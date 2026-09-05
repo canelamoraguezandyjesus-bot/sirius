@@ -72,8 +72,12 @@ mismo invariante:
    La letra de la propuesta habría hecho NO_COMPARABLE cada día.
 2. `17 0,4-23 * * *`: los guardianes del contador revientan con
    `ValueError: invalid literal for int() with base 10: '4-23'`
-   (`seven_day_streak._expandir_campo`): ese lector entiende `*`, `*/N`
-   y comas, no rangos.
+   (`seven_day_streak._expandir_campo`): ese lector entendía `*`, `*/N`,
+   enteros sueltos, listas por comas DE ENTEROS SUELTOS y rangos `a-b` a
+   secas —su rama de comas se evaluaba antes que la de rangos y no
+   recurría, así que un rango SUELTO sí funcionaba y un rango DENTRO de
+   una lista, no—. Desde ADR-143 (encargo WI-20260905-034826) los dos
+   lectores implementan un único dialecto que admite `0,4-23`.
 3. La lista con comas: Quality (run 33931016125) cazó lo que mi
    validación local no vio por correr solo tests/automation —
    `test_hora_recomendada_atada_al_schedule_real_del_repositorio`

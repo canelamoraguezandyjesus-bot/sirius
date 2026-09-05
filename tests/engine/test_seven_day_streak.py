@@ -16,10 +16,15 @@ de este fichero es:
 6. Ninguna ruta del contador conmuta nada (requisito 8).
 7. La hora de la pasada se deriva del ``schedule: cron:`` real, nunca a ojo
    (requisito 5).
+8. Los dos lectores de ``cron`` del repositorio -el del motor y el minilector
+   de este fichero, independiente a propósito- hablan el MISMO dialecto, y una
+   tabla de equivalencia impide que vuelvan a divergir en silencio (ADR-143).
 """
 
 from __future__ import annotations
 
+import re
+from collections.abc import Callable
 from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
 
@@ -38,6 +43,7 @@ from sirius_engine.projection_verifier import (
     formatear_linea,
 )
 from sirius_engine.seven_day_streak import (
+    _expandir_campo,
     anadir_lineas,
     detectar_correcciones_manuales,
     evaluar_racha,
@@ -500,6 +506,67 @@ def test_hora_recomendada_para_si_ningun_hueco_deja_ventana_tranquila(tmp_path: 
         hora_recomendada_pasada(workflows)
 
 
+# El minilector de `cron` del guardián-oráculo. Vive aquí, a nivel de módulo y
+# no dentro de la prueba, por dos razones: para poder ejercitarlo solo (la
+# tabla de equivalencia de más abajo) y porque un lector escondido dentro de
+# un `for` es exactamente el que divergió sin que nadie lo viera.
+#
+# Es una SEGUNDA implementación, deliberadamente independiente, del mismo
+# dialecto que documenta `seven_day_streak._expandir_campo` (ADR-143): no
+# importa nada del motor -esa es la disciplina «YAML aparte» que este guardián
+# cita-, y por eso no puede compartir con él ni el código ni sus errores. Lo
+# que impide que los dos vuelvan a divergir en silencio no es este comentario,
+# es `test_los_dos_lectores_de_cron_expanden_y_rechazan_igual`.
+
+_ENTERO_CRON_ORACULO = re.compile(r"[0-9]+")
+_RANGO_CRON_ORACULO = re.compile(r"([0-9]+)-([0-9]+)")
+_PASO_CRON_ORACULO = re.compile(r"\*/([0-9]+)")
+
+
+def expandir_campo_del_oraculo(campo: str, tope: int, nombre: str) -> list[int]:
+    """Los enteros de ``[0, tope)`` que denota un campo minuto/hora del dialecto.
+
+    Las cinco formas admitidas -``*``, ``*/N``, entero, rango ``a-b`` y listas
+    por comas de enteros o rangos- y el rechazo ruidoso de todo lo demás, con
+    el campo nombrado en el mensaje: nunca un ``int()`` pelado, que es como
+    llegaron los rojos 2 y 3 de ADR-139.
+    """
+
+    def fuera_del_dialecto(forma: str) -> ValueError:
+        return ValueError(
+            f"campo {nombre} de cron: forma no admitida {forma!r} en la expresión {campo!r}"
+        )
+
+    if campo == "*":
+        return list(range(tope))
+    paso = _PASO_CRON_ORACULO.fullmatch(campo)
+    if paso is not None:
+        salto = int(paso.group(1))
+        if not 1 <= salto <= tope:
+            raise fuera_del_dialecto(campo)
+        return list(range(0, tope, salto))
+    if campo.startswith("*") or "/" in campo:
+        raise fuera_del_dialecto(campo)
+
+    valores: set[int] = set()
+    for elemento in campo.split(","):
+        rango = _RANGO_CRON_ORACULO.fullmatch(elemento)
+        entero = _ENTERO_CRON_ORACULO.fullmatch(elemento)
+        if rango is not None:
+            inicio, fin = int(rango.group(1)), int(rango.group(2))
+            if inicio > fin or fin >= tope:
+                raise fuera_del_dialecto(elemento)
+            valores.update(range(inicio, fin + 1))
+        elif entero is not None:
+            valor = int(entero.group())
+            if valor >= tope:
+                raise fuera_del_dialecto(elemento)
+            valores.add(valor)
+        else:
+            raise fuera_del_dialecto(elemento)
+    return sorted(valores)
+
+
 def test_hora_recomendada_atada_al_schedule_real_del_repositorio() -> None:
     """Misma disciplina que ``test_ventana_tolerancia_atada_al_yaml_real...``: YAML aparte."""
     minutos_disparo = set()
@@ -512,13 +579,10 @@ def test_hora_recomendada_atada_al_schedule_real_del_repositorio() -> None:
             continue
         for entrada in activadores.get("schedule") or []:
             expresion = entrada.get("cron")
-            minuto, hora_campo = expresion.split()[0], expresion.split()[1]
-            if hora_campo.startswith("*/"):
-                paso = int(hora_campo[2:])
-                for h in range(0, 24, paso):
-                    minutos_disparo.add(h * 60 + int(minuto))
-            else:
-                minutos_disparo.add(int(hora_campo) * 60 + int(minuto))
+            campos = expresion.split()
+            for hora_campo in expandir_campo_del_oraculo(campos[1], 24, "hora"):
+                for minuto in expandir_campo_del_oraculo(campos[0], 60, "minuto"):
+                    minutos_disparo.add(hora_campo * 60 + minuto)
     assert minutos_disparo, "no encontré ningún schedule real: la comparación no mediría nada"
 
     ordenados = sorted(minutos_disparo)
@@ -534,3 +598,131 @@ def test_hora_recomendada_atada_al_schedule_real_del_repositorio() -> None:
 
     hora, _motivo = hora_recomendada_pasada()
     assert hora == esperado
+
+
+# --- 8. Los dos lectores de cron hablan el mismo dialecto (ADR-143) ---------
+#
+# Ningún lector puede observar que diverge del otro: por eso el guardián es un
+# tercero. La tabla es la unidad de medida -todas las formas admitidas, las
+# mixtas incluidas, y una colección de rechazadas- y los dos lectores tienen
+# que estar de acuerdo en TODAS, tanto en lo que expanden como en lo que
+# rechazan. Cada forma de aquí se vio fallar antes del arreglo en al menos uno
+# de los dos lectores (ADR-143, «Comprobación que la sostiene»).
+
+_FORMAS_ADMITIDAS: tuple[str, ...] = (
+    "*",
+    "*/2",
+    "*/6",
+    "*/15",
+    "0",
+    "17",
+    "23",
+    "4-23",
+    "0-0",
+    "0,4-23",  # la mixta que quemó los rojos 2 y 3 de ADR-139
+    "1-3,5,7-9",
+    "0,15,30",
+    "0,30",
+    "3,3",
+    "01",
+)
+
+_FORMAS_RECHAZADAS: tuple[str, ...] = (
+    "",
+    " 1",
+    "8-18/2",  # paso sobre rango: GitHub lo admite, este dialecto no
+    "0-23/2",
+    "*/0",
+    "*/99",
+    "*/x",
+    "*/",
+    "**",
+    "*,1",
+    "0,*/2",
+    "3-1",
+    "1-",
+    "-3",
+    "1-2-3",
+    "1,,2",
+    "a",
+    "JAN",
+    "?",
+    "60",
+    "1;2",
+    "+1",
+    "\u0661\u0665",  # dígitos árabo-índicos: `str.isdigit()` los daría por buenos
+)
+
+_TABLA_DEL_DIALECTO: tuple[str, ...] = _FORMAS_ADMITIDAS + _FORMAS_RECHAZADAS
+
+#: Los dos campos reales, con su tope y el nombre que el rechazo debe decir.
+_CAMPOS_DEL_DIALECTO: tuple[tuple[int, str], ...] = ((60, "minuto"), (24, "hora"))
+
+
+def _leer_campo(
+    lector: Callable[[str, int, str], list[int]], campo: str, tope: int, nombre: str
+) -> tuple[list[int] | None, str | None]:
+    """La lectura de un campo como dato comparable: o los valores, o el rechazo."""
+    try:
+        return sorted(set(lector(campo, tope, nombre))), None
+    except ValueError as error:
+        return None, str(error)
+
+
+@pytest.mark.parametrize(("tope", "nombre"), _CAMPOS_DEL_DIALECTO)
+@pytest.mark.parametrize("campo", _TABLA_DEL_DIALECTO)
+def test_los_dos_lectores_de_cron_expanden_y_rechazan_igual(
+    campo: str, tope: int, nombre: str
+) -> None:
+    valores_motor, rechazo_motor = _leer_campo(_expandir_campo, campo, tope, nombre)
+    valores_oraculo, rechazo_oraculo = _leer_campo(expandir_campo_del_oraculo, campo, tope, nombre)
+
+    assert (rechazo_motor is None) == (rechazo_oraculo is None), (
+        f"los dos lectores discrepan sobre si {campo!r} pertenece al dialecto en el campo "
+        f"{nombre}: motor={rechazo_motor or valores_motor}, "
+        f"oráculo={rechazo_oraculo or valores_oraculo}"
+    )
+    assert valores_motor == valores_oraculo, (
+        f"{campo!r} expande distinto en el campo {nombre}: motor={valores_motor}, "
+        f"oráculo={valores_oraculo}"
+    )
+
+
+@pytest.mark.parametrize("campo", _FORMAS_ADMITIDAS)
+def test_toda_forma_admitida_del_dialecto_la_digieren_los_dos(campo: str) -> None:
+    """La mitad que hace la tabla no vacua: sin esto, «rechazar todo» la pasaría entera."""
+    assert _expandir_campo(campo, 60, "minuto")
+    assert expandir_campo_del_oraculo(campo, 60, "minuto")
+
+
+@pytest.mark.parametrize(("tope", "nombre"), _CAMPOS_DEL_DIALECTO)
+@pytest.mark.parametrize("campo", _FORMAS_RECHAZADAS)
+def test_toda_forma_fuera_del_dialecto_la_rechazan_los_dos_con_el_campo_nombrado(
+    campo: str, tope: int, nombre: str
+) -> None:
+    """Rechazo RUIDOSO: el mensaje dice el campo y la forma, nunca un ``int()`` pelado."""
+    for lector in (_expandir_campo, expandir_campo_del_oraculo):
+        with pytest.raises(ValueError) as excepcion:
+            lector(campo, tope, nombre)
+        mensaje = str(excepcion.value)
+        assert nombre in mensaje, f"{lector.__name__} no dice qué campo falló: {mensaje}"
+        assert "invalid literal for int()" not in mensaje
+
+
+def test_la_lista_con_rango_expande_igual_en_los_dos_lectores() -> None:
+    """``0,4-23``: la expresión exacta del rojo 2 de ADR-139."""
+    esperado = [0, *range(4, 24)]
+    assert _expandir_campo("0,4-23", 24, "hora") == esperado
+    assert expandir_campo_del_oraculo("0,4-23", 24, "hora") == esperado
+
+
+def test_el_paso_sobre_rango_lo_rechazan_los_dos_con_el_campo_en_el_mensaje() -> None:
+    """``8-18/2`` es válido para GitHub y está fuera de este dialecto: se dice, no se adivina."""
+    for lector in (_expandir_campo, expandir_campo_del_oraculo):
+        with pytest.raises(ValueError, match="hora"):
+            lector("8-18/2", 24, "hora")
+
+
+def test_el_comodin_en_minuto_expande_a_los_sesenta_en_los_dos() -> None:
+    assert _expandir_campo("*", 60, "minuto") == list(range(60))
+    assert expandir_campo_del_oraculo("*", 60, "minuto") == list(range(60))

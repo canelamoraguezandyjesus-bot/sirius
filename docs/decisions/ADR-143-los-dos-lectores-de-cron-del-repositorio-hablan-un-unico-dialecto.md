@@ -35,9 +35,9 @@ escrita.
    `cron`: la tabla ata a los dos que hay.
 3. **Criterio de parada** (decidido antes de ver ningún resultado del
    arreglo): (a) si unificar el dialecto cambiara la hora recomendada derivada
-   del árbol real —hoy 03:24 UTC—, se para: el encargo dice expresamente que
-   ninguna derivación vigente cambia, así que un cambio ahí sería señal de que
-   el dialecto nuevo interpreta distinto lo que ya funcionaba; (b) si el
+   del árbol real, se para: el encargo dice expresamente que ninguna
+   derivación vigente cambia, así que un cambio ahí sería señal de que el
+   dialecto nuevo interpreta distinto lo que ya funcionaba; (b) si el
    oráculo no pudiera implementar el dialecto íntegro sin importar código del
    motor, se para y se escala, porque romper el «YAML aparte» es una decisión
    de disciplina que no me toca; (c) si aparecieran dos rondas de defectos de
@@ -72,9 +72,20 @@ silencio, y `24` en el campo de hora devolvía `[24]`, un valor que no existe.
 ## Criterio de parada (escrito ANTES de decidir)
 
 El de la nota de arranque, punto 3, palabra por palabra. Ninguno de sus tres
-supuestos se disparó: la hora derivada del árbol real sigue siendo 03:24 UTC,
-el oráculo implementa el dialecto íntegro sin importar nada del motor, y no
-hubo dos rondas de la misma familia.
+supuestos se disparó: la hora derivada del árbol real no se movió, el oráculo
+implementa el dialecto íntegro sin importar nada del motor, y no hubo dos
+rondas de la misma familia.
+
+Una precisión que el dato obliga a hacer, y que el encargo tenía cruzada: el
+encargo pide que «la hora recomendada derivada del árbol real siga siendo
+exactamente 03:24 UTC», pero 03:24 es el `cron` CONFIGURADO del contador
+(`24 3 * * *` en `.github/workflows/contador-siete-dias.yml`), no lo que
+`hora_recomendada_pasada()` deriva. Medido sobre el árbol real, antes y
+después del cambio, lo derivado es **09:24 UTC** (punto medio del mayor hueco
+libre, 345 min tras las 06:32 UTC). Lo que el encargo protege —que ninguna
+derivación vigente se mueva— se cumple exactamente: el valor es idéntico antes
+y después. Este ADR no cambia ningún `schedule:`; que el `cron` configurado no
+coincida con el derivado es un hecho anterior y ajeno a este encargo.
 
 ## Opciones consideradas
 
@@ -140,18 +151,27 @@ casos son los rechazos que antes eran silencio o mensaje sin campo.
   `test_el_paso_sobre_rango_lo_rechazan_los_dos_con_el_campo_en_el_mensaje`
   (`8-18/2`) y `test_el_comodin_en_minuto_expande_a_los_sesenta_en_los_dos`.
 - `test_hora_recomendada_atada_al_schedule_real_del_repositorio`, adaptado a
-  su helper de módulo y no debilitado: sigue derivando 03:24 UTC del árbol
-  real.
+  su helper de módulo (`expandir_campo_del_oraculo`) y no debilitado: sigue
+  comparando contra el árbol real, y ahora el minilector expande también el
+  campo de MINUTO con el dialecto, no solo la hora.
 
-Validaciones obligatorias (`ruff format --check`, `ruff check`, `mypy src
-tests`, `pytest`, `git diff --check`) en verde, con su código de salida
-verificado y citado en la PR.
+**Prueba por mutación** (ADR-001), las dos direcciones:
+
+- El oráculo deja de entender rangos dentro de listas (`rango = None`): 13
+  rojos, entre ellos la tabla de equivalencia en `0,4-23` y `1-3,5,7-9`.
+- El motor vuelve a su rama de comas de enteros sueltos (el fallo original):
+  7 rojos, con el mismo par de expresiones. Restaurado el árbol, 163 en verde.
+
+Validaciones obligatorias sobre el árbol final, con su código de salida
+verificado (0 en las cinco): `uv run ruff format --check .` (602 ficheros),
+`uv run ruff check .`, `uv run mypy src tests` (570 ficheros), `uv run pytest`
+(**4932 pasadas, 15 saltadas, 2 xfailed** en 743 s) y `git diff --check`.
 
 ## Consecuencias
 
 - Ningún `schedule:` real cambia y ninguna derivación vigente se mueve: la
-  hora recomendada sigue siendo 03:24 UTC. Los invariantes de ADR-139 siguen
-  en pie.
+  hora recomendada derivada del árbol real es 09:24 UTC, el mismo valor que
+  daba antes del cambio. Los invariantes de ADR-139 siguen en pie.
 - Un `schedule:` futuro con lista, rango o forma mixta ya no revienta ninguno
   de los dos lectores; uno fuera del dialecto revienta los dos, y dice cuál es
   el campo y cuál la forma.
