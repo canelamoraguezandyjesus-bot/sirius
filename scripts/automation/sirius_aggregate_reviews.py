@@ -159,13 +159,23 @@ def _dedupe(observations: list[dict[str, str]]) -> list[dict[str, str]]:
     return unique
 
 
-def _failed(summary: str, sources: dict[str, dict[str, str]]) -> dict[str, Any]:
-    return {
+def _failed(
+    summary: str, sources: dict[str, dict[str, str]], *, infra_retryable: bool = False
+) -> dict[str, Any]:
+    resultado: dict[str, Any] = {
         "verdict": "FAILED_SAFELY",
         "summary": summary,
         "sources": sources,
         "observations": [],
     }
+    if infra_retryable:
+        # ADR-141: la parada es del ARNÉS de la revisión (head no demostrado,
+        # timeout del recolector), no del contenido revisado. El aplicador de
+        # veredictos puede re-armar UNA ronda nueva en vez de detener la
+        # incidencia; cualquier otra parada se queda sin la bandera y detiene
+        # como siempre.
+        resultado["infra_retryable"] = True
+    return resultado
 
 
 def aggregate(
@@ -231,6 +241,7 @@ def aggregate(
             "El revisor Claude no demostró haber revisado el head esperado "
             f"`{expected_head}` (reviewed_head_sha ausente o distinto); parada segura.",
             sources,
+            infra_retryable=True,
         )
     if (
         dual
@@ -241,6 +252,7 @@ def aggregate(
             "Codex no demostró haber revisado el head esperado "
             f"`{expected_head}` (reviewed_head_sha ausente o distinto); parada segura.",
             sources,
+            infra_retryable=True,
         )
 
     # --- Regla 3: fallo seguro de cualquiera -----------------------------------
@@ -252,9 +264,20 @@ def aggregate(
             reason = str(codex.get("reason") or "").strip()
             summary = str(codex.get("summary") or "").strip() or "sin detalle"
             details.append(f"Codex{f' ({reason})' if reason else ''}: {summary}")
+        # ADR-141: reintentable solo si la ÚNICA parada es el timeout del
+        # recolector de Codex — una parada de contenido de Claude no se
+        # reintenta sola, taparía su diagnóstico.
+        solo_timeout_de_codex = (
+            claude_status != "FAILED_SAFELY"
+            and dual
+            and codex_status == "FAILED_SAFELY"
+            and codex is not None
+            and str(codex.get("reason") or "").strip() == "timeout"
+        )
         return _failed(
             "La ronda de revisión dual termina en fallo seguro. " + " | ".join(details),
             sources,
+            infra_retryable=solo_timeout_de_codex,
         )
 
     # --- Regla 4: bloqueo por decisión de Claude --------------------------------

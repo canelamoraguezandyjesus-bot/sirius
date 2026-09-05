@@ -222,6 +222,70 @@ def test_codex_wrong_sha_fails_safely(tmp_path: Path) -> None:
     assert "Codex" in result["summary"]
 
 
+# --------------------------------------------------------------------------- #
+# ADR-141: clasificación de paradas reintetables por infraestructura
+# --------------------------------------------------------------------------- #
+
+
+def test_head_de_claude_no_demostrado_es_reintentable_por_infra(tmp_path: Path) -> None:
+    """ADR-141: un veredicto de contenido sin head demostrable es un fallo del
+    ARNÉS del revisor, no del trabajo revisado — el 04-09 costó una vuelta
+    entera revivida a mano. Vista fallar contra el agregador sin la bandera."""
+    result = _run(tmp_path, _claude(sha=None), _codex())
+    assert result["verdict"] == "FAILED_SAFELY"
+    assert result.get("infra_retryable") is True
+
+
+def test_head_de_claude_distinto_tambien_es_reintentable(tmp_path: Path) -> None:
+    result = _run(tmp_path, _claude(sha=OTHER_HEAD), _codex())
+    assert result["verdict"] == "FAILED_SAFELY"
+    assert result.get("infra_retryable") is True
+
+
+def test_head_de_codex_no_demostrado_es_reintentable(tmp_path: Path) -> None:
+    result = _run(tmp_path, _claude(), _codex(sha=None))
+    assert result["verdict"] == "FAILED_SAFELY"
+    assert result.get("infra_retryable") is True
+
+
+def test_timeout_de_codex_es_reintentable(tmp_path: Path) -> None:
+    """El caso de G3 del 04-09: Codex no entregó dentro de su plazo absoluto."""
+    result = _run(tmp_path, _claude(), _codex("FAILED_SAFELY", sha=None, reason="timeout"))
+    assert result["verdict"] == "FAILED_SAFELY"
+    assert result.get("infra_retryable") is True
+
+
+def test_failed_safely_de_claude_no_es_reintentable(tmp_path: Path) -> None:
+    """Adversaria: una parada de CONTENIDO de Claude (decidió detenerse) no se
+    reintenta sola — reintentarla taparía el diagnóstico que quiso dejar."""
+    result = _run(tmp_path, _claude("FAILED_SAFELY", sha=None), _codex())
+    assert result["verdict"] == "FAILED_SAFELY"
+    assert not result.get("infra_retryable")
+
+
+def test_codex_failed_con_otra_razon_no_es_reintentable(tmp_path: Path) -> None:
+    """Adversaria: solo el timeout es infraestructura declarada; cualquier otra
+    razón del recolector se queda parada para diagnóstico humano."""
+    result = _run(
+        tmp_path, _claude(), _codex("FAILED_SAFELY", sha=None, reason="colector-invalido")
+    )
+    assert result["verdict"] == "FAILED_SAFELY"
+    assert not result.get("infra_retryable")
+
+
+def test_un_veredicto_normal_no_lleva_la_bandera(tmp_path: Path) -> None:
+    """Adversaria: la bandera es exclusiva de las paradas; un APPROVED o un
+    CHANGES_REQUESTED jamás la llevan."""
+    aprobado = _run(tmp_path, _claude(), _codex())
+    cambios = _run(
+        tmp_path,
+        _claude("CHANGES_REQUESTED", observations=[_claude_observation()]),
+        _codex(),
+    )
+    assert "infra_retryable" not in aprobado
+    assert "infra_retryable" not in cambios
+
+
 def test_claude_abbreviated_sha_prefix_is_accepted(tmp_path: Path) -> None:
     result = _run(tmp_path, _claude(sha=HEAD[:12]), _codex())
     assert result["verdict"] == "REVIEW_APPROVED"
