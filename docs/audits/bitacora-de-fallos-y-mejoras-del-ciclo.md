@@ -788,6 +788,43 @@ ADR o su incidencia cuando se adopte.
   fichas que el propietario dejó encargadas antes de dormirse, menos la
   observación del contador (entrada siguiente) y el encargo de prueba.
 
+### 36. El contador no ha corrido NUNCA a su hora: diez días de datos contra la geometría estática (05-09-2026, 03:44 UTC)
+
+- Esperando la pasada de las 03:24 UTC para el parte matinal, no llegó.
+  El diario de la racha guarda el instante real de las diez pasadas
+  desde que el cron `24 3 * * *` entró en main (26-08, `4d0420e`):
+  04:07, 14:20, 15:29, 10:13, 09:20, 09:54, 08:46, 07:59, 08:09, 08:04.
+  Retrasos de ENTREGA del scheduler de GitHub de entre 43 minutos y
+  12 horas, convergiendo estos días hacia ~08:00 UTC (unas 4 h 40
+  tarde). La pasada de hoy llegará previsiblemente hacia las 08:00.
+- Lo que significa: toda la geometría del contador — el 03:24 como
+  punto medio del mayor hueco, los 172 min de tranquilidad, el teorema
+  de ADR-139 — vive en el espacio de los crones PROGRAMADOS, y la
+  entrega real lo desordena por horas. El guardián estático sigue
+  valiendo como contrato entre workflows (nadie puede densificar el
+  horario sin re-derivar), pero la garantía de ventana tranquila NO se
+  transfiere al tiempo de pared: hacia las ~08:00 la pasada llega ~92
+  min después del 06:32 nominal del motor — que a su vez también se
+  entrega tarde y de forma impredecible.
+- Consecuencia práctica hoy: ninguna — pre-C2 todo es `no_comparable`.
+  Post-C2: los días activos podrían perder verdes por la frescura
+  medida contra el instante REAL de la pasada. Candidato a encargo
+  (decisión del propietario): que la pasada mida su propia ventana al
+  llegar — contra los runs reales previos, no contra el horario — y se
+  declare con motivo veraz si llegó sucia, en vez de asumir una
+  geometría que el scheduler no respeta.
+- Mi expectativa de anoche («a las 04:24 tuyas, el momento de la
+  verdad») estaba doblemente mal calibrada, y lo corrijo aquí antes que
+  en el parte: ni la hora (entrega real ~08:00) ni el veredicto posible
+  — C2 sigue apagado a propósito (`CLASES_CON_ESTADO_PROPIO` es el
+  frozenset vacío, projection_verifier.py:85), así que «comparable» no
+  puede decirse todavía por diseño. El hito real de la noche es otro y
+  ya está: la precondición de C2 («observar al menos una pasada real
+  del reflejo») quedó cumplida dos veces por C1b, y el motivo
+  hardcodeado del `no_comparable` («nada escribe el desenlace de GitHub
+  en su almacén») es desde esta noche históricamente falso — C2 lo
+  retirará cuando el propietario decida encender la comparación.
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
@@ -832,4 +869,6 @@ ADR o su incidencia cuando se adopte.
     pasada reflejó 70 WorkItems y la segunda fue idempotente. Queda C2
     (declarar `programacion` en `CLASES_CON_ESTADO_PROPIO`, ADR-101),
     que va después de observar al menos una pasada real del contador con
-    el espejo poblado — la primera candidata es la de hoy, 03:24 UTC.
+    el espejo poblado — la primera candidata es la de hoy, entregada
+    hacia las ~08:00 UTC reales (entrada 36), y no podrá decir
+    «comparable» hasta que C2 encienda la jurisdicción.
