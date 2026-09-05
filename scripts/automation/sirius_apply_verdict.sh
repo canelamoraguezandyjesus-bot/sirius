@@ -592,6 +592,45 @@ case "$verdict" in
     ;;
 
   FAILED_SAFELY | USAGE_LIMIT_REACHED)
+    # ADR-141: si el agregador clasificó la parada como de INFRAESTRUCTURA
+    # (head no demostrado, timeout del recolector de Codex) y es la primera
+    # para este head, se re-arma una ronda nueva en vez de detener: se repone
+    # `sirius:review-requested` con un marcador de reintento. Tope duro de
+    # UNO por head (el marcador es el candado); segunda parada de infra, o
+    # cualquier parada sin la bandera, detiene como siempre. Solo el revisor:
+    # la bandera nace de sirius_aggregate_reviews.py y no tiene sentido en
+    # otros roles. Si no hay PR verificable no se reintenta nada (se usa
+    # locate_verified_pr directamente porque resolve_pr detiene el guion).
+    infra_retryable="$(jq -r '.infra_retryable // false' "$VERDICT_FILE" 2>/dev/null)"
+    if [ "$ROLE" = "reviewer" ] && [ "$verdict" = "FAILED_SAFELY" ] && \
+       [ "$infra_retryable" = "true" ]; then
+      retry_result="$(locate_verified_pr)"
+      retry_status="$(printf '%s' "$retry_result" | cut -f1)"
+      retry_head="$(printf '%s' "$retry_result" | cut -f3)"
+      if [ "$retry_status" = "OK" ] && [ -n "$retry_head" ]; then
+        retry_scan="$(mktemp)"
+        sirius_scan_text "$REPO" "$ISSUE" "$retry_scan"
+        if ! grep -qF "sirius-reintento-ronda:${retry_head}" "$retry_scan"; then
+          rm -f "$retry_scan"
+          marker="<!-- sirius-reintento-ronda:${retry_head}:${SIRIUS_RUN_TAG} -->"
+          body_file="$(mktemp)"
+          printf '%s\n\n%s\n\n%s\n\n%s\n' \
+            "$marker" \
+            "🔁 **Reintento la ronda de revisión (fallo de infraestructura)**" \
+            "${summary}" \
+            "La parada fue del arnés de la revisión, no del contenido: repongo la revisión una única vez para este head (ADR-141). Si vuelve a fallar, me detendré de forma segura." >"$body_file"
+          if ! transition "$marker" "$body_file" "sirius:review-requested" "8250DF" "Evento consumible: iniciar revisión independiente"; then
+            rm -f "$body_file"
+            exit 1
+          fi
+          rm -f "$body_file"
+          echo "Parada de infraestructura del revisor: ronda re-armada para el head ${retry_head} (ADR-141)."
+          exit 0
+        fi
+        rm -f "$retry_scan"
+        echo "Parada de infraestructura con reintento ya consumido para ${retry_head}; me detengo como siempre."
+      fi
+    fi
     marker="<!-- sirius-verdict:${ROLE}:${verdict}:${SIRIUS_RUN_TAG} -->"
     body_file="$(mktemp)"
     printf '%s\n\n%s\n\n%s\n' "$marker" "🔴 **Me he detenido de forma segura**" "${summary}" >"$body_file"

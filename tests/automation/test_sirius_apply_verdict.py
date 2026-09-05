@@ -1146,6 +1146,88 @@ def test_corrector_fixed_with_cycle_marker(tmp_path: Path) -> None:
     assert "sirius-repair-cycle:1" in _comments(env)
 
 
+def test_reviewer_parada_de_infra_rearma_una_ronda_nueva(tmp_path: Path) -> None:
+    """ADR-141: una parada del ARNÉS de la revisión (head no demostrado,
+    timeout del recolector — la bandera la pone el agregador) no detiene la
+    incidencia: repone `sirius:review-requested` con su marcador de
+    reintento, una sola vez por head. Vista fallar contra el guion sin la
+    rama de reintento."""
+    env = _setup(tmp_path)
+    _seed_issue(
+        env, ["sirius:reviewing"], comments="PR abierta: https://github.com/owner/repo/pull/9\n"
+    )
+    _seed_pr(env, 9, head="d5e5f5061234")
+    vf = _verdict_file(
+        tmp_path,
+        {"verdict": "FAILED_SAFELY", "summary": "arnés caído", "infra_retryable": True},
+    )
+    r = _run(env, "reviewer", vf)
+    assert r.returncode == 0, r.stdout + r.stderr
+    labels = _labels(env)
+    assert "sirius:review-requested" in labels
+    assert "sirius:failed-safely" not in labels
+    assert "sirius-reintento-ronda:d5e5f5061234" in _comments(env)
+
+
+def test_reviewer_parada_de_infra_con_reintento_previo_se_detiene(tmp_path: Path) -> None:
+    """El tope es UNO por head: con el marcador de reintento ya publicado, la
+    segunda parada de infraestructura detiene como siempre — sin esto, dos
+    fallos persistentes del arnés harían un columpio infinito."""
+    env = _setup(tmp_path)
+    _seed_issue(
+        env,
+        ["sirius:reviewing"],
+        comments=(
+            "PR abierta: https://github.com/owner/repo/pull/9\n"
+            "<!-- sirius-reintento-ronda:d5e5f5061234:run-anterior -->\n"
+        ),
+    )
+    _seed_pr(env, 9, head="d5e5f5061234")
+    vf = _verdict_file(
+        tmp_path,
+        {"verdict": "FAILED_SAFELY", "summary": "arnés caído otra vez", "infra_retryable": True},
+    )
+    r = _run(env, "reviewer", vf)
+    assert r.returncode == 0, r.stdout + r.stderr
+    labels = _labels(env)
+    assert "sirius:failed-safely" in labels
+    assert "sirius:review-requested" not in labels
+
+
+def test_reviewer_parada_sin_bandera_se_detiene_como_siempre(tmp_path: Path) -> None:
+    """Adversaria: sin `infra_retryable` no hay reintento — una parada de
+    contenido conserva el comportamiento de siempre."""
+    env = _setup(tmp_path)
+    _seed_issue(
+        env, ["sirius:reviewing"], comments="PR abierta: https://github.com/owner/repo/pull/9\n"
+    )
+    _seed_pr(env, 9, head="d5e5f5061234")
+    vf = _verdict_file(tmp_path, {"verdict": "FAILED_SAFELY", "summary": "me detengo por X"})
+    r = _run(env, "reviewer", vf)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "sirius:failed-safely" in _labels(env)
+    assert "sirius:review-requested" not in _labels(env)
+
+
+def test_corrector_parada_con_bandera_no_reintenta(tmp_path: Path) -> None:
+    """Adversaria de rol: la bandera solo tiene efecto en el revisor; un
+    corrector con ella (no debería ocurrir, pero un JSON manda) se detiene
+    como siempre."""
+    env = _setup(tmp_path)
+    _seed_issue(
+        env, ["sirius:repairing"], comments="PR abierta: https://github.com/owner/repo/pull/9\n"
+    )
+    _seed_pr(env, 9, head="d5e5f5061234")
+    vf = _verdict_file(
+        tmp_path,
+        {"verdict": "FAILED_SAFELY", "summary": "no corregible", "infra_retryable": True},
+    )
+    r = _run(env, "corrector", vf)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "sirius:failed-safely" in _labels(env)
+    assert "sirius:review-requested" not in _labels(env)
+
+
 def test_corrector_fixed_firma_el_marcador_con_su_run(tmp_path: Path) -> None:
     """ADR-140: el marcador FIXED del corrector lleva la firma del run que lo
     produjo (`:<run_id>-<attempt>`), para que cada corrección —y cada muerte—
