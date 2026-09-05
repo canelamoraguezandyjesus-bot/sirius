@@ -93,10 +93,19 @@ Predicción escrita antes de construir:
   `hoy` = 3 `NO_ENTRO`.
 - En la máquina del propietario, con Ollama real
   (`uv run python scripts/medir_banco_con_ollama_real.py --diagnostico`,
-  modelo `qwen3:4b-instruct`, 0 rendiciones), la crítica
-  `TIRADO_POR_EL_FILTRO` pasa de 1 a 0 y las críticas perdidas totales de
-  10 a 3 (las tres de B04-CA-34, pendientes de la siembra, M20) — **fila
-  pendiente de medir por el propietario, no estimada ni inventada aquí.**
+  modelo `qwen3:4b-instruct`, espera 30 s), **medido el 05-09-2026 sobre
+  main `a07c5d5`, ya con M20 (ADR-129) fusionada**: 47 llamadas, 0
+  rendiciones, 0,8 min. Críticas `TIRADO_POR_EL_FILTRO` **1 → 0** — la
+  predicción propia de este encargo se cumple: ninguna crítica descartada
+  por el modelo quedó sin rescatar — y críticas perdidas totales **10 → 0**.
+  El tramo 10 → 3 de M19b y el 3 → 0 de M20 no pueden separarse a
+  posteriori, porque la medición llegó con los dos encargos dentro; lo que
+  sí es atribuible a este es que la única pérdida de la clase que RF-25/RF-26
+  gobierna desapareció. Resto de la medición: aciertos exactos 8/47,
+  cobertura 70/81, 218 elementos de más — registro completo, con la
+  comparación contra el 02-09, en
+  `docs/audits/evidencia-experimento-filtro-fiel-al-laboratorio.md`, sección
+  «Resultado en la máquina del propietario (Ollama real, 05-09-2026)».
 
 Si en este runner cambia cualquier métrica del banco de 47 casos, este
 encargo ha tocado algo que no debía (el camino sin Ollama no puede verse
