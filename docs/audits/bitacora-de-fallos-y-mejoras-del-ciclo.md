@@ -825,6 +825,71 @@ ADR o su incidencia cuando se adopte.
   en su almacén») es desde esta noche históricamente falso — C2 lo
   retirará cuando el propietario decida encender la comparación.
 
+### 37. El encargo de prueba #537 de cabo a rabo: 3 rondas contra la mediana de 4,5, y ninguna fue de código (05-09-2026, 03:47-07:00 UTC)
+
+- **El encargo**: unificar el dialecto de los dos lectores de cron
+  (ADR-143, PR #538, fusionada `78e81fc` a las 07:00). Era a la vez la
+  medición de ADR-138 (primer ciclo con los tres agentes en el modelo
+  reforzado), ADR-135/140 (evidencia y mutación) y ADR-141 (reintento).
+  Resultado: **3 h 12 min de despacho a completed, 3 rondas de revisión
+  — y cero defectos de código: el código de la implementación inicial
+  no necesitó ni un retoque en todo el ciclo.**
+- **El despacho rebotó primero (deuda 2, mordiéndome a mí)**: la orden
+  empezaba por «Unifica…» y el intérprete provisional de ADR-043 solo
+  reconoce «corrige»/«implementa» al principio. Rojo limpio del
+  despachador (nada creado), re-despacho con «Implementa» delante, 61
+  segundos perdidos. El apaño de la deuda 2 también muerde al operador
+  que lo conoce.
+- **El implementador entregó en 21 minutos** la PR con nota de arranque
+  previa al código, el rojo previo POR FORMA en los dos lectores (tabla
+  en el cuerpo de la PR) y mutaciones en las dos direcciones (13 y 7
+  rojos). La tabla de equivalencia trae trampas que mi encargo no pidió
+  (`+1`, que `int()` acepta; dígitos árabo-índicos que `isdigit()`
+  bendeciría; la prueba anti-vacuidad para que «rechazar todo» no pase
+  la tabla). El listón de calidad inicial subió de forma visible.
+- **Ronda 1 — mi encargo tenía un pin factualmente falso.** Exigí «la
+  derivada debe seguir siendo exactamente 03:24» creyendo describir el
+  statu quo; la derivada real era 09:24 DESDE ANTES del encargo. Claude
+  revisor aprobó; Codex paró el cambio (P1): reinterpretar un límite
+  escrito es decisión del propietario, no del implementador. El
+  corrector se detuvo en `blocked-decision` con el mejor diagnóstico
+  que le he visto al motor: midió la RAÍZ — **el derivador se incluye a
+  sí mismo**; al programar la hora derivada (25-08), el propio disparo
+  del contador partió el hueco de 345 min del que salía 03:24 y la
+  derivación saltó al hueco de las 06:32 → 09:24. Sin el cron del
+  contador en el árbol, vuelve a dar exactamente 03:24. Registré la
+  decisión (enmendar MI límite: el invariante es «este encargo no
+  cambia la derivación»; cron/derivador/cabecera intactos, a ficha del
+  propietario) y `continua`. Tercera lección de encargos en tres
+  ciclos: la 26 fue un caso frontera sin decidir, la 31 una semántica
+  sin especificar, esta un HECHO afirmado sin verificar. Un límite
+  numérico se mide antes de escribirse.
+- **El corrector repetido murió por presupuesto** (~31 min; el paso lo
+  mata a los 30): editó el cuerpo de la PR pero no llegó a commitear, y
+  su centinela FAILED_SAFELY quedó en pie. Primer dato en vivo del
+  recorte deliberado de ADR-141 (el corrector NO se reintenta solo):
+  costó exactamente un `continua` manual. La causa de fondo alimenta la
+  deuda 8: una corrección SOLO documental revalida el mundo entero
+  (suite completa incluida) y con el modelo reforzado, más lento por
+  paso, eso roza el presupuesto. La repetición acabó en 12-25 min.
+- **Ronda 2 — Codex cazó al corrector en la familia ADR-135**: el
+  corrector declaró «`uv run pytest` → 0» habiendo corrido DOS procesos
+  (la partición en tandas con la que esquivaba el presupuesto), y
+  `scripts/check.ps1` exige UNA ejecución. P1 legítimo: evidencia que
+  no demuestra lo que afirma. Ronda 3: recaptura con una sola
+  invocación (4932/15/2 en 7 m 32 s) y un párrafo de honestidad sobre
+  qué captura se cita dónde. Aprobación dual sobre `92e5b9f`, con el
+  marcador FIXED firmado por run (`33948927999-1`) — ADR-140 visto
+  funcionar en vivo.
+- **Lectura de la medición**: las 3 rondas fueron (1) un defecto de MI
+  encargo, (2) un defecto de evidencia del corrector, (3) el cierre.
+  Ningún hallazgo tocó el código. Si el patrón se repite en el próximo
+  encargo, la frustración de «tres a cinco rondas por encargo» no se
+  cura con más rondas de código sino donde ya apunta esta noche: encargos
+  con hechos verificados, y evidencia bien contada a la primera. La
+  revisión dual pagó su asiento dos veces (las dos paradas fueron de
+  Codex, con Claude aprobando).
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
@@ -872,3 +937,13 @@ ADR o su incidencia cuando se adopte.
     el espejo poblado — la primera candidata es la de hoy, entregada
     hacia las ~08:00 UTC reales (entrada 36), y no podrá decir
     «comparable» hasta que C2 encienda la jurisdicción.
+14. La hora del contador, de punta a punta (decisión del propietario;
+    entradas 36 y 37 + diagnóstico del corrector en #537): (a) el
+    derivador se INCLUYE A SÍ MISMO — programar la hora derivada movió
+    la derivación de 03:24 a 09:24 en el acto; (b) la cabecera de
+    `contador-siete-dias.yml` afirma «03:24, derivado» y hoy es falso;
+    (c) GitHub ENTREGA ese cron con 43 min-12 h de retraso (~08:00
+    estos días), así que la geometría estática tampoco gobierna el
+    reloj de pared — candidato: la pasada mide su propia ventana al
+    llegar, contra runs reales. Las tres piezas van juntas en una sola
+    ficha porque cualquier arreglo parcial contradice a las otras dos.
