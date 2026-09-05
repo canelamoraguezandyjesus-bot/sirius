@@ -86,9 +86,14 @@ camino completo, marcador a marcador y en orden cronológico.
 **Predicción, escrita antes de correr nada:** el recorrido del caso vivo
 produce entre 4 y 6 sucesos —reactivación más el camino de fase desde
 `REPARAR` hasta la entrega— y cero en la segunda pasada.
-**Resultado:** pendiente de medir — esta línea se rellena después de correr
-las pruebas, no antes (si se rellenara antes no sería una medida, sería la
-predicción escrita dos veces).
+**Resultado (medido después de correr las pruebas):** exactamente 5 —
+`work_item_reactivated`, `work_item_repair_resumed`, `work_item_review_started`,
+`work_item_review_approved`, `work_item_delivered`—, y cero en la segunda
+pasada. Dentro del rango predicho, en su extremo bajo: el recorrido reproduce
+los estados que el historial acredita, no cada vuelta del bucle
+revisar-reparar que la incidencia dio de verdad (las dos vueltas de Quality no
+dejaron notificación propia, porque `sirius:ci-pending` no es una de las seis
+etiquetas que `notify-sirius-state.yml` vigila).
 
 ## Opciones consideradas
 
@@ -151,17 +156,33 @@ posterior a la parada—, no la foto. Fuera del recorrido, el gate
   `gh issue view 537 --repo canelamoraguezandyjesus-bot/sirius --json comments`
   (tabla de arriba): confirma que la segunda reanudación no publicó marcador y
   que las tres notificaciones intermedias sí existen.
-- `tests/engine/test_reflect.py::test_recorrido_acreditado_avanza_el_caso_vivo_de_la_537`
-  y `::test_sin_acreditacion_intermedia_se_declara_y_no_se_toca_nada`: la
-  primera exige los cinco pasos y su segunda pasada a cero; la segunda exige la
-  divergencia literal de hoy. Vistas FALLAR contra el reflector de `main`
-  (`git stash` del cambio de `reflect.py`) antes de la implementación.
-- `tests/automation/test_reflejar_desenlace_github.py::test_recorrido_acreditado_de_la_incidencia_537`:
-  el recorrido completo contra `DurableWorkEngineStore` y el espejo doble, con
-  la comprobación de `store.list_events()` y la segunda pasada a cero.
-- Validaciones obligatorias completas con una sola invocación de
-  `scripts/check.ps1` (Ruff format, Ruff lint, mypy, pytest) más
-  `git diff --check`.
+- `tests/engine/test_reflect.py`, sección G: siete pruebas nuevas -el caso
+  vivo con sus cinco pasos y su segunda pasada a cero, el contraejemplo sin
+  acreditación intermedia, la foto repetida, el ancla, el historial sin ancla,
+  el tramo ilegal, y la garantía de que el recorrido no altera un plan que la
+  foto ya resolvía.
+- `tests/engine/test_reflect_cli.py::test_una_pasada_real_recorre_la_recuperacion_de_la_537`:
+  la pasada ENTERA de `sirius-reflejar` -comentarios crudos, proyección real,
+  plan y almacén- sobre un doble del espejo con los 22 comentarios de la #537.
+  Comprueba los cinco sucesos en `store.list_events()` y la segunda pasada a
+  cero. Su hermana
+  `::test_sin_las_notificaciones_intermedias_la_misma_pasada_declara_y_no_toca_nada`
+  es el contraejemplo sobre la misma pasada.
+- Rojo previo, visto fallar: con el recorrido desactivado en
+  `reflejar_desenlace` (una línea: `return por_foto`), caen exactamente tres
+  pruebas —las dos del caso vivo y la del ancla— con el texto literal del run
+  real: «no hay camino hacia delante, no se toca nada». Con el recorrido
+  activo, 4945 pruebas en verde.
+- Prueba por mutación (tres sembradas, una prueba distinta cae con cada una):
+  anclar en la PRIMERA coincidencia en vez de la última →
+  `test_el_recorrido_ancla_en_la_ULTIMA_coincidencia_con_el_estado_guardado`;
+  quitar la exigencia de acreditación intermedia →
+  `test_la_foto_repetida_en_el_historial_no_es_acreditacion_intermedia`;
+  aplicar el trozo bueno de un recorrido ilegal en vez de abandonarlo entero →
+  `test_un_tramo_ilegal_abandona_el_recorrido_entero`.
+- Validaciones obligatorias completas con UNA sola invocación de
+  `scripts/check.ps1` (Ruff format, Ruff lint, mypy, pytest): «4945 passed, 15
+  skipped, 2 xfailed», exit 0. Más `git diff --check`, limpio.
 
 ## Consecuencias
 

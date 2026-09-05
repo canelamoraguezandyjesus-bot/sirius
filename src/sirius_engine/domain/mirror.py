@@ -92,6 +92,30 @@ class VeredictoPublicado:
 
 
 @dataclass(frozen=True, slots=True)
+class EstadoAcreditado:
+    """Un estado por el que la incidencia PASÓ, probado por un marcador del historial.
+
+    A diferencia de ``estado``/``fase`` -que son la FOTO actual, lo que las
+    etiquetas vigentes proyectan-, esto es el camino: cada
+    ``<!-- sirius-notification:sirius:<etiqueta>:<head> -->`` que
+    ``notify-sirius-state.yml`` publica al aplicarse una etiqueta deja
+    constancia fechada de que la incidencia estuvo en ese estado. Es lo que
+    permite AVANZAR el almacén del motor por transiciones ya legales cuando
+    una recuperación entera ocurrió sin que ninguna pasada de reflejo la
+    observara (ADR-144, incidencia #539).
+
+    La interpretación de ``etiqueta`` a ``(estado, fase)`` es exactamente la
+    misma tabla que usa la foto (``mirror_projection._LABEL_STATE``): aquí no
+    se reinterpreta el vocabulario, solo se aplica a otro sitio del historial.
+    """
+
+    etiqueta: str
+    estado: WorkItemState
+    fase: WorkItemPhase | None
+    head: str
+
+
+@dataclass(frozen=True, slots=True)
 class MirroredWorkItem:
     """Proyección NO-autoritativa de una incidencia de la vía GitHub.
 
@@ -134,6 +158,12 @@ class MirroredWorkItem:
     #: parcial-: sin este marcador, un cambio de etiqueta sobre un
     #: ``WorkItem`` parado no autoriza reanudar (CODEX-001, ronda 4, PR #530).
     reanudacion_publicada: bool = False
+    #: Los estados que el historial DE CONFIANZA acredita, del más antiguo al
+    #: más reciente, uno por marcador ``sirius-notification`` con etiqueta
+    #: reconocida. Vacío cuando la incidencia no tiene ninguno -lo normal
+    #: mientras el ciclo no ha cambiado de etiqueta ni una vez-, y también
+    #: cuando los tiene pero ninguno es de confianza.
+    historial_estados: tuple[EstadoAcreditado, ...] = ()
     autoritativo: bool = field(default=False, init=False)
 
 

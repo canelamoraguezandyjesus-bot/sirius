@@ -48,6 +48,7 @@ from datetime import datetime
 
 from sirius_engine.domain.mirror import (
     EspejoIlegibleError,
+    EstadoAcreditado,
     EventoQuality,
     MirroredRun,
     MirroredWorkItem,
@@ -210,6 +211,26 @@ _STOP_MARKER_RE = re.compile(
     r"|precheck(?!:head-movido-tras-ci\s*-->))"
     r"(?::[^>]*)?-->"
 )
+
+# Marcador que `notify-sirius-state.yml` publica cada vez que se APLICA una de
+# las seis etiquetas que vigila (`implementing`, `repair-requested`,
+# `ready-for-merge`, `blocked-decision`, `failed-safely`, `completed`):
+#
+#   marker="<!-- sirius-notification:${STATE_LABEL}:${head_sha} -->"
+#
+# A diferencia de las etiquetas vigentes -que son la FOTO de ahora mismo-,
+# estos marcadores son el CAMINO: cada uno prueba, fechado y por escrito, que
+# la incidencia estuvo en ese estado. `head_sha` vale `no-head` cuando la
+# incidencia todavía no tenía ningún SHA publicado (mismo guion), así que aquí
+# se captura tal cual, sin exigir forma de SHA.
+#
+# El guion deduplica por marcador COMPLETO -etiqueta y head-, así que la
+# secuencia no es exhaustiva: una etiqueta repuesta sobre el mismo head no
+# publica un segundo marcador. Eso la hace incompleta, nunca falsa; el
+# recorrido acreditado (ADR-144) solo necesita que lo que diga haya ocurrido,
+# no que diga todo lo que ocurrió.
+_NOTIFICATION_MARKER_RE = re.compile(r"<!--\s*sirius-notification:(sirius:[a-z-]+):([^\s>]*)\s*-->")
+
 
 # --- Etiquetas -> (estado, fase) --------------------------------------------
 #
@@ -433,6 +454,44 @@ def _interpretar_reanudacion_publicada(
     return ultima_parada is None or ultimo_resume > ultima_parada
 
 
+def _interpretar_historial_estados(
+    cuerpo: CuerpoIncidencia, comentarios: Sequence[Comentario]
+) -> tuple[EstadoAcreditado, ...]:
+    """Los estados acreditados por marcadores ``sirius-notification``, en orden.
+
+    Mismo filtro de confianza y mismo orden cronológico que
+    :func:`_texto_cronologico_de_confianza` -cuerpo primero, comentarios en el
+    orden en que ya llegan del puerto-, y la MISMA tabla ``_LABEL_STATE`` que
+    interpreta la foto: una etiqueta no significa una cosa cuando está puesta y
+    otra cuando la nombra un marcador. Una etiqueta que la tabla no reconozca
+    se ignora en silencio, igual que en :func:`_estado_y_fase`.
+
+    Deliberadamente NO se corta por ``history_after_last_resume``: una orden de
+    reanudación mueve el listón de la convergencia -cuántas rondas cuentan-,
+    no borra los estados por los que la incidencia pasó antes. El recorrido
+    acreditado ancla en el estado guardado del motor, que puede ser anterior a
+    esa orden (ADR-144).
+    """
+    textos: list[str] = []
+    if es_autor_de_confianza(cuerpo):
+        textos.append(cuerpo.texto)
+    textos.extend(
+        comentario.cuerpo for comentario in comentarios if es_autor_de_confianza(comentario)
+    )
+
+    acreditados: list[EstadoAcreditado] = []
+    for texto in textos:
+        for match in _NOTIFICATION_MARKER_RE.finditer(texto):
+            etiqueta = match.group(1)
+            if etiqueta not in _LABEL_STATE:
+                continue
+            estado, fase = _LABEL_STATE[etiqueta]
+            acreditados.append(
+                EstadoAcreditado(etiqueta=etiqueta, estado=estado, fase=fase, head=match.group(2))
+            )
+    return tuple(acreditados)
+
+
 def _interpretar_diagnostico_fallo(comentarios: Sequence[Comentario]) -> str | None:
     """El diagnóstico del último comentario de confianza que paró de forma segura.
 
@@ -498,6 +557,7 @@ def proyectar_work_item(
         reanudacion_publicada=_interpretar_reanudacion_publicada(
             cuerpo.cuerpo, comentarios.comentarios
         ),
+        historial_estados=_interpretar_historial_estados(cuerpo.cuerpo, comentarios.comentarios),
     )
 
 

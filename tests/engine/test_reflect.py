@@ -53,13 +53,14 @@ import pytest
 
 from sirius_engine.adapters.memory_store import InMemoryWorkEngineStore
 from sirius_engine.domain.dispatch import DispatchEpisode
-from sirius_engine.domain.mirror import MirroredWorkItem, OrigenLectura
+from sirius_engine.domain.mirror import EstadoAcreditado, MirroredWorkItem, OrigenLectura
 from sirius_engine.domain.work_item import (
     WorkItem,
     WorkItemClass,
     WorkItemPhase,
     WorkItemState,
 )
+from sirius_engine.mirror_projection import _LABEL_STATE
 from sirius_engine.reflect import (
     PASO_COMPROBACION_INICIADA,
     PASO_DECISION_RESUELTA,
@@ -101,6 +102,7 @@ def _espejo(
     head_sha: str | None = None,
     diagnostico_fallo: str | None = None,
     reanudacion_publicada: bool = False,
+    historial_estados: tuple[EstadoAcreditado, ...] = (),
 ) -> MirroredWorkItem:
     return MirroredWorkItem(
         work_id=f"{_REPO}#508",
@@ -118,6 +120,7 @@ def _espejo(
         origen=OrigenLectura(fuente="test", leido_en=_AHORA),
         diagnostico_fallo=diagnostico_fallo,
         reanudacion_publicada=reanudacion_publicada,
+        historial_estados=historial_estados,
     )
 
 
@@ -862,3 +865,259 @@ def test_mutacion_quitar_idempotencia_la_detecta_esta_prueba() -> None:
     )
     # Si esto no fuera así, la siguiente línea lanzaría IllegalTransitionError.
     aplicar_pasos(store, _WORK_ID, segundo.pasos, now=_AHORA)
+
+
+# --- Sección G: recorrer una recuperación acreditada (ADR-144, #539) -------
+#
+# Nota de arranque en ADR-144. El caso vivo es WI-20260905-034826 (incidencia
+# #537): el motor se quedó en `failed_safely`/`reparar` en su parada de las
+# 05:17 del 05-09-2026 y la incidencia siguió sin él -segunda reanudación a
+# las 05:29, dos vueltas de Quality+revisión, `completed` a las 07:00-. El
+# reflector comparaba su estado guardado con la foto actual, no encontraba
+# camino hacia delante y se negaba (fail-open correcto, memoria
+# desactualizada). Estas pruebas fijan que el historial de confianza, que sí
+# acredita el camino, baste para recorrerlo.
+
+
+def _acreditado(etiqueta: str, head: str = "1c934781") -> EstadoAcreditado:
+    estado, fase = _LABEL_STATE[etiqueta]
+    return EstadoAcreditado(etiqueta=etiqueta, estado=estado, fase=fase, head=head)
+
+
+#: Los marcadores `sirius-notification` reales de la #537, en el orden en que
+#: se publicaron (leídos con `gh issue view 537 --json comments`, 05-09-2026).
+_HISTORIAL_537: tuple[EstadoAcreditado, ...] = (
+    _acreditado("sirius:implementing", "no-head"),
+    _acreditado("sirius:repair-requested", "1c934781"),
+    _acreditado("sirius:blocked-decision", "1c934781"),
+    _acreditado("sirius:failed-safely", "1c934781"),
+    _acreditado("sirius:repair-requested", "786c82dc"),
+    _acreditado("sirius:ready-for-merge", "92e5b9f4"),
+    _acreditado("sirius:completed", "92e5b9f4"),
+)
+
+
+def _motor_parado_en_reparar(store: InMemoryWorkEngineStore) -> WorkItem:
+    """El estado exacto en que se quedó WI-20260905-034826: failed_safely/reparar."""
+    _work_item_activo(store)
+    store.begin_work_item_execution(_WORK_ID, now=_AHORA)
+    store.begin_work_item_check(_WORK_ID, now=_AHORA)
+    store.begin_work_item_review(_WORK_ID, now=_AHORA)
+    store.request_work_item_repair(_WORK_ID, now=_AHORA)
+    parado = store.fail_work_item_safely(_WORK_ID, diagnostico="sin tiempo", now=_AHORA)
+    assert parado.estado is WorkItemState.FAILED_SAFELY
+    assert parado.fase is WorkItemPhase.REPARAR
+    return parado
+
+
+def test_recorrido_acreditado_avanza_el_caso_vivo_de_la_537() -> None:
+    """El caso que motivó ADR-144, con el historial real de la incidencia #537.
+
+    El espejo NO trae `reanudacion_publicada`: la segunda reanudación no dejó
+    marcador nuevo porque `sirius_comment_once` deduplica por el texto del
+    marcador y el head no había cambiado. Lo que acredita el camino son las
+    notificaciones de etiqueta posteriores a la parada.
+    """
+    store = InMemoryWorkEngineStore()
+    parado = _motor_parado_en_reparar(store)
+    espejo = _espejo(
+        estado=WorkItemState.DELIVERED,
+        fase=WorkItemPhase.ENTREGAR,
+        etiquetas=("sirius:completed",),
+        head_sha="92e5b9f469485c537c9cec5b37f6131f17d9903a",
+        historial_estados=_HISTORIAL_537,
+    )
+
+    resultado = reflejar_desenlace(parado, espejo, _episodio())
+
+    assert resultado.divergencia is None
+    assert tuple(paso.kind for paso in resultado.pasos) == (
+        PASO_REACTIVADO,
+        PASO_REPARACION_REANUDADA,
+        PASO_REVISION_INICIADA,
+        PASO_REVISION_APROBADA,
+        PASO_ENTREGADO,
+    )
+
+    aplicados = aplicar_pasos(store, _WORK_ID, resultado.pasos, now=_AHORA)
+    entregado = aplicados[-1]
+    assert entregado.estado is WorkItemState.DELIVERED
+    assert entregado.fase is WorkItemPhase.ENTREGAR
+    assert entregado.resultado is not None
+    assert entregado.resultado["merge_sha"] == "92e5b9f469485c537c9cec5b37f6131f17d9903a"
+
+    # C1, invariante 3: la pasada siguiente no añade nada.
+    segunda = reflejar_desenlace(entregado, espejo, _episodio())
+    assert segunda.pasos == ()
+    assert segunda.divergencia is None
+
+
+def test_sin_acreditacion_intermedia_se_declara_y_no_se_toca_nada() -> None:
+    """El contraejemplo de la incidencia #539, en su forma más pura.
+
+    Mismo motor y misma foto que el caso vivo, pero el historial de confianza
+    se detiene en la parada: nada acredita que la incidencia volviera a estar
+    viva. Se conserva exactamente el comportamiento de hoy.
+    """
+    store = InMemoryWorkEngineStore()
+    parado = _motor_parado_en_reparar(store)
+    espejo = _espejo(
+        estado=WorkItemState.DELIVERED,
+        fase=WorkItemPhase.ENTREGAR,
+        etiquetas=("sirius:completed",),
+        historial_estados=_HISTORIAL_537[:4],
+    )
+
+    resultado = reflejar_desenlace(parado, espejo, _episodio())
+
+    assert resultado.pasos == ()
+    assert resultado.divergencia is not None
+    assert "no hay camino hacia delante, no se toca nada" in resultado.divergencia
+
+
+def test_la_foto_repetida_en_el_historial_no_es_acreditacion_intermedia() -> None:
+    """Prueba adversaria: el historial no dice NADA que la foto no dijera ya.
+
+    Es el caso que CODEX-001 (ronda 4, PR #530) cerró y que este cambio no
+    puede reabrir: una etiqueta de parada sustituida por otra sin ninguna
+    orden del propietario. El único estado acreditado tras la parada es el de
+    la propia foto, así que no hay ninguna secuencia que recorrer -solo el
+    salto que el reflector ya rechazaba.
+    """
+    store = InMemoryWorkEngineStore()
+    parado = _motor_parado_en_reparar(store)
+    espejo = _espejo(
+        estado=WorkItemState.DELIVERED,
+        fase=WorkItemPhase.ENTREGAR,
+        etiquetas=("sirius:completed",),
+        historial_estados=(*_HISTORIAL_537[:4], _acreditado("sirius:completed", "92e5b9f4")),
+    )
+
+    resultado = reflejar_desenlace(parado, espejo, _episodio())
+
+    assert resultado.pasos == ()
+    assert resultado.divergencia is not None
+
+
+def test_el_recorrido_ancla_en_la_ULTIMA_coincidencia_con_el_estado_guardado() -> None:
+    """El motor está donde se quedó, no donde estuvo la primera vez.
+
+    Este historial para dos veces en seguro. Anclando en la PRIMERA parada, el
+    recorrido intentaría llevar el motor hasta ENTREGAR y desde ahí volver a
+    REPARAR para la segunda vuelta -y no existe ninguna arista de ENTREGAR a
+    REPARAR-, así que se abandonaría entero y el motor se quedaría
+    desactualizado. Anclando en la última -que es donde el motor se quedó de
+    verdad- el camino existe.
+    """
+    store = InMemoryWorkEngineStore()
+    parado = _motor_parado_en_reparar(store)
+    espejo = _espejo(
+        estado=WorkItemState.DELIVERED,
+        fase=WorkItemPhase.ENTREGAR,
+        etiquetas=("sirius:completed",),
+        historial_estados=(
+            _acreditado("sirius:implementing", "no-head"),
+            _acreditado("sirius:failed-safely", "1c934781"),
+            _acreditado("sirius:repair-requested", "1c934781"),
+            _acreditado("sirius:ready-for-merge", "1c934781"),
+            _acreditado("sirius:failed-safely", "786c82dc"),
+            _acreditado("sirius:repair-requested", "786c82dc"),
+            _acreditado("sirius:ready-for-merge", "92e5b9f4"),
+            _acreditado("sirius:completed", "92e5b9f4"),
+        ),
+    )
+
+    resultado = reflejar_desenlace(parado, espejo, _episodio())
+
+    assert tuple(paso.kind for paso in resultado.pasos) == (
+        PASO_REACTIVADO,
+        PASO_REPARACION_REANUDADA,
+        PASO_REVISION_INICIADA,
+        PASO_REVISION_APROBADA,
+        PASO_ENTREGADO,
+    ), "anclar en la PRIMERA parada habría abandonado el recorrido entero"
+
+
+def test_sin_ancla_en_el_historial_no_hay_recorrido() -> None:
+    """El estado guardado tiene que estar EN el historial acreditado.
+
+    Un historial que nunca menciona el estado del motor no conecta nada con
+    nada: recorrerlo sería empezar por un punto que nadie acreditó.
+    """
+    store = InMemoryWorkEngineStore()
+    parado = _motor_parado_en_reparar(store)
+    espejo = _espejo(
+        estado=WorkItemState.DELIVERED,
+        fase=WorkItemPhase.ENTREGAR,
+        etiquetas=("sirius:completed",),
+        historial_estados=(
+            _acreditado("sirius:implementing", "no-head"),
+            _acreditado("sirius:ready-for-merge", "92e5b9f4"),
+            _acreditado("sirius:completed", "92e5b9f4"),
+        ),
+    )
+
+    resultado = reflejar_desenlace(parado, espejo, _episodio())
+
+    assert resultado.pasos == ()
+    assert resultado.divergencia is not None
+
+
+def test_un_tramo_ilegal_abandona_el_recorrido_entero() -> None:
+    """Todo o nada: si un tramo no es una transición real, no se aplica ninguno.
+
+    El historial acredita aquí un retroceso imposible (de ENTREGAR a
+    EJECUTAR). El recorrido no puede "saltárselo" ni aplicar solo el trozo
+    bueno: se abandona entero y se declara la divergencia de siempre.
+    """
+    store = InMemoryWorkEngineStore()
+    parado = _motor_parado_en_reparar(store)
+    espejo = _espejo(
+        estado=WorkItemState.DELIVERED,
+        fase=WorkItemPhase.ENTREGAR,
+        etiquetas=("sirius:completed",),
+        historial_estados=(
+            *_HISTORIAL_537[:4],
+            _acreditado("sirius:ready-for-merge", "92e5b9f4"),
+            _acreditado("sirius:implementing", "92e5b9f4"),
+            _acreditado("sirius:completed", "92e5b9f4"),
+        ),
+    )
+
+    resultado = reflejar_desenlace(parado, espejo, _episodio())
+
+    assert resultado.pasos == ()
+    assert resultado.divergencia is not None
+    assert store.get_work_item(_WORK_ID) is not None
+    item = store.get_work_item(_WORK_ID)
+    assert item is not None
+    assert item.estado is WorkItemState.FAILED_SAFELY
+
+
+def test_el_recorrido_solo_entra_cuando_la_foto_sola_no_basta() -> None:
+    """El cálculo por foto manda: el recorrido es el plan B, no el plan A.
+
+    Con un motor ACTIVE/EJECUTAR y una foto ACTIVE/REVISAR, el cálculo de
+    siempre ya encuentra camino; el historial acreditado -que aquí describe
+    un rodeo por REPARAR- no puede cambiar ese plan mínimo.
+    """
+    store = InMemoryWorkEngineStore()
+    _work_item_activo(store)
+    ejecutando = store.begin_work_item_execution(_WORK_ID, now=_AHORA)
+
+    espejo = _espejo(
+        estado=WorkItemState.ACTIVE,
+        fase=WorkItemPhase.REVISAR,
+        etiquetas=("sirius:reviewing",),
+        historial_estados=(
+            _acreditado("sirius:implementing", "no-head"),
+            _acreditado("sirius:repair-requested", "1c934781"),
+        ),
+    )
+
+    resultado = reflejar_desenlace(ejecutando, espejo, _episodio())
+
+    assert tuple(paso.kind for paso in resultado.pasos) == (
+        PASO_COMPROBACION_INICIADA,
+        PASO_REVISION_INICIADA,
+    )

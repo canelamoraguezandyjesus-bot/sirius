@@ -70,16 +70,38 @@ Dos funciones, deliberadamente separadas:
 5. **Idempotente por construcción.** Si el ``WorkItem`` ya está exactamente
    en el objetivo, el camino calculado está vacío: una segunda pasada sobre
    el mismo espejo no añade ningún suceso.
+6. **Recorrer lo acreditado, cuando la foto sola no basta** (ADR-144,
+   incidencia #539). Las cinco reglas de arriba comparan DOS FOTOS: el estado
+   guardado y lo que las etiquetas vigentes proyectan. Si entre esas dos
+   fotos pasó una recuperación entera sin que ninguna pasada la observara -el
+   caso real de WI-20260905-034826 / incidencia #537: parada a las 05:17,
+   segunda reanudación a las 05:29, dos vueltas de Quality y revisión, y
+   ``completed`` a las 07:00-, no hay salto legal entre las dos fotos y la
+   regla 3 declara divergencia, para siempre. Cuando -y solo cuando- eso
+   pasa, se intenta el **recorrido acreditado**: si el historial DE CONFIANZA
+   de la incidencia (``espejo.historial_estados``, los marcadores
+   ``sirius-notification`` que el bot publica al aplicarse cada etiqueta)
+   acredita una secuencia de estados que conecta el estado guardado con la
+   foto, se recorre entera, tramo a tramo, anotando cada transición
+   intermedia como suceso propio del diario. No hay ninguna arista nueva: lo
+   que se legaliza es RECORRER saltos ya legales -cada tramo lo calculan
+   estas mismas cinco reglas, y el ``WorkItem`` intermedio avanza llamando a
+   los métodos del dominio, que son los que dicen qué es legal-. Y hace falta
+   al menos un estado acreditado INTERMEDIO, distinto de la foto: un
+   historial que solo repite lo que la foto ya decía no acredita ninguna
+   secuencia, y ese salto se sigue rechazando como hoy (CODEX-001, ronda 4,
+   PR #530).
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 
 from sirius_engine.domain.dispatch import DispatchEpisode
-from sirius_engine.domain.mirror import MirroredWorkItem
+from sirius_engine.domain.errors import EngineError
+from sirius_engine.domain.mirror import EstadoAcreditado, MirroredWorkItem
 from sirius_engine.domain.work_item import WorkItem, WorkItemPhase, WorkItemState
 from sirius_engine.ports.store import WorkEngineStore
 
@@ -185,14 +207,26 @@ def _camino_de_fase(
     return tuple(pasos)
 
 
-def reflejar_desenlace(
-    work_item: WorkItem, espejo: MirroredWorkItem, episodio: DispatchEpisode
+def _reflejar_por_foto(
+    work_item: WorkItem,
+    espejo: MirroredWorkItem,
+    episodio: DispatchEpisode,
+    *,
+    reanudacion_acreditada: bool,
 ) -> ResultadoReflejo:
-    """Calcula el plan MÍNIMO que lleva ``work_item`` a lo que ``espejo`` proyecta.
+    """El cálculo de siempre: el plan MÍNIMO hacia UNA foto del espejo.
 
     Pura: no llama al almacén, a GitHub ni al disco. ``episodio`` solo aporta
     ``numero_incidencia`` para el ``resultado`` de una entrega -el motor no
     puede afirmar «entregado» sin decir a qué incidencia corresponde.
+
+    ``reanudacion_acreditada`` es lo único que este cálculo no decide por sí
+    mismo: qué autoriza a salir de una parada. Desde la foto actual es
+    ``espejo.reanudacion_publicada`` -el permiso escrito del propietario,
+    regla 3-; desde un tramo del recorrido acreditado (regla 6) lo autoriza el
+    marcador intermedio que ya se verificó antes de llamar aquí. El parámetro
+    existe para que esa diferencia se vea en la firma en vez de esconderse en
+    un espejo fabricado con el campo cambiado.
     """
     if espejo.etiquetas_contradictorias:
         contradictorias = ", ".join(sorted(espejo.etiquetas))
@@ -251,14 +285,14 @@ def reflejar_desenlace(
     if (
         work_item.estado is WorkItemState.FAILED_SAFELY
         and espejo.estado is not WorkItemState.FAILED_SAFELY
-        and espejo.reanudacion_publicada
+        and reanudacion_acreditada
     ):
         pasos_reanudacion = (PasoReflejo(kind=PASO_REACTIVADO),)
         estado_efectivo = WorkItemState.ACTIVE
     elif (
         work_item.estado is WorkItemState.NEEDS_DECISION
         and espejo.estado is not WorkItemState.NEEDS_DECISION
-        and espejo.reanudacion_publicada
+        and reanudacion_acreditada
     ):
         pasos_reanudacion = (
             PasoReflejo(kind=PASO_DECISION_RESUELTA, resultado={"continuar": True}),
@@ -339,6 +373,187 @@ def reflejar_desenlace(
     if camino is None:
         return ResultadoReflejo(pasos=(), divergencia=_divergencia_atras(work_item, espejo))
     return ResultadoReflejo(pasos=(*pasos_reanudacion, *camino))
+
+
+def reflejar_desenlace(
+    work_item: WorkItem, espejo: MirroredWorkItem, episodio: DispatchEpisode
+) -> ResultadoReflejo:
+    """El plan que lleva ``work_item`` hasta donde la incidencia está HOY.
+
+    Dos cálculos, en este orden y nunca al revés (regla 6):
+
+    1. El de siempre, contra la foto actual del espejo
+       (:func:`_reflejar_por_foto`). Si encuentra camino -o si no hay nada que
+       decir- eso es la respuesta: el recorrido no puede alargar ni cambiar un
+       plan mínimo que ya existe.
+    2. Solo si ese cálculo declaró divergencia, el **recorrido acreditado**:
+       si el historial de confianza acredita una secuencia de saltos ya
+       legales que conecta el estado guardado con la foto, se recorre entera.
+       Si no la acredita, se devuelve la divergencia del punto 1 tal cual
+       -mismo texto, mismo fail-open, cero pasos.
+
+    Sigue siendo pura: no llama al almacén, a GitHub ni al disco.
+    """
+    por_foto = _reflejar_por_foto(
+        work_item, espejo, episodio, reanudacion_acreditada=espejo.reanudacion_publicada
+    )
+    if por_foto.divergencia is None:
+        return por_foto
+    recorrido = _recorrer_historial_acreditado(work_item, espejo, episodio)
+    return recorrido if recorrido is not None else por_foto
+
+
+def _objetivos_acreditados(
+    work_item: WorkItem, espejo: MirroredWorkItem
+) -> tuple[EstadoAcreditado, ...] | None:
+    """Los estados acreditados que quedan POR recorrer, o ``None`` si no hay recorrido.
+
+    Dos exigencias, y las dos son la salvaguarda entera:
+
+    - **Ancla**: el estado guardado del motor tiene que aparecer en el
+      historial acreditado, y se toma la coincidencia MÁS RECIENTE -el motor
+      está donde se quedó, no donde estuvo la primera vez-. Un marcador de
+      parada no trae fase (``sirius:failed-safely`` y
+      ``sirius:blocked-decision`` proyectan ``fase=None``), así que en esos la
+      coincidencia es solo de estado; en los demás tienen que coincidir los
+      dos ejes.
+    - **Acreditación intermedia**: al menos una de las observaciones
+      posteriores al ancla tiene que ser distinta de la foto actual. Si todas
+      son la foto, el historial no acredita ninguna secuencia -solo repite lo
+      que la foto ya decía-, y ese salto de una sola observación es
+      exactamente el que el reflector rechaza desde CODEX-001 (ronda 4, PR
+      #530): una etiqueta de parada sustituida a mano, sin ninguna orden del
+      propietario, no autoriza nada.
+    """
+    historial = espejo.historial_estados
+    ancla: int | None = None
+    for indice, acreditado in enumerate(historial):
+        if acreditado.estado is not work_item.estado:
+            continue
+        if acreditado.fase is not None and acreditado.fase is not work_item.fase:
+            continue
+        ancla = indice
+    if ancla is None:
+        return None
+    posteriores = historial[ancla + 1 :]
+    if not posteriores:
+        return None
+    foto = (espejo.estado, espejo.fase)
+    if all((acreditado.estado, acreditado.fase) == foto for acreditado in posteriores):
+        return None
+    return posteriores
+
+
+def _recorrer_historial_acreditado(
+    work_item: WorkItem, espejo: MirroredWorkItem, episodio: DispatchEpisode
+) -> ResultadoReflejo | None:
+    """El plan que recorre, tramo a tramo, lo que el historial de confianza acredita.
+
+    ``None`` cuando no hay recorrido posible -y entonces el llamador conserva
+    la divergencia de siempre-. Es TODO O NADA: si cualquier tramo diverge o
+    resulta ilegal, no se devuelve el trozo bueno; se abandona entero. Aplicar
+    media recuperación dejaría el diario en un punto que nadie acreditó.
+
+    Cada tramo se calcula con la MISMA :func:`_reflejar_por_foto` que la foto
+    actual, sobre un espejo derivado del real al que solo se le cambian
+    ``estado``/``fase``/``etiquetas`` por los del estado acreditado: el resto
+    -diagnóstico de fallo, SHA de fusión- sigue siendo el del espejo real,
+    porque es el único que hay. Y entre tramo y tramo el ``WorkItem`` avanza
+    llamando a los métodos REALES del dominio (:func:`_avanzar`), no a una
+    tabla paralela de estados: si un tramo no fuera una transición legal, es
+    la máquina de estados de :mod:`sirius_engine.domain.work_item` la que lo
+    dice, y el recorrido se abandona. Este módulo no añade ninguna arista.
+    """
+    if espejo.etiquetas_contradictorias or espejo.estado is None:
+        # Invariante 4 de la incidencia #539: una incidencia con etiquetas de
+        # estado contradictorias se sigue tratando como hoy -declarar y no
+        # tocar nada-, y sin foto no hay destino al que recorrer.
+        return None
+    objetivos = _objetivos_acreditados(work_item, espejo)
+    if objetivos is None:
+        return None
+
+    pasos: list[PasoReflejo] = []
+    simulado = work_item
+    for acreditado in objetivos:
+        espejo_del_tramo = replace(
+            espejo,
+            estado=acreditado.estado,
+            fase=acreditado.fase,
+            etiquetas=(acreditado.etiqueta,),
+        )
+        tramo = _reflejar_por_foto(
+            simulado, espejo_del_tramo, episodio, reanudacion_acreditada=True
+        )
+        if tramo.divergencia is not None:
+            return None
+        avanzado = _avanzar(simulado, tramo.pasos)
+        if avanzado is None:
+            return None
+        simulado = avanzado
+        pasos.extend(tramo.pasos)
+
+    # El último tramo va contra el espejo REAL, no contra un derivado: es el
+    # que trae el SHA de fusión de la entrega y el que garantiza que el
+    # recorrido termina exactamente en la foto, no cerca.
+    ultimo = _reflejar_por_foto(simulado, espejo, episodio, reanudacion_acreditada=True)
+    if ultimo.divergencia is not None:
+        return None
+    pasos.extend(ultimo.pasos)
+    if not pasos:
+        return None
+    return ResultadoReflejo(pasos=tuple(pasos))
+
+
+#: Nombre del paso -> método del DOMINIO que lo ejecuta. Hermana de
+#: :data:`_APLICAR` (que apunta a los puertos del almacén) y deliberadamente
+#: separada: esta se usa para SIMULAR el recorrido antes de tocar nada, y la
+#: otra para aplicarlo. Que las dos existan es lo que permite comprobar la
+#: legalidad de un tramo sin escribir un solo suceso.
+_AVANZAR_DOMINIO: dict[str, str] = {
+    PASO_EJECUCION_INICIADA: "begin_execution",
+    PASO_COMPROBACION_INICIADA: "begin_check",
+    PASO_REVISION_INICIADA: "begin_review",
+    PASO_REVISION_APROBADA: "approve_review",
+    PASO_REPARACION_SOLICITADA: "request_repair",
+    PASO_REPARACION_REANUDADA: "resume_after_repair",
+    PASO_ESCALADO: "escalate",
+    PASO_REACTIVADO: "reactivate",
+}
+
+
+def _avanzar(work_item: WorkItem, pasos: Sequence[PasoReflejo]) -> WorkItem | None:
+    """Avanza una COPIA del ``WorkItem`` por ``pasos``, o ``None`` si alguno es ilegal.
+
+    No toca el almacén: son los métodos del dominio, que devuelven instancias
+    nuevas (``WorkItem`` es inmutable). El ``now`` que reciben es el
+    ``updated_at`` que el propio ``WorkItem`` ya trae, porque de esta
+    simulación solo se leen ``estado`` y ``fase``: la marca de tiempo real la
+    pone :func:`aplicar_pasos` cuando se aplica de verdad, y usar aquí un
+    ``datetime.now()`` rompería la pureza de :func:`reflejar_desenlace`.
+    """
+    simulado = work_item
+    for paso in pasos:
+        try:
+            if paso.kind == PASO_ENTREGADO:
+                assert paso.resultado is not None
+                simulado = simulado.deliver(resultado=paso.resultado, now=simulado.updated_at)
+            elif paso.kind == PASO_FALLO_SEGURO:
+                assert paso.diagnostico is not None
+                simulado = simulado.fail_safely(
+                    diagnostico=paso.diagnostico, now=simulado.updated_at
+                )
+            elif paso.kind == PASO_DECISION_RESUELTA:
+                assert paso.resultado is not None
+                simulado = simulado.resolve_decision(
+                    continuar=bool(paso.resultado["continuar"]), now=simulado.updated_at
+                )
+            else:
+                metodo = getattr(simulado, _AVANZAR_DOMINIO[paso.kind])
+                simulado = metodo(now=simulado.updated_at)
+        except EngineError:
+            return None
+    return simulado
 
 
 def _divergencia_atras(work_item: WorkItem, espejo: MirroredWorkItem) -> str:
