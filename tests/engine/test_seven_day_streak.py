@@ -577,6 +577,36 @@ def test_hora_recomendada_deriva_sobre_lo_que_hay_si_el_contador_no_esta(
     assert hora == time(12, 0)
 
 
+def test_si_el_unico_cron_es_el_del_contador_el_error_nombra_la_exclusion(
+    tmp_path: Path,
+) -> None:
+    """Un directorio donde el ÚNICO `schedule: cron:` es el del contador.
+
+    Con la exclusión de ADR-144 no queda ningún disparo que contar, así que la
+    función tiene que parar -eso no cambia-. Lo que no puede hacer es afirmar
+    que no encontró ningún `schedule: cron:` en el directorio: sí lo hay, y es
+    justo el que ella se salta. El error tiene que nombrar la exclusión para
+    que la causa se lea en el propio mensaje, en vez de mandar a buscar un
+    disparador ausente que en realidad está escrito.
+    """
+    workflows = tmp_path / "workflows"
+    workflows.mkdir()
+    (workflows / _CONTADOR_PARA_LAS_PRUEBAS).write_text(
+        yaml.safe_dump(
+            {"on": {"schedule": [{"cron": "24 3 * * *"}]}, "jobs": {"j": {"timeout-minutes": 30}}}
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match=_CONTADOR_PARA_LAS_PRUEBAS) as error:
+        hora_recomendada_pasada(workflows)
+
+    assert "no encontré ningún `schedule: cron:`" not in str(error.value), (
+        "el mensaje sigue afirmando que el directorio no tiene ningún `schedule: cron:`, "
+        "cuando lo que ocurre es que el único que hay se excluye a propósito"
+    )
+
+
 def test_un_contador_renombrado_vuelve_a_contarse_sin_reventar(tmp_path: Path) -> None:
     """Un renombrado accidental degrada a «como antes de ADR-144», nunca a un error.
 

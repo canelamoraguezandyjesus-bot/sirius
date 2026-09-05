@@ -572,8 +572,13 @@ def hora_recomendada_pasada(workflows_dir: Path = _WORKFLOWS_DIR) -> tuple[time,
     hora que no serviría (criterio de parada (b)).
     """
     disparos: list[time] = []
+    # Si el fichero del contador estaba y se saltó, el mensaje de «no hay nada
+    # que contar» tiene que decirlo: lo que ese directorio contenga puede no
+    # ser vacío -puede ser justo lo que esta función excluye a propósito-.
+    se_excluyo_el_contador = False
     for wf in sorted(workflows_dir.glob("*.yml")):
         if wf.name == NOMBRE_DEL_WORKFLOW_DEL_CONTADOR:
+            se_excluyo_el_contador = True
             continue
         doc: Any = yaml.safe_load(wf.read_text(encoding="utf-8"))
         activadores = doc.get("on") if isinstance(doc, dict) else None
@@ -591,6 +596,17 @@ def hora_recomendada_pasada(workflows_dir: Path = _WORKFLOWS_DIR) -> tuple[time,
                 disparos.extend(_horas_de_disparo(expresion))
 
     if not disparos:
+        if se_excluyo_el_contador:
+            # Decir aquí «no encontré ningún `schedule: cron:` en el
+            # directorio» sería falso: puede haberlo, en el fichero que esta
+            # función acaba de saltarse. La causa se nombra para que quien lea
+            # el error no busque un disparador que sí está escrito.
+            raise ValueError(
+                f"no quedó ningún `schedule: cron:` que contar en {workflows_dir}: se "
+                f"excluyeron los disparos de {NOMBRE_DEL_WORKFLOW_DEL_CONTADOR}, que esta "
+                "función no cuenta a propósito (ADR-144: la pasada del contador no se "
+                "estorba a sí misma). No hay de qué derivar la hora tranquila"
+            )
         raise ValueError(
             f"no encontré ningún `schedule: cron:` en {workflows_dir}: no hay de qué derivar "
             "la hora tranquila"
