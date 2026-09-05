@@ -96,9 +96,11 @@ Dos funciones, deliberadamente separadas:
    historial que no acredita nada intermedio no acredita ninguna secuencia, y
    ese salto de una sola observación se sigue rechazando como hoy (CODEX-001,
    ronda 4, PR #530). Y la acreditación es POR TRAMO: si el recorrido pasa
-   por una segunda parada, la salida de esa parada la tiene que acreditar una
-   observación posterior a ELLA -o el marcador real de reanudación-, nunca la
-   foto final (CODEX-001, ronda 1, PR #540).
+   por una segunda parada, la salida de esa parada la acredita la observación
+   que el recorrido toma como objetivo justo DESPUÉS de ella -el marcador que
+   el bot publicó, fechado y posterior a la parada- siempre que no sea la
+   propia foto, o el marcador real de reanudación; nunca la foto final
+   (CODEX-001, ronda 1, PR #540; CLAUDE-R2-001 y CODEX-001, ronda 2).
 """
 
 from __future__ import annotations
@@ -488,17 +490,29 @@ def _salida_de_parada_acreditada(
 
     - el marcador REAL de reanudación (``espejo.reanudacion_publicada``, el
       permiso escrito del propietario), que vale para todo el recorrido; o
-    - una observación acreditada POSTERIOR a este tramo que sea distinta de la
-      foto -el bot la publicó, fechada, después de esta parada-. La foto no
-      cuenta: es el destino, no evidencia de haber salido.
+    - la observación acreditada de ESTE tramo (``objetivos[indice]``) cuando
+      no es la foto: es exactamente el marcador que el bot publicó, fechado,
+      DESPUÉS de la parada de la que este tramo intenta salir -la primera
+      evidencia de que la incidencia volvió a estar viva-. La foto no cuenta:
+      es el destino, no evidencia de haber salido.
+
+    Lo que se mide es la evidencia posterior a ESA PARADA, no la posición
+    respecto al tramo ni la coincidencia con la foto. Medirla sobre
+    ``objetivos[indice + 1 :]`` -la primera forma de esta función- volvía a
+    hacer depender la acreditación de la foto por la puerta de atrás: exigía
+    una observación de más y contaba como acreditación la ÚLTIMA del
+    historial, que es el destino y no una acreditación de cómo se llegó. El
+    mismo historial recorría o no según cuál fuera la etiqueta vigente en el
+    momento de la pasada (CLAUDE-R2-001 y CODEX-001, ronda 2, PR #540).
 
     Por construcción, el último tramo del recorrido -el que va contra el
-    espejo real- nunca tiene observación posterior, así que solo el marcador
-    real puede autorizarlo.
+    espejo real- coincide con la foto, así que solo el marcador real puede
+    autorizarlo.
     """
     if espejo.reanudacion_publicada:
         return True
-    return any((posterior.estado, posterior.fase) != foto for posterior in objetivos[indice + 1 :])
+    objetivo = objetivos[indice]
+    return (objetivo.estado, objetivo.fase) != foto
 
 
 def _recorrer_historial_acreditado(

@@ -716,10 +716,15 @@ foto vigente no es expresable como marcador `sirius-notification`
 (`sirius:ci-pending` y `sirius:review-requested`/`sirius:reviewing` no están
 entre las seis etiquetas que `notify-sirius-state.yml` vigila). Y la
 acreditación de salir de una parada es POR TRAMO: si el recorrido pasa por una
-segunda parada, la salida de esa parada la tiene que acreditar una observación
-posterior a ELLA, nunca la foto final. Las dos precisiones son correcciones de
-la ronda 1 de la PR #540 (CLAUDE-REV-001 y CODEX-001); ADR-144 las documenta
-con su rojo previo y sus mutaciones.
+segunda parada, la salida de esa parada la acredita la observación que el
+recorrido toma como objetivo justo DESPUÉS de ella —el primer marcador que el
+bot publicó tras la parada— siempre que no sea la propia foto; nunca la foto
+final. Las dos precisiones son correcciones de la ronda 1 de la PR #540
+(CLAUDE-REV-001 y CODEX-001), y la forma exacta de la segunda —medir la
+evidencia posterior a la PARADA y no al TRAMO, para que el mismo historial no
+recorra o deje de recorrer según cuál sea la etiqueta vigente— es la corrección
+de la ronda 2 (CLAUDE-R2-001 y CODEX-001); ADR-144 las documenta con su rojo
+previo y sus mutaciones.
 
 `.github/workflows/reflejar-desenlace.yml` y ADR-137 no cambian: el enganche,
 sus disparadores y su horario son exactamente los mismos; lo que cambia es qué

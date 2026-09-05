@@ -172,10 +172,31 @@ final: exactamente la salvaguarda que este párrafo declara
 (corrección CODEX-001, ronda 1, PR #540). Con la acreditación por tramo, ese
 recorrido se abandona entero; y si el historial sí acredita algo después de la
 segunda parada, se recorre completo. El último tramo —el que va contra el
-espejo real— no tiene por construcción ninguna observación posterior, así que
-solo el marcador real (`espejo.reanudacion_publicada`) puede autorizarlo.
-Fuera del recorrido, el gate `reanudacion_publicada` sigue exactamente como
-estaba.
+espejo real— coincide con la foto, así que solo el marcador real
+(`espejo.reanudacion_publicada`) puede autorizarlo. Fuera del recorrido, el
+gate `reanudacion_publicada` sigue exactamente como estaba.
+
+En código, «la observación posterior a ELLA» es **la observación que el
+recorrido toma como objetivo en ese mismo tramo**: `objetivos[indice]`, el
+primer marcador que el bot publicó después de la parada. La segunda
+implementación la buscaba en `objetivos[indice + 1:]` —una observación
+posterior AL TRAMO, no a la PARADA—, y con eso volvía a colar la foto por la
+puerta de atrás por dos vías: pedía una observación de más, y contaba como
+acreditación la ÚLTIMA del historial, que es el destino y no evidencia de cómo
+se llegó (justo lo contrario de lo que declara la exigencia de acreditación
+intermedia). La consecuencia medida: con el motor parado en
+`failed_safely`/`reparar` y el historial `implementing → repair-requested →
+failed-safely → repair-requested → ready-for-merge`, la pasada que corre justo
+después del workflow de revisión —foto `sirius:ready-for-merge`, la que
+`reflejar-desenlace.yml` ve con más frecuencia porque se dispara por
+`workflow_run`— rechazaba la recuperación entera, mientras que minutos después,
+con `sirius:completed` aplicado y su marcador en el historial, la misma
+evidencia sí se recorría. Dos pasadas sobre el mismo historial acreditado con
+resultado opuesto, decidido por cuál era la etiqueta vigente. Con
+`objetivos[indice]` las dos recorren, y el rechazo de
+`blocked-decision → completed` sin marcador intermedio se conserva porque ahí
+el objetivo del tramo ES la foto (correcciones CLAUDE-R2-001 y CODEX-001,
+ronda 2, PR #540).
 
 ## Comprobación que la sostiene
 
@@ -193,10 +214,35 @@ estaba.
   `sirius:reviewing`, una sola observación posterior al ancla); su gemela con
   foto `sirius:ci-pending`; la cara positiva de las dos, en la que el mismo
   motor y la misma foto no notificada SÍ recorren cuando el historial acredita
-  algo intermedio; la misma medida del salto sin ninguna parada de por medio;
+  algo intermedio; la misma medida del salto anclando en un
+  `sirius:blocked-decision` -el único caso del mapa que ancla solo por estado-;
   la segunda parada que la foto final no acredita (CODEX-001); y su cara
   positiva, la segunda parada que sí sale cuando una observación posterior la
   acredita, con sus siete pasos aplicados.
+  En la ronda 2 se corrigió la ENTRADA de dos de ellas (CLAUDE-R2-002): las dos
+  construían el historial con etiquetas (`sirius:ci-pending`,
+  `sirius:reviewing`) que `notify-sirius-state.yml` no notifica y que por tanto
+  `_interpretar_historial_estados` no puede devolver jamás, así que demostraban
+  su punto sobre una entrada inalcanzable. La cara positiva pasa a acreditarse
+  con una segunda `sirius:repair-requested` sobre un head nuevo, y la medida
+  del salto pasa a anclar en `sirius:blocked-decision` con el motor en
+  `NEEDS_DECISION`. Esa segunda no admite una versión con el motor VIVO: las
+  tres etiquetas notificadas que proyectan `ACTIVE` son `implementing`
+  (EJECUTAR), `repair-requested` (REPARAR) y `ready-for-merge` (ENTREGAR), y
+  desde las dos primeras el cálculo por foto ya alcanza `ci-pending` y
+  `reviewing` -no hay divergencia que rescatar-, mientras que desde ENTREGAR
+  `_camino_de_fase` no tiene ninguna arista de avance. Medido sobre
+  `_LABEL_STATE` y la condición `if` de `notify-sirius-state.yml`; queda
+  escrito en el docstring de la prueba.
+- `tests/engine/test_reflect.py`, sección G ter (correcciones CLAUDE-R2-001 y
+  CODEX-001 de la ronda 2 de la PR #540): tres pruebas más -el caso vivo de la
+  #537 con un marcador menos, visto con la foto intermedia
+  `sirius:ready-for-merge` (cuatro pasos, sin entrega); su gemela con el mismo
+  historial más el marcador de `sirius:completed` y la foto (DELIVERED,
+  ENTREGAR) (los mismos cuatro pasos más la entrega), que juntas fijan que el
+  resultado ya no dependa de cuál sea la etiqueta vigente; y la traza literal
+  de CODEX-001 (`failed-safely → repair-requested → blocked-decision →
+  repair-requested → completed`) con sus siete pasos legales hasta entregar.
 - `tests/engine/test_reflect_cli.py::test_una_pasada_real_recorre_la_recuperacion_de_la_537`:
   la pasada ENTERA de `sirius-reflejar` -comentarios crudos, proyección real,
   plan y almacén- sobre un doble del espejo con los 22 comentarios de la #537.
@@ -205,36 +251,58 @@ estaba.
   `::test_sin_las_notificaciones_intermedias_la_misma_pasada_declara_y_no_toca_nada`
   es el contraejemplo sobre la misma pasada.
 - Rojo previo, visto fallar: con el recorrido desactivado en
-  `reflejar_desenlace` (una línea: `return por_foto`), caen exactamente tres
-  pruebas —las dos del caso vivo y la del ancla— con el texto literal del run
-  real: «no hay camino hacia delante, no se toca nada».
+  `reflejar_desenlace` (una línea: `return por_foto`),
+  `uv run pytest tests/engine/test_reflect.py tests/engine/test_reflect_cli.py -q`
+  da «8 failed, 46 passed» sobre el árbol de la ronda 2 —el caso vivo, el
+  ancla, la acreditación intermedia real, la segunda parada acreditada, las
+  tres de la sección G ter y la pasada real del CLI— todas con el texto
+  literal del run real: «no hay camino hacia delante, no se toca nada». (En la
+  ronda 1, con tres pruebas menos y sin la sección G ter, esa misma mutación
+  hacía caer tres.)
 - Rojo previo de las dos correcciones de la ronda 1 de la PR #540, visto
   fallar: con `src/sirius_engine/reflect.py` restaurado al commit `d2b50384`
-  (el head auditado) y las cinco pruebas nuevas puestas, `uv run pytest
+  (el head auditado) y las seis pruebas nuevas puestas, `uv run pytest
   tests/engine/test_reflect.py -q` da «4 failed, 39 passed», incluida la traza
   literal de la revisión.
-- Prueba por mutación (cinco sembradas, una prueba distinta cae con cada una):
-  anclar en la PRIMERA coincidencia en vez de la última →
-  `test_el_recorrido_ancla_en_la_ULTIMA_coincidencia_con_el_estado_guardado`;
-  quitar la exigencia de acreditación intermedia →
-  `test_la_foto_repetida_en_el_historial_no_es_acreditacion_intermedia`;
-  aplicar el trozo bueno de un recorrido ilegal en vez de abandonarlo entero →
-  `test_un_tramo_ilegal_abandona_el_recorrido_entero`; medir la acreditación
-  contra la foto en vez del salto (`intermedias = posteriores` en vez de
-  `posteriores[:-1]`) →
-  `test_una_sola_observacion_posterior_tampoco_acredita_sin_ninguna_parada_de_por_medio`;
-  y volver a acreditar todos los tramos de golpe
-  (`reanudacion_acreditada=True`) →
+- Prueba por mutación: seis sembradas, cada una vista caer sobre el árbol de la
+  ronda 2 con
+  `uv run pytest tests/engine/test_reflect.py tests/engine/test_reflect_cli.py -q`.
+  Anclar en la PRIMERA coincidencia en vez de la última → «1 failed, 53
+  passed»,
+  `test_el_recorrido_ancla_en_la_ULTIMA_coincidencia_con_el_estado_guardado`.
+  Quitar la exigencia de acreditación intermedia (el `if all(...)` de
+  `_objetivos_acreditados`) → «3 failed, 51 passed», las tres pruebas de una
+  sola observación posterior (`…foto_sea_reviewing`, `…foto_sea_ci_pending`,
+  `…desde_una_decision_bloqueada`); ya no cae
+  `test_la_foto_repetida_en_el_historial_no_es_acreditacion_intermedia`, porque
+  desde la ronda 2 ese historial lo rechaza además la acreditación por tramo
+  -su único objetivo ES la foto-, y esa redundancia es deliberada. Aplicar el
+  trozo bueno de un recorrido ilegal en vez de abandonarlo entero → «1 failed,
+  53 passed», `test_un_tramo_ilegal_abandona_el_recorrido_entero`. Medir la
+  acreditación contra la foto en vez del salto (`intermedias = posteriores` en
+  vez de `posteriores[:-1]`) → «3 failed, 51 passed», las mismas tres. Volver a
+  acreditar todos los tramos de golpe (`reanudacion_acreditada=True`) → «1
+  failed, 53 passed»,
   `test_la_segunda_parada_del_recorrido_no_sale_acreditada_por_la_foto_final`.
-- Validaciones obligatorias completas, sobre el árbol de la ronda 1 de
+  Y medir la salida de la parada sobre `objetivos[indice + 1 :]` en vez de
+  sobre `objetivos[indice]` -la forma de la ronda 1- → «2 failed, 52 passed»,
+  `test_el_recorrido_acreditado_avanza_con_la_foto_intermedia_ready_for_merge`
+  y `test_la_traza_literal_de_codex_recorre_los_siete_pasos_hasta_entregar`,
+  las dos con «…no hay camino hacia delante, no se toca nada»: es el rojo
+  previo de la corrección CLAUDE-R2-001/CODEX-001 de la ronda 2.
+- Validaciones obligatorias completas, sobre el árbol de la ronda 2 de
   correcciones de la PR #540: `uv run ruff format --check .` («602 files
   already formatted»), `uv run ruff check .` («All checks passed!»),
   `uv run mypy src tests` («Success: no issues found in 570 source files») y
-  `uv run pytest` («4951 passed, 15 skipped, 2 xfailed in 837.22s», exit 0).
-  Más `git diff --check`, limpio. La cifra anterior de este ADR —«4945
-  passed», con `scripts/check.ps1`— era la del commit `d2b50384`: las seis que
-  la separan de 4951 son exactamente las seis pruebas nuevas de la sección G
-  bis (`pytest --collect-only -q` da 4962 en `d2b50384` y 4968 aquí).
+  `uv run pytest` («4954 passed, 15 skipped, 2 xfailed in 449.65s», exit 0).
+  Más `git diff --check`, limpio. Las cifras anteriores de este ADR eran las de
+  las rondas previas: «4945 passed» en `d2b50384` y «4951 passed» en la ronda 1
+  de correcciones. Las tres que separan 4951 de 4954 son exactamente las tres
+  pruebas nuevas de la sección G ter; `pytest --collect-only -q` da 4962 en
+  `d2b50384`, 4968 tras la ronda 1 y 4971 aquí (las seis de la sección G bis
+  más estas tres). Las dos pruebas que la ronda 2 corrigió (CLAUDE-R2-002) no
+  mueven la cuenta: se reescribió su entrada, no se añadió ni se quitó
+  ninguna.
 
 ## Consecuencias
 
