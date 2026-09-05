@@ -100,11 +100,20 @@ DEFAULT_SETTLE_SECONDS = 60
 #: `_declara_fallo_del_conector` para el detalle y las latencias observadas.
 #: Se anclan al inicio del cuerpo y se mantienen estrechos: reconocer de más
 #: aquí no aprueba nada, pero pararía una ronda sana antes de tiempo.
-_FALLOS_DECLARADOS_DEL_CONECTOR: tuple[str, ...] = (
-    "Codex Review: Something went wrong.",
+# Partida por TRANSITORIEDAD (ADR-146): el primer prefijo es el único cuyo
+# propio texto pide el reintento («Try again later») y el único observado
+# recuperándose al re-armar la ronda (el 05-09, #541: `continua` y aprobó a la
+# primera). Los otros tres —límite de uso, configuración, canal de tarea— son
+# persistentes o de transitoriedad no demostrada: reintentarlos quemaría la
+# ronda del candado de ADR-141 sin arreglar nada.
+_FALLOS_TRANSITORIOS_DEL_CONECTOR: tuple[str, ...] = ("Codex Review: Something went wrong.",)
+_FALLOS_PERSISTENTES_DEL_CONECTOR: tuple[str, ...] = (
     "You have reached your Codex usage",
     "To use Codex here,",
     "Codex couldn't complete this request.",
+)
+_FALLOS_DECLARADOS_DEL_CONECTOR: tuple[str, ...] = (
+    _FALLOS_TRANSITORIOS_DEL_CONECTOR + _FALLOS_PERSISTENTES_DEL_CONECTOR
 )
 
 TRIGGER_MARKER_TEMPLATE = "<!-- sirius-codex-review:{head}:{round_id} -->"
@@ -929,9 +938,17 @@ def _check_conversation_comments(
         # quien ya había contestado).
         fallo = _declara_fallo_del_conector(str(comment.get("body") or ""))
         if fallo is not None:
+            # ADR-146: solo el subtipo cuyo texto pide el reintento lleva la
+            # razón transitoria que el agregador re-arma (con el candado por
+            # head de ADR-141); el resto conserva la razón de siempre y para.
+            transitorio = (
+                str(comment.get("body") or "").strip().startswith(_FALLOS_TRANSITORIOS_DEL_CONECTOR)
+            )
             return CodexResult(
                 status="FAILED_SAFELY",
-                reason="codex-fallo-declarado",
+                reason="codex-fallo-declarado-transitorio"
+                if transitorio
+                else "codex-fallo-declarado",
                 reviewed_head_sha=head,
                 trigger_comment_id=trigger_id,
                 summary=(

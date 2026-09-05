@@ -1797,9 +1797,11 @@ def test_collect_para_en_cuanto_el_conector_declara_un_fallo_suyo(tmp_path: Path
     assert r.returncode == 0, r.stdout + r.stderr
     result = _result(tmp_path)
     assert result["status"] == "FAILED_SAFELY"
-    assert result["reason"] == "codex-fallo-declarado", (
-        "un fallo declarado por el conector no puede seguir contándose como 'timeout': "
-        "el diagnóstico dice qué pasó y qué hacer, y 'no contestó' es falso"
+    assert result["reason"] == "codex-fallo-declarado-transitorio", (
+        "un fallo declarado por el conector no puede seguir contándose como 'timeout' "
+        "(el diagnóstico dice qué pasó y qué hacer), y ESTE prefijo —cuyo propio texto "
+        "pide «Try again later»— lleva la razón transitoria que ADR-146 reintenta con "
+        "el candado de ADR-141"
     )
     assert "Something went wrong" in result["summary"]
     # Sigue sin publicar un segundo disparador: reintentar es abrir otra ronda,

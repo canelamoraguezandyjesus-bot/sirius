@@ -110,4 +110,7 @@ presupuesto del paso (30 min para esperas de 20).
 - **Incluir «resultado de Codex ausente/fuera de contrato» como
   reintentable:** puede ser un defecto real y repetible del recolector;
   reintentarlo taparía la señal. Si la práctica enseña que suele ser
-  transitorio, se amplía con su medición.
+  transitorio, se amplía con su medición. La medición llegó el mismo
+  05-09 (#541: fallo declarado «Try again later», reintento manual que
+  aprobó a la primera) y ADR-146 amplió exactamente el subtipo
+  transitorio — el persistente sigue excluido, como aquí se pedía.

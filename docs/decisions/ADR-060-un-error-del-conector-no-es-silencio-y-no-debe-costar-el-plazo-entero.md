@@ -63,7 +63,9 @@ devolvía `None` y se descartaban como candidatos. **Eran invisibles, no
 ambiguos.**
 
 Se añade `_declara_fallo_del_conector`, que se consulta **antes** de ese filtro
-y produce una parada inmediata con motivo `codex-fallo-declarado` y el mensaje
+y produce una parada inmediata con motivo `codex-fallo-declarado` — o, desde
+ADR-146, `codex-fallo-declarado-transitorio` para el único prefijo cuyo texto
+pide el reintento, que el agregador re-arma con el candado de ADR-141 — y el mensaje
 real dentro.
 
 **Lo que NO se toca, y es deliberado:**
