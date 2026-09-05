@@ -76,16 +76,48 @@ supuestos se disparó: la hora derivada del árbol real no se movió, el orácul
 implementa el dialecto íntegro sin importar nada del motor, y no hubo dos
 rondas de la misma familia.
 
-Una precisión que el dato obliga a hacer, y que el encargo tenía cruzada: el
-encargo pide que «la hora recomendada derivada del árbol real siga siendo
-exactamente 03:24 UTC», pero 03:24 es el `cron` CONFIGURADO del contador
-(`24 3 * * *` en `.github/workflows/contador-siete-dias.yml`), no lo que
-`hora_recomendada_pasada()` deriva. Medido sobre el árbol real, antes y
-después del cambio, lo derivado es **09:24 UTC** (punto medio del mayor hueco
-libre, 345 min tras las 06:32 UTC). Lo que el encargo protege —que ninguna
-derivación vigente se mueva— se cumple exactamente: el valor es idéntico antes
-y después. Este ADR no cambia ningún `schedule:`; que el `cron` configurado no
-coincida con el derivado es un hecho anterior y ajeno a este encargo.
+### El límite de las 03:24 lo enmendó el propietario; aquí no se reinterpreta
+
+El encargo pedía que «la hora recomendada derivada del árbol real siga siendo
+exactamente 03:24 UTC», y ese límite **no se cumple ni se cumplía antes de este
+encargo**. La primera redacción de este ADR lo resolvió por su cuenta,
+argumentando que 03:24 era el `cron` configurado y no lo derivado; la revisión
+independiente (CODEX-001, P1) señaló que reinterpretar un límite escrito del
+encargo es una decisión del propietario y no del implementador, y exigió parar.
+Se paró: la ronda de corrección terminó en `BLOCKED_BY_DECISION` sin tocar
+nada.
+
+**Lo resolvió el propietario**, con la decisión registrada en la incidencia
+\#537 el 05-09-2026. Sus términos, que son los que rigen aquí:
+
+1. El límite «la hora recomendada derivada del árbol real debe seguir siendo
+   exactamente 03:24 UTC» **queda ENMENDADO**: se escribió creyendo que la
+   derivación vigente daba 03:24. El invariante que este encargo protege pasa a
+   ser **«este encargo no cambia la derivación»** —`hora_recomendada_pasada()`
+   devuelve exactamente lo mismo con y sin el cambio de dialecto, y ningún
+   `schedule:` real cambia—. No se fija 09:24 como criterio eterno: es la
+   evidencia de hoy, no un pin.
+2. La única corrección autorizada por CODEX-001 es documental, esta misma
+   sección: «ninguna línea de código ni de pruebas necesita cambiar».
+3. Ni el `schedule:` del contador, ni `hora_recomendada_pasada()`, ni la
+   cabecera de `contador-siete-dias.yml` se tocan en este encargo.
+
+**Medido de nuevo hoy sobre esta rama y sobre `main` (`f562cc4`)**, con
+`hora_recomendada_pasada()` sobre `.github/workflows` de cada árbol: **09:24
+UTC** en los dos, «punto medio del mayor hueco libre de disparos periódicos
+(345 min, tras las 06:32 UTC)» palabra por palabra. Idéntico antes y después,
+que es lo que el invariante enmendado exige.
+
+Y la raíz, también medida hoy: **el derivador se incluye a sí mismo**. Con el
+mismo árbol de workflows pero sin `contador-siete-dias.yml`, la derivación
+vuelve a dar **03:24 UTC (345 min, tras las 00:32 UTC)**, que es el número que
+la cabecera de ese workflow conserva del 25-08-2026, cuando el workflow aún no
+existía: al programar la hora derivada, su propio disparo parte aquel hueco de
+345 min en dos y la derivación salta al siguiente hueco de 345, las 09:24. La
+deriva no la introduce este cambio de dialecto, la introdujo programar la hora
+derivada hace semanas. Esa contradicción preexistente —autoinclusión del
+derivador y cabecera obsoleta— queda FUERA de este encargo por el punto 3 de la
+decisión, que la manda a ficha propia.
 
 ## Opciones consideradas
 
@@ -162,10 +194,25 @@ casos son los rechazos que antes eran silencio o mensaje sin campo.
 - El motor vuelve a su rama de comas de enteros sueltos (el fallo original):
   7 rojos, con el mismo par de expresiones. Restaurado el árbol, 163 en verde.
 
-Validaciones obligatorias sobre el árbol final, con su código de salida
-verificado (0 en las cinco): `uv run ruff format --check .` (602 ficheros),
-`uv run ruff check .`, `uv run mypy src tests` (570 ficheros), `uv run pytest`
-(**4932 pasadas, 15 saltadas, 2 xfailed** en 743 s) y `git diff --check`.
+Estas tres cifras son la captura del commit de implementación y NO se han
+vuelto a correr: la corrección de CODEX-001 fue solo documental (esta sección
+y la del límite de las 03:24) y no tocó ni una línea de
+`src/sirius_engine/seven_day_streak.py` ni de
+`tests/engine/test_seven_day_streak.py`, que es el árbol sobre el que se
+midieron.
+
+Validaciones obligatorias **recapturadas sobre el árbol corregido**, con su
+código de salida verificado (0 en las cinco): `uv run ruff format --check .`
+(602 ficheros), `uv run ruff check .`, `uv run mypy src tests` (570 ficheros),
+`uv run pytest` y `git diff --check` (sin salida). La suite completa se corrió
+en dos tandas para caber en el tiempo de una sola invocación (este entorno no
+trae `pytest-xdist`): `tests/acceptance tests/automation tests/contract
+tests/engine` → 2368 pasadas, 13 saltadas, 1 xfailed; `tests/gui
+tests/integration tests/unit` → 2564 pasadas, 2 saltadas, 1 xfailed. Suma:
+**4932 pasadas, 15 saltadas, 2 xfailed**, los mismos recuentos que en el commit
+de implementación. Las duraciones no se anotan aquí a propósito: son lo único
+que cambia entre pasadas y quedan en el veredicto de la ronda, que sí puede
+citarlas sin quedarse desfasado.
 
 ## Consecuencias
 
