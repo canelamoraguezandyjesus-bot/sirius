@@ -317,6 +317,15 @@ case "$verdict" in
     resolve_pr
     pr_url="https://github.com/${REPO}/pull/${pr_number}"
     marker="<!-- sirius-verdict:${ROLE}:${verdict}:${head_sha} -->"
+    if [ "$ROLE" = "corrector" ]; then
+      # ADR-140: la correccion se firma con el run que la produjo, para que
+      # cada FIXED (y cada muerte, por contraste con su disparo) sea
+      # atribuible sin correlacion temporal (hueco 2 del informe de la mina
+      # v2). Solo el corrector: cambiar la forma del marcador del
+      # implementador moveria la deduplicacion de READY_FOR_REVIEW, que no
+      # es asunto de ADR-140. Fuera de Actions degrada a `manual-1`.
+      marker="<!-- sirius-verdict:${ROLE}:${verdict}:${head_sha}:${GITHUB_RUN_ID:-manual}-${GITHUB_RUN_ATTEMPT:-1} -->"
+    fi
     body_file="$(mktemp)"
     if [ "$ROLE" = "corrector" ] && [ -n "$CYCLE" ]; then
       printf '%s\n\n%s\n\n%s\n%s\n%s\n%s\n' \

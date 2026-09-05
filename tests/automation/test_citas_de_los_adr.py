@@ -167,6 +167,7 @@ _ADR_135 = (
     "ADR-135-el-corrector-actualiza-en-el-mismo-commit-el-papel-que-depende-de-su-correccion.md"
 )
 _ADR_139 = "ADR-139-la-reconciliacion-pasa-cada-hora-activa-en-vez-de-cada-seis.md"
+_ADR_140 = "ADR-140-el-corrector-firma-su-run-y-demuestra-cada-mutacion.md"
 
 RAMA_DE_ORIGEN_NO_FUSIONADA: dict[str, list[str]] = {
     "experiments/adr002/round/cases.py": [
@@ -283,7 +284,7 @@ RAMA_DE_ORIGEN_NO_FUSIONADA: dict[str, list[str]] = {
     # ADR-139 (el cron del reconciliador) cita el papel de cambios para el
     # propietario que salió de la misma mina: vive en la misma rama de
     # auditoría que nunca se fusiona entera.
-    "docs/audits/mina-2026-09-cambios-para-el-propietario.md": [_ADR_139],
+    "docs/audits/mina-2026-09-cambios-para-el-propietario.md": [_ADR_139, _ADR_140],
 }
 
 
