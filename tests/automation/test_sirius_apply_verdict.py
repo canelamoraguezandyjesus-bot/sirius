@@ -1146,6 +1146,59 @@ def test_corrector_fixed_with_cycle_marker(tmp_path: Path) -> None:
     assert "sirius-repair-cycle:1" in _comments(env)
 
 
+def test_corrector_fixed_firma_el_marcador_con_su_run(tmp_path: Path) -> None:
+    """ADR-140: el marcador FIXED del corrector lleva la firma del run que lo
+    produjo (`:<run_id>-<attempt>`), para que cada corrección —y cada muerte—
+    sea atribuible a su ejecución sin correlación temporal (hueco 2 del
+    informe de la mina v2). Vista fallar contra el guion sin la firma."""
+    env = _setup(tmp_path)
+    env["GITHUB_RUN_ID"] = "424242"
+    env["GITHUB_RUN_ATTEMPT"] = "2"
+    _seed_issue(
+        env, ["sirius:repairing"], comments="PR abierta: https://github.com/owner/repo/pull/9\n"
+    )
+    _seed_pr(env, 9, head="d5e5f5061234")
+    vf = _verdict_file(tmp_path, {"verdict": "FIXED", "summary": "corregido"})
+    r = _run(env, "corrector", vf, cycle="1")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "sirius-verdict:corrector:FIXED:d5e5f5061234:424242-2 -->" in _comments(env)
+
+
+def test_corrector_fixed_sin_entorno_de_run_firma_manual(tmp_path: Path) -> None:
+    """Fuera de Actions (una corrección aplicada a mano con el mismo guion),
+    la firma degrada a `manual-1` en vez de romper o mentir."""
+    env = _setup(tmp_path)
+    env.pop("GITHUB_RUN_ID", None)
+    env.pop("GITHUB_RUN_ATTEMPT", None)
+    _seed_issue(
+        env, ["sirius:repairing"], comments="PR abierta: https://github.com/owner/repo/pull/9\n"
+    )
+    _seed_pr(env, 9, head="d5e5f5061234")
+    vf = _verdict_file(tmp_path, {"verdict": "FIXED", "summary": "corregido"})
+    r = _run(env, "corrector", vf, cycle="1")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "sirius-verdict:corrector:FIXED:d5e5f5061234:manual-1 -->" in _comments(env)
+
+
+def test_implementer_ready_no_cambia_de_forma_con_entorno_de_run(tmp_path: Path) -> None:
+    """Adversaria de ADR-140: la firma es SOLO del corrector. El marcador
+    READY_FOR_REVIEW del implementador conserva su forma anclada al head,
+    aunque el entorno traiga run id — cambiarla movería la deduplicación de
+    la implementación, que no es asunto de ADR-140."""
+    env = _setup(tmp_path)
+    env["GITHUB_RUN_ID"] = "424242"
+    env["GITHUB_RUN_ATTEMPT"] = "2"
+    _seed_issue(
+        env, ["sirius:implementing"], comments="PR abierta: https://github.com/owner/repo/pull/9\n"
+    )
+    _seed_pr(env, 9, head="d5e5f5061234")
+    vf = _verdict_file(tmp_path, {"verdict": "READY_FOR_REVIEW", "summary": "listo"})
+    r = _run(env, "implementer", vf)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "sirius-verdict:implementer:READY_FOR_REVIEW:d5e5f5061234 -->" in _comments(env)
+    assert "READY_FOR_REVIEW:d5e5f5061234:424242" not in _comments(env)
+
+
 def test_corrector_failed_safely(tmp_path: Path) -> None:
     env = _setup(tmp_path)
     _seed_issue(env, ["sirius:repairing"])

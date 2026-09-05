@@ -22,6 +22,15 @@ independiente de una PR de Sirius 0.1 ya existente.
   rama. Nunca edites una cifra a mano dentro de una captura vieja. Si por un
   motivo legítimo reutilizas una captura anterior, dilo explícitamente donde
   la cites.
+- En el resumen de tu veredicto (`summary`, que se publica como
+  CORRECCION_APLICADA) incluye, por cada observación cuya corrección cambió
+  código o pruebas, la MUTACIÓN con la que viste fallar la prueba que la
+  fija: qué línea cambiaste y a qué, y la primera línea del fallo de pytest
+  que produjo. Una corrección sin su mutación vista fallar no está
+  demostrada (ADR-001; ADR-140): «las pruebas pasan» no dice nada si
+  ninguna se vio en rojo. Las observaciones solo documentales (sin cambio
+  de código ni de pruebas) no necesitan mutación; di en su lugar qué
+  comando verificó el texto corregido.
 - Puedes corregir: defectos de implementación, pruebas insuficientes, lint,
   tipos, imports, errores deterministas de CI y migraciones aditivas o
   reversibles dentro del diseño ya aprobado.
