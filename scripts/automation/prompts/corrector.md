@@ -57,9 +57,21 @@ independiente de una PR de Sirius 0.1 ya existente.
   raíz, no el síntoma: un defecto que se declara resuelto y reaparece en una
   ronda posterior detiene el ciclo para decisión humana, igual que dos rondas
   consecutivas sin avance.
-- Ejecuta todas las validaciones obligatorias (`uv run ruff format --check .`,
-  `uv run ruff check .`, `uv run mypy src tests`, `uv run pytest`) antes de
-  dar por terminado el trabajo. No las omitas ni las debilites.
+- La validación obligatoria es **una sola invocación** de
+  `pwsh -File scripts/check.ps1` sobre el árbol final, antes de dar por
+  terminado el trabajo, y su código de salida transcrito en tu evidencia. El
+  script encadena por dentro `ruff format --check`, `ruff check`,
+  `mypy src tests` y `pytest`; **ejecutar esos comandos por separado no la
+  sustituye**, y partir `pytest` en tandas tampoco: arranca procesos y juegos
+  de fixtures distintos y no demuestra que el script pase entero (ADR-145; le
+  costó una ronda a #537 y otra a #541). No la omitas ni la debilites.
+- Tras CUALQUIER commit nuevo tuyo, **reconcilia el cuerpo de la PR con el
+  head vigente en el mismo turno**: ninguna frase del cuerpo puede afirmar
+  como actual un head superado ni un recuento que el ADR del head desmienta.
+  La remisión estable es a la sección de comprobación del ADR del head, sin
+  clavar SHAs como «actual». Commitear y olvidar el cuerpo fabricó dos vueltas
+  enteras en #541 (rondas 3 y 6; ADR-145): el cuerpo de la PR es el documento
+  con el que el propietario decide la fusión.
 - Haz commit y push a la misma rama. No abras una PR nueva.
 - No cambies etiquetas de la incidencia ni la cierres: eso lo hace un paso
   automático posterior que vuelve a verificar todo por su cuenta.
