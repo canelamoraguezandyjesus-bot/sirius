@@ -506,6 +506,112 @@ def test_hora_recomendada_para_si_ningun_hueco_deja_ventana_tranquila(tmp_path: 
         hora_recomendada_pasada(workflows)
 
 
+# --- 7 bis. El derivador no se cuenta a sí mismo (ADR-144) ------------------
+#
+# La pregunta que `hora_recomendada_pasada` responde es «¿cuál es la hora más
+# tranquila para la PASADA del contador?», y la propia pasada no puede
+# estorbarse a sí misma. Hasta ADR-144 sí lo hacía: al cablear en
+# `contador-siete-dias.yml` la hora derivada el 25-08-2026 (03:24 UTC, punto
+# medio de un hueco de 345 min), su propio disparo partió ese hueco y la
+# derivación saltó al siguiente hueco de 345, las 09:24 (medido en ADR-143).
+#
+# El nombre del fichero se escribe aquí a mano, sin importar la constante del
+# motor: si alguien renombra el workflow y no toca el motor -o al revés-, estas
+# pruebas lo dicen en vez de seguir de acuerdo consigo mismas.
+
+_CONTADOR_PARA_LAS_PRUEBAS = "contador-siete-dias.yml"
+
+
+def _arbol_con_un_solo_disparo(tmp_path: Path) -> Path:
+    """Un directorio de workflows con UN disparo a medianoche y un tope de job.
+
+    Con un solo disparo, el mayor hueco libre es el día entero y su punto medio
+    cae a las 12:00. Un segundo disparo justo ahí lo parte en dos mitades de
+    720 min y mueve la derivación a las 06:00: el mismo mecanismo, en pequeño,
+    con el que el cron del contador movió la hora real de las 03:24 a las
+    09:24. El `timeout-minutes` existe porque la ventana de tolerancia también
+    se deriva, y sin ningún tope no habría de qué.
+    """
+    workflows = tmp_path / "workflows"
+    workflows.mkdir()
+    (workflows / "otro.yml").write_text(
+        yaml.safe_dump(
+            {"on": {"schedule": [{"cron": "0 0 * * *"}]}, "jobs": {"j": {"timeout-minutes": 30}}}
+        ),
+        encoding="utf-8",
+    )
+    return workflows
+
+
+def _escribir_disparo_de_mediodia(ruta: Path) -> None:
+    ruta.write_text(
+        yaml.safe_dump({"on": {"schedule": [{"cron": "0 12 * * *"}]}}), encoding="utf-8"
+    )
+
+
+def test_hora_recomendada_no_cuenta_los_disparos_del_workflow_del_contador(
+    tmp_path: Path,
+) -> None:
+    """Con el fichero del contador presente, sus disparos no parten ningún hueco."""
+    workflows = _arbol_con_un_solo_disparo(tmp_path)
+    _escribir_disparo_de_mediodia(workflows / _CONTADOR_PARA_LAS_PRUEBAS)
+
+    hora, motivo = hora_recomendada_pasada(workflows)
+
+    assert hora == time(12, 0), (
+        "el disparo del propio contador partió el hueco del que sale su hora: "
+        "es exactamente la autoinclusión que ADR-144 retira"
+    )
+    assert "1440 min" in motivo
+
+
+def test_hora_recomendada_deriva_sobre_lo_que_hay_si_el_contador_no_esta(
+    tmp_path: Path,
+) -> None:
+    """El otro lado: la exclusión es una resta, no un requisito de que el fichero exista."""
+    workflows = _arbol_con_un_solo_disparo(tmp_path)
+    assert not (workflows / _CONTADOR_PARA_LAS_PRUEBAS).exists()
+
+    hora, _motivo = hora_recomendada_pasada(workflows)
+
+    assert hora == time(12, 0)
+
+
+def test_un_contador_renombrado_vuelve_a_contarse_sin_reventar(tmp_path: Path) -> None:
+    """Un renombrado accidental degrada a «como antes de ADR-144», nunca a un error.
+
+    La exclusión es NOMBRADA a propósito (ADR-144): no adivina quién consume la
+    hora. El precio, declarado aquí, es que un fichero con otro nombre vuelve a
+    contarse -y esta prueba es la que lo hace visible en vez de silencioso-.
+    """
+    workflows = _arbol_con_un_solo_disparo(tmp_path)
+    _escribir_disparo_de_mediodia(workflows / "contador-siete-dias-viejo.yml")
+
+    hora, _motivo = hora_recomendada_pasada(workflows)
+
+    assert hora == time(6, 0)
+
+
+def test_hora_recomendada_del_arbol_real_no_cuenta_el_cron_del_propio_contador() -> None:
+    """El pin MEDIDO del árbol real: 03:24 UTC, 345 min tras las 00:32 (ADR-143/ADR-144).
+
+    No es un número elegido: es el que la derivación daba el 25-08-2026, cuando
+    `contador-siete-dias.yml` todavía no existía, y el que ADR-143 volvió a
+    medir el 05-09-2026 sobre el mismo árbol sin ese fichero. Contra el
+    derivador autoincluyente esta prueba falla con 09:24, que es la medida que
+    ADR-143 registró y que este encargo desmiente como derivación correcta.
+    """
+    hora, motivo = hora_recomendada_pasada()
+
+    assert hora == time(3, 24), (
+        "la derivación del árbol real dejó de dar 03:24 UTC. Si acabas de mover "
+        "un `schedule:`, la cabecera de `contador-siete-dias.yml` ya no dice la "
+        "verdad y hay que volver a derivar la hora; si acabas de tocar el "
+        "derivador, comprueba que sigue sin contarse a sí mismo (ADR-144)"
+    )
+    assert "345 min, tras las 00:32" in motivo
+
+
 # El minilector de `cron` del guardián-oráculo. Vive aquí, a nivel de módulo y
 # no dentro de la prueba, por dos razones: para poder ejercitarlo solo (la
 # tabla de equivalencia de más abajo) y porque un lector escondido dentro de
@@ -571,6 +677,13 @@ def test_hora_recomendada_atada_al_schedule_real_del_repositorio() -> None:
     """Misma disciplina que ``test_ventana_tolerancia_atada_al_yaml_real...``: YAML aparte."""
     minutos_disparo = set()
     for wf in sorted((_REPO_ROOT / ".github" / "workflows").glob("*.yml")):
+        if wf.name == _CONTADOR_PARA_LAS_PRUEBAS:
+            # ADR-144: la hora que se compara es la de la PASADA del contador,
+            # y la propia pasada no se estorba a sí misma. La exclusión se
+            # escribe aquí otra vez, con el nombre a mano y sin importar la
+            # constante del motor: el «YAML aparte» de ADR-143 vale también
+            # para esto, o el oráculo dejaría de medir por su cuenta.
+            continue
         doc = yaml.safe_load(wf.read_text(encoding="utf-8"))
         activadores = doc.get("on") if isinstance(doc, dict) else None
         if activadores is None and isinstance(doc, dict):

@@ -33,7 +33,9 @@ Una cuarta pieza, independiente de las tres anteriores pero con la misma
 exigencia de no inventar números: :func:`hora_recomendada_pasada` deriva, de
 los `schedule: cron:` reales de `.github/workflows/*.yml`, la hora del día
 más alejada de cualquier disparo periódico -el punto medio del mayor hueco
-libre-, y la valida contra la ventana de tolerancia de etiqueta de máquina
+libre, sin contar los disparos del propio workflow del contador, que es quien
+consume esa hora (ADR-144)-, y la valida contra la ventana de tolerancia de
+etiqueta de máquina
 (:func:`sirius_engine.projection_verifier.ventana_tolerancia_etiqueta_maquina`).
 El cierre de la incidencia #265 midió que, con la tolerancia vigente, un día
 solo puede salir verde si nada se movió en las tres horas previas a la
@@ -73,6 +75,15 @@ from sirius_engine.projection_verifier import (
 DIAS_REQUERIDOS = 7
 
 _WORKFLOWS_DIR = Path(__file__).resolve().parents[2] / ".github" / "workflows"
+
+#: El workflow que CONSUME la hora que :func:`hora_recomendada_pasada` deriva
+#: -la pasada diaria de ``sirius-racha``-, y por eso el único cuyos disparos
+#: esa función NO cuenta (ADR-144). La exclusión es NOMBRADA a propósito: no
+#: adivina quién consume la hora mirando lo que cada workflow ejecuta, así que
+#: se lee y se audita de un vistazo. El precio, declarado: si este fichero se
+#: renombra, sus disparos vuelven a contarse -degrada al comportamiento
+#: anterior, nunca a un error-.
+NOMBRE_DEL_WORKFLOW_DEL_CONTADOR = "contador-siete-dias.yml"
 
 
 # --- 1. El registro: JSONL versionado, solo crece ---------------------------
@@ -536,6 +547,21 @@ def hora_recomendada_pasada(workflows_dir: Path = _WORKFLOWS_DIR) -> tuple[time,
     devuelve su punto medio -la hora más alejada de CUALQUIER disparo
     periódico, antes o después-.
 
+    **Con una excepción nombrada: el propio contador** (ADR-144). Los disparos
+    de :data:`NOMBRE_DEL_WORKFLOW_DEL_CONTADOR` -el workflow que ejecuta la
+    pasada para la que se deriva esta hora- no cuentan. La pregunta que esta
+    función responde es «¿cuál es la hora más tranquila para la PASADA del
+    contador?», y la propia pasada no puede estorbarse a sí misma: es la misma
+    propiedad que ``tests/automation/test_contador_de_siete_dias.py`` ya
+    aplicaba por su lado («un workflow no se estorba a sí mismo, y contarlo
+    daría siempre cero») y que aquí faltaba. Sin ella, cablear la hora derivada
+    la invalidaba en el acto: al programar 03:24 UTC -punto medio de un hueco
+    de 345 min, derivado el 25-08-2026, cuando el workflow aún no existía- su
+    propio disparo partió ese hueco y la derivación saltó al siguiente hueco de
+    345, las 09:24 (medido en ADR-143). Solo se restan sus DISPAROS: su
+    ``timeout-minutes`` sigue contando para la ventana de tolerancia, porque un
+    job largo del contador retrasa etiquetas igual que cualquier otro.
+
     Se valida contra
     :func:`sirius_engine.projection_verifier.ventana_tolerancia_etiqueta_maquina`:
     el cierre de la incidencia #265 midió que, con la tolerancia vigente, un
@@ -547,6 +573,8 @@ def hora_recomendada_pasada(workflows_dir: Path = _WORKFLOWS_DIR) -> tuple[time,
     """
     disparos: list[time] = []
     for wf in sorted(workflows_dir.glob("*.yml")):
+        if wf.name == NOMBRE_DEL_WORKFLOW_DEL_CONTADOR:
+            continue
         doc: Any = yaml.safe_load(wf.read_text(encoding="utf-8"))
         activadores = doc.get("on") if isinstance(doc, dict) else None
         # PyYAML interpreta la clave YAML `on:` sin comillas como el booleano

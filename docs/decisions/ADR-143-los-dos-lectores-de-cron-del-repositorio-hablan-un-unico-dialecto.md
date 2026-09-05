@@ -119,6 +119,19 @@ derivada hace semanas. Esa contradicción preexistente —autoinclusión del
 derivador y cabecera obsoleta— queda FUERA de este encargo por el punto 3 de la
 decisión, que la manda a ficha propia.
 
+**Desenlace (añadido el 05-09-2026 por el encargo WI-20260905-131022,
+incidencia #541, ADR-144).** La medida de arriba no se reescribe: 09:24 UTC es
+lo que el derivador autoincluyente daba, y es lo que había que medir aquí. La
+ficha propia que este ADR anunciaba se abrió y se resolvió el mismo día:
+`hora_recomendada_pasada()` ya no cuenta los disparos de
+`contador-siete-dias.yml`, y la derivación del árbol real vuelve a dar
+**03:24 UTC (345 min, tras las 00:32)** —el número que el `cron` vigente
+llevaba y que la cabecera del workflow declara como derivado, que con esto
+vuelve a ser verdad sola—. Ningún fichero de `.github/**` cambió, ni aquí ni
+allí. Lo que sigue abierto, y ADR-144 lo declara, es la otra mitad de la
+entrada 36 de la bitácora: la pasada todavía no mide su propia ventana al
+llegar.
+
 ## Opciones consideradas
 
 1. **Un solo lector, importado por el oráculo.** Descartada por el encargo y
@@ -236,8 +249,11 @@ pasada futura, que tendrá que recapturarlas junto con el resto.
 ## Consecuencias
 
 - Ningún `schedule:` real cambia y ninguna derivación vigente se mueve: la
-  hora recomendada derivada del árbol real es 09:24 UTC, el mismo valor que
-  daba antes del cambio. Los invariantes de ADR-139 siguen en pie.
+  hora recomendada derivada del árbol real era 09:24 UTC al cerrar este
+  encargo, el mismo valor que daba antes del cambio. Los invariantes de
+  ADR-139 siguen en pie. (Ese 09:24 lo movió después ADR-144, al retirar la
+  autoinclusión del derivador: hoy son las 03:24 UTC. Ver el «Desenlace» de
+  más arriba.)
 - Un `schedule:` futuro con lista, rango o forma mixta ya no revienta ninguno
   de los dos lectores; uno fuera del dialecto revienta los dos, y dice cuál es
   el campo y cuál la forma.

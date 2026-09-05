@@ -171,25 +171,67 @@ AssertionError: assert datetime.time(9, 24) == datetime.time(3, 24)
 - `test_hora_recomendada_no_cuenta_los_disparos_del_workflow_del_contador`: con
   un directorio de pruebas donde el fichero del contador SÍ está, sus disparos
   no mueven la derivación (misma hora que sin él).
-- `test_hora_recomendada_deriva_igual_que_hoy_si_el_contador_no_esta`: el otro
-  lado del caso de aceptación —un directorio sin el fichero del contador deriva
-  sobre lo que hay, sin exigir que exista—, y su gemelo con el fichero
-  renombrado, que demuestra que un renombrado accidental degrada a «no hay
-  exclusión», no a un error.
+- `test_hora_recomendada_deriva_sobre_lo_que_hay_si_el_contador_no_esta`: el
+  otro lado del caso de aceptación —un directorio sin ese fichero deriva sobre
+  lo que hay, sin exigir que exista—.
+- `test_un_contador_renombrado_vuelve_a_contarse_sin_reventar`: el precio
+  declarado de que la exclusión sea nombrada; un renombrado accidental degrada
+  a «como antes de este ADR», nunca a un error.
 - `test_hora_recomendada_atada_al_schedule_real_del_repositorio`: el
   guardián-oráculo, con la misma exclusión aplicada por su lado.
 
-**Prueba por mutación** (ADR-001), las dos direcciones:
+**Prueba por mutación** (ADR-001), las dos direcciones, sobre
+`tests/engine/test_seven_day_streak.py` más
+`tests/automation/test_contador_de_siete_dias.py`:
 
-- Quitada la exclusión del motor (el derivador vuelve a contarse a sí mismo):
-  ROJO en las pruebas nuevas, con `9:24 != 3:24`.
-- Quitada la exclusión SOLO del guardián-oráculo (el motor la conserva): ROJO
-  en `test_hora_recomendada_atada_al_schedule_real_del_repositorio`, que es
-  justo lo que ese tercero existe para detectar.
+- **El motor vuelve a contarse a sí mismo** (retirado el `continue` de la
+  exclusión): `3 failed, 173 passed`. Los tres rojos son el pin del árbol real
+  (`9:24 != 3:24`), el caso sintético del fichero presente (`6:00 != 12:00`) y
+  el guardián-oráculo, que sigue aplicando la exclusión por su lado y por eso
+  detecta la divergencia.
+- **La exclusión se cae SOLO del guardián-oráculo** y el motor la conserva:
+  `1 failed, 166 passed`, y el rojo es exactamente
+  `test_hora_recomendada_atada_al_schedule_real_del_repositorio`
+  (`assert datetime.time(3, 24) == datetime.time(9, 24)`) —el tercero
+  detectando que los dos lados dejaron de medir lo mismo, que es para lo que
+  existe—.
+- Restaurado el árbol: `167 passed`.
 
-Las cifras exactas de cada mutación y las validaciones obligatorias completas,
-con una sola invocación del script, se anotan más abajo antes de cerrar la
-rama.
+Vistas fallar ANTES de escribir la exclusión (`3 failed, 6 passed` en la
+selección `-k "contador or atada or hueco"`): las DOS pruebas nuevas que fijan
+la propiedad —el pin del árbol real y el caso sintético— más el guardián-oráculo
+ya adaptado. Las otras dos nuevas
+(`..._deriva_sobre_lo_que_hay_si_el_contador_no_esta` y
+`..._renombrado_vuelve_a_contarse_sin_reventar`) pasan igual antes y después, y
+eso es exactamente lo que afirman: fijan el lado que este cambio NO debe mover.
+Se dice aquí en vez de contarlas como rojos previos que no fueron.
+
+**Validaciones obligatorias**, con una sola invocación de
+`pwsh -File scripts/check.ps1` sobre el árbol final de la rama —el script
+encadena las cuatro y no se parte en tandas—:
+
+- `uv run ruff format --check .` → «602 files already formatted»;
+- `uv run ruff check .` → «All checks passed!»;
+- `uv run mypy src tests` → «Success: no issues found in 570 source files»;
+- `uv run pytest` → «collected 4954 items» y
+  «4937 passed, 15 skipped, 2 xfailed in 420.66s (0:07:00)».
+
+Un solo proceso de `pytest` y un solo juego de fixtures de sesión; el script
+terminó con código de salida 0. Cuatro pruebas más que la base: medido con
+`uv run pytest --collect-only -q` sobre las dos versiones del árbol, 4950 en
+`main` (`78e81fc`) y 4954 en esta rama, que son exactamente las cuatro que este
+encargo añade y ninguna más.
+
+`git diff --check` sobre el árbol: sin salida.
+
+Esa captura se hizo sobre el árbol final de código y pruebas; lo único que
+cambió después son las cifras y los nombres transcritos en esta misma sección.
+Como en `docs/decisions/` sí hay guardianes que leen —los de
+`tests/automation/`—, se volvieron a correr sobre el árbol exacto que se
+commitea: `uv run ruff format --check .` → «602 files already formatted», y
+`uv run pytest tests/automation tests/engine/test_seven_day_streak.py` →
+«1311 passed, 10 skipped in 174.40s». Nada de lo medido arriba dependía de este
+párrafo.
 
 ## Consecuencias
 
