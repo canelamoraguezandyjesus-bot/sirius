@@ -678,6 +678,55 @@ ADR o su incidencia cuando se adopte.
   bloque C: la pasada del contador de las 03:24 debería, por primera vez,
   tener estado comparable — y C2 se decide después de verla.
 
+### 33. La guardia nocturna del 04-05/09: tres fusiones, una refutación, dos tropiezos míos y dos diseños para mañana (05-09-2026, 00:00-01:15 UTC)
+
+- **Fusionado con la autorización nocturna del propietario** (Quality +
+  mi revisión, según sus condiciones): ADR-138 (#532, los tres agentes a
+  `--model opus`, alias a propósito, con listón medible: los dos
+  próximos encargos contra la mediana de 4,5 rondas), ADR-139 (#533) y
+  ADR-140 (#534, el cambio 1 del papel de la mina: el marcador FIXED del
+  corrector firmado con `run_id-attempt` y el prompt exigiendo la
+  mutación vista fallar por observación — rojo previo 2 failed +
+  adversaria en verde, 45/45 después). El papel de la mina queda entero
+  ejecutado o superado.
+- **La refutación que vale un ADR.** La «opción barata» del papel
+  (reconciliar cada hora) es IMPOSIBLE bajo los invariantes del
+  contador: su derivador de hora exige que el mayor hueco libre de
+  disparos doble la tolerancia (340 min hoy) — horario da ~172, cada-4
+  daría 240, solo el cada-6 vigente cumple. Cuatro rojos por el camino,
+  incluidos DOS lectores de crones con dialectos distintos (el del motor
+  sin rangos; el del test de la hora recomendada sin comas siquiera).
+  ADR-139 entra RECHAZADO con todo citado; el cron no cambia; la vía
+  real es la «opción completa» (avance aceptando `repairing` con head
+  FIXED igual), pariente de la deuda 10.
+- **Mis dos tropiezos de método, cazados y corregidos.** (a) Afirmé
+  «suite en verde» con 2 rojos en mano: la tubería `pytest | tail` se
+  tragó el código de salida y el commit encadenado salió igual — la
+  familia del ADR-135, autoinfligida horas después de legislarla; commit
+  de corrección con el registro enderezado y, desde entonces, códigos de
+  salida capturados explícitos en toda validación. (b) Validé solo
+  `tests/automation` en local y Quality me cazó un rojo en
+  `tests/engine`: la validación obligatoria es la suite COMPLETA, sin
+  atajos nocturnos.
+- **Deudas 10 y 12: diseño sí, cirugía nocturna no.** Ambas tocan la
+  columna del motor y el reconocimiento ya encontró las trampas que un
+  parche ingenuo pisaría: (12) el anti-bucle del disparador de Codex
+  («no se publica un segundo disparador para el mismo head y ronda»,
+  sirius_codex_review.py) haría que un reintento sobre el mismo head
+  esperase 1200 s a un disparo que nunca llegará — el reintento correcto
+  re-arma una RONDA nueva (reponer `review-requested` + marcador
+  `reintento-infra` con tope de uno por head), clasificando en
+  sirius_aggregate_reviews.py qué fallos son de infraestructura (regla 2
+  «head no demostrado» y los FAILED_SAFELY con razón timeout), que es
+  Python puro y testeable; (10) la ruta de vuelta desde
+  `ready-for-merge` debe nacer en la ruta de avance (aceptar verdes de
+  Quality con aprobación obsoleta y reponer `review-requested`), no en
+  el guard de fusión, y su prueba tiene que cubrir el caso de HOY dos
+  veces visto. Las dos especificaciones llevan sus casos de parada y
+  vuelta escritos (lección de la entrada 31). Construcción: mañana, con
+  el propietario despierto para revisar la PR — «nada que él no hubiera
+  fusionado» incluye no operar la columna a la 01:00.
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
