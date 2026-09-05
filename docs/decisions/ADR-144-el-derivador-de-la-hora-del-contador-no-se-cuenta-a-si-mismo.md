@@ -274,7 +274,9 @@ vacío y hacía decir a la función «no encontré ningún `schedule: cron:` en
 {workflows_dir}» —falso sobre ese directorio: `cron` hay, y es justo el que ella
 se salta a propósito—. Ahora una variable local recuerda si el fichero del
 contador se excluyó, y en ese caso el error nombra la exclusión y este ADR en
-vez de mandar a buscar un disparador ausente que sí está escrito. El valor
+vez de mandar a buscar un disparador ausente que sí está escrito. (Esa variable
+dejó de calcularse así en la ronda 5, que la ata al CONTENIDO del fichero y no a
+su mera presencia: el bloque de más abajo lo cuenta.) El valor
 devuelto, el `continue` de la exclusión y las demás ramas de la función quedan
 igual. Lo fija
 `test_si_el_unico_cron_es_el_del_contador_el_error_nombra_la_exclusion`, y su
@@ -287,50 +289,80 @@ E         Expected regex: 'contador-siete-dias.yml'
 E         Actual message: 'no encontré ningún `schedule: cron:` en /tmp/pytest-of-runner/pytest-1/test_si_el_unico_cron_es_el_de0/workflows: no hay de qué derivar la hora tranquila'
 ```
 
-Esa prueba suma un item al par de ficheros del bloque de mutaciones, que hoy
-recolecta **183 items** (`uv run pytest --collect-only -q` sobre los dos, sobre
-este árbol) en vez de los 182 con los que se midieron los cinco bullets de
-arriba. Esas cifras se dejan como se midieron sobre el head `3549994`, sin
-retocarlas a mano; la prueba nueva no ejercita `.github/**` ni la lectura del
-árbol real —trabaja sobre un `tmp_path` propio—, así que no entra en ninguna de
-aquellas mutaciones más que como un verde más.
+**Ronda 5 de revisión (CODEX-002): el indicador de exclusión mira lo que el
+fichero CONTIENE, no que exista.** La ronda 4 ponía
+`se_excluyo_el_contador = True` por el solo hecho de encontrar el fichero, y el
+`continue` impedía mirar dentro. Un `contador-siete-dias.yml` que conserve solo
+`workflow_dispatch` —sin ningún `schedule:`— no esconde ningún `cron`, pero, si
+tampoco lo tenía ningún otro workflow, el error afirmaba igualmente que «se
+excluyeron los disparos» del contador: mandaba a buscar un disparador que nadie
+había escrito, que es el mismo defecto que la ronda 4 vino a quitar, con el
+signo cambiado. Ahora un ayudante nuevo, `_expresiones_cron`, devuelve las
+expresiones `schedule: cron:` escritas en un fichero sin interpretarlas, y quien
+llama decide qué hacer con ellas: para los demás workflows, contarlas; para el
+del contador, solo mirar SI las hay —`se_excluyo_algun_cron_del_contador =
+bool(expresiones)`— y seguir sin sumarlas. La exclusión de sus disparos, el
+valor devuelto y las demás ramas quedan igual; lo único que cambia es de qué
+depende el mensaje. Lo fija
+`test_un_contador_sin_schedule_no_carga_con_la_culpa_de_la_exclusion`, y su
+mutación —la asignación devuelta a `se_excluyo_algun_cron_del_contador = True`,
+que es la línea exacta de la ronda 4— la pone roja:
 
-**Validaciones obligatorias**, sobre el árbol final de la rama (ronda 4, con la
-prueba de CLAUDE-R3-001 dentro), los cuatro comandos uno a uno —el runner de
-esta ronda los ejecuta directamente, sin pasar por `scripts/check.ps1`—:
+```
+E       AssertionError: Regex pattern did not match.
+E         Expected regex: 'no encontré ningún `schedule: cron:`'
+E         Actual message: 'no quedó ningún `schedule: cron:` que contar en /tmp/pytest-of-runner/pytest-1/test_un_contador_sin_schedule_0/workflows: se excluyeron los disparos de contador-siete-dias.yml, que esta función no cuenta a propósito (ADR-144: la pasada del contador no se estorba a sí misma). No hay de qué derivar la hora tranquila'
+```
+
+Las pruebas de las rondas 4 y 5 suman un item cada una al par de ficheros del
+bloque de mutaciones, que hoy recolecta **184 items** (`uv run pytest
+--collect-only -q` sobre los dos, sobre este árbol) en vez de los 182 con los
+que se midieron los cinco bullets de arriba. Esas cifras se dejan como se
+midieron sobre el head `3549994`, sin retocarlas a mano; ninguna de las dos
+pruebas nuevas ejercita `.github/**` ni la lectura del árbol real —trabajan
+sobre un `tmp_path` propio—, así que no entran en ninguna de aquellas
+mutaciones más que como un verde más.
+
+**Validaciones obligatorias**, sobre el árbol final de la rama (ronda 5, con la
+prueba de CODEX-002 dentro), en **una sola invocación de
+`pwsh -File scripts/check.ps1`** —que es la forma que exige AGENTS.md
+(«Ejecuta `scripts/check.ps1` antes de entregar»), y no los cuatro comandos
+sueltos con los que la ronda 4 los corrió: eso es justo lo que CODEX-001
+señaló—. El script encadena los cuatro con `$ErrorActionPreference = "Stop"`,
+así que su salida 0 es la de los cuatro:
 
 - `uv run ruff format --check .` → «602 files already formatted»;
 - `uv run ruff check .` → «All checks passed!»;
 - `uv run mypy src tests` → «Success: no issues found in 570 source files»;
-- `uv run pytest` → «4944 passed, 15 skipped, 2 xfailed in 467.30s (0:07:47)»
-  —4961 items, que es el total que mide el `--collect-only` del párrafo de más
+- `uv run pytest` → «4945 passed, 15 skipped, 2 xfailed in 509.47s (0:08:29)»
+  —4962 items, que es el total que mide el `--collect-only` del párrafo de más
   abajo y la suma exacta de esas tres cifras—.
 
-Un solo proceso de `pytest` y un solo juego de fixtures de sesión; los cuatro
-comandos terminaron con código de salida 0. (La ronda 3 midió estas mismas
-cuatro líneas con una sola invocación de `pwsh -File scripts/check.ps1` y
-«4943 passed, 15 skipped, 2 xfailed in 470.66s» sobre 4960 items; la diferencia
-de un item es exactamente la prueba nueva de esta ronda.)
+La invocación completa tardó 8m31.943s (`time`) y terminó con código de salida
+0. (La ronda 4 midió estas mismas cuatro líneas con los comandos sueltos y
+«4944 passed, 15 skipped, 2 xfailed in 467.30s» sobre 4961 items, y la ronda 3
+con `check.ps1` y «4943 passed, 15 skipped, 2 xfailed in 470.66s» sobre 4960;
+cada diferencia de un item es exactamente la prueba nueva de cada ronda.)
 
-**Doce items recolectados más que la base**: medido con
+**Trece items recolectados más que la base**: medido con
 `uv run pytest --collect-only -q` sobre las dos versiones del árbol, `main`
-(`78e81fc`) en un `git worktree` aparte da **4949** y esta rama **4961**.
+(`78e81fc`) en un `git worktree` aparte da **4949** y esta rama **4962**.
 Comparando con `comm` las dos listas de ids recolectados, la diferencia son
-exactamente doce y ninguna más -y ningún id desaparece-: las SIETE pruebas que
-este encargo añade -las cinco de `tests/engine/test_seven_day_streak.py`, el
+exactamente trece y ninguna más -y ningún id desaparece-: las OCHO pruebas que
+este encargo añade -las seis de `tests/engine/test_seven_day_streak.py`, el
 guardián del cron cableado y su anti-vacua, ambos en
-`tests/automation/test_contador_de_siete_dias.py`-, que suman once items porque
+`tests/automation/test_contador_de_siete_dias.py`-, que suman doce items porque
 la anti-vacua está parametrizada con cinco casos; más un caso parametrizado que
 no es una prueba nueva sino el propio fichero de este ADR:
 `tests/automation/test_citas_de_los_adr.py::test_toda_ruta_citada_por_un_adr_existe`
 parametriza por fichero de `docs/decisions/`, de modo que cada ADR nuevo suma
 un caso.
 
-(Las cifras de este párrafo son la medida de la ronda 4, con la prueba nueva de
-CLAUDE-R3-001 dentro. La redacción anterior decía «once items» sobre una rama de
-4960, antes «seis» sobre una de 4955, y antes «cuatro» sobre una base de 4950;
-todas quedaron atrás al añadirse las pruebas de cada ronda, y se dejan dichas
-aquí en vez de borrarse.)
+(Las cifras de este párrafo son la medida de la ronda 5, con la prueba nueva de
+CODEX-002 dentro. La redacción anterior decía «doce items» sobre una rama de
+4961, antes «once» sobre una de 4960, antes «seis» sobre una de 4955, y antes
+«cuatro» sobre una base de 4950; todas quedaron atrás al añadirse las pruebas
+de cada ronda, y se dejan dichas aquí en vez de borrarse.)
 
 `git diff --check` sobre el árbol: sin salida.
 
@@ -340,7 +372,7 @@ Como en `docs/decisions/` sí hay guardianes que leen —los de
 `tests/automation/`—, se volvieron a correr sobre el árbol exacto que se
 commitea: `uv run ruff format --check .` → «602 files already formatted», y
 `uv run pytest tests/automation tests/engine/test_seven_day_streak.py` →
-«1318 passed, 10 skipped in 174.75s (0:02:54)». Nada de lo medido arriba
+«1319 passed, 10 skipped in 158.01s (0:02:38)». Nada de lo medido arriba
 dependía de este párrafo, y lo único que cambió después de esa última corrida
 son estas dos cifras al transcribirlas.
 

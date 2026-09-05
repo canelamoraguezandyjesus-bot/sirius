@@ -607,6 +607,33 @@ def test_si_el_unico_cron_es_el_del_contador_el_error_nombra_la_exclusion(
     )
 
 
+def test_un_contador_sin_schedule_no_carga_con_la_culpa_de_la_exclusion(
+    tmp_path: Path,
+) -> None:
+    """El fichero del contador está, pero no trae ningún `schedule: cron:`.
+
+    El otro lado de la prueba anterior. Ahí la exclusión SÍ escondía el único
+    `cron` del directorio y el error tenía que nombrarla; aquí no hay ningún
+    `cron` que esconder -el contador solo lleva `workflow_dispatch`-, así que
+    culpar a la exclusión mandaría a buscar un disparador que nadie escribió.
+    El indicador se calcula de lo que el fichero CONTIENE, no de que exista.
+    """
+    workflows = tmp_path / "workflows"
+    workflows.mkdir()
+    (workflows / _CONTADOR_PARA_LAS_PRUEBAS).write_text(
+        yaml.safe_dump({"on": {"workflow_dispatch": None}, "jobs": {"j": {"timeout-minutes": 30}}}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="no encontré ningún `schedule: cron:`") as error:
+        hora_recomendada_pasada(workflows)
+
+    assert _CONTADOR_PARA_LAS_PRUEBAS not in str(error.value), (
+        "el mensaje culpa a la exclusión del contador de un `cron` que ese fichero no "
+        "tiene: con solo `workflow_dispatch` no hay ningún disparo excluido que explicar"
+    )
+
+
 def test_un_contador_renombrado_vuelve_a_contarse_sin_reventar(tmp_path: Path) -> None:
     """Un renombrado accidental degrada a «como antes de ADR-144», nunca a un error.
 

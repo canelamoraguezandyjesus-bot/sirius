@@ -537,6 +537,29 @@ def _horas_de_disparo(expresion_cron: str) -> list[time]:
     return [time(hour=hora, minute=minuto) for hora in horas for minuto in minutos]
 
 
+def _expresiones_cron(workflow: Path) -> list[str]:
+    """Las expresiones `schedule: cron:` escritas en un fichero de workflow.
+
+    Sin interpretarlas: devuelve el texto tal cual, para que quien llame decida
+    si las cuenta o solo mira si las hay.
+    """
+    doc: Any = yaml.safe_load(workflow.read_text(encoding="utf-8"))
+    activadores = doc.get("on") if isinstance(doc, dict) else None
+    # PyYAML interpreta la clave YAML `on:` sin comillas como el booleano
+    # `True`: `.get("on")` falla en silencio si no se contempla también esa
+    # forma, y el disparador real de estos workflows lleva `on:` sin comillas.
+    if activadores is None and isinstance(doc, dict):
+        activadores = doc.get(True)
+    if not isinstance(activadores, dict):
+        return []
+    expresiones: list[str] = []
+    for entrada in activadores.get("schedule") or []:
+        expresion = entrada.get("cron") if isinstance(entrada, dict) else None
+        if expresion:
+            expresiones.append(expresion)
+    return expresiones
+
+
 def hora_recomendada_pasada(workflows_dir: Path = _WORKFLOWS_DIR) -> tuple[time, str]:
     """La hora del día más alejada de cualquier disparo `schedule: cron:` real.
 
@@ -572,31 +595,26 @@ def hora_recomendada_pasada(workflows_dir: Path = _WORKFLOWS_DIR) -> tuple[time,
     hora que no serviría (criterio de parada (b)).
     """
     disparos: list[time] = []
-    # Si el fichero del contador estaba y se saltó, el mensaje de «no hay nada
-    # que contar» tiene que decirlo: lo que ese directorio contenga puede no
-    # ser vacío -puede ser justo lo que esta función excluye a propósito-.
-    se_excluyo_el_contador = False
+    # Si lo que se saltó tenía `cron`, el mensaje de «no hay nada que contar»
+    # tiene que decirlo: lo que ese directorio contenga puede no ser vacío
+    # -puede ser justo lo que esta función excluye a propósito-. La condición
+    # es que el fichero excluido TRAIGA disparos, no que exista: un
+    # `contador-siete-dias.yml` con solo `workflow_dispatch` no esconde ningún
+    # `schedule: cron:`, y culpar a la exclusión mandaría a buscar un
+    # disparador que nadie escribió.
+    se_excluyo_algun_cron_del_contador = False
     for wf in sorted(workflows_dir.glob("*.yml")):
+        expresiones = _expresiones_cron(wf)
         if wf.name == NOMBRE_DEL_WORKFLOW_DEL_CONTADOR:
-            se_excluyo_el_contador = True
+            # Se lee para saber SI traía `cron`, nunca para contarlo: sus
+            # disparos no entran en `disparos` (ADR-144).
+            se_excluyo_algun_cron_del_contador = bool(expresiones)
             continue
-        doc: Any = yaml.safe_load(wf.read_text(encoding="utf-8"))
-        activadores = doc.get("on") if isinstance(doc, dict) else None
-        # PyYAML interpreta la clave YAML `on:` sin comillas como el booleano
-        # `True`: `.get("on")` falla en silencio si no se contempla también
-        # esa forma, y el disparador real de estos workflows lleva `on:` sin
-        # comillas.
-        if activadores is None and isinstance(doc, dict):
-            activadores = doc.get(True)
-        if not isinstance(activadores, dict):
-            continue
-        for entrada in activadores.get("schedule") or []:
-            expresion = entrada.get("cron") if isinstance(entrada, dict) else None
-            if expresion:
-                disparos.extend(_horas_de_disparo(expresion))
+        for expresion in expresiones:
+            disparos.extend(_horas_de_disparo(expresion))
 
     if not disparos:
-        if se_excluyo_el_contador:
+        if se_excluyo_algun_cron_del_contador:
             # Decir aquí «no encontré ningún `schedule: cron:` en el
             # directorio» sería falso: puede haberlo, en el fichero que esta
             # función acaba de saltarse. La causa se nombra para que quien lea
