@@ -1077,6 +1077,72 @@ ADR o su incidencia cuando se adopte.
   (`bash -ec`, sin `pwsh` en el contenedor, declarado en ADR y PR).
   ADR-146 todavía sin dato vivo: ninguna ronda de revisión en #546 aún.
 
+### 42. El criterio del propietario para la memoria («todos los números bien»), la puerta cerrada, y el techo de la búsqueda medido palanca a palanca (05-09-2026 22:45 → 06-09-2026 00:00 UTC)
+
+- **La decisión, en palabras del propietario** (sesión, 06-09 hacia las
+  00:30 hora local): «tenemos que sacar todos los números bien… no me
+  vale a medias». Sustituye al «el ruido es tolerable» del registro del
+  02-09. Retiré en el acto mis dos propuestas de esa misma hora —«abre la
+  puerta» y marcar la criticidad automáticamente—: con 8/47 exactas y
+  218 de más no se enciende nada. Queda como criterio de parada de toda
+  la línea de memoria: exactas 47/47, hallados 81/81, críticas perdidas
+  0 y de más 0 sobre el banco con Ollama real en su máquina; hasta
+  entonces la puerta sigue cerrada. ADR-148 (propuesto) lo registra con
+  el plan.
+- **La puerta.** `category_matching_enabled` está en `False` por defecto
+  y se lee de `settings.json` (`composition_root.py:514`): cerrada, no se
+  construyen ni el índice, ni el filtro con Ollama, ni el rescate, ni la
+  siembra. Toda la memoria mejorada de dos semanas está en `main` y
+  apagada en el Sirius diario del propietario; el «0 críticas perdidas»
+  de hoy es del camino con la puerta abierta, que el arnés del banco
+  abre a mano. Ninguna medición de estas semanas describe lo que el
+  propietario usa cada día.
+- **Techo de la etapa de búsqueda, caso por caso y sin Ollama** (guiones
+  de sesión sobre `_ejecutar_banco_paquete_completo`, con un doble que no
+  descarta y recuerda qué entró; parches por nombre de módulo para
+  inyectar los ejes del corpus en el puerto y la petición real de cada
+  caso en `_peticion_ordinaria`; sin tocar el repositorio ni leer
+  `razon_segura`):
+
+  | configuración | exactas | de más | hallados | críticas perdidas |
+  |---|---|---|---|---|
+  | hoy: petición fija, sin ejes | 0/47 | 487 | 72/81 | 0 |
+  | solo ejes de los ítems | 0/47 | 421 | 71/81 | 0 |
+  | solo petición real del caso | 16/47 | 162 | 73/81 | 0 |
+  | ejes y petición real | 20/47 | 144 | 73/81 | 0 |
+
+  La palanca grande es la petición: producción interroga al motor con
+  una política uniforme para las 47 preguntas (`_peticion_ordinaria`:
+  M1, EXHAUSTIVA, ahora, sin corte), mientras el banco y el laboratorio
+  llevan por caso el modo (historial o respuesta), la fecha o intervalo,
+  el corte «qué sabía el día X», el permiso y la cardinalidad. Solo con la
+  petición real, 16 casos salen exactos y 19 sin nada de más, sin filtro
+  alguno (20 y 23 con los ejes). Los ejes de los ítems valen menos de lo
+  que suponía, y producción tiene de dónde derivarlos (fechas de
+  aprobación y sustitución, `created_at` de las revisiones). Las
+  críticas perdidas siguen en 0 con la petición real aunque la siembra
+  solo actúe en los dos casos cuyo propósito la pide.
+- **Los 8 huecos que quedan con las dos palancas puestas**, en cuatro
+  clases: (i) enumerar por ventana temporal sin tema (B04-CA-22, cinco
+  decisiones «válidas entre enero y marzo»: la búsqueda parte de palabras
+  y no sabe listar por vigencia); (ii) el corte de registro (B04-CA-32,
+  «qué sabía el 1 de marzo»: G8 compara con el `created_at` real y el
+  cargador del banco crea todo hoy — artefacto del cargador, no del
+  producto, que sí tiene esa fecha); (iii) una afirmación candidata de
+  fuente externa (B04-CA-29, MEM-020 CANDIDATA: el cargador la archiva;
+  en el producto sería una sugerencia pendiente — decisión de producto
+  pendiente: si lo no confirmado se recupera marcado como tal); (iv) la
+  derivación léxica de D3 bajo cardinalidad acotada (B04-CA-30, MEM-001:
+  entra en EXHAUSTIVA y queda fuera del límite en ACOTADA — es de
+  ranking, no de búsqueda).
+- **Lo que esto dice del plan del 02-09**: la siembra (M20) fue fuerza
+  bruta para no perder críticas mientras la petición seguía ciega; con
+  la petición real el ruido cae de 487 a 144 antes de cualquier filtro.
+  El orden correcto era petición, ejes, filtro. Sexta lección de
+  encargos: medir el techo de cada palanca ANTES de elegir el encargo —
+  hoy costó tres guiones y veinte minutos; el plan del 02-09 se eligió
+  sin ese número.
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
