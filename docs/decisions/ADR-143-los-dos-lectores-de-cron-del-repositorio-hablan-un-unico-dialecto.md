@@ -195,24 +195,43 @@ casos son los rechazos que antes eran silencio o mensaje sin campo.
   7 rojos, con el mismo par de expresiones. Restaurado el árbol, 163 en verde.
 
 Estas tres cifras son la captura del commit de implementación y NO se han
-vuelto a correr: la corrección de CODEX-001 fue solo documental (esta sección
-y la del límite de las 03:24) y no tocó ni una línea de
-`src/sirius_engine/seven_day_streak.py` ni de
+vuelto a correr: las dos correcciones posteriores de CODEX-001 (rondas 2 y 3)
+fueron solo documentales —la sección del límite de las 03:24 y esta misma— y
+no tocaron ni una línea de `src/sirius_engine/seven_day_streak.py` ni de
 `tests/engine/test_seven_day_streak.py`, que es el árbol sobre el que se
 midieron.
 
-Validaciones obligatorias **recapturadas sobre el árbol corregido**, con su
-código de salida verificado (0 en las cinco): `uv run ruff format --check .`
-(602 ficheros), `uv run ruff check .`, `uv run mypy src tests` (570 ficheros),
-`uv run pytest` y `git diff --check` (sin salida). La suite completa se corrió
-en dos tandas para caber en el tiempo de una sola invocación (este entorno no
-trae `pytest-xdist`): `tests/acceptance tests/automation tests/contract
-tests/engine` → 2368 pasadas, 13 saltadas, 1 xfailed; `tests/gui
-tests/integration tests/unit` → 2564 pasadas, 2 saltadas, 1 xfailed. Suma:
-**4932 pasadas, 15 saltadas, 2 xfailed**, los mismos recuentos que en el commit
-de implementación. Las duraciones no se anotan aquí a propósito: son lo único
-que cambia entre pasadas y quedan en el veredicto de la ronda, que sí puede
-citarlas sin quedarse desfasado.
+Validaciones obligatorias **recapturadas sobre esta rama (`786c82d` más esta
+sección) con una sola invocación de `pwsh -File scripts/check.ps1`**, que es
+lo que AGENTS.md exige entregar. No se partió nada: el script encadena las
+cuatro comprobaciones y terminó con código de salida 0. Sus salidas literales,
+en orden:
+
+- `uv run ruff format --check .` → «602 files already formatted»;
+- `uv run ruff check .` → «All checks passed!»;
+- `uv run mypy src tests` → «Success: no issues found in 570 source files»;
+- `uv run pytest` → «collected 4949 items» y
+  «4932 passed, 15 skipped, 2 xfailed in 448.91s (0:07:28)».
+
+Una sola ejecución del proceso de pytest y de sus fixtures de sesión, con los
+mismos recuentos que en el commit de implementación. El script entero tardó
+7m32.3s. `git diff --check` sobre el árbol, sin salida.
+
+Esa ejecución se hizo sobre el árbol que ya llevaba esta misma sección
+reescrita; la única diferencia entre el árbol medido y el que se commitea es
+la transcripción de las cifras de arriba dentro de este párrafo, que ningún
+guardián lee. Antes de reescribirla hubo otra ejecución idéntica del script
+sobre el árbol intacto (`786c82d` limpio): también salida 0 y también
+«4932 passed, 15 skipped, 2 xfailed», en 471.95s.
+
+La ronda anterior partió `pytest` en dos tandas (`acceptance/automation/
+contract/engine` por un lado, `gui/integration/unit` por otro) y aun así
+afirmó que `uv run pytest` había terminado en 0. Eso no lo demostraba: partir
+la suite arranca dos procesos y dos juegos de fixtures de sesión, y nunca
+ejercita el script obligatorio entero. La captura de arriba sustituye a
+aquella (CODEX-001, ronda 3). Las duraciones sí se anotan ahora porque son de
+esta misma captura y forman parte de ella; volverán a moverse en cualquier
+pasada futura, que tendrá que recapturarlas junto con el resto.
 
 ## Consecuencias
 
