@@ -63,15 +63,18 @@ def test_un_resultado_rojo_no_revive_una_parada_segura() -> None:
     )
 
 
-def test_la_transicion_de_exito_retira_las_dos_etiquetas_fuente() -> None:
-    """PR #477 rondas 3-5: las dos etiquetas-fuente van como removes (CSV)
-    DENTRO de la transición verificada — retirar una ausente se tolera, y el
-    estado no puede quedar con failed-safely junto a review-requested ni en
-    primera ejecución ni en reintento."""
+def test_la_transicion_de_exito_retira_las_tres_etiquetas_fuente() -> None:
+    """PR #477 rondas 3-5: las etiquetas-fuente van como removes (CSV) DENTRO
+    de la transición verificada — retirar una ausente se tolera, y el estado
+    no puede quedar con una fuente conviviendo con review-requested ni en
+    primera ejecución ni en reintento. Re-anclada a conciencia con ADR-142:
+    el tercer origen (`ready-for-merge`, deuda 10) entra en el mismo CSV por
+    la misma razón — una aprobación caducada no puede convivir con la
+    revisión repuesta."""
     guion = _sin_comentarios(_paso_de_avance())
-    assert '"sirius:ci-pending,sirius:failed-safely"' in guion, (
-        "la transición de éxito ya no retira ambas etiquetas-fuente en su "
-        "verificación: una transición parcial anterior dejaría una parada "
+    assert '"sirius:ci-pending,sirius:failed-safely,sirius:ready-for-merge"' in guion, (
+        "la transición de éxito ya no retira las tres etiquetas-fuente en su "
+        "verificación: una transición parcial anterior dejaría una fuente "
         "falsa conviviendo con el estado activo"
     )
 

@@ -115,10 +115,23 @@ jobs:
           # hacia revision; un resultado ROJO sigue actuando solo sobre
           # `ci-pending`: revivir una parada segura hacia correccion seria
           # tomar una decision, no registrar un resultado.
+          #
+          # ADR-142 (deuda 10 de la bitacora; entradas 25 y 29: dos veces el
+          # 04-09 a mano): el tercer origen es `ready-for-merge`. Cuando main
+          # avanza y el update-branch mueve el head, la aprobacion registrada
+          # caduca y el motor no tenia camino de vuelta a revision: el verde
+          # de Quality del head nuevo repone `review-requested` el solo. Solo
+          # verdes, por la misma doctrina; y con un guard mas abajo: si el
+          # head verde ES el aprobado (un re-run sobre el head vigente), no
+          # se toca nada — reponer la revision destruiria una aprobacion
+          # valida.
           declare -A origen_de=()
           candidate_issues=()
-          for etiqueta_origen in "sirius:ci-pending" "sirius:failed-safely"; do
+          for etiqueta_origen in "sirius:ci-pending" "sirius:failed-safely" "sirius:ready-for-merge"; do
             if [ "$etiqueta_origen" = "sirius:failed-safely" ] && [ "$CONCLUSION" != "success" ]; then
+              continue
+            fi
+            if [ "$etiqueta_origen" = "sirius:ready-for-merge" ] && [ "$CONCLUSION" != "success" ]; then
               continue
             fi
             # La consulta va a fichero con su codigo comprobado (revision de
@@ -200,6 +213,7 @@ jobs:
               # PR #477, P1); si venia de ci-pending, se retira esa.
               remueve_ambiguedad="sirius:ci-pending"
               [ "${origen_de[$issue_number]}" = "sirius:failed-safely" ] && remueve_ambiguedad=""
+              [ "${origen_de[$issue_number]}" = "sirius:ready-for-merge" ] && remueve_ambiguedad="sirius:ready-for-merge"
               trigger_transition "$GH_REPO" "$issue_number" "$marker" "$body_file" \
                 "sirius:failed-safely" "D93F0B" "Estado temporal: fallo operativo detenido de forma segura" \
                 "noclose" "$remueve_ambiguedad" \
@@ -210,6 +224,28 @@ jobs:
           fi
 
           issue_number="${matched_issues[0]}"
+
+          # ADR-142: con origen `ready-for-merge` y verde, si la aprobacion
+          # registrada cubre EXACTAMENTE este head (un re-run de Quality sobre
+          # el head ya aprobado), no hay nada que reponer: transicionar
+          # destruiria una aprobacion valida y costaria una ronda entera. La
+          # lectura se propaga como reintentable, igual que las de candidatas.
+          if [ "${origen_de[$issue_number]}" = "sirius:ready-for-merge" ] && \
+             [ "$CONCLUSION" = "success" ]; then
+            aprobacion_file="$(mktemp)"
+            if ! sirius_read_issue_comments "$GH_REPO" "$issue_number" >"$aprobacion_file" 2>/dev/null; then
+              rm -f "$aprobacion_file"
+              echo "::error::No se pudieron leer los comentarios de #${issue_number} para comprobar la aprobacion vigente; reintentable."
+              exit 1
+            fi
+            if grep -qF "sirius-verdict:reviewer:approved:${HEAD_SHA}" "$aprobacion_file"; then
+              rm -f "$aprobacion_file"
+              echo "La aprobacion registrada de #${issue_number} ya cubre el head ${HEAD_SHA}; nada que reponer."
+              exit 0
+            fi
+            rm -f "$aprobacion_file"
+          fi
+
           body_file="$(mktemp)"
           rc=0
           case "$CONCLUSION" in
@@ -231,7 +267,7 @@ jobs:
               # reintento (revision de la PR #477, P2 dos veces).
               trigger_transition "$GH_REPO" "$issue_number" "$marker" "$body_file" \
                 "sirius:review-requested" "8250DF" "Evento consumible: iniciar revisión independiente" \
-                "noclose" "sirius:ci-pending,sirius:failed-safely" || rc=1
+                "noclose" "sirius:ci-pending,sirius:failed-safely,sirius:ready-for-merge" || rc=1
               ;;
             failure|timed_out)
               marker="<!-- sirius-quality:${HEAD_SHA}:${CONCLUSION} -->"
