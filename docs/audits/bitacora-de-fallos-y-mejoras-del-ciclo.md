@@ -972,6 +972,51 @@ ADR o su incidencia cuando se adopte.
   parches sobre el mismo vicio y parada. La diferencia no fue el motor:
   fue el encargo.
 
+### 40. El ciclo de #541 (derivador): 5 horas, la taxonomía completa de las vueltas, y dos reglas de prompt que se pagan solas (05-09-2026, 13:10-18:11 UTC)
+
+- **El ciclo**: despacho 13:10, fusión `21eefcd` 18:11 — 5 h 01, cinco
+  rondas con hallazgos más la aprobación. Deuda 14(a) saldada: la
+  derivada vuelve a ser 03:24, coincide con el cron y con la cabecera,
+  y un guardián nuevo lo vigila (mutación `0 5 * * *` sobre copia
+  temporal vista fallar). Ocho pruebas nuevas; cero `.github/**`.
+- **Taxonomía de las vueltas, medida**: (i) código real, tres y
+  pequeñas — el `set` que colapsaba crons duplicados, el indicador de
+  exclusión por nombre en vez de por contenido, el mensaje de error que
+  negaba el cron que él mismo excluía; (ii) contabilidad de evidencia,
+  CUATRO — `check.ps1` partido en comandos sueltos (segunda vez hoy
+  tras #537), el cuerpo de la PR desfasado del head DOS veces (rondas 3
+  y 6: el corrector commitea y olvida el cuerpo), y la aritmética de
+  mutaciones irreconciliable (176≠167); (iii) infraestructura, tres —
+  Quality colgado en el espejo de paquetes (cancelado a los 20 min;
+  relanzado), el fallo DECLARADO de Codex («Something went wrong. Try
+  again later» — la clase que ADR-141 excluyó a propósito: primer dato
+  en vivo, y era transitorio: la ronda re-armada aprobó a la primera), y
+  la deuda 3 mordiendo otra vez (verde de Quality llegando en
+  `repairing` y perdiéndose; receta del relanzamiento aplicada).
+- **Lo que funcionó solo**: la revivificación automática
+  failed-safely→review-requested tras el relanzamiento verde (H-34/
+  ADR-142, primera vez en vivo, cero cirugía); y el freno de
+  convergencia saltando por aritmética en la vuelta 4 — ahí la decisión
+  registrada fue reanudar (sin bifurcación de diseño, restos triviales
+  y especificados), y el ciclo cerró en dos vueltas más: el freno y la
+  reanudación con criterio se complementan.
+- **El informe externo (modelo de OpenAI) convergió con este
+  diagnóstico** por lectura independiente: sus cinco ejemplos son
+  exactos, refutó la falsa mejora de «paralelizar revisiones» (ya lo
+  están) y reprodujo en local el clasificador de ADR-141. Sus tres
+  mejoras se reparten así: reglas de prompt (carril del operador, abajo),
+  disciplina de encargos (ya activa: las cuatro lecciones), y ampliación
+  del reintento (ADR-146 candidato con el dato de hoy).
+- **Las dos reglas de prompt que hoy habrían ahorrado ~3 vueltas** entre
+  #537 y #541, camino de PRs del operador: (a) las validaciones
+  obligatorias son UNA invocación de `scripts/check.ps1` con su código
+  de salida transcrito — los comandos sueltos no la sustituyen; (b)
+  tras CUALQUIER commit, el cuerpo de la PR se reconcilia con el head
+  en el mismo turno, sin afirmar como «actual» un SHA superado — la
+  remisión estable es al ADR del head. Ambas con guardián textual y su
+  ADR; la ampliación del reintento (fallo declarado transitorio de
+  Codex, mismo candado por head) va aparte con el suyo.
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
@@ -1020,12 +1065,13 @@ ADR o su incidencia cuando se adopte.
     hacia las ~08:00 UTC reales (entrada 36), y no podrá decir
     «comparable» hasta que C2 encienda la jurisdicción.
 14. La hora del contador, de punta a punta (decisión del propietario;
-    entradas 36 y 37 + diagnóstico del corrector en #537): (a) el
-    derivador se INCLUYE A SÍ MISMO — programar la hora derivada movió
-    la derivación de 03:24 a 09:24 en el acto; (b) la cabecera de
-    `contador-siete-dias.yml` afirma «03:24, derivado» y hoy es falso;
-    (c) GitHub ENTREGA ese cron con 43 min-12 h de retraso (~08:00
-    estos días), así que la geometría estática tampoco gobierna el
-    reloj de pared — candidato: la pasada mide su propia ventana al
-    llegar, contra runs reales. Las tres piezas van juntas en una sola
-    ficha porque cualquier arreglo parcial contradice a las otras dos.
+    entradas 36 y 37 + diagnóstico del corrector en #537). **(a) y (b)
+    SALDADAS el 05-09** (ADR-144, #541, entrada 40): el derivador ya no
+    se cuenta a sí mismo — la derivada vuelve a 03:24, coincide con el
+    cron cableado, la cabecera vuelve a ser verdad sola y un guardián
+    vigila la coincidencia. Queda **(c)**: GitHub ENTREGA ese cron con
+    43 min-12 h de retraso (~08:00 estos días), así que la geometría
+    estática no gobierna el reloj de pared — candidato decidido por el
+    propietario para una ficha posterior («derivador ya; ventana
+    después»): la pasada mide su propia ventana al llegar, contra runs
+    reales.
