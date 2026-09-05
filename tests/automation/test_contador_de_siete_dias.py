@@ -87,6 +87,19 @@ def _tranquilidad_antes_de(minuto: int, disparos: set[int]) -> int:
     return min((minuto - otro) % MINUTOS_DEL_DIA for otro in otros)
 
 
+def _cableado_es_exactamente(minutos: list[int], derivada: int) -> bool:
+    """¿El contador declara UN solo disparo periódico y es el derivado?
+
+    Sobre la LISTA de minutos, nunca sobre un conjunto: `set(...)` colapsa dos
+    entradas idénticas -``'24 3 * * *'`` declarado dos veces da ``[204, 204]``,
+    y el conjunto lo reduce a ``{204}``- y daría por buena una hora programada
+    dos veces al día, que es justo lo que el mensaje de más abajo dice que no
+    puede pasar. Comparar contra ``[derivada]`` comprueba a la vez la cantidad
+    (una sola entrada) y el valor.
+    """
+    return minutos == [derivada]
+
+
 def test_el_contador_existe_y_tiene_horario() -> None:
     """Anti-vacua: sin horario, las demás pruebas medirían un contador que no corre."""
     assert CONTADOR.is_file(), (
@@ -152,10 +165,10 @@ def test_el_cron_cableado_del_contador_es_la_hora_que_el_derivador_devuelve() ->
     hora, motivo = hora_recomendada_pasada()
     derivada = hora.hour * 60 + hora.minute
 
-    cableados = set(_minutos_de(_doc(CONTADOR)))
+    cableados = _minutos_de(_doc(CONTADOR))
 
-    assert cableados == {derivada}, (
-        f"el contador dispara en {sorted(cableados)} (minutos del día) y la "
+    assert _cableado_es_exactamente(cableados, derivada), (
+        f"el contador dispara en {cableados} (minutos del día) y la "
         f"derivación devuelve {derivada} ({hora.hour:02d}:{hora.minute:02d} UTC, "
         f"{motivo}).\n"
         "  La cabecera de `contador-siete-dias.yml` declara su hora DERIVADA, y "
@@ -257,3 +270,32 @@ def test_el_criterio_rechaza_una_hora_mala() -> None:
         "una hora pegada a otro disparo tiene que quedar por debajo de la "
         "tolerancia; si no, el criterio no está midiendo nada"
     )
+
+
+@pytest.mark.parametrize(
+    ("cableados", "esperado"),
+    [
+        # Lo único que vale: una sola entrada, y es la derivada.
+        ([204], True),
+        # El caso que `set(...)` daba por bueno: `'24 3 * * *'` declarado DOS
+        # veces. El conjunto lo colapsaba en `{204}` y la comprobación pasaba
+        # con el contador programado dos veces al día.
+        ([204, 204], False),
+        # Dos disparos distintos: ninguno de los dos puede ser «la» derivada.
+        ([204, 300], False),
+        # Una sola entrada, pero no la derivada.
+        ([300], False),
+        # Sin ningún disparo periódico no hay nada que comparar.
+        ([], False),
+    ],
+)
+def test_el_guardian_del_cron_cableado_no_colapsa_los_duplicados(
+    cableados: list[int], esperado: bool
+) -> None:
+    """La mutación, fijada: contar los disparos, no solo mirar cuáles son.
+
+    El guardián de arriba exige «un solo cron», y con `set(...)` esa exigencia
+    era decorativa: dos entradas idénticas se reducían a una y pasaban. Aquí se
+    fija que la cantidad cuenta, para que volver al conjunto se ponga rojo.
+    """
+    assert _cableado_es_exactamente(cableados, 204) is esperado
