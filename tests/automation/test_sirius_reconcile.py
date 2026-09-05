@@ -680,6 +680,9 @@ def test_recon_stuck_007_el_reconciliador_esta_programado_y_sigue_siendo_manual(
     assert "schedule" in disparo, "sin `schedule:` la detección sigue dependiendo de un humano"
     assert "workflow_dispatch" in disparo, "quitar el disparo manual sería una regresión"
     crons = [e["cron"] for e in disparo["schedule"]]
+    # El cada-6 no es pereza: densificarlo quedó refutado por cuatro rojos
+    # (ADR-139) — el derivador de la hora del contador exige que el mayor
+    # hueco libre de disparos doble su ventana de tolerancia.
     assert crons == ["17 */6 * * *"], crons
     # Y sigue sin poder fusionar ni iniciar bloques: la excepción del contrato
     # v1.6 §9.1 se apoya en que este workflow NO es el motor del flujo.

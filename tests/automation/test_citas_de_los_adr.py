@@ -166,6 +166,7 @@ _ADR_134 = (
 _ADR_135 = (
     "ADR-135-el-corrector-actualiza-en-el-mismo-commit-el-papel-que-depende-de-su-correccion.md"
 )
+_ADR_139 = "ADR-139-la-reconciliacion-pasa-cada-hora-activa-en-vez-de-cada-seis.md"
 
 RAMA_DE_ORIGEN_NO_FUSIONADA: dict[str, list[str]] = {
     "experiments/adr002/round/cases.py": [
@@ -279,6 +280,10 @@ RAMA_DE_ORIGEN_NO_FUSIONADA: dict[str, list[str]] = {
     # a mano).
     "docs/audits/SIRIUS_MINA_APRENDIZAJE_OPERATIVO_2026-09.md": [_ADR_132, _ADR_134, _ADR_135],
     "docs/audits/mina-2026-09-medicion-de-guardianes.md": [_ADR_132, _ADR_134],
+    # ADR-139 (el cron del reconciliador) cita el papel de cambios para el
+    # propietario que salió de la misma mina: vive en la misma rama de
+    # auditoría que nunca se fusiona entera.
+    "docs/audits/mina-2026-09-cambios-para-el-propietario.md": [_ADR_139],
 }
 
 
