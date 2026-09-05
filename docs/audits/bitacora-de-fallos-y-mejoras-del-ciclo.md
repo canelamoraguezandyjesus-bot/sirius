@@ -727,6 +727,67 @@ ADR o su incidencia cuando se adopte.
   el propietario despierto para revisar la PR — «nada que él no hubiera
   fusionado» incluye no operar la columna a la 01:00.
 
+### 34. Deuda 12 saldada en caliente: ADR-141, y Quality demostrando la tesis sin querer (05-09-2026, 01:30-02:50 UTC)
+
+- El «construcción: mañana» de la entrada 33 lo adelantó el propietario
+  en persona: preguntado con las dos fichas explicadas delante, contestó
+  «Fusiónalas tú». La cirugía nocturna de la columna dejó de ser
+  iniciativa mía para ser encargo suyo — la regla «nada que él no
+  hubiera fusionado» quedó satisfecha por la vía directa.
+- ADR-141 construido exactamente según la especificación de la
+  entrada 33, sin desviaciones: clasificación en el agregador
+  (`infra_retryable`, puesto en exactamente tres sitios: head de Claude
+  no demostrado, head de Codex no demostrado, fallo seguro cuya única
+  causa es el timeout del recolector de Codex), decisión en el aplicador
+  (solo rol revisor, candado material `sirius-reintento-ronda:<head>`
+  con tope de UNO por head, `locate_verified_pr` y no `resolve_pr`
+  porque este detiene el guion), cero lógica nueva en YAML. Catorce
+  pruebas nuevas (7 agregador + 7 aplicador), las de comportamiento
+  vistas fallar contra el código sin la rama y las adversarias fijando
+  que la bandera JAMÁS acompaña una parada de contenido.
+- **La propia PR #535 sufrió el género de fallo que legisla**: su primer
+  Quality murió en `apt-get install libegl1` (espejo de paquetes
+  colgado), rojo de infraestructura puro, sin una línea mía implicada.
+  Receta de siempre — relanzar el run — y verde a la segunda. No es una
+  ronda del ciclo (no había revisor implicado), pero es el mismo género
+  de pérdida que ADR-141 elimina del tramo de revisión.
+- Fusionada como `680b461`. El primer dato en vivo del reintento llegará
+  con la próxima parada de infraestructura real de un revisor: se
+  registrará aquí con su marcador y su ronda re-armada.
+
+### 35. Deuda 10 saldada: ADR-142, y mi tropiezo de fontanería de ramas por el camino (05-09-2026, 02:20-03:08 UTC)
+
+- ADR-142: `sirius:ready-for-merge` entra como tercer origen de la ruta
+  de avance bajo la doctrina H-34 — solo verdes (un rojo no degrada una
+  aprobación: sería decidir, no registrar), retirada de las TRES
+  etiquetas-fuente en el CSV de la transición verificada, la parada por
+  ambigüedad conociendo el origen nuevo, y el guard que mi receta manual
+  no necesitaba pero el workflow sí: si el head verde ES el aprobado
+  (`sirius-verdict:reviewer:approved:<head>` presente), no se toca nada
+  — un re-run de Quality no puede destruir una aprobación válida.
+  Guardián textual nuevo (`test_ruta_de_avance_origenes.py`, el patrón
+  de `test_recon_stuck_007`): 4/4 visto fallar contra el workflow de dos
+  orígenes; el pin H-34 del CSV re-anclado a conciencia citando el ADR.
+- **Mi tropiezo de fontanería**: construí el commit de ADR-142 encima de
+  la rama local de ADR-141 — nunca había creado la suya. Me delató el
+  push a una ref inexistente, que falló sin daño alguno. Recuperación
+  sin tocar historia ni fusionar de más: rama nueva apuntando al commit,
+  la local de 141 repuntada a su origin, #535 fusionada primero,
+  cherry-pick limpio sobre el main fresco (sin solaparse un fichero),
+  PR #536 con Quality revalidando el árbol entero. Lección operativa:
+  la rama del encargo se crea ANTES del primer commit, no cuando toca
+  empujar.
+- Lo que el ADR declara no verificable antes de fusionar, en sus
+  términos: un workflow no corre desde una rama, así que la primera
+  reposición real la hará el próximo encargo cuyo `fusiona` rebote con
+  main movido. Criterio abierto; se registrará aquí.
+- Fusionada como `f562cc4` a las 03:08 UTC. Con ella y ADR-141 dentro,
+  las dos cirugías manuales recurrentes del 04-09 (revivir paradas de
+  infraestructura; reponer revisión tras aprobación caducada) salen del
+  manual del operador: las cinco fusiones de la noche cierran todas las
+  fichas que el propietario dejó encargadas antes de dormirse, menos la
+  observación del contador (entrada siguiente) y el encargo de prueba.
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
@@ -752,20 +813,23 @@ ADR o su incidencia cuando se adopte.
    scripts/medir_banco_con_ollama_real.py --diagnostico`.
 10. Ruta de vuelta a revisión desde `ready-for-merge` cuando el head se
     mueve: el agujero más repetido del motor (entradas 25 y 29, dos veces
-    el 04-09). Mientras tanto, receta manual: etiqueta a `ci-pending` +
-    relanzar el run verde de Quality del head nuevo.
+    el 04-09). **SALDADA el 05-09**: ADR-142 (#536, entrada 35) — origen
+    nuevo en la ruta de avance, solo verdes, con guard de aprobación
+    vigente. La receta manual (etiqueta a `ci-pending` + relanzar el run
+    verde) queda solo como plan B si el workflow fallara.
 11. Los ADR citan recuentos de la suite completa, que se desfasan con
     cada merge a `main` (3 rondas perdidas el 04-09, entrada 29):
     convenio candidato — citar recuentos por fichero del encargo, o
     marcar el total como «del árbol en <sha>».
 12. Fallos de infraestructura de los revisores (timeout de Codex a
     1200 s; revisor Claude sin `reviewed_head_sha`) cuestan una vuelta
-    entera cada uno (entradas 29 y 31, tres el 04-09): candidato —
-    reintento automático de la ronda cuando la parada es de esa clase,
-    en vez de `failed-safely` + relanzamiento manual del run verde.
-13. C1b — el enganche de `sirius-reflejar` en los workflows (tras cada
-    cambio de etiqueta en advance/review/repair/complete/resume): es
-    `.github/**`, del propietario; los puntos exactos están documentados
-    en ADR-136. Hasta entonces el reflejo existe pero nadie lo ejecuta
-    solo. C2 (declarar `programacion` en `CLASES_CON_ESTADO_PROPIO`,
-    ADR-101) va después de observar al menos una pasada real.
+    entera cada uno (entradas 29 y 31, tres el 04-09). **SALDADA el
+    05-09**: ADR-141 (#535, entrada 34) — el agregador clasifica
+    (`infra_retryable`) y el aplicador re-arma UNA ronda nueva con
+    candado material por head; una parada persistente detiene igual.
+13. C1b — el enganche de `sirius-reflejar` en los workflows. **SALDADA
+    el 04-09** (ADR-137, #531, entrada 32): el enganche vive, su primera
+    pasada reflejó 70 WorkItems y la segunda fue idempotente. Queda C2
+    (declarar `programacion` en `CLASES_CON_ESTADO_PROPIO`, ADR-101),
+    que va después de observar al menos una pasada real del contador con
+    el espejo poblado — la primera candidata es la de hoy, 03:24 UTC.
