@@ -211,7 +211,26 @@ pasada.
   contenida en un texto mayor y quitar el filtro de confianza tumban cada una
   su prueba.
 - Validaciones obligatorias completas con una sola invocación de
-  `scripts/check.ps1` (ADR-145).
+  `scripts/check.ps1` (ADR-145): `4983 passed, 16 skipped, 2 xfailed`, código de
+  salida 0.
+- **Corrección de la ronda 1 (#545), disparada por `CI_FAILURE` sobre el head
+  `c618f10`.** Quality (run 33994967331) paró en `Ruff lint` con dos defectos,
+  ambos en pruebas nuevas de este cambio y ninguno en el código del reflector ni
+  de la proyección: `I001` en `tests/engine/test_mirror_projection.py` —
+  `FormaDePermiso` llegaba en un segundo `from sirius_engine.domain.mirror`
+  colocado tras el import de `work_item`— y `SIM201` en
+  `tests/engine/test_reflect_cli.py:490` — `not (entrada[:2] == (5, 29))`—. Se
+  fusiona el import duplicado en uno solo ordenado y se escribe la comparación
+  como `entrada[:2] != (5, 29)`; ninguna de las dos toca lo que las pruebas
+  afirman. Las dos líneas siguen fijadas por una prueba, vistas caer:
+  quitar `FormaDePermiso` del import tumba
+  `test_los_permisos_de_reanudacion_llevan_las_dos_formas_en_orden` y
+  `test_el_booleano_vigente_de_reanudacion_no_cambia_con_los_permisos`
+  (`NameError: name 'FormaDePermiso' is not defined`); cambiar la tupla a
+  `(9, 99)` tumba
+  `test_sin_la_orden_del_propietario_la_misma_pasada_declara_y_no_toca_nada`
+  (`AssertionError: assert 25 == (25 - 1)`), que es la guarda de que ese filtro
+  quita exactamente el `continua` de las 05:29.
 
 ## Consecuencias
 

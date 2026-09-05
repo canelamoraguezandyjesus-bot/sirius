@@ -25,9 +25,12 @@ from typing import Any
 import pytest
 
 from sirius_engine.adapters.fixture_mirror import FixedGitHubMirrorReader
-from sirius_engine.domain.mirror import EspejoIlegibleError, MirroredWorkItem
+from sirius_engine.domain.mirror import (
+    EspejoIlegibleError,
+    FormaDePermiso,
+    MirroredWorkItem,
+)
 from sirius_engine.domain.work_item import WorkItemPhase, WorkItemState
-from sirius_engine.domain.mirror import FormaDePermiso
 from sirius_engine.mirror_projection import (
     _LABEL_PRIORITY,
     _LABEL_STATE,

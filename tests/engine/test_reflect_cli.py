@@ -487,7 +487,7 @@ def test_sin_la_orden_del_propietario_la_misma_pasada_declara_y_no_toca_nada(
     store = InMemoryWorkEngineStore()
     journal = InMemoryDispatchJournal()
     _motor_parado_en_reparar(store, journal)
-    sin_orden = tuple(entrada for entrada in _COMENTARIOS_537 if not (entrada[:2] == (5, 29)))
+    sin_orden = tuple(entrada for entrada in _COMENTARIOS_537 if entrada[:2] != (5, 29))
     assert len(sin_orden) == len(_COMENTARIOS_537) - 1
 
     codigo, texto = _correr(
