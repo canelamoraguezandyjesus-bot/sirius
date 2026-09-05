@@ -180,22 +180,53 @@ AssertionError: assert datetime.time(9, 24) == datetime.time(3, 24)
 - `test_hora_recomendada_atada_al_schedule_real_del_repositorio`: el
   guardián-oráculo, con la misma exclusión aplicada por su lado.
 
-**Prueba por mutación** (ADR-001), las dos direcciones, sobre
-`tests/engine/test_seven_day_streak.py` más
-`tests/automation/test_contador_de_siete_dias.py`:
+Y en `tests/automation/test_contador_de_siete_dias.py`:
 
-- **El motor vuelve a contarse a sí mismo** (retirado el `continue` de la
-  exclusión): `3 failed, 173 passed`. Los tres rojos son el pin del árbol real
-  (`9:24 != 3:24`), el caso sintético del fichero presente (`6:00 != 12:00`) y
-  el guardián-oráculo, que sigue aplicando la exclusión por su lado y por eso
-  detecta la divergencia.
+- `test_el_cron_cableado_del_contador_es_la_hora_que_el_derivador_devuelve`: el
+  guardián que **compara los dos lados**, el cron cableado en `.github/**` y la
+  hora que devuelve el derivador. Sin él, la primera consecuencia de este ADR
+  -«la cabecera vuelve a ser verdad sola»- descansaba en dos pines que nunca se
+  miraban entre sí: uno fija lo que DERIVA el motor y el otro solo exige que el
+  cron CABLEADO deje pasar la tolerancia. Entre los dos cabía una hora que
+  cumpliera la tolerancia sin ser la derivada -`0 5 * * *`: 268 min tranquilos
+  contra 170 de tolerancia-, y con ella la cabecera pasaría a mentir en
+  silencio. No es circular: el derivador excluye por nombre los disparos de ese
+  mismo fichero, así que el número con el que se compara no depende del cron que
+  se comprueba.
+
+**Prueba por mutación** (ADR-001), tres direcciones. **Todas las corridas de
+este bloque, mutadas y de control, se hicieron sobre el MISMO par de ficheros**
+—`tests/engine/test_seven_day_streak.py` más
+`tests/automation/test_contador_de_siete_dias.py`, que recolectan **177
+items**—, de modo que las cifras de cada bullet suman siempre ese total y se
+pueden comparar entre sí:
+
+- **El motor vuelve a contarse a sí mismo** (sustituido por `pass` el `continue`
+  de la exclusión en `hora_recomendada_pasada`): `4 failed, 173 passed`. Los
+  cuatro rojos son el pin del árbol real (`9:24 != 3:24`), el caso sintético del
+  fichero presente (`6:00 != 12:00`), el guardián-oráculo —que sigue aplicando
+  la exclusión por su lado y por eso detecta la divergencia— y el guardián del
+  cron cableado, que ve `[204]` en `.github/**` contra `564` derivado.
 - **La exclusión se cae SOLO del guardián-oráculo** y el motor la conserva:
-  `1 failed, 166 passed`, y el rojo es exactamente
+  `1 failed, 176 passed`, y el rojo es exactamente
   `test_hora_recomendada_atada_al_schedule_real_del_repositorio`
   (`assert datetime.time(3, 24) == datetime.time(9, 24)`) —el tercero
   detectando que los dos lados dejaron de medir lo mismo, que es para lo que
   existe—.
-- Restaurado el árbol: `167 passed`.
+- **El cron cableado deja de ser la hora derivada.** Esta mutación NO se hace
+  sobre `.github/**` —el encargo lo prohíbe— sino sobre una copia entera del
+  árbol en un directorio temporal, ejecutada con `PYTHONPATH` apuntando al `src`
+  de la copia para que el derivador lea el `.github` de la copia y no el real.
+  Allí el cron del contador pasa de `'24 3 * * *'` a `'0 5 * * *'`, una hora que
+  **sigue cumpliendo la tolerancia** (268 min tranquilos contra 170):
+  `1 failed, 176 passed`, y el rojo es exactamente
+  `test_el_cron_cableado_del_contador_es_la_hora_que_el_derivador_devuelve`
+  (`assert {300} == {204}`). El pin de las 03:24 y el guardián de tolerancia se
+  quedan los DOS en verde: ésa es la rendija por la que la cabecera podía pasar
+  a mentir en silencio, y es la que este guardián cierra. Sin mutar, la misma
+  copia da `177 passed`, que es el control de que la copia se estaba midiendo a
+  sí misma.
+- Restaurado el árbol, sobre ese mismo par: `177 passed`.
 
 Vistas fallar ANTES de escribir la exclusión (`3 failed, 6 passed` en la
 selección `-k "contador or atada or hueco"`): las DOS pruebas nuevas que fijan
@@ -206,6 +237,11 @@ ya adaptado. Las otras dos nuevas
 eso es exactamente lo que afirman: fijan el lado que este cambio NO debe mover.
 Se dice aquí en vez de contarlas como rojos previos que no fueron.
 
+La quinta prueba, el guardián del cron cableado, no existía en aquella corrida:
+nació de la primera ronda de revisión de esta rama, que vio que la consecuencia
+declarada abajo no tenía guardián. Su rojo es la tercera mutación del bloque
+siguiente, y por eso no aparece aquí.
+
 **Validaciones obligatorias**, con una sola invocación de
 `pwsh -File scripts/check.ps1` sobre el árbol final de la rama —el script
 encadena las cuatro y no se parte en tandas—:
@@ -213,14 +249,28 @@ encadena las cuatro y no se parte en tandas—:
 - `uv run ruff format --check .` → «602 files already formatted»;
 - `uv run ruff check .` → «All checks passed!»;
 - `uv run mypy src tests` → «Success: no issues found in 570 source files»;
-- `uv run pytest` → «collected 4954 items» y
-  «4937 passed, 15 skipped, 2 xfailed in 420.66s (0:07:00)».
+- `uv run pytest` → «collected 4955 items» y
+  «4938 passed, 15 skipped, 2 xfailed in 426.07s (0:07:06)».
+
+De la salida del script se conservó el resumen final de `pytest`; las tres
+primeras líneas se transcriben de una reejecución inmediata de esos mismos tres
+comandos, uno a uno, sobre el mismo árbol.
 
 Un solo proceso de `pytest` y un solo juego de fixtures de sesión; el script
-terminó con código de salida 0. Cuatro pruebas más que la base: medido con
-`uv run pytest --collect-only -q` sobre las dos versiones del árbol, 4950 en
-`main` (`78e81fc`) y 4954 en esta rama, que son exactamente las cuatro que este
-encargo añade y ninguna más.
+terminó con código de salida 0.
+
+**Seis items recolectados más que la base** -y no cuatro, como decía la primera
+redacción de este párrafo, que además situaba la base en 4950-: medido hoy con
+`uv run pytest --collect-only -q` sobre las dos versiones del árbol, `main`
+(`78e81fc`) en un `git worktree` aparte da **4949** y esta rama **4955**.
+Comparando con `diff` las dos listas de ids recolectados, la diferencia son
+exactamente seis y ninguna más: las CINCO pruebas que este encargo añade -las
+cuatro de `tests/engine/test_seven_day_streak.py` y el guardián del cron
+cableado de `tests/automation/test_contador_de_siete_dias.py`- más un caso
+parametrizado que no es una prueba nueva sino el propio fichero de este ADR:
+`tests/automation/test_citas_de_los_adr.py::test_toda_ruta_citada_por_un_adr_existe`
+parametriza por fichero de `docs/decisions/`, de modo que cada ADR nuevo suma
+un caso.
 
 `git diff --check` sobre el árbol: sin salida.
 
@@ -230,8 +280,9 @@ Como en `docs/decisions/` sí hay guardianes que leen —los de
 `tests/automation/`—, se volvieron a correr sobre el árbol exacto que se
 commitea: `uv run ruff format --check .` → «602 files already formatted», y
 `uv run pytest tests/automation tests/engine/test_seven_day_streak.py` →
-«1311 passed, 10 skipped in 174.40s». Nada de lo medido arriba dependía de este
-párrafo.
+«1312 passed, 10 skipped in 173.13s (0:02:53)». Nada de lo medido arriba
+dependía de este párrafo, y lo único que cambió después de esa última corrida
+son estas dos cifras al transcribirlas.
 
 ## Consecuencias
 
@@ -239,7 +290,12 @@ párrafo.
   hueco libre (345 min, tras las 00:32)») vuelve a ser verdad **sola**, sin
   nota al pie: `uv run sirius-racha --hora-recomendada` sobre este árbol imprime
   exactamente ese número y ese motivo. Ninguna línea de `.github/**` cambia en
-  este encargo, y ninguna hace falta que cambie.
+  este encargo, y ninguna hace falta que cambie. Y no se queda en afirmación:
+  lo vigila
+  `test_el_cron_cableado_del_contador_es_la_hora_que_el_derivador_devuelve`,
+  que compara el cron cableado con la hora derivada y se pone rojo el día que
+  dejen de coincidir —incluso si la hora nueva siguiera cumpliendo la
+  tolerancia, que es el caso en el que nadie más se enteraría—.
 - ADR-143 conserva su medida del 05-09-2026 (09:24) como lo que fue —la medida
   del árbol autoincluyente— y gana el desenlace: la ficha que anunciaba es
   ésta.
