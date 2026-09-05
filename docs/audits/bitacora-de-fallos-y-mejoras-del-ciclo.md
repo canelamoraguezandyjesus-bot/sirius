@@ -890,6 +890,45 @@ ADR o su incidencia cuando se adopte.
   revisión dual pagó su asiento dos veces (las dos paradas fueron de
   Codex, con Claude aprobando).
 
+### 38. La pasada real del contador y la primera divergencia verdadera del espejo (05-09-2026, 07:44-08:25 UTC)
+
+- **La pasada del contador llegó a las 07:44:53 UTC** — 4 h 20 tarde
+  sobre el cron de las 03:24, dentro del patrón de diez días de la
+  entrada 36. Como quedó corregido en esa entrada, no podía decir
+  «comparable» y no lo dijo: 19 líneas (18 de `programacion` y, por
+  primera vez, 1 de `auditoria` — el espejo poblado por C1b alimenta
+  más historia), todas `no_comparable` por jurisdicción
+  (`CLASES_CON_ESTADO_PROPIO` vacío; C2 apagado a propósito).
+- **La primera divergencia real, dicha por el propio reflector** (run
+  de las 07:09, tras la fusión de #538): «el motor está en
+  estado=failed_safely fase=reparar y la incidencia proyecta
+  estado=delivered fase=entregar; no hay camino hacia delante, no se
+  toca nada. Pasos aplicados en total: 0». El diario del motor recuerda
+  el WI de #537 hasta su parada de las 05:17 (nueve transiciones
+  reflejadas, incluida la primera reanudación) y NADA posterior: ni la
+  segunda reanudación, ni las dos vueltas de Quality/revisión, ni el
+  `completed` de las 07:00. El reflector avanza comparando su estado
+  guardado con la FOTO actual del espejo, y de `failed_safely` a
+  `delivered` no hay salto legal en la máquina de estados — fail-open
+  correcto (exit 0, «no se toca nada»), memoria desactualizada como
+  consecuencia. Los saltos intermedios existieron en GitHub pero el
+  reflector no los recorrió; qué saltos individuales sabe dar desde
+  `failed_safely` es parte de la investigación de la ficha.
+- **El mismo log censa seis incidencias viejas con etiquetas
+  contradictorias** — `sirius:completed` y `sirius:failed-safely` a la
+  vez: #336, #344, #345, #353, #495 y #498 — que el reflector declara y
+  se niega a tocar, también correctamente. Restos de transiciones
+  parciales de agosto; nadie los había visto porque nadie leía.
+- **Por qué importa**: es el primer dato real de la clase de
+  divergencia que C2 existe para detectar — y demuestra que encender C2
+  HOY contaría como divergencia algo que es un hueco del PROYECTOR, no
+  del motor. Ficha para el propietario (dominio del motor, dos piezas):
+  el reflector aprende a recorrer una recuperación completa acreditada
+  por el historial de notificaciones (no solo la foto), y la limpieza
+  de las seis etiquetas dobles. Candidata natural a siguiente encargo
+  del motor: acotada, con el caso vivo de esta noche como escenario de
+  aceptación. C2 va DESPUÉS de esa ficha, no antes.
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
