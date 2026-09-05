@@ -32,16 +32,11 @@ name: Reconciliar estados de Sirius
 on:
   workflow_dispatch:
   schedule:
-    # Cada hora salvo la madrugada del contador: su guardián de hora exige
-    # >=170 min de tranquilidad antes de las 03:24 UTC (la variante ingenua
-    # '17 * * * *' dispararía a las 03:17, a 7 min; vista fallar en ADR-139).
-    # Con 00:17 como último disparo previo quedan 187 min. El hueco 01-03 es
-    # la madrugada: la carrera que este cron cura nace de ciclos activos.
-    # Lista de horas explícita porque el lector de crones del contador
-    # (seven_day_streak._expandir_campo) entiende `*`, `*/N` y comas, no
-    # rangos `a-b` — la variante '17 0,4-23' revienta su ValueError (vista
-    # fallar también, ADR-139) y tocar el motor no es asunto de este cambio.
-    - cron: '17 0,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23 * * *'
+    # Cada 6 horas, y NO puede ser más denso: el derivador de la hora del
+    # contador exige que el mayor hueco libre de disparos doble su ventana
+    # de tolerancia (340 min hoy). La propuesta de pasar a cada hora se
+    # intentó y quedó refutada por cuatro rojos distintos: ADR-139.
+    - cron: '17 */6 * * *'
 
 permissions:
   contents: read
