@@ -264,20 +264,25 @@ def aggregate(
             reason = str(codex.get("reason") or "").strip()
             summary = str(codex.get("summary") or "").strip() or "sin detalle"
             details.append(f"Codex{f' ({reason})' if reason else ''}: {summary}")
-        # ADR-141: reintentable solo si la ÚNICA parada es el timeout del
-        # recolector de Codex — una parada de contenido de Claude no se
-        # reintenta sola, taparía su diagnóstico.
-        solo_timeout_de_codex = (
+        # ADR-141: reintentable solo si la ÚNICA parada es infraestructura
+        # TRANSITORIA del recolector de Codex — el timeout, y desde ADR-146
+        # también el fallo que el conector declara pidiendo el reintento
+        # («Try again later»); su subtipo persistente (límite de uso,
+        # configuración) conserva la razón genérica y sigue parando. Una
+        # parada de contenido de Claude no se reintenta sola: taparía su
+        # diagnóstico.
+        solo_infra_transitoria_de_codex = (
             claude_status != "FAILED_SAFELY"
             and dual
             and codex_status == "FAILED_SAFELY"
             and codex is not None
-            and str(codex.get("reason") or "").strip() == "timeout"
+            and str(codex.get("reason") or "").strip()
+            in {"timeout", "codex-fallo-declarado-transitorio"}
         )
         return _failed(
             "La ronda de revisión dual termina en fallo seguro. " + " | ".join(details),
             sources,
-            infra_retryable=solo_timeout_de_codex,
+            infra_retryable=solo_infra_transitoria_de_codex,
         )
 
     # --- Regla 4: bloqueo por decisión de Claude --------------------------------

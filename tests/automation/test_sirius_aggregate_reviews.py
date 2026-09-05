@@ -255,6 +255,36 @@ def test_timeout_de_codex_es_reintentable(tmp_path: Path) -> None:
     assert result.get("infra_retryable") is True
 
 
+def test_fallo_declarado_transitorio_de_codex_es_reintentable(tmp_path: Path) -> None:
+    """ADR-146: el 05-09 (#541, 15:36 UTC) Codex declaró «Something went wrong.
+    Try again later» — su propio texto pide el reintento — y ADR-141 lo excluía,
+    así que costó un `continua` manual; la ronda re-armada aprobó a la primera.
+    El recolector etiqueta ese subtipo con razón propia y aquí se reintenta con
+    el mismo candado por head de ADR-141. Vista fallar contra el agregador que
+    solo aceptaba `timeout`."""
+    result = _run(
+        tmp_path,
+        _claude(),
+        _codex("FAILED_SAFELY", sha=None, reason="codex-fallo-declarado-transitorio"),
+    )
+    assert result["verdict"] == "FAILED_SAFELY"
+    assert result.get("infra_retryable") is True
+
+
+def test_fallo_declarado_persistente_de_codex_no_se_reintenta_solo(tmp_path: Path) -> None:
+    """Adversaria de ADR-146: la razón genérica `codex-fallo-declarado` cubre
+    también límites de uso y errores de configuración — persistentes —, y esos
+    siguen parados para diagnóstico humano: reintentarlos quemaría la ronda del
+    candado sin arreglar nada."""
+    result = _run(
+        tmp_path,
+        _claude(),
+        _codex("FAILED_SAFELY", sha=None, reason="codex-fallo-declarado"),
+    )
+    assert result["verdict"] == "FAILED_SAFELY"
+    assert not result.get("infra_retryable")
+
+
 def test_failed_safely_de_claude_no_es_reintentable(tmp_path: Path) -> None:
     """Adversaria: una parada de CONTENIDO de Claude (decidió detenerse) no se
     reintenta sola — reintentarla taparía el diagnóstico que quiso dejar."""
