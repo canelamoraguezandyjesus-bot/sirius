@@ -1017,6 +1017,66 @@ ADR o su incidencia cuando se adopte.
   ADR; la ampliación del reintento (fallo declarado transitorio de
   Codex, mismo candado por head) va aparte con el suyo.
 
+### 41. La deuda 9 se salda en la máquina del propietario (0 críticas perdidas), #545 caza una premisa falsa del encargo, y el primer dato vivo de ADR-145: la forma obedecida, la verdad no (05-09-2026, 18:11-22:45 UTC)
+
+- **Deuda 9 saldada por el propietario en su máquina** (`qwen3:4b-instruct`,
+  tope 30 s, main `a07c5d5`): 8/47 aciertos exactos (suelo 29: no
+  llega), **0 omisiones críticas** (suelo ≤1: llega), cobertura **70/81**
+  (suelo 63: llega), 218 elementos de más, 0,8 min, 47 llamadas, 0
+  rendiciones. Frente a la línea base del 02-09 (antes de M19b/M20):
+  críticas perdidas 10→0, cobertura 59→70, exactos 22→8, de más 39→218.
+  El diagnóstico confirma el mecanismo: B04-CA-33 DEC-003 y B04-CA-34
+  DEC-003/MEM-014/MEM-016 pasan de NO_ENTRO a OK. Es el trato que ADR-129
+  declaró — cero críticas perdidas a cambio de 5,6× más ruido y catorce
+  exactos menos — ahora con número. Las filas pendientes de ADR-128 y
+  ADR-129 y la evidencia del experimento quedan rellenadas con la
+  ejecución transcrita (PR del operador, aparte). Nota operativa: con el
+  repositorio bajo OneDrive, `uv run` tropezó al reemplazar un
+  `dist-info` del `.venv` («Acceso denegado»); el reintento pasó con un
+  aviso de RECORD.
+- **#545 cazó una premisa falsa del encargo**: la cuarta, «marcador de
+  reanudación posterior a la parada (el continua de las 05:33)». No
+  existe: `sirius_comment_once` desduplica por el texto del marcador y
+  el segundo `continua` sobre el MISMO head no deja segundo marcador —
+  el `continua` real del propietario es el de las 05:29:04Z y quedó como
+  comentario suyo, sin marcador propio. El implementador paró en
+  `blocked-decision` en vez de reinterpretar (la orden lo exigía) y el
+  encargo funcionó como contrato. Decisión registrada: la salida de una
+  parada la acredita un marcador de reanudación O la orden exacta
+  `continua` del propietario (misma semántica que el reanudador),
+  consumidos en orden. Quinta lección de encargos: también las premisas
+  que YO doy por verificadas se miran en el dato primario (qué
+  comentario existe, a qué hora, sobre qué head), no en la memoria del
+  día. Al reanudar, la puerta de activación rechazó
+  `implement-requested` sin `planned`
+  (`sirius-activation:rejected:sin-planned`): la certificación humana de
+  alcance no sobrevive a la parada, por diseño; se repone `planned` y
+  después `implement-requested`.
+- **Primer dato vivo de ADR-145: la forma obedecida, la verdad no.**
+  implementer@3 (estreno del prompt) declaró en el veredicto justo lo
+  que la regla pide — «Validaciones obligatorias completas con una sola
+  invocación de pwsh -File scripts/check.ps1: ruff format, ruff lint,
+  mypy y 4983 passed, 16 skipped, 2 xfailed, exit 0» — sobre el head
+  `c618f109`. Quality sobre ESE head cayó en `ruff check` a los 21 s con
+  dos errores: I001 (bloque de imports desordenado,
+  `tests/engine/test_mirror_projection.py:15` — el `FormaDePermiso`
+  añadido tarde, detrás de los demás) y SIM201 (`not (x == y)`,
+  `tests/engine/test_reflect_cli.py:490`); `ruff format` sí pasaba.
+  Lectura: una regla de prompt gobierna la FORMA de la declaración, no
+  su verdad; el verificador es Quality — y su cierre rojo llegó con la
+  etiqueta en `implementing` y se perdió (deuda 3, otra vez: relanzado a
+  las 22:44, consumido, `repairing` a las 22:45). ADR-145 vale lo que
+  vale: ahorra vueltas cuando el agente ejecuta de verdad; el candado
+  está en la deuda 3, porque mientras un cierre de Quality pueda
+  perderse, una declaración falsa cuesta una intervención humana en vez
+  de una vuelta del corrector. Candidata a encargo: al pasar a
+  `ci-pending`, consultar el último Quality completado del head y
+  encaminar sin esperar al evento.
+- **ADR-145 y ADR-146 en main** (`caf0fdf`, `a07c5d5`) bajo «Dale a
+  todo»; la cadena de comprobación del operador como UNA invocación
+  (`bash -ec`, sin `pwsh` en el contenedor, declarado en ADR y PR).
+  ADR-146 todavía sin dato vivo: ninguna ronda de revisión en #546 aún.
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
@@ -1027,7 +1087,11 @@ ADR o su incidencia cuando se adopte.
 2. Intérprete de intención del despachador: falsos positivos por subcadena
    (5). ADR-043 lo reconoce como apaño.
 3. Ruta H-34: el verde de Quality se pierde si llega en `repairing`
-   (entradas 3 y 18: tres veces hoy).
+   (entradas 3 y 18: tres veces hoy). También el ROJO si llega en
+   `implementing` (entrada 41, #546: el veredicto declaró `exit 0` y
+   Quality dijo que no; nadie lo encaminó hasta relanzarlo a mano).
+   Candidata a encargo: al pasar a `ci-pending`, consultar el último
+   Quality completado del head y encaminar sin esperar al evento.
 4. Cliente único de Ollama local para los tres adaptadores (7, 8).
 5. Vigilancia durable con modelo barato (4, 11).
 6. Rechazo de una propuesta de criticidad recordado solo en sesión (M21b):
@@ -1038,8 +1102,10 @@ ADR o su incidencia cuando se adopte.
    ronda trae varios hallazgos de interfaz (entradas 9 y 16), y poder
    cancelarlo cuando el propietario corrige a mano (entrada 17).
 9. Medición con Ollama real de M19b y M20 en la máquina del propietario
-   (filas pendientes en ADR-128 y ADR-129): `uv run python
-   scripts/medir_banco_con_ollama_real.py --diagnostico`.
+   (filas pendientes en ADR-128 y ADR-129). **SALDADA el 05-09** (entrada
+   41): 0 críticas perdidas (venía de 10), cobertura 70/81 (de 59), con
+   `qwen3:4b-instruct`, 47 llamadas, 0 rendiciones; filas rellenadas con
+   la ejecución transcrita y comparadas contra el 02-09.
 10. Ruta de vuelta a revisión desde `ready-for-merge` cuando el head se
     mueve: el agujero más repetido del motor (entradas 25 y 29, dos veces
     el 04-09). **SALDADA el 05-09**: ADR-142 (#536, entrada 35) — origen
@@ -1075,3 +1141,11 @@ ADR o su incidencia cuando se adopte.
     propietario para una ficha posterior («derivador ya; ventana
     después»): la pasada mide su propia ventana al llegar, contra runs
     reales.
+15. Reanudador (`sirius_resume_on_command.sh`): un segundo `continua`
+    sobre el MISMO head no deja marcador propio porque
+    `sirius_comment_once` desduplica por texto (entrada 41: la premisa
+    falsa de #545). Ficha del operador: que el marcador lleve run y
+    attempt (patrón ADR-140) para que cada permiso escrito deje un
+    rastro distinto. Mientras tanto, el reflector acredita también la
+    orden exacta `continua` del propietario (decisión registrada en
+    #545).
