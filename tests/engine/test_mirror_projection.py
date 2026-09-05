@@ -1240,3 +1240,121 @@ def test_proyectar_funciona_sin_scripts_en_sys_path_ni_automation_importable() -
         assert len(mirrored.eventos_quality) == 8
     finally:
         sys.path[:] = ruta_original
+
+
+# --- `historial_estados`: el camino, no la foto (ADR-144, incidencia #539) ---
+
+
+def test_historial_estados_recoge_las_notificaciones_de_etiqueta_en_orden() -> None:
+    """Cada `sirius-notification` publicado es un estado por el que se PASÓ.
+
+    Es lo que `notify-sirius-state.yml` escribe al aplicarse una de las seis
+    etiquetas que vigila, y lo que permite al reflector recorrer una
+    recuperación que ninguna pasada llegó a observar. La interpretación de
+    etiqueta a (estado, fase) es la MISMA tabla que usa la foto.
+    """
+    metadatos = _metadatos_minimos()
+    cuerpo = _cuerpo_de_confianza("")
+    comentarios = LecturaComentarios(
+        estado=LecturaEstado.OK,
+        comentarios=tuple(
+            Comentario(
+                autor_login="github-actions[bot]",
+                autor_asociacion="NONE",
+                cuerpo=f"<!-- sirius-notification:{etiqueta}:{head} -->\n\ntexto",
+                creado_en=datetime(2026, 9, 5, hora, tzinfo=UTC),
+            )
+            for hora, etiqueta, head in (
+                (3, "sirius:implementing", "no-head"),
+                (5, "sirius:failed-safely", "1c934781"),
+                (6, "sirius:repair-requested", "786c82dc"),
+                (7, "sirius:completed", "92e5b9f4"),
+            )
+        ),
+    )
+
+    mirrored = proyectar_work_item(
+        repo=_REPO,
+        numero=1,
+        metadatos=metadatos,
+        cuerpo=cuerpo,
+        comentarios=comentarios,
+        ahora=_AHORA,
+    )
+
+    assert tuple(acreditado.etiqueta for acreditado in mirrored.historial_estados) == (
+        "sirius:implementing",
+        "sirius:failed-safely",
+        "sirius:repair-requested",
+        "sirius:completed",
+    )
+    assert tuple(
+        (acreditado.estado, acreditado.fase) for acreditado in mirrored.historial_estados
+    ) == tuple(
+        _LABEL_STATE[etiqueta]
+        for etiqueta in (
+            "sirius:implementing",
+            "sirius:failed-safely",
+            "sirius:repair-requested",
+            "sirius:completed",
+        )
+    )
+    assert mirrored.historial_estados[0].head == "no-head"
+
+
+def test_historial_estados_ignora_las_notificaciones_de_autores_ajenos() -> None:
+    """Mismo filtro de confianza que el resto de la proyección.
+
+    Si un tercero pudiera publicar `sirius-notification`, podría fabricar el
+    camino entero de una recuperación que nunca ocurrió y hacer que el motor
+    la anotara en su diario. El filtro es el mismo `es_autor_de_confianza`
+    que gobierna rondas, veredictos y reanudación.
+    """
+    metadatos = _metadatos_minimos()
+    cuerpo = _cuerpo_de_confianza("")
+    ajeno = Comentario(
+        autor_login="alguien",
+        autor_asociacion="NONE",
+        cuerpo="<!-- sirius-notification:sirius:completed:deadbee1 -->",
+        creado_en=datetime(2026, 9, 5, 7, tzinfo=UTC),
+    )
+    comentarios = LecturaComentarios(estado=LecturaEstado.OK, comentarios=(ajeno,))
+
+    mirrored = proyectar_work_item(
+        repo=_REPO,
+        numero=1,
+        metadatos=metadatos,
+        cuerpo=cuerpo,
+        comentarios=comentarios,
+        ahora=_AHORA,
+    )
+
+    assert mirrored.historial_estados == ()
+
+
+def test_historial_estados_ignora_una_etiqueta_que_la_tabla_no_reconoce() -> None:
+    """Una notificación de algo que no está en el mapa no acredita ningún estado."""
+    metadatos = _metadatos_minimos()
+    cuerpo = _cuerpo_de_confianza("")
+    comentarios = LecturaComentarios(
+        estado=LecturaEstado.OK,
+        comentarios=(
+            Comentario(
+                autor_login="github-actions[bot]",
+                autor_asociacion="NONE",
+                cuerpo="<!-- sirius-notification:sirius:inventada:deadbee1 -->",
+                creado_en=datetime(2026, 9, 5, 7, tzinfo=UTC),
+            ),
+        ),
+    )
+
+    mirrored = proyectar_work_item(
+        repo=_REPO,
+        numero=1,
+        metadatos=metadatos,
+        cuerpo=cuerpo,
+        comentarios=comentarios,
+        ahora=_AHORA,
+    )
+
+    assert mirrored.historial_estados == ()

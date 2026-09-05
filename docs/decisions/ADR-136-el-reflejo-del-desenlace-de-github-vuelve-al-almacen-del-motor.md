@@ -689,6 +689,47 @@ Las dos mutaciones se aplicaron y revirtieron a mano sobre
 `src/sirius_engine/reflect.py` durante la implementación; no quedan en el
 árbol ni en el historial de commits de esta rama.
 
+## El avance ya no es solo por foto: recorrido acreditado (ADR-144, incidencia #539)
+
+Todo lo anterior describe un cálculo entre DOS FOTOS: el `WorkItem` guardado y
+lo que las etiquetas vigentes de la incidencia proyectan. El 05-09-2026, tras
+el ciclo de la #537, la primera divergencia real de producción (run
+33951766681) mostró el límite de ese modelo: si entre las dos fotos ocurrió una
+recuperación entera —parada, reanudación, dos vueltas del bucle
+revisar-reparar y cierre— sin que ninguna pasada de reflejo la observara, no
+hay ningún salto legal entre las dos fotos y la regla «nunca hacia atrás»
+declara divergencia para siempre.
+
+**ADR-144 lo corrige sin tocar nada de lo de arriba**: el cálculo por foto
+sigue siendo el primero y el que manda; solo cuando devuelve divergencia se
+intenta el **recorrido acreditado** por el historial de confianza de la
+incidencia (`MirroredWorkItem.historial_estados`, los marcadores
+`sirius-notification` que el bot publica al aplicarse cada etiqueta). Ninguna
+arista nueva del dominio: cada tramo lo calculan estas mismas cinco reglas.
+La sección «Reanudación de una parada por orden del propietario» y su
+salvaguarda CODEX-001 siguen vigentes tal cual para el cálculo por foto —el
+recorrido exige, en su lugar, al menos un estado acreditado ESTRICTAMENTE
+ENTRE el ancla y el destino que el historial alcanza y distinto de la foto,
+que es lo que un relabelado a mano no produce. La exigencia mide el salto, no
+la coincidencia con la foto: medirla contra la foto no filtraba nada cuando la
+foto vigente no es expresable como marcador `sirius-notification`
+(`sirius:ci-pending` y `sirius:review-requested`/`sirius:reviewing` no están
+entre las seis etiquetas que `notify-sirius-state.yml` vigila). Y la
+acreditación de salir de una parada es POR TRAMO: si el recorrido pasa por una
+segunda parada, la salida de esa parada la acredita la observación que el
+recorrido toma como objetivo justo DESPUÉS de ella —el primer marcador que el
+bot publicó tras la parada— siempre que no sea la propia foto; nunca la foto
+final. Las dos precisiones son correcciones de la ronda 1 de la PR #540
+(CLAUDE-REV-001 y CODEX-001), y la forma exacta de la segunda —medir la
+evidencia posterior a la PARADA y no al TRAMO, para que el mismo historial no
+recorra o deje de recorrer según cuál sea la etiqueta vigente— es la corrección
+de la ronda 2 (CLAUDE-R2-001 y CODEX-001); ADR-144 las documenta con su rojo
+previo y sus mutaciones.
+
+`.github/workflows/reflejar-desenlace.yml` y ADR-137 no cambian: el enganche,
+sus disparadores y su horario son exactamente los mismos; lo que cambia es qué
+calcula la pasada cuando corre.
+
 ## Consecuencias
 
 - El motor ya puede llevar, por sí mismo, el desenlace real de una
@@ -707,6 +748,9 @@ Las dos mutaciones se aplicaron y revirtieron a mano sobre
   tres construcciones directas fuera de `mirror_projection.py`
   (`test_authority_reversion.py`, `test_projection_verifier.py`) se
   actualizaron con `diagnostico_fallo=None`.
+- `MirroredWorkItem` creció un tercer campo, `historial_estados`, también con
+  valor por defecto (`()`), en ADR-144: sin marcadores acreditados no hay
+  recorrido, que es el defecto seguro.
 - `MirroredWorkItem` creció un segundo campo, `reanudacion_publicada: bool`
   (ronda 4, CODEX-001) — con valor por defecto `False`, así que las
   construcciones directas existentes que no lo pasan (incluidas las de
