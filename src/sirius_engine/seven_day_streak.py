@@ -47,6 +47,7 @@ igual que exige :mod:`sirius_engine.projection_verifier`.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
@@ -402,19 +403,108 @@ def evaluar_racha(
 # --- 4. La hora de la pasada, derivada del schedule real ---------------------
 
 
-def _expandir_campo(campo: str, tope: int) -> list[int]:
-    """Expande un campo ``cron`` (minuto o hora) a los enteros que denota, en ``[0, tope)``."""
+#: Las cinco formas -y no hay más- del dialecto ``cron`` de este repositorio
+#: para los campos minuto y hora (ADR-143). Se enuncia una sola vez, aquí,
+#: porque va literalmente en cada mensaje de rechazo: quien lo lea sabrá qué
+#: podía haber escrito sin ir a buscar la documentación.
+_DIALECTO_CRON = (
+    "el dialecto de este repositorio admite '*', '*/N', un entero suelto, un rango 'a-b' "
+    "y listas por comas cuyos elementos son enteros o rangos"
+)
+
+_ENTERO_CRON = re.compile(r"[0-9]+")
+
+
+def _rechazo_de_campo(*, nombre: str, campo: str, forma: str, motivo: str) -> ValueError:
+    """El rechazo RUIDOSO del dialecto: dice el campo, la forma y qué se admitía.
+
+    Existe para que ningún camino de :func:`_expandir_campo` acabe en un
+    ``int()`` pelado. Los dos rojos de la noche del 04/05-09-2026 (ADR-139)
+    llegaron como ``invalid literal for int() with base 10: '4-23'``, un
+    mensaje que no dice ni qué campo se estaba leyendo ni qué forma sobraba.
+    """
+    detalle = f"{forma!r}" if forma == campo else f"{forma!r} (dentro de {campo!r})"
+    return ValueError(f"campo {nombre} de cron: {motivo} {detalle}; {_DIALECTO_CRON}")
+
+
+def _entero_de_campo(texto: str, *, nombre: str, campo: str, tope: int) -> int:
+    """Un entero del dialecto: solo dígitos, y dentro de ``[0, tope)``."""
+    if not _ENTERO_CRON.fullmatch(texto):
+        raise _rechazo_de_campo(nombre=nombre, campo=campo, forma=texto, motivo="forma no admitida")
+    valor = int(texto)
+    if valor >= tope:
+        raise _rechazo_de_campo(
+            nombre=nombre,
+            campo=campo,
+            forma=texto,
+            motivo=f"valor fuera de [0, {tope}) en",
+        )
+    return valor
+
+
+def _expandir_elemento(elemento: str, tope: int, nombre: str, campo: str) -> list[int]:
+    """Un elemento del dialecto que puede ir suelto o dentro de una lista: entero o rango."""
+    if "-" in elemento:
+        partes = elemento.split("-")
+        if len(partes) != 2:
+            raise _rechazo_de_campo(
+                nombre=nombre, campo=campo, forma=elemento, motivo="rango mal formado"
+            )
+        inicio = _entero_de_campo(partes[0], nombre=nombre, campo=campo, tope=tope)
+        fin = _entero_de_campo(partes[1], nombre=nombre, campo=campo, tope=tope)
+        if inicio > fin:
+            raise _rechazo_de_campo(
+                nombre=nombre, campo=campo, forma=elemento, motivo="rango descendente"
+            )
+        return list(range(inicio, fin + 1))
+    return [_entero_de_campo(elemento, nombre=nombre, campo=campo, tope=tope)]
+
+
+def _expandir_campo(campo: str, tope: int, nombre: str) -> list[int]:
+    """Expande un campo ``cron`` (minuto u hora) a los enteros que denota, en ``[0, tope)``.
+
+    **Este docstring es la definición del dialecto** (ADR-143), el único sitio
+    donde se enuncia. Hay DOS lectores de ``cron`` en el repositorio -este y el
+    del guardián-oráculo de `tests/engine/test_seven_day_streak.py`, que
+    conserva su independencia («YAML aparte») y por eso no importa este código-,
+    y los dos implementan estas cinco formas ÍNTEGRAS, ni una más:
+
+    - ``*``: todos los valores de ``[0, tope)``.
+    - ``*/N``: desde 0, de N en N, con ``1 <= N <= tope``.
+    - un entero suelto, dentro de ``[0, tope)``.
+    - un rango ``a-b``, con ``a <= b`` y ambos dentro de ``[0, tope)``.
+    - una lista por comas cuyos elementos son enteros o rangos: la forma
+      ``0,4-23``, que GitHub admite y que quemó los rojos 2 y 3 de ADR-139.
+
+    Fuera del dialecto -el paso sobre rango ``8-18/2``, los nombres (``JAN``,
+    ``MON``), ``?``, ``L``, ``#``, ``W``, un ``*`` dentro de una lista, un valor
+    fuera de tope, un rango descendente-: rechazo RUIDOSO
+    (:func:`_rechazo_de_campo`), que nombra el campo y la forma no admitida.
+    Nunca un ``int()`` pelado.
+
+    Que los dos lectores no puedan volver a divergir en silencio no lo
+    garantiza este docstring, sino
+    ``test_los_dos_lectores_de_cron_expanden_y_rechazan_igual``: una tabla de
+    expresiones sobre la que ambos deben expandir igual y rechazar lo mismo.
+    """
     if campo == "*":
         return list(range(tope))
     if campo.startswith("*/"):
-        paso = int(campo[2:])
-        return list(range(0, tope, paso))
+        paso_texto = campo[2:]
+        if not _ENTERO_CRON.fullmatch(paso_texto) or not 1 <= int(paso_texto) <= tope:
+            raise _rechazo_de_campo(
+                nombre=nombre,
+                campo=campo,
+                forma=campo,
+                motivo=f"paso no admitido (se espera un entero de 1 a {tope}) en",
+            )
+        return list(range(0, tope, int(paso_texto)))
     if "," in campo:
-        return sorted(int(valor) for valor in campo.split(","))
-    if "-" in campo:
-        inicio_texto, fin_texto = campo.split("-")
-        return list(range(int(inicio_texto), int(fin_texto) + 1))
-    return [int(campo)]
+        valores: set[int] = set()
+        for elemento in campo.split(","):
+            valores.update(_expandir_elemento(elemento, tope, nombre, campo))
+        return sorted(valores)
+    return _expandir_elemento(campo, tope, nombre, campo)
 
 
 def _horas_de_disparo(expresion_cron: str) -> list[time]:
@@ -422,16 +512,17 @@ def _horas_de_disparo(expresion_cron: str) -> list[time]:
 
     Solo interpreta minuto y hora -los tres campos restantes (día del mes,
     mes, día de la semana) no cambian LA HORA del día en que dispara, que es
-    lo único que a este módulo le hace falta derivar-. Los dos campos pueden
-    llevar cualquier forma real de ``cron`` (``*``, ``*/N``, lista, rango),
-    no solo un entero suelto: un ``schedule`` tan frecuente como ``*/30 * * *
-    *`` lleva ``*/30`` en el campo de minuto, no en el de hora.
+    lo único que a este módulo le hace falta derivar-. Los dos campos llevan
+    cualquier forma del dialecto de :func:`_expandir_campo` (``*``, ``*/N``,
+    entero, rango y listas de enteros o rangos), no solo un entero suelto: un
+    ``schedule`` tan frecuente como ``*/30 * * * *`` lleva ``*/30`` en el
+    campo de minuto, no en el de hora.
     """
     campos = expresion_cron.split()
     if len(campos) != 5:
         raise ValueError(f"expresión cron no reconocida: {expresion_cron!r}")
-    minutos = _expandir_campo(campos[0], 60)
-    horas = _expandir_campo(campos[1], 24)
+    minutos = _expandir_campo(campos[0], 60, "minuto")
+    horas = _expandir_campo(campos[1], 24, "hora")
     return [time(hour=hora, minute=minuto) for hora in horas for minuto in minutos]
 
 
