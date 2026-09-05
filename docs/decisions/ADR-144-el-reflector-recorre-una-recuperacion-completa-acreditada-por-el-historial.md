@@ -86,10 +86,9 @@ camino completo, marcador a marcador y en orden cronológico.
 **Predicción, escrita antes de correr nada:** el recorrido del caso vivo
 produce entre 4 y 6 sucesos —reactivación más el camino de fase desde
 `REPARAR` hasta la entrega— y cero en la segunda pasada.
-**Resultado:** exactamente 5 (`work_item_reactivated`,
-`work_item_repair_resumed`, `work_item_review_started`,
-`work_item_review_approved`, `work_item_delivered`), y cero en la segunda
-pasada. Dentro del rango predicho.
+**Resultado:** pendiente de medir — esta línea se rellena después de correr
+las pruebas, no antes (si se rellenara antes no sería una medida, sería la
+predicción escrita dos veces).
 
 ## Opciones consideradas
 
