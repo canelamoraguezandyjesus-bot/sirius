@@ -237,6 +237,7 @@ def test_lo_que_los_prompts_prohiben_esta_denegado_de_verdad(prompt_path: Path) 
 # preparado, es ESE workflow el que tiene que prepararlo.
 WORKFLOW_DE_CADA_ROL = {
     "implementer.md": "implement-sirius-work.yml",
+    "implementer-v3.md": "implement-sirius-work.yml",
     "corrector.md": "repair-sirius-work.yml",
     "reviewer.md": "review-sirius-work.yml",
     "documentalista.md": "implement-sirius-work.yml",
@@ -425,3 +426,73 @@ def test_agents_declara_la_politica_de_revision() -> None:
     texto = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
     assert "Política de revisión" in texto
     assert "EXHAUSTIVA" in texto
+
+
+# --- ADR-145: la validación obligatoria es UNA invocación del script ---------
+#
+# El 05-09 dos ciclos perdieron una ronda cada uno por el mismo desacuerdo de
+# textos: implementer.md y corrector.md enumeraban los cuatro comandos sueltos
+# como «las validaciones obligatorias» mientras AGENTS.md (que los revisores
+# hacen cumplir) exige `scripts/check.ps1` — un proceso, unas fixtures, un
+# código de salida (#537 ronda 2; #541 vuelta 4). Y en #541 otras dos vueltas
+# (rondas 3 y 6) nacieron de commitear sin reconciliar el cuerpo de la PR con
+# el head nuevo. Estos guardianes fijan las dos reglas SOBRE EL TEXTO de los
+# prompts, igual que el resto del fichero: que algo esté prometido en un ADR
+# no es que esté escrito donde el agente lo lee.
+
+
+def _prompt_vigente_del_implementador() -> str:
+    """El fichero de la fila implementer@N más alta del carril de ejecución.
+
+    Del manifiesto, no de una lista a mano: cuando nazca implementer@4 con su
+    fichero nuevo (H-28), este guardián lo seguirá solo.
+    """
+    import json
+
+    manifiesto = json.loads((PROMPTS_DIR / "manifiesto.json").read_text(encoding="utf-8"))
+    filas = manifiesto["carriles"]["ejecucion"]
+    version_maxima = max(
+        int(clave.split("@")[1]) for clave in filas if clave.startswith("implementer@")
+    )
+    return str(Path(filas[f"implementer@{version_maxima}"]["fichero"]).name)
+
+
+_PROMPTS_QUE_VALIDAN = (_prompt_vigente_del_implementador(), "corrector.md")
+
+
+@pytest.mark.parametrize("nombre", _PROMPTS_QUE_VALIDAN)
+def test_los_prompts_que_validan_exigen_el_script_de_comprobacion_unico(nombre: str) -> None:
+    ruta = PROMPTS_DIR / nombre
+    texto = ruta.read_text(encoding="utf-8")
+    assert "pwsh -File scripts/check.ps1" in texto, (
+        f"{ruta.relative_to(REPO_ROOT)} ya no exige el script de comprobación "
+        "único: el agente validará con comandos sueltos y el revisor lo parará "
+        "citando AGENTS.md — la ronda perdida de #537/#541 (ADR-145)"
+    )
+    assert "una sola invocación" in texto, (
+        f"{ruta.relative_to(REPO_ROOT)} no dice que la invocación es UNA: "
+        "partir la suite en tandas arranca procesos y fixtures distintos y no "
+        "demuestra que el script pase entero (ADR-145)"
+    )
+    assert not re.search(
+        r"validaciones obligatorias \(`uv run ruff",
+        texto,
+    ), (
+        f"{ruta.relative_to(REPO_ROOT)} presenta los comandos sueltos como "
+        "validación: es el texto exacto que fabricó las rondas perdidas de "
+        "#537 y #541 (ADR-145). Los cuatro comandos solo pueden citarse como "
+        "lo que el script ejecuta por dentro"
+    )
+
+
+def test_el_corrector_reconcilia_el_cuerpo_de_la_pr_tras_cada_commit() -> None:
+    texto = (PROMPTS_DIR / "corrector.md").read_text(encoding="utf-8")
+    assert "cuerpo de la PR" in texto and "en el mismo turno" in texto, (
+        "corrector.md ya no obliga a reconciliar el cuerpo de la PR con el "
+        "head vigente en el mismo turno del commit: las vueltas 3 y 6 de #541 "
+        "nacieron exactamente de ese olvido (ADR-145)"
+    )
+    assert "head superado" in texto, (
+        "corrector.md ya no prohíbe afirmar como actual un head superado en "
+        "el cuerpo de la PR (ADR-145)"
+    )

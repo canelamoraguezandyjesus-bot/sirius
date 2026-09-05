@@ -27,7 +27,7 @@ from sirius_engine.adapters.github_worker_request import (
 )
 from sirius_engine.capability_registry import load_capability_registry
 from sirius_engine.domain.context_fragment import ContextFragment
-from sirius_engine.domain.errors import EgressClassificationError
+from sirius_engine.domain.errors import EgressClassificationError, UnknownAgentProfileError
 from sirius_engine.domain.work_item import WorkItem, WorkItemClass, create_work_item
 from sirius_engine.profile_registry import load_agent_profile
 from sirius_engine.worker_request import project_worker_request
@@ -143,9 +143,18 @@ def _cuerpo_con_perfil(perfil: str) -> str:
     Desde C3 (ADR-088) el workflow ELIGE el prompt leyendo ese campo, así que
     ejecutar su guión sin cuerpo ya no reproduce nada: muere por variable no
     definida. Dárselo aquí no es maquillar el fallo -es darle el mismo dato que
-    el `env:` del paso le da en producción.
+    el `env:` del paso le da en producción. La versión se lee del PERFIL, como
+    hace el despachador real: clavar aquí un @N a mano haría que esta prueba
+    comparase la proyección vigente contra un prompt congelado de otra versión
+    (le pasó con implementer@3, ADR-145).
     """
-    return f"## Bloque\n\nENCARGO\n\nPerfil: {perfil}@1\n\n## Objetivo\n\nlo que sea\n"
+    try:
+        version = load_agent_profile(perfil).version
+    except UnknownAgentProfileError:
+        # Un perfil desconocido tiene que llegar AL GUIÓN y morir allí
+        # (test_un_perfil_desconocido_...): el fixture no le hace de puerta.
+        version = 1
+    return f"## Bloque\n\nENCARGO\n\nPerfil: {perfil}@{version}\n\n## Objetivo\n\nlo que sea\n"
 
 
 def _prompt_real_del_workflow(
