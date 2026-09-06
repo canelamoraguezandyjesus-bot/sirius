@@ -1426,6 +1426,21 @@ ADR o su incidencia cuando se adopte.
   muriera ahora, la rama conserva lo corregido. Despachado a las 14:31 el
   encargo #558 (la deuda concreta de #503: `posible_goteo` retirada una
   sola vez al leer las observaciones), en `implementing` desde las 14:32.
+  **El dato completo, a las 14:51 (21 minutos de ronda)**: veredicto
+  `FIXED` parcial y declarado, exactamente la forma de ADR-155: dos
+  hallazgos corregidos con commit y push propios (CODEX-002 P1 con su
+  mutación vista fallar; CLAUDE-A1-001 P3 con la paridad `sed`/Python
+  comprobada en el runner sobre cinco cuerpos), y dos NO corregidos
+  nombrados por identificador (CODEX-003 P1 y CODEX-001 P2: «no cabía con
+  garantías antes de la hora límite; no es un bloqueo ni un fallo
+  técnico: es el plazo»), con la cadena completa una sola vez sobre el
+  árbol final (5068 passed, 17 skipped, 2 xfailed, código 0, anclada a
+  `242e8b3`) y el ADR y el cuerpo de la PR reconciliados. De cuatro
+  pendientes a dos: progreso por la regla de convergencia, y ni un minuto
+  perdido. Lo que la ronda 4 (36:12, cero pushes) no supo hacer, la ronda
+  5 lo hizo en 21 con el plazo delante. Y #558 recorrió el ciclo entero
+  en 28 minutos (implementador 12, Quality 8, revisión dual 7): PR #559
+  en `ready-for-merge` a las 15:00.
 - **Estado a las 13:32 UTC (14:32 del propietario)**: `main` en
   `52344dc` tras cuatro fusiones del operador (#553 `3a00e04` 04:05,
   #555 `4cd8924` y #554 `dc45b59` 05:03, #556 `52344dc` 13:29). Las dos
