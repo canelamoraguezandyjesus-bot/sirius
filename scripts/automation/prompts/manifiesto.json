@@ -22,6 +22,10 @@
       "implementer@3": {
         "fichero": "scripts/automation/prompts/implementer-v3.md",
         "sha256": "157a862431979aa1abdadbf39a6c54ccfabc7e8dcf60b3215d41cd9f254d5380"
+      },
+      "implementer@4": {
+        "fichero": "scripts/automation/prompts/implementer-v4.md",
+        "sha256": "f3c510db3d84d6882d425486eebd0f655888141e8745d6af14bf4234b32ef398"
       }
     },
     "revision": {
@@ -50,6 +54,10 @@
         "sha256": "950feb3071118e1ce1634ae0c2299298cab32c7df2caf3fe0507b25a3329b901"
       },
       "implementer@3": {
+        "fichero": "scripts/automation/prompts/reviewer-v2.md",
+        "sha256": "4a0a23423657a97f3c350737f078fe9ca1f44cfc17aab6ec62f285b033528e39"
+      },
+      "implementer@4": {
         "fichero": "scripts/automation/prompts/reviewer-v2.md",
         "sha256": "4a0a23423657a97f3c350737f078fe9ca1f44cfc17aab6ec62f285b033528e39"
       }
