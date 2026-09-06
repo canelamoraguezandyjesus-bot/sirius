@@ -1420,6 +1420,44 @@ def test_el_diagnostico_guardado_identifica_la_parada_cuando_el_tiempo_no_discri
     assert tuple(paso.kind for paso in resultado.pasos) == _RECORRIDO_DESDE_LA_PRIMERA_PARADA
 
 
+def test_un_marcador_con_otro_diagnostico_no_ancla_la_parada_guardada() -> None:
+    """Un ancla que el diagnóstico guardado CONTRADICE no es un ancla.
+
+    El notificador deduplica por estado y head (`notify-sirius-state.yml`), así
+    que una segunda parada `failed-safely` sobre el mismo head puede no dejar
+    marcador propio: en el historial solo está el de la PRIMERA, y lleva su
+    diagnóstico. El motor, en cambio, guarda el de la segunda. Anclar ahí
+    levantaría la segunda parada con el permiso de la primera y entregaría la
+    incidencia; lo que corresponde es abstenerse -conservar la parada sin
+    permiso- porque el propio texto guardado dice que esa ocurrencia no es la
+    suya (CODEX-002, ronda 3, PR #546).
+    """
+    store = InMemoryWorkEngineStore()
+    parado = _motor_parado_en_reparar(store, diagnostico="la ronda 2 agotó el tiempo del job")
+    historial, permisos = _cronologia(
+        ("diagnostico", "la ronda 1 se quedó sin turnos"),
+        ("estado", "sirius:failed-safely"),
+        ("orden", "continua"),
+        ("estado", "sirius:repair-requested"),
+        ("diagnostico", "la ronda 2 agotó el tiempo del job"),
+        ("estado", "sirius:ready-for-merge"),
+        ("estado", "sirius:completed"),
+    )
+    paradas = [
+        acreditado
+        for acreditado in historial
+        if acreditado.estado is WorkItemState.FAILED_SAFELY
+    ]
+    assert [acreditado.diagnostico for acreditado in paradas] == [
+        "la ronda 1 se quedó sin turnos"
+    ], "el historial solo trae el marcador de la PRIMERA parada, con su propio diagnóstico"
+
+    resultado = reflejar_desenlace(parado, _espejo_de_dos_paradas(historial, permisos), _episodio())
+
+    assert resultado.pasos == ()
+    assert resultado.divergencia is not None
+
+
 def test_sin_ancla_en_el_historial_no_hay_recorrido() -> None:
     """El estado guardado tiene que estar EN el historial acreditado.
 

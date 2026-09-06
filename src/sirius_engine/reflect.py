@@ -483,10 +483,20 @@ def _ancla_del_recorrido(work_item: WorkItem, historial: Sequence[EstadoAcredita
        descarta. Si el descarte se las lleva TODAS, el almacén es más antiguo
        que el historial entero y no informa de nada: el recorrido empieza en la
        primera.
-    2. **Identidad del suceso.** Si el almacén guarda un diagnóstico de parada
-       y exactamente una de las ocurrencias que quedan lleva ESE diagnóstico,
-       esa es: no es una preferencia, es el mismo texto escrito dos veces.
-    3. Y solo si ninguna de las dos discrimina, la más reciente de las que la
+    2. **Compatibilidad del diagnóstico.** Si el almacén guarda un diagnóstico
+       de parada, una ocurrencia que lleva OTRO diagnóstico distinto no puede
+       ser la que el almacén guardó: lo dice su propio texto. Esas quedan
+       descartadas, y si el descarte se las lleva todas no hay ancla -el
+       recorrido se abandona en vez de anclar en una parada que el diagnóstico
+       guardado contradice-. Una ocurrencia SIN diagnóstico no contradice
+       nada y se conserva: el respaldo sigue existiendo cuando no hay
+       diagnóstico que discrimine (CODEX-002, ronda 3, PR #546; el notificador
+       deduplica por estado y head, así que una segunda parada sobre el mismo
+       head puede no dejar marcador propio).
+    3. **Identidad del suceso.** Si exactamente una de las ocurrencias que
+       quedan lleva ESE diagnóstico, esa es: no es una preferencia, es el
+       mismo texto escrito dos veces.
+    4. Y solo si ninguna de las tres discrimina, la más reciente de las que la
        evidencia no descartó.
     """
     candidatos = [
@@ -499,15 +509,21 @@ def _ancla_del_recorrido(work_item: WorkItem, historial: Sequence[EstadoAcredita
     anteriores = [
         indice for indice in candidatos if _el_almacen_pudo_guardarla(historial[indice], work_item)
     ]
+    base = anteriores or candidatos
     if work_item.diagnostico is not None:
-        por_identidad = [
+        base = [
             indice
-            for indice in (anteriores or candidatos)
-            if historial[indice].diagnostico == work_item.diagnostico
+            for indice in base
+            if historial[indice].diagnostico in (None, work_item.diagnostico)
+        ]
+        if not base:
+            return None
+        por_identidad = [
+            indice for indice in base if historial[indice].diagnostico == work_item.diagnostico
         ]
         if len(por_identidad) == 1:
             return por_identidad[0]
-    return anteriores[-1] if anteriores else candidatos[0]
+    return base[-1] if anteriores else base[0]
 
 
 def _consumir_permiso(

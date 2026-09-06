@@ -206,6 +206,18 @@ aplicar la etiqueta, y la etiqueta es lo que dispara el marcador—. Con eso:
   literal (`test_recorrido_acreditado_avanza_el_caso_vivo_de_la_537`), vista
   FALLAR contra el reflector de `main` antes del cambio y pasar después. Sigue
   en verde tras la corrección de la ronda 2, con el mismo plan de cinco pasos.
+- **Un ancla que el diagnóstico guardado contradice se rechaza** (CODEX-002,
+  ronda 3). `notify-sirius-state.yml` deduplica su marcador por estado y head,
+  así que una segunda parada `failed-safely` sobre el mismo head puede no dejar
+  marcador propio. `_ancla_del_recorrido` descarta ahora las ocurrencias cuyo
+  diagnóstico difiere del que el almacén guarda -una ocurrencia SIN diagnóstico
+  no contradice nada y se conserva, que es lo que mantiene vivo el respaldo
+  cuando no hay diagnóstico discriminante-, y si el descarte se las lleva todas
+  no hay recorrido. Prueba:
+  `test_un_marcador_con_otro_diagnostico_no_ancla_la_parada_guardada`, vista
+  fallar con la mutación que quita el filtro (`... in (None,
+  work_item.diagnostico)` → `True`): devuelve cinco pasos empezando por
+  `work_item_reactivated` en vez de `()`.
 - Los dos contraejemplos del encargo, cada uno con su prueba: sin permiso
   posterior a la parada no se toca nada; dos paradas y un solo permiso
   posterior a la primera acreditan la primera salida y no la segunda.
