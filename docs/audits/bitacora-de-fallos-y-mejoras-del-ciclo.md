@@ -1539,7 +1539,12 @@ ADR o su incidencia cuando se adopte.
   vez). Coste de la sonda: ocho minutos de revisor Claude. Siguiente
   sonda a las 20:40 UTC con un `continua` a secas; si sigue sin cuota, la
   siguiente a las 07:00 UTC de mañana. El propietario mantiene la opción
-  1 (esperar) salvo que diga lo contrario.
+  1 (esperar) salvo que diga lo contrario. Sonda de las 20:36: `continua`
+  a secas, revisión repuesta, Codex declaró la cuota agotada por tercera
+  vez a las 20:46 (run 34058533259). Cuatro horas y media después del
+  primer aviso, la cuota no ha vuelto: no es una ventana corta. Siguiente
+  sonda a las 07:00 UTC del 07-09; el día de #545 se cierra en
+  `failed-safely` con R4-001 (P1) pendiente y todo lo demás dentro.
 - **Estado a las 13:32 UTC (14:32 del propietario)**: `main` en
   `52344dc` tras cuatro fusiones del operador (#553 `3a00e04` 04:05,
   #555 `4cd8924` y #554 `dc45b59` 05:03, #556 `52344dc` 13:29). Las dos
