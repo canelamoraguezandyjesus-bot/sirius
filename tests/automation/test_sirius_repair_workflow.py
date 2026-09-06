@@ -368,6 +368,10 @@ def test_there_is_no_measured_diagnosis_step() -> None:
     nombres = [str(step.get("name") or "") for step in _steps(doc)]
     assert nombres == [
         "Checkout",
+        # ADR-152: la copia de `scripts/automation` de `main` que ejecuta el
+        # veredicto, tomada antes de que el corrector toque el árbol. Va justo
+        # detrás del checkout: cuanto antes, menos manos han pasado por el árbol.
+        "Congelar la automatización de main",
         # Preparación del entorno: el corrector debe poder ejecutar las cuatro
         # validaciones, y el runner no trae `uv` (solo lo instalaba `quality.yml`).
         # Sin estos tres pasos la ronda se detenía en `FAILED_SAFELY` por falta de
@@ -388,12 +392,23 @@ def test_there_is_no_measured_diagnosis_step() -> None:
     aplicar = _step(doc, "Aplicar el veredicto")
     # El entorno COMPLETO: era el canal por el que la medida llegaba al
     # comentario. Cualquier variable nueva obliga a pasar por aquí.
-    assert sorted(aplicar["env"]) == ["CYCLE", "GH_REPO", "GH_TOKEN", "ISSUE_NUMBER"]
+    # SIRIUS_READ_TOKEN (ADR-149) es el github.token con el que el guion
+    # consulta los runs de Quality del head; no lleva texto ni entra en
+    # ningún comentario.
+    assert sorted(aplicar["env"]) == [
+        "CYCLE",
+        "GH_REPO",
+        "GH_TOKEN",
+        "ISSUE_NUMBER",
+        "SIRIUS_READ_TOKEN",
+    ]
     # Y el guion COMPLETO: es la invocación y nada más, así que tampoco cabe
     # medir aquí mismo antes de llamar al script.
+    # La invocación va contra la copia congelada de `main` (ADR-152), nunca
+    # contra `scripts/automation` del árbol que el corrector dejó.
     assert [linea.strip() for linea in str(aplicar["run"]).strip().splitlines()] == [
         "set -uo pipefail",
-        "bash scripts/automation/sirius_apply_verdict.sh \\",
+        'bash "${RUNNER_TEMP}/automation-de-main/scripts/automation/sirius_apply_verdict.sh" \\',
         '"$GH_REPO" "$ISSUE_NUMBER" "corrector" "${RUNNER_TEMP}/sirius_verdict.json" "$CYCLE"',
     ]
 

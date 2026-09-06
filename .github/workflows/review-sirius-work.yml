@@ -66,8 +66,9 @@ jobs:
     # siempre se traduce en un resultado estructurado y nunca en una
     # cancelación del job, y la agregación y la aplicación del veredicto
     # tienen margen garantizado, no meramente probable:
-    #   revisor Claude 30 + recolección de Codex 30 + agregación 5 +
-    #   aplicación 10 = 75, dentro de los 85 del job.
+    #   congelación de la automatización 1 + revisor Claude 30 +
+    #   recolección de Codex 30 + agregación 5 + aplicación 10 = 76, dentro de
+    #   los 85 del job.
     # La espera interna del recolector está además limitada a
     # SIRIUS_CODEX_REVIEW_MAX_TIMEOUT_SECONDS (1500 s = 25 min), por debajo de
     # los 30 de su paso.
@@ -78,6 +79,32 @@ jobs:
         with:
           ref: main
           persist-credentials: false
+
+      - name: Congelar la automatización de main
+        # ADR-152: los pasos POSTERIORES al agente (recoger el resultado de
+        # Codex, agregar los veredictos y aplicar el veredicto) ejecutan ESTA
+        # copia, tomada de `main` antes de que el agente toque el árbol. El
+        # revisor puede traerse el head de la PR para ejecutar pruebas; ejecutar
+        # después el guion del árbol que dejó significaría que el agente elige
+        # qué automatización aplica su propio veredicto con el PAT (el 06-09 el
+        # veredicto de #545 corrió el guion de su rama, sin ADR-149, y no
+        # relanzó Quality).
+        timeout-minutes: 1
+        shell: bash --noprofile --norc {0}
+        run: |
+          set -uo pipefail
+          # La copia reproduce el TRAZADO del árbol (scripts/automation y
+          # src/sirius_engine): sirius_convergence.py y sirius_drip_guard_cli.py
+          # alcanzan src/sirius_engine por parents[2] de su propia ruta. La
+          # primera copia, plana (3a00e04), los dejó sin round_history.py y la
+          # revisión de #550 paró en registro-de-ronda-fallido (run 34011306916).
+          if ! mkdir -p "${RUNNER_TEMP}/automation-de-main/scripts" "${RUNNER_TEMP}/automation-de-main/src" \
+            || ! cp -R scripts/automation "${RUNNER_TEMP}/automation-de-main/scripts/automation" \
+            || ! cp -R src/sirius_engine "${RUNNER_TEMP}/automation-de-main/src/sirius_engine"; then
+            echo "::error::No se pudo congelar la automatización de main; sin la copia no hay veredicto."
+            exit 1
+          fi
+          echo "Automatización congelada desde main $(git rev-parse --short HEAD) en ${RUNNER_TEMP}/automation-de-main (scripts/automation y src/sirius_engine)"
 
       - name: Localizar la PR y verificar el head que superó Quality
         id: gate
@@ -327,7 +354,7 @@ jobs:
           SIRIUS_CODEX_REVIEW_MAX_TIMEOUT_SECONDS: ${{ vars.SIRIUS_CODEX_REVIEW_MAX_TIMEOUT_SECONDS }}
         run: |
           set -uo pipefail
-          python3 scripts/automation/sirius_codex_review.py collect \
+          python3 "${RUNNER_TEMP}/automation-de-main/scripts/automation/sirius_codex_review.py" collect \
             --repo "$GH_REPO" \
             --pr "$PR_NUMBER" \
             --head "$HEAD_SHA" \
@@ -345,7 +372,7 @@ jobs:
           HEAD_SHA: ${{ steps.gate.outputs.head_sha }}
         run: |
           set -uo pipefail
-          python3 scripts/automation/sirius_aggregate_reviews.py \
+          python3 "${RUNNER_TEMP}/automation-de-main/scripts/automation/sirius_aggregate_reviews.py" \
             --claude-file "${RUNNER_TEMP}/sirius_verdict.json" \
             --codex-file "${RUNNER_TEMP}/sirius_codex_review.json" \
             --expected-head "$HEAD_SHA" \
@@ -379,5 +406,5 @@ jobs:
           else
             verdict_file="${RUNNER_TEMP}/sirius_verdict.json"
           fi
-          bash scripts/automation/sirius_apply_verdict.sh \
+          bash "${RUNNER_TEMP}/automation-de-main/scripts/automation/sirius_apply_verdict.sh" \
             "$GH_REPO" "$ISSUE_NUMBER" "reviewer" "$verdict_file"
