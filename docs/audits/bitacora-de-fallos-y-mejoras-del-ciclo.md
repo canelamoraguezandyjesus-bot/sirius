@@ -1397,6 +1397,24 @@ ADR o su incidencia cuando se adopte.
   con el plazo a la vista (deuda 8), o sacar la cadena del presupuesto
   del agente (opción 4 de ADR-150). Decisión del propietario, planteada
   a las 14:12.
+- **Decisión del propietario (14:12) y ficha ADR-155**: entre «ficha de
+  la deuda 8 y luego `continua`», «lo corrijo yo en la rama» y «`continua`
+  otra vez», eligió la primera. ADR-155 («el corrector entrega por
+  hallazgo, con el plazo a la vista»): el paso que prepara el prompt
+  calcula con `date -u` la hora a la que muere el paso del corrector
+  (`PLAZO_MIN`, el mismo 36 del `timeout-minutes`, sujetado por guardián)
+  y la hora límite para arrancar la validación (36 − 16: la cadena tarda
+  9-15 min más el push), y las escribe en el contexto; `corrector.md`
+  exige corregir de mayor a menor severidad, commit y push tras cada
+  hallazgo, y, llegado el límite, validar lo hecho, empujar y escribir
+  `FIXED` nombrando por identificador lo que quedó sin corregir (la
+  definición de `FIXED` admite ya esa entrega parcial declarada). Cinco
+  guardianes nuevos vistos fallar contra `main` (5 de 5); con el cambio,
+  125 en verde con los guardianes vecinos; la sintaxis del paso y la
+  aritmética de fechas ejecutadas en local. Criterio en vivo: la siguiente
+  ronda de #545 deja al menos un push antes del límite y la revisión
+  siguiente cuenta menos de cuatro pendientes; una tercera muerte por
+  tiempo SIN push intermedio desmiente el ADR.
 - **Estado a las 13:32 UTC (14:32 del propietario)**: `main` en
   `52344dc` tras cuatro fusiones del operador (#553 `3a00e04` 04:05,
   #555 `4cd8924` y #554 `dc45b59` 05:03, #556 `52344dc` 13:29). Las dos
