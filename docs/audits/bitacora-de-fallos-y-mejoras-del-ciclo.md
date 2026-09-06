@@ -1441,6 +1441,23 @@ ADR o su incidencia cuando se adopte.
   5 lo hizo en 21 con el plazo delante. Y #558 recorrió el ciclo entero
   en 28 minutos (implementador 12, Quality 8, revisión dual 7): PR #559
   en `ready-for-merge` a las 15:00.
+- **ADR-149 corrió por primera vez de verdad (14:51) y chocó con el PAT**:
+  Quality sobre `242e8b3` terminó a las 14:50:20, cincuenta segundos ANTES
+  del veredicto `FIXED` (14:51:10), es decir, el caso exacto de la deuda
+  3. Gracias a ADR-152 el veredicto ejecutó el guion de `main`, la lectura
+  con el `github.token` encontró el run terminado y el relanzamiento con
+  el PAT devolvió `HTTP 403: Resource not accessible by personal access
+  token`, cuatro veces (reintentos de 2, 4 y 8 s), y el paso terminó en 1
+  con la incidencia en `ci-pending`, tal como ADR-149 prescribe. El PAT
+  (`SIRIUS_BOT_TOKEN`) no tiene el permiso de escritura sobre Actions que
+  el endpoint `actions/runs/{id}/rerun` exige. Consecuencia: la deuda 3
+  sigue abierta por un permiso, no por código; #545 llevaba 14 minutos
+  parado en `ci-pending` cuando el operador relanzó el run a mano a las
+  15:05. Pedido al propietario: conceder al PAT «Actions: Read and
+  write» en el repositorio. Mejora candidata (pequeña): que un
+  relanzamiento fallido deje un comentario visible en la incidencia con
+  la causa y el gesto que la desbloquea, en vez de solo un `::error` en el
+  log que nadie lee.
 - **Estado a las 13:32 UTC (14:32 del propietario)**: `main` en
   `52344dc` tras cuatro fusiones del operador (#553 `3a00e04` 04:05,
   #555 `4cd8924` y #554 `dc45b59` 05:03, #556 `52344dc` 13:29). Las dos
