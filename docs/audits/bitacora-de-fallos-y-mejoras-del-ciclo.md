@@ -1358,18 +1358,19 @@ ADR o su incidencia cuando se adopte.
   anclada. Guardián visto fallar (2 de 2 prompts vigentes), 100 passed en
   los seis módulos afectados, cadena completa sobre `c3514e9`: 4998
   passed, 16 skipped, 2 xfailed, `check=0`.
-- **Estado a las 05:05 UTC (06:05 del propietario)**: `main` en
-  `dc45b59` tras tres fusiones del operador (#553 `3a00e04` a las 04:05,
-  #555 `4cd8924` y #554 `dc45b59` a las 05:03): la automatización de
-  `main` congelada con su trazado y `check.ps1` que propaga el código de
-  salida ya rigen para todo run nuevo. #550 reanudado con `continua` a
-  las 05:04 sobre `098bdfe`, con nota previa del operador explicando la
-  parada; su ronda de revisión es el primer dato en vivo de la copia
-  corregida. #545 en `ready-for-merge` sobre `537a026`; mi revisión de
-  sus rondas 2 y 3 hecha, sin hallazgos que bloqueen; «Update branch»
-  hecho a las 05:04 con `main` ya quieto, Quality en cola: por ADR-142
-  volverá a revisión y después `fusiona`. ADR-148 (memoria) sigue
-  esperando, por orden del propietario, a que lo demás termine.
+- **Estado a las 13:32 UTC (14:32 del propietario)**: `main` en
+  `52344dc` tras cuatro fusiones del operador (#553 `3a00e04` 04:05,
+  #555 `4cd8924` y #554 `dc45b59` 05:03, #556 `52344dc` 13:29). Las dos
+  ramas del motor actualizadas con `main` a las 13:30 (#552 → `821b2ac`;
+  #546 → merge nuevo) ANTES de reanudar, para que cada corrector trabaje
+  sobre el árbol que se fusiona; `continua` en #550 y en #545 a las
+  13:31, con nota previa en cada una. Pendiente por incidencia: #550, un
+  hallazgo bajo (terna del ADR-151, que con ADR-154 se ancla); #545,
+  cuatro hallazgos (P3 + P2 + dos P1) sobre el head aprobado a las 04:11.
+  Después: Quality → revisión → `fusiona` en cada incidencia; el segundo
+  en llegar necesitará otro «Update branch» y su ronda de ADR-142.
+  ADR-148 (memoria) sigue esperando, por orden del propietario, a que lo
+  demás termine.
 
 ---
 
