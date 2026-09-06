@@ -1370,6 +1370,18 @@ ADR o su incidencia cuando se adopte.
   lo pida, B solo con decisión sobre ADR-082) y #267 (mecanizar el
   método: lista de candidatos, parte ya hecha —convergencia, guardián de
   goteo, ADR-145/153/154— y parte sin dueño).
+- **Primeros datos en vivo de ADR-153 y ADR-154 (13:42)**: la ronda 3 del
+  corrector de #550 (run 34036324130, 11 min) tomó la opción (b) del
+  hallazgo —el ADR afirma las cuatro validaciones en verde con código 0
+  sobre cada head validado y remite la terna concreta, anclada, al
+  cuerpo de la PR— y escribió la cifra exactamente como ADR-154 la pide:
+  «5025 passed, 17 skipped, 2 xfailed en 483,18 s, código de salida 0,
+  sobre el árbol de `479debf`; esa terna es la de ese árbol, no un
+  recuento del head vigente si la rama vuelve a actualizarse». Como la
+  rama ya lleva `dc45b59`, ese «código de salida 0» es el primero medido
+  con el `check.ps1` de ADR-153 en un runner: cubre los cuatro pasos, y
+  Quality lo confirmó en verde a las 13:53 (run 34036885470). Los dos
+  criterios en vivo, cumplidos en la misma ronda.
 - **Estado a las 13:32 UTC (14:32 del propietario)**: `main` en
   `52344dc` tras cuatro fusiones del operador (#553 `3a00e04` 04:05,
   #555 `4cd8924` y #554 `dc45b59` 05:03, #556 `52344dc` 13:29). Las dos
