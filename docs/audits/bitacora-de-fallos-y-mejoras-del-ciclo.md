@@ -1358,6 +1358,18 @@ ADR o su incidencia cuando se adopte.
   anclada. Guardián visto fallar (2 de 2 prompts vigentes), 100 passed en
   los seis módulos afectados, cadena completa sobre `c3514e9`: 4998
   passed, 16 skipped, 2 xfailed, `check=0`.
+- **Registros, no trabajo (13:36)**: de los cuatro del inventario de la
+  entrada 43, dos estaban cumplidos y se cierran con su nota: #270 (la
+  decisión I4 «dónde corre el motor y dónde guarda su memoria» la tomaron
+  ADR-082 y ADR-083 y el enganche vive desde ADR-136/137; se le quita la
+  etiqueta `sirius:planned` antes de cerrar para no fabricar una
+  contradicción al espejo) y #172 (el diseño del Work Engine se entregó
+  en `docs/implementation/SIRIUS_WORK_ENGINE_*` con ADR-019/020 y está
+  construido). Los otros dos son decisiones del propietario y quedan
+  abiertos: #341 (partir objetivos grandes: C ahora, A cuando el volumen
+  lo pida, B solo con decisión sobre ADR-082) y #267 (mecanizar el
+  método: lista de candidatos, parte ya hecha —convergencia, guardián de
+  goteo, ADR-145/153/154— y parte sin dueño).
 - **Estado a las 13:32 UTC (14:32 del propietario)**: `main` en
   `52344dc` tras cuatro fusiones del operador (#553 `3a00e04` 04:05,
   #555 `4cd8924` y #554 `dc45b59` 05:03, #556 `52344dc` 13:29). Las dos
