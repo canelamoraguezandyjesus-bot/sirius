@@ -1522,7 +1522,17 @@ ADR o su incidencia cuando se adopte.
   las 17:05 UTC («Update branch» + `continua`; si Codex sigue sin cuota,
   la ronda se para sola en ocho minutos de revisor y se espera a mañana).
   Sonda hecha: rama actualizada a `bc33b82` (con #560) y `continua` a
-  las 17:06.
+  las 17:06. **Error de secuencia del operador**: la fase que se repone
+  con `continua` era la REVISIÓN, y la puerta del revisor exige que el
+  head vigente sea el último que superó Quality; con la rama recién
+  actualizada, el head nuevo aún no tenía Quality → parada inmediata
+  `head-obsoleto` (17:06:25), sin gastar ninguna ronda. Inofensivo pero
+  torpe: para una fase de revisión, o no se actualiza la rama antes del
+  `continua`, o se actualiza y se deja que el verde de Quality sobre el
+  head nuevo la reviva solo (ruta de ADR-142 desde `failed-safely`, que
+  es lo que va a pasar ahora: Quality corre sobre `bc33b82` desde las
+  17:05). Regla: «Update branch» + `continua` solo vale para la fase de
+  corrección; para la revisión, el `continua` va sin actualizar o no va.
 - **Estado a las 13:32 UTC (14:32 del propietario)**: `main` en
   `52344dc` tras cuatro fusiones del operador (#553 `3a00e04` 04:05,
   #555 `4cd8924` y #554 `dc45b59` 05:03, #556 `52344dc` 13:29). Las dos
