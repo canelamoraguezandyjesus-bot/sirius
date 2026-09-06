@@ -388,7 +388,16 @@ def test_there_is_no_measured_diagnosis_step() -> None:
     aplicar = _step(doc, "Aplicar el veredicto")
     # El entorno COMPLETO: era el canal por el que la medida llegaba al
     # comentario. Cualquier variable nueva obliga a pasar por aquí.
-    assert sorted(aplicar["env"]) == ["CYCLE", "GH_REPO", "GH_TOKEN", "ISSUE_NUMBER"]
+    # SIRIUS_READ_TOKEN (ADR-149) es el github.token con el que el guion
+    # consulta los runs de Quality del head; no lleva texto ni entra en
+    # ningún comentario.
+    assert sorted(aplicar["env"]) == [
+        "CYCLE",
+        "GH_REPO",
+        "GH_TOKEN",
+        "ISSUE_NUMBER",
+        "SIRIUS_READ_TOKEN",
+    ]
     # Y el guion COMPLETO: es la invocación y nada más, así que tampoco cabe
     # medir aquí mismo antes de llamar al script.
     assert [linea.strip() for linea in str(aplicar["run"]).strip().splitlines()] == [

@@ -27,6 +27,9 @@ permissions:
   issues: write
   pull-requests: write
   id-token: write
+  # ADR-149: al aplicar el veredicto se consultan los runs de Quality del
+  # head con el github.token (las lecturas de Actions no van con el PAT).
+  actions: read
 
 concurrency:
   group: sirius-implement-${{ github.event.issue.number }}-${{ github.event.label.name }}
@@ -296,6 +299,9 @@ jobs:
           # El veredicto escribe el estado resultante, que puede ser notificable
           # (`ci-pending` no lo es, pero `failed-safely` y `blocked-decision` sí).
           GH_TOKEN: ${{ secrets.SIRIUS_BOT_TOKEN }}
+          # ADR-149: las lecturas de Actions (¿terminó ya Quality para este
+          # head?) van con el github.token; el relanzamiento, con el PAT.
+          SIRIUS_READ_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |

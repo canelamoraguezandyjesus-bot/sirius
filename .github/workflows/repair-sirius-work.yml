@@ -656,6 +656,9 @@ jobs:
           # El veredicto escribe la etiqueta del estado resultante, que puede ser
           # notificable (`repair-requested`, `failed-safely`, `ready-for-merge`).
           GH_TOKEN: ${{ secrets.SIRIUS_BOT_TOKEN }}
+          # ADR-149: las lecturas de Actions (¿terminó ya Quality para este
+          # head?) van con el github.token; el relanzamiento, con el PAT.
+          SIRIUS_READ_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           CYCLE: ${{ steps.gate.outputs.cycle }}
