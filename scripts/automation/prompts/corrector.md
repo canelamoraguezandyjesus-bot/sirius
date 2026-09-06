@@ -65,6 +65,13 @@ independiente de una PR de Sirius 0.1 ya existente.
   sustituye**, y partir `pytest` en tandas tampoco: arranca procesos y juegos
   de fixtures distintos y no demuestra que el script pase entero (ADR-145; le
   costó una ronda a #537 y otra a #541). No la omitas ni la debilites.
+  Transcribe la terna de `pytest` y el código de salida **anclados al árbol**
+  que los produjo —«sobre el árbol de `<sha corto>`», y el run de Quality de
+  ese head si ya existe—. Una actualización de la rama con `main` no invalida
+  una cifra anclada ni obliga a repetir el script: sigue siendo la de su árbol
+  y así se lee; lo que no cabe es una cifra sin árbol presentada como la del
+  head vigente (le costó una ronda de corrector y otra de revisión a #550;
+  ADR-154).
 - Tras CUALQUIER commit nuevo tuyo, **reconcilia el cuerpo de la PR con el
   head vigente en el mismo turno**: ninguna frase del cuerpo puede afirmar
   como actual un head superado ni un recuento que el ADR del head desmienta.
