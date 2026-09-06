@@ -1521,6 +1521,8 @@ ADR o su incidencia cuando se adopte.
   a las 16:06 (`132b961`): ADR-149 corregido en `main`. Plan: sonda a
   las 17:05 UTC («Update branch» + `continua`; si Codex sigue sin cuota,
   la ronda se para sola en ocho minutos de revisor y se espera a mañana).
+  Sonda hecha: rama actualizada a `bc33b82` (con #560) y `continua` a
+  las 17:06.
 - **Estado a las 13:32 UTC (14:32 del propietario)**: `main` en
   `52344dc` tras cuatro fusiones del operador (#553 `3a00e04` 04:05,
   #555 `4cd8924` y #554 `dc45b59` 05:03, #556 `52344dc` 13:29). Las dos
