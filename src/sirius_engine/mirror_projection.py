@@ -44,6 +44,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Sequence
+from dataclasses import replace
 from datetime import datetime
 
 from sirius_engine.domain.mirror import (
@@ -597,13 +598,11 @@ def _interpretar_historial_estados(
     - el **instante** del comentario que la publicó (``None`` si el marcador
       viene del cuerpo, que no tiene instante propio);
     - el **diagnóstico** que le corresponde, si acredita una parada
-      ``FAILED_SAFELY``: el último publicado hasta su posición, que es donde
-      ``sirius_apply_verdict.sh`` lo escribe -el comentario del veredicto va
-      ANTES de aplicar la etiqueta, y la etiqueta es lo que dispara este
-      marcador-. ``None`` si no hay ninguno hasta aquí: entonces no se
-      atribuye ninguno.
+      ``FAILED_SAFELY``, emparejado por RANGO y no por posición
+      (:func:`_atribuir_diagnosticos`, CLAUDE-R4-002): la k-ésima parada
+      notificada con el k-ésimo diagnóstico publicado, alineando desde el
+      final. ``None`` si no le toca ninguno: entonces no se atribuye ninguno.
     """
-    diagnosticos = _interpretar_diagnosticos_fallo(cuerpo, comentarios)
     instantes = {
         orden: comentario.creado_en
         for orden, comentario in _comentarios_de_confianza(cuerpo, comentarios)
@@ -623,24 +622,64 @@ def _interpretar_historial_estados(
                     head=match.group(2),
                     orden=orden,
                     publicado_en=instantes.get(orden),
-                    diagnostico=(
-                        _diagnostico_hasta(diagnosticos, orden)
-                        if estado is WorkItemState.FAILED_SAFELY
-                        else None
-                    ),
                 )
             )
-    return tuple(acreditados)
+    return _atribuir_diagnosticos(acreditados, _interpretar_diagnosticos_fallo(cuerpo, comentarios))
 
 
-def _diagnostico_hasta(diagnosticos: Sequence[tuple[int, str]], orden: int) -> str | None:
-    """El último diagnóstico publicado en el historial hasta ``orden``, o ``None``."""
-    atribuible: str | None = None
-    for posicion, texto in diagnosticos:
-        if posicion > orden:
-            break
-        atribuible = texto
-    return atribuible
+def _atribuir_diagnosticos(
+    acreditados: Sequence[EstadoAcreditado], diagnosticos: Sequence[tuple[int, str]]
+) -> tuple[EstadoAcreditado, ...]:
+    """Le da a cada parada acreditada el diagnóstico del veredicto que la causó.
+
+    **Por identidad del suceso, no por la posición relativa de los dos
+    comentarios** (CLAUDE-R4-002, ronda 4, PR #546). Atribuir a cada marcador
+    el último diagnóstico publicado ANTES de su posición parecía seguro porque
+    ``sirius_apply_verdict.sh`` publica el diagnóstico y DESPUÉS aplica la
+    etiqueta. Pero el marcador no lo publica ese guion: lo publica
+    ``notify-sirius-state.yml``, que es asíncrono y secundario. Si el aviso de
+    la primera parada se retrasa hasta después del veredicto de la SEGUNDA,
+    las dos ocurrencias se proyectan con el diagnóstico de la segunda —y desde
+    el filtro del ancla de esta misma rama, un diagnóstico mal atribuido ya no
+    solo copia mal el diario: descarta la ocurrencia y puede abandonar el
+    recorrido entero—.
+
+    Lo que sí es fiable, y es lo que se usa: la **k-ésima** parada notificada
+    es la k-ésima parada ocurrida. El grupo de concurrencia de
+    ``notify-sirius-state.yml`` lleva el nombre de la etiqueta, así que los
+    avisos de una MISMA etiqueta sí se serializan entre sí —lo que no se
+    serializa es un aviso contra el de OTRA etiqueta, y contra el comentario
+    del veredicto, que es otro flujo—. Y los veredictos son comentarios
+    síncronos del propio rol, así que su orden entre ellos también es fiel.
+    Así que se emparejan por RANGO: la última parada notificada con el último
+    diagnóstico publicado, la penúltima con el penúltimo, y así.
+
+    Se alinea desde el FINAL, no desde el principio, porque puede haber más
+    diagnósticos que marcadores: el notificador deduplica por estado y head,
+    de modo que una segunda parada sobre el mismo head no deja marcador
+    propio. Alinear desde el final mantiene además la coherencia con
+    :func:`_interpretar_diagnostico_fallo`, que le da a la foto vigente el
+    último diagnóstico de la incidencia.
+
+    Una parada sin contrapartida se queda con ``None``: abstenerse antes que
+    atribuirle lo que no es suyo.
+    """
+    paradas = [
+        indice
+        for indice, acreditado in enumerate(acreditados)
+        if acreditado.estado is WorkItemState.FAILED_SAFELY
+    ]
+    #: El desfase que alinea las dos listas por el final: si hay más
+    #: diagnósticos que paradas notificadas, los primeros diagnósticos se
+    #: quedan sin marcador (deduplicado); si hay más paradas que
+    #: diagnósticos, las primeras paradas se quedan sin diagnóstico.
+    desfase = len(diagnosticos) - len(paradas)
+    atribuidos = list(acreditados)
+    for rango, indice in enumerate(paradas):
+        posicion = rango + desfase
+        if 0 <= posicion < len(diagnosticos):
+            atribuidos[indice] = replace(atribuidos[indice], diagnostico=diagnosticos[posicion][1])
+    return tuple(atribuidos)
 
 
 def _interpretar_permisos_reanudacion(

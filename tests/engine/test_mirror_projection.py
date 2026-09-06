@@ -1484,6 +1484,36 @@ def test_una_parada_sin_diagnostico_publicado_hasta_ella_no_hereda_el_siguiente(
     )
 
 
+def test_un_aviso_de_parada_retrasado_no_le_roba_el_diagnostico_a_la_otra() -> None:
+    """El diagnóstico va por IDENTIDAD del suceso, no por posición relativa.
+
+    `notify-sirius-state.yml` es asíncrono y secundario: el aviso de la primera
+    parada puede publicarse DESPUÉS del veredicto de la segunda. Atribuyendo
+    por posición -el último diagnóstico publicado antes del marcador-, las dos
+    ocurrencias se llevaban el diagnóstico de la SEGUNDA (CLAUDE-R4-002, ronda
+    4, PR #546). Lo que sí es fiel es el rango: los avisos de una MISMA
+    etiqueta se serializan entre sí -el grupo de concurrencia lleva su
+    nombre-, y los veredictos son comentarios síncronos, así que la k-ésima
+    parada notificada es la k-ésima parada ocurrida.
+    """
+    mirrored = _proyectar(
+        _comentarios(
+            _parada_publicada("fallo 1"),
+            _parada_publicada("fallo 2"),
+            _bot("<!-- sirius-notification:sirius:failed-safely:1c934781 -->"),
+            _bot("<!-- sirius-notification:sirius:failed-safely:786c82dc -->"),
+        )
+    )
+
+    assert [acreditado.diagnostico for acreditado in mirrored.historial_estados] == [
+        "fallo 1",
+        "fallo 2",
+    ], "el aviso retrasado de la primera parada no hereda el diagnóstico de la segunda"
+    assert mirrored.diagnostico_fallo == "fallo 2", (
+        "el diagnóstico de la FOTO vigente no cambia: sigue siendo el de la última parada"
+    )
+
+
 def test_la_orden_de_continuar_solo_cuenta_del_propietario() -> None:
     """`continua` es palabra del propietario, no del bot.
 

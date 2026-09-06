@@ -176,8 +176,9 @@ un aviso a destiempo, es el criterio.
 La primera de esas dos excepciones se entrega **incompleta a sabiendas**: un
 aviso de PARADA publicado tarde —después del permiso que la levantó— sigue
 tumbando el recorrido, porque la parada y su permiso se correlacionan por
-posición y no por identidad. Es CLAUDE-R4-001, y va con CLAUDE-R4-002 en
-«Consecuencias», con su vía de raíz.
+posición y no por identidad. Es CLAUDE-R4-001, y está en «Consecuencias» con
+su vía de raíz. Su hermano CLAUDE-R4-002 —el diagnóstico atribuido por
+posición— sí quedó corregido en la ronda 4, también en «Consecuencias».
 
 **Cada ocurrencia del historial se lleva su propia evidencia** (misma ronda,
 CODEX-002 y CODEX-003). La posición ordena, pero no identifica: el mismo
@@ -412,6 +413,28 @@ aplicar la etiqueta, y la etiqueta es lo que dispara el marcador—. Con eso:
 - El commit `923202f`, anterior a esta ronda, pasó `ruff format` sobre las dos
   pruebas que la corrección de la ronda 2 empujó sin formatear; no cambia
   ninguna afirmación de este ADR.
+
+- **Ronda 4, CLAUDE-R4-002** (el diagnóstico por identidad y no por posición).
+  La prueba que lo fija es
+  `test_un_aviso_de_parada_retrasado_no_le_roba_el_diagnostico_a_la_otra`
+  (`tests/engine/test_mirror_projection.py`): proyecta los comentarios reales
+  en el orden `[veredicto «fallo 1», veredicto «fallo 2», notification
+  failed-safely head 1c934781, notification failed-safely head 786c82dc]` y
+  exige `['fallo 1', 'fallo 2']`. **Mutación vista caer:** sustituir el cuerpo
+  de `_atribuir_diagnosticos` por la atribución posicional anterior —«el último
+  diagnóstico publicado hasta `acreditado.orden`»— la tumba con
+  `AssertionError: el aviso retrasado de la primera parada no hereda el
+  diagnóstico de la segunda` / `assert ['fallo 2', 'fallo 2'] == ['fallo 1',
+  'fallo 2']`. Las dos pruebas hermanas siguen en verde sin tocarlas:
+  `test_cada_parada_acreditada_lleva_el_diagnostico_publicado_hasta_ella` y
+  `test_una_parada_sin_diagnostico_publicado_hasta_ella_no_hereda_el_siguiente`.
+
+- **Ronda 4, CLAUDE-R4-003 y CLAUDE-R4-004** (texto). Lo que las sostiene no es
+  una prueba sino el propio guion: `grep -c 'if ($LASTEXITCODE -ne 0) { exit
+  $LASTEXITCODE }' scripts/check.ps1` devuelve **3** sobre el árbol de esta
+  rama, que es lo que hace falsa en presente la afirmación que este ADR y el
+  docstring de `_el_almacen_pudo_guardarla` hacían, y cierta solo en pasado
+  sobre el head `923202f`.
 - Validaciones obligatorias completas con una sola invocación de
   `scripts/check.ps1` (ADR-145): `4992 passed, 16 skipped, 2 xfailed` en
   439.75 s, código de salida 0, sobre el árbol final de esta
@@ -461,9 +484,9 @@ aplicar la etiqueta, y la etiqueta es lo que dispara el marcador—. Con eso:
 - Un `NEEDS_DECISION` jamás se resuelve en el almacén sin su permiso.
 - El almacén gana memoria de tramos intermedios que ninguna pasada observó:
   el diario registra las transiciones reales, no un salto.
-- **Se entrega con dos defectos conocidos y vivos**, aplazados por plazo
-  (ADR-155) en la ronda 4 de la PR #546 y re-levantados para que la revisión
-  siguiente los vuelva a exigir:
+- **Se entrega con un defecto conocido y vivo**, aplazado por plazo
+  (ADR-155) en la ronda 4 de la PR #546 y re-levantado para que la revisión
+  siguiente lo vuelva a exigir:
 
   - **CLAUDE-R4-001** (P1, `reflect.py`): en
     `_recorrer_historial_acreditado`, un aviso de PARADA que no encaja donde
@@ -475,18 +498,41 @@ aplicar la etiqueta, y la etiqueta es lo que dispara el marcador—. Con eso:
     y entonces `_consumir_permiso` no encuentra ningún permiso posterior y una
     recuperación que el propietario sí autorizó por escrito queda como
     divergencia declarada para siempre.
-  - **CLAUDE-R4-002** (P2, `mirror_projection.py`): `_diagnostico_hasta`
-    atribuye a cada marcador de parada el último diagnóstico publicado ANTES de
-    su posición. Con el aviso de la primera parada retrasado tras el veredicto
-    de la segunda, las dos ocurrencias se proyectan con el diagnóstico de la
-    SEGUNDA. Desde el filtro del ancla de esta ronda
-    (`historial[indice].diagnostico in (None, work_item.diagnostico)` con `if
-    not base: return None`), esa mala atribución ya no solo copia mal el
-    diario: puede descartar todas las ocurrencias y abandonar el recorrido.
+  Y uno **corregido en la ronda 4**, que se registra aquí porque cambia el
+  criterio de atribución:
 
-  Los dos son la misma familia —acreditar o negar la salida de una parada por
-  la POSICIÓN de un aviso asíncrono— y tienen una misma vía de raíz ya
-  identificada: **transportar la identidad del suceso** (el `head` que el
+  - **CLAUDE-R4-002** (P2, `mirror_projection.py`), **corregido**.
+    `_diagnostico_hasta` atribuía a cada marcador de parada el último
+    diagnóstico publicado ANTES de su posición; con el aviso de la primera
+    parada retrasado tras el veredicto de la segunda, las dos ocurrencias se
+    proyectaban con el diagnóstico de la SEGUNDA. La sustituye
+    `_atribuir_diagnosticos`, que empareja por **rango**: la k-ésima parada
+    notificada con el k-ésimo diagnóstico publicado, alineando desde el final.
+    Lo que lo sostiene es lo único que el notificador sí garantiza —el grupo
+    de concurrencia de `notify-sirius-state.yml` lleva el nombre de la
+    etiqueta, así que los avisos de una MISMA etiqueta se serializan entre
+    sí— más el hecho de que los veredictos son comentarios síncronos. Alinear
+    desde el final, y no desde el principio, es lo que respeta la
+    deduplicación por estado y head (más diagnósticos que marcadores) y lo que
+    mantiene la coherencia con el diagnóstico de la foto vigente.
+
+    **Residuo conocido de esta corrección:** cuando hay tantas paradas
+    notificadas como diagnósticos, el emparejamiento por rango no deja ninguna
+    sin diagnóstico, así que una parada cuyo diagnóstico se publicó DESPUÉS de
+    su marcador recibe ahora el del suceso emparejado en vez de `None`. Con
+    dos marcadores y un diagnóstico la abstención sigue intacta
+    (`test_una_parada_sin_diagnostico_publicado_hasta_ella_no_hereda_el_siguiente`).
+    Por eso el doble de pruebas `_cronologia` de `tests/engine/test_reflect.py`
+    **se deja con la atribución posicional que ya tenía**: alinearlo por rango
+    tumbaría `test_una_parada_sin_diagnostico_atribuible_no_recrea_ninguno` y
+    `test_un_marcador_con_otro_diagnostico_no_ancla_la_parada_guardada`, que
+    son pruebas existentes y no se relajan. Esa divergencia entre el doble y la
+    proyección es deliberada y está señalada aquí: cerrarla es parte del mismo
+    trabajo de raíz que CLAUDE-R4-001.
+
+  R4-001 y R4-002 son la misma familia —acreditar o negar la salida de una parada por
+  la POSICIÓN de un aviso asíncrono— y comparten la misma vía de raíz:
+  **transportar la identidad del suceso** (el `head` que el
   marcador `sirius-notification:<etiqueta>:<head>` ya trae, o el run del
   veredicto que causó la parada) desde `mirror_projection` a través de
   `EstadoAcreditado` hasta `reflect`, para correlacionar parada, diagnóstico y
