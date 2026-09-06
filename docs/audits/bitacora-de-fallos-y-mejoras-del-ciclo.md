@@ -1201,6 +1201,103 @@ ADR o su incidencia cuando se adopte.
   de reanudación lo interpretan `mirror_projection.py`, `reflect.py` y
   `round_history.py`, y la PR #546 lo está tocando.
 
+### 44. El veredicto corría el guion de la RAMA, no el de `main` (ADR-149 inerte en su estreno), ADR-152; tres datos más de ADR-145 —uno mío— y dos de ADR-150 (06-09-2026, 01:30-04:00 UTC)
+
+- **ADR-149 no actuó en su primer caso vivo, y no por lo que dice**: la
+  ronda 2 de #545 (run 34007489545) empujó `3380f09` a las 03:14:02,
+  Quality cerró en rojo a las 03:14:31 y el veredicto (`FIXED`, 03:15:25 →
+  03:15:31) corrió con el entorno nuevo (`SIRIUS_READ_TOKEN` en el log)
+  sin ejecutar ni una línea de `relanzar_quality_si_ya_termino`: tres
+  milisegundos entre publicar el comentario y «Veredicto aplicado». La
+  raíz no está en la función: los pasos posteriores al agente invocan
+  `scripts/automation/...` por ruta relativa al ÁRBOL DE TRABAJO, y ese
+  árbol es el que el agente dejó —el corrector hace checkout de la rama
+  de la PR—; la rama de #546 nace de `a07c5d5` y su
+  `sirius_apply_verdict.sh` tiene cero apariciones de la función. Peor
+  que el arreglo perdido: con el PAT en la mano, **el agente elegía qué
+  automatización aplicaba su propio veredicto**, justo lo que la
+  cabecera del workflow («Claude NUNCA muta etiquetas… el guion
+  reverifica todo por su cuenta») da por imposible. ADR-152 (PR #553):
+  copiar `scripts/automation` a `${RUNNER_TEMP}/automation-de-main` nada
+  más hacer checkout, y que todo paso posterior al agente ejecute esa
+  copia (veredicto en los cuatro workflows; recogida de Codex y
+  agregación en la revisión). Guardián nuevo de 12 casos visto fallar
+  contra los YAML sin tocar; presupuesto del corrector intacto en 80
+  (congelación 1, `uv` 3 → 2); cadena completa 4984 en verde. Sin dato en
+  vivo aún: lo dará la primera ronda sobre una rama anterior a ADR-149.
+- **Datos 2 y 3 de ADR-145, y la raíz, que no era el corrector**: el
+  corrector de la ronda 2 de #545 declaró «una sola invocación de
+  `check.ps1`, código 0, 4992 passed» sobre un árbol que Quality tumbó en
+  `ruff format` a los 24 s (dos ficheros de prueba sin formatear) y, tras
+  mi commit de formato `923202f`, en `mypy` a los 21 s (`reflect.py:484`,
+  `datetime >= None`). Con dos rondas de la misma familia, tocaba buscar
+  la raíz y no seguir parcheando: la encontró la ronda 3 (run
+  34009172673, 03:31 → 03:54, `FIXED` en `537a026`, 24 min). La
+  declaración ERA verdad y el árbol estaba rojo a la vez, porque
+  `scripts/check.ps1` encadena los cuatro comandos sin comprobar el
+  código de salida de ninguno: `$ErrorActionPreference = "Stop"` no
+  alcanza a los ejecutables nativos y `pwsh -File` devuelve el código del
+  ÚLTIMO comando, así que el «exit 0» del guion era el de pytest y solo
+  el de pytest. Lo que la entrada 41 leyó como «la forma obedecida, la
+  verdad no» era el termómetro roto: los tres datos de ADR-145 son el
+  mismo defecto del guion, no tres agentes mintiendo; y todas las
+  validaciones «en verde» declaradas desde que existe el guion solo
+  demostraban pytest. Ficha del operador ADR-153 (PR #554): cada comando comprueba
+  `$LASTEXITCODE`, el guion se detiene en el primer rojo y termina con
+  `exit $LASTEXITCODE`; guardián textual porque en el contenedor no hay
+  `pwsh` (intenté bajarlo y el entorno lo denegó), de modo que el guion
+  corregido lo ejecuta por primera vez el siguiente rol en un runner.
+  El corrector señaló el defecto y no lo tocó, con razón: es la
+  validación obligatoria de ADR-145, decisión de otro sitio. Y el mío:
+  empujé `923202f` habiendo corrido en local solo `ruff format` y `ruff
+  check`, no la cadena entera; «a medias», la misma familia. Costó un run
+  de Quality (45 s) y la ronda 3 era inevitable igual —el error de mypy
+  es de código—, pero la regla queda escrita: los parches del operador
+  van bajo la misma norma que los roles, cadena completa antes de
+  empujar, aunque «solo sea el formateador». Y otra vez la medida del
+  ciclo: Quality en rojo → `repair-requested` → corrector en 12 s, sin
+  ninguna mano.
+- **ADR-150 en vivo, dos datos y ninguna mordida**: la ronda 2 de #545
+  terminó en `FIXED` a los 24 min con la cadena declarada (fuera o no
+  verdad), y la ronda de #550 (ciclo 2, run 34008597444, 03:17 → 03:40)
+  corrigió cuatro hallazgos en 24 min —el P1 de Codex (`gh api` conmuta a
+  POST con `-f`: `--method GET` explícito), la promesa de dos instantes
+  servida por un filtro sobre un tercero (`created` frente a la
+  reejecución, resuelta como «medir menos y decirlo», con guardián de
+  docstring), la ventana de la pasada sin prueba (el doble registra sus
+  llamadas) y el filtro fuera del `try` (una marca sin zona mataba la
+  pasada diaria)— y empujó `2477876` + `823d3ac`. El tope de 36 no ha
+  vuelto a morder; criterio en vivo de ADR-150 cumplido dos veces. De
+  paso, el P1 de Codex enseña algo del método: el ejecutor simulado
+  decidía el payload, así que ninguna prueba podía ver el método HTTP
+  real; el defecto solo era visible leyendo la ayuda de `gh`.
+- **Tropiezo mío de secuencia (04:11)**: #550 entró en
+  `ready-for-merge` a las 03:56 y yo fusioné mi PR #553 a las 04:05 sin
+  volver a mirar las etiquetas; al escribir `fusiona`, el guion de fusión
+  lo paró con razón: «la PR #552 está 2 commit(s) por detrás de `main`;
+  su Quality se calculó contra una base que ya no existe». Coste: un
+  «Update branch» (hecho a las 04:13), Quality otra vez y —por ADR-142—
+  una ronda de revisión más sobre el head nuevo antes de poder
+  fusionarla; y #545, que llegó a `ready-for-merge` a las 04:11 sobre
+  `537a026`, tendrá que pasar por lo mismo. Regla nueva del operador:
+  **antes de mover `main`, mirar si hay alguna PR del motor en
+  `ready-for-merge` y fusionarla primero**; y encadenar las fusiones de
+  `main` en serie (cada una deja a la siguiente «por detrás»), no en
+  paralelo. ADR-153 (PR #554) se queda abierta hasta que #552 esté
+  dentro; después se fusiona, y un solo «Update branch» de #546 cubre las
+  dos.
+- **Estado a las 04:22 UTC (05:22 del propietario)**: #545 en
+  `ready-for-merge` sobre `537a026` desde las 04:11 (la ronda 3 acabó en
+  `FIXED` a las 03:54 con Quality ya en marcha, el evento llegó en el
+  estado bueno y la revisión aprobó); mi revisión de sus rondas 2 y 3
+  hecha, sin hallazgos que bloqueen; espera su «Update branch». #550 en
+  `ready-for-merge` con la rama actualizada a las 04:13 y Quality en
+  marcha sobre el head nuevo: por ADR-142 volverá a revisión y después
+  `fusiona`. PR #553 (ADR-152) fusionada a las 04:05 (`3a00e04`: desde
+  ahora todo veredicto corre la automatización de `main`); PR #554
+  (ADR-153) abierta, esperando Quality y su turno. ADR-148 (memoria)
+  sigue esperando, por orden del propietario, a que lo demás termine.
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
@@ -1219,19 +1316,31 @@ ADR o su incidencia cuando se adopte.
    **Arreglo fusionado el 06-09** (ADR-149, PR #549, `6ba5901`, entrada
    43): el veredicto relanza el run de Quality del head si ya terminó al
    entrar en `ci-pending`. Queda **sin dato en vivo**: se salda cuando el
-   primer ciclo deje su `QUALITY_RELANZADO` y se encamine solo.
+   primer ciclo deje su `QUALITY_RELANZADO` y se encamine solo. **Primer
+   intento en vivo, inerte (06-09, 03:15, entrada 44)**: el veredicto de
+   #545 corrió el `sirius_apply_verdict.sh` de la rama de la PR (anterior
+   a ADR-149), no el de `main`; ADR-152 (PR #553) congela la automatización
+   de `main` al arrancar cada job. El dato en vivo sigue pendiente.
 4. Cliente único de Ollama local para los tres adaptadores (7, 8).
 5. Vigilancia durable con modelo barato (4, 11).
 6. Rechazo de una propuesta de criticidad recordado solo en sesión (M21b):
    persistirlo necesita columna y decisión del propietario.
 7. Suite GUI: `test_streaming_message_grows_without_overlapping_neighbours`
-   depende del orden/estado de Qt (entrada 16).
+   depende del orden/estado de Qt (entrada 16). Volvió a morder el 06-09
+   a las 04:16 en la cadena del operador sobre la rama de ADR-153
+   (`assert 32 >= 54`, con `QT_QPA_PLATFORM=offscreen` y un cambio que no
+   toca ni la GUI ni Python): una cadena entera de 9,5 min repetida por
+   un dato de altura de Qt. Sigue sin incidencia.
 8. Corrector del motor: presupuesto o un commit por hallazgo cuando la
    ronda trae varios hallazgos de interfaz (entradas 9 y 16), y poder
    cancelarlo cuando el propietario corrige a mano (entrada 17). ADR-150
-   (06-09, entrada 43) sube el tope del paso de 30 a 50 min para que
-   quepa la cadena completa de ADR-145 tras la corrección; el presupuesto
-   por hallazgo y la cancelación siguen abiertos (encargo del motor).
+   (06-09, entrada 43) sube el tope del paso de 30 a 36 min y el job a 85
+   —lo máximo que el contador de siete días permite— para que quepa la
+   cadena completa de ADR-145 tras la corrección; dos rondas en vivo
+   después (24 min cada una, entradas 43 y 44) el tope no ha vuelto a
+   morder. El presupuesto por hallazgo y la cancelación siguen abiertos
+   (encargo del motor), y la opción 4 de ADR-150 (`check.ps1` como paso
+   determinista tras el agente) espera decisión del propietario.
 9. Medición con Ollama real de M19b y M20 en la máquina del propietario
    (filas pendientes en ADR-128 y ADR-129). **SALDADA el 05-09** (entrada
    41): 0 críticas perdidas (venía de 10), cobertura 70/81 (de 59), con
