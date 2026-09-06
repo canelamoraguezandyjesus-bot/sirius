@@ -139,7 +139,9 @@ Se toma la opción 1.
   puerto y adapter la nombren, y se ve fallar si se borra cualquiera de las dos
   declaraciones (CLAUDE-CR-151-001).
 - Las cuatro validaciones obligatorias, en verde, con una sola invocación del
-  script de comprobación (ADR-145).
+  script de comprobación (ADR-145): `pwsh -File scripts/check.ps1` sobre el
+  árbol de esta rama termina con **código de salida 0** y
+  **4997 passed, 16 skipped, 2 xfailed**. `git diff --check`, limpio.
 
 ## Consecuencias
 
