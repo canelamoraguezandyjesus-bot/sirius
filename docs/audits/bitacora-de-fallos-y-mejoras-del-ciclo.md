@@ -1312,6 +1312,52 @@ ADR o su incidencia cuando se adopte.
   resuelve por `__file__` y ejecutarlo desde el sitio nuevo antes de
   fusionar. Coste: #550 en `failed-safely` hasta la fusión de la
   corrección y un `continua`; #545 sigue en `ready-for-merge` sin daño.
+- **Primer dato en vivo de la copia con trazado (05:12), y la deuda 11
+  cobrando su primera vuelta**: la revisión reanudada de #550 (run
+  34013060064) aplicó su veredicto desde la copia congelada sin error:
+  `CHANGES_REQUESTED` publicado con su `RONDA_HALLAZGOS` (ronda 2) y la
+  incidencia a `repairing` a las 05:13. ADR-152 corregido funciona. El
+  hallazgo único (CLAUDE-CR-151-004, baja; Codex aprobó) es exactamente la
+  deuda 11: la terna de pytest que ADR-151 cita («4997 passed…») se midió
+  sobre `823d3ac` y el «Update branch» trajo de `main` las 12 pruebas de
+  ADR-152 sin tocar el ADR, así que la cifra ya no describe el head que se
+  fusiona. Coste: una ronda de corrector y otra de revisión (~1 h) por una
+  línea de documentación, y se repetirá con CADA actualización de rama
+  que el guion de fusión exige ahora. El propio revisor da la forma que no
+  caduca: cifra anclada al head («sobre el árbol de <sha>», citando el run
+  de Quality). Candidata a ficha del operador: que los prompts del
+  implementador y del corrector exijan esa forma (deuda 11).
+- **Los dos agentes murieron a la vez a las 05:23-05:24, con coste 0**:
+  el corrector de #550 (run 34013419739) corrió diez minutos y no
+  sustituyó su veredicto provisional; el de #545 (run 34013875512) murió
+  a los 437 ms del arranque —`is_error: true`, `num_turns: 1`,
+  `total_cost_usd: 0`—: el primer mensaje a la API falló. Las dos
+  incidencias a `failed-safely`, sin nada perdido. Con ese perfil (dos
+  runners distintos, mismo minuto, coste cero) la causa que encaja es el
+  tope de uso de la suscripción tras una noche de rondas seguidas; no hay
+  dato directo porque la acción no transcribe el error. Queda como dato
+  para la deuda 12 ampliada: una muerte en el arranque con coste 0 debería
+  clasificarse como `infra_retryable` y re-armarse sola, en vez de exigir
+  un `continua`. A esa misma hora el operador (esta sesión) también se
+  quedó sin turnos hasta las 13:11: siete horas y media sin vigilancia,
+  que el propietario cubrió con un «Dale» al despertar.
+- **La revisión de #545 sobre el head actualizado (05:23) encontró 4
+  hallazgos —dos P1 de Codex— en el MISMO código que ambos revisores
+  aprobaron a las 04:11** (`537a026` → `4a05a64` solo añade el merge de
+  `main`). El propio revisor Claude etiqueta su hallazgo como «LLEGA
+  TARDE POR GOTEO DEL REVISOR». Los de Codex son afirmaciones nuevas sobre
+  las correcciones de la ronda 2 (ancla que contradice el diagnóstico,
+  parada retrasada frente al permiso). Se dejan al corrector: si son
+  reales, mejor ahora que en `main`; si el freno de convergencia salta por
+  familia repetida, es decisión del propietario. Dato para el guardián de
+  goteo (deuda de la entrada 23): la aprobación previa no lo frenó.
+- **ADR-154 (PR #556)**: la ficha de la deuda 11, montada durante la
+  espera: `corrector.md` in situ e `implementer-v4.md` por H-28 exigen la
+  terna y el código de salida anclados al árbol («sobre el árbol de
+  `<sha>`»), y declaran que un «Update branch» no invalida una cifra
+  anclada. Guardián visto fallar (2 de 2 prompts vigentes), 100 passed en
+  los seis módulos afectados, cadena completa sobre `c3514e9`: 4998
+  passed, 16 skipped, 2 xfailed, `check=0`.
 - **Estado a las 05:05 UTC (06:05 del propietario)**: `main` en
   `dc45b59` tras tres fusiones del operador (#553 `3a00e04` a las 04:05,
   #555 `4cd8924` y #554 `dc45b59` a las 05:03): la automatización de
