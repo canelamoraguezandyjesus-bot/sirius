@@ -1382,6 +1382,21 @@ ADR o su incidencia cuando se adopte.
   con el `check.ps1` de ADR-153 en un runner: cubre los cuatro pasos, y
   Quality lo confirmó en verde a las 13:53 (run 34036885470). Los dos
   criterios en vivo, cumplidos en la misma ronda.
+- **#550 dentro (14:08) y la segunda muerte por tiempo del corrector de
+  #545 (14:08)**: la revisión aprobó `479debf` a las 14:02, `fusiona` a
+  las 14:06 y la PR #552 fusionada a las 14:08:58: la deuda 14(c) queda
+  saldada de punta a punta (la pasada del contador mide y declara su
+  entrega). En el mismo minuto, el corrector de #545 (run 34036357352)
+  murió a los 36:12 del paso —el tope de ADR-150— con cuatro hallazgos
+  (dos P1 de `reflect.py`, un P2 y un P3) y sin haber empujado nada:
+  todo el trabajo de la ronda, perdido. Es la **segunda muerte por
+  tiempo** que ADR-150 fijó como criterio de refutación: «una segunda
+  muerte por tiempo desmiente el ADR y señala a la deuda 8». El tope no
+  puede subir (el contador prohíbe jobs de más de 85), así que lo que
+  toca no son minutos sino la forma de la ronda: entregar por hallazgo
+  con el plazo a la vista (deuda 8), o sacar la cadena del presupuesto
+  del agente (opción 4 de ADR-150). Decisión del propietario, planteada
+  a las 14:12.
 - **Estado a las 13:32 UTC (14:32 del propietario)**: `main` en
   `52344dc` tras cuatro fusiones del operador (#553 `3a00e04` 04:05,
   #555 `4cd8924` y #554 `dc45b59` 05:03, #556 `52344dc` 13:29). Las dos
