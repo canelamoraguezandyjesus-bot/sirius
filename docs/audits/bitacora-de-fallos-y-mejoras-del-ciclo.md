@@ -1181,6 +1181,25 @@ ADR o su incidencia cuando se adopte.
   guardián de la suma protegía la aritmética, no el sentido del número.
   Séptima lección: al cambiar lo que un rol tiene que hacer, revisar en
   el mismo commit cuánto tiempo tiene para hacerlo.
+- **ADR-150 chocó con el contador antes de nacer**: la primera redacción
+  (corrector 50, job 100) rompía la geometría del contador de siete días
+  —su cabecera prohíbe subir CUALQUIER job de 85, porque la tolerancia es
+  el máximo `timeout-minutes` × 2 (170) contra 172 min de tranquilidad
+  antes de las 03:24, con dos minutos de margen— y sus guardianes lo
+  habrían dicho en rojo. Se retiró antes de ejecutar la cadena: corrector
+  36, job 85 (44 del resto de pasos + 5 de margen), y la salida de fondo
+  escrita como opción 4: `check.ps1` como paso determinista del workflow
+  tras el agente, para que el presupuesto no incluya la cadena y «exit 0»
+  sea un hecho, no una declaración (el mismo agujero de la entrada 41).
+  Fusionadas #549 (`6ba5901`) y #551 (`f8cb429`); `continua` en #545
+  hacia las 02:52 UTC con el presupuesto nuevo: es el criterio en vivo de
+  ADR-150. Despachado a las 02:33 el encargo #550 (deuda 14(c): la pasada
+  del contador mide y declara su retraso de entrega y si su ventana
+  previa estuvo tranquila según los runs reales; datos: las ocho últimas
+  pasadas programadas arrancaron entre 4 h 20 y 6 h 50 después de las
+  03:24). Deuda 15 se aplaza a después de #546: el formato del marcador
+  de reanudación lo interpretan `mirror_projection.py`, `reflect.py` y
+  `round_history.py`, y la PR #546 lo está tocando.
 
 ---
 
