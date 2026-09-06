@@ -1543,7 +1543,13 @@ ADR o su incidencia cuando se adopte.
    `follow_redirects=False` (mismo hueco que 7). Sin arreglar a propósito:
    fuera del alcance de M21a.
 2. Intérprete de intención del despachador: falsos positivos por subcadena
-   (5). ADR-043 lo reconoce como apaño.
+   (5). ADR-043 lo reconoce como apaño. **Revisado el 06-09**: la
+   frontera de palabra ya está (H-19, `_marcador_presente`); lo que queda
+   es que los marcadores de sensibilidad disparan sin contexto («no borres
+   nada» = «borra la tabla»), y eso es una decisión registrada del
+   propietario (#324: fail-closed, «que avise siempre aunque a veces
+   avise de más»). No es una ficha del operador: si se quiere afinar
+   (negaciones, citas), es decisión suya y encargo del motor.
 3. Ruta H-34: el verde de Quality se pierde si llega en `repairing`
    (entradas 3 y 18: tres veces hoy). También el ROJO si llega en
    `implementing` (entrada 41, #546: el veredicto declaró `exit 0` y
@@ -1557,7 +1563,13 @@ ADR o su incidencia cuando se adopte.
    intento en vivo, inerte (06-09, 03:15, entrada 44)**: el veredicto de
    #545 corrió el `sirius_apply_verdict.sh` de la rama de la PR (anterior
    a ADR-149), no el de `main`; ADR-152 (PR #553) congela la automatización
-   de `main` al arrancar cada job. El dato en vivo sigue pendiente.
+   de `main` al arrancar cada job. **Segundo intento en vivo (06-09,
+   14:51, entrada 44)**: ya con el guion de `main`, la lectura encontró el
+   run terminado y el relanzamiento devolvió `HTTP 403`: el PAT no tiene
+   «Actions: Read and write». Corrección de ADR-149 (PR #560, `132b961`):
+   el fallo se cuenta en la incidencia (`QUALITY_SIN_ENCAMINAR`). **Queda
+   en manos del propietario**: conceder el permiso al PAT; con él, el
+   primer `QUALITY_RELANZADO` en vivo salda la deuda.
 4. Cliente único de Ollama local para los tres adaptadores (7, 8).
 5. Vigilancia durable con modelo barato (4, 11).
 6. Rechazo de una propuesta de criticidad recordado solo en sesión (M21b):
@@ -1575,9 +1587,12 @@ ADR o su incidencia cuando se adopte.
    —lo máximo que el contador de siete días permite— para que quepa la
    cadena completa de ADR-145 tras la corrección; dos rondas en vivo
    después (24 min cada una, entradas 43 y 44) el tope no ha vuelto a
-   morder. El presupuesto por hallazgo y la cancelación siguen abiertos
-   (encargo del motor), y la opción 4 de ADR-150 (`check.ps1` como paso
-   determinista tras el agente) espera decisión del propietario.
+   morder. **Mitad saldada el 06-09** (ADR-155, PR #557, `627b14c`,
+   entrada 44): el corrector recibe su plazo, corrige por severidad y
+   empuja por hallazgo; dos rondas en vivo (21 y 18 min) entregaron 2/4 y
+   3/4 sin perder nada. La cancelación cuando el propietario corrige a
+   mano sigue abierta, y la opción 4 de ADR-150 espera decisión del
+   propietario.
 9. Medición con Ollama real de M19b y M20 en la máquina del propietario
    (filas pendientes en ADR-128 y ADR-129). **SALDADA el 05-09** (entrada
    41): 0 críticas perdidas (venía de 10), cobertura 70/81 (de 59), con
@@ -1592,7 +1607,11 @@ ADR o su incidencia cuando se adopte.
 11. Los ADR citan recuentos de la suite completa, que se desfasan con
     cada merge a `main` (3 rondas perdidas el 04-09, entrada 29):
     convenio candidato — citar recuentos por fichero del encargo, o
-    marcar el total como «del árbol en <sha>».
+    marcar el total como «del árbol en <sha>». **SALDADA el 06-09**
+    (ADR-154, PR #556, `52344dc`, entrada 44): los prompts del corrector
+    y del implementador (`implementer@4`) exigen la terna anclada al árbol
+    («sobre el árbol de <sha>»); primer dato en vivo en la ronda 3 de
+    #550 y en las rondas 5-6 de #545.
 12. Fallos de infraestructura de los revisores (timeout de Codex a
     1200 s; revisor Claude sin `reviewed_head_sha`) cuestan una vuelta
     entera cada uno (entradas 29 y 31, tres el 04-09). **SALDADA el
@@ -1617,7 +1636,11 @@ ADR o su incidencia cuando se adopte.
     estática no gobierna el reloj de pared — candidato decidido por el
     propietario para una ficha posterior («derivador ya; ventana
     después»): la pasada mide su propia ventana al llegar, contra runs
-    reales.
+    reales. **(c) SALDADA el 06-09** (ADR-151, encargo #550, PR #552,
+    fusionada a las 14:08; entrada 44): cada pasada mide y declara su
+    retraso y si su ventana previa estuvo tranquila según los runs
+    reales, con la limitación de los runs reejecutados declarada. Queda
+    ver la primera pasada programada con la medida (mañana ~08:00 UTC).
 15. Reanudador (`sirius_resume_on_command.sh`): un segundo `continua`
     sobre el MISMO head no deja marcador propio porque
     `sirius_comment_once` desduplica por texto (entrada 41: la premisa
@@ -1625,4 +1648,13 @@ ADR o su incidencia cuando se adopte.
     attempt (patrón ADR-140) para que cada permiso escrito deje un
     rastro distinto. Mientras tanto, el reflector acredita también la
     orden exacta `continua` del propietario (decisión registrada en
-    #545).
+    #545). Aplazada a después de #546 (sus rondas siguen tocando
+    `mirror_projection.py` y `reflect.py`).
+16. Cuotas de los agentes (06-09, entrada 44): el ciclo no sabe que una
+    cuota está agotada hasta que gasta la ronda —Claude a las 05:23 (dos
+    agentes muertos con coste 0, ocho horas de parada nocturna), Codex a
+    las 16:00 (`codex-fallo-declarado` en la revisión de #545)—. Sin API
+    para leer las cuotas, lo que cabe es que la muerte con coste 0 se
+    diagnostique como lo que es («arranque fallido: probable tope de
+    uso») y que un fallo declarado de Codex pueda degradar la ronda a
+    solo-Claude por decisión del propietario, no a mano. Decisión suya.
