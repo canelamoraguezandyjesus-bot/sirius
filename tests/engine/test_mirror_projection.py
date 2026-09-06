@@ -25,7 +25,11 @@ from typing import Any
 import pytest
 
 from sirius_engine.adapters.fixture_mirror import FixedGitHubMirrorReader
-from sirius_engine.domain.mirror import EspejoIlegibleError, MirroredWorkItem
+from sirius_engine.domain.mirror import (
+    EspejoIlegibleError,
+    FormaDePermiso,
+    MirroredWorkItem,
+)
 from sirius_engine.domain.work_item import WorkItemPhase, WorkItemState
 from sirius_engine.mirror_projection import (
     _LABEL_PRIORITY,
@@ -1240,3 +1244,362 @@ def test_proyectar_funciona_sin_scripts_en_sys_path_ni_automation_importable() -
         assert len(mirrored.eventos_quality) == 8
     finally:
         sys.path[:] = ruta_original
+
+
+# --- `historial_estados` y `permisos_reanudacion` (ADR-147, incidencia #545) ---
+#
+# El camino y los permisos, no la foto. El material de partida de la PR #540
+# ya exponía el historial de estados notificados; lo nuevo de ADR-147 es la
+# CRONOLOGÍA de los permisos escritos del propietario y el `orden` compartido
+# que hace comparables las dos cosas.
+
+
+def _comentarios(*textos: tuple[str, str, str]) -> LecturaComentarios:
+    """Comentarios de confianza en orden, cada uno `(login, asociación, cuerpo)`."""
+    return LecturaComentarios(
+        estado=LecturaEstado.OK,
+        comentarios=tuple(
+            Comentario(
+                autor_login=login,
+                autor_asociacion=asociacion,
+                cuerpo=cuerpo,
+                creado_en=datetime(2026, 9, 5, 3 + indice, tzinfo=UTC),
+            )
+            for indice, (login, asociacion, cuerpo) in enumerate(textos)
+        ),
+    )
+
+
+def _bot(cuerpo: str) -> tuple[str, str, str]:
+    return ("github-actions[bot]", "NONE", cuerpo)
+
+
+def _propietario(cuerpo: str) -> tuple[str, str, str]:
+    return (_OWNER_LOGIN, "OWNER", cuerpo)
+
+
+def _proyectar(comentarios: LecturaComentarios) -> MirroredWorkItem:
+    return proyectar_work_item(
+        repo=_REPO,
+        numero=1,
+        metadatos=_metadatos_minimos(),
+        cuerpo=_cuerpo_de_confianza(""),
+        comentarios=comentarios,
+        ahora=_AHORA,
+    )
+
+
+def test_historial_estados_recoge_las_notificaciones_de_etiqueta_en_orden() -> None:
+    """Cada `sirius-notification` publicado es un estado por el que se PASÓ.
+
+    Es lo que `notify-sirius-state.yml` escribe al aplicarse una de las seis
+    etiquetas que vigila, y lo que permite al reflector recorrer una
+    recuperación que ninguna pasada llegó a observar. La interpretación de
+    etiqueta a (estado, fase) es la MISMA tabla que usa la foto.
+    """
+    mirrored = _proyectar(
+        _comentarios(
+            *(
+                _bot(f"<!-- sirius-notification:{etiqueta}:{head} -->\n\ntexto")
+                for etiqueta, head in (
+                    ("sirius:implementing", "no-head"),
+                    ("sirius:failed-safely", "1c934781"),
+                    ("sirius:repair-requested", "786c82dc"),
+                    ("sirius:completed", "92e5b9f4"),
+                )
+            )
+        )
+    )
+
+    assert tuple(acreditado.etiqueta for acreditado in mirrored.historial_estados) == (
+        "sirius:implementing",
+        "sirius:failed-safely",
+        "sirius:repair-requested",
+        "sirius:completed",
+    )
+    assert tuple(
+        (acreditado.estado, acreditado.fase) for acreditado in mirrored.historial_estados
+    ) == tuple(
+        _LABEL_STATE[etiqueta]
+        for etiqueta in (
+            "sirius:implementing",
+            "sirius:failed-safely",
+            "sirius:repair-requested",
+            "sirius:completed",
+        )
+    )
+    assert mirrored.historial_estados[0].head == "no-head"
+    # El cuerpo de confianza ocupa la posición 0 del historial, así que el
+    # primer comentario es la 1: es la escala que comparten los permisos.
+    assert tuple(acreditado.orden for acreditado in mirrored.historial_estados) == (1, 2, 3, 4)
+
+
+def test_historial_estados_ignora_las_notificaciones_de_autores_ajenos() -> None:
+    """Mismo filtro de confianza que el resto de la proyección.
+
+    Si un tercero pudiera publicar `sirius-notification`, podría fabricar el
+    camino entero de una recuperación que nunca ocurrió y hacer que el motor
+    la anotara en su diario.
+    """
+    mirrored = _proyectar(
+        _comentarios(("alguien", "NONE", "<!-- sirius-notification:sirius:completed:deadbee1 -->"))
+    )
+
+    assert mirrored.historial_estados == ()
+
+
+def test_historial_estados_ignora_una_etiqueta_que_la_tabla_no_reconoce() -> None:
+    """Una notificación de algo que no está en el mapa no acredita ningún estado."""
+    mirrored = _proyectar(
+        _comentarios(_bot("<!-- sirius-notification:sirius:inventada:deadbee1 -->"))
+    )
+
+    assert mirrored.historial_estados == ()
+
+
+def test_los_permisos_de_reanudacion_llevan_las_dos_formas_en_orden() -> None:
+    """La cronología que ADR-147 exige: marcador y orden, con el mismo peso.
+
+    El marcador es el RECIBO que publica `sirius_resume_on_command.sh`; la
+    orden `continua` es el PERMISO mismo. Las dos formas hacen falta porque el
+    recibo puede faltar estructuralmente -`sirius_comment_once` deduplica por
+    el texto completo del marcador y el de `sirius-resume-stop` solo lleva el
+    head, así que dos reanudaciones sobre un mismo head nunca dejan un segundo
+    recibo (medición sobre el historial real de la #537)-.
+    """
+    mirrored = _proyectar(
+        _comentarios(
+            _propietario("continua\n\n---\n_Generated by [Claude Code](https://claude.ai/code)_"),
+            _bot("<!-- sirius-resume-stop:1c934781 -->\n\n🟢 **Parada segura levantada**"),
+            _bot("<!-- sirius-notification:sirius:failed-safely:1c934781 -->"),
+            _propietario("continua\n\n---\n_Generated by [Claude Code](https://claude.ai/code)_"),
+            _bot("<!-- sirius-convergence-reset:786c82dc -->"),
+            _bot("<!-- sirius-restart-sin-pr:537:33991302556-1 -->"),
+        )
+    )
+
+    assert tuple((permiso.forma, permiso.orden) for permiso in mirrored.permisos_reanudacion) == (
+        (FormaDePermiso.ORDEN, 1),
+        (FormaDePermiso.MARCADOR, 2),
+        (FormaDePermiso.ORDEN, 4),
+        (FormaDePermiso.MARCADOR, 5),
+        (FormaDePermiso.MARCADOR, 6),
+    )
+    # El `orden` es comparable con el del historial de estados: la parada está
+    # en la posición 3 y el segundo permiso, en la 4, es posterior a ella.
+    assert mirrored.historial_estados[0].orden == 3
+
+
+def _parada_publicada(diagnostico: str) -> tuple[str, str, str]:
+    """El comentario literal que `sirius_apply_verdict.sh` escribe al parar en seguro."""
+    return _propietario(
+        "<!-- sirius-verdict:corrector:FAILED_SAFELY:33945456417-1 -->\n\n"
+        f"🔴 **Me he detenido de forma segura**\n\n{diagnostico}"
+    )
+
+
+def test_cada_estado_acreditado_lleva_el_instante_de_su_comentario() -> None:
+    """La posición ordena; el instante identifica (CODEX-002, ronda 2, PR #546).
+
+    El mismo `(estado, fase)` aparece varias veces en un ciclo real, y la
+    posición sola no dice cuál de esas ocurrencias guardó el almacén. El
+    instante del comentario que la publicó sí lo acota: el almacén no pudo
+    guardar una publicada después de su última escritura. Un marcador que viene
+    del CUERPO no tiene instante propio -y es, por construcción, anterior a
+    todo comentario-, así que se proyecta como `None` en vez de inventarle uno.
+    """
+    comentarios = _comentarios(
+        _bot("<!-- sirius-notification:sirius:failed-safely:1c934781 -->"),
+        _bot("<!-- sirius-notification:sirius:repair-requested:786c82dc -->"),
+    )
+    mirrored = proyectar_work_item(
+        repo=_REPO,
+        numero=1,
+        metadatos=_metadatos_minimos(),
+        cuerpo=_cuerpo_de_confianza("<!-- sirius-notification:sirius:implementing:1c934781 -->"),
+        comentarios=comentarios,
+        ahora=_AHORA,
+    )
+
+    assert comentarios.comentarios is not None
+    assert tuple(
+        (acreditado.etiqueta, acreditado.publicado_en) for acreditado in mirrored.historial_estados
+    ) == (
+        ("sirius:implementing", None),
+        ("sirius:failed-safely", comentarios.comentarios[0].creado_en),
+        ("sirius:repair-requested", comentarios.comentarios[1].creado_en),
+    )
+
+
+def test_cada_parada_acreditada_lleva_el_diagnostico_publicado_hasta_ella() -> None:
+    """Cada parada conserva SU evidencia (CODEX-003, ronda 2, PR #546).
+
+    `sirius_apply_verdict.sh` publica el diagnóstico ANTES de aplicar la
+    etiqueta, y la etiqueta es lo que dispara el marcador de notificación: el
+    diagnóstico que le toca a una parada es el último publicado hasta su
+    posición. Sin esta atribución, el reflector recreaba todas las paradas
+    históricas con el diagnóstico de la última de toda la incidencia.
+    """
+    mirrored = _proyectar(
+        _comentarios(
+            _parada_publicada("la ronda 1 se quedó sin turnos"),
+            _bot("<!-- sirius-notification:sirius:failed-safely:1c934781 -->"),
+            _propietario("continua"),
+            _bot("<!-- sirius-notification:sirius:repair-requested:1c934781 -->"),
+            _parada_publicada("la ronda 2 agotó el tiempo del job"),
+            _bot("<!-- sirius-notification:sirius:failed-safely:786c82dc -->"),
+        )
+    )
+
+    assert tuple(
+        (acreditado.etiqueta, acreditado.diagnostico) for acreditado in mirrored.historial_estados
+    ) == (
+        ("sirius:failed-safely", "la ronda 1 se quedó sin turnos"),
+        ("sirius:repair-requested", None),
+        ("sirius:failed-safely", "la ronda 2 agotó el tiempo del job"),
+    )
+    assert mirrored.diagnostico_fallo == "la ronda 2 agotó el tiempo del job", (
+        "el diagnóstico de la FOTO vigente sigue siendo el de la última parada"
+    )
+
+
+def test_una_parada_sin_diagnostico_publicado_hasta_ella_no_hereda_el_siguiente() -> None:
+    """Abstenerse antes que atribuir lo que no es suyo.
+
+    El diagnóstico se publica después del marcador de la primera parada: hasta
+    ahí no hay ninguno atribuible, y la proyección lo dice con `None` en vez de
+    prestarle el de la parada siguiente.
+    """
+    mirrored = _proyectar(
+        _comentarios(
+            _bot("<!-- sirius-notification:sirius:failed-safely:1c934781 -->"),
+            _parada_publicada("la ronda 2 agotó el tiempo del job"),
+            _bot("<!-- sirius-notification:sirius:failed-safely:786c82dc -->"),
+        )
+    )
+
+    assert tuple(acreditado.diagnostico for acreditado in mirrored.historial_estados) == (
+        None,
+        "la ronda 2 agotó el tiempo del job",
+    )
+
+
+def test_un_aviso_de_parada_retrasado_no_le_roba_el_diagnostico_a_la_otra() -> None:
+    """El diagnóstico va por IDENTIDAD del suceso, no por posición relativa.
+
+    `notify-sirius-state.yml` es asíncrono y secundario: el aviso de la primera
+    parada puede publicarse DESPUÉS del veredicto de la segunda. Atribuyendo
+    por posición -el último diagnóstico publicado antes del marcador-, las dos
+    ocurrencias se llevaban el diagnóstico de la SEGUNDA (CLAUDE-R4-002, ronda
+    4, PR #546). Lo que sí es fiel es el rango: los avisos de una MISMA
+    etiqueta se serializan entre sí -el grupo de concurrencia lleva su
+    nombre-, y los veredictos son comentarios síncronos, así que la k-ésima
+    parada notificada es la k-ésima parada ocurrida.
+    """
+    mirrored = _proyectar(
+        _comentarios(
+            _parada_publicada("fallo 1"),
+            _parada_publicada("fallo 2"),
+            _bot("<!-- sirius-notification:sirius:failed-safely:1c934781 -->"),
+            _bot("<!-- sirius-notification:sirius:failed-safely:786c82dc -->"),
+        )
+    )
+
+    assert [acreditado.diagnostico for acreditado in mirrored.historial_estados] == [
+        "fallo 1",
+        "fallo 2",
+    ], "el aviso retrasado de la primera parada no hereda el diagnóstico de la segunda"
+    assert mirrored.diagnostico_fallo == "fallo 2", (
+        "el diagnóstico de la FOTO vigente no cambia: sigue siendo el de la última parada"
+    )
+
+
+def test_la_orden_de_continuar_solo_cuenta_del_propietario() -> None:
+    """`continua` es palabra del propietario, no del bot.
+
+    El filtro de confianza general acepta a `github-actions[bot]` -y tiene que
+    aceptarlo, porque es quien publica los marcadores-. Aceptar de él la orden
+    sería dejar que la automatización se diera permiso a sí misma.
+    """
+    mirrored = _proyectar(_comentarios(_bot("continua"), ("alguien", "NONE", "continua")))
+
+    assert mirrored.permisos_reanudacion == ()
+
+
+def test_un_texto_que_no_es_la_orden_exacta_no_es_permiso() -> None:
+    """La MISMA guarda que `sirius_resume_on_command.sh`: la palabra sola.
+
+    Una mención casual de la palabra en una discusión no puede reanudar un
+    ciclo que se detuvo por algo. Se tolera únicamente el bloque de
+    atribución tras `---`, que es la excepción medida de ese guion.
+    """
+    mirrored = _proyectar(
+        _comentarios(
+            _propietario("continua ya, por favor"),
+            _propietario("esto continua siendo raro"),
+            _propietario("fusiona"),
+            _propietario("Continua"),
+        )
+    )
+
+    assert tuple(permiso.orden for permiso in mirrored.permisos_reanudacion) == (4,), (
+        "solo `Continua` -la palabra sola, con el paso a minúsculas de `tr`- es la orden"
+    )
+
+
+def test_una_linea_en_blanco_delante_de_la_palabra_no_es_la_orden() -> None:
+    """El recorte del guion es LÍNEA A LÍNEA, y así no borra una línea en blanco.
+
+    `sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'` procesa una línea cada
+    vez: con el cuerpo `"\ncontinua"` deja `"\ncontinua"`, que el `if` de la
+    guarda 1 rechaza -«no es la orden exacta 'continua'; no se actua», salida 0
+    y ninguna etiqueta repuesta-. `str.strip()` sí se comía ese salto de línea
+    y proyectaba un permiso por una reanudación que nunca ocurrió
+    (CLAUDE-A1-001, ronda 3, PR #546).
+    """
+    mirrored = _proyectar(
+        _comentarios(
+            _propietario("\ncontinua"),
+            _propietario(
+                "  \ncontinua\n\n---\n_Generated by [Claude Code](https://claude.ai/code)_"
+            ),
+        )
+    )
+
+    assert mirrored.permisos_reanudacion == ()
+
+
+def test_una_orden_en_mayusculas_con_tilde_no_cuenta_igual_que_en_el_guion() -> None:
+    """Fidelidad byte a byte con `tr '[:upper:]' '[:lower:]'` en la localización C.
+
+    `tr` no baja la `Ú`, así que `sirius_resume_on_command.sh` rechaza
+    `CONTINÚA` y no repone ninguna etiqueta. Usar `str.lower()` aquí
+    aceptaría un permiso que el propietario nunca llegó a dar: la fidelidad es
+    lo conservador.
+    """
+    mirrored = _proyectar(_comentarios(_propietario("CONTINÚA"), _propietario("continúa")))
+
+    assert tuple(permiso.orden for permiso in mirrored.permisos_reanudacion) == (2,)
+
+
+def test_el_booleano_vigente_de_reanudacion_no_cambia_con_los_permisos() -> None:
+    """La cronología se AÑADE al booleano; no lo sustituye ni lo redefine.
+
+    `reanudacion_publicada` sigue siendo lo que era -el marcador más reciente
+    es posterior a la última parada publicada- y sigue gobernando la regla 3
+    del reflector, la del cálculo por foto. Una orden `continua` sin marcador
+    no lo enciende: ampliar ese booleano habría cambiado el comportamiento de
+    todos los caminos que no son el recorrido acreditado, y eso está fuera del
+    alcance de la incidencia #545.
+    """
+    mirrored = _proyectar(
+        _comentarios(
+            _propietario("<!-- sirius-verdict:corrector:FAILED_SAFELY:33945456417-1 -->"),
+            _propietario("continua"),
+        )
+    )
+
+    assert mirrored.reanudacion_publicada is False
+    assert tuple(permiso.forma for permiso in mirrored.permisos_reanudacion) == (
+        FormaDePermiso.ORDEN,
+    )
