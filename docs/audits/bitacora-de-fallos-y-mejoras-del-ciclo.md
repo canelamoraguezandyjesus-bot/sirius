@@ -1457,7 +1457,28 @@ ADR o su incidencia cuando se adopte.
   write» en el repositorio. Mejora candidata (pequeña): que un
   relanzamiento fallido deje un comentario visible en la incidencia con
   la causa y el gesto que la desbloquea, en vez de solo un `::error` en el
-  log que nadie lee.
+  log que nadie lee. Hecha en el acto: ADR-149 enmendado con sección
+  fechada y PR #560 (`avisar_quality_sin_encaminar`: aviso
+  `QUALITY_SIN_ENCAMINAR` una sola vez por head, fase y run, con el
+  detalle de `gh` y el gesto que desbloquea; dos casos vistos fallar
+  contra el guion de `main`, 61 en verde con el cambio).
+- **El freno de convergencia paró #545 a las 15:23, y ADR-155 no lo
+  evitó**: la revisión de la ronda 5 (run 34041631639, sobre `242e8b3`)
+  devolvió 4 hallazgos: los dos aplazados por plazo (CLAUDE-R4-001 P1 y
+  R4-002 P2, «re-levantados a petición expresa del corrector»), más dos
+  P3 de documentación nuevos: R4-003 —el docstring de
+  `_el_almacen_pudo_guardarla` y ADR-147 siguen diciendo en presente que
+  `check.ps1` no propaga códigos, cosa que ADR-153 cerró y que los
+  «Update branch» del operador trajeron a la rama sin que el corrector
+  reconciliara el texto— y R4-004 —el ADR no registra las dos
+  limitaciones vivas—. Par (4, 7) contra la mejor marca (3, 7): sin
+  progreso neto en dos rondas → `convergencia-sin-progreso` →
+  `blocked-decision`. Lección para ADR-155: una entrega parcial reduce
+  los pendientes solo si la revisión siguiente no añade otros; aquí los
+  dos P3 nuevos son consecuencia de actualizar la rama con `main` (el
+  árbol cambió debajo del texto). Decisión planteada al propietario a las
+  15:32 con recomendación: registrar la corrección de raíz por identidad
+  (R4-001 + R4-002 juntos) más los dos P3, y `continua`.
 - **Estado a las 13:32 UTC (14:32 del propietario)**: `main` en
   `52344dc` tras cuatro fusiones del operador (#553 `3a00e04` 04:05,
   #555 `4cd8924` y #554 `dc45b59` 05:03, #556 `52344dc` 13:29). Las dos
