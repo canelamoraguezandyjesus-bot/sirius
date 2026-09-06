@@ -138,6 +138,42 @@ Ver punto 3 de la nota de arranque.
   de la PR sobre su head definitivo.
 - Lo que NO se ha medido: el caso en vivo (criterio 3).
 
+## Corrección (06-09-2026, 04:31 UTC): la copia reproduce el trazado del árbol
+
+La opción 1 afirmaba que la copia era «autocontenida», y no lo era del todo:
+`sirius_apply_verdict.sh` sí carga sus ayudantes desde su propio directorio,
+pero dos de esos ayudantes —`sirius_convergence.py` y
+`sirius_drip_guard_cli.py`— alcanzan `src/sirius_engine/round_history.py` (y
+`round_family_detector.py`, `drip_guard.py`) por **`parents[2]` de su propia
+ruta**, es decir, dan por hecho que viven en `<raíz>/scripts/automation/`.
+Con la copia plana en `${RUNNER_TEMP}/automation-de-main/`, `parents[2]` es
+`/home/runner/work` y el módulo compartido no existe.
+
+El dato: primer run con la copia, la revisión de #550 sobre `098bdfe` (run
+34011306916, 04:21 → 04:31). La congelación, la recogida de Codex y la
+agregación funcionaron; el veredicto (`CHANGES_REQUESTED`) cayó al registrar
+la ronda con `FileNotFoundError:
+/home/runner/work/src/sirius_engine/round_history.py` en los dos ayudantes, y
+la incidencia paró en `failed-safely` con `registro-de-ronda-fallido`. Nada
+se perdió salvo la ronda: la parada segura hizo su trabajo.
+
+Corrección, misma decisión: la copia reproduce el **trazado** del árbol —
+`${RUNNER_TEMP}/automation-de-main/scripts/automation/` y
+`${RUNNER_TEMP}/automation-de-main/src/sirius_engine/`— y los pasos
+posteriores invocan `…/automation-de-main/scripts/automation/<guion>`. Así
+`parents[2]` de cualquier guion copiado es la raíz de la copia, que contiene
+`src/sirius_engine`. Ningún guion cambia. El guardián gana un caso que ata las
+dos cosas: para cada ayudante de `scripts/automation` que alcance
+`src/sirius_engine` por `parents[2]`, la congelación copia `src/sirius_engine`
+bajo el mismo trazado y las invocaciones apuntan a `scripts/automation` dentro
+de la copia.
+
+Lo que enseña: «autocontenido» se comprueba ejecutando, no leyendo. El
+guardián de la forma no podía ver esto; lo vio el primer run real. Queda
+como criterio: la próxima vez que un paso cambie de dónde se ejecuta un guion,
+listar todo lo que ese guion resuelve por `__file__` antes de dar por hecho
+que la copia basta.
+
 ## Consecuencias
 
 - Toda mejora de la automatización actúa desde el primer run posterior a su

@@ -408,7 +408,7 @@ def test_there_is_no_measured_diagnosis_step() -> None:
     # contra `scripts/automation` del árbol que el corrector dejó.
     assert [linea.strip() for linea in str(aplicar["run"]).strip().splitlines()] == [
         "set -uo pipefail",
-        'bash "${RUNNER_TEMP}/automation-de-main/sirius_apply_verdict.sh" \\',
+        'bash "${RUNNER_TEMP}/automation-de-main/scripts/automation/sirius_apply_verdict.sh" \\',
         '"$GH_REPO" "$ISSUE_NUMBER" "corrector" "${RUNNER_TEMP}/sirius_verdict.json" "$CYCLE"',
     ]
 
