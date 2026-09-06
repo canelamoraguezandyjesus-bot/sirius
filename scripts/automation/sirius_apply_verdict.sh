@@ -536,6 +536,21 @@ case "$verdict" in
       stop_safely "sanitizacion-fallida" \
         "No se pudieron sanear las observaciones estructuradas antes de publicarlas; me detengo para no entregar al corrector un bloque corrupto."
     fi
+    # `posible_goteo` está reservada al guardián de goteo (ADR-123): una
+    # observación que ya la traiga del revisor es una marca ajena que nadie
+    # evaluó. Se retira UNA sola vez aquí, en el mismo punto donde se leen y
+    # sanean las observaciones, y no aguas abajo: así ningún consumidor
+    # posterior del guion -el bloque legible, el bloque
+    # OBSERVACIONES_ESTRUCTURADAS que re-extrae la puerta del corrector o el
+    # registro de ronda- puede reenviarla, ni siquiera si el guardián falla o
+    # no llega a invocarse (incidencia #558, deuda de #503). Las retiradas de
+    # `drip_guard.py`, del CLI del guardián y de la rama `else` de más abajo
+    # se conservan sin cambios, como defensa en profundidad.
+    observations="$(printf '%s' "$observations" | jq -c 'map(if type == "object" then del(.posible_goteo) else . end)')"
+    if [ -z "$observations" ] || [ "$observations" = "[]" ]; then
+      stop_safely "sanitizacion-fallida" \
+        "No se pudo retirar la clave reservada \`posible_goteo\` de las observaciones estructuradas antes de publicarlas; me detengo para no entregar al corrector un bloque corrupto."
+    fi
     pr_hint="https://github.com/${REPO}/pull/${pr_number}"
 
     # Registro de convergencia (contrato §5, v1.5). Sustituye al contador ciego

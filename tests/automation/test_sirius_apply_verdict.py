@@ -805,6 +805,102 @@ def test_drip_guard_cli_total_failure_does_not_leak_foreign_posible_goteo(
     assert "Guardián de goteo" not in comments
 
 
+def _break_drip_guard_cli(env: dict[str, str]) -> None:
+    """Deja `python3` inservible SOLO para `sirius_drip_guard_cli.py`.
+
+    El resto de invocaciones (sirius_convergence.py: record, family-check)
+    siguen usando el intérprete real, para no tapar la ronda entera con un
+    entorno sin Python.
+    """
+    real_python3 = shutil.which("python3")
+    assert real_python3 is not None
+    bin_dir = Path(env["PATH"].split(os.pathsep, 1)[0])
+    fake_python3 = bin_dir / "python3"
+    fake_python3.write_text(
+        "#!/usr/bin/env bash\n"
+        "if printf '%s' \"$*\" | grep -q sirius_drip_guard_cli.py; then\n"
+        "  echo 'python3 no disponible (simulado)' >&2\n"
+        "  exit 127\n"
+        "fi\n"
+        f'exec "{real_python3}" "$@"\n',
+        encoding="utf-8",
+    )
+    fake_python3.chmod(0o755)
+
+
+@pytest.mark.parametrize("guardian_caido", [False, True], ids=["guardian-vivo", "guardian-caido"])
+def test_foreign_posible_goteo_is_dropped_when_reading_the_observations(
+    tmp_path: Path, guardian_caido: bool
+) -> None:
+    """Incidencia #558 (deuda de #503).
+
+    `posible_goteo` está reservada al guardián de goteo. Si el veredicto del
+    revisor ya trae esa clave, se retira al LEER las observaciones -junto al
+    saneado-, así que ningún consumidor posterior puede reenviarla: ni el
+    comentario `CHANGES_REQUESTED` (bloque legible y bloque
+    OBSERVACIONES_ESTRUCTURADAS) ni el registro de ronda. Vale igual con el
+    guardián disponible que con el guardián caído.
+
+    Antes del cambio esta prueba falla en los dos casos: la retirada vivía
+    solo aguas abajo (guardián y rama `else`), y `$observations` -que es lo
+    que se incrusta en OBSERVACIONES_ESTRUCTURADAS y lo que alimenta el
+    registro de ronda- conservaba la marca ajena tal cual.
+    """
+    head1, head2 = "7777aaaa7777", "8888bbbb8888"
+    env = _setup(tmp_path)
+    _seed_issue(env, ["sirius:reviewing"], comments=_seed_round1_history(head1, head2))
+    _seed_pr(env, 9, head=head2)
+    # Línea 10 AÑADIDA en el hunk: con el guardián vivo no hay goteo que
+    # marcar, así que cualquier `posible_goteo` que aparezca en el comentario
+    # solo puede venir del revisor.
+    patch = "@@ -8,2 +8,4 @@\n context\n+añadida\n+línea 10 añadida\n context"
+    _seed_compare(env, files=[{"filename": "src/x.py", "status": "modified", "patch": patch}])
+    if guardian_caido:
+        _break_drip_guard_cli(env)
+
+    marca_ajena = "marca ajena inventada por el revisor"
+    vf = _verdict_file(
+        tmp_path,
+        {
+            "verdict": "CHANGES_REQUESTED",
+            "summary": "hay defectos",
+            "reviewed_head_sha": head2,
+            "observations": [
+                {
+                    "id": "CLAUDE-REV-558",
+                    "severidad": "alta",
+                    "archivo": "src/x.py:10",
+                    "problema": "la línea 10 nueva no valida entrada",
+                    "criterio_esperado": "debe validar",
+                    "prueba": "test_x_invalid",
+                    "limites_correccion": "solo src/x.py",
+                    "posible_goteo": marca_ajena,
+                }
+            ],
+        },
+    )
+    r = _run(env, "reviewer", vf)
+    assert r.returncode == 0, r.stdout + r.stderr
+    comments = _comments(env)
+    # La ronda se publica igual: lo que desaparece es la clave reservada.
+    assert "## CHANGES_REQUESTED" in comments
+    assert "CLAUDE-REV-558" in comments
+    assert marca_ajena not in comments
+    assert "posible_goteo" not in comments
+    assert "Guardián de goteo" not in comments
+
+    bloque_obs = re.search(
+        r"## OBSERVACIONES_ESTRUCTURADAS\n```json\n(.*?)\n```", comments, re.DOTALL
+    )
+    assert bloque_obs is not None, comments
+    assert "posible_goteo" not in json.loads(bloque_obs.group(1))[0]
+
+    # El historial ya trae el registro de la ronda 1: se comprueban todos.
+    bloques_ronda = re.findall(r"## RONDA_HALLAZGOS\n```json\n(.*?)\n```", comments, re.DOTALL)
+    assert len(bloques_ronda) == 2, comments
+    assert all("posible_goteo" not in bloque for bloque in bloques_ronda)
+
+
 def test_reviewer_changes_requested_increments_the_round_number(tmp_path: Path) -> None:
     env = _setup(tmp_path)
     _seed_issue(
