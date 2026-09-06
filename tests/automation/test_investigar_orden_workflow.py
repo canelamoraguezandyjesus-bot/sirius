@@ -106,10 +106,12 @@ def test_el_veredicto_se_aplica_siempre_que_la_puerta_dejara_pasar() -> None:
     # el guion no es una llamada -el guardián vacuo de esta casa ya mordió una
     # vez dentro de esta misma prueba, confundiendo el paso de la PR (cuyo
     # comentario nombra al guion) con el paso que lo ejecuta-.
+    # Desde ADR-152 la invocación va contra la copia congelada de `main`.
     veredicto = next(
         p
         for p in pasos
-        if "bash scripts/automation/sirius_apply_verdict.sh" in str(p.get("run", ""))
+        if 'bash "${RUNNER_TEMP}/automation-de-main/sirius_apply_verdict.sh"'
+        in str(p.get("run", ""))
     )
     assert "always()" in str(veredicto.get("if", "")), (
         "el veredicto solo se aplicaría en el camino feliz"

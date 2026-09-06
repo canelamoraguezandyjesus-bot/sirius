@@ -368,6 +368,10 @@ def test_there_is_no_measured_diagnosis_step() -> None:
     nombres = [str(step.get("name") or "") for step in _steps(doc)]
     assert nombres == [
         "Checkout",
+        # ADR-152: la copia de `scripts/automation` de `main` que ejecuta el
+        # veredicto, tomada antes de que el corrector toque el árbol. Va justo
+        # detrás del checkout: cuanto antes, menos manos han pasado por el árbol.
+        "Congelar la automatización de main",
         # Preparación del entorno: el corrector debe poder ejecutar las cuatro
         # validaciones, y el runner no trae `uv` (solo lo instalaba `quality.yml`).
         # Sin estos tres pasos la ronda se detenía en `FAILED_SAFELY` por falta de
@@ -400,9 +404,11 @@ def test_there_is_no_measured_diagnosis_step() -> None:
     ]
     # Y el guion COMPLETO: es la invocación y nada más, así que tampoco cabe
     # medir aquí mismo antes de llamar al script.
+    # La invocación va contra la copia congelada de `main` (ADR-152), nunca
+    # contra `scripts/automation` del árbol que el corrector dejó.
     assert [linea.strip() for linea in str(aplicar["run"]).strip().splitlines()] == [
         "set -uo pipefail",
-        "bash scripts/automation/sirius_apply_verdict.sh \\",
+        'bash "${RUNNER_TEMP}/automation-de-main/sirius_apply_verdict.sh" \\',
         '"$GH_REPO" "$ISSUE_NUMBER" "corrector" "${RUNNER_TEMP}/sirius_verdict.json" "$CYCLE"',
     ]
 
