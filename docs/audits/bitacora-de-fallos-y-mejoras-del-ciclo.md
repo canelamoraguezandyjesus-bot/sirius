@@ -1286,17 +1286,45 @@ ADR o su incidencia cuando se adopte.
   paralelo. ADR-153 (PR #554) se queda abierta hasta que #552 esté
   dentro; después se fusiona, y un solo «Update branch» de #546 cubre las
   dos.
-- **Estado a las 04:22 UTC (05:22 del propietario)**: #545 en
+- **ADR-152 rompió su primer run real (04:31), y la lección es mía**: la
+  revisión de #550 sobre el head actualizado (run 34011306916) congeló,
+  recogió a Codex y agregó desde la copia sin problema, y el veredicto
+  (`CHANGES_REQUESTED`) cayó al registrar la ronda:
+  `FileNotFoundError: /home/runner/work/src/sirius_engine/round_history.py`
+  en `sirius_drip_guard_cli.py` y en `sirius_convergence.py`. Los dos
+  alcanzan `src/sirius_engine` por `parents[2]` de su propia ruta —dan
+  por hecho que viven en `<raíz>/scripts/automation/`— y la copia plana
+  en `${RUNNER_TEMP}/automation-de-main/` los dejó sin paquete. Parada
+  segura `registro-de-ronda-fallido`; nada perdido salvo la ronda. El ADR
+  decía «autocontenida» porque LEÍ que los ayudantes cargaban a sus
+  hermanos por ruta propia, y no ejecuté la copia: la misma familia que
+  la entrada 43 le reprocha al guardián de la suma («protegía la
+  aritmética, no el sentido»). Corrección (misma decisión, ADR-152
+  enmendado con sección fechada, PR #555): la copia reproduce el TRAZADO del árbol
+  (`…/automation-de-main/scripts/automation` y `…/src/sirius_engine`) y
+  las invocaciones van por ese trazado; guardián con un caso nuevo que
+  ata los ayudantes que resuelven por `parents[2]` a las dos órdenes de
+  copia (9 de 13 casos vistos fallar contra la copia plana); y esta vez
+  EJECUTADO: reproducción local con el `python3` del sistema, copia plana
+  → `record` en 1 con el mismo `FileNotFoundError`; copia con trazado →
+  `record`, `family-check` y el guardián de goteo en 0. Regla: cuando un
+  paso cambie de dónde se ejecuta un guion, listar todo lo que ese guion
+  resuelve por `__file__` y ejecutarlo desde el sitio nuevo antes de
+  fusionar. Coste: #550 en `failed-safely` hasta la fusión de la
+  corrección y un `continua`; #545 sigue en `ready-for-merge` sin daño.
+- **Estado a las 04:56 UTC (05:56 del propietario)**: #545 en
   `ready-for-merge` sobre `537a026` desde las 04:11 (la ronda 3 acabó en
   `FIXED` a las 03:54 con Quality ya en marcha, el evento llegó en el
   estado bueno y la revisión aprobó); mi revisión de sus rondas 2 y 3
-  hecha, sin hallazgos que bloqueen; espera su «Update branch». #550 en
-  `ready-for-merge` con la rama actualizada a las 04:13 y Quality en
-  marcha sobre el head nuevo: por ADR-142 volverá a revisión y después
-  `fusiona`. PR #553 (ADR-152) fusionada a las 04:05 (`3a00e04`: desde
-  ahora todo veredicto corre la automatización de `main`); PR #554
-  (ADR-153) abierta, esperando Quality y su turno. ADR-148 (memoria)
-  sigue esperando, por orden del propietario, a que lo demás termine.
+  hecha, sin hallazgos que bloqueen; espera su «Update branch» hasta que
+  `main` deje de moverse. #550 en `failed-safely` sobre `098bdfe` (rama
+  actualizada 04:13, Quality verde 04:21, revisión devuelta por ADR-142 y
+  caída en el veredicto por la copia plana): `continua` en cuanto se
+  fusione la corrección. PR #553 (ADR-152) fusionada a las 04:05
+  (`3a00e04`); PR #555 (la corrección del trazado) abierta a las 04:55 y
+  en Quality; PR #554 (ADR-153) verde desde las 04:28, esperando su
+  turno detrás de #555. ADR-148 (memoria) sigue esperando, por orden del
+  propietario, a que lo demás termine.
 
 ---
 
