@@ -1505,6 +1505,18 @@ ADR o su incidencia cuando se adopte.
   veredicto (15:45:07) entró con Quality ya en marcha (15:44:03): sin
   carrera. Riesgo a vigilar: el emparejamiento por rango no es la
   identidad que R4-002 pedía; la revisión dirá si vale.
+- **Parada por cuota de Codex (16:00)**: la revisión dual de `3f620cf`
+  (run 34043682586) terminó en `FAILED_SAFELY` con `codex-fallo-declarado`:
+  Codex contestó en la PR «You have reached your Codex usage limits for
+  code reviews». Claude sí revisó (7,5 min) pero el agregador exige a los
+  dos, y ADR-141 no reintenta un fallo que el conector declara —esperar
+  no lo cambia—. Es la segunda cuota del día que para el ciclo (la de
+  Claude a las 05:23, la de Codex ahora), y ninguna de las dos la ve el
+  motor antes de gastar la ronda. Decisión del propietario: esperar a que
+  la cuota vuelva, o poner la revisión en modo solo-Claude
+  (`SIRIUS_CODEX_REVIEW_ENABLED`) mientras dure y reanudar con `continua`.
+  Dato para la deuda 12 ampliada: una cuota agotada debería leerse ANTES
+  de disparar la ronda, no después.
 - **Estado a las 13:32 UTC (14:32 del propietario)**: `main` en
   `52344dc` tras cuatro fusiones del operador (#553 `3a00e04` 04:05,
   #555 `4cd8924` y #554 `dc45b59` 05:03, #556 `52344dc` 13:29). Las dos
