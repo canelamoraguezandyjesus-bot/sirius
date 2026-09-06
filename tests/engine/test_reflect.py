@@ -1444,9 +1444,7 @@ def test_un_marcador_con_otro_diagnostico_no_ancla_la_parada_guardada() -> None:
         ("estado", "sirius:completed"),
     )
     paradas = [
-        acreditado
-        for acreditado in historial
-        if acreditado.estado is WorkItemState.FAILED_SAFELY
+        acreditado for acreditado in historial if acreditado.estado is WorkItemState.FAILED_SAFELY
     ]
     assert [acreditado.diagnostico for acreditado in paradas] == [
         "la ronda 1 se quedó sin turnos"
