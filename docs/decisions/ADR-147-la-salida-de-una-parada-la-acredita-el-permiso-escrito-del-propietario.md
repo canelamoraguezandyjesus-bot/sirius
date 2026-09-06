@@ -308,11 +308,87 @@ aplicar la etiqueta, y la etiqueta es lo que dispara el marcador—. Con eso:
      `AssertionError: At index 1 diff: ('sirius:failed-safely', None) !=
      ('sirius:failed-safely', datetime.datetime(2026, 9, 5, 3, 0, …))`.
 
+- **Ronda siguiente (#545): los tres hallazgos vuelven por goteo, y con ellos
+  aparece un error de tipos que la corrección anterior dejó.** El revisor
+  volvió a entregar CODEX-001, CODEX-002 y CODEX-003 sobre el head `f877ec7`
+  —el ANTERIOR a su corrección—, así que lo primero fue comprobar si seguían
+  vivos sobre el head vigente. No lo estaban; y no se da por bueno porque lo
+  diga un commit: cada uno se volvió a ver caer con su mutación sobre el árbol
+  de esta ronda, con la primera línea del fallo de `pytest`:
+
+  1. CODEX-001 — `if acreditado is None or espejo_del_tramo.estado in _PARADAS:`
+     → `if True:` tumba
+     `test_un_aviso_publicado_fuera_de_orden_no_envenena_el_recorrido`:
+     `AssertionError: assert 'WI-20260902-174417: el motor está en
+     estado=failed_safely fase=reparar y la incidencia proyecta
+     estado=delivered fase=entregar; no hay camino hacia delante, no se toca
+     nada' is None`.
+  2. CODEX-002 — `return anteriores[-1] if anteriores else candidatos[0]` →
+     `return candidatos[-1]` tumba
+     `test_el_recorrido_ancla_en_la_ocurrencia_que_el_almacen_pudo_guardar`:
+     `AssertionError: At index 1 diff: 'work_item_repair_resumed' !=
+     'work_item_failed_safely'`.
+  3. CODEX-003 — quitar `diagnostico_fallo=acreditado.diagnostico` del espejo
+     de cada tramo tumba `test_cada_parada_del_recorrido_conserva_SU_diagnostico`:
+     `AssertionError: cada parada se escribe con su propia evidencia, no con la
+     de la última`.
+  4. En la proyección, `if posicion > orden: break` → `if False: break` tumba
+     `test_cada_parada_acreditada_lleva_el_diagnostico_publicado_hasta_ella`:
+     `AssertionError: At index 0 diff: ('sirius:failed-safely', 'la ronda 2
+     agotó el tiempo del job') != ('sirius:failed-safely', 'la ronda 1 se quedó
+     sin turnos')`.
+  5. En la proyección, `publicado_en=instantes.get(orden)` →
+     `publicado_en=None` tumba
+     `test_cada_estado_acreditado_lleva_el_instante_de_su_comentario`:
+     `AssertionError: At index 1 diff: ('sirius:failed-safely', None) !=
+     ('sirius:failed-safely', datetime.datetime(2026, 9, 5, 3, 0, …))`.
+
+  Lo que sí seguía vivo era un **error de tipos que introdujo esa misma
+  corrección** y que la validación obligatoria no delata. Sobre el head
+  `923202f`, `uv run mypy src tests` termina en 1 con
+  `src/sirius_engine/reflect.py:484: error: Unsupported operand types for >=
+  ("datetime" and "None")`: en la comprensión del ancla, `mypy` no estrecha
+  `historial[indice].publicado_en` a través del `or` —un subíndice no es un
+  nombre—, así que la comparación queda `datetime | None` contra `datetime`. Y
+  aun así `pwsh -File scripts/check.ps1` terminaba en **0**: `scripts/check.ps1`
+  encadena los cuatro comandos sin comprobar el código de salida de cada uno y
+  PowerShell no propaga el de un ejecutable nativo, de modo que el código de
+  salida del script es el de `pytest` y solo el de `pytest`. En Quality no hay
+  ese amortiguador: `.github/workflows/quality.yml:111` ejecuta `uv run mypy
+  src tests` como paso propio, así que ese error es un rojo determinista.
+
+  El arreglo estrecha el instante en una función con nombre,
+  `_el_almacen_pudo_guardarla`, sin tocar el criterio: la ocurrencia sin
+  instante sigue sin descartarse y la publicada después de `updated_at` sigue
+  descartada. **Mutación vista caer:** `return publicado_en is None or
+  publicado_en <= work_item.updated_at` → `return True` tumba
+  `test_el_recorrido_ancla_en_la_ocurrencia_que_el_almacen_pudo_guardar`:
+  `AssertionError: At index 1 diff: 'work_item_repair_resumed' !=
+  'work_item_failed_safely'`. Tras el arreglo, `uv run mypy src tests` termina
+  en 0 (`Success: no issues found in 570 source files`).
+
+  Que `scripts/check.ps1` no propague el código de salida de sus tres primeros
+  comandos queda **señalado y sin tocar**: es la validación obligatoria de
+  ADR-145 y cambiarla es una decisión de ese ADR, no una de las observaciones
+  de esta ronda. Mientras siga así, «código de salida 0 del script» acredita
+  `pytest` y nada más, y por eso la línea de abajo transcribe además la salida
+  de los otros tres comandos.
+
+- El commit `923202f`, anterior a esta ronda, pasó `ruff format` sobre las dos
+  pruebas que la corrección de la ronda 2 empujó sin formatear; no cambia
+  ninguna afirmación de este ADR.
 - Validaciones obligatorias completas con una sola invocación de
-  `scripts/check.ps1` (ADR-145): `4992 passed, 16 skipped, 2 xfailed`
-  en 452.01 s, código de salida 0, sobre el árbol final de esta ronda. La
-  cifra anterior de este ADR —`4983 passed`— era la del head `f877ec7`; sube
-  en 9 por las 11 pruebas nuevas menos las 2 reescritas.
+  `scripts/check.ps1` (ADR-145): `4992 passed, 16 skipped, 2 xfailed` en
+  439.75 s, código de salida 0, sobre el árbol final de esta
+  ronda; y dentro de esa misma invocación, `ruff format --check` («602 files
+  already formatted»), `ruff check` («All checks passed!») y `mypy src tests`
+  («Success: no issues found in 570 source files»), leídos en su salida y no
+  en el código de salida del script. La cifra de pruebas no se mueve respecto
+  de la ronda anterior —el arreglo de tipos no añade ni quita ninguna—; la
+  anterior a la ronda 2, `4983 passed`, era la del head `f877ec7` y subió en 9
+  por las 11 pruebas nuevas menos las 2 reescritas. Lo único que cambia en el
+  árbol después de esta captura es la transcripción de estas mismas cifras y el
+  cuerpo de la PR.
 - **Corrección de la ronda 1 (#545), disparada por `CI_FAILURE` sobre el head
   `c618f10`.** Quality (run 33994967331) paró en `Ruff lint` con dos defectos,
   ambos en pruebas nuevas de este cambio y ninguno en el código del reflector ni

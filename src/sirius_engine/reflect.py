@@ -443,6 +443,25 @@ def _coincide_con_el_estado_guardado(acreditado: EstadoAcreditado, work_item: Wo
     return acreditado.fase is None or acreditado.fase is work_item.fase
 
 
+def _el_almacen_pudo_guardarla(acreditado: EstadoAcreditado, work_item: WorkItem) -> bool:
+    """Si esta ocurrencia se publicó a tiempo de ser la que el almacén guardó.
+
+    El almacén no pudo guardar un marcador publicado DESPUÉS de su última
+    escritura (``work_item.updated_at``). Una ocurrencia sin instante viene del
+    CUERPO de la incidencia, anterior por construcción a todo comentario, y por
+    eso nunca se descarta.
+
+    Es una función y no una condición dentro de la comprensión porque el
+    instante es opcional y hay que estrecharlo antes de compararlo: en la
+    comprensión el estrechamiento no llegaba a la comparación -``mypy``:
+    ``Unsupported operand types for >= ("datetime" and "None")``- y el árbol
+    quedaba con un error de tipos que ``scripts/check.ps1`` no propaga a su
+    código de salida.
+    """
+    publicado_en = acreditado.publicado_en
+    return publicado_en is None or publicado_en <= work_item.updated_at
+
+
 def _ancla_del_recorrido(work_item: WorkItem, historial: Sequence[EstadoAcreditado]) -> int | None:
     """La OCURRENCIA del historial acreditado que el almacén guardó.
 
@@ -478,10 +497,7 @@ def _ancla_del_recorrido(work_item: WorkItem, historial: Sequence[EstadoAcredita
     if not candidatos:
         return None
     anteriores = [
-        indice
-        for indice in candidatos
-        if historial[indice].publicado_en is None
-        or historial[indice].publicado_en <= work_item.updated_at
+        indice for indice in candidatos if _el_almacen_pudo_guardarla(historial[indice], work_item)
     ]
     if work_item.diagnostico is not None:
         por_identidad = [
