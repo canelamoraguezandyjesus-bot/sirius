@@ -1417,7 +1417,15 @@ ADR o su incidencia cuando se adopte.
   tiempo SIN push intermedio desmiente el ADR. Cadena completa sobre
   `0cf6c7c`: 5032 passed, 16 skipped, 2 xfailed, `check=0`; PR #557
   fusionada a las 14:26 (`627b14c`). #546 actualizada con `main` y #545
-  reanudado con `continua` a las 14:28: es el criterio en vivo.
+  reanudado con `continua` a las 14:28: es el criterio en vivo. **Primer
+  dato, a los once minutos**: la ronda 5 del corrector (arranque 14:30)
+  empujó a las 14:31 (CLAUDE-A1-001, el recorte línea a línea de la orden
+  `continua`), a las 14:32 (formato) y a las 14:41 (ADR-147 con las
+  cifras ancladas al árbol, ADR-154 obedecido sin que nadie se lo pida
+  dos veces): tres pushes antes del límite de las 14:50. Aunque el paso
+  muriera ahora, la rama conserva lo corregido. Despachado a las 14:31 el
+  encargo #558 (la deuda concreta de #503: `posible_goteo` retirada una
+  sola vez al leer las observaciones), en `implementing` desde las 14:32.
 - **Estado a las 13:32 UTC (14:32 del propietario)**: `main` en
   `52344dc` tras cuatro fusiones del operador (#553 `3a00e04` 04:05,
   #555 `4cd8924` y #554 `dc45b59` 05:03, #556 `52344dc` 13:29). Las dos
