@@ -1,7 +1,8 @@
 """Puerto de lectura de la vía GitHub para el espejo (A3, incidencia #193).
 
-Tres proveedores separados -metadatos, cuerpo, comentarios- más uno para el
-run de Actions, cada uno con su propio resultado ``LecturaEstado``. Están
+Tres proveedores separados -metadatos, cuerpo, comentarios- más dos para
+Actions -un run por su id, y los runs de una ventana temporal-, cada uno con su
+propio resultado ``LecturaEstado``. Están
 separados a propósito, no fusionados en una única lectura "de la incidencia":
 el requisito 2 exige poder simular el fallo de CADA proveedor por separado, y
 un método único que internamente combine varias llamadas no podría exponer
@@ -132,6 +133,43 @@ class LecturaRunActions:
     error: str | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class RunEnVentana:
+    """Un run de Actions que tocó una ventana temporal, con lo justo para juzgarlo.
+
+    ``workflow`` es el NOMBRE DEL FICHERO del workflow (``motor-sirius.yml``),
+    no su ruta ni su título: es la forma con la que este repositorio ya nombra
+    a un workflow cuando tiene que excluirlo por su nombre
+    (``NOMBRE_DEL_WORKFLOW_DEL_CONTADOR``, ADR-144), y así el criterio se lee y
+    se audita de un vistazo en vez de adivinarse.
+
+    ``fin`` es ``None`` cuando el run todavía no ha terminado. No es "no lo sé":
+    es "aún no ha ocurrido", y quien filtre por la ventana necesita poder
+    distinguirlo de una fecha de fin inventada.
+    """
+
+    run_id: str
+    workflow: str
+    inicio: datetime
+    fin: datetime | None
+
+
+@dataclass(frozen=True, slots=True)
+class LecturaRunsEnVentana:
+    """Los runs de una ventana temporal, o el hecho de no haber podido leerlos.
+
+    ``runs=()`` con ``estado=OK`` es "leí y no había ninguno" -una ventana
+    tranquila-. ``estado=NO_DISPONIBLE`` es "no pude leer", y ``runs`` es
+    ``None``: nunca una tupla vacía, para que un consumidor descuidado no pueda
+    tratar una lectura caída como una ventana tranquila (misma disciplina que
+    el resto de este módulo).
+    """
+
+    estado: LecturaEstado
+    runs: tuple[RunEnVentana, ...] | None = None
+    error: str | None = None
+
+
 class GitHubMirrorPort(Protocol):
     """Contrato que cualquier lector de la vía GitHub debe satisfacer.
 
@@ -149,3 +187,19 @@ class GitHubMirrorPort(Protocol):
     def leer_comentarios(self, *, repo: str, numero: int) -> LecturaComentarios: ...
 
     def leer_run_actions(self, *, repo: str, run_id: str) -> LecturaRunActions: ...
+
+    def listar_runs_en_ventana(
+        self, *, repo: str, desde: datetime, hasta: datetime
+    ) -> LecturaRunsEnVentana:
+        """Los runs de ``repo`` que EMPEZARON o TERMINARON dentro de ``[desde, hasta]``.
+
+        El único método de este puerto que no habla de UNA cosa conocida de
+        antemano -una incidencia, un run por su id- sino de una ventana de
+        tiempo: es lo que hace falta para preguntar "¿se movió algo aquí?" sin
+        saber de antemano qué podría haberse movido.
+
+        El criterio es "empezó o terminó dentro", no "se solapa con": un run
+        que arrancó antes de ``desde`` y sigue vivo cruza la ventana sin caer
+        en ella. Queda declarado aquí porque es una elección, no un descuido.
+        """
+        ...

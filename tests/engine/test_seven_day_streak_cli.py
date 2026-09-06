@@ -28,7 +28,9 @@ from sirius_engine.ports.github_mirror import (
     LecturaCuerpo,
     LecturaEstado,
     LecturaMetadatos,
+    LecturaRunsEnVentana,
     MetadatosIncidencia,
+    RunEnVentana,
 )
 from sirius_engine.projection_verifier import (
     EJE_ESTADO,
@@ -38,7 +40,11 @@ from sirius_engine.projection_verifier import (
     VeredictoEje,
     formatear_linea,
 )
-from sirius_engine.seven_day_streak import leer_registro
+from sirius_engine.seven_day_streak import (
+    NOMBRE_DEL_WORKFLOW_DEL_CONTADOR,
+    hora_recomendada_pasada,
+    leer_registro,
+)
 
 _AHORA = datetime(2026, 8, 22, 3, 17, tzinfo=UTC)
 _REPO = "canelamoraguezandyjesus-bot/sirius"
@@ -529,3 +535,190 @@ def test_docstring_no_afirma_que_el_motor_arranca_solo_a_mano() -> None:
         "el docstring tiene que decir con qué resultado sigue midiendo la "
         "pasada mientras el contador siga bloqueado, no dejarlo implícito"
     )
+
+
+# --- ADR-151: la pasada mide y declara CÓMO llegó, sin cambiar ningún veredicto ---
+
+
+#: La hora programada NO se copia a mano: se deriva del mismo sitio que la
+#: deriva el comando (y que el guardián de ADR-144 mantiene igual al `cron`
+#: cableado). Copiarla aquí ataría la prueba a un número que ya se sabe
+#: derivar, que es justo lo que ADR-144 existe para no hacer.
+_HORA_PROGRAMADA, _ = hora_recomendada_pasada(_RAIZ_REPOSITORIO / ".github" / "workflows")
+_A_SU_HORA = datetime.combine(_AHORA.date(), _HORA_PROGRAMADA, tzinfo=UTC)
+_TARDE = _A_SU_HORA + timedelta(minutes=280)
+
+
+def _con_runs(mirror: FixedGitHubMirrorReader, *runs: RunEnVentana) -> FixedGitHubMirrorReader:
+    mirror.runs_en_ventana_por_repo[_REPO] = LecturaRunsEnVentana(
+        estado=LecturaEstado.OK, runs=runs
+    )
+    return mirror
+
+
+def _run(workflow: str, run_id: str) -> RunEnVentana:
+    return RunEnVentana(run_id=run_id, workflow=workflow, inicio=_A_SU_HORA, fin=_A_SU_HORA)
+
+
+def _pasada(
+    tmp_path: Path,
+    *,
+    mirror: FixedGitHubMirrorReader,
+    ahora: datetime,
+    sufijo: str,
+) -> tuple[str, tuple[LineaRegistro, ...]]:
+    store = InMemoryWorkEngineStore()
+    journal = InMemoryDispatchJournal()
+    _preparar_trabajo_activo(store, journal, work_id="WI-1", clase=WorkItemClass.PROGRAMACION)
+    registro = tmp_path / f"registro-{sufijo}.jsonl"
+    _codigo, texto = _correr(
+        registro=registro,
+        diario=tmp_path / f"diario-{sufijo}.jsonl",
+        store=store,
+        journal=journal,
+        mirror=mirror,
+        ahora=ahora,
+    )
+    return texto, leer_registro(registro)
+
+
+def test_una_pasada_puntual_con_ventana_tranquila_lo_declara_y_lo_registra(
+    tmp_path: Path,
+) -> None:
+    texto, lineas = _pasada(
+        tmp_path,
+        mirror=_con_runs(_mirror_verde()),
+        ahora=_A_SU_HORA,
+        sufijo="puntual",
+    )
+
+    assert "ventana previa tranquila: 0 runs" in texto
+    assert "retraso" not in texto
+    assert lineas[0].entrega is not None
+    assert lineas[0].entrega.retraso_min == 0
+    assert lineas[0].entrega.lectura_de_runs is LecturaEstado.OK
+
+
+def test_una_pasada_tardia_con_ventana_sucia_lo_declara_sin_cambiar_ningun_eje(
+    tmp_path: Path,
+) -> None:
+    """El caso que motivó ADR-151, y su límite: se declara, y NADA MÁS cambia.
+
+    Las dos pasadas son idénticas salvo en cómo llegaron -una a su hora con la
+    ventana vacía, otra 280 min tarde y con dos runs dentro-. Si medir la
+    entrega tocara algún eje, los veredictos de las dos no coincidirían.
+    """
+    texto_tarde, lineas_tarde = _pasada(
+        tmp_path,
+        mirror=_con_runs(
+            _mirror_verde(),
+            _run("implement-sirius-work.yml", "11"),
+            _run("implement-sirius-work.yml", "12"),
+        ),
+        ahora=_TARDE,
+        sufijo="tarde",
+    )
+    _texto_puntual, lineas_puntual = _pasada(
+        tmp_path,
+        mirror=_con_runs(_mirror_verde()),
+        ahora=_A_SU_HORA,
+        sufijo="control",
+    )
+
+    assert "280 min de retraso" in texto_tarde
+    assert _HORA_PROGRAMADA.isoformat(timespec="minutes") in texto_tarde
+    assert "NO tranquila: 2 runs" in texto_tarde
+    assert "implement-sirius-work.yml#11" in texto_tarde
+    assert "implement-sirius-work.yml#12" in texto_tarde
+
+    assert lineas_tarde[0].entrega is not None
+    assert lineas_tarde[0].entrega.retraso_min == 280
+    assert lineas_tarde[0].veredictos == lineas_puntual[0].veredictos, (
+        "medir la entrega no puede cambiar ningún veredicto de ningún eje (ADR-151)"
+    )
+    assert lineas_tarde[0].es_verde == lineas_puntual[0].es_verde
+
+
+def test_una_lectura_de_runs_caida_no_rompe_la_pasada_ni_se_llama_tranquila(
+    tmp_path: Path,
+) -> None:
+    """El doble sin configurar devuelve NO_DISPONIBLE: la pasada sigue y lo dice."""
+    texto, lineas = _pasada(
+        tmp_path,
+        mirror=_mirror_verde(),  # sin `runs_en_ventana_por_repo`: lectura caída
+        ahora=_A_SU_HORA,
+        sufijo="caida",
+    )
+
+    assert "no se pudieron leer los runs de la ventana previa" in texto
+    assert "tranquila" not in texto
+    assert len(lineas) == 1, "la pasada siguió y registró su línea"
+    assert lineas[0].entrega is not None
+    assert lineas[0].entrega.lectura_de_runs is LecturaEstado.NO_DISPONIBLE
+
+
+def test_los_runs_del_propio_contador_no_ensucian_la_ventana_de_su_pasada(
+    tmp_path: Path,
+) -> None:
+    texto, lineas = _pasada(
+        tmp_path,
+        mirror=_con_runs(_mirror_verde(), _run(NOMBRE_DEL_WORKFLOW_DEL_CONTADOR, "9")),
+        ahora=_A_SU_HORA,
+        sufijo="propio",
+    )
+
+    assert "ventana previa tranquila: 0 runs" in texto, (
+        "una pasada no se estorba a sí misma: mismo criterio nombrado que ADR-144"
+    )
+    assert lineas[0].entrega is not None
+    assert lineas[0].entrega.runs_en_ventana == ()
+
+
+def test_si_la_hora_programada_no_se_puede_derivar_la_pasada_sigue_y_lo_declara(
+    tmp_path: Path,
+) -> None:
+    """El escenario del margen de dos minutos: sale en ROJO en su guardián, no aquí.
+
+    ``hora_recomendada_pasada`` lanza a propósito cuando ninguna hora del día
+    dejaría tranquila la ventana de tolerancia. Perder la medición del día
+    entero por no poder medir el retraso sería cambiar un aviso por una avería,
+    así que la pasada sigue, lo declara y escribe la línea sin ``entrega``.
+    """
+    raiz = tmp_path / "raiz"
+    workflows = raiz / ".github" / "workflows"
+    workflows.mkdir(parents=True)
+    # Un único workflow con `cron`, y un tope tan alto que la tolerancia
+    # (el doble) no cabe en ningún hueco del día.
+    (workflows / "solo-uno.yml").write_text(
+        "on:\n  schedule:\n    - cron: '0 1 * * *'\njobs:\n"
+        "  uno:\n    timeout-minutes: 900\n    runs-on: ubuntu-latest\n",
+        encoding="utf-8",
+    )
+    store = InMemoryWorkEngineStore()
+    journal = InMemoryDispatchJournal()
+    _preparar_trabajo_activo(store, journal, work_id="WI-1", clase=WorkItemClass.PROGRAMACION)
+    registro = tmp_path / "registro-sin-hora.jsonl"
+    salida = io.StringIO()
+
+    codigo = seven_day_streak_cli.main(
+        [
+            "--diario",
+            str(tmp_path / "diario-sin-hora.jsonl"),
+            "--registro",
+            str(registro),
+            "--raiz",
+            str(raiz),
+        ],
+        entorno={},
+        salida=salida,
+        ahora=_A_SU_HORA,
+        store=store,
+        dispatch_journal=journal,
+        mirror=_con_runs(_mirror_verde()),
+    )
+
+    assert codigo == 0
+    assert "no se pudo derivar la hora programada" in salida.getvalue()
+    lineas = leer_registro(registro)
+    assert len(lineas) == 1
+    assert lineas[0].entrega is None, "sin medida no se inventa una: ausente = no medido"

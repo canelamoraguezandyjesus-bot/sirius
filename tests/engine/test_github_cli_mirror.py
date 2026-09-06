@@ -10,6 +10,7 @@ a un valor vacío interpretado como ausencia (requisito 2).
 from __future__ import annotations
 
 import subprocess
+from datetime import UTC, datetime
 
 from sirius_engine.adapters.github_cli_mirror import GitHubCliMirrorReader
 from sirius_engine.ports.github_mirror import LecturaEstado
@@ -202,3 +203,153 @@ def test_excepcion_del_proceso_se_traduce_a_no_disponible() -> None:
     lector = GitHubCliMirrorReader(ejecutar=ejecutar_que_revienta)
     lectura = lector.leer_metadatos(repo=_REPO, numero=1)
     assert lectura.estado is LecturaEstado.NO_DISPONIBLE
+
+
+# --- El listado de runs por ventana temporal (ADR-151) ----------------------
+
+
+_DESDE = datetime(2026, 9, 5, 5, 0, tzinfo=UTC)
+_HASTA = datetime(2026, 9, 5, 7, 50, tzinfo=UTC)
+
+
+def _run_json(*, run_id: int, path: str, inicio: str, fin: str, status: str = "completed") -> str:
+    return (
+        f'{{"id": {run_id}, "path": "{path}", "status": "{status}", '
+        f'"run_started_at": "{inicio}", "updated_at": "{fin}"}}'
+    )
+
+
+def test_listar_runs_en_ventana_se_queda_con_los_que_empezaron_o_terminaron_dentro() -> None:
+    """El filtro `created` de la API no basta, y por eso el adapter filtra otra vez.
+
+    `created` solo sabe de la fecha de CREACIÓN, así que la consulta retrocede
+    para no perder un run que terminó dentro habiendo empezado antes -y
+    entonces hay que descartar a mano lo que se trajo de más-.
+    """
+
+    def ejecutar(argv: list[str]) -> subprocess.CompletedProcess[str]:
+        return _proceso(
+            argv,
+            stdout="\n".join(
+                [
+                    # Empezó dentro: cuenta.
+                    _run_json(
+                        run_id=1,
+                        path=".github/workflows/implement-sirius-work.yml",
+                        inicio="2026-09-05T06:00:00Z",
+                        fin="2026-09-05T06:20:00Z",
+                    ),
+                    # Empezó ANTES de la ventana y terminó dentro: cuenta.
+                    _run_json(
+                        run_id=2,
+                        path=".github/workflows/motor-sirius.yml",
+                        inicio="2026-09-05T04:40:00Z",
+                        fin="2026-09-05T05:10:00Z",
+                    ),
+                    # Empezó y terminó antes de la ventana: NO cuenta.
+                    _run_json(
+                        run_id=3,
+                        path=".github/workflows/motor-sirius.yml",
+                        inicio="2026-09-05T03:00:00Z",
+                        fin="2026-09-05T03:30:00Z",
+                    ),
+                ]
+            ),
+        )
+
+    lector = GitHubCliMirrorReader(ejecutar=ejecutar)
+    lectura = lector.listar_runs_en_ventana(repo=_REPO, desde=_DESDE, hasta=_HASTA)
+
+    assert lectura.estado is LecturaEstado.OK
+    assert lectura.runs is not None
+    assert [run.run_id for run in lectura.runs] == ["1", "2"]
+    assert [run.workflow for run in lectura.runs] == [
+        "implement-sirius-work.yml",
+        "motor-sirius.yml",
+    ], "el puerto promete el NOMBRE DEL FICHERO, que es como se excluye un workflow (ADR-144)"
+
+
+def test_listar_runs_en_ventana_consulta_con_el_filtro_created_de_la_api() -> None:
+    """La consulta retrocede una ventana entera, derivada de la propia ventana."""
+    visto: list[list[str]] = []
+
+    def ejecutar(argv: list[str]) -> subprocess.CompletedProcess[str]:
+        visto.append(argv)
+        return _proceso(argv, stdout="")
+
+    lector = GitHubCliMirrorReader(ejecutar=ejecutar)
+    lector.listar_runs_en_ventana(repo=_REPO, desde=_DESDE, hasta=_HASTA)
+
+    (argv,) = visto
+    assert f"repos/{_REPO}/actions/runs" in argv
+    # 05:00 menos la ventana entera (2 h 50 min) = 02:10 del mismo día.
+    assert "created=>=2026-09-05T02:10:00Z" in argv
+
+
+def test_un_run_sin_terminar_solo_cuenta_si_empezo_dentro() -> None:
+    def ejecutar(argv: list[str]) -> subprocess.CompletedProcess[str]:
+        return _proceso(
+            argv,
+            stdout="\n".join(
+                [
+                    _run_json(
+                        run_id=4,
+                        path=".github/workflows/motor-sirius.yml",
+                        inicio="2026-09-05T04:00:00Z",
+                        fin="2026-09-05T07:00:00Z",
+                        status="in_progress",
+                    ),
+                    _run_json(
+                        run_id=5,
+                        path=".github/workflows/motor-sirius.yml",
+                        inicio="2026-09-05T06:00:00Z",
+                        fin="2026-09-05T07:00:00Z",
+                        status="in_progress",
+                    ),
+                ]
+            ),
+        )
+
+    lector = GitHubCliMirrorReader(ejecutar=ejecutar)
+    lectura = lector.listar_runs_en_ventana(repo=_REPO, desde=_DESDE, hasta=_HASTA)
+
+    assert lectura.runs is not None
+    assert [run.run_id for run in lectura.runs] == ["5"], (
+        "un run vivo que arrancó antes cruza la ventana, no cae en ella: `updated_at` "
+        "de un run sin terminar no es la hora a la que terminó"
+    )
+    assert lectura.runs[0].fin is None
+
+
+def test_listar_runs_en_ventana_vacio_es_ventana_tranquila_leida() -> None:
+    def ejecutar(argv: list[str]) -> subprocess.CompletedProcess[str]:
+        return _proceso(argv, stdout="")
+
+    lector = GitHubCliMirrorReader(ejecutar=ejecutar)
+    lectura = lector.listar_runs_en_ventana(repo=_REPO, desde=_DESDE, hasta=_HASTA)
+
+    assert lectura.estado is LecturaEstado.OK
+    assert lectura.runs == ()
+
+
+def test_listar_runs_en_ventana_fallo_de_proceso_es_no_disponible() -> None:
+    def ejecutar(argv: list[str]) -> subprocess.CompletedProcess[str]:
+        return _proceso(argv, returncode=1, stderr="HTTP 503")
+
+    lector = GitHubCliMirrorReader(ejecutar=ejecutar)
+    lectura = lector.listar_runs_en_ventana(repo=_REPO, desde=_DESDE, hasta=_HASTA)
+
+    assert lectura.estado is LecturaEstado.NO_DISPONIBLE
+    assert lectura.runs is None, "una lectura caída no puede parecerse a una ventana tranquila"
+    assert "503" in (lectura.error or "")
+
+
+def test_listar_runs_en_ventana_con_una_respuesta_ilegible_es_no_disponible() -> None:
+    def ejecutar(argv: list[str]) -> subprocess.CompletedProcess[str]:
+        return _proceso(argv, stdout='{"id": 1, "path": ".github/workflows/x.yml"}')
+
+    lector = GitHubCliMirrorReader(ejecutar=ejecutar)
+    lectura = lector.listar_runs_en_ventana(repo=_REPO, desde=_DESDE, hasta=_HASTA)
+
+    assert lectura.estado is LecturaEstado.NO_DISPONIBLE
+    assert lectura.runs is None
