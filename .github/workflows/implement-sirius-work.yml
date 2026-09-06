@@ -63,7 +63,25 @@ jobs:
           # PAT la PR y sus pushes provienen de una identidad real y Quality
           # arranca sola, como si la abriera una persona.
           token: ${{ secrets.SIRIUS_BOT_TOKEN }}
-      
+
+      - name: Congelar la automatización de main
+        # ADR-152: el paso POSTERIOR al agente (aplicar el veredicto) ejecuta
+        # ESTA copia, tomada de `main` antes de que el agente toque el árbol.
+        # El agente crea una rama y trabaja en ella; ejecutar después el guion
+        # del árbol que dejó significaría que el agente elige qué automatización
+        # aplica su propio veredicto con el PAT, y que un arreglo de `main` solo
+        # rige en las ramas que ya lo contienen (el 06-09 el veredicto de #545
+        # corrió el guion de su rama, sin ADR-149, y no relanzó Quality).
+        timeout-minutes: 1
+        shell: bash --noprofile --norc {0}
+        run: |
+          set -uo pipefail
+          if ! cp -R scripts/automation "${RUNNER_TEMP}/automation-de-main"; then
+            echo "::error::No se pudo congelar scripts/automation; sin la copia de main no hay veredicto."
+            exit 1
+          fi
+          echo "Automatización congelada desde main $(git rev-parse --short HEAD) en ${RUNNER_TEMP}/automation-de-main"
+
       - name: Install Qt system libraries for PySide6 (offscreen)
         # Un `apt-get` colgado se comia el trabajo ENTERO. Sin plazo propio, la
         # descarga espera a un espejo que no responde hasta que GitHub cancela el
@@ -306,5 +324,5 @@ jobs:
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
           set -uo pipefail
-          bash scripts/automation/sirius_apply_verdict.sh \
+          bash "${RUNNER_TEMP}/automation-de-main/sirius_apply_verdict.sh" \
             "$GH_REPO" "$ISSUE_NUMBER" "implementer" "${RUNNER_TEMP}/sirius_verdict.json"

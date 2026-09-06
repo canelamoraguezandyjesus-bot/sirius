@@ -67,9 +67,15 @@ jobs:
     # observaciones con varios `gh` y sus reintentos, sin `SIRIUS_GH_DEADLINE`
     # ni tope propio— podía comerse el margen que los otros reservaban, y el
     # job caducaba durante el corrector igual que antes.
-    #   checkout 5 + puerta 8 + evento 3 + prompt 2 + corrector 30 +
-    #   aplicación 5 = 53, con 7 de margen sobre los 60 del job.
-    timeout-minutes: 80
+    #   checkout 5 + congelación 1 + Qt 10 + uv 2 + sync 8 + puerta 8 +
+    #   evento 3 + prompt 2 + corrector 36 + aplicación 5 = 80, con 5 de
+    #   margen sobre los 85 del job (ADR-150: el corrector pasa de 30 a 36
+    #   porque desde ADR-145 su ronda incluye la cadena completa de
+    #   `check.ps1`, unos 9 min; ADR-152: la congelación de `scripts/automation`
+    #   de `main` toma 1 y `uv` cede 1). NO
+    #   SUBIR DE 85: la cabecera de `contador-siete-dias.yml` explica por qué
+    #   el tope de cualquier job entra en la tolerancia del contador.
+    timeout-minutes: 85
     #
     # LO QUE ESTO NO GARANTIZA, dicho aqui para que nadie lo lea de mas.
     #
@@ -108,7 +114,25 @@ jobs:
           # el token por defecto ese re-disparo quedaría suprimido y el ciclo
           # revisión→corrección→revisión no cerraría.
           token: ${{ secrets.SIRIUS_BOT_TOKEN }}
-     
+
+      - name: Congelar la automatización de main
+        # ADR-152: el paso POSTERIOR al agente (aplicar el veredicto) ejecuta
+        # ESTA copia, tomada de `main` antes de que el corrector toque el árbol.
+        # El corrector hace checkout de la rama de la PR, que puede ser anterior
+        # a `main`: el 06-09 el veredicto de #545 (run 34007489545) corrió el
+        # guion de esa rama, sin ADR-149, y no relanzó Quality. Y un agente no
+        # debe poder elegir qué automatización aplica su propio veredicto con
+        # el PAT.
+        timeout-minutes: 1
+        shell: bash --noprofile --norc {0}
+        run: |
+          set -uo pipefail
+          if ! cp -R scripts/automation "${RUNNER_TEMP}/automation-de-main"; then
+            echo "::error::No se pudo congelar scripts/automation; sin la copia de main no hay veredicto."
+            exit 1
+          fi
+          echo "Automatización congelada desde main $(git rev-parse --short HEAD) en ${RUNNER_TEMP}/automation-de-main"
+
       - name: Install Qt system libraries for PySide6 (offscreen)
         # Ver la nota extensa en `quality.yml`: un apt colgado se comia el
         # trabajo entero. Aqui el `timeout-minutes` ya acotaba el dano; ahora
@@ -151,7 +175,10 @@ jobs:
           exit 1
 
       - name: Install uv
-        timeout-minutes: 3
+        # 2 y no 3 desde ADR-152: el minuto cedido lo ocupa «Congelar la
+        # automatización de main», y la suma del job no puede pasar de 80.
+        # `uv` se instala en segundos, con caché.
+        timeout-minutes: 2
         uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           enable-cache: true
@@ -622,7 +649,15 @@ jobs:
         if: steps.gate.outputs.valid == 'true'
         id: claude
         continue-on-error: true
-        timeout-minutes: 30
+        # ADR-150: 36, no 30. Desde ADR-145 la ronda incluye UNA invocación
+        # de `scripts/check.ps1` (unos 9 min en el runner) después de la
+        # corrección; con 30 el corrector de #545 murió a los 30:00 exactos
+        # con `pwsh`, `uv` y `pytest` vivos (run 33998592213): había
+        # corregido y estaba validando. Tres muertes iguales en M21b. 36 es
+        # el máximo que cabe bajo el job de 85 (44 del resto de pasos + 5 de
+        # margen), y 85 es el techo que la cabecera de
+        # `contador-siete-dias.yml` impone a TODOS los jobs.
+        timeout-minutes: 36
         uses: anthropics/claude-code-action@v1
         env:
           GH_TOKEN: ${{ secrets.SIRIUS_BOT_TOKEN }}
@@ -664,5 +699,5 @@ jobs:
           CYCLE: ${{ steps.gate.outputs.cycle }}
         run: |
           set -uo pipefail
-          bash scripts/automation/sirius_apply_verdict.sh \
+          bash "${RUNNER_TEMP}/automation-de-main/sirius_apply_verdict.sh" \
             "$GH_REPO" "$ISSUE_NUMBER" "corrector" "${RUNNER_TEMP}/sirius_verdict.json" "$CYCLE"
