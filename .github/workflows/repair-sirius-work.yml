@@ -628,6 +628,17 @@ jobs:
           CYCLE: ${{ steps.gate.outputs.cycle }}
         run: |
           set -uo pipefail
+          # ADR-155: el plazo, a la vista del corrector. PLAZO_MIN es el
+          # `timeout-minutes` del paso «Ejecutar Claude Code (corrector)»
+          # (36, ADR-150) y un guardián exige que coincidan. La cadena
+          # completa tarda entre 9 y 15 min en el runner: la validación
+          # final tiene que arrancar no más tarde de PLAZO_MIN − RESERVA_MIN.
+          # Sin esto, el corrector de #545 murió dos veces a los 36 min sin
+          # empujar nada (runs 33998592213 y 34036357352).
+          PLAZO_MIN=36
+          RESERVA_MIN=16
+          plazo_utc="$(date -u -d "+${PLAZO_MIN} minutes" +%H:%M:%SZ)"
+          limite_validacion_utc="$(date -u -d "+$((PLAZO_MIN - RESERVA_MIN)) minutes" +%H:%M:%SZ)"
           {
             echo "prompt<<SIRIUS_PROMPT_EOF"
             cat scripts/automation/prompts/corrector.md
@@ -637,6 +648,7 @@ jobs:
             echo "- Incidencia de trabajo: #${ISSUE_NUMBER}"
             echo "- Pull Request a corregir: #${PR_NUMBER}"
             echo "- Ronda de corrección: ${CYCLE}. No hay un tope fijo de rondas: el ciclo continúa mientras haya progreso comprobable y se detiene en cuanto deja de haberlo."
+            echo "- Plazo de esta ronda (ADR-155): tu paso muere a las ${plazo_utc} UTC (${PLAZO_MIN} minutos desde ahora; comprueba la hora con \`date -u\`). Arranca la validación final no más tarde de las ${limite_validacion_utc} UTC: la cadena completa tarda entre 9 y 15 minutos. Si a esa hora quedan hallazgos sin corregir, deja de corregir, valida lo hecho, empuja y declara en el veredicto cuáles corregiste y cuáles no."
             echo "- Las observaciones estructuradas están en la ruta exacta de la variable de entorno SIRIUS_OBSERVATIONS_FILE."
             echo "- El archivo de veredicto debe escribirse en la ruta exacta de la variable de entorno SIRIUS_VERDICT_FILE."
             echo ""
