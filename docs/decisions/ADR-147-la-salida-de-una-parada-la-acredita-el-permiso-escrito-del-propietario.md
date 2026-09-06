@@ -410,6 +410,15 @@ aplicar la etiqueta, y la etiqueta es lo que dispara el marcador—. Con eso:
   por las 11 pruebas nuevas menos las 2 reescritas. Lo único que cambia en el
   árbol después de esta captura es la transcripción de estas mismas cifras y el
   cuerpo de la PR.
+- **Ronda 3.** Validaciones obligatorias completas con una sola invocación de
+  `pwsh -File scripts/check.ps1` (ADR-145) **sobre el árbol de `4d9eb70`**:
+  `5068 passed, 17 skipped, 2 xfailed` en 479.96 s (0:07:59), código de salida
+  **0**. La cifra sube en 76 respecto de la de la ronda 2 (`4992`) porque esta
+  rama se actualizó con `main` entre medias; de esas, 2 son las pruebas nuevas
+  de esta ronda —`test_un_marcador_con_otro_diagnostico_no_ancla_la_parada_guardada`
+  y `test_una_linea_en_blanco_delante_de_la_palabra_no_es_la_orden`—. Lo único
+  que cambia en el árbol después de esta captura es la transcripción de estas
+  mismas cifras.
 - **Corrección de la ronda 1 (#545), disparada por `CI_FAILURE` sobre el head
   `c618f10`.** Quality (run 33994967331) paró en `Ruff lint` con dos defectos,
   ambos en pruebas nuevas de este cambio y ninguno en el código del reflector ni
