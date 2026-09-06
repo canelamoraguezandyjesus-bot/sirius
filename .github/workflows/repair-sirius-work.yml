@@ -68,10 +68,12 @@ jobs:
     # ni tope propio— podía comerse el margen que los otros reservaban, y el
     # job caducaba durante el corrector igual que antes.
     #   checkout 5 + Qt 10 + uv 3 + sync 8 + puerta 8 + evento 3 + prompt 2 +
-    #   corrector 50 + aplicación 5 = 94, con 6 de margen sobre los 100 del
-    #   job (ADR-150: el corrector pasa de 30 a 50 porque desde ADR-145 su
-    #   ronda incluye la cadena completa de `check.ps1`, unos 9 min).
-    timeout-minutes: 100
+    #   corrector 36 + aplicación 5 = 80, con 5 de margen sobre los 85 del
+    #   job (ADR-150: el corrector pasa de 30 a 36 porque desde ADR-145 su
+    #   ronda incluye la cadena completa de `check.ps1`, unos 9 min). NO
+    #   SUBIR DE 85: la cabecera de `contador-siete-dias.yml` explica por qué
+    #   el tope de cualquier job entra en la tolerancia del contador.
+    timeout-minutes: 85
     #
     # LO QUE ESTO NO GARANTIZA, dicho aqui para que nadie lo lea de mas.
     #
@@ -624,12 +626,15 @@ jobs:
         if: steps.gate.outputs.valid == 'true'
         id: claude
         continue-on-error: true
-        # ADR-150: 50, no 30. Desde ADR-145 la ronda incluye UNA invocación
+        # ADR-150: 36, no 30. Desde ADR-145 la ronda incluye UNA invocación
         # de `scripts/check.ps1` (unos 9 min en el runner) después de la
         # corrección; con 30 el corrector de #545 murió a los 30:00 exactos
         # con `pwsh`, `uv` y `pytest` vivos (run 33998592213): había
-        # corregido y estaba validando. Tres muertes iguales en M21b.
-        timeout-minutes: 50
+        # corregido y estaba validando. Tres muertes iguales en M21b. 36 es
+        # el máximo que cabe bajo el job de 85 (44 del resto de pasos + 5 de
+        # margen), y 85 es el techo que la cabecera de
+        # `contador-siete-dias.yml` impone a TODOS los jobs.
+        timeout-minutes: 36
         uses: anthropics/claude-code-action@v1
         env:
           GH_TOKEN: ${{ secrets.SIRIUS_BOT_TOKEN }}
