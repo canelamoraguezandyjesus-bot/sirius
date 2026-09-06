@@ -49,6 +49,7 @@ import yaml
 from sirius_engine.domain.mirror import MirroredWorkItem
 from sirius_engine.domain.work_item import WorkItem, WorkItemClass, WorkItemPhase, WorkItemState
 from sirius_engine.issue_body_parsing import CuerpoDeclarado
+from sirius_engine.ports.github_mirror import LecturaEstado
 
 #: Nombre de cada eje, tal y como aparece en :class:`VeredictoEje` y en el
 #: registro. Cadenas, no un enum: viajan tal cual al log y a los mensajes de
@@ -128,17 +129,58 @@ class ContextoEjesDiarios:
 
 
 @dataclass(frozen=True, slots=True)
+class EntregaDeLaPasada:
+    """Cómo llegó la pasada que escribió la línea: con cuánto retraso y a qué ventana.
+
+    Vive aquí, junto a :class:`LineaRegistro`, y no en
+    :mod:`sirius_engine.seven_day_streak` -que es quien la calcula- por una
+    razón de dependencias, no de gusto: el contador ya importa de este módulo,
+    así que ponerla allí cerraría el círculo. Aquí es un dato inerte; quien lo
+    mide y quien lo declara están en el contador (ADR-151).
+
+    Es MEDIDA, no veredicto. No entra en :attr:`LineaRegistro.es_verde` ni en
+    ningún eje: existe para que dentro de unos días se pueda decidir, con datos
+    reales, qué hacer con la entrega tardía del ``cron`` -no para decidirlo hoy.
+
+    - ``retraso_min`` nunca es negativo: una pasada lanzada a mano ANTES de su
+      hora no llegó "con retraso negativo", simplemente no llegó tarde. Lo que
+      esa pasada tiene de anómalo se declara en el texto, no aquí.
+    - ``runs_en_ventana`` son los runs ajenos al propio contador que empezaron o
+      terminaron en la ventana previa. Vacío = ventana tranquila **solo si**
+      ``lectura_de_runs`` es ``OK``.
+    - ``lectura_de_runs`` es lo que impide confundir "leí y no había nada" con
+      "no pude leer": son dos valores distintos, nunca la misma tupla vacía.
+    """
+
+    retraso_min: int
+    runs_en_ventana: tuple[str, ...]
+    lectura_de_runs: LecturaEstado
+
+    def __post_init__(self) -> None:
+        if self.retraso_min < 0:
+            raise ValueError(f"un retraso de entrega no puede ser negativo: {self.retraso_min}")
+        if self.lectura_de_runs is LecturaEstado.NO_DISPONIBLE and self.runs_en_ventana:
+            raise ValueError(
+                "una lectura de runs caída no puede traer runs: si se leyeron, la lectura no cayó"
+            )
+
+
+@dataclass(frozen=True, slots=True)
 class LineaRegistro:
     """Una línea del registro: lo que exige el objetivo del bloque.
 
     Instante, clase, ``work_id`` y el resultado por eje. Sin esto, "siete
     días continuos" (contrato §11.2) no sería comprobable después.
+
+    ``entrega`` es OPCIONAL y no participa en :attr:`es_verde`: mide cómo llegó
+    la pasada, no si el día fue verde (ADR-151).
     """
 
     instante: datetime
     clase: WorkItemClass
     work_id: str
     veredictos: tuple[VeredictoEje, ...]
+    entrega: EntregaDeLaPasada | None = None
 
     @property
     def es_verde(self) -> bool:
@@ -439,16 +481,23 @@ def verificar_despacho(
 
 def formatear_linea(linea: LineaRegistro) -> str:
     """Serializa una línea del registro a JSON determinista (misma entrada, mismo texto)."""
-    return json.dumps(
-        {
-            "instante": linea.instante.isoformat(),
-            "clase": linea.clase.value,
-            "work_id": linea.work_id,
-            "ejes": [
-                {"eje": v.eje, "resultado": v.resultado.value, "motivo": v.motivo}
-                for v in linea.veredictos
-            ],
-        },
-        sort_keys=True,
-        ensure_ascii=False,
-    )
+    datos: dict[str, Any] = {
+        "instante": linea.instante.isoformat(),
+        "clase": linea.clase.value,
+        "work_id": linea.work_id,
+        "ejes": [
+            {"eje": v.eje, "resultado": v.resultado.value, "motivo": v.motivo}
+            for v in linea.veredictos
+        ],
+    }
+    # El campo solo aparece cuando SE MIDIÓ. Emitirlo siempre -aunque fuera
+    # `null`- cambiaría el texto exacto de una línea sin entrega, y el registro
+    # deduplica por texto exacto (`anadir_lineas`, requisito 6): una línea vieja
+    # y su equivalente nueva dejarían de ser la misma. Ausente = "no medido".
+    if linea.entrega is not None:
+        datos["entrega"] = {
+            "retraso_min": linea.entrega.retraso_min,
+            "runs_en_ventana": list(linea.entrega.runs_en_ventana),
+            "lectura_de_runs": linea.entrega.lectura_de_runs.value,
+        }
+    return json.dumps(datos, sort_keys=True, ensure_ascii=False)

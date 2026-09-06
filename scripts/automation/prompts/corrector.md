@@ -57,6 +57,22 @@ independiente de una PR de Sirius 0.1 ya existente.
   raíz, no el síntoma: un defecto que se declara resuelto y reaparece en una
   ronda posterior detiene el ciclo para decisión humana, igual que dos rondas
   consecutivas sin avance.
+- **Entrega por hallazgo, con el plazo a la vista** (ADR-155). El contexto de
+  esta ejecución trae la hora a la que muere tu paso y la hora límite para
+  arrancar la validación final; míralas antes de empezar y comprueba la hora
+  con `date -u` cuando lo necesites. Corrige los hallazgos
+  **de mayor a menor severidad** (P0 y P1 antes que P2, y estos antes que P3
+  o «baja»), y **haz commit y push tras cada hallazgo corregido con su
+  prueba**: un push
+  intermedio no necesita la cadena completa (Quality corre sobre el head
+  final), pero el trabajo empujado sobrevive si el paso muere y el que se
+  queda en tu árbol no (el corrector de #545 murió dos veces a los 36 minutos
+  sin empujar nada, y las dos rondas se perdieron enteras). Cuando llegue la
+  hora límite de la validación, **deja de corregir aunque queden hallazgos**:
+  ejecuta la cadena una sola vez sobre lo hecho, empuja y escribe `FIXED`
+  nombrando por su identificador los hallazgos que corregiste y los que NO,
+  para que la revisión siguiente vuelva a levantar estos últimos. No declares
+  corregido lo que no está.
 - La validación obligatoria es **una sola invocación** de
   `pwsh -File scripts/check.ps1` sobre el árbol final, antes de dar por
   terminado el trabajo, y su código de salida transcrito en tu evidencia. El
@@ -125,8 +141,11 @@ Escribe un único archivo JSON en la ruta exacta de la variable de entorno
 
 `verdict` debe ser exactamente uno de:
 
-- `FIXED`: todas las observaciones corregibles quedaron resueltas, las
-  validaciones obligatorias están en verde y el push ya se hizo.
+- `FIXED`: lo corregido está en verde con las validaciones obligatorias y el
+  push ya se hizo. Lo normal es que sean todas las observaciones corregibles;
+  si el plazo te obligó a parar antes (ADR-155), sigue siendo `FIXED`, pero el
+  resumen nombra una a una las observaciones que quedaron **sin corregir**,
+  por su identificador, y no afirma nada sobre ellas.
 - `CHECKS_UNRELATED`: esta ronda la disparó un fallo de Quality (`CI_FAILURE`),
   lo investigaste y **el fallo no es atribuible a este trabajo**. No empujaste
   nada porque no había nada tuyo que arreglar. Explica qué falló, por qué no lo

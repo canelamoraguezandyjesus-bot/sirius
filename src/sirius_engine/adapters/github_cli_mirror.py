@@ -20,7 +20,7 @@ import json
 import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sirius_engine.ports.github_mirror import (
     Comentario,
@@ -30,8 +30,10 @@ from sirius_engine.ports.github_mirror import (
     LecturaEstado,
     LecturaMetadatos,
     LecturaRunActions,
+    LecturaRunsEnVentana,
     MetadatosIncidencia,
     RunActions,
+    RunEnVentana,
 )
 
 Ejecutor = Callable[[list[str]], "subprocess.CompletedProcess[str]"]
@@ -39,6 +41,11 @@ Ejecutor = Callable[[list[str]], "subprocess.CompletedProcess[str]"]
 
 def _ejecutar_gh(argv: list[str]) -> subprocess.CompletedProcess[str]:
     return subprocess.run(["gh", *argv], capture_output=True, text=True, check=False, timeout=60)
+
+
+def _instante(texto: str) -> datetime:
+    """Un instante de la API de GitHub (``2026-09-05T07:44:12Z``) como ``datetime`` con zona."""
+    return datetime.fromisoformat(texto.replace("Z", "+00:00"))
 
 
 def _lineas_json(salida: str) -> list[dict[str, object]]:
@@ -188,3 +195,114 @@ class GitHubCliMirrorReader:
         except (json.JSONDecodeError, TypeError) as exc:
             return LecturaRunActions(estado=LecturaEstado.NO_DISPONIBLE, error=str(exc))
         return LecturaRunActions(estado=LecturaEstado.OK, run=run)
+
+    def listar_runs_en_ventana(
+        self, *, repo: str, desde: datetime, hasta: datetime
+    ) -> LecturaRunsEnVentana:
+        """Los runs que empezaron o terminaron dentro de ``[desde, hasta]``, vía ``gh api``.
+
+        DOS PASOS, y el segundo no es redundante. El filtro ``created`` de la
+        API solo sabe de la fecha de CREACIÓN del run, así que por sí solo
+        dejaría fuera lo que el puerto promete: un run creado antes de
+        ``desde`` que TERMINÓ dentro de la ventana. Por eso la consulta
+        retrocede una ventana entera -``desde - (hasta - desde)``- y el filtro
+        exacto se aplica aquí, sobre lo devuelto.
+
+        Retroceder una ventana entera no es un número inventado: quien llama
+        con la ventana de tolerancia de etiqueta de máquina la trae ya derivada
+        del DOBLE del job más largo declarado
+        (``ventana_tolerancia_etiqueta_maquina``), así que ningún run puede
+        haber empezado más de media ventana antes de terminar. Una ventana
+        entera lo cubre con holgura, y se deriva de lo que ya se recibe en vez
+        de añadir una constante nueva.
+
+        LO QUE ESTA LECTURA NO VE, Y HAY QUE DECIRLO (CLAUDE-CR-151-001). El
+        párrafo anterior cubre UNA sola causa de separación entre ``created`` y
+        el fin de un run: su DURACIÓN. Hay otra, y este repositorio la produce a
+        diario: la REEJECUCIÓN. Al REEJECUTAR un run, ``run_started_at`` se
+        reinicia -es la definición documentada del campo: la hora de inicio de
+        la última ejecución- y ``created_at`` NO. Así que un run creado hace
+        días y REEJECUTADO dentro de la ventana queda fuera de ``created>=`` y
+        no llega nunca al filtro de abajo. Y esta automatización reejecuta runs
+        como parte de su funcionamiento normal
+        (``sirius_apply_verdict.sh``: ``actions/runs/{id}/rerun`` y
+        ``rerun-failed-jobs``; ``repair-sirius-work.yml``).
+
+        No se corrige, y por qué: el listado de la API no admite filtrar por
+        ``run_started_at`` ni por ``updated_at`` -solo por ``created``-, así que
+        cubrirlo obligaría a paginar el historial sin cota. Se elige medir menos
+        y DECIRLO: lo que esta lectura devuelve son los runs CREADOS desde
+        ``desde - (hasta - desde)`` que además empezaron o terminaron dentro de
+        la ventana. Una "ventana previa tranquila" apoyada en esta lectura
+        significa eso y no "no se movió nada": un run reejecutado dentro de la
+        ventana pero creado antes del margen no aparece aquí.
+        """
+        margen = hasta - desde
+        desde_consulta = (desde - margen).astimezone(UTC)
+        proceso = self._invocar(
+            [
+                "api",
+                # `gh api` conmuta SOLO a POST en cuanto aparece un `-f`
+                # ("adding request parameters will automatically switch the
+                # request method to POST", `gh api --help`), y un POST sobre el
+                # endpoint de listado devolvería error: toda pasada real
+                # acabaría en NO_DISPONIBLE. `--method GET` los manda como
+                # query string, que es lo que este listado necesita (CODEX-001).
+                "--method",
+                "GET",
+                "--paginate",
+                f"repos/{repo}/actions/runs",
+                "-f",
+                f"created=>={desde_consulta.strftime('%Y-%m-%dT%H:%M:%SZ')}",
+                "-f",
+                "per_page=100",
+                "--jq",
+                ".workflow_runs[] | {id, path, status, "
+                "run_started_at: (.run_started_at // .created_at), updated_at} | @json",
+            ]
+        )
+        if proceso.returncode != 0:
+            return LecturaRunsEnVentana(
+                estado=LecturaEstado.NO_DISPONIBLE,
+                error=proceso.stderr.strip() or "gh api devolvió un error",
+            )
+        try:
+            todos = [
+                RunEnVentana(
+                    run_id=str(entrada["id"]),
+                    # `path` viene como `.github/workflows/motor-sirius.yml`;
+                    # el puerto promete el nombre del fichero, que es la forma
+                    # con la que este repositorio excluye un workflow por su
+                    # nombre (ADR-144).
+                    workflow=str(entrada["path"]).rsplit("/", maxsplit=1)[-1],
+                    inicio=_instante(str(entrada["run_started_at"])),
+                    # La API no publica un `completed_at` en el listado:
+                    # `updated_at` es su última modificación, y solo equivale a
+                    # "cuándo terminó" cuando el run YA terminó. Un run vivo se
+                    # declara sin fin en vez de estrenar una fecha que no es la
+                    # que dice ser.
+                    fin=(
+                        _instante(str(entrada["updated_at"]))
+                        if str(entrada.get("status")) == "completed"
+                        else None
+                    ),
+                )
+                for entrada in _lineas_json(proceso.stdout)
+            ]
+            # El filtro va DENTRO del `try`, no después (CLAUDE-CR-151-003):
+            # proteger el PARSEO no basta si el CONSUMO de lo parseado también
+            # puede reventar. `fromisoformat` lee sin quejarse una marca sin
+            # zona ("2026-09-05 07:44:12") y devuelve un `datetime` naive; es
+            # esta comparación con `desde`/`hasta` -aware- la que lanza
+            # `TypeError`. Fuera del `try` esa excepción se escaparía del
+            # adapter y mataría la pasada diaria entera, en vez de declararse
+            # como la lectura caída que es.
+            runs = tuple(
+                run
+                for run in todos
+                if desde <= run.inicio <= hasta
+                or (run.fin is not None and desde <= run.fin <= hasta)
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            return LecturaRunsEnVentana(estado=LecturaEstado.NO_DISPONIBLE, error=str(exc))
+        return LecturaRunsEnVentana(estado=LecturaEstado.OK, runs=runs)

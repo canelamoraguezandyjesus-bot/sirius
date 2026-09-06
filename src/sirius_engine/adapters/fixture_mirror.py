@@ -1,10 +1,11 @@
 """Doble de pruebas de :class:`GitHubMirrorPort` (A3, incidencia #193).
 
 Se configura por respuesta exacta -una :class:`LecturaMetadatos`,
-:class:`LecturaCuerpo`, :class:`LecturaComentarios` o
-:class:`LecturaRunActions` por clave-, así una prueba puede simular el fallo
-de un proveedor concreto sin tocar los demás (requisito 2: «una prueba debe
-demostrarlo simulando el fallo de cada proveedor por separado»). Una clave
+:class:`LecturaCuerpo`, :class:`LecturaComentarios`,
+:class:`LecturaRunActions` o :class:`LecturaRunsEnVentana` por clave-, así una
+prueba puede simular el fallo de un proveedor concreto sin tocar los demás
+(requisito 2: «una prueba debe demostrarlo simulando el fallo de cada proveedor
+por separado»). Una clave
 sin configurar devuelve ``NO_DISPONIBLE`` en vez de fallar con
 ``KeyError``: un doble que no sabe qué responder está, con más razón,
 "sin poder leer".
@@ -13,6 +14,7 @@ sin configurar devuelve ``NO_DISPONIBLE`` en vez de fallar con
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 
 from sirius_engine.ports.github_mirror import (
     LecturaComentarios,
@@ -20,6 +22,7 @@ from sirius_engine.ports.github_mirror import (
     LecturaEstado,
     LecturaMetadatos,
     LecturaRunActions,
+    LecturaRunsEnVentana,
 )
 
 
@@ -33,6 +36,20 @@ class FixedGitHubMirrorReader:
         default_factory=dict
     )
     runs_por_id: dict[tuple[str, str], LecturaRunActions] = field(default_factory=dict)
+    #: Una ÚNICA respuesta por repositorio, no una por ventana: la ventana la
+    #: calcula quien llama a partir de su `ahora` real, y obligar a una prueba a
+    #: adivinar ese par de instantes exactos para configurar el doble no
+    #: probaría nada sobre la ventana -solo sobre la aritmética de la propia
+    #: prueba-. Un repositorio sin configurar sigue devolviendo NO_DISPONIBLE.
+    runs_en_ventana_por_repo: dict[str, LecturaRunsEnVentana] = field(default_factory=dict)
+    #: Cada llamada a `listar_runs_en_ventana`, en orden: `(repo, desde, hasta)`.
+    #: No indexar por ventana (arriba) no obliga a no REGISTRARLA: sin este
+    #: registro, la ventana con la que la pasada pregunta es la única parte del
+    #: cambio que ninguna prueba sujeta, y cambiar el `desde` del comando por
+    #: cualquier margen inventado dejaba la suite entera en verde
+    #: (CLAUDE-CR-151-002). Registrar y comprobar después no obliga a adivinar
+    #: nada: la prueba deriva el par que espera igual que lo deriva el comando.
+    llamadas_a_runs_en_ventana: list[tuple[str, datetime, datetime]] = field(default_factory=list)
 
     def leer_metadatos(self, *, repo: str, numero: int) -> LecturaMetadatos:
         return self.metadatos_por_incidencia.get(
@@ -56,4 +73,15 @@ class FixedGitHubMirrorReader:
         return self.runs_por_id.get(
             (repo, run_id),
             LecturaRunActions(estado=LecturaEstado.NO_DISPONIBLE, error="fixture sin configurar"),
+        )
+
+    def listar_runs_en_ventana(
+        self, *, repo: str, desde: datetime, hasta: datetime
+    ) -> LecturaRunsEnVentana:
+        self.llamadas_a_runs_en_ventana.append((repo, desde, hasta))
+        return self.runs_en_ventana_por_repo.get(
+            repo,
+            LecturaRunsEnVentana(
+                estado=LecturaEstado.NO_DISPONIBLE, error="fixture sin configurar"
+            ),
         )
