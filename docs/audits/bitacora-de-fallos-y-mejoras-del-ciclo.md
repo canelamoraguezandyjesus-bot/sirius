@@ -1478,7 +1478,15 @@ ADR o su incidencia cuando se adopte.
   dos P3 nuevos son consecuencia de actualizar la rama con `main` (el
   árbol cambió debajo del texto). Decisión planteada al propietario a las
   15:32 con recomendación: registrar la corrección de raíz por identidad
-  (R4-001 + R4-002 juntos) más los dos P3, y `continua`.
+  (R4-001 + R4-002 juntos) más los dos P3, y `continua`. El propietario
+  eligió esa opción: decisión registrada en #545 (comentario que empieza
+  por `DECISIÓN`, que es lo que la puerta del corrector extrae e inyecta
+  como contexto vinculante; su cabecera dice «15:35 UTC» y se publicó a
+  las 15:26: hora estimada en vez de medida, error del operador que queda
+  anotado), rama actualizada con `main` (#559 dentro: `fusiona` en #558
+  a las 15:25 y PR #559 fusionada a las 15:26, la deuda concreta de #503
+  saldada) y `continua` a las 15:27. PR #560 (ADR-149) se retiene hasta
+  que #546 esté dentro, por la misma regla que #559.
 - **Estado a las 13:32 UTC (14:32 del propietario)**: `main` en
   `52344dc` tras cuatro fusiones del operador (#553 `3a00e04` 04:05,
   #555 `4cd8924` y #554 `dc45b59` 05:03, #556 `52344dc` 13:29). Las dos
