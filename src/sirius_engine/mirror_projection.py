@@ -265,6 +265,30 @@ _ORDEN_FIRMA_RE = re.compile(r"^[ \t]*---[ \t]*$.*", re.DOTALL | re.MULTILINE)
 _ORDENES_DE_CONTINUAR = ("continua", "contin\u00faa")
 
 
+#: Los espacios que caben DENTRO de una línea, que es lo único que
+#: `[[:space:]]` puede recortar en un `sed` línea a línea.
+_ESPACIO_HORIZONTAL = " \t\x0b\x0c"
+
+
+def _recorte_como_el_guion(texto: str) -> str:
+    """El recorte de `sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'`, línea a línea.
+
+    NO es ``str.strip()``. `sed` procesa una línea cada vez, así que no puede
+    borrar una línea en blanco: recorta sus espacios y la deja vacía, y la
+    línea sigue ahí. `str.strip()` sí se come los saltos de línea iniciales, y
+    con eso aceptaba como orden un `"\ncontinua"` que el guion rechaza -es
+    decir, inventaba un permiso que el propietario no llegó a dar-
+    (CLAUDE-A1-001, ronda 3, PR #546).
+
+    Lo que sí desaparece por el final son los saltos de línea finales, porque
+    el guion mete cada recorte en una sustitución de órdenes -``$( … )``- y
+    bash se los quita. Por eso el recorte por línea va seguido de un
+    ``rstrip("\n")`` y de ningún otro.
+    """
+    lineas = [linea.strip(_ESPACIO_HORIZONTAL) for linea in texto.split("\n")]
+    return "\n".join(lineas).rstrip("\n")
+
+
 def _es_orden_de_continuar(texto: str) -> bool:
     """El MISMO predicado que la guarda 1 de ``sirius_resume_on_command.sh``.
 
@@ -276,7 +300,8 @@ def _es_orden_de_continuar(texto: str) -> bool:
     """
     sin_retornos = texto.replace("\r", "")
     sin_firma = _ORDEN_FIRMA_RE.sub("", sin_retornos)
-    normalizada = "".join(chr(ord(c) + 32) if "A" <= c <= "Z" else c for c in sin_firma.strip())
+    recortada = _recorte_como_el_guion(sin_firma)
+    normalizada = "".join(chr(ord(c) + 32) if "A" <= c <= "Z" else c for c in recortada)
     return normalizada in _ORDENES_DE_CONTINUAR
 
 

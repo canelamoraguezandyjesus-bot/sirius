@@ -224,6 +224,15 @@ aplicar la etiqueta, y la etiqueta es lo que dispara el marcador—. Con eso:
 - La proyección se prueba contra los textos literales de los marcadores y de
   la orden, incluida la forma con el bloque de atribución tras `---` que el
   propietario publica de verdad.
+- **La paridad con la guarda 1 del guion es línea a línea, no `strip()`**
+  (CLAUDE-A1-001, ronda 3). El `sed` del guion recorta cada línea por separado
+  y por eso no borra una línea en blanco delante de la palabra; `str.strip()`
+  sí, y aceptaba como orden un `"\ncontinua"` que el guion rechaza. Prueba:
+  `test_una_linea_en_blanco_delante_de_la_palabra_no_es_la_orden`, vista fallar
+  con la mutación que vuelve a `sin_firma.strip()` (proyecta dos permisos de
+  forma ORDEN en vez de `()`). Contrastado además ejecutando en el runner el
+  `sed`/`tr` literales del guion sobre los cinco cuerpos de la prueba: los
+  cinco veredictos coinciden con los de `_es_orden_de_continuar`.
 - **La pasada real, sobre el diario real y el GitHub real.** Con el diario de
   `origin/estado-del-motor` copiado a `/tmp` y el lector `gh` de producción:
 
