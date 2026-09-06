@@ -173,6 +173,12 @@ parada real sin exigir su permiso— y el tramo final contra la foto. Y una
 salida de parada sin permiso sigue abandonando el recorrido entero: eso no es
 un aviso a destiempo, es el criterio.
 
+La primera de esas dos excepciones se entrega **incompleta a sabiendas**: un
+aviso de PARADA publicado tarde —después del permiso que la levantó— sigue
+tumbando el recorrido, porque la parada y su permiso se correlacionan por
+posición y no por identidad. Es CLAUDE-R4-001, y va con CLAUDE-R4-002 en
+«Consecuencias», con su vía de raíz.
+
 **Cada ocurrencia del historial se lleva su propia evidencia** (misma ronda,
 CODEX-002 y CODEX-003). La posición ordena, pero no identifica: el mismo
 `(estado, fase)` aparece varias veces en un ciclo con dos vueltas de
@@ -371,10 +377,16 @@ aplicar la etiqueta, y la etiqueta es lo que dispara el marcador—. Con eso:
   ("datetime" and "None")`: en la comprensión del ancla, `mypy` no estrecha
   `historial[indice].publicado_en` a través del `or` —un subíndice no es un
   nombre—, así que la comparación queda `datetime | None` contra `datetime`. Y
-  aun así `pwsh -File scripts/check.ps1` terminaba en **0**: `scripts/check.ps1`
-  encadena los cuatro comandos sin comprobar el código de salida de cada uno y
-  PowerShell no propaga el de un ejecutable nativo, de modo que el código de
-  salida del script es el de `pytest` y solo el de `pytest`. En Quality no hay
+  aun así `pwsh -File scripts/check.ps1` terminaba en **0**: en aquel árbol
+  —el head `923202f`, anterior a la actualización de esta rama con `main`—
+  `scripts/check.ps1` encadenaba los cuatro comandos sin comprobar el código de
+  salida de cada uno y PowerShell no propaga el de un ejecutable nativo, de
+  modo que el código de salida del script era el de `pytest` y solo el de
+  `pytest`. **Eso dejó de ser cierto dentro de esta misma ronda**: ADR-153,
+  fusionado en `main` el 06-09-2026 y entrado en esta rama con la
+  actualización, añadió `if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }` tras
+  cada uno de los tres primeros comandos, así que en el árbol que se fusiona el
+  guion se detiene en el primer rojo. En Quality no hay
   ese amortiguador: `.github/workflows/quality.yml:111` ejecuta `uv run mypy
   src tests` como paso propio, así que ese error es un rojo determinista.
 
@@ -388,12 +400,14 @@ aplicar la etiqueta, y la etiqueta es lo que dispara el marcador—. Con eso:
   'work_item_failed_safely'`. Tras el arreglo, `uv run mypy src tests` termina
   en 0 (`Success: no issues found in 570 source files`).
 
-  Que `scripts/check.ps1` no propague el código de salida de sus tres primeros
-  comandos queda **señalado y sin tocar**: es la validación obligatoria de
-  ADR-145 y cambiarla es una decisión de ese ADR, no una de las observaciones
-  de esta ronda. Mientras siga así, «código de salida 0 del script» acredita
-  `pytest` y nada más, y por eso la línea de abajo transcribe además la salida
-  de los otros tres comandos.
+  Que `scripts/check.ps1` no propagara el código de salida de sus tres primeros
+  comandos quedó **señalado y sin tocar** en su momento: era la validación
+  obligatoria de ADR-145 y cambiarla era una decisión de ese ADR, no una de las
+  observaciones de esta ronda. **Lo cerró ADR-153**, no este trabajo. Mientras
+  siguió así —hasta la actualización de esta rama con `main`—, «código de salida
+  0 del script» acreditaba `pytest` y nada más, y por eso las líneas de abajo
+  transcriben además la salida de los otros tres comandos; sobre el árbol
+  vigente el código de salida del guion ya acredita los cuatro.
 
 - El commit `923202f`, anterior a esta ronda, pasó `ruff format` sobre las dos
   pruebas que la corrección de la ronda 2 empujó sin formatear; no cambia
@@ -447,6 +461,42 @@ aplicar la etiqueta, y la etiqueta es lo que dispara el marcador—. Con eso:
 - Un `NEEDS_DECISION` jamás se resuelve en el almacén sin su permiso.
 - El almacén gana memoria de tramos intermedios que ninguna pasada observó:
   el diario registra las transiciones reales, no un salto.
+- **Se entrega con dos defectos conocidos y vivos**, aplazados por plazo
+  (ADR-155) en la ronda 4 de la PR #546 y re-levantados para que la revisión
+  siguiente los vuelva a exigir:
+
+  - **CLAUDE-R4-001** (P1, `reflect.py`): en
+    `_recorrer_historial_acreditado`, un aviso de PARADA que no encaja donde
+    está publicado abandona el recorrido entero (`if acreditado is None or
+    espejo_del_tramo.estado in _PARADAS: return None`). Como
+    `notify-sirius-state.yml` mete el nombre de la etiqueta en su grupo de
+    concurrencia, los avisos de etiquetas distintas no se serializan entre sí:
+    el aviso de una parada puede publicarse DESPUÉS del permiso que la levantó,
+    y entonces `_consumir_permiso` no encuentra ningún permiso posterior y una
+    recuperación que el propietario sí autorizó por escrito queda como
+    divergencia declarada para siempre.
+  - **CLAUDE-R4-002** (P2, `mirror_projection.py`): `_diagnostico_hasta`
+    atribuye a cada marcador de parada el último diagnóstico publicado ANTES de
+    su posición. Con el aviso de la primera parada retrasado tras el veredicto
+    de la segunda, las dos ocurrencias se proyectan con el diagnóstico de la
+    SEGUNDA. Desde el filtro del ancla de esta ronda
+    (`historial[indice].diagnostico in (None, work_item.diagnostico)` con `if
+    not base: return None`), esa mala atribución ya no solo copia mal el
+    diario: puede descartar todas las ocurrencias y abandonar el recorrido.
+
+  Los dos son la misma familia —acreditar o negar la salida de una parada por
+  la POSICIÓN de un aviso asíncrono— y tienen una misma vía de raíz ya
+  identificada: **transportar la identidad del suceso** (el `head` que el
+  marcador `sirius-notification:<etiqueta>:<head>` ya trae, o el run del
+  veredicto que causó la parada) desde `mirror_projection` a través de
+  `EstadoAcreditado` hasta `reflect`, para correlacionar parada, diagnóstico y
+  permiso por identidad y no por posición. Lo que la ronda 4 midió y hay que
+  resolver al hacerlo: el helper `_cronologia` de `tests/engine/test_reflect.py`
+  da el mismo `head` (`1c934781`) a todas las ocurrencias, así que una
+  correlación por head a secas haría pasar el recorrido de
+  `test_un_permiso_anterior_a_la_parada_no_la_levanta`, que exige lo contrario;
+  la identidad necesita un discriminante más que el head desnudo.
+
 - Queda pendiente, como ficha del operador, endurecer
   `sirius_resume_on_command.sh` para que su marcador lleve run/intento y nunca
   se deduplique. Mientras no se haga, la orden `continua` es la única forma de

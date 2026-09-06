@@ -455,8 +455,13 @@ def _el_almacen_pudo_guardarla(acreditado: EstadoAcreditado, work_item: WorkItem
     instante es opcional y hay que estrecharlo antes de compararlo: en la
     comprensión el estrechamiento no llegaba a la comparación -``mypy``:
     ``Unsupported operand types for >= ("datetime" and "None")``- y el árbol
-    quedaba con un error de tipos que ``scripts/check.ps1`` no propaga a su
-    código de salida.
+    quedaba con un error de tipos que, en el árbol de entonces (el head
+    ``923202f``, anterior a la actualización de esta rama con ``main``),
+    ``scripts/check.ps1`` NO propagaba a su código de salida. Hoy sí lo
+    propaga: ADR-153 le añadió ``if ($LASTEXITCODE -ne 0) { exit
+    $LASTEXITCODE }`` tras cada comando nativo, así que un error de tipos ya
+    deja el guion en rojo. El motivo de que el estrechamiento viva en una
+    función con nombre no cambia por eso: es ``mypy``, no el guion.
     """
     publicado_en = acreditado.publicado_en
     return publicado_en is None or publicado_en <= work_item.updated_at
