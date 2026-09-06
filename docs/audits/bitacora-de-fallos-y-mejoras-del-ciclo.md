@@ -1197,6 +1197,10 @@ ADR o su incidencia cuando se adopte.
    Quality dijo que no; nadie lo encaminó hasta relanzarlo a mano).
    Candidata a encargo: al pasar a `ci-pending`, consultar el último
    Quality completado del head y encaminar sin esperar al evento.
+   **Arreglo fusionado el 06-09** (ADR-149, PR #549, `6ba5901`, entrada
+   43): el veredicto relanza el run de Quality del head si ya terminó al
+   entrar en `ci-pending`. Queda **sin dato en vivo**: se salda cuando el
+   primer ciclo deje su `QUALITY_RELANZADO` y se encamine solo.
 4. Cliente único de Ollama local para los tres adaptadores (7, 8).
 5. Vigilancia durable con modelo barato (4, 11).
 6. Rechazo de una propuesta de criticidad recordado solo en sesión (M21b):
