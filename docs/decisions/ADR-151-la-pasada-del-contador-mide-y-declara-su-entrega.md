@@ -138,10 +138,14 @@ Se toma la opción 1.
   guardián de docstring en `tests/engine/test_github_cli_mirror.py`: exige que
   puerto y adapter la nombren, y se ve fallar si se borra cualquiera de las dos
   declaraciones (CLAUDE-CR-151-001).
-- Las cuatro validaciones obligatorias, en verde, con una sola invocación del
-  script de comprobación (ADR-145): `pwsh -File scripts/check.ps1` sobre el
-  árbol de esta rama termina con **código de salida 0** y
-  **4997 passed, 16 skipped, 2 xfailed**. `git diff --check`, limpio.
+- Las cuatro validaciones obligatorias, en verde con **una sola invocación** del
+  script de comprobación (ADR-145): `pwsh -File scripts/check.ps1` termina con
+  **código de salida 0** sobre el árbol de cada head validado de esta rama, el
+  último de ellos el que se fusiona. La terna de `pytest` va **anclada a su
+  árbol** en el cuerpo de la PR —con el run de `Quality` de ese head— y no aquí
+  (ADR-154): cada actualización de la rama con `main` trae pruebas nuevas, así
+  que un recuento escrito en este ADR dejaría de describir el árbol que se
+  fusiona. `git diff --check`, limpio.
 
 ## Consecuencias
 
