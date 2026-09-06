@@ -1910,7 +1910,39 @@ def test_si_el_relanzamiento_falla_el_paso_queda_rojo_con_la_incidencia_en_ci_pe
     assert "relanzamiento-fallido" in r.stdout + r.stderr
     assert "sirius:ci-pending" in _labels(env)
     assert "sirius:failed-safely" not in _labels(env)
-    assert "sirius-quality-relanzado" not in _comments(env)
+    comments = _comments(env)
+    assert "sirius-quality-relanzado" not in comments
+    # ADR-149, corrección del 06-09: el fallo se cuenta en la incidencia, con
+    # la causa citada y el gesto que desbloquea; un `::error` en el log no lo
+    # lee nadie (#545 estuvo 14 min parada por un PAT sin permiso, HTTP 403).
+    assert f"sirius-quality-sin-encaminar:{head}:relanzamiento-fallido:555" in comments
+    assert "## QUALITY_SIN_ENCAMINAR" in comments
+    assert "403 rerun" in comments, "el aviso debe citar el detalle que dio gh"
+    assert "actions/runs/555" in comments
+    assert "Actions: Read and write" in comments
+
+
+def test_el_aviso_de_quality_sin_encaminar_se_publica_una_sola_vez(tmp_path: Path) -> None:
+    """Reejecutar el paso (attempt 2) con el mismo fallo no duplica el aviso:
+    el marcador lleva head, fase y run, y `sirius_comment_once` lo respeta."""
+    env = _setup(tmp_path)
+    head = "c4d482267d9a"
+    _seed_issue(
+        env,
+        ["sirius:implementing"],
+        comments=(
+            "PR abierta: https://github.com/owner/repo/pull/9\n"
+            f"<!-- sirius-quality-sin-encaminar:{head}:relanzamiento-fallido:555 -->\n"
+        ),
+    )
+    _seed_pr(env, 9, head=head)
+    vf = _verdict_file(tmp_path, {"verdict": "READY_FOR_REVIEW", "summary": "listo"})
+    _seed_quality_runs(env, head, [{"id": 555, "status": "completed", "conclusion": "failure"}])
+    (_md(env) / "rerun_fails").write_text("", encoding="utf-8")
+    r = _run(env, "implementer", vf)
+    assert r.returncode != 0
+    assert _comments(env).count("sirius-quality-sin-encaminar") == 1
+    assert "## QUALITY_SIN_ENCAMINAR" not in _comments(env)
 
 
 def test_si_la_consulta_de_runs_cae_el_paso_queda_rojo_no_verde(tmp_path: Path) -> None:
@@ -1922,6 +1954,10 @@ def test_si_la_consulta_de_runs_cae_el_paso_queda_rojo_no_verde(tmp_path: Path) 
     assert r.returncode != 0
     assert "consulta-runs-fallida" in r.stdout + r.stderr
     assert "sirius:ci-pending" in _labels(env)
+    comments = _comments(env)
+    assert "sirius-quality-sin-encaminar:c4d482267d9a:consulta-runs-fallida" in comments
+    assert "## QUALITY_SIN_ENCAMINAR" in comments
+    assert "503 runs" in comments
 
 
 def test_la_lectura_va_con_el_token_de_lectura_y_el_relanzamiento_con_el_pat(

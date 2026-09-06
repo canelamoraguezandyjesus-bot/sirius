@@ -170,6 +170,39 @@ Ejecutado el 06-09-2026 en el contenedor del operador, sobre esta rama:
    `QUALITY_RELANZADO` y encaminarse solo; hasta entonces la deuda 3 queda
    «arreglo fusionado, sin dato en vivo».
 
+## Corrección (06-09-2026, 14:51 UTC): el fallo del relanzamiento se cuenta en la incidencia
+
+Primer caso real, en #545: Quality terminó para `242e8b3` a las 14:50:20 y
+el veredicto `FIXED` entró en `ci-pending` a las 14:51:10 —la carrera exacta
+de la deuda 3—. Gracias a ADR-152 corrió este guion desde `main`: la lectura
+con el `github.token` encontró el run terminado (34039974177) y el
+relanzamiento con el PAT devolvió cuatro veces `HTTP 403: Resource not
+accessible by personal access token`. El paso terminó en 1 y la incidencia se
+quedó en `ci-pending`, tal como esta decisión prescribe.
+
+Dos cosas que esta decisión no había dicho:
+
+1. **El PAT necesita el permiso «Actions: Read and write»** en el
+   repositorio para `POST actions/runs/{id}/rerun`. La lectura no lo
+   necesita (va con el `github.token` y `actions: read`), así que las
+   pruebas con el `gh` simulado no podían verlo. Es un gesto del propietario
+   en la configuración del token, pedido el 06-09; hasta entonces, cada
+   carrera perdida exige relanzar el run a mano.
+2. **Un `::error` en el log no lo lee nadie.** La incidencia se quedó 14
+   minutos en `ci-pending` sin ningún rastro visible hasta que el operador la
+   miró. Ahora, cuando la consulta o el relanzamiento fallan, el guion
+   publica una sola vez (marcador `sirius-quality-sin-encaminar:<head>:<fase>[:<run>]`)
+   un aviso `QUALITY_SIN_ENCAMINAR` con la fase, el detalle que dio `gh`, el
+   run terminado si se conoce y el gesto que desbloquea (relanzar a mano, o
+   el permiso del PAT si el detalle es el 403). El paso sigue terminando en 1
+   y la incidencia sigue en `ci-pending`: nada cambia en el encaminamiento,
+   solo deja de ser silencioso.
+
+Guardianes: los dos casos de fallo (`consulta-runs-fallida`,
+`relanzamiento-fallido`) exigen el aviso con el detalle de `gh` y el
+marcador; un tercer caso fija que reejecutar el paso con el marcador ya
+publicado no duplica el aviso. Vistos fallar contra el guion anterior.
+
 ## Consecuencias
 
 - La receta manual «reponer `ci-pending` y relanzar el run» deja de ser

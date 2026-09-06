@@ -307,15 +307,58 @@ sha_matches() {
 # relanzamiento fallido NO se tratan como «no hay nada que relanzar»: la
 # incidencia queda en `ci-pending` y el paso termina en rojo, reintentable,
 # igual que en la puerta del corrector.
+# primera_linea_de_gh — el detalle que `gh` dejó en stderr (su primera línea
+# `gh: …`, o la primera línea que haya), para citarlo en el aviso.
+primera_linea_de_gh() {
+  local detalle
+  detalle="$(grep -m1 '^gh:' "$1" 2>/dev/null || head -n1 "$1" 2>/dev/null || true)"
+  printf '%s' "${detalle:-sin detalle}"
+}
+
+# avisar_quality_sin_encaminar — ADR-149, corrección del 06-09: cuando el
+# relanzamiento (o la consulta previa) falla, el paso ya quedaba rojo y la
+# incidencia en `ci-pending`, pero SOLO lo decía un `::error` en el log del
+# run, y nadie lee logs: #545 estuvo 14 minutos parada hasta que el operador
+# la vio y relanzó a mano (el PAT sin permiso de escritura sobre Actions,
+# `HTTP 403`). El aviso va a la incidencia, una sola vez por head, fase y
+# run, con la causa citada y el gesto que desbloquea.
+avisar_quality_sin_encaminar() {
+  local fase="$1" run="$2" detalle="$3" marker="" body_file="" run_line=""
+  if [ -n "$run" ]; then
+    marker="<!-- sirius-quality-sin-encaminar:${head_sha}:${fase}:${run} -->"
+    run_line="- Run de Quality terminado y sin encaminar: https://github.com/${REPO}/actions/runs/${run}"
+  else
+    marker="<!-- sirius-quality-sin-encaminar:${head_sha}:${fase} -->"
+    run_line="- Run de Quality: no se pudo consultar."
+  fi
+  body_file="$(mktemp)"
+  printf '%s\n\n%s\n\n%s\n%s\n%s\n%s\n%s\n' \
+    "$marker" \
+    "## QUALITY_SIN_ENCAMINAR" \
+    "- Head SHA: \`${head_sha}\`" \
+    "$run_line" \
+    "- Fase que falló: \`${fase}\`. Detalle de \`gh\`: ${detalle:-sin detalle}" \
+    "- Qué pasa: Quality puede haber terminado para este head ANTES de que la incidencia entrara en \`sirius:ci-pending\`, y ese resultado no se encaminará solo (deuda 3 de la bitácora, ADR-149). La incidencia queda en \`sirius:ci-pending\` y este paso, reintentable." \
+    "- Qué la desbloquea: relanzar a mano el run de Quality de este head (Actions → Re-run all jobs) o reejecutar este paso. Si el detalle dice \`HTTP 403 … personal access token\`, el PAT necesita el permiso «Actions: Read and write» en el repositorio." >"$body_file"
+  sirius_comment_once "$REPO" "$ISSUE" "$marker" "$body_file" \
+    || echo "::warning::No se pudo publicar el aviso QUALITY_SIN_ENCAMINAR en la incidencia." >&2
+  rm -f "$body_file"
+}
+
 relanzar_quality_si_ya_termino() {
-  local runs_json="" activos="" terminado="" marker="" scan_file="" body_file=""
+  local runs_json="" activos="" terminado="" marker="" scan_file="" body_file="" err_file=""
+  err_file="$(mktemp)"
   if ! runs_json="$( ( export GH_TOKEN="${SIRIUS_READ_TOKEN:-${GH_TOKEN:-}}"
       sirius_retry gh api \
         "repos/${REPO}/actions/workflows/quality.yml/runs?head_sha=${head_sha}&event=pull_request&per_page=20" \
-        --jq '[.workflow_runs[] | {id: .id, status: .status}]' ) )"; then
+        --jq '[.workflow_runs[] | {id: .id, status: .status}]' ) 2>"$err_file" )"; then
+    cat "$err_file" >&2
+    avisar_quality_sin_encaminar "consulta-runs-fallida" "" "$(primera_linea_de_gh "$err_file")"
+    rm -f "$err_file"
     echo "::error::No se pudo consultar los runs de Quality del head ${head_sha} (consulta-runs-fallida); la incidencia queda en ci-pending y este paso, reintentable." >&2
     exit 1
   fi
+  rm -f "$err_file"
   activos="$(printf '%s' "$runs_json" | jq -r '[.[] | select(.status != "completed")] | length' 2>/dev/null || echo "")"
   if [ -z "$activos" ]; then
     echo "::error::Respuesta ilegible al consultar los runs de Quality del head ${head_sha} (consulta-runs-ilegible); la incidencia queda en ci-pending y este paso, reintentable." >&2
@@ -339,10 +382,15 @@ relanzar_quality_si_ya_termino() {
     return 0
   fi
   rm -f "$scan_file"
-  if ! sirius_retry gh api -X POST "repos/${REPO}/actions/runs/${terminado}/rerun" >/dev/null; then
+  err_file="$(mktemp)"
+  if ! sirius_retry gh api -X POST "repos/${REPO}/actions/runs/${terminado}/rerun" >/dev/null 2>"$err_file"; then
+    cat "$err_file" >&2
+    avisar_quality_sin_encaminar "relanzamiento-fallido" "$terminado" "$(primera_linea_de_gh "$err_file")"
+    rm -f "$err_file"
     echo "::error::No se pudo relanzar el run ${terminado} de Quality (relanzamiento-fallido); la incidencia queda en ci-pending y este paso, reintentable." >&2
     exit 1
   fi
+  rm -f "$err_file"
   body_file="$(mktemp)"
   printf '%s\n\n%s\n\n%s\n%s\n%s\n' \
     "$marker" \
