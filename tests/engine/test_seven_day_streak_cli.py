@@ -39,6 +39,7 @@ from sirius_engine.projection_verifier import (
     ResultadoEje,
     VeredictoEje,
     formatear_linea,
+    ventana_tolerancia_etiqueta_maquina,
 )
 from sirius_engine.seven_day_streak import (
     NOMBRE_DEL_WORKFLOW_DEL_CONTADOR,
@@ -597,6 +598,31 @@ def test_una_pasada_puntual_con_ventana_tranquila_lo_declara_y_lo_registra(
     assert lineas[0].entrega is not None
     assert lineas[0].entrega.retraso_min == 0
     assert lineas[0].entrega.lectura_de_runs is LecturaEstado.OK
+
+
+def test_la_pasada_pregunta_por_la_ventana_de_tolerancia_que_termina_ahora(
+    tmp_path: Path,
+) -> None:
+    """La ventana con la que se pregunta es el objetivo de la incidencia: se sujeta.
+
+    Sin esta prueba, cambiar el `desde` del comando por `ahora` -una ventana de
+    duración cero, que no puede contener ningún run- o por cualquier otro margen
+    inventado dejaba la suite entera en verde, incluidas las cuatro pruebas
+    nuevas de ADR-151 (CLAUDE-CR-151-002). La tolerancia se DERIVA aquí, por la
+    misma razón por la que `_HORA_PROGRAMADA` se deriva en vez de escribir la
+    hora a mano: copiar el número ataría la prueba a un valor que ya se sabe
+    derivar.
+    """
+    mirror = _con_runs(_mirror_verde())
+
+    _texto, _lineas = _pasada(tmp_path, mirror=mirror, ahora=_TARDE, sufijo="ventana")
+
+    tolerancia = ventana_tolerancia_etiqueta_maquina(_RAIZ_REPOSITORIO / ".github" / "workflows")
+    assert mirror.llamadas_a_runs_en_ventana == [(_REPO, _TARDE - tolerancia, _TARDE)], (
+        "la pasada tiene que preguntar por [ahora - ventana_tolerancia, ahora]: "
+        "cualquier otro margen mide una ventana que no es la que la premisa de "
+        "ADR-144 declara tranquila"
+    )
 
 
 def test_una_pasada_tardia_con_ventana_sucia_lo_declara_sin_cambiar_ningun_eje(

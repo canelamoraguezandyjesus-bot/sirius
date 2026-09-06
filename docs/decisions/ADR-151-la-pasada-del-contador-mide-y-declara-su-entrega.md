@@ -45,8 +45,18 @@ tardía no existe.
    el cron, ni la tolerancia, ni ninguna ventana. No hace verde ningún día que
    hoy no lo sea, ni rojo ninguno que lo sea. No cubre los runs que **cruzan**
    la ventana sin empezar ni terminar dentro (un job que arrancó antes y sigue
-   vivo): el criterio es «empezó o terminó dentro», y se declara así. Y no
-   arregla el retraso de GitHub —no está en nuestra mano—: solo lo mide.
+   vivo): el criterio es «empezó o terminó dentro», y se declara así. Tampoco
+   ve —y esto es lo que este repositorio produce a diario— un run **reejecutado**
+   dentro de la ventana cuya creación es anterior al margen de la consulta: el
+   listado de la API solo se acota por `created`, y al reejecutar
+   `run_started_at` se reinicia mientras `created_at` no
+   (`sirius_apply_verdict.sh` reejecuta runs y trabajos fallidos, y
+   `repair-sirius-work.yml` también). Cubrirlo obligaría a paginar el historial
+   sin cota, así que se mide menos **y se dice**: «ventana previa tranquila»
+   significa «ningún run creado en la ventana ampliada empezó o terminó
+   dentro», no «no se movió nada». Queda declarado en el docstring del puerto y
+   en el del adapter, con su guardián de prueba. Y no arregla el retraso de
+   GitHub —no está en nuestra mano—: solo lo mide.
 3. **Criterio de parada.** (a) Si medir la entrega obligara a cambiar el
    resultado de cualquier eje, o a tocar `.github/**`, el derivador, la
    tolerancia o cualquier ventana del verificador, se para y se escala: el
@@ -91,7 +101,16 @@ Se toma la opción 1.
 - El puerto `GitHubMirrorPort` gana `listar_runs_en_ventana(repo, desde, hasta)`
   → `LecturaRunsEnVentana`, con su `LecturaEstado` propio como todas las demás
   lecturas. `GitHubCliMirrorReader` lo implementa sobre
-  `gh api repos/{repo}/actions/runs` con el filtro `created` de la API.
+  `gh api --method GET repos/{repo}/actions/runs` con el filtro `created` de la
+  API. El `--method GET` es explícito y tiene prueba de regresión: `gh api`
+  conmuta a POST en cuanto la invocación lleva un `-f`, y un POST sobre el
+  endpoint de listado dejaría toda pasada real en `NO_DISPONIBLE` (CODEX-001).
+- Cualquier respuesta que `gh` devuelva y no se pueda consumir —incluida una con
+  instantes parseables pero SIN zona horaria, que `fromisoformat` acepta y solo
+  revienta al comparar— se declara `NO_DISPONIBLE` y no se escapa del adapter:
+  el filtro de la ventana vive DENTRO del `try` que protege el parseo
+  (CLAUDE-CR-151-003). Perder la pasada del día entera por una marca de tiempo
+  mal formada sería cambiar un aviso por una avería.
 - `sirius_engine.seven_day_streak` gana `medir_entrega_de_la_pasada` (la medida)
   y `declarar_entrega_de_la_pasada` (el texto), y `evaluar_racha` acepta
   `entrega_hoy` con el mismo molde que `lecturas_caidas_hoy` (ADR-084): una
@@ -109,8 +128,16 @@ Se toma la opción 1.
   `contador-siete-dias.yml` (`event: schedule`, runs 4 a 11), tal y como los
   recoge el cuerpo de la incidencia #550.
 - Cada prueba nueva se vio FALLAR antes del cambio (ADR-001, §3 de la skill
-  `disciplina-evidencia`); el detalle de la comprobación va en la descripción de
-  la PR.
+  `disciplina-evidencia`), y también por mutación dirigida; el detalle de cada
+  mutación va en la descripción de la PR.
+- La ventana con la que la pasada pregunta —`[ahora − ventana_tolerancia, ahora]`—
+  la sujeta una prueba propia: el doble del espejo registra cada llamada y la
+  prueba compara el par contra la tolerancia DERIVADA, no copiada
+  (CLAUDE-CR-151-002). Se vio fallar con la mutación `desde=ahora`.
+- La limitación de los runs reejecutados (punto 2 de la nota de arranque) tiene
+  guardián de docstring en `tests/engine/test_github_cli_mirror.py`: exige que
+  puerto y adapter la nombren, y se ve fallar si se borra cualquiera de las dos
+  declaraciones (CLAUDE-CR-151-001).
 - Las cuatro validaciones obligatorias, en verde, con una sola invocación del
   script de comprobación (ADR-145).
 
@@ -125,6 +152,11 @@ Se toma la opción 1.
   más de lo que el dato sostiene.
 - La pasada hace **una llamada más** a `gh` por ejecución. Si esa llamada cae,
   se declara y la pasada sigue: una lectura caída no rompe la racha (ADR-084).
+- «Ventana previa tranquila» significa, exactamente, «ningún run **creado** en la
+  ventana ampliada empezó o terminó dentro». No significa «no se movió nada»: un
+  run reejecutado dentro de la ventana pero creado antes del margen no se ve
+  (punto 2 de la nota de arranque). Quien decida más adelante qué hacer con la
+  entrega tardía tiene que leer el dato con esa cota puesta.
 - Si `hora_recomendada_pasada` no pudiera derivar la hora —el escenario que el
   guardián de ADR-144 vigila: alguien sube un `timeout-minutes` y ninguna hora
   del día sirve—, la pasada **no revienta**: lo declara en el `motivo` y escribe

@@ -13,7 +13,7 @@ import subprocess
 from datetime import UTC, datetime
 
 from sirius_engine.adapters.github_cli_mirror import GitHubCliMirrorReader
-from sirius_engine.ports.github_mirror import LecturaEstado
+from sirius_engine.ports.github_mirror import GitHubMirrorPort, LecturaEstado
 
 _REPO = "owner/repo"
 
@@ -353,3 +353,82 @@ def test_listar_runs_en_ventana_con_una_respuesta_ilegible_es_no_disponible() ->
 
     assert lectura.estado is LecturaEstado.NO_DISPONIBLE
     assert lectura.runs is None
+
+
+def test_listar_runs_en_ventana_pide_get_explicito_al_llevar_parametros() -> None:
+    """Con un `-f` y sin `--method GET`, `gh` haría POST sobre un endpoint de listado.
+
+    Lo dice su propia ayuda: «adding request parameters will automatically
+    switch the request method to POST». Ese POST fallaría en toda pasada real y
+    la medición declararía siempre NO_DISPONIBLE, así que la ausencia de
+    `--method GET` no es un detalle de estilo: es el defecto (CODEX-001).
+    """
+    visto: list[list[str]] = []
+
+    def ejecutar(argv: list[str]) -> subprocess.CompletedProcess[str]:
+        visto.append(argv)
+        return _proceso(argv, stdout="")
+
+    lector = GitHubCliMirrorReader(ejecutar=ejecutar)
+    lector.listar_runs_en_ventana(repo=_REPO, desde=_DESDE, hasta=_HASTA)
+
+    (argv,) = visto
+    assert any(bandera in argv for bandera in ("-f", "-F", "--raw-field", "--field")), (
+        "esta prueba vigila la conmutación a POST que provocan los parámetros: "
+        "si la consulta dejó de llevarlos, hay que revisar qué vigila"
+    )
+    assert "--method" in argv and argv[argv.index("--method") + 1] == "GET", (
+        "una consulta de `gh api` con parámetros necesita `--method GET` "
+        "explícito, o la CLI la manda como POST (CODEX-001)"
+    )
+
+
+def test_una_marca_de_tiempo_sin_zona_es_no_disponible_y_no_revienta() -> None:
+    """`fromisoformat` lee «2026-09-05 06:00:00» sin quejarse: revienta al COMPARAR.
+
+    El parseo no lanza -devuelve un `datetime` naive-, así que el hueco no
+    estaba en el parseo sino en el consumo: la comparación con `desde`/`hasta`,
+    que son aware. Antes de CLAUDE-CR-151-003 esa comparación caía fuera del
+    `try` y el `TypeError` se escapaba del adapter, matando la pasada diaria
+    entera en vez de declararse como la lectura caída que es.
+    """
+
+    def ejecutar(argv: list[str]) -> subprocess.CompletedProcess[str]:
+        return _proceso(
+            argv,
+            stdout=_run_json(
+                run_id=7,
+                path=".github/workflows/motor-sirius.yml",
+                inicio="2026-09-05 06:00:00",
+                fin="2026-09-05 06:00:00",
+            ),
+        )
+
+    lector = GitHubCliMirrorReader(ejecutar=ejecutar)
+    lectura = lector.listar_runs_en_ventana(repo=_REPO, desde=_DESDE, hasta=_HASTA)
+
+    assert lectura.estado is LecturaEstado.NO_DISPONIBLE
+    assert lectura.runs is None, "una lectura caída no puede parecerse a una ventana tranquila"
+
+
+def test_la_limitacion_de_los_runs_reejecutados_esta_declarada_donde_se_lee() -> None:
+    """Guardián de docstring: la reejecución se nombra donde se promete la lectura.
+
+    El puerto promete los runs que EMPEZARON o TERMINARON en la ventana; la API
+    solo se acota por `created`, que al REEJECUTAR no se reinicia aunque
+    `run_started_at` sí. Este repositorio reejecuta runs a diario, así que la
+    limitación es probable, no teórica, y «ventana previa tranquila» afirmaría
+    más de lo que la lectura sostiene si nadie la declarase (CLAUDE-CR-151-001).
+    """
+    for donde, docstring in (
+        ("el puerto", GitHubMirrorPort.listar_runs_en_ventana.__doc__ or ""),
+        ("el adapter", GitHubCliMirrorReader.listar_runs_en_ventana.__doc__ or ""),
+    ):
+        assert "REEJECUT" in docstring.upper(), (
+            f"{donde} no declara que un run REEJECUTADO dentro de la ventana "
+            "puede no aparecer: la promesa habla de dos instantes y el filtro "
+            "de la API mira un tercero (`created`)"
+        )
+        assert "created" in docstring, (
+            f"{donde} nombra la limitación sin nombrar `created`, que es el filtro del que nace"
+        )

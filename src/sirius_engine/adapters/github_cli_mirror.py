@@ -215,12 +215,41 @@ class GitHubCliMirrorReader:
         haber empezado más de media ventana antes de terminar. Una ventana
         entera lo cubre con holgura, y se deriva de lo que ya se recibe en vez
         de añadir una constante nueva.
+
+        LO QUE ESTA LECTURA NO VE, Y HAY QUE DECIRLO (CLAUDE-CR-151-001). El
+        párrafo anterior cubre UNA sola causa de separación entre ``created`` y
+        el fin de un run: su DURACIÓN. Hay otra, y este repositorio la produce a
+        diario: la REEJECUCIÓN. Al REEJECUTAR un run, ``run_started_at`` se
+        reinicia -es la definición documentada del campo: la hora de inicio de
+        la última ejecución- y ``created_at`` NO. Así que un run creado hace
+        días y REEJECUTADO dentro de la ventana queda fuera de ``created>=`` y
+        no llega nunca al filtro de abajo. Y esta automatización reejecuta runs
+        como parte de su funcionamiento normal
+        (``sirius_apply_verdict.sh``: ``actions/runs/{id}/rerun`` y
+        ``rerun-failed-jobs``; ``repair-sirius-work.yml``).
+
+        No se corrige, y por qué: el listado de la API no admite filtrar por
+        ``run_started_at`` ni por ``updated_at`` -solo por ``created``-, así que
+        cubrirlo obligaría a paginar el historial sin cota. Se elige medir menos
+        y DECIRLO: lo que esta lectura devuelve son los runs CREADOS desde
+        ``desde - (hasta - desde)`` que además empezaron o terminaron dentro de
+        la ventana. Una "ventana previa tranquila" apoyada en esta lectura
+        significa eso y no "no se movió nada": un run reejecutado dentro de la
+        ventana pero creado antes del margen no aparece aquí.
         """
         margen = hasta - desde
         desde_consulta = (desde - margen).astimezone(UTC)
         proceso = self._invocar(
             [
                 "api",
+                # `gh api` conmuta SOLO a POST en cuanto aparece un `-f`
+                # ("adding request parameters will automatically switch the
+                # request method to POST", `gh api --help`), y un POST sobre el
+                # endpoint de listado devolvería error: toda pasada real
+                # acabaría en NO_DISPONIBLE. `--method GET` los manda como
+                # query string, que es lo que este listado necesita (CODEX-001).
+                "--method",
+                "GET",
                 "--paginate",
                 f"repos/{repo}/actions/runs",
                 "-f",
@@ -260,11 +289,20 @@ class GitHubCliMirrorReader:
                 )
                 for entrada in _lineas_json(proceso.stdout)
             ]
+            # El filtro va DENTRO del `try`, no después (CLAUDE-CR-151-003):
+            # proteger el PARSEO no basta si el CONSUMO de lo parseado también
+            # puede reventar. `fromisoformat` lee sin quejarse una marca sin
+            # zona ("2026-09-05 07:44:12") y devuelve un `datetime` naive; es
+            # esta comparación con `desde`/`hasta` -aware- la que lanza
+            # `TypeError`. Fuera del `try` esa excepción se escaparía del
+            # adapter y mataría la pasada diaria entera, en vez de declararse
+            # como la lectura caída que es.
+            runs = tuple(
+                run
+                for run in todos
+                if desde <= run.inicio <= hasta
+                or (run.fin is not None and desde <= run.fin <= hasta)
+            )
         except (KeyError, TypeError, ValueError) as exc:
             return LecturaRunsEnVentana(estado=LecturaEstado.NO_DISPONIBLE, error=str(exc))
-        runs = tuple(
-            run
-            for run in todos
-            if desde <= run.inicio <= hasta or (run.fin is not None and desde <= run.fin <= hasta)
-        )
         return LecturaRunsEnVentana(estado=LecturaEstado.OK, runs=runs)

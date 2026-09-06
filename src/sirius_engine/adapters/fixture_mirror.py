@@ -42,6 +42,14 @@ class FixedGitHubMirrorReader:
     #: probaría nada sobre la ventana -solo sobre la aritmética de la propia
     #: prueba-. Un repositorio sin configurar sigue devolviendo NO_DISPONIBLE.
     runs_en_ventana_por_repo: dict[str, LecturaRunsEnVentana] = field(default_factory=dict)
+    #: Cada llamada a `listar_runs_en_ventana`, en orden: `(repo, desde, hasta)`.
+    #: No indexar por ventana (arriba) no obliga a no REGISTRARLA: sin este
+    #: registro, la ventana con la que la pasada pregunta es la única parte del
+    #: cambio que ninguna prueba sujeta, y cambiar el `desde` del comando por
+    #: cualquier margen inventado dejaba la suite entera en verde
+    #: (CLAUDE-CR-151-002). Registrar y comprobar después no obliga a adivinar
+    #: nada: la prueba deriva el par que espera igual que lo deriva el comando.
+    llamadas_a_runs_en_ventana: list[tuple[str, datetime, datetime]] = field(default_factory=list)
 
     def leer_metadatos(self, *, repo: str, numero: int) -> LecturaMetadatos:
         return self.metadatos_por_incidencia.get(
@@ -70,6 +78,7 @@ class FixedGitHubMirrorReader:
     def listar_runs_en_ventana(
         self, *, repo: str, desde: datetime, hasta: datetime
     ) -> LecturaRunsEnVentana:
+        self.llamadas_a_runs_en_ventana.append((repo, desde, hasta))
         return self.runs_en_ventana_por_repo.get(
             repo,
             LecturaRunsEnVentana(

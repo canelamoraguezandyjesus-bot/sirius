@@ -201,5 +201,15 @@ class GitHubMirrorPort(Protocol):
         El criterio es "empezó o terminó dentro", no "se solapa con": un run
         que arrancó antes de ``desde`` y sigue vivo cruza la ventana sin caer
         en ella. Queda declarado aquí porque es una elección, no un descuido.
+
+        Y una segunda limitación, del mismo tipo, que ninguna implementación
+        sobre la API de GitHub puede evitar hoy (CLAUDE-CR-151-001): el listado
+        de runs solo se puede acotar por ``created``, y al REEJECUTAR un run
+        ``run_started_at`` se reinicia mientras ``created_at`` no. Un run creado
+        mucho antes y REEJECUTADO dentro de la ventana puede, por tanto, no
+        aparecer. Quien lea una tupla vacía debe entenderla como "no se vio
+        nada" y no como "no ocurrió nada": la reejecución es la vía por la que
+        esta lectura mide menos de lo que la firma promete, y se declara aquí
+        para que nadie construya sobre ella una afirmación más fuerte.
         """
         ...
