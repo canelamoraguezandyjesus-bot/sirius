@@ -1414,7 +1414,10 @@ ADR o su incidencia cuando se adopte.
   aritmética de fechas ejecutadas en local. Criterio en vivo: la siguiente
   ronda de #545 deja al menos un push antes del límite y la revisión
   siguiente cuenta menos de cuatro pendientes; una tercera muerte por
-  tiempo SIN push intermedio desmiente el ADR.
+  tiempo SIN push intermedio desmiente el ADR. Cadena completa sobre
+  `0cf6c7c`: 5032 passed, 16 skipped, 2 xfailed, `check=0`; PR #557
+  fusionada a las 14:26 (`627b14c`). #546 actualizada con `main` y #545
+  reanudado con `continua` a las 14:28: es el criterio en vivo.
 - **Estado a las 13:32 UTC (14:32 del propietario)**: `main` en
   `52344dc` tras cuatro fusiones del operador (#553 `3a00e04` 04:05,
   #555 `4cd8924` y #554 `dc45b59` 05:03, #556 `52344dc` 13:29). Las dos
