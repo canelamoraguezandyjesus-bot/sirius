@@ -1143,6 +1143,45 @@ ADR o su incidencia cuando se adopte.
   hoy costó tres guiones y veinte minutos; el plan del 02-09 se eligió
   sin ese número.
 
+### 43. «Primero terminar todo lo que no es memoria»: el inventario, la muerte del corrector de #545 por tiempo, y dos fichas del operador (ADR-149, ADR-150) (06-09-2026, 00:00-01:30 UTC)
+
+- **La orden del propietario**: terminar todo lo que no sea memoria y
+  después «darle caña a la memoria». Inventario publicado (incidencias
+  abiertas más deudas): trabajo a medias = #545/#546, deuda 3, deuda 15,
+  #503 + deuda 8, deuda 14(c) + C2, y las deudas pequeñas 2, 11, 5 y 7;
+  registros, no trabajo = #270, #172, #341, #267 y las incidencias
+  paraguas del laboratorio; fuera de la pasada = Model Studio (#126,
+  #127, #134). ADR-148 (el plan de la memoria) espera. Con su «Dale»
+  quedó autorizado fusionar las fichas del operador de esta pasada en
+  verde; #547 fusionada (`d001f77`): la deuda 9 cerrada de punta a punta.
+- **Cuarta muerte del corrector con el mismo perfil, y esta vez con el
+  dato exacto**: la ronda 1 de #545 (run 33998592213, tres hallazgos de
+  Codex: un P1 de diseño y dos P2) murió con «The action has timed out»
+  a los 30:00 exactos, y al matarla tenía vivos `pwsh`, `uv` y `pytest`:
+  había corregido y estaba ejecutando la cadena completa que ADR-145
+  exige. Sin commit ni push; PR en `f877ec7`; incidencia en
+  `failed-safely` con el veredicto provisional. El tope de 30 min era de
+  antes de ADR-145 y nadie lo movió con la regla: 30 − 9 de cadena = 21
+  para corregir un P1. ADR-150 (ficha del operador): corrector 50, job
+  100, aritmética real en el comentario del workflow; el guardián
+  estructural sigue en verde sin tocarlo. Criterio en vivo: la ronda
+  relanzada con `continua` termina en `FIXED` o muere por otra causa;
+  una segunda muerte por tiempo desmiente el ADR y señala a la deuda 8.
+- **Deuda 3, ficha hecha (ADR-149, PR #549)**: `sirius_apply_verdict.sh`
+  relanza el run de Quality del head si ya terminó cuando la incidencia
+  entra en `ci-pending` (mismo remedio que la rama head-movido-tras-ci
+  de la puerta del corrector, en el punto de entrada general); lectura
+  con el `github.token`, relanzamiento con el PAT; marcador por head y
+  run; lectura caída o relanzamiento fallido = paso rojo reintentable con
+  la incidencia ya en `ci-pending`. Ocho pruebas con el `gh` simulado y
+  tres guardianes; mutación vista caer (6 de 9); cadena completa 4970
+  en verde. Lo que falta: el dato en vivo (`QUALITY_RELANZADO`).
+- **Lo que enseña la muerte**: una regla nueva de prompt (ADR-145) cambia
+  el coste de la ronda y arrastra a los presupuestos que la rodean; el
+  guardián de la suma protegía la aritmética, no el sentido del número.
+  Séptima lección: al cambiar lo que un rol tiene que hacer, revisar en
+  el mismo commit cuánto tiempo tiene para hacerlo.
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
@@ -1166,7 +1205,10 @@ ADR o su incidencia cuando se adopte.
    depende del orden/estado de Qt (entrada 16).
 8. Corrector del motor: presupuesto o un commit por hallazgo cuando la
    ronda trae varios hallazgos de interfaz (entradas 9 y 16), y poder
-   cancelarlo cuando el propietario corrige a mano (entrada 17).
+   cancelarlo cuando el propietario corrige a mano (entrada 17). ADR-150
+   (06-09, entrada 43) sube el tope del paso de 30 a 50 min para que
+   quepa la cadena completa de ADR-145 tras la corrección; el presupuesto
+   por hallazgo y la cancelación siguen abiertos (encargo del motor).
 9. Medición con Ollama real de M19b y M20 en la máquina del propietario
    (filas pendientes en ADR-128 y ADR-129). **SALDADA el 05-09** (entrada
    41): 0 críticas perdidas (venía de 10), cobertura 70/81 (de 59), con
