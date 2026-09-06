@@ -1423,8 +1423,7 @@ def test_cada_estado_acreditado_lleva_el_instante_de_su_comentario() -> None:
 
     assert comentarios.comentarios is not None
     assert tuple(
-        (acreditado.etiqueta, acreditado.publicado_en)
-        for acreditado in mirrored.historial_estados
+        (acreditado.etiqueta, acreditado.publicado_en) for acreditado in mirrored.historial_estados
     ) == (
         ("sirius:implementing", None),
         ("sirius:failed-safely", comentarios.comentarios[0].creado_en),
@@ -1453,8 +1452,7 @@ def test_cada_parada_acreditada_lleva_el_diagnostico_publicado_hasta_ella() -> N
     )
 
     assert tuple(
-        (acreditado.etiqueta, acreditado.diagnostico)
-        for acreditado in mirrored.historial_estados
+        (acreditado.etiqueta, acreditado.diagnostico) for acreditado in mirrored.historial_estados
     ) == (
         ("sirius:failed-safely", "la ronda 1 se quedó sin turnos"),
         ("sirius:repair-requested", None),

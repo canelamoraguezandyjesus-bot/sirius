@@ -936,9 +936,7 @@ def _cronologia(
                     fase=fase,
                     head="1c934781",
                     orden=orden,
-                    publicado_en=(
-                        desde + timedelta(minutes=orden) if desde is not None else None
-                    ),
+                    publicado_en=(desde + timedelta(minutes=orden) if desde is not None else None),
                     diagnostico=(
                         diagnostico_vigente if estado is WorkItemState.FAILED_SAFELY else None
                     ),
@@ -1359,9 +1357,7 @@ def test_el_recorrido_ancla_en_la_ocurrencia_que_el_almacen_pudo_guardar() -> No
     parada, en vez de saltárselas (CODEX-002, ronda 2, PR #546).
     """
     store = InMemoryWorkEngineStore()
-    parado = _motor_parado_en_reparar(
-        store, parado_en=_INICIO_DEL_HISTORIAL + timedelta(minutes=1)
-    )
+    parado = _motor_parado_en_reparar(store, parado_en=_INICIO_DEL_HISTORIAL + timedelta(minutes=1))
     historial, permisos = _cronologia(*_DOS_PARADAS_IGUALES, desde=_INICIO_DEL_HISTORIAL)
     segunda_parada = historial[2]
     assert segunda_parada.estado is WorkItemState.FAILED_SAFELY
