@@ -1487,6 +1487,24 @@ ADR o su incidencia cuando se adopte.
   a las 15:25 y PR #559 fusionada a las 15:26, la deuda concreta de #503
   saldada) y `continua` a las 15:27. PR #560 (ADR-149) se retiene hasta
   que #546 esté dentro, por la misma regla que #559.
+- **Ronda 6 de #545 (15:27 → 15:45, 18 minutos), segunda entrega parcial
+  de ADR-155**: corregidos R4-002 (P2: la atribución del diagnóstico deja
+  la posición y pasa a emparejar por RANGO —la k-ésima parada notificada
+  con el k-ésimo diagnóstico— apoyándose en lo único que el notificador
+  serializa, los avisos de una misma etiqueta; prueba nueva vista fallar
+  con mutación), R4-003 y R4-004 (texto, verificados con `grep -c` sobre
+  `check.ps1` y con la cadena). NO corregido R4-001 (P1), con el
+  obstáculo medido y declarado: correlacionar parada y permiso por head
+  desnudo haría pasar `test_un_permiso_anterior_a_la_parada_no_la_levanta`
+  al revés, porque el doble `_cronologia` da el mismo head a todas las
+  ocurrencias, y la decisión prohíbe relajar pruebas; hace falta un
+  discriminante más que el head (el veredicto síncrono que causó la
+  parada, no el aviso asíncrono). Cadena una sola vez sobre `91dac47`
+  (5071 passed, 17 skipped, 2 xfailed, código 0 «que acredita los cuatro
+  comandos», ADR-153 citado por el propio corrector). Esta vez el
+  veredicto (15:45:07) entró con Quality ya en marcha (15:44:03): sin
+  carrera. Riesgo a vigilar: el emparejamiento por rango no es la
+  identidad que R4-002 pedía; la revisión dirá si vale.
 - **Estado a las 13:32 UTC (14:32 del propietario)**: `main` en
   `52344dc` tras cuatro fusiones del operador (#553 `3a00e04` 04:05,
   #555 `4cd8924` y #554 `dc45b59` 05:03, #556 `52344dc` 13:29). Las dos
