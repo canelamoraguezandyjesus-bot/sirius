@@ -1533,6 +1533,13 @@ ADR o su incidencia cuando se adopte.
   es lo que va a pasar ahora: Quality corre sobre `bc33b82` desde las
   17:05). Regla: «Update branch» + `continua` solo vale para la fase de
   corrección; para la revisión, el `continua` va sin actualizar o no va.
+  Y así fue: Quality verde sobre `bc33b82` a las 17:23, la ruta de
+  ADR-142 revivió la revisión sola (run 34048494054) y Codex volvió a
+  declarar la cuota agotada a las 17:34 (`codex-fallo-declarado`, segunda
+  vez). Coste de la sonda: ocho minutos de revisor Claude. Siguiente
+  sonda a las 20:40 UTC con un `continua` a secas; si sigue sin cuota, la
+  siguiente a las 07:00 UTC de mañana. El propietario mantiene la opción
+  1 (esperar) salvo que diga lo contrario.
 - **Estado a las 13:32 UTC (14:32 del propietario)**: `main` en
   `52344dc` tras cuatro fusiones del operador (#553 `3a00e04` 04:05,
   #555 `4cd8924` y #554 `dc45b59` 05:03, #556 `52344dc` 13:29). Las dos
