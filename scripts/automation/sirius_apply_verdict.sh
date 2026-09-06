@@ -284,6 +284,78 @@ sha_matches() {
   return 1
 }
 
+# relanzar_quality_si_ya_termino — deuda 3 de la bitácora (ADR-149).
+#
+# Quality arranca con el push de la PR y la transición a `ci-pending` llega
+# DESPUÉS: cuando el veredicto tarda más que Quality (un rojo de lint en 21 s;
+# o la cadena de comprobación del corrector, que dura lo mismo que Quality),
+# el `workflow_run` de Quality se consume con la incidencia todavía en
+# `implementing`/`repairing` y nadie vuelve a encaminarla: el ciclo queda mudo
+# hasta que una persona relanza el run a mano (entradas 3, 18, 40 y 41 de la
+# bitácora). Mismo remedio que la rama head-movido-tras-ci de la puerta del
+# corrector: si ya hay un run de Quality TERMINADO para este head, se relanza,
+# y su nueva finalización emite el `workflow_run` que el avance consumirá con
+# la incidencia ya en `ci-pending`. Si hay uno en cola o corriendo, su
+# finalización natural basta y no se toca nada.
+#
+# Tokens: las LECTURAS de Actions van con SIRIUS_READ_TOKEN (el github.token
+# del paso, con actions:read) cuando el workflow lo da; el POST va con el token
+# de esta invocación, el PAT, porque un `workflow_run` emitido a partir del
+# GITHUB_TOKEN no despierta al avance (anti-recursión; misma doctrina que
+# CHECKS_UNRELATED, abajo). Un marcador por head y run hace idempotente el
+# relanzamiento ante una reejecución de este paso. Una lectura caída o un
+# relanzamiento fallido NO se tratan como «no hay nada que relanzar»: la
+# incidencia queda en `ci-pending` y el paso termina en rojo, reintentable,
+# igual que en la puerta del corrector.
+relanzar_quality_si_ya_termino() {
+  local runs_json="" activos="" terminado="" marker="" scan_file="" body_file=""
+  if ! runs_json="$( ( export GH_TOKEN="${SIRIUS_READ_TOKEN:-${GH_TOKEN:-}}"
+      sirius_retry gh api \
+        "repos/${REPO}/actions/workflows/quality.yml/runs?head_sha=${head_sha}&event=pull_request&per_page=20" \
+        --jq '[.workflow_runs[] | {id: .id, status: .status}]' ) )"; then
+    echo "::error::No se pudo consultar los runs de Quality del head ${head_sha} (consulta-runs-fallida); la incidencia queda en ci-pending y este paso, reintentable." >&2
+    exit 1
+  fi
+  activos="$(printf '%s' "$runs_json" | jq -r '[.[] | select(.status != "completed")] | length' 2>/dev/null || echo "")"
+  if [ -z "$activos" ]; then
+    echo "::error::Respuesta ilegible al consultar los runs de Quality del head ${head_sha} (consulta-runs-ilegible); la incidencia queda en ci-pending y este paso, reintentable." >&2
+    exit 1
+  fi
+  if [ "$activos" -gt 0 ]; then
+    echo "Quality sigue en curso para ${head_sha}; su finalización encaminará la incidencia."
+    return 0
+  fi
+  terminado="$(printf '%s' "$runs_json" | jq -r '[.[] | select(.status == "completed")] | .[0].id // empty' 2>/dev/null || true)"
+  if [ -z "$terminado" ]; then
+    echo "Sin run de Quality terminado para ${head_sha}; su cierre llegará con la incidencia ya en ci-pending."
+    return 0
+  fi
+  marker="<!-- sirius-quality-relanzado:${head_sha}:${terminado} -->"
+  scan_file="$(mktemp)"
+  sirius_scan_text "$REPO" "$ISSUE" "$scan_file"
+  if grep -qF "$marker" "$scan_file"; then
+    rm -f "$scan_file"
+    echo "El run ${terminado} de Quality ya se relanzó para ${head_sha}; no se repite."
+    return 0
+  fi
+  rm -f "$scan_file"
+  if ! sirius_retry gh api -X POST "repos/${REPO}/actions/runs/${terminado}/rerun" >/dev/null; then
+    echo "::error::No se pudo relanzar el run ${terminado} de Quality (relanzamiento-fallido); la incidencia queda en ci-pending y este paso, reintentable." >&2
+    exit 1
+  fi
+  body_file="$(mktemp)"
+  printf '%s\n\n%s\n\n%s\n%s\n%s\n' \
+    "$marker" \
+    "## QUALITY_RELANZADO" \
+    "- Head SHA: \`${head_sha}\`" \
+    "- Run relanzado: https://github.com/${REPO}/actions/runs/${terminado}" \
+    "- Motivo: Quality terminó para este head antes de que la incidencia entrara en \`sirius:ci-pending\`, así que su resultado se habría perdido (deuda 3 de la bitácora, ADR-149). La nueva finalización del run la encaminará." >"$body_file"
+  sirius_comment_once "$REPO" "$ISSUE" "$marker" "$body_file" \
+    || echo "::warning::No se pudo publicar el aviso del relanzamiento; el run ${terminado} ya está relanzado."
+  rm -f "$body_file"
+  return 0
+}
+
 # require_reviewed_head — endurecimiento de la revisión (contrato §4.1):
 # cualquier resultado de revisión (aprobación O cambios solicitados) debe
 # demostrar sobre qué versión se pronunció. Exige que el JSON declare
@@ -347,6 +419,9 @@ case "$verdict" in
       exit 1
     fi
     rm -f "$body_file"
+    # Ya en `ci-pending`: si Quality terminó antes de esta transición, su
+    # cierre se consumió con la incidencia en otro estado (deuda 3, ADR-149).
+    relanzar_quality_si_ya_termino
     ;;
 
   CHECKS_UNRELATED)

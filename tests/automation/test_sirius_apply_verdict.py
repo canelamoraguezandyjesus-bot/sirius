@@ -55,6 +55,27 @@ issue_from() { printf '%s' "$1" | grep -oE 'issues/[0-9]+' | head -1 | cut -d/ -
 case "$sub" in
   api)
     args="$*"
+    # ADR-149: runs de Quality del head (GET) y relanzamiento (POST). El GET
+    # sirve `quality_runs_<head>.json` (o ninguno) y aplica el `--jq` real del
+    # llamador; ambos anotan el token con el que llegaron, para poder afirmar
+    # que la lectura va con el de lectura y el POST con el PAT.
+    if printf '%s' "$args" | grep -q 'actions/workflows/quality.yml/runs'; then
+      [ -f "$D/quality_runs_fail" ] && { echo "503 runs" >&2; exit 1; }
+      filtro_runs=""; prev=""
+      for a in "$@"; do [ "$prev" = "--jq" ] && filtro_runs="$a"; prev="$a"; done
+      h="$(printf '%s' "$args" | grep -oE 'head_sha=[0-9a-f]+' | cut -d= -f2)"
+      echo "QUALITY_RUNS ${h} token=${GH_TOKEN:-}" >> "$D/actions.log"
+      f_runs="$D/quality_runs_${h}.json"
+      [ -f "$f_runs" ] || printf '{"workflow_runs": []}' > "$f_runs"
+      jq -r "$filtro_runs" "$f_runs"
+      exit 0
+    fi
+    if printf '%s' "$args" | grep -qE 'actions/runs/[0-9]+/rerun'; then
+      rid="$(printf '%s' "$args" | grep -oE 'runs/[0-9]+' | cut -d/ -f2)"
+      echo "RERUN ${rid} token=${GH_TOKEN:-}" >> "$D/actions.log"
+      [ -f "$D/rerun_fails" ] && { echo "403 rerun" >&2; exit 1; }
+      exit 0
+    fi
     if printf '%s' "$args" | grep -q '/compare/'; then
       cat "$D/compare_response.json" 2>/dev/null || printf '{"files": []}'
       exit 0
@@ -1678,3 +1699,149 @@ def test_without_actions_variables_the_stop_message_is_unchanged(tmp_path: Path)
     r = _run(env, "corrector", tmp_path / "no-existe.json")
     assert r.returncode != 0
     assert _comments(env).strip() == _cuerpo_de_parada("", run_tag="manual-1").strip()
+
+
+# --------------------------------------------------------------------------- #
+# ADR-149: al entrar en ci-pending, relanzar Quality si su cierre ya se consumió
+# --------------------------------------------------------------------------- #
+
+
+def _seed_quality_runs(env: dict[str, str], head: str, runs: list[dict[str, object]]) -> None:
+    """Respuesta de `gh api .../actions/workflows/quality.yml/runs?head_sha=<head>`."""
+    (_md(env) / f"quality_runs_{head}.json").write_text(
+        json.dumps({"workflow_runs": runs}), encoding="utf-8"
+    )
+
+
+def _actions_log(env: dict[str, str]) -> str:
+    f = _md(env) / "actions.log"
+    return f.read_text(encoding="utf-8") if f.exists() else ""
+
+
+def _implementador_listo(env: dict[str, str], tmp_path: Path, head: str) -> Path:
+    _seed_issue(
+        env, ["sirius:implementing"], comments="PR abierta: https://github.com/owner/repo/pull/9\n"
+    )
+    _seed_pr(env, 9, head=head)
+    return _verdict_file(tmp_path, {"verdict": "READY_FOR_REVIEW", "summary": "listo"})
+
+
+def test_ready_for_review_relanza_un_quality_ya_terminado_para_el_head(tmp_path: Path) -> None:
+    """La carrera de la deuda 3: Quality cerró antes de la transición y su
+    workflow_run se consumió con la incidencia en implementing. Se relanza el
+    run terminado y se publica el marcador una vez."""
+    env = _setup(tmp_path)
+    head = "c4d482267d9a"
+    vf = _implementador_listo(env, tmp_path, head)
+    _seed_quality_runs(env, head, [{"id": 555, "status": "completed", "conclusion": "failure"}])
+    r = _run(env, "implementer", vf)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "sirius:ci-pending" in _labels(env)
+    assert "RERUN 555" in _actions_log(env)
+    comments = _comments(env)
+    assert f"sirius-quality-relanzado:{head}:555" in comments
+    assert "QUALITY_RELANZADO" in comments
+
+
+def test_un_quality_en_curso_no_se_relanza(tmp_path: Path) -> None:
+    """Con un run en cola o corriendo, su cierre natural encaminará: nada que hacer."""
+    env = _setup(tmp_path)
+    head = "c4d482267d9a"
+    vf = _implementador_listo(env, tmp_path, head)
+    _seed_quality_runs(
+        env,
+        head,
+        [
+            {"id": 556, "status": "in_progress", "conclusion": None},
+            {"id": 555, "status": "completed", "conclusion": "failure"},
+        ],
+    )
+    r = _run(env, "implementer", vf)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "sirius:ci-pending" in _labels(env)
+    assert "RERUN" not in _actions_log(env)
+    assert "sirius-quality-relanzado" not in _comments(env)
+
+
+def test_sin_runs_de_quality_no_se_relanza_nada(tmp_path: Path) -> None:
+    env = _setup(tmp_path)
+    vf = _implementador_listo(env, tmp_path, "c4d482267d9a")
+    r = _run(env, "implementer", vf)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "QUALITY_RUNS c4d482267d9a" in _actions_log(env), "tiene que consultar los runs"
+    assert "RERUN" not in _actions_log(env)
+
+
+def test_el_fixed_del_corrector_tambien_relanza(tmp_path: Path) -> None:
+    """El corrector corre la cadena completa tras su push: la carrera es la norma."""
+    env = _setup(tmp_path)
+    head = "d5e5f5061234"
+    _seed_issue(
+        env, ["sirius:repairing"], comments="PR abierta: https://github.com/owner/repo/pull/9\n"
+    )
+    _seed_pr(env, 9, head=head)
+    _seed_quality_runs(env, head, [{"id": 557, "status": "completed", "conclusion": "success"}])
+    vf = _verdict_file(tmp_path, {"verdict": "FIXED", "summary": "corregido"})
+    r = _run(env, "corrector", vf, cycle="1")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "sirius:ci-pending" in _labels(env)
+    assert "RERUN 557" in _actions_log(env)
+
+
+def test_un_relanzamiento_ya_publicado_no_se_repite(tmp_path: Path) -> None:
+    """Reejecutar el paso (attempt 2) no relanza dos veces el mismo run."""
+    env = _setup(tmp_path)
+    head = "c4d482267d9a"
+    vf = _implementador_listo(env, tmp_path, head)
+    with (_md(env) / f"comments_{ISSUE}.txt").open("a", encoding="utf-8") as f:
+        f.write(f"<!-- sirius-quality-relanzado:{head}:555 -->\n")
+    _seed_quality_runs(env, head, [{"id": 555, "status": "completed", "conclusion": "failure"}])
+    r = _run(env, "implementer", vf)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "RERUN" not in _actions_log(env)
+
+
+def test_si_el_relanzamiento_falla_el_paso_queda_rojo_con_la_incidencia_en_ci_pending(
+    tmp_path: Path,
+) -> None:
+    env = _setup(tmp_path)
+    head = "c4d482267d9a"
+    vf = _implementador_listo(env, tmp_path, head)
+    _seed_quality_runs(env, head, [{"id": 555, "status": "completed", "conclusion": "failure"}])
+    (_md(env) / "rerun_fails").write_text("", encoding="utf-8")
+    r = _run(env, "implementer", vf)
+    assert r.returncode != 0
+    assert "relanzamiento-fallido" in r.stdout + r.stderr
+    assert "sirius:ci-pending" in _labels(env)
+    assert "sirius:failed-safely" not in _labels(env)
+    assert "sirius-quality-relanzado" not in _comments(env)
+
+
+def test_si_la_consulta_de_runs_cae_el_paso_queda_rojo_no_verde(tmp_path: Path) -> None:
+    """«No pude consultar» no es «no hay run terminado»."""
+    env = _setup(tmp_path)
+    vf = _implementador_listo(env, tmp_path, "c4d482267d9a")
+    (_md(env) / "quality_runs_fail").write_text("", encoding="utf-8")
+    r = _run(env, "implementer", vf)
+    assert r.returncode != 0
+    assert "consulta-runs-fallida" in r.stdout + r.stderr
+    assert "sirius:ci-pending" in _labels(env)
+
+
+def test_la_lectura_va_con_el_token_de_lectura_y_el_relanzamiento_con_el_pat(
+    tmp_path: Path,
+) -> None:
+    """Doctrina de tokens: el GET de runs con el github.token del paso; el POST
+    con el token de la invocación (el PAT), o el workflow_run no despierta al
+    avance."""
+    env = _setup(tmp_path)
+    env["GH_TOKEN"] = "pat-de-la-invocacion"
+    env["SIRIUS_READ_TOKEN"] = "token-de-lectura"
+    head = "c4d482267d9a"
+    vf = _implementador_listo(env, tmp_path, head)
+    _seed_quality_runs(env, head, [{"id": 555, "status": "completed", "conclusion": "success"}])
+    r = _run(env, "implementer", vf)
+    assert r.returncode == 0, r.stdout + r.stderr
+    log = _actions_log(env)
+    assert f"QUALITY_RUNS {head} token=token-de-lectura" in log
+    assert "RERUN 555 token=pat-de-la-invocacion" in log
