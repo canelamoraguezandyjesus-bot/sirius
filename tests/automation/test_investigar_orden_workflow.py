@@ -110,7 +110,7 @@ def test_el_veredicto_se_aplica_siempre_que_la_puerta_dejara_pasar() -> None:
     veredicto = next(
         p
         for p in pasos
-        if 'bash "${RUNNER_TEMP}/automation-de-main/sirius_apply_verdict.sh"'
+        if 'bash "${RUNNER_TEMP}/automation-de-main/scripts/automation/sirius_apply_verdict.sh"'
         in str(p.get("run", ""))
     )
     assert "always()" in str(veredicto.get("if", "")), (
