@@ -54,6 +54,22 @@ jobs:
           persist-credentials: true
           token: ${{ secrets.SIRIUS_BOT_TOKEN }}
 
+      - name: Congelar la automatización de main
+        # ADR-152: el paso POSTERIOR al agente (aplicar el veredicto) ejecuta
+        # ESTA copia, tomada de `main` antes de que el investigador toque el
+        # árbol. Así ningún agente elige qué automatización aplica su propio
+        # veredicto con el PAT, y los arreglos de `main` rigen desde el primer
+        # run posterior a su fusión, sea cual sea la rama de la PR.
+        timeout-minutes: 1
+        shell: bash --noprofile --norc {0}
+        run: |
+          set -uo pipefail
+          if ! cp -R scripts/automation "${RUNNER_TEMP}/automation-de-main"; then
+            echo "::error::No se pudo congelar scripts/automation; sin la copia de main no hay veredicto."
+            exit 1
+          fi
+          echo "Automatización congelada desde main $(git rev-parse --short HEAD) en ${RUNNER_TEMP}/automation-de-main"
+
       - name: "Puerta: solo el perfil investigador, y activacion valida"
         id: gate
         shell: bash --noprofile --norc {0}
@@ -198,5 +214,5 @@ jobs:
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
           set -uo pipefail
-          bash scripts/automation/sirius_apply_verdict.sh \
+          bash "${RUNNER_TEMP}/automation-de-main/sirius_apply_verdict.sh" \
             "$GH_REPO" "$ISSUE_NUMBER" "implementer" "${RUNNER_TEMP}/sirius_verdict.json"
