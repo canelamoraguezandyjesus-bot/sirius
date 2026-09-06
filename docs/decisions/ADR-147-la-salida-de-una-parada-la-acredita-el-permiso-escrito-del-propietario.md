@@ -447,6 +447,17 @@ aplicar la etiqueta, y la etiqueta es lo que dispara el marcador—. Con eso:
   por las 11 pruebas nuevas menos las 2 reescritas. Lo único que cambia en el
   árbol después de esta captura es la transcripción de estas mismas cifras y el
   cuerpo de la PR.
+- **Ronda 4.** Validaciones obligatorias completas con una sola invocación de
+  `pwsh -File scripts/check.ps1` (ADR-145) **sobre el árbol de `91dac47`**:
+  `5071 passed, 17 skipped, 2 xfailed` en 461.44 s (0:07:41), código de salida
+  **0**. Sobre este árbol ese 0 acredita los cuatro comandos y no solo `pytest`:
+  es exactamente lo que ADR-153 cambió y lo que CLAUDE-R4-003 obligaba a dejar
+  de negar. La cifra sube en 3 respecto de la de la ronda 3 (`5068`, head
+  `4d9eb70`): 1 es la prueba nueva de esta ronda
+  —`test_un_aviso_de_parada_retrasado_no_le_roba_el_diagnostico_a_la_otra`— y
+  las otras 2 entran con la actualización de la rama con `main` (#559). Lo
+  único que cambia en el árbol después de esta captura es la transcripción de
+  estas mismas cifras y el cuerpo de la PR.
 - **Ronda 3.** Validaciones obligatorias completas con una sola invocación de
   `pwsh -File scripts/check.ps1` (ADR-145) **sobre el árbol de `4d9eb70`**:
   `5068 passed, 17 skipped, 2 xfailed` en 479.96 s (0:07:59), código de salida
