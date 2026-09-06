@@ -149,16 +149,50 @@ bot.
 
 **Lo demás del recorrido** se conserva del material de la PR #540: la
 proyección expone el historial de estados notificados
-(`sirius-notification`, las seis etiquetas de `notify-sirius-state.yml`); el
-recorrido ancla en la ÚLTIMA coincidencia con el estado guardado; cada tramo
-se calcula con el MISMO cálculo por foto de siempre y avanza llamando a los
-métodos REALES del dominio, así que ninguna arista es nueva; y es TODO O NADA
-—si un tramo diverge o resulta ilegal, no se aplica ninguno—. Lo que
+(`sirius-notification`, las seis etiquetas de `notify-sirius-state.yml`); cada
+tramo se calcula con el MISMO cálculo por foto de siempre y avanza llamando a
+los métodos REALES del dominio, así que ninguna arista es nueva; y es TODO O
+NADA —o el recorrido llega hasta la foto, o no se aplica ninguno—. Lo que
 desaparece es toda comparación con la foto dentro de la acreditación: la
 exigencia de «acreditación intermedia distinta de la foto» de la PR #540 se
 retira entera, porque el criterio de salida de parada es estrictamente más
 fuerte que ella y no depende de qué etiqueta esté puesta en el instante de la
 pasada.
+
+**El orden de publicación de los avisos no es el orden de aplicación** (ronda
+2 de la PR #546, CODEX-001). Es lo que esta misma nota de arranque ya decía en
+su pregunta 2 —el notificador no serializa entre etiquetas, su grupo de
+concurrencia lleva el nombre de la etiqueta—, pero el recorrido exigía que
+TODOS los marcadores posteriores al ancla formaran una secuencia legal en ese
+orden, así que un solo aviso retrasado lo tumbaba entero y para siempre. Lo que
+se reconstruye es una SUBSECUENCIA legal hasta la foto: un aviso que no encaja
+donde está publicado no mueve el recorrido y tampoco lo tumba. Con dos
+excepciones que no se saltan nunca, porque saltarlas sí cambiaría lo que el
+recorrido afirma: un aviso de PARADA —saltárselo sería pasar por encima de una
+parada real sin exigir su permiso— y el tramo final contra la foto. Y una
+salida de parada sin permiso sigue abandonando el recorrido entero: eso no es
+un aviso a destiempo, es el criterio.
+
+**Cada ocurrencia del historial se lleva su propia evidencia** (misma ronda,
+CODEX-002 y CODEX-003). La posición ordena, pero no identifica: el mismo
+`(estado, fase)` aparece varias veces en un ciclo con dos vueltas de
+reparación. Así que cada `EstadoAcreditado` lleva ahora el INSTANTE del
+comentario que lo publicó y, si acredita una parada, el DIAGNÓSTICO que el
+historial le atribuye —el último publicado hasta su posición, que es donde
+`sirius_apply_verdict.sh` lo escribe: el comentario del veredicto va antes de
+aplicar la etiqueta, y la etiqueta es lo que dispara el marcador—. Con eso:
+
+- el recorrido **ancla en la ocurrencia que el almacén pudo guardar**, no en la
+  última por costumbre: se descartan las publicadas DESPUÉS de la última
+  escritura del almacén (`updated_at`); si el diagnóstico guardado señala
+  exactamente una de las que quedan, esa; y solo si ninguna de las dos
+  discrimina, la más reciente de las que la evidencia no descartó. Anclar
+  siempre en la última hacía que un motor detenido en la PRIMERA parada se
+  saltara entero el tramo intermedio —la primera recuperación y la segunda
+  parada—, que es justo el salto que este ADR viene a evitar;
+- cada parada que el recorrido recrea **conserva SU diagnóstico**, y si no hay
+  ninguno atribuible hasta ella no se recrea ninguno. El de la FOTO vigente no
+  cambia: lo sigue poniendo el espejo real, contra el que va el tramo final.
 
 ## Comprobación que la sostiene
 
@@ -170,7 +204,8 @@ pasada.
   de la primera ronda de #545, reproducida aquí.
 - Prueba del caso vivo sobre un doble del espejo que reproduce ese historial
   literal (`test_recorrido_acreditado_avanza_el_caso_vivo_de_la_537`), vista
-  FALLAR contra el reflector de `main` antes del cambio y pasar después.
+  FALLAR contra el reflector de `main` antes del cambio y pasar después. Sigue
+  en verde tras la corrección de la ronda 2, con el mismo plan de cinco pasos.
 - Los dos contraejemplos del encargo, cada uno con su prueba: sin permiso
   posterior a la parada no se toca nada; dos paradas y un solo permiso
   posterior a la primera acreditan la primera salida y no la segunda.
@@ -210,9 +245,74 @@ pasada.
   proyección: aceptar la orden del bot, usar `str.lower()`, aceptar la palabra
   contenida en un texto mayor y quitar el filtro de confianza tumban cada una
   su prueba.
+- **Corrección de la ronda 2 (#545), disparada por la revisión** (CODEX-001
+  P1, CODEX-002 y CODEX-003 P2 sobre el head `f877ec7`). Las tres son la misma
+  familia: el recorrido daba valor de evidencia a la POSICIÓN de un marcador
+  —como orden de aplicación, como identidad de la ocurrencia y como
+  atribución del diagnóstico— cuando la posición solo ordena. La corrección
+  está descrita en la sección «Decisión»; su comprobación, aquí:
+
+  - `_interpretar_historial_estados` le pone a cada `EstadoAcreditado` el
+    `creado_en` de su comentario (`None` si el marcador viene del cuerpo, que
+    no tiene instante propio) y, a las paradas, el diagnóstico atribuible hasta
+    su posición. `_interpretar_diagnostico_fallo` —el de la foto vigente— pasa
+    a ser el último elemento de esa misma cronología, no un segundo recorrido:
+    la foto y las paradas históricas no pueden discrepar sobre qué es un
+    diagnóstico.
+  - Pruebas: **8 nuevas** en `tests/engine/test_reflect.py` y **3** en
+    `tests/engine/test_mirror_projection.py`. Dos pruebas se REESCRIBEN porque
+    fijaban lo corregido: `test_el_recorrido_ancla_en_la_ULTIMA_coincidencia…`
+    (su enunciado —«anclar en la primera abandonaría el recorrido entero»— deja
+    de ser cierto en cuanto un aviso a destiempo no tumba el recorrido) da paso
+    a las tres pruebas del ancla correlacionada, y
+    `test_un_tramo_ilegal_abandona_el_recorrido_entero` (su tramo ilegal era un
+    `sirius:implementing` publicado tarde, es decir, el caso que CODEX-001 pide
+    tolerar) da paso a las dos que fijan las excepciones que NO se saltan: el
+    aviso de parada y el tramo final contra la foto.
+
+  **Las siete mutaciones de esta ronda, vistas caer** (ADR-001, regla 3), con
+  la primera línea del fallo de `pytest`:
+
+  1. `if acreditado is None or espejo_del_tramo.estado in _PARADAS:` →
+     `if True:` (el aviso a destiempo vuelve a tumbar el recorrido) tumba
+     `test_un_aviso_publicado_fuera_de_orden_no_envenena_el_recorrido`:
+     `AssertionError: assert 'WI-20260902-174417: … no hay camino hacia
+     delante, no se toca nada' is None` —literalmente el defecto que CODEX-001
+     describe—.
+  2. La misma línea → `if acreditado is None:` (se permite saltarse también un
+     aviso de parada) tumba
+     `test_un_aviso_de_PARADA_que_no_encaja_abandona_el_recorrido_entero`:
+     `AssertionError: assert (PasoReflejo(…)) == ()`.
+  3. `return anteriores[-1] if anteriores else candidatos[0]` →
+     `return candidatos[-1]` (el ancla vuelve a ser «la última coincidencia»)
+     tumba `test_el_recorrido_ancla_en_la_ocurrencia_que_el_almacen_pudo_guardar`:
+     `AssertionError: At index 1 diff: 'work_item_repair_resumed' !=
+     'work_item_failed_safely'` —el salto que se come la segunda parada—.
+  4. `if len(por_identidad) == 1:` → `if False:` (se quita la correlación por
+     identidad del diagnóstico) tumba
+     `test_el_diagnostico_guardado_identifica_la_parada_cuando_el_tiempo_no_discrimina`,
+     con el mismo primer diff.
+  5. Quitar `diagnostico_fallo=acreditado.diagnostico` del espejo de cada tramo
+     (el tramo histórico vuelve a heredar el diagnóstico de la foto) tumba
+     `test_cada_parada_del_recorrido_conserva_SU_diagnostico`:
+     `AssertionError: cada parada se escribe con su propia evidencia, no con la
+     de la última`.
+  6. `if posicion > orden: break` → `if False: break` en `_diagnostico_hasta`
+     (la proyección atribuye a toda parada el último diagnóstico) tumba
+     `test_cada_parada_acreditada_lleva_el_diagnostico_publicado_hasta_ella`:
+     `AssertionError: At index 0 diff: ('sirius:failed-safely', 'la ronda 2
+     agotó el tiempo del job') != ('sirius:failed-safely', 'la ronda 1 se quedó
+     sin turnos')`.
+  7. `publicado_en=instantes.get(orden)` → `publicado_en=None` tumba
+     `test_cada_estado_acreditado_lleva_el_instante_de_su_comentario`:
+     `AssertionError: At index 1 diff: ('sirius:failed-safely', None) !=
+     ('sirius:failed-safely', datetime.datetime(2026, 9, 5, 3, 0, …))`.
+
 - Validaciones obligatorias completas con una sola invocación de
-  `scripts/check.ps1` (ADR-145): `4983 passed, 16 skipped, 2 xfailed`, código de
-  salida 0.
+  `scripts/check.ps1` (ADR-145): `4992 passed, 16 skipped, 2 xfailed`
+  en 452.01 s, código de salida 0, sobre el árbol final de esta ronda. La
+  cifra anterior de este ADR —`4983 passed`— era la del head `f877ec7`; sube
+  en 9 por las 11 pruebas nuevas menos las 2 reescritas.
 - **Corrección de la ronda 1 (#545), disparada por `CI_FAILURE` sobre el head
   `c618f10`.** Quality (run 33994967331) paró en `Ruff lint` con dos defectos,
   ambos en pruebas nuevas de este cambio y ninguno en el código del reflector ni

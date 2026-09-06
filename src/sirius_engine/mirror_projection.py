@@ -382,6 +382,26 @@ def _textos_de_confianza(
     return tuple(texto for texto, _ in _historial_de_confianza(cuerpo, comentarios))
 
 
+def _comentarios_de_confianza(
+    cuerpo: CuerpoIncidencia, comentarios: Sequence[Comentario]
+) -> tuple[tuple[int, Comentario], ...]:
+    """Los COMENTARIOS de confianza con su posición en :func:`_historial_de_confianza`.
+
+    Existe para lo que solo un comentario tiene y el cuerpo no: un instante de
+    publicación. El desplazamiento inicial se calcula con el MISMO predicado
+    que decide si el cuerpo entra en el historial, así que las dos numeraciones
+    no pueden desalinearse -no hay dos recorridos que mantener de acuerdo, hay
+    uno y un desplazamiento-.
+    """
+    inicio = 1 if es_autor_de_confianza(cuerpo) else 0
+    return tuple(
+        (inicio + posicion, comentario)
+        for posicion, comentario in enumerate(
+            comentario for comentario in comentarios if es_autor_de_confianza(comentario)
+        )
+    )
+
+
 def _texto_cronologico_de_confianza(
     cuerpo: CuerpoIncidencia, comentarios: Sequence[Comentario]
 ) -> str:
@@ -545,7 +565,24 @@ def _interpretar_historial_estados(
     no borra los estados por los que la incidencia pasó antes. El recorrido
     acreditado ancla en el estado guardado del motor, que puede ser anterior a
     esa orden (ADR-147).
+
+    Cada ocurrencia se lleva su propia evidencia, no la del ciclo entero
+    (CODEX-002 y CODEX-003, ronda 2, PR #546):
+
+    - el **instante** del comentario que la publicó (``None`` si el marcador
+      viene del cuerpo, que no tiene instante propio);
+    - el **diagnóstico** que le corresponde, si acredita una parada
+      ``FAILED_SAFELY``: el último publicado hasta su posición, que es donde
+      ``sirius_apply_verdict.sh`` lo escribe -el comentario del veredicto va
+      ANTES de aplicar la etiqueta, y la etiqueta es lo que dispara este
+      marcador-. ``None`` si no hay ninguno hasta aquí: entonces no se
+      atribuye ninguno.
     """
+    diagnosticos = _interpretar_diagnosticos_fallo(cuerpo, comentarios)
+    instantes = {
+        orden: comentario.creado_en
+        for orden, comentario in _comentarios_de_confianza(cuerpo, comentarios)
+    }
     acreditados: list[EstadoAcreditado] = []
     for orden, texto in enumerate(_textos_de_confianza(cuerpo, comentarios)):
         for match in _NOTIFICATION_MARKER_RE.finditer(texto):
@@ -560,9 +597,25 @@ def _interpretar_historial_estados(
                     fase=fase,
                     head=match.group(2),
                     orden=orden,
+                    publicado_en=instantes.get(orden),
+                    diagnostico=(
+                        _diagnostico_hasta(diagnosticos, orden)
+                        if estado is WorkItemState.FAILED_SAFELY
+                        else None
+                    ),
                 )
             )
     return tuple(acreditados)
+
+
+def _diagnostico_hasta(diagnosticos: Sequence[tuple[int, str]], orden: int) -> str | None:
+    """El último diagnóstico publicado en el historial hasta ``orden``, o ``None``."""
+    atribuible: str | None = None
+    for posicion, texto in diagnosticos:
+        if posicion > orden:
+            break
+        atribuible = texto
+    return atribuible
 
 
 def _interpretar_permisos_reanudacion(
@@ -609,22 +662,44 @@ def _interpretar_permisos_reanudacion(
     return tuple(permisos)
 
 
-def _interpretar_diagnostico_fallo(comentarios: Sequence[Comentario]) -> str | None:
-    """El diagnóstico del último comentario de confianza que paró de forma segura.
+def _interpretar_diagnosticos_fallo(
+    cuerpo: CuerpoIncidencia, comentarios: Sequence[Comentario]
+) -> tuple[tuple[int, str], ...]:
+    """La CRONOLOGÍA de los diagnósticos de parada, cada uno con su posición.
 
     Nunca en el cuerpo -a diferencia de SHA/PR-: ``FAILED_SAFELY`` es un
-    veredicto de un rol de ejecución, y esos solo se publican como
-    comentario (misma fuente que :func:`_interpretar_veredictos`).
+    veredicto de un rol de ejecución, y esos solo se publican como comentario
+    (misma fuente que :func:`_interpretar_veredictos`). El cuerpo entra igual
+    en el recorrido, pero solo para que la posición esté en la MISMA escala que
+    la de :func:`_interpretar_historial_estados`.
+
+    Antes de la ronda 2 de la PR #546 solo existía el último diagnóstico de
+    toda la incidencia, y el recorrido acreditado se lo ponía a TODAS las
+    paradas que recreaba: dos paradas seguidas con diagnósticos distintos se
+    escribían las dos con el segundo (CODEX-003). Conservar la cronología es lo
+    que permite atribuirle a cada parada la suya.
     """
-    for comentario in reversed(comentarios):
-        if not es_autor_de_confianza(comentario):
-            continue
+    diagnosticos: list[tuple[int, str]] = []
+    for orden, comentario in _comentarios_de_confianza(cuerpo, comentarios):
         match = _DIAGNOSTICO_FALLO_RE.search(comentario.cuerpo)
         if match:
             texto = match.group(1).strip()
             if texto:
-                return texto
-    return None
+                diagnosticos.append((orden, texto))
+    return tuple(diagnosticos)
+
+
+def _interpretar_diagnostico_fallo(
+    cuerpo: CuerpoIncidencia, comentarios: Sequence[Comentario]
+) -> str | None:
+    """El diagnóstico de la ÚLTIMA parada publicada: el que le toca a la foto vigente.
+
+    Es el último elemento de :func:`_interpretar_diagnosticos_fallo` y no un
+    segundo recorrido: la foto y las paradas históricas leen exactamente la
+    misma cronología, así que no pueden discrepar sobre qué es un diagnóstico.
+    """
+    diagnosticos = _interpretar_diagnosticos_fallo(cuerpo, comentarios)
+    return diagnosticos[-1][1] if diagnosticos else None
 
 
 def proyectar_work_item(
@@ -670,7 +745,7 @@ def proyectar_work_item(
         eventos_quality=_interpretar_eventos_quality(texto_vigente),
         fallos_quality_consecutivos=ci_failure_streak(texto_vigente),
         origen=OrigenLectura(fuente=f"github:{repo}#{numero}", leido_en=ahora),
-        diagnostico_fallo=_interpretar_diagnostico_fallo(comentarios.comentarios),
+        diagnostico_fallo=_interpretar_diagnostico_fallo(cuerpo.cuerpo, comentarios.comentarios),
         reanudacion_publicada=_interpretar_reanudacion_publicada(
             cuerpo.cuerpo, comentarios.comentarios
         ),

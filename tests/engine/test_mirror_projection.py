@@ -1390,6 +1390,102 @@ def test_los_permisos_de_reanudacion_llevan_las_dos_formas_en_orden() -> None:
     assert mirrored.historial_estados[0].orden == 3
 
 
+def _parada_publicada(diagnostico: str) -> tuple[str, str, str]:
+    """El comentario literal que `sirius_apply_verdict.sh` escribe al parar en seguro."""
+    return _propietario(
+        "<!-- sirius-verdict:corrector:FAILED_SAFELY:33945456417-1 -->\n\n"
+        f"🔴 **Me he detenido de forma segura**\n\n{diagnostico}"
+    )
+
+
+def test_cada_estado_acreditado_lleva_el_instante_de_su_comentario() -> None:
+    """La posición ordena; el instante identifica (CODEX-002, ronda 2, PR #546).
+
+    El mismo `(estado, fase)` aparece varias veces en un ciclo real, y la
+    posición sola no dice cuál de esas ocurrencias guardó el almacén. El
+    instante del comentario que la publicó sí lo acota: el almacén no pudo
+    guardar una publicada después de su última escritura. Un marcador que viene
+    del CUERPO no tiene instante propio -y es, por construcción, anterior a
+    todo comentario-, así que se proyecta como `None` en vez de inventarle uno.
+    """
+    comentarios = _comentarios(
+        _bot("<!-- sirius-notification:sirius:failed-safely:1c934781 -->"),
+        _bot("<!-- sirius-notification:sirius:repair-requested:786c82dc -->"),
+    )
+    mirrored = proyectar_work_item(
+        repo=_REPO,
+        numero=1,
+        metadatos=_metadatos_minimos(),
+        cuerpo=_cuerpo_de_confianza("<!-- sirius-notification:sirius:implementing:1c934781 -->"),
+        comentarios=comentarios,
+        ahora=_AHORA,
+    )
+
+    assert comentarios.comentarios is not None
+    assert tuple(
+        (acreditado.etiqueta, acreditado.publicado_en)
+        for acreditado in mirrored.historial_estados
+    ) == (
+        ("sirius:implementing", None),
+        ("sirius:failed-safely", comentarios.comentarios[0].creado_en),
+        ("sirius:repair-requested", comentarios.comentarios[1].creado_en),
+    )
+
+
+def test_cada_parada_acreditada_lleva_el_diagnostico_publicado_hasta_ella() -> None:
+    """Cada parada conserva SU evidencia (CODEX-003, ronda 2, PR #546).
+
+    `sirius_apply_verdict.sh` publica el diagnóstico ANTES de aplicar la
+    etiqueta, y la etiqueta es lo que dispara el marcador de notificación: el
+    diagnóstico que le toca a una parada es el último publicado hasta su
+    posición. Sin esta atribución, el reflector recreaba todas las paradas
+    históricas con el diagnóstico de la última de toda la incidencia.
+    """
+    mirrored = _proyectar(
+        _comentarios(
+            _parada_publicada("la ronda 1 se quedó sin turnos"),
+            _bot("<!-- sirius-notification:sirius:failed-safely:1c934781 -->"),
+            _propietario("continua"),
+            _bot("<!-- sirius-notification:sirius:repair-requested:1c934781 -->"),
+            _parada_publicada("la ronda 2 agotó el tiempo del job"),
+            _bot("<!-- sirius-notification:sirius:failed-safely:786c82dc -->"),
+        )
+    )
+
+    assert tuple(
+        (acreditado.etiqueta, acreditado.diagnostico)
+        for acreditado in mirrored.historial_estados
+    ) == (
+        ("sirius:failed-safely", "la ronda 1 se quedó sin turnos"),
+        ("sirius:repair-requested", None),
+        ("sirius:failed-safely", "la ronda 2 agotó el tiempo del job"),
+    )
+    assert mirrored.diagnostico_fallo == "la ronda 2 agotó el tiempo del job", (
+        "el diagnóstico de la FOTO vigente sigue siendo el de la última parada"
+    )
+
+
+def test_una_parada_sin_diagnostico_publicado_hasta_ella_no_hereda_el_siguiente() -> None:
+    """Abstenerse antes que atribuir lo que no es suyo.
+
+    El diagnóstico se publica después del marcador de la primera parada: hasta
+    ahí no hay ninguno atribuible, y la proyección lo dice con `None` en vez de
+    prestarle el de la parada siguiente.
+    """
+    mirrored = _proyectar(
+        _comentarios(
+            _bot("<!-- sirius-notification:sirius:failed-safely:1c934781 -->"),
+            _parada_publicada("la ronda 2 agotó el tiempo del job"),
+            _bot("<!-- sirius-notification:sirius:failed-safely:786c82dc -->"),
+        )
+    )
+
+    assert tuple(acreditado.diagnostico for acreditado in mirrored.historial_estados) == (
+        None,
+        "la ronda 2 agotó el tiempo del job",
+    )
+
+
 def test_la_orden_de_continuar_solo_cuenta_del_propietario() -> None:
     """`continua` es palabra del propietario, no del bot.
 

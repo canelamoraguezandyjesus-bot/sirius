@@ -49,7 +49,7 @@ Estructura de este fichero:
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -895,28 +895,53 @@ def test_mutacion_quitar_idempotencia_la_detecta_esta_prueba() -> None:
 
 def _cronologia(
     *entradas: tuple[str, str],
+    desde: datetime | None = None,
 ) -> tuple[tuple[EstadoAcreditado, ...], tuple[PermisoDeReanudacion, ...]]:
     """El historial de confianza como UNA secuencia, con su ``orden`` compartido.
 
     Cada entrada es ``("estado", "<etiqueta>")`` -un marcador
-    ``sirius-notification``- o ``("marcador"|"orden", "<referencia>")`` -un
-    permiso escrito del propietario-, en el orden en que se publicaron; el
-    ``orden`` se asigna por posición, exactamente como hace la proyección real
-    sobre los textos de confianza.
+    ``sirius-notification``-, ``("marcador"|"orden", "<referencia>")`` -un
+    permiso escrito del propietario- o ``("diagnostico", "<texto>")`` -un
+    comentario de veredicto ``FAILED_SAFELY`` con su diagnóstico-, en el orden
+    en que se publicaron; el ``orden`` se asigna por posición, exactamente como
+    hace la proyección real sobre los textos de confianza.
 
-    Que las dos cosas se declaren JUNTAS es deliberado: lo que el reflector
-    mide es la posición relativa entre una parada y el permiso que la levanta,
-    y dos listas independientes dejarían esa relación escrita en ningún sitio
-    -que es justo como se colaba la foto en las tres rondas de la #539-.
+    Que las tres cosas se declaren JUNTAS es deliberado: lo que el reflector
+    mide es la posición relativa entre una parada, el permiso que la levanta y
+    el diagnóstico que la explica, y unas listas independientes dejarían esa
+    relación escrita en ningún sitio -que es justo como se colaba la foto en
+    las tres rondas de la #539-.
+
+    Con ``desde``, cada posición recibe además su instante de publicación (un
+    minuto por posición, que es todo lo que hace falta para ordenarlos), igual
+    que la proyección le pone a cada marcador el ``creado_en`` de su
+    comentario. Sin ``desde`` no hay instantes: es el caso del marcador que
+    viene del cuerpo de la incidencia, que no tiene ninguno.
+
+    El diagnóstico se atribuye igual que en la proyección -el último publicado
+    hasta la posición del marcador, y solo a las paradas ``FAILED_SAFELY``-.
     """
     estados: list[EstadoAcreditado] = []
     permisos: list[PermisoDeReanudacion] = []
+    diagnostico_vigente: str | None = None
     for orden, (tipo, referencia) in enumerate(entradas):
-        if tipo == "estado":
+        if tipo == "diagnostico":
+            diagnostico_vigente = referencia
+        elif tipo == "estado":
             estado, fase = _LABEL_STATE[referencia]
             estados.append(
                 EstadoAcreditado(
-                    etiqueta=referencia, estado=estado, fase=fase, head="1c934781", orden=orden
+                    etiqueta=referencia,
+                    estado=estado,
+                    fase=fase,
+                    head="1c934781",
+                    orden=orden,
+                    publicado_en=(
+                        desde + timedelta(minutes=orden) if desde is not None else None
+                    ),
+                    diagnostico=(
+                        diagnostico_vigente if estado is WorkItemState.FAILED_SAFELY else None
+                    ),
                 )
             )
         else:
@@ -955,17 +980,40 @@ _CRONOLOGIA_537 = _cronologia(
 )
 
 
-def _motor_parado_en_reparar(store: InMemoryWorkEngineStore) -> WorkItem:
-    """El estado exacto en que se quedó WI-20260905-034826: failed_safely/reparar."""
+def _motor_parado_en_reparar(
+    store: InMemoryWorkEngineStore,
+    *,
+    diagnostico: str = "sin tiempo",
+    parado_en: datetime = _AHORA,
+) -> WorkItem:
+    """El estado exacto en que se quedó WI-20260905-034826: failed_safely/reparar.
+
+    ``diagnostico`` y ``parado_en`` son la evidencia que el ALMACÉN guarda de
+    su parada -el texto que le llegó y el instante en que la escribió-, y son
+    lo que permite correlacionar en qué ocurrencia del historial se quedó
+    cuando hay varias iguales (CODEX-002, ronda 2, PR #546).
+    """
     _work_item_activo(store)
     store.begin_work_item_execution(_WORK_ID, now=_AHORA)
     store.begin_work_item_check(_WORK_ID, now=_AHORA)
     store.begin_work_item_review(_WORK_ID, now=_AHORA)
     store.request_work_item_repair(_WORK_ID, now=_AHORA)
-    parado = store.fail_work_item_safely(_WORK_ID, diagnostico="sin tiempo", now=_AHORA)
+    parado = store.fail_work_item_safely(_WORK_ID, diagnostico=diagnostico, now=parado_en)
     assert parado.estado is WorkItemState.FAILED_SAFELY
     assert parado.fase is WorkItemPhase.REPARAR
     return parado
+
+
+def _motor_bloqueado_en_revisar(store: InMemoryWorkEngineStore) -> WorkItem:
+    """Un motor anclado en ``needs_decision``/``revisar``: la otra parada del dominio."""
+    _work_item_activo(store)
+    store.begin_work_item_execution(_WORK_ID, now=_AHORA)
+    store.begin_work_item_check(_WORK_ID, now=_AHORA)
+    store.begin_work_item_review(_WORK_ID, now=_AHORA)
+    bloqueado = store.escalate_work_item(_WORK_ID, now=_AHORA)
+    assert bloqueado.estado is WorkItemState.NEEDS_DECISION
+    assert bloqueado.fase is WorkItemPhase.REVISAR
+    return bloqueado
 
 
 def test_recorrido_acreditado_avanza_el_caso_vivo_de_la_537() -> None:
@@ -1246,30 +1294,53 @@ def test_un_permiso_no_puede_acreditar_dos_salidas_de_parada() -> None:
     assert resultado.divergencia is not None
 
 
-def test_el_recorrido_ancla_en_la_ULTIMA_coincidencia_con_el_estado_guardado() -> None:
-    """El motor está donde se quedó, no donde estuvo la primera vez.
+#: Dos vueltas de reparación, cada parada con su permiso: el mismo
+#: ``(failed_safely, reparar)`` aparece DOS veces (posiciones 0 y 3) y la
+#: posición, por sí sola, no dice en cuál de las dos se quedó el almacén.
+_DOS_PARADAS_IGUALES: tuple[tuple[str, str], ...] = (
+    ("estado", "sirius:failed-safely"),
+    ("orden", "continua"),
+    ("estado", "sirius:repair-requested"),
+    ("estado", "sirius:failed-safely"),
+    ("orden", "continua"),
+    ("estado", "sirius:repair-requested"),
+    ("estado", "sirius:ready-for-merge"),
+    ("estado", "sirius:completed"),
+)
 
-    Este historial para dos veces en seguro, y cada parada trae su permiso.
-    Anclando en la PRIMERA, el recorrido intentaría llevar el motor hasta
-    ENTREGAR y desde ahí volver a REPARAR -y no existe ninguna arista de
-    ENTREGAR a REPARAR-, así que se abandonaría entero. Anclando en la última
-    -que es donde el motor se quedó de verdad- el camino existe.
-    """
-    store = InMemoryWorkEngineStore()
-    parado = _motor_parado_en_reparar(store)
-    historial, permisos = _cronologia(
-        ("estado", "sirius:implementing"),
-        ("estado", "sirius:failed-safely"),
-        ("orden", "continua"),
-        ("estado", "sirius:repair-requested"),
-        ("estado", "sirius:ready-for-merge"),
-        ("estado", "sirius:failed-safely"),
-        ("orden", "continua"),
-        ("estado", "sirius:repair-requested"),
-        ("estado", "sirius:ready-for-merge"),
-        ("estado", "sirius:completed"),
-    )
-    espejo = _espejo(
+#: El instante de la posición 0 de ``_DOS_PARADAS_IGUALES``; ``_cronologia``
+#: reparte un minuto por posición, así que la segunda parada (posición 3) se
+#: publica tres minutos después.
+_INICIO_DEL_HISTORIAL = datetime(2026, 9, 5, 5, 0, tzinfo=UTC)
+
+#: Los siete pasos de recorrer las DOS vueltas: la primera recuperación, la
+#: segunda parada y la segunda recuperación, ninguna omitida.
+_RECORRIDO_DESDE_LA_PRIMERA_PARADA = (
+    PASO_REACTIVADO,
+    PASO_FALLO_SEGURO,
+    PASO_REACTIVADO,
+    PASO_REPARACION_REANUDADA,
+    PASO_REVISION_INICIADA,
+    PASO_REVISION_APROBADA,
+    PASO_ENTREGADO,
+)
+
+#: Los cinco de recorrer solo la segunda: es lo que corresponde cuando el
+#: almacén guardó la SEGUNDA parada, y lo que sería un salto si guardó la
+#: primera.
+_RECORRIDO_DESDE_LA_SEGUNDA_PARADA = (
+    PASO_REACTIVADO,
+    PASO_REPARACION_REANUDADA,
+    PASO_REVISION_INICIADA,
+    PASO_REVISION_APROBADA,
+    PASO_ENTREGADO,
+)
+
+
+def _espejo_de_dos_paradas(
+    historial: tuple[EstadoAcreditado, ...], permisos: tuple[PermisoDeReanudacion, ...]
+) -> MirroredWorkItem:
+    return _espejo(
         estado=WorkItemState.DELIVERED,
         fase=WorkItemPhase.ENTREGAR,
         etiquetas=("sirius:completed",),
@@ -1277,15 +1348,80 @@ def test_el_recorrido_ancla_en_la_ULTIMA_coincidencia_con_el_estado_guardado() -
         permisos_reanudacion=permisos,
     )
 
-    resultado = reflejar_desenlace(parado, espejo, _episodio())
 
-    assert tuple(paso.kind for paso in resultado.pasos) == (
-        PASO_REACTIVADO,
-        PASO_REPARACION_REANUDADA,
-        PASO_REVISION_INICIADA,
-        PASO_REVISION_APROBADA,
-        PASO_ENTREGADO,
-    ), "anclar en la PRIMERA parada habría abandonado el recorrido entero"
+def test_el_recorrido_ancla_en_la_ocurrencia_que_el_almacen_pudo_guardar() -> None:
+    """El tiempo correlaciona: un aviso posterior a la escritura no es el guardado.
+
+    Mismo historial que su gemela y el mismo motor, con una sola diferencia: el
+    almacén escribió su parada UN MINUTO después de la primera y dos antes de
+    la segunda, así que la segunda no puede ser la que guardó. El recorrido
+    empieza en la primera y registra la recuperación intermedia y la segunda
+    parada, en vez de saltárselas (CODEX-002, ronda 2, PR #546).
+    """
+    store = InMemoryWorkEngineStore()
+    parado = _motor_parado_en_reparar(
+        store, parado_en=_INICIO_DEL_HISTORIAL + timedelta(minutes=1)
+    )
+    historial, permisos = _cronologia(*_DOS_PARADAS_IGUALES, desde=_INICIO_DEL_HISTORIAL)
+    segunda_parada = historial[2]
+    assert segunda_parada.estado is WorkItemState.FAILED_SAFELY
+    assert segunda_parada.publicado_en == _INICIO_DEL_HISTORIAL + timedelta(minutes=3), (
+        "la segunda parada se publica DESPUÉS de la escritura del almacén"
+    )
+
+    resultado = reflejar_desenlace(parado, _espejo_de_dos_paradas(historial, permisos), _episodio())
+
+    assert resultado.divergencia is None
+    assert tuple(paso.kind for paso in resultado.pasos) == _RECORRIDO_DESDE_LA_PRIMERA_PARADA
+
+
+def test_el_recorrido_ancla_en_la_segunda_parada_cuando_el_almacen_es_posterior() -> None:
+    """La cara opuesta: si el almacén escribió después de las dos, se quedó en la última.
+
+    El mismo historial, minuto a minuto, y un almacén que escribió su parada
+    una hora después del final: las dos ocurrencias son posibles, y entonces el
+    motor está donde se quedó, no donde estuvo la primera vez. Que las dos
+    pruebas den resultados DISTINTOS sobre el mismo historial es lo que
+    demuestra que el ancla se correlaciona en vez de elegirse por costumbre.
+    """
+    store = InMemoryWorkEngineStore()
+    parado = _motor_parado_en_reparar(store, parado_en=_INICIO_DEL_HISTORIAL + timedelta(hours=1))
+    historial, permisos = _cronologia(*_DOS_PARADAS_IGUALES, desde=_INICIO_DEL_HISTORIAL)
+
+    resultado = reflejar_desenlace(parado, _espejo_de_dos_paradas(historial, permisos), _episodio())
+
+    assert resultado.divergencia is None
+    assert tuple(paso.kind for paso in resultado.pasos) == _RECORRIDO_DESDE_LA_SEGUNDA_PARADA
+
+
+def test_el_diagnostico_guardado_identifica_la_parada_cuando_el_tiempo_no_discrimina() -> None:
+    """La identidad del suceso: el mismo texto escrito dos veces no es una preferencia.
+
+    Sin instantes -el caso del marcador que viene del cuerpo- el tiempo no
+    descarta ninguna de las dos ocurrencias. Lo que sí las distingue es el
+    diagnóstico que el almacén guarda de SU parada: es el de la primera, y solo
+    una ocurrencia del historial lo lleva.
+    """
+    store = InMemoryWorkEngineStore()
+    parado = _motor_parado_en_reparar(store, diagnostico="la ronda 1 se quedó sin turnos")
+    historial, permisos = _cronologia(
+        ("diagnostico", "la ronda 1 se quedó sin turnos"),
+        ("estado", "sirius:failed-safely"),
+        ("orden", "continua"),
+        ("estado", "sirius:repair-requested"),
+        ("diagnostico", "la ronda 2 agotó el tiempo del job"),
+        ("estado", "sirius:failed-safely"),
+        ("orden", "continua"),
+        ("estado", "sirius:repair-requested"),
+        ("estado", "sirius:ready-for-merge"),
+        ("estado", "sirius:completed"),
+    )
+    assert [acreditado.publicado_en for acreditado in historial] == [None] * len(historial)
+
+    resultado = reflejar_desenlace(parado, _espejo_de_dos_paradas(historial, permisos), _episodio())
+
+    assert resultado.divergencia is None
+    assert tuple(paso.kind for paso in resultado.pasos) == _RECORRIDO_DESDE_LA_PRIMERA_PARADA
 
 
 def test_sin_ancla_en_el_historial_no_hay_recorrido() -> None:
@@ -1317,13 +1453,17 @@ def test_sin_ancla_en_el_historial_no_hay_recorrido() -> None:
     assert resultado.divergencia is not None
 
 
-def test_un_tramo_ilegal_abandona_el_recorrido_entero() -> None:
-    """Todo o nada: si un tramo no es una transición real, no se aplica ninguno.
+def test_un_aviso_publicado_fuera_de_orden_no_envenena_el_recorrido() -> None:
+    """El orden de publicación de los avisos NO es el orden de aplicación.
 
-    El historial acredita aquí un retroceso imposible (de ENTREGAR a
-    EJECUTAR), con su permiso para salir de la parada en regla. El recorrido
-    no puede "saltárselo" ni aplicar solo el trozo bueno: se abandona entero y
-    se declara la divergencia de siempre.
+    `notify-sirius-state.yml` incluye el nombre de la etiqueta en su grupo de
+    concurrencia, así que dos etiquetas distintas no se serializan entre sí y
+    un aviso puede publicarse tarde: aquí el de `sirius:ready-for-merge` llega
+    después del de `sirius:completed`. Tratar esa posición como autoritativa
+    dejaba el recorrido en cero pasos y «no hay camino hacia delante» para
+    siempre, aunque la foto vigente sea `completed` (CODEX-001, ronda 2, PR
+    #546). Lo que se reconstruye es una SUBSECUENCIA legal hasta la foto: el
+    aviso retrasado no mueve el recorrido y tampoco lo tumba.
     """
     store = InMemoryWorkEngineStore()
     parado = _motor_parado_en_reparar(store)
@@ -1331,14 +1471,57 @@ def test_un_tramo_ilegal_abandona_el_recorrido_entero() -> None:
         ("estado", "sirius:failed-safely"),
         ("orden", "continua"),
         ("estado", "sirius:repair-requested"),
+        ("estado", "sirius:completed"),
         ("estado", "sirius:ready-for-merge"),
-        ("estado", "sirius:implementing"),
+    )
+    espejo = _espejo(
+        estado=WorkItemState.DELIVERED,
+        fase=WorkItemPhase.ENTREGAR,
+        etiquetas=("sirius:completed",),
+        head_sha="92e5b9f4",
+        historial_estados=historial,
+        permisos_reanudacion=permisos,
+    )
+
+    resultado = reflejar_desenlace(parado, espejo, _episodio())
+
+    assert resultado.divergencia is None
+    assert tuple(paso.kind for paso in resultado.pasos) == (
+        PASO_REACTIVADO,
+        PASO_REPARACION_REANUDADA,
+        PASO_REVISION_INICIADA,
+        PASO_REVISION_APROBADA,
+        PASO_ENTREGADO,
+    )
+    aplicados = aplicar_pasos(store, _WORK_ID, resultado.pasos, now=_AHORA)
+    assert aplicados[-1].estado is WorkItemState.DELIVERED
+
+
+def test_un_aviso_de_PARADA_que_no_encaja_abandona_el_recorrido_entero() -> None:
+    """La primera excepción: un aviso de parada no se salta nunca.
+
+    Saltarse un aviso a destiempo es no moverse por él; saltarse una PARADA
+    sería pasar por encima de ella sin exigir su permiso, que es exactamente la
+    garantía que ADR-147 fija. Aquí el `blocked-decision` no encaja donde está
+    publicado -el recorrido ya ha entregado- y el recorrido se abandona entero:
+    ni se aplica el trozo bueno ni se resuelve un `NEEDS_DECISION` que nadie
+    autorizó.
+    """
+    store = InMemoryWorkEngineStore()
+    parado = _motor_parado_en_reparar(store)
+    historial, permisos = _cronologia(
+        ("estado", "sirius:failed-safely"),
+        ("orden", "continua"),
+        ("estado", "sirius:repair-requested"),
+        ("estado", "sirius:completed"),
+        ("estado", "sirius:blocked-decision"),
         ("estado", "sirius:completed"),
     )
     espejo = _espejo(
         estado=WorkItemState.DELIVERED,
         fase=WorkItemPhase.ENTREGAR,
         etiquetas=("sirius:completed",),
+        head_sha="92e5b9f4",
         historial_estados=historial,
         permisos_reanudacion=permisos,
     )
@@ -1350,6 +1533,134 @@ def test_un_tramo_ilegal_abandona_el_recorrido_entero() -> None:
     item = store.get_work_item(_WORK_ID)
     assert item is not None
     assert item.estado is WorkItemState.FAILED_SAFELY
+
+
+def test_un_recorrido_que_no_termina_en_la_foto_no_se_aplica() -> None:
+    """La segunda excepción: el tramo final contra la foto tampoco se salta.
+
+    El historial acredita aquí una entrega, pero la foto vigente proyecta
+    `sirius:reviewing` -que `notify-sirius-state.yml` no notifica, así que
+    jamás aparece en el historial-. Un recorrido que llega a `delivered` no
+    termina en esa foto, y terminar cerca no es terminar: todo o nada.
+    """
+    store = InMemoryWorkEngineStore()
+    parado = _motor_parado_en_reparar(store)
+    historial, permisos = _cronologia(
+        ("estado", "sirius:failed-safely"),
+        ("orden", "continua"),
+        ("estado", "sirius:repair-requested"),
+        ("estado", "sirius:completed"),
+    )
+    espejo = _espejo(
+        estado=WorkItemState.ACTIVE,
+        fase=WorkItemPhase.REVISAR,
+        etiquetas=("sirius:reviewing",),
+        historial_estados=historial,
+        permisos_reanudacion=permisos,
+    )
+
+    resultado = reflejar_desenlace(parado, espejo, _episodio())
+
+    assert resultado.pasos == ()
+    assert resultado.divergencia is not None
+
+
+def test_cada_parada_del_recorrido_conserva_SU_diagnostico() -> None:
+    """Un diagnóstico es la evidencia de UNA parada, no del ciclo entero.
+
+    El motor está anclado en `needs_decision` y el historial acredita dos
+    fallos seguros con diagnósticos distintos antes de `completed`. Al fabricar
+    cada espejo histórico solo se sustituían estado, fase y etiquetas, así que
+    los dos sucesos se escribían con el diagnóstico de la ÚLTIMA parada de toda
+    la incidencia -el único que el espejo expone- y el diario perdía la
+    evidencia real de la primera (CODEX-003, ronda 2, PR #546). El de la foto
+    vigente no cambia: lo sigue poniendo el espejo real.
+    """
+    store = InMemoryWorkEngineStore()
+    bloqueado = _motor_bloqueado_en_revisar(store)
+    historial, permisos = _cronologia(
+        ("estado", "sirius:blocked-decision"),
+        ("orden", "continua"),
+        ("diagnostico", "la ronda 1 se quedó sin turnos"),
+        ("estado", "sirius:failed-safely"),
+        ("orden", "continua"),
+        ("estado", "sirius:repair-requested"),
+        ("diagnostico", "la ronda 2 agotó el tiempo del job"),
+        ("estado", "sirius:failed-safely"),
+        ("orden", "continua"),
+        ("estado", "sirius:ready-for-merge"),
+        ("estado", "sirius:completed"),
+    )
+    espejo = _espejo(
+        estado=WorkItemState.DELIVERED,
+        fase=WorkItemPhase.ENTREGAR,
+        etiquetas=("sirius:completed",),
+        head_sha="92e5b9f4",
+        diagnostico_fallo="la ronda 2 agotó el tiempo del job",
+        historial_estados=historial,
+        permisos_reanudacion=permisos,
+    )
+
+    resultado = reflejar_desenlace(bloqueado, espejo, _episodio())
+
+    assert resultado.divergencia is None
+    assert tuple(paso.kind for paso in resultado.pasos) == (
+        PASO_DECISION_RESUELTA,
+        PASO_FALLO_SEGURO,
+        PASO_REACTIVADO,
+        PASO_REPARACION_SOLICITADA,
+        PASO_FALLO_SEGURO,
+        PASO_REACTIVADO,
+        PASO_REPARACION_REANUDADA,
+        PASO_REVISION_INICIADA,
+        PASO_REVISION_APROBADA,
+        PASO_ENTREGADO,
+    )
+    diagnosticos = [paso.diagnostico for paso in resultado.pasos if paso.kind == PASO_FALLO_SEGURO]
+    assert diagnosticos == [
+        "la ronda 1 se quedó sin turnos",
+        "la ronda 2 agotó el tiempo del job",
+    ], "cada parada se escribe con su propia evidencia, no con la de la última"
+    aplicados = aplicar_pasos(store, _WORK_ID, resultado.pasos, now=_AHORA)
+    assert aplicados[-1].estado is WorkItemState.DELIVERED
+
+
+def test_una_parada_sin_diagnostico_atribuible_no_recrea_ninguno() -> None:
+    """Abstenerse es la otra mitad: no se inventa un diagnóstico que no es suyo.
+
+    Mismo recorrido, con el diagnóstico de la primera parada publicado DESPUÉS
+    de ella -no hay ninguno atribuible hasta ese marcador-. El suceso se
+    escribe declarando que no lo hay, en vez de heredar el de la parada
+    siguiente.
+    """
+    store = InMemoryWorkEngineStore()
+    bloqueado = _motor_bloqueado_en_revisar(store)
+    historial, permisos = _cronologia(
+        ("estado", "sirius:blocked-decision"),
+        ("orden", "continua"),
+        ("estado", "sirius:failed-safely"),
+        ("diagnostico", "la ronda 2 agotó el tiempo del job"),
+        ("orden", "continua"),
+        ("estado", "sirius:ready-for-merge"),
+        ("estado", "sirius:completed"),
+    )
+    espejo = _espejo(
+        estado=WorkItemState.DELIVERED,
+        fase=WorkItemPhase.ENTREGAR,
+        etiquetas=("sirius:completed",),
+        diagnostico_fallo="la ronda 2 agotó el tiempo del job",
+        historial_estados=historial,
+        permisos_reanudacion=permisos,
+    )
+
+    resultado = reflejar_desenlace(bloqueado, espejo, _episodio())
+
+    assert resultado.divergencia is None
+    fallos = [paso for paso in resultado.pasos if paso.kind == PASO_FALLO_SEGURO]
+    assert len(fallos) == 1
+    assert fallos[0].diagnostico == (
+        "la incidencia lleva sirius:failed-safely sin diagnóstico de confianza publicado"
+    )
 
 
 def test_el_recorrido_solo_entra_cuando_la_foto_sola_no_basta() -> None:

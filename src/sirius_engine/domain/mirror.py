@@ -114,6 +114,20 @@ class EstadoAcreditado:
     produce el mismo recorrido de textos, y compararlas es lo que permite
     decir "este permiso es posterior a esta parada" sin volver a mirar la foto
     (ADR-147).
+
+    ``publicado_en`` y ``diagnostico`` son la EVIDENCIA PROPIA de esta
+    ocurrencia, y existen porque la posición no la identifica: el mismo
+    ``(estado, fase)`` aparece varias veces en un ciclo real, y elegir "la
+    última" no demuestra que sea la que el almacén guardó (CODEX-002, ronda 2,
+    PR #546). ``publicado_en`` es el instante del comentario que trae el
+    marcador -``None`` cuando viene del CUERPO de la incidencia, que no tiene
+    instante propio y es, por construcción, anterior a todo comentario-;
+    ``diagnostico`` es el último diagnóstico de parada publicado hasta este
+    marcador, y solo lo llevan los marcadores de ``FAILED_SAFELY``: es lo que
+    permite que cada parada del recorrido conserve SU evidencia en vez de
+    heredar la de la última parada de toda la incidencia (CODEX-003, ronda 2,
+    PR #546). ``None`` cuando no hay ninguno atribuible, y entonces no se
+    recrea ninguno.
     """
 
     etiqueta: str
@@ -121,6 +135,8 @@ class EstadoAcreditado:
     fase: WorkItemPhase | None
     head: str
     orden: int
+    publicado_en: datetime | None = None
+    diagnostico: str | None = None
 
 
 class FormaDePermiso(StrEnum):
