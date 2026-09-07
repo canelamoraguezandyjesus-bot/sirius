@@ -643,6 +643,44 @@ aplicar la etiqueta, y la etiqueta es lo que dispara el marcador—. Con eso:
   Lo único que cambia en el árbol después de esta captura es la transcripción
   de estas mismas cifras.
 
+- **Ronda 14 (CODEX-001): el defecto del canal es real, su corrección está
+  fuera del alcance de esta PR, y lo que sí toca a este trabajo es dejar de
+  prometerlo.** La revisión levantó como P1 que el §7 del contrato
+  (`docs/implementation/AUTOMATION_OPERATING_CONTRACT.md:363`) promete un aviso
+  «por EVENTO de etiqueta» que la cola puede descartar: el grupo de
+  concurrencia de `.github/workflows/notify-sirius-state.yml:11-13` es
+  `notify-sirius-<incidencia>-<etiqueta>` y GitHub Actions conserva como mucho
+  UNA ejecución en espera por grupo, así que un tercer evento de la misma
+  etiqueta desplaza al segundo antes de que publique su marcador. El
+  diagnóstico es correcto. Su corrección, tal como el propio hallazgo la
+  acota -«impedir que eventos distintos compartan una ranura pendiente
+  descartable»-, es un cambio del grupo de concurrencia: vive entero en
+  `.github/**`, que la decisión del propietario del 07-09-2026 (21:15 UTC)
+  deja fuera de #546 **sin excepción**, y el otro fichero señalado es el
+  contrato, cuya §7 el propietario asignó a su propia ficha (#563). Comprobado
+  sobre el árbol de esta ronda: `git diff --quiet main HEAD -- .github/` sale
+  en **0** y `git diff --quiet main HEAD --
+  docs/implementation/AUTOMATION_OPERATING_CONTRACT.md` también, es decir,
+  ninguno de los dos ficheros que el hallazgo señala lleva una línea de #546;
+  su autoría es `07a51b1` y `f2085db` (ADR-157, PR #562 y #563, ya
+  fusionadas).
+
+  Lo que sí nace de este trabajo, y por eso se corrige aquí, es que cinco
+  pasajes de #546 daban por incondicional lo que el canal no garantiza
+  («desde ADR-157 cada evento de etiqueta deja su propio aviso», y sus
+  variantes en `mirror_projection.py`, `reflect.py` y `domain/mirror.py`).
+  Quedan acotados al caso en que el evento llega a ejecutarse, con la nota que
+  explica el límite junto a `_NOTIFICATION_MARKER_RE`, y con la consecuencia
+  que importa al motor: los respaldos que este código mantiene para los
+  historiales anteriores a ADR-157 son también la red del hueco que la cola
+  puede dejar en un historial posterior. La abstención por «más diagnósticos
+  que marcadores» de `_atribuir_diagnosticos` y el abandono del recorrido de
+  `_hay_una_parada_posterior_sin_aviso` ya cubren ese hueco sin cambio de
+  lógica: por eso esta ronda **no cambia ni una línea de comportamiento ni
+  ninguna prueba**, y no hay mutación que enseñar. Lo que verifica el texto
+  corregido son las dos comprobaciones `git diff --quiet` de arriba y la
+  invocación de `scripts/check.ps1` que sigue.
+
 ## Consecuencias
 
 - **Ronda 6, CLAUDE-R6-001 y CLAUDE-R6-002 (misma raíz): la cota de la parada

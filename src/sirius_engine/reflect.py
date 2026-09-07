@@ -573,7 +573,9 @@ def _hay_una_parada_posterior_sin_aviso(
     por ``(etiqueta, head)`` y la segunda parada sobre el mismo head no dejaba
     aviso propio: mientras ese veredicto exista, la posición no dice en cuál de
     las dos se quedó el motor. Desde ADR-157 el marcador lleva el run del
-    evento y cada parada deja el suyo, pero esta función NO lo aprovecha:
+    evento y cada parada cuyo evento llega a ejecutarse deja el suyo (con el
+    hueco que la cola del notificador puede seguir dejando: CODEX-001, ronda
+    14, PR #546), pero esta función NO lo aprovecha:
     sobre un historial posterior sigue abandonando el recorrido en cuanto hay
     un veredicto de parada detrás de la cota **y publicado a tiempo de que el
     almacén lo guardara**, aunque su aviso esté escrito y aunque cada parada
@@ -703,10 +705,11 @@ def _orden_de_la_parada(acreditado: EstadoAcreditado) -> int:
     con dos ``blocked-decision`` sobre el mismo head, la cota del aviso de la
     PRIMERA dejaba pasar su propio ``continua`` para resolver la SEGUNDA, cuyo
     aviso deduplicó ``sirius_comment_once`` -así ocurrió en los historiales
-    publicados antes de ADR-157 (07-09-2026), que desde entonces da a cada
-    parada su propio aviso-. Quien cierra ese flanco, para aquellos
-    historiales, es :func:`_hay_una_parada_posterior_sin_aviso`, abandonando el
-    recorrido (CLAUDE-R7-001 y CLAUDE-R7-002, ronda 7, PR #546; ADR-147).
+    publicados antes de ADR-157 (07-09-2026), que desde entonces da su propio
+    aviso a cada parada cuyo evento de etiqueta llega a ejecutarse-. Quien
+    cierra ese flanco, para aquellos historiales, es
+    :func:`_hay_una_parada_posterior_sin_aviso`, abandonando el recorrido
+    (CLAUDE-R7-001 y CLAUDE-R7-002, ronda 7, PR #546; ADR-147).
     """
     if acreditado.orden_del_veredicto is None:
         return acreditado.orden

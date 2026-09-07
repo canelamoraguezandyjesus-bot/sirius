@@ -171,8 +171,12 @@ class ParadaPublicada:
     ``(etiqueta, head)`` -una segunda parada sobre el mismo head no dejaba
     marcador propio- en todo historial publicado ANTES de ADR-157 (fusionado
     en `main` el 07-09-2026), que desde entonces mete el run en el marcador y
-    hace que cada parada deje el suyo. Esta lista sigue haciendo falta para
-    esos historiales antiguos, que ADR-157 declara que «conservan sus huecos».
+    hace que cada parada deje el suyo cuando su evento de etiqueta llega a
+    ejecutarse. Esta lista sigue haciendo falta para esos historiales
+    antiguos, que ADR-157 declara que «conservan sus huecos», y para los
+    huecos que la cola del notificador siga dejando (CODEX-001, ronda 14,
+    PR #546; nota de ``_NOTIFICATION_MARKER_RE`` en
+    :mod:`sirius_engine.mirror_projection`).
     Sin ella, una parada sin aviso no existe para
     :mod:`sirius_engine.reflect` y el recorrido ancla en el aviso de una
     parada ANTERIOR, cuya cota deja pasar permisos escritos antes de la

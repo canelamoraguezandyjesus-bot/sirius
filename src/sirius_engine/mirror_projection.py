@@ -249,12 +249,25 @@ _STOP_MARKER_RE = re.compile(
 # 07-09-2026): hasta entonces el marcador era `<etiqueta>:<head>` y el guion
 # deduplicaba por marcador COMPLETO, así que una etiqueta repuesta sobre el
 # mismo head NO publicaba un segundo marcador y la secuencia era incompleta.
-# Desde ADR-157 cada evento de etiqueta deja su propio aviso. Las dos formas
-# tienen que convivir: los historiales publicados ANTES de esa fusión -las
-# incidencias ya vividas, que ADR-157 declara que «conservan sus huecos»-
-# siguen trayendo el marcador sin run, y de ellos sigue siendo cierto que la
-# secuencia es incompleta, nunca falsa; el recorrido acreditado (ADR-147) solo
-# necesita que lo que diga haya ocurrido, no que diga todo lo que ocurrió.
+# Desde ADR-157 cada evento de etiqueta que LLEGA A EJECUTARSE deja su propio
+# aviso. Las dos formas tienen que convivir: los historiales publicados ANTES
+# de esa fusión -las incidencias ya vividas, que ADR-157 declara que
+# «conservan sus huecos»- siguen trayendo el marcador sin run, y de ellos
+# sigue siendo cierto que la secuencia es incompleta, nunca falsa; el
+# recorrido acreditado (ADR-147) solo necesita que lo que diga haya ocurrido,
+# no que diga todo lo que ocurrió.
+#
+# Ese «cada evento» tiene un límite conocido, y es del canal, no del motor
+# (CODEX-001, ronda 14, PR #546): el grupo de concurrencia de
+# `notify-sirius-state.yml` es `notify-sirius-<incidencia>-<etiqueta>` y
+# GitHub Actions guarda como mucho UNA ejecución en espera por grupo, así que
+# un tercer evento de la misma etiqueta puede desplazar al segundo antes de
+# que este publique nada. Por eso un historial POSTERIOR a ADR-157 también
+# puede traer un hueco, y los respaldos que este módulo mantiene para los
+# historiales antiguos siguen siendo la red de esos huecos y no solo la de
+# aquellos: la secuencia sigue siendo incompleta, nunca falsa. Cerrar el canal
+# se decide y se corrige en su propia ficha, no aquí (decisión del
+# propietario, 07-09-2026: no se toca `.github/**` desde esta PR).
 _NOTIFICATION_MARKER_RE = re.compile(
     r"<!--\s*sirius-notification:(sirius:[a-z-]+):([^\s>:]*)(?::[^\s>]*)?\s*-->"
 )
@@ -656,10 +669,13 @@ def _atribuir_diagnosticos(
        así que conservaba el primero y suprimía los posteriores. Por eso,
        cuando hay MÁS diagnósticos que marcadores, los que se quedan sin
        contrapartida son los ÚLTIMOS, no los primeros. Desde ADR-157 el
-       marcador lleva además el run del evento y cada parada deja el suyo:
-       este hecho, y la tercera condición que sale de él, quedan como respaldo
-       para los historiales ya publicados -las incidencias que ADR-157 declara
-       que «conservan sus huecos»-, sobre los que sigue habiendo más
+       marcador lleva además el run del evento y cada parada cuyo evento llega
+       a ejecutarse deja el suyo: este hecho, y la tercera condición que sale
+       de él, quedan como respaldo para los historiales ya publicados -las
+       incidencias que ADR-157 declara que «conservan sus huecos»- y para los
+       huecos que la cola del notificador siga dejando al descartar un evento
+       en espera (CODEX-001, ronda 14, PR #546; nota de
+       ``_NOTIFICATION_MARKER_RE``), sobre los que sigue habiendo más
        diagnósticos que marcadores.
 
     De ahí el emparejamiento: recorriendo las paradas notificadas de la más
@@ -741,8 +757,11 @@ def _interpretar_paradas_publicadas(
     fusión, una SEGUNDA parada sobre el mismo head deja veredicto y no deja
     aviso, y es justo la que :mod:`sirius_engine.reflect` necesita ver para
     abstenerse en vez de anclar en el aviso de la primera (CLAUDE-R7-001,
-    ronda 7, PR #546). Desde ADR-157 cada parada deja su propio aviso, así que
-    esta lista es el respaldo de aquellos historiales, no de los nuevos.
+    ronda 7, PR #546). Desde ADR-157 cada parada deja su propio aviso siempre
+    que su evento de etiqueta llegue a ejecutarse, así que esta lista es sobre
+    todo el respaldo de aquellos historiales -y sigue siéndolo de los nuevos
+    cuando la cola del notificador descarta un evento en espera (CODEX-001,
+    ronda 14, PR #546; nota de ``_NOTIFICATION_MARKER_RE``).
 
     Incluye las paradas SIN diagnóstico -``sirius:blocked-decision`` no publica
     ninguno-, que es lo que la deja fuera del alcance de
