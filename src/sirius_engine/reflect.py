@@ -834,12 +834,16 @@ def _recorrer_historial_acreditado(
             # permiso que este tramo hubiera consumido sigue sin consumir.
             continue
         permiso_siguiente = permiso_tras_el_tramo
-        if avanzado.estado in _PARADAS and avanzado.estado is not simulado.estado:
-            # Este tramo RECREA una parada: la que el recorrido debía recrear
-            # más antigua queda saldada. Se consumen en orden, como los
-            # permisos, porque la posición del aviso no identifica el suceso.
-            if paradas_por_recrear:
-                paradas_por_recrear.pop(0)
+        # Un tramo que ENTRA en una parada la RECREA: el veredicto más antiguo
+        # de los que el recorrido debía recrear queda saldado. Se consumen en
+        # orden, como los permisos, porque la posición del aviso no identifica
+        # el suceso.
+        if (
+            paradas_por_recrear
+            and avanzado.estado in _PARADAS
+            and avanzado.estado is not simulado.estado
+        ):
+            paradas_por_recrear.pop(0)
         simulado = avanzado
         if simulado.estado in _PARADAS and acreditado is not None:
             orden_de_la_parada = _orden_de_la_parada(acreditado)
