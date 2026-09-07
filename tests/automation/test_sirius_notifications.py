@@ -174,3 +174,79 @@ def test_la_prueba_anterior_mira_donde_se_escriben_las_etiquetas() -> None:
         "repair-sirius-work.yml",
         "review-sirius-work.yml",
     } <= ficheros, f"Faltan workflows escritores conocidos; solo se ven {sorted(ficheros)}."
+
+
+# --------------------------------------------------------------------------- #
+# ADR-157: el marcador identifica el EVENTO, no solo el estado y el head
+# --------------------------------------------------------------------------- #
+
+
+def _paso_de_notificacion() -> str:
+    """El `run:` del paso que publica la notificación de estado."""
+    doc = yaml.safe_load(NOTIFICADOR.read_text(encoding="utf-8"))
+    for job in doc["jobs"].values():
+        for paso in job.get("steps", []):
+            guion = str(paso.get("run") or "")
+            if "sirius-notification:" in guion:
+                return guion
+    raise AssertionError("El notificador ya no publica ningún marcador sirius-notification.")
+
+
+def test_el_marcador_de_notificacion_identifica_el_evento_y_no_solo_el_head() -> None:
+    """Dos paradas del mismo estado sobre el mismo head dejan cada una su rastro.
+
+    Motivo del defecto (ADR-157): el marcador era
+    `sirius-notification:<etiqueta>:<head>`, y como la comprobación de duplicado
+    es exacta sobre él, la SEGUNDA parada del mismo estado sobre el mismo head no
+    publicaba nada. El historial de la incidencia guardaba una ocurrencia donde
+    hubo dos, y el reflector de #546 se pasó cinco rondas (R4-002, R5-001,
+    R6-001, R6-002, R7-001, R7-002) intentando adivinar por heurística lo que
+    este workflow había borrado al publicar. Medido en la propia #545: un solo
+    marcador `sirius-notification:sirius:failed-safely:bc33b82…` y tres
+    comentarios de parada sobre ese head.
+
+    Contra el workflow anterior esta prueba falla: su marcador termina en el
+    head.
+    """
+    guion = _paso_de_notificacion()
+    linea = next(
+        (l.strip() for l in guion.splitlines() if l.strip().startswith("marker=")),
+        "",
+    )
+    assert linea, "No se encuentra la línea que compone el marcador de notificación."
+    assert "${STATE_LABEL}" in linea and "${head_sha}" in linea, (
+        f"El marcador debe seguir llevando estado y head: {linea}"
+    )
+    assert "RUN_ID" in linea, (
+        "El marcador debe llevar el run del evento que lo produce; sin él, dos "
+        f"paradas iguales sobre el mismo head comparten marcador: {linea}"
+    )
+
+
+def test_el_run_del_evento_llega_al_paso_que_compone_el_marcador() -> None:
+    """El marcador no puede llevar un run que el paso no reciba."""
+    doc = yaml.safe_load(NOTIFICADOR.read_text(encoding="utf-8"))
+    entornos = [
+        paso.get("env") or {}
+        for job in doc["jobs"].values()
+        for paso in job.get("steps", [])
+        if "sirius-notification:" in str(paso.get("run") or "")
+    ]
+    assert entornos, "No se encuentra el paso que publica la notificación."
+    assert any("github.run_id" in str(env.get("RUN_ID", "")) for env in entornos), (
+        "El paso que publica la notificación debe recibir RUN_ID de github.run_id; "
+        f"su entorno es {entornos}."
+    )
+
+
+def test_la_comprobacion_de_duplicado_sigue_siendo_exacta_sobre_el_marcador() -> None:
+    """Reejecutar el MISMO run no puede publicar un segundo aviso.
+
+    El run no cambia al reintentar un run de Actions, así que la idempotencia se
+    conserva si —y solo si— el duplicado se busca con el marcador completo.
+    """
+    guion = _paso_de_notificacion()
+    assert 'grep -Fq "$marker"' in guion, (
+        "La comprobación de duplicado debe ser exacta sobre el marcador completo; "
+        "si se relaja a un prefijo, se vuelve al defecto que ADR-157 corrige."
+    )
