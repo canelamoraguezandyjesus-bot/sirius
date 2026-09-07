@@ -1648,6 +1648,16 @@ ADR o su incidencia cuando se adopte.
   con coste y sin veredicto en mitad de una ronda: un fallo del arnés o
   de la API, no del contenido. Si se repite con Codex arreglado, es una
   ficha (clasificarlo como `infra_retryable` de ADR-141 si no lo está).
+- **Fusión y relevo (12:47 UTC)**: cadena completa sobre `ed3687e` en 0
+  (5042 passed, 16 skipped, 2 xfailed; ruff y mypy limpios) y Quality verde
+  (run 34122624555, 12:34 → 12:47; la primera pasada, sobre `a3e3a4d`, cayó
+  en el guardián de citas de los ADR por escribir `#L356` dentro de las
+  comillas: corregido a `ruta:línea`, solo documentación). PR #561
+  fusionada en `main` como `bd21e38`. Acto seguido «Update branch» en #546
+  → head `50aa631` (merge de `main`), Quality run 34123840522 desde las
+  12:47:58. Lo que debe pasar: verde → la ruta de ADR-142 saca #545 de
+  `failed-safely` a `reviewing` → revisión dual con el recolector nuevo →
+  veredicto por resultado. Sonda del servidor armada a las 13:29 UTC.
 
 ---
 
