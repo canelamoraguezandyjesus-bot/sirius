@@ -505,6 +505,20 @@ aplicar la etiqueta, y la etiqueta es lo que dispara el marcador—. Con eso:
   skipped, 2 xfailed in 460.95s (0:07:40)`. Las tres pruebas nuevas o ampliadas
   de la ronda, con su mutación vista caer, están descritas en «Consecuencias».
 
+- **Ronda 8 (CLAUDE-R8-001 y CLAUDE-R8-002), sobre el árbol de `d8553d7`**:
+  una sola invocación de `pwsh -File scripts/check.ps1` (Ruff format, Ruff
+  lint, mypy, pytest), código de salida **0**, `5093 passed, 17 skipped, 2
+  xfailed in 397.58s (0:06:37)`. La cifra sube en 2 respecto de la ronda 7
+  (`5091`): son las dos pruebas nuevas de CLAUDE-R8-001
+  (`test_historial_estados_lee_el_marcador_con_run_sin_pegarlo_al_head` y
+  `test_historial_estados_sigue_leyendo_el_marcador_sin_run`). CLAUDE-R8-002 es
+  solo texto y no añade ninguna. Mutación vista caer: con
+  `_NOTIFICATION_MARKER_RE` en su forma anterior —`([^\s>]*)` para el head, sin
+  el tramo opcional del run—, la primera de esas dos pruebas falla con
+  `AssertionError: assert '1c934781:33951766681' == '1c934781'`. Lo único que
+  cambia en el árbol después de esta captura es la transcripción de estas
+  mismas cifras.
+
 ## Consecuencias
 
 - **Ronda 6, CLAUDE-R6-001 y CLAUDE-R6-002 (misma raíz): la cota de la parada
