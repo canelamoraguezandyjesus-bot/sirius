@@ -597,6 +597,43 @@ def _hay_una_parada_posterior_sin_aviso(
     )
 
 
+def _paradas_que_el_recorrido_debe_recrear(
+    ancla: EstadoAcreditado, paradas: Sequence[ParadaPublicada], work_item: WorkItem
+) -> list[ParadaPublicada]:
+    """Los veredictos de parada que el recorrido tiene que atravesar recreándolos.
+
+    Hermana de :func:`_hay_una_parada_posterior_sin_aviso`, para el caso que
+    aquella no cubre: allí se pregunta por el ANCLA -y solo cuando el motor
+    está parado, que es cuando la posición del ancla no identifica el suceso-;
+    aquí se pregunta por el RECORRIDO entero, con el motor donde esté.
+
+    El bucle de tramos solo exige permiso cuando el ``WorkItem`` simulado ENTRA
+    en una parada, y solo entra si esa parada dejó su aviso en
+    ``historial_estados``. Un veredicto de parada publicado SIN aviso propio
+    -en los historiales anteriores a ADR-157 ``sirius_comment_once``
+    deduplicaba el marcador por ``(etiqueta, head)``, y también falta si el
+    workflow del notificador falló- se atravesaba sin recrear la parada y sin
+    consumir ningún permiso, aunque el motor estuviera anclado ANTES de ella
+    (CLAUDE-R10-001, ronda 10, PR #546).
+
+    Lo que se devuelve es la lista de veredictos posteriores a la cota del
+    ancla (:func:`_orden_de_la_parada`) que el almacén PUDO guardar -sin
+    instante, o publicados no después de su última escritura-. El bucle va
+    saldando uno por cada parada que recrea, en orden; si al terminar queda
+    alguno sin saldar, el recorrido se abandona. La abstención es la salida
+    correcta y suficiente: no se inventa ningún tramo de parada ni se relaja
+    :func:`_consumir_permiso`, y un veredicto que SÍ tiene su tramo se sigue
+    comportando exactamente igual que antes -consumiendo su permiso-.
+    """
+    cota = _orden_de_la_parada(ancla)
+    return [
+        parada
+        for parada in paradas
+        if parada.orden > cota
+        and (parada.publicado_en is None or parada.publicado_en <= work_item.updated_at)
+    ]
+
+
 def _orden_de_la_parada(acreditado: EstadoAcreditado) -> int:
     """La posición de la PARADA REAL, no la del aviso que la anunció.
 
@@ -752,6 +789,9 @@ def _recorrer_historial_acreditado(
     simulado = work_item
     permiso_siguiente = 0
     orden_de_la_parada = _orden_de_la_parada(espejo.historial_estados[ancla])
+    paradas_por_recrear = _paradas_que_el_recorrido_debe_recrear(
+        espejo.historial_estados[ancla], espejo.paradas_publicadas, work_item
+    )
     #: Los tramos: cada estado acreditado que queda por recorrer y, al final,
     #: el espejo REAL. El último no lleva estado acreditado porque la foto no
     #: está en el historial -y no hace falta: después de él no queda ninguna
@@ -794,11 +834,22 @@ def _recorrer_historial_acreditado(
             # permiso que este tramo hubiera consumido sigue sin consumir.
             continue
         permiso_siguiente = permiso_tras_el_tramo
+        if avanzado.estado in _PARADAS and avanzado.estado is not simulado.estado:
+            # Este tramo RECREA una parada: la que el recorrido debía recrear
+            # más antigua queda saldada. Se consumen en orden, como los
+            # permisos, porque la posición del aviso no identifica el suceso.
+            if paradas_por_recrear:
+                paradas_por_recrear.pop(0)
         simulado = avanzado
         if simulado.estado in _PARADAS and acreditado is not None:
             orden_de_la_parada = _orden_de_la_parada(acreditado)
         pasos.extend(tramo.pasos)
 
+    if paradas_por_recrear:
+        # Queda un veredicto de parada que el almacén pudo guardar y que
+        # ningún tramo recreó: el recorrido habría pasado por encima de él sin
+        # exigir su permiso (CLAUDE-R10-001, ronda 10, PR #546).
+        return None
     if not pasos:
         return None
     return ResultadoReflejo(pasos=tuple(pasos))

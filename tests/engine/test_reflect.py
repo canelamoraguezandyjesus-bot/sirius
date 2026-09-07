@@ -2384,3 +2384,103 @@ def test_la_abstencion_tambien_alcanza_a_la_parada_posterior_con_aviso_propio() 
     item = store.get_work_item(_WORK_ID)
     assert item is not None
     assert item.estado is WorkItemState.NEEDS_DECISION
+
+
+def test_una_parada_que_ningun_tramo_recrea_abandona_el_recorrido() -> None:
+    """Un veredicto de parada que el recorrido no recrea lo abandona entero.
+
+    El bucle de tramos solo exige permiso cuando el WorkItem simulado ENTRA en
+    una parada, y solo entra si esa parada dejó su aviso en
+    `historial_estados`. La abstención del ancla
+    (`_hay_una_parada_posterior_sin_aviso`) tapaba ese hueco, pero NO se evalúa
+    cuando el ancla queda identificada por su DIAGNÓSTICO: ahí
+    `_ancla_del_recorrido` devuelve la ocurrencia antes de llegar a la guarda.
+
+    Aquí el almacén guarda el diagnóstico de la PRIMERA parada, así que el
+    ancla se identifica por identidad; detrás hay un segundo veredicto de
+    parada cuyo aviso deduplicó `sirius_comment_once` -así ocurría en todo
+    historial anterior a ADR-157- y una etiqueta activa repuesta a mano, sin
+    ninguna palabra escrita. El recorrido reactivaba con el único `continua`
+    escrito -el de la primera parada- y llegaba hasta la foto, atravesando el
+    veredicto de la segunda como si no existiera y acreditando su salida con
+    CERO permisos (CLAUDE-R10-001, ronda 10, PR #546). Ahora ese veredicto, que
+    el almacén pudo guardar y que ningún tramo recrea, abandona el recorrido y
+    el llamador conserva la divergencia de siempre.
+    """
+    store = InMemoryWorkEngineStore()
+    parado = _motor_parado_en_reparar(store, diagnostico="la ronda 1 se quedó sin turnos")
+    entradas: tuple[tuple[str, str], ...] = (
+        ("diagnostico", "la ronda 1 se quedó sin turnos"),
+        ("estado", "sirius:failed-safely"),
+        ("orden", "continua"),
+        ("estado", "sirius:repair-requested"),
+        # La SEGUNDA parada: su veredicto está publicado y su aviso lo
+        # deduplicó `sirius_comment_once` por ser el mismo par (etiqueta,
+        # head). Después alguien repuso la etiqueta activa a mano, sin
+        # escribir nada.
+        ("parada", "33945456417-2"),
+    )
+    historial, permisos = _cronologia(*entradas)
+    assert historial[0].diagnostico == "la ronda 1 se quedó sin turnos", (
+        "el ancla queda identificada por su diagnóstico, no por su posición"
+    )
+    paradas = _paradas(*entradas)
+    assert len(paradas) == 2, "los dos veredictos de parada están publicados"
+    assert len(permisos) == 1, "solo hay un `continua` escrito, el de la primera parada"
+    espejo = _espejo(
+        estado=WorkItemState.ACTIVE,
+        fase=WorkItemPhase.REPARAR,
+        etiquetas=("sirius:repair-requested",),
+        historial_estados=historial,
+        permisos_reanudacion=permisos,
+        paradas_publicadas=paradas,
+    )
+
+    resultado = reflejar_desenlace(parado, espejo, _episodio())
+
+    assert resultado.pasos == ()
+    assert resultado.divergencia is not None
+    aplicar_pasos(store, _WORK_ID, resultado.pasos, now=_AHORA)
+    item = store.get_work_item(_WORK_ID)
+    assert item is not None
+    assert item.estado is WorkItemState.FAILED_SAFELY
+    assert item.fase is WorkItemPhase.REPARAR
+
+
+def test_una_parada_con_su_tramo_en_el_recorrido_se_sigue_recorriendo_entera() -> None:
+    """La gemela en verde: un veredicto que SÍ tiene su tramo no abandona nada.
+
+    Mismo motor y mismo ancla identificado por su diagnóstico que su hermana,
+    con una sola diferencia: la segunda parada dejó su aviso -como los publica
+    todo historial posterior a ADR-157- y el propietario escribió su `continua`
+    detrás. El recorrido recrea las DOS paradas, consume un permiso por cada
+    salida y llega hasta la foto. Es lo que demuestra que la abstención nueva
+    mira si el veredicto tiene su tramo, no cuántos veredictos hay.
+    """
+    store = InMemoryWorkEngineStore()
+    parado = _motor_parado_en_reparar(store, diagnostico="la ronda 1 se quedó sin turnos")
+    entradas: tuple[tuple[str, str], ...] = (
+        ("diagnostico", "la ronda 1 se quedó sin turnos"),
+        ("estado", "sirius:failed-safely"),
+        ("orden", "continua"),
+        ("estado", "sirius:repair-requested"),
+        ("parada", "33945456417-2"),
+        ("estado", "sirius:blocked-decision"),
+        ("orden", "continua"),
+    )
+    historial, permisos = _cronologia(*entradas)
+    assert len(_paradas(*entradas)) == 2
+    assert len(permisos) == 2
+    espejo = _espejo(
+        estado=WorkItemState.ACTIVE,
+        fase=WorkItemPhase.REPARAR,
+        etiquetas=("sirius:repair-requested",),
+        historial_estados=historial,
+        permisos_reanudacion=permisos,
+        paradas_publicadas=_paradas(*entradas),
+    )
+
+    resultado = reflejar_desenlace(parado, espejo, _episodio())
+
+    assert resultado.divergencia is None
+    assert PASO_ESCALADO in tuple(paso.kind for paso in resultado.pasos)

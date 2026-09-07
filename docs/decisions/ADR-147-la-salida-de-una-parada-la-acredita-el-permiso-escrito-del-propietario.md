@@ -841,6 +841,48 @@ aplicar la etiqueta, y la etiqueta es lo que dispara el marcador—. Con eso:
   El criterio de acreditación de ADR-147 no cambia: un permiso escrito por
   salida, consumido en orden, y la foto nunca acredita.
 
+- **Ronda 10, CLAUDE-R10-001: el recorrido tampoco pasa por encima de un
+  veredicto de parada que ningún tramo suyo recrea.** La abstención de la
+  ronda 7 (`_hay_una_parada_posterior_sin_aviso`) pregunta por el ANCLA, y
+  `_ancla_del_recorrido` no llega siempre a esa guarda: cuando exactamente una
+  ocurrencia lleva el diagnóstico que el almacén guardó, el punto 3 -la
+  identidad del suceso- devuelve esa ocurrencia ANTES de evaluarla. Con el
+  ancla identificada así, un veredicto de parada POSTERIOR sin aviso propio
+  -en los historiales anteriores a ADR-157 `sirius_comment_once` deduplicaba
+  el marcador por `(etiqueta, head)`, y también falta si el workflow del
+  notificador falló- no recreaba ningún tramo de parada en el recorrido, y el
+  bucle solo exige permiso cuando el `WorkItem` simulado ENTRA en una parada:
+  esa segunda salida se acreditaba con CERO permisos escritos.
+
+  La corrección no proyecta ningún dato nuevo -`espejo.paradas_publicadas` ya
+  llega a la función- ni relaja `_consumir_permiso`: al empezar el recorrido,
+  `_paradas_que_el_recorrido_debe_recrear` lista los veredictos posteriores a
+  la cota del ancla (`_orden_de_la_parada`) que el almacén PUDO guardar -sin
+  instante, o publicados no después de su última escritura-; el bucle salda
+  uno por cada parada que recrea, en orden, igual que se consumen los
+  permisos; y si al terminar queda alguno sin saldar, el recorrido se abandona
+  entero (`return None`) y el llamador conserva la divergencia de siempre. Un
+  veredicto que SÍ tiene su tramo se comporta exactamente como antes:
+  consume su permiso y el recorrido llega hasta la foto. Lo fijan dos pruebas
+  nuevas de `tests/engine/test_reflect.py`:
+  `test_una_parada_que_ningun_tramo_recrea_abandona_el_recorrido` -la roja, con
+  el ancla identificada por su diagnóstico y un segundo veredicto sin aviso- y
+  su gemela en verde
+  `test_una_parada_con_su_tramo_en_el_recorrido_se_sigue_recorriendo_entera`.
+
+  **Lo que la observación describía y NO se pudo reproducir tal cual.**
+  CLAUDE-R10-001 proponía el escenario con el motor en `ACTIVE/EJECUTAR` y la
+  foto `sirius:completed`. Sobre ese par, `reflejar_desenlace` ni siquiera
+  consulta el recorrido acreditado: `_reflejar_por_foto` encuentra camino de
+  fase hacia delante -`EJECUTAR -> COMPROBAR -> REVISAR -> ENTREGAR` y
+  `work_item_delivered`- y devuelve ese plan (regla 6: el recorrido solo
+  contesta si la foto declaró divergencia). Que el reflejo por foto avance sin
+  mirar `paradas_publicadas` cuando el motor NUNCA estuvo parado es otra
+  cuestión, y su corrección viviría en `_reflejar_por_foto`, expresamente
+  fuera de los límites de CLAUDE-R10-001. El defecto que sí es del recorrido
+  -atravesar un veredicto de parada sin recrearlo ni pagar su permiso- es el
+  que fija la prueba roja de arriba, por la puerta que de verdad lo alcanza.
+
 ## Alternativas descartadas y por qué
 
 - **Opción 1** (criterio literal, caso vivo sin resolver): deja el encargo sin
