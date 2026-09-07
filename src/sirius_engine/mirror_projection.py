@@ -235,20 +235,29 @@ _STOP_MARKER_RE = re.compile(
 # las seis etiquetas que vigila (`implementing`, `repair-requested`,
 # `ready-for-merge`, `blocked-decision`, `failed-safely`, `completed`):
 #
-#   marker="<!-- sirius-notification:${STATE_LABEL}:${head_sha} -->"
+#   marker="<!-- sirius-notification:${STATE_LABEL}:${head_sha}:${RUN_ID:-sin-run} -->"
 #
 # A diferencia de las etiquetas vigentes -que son la FOTO de ahora mismo-,
 # estos marcadores son el CAMINO: cada uno prueba, fechado y por escrito, que
 # la incidencia estuvo en ese estado. `head_sha` vale `no-head` cuando la
 # incidencia todavía no tenía ningún SHA publicado (mismo guion), así que aquí
-# se captura tal cual, sin exigir forma de SHA.
+# se captura tal cual, sin exigir forma de SHA. El tramo del run se lee y se
+# DESCARTA: `head` es el head y solo el head, que es lo que su docstring
+# promete y lo único comparable con un SHA (CLAUDE-R8-001, ronda 8, PR #546).
 #
-# El guion deduplica por marcador COMPLETO -etiqueta y head-, así que la
-# secuencia no es exhaustiva: una etiqueta repuesta sobre el mismo head no
-# publica un segundo marcador. Eso la hace incompleta, nunca falsa; el
-# recorrido acreditado (ADR-147) solo necesita que lo que diga haya ocurrido,
-# no que diga todo lo que ocurrió.
-_NOTIFICATION_MARKER_RE = re.compile(r"<!--\s*sirius-notification:(sirius:[a-z-]+):([^\s>]*)\s*-->")
+# El tramo final del run existe desde ADR-157 (fusionado en `main` el
+# 07-09-2026): hasta entonces el marcador era `<etiqueta>:<head>` y el guion
+# deduplicaba por marcador COMPLETO, así que una etiqueta repuesta sobre el
+# mismo head NO publicaba un segundo marcador y la secuencia era incompleta.
+# Desde ADR-157 cada evento de etiqueta deja su propio aviso. Las dos formas
+# tienen que convivir: los historiales publicados ANTES de esa fusión -las
+# incidencias ya vividas, que ADR-157 declara que «conservan sus huecos»-
+# siguen trayendo el marcador sin run, y de ellos sigue siendo cierto que la
+# secuencia es incompleta, nunca falsa; el recorrido acreditado (ADR-147) solo
+# necesita que lo que diga haya ocurrido, no que diga todo lo que ocurrió.
+_NOTIFICATION_MARKER_RE = re.compile(
+    r"<!--\s*sirius-notification:(sirius:[a-z-]+):([^\s>:]*)(?::[^\s>]*)?\s*-->"
+)
 
 # La orden exacta del propietario que `sirius_resume_on_command.sh` acepta como
 # permiso para reanudar (líneas 72-89 de ese guion), reproducida aquí paso a

@@ -98,9 +98,14 @@ class EstadoAcreditado:
 
     A diferencia de ``estado``/``fase`` -que son la FOTO actual, lo que las
     etiquetas vigentes proyectan-, esto es el camino: cada
-    ``<!-- sirius-notification:sirius:<etiqueta>:<head> -->`` que
+    ``<!-- sirius-notification:sirius:<etiqueta>:<head>:<run> -->`` que
     ``notify-sirius-state.yml`` publica al aplicarse una etiqueta deja
-    constancia fechada de que la incidencia estuvo en ese estado. Es lo que
+    constancia fechada de que la incidencia estuvo en ese estado. El tramo
+    del run lo añadió ADR-157; los historiales publicados antes traen el
+    marcador sin él y se leen igual. ``head`` guarda SOLO el head -``no-head``
+    cuando la incidencia todavía no tenía SHA publicado-: el run se descarta
+    al leerlo, para que este campo siga siendo comparable con un SHA
+    (CLAUDE-R8-001, ronda 8, PR #546). Es lo que
     permite AVANZAR el almacén del motor por transiciones ya legales cuando
     una recuperación entera ocurrió sin que ninguna pasada de reflejo la
     observara (ADR-147, incidencia #545; material de partida de la PR #540).

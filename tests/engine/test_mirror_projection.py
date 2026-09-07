@@ -1334,6 +1334,45 @@ def test_historial_estados_recoge_las_notificaciones_de_etiqueta_en_orden() -> N
     assert tuple(acreditado.orden for acreditado in mirrored.historial_estados) == (1, 2, 3, 4)
 
 
+def test_historial_estados_lee_el_marcador_con_run_sin_pegarlo_al_head() -> None:
+    """El notificador de `main` publica `<etiqueta>:<head>:<run>` (ADR-157).
+
+    Desde ADR-157 el marcador lleva el run que atiende el evento de etiqueta,
+    para que dos paradas distintas sobre el mismo head dejen cada una el suyo.
+    `EstadoAcreditado.head` sigue siendo el HEAD y solo el head: pegarle el run
+    convierte un campo público documentado en un valor que nadie puede
+    comparar con un SHA (CLAUDE-R8-001, ronda 8, PR #546).
+    """
+    mirrored = _proyectar(
+        _comentarios(
+            _bot("<!-- sirius-notification:sirius:failed-safely:1c934781:33951766681 -->\n\ntexto")
+        )
+    )
+
+    assert mirrored.historial_estados[-1].head == "1c934781"
+    assert (
+        mirrored.historial_estados[-1].estado,
+        mirrored.historial_estados[-1].fase,
+    ) == _LABEL_STATE["sirius:failed-safely"]
+    assert mirrored.historial_estados[-1].etiqueta == "sirius:failed-safely"
+
+
+def test_historial_estados_sigue_leyendo_el_marcador_sin_run() -> None:
+    """El formato anterior a ADR-157 sigue vivo en las incidencias ya vividas.
+
+    ADR-157 («Consecuencias») deja dicho que las incidencias anteriores
+    conservan sus huecos: su historial guarda marcadores `<etiqueta>:<head>`
+    sin run, y la proyección tiene que seguir leyéndolos igual
+    (CLAUDE-R8-001, ronda 8, PR #546).
+    """
+    mirrored = _proyectar(
+        _comentarios(_bot("<!-- sirius-notification:sirius:completed:deadbee1 -->\n\ntexto"))
+    )
+
+    assert mirrored.historial_estados[-1].head == "deadbee1"
+    assert mirrored.historial_estados[-1].etiqueta == "sirius:completed"
+
+
 def test_historial_estados_ignora_las_notificaciones_de_autores_ajenos() -> None:
     """Mismo filtro de confianza que el resto de la proyección.
 
