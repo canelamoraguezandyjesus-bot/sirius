@@ -1565,7 +1565,7 @@ ADR o su incidencia cuando se adopte.
   ADR-148 (memoria) sigue esperando, por orden del propietario, a que lo
   demás termine.
 
-### 45. Codex volvió y el recolector no le leyó el hallazgo: dos rondas de veinte minutos por un cuerpo sin inline (ADR-156), y el P2 que Codex me puso a mí (07-09-2026, 04:19-12:50 UTC)
+### 45. Codex volvió y el recolector no le leyó el hallazgo: dos rondas de veinte minutos por un cuerpo sin inline (ADR-156), y el P2 que Codex me puso a mí (07-09-2026, 04:19-17:12 UTC)
 
 - **Reanudación limpia (04:19-04:20)**: el propietario avisó de que la
   cuota de Codex había vuelto; `continua` a secas en #545 a las 04:20:25
@@ -1793,6 +1793,103 @@ ADR o su incidencia cuando se adopte.
   servidor encadenados (cada 12 min, re-armándose solos hasta que #546 se
   fusione), que sí sobreviven. Deuda 5, en acto y ahora con remedio.
 
+### 46. Siete rondas más, dos frenos, dos veces «listo» invalidadas por mis propias fusiones, y el primer `QUALITY_RELANZADO` en vivo (07-09-2026, 17:12-22:50 UTC)
+
+- **El ciclo, en bruto.** Rondas 8 a 15 de #545/#546, todas con la misma
+  forma: revisión → corrección → Quality → revisión. Horas leídas de
+  GitHub, no estimadas: ronda 8 (`305dc56`, corregida 17:39:41, revisión
+  17:56:40), ronda 9 (`50e5ec2`, 18:15:10 → 18:34:12), ronda 10
+  (`266a46c`, 18:53:07 → 19:11:14), ronda 11 (`ddbc958`, 19:28:00 →
+  19:49:02), ronda 12 (`d29d70f`, 20:04:38 → **20:24:04 aprobada**),
+  ronda 13 (`0538bd4`, 21:32:15 → **21:49:08 aprobada**), ronda 14
+  (`2678e87`/`db2ee2a`) y ronda 15 (`c2db289`, 22:46:45, Quality en
+  marcha al cerrar esta entrada). El recuento de hallazgos por ronda bajó
+  6 → 4 → 3 → 2 → 1 y llegó dos veces a cero.
+- **El freno de convergencia mordió por primera vez (19:11:35)**, con
+  razón `convergencia-sin-progreso`: el par (pendientes, severidad) de la
+  ronda 10 era (2,5) frente a la mejor marca histórica (1,1). Funcionó
+  como está diseñado: paró y pidió decisión. El propietario eligió **«una
+  ronda más, acotada»** (decisión registrada 19:14:07, `continua` a las
+  19:14:11, `sirius-convergence-reset` a las 19:14:30) y la ronda
+  siguiente entregó la aprobación. El freno no se saltó: se reinició por
+  decisión escrita, que es su vía prevista.
+- **Dos veces `ready-for-merge`, dos veces invalidado, y las dos por mí.**
+  A las 20:24:11 y a las 21:49:13 el motor declaró el trabajo listo. Las
+  dos veces la rama había quedado detrás de `main` porque yo acababa de
+  fusionar otra cosa: ADR-157 (`07a51b1`, 17:07) antes de la primera, y
+  **#563 (`f2085db`, 21:48:23) treinta y cinco segundos antes de la
+  segunda**. La puerta de fusión exige la rama al día, así que cada una
+  costó «Update branch» + Quality + revisión enteros: dos vueltas de ~25
+  min que no las provocó ningún defecto del encargo, sino mi orden de
+  trabajo. **Regla nueva, ya aplicada**: mientras una PR del motor esté en
+  vuelo no se fusiona nada más en `main`; las fichas del operador se
+  preparan, se dejan verdes y esperan turno. Es la razón de que ADR-158
+  (PR #564) esté abierta y explícitamente marcada «no fusionar hasta que
+  #546 esté dentro».
+- **El primer `QUALITY_RELANZADO` en vivo: deuda 3 saldada (21:32:20
+  UTC).** El veredicto de la ronda 13 llegó, otra vez, después de que
+  Quality hubiera terminado para ese head. Esta vez el relanzamiento
+  automático **funcionó**: comentario `sirius-quality-relanzado:0538bd4…`
+  con el run 34162972853, que arrancó como intento 2 y cerró verde a las
+  21:42:19, y la incidencia se encaminó sola a revisión. Es la prueba en
+  vivo de que el propietario concedió al PAT el permiso «Actions: Read and
+  write» —lo que hoy costó cuatro relanzamientos a mano antes de las
+  17:07— y el dato que a ADR-149 le faltaba desde el 06-09. La deuda 3 se
+  cierra con este dato, no con una promesa.
+- **La contradicción que Codex encontró en `main`, no en el encargo
+  (20:59:23)**: tras actualizar la rama, la revisión levantó como P1 que
+  el §7 del contrato operativo describía la clave de idempotencia
+  `incidencia-estado-head` mientras ADR-157 ya publicaba
+  `incidencia-estado-head-run`. El corrector **paró bien** (21:02:53):
+  el fichero llegó con `main` y tocarlo desde #546 se sale del alcance.
+  Decisión del propietario de las 21:15 (registrada 21:12:40): camino
+  (a) —ficha propia del operador—. Salió **PR #563**, fusionada a las
+  21:48:23 como `f2085db`, que reescribe el §7 y pasa ADR-157 a
+  ACEPTADO. Lección de método: **cambiar comportamiento sin actualizar el
+  contrato que lo describe es dejar una mentira firmada**; ADR-157 lo
+  hizo y lo encontró un revisor, no yo.
+- **Y el hueco que quedaba en ADR-157, encontrado por la ronda 14
+  (22:17:14)**: el grupo de concurrencia de `notify-sirius-state.yml`
+  lleva incidencia y etiqueta, y GitHub Actions conserva **como mucho una
+  ejecución en espera por grupo**, así que un tercer evento de la misma
+  etiqueta desplaza al segundo y ese aviso no se publica nunca. El §7
+  promete un aviso por EVENTO: la promesa no se sostiene con esa cola. El
+  corrector volvió a parar (22:30:47) y el propietario ratificó el reparto
+  a las 22:36 (registrada 22:34:44): #546 no toca `.github/**`, y el
+  defecto va a ficha propia. Salió **ADR-158 / PR #564** (rama
+  `claude/adr-158-cada-evento-su-ranura`, árbol `f3582e3`): el grupo gana
+  `github.run_id`, con `cancel-in-progress: false` intacto, más el §7
+  ampliado con el precio que eso acepta (los avisos pueden publicarse
+  fuera de orden). Cadena completa como una sola invocación: `606 files
+  already formatted`, `All checks passed!`, `Success: no issues found in
+  574 source files`, `5049 passed, 16 skipped, 2 xfailed`, código 0.
+  **Abierta y en espera**: se fusiona cuando #546 esté dentro.
+- **Rondas 13 a 15: el corrector aprendió a no corregir.** Las tres son
+  documentales. La 13 registra la decisión del reparto; la 14 acota los
+  cinco pasajes de #546 que daban por incondicional («desde ADR-157 cada
+  evento deja su propio aviso») lo que la cola no garantiza; la 15 deja
+  escrito el límite heredado para que la revisión siguiente no lo levante
+  como nuevo. Es exactamente lo que debe pasar cuando el hallazgo es real
+  pero su arreglo vive fuera del alcance: se escribe, no se parchea.
+- **Mis fallos de la tarde, sin adornos.** (1) **Rompí dos veces la
+  cadena de vigilancia**: los recordatorios del servidor sobreviven a la
+  suspensión de la sesión, pero solo si al atender uno armo el siguiente
+  ANTES de mirar nada; las dos veces miré primero, me llevó el trabajo por
+  delante y la cadena murió. Arreglo aplicado: cinco recordatorios
+  escalonados armados a la vez —de modo que perder uno no rompe la
+  cadena— y la regla «lo PRIMERO es armar el siguiente» escrita en la
+  primera línea del cuerpo de cada uno. El propietario lo vio dos veces y
+  las dos tenía razón. (2) **La hora, otra vez**: llevaba todo el día
+  convirtiendo a UTC+1 cuando el propietario está en **UTC+2**; me
+  corrigió él. Los partes de ahora en adelante llevan su hora leída, no
+  calculada de memoria.
+- **Balance del encargo #545 a las 22:50 UTC**: 15 rondas, 50 commits,
+  cuatro paradas por decisión (R5-003, convergencia, CODEX-001 dos veces),
+  tres fichas del operador nacidas de sus propias rondas (ADR-156,
+  ADR-157, ADR-158) y dos de ellas ya en `main`. Ninguna de las cuatro
+  paradas fue un fallo: las cuatro veces el motor se negó a inventarse un
+  permiso que no tenía.
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
@@ -1825,11 +1922,23 @@ ADR o su incidencia cuando se adopte.
    14:51, entrada 44)**: ya con el guion de `main`, la lectura encontró el
    run terminado y el relanzamiento devolvió `HTTP 403`: el PAT no tiene
    «Actions: Read and write». Corrección de ADR-149 (PR #560, `132b961`):
-   el fallo se cuenta en la incidencia (`QUALITY_SIN_ENCAMINAR`). **Queda
-   en manos del propietario**: conceder el permiso al PAT; con él, el
-   primer `QUALITY_RELANZADO` en vivo salda la deuda.
+   el fallo se cuenta en la incidencia (`QUALITY_SIN_ENCAMINAR`).
+   **SALDADA el 07-09 a las 21:32:20** (entrada 46): el propietario
+   concedió el permiso al PAT y la ronda 13 de #545 dejó el primer
+   `QUALITY_RELANZADO` en vivo —head `0538bd4`, run 34162972853 relanzado
+   como intento 2, verde a las 21:42:19— y la incidencia se encaminó sola
+   a revisión. La ruta H-34 ya no necesita mano humana.
 4. Cliente único de Ollama local para los tres adaptadores (7, 8).
-5. Vigilancia durable con modelo barato (4, 11).
+5. Vigilancia durable con modelo barato (4, 11). **Mitad remediada el
+   07-09** (entradas 45 y 46): los temporizadores de terminal no
+   sobreviven a una suspensión de la sesión —cinco horas de parada el
+   07-09 por eso—, y los recordatorios del servidor sí, pero solo si al
+   atender uno se arma el siguiente ANTES de hacer nada más; rompí esa
+   cadena dos veces. Remedio en uso: varios recordatorios escalonados
+   armados a la vez, con la regla de re-armado en la primera línea del
+   cuerpo. Lo que sigue abierto es lo que la deuda pedía de verdad: que la
+   vigilancia no dependa de que yo me acuerde, sino de un vigía barato del
+   propio motor.
 6. Rechazo de una propuesta de criticidad recordado solo en sesión (M21b):
    persistirlo necesita columna y decisión del propietario.
 7. Suite GUI: `test_streaming_message_grows_without_overlapping_neighbours`
