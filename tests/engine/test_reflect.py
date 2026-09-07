@@ -946,9 +946,11 @@ def _cronologia(
     estados: list[EstadoAcreditado] = []
     permisos: list[PermisoDeReanudacion] = []
     diagnosticos: list[tuple[int, str]] = []
+    orden_sin_recibo: int | None = None
     for orden, (tipo, referencia) in enumerate(entradas):
         if tipo == "diagnostico":
             diagnosticos.append((orden, referencia))
+            orden_sin_recibo = None
         elif tipo == "estado":
             estado, fase = _LABEL_STATE[referencia]
             estados.append(
@@ -961,6 +963,12 @@ def _cronologia(
                     publicado_en=(desde + timedelta(minutes=orden) if desde is not None else None),
                 )
             )
+        elif tipo == "marcador" and orden_sin_recibo is not None:
+            # El recibo que responde a una orden `continua` es el MISMO acto
+            # que ella y no añade un permiso (decisión del propietario del
+            # 07-09-2026 sobre CLAUDE-R5-003, ADR-147), exactamente como lo
+            # colapsa `mirror_projection._interpretar_permisos_reanudacion`.
+            orden_sin_recibo = None
         else:
             permisos.append(
                 PermisoDeReanudacion(
@@ -969,6 +977,7 @@ def _cronologia(
                     orden=orden,
                 )
             )
+            orden_sin_recibo = orden if tipo == "orden" else orden_sin_recibo
     paradas = [
         indice
         for indice, acreditado in enumerate(estados)
@@ -1514,6 +1523,53 @@ def _espejo_de_dos_paradas(
         historial_estados=historial,
         permisos_reanudacion=permisos,
     )
+
+
+def test_una_sola_autorizacion_no_levanta_dos_paradas_consecutivas() -> None:
+    """Una autorización, una salida: el recibo no duplica la orden (CLAUDE-R5-003).
+
+    La orden `continua` del propietario y el `sirius-resume-stop` que
+    `sirius_resume_on_command.sh` publica al procesarla son el MISMO acto
+    (decisión del propietario del 07-09-2026, ADR-147). Contándolos por
+    separado, este historial -dos paradas seguidas y una sola palabra escrita
+    después- acreditaba las DOS salidas con esa única autorización y el
+    recorrido llegaba entero hasta `delivered/entregar`. Con el recibo
+    colapsado en su orden solo hay un permiso: la primera parada lo consume y
+    la segunda se queda sin acreditar, así que el recorrido se abandona y se
+    declara divergencia sin tocar el almacén, que es lo que el contrato de
+    `_consumir_permiso` afirma.
+    """
+    store = InMemoryWorkEngineStore()
+    parado = _motor_parado_en_reparar(store, parado_en=_INICIO_DEL_HISTORIAL + timedelta(minutes=1))
+    historial, permisos = _cronologia(
+        ("estado", "sirius:failed-safely"),
+        ("estado", "sirius:repair-requested"),
+        ("estado", "sirius:failed-safely"),
+        ("orden", "continua"),
+        ("marcador", "<!-- sirius-resume-stop:1c934781 -->"),
+        ("estado", "sirius:repair-requested"),
+        ("estado", "sirius:ready-for-merge"),
+        ("estado", "sirius:completed"),
+        desde=_INICIO_DEL_HISTORIAL,
+    )
+    assert tuple(permiso.forma for permiso in permisos) == (FormaDePermiso.ORDEN,), (
+        "el recibo de la posición 4 es el mismo acto que la orden de la 3"
+    )
+    espejo = _espejo(
+        estado=WorkItemState.DELIVERED,
+        fase=WorkItemPhase.ENTREGAR,
+        etiquetas=("sirius:completed",),
+        historial_estados=historial,
+        permisos_reanudacion=permisos,
+    )
+
+    resultado = reflejar_desenlace(parado, espejo, _episodio())
+
+    assert resultado.pasos == ()
+    assert resultado.divergencia is not None
+    item = store.get_work_item(_WORK_ID)
+    assert item is not None
+    assert item.estado is WorkItemState.FAILED_SAFELY
 
 
 def test_el_recorrido_ancla_en_la_ocurrencia_que_el_almacen_pudo_guardar() -> None:

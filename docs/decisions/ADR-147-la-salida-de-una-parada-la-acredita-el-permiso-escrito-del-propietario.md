@@ -645,28 +645,43 @@ aplicar la etiqueta, y la etiqueta es lo que dispara el marcador—. Con eso:
   hasta `reflect`, para correlacionar parada, diagnóstico y permiso por
   identidad y no por posición.
 
-- **Se entrega con una limitación viva, que necesita una decisión del
-  propietario: CLAUDE-R5-003** (P3, `mirror_projection._interpretar_permisos_reanudacion`).
-  Lo que el código garantiza es que un ELEMENTO de `permisos_reanudacion` no
-  acredita dos salidas; lo que el docstring de `_consumir_permiso` afirma es
-  que «un permiso no puede acreditar dos salidas». Son cosas distintas porque
-  UNA autorización del propietario deja sistemáticamente DOS rastros: la orden
-  `continua` y el recibo que `sirius_resume_on_command.sh` publica al
-  procesarla (en el historial real de la #537, las 04:45 y las 04:46). Con dos
-  avisos de parada consecutivos y sin ningún permiso entre ellos, una sola
-  palabra escrita levantaría las dos.
+- **CLAUDE-R5-003 resuelto por decisión del propietario (07-09-2026, 14:55
+  UTC), lectura (b): la orden y su recibo son el MISMO acto.** El problema
+  medido en la ronda 5 era real: una sola autorización del propietario deja
+  sistemáticamente DOS rastros -la orden `continua` y el recibo que
+  `sirius_resume_on_command.sh` publica al procesarla; en el historial real de
+  la #537, las 04:45 y las 04:46-, y `_interpretar_permisos_reanudacion` los
+  contaba como dos elementos de `permisos_reanudacion`. Con dos avisos de
+  parada consecutivos y una sola palabra escrita después, esa autorización
+  levantaba las DOS paradas, en contra de lo que afirma el docstring de
+  `_consumir_permiso` («un permiso no puede acreditar dos salidas»).
 
-  No se corrige en esta ronda porque corregirlo choca de frente con una prueba
-  existente que fija LO CONTRARIO:
-  `test_los_permisos_de_reanudacion_llevan_las_dos_formas_en_orden`
-  (`tests/engine/test_mirror_projection.py`) afirma que el `continua` de la
-  posición 1 y el `sirius-resume-stop` de la posición 2 son DOS permisos, y
-  los límites de corrección del hallazgo prohíben relajar o reescribir
-  cualquier prueba existente. Elegir entre «las dos formas cuentan siempre por
-  separado» y «el recibo pegado a su orden es el mismo acto» es una decisión de
-  esta ADR, del propietario, no del corrector. Medido en la ronda 5 de la
-  PR #546: la supresión del recibo inmediatamente posterior a su orden deja
-  el resto de la suite en verde y solo tumba esa prueba.
+  El propietario decidió la lectura (b) y autorizó reescribir la prueba que
+  fijaba lo contrario. Desde la ronda 6, `_interpretar_permisos_reanudacion`
+  COLAPSA el recibo con la orden a la que responde: un marcador de reanudación
+  que sigue a una orden `continua` todavía sin recibo, y sin ninguna PARADA
+  publicada entre medias (`_STOP_MARKER_RE`, que es la que abre un suceso
+  nuevo), no añade un segundo permiso. Las dos formas siguen valiendo una cada
+  una cuando llegan solas, que es para lo que existen: un recibo sin orden
+  previa legible -otra automatización reanuda- y una orden sin recibo -el
+  recibo deduplicado por `sirius_comment_once` sobre el mismo head-. El
+  docstring de `_consumir_permiso` conserva su afirmación, que con este cambio
+  pasa a ser verdad.
+
+  Lo fijan tres pruebas de `tests/engine/test_mirror_projection.py`
+  -`test_los_permisos_de_reanudacion_llevan_las_dos_formas_en_orden`,
+  reescrita por la decisión; `test_una_parada_entre_la_orden_y_su_recibo_deja_los_dos_permisos`;
+  `test_un_recibo_sin_orden_previa_sigue_siendo_un_permiso`- y
+  `test_una_sola_autorizacion_no_levanta_dos_paradas_consecutivas`
+  (`tests/engine/test_reflect.py`), que sobre dos paradas seguidas y una sola
+  autorización exige `pasos == ()` y divergencia declarada. Vistas fallar con
+  la mutación que devuelve el conteo por separado (`if orden_sin_recibo is not
+  None:` → `if False:` en `mirror_projection`, y el mismo colapso desactivado
+  en el doble `_cronologia`): «AssertionError: el recibo de la posición 4 es el
+  mismo acto que la orden de la 3» y el diff de los cinco permisos de la
+  prueba reescrita. El doble `_cronologia` de `tests/engine/test_reflect.py`
+  colapsa igual que la proyección, para no fabricar permisos que producción no
+  produce (CLAUDE-R5-002).
 
 - Queda pendiente, como ficha del operador, endurecer
   `sirius_resume_on_command.sh` para que su marcador lleve run/intento y nunca

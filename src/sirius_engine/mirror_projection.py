@@ -734,14 +734,29 @@ def _interpretar_permisos_reanudacion(
     ronda de #545 sobre el historial real de la #537).
 
     ``orden`` es la posición del texto en el historial de confianza, la misma
-    escala que usa :func:`_interpretar_historial_estados`. Un texto que
-    contenga las dos cosas produce dos permisos con el mismo ``orden``; el
-    consumo en orden del recorrido los toma uno detrás de otro, que es lo
-    correcto: son dos permisos escritos, no uno.
+    escala que usa :func:`_interpretar_historial_estados`.
+
+    El recibo NO se suma a la orden que lo provocó (decisión del propietario
+    del 07-09-2026 sobre CLAUDE-R5-003, registrada en ADR-147): la orden
+    ``continua`` y el ``sirius-resume-stop`` que ``sirius_resume_on_command.sh``
+    publica al procesarla son el MISMO acto, y contarlos por separado dejaba
+    que una sola autorización acreditara DOS salidas de parada, en contra de
+    lo que afirma el contrato de :func:`sirius_engine.reflect._consumir_permiso`.
+    Por eso un recibo que sigue a una orden todavía sin recibo, y sin ninguna
+    PARADA publicada entre medias (``_STOP_MARKER_RE``, el veredicto que sí
+    abre un suceso nuevo), se colapsa con ella. Las dos formas siguen contando
+    una cada una cuando llegan solas: un recibo sin orden previa legible -la
+    reanudación que dispara otra automatización- y una orden sin recibo -el
+    recibo deduplicado por ``sirius_comment_once``, que es para lo que la
+    forma ``ORDEN`` existe (ADR-147)-.
     """
     permisos: list[PermisoDeReanudacion] = []
+    orden_sin_recibo: int | None = None
     for orden, (texto, del_propietario) in enumerate(_historial_de_confianza(cuerpo, comentarios)):
         for match in _RESUME_MARKER_RE.finditer(texto):
+            if orden_sin_recibo is not None:
+                orden_sin_recibo = None
+                continue
             permisos.append(
                 PermisoDeReanudacion(
                     forma=FormaDePermiso.MARCADOR, referencia=match.group(0), orden=orden
@@ -751,6 +766,9 @@ def _interpretar_permisos_reanudacion(
             permisos.append(
                 PermisoDeReanudacion(forma=FormaDePermiso.ORDEN, referencia="continua", orden=orden)
             )
+            orden_sin_recibo = orden
+        elif _STOP_MARKER_RE.search(texto):
+            orden_sin_recibo = None
     return tuple(permisos)
 
 

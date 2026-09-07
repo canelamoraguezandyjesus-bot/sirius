@@ -600,6 +600,11 @@ def _consumir_permiso(
 
     Que el puntero solo avance es la otra mitad: un permiso no puede acreditar
     dos salidas, porque una vez consumido ya no está en la lista para nadie.
+    Y un permiso es UNA autorización, no cada rastro que deja: desde la ronda 6
+    la proyección colapsa el recibo de `sirius_resume_on_command.sh` con la
+    orden `continua` que lo provocó (CLAUDE-R5-003, decisión del propietario
+    del 07-09-2026 en ADR-147), así que esta frase es verdad también para el
+    propietario que escribió una sola palabra.
     Un permiso ANTERIOR a la parada tampoco vale, y al saltárselo queda
     descartado para siempre -las paradas siguientes son todavía más tardías-.
     """
