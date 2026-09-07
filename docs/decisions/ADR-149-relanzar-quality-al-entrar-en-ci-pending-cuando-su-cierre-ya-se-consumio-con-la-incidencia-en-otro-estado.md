@@ -225,6 +225,28 @@ cualquiera ya no pasan por «cero runs activos».
 Guardián: un doble de `gh` que imprime `not-json` con código 0 exige el
 marcador, el encabezado y la cita; visto fallar contra el guion anterior.
 
+## Segunda corrección (07-09-2026, 13:15 UTC): un JSON válido que no es una lista
+
+La comprobación anterior exigía que `activos` fuera un entero, y eso no
+bastaba: `jq` itera también los VALORES de un objeto, así que
+`printf '{}' | jq -r '[.[] | select(.status != "completed")] | length'`
+devuelve `0`. Un `gh` (o un doble) que respondiera `{}` con código 0 se
+aceptaba como «lista vacía legible»: no se publicaba `QUALITY_SIN_ENCAMINAR`
+y la función terminaba en verde por la rama «sin run terminado», que es
+exactamente lo que esta decisión prohíbe. Lo vio Codex en la ronda 5 de la
+PR #546 (hallazgo CODEX-002).
+
+Ahora el filtro comprueba el TIPO antes de contar: solo una lista cuyos
+elementos sean objetos se cuenta; cualquier otra cosa produce
+`no-es-lista-de-runs`, que el `case` ya trata como ilegible. Se conserva sin
+cambio el comportamiento para una lista válida vacía (`[]` → `0`) y para los
+fallos de transporte, que siguen saliendo por `consulta-runs-fallida`.
+
+Guardián: `test_una_respuesta_de_runs_que_no_es_lista_no_se_acepta_como_vacia`
+(`tests/automation/test_sirius_apply_verdict.py`), con un doble de `gh` que
+imprime `{}` con código 0; visto fallar contra el filtro anterior, que
+terminaba el paso con código 0 y sin aviso.
+
 Es la misma familia que ADR-156 (el recolector no leía los hallazgos que
 Codex publica en el cuerpo): el motor ignoraba una señal presente porque
 llegaba con una forma que no esperaba. Las dos correcciones viajan en la

@@ -62,6 +62,7 @@ case "$sub" in
     if printf '%s' "$args" | grep -q 'actions/workflows/quality.yml/runs'; then
       [ -f "$D/quality_runs_fail" ] && { echo "503 runs" >&2; exit 1; }
       [ -f "$D/quality_runs_illegible" ] && { echo "not-json"; exit 0; }
+      [ -f "$D/quality_runs_objeto" ] && { echo "{}"; exit 0; }
       filtro_runs=""; prev=""
       for a in "$@"; do [ "$prev" = "--jq" ] && filtro_runs="$a"; prev="$a"; done
       h="$(printf '%s' "$args" | grep -oE 'head_sha=[0-9a-f]+' | cut -d= -f2)"
@@ -1959,6 +1960,29 @@ def test_si_la_consulta_de_runs_cae_el_paso_queda_rojo_no_verde(tmp_path: Path) 
     assert "sirius-quality-sin-encaminar:c4d482267d9a:consulta-runs-fallida" in comments
     assert "## QUALITY_SIN_ENCAMINAR" in comments
     assert "503 runs" in comments
+
+
+def test_una_respuesta_de_runs_que_no_es_lista_no_se_acepta_como_vacia(tmp_path: Path) -> None:
+    """Un JSON válido que no es una lista tampoco es legible (CODEX-002, ronda 5, #546).
+
+    `jq` itera también los VALORES de un objeto, así que
+    `printf '{}' | jq -r '[.[] | select(.status != "completed")] | length'`
+    devuelve `0`: la guarda anterior lo aceptaba como «lista vacía» y la
+    función terminaba en verde por la rama «sin run terminado», sin publicar
+    `QUALITY_SIN_ENCAMINAR`. ADR-149 exige avisar y salir en rojo ante
+    cualquier respuesta no interpretable como lista.
+    """
+    env = _setup(tmp_path)
+    head = "c4d482267d9a"
+    vf = _implementador_listo(env, tmp_path, head)
+    (_md(env) / "quality_runs_objeto").write_text("", encoding="utf-8")
+    r = _run(env, "implementer", vf)
+    assert r.returncode != 0
+    assert "consulta-runs-ilegible" in r.stdout + r.stderr
+    assert "sirius:ci-pending" in _labels(env)
+    assert "sirius:failed-safely" not in _labels(env)
+    assert "RERUN" not in _actions_log(env)
+    assert f"sirius-quality-sin-encaminar:{head}:consulta-runs-ilegible" in _comments(env)
 
 
 def test_si_la_respuesta_de_runs_es_ilegible_el_aviso_tambien_se_publica(tmp_path: Path) -> None:
