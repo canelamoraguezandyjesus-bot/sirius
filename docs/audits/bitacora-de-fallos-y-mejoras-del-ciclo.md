@@ -1883,6 +1883,21 @@ ADR o su incidencia cuando se adopte.
   convirtiendo a UTC+1 cuando el propietario está en **UTC+2**; me
   corrigió él. Los partes de ahora en adelante llevan su hora leída, no
   calculada de memoria.
+- **Y a las 22:55:19 se acabó la cuota de Codex, con la PR a un paso de
+  entrar.** La ronda 16 sobre `c2db289` pidió la revisión a las 22:55:10 y
+  el conector contestó **nueve segundos después**: «You have reached your
+  Codex usage limits for code reviews». El revisor Claude sí corrió entero
+  (22:55:11 → 23:03:12, sin un solo comentario inline que publicar), pero
+  en modo dual **no hay camino que aplique el veredicto de Claude sin el de
+  Codex**, así que el agregado fue `FAILED_SAFELY` con razón
+  `codex-fallo-declarado` (23:03:17) y la incidencia quedó en
+  `sirius:failed-safely`. Quality estaba verde sobre ese head y la rama al
+  día con `main`: lo único que separa a #546 de la fusión es una cuota
+  ajena. Es la **segunda vez en 31 horas** (la primera, el 06-09 a las
+  16:00) y ahora sí bloquea el resultado, no solo una ronda. Plan mientras
+  tanto: reintentar la ronda espaciada —cada reintento cuesta un run de
+  ~9 min y no gasta cuota de Codex si sigue agotada— y **no fusionar nada
+  en `main`**, para que la rama no se desfase mientras espera.
 - **Balance del encargo #545 a las 22:50 UTC**: 15 rondas, 50 commits,
   cuatro paradas por decisión (R5-003, convergencia, CODEX-001 dos veces),
   tres fichas del operador nacidas de sus propias rondas (ADR-156,
@@ -2025,3 +2040,11 @@ ADR o su incidencia cuando se adopte.
     diagnostique como lo que es («arranque fallido: probable tope de
     uso») y que un fallo declarado de Codex pueda degradar la ronda a
     solo-Claude por decisión del propietario, no a mano. Decisión suya.
+    **Segunda ocurrencia y primera que bloquea un resultado (07-09,
+    22:55:19, entrada 46)**: el tope de Codex saltó con #546 en verde y al
+    día, y el modo dual no tiene forma de aplicar el veredicto de Claude
+    solo, así que la fusión queda parada por una cuota ajena. Esto
+    convierte la decisión en urgente y le añade un dato: el conector
+    responde el tope en **nueve segundos**, o sea que degradar a
+    solo-Claude se puede decidir al principio de la ronda y sin gastar los
+    nueve minutos del revisor.
