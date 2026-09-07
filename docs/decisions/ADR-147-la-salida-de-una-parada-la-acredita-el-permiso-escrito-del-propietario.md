@@ -591,6 +591,29 @@ aplicar la etiqueta, y la etiqueta es lo que dispara el marcador—. Con eso:
   hasta `reflect`, para correlacionar parada, diagnóstico y permiso por
   identidad y no por posición.
 
+- **Se entrega con una limitación viva, que necesita una decisión del
+  propietario: CLAUDE-R5-003** (P3, `mirror_projection._interpretar_permisos_reanudacion`).
+  Lo que el código garantiza es que un ELEMENTO de `permisos_reanudacion` no
+  acredita dos salidas; lo que el docstring de `_consumir_permiso` afirma es
+  que «un permiso no puede acreditar dos salidas». Son cosas distintas porque
+  UNA autorización del propietario deja sistemáticamente DOS rastros: la orden
+  `continua` y el recibo que `sirius_resume_on_command.sh` publica al
+  procesarla (en el historial real de la #537, las 04:45 y las 04:46). Con dos
+  avisos de parada consecutivos y sin ningún permiso entre ellos, una sola
+  palabra escrita levantaría las dos.
+
+  No se corrige en esta ronda porque corregirlo choca de frente con una prueba
+  existente que fija LO CONTRARIO:
+  `test_los_permisos_de_reanudacion_llevan_las_dos_formas_en_orden`
+  (`tests/engine/test_mirror_projection.py`) afirma que el `continua` de la
+  posición 1 y el `sirius-resume-stop` de la posición 2 son DOS permisos, y
+  los límites de corrección del hallazgo prohíben relajar o reescribir
+  cualquier prueba existente. Elegir entre «las dos formas cuentan siempre por
+  separado» y «el recibo pegado a su orden es el mismo acto» es una decisión de
+  esta ADR, del propietario, no del corrector. Medido en la ronda 5 de la
+  PR #546: la supresión del recibo inmediatamente posterior a su orden deja
+  el resto de la suite en verde y solo tumba esa prueba.
+
 - Queda pendiente, como ficha del operador, endurecer
   `sirius_resume_on_command.sh` para que su marcador lleve run/intento y nunca
   se deduplique. Mientras no se haga, la orden `continua` es la única forma de
