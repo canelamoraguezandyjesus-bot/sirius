@@ -1755,6 +1755,43 @@ ADR o su incidencia cuando se adopte.
   día**: la decisión la fecha «14:55 UTC» y la hora real es 16:02; la
   estimé en vez de leerla y publiqué una fe de erratas en la incidencia.
   Regla, otra vez: ninguna hora sin leerla de GitHub en el mismo turno.
+- **Ronda 9 y la parada por familia (16:26-16:39 UTC)**: revisión sobre
+  `19dd218` con Codex APROBANDO y Claude pidiendo cambios: tres hallazgos
+  (R7-001 P1, R7-002 P1 —«regresión de la corrección de la ronda
+  anterior»— y R7-003 P2), **los tres en el mismo sitio de siempre**
+  (`_atribuir_diagnosticos`, `_orden_de_la_parada`, `_ancla_del_recorrido`
+  y el doble de sus pruebas). Con esta van cinco rondas de la misma
+  familia (R4-002, R5-001/CODEX-001, R6-001/002, R7-001/002). La regla de
+  `CLAUDE.md` obliga a parar a la SEGUNDA; yo dejé pasar hasta la quinta,
+  anotándolo cada vez sin actuar. Ese es el fallo de método del día.
+- **La raíz, nombrada por el propio hallazgo, y arreglada (ADR-157,
+  16:41-17:07 UTC)**: R7-001 lo dice literal: «`notify-sirius-state.yml`
+  deduplica por `sirius-notification:<etiqueta>:<head>`, así que una
+  SEGUNDA `blocked-decision` sobre el mismo head no deja marcador propio».
+  El emisor destruía al publicar la evidencia que sus lectores necesitan
+  después; la propia #545 tiene UN marcador `failed-safely:bc33b82…` y
+  TRES comentarios de parada sobre ese head. Ficha del operador ADR-157
+  (nota de arranque `33e696b` antes del código): el marcador lleva el run
+  del evento (`RUN_ID`), así que reejecutar el mismo run sigue sin
+  duplicar y dos paradas distintas dejan cada una el suyo. Dos guardianes
+  vistos fallar contra `main` y un tercero de candado sobre la
+  comprobación exacta; cadena completa sobre `900f46cf` en 0 (5046
+  passed); Quality verde (run 34145327794); **fusionada como `07a51b1` a
+  las 17:07**. Lo que NO arregla: los historiales ya vividos siguen con
+  sus huecos, así que la heurística de #546 sigue haciendo falta como
+  respaldo del pasado —pero deja de ser el camino principal—.
+- **Ronda 10 del corrector (16:39-17:05)**: dos empujes, `b1af8fd`
+  (R7-003: el doble se ata a producción también en los permisos) y
+  `8f884b8` (comprobación anclada); Quality verde a las 17:04:57 y el
+  veredicto entró después → **cuarta carrera de ADR-149 en el día**, con
+  el PAT otra vez sin permiso; relanzado a mano a las 17:07.
+- **Parón real del operador y su arreglo**: el propietario preguntó por
+  qué me paro. La respuesta honesta es que entre comprobaciones espero con
+  un temporizador de terminal, y **eso no sobrevive a una suspensión de la
+  sesión**: de 08:14 a 13:33 la sesión quedó suspendida y #545 estuvo cinco
+  horas quieta. Desde las 17:12 la vigilancia va por recordatorios del
+  servidor encadenados (cada 12 min, re-armándose solos hasta que #546 se
+  fusione), que sí sobreviven. Deuda 5, en acto y ahora con remedio.
 
 ---
 
