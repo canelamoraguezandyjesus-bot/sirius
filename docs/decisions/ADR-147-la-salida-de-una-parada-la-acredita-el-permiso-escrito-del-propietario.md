@@ -495,20 +495,42 @@ aplicar la etiqueta, y la etiqueta es lo que dispara el marcador—. Con eso:
 - Un `NEEDS_DECISION` jamás se resuelve en el almacén sin su permiso.
 - El almacén gana memoria de tramos intermedios que ninguna pasada observó:
   el diario registra las transiciones reales, no un salto.
-- **Se entrega con un defecto conocido y vivo**, aplazado por plazo
-  (ADR-155) en la ronda 4 de la PR #546 y re-levantado para que la revisión
-  siguiente lo vuelva a exigir:
+- El defecto que la ronda 4 aplazó por plazo (ADR-155) queda **corregido en la
+  ronda 5**, por la vía de raíz que el propietario registró el 06-09-2026:
 
-  - **CLAUDE-R4-001** (P1, `reflect.py`): en
-    `_recorrer_historial_acreditado`, un aviso de PARADA que no encaja donde
-    está publicado abandona el recorrido entero (`if acreditado is None or
-    espejo_del_tramo.estado in _PARADAS: return None`). Como
+  - **CLAUDE-R4-001** (P1, `reflect.py`), **corregido en la ronda 5**. El
+    orden de una parada era la posición de su marcador `sirius-notification`, y
+    `_consumir_permiso` exige un permiso posterior a ese orden. Como
     `notify-sirius-state.yml` mete el nombre de la etiqueta en su grupo de
     concurrencia, los avisos de etiquetas distintas no se serializan entre sí:
     el aviso de una parada puede publicarse DESPUÉS del permiso que la levantó,
-    y entonces `_consumir_permiso` no encuentra ningún permiso posterior y una
-    recuperación que el propietario sí autorizó por escrito queda como
-    divergencia declarada para siempre.
+    y entonces no quedaba ningún permiso posterior y una recuperación que el
+    propietario sí autorizó por escrito quedaba como divergencia declarada para
+    siempre.
+
+    Se corrige **transportando la identidad del suceso**, que es la vía de raíz
+    que el propietario registró: `EstadoAcreditado` lleva ahora
+    `orden_del_veredicto` —la posición del comentario de veredicto que causó la
+    parada, el mismo que le dio su `diagnostico`—, `_atribuir_diagnosticos` la
+    rellena al emparejar, y `reflect._orden_de_la_parada` la usa como posición
+    de la parada, volviendo a la del aviso solo cuando no hay ningún veredicto
+    atribuible. El veredicto es síncrono, lo publica el propio rol y
+    `sirius_apply_verdict.sh` lo escribe SIEMPRE antes de aplicar la etiqueta,
+    así que la correlación parada-permiso deja de depender de dónde cayó el
+    aviso. El criterio de ADR-147 no se toca: el permiso escrito sigue siendo
+    la única acreditación, sigue teniendo que ser estrictamente posterior a la
+    parada y se sigue consumiendo en orden.
+
+    El obstáculo que la ronda 4 midió —el doble `_cronologia` da el mismo
+    `head` a todas las ocurrencias, así que correlacionar por head desnudo
+    haría pasar `test_un_permiso_anterior_a_la_parada_no_la_levanta`— queda
+    resuelto sin tocar el head: el discriminante es la posición del veredicto,
+    no el head. Esa prueba sigue verde sin cambiarla, porque un historial sin
+    veredicto atribuible conserva la referencia de siempre. Lo fija
+    `test_un_aviso_de_parada_retrasado_no_niega_el_permiso_que_si_se_escribio`
+    (`tests/engine/test_reflect.py`), vista fallar con
+    `_orden_de_la_parada` devolviendo siempre `acreditado.orden`.
+
   Y uno **corregido en la ronda 4**, que se registra aquí porque cambia el
   criterio de atribución:
 
@@ -548,24 +570,26 @@ aplicar la etiqueta, y la etiqueta es lo que dispara el marcador—. Con eso:
     `test_una_parada_sin_diagnostico_publicado_hasta_ella_no_hereda_el_siguiente`
     ni `test_un_aviso_de_parada_retrasado_no_le_roba_el_diagnostico_a_la_otra`.
 
-    **Residuo conocido, todavía abierto (CLAUDE-R5-002):** el doble de pruebas
-    `_cronologia` de `tests/engine/test_reflect.py` sigue con la atribución
-    posicional que ya tenía, así que puede fabricar `EstadoAcreditado` que la
-    proyección real no produce. Cerrar esa divergencia es parte del mismo
-    trabajo de raíz que CLAUDE-R4-001.
+    **CLAUDE-R5-002, cerrado en la misma ronda.** El doble de pruebas
+    `_cronologia` de `tests/engine/test_reflect.py` seguía con la atribución
+    posicional antigua, así que fabricaba `EstadoAcreditado` que la proyección
+    no puede producir. Ahora aplica exactamente el mismo consumo en orden, y lo
+    fija una prueba de acoplamiento —
+    `test_el_doble_de_cronologia_proyecta_lo_mismo_que_la_proyeccion_real`—
+    que pasa el MISMO historial por los dos caminos y exige que coincidan en
+    etiqueta, estado, fase, diagnóstico y en la distancia entre el marcador y
+    el veredicto que lo explica. Ni
+    `test_una_parada_sin_diagnostico_atribuible_no_recrea_ninguno` ni
+    `test_un_marcador_con_otro_diagnostico_no_ancla_la_parada_guardada` han
+    tenido que tocarse: la temida caída era de la alineación por rango, no de
+    esta regla.
 
-  R4-001 y R4-002 son la misma familia —acreditar o negar la salida de una parada por
-  la POSICIÓN de un aviso asíncrono— y comparten la misma vía de raíz:
-  **transportar la identidad del suceso** (el `head` que el
-  marcador `sirius-notification:<etiqueta>:<head>` ya trae, o el run del
-  veredicto que causó la parada) desde `mirror_projection` a través de
-  `EstadoAcreditado` hasta `reflect`, para correlacionar parada, diagnóstico y
-  permiso por identidad y no por posición. Lo que la ronda 4 midió y hay que
-  resolver al hacerlo: el helper `_cronologia` de `tests/engine/test_reflect.py`
-  da el mismo `head` (`1c934781`) a todas las ocurrencias, así que una
-  correlación por head a secas haría pasar el recorrido de
-  `test_un_permiso_anterior_a_la_parada_no_la_levanta`, que exige lo contrario;
-  la identidad necesita un discriminante más que el head desnudo.
+  R4-001, R4-002 y R5-001 eran la misma familia —acreditar, negar o explicar la
+  salida de una parada por la POSICIÓN de un aviso asíncrono— y se cierran por
+  la misma vía de raíz: **transportar la identidad del suceso** desde
+  `mirror_projection` a través de `EstadoAcreditado` (`orden_del_veredicto`)
+  hasta `reflect`, para correlacionar parada, diagnóstico y permiso por
+  identidad y no por posición.
 
 - Queda pendiente, como ficha del operador, endurecer
   `sirius_resume_on_command.sh` para que su marcador lleve run/intento y nunca

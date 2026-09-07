@@ -659,6 +659,12 @@ def _atribuir_diagnosticos(
     descarta la ocurrencia cuyo diagnóstico contradice al guardado, así que
     abandona el recorrido entero.
 
+    Cada parada se queda además con ``orden_del_veredicto``: la posición del
+    comentario que le dio el diagnóstico, que es la identidad del suceso y lo
+    que :mod:`sirius_engine.reflect` usa para correlacionar la parada con el
+    permiso que la levanta sin depender de dónde cayó su aviso
+    (CLAUDE-R4-001).
+
     Sigue cubierto lo que la ronda 4 sí midió bien (CLAUDE-R4-002): un aviso
     RETRASADO no le roba el diagnóstico a la otra parada. Con los dos
     diagnósticos publicados antes de los dos avisos, el primer aviso toma el
@@ -674,7 +680,11 @@ def _atribuir_diagnosticos(
     siguiente = 0
     for indice, orden_marcador in paradas:
         if siguiente < len(diagnosticos) and diagnosticos[siguiente][0] < orden_marcador:
-            atribuidos[indice] = replace(atribuidos[indice], diagnostico=diagnosticos[siguiente][1])
+            atribuidos[indice] = replace(
+                atribuidos[indice],
+                diagnostico=diagnosticos[siguiente][1],
+                orden_del_veredicto=diagnosticos[siguiente][0],
+            )
             siguiente += 1
     return tuple(atribuidos)
 

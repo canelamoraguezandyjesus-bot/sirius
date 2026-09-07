@@ -125,11 +125,24 @@ class EstadoAcreditado:
     ``diagnostico`` solo lo llevan los marcadores de ``FAILED_SAFELY`` y es lo
     que permite que cada parada del recorrido conserve SU evidencia en vez de
     heredar la de la última parada de toda la incidencia (CODEX-003, ronda 2,
-    PR #546). Se empareja por RANGO -la k-ésima parada notificada con el
-    k-ésimo diagnóstico publicado, alineando desde el final- y no por la
-    posición relativa de los dos comentarios, que el notificador asíncrono no
-    garantiza (CLAUDE-R4-002, ronda 4, PR #546). ``None`` cuando no le toca
-    ninguno, y entonces no se recrea ninguno.
+    PR #546). Se empareja consumiendo en orden -cada parada notificada toma el
+    diagnóstico no consumido más antiguo publicado ANTES de ella- y no por la
+    posición relativa de los dos comentarios ni alineando desde el final, que
+    la deduplicación del notificador desmiente (CLAUDE-R5-001, ronda 5, PR
+    #546). ``None`` cuando no le toca ninguno, y entonces no se recrea ninguno.
+
+    ``orden_del_veredicto`` es la IDENTIDAD del suceso: la posición, en el
+    mismo historial de confianza, del comentario de veredicto que causó esta
+    parada -el que trajo su ``diagnostico``-. Existe porque el marcador lo
+    publica ``notify-sirius-state.yml``, que es asíncrono y no se serializa
+    contra otras etiquetas: el aviso de una parada puede publicarse DESPUÉS
+    del ``continua`` que la levantó, y entonces exigir un permiso posterior a
+    la POSICIÓN DEL AVISO niega un permiso que el propietario sí escribió
+    después de la parada real (CLAUDE-R4-001, ronda 4, PR #546). Con el
+    veredicto —que sí es síncrono y precede siempre a su etiqueta— la
+    correlación parada-permiso deja de depender de dónde cayó el aviso.
+    ``None`` cuando no hay ningún veredicto atribuible: entonces se vuelve a
+    ``orden``, que es lo único que hay.
     """
 
     etiqueta: str
@@ -139,6 +152,7 @@ class EstadoAcreditado:
     orden: int
     publicado_en: datetime | None = None
     diagnostico: str | None = None
+    orden_del_veredicto: int | None = None
 
 
 class FormaDePermiso(StrEnum):

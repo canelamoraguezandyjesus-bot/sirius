@@ -531,6 +531,37 @@ def _ancla_del_recorrido(work_item: WorkItem, historial: Sequence[EstadoAcredita
     return base[-1] if anteriores else base[0]
 
 
+def _orden_de_la_parada(acreditado: EstadoAcreditado) -> int:
+    """La posición de la PARADA REAL, no la del aviso que la anunció.
+
+    El permiso que acredita salir de una parada tiene que ser posterior a la
+    parada, y hasta la ronda 5 «la parada» era la posición de su marcador
+    ``sirius-notification``. Pero ese marcador lo publica
+    ``notify-sirius-state.yml``, cuyo grupo de concurrencia lleva el nombre de
+    la etiqueta: los avisos de etiquetas DISTINTAS no se serializan entre sí,
+    así que el aviso de una parada puede publicarse DESPUÉS del ``continua``
+    que la levantó. Con la secuencia ``[veredicto de parada, continua, aviso de
+    la parada]`` no quedaba ningún permiso posterior al aviso y el recorrido
+    entero se abandonaba: una recuperación autorizada por escrito quedaba como
+    divergencia declarada para siempre (CLAUDE-R4-001, ronda 4, PR #546).
+
+    Lo que sí identifica el suceso es el comentario del VEREDICTO que causó la
+    parada (``orden_del_veredicto``): es síncrono, lo publica el propio rol, y
+    ``sirius_apply_verdict.sh`` lo escribe SIEMPRE antes de aplicar la etiqueta.
+    Cuando la proyección pudo atribuirlo, es él quien fija la posición de la
+    parada; si no hay ninguno atribuible, se vuelve a la del aviso, que es lo
+    único que hay.
+
+    Lo que NO cambia: el permiso sigue teniendo que ser ESTRICTAMENTE
+    posterior a la parada, y un permiso anterior no la levanta
+    (``test_un_permiso_anterior_a_la_parada_no_la_levanta``). Esto no relaja el
+    criterio de ADR-147: mueve la referencia del aviso al suceso.
+    """
+    if acreditado.orden_del_veredicto is None:
+        return acreditado.orden
+    return acreditado.orden_del_veredicto
+
+
 def _consumir_permiso(
     permisos: Sequence[PermisoDeReanudacion], desde: int, posterior_a: int
 ) -> int | None:
@@ -622,7 +653,7 @@ def _recorrer_historial_acreditado(
     pasos: list[PasoReflejo] = []
     simulado = work_item
     permiso_siguiente = 0
-    orden_de_la_parada = espejo.historial_estados[ancla].orden
+    orden_de_la_parada = _orden_de_la_parada(espejo.historial_estados[ancla])
     #: Los tramos: cada estado acreditado que queda por recorrer y, al final,
     #: el espejo REAL. El último no lleva estado acreditado porque la foto no
     #: está en el historial -y no hace falta: después de él no queda ninguna
@@ -667,7 +698,7 @@ def _recorrer_historial_acreditado(
         permiso_siguiente = permiso_tras_el_tramo
         simulado = avanzado
         if simulado.estado in _PARADAS and acreditado is not None:
-            orden_de_la_parada = acreditado.orden
+            orden_de_la_parada = _orden_de_la_parada(acreditado)
         pasos.extend(tramo.pasos)
 
     if not pasos:

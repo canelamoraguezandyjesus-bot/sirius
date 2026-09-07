@@ -49,6 +49,7 @@ Estructura de este fichero:
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -68,7 +69,16 @@ from sirius_engine.domain.work_item import (
     WorkItemPhase,
     WorkItemState,
 )
-from sirius_engine.mirror_projection import _LABEL_STATE
+from sirius_engine.mirror_projection import _LABEL_STATE, proyectar_work_item
+from sirius_engine.ports.github_mirror import (
+    Comentario,
+    CuerpoIncidencia,
+    LecturaComentarios,
+    LecturaCuerpo,
+    LecturaEstado,
+    LecturaMetadatos,
+    MetadatosIncidencia,
+)
 from sirius_engine.reflect import (
     PASO_COMPROBACION_INICIADA,
     PASO_DECISION_RESUELTA,
@@ -918,15 +928,25 @@ def _cronologia(
     comentario. Sin ``desde`` no hay instantes: es el caso del marcador que
     viene del cuerpo de la incidencia, que no tiene ninguno.
 
-    El diagnóstico se atribuye igual que en la proyección -el último publicado
-    hasta la posición del marcador, y solo a las paradas ``FAILED_SAFELY``-.
+    El diagnóstico se atribuye EXACTAMENTE como en la proyección real
+    (``mirror_projection._atribuir_diagnosticos``): cada parada
+    ``FAILED_SAFELY``, de la más antigua a la más reciente, toma el diagnóstico
+    no consumido más antiguo publicado ANTES de ella, y se queda con la
+    posición de ese veredicto en ``orden_del_veredicto``. Hasta la ronda 5 este
+    doble usaba la atribución POSICIONAL antigua -el último publicado hasta la
+    posición del marcador-, así que fabricaba ``EstadoAcreditado`` que la
+    proyección no puede producir y las pruebas que dependen del diagnóstico no
+    acreditaban el comportamiento de producción (CLAUDE-R5-002, ronda 5, PR
+    #546). Que las dos coinciden lo fija
+    ``test_el_doble_de_cronologia_proyecta_lo_mismo_que_la_proyeccion_real``.
     """
     estados: list[EstadoAcreditado] = []
     permisos: list[PermisoDeReanudacion] = []
-    diagnostico_vigente: str | None = None
+    diagnosticos: list[tuple[int, str]] = []
+    siguiente_diagnostico = 0
     for orden, (tipo, referencia) in enumerate(entradas):
         if tipo == "diagnostico":
-            diagnostico_vigente = referencia
+            diagnosticos.append((orden, referencia))
         elif tipo == "estado":
             estado, fase = _LABEL_STATE[referencia]
             estados.append(
@@ -937,11 +957,16 @@ def _cronologia(
                     head="1c934781",
                     orden=orden,
                     publicado_en=(desde + timedelta(minutes=orden) if desde is not None else None),
-                    diagnostico=(
-                        diagnostico_vigente if estado is WorkItemState.FAILED_SAFELY else None
-                    ),
                 )
             )
+            if (
+                estado is WorkItemState.FAILED_SAFELY
+                and siguiente_diagnostico < len(diagnosticos)
+                and diagnosticos[siguiente_diagnostico][0] < orden
+            ):
+                posicion, texto = diagnosticos[siguiente_diagnostico]
+                estados[-1] = replace(estados[-1], diagnostico=texto, orden_del_veredicto=posicion)
+                siguiente_diagnostico += 1
         else:
             permisos.append(
                 PermisoDeReanudacion(
@@ -1091,6 +1116,137 @@ def test_sin_permiso_posterior_a_la_parada_se_declara_y_no_se_toca_nada() -> Non
     item = store.get_work_item(_WORK_ID)
     assert item is not None
     assert item.estado is WorkItemState.FAILED_SAFELY
+
+
+def test_el_doble_de_cronologia_proyecta_lo_mismo_que_la_proyeccion_real() -> None:
+    """El doble no puede fabricar lo que la proyección no produce (CLAUDE-R5-002).
+
+    `_cronologia` es la entrada de todas las pruebas de recorrido, así que si
+    atribuye el diagnóstico de otra manera que
+    `mirror_projection._interpretar_historial_estados`, esas pruebas fijan
+    comportamiento sobre un `EstadoAcreditado` que producción nunca ve. Esta
+    prueba de acoplamiento pasa el MISMO historial por los dos caminos y exige
+    que coincidan en etiqueta, estado, fase, diagnóstico y en la posición
+    relativa del marcador y del veredicto que lo explica -la escala absoluta
+    difiere en el cuerpo de la incidencia, que la proyección cuenta como
+    posición 0 y el doble no tiene-.
+    """
+    entradas: tuple[tuple[str, str], ...] = (
+        ("diagnostico", "la ronda 1 se quedó sin turnos"),
+        ("estado", "sirius:failed-safely"),
+        ("orden", "continua"),
+        ("estado", "sirius:repair-requested"),
+        ("diagnostico", "la ronda 2 agotó el tiempo del job"),
+        ("diagnostico", "la ronda 3 murió sin empujar"),
+        ("estado", "sirius:failed-safely"),
+    )
+    doble, _ = _cronologia(*entradas)
+    proyectado = proyectar_work_item(
+        repo="canelamoraguezandyjesus-bot/sirius",
+        numero=545,
+        metadatos=LecturaMetadatos(
+            estado=LecturaEstado.OK,
+            metadatos=MetadatosIncidencia(
+                numero=545, titulo="t", estado_gh="open", etiquetas=("sirius:failed-safely",)
+            ),
+        ),
+        cuerpo=LecturaCuerpo(
+            estado=LecturaEstado.OK,
+            cuerpo=CuerpoIncidencia(
+                autor_login="canelamoraguezandyjesus-bot", autor_asociacion="OWNER", texto=""
+            ),
+        ),
+        comentarios=LecturaComentarios(
+            estado=LecturaEstado.OK,
+            comentarios=tuple(
+                Comentario(
+                    autor_login="canelamoraguezandyjesus-bot",
+                    autor_asociacion="OWNER",
+                    cuerpo=_texto_de_confianza(tipo, referencia),
+                    creado_en=_AHORA + timedelta(minutes=indice),
+                )
+                for indice, (tipo, referencia) in enumerate(entradas)
+            ),
+        ),
+        ahora=_AHORA,
+    ).historial_estados
+
+    def _comparable(
+        acreditados: tuple[EstadoAcreditado, ...],
+    ) -> tuple[tuple[str, object, object, str | None, int | None], ...]:
+        return tuple(
+            (
+                acreditado.etiqueta,
+                acreditado.estado,
+                acreditado.fase,
+                acreditado.diagnostico,
+                (
+                    None
+                    if acreditado.orden_del_veredicto is None
+                    else acreditado.orden - acreditado.orden_del_veredicto
+                ),
+            )
+            for acreditado in acreditados
+        )
+
+    assert _comparable(doble) == _comparable(proyectado)
+
+
+def _texto_de_confianza(tipo: str, referencia: str) -> str:
+    """El comentario REAL que produce cada entrada de :func:`_cronologia`."""
+    if tipo == "estado":
+        return f"<!-- sirius-notification:{referencia}:1c934781 -->"
+    if tipo == "diagnostico":
+        return (
+            "<!-- sirius-verdict:corrector:FAILED_SAFELY:33945456417-1 -->\n\n"
+            f"🔴 **Me he detenido de forma segura**\n\n{referencia}"
+        )
+    return referencia
+
+
+def test_un_aviso_de_parada_retrasado_no_niega_el_permiso_que_si_se_escribio() -> None:
+    """La salida la acredita un permiso posterior a la PARADA, no al aviso.
+
+    `notify-sirius-state.yml` mete el nombre de la etiqueta en su grupo de
+    concurrencia, así que los avisos de etiquetas distintas no se serializan
+    entre sí y el aviso de una parada puede publicarse DESPUÉS del `continua`
+    que la levantó. Exigiendo un permiso posterior a la POSICIÓN DEL AVISO,
+    esta secuencia no encontraba ninguno, `_consumir_permiso` devolvía `None` y
+    el recorrido entero se abandonaba: una recuperación que el propietario sí
+    autorizó por escrito quedaba como divergencia declarada para siempre
+    (CLAUDE-R4-001, ronda 4, PR #546). La referencia es ahora el comentario del
+    VEREDICTO que causó la parada, que es síncrono y precede siempre a su
+    etiqueta.
+    """
+    store = InMemoryWorkEngineStore()
+    parado = _motor_parado_en_reparar(store)
+    historial, permisos = _cronologia(
+        ("diagnostico", "sin tiempo"),
+        ("orden", "continua"),
+        ("estado", "sirius:failed-safely"),
+        ("estado", "sirius:repair-requested"),
+        ("estado", "sirius:ready-for-merge"),
+        ("estado", "sirius:completed"),
+    )
+    espejo = _espejo(
+        estado=WorkItemState.DELIVERED,
+        fase=WorkItemPhase.ENTREGAR,
+        etiquetas=("sirius:completed",),
+        head_sha="92e5b9f4",
+        historial_estados=historial,
+        permisos_reanudacion=permisos,
+    )
+
+    resultado = reflejar_desenlace(parado, espejo, _episodio())
+
+    assert resultado.divergencia is None
+    assert tuple(paso.kind for paso in resultado.pasos) == (
+        PASO_REACTIVADO,
+        PASO_REPARACION_REANUDADA,
+        PASO_REVISION_INICIADA,
+        PASO_REVISION_APROBADA,
+        PASO_ENTREGADO,
+    )
 
 
 def test_un_permiso_anterior_a_la_parada_no_la_levanta() -> None:
