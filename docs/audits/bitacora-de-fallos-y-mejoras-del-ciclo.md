@@ -1676,7 +1676,17 @@ ADR o su incidencia cuando se adopte.
   cambió entre la ronda 1 y este head (por los merges de `main`), el
   guardián de goteo no lo marca, y el corrector lo corregirá dentro de
   la rama de #546. Queda pendiente llevar este dato a la sección
-  «Comprobación» de ADR-156 en la siguiente ficha del operador.
+  «Comprobación» de ADR-156 en la siguiente ficha del operador. El
+  veredicto (13:07:19) trae seis hallazgos: CLAUDE-R5-001 (P1, nuevo:
+  `_atribuir_diagnosticos` alinea desde el final cuando la deduplicación
+  real conserva el PRIMER marcador), CLAUDE-R4-001 (P1, el declarado
+  pendiente desde la ronda 4), CLAUDE-R5-002 (P2), CLAUDE-R5-003 (P3),
+  CODEX-001 (P1, inline, converge con R5-001) y CODEX-002 (P2, el del
+  cuerpo, entregado como `scripts/automation/sirius_apply_verdict.sh:363`
+  con el enlace de la revisión como prueba: exactamente lo que ADR-156
+  prometía). Corrector desde las 13:07:18 (run 34125591940, plazo de
+  ADR-155). El freno de convergencia mide desde cero (reinicio de ayer):
+  la siguiente revisión tiene que bajar de seis.
 
 ---
 
