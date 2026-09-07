@@ -488,6 +488,54 @@ aplicar la etiqueta, y la etiqueta es lo que dispara el marcador—. Con eso:
 
 ## Consecuencias
 
+- **Ronda 6, CLAUDE-R6-001 y CLAUDE-R6-002 (misma raíz): la cota de la parada
+  nunca se adelanta a la parada real.** El emparejamiento «cada parada toma el
+  diagnóstico no consumido más antiguo publicado antes de ella» descansaba en
+  un hecho que solo vale DENTRO de una serie `(etiqueta, head)`: la
+  deduplicación de `notify-sirius-state.yml` suprime los avisos posteriores del
+  MISMO head, pero una parada sobre un head NUEVO vuelve a publicar marcador.
+  Con dos paradas sobre H1 y una tercera sobre H2, el marcador de H2 heredaba
+  el veredicto de la segunda parada de H1: el diario escribía una parada con el
+  texto de otra (R6-002) y, peor, `_orden_de_la_parada` devolvía una posición
+  ADELANTADA con la que `_consumir_permiso` aceptaba un `continua` escrito
+  ANTES de la parada real (R6-001) -inventar un permiso que el propietario no
+  dio, que es la familia de defecto que el encargo prohíbe-. `_atribuir_diagnosticos`
+  añade ahora la tercera condición: todo diagnóstico pendiente publicado antes
+  de un marcador y que no sea el suyo tiene que pertenecer a un marcador
+  POSTERIOR, porque los que la deduplicación deja sin marcador son siempre
+  posteriores al superviviente de su serie; cuando no caben, la evidencia no
+  discrimina y la proyección se ABSTIENE (`None`, sin `orden_del_veredicto`),
+  con lo que la cota vuelve a la posición del aviso, posterior a todos ellos y
+  por tanto segura. Pruebas, las dos vistas fallar sobre f62f238:
+  `test_el_marcador_de_otra_serie_no_hereda_el_diagnostico_de_la_serie_anterior`
+  (`tests/engine/test_mirror_projection.py`), con la mutación que anula la
+  condición nueva (`if candidatos - 1 > len(paradas) - posicion - 1:` →
+  `if False:`), que atribuye «B» y cota 4 al marcador de la serie nueva; y
+  `test_una_parada_de_otra_serie_no_se_levanta_con_un_permiso_anterior_a_ella`
+  (`tests/engine/test_reflect.py`), con la mutación gemela en el doble
+  `_cronologia` (`if not pendientes or len(pendientes) - 1 > …:` →
+  `if not pendientes:`), que devuelve el plan completo de siete pasos hasta
+  `delivered/entregar` en vez de `()`. Ninguna prueba existente se tocó: siguen
+  verdes `test_un_aviso_de_parada_retrasado_no_niega_el_permiso_que_si_se_escribio`,
+  `test_un_permiso_anterior_a_la_parada_no_la_levanta`,
+  `test_el_marcador_deduplicado_conserva_el_diagnostico_de_la_primera_parada`,
+  `test_tres_diagnosticos_y_un_marcador_no_atribuyen_el_ultimo`,
+  `test_una_parada_sin_diagnostico_publicado_hasta_ella_no_hereda_el_siguiente`
+  y `test_un_aviso_de_parada_retrasado_no_le_roba_el_diagnostico_a_la_otra`.
+- **Limitación viva, CLAUDE-R6-003 (ronda 6): la correlación por identidad
+  cubre solo `failed-safely`.** La identidad que se transporta es el
+  diagnóstico del veredicto, y `sirius:blocked-decision` no publica ninguno:
+  `_atribuir_diagnosticos` solo rellena `orden_del_veredicto` para los
+  acreditados `FAILED_SAFELY`, así que un marcador `blocked-decision` -parada
+  de pleno derecho en `_PARADAS`- llega siempre con `orden_del_veredicto is
+  None` y se correlaciona por la posición de su AVISO. Consecuencia observable:
+  una recuperación autorizada por escrito tras un `blocked-decision` cuyo aviso
+  se publicó DESPUÉS del `continua` se sigue declarando como divergencia. Es el
+  lado conservador del defecto -nunca acredita de más- y queda aquí registrado
+  con su identificador en vez de corregirse, que es la salida que el propio
+  hallazgo declara admisible; queda también escrito en el docstring de
+  `reflect._orden_de_la_parada`.
+
 - El caso vivo avanza: WI-20260905-034826 llega a `delivered/entregar` y la
   pasada siguiente no añade nada.
 - Las recuperaciones sin ninguna palabra escrita del propietario quedan como

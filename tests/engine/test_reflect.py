@@ -932,7 +932,10 @@ def _cronologia(
     (``mirror_projection._atribuir_diagnosticos``): cada parada
     ``FAILED_SAFELY``, de la más antigua a la más reciente, toma el diagnóstico
     no consumido más antiguo publicado ANTES de ella, y se queda con la
-    posición de ese veredicto en ``orden_del_veredicto``. Hasta la ronda 5 este
+    posición de ese veredicto en ``orden_del_veredicto``; se ABSTIENE cuando
+    los diagnósticos pendientes publicados antes de ella no caben en los
+    marcadores que quedan detrás, porque entonces la evidencia no discrimina
+    cuál es el suyo (CLAUDE-R6-002, ronda 6). Hasta la ronda 5 este
     doble usaba la atribución POSICIONAL antigua -el último publicado hasta la
     posición del marcador-, así que fabricaba ``EstadoAcreditado`` que la
     proyección no puede producir y las pruebas que dependen del diagnóstico no
@@ -943,7 +946,6 @@ def _cronologia(
     estados: list[EstadoAcreditado] = []
     permisos: list[PermisoDeReanudacion] = []
     diagnosticos: list[tuple[int, str]] = []
-    siguiente_diagnostico = 0
     for orden, (tipo, referencia) in enumerate(entradas):
         if tipo == "diagnostico":
             diagnosticos.append((orden, referencia))
@@ -959,14 +961,6 @@ def _cronologia(
                     publicado_en=(desde + timedelta(minutes=orden) if desde is not None else None),
                 )
             )
-            if (
-                estado is WorkItemState.FAILED_SAFELY
-                and siguiente_diagnostico < len(diagnosticos)
-                and diagnosticos[siguiente_diagnostico][0] < orden
-            ):
-                posicion, texto = diagnosticos[siguiente_diagnostico]
-                estados[-1] = replace(estados[-1], diagnostico=texto, orden_del_veredicto=posicion)
-                siguiente_diagnostico += 1
         else:
             permisos.append(
                 PermisoDeReanudacion(
@@ -975,6 +969,25 @@ def _cronologia(
                     orden=orden,
                 )
             )
+    paradas = [
+        indice
+        for indice, acreditado in enumerate(estados)
+        if acreditado.estado is WorkItemState.FAILED_SAFELY
+    ]
+    siguiente_diagnostico = 0
+    for posicion, indice in enumerate(paradas):
+        pendientes = [
+            entrada
+            for entrada in diagnosticos[siguiente_diagnostico:]
+            if entrada[0] < estados[indice].orden
+        ]
+        if not pendientes or len(pendientes) - 1 > len(paradas) - posicion - 1:
+            continue
+        orden_veredicto, texto = pendientes[0]
+        estados[indice] = replace(
+            estados[indice], diagnostico=texto, orden_del_veredicto=orden_veredicto
+        )
+        siguiente_diagnostico += 1
     return tuple(estados), tuple(permisos)
 
 
@@ -2051,3 +2064,48 @@ def test_la_acreditacion_no_depende_de_la_etiqueta_vigente_en_la_pasada() -> Non
     assert tuple(paso.kind for paso in resultado_completed.pasos) == (*esperado, PASO_ENTREGADO)
     assert resultado_ready.divergencia is None
     assert resultado_completed.divergencia is None
+
+
+def test_una_parada_de_otra_serie_no_se_levanta_con_un_permiso_anterior_a_ella() -> None:
+    """La cota de la parada nunca puede adelantarse a un veredicto de parada posterior.
+
+    `notify-sirius-state.yml` deduplica por `sirius-notification:<etiqueta>:<head>`,
+    así que suprime los avisos posteriores de la MISMA serie -mismo head- pero
+    vuelve a publicar cuando la parada cae sobre un head NUEVO. Con dos paradas
+    sobre H1 y una tercera sobre H2, la atribución de la ronda 6 le daba al
+    marcador de H2 el veredicto de la SEGUNDA parada de H1: su
+    `orden_del_veredicto` quedaba por delante de la parada real y
+    `_consumir_permiso` aceptaba un `continua` escrito ANTES de ella
+    -inventando un permiso que el propietario no dio para esa parada
+    (CLAUDE-R6-001, ronda 6, PR #546)-.
+
+    Aquí el último `continua` (posición 5) es anterior al veredicto «C»
+    (posición 6), que es la parada real de la serie H2: no hay ningún permiso
+    posterior a ella y el recorrido se abandona entero.
+    """
+    store = InMemoryWorkEngineStore()
+    parado = _motor_parado_en_reparar(store, diagnostico="A")
+    historial, permisos = _cronologia(
+        ("diagnostico", "A"),
+        ("estado", "sirius:failed-safely"),
+        ("orden", "continua"),
+        ("estado", "sirius:repair-requested"),
+        ("diagnostico", "B"),
+        ("orden", "continua"),
+        ("diagnostico", "C"),
+        ("estado", "sirius:failed-safely"),
+        ("estado", "sirius:ready-for-merge"),
+        ("estado", "sirius:completed"),
+    )
+    espejo = _espejo(
+        estado=WorkItemState.DELIVERED,
+        fase=WorkItemPhase.ENTREGAR,
+        etiquetas=("sirius:completed",),
+        historial_estados=historial,
+        permisos_reanudacion=permisos,
+    )
+
+    resultado = reflejar_desenlace(parado, espejo, _episodio())
+
+    assert resultado.pasos == ()
+    assert resultado.divergencia is not None

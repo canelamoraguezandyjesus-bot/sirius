@@ -651,6 +651,23 @@ def _atribuir_diagnosticos(
     diagnósticos se consumen, así que un mismo diagnóstico nunca acredita dos
     paradas.
 
+    Y una tercera condición, que es la que cierra la serie INTERRUMPIDA
+    (CLAUDE-R6-002, ronda 6, PR #546). El hecho 2 solo vale dentro de una misma
+    serie ``(etiqueta, head)``: los diagnósticos que la deduplicación deja sin
+    marcador son los de las paradas POSTERIORES al marcador superviviente, así
+    que están publicados DESPUÉS de él. Por eso todo diagnóstico no consumido
+    publicado ANTES de un marcador y que no sea el suyo tiene que pertenecer a
+    algún marcador POSTERIOR. Cuando no hay marcadores posteriores suficientes
+    para absorberlos -``candidatos - 1 > marcadores que quedan detrás``-, la
+    evidencia no discrimina cuál de ellos causó esta parada y la proyección se
+    abstiene: ``None``, sin ``orden_del_veredicto``, y entonces
+    :mod:`sirius_engine.reflect` vuelve a la posición del aviso, que es una
+    cota SEGURA porque el aviso es posterior a todos ellos. Con dos paradas
+    sobre H1 y una tercera sobre H2, el marcador de H2 dejaba de heredar el
+    veredicto de la segunda parada de H1 -diario mentiroso (CODEX-003 por el
+    flanco contrario) y, peor, cota adelantada que acreditaba la salida de la
+    parada de H2 con un permiso ANTERIOR a ella (CLAUDE-R6-001)-.
+
     Esto sustituye a la alineación desde el final de la ronda 4 (CLAUDE-R5-001
     y CODEX-001, ronda 5, PR #546), que razonaba la deduplicación al revés: con
     dos paradas sobre un mismo head, le daba al único marcador —el de la
@@ -678,14 +695,18 @@ def _atribuir_diagnosticos(
     ]
     atribuidos = list(acreditados)
     siguiente = 0
-    for indice, orden_marcador in paradas:
-        if siguiente < len(diagnosticos) and diagnosticos[siguiente][0] < orden_marcador:
-            atribuidos[indice] = replace(
-                atribuidos[indice],
-                diagnostico=diagnosticos[siguiente][1],
-                orden_del_veredicto=diagnosticos[siguiente][0],
-            )
-            siguiente += 1
+    for posicion, (indice, orden_marcador) in enumerate(paradas):
+        candidatos = sum(1 for orden, _ in diagnosticos[siguiente:] if orden < orden_marcador)
+        if candidatos == 0:
+            continue
+        if candidatos - 1 > len(paradas) - posicion - 1:
+            continue
+        atribuidos[indice] = replace(
+            atribuidos[indice],
+            diagnostico=diagnosticos[siguiente][1],
+            orden_del_veredicto=diagnosticos[siguiente][0],
+        )
+        siguiente += 1
     return tuple(atribuidos)
 
 

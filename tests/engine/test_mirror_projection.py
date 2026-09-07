@@ -1656,3 +1656,40 @@ def test_el_booleano_vigente_de_reanudacion_no_cambia_con_los_permisos() -> None
     assert tuple(permiso.forma for permiso in mirrored.permisos_reanudacion) == (
         FormaDePermiso.ORDEN,
     )
+
+
+def test_el_marcador_de_otra_serie_no_hereda_el_diagnostico_de_la_serie_anterior() -> None:
+    """La serie INTERRUMPIDA: dos paradas sobre un head y una tercera sobre otro.
+
+    El hecho de la deduplicación -«los diagnósticos que se quedan sin marcador
+    son los ÚLTIMOS»- solo vale DENTRO de una misma serie `(etiqueta, head)`.
+    Con dos paradas sobre `1c934781` -la segunda sin marcador propio, suprimido-
+    y una tercera sobre `786c82dc`, el emparejamiento en orden le daba al
+    segundo marcador el diagnóstico «B», que es el de la segunda parada del
+    head anterior (CLAUDE-R6-002, ronda 6, PR #546). Aquí la evidencia no
+    discrimina cuál de los dos pendientes causó esa parada -no quedan
+    marcadores detrás que absorban al otro-, así que la proyección se abstiene,
+    que es lo que ADR-147 ya tenía decidido para ese caso.
+
+    Y la abstención es además lo que mantiene SEGURA la cota que
+    `reflect._orden_de_la_parada` usa: sin `orden_del_veredicto` vuelve a la
+    posición del aviso, posterior a los dos veredictos, en vez de adelantarse a
+    la parada real (CLAUDE-R6-001).
+    """
+    mirrored = _proyectar(
+        _comentarios(
+            _parada_publicada("A"),
+            _bot("<!-- sirius-notification:sirius:failed-safely:1c934781 -->"),
+            _parada_publicada("B"),
+            _parada_publicada("C"),
+            _bot("<!-- sirius-notification:sirius:failed-safely:786c82dc -->"),
+        )
+    )
+
+    assert [
+        (acreditado.head, acreditado.diagnostico, acreditado.orden_del_veredicto)
+        for acreditado in mirrored.historial_estados
+    ] == [("1c934781", "A", 1), ("786c82dc", None, None)], (
+        "el marcador de la serie nueva no hereda «B» ni una cota anterior a su propia parada"
+    )
+    assert mirrored.diagnostico_fallo == "C", "el diagnóstico de la FOTO vigente no cambia"

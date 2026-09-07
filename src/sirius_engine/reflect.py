@@ -556,6 +556,26 @@ def _orden_de_la_parada(acreditado: EstadoAcreditado) -> int:
     posterior a la parada, y un permiso anterior no la levanta
     (``test_un_permiso_anterior_a_la_parada_no_la_levanta``). Esto no relaja el
     criterio de ADR-147: mueve la referencia del aviso al suceso.
+
+    La cota nunca se adelanta a la parada REAL. La proyección se ABSTIENE de
+    atribuir cuando hay más de un veredicto de parada pendiente publicado antes
+    del marcador y no quedan marcadores detrás que absorban al otro
+    (``_atribuir_diagnosticos``, CLAUDE-R6-002): en esa situación devolvemos la
+    posición del aviso, que es posterior a todos ellos y por tanto segura. Sin
+    esa abstención, el marcador de una serie NUEVA heredaba el veredicto de una
+    parada anterior y su cota acreditaba la salida con un permiso escrito ANTES
+    de la parada real (CLAUDE-R6-001, ronda 6, PR #546).
+
+    **Alcance: solo ``failed-safely``.** ``orden_del_veredicto`` únicamente lo
+    rellena ``_atribuir_diagnosticos`` para los acreditados ``FAILED_SAFELY``,
+    porque la identidad del suceso que se transporta es su DIAGNÓSTICO y
+    ``sirius:blocked-decision`` no publica ninguno. Un marcador
+    ``blocked-decision`` llega siempre con ``orden_del_veredicto is None`` y se
+    correlaciona por la posición de su AVISO, así que una recuperación
+    autorizada por escrito tras un ``blocked-decision`` con aviso retrasado se
+    sigue declarando como divergencia. Es conservador -nunca inventa un
+    permiso- y queda registrado como limitación viva en ADR-147
+    (CLAUDE-R6-003, ronda 6, PR #546).
     """
     if acreditado.orden_del_veredicto is None:
         return acreditado.orden
