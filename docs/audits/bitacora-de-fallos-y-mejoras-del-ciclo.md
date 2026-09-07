@@ -1721,6 +1721,29 @@ ADR o su incidencia cuando se adopte.
   cada `sleep`/`git` de terminal (uno por temporizador). Respondido y
   corregido: esperar con recordatorios del servidor y consultas a GitHub;
   la sesión ha pasado a modo automático.
+- **Ronda 7 del corrector (14:00:26 → 14:23:09, 23 min) y primera parada
+  por decisión de este ciclo (14:23:15)**: R6-001, R6-002 y R6-003
+  corregidos y empujados en `44bcdc3` (14:05; los dos primeros con la
+  misma raíz: una tercera condición en `_atribuir_diagnosticos` que se
+  abstiene cuando un diagnóstico pendiente anterior al marcador no cabe en
+  los marcadores posteriores, con dos mutaciones vistas fallar) y la
+  comprobación anclada en `6ac42c0` (14:14); cadena completa sobre
+  `6ac42c0`: 5086 passed, 17 skipped, 2 xfailed, código 0 (14:22:02);
+  Quality verde sobre ese head a las 14:22:42, esta vez sin carrera
+  porque el veredicto no fue `FIXED`. Veredicto `BLOCKED_BY_DECISION`:
+  el único pendiente, CLAUDE-R5-003 (P3), lo declara no corregible sin
+  decisión del propietario, y el corrector paró como sus límites mandan.
+  La disyuntiva: (a) la orden `continua` y el recibo `sirius-resume-stop`
+  que publica el reanudador cuentan como DOS permisos (lo que el código
+  hace hoy; obliga a quitar del docstring de `_consumir_permiso` la
+  frase «un permiso no puede acreditar dos salidas»), o (b) el recibo
+  pegado a su orden es el MISMO acto y cuenta como UN permiso (obliga a
+  reescribir `test_los_permisos_de_reanudacion_llevan_las_dos_formas_en_orden`).
+  Presentada al propietario con recomendación (b): es la lectura de
+  ADR-147 —las dos formas existen porque el recibo puede faltar, no
+  porque sean dos autorizaciones— y la única que conserva el criterio
+  «una salida, un permiso». Pendiente su respuesta; después, decisión
+  registrada en #545 (comentario que empieza por «DECISI…») y `continua`.
 
 ---
 
