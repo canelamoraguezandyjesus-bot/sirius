@@ -519,6 +519,24 @@ aplicar la etiqueta, y la etiqueta es lo que dispara el marcador—. Con eso:
   cambia en el árbol después de esta captura es la transcripción de estas
   mismas cifras.
 
+- **Ronda 9 (CLAUDE-R9-001), sobre el árbol de `28c60e3`**: una sola
+  invocación de `pwsh -File scripts/check.ps1` (Ruff format, Ruff lint, mypy,
+  pytest), código de salida **0**, `5094 passed, 17 skipped, 2 xfailed in
+  409.48s (0:06:49)`. La cifra sube en 1 respecto de la ronda 8 (`5093`): es la
+  prueba nueva
+  `test_la_abstencion_tambien_alcanza_a_la_parada_posterior_con_aviso_propio`
+  (`tests/engine/test_reflect.py`), que fija el comportamiento REAL de
+  `_hay_una_parada_posterior_sin_aviso` sobre un historial posterior a ADR-157
+  -segunda parada con aviso propio y `continua` detrás de cada parada, ancla
+  `blocked-decision`: `pasos == ()` y divergencia-. La corrección de
+  CLAUDE-R9-001 no cambia ni una línea de lógica: solo el docstring de esa
+  función y el punto 2 de la entrada de ADR-157 en «Consecuencias». Mutación
+  vista caer: con la abstención desactivada (`return any(` → `return False and
+  any(` en `_hay_una_parada_posterior_sin_aviso`), la prueba nueva falla con
+  `E AssertionError: assert (PasoReflejo(...co=None), ...) == ()`. Lo único
+  que cambia en el árbol después de esta captura es la transcripción de estas
+  mismas cifras.
+
 ## Consecuencias
 
 - **Ronda 6, CLAUDE-R6-001 y CLAUDE-R6-002 (misma raíz): la cota de la parada
