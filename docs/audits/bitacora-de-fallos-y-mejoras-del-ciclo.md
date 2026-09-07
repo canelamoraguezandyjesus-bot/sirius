@@ -1742,8 +1742,19 @@ ADR o su incidencia cuando se adopte.
   Presentada al propietario con recomendación (b): es la lectura de
   ADR-147 —las dos formas existen porque el recibo puede faltar, no
   porque sean dos autorizaciones— y la única que conserva el criterio
-  «una salida, un permiso». Pendiente su respuesta; después, decisión
-  registrada en #545 (comentario que empieza por «DECISI…») y `continua`.
+  «una salida, un permiso».
+- **Decisión del propietario y ronda 8 (16:02 UTC)**: eligió (b). Decisión
+  registrada en #545 (comentario 5573158409, que empieza por «DECISIÓN»)
+  con las cuatro consecuencias autorizadas —colapsar el recibo con la
+  orden en `_interpretar_permisos_reanudacion`, reescribir
+  `test_los_permisos_de_reanudacion_llevan_las_dos_formas_en_orden`,
+  añadir la prueba de que una autorización no levanta dos paradas, y
+  registrar la decisión en ADR-147— y `continua` a secas justo después
+  (16:02:54). Reanudador en verde y corrector de la ronda 8 en marcha
+  (run 34141369075, 16:03:06). **Error mío de medida, el tercero del
+  día**: la decisión la fecha «14:55 UTC» y la hora real es 16:02; la
+  estimé en vez de leerla y publiqué una fe de erratas en la incidencia.
+  Regla, otra vez: ninguna hora sin leerla de GitHub en el mismo turno.
 
 ---
 
