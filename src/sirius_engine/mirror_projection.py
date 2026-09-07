@@ -598,10 +598,10 @@ def _interpretar_historial_estados(
     - el **instante** del comentario que la publicó (``None`` si el marcador
       viene del cuerpo, que no tiene instante propio);
     - el **diagnóstico** que le corresponde, si acredita una parada
-      ``FAILED_SAFELY``, emparejado por RANGO y no por posición
-      (:func:`_atribuir_diagnosticos`, CLAUDE-R4-002): la k-ésima parada
-      notificada con el k-ésimo diagnóstico publicado, alineando desde el
-      final. ``None`` si no le toca ninguno: entonces no se atribuye ninguno.
+      ``FAILED_SAFELY`` (:func:`_atribuir_diagnosticos`, CLAUDE-R5-001): cada
+      parada notificada, de la más antigua a la más reciente, toma el
+      diagnóstico no consumido más antiguo publicado ANTES de ella. ``None`` si
+      no le toca ninguno: entonces no se atribuye ninguno.
     """
     instantes = {
         orden: comentario.creado_en
@@ -632,53 +632,50 @@ def _atribuir_diagnosticos(
 ) -> tuple[EstadoAcreditado, ...]:
     """Le da a cada parada acreditada el diagnóstico del veredicto que la causó.
 
-    **Por identidad del suceso, no por la posición relativa de los dos
-    comentarios** (CLAUDE-R4-002, ronda 4, PR #546). Atribuir a cada marcador
-    el último diagnóstico publicado ANTES de su posición parecía seguro porque
-    ``sirius_apply_verdict.sh`` publica el diagnóstico y DESPUÉS aplica la
-    etiqueta. Pero el marcador no lo publica ese guion: lo publica
-    ``notify-sirius-state.yml``, que es asíncrono y secundario. Si el aviso de
-    la primera parada se retrasa hasta después del veredicto de la SEGUNDA,
-    las dos ocurrencias se proyectan con el diagnóstico de la segunda —y desde
-    el filtro del ancla de esta misma rama, un diagnóstico mal atribuido ya no
-    solo copia mal el diario: descarta la ocurrencia y puede abandonar el
-    recorrido entero—.
+    Dos hechos del sistema real, y la regla sale de los dos juntos:
 
-    Lo que sí es fiable, y es lo que se usa: la **k-ésima** parada notificada
-    es la k-ésima parada ocurrida. El grupo de concurrencia de
-    ``notify-sirius-state.yml`` lleva el nombre de la etiqueta, así que los
-    avisos de una MISMA etiqueta sí se serializan entre sí —lo que no se
-    serializa es un aviso contra el de OTRA etiqueta, y contra el comentario
-    del veredicto, que es otro flujo—. Y los veredictos son comentarios
-    síncronos del propio rol, así que su orden entre ellos también es fiel.
-    Así que se emparejan por RANGO: la última parada notificada con el último
-    diagnóstico publicado, la penúltima con el penúltimo, y así.
+    1. **Un diagnóstico publicado DESPUÉS de un marcador no puede ser suyo.**
+       ``sirius_apply_verdict.sh`` publica el diagnóstico y solo después aplica
+       la etiqueta que dispara el aviso, así que el diagnóstico de una parada
+       precede siempre a su marcador en el historial de confianza.
+    2. **El marcador que sobrevive a la deduplicación es el de la PRIMERA
+       parada de su serie.** ``sirius_comment_once`` lee el historial y, si el
+       marcador ``sirius-notification:<etiqueta>:<head>`` ya está presente,
+       devuelve sin publicar: conserva el primero y suprime los posteriores.
+       Por eso, cuando hay MÁS diagnósticos que marcadores, los que se quedan
+       sin contrapartida son los ÚLTIMOS, no los primeros.
 
-    Se alinea desde el FINAL, no desde el principio, porque puede haber más
-    diagnósticos que marcadores: el notificador deduplica por estado y head,
-    de modo que una segunda parada sobre el mismo head no deja marcador
-    propio. Alinear desde el final mantiene además la coherencia con
-    :func:`_interpretar_diagnostico_fallo`, que le da a la foto vigente el
-    último diagnóstico de la incidencia.
+    De ahí el emparejamiento: recorriendo las paradas notificadas de la más
+    antigua a la más reciente, cada una toma el diagnóstico **no consumido más
+    antiguo publicado antes de ella**, y ``None`` si no hay ninguno. Los
+    diagnósticos se consumen, así que un mismo diagnóstico nunca acredita dos
+    paradas.
 
-    Una parada sin contrapartida se queda con ``None``: abstenerse antes que
-    atribuirle lo que no es suyo.
+    Esto sustituye a la alineación desde el final de la ronda 4 (CLAUDE-R5-001
+    y CODEX-001, ronda 5, PR #546), que razonaba la deduplicación al revés: con
+    dos paradas sobre un mismo head, le daba al único marcador —el de la
+    primera— el diagnóstico de la SEGUNDA. Y un diagnóstico mal atribuido no
+    solo copia mal el diario: el filtro del ancla de :mod:`sirius_engine.reflect`
+    descarta la ocurrencia cuyo diagnóstico contradice al guardado, así que
+    abandona el recorrido entero.
+
+    Sigue cubierto lo que la ronda 4 sí midió bien (CLAUDE-R4-002): un aviso
+    RETRASADO no le roba el diagnóstico a la otra parada. Con los dos
+    diagnósticos publicados antes de los dos avisos, el primer aviso toma el
+    primer diagnóstico y el segundo el segundo, porque el consumo va en orden y
+    no «el último publicado hasta aquí».
     """
     paradas = [
-        indice
+        (indice, acreditado.orden)
         for indice, acreditado in enumerate(acreditados)
         if acreditado.estado is WorkItemState.FAILED_SAFELY
     ]
-    #: El desfase que alinea las dos listas por el final: si hay más
-    #: diagnósticos que paradas notificadas, los primeros diagnósticos se
-    #: quedan sin marcador (deduplicado); si hay más paradas que
-    #: diagnósticos, las primeras paradas se quedan sin diagnóstico.
-    desfase = len(diagnosticos) - len(paradas)
     atribuidos = list(acreditados)
-    for rango, indice in enumerate(paradas):
-        posicion = rango + desfase
-        if 0 <= posicion < len(diagnosticos):
-            atribuidos[indice] = replace(atribuidos[indice], diagnostico=diagnosticos[posicion][1])
+    siguiente = 0
+    for indice, orden_marcador in paradas:
+        if siguiente < len(diagnosticos) and diagnosticos[siguiente][0] < orden_marcador:
+            atribuidos[indice] = replace(atribuidos[indice], diagnostico=diagnosticos[siguiente][1])
+            siguiente += 1
     return tuple(atribuidos)
 
 

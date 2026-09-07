@@ -1514,6 +1514,59 @@ def test_un_aviso_de_parada_retrasado_no_le_roba_el_diagnostico_a_la_otra() -> N
     )
 
 
+def test_el_marcador_deduplicado_conserva_el_diagnostico_de_la_primera_parada() -> None:
+    """La deduplicación conserva el PRIMER marcador, no el último (CLAUDE-R5-001).
+
+    `sirius_comment_once` lee el historial y, si el marcador
+    `sirius-notification:<etiqueta>:<head>` ya está, devuelve sin publicar. Así
+    que dos paradas `failed-safely` sobre un MISMO head dejan un solo marcador:
+    el de la primera. La alineación desde el final de la ronda 4 le daba a ese
+    marcador el diagnóstico de la SEGUNDA parada, que es el defecto que esta
+    prueba fija -y que, vía el filtro del ancla de `reflect`, abandonaba el
+    recorrido entero-.
+    """
+    mirrored = _proyectar(
+        _comentarios(
+            _parada_publicada("la ronda 1 se quedó sin turnos"),
+            _bot("<!-- sirius-notification:sirius:failed-safely:1c934781 -->"),
+            _propietario("continua"),
+            _bot("<!-- sirius-notification:sirius:repair-requested:1c934781 -->"),
+            _parada_publicada("la ronda 2 agotó el tiempo del job"),
+        )
+    )
+
+    assert tuple(
+        (acreditado.etiqueta, acreditado.diagnostico) for acreditado in mirrored.historial_estados
+    ) == (
+        ("sirius:failed-safely", "la ronda 1 se quedó sin turnos"),
+        ("sirius:repair-requested", None),
+    ), "el único marcador es el de la PRIMERA parada y le toca el PRIMER diagnóstico"
+    assert mirrored.diagnostico_fallo == "la ronda 2 agotó el tiempo del job", (
+        "el diagnóstico de la FOTO vigente sigue siendo el de la última parada"
+    )
+
+
+def test_tres_diagnosticos_y_un_marcador_no_atribuyen_el_ultimo() -> None:
+    """El caso medido en el historial real de la incidencia #545.
+
+    Sobre el head `bc33b82` hay TRES comentarios de parada y un solo marcador
+    `sirius-notification:sirius:failed-safely`, porque la deduplicación suprimió
+    los dos posteriores. Con más diagnósticos que marcadores, los que se quedan
+    sin contrapartida son los ÚLTIMOS: el marcador superviviente no puede
+    heredar el diagnóstico de una parada posterior.
+    """
+    mirrored = _proyectar(
+        _comentarios(
+            _parada_publicada("parada 1"),
+            _bot("<!-- sirius-notification:sirius:failed-safely:bc33b82f -->"),
+            _parada_publicada("parada 2"),
+            _parada_publicada("parada 3"),
+        )
+    )
+
+    assert [acreditado.diagnostico for acreditado in mirrored.historial_estados] == ["parada 1"]
+
+
 def test_la_orden_de_continuar_solo_cuenta_del_propietario() -> None:
     """`continua` es palabra del propietario, no del bot.
 

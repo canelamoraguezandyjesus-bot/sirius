@@ -512,33 +512,46 @@ aplicar la etiqueta, y la etiqueta es lo que dispara el marcador—. Con eso:
   Y uno **corregido en la ronda 4**, que se registra aquí porque cambia el
   criterio de atribución:
 
-  - **CLAUDE-R4-002** (P2, `mirror_projection.py`), **corregido**.
+  - **CLAUDE-R4-002** (P2, `mirror_projection.py`), **corregido en la ronda 4**;
+    su corrección se **rehízo en la ronda 5** (CLAUDE-R5-001 y CODEX-001).
     `_diagnostico_hasta` atribuía a cada marcador de parada el último
     diagnóstico publicado ANTES de su posición; con el aviso de la primera
     parada retrasado tras el veredicto de la segunda, las dos ocurrencias se
-    proyectaban con el diagnóstico de la SEGUNDA. La sustituye
-    `_atribuir_diagnosticos`, que empareja por **rango**: la k-ésima parada
-    notificada con el k-ésimo diagnóstico publicado, alineando desde el final.
-    Lo que lo sostiene es lo único que el notificador sí garantiza —el grupo
-    de concurrencia de `notify-sirius-state.yml` lleva el nombre de la
-    etiqueta, así que los avisos de una MISMA etiqueta se serializan entre
-    sí— más el hecho de que los veredictos son comentarios síncronos. Alinear
-    desde el final, y no desde el principio, es lo que respeta la
-    deduplicación por estado y head (más diagnósticos que marcadores) y lo que
-    mantiene la coherencia con el diagnóstico de la foto vigente.
+    proyectaban con el diagnóstico de la SEGUNDA. La ronda 4 lo sustituyó por
+    `_atribuir_diagnosticos` emparejando por rango **alineado desde el final**,
+    razonando que así se respetaba la deduplicación por estado y head. Ese
+    razonamiento estaba invertido: `sirius_comment_once` lee el historial y, si
+    el marcador ya está presente, devuelve sin publicar, o sea **conserva el
+    primero y suprime los posteriores**. Con más diagnósticos que marcadores
+    —el caso central del encargo, dos paradas sobre un mismo head— el único
+    marcador es el de la PRIMERA parada y la alineación desde el final le daba
+    el diagnóstico de la ÚLTIMA. Vía el filtro del ancla de `reflect`, un
+    diagnóstico ajeno no solo copia mal el diario: descarta la ocurrencia y
+    abandona el recorrido entero.
 
-    **Residuo conocido de esta corrección:** cuando hay tantas paradas
-    notificadas como diagnósticos, el emparejamiento por rango no deja ninguna
-    sin diagnóstico, así que una parada cuyo diagnóstico se publicó DESPUÉS de
-    su marcador recibe ahora el del suceso emparejado en vez de `None`. Con
-    dos marcadores y un diagnóstico la abstención sigue intacta
-    (`test_una_parada_sin_diagnostico_publicado_hasta_ella_no_hereda_el_siguiente`).
-    Por eso el doble de pruebas `_cronologia` de `tests/engine/test_reflect.py`
-    **se deja con la atribución posicional que ya tenía**: alinearlo por rango
-    tumbaría `test_una_parada_sin_diagnostico_atribuible_no_recrea_ninguno` y
-    `test_un_marcador_con_otro_diagnostico_no_ancla_la_parada_guardada`, que
-    son pruebas existentes y no se relajan. Esa divergencia entre el doble y la
-    proyección es deliberada y está señalada aquí: cerrarla es parte del mismo
+    La regla vigente sale de dos hechos del sistema real: (1) un diagnóstico
+    publicado DESPUÉS de un marcador no puede ser suyo, porque
+    `sirius_apply_verdict.sh` publica el diagnóstico y solo después aplica la
+    etiqueta que dispara el aviso; y (2) el marcador que sobrevive a la
+    deduplicación es el de la primera parada de su serie. De ahí el
+    emparejamiento actual: **cada parada notificada, de la más antigua a la más
+    reciente, toma el diagnóstico no consumido más antiguo publicado ANTES de
+    ella, y `None` si no hay ninguno**; los diagnósticos se consumen, así que
+    ninguno acredita dos paradas. Sigue cubierto lo que la ronda 4 sí midió
+    bien —el aviso retrasado no le roba el diagnóstico a la otra parada—,
+    porque el consumo va en orden y no es «el último publicado hasta aquí».
+
+    Lo fijan `test_el_marcador_deduplicado_conserva_el_diagnostico_de_la_primera_parada`
+    y `test_tres_diagnosticos_y_un_marcador_no_atribuyen_el_ultimo`
+    (`tests/engine/test_mirror_projection.py`), vistas fallar contra la
+    alineación desde el final antes de corregir, y sin relajar
+    `test_una_parada_sin_diagnostico_publicado_hasta_ella_no_hereda_el_siguiente`
+    ni `test_un_aviso_de_parada_retrasado_no_le_roba_el_diagnostico_a_la_otra`.
+
+    **Residuo conocido, todavía abierto (CLAUDE-R5-002):** el doble de pruebas
+    `_cronologia` de `tests/engine/test_reflect.py` sigue con la atribución
+    posicional que ya tenía, así que puede fabricar `EstadoAcreditado` que la
+    proyección real no produce. Cerrar esa divergencia es parte del mismo
     trabajo de raíz que CLAUDE-R4-001.
 
   R4-001 y R4-002 son la misma familia —acreditar o negar la salida de una parada por
