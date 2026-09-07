@@ -486,6 +486,12 @@ aplicar la etiqueta, y la etiqueta es lo que dispara el marcador—. Con eso:
   (`AssertionError: assert 25 == (25 - 1)`), que es la guarda de que ese filtro
   quita exactamente el `continua` de las 05:29.
 
+- **Ronda 6, sobre el árbol de `44bcdc3`**: una sola invocación de
+  `pwsh -File scripts/check.ps1` (Ruff format, Ruff lint, mypy, pytest), código
+  de salida **0**, `5086 passed, 17 skipped, 2 xfailed in 480.30s (0:08:00)`.
+  Las dos mutaciones de la ronda están descritas en «Consecuencias», cada una
+  con la prueba que vio caer.
+
 ## Consecuencias
 
 - **Ronda 6, CLAUDE-R6-001 y CLAUDE-R6-002 (misma raíz): la cota de la parada
