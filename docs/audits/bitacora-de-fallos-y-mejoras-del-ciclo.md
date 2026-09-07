@@ -1658,6 +1658,25 @@ ADR o su incidencia cuando se adopte.
   12:47:58. Lo que debe pasar: verde → la ruta de ADR-142 saca #545 de
   `failed-safely` a `reviewing` → revisión dual con el recolector nuevo →
   veredicto por resultado. Sonda del servidor armada a las 13:29 UTC.
+- **ADR-156 en vivo, criterio 3 cumplido (12:55-13:07 UTC)**: Quality
+  verde sobre `50aa631` a las 12:55:30; la ruta de ADR-142 puso
+  `review-requested` a las 12:55:46 y la revisión dual arrancó a las
+  12:56 (run 34124551354). Codex contestó a las 13:04:25 (revisión
+  5132295972) OTRA VEZ con un hallazgo solo en el cuerpo: un P2 sobre mi
+  segunda corrección de ADR-149 —un JSON válido que no es lista (`{}`)
+  pasa por «cero runs activos» y la función termina en verde sin aviso—.
+  Es cierto, y lo sabía: al escribir la corrección vi ese caso y lo dejé
+  fuera «para mantener el arreglo estrecho»; estrecho de más. El revisor
+  Claude terminó a las 13:06:07 (9,5 min); el recolector nuevo leyó el
+  cuerpo y cerró a los 62 s (una pasada más la ventana de estabilidad de
+  60 s), agregado `CHANGES_REQUESTED` y veredicto aplicado a las
+  13:07:19: la incidencia pasó a `repairing`. Por resultado, no por
+  plazo: 62 s donde por la mañana fueron 20 min dos veces. El corrector
+  recibe el P2 de Codex junto con lo del revisor Claude; como el guion
+  cambió entre la ronda 1 y este head (por los merges de `main`), el
+  guardián de goteo no lo marca, y el corrector lo corregirá dentro de
+  la rama de #546. Queda pendiente llevar este dato a la sección
+  «Comprobación» de ADR-156 en la siguiente ficha del operador.
 
 ---
 
