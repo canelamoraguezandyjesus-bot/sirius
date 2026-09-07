@@ -1565,7 +1565,7 @@ ADR o su incidencia cuando se adopte.
   ADR-148 (memoria) sigue esperando, por orden del propietario, a que lo
   demás termine.
 
-### 45. Codex volvió y el recolector no le leyó el hallazgo: dos rondas de veinte minutos por un cuerpo sin inline (ADR-156), y el P2 que Codex me puso a mí (07-09-2026, 04:19-07:10 UTC)
+### 45. Codex volvió y el recolector no le leyó el hallazgo: dos rondas de veinte minutos por un cuerpo sin inline (ADR-156), y el P2 que Codex me puso a mí (07-09-2026, 04:19-12:50 UTC)
 
 - **Reanudación limpia (04:19-04:20)**: el propietario avisó de que la
   cuota de Codex había vuelto; `continua` a secas en #545 a las 04:20:25
@@ -1625,14 +1625,29 @@ ADR o su incidencia cuando se adopte.
   marcará `posible_goteo` para que el corrector decida por alcance.
   Criterio 3 de ADR-156: un `timeout` con una revisión de Codex a la
   vista lo desmiente.
-- **Dato para la deuda 5, y un error mío de medida**: tras el reinicio
-  de la madrugada el reloj del contenedor volvió a sincronizarse (04:37
-  cuando GitHub decía 04:37; 07:04 cuando GitHub decía 07:05). Lo que se
-  desfasó fue mi estimación del tiempo transcurrido: al abrir la PR creí
-  que eran las ~05:05 y eran las 07:05. Las dos fichas costaron dos
-  horas de reloj que sentí como veinte minutos, y durante ese rato #545
-  siguió parada. Lección: la hora se lee, no se estima; todas las horas
-  de esta entrada son de GitHub.
+- **Dato para la deuda 5, y dos errores míos de medida**: tras el
+  reinicio de la madrugada el reloj del contenedor volvió a estar en hora
+  (04:37 = 04:37 de GitHub; 07:04 = 07:05; 12:33 = 12:34). Lo que falló
+  fue mi lectura del tiempo, dos veces. Primera: creí que la PR se abría
+  a las ~05:05 y eran las 07:05 (dos horas de ficha sentidas como
+  veinte minutos). Segunda, peor: entre el rojo de la primera cadena
+  (07:14) y mi siguiente acción (12:33) pasaron CINCO HORAS en las que
+  no hice nada; el temporizador de diez minutos que había armado no me
+  despertó, y no tengo otra explicación que una suspensión de la sesión.
+  Lección doble: la hora se lee de GitHub, no se estima; y un `sleep`
+  del contenedor no es una vigilancia (deuda 5, otra vez): la única
+  sonda que ha demostrado sobrevivir es el recordatorio del servidor.
+  Coste: #545 parada desde las 05:01 y la PR de la ficha sin fusionar a
+  las 12:35, con el propietario ya probablemente despierto.
+- **Otro dato para la deuda 16**: en la ronda re-armada (run
+  34084006339) el revisor Claude terminó a los 195 s con `is_error:
+  true` tras 26 turnos y 1,65 USD —no fue cuota: costó dinero— y dejó
+  el veredicto provisional («Revisión interrumpida antes de terminar»).
+  Esa ronda ya estaba condenada por el timeout de Codex, así que no
+  costó nada extra, pero es la primera vez que veo a un agente morir
+  con coste y sin veredicto en mitad de una ronda: un fallo del arnés o
+  de la API, no del contenido. Si se repite con Codex arreglado, es una
+  ficha (clasificarlo como `infra_retryable` de ADR-141 si no lo está).
 
 ---
 
