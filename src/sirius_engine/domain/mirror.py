@@ -155,6 +155,31 @@ class EstadoAcreditado:
     orden_del_veredicto: int | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class ParadaPublicada:
+    """Un veredicto de PARADA publicado en el historial de confianza, con su posición.
+
+    Es la evidencia de que el ciclo se detuvo, INDEPENDIENTE del aviso que la
+    anunció: ``sirius_apply_verdict.sh`` y las puertas deterministas publican
+    siempre el comentario del veredicto, mientras que el marcador
+    ``sirius-notification:<etiqueta>:<head>`` lo deduplica
+    ``sirius_comment_once`` -una segunda parada sobre el mismo head no deja
+    marcador propio-. Sin esta lista, una parada sin aviso no existe para
+    :mod:`sirius_engine.reflect` y el recorrido ancla en el aviso de una
+    parada ANTERIOR, cuya cota deja pasar permisos escritos antes de la
+    parada real (CLAUDE-R7-001 y CLAUDE-R7-002, ronda 7, PR #546).
+
+    ``orden`` está en la MISMA escala que el de :class:`EstadoAcreditado` y
+    :class:`PermisoDeReanudacion`; ``publicado_en`` es el instante del
+    comentario que la publicó (``None`` si viene del CUERPO de la incidencia,
+    anterior por construcción a todo comentario), y es lo que permite
+    preguntar si el almacén PUDO guardarla.
+    """
+
+    orden: int
+    publicado_en: datetime | None = None
+
+
 class FormaDePermiso(StrEnum):
     """Las dos formas del permiso escrito del propietario, con el mismo peso.
 
@@ -246,6 +271,12 @@ class MirroredWorkItem:
     #: uno a uno, y la k-ésima salida de parada solo puede usar uno posterior
     #: a ESA parada y aún no consumido (ADR-147, incidencia #545).
     permisos_reanudacion: tuple[PermisoDeReanudacion, ...] = ()
+    #: Los veredictos de PARADA publicados en el historial de confianza, del
+    #: más antiguo al más reciente. A diferencia de ``historial_estados`` -que
+    #: solo ve las paradas con aviso propio-, aquí están TODAS: es lo que
+    #: permite al recorrido abstenerse cuando la evidencia no identifica en
+    #: cuál de ellas se quedó el almacén (ADR-147, CLAUDE-R7-001).
+    paradas_publicadas: tuple[ParadaPublicada, ...] = ()
     autoritativo: bool = field(default=False, init=False)
 
 

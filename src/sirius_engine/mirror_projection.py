@@ -55,6 +55,7 @@ from sirius_engine.domain.mirror import (
     MirroredRun,
     MirroredWorkItem,
     OrigenLectura,
+    ParadaPublicada,
     PermisoDeReanudacion,
     RondaHallazgos,
     VeredictoPublicado,
@@ -710,6 +711,35 @@ def _atribuir_diagnosticos(
     return tuple(atribuidos)
 
 
+def _interpretar_paradas_publicadas(
+    cuerpo: CuerpoIncidencia, comentarios: Sequence[Comentario]
+) -> tuple[ParadaPublicada, ...]:
+    """La CRONOLOGÍA de los veredictos de PARADA, cada uno con su posición e instante.
+
+    Misma fuente y misma escala que :func:`_interpretar_historial_estados`,
+    pero mirando el comentario del VEREDICTO (``_STOP_MARKER_RE``) en vez del
+    aviso: el veredicto lo publica siempre el rol o la puerta que para, y
+    ``sirius_comment_once`` no lo deduplica -deduplica el marcador
+    ``sirius-notification``, que lleva solo etiqueta y head-. Por eso una
+    SEGUNDA parada sobre el mismo head deja veredicto y no deja aviso, y es
+    justo la que :mod:`sirius_engine.reflect` necesita ver para abstenerse en
+    vez de anclar en el aviso de la primera (CLAUDE-R7-001, ronda 7, PR #546).
+
+    Incluye las paradas SIN diagnóstico -``sirius:blocked-decision`` no publica
+    ninguno-, que es lo que la deja fuera del alcance de
+    :func:`_interpretar_diagnosticos_fallo`.
+    """
+    instantes = {
+        orden: comentario.creado_en
+        for orden, comentario in _comentarios_de_confianza(cuerpo, comentarios)
+    }
+    return tuple(
+        ParadaPublicada(orden=orden, publicado_en=instantes.get(orden))
+        for orden, texto in enumerate(_textos_de_confianza(cuerpo, comentarios))
+        if _STOP_MARKER_RE.search(texto)
+    )
+
+
 def _interpretar_permisos_reanudacion(
     cuerpo: CuerpoIncidencia, comentarios: Sequence[Comentario]
 ) -> tuple[PermisoDeReanudacion, ...]:
@@ -863,6 +893,7 @@ def proyectar_work_item(
         permisos_reanudacion=_interpretar_permisos_reanudacion(
             cuerpo.cuerpo, comentarios.comentarios
         ),
+        paradas_publicadas=_interpretar_paradas_publicadas(cuerpo.cuerpo, comentarios.comentarios),
     )
 
 

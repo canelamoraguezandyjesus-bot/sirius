@@ -118,6 +118,7 @@ from sirius_engine.domain.errors import EngineError
 from sirius_engine.domain.mirror import (
     EstadoAcreditado,
     MirroredWorkItem,
+    ParadaPublicada,
     PermisoDeReanudacion,
 )
 from sirius_engine.domain.work_item import WorkItem, WorkItemPhase, WorkItemState
@@ -467,7 +468,11 @@ def _el_almacen_pudo_guardarla(acreditado: EstadoAcreditado, work_item: WorkItem
     return publicado_en is None or publicado_en <= work_item.updated_at
 
 
-def _ancla_del_recorrido(work_item: WorkItem, historial: Sequence[EstadoAcreditado]) -> int | None:
+def _ancla_del_recorrido(
+    work_item: WorkItem,
+    historial: Sequence[EstadoAcreditado],
+    paradas: Sequence[ParadaPublicada] = (),
+) -> int | None:
     """La OCURRENCIA del historial acreditado que el almacén guardó.
 
     ``None`` -y entonces no hay recorrido- cuando el historial no menciona el
@@ -502,7 +507,19 @@ def _ancla_del_recorrido(work_item: WorkItem, historial: Sequence[EstadoAcredita
        quedan lleva ESE diagnóstico, esa es: no es una preferencia, es el
        mismo texto escrito dos veces.
     4. Y solo si ninguna de las tres discrimina, la más reciente de las que la
-       evidencia no descartó.
+       evidencia no descartó, **salvo que quede una parada sin acreditar
+       detrás**: si el motor está PARADO y el historial de confianza trae un
+       veredicto de parada publicado DESPUÉS de la cota de esa ocurrencia y no
+       posterior a ``work_item.updated_at`` -es decir, una parada que el
+       almacén pudo guardar y que ningún aviso acredita, porque
+       ``sirius_comment_once`` deduplica el marcador por ``(etiqueta, head)``-,
+       la evidencia no dice en cuál de las dos se quedó el motor y el recorrido
+       se abandona (``None``). Anclar en la anterior fijaría una cota que deja
+       pasar el permiso escrito para la parada ANTERIOR y acreditaría una
+       salida que nadie autorizó (CLAUDE-R7-001 y CLAUDE-R7-002, ronda 7, PR
+       #546). La ocurrencia identificada por su DIAGNÓSTICO (punto 3) no
+       necesita esta abstención: ahí el suceso está identificado por su propio
+       texto, no por la posición.
     """
     candidatos = [
         indice
@@ -528,7 +545,37 @@ def _ancla_del_recorrido(work_item: WorkItem, historial: Sequence[EstadoAcredita
         ]
         if len(por_identidad) == 1:
             return por_identidad[0]
-    return base[-1] if anteriores else base[0]
+    eleccion = base[-1] if anteriores else base[0]
+    if work_item.estado in _PARADAS and _hay_una_parada_posterior_sin_aviso(
+        historial[eleccion], paradas, work_item
+    ):
+        return None
+    return eleccion
+
+
+def _hay_una_parada_posterior_sin_aviso(
+    acreditado: EstadoAcreditado, paradas: Sequence[ParadaPublicada], work_item: WorkItem
+) -> bool:
+    """Si detrás de esta ocurrencia hay otra parada que el almacén pudo guardar.
+
+    La lista de :class:`ParadaPublicada` son los VEREDICTOS de parada, no sus
+    avisos: el veredicto lo publica siempre quien para, y el aviso lo deduplica
+    ``sirius_comment_once`` por ``(etiqueta, head)``. Así que una parada
+    posterior a la cota de esta ocurrencia, publicada a tiempo de que el
+    almacén la guardara, es exactamente la parada que el historial NO acredita
+    con aviso propio: mientras exista, la posición no dice en cuál de las dos
+    se quedó el motor.
+
+    La referencia es la COTA (:func:`_orden_de_la_parada`), no la posición del
+    aviso: el veredicto que causó esta misma parada nunca cuenta como parada
+    posterior, esté su aviso donde esté.
+    """
+    cota = _orden_de_la_parada(acreditado)
+    return any(
+        parada.orden > cota
+        and (parada.publicado_en is None or parada.publicado_en <= work_item.updated_at)
+        for parada in paradas
+    )
 
 
 def _orden_de_la_parada(acreditado: EstadoAcreditado) -> int:
@@ -573,9 +620,14 @@ def _orden_de_la_parada(acreditado: EstadoAcreditado) -> int:
     ``blocked-decision`` llega siempre con ``orden_del_veredicto is None`` y se
     correlaciona por la posición de su AVISO, así que una recuperación
     autorizada por escrito tras un ``blocked-decision`` con aviso retrasado se
-    sigue declarando como divergencia. Es conservador -nunca inventa un
-    permiso- y queda registrado como limitación viva en ADR-147
-    (CLAUDE-R6-003, ronda 6, PR #546).
+    sigue declarando como divergencia (CLAUDE-R6-003, ronda 6, PR #546).
+
+    Eso NO lo hacía conservador por sí solo, y la ronda 6 lo escribió mal aquí:
+    con dos ``blocked-decision`` sobre el mismo head, la cota del aviso de la
+    PRIMERA dejaba pasar su propio ``continua`` para resolver la SEGUNDA, cuyo
+    aviso deduplicó ``sirius_comment_once``. Quien cierra ese flanco es
+    :func:`_hay_una_parada_posterior_sin_aviso`, abandonando el recorrido
+    (CLAUDE-R7-001 y CLAUDE-R7-002, ronda 7, PR #546; ADR-147).
     """
     if acreditado.orden_del_veredicto is None:
         return acreditado.orden
@@ -668,7 +720,7 @@ def _recorrer_historial_acreditado(
         # tratando como hoy -declarar y no tocar nada-, y sin foto no hay
         # destino al que recorrer.
         return None
-    ancla = _ancla_del_recorrido(work_item, espejo.historial_estados)
+    ancla = _ancla_del_recorrido(work_item, espejo.historial_estados, espejo.paradas_publicadas)
     if ancla is None:
         return None
     objetivos = espejo.historial_estados[ancla + 1 :]

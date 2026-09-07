@@ -535,25 +535,49 @@ aplicar la etiqueta, y la etiqueta es lo que dispara el marcador—. Con eso:
   `test_tres_diagnosticos_y_un_marcador_no_atribuyen_el_ultimo`,
   `test_una_parada_sin_diagnostico_publicado_hasta_ella_no_hereda_el_siguiente`
   y `test_un_aviso_de_parada_retrasado_no_le_roba_el_diagnostico_a_la_otra`.
-- **Limitación viva, CLAUDE-R6-003 (ronda 6): la correlación por identidad
-  cubre solo `failed-safely`.** La identidad que se transporta es el
-  diagnóstico del veredicto, y `sirius:blocked-decision` no publica ninguno:
-  `_atribuir_diagnosticos` solo rellena `orden_del_veredicto` para los
-  acreditados `FAILED_SAFELY`, así que un marcador `blocked-decision` -parada
-  de pleno derecho en `_PARADAS`- llega siempre con `orden_del_veredicto is
-  None` y se correlaciona por la posición de su AVISO. Consecuencia observable:
-  una recuperación autorizada por escrito tras un `blocked-decision` cuyo aviso
-  se publicó DESPUÉS del `continua` se sigue declarando como divergencia. Es el
-  lado conservador del defecto -nunca acredita de más- y queda aquí registrado
-  con su identificador en vez de corregirse, que es la salida que el propio
-  hallazgo declara admisible; queda también escrito en el docstring de
-  `reflect._orden_de_la_parada`.
+- **La correlación por identidad cubre solo `failed-safely` (CLAUDE-R6-003,
+  ronda 6), y desde la ronda 7 eso ya no acredita de más.** La identidad que se
+  transporta es el diagnóstico del veredicto, y `sirius:blocked-decision` no
+  publica ninguno: `_atribuir_diagnosticos` solo rellena `orden_del_veredicto`
+  para los acreditados `FAILED_SAFELY`, así que un marcador `blocked-decision`
+  -parada de pleno derecho en `_PARADAS`- llega siempre con
+  `orden_del_veredicto is None` y se correlaciona por la posición de su AVISO.
+  Lo que la ronda 6 escribió aquí -«es el lado conservador del defecto, nunca
+  acredita de más»- **era falso por el flanco contrario, y se retira**: con dos
+  `blocked-decision` sobre el MISMO head, el notificador deduplica el aviso de
+  la segunda, el filtro de identidad no discrimina (no hay diagnóstico que
+  comparar) y el recorrido anclaba en el aviso de la PRIMERA, cuya cota deja
+  pasar el `continua` escrito para ella: un `NEEDS_DECISION` se resolvía sin su
+  permiso (CLAUDE-R7-001, ronda 7). El mismo hueco por el otro lado: un
+  acreditado con `diagnostico is None` por la ABSTENCIÓN de CLAUDE-R6-002
+  tampoco lo descarta el filtro, así que servía de ancla aunque el almacén
+  guardara un veredicto de parada POSTERIOR a ese aviso (CLAUDE-R7-002).
+
+  **Corrección de la ronda 7 (07-09-2026), la misma para los dos y por
+  abstenerse, nunca por acreditar más.** La proyección publica ahora la
+  cronología de los VEREDICTOS de parada (`ParadaPublicada`,
+  `mirror_projection._interpretar_paradas_publicadas`, `_STOP_MARKER_RE`), que
+  existen aunque `sirius_comment_once` haya deduplicado su aviso. Cuando el
+  motor está parado y el ancla no quedó identificada por su propio diagnóstico,
+  `reflect._ancla_del_recorrido` **abandona el recorrido** si hay un veredicto
+  de parada publicado después de la cota del ancla que el almacén pudo guardar
+  (`publicado_en <= work_item.updated_at`): la evidencia no dice en cuál de las
+  dos paradas se quedó el motor, así que se conserva la divergencia declarada.
+  Lo fijan `test_una_segunda_parada_sin_aviso_propio_no_se_resuelve_con_el_permiso_de_la_primera`
+  y `test_un_acreditado_sin_diagnostico_no_ancla_si_queda_una_parada_posterior`
+  (`tests/engine/test_reflect.py`), vistas caer con la mutación
+  `parada.orden > cota` → `parada.orden > cota + 10_000` en
+  `reflect._hay_una_parada_posterior_sin_aviso`: las dos devuelven el plan
+  completo hasta `delivered/entregar` en vez de `()`
+  (`AssertionError: assert (PasoReflejo(...)) == ()`).
 
 - El caso vivo avanza: WI-20260905-034826 llega a `delivered/entregar` y la
   pasada siguiente no añade nada.
 - Las recuperaciones sin ninguna palabra escrita del propietario quedan como
   divergencia declarada. Es la consecuencia aceptada y deliberada del encargo.
-- Un `NEEDS_DECISION` jamás se resuelve en el almacén sin su permiso.
+- Un `NEEDS_DECISION` jamás se resuelve en el almacén sin su permiso: desde
+  la ronda 7 también cuando la segunda parada sobre el mismo head se quedó
+  sin aviso propio, porque entonces no hay ancla (CLAUDE-R7-001).
 - El almacén gana memoria de tramos intermedios que ninguna pasada observó:
   el diario registra las transiciones reales, no un salto.
 - El defecto que la ronda 4 aplazó por plazo (ADR-155) queda **corregido en la

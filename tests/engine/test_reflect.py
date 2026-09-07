@@ -61,6 +61,7 @@ from sirius_engine.domain.mirror import (
     FormaDePermiso,
     MirroredWorkItem,
     OrigenLectura,
+    ParadaPublicada,
     PermisoDeReanudacion,
 )
 from sirius_engine.domain.work_item import (
@@ -122,6 +123,7 @@ def _espejo(
     reanudacion_publicada: bool = False,
     historial_estados: tuple[EstadoAcreditado, ...] = (),
     permisos_reanudacion: tuple[PermisoDeReanudacion, ...] = (),
+    paradas_publicadas: tuple[ParadaPublicada, ...] = (),
 ) -> MirroredWorkItem:
     return MirroredWorkItem(
         work_id=f"{_REPO}#508",
@@ -141,6 +143,7 @@ def _espejo(
         reanudacion_publicada=reanudacion_publicada,
         historial_estados=historial_estados,
         permisos_reanudacion=permisos_reanudacion,
+        paradas_publicadas=paradas_publicadas,
     )
 
 
@@ -951,6 +954,15 @@ def _cronologia(
         if tipo == "diagnostico":
             diagnosticos.append((orden, referencia))
             orden_sin_recibo = None
+        elif tipo == "parada":
+            # Un veredicto de PARADA que no publica diagnóstico
+            # (`sirius:blocked-decision`) ni deja aviso propio, porque
+            # `sirius_comment_once` deduplica el marcador por (etiqueta, head).
+            # Limpia la orden pendiente igual que `_STOP_MARKER_RE` en
+            # `mirror_projection._interpretar_permisos_reanudacion`: abre un
+            # suceso nuevo, así que el recibo posterior ya no es el recibo de
+            # esa orden.
+            orden_sin_recibo = None
         elif tipo == "estado":
             estado, fase = _LABEL_STATE[referencia]
             estados.append(
@@ -1214,10 +1226,34 @@ def test_el_doble_de_cronologia_proyecta_lo_mismo_que_la_proyeccion_real() -> No
     assert _comparable(doble) == _comparable(proyectado)
 
 
+def _paradas(
+    *entradas: tuple[str, str], desde: datetime | None = None
+) -> tuple[ParadaPublicada, ...]:
+    """Los VEREDICTOS de parada de las mismas entradas, como los proyecta producción.
+
+    Cuenta las dos formas que `mirror_projection._STOP_MARKER_RE` reconoce y
+    que `_texto_de_confianza` escribe: el veredicto `FAILED_SAFELY` con su
+    diagnóstico (`"diagnostico"`) y el veredicto de parada que no publica
+    ninguno (`"parada"`, el `blocked` de `sirius:blocked-decision`). Los avisos
+    no entran: un veredicto de parada existe aunque su marcador lo haya
+    deduplicado `sirius_comment_once`, que es justo lo que hace falta ver.
+    """
+    return tuple(
+        ParadaPublicada(
+            orden=orden,
+            publicado_en=(desde + timedelta(minutes=orden) if desde is not None else None),
+        )
+        for orden, (tipo, _) in enumerate(entradas)
+        if tipo in ("diagnostico", "parada")
+    )
+
+
 def _texto_de_confianza(tipo: str, referencia: str) -> str:
     """El comentario REAL que produce cada entrada de :func:`_cronologia`."""
     if tipo == "estado":
         return f"<!-- sirius-notification:{referencia}:1c934781 -->"
+    if tipo == "parada":
+        return f"<!-- sirius-verdict:revisor:blocked:{referencia} -->"
     if tipo == "diagnostico":
         return (
             "<!-- sirius-verdict:corrector:FAILED_SAFELY:33945456417-1 -->\n\n"
@@ -2165,3 +2201,92 @@ def test_una_parada_de_otra_serie_no_se_levanta_con_un_permiso_anterior_a_ella()
 
     assert resultado.pasos == ()
     assert resultado.divergencia is not None
+
+
+def test_una_segunda_parada_sin_aviso_propio_no_se_resuelve_con_el_permiso_de_la_primera() -> None:
+    """Dos `blocked-decision` sobre el mismo head: el `continua` de la primera no vale.
+
+    `notify-sirius-state.yml` deduplica por `sirius-notification:<etiqueta>:<head>`,
+    así que la SEGUNDA parada sobre el mismo head no deja marcador propio: en el
+    historial solo está el aviso de la primera. Y `blocked-decision` no publica
+    diagnóstico, así que el filtro de identidad del ancla no discrimina nada.
+    Anclando en el aviso de la primera, la cota es su posición y el `continua`
+    escrito para levantarla queda por delante: el recorrido resolvía la SEGUNDA
+    parada -para la que nadie escribió nada- y llegaba hasta la foto
+    (CLAUDE-R7-001, ronda 7, PR #546). Ahora el veredicto de parada posterior a
+    la cota, que el almacén pudo guardar, dice que la evidencia no identifica
+    el suceso: no hay ancla y la divergencia se conserva.
+    """
+    store = InMemoryWorkEngineStore()
+    bloqueado = _motor_bloqueado_en_revisar(store)
+    entradas: tuple[tuple[str, str], ...] = (
+        ("estado", "sirius:blocked-decision"),
+        ("orden", "continua"),
+        ("estado", "sirius:repair-requested"),
+        ("parada", "33945456417-2"),
+        ("estado", "sirius:ready-for-merge"),
+        ("estado", "sirius:completed"),
+    )
+    historial, permisos = _cronologia(*entradas)
+    espejo = _espejo(
+        estado=WorkItemState.DELIVERED,
+        fase=WorkItemPhase.ENTREGAR,
+        etiquetas=("sirius:completed",),
+        historial_estados=historial,
+        permisos_reanudacion=permisos,
+        paradas_publicadas=_paradas(*entradas),
+    )
+
+    resultado = reflejar_desenlace(bloqueado, espejo, _episodio())
+
+    assert resultado.pasos == ()
+    assert resultado.divergencia is not None
+    item = store.get_work_item(_WORK_ID)
+    assert item is not None
+    assert item.estado is WorkItemState.NEEDS_DECISION
+
+
+def test_un_acreditado_sin_diagnostico_no_ancla_si_queda_una_parada_posterior() -> None:
+    """La abstención de la ronda 6 no puede servir de ancla con una parada detrás.
+
+    Con dos veredictos de parada publicados antes del único aviso, la
+    proyección se ABSTIENE de atribuir diagnóstico (CLAUDE-R6-002) y el
+    acreditado queda con `diagnostico is None`. Ese `None` atraviesa el filtro
+    de identidad del ancla -no contradice a ninguno-, así que el acreditado de
+    la primera parada anclaba el recorrido y su cota -la del aviso- dejaba
+    pasar el `continua` escrito ANTES del tercer veredicto de parada, el que el
+    almacén sí guardó (CLAUDE-R7-002, ronda 7, PR #546). La abstención es
+    correcta frente a los veredictos ANTERIORES al aviso; frente al posterior,
+    quien tiene que abstenerse es el ancla.
+    """
+    store = InMemoryWorkEngineStore()
+    parado = _motor_parado_en_reparar(store, diagnostico="la ronda 3 murió sin empujar")
+    entradas: tuple[tuple[str, str], ...] = (
+        ("diagnostico", "la ronda 1 se quedó sin turnos"),
+        ("diagnostico", "la ronda 2 agotó el tiempo del job"),
+        ("estado", "sirius:failed-safely"),
+        ("orden", "continua"),
+        ("estado", "sirius:repair-requested"),
+        ("diagnostico", "la ronda 3 murió sin empujar"),
+        ("estado", "sirius:ready-for-merge"),
+        ("estado", "sirius:completed"),
+    )
+    historial, permisos = _cronologia(*entradas)
+    assert historial[0].estado is WorkItemState.FAILED_SAFELY
+    assert historial[0].diagnostico is None
+    espejo = _espejo(
+        estado=WorkItemState.DELIVERED,
+        fase=WorkItemPhase.ENTREGAR,
+        etiquetas=("sirius:completed",),
+        historial_estados=historial,
+        permisos_reanudacion=permisos,
+        paradas_publicadas=_paradas(*entradas),
+    )
+
+    resultado = reflejar_desenlace(parado, espejo, _episodio())
+
+    assert resultado.pasos == ()
+    assert resultado.divergencia is not None
+    item = store.get_work_item(_WORK_ID)
+    assert item is not None
+    assert item.estado is WorkItemState.FAILED_SAFELY
