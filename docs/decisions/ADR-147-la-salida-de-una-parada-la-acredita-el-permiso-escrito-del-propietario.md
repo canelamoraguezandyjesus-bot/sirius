@@ -724,6 +724,17 @@ aplicar la etiqueta, y la etiqueta es lo que dispara el marcador—. Con eso:
   consulta a la API de arriba, `git diff --quiet main HEAD -- .github/` -que
   sigue saliendo en **0**- y la invocación de `scripts/check.ps1` que sigue.
 
+- **Comprobación de la ronda 15, sobre el árbol de `535f7ff`**: una sola
+  invocación de `pwsh -File scripts/check.ps1` (Ruff format, Ruff lint, mypy,
+  pytest), código de salida **0**,
+  `5102 passed, 17 skipped, 2 xfailed in 443.32s (0:07:23)`. La terna es la
+  misma de las rondas 13 y 14 (`5102 passed, 17 skipped, 2 xfailed`) porque
+  esta ronda es documental: no añade ni quita ninguna prueba, y por eso
+  tampoco hay mutación que enseñar.
+
+  Lo único que cambia en el árbol después de esta captura es la transcripción
+  de estas mismas cifras.
+
 ## Consecuencias
 
 - **Ronda 6, CLAUDE-R6-001 y CLAUDE-R6-002 (misma raíz): la cota de la parada
