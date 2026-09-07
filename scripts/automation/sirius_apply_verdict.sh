@@ -360,10 +360,18 @@ relanzar_quality_si_ya_termino() {
   fi
   rm -f "$err_file"
   activos="$(printf '%s' "$runs_json" | jq -r '[.[] | select(.status != "completed")] | length' 2>/dev/null || echo "")"
-  if [ -z "$activos" ]; then
-    echo "::error::Respuesta ilegible al consultar los runs de Quality del head ${head_sha} (consulta-runs-ilegible); la incidencia queda en ci-pending y este paso, reintentable." >&2
-    exit 1
-  fi
+  case "$activos" in
+    ''|*[!0-9]*)
+      # ADR-149, corrección del 07-09: código 0 con una salida que no es una
+      # lista de runs también se cuenta en la incidencia (lo vio Codex en la
+      # revisión 5128044887 de #546). Ni se relanza nada con datos ilegibles
+      # ni la incidencia se queda en silencio.
+      avisar_quality_sin_encaminar "consulta-runs-ilegible" "" \
+        "respuesta no interpretable como lista de runs: $(printf '%s' "$runs_json" | tr -d '\n' | head -c 120)"
+      echo "::error::Respuesta ilegible al consultar los runs de Quality del head ${head_sha} (consulta-runs-ilegible); la incidencia queda en ci-pending y este paso, reintentable." >&2
+      exit 1
+      ;;
+  esac
   if [ "$activos" -gt 0 ]; then
     echo "Quality sigue en curso para ${head_sha}; su finalización encaminará la incidencia."
     return 0
