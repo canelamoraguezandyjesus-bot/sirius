@@ -1545,6 +1545,12 @@ ADR o su incidencia cuando se adopte.
   primer aviso, la cuota no ha vuelto: no es una ventana corta. Siguiente
   sonda a las 07:00 UTC del 07-09; el día de #545 se cierra en
   `failed-safely` con R4-001 (P1) pendiente y todo lo demás dentro.
+  Madrugada del 07-09: el contenedor del operador se reinició y se llevó
+  el temporizador de la sonda (un `sleep` no sobrevive al reinicio); al
+  volver, el reloj del contenedor marcaba 02:08 cuando el servidor decía
+  04:18, así que las horas se toman de GitHub y no de `date`. La sonda
+  queda como recordatorio persistente del servidor (`send_later`,
+  07:00Z), que sí sobrevive. Deuda 5 (vigilancia durable) en acto.
 - **Estado a las 13:32 UTC (14:32 del propietario)**: `main` en
   `52344dc` tras cuatro fusiones del operador (#553 `3a00e04` 04:05,
   #555 `4cd8924` y #554 `dc45b59` 05:03, #556 `52344dc` 13:29). Las dos
