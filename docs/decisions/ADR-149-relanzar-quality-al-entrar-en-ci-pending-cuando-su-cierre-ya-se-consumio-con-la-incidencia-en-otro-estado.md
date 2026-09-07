@@ -203,6 +203,33 @@ Guardianes: los dos casos de fallo (`consulta-runs-fallida`,
 marcador; un tercer caso fija que reejecutar el paso con el marcador ya
 publicado no duplica el aviso. Vistos fallar contra el guion anterior.
 
+## Corrección (07-09-2026, 04:24 UTC): la respuesta ilegible también se cuenta
+
+La corrección del 06-09 cubría que `gh api` terminara con error. Codex, en la
+revisión 5128044887 de la PR #546 (hallazgo P2, publicado en el cuerpo de la
+revisión porque el guion no está en el diff de esa PR), señaló el hueco: si
+`gh` devuelve código 0 pero su salida no es una lista de runs interpretable,
+la rama `consulta-runs-ilegible` salía con 1 sin publicar nada, y la
+incidencia se quedaba en `ci-pending` en el mismo silencio que esta
+corrección vino a quitar.
+
+Ahora esa rama publica también, una sola vez, el aviso
+`QUALITY_SIN_ENCAMINAR` (marcador
+`sirius-quality-sin-encaminar:<head>:consulta-runs-ilegible`) citando los
+primeros 120 caracteres de lo que devolvió `gh`. Todo lo demás se conserva:
+el paso termina en 1, la incidencia sigue en `ci-pending` y no se relanza
+nada con datos que no se pueden leer. La comprobación exige además que
+`activos` sea un entero, no solo que no esté vacío: un `null` o un texto
+cualquiera ya no pasan por «cero runs activos».
+
+Guardián: un doble de `gh` que imprime `not-json` con código 0 exige el
+marcador, el encabezado y la cita; visto fallar contra el guion anterior.
+
+Es la misma familia que ADR-156 (el recolector no leía los hallazgos que
+Codex publica en el cuerpo): el motor ignoraba una señal presente porque
+llegaba con una forma que no esperaba. Las dos correcciones viajan en la
+misma PR.
+
 ## Consecuencias
 
 - La receta manual «reponer `ci-pending` y relanzar el run» deja de ser

@@ -61,6 +61,7 @@ case "$sub" in
     # que la lectura va con el de lectura y el POST con el PAT.
     if printf '%s' "$args" | grep -q 'actions/workflows/quality.yml/runs'; then
       [ -f "$D/quality_runs_fail" ] && { echo "503 runs" >&2; exit 1; }
+      [ -f "$D/quality_runs_illegible" ] && { echo "not-json"; exit 0; }
       filtro_runs=""; prev=""
       for a in "$@"; do [ "$prev" = "--jq" ] && filtro_runs="$a"; prev="$a"; done
       h="$(printf '%s' "$args" | grep -oE 'head_sha=[0-9a-f]+' | cut -d= -f2)"
@@ -1958,6 +1959,27 @@ def test_si_la_consulta_de_runs_cae_el_paso_queda_rojo_no_verde(tmp_path: Path) 
     assert "sirius-quality-sin-encaminar:c4d482267d9a:consulta-runs-fallida" in comments
     assert "## QUALITY_SIN_ENCAMINAR" in comments
     assert "503 runs" in comments
+
+
+def test_si_la_respuesta_de_runs_es_ilegible_el_aviso_tambien_se_publica(tmp_path: Path) -> None:
+    """ADR-149, corrección del 07-09: código 0 con salida no interpretable
+    tampoco deja la incidencia en silencio (hallazgo P2 de Codex en #546,
+    revisión 5128044887). Sigue en `ci-pending`, el paso sigue rojo y no se
+    relanza nada con datos que no se pueden leer."""
+    env = _setup(tmp_path)
+    head = "c4d482267d9a"
+    vf = _implementador_listo(env, tmp_path, head)
+    (_md(env) / "quality_runs_illegible").write_text("", encoding="utf-8")
+    r = _run(env, "implementer", vf)
+    assert r.returncode != 0
+    assert "consulta-runs-ilegible" in r.stdout + r.stderr
+    assert "sirius:ci-pending" in _labels(env)
+    assert "sirius:failed-safely" not in _labels(env)
+    assert "RERUN" not in _actions_log(env)
+    comments = _comments(env)
+    assert f"sirius-quality-sin-encaminar:{head}:consulta-runs-ilegible" in comments
+    assert "## QUALITY_SIN_ENCAMINAR" in comments
+    assert "not-json" in comments, "el aviso cita lo que devolvió gh"
 
 
 def test_la_lectura_va_con_el_token_de_lectura_y_el_relanzamiento_con_el_pat(
