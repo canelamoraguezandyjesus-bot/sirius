@@ -598,7 +598,7 @@ def _hay_una_parada_posterior_sin_aviso(
 
 
 def _paradas_que_el_recorrido_debe_recrear(
-    ancla: EstadoAcreditado, paradas: Sequence[ParadaPublicada], work_item: WorkItem
+    ancla: EstadoAcreditado, paradas: Sequence[ParadaPublicada]
 ) -> list[ParadaPublicada]:
     """Los veredictos de parada que el recorrido tiene que atravesar recreándolos.
 
@@ -617,21 +617,31 @@ def _paradas_que_el_recorrido_debe_recrear(
     (CLAUDE-R10-001, ronda 10, PR #546).
 
     Lo que se devuelve es la lista de veredictos posteriores a la cota del
-    ancla (:func:`_orden_de_la_parada`) que el almacén PUDO guardar -sin
-    instante, o publicados no después de su última escritura-. El bucle va
-    saldando uno por cada parada que recrea, en orden; si al terminar queda
+    ancla (:func:`_orden_de_la_parada`), y esa cota es la ÚNICA que delimita el
+    tramo: el historial de confianza termina en la foto, así que todo veredicto
+    por detrás del ancla cae dentro de lo que el recorrido reproduce. El bucle
+    va saldando uno por cada parada que recrea, en orden; si al terminar queda
     alguno sin saldar, el recorrido se abandona. La abstención es la salida
     correcta y suficiente: no se inventa ningún tramo de parada ni se relaja
     :func:`_consumir_permiso`, y un veredicto que SÍ tiene su tramo se sigue
     comportando exactamente igual que antes -consumiendo su permiso-.
+
+    Lo que NO se filtra aquí, y la ronda 10 filtraba, es el instante de
+    publicación contra ``work_item.updated_at``. Ese predicado es el de
+    :func:`_el_almacen_pudo_guardarla` y responde a la pregunta del ANCLA
+    -«¿en cuál de las ocurrencias se quedó el almacén?»-, donde es correcto.
+    Aquí la pregunta es otra -«¿qué veredictos caen en el tramo que el
+    recorrido reproduce?»- y el tramo es, por definición, lo POSTERIOR a la
+    última escritura del almacén: todo veredicto suyo tiene
+    ``publicado_en > updated_at`` y el filtro dejaba la lista siempre vacía,
+    devolviendo intacto el fallo de CLAUDE-R10-001. Un veredicto publicado
+    después de la última escritura del almacén es precisamente el que el
+    almacén NO vio y el que el recorrido tiene que recrear (CLAUDE-R11-001,
+    ronda 11, PR #546;
+    ``test_una_parada_fechada_que_ningun_tramo_recrea_abandona_el_recorrido``).
     """
     cota = _orden_de_la_parada(ancla)
-    return [
-        parada
-        for parada in paradas
-        if parada.orden > cota
-        and (parada.publicado_en is None or parada.publicado_en <= work_item.updated_at)
-    ]
+    return [parada for parada in paradas if parada.orden > cota]
 
 
 def _orden_de_la_parada(acreditado: EstadoAcreditado) -> int:
@@ -790,7 +800,7 @@ def _recorrer_historial_acreditado(
     permiso_siguiente = 0
     orden_de_la_parada = _orden_de_la_parada(espejo.historial_estados[ancla])
     paradas_por_recrear = _paradas_que_el_recorrido_debe_recrear(
-        espejo.historial_estados[ancla], espejo.paradas_publicadas, work_item
+        espejo.historial_estados[ancla], espejo.paradas_publicadas
     )
     #: Los tramos: cada estado acreditado que queda por recorrer y, al final,
     #: el espejo REAL. El último no lleva estado acreditado porque la foto no

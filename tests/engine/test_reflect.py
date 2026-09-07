@@ -1260,12 +1260,21 @@ def test_el_doble_de_cronologia_proyecta_lo_mismo_que_la_proyeccion_real() -> No
         FormaDePermiso.MARCADOR,
     ]
 
-    doble_paradas = _paradas(*entradas)
+    doble_paradas = _paradas(*entradas, desde=_AHORA)
     origen_paradas = doble_paradas[0].orden
     assert tuple(parada.orden - origen_paradas for parada in doble_paradas) == tuple(
         parada.orden - proyeccion.paradas_publicadas[0].orden
         for parada in proyeccion.paradas_publicadas
     )
+    # Y en el INSTANTE, no solo en la posición: todo veredicto de parada se
+    # publica como comentario -el cuerpo del encargo no lleva ninguno-, así que
+    # `_interpretar_paradas_publicadas` le pone SIEMPRE su `creado_en`. Un doble
+    # que devuelva `publicado_en=None` fabrica una forma que producción no
+    # emite, y es lo que dejó pasar CLAUDE-R11-001 (CLAUDE-R11-002, ronda 11).
+    assert tuple(parada.publicado_en for parada in doble_paradas) == tuple(
+        parada.publicado_en for parada in proyeccion.paradas_publicadas
+    )
+    assert all(parada.publicado_en is not None for parada in proyeccion.paradas_publicadas)
 
 
 def _paradas(
@@ -1279,6 +1288,12 @@ def _paradas(
     ninguno (`"parada"`, el `blocked` de `sirius:blocked-decision`). Los avisos
     no entran: un veredicto de parada existe aunque su marcador lo haya
     deduplicado `sirius_comment_once`, que es justo lo que hace falta ver.
+
+    Con ``desde``, cada veredicto recibe su instante de publicación -un minuto
+    por posición-, que es la forma que produce SIEMPRE la proyección real: todo
+    veredicto de parada se publica como comentario y llega con su ``creado_en``
+    (lo fija `test_el_doble_de_cronologia_proyecta_lo_mismo_que_la_proyeccion_real`,
+    CLAUDE-R11-002, ronda 11, PR #546).
     """
     return tuple(
         ParadaPublicada(
@@ -2445,6 +2460,68 @@ def test_una_parada_que_ningun_tramo_recrea_abandona_el_recorrido() -> None:
     assert item is not None
     assert item.estado is WorkItemState.FAILED_SAFELY
     assert item.fase is WorkItemPhase.REPARAR
+
+
+def test_una_parada_fechada_que_ningun_tramo_recrea_abandona_el_recorrido() -> None:
+    """La gemela FECHADA de la anterior: el veredicto que el almacén NO vio.
+
+    Misma secuencia que
+    `test_una_parada_que_ningun_tramo_recrea_abandona_el_recorrido`, con la
+    única diferencia de que aquí cada posición trae su instante real de
+    publicación -que es lo que produce la proyección: todo veredicto de parada
+    se publica como COMENTARIO y llega con su `creado_en`-.
+
+    Es el caso normal, no el raro: el tramo que el recorrido reproduce es, por
+    definición, lo que ocurrió DESPUÉS de la última escritura del almacén, así
+    que el veredicto de la segunda parada (05:04) es SIEMPRE posterior al
+    `updated_at` del motor parado (05:01). Filtrar la lista de veredictos por
+    recrear con `publicado_en <= work_item.updated_at` -la pregunta del ANCLA,
+    no la del recorrido- la dejaba vacía y devolvía el fallo de
+    CLAUDE-R10-001: el recorrido reactivaba con el único `continua` escrito,
+    el de la PRIMERA parada, y atravesaba el segundo veredicto sin recrearlo
+    y sin pagar ningún permiso (CLAUDE-R11-001, ronda 11, PR #546).
+    """
+    inicio = datetime(2026, 9, 5, 5, 0, tzinfo=UTC)
+    store = InMemoryWorkEngineStore()
+    parado = _motor_parado_en_reparar(
+        store,
+        diagnostico="la ronda 1 se quedó sin turnos",
+        parado_en=inicio + timedelta(minutes=1),
+    )
+    entradas: tuple[tuple[str, str], ...] = (
+        ("diagnostico", "la ronda 1 se quedó sin turnos"),
+        ("estado", "sirius:failed-safely"),
+        ("orden", "continua"),
+        ("estado", "sirius:repair-requested"),
+        # La SEGUNDA parada: su veredicto está publicado -a las 05:04, después
+        # de que el almacén escribiera- y su aviso lo deduplicó
+        # `sirius_comment_once`.
+        ("parada", "33945456417-2"),
+    )
+    historial, permisos = _cronologia(*entradas, desde=inicio)
+    paradas = _paradas(*entradas, desde=inicio)
+    assert len(paradas) == 2, "los dos veredictos de parada están publicados"
+    assert all(parada.publicado_en is not None for parada in paradas), (
+        "un veredicto de parada se publica como comentario y trae su instante"
+    )
+    assert paradas[-1].publicado_en is not None
+    assert paradas[-1].publicado_en > parado.updated_at, (
+        "el veredicto del tramo recorrido es posterior a la última escritura del almacén"
+    )
+    assert len(permisos) == 1, "solo hay un `continua` escrito, el de la primera parada"
+    espejo = _espejo(
+        estado=WorkItemState.ACTIVE,
+        fase=WorkItemPhase.REPARAR,
+        etiquetas=("sirius:repair-requested",),
+        historial_estados=historial,
+        permisos_reanudacion=permisos,
+        paradas_publicadas=paradas,
+    )
+
+    resultado = reflejar_desenlace(parado, espejo, _episodio())
+
+    assert resultado.pasos == ()
+    assert resultado.divergencia is not None
 
 
 def test_una_parada_con_su_tramo_en_el_recorrido_se_sigue_recorriendo_entera() -> None:

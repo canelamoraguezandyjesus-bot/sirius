@@ -872,8 +872,9 @@ aplicar la etiqueta, y la etiqueta es lo que dispara el marcador—. Con eso:
   La corrección no proyecta ningún dato nuevo -`espejo.paradas_publicadas` ya
   llega a la función- ni relaja `_consumir_permiso`: al empezar el recorrido,
   `_paradas_que_el_recorrido_debe_recrear` lista los veredictos posteriores a
-  la cota del ancla (`_orden_de_la_parada`) que el almacén PUDO guardar -sin
-  instante, o publicados no después de su última escritura-; el bucle salda
+  la cota del ancla (`_orden_de_la_parada`) -la ronda 10 los filtraba además
+  por su instante de publicación, y ese filtro dejaba la lista siempre vacía;
+  lo corrige la ronda 11, CLAUDE-R11-001, más abajo-; el bucle salda
   uno por cada parada que recrea, en orden, igual que se consumen los
   permisos; y si al terminar queda alguno sin saldar, el recorrido se abandona
   entero (`return None`) y el llamador conserva la divergencia de siempre. Un
@@ -897,6 +898,45 @@ aplicar la etiqueta, y la etiqueta es lo que dispara el marcador—. Con eso:
   fuera de los límites de CLAUDE-R10-001. El defecto que sí es del recorrido
   -atravesar un veredicto de parada sin recrearlo ni pagar su permiso- es el
   que fija la prueba roja de arriba, por la puerta que de verdad lo alcanza.
+
+- **Ronda 11, CLAUDE-R11-001 y CLAUDE-R11-002 (misma raíz): el tramo que el
+  recorrido reproduce lo delimita la cota del ancla, no `updated_at`.** La
+  abstención que la ronda 10 acaba de describir era INERTE.
+  `_paradas_que_el_recorrido_debe_recrear` filtraba su lista con
+  `parada.publicado_en is None or parada.publicado_en <= work_item.updated_at`,
+  que es el predicado de `_el_almacen_pudo_guardarla` y responde a la pregunta
+  del ANCLA -«¿en cuál de las ocurrencias se quedó el almacén?»-, donde sigue
+  siendo correcto. La pregunta de esta función es otra: «¿qué veredictos de
+  parada caen dentro del tramo que el recorrido reproduce?». Y ese tramo es,
+  por definición del recorrido acreditado, lo que ocurrió DESPUÉS de la última
+  escritura del almacén, así que todo veredicto suyo tiene
+  `publicado_en > updated_at` y quedaba excluido: la lista salía siempre vacía
+  y el recorrido volvía a atravesar la parada sin recrearla y sin consumir
+  ningún permiso, que es exactamente CLAUDE-R10-001. La corrección quita ese
+  filtro: la cota del ancla es la única que delimita el tramo, porque el
+  historial de confianza termina en la foto y todo veredicto por detrás del
+  ancla cae dentro de lo que el recorrido reproduce. Con ello desaparece
+  también la segunda forma del fallo que la observación describía -un veredicto
+  excluido conviviendo con otro incluido hacía que `paradas_por_recrear.pop(0)`
+  saldara el veredicto equivocado-, porque ya no hay exclusiones. Lo fija la
+  prueba nueva
+  `test_una_parada_fechada_que_ningun_tramo_recrea_abandona_el_recorrido`
+  (`tests/engine/test_reflect.py`), gemela FECHADA de la roja de la ronda 10:
+  mismas cinco entradas, almacén parado a las 05:01 y segundo veredicto de
+  parada publicado a las 05:04, `pasos == ()` y divergencia.
+
+  Por qué no se detectó en la ronda 10 -CLAUDE-R11-002-: el doble `_paradas`
+  construye `ParadaPublicada` con `publicado_en=None` salvo que se le pase
+  `desde`, y ninguna prueba de recorrido se lo pasaba; con `None` el filtro
+  dejaba pasar todo. La proyección real
+  (`mirror_projection._interpretar_paradas_publicadas`) NO produce esa forma:
+  todo veredicto de parada se publica como comentario -el cuerpo del encargo no
+  lleva ninguno- y llega siempre con su `creado_en`. La referencia sigue siendo
+  producción: no se toca la proyección ni `ParadaPublicada`, sino el doble y
+  su prueba de acoplamiento, que ahora compara también los INSTANTES
+  (`test_el_doble_de_cronologia_proyecta_lo_mismo_que_la_proyeccion_real`,
+  tercera repetición de la familia CLAUDE-R5-002 / CLAUDE-R7-003), y la prueba
+  nueva del P1 corre con instantes reales.
 
 ## Alternativas descartadas y por qué
 
