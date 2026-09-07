@@ -1703,6 +1703,24 @@ ADR o su incidencia cuando se adopte.
   ~13:41 para que su cierre encamine la incidencia a revisión. Sin el
   permiso del PAT, cada `FIXED` que llegue tarde va a costar un
   relanzamiento a mano: el gesto es del propietario.
+- **Ronda 6 (13:48-14:00 UTC)**: el run relanzado a mano cerró verde a
+  las 13:48:18 y la ruta puso la revisión en marcha a las 13:48:36 (run
+  34129473175). Revisor Claude 13:48:52 → 13:58:46; el recolector de Codex
+  cerró otra vez en 62 s (por resultado, segunda vez seguida);
+  `CHANGES_REQUESTED` a las 13:59:57 con CUATRO hallazgos, todos de
+  Claude: CLAUDE-R6-001 (P1) y R6-002 (P2) sobre el código NUEVO de la
+  ronda 6 (`_orden_de_la_parada`, `_atribuir_diagnosticos`), R6-003 (P3)
+  y R5-003 (P3) re-levantado a petición del corrector. De seis a cuatro:
+  el freno de convergencia deja pasar (mejora estricta), y el corrector de
+  la ronda 7 arrancó a las 13:59:56 (run 34130494976). Familia: cada
+  corrección de la atribución de diagnósticos trae código nuevo que la
+  revisión siguiente vuelve a abrir (rondas 4, 5 y 6); el freno la mide y
+  por ahora mejora. Sin Codex en el veredicto esta vez.
+- **Modo de permisos**: el propietario preguntó a las 14:0x por qué «le
+  pido permiso todo el rato»: eran los avisos de permiso de la sesión por
+  cada `sleep`/`git` de terminal (uno por temporizador). Respondido y
+  corregido: esperar con recordatorios del servidor y consultas a GitHub;
+  la sesión ha pasado a modo automático.
 
 ---
 
