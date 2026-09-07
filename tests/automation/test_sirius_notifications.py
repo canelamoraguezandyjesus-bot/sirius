@@ -210,7 +210,7 @@ def test_el_marcador_de_notificacion_identifica_el_evento_y_no_solo_el_head() ->
     """
     guion = _paso_de_notificacion()
     linea = next(
-        (l.strip() for l in guion.splitlines() if l.strip().startswith("marker=")),
+        (linea.strip() for linea in guion.splitlines() if linea.strip().startswith("marker=")),
         "",
     )
     assert linea, "No se encuentra la línea que compone el marcador de notificación."
