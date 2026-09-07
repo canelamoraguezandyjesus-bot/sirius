@@ -17,7 +17,7 @@ La ronda de revisión de #545 (PR #546, head `bc33b82`) se reanudó a las
 contestó a las 04:24:03 con una revisión formal `COMMENTED` (5128044887)
 sobre `bc33b82` con UN hallazgo P2, publicado ÍNTEGRAMENTE en el cuerpo de la
 revisión y sin ningún comentario inline. El hallazgo señala
-`scripts/automation/sirius_apply_verdict.sh#L356`, un fichero que NO está en
+`scripts/automation/sirius_apply_verdict.sh:356`, un fichero que NO está en
 el diff de la PR (llegó a la rama al actualizarla con `main`, #560), y GitHub
 no permite anclar un comentario inline fuera del diff: el conector recurre
 entonces al cuerpo, con la forma «enlace permanente al blob del head, insignia
