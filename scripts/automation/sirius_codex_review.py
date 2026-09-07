@@ -134,6 +134,15 @@ esperado, evidencia o prueba que lo demuestra y límites de la corrección.
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 REVIEWED_COMMIT_RE = re.compile(r"Reviewed commit[^0-9a-fA-F]{0,20}([0-9a-fA-F]{7,40})")
 SEVERITY_BADGE_RE = re.compile(r"!\[(P[0-9])[^\]]*Badge[^\]]*\]")
+# Enlace permanente a un blob del repositorio —commit, ruta y línea—, tal como
+# el conector lo escribe en la línea anterior a cada hallazgo que publica en el
+# CUERPO de la revisión (ADR-156).
+BLOB_PERMALINK_RE = re.compile(
+    r"https://github\.com/[^/\s]+/[^/\s]+/blob/([0-9a-fA-F]{7,40})/([^\s#()<>]+)#L([0-9]+)"
+)
+# Bloque de cortesía «About Codex in GitHub» con el que el conector cierra cada
+# revisión: no es un hallazgo y no debe llegar al corrector como tal.
+DETAILS_BLOCK_RE = re.compile(r"<details>.*?</details>", re.DOTALL | re.IGNORECASE)
 
 # Fórmula con la que el conector declara que no encontró nada, observada en las
 # incidencias #148 y #177: «Codex Review: Didn't find any major issues».
@@ -408,21 +417,88 @@ def _observations_from_comments(comments: list[dict[str, Any]]) -> list[dict[str
         )
         permalink = str(comment.get("html_url") or "").strip()
         observations.append(
-            {
-                "id": f"CODEX-{index:03d}",
-                "severidad": _severity_from_body(body),
-                "archivo": location,
-                "problema": body or "(comentario de Codex sin cuerpo)",
-                "criterio_esperado": (
-                    "Resolver el defecto exactamente como lo describe el hallazgo de Codex "
-                    "citado en 'problema' y demostrar la corrección con una prueba."
-                ),
-                "prueba": permalink or f"Comentario inline de Codex sobre {location}.",
-                "limites_correccion": (
-                    "Corregir únicamente el componente señalado, sin ampliar el alcance "
-                    "aprobado de la incidencia."
-                ),
-            }
+            _observation(
+                index,
+                severity=_severity_from_body(body),
+                location=location,
+                problem=body or "(comentario de Codex sin cuerpo)",
+                proof=permalink or f"Comentario inline de Codex sobre {location}.",
+            )
+        )
+    return observations
+
+
+def _observation(
+    index: int, *, severity: str, location: str, problem: str, proof: str
+) -> dict[str, str]:
+    """Un hallazgo en el contrato del corrector, venga de donde venga."""
+    return {
+        "id": f"CODEX-{index:03d}",
+        "severidad": severity,
+        "archivo": location,
+        "problema": problem,
+        "criterio_esperado": (
+            "Resolver el defecto exactamente como lo describe el hallazgo de Codex "
+            "citado en 'problema' y demostrar la corrección con una prueba."
+        ),
+        "prueba": proof,
+        "limites_correccion": (
+            "Corregir únicamente el componente señalado, sin ampliar el alcance "
+            "aprobado de la incidencia."
+        ),
+    }
+
+
+def _observations_from_body(
+    body: str, head: str, review_url: str, first_index: int
+) -> list[dict[str, str]]:
+    """Hallazgos publicados en el CUERPO de una revisión formal (ADR-156).
+
+    Cuando el fichero señalado no está en el diff de la PR, GitHub no admite un
+    comentario inline y el conector escribe el hallazgo en el cuerpo: enlace
+    permanente al blob del head, insignia de severidad, título y descripción
+    (revisión 5128044887 de la PR #546, 07-09-2026; el recolector agotó el
+    plazo con el hallazgo a la vista porque solo leía los comentarios inline).
+
+    Cada hallazgo se reconoce por su insignia de severidad y abarca desde el
+    enlace permanente que lo precede —si lo hay— hasta el hallazgo siguiente.
+    Del enlace salen la ruta y la línea; la línea solo si el enlace es del head
+    esperado, igual que el lector de comentarios inline omite la línea cuando
+    no puede demostrar de qué lado del diff es. El texto del bloque se conserva
+    íntegro como ``problema`` (es dato, no instrucción). El bloque ``<details>``
+    de cortesía se excluye antes de leer: no es un hallazgo.
+    """
+    text = DETAILS_BLOCK_RE.sub("", body or "")
+    badges = list(SEVERITY_BADGE_RE.finditer(text))
+    if not badges:
+        return []
+    starts: list[int] = []
+    permalinks: list[re.Match[str] | None] = []
+    for badge in badges:
+        line_start = text.rfind("\n", 0, badge.start()) + 1
+        previous_start = text.rfind("\n", 0, max(line_start - 1, 0)) + 1 if line_start else 0
+        previous_line = text[previous_start : max(line_start - 1, 0)] if line_start else ""
+        permalink = BLOB_PERMALINK_RE.search(previous_line)
+        starts.append(previous_start if permalink else line_start)
+        permalinks.append(permalink)
+    ends = [*starts[1:], len(text)]
+    observations: list[dict[str, str]] = []
+    for offset, (start, end, permalink) in enumerate(zip(starts, ends, permalinks, strict=True)):
+        block = text[start:end].strip()
+        if permalink is None:
+            location = "desconocido"
+        elif _sha_matches(head, permalink.group(1)):
+            location = f"{permalink.group(2)}:{permalink.group(3)}"
+        else:
+            location = permalink.group(2)
+        observations.append(
+            _observation(
+                first_index + offset,
+                severity=_severity_from_body(block),
+                location=location,
+                problem=block,
+                proof=review_url or f"Cuerpo de la revisión de Codex sobre {location}.",
+            )
         )
     return observations
 
@@ -739,8 +815,11 @@ def _check_reviews(
             )
 
     # Hallazgos de TODAS las revisiones con comentarios, numerados de forma
-    # global y determinista (el orden lo fija `_observations_from_comments`).
+    # global y determinista (el orden lo fija `_observations_from_comments`);
+    # detrás, los publicados en el cuerpo de cada revisión, en el orden de las
+    # revisiones (ADR-156).
     inline_comments: list[dict[str, Any]] = []
+    bodies: list[tuple[str, str]] = []
     unclear_review_id = 0
     approved_review_id = 0
     for _, review in candidates:
@@ -751,6 +830,9 @@ def _check_reviews(
             continue
         if state in {"COMMENTED", "CHANGES_REQUESTED"}:
             comments = _gh_paginated(f"repos/{repo}/pulls/{pr}/reviews/{review_id}/comments")
+            bodies.append(
+                (str(review.get("body") or ""), str(review.get("html_url") or "").strip())
+            )
             # "Sin comentarios inline" NO significa "todavía no materializada".
             # El conector publica también revisiones cuyo contenido vive
             # entero en el `body` — el resumen «Codex Review» —, y esas están
@@ -790,6 +872,8 @@ def _check_reviews(
         return None, True
 
     observations = _observations_from_comments(inline_comments)
+    for body, review_url in bodies:
+        observations.extend(_observations_from_body(body, head, review_url, len(observations) + 1))
     reported_review_id = int(candidates[-1][1].get("id") or 0)
 
     if observations:

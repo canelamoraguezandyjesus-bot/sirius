@@ -1889,3 +1889,148 @@ def test_las_citas_al_contrato_operativo_referencian_secciones_que_existen() -> 
     assert cited_sections, "no se encontró ninguna cita al contrato en el script"
     missing = cited_sections - valid_sections
     assert not missing, f"citas a secciones inexistentes del contrato: {sorted(missing)}"
+
+
+# --------------------------------------------------------------------------- #
+# Recolector: hallazgos publicados en el cuerpo de la revisión (ADR-156)
+# --------------------------------------------------------------------------- #
+
+# Cuerpo real de la revisión 5128044887 de Codex sobre la PR #546 (07-09-2026,
+# 04:24:03 UTC): un hallazgo P2 publicado entero en el cuerpo, sin comentario
+# inline, porque el fichero señalado no está en el diff de la PR y GitHub no
+# admite un comentario inline fuera del diff. Solo se sustituyen el
+# repositorio y el SHA del enlace permanente por los de estas pruebas.
+_CUERPO_CON_HALLAZGO = (
+    "\n### 💡 Codex Review\n\n"
+    f"https://github.com/{REPO}/blob/{HEAD}/scripts/automation/sirius_apply_verdict.sh#L356\n"
+    "**<sub><sub>![P2 Badge](https://img.shields.io/badge/P2-yellow?style=flat)</sub></sub>"
+    "  Publica también el aviso ante una respuesta ilegible**\n\n"
+    "Problema observado: la nueva llamada a `avisar_quality_sin_encaminar` solo cubre que "
+    "`gh api` termine con error; si devuelve código 0 pero su salida no puede "
+    "interpretarse —por ejemplo, un doble de `gh` que imprima `not-json` y termine "
+    "correctamente—, el `jq` de `activos` produce vacío y la rama "
+    "`consulta-runs-ilegible` sale con código 1 sin publicar ningún comentario.\n\n"
+    f"AGENTS.md reference: [AGENTS.md:L83-L86](https://github.com/{REPO}/blob/{HEAD}/AGENTS.md#L83-L86)\n"
+    "    \n\n\n<details> <summary>\u2139\ufe0f About Codex in GitHub</summary>\n<br/>\n\n"
+    "[Your team has set up Codex to review pull requests in this repo]"
+    "(https://chatgpt.com/codex/cloud/settings/general). Reviews are triggered when you\n"
+    "- Open a pull request for review\n- Mark a draft as ready\n"
+    '- Comment "@codex review".\n\n'
+    "If Codex has suggestions, it will comment; otherwise it will react with 👍.\n\n\n\n\n"
+    "Codex can also answer questions or update the PR. Try commenting "
+    '"@codex address that feedback".\n            \n</details>'
+)
+_URL_REVISION = f"https://github.com/{REPO}/pull/{PR}#pullrequestreview-5128044887"
+
+
+def _revision_con_cuerpo(
+    review_id: int = 5128044887, body: str = _CUERPO_CON_HALLAZGO
+) -> dict[str, Any]:
+    review = _review(review_id=review_id, body=body)
+    review["html_url"] = _URL_REVISION
+    return review
+
+
+def test_un_hallazgo_publicado_solo_en_el_cuerpo_de_la_revision_pide_cambios(
+    tmp_path: Path,
+) -> None:
+    # ADR-156: el recolector solo leía los comentarios inline; una revisión
+    # formal con el hallazgo en el cuerpo y sin inline se daba por «completa»
+    # pero sin observaciones ni aprobación, y la ronda agotaba el plazo con el
+    # hallazgo a la vista (run 34082742434 de #545, 07-09-2026).
+    env = _setup(tmp_path)
+    _write_state(tmp_path)
+    _seed(env, "reviews.json", [_revision_con_cuerpo()])
+    _seed(env, "review_comments_5128044887.json", [])
+    r = _run_collect(env, tmp_path)
+    assert r.returncode == 0, r.stdout + r.stderr
+    result = _result(tmp_path)
+    assert result["status"] == "CHANGES_REQUESTED", result
+    assert result["reviewed_head_sha"] == HEAD
+    assert result["review_id"] == 5128044887
+    [obs] = result["observations"]
+    assert obs["id"] == "CODEX-001"
+    assert obs["severidad"] == "P2"
+    assert obs["archivo"] == "scripts/automation/sirius_apply_verdict.sh:356"
+    assert "Publica también el aviso ante una respuesta ilegible" in obs["problema"]
+    assert "consulta-runs-ilegible" in obs["problema"]
+    assert "About Codex in GitHub" not in obs["problema"], "el bloque de cortesía no es un hallazgo"
+    assert obs["prueba"] == _URL_REVISION
+    assert obs["criterio_esperado"] and obs["limites_correccion"]
+
+
+def test_los_hallazgos_del_cuerpo_se_unen_a_los_inline_a_continuacion(tmp_path: Path) -> None:
+    env = _setup(tmp_path)
+    _write_state(tmp_path)
+    _seed(env, "reviews.json", [_revision_con_cuerpo(review_id=700)])
+    _seed(env, "review_comments_700.json", [_review_comment(801, "src/a.py", 10)])
+    r = _run_collect(env, tmp_path)
+    assert r.returncode == 0, r.stdout + r.stderr
+    observations = _result(tmp_path)["observations"]
+    assert [o["id"] for o in observations] == ["CODEX-001", "CODEX-002"]
+    assert [o["archivo"] for o in observations] == [
+        "src/a.py:10",
+        "scripts/automation/sirius_apply_verdict.sh:356",
+    ]
+    assert "discussion_r801" in observations[0]["prueba"]
+    assert observations[1]["prueba"] == _URL_REVISION
+
+
+def test_un_enlace_permanente_de_otro_commit_no_presta_su_linea(tmp_path: Path) -> None:
+    # La línea solo vale si el enlace es del head esperado; si apunta a otro
+    # commit, la ruta se conserva y la línea se omite, como hace el lector de
+    # comentarios inline cuando no puede demostrar el lado del diff.
+    env = _setup(tmp_path)
+    _write_state(tmp_path)
+    body = _CUERPO_CON_HALLAZGO.replace(f"/blob/{HEAD}/scripts", f"/blob/{OTHER_HEAD}/scripts")
+    _seed(env, "reviews.json", [_revision_con_cuerpo(body=body)])
+    _seed(env, "review_comments_5128044887.json", [])
+    r = _run_collect(env, tmp_path)
+    assert r.returncode == 0, r.stdout + r.stderr
+    [obs] = _result(tmp_path)["observations"]
+    assert obs["archivo"] == "scripts/automation/sirius_apply_verdict.sh"
+    assert obs["severidad"] == "P2"
+
+
+def test_dos_hallazgos_en_un_cuerpo_son_dos_observaciones_en_su_orden(tmp_path: Path) -> None:
+    env = _setup(tmp_path)
+    _write_state(tmp_path)
+    body = (
+        "### Codex Review\n\n"
+        f"https://github.com/{REPO}/blob/{HEAD}/src/a.py#L4\n"
+        "**<sub><sub>![P1 Badge](https://img.shields.io/badge/P1-orange?style=flat)</sub></sub>"
+        "  Primero**\n\nDescripción del primero.\n\n"
+        f"https://github.com/{REPO}/blob/{HEAD}/src/b.py#L9-L12\n"
+        "**<sub><sub>![P3 Badge](https://img.shields.io/badge/P3-green?style=flat)</sub></sub>"
+        "  Segundo**\n\nDescripción del segundo.\n"
+    )
+    _seed(env, "reviews.json", [_revision_con_cuerpo(review_id=700, body=body)])
+    _seed(env, "review_comments_700.json", [])
+    r = _run_collect(env, tmp_path)
+    assert r.returncode == 0, r.stdout + r.stderr
+    observations = _result(tmp_path)["observations"]
+    assert [(o["severidad"], o["archivo"]) for o in observations] == [
+        ("P1", "src/a.py:4"),
+        ("P3", "src/b.py:9"),
+    ]
+    assert "Primero" in observations[0]["problema"]
+    assert "Segundo" not in observations[0]["problema"]
+    assert "Descripción del segundo" in observations[1]["problema"]
+    assert "Primero" not in observations[1]["problema"]
+
+
+def test_un_cuerpo_sin_insignia_sigue_sin_ser_un_hallazgo(tmp_path: Path) -> None:
+    # El resumen «Here are some automated review suggestions» y el bloque de
+    # cortesía no llevan insignia: no son hallazgos y no piden cambios.
+    env = _setup(tmp_path)
+    _write_state(tmp_path)
+    body = _CUERPO_CON_HALLAZGO[_CUERPO_CON_HALLAZGO.index("<details>") :]
+    body = "\n### 💡 Codex Review\n\nHere are some automated review suggestions.\n\n" + body
+    _seed(env, "reviews.json", [_revision_con_cuerpo(body=body)])
+    _seed(env, "review_comments_5128044887.json", [])
+    r = _run_collect(env, tmp_path)
+    assert r.returncode == 0, r.stdout + r.stderr
+    result = _result(tmp_path)
+    assert result["status"] == "FAILED_SAFELY"
+    assert result["reason"] == "timeout"
+    assert result["observations"] == []
