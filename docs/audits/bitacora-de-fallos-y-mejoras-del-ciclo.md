@@ -2047,4 +2047,11 @@ ADR o su incidencia cuando se adopte.
     convierte la decisión en urgente y le añade un dato: el conector
     responde el tope en **nueve segundos**, o sea que degradar a
     solo-Claude se puede decidir al principio de la ronda y sin gastar los
-    nueve minutos del revisor.
+    nueve minutos del revisor. **Y el interruptor ya existe y no es código**:
+    `review-sirius-work.yml:127-131` pone `dual="true"` únicamente cuando la
+    variable de repositorio `SIRIUS_CODEX_REVIEW_ENABLED` vale exactamente
+    `true`; con cualquier otro valor la ronda corre solo con Claude. O sea
+    que la degradación de emergencia es un gesto del propietario en los
+    ajustes del repositorio, reversible y sin tocar una línea. Lo que la
+    decisión tiene que resolver no es cómo, sino **cuándo** se permite: a
+    mano y siempre, o automáticamente ante un `codex-fallo-declarado`.
