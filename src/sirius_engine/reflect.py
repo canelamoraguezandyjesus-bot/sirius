@@ -500,9 +500,10 @@ def _ancla_del_recorrido(
        recorrido se abandona en vez de anclar en una parada que el diagnóstico
        guardado contradice-. Una ocurrencia SIN diagnóstico no contradice
        nada y se conserva: el respaldo sigue existiendo cuando no hay
-       diagnóstico que discrimine (CODEX-002, ronda 3, PR #546; el notificador
-       deduplica por estado y head, así que una segunda parada sobre el mismo
-       head puede no dejar marcador propio).
+       diagnóstico que discrimine (CODEX-002, ronda 3, PR #546; en los
+       historiales anteriores a ADR-157 el notificador deduplicaba por estado
+       y head, así que una segunda parada sobre el mismo head podía no dejar
+       marcador propio).
     3. **Identidad del suceso.** Si exactamente una de las ocurrencias que
        quedan lleva ESE diagnóstico, esa es: no es una preferencia, es el
        mismo texto escrito dos veces.
@@ -511,8 +512,9 @@ def _ancla_del_recorrido(
        detrás**: si el motor está PARADO y el historial de confianza trae un
        veredicto de parada publicado DESPUÉS de la cota de esa ocurrencia y no
        posterior a ``work_item.updated_at`` -es decir, una parada que el
-       almacén pudo guardar y que ningún aviso acredita, porque
-       ``sirius_comment_once`` deduplica el marcador por ``(etiqueta, head)``-,
+       almacén pudo guardar y que ningún aviso acredita, porque en los
+       historiales anteriores a ADR-157 ``sirius_comment_once`` deduplicaba el
+       marcador por ``(etiqueta, head)``-,
        la evidencia no dice en cuál de las dos se quedó el motor y el recorrido
        se abandona (``None``). Anclar en la anterior fijaría una cota que deja
        pasar el permiso escrito para la parada ANTERIOR y acreditaría una
@@ -559,12 +561,17 @@ def _hay_una_parada_posterior_sin_aviso(
     """Si detrás de esta ocurrencia hay otra parada que el almacén pudo guardar.
 
     La lista de :class:`ParadaPublicada` son los VEREDICTOS de parada, no sus
-    avisos: el veredicto lo publica siempre quien para, y el aviso lo deduplica
-    ``sirius_comment_once`` por ``(etiqueta, head)``. Así que una parada
-    posterior a la cota de esta ocurrencia, publicada a tiempo de que el
-    almacén la guardara, es exactamente la parada que el historial NO acredita
-    con aviso propio: mientras exista, la posición no dice en cuál de las dos
-    se quedó el motor.
+    avisos: el veredicto lo publica siempre quien para, y el aviso lo
+    deduplicaba ``sirius_comment_once`` por ``(etiqueta, head)`` en todo
+    historial publicado ANTES de ADR-157 (07-09-2026), que desde entonces mete
+    el run del evento en el marcador y hace que cada parada deje el suyo. Así
+    que una parada posterior a la cota de esta ocurrencia, publicada a tiempo
+    de que el almacén la guardara, es exactamente la parada que aquellos
+    historiales NO acreditan con aviso propio: mientras exista, la posición no
+    dice en cuál de las dos se quedó el motor. Esto es un RESPALDO para las
+    incidencias ya vividas -las que ADR-157 declara que «conservan sus
+    huecos»-; sobre un historial publicado después, sencillamente no encuentra
+    ninguna parada sin aviso y no se abstiene.
 
     La referencia es la COTA (:func:`_orden_de_la_parada`), no la posición del
     aviso: el veredicto que causó esta misma parada nunca cuenta como parada
@@ -625,9 +632,11 @@ def _orden_de_la_parada(acreditado: EstadoAcreditado) -> int:
     Eso NO lo hacía conservador por sí solo, y la ronda 6 lo escribió mal aquí:
     con dos ``blocked-decision`` sobre el mismo head, la cota del aviso de la
     PRIMERA dejaba pasar su propio ``continua`` para resolver la SEGUNDA, cuyo
-    aviso deduplicó ``sirius_comment_once``. Quien cierra ese flanco es
-    :func:`_hay_una_parada_posterior_sin_aviso`, abandonando el recorrido
-    (CLAUDE-R7-001 y CLAUDE-R7-002, ronda 7, PR #546; ADR-147).
+    aviso deduplicó ``sirius_comment_once`` -así ocurrió en los historiales
+    publicados antes de ADR-157 (07-09-2026), que desde entonces da a cada
+    parada su propio aviso-. Quien cierra ese flanco, para aquellos
+    historiales, es :func:`_hay_una_parada_posterior_sin_aviso`, abandonando el
+    recorrido (CLAUDE-R7-001 y CLAUDE-R7-002, ronda 7, PR #546; ADR-147).
     """
     if acreditado.orden_del_veredicto is None:
         return acreditado.orden

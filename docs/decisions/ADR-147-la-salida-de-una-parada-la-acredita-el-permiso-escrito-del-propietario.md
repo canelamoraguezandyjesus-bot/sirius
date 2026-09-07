@@ -743,6 +743,52 @@ aplicar la etiqueta, y la etiqueta es lo que dispara el marcador—. Con eso:
   se deduplique. Mientras no se haga, la orden `continua` es la única forma de
   permiso disponible para la segunda reanudación sobre un mismo head.
 
+- **ADR-157 cambia el emisor: desde el 07-09-2026 cada parada deja su propio
+  aviso (CLAUDE-R8-001 y CLAUDE-R8-002, ronda 8).** Toda la maquinaria
+  heurística de las rondas 6 y 7 —la abstención de `_atribuir_diagnosticos`,
+  `ParadaPublicada` y `_hay_una_parada_posterior_sin_aviso`— se justificaba en
+  una premisa sobre el emisor: `notify-sirius-state.yml` publicaba el marcador
+  `<!-- sirius-notification:<etiqueta>:<head> -->` y `sirius_comment_once` lo
+  deduplicaba por marcador completo, así que una segunda parada sobre el mismo
+  head no dejaba rastro propio. ADR-157 (PR #562, fusionado en `main` el
+  07-09-2026 a las 17:07:32Z, once minutos después del head `8f884b8b` de esta
+  rama) arregla eso en el origen: el marcador es ahora
+  `<!-- sirius-notification:<etiqueta>:<head>:<run> -->` y cada evento de
+  etiqueta deja el suyo.
+
+  Dos consecuencias, ambas de esta ronda:
+
+  1. **El patrón de la proyección leía mal el marcador nuevo.**
+     `_NOTIFICATION_MARKER_RE` capturaba el head con `[^\s>]*`, que incluye los
+     dos puntos, así que sobre el marcador vigente `EstadoAcreditado.head`
+     guardaba `1c934781:33951766681` en vez de `1c934781`. Hoy `src/` no lee
+     ese campo, así que no había regresión de comportamiento, pero es un campo
+     público cuyo docstring promete el head y solo el head. El patrón lee ahora
+     el head hasta el primer `:` y DESCARTA el tramo del run si lo hay, de modo
+     que las dos formas conviven: los historiales publicados antes de ADR-157
+     —las incidencias ya vividas, que ADR-157 declara que «conservan sus
+     huecos»— siguen leyéndose igual. Lo fijan dos pruebas nuevas de
+     `tests/engine/test_mirror_projection.py`,
+     `test_historial_estados_lee_el_marcador_con_run_sin_pegarlo_al_head` y
+     `test_historial_estados_sigue_leyendo_el_marcador_sin_run`.
+  2. **La heurística de las rondas 6 y 7 permanece, pero como RESPALDO de los
+     historiales antiguos, y así queda declarado aquí** —que es exactamente lo
+     que ADR-157 pide en sus «Consecuencias»—. No se retira ni una línea: las
+     incidencias ya vividas conservan sus huecos y siguen necesitándola. Lo que
+     cambia es el texto: las siete afirmaciones que la describían EN PRESENTE
+     («el guion deduplica por marcador completo», «el marcador que sobrevive a
+     la deduplicación es el de la primera parada de su serie», los puntos 2 y 4
+     de `_ancla_del_recorrido`, `ParadaPublicada`,
+     `_hay_una_parada_posterior_sin_aviso`, `_interpretar_paradas_publicadas` y
+     el cierre de `_orden_de_la_parada`) quedan acotadas al árbol en que fueron
+     ciertas y citando ADR-157, igual que la ronda 4 hizo con `check.ps1` y
+     ADR-153. Sobre un historial publicado después de ADR-157,
+     `_hay_una_parada_posterior_sin_aviso` sencillamente no encuentra ninguna
+     parada sin aviso y no se abstiene.
+
+  El criterio de acreditación de ADR-147 no cambia: un permiso escrito por
+  salida, consumido en orden, y la foto nunca acredita.
+
 ## Alternativas descartadas y por qué
 
 - **Opción 1** (criterio literal, caso vivo sin resolver): deja el encargo sin

@@ -167,9 +167,13 @@ class ParadaPublicada:
     Es la evidencia de que el ciclo se detuvo, INDEPENDIENTE del aviso que la
     anunció: ``sirius_apply_verdict.sh`` y las puertas deterministas publican
     siempre el comentario del veredicto, mientras que el marcador
-    ``sirius-notification:<etiqueta>:<head>`` lo deduplica
-    ``sirius_comment_once`` -una segunda parada sobre el mismo head no deja
-    marcador propio-. Sin esta lista, una parada sin aviso no existe para
+    ``sirius-notification`` lo deduplicaba ``sirius_comment_once`` por
+    ``(etiqueta, head)`` -una segunda parada sobre el mismo head no dejaba
+    marcador propio- en todo historial publicado ANTES de ADR-157 (fusionado
+    en `main` el 07-09-2026), que desde entonces mete el run en el marcador y
+    hace que cada parada deje el suyo. Esta lista sigue haciendo falta para
+    esos historiales antiguos, que ADR-157 declara que «conservan sus huecos».
+    Sin ella, una parada sin aviso no existe para
     :mod:`sirius_engine.reflect` y el recorrido ancla en el aviso de una
     parada ANTERIOR, cuya cota deja pasar permisos escritos antes de la
     parada real (CLAUDE-R7-001 y CLAUDE-R7-002, ronda 7, PR #546).

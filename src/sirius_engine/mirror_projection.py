@@ -648,12 +648,19 @@ def _atribuir_diagnosticos(
        ``sirius_apply_verdict.sh`` publica el diagnóstico y solo después aplica
        la etiqueta que dispara el aviso, así que el diagnóstico de una parada
        precede siempre a su marcador en el historial de confianza.
-    2. **El marcador que sobrevive a la deduplicación es el de la PRIMERA
-       parada de su serie.** ``sirius_comment_once`` lee el historial y, si el
-       marcador ``sirius-notification:<etiqueta>:<head>`` ya está presente,
-       devuelve sin publicar: conserva el primero y suprime los posteriores.
-       Por eso, cuando hay MÁS diagnósticos que marcadores, los que se quedan
-       sin contrapartida son los ÚLTIMOS, no los primeros.
+    2. **En los historiales anteriores a ADR-157, el marcador que sobrevivía
+       a la deduplicación era el de la PRIMERA parada de su serie.**
+       ``sirius_comment_once`` lee el historial y, si el marcador ya está
+       presente, devuelve sin publicar; hasta ADR-157 (fusionado en `main` el
+       07-09-2026) ese marcador era ``sirius-notification:<etiqueta>:<head>``,
+       así que conservaba el primero y suprimía los posteriores. Por eso,
+       cuando hay MÁS diagnósticos que marcadores, los que se quedan sin
+       contrapartida son los ÚLTIMOS, no los primeros. Desde ADR-157 el
+       marcador lleva además el run del evento y cada parada deja el suyo:
+       este hecho, y la tercera condición que sale de él, quedan como respaldo
+       para los historiales ya publicados -las incidencias que ADR-157 declara
+       que «conservan sus huecos»-, sobre los que sigue habiendo más
+       diagnósticos que marcadores.
 
     De ahí el emparejamiento: recorriendo las paradas notificadas de la más
     antigua a la más reciente, cada una toma el diagnóstico **no consumido más
@@ -728,11 +735,14 @@ def _interpretar_paradas_publicadas(
     Misma fuente y misma escala que :func:`_interpretar_historial_estados`,
     pero mirando el comentario del VEREDICTO (``_STOP_MARKER_RE``) en vez del
     aviso: el veredicto lo publica siempre el rol o la puerta que para, y
-    ``sirius_comment_once`` no lo deduplica -deduplica el marcador
-    ``sirius-notification``, que lleva solo etiqueta y head-. Por eso una
-    SEGUNDA parada sobre el mismo head deja veredicto y no deja aviso, y es
-    justo la que :mod:`sirius_engine.reflect` necesita ver para abstenerse en
-    vez de anclar en el aviso de la primera (CLAUDE-R7-001, ronda 7, PR #546).
+    ``sirius_comment_once`` no lo deduplica -deduplicaba el marcador
+    ``sirius-notification``, que hasta ADR-157 (07-09-2026) llevaba solo
+    etiqueta y head-. Por eso, en los historiales publicados ANTES de esa
+    fusión, una SEGUNDA parada sobre el mismo head deja veredicto y no deja
+    aviso, y es justo la que :mod:`sirius_engine.reflect` necesita ver para
+    abstenerse en vez de anclar en el aviso de la primera (CLAUDE-R7-001,
+    ronda 7, PR #546). Desde ADR-157 cada parada deja su propio aviso, así que
+    esta lista es el respaldo de aquellos historiales, no de los nuevos.
 
     Incluye las paradas SIN diagnóstico -``sirius:blocked-decision`` no publica
     ninguno-, que es lo que la deja fuera del alcance de
