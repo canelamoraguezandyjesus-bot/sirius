@@ -692,6 +692,38 @@ aplicar la etiqueta, y la etiqueta es lo que dispara el marcador—. Con eso:
   Lo único que cambia en el árbol después de esta captura es la transcripción
   de estas mismas cifras.
 
+- **Ronda 15 (CODEX-001, la misma revisión): la observación llegó otra vez y ya
+  estaba resuelta; lo que faltaba era dejar escrito el límite que el
+  propietario aceptó.** La revisión que abre esta ronda es la MISMA que abrió
+  la 14 -`pullrequestreview-5135487058`, publicada el 07-09-2026 a las
+  22:11:28Z sobre el árbol de `a538cdd`-, es decir, sobre el head ANTERIOR a
+  la corrección de la ronda 14 (`2678e87`, 22:29:28Z). Comprobado con
+  `gh api repos/.../pulls/546/reviews --jq '.[] | select(.id==5135487058) |
+  {submitted_at, commit_id}'`, que devuelve
+  `{"commit_id":"a538cdde...","submitted_at":"2026-09-07T22:11:28Z"}`. Por eso
+  esta ronda no reabre el hallazgo: sobre el head vigente, los cinco pasajes
+  que lo motivaban ya están acotados.
+
+  Lo que sí quedaba pendiente de registrar es la decisión del propietario del
+  07-09-2026 (22:36 UTC), posterior a `2678e87` y por tanto ausente de la
+  entrada de la ronda 14, que ratifica el reparto y añade una frase que el
+  propietario pidió expresamente dejar por escrito «para que la próxima
+  revisión no lo levante como nuevo»: **hasta que entre la ficha del operador
+  que cambia el grupo de concurrencia del notificador -una ranura por evento,
+  conservando la idempotencia por run que protege los reintentos-, el canal
+  puede perder un evento intermedio de la misma etiqueta**, y el reflector lo
+  trata como lo que es, un hueco del historial, con los respaldos que ya
+  tiene. Esa limitación **no la introduce #546: la hereda de `main`** (autoría
+  `07a51b1` y `f2085db`), y el §7 del contrato promete de más mientras esa
+  ficha no entre. La decisión del propietario del 07-09-2026 (22:22 UTC) es la
+  que asigna esa corrección a la ficha propia del operador, con su guardián y
+  con el §7 acotado a lo que la cola garantiza de verdad.
+
+  Esta ronda, por tanto, **no cambia ni una línea de código ni ninguna
+  prueba**: no hay mutación que enseñar. Lo que verifica su texto son la
+  consulta a la API de arriba, `git diff --quiet main HEAD -- .github/` -que
+  sigue saliendo en **0**- y la invocación de `scripts/check.ps1` que sigue.
+
 ## Consecuencias
 
 - **Ronda 6, CLAUDE-R6-001 y CLAUDE-R6-002 (misma raíz): la cota de la parada
