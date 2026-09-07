@@ -1565,6 +1565,71 @@ ADR o su incidencia cuando se adopte.
   ADR-148 (memoria) sigue esperando, por orden del propietario, a que lo
   demás termine.
 
+### 45. Codex volvió y el recolector no le leyó el hallazgo: dos rondas de veinte minutos por un cuerpo sin inline (ADR-156), y el P2 que Codex me puso a mí (07-09-2026, 04:19-05:10 UTC)
+
+- **Reanudación limpia (04:19-04:20)**: el propietario avisó de que la
+  cuota de Codex había vuelto; `continua` a secas en #545 a las 04:20:25
+  (sin «Update branch»: la fase repuesta era la revisión, regla de la
+  entrada 44). Reanudación en 15 s, revisión dual en marcha sobre
+  `bc33b82` (run 34082742434). Revisor Claude: 04:20:50 → 04:29:18.
+- **Codex contestó a los cuatro minutos (04:24:03)** con una revisión
+  formal `COMMENTED` (5128044887) sobre `bc33b82`: un P2 sobre
+  `scripts/automation/sirius_apply_verdict.sh#L356` —mi corrección de
+  ADR-149 del 06-09—, publicado ENTERO en el cuerpo de la revisión, sin
+  comentario inline. Motivo: ese guion no está en el diff de #546 (llegó
+  con la actualización desde `main`, #560) y GitHub no admite un inline
+  fuera del diff; el conector escribe entonces «enlace permanente,
+  insignia, título, descripción» en el cuerpo.
+- **El recolector no lee cuerpos**: `_check_reviews` construye los
+  hallazgos solo desde los comentarios inline; una revisión con cuerpo y
+  sin inline la da por «completa» pero sin observaciones ni aprobación y
+  devuelve «sigue esperando», y como hay una revisión formal en curso
+  tampoco mira reacción ni comentario. Plazo absoluto agotado a las
+  04:40:50 → `FAILED_SAFELY`/`timeout` con el hallazgo a la vista desde
+  el minuto cuatro. ADR-141 hizo lo suyo: re-armó una ronda (run
+  34084006339, revisor Claude 3,5 min, Codex volvió a contestar igual),
+  mismo desenlace a las 05:01:11 y candado consumido: #545 en
+  `failed-safely`. Coste: dos rondas y cuarenta minutos. Lo vi venir a
+  las 04:35 leyendo el recolector (el paso «Recoger el resultado de
+  Codex» llevaba seis minutos con la revisión ya publicada), y las
+  fichas estaban escritas antes de que la segunda ronda terminara.
+- **El P2 es real**: con código 0 de `gh` y una salida que no es una
+  lista de runs, la rama `consulta-runs-ilegible` salía con 1 sin
+  publicar el aviso `QUALITY_SIN_ENCAMINAR` que la corrección del 06-09
+  había puesto para los otros dos fallos. Misma familia que la propia
+  corrección y que el defecto del recolector: **el motor ignora una
+  señal presente porque llega con una forma que no esperaba** (un cuerpo
+  en vez de inline; código 0 con texto en vez de JSON). Regla de las dos
+  rondas: tres casos de la familia en dos días; la raíz común no es un
+  guion sino un hábito de lectura —leer solo el canal previsto— y la
+  respuesta no es un guardián más sino leer todos los sitios donde el
+  emisor escribe. No hay un cuarto sitio conocido; si aparece, esta
+  entrada es la pista.
+- **Fichas (rama `claude/adr-156-hallazgos-en-el-cuerpo`)**: ADR-156
+  (nota de arranque `0338328`, publicada antes del primer cambio): el
+  recolector lee los hallazgos del cuerpo por su insignia, toma ruta y
+  línea del enlace permanente (la línea solo si el enlace es del head
+  esperado), excluye el bloque `<details>` y une esos hallazgos a los
+  inline; cinco guardianes, cuatro vistos fallar contra `main` con el
+  cuerpo real de la revisión (`de8feef`). Segunda corrección de ADR-149
+  (`a3e3a4d`): `consulta-runs-ilegible` publica también el aviso, con la
+  respuesta citada, y `activos` debe ser un entero; guardián visto
+  fallar. Las dos en la misma PR porque son la misma familia. Cadena
+  completa una sola vez sobre `a3e3a4d` (cifras en la PR).
+- **Lo que esto cambia para #545**: al fusionar la PR, «Update branch»
+  en #546 (fase de revisión: NO va `continua`; el verde de Quality sobre
+  el head nuevo la revive por la ruta de ADR-142, entrada 44) y la
+  siguiente ronda debe terminar por resultado: Codex ya no tendrá ese P2
+  que señalar (el guion nuevo viene con la actualización) y, si señala
+  otro fuera del diff, el recolector lo leerá y el guardián de goteo lo
+  marcará `posible_goteo` para que el corrector decida por alcance.
+  Criterio 3 de ADR-156: un `timeout` con una revisión de Codex a la
+  vista lo desmiente.
+- **Dato para la deuda 5**: el reloj del contenedor del operador no es
+  de fiar ni siquiera de un rato a otro: marcaba 04:37 cuando GitHub
+  decía 04:37 y 07:04 cuando GitHub decía ~05:05. Todas las horas de
+  esta entrada son de GitHub.
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
