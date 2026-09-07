@@ -1687,6 +1687,22 @@ ADR o su incidencia cuando se adopte.
   prometía). Corrector desde las 13:07:18 (run 34125591940, plazo de
   ADR-155). El freno de convergencia mide desde cero (reinicio de ayer):
   la siguiente revisión tiene que bajar de seis.
+- **Ronda 5 del corrector (13:07:41 → 13:29:01, 21 min) y tercera carrera
+  de ADR-149 (13:29)**: cuatro empujes por hallazgo —`65dc625` 13:10
+  (R5-001 + CODEX-001), `bb66872` 13:14 (R4-001 + R5-002), `7910b3c`
+  13:15 (CODEX-002), `f62f238` 13:19 (R5-003 declarado como limitación
+  viva que necesita decisión del propietario)— y validación después:
+  ADR-155 funcionando como se escribió. Quality del último head
+  (`f62f238`, run 34126749355) terminó verde a las 13:27:51 y el veredicto
+  `FIXED` entró en `ci-pending` a las 13:29:08: la carrera exacta de la
+  deuda 3, tercera vez en vivo. ADR-149 hizo lo suyo —encontró el run
+  terminado, intentó relanzarlo cuatro veces— y el PAT volvió a devolver
+  `HTTP 403` (sigue sin «Actions: Read and write»); esta vez el aviso
+  `QUALITY_SIN_ENCAMINAR` (corrección del 06-09) sí quedó en la
+  incidencia (comentario 5571369942). Relanzado a mano el run a las
+  ~13:41 para que su cierre encamine la incidencia a revisión. Sin el
+  permiso del PAT, cada `FIXED` que llegue tarde va a costar un
+  relanzamiento a mano: el gesto es del propietario.
 
 ---
 
