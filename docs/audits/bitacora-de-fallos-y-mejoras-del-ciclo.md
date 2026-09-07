@@ -1565,7 +1565,7 @@ ADR o su incidencia cuando se adopte.
   ADR-148 (memoria) sigue esperando, por orden del propietario, a que lo
   demás termine.
 
-### 45. Codex volvió y el recolector no le leyó el hallazgo: dos rondas de veinte minutos por un cuerpo sin inline (ADR-156), y el P2 que Codex me puso a mí (07-09-2026, 04:19-05:10 UTC)
+### 45. Codex volvió y el recolector no le leyó el hallazgo: dos rondas de veinte minutos por un cuerpo sin inline (ADR-156), y el P2 que Codex me puso a mí (07-09-2026, 04:19-07:10 UTC)
 
 - **Reanudación limpia (04:19-04:20)**: el propietario avisó de que la
   cuota de Codex había vuelto; `continua` a secas en #545 a las 04:20:25
@@ -1625,10 +1625,14 @@ ADR o su incidencia cuando se adopte.
   marcará `posible_goteo` para que el corrector decida por alcance.
   Criterio 3 de ADR-156: un `timeout` con una revisión de Codex a la
   vista lo desmiente.
-- **Dato para la deuda 5**: el reloj del contenedor del operador no es
-  de fiar ni siquiera de un rato a otro: marcaba 04:37 cuando GitHub
-  decía 04:37 y 07:04 cuando GitHub decía ~05:05. Todas las horas de
-  esta entrada son de GitHub.
+- **Dato para la deuda 5, y un error mío de medida**: tras el reinicio
+  de la madrugada el reloj del contenedor volvió a sincronizarse (04:37
+  cuando GitHub decía 04:37; 07:04 cuando GitHub decía 07:05). Lo que se
+  desfasó fue mi estimación del tiempo transcurrido: al abrir la PR creí
+  que eran las ~05:05 y eran las 07:05. Las dos fichas costaron dos
+  horas de reloj que sentí como veinte minutos, y durante ese rato #545
+  siguió parada. Lección: la hora se lee, no se estima; todas las horas
+  de esta entrada son de GitHub.
 
 ---
 
