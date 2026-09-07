@@ -1,6 +1,6 @@
 # ADR-157 — Cada parada deja su propio marcador de notificación
 
-- Estado: PROPUESTO
+- Estado: ACEPTADO (fusionado en `main` como `07a51b1` el 07-09-2026; §7 del contrato operativo actualizado en la ficha siguiente)
 - Fecha: 2026-09-07
 - Aprobación: mandato del propietario del 07-09-2026 («ponte a trabajar», y la
   regla de la disciplina de evidencia que él mismo fijó en `CLAUDE.md`: dos
