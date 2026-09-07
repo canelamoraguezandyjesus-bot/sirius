@@ -872,14 +872,32 @@ aplicar la etiqueta, y la etiqueta es lo que dispara el marcador—. Con eso:
      avisos RETRASADOS-: con el motor anclado en un `sirius:blocked-decision`
      -que llega sin diagnóstico, porque `escalate` no escribe ninguno, y por
      tanto no discrimina por identidad- cualquier veredicto de parada posterior
-     abandona el recorrido y declara divergencia, aunque cada parada traiga su
-     aviso y su `continua`. Es conservador -no acredita ninguna salida que
-     nadie autorizase- y queda declarado aquí en vez de retirado, porque
-     retirarlo tocaría la lógica de la abstención, fuera de los límites de
+     **que el almacén pudo guardar** (`publicado_en <= updated_at`) abandona el
+     recorrido y declara divergencia, aunque cada parada traiga su aviso y su
+     `continua`. Es conservador -no acredita ninguna salida que nadie
+     autorizase- y queda declarado aquí en vez de retirado, porque retirarlo
+     tocaría la lógica de la abstención, fuera de los límites de
      CLAUDE-R9-001. Lo fija la prueba
      `test_la_abstencion_tambien_alcanza_a_la_parada_posterior_con_aviso_propio`
      de `tests/engine/test_reflect.py`, que declara el comportamiento tal y
      como está escrito.
+
+     El **alcance** de esa limitación lo acota la ronda 12 (CLAUDE-R12-001):
+     llega solo hasta el veredicto que el almacén PUDO guardar, que es el caso
+     en que la evidencia no dice en cuál de las dos paradas se quedó el motor
+     -el de CLAUDE-R7-001 y CLAUDE-R7-002-. El veredicto publicado DESPUÉS de
+     la última escritura del almacén -el caso normal, porque el tramo que el
+     recorrido reproduce es por definición posterior a esa escritura- no
+     abstiene nada: ahí el recorrido recrea la parada y le exige su permiso
+     escrito, y lo fija la prueba nueva
+     `test_una_parada_posterior_a_la_ultima_escritura_no_abstiene_el_ancla`.
+     Hasta la ronda 12 este punto y el docstring de la función dejaban caer ese
+     calificador en la frase que describe el efecto, y la prueba que lo fijaba
+     alimentaba al reflector un `ParadaPublicada` con `publicado_en=None`, una
+     forma que `mirror_projection._interpretar_paradas_publicadas` no emite
+     -todo veredicto de parada se publica como comentario y llega con su
+     `creado_en`-: el ADR afirmaba una limitación más ancha que la de
+     producción y la prueba la sostenía con una entrada imposible.
 
   El criterio de acreditación de ADR-147 no cambia: un permiso escrito por
   salida, consumido en orden, y la foto nunca acredita.
@@ -965,6 +983,46 @@ aplicar la etiqueta, y la etiqueta es lo que dispara el marcador—. Con eso:
   (`test_el_doble_de_cronologia_proyecta_lo_mismo_que_la_proyeccion_real`,
   tercera repetición de la familia CLAUDE-R5-002 / CLAUDE-R7-003), y la prueba
   nueva del P1 corre con instantes reales.
+
+- **Ronda 12, CLAUDE-R12-001 y CLAUDE-R12-002 (misma raíz): el doble ya no
+  puede emitir una forma que la proyección no emite, y el alcance de la
+  abstención queda escrito.** La aserción que la ronda 11 añadió a
+  `test_el_doble_de_cronologia_proyecta_lo_mismo_que_la_proyeccion_real`
+  -`all(parada.publicado_en is not None ...)` sobre la proyección REAL- dejó a
+  la vista que el resto del árbol seguía contradiciéndola: `_paradas` conservaba
+  `desde: datetime | None = None` y seis llamadas de las pruebas de recorrido lo
+  usaban así, de modo que `_hay_una_parada_posterior_sin_aviso` y
+  `_el_almacen_pudo_guardarla` se ejercitaban por el atajo `publicado_en is
+  None` sin llegar nunca a la comparación de instantes que producción sí
+  ejecuta (CLAUDE-R12-002). La corrección hace `desde` OBLIGATORIO en `_paradas`
+  y fecha las seis llamadas con el instante que corresponde al motor que cada
+  prueba construye: `_ANTES_DEL_ALMACEN` (11:00 del 4-09, anterior al
+  `updated_at`) cuando lo que se prueba es el veredicto que el almacén PUDO
+  guardar, y `_TRAS_EL_ALMACEN` (05:00 del 5-09) cuando lo que se prueba es el
+  tramo que el recorrido reproduce. Las pruebas de las rondas 7 y 10 añaden
+  además la aserción que dice POR QUÉ siguen verdes -el instante del último
+  veredicto contra `updated_at`-, para que el resultado no se atribuya al
+  mecanismo equivocado. `_cronologia` conserva `desde` opcional porque su
+  `None` sí tiene fuente real: el marcador que viene del cuerpo de la
+  incidencia, que no trae `creado_en`.
+
+  Con las entradas fechadas quedó demostrado lo que la ronda 9 había escrito de
+  más (CLAUDE-R12-001): tanto este ADR como el docstring de
+  `_hay_una_parada_posterior_sin_aviso` describían el efecto observable sin el
+  calificador que el código sí tiene -`publicado_en <= updated_at`-, y
+  `test_la_abstencion_tambien_alcanza_a_la_parada_posterior_con_aviso_propio`
+  fijaba ese `pasos == ()` alimentando `publicado_en=None`. Fechada con
+  instantes del tramo recorrido, esa prueba se pone en ROJO
+  (`E AssertionError: assert resultado.pasos == ()`, contra un plan de ocho
+  pasos que llega a `work_item_delivered`), que es el comportamiento CORRECTO:
+  un permiso escrito por salida, el `continua` de la posición 1 para la primera
+  parada y el de la posición 5 para la segunda. La corrección refunda la prueba
+  sobre instantes ANTERIORES a la última escritura del almacén -donde la
+  limitación existe de verdad- y añade su gemela
+  `test_una_parada_posterior_a_la_ultima_escritura_no_abstiene_el_ancla`, que
+  fija el otro lado. Ninguna línea de lógica cambia: el filtro por `updated_at`
+  de la abstención sigue siendo el correcto para el escenario de CLAUDE-R7-001
+  y CLAUDE-R7-002.
 
 ## Alternativas descartadas y por qué
 

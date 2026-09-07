@@ -575,15 +575,26 @@ def _hay_una_parada_posterior_sin_aviso(
     las dos se quedó el motor. Desde ADR-157 el marcador lleva el run del
     evento y cada parada deja el suyo, pero esta función NO lo aprovecha:
     sobre un historial posterior sigue abandonando el recorrido en cuanto hay
-    un veredicto de parada detrás de la cota, aunque su aviso esté escrito y
-    aunque cada parada traiga su ``continua``. El efecto observable está en un
-    ancla que no discrimina por identidad -un ``sirius:blocked-decision``, que
-    llega sin diagnóstico porque ``escalate`` no escribe ninguno-: una
-    recuperación autorizada por escrito se declara como divergencia
+    un veredicto de parada detrás de la cota **y publicado a tiempo de que el
+    almacén lo guardara**, aunque su aviso esté escrito y aunque cada parada
+    traiga su ``continua``. El efecto observable está en un ancla que no
+    discrimina por identidad -un ``sirius:blocked-decision``, que llega sin
+    diagnóstico porque ``escalate`` no escribe ninguno-: una recuperación
+    autorizada por escrito se declara como divergencia
     (``test_la_abstencion_tambien_alcanza_a_la_parada_posterior_con_aviso_propio``,
     CLAUDE-R9-001, ronda 9, PR #546). Es una limitación viva, y conservadora:
     no acredita ninguna salida que nadie autorizase, solo deja de acreditar
     una que sí lo estaba.
+
+    Y su ALCANCE es solo ese: el veredicto que el almacén PUDO guardar
+    (``publicado_en <= work_item.updated_at``), que es el caso en que la
+    evidencia no dice en cuál de las dos paradas se quedó el motor. El
+    veredicto POSTERIOR a la última escritura del almacén -el caso normal, el
+    del tramo que el recorrido reproduce- no abstiene nada: ahí el recorrido
+    recrea la parada y le exige su permiso escrito, como fija
+    ``test_una_parada_posterior_a_la_ultima_escritura_no_abstiene_el_ancla``
+    (CLAUDE-R12-001, ronda 12, PR #546). Quien cubre ese tramo es
+    :func:`_paradas_que_el_recorrido_debe_recrear`, que no filtra por tiempo.
 
     La referencia es la COTA (:func:`_orden_de_la_parada`), no la posición del
     aviso: el veredicto que causó esta misma parada nunca cuenta como parada

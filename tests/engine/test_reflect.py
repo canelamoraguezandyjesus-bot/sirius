@@ -97,6 +97,14 @@ from sirius_engine.reflect import (
 )
 
 _AHORA = datetime(2026, 9, 4, 12, 0, tzinfo=UTC)
+# Los dos instantes de publicación que separan los dos casos que el reflector
+# distingue de verdad: un veredicto de parada publicado ANTES de la última
+# escritura del almacén es uno que el almacén PUDO guardar -y entonces la
+# evidencia no dice en cuál de las dos paradas se quedó el motor-, y uno
+# publicado DESPUÉS cae en el tramo que el recorrido reproduce, que por
+# definición es posterior a esa escritura (CLAUDE-R12-001, ronda 12, PR #546).
+_ANTES_DEL_ALMACEN = datetime(2026, 9, 4, 11, 0, tzinfo=UTC)
+_TRAS_EL_ALMACEN = datetime(2026, 9, 5, 5, 0, tzinfo=UTC)
 _WORK_ID = "WI-20260902-174417"
 _REPO = "canelamoraguezandyjesus-bot/sirius"
 
@@ -1277,9 +1285,7 @@ def test_el_doble_de_cronologia_proyecta_lo_mismo_que_la_proyeccion_real() -> No
     assert all(parada.publicado_en is not None for parada in proyeccion.paradas_publicadas)
 
 
-def _paradas(
-    *entradas: tuple[str, str], desde: datetime | None = None
-) -> tuple[ParadaPublicada, ...]:
+def _paradas(*entradas: tuple[str, str], desde: datetime) -> tuple[ParadaPublicada, ...]:
     """Los VEREDICTOS de parada de las mismas entradas, como los proyecta producción.
 
     Cuenta las dos formas que `mirror_projection._STOP_MARKER_RE` reconoce y
@@ -1289,17 +1295,23 @@ def _paradas(
     no entran: un veredicto de parada existe aunque su marcador lo haya
     deduplicado `sirius_comment_once`, que es justo lo que hace falta ver.
 
-    Con ``desde``, cada veredicto recibe su instante de publicación -un minuto
-    por posición-, que es la forma que produce SIEMPRE la proyección real: todo
-    veredicto de parada se publica como comentario y llega con su ``creado_en``
-    (lo fija `test_el_doble_de_cronologia_proyecta_lo_mismo_que_la_proyeccion_real`,
-    CLAUDE-R11-002, ronda 11, PR #546).
+    ``desde`` es OBLIGATORIO: cada veredicto recibe su instante de publicación
+    -un minuto por posición-, que es la única forma que produce la proyección
+    real, porque todo veredicto de parada se publica como comentario y llega
+    con su ``creado_en``; lo fija
+    `test_el_doble_de_cronologia_proyecta_lo_mismo_que_la_proyeccion_real`. Con
+    ``desde`` opcional este doble emitía ``publicado_en=None``, una forma que
+    producción no emite, y las pruebas de recorrido tomaban el atajo ``is
+    None`` de `_hay_una_parada_posterior_sin_aviso` y de
+    `_el_almacen_pudo_guardarla` sin llegar nunca a la comparación de instantes
+    que producción sí ejecuta: es lo que dejó pasar CLAUDE-R11-001 y lo que
+    sostenía la afirmación falsa de CLAUDE-R12-001 (CLAUDE-R12-002, ronda 12,
+    PR #546). Quien llama elige el instante contra el ``updated_at`` del motor
+    que construye: :data:`_ANTES_DEL_ALMACEN` para el veredicto que el almacén
+    pudo guardar, :data:`_TRAS_EL_ALMACEN` para el del tramo recorrido.
     """
     return tuple(
-        ParadaPublicada(
-            orden=orden,
-            publicado_en=(desde + timedelta(minutes=orden) if desde is not None else None),
-        )
+        ParadaPublicada(orden=orden, publicado_en=desde + timedelta(minutes=orden))
         for orden, (tipo, _) in enumerate(entradas)
         if tipo in ("diagnostico", "parada")
     )
@@ -2285,13 +2297,19 @@ def test_una_segunda_parada_sin_aviso_propio_no_se_resuelve_con_el_permiso_de_la
         ("estado", "sirius:completed"),
     )
     historial, permisos = _cronologia(*entradas)
+    paradas = _paradas(*entradas, desde=_ANTES_DEL_ALMACEN)
+    assert paradas[-1].publicado_en is not None
+    assert paradas[-1].publicado_en <= bloqueado.updated_at, (
+        "quien abandona aquí es la abstención del ancla, y solo alcanza al "
+        "veredicto que el almacén PUDO guardar"
+    )
     espejo = _espejo(
         estado=WorkItemState.DELIVERED,
         fase=WorkItemPhase.ENTREGAR,
         etiquetas=("sirius:completed",),
         historial_estados=historial,
         permisos_reanudacion=permisos,
-        paradas_publicadas=_paradas(*entradas),
+        paradas_publicadas=paradas,
     )
 
     resultado = reflejar_desenlace(bloqueado, espejo, _episodio())
@@ -2331,13 +2349,19 @@ def test_un_acreditado_sin_diagnostico_no_ancla_si_queda_una_parada_posterior() 
     historial, permisos = _cronologia(*entradas)
     assert historial[0].estado is WorkItemState.FAILED_SAFELY
     assert historial[0].diagnostico is None
+    paradas = _paradas(*entradas, desde=_ANTES_DEL_ALMACEN)
+    assert paradas[-1].publicado_en is not None
+    assert paradas[-1].publicado_en <= parado.updated_at, (
+        "el tercer veredicto es de los que el almacén pudo guardar: por eso el "
+        "ancla se abstiene, y no por la lista de veredictos que el recorrido recrea"
+    )
     espejo = _espejo(
         estado=WorkItemState.DELIVERED,
         fase=WorkItemPhase.ENTREGAR,
         etiquetas=("sirius:completed",),
         historial_estados=historial,
         permisos_reanudacion=permisos,
-        paradas_publicadas=_paradas(*entradas),
+        paradas_publicadas=paradas,
     )
 
     resultado = reflejar_desenlace(parado, espejo, _episodio())
@@ -2362,11 +2386,22 @@ def test_la_abstencion_tambien_alcanza_a_la_parada_posterior_con_aviso_propio() 
     diagnóstico, porque `escalate` no escribe ninguno, y por tanto no
     discrimina por identidad- se abstiene y el recorrido se abandona.
 
-    Esta prueba fija ese comportamiento tal y como está escrito, que es más
-    ancho que la limitación de CLAUDE-R6-003 -los avisos RETRASADOS- y así
-    queda declarado en ADR-147 (CLAUDE-R9-001, ronda 9, PR #546). Es
-    conservador: no acredita ninguna salida que nadie autorizase, solo deja de
-    acreditar una que sí lo estaba.
+    El alcance de esa abstención es EXACTAMENTE el veredicto que el almacén
+    pudo guardar (`publicado_en <= updated_at`), que es el caso en que la
+    evidencia no dice en cuál de las dos paradas se quedó el motor -el de
+    CLAUDE-R7-001 y CLAUDE-R7-002-, y por eso aquí los instantes son
+    ANTERIORES a la última escritura del almacén. Su gemela
+    `test_una_parada_posterior_a_la_ultima_escritura_no_abstiene_el_ancla`
+    enseña el otro lado: un veredicto del tramo que el recorrido reproduce no
+    abstiene nada. Hasta la ronda 12 esta prueba alimentaba al reflector
+    `publicado_en=None` -una forma que la proyección no emite- y fijaba como
+    comportamiento de producción una abstención que producción no hace sobre
+    ese tramo (CLAUDE-R12-001, ronda 12, PR #546).
+
+    Lo que queda fijado es una limitación viva, más ancha que la de
+    CLAUDE-R6-003 -los avisos RETRASADOS-, y así queda declarada en ADR-147
+    (CLAUDE-R9-001, ronda 9, PR #546). Es conservadora: no acredita ninguna
+    salida que nadie autorizase, solo deja de acreditar una que sí lo estaba.
     """
     store = InMemoryWorkEngineStore()
     bloqueado = _motor_bloqueado_en_revisar(store)
@@ -2383,13 +2418,18 @@ def test_la_abstencion_tambien_alcanza_a_la_parada_posterior_con_aviso_propio() 
     historial, permisos = _cronologia(*entradas)
     assert historial[0].estado is WorkItemState.NEEDS_DECISION
     assert historial[2].estado is WorkItemState.FAILED_SAFELY
+    paradas = _paradas(*entradas, desde=_ANTES_DEL_ALMACEN)
+    assert paradas[-1].publicado_en is not None
+    assert paradas[-1].publicado_en <= bloqueado.updated_at, (
+        "la abstención solo alcanza al veredicto que el almacén pudo guardar"
+    )
     espejo = _espejo(
         estado=WorkItemState.DELIVERED,
         fase=WorkItemPhase.ENTREGAR,
         etiquetas=("sirius:completed",),
         historial_estados=historial,
         permisos_reanudacion=permisos,
-        paradas_publicadas=_paradas(*entradas),
+        paradas_publicadas=paradas,
     )
 
     resultado = reflejar_desenlace(bloqueado, espejo, _episodio())
@@ -2399,6 +2439,70 @@ def test_la_abstencion_tambien_alcanza_a_la_parada_posterior_con_aviso_propio() 
     item = store.get_work_item(_WORK_ID)
     assert item is not None
     assert item.estado is WorkItemState.NEEDS_DECISION
+
+
+def test_una_parada_posterior_a_la_ultima_escritura_no_abstiene_el_ancla() -> None:
+    """La gemela de la anterior en el tramo que el recorrido SÍ reproduce.
+
+    Misma secuencia y mismo motor, con una sola diferencia: los veredictos se
+    publican DESPUÉS de la última escritura del almacén, que es el caso normal
+    -el tramo que el recorrido reproduce es, por definición, lo que ocurrió
+    después de que el almacén escribiera-. Ahí `publicado_en > updated_at`, la
+    abstención del ancla no dispara, y el recorrido hace lo que ADR-147 manda:
+    recrea las dos paradas y consume un permiso escrito por cada salida -el
+    `continua` de la posición 1 para la primera y el de la posición 5 para la
+    segunda-.
+
+    Es la mitad que faltaba de CLAUDE-R9-001: sin ella, el docstring de
+    `_hay_una_parada_posterior_sin_aviso` y ADR-147 afirmaban una limitación
+    sin su alcance, y la prueba hermana la fijaba con una entrada que la
+    proyección no emite (CLAUDE-R12-001, ronda 12, PR #546).
+    """
+    store = InMemoryWorkEngineStore()
+    bloqueado = _motor_bloqueado_en_revisar(store)
+    entradas: tuple[tuple[str, str], ...] = (
+        ("estado", "sirius:blocked-decision"),
+        ("orden", "continua"),
+        ("estado", "sirius:repair-requested"),
+        ("diagnostico", "la ronda 8 murió sin empujar"),
+        ("estado", "sirius:failed-safely"),
+        ("orden", "continua"),
+        ("estado", "sirius:ready-for-merge"),
+        ("estado", "sirius:completed"),
+    )
+    historial, permisos = _cronologia(*entradas, desde=_TRAS_EL_ALMACEN)
+    paradas = _paradas(*entradas, desde=_TRAS_EL_ALMACEN)
+    assert paradas[-1].publicado_en is not None
+    assert paradas[-1].publicado_en > bloqueado.updated_at, (
+        "el veredicto del tramo recorrido es posterior a la última escritura del almacén"
+    )
+    assert len(permisos) == 2, "hay un `continua` escrito por cada parada"
+    espejo = _espejo(
+        estado=WorkItemState.DELIVERED,
+        fase=WorkItemPhase.ENTREGAR,
+        etiquetas=("sirius:completed",),
+        historial_estados=historial,
+        permisos_reanudacion=permisos,
+        paradas_publicadas=paradas,
+    )
+
+    resultado = reflejar_desenlace(bloqueado, espejo, _episodio())
+
+    assert resultado.divergencia is None
+    assert tuple(paso.kind for paso in resultado.pasos) == (
+        "work_item_decision_resolved",
+        "work_item_repair_requested",
+        "work_item_failed_safely",
+        "work_item_reactivated",
+        "work_item_repair_resumed",
+        "work_item_review_started",
+        "work_item_review_approved",
+        "work_item_delivered",
+    )
+    aplicar_pasos(store, _WORK_ID, resultado.pasos, now=_AHORA)
+    item = store.get_work_item(_WORK_ID)
+    assert item is not None
+    assert item.estado is WorkItemState.DELIVERED
 
 
 def test_una_parada_que_ningun_tramo_recrea_abandona_el_recorrido() -> None:
@@ -2439,7 +2543,7 @@ def test_una_parada_que_ningun_tramo_recrea_abandona_el_recorrido() -> None:
     assert historial[0].diagnostico == "la ronda 1 se quedó sin turnos", (
         "el ancla queda identificada por su diagnóstico, no por su posición"
     )
-    paradas = _paradas(*entradas)
+    paradas = _paradas(*entradas, desde=_ANTES_DEL_ALMACEN)
     assert len(paradas) == 2, "los dos veredictos de parada están publicados"
     assert len(permisos) == 1, "solo hay un `continua` escrito, el de la primera parada"
     espejo = _espejo(
@@ -2546,7 +2650,7 @@ def test_una_parada_con_su_tramo_en_el_recorrido_se_sigue_recorriendo_entera() -
         ("orden", "continua"),
     )
     historial, permisos = _cronologia(*entradas)
-    assert len(_paradas(*entradas)) == 2
+    assert len(_paradas(*entradas, desde=_TRAS_EL_ALMACEN)) == 2
     assert len(permisos) == 2
     espejo = _espejo(
         estado=WorkItemState.ACTIVE,
@@ -2554,7 +2658,7 @@ def test_una_parada_con_su_tramo_en_el_recorrido_se_sigue_recorriendo_entera() -
         etiquetas=("sirius:repair-requested",),
         historial_estados=historial,
         permisos_reanudacion=permisos,
-        paradas_publicadas=_paradas(*entradas),
+        paradas_publicadas=_paradas(*entradas, desde=_TRAS_EL_ALMACEN),
     )
 
     resultado = reflejar_desenlace(parado, espejo, _episodio())
