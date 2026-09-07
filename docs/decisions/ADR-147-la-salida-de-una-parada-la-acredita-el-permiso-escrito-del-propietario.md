@@ -537,6 +537,21 @@ aplicar la etiqueta, y la etiqueta es lo que dispara el marcador—. Con eso:
   que cambia en el árbol después de esta captura es la transcripción de estas
   mismas cifras.
 
+- **Ronda 10 (CLAUDE-R10-001), sobre el árbol de `cbcd068`**: una sola
+  invocación de `pwsh -File scripts/check.ps1` (Ruff format, Ruff lint, mypy,
+  pytest), código de salida **0**, `5096 passed, 17 skipped, 2 xfailed in
+  460.37s (0:07:40)`. La cifra sube en 2 respecto de la ronda 9 (`5094`): son
+  las dos pruebas nuevas de `tests/engine/test_reflect.py`,
+  `test_una_parada_que_ningun_tramo_recrea_abandona_el_recorrido` y
+  `test_una_parada_con_su_tramo_en_el_recorrido_se_sigue_recorriendo_entera`.
+  Mutación vista caer: con la abstención nueva desactivada
+  (`if paradas_por_recrear:` → `if False and paradas_por_recrear:` al cerrar el
+  bucle de tramos de `_recorrer_historial_acreditado`), la primera de esas dos
+  falla con `E AssertionError: assert (PasoReflejo(...ostico=None),) == ()` y
+  ninguna otra prueba del árbol se mueve (`1 failed, 1281 passed, 1 skipped`
+  sobre `tests/engine`). Lo único que cambia en el árbol después de esta
+  captura es la transcripción de estas mismas cifras.
+
 ## Consecuencias
 
 - **Ronda 6, CLAUDE-R6-001 y CLAUDE-R6-002 (misma raíz): la cota de la parada
