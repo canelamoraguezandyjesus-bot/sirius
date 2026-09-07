@@ -492,6 +492,13 @@ aplicar la etiqueta, y la etiqueta es lo que dispara el marcador—. Con eso:
   Las dos mutaciones de la ronda están descritas en «Consecuencias», cada una
   con la prueba que vio caer.
 
+- **Ronda 6, segunda corrección (CLAUDE-R5-003), sobre el árbol de
+  `6b4a452`**: una sola invocación de `pwsh -File scripts/check.ps1` (Ruff
+  format, Ruff lint, mypy, pytest), código de salida **0**, `5089 passed, 17
+  skipped, 2 xfailed in 502.49s (0:08:22)`. Las tres pruebas nuevas y la
+  reescrita por la decisión del propietario, con su mutación vista caer, están
+  descritas en «Consecuencias».
+
 ## Consecuencias
 
 - **Ronda 6, CLAUDE-R6-001 y CLAUDE-R6-002 (misma raíz): la cota de la parada
