@@ -571,6 +571,24 @@ aplicar la etiqueta, y la etiqueta es lo que dispara el marcador—. Con eso:
   completo hasta `delivered/entregar` en vez de `()`
   (`AssertionError: assert (PasoReflejo(...)) == ()`).
 
+- **CLAUDE-R7-003 (P2, ronda 7): el doble de las pruebas vuelve a estar atado a
+  producción también en los PERMISOS.** La ronda 6 le copió al doble
+  `_cronologia` el colapso del recibo con su orden sin extender la prueba de
+  acoplamiento que CLAUDE-R5-002 exigió, y las dos copias ya divergían:
+  producción limpia la orden pendiente con cualquier veredicto de parada
+  (`_STOP_MARKER_RE`) y el doble solo con la entrada `diagnostico`.
+  `test_el_doble_de_cronologia_proyecta_lo_mismo_que_la_proyeccion_real` compara
+  ahora, además de los acreditados, la tupla de `permisos_reanudacion` y la de
+  `paradas_publicadas` (forma y posición relativa), con entradas que traen la
+  orden con su recibo colapsado, la orden con un veredicto de parada entre
+  medias y el recibo que entonces cuenta solo. El doble gana la entrada
+  `("parada", …)` -un veredicto de parada sin diagnóstico ni aviso propio- que
+  limpia la orden pendiente igual que producción. Vista caer con la mutación
+  `orden_sin_recibo = None` → `pass` en esa rama del doble:
+  `AssertionError: assert ((<FormaDePer... 'orden'>, 6)) == ((<FormaDePer...arcador'>, 8))`,
+  «Right contains one more item». La referencia sigue siendo producción: no se
+  tocó `mirror_projection._interpretar_permisos_reanudacion`.
+
 - El caso vivo avanza: WI-20260905-034826 llega a `delivered/entregar` y la
   pasada siguiente no añade nada.
 - Las recuperaciones sin ninguna palabra escrita del propietario quedan como

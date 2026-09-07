@@ -1164,18 +1164,32 @@ def test_el_doble_de_cronologia_proyecta_lo_mismo_que_la_proyeccion_real() -> No
     relativa del marcador y del veredicto que lo explica -la escala absoluta
     difiere en el cuerpo de la incidencia, que la proyección cuenta como
     posición 0 y el doble no tiene-.
+
+    Y desde la ronda 7 compara también los PERMISOS y las PARADAS publicadas
+    (CLAUDE-R7-003): la ronda 6 le copió al doble el colapso del recibo con su
+    orden sin atarlo a producción, y las dos copias ya divergían -producción
+    limpia la orden pendiente con cualquier veredicto de parada
+    (`_STOP_MARKER_RE`) y el doble solo con la entrada `diagnostico`-. Las
+    entradas traen los tres casos que las pruebas de
+    `tests/engine/test_mirror_projection.py` fijan por separado: una orden con
+    su recibo colapsado, una orden con un veredicto de parada entre medias y el
+    recibo que entonces cuenta solo.
     """
     entradas: tuple[tuple[str, str], ...] = (
         ("diagnostico", "la ronda 1 se quedó sin turnos"),
         ("estado", "sirius:failed-safely"),
         ("orden", "continua"),
         ("estado", "sirius:repair-requested"),
+        ("marcador", "<!-- sirius-resume-stop:1c934781 -->"),
         ("diagnostico", "la ronda 2 agotó el tiempo del job"),
         ("diagnostico", "la ronda 3 murió sin empujar"),
         ("estado", "sirius:failed-safely"),
+        ("orden", "continua"),
+        ("parada", "33945456417-2"),
+        ("marcador", "<!-- sirius-convergence-reset:1c934781 -->"),
     )
-    doble, _ = _cronologia(*entradas)
-    proyectado = proyectar_work_item(
+    doble, doble_permisos = _cronologia(*entradas)
+    proyeccion = proyectar_work_item(
         repo="canelamoraguezandyjesus-bot/sirius",
         numero=545,
         metadatos=LecturaMetadatos(
@@ -1203,7 +1217,8 @@ def test_el_doble_de_cronologia_proyecta_lo_mismo_que_la_proyeccion_real() -> No
             ),
         ),
         ahora=_AHORA,
-    ).historial_estados
+    )
+    proyectado = proyeccion.historial_estados
 
     def _comparable(
         acreditados: tuple[EstadoAcreditado, ...],
@@ -1223,7 +1238,34 @@ def test_el_doble_de_cronologia_proyecta_lo_mismo_que_la_proyeccion_real() -> No
             for acreditado in acreditados
         )
 
+    def _permisos_comparables(
+        permisos: tuple[PermisoDeReanudacion, ...],
+    ) -> tuple[tuple[FormaDePermiso, int], ...]:
+        # La escala absoluta difiere en el cuerpo de la incidencia -posición 0
+        # para la proyección, inexistente para el doble-, así que se compara la
+        # posición RELATIVA al primer permiso, igual que con los acreditados.
+        if not permisos:
+            return ()
+        origen = permisos[0].orden
+        return tuple((permiso.forma, permiso.orden - origen) for permiso in permisos)
+
     assert _comparable(doble) == _comparable(proyectado)
+    assert _permisos_comparables(doble_permisos) == _permisos_comparables(
+        proyeccion.permisos_reanudacion
+    )
+    assert len(doble_permisos) == 3
+    assert [permiso.forma for permiso in doble_permisos] == [
+        FormaDePermiso.ORDEN,
+        FormaDePermiso.ORDEN,
+        FormaDePermiso.MARCADOR,
+    ]
+
+    doble_paradas = _paradas(*entradas)
+    origen_paradas = doble_paradas[0].orden
+    assert tuple(parada.orden - origen_paradas for parada in doble_paradas) == tuple(
+        parada.orden - proyeccion.paradas_publicadas[0].orden
+        for parada in proyeccion.paradas_publicadas
+    )
 
 
 def _paradas(
