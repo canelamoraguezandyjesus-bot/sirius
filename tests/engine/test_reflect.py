@@ -2332,3 +2332,55 @@ def test_un_acreditado_sin_diagnostico_no_ancla_si_queda_una_parada_posterior() 
     item = store.get_work_item(_WORK_ID)
     assert item is not None
     assert item.estado is WorkItemState.FAILED_SAFELY
+
+
+def test_la_abstencion_tambien_alcanza_a_la_parada_posterior_con_aviso_propio() -> None:
+    """Lo que la abstención mira es el VEREDICTO posterior, no si dejó aviso.
+
+    `_hay_una_parada_posterior_sin_aviso` recorre `paradas_publicadas` -los
+    veredictos de parada- y no consulta `historial_estados` en ningún momento,
+    así que no distingue una parada posterior que dejó su propio marcador de
+    una que la deduplicación se comió. Aquí la segunda parada SÍ trae su aviso
+    (`sirius:failed-safely` detrás de su veredicto), tal y como los publica
+    todo historial posterior a ADR-157, y cada parada tiene su `continua`
+    escrito detrás; aun así el ancla `blocked-decision` -que llega sin
+    diagnóstico, porque `escalate` no escribe ninguno, y por tanto no
+    discrimina por identidad- se abstiene y el recorrido se abandona.
+
+    Esta prueba fija ese comportamiento tal y como está escrito, que es más
+    ancho que la limitación de CLAUDE-R6-003 -los avisos RETRASADOS- y así
+    queda declarado en ADR-147 (CLAUDE-R9-001, ronda 9, PR #546). Es
+    conservador: no acredita ninguna salida que nadie autorizase, solo deja de
+    acreditar una que sí lo estaba.
+    """
+    store = InMemoryWorkEngineStore()
+    bloqueado = _motor_bloqueado_en_revisar(store)
+    entradas: tuple[tuple[str, str], ...] = (
+        ("estado", "sirius:blocked-decision"),
+        ("orden", "continua"),
+        ("estado", "sirius:repair-requested"),
+        ("diagnostico", "la ronda 8 murió sin empujar"),
+        ("estado", "sirius:failed-safely"),
+        ("orden", "continua"),
+        ("estado", "sirius:ready-for-merge"),
+        ("estado", "sirius:completed"),
+    )
+    historial, permisos = _cronologia(*entradas)
+    assert historial[0].estado is WorkItemState.NEEDS_DECISION
+    assert historial[2].estado is WorkItemState.FAILED_SAFELY
+    espejo = _espejo(
+        estado=WorkItemState.DELIVERED,
+        fase=WorkItemPhase.ENTREGAR,
+        etiquetas=("sirius:completed",),
+        historial_estados=historial,
+        permisos_reanudacion=permisos,
+        paradas_publicadas=_paradas(*entradas),
+    )
+
+    resultado = reflejar_desenlace(bloqueado, espejo, _episodio())
+
+    assert resultado.pasos == ()
+    assert resultado.divergencia is not None
+    item = store.get_work_item(_WORK_ID)
+    assert item is not None
+    assert item.estado is WorkItemState.NEEDS_DECISION

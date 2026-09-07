@@ -560,18 +560,30 @@ def _hay_una_parada_posterior_sin_aviso(
 ) -> bool:
     """Si detrás de esta ocurrencia hay otra parada que el almacén pudo guardar.
 
-    La lista de :class:`ParadaPublicada` son los VEREDICTOS de parada, no sus
-    avisos: el veredicto lo publica siempre quien para, y el aviso lo
-    deduplicaba ``sirius_comment_once`` por ``(etiqueta, head)`` en todo
-    historial publicado ANTES de ADR-157 (07-09-2026), que desde entonces mete
-    el run del evento en el marcador y hace que cada parada deje el suyo. Así
-    que una parada posterior a la cota de esta ocurrencia, publicada a tiempo
-    de que el almacén la guardara, es exactamente la parada que aquellos
-    historiales NO acreditan con aviso propio: mientras exista, la posición no
-    dice en cuál de las dos se quedó el motor. Esto es un RESPALDO para las
-    incidencias ya vividas -las que ADR-157 declara que «conservan sus
-    huecos»-; sobre un historial publicado después, sencillamente no encuentra
-    ninguna parada sin aviso y no se abstiene.
+    Lo que mira es el VEREDICTO, no el aviso: la lista de
+    :class:`ParadaPublicada` son los veredictos de parada -que publica siempre
+    quien para- y esta función no consulta ``historial_estados`` en ningún
+    momento. Así que se abstiene ante CUALQUIER veredicto de parada posterior
+    a la cota de esta ocurrencia y publicado a tiempo de que el almacén lo
+    guardara, haya dejado esa parada su propio aviso o no. El nombre viene del
+    caso que la motivó, no del alcance que tiene.
+
+    El caso que la motivó son los historiales publicados ANTES de ADR-157
+    (07-09-2026), en los que ``sirius_comment_once`` deduplicaba el marcador
+    por ``(etiqueta, head)`` y la segunda parada sobre el mismo head no dejaba
+    aviso propio: mientras ese veredicto exista, la posición no dice en cuál de
+    las dos se quedó el motor. Desde ADR-157 el marcador lleva el run del
+    evento y cada parada deja el suyo, pero esta función NO lo aprovecha:
+    sobre un historial posterior sigue abandonando el recorrido en cuanto hay
+    un veredicto de parada detrás de la cota, aunque su aviso esté escrito y
+    aunque cada parada traiga su ``continua``. El efecto observable está en un
+    ancla que no discrimina por identidad -un ``sirius:blocked-decision``, que
+    llega sin diagnóstico porque ``escalate`` no escribe ninguno-: una
+    recuperación autorizada por escrito se declara como divergencia
+    (``test_la_abstencion_tambien_alcanza_a_la_parada_posterior_con_aviso_propio``,
+    CLAUDE-R9-001, ronda 9, PR #546). Es una limitación viva, y conservadora:
+    no acredita ninguna salida que nadie autorizase, solo deja de acreditar
+    una que sí lo estaba.
 
     La referencia es la COTA (:func:`_orden_de_la_parada`), no la posición del
     aviso: el veredicto que causó esta misma parada nunca cuenta como parada

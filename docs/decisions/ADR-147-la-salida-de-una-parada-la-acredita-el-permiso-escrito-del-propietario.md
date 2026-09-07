@@ -796,9 +796,29 @@ aplicar la etiqueta, y la etiqueta es lo que dispara el marcador—. Con eso:
      `_hay_una_parada_posterior_sin_aviso`, `_interpretar_paradas_publicadas` y
      el cierre de `_orden_de_la_parada`) quedan acotadas al árbol en que fueron
      ciertas y citando ADR-157, igual que la ronda 4 hizo con `check.ps1` y
-     ADR-153. Sobre un historial publicado después de ADR-157,
-     `_hay_una_parada_posterior_sin_aviso` sencillamente no encuentra ninguna
-     parada sin aviso y no se abstiene.
+     ADR-153.
+
+     La ronda 8 escribió aquí, y en el docstring de
+     `_hay_una_parada_posterior_sin_aviso`, que «sobre un historial publicado
+     después de ADR-157 esa función sencillamente no encuentra ninguna parada
+     sin aviso y no se abstiene». **Era falso y la ronda 9 lo corrige**
+     (CLAUDE-R9-001): la función recorre `paradas_publicadas` -los VEREDICTOS
+     de parada- y no consulta `historial_estados` en ningún momento, así que no
+     puede saber si la parada posterior dejó aviso propio. Se abstiene ante
+     CUALQUIER veredicto de parada posterior a la cota que el almacén pudo
+     guardar, también sobre historiales posteriores a ADR-157. La limitación
+     viva, entonces, es más ancha que la de CLAUDE-R6-003 -que la acotaba a los
+     avisos RETRASADOS-: con el motor anclado en un `sirius:blocked-decision`
+     -que llega sin diagnóstico, porque `escalate` no escribe ninguno, y por
+     tanto no discrimina por identidad- cualquier veredicto de parada posterior
+     abandona el recorrido y declara divergencia, aunque cada parada traiga su
+     aviso y su `continua`. Es conservador -no acredita ninguna salida que
+     nadie autorizase- y queda declarado aquí en vez de retirado, porque
+     retirarlo tocaría la lógica de la abstención, fuera de los límites de
+     CLAUDE-R9-001. Lo fija la prueba
+     `test_la_abstencion_tambien_alcanza_a_la_parada_posterior_con_aviso_propio`
+     de `tests/engine/test_reflect.py`, que declara el comportamiento tal y
+     como está escrito.
 
   El criterio de acreditación de ADR-147 no cambia: un permiso escrito por
   salida, consumido en orden, y la foto nunca acredita.
