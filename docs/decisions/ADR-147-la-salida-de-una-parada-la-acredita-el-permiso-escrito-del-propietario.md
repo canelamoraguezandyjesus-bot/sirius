@@ -580,6 +580,34 @@ aplicar la etiqueta, y la etiqueta es lo que dispara el marcador—. Con eso:
   Lo único que cambia en el árbol después de esta captura es la transcripción
   de estas mismas cifras.
 
+- **Ronda 12 (CLAUDE-R12-001 y CLAUDE-R12-002), sobre el árbol de `8248592`**:
+  una sola invocación de `pwsh -File scripts/check.ps1` (Ruff format, Ruff
+  lint, mypy, pytest), código de salida **0**,
+  `5098 passed, 17 skipped, 2 xfailed in 462.36s (0:07:42)`. La cifra sube en 1
+  respecto de la ronda 11 (`5097`): es la prueba nueva
+  `test_una_parada_posterior_a_la_ultima_escritura_no_abstiene_el_ancla`
+  (`tests/engine/test_reflect.py`), la gemela de
+  `test_la_abstencion_tambien_alcanza_a_la_parada_posterior_con_aviso_propio`
+  en el tramo que el recorrido reproduce. Mutaciones vistas caer:
+
+  1. CLAUDE-R12-001, sobre el árbol anterior a la corrección (`ddbc958`),
+     fechando la entrada de la prueba de la ronda 9 con instantes del tramo
+     recorrido (`_paradas(*entradas)` →
+     `_paradas(*entradas, desde=datetime(2026, 9, 5, 5, 0, tzinfo=UTC))`):
+     `E AssertionError: assert resultado.pasos == ()`, contra un plan de ocho
+     pasos que termina en `work_item_delivered`. Es la demostración de que el
+     texto del ADR y del docstring afirmaban una limitación que producción no
+     tiene sobre ese tramo.
+  2. La prueba nueva, mutando el predicado de producción -quitando
+     `and (parada.publicado_en is None or parada.publicado_en <=
+     work_item.updated_at)` de `_hay_una_parada_posterior_sin_aviso`-, falla
+     con `E AssertionError: assert 'WI-20260902-174417: el motor está en
+     estado=needs_decision ... no se toca nada' is None`. La corrección deja
+     ese filtro intacto: esta ronda no toca ni una línea de lógica.
+
+  Lo único que cambia en el árbol después de esta captura es la transcripción
+  de estas mismas cifras.
+
 ## Consecuencias
 
 - **Ronda 6, CLAUDE-R6-001 y CLAUDE-R6-002 (misma raíz): la cota de la parada
