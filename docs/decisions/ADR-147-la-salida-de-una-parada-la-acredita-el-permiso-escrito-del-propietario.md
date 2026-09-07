@@ -552,6 +552,34 @@ aplicar la etiqueta, y la etiqueta es lo que dispara el marcador—. Con eso:
   sobre `tests/engine`). Lo único que cambia en el árbol después de esta
   captura es la transcripción de estas mismas cifras.
 
+- **Ronda 11 (CLAUDE-R11-001 y CLAUDE-R11-002), sobre el árbol de `0ee3d5a`**:
+  una sola invocación de `pwsh -File scripts/check.ps1` (Ruff format, Ruff
+  lint, mypy, pytest), código de salida **0**,
+  `5097 passed, 17 skipped, 2 xfailed in 466.54s (0:07:46)`. La cifra sube en 1
+  respecto de la ronda 10 (`5096`): es la prueba nueva
+  `test_una_parada_fechada_que_ningun_tramo_recrea_abandona_el_recorrido`
+  (`tests/engine/test_reflect.py`), la gemela FECHADA de la roja de la ronda
+  10. Mutaciones vistas caer, sobre el árbol anterior a la corrección
+  (`266a46c`):
+
+  1. CLAUDE-R11-001, con el filtro de la ronda 10 en su sitio
+     (`and (parada.publicado_en is None or parada.publicado_en <=
+     work_item.updated_at)` en `_paradas_que_el_recorrido_debe_recrear`), la
+     prueba nueva falla con
+     `E AssertionError: assert (PasoReflejo(...ostico=None),) == ()` -el
+     recorrido reactiva con el único `continua`, el de la primera parada-.
+     La corrección, que es quitar ese filtro, no mueve ninguna otra prueba:
+     `62 passed` en `tests/engine/test_reflect.py` y `1283 passed, 1 skipped`
+     en `tests/engine`.
+  2. CLAUDE-R11-002, devolviendo la llamada del doble a su forma anterior
+     (`_paradas(*entradas, desde=_AHORA)` → `_paradas(*entradas)` en
+     `test_el_doble_de_cronologia_proyecta_lo_mismo_que_la_proyeccion_real`),
+     la comparación nueva de instantes falla con
+     `E assert (None, None, None, None) == (datetime.dat...timezone.utc))`.
+
+  Lo único que cambia en el árbol después de esta captura es la transcripción
+  de estas mismas cifras.
+
 ## Consecuencias
 
 - **Ronda 6, CLAUDE-R6-001 y CLAUDE-R6-002 (misma raíz): la cota de la parada
