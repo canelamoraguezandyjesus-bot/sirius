@@ -629,6 +629,20 @@ aplicar la etiqueta, y la etiqueta es lo que dispara el marcador—. Con eso:
   marcadores. Esta ronda, por tanto, **no cambia código ni pruebas**: registra
   la decisión y su comprobación.
 
+- **Comprobación de la ronda 13, sobre el árbol de `1f77b6a`**: una sola
+  invocación de `pwsh -File scripts/check.ps1` (Ruff format, Ruff lint, mypy,
+  pytest), código de salida **0**,
+  `5102 passed, 17 skipped, 2 xfailed in 446.40s (0:07:26)`. La cifra sube en 4
+  respecto de la ronda 12 (`5098`) y ninguna de las cuatro es de este trabajo:
+  entran con el merge de `main` (`287d4b5`), que trae ADR-157 y sus pruebas del
+  marcador por parada (`07a51b1`, PR #562). Esta ronda no cambia código ni
+  pruebas -es documental-, así que no hay mutación que enseñar: lo que verifica
+  el texto corregido es `git diff --quiet main HEAD -- .github/`, que sale en
+  **0** y demuestra que #546 no toca el fichero que CODEX-001 señala.
+
+  Lo único que cambia en el árbol después de esta captura es la transcripción
+  de estas mismas cifras.
+
 ## Consecuencias
 
 - **Ronda 6, CLAUDE-R6-001 y CLAUDE-R6-002 (misma raíz): la cota de la parada
