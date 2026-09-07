@@ -608,6 +608,27 @@ aplicar la etiqueta, y la etiqueta es lo que dispara el marcador—. Con eso:
   Lo único que cambia en el árbol después de esta captura es la transcripción
   de estas mismas cifras.
 
+- **Ronda 13 (CODEX-001): fuera del alcance de esta PR por decisión del
+  propietario (07-09-2026, 21:15 UTC), atendida en #563.** La revisión levantó
+  como P1 que `.github/workflows/notify-sirius-state.yml:76` deduplica por
+  `incidencia-estado-head-run` mientras el §7 de
+  `docs/implementation/AUTOMATION_OPERATING_CONTRACT.md` sigue describiendo la
+  clave `incidencia-estado-head`. La contradicción es real, pero **no nace de
+  este trabajo**: ese fichero llegó a la rama con el merge de `main` y su
+  autoría es `07a51b1` (ADR-157, PR #562, ya fusionada). Comprobado sobre el
+  árbol de `287d4b5`: `git diff --quiet main HEAD -- .github/` sale en **0**,
+  es decir, #546 no cambia ni una línea de `.github/**`. El marcador con el run
+  es la decisión deliberada de ADR-157, con su coste aceptado por escrito allí;
+  lo que faltaba era el otro lado del contrato, y eso se corrige en su propia
+  ficha (#563, solo documentación, que además pasa ADR-157 a ACEPTADO).
+
+  Lo que sí toca a este encargo ya estaba hecho y sigue verde: la proyección
+  lee el marcador con y sin sufijo de run
+  (`mirror_projection.py`, `r"<!--\s*sirius-notification:(sirius:[a-z-]+):([^\s>:]*)(?::[^\s>]*)?\s*-->"`),
+  de modo que el cambio de clave de ADR-157 no rompe la acreditación por
+  marcadores. Esta ronda, por tanto, **no cambia código ni pruebas**: registra
+  la decisión y su comprobación.
+
 ## Consecuencias
 
 - **Ronda 6, CLAUDE-R6-001 y CLAUDE-R6-002 (misma raíz): la cota de la parada
