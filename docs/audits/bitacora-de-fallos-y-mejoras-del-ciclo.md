@@ -3016,6 +3016,64 @@ ADR o su incidencia cuando se adopte.
   maniobra de fusión obligada (deuda 23) y un fallo de vista del revisor en
   rondas anteriores—. No es un defecto del freno: es que **un freno bueno
   obliga a mirar, y mirar es exactamente lo que hizo falta**.
+
+---
+
+### 64. H4 queda diagnosticado hasta el mecanismo, y no es lo que ADR-148 dice: es una puerta de activación por subcadena (08-09-2026, 16:20-16:35 UTC)
+
+- **Punto de partida**: ADR-148 clasifica H4 como «de ranking, no de búsqueda»,
+  y sobre esa frase escribí el encargo. La entrada 58 ya mostró que **quitar el
+  límite no recupera `MEM-001`**, y la 61 que **el ámbito tampoco**. Quedaba
+  saber qué sí.
+- **La cadena de descartes, cada uno con una variable sola:**
+  1. **El límite de ACOTADA**: no. Forzando EXHAUSTIVA sin límite entran 5 y
+     `MEM-001` no está.
+  2. **El ámbito**: no. Declarándolo global entran otros pero `MEM-001` sigue
+     fuera, y el banco entero empeora. Además comprobé que
+     `_ambito_de_produccion` del guion y `ambito_de_recuperacion` del producto
+     son **idénticas carácter a carácter**, así que ni siquiera divergen.
+  3. **`tiempo_objetivo`**: no.
+  4. **Sustituir la petición del caso por la uniforme SOLO en ese caso**: sí
+     —`MEM-001` entra y el caso queda exacto—. Eso puso la diferencia dentro
+     del traductor, no en el motor.
+  5. **Diff de las dos `Peticion` campo a campo**, que es lo que había que
+     haber hecho tres sondas antes: difieren en cardinalidad, límites,
+     ventana y **propósito**.
+  6. **Sustituir solo `proposito`**: `MEM-001` **ENTRA**, `faltan=[]`, a
+     cambio de dos extras más. **Ésa es la causa.**
+- **El mecanismo, leído en el código y no supuesto**: `MEM-001` no llega por la
+  búsqueda, llega por la **ampliación por categoría** (M14), y esa ampliación
+  corre solo si `category_matching_enabled` **y**
+  `pide_contexto(peticion.proposito)`
+  (`rank_relevant_knowledge.py:539`). Y `pide_contexto` es una **comprobación
+  de subcadena**: `PROPOSITO_DE_CONTEXTO in proposito.casefold()`, con
+  `PROPOSITO_DE_CONTEXTO = "contexto"` (`relevance.py:156, 345-354`). El
+  propósito de la política uniforme —`'recuperacion de contexto relevante
+  (B6b)'`— contiene «contexto»; el que el caso declara
+  —`'responder_al_usuario'`— no. **Toda la diferencia es esa subcadena.**
+- **Tres consecuencias, y ninguna es «mejorar el orden»:**
+  1. **ADR-148 clasifica mal H4.** No es de ranking: es de **activación**. El
+     elemento no se ordena tarde, es que **el único camino que lo alcanza no
+     se enciende**.
+  2. **Es la deuda 2 otra vez, en otro sitio.** Aquel intérprete de intención
+     decidía por subcadena y daba falsos positivos; aquí una subcadena decide
+     si se activa un camino de recuperación entero. La fragilidad es la misma
+     y ahora tiene una segunda víctima medida.
+  3. **Y toca la puerta que el propietario tiene cerrada.** La ampliación
+     exige además `category_matching_enabled`, que el arnés del banco abre
+     (`category_matching_enabled=True`) y **producción no**. O sea que en el
+     producto de hoy `MEM-001` es inalcanzable por ese camino sea cual sea el
+     propósito. **H4 no se puede cerrar sin tocar esa puerta**, y eso ya no es
+     un hueco: es la decisión que ADR-148 reserva para el final de la línea.
+- **Lo que esto le ahorra al encargo**: llega con la causa localizada hasta la
+  línea, tres hipótesis descartadas con número y una pregunta de producto
+  nítida en vez de un «mejora el ranking» que apuntaba al sitio equivocado.
+- **Y una lección sobre mi propio método**: hice tres sondas antes de mirar el
+  diff de las dos peticiones campo a campo, y **dos de esas sondas no probaban
+  nada** —sustituí `modo`, `permiso` y `propósito` por valores que el caso ya
+  tenía—. El diff costaba un minuto y las habría ahorrado todas. **Antes de
+  variar una variable, mirar en qué difieren de verdad las dos
+  configuraciones.**
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
