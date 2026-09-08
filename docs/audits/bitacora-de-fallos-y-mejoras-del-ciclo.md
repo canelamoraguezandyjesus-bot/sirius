@@ -2391,6 +2391,53 @@ ADR o su incidencia cuando se adopte.
   hereda como ciertas y construye encima. **Los tres llevan ya un bloque de
   reglas de evidencia** que dice, en el propio encargo, que si algo del
   contexto no cuadra con el árbol manda el árbol.
+
+---
+
+### 55. Medí la palanca 2 con H2 simulado: el diagnóstico acertaba la causa, pero contra el suelo real la palanca no paga (08-09-2026, 13:20-13:50 UTC)
+
+- **Primero validé el instrumento, y esta vez sí antes de usarlo.** Corrí el
+  guion de diagnóstico sobre la rama de la palanca 2 (`58fa079e`) sin parchear
+  nada: sale `17/47; 57 de más; 39/81; 9 críticas`, **idéntico** al número que
+  publicó el veredicto de #572. Sin esa reproducción, ninguna de las
+  comparaciones de abajo valdría nada.
+- **Las seis mediciones, todas con `--peticion` y el mismo guion:**
+
+  | árbol | fechado del canon | exactas | de más | hallados | críticas |
+  |---|---|---|---|---|---|
+  | `22e880e` (main) | ninguno, como hoy | 16/47 | 162 | 73/81 | 0 |
+  | `22e880e` (main) | **por ítem** | **17/47** | **162** | **74/81** | **0** |
+  | `58fa079` (palanca 2) | ninguno | 17/47 | 57 | 39/81 | **9** |
+  | `58fa079` | constante `2026-01-01` (la del veredicto) | 16/47 | 163 | 74/81 | 0 |
+  | `58fa079` | solo `created_at` por ítem | 14/47 | 146 | 62/81 | **5** |
+  | `58fa079` | `created_at` **y** `updated_at` por ítem | 16/47 | 164 | 73/81 | 0 |
+
+- **Lo que establece.** (1) El veredicto acertó la **causa**: con un fechado
+  fiel las nueve omisiones críticas desaparecen, así que no las provocaba la
+  derivación sino el arnés. (2) Falló la **magnitud**, y en la dirección que
+  importa: H2 sola deja el suelo en `17/47; 162; 74/81; 0` —mejor que hoy en
+  las cuatro columnas—, no en `16/47; 163; 74/81`. (3) **Contra ese suelo, la
+  palanca 2 no paga**: `16/47; 164; 73/81; 0`, peor en tres columnas y mejor en
+  ninguna, con el techo de los ejes del corpus todavía en `20/47; 144`.
+- **Y el dato de método, que vale más que los tres anteriores**: el número de
+  esa rama va de **9 críticas a 5 y a 0** según cómo se feche el arnés, sin que
+  cambie una línea de su código. **Una palanca cuya medición se mueve así con
+  una decisión del arnés no se puede juzgar hasta que esa decisión esté
+  tomada.** Es la deuda 21 en su forma más aguda: no es que el arnés tenga un
+  fallo, es que el arnés **es un parámetro libre** del experimento.
+- **Estuve a punto de cometer el error que acababa de documentar.** Mi primera
+  sonda sobre esa rama fechó solo `created_at` y dio `14/47; 146; 62/81; 5
+  críticas`; iba a leerlo como «la palanca empeora el sistema». Me paró que el
+  número era raro y que la deuda 21 —escrita hacía media hora— dice que la
+  contra-medición tiene que ser tan fiel como la palanca que juzga: esa rama
+  deriva su ventana también de `updated_at`, que yo no había tocado. Fechando
+  las dos columnas, las cinco críticas desaparecen. **La regla se cobró su
+  primer acierto sobre su propio autor, y a los treinta minutos de escribirla.**
+- **Publicado en #572 como evidencia, sin reanudarla**: la incidencia sigue
+  parada y el comentario dice expresamente que no es una decisión ni una orden.
+  Y publicado en #574 el matiz de `updated_at`, marcado como **no ampliación de
+  alcance**: fecharlo no es su objetivo, pero si lo deja como está tiene que
+  declararlo como limitación, porque el arnés queda fechado a medias.
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
