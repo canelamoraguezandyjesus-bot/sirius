@@ -2398,6 +2398,23 @@ ADR o su incidencia cuando se adopte.
     tocarse. Lo que consume rondas en este ciclo no es el trabajo: es el
     registro del trabajo.
 
+    **Y sigue en #570 (08-09), pese a estar puesto como LÍMITE EXPLÍCITO en el
+    encargo.** Dos rondas más de la misma familia: CLAUDE-R2-002 (la sección de
+    validación quedó anclada a los árboles de la ronda 1, con la frase «lo
+    único posterior a d247af9 es este párrafo» ya falsa) y CLAUDE-R3-001 (el
+    inventario de guardianes dice 16 pruebas donde el árbol tiene 26, y la
+    ficha se contradice dentro de la misma sección). **Van cinco rondas de esta
+    familia en dos encargos.** Yo escribí en #570 «la sección de validación del
+    ADR debe traer la terna, el código de salida y el ancla al árbol» y se
+    incumplió en la primera corrección: **pedirlo por escrito en el encargo no
+    basta**.
+
+    Y hay un matiz nuevo que el guardián tiene que cubrir: el defecto no es que
+    el ADR nazca mal, es que **la corrección de cada ronda introduce la
+    imprecisión que encuentra la siguiente**, porque el ADR crece y nadie
+    contrasta el conjunto. Un guardián que solo valide el ADR al crearlo no
+    serviría: tiene que correr en CADA commit.
+
 ---
 
 ### 51. La deuda 7 cerrada, y la reprodujo quien yo dije que no podría (08-09-2026, 08:03-08:20 UTC)
