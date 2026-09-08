@@ -33,6 +33,31 @@ Lo que esta decisión **no** autoriza:
 - No autoriza relajar, renombrar ni aplazar ninguno de los tres hallazgos.
 - No autoriza tocar nada fuera de los límites que cada hallazgo declara.
 
+## Por qué mi propia regla de «solo prosa de la ficha» NO se aplica aquí
+
+Escribí en la ronda 5 de #574 que **si el freno para el ciclo y la ronda trae
+solo prosa de la ficha, no autorizo otra ronda**. Dos de los tres hallazgos de
+esta ronda son de ficha, así que hay que decir por qué no dispara — y la
+respuesta ya está escrita por mí en la entrada 63, no la invento ahora:
+
+> «El criterio se refiere a **defectos de PROSA introducidos por la
+> corrección**» — y allí mismo, sobre un hallazgo documental: «no es prosa: es
+> un agujero de cobertura».
+
+Los dos motivos, independientes:
+
+1. **Ninguno de los tres lo introdujo una corrección.** Los tres estaban
+   íntegros en el head de la ronda 1; son goteo, no prosa generada al parchear.
+   El criterio se escribió contra el bucle «cada corrección añade prosa nueva
+   que nadie verifica», y aquí no hay tal bucle: el código de la ronda 1 se
+   corrigió una vez y la ronda 2 miró sitios que nadie había mirado.
+2. **No son prosa.** `CLAUDE-R2-001` dice que el titular afirma más de lo que
+   el dato sostiene —el banco no distingue registro de vigencia—, y eso cambia
+   **qué significan las cifras**, no cómo están redactadas; tanto, que lo he
+   subido a deuda 27 y alcanza a H2, que ya está fusionado. `CLAUDE-R2-003`
+   dice que la ficha afirma «E3 se comporta exactamente como antes» y existe un
+   tercer caso donde no. Las dos son afirmaciones falsas, no estilo.
+
 ## Criterio de parada, decidido ahora
 
 Si tras la corrección de la ronda 2 la ronda 3 trae **hallazgos no marcados
