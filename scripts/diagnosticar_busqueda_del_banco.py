@@ -40,7 +40,7 @@ from __future__ import annotations
 import json
 import sys
 import tempfile
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -81,8 +81,21 @@ def _ambito_de_produccion(active_project_id: int | None) -> Ambito:
 
 
 def _medir(
-    banco: Mapping[str, Any], *, con_ejes: bool, con_peticion: bool
+    banco: Mapping[str, Any],
+    *,
+    con_ejes: bool,
+    con_peticion: bool,
+    peticion_alternativa: Callable[..., Peticion] | None = None,
 ) -> tuple[Any, list[list[Clave]], dict[str, int]]:
+    """Mide la etapa de búsqueda con las palancas pedidas.
+
+    ``peticion_alternativa`` sustituye a la petición del caso cuando se mide
+    algo que la PRODUCE en vez de leerla del banco — hoy, el intérprete de
+    ADR-164 (``scripts/medir_interprete_de_peticion.py``). Tiene la firma de
+    ``_peticion_ordinaria`` (``query_text, operation_id, *,
+    active_project_id``) y manda sobre ``con_peticion``, que sigue siendo el
+    techo declarado del banco.
+    """
     casos = banco["casos"]
     consultas = [caso["consulta"] for caso in casos]
     if len(set(consultas)) != len(consultas):
@@ -129,7 +142,9 @@ def _medir(
     arnes._load_canon_item = cargar_y_registrar
     if con_ejes:
         arnes.build_staged_engine_port = puerto_con_ejes
-    if con_peticion:
+    if peticion_alternativa is not None:
+        recuperacion._peticion_ordinaria = peticion_alternativa
+    elif con_peticion:
         recuperacion._peticion_ordinaria = peticion_del_caso
     try:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as carpeta:

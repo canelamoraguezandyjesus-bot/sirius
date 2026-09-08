@@ -26,6 +26,7 @@ from sirius.adapters.persistence.sqlite_identity_repository import (
 )
 from sirius.adapters.secrets.fake import FakeSecretStore
 from sirius.application.context import ContextBuilder
+from sirius.application.interpret_query_request import InterpreteDePeticion
 from sirius.application.rank_relevant_knowledge import RankRelevantKnowledgeUseCase
 from sirius.composition_root import (
     _CATEGORY_VOCABULARY,
@@ -35,6 +36,7 @@ from sirius.composition_root import (
     build_conversation_dependencies,
 )
 from sirius.config.settings import save_settings
+from sirius.domain.staged_engine_contracts import Cardinalidad, Modo
 
 
 class _RecordingRankUseCase(RankRelevantKnowledgeUseCase):
@@ -70,10 +72,29 @@ class _RecordingRelevanceFilterAdapter:
         return candidates
 
 
+class _RecordingQueryIntentAdapter:
+    """Stands in for ``OllamaQueryIntentClassifierAdapter`` (ADR-164): never
+    touches the network, just records the model composition_root passed, and
+    behaves like a model that could not decide, so the interpreter falls back
+    to the uniform petition and the rest of the wiring completes normally."""
+
+    captured: ClassVar[list[str]] = []
+
+    def __init__(self, model: str) -> None:
+        type(self).captured.append(model)
+
+    def classify_intent(self, query_text: str) -> None:  # pragma: no cover
+        return None
+
+
 def _patch_recorders(monkeypatch: Any) -> None:
     _RecordingRankUseCase.captured = []
     _RecordingContextBuilder.captured = []
     _RecordingRelevanceFilterAdapter.captured = []
+    _RecordingQueryIntentAdapter.captured = []
+    monkeypatch.setattr(
+        composition_root, "OllamaQueryIntentClassifierAdapter", _RecordingQueryIntentAdapter
+    )
     monkeypatch.setattr(composition_root, "RankRelevantKnowledgeUseCase", _RecordingRankUseCase)
     monkeypatch.setattr(composition_root, "ContextBuilder", _RecordingContextBuilder)
     monkeypatch.setattr(
@@ -192,3 +213,43 @@ def test_gate_wiring_never_breaks_the_relevance_filter_port_contract(tmp_path: P
     # local Ollama.
     result = dependencies.send_message_use_case.send_message("hola")
     assert result.user_message.content == "hola"
+
+
+def test_gate_closed_builds_the_interpreter_without_a_model(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    """ADR-164 (palanca 1 de ADR-148): el intérprete de peticiones va detrás
+    de la MISMA puerta cerrada por defecto. Con ella cerrada, el adaptador
+    local ni siquiera se instancia y el intérprete se construye sin
+    clasificador — es decir, emitiendo exactamente la petición uniforme de
+    antes de ADR-164."""
+    _patch_recorders(monkeypatch)
+
+    build_conversation_dependencies(
+        tmp_path / "sirius.db", tmp_path / "backups", secret_store=FakeSecretStore()
+    )
+
+    assert _RecordingQueryIntentAdapter.captured == []
+    interprete = _RecordingRankUseCase.captured[0]["query_request_interpreter"]
+    assert isinstance(interprete, InterpreteDePeticion)
+    peticion = interprete.interpretar("consulta", "op-1", active_project_id=None)
+    assert peticion.modo is Modo.M1_ORDINARIO
+    assert peticion.cardinalidad is Cardinalidad.EXHAUSTIVA
+    assert peticion.ventana.corte_de_registro is None
+
+
+def test_gate_open_wires_the_local_query_intent_model(tmp_path: Path, monkeypatch: Any) -> None:
+    """Con la puerta abierta, el intérprete recibe el adaptador local — el
+    MISMO modelo Ollama que ya usan el filtro de relevancia y el
+    clasificador (D7 punto 5), nunca el proveedor de pago."""
+    _patch_recorders(monkeypatch)
+    save_settings({"category_matching_enabled": True})
+
+    build_conversation_dependencies(
+        tmp_path / "sirius.db", tmp_path / "backups", secret_store=FakeSecretStore()
+    )
+
+    assert _RecordingQueryIntentAdapter.captured == [_RELEVANCE_FILTER_MODEL]
+    assert isinstance(
+        _RecordingRankUseCase.captured[0]["query_request_interpreter"], InterpreteDePeticion
+    )

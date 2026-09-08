@@ -11,6 +11,7 @@ hand-written migration runs, so this is the only way to exercise a real FTS5
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 from sqlalchemy import text
@@ -34,6 +35,10 @@ from sirius.application.approve_decision import ApproveDecisionUseCase
 from sirius.application.archive_decision import ArchiveDecisionUseCase
 from sirius.application.archive_memory import ArchiveMemoryUseCase
 from sirius.application.delete_memory import DeleteMemoryUseCase
+from sirius.application.interpret_query_request import (
+    PROPOSITO_RECUPERACION_ORDINARIA,
+    InterpreteDePeticion,
+)
 from sirius.application.propose_decision import ProposeDecisionUseCase
 from sirius.application.rank_relevant_knowledge import RankRelevantKnowledgeUseCase
 from sirius.application.save_manual_memory import SaveManualMemoryUseCase
@@ -43,7 +48,15 @@ from sirius.application.supersede_decision import SupersedeDecisionUseCase
 from sirius.application.tag_category import CategoryTargetKind
 from sirius.domain.conversation import SourceMessageChoice
 from sirius.domain.criticality import Criticality
-from sirius.domain.staged_engine_contracts import PuertoDeRecuperacion, SenalesDeCandidato
+from sirius.domain.query_intent import IntencionDeConsulta
+from sirius.domain.staged_engine_contracts import (
+    Ambito,
+    Cardinalidad,
+    Modo,
+    Peticion,
+    PuertoDeRecuperacion,
+    SenalesDeCandidato,
+)
 
 
 def _bootstrap(database_path: Path) -> None:
@@ -75,6 +88,7 @@ def _use_case(
     category_matching_enabled: bool = False,
     staged_engine_port: PuertoDeRecuperacion | None = None,
     staged_engine_candidate: SenalesDeCandidato | None = None,
+    query_request_interpreter: InterpreteDePeticion | None = None,
 ) -> RankRelevantKnowledgeUseCase:
     return RankRelevantKnowledgeUseCase(
         memory_repository=build_sqlite_memory_repository(database_path),
@@ -86,6 +100,7 @@ def _use_case(
         category_matching_enabled=category_matching_enabled,
         staged_engine_port=staged_engine_port,
         staged_engine_candidate=staged_engine_candidate,
+        query_request_interpreter=query_request_interpreter,
     )
 
 
@@ -1653,3 +1668,175 @@ def test_siembra_seeds_nothing_with_the_gate_closed(tmp_path: Path) -> None:
     )
 
     assert resultado == ()
+
+
+# --------------------------------------------------------------------------
+# ADR-164 (palanca 1 de ADR-148): la pregunta se convierte en una `Peticion`
+# propia, no en la política uniforme de antes.
+# --------------------------------------------------------------------------
+
+
+class _ModeloDeIntencion:
+    """Doble determinista del modelo local: contesta la intención que se le
+    dé. En CI no hay Ollama, y fingir que lo hay mediría el doble, no el
+    modelo (ADR-164): lo que estas dos pruebas fijan es el CABLEADO —que la
+    petición emitida sale de la consulta— y las reglas del producto, no la
+    calidad de la inferencia."""
+
+    def __init__(self, intencion: IntencionDeConsulta) -> None:
+        self._intencion = intencion
+
+    def classify_intent(self, query_text: str) -> IntencionDeConsulta:
+        return self._intencion
+
+
+def _espiar_peticiones(
+    monkeypatch: pytest.MonkeyPatch,
+) -> list[Peticion]:
+    """Las peticiones que `rank()` entrega realmente a `recuperar()`.
+
+    Envuelve al motor real en vez de sustituirlo: lo que se observa es la
+    petición que el motor recibe, con el motor haciendo su trabajo de
+    siempre."""
+    capturadas: list[Peticion] = []
+    # El módulo no reexporta ``recuperar`` en su ``__all__`` (es un detalle
+    # suyo, no parte de su interfaz), así que se llega a él por el módulo
+    # mismo en vez de importarlo: envolverlo es justo lo que esta espía hace.
+    modulo: Any = rank_relevant_knowledge_module
+    real = modulo.recuperar
+
+    def espia(peticion: Peticion, puerto: Any, candidato: Any, plano: Any) -> Any:
+        capturadas.append(peticion)
+        return real(peticion, puerto, candidato, plano)
+
+    monkeypatch.setattr(rank_relevant_knowledge_module, "recuperar", espia)
+    return capturadas
+
+
+@pytest.mark.integration
+def test_produccion_emite_la_peticion_derivada_de_la_consulta_no_la_uniforme(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """El criterio de aceptación de ADR-164: con el intérprete cableado, la
+    `Peticion` que el motor recibe trae el modo, la cardinalidad, el límite y
+    el tiempo DERIVADOS de la consulta, y no los cuatro valores fijos que
+    `_peticion_ordinaria` ponía para toda pregunta (M1, EXHAUSTIVA, sin
+    límite que ate, «ahora» sin corte).
+
+    El permiso y el propósito NO se derivan: son reglas del producto, y esta
+    prueba comprueba a la vez que el propósito emitido sigue siendo el fijo
+    de producción — el que activa la siembra de M20 (ADR-129)."""
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    active_project_id, _ = _two_projects(database_path)
+    puerto = build_staged_engine_port(database_path)
+    capturadas = _espiar_peticiones(monkeypatch)
+    interprete = InterpreteDePeticion(
+        intent_classifier=_ModeloDeIntencion(
+            IntencionDeConsulta(
+                modo=Modo.M2_HISTORICO,
+                cardinalidad=Cardinalidad.ACOTADA,
+                limite=3,
+                tiempo_objetivo="2026-03-20T00:00:00Z",
+                corte_de_registro="2026-03-01T00:00:00Z",
+            )
+        )
+    )
+
+    try:
+        _use_case(
+            database_path,
+            category_matching_enabled=True,
+            staged_engine_port=puerto,
+            staged_engine_candidate=staged_engine_candidate.candidato(),
+            query_request_interpreter=interprete,
+        ).rank("¿qué decisiones de presupuesto usábamos antes?")
+    finally:
+        puerto.close()
+
+    assert len(capturadas) == 1
+    peticion = capturadas[0]
+    assert peticion.modo is Modo.M2_HISTORICO
+    assert peticion.admite_no_vigentes is True
+    assert peticion.cardinalidad is Cardinalidad.ACOTADA
+    assert peticion.limite_objetivo == 3
+    assert peticion.ventana.tiempo_objetivo == "2026-03-20T00:00:00Z"
+    assert peticion.ventana.corte_de_registro == "2026-03-01T00:00:00Z"
+    # Las reglas del producto, intactas: propósito fijo y ámbito de M16.
+    assert peticion.proposito == PROPOSITO_RECUPERACION_ORDINARIA
+    assert peticion.ambito == Ambito(global_=False, proyectos=(str(active_project_id),))
+
+
+@pytest.mark.integration
+def test_sin_interprete_la_peticion_emitida_sigue_siendo_la_uniforme(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """La cara opuesta, y el candado del pasado: sin intérprete cableado
+    —el estado por defecto de todo llamador anterior a ADR-164— la petición
+    emitida es exactamente la de siempre."""
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    _two_projects(database_path)
+    puerto = build_staged_engine_port(database_path)
+    capturadas = _espiar_peticiones(monkeypatch)
+
+    try:
+        _use_case(
+            database_path,
+            category_matching_enabled=True,
+            staged_engine_port=puerto,
+            staged_engine_candidate=staged_engine_candidate.candidato(),
+        ).rank("¿qué decisiones de presupuesto usábamos antes?")
+    finally:
+        puerto.close()
+
+    assert len(capturadas) == 1
+    peticion = capturadas[0]
+    assert peticion.modo is Modo.M1_ORDINARIO
+    assert peticion.cardinalidad is Cardinalidad.EXHAUSTIVA
+    assert peticion.admite_no_vigentes is False
+    assert peticion.ventana.corte_de_registro is None
+
+
+@pytest.mark.integration
+def test_un_corte_de_registro_derivado_excluye_lo_registrado_despues(tmp_path: Path) -> None:
+    """La consecuencia observable, sin espiar nada: `G8`
+    (`src/sirius/domain/staged_engine_gates.py`) descarta lo registrado
+    después del corte, y hasta ADR-164 producción nunca emitía ninguno, así
+    que ese camino del motor era inalcanzable desde `rank()`."""
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    active_project_id, _ = _two_projects(database_path)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+    memoria = SaveManualMemoryUseCase(unit_of_work).save(
+        "faroquenopalabraunica sobre la costa", project_id=active_project_id
+    )
+
+    def _rank(interprete: InterpreteDePeticion | None) -> list[int]:
+        puerto = build_staged_engine_port(database_path)
+        try:
+            return [
+                c.item_id
+                for c in _use_case(
+                    database_path,
+                    category_matching_enabled=True,
+                    staged_engine_port=puerto,
+                    staged_engine_candidate=staged_engine_candidate.candidato(),
+                    query_request_interpreter=interprete,
+                ).rank("faroquenopalabraunica")
+            ]
+        finally:
+            puerto.close()
+
+    con_corte = InterpreteDePeticion(
+        intent_classifier=_ModeloDeIntencion(
+            IntencionDeConsulta(
+                modo=Modo.M1_ORDINARIO,
+                cardinalidad=Cardinalidad.EXACTA,
+                corte_de_registro="2000-01-01T00:00:00Z",
+            )
+        )
+    )
+
+    assert _rank(None) == [memoria.id]
+    assert _rank(con_corte) == []

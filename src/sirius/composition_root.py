@@ -42,6 +42,7 @@ from sirius.adapters.llm.token_counter import CharacterHeuristicTokenCounter
 from sirius.adapters.llm.unconfigured import UnconfiguredLLMProvider
 from sirius.adapters.ollama_category_classifier import OllamaCategoryClassifierAdapter
 from sirius.adapters.ollama_criticality_classifier import OllamaCriticalityClassifierAdapter
+from sirius.adapters.ollama_query_intent_classifier import OllamaQueryIntentClassifierAdapter
 from sirius.adapters.ollama_relevance_filter import OllamaRelevanceFilterAdapter
 from sirius.adapters.persistence.sqlite_conversation_repository import (
     build_sqlite_conversation_repository,
@@ -85,6 +86,7 @@ from sirius.application.export_structured import ExportStructuredUseCase
 from sirius.application.get_conversation_history import GetConversationHistoryUseCase
 from sirius.application.historical_projects import HistoricalProjectsUseCase
 from sirius.application.initial_project import InitialProjectUseCase
+from sirius.application.interpret_query_request import InterpreteDePeticion
 from sirius.application.knowledge_overview import GetKnowledgeOverviewUseCase
 from sirius.application.memory_origin import GetMemoryOriginUseCase
 from sirius.application.project_continuity import ProjectContinuityUseCase
@@ -525,6 +527,24 @@ def build_conversation_dependencies(
         category_matching_enabled=category_matching_enabled,
         staged_engine_port=staged_engine_port,
         staged_engine_candidate=staged_engine_candidato(),
+        # ADR-164 (palanca 1 de ADR-148): la pregunta se convierte en una
+        # `Peticion` propia en vez de en la política uniforme de antes. Va
+        # detrás de la MISMA puerta cerrada por defecto que el resto del
+        # camino del motor por etapas: con `category_matching_enabled` en
+        # False, `_rank_via_staged_engine` no se ejecuta siquiera, y el
+        # intérprete se construye sin clasificador —es decir, emitiendo la
+        # política uniforme— para que la puerta cerrada no dependa de que
+        # este parámetro sea `None`. El adaptador es el TERCER cliente del
+        # mismo servicio Ollama local (D7 punto 5), nunca un segundo
+        # componente de red ni el proveedor de pago: la pregunta del usuario
+        # no sale de la máquina para decidir cómo buscar en su memoria.
+        query_request_interpreter=InterpreteDePeticion(
+            intent_classifier=(
+                OllamaQueryIntentClassifierAdapter(ollama_model)
+                if category_matching_enabled
+                else None
+            )
+        ),
     )
     context_builder = ContextBuilder(
         identity_repository=identity_repository,
