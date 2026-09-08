@@ -743,98 +743,105 @@ def test_sin_cambio_de_perfil_hay_exactamente_una_duena(
         pytest.param("programador", "investigador", id="de-programador-a-investigador"),
     ],
 )
-def test_un_perfil_cambiado_no_lo_ejecuta_nadie_y_queda_recuperable(
+def test_un_perfil_cambiado_no_lo_ejecuta_nadie_y_no_retira_nada(
     tmp_path: Path, orden: tuple[str, ...], evento: str, actual: str
 ) -> None:
     """Los dos desenlaces peores, reproducidos sobre `398017a`:
 
     - evento `investigador` y cuerpo `programador`: las dos puertas declinaban y
-      la incidencia se quedaba en `planned` + `implement-requested` **sin que
-      nadie la atendiera**;
+      la incidencia se quedaba **sin que nadie la atendiera**;
     - evento `programador` y cuerpo `investigador`: **las dos** la atendían.
-      Investigación la cerraba en `failed-safely` y el implementador ejecutaba el
-      modelo sobre la misma orden.
 
-    Ahora ninguna ejecuta: ese evento pedía otro trabajo, y hacer el de ahora
-    sería cambiar el tipo de trabajo en silencio. Se explica, se retira el evento
-    y se conserva `sirius:planned`, así que volver a aplicar la etiqueta reactiva.
+    Ninguna ejecuta ya. Y desde la cuarta ronda **tampoco se retira la etiqueta**:
+    esa escritura solo sería legítima si la etiqueta fuese la que trajo este
+    evento, y eso no se puede probar. Se explica y se para en rojo, conservando
+    la activación para que la atienda el evento que sí le corresponde.
     """
     pasos, final = _encadenar(tmp_path, orden, perfil_evento=evento, perfil_actual=actual)
 
     for paso in pasos:
-        assert paso.resultado.codigo == 0, f"{paso.cual}: {paso.resultado.stderr}"
         assert not _atendio(paso), f"{paso.cual} no puede hacerse cargo de un evento rancio"
-    assert "sirius:failed-safely" not in final["labels"], "nadie impone un desenlace"
-    assert "sirius:implement-requested" not in final["labels"], "el evento rancio se retira"
-    assert final["labels"] == ["sirius:planned"], final["labels"]
+    assert [p.cual for p in pasos if p.resultado.codigo != 0], (
+        "la puerta que sería la dueña según el cuerpo actual tiene que parar en rojo"
+    )
+    assert final["labels"] == ["sirius:planned", "sirius:implement-requested"], final["labels"]
     assert len(final["comments"]) == 1, "una sola explicación, corra quien corra primero"
-    assert "perfil-cambiado" in final["comments"][0]
-    assert "vuelve a aplicar" in final["comments"][0], "y dice cómo recuperarlo"
+    comentario = final["comments"][0]
+    assert "perfil-cambiado" in comentario
+    assert "No se ha ejecutado nada" in comentario
+    assert "Tampoco se ha tocado ninguna etiqueta" in comentario, (
+        "el diagnóstico no puede decir que retiró una etiqueta cuando la conservó"
+    )
+    assert "ya no lleva" in comentario, (
+        "ni pedir que se reactive algo que puede estar ya activado: la acción es condicional"
+    )
 
 
 @pytest.mark.parametrize(
-    ("evento", "actual"),
+    ("perfil_a", "perfil_b"),
     [
-        pytest.param("investigador", "programador", id="de-investigador-a-programador"),
-        pytest.param("programador", "investigador", id="de-programador-a-investigador"),
+        pytest.param("investigador", "programador", id="A-investigador-B-programador"),
+        pytest.param("programador", "investigador", id="A-programador-B-investigador"),
     ],
 )
-def test_un_evento_viejo_no_borra_una_activacion_nueva(
-    tmp_path: Path, evento: str, actual: str
+@pytest.mark.parametrize(
+    "rechazo_previo",
+    [pytest.param(False, id="A-nunca-procesado"), pytest.param(True, id="A-ya-rechazado")],
+)
+def test_un_evento_viejo_no_borra_la_activacion_de_uno_nuevo(
+    tmp_path: Path, perfil_a: str, perfil_b: str, rechazo_previo: bool
 ) -> None:
     """La secuencia entera, que es donde estaba el fallo.
 
-    Reproducido sobre `05db7a9`: el reparto rechaza un evento rancio y retira su
-    etiqueta; el propietario **sigue el diagnóstico** y vuelve a aplicarla; se
-    reejecuta el job viejo — y el reparto **borraba la activación nueva**.
+    1. Se activa una orden con `Perfil: A`; su evento **A** queda en cola.
+    2. El propietario cambia el perfil a **B**, retira la etiqueta y la vuelve a
+       aplicar: nace el evento **B**.
+    3. Arranca **A**. La etiqueta que ve es la de B.
+    4. Arranca **B**.
 
-    La escritura que retira la etiqueta solo es legítima si la etiqueta que
-    retira es la que trajo ese evento, y eso no se puede probar. Lo que sí se
-    puede probar es que el rechazo ya se entregó una vez: entonces la etiqueta
-    que hay ahora o es nueva, o es la que no llegó a retirarse, y no hay forma de
-    distinguirlas. Se para en rojo **sin escribir**.
+    Sobre `08f45a5`, en el paso 3 el reparto retiraba la etiqueta —no había
+    ningún marcador que lo frenara, porque A no se había procesado nunca— y en
+    el paso 4 B encontraba solo `sirius:planned` y declinaba: **el encargo se
+    perdía**. La protección de la tercera ronda solo cubría el caso con rechazo
+    previo, y la AUSENCIA del marcador no demuestra que la etiqueta sea de este
+    evento. Se prueban los dos, con marcador y sin él.
     """
     registro = _registro_controlado(tmp_path / "reg", "investigacion", "auditoria")
-    cuerpo_actual = cuerpo_de_orden(actual)
-    cuerpo_evento = cuerpo_de_orden(evento)
+    cuerpo_b = cuerpo_de_orden(perfil_b)
     orden = ("investigacion", "implementacion")
+    incidencia = incidencia_activa(body=cuerpo_b)
 
-    # 1) El evento rancio llega a las dos puertas.
-    incidencia = incidencia_activa(body=cuerpo_actual)
-    for i, cual in enumerate(orden):
-        r = _puerta(
-            cual,
-            tmp_path / f"1-{i}",
-            registro=registro,
-            incidencia=incidencia,
-            cuerpo_del_evento=cuerpo_evento,
-        )
-        assert r.codigo == 0, f"{cual}: {r.stderr}"
-        incidencia = estado_tras(r, cuerpo_actual)
-    assert incidencia["labels"] == ["sirius:planned"], incidencia["labels"]
-    assert len(incidencia["comments"]) == 1
+    if rechazo_previo:
+        # A ya se procesó una vez: su diagnóstico está publicado.
+        for i, cual in enumerate(orden):
+            r = _puerta(
+                cual,
+                tmp_path / f"0-{i}",
+                registro=registro,
+                incidencia=incidencia,
+                cuerpo_del_evento=cuerpo_de_orden(perfil_a),
+            )
+            incidencia = estado_tras(r, cuerpo_b)
+        assert len(incidencia["comments"]) == 1
 
-    # 2) El propietario sigue el diagnóstico y vuelve a activar.
-    incidencia["labels"] = ["sirius:planned", "sirius:implement-requested"]
-
-    # 3) Alguien reejecuta el job del evento VIEJO.
+    # 3) Arranca A -sobre la etiqueta que aplicó B-.
     for i, cual in enumerate(orden):
         r = _puerta(
             cual,
             tmp_path / f"3-{i}",
             registro=registro,
             incidencia=incidencia,
-            cuerpo_del_evento=cuerpo_evento,
+            cuerpo_del_evento=cuerpo_de_orden(perfil_a),
         )
-        assert r.valid != "true", f"{cual} no puede ejecutar un evento rancio"
+        assert r.valid != "true", f"A no puede ejecutar en {cual}"
         assert "sirius:implement-requested" in r.etiquetas, (
-            f"{cual} ha borrado una activación que no es de su evento"
+            f"A ha borrado en {cual} una activación que no es de su evento"
         )
-        assert len(r.comentarios) == 1, f"{cual} publicó un diagnóstico de más"
-        incidencia = estado_tras(r, cuerpo_actual)
+        incidencia = estado_tras(r, cuerpo_b)
     assert incidencia["labels"] == ["sirius:planned", "sirius:implement-requested"]
+    assert len(incidencia["comments"]) == 1, "un solo diagnóstico, no uno por pasada"
 
-    # 4) Y el evento NUEVO -el que disparó esa reactivación- sí se atiende.
+    # 4) Arranca B: su propio evento, con el cuerpo que coincide.
     atienden = []
     for i, cual in enumerate(orden):
         r = _puerta(
@@ -842,14 +849,13 @@ def test_un_evento_viejo_no_borra_una_activacion_nueva(
             tmp_path / f"4-{i}",
             registro=registro,
             incidencia=incidencia,
-            cuerpo_del_evento=cuerpo_actual,
+            cuerpo_del_evento=cuerpo_b,
         )
-        paso = Paso(cual=cual, antes=list(incidencia["labels"]), resultado=r)
-        if _atendio(paso):
+        if _atendio(Paso(cual=cual, antes=list(incidencia["labels"]), resultado=r)):
             atienden.append(cual)
-        incidencia = estado_tras(r, cuerpo_actual)
-    esperada = "investigacion" if actual == "investigador" else "implementacion"
-    assert atienden == [esperada], f"la activación nueva la atiende {atienden}, no {esperada}"
+        incidencia = estado_tras(r, cuerpo_b)
+    esperada = "investigacion" if perfil_b == "investigador" else "implementacion"
+    assert atienden == [esperada], f"a B lo atiende {atienden}, no {esperada}"
 
 
 def test_el_reparto_no_deja_que_las_dos_puertas_ejecuten_el_mismo_encargo(

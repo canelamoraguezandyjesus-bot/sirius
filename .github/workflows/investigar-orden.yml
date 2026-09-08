@@ -131,10 +131,7 @@ jobs:
                echo "El cuerpo actual de #${ISSUE_NUMBER} no es una orden de investigacion; no se toca nada."
                exit 0 ;;
             2) echo "valid=false" >> "$GITHUB_OUTPUT"
-               echo "Evento rancio en #${ISSUE_NUMBER}: el reparto ya lo explico y retiro la etiqueta. Hace falta una activacion nueva."
-               exit 0 ;;
-            4) echo "valid=false" >> "$GITHUB_OUTPUT"
-               echo "::error::Evento rancio ya rechazado y la incidencia vuelve a llevar sirius:implement-requested: el reparto no puede saber si esa etiqueta es una activacion nueva o la que no llego a retirarse, asi que NO ha tocado nada. La explicacion del rechazo anterior sigue en la incidencia; requiere revision humana."
+               echo "::error::El perfil del cuerpo cambio desde que se aplico la etiqueta: este evento pedia otro trabajo y no se ha ejecutado nada. NO se ha tocado ninguna etiqueta -no se puede probar que la activacion presente sea la de este evento-. El diagnostico esta en la incidencia."
                exit 1 ;;
             *) echo "::error::El reparto de la activacion no se pudo decidir (codigo ${reparto_rc}); no se ejecuta el carril."
                exit 1 ;;

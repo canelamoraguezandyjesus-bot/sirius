@@ -330,9 +330,9 @@ lo que la reejecución reconoce.**
    `sirius:implement-requested` y se conserva `sirius:planned`, así que volver a
    aplicar la etiqueta reactiva. Quién publica ese rechazo está **decidido**, no
    repartido al azar: lo hace la puerta que sería la dueña según el cuerpo
-   actual; la otra recibe «no es tuya» y se calla. **Esa retirada quedó ACOTADA
-   por el punto 11**: solo se hace la primera vez, porque después no se puede
-   probar que la etiqueta presente sea la de ese evento.
+   actual; la otra recibe «no es tuya» y se calla. **Esa retirada quedó
+   SUSTITUIDA por el punto 12**: no se hace nunca, porque no se puede probar que
+   la etiqueta presente sea la de ese evento.
 9. **Ninguna prueba de comportamiento lee el registro real (hallazgo 4).** Todas
    reciben un registro controlado. El registro real solo se usa para comprobar
    que es válido y para enumerar qué entradas hay que cubrir. Así las cuatro
@@ -484,14 +484,11 @@ a preguntar «¿es este el estado final?». Esa pregunta no tiene combinaciones.
     y cubre las **ocho** combinaciones sin casos especiales, porque la pregunta
     del estado final no tiene combinaciones. La regla no es nueva: es la de
     `sirius_transition`, escrita para la incidencia #50.
-11. **El reparto no retira una etiqueta que no puede atribuir a su evento.** Su
-    marcador identifica el **par** de perfiles concreto. Si ese par ya tiene su
-    explicación publicada, el rechazo se entregó una vez; entonces una
-    `sirius:implement-requested` presente o es una activación **nueva** —el
-    propietario siguió el diagnóstico— o es la misma que no llegó a retirarse, y
-    **no hay forma de distinguirlas** con lo que la API deja ver. Se para sin
-    escribir, con código 4, y la puerta que llama termina en rojo. Borrar una
-    activación nueva por un evento viejo es peor que un job rojo.
+11. **El reparto no retira una etiqueta que no puede atribuir a su evento.**
+    *Resuelto a medias, y el punto 12 lo termina.* Esta ronda acotó la retirada
+    a la primera pasada, mirando si el rechazo ya estaba publicado; pero la
+    **ausencia** de ese marcador no demuestra nada, así que el caso de un evento
+    antiguo que nunca se había procesado seguía borrando activaciones ajenas.
 
 ## Comprobación de la tercera ronda
 
@@ -514,13 +511,48 @@ workflows y el guion de reparto: **6 fallan** —las dos combinaciones, las dos
 intervenciones posteriores y las dos direcciones del evento viejo—. Las cuatro
 configuraciones del registro siguen pasando las 74.
 
+## Decisión de la cuarta ronda
+
+12. **Ante un cambio de perfil no se retira la etiqueta. Nunca.** El punto 11 se
+    apoyaba en el marcador del rechazo, y la **ausencia** de un marcador no
+    demuestra que la etiqueta sea de este evento. Reproducido sin marcador
+    ninguno: se activa una orden y su evento **A** queda en cola; el propietario
+    cambia el perfil, retira la etiqueta y la vuelve a aplicar —evento **B**—;
+    arranca A, ve la etiqueta de B y la borraba; arranca B, encuentra solo
+    `sirius:planned` y declina. **El encargo se perdía.** La salida es la
+    conservadora: explicar y parar en rojo, conservando la activación para que la
+    atienda el evento que sí le corresponde. Con eso el reparto deja de escribir
+    etiquetas por completo, y desaparecen tanto el código 4 como la lectura de
+    comentarios que lo sostenía: menos código, y ninguna inferencia que no se
+    pueda probar.
+13. **El diagnóstico dice lo que pasó, no lo que se pretendía.** Ya no afirma
+    que retiró una etiqueta, porque no la retira, y la acción siguiente es
+    condicional: si la incidencia **ya no lleva** la etiqueta, aplícala; si la
+    lleva, la atenderá el evento de esa activación.
+
+## Comprobación de la cuarta ronda
+
+**Reproducido sobre `08f45a5`**, la secuencia A/B entera y en las dos
+direcciones: tras A la incidencia quedaba en `['sirius:planned']` y **B no lo
+atendía nadie**. Después del arreglo, tras A quedan
+`['sirius:planned', 'sirius:implement-requested']` —intactas— y a B lo atiende
+**exactamente una** puerta: el implementador si el cuerpo dice `programador`, y
+la retirada del carril si dice `investigador`.
+
+**Prueba de mutación.** Con el arreglo: **76 pasan**. Guardando los dos workflows
+y el guion de reparto: **8 fallan** —las cuatro del perfil cambiado y las cuatro
+de la secuencia A/B, con y sin rechazo previo—. Las 76 pasan con las cuatro
+configuraciones del registro.
+
 ## La ambigüedad que NO se resuelve, y por qué se para en vez de adivinar
 
-Cuando un evento rancio ya rechazado se reejecuta y la incidencia vuelve a llevar
+Cuando un evento con el perfil cambiado llega y la incidencia lleva
 `sirius:implement-requested`, esa etiqueta puede ser:
 
-- una **activación nueva**, aplicada por el propietario siguiendo el diagnóstico; o
-- **la misma de antes**, si aquella retirada se publicó pero no llegó a confirmarse.
+- la del **propio evento**, que sería legítimo retirar; o
+- la de una **activación posterior** —el propietario cambió el perfil y reactivó,
+  o siguió el diagnóstico de un rechazo anterior—, que retirar sería borrarle el
+  encargo a otro.
 
 Distinguirlas exigiría saber **cuándo** se aplicó la etiqueta y compararlo con el
 evento que se atiende. La API de GitHub no ofrece ni compare-and-swap sobre
@@ -529,9 +561,11 @@ Inventar esa identidad —una etiqueta nueva, un fichero de estado, un marcador 
 codifique lo que no se puede observar— sería ampliar la arquitectura para tapar
 la ambigüedad, que es justo lo que el criterio de parada (b) de esta ronda
 prohíbe. Así que **no se resuelve: se declara y se para en rojo sin escribir**,
-con un mensaje que dice exactamente qué mirar. Es una parada recuperable —la
-activación nueva sigue viva y su propio evento la atiende— y el coste es un job
-rojo que pide una mirada humana.
+con un mensaje que dice exactamente qué mirar. El coste es doble y se dice
+entero: un job rojo que pide una mirada humana, y —si nadie más activa la
+incidencia— una `sirius:implement-requested` que se queda puesta sin que ningún
+carril la atienda, con su explicación en la incidencia. Se prefiere a la
+alternativa, que era borrarle la activación a otro.
 
 ## Consecuencias
 
