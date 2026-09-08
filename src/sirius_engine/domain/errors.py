@@ -262,6 +262,27 @@ class ClaseNoDespachableError(EngineError):
         self.clase = clase
 
 
+class CarrilRetiradoError(EngineError):
+    """Raised when the dispatcher is asked to dispatch a class whose lane was retired.
+
+    Distinta de :class:`ClaseNoDespachableError` a propósito, y la distinción
+    importa a quien la lee: aquella dice «esta clase nunca tuvo despachador»;
+    esta dice «lo tuvo, y el propietario lo retiró» -con la fecha, el motivo y a
+    dónde va ese trabajo ahora-. Confundirlas haría que una retirada pareciera
+    un hueco del diseño, y que un hueco del diseño pareciera una decisión.
+
+    La clase NO desaparece de ``TABLA_ACTIVACION`` ni del contrato §11.1: la
+    retirada se declara en ``docs/implementation/work_engine/carriles_retirados.json``,
+    y quitar esa entrada la reactiva sin tocar código (ADR-161, ADR-162).
+    """
+
+    def __init__(self, work_id: str, clase: str, explicacion: str) -> None:
+        super().__init__(f"work item {work_id!r} has class {clase!r}: {explicacion}")
+        self.work_id = work_id
+        self.clase = clase
+        self.explicacion = explicacion
+
+
 class EstadoNoDespachableError(EngineError):
     """Raised when the C2 dispatcher is asked to dispatch a WorkItem that is not ``ACTIVE``.
 

@@ -59,8 +59,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
+from sirius_engine.carriles_retirados import carril_retirado
 from sirius_engine.domain.dispatch import DispatchEpisode, orden_enlazada
 from sirius_engine.domain.errors import (
+    CarrilRetiradoError,
     ClaseNoDespachableError,
     EstadoNoDespachableError,
     OrdenNoEnlazadaError,
@@ -188,6 +190,18 @@ def dispatch_work_item(
         entrada_tabla = TABLA_ACTIVACION.get(work_item.clase)
         if entrada_tabla is None:
             raise ClaseNoDespachableError(work_item.work_id, work_item.clase.value)
+
+        # ADR-161/ADR-162: la clase sigue en la tabla -el contrato §11.1 la
+        # describe y su fila no se borra-, pero su carril está retirado. Se
+        # comprueba AQUÍ, junto al resto de guardas y antes de tocar GitHub o el
+        # diario, para que no nazca ningún WorkItem nuevo de un carril que nadie
+        # va a atender: es el mismo motivo por el que H-17 subió la comprobación
+        # de clase antes de crear nada.
+        retirado = carril_retirado(work_item.clase)
+        if retirado is not None:
+            raise CarrilRetiradoError(
+                work_item.work_id, work_item.clase.value, retirado.explicacion()
+            )
 
         if work_item.estado is not WorkItemState.ACTIVE:
             raise EstadoNoDespachableError(work_item.work_id, work_item.estado.value)

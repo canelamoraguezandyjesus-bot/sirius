@@ -143,7 +143,47 @@ clase y los dos workflows vuelven a atenderla. Es la propiedad que ADR-161 pedí
 
 ## Comprobación que la sostiene
 
-Se rellena en el commit que la produce, con las cifras reales.
+**Las cuatro entradas, ejercitadas.** `tests/automation/test_carriles_retirados.py`
+—18 pruebas— no lee sólo texto: **ejecuta con `bash` real los guiones de las dos
+puertas**, extraídos del YAML, y comprueba su código de salida y su
+`GITHUB_OUTPUT`.
+
+| Entrada | Comprobación | Resultado |
+|---|---|---|
+| `sirius-despachar` | las dos clases retiradas y las dos vivas | rechaza con explicación; `programacion` y `documentacion` siguen |
+| `investigar-orden.yml` | guion de la puerta con `Perfil: investigador@2` | `exit 0`, `valid=false`, y **todos** los pasos que gastan el investigador quedan apagados |
+| `audit-sirius-repository.yml` | guion de la guarda | `retirado=true`, informe escrito, y el paso de Claude condicionado a no estar retirado |
+| Puerta del implementador | sigue declinando el perfil | conservada |
+
+**La guarda que no envejece.** `test_toda_entrada_de_un_carril_retirado_esta_cubierta`
+**enumera los workflows desde el árbol** y exige que todo el que reaccione a una
+de las dos etiquetas de entrada consulte el registro o esté declarado exento con
+su motivo. No es decorativa: **encontró una cuarta entrada que el inventario a
+mano no tenía** —`validate-sirius-activation.yml`, que también reacciona a
+`sirius:implement-requested`—. Se declaró exenta con su razón: valida la
+activación y no atiende ningún carril. Una lista escrita a mano no habría dado
+ese aviso.
+
+**Vistas fallar (prueba por mutación).** Las tres guardas muerden:
+
+| Mutación | Efecto |
+|---|---|
+| Quitar `investigacion` del registro | 4 pruebas caen **y el despachador vuelve a aceptar la orden**: es la demostración de que la reactivación funciona quitando una línea |
+| `if false` en la puerta del implementador | cae `test_la_puerta_del_implementador_sigue_declinando_el_perfil_investigador` |
+| Quitar el `if:` del paso de Claude | cae `test_el_auditor_no_ejecuta_el_modelo_y_publica_la_explicacion` |
+
+Revertidas las tres, 18 en verde.
+
+**Fail-closed en la afirmación.** Un registro ilegible sale con código 2, no con
+1: «no pude leer» no puede confundirse con «el carril está activo», porque esa
+confusión dejaría pasar trabajo por un carril retirado.
+
+**Ninguna prueba lanza un agente ni gasta una API.** Todo es lectura de ficheros,
+`bash` local y dobles.
+
+**Nada se ha borrado**, y hay una prueba que lo fija: los dos workflows, el
+runbook del Auditor, el perfil, los guiones del investigador y
+`docs/investigaciones/` siguen en el árbol.
 
 ## Consecuencias
 

@@ -38,6 +38,7 @@ from sirius_engine.adapters.durable.store import DurableWorkEngineStore
 from sirius_engine.adapters.github_cli_writer import GitHubCliWriter, MissingCredentialError
 from sirius_engine.adapters.memory_dispatch_journal import InMemoryDispatchJournal
 from sirius_engine.adapters.memory_store import InMemoryWorkEngineStore
+from sirius_engine.carriles_retirados import carril_retirado
 from sirius_engine.cli import REPO, resolver_diario
 from sirius_engine.dispatcher import TABLA_ACTIVACION, dispatch_work_item
 from sirius_engine.domain.authority import autoridad_de_clase
@@ -214,6 +215,20 @@ def main(
         linea("que nunca se va a despachar dejaría trabajo ACTIVE huérfano en el diario,")
         linea("así que el rechazo ocurre antes de escribir nada.")
         return 5
+
+    # ADR-161/ADR-162: el carril de esa clase está retirado. Se rechaza en el
+    # mismo sitio y por el mismo motivo que la comprobación de arriba -antes de
+    # crear nada-, pero con mensaje propio: «esta clase nunca tuvo despachador»
+    # y «lo tuvo y se retiró» son dos cosas distintas para quien lee, y el
+    # segundo caso tiene que decir a dónde va ahora ese trabajo.
+    if decision.resultado is ResultadoPuerta.CREAR_Y_ACTIVAR and decision.datos_trabajo is not None:
+        retirado = carril_retirado(decision.datos_trabajo.clase)
+        if retirado is not None:
+            linea("No he creado nada.")
+            linea("")
+            for parrafo in retirado.explicacion().splitlines():
+                linea(f"  {parrafo}")
+            return 6
 
     # Un ENSAYO no persiste nada. Si usara el almacén durable dejaría un
     # WorkItem ACTIVE que nadie va a despachar: exactamente el estado

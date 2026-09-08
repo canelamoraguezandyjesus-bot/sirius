@@ -853,20 +853,44 @@ filas a esas tablas.
 
 ### 13.2 La distinción que esta sección existe para no perder
 
-**La retirada está acordada. NO está ejecutada.**
+**La retirada se acordó en ADR-161 y la ejecuta ADR-162.** Las dos cosas siguen
+siendo distintas, y el estado de cada una se lee aquí:
 
-Mientras estas tres cosas sigan siendo ciertas —y hoy lo son—, los dos carriles
-**funcionan si alguien los dispara**:
+- **Acordada** desde la fusión de la PR de ADR-161.
+- **Ejecutada** desde la fusión de la PR de ADR-162, que es la que apaga las
+  entradas. Antes de esa fusión los dos carriles funcionaban si alguien los
+  disparaba.
 
-1. `TABLA_ACTIVACION` (`src/sirius_engine/dispatcher.py`) sigue conteniendo
-   `AUDITORIA` e `INVESTIGACION`.
-2. Los workflows `audit-sirius-repository.yml` e `investigar-orden.yml` siguen en
-   `.github/workflows/`.
-3. La etiqueta `auditoria:solicitada` sigue creada por el bootstrap.
+Lo que **no** cambia, ni con una fusión ni con la otra:
 
-Por eso las filas de §11.1 y §12.4 **no se han borrado**: un contrato que
-declarase inexistente una clase que el despachador sigue despachando sería falso,
-y esa falsedad se descubriría el día en que alguien aplicara la etiqueta.
+1. `TABLA_ACTIVACION` (`src/sirius_engine/dispatcher.py`) **sigue conteniendo**
+   `AUDITORIA` e `INVESTIGACION`, y las filas de §11.1 y §12.4 tampoco se borran.
+   Un contrato que declarase inexistente una clase que el registro sigue
+   describiendo sería falso, y la retirada dejaría de ser reversible con solo
+   quitar una línea.
+2. Los workflows `audit-sirius-repository.yml` e `investigar-orden.yml`
+   **siguen en `.github/workflows/`**, y ahora responden en vez de ejecutar.
+3. La etiqueta `auditoria:solicitada` **sigue creada** por el bootstrap: quien la
+   aplique recibirá la explicación, no el silencio.
+
+### 13.2.1 Qué ocurre desde la fusión de ADR-162
+
+| Entrada | Antes | Desde la fusión |
+|---|---|---|
+| `sirius-despachar` con una orden de esas clases | creaba el WorkItem y la incidencia | **No crea nada**: rechaza con `CarrilRetiradoError`, explica el motivo y a dónde va ese trabajo, y sale con código 6 |
+| Etiqueta `auditoria:solicitada` | ejecutaba el Auditor | **No ejecuta ningún modelo**: publica la explicación en la incidencia por el mismo camino de siempre |
+| Etiqueta `sirius:implement-requested` con `Perfil: investigador@N` | investigaba y abría PR | **No investiga**: explica y deja la incidencia en `sirius:failed-safely`, que es terminal |
+| Puerta del implementador | declinaba el perfil | **Sigue declinándolo**, y por eso esa activación no acaba en programación |
+
+La fuente de verdad de qué carril está retirado es
+`docs/implementation/work_engine/carriles_retirados.json`. **Reactivar un carril
+es quitar su entrada de ese fichero y fusionar**: no hay que tocar código,
+workflows ni pruebas.
+
+Lo que esta ejecución **no** alcanza, declarado en ADR-162: una persona con
+permisos puede relanzar a mano un run antiguo desde Actions, que reejecuta el
+YAML de aquel commit; y `preflight-investigador.yml` y `medir-investigador.yml`
+siguen lanzables a mano, porque miden el instrumento y no aceptan encargos.
 
 ### 13.3 Lo que esta versión NO cambia
 

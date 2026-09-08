@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "_comentario": "Registro CERRADO de carriles retirados (ADR-161, ejecutado por ADR-162). Dato, no codigo, como registro_capacidades.yml y manifiesto.json. Lo leen TRES piezas: el despachador (src/sirius_engine/carriles_retirados.py), el workflow del auditor y el de investigacion (scripts/automation/sirius_carril_retirado.py). JSON y no YAML a proposito: los guiones de los workflows corren con el python3 a secas del runner, que no trae pyyaml. REACTIVAR UN CARRIL ES QUITAR SU ENTRADA DE AQUI Y FUSIONAR: no hay que tocar codigo, workflows ni pruebas.",
+  "carriles": {
+    "investigacion": {
+      "retirado_por": "ADR-161",
+      "ejecutado_por": "ADR-162",
+      "fecha": "2026-09-08",
+      "perfil": "investigador",
+      "motivo": "El propietario traslada la investigacion a sus sesiones de ChatGPT, Claude y Codex (EV-016, ADR-160).",
+      "a_donde_va": "Pidelo en tu sesion de ChatGPT, Claude o Codex. Lo ya investigado sigue en docs/investigaciones/, con su fecha y su caducidad declarada."
+    },
+    "auditoria": {
+      "retirado_por": "ADR-161",
+      "ejecutado_por": "ADR-162",
+      "fecha": "2026-09-08",
+      "etiqueta": "auditoria:solicitada",
+      "motivo": "El propietario traslada la auditoria a sus sesiones de ChatGPT, Claude y Codex (EV-016, ADR-160).",
+      "a_donde_va": "Pidela en tu sesion de ChatGPT, Claude o Codex. Los informes anteriores siguen en las incidencias donde se publicaron, y el runbook en docs/implementation/AUDITOR_AGENT_V0.md."
+    }
+  },
+  "_lo_que_esto_no_hace": "No borra codigo, perfiles, prompts, informes, investigaciones, ADR ni el diario. No cancela ningun trabajo. No toca los revisores del ciclo, el corrector, la convergencia ni Quality. No impide relanzar A MANO un run historico desde Actions: un re-run reejecuta el YAML de aquel commit, no el de main (limitacion declarada en ADR-162)."
+}

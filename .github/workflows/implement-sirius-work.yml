@@ -168,16 +168,24 @@ jobs:
           ISSUE_BODY: ${{ github.event.issue.body }}
         run: |
           set -uo pipefail
-          # El perfil `investigador` NO lo atiende este workflow: lo atiende
-          # `investigar-orden.yml` con la misma etiqueta de activacion
-          # (ADR-099). La exclusion va AQUI, ANTES de consumir el evento: si se
-          # excluyera despues, las etiquetas ya estarian movidas y nadie
-          # atenderia la orden. Se sale con valid=false, que es "no es mio",
-          # no un fallo.
+          # El perfil `investigador` NO lo atiende este workflow. La exclusion
+          # va AQUI, ANTES de consumir el evento: si se excluyera despues, las
+          # etiquetas ya estarian movidas y nadie atenderia la orden. Se sale
+          # con valid=false, que es "no es mio", no un fallo.
+          #
+          # ESTA PUERTA SE CONSERVA TRAS LA RETIRADA DEL CARRIL (ADR-161,
+          # ejecutado por ADR-162), y conviene decir por que, porque la
+          # tentacion de quitarla es exactamente el defecto: investigacion
+          # comparte la etiqueta de activacion con programacion (ADR-099), asi
+          # que sin esta linea una activacion con perfil `investigador`
+          # **se implementaria como programacion**. Quien responde ahora es
+          # `investigar-orden.yml`, que en vez de investigar explica que el
+          # carril esta retirado y deja la incidencia en `sirius:failed-safely`:
+          # ni espera, ni cambia de carril.
           perfil=$(printf '%s' "$ISSUE_BODY" | sed -n 's/^Perfil: *\([A-Za-z_-][A-Za-z_-]*\)@.*/\1/p' | head -1)
           if [ "$perfil" = "investigador" ]; then
             echo "valid=false" >> "$GITHUB_OUTPUT"
-            echo "Perfil investigador: esta activacion la atiende investigar-orden.yml."
+            echo "Perfil investigador: esta activacion no la consume el implementador; la atiende y la cierra investigar-orden.yml (carril retirado, ADR-162)."
             exit 0
           fi
           if bash scripts/automation/sirius_validate_activation.sh "$GH_REPO" "$ISSUE_NUMBER"; then
