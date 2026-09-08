@@ -185,10 +185,26 @@ Las dos direcciones, como exige ADR-001 §3.
 
 ### 5. Validaciones obligatorias
 
-`uv run ruff format --check .` (607 ficheros), `uv run ruff check .`,
-`uv run mypy src tests` (574 ficheros), `uv run pytest` y `git diff --check`,
-todas en verde. `tests/gui` completa: 482 pasadas, 2 saltadas (QtMultimedia
-ausente, MS-A02).
+**Cadena completa como una sola invocación** de `pwsh -File scripts/check.ps1`
+—ADR-145: ejecutar por separado los comandos que el script encadena no la
+sustituye—, **anclada al árbol de `bc7eeda`** (ADR-154):
+
+```
+5112 passed, 17 skipped, 2 xfailed in 486.13s (0:08:06)
+check=0
+```
+
+Bajo esa misma ancla, el árbol de `bc7eeda`, quedan las cifras auxiliares, que
+proceden de la tanda por comandos sueltos con la que se escribió el cambio y no
+de la invocación única de arriba: `uv run ruff format --check .`, 607 ficheros
+ya formateados; `uv run ruff check .`, sin hallazgos; `uv run mypy src tests`,
+574 ficheros; `git diff --check`, limpio; y `uv run pytest tests/gui`, 482
+pasadas y 2 saltadas (QtMultimedia ausente, MS-A02).
+
+Ninguna de esas cifras se lee como cifra del head vigente: una cifra anclada
+sigue siendo la de su árbol, y los commits documentales posteriores de la rama
+—que no tocan ni código ni pruebas— no la invalidan ni obligan a repetir el
+script (ADR-154).
 
 ## Decisión
 
