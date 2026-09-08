@@ -185,10 +185,13 @@ _DIAGNOSTICO_FALLO_RE = re.compile(
 # Los tres marcadores que `sirius_resume_on_command.sh` publica ANTES de
 # reponer la etiqueta activa (líneas 297-324 de ese guion), en ese orden
 # exacto por diseño: el permiso escrito siempre precede a la etiqueta que
-# autoriza (CODEX-001, ronda 4, PR #530). `sirius-convergence-reset` y
-# `sirius-resume-stop` llevan un SHA de head; `sirius-restart-sin-pr` lleva
-# `<incidencia>:<run>-<intento>` porque una parada sin PR no tiene head sobre
-# el que continuar (comentario del propio guion, líneas 305-309).
+# autoriza (CODEX-001, ronda 4, PR #530). Desde ADR-159 los TRES llevan el run
+# y el intento del evento que los publicó: `sirius-convergence-reset` y
+# `sirius-resume-stop` como `<head>:<run>-<intento>`, y `sirius-restart-sin-pr`
+# como `<incidencia>:<run>-<intento>` porque una parada sin PR no tiene head
+# sobre el que continuar (comentario del propio guion). Hasta esa ficha los dos
+# primeros llevaban el head DESNUDO, y este patrón sigue reconociéndolos: los
+# historiales publicados antes conservan esa forma y se leen igual.
 #
 # Su sola PRESENCIA en el historial no basta -eso bastaba en la versión de la
 # ronda 4 y reabría exactamente lo que esa ronda quería cerrar (hallazgo
@@ -795,11 +798,16 @@ def _interpretar_permisos_reanudacion(
       automatización se diera permiso a sí misma-.
 
     El marcador es el recibo de la máquina y la orden es el permiso mismo. Las
-    dos formas hacen falta porque el recibo puede faltar ESTRUCTURALMENTE:
-    ``sirius_comment_once`` deduplica por el texto completo del marcador y el
-    de ``sirius-resume-stop`` solo lleva el head, así que dos reanudaciones
-    sobre un mismo head nunca dejan un segundo recibo (medición de la primera
-    ronda de #545 sobre el historial real de la #537).
+    dos formas hacen falta porque el recibo PUDO faltar estructuralmente:
+    ``sirius_comment_once`` deduplica por el texto completo del marcador y,
+    **hasta ADR-159**, el de ``sirius-resume-stop`` solo llevaba el head, así
+    que dos reanudaciones sobre un mismo head nunca dejaban un segundo recibo
+    (medición de la primera ronda de #545 sobre el historial real de la #537).
+    Desde ADR-159 el recibo lleva también el run y el intento, y cada permiso
+    escrito deja el suyo. La forma ``ORDEN`` NO se retira por eso: los
+    historiales publicados antes de esa ficha conservan sus huecos, y una
+    reanudación disparada por otra automatización puede seguir llegando sin
+    orden legible.
 
     ``orden`` es la posición del texto en el historial de confianza, la misma
     escala que usa :func:`_interpretar_historial_estados`.
