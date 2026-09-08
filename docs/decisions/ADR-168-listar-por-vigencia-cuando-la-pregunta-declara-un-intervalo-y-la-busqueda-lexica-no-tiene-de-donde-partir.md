@@ -333,9 +333,42 @@ la frontera toca. Comprobado sobre el árbol de la validación de abajo, donde
 las cuatro cotas del arnés del motor portado son aserciones de la prueba de
 aceptación y pasan sin cambiarlas.
 
+### Corrección posterior: la guarda de los dos extremos no es del corte de registro
+
+Revisión de la ronda 2 (CLAUDE-R2-002). Al ganar el parámetro `extremo`,
+`_iso_declarado` ganó también una guarda —`if len(extremos) != 2: return
+None`— colocada **antes** de elegir extremo, de modo que alcanzaba a las dos
+rutas que leen de ahí y no solo a la del tiempo objetivo. `_corte_de_registro`
+llama con el extremo por defecto, así que una escritura de TRES o más
+extremos (`"2026-01-01/2026-02-01/2026-03-01"`) dejaba de producir corte: de
+`2026-03-01 23:59:59.999999` a **ningún corte**.
+
+Las dos rutas quieren respuestas contrarias ante la misma entrada patológica,
+y esa es la razón de que la guarda deje de ser común
+(`exigir_dos_extremos`):
+
+- **El tiempo objetivo se descarta entero.** Elegir dos extremos de tres
+  sería adivinar cuáles, y la ventana afirmaría una vigencia que nadie
+  declaró. Fijado en `test_un_intervalo_de_mas_de_dos_extremos_no_declara_ninguno`,
+  que no cambia.
+- **El corte de registro NO.** El corte es el filtro que sostiene «¿qué sabía
+  yo el día X?» y su razón de ser es **excluir** lo registrado después;
+  perderlo entero entrega como sabido entonces lo que se registró después,
+  que es sobre-inclusión en el único sitio donde el error tiene dirección
+  mala. Conserva el comportamiento anterior a ADR-168 —el último extremo, al
+  final de su día civil— y sigue errando hacia excluir. Fijado en
+  `test_el_corte_de_registro_de_mas_de_dos_extremos_sigue_cortando`.
+
+Nada más cambia: ni `_tiempo_objetivo`, ni `_tiempo_objetivo_desde`, ni
+`_PATRON_ISO`, ni la forma con `Z` con la que `G8` compara. Las cuatro
+configuraciones del banco **no se mueven**, porque ninguna petición del banco
+declara una escritura de tres extremos: comprobado sobre el árbol de la
+validación de abajo, donde las cuatro cotas del arnés del motor portado
+siguen siendo aserciones de la prueba de aceptación y pasan sin cambiarlas.
+
 ### Pruebas vistas fallar (mutación transcrita)
 
-Once mutaciones, cada una revertida después. Ninguna prueba nueva pasa con
+Doce mutaciones, cada una revertida después. Ninguna prueba nueva pasa con
 el código de antes:
 
 | Mutación | Qué se rompe | Rojo |
@@ -351,6 +384,7 @@ el código de antes:
 | M9 la vía se dispara sin intervalo declarado | la no interferencia | 5, entre ellas el suelo D1 (`55 == 21`) |
 | M10 el extremo final viaja sin reescribir (`"hasta": hasta`) | el grano de instante en la frontera del mismo día | 1 (`test_por_ventana_de_vigencia_excluye_lo_registrado_el_mismo_dia_tras_el_final`) |
 | M11 un extremo ilegible se consulta igual (`corte = hasta`) | la guarda del extremo no legible | 1 (`test_por_ventana_de_vigencia_no_afirma_nada_con_un_final_ilegible`) |
+| M12 la guarda de los dos extremos vuelve a ser común (`if len(extremos) != 2:`) | el corte de registro con tres extremos | 1 (`test_el_corte_de_registro_de_mas_de_dos_extremos_sigue_cortando`: `assert None == '2026-03-01 23:59:59.999999'`) |
 
 ### La cota que se mueve, y en qué dirección
 

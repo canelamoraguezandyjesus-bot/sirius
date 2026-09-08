@@ -231,6 +231,27 @@ def test_un_intervalo_de_mas_de_dos_extremos_no_declara_ninguno() -> None:
     assert intencion.tiempo_objetivo_desde is None
 
 
+def test_el_corte_de_registro_de_mas_de_dos_extremos_sigue_cortando() -> None:
+    """La guarda de los dos extremos es del tiempo objetivo, no del corte
+    (ADR-168, CLAUDE-R2-002).
+
+    Descartar la ventana entera cuando la escritura trae tres extremos es
+    prudente —elegir dos de tres sería adivinar—, pero descartar el CORTE es
+    lo contrario: el corte excluye lo registrado después, así que quedarse
+    sin corte entrega como «sabido entonces» lo registrado después. El corte
+    conserva el comportamiento anterior a ADR-168 —el último extremo, al
+    final de su día civil— y sigue errando hacia excluir.
+    """
+
+    def _handle(request: httpx.Request) -> httpx.Response:
+        return _answer(corte_de_registro="2026-01-01/2026-02-01/2026-03-01")
+
+    intencion = _adapter(httpx.MockTransport(_handle)).classify_intent("¿qué sabía yo?")
+
+    assert intencion is not None
+    assert intencion.corte_de_registro == "2026-03-01 23:59:59.999999"
+
+
 def test_un_modo_fuera_de_m1_m5_devuelve_none() -> None:
     def _handle(request: httpx.Request) -> httpx.Response:
         return _answer(modo="M9")

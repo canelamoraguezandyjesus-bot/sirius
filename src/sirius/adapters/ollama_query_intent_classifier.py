@@ -310,13 +310,26 @@ def instante_utc(valor: str | None) -> datetime | None:
     return momento.replace(tzinfo=UTC) if momento.tzinfo is None else momento.astimezone(UTC)
 
 
-def _iso_declarado(declarado: object, *, extremo: int = -1) -> str | None:
+def _iso_declarado(
+    declarado: object, *, extremo: int = -1, exigir_dos_extremos: bool = True
+) -> str | None:
     """La fecha declarada si es ISO-8601 reconocible; ``None`` si no lo es o
     si el modelo contestó la cadena vacía. Un intervalo se resuelve por su
     extremo final (``extremo=-1``), la misma traducción que el traductor del
     banco declara (``tests/acceptance/staged_engine_case_translation.py``);
     ``extremo=0`` pide el inicial, y solo lo hay si el intervalo tiene
-    exactamente dos extremos."""
+    exactamente dos extremos.
+
+    ``exigir_dos_extremos`` es lo que decide qué se hace con una escritura de
+    TRES o más extremos, y no es la misma respuesta para las dos rutas que
+    leen de aquí (ADR-168, CLAUDE-R2-002). Para el tiempo objetivo elegir dos
+    de tres sería adivinar cuáles, y la ventana se descarta entera. Para el
+    corte de registro descartarla es lo contrario de prudente: el corte
+    EXCLUYE lo registrado después, así que quedarse sin corte entrega como
+    «sabido entonces» lo que se registró después. Esa ruta pide
+    ``exigir_dos_extremos=False`` y conserva el comportamiento anterior a
+    ADR-168 —el último extremo—, que sigue errando hacia excluir.
+    """
     if not isinstance(declarado, str):
         return None
     texto = declarado.strip()
@@ -324,7 +337,7 @@ def _iso_declarado(declarado: object, *, extremo: int = -1) -> str | None:
         return None
     if "/" in texto:
         extremos = [parte.strip() for parte in texto.split("/")]
-        if len(extremos) != 2:
+        if len(extremos) != 2 and (exigir_dos_extremos or extremo == 0):
             return None
         texto = extremos[extremo]
     elif extremo == 0:
@@ -383,8 +396,12 @@ def _corte_de_registro(declarado: object) -> str | None:
     («¿qué sabía yo el 1 de marzo?») es de grano día, y la hora que el
     modelo escriba —o deje de escribir— es formato, no información. Ver el
     encabezado del módulo.
+
+    Una escritura de tres o más extremos se resuelve por el último, como
+    antes de ADR-168: perder el corte entero sobre-incluiría lo registrado
+    después del día por el que se pregunta (``exigir_dos_extremos=False``).
     """
-    texto = _iso_declarado(declarado)
+    texto = _iso_declarado(declarado, exigir_dos_extremos=False)
     if texto is None or instante_utc(texto) is None:
         return None
     # El día es el que la escritura NOMBRA, no el que resulta de llevarla a
