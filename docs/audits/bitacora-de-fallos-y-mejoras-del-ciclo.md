@@ -3131,6 +3131,16 @@ ADR o su incidencia cuando se adopte.
   comprobadas contra el árbol y una regla nueva heredada de ADR-166: si una
   corrección toca el fichero de pruebas, la cadena se vuelve a ejecutar entera
   y la sección se re-ancla; no vale conservar la terna del árbol anterior.
+- **Y la activación de #577 la rechazó la guarda a la primera**:
+  `sirius-activation:rejected:cuerpo-incompleto`, «secciones ausentes:
+  requisitos y pruebas». Mi borrador tenía «Casos de aceptación» pero **no la
+  sección `## Requisitos y pruebas de aceptación` que el contrato exige**, y
+  el mismo defecto estaba en el borrador de la palanca 3. Es la segunda vez que
+  una guarda de activación me caza —la primera fue enviar las etiquetas por
+  separado (entrada 49)— y las dos veces ha sido barata: rechaza en segundos y
+  dice exactamente qué falta. **Un validador que nombra la sección ausente vale
+  más que uno que solo dice «no».** Corregidos los dos borradores y reactivada
+  la incidencia.
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
