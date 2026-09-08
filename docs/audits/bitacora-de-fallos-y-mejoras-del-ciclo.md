@@ -2764,6 +2764,60 @@ ADR o su incidencia cuando se adopte.
   literalmente el enunciado de la deuda 19, y lo hizo dentro de una corrección
   por lo demás correcta. Añadido al guardián previo a la fusión y avisado junto
   con la cifra, para que las dos se cierren en una sola ronda.
+
+---
+
+### 60. La ronda 3 la provocó el propio revisor, y aun así encontró lo mejor del ciclo: una mutación que sobrevivía (08-09-2026, 14:05-14:20 UTC)
+
+- **Tres hallazgos, y el revisor declara que los tres son culpa suya.** Los
+  marca con «LLEGA TARDE POR GOTEO DEL REVISOR» y explica por qué: las líneas
+  son **idénticas a las de la ronda 1** —existen desde `b1341e16` en el ADR y
+  desde `5200b4f` en el cargador—, así que el defecto no lo introdujo la
+  corrección anterior: no se vio antes. El motor trae un **guardián de goteo**
+  que lo marca solo, con la pregunta al lado: «¿por qué no se vio entonces?».
+  Que el ciclo sepa distinguir «esto es nuevo» de «esto se me escapó» es de lo
+  más sano que tiene.
+- **La convergencia empeoró**: `(4,5) → (2,5) → (3,6)`. Es la primera vez que
+  el par sube, y **el motivo no es el trabajo sino el revisor**, que lo dice él
+  mismo. Un freno que mide la convergencia del trabajo puede saltar por un
+  fallo del que mide.
+- **Los tres hallazgos son reales, y el dato principal lo comprobé yo antes de
+  repetirlo**: `DEC-004` declara `valid_from: 2026-09-01`, **posterior** al
+  `ahora_declarado` del banco (`2026-06-15`), y es el único de los 97.
+  1. El ADR justificaba fechar `MEM-005` con `ahora_declarado` llamándolo «el
+     instante MÁS TARDÍO que el corpus admite». **Falso**: es el décimo de
+     once. Otra afirmación sin comprobar sobre el corpus, **en la ficha que
+     existe porque hubo una afirmación sin comprobar sobre el corpus**.
+  2. `DEC-004` recibe así una fecha de registro **en el futuro del banco**, lo
+     que reintroduce para un ítem el mismo artefacto que H2 cierra. Hoy no
+     mueve ninguna cifra —ningún caso combina `DEC-004` con un corte— pero no
+     estaba declarado, mientras que el detalle simétrico de `MEM-005` sí lo
+     estaba y con prueba.
+  3. **La mejor, y la más incómoda: una mutación que HOY sobrevive.** Cambiar
+     `_FORMATO_DE_REGISTRO_EN_SQLITE` de `"%Y-%m-%d %H:%M:%S.%f"` a
+     `"%Y-%m-%dT%H:%M:%S.%fZ"` deja las cuatro pruebas nuevas **en verde**,
+     porque el lado esperado usa la misma constante que el cargador y
+     `B04-CA-32` no distingue las dos formas —su comparación se decide en el
+     sexto carácter—. Es **la misma circularidad que la ronda 1 señaló para el
+     valor**, arreglada para el valor y no para el formato. Y el formato es
+     justo lo que la deuda 20 dice que decide, porque `G8` compara cadenas.
+- **El corrector cerró los tres en un commit** (`c8dfbed3`): el comentario del
+  cargador ahora dice que **NO** es el instante más tardío, nombra `DEC-004`,
+  cita el guardián nuevo y acota el argumento de conservadurismo a los dos
+  únicos cortes que el banco declara. Hay guardián para `DEC-004` y guardián
+  del formato con literal propio.
+- **Y mi guardián previo a la fusión falló por tercera vez, ahora al revés.**
+  Marcó como FALLA la frase «más tardío que el corpus admite» **dentro de la
+  negación que la corrige**. Los dos fallos anteriores decían OK cuando no lo
+  era; éste dio alarma falsa, que es el lado seguro. Corregido: donde aparezca
+  la frase, se exige `DEC-004` a menos de cinco líneas. **Tres versiones y tres
+  fallos**: escribir un guardián deprisa se parece mucho a no tenerlo, y la
+  única razón de que sirviera fue contrastar cada veredicto suyo a mano.
+- **`main` se movió a `afe704e`** (ADR-163, de la otra sesión, PR #569)
+  mientras esta PR estaba en corrección. La puerta de fusión exige estar al
+  día, así que habrá que actualizar la rama **cuando llegue a
+  `ready-for-merge`**, no ahora: mover el head en mitad de una ronda es
+  justamente lo que en la entrada 46 costó una ronda entera.
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
