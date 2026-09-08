@@ -406,6 +406,71 @@ solo REST **no** impide decidir, porque `sirius_read_issue_body` cae a GraphQL.
   carril **activo**, y para entonces el reparto ya ha comprobado que el cuerpo
   actual declara ese perfil y que no cambió desde el evento.
 
+## Tercera ronda: el criterio de parada (e) se cumple, y dice qué hacer
+
+La nota de la segunda ronda escribió: *«si apareciera una **tercera** ronda de la
+misma familia, el diseño de la puerta está mal planteado y hay que rehacerlo, no
+parchearlo»*. Ha aparecido. Los tres defectos nuevos son de la misma familia, y
+comparten algo más preciso que las dos raíces anteriores:
+
+> **La puerta intentaba reconstruir, a partir del estado que queda, hechos sobre
+> una operación concreta. El estado no lleva esa información.** Un juego de
+> etiquetas no es una operación, un comentario antiguo no es «esto sigue
+> pendiente», y el cuerpo de un evento no es «esta es la activación vigente».
+
+Y el rediseño no hay que inventarlo, porque **ya existe en el repositorio**:
+`sirius_transition` (`scripts/automation/sirius_issue.sh`) se escribió para este
+mismo fallo, en la incidencia #50, y su regla es la que faltaba:
+
+> *«Un marcador presente NO basta por sí solo […]. Si el marcador existe, se
+> verifica el estado final real: si ya está aplicado, no se repite nada; si
+> falta, se completa la transición SIN publicar un comentario duplicado.»*
+
+Aplicada aquí, **desaparece la firma de estado a medias que la segunda ronda
+inventó**: no hay que reconocer qué escrituras fallaron —ocho combinaciones, dos
+mal— sino **converger al estado final**. Y donde la convergencia no se puede
+distinguir de una intervención posterior, se para.
+
+## Nota de arranque de la tercera ronda (publicada ANTES del primer cambio)
+
+**1. ¿Dónde vive el fallo y dónde va el arreglo?** En dos sitios, y los dos son
+inferencias sobre operaciones que el estado no puede sostener: la firma de
+«retirada a medias» de la puerta, y la retirada de la etiqueta que hace el
+reparto ante un evento rancio. El arreglo sustituye la primera por convergencia
+al estado final con guardas de intervención posterior, y quita la segunda cuando
+no se puede probar que la etiqueta presente sea la del evento que se atiende.
+
+**2. ¿Qué NO va a garantizar esto?**
+
+- **No hace atómicas las escrituras**, ni inventa un compare-and-swap que la API
+  de GitHub no ofrece.
+- **No va a saber siempre de quién es una etiqueta.** Donde no pueda probarlo,
+  el resultado será una **parada en rojo sin escribir**, no una suposición.
+- **No añade estados, ni etiquetas, ni documentos nuevos.** Ni un ADR nuevo:
+  esta ronda corrige lo que ADR-167 ya decidía.
+- **No toca** `sirius_issue.sh`, el validador, el reconciliador, los revisores,
+  el corrector, la convergencia, Quality, Sirius, memoria, roadmap, permisos ni
+  configuración remota. Ningún carril se reactiva.
+
+**3. Criterio de parada (escrito ANTES de tocar el código).**
+
+- **(a)** Si la convergencia al estado final no cubre las ocho combinaciones sin
+  casos especiales, el diseño no es el correcto y se replantea otra vez.
+- **(b)** Si distinguir «mi operación pendiente» de «intervención posterior»
+  exigiera inventar estado nuevo —una etiqueta, un fichero, un marcador que
+  codifique lo que no se puede observar—, **se para y se declara la ambigüedad**
+  en vez de ampliar la arquitectura para taparla.
+- **(c)** Ninguna escritura que no se pueda atribuir al evento vigente. Ante la
+  duda, no se escribe.
+- **(d)** Las garantías que se declaren no pueden ser más amplias que las
+  pruebas que las sostienen.
+
+**4. ¿Qué haría imposible el error más probable?** El error más probable es
+volver a inventar una regla de reconocimiento —una firma, una lista, una
+heurística— en vez de usar la que ya existe. Lo hace imposible **no tener nada
+que reconocer**: la puerta deja de preguntarse «¿qué escrituras faltaron?» y pasa
+a preguntar «¿es este el estado final?». Esa pregunta no tiene combinaciones.
+
 ## Consecuencias
 
 - Las dos puertas pueden terminar en rojo donde antes terminaban en verde. Es el
