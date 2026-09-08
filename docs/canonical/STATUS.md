@@ -28,3 +28,26 @@ Los archivos originales conservan palabras como `PROPUESTO` en su nombre o conte
 - HEAD-R1 permanece físicamente inactivo. No existen compras ni fases autorizadas.
 - El multiagente permanece condicionado a evidencia posterior y no es requisito obligatorio de Sirius 1.0.
 - Ningún modelo puede controlar directamente actuadores o firmware activo.
+
+## Separación entre Sirius y su motor (8 de septiembre de 2026)
+
+Añadido al final: las líneas anteriores están citadas por número desde la
+Arquitectura Técnica 0.2 y desde
+`docs/implementation/AGENTES_SUPERFICIE_DE_INVOCACION.md`.
+
+- **Decisiones EV-015 a EV-019** (`docs/evolution/DECISIONS.md`), aprobadas por
+  la fusión de la Pull Request #567, por el propietario.
+- **Enmienda §19 del Documento Rector de Evolución**, aprobada por la misma
+  fusión. Enmienda §2, §4, §5 y §9.3; **no toca §17**, la regla de activación.
+- **ADR-160** (el reparto de responsabilidades entre Sirius, el motor, las
+  aplicaciones externas y la memoria común) y **ADR-161** (la retirada de los
+  carriles dedicados de investigación y auditoría).
+- **Relación con las decisiones anteriores:** EV-015 precisa EV-001, EV-016
+  sustituye EV-002 y acota EV-003, y **EV-004 se mantiene vigente sin enmienda**
+  —el conocimiento común del trabajo no es la memoria canónica de Sirius, así
+  que lo que EV-004 protege sigue protegido—.
+- **Aprobación documental y retirada técnica son cosas distintas.** La fusión de
+  la #567 aprobó los documentos; la desactivación efectiva de los dos carriles
+  la ejecuta ADR-163, en su propia Pull Request.
+- Nada de esto autoriza implementación ni cambia prioridades, alcance o
+  numeración de versiones.
