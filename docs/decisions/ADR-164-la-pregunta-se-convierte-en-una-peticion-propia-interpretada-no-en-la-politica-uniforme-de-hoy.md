@@ -340,30 +340,28 @@ la palanca 1 no se da por cerrada hasta que el propietario la corra.
 
 **Cadena completa como UNA SOLA invocación** (ADR-145, ADR-153) con
 `pwsh -File scripts/check.ps1` y su código de salida capturado (ADR-154).
-Anclada al árbol de `882b796`, el commit del código:
+Anclada al árbol de **`5c0862f`**, el que trae el código y las pruebas de la
+ronda 3 (incidencia #570):
 
 ```
 614 files already formatted
 All checks passed!
 Success: no issues found in 580 source files
-5154 passed, 17 skipped, 2 xfailed in 442.60s (0:07:22)
+5176 passed, 17 skipped, 2 xfailed in 461.32s (0:07:41)
 check=0
 ```
 
-**Repetida sobre `d247af9`**, el árbol que ya trae esta ficha —en vez de dar
-por hecho que un cambio documental no mueve nada, que es justo lo que ADR-154
-prohíbe suponer—:
+`git diff --check` sale limpio (`0`) sobre ese árbol. Lo único posterior a
+`5c0862f` es **esta sección de la ficha**: un cambio documental que no toca
+código ni pruebas, y que existe precisamente porque la ronda 2 dejó esta
+sección anclada a un árbol que ya no era el head.
 
-```
-614 files already formatted
-All checks passed!
-Success: no issues found in 580 source files
-5154 passed, 17 skipped, 2 xfailed in 436.89s (0:07:16)
-check=0
-```
-
-`git diff --check` sale limpio (`0`) sobre los dos árboles. Lo único posterior
-a `d247af9` es este párrafo.
+**Historia de la misma cadena en las rondas anteriores** —se conserva
+declarada como tal, no como la cifra vigente—: `882b796` (el commit del código
+de la ronda 1) y `d247af9` (el árbol que estrenó esta ficha) midieron los dos
+`5154 passed, 17 skipped, 2 xfailed` con `check=0`, en `442.60s` y `436.89s`
+respectivamente. La diferencia hasta las 5176 de hoy son los guardianes
+añadidos en las rondas 2 y 3.
 
 **Guardianes deterministas añadidos** (los que corren en CI, sin Ollama):
 `tests/unit/test_interpret_query_request.py` (14: respaldo, los cuatro ejes,
