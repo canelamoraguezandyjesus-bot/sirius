@@ -3310,9 +3310,38 @@ cambiarlo **no lo decide el ciclo**.
 2. **Y de ahí sale el enunciado limpio del estado de la línea**: tras H1, los
    **tres** huecos que quedan en la columna de hallados —`DEC-001`, `MEM-020`,
    `MEM-001`— son **decisiones del propietario, no trabajo de ingeniería**. La
-   columna de hallados está terminada por parte del ciclo. Lo que sigue abierto
-   a trabajo es **exactas** (17/47) y **de más** (162), que es justo donde
-   apunta la palanca 3.
+   columna de hallados está terminada por parte del ciclo.
+
+   **CORRECCIÓN, 19:45 UTC, mía y antes de que nadie la pidiera.** Al escribir
+   esto puse «lo que sigue abierto es exactas (17/47) y de más (162)» como si
+   fueran cifras del producto, y **no lo son**: salen de
+   `diagnosticar_busqueda_del_banco.py`, que imprime `SIN FILTRO` porque mide
+   **la etapa de búsqueda sin el filtro de relevancia**. Son el **techo que el
+   filtro recibe**, no lo que el sistema entrega. La vía completa la mide otro
+   test —el del motor portado, con categoría buscable, siembra, ámbito y
+   `G8`/`G12`—, y su fila final publica **`29/47; 50; 0; 63/81`**, que ya
+   alcanza el suelo D1 (`29/47, ≤21, ≤1, ≥63/81`; el `≤21` se cuenta sobre los
+   31 casos con contenido, y por eso convive con el `50` sin salvedad).
+
+   **Qué sobrevive y qué no**, dicho sin adornos:
+
+   - **Sobrevive la conclusión sobre `hallados`**, y de hecho se refuerza: el
+     filtro solo puede quitar, nunca añadir, así que tres ítems que faltan **en
+     el techo** faltan también en la vía completa. Que los tres sean decisiones
+     tuyas es cierto y no depende de qué medición se mire.
+   - **NO sobrevive** un cálculo que hice después y que estuve a punto de
+     publicar como objetivo para la palanca 3: que «si las de más bajaran a
+     cero, exactas sería 44/47», y que «limpiar los 12 casos más ligeros cruza
+     el suelo D1 de 29/47». Las dos cifras salen del reparto de la **etapa de
+     búsqueda** y el `29/47` de D1 es de la **vía completa**. Comparar las dos
+     es comparar dos poblaciones distintas, y el número que salía era bonito
+     precisamente por eso.
+
+   El error es el mismo del que va todo este día —**tomar una cifra sin
+   comprobar de qué es cifra**— y esta vez el que lo cazó fui yo, leyendo la
+   definición de las cotas del arnés en vez de la mía. Lo dejo escrito porque
+   el cálculo equivocado era más útil que el correcto, y ésa es exactamente la
+   clase de cifra que uno no quiere querer.
 3. **ADR-148 no nombra este hueco.** Enumera H1-H4 y `DEC-001` no está entre
    ellos: se contaba dentro de los cinco de H1, y H1 ha demostrado —midiendo—
    que no era de vigencia sino de ámbito. Es un hueco nuevo, y lo llamo **H5**
