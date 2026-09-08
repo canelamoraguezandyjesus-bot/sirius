@@ -155,8 +155,15 @@ Seis traducciones no obvias, escritas aquí porque cada una es una decisión:
     día se lee de lo **escrito**, antes de convertir a UTC (incidencia #570,
     ronda 3): tomarlo después movería `2026-03-01T00:30:00+02:00` al 28 de
     febrero y excluiría entero el 1 de marzo, que es el día por el que se
-    pregunta, y con un desfase negativo cerca de medianoche se iría al día
-    siguiente.
+    pregunta. Y el desfase declarado **no se descarta** (incidencia #570,
+    ronda 4): descartarlo falla en el sentido contrario y peor, porque con un
+    desfase NEGATIVO el día civil termina después del final del día en UTC
+    —el 1 de marzo en `-05:00` no acaba hasta las `2026-03-02 04:59:59` UTC—
+    y cortar antes escondería lo registrado en sus últimas cinco horas. El
+    corte emitido es el **más tardío** de los dos finales, el del día civil
+    en el desfase declarado llevado a UTC y el del día en UTC: es la única
+    escritura que respeta en los dos sentidos el criterio asimétrico de la
+    viñeta.
   - **tiempo objetivo → instante en UTC escrito con el sufijo `Z`**, el
     mismo con el que el corpus declara `valid_from`/`valid_to`. `G8` los
     compara **como cadenas** (`valid_from > objetivo`), y `"…Z"` no es

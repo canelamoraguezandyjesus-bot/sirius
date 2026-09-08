@@ -482,17 +482,26 @@ def test_un_ahora_fijado_por_el_llamador_se_respeta_en_cada_consulta() -> None:
 
 
 @pytest.mark.parametrize(
-    "escritura",
-    ["2026-03-01T00:30:00+02:00", "2026-03-01T23:30:00-05:00", "2026-03-01T12:00:00Z"],
+    ("escritura", "esperado"),
+    [
+        ("2026-03-01T00:30:00+02:00", "2026-03-01 23:59:59.999999"),
+        ("2026-03-01T23:30:00-05:00", "2026-03-02 04:59:59.999999"),
+        ("2026-03-01T12:00:00Z", "2026-03-01 23:59:59.999999"),
+    ],
 )
-def test_el_corte_conserva_el_dia_civil_que_la_pregunta_nombra(escritura: str) -> None:
-    """«¿Qué sabía yo el 1 de marzo?» es el 1 de marzo, lo escriba el modelo
-    con el desfase que lo escriba.
+def test_el_corte_conserva_el_dia_civil_que_la_pregunta_nombra(
+    escritura: str, esperado: str
+) -> None:
+    """«¿Qué sabía yo el 1 de marzo?» es el 1 de marzo entero, lo escriba el
+    modelo con el desfase que lo escriba.
 
     Tomar el día DESPUÉS de convertir a UTC movería
-    ``2026-03-01T00:30:00+02:00`` al 28 de febrero —y excluiría entero el día
-    por el que se pregunta—, y con un desfase negativo cerca de medianoche
-    se iría al día siguiente."""
+    ``2026-03-01T00:30:00+02:00`` al 28 de febrero y excluiría entero el día
+    por el que se pregunta. Descartar el desfase falla en el otro sentido:
+    en ``-05:00`` el 1 de marzo no termina hasta las ``2026-03-02 04:59:59``
+    UTC, y cortar antes escondería sus últimas cinco horas de registro
+    (incidencia #570, ronda 4). Por eso se emite el más tardío de los dos
+    finales."""
 
     def _handle(request: httpx.Request) -> httpx.Response:
         return _answer(corte_de_registro=escritura)
@@ -500,7 +509,7 @@ def test_el_corte_conserva_el_dia_civil_que_la_pregunta_nombra(escritura: str) -
     intencion = _adapter(httpx.MockTransport(_handle)).classify_intent("¿qué sabía el 1 de marzo?")
 
     assert intencion is not None
-    assert intencion.corte_de_registro == "2026-03-01 23:59:59.999999"
+    assert intencion.corte_de_registro == esperado
 
 
 def test_el_objetivo_emitido_da_el_mismo_veredicto_de_g8_que_el_del_banco() -> None:

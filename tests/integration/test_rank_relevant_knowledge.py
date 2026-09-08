@@ -1912,3 +1912,74 @@ def test_las_tres_escrituras_del_corte_de_hoy_admiten_el_mismo_conjunto(
         puerto.close()
 
     assert recuperadas == [memoria.id]
+
+
+@pytest.mark.integration
+def test_el_corte_con_desfase_negativo_no_esconde_el_final_del_dia_que_nombra(
+    tmp_path: Path,
+) -> None:
+    """Lo registrado durante el día que la pregunta nombra sigue saliendo,
+    aunque ese día termine DESPUÉS del final del día en UTC.
+
+    «¿Qué sabía yo el 1 de marzo?» escrito con desfase `-05:00` nombra un día
+    civil que no acaba hasta las `2026-03-02 04:59:59` UTC. Cortando en
+    `2026-03-01 23:59:59` —descartando el desfase— `G8` descartaría como
+    «posterior al corte de registro» todo lo registrado en sus últimas cinco
+    horas, que es justo el sentido del error que ADR-164 declara peligroso:
+    errar hacia incluir el día D nunca esconde canon, errar hacia excluirlo
+    sí (incidencia #570, ronda 4).
+
+    Como la de arriba, esta prueba pone el doble en el extremo HTTP: lo que
+    se ejercita es la canonización del adaptador, que un doble del puerto
+    saltaría."""
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    active_project_id, _ = _two_projects(database_path)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+    memoria = SaveManualMemoryUseCase(unit_of_work).save(
+        "faroquenopalabraunica sobre la costa", project_id=active_project_id
+    )
+    # Registrada a las 02:00 UTC del día siguiente: fuera del 1 de marzo en
+    # UTC, pero dentro del 1 de marzo en `-05:00`, que es el que se nombra.
+    engine = build_engine(database_path)
+    with engine.begin() as connection:
+        connection.execute(
+            text("UPDATE memories SET created_at = :created_at WHERE id = :id"),
+            {"created_at": "2026-03-02 02:00:00.000000", "id": memoria.id},
+        )
+
+    def _handle(request: httpx.Request) -> httpx.Response:
+        cuerpo = {
+            "modo": "M1",
+            "cardinalidad": "EXACTA",
+            "limite": 0,
+            "tiempo_objetivo": "",
+            "corte_de_registro": "2026-03-01T23:30:00-05:00",
+        }
+        return httpx.Response(200, json={"message": {"content": json.dumps(cuerpo)}})
+
+    cliente = httpx.Client(
+        transport=httpx.MockTransport(_handle), base_url="http://localhost:11434"
+    )
+    interprete = InterpreteDePeticion(
+        intent_classifier=OllamaQueryIntentClassifierAdapter(
+            "qwen3:4b-instruct", ahora="2026-03-02", client=cliente
+        )
+    )
+
+    puerto = build_staged_engine_port(database_path)
+    try:
+        recuperadas = [
+            c.item_id
+            for c in _use_case(
+                database_path,
+                category_matching_enabled=True,
+                staged_engine_port=puerto,
+                staged_engine_candidate=staged_engine_candidate.candidato(),
+                query_request_interpreter=interprete,
+            ).rank("faroquenopalabraunica")
+        ]
+    finally:
+        puerto.close()
+
+    assert recuperadas == [memoria.id]

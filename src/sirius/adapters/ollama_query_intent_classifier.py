@@ -57,7 +57,14 @@ reemiten aquí en una forma canónica única:
   El día se toma de lo escrito, ANTES de convertir a UTC: convertir
   primero movería ``2026-03-01T00:30:00+02:00`` al 28 de febrero y
   excluiría el 1 de marzo entero, que es justo el día por el que se
-  pregunta.
+  pregunta. El desfase declarado tampoco se descarta, porque descartarlo
+  falla en el sentido contrario: el día civil de ``2026-03-01T23:30:00-05:00``
+  no termina hasta las ``2026-03-02 04:59:59`` UTC, y cortar a las
+  ``2026-03-01 23:59:59`` escondería lo registrado en sus últimas cinco
+  horas. Se emite el MÁS TARDÍO de los dos finales —el del día civil en el
+  desfase declarado, llevado a UTC, y el del día en UTC—, porque el criterio
+  que manda aquí es asimétrico: errar hacia incluir el día D nunca esconde
+  canon, errar hacia excluirlo sí.
 - **tiempo objetivo**: es un instante, no un día, y ``G8`` lo compara con
   ``valid_from``/``valid_to`` **por orden lexicográfico**. El único corpus
   que puebla esos ejes los escribe con sufijo ``Z``, y ``"…Z"`` no es
@@ -81,7 +88,7 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import UTC, date, datetime, time
+from datetime import UTC, date, datetime, time, timezone
 
 import httpx
 
@@ -352,6 +359,30 @@ def _corte_de_registro(declarado: object) -> str | None:
     # El día es el que la escritura NOMBRA, no el que resulta de llevarla a
     # UTC: «el 1 de marzo» escrito como ``2026-03-01T00:30:00+02:00`` cae en
     # el 28 de febrero al convertirlo, y el corte excluiría entero el día por
-    # el que se pregunta (y con un desfase negativo, se iría al siguiente).
-    final = datetime.combine(date.fromisoformat(texto[:10]), _FINAL_DEL_DIA)
-    return final.strftime(_FORMATO_DE_CREATED_AT)
+    # el que se pregunta.
+    dia = date.fromisoformat(texto[:10])
+    final_en_utc = datetime.combine(dia, _FINAL_DEL_DIA)
+    # …pero el desfase declarado tampoco se descarta: con uno NEGATIVO el día
+    # civil termina DESPUÉS del final del día en UTC, y quedarse en éste
+    # excluiría lo registrado en las últimas horas del día por el que se
+    # pregunta. Se toma el más tardío de los dos, que es la única forma de
+    # errar siempre hacia incluir el día D. Ver el encabezado del módulo.
+    desfase = _desfase_declarado(texto)
+    if desfase is None:
+        return final_en_utc.strftime(_FORMATO_DE_CREATED_AT)
+    final_civil = datetime.combine(dia, _FINAL_DEL_DIA, tzinfo=desfase).astimezone(UTC)
+    return max(final_en_utc, final_civil.replace(tzinfo=None)).strftime(_FORMATO_DE_CREATED_AT)
+
+
+def _desfase_declarado(texto: str) -> timezone | None:
+    """El desfase que la escritura declara, o ``None`` si no declara ninguno.
+
+    Una escritura sin zona no aporta desfase que respetar: el módulo asume
+    UTC (``instante_utc``) y el final del día en UTC es ya la respuesta.
+    """
+    try:
+        momento = datetime.fromisoformat(texto.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    desplazamiento = momento.utcoffset()
+    return None if desplazamiento is None else timezone(desplazamiento)
