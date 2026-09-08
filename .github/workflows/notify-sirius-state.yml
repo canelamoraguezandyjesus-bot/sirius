@@ -8,8 +8,17 @@ permissions:
   contents: read
   issues: write
 
+# Una ranura por EVENTO, no por etiqueta (ADR-158). Actions guarda como mucho
+# UNA ejecucion en espera por grupo y descarta la pendiente cuando llega otra,
+# incluso con cancel-in-progress: false: con el grupo anterior
+# (incidencia+etiqueta) un tercer evento de la misma etiqueta desplazaba al
+# segundo antes de que publicara, y ese suceso no dejaba marcador -el mismo
+# agujero que ADR-157 vino a cerrar, por otra puerta-. Al incluir el run, dos
+# eventos distintos no comparten ranura y ninguno puede descartar a otro;
+# reejecutar el MISMO run sigue cayendo en el mismo grupo, y su marcador
+# -que lleva ese run desde ADR-157- sigue deduplicando.
 concurrency:
-  group: notify-sirius-${{ github.event.issue.number }}-${{ github.event.label.name }}
+  group: notify-sirius-${{ github.event.issue.number }}-${{ github.event.label.name }}-${{ github.run_id }}
   cancel-in-progress: false
 
 jobs:
