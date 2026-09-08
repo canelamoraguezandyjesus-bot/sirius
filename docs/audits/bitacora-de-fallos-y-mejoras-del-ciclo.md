@@ -1958,19 +1958,35 @@ ADR o su incidencia cuando se adopte.
   aprueben, sino que los dos aprueben **el MISMO head**. Con hallazgos P3 de una
   línea eso puede alternar varias vueltas sin que ninguna de las dos partes se
   equivoque.
-- **Deuda 7, primera medición seria y sin reproducción.** El test inestable de
-  Qt (`test_streaming_message_grows_without_overlapping_neighbours`) se ejecutó
+- **Deuda 7: 47 ejecuciones y ninguna reproducción, y eso cambia el encargo.**
+  El test inestable de Qt
+  (`test_streaming_message_grows_without_overlapping_neighbours`) se ejecutó
   **25/25 en verde en aislamiento**, **10/10 en verde la suite `tests/gui`
-  entera** y **10/10 en verde la cadena completa** (~8 min por pasada). Diez
-  pasadas limpias de la suite entera son ya un dato: la inestabilidad es rara,
-  no habitual, y el encargo tendrá que decir eso con estas cifras en vez de
-  inventarse una tasa. Hipótesis viva, sin confirmar: el fallo observado
-  (`assert 32 >= 54`) compara la altura final de la fila contra
+  entera** y **12/12 en verde la cadena completa** (~8 min por pasada; total
+  ~2 h de máquina). Cuarenta y siete ejecuciones sin una sola caída.
+
+  La conclusión no es «ya no falla», es **cuál es el orden de magnitud**: se le
+  conocen DOS caídas en la operación real (entrada 16 y el 06-09 a las 04:16)
+  frente a un contador de ejecuciones de Quality que el 07-09 iba por el
+  **run 1475**. Aunque no todas esas ejecuciones sean comparables, la tasa está
+  en el orden de una por mil, no de una por diez. Con esa tasa, reproducirlo
+  localmente exigiría **cientos** de pasadas, no doce, y encima en un entorno
+  que no es el runner (el fallo es de temporización de Qt, y la máquina importa).
+
+  **Lo que eso obliga a cambiar en el encargo**: pedir «reprodúcelo y arréglalo»
+  sería mandar al motor a una pared. El encargo tiene que ir por el
+  **invariante**: la aserción compara la altura final de la fila contra
   `mid_stream_height`, que se lee justo tras `rendered_plain_text() ==
-  "parcial"` y sin esperar a que el layout se asiente, así que puede capturar
-  una altura que todavía es del marcador previo. El texto final («parcial
-  completo») es MÁS largo que el intermedio («parcial»), o sea que encoger no
-  es un efecto de métrica de texto.
+  "parcial"` y **sin esperar a que el layout se asiente**, así que puede
+  capturar una altura que todavía no es la del texto intermedio. El arreglo es
+  esperar el asentamiento antes de medir —como ya hace `_wait_for_real_layout`
+  en el resto del fichero— y el guardián no puede depender de que el fallo
+  aparezca, sino de que la medida se tome sobre un layout estable. Dato que
+  sostiene la hipótesis: el texto final («parcial completo») es MÁS largo que
+  el intermedio («parcial»), así que la fila encogiendo de 54 a 32 px no es un
+  efecto de métrica de texto. Hipótesis, no conclusión: sin reproducción no se
+  puede afirmar, y el encargo debe decirlo con esas palabras. El fallo observado
+  fue `assert 32 >= 54`.
 
 ---
 
