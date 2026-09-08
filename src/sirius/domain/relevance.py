@@ -153,7 +153,8 @@ __all__ = [
 #: ``experiments/adr002/lateral/categoria.py:_pide_contexto`` (rama
 #: ``evidence/adr001-spikes``), calcada del arnés
 #: (``tests/acceptance/staged_engine_category_and_relevance.py:257``). El
-#: propósito real que toda llamada a ``rank()`` declara ya contiene esta
+#: propósito real que toda llamada al caso de uso (hoy ``rank_con_cupo()``,
+#: ADR-169) declara ya contiene esta
 #: subcadena a propósito (M16, ADR-124,
 #: ``rank_relevant_knowledge._PROPOSITO_RECUPERACION_ORDINARIA``).
 PROPOSITO_DE_CONTEXTO: Final = "contexto"

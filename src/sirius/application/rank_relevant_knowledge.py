@@ -92,7 +92,8 @@ __all__ = ["RankRelevantKnowledgeUseCase"]
 #: ``"contexto"`` a propósito, la misma condición que la réplica del arnés
 #: ``pide_contexto``/``PROPOSITO_DE_CONTEXTO`` exige
 #: (``tests/acceptance/staged_engine_category_and_relevance.py:257,403-409``),
-#: porque la única llamada real a ``rank()`` ocurre desde
+#: porque la única llamada real al caso de uso (hoy ``rank_con_cupo()``,
+#: ADR-169) ocurre desde
 #: ``ContextBuilder._rank_related_knowledge`` para ensamblar el contexto de
 #: un turno — un hecho estructural sobre quién llama, no una adivinanza
 #: sobre la consulta.
@@ -106,7 +107,8 @@ __all__ = ["RankRelevantKnowledgeUseCase"]
 _PROPOSITO_RECUPERACION_ORDINARIA = PROPOSITO_RECUPERACION_ORDINARIA
 
 #: Permiso de la recuperación ordinaria, decidido por REGLA del producto y
-#: nunca por el modelo (ADR-164): la única llamada real a ``rank()`` ensambla
+#: nunca por el modelo (ADR-164): la única llamada real al caso de uso (hoy
+#: ``rank_con_cupo()``, ADR-169) ensambla
 #: el contexto de un turno que el propietario mismo ha iniciado sobre sus
 #: propios datos locales. Existe como nombre —en vez de quedar implícito en
 #: el valor por defecto del intérprete— para que el día en que Sirius tenga
@@ -403,7 +405,8 @@ class RankRelevantKnowledgeUseCase:
         ``tests/acceptance/staged_engine_category_and_relevance.py:412-445``).
         ``_peticion_ordinaria`` (arriba) fija ese propósito a un literal fijo
         que ya contiene la subcadena "contexto" a propósito (M16, ADR-124) —
-        así que, en producción, toda llamada real a ``rank()`` siembra en
+        así que, en producción, toda llamada real al caso de uso (hoy
+        ``rank_con_cupo()``, ADR-169) siembra en
         cada turno, sin depender de que la consulta nombre ninguna palabra
         de ningún vocabulario: quien poda el ruido resultante es el filtro
         de relevancia (ADR-125), con el rescate RF-25/RF-26 (M19b)

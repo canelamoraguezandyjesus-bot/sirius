@@ -69,7 +69,8 @@ __all__ = [
 #: Propósito declarado de una recuperación de contexto ordinaria: ``E0``
 #: exige uno no vacío (``G1``). Contiene la subcadena ``"contexto"`` a
 #: propósito, la misma condición que ``pide_contexto`` exige para la siembra
-#: de M20 (ADR-129), porque la única llamada real a ``rank()`` ocurre desde
+#: de M20 (ADR-129), porque la única llamada real al caso de uso (hoy
+#: ``rank_con_cupo()``, ADR-169) ocurre desde
 #: ``ContextBuilder._rank_related_knowledge`` para ensamblar el contexto de
 #: un turno — un hecho estructural sobre quién llama, no una adivinanza
 #: sobre la consulta. Estaba en ``rank_relevant_knowledge`` hasta ADR-164 y
@@ -88,7 +89,8 @@ class PermisoDeRecuperacion(StrEnum):
 
     Los dos valores del banco (``peticion_p2.permiso``). No lo infiere el
     modelo: lo declara quien llama, a partir de qué operación es — en Sirius
-    0.1 la única llamada real a ``rank()`` es el ensamblado de contexto de un
+    0.1 la única llamada real al caso de uso (hoy ``rank_con_cupo()``,
+    ADR-169) es el ensamblado de contexto de un
     turno que el propietario mismo ha iniciado sobre sus propios datos
     locales, y por eso producción declara ``AUTORIZADO``.
     """
