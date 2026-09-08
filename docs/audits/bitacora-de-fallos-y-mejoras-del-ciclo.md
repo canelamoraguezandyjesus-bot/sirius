@@ -2998,6 +2998,24 @@ ADR o su incidencia cuando se adopte.
   persigue en los demás. La recomendación va con la enmienda: dejar que esta
   corrección entre —cierra un agujero real— y, si la siguiente ronda vuelve a
   traer solo prosa, parar entonces sin más discusión.
+- **El motor se me adelantó y paró él solo**: a las 16:03 saltó el freno de
+  convergencia con el motivo exacto —«no hay progreso neto en dos rondas
+  consecutivas (4 → 5 → 6): el par (2,3) no mejora la mejor marca histórica
+  (2,3)»— y pidió decisión humana. O sea que la escalada no fue una cortesía
+  mía: **el ciclo la exigía por su cuenta**, y mi criterio publicado y el suyo
+  coincidieron en el mismo punto. Es la primera vez que el freno muerde de
+  verdad en este ciclo.
+- **Decisión del propietario: una ronda más, por la vía (A).** Registrada como
+  comentario `DECISIÓN` en #574 antes del `continua`, con el alcance acotado
+  —cerrar el agujero de cobertura y re-anclar la cadena sobre el árbol
+  fusionado, nada más— y con el criterio de la ronda siguiente escrito por
+  delante: **si vuelve a traer únicamente prosa, se para y no se autoriza
+  otra.**
+- **Lo que este episodio deja claro sobre el freno**: mide la convergencia del
+  TRABAJO, pero puede morder por causas que no son del trabajo —aquí, una
+  maniobra de fusión obligada (deuda 23) y un fallo de vista del revisor en
+  rondas anteriores—. No es un defecto del freno: es que **un freno bueno
+  obliga a mirar, y mirar es exactamente lo que hizo falta**.
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
