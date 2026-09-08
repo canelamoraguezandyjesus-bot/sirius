@@ -3647,6 +3647,39 @@ de que auditar el encargo antes de publicarlo deba ser parte del encargo.
     viva, y esa decisión está abierta. Si la palanca 2 se retira, esta deuda
     baja de prioridad hasta que otra palanca derive de esas columnas.
 
+
+    **REVISADA el 08-09 a las 18:50 UTC, y la deuda BAJA de rango: la mitad
+    sin fechar no contamina ninguna medición del banco.** Seguido el dato
+    desde donde se declara hasta donde se consume, que es lo que la deuda 24
+    exige y lo que yo no había hecho al registrar esto:
+
+    - **La etapa de búsqueda no lee ninguna de las columnas sin fechar.** Las
+      dos consultas del puerto (`staged_engine_port.py`, `_SQL_MEMORIAS` y
+      `_SQL_DECISIONES`) toman de las tablas de revisión **solo `r.content`**;
+      la única fecha que seleccionan es `m.created_at`/`d.created_at`, que es
+      exactamente lo que ADR-166 fechó. Y `ItemCanonico` declara **una sola
+      fecha**, `created_at`. O sea que el alcance de ADR-166 no fue «a
+      medias»: fue **exactamente** el de lo que el motor lee.
+    - **`updated_at` sí se lee, pero no en esta vía.** Es la clave 7ª de 8 de
+      `_sort_key` (`relevance.py:519`), y por tanto solo decide cuando empatan
+      los seis booleanos anteriores. Llegué a anotar que eso era una mina para
+      la palanca 3 —que introduce el truncado a `n`, donde el orden sí decide
+      quién sobrevive—, **y era falso**: la vía del motor por etapas conserva
+      «el orden que ya le adjudicó» el motor y **nunca reordena `ranked` por
+      el criterio S7.5/M9**, cosa que el propio código declara y justifica con
+      un hallazgo de revisión anterior (CODEX-001, incidencia #457, tercera
+      ronda). Con la puerta cerrada, la vía ordinaria sí usa `_sort_key`, pero
+      ahí `updated_at` es dato real de producción, no del arnés.
+
+    Queda, entonces, como **trampa latente y no como contaminación**: se
+    activaría si alguien hiciera que la vía por etapas volviese a ordenar por
+    S7.5, que es justo lo que el código prohíbe hoy por escrito.
+
+    **Y la forma en que casi me equivoco merece quedar anotada**, porque es la
+    misma del día en el sentido contrario: la deuda 24 nombra el error de dar
+    por bueno que un dato llega; aquí di por bueno que un dato **estorba**, sin
+    seguirlo tampoco. Una alarma sin traza es tan barata de escribir como una
+    garantía sin traza, y cuesta lo mismo comprobarla: tres minutos.
 23. **La puerta de fusión y la ruta de avance se contradicen: ponerse al día
     para poder fusionar TE SACA de `ready-for-merge`.** Medido en vivo el
     08-09 con #574/#575:
