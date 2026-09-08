@@ -778,11 +778,26 @@ aplicar la etiqueta, y la etiqueta es lo que dispara el marcador—. Con eso:
   pytest), código de salida **0**,
   `5102 passed, 17 skipped, 2 xfailed in 470.49s (0:07:50)`. La terna es la
   misma que la de las rondas 13-15 porque esta ronda no añade ni quita ninguna
-  prueba: refuerza seis que ya existían -y la de acoplamiento- sin cambiar
-  ninguna de sus aserciones.
+  prueba: refuerza seis que ya existían -y la de acoplamiento-. Lo que no
+  cambió fue ninguna aserción ANTERIOR: el diff `c2db289..5e30caa` no borra ni
+  reescribe una sola línea `assert` de las que ya había -`git diff
+  c2db289..5e30caa -- tests/ | grep '^-.*assert'` no imprime nada-. Sí AÑADE
+  aserciones nuevas sobre las mismas pruebas: la de pertenencia en
+  `test_el_doble_de_cronologia_proyecta_lo_mismo_que_la_proyeccion_real`
+  (`assert atribuidos` y `assert all(orden in ordenes_proyectados ...)`), la
+  guarda común de `_espejo` (`assert not sin_su_veredicto, ...`) y, en las
+  pruebas de recorrido, aserciones temporales y de longitud que fijan dónde cae
+  cada veredicto respecto de `updated_at` (`assert paradas[0].publicado_en <=
+  parado.updated_at < paradas[1].publicado_en`, `assert len(paradas) == 2`,
+  `assert len(paradas) == 1`). Por eso la terna no se mueve: la cuenta de
+  pruebas es la misma aunque cada una afirme más.
 
   Lo único que cambia en el árbol después de esta captura es la transcripción
-  de estas mismas cifras.
+  de estas mismas cifras y, en la ronda 17, la redacción de este párrafo
+  (CODEX-001, P3): decía «sin cambiar ninguna de sus aserciones», que es falso
+  porque el diff sí añade aserciones, y ahora distingue las que se añaden de
+  las anteriores, que siguen intactas. Ni el código, ni las pruebas, ni las
+  cifras se tocaron, así que la terna sigue siendo la del árbol de `5e30caa`.
 
 ## Consecuencias
 
