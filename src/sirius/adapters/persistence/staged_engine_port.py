@@ -398,6 +398,20 @@ class StagedEnginePort:
         sea un instante legible no acota nada, así que no se consulta: la
         ventana devuelve vacío en vez de afirmar vigencia bajo un extremo que
         no sabe leer.
+
+        Ninguna de las dos afirma que la decisión estuviera VIGENTE durante
+        la ventana, y el texto que el motor entrega tampoco lo afirma:
+        ``created_at`` es el instante en que la decisión se PROPUSO
+        (``ProposeDecisionUseCase``), no aquel en que se aprobó
+        (``DecisionModel`` no persiste ninguna fecha de aprobación, y
+        ``updated_at`` es el último toque), así que una decisión propuesta
+        antes del final de la ventana y aprobada DESPUÉS de ella entra
+        igualmente por esta ruta. Lo que se entrega es «aprobada, y registrada
+        no después del final de la ventana»: exactamente las dos condiciones,
+        ni una palabra más. La vigencia real llegará cuando el sustrato la
+        persista (palanca 2 de ADR-148, ``valid_from``/``valid_to``); hasta
+        entonces es deuda declarada, no una afirmación disimulada.
+
         Una decisión ``SUPERSEDED`` no entra aunque pudiera haber estado
         vigente dentro de la ventana: el esquema guarda QUÉ la sustituyó,
         pero no CUÁNDO —``updated_at`` es el último toque, no el fin de una

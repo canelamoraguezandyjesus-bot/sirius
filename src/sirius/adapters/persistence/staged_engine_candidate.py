@@ -248,7 +248,10 @@ class CandidatoLexicoEstructurado:
             contexto.puerto.por_ventana_de_vigencia(desde, hasta),
             contexto,
             senal=MEDIO_POR_VIGENCIA,
-            razon=f"vigente en la ventana declarada por la peticion ({desde} a {hasta})",
+            razon=(
+                "decision aprobada cuyo registro no es posterior al final de la "
+                f"ventana declarada por la peticion ({desde} a {hasta})"
+            ),
         )
 
     def _terminos_puente(self, contexto: ContextoDeEtapa, terminos: Sequence[str]) -> list[str]:

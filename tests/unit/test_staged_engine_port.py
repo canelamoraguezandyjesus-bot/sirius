@@ -287,6 +287,62 @@ def test_por_ventana_de_vigencia_no_afirma_nada_con_un_final_ilegible(tmp_path: 
         puerto.close()
 
 
+def test_por_ventana_de_vigencia_admite_lo_aprobado_despues_del_final_de_la_ventana(
+    tmp_path: Path,
+) -> None:
+    """Lo que las dos condiciones del predicado NO afirman, fijado aquí para
+    que el texto entregado no pueda volver a afirmarlo (ADR-168, ronda 3).
+
+    `created_at` es el instante en que la decisión se PROPUSO, no aquel en
+    que se aprobó: `DecisionModel` no persiste fecha de aprobación. Así que
+    una decisión registrada DENTRO de la ventana y aprobada DESPUÉS de su
+    final entra por la vía —y debe entrar, porque el predicado es el que
+    es—, pero de ella solo puede decirse que está aprobada y que su registro
+    no es posterior al final de la ventana. Que estuviera vigente durante la
+    ventana es justo lo que el sustrato de Sirius 0.1 no sostiene (deuda de
+    la palanca 2 de ADR-148).
+
+    El `updated_at` que deja la aprobación —el reloj del runner, posterior a
+    la ventana de 2026-03— es la prueba de que la aprobación cae fuera.
+    """
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    unidad = build_sqlite_unit_of_work(database_path)
+    decision = ProposeDecisionUseCase(unidad).propose(
+        "descuento-invierno", _proyecto_de_prueba(database_path), "Se aplica el descuento."
+    )
+    _fijar_created_at(database_path, decision.id, _REGISTRO_FIJADO)
+    ApproveDecisionUseCase(unidad).approve(decision.id, confirmed=True)
+
+    registro, aprobacion = _fechas_de_la_decision(database_path, decision.id)
+    fin_de_la_ventana = "2026-03-20T23:59:59Z"
+    assert registro == _REGISTRO_FIJADO
+    assert aprobacion > "2026-03-20 23:59:59"
+
+    puerto = build_staged_engine_port(database_path)
+    try:
+        encontrados = puerto.por_ventana_de_vigencia("2026-01-10T00:00:00Z", fin_de_la_ventana)
+    finally:
+        puerto.close()
+
+    assert [item.id for item in encontrados] == [f"{Clase.DECISION.value}:{decision.id}"]
+
+
+def _fechas_de_la_decision(database_path: Path, decision_id: int) -> tuple[str, str]:
+    """`created_at` y `updated_at` tal como están guardados, sin pasar por el
+    dominio: lo que se comprueba es la forma literal de la fila."""
+    engine = build_engine(database_path)
+    try:
+        with engine.begin() as conexion:
+            fila = conexion.execute(
+                text("SELECT created_at, updated_at FROM decisions WHERE id = :id"),
+                {"id": decision_id},
+            ).one()
+    finally:
+        engine.dispose()
+    return str(fila[0]), str(fila[1])
+
+
 def test_por_ventana_de_vigencia_no_devuelve_una_propuesta_sin_aprobar(tmp_path: Path) -> None:
     """Una decisión `PROPOSED` no ha empezado ninguna vigencia: aprobarla es
     lo que la empieza (`sirius.domain.decision.DecisionStatus`)."""

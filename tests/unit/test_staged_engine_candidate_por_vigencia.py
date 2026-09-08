@@ -272,3 +272,35 @@ def test_la_via_no_puede_desplazar_a_un_critico_fuera_del_limite() -> None:
 
     assert recuperacion.ids == ("DECISION:7",)
     assert recuperacion.traza.criticos_omitidos == ()
+
+
+# -- Lo que la vía dice de lo que trae ---------------------------------------
+
+
+def test_la_razon_enuncia_las_dos_condiciones_y_no_afirma_vigencia() -> None:
+    """La cadena que el usuario acaba leyendo (`staged_engine_trace.explicar`
+    la publica en `Explicacion.razon_de_orden`) no puede afirmar más que el
+    predicado del puerto: la decisión está APROBADA y su registro no es
+    posterior al final de la ventana.
+
+    Que estuviera vigente DURANTE la ventana es otra cosa, y el sustrato de
+    Sirius 0.1 no la sostiene: `created_at` es cuándo se propuso, no cuándo
+    se aprobó, y no hay fecha de aprobación persistida
+    (`tests/unit/test_staged_engine_port.py::
+    test_por_ventana_de_vigencia_admite_lo_aprobado_despues_del_final_de_la_ventana`).
+    Es la deuda de la palanca 2 de ADR-148, declarada en ADR-168 y no
+    disimulada en el texto entregado.
+    """
+    puerto = _PuertoEspia(por_ventana=[_decision("DECISION:9")])
+    peticion = _peticion(consulta=CONSULTA_SIN_TEMA, intervalo=VENTANA)
+
+    (aportada,) = staged_engine_candidate.candidato().candidatas(
+        _contexto(peticion, puerto, Etapa.E3)
+    )
+
+    desde, hasta = VENTANA
+    assert aportada.razon == (
+        "decision aprobada cuyo registro no es posterior al final de la "
+        f"ventana declarada por la peticion ({desde} a {hasta})"
+    )
+    assert "vigente" not in aportada.razon

@@ -444,9 +444,53 @@ declara una escritura de tres extremos: comprobado sobre el árbol de la
 validación de abajo, donde las cuatro cotas del arnés del motor portado
 siguen siendo aserciones de la prueba de aceptación y pasan sin cambiarlas.
 
+### Corrección posterior: el texto entregado enuncia las dos condiciones, no la vigencia
+
+Revisión de la ronda 3 (CLAUDE-R3-001). La sección «La dimensión que la
+contra-medición NO aislaba» declara, arriba, que sobre un `created_at` real la
+vía **admite lo registrado antes de `hasta` cuya vigencia empieza después**.
+Esa declaración entraba en contradicción con la cadena que el motor entregaba
+al usuario y que la ronda 2 no ajustó: `razon="vigente en la ventana declarada
+por la peticion (X a Y)"`, publicada en `Explicacion.razon_de_orden` por
+`staged_engine_trace.explicar`.
+
+El predicado real es `created_at <= :hasta AND status = 'approved'`, y
+`created_at` es el instante en que la decisión se **propuso**
+(`ProposeDecisionUseCase`), no aquel en que se aprobó: `DecisionModel` no
+persiste ninguna fecha de aprobación, y `updated_at` es el último toque —el
+mismo motivo por el que esta ficha se niega a datar con él el final de una
+vigencia (`SUPERSEDED`)—. Así que una decisión propuesta dentro de la ventana
+y **aprobada después de su final** entra por la vía, y de ella se afirmaba una
+vigencia que el sustrato de Sirius 0.1 no sostiene. Es la familia de defecto
+que ADR-166 evitó al negarse a inventar una fecha ausente, aquí en el extremo
+**inicial** de la vigencia.
+
+Lo que cambia es el texto, no el predicado: la vía sigue devolviendo lo mismo,
+con la misma cota, el mismo orden y la misma restricción de estado, y ninguna
+cifra medida se mueve. La cadena entregada pasa a enunciar exactamente las dos
+condiciones —`"decision aprobada cuyo registro no es posterior al final de la
+ventana declarada por la peticion (X a Y)"`— y el docstring de
+`por_ventana_de_vigencia` dice ahora en el mismo párrafo qué es lo que las dos
+**no** afirman. Cerrar la deuda sigue siendo la palanca 2 de ADR-148
+(`valid_from`/`valid_to` persistidos), no este encargo; lo que faltaba era que
+el texto entregado no la contradijera.
+
+Dos pruebas nuevas, ninguna existente tocada:
+
+- `test_por_ventana_de_vigencia_admite_lo_aprobado_despues_del_final_de_la_ventana`
+  (`tests/unit/test_staged_engine_port.py`): una decisión con `created_at`
+  fijado dentro de la ventana y aprobada después —el `updated_at` que deja la
+  aprobación es posterior al final— entra por la vía. Fija el hecho del que la
+  redacción tiene que dar cuenta; la prueba vecina
+  `test_por_ventana_de_vigencia_no_devuelve_una_propuesta_sin_aprobar` no lo
+  cubría, porque su decisión sigue sin aprobar en el momento de la consulta.
+- `test_la_razon_enuncia_las_dos_condiciones_y_no_afirma_vigencia`
+  (`tests/unit/test_staged_engine_candidate_por_vigencia.py`): fija la cadena
+  de `Candidata.razon`, que hasta ahora no fijaba ninguna prueba.
+
 ### Pruebas vistas fallar (mutación transcrita)
 
-Doce mutaciones, cada una revertida después. Ninguna prueba nueva pasa con
+Catorce mutaciones, cada una revertida después. Ninguna prueba nueva pasa con
 el código de antes:
 
 | Mutación | Qué se rompe | Rojo |
@@ -463,6 +507,8 @@ el código de antes:
 | M10 el extremo final viaja sin reescribir (`"hasta": hasta`) | el grano de instante en la frontera del mismo día | 1 (`test_por_ventana_de_vigencia_excluye_lo_registrado_el_mismo_dia_tras_el_final`) |
 | M11 un extremo ilegible se consulta igual (`corte = hasta`) | la guarda del extremo no legible | 1 (`test_por_ventana_de_vigencia_no_afirma_nada_con_un_final_ilegible`) |
 | M12 la guarda de los dos extremos vuelve a ser común (`if len(extremos) != 2:`) | el corte de registro con tres extremos | 1 (`test_el_corte_de_registro_de_mas_de_dos_extremos_sigue_cortando`: `assert None == '2026-03-01 23:59:59.999999'`) |
+| M13 la razón vuelve a decir «vigente en la ventana declarada por la peticion» | la afirmación que el predicado no sostiene | 1 (`test_la_razon_enuncia_las_dos_condiciones_y_no_afirma_vigencia`: `assert 'vigente en l...20T00:00:00Z)' == 'decision apr...20T00:00:00Z)'`) |
+| M14 el predicado exige además `updated_at <= :hasta` | el hecho que la redacción tiene que reconocer | 2 (`test_por_ventana_de_vigencia_admite_lo_aprobado_despues_del_final_de_la_ventana` y `…excluye_lo_registrado_el_mismo_dia_tras_el_final`: `assert [] == ['DECISION:1']`) |
 
 ### La cota que se mueve, y en qué dirección
 
