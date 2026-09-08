@@ -268,6 +268,32 @@ ambos `2026-04-01T00:00:00Z`). Con `+00:00` el ítem se rechazaba como «aún no
 vigente»; con `Z` se admite, igual que con la ventana del banco. Restaurado
 el código, las cuatro pasan.
 
+**Los dos guardianes de la ronda 4, vistos FALLAR por mutación** (incidencia
+#570, ronda 4; transcritos aquí en la ronda 5, que es lo que la ronda 4 dejó
+solo en el cuerpo de la PR y en un comentario de la incidencia —fuera del
+registro estable— y por eso se vuelve a ejecutar la mutación sobre el árbol de
+`4cc9840` y se transcribe la salida NUEVA, no la citada de memoria). Dos
+mutaciones, una por guardián, cada una restaurando la conducta anterior a esa
+ronda:
+
+```
+# _corte_de_registro, última línea: max(final_en_utc, final_civil.replace(tzinfo=None)).strftime(...) -> final_en_utc.strftime(...)
+FAILED tests/integration/test_rank_relevant_knowledge.py::test_el_corte_con_desfase_negativo_no_esconde_el_final_del_dia_que_nombra - assert [] == [1]
+1 failed in 1.48s
+
+# InterpreteDePeticion.interpretar: añadido objetivos=3 a la construcción de Peticion
+FAILED tests/unit/test_interpret_query_request.py::test_los_objetivos_en_uno_adelantan_la_parada_s1_en_las_exactas_del_banco - AssertionError: assert 3 == 1
+1 failed in 0.06s
+```
+
+La primera es la que cierra el sentido que la ronda 3 dejó abierto: descartar
+el desfase declarado devuelve `[]` donde el día civil termina DESPUÉS del final
+del día en UTC, es decir esconde lo registrado en las últimas horas del día por
+el que se pregunta. La segunda no fija código de producción —`interpretar` no
+toca `objetivos`— sino el **techo declarado** de esta ficha: si alguien derivase
+`objetivos` en producción, la prueba lo dice en vez de que el párrafo de abajo
+envejezca en silencio. Restauradas las dos líneas, las dos pruebas pasan.
+
 **Lo que esto SÍ cambia en la predicción de la medición con Ollama, dicho
 sin ajustar la predicción.** La predicción escrita antes de medir
 (`coincidencia campo a campo >= 45/47`) **se mantiene sin tocar**: se declara
