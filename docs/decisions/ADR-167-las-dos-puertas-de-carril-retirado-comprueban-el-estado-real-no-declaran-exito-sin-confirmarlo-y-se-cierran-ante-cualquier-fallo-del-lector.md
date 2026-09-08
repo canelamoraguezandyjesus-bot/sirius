@@ -123,10 +123,115 @@ en vez de continuar en verde.**
 
 ## Comprobación que la sostiene
 
-Se rellena en el commit que la produce, con los resultados reales.
+**El arnés.** `tests/automation/fixtures/carriles_retirados/` extrae el guion
+real del paso del YAML, lo corre con `bash` contra un `gh` doble y devuelve lo
+observable: código de salida, comentarios publicados, etiquetas finales, estado
+de la incidencia y la lista de llamadas. El doble delega los filtros en el `jq`
+de verdad —interpretarlos a mano fue un error del primer intento: bastaba con
+que `--jq '{state: .state, is_pr: ...}'` contuviera `.state` para devolver algo
+que GitHub nunca habría devuelto— y sabe fallar a voluntad, incluida la
+**respuesta ambigua**: publica el comentario **y además** devuelve error.
+
+**Los cinco, reproducidos sobre `afe704e` antes de tocar nada:**
+
+| # | Lo observado en `main` |
+|---|---|
+| 1a | Fallan las etiquetas → **salida 0** (verde), etiquetas intactas en `planned` + `implement-requested`, 1 comentario |
+| 1b | Falla el comentario → **salida 0**, etiquetas en `sirius:failed-safely`, **0 comentarios**: terminal y muda |
+| 2 | Evento atrasado sobre incidencia ya completada → **salida 0**, etiquetas finales `['sirius:completed', 'sirius:failed-safely']` |
+| 3 | Lector con código 127 → puerta de investigación: **`valid=true`**, es decir, el investigador habría corrido sobre un carril retirado; auditor: **`retirado=false`**, hacia el modelo |
+| 4 | Dos activaciones iguales → **2 comentarios** |
+| 5 | `test_el_registro_declara_los_dos_carriles_retirados` exigía `set(carriles) == set(CARRILES)`: quitar una entrada —la reactivación que §13.2.1 promete— dejaba la suite en rojo |
+
+**Prueba de mutación, que es lo que hace que las pruebas valgan algo.** Con los
+arreglos aplicados: **45 pasan**. Guardando *solo* los dos workflows arreglados y
+dejando el resto (`git stash push -- .github/workflows/...`), las mismas 45
+pruebas dan **17 fallos y 28 pases** contra el código de `main`. Ninguna prueba
+nueva pasa por casualidad:
+
+```
+FAILED test_el_camino_bueno_explica_y_cierra_en_un_estado_terminal
+FAILED test_si_fallan_las_etiquetas_el_paso_termina_en_rojo
+FAILED test_si_falla_el_comentario_no_se_toca_ninguna_etiqueta
+FAILED test_reejecutar_tras_un_fallo_de_etiquetas_converge
+FAILED test_dos_activaciones_iguales_dejan_un_solo_comentario
+FAILED test_una_respuesta_ambigua_no_acaba_en_comentario_duplicado
+FAILED test_no_se_toca_una_incidencia_que_ya_no_esta_esperando[evento-atrasado-sobre-incidencia-completada]
+FAILED test_no_se_toca_una_incidencia_que_ya_no_esta_esperando[incidencia-cerrada]
+FAILED test_no_se_toca_una_incidencia_que_ya_no_esta_esperando[carrera-con-el-validador]
+FAILED test_no_se_toca_una_incidencia_que_ya_no_esta_esperando[evento-repetido]
+FAILED test_manda_el_perfil_del_cuerpo_actual_y_no_el_del_evento
+FAILED test_si_no_se_puede_leer_la_incidencia_no_se_toca[la-api-no-responde]
+FAILED test_si_no_se_puede_leer_la_incidencia_no_se_toca[respuesta-ilegible]
+FAILED test_un_codigo_inesperado_del_lector_detiene_la_puerta[3]
+FAILED test_un_codigo_inesperado_del_lector_detiene_la_puerta[127]
+FAILED test_un_codigo_inesperado_del_lector_detiene_al_auditor[3]
+FAILED test_un_codigo_inesperado_del_lector_detiene_al_auditor[127]
+```
+
+El parámetro `[2]` **pasa** en las dos versiones, y así debe ser: el código `2`
+era el único que ADR-163 ya trataba bien. Decirlo importa tanto como decir los
+diecisiete.
+
+**Un matiz del hallazgo 3 que solo apareció al aislar la variable.** El primer
+shim hacía fallar *todas* las llamadas a `python3`, así que también rompía el
+validador de activación y la puerta se detenía —por el motivo equivocado—: la
+prueba habría pasado sin probar nada. Con un shim que falla **solo** para
+`sirius_carril_retirado.py` y delega el resto en el intérprete real, se ve lo que
+la puerta concluye de verdad: `valid=true`. Es un fallo más grave de lo que la
+primera reproducción sugería.
+
+**La recuperación, demostrada y no supuesta (criterio de parada (b)).**
+`test_reejecutar_tras_un_fallo_de_etiquetas_converge` parte del estado que dejó
+una primera pasada fallida —no de una incidencia limpia— y comprueba que la
+segunda **no republica** (1 comentario, no 2) y **sí** completa la transición,
+saliendo con 0. El reconciliador no interviene, y ya se había medido que no
+podía.
+
+**La reversibilidad, demostrada sin tocar el registro real.** Cuatro
+configuraciones controladas —los dos retirados, cada uno reactivado por
+separado, y ninguno— pasan las comprobaciones de formato y seguridad; tres
+registros mal formados las hacen fallar (campo ausente, clase no autorizada,
+`carriles` que no es un objeto), que es lo que prueba que esas comprobaciones
+siguen siendo comprobaciones. Y con un registro en el que investigación ya no
+consta retirada, la misma puerta **ejecutada** no comenta, no pone
+`failed-safely` y llega a `valid=true`. `docs/implementation/work_engine/carriles_retirados.json`
+**no se ha modificado**: los dos carriles siguen retirados.
+
+**Comprobaciones del repositorio**, con la invocación exacta de CI:
+`ruff format --check .`, `ruff check .`, `mypy src tests` y `pytest`. Resultados
+en el cuerpo de la PR.
+
+## Lo que sigue sin estar garantizado, dicho aquí y no descubierto luego
+
+- **La ventana con el validador concurrente se acorta, no se cierra.**
+  `validate-sirius-activation.yml` reacciona al MISMO evento de etiqueta, con
+  otro grupo de concurrencia, así que los dos corren a la vez. La puerta lee el
+  estado y decide con esa instantánea; si el validador retira
+  `sirius:implement-requested` **después** de esa lectura y **antes** de la
+  escritura, la incidencia acaba en `sirius:failed-safely` con el diagnóstico
+  del validador además de la explicación del carril. No es una contradicción
+  —`failed-safely` es terminal y el reconciliador no lo señala—, y el desenlace
+  coincide con la intención del validador: parar. Cerrarlo del todo exigiría un
+  compare-and-swap sobre las etiquetas que la API de GitHub no ofrece. Lo que la
+  puerta sí garantiza es que **no actúa sobre una activación que ya no está
+  viva** en el momento en que mira.
+- **El comentario sigue sin ser exactamente-una-vez.** El marcador acota la
+  ventana; un POST aceptado cuya respuesta se pierde no se puede descartar. Lo
+  que sí queda probado es que la siguiente pasada no duplica.
+- **Los runs históricos siguen siendo relanzables a mano** desde Actions por
+  quien tenga permisos: reejecutan el YAML de aquel commit, sin estas puertas.
+  Ya lo declaraba ADR-163 y sigue siendo cierto.
+- **El paso que prepara el encargo del investigador sigue usando el cuerpo del
+  evento** (`ISSUE_BODY`), no la instantánea de la puerta. No es uno de los cinco
+  hallazgos y no se toca aquí; solo corre con el carril **activo**, y la puerta
+  ya ha comprobado para entonces que el perfil del cuerpo actual es el suyo.
 
 ## Consecuencias
 
 - Las dos puertas pueden terminar en rojo donde antes terminaban en verde. Es el
   cambio buscado: un verde que no se ha ganado es peor que un rojo.
 - El registro real **no cambia**: los dos carriles siguen retirados.
+- Las pruebas de este mecanismo pasan a **ejecutar** los guiones de los pasos.
+  El arnés vive en `tests/automation/fixtures/carriles_retirados/` y está
+  disponible para cualquier otra puerta que quiera probarse igual.

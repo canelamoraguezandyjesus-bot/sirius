@@ -905,3 +905,37 @@ siguen lanzables a mano, porque miden el instrumento y no aceptan encargos.
   auditoría— seguirá teniendo tres clases mientras la retirada no se ejecute.
 - **§12.1**, la condición sin excepción de la orden enlazada. Intacta.
 
+
+### 13.4 Corrección de la ejecución (ADR-167)
+
+**Esto no cambia lo que §13 decide, y por eso no sube la versión del contrato:**
+corrige cómo se ejecutaba. La revisión de la implementación de ADR-163 (en
+`929b673`) encontró cinco defectos en las dos puertas, y ADR-167 los arregla.
+Lo que cambia en lo observable, y que este contrato declara desde la fusión de
+la PR de ADR-167:
+
+| Situación | Antes (ADR-163) | Ahora (ADR-167) |
+|---|---|---|
+| No se puede publicar la explicación | `::warning::` y **seguía** a poner la etiqueta terminal: incidencia cerrada y muda | El paso termina en **rojo** y **no toca ninguna etiqueta**; la incidencia se queda como estaba |
+| No se puede confirmar la transición | `::error::` seguido de `exit 0`: job **verde** con la incidencia colgada en `implement-requested` | El paso termina en **rojo** con la explicación ya publicada; reejecutar converge |
+| Evento atrasado o repetido sobre una incidencia ya terminada | Decidía con el cuerpo del evento y podía dejar `sirius:completed` **y** `sirius:failed-safely` a la vez | Relee estado, etiquetas y cuerpo de la API en una sola instantánea y **no toca** lo que ya no espera |
+| El lector del registro falla de un modo imprevisto | Solo el código `2` era error; cualquier otro se leía como «carril activo» y el trabajo **seguía** | Contrato explícito: `0` retirado, `1` activo, **cualquier otro detiene** el paso con diagnóstico |
+| Dos activaciones iguales | Dos comentarios: el marcador no iba en el cuerpo publicado | Un solo comentario: el marcador es la primera línea del cuerpo |
+
+**La recuperación de estas puertas es reejecutar el job, no el reconciliador.**
+Se comprobó, y consta en ADR-167: §9.1 solo repara los casos A y B, un
+`planned` + `implement-requested` atascado lo excluye a propósito, y un
+`completed` + `failed-safely` simultáneo se le presenta como CONTRADICCIÓN que
+pide revisión humana. Cada operación de la puerta es idempotente, así que
+reejecutarla converge sin duplicar el comentario.
+
+**Y la promesa de reversibilidad de §13.2.1 —«reactivar un carril es quitar su
+entrada de ese fichero y fusionar: no hay que tocar código, workflows ni
+pruebas»— es cierta desde ADR-167, y no lo era antes.** La suite de ADR-163
+exigía que el registro declarase siempre los dos carriles, así que la
+reactivación documentada habría dejado las pruebas en rojo. Ahora las pruebas
+comprueban el mecanismo contra registros controlados, conservan las
+comprobaciones de formato y de seguridad del registro, y **demuestran** que las
+cuatro configuraciones posibles —los dos retirados, cada uno reactivado por
+separado, y ninguno— son válidas. El registro real no se ha tocado: los dos
+carriles siguen retirados.
