@@ -76,6 +76,18 @@ ADR-111) y D2 es competencia de M11 sobre el pipeline íntegro que M8-M10
 integren, no de este módulo — aunque la cifra de cobertura de este ADR
 (63/81) ya alcanza, de forma aislada, el suelo provisional que D2 registra.
 
+El hueco H2 de ADR-148 (ADR-166) se cierra en el CARGADOR de este módulo,
+que es donde vivía: `_load_canon_item` creaba los 97 ítems llamando a los
+casos de uso reales, que fechan con el reloj de la máquina, así que todos
+nacían con la fecha del día de la medición y cualquier corte de registro
+anterior los descartaba en `G8`
+(`src/sirius/domain/staged_engine_gates.py:214-216`). No era un defecto del
+producto —ahí `created_at` es real— sino un artefacto de este arnés. Desde
+ADR-166 el cargador escribe en `created_at` la fecha que el corpus declara
+(`ejes_p2.valid_from`; para el único ítem que no la declara, `MEM-005`, el
+`ahora_declarado` del propio banco). La puerta `G8` no se toca: comparaba
+bien, el dato era el que estaba mal.
+
 `criticidad.razon_segura` viaja en el fixture porque así la porta la rama de
 evidencia, pero nunca se lee: el cargador que construye los `Memory`/
 `Decision` reales (`_load_canon_item`) lee, desde M18b (ADR-126), únicamente
@@ -99,6 +111,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -321,12 +334,101 @@ def _apply_criticidad(
     set_criticality_use_case.set(CriticalityTargetKind(kind), real_id, criticality)
 
 
+#: Hueco H2 de ADR-148 (ADR-166): fecha de registro de un item que el corpus
+#: NO fecha. El corpus declara la fecha de cada item en `ejes_p2.valid_from`
+#: —la unica fecha que declara item a item—, y exactamente uno de los 97
+#: (`MEM-005`, «el contrato de mantenimiento se renovo, pero no consta desde
+#: cuando») la declara `null` a proposito. Para ese caso no se inventa una
+#: fecha: se usa el «ahora» que el propio banco declara para si mismo. No es
+#: el instante mas tardio que el corpus admite —`DEC-004` declara
+#: `valid_from: 2026-09-01`, posterior a el (ver
+#: `test_solo_dec_004_recibe_un_registro_posterior_al_ahora_del_banco`)—,
+#: pero si es posterior o igual a la fecha de registro de todos los demas
+#: items, y por tanto no anterior a ninguno de los dos unicos cortes de
+#: registro que el banco declara (`2026-02-15` y `2026-03-01`): frente a
+#: ellos, lo no fechado no se cuela por un corte anterior, que es justo lo
+#: que una fecha inventada haria.
+#: `test_el_registro_de_lo_no_fechado_es_el_ahora_que_el_corpus_declara` fija
+#: que esta constante es, byte a byte, el `ahora_declarado` del fixture.
+_REGISTRO_DE_LO_NO_FECHADO: Final[str] = "2026-06-15T00:00:00Z"
+
+#: Como el esquema de Sirius 0.1 escribe un `created_at` en SQLite (el mismo
+#: formato que produce el dialecto de SQLAlchemy para sus columnas `DateTime`,
+#: y por tanto el que ya llevan las filas que crean los casos de uso). La
+#: forma importa y no solo el valor, porque `G8` compara `created_at` contra
+#: el corte LEXICOGRAFICAMENTE (`src/sirius/domain/staged_engine_gates.py`,
+#: lineas 214-216): quien la fije es
+#: `test_el_registro_escrito_lleva_la_forma_que_g8_compara`, que comprueba lo
+#: escrito contra un literal propio y no contra esta constante.
+_FORMATO_DE_REGISTRO_EN_SQLITE: Final[str] = "%Y-%m-%d %H:%M:%S.%f"
+
+#: Una sentencia literal por tabla en vez de interpolar el nombre: el par
+#: `(kind, id)` que `_load_canon_item` devuelve es cerrado, y asi ninguna
+#: cadena de SQL se construye por concatenacion.
+_FIJAR_REGISTRO: Final[Mapping[str, str]] = {
+    "memory": "UPDATE memories SET created_at = :momento WHERE id = :id",
+    "decision": "UPDATE decisions SET created_at = :momento WHERE id = :id",
+}
+
+
+#: Lectura, tambien literal por tabla y por el mismo motivo que
+#: `_FIJAR_REGISTRO`.
+_LEER_REGISTRO: Final[Mapping[str, str]] = {
+    "memories": "SELECT id, created_at FROM memories ORDER BY id",
+    "decisions": "SELECT id, created_at FROM decisions ORDER BY id",
+}
+
+
+def _instante_del_corpus(declarado: str) -> datetime:
+    """El instante que el corpus escribe (`...Z`), como `datetime` naive en
+    UTC — la forma en que el esquema de Sirius 0.1 guarda `created_at`
+    (`sirius.adapters.persistence.sqlite_memory_repository._utc_now_naive`)."""
+    return datetime.fromisoformat(declarado).astimezone(UTC).replace(tzinfo=None)
+
+
+def _fecha_de_registro(item: Mapping[str, Any]) -> datetime:
+    """La fecha de registro que el corpus congelado declara para este item.
+
+    Hueco H2 de ADR-148: el cargador creaba los 97 items llamando a los casos
+    de uso reales, que fechan con el reloj de la maquina, asi que todos
+    nacian con la fecha del dia de la medicion y cualquier corte de registro
+    anterior los descartaba en `G8`
+    (`src/sirius/domain/staged_engine_gates.py:214-216`). La puerta estaba
+    bien; el dato que se le daba, no. La fecha declarada es
+    `ejes_p2.valid_from`; cuando el corpus no la declara, ver
+    `_REGISTRO_DE_LO_NO_FECHADO`.
+    """
+    declarada = item["ejes_p2"]["valid_from"]
+    if declarada is None:
+        return _instante_del_corpus(_REGISTRO_DE_LO_NO_FECHADO)
+    return _instante_del_corpus(str(declarada))
+
+
+def _fijar_fecha_de_registro(
+    database_path: Path, kind: str, real_id: int, momento: datetime
+) -> None:
+    """Escribe en `created_at` la fecha declarada, sobre la fila ya creada.
+
+    Se hace con una escritura directa y no por los casos de uso a proposito:
+    ningun caso de uso de Sirius 0.1 acepta una fecha de creacion —la pone el
+    reloj, y eso es correcto en el producto—, y el alcance de esta ficha es el
+    cargador del banco, no la firma de los casos de uso.
+    """
+    engine = build_engine(database_path)
+    with engine.begin() as connection:
+        connection.execute(
+            text(_FIJAR_REGISTRO[kind]),
+            {"momento": momento.strftime(_FORMATO_DE_REGISTRO_EN_SQLITE), "id": real_id},
+        )
+
+
 def _load_canon_item(
     item: Mapping[str, Any],
     *,
     project_ids: Mapping[str, int],
     unit_of_work: Any,
     set_criticality_use_case: SetCriticalityUseCase,
+    database_path: Path,
 ) -> tuple[str, int] | None:
     """Crea el `Memory`/`Decision` real de un item del canon portado, o
     `None` si el canon lo declara sin contenido persistible (una memoria
@@ -337,14 +439,21 @@ def _load_canon_item(
     `resultado_esperado`, así que no crearlos no cambia ninguna métrica.
 
     El cargador que alimenta el pipeline bajo prueba: lee `id`, `kind`,
-    `project`, `text`, `confirmacion`, `validez`, `disponibilidad` y, desde
-    M18b (ADR-126), `criticidad.nivel` (vía `_apply_criticidad`) — nunca
-    `criticidad.razon_segura`, la única ruta bajo `criticidad` que sigue
-    prohibida.
+    `project`, `text`, `confirmacion`, `validez`, `disponibilidad`, desde
+    M18b (ADR-126) `criticidad.nivel` (vía `_apply_criticidad`) y, desde el
+    hueco H2 de ADR-148 (ADR-166), `ejes_p2.valid_from` (vía
+    `_fecha_de_registro`) — nunca `criticidad.razon_segura`, la única ruta
+    bajo `criticidad` que sigue prohibida.
+
+    La fecha de registro se fija DENTRO de este cargador, en el mismo punto
+    en que el ítem se crea y antes de devolverlo: ningún ítem del banco puede
+    quedar con la fecha del reloj de la máquina sin que este cargador lo haya
+    decidido.
     """
     project_name = item["project"]
     project_id = None if project_name == "PRJ-GLOBAL" else project_ids[project_name]
     text = item["text"]
+    registro = _fecha_de_registro(item)
     if item["kind"] == "MEMORIA":
         if not text.strip():
             return None
@@ -352,6 +461,7 @@ def _load_canon_item(
         if not _vigente(item):
             ArchiveMemoryUseCase(unit_of_work).archive(memory.id)
         _apply_criticidad(item, "memory", memory.id, set_criticality_use_case)
+        _fijar_fecha_de_registro(database_path, "memory", memory.id, registro)
         return ("memory", memory.id)
     assert item["kind"] == "DECISION"
     assert project_id is not None
@@ -359,6 +469,7 @@ def _load_canon_item(
     if _vigente(item):
         ApproveDecisionUseCase(unit_of_work).approve(decision.id, confirmed=True)
     _apply_criticidad(item, "decision", decision.id, set_criticality_use_case)
+    _fijar_fecha_de_registro(database_path, "decision", decision.id, registro)
     return ("decision", decision.id)
 
 
@@ -384,6 +495,66 @@ def _create_projects(database_path: Path, names: list[str]) -> dict[str, int]:
         if name != names[-1]:
             project_repository.complete_active_project(project.id)
     return project_ids
+
+
+@dataclass(frozen=True, slots=True)
+class _CanonCargado:
+    """Lo que deja una carga del canon: la traducción de identidades y los
+    proyectos reales creados."""
+
+    real_a_canonico: Mapping[tuple[str, int], str]
+    project_ids: Mapping[str, int]
+
+
+def _cargar_el_canon(database_path: Path) -> _CanonCargado:
+    """Carga los 97 ítems del canon con el cargador real, y nada más.
+
+    NO es un cuarto arnés de medición: no ejecuta ningún caso del banco ni
+    calcula ninguna métrica. Existe para que las pruebas del **cargador**
+    (hueco H2 de ADR-148, ADR-166) puedan mirar lo que el cargador escribe
+    sin arrastrar la tubería propia de cada una de las tres mediciones.
+    Unificar en esta función los tres bucles de carga que hoy existen sería
+    un refactor que ADR-166 declara explícitamente fuera de su alcance (nota
+    de arranque, punto 4).
+    """
+    banco = _fixture()
+    upgrade_to_head(database_path)
+    nombres_de_proyecto = sorted(
+        {i["project"] for i in banco["items"] if i["project"] != "PRJ-GLOBAL"}
+    )
+    project_ids = _create_projects(database_path, nombres_de_proyecto)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+    set_criticality_use_case = SetCriticalityUseCase(
+        build_sqlite_memory_repository(database_path),
+        build_sqlite_decision_repository(database_path),
+    )
+    real_a_canonico: dict[tuple[str, int], str] = {}
+    for item in banco["items"]:
+        real = _load_canon_item(
+            item,
+            project_ids=project_ids,
+            unit_of_work=unit_of_work,
+            set_criticality_use_case=set_criticality_use_case,
+            database_path=database_path,
+        )
+        if real is None:
+            continue
+        real_a_canonico[real] = item["id"]
+    return _CanonCargado(real_a_canonico=real_a_canonico, project_ids=project_ids)
+
+
+def _registros_escritos(database_path: Path) -> dict[tuple[str, int], str]:
+    """El `created_at` que la base guarda para cada `Memory`/`Decision`, tal
+    cual, sin pasar por ningún repositorio: es la columna que el puerto real
+    lee (`staged_engine_port`) y la que `G8` acaba comparando."""
+    engine = build_engine(database_path)
+    escritos: dict[tuple[str, int], str] = {}
+    with engine.begin() as connection:
+        for kind, tabla in (("memory", "memories"), ("decision", "decisions")):
+            consulta = text(_LEER_REGISTRO[tabla])
+            for fila in connection.execute(consulta):
+                escritos[(kind, int(fila[0]))] = str(fila[1])
+    return escritos
 
 
 class _TrackingMapping(Mapping[str, Any]):
@@ -479,6 +650,7 @@ def _ejecutar_banco(database_path: Path) -> _EjecucionDelBanco:
             project_ids=project_ids,
             unit_of_work=unit_of_work,
             set_criticality_use_case=set_criticality_use_case,
+            database_path=database_path,
         )
         if real is None:
             continue
@@ -695,6 +867,7 @@ def _ejecutar_banco_motor_portado(database_path: Path) -> _EjecucionDelBanco:
             project_ids=project_ids,
             unit_of_work=unit_of_work,
             set_criticality_use_case=set_criticality_use_case,
+            database_path=database_path,
         )
         if real is None:
             continue
@@ -1421,6 +1594,206 @@ def test_el_cargador_no_lee_criticidad(ejecucion_del_banco: _EjecucionDelBanco) 
     # un caso controlado independiente, `test_es_critico_lee_nivel_pero_nunca_razon_segura`.
     rutas_del_arnes = set(ejecucion_del_banco.accesos_del_arnes)
     assert ("criticidad", "razon_segura") not in rutas_del_arnes
+
+
+def test_el_registro_de_lo_no_fechado_es_el_ahora_que_el_corpus_declara() -> None:
+    """H2 (ADR-166): la fecha que el cargador pone al único ítem que el
+    corpus no fecha no se inventa — es, byte a byte, el `ahora_declarado`
+    del propio banco. Si el fixture cambiara ese instante, esta prueba lo
+    dice en vez de dejar una constante envejecer en silencio."""
+    assert _fixture()["ahora_declarado"] == _REGISTRO_DE_LO_NO_FECHADO
+
+
+def test_solo_mem_005_no_declara_fecha_y_el_corpus_dice_por_que() -> None:
+    """H2 (ADR-166): la decisión sobre «qué se hace con lo no fechado» se
+    toma sobre un hecho contado, no sobre una impresión. Exactamente uno de
+    los 97 ítems declara `valid_from: null`, y su propio texto dice que la
+    ausencia es deliberada."""
+    items = _fixture()["items"]
+    sin_fecha = [item["id"] for item in items if item["ejes_p2"]["valid_from"] is None]
+    assert sin_fecha == ["MEM-005"]
+    mem_005 = next(item for item in items if item["id"] == "MEM-005")
+    assert "no consta desde cuándo" in mem_005["text"]
+
+
+def test_solo_dec_004_recibe_un_registro_posterior_al_ahora_del_banco() -> None:
+    """H2 (ADR-166): el detalle simétrico del de `MEM-005`, declarado y
+    contado en vez de redescubierto. El corpus **no separa** registro de
+    vigencia, y para exactamente un ítem la fecha que declara es una
+    vigencia futura: `DEC-004` («A partir de septiembre el proveedor de
+    mensajería cambia a Norte») declara `valid_from: 2026-09-01`, posterior
+    al `ahora_declarado` del propio banco (`2026-06-15`). Al escribirla en
+    `created_at`, ese ítem queda registrado en el futuro del corpus, y `G8`
+    lo descartaría como «posterior al corte de registro» ante cualquier corte
+    anterior al `2026-09-01` —lo que incluye los dos que el banco ya declara
+    hoy, `2026-03-01` (`B04-CA-32`) y `2026-02-15` (`B04-CA-47`)—, y no solo
+    ante cortes entre el `ahora_declarado` y esa fecha.
+
+    Hoy no mueve ninguna métrica y esta prueba lo fija también: esos dos
+    únicos casos que declaran corte no esperan `DEC-004`, y el único que lo
+    espera (`B04-CA-06`) no declara corte. Quien añada CUALQUIER caso con
+    corte de registro, sea cual sea su fecha, verá esta prueba en rojo y
+    tendrá que contarlo; en particular si ese caso espera `DEC-004` con un
+    corte anterior al `2026-09-01`."""
+    banco = _fixture()
+    ahora = str(banco["ahora_declarado"])
+    posteriores = [
+        item["id"]
+        for item in banco["items"]
+        if item["ejes_p2"]["valid_from"] is not None and str(item["ejes_p2"]["valid_from"]) > ahora
+    ]
+    assert posteriores == ["DEC-004"]
+
+    con_corte = [caso for caso in banco["casos"] if caso["peticion_p2"].get("corte_registro")]
+    assert [caso["id"] for caso in con_corte] == ["B04-CA-32", "B04-CA-47"]
+    assert [caso["id"] for caso in con_corte if "DEC-004" in caso["resultado_esperado"]] == []
+    espera_dec_004 = [
+        caso["id"] for caso in banco["casos"] if "DEC-004" in caso["resultado_esperado"]
+    ]
+    assert espera_dec_004 == ["B04-CA-06"]
+
+
+#: La forma en que `created_at` se escribe, escrita AQUÍ como literal
+#: independiente y no reutilizando `_FORMATO_DE_REGISTRO_EN_SQLITE`: si el
+#: guardián leyera la misma constante que el cargador, los dos lados se
+#: moverían a la vez y no fijaría nada.
+_FORMA_DEL_REGISTRO_ESCRITO: Final[re.Pattern[str]] = re.compile(
+    r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{6}$"
+)
+
+
+def test_el_registro_escrito_lleva_la_forma_que_g8_compara(tmp_path: Path) -> None:
+    """H2 (ADR-166): la FORMA importa, no solo el valor. `G8` compara
+    `created_at` contra el corte **lexicográficamente**
+    (`src/sirius/domain/staged_engine_gates.py:214-216`) — es la «deuda 20»
+    que la incidencia #574 nombra—, así que el arnés tiene que escribir la
+    misma forma que escribe el producto: `AAAA-MM-DD HH:MM:SS.ffffff`, la del
+    dialecto de SQLAlchemy para sus columnas `DateTime`, con la que además se
+    hizo la medición de esta ficha. Las dos formas no son intercambiables:
+    divergen cuando el registro cae el mismo día que el corte a una hora
+    distinta de medianoche, porque el espacio ordena antes que la `T` —un
+    ítem `2026-03-01 12:00:00.000000` no se descarta frente al corte
+    `2026-03-01T00:00:00Z`, y escrito `2026-03-01T12:00:00.000000Z` sí—.
+
+    El guardián no pasa por `_FORMATO_DE_REGISTRO_EN_SQLITE`: comprueba
+    contra un literal propio (`_FORMA_DEL_REGISTRO_ESCRITO`) que **todos** los
+    `created_at` leídos crudos de `memories` y `decisions` tras cargar el
+    canon llevan `AAAA-MM-DD HH:MM:SS.ffffff`, sin `T` y sin `Z`."""
+    database_path = tmp_path / "sirius.db"
+    _cargar_el_canon(database_path)
+    escritos = _registros_escritos(database_path)
+
+    assert len(escritos) == 95  # 97 menos los dos que el canon porta sin texto
+    desviados = sorted(
+        valor for valor in escritos.values() if _FORMA_DEL_REGISTRO_ESCRITO.match(valor) is None
+    )
+    assert desviados == []
+
+
+#: La forma en que el corpus congelado declara sus fechas de registro,
+#: escrita AQUI como literal propio: `AAAA-MM-DDT00:00:00Z`, siempre a
+#: medianoche y siempre en UTC (lo comprueba item a item el guardian de abajo,
+#: y por eso puede derivar el `created_at` esperado por TEXTO en vez de
+#: llamando a `_instante_del_corpus`).
+_FORMA_DECLARADA_POR_EL_CORPUS: Final[re.Pattern[str]] = re.compile(
+    r"^(?P<dia>\d{4}-\d{2}-\d{2})T00:00:00Z$"
+)
+
+
+def test_el_cargador_fecha_cada_item_con_el_registro_que_el_corpus_declara(
+    tmp_path: Path,
+) -> None:
+    """Hueco H2 de ADR-148 (ADR-166): cada ítem cargado lleva la fecha de
+    registro que el corpus declara, no la del día en que corre la medición.
+
+    Recorre **los 95 ítems que el canon crea** —los 97 que el corpus porta
+    menos los dos que porta sin texto a propósito, que no llegan a crear fila
+    y por tanto no tienen `created_at` que mirar—, no una muestra: cualquier
+    ruta del cargador que dejase uno con la fecha del reloj deja esta prueba
+    en rojo. Y fija además el reparto de fechas distintas que el corpus
+    declara (11 valores), porque el artefacto que H2 describe tenía una firma
+    inconfundible —una sola fecha compartida por todos—."""
+    database_path = tmp_path / "sirius.db"
+    cargado = _cargar_el_canon(database_path)
+    escritos = _registros_escritos(database_path)
+    items_por_id = {item["id"]: item for item in _fixture()["items"]}
+
+    # El lado ESPERADO se deriva TEXTUALMENTE de la cadena que el corpus
+    # declara: no pasa por `_instante_del_corpus` —la auxiliar en la que
+    # `_fecha_de_registro` delega para decidir el instante que se escribe— ni
+    # por `_FORMATO_DE_REGISTRO_EN_SQLITE` ni por `_REGISTRO_DE_LO_NO_FECHADO`
+    # (el «ahora» de lo no fechado se lee del propio fixture). De eso, y solo de
+    # eso, esta aislado el lado esperado; con cualquiera de esas tres piezas los
+    # dos lados se moverian a la vez y un desplazamiento del instante dentro de
+    # `_instante_del_corpus` seguiria en verde, que es justo lo que este
+    # guardian tiene que dejar en rojo.
+    ahora_declarado = str(_fixture()["ahora_declarado"])
+    esperados: dict[tuple[str, int], str] = {}
+    for real, corpus_id in cargado.real_a_canonico.items():
+        declarada = items_por_id[corpus_id]["ejes_p2"]["valid_from"]
+        declarada_texto = ahora_declarado if declarada is None else str(declarada)
+        dia_declarado = _FORMA_DECLARADA_POR_EL_CORPUS.match(declarada_texto)
+        assert dia_declarado is not None, declarada_texto
+        esperados[real] = f"{dia_declarado['dia']} 00:00:00.000000"
+    assert len(esperados) == 95  # 97 menos los dos que el canon porta sin texto
+    obtenidos = {real: escritos[real] for real in esperados}
+    assert obtenidos == esperados
+
+    assert len(set(esperados.values())) == 11
+
+    # Y dos anclas a literales completos, escritos a mano, para que ni el
+    # derivado textual pueda deslizarse entero sin que nada lo note: el item
+    # fechado que `B04-CA-32` espera y el unico que el corpus porta sin fechar.
+    reales_por_corpus = {corpus: real for real, corpus in cargado.real_a_canonico.items()}
+    assert escritos[reales_por_corpus["DEC-012"]] == "2026-01-01 00:00:00.000000"
+    assert escritos[reales_por_corpus["MEM-005"]] == "2026-06-15 00:00:00.000000"
+
+
+def test_b04_ca_32_entra_porque_su_registro_ya_no_es_posterior_al_corte(
+    tmp_path: Path,
+) -> None:
+    """Hueco H2 de ADR-148 (ADR-166): `B04-CA-32` («¿Qué sabía Sirius sobre
+    el aforo el 1 de marzo?», corte de registro `2026-03-01T00:00:00Z`) pasa
+    de fallar a acertar, y por ESTA causa y no por otra.
+
+    La prueba no se conforma con que el caso acierte: mira el motivo. Antes
+    del cambio, la traza del motor traía literalmente
+    `('DECISION:12', 'G8', 'posterior al corte de registro')` — el ítem que
+    el caso espera, descartado por una fecha que ponía el reloj de la
+    máquina. Después, ese descarte no está y `DEC-012` es el único
+    resultado, que es exactamente el `resultado_esperado` del caso.
+
+    Se mide con el puerto de PRODUCCIÓN (`build_staged_engine_port`, todo
+    ítem con `SIN_EJES`) y la petición del caso: la configuración
+    `--peticion` de `scripts/diagnosticar_busqueda_del_banco.py`, la que
+    aísla el corte de registro de la ventana de vigencia. `G8` no se toca:
+    la puerta estaba bien; lo que estaba mal era el dato.
+    """
+    database_path = tmp_path / "sirius.db"
+    cargado = _cargar_el_canon(database_path)
+    banco = _fixture()
+    caso = next(c for c in banco["casos"] if c["id"] == "B04-CA-32")
+    assert caso["resultado_esperado"] == ["DEC-012"]
+    assert caso["peticion_p2"]["corte_registro"] == "2026-03-01T00:00:00Z"
+
+    (real_dec_012,) = [
+        real for real, corpus_id in cargado.real_a_canonico.items() if corpus_id == "DEC-012"
+    ]
+    identidad = _identidad_del_motor(*real_dec_012)
+
+    peticion = peticion_desde_caso(
+        caso,
+        operation_id=f"banco:{caso['id']}",
+        ambito=Ambito(global_=False, proyectos=(str(cargado.project_ids[caso["ambito"]]),)),
+        limite_sin_atar=int(banco["conteos"]["items_del_canon"]),
+    )
+    recuperacion = recuperar(
+        peticion, build_staged_engine_port(database_path), staged_engine_candidate.candidato()
+    )
+
+    descartes_de_dec_012 = [p for p in recuperacion.traza.puertas if p[0] == identidad]
+    assert descartes_de_dec_012 == []
+    assert [resultado.item.id for resultado in recuperacion.resultados] == [identidad]
 
 
 def test_el_arnes_del_motor_portado_no_lee_razon_segura(
@@ -2163,6 +2536,7 @@ def _ejecutar_banco_paquete_completo(
             project_ids=project_ids,
             unit_of_work=unit_of_work,
             set_criticality_use_case=set_criticality_use_case,
+            database_path=database_path,
         )
         if real is None:
             continue
