@@ -3814,6 +3814,21 @@ la cadena que contradecía esa declaración quedó a la vista. Escribir la
 condición no fue burocracia — fue lo que convirtió una sobreafirmación
 silenciosa en una contradicción localizable.
 
+**Apéndice: apliqué la pregunta de la raíz 3 a las OTRAS cadenas, y salió bien
+—que es el resultado que hay que registrar igual.** Las cinco razones que el
+motor puede entregar están en `staged_engine_candidate.py`. Cuatro describen el
+camino de entrada y son comprobables en el propio código. La quinta me hizo
+levantar la ceja —`E4`: «evidencia atribuida del historial, **cotejada con lo
+vigente**», que afirma un cotejo—, así que la tracé en vez de anotar una
+sospecha: `historial_y_fuentes` **devuelve siempre `()`**, porque `E4` no tiene
+objetivo real en Sirius 0.1 y su docstring lo declara. Esa cadena no llega a
+nadie. **Dos comandos, sospecha cerrada.**
+
+Queda como **trampa latente**, no como defecto: si alguien implementa alguna
+vez `historial_y_fuentes`, esa frase empieza a entregar un cotejo que el código
+no hace, y nadie lo notará porque el texto ya estaba ahí y parecerá revisado.
+Es la familia de `CLAUDE-R3-001` esperando a que le pongan datos delante.
+
 ---
 
 ### 78. Once fallos míos en una tarde, y son cuatro raíces, no once (08-09-2026, 19:58 UTC)
