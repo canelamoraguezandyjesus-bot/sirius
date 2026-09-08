@@ -60,10 +60,25 @@ peores=[('B04-CA-17', 34, 0), ('B04-CA-28', 20, 0), ('B04-CA-35', 16, 0),
 Coincide con lo que la incidencia declaraba como referencia. **Es la entrada,
 no el resultado**: ese guion corre SIN filtro, y esta palanca ES el filtro.
 
-**Vía completa** (con Ollama real, `scripts/medir_banco_con_ollama_real.py`),
-la cifra publicada que la incidencia cita: `29/47; 50; 0; 63/81`. No se
-vuelve a medir aquí porque **no hay Ollama en CI**: la cierra el propietario
-en su máquina, con el comando y la predicción de más abajo.
+**La cifra que la incidencia cita, `29/47; 50; 0; 63/81`, NO sale de la vía
+completa**, y esta ficha lo corrige: el árbol dice que es la fila del **arnés
+de examen** (`docs/decisions/ADR-117-…:106`, «Arnés de examen
+(ADR-109..ADR-115, ya fusionado)»; ADR-115:103 publica la misma fila 5). Y
+además está caducada en su cuarta columna: ADR-168:515-516 —ya en `main`— la
+deja en **`29/47; 50; 0; 67/81`**, y la constante del árbol lo confirma
+(`tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py:243`,
+`_MINIMO_ELEMENTOS_HALLADOS_MOTOR: Final[int] = 67`). Manda el árbol: la
+diferencia se registra aquí en vez de acomodarse.
+
+**Vía completa** (con Ollama real, `scripts/medir_banco_con_ollama_real.py`,
+que importa `_ejecutar_banco_paquete_completo` y por tanto mide el paquete
+completo de producción, **nunca el arnés**): **no tiene línea base vigente
+sobre este árbol**. La única salida de ese guion publicada en todo el
+repositorio es la del propietario del 02-09-2026, con `qwen3:4b-instruct`
+(`docs/decisions/ADR-125-…:150-160`): **`22/47; 39 de más; 10 críticas
+perdidas; 59/81`**, medida sobre un árbol anterior. No se vuelve a medir aquí
+porque **no hay Ollama en CI**: la cierra el propietario en su máquina, con el
+comando y la predicción de más abajo.
 
 Las dos mediciones **no se mezclan**: poblaciones distintas (una es la etapa
 de búsqueda sin filtro, la otra el camino entero con modelo). Cada cifra de
@@ -99,16 +114,22 @@ De ahí salen dos consecuencias que gobiernan toda la evidencia de esta ficha:
 
 ## Criterio de parada (escrito ANTES de decidir y ANTES de medir nada del cambio)
 
-- **La vía completa no se mueve: `29/47; 50; 0; 63/81` sigue igual.** Es una
+- **La vía completa no se mueve.** No hay línea base vigente de
+  `scripts/medir_banco_con_ollama_real.py` sobre este árbol: la única
+  publicada es la del propietario del 02-09-2026 con `qwen3:4b-instruct`
+  (ADR-125:150-160), **`22/47; 39; 10; 59/81`**, sobre un árbol anterior. La
+  corrida del propietario establece la línea base, y contra esa cifra —con su
+  fecha y su modelo al lado— se compara. Es una
   predicción, no una excusa: en esa vía el intérprete se construye sin
   clasificador y toda petición sale `EXHAUSTIVA`
   (`INTENCION_ORDINARIA`, `src/sirius/application/interpret_query_request.py:102-108`),
   así que el cupo es `None` en las 47 y el recorte no puede dispararse. **Si
   alguna de las cuatro columnas cambia, esta palanca no es la causa y hay que
   explicar caso a caso qué lo fue.**
-- **Como `50 > 20`, la tercera condición de aceptación de la incidencia se
-  activa por construcción**: se registra la cifra y **se para para decisión
-  del propietario** sobre el modelo. Esta palanca no cierra el ruido de
+- **Como las «de más» de la vía completa son `39 > 20` en la única medición
+  publicada de ese guion (ADR-125), la tercera condición de aceptación de la
+  incidencia se activa por construcción**: se registra la cifra y **se para
+  para decisión del propietario** sobre el modelo. Esta palanca no cierra el ruido de
   producción hoy, y decirlo antes de medir es parte del criterio.
 - **La entrada tampoco se mueve**: `17/47; 162; 78/81; 0` con
   `--peticion`. Ese guion corre sin filtro; si cambia, el cambio se coló
@@ -322,8 +343,15 @@ uv run python scripts/medir_banco_con_ollama_real.py
 ```
 
 **Predicción, escrita antes de ejecutarla** (y antes de medir nada del
-cambio, en la nota de arranque de arriba): **las cuatro cifras no se mueven —
-`29/47; 50; 0; 63/81`**. No es una excusa, es la consecuencia comprobable del
+cambio, en la nota de arranque de arriba): **las cuatro cifras no se mueven
+por esta palanca**. Este guion **no tiene línea base vigente sobre este
+árbol**, así que la corrida del propietario la establece; la única referencia
+publicada suya es la de ADR-125:150-160 —02-09-2026, `qwen3:4b-instruct`,
+**`22/47; 39; 10; 59/81`**, sobre un árbol anterior—, y contra ella se lee la
+diferencia, sabiendo que entre aquel árbol y este han entrado cambios ajenos
+a esta palanca. Lo que la ficha predice no es un número, es una invariante:
+**el recorte no puede mover ninguna de las cuatro columnas**. No es una
+excusa, es la consecuencia comprobable del
 árbol: en esa vía el intérprete se construye sin clasificador y toda petición
 sale `EXHAUSTIVA` (`INTENCION_ORDINARIA`), así que el cupo es `None` en las 47
 y el recorte no puede dispararse. Está fijado además por prueba determinista
@@ -332,7 +360,8 @@ de las cuatro columnas cambia, esta palanca no es la causa y hay que explicar
 caso a caso qué lo fue.**
 
 Y por tanto, **la tercera condición de aceptación de la incidencia se activa
-por construcción**: `50 > 20` de más. Se registra la cifra y **se para para
+por construcción**: `39 > 20` de más en la única medición publicada de este
+guion (ADR-125). Se registra la cifra y **se para para
 decisión del propietario** sobre qué modelo se adopta —el coste de un modelo
 mayor es suyo—, con `--modelo` del mismo guion:
 
@@ -434,15 +463,18 @@ más.
 
 - **El filtro puede usar la cardinalidad, y en producción hoy no la usa.** Con
   `category_matching_enabled` cerrada no hay filtro; abierta, toda petición es
-  `EXHAUSTIVA` y el cupo es `None`. Ninguna cifra de la vía completa se mueve,
-  y eso está predicho y fijado con prueba, no descubierto después.
+  `EXHAUSTIVA` y el cupo es `None`. Ninguna cifra de la vía completa se mueve
+  por esta palanca, y eso está predicho y fijado con prueba, no descubierto
+  después.
 - **La cota superior del recorte queda medida: `162 → 125` de más**, con
   `78/81 → 75/81` hallados y `0` críticas perdidas, y con la condición del
   oráculo escrita al lado. El objetivo del propietario sigue siendo `0` de
   más; esta palanca no lo alcanza y las tres palancas de ADR-148 quedan
   cerradas sin alcanzarlo.
-- **Queda una decisión del propietario, y esta ficha no la toma**: `50 > 20`
-  de más en la vía completa activa la tercera condición de aceptación de la
+- **Queda una decisión del propietario, y esta ficha no la toma**: `39 > 20`
+  de más en la vía completa —la única medición publicada de
+  `medir_banco_con_ollama_real.py`, ADR-125, 02-09-2026,
+  `qwen3:4b-instruct`— activa la tercera condición de aceptación de la
   incidencia #579 — medir un modelo mayor y decidir cuál se adopta. El coste
   es suyo.
 - **Y queda una pregunta de esquema, también suya**: que la petición traiga
