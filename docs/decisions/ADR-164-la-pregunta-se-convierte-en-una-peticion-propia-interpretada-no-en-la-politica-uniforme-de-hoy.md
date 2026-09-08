@@ -414,30 +414,34 @@ la palanca 1 no se da por cerrada hasta que el propietario la corra.
 
 **Cadena completa como UNA SOLA invocación** (ADR-145, ADR-153) con
 `pwsh -File scripts/check.ps1` y su código de salida capturado (ADR-154).
-Anclada al árbol de **`6dfdfe7`**, el que trae el código y las pruebas de la
-ronda 4 (incidencia #570):
+Anclada al árbol de **`56d78a7`**, el de la ronda 5 (incidencia #570), que
+trae el mismo código y las mismas pruebas de la ronda 4 más las correcciones
+documentales de esta ronda:
 
 ```
-614 files already formatted
-All checks passed!
-Success: no issues found in 580 source files
-5178 passed, 17 skipped, 2 xfailed in 451.78s (0:07:31)
+5178 passed, 17 skipped, 2 xfailed in 452.72s (0:07:32)
 check=0
 ```
 
-`git diff --check` sale limpio (`0`) sobre ese árbol. Lo único posterior a
-`6dfdfe7` es **esta sección de la ficha**: un cambio documental que no toca
-código ni pruebas, y que existe porque la sección tiene que anclarse al árbol
-que la cadena midió.
+De esa invocación se transcribe la cola capturada —la terna de `pytest` y el
+código de salida—; `check=0` solo sale si `ruff format --check`, `ruff check`
+y `mypy src tests` pasaron antes, porque el guion corta en el primero que
+falle. `git diff --check` sale limpio (`0`) sobre ese árbol. Lo único
+posterior a `56d78a7` es **esta sección de la ficha**: un cambio documental
+que no toca código ni pruebas, y que existe porque la sección tiene que
+anclarse al árbol que la cadena midió.
 
 **Historia de la misma cadena en las rondas anteriores** —se conserva
 declarada como tal, no como la cifra vigente—: `882b796` (el commit del código
 de la ronda 1) y `d247af9` (el árbol que estrenó esta ficha) midieron los dos
 `5154 passed, 17 skipped, 2 xfailed` con `check=0`, en `442.60s` y `436.89s`
 respectivamente; `5c0862f` (ronda 3) midió `5176 passed, 17 skipped, 2 xfailed`
-en `461.32s` con `check=0`. La diferencia hasta las 5178 de hoy son los
-guardianes añadidos en las rondas 2, 3 y 4: las dos de la ronda 4 son el techo
-de `objetivos` (unitaria) y el corte con desfase negativo (integración).
+en `461.32s` con `check=0`, y `6dfdfe7` (ronda 4) las mismas `5178 passed,
+17 skipped, 2 xfailed` de hoy en `451.78s` con `check=0`. La diferencia hasta
+las 5178 de hoy son los guardianes añadidos en las rondas 2, 3 y 4: las dos de
+la ronda 4 son el techo de `objetivos` (unitaria) y el corte con desfase
+negativo (integración). La ronda 5 no añade pruebas —solo evidencia y
+recuentos—, y por eso la terna no se mueve.
 
 **Guardianes deterministas añadidos** (los que corren en CI, sin Ollama).
 El recuento es de funciones `test_` y está contado sobre el árbol al que se
