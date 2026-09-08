@@ -2242,6 +2242,78 @@ ADR o su incidencia cuando se adopte.
   el aviso de la deuda 20, que ahí es directamente relevante porque esa palanca
   deriva la ventana de vigencia y el registro, o sea instantes que G8 va a
   comparar.
+
+---
+
+### 53. La palanca 2 se paró en su propio criterio, la parada trajo la raíz aislada, y yo escalé una decisión que la evidencia ya había resuelto (08-09-2026, 11:43-12:35 UTC)
+
+- **El ciclo se detuvo en el criterio que él mismo había publicado antes de
+  medir, en vez de vestir el número.** #572 implementó la palanca 2 (ADR-165,
+  PR #573, rama `feature/ejes-derivados-en-el-puerto-real`, base `22e880e`,
+  head `58fa079e`): `StagedEnginePort` deriva sin migración `valid_from`,
+  `valid_to` y autoridad de columnas que ya consulta. Con **la cadena entera en
+  verde** paró igualmente, porque la medición del banco no cumplía el criterio.
+  El cuerpo de la PR lo dice con esas palabras: «La medición del banco NO
+  cumple el criterio publicado: se registra y se para». Cadena sobre el árbol
+  `79a7051` con UNA sola invocación de `scripts/check.ps1`: 614 formateados,
+  ruff OK, mypy OK, **5199 passed / 17 skipped / 2 xfailed en 475.56s**, código
+  de salida 0; `git diff --check` sin hallazgos. 28 pruebas nuevas o
+  actualizadas, vistas fallar contra cinco mutaciones del puerto. Trabajo
+  terminado y en verde que **no se declara logrado porque el número no da**:
+  eso es exactamente lo que ADR-001 pide y cuesta, porque lo fácil era publicar
+  las 28 pruebas y callar la medición.
+- **Los números.** Con la petición del caso, los ejes derivados dan `17/47
+  exactas; 57 de más; 39/81 hallados; **9 críticas perdidas**`, contra el suelo
+  de hoy `16/47; 162; 73/81; 0`. Mejora en lo que menos pesa (una exacta más,
+  105 de más menos) y **rompe lo que más pesa**: nueve omisiones críticas donde
+  había cero. El criterio del propietario no admite ese cambio.
+- **Una parada útil se distingue de un «no sé» en que trae la raíz aislada**, y
+  ésta la trajo con tres mediciones, ninguna de las cuales acusa a la palanca:
+  (1) desactivando **solo** la ventana de vigencia se vuelve al suelo exacto;
+  (2) **fechando el canon en `2026-01-01`, como estaría en producción, la caída
+  desaparece entera** (`16/47; 163; 74/81; 0`); (3) inyectando del corpus
+  **solo** esos tres ejes se alcanza el techo entero (`20/47; 144; 73/81; 0`).
+  La conclusión que sostienen las tres juntas: la palanca es la correcta y lo
+  que le falta son las fechas reales del canon.
+- **La causa es el arnés, no el producto.** El cargador del banco crea los 97
+  ítems el día de la medición, y **43 de los 47 casos preguntan por
+  `2026-06-15`**: la vigencia derivada empieza después del momento por el que
+  se pregunta, y G8 los descarta con toda la razón. Es el hueco **H2 de
+  ADR-148**, que P2 convierte de un caso (B04-CA-32) en casi todos. La puerta
+  funciona; lo que estaba mal era el dato que se le daba.
+- **Segunda vez seguida que el instrumento de medida —no el código— casi da un
+  veredicto falso.** En la ronda anterior (entrada 52) el guion que decide si
+  la palanca pasa comparaba un instante *naive* con uno *aware* y puntuaba como
+  fallo seis casos correctos, con el listón a dos de margen. Ahora el cargador
+  fecha mal el canon y hunde la medición nueve críticas. `CLAUDE.md` manda
+  parar a la SEGUNDA aparición de una familia y buscar la raíz: **el arnés del
+  banco decide si el trabajo se acepta y no tiene guardianes propios**, mientras
+  que el producto que juzga sí los tiene. Va como **deuda 21**.
+- **Mi error, y es de método: escalé al propietario una decisión que la
+  evidencia ya había resuelto.** Le planteé una disyuntiva —(a) fusionar P2 con
+  la medición declarada pendiente, o (b) retener P2 hasta que H2 esté— y le
+  pedí que eligiera. Al releer el veredicto con cuidado vi que **las dos
+  opciones que el propio implementador ofrece comparten el primer paso, H2**, y
+  que se diferencian solo en si #572 espera parada o sigue viva; y que fusionar
+  con la medición sin cumplir no lo permite ninguna de las dos, porque lo cierra
+  el criterio de parada que el encargo publicó antes de medir. No había
+  decisión suya: había una ordenación de plan, que me toca a mí. Le robé una
+  interrupción por no leer bien lo que ya tenía delante.
+  **Regla nueva: antes de escalar, comprobar que las opciones difieren en la
+  SIGUIENTE acción. Si comparten el paso inmediato, no es una decisión: es una
+  secuencia, y ejecutarla es mío.**
+- **H2 lanzado como #574** a las 12:22, en `sirius:implementing` a las 12:24:29,
+  con las tres mediciones de la parada dentro del encargo y el límite explícito
+  de no tocar G8 ni el puerto de #572 —la puerta está bien, y esa palanca está
+  parada esperando—. La secuencia queda escrita: **H2 entra → #572 se reanuda
+  con decisión registrada → P2 se re-mide sobre el suelo nuevo → solo se fusiona
+  si el número cumple.**
+- **Lo que este ciclo hizo bien y conviene no perder**: el encargo publicó su
+  criterio de parada ANTES de medir, así que cuando el número salió mal no hubo
+  margen para reinterpretarlo. Es la misma disciplina que en #566 me obligó a
+  enmendar por escrito mi propio criterio en vez de releerlo a mi favor
+  (entrada 48). El criterio publicado antes es lo único que impide que el
+  resultado elija el listón.
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
@@ -2543,3 +2615,42 @@ ADR o su incidencia cuando se adopte.
     el borde, y un guardián que la fije; (c) dejarlo y aceptar que cada emisor
     nuevo pague su ronda. La canonización del emisor que #570 está haciendo
     hace falta en cualquiera de los tres casos, así que no es trabajo perdido.
+
+21. **El arnés del banco decide si el trabajo se acepta, y no tiene guardianes
+    propios.** El corpus congelado, el cargador que lo mete en SQLite
+    (`tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py`) y los guiones de
+    recuento (`scripts/diagnosticar_busqueda_del_banco.py`,
+    `scripts/medir_banco_con_ollama_real.py`) son el tribunal de la línea de
+    memoria: su salida decide si una palanca pasa o se retiene. Son código, y
+    están fuera de la disciplina que se aplica al código que juzgan.
+
+    **Dos apariciones seguidas, y cada una estuvo a punto de dar un veredicto
+    falso en dirección contraria al hecho:**
+
+    - Entrada 52 (#570): el guion que puntúa comparaba un instante *naive* con
+      uno *aware* y marcaba como fallo seis casos correctos, con el listón
+      declarado a dos de margen. Habría dicho que **P1 no llega**.
+    - Entrada 53 (#572): el cargador crea los 97 ítems el día de la medición
+      mientras 43 de los 47 casos preguntan por `2026-06-15`, y la medición de
+      P2 se hundió a nueve omisiones críticas. Habría dicho que **P2 empeora el
+      sistema**.
+
+    En los dos casos el número era del arnés y se leía como del producto. El
+    primero lo cazó un revisor leyendo; el segundo lo cazó el implementador
+    porque el encargo le obligó a aislar la raíz antes de parar. **Ninguno de
+    los dos lo cazó una prueba.**
+
+    La asimetría que lo hace caro: al producto se le exige prueba vista fallar,
+    mutación transcrita y ancla al árbol; al instrumento que decide si el
+    producto pasa no se le exige nada.
+
+    Candidatos, para decisión del propietario: (a) que el arnés tenga su propia
+    suite —al menos: el cargador respeta las fechas del corpus, ningún
+    comparador de instantes mezcla *naive* con *aware*, y el recuento sobre un
+    caso sintético de resultado conocido da el número esperado—; (b) un caso
+    testigo de resultado fijo en CI que falle si el arnés cambia de respuesta
+    sin que cambie el producto; (c) aceptarlo, y exigir que toda medición que
+    decida una palanca venga acompañada de una contra-medición que aísle el
+    arnés —que es lo que #572 hizo a mano, y funcionó—.
+
+    **H2 (#574) arregla UNA de las dos apariciones. No arregla la familia.**
