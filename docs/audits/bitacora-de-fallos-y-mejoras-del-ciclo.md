@@ -3141,6 +3141,52 @@ ADR o su incidencia cuando se adopte.
   dice exactamente qué falta. **Un validador que nombra la sección ausente vale
   más que uno que solo dice «no».** Corregidos los dos borradores y reactivada
   la incidencia.
+
+---
+
+### 66. H1 entrega cuatro de las cinco y corrige dos afirmaciones mías; la quinta era inalcanzable y yo no lo había comprobado (08-09-2026, 18:23 UTC)
+
+- **PR #578 (ADR-168)**: `--peticion` pasa de `17/47; 162; 74/81; 0` a
+  **`17/47; 162; 78/81; 0`**, y el techo a `21/47; 144; 78/81; 0`. Cuatro
+  ocurrencias más y —esto es lo notable— **las «de más» NO suben**: 162 y 144,
+  iguales. Yo había dejado esa columna sin listón a propósito, temiendo que
+  enumerar por ventana trajera ruido; no trajo ninguno.
+- **Dos afirmaciones de mi encargo que el árbol desmiente, y las dos las
+  comprobé yo antes de darlas por buenas:**
+  1. **«El intervalo llega en la `Peticion`» era FALSO.** En `main` (`6371d4c`)
+     `VentanaTemporal` tenía exactamente dos campos, `tiempo_objetivo` y
+     `corte_de_registro`: **no había dónde meter el extremo inicial**. El
+     corpus sí declara el intervalo, pero el contrato del producto lo tiraba
+     una línea antes de construir la petición. Yo confundí «el corpus lo
+     declara» con «el motor lo recibe», que es exactamente el mismo error de
+     categoría que cometí con la fecha de registro en H2.
+  2. **`79/81` era inalcanzable; el techo real es `78/81`.** `DEC-001` no lo
+     bloquea la vigencia sino el **ámbito**: su proyecto es `LISTA-CERRADA-AB`
+     con eje `MULTI_PROYECTO_CERRADO`, y el caso pregunta con ámbito
+     `PRJ-BETA`. Lo comprobé: sale por `G4`, no por `G8`.
+- **Mi fallo de método, que es el mismo que ya me pasó con H4 y conviene
+  nombrar**: comprobé el **mecanismo** —ninguno de los cinco comparte palabra
+  con la consulta— y di por hecho que **la misma causa** los bloqueaba a los
+  cinco. No comprobé si alguno tenía **además** otro bloqueo. El implementador
+  sí, y lo hizo bien: leyó el veredicto de puerta **ítem a ítem** durante la
+  ejecución real, no el recuento agregado. **Un recuento agregado nunca dice
+  por qué falta cada cosa; solo cuántas faltan.**
+- **Y lo hicieron en el orden correcto**: publicaron la predicción **con la
+  diferencia ya escrita** (78, no 79) **antes** de medir. Si la hubieran
+  ajustado después habría sido acomodarse al resultado; hacerlo antes es
+  corregir el encargo, que es lo que la disciplina pide.
+- **Una decisión de alcance suya que merece registrarse por el orden en que la
+  tomaron**: la vía nueva enumera **solo decisiones**, no memorias. Primero
+  midieron el ruido de enumerar las dos clases —**+20 elementos de más, todos
+  memorias**, rompiendo el suelo—, después miraron de qué estaba hecho, y solo
+  entonces fueron al modelo de dominio a preguntar si el sustrato justificaba
+  la restricción (la decisión tiene ciclo de vida de vigencia
+  `PROPOSED → APPROVED → SUPERSEDED`; la memoria no). **Midieron y luego
+  justificaron, no al revés.**
+- **Nueve mutaciones transcritas**, cuatro pruebas de aceptación y once
+  unitarias, todas vistas fallar, y la única cota que se mueve **sube** (de 63
+  a 67 elementos hallados mínimos). Cadena verde con una sola invocación sobre
+  `ffd8d05`: `5227 passed, 17 skipped, 2 xfailed`, `EXIT_CODE_CHECK=0`.
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
