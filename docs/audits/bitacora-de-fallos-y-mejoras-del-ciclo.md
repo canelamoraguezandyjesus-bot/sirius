@@ -4081,6 +4081,55 @@ invalidada por lo dicho arriba, pero conviene saber que el marco se enmendó el
 mismo día y que quien las escribió no lo sabía.
 ---
 
+### 82. Son TRES mediciones, no dos, y producción mide 0/47 con 487 de más (08-09-2026, 21:52 UTC)
+
+Corriendo la prueba del paquete completo sobre el head de la palanca 3 para
+verificar que producción no se mueve —que no se mueve: `4 passed`—, salió la
+cifra que llevaba todo el día sin tener delante.
+
+| medición | exactas | de más | críticas | hallados |
+|---|---|---|---|---|
+| etapa de búsqueda sin filtro (`--peticion`) | 17/47 | 162 | 0 | 78/81 |
+| **arnés de examen** (motor portado, semántica de laboratorio) | 29/47 | 50 | 0 | **67/81** |
+| **paquete completo de PRODUCCIÓN** (`composition_root`) | **0/47** | **487** | 0 | 72/81 |
+
+**Lo que yo había dicho, al propietario y por escrito en el encargo de #579**:
+«la vía completa publica hoy `29/47; 50; 0; 63/81` y **ya alcanza el suelo
+D1**». **Falso dos veces**: el `29/47` es el **arnés de examen** y no
+producción —cuya propia prueba declara «ningún suelo D1/D2 afirmado aquí»—, y
+la cobertura del arnés ya no es `63/81` sino `67/81`, porque **H1 la subió esta
+misma tarde** y yo cité el número viejo horas después de fusionarlo.
+
+**Es la tercera confusión de mediciones del día, y la peor por cómo llegó.**
+Esta mañana me corregí públicamente por mezclar la etapa de búsqueda con «la vía
+completa» (entrada 68). Al arreglar esa, **introduje la siguiente un nivel más
+abajo**: dejé de confundir 1 con 2 y empecé a confundir 2 con 3. La raíz 2 de la
+entrada 78 —«¿sobre qué población es esta cifra?»— la escribí yo hoy, y he
+fallado en ella tres veces en doce horas.
+
+**Y lo que la cifra significa, que importa más que mi error.** Producción
+devuelve **487 elementos de más y no acierta ni un caso exacto**, con la puerta
+`category_matching_enabled` abierta y dobles deterministas. Es exactamente lo
+que el diagnóstico da **sin banderas** (`0/47; 487; 72/81`), lo que encaja: sin
+un clasificador real, el intérprete emite la política uniforme y toda petición
+llega igual. O sea:
+
+> **La distancia que las palancas de ADR-148 existen para cerrar no es
+> `17/47 → 47/47`. Es `0/47 → 47/47` en producción, y el `17/47` del
+> diagnóstico es lo que se conseguiría si el intérprete corriera con modelo
+> real.**
+
+Eso reordena la línea: el arnés de examen (`29/47; 50`) es el **techo de
+laboratorio**; la etapa de búsqueda con petición real (`17/47; 162`) es lo que
+las palancas 1 y 2 podrían dar; y producción está en `0/47`. Ninguna de las tres
+es «la cifra del banco» a secas, y llamarlas así —como he hecho todo el día— es
+lo que produce estos errores.
+
+Corregido en la incidencia #579 con las tres filas y el comando que las imprime,
+para que nadie tenga que fiarse de mí: `uv run pytest
+tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py -q -s -k paquete_completo`.
+---
+
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
 
 1. `ollama_category_classifier.py`: ruta relativa y sin
