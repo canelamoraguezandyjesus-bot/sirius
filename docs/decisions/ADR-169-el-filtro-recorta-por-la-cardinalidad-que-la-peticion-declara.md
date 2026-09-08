@@ -370,8 +370,43 @@ relajado, saltado ni reescrito para conseguir verde.**
 
 ### Validación obligatoria
 
+**Cadena completa como UNA SOLA invocación** (ADR-145, ADR-153), con
+`pwsh -File scripts/check.ps1` y su código de salida capturado (ADR-154),
+anclada al árbol de **`da6fea3`**:
 
-*(se ancla al árbol tras ejecutar la cadena; ver más abajo)*
+```
+5251 passed, 17 skipped, 2 xfailed in 523.33s (0:08:43)
+EXIT_CODE_CHECK=0
+```
+
+De esa invocación se transcribe la cola capturada —la terna de `pytest` y el
+código de salida—; el código `0` solo sale si `ruff format --check`, `ruff
+check` y `mypy src tests` pasaron antes, porque el guion corta en el primero
+que falle (ADR-153). Sube de `5232` a `5251` pruebas: las **diecinueve** que
+esta ficha añade. Ninguna cota se ha movido y ninguna prueba se ha relajado.
+
+La quinta validación se ejecuta **sobre el rango de la rama y no sin
+argumentos** (CODEX-001, señalado en la revisión de ADR-168): `git diff
+--check` sin revisiones compara el árbol de trabajo con el índice y sale `0`
+aunque el rango ya confirmado traiga errores de espacios, así que no
+demostraría nada sobre este cambio.
+
+```
+$ git diff --check ce94bdf da6fea3
+EXIT_DIFF_CHECK=0
+$ git diff --check ce94bdf
+EXIT_DIFF_CHECK_ARBOL=0
+```
+
+Sin salida y con código `0` las dos: el rango entero de la rama —desde su base
+en `main` (`ce94bdf`) hasta el árbol que midió la cadena— está limpio, y el
+árbol de trabajo que confirma esta sección también.
+
+Lo único posterior a `da6fea3` es **esta sección de la ficha** y el cuerpo de
+la PR: documentales, sin tocar código ni pruebas, y existen porque la sección
+tiene que anclarse al árbol que la cadena midió. Si una corrección posterior
+toca código o pruebas, la cadena se vuelve a ejecutar entera y esta sección se
+re-ancla al árbol nuevo, sin conservar la terna del anterior (ADR-154).
 
 ## Consecuencias
 
