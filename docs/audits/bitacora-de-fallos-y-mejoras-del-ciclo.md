@@ -2852,6 +2852,48 @@ ADR o su incidencia cuando se adopte.
   que el registro permanente explicara la deuda 20 **al revés**. Lo que se
   paga en rondas se ahorra en un ADR que habría enseñado algo falso a quien lo
   leyera.
+
+---
+
+### 61. Cinco rondas, todas sobre la ficha, y el par se queda plano: publico mi criterio de parada antes de ver la ronda 6 (08-09-2026, 15:00-15:20 UTC)
+
+- **Ronda 5: dos hallazgos, `pending=2, severity_total=3` — exactamente lo
+  mismo que la ronda 4.** El par deja de mejorar. Rondas: `(4,5) → (2,5) →
+  (3,6) → (2,3) → (2,3)`.
+- **Los dos son reales y los comprobé yo:**
+  1. La sección de validación afirma «lo único posterior a `c8dfbed` es esta
+     sección de la ficha: cambios documentales que no tocan código ni
+     pruebas». **Falso**: el commit del propio head (`fb31ca9`) reescribió
+     además el bullet de la FORMA y **dos docstrings del fichero de pruebas**.
+     Es la **tercera vez** que una corrección de ronda deja falsa la sección de
+     validación —antes fue el borrado de `git diff --check`—.
+  2. La cita `staged_engine_gates.py:213-215` está mal: **213 es el cierre del
+     docstring y 216 es la línea del descarte**; el rango bueno es `214-216`.
+     Lo verifiqué numerando el fichero. Aparece **seis veces**, cinco de ellas
+     desde la ronda 1. Y el colmo: una ronda anterior escribió en sus límites
+     «las citas a `213-215` son correctas y se conservan tal cual».
+- **Yo también la propagué**: usé `213-215` en un comentario de la incidencia.
+  Mi bitácora, en cambio, cita `:215`, que sí es la línea de la comparación.
+- **La familia está clara y ya van tres rondas de ella**: *una afirmación de la
+  ficha que el árbol desmiente, introducida o no vista por la ronda anterior*.
+  `CLAUDE.md` manda parar a la SEGUNDA y buscar la raíz. La raíz no es
+  misteriosa y ya está registrada como **deuda 19**: el ADR crece en cada
+  ronda, nadie contrasta el conjunto contra el árbol, y **cada corrección
+  añade prosa nueva que nadie verifica**. Aquí se ve en estado puro: el código
+  se aprobó en la ronda 1 y **no se ha vuelto a tocar en cinco rondas**.
+- **Criterio de parada, decidido AHORA y antes de ver la ronda 6** —que es lo
+  que este ciclo exige a cada encargo y me toca cumplir a mí—:
+  - **Si la ronda 6 aprueba**, se actualiza la rama con `main` y se fusiona.
+  - **Si la ronda 6 encuentra un defecto de esta misma familia**, NO autorizo
+    otra ronda: paro el ciclo y se lo llevo al propietario con la raíz —la
+    deuda 19 y su candidato (c), un guardián que valide la sección de
+    validación contra la plantilla en CADA commit—, porque seguir parcheando
+    sería exactamente lo que la disciplina prohíbe.
+  - **Lo que NO cambia en ninguno de los dos casos**: el trabajo de producto
+    está bien y medido. El cargador no se ha tocado desde la ronda 1, las
+    cuatro cifras del banco están verificadas por mí de forma independiente, y
+    la predicción se cumplió dígito a dígito. Lo que está en discusión es la
+    calidad del **registro**, no la del cambio.
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
