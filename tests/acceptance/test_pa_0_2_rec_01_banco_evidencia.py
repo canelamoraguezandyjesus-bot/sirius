@@ -1690,6 +1690,16 @@ def test_el_registro_escrito_lleva_la_forma_que_g8_compara(tmp_path: Path) -> No
     assert desviados == []
 
 
+#: La forma en que el corpus congelado declara sus fechas de registro,
+#: escrita AQUI como literal propio: `AAAA-MM-DDT00:00:00Z`, siempre a
+#: medianoche y siempre en UTC (lo comprueba item a item el guardian de abajo,
+#: y por eso puede derivar el `created_at` esperado por TEXTO en vez de
+#: llamando a `_instante_del_corpus`).
+_FORMA_DECLARADA_POR_EL_CORPUS: Final[re.Pattern[str]] = re.compile(
+    r"^(?P<dia>\d{4}-\d{2}-\d{2})T00:00:00Z$"
+)
+
+
 def test_el_cargador_fecha_cada_item_con_el_registro_que_el_corpus_declara(
     tmp_path: Path,
 ) -> None:
@@ -1708,23 +1718,35 @@ def test_el_cargador_fecha_cada_item_con_el_registro_que_el_corpus_declara(
     escritos = _registros_escritos(database_path)
     items_por_id = {item["id"]: item for item in _fixture()["items"]}
 
-    # El lado ESPERADO se lee del corpus, no de `_fecha_de_registro`: calcularlo
-    # con la misma funcion que decide lo que el cargador escribe comprobaria
-    # que la base coincide con la implementacion —los dos lados se moverian a
-    # la vez ante cualquier cambio de la regla—, y lo que esta prueba tiene que
-    # comprobar es que coincide con lo que el corpus DECLARA.
+    # El lado ESPERADO se deriva TEXTUALMENTE de la cadena que el corpus
+    # declara: no pasa por `_instante_del_corpus` —la auxiliar en la que
+    # `_fecha_de_registro` delega para decidir el instante que se escribe— ni
+    # por `_FORMATO_DE_REGISTRO_EN_SQLITE` ni por `_REGISTRO_DE_LO_NO_FECHADO`
+    # (el «ahora» de lo no fechado se lee del propio fixture). De eso, y solo de
+    # eso, esta aislado el lado esperado; con cualquiera de esas tres piezas los
+    # dos lados se moverian a la vez y un desplazamiento del instante dentro de
+    # `_instante_del_corpus` seguiria en verde, que es justo lo que este
+    # guardian tiene que dejar en rojo.
+    ahora_declarado = str(_fixture()["ahora_declarado"])
     esperados: dict[tuple[str, int], str] = {}
     for real, corpus_id in cargado.real_a_canonico.items():
         declarada = items_por_id[corpus_id]["ejes_p2"]["valid_from"]
-        instante = _instante_del_corpus(
-            _REGISTRO_DE_LO_NO_FECHADO if declarada is None else str(declarada)
-        )
-        esperados[real] = instante.strftime(_FORMATO_DE_REGISTRO_EN_SQLITE)
+        declarada_texto = ahora_declarado if declarada is None else str(declarada)
+        dia_declarado = _FORMA_DECLARADA_POR_EL_CORPUS.match(declarada_texto)
+        assert dia_declarado is not None, declarada_texto
+        esperados[real] = f"{dia_declarado['dia']} 00:00:00.000000"
     assert len(esperados) == 95  # 97 menos los dos que el canon porta sin texto
     obtenidos = {real: escritos[real] for real in esperados}
     assert obtenidos == esperados
 
     assert len(set(esperados.values())) == 11
+
+    # Y dos anclas a literales completos, escritos a mano, para que ni el
+    # derivado textual pueda deslizarse entero sin que nada lo note: el item
+    # fechado que `B04-CA-32` espera y el unico que el corpus porta sin fechar.
+    reales_por_corpus = {corpus: real for real, corpus in cargado.real_a_canonico.items()}
+    assert escritos[reales_por_corpus["DEC-012"]] == "2026-01-01 00:00:00.000000"
+    assert escritos[reales_por_corpus["MEM-005"]] == "2026-06-15 00:00:00.000000"
 
 
 def test_b04_ca_32_entra_porque_su_registro_ya_no_es_posterior_al_corte(

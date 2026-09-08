@@ -239,7 +239,7 @@ revisión propuso, y que la versión anterior de la prueba dejaba en **verde**
 (`1 passed`): en `_fecha_de_registro`, la rama del `None` devuelve un instante
 ajeno al corpus, `2026-12-01T00:00:00Z`, en vez de
 `_REGISTRO_DE_LO_NO_FECHADO`. Con el lado esperado leído del corpus, esa misma
-mutación deja la prueba en rojo:
+mutación dejaba la prueba en rojo:
 
 ```
 E       AssertionError: assert {('memory', 1....000000', ...} == {('memory', 1....000000', ...}
@@ -247,6 +247,34 @@ E         Differing items:
 E         {('memory', 5): '2026-12-01 00:00:00.000000'} != {('memory', 5): '2026-06-15 00:00:00.000000'}
 1 failed, 33 deselected in 3.72s
 ```
+
+**Y el tramo que aquella corrección dejó sin cerrar: `_instante_del_corpus`,
+visto FALLAR por mutación.** La sexta revisión señaló que evitar
+`_fecha_de_registro` no bastaba: el lado esperado la rodeaba pero llamaba a la
+auxiliar en la que delega, `_instante_del_corpus`, y formateaba con la misma
+constante, así que un desplazamiento del instante movía los dos lados a la vez y
+sobrevivía a las seis pruebas. Ahora el lado esperado se **deriva textualmente**
+de la cadena del fixture y no pasa por `_instante_del_corpus`, ni por
+`_FORMATO_DE_REGISTRO_EN_SQLITE`, ni por `_REGISTRO_DE_LO_NO_FECHADO`. La
+mutación es la que la revisión describe —en `_instante_del_corpus`, devolver
+`... .replace(tzinfo=None) + timedelta(hours=1)`—. Con la construcción anterior
+(el árbol de `dcf9ded`, con la mutación puesta) las seis seguían en **verde**,
+que es el hueco que la revisión nombra:
+
+```
+6 passed, 30 deselected in 3.73s
+```
+
+Con la construcción de ahora, la misma mutación deja el guardián en rojo:
+
+```
+FAILED tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py::test_el_cargador_fecha_cada_item_con_el_registro_que_el_corpus_declara - AssertionError: assert {('memory', 1....000000', ...} == {('memory', 1....000000', ...}
+1 failed, 5 passed, 30 deselected in 3.45s
+```
+
+El detalle que imprime es el desplazamiento, valor a valor:
+`{('memory', 1): '2026-01-01 01:00:00.000000'} != {('memory', 1): '2026-01-01
+00:00:00.000000'}`. Retirada la mutación, pasa.
 
 **Los dos guardianes del corpus, vistos FALLAR por mutación.** No fijan
 conducta sino hechos del fixture sobre los que se apoya la decisión, así que
@@ -281,8 +309,9 @@ E         Left contains 95 more items, first extra item: '2026-01-01T00:00:00.00
 La segunda mutación es exactamente la que, **antes** de este guardián,
 sobrevivía: con ella puesta, las cuatro pruebas anteriores de esta ficha
 seguían en verde —el lado esperado de
-`test_el_cargador_fecha_cada_item_con_el_registro_que_el_corpus_declara` usa
-la misma constante que el cargador, así que los dos lados se movían juntos, y
+`test_el_cargador_fecha_cada_item_con_el_registro_que_el_corpus_declara` usaba
+entonces la misma constante que el cargador —hoy ya no: la deriva por texto,
+ver el bloque anterior—, así que los dos lados se movían juntos, y
 `B04-CA-32` decide su comparación en el sexto carácter, donde las dos formas
 coinciden—. Ahora la mata el guardián nuevo, que compara contra un literal
 independiente.
@@ -397,10 +426,19 @@ todos en `tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py`:
   texto a propósito, que no llegan a crear fila y por tanto no tienen
   `created_at` que mirar), no una muestra, y compara `created_at` columna a
   columna con lo que el corpus declara para cada uno —el lado esperado se
-  construye leyendo `ejes_p2.valid_from` del fixture, no llamando a
-  `_fecha_de_registro`, para que un cambio de la regla no mueva los dos lados
-  a la vez—; fija además que hay once fechas distintas, porque el artefacto
-  tenía la firma contraria —una sola compartida por todos—.
+  **deriva textualmente** de la cadena `ejes_p2.valid_from` del fixture
+  (`AAAA-MM-DDT00:00:00Z` → `AAAA-MM-DD 00:00:00.000000`, con la forma
+  declarada fijada por un literal propio, `_FORMA_DECLARADA_POR_EL_CORPUS`), sin
+  pasar por `_fecha_de_registro`, ni por `_instante_del_corpus` —la auxiliar en
+  la que aquella delega—, ni por `_FORMATO_DE_REGISTRO_EN_SQLITE`, ni por
+  `_REGISTRO_DE_LO_NO_FECHADO` —el «ahora» de lo no fechado se lee del propio
+  fixture—: de esas cuatro piezas, y de ninguna otra, está aislado, y por eso un
+  desplazamiento del instante dentro de cualquiera de ellas no mueve los dos
+  lados a la vez—; ancla además dos `created_at` escritos contra literales
+  completos escritos a mano (`DEC-012` → `2026-01-01 00:00:00.000000` y el único
+  no fechado, `MEM-005` → `2026-06-15 00:00:00.000000`), y fija que hay once
+  fechas distintas, porque el artefacto tenía la firma contraria —una sola
+  compartida por todos—.
 - `test_b04_ca_32_entra_porque_su_registro_ya_no_es_posterior_al_corte`: no se
   conforma con que el caso acierte, mira el **motivo**: exige que la traza no
   traiga el descarte `G8` «posterior al corte de registro» para `DEC-012` y
