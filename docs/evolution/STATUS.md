@@ -354,6 +354,15 @@ comprobó qué documentos la contradecían. Esa dirección queda formalizada en
 **EV-015 a EV-019** (`docs/evolution/DECISIONS.md`), en la **§19** del Rector y
 en **ADR-158** y **ADR-159**.
 
+**EV-015 precisa EV-001, EV-016 sustituye EV-002 y acota EV-003, y EV-004 se
+mantiene vigente sin enmienda.**
+
+**Estado documental: ENMIENDA PREPARADA.** Entra en vigor con la fusión de la
+Pull Request que la introduce, por el propietario, conforme al procedimiento
+establecido en este repositorio. **Aprobación documental y retirada técnica son
+cosas distintas**: la retirada de los carriles de investigación y auditoría
+(ADR-159) sigue sin ejecutar incluso después de fusionar.
+
 ### Qué cambia en el apartado «Vigente» de este documento
 
 Las dos líneas de arriba que decían «Sirius conserva … síntesis final» y «El

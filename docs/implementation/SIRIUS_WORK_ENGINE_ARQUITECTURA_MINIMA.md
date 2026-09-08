@@ -917,7 +917,8 @@ El plan de implementación NO se escribe aquí: es la fase posterior a la aproba
 **§7.3 dice en su título «GPT Researcher (Worker de investigación, OBLIGATORIO en
 el MVP)». Esa obligatoriedad queda SUPERADA por ADR-159**, que retira el carril
 dedicado de investigación: esos encargos pasan a las sesiones externas del
-propietario.
+propietario. ADR-159 es **enmienda preparada**: entra en vigor al fusionarse su
+Pull Request, y esa aprobación documental **no ejecuta** la retirada.
 
 Lo que eso cambia y lo que no:
 
@@ -931,5 +932,6 @@ Lo que eso cambia y lo que no:
 - **No cambia:** §7.5, el comprobador determinista, y todo lo relativo a revisión
   y corrección. Los revisores del ciclo se conservan enteros (ADR-159).
 - **Ejecución pendiente:** ADR-159 registra la decisión, **no la ejecuta**. El
-  carril de investigación sigue operativo hoy.
+  carril de investigación sigue operativo hoy, y seguirá estándolo después de
+  fusionar hasta que la retirada técnica se prepare y se ordene.
 

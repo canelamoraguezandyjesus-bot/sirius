@@ -1,7 +1,7 @@
 # Propuesta de separación entre Sirius y su motor de trabajo
 
 - **Identificador:** `SIRIUS-PROPUESTA-SEPARACION-001`
-- **Estado:** **REVISADA Y FORMALIZADA** el 8 de septiembre de 2026. Nació como propuesta para revisión del propietario; su dirección está hoy registrada en EV-015 a EV-019, ADR-158 y ADR-159 (ver el recuadro siguiente)
+- **Estado:** **REVISADA**; su dirección está recogida en **enmiendas preparadas** el 8 de septiembre de 2026 —EV-015 a EV-019, la §19 del Rector, ADR-158 y ADR-159—, que entran en vigor al fusionarse su Pull Request por el propietario (ver el recuadro siguiente)
 - **Fecha:** 8 de septiembre de 2026
 - **Árbol sobre el que se comprobó todo:** `main` en `f2085db`
   (`f2085dbbcdef9f33e084131984f1dd6c3daf0101`, 2026-09-07T23:48:23+02:00)
@@ -24,17 +24,23 @@
 
 Este documento **se conserva tal como quedó tras la revisión del propietario**:
 es el análisis con sus comprobaciones, y no se reescribe para que parezca que
-siempre supo el final. Lo que sigue dice qué partes suyas dejaron de ser
-propuesta.
+siempre supo el final. Lo que sigue dice qué partes suyas están ya recogidas en
+una enmienda preparada.
+
+**Estado documental unificado:** las enmiendas están **preparadas**, y entran en
+vigor con la fusión de la Pull Request que las introduce, por el propietario,
+conforme al procedimiento establecido. **Aprobación documental y retirada
+técnica son cosas distintas:** fusionar aprueba los documentos y **no** desactiva
+ningún carril.
 
 | De esta propuesta | Dónde está formalizado |
 |---|---|
 | La dirección del apartado 7.1, sus seis puntos | **EV-015 a EV-019** (`docs/evolution/DECISIONS.md`) y **ADR-158** |
-| Las enmiendas del apartado 4.1, filas 1-4 y 6 | `docs/evolution/RECTOR.md` §19; EV-002 marcada como sustituida y EV-003 como acotada |
+| Las enmiendas del apartado 4.1, filas 1-4 y 6 | `docs/evolution/RECTOR.md` §19 y `docs/evolution/DECISIONS.md`, con la relación unificada: **EV-015 precisa EV-001, EV-016 sustituye EV-002 y acota EV-003, y EV-004 se mantiene vigente sin enmienda** |
 | La fila 5 del apartado 4.1 (EV-004 y la memoria común) | **EV-018**: el conocimiento común **no es** la memoria canónica, así que **EV-004 queda vigente sin enmienda**. La decisión T-3 del apartado 7.2 queda resuelta por esta vía |
 | Las enmiendas del apartado 4.1, filas 7-13 | **ADR-159**, contrato operativo **§13 (v1.10)**, `docs/implementation/bloques_del_motor.yml`, `docs/operations/MOTOR_DE_SIRIUS.md`, arquitectura mínima del motor §18, superficie de invocación §9 |
-| La recomendación de T-1 (desactivación reversible) | **ADR-159**, apartado «Recomendación técnica de ejecución (no ejecutada)». Sigue siendo recomendación: **nadie ha ordenado ejecutarla** |
-| Las decisiones T-2 y T-4 a T-10 del apartado 7.2 | **Siguen abiertas.** Ninguna se ha decidido aquí |
+| La recomendación de T-1 (desactivación reversible) | **ADR-159**, apartado «Recomendación técnica de ejecución (no ejecutada)». Sigue siendo recomendación de **forma**: nadie ha ordenado ejecutarla, y su paso 0 —inventariar todas las vías de entrada a cada carril, incluidas activaciones manuales y órdenes en curso— **no se ha hecho** |
+| Las decisiones T-2 y T-4 a T-10 del apartado 7.2 | **Siguen abiertas.** Ninguna se ha decidido aquí. En particular **T-2** —el tratamiento de la puerta del implementador— queda expresamente pendiente en ADR-159, punto 4, hasta comprobar todas las vías de entrada |
 | Las filas 14 y 17 del apartado 4.2 (`README.md`, HEAD-R1) y el «Próximo paso» de la fila 16 | **No tocadas**, por orden expresa del propietario de no ampliar el trabajo a otros defectos documentales |
 
 **La retirada de los dos carriles está ACORDADA y NO EJECUTADA.** Hoy siguen

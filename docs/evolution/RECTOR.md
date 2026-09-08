@@ -309,6 +309,13 @@ El usuario aprobó el 22 de julio de 2026 este documento y las decisiones EV-001
 **Decisiones canónicas:** EV-015 a EV-019 en `docs/evolution/DECISIONS.md`.
 **Aprobación:** la fusión de la Pull Request que introduce esta enmienda, por el
 propietario.
+**Relación con las decisiones canónicas anteriores:** **EV-015 precisa EV-001, EV-016 sustituye EV-002 y acota EV-003, y EV-004 se
+mantiene vigente sin enmienda.**
+**Estado documental: ENMIENDA PREPARADA.** Entra en vigor con la fusión de la
+Pull Request que la introduce, por el propietario, conforme al procedimiento
+establecido en este repositorio. **Aprobación documental y retirada técnica son
+cosas distintas**: la retirada de los carriles de investigación y auditoría
+(ADR-159) sigue sin ejecutar incluso después de fusionar.
 
 ### 19.1 Qué queda enmendado
 

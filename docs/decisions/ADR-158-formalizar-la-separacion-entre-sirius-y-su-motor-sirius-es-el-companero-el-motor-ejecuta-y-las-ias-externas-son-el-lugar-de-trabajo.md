@@ -5,11 +5,19 @@
 - Aprobación: la fusión de la PR que introduce este ADR, por el propietario
 - Contexto: la dirección que el propietario expresó al encargar
   `docs/evolution/PROPUESTA_SEPARACION_SIRIUS_MOTOR.md` y al revisarla
-- Relacionadas: **EV-002, EV-003 y EV-004**, a las que sustituye por la vía del
-  registro de decisiones (`docs/evolution/DECISIONS.md`); `docs/evolution/RECTOR.md`
-  §2, §4 y §5, que este ADR enmienda por la vía documental; ADR-159 (la retirada
-  de los dos carriles); ADR-083 y la decisión D6 (memoria del motor separada de
-  la del producto); ADR-001 (disciplina de evidencia)
+- Estado documental: **ENMIENDA PREPARADA.** Entra en vigor con la fusión de la
+  Pull Request que la introduce, por el propietario, conforme al procedimiento
+  establecido en este repositorio. **La aprobación documental no ejecuta ninguna
+  retirada técnica** (ver ADR-159)
+- Relación con las decisiones canónicas vigentes, en una línea que se repite
+  igual en todos los documentos de esta enmienda: **EV-015 precisa EV-001,
+  EV-016 sustituye EV-002 y acota EV-003, y EV-004 se mantiene vigente sin
+  enmienda.**
+- Relacionadas: `docs/evolution/DECISIONS.md` (donde viven EV-001 a EV-004 y las
+  nuevas EV-015 a EV-019); `docs/evolution/RECTOR.md` §2, §4, §5 y §9.3, que
+  este ADR enmienda por la vía documental; ADR-159 (la retirada de los dos
+  carriles); ADR-083 y la decisión D6 (memoria del motor separada de la del
+  producto); ADR-001 (disciplina de evidencia)
 
 > **Este ADR es también la nota de arranque de la rama
 > `claude/sirius-motor-separation-proposal-svoy0a` para el trabajo de
@@ -90,7 +98,7 @@ consecuencias y ejecución propias.
 
 ## Opciones consideradas
 
-1. **Editar `RECTOR.md` §2/§4/§5 y EV-002/EV-003/EV-004 en su sitio.**
+1. **Editar `RECTOR.md` §2/§4/§5 y EV-001 a EV-004 en su sitio.**
    Descartada por el criterio (a): esas líneas están citadas por número desde
    cinco documentos y un ADR. Editarlas en su sitio falsearía citas publicadas
    que no son de este trabajo.
@@ -112,8 +120,9 @@ final de `docs/evolution/RECTOR.md` (§19).
 1. **Sirius es el compañero personal, de ingeniería y del robot.** Conserva
    identidad, memoria propia, conversación, voz, cámaras y percepción, ayuda de
    ingeniería y electrónica, manejo del ordenador y de los dispositivos
-   autorizados. **Sustituye a EV-001 en su alcance**, no en su fondo: Sirius
-   sigue siendo el sistema personal responsable ante el usuario.
+   autorizados. **Precisa EV-001**: no la sustituye ni cambia su fondo —Sirius
+   sigue siendo el sistema personal responsable ante el usuario—, sino que dice
+   de qué es compañero.
 2. **El trabajo habitual se realiza directamente con las IAs externas.** El
    propietario conversa, encarga y decide desde ChatGPT, Claude o Codex sin que
    Sirius intermedie. **Sustituye a EV-002 y acota EV-003**: Sirius deja de ser
@@ -213,8 +222,10 @@ fingir que las tenía delante.
 
 ## Consecuencias
 
-- `docs/evolution/DECISIONS.md` gana EV-015 a EV-019 y marca EV-002 y EV-003
-  como sustituidas y acotadas; **EV-004 no se toca**, por el punto 5.
+- `docs/evolution/DECISIONS.md` gana EV-015 a EV-019 y marca en su sitio la
+  relación con las anteriores, con la línea unificada de la cabecera: **EV-015
+  precisa EV-001, EV-016 sustituye EV-002 y acota EV-003, y EV-004 se mantiene
+  vigente sin enmienda.** Ninguna decisión anterior pierde su texto.
 - `docs/evolution/RECTOR.md` gana un §19 de enmienda al final, que dice qué
   apartados quedan sustituidos y por qué no se editan en su sitio.
 - `docs/evolution/STATUS.md` y `docs/canonical/STATUS.md` registran el cambio.
@@ -223,6 +234,11 @@ fingir que las tenía delante.
 - Queda una obligación explícita para quien redefina la etapa 0.4: conservar la
   delegación especializada del punto 6, que de otro modo se borraría por omisión
   al decir «esto ya lo hace el motor».
+- **Estado documental unificado en todos los documentos tocados:** enmiendas
+  **preparadas**, con entrada en vigor al fusionarse la Pull Request por el
+  propietario, conforme al procedimiento establecido. Ese acto es **aprobación
+  documental**; la **retirada técnica** de los dos carriles sigue pendiente
+  después de él, y ADR-159 la mantiene separada.
 
 ## Alternativas descartadas y por qué
 

@@ -6,6 +6,9 @@
 
 ## EV-001 - Sirius es el sistema personal completo
 
+> **PRECISADA por EV-015** (8 de septiembre de 2026, ADR-158): sigue vigente
+> entera; EV-015 dice de qué es compañero, no cambia su fondo.
+
 Sirius es la identidad y el sistema personal responsable ante el usuario. No es un modelo concreto, una secretaria pasiva, un lanzador de aplicaciones ni solo el subsistema de orquestación.
 
 ## EV-002 - Sirius es el interlocutor principal
@@ -91,11 +94,18 @@ Estas decisiones no amplían Sirius 0.1 ni autorizan implementación post-0.1. S
 
 ## Separación entre Sirius y su motor de trabajo — decisiones EV-015 a EV-019
 
-**Estado:** PROPUESTAS
+**Estado:** ENMIENDA PREPARADA
 **Fecha:** 8 de septiembre de 2026
 **Aprobación:** la fusión de la Pull Request que las introduce, por el
 propietario — la misma regla que fijan la Definición de Producto 0.2, la
 Arquitectura Técnica 0.2 y el Plan de Pruebas 0.2 en sus propias cabeceras.
+**Relación con las decisiones anteriores:** **EV-015 precisa EV-001, EV-016 sustituye EV-002 y acota EV-003, y EV-004 se
+mantiene vigente sin enmienda.**
+**Alcance de la aprobación:** **Estado documental: ENMIENDA PREPARADA.** Entra en vigor con la fusión de la
+Pull Request que la introduce, por el propietario, conforme al procedimiento
+establecido en este repositorio. **Aprobación documental y retirada técnica son
+cosas distintas**: la retirada de los carriles de investigación y auditoría
+(ADR-159) sigue sin ejecutar incluso después de fusionar.
 **Autoridad final:** usuario responsable del Proyecto Sirius
 **Registro de la decisión:** `docs/decisions/ADR-158-formalizar-la-separacion-entre-sirius-y-su-motor-sirius-es-el-companero-el-motor-ejecuta-y-las-ias-externas-son-el-lugar-de-trabajo.md`
 y `docs/decisions/ADR-159-retirar-los-carriles-dedicados-de-investigacion-y-auditoria-conservando-los-revisores-del-ciclo-decision-tomada-ejecucion-pendiente.md`

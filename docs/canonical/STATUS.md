@@ -35,16 +35,20 @@ Añadido al final: las líneas anteriores están citadas por número desde la
 Arquitectura Técnica 0.2 y desde
 `docs/implementation/AGENTES_SUPERFICIE_DE_INVOCACION.md`.
 
-- **Decisiones EV-015 a EV-019** (`docs/evolution/DECISIONS.md`): PROPUESTAS,
-  aprobadas por la fusión de la Pull Request que las introduce, por el
+- **Decisiones EV-015 a EV-019** (`docs/evolution/DECISIONS.md`): **enmienda
+  preparada**, en vigor al fusionarse la Pull Request que las introduce, por el
   propietario — la misma regla que fijan en su cabecera la Definición de
   Producto 0.2, la Arquitectura Técnica 0.2 y el Plan de Pruebas 0.2.
+- **Relación con las decisiones anteriores:** EV-015 precisa EV-001, EV-016
+  sustituye EV-002 y acota EV-003, y EV-004 se mantiene vigente sin enmienda.
 - **Enmienda §19 del Documento Rector de Evolución**, con el mismo criterio de
   aprobación. Enmienda §2, §4, §5 y §9.3; **no toca §17**, la regla de
   activación.
 - **ADR-158** (el reparto de responsabilidades) y **ADR-159** (la retirada de los
   carriles dedicados de investigación y auditoría, con la ejecución pendiente).
-- **EV-004 sigue vigente sin enmienda.**
-- Nada de esto autoriza implementación, cambia prioridades o alcance de
-  versiones, ni ejecuta la retirada de ningún carril.
+- **Aprobación documental y retirada técnica son cosas distintas.** Fusionar
+  aprueba estos documentos; **no** ejecuta la retirada de los carriles de
+  investigación y auditoría, que sigue pendiente y sin fecha (ADR-159).
+- Nada de esto autoriza implementación ni cambia prioridades o alcance de
+  versiones.
 

@@ -3,6 +3,11 @@
 - Estado: PROPUESTO
 - Fecha: 2026-09-08
 - Aprobación: la fusión de la PR que introduce este ADR, por el propietario
+- Estado documental: **ENMIENDA PREPARADA.** Entra en vigor con la fusión de la
+  Pull Request que la introduce, por el propietario, conforme al procedimiento
+  establecido en este repositorio. **Esa aprobación documental NO ejecuta la
+  retirada**: la retirada técnica queda pendiente y sin fecha, incluso después
+  de fusionar
 - Contexto: la dirección del propietario recogida en
   `docs/evolution/PROPUESTA_SEPARACION_SIRIUS_MOTOR.md` §7.1, punto 2. La nota
   de arranque de este trabajo es la de **ADR-158**, publicada antes del primer
@@ -32,8 +37,9 @@ condiciones propias, escritas antes de tocar el registro:
 
 - **(e)** Si al enumerar las piezas apareciera **una sola** compartida entre un
   carril a retirar y un revisor del ciclo, la retirada no se registra como
-  «limpia»: se declara esa pieza y su tratamiento, o se para. *Se disparó*: hay
-  una, y está en la Decisión, punto 4.
+  «limpia»: se declara esa pieza, o se para. *Se disparó*: hay una, la puerta
+  del implementador, y queda **declarada como pendiente de tratamiento** en el
+  punto 4 —no resuelta aquí—.
 - **(f)** Si registrar la retirada exigiera declarar en un documento algo que el
   árbol contradice hoy, manda el árbol. *Se disparó*: `TABLA_ACTIVACION` sigue
   teniendo las dos clases, así que el contrato **no** las borra, las marca como
@@ -70,12 +76,21 @@ condiciones propias, escritas antes de tocar el registro:
    `INVESTIGACION` (`src/sirius_engine/dispatcher.py`), los workflows siguen en
    su sitio, y las etiquetas siguen creadas. **Mientras eso siga así, los dos
    carriles siguen funcionando si alguien los dispara.**
-4. **La única costura con el ciclo, declarada por el criterio (e):** el workflow
-   del implementador declina las activaciones de perfil `investigador` para que
-   las atienda `investigar-orden.yml`
-   (`.github/workflows/implement-sirius-work.yml:171-180`). No se toca: con el
-   carril desactivado no se dispara, y modificarla exige escribir en `.github/**`,
-   donde la automatización no puede (ADR-002).
+4. **La única costura con el ciclo, declarada por el criterio (e), queda
+   PENDIENTE de tratamiento:** el workflow del implementador declina las
+   activaciones de perfil `investigador` para que las atienda
+   `investigar-orden.yml` (`.github/workflows/implement-sirius-work.yml:171-180`).
+   Qué se hace con esa puerta **no se decide aquí**, y este ADR no afirma que
+   pueda dejarse tal cual: decidirlo exige antes **comprobar todas las vías de
+   entrada** al carril —entre ellas, y sin darlas por agotadas: la activación
+   manual de una etiqueta por una persona, las órdenes ya despachadas y aún en
+   curso, los reintentos y relanzamientos del propio ciclo, el reconciliador, y
+   cualquier WorkItem con perfil `investigador` que exista cuando la retirada se
+   ejecute—. Esa comprobación es parte de **preparar** la retirada, no de este
+   registro, y **no se ha hecho**. Nota operativa, no conclusión: modificar esa
+   puerta exigiría escribir en `.github/**`, donde la automatización no puede
+   (ADR-002), así que quien prepare la retirada debe contar con una mano
+   distinta.
 5. **Lo que la retirada NO alcanza**, para que nadie lo deduzca de más:
    - `docs/investigaciones/` y los informes de auditoría **se conservan**: son
      resultados, no agentes, y la guarda de caducidad
@@ -93,28 +108,39 @@ condiciones propias, escritas antes de tocar el registro:
 Cuando el propietario ordene ejecutar la retirada, la forma recomendada es
 **desactivación reversible**, y en este orden:
 
-1. Dejar de despachar las dos clases y retirar el disparador de cada carril.
+0. **Antes que nada, enumerar y comprobar todas las vías de entrada** a cada
+   carril, incluidas las activaciones manuales de etiqueta y las órdenes
+   pendientes o en curso. Sin ese inventario, «desactivar el disparador» es una
+   suposición sobre cuántos disparadores hay.
+1. Dejar de despachar las dos clases y retirar las vías de entrada que ese
+   inventario haya encontrado.
 2. **Conservar** código, perfiles, prompts, ADR, historial y resultados.
-3. No borrar la etiqueta `auditoria:solicitada` ni la puerta del punto 4.
+3. Decidir, **con el inventario del paso 0 delante**, qué se hace con la
+   etiqueta `auditoria:solicitada` y con la puerta del punto 4. Este ADR no
+   anticipa esa decisión.
 
-Motivo: es lo más barato de deshacer si el traslado a las sesiones externas no
-rinde, y no destruye nada medido. El borrado definitivo, si algún día se quiere,
-es una decisión posterior con su propio ADR.
+Motivo de que la forma recomendada sea reversible: es lo más barato de deshacer
+si el traslado a las sesiones externas no rinde, y no destruye nada medido. El
+borrado definitivo, si algún día se quiere, es una decisión posterior con su
+propio ADR.
 
-**Nada de esto se ha hecho.** Este apartado es una recomendación, no un registro
-de ejecución.
+**Nada de esto se ha hecho.** Este apartado es una recomendación de forma, no un
+registro de ejecución ni un plan comprobado.
 
 ## Comprobación que la sostiene
 
 - **Las piezas de cada función están enumeradas y son disjuntas**, salvo la del
   punto 4: `docs/evolution/PROPUESTA_SEPARACION_SIRIUS_MOTOR.md` §2.3 las lista
   fichero a fichero, comprobadas en el árbol.
-- **La costura del punto 4 es la única**: buscando `auditor`/`auditoria` e
-  `investigador`/`investigacion` en los workflows del ciclo
-  (`review-sirius-work.yml`, `repair-sirius-work.yml`,
-  `implement-sirius-work.yml`, `quality.yml`,
-  `advance-sirius-after-quality.yml`), los únicos aciertos con efecto son las
-  líneas 171-180 del implementador; el resto son comentarios.
+- **La costura del punto 4 es la única *entre los workflows del ciclo*, y eso es
+  todo lo que se ha comprobado**: buscando `auditor`/`auditoria` e
+  `investigador`/`investigacion` en `review-sirius-work.yml`,
+  `repair-sirius-work.yml`, `implement-sirius-work.yml`, `quality.yml` y
+  `advance-sirius-after-quality.yml`, los únicos aciertos con efecto son las
+  líneas 171-180 del implementador; el resto son comentarios. **No se ha
+  comprobado** el conjunto de vías de entrada a los carriles —etiquetas
+  aplicadas a mano, órdenes en curso, reintentos, reconciliador—, y por eso el
+  punto 4 queda pendiente en vez de resuelto.
 - **El árbol contradice cualquier redacción que dé la retirada por ejecutada**:
   `TABLA_ACTIVACION` sigue teniendo las cuatro clases. Por eso el contrato
   operativo marca las filas en vez de borrarlas, y esa marca es la comprobación
@@ -122,6 +148,30 @@ de ejecución.
   documento y contrastar con el código.
 - **Ningún fichero fuera de `docs/` se ha modificado** en el commit que registra
   esta decisión.
+- **El campo `retirada_acordada` es compatible con los lectores y validadores
+  que existen**, y esto se comprobó en vez de suponerse:
+  1. **Lector único.** Buscando `bloques_del_motor` en todo el árbol
+     (`*.py`, `*.sh`, `*.ps1`, `*.yml`, `*.yaml`), el único consumidor es
+     `tests/automation/test_registro_de_bloques.py`. No lo lee nada de `src/`,
+     `scripts/` ni `.github/`.
+  2. **No hay lista cerrada de campos.** Esa guarda declara
+     `CAMPOS_SIEMPRE = ("id", "titulo", "estado")` como campos **obligatorios**,
+     no como los únicos permitidos, y no comprueba campos desconocidos. El
+     registro ya llevaba diez campos opcionales —`evidencia`, `medido_hoy`,
+     `que_lo_cerraria`, `decidido`, `depende_de`, `ojo`,
+     `actualizado_25_08_2026`, `actualizado_27_08_2026`, `incidencia`—:
+     `retirada_acordada` es el undécimo, no un patrón nuevo.
+  3. **Los identificadores no cambian**, así que
+     `test_ningun_bloque_conocido_desaparece` sigue satisfecho: S2, B1 y C4
+     conservan `id`, `titulo`, `estado: cerrado` y `evidencia`.
+  4. **La guarda pasa**: 30 pruebas en verde.
+  5. **Y se ha visto MORDER con el campo puesto**, que es lo que evita dar por
+     buena una compatibilidad vacua: quitando la línea `evidencia` de C4 —el
+     bloque que lleva `retirada_acordada`— fallan exactamente
+     `test_todo_bloque_cerrado_dice_que_lo_demuestra` y
+     `test_cada_bloque_del_registro_pasa_sus_dos_reglas[C4]` (2 fallidas, 28
+     pasadas). Es decir: el campo nuevo **no se confunde con evidencia** ni
+     desactiva la regla. Revertida la mutación, vuelven las 30 en verde.
 
 ## Consecuencias
 
@@ -138,6 +188,12 @@ de ejecución.
   este ADR donde afirman lo contrario.
 - Queda **pendiente y sin fecha** la ejecución. Mientras no ocurra, cualquiera
   puede disparar los dos carriles y funcionarán.
+- Queda **pendiente** el tratamiento de la puerta del implementador y de la
+  etiqueta `auditoria:solicitada`, condicionado al inventario de vías de entrada
+  del paso 0 de la recomendación.
+- **Estado documental:** enmienda preparada; entra en vigor al fusionarse la
+  Pull Request por el propietario. Ese acto aprueba el documento y **no** ejecuta
+  la retirada.
 
 ## Alternativas descartadas y por qué
 
