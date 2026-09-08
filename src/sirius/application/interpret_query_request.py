@@ -199,7 +199,7 @@ class InterpreteDePeticion:
                 tiempo_objetivo=(
                     intencion.tiempo_objetivo
                     if intencion.tiempo_objetivo is not None
-                    else self._clock.utc_now().isoformat()
+                    else _ahora_como_lo_declara_el_corpus(self._clock.utc_now())
                 ),
                 corte_de_registro=intencion.corte_de_registro,
             ),
@@ -218,6 +218,19 @@ class InterpreteDePeticion:
             return INTENCION_ORDINARIA
         inferida = self._intent_classifier.classify_intent(query_text)
         return inferida if inferida is not None else INTENCION_ORDINARIA
+
+
+def _ahora_como_lo_declara_el_corpus(momento: datetime) -> str:
+    """El «ahora» del respaldo, escrito con el sufijo ``Z``.
+
+    Misma forma que la del tiempo objetivo interpretado
+    (``ollama_query_intent_classifier._tiempo_objetivo``) y que la del corpus
+    que puebla ``valid_from``/``valid_to``, porque ``G8`` los compara como
+    CADENAS: con ``+00:00`` el veredicto se invertiría en la frontera exacta
+    (el ``+`` ordena antes que la ``Z``). No es cosmética, y por eso el
+    respaldo se alinea también y no solo la rama interpretada.
+    """
+    return momento.isoformat().replace("+00:00", "Z")
 
 
 def _limites(limite: int | None) -> tuple[int, int]:
