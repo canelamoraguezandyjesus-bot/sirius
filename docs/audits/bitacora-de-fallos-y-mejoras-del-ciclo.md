@@ -3516,6 +3516,19 @@ Dos cosas que esto establece y que ninguna lectura habría establecido:
 
 La tabla de mutaciones de la ficha, por tanto, **es honesta**: no es una lista
 de intenciones, es reproducible en once minutos de máquina.
+
+**Y la tercera comprobación, la que decide la fusión**: volví a medir el banco
+sobre el head final `fa098871`. `--peticion` da `17/47; 162; 78/81; 0` y
+`--ejes --peticion` da `21/47; 144; 78/81; 0` — **idénticas** a las de
+`2c21f599`, antes de las dos correcciones. O sea que el arreglo de la frontera
+no mueve ninguna de las cuatro cifras, que es exactamente lo que la ficha
+afirma y por la razón que da: el cargador escribe cada `created_at` a la
+medianoche del día declarado, y la medianoche del corte sigue entrando por
+igualdad.
+
+Tres afirmaciones de la PR, tres comprobadas ejecutándolas. Con eso, lo único
+que falta para la puerta de fusión es Quality verde sobre este head y que la
+revisión cierre.
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
