@@ -3016,6 +3016,28 @@ ADR o su incidencia cuando se adopte.
   maniobra de fusión obligada (deuda 23) y un fallo de vista del revisor en
   rondas anteriores—. No es un defecto del freno: es que **un freno bueno
   obliga a mirar, y mirar es exactamente lo que hizo falta**.
+- **La ronda autorizada cerró lo suyo y bien.** El lado esperado del guardián
+  ya no pasa por `_instante_del_corpus` ni por la constante de formato: se
+  **deriva textualmente** de la cadena del fixture y añade dos anclas a
+  literales escritos a mano. Y el ADR transcribe la mutación con **el antes y
+  el después**: con la construcción anterior las seis pruebas seguían en verde
+  (`6 passed`), con la nueva la misma mutación deja el guardián en rojo
+  (`1 failed, 5 passed`). Eso es demostrar que el agujero existía **y** que
+  está cerrado, no solo lo segundo.
+- **Ronda 7: Claude APRUEBA; Codex deja un único P3.** Convergencia `(2,3) →
+  (1,1)`. El hallazgo es un recuento mal explicado en el ADR —el salto de
+  `5185` a `5205` pruebas se atribuía a «21 funciones nuevas y 6 retiradas»
+  cuando seis de esos pares son firmas reformateadas—, y el desglose bueno son
+  15 funciones nuevas que dan 18 casos por parametrización más dos sueltos.
+  **Es prosa**, y por la letra de mi criterio tocaría parar.
+- **Y aquí conviene ser preciso conmigo mismo en vez de cómodo.** Mi criterio
+  decía «no AUTORIZO otra ronda», y autorizar solo hace falta cuando el freno
+  detiene el ciclo y pide decisión. **El freno no ha saltado** —porque `(1,1)`
+  mejora `(2,3)`— así que el corrector sigue por su propia regla y no hay nada
+  que yo autorice. Si vuelve a parar, el criterio se aplica tal como está
+  escrito. Lo dejo dicho porque la tentación de leer un criterio propio a
+  favor es exactamente lo que este ciclo persigue en los demás, y no vale
+  hacerlo en silencio.
 
 ---
 
