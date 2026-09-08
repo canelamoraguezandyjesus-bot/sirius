@@ -4278,6 +4278,38 @@ podría colarse disfrazada, y esa contrapartida la decide él.
 fallo, la confirmación de que el resto de la cadena está limpio y las dos líneas
 exactas que hay que tocar —ninguna cifra, ningún código, ninguna prueba—; y
 después, **un solo `continua`**, en comentario aparte.
+
+---
+
+### 85. `failed-safely` por fallo de CI no se sale con `continua`: el corrector espera un veredicto que un fallo de CI nunca produce (08-09-2026, 22:47 UTC)
+
+Tras el `continua`, el ciclo reanudó, el corrector se ejecutó
+(`34287346192`)… y **volvió a pararse con el mismo motivo**: «el rol
+`corrector` no escribió ningún veredicto». Head sin cambiar, `e01caf3d`.
+
+**El bucle, y su causa estructural:**
+
+1. Quality falla → el ciclo pide corrección.
+2. El corrector arranca, pero su contrato es **corregir lo que señaló la
+   revisión**, y aquí **no hay revisión**: el fallo vino de Quality.
+3. Sin resultado estructurado del que partir, se detiene de forma segura.
+4. `continua` reanuda… y vuelve al paso 2.
+
+**Cada `continua` gasta una vuelta para volver al mismo sitio.** Mandé uno,
+comprobé el resultado y **no mandé un segundo**: es exactamente el bucle contra
+el que la propia nota operativa del ciclo advierte.
+
+**Y no puedo arreglarlo yo**, aunque el arreglo sean dos líneas: viven en el ADR
+de la rama de la incidencia, y esta sesión tiene prohibido empujar a una rama
+que no sea la suya. La prohibición es buena —quien conduce el ciclo no debe
+escribir en las ramas que juzga— y aquí es justo lo que deja el trabajo parado.
+
+**Lo que hace que esto sea de la casa y no del azar**: el defecto que rompe CI
+es **documental** (dos líneas de prosa), y el corrector documental existe. Lo
+que falta no es capacidad, es **una vía de entrada**: el ciclo sabe convertir
+un hallazgo de revisión en encargo de corrección, y no sabe convertir un fallo
+de Quality en lo mismo. Queda como deuda 29.
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
@@ -4850,3 +4882,26 @@ después, **un solo `continua`**, en comentario aparte.
     prosa no es comprobable a máquina— pero convierte «acuérdate de mirar» en
     una lista concreta y corta. Hoy cada una de estas cuesta una ronda entera de
     dos revisores.
+
+29. **Un `failed-safely` originado en Quality no tiene salida automática: el
+    corrector exige un veredicto de revisión que un fallo de CI nunca
+    produce.** Reproducido el 08-09 en #579: Quality falla → corrección
+    solicitada → el corrector arranca y se detiene («no escribió ningún
+    veredicto») → `failed-safely` → `continua` → **el mismo sitio**. El
+    diagnóstico estaba publicado en la incidencia, con el comando, la línea de
+    fallo y las dos líneas exactas que había que tocar; no faltaba información,
+    faltaba **quién la ejecutara**. Distinta de la deuda 3 (que es sobre el
+    verde de Quality perdido al llegar en `repairing`): aquí el problema es el
+    **rojo**, y que nadie lo recoge.
+
+    Y la salida manual tampoco está a mano de quien conduce el ciclo: el
+    arreglo vive en la rama de la incidencia, y una sesión que acompaña tiene
+    —con razón— prohibido escribir en la rama que juzga.
+
+    Candidatos, para decisión del propietario: (a) que el corrector acepte como
+    entrada un `CI_FAILURE` además de un veredicto de revisión, tratándolo como
+    un hallazgo de una sola observación; (b) que un fallo de Quality genere un
+    veredicto estructurado sintético con el log como «problema», para que el
+    camino existente sirva sin tocarlo; (c) dejarlo como intervención humana
+    declarada, pero entonces documentarlo, porque hoy la incidencia dice
+    «corrección autorizada» y no hay quien la haga.
