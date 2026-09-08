@@ -3903,6 +3903,52 @@ habrían cazado; ninguna de las cuatro se responde ejecutando algo. Se responden
 **antes** de ejecutar nada, decidiendo qué hay que preguntar. Las dejo escritas
 como cuatro preguntas y no como cuatro lecciones porque una pregunta se puede
 usar y una lección solo se puede recordar.
+
+---
+
+### 79. H1 fusionado en `ce94bdf` tras 4 rondas, y la palanca 3 lanzada como #579 (08-09-2026, 20:30 UTC)
+
+**ADR-168 en `main`.** Cuatro rondas, aprobación dual (Claude y Codex sobre el
+mismo head `91820ce4`), y el suelo del banco medido **por mí sobre `main` ya
+fusionado**, no sobre la rama: `--peticion` = `17/47; 162; **78/81**; 0`;
+`--ejes --peticion` = `21/47; 144; 78/81; 0`. Idénticas a lo que la rama
+declaraba, así que la fusión no movió nada.
+
+**El recorrido de las cuatro rondas, que es lo que vale la pena mirar:**
+
+| ronda | par | qué encontró |
+|---|---|---|
+| 1 | `(2,4)` | la comparación de instantes como texto; y `git diff --check` sin rango, que era defecto **mío** |
+| 2 | `(3,4)` | goteo: el banco no distingue registro de vigencia (deuda 27), la guarda que alcanzaba a un filtro ajeno, y el discriminante real de la vía |
+| 3 | `(1,1)` | la sobreafirmación llegaba al **usuario**, no solo a la ficha |
+| 4 | `(0,0)` | aprobada |
+
+**Lo que verifiqué yo, ejecutándolo y no leyéndolo**: la medición reproducida al
+dígito en cada head; **tres mutaciones aplicadas a mano** —el extremo sin
+reescribir, la guarda del extremo ilegible, y la cadena volviendo a afirmar
+vigencia—, cada una matando **solo** las pruebas nuevas correspondientes; el
+`git diff --check` con rango; las cuatro ramas de la guarda parametrizada; y la
+remedición sobre `main` tras fusionar. La puerta previa a fusionar pasó sus diez
+comprobaciones en cero, con `behind_by = 0` confirmado antes de publicar la
+orden.
+
+**Y lo que NO verifiqué, que es la lección del día**: qué significaban las
+cifras (deuda 27) y qué le dice el motor al usuario. Las dos las encontró la
+revisión. Están en la entrada 78 como raíces 2 y 3.
+
+**Palanca 3 lanzada como #579**, con las dos etiquetas juntas y el cuerpo
+pasado por el **validador real** antes de publicarlo (código 0) —la activación
+de H1 se rechazó por cuerpo incompleto y costó una vuelta—. El encargo va
+corregido en todo lo que la auditoría de esta tarde desmintió: que no depende de
+la palanca 2, que la puerta cerrada aplana la cardinalidad a `EXHAUSTIVA`, que
+el diagnóstico mide la **entrada** de la palanca y no su resultado, que
+`git diff --check` lleva rango, y con la deuda 27 incorporada como regla de
+evidencia heredada.
+
+**Estado de la línea de memoria tras H1**: la columna de hallados está
+terminada por parte del ciclo —los tres huecos que quedan son decisiones del
+propietario (H3, H4 y el H5 hallado hoy)—. Lo que sigue abierto a trabajo es
+**exactas** y **de más**, y a eso apunta #579.
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
