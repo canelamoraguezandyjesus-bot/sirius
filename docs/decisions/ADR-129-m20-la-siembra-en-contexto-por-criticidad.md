@@ -110,9 +110,18 @@ Predicción escrita antes de construir (incidencia #516, objetivo, punto h):
   (si sube, regístralo); elementos de más SUBEN claramente y sin cota (la
   siembra mete en cada consulta todo lo no ordinario del ámbito, y el doble
   no poda) — regístralo y explícalo, no es motivo de parada.
-- Máquina del propietario con Ollama real: críticas perdidas 3 → 0 y
-  elementos de más podados por el filtro — **fila PENDIENTE de medir por el
-  propietario**, no estimada ni inventada aquí.
+- Máquina del propietario con Ollama real, **medido el 05-09-2026**
+  (`qwen3:4b-instruct`, espera 30 s, 47 llamadas, 0 rendiciones, 0,8 min,
+  main `a07c5d5`): críticas perdidas **3 → 0** — DEC-003, MEM-014 y MEM-016
+  de B04-CA-34 y DEC-003 de B04-CA-33 pasan de `NO_ENTRO` en el laboratorio
+  a `OK` en producción —, cobertura **70/81** (suelo D1 63: alcanza),
+  aciertos exactos 8/47, y los elementos de más que el doble del runner
+  dejaba sin cota quedan **podados por el filtro a 218** (el medidor los
+  clasifica como ruido tolerable; frente a los 39 del 02-09 sin siembra, es
+  el precio de sembrar todo lo no ordinario del ámbito, tal como esta
+  decisión aceptó). Registro completo en
+  `docs/audits/evidencia-experimento-filtro-fiel-al-laboratorio.md`, sección
+  «Resultado en la máquina del propietario (Ollama real, 05-09-2026)».
 
 Criterio de parada: si en el runner las `NO_ENTRO` no bajan a 0, o si algún
 caso PIERDE una crítica que antes tenía, se para y se busca la raíz (regla
@@ -309,7 +318,10 @@ Comandos ejecutados tras completar la implementación, en este orden:
   sube sin cota conocida — la poda del ruido pasa a depender enteramente
   del filtro y de RF-25/RF-26 (M19b), tal como registra la Decisión 2 y tal
   como predecía el objetivo de esta incidencia. La medición con Ollama real
-  sobre esa poda queda pendiente, en la máquina del propietario.
+  sobre esa poda llegó el 05-09-2026 (máquina del propietario): 218
+  elementos de más tras el filtro, frente a los 39 de antes de la siembra,
+  con 0 críticas perdidas y cobertura 70/81 — el intercambio exacto que esta
+  decisión aceptó, ahora medido.
 - Con la puerta cerrada, el comportamiento de hoy no cambia: la siembra
   vive exclusivamente en `_rank_via_staged_engine`, que ni se ejecuta.
 

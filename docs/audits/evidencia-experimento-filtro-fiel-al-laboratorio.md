@@ -256,6 +256,56 @@ idéntica, dio 0. No se investigó la causa (transitoria, probablemente el model
 descargándose o recargándose); el medidor ahora publica el motivo de cada
 rendición para que, si se repite, quede registrado en vez de adivinado.
 
+### Resultado en la máquina del propietario (Ollama real, 05-09-2026)
+
+Tras la ola de criticidad entera (M18b → M21b: ADR-126 a ADR-131) más los
+guardianes G1-G3. `uv run python scripts/medir_banco_con_ollama_real.py
+--diagnostico`, modelo `qwen3:4b-instruct`, espera 30 s, sobre main
+`a07c5d5`: **47 llamadas, 0 rendiciones, 0,8 min** — medición válida por su
+propio criterio.
+
+Métricas: 8/47 aciertos exactos (suelo D1 29/47: por debajo), 218 de más
+(ruido tolerable), **0 críticas perdidas** (suelo D1 ≤ 1: alcanza), **70/81**
+de cobertura (suelo D1 63: alcanza).
+
+| caso | crítica | laboratorio (fila 4) | producción (propietario, 05-09) |
+|---|---|---|---|
+| B04-CA-33 | DEC-003 | NO_ENTRO | OK |
+| B04-CA-34 | DEC-003, MEM-014, MEM-016 | NO_ENTRO | OK |
+
+Laboratorio, fila 4: 4 críticas perdidas (`NO_ENTRO`: 4). Producción, hoy: 0.
+
+**Comparado con el 02-09 (misma máquina, mismo modelo, antes de M19b y
+M20):** críticas perdidas **10 → 0**, cobertura **59 → 70/81**, aciertos
+exactos 22 → 8, elementos de más 39 → 218. Las nueve pérdidas por `NO_ENTRO`
+del 02-09 (B04-CA-02, B04-CA-31 y B04-CA-34) y la única
+`TIRADO_POR_EL_FILTRO` (DEC-003 en B04-CA-23) han desaparecido todas: la
+siembra (M20, ADR-129) pone lo crítico delante del filtro y el rescate por
+criticidad (M19b, ADR-128) impide que el modelo lo tire. El precio, aceptado
+por escrito en ADR-129 antes de medirlo: la siembra mete en cada consulta
+todo lo no ordinario del ámbito y el filtro solo lo poda hasta 218 de más;
+los aciertos exactos bajan porque la respuesta trae más de lo pedido, no
+menos. La métrica que la Decisión 1 protege —ninguna crítica perdida— pasa de
+incumplida por diez a cumplida.
+
+Nota operativa de la ejecución: una corrida previa del mismo comando falló
+antes de medir nada, con `uv` incapaz de reinstalar el paquete del proyecto
+(«Acceso denegado» al borrar el `dist-info` del `.venv`, que vive dentro de
+una carpeta sincronizada por OneDrive); la siguiente corrida reinstaló con un
+aviso de `RECORD` ausente y midió entera. El aviso no afectó al resultado —el
+banco corrió los 47 casos— y el `.venv` bajo OneDrive queda anotado como
+riesgo de la máquina, no del código.
+
+**Disciplina de esta medición (ADR-001).** Criterio de parada: los suelos de
+la Decisión 1 de este documento (29/47 exactos, ≤ 1 crítica perdida, 63/81 de
+cobertura), escritos antes de medir; las filas que ADR-128 y ADR-129 dejaron
+pendientes fijaban qué se mediría y contra qué. Afirmación: M19b + M20
+alcanzan los dos suelos que la Decisión 1 protege (críticas perdidas y
+cobertura) y no el de aciertos exactos. Comprobación: la ejecución transcrita
+arriba, con su diagnóstico por caso y la comparación contra el 02-09 en la
+misma máquina y con el mismo modelo. No hay decisión nueva: esta sección
+rellena las filas pendientes de los dos ADR y deja escrito el precio medido.
+
 ## Medición previa a la decisión: qué haría cada forma de marcar lo crítico
 
 **Pregunta:** antes de decidir cómo se marca lo crítico en producción, ¿qué

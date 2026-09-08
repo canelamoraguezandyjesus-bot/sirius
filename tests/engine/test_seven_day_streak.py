@@ -19,6 +19,8 @@ de este fichero es:
 8. Los dos lectores de ``cron`` del repositorio -el del motor y el minilector
    de este fichero, independiente a propósito- hablan el MISMO dialecto, y una
    tabla de equivalencia impide que vuelvan a divergir en silencio (ADR-143).
+9. La pasada mide y declara CÓMO llegó -retraso de entrega e higiene de su
+   ventana previa- sin que ningún veredicto cambie (ADR-151).
 """
 
 from __future__ import annotations
@@ -34,21 +36,30 @@ import yaml
 from sirius_engine.domain.authority import Autoridad, autoridad_de_clase
 from sirius_engine.domain.events import AggregateType, Event
 from sirius_engine.domain.work_item import WorkItemClass, create_work_item
+from sirius_engine.ports.github_mirror import (
+    LecturaEstado,
+    LecturaRunsEnVentana,
+    RunEnVentana,
+)
 from sirius_engine.projection_verifier import (
     EJE_ESTADO,
     EJE_FASE,
+    EntregaDeLaPasada,
     LineaRegistro,
     ResultadoEje,
     VeredictoEje,
     formatear_linea,
 )
 from sirius_engine.seven_day_streak import (
+    NOMBRE_DEL_WORKFLOW_DEL_CONTADOR,
     _expandir_campo,
     anadir_lineas,
+    declarar_entrega_de_la_pasada,
     detectar_correcciones_manuales,
     evaluar_racha,
     hora_recomendada_pasada,
     leer_registro,
+    medir_entrega_de_la_pasada,
 )
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -896,3 +907,244 @@ def test_el_paso_sobre_rango_lo_rechazan_los_dos_con_el_campo_en_el_mensaje() ->
 def test_el_comodin_en_minuto_expande_a_los_sesenta_en_los_dos() -> None:
     assert _expandir_campo("*", 60, "minuto") == list(range(60))
     assert expandir_campo_del_oraculo("*", 60, "minuto") == list(range(60))
+
+
+# --- 9. La entrega de la pasada: se mide, se declara, y no juzga (ADR-151) ---
+
+
+_HORA_PROGRAMADA = time(hour=3, minute=24)
+
+
+def _run(workflow: str, *, run_id: str = "1", inicio: datetime | None = None) -> RunEnVentana:
+    momento = inicio or datetime(2026, 8, 22, 3, 0, tzinfo=UTC)
+    return RunEnVentana(run_id=run_id, workflow=workflow, inicio=momento, fin=momento)
+
+
+def _lectura(*runs: RunEnVentana) -> LecturaRunsEnVentana:
+    return LecturaRunsEnVentana(estado=LecturaEstado.OK, runs=runs)
+
+
+def test_una_pasada_puntual_con_ventana_vacia_no_declara_retraso_y_dice_cuantos_runs() -> None:
+    entrega = medir_entrega_de_la_pasada(
+        ahora=datetime(2026, 8, 22, 3, 24, tzinfo=UTC),
+        hora_programada=_HORA_PROGRAMADA,
+        lectura_runs=_lectura(),
+    )
+
+    assert entrega.retraso_min == 0
+    assert entrega.runs_en_ventana == ()
+    assert entrega.lectura_de_runs is LecturaEstado.OK
+    texto = declarar_entrega_de_la_pasada(
+        entrega, ahora=datetime(2026, 8, 22, 3, 24, tzinfo=UTC), hora_programada=_HORA_PROGRAMADA
+    )
+    assert "retraso" not in texto
+    assert "ventana previa tranquila: 0 runs" in texto
+
+
+def test_una_pasada_tardia_mide_los_minutos_reales_y_nombra_los_runs_de_la_ventana() -> None:
+    """El caso REAL: las ocho últimas pasadas llegaron entre 4h20 y 6h50 tarde (#550)."""
+    ahora = datetime(2026, 8, 22, 8, 4, tzinfo=UTC)
+
+    entrega = medir_entrega_de_la_pasada(
+        ahora=ahora,
+        hora_programada=_HORA_PROGRAMADA,
+        lectura_runs=_lectura(
+            _run("implement-sirius-work.yml", run_id="11"),
+            _run("implement-sirius-work.yml", run_id="12"),
+        ),
+    )
+
+    assert entrega.retraso_min == 280, "de 03:24 a 08:04 hay 4 h 40 min"
+    assert entrega.runs_en_ventana == (
+        "implement-sirius-work.yml#11",
+        "implement-sirius-work.yml#12",
+    )
+    texto = declarar_entrega_de_la_pasada(entrega, ahora=ahora, hora_programada=_HORA_PROGRAMADA)
+    assert "280 min de retraso" in texto
+    assert "03:24" in texto
+    assert "NO tranquila: 2 runs" in texto
+    assert "implement-sirius-work.yml#11" in texto
+
+
+def test_una_pasada_lanzada_antes_de_hora_no_se_declara_como_retraso() -> None:
+    """`workflow_dispatch` a deshora: retraso 0, y el texto dice qué fue en realidad."""
+    ahora = datetime(2026, 8, 22, 2, 39, tzinfo=UTC)
+
+    entrega = medir_entrega_de_la_pasada(
+        ahora=ahora, hora_programada=_HORA_PROGRAMADA, lectura_runs=_lectura()
+    )
+
+    assert entrega.retraso_min == 0, "un adelanto no es un retraso negativo"
+    texto = declarar_entrega_de_la_pasada(entrega, ahora=ahora, hora_programada=_HORA_PROGRAMADA)
+    assert "45 min ANTES" in texto
+    assert "no es un retraso" in texto
+
+
+def test_una_lectura_de_runs_caida_nunca_se_declara_como_ventana_tranquila() -> None:
+    ahora = datetime(2026, 8, 22, 3, 24, tzinfo=UTC)
+
+    entrega = medir_entrega_de_la_pasada(
+        ahora=ahora,
+        hora_programada=_HORA_PROGRAMADA,
+        lectura_runs=LecturaRunsEnVentana(
+            estado=LecturaEstado.NO_DISPONIBLE, error="gh api devolvió un error"
+        ),
+    )
+
+    assert entrega.lectura_de_runs is LecturaEstado.NO_DISPONIBLE
+    assert entrega.runs_en_ventana == ()
+    texto = declarar_entrega_de_la_pasada(entrega, ahora=ahora, hora_programada=_HORA_PROGRAMADA)
+    assert "no se pudieron leer los runs" in texto
+    assert "tranquila" not in texto, (
+        "confundir «no pude leer» con «no había nada» es exactamente el defecto que "
+        "el puerto documenta haberse cometido cinco veces"
+    )
+
+
+def test_los_runs_del_propio_contador_no_ensucian_su_propia_ventana() -> None:
+    """Mismo criterio NOMBRADO que ADR-144: una pasada no se estorba a sí misma."""
+    entrega = medir_entrega_de_la_pasada(
+        ahora=datetime(2026, 8, 22, 3, 24, tzinfo=UTC),
+        hora_programada=_HORA_PROGRAMADA,
+        lectura_runs=_lectura(
+            _run(NOMBRE_DEL_WORKFLOW_DEL_CONTADOR, run_id="9"),
+            _run("motor-sirius.yml", run_id="10"),
+        ),
+    )
+
+    assert entrega.runs_en_ventana == ("motor-sirius.yml#10",)
+
+
+def test_una_entrega_con_retraso_negativo_no_se_puede_construir() -> None:
+    with pytest.raises(ValueError, match="no puede ser negativo"):
+        EntregaDeLaPasada(retraso_min=-1, runs_en_ventana=(), lectura_de_runs=LecturaEstado.OK)
+
+
+def test_una_lectura_caida_con_runs_dentro_no_se_puede_construir() -> None:
+    with pytest.raises(ValueError, match="no puede traer runs"):
+        EntregaDeLaPasada(
+            retraso_min=0,
+            runs_en_ventana=("motor-sirius.yml#1",),
+            lectura_de_runs=LecturaEstado.NO_DISPONIBLE,
+        )
+
+
+def test_la_entrega_se_declara_en_el_motivo_y_no_toca_el_conteo() -> None:
+    dias = _rango(_HOY - timedelta(days=6), _HOY)
+    lineas = [_linea_verde(dia) for dia in dias]
+
+    sin_entrega = evaluar_racha(lineas=lineas, eventos=(), clase=_CLASE, hoy=_HOY)
+    con_entrega = evaluar_racha(
+        lineas=lineas,
+        eventos=(),
+        clase=_CLASE,
+        hoy=_HOY,
+        entrega_hoy="pasada entregada con 280 min de retraso sobre las 03:24 UTC programadas",
+    )
+
+    assert con_entrega.cumple == sin_entrega.cumple
+    assert con_entrega.dias_consecutivos == sin_entrega.dias_consecutivos
+    assert "280 min de retraso" in con_entrega.motivo
+    assert "280 min de retraso" not in sin_entrega.motivo
+
+
+def test_una_linea_con_entrega_va_y_vuelve_del_registro_sin_perder_la_medida(
+    tmp_path: Path,
+) -> None:
+    entrega = EntregaDeLaPasada(
+        retraso_min=280,
+        runs_en_ventana=("implement-sirius-work.yml#11",),
+        lectura_de_runs=LecturaEstado.OK,
+    )
+    linea = LineaRegistro(
+        instante=_instante(_HOY),
+        clase=_CLASE,
+        work_id=_WORK_ID,
+        veredictos=(VeredictoEje(eje=EJE_FASE, resultado=ResultadoEje.COINCIDE),),
+        entrega=entrega,
+    )
+    registro = tmp_path / "racha.jsonl"
+
+    assert anadir_lineas(registro, [linea]) == 1
+
+    (leida,) = leer_registro(registro)
+    assert leida.entrega == entrega
+
+
+def test_un_registro_con_lineas_viejas_y_nuevas_se_lee_y_se_evalua_igual(
+    tmp_path: Path,
+) -> None:
+    """El registro solo crece: las líneas de antes de ADR-151 no llevan `entrega`.
+
+    Ausente no es «cero de retraso y ventana tranquila» -eso sería inventar una
+    medida que nadie tomó-: es «no medido», y el contador cuenta exactamente
+    igual con ellas.
+    """
+    dias = _rango(_HOY - timedelta(days=6), _HOY)
+    viejas = [_linea_verde(dia) for dia in dias[:-1]]
+    nueva = LineaRegistro(
+        instante=_instante(dias[-1]),
+        clase=_CLASE,
+        work_id=_WORK_ID,
+        veredictos=(
+            VeredictoEje(eje=EJE_FASE, resultado=ResultadoEje.COINCIDE),
+            VeredictoEje(eje=EJE_ESTADO, resultado=ResultadoEje.COINCIDE),
+        ),
+        entrega=EntregaDeLaPasada(
+            retraso_min=280, runs_en_ventana=(), lectura_de_runs=LecturaEstado.OK
+        ),
+    )
+    registro = tmp_path / "racha.jsonl"
+    anadir_lineas(registro, [*viejas, nueva])
+
+    leidas = leer_registro(registro)
+
+    assert [linea.entrega for linea in leidas[:-1]] == [None] * len(viejas)
+    assert leidas[-1].entrega is not None
+    evaluacion = evaluar_racha(lineas=leidas, eventos=(), clase=_CLASE, hoy=_HOY)
+    assert evaluacion.cumple is True
+    assert evaluacion.dias_consecutivos == 7
+
+
+def test_una_linea_sin_entrega_se_serializa_exactamente_como_antes_de_adr_151() -> None:
+    """Si el campo se emitiera siempre -aunque fuera `null`-, el texto cambiaría.
+
+    Y el registro deduplica por TEXTO EXACTO (`anadir_lineas`, requisito 6):
+    una línea vieja y su equivalente nueva dejarían de ser la misma, y la
+    historia del registro se duplicaría en silencio.
+    """
+    texto = formatear_linea(_linea_verde(_HOY))
+
+    assert "entrega" not in texto
+
+
+def test_un_fichero_con_las_dos_formas_de_linea_se_lee_entero(tmp_path: Path) -> None:
+    """Las dos formas, escritas como TEXTO CRUDO: la de antes de ADR-151 y la de después.
+
+    Construir las dos líneas con el serializador probaría que el serializador
+    se entiende consigo mismo. Lo que hay que probar es que una línea escrita
+    por la versión ANTERIOR del código -que no conocía `entrega`- se sigue
+    leyendo, y para eso su texto tiene que venir de fuera del serializador.
+    """
+    registro = tmp_path / "racha.jsonl"
+    registro.write_text(
+        '{"clase": "programacion", "ejes": [{"eje": "fase", "motivo": null, '
+        '"resultado": "coincide"}], "instante": "2026-08-21T12:00:00+00:00", '
+        '"work_id": "WI-VIEJA"}\n'
+        '{"clase": "programacion", "ejes": [{"eje": "fase", "motivo": null, '
+        '"resultado": "coincide"}], "entrega": {"lectura_de_runs": "ok", '
+        '"retraso_min": 280, "runs_en_ventana": ["implement-sirius-work.yml#11"]}, '
+        '"instante": "2026-08-22T12:00:00+00:00", "work_id": "WI-NUEVA"}\n',
+        encoding="utf-8",
+    )
+
+    vieja, nueva = leer_registro(registro)
+
+    assert vieja.work_id == "WI-VIEJA"
+    assert vieja.entrega is None, "campo ausente = no medido, nunca «cero de retraso»"
+    assert vieja.es_verde is True
+    assert nueva.entrega is not None
+    assert nueva.entrega.retraso_min == 280
+    assert nueva.entrega.runs_en_ventana == ("implement-sirius-work.yml#11",)
+    assert nueva.entrega.lectura_de_runs is LecturaEstado.OK
+    assert nueva.es_verde is True, "la entrega no participa en si el día fue verde"

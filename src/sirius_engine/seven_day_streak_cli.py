@@ -17,6 +17,13 @@ comando:
    (:func:`sirius_engine.seven_day_streak.evaluar_racha`) y la publica por
    salida estándar.
 
+Y, desde ADR-151, **mide cómo llegó la propia pasada** antes de comparar nada:
+con cuánto retraso sobre su hora derivada (ADR-144) y si su ventana previa
+estuvo tranquila según los runs reales de Actions. Esa medida va al ``motivo``
+de cada clase y al campo opcional ``entrega`` de cada línea nueva. Es medida,
+no veredicto: ningún eje cambia de resultado por llegar tarde ni por cruzarse
+con otros runs.
+
 **No conmuta nada** (contrato §11.3): ninguna llamada de este módulo toca
 ``sirius_engine.domain.authority`` ni ningún estado del motor. Publica y
 registra; la conmutación, si algún día llega, es un acto aparte y de otro
@@ -71,7 +78,8 @@ import argparse
 import os
 import sys
 from collections.abc import Mapping, Sequence
-from datetime import UTC, datetime
+from dataclasses import replace
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from sirius_engine.adapters.durable.dispatch_journal import DurableDispatchJournal
@@ -83,7 +91,7 @@ from sirius_engine.authority_reversion import (
     formatear_aviso_reversion,
     leer_registro_conmutaciones,
 )
-from sirius_engine.cli import resolver_diario
+from sirius_engine.cli import REPO, resolver_diario
 from sirius_engine.domain.authority import Autoridad, autoridad_de_clase
 from sirius_engine.domain.events import AggregateType
 from sirius_engine.domain.mirror import EspejoIlegibleError
@@ -95,15 +103,18 @@ from sirius_engine.ports.store import WorkEngineStore
 from sirius_engine.projection_verifier import (
     CLASES_CON_ESTADO_PROPIO,
     ContextoEjesDiarios,
+    EntregaDeLaPasada,
     ventana_tolerancia_etiqueta_maquina,
     verificar_dia,
 )
 from sirius_engine.seven_day_streak import (
     DIAS_REQUERIDOS,
     anadir_lineas,
+    declarar_entrega_de_la_pasada,
     evaluar_racha,
     hora_recomendada_pasada,
     leer_registro,
+    medir_entrega_de_la_pasada,
 )
 
 COMANDO = "sirius-racha"
@@ -190,6 +201,14 @@ def _parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--repo",
+        default=REPO,
+        help=(
+            "repositorio cuyos runs de Actions se miran para saber si la ventana previa a "
+            f"esta pasada estuvo tranquila (por defecto {REPO})"
+        ),
+    )
+    parser.add_argument(
         "--hora-recomendada",
         action="store_true",
         help=(
@@ -242,6 +261,20 @@ def main(
     registro = Path(args.registro) if args.registro else raiz / _REGISTRO_RELATIVO
     ventana_tolerancia = ventana_tolerancia_etiqueta_maquina(workflows_dir)
 
+    # --- Cómo llegó ESTA pasada (ADR-151) ------------------------------------
+    #
+    # ADR-144 derivó la hora tranquila; su premisa es que nada mueve etiquetas
+    # en la ventana previa. Se mide aquí, y solo se mide: ningún veredicto de
+    # ningún eje cambia por esto. Se hace ANTES de comparar nada para que la
+    # ventana se lea lo más cerca posible del `ahora` con el que se compara.
+    entrega, entrega_declarada = _medir_entrega(
+        ahora=ahora,
+        workflows_dir=workflows_dir,
+        ventana_tolerancia=ventana_tolerancia,
+        mirror=mirror,
+        repo=args.repo,
+    )
+
     lineas_nuevas = []
     lecturas_caidas_por_clase: dict[WorkItemClass, list[str]] = {}
     for work_id in _work_ids_conocidos(store):
@@ -267,29 +300,31 @@ def main(
                 f"{work_id} (incidencia #{episodio.numero_incidencia})"
             )
             continue
-        lineas_nuevas.append(
-            verificar_dia(
-                motor=item,
-                espejo=espejo,
-                # Ningún proveedor de este comando conoce todavía cuándo se
-                # aplicó la etiqueta de máquina vigente -el puerto del
-                # espejo (`GitHubMirrorPort`) no expone esa lectura-, así
-                # que la edad se declara desconocida. `verificar_dia` ya
-                # trata una edad desconocida de forma segura: las ventanas
-                # 1 y 4 (residencia normal de etiqueta) no protegen nada, y
-                # una divergencia real sigue leyéndose como divergencia
-                # (nunca como un verde inventado).
-                contexto=ContextoEjesDiarios(edad_etiqueta_maquina=None),
-                ventana_tolerancia=ventana_tolerancia,
-                instante=ahora,
-                # H-25 (#376): la precondición del §11.2 como hecho declarado.
-                # Mientras el conjunto esté vacío -hoy lo está-, cada línea
-                # sale NO_COMPARABLE diciendo que la etapa no ha empezado, en
-                # vez de una DIVERGENCIA que acusa al motor de no llevar un
-                # estado que nada le escribe todavía.
-                clases_con_estado_propio=CLASES_CON_ESTADO_PROPIO,
-            )
+        linea_del_dia = verificar_dia(
+            motor=item,
+            espejo=espejo,
+            # Ningún proveedor de este comando conoce todavía cuándo se
+            # aplicó la etiqueta de máquina vigente -el puerto del
+            # espejo (`GitHubMirrorPort`) no expone esa lectura-, así
+            # que la edad se declara desconocida. `verificar_dia` ya
+            # trata una edad desconocida de forma segura: las ventanas
+            # 1 y 4 (residencia normal de etiqueta) no protegen nada, y
+            # una divergencia real sigue leyéndose como divergencia
+            # (nunca como un verde inventado).
+            contexto=ContextoEjesDiarios(edad_etiqueta_maquina=None),
+            ventana_tolerancia=ventana_tolerancia,
+            instante=ahora,
+            # H-25 (#376): la precondición del §11.2 como hecho declarado.
+            # Mientras el conjunto esté vacío -hoy lo está-, cada línea
+            # sale NO_COMPARABLE diciendo que la etapa no ha empezado, en
+            # vez de una DIVERGENCIA que acusa al motor de no llevar un
+            # estado que nada le escribe todavía.
+            clases_con_estado_propio=CLASES_CON_ESTADO_PROPIO,
         )
+        # La entrega se anexa a la línea YA verificada, sin pasar por
+        # `verificar_dia`: ese es el juez, y darle un dato que no juzga solo
+        # abriría la puerta a que algún día lo juzgara.
+        lineas_nuevas.append(replace(linea_del_dia, entrega=entrega))
 
     anadidas = anadir_lineas(registro, lineas_nuevas)
     linea(f"Pasada registrada: {anadidas} línea(s) nueva(s) en {registro}.")
@@ -306,6 +341,7 @@ def main(
             clase=clase,
             hoy=ahora.date(),
             lecturas_caidas_hoy=tuple(lecturas_caidas_por_clase.get(clase, ())),
+            entrega_hoy=entrega_declarada,
         )
         estado = "CUMPLE" if evaluacion.cumple else "no cumple"
         linea(f"{clase.value} ({DIAS_REQUERIDOS} días requeridos): {estado} — {evaluacion.motivo}")
@@ -355,6 +391,44 @@ def main(
     linea("Esta pasada no conmuta NADA hacia el motor (contrato §11.3): solo mide,")
     linea("registra y, si hace falta, devuelve el mando a GitHub (§11.4).")
     return 0
+
+
+def _medir_entrega(
+    *,
+    ahora: datetime,
+    workflows_dir: Path,
+    ventana_tolerancia: timedelta,
+    mirror: GitHubMirrorPort,
+    repo: str,
+) -> tuple[EntregaDeLaPasada | None, str]:
+    """Mide cómo llegó esta pasada, o dice por qué no se pudo medir. Nunca revienta.
+
+    Devuelve la medida para la línea del registro -``None`` si no se pudo
+    medir, que el registro lee como "no medido"- y el texto para el ``motivo``,
+    que en ese caso explica la razón en vez de callarla.
+
+    POR QUÉ NO SE DEJA PROPAGAR EL FALLO. La hora programada la deriva
+    :func:`hora_recomendada_pasada`, que lanza a propósito cuando ninguna hora
+    del día dejaría tranquila la ventana de tolerancia -el escenario del margen
+    de dos minutos que vigila ``tests/automation/test_contador_de_siete_dias.py``.
+    Ese día debe salir en ROJO en esa prueba, no matar la pasada diaria: perder
+    la medición del día entero por no poder medir el retraso sería cambiar un
+    aviso por una avería.
+    """
+    try:
+        hora_programada, _motivo = hora_recomendada_pasada(workflows_dir)
+    except ValueError as error:
+        return None, f"no se pudo derivar la hora programada de la pasada ({error}): sin medir"
+    entrega = medir_entrega_de_la_pasada(
+        ahora=ahora,
+        hora_programada=hora_programada,
+        lectura_runs=mirror.listar_runs_en_ventana(
+            repo=repo, desde=ahora - ventana_tolerancia, hasta=ahora
+        ),
+    )
+    return entrega, declarar_entrega_de_la_pasada(
+        entrega, ahora=ahora, hora_programada=hora_programada
+    )
 
 
 def hora_recomendada(workflows_dir: Path) -> str:

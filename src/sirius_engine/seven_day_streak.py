@@ -41,6 +41,14 @@ El cierre de la incidencia #265 midió que, con la tolerancia vigente, un día
 solo puede salir verde si nada se movió en las tres horas previas a la
 pasada: elegir la hora a ojo desoiría esa medición.
 
+Y una quinta, que es la otra mitad de esa cuarta (ADR-151): derivar la hora
+tranquila no sirve de nada si la pasada no llega a ella.
+:func:`medir_entrega_de_la_pasada` mide con cuánto retraso llegó de verdad
+-`ahora` contra la hora derivada- y si su ventana previa estuvo tranquila
+según los runs reales de Actions; :func:`declarar_entrega_de_la_pasada` lo pone
+en palabras para el ``motivo``. **Mide y declara, no juzga**: ningún veredicto
+de ningún eje cambia por esto.
+
 Determinista y sin red: todo lo que sigue trabaja sobre lo que ya se leyó -el
 registro, el diario de eventos, los ficheros YAML del propio repositorio-,
 igual que exige :mod:`sirius_engine.projection_verifier`.
@@ -61,9 +69,11 @@ import yaml
 
 from sirius_engine.domain.events import AggregateType, Event
 from sirius_engine.domain.work_item import WorkItemClass
+from sirius_engine.ports.github_mirror import LecturaEstado, LecturaRunsEnVentana
 from sirius_engine.projection_verifier import (
     EJE_ESTADO,
     EJE_FASE,
+    EntregaDeLaPasada,
     LineaRegistro,
     ResultadoEje,
     VeredictoEje,
@@ -89,6 +99,24 @@ NOMBRE_DEL_WORKFLOW_DEL_CONTADOR = "contador-siete-dias.yml"
 # --- 1. El registro: JSONL versionado, solo crece ---------------------------
 
 
+def _parsear_entrega(datos: dict[str, Any]) -> EntregaDeLaPasada | None:
+    """La ``entrega`` de una línea, o ``None`` si esa línea no la trae.
+
+    El campo es POSTERIOR al registro (ADR-151) y el registro solo crece: las
+    líneas escritas antes no lo llevan y se siguen leyendo exactamente igual.
+    Ausente no es "cero minutos de retraso y ventana tranquila" -eso sería
+    inventar una medida que nadie tomó-: es "no medido", y por eso ``None``.
+    """
+    crudo = datos.get("entrega")
+    if crudo is None:
+        return None
+    return EntregaDeLaPasada(
+        retraso_min=int(crudo["retraso_min"]),
+        runs_en_ventana=tuple(str(run) for run in crudo["runs_en_ventana"]),
+        lectura_de_runs=LecturaEstado(crudo["lectura_de_runs"]),
+    )
+
+
 def _parsear_linea(texto: str) -> LineaRegistro:
     datos: dict[str, Any] = json.loads(texto)
     return LineaRegistro(
@@ -103,6 +131,7 @@ def _parsear_linea(texto: str) -> LineaRegistro:
             )
             for eje in datos["ejes"]
         ),
+        entrega=_parsear_entrega(datos),
     )
 
 
@@ -328,6 +357,7 @@ def evaluar_racha(
     hoy: date,
     dias_requeridos: int = DIAS_REQUERIDOS,
     lecturas_caidas_hoy: Sequence[str] = (),
+    entrega_hoy: str | None = None,
 ) -> EvaluacionRacha:
     """Cuenta la racha vigente de ``clase`` hacia atrás desde ``hoy``, sin conmutar nada.
 
@@ -356,6 +386,15 @@ def evaluar_racha(
     la condición mide- así que no rompe la racha (ADR-084); pero se declara
     en ``motivo`` para que un ``CUMPLE`` nunca calle que esta pasada tuvo
     lecturas caídas.
+
+    ``entrega_hoy`` es del mismo molde: una descripción ya formada por quien
+    invoca -:func:`declarar_entrega_de_la_pasada`- de CÓMO llegó esta pasada
+    (con cuánto retraso sobre su hora programada, y si su ventana previa estuvo
+    tranquila). Tampoco toca el conteo: el retraso de entrega no es una
+    discrepancia entre el motor y su incidencia, que es lo único que la
+    condición del §11.2 mide. Se anexa al ``motivo`` por la misma razón que las
+    lecturas caídas: un ``CUMPLE`` que calle que la pasada llegó cinco horas
+    tarde a una ventana sucia afirma más de lo que el dato sostiene (ADR-151).
     """
     lineas_clase = [linea for linea in lineas if linea.clase is clase]
     por_dia: dict[date, list[LineaRegistro]] = {}
@@ -406,6 +445,8 @@ def evaluar_racha(
             f"{motivo} — aviso: esta pasada no pudo leer "
             f"{', '.join(lecturas_caidas_hoy)} (no interrumpe el contador, contrato §11.2)"
         )
+    if entrega_hoy:
+        motivo = f"{motivo} — entrega: {entrega_hoy}"
     return EvaluacionRacha(
         clase=clase, cumple=cumple, dias_consecutivos=dias_consecutivos, motivo=motivo
     )
@@ -662,3 +703,96 @@ def hora_recomendada_pasada(workflows_dir: Path = _WORKFLOWS_DIR) -> tuple[time,
         f"{time(hour=inicio_max // 60, minute=inicio_max % 60).isoformat(timespec='minutes')} UTC)"
     )
     return hora, motivo
+
+
+# --- 5. La entrega de la pasada: con cuánto retraso llegó, y a qué ventana ---
+
+
+def _minutos_de_desfase(*, ahora: datetime, hora_programada: time) -> int:
+    """Minutos entre la hora programada de HOY y ``ahora``. Negativo = llegó antes.
+
+    El día natural sale de ``ahora``, no de un calendario aparte: la hora
+    programada es diaria (``24 3 * * *``), así que la del día de la pasada es
+    la única con la que tiene sentido compararla.
+    """
+    programada = datetime.combine(ahora.date(), hora_programada, tzinfo=ahora.tzinfo)
+    return int((ahora - programada).total_seconds() // 60)
+
+
+def medir_entrega_de_la_pasada(
+    *,
+    ahora: datetime,
+    hora_programada: time,
+    lectura_runs: LecturaRunsEnVentana,
+) -> EntregaDeLaPasada:
+    """Qué retraso trajo esta pasada y con qué se cruzó en su ventana previa.
+
+    Dos medidas, ninguna de ellas un veredicto (ADR-151):
+
+    1. **El retraso**, contra la hora que :func:`hora_recomendada_pasada`
+       deriva -la misma que el guardián de ADR-144 mantiene igual al ``cron``
+       cableado-. Nunca negativo: una pasada lanzada a mano antes de su hora no
+       llegó tarde, y decir que llegó con "-45 minutos de retraso" sería un
+       número con el signo haciendo de explicación.
+    2. **La higiene de la ventana previa**, según ``lectura_runs``: los runs
+       ajenos al propio contador que empezaron o terminaron en ella. Los del
+       contador no cuentan, por el mismo criterio NOMBRADO que ADR-144
+       (:data:`NOMBRE_DEL_WORKFLOW_DEL_CONTADOR`): una pasada no se estorba a
+       sí misma, y contarla daría siempre "ventana sucia".
+
+    Una lectura caída **no** produce "ventana tranquila": produce
+    ``lectura_de_runs = NO_DISPONIBLE`` con la lista vacía, que es un valor
+    distinto y se declara como tal.
+    """
+    retraso = max(0, _minutos_de_desfase(ahora=ahora, hora_programada=hora_programada))
+    if lectura_runs.estado is not LecturaEstado.OK or lectura_runs.runs is None:
+        return EntregaDeLaPasada(
+            retraso_min=retraso,
+            runs_en_ventana=(),
+            lectura_de_runs=LecturaEstado.NO_DISPONIBLE,
+        )
+    ajenos = tuple(
+        f"{run.workflow}#{run.run_id}"
+        for run in lectura_runs.runs
+        if run.workflow != NOMBRE_DEL_WORKFLOW_DEL_CONTADOR
+    )
+    return EntregaDeLaPasada(
+        retraso_min=retraso, runs_en_ventana=ajenos, lectura_de_runs=LecturaEstado.OK
+    )
+
+
+def declarar_entrega_de_la_pasada(
+    entrega: EntregaDeLaPasada, *, ahora: datetime, hora_programada: time
+) -> str:
+    """La medida de :func:`medir_entrega_de_la_pasada`, en palabras para el ``motivo``.
+
+    Se separa de la medida porque el texto dice una cosa que el dato no guarda:
+    una pasada lanzada a mano ANTES de su hora tiene ``retraso_min = 0`` igual
+    que una puntual, y son dos cosas distintas. El texto lo distingue mirando el
+    desfase con signo; el registro guarda la medida, que es lo que no envejece.
+    """
+    programada = hora_programada.isoformat(timespec="minutes")
+    desfase = _minutos_de_desfase(ahora=ahora, hora_programada=hora_programada)
+    if entrega.retraso_min > 0:
+        cuando = (
+            f"pasada entregada con {entrega.retraso_min} min de retraso sobre las "
+            f"{programada} UTC programadas"
+        )
+    elif desfase < 0:
+        cuando = (
+            f"pasada entregada {-desfase} min ANTES de las {programada} UTC programadas "
+            "(fuera de hora, no es un retraso)"
+        )
+    else:
+        cuando = f"pasada entregada a su hora programada ({programada} UTC)"
+
+    if entrega.lectura_de_runs is not LecturaEstado.OK:
+        ventana = "no se pudieron leer los runs de la ventana previa"
+    elif entrega.runs_en_ventana:
+        ventana = (
+            f"ventana previa NO tranquila: {len(entrega.runs_en_ventana)} runs "
+            f"({', '.join(entrega.runs_en_ventana)})"
+        )
+    else:
+        ventana = "ventana previa tranquila: 0 runs"
+    return f"{cuando}; {ventana}"

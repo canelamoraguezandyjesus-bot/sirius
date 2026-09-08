@@ -55,6 +55,29 @@ issue_from() { printf '%s' "$1" | grep -oE 'issues/[0-9]+' | head -1 | cut -d/ -
 case "$sub" in
   api)
     args="$*"
+    # ADR-149: runs de Quality del head (GET) y relanzamiento (POST). El GET
+    # sirve `quality_runs_<head>.json` (o ninguno) y aplica el `--jq` real del
+    # llamador; ambos anotan el token con el que llegaron, para poder afirmar
+    # que la lectura va con el de lectura y el POST con el PAT.
+    if printf '%s' "$args" | grep -q 'actions/workflows/quality.yml/runs'; then
+      [ -f "$D/quality_runs_fail" ] && { echo "503 runs" >&2; exit 1; }
+      [ -f "$D/quality_runs_illegible" ] && { echo "not-json"; exit 0; }
+      [ -f "$D/quality_runs_objeto" ] && { echo "{}"; exit 0; }
+      filtro_runs=""; prev=""
+      for a in "$@"; do [ "$prev" = "--jq" ] && filtro_runs="$a"; prev="$a"; done
+      h="$(printf '%s' "$args" | grep -oE 'head_sha=[0-9a-f]+' | cut -d= -f2)"
+      echo "QUALITY_RUNS ${h} token=${GH_TOKEN:-}" >> "$D/actions.log"
+      f_runs="$D/quality_runs_${h}.json"
+      [ -f "$f_runs" ] || printf '{"workflow_runs": []}' > "$f_runs"
+      jq -r "$filtro_runs" "$f_runs"
+      exit 0
+    fi
+    if printf '%s' "$args" | grep -qE 'actions/runs/[0-9]+/rerun'; then
+      rid="$(printf '%s' "$args" | grep -oE 'runs/[0-9]+' | cut -d/ -f2)"
+      echo "RERUN ${rid} token=${GH_TOKEN:-}" >> "$D/actions.log"
+      [ -f "$D/rerun_fails" ] && { echo "403 rerun" >&2; exit 1; }
+      exit 0
+    fi
     if printf '%s' "$args" | grep -q '/compare/'; then
       cat "$D/compare_response.json" 2>/dev/null || printf '{"files": []}'
       exit 0
@@ -782,6 +805,102 @@ def test_drip_guard_cli_total_failure_does_not_leak_foreign_posible_goteo(
     assert r.returncode == 0, r.stdout + r.stderr
     comments = _comments(env)
     assert "Guardián de goteo" not in comments
+
+
+def _break_drip_guard_cli(env: dict[str, str]) -> None:
+    """Deja `python3` inservible SOLO para `sirius_drip_guard_cli.py`.
+
+    El resto de invocaciones (sirius_convergence.py: record, family-check)
+    siguen usando el intérprete real, para no tapar la ronda entera con un
+    entorno sin Python.
+    """
+    real_python3 = shutil.which("python3")
+    assert real_python3 is not None
+    bin_dir = Path(env["PATH"].split(os.pathsep, 1)[0])
+    fake_python3 = bin_dir / "python3"
+    fake_python3.write_text(
+        "#!/usr/bin/env bash\n"
+        "if printf '%s' \"$*\" | grep -q sirius_drip_guard_cli.py; then\n"
+        "  echo 'python3 no disponible (simulado)' >&2\n"
+        "  exit 127\n"
+        "fi\n"
+        f'exec "{real_python3}" "$@"\n',
+        encoding="utf-8",
+    )
+    fake_python3.chmod(0o755)
+
+
+@pytest.mark.parametrize("guardian_caido", [False, True], ids=["guardian-vivo", "guardian-caido"])
+def test_foreign_posible_goteo_is_dropped_when_reading_the_observations(
+    tmp_path: Path, guardian_caido: bool
+) -> None:
+    """Incidencia #558 (deuda de #503).
+
+    `posible_goteo` está reservada al guardián de goteo. Si el veredicto del
+    revisor ya trae esa clave, se retira al LEER las observaciones -junto al
+    saneado-, así que ningún consumidor posterior puede reenviarla: ni el
+    comentario `CHANGES_REQUESTED` (bloque legible y bloque
+    OBSERVACIONES_ESTRUCTURADAS) ni el registro de ronda. Vale igual con el
+    guardián disponible que con el guardián caído.
+
+    Antes del cambio esta prueba falla en los dos casos: la retirada vivía
+    solo aguas abajo (guardián y rama `else`), y `$observations` -que es lo
+    que se incrusta en OBSERVACIONES_ESTRUCTURADAS y lo que alimenta el
+    registro de ronda- conservaba la marca ajena tal cual.
+    """
+    head1, head2 = "7777aaaa7777", "8888bbbb8888"
+    env = _setup(tmp_path)
+    _seed_issue(env, ["sirius:reviewing"], comments=_seed_round1_history(head1, head2))
+    _seed_pr(env, 9, head=head2)
+    # Línea 10 AÑADIDA en el hunk: con el guardián vivo no hay goteo que
+    # marcar, así que cualquier `posible_goteo` que aparezca en el comentario
+    # solo puede venir del revisor.
+    patch = "@@ -8,2 +8,4 @@\n context\n+añadida\n+línea 10 añadida\n context"
+    _seed_compare(env, files=[{"filename": "src/x.py", "status": "modified", "patch": patch}])
+    if guardian_caido:
+        _break_drip_guard_cli(env)
+
+    marca_ajena = "marca ajena inventada por el revisor"
+    vf = _verdict_file(
+        tmp_path,
+        {
+            "verdict": "CHANGES_REQUESTED",
+            "summary": "hay defectos",
+            "reviewed_head_sha": head2,
+            "observations": [
+                {
+                    "id": "CLAUDE-REV-558",
+                    "severidad": "alta",
+                    "archivo": "src/x.py:10",
+                    "problema": "la línea 10 nueva no valida entrada",
+                    "criterio_esperado": "debe validar",
+                    "prueba": "test_x_invalid",
+                    "limites_correccion": "solo src/x.py",
+                    "posible_goteo": marca_ajena,
+                }
+            ],
+        },
+    )
+    r = _run(env, "reviewer", vf)
+    assert r.returncode == 0, r.stdout + r.stderr
+    comments = _comments(env)
+    # La ronda se publica igual: lo que desaparece es la clave reservada.
+    assert "## CHANGES_REQUESTED" in comments
+    assert "CLAUDE-REV-558" in comments
+    assert marca_ajena not in comments
+    assert "posible_goteo" not in comments
+    assert "Guardián de goteo" not in comments
+
+    bloque_obs = re.search(
+        r"## OBSERVACIONES_ESTRUCTURADAS\n```json\n(.*?)\n```", comments, re.DOTALL
+    )
+    assert bloque_obs is not None, comments
+    assert "posible_goteo" not in json.loads(bloque_obs.group(1))[0]
+
+    # El historial ya trae el registro de la ronda 1: se comprueban todos.
+    bloques_ronda = re.findall(r"## RONDA_HALLAZGOS\n```json\n(.*?)\n```", comments, re.DOTALL)
+    assert len(bloques_ronda) == 2, comments
+    assert all("posible_goteo" not in bloque for bloque in bloques_ronda)
 
 
 def test_reviewer_changes_requested_increments_the_round_number(tmp_path: Path) -> None:
@@ -1678,3 +1797,229 @@ def test_without_actions_variables_the_stop_message_is_unchanged(tmp_path: Path)
     r = _run(env, "corrector", tmp_path / "no-existe.json")
     assert r.returncode != 0
     assert _comments(env).strip() == _cuerpo_de_parada("", run_tag="manual-1").strip()
+
+
+# --------------------------------------------------------------------------- #
+# ADR-149: al entrar en ci-pending, relanzar Quality si su cierre ya se consumió
+# --------------------------------------------------------------------------- #
+
+
+def _seed_quality_runs(env: dict[str, str], head: str, runs: list[dict[str, object]]) -> None:
+    """Respuesta de `gh api .../actions/workflows/quality.yml/runs?head_sha=<head>`."""
+    (_md(env) / f"quality_runs_{head}.json").write_text(
+        json.dumps({"workflow_runs": runs}), encoding="utf-8"
+    )
+
+
+def _actions_log(env: dict[str, str]) -> str:
+    f = _md(env) / "actions.log"
+    return f.read_text(encoding="utf-8") if f.exists() else ""
+
+
+def _implementador_listo(env: dict[str, str], tmp_path: Path, head: str) -> Path:
+    _seed_issue(
+        env, ["sirius:implementing"], comments="PR abierta: https://github.com/owner/repo/pull/9\n"
+    )
+    _seed_pr(env, 9, head=head)
+    return _verdict_file(tmp_path, {"verdict": "READY_FOR_REVIEW", "summary": "listo"})
+
+
+def test_ready_for_review_relanza_un_quality_ya_terminado_para_el_head(tmp_path: Path) -> None:
+    """La carrera de la deuda 3: Quality cerró antes de la transición y su
+    workflow_run se consumió con la incidencia en implementing. Se relanza el
+    run terminado y se publica el marcador una vez."""
+    env = _setup(tmp_path)
+    head = "c4d482267d9a"
+    vf = _implementador_listo(env, tmp_path, head)
+    _seed_quality_runs(env, head, [{"id": 555, "status": "completed", "conclusion": "failure"}])
+    r = _run(env, "implementer", vf)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "sirius:ci-pending" in _labels(env)
+    assert "RERUN 555" in _actions_log(env)
+    comments = _comments(env)
+    assert f"sirius-quality-relanzado:{head}:555" in comments
+    assert "QUALITY_RELANZADO" in comments
+
+
+def test_un_quality_en_curso_no_se_relanza(tmp_path: Path) -> None:
+    """Con un run en cola o corriendo, su cierre natural encaminará: nada que hacer."""
+    env = _setup(tmp_path)
+    head = "c4d482267d9a"
+    vf = _implementador_listo(env, tmp_path, head)
+    _seed_quality_runs(
+        env,
+        head,
+        [
+            {"id": 556, "status": "in_progress", "conclusion": None},
+            {"id": 555, "status": "completed", "conclusion": "failure"},
+        ],
+    )
+    r = _run(env, "implementer", vf)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "sirius:ci-pending" in _labels(env)
+    assert "RERUN" not in _actions_log(env)
+    assert "sirius-quality-relanzado" not in _comments(env)
+
+
+def test_sin_runs_de_quality_no_se_relanza_nada(tmp_path: Path) -> None:
+    env = _setup(tmp_path)
+    vf = _implementador_listo(env, tmp_path, "c4d482267d9a")
+    r = _run(env, "implementer", vf)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "QUALITY_RUNS c4d482267d9a" in _actions_log(env), "tiene que consultar los runs"
+    assert "RERUN" not in _actions_log(env)
+
+
+def test_el_fixed_del_corrector_tambien_relanza(tmp_path: Path) -> None:
+    """El corrector corre la cadena completa tras su push: la carrera es la norma."""
+    env = _setup(tmp_path)
+    head = "d5e5f5061234"
+    _seed_issue(
+        env, ["sirius:repairing"], comments="PR abierta: https://github.com/owner/repo/pull/9\n"
+    )
+    _seed_pr(env, 9, head=head)
+    _seed_quality_runs(env, head, [{"id": 557, "status": "completed", "conclusion": "success"}])
+    vf = _verdict_file(tmp_path, {"verdict": "FIXED", "summary": "corregido"})
+    r = _run(env, "corrector", vf, cycle="1")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "sirius:ci-pending" in _labels(env)
+    assert "RERUN 557" in _actions_log(env)
+
+
+def test_un_relanzamiento_ya_publicado_no_se_repite(tmp_path: Path) -> None:
+    """Reejecutar el paso (attempt 2) no relanza dos veces el mismo run."""
+    env = _setup(tmp_path)
+    head = "c4d482267d9a"
+    vf = _implementador_listo(env, tmp_path, head)
+    with (_md(env) / f"comments_{ISSUE}.txt").open("a", encoding="utf-8") as f:
+        f.write(f"<!-- sirius-quality-relanzado:{head}:555 -->\n")
+    _seed_quality_runs(env, head, [{"id": 555, "status": "completed", "conclusion": "failure"}])
+    r = _run(env, "implementer", vf)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "RERUN" not in _actions_log(env)
+
+
+def test_si_el_relanzamiento_falla_el_paso_queda_rojo_con_la_incidencia_en_ci_pending(
+    tmp_path: Path,
+) -> None:
+    env = _setup(tmp_path)
+    head = "c4d482267d9a"
+    vf = _implementador_listo(env, tmp_path, head)
+    _seed_quality_runs(env, head, [{"id": 555, "status": "completed", "conclusion": "failure"}])
+    (_md(env) / "rerun_fails").write_text("", encoding="utf-8")
+    r = _run(env, "implementer", vf)
+    assert r.returncode != 0
+    assert "relanzamiento-fallido" in r.stdout + r.stderr
+    assert "sirius:ci-pending" in _labels(env)
+    assert "sirius:failed-safely" not in _labels(env)
+    comments = _comments(env)
+    assert "sirius-quality-relanzado" not in comments
+    # ADR-149, corrección del 06-09: el fallo se cuenta en la incidencia, con
+    # la causa citada y el gesto que desbloquea; un `::error` en el log no lo
+    # lee nadie (#545 estuvo 14 min parada por un PAT sin permiso, HTTP 403).
+    assert f"sirius-quality-sin-encaminar:{head}:relanzamiento-fallido:555" in comments
+    assert "## QUALITY_SIN_ENCAMINAR" in comments
+    assert "403 rerun" in comments, "el aviso debe citar el detalle que dio gh"
+    assert "actions/runs/555" in comments
+    assert "Actions: Read and write" in comments
+
+
+def test_el_aviso_de_quality_sin_encaminar_se_publica_una_sola_vez(tmp_path: Path) -> None:
+    """Reejecutar el paso (attempt 2) con el mismo fallo no duplica el aviso:
+    el marcador lleva head, fase y run, y `sirius_comment_once` lo respeta."""
+    env = _setup(tmp_path)
+    head = "c4d482267d9a"
+    _seed_issue(
+        env,
+        ["sirius:implementing"],
+        comments=(
+            "PR abierta: https://github.com/owner/repo/pull/9\n"
+            f"<!-- sirius-quality-sin-encaminar:{head}:relanzamiento-fallido:555 -->\n"
+        ),
+    )
+    _seed_pr(env, 9, head=head)
+    vf = _verdict_file(tmp_path, {"verdict": "READY_FOR_REVIEW", "summary": "listo"})
+    _seed_quality_runs(env, head, [{"id": 555, "status": "completed", "conclusion": "failure"}])
+    (_md(env) / "rerun_fails").write_text("", encoding="utf-8")
+    r = _run(env, "implementer", vf)
+    assert r.returncode != 0
+    assert _comments(env).count("sirius-quality-sin-encaminar") == 1
+    assert "## QUALITY_SIN_ENCAMINAR" not in _comments(env)
+
+
+def test_si_la_consulta_de_runs_cae_el_paso_queda_rojo_no_verde(tmp_path: Path) -> None:
+    """«No pude consultar» no es «no hay run terminado»."""
+    env = _setup(tmp_path)
+    vf = _implementador_listo(env, tmp_path, "c4d482267d9a")
+    (_md(env) / "quality_runs_fail").write_text("", encoding="utf-8")
+    r = _run(env, "implementer", vf)
+    assert r.returncode != 0
+    assert "consulta-runs-fallida" in r.stdout + r.stderr
+    assert "sirius:ci-pending" in _labels(env)
+    comments = _comments(env)
+    assert "sirius-quality-sin-encaminar:c4d482267d9a:consulta-runs-fallida" in comments
+    assert "## QUALITY_SIN_ENCAMINAR" in comments
+    assert "503 runs" in comments
+
+
+def test_una_respuesta_de_runs_que_no_es_lista_no_se_acepta_como_vacia(tmp_path: Path) -> None:
+    """Un JSON válido que no es una lista tampoco es legible (CODEX-002, ronda 5, #546).
+
+    `jq` itera también los VALORES de un objeto, así que
+    `printf '{}' | jq -r '[.[] | select(.status != "completed")] | length'`
+    devuelve `0`: la guarda anterior lo aceptaba como «lista vacía» y la
+    función terminaba en verde por la rama «sin run terminado», sin publicar
+    `QUALITY_SIN_ENCAMINAR`. ADR-149 exige avisar y salir en rojo ante
+    cualquier respuesta no interpretable como lista.
+    """
+    env = _setup(tmp_path)
+    head = "c4d482267d9a"
+    vf = _implementador_listo(env, tmp_path, head)
+    (_md(env) / "quality_runs_objeto").write_text("", encoding="utf-8")
+    r = _run(env, "implementer", vf)
+    assert r.returncode != 0
+    assert "consulta-runs-ilegible" in r.stdout + r.stderr
+    assert "sirius:ci-pending" in _labels(env)
+    assert "sirius:failed-safely" not in _labels(env)
+    assert "RERUN" not in _actions_log(env)
+    assert f"sirius-quality-sin-encaminar:{head}:consulta-runs-ilegible" in _comments(env)
+
+
+def test_si_la_respuesta_de_runs_es_ilegible_el_aviso_tambien_se_publica(tmp_path: Path) -> None:
+    """ADR-149, corrección del 07-09: código 0 con salida no interpretable
+    tampoco deja la incidencia en silencio (hallazgo P2 de Codex en #546,
+    revisión 5128044887). Sigue en `ci-pending`, el paso sigue rojo y no se
+    relanza nada con datos que no se pueden leer."""
+    env = _setup(tmp_path)
+    head = "c4d482267d9a"
+    vf = _implementador_listo(env, tmp_path, head)
+    (_md(env) / "quality_runs_illegible").write_text("", encoding="utf-8")
+    r = _run(env, "implementer", vf)
+    assert r.returncode != 0
+    assert "consulta-runs-ilegible" in r.stdout + r.stderr
+    assert "sirius:ci-pending" in _labels(env)
+    assert "sirius:failed-safely" not in _labels(env)
+    assert "RERUN" not in _actions_log(env)
+    comments = _comments(env)
+    assert f"sirius-quality-sin-encaminar:{head}:consulta-runs-ilegible" in comments
+    assert "## QUALITY_SIN_ENCAMINAR" in comments
+    assert "not-json" in comments, "el aviso cita lo que devolvió gh"
+
+
+def test_la_lectura_va_con_el_token_de_lectura_y_el_relanzamiento_con_el_pat(
+    tmp_path: Path,
+) -> None:
+    """Doctrina de tokens: el GET de runs con el github.token del paso; el POST
+    con el token de la invocación (el PAT), o el workflow_run no despierta al
+    avance."""
+    env = _setup(tmp_path)
+    env["GH_TOKEN"] = "pat-de-la-invocacion"
+    env["SIRIUS_READ_TOKEN"] = "token-de-lectura"
+    head = "c4d482267d9a"
+    vf = _implementador_listo(env, tmp_path, head)
+    _seed_quality_runs(env, head, [{"id": 555, "status": "completed", "conclusion": "success"}])
+    r = _run(env, "implementer", vf)
+    assert r.returncode == 0, r.stdout + r.stderr
+    log = _actions_log(env)
+    assert f"QUALITY_RUNS {head} token=token-de-lectura" in log
+    assert "RERUN 555 token=pat-de-la-invocacion" in log

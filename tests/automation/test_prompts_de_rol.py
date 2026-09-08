@@ -238,6 +238,7 @@ def test_lo_que_los_prompts_prohiben_esta_denegado_de_verdad(prompt_path: Path) 
 WORKFLOW_DE_CADA_ROL = {
     "implementer.md": "implement-sirius-work.yml",
     "implementer-v3.md": "implement-sirius-work.yml",
+    "implementer-v4.md": "implement-sirius-work.yml",
     "corrector.md": "repair-sirius-work.yml",
     "reviewer.md": "review-sirius-work.yml",
     "documentalista.md": "implement-sirius-work.yml",
@@ -495,4 +496,29 @@ def test_el_corrector_reconcilia_el_cuerpo_de_la_pr_tras_cada_commit() -> None:
     assert "head superado" in texto, (
         "corrector.md ya no prohíbe afirmar como actual un head superado en "
         "el cuerpo de la PR (ADR-145)"
+    )
+
+
+@pytest.mark.parametrize("nombre", _PROMPTS_QUE_VALIDAN)
+def test_los_prompts_que_validan_anclan_las_cifras_al_arbol(nombre: str) -> None:
+    """ADR-154: la terna de pytest y el código de salida se citan anclados al
+    árbol que los produjo. El guion de fusión exige la rama al día con main, el
+    «Update branch» trae pruebas nuevas sin tocar el ADR, y la revisión que
+    ADR-142 impone después encontraba una cifra caducada: una ronda de
+    corrector y otra de revisión por una línea de documentación (#550, ronda
+    2, CLAUDE-CR-151-004; deuda 11 de la bitácora)."""
+    ruta = PROMPTS_DIR / nombre
+    texto = ruta.read_text(encoding="utf-8")
+    assert "anclados al árbol" in texto, (
+        f"{ruta.relative_to(REPO_ROOT)} no exige citar la terna y el código de "
+        "salida anclados al árbol que los produjo (ADR-154)"
+    )
+    assert "sobre el árbol de" in texto, (
+        f"{ruta.relative_to(REPO_ROOT)} no da la forma de la ancla («sobre el "
+        "árbol de <sha corto>») (ADR-154)"
+    )
+    assert "no invalida" in texto, (
+        f"{ruta.relative_to(REPO_ROOT)} no dice que una actualización de la rama "
+        "no invalida una cifra anclada: sin eso el agente repetirá el script o "
+        "reescribirá la cifra en cada «Update branch» (ADR-154)"
     )

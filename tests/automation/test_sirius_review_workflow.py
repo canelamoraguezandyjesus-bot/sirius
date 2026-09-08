@@ -130,9 +130,15 @@ def test_job_timeout_covers_every_bounded_step_plus_margin() -> None:
     # margen para los pasos deterministas cortos. Si el job muriera durante la
     # espera, el recolector no llegaría a emitir su FAILED_SAFELY; si muriera
     # después, el veredicto agregado no llegaría a aplicarse.
+    # Desde ADR-152 hay un quinto paso acotado: la congelación de
+    # `scripts/automation` de `main` (1 min), que no puede quedar sin plazo
+    # porque sin la copia no hay veredicto, y un paso colgado ahí se comería el
+    # presupuesto de los cuatro que sí pueden tardar.
     doc = _load()
     bounded = [step["timeout-minutes"] for step in _steps(doc) if "timeout-minutes" in step]
-    assert len(bounded) == 4, "los cuatro pasos que pueden tardar deben declarar su timeout"
+    assert len(bounded) == 5, (
+        "los cuatro pasos que pueden tardar y la congelación deben declarar su timeout"
+    )
     assert _job(doc)["timeout-minutes"] >= sum(bounded) + 5
 
 

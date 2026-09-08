@@ -8,8 +8,17 @@ permissions:
   contents: read
   issues: write
 
+# Una ranura por EVENTO, no por etiqueta (ADR-158). Actions guarda como mucho
+# UNA ejecucion en espera por grupo y descarta la pendiente cuando llega otra,
+# incluso con cancel-in-progress: false: con el grupo anterior
+# (incidencia+etiqueta) un tercer evento de la misma etiqueta desplazaba al
+# segundo antes de que publicara, y ese suceso no dejaba marcador -el mismo
+# agujero que ADR-157 vino a cerrar, por otra puerta-. Al incluir el run, dos
+# eventos distintos no comparten ranura y ninguno puede descartar a otro;
+# reejecutar el MISMO run sigue cayendo en el mismo grupo, y su marcador
+# -que lleva ese run desde ADR-157- sigue deduplicando.
 concurrency:
-  group: notify-sirius-${{ github.event.issue.number }}-${{ github.event.label.name }}
+  group: notify-sirius-${{ github.event.issue.number }}-${{ github.event.label.name }}-${{ github.run_id }}
   cancel-in-progress: false
 
 jobs:
@@ -39,6 +48,7 @@ jobs:
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           STATE_LABEL: ${{ github.event.label.name }}
           REPOSITORY_OWNER: ${{ github.repository_owner }}
+          RUN_ID: ${{ github.run_id }}
         run: |
           set -u
           set -o pipefail
@@ -63,8 +73,16 @@ jobs:
           head_sha="$(sirius_extract_sha "$scan_file")"
           rm -f "$scan_file"
 
-          # Idempotencia: una sola notificacion por incidencia, estado y SHA.
-          marker="<!-- sirius-notification:${STATE_LABEL}:${head_sha} -->"
+          # Idempotencia: una sola notificacion por EVENTO de etiqueta, no por
+          # estado y SHA (ADR-157). El marcador lleva el run que atiende el
+          # evento, asi que reejecutar ESTE run no publica un segundo aviso -el
+          # run no cambia al reintentar- pero dos paradas distintas del mismo
+          # estado sobre el mismo head dejan cada una el suyo. Con el marcador
+          # anterior (`<etiqueta>:<head>`) la segunda no dejaba ningun rastro y
+          # el historial de la incidencia guardaba una ocurrencia donde hubo
+          # dos: cinco rondas de #545 se fueron en adivinar lo que este
+          # workflow habia borrado al publicar.
+          marker="<!-- sirius-notification:${STATE_LABEL}:${head_sha}:${RUN_ID:-sin-run} -->"
           existing="$(sirius_read_issue_comments "$GH_REPO" "$ISSUE_NUMBER" 2>/dev/null || true)"
           if printf '%s' "$existing" | grep -Fq "$marker"; then
             echo "La notificacion para ${STATE_LABEL} (${head_sha}) ya existe; no se duplica."

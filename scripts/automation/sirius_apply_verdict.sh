@@ -284,6 +284,141 @@ sha_matches() {
   return 1
 }
 
+# relanzar_quality_si_ya_termino — deuda 3 de la bitácora (ADR-149).
+#
+# Quality arranca con el push de la PR y la transición a `ci-pending` llega
+# DESPUÉS: cuando el veredicto tarda más que Quality (un rojo de lint en 21 s;
+# o la cadena de comprobación del corrector, que dura lo mismo que Quality),
+# el `workflow_run` de Quality se consume con la incidencia todavía en
+# `implementing`/`repairing` y nadie vuelve a encaminarla: el ciclo queda mudo
+# hasta que una persona relanza el run a mano (entradas 3, 18, 40 y 41 de la
+# bitácora). Mismo remedio que la rama head-movido-tras-ci de la puerta del
+# corrector: si ya hay un run de Quality TERMINADO para este head, se relanza,
+# y su nueva finalización emite el `workflow_run` que el avance consumirá con
+# la incidencia ya en `ci-pending`. Si hay uno en cola o corriendo, su
+# finalización natural basta y no se toca nada.
+#
+# Tokens: las LECTURAS de Actions van con SIRIUS_READ_TOKEN (el github.token
+# del paso, con actions:read) cuando el workflow lo da; el POST va con el token
+# de esta invocación, el PAT, porque un `workflow_run` emitido a partir del
+# GITHUB_TOKEN no despierta al avance (anti-recursión; misma doctrina que
+# CHECKS_UNRELATED, abajo). Un marcador por head y run hace idempotente el
+# relanzamiento ante una reejecución de este paso. Una lectura caída o un
+# relanzamiento fallido NO se tratan como «no hay nada que relanzar»: la
+# incidencia queda en `ci-pending` y el paso termina en rojo, reintentable,
+# igual que en la puerta del corrector.
+# primera_linea_de_gh — el detalle que `gh` dejó en stderr (su primera línea
+# `gh: …`, o la primera línea que haya), para citarlo en el aviso.
+primera_linea_de_gh() {
+  local detalle
+  detalle="$(grep -m1 '^gh:' "$1" 2>/dev/null || head -n1 "$1" 2>/dev/null || true)"
+  printf '%s' "${detalle:-sin detalle}"
+}
+
+# avisar_quality_sin_encaminar — ADR-149, corrección del 06-09: cuando el
+# relanzamiento (o la consulta previa) falla, el paso ya quedaba rojo y la
+# incidencia en `ci-pending`, pero SOLO lo decía un `::error` en el log del
+# run, y nadie lee logs: #545 estuvo 14 minutos parada hasta que el operador
+# la vio y relanzó a mano (el PAT sin permiso de escritura sobre Actions,
+# `HTTP 403`). El aviso va a la incidencia, una sola vez por head, fase y
+# run, con la causa citada y el gesto que desbloquea.
+avisar_quality_sin_encaminar() {
+  local fase="$1" run="$2" detalle="$3" marker="" body_file="" run_line=""
+  if [ -n "$run" ]; then
+    marker="<!-- sirius-quality-sin-encaminar:${head_sha}:${fase}:${run} -->"
+    run_line="- Run de Quality terminado y sin encaminar: https://github.com/${REPO}/actions/runs/${run}"
+  else
+    marker="<!-- sirius-quality-sin-encaminar:${head_sha}:${fase} -->"
+    run_line="- Run de Quality: no se pudo consultar."
+  fi
+  body_file="$(mktemp)"
+  printf '%s\n\n%s\n\n%s\n%s\n%s\n%s\n%s\n' \
+    "$marker" \
+    "## QUALITY_SIN_ENCAMINAR" \
+    "- Head SHA: \`${head_sha}\`" \
+    "$run_line" \
+    "- Fase que falló: \`${fase}\`. Detalle de \`gh\`: ${detalle:-sin detalle}" \
+    "- Qué pasa: Quality puede haber terminado para este head ANTES de que la incidencia entrara en \`sirius:ci-pending\`, y ese resultado no se encaminará solo (deuda 3 de la bitácora, ADR-149). La incidencia queda en \`sirius:ci-pending\` y este paso, reintentable." \
+    "- Qué la desbloquea: relanzar a mano el run de Quality de este head (Actions → Re-run all jobs) o reejecutar este paso. Si el detalle dice \`HTTP 403 … personal access token\`, el PAT necesita el permiso «Actions: Read and write» en el repositorio." >"$body_file"
+  sirius_comment_once "$REPO" "$ISSUE" "$marker" "$body_file" \
+    || echo "::warning::No se pudo publicar el aviso QUALITY_SIN_ENCAMINAR en la incidencia." >&2
+  rm -f "$body_file"
+}
+
+relanzar_quality_si_ya_termino() {
+  local runs_json="" activos="" terminado="" marker="" scan_file="" body_file="" err_file=""
+  err_file="$(mktemp)"
+  if ! runs_json="$( ( export GH_TOKEN="${SIRIUS_READ_TOKEN:-${GH_TOKEN:-}}"
+      sirius_retry gh api \
+        "repos/${REPO}/actions/workflows/quality.yml/runs?head_sha=${head_sha}&event=pull_request&per_page=20" \
+        --jq '[.workflow_runs[] | {id: .id, status: .status}]' ) 2>"$err_file" )"; then
+    cat "$err_file" >&2
+    avisar_quality_sin_encaminar "consulta-runs-fallida" "" "$(primera_linea_de_gh "$err_file")"
+    rm -f "$err_file"
+    echo "::error::No se pudo consultar los runs de Quality del head ${head_sha} (consulta-runs-fallida); la incidencia queda en ci-pending y este paso, reintentable." >&2
+    exit 1
+  fi
+  rm -f "$err_file"
+  # `jq` itera también los VALORES de un objeto, así que `{}` daba `0` y se
+  # colaba como lista vacía legible (hallazgo P2 de Codex, ronda 5 de #546).
+  # Antes de contar hay que exigir que la respuesta sea una LISTA y que sus
+  # elementos sean objetos: cualquier otra cosa no es interpretable como runs.
+  activos="$(printf '%s' "$runs_json" \
+    | jq -r 'if type == "array" and all(.[]; type == "object")
+             then [.[] | select(.status != "completed")] | length
+             else "no-es-lista-de-runs" end' 2>/dev/null || echo "")"
+  case "$activos" in
+    ''|*[!0-9]*)
+      # ADR-149, corrección del 07-09: código 0 con una salida que no es una
+      # lista de runs también se cuenta en la incidencia (lo vio Codex en la
+      # revisión 5128044887 de #546). Ni se relanza nada con datos ilegibles
+      # ni la incidencia se queda en silencio.
+      avisar_quality_sin_encaminar "consulta-runs-ilegible" "" \
+        "respuesta no interpretable como lista de runs: $(printf '%s' "$runs_json" | tr -d '\n' | head -c 120)"
+      echo "::error::Respuesta ilegible al consultar los runs de Quality del head ${head_sha} (consulta-runs-ilegible); la incidencia queda en ci-pending y este paso, reintentable." >&2
+      exit 1
+      ;;
+  esac
+  if [ "$activos" -gt 0 ]; then
+    echo "Quality sigue en curso para ${head_sha}; su finalización encaminará la incidencia."
+    return 0
+  fi
+  terminado="$(printf '%s' "$runs_json" | jq -r '[.[] | select(.status == "completed")] | .[0].id // empty' 2>/dev/null || true)"
+  if [ -z "$terminado" ]; then
+    echo "Sin run de Quality terminado para ${head_sha}; su cierre llegará con la incidencia ya en ci-pending."
+    return 0
+  fi
+  marker="<!-- sirius-quality-relanzado:${head_sha}:${terminado} -->"
+  scan_file="$(mktemp)"
+  sirius_scan_text "$REPO" "$ISSUE" "$scan_file"
+  if grep -qF "$marker" "$scan_file"; then
+    rm -f "$scan_file"
+    echo "El run ${terminado} de Quality ya se relanzó para ${head_sha}; no se repite."
+    return 0
+  fi
+  rm -f "$scan_file"
+  err_file="$(mktemp)"
+  if ! sirius_retry gh api -X POST "repos/${REPO}/actions/runs/${terminado}/rerun" >/dev/null 2>"$err_file"; then
+    cat "$err_file" >&2
+    avisar_quality_sin_encaminar "relanzamiento-fallido" "$terminado" "$(primera_linea_de_gh "$err_file")"
+    rm -f "$err_file"
+    echo "::error::No se pudo relanzar el run ${terminado} de Quality (relanzamiento-fallido); la incidencia queda en ci-pending y este paso, reintentable." >&2
+    exit 1
+  fi
+  rm -f "$err_file"
+  body_file="$(mktemp)"
+  printf '%s\n\n%s\n\n%s\n%s\n%s\n' \
+    "$marker" \
+    "## QUALITY_RELANZADO" \
+    "- Head SHA: \`${head_sha}\`" \
+    "- Run relanzado: https://github.com/${REPO}/actions/runs/${terminado}" \
+    "- Motivo: Quality terminó para este head antes de que la incidencia entrara en \`sirius:ci-pending\`, así que su resultado se habría perdido (deuda 3 de la bitácora, ADR-149). La nueva finalización del run la encaminará." >"$body_file"
+  sirius_comment_once "$REPO" "$ISSUE" "$marker" "$body_file" \
+    || echo "::warning::No se pudo publicar el aviso del relanzamiento; el run ${terminado} ya está relanzado."
+  rm -f "$body_file"
+  return 0
+}
+
 # require_reviewed_head — endurecimiento de la revisión (contrato §4.1):
 # cualquier resultado de revisión (aprobación O cambios solicitados) debe
 # demostrar sobre qué versión se pronunció. Exige que el JSON declare
@@ -347,6 +482,9 @@ case "$verdict" in
       exit 1
     fi
     rm -f "$body_file"
+    # Ya en `ci-pending`: si Quality terminó antes de esta transición, su
+    # cierre se consumió con la incidencia en otro estado (deuda 3, ADR-149).
+    relanzar_quality_si_ya_termino
     ;;
 
   CHECKS_UNRELATED)
@@ -460,6 +598,21 @@ case "$verdict" in
     if [ -z "$observations" ] || [ "$observations" = "[]" ]; then
       stop_safely "sanitizacion-fallida" \
         "No se pudieron sanear las observaciones estructuradas antes de publicarlas; me detengo para no entregar al corrector un bloque corrupto."
+    fi
+    # `posible_goteo` está reservada al guardián de goteo (ADR-123): una
+    # observación que ya la traiga del revisor es una marca ajena que nadie
+    # evaluó. Se retira UNA sola vez aquí, en el mismo punto donde se leen y
+    # sanean las observaciones, y no aguas abajo: así ningún consumidor
+    # posterior del guion -el bloque legible, el bloque
+    # OBSERVACIONES_ESTRUCTURADAS que re-extrae la puerta del corrector o el
+    # registro de ronda- puede reenviarla, ni siquiera si el guardián falla o
+    # no llega a invocarse (incidencia #558, deuda de #503). Las retiradas de
+    # `drip_guard.py`, del CLI del guardián y de la rama `else` de más abajo
+    # se conservan sin cambios, como defensa en profundidad.
+    observations="$(printf '%s' "$observations" | jq -c 'map(if type == "object" then del(.posible_goteo) else . end)')"
+    if [ -z "$observations" ] || [ "$observations" = "[]" ]; then
+      stop_safely "sanitizacion-fallida" \
+        "No se pudo retirar la clave reservada \`posible_goteo\` de las observaciones estructuradas antes de publicarlas; me detengo para no entregar al corrector un bloque corrupto."
     fi
     pr_hint="https://github.com/${REPO}/pull/${pr_number}"
 
