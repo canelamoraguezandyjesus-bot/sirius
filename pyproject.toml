@@ -131,7 +131,9 @@ testpaths = ["tests"]
 # scripts/: helpers de empaquetado invocados desde PowerShell.
 # tests/unit: ayudantes compartidos entre pruebas (tests/ no es un paquete).
 # tests/acceptance: traductor del arnes de aceptacion (incidencia #461).
-pythonpath = ["scripts", "tests/unit", "tests/acceptance"]
+# tests/automation/fixtures: arnes que EJECUTA los pasos de los workflows contra
+# un `gh` doble, con su registro de carriles controlado (ADR-167).
+pythonpath = ["scripts", "tests/unit", "tests/acceptance", "tests/automation/fixtures"]
 addopts = [
   "--import-mode=importlib",
   "--strict-config",

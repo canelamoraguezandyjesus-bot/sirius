@@ -85,51 +85,131 @@ jobs:
           SIRIUS_TRIGGER_TOKEN: ${{ secrets.SIRIUS_BOT_TOKEN }}
           GH_REPO: ${{ github.repository }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
-          ISSUE_BODY: ${{ github.event.issue.body }}
         run: |
           set -uo pipefail
-          perfil=$(printf '%s' "$ISSUE_BODY" | sed -n 's/^Perfil: *\([A-Za-z_-][A-Za-z_-]*\)@.*/\1/p' | head -1)
+
+          # CONTRATO DEL LECTOR, EXPLÍCITO (ADR-167, hallazgo 3). Antes solo el
+          # código 2 se trataba como error, así que un 127 -la orden no existe-
+          # caía en «carril activo» y el trabajo seguía. Ahora: 0 retirado, 1
+          # activo, y CUALQUIER otro código detiene el paso sin ejecutar nada.
+          retirado_rc=0
+          explicacion="$(python3 scripts/automation/sirius_carril_retirado.py investigacion)" || retirado_rc=$?
+          case "$retirado_rc" in
+            0) carril_retirado=true ;;
+            1) carril_retirado=false ;;
+            *) echo "::error::El lector del registro de carriles retirados termino con un codigo inesperado (${retirado_rc}); no se ejecuta el carril."
+               exit 1 ;;
+          esac
+
+          source scripts/automation/sirius_issue.sh
+
+          # EL ESTADO REAL, NO EL DEL EVENTO (ADR-167, hallazgo 2). Un evento
+          # atrasado o repetido traia el cuerpo de entonces, asi que una
+          # incidencia ya completada podia acabar con `completed` y
+          # `failed-safely` a la vez -que el reconciliador reporta como
+          # CONTRADICCION que exige revision humana-. Todo lo que decide esta
+          # puerta se relee ahora de la API, y de UNA sola instantanea: con tres
+          # llamadas, estado, etiquetas y cuerpo podrian venir de tres momentos
+          # distintos y la puerta decidiria sobre un estado que nunca existio.
+          instantanea="$(mktemp)"
+          if ! gh api "repos/${GH_REPO}/issues/${ISSUE_NUMBER}" > "$instantanea"; then
+            echo "::error::No se pudo leer #${ISSUE_NUMBER}; reintentable."
+            exit 1
+          fi
+          leer() { python3 -c "$1" "$instantanea"; }
+          estado_actual="$(leer 'import json,sys;print(json.load(open(sys.argv[1])).get("state") or "")')"
+          labels_now="$(leer 'import json,sys;print("\n".join(e["name"] for e in json.load(open(sys.argv[1])).get("labels") or []))')"
+          cuerpo_actual="$(leer 'import json,sys;print(json.load(open(sys.argv[1])).get("body") or "")')"
+          # Una instantanea que no se deja leer no es «la incidencia esta rara»:
+          # es que no sabemos nada de ella, y sin saberlo no se toca.
+          if [ -z "$estado_actual" ]; then
+            echo "::error::La respuesta de la API para #${ISSUE_NUMBER} no se pudo interpretar; no se toca nada."
+            exit 1
+          fi
+
+          # El perfil sale del cuerpo ACTUAL: si cambió desde el evento, manda
+          # el de ahora.
+          perfil=$(printf '%s' "$cuerpo_actual" | sed -n 's/^Perfil: *\([A-Za-z_-][A-Za-z_-]*\)@.*/\1/p' | head -1)
           if [ "$perfil" != "investigador" ]; then
             echo "valid=false" >> "$GITHUB_OUTPUT"
-            echo "Perfil '${perfil:-ninguno}': no es una orden de investigacion; la atiende el implementador."
+            echo "Perfil '${perfil:-ninguno}' en el cuerpo actual: no es una orden de investigacion; no se toca nada."
             exit 0
           fi
 
-          # CARRIL RETIRADO (ADR-161, ejecutado por ADR-163). Es una orden de
-          # investigacion de verdad, y este workflow es el unico que la atiende:
-          # el implementador la declina antes de consumir el evento. Por eso NO
-          # basta con no investigar -eso dejaria la incidencia esperando para
-          # siempre-: hay que RESPONDER y TERMINAR. Se explica en la incidencia
-          # y se la deja en `sirius:failed-safely`, que es terminal y no reentra
-          # en el ciclo, para que tampoco acabe en programacion por otra ruta.
-          retirado_rc=0
-          explicacion="$(python3 scripts/automation/sirius_carril_retirado.py investigacion)" || retirado_rc=$?
-          if [ "$retirado_rc" -eq 2 ]; then
-            echo "::error::No se pudo leer el registro de carriles retirados; reintentable."
-            exit 1
-          fi
-          if [ "$retirado_rc" -eq 0 ]; then
+          # No se pisa trabajo cerrado, terminado ni ya consumido. Cubre el
+          # evento atrasado, el repetido, y la carrera con
+          # `validate-sirius-activation.yml`: si el validador ya retiro la
+          # etiqueta, aqui no queda `implement-requested` y no se toca nada.
+          #
+          # Callarse aqui no pierde el diagnostico: `validate-sirius-activation`
+          # es un workflow APARTE que reacciona al MISMO evento de etiqueta y
+          # publica el rechazo con su motivo (incidencia-cerrada,
+          # estado-incompatible...). Esta puerta se limita a no anadir un
+          # veredicto suyo sobre algo que ya no espera.
+          for terminal in sirius:completed sirius:failed-safely sirius:blocked-decision sirius:ready-for-merge; do
+            if printf '%s\n' "$labels_now" | grep -Fxq "$terminal"; then
+              echo "valid=false" >> "$GITHUB_OUTPUT"
+              echo "#${ISSUE_NUMBER} ya esta en ${terminal}: no se toca."
+              exit 0
+            fi
+          done
+          if [ "$estado_actual" != "open" ]; then
             echo "valid=false" >> "$GITHUB_OUTPUT"
-            source scripts/automation/sirius_issue.sh
+            echo "#${ISSUE_NUMBER} esta ${estado_actual}: no se toca."
+            exit 0
+          fi
+          if ! printf '%s\n' "$labels_now" | grep -Fxq "sirius:implement-requested"; then
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+            echo "#${ISSUE_NUMBER} ya no lleva sirius:implement-requested: la activacion no esta viva; no se toca."
+            exit 0
+          fi
+
+          if [ "$carril_retirado" = "true" ]; then
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+
+            # NI LA RESPUESTA NI LA TRANSICION SE DAN POR HECHAS (ADR-167,
+            # hallazgo 1). Antes un fallo del comentario era un `warning` y un
+            # fallo de las etiquetas un `error` seguido de `exit 0`: verde en
+            # los dos casos. Ahora cualquiera de los dos termina el paso en
+            # ROJO. El orden importa y es este a proposito:
+            #
+            #   1. El comentario primero, y SIN mencionar el estado final: si
+            #      la transicion no llega a hacerse, lo publicado sigue siendo
+            #      cierto.
+            #   2. Las etiquetas despues. Si fallan, la incidencia se queda
+            #      donde estaba -con su explicacion ya puesta- y el job rojo
+            #      pide reejecucion.
+            #
+            # Reejecutar CONVERGE: `sirius_comment_once` encuentra su marcador
+            # y no republica, y las etiquetas se vuelven a intentar. No se
+            # delega en el reconciliador, que para este estado no repara nada:
+            # solo informa (contrato §9.1).
+            marcador="<!-- sirius-carril-retirado:investigacion -->"
             cuerpo="$(mktemp)"
             {
+              printf '%s\n\n' "$marcador"
               printf '%s\n\n' "$explicacion"
-              printf 'Esta incidencia queda en `sirius:failed-safely`: no se ha investigado nada y no espera a nadie.\n'
+              printf 'No se ha investigado nada: ningun modelo se ha ejecutado y esta activacion no la atiende ningun carril.\n'
             } > "$cuerpo"
-            sirius_comment_once "$GH_REPO" "$ISSUE_NUMBER" \
-              "sirius-carril-retirado:investigacion" "$cuerpo" || \
-              echo "::warning::No se pudo publicar la explicacion; se continua para no dejar la incidencia en curso."
+            if ! sirius_comment_once "$GH_REPO" "$ISSUE_NUMBER" "$marcador" "$cuerpo"; then
+              echo "::error::No se pudo publicar la explicacion en #${ISSUE_NUMBER}. NO se ha cambiado ninguna etiqueta: la incidencia sigue como estaba. Reejecutar este job converge."
+              exit 1
+            fi
             # La MISMA envoltura de una linea que el resto del ciclo: la
             # etiqueta se escribe con el PAT, nunca con el GITHUB_TOKEN, porque
             # GitHub suprime los eventos del token efimero (ADR-014, ADR-015).
             trigger_set_labels() {
               ( export GH_TOKEN="${SIRIUS_TRIGGER_TOKEN:-${GH_TOKEN:-}}"; sirius_set_issue_labels "$@" )
             }
-            trigger_set_labels "$GH_REPO" "$ISSUE_NUMBER" \
-              "sirius:failed-safely" "sirius:implement-requested" "sirius:planned" || \
-              echo "::error::No se pudo cerrar la incidencia en failed-safely; queda para el reconciliador."
+            if ! trigger_set_labels "$GH_REPO" "$ISSUE_NUMBER" \
+              "sirius:failed-safely" "sirius:implement-requested" "sirius:planned"; then
+              echo "::error::La explicacion esta publicada en #${ISSUE_NUMBER}, pero la transicion a sirius:failed-safely NO se pudo confirmar. Reejecutar este job converge."
+              exit 1
+            fi
+            echo "#${ISSUE_NUMBER}: carril retirado, explicado y cerrado en sirius:failed-safely."
             exit 0
           fi
+
           # La MISMA validacion de activacion que el implementador: llegar aqui
           # por la etiqueta no basta, la puerta comprueba el estado real.
           if bash scripts/automation/sirius_validate_activation.sh "$GH_REPO" "$ISSUE_NUMBER"; then

@@ -1,0 +1,150 @@
+#!/usr/bin/env python3
+"""Doble explícito de `gh` para probar las puertas de carril retirado (ADR-167).
+
+No hay red ni credenciales: el estado de la incidencia vive en el JSON que
+apunta ``FAKE_GH_STATE`` y este guion lo lee y lo muta como lo haría GitHub.
+Cada llamada queda registrada en ``FAKE_GH_LOG``, así que una prueba puede
+comprobar **qué se llamó y en qué orden**, no solo el resultado.
+
+Inyección de fallos: ``FAKE_GH_FAIL`` lleva una lista separada por comas de
+prefijos de orden que deben fallar (por ejemplo ``issue edit`` o
+``issue comment``). ``FAKE_GH_FAIL_AMBIGUO`` hace que ``issue comment`` publique
+el comentario **y además** devuelva error, que es el caso que ninguna API puede
+descartar y que el arnés tiene que saber reproducir.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+ESTADO = Path(os.environ["FAKE_GH_STATE"])
+REGISTRO = Path(os.environ.get("FAKE_GH_LOG", os.devnull))
+
+
+def _leer() -> dict[str, object]:
+    return dict(json.loads(ESTADO.read_text(encoding="utf-8")))
+
+
+def _guardar(datos: dict[str, object]) -> None:
+    ESTADO.write_text(json.dumps(datos, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def main(argv: list[str]) -> int:
+    orden = " ".join(argv)
+    with REGISTRO.open("a", encoding="utf-8") as registro:
+        registro.write(orden + "\n")
+
+    for prefijo in filter(None, os.environ.get("FAKE_GH_FAIL", "").split(",")):
+        if prefijo and prefijo in orden:
+            print(f"fake gh: fallo inyectado para {prefijo!r}", file=sys.stderr)
+            return 1
+
+    datos = _leer()
+    etiquetas: list[str] = list(datos.get("labels", []))  # type: ignore[arg-type]
+    comentarios: list[str] = list(datos.get("comments", []))  # type: ignore[arg-type]
+
+    def incidencia() -> dict[str, object]:
+        return {
+            "number": int(datos.get("number", 1)),
+            "state": datos.get("state", "open"),
+            "body": datos.get("body", ""),
+            "labels": [{"name": e} for e in etiquetas],
+            "title": datos.get("title", "Orden de prueba"),
+        }
+
+    def como_comentarios() -> list[dict[str, object]]:
+        # Autor de confianza: es lo que exige el filtro de
+        # `sirius_read_issue_comments`. Un comentario ajeno no lo veria, y la
+        # deduplicacion se probaria contra un historial vacio sin querer.
+        return [
+            {"body": c, "user": {"login": "github-actions[bot]"}, "author_association": "NONE"}
+            for c in comentarios
+        ]
+
+    def responder(objeto: object, jq: str, crudo: bool) -> int:
+        """Delega el filtro en el `jq` DE VERDAD.
+
+        Interpretar los filtros a mano fue un error del arnes anterior: bastaba
+        con que `--jq '{state: .state, is_pr: ...}'` contuviera `.state` para que
+        el doble devolviera solo el estado, y el guion real recibia algo que
+        GitHub nunca habria devuelto.
+        """
+        crudo_json = json.dumps(objeto, ensure_ascii=False)
+        if not jq:
+            print(crudo_json)
+            return 0
+        orden = ["jq"] + (["-r"] if crudo else []) + [jq]
+        salida = subprocess.run(orden, input=crudo_json, capture_output=True, text=True)
+        if salida.returncode != 0:
+            print(salida.stderr, file=sys.stderr)
+            return salida.returncode
+        print(salida.stdout, end="")
+        return 0
+
+    if argv[:1] == ["api"]:
+        if os.environ.get("FAKE_GH_BASURA") == "1":
+            # La API responde 200 con algo que no es la incidencia: un portal
+            # cautivo, un proxy, un 200 con cuerpo de error. Se acepta el
+            # codigo de salida y se rompe al interpretar.
+            print("<html>no soy una incidencia</html>")
+            return 0
+        objetivo = next((a for a in argv if a.startswith("repos/")), "")
+        jq = argv[argv.index("--jq") + 1] if "--jq" in argv else ""
+        if "/comments" in objetivo:
+            return responder(como_comentarios(), jq, crudo=True)
+        return responder(incidencia(), jq, crudo=True)
+
+    if argv[:2] == ["issue", "edit"]:
+        if "--add-label" in argv:
+            etiqueta = argv[argv.index("--add-label") + 1]
+            if etiqueta not in etiquetas:
+                etiquetas.append(etiqueta)
+        if "--remove-label" in argv:
+            etiqueta = argv[argv.index("--remove-label") + 1]
+            etiquetas = [e for e in etiquetas if e != etiqueta]
+        datos["labels"] = etiquetas
+        _guardar(datos)
+        return 0
+
+    if argv[:2] == ["issue", "comment"]:
+        cuerpo = Path(argv[argv.index("--body-file") + 1]).read_text(encoding="utf-8")
+        comentarios.append(cuerpo)
+        datos["comments"] = comentarios
+        _guardar(datos)
+        if os.environ.get("FAKE_GH_FAIL_AMBIGUO") == "1":
+            # GitHub aceptó el POST y la respuesta se perdió: publicado y en error.
+            print("fake gh: respuesta ambigua (publicado, pero error)", file=sys.stderr)
+            return 1
+        return 0
+
+    if argv[:2] == ["issue", "view"]:
+        # La via de respaldo GraphQL: otros nombres de campo, mismo contenido.
+        jq = argv[argv.index("--jq") + 1] if "--jq" in argv else ""
+        vista = {
+            "body": datos.get("body", ""),
+            "state": str(datos.get("state", "open")).upper(),
+            "labels": [{"name": e} for e in etiquetas],
+            "comments": [
+                {"body": c, "author": {"login": "app/github-actions"}, "authorAssociation": "NONE"}
+                for c in comentarios
+            ],
+        }
+        return responder(vista, jq, crudo=True)
+
+    if argv[:2] == ["issue", "close"]:
+        datos["state"] = "closed"
+        _guardar(datos)
+        return 0
+
+    if argv[:2] == ["label", "create"]:
+        return 0
+
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))
