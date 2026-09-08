@@ -2314,3 +2314,18 @@ ADR o su incidencia cuando se adopte.
     nueva necesitará la suya. Cerrarlo de verdad es fabricar el espejo pasando
     un historial sintético por la proyección real; es un cambio grande y va en
     ficha propia, después de #546.
+18. **Dos sesiones en paralelo se pisan los números de ADR, y ninguna puede
+    verlo sola.** Dos colisiones en una hora el 08-09 (entrada 50): #567/#568
+    sobre `ADR-160`, y #568/#569 sobre `ADR-162`. `scripts/siguiente_adr.py`
+    solo consulta ramas YA empujadas, así que dos sesiones que numeran con
+    minutos de diferencia reclaman el mismo número; git no da conflicto porque
+    los nombres de fichero difieren, y `test_registro_de_decisiones` solo ve
+    duplicados dentro de un mismo árbol. **Se descubre al fusionar la
+    segunda**, cuando ya cuesta una vuelta entera. Candidatos, para decisión
+    del propietario: (a) reservar el número con un commit vacío en `main` al
+    numerar; (b) un guardián que compare contra las ramas remotas en Quality,
+    no solo contra el árbol; (c) que el número lo asigne el merge y no el
+    autor, dejando el nombre del fichero sin número hasta fusionar. Mientras
+    tanto, la regla operativa es: **volver a ejecutar `siguiente_adr.py` tras
+    `git fetch` justo antes de abrir la PR**, y recordar que renumerar incluye
+    el TÍTULO de la PR, porque el squash lo usa como mensaje de commit.
