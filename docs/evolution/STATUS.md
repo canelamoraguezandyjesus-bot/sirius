@@ -340,3 +340,70 @@ tanto al registro del umbral de D7 punto 6 como al cierre de esta ola. M17 es el
 control: si las dos pruebas `xfail(strict=True)` de M11 no pasan tras M13-M16, este
 documento se actualiza de nuevo con la cifra real alcanzada, sin dar la ola por cerrada por
 declaración — se cierra cuando las pruebas lo confirmen, no antes.
+
+## Separación entre Sirius y su motor — formalizada el 8 de septiembre de 2026
+
+> Añadido al final, sin tocar ninguna línea anterior, por la misma razón que la
+> sección precedente: ADR-111 cita `docs/evolution/STATUS.md:156-166` y `:202`, y
+> la Definición de Producto 0.2 cita `docs/evolution/STATUS.md:48-60`. Insertar
+> contenido antes las habría desplazado.
+
+El propietario expresó una dirección sobre el reparto entre Sirius y su motor de
+trabajo; `docs/evolution/PROPUESTA_SEPARACION_SIRIUS_MOTOR.md` la recogió y
+comprobó qué documentos la contradecían. Esa dirección queda formalizada en
+**EV-015 a EV-019** (`docs/evolution/DECISIONS.md`), en la **§19** del Rector y
+en **ADR-160** y **ADR-161**.
+
+**EV-015 precisa EV-001, EV-016 sustituye EV-002 y acota EV-003, y EV-004 se
+mantiene vigente sin enmienda.**
+
+**Entrada en vigor:** la fusión de la Pull Request que introduce esta enmienda,
+por el propietario, conforme al procedimiento establecido en este repositorio.
+**Aprobación documental y retirada técnica son cosas distintas:** esa fusión
+aprueba los documentos y **no** desactiva ningún carril; la retirada de los
+carriles de investigación y auditoría (ADR-161) sigue siendo un acto posterior.
+
+### Qué cambia en el apartado «Vigente» de este documento
+
+Las dos líneas de arriba que decían «Sirius conserva … síntesis final» y «El
+modelo de interacción principal es híbrido: Sirius es el interlocutor principal»
+quedan **enmendadas por EV-016**, y se leen así desde hoy:
+
+- Sirius conserva identidad, memoria propia, contexto, permisos y trazabilidad.
+  La **síntesis final es a petición**, no obligatoria.
+- El trabajo habitual del propietario se realiza **directamente con ChatGPT,
+  Claude o Codex**. Sirius no intermedia obligatoriamente; abrir una sesión
+  especializada sigue siendo una capacidad suya (EV-019), no el camino por el
+  que llega el trabajo.
+- El motor conserva ejecución, documentación, comprobaciones, revisión,
+  corrección, recuperación y diario operativo, y nada más (EV-017).
+- Existen **tres responsabilidades de memoria** con dueño distinto —la propia de
+  Sirius, el estado y diario del motor, y el conocimiento común del trabajo y los
+  proyectos—, sin que eso obligue a tres bases de datos (EV-018). El
+  conocimiento común **no es la memoria canónica**, así que EV-004 sigue vigente.
+
+### Los dos carriles dedicados: decisión tomada, ejecución pendiente
+
+ADR-161 registra que **se retiran** los carriles dedicados de investigación
+(perfil `investigador`) y auditoría (`auditoria:solicitada`), y que **los
+revisores del ciclo y las comprobaciones se conservan enteros**.
+
+**Nada se ha ejecutado.** `TABLA_ACTIVACION` sigue conteniendo las cuatro clases,
+los workflows siguen en su sitio y las etiquetas siguen creadas: **hoy los dos
+carriles funcionan si alguien los dispara**. La forma de ejecución recomendada
+—desactivación reversible, conservando código, perfiles, ADR, historial y
+resultados— está en ADR-161 y **no está ordenada**.
+
+### Lo que esta formalización NO cambia
+
+- **No autoriza implementación de nada.** La regla de activación
+  (`docs/evolution/RECTOR.md:282-290`) sigue entera, y las dos excepciones
+  vigentes —el Sirius Work Engine y Sirius 0.2 — Memoria útil— siguen siendo las
+  únicas, con el alcance que ya tenían.
+- **No cambia prioridades, alcance ni numeración de ninguna versión**, ni el
+  orden del roadmap. El conocimiento común **no recibe etapa**, y su relación con
+  Sirius 0.2 sigue por estudiar.
+- **No elige herramienta, ubicación ni formato** para el conocimiento común.
+- **No toca la ola de paridad en producción**, que sigue su curso donde la dejó
+  la sección anterior.
+

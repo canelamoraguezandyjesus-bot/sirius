@@ -39,8 +39,8 @@ rechazado (H-12). Un ensayo que no pasa por las guardas no ensaya nada.
   (ADR-043): para programación entiende «corrige» o «implementa» **al principio
   de la frase**. Una orden que empiece por otro verbo sale rechazada como
   «intención ambigua», y no crea nada.
-- **Solo despacha `programacion` y `auditoria`.** Una orden de documentación se
-  acepta al entrar y luego el despachador la rechaza.
+- **Qué clases despacha hoy.** `TABLA_ACTIVACION` tiene cuatro: `programacion`, `auditoria`, `documentacion` (ADR-088) e `investigacion` (ADR-099). De `auditoria` e `investigacion` hay **retirada acordada** (ADR-161 y contrato §13) y **ejecución pendiente**: siguen despachándose, y fusionar esos documentos no las retira.
+  Lo que el despachador rechaza es cualquier clase que no esté en esa tabla.
 - **`--ejecutar` necesita dos cosas, y falla en este orden.** Primero la
   variable `SIRIUS_BOT_TOKEN`: sin ella el escritor **no llega ni a
   construirse** —el fallo ocurre antes de cualquier escritura, con un mensaje
