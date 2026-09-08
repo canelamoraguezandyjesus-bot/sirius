@@ -3,25 +3,26 @@
 Lo que estas pruebas existen para impedir es el defecto que el inventario de
 ADR-163 encontró: **una entrada retirada que se queda esperando, o que acaba en
 programación por otra ruta**. Investigación comparte la etiqueta de activación
-con programación y se reparte por el campo ``Perfil:``; si se desactivara solo
-``investigar-orden.yml`` la activación quedaría colgada, y si se quitara la
-puerta del implementador se implementaría como programación.
+con programación y se reparte por el campo ``Perfil:``.
 
-CÓMO PRUEBAN, tras ADR-167: las puertas se **ejecutan**. La revisión de ADR-163
-encontró cinco fallos que ninguna prueba de este fichero vio porque comprobaban
-que el guion *mencionaba* ``sirius_comment_once`` o ``sirius:failed-safely``, no
-lo que pasaba al correrlo. Ahora el arnés
+CÓMO PRUEBAN, tras ADR-167: las puertas se **ejecutan**. El arnés
 (``tests/automation/fixtures/carriles_retirados/``) extrae el guion real del
 paso, lo corre con ``bash`` contra un ``gh`` doble —sin red ni credenciales— y
 devuelve lo observable: **código de salida, comentarios publicados, etiquetas
 finales y la lista de llamadas**. Una puerta que dijera «hecho» sin haberlo
 hecho cae aquí.
 
-La prueba que ata las entradas es
-:func:`test_toda_entrada_de_un_carril_retirado_esta_cubierta`: **enumera los
-disparadores desde el árbol**, no de una lista escrita a mano, así que un
-workflow nuevo que reaccione a esas etiquetas y no consulte el registro la hace
-caer.
+DOS COSAS QUE LA SEGUNDA RONDA DE ADR-167 CAMBIÓ, y conviene leer antes de
+tocar nada:
+
+1. **Ninguna prueba de comportamiento lee el registro real.** Todas reciben un
+   registro controlado. Antes no era así, y por eso reactivar un carril —que el
+   contrato promete que es quitar una entrada y fusionar— dejaba seis pruebas en
+   rojo. El registro real solo se usa para comprobar que es válido.
+2. **Las dos puertas se prueban juntas y encadenadas**, sobre la misma
+   incidencia. Dos ejecuciones aisladas no pueden mostrar ni que una activación
+   se quede sin dueña ni que la atiendan las dos, que son exactamente los dos
+   desenlaces que el reparto tuvo que arreglar.
 
 Deterministas: leen ficheros y ejecutan guiones de shell contra dobles
 explícitos. No lanzan ningún agente, no tocan el registro real y no gastan
@@ -31,8 +32,10 @@ ninguna API.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -42,12 +45,15 @@ from carriles_retirados.arnes import (
     Resultado,
     cuerpo_de_orden,
     ejecutar_paso,
+    estado_tras,
     incidencia_activa,
 )
 
 RAIZ = Path(__file__).resolve().parents[2]
 REGISTRO = RAIZ / "docs" / "implementation" / "work_engine" / "carriles_retirados.json"
 LECTOR = RAIZ / "scripts" / "automation" / "sirius_carril_retirado.py"
+REPARTO = RAIZ / "scripts" / "automation" / "sirius_reparto_activacion.sh"
+VALIDADOR = RAIZ / "scripts" / "automation" / "sirius_validate_activation.sh"
 WORKFLOWS = RAIZ / ".github" / "workflows"
 
 #: Los carriles que ADR-161 AUTORIZA retirar, y la etiqueta por la que entra cada
@@ -61,11 +67,22 @@ CAMPOS = ("retirado_por", "ejecutado_por", "fecha", "motivo", "a_donde_va")
 
 #: El marcador de idempotencia del comentario de la puerta de investigación.
 #: Tiene que estar EN el cuerpo publicado: `sirius_comment_once` deduplica
-#: buscándolo en los comentarios ya existentes, así que un marcador que solo
-#: viviera en la llamada no deduplicaría nada (hallazgo 4 de ADR-167).
+#: buscándolo en los comentarios ya existentes.
 MARCADOR = "<!-- sirius-carril-retirado:investigacion -->"
 
-TERMINALES = ("sirius:completed", "sirius:failed-safely", "sirius:blocked-decision")
+
+#: Los estados incompatibles con una activación nueva, **leídos de su dueño** y
+#: no copiados aquí. Copiar esta lista fue el hallazgo 2 de la segunda ronda: la
+#: puerta se escribió una versión de cuatro y dejó fuera `implementing`,
+#: `reviewing`, `repairing`, `ci-pending` y los dos `*-requested`.
+def _estados_incompatibles() -> tuple[str, ...]:
+    texto = VALIDADOR.read_text(encoding="utf-8")
+    match = re.search(r'INCOMPATIBLE_STATES="([^"]+)"', texto)
+    assert match, f"no se encontró INCOMPATIBLE_STATES en {VALIDADOR.name}"
+    return tuple(match.group(1).split())
+
+
+INCOMPATIBLES = _estados_incompatibles()
 
 
 def _registro() -> dict[str, Any]:
@@ -83,13 +100,6 @@ def _pasos(nombre: str, job: str) -> list[dict[str, Any]]:
     return pasos
 
 
-def _guion(nombre: str, job: str, step_id: str) -> str:
-    for paso in _pasos(nombre, job):
-        if paso.get("id") == step_id:
-            return str(paso["run"])
-    raise AssertionError(f"{nombre}: no existe el paso {step_id!r} en {job!r}")
-
-
 def _entrada(clase: str) -> dict[str, str]:
     return {
         "retirado_por": "ADR-161",
@@ -100,9 +110,10 @@ def _entrada(clase: str) -> dict[str, str]:
     }
 
 
-def _registro_controlado(tmp_path: Path, *clases: str, nombre: str = "registro.json") -> Path:
+def _registro_controlado(tmp_path: Path, *clases: str) -> Path:
     """Un registro de prueba con exactamente las clases pedidas. Nunca el real."""
-    ruta = tmp_path / nombre
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    ruta = tmp_path / "registro_de_prueba.json"
     ruta.write_text(
         json.dumps({"carriles": {clase: _entrada(clase) for clase in clases}}, ensure_ascii=False),
         encoding="utf-8",
@@ -134,30 +145,86 @@ def _validar_registro(datos: dict[str, Any]) -> list[str]:
     return fallos
 
 
-def _incidencia_de(resultado: Resultado, **cambios: Any) -> dict[str, Any]:
-    """El estado que dejó una ejecución, como entrada de la siguiente.
+# --------------------------------------------------------------------------
+# Ejecutar las puertas. SIEMPRE con registro controlado.
+# --------------------------------------------------------------------------
 
-    Es lo que hace comprobable la CONVERGENCIA: la segunda pasada no parte de
-    una incidencia limpia, sino exactamente de lo que quedó tras la primera.
+PUERTAS = {
+    "investigacion": ("investigar-orden.yml", "investigar"),
+    "implementacion": ("implement-sirius-work.yml", "implement"),
+    "auditoria": ("audit-sirius-repository.yml", "auditar"),
+}
+
+
+def _puerta(cual: str, tmp_path: Path, *, registro: Path | None = None, **kwargs: Any) -> Resultado:
+    workflow, job = PUERTAS[cual]
+    paso = "retirada" if cual == "auditoria" else "gate"
+    if registro is None:
+        # Por defecto, los DOS retirados: es la configuración que la mayoría de
+        # estas pruebas describe. Pero sale de un fichero controlado, no del
+        # registro real, así que reactivar en el registro real no las mueve.
+        registro = _registro_controlado(tmp_path / "reg", "investigacion", "auditoria")
+    if cual == "auditoria":
+        kwargs.setdefault("incidencia", {"labels": ["auditoria:solicitada"], "comments": []})
+    return ejecutar_paso(workflow, job, paso, tmp_path=tmp_path, registro=registro, **kwargs)
+
+
+@dataclass(frozen=True, slots=True)
+class Paso:
+    """Una puerta de la cadena: qué encontró y qué dejó."""
+
+    cual: str
+    antes: list[str]
+    resultado: Resultado
+
+
+def _encadenar(
+    tmp_path: Path,
+    orden: tuple[str, ...],
+    *,
+    perfil_evento: str,
+    perfil_actual: str,
+    labels: list[str] | None = None,
+    registro: Path | None = None,
+) -> tuple[list[Paso], dict[str, Any]]:
+    """Las puertas de `orden`, una tras otra, sobre la MISMA incidencia."""
+    cuerpo = cuerpo_de_orden(perfil_actual)
+    incidencia = incidencia_activa(body=cuerpo)
+    if labels is not None:
+        incidencia["labels"] = list(labels)
+    if registro is None:
+        registro = _registro_controlado(tmp_path / "reg", "investigacion", "auditoria")
+    resultados: list[Paso] = []
+    for i, cual in enumerate(orden):
+        # El estado de ENTRADA se conserva: sin él no se puede distinguir «la
+        # atendió» de «se la encontró atendida».
+        antes = list(incidencia["labels"])
+        r = _puerta(
+            cual,
+            tmp_path / f"{i}",
+            registro=registro,
+            incidencia=incidencia,
+            cuerpo_del_evento=cuerpo_de_orden(perfil_evento),
+        )
+        resultados.append(Paso(cual=cual, antes=antes, resultado=r))
+        incidencia = estado_tras(r, cuerpo)
+    return resultados, incidencia
+
+
+def _atendio(paso: Paso) -> bool:
+    """¿Esta puerta se hizo cargo del encargo?
+
+    Dos formas de hacerse cargo, y contar solo una fue un error de esta misma
+    prueba: **ejecutar** (`valid=true`, el modelo va a correr) y **retirar**
+    (dejar la incidencia en `sirius:failed-safely`). Contando solo la primera, el
+    caso en que una puerta retiraba y la otra ejecutaba la MISMA orden salía como
+    «una sola dueña», que es justo el defecto.
     """
-    incidencia: dict[str, Any] = {
-        "labels": list(resultado.etiquetas),
-        "comments": list(resultado.comentarios),
-        "state": resultado.estado_incidencia,
-        "body": cuerpo_de_orden(),
-    }
-    incidencia.update(cambios)
-    return incidencia
-
-
-def _puerta_investigacion(tmp_path: Path, **kwargs: Any) -> Resultado:
-    return ejecutar_paso("investigar-orden.yml", "investigar", "gate", tmp_path=tmp_path, **kwargs)
-
-
-def _puerta_auditoria(tmp_path: Path, **kwargs: Any) -> Resultado:
-    kwargs.setdefault("incidencia", {"labels": ["auditoria:solicitada"], "comments": []})
-    return ejecutar_paso(
-        "audit-sirius-repository.yml", "auditar", "retirada", tmp_path=tmp_path, **kwargs
+    if paso.resultado.valid == "true":
+        return True
+    return (
+        "sirius:failed-safely" in paso.resultado.etiquetas
+        and "sirius:failed-safely" not in paso.antes
     )
 
 
@@ -169,12 +236,9 @@ def _puerta_auditoria(tmp_path: Path, **kwargs: Any) -> Resultado:
 def test_el_registro_real_es_valido() -> None:
     """Lo que haya declarado tiene que estar bien declarado.
 
-    Esta prueba NO exige que los dos carriles consten retirados. Exigirlo -como
-    hacía antes de ADR-167- convertía la reactivación documentada, que es quitar
-    una entrada y fusionar, en una prueba roja: la propiedad reversible que
-    ADR-161 pedía quedaba prohibida por su propia suite. Lo que sí se sostiene
-    en cualquier configuración es esto: solo clases autorizadas, y con todos sus
-    campos.
+    Esta prueba NO exige que los dos carriles consten retirados, y es la ÚNICA
+    que mira el registro real. Exigirlo convertía la reactivación documentada
+    —quitar una entrada y fusionar— en una prueba roja.
     """
     assert _validar_registro(_registro()) == []
 
@@ -214,12 +278,7 @@ def test_las_comprobaciones_del_registro_de_verdad_rechazan(
 
 
 def test_la_clase_sigue_en_la_tabla_de_activacion_y_en_el_contrato() -> None:
-    """Retirar no es borrar: la fila se conserva, y por eso reactivar es una línea.
-
-    Si alguien 'limpiara' `TABLA_ACTIVACION`, el rechazo pasaría a ser
-    `ClaseNoDespachableError` -«esta clase nunca tuvo despachador»- y se
-    perdería la distinción que ADR-163 existe para conservar.
-    """
+    """Retirar no es borrar: la fila se conserva, y por eso reactivar es una línea."""
     from sirius_engine.dispatcher import TABLA_ACTIVACION
     from sirius_engine.domain.work_item import WorkItemClass
 
@@ -247,10 +306,12 @@ def test_el_despachador_rechaza_un_carril_retirado_con_su_explicacion(
 
 
 @pytest.mark.parametrize("clase", ["programacion", "documentacion"])
-def test_las_clases_vivas_no_constan_retiradas(clase: str) -> None:
+def test_las_clases_vivas_no_constan_retiradas(tmp_path: Path, clase: str) -> None:
+    """Ni siquiera en un registro con los dos carriles retirados."""
     from sirius_engine.carriles_retirados import carril_retirado
 
-    assert carril_retirado(clase) is None
+    registro = _registro_controlado(tmp_path, *CARRILES)
+    assert carril_retirado(clase, registro=registro) is None
 
 
 def test_el_rechazo_del_despachador_es_un_error_propio_y_no_el_generico() -> None:
@@ -258,24 +319,22 @@ def test_el_rechazo_del_despachador_es_un_error_propio_y_no_el_generico() -> Non
     from sirius_engine.domain.errors import CarrilRetiradoError, ClaseNoDespachableError
 
     assert issubclass(CarrilRetiradoError, Exception)
-    # Que mypy sepa que son tipos distintos es justo lo que se quiere: la prueba
-    # fija que el despachador NO reutiliza el error genérico, y por eso compara
-    # los nombres -comparar los tipos sería una identidad que el comprobador ya
-    # resuelve, y no probaría nada en ejecución-.
     assert CarrilRetiradoError.__name__ != ClaseNoDespachableError.__name__
     assert not issubclass(CarrilRetiradoError, ClaseNoDespachableError)
 
 
 # --------------------------------------------------------------------------
-# El lector que usan los workflows: contrato de códigos (hallazgo 3)
+# El lector que usan los workflows: contrato de códigos
 # --------------------------------------------------------------------------
 
 
-def _leer(clase: str, *, registro: Path | None = None) -> subprocess.CompletedProcess[str]:
-    orden = [sys.executable, str(LECTOR), clase]
-    if registro is not None:
-        orden += ["--registro", str(registro)]
-    return subprocess.run(orden, capture_output=True, text=True, cwd=RAIZ)
+def _leer(clase: str, *, registro: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, str(LECTOR), clase, "--registro", str(registro)],
+        capture_output=True,
+        text=True,
+        cwd=RAIZ,
+    )
 
 
 @pytest.mark.parametrize("clase", sorted(CARRILES))
@@ -292,11 +351,7 @@ def test_el_lector_dice_activo_con_codigo_uno(tmp_path: Path) -> None:
 
 
 def test_un_registro_ilegible_no_se_lee_como_carril_activo(tmp_path: Path) -> None:
-    """Fail-closed en la afirmación: no poder leer no es «está activo».
-
-    Si un registro roto devolviera 1, el workflow concluiría que el carril sigue
-    vivo y dejaría pasar el trabajo por un carril retirado.
-    """
+    """Fail-closed en la afirmación: no poder leer no es «está activo»."""
     roto = tmp_path / "roto.json"
     roto.write_text("{esto no es json", encoding="utf-8")
     assert _leer("auditoria", registro=roto).returncode == 2
@@ -310,25 +365,15 @@ def test_un_registro_ilegible_no_se_lee_como_carril_activo(tmp_path: Path) -> No
 def test_toda_entrada_de_un_carril_retirado_esta_cubierta() -> None:
     """La guarda que no envejece: enumera los disparadores, no los da por sabidos.
 
-    Cualquier workflow que reaccione a la etiqueta de entrada de un carril **que
-    conste retirado** tiene que consultar el registro, o declarar por qué no le
-    hace falta. Añadir uno nuevo sin cerrarlo hace caer esta prueba.
-
-    Se recorre el REGISTRO, no la lista de clases autorizadas: si un carril se
-    reactiva, su entrada vuelve a ser una entrada normal y ya no hay nada que
-    cerrar.
+    Se recorre el REGISTRO real, no la lista de clases autorizadas: si un carril
+    se reactiva, su entrada vuelve a ser una entrada normal y no hay nada que
+    cerrar. Con el registro vacío esta prueba no comprueba nada, y es correcto.
     """
-    # El implementador reacciona a la etiqueta compartida y NO consulta el
-    # registro a propósito: su papel es declinar el perfil para que el carril
-    # retirado lo atienda quien sabe responderlo. Se declara aquí, con su
-    # motivo, en vez de dejarlo como un hueco silencioso.
     exentos = {
-        # Declina el perfil `investigador` ANTES de consumir el evento: no
-        # atiende el carril, lo aparta para que lo atienda quien sabe cerrarlo.
-        "implement-sirius-work.yml": "declina el perfil investigador; no lo atiende",
-        # Solo valida que la activación sea legítima y retira el evento si no lo
-        # es. No ejecuta ningún carril, así que no tiene nada que cerrar. Lo
-        # encontró esta misma prueba, que por eso enumera en vez de suponer.
+        # No atiende el carril: el reparto le dice que la orden no es suya y la
+        # aparta para que la atienda quien sabe cerrarla.
+        "implement-sirius-work.yml": "el reparto la declina; no atiende el carril",
+        # Solo valida que la activación sea legítima. No ejecuta ningún carril.
         "validate-sirius-activation.yml": "valida la activación; no atiende ningún carril",
     }
 
@@ -351,25 +396,14 @@ def test_toda_entrada_de_un_carril_retirado_esta_cubierta() -> None:
             )
 
 
-def test_la_puerta_del_implementador_sigue_declinando_el_perfil_investigador() -> None:
-    """Sin ella, una activación de investigación se implementaría como programación.
-
-    Es la decisión que ADR-161 dejó pendiente y que ADR-163 resuelve: la puerta
-    se conserva. Esta prueba impide que una limpieza futura la quite.
-    """
-    guion = _guion("implement-sirius-work.yml", "implement", "gate")
-    assert 'if [ "$perfil" = "investigador" ]' in guion
-    assert "valid=false" in guion
-
-
 # --------------------------------------------------------------------------
-# La puerta de investigación, EJECUTADA (ADR-167)
+# La puerta de investigación: el camino bueno y los fallos de la primera ronda
 # --------------------------------------------------------------------------
 
 
 def test_el_camino_bueno_explica_y_cierra_en_un_estado_terminal(tmp_path: Path) -> None:
     """Lo que tiene que pasar cuando todo va bien, comprobado en lo observable."""
-    r = _puerta_investigacion(tmp_path, incidencia=incidencia_activa())
+    r = _puerta("investigacion", tmp_path, incidencia=incidencia_activa())
 
     assert r.codigo == 0, r.stderr
     assert r.valid == "false", "ningún paso que gaste el investigador puede correr"
@@ -378,18 +412,11 @@ def test_el_camino_bueno_explica_y_cierra_en_un_estado_terminal(tmp_path: Path) 
     assert "retirado" in r.comentarios[0]
     assert "A dónde va ahora" in r.comentarios[0]
     assert r.etiquetas == ["sirius:failed-safely"], r.etiquetas
-    assert not any("gpt-researcher" in ll or "atender_orden" in ll for ll in r.llamadas_gh)
 
 
 def test_si_fallan_las_etiquetas_el_paso_termina_en_rojo(tmp_path: Path) -> None:
-    """Hallazgo 1: antes esto salía con 0.
-
-    Un `::error::` seguido de `exit 0` es un job VERDE: nadie se entera, y la
-    incidencia se queda en `implement-requested` esperando a un carril que ya no
-    existe. La explicación sí está publicada, así que quien mire la incidencia
-    ve la verdad; lo que faltaba era que el run lo dijera.
-    """
-    r = _puerta_investigacion(tmp_path, incidencia=incidencia_activa(), fallar="issue edit")
+    """Primera ronda, hallazgo 1: antes esto salía con 0 y el job iba verde."""
+    r = _puerta("investigacion", tmp_path, incidencia=incidencia_activa(), fallar="issue edit")
 
     assert r.codigo != 0, "una transición que no se pudo confirmar no puede salir verde"
     assert len(r.comentarios) == 1, "la explicación se publica primero, y se queda"
@@ -397,14 +424,8 @@ def test_si_fallan_las_etiquetas_el_paso_termina_en_rojo(tmp_path: Path) -> None
 
 
 def test_si_falla_el_comentario_no_se_toca_ninguna_etiqueta(tmp_path: Path) -> None:
-    """Hallazgo 1, la otra mitad: antes era un `warning` y seguía a cerrar.
-
-    Cerrar en `failed-safely` sin haber podido explicar por qué deja una
-    incidencia terminada y muda: quien la abrió no tiene forma de saber que su
-    carril está retirado ni a dónde ir. Ahora el orden lo impide -el comentario
-    primero- y el fallo termina el paso en rojo.
-    """
-    r = _puerta_investigacion(tmp_path, incidencia=incidencia_activa(), fallar="issue comment")
+    """Primera ronda, hallazgo 1, la otra mitad: antes era un `warning` y seguía."""
+    r = _puerta("investigacion", tmp_path, incidencia=incidencia_activa(), fallar="issue comment")
 
     assert r.codigo != 0
     assert r.comentarios == []
@@ -414,151 +435,44 @@ def test_si_falla_el_comentario_no_se_toca_ninguna_etiqueta(tmp_path: Path) -> N
     assert not any(ll.startswith("issue edit") for ll in r.llamadas_gh)
 
 
-def test_reejecutar_tras_un_fallo_de_etiquetas_converge(tmp_path: Path) -> None:
-    """La recuperación es reejecutar, y hay que demostrarlo, no suponerlo.
-
-    ADR-167 comprobó que el reconciliador NO repara este estado: para
-    `planned + implement-requested` no hace nada, y `completed + failed-safely`
-    lo reporta como CONTRADICCIÓN que exige revisión humana (contrato §9.1). Así
-    que la convergencia tiene que estar aquí: la segunda pasada parte del estado
-    que dejó la primera, no republica -el marcador ya está- y termina la
-    transición.
-    """
-    primera = _puerta_investigacion(
-        tmp_path / "1", incidencia=incidencia_activa(), fallar="issue edit"
-    )
-    assert primera.codigo != 0 and len(primera.comentarios) == 1
-
-    segunda = _puerta_investigacion(tmp_path / "2", incidencia=_incidencia_de(primera))
-
-    assert segunda.codigo == 0, segunda.stderr
-    assert len(segunda.comentarios) == 1, "el marcador tiene que evitar el duplicado"
-    assert segunda.etiquetas == ["sirius:failed-safely"], segunda.etiquetas
-
-
 def test_dos_activaciones_iguales_dejan_un_solo_comentario(tmp_path: Path) -> None:
-    """Hallazgo 4: antes dejaban dos.
+    """Primera ronda, hallazgo 4: antes dejaban dos.
 
-    Aquí la segunda activación se para antes, en la comprobación de estado: la
-    incidencia ya está en `sirius:failed-safely`. Es el desenlace que ve quien
-    la abrió -un comentario, no dos-, y por eso se comprueba así.
-
-    El marcador, que es la otra mitad del arreglo, se prueba donde de verdad
-    entra en juego: en :func:`test_reejecutar_tras_un_fallo_de_etiquetas_converge`
-    y en :func:`test_una_respuesta_ambigua_no_acaba_en_comentario_duplicado`,
-    donde la primera pasada dejó el comentario publicado **sin** llegar a la
-    etiqueta terminal. Ahí no hay estado que frene la segunda: si el marcador no
-    estuviera en el cuerpo publicado -que es el defecto de ADR-163-, se
-    publicaría un duplicado.
+    Aquí la segunda activación se para antes, porque la incidencia ya está en
+    `sirius:failed-safely`. El marcador —la otra mitad del arreglo— se prueba
+    donde de verdad entra en juego: en las dos pruebas de convergencia de abajo,
+    donde la primera pasada dejó el comentario publicado SIN llegar a la etiqueta
+    terminal.
     """
-    primera = _puerta_investigacion(tmp_path / "1", incidencia=incidencia_activa())
+    primera = _puerta("investigacion", tmp_path / "1", incidencia=incidencia_activa())
     assert len(primera.comentarios) == 1
 
-    segunda = _puerta_investigacion(tmp_path / "2", incidencia=_incidencia_de(primera))
+    segunda = _puerta(
+        "investigacion", tmp_path / "2", incidencia=estado_tras(primera, cuerpo_de_orden())
+    )
 
     assert len(segunda.comentarios) == 1, segunda.comentarios
     assert segunda.codigo == 0
 
 
 def test_una_respuesta_ambigua_no_acaba_en_comentario_duplicado(tmp_path: Path) -> None:
-    """GitHub acepta el POST y la respuesta se pierde: publicado y en error.
-
-    Ninguna API lo puede descartar. Lo que sí se puede exigir es que la segunda
-    pasada no vuelva a publicar: el marcador ya está en el cuerpo del primero.
-    """
-    primera = _puerta_investigacion(tmp_path / "1", incidencia=incidencia_activa(), ambiguo=True)
+    """GitHub acepta el POST y la respuesta se pierde: publicado y en error."""
+    primera = _puerta("investigacion", tmp_path / "1", incidencia=incidencia_activa(), ambiguo=True)
     assert len(primera.comentarios) == 1, "el doble publica y además devuelve error"
 
-    segunda = _puerta_investigacion(tmp_path / "2", incidencia=_incidencia_de(primera))
+    segunda = _puerta(
+        "investigacion", tmp_path / "2", incidencia=estado_tras(primera, cuerpo_de_orden())
+    )
 
     assert len(segunda.comentarios) == 1, segunda.comentarios
     assert segunda.etiquetas == ["sirius:failed-safely"]
 
 
-@pytest.mark.parametrize(
-    ("descripcion", "incidencia"),
-    [
-        pytest.param(
-            "ya completada",
-            incidencia_activa(labels=["sirius:completed"], state="closed"),
-            id="evento-atrasado-sobre-incidencia-completada",
-        ),
-        pytest.param(
-            "cerrada",
-            incidencia_activa(state="closed"),
-            id="incidencia-cerrada",
-        ),
-        pytest.param(
-            "sin la etiqueta de activación",
-            incidencia_activa(labels=["sirius:planned"]),
-            id="carrera-con-el-validador",
-        ),
-        pytest.param(
-            "ya cerrada por una pasada anterior",
-            incidencia_activa(labels=["sirius:failed-safely"]),
-            id="evento-repetido",
-        ),
-    ],
-)
-def test_no_se_toca_una_incidencia_que_ya_no_esta_esperando(
-    tmp_path: Path, descripcion: str, incidencia: dict[str, Any]
-) -> None:
-    """Hallazgo 2: la puerta decidía con el cuerpo del EVENTO, sin mirar el estado.
+def test_si_no_se_puede_leer_la_incidencia_no_se_toca(tmp_path: Path) -> None:
+    """Sin estado no hay decisión: se termina en rojo sin tocar nada."""
+    r = _puerta("investigacion", tmp_path, incidencia=incidencia_activa(), fallar="api")
 
-    Un evento atrasado sobre una incidencia ya completada acababa poniéndole
-    `sirius:failed-safely` **encima** de `sirius:completed`: los dos a la vez,
-    que es justo lo que el reconciliador reporta como CONTRADICCIÓN. Ahora la
-    puerta relee estado, etiquetas y cuerpo de la API en UNA instantánea y no
-    toca nada que no siga esperando.
-    """
-    etiquetas_antes = list(incidencia["labels"])
-
-    r = _puerta_investigacion(tmp_path, incidencia=incidencia)
-
-    assert r.codigo == 0, f"{descripcion}: no tocar no es fallar"
-    assert r.valid == "false"
-    assert r.etiquetas == etiquetas_antes, f"{descripcion}: {r.etiquetas}"
-    assert r.comentarios == [], f"{descripcion}: no hay nada que explicar dos veces"
-    assert not any(ll.startswith("issue edit") for ll in r.llamadas_gh)
-
-
-def test_manda_el_perfil_del_cuerpo_actual_y_no_el_del_evento(tmp_path: Path) -> None:
-    """Si el cuerpo cambió de perfil desde el evento, la puerta no es la suya.
-
-    Actuar con el perfil del evento significaría cerrar como «carril retirado»
-    una orden que ahora es de programación, y que el implementador sí atiende.
-    """
-    r = _puerta_investigacion(
-        tmp_path,
-        incidencia=incidencia_activa(body=cuerpo_de_orden("programador")),
-        cuerpo_del_evento=cuerpo_de_orden("investigador"),
-    )
-
-    assert r.codigo == 0
-    assert r.valid == "false"
-    assert r.comentarios == []
-    assert r.etiquetas == ["sirius:planned", "sirius:implement-requested"]
-
-
-@pytest.mark.parametrize(
-    ("como", "kwargs"),
-    [
-        pytest.param("la llamada falla", {"fallar": "api"}, id="la-api-no-responde"),
-        pytest.param("la respuesta no es la incidencia", {"basura": True}, id="respuesta-ilegible"),
-    ],
-)
-def test_si_no_se_puede_leer_la_incidencia_no_se_toca(
-    tmp_path: Path, como: str, kwargs: dict[str, Any]
-) -> None:
-    """Corolario del hallazgo 2: sin estado no hay decisión.
-
-    Una instantánea que no se deja leer no es «la incidencia está rara»: es que
-    no sabemos nada de ella. Actuar igualmente sería la misma clase de
-    afirmación sin comprobar que ADR-167 corrige.
-    """
-    r = _puerta_investigacion(tmp_path, incidencia=incidencia_activa(), **kwargs)
-
-    assert r.codigo != 0, como
+    assert r.codigo != 0
     assert r.comentarios == []
     assert r.etiquetas == ["sirius:planned", "sirius:implement-requested"]
     assert not any(ll.startswith("issue edit") for ll in r.llamadas_gh)
@@ -566,13 +480,8 @@ def test_si_no_se_puede_leer_la_incidencia_no_se_toca(
 
 @pytest.mark.parametrize("codigo", [2, 3, 127])
 def test_un_codigo_inesperado_del_lector_detiene_la_puerta(tmp_path: Path, codigo: int) -> None:
-    """Hallazgo 3: solo el 2 se trataba como error; cualquier otro seguía en verde.
-
-    Un 127 -`python3` no está, la ruta cambió- caía en la rama «carril activo» y
-    la orden seguía hacia el investigador. El contrato ahora es explícito: 0
-    retirado, 1 activo, y todo lo demás para el paso con diagnóstico.
-    """
-    r = _puerta_investigacion(tmp_path, incidencia=incidencia_activa(), codigo_del_lector=codigo)
+    """Primera ronda, hallazgo 3: solo el 2 se trataba como error."""
+    r = _puerta("investigacion", tmp_path, incidencia=incidencia_activa(), codigo_del_lector=codigo)
 
     assert r.codigo != 0, "lo que no se puede afirmar no se afirma"
     assert r.valid != "true", "y desde luego no se ejecuta el carril"
@@ -580,17 +489,312 @@ def test_un_codigo_inesperado_del_lector_detiene_la_puerta(tmp_path: Path, codig
     assert r.etiquetas == ["sirius:planned", "sirius:implement-requested"]
 
 
-def test_una_reactivacion_deja_la_puerta_abierta(tmp_path: Path) -> None:
-    """Hallazgo 5, la otra mitad: reactivar tiene que SERVIR, no solo validar.
+# --------------------------------------------------------------------------
+# Segunda ronda, hallazgo 1: la transición se aplica en VARIAS escrituras
+# --------------------------------------------------------------------------
 
-    Con un registro controlado en el que investigación ya no consta retirada, la
-    misma puerta no publica explicación, no cierra nada, y deja pasar la orden a
-    la validación de activación de siempre. El registro real no se toca.
+
+@pytest.mark.parametrize(
+    ("falla", "estado_a_medias"),
+    [
+        pytest.param(
+            "--remove-label sirius:implement-requested",
+            ["sirius:implement-requested", "sirius:failed-safely"],
+            id="no-se-retiro-implement-requested",
+        ),
+        pytest.param(
+            "--add-label sirius:failed-safely",
+            [],
+            id="no-se-anadio-failed-safely",
+        ),
+        pytest.param(
+            "--remove-label sirius:planned",
+            ["sirius:planned", "sirius:failed-safely"],
+            id="no-se-retiro-planned",
+        ),
+    ],
+)
+def test_una_escritura_parcial_se_completa_al_reejecutar(
+    tmp_path: Path, falla: str, estado_a_medias: list[str]
+) -> None:
+    """`sirius_set_issue_labels` hace VARIAS llamadas: unas pueden ir y otras no.
+
+    Los dos estados a medias se reprodujeron sobre `398017a`, y en los dos la
+    reejecución salía en **verde** sin arreglar nada:
+
+    - sin retirar `implement-requested` quedaba `implement-requested` +
+      `failed-safely`, y la reejecución lo tomaba por «ya terminado»;
+    - sin añadir `failed-safely` la incidencia se quedaba **sin etiquetas**, y la
+      reejecución no encontraba activación que atender.
+
+    Lo que distingue «mi transición a medias» de «trabajo de otro» es la huella
+    que la propia puerta publica: el marcador.
     """
-    r = _puerta_investigacion(
+    primera = _puerta("investigacion", tmp_path / "1", incidencia=incidencia_activa(), fallar=falla)
+    assert primera.codigo != 0, "una transición a medias no puede salir verde"
+    assert primera.etiquetas == estado_a_medias, primera.etiquetas
+    assert len(primera.comentarios) == 1, "la explicación se publicó antes de escribir"
+
+    segunda = _puerta(
+        "investigacion", tmp_path / "2", incidencia=estado_tras(primera, cuerpo_de_orden())
+    )
+
+    assert segunda.codigo == 0, segunda.stderr
+    assert segunda.etiquetas == ["sirius:failed-safely"], segunda.etiquetas
+    assert len(segunda.comentarios) == 1, "y sin republicar la explicación"
+
+
+def test_una_retirada_a_medias_no_se_completa_encima_de_trabajo_posterior(
+    tmp_path: Path,
+) -> None:
+    """Completar no puede convertirse en pisar.
+
+    Si además del estado a medias hay CUALQUIER otra etiqueta `sirius:`, el ciclo
+    movió la incidencia después: la puerta no impone ningún desenlace, termina en
+    rojo y pide que lo mire una persona. La comprobación no copia ninguna lista;
+    es «todo `sirius:` que no sean las tres de esta transición», así que un
+    estado que se invente mañana también la dispara.
+    """
+    primera = _puerta(
+        "investigacion",
+        tmp_path / "1",
+        incidencia=incidencia_activa(),
+        fallar="--remove-label sirius:implement-requested",
+    )
+    a_medias = estado_tras(primera, cuerpo_de_orden())
+    a_medias["labels"] = [*a_medias["labels"], "sirius:implementing"]
+
+    segunda = _puerta("investigacion", tmp_path / "2", incidencia=a_medias)
+
+    assert segunda.codigo != 0, "una contradicción no se resuelve sola"
+    assert sorted(segunda.etiquetas) == sorted(a_medias["labels"]), "no se toca nada"
+    assert len(segunda.comentarios) == 1, "y no se publica un segundo diagnóstico"
+
+
+# --------------------------------------------------------------------------
+# Segunda ronda, hallazgo 2: no imponer un desenlace al trabajo en curso
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("estado", INCOMPATIBLES)
+def test_una_activacion_improcedente_no_impone_failed_safely(tmp_path: Path, estado: str) -> None:
+    """La puerta se había escrito su propia lista de estados terminales, de cuatro.
+
+    Con `implementing`, `reviewing`, `repairing`, `ci-pending` o cualquiera de
+    los `*-requested`, una activación nueva acababa poniendo `failed-safely`
+    ENCIMA del trabajo en curso. Ahora quien decide si la activación es legítima
+    es su dueño —`sirius_validate_activation.sh`, que tiene los diez estados—, y
+    su política es explicar y retirar el evento **sin** imponer un desenlace.
+
+    Los estados se leen del propio validador: si mañana añade uno, esta prueba lo
+    cubre sola.
+    """
+    r = _puerta(
+        "investigacion",
+        tmp_path,
+        incidencia=incidencia_activa(
+            labels=["sirius:planned", "sirius:implement-requested", estado]
+        ),
+    )
+
+    assert r.codigo == 0, r.stderr
+    assert r.valid != "true"
+    assert estado in r.etiquetas, f"{estado} es trabajo de otro: no se toca"
+    assert "sirius:implement-requested" not in r.etiquetas, "el evento improcedente se retira"
+    assert len(r.comentarios) == 1, "y se explica por qué"
+    if estado != "sirius:failed-safely":
+        assert "sirius:failed-safely" not in r.etiquetas, (
+            "la retirada no puede imponer su desenlace a un trabajo en curso"
+        )
+
+
+def test_si_el_validador_ya_retiro_el_evento_la_puerta_no_toca_nada(tmp_path: Path) -> None:
+    """El validador corre en su propio workflow y puede llegar primero.
+
+    Cuando llega, deja la incidencia sin `sirius:implement-requested`. La puerta
+    no puede suponer que ella va primero ni volver a actuar sobre una activación
+    que ya no está viva.
+    """
+    r = _puerta(
+        "investigacion",
+        tmp_path,
+        incidencia=incidencia_activa(labels=["sirius:planned"]),
+    )
+
+    assert r.codigo == 0
+    assert r.valid != "true"
+    assert r.etiquetas == ["sirius:planned"], r.etiquetas
+    assert r.comentarios == []
+    assert not any(ll.startswith("issue edit") for ll in r.llamadas_gh)
+
+
+# --------------------------------------------------------------------------
+# Segunda ronda, hallazgo 3: el reparto entre las dos puertas
+# --------------------------------------------------------------------------
+
+ORDENES = [
+    pytest.param(("investigacion", "implementacion"), id="investigacion-primero"),
+    pytest.param(("implementacion", "investigacion"), id="implementacion-primero"),
+]
+
+
+@pytest.mark.parametrize("orden", ORDENES)
+@pytest.mark.parametrize(
+    ("perfil", "duena"),
+    [
+        pytest.param("investigador", "investigacion", id="investigador"),
+        pytest.param("programador", "implementacion", id="programador"),
+    ],
+)
+def test_sin_cambio_de_perfil_hay_exactamente_una_duena(
+    tmp_path: Path, orden: tuple[str, ...], perfil: str, duena: str
+) -> None:
+    """Ni ninguna ni las dos: una."""
+    pasos, _ = _encadenar(tmp_path, orden, perfil_evento=perfil, perfil_actual=perfil)
+    por_puerta = {p.cual: p.resultado for p in pasos}
+    assert [p.cual for p in pasos if _atendio(p)] == [duena], (
+        "exactamente una puerta se hace cargo del encargo"
+    )
+
+    if duena == "implementacion":
+        assert por_puerta["implementacion"].valid == "true", "la atiende el implementador"
+        assert por_puerta["investigacion"].valid == "false"
+    else:
+        # El carril de investigación está retirado en el registro controlado, así
+        # que «atenderla» es retirarla: explicar y cerrar. Lo que importa es que
+        # el implementador NO la toca.
+        assert por_puerta["implementacion"].valid == "false"
+        assert "sirius:failed-safely" in por_puerta["investigacion"].etiquetas
+
+
+@pytest.mark.parametrize("orden", ORDENES)
+@pytest.mark.parametrize(
+    ("evento", "actual"),
+    [
+        pytest.param("investigador", "programador", id="de-investigador-a-programador"),
+        pytest.param("programador", "investigador", id="de-programador-a-investigador"),
+    ],
+)
+def test_un_perfil_cambiado_no_lo_ejecuta_nadie_y_queda_recuperable(
+    tmp_path: Path, orden: tuple[str, ...], evento: str, actual: str
+) -> None:
+    """Los dos desenlaces peores, reproducidos sobre `398017a`:
+
+    - evento `investigador` y cuerpo `programador`: las dos puertas declinaban y
+      la incidencia se quedaba en `planned` + `implement-requested` **sin que
+      nadie la atendiera**;
+    - evento `programador` y cuerpo `investigador`: **las dos** la atendían.
+      Investigación la cerraba en `failed-safely` y el implementador ejecutaba el
+      modelo sobre la misma orden.
+
+    Ahora ninguna ejecuta: ese evento pedía otro trabajo, y hacer el de ahora
+    sería cambiar el tipo de trabajo en silencio. Se explica, se retira el evento
+    y se conserva `sirius:planned`, así que volver a aplicar la etiqueta reactiva.
+    """
+    pasos, final = _encadenar(tmp_path, orden, perfil_evento=evento, perfil_actual=actual)
+
+    for paso in pasos:
+        assert paso.resultado.codigo == 0, f"{paso.cual}: {paso.resultado.stderr}"
+        assert not _atendio(paso), f"{paso.cual} no puede hacerse cargo de un evento rancio"
+    assert "sirius:failed-safely" not in final["labels"], "nadie impone un desenlace"
+    assert "sirius:implement-requested" not in final["labels"], "el evento rancio se retira"
+    assert final["labels"] == ["sirius:planned"], final["labels"]
+    assert len(final["comments"]) == 1, "una sola explicación, corra quien corra primero"
+    assert "perfil-cambiado" in final["comments"][0]
+    assert "vuelve a aplicar" in final["comments"][0], "y dice cómo recuperarlo"
+
+
+def test_el_reparto_no_deja_que_las_dos_puertas_ejecuten_el_mismo_encargo(
+    tmp_path: Path,
+) -> None:
+    """La propiedad, dicha entera y comprobada sobre las cuatro combinaciones."""
+    # LOS DOS ÓRDENES, y no es cosmético: con investigación siempre primero, el
+    # caso «evento programador, cuerpo investigador» salía como una sola dueña
+    # incluso en el código defectuoso, porque la retirada dejaba `failed-safely`
+    # y el validador frenaba después al implementador. Encadenando al revés se ve
+    # lo que de verdad pasaba: las dos se hacían cargo del mismo encargo.
+    for orden in (("investigacion", "implementacion"), ("implementacion", "investigacion")):
+        for evento, actual in (
+            ("investigador", "investigador"),
+            ("programador", "programador"),
+            ("investigador", "programador"),
+            ("programador", "investigador"),
+        ):
+            pasos, _ = _encadenar(
+                tmp_path / f"{orden[0]}-{evento}-{actual}",
+                orden,
+                perfil_evento=evento,
+                perfil_actual=actual,
+            )
+            atienden = [p.cual for p in pasos if _atendio(p)]
+            assert len(atienden) <= 1, (
+                f"{orden[0]} primero, {evento}->{actual}: "
+                f"se hacen cargo del mismo encargo {atienden}"
+            )
+
+
+def test_la_puerta_del_implementador_declina_el_perfil_investigador(tmp_path: Path) -> None:
+    """Sin esto, una activación de investigación se implementaría como programación."""
+    r = _puerta(
+        "implementacion",
+        tmp_path,
+        incidencia=incidencia_activa(body=cuerpo_de_orden("investigador")),
+        cuerpo_del_evento=cuerpo_de_orden("investigador"),
+    )
+
+    assert r.codigo == 0, r.stderr
+    assert r.valid == "false"
+    assert r.comentarios == [], "declinar no es rechazar: no comenta ni toca etiquetas"
+    assert r.etiquetas == ["sirius:planned", "sirius:implement-requested"]
+
+
+def test_si_el_reparto_no_se_puede_decidir_las_dos_puertas_terminan_en_rojo(
+    tmp_path: Path,
+) -> None:
+    """El mismo contrato de códigos que el lector: lo que no se sabe, para el paso.
+
+    Hay que romper las DOS vías de lectura. `sirius_read_issue_body` cae a
+    GraphQL cuando REST falla, y esa robustez es deliberada: con solo `gh api`
+    roto el reparto todavía decide bien, y esta prueba lo comprobó al escribirla
+    -falló por suponer que una vía bastaba-. «No se puede decidir» es que fallen
+    todas.
+    """
+    for cual in ("investigacion", "implementacion"):
+        r = _puerta(cual, tmp_path / cual, incidencia=incidencia_activa(), fallar="api,issue view")
+        assert r.codigo != 0, f"{cual} no puede seguir sin saber si la orden es suya"
+        assert r.valid != "true"
+        assert not any(ll.startswith("issue edit") for ll in r.llamadas_gh)
+
+
+def test_con_una_sola_via_de_lectura_rota_el_reparto_sigue_decidiendo(
+    tmp_path: Path,
+) -> None:
+    """El respaldo GraphQL no es decorativo: con REST caído el reparto decide igual."""
+    r = _puerta(
+        "implementacion",
+        tmp_path,
+        incidencia=incidencia_activa(body=cuerpo_de_orden("investigador")),
+        cuerpo_del_evento=cuerpo_de_orden("investigador"),
+        fallar="api",
+    )
+
+    assert r.codigo == 0, r.stderr
+    assert r.valid == "false", "decidió que no era suya, con REST caído"
+    assert r.comentarios == []
+
+
+# --------------------------------------------------------------------------
+# El carril reactivado: la puerta se abre, y sin editar ninguna prueba
+# --------------------------------------------------------------------------
+
+
+def test_una_reactivacion_deja_la_puerta_de_investigacion_abierta(tmp_path: Path) -> None:
+    """Reactivar tiene que SERVIR, no solo validar."""
+    r = _puerta(
+        "investigacion",
         tmp_path,
         incidencia=incidencia_activa(),
-        registro=_registro_controlado(tmp_path, "auditoria"),
+        registro=_registro_controlado(tmp_path / "reg", "auditoria"),
     )
 
     assert r.comentarios == [], "un carril vivo no explica que esté retirado"
@@ -599,17 +803,11 @@ def test_una_reactivacion_deja_la_puerta_abierta(tmp_path: Path) -> None:
     assert r.etiquetas == ["sirius:planned", "sirius:implement-requested"]
 
 
-def test_los_pasos_que_gastan_el_investigador_dependen_de_la_puerta(tmp_path: Path) -> None:
-    """`valid=false` es lo que apaga el gasto; esto comprueba que apaga TODO.
-
-    La ejecución de arriba prueba que la puerta emite `valid=false`; esto prueba
-    que ese `false` alcanza a cada paso caro. Un paso nuevo sin la condición cae
-    aquí.
-    """
-    pasos = _pasos("investigar-orden.yml", "investigar")
+def test_los_pasos_que_gastan_el_investigador_dependen_de_la_puerta() -> None:
+    """`valid=false` es lo que apaga el gasto; esto comprueba que apaga TODO."""
     caros = [
         p
-        for p in pasos
+        for p in _pasos("investigar-orden.yml", "investigar")
         if p.get("id") in {"atender", "abrir_pr"} or "Atender" in str(p.get("name", ""))
     ]
     assert caros, "se esperaba encontrar los pasos que ejecutan al investigador"
@@ -620,12 +818,12 @@ def test_los_pasos_que_gastan_el_investigador_dependen_de_la_puerta(tmp_path: Pa
 
 
 # --------------------------------------------------------------------------
-# La puerta de auditoría, EJECUTADA
+# La puerta de auditoría
 # --------------------------------------------------------------------------
 
 
 def test_el_auditor_no_ejecuta_el_modelo_y_publica_la_explicacion(tmp_path: Path) -> None:
-    r = _puerta_auditoria(tmp_path)
+    r = _puerta("auditoria", tmp_path)
 
     assert r.codigo == 0, r.stderr
     assert r.retirado == "true"
@@ -633,17 +831,16 @@ def test_el_auditor_no_ejecuta_el_modelo_y_publica_la_explicacion(tmp_path: Path
     assert "retirado" in informe
     assert "No se ha ejecutado ningun modelo" in informe
 
-    # Y el paso que gasta el modelo queda condicionado a que NO esté retirado.
-    pasos = _pasos("audit-sirius-repository.yml", "auditar")
-    claude = [p for p in pasos if p.get("id") == "claude"]
+    claude = [
+        p for p in _pasos("audit-sirius-repository.yml", "auditar") if p.get("id") == "claude"
+    ]
     assert claude, "se esperaba el paso que ejecuta Claude"
     assert "retirada.outputs.retirado != 'true'" in str(claude[0].get("if", ""))
 
 
 @pytest.mark.parametrize("codigo", [2, 3, 127])
 def test_un_codigo_inesperado_del_lector_detiene_al_auditor(tmp_path: Path, codigo: int) -> None:
-    """Hallazgo 3 en el auditor: un 127 daba `retirado=false` y seguía al modelo."""
-    r = _puerta_auditoria(tmp_path, codigo_del_lector=codigo)
+    r = _puerta("auditoria", tmp_path, codigo_del_lector=codigo)
 
     assert r.codigo != 0
     assert r.retirado != "false", r.github_output
@@ -653,7 +850,9 @@ def test_un_codigo_inesperado_del_lector_detiene_al_auditor(tmp_path: Path, codi
 def test_con_el_carril_de_auditoria_reactivado_el_auditor_sigue_su_camino(
     tmp_path: Path,
 ) -> None:
-    r = _puerta_auditoria(tmp_path, registro=_registro_controlado(tmp_path, "investigacion"))
+    r = _puerta(
+        "auditoria", tmp_path, registro=_registro_controlado(tmp_path / "reg", "investigacion")
+    )
 
     assert r.codigo == 0, r.stderr
     assert r.retirado == "false"
@@ -677,6 +876,7 @@ def test_los_revisores_el_corrector_y_quality_siguen_intactos() -> None:
     ):
         texto = (WORKFLOWS / nombre).read_text(encoding="utf-8")
         assert "sirius_carril_retirado" not in texto, f"{nombre} no debería haberse tocado"
+        assert "sirius_reparto_activacion" not in texto, f"{nombre} no debería haberse tocado"
 
 
 def test_no_se_ha_borrado_nada_de_los_carriles_retirados() -> None:

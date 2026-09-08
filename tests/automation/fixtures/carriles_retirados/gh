@@ -86,12 +86,6 @@ def main(argv: list[str]) -> int:
         return 0
 
     if argv[:1] == ["api"]:
-        if os.environ.get("FAKE_GH_BASURA") == "1":
-            # La API responde 200 con algo que no es la incidencia: un portal
-            # cautivo, un proxy, un 200 con cuerpo de error. Se acepta el
-            # codigo de salida y se rompe al interpretar.
-            print("<html>no soy una incidencia</html>")
-            return 0
         objetivo = next((a for a in argv if a.startswith("repos/")), "")
         jq = argv[argv.index("--jq") + 1] if "--jq" in argv else ""
         if "/comments" in objetivo:

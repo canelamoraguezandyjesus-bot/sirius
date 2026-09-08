@@ -72,7 +72,6 @@ def ejecutar_paso(
     incidencia: dict[str, Any],
     fallar: str = "",
     ambiguo: bool = False,
-    basura: bool = False,
     cuerpo_del_evento: str | None = None,
     entorno: dict[str, str] | None = None,
     codigo_del_lector: int | None = None,
@@ -127,12 +126,12 @@ def ejecutar_paso(
             "FAKE_GH_LOG": str(bitacora),
             "FAKE_GH_FAIL": fallar,
             "FAKE_GH_FAIL_AMBIGUO": "1" if ambiguo else "",
-            "FAKE_GH_BASURA": "1" if basura else "",
             "GITHUB_OUTPUT": str(salida),
             "RUNNER_TEMP": str(trabajo),
             "GH_TOKEN": "token-efimero",
             "SIRIUS_TRIGGER_TOKEN": "pat-del-bot",
             "GH_REPO": "duenyo/repo",
+            "REPOSITORY_OWNER": "duenyo",
             "ISSUE_NUMBER": "1",
             "ISSUE_BODY": (
                 cuerpo_del_evento
@@ -208,3 +207,18 @@ def incidencia_activa(**cambios: Any) -> dict[str, Any]:
     }
     base.update(cambios)
     return base
+
+
+def estado_tras(resultado: Resultado, cuerpo: str) -> dict[str, Any]:
+    """El estado que dejó una ejecución, como entrada de la siguiente.
+
+    Es lo que permite encadenar las DOS puertas sobre la misma incidencia, que es
+    como ocurre de verdad: dos ejecuciones aisladas no pueden mostrar ni que una
+    activación se quede sin dueña ni que la atiendan las dos.
+    """
+    return {
+        "labels": list(resultado.etiquetas),
+        "comments": list(resultado.comentarios),
+        "state": resultado.estado_incidencia,
+        "body": cuerpo,
+    }
