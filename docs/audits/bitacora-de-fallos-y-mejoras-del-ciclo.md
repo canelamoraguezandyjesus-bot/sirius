@@ -2317,7 +2317,7 @@ ADR o su incidencia cuando se adopte.
 
 ---
 
-### 54. Medí mi propio encargo antes de que costara rondas: la premisa era falsa, el criterio era alcanzable, y la contra-medición que lo motivó estaba corta (08-09-2026, 12:35-13:00 UTC)
+### 54. Medí mis propios encargos antes de que costaran rondas: tres premisas falsas escritas de memoria, y la contra-medición que las motivó estaba corta (08-09-2026, 12:35-13:20 UTC)
 
 - **Escribí #574 con dos afirmaciones que no había comprobado.** La primera,
   falsa: «que el cargador fije el `created_at` a partir de la fecha que el
@@ -2367,6 +2367,30 @@ ADR o su incidencia cuando se adopte.
 - **Dos datos que la sonda destapó y que el encargo ahora obliga a resolver**:
   `MEM-005` es el único ítem del canon sin `valid_from`, y el cargador crea 95
   filas y no 97 porque dos ítems portan texto vacío a propósito.
+- **Aprovechando la sonda, pasé por el mismo filtro los tres encargos que aún
+  no he lanzado, y cayeron dos premisas más.** En el borrador de H1 escribí
+  «B04-CA-22: cinco decisiones (DEC-001, DEC-005, DEC-009, DEC-011,
+  DEC-015)». El árbol dice que **el caso espera SEIS** —con `DEC-014`—, que
+  **`DEC-014` ya entra hoy** y que las cinco de mi lista son las que faltan.
+  Confundí «cinco ocurrencias perdidas», que es lo que dice ADR-148, con
+  «cinco decisiones esperadas». **El error no era solo de cuenta**: mi criterio
+  de aceptación decía «recupera sus cinco» y así **no protegía la que ya
+  entra**, de modo que una vía nueva que enumere por vigencia podía sustituir
+  el camino léxico, perder `DEC-014` y aun así parecer una mejora. Corregido:
+  ahora exige las seis y fija `DEC-014` con prueba propia.
+- **Y en el borrador de P3, una premisa numérica heredada**: «tras P1 y P2 el
+  banco queda en 20/47 y 144 de más». Ese par es el **techo** con los ejes del
+  corpus INYECTADOS, no lo que dejan los ejes DERIVADOS de la palanca 2 —que
+  midieron muy por debajo—. La predicción de P3 colgaba de un número que no es
+  su punto de partida. Corregido: **la línea base se mide al lanzar, con P1, P2
+  y H2 puestas**, y la predicción se escribe sobre esa cifra.
+- **Tres borradores revisados, tres premisas falsas.** Ninguna la habría
+  cazado una prueba: las tres eran afirmaciones de contexto escritas de
+  memoria, del mismo tipo que la deuda 19 persigue en los ADR. La diferencia
+  es que en un encargo se pagan multiplicadas, porque el implementador las
+  hereda como ciertas y construye encima. **Los tres llevan ya un bloque de
+  reglas de evidencia** que dice, en el propio encargo, que si algo del
+  contexto no cuadra con el árbol manda el árbol.
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
