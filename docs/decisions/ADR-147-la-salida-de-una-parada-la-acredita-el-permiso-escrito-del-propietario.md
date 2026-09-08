@@ -773,6 +773,17 @@ aplicar la etiqueta, y la etiqueta es lo que dispara el marcador—. Con eso:
   de atribuir y por eso la guarda no la alcanza, así que se fechó a mano con el
   mismo criterio.
 
+- **Comprobación de la ronda 16, sobre el árbol de `5e30caa`**: una sola
+  invocación de `pwsh -File scripts/check.ps1` (Ruff format, Ruff lint, mypy,
+  pytest), código de salida **0**,
+  `5102 passed, 17 skipped, 2 xfailed in 470.49s (0:07:50)`. La terna es la
+  misma que la de las rondas 13-15 porque esta ronda no añade ni quita ninguna
+  prueba: refuerza seis que ya existían -y la de acoplamiento- sin cambiar
+  ninguna de sus aserciones.
+
+  Lo único que cambia en el árbol después de esta captura es la transcripción
+  de estas mismas cifras.
+
 ## Consecuencias
 
 - **Ronda 6, CLAUDE-R6-001 y CLAUDE-R6-002 (misma raíz): la cota de la parada
