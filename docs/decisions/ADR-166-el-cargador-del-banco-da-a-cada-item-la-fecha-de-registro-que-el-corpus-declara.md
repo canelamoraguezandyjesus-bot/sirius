@@ -338,11 +338,11 @@ ficha.
 
 **Cadena completa como UNA SOLA invocación** (ADR-145, ADR-153) con
 `pwsh -File scripts/check.ps1` y su código de salida capturado (ADR-154).
-Anclada al árbol de **`63822b0`**, el que trae las correcciones de la
-primera revisión de esta PR:
+Anclada al árbol de **`c8dfbed`**, el que trae los dos guardianes de la
+tercera revisión de esta PR:
 
 ```
-5183 passed, 17 skipped, 2 xfailed in 445.07s (0:07:25)
+5185 passed, 17 skipped, 2 xfailed in 529.86s (0:08:49)
 check=0
 ```
 
@@ -350,17 +350,18 @@ De esa invocación se transcribe la cola capturada —la terna de `pytest` y el
 código de salida—; `check=0` solo sale si `ruff format --check`, `ruff check`
 y `mypy src tests` pasaron antes, porque el guion corta en el primero que
 falle. La quinta validación que la incidencia exige transcribir también queda
-asentada sobre ese mismo árbol: `git diff --check 22e880e 63822b0` no imprime
-nada y sale con código `0` —limpio—. Lo único posterior a `63822b0` es **esta
-sección de la ficha** y la corrección del límite conocido en «Consecuencias»:
-cambios documentales que no tocan código ni pruebas, y que existen porque la
-sección tiene que anclarse al árbol que la cadena midió y porque la cifra que
-el párrafo citaba era la que el propietario retractó.
+asentada sobre ese mismo árbol: `git diff --check 22e880e c8dfbed` no imprime
+nada y sale con código `0` —limpio—. Lo único posterior a `c8dfbed` es **esta
+sección de la ficha**: cambios documentales que no tocan código ni pruebas, y
+que existen porque la sección tiene que anclarse al árbol que la cadena
+midió.
 
-(La cifra anterior de esta sección —`5183 passed, 17 skipped, 2 xfailed in
-487.87s`, anclada a `5200b4f`— seguía siendo la de su árbol; se sustituye
-porque las correcciones de la revisión tocaron una prueba, así que la cadena
-volvió a correr entera sobre el árbol nuevo.)
+(Las cifras anteriores de esta sección —`5183 passed, 17 skipped, 2 xfailed in
+487.87s`, anclada a `5200b4f`, y `5183 passed, 17 skipped, 2 xfailed in
+445.07s`, anclada a `63822b0`— seguían siendo cada una la de su árbol; se
+sustituyen porque cada ronda de correcciones tocó pruebas, así que la cadena
+volvió a correr entera sobre el árbol nuevo. Los dos pasados de más —5183 a
+5185— son exactamente los dos guardianes que la tercera revisión pidió.)
 
 **Guardianes deterministas añadidos** (los seis corren en CI, sin Ollama),
 todos en `tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py`:
