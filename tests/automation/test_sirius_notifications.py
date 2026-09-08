@@ -250,3 +250,37 @@ def test_la_comprobacion_de_duplicado_sigue_siendo_exacta_sobre_el_marcador() ->
         "La comprobación de duplicado debe ser exacta sobre el marcador completo; "
         "si se relaja a un prefijo, se vuelve al defecto que ADR-157 corrige."
     )
+
+
+def test_cada_evento_de_etiqueta_tiene_su_propia_ranura() -> None:
+    """Dos eventos distintos no pueden compartir una ranura descartable.
+
+    Motivo del defecto (ADR-158): el grupo de concurrencia era
+    `notify-sirius-<incidencia>-<etiqueta>`, y Actions guarda como mucho UNA
+    ejecución en espera por grupo —descartando la pendiente cuando llega otra,
+    incluso con `cancel-in-progress: false`—. Con tres aplicaciones seguidas de
+    la misma etiqueta, la segunda podía morir sin publicar, y ese suceso no
+    dejaba marcador: el mismo agujero que ADR-157 cerró en el marcador, por la
+    puerta de la cola. Lo encontró Codex revisando la PR #546 (CODEX-001, P1,
+    07-09-2026 22:17 UTC).
+
+    Contra el workflow anterior esta prueba falla: su grupo no menciona el run.
+    """
+    doc = yaml.safe_load(NOTIFICADOR.read_text(encoding="utf-8"))
+    grupo = str((doc.get("concurrency") or {}).get("group") or "")
+    assert grupo, "El notificador debe declarar un grupo de concurrencia."
+    assert "github.event.issue.number" in grupo and "github.event.label.name" in grupo, (
+        f"El grupo debe seguir distinguiendo incidencia y etiqueta: {grupo}"
+    )
+    assert "github.run_id" in grupo, (
+        "El grupo debe incluir el run del evento; sin él, un evento pendiente puede "
+        f"ser descartado por el siguiente y su suceso no deja marcador: {grupo}"
+    )
+
+
+def test_el_notificador_no_cancela_lo_que_ya_esta_publicando() -> None:
+    """`cancel-in-progress` sigue en falso: un aviso a medias no se aborta."""
+    doc = yaml.safe_load(NOTIFICADOR.read_text(encoding="utf-8"))
+    assert (doc.get("concurrency") or {}).get("cancel-in-progress") is False, (
+        "El notificador nunca debe cancelar una ejecución en curso."
+    )
