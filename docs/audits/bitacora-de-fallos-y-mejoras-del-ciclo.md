@@ -3485,6 +3485,37 @@ comprobación previa a pasar a revisión puede compararlos y devolver el trabajo
 al corrector **sin gastar una ronda de revisión**. Este defecto lleva seis
 rondas en dos encargos y va camino de la séptima; no es un descuido de nadie en
 particular, es un paso que ningún guardián comprueba.
+
+---
+
+### 72. Verifico la corrección de H1 con la mutación puesta, en vez de leerla (08-09-2026, 19:02 UTC)
+
+Después de fallar la predicción por juzgar un árbol intermedio, hice lo que
+debía haber hecho antes: **comprobar la corrección ejecutándola**, no leyéndola.
+
+- **`git diff --check 6371d4c a8fe837`**, la comprobación que el ADR ahora
+  transcribe con rango: ejecutada por mí, sin salida y código `0`. Limpio, como
+  declara.
+- **La mutación, aplicada de verdad sobre `fa09887`**: sustituí el
+  reescribido del extremo por `corte = hasta` —que es literalmente el texto de
+  la mutación M11 de la ficha, y arrastra el efecto de M10— y corrí las pruebas
+  del puerto. Resultado: **`2 failed, 12 passed`**, y las dos que caen son
+  exactamente las dos nuevas —la de la frontera del mismo día civil y la del
+  extremo ilegible—. Revertida después.
+
+Dos cosas que esto establece y que ninguna lectura habría establecido:
+
+1. **Las pruebas nuevas cazan el fallo que dicen cazar.** Es la diferencia
+   entre «hay una prueba con ese nombre» y «esa prueba falla sin el arreglo», y
+   es justo lo que la propia revisión había señalado que faltaba: las cuatro
+   pruebas anteriores comparaban con años de separación y no tocaban la
+   frontera.
+2. **Son dirigidas**: las otras doce del fichero siguen pasando con la mutación
+   puesta. Una prueba que se cae con cualquier cambio no dice dónde está el
+   fallo.
+
+La tabla de mutaciones de la ficha, por tanto, **es honesta**: no es una lista
+de intenciones, es reproducible en once minutos de máquina.
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
