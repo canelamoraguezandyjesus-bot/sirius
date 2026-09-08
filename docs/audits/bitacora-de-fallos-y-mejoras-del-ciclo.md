@@ -2394,7 +2394,7 @@ ADR o su incidencia cuando se adopte.
 
 ---
 
-### 55. Medí la palanca 2 con H2 simulado: el diagnóstico acertaba la causa, pero contra el suelo real la palanca no paga (08-09-2026, 13:20-13:50 UTC)
+### 55. Medí la palanca 2 con H2 simulado: el diagnóstico acertaba la causa, la palanca no paga, y el techo se alcanza sin ella (08-09-2026, 13:20-14:10 UTC)
 
 - **Primero validé el instrumento, y esta vez sí antes de usarlo.** Corrí el
   guion de diagnóstico sobre la rama de la palanca 2 (`58fa079e`) sin parchear
@@ -2438,6 +2438,30 @@ ADR o su incidencia cuando se adopte.
   Y publicado en #574 el matiz de `updated_at`, marcado como **no ampliación de
   alcance**: fecharlo no es su objetivo, pero si lo deja como está tiene que
   declararlo como limitación, porque el arnés queda fechado a medias.
+- **Después medí las dos configuraciones de techo, para separar «el andamiaje
+  no funciona» de «lo derivado no alcanza». Con el mismo fechado por ítem:**
+
+  | configuración | exactas | de más | hallados | críticas |
+  |---|---|---|---|---|
+  | `main` + H2, puerto de producción (`SIN_EJES`) | **17/47** | **162** | 74/81 | 0 |
+  | `58fa079` + H2, ejes **derivados** | 16/47 | 164 | 73/81 | 0 |
+  | `main` + H2, ejes del **corpus** | **21/47** | **144** | 74/81 | 0 |
+  | `58fa079` + H2, ejes del **corpus** | **21/47** | **144** | 74/81 | 0 |
+
+  **Las dos últimas filas son idénticas.** Con los ejes puestos, la rama de la
+  palanca 2 da exactamente lo mismo que `main`: **el andamiaje que consume ejes
+  ya está en `main`** y esa palanca no lo mejora. Y el techo real, una vez
+  fechado el arnés, sube a `21/47; 144; 74/81` porque H2 recupera B04-CA-32.
+- **El número que ordena la línea de memoria**: la distancia entre lo
+  **derivado** y lo **declarado** es de **5 exactas y 20 de más**. La propia
+  PR #573 lo dice en palabras —«lo que el esquema no guarda sigue sin
+  derivarse»—; esto le pone cifra. La parte derivable de las columnas de hoy
+  vale **cero o menos**, mientras que los ejes completos valen +4 exactas y −18
+  de más sobre el suelo. Si el criterio del propietario es 0 de más, **por
+  derivación no se llega**: o se derivan mejor, o esos ejes hay que
+  **guardarlos**, y eso ya no es una palanca sino una decisión de esquema.
+- **Lo que NO prueba, y va escrito en el comentario**: que no exista una
+  derivación mejor. Prueba que ésta, con el esquema de hoy, no paga.
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
