@@ -2474,7 +2474,7 @@ ADR o su incidencia cuando se adopte.
 
 ---
 
-### 56. H2 entrega la predicción dígito a dígito, y dejo H3 medido para que el propietario no decida a ciegas (08-09-2026, 14:10-15:00 UTC)
+### 56. H2 entrega la predicción dígito a dígito, y dejo medidos H3 y la premisa de H1 (08-09-2026, 14:10-15:20 UTC)
 
 - **PR #575 (ADR-166) cumple la predicción exacta que publiqué antes de que
   implementara**: `--peticion` pasa de `16/47; 162; 73/81; 0` a **`17/47; 162;
@@ -2521,6 +2521,19 @@ ADR o su incidencia cuando se adopte.
 - **Lo que la medición NO es**: mi sonda trata lo candidato como memoria viva;
   el producto lo trataría como **sugerencia marcada**, que es otra cosa y
   podría presentarse distinto. Los números acotan la decisión; no la diseñan.
+- **Y comprobé también la premisa de H1, que es el hueco mayor** —cinco de las
+  siete ocurrencias que faltan tras H2—. La pregunta de B04-CA-22 es «¿Qué
+  decisiones eran válidas entre enero y marzo?» y espera seis decisiones.
+  Cruzando sus textos con las palabras de la consulta: **`DEC-014` es el único
+  que comparte una**, «enero», porque su texto dice «Se habilita el turno
+  reducido de enero». Los otros cinco no comparten ninguna.
+
+  O sea que **`DEC-014` entra por accidente léxico, no porque el motor entienda
+  la vigencia**. La premisa de ADR-148 —«la búsqueda parte de palabras y aquí no
+  hay ninguna»— queda confirmada con el árbol delante y no solo citada. Y
+  mejora el criterio de aceptación que ya había corregido: no basta con que
+  `DEC-014` siga entrando; **si pasa a entrar por vigencia, deja de depender de
+  cómo esté redactada**, y eso hay que decirlo.
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
