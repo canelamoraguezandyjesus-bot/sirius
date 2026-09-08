@@ -3189,6 +3189,63 @@ ADR o su incidencia cuando se adopte.
   `ffd8d05`: `5227 passed, 17 skipped, 2 xfailed`, `EXIT_CODE_CHECK=0`.
 ---
 
+### 67. Audito el encargo de P3 contra el árbol ANTES de lanzarlo, y aparece el mismo error de categoría por tercera vez (08-09-2026, 18:40 UTC)
+
+Con Quality corriendo sobre H1 no había nada que mirar, así que dediqué la hora
+a dos cosas que sí se pueden comprobar: **reproducir la medición de la PR #578
+por mi cuenta** y **auditar frase a frase el encargo de P3** antes de lanzarlo.
+Las dos dieron algo.
+
+**La PR #578 se reproduce al dígito.** Ejecutando yo el diagnóstico sobre su
+head `2c21f599`: `--peticion` = `17/47 exactas; 162 de más; 78/81 hallados;
+0 críticas`; `--ejes --peticion` = `21/47; 144; 78/81; 0`. Es exactamente lo que
+el cuerpo declara, en las cuatro columnas y en las dos configuraciones. **La
+diferencia entre creerse una cifra y reproducirla cuesta diez minutos de
+máquina y cero de persona**, porque corre sola mientras se hace otra cosa; no
+hay excusa para no hacerlo con la cifra que decide una fusión.
+
+**De ocho afirmaciones comprobables del encargo de P3, ocho eran ciertas**: el
+contrato del puerto en `relevance_filter.py:33-35`, sus dos llamadas en
+`context.py:372` y `:399`, «nunca reordena» y «falla abierto» —los dos
+**literales** en el docstring del puerto—, los cuatro símbolos citados de
+`staged_engine.py`, el reparto `29 EXACTA / 13 EXHAUSTIVA / 5 ACOTADA`
+contado sobre el corpus, la bandera `--modelo`, y la tabla de los seis casos
+con más ruido, que vuelta a medir sobre el head de H1 **sale idéntica** (ni H1
+ni H2 mueven el reparto del ruido).
+
+**Y tres cosas estaban mal, ninguna de ellas por descuido de redacción:**
+
+1. **El encargo dependía de la palanca 2, que no entra.** La cerré yo mismo
+   ayer con negativo medido, y el borrador seguía diciendo «va DESPUÉS de P1 y
+   P2» y «Depende de P1 y P2», en dos sitios. Un encargo que espera algo que no
+   va a llegar es un encargo parado.
+2. **El techo citado ya no era el techo**: `20/47 … 144` pasó a `21/47 … 144`
+   con H2 dentro. El encargo mandaba re-medir, así que no habría hecho daño,
+   pero una cifra caduca en un encargo es una invitación a heredarla.
+3. **La tercera aparición del mismo error de categoría**, y ésta es la que
+   importa. El borrador decía «la cardinalidad ya viaja en la `Peticion` desde
+   P1». Comprobado: `Peticion` **sí** declara `cardinalidad` y el motor **sí**
+   la honra (`staged_engine.py:246-248`)… **pero en la producción de hoy todo
+   llega como `EXHAUSTIVA`**. El intérprete de P1 está cableado
+   (`composition_root.py:541`) y su clasificador se construye **solo si
+   `category_matching_enabled` está abierta**; con la puerta cerrada —el estado
+   por defecto, y el que ningún encargo de esta línea puede cambiar— se
+   construye `InterpreteDePeticion(intent_classifier=None)`, que emite la
+   política uniforme (`rank_relevant_knowledge.py:135-161`). O sea: **la rama
+   «EXACTA recorta a n» no se dispara hoy fuera del laboratorio**, y una prueba
+   que no construya la `Peticion` explícitamente no estaría probando nada.
+
+**Las tres veces el error tiene la misma forma exacta**, y por eso queda como
+deuda 24 con nombre propio: confundir **«el dato está declarado»** con **«el
+dato llega en ejecución»**. En H2 fue la fecha de registro —el corpus la
+declara, el cargador no la aplicaba—; en H1 fue el intervalo —el corpus lo
+declara, `VentanaTemporal` no tenía dónde meterlo—; en P3 es la cardinalidad
+—el contrato la lleva, la puerta cerrada la aplana—. **Dos de las tres las
+pagué con una ronda de ciclo. La tercera costó veinte minutos de lectura
+porque la busqué antes de lanzar.** Ésa es toda la diferencia, y es la razón
+de que auditar el encargo antes de publicarlo deba ser parte del encargo.
+---
+
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
 
 1. `ollama_category_classifier.py`: ruta relativa y sin
@@ -3622,3 +3679,15 @@ ADR o su incidencia cuando se adopte.
     y Quality corrió sobre el resultado del merge, que es justo lo que GitHub
     ya calcula; (c) una ventana de gracia: tras aprobar, permitir fusionar
     durante N minutos aunque la base se haya movido, con el riesgo declarado.
+
+24. **Los encargos de esta línea confunden «el dato está declarado» con «el
+    dato llega en ejecución», y ya ha fallado TRES veces** (H2: la fecha de
+    registro; H1: el intervalo temporal; P3: la cardinalidad, cazada antes de
+    lanzar). Dos costaron una ronda de ciclo cada una. No es descuido de quien
+    redacta: es que leer el corpus o el contrato **parece** comprobación y no
+    lo es. La comprobación que sí vale es **seguir el valor desde donde se
+    declara hasta donde se consume**, pasando por la raíz de composición, y
+    escribir **de qué puerta depende**. Propuesta para el propietario: que
+    ninguna afirmación de la forma «X ya viaja en Y» entre en un encargo sin
+    esa traza al lado, y que el encargo se audite contra el árbol **antes** de
+    publicarse, no después de que la revisión lo desmienta.
