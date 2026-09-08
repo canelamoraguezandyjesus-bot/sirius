@@ -2489,3 +2489,56 @@ ADR o su incidencia cuando se adopte.
     el borde, y un guardián que la fije; (c) dejarlo y aceptar que cada emisor
     nuevo pague su ronda. La canonización del emisor que #570 está haciendo
     hace falta en cualquiera de los tres casos, así que no es trabajo perdido.
+
+---
+
+### 52. La primera palanca de memoria entra tras seis rondas, y cinco fueron sobre el ADR (08-09-2026, 08:16-11:43 UTC)
+
+- **ADR-164 fusionado como `22e880e`**: la pregunta del usuario se convierte ya
+  en una `Peticion` propia —modo, propósito, permiso, cardinalidad, límite,
+  tiempo objetivo y corte de registro— en vez de la política uniforme de
+  `_peticion_ordinaria`. **P1, la palanca de mayor salto medido, está en
+  `main`.**
+- **El hallazgo que salvó la medición: el instrumento tenía el defecto que
+  medía.** `CLAUDE-R1-002` encontró que
+  `scripts/medir_interprete_de_peticion.py` —el guion que el propietario iba a
+  ejecutar para decidir si la palanca pasa— comparaba un instante *naive* con
+  uno *aware*, lo que en Python siempre da «distintos». Puntuaba como fallo
+  seis casos correctos, y el listón declarado era ≥45/47: margen de dos. **Le
+  habría dado al propietario un número por debajo del criterio sin culpa del
+  intérprete**, y la conclusión habría sido que P1 no llega. La lección no es
+  del intérprete: es que **un instrumento de medida es código y necesita sus
+  propios guardianes**, sobre todo cuando su resultado decide si un trabajo se
+  acepta.
+- **Y el defecto de fondo, que P1 no crea sino que destapa** (`CLAUDE-R1-001`,
+  media): el corte de registro viajaba sin canonizar y G8 lo compara
+  **lexicográficamente** contra un `created_at` que SQLite entrega como
+  `'AAAA-MM-DD HH:MM:SS.ffffff'` —separador espacio—. Como el espacio (0x20)
+  ordena antes que la `T` (0x54), las tres escrituras válidas del mismo
+  instante admiten conjuntos distintos. La prueba que existía pasaba con el
+  defecto puesto porque usaba el año 2000 y la comparación se resolvía en los
+  dígitos del año. Hasta ADR-164 producción nunca emitía un corte: **ese camino
+  de G8 se vuelve alcanzable por primera vez con esta palanca**. Registrado
+  como **deuda 20**, con la raíz fuera del alcance del encargo y por tanto
+  planteado al propietario.
+- **Seis rondas, y cinco fueron sobre el ADR.** El código se estabilizó pronto;
+  lo que consumió el ciclo fue el registro: una premisa falsa escrita para
+  justificar no revisar la predicción («ningún caso del banco declara corte»,
+  cuando lo declaran dos), la sección de validación anclada a árboles viejos
+  con una frase ya falsa, un inventario que decía 16 pruebas donde había 26, y
+  dos guardianes declarados sin transcribir su mutación. **Todo eso es la deuda
+  19**, que con esto suma seis rondas en dos encargos.
+- **Lo que aprendí y ya está aplicado**: escribí la exigencia de la sección de
+  validación como límite explícito en el encargo de #570 y **se incumplió tres
+  veces igualmente**. Pedirlo por escrito no basta. Y el patrón real no es que
+  el ADR nazca mal, sino que **la corrección de cada ronda introduce la
+  imprecisión que encuentra la siguiente**, porque el documento crece y nadie
+  contrasta el conjunto: un guardián que valide el ADR solo al crearlo no
+  habría cazado ninguna de las seis.
+- **Convergencia**: 4 → 5 → 3 → 2 → 2 hallazgos, con la severidad bajando de
+  alta a media a baja. Codex aprobó desde la ronda 3 en adelante. El freno de
+  convergencia no llegó a morder.
+- **P2 lanzada como #572** con las dos lecciones escritas dentro del encargo y
+  el aviso de la deuda 20, que ahí es directamente relevante porque esa palanca
+  deriva la ventana de vigencia y el registro, o sea instantes que G8 va a
+  comparar.
