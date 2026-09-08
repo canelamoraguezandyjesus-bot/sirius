@@ -2457,9 +2457,18 @@ ADR o su incidencia cuando se adopte.
   PR #573 lo dice en palabras —«lo que el esquema no guarda sigue sin
   derivarse»—; esto le pone cifra. La parte derivable de las columnas de hoy
   vale **cero o menos**, mientras que los ejes completos valen +4 exactas y −18
-  de más sobre el suelo. Si el criterio del propietario es 0 de más, **por
-  derivación no se llega**: o se derivan mejor, o esos ejes hay que
-  **guardarlos**, y eso ya no es una palanca sino una decisión de esquema.
+  de más sobre el suelo. O se derivan mejor, o esos ejes hay que **guardarlos**,
+  y eso último ya no es una palanca sino una decisión de esquema del propietario.
+
+  **Cuidado con leer de más en esta cifra, que casi lo hago yo.** El guion mide
+  **solo la etapa de búsqueda**: las «de más» las tiene que cerrar la palanca 3
+  —el filtro usando la cardinalidad—, no los ejes, así que `144 de más` en el
+  techo no contradice el criterio de 0 de más del propietario. Lo que sí es
+  techo duro es lo **hallado**: el filtro solo puede quitar, nunca añadir, así
+  que `74/81` es el máximo alcanzable hasta que se cierren H1 (5 ocurrencias),
+  H3 (`MEM-020`) y H4 (`MEM-001`) —justo las siete que faltan—. El plan de
+  ADR-148 sigue siendo coherente; **lo único que esta medición desmiente es la
+  palanca 2**.
 - **Lo que NO prueba, y va escrito en el comentario**: que no exista una
   derivación mejor. Prueba que ésta, con el esquema de hoy, no paga.
 ---
