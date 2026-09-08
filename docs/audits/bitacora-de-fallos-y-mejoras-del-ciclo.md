@@ -3514,6 +3514,14 @@ Dos cosas que esto establece y que ninguna lectura habría establecido:
    puesta. Una prueba que se cae con cualquier cambio no dice dónde está el
    fallo.
 
+**Reconciliación con el parte del corrector, para que nadie lea una
+discrepancia donde no la hay**: su ficha declara DOS mutaciones separadas —el
+extremo sin reescribir, y la guarda del extremo ilegible— y cada una da `1
+failed, 13 passed`. La mía las combinaba en una sola edición (`corte = hasta`
+sustituyendo a las dos cosas) y por eso dio `2 failed, 12 passed`. Las tres
+cuentas suman 14, que es el tamaño del fichero. **Coinciden**; lo que cambia es
+cuántas mutaciones lleva cada tirada.
+
 La tabla de mutaciones de la ficha, por tanto, **es honesta**: no es una lista
 de intenciones, es reproducible en once minutos de máquina.
 
