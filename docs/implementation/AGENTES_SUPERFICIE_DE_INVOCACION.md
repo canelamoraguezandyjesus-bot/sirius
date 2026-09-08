@@ -306,3 +306,35 @@ Por la regla de las dos rondas no toca seguir parcheando, así que la regla
 operativa que sale de aquí es: **ninguna referencia a otro documento del
 repositorio se escribe sin abrir el fichero citado en la misma acción.** Barato,
 mecánico, y habría evitado los dos casos.
+
+---
+
+## 9. Nota de superación del 8 de septiembre de 2026
+
+> Al final, no en §2 ni en §6: la línea 73 está citada por número desde
+> `docs/evolution/PROPUESTA_SEPARACION_SIRIUS_MOTOR.md`. El texto anterior se
+> conserva entero, con su fecha del 14 de agosto de 2026.
+
+**ADR-161 retira el carril dedicado del Auditor.** Entra en vigor con la fusión
+de su Pull Request, y esa aprobación documental **no ejecuta** la retirada. Dos apartados de este documento quedan superados por esa decisión:
+
+- **§2, «Superficie 3 — Desde Sirius» (línea 73).** Se describía como «el final
+  del camino»: un control dentro de Sirius que creara la incidencia y aplicara la
+  etiqueta para lanzar auditorías. Con el carril retirado, esa superficie se
+  queda sin objeto. Lo que EV-015 y EV-019 dejan en su lugar es otra cosa: Sirius
+  **ayuda** en ingeniería con herramientas propias, **avisa** del estado de los
+  trabajos y puede **consultar a un especialista** para una duda del propietario.
+- **§6, «Orden recomendado», pasos 3 a 5.** Ya no describen el siguiente paso de
+  nada: la línea multimodelo se resolvió por otra vía —ADR-095 (el atestado) y
+  ADR-098 (la configuración medida)— y su destinatario, el investigador
+  dedicado, también queda retirado por ADR-161.
+
+**Lo que NO queda superado:** §1, la distinción entre «desde dónde lanzo un
+agente» y «con qué IA lo ejecuto», y §8, la nota de arranque tardía con su tabla
+de afirmación → comprobación, que sigue siendo el precedente citable de esa
+práctica.
+
+**Ejecución pendiente:** ADR-161 registra la decisión, no la ejecuta. La
+superficie 2 —el workflow `audit-sirius-repository.yml`— sigue construida y
+operativa hoy, y seguirá estándolo después de fusionar.
+

@@ -902,3 +902,36 @@ El plan de implementación NO se escribe aquí: es la fase posterior a la aproba
   resuelta por la PR #174: la reconciliación documental ya está hecha.)
 - No autoriza nada: implementación, spikes, instalaciones y enmiendas de contrato son
   decisiones posteriores, del propietario, con este documento como material.
+
+---
+
+## 18. Nota de superación del 8 de septiembre de 2026 — el Worker de investigación deja de ser obligatorio
+
+> Al final del documento, y no en §7.3, porque la línea 476 —el propio título de
+> ese apartado— está citada por número desde
+> `docs/evolution/PROPUESTA_SEPARACION_SIRIUS_MOTOR.md`, y §7.3 a §17 lo están
+> desde varios ADR. Editar ahí desplazaría citas ajenas. El texto original se
+> conserva íntegro: este documento es un **diseño fechado**, y un diseño no se
+> reescribe para que parezca que acertó.
+
+**§7.3 dice en su título «GPT Researcher (Worker de investigación, OBLIGATORIO en
+el MVP)». Esa obligatoriedad queda SUPERADA por ADR-161**, que retira el carril
+dedicado de investigación: esos encargos pasan a las sesiones externas del
+propietario. ADR-161 entra en vigor con la fusión de su Pull Request, y esa
+aprobación documental **no ejecuta** la retirada.
+
+Lo que eso cambia y lo que no:
+
+- **Cambia:** el Worker de investigación deja de ser un componente obligatorio
+  del MVP del motor. §7.3 pasa a describir una vía diseñada y no adoptada.
+- **No cambia:** la política global de egress de §6.1 y el concepto de
+  `ExportSafeBrief` siguen siendo la referencia de este repositorio sobre cómo se
+  protege una frontera de confidencialidad —**mecánicamente, no diciéndole al
+  modelo que no filtre**—, y ADR-160 los cita como tal para el conocimiento común
+  del trabajo.
+- **No cambia:** §7.5, el comprobador determinista, y todo lo relativo a revisión
+  y corrección. Los revisores del ciclo se conservan enteros (ADR-161).
+- **Ejecución pendiente:** ADR-161 registra la decisión, **no la ejecuta**. El
+  carril de investigación sigue operativo hoy, y seguirá estándolo después de
+  fusionar hasta que la retirada técnica se prepare y se ordene.
+

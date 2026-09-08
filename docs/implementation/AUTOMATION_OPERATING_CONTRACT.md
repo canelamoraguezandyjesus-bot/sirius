@@ -1,10 +1,10 @@
 # SIRIUS - Contrato operativo de automatización
 
-- **Versión:** 1.9
-- **Fecha:** 22 de agosto de 2026
-- **Estado:** VIGENTE (§4, §5, §9, §11 y §12 actualizadas; ver §10.3 a §10.9)
+- **Versión:** 1.10 (§13). Anterior: 1.9, del 22 de agosto de 2026
+- **Fecha:** 8 de septiembre de 2026 (v1.10); 22 de agosto de 2026 (v1.9)
+- **Estado:** VIGENTE (§4, §5, §9, §11 y §12 actualizadas; ver §10.3 a §10.9). La v1.10 (§13) entra en vigor con la fusión de la Pull Request que la introduce, por el propietario
 - **Autoridad:** Operativa para el desarrollo automatizado de Sirius 0.1
-- **Sustituye:** versión 1.8 del 21 de agosto de 2026
+- **Sustituye:** la v1.10 sustituye a la v1.9 del 22 de agosto de 2026, que sustituyó a la 1.8 del 21 de agosto de 2026
 - **No modifica:** Producto, Arquitectura Técnica, ATD, requisitos ni alcance de Sirius 0.1
 
 ## 0. Propósito
@@ -625,11 +625,11 @@ Cubre todas las clases de trabajo, sin huecos. Una clase que no aparezca aquí n
 | Clase de trabajo | ¿Existe en la vía GitHub? | Autoridad desde la v1.7 | ¿Conmuta? |
 |---|---|---|---|
 | conversación / exploración / consulta | no (no crea WorkItem) | motor, o ningún WorkItem | — |
-| investigación | no | **motor, desde su nacimiento** | — |
+| investigación | no | **motor, desde su nacimiento** — **RETIRADA ACORDADA** (§13, ADR-161) y **EJECUCIÓN PENDIENTE**: la fila sigue aquí porque `TABLA_ACTIVACION` sigue teniendo la clase | — |
 | documental no publicada | no | **motor** | — |
 | documental publicada (PR en el repo) | sí | incidencia | sí |
 | programación | sí | incidencia | sí |
-| auditoría | sí (etiqueta propia) | incidencia | sí |
+| auditoría | sí (etiqueta propia) | incidencia — **RETIRADA ACORDADA** (§13, ADR-161) y **EJECUCIÓN PENDIENTE**: la fila sigue aquí porque `TABLA_ACTIVACION` sigue teniendo la clase | sí, mientras la clase exista |
 | reparación / espera / cancelación | son fases o estados, no clases | la de su WorkItem | — |
 
 Para las clases nativas del motor **no hay periodo previo**: nacen canónicas en el almacén del motor. Si algo de ellas se refleja en GitHub, ese reflejo es informativo y se etiqueta como tal.
@@ -793,7 +793,7 @@ clase del WorkItem que despacha**, tomada de esta tabla cerrada:
 | Clase del WorkItem | Etiqueta de activación que el motor puede aplicar |
 |---|---|
 | `programacion` | `sirius:implement-requested` |
-| `auditoria` | `auditoria:solicitada` |
+| `auditoria` | `auditoria:solicitada` — **retirada acordada** (§13, ADR-161) y **ejecución pendiente** |
 
 Con la **misma condición sin excepción de §12.1**, que no se relaja ni se
 reescribe: solo si existe una orden explícita del propietario, registrada y
@@ -819,3 +819,65 @@ naturaleza del gesto.
   inventa. Despachar una auditoría no autoriza a despachar sus consecuencias.
 - **§9.1 sigue sin poder aplicar ninguna de las dos.** La autorización es del
   motor, no del vigilante periódico, igual que en §12.1.
+
+## 13. Versión 1.10 — retirada acordada de los carriles dedicados de investigación y auditoría
+
+> **Por qué esta sección está al final y no en §10, donde vive el historial de
+> versiones.** ADR-084 cita `AUTOMATION_OPERATING_CONTRACT.md:646` y ADR-136 cita
+> `AUTOMATION_OPERATING_CONTRACT.md:650`, ambas dentro de §11.2. Insertar una
+> §10.10 antes de esas líneas las habría desplazado y falseado dos citas
+> publicadas. Las dos filas de §11.1 y la de §12.4 sí se han marcado en su sitio,
+> **sin añadir ni quitar una sola línea**, para que esas citas sigan apuntando
+> donde apuntaban.
+
+- **Decisión:** ADR-161, y la decisión canónica EV-017 de
+  `docs/evolution/DECISIONS.md`.
+- **Origen:** dirección del propietario recogida en
+  `docs/evolution/PROPUESTA_SEPARACION_SIRIUS_MOTOR.md` §7.1, punto 2.
+- **Entrada en vigor:** la fusión de la Pull Request que introduce esta sección,
+  por el propietario, conforme al procedimiento establecido en este repositorio.
+- **Aprobación documental y retirada técnica son cosas distintas.** Esa fusión
+  pone en vigor esta sección; **no** desactiva ningún carril. La ejecución es un
+  acto posterior, sin fecha (§13.2).
+
+### 13.1 Qué se decide
+
+Los carriles dedicados de **investigación** (perfil `investigador`, ADR-099) y
+**auditoría** (`auditoria:solicitada`, ADR-016) **se retiran**: dejan de ser el
+camino de esos encargos, que pasan a las sesiones externas del propietario.
+
+Enmienda, por tanto, la tabla de autoridad de §11.1 y la tabla cerrada de §12.4
+en lo que a esas dos clases se refiere. Es una enmienda del contrato, con el
+mismo criterio con que ADR-088 y ADR-099 fueron las enmiendas que **añadieron**
+filas a esas tablas.
+
+### 13.2 La distinción que esta sección existe para no perder
+
+**La retirada está acordada. NO está ejecutada.**
+
+Mientras estas tres cosas sigan siendo ciertas —y hoy lo son—, los dos carriles
+**funcionan si alguien los dispara**:
+
+1. `TABLA_ACTIVACION` (`src/sirius_engine/dispatcher.py`) sigue conteniendo
+   `AUDITORIA` e `INVESTIGACION`.
+2. Los workflows `audit-sirius-repository.yml` e `investigar-orden.yml` siguen en
+   `.github/workflows/`.
+3. La etiqueta `auditoria:solicitada` sigue creada por el bootstrap.
+
+Por eso las filas de §11.1 y §12.4 **no se han borrado**: un contrato que
+declarase inexistente una clase que el despachador sigue despachando sería falso,
+y esa falsedad se descubriría el día en que alguien aplicara la etiqueta.
+
+### 13.3 Lo que esta versión NO cambia
+
+- **Los revisores del ciclo y las comprobaciones, enteros.** Revisor Claude,
+  segundo revisor Codex (§4.1), agregación, convergencia (§5.1), corrector y
+  Quality siguen exactamente como estaban. Ninguna de las dos clases retiradas
+  comparte lógica con ellos.
+- **§8, el merge humano.** Intacto.
+- **§9 y §9.1**, las prohibiciones y el vigilante periódico. Intactos.
+- **§11.2, §11.3 y §11.4**, la condición de conmutación, el acto y la vuelta
+  atrás. Intactos. El orden de conmutación de §11.3 —documental → programación →
+  auditoría— seguirá teniendo tres clases mientras la retirada no se ejecute.
+- **§12.1**, la condición sin excepción de la orden enlazada. Intacta.
+
