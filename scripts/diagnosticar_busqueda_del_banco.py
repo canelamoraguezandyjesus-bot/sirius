@@ -19,6 +19,19 @@ techo de dos palancas que producción no tiene y el laboratorio sí (ADR-148):
   (``src/sirius/application/rank_relevant_knowledge.py``), conservando el
   ámbito que producción deriva del proyecto activo.
 
+- ``--cupo`` (ADR-169, palanca 3): aplica el recorte por cardinalidad
+  —``recortar_al_cupo``, la misma función que el adaptador de Ollama usa en
+  su camino de éxito— sobre un doble que no descarta nada. **No mide el
+  acierto de la palanca, y su cifra no se publica sin esta condición al
+  lado**: la ``n`` de ``EXACTA`` que el banco pone en la petición es
+  ``max(1, len(caso["resultado_esperado"]))``, o sea **adjudicación** —el
+  oráculo—, y producción no la tiene ni puede inventarla (ADR-164 la deja
+  fija en 1, ``src/sirius/application/interpret_query_request.py``). Lo que
+  esta bandera mide es una **cota superior**: cuánto ruido quitaría el
+  recorte si alguien acertara la ``n``. Solo tiene sentido junto a
+  ``--peticion``: sin ella toda petición es ``EXHAUSTIVA`` y el cupo es
+  ``None`` en las 47.
+
 Reutiliza ``_ejecutar_banco_paquete_completo`` sin reimplementarlo — la única
 forma de no medir otra cosa por accidente — e inyecta las dos palancas por
 parches sobre nombres de módulo, restaurados al salir. Corre sin Ollama: solo
@@ -27,7 +40,7 @@ ve la etapa de búsqueda. Nunca lee ``criticidad.razon_segura``.
 USO
 ===
 
-    uv run python scripts/diagnosticar_busqueda_del_banco.py [--ejes] [--peticion]
+    uv run python scripts/diagnosticar_busqueda_del_banco.py [--ejes] [--peticion] [--cupo]
 
 Medido el 05-09-2026 sobre ``a07c5d5`` (ADR-148): sin banderas 0/47 exactos,
 487 de más, 72/81; ``--ejes`` 0/47, 421, 71/81; ``--peticion`` 16/47, 162,
@@ -71,7 +84,7 @@ import tests.acceptance.test_pa_0_2_rec_01_banco_evidencia as arnes  # noqa: E40
 from tests.acceptance.staged_engine_case_translation import peticion_desde_caso  # noqa: E402
 
 import sirius.application.rank_relevant_knowledge as recuperacion  # noqa: E402
-from sirius.domain.relevance import RankedKnowledge  # noqa: E402
+from sirius.domain.relevance import RankedKnowledge, recortar_al_cupo  # noqa: E402
 from sirius.domain.staged_engine_contracts import Ambito, Peticion  # noqa: E402
 
 _BANCO = _RAIZ / "tests" / "acceptance" / "fixtures" / "evidence_bank_47_casos.json"
@@ -79,16 +92,29 @@ Clave = tuple[str, int]
 
 
 class _FiltroQueNoDescartaYRecuerda:
-    """El doble de producción (conserva todo) que además recuerda qué entró."""
+    """El doble de producción (conserva todo) que además recuerda qué entró.
 
-    def __init__(self) -> None:
+    Con ``aplica_cupo`` conserva todo **y luego aplica el recorte real** de
+    ADR-169 (``recortar_al_cupo``, la misma función que usa el adaptador de
+    Ollama en su camino de éxito). Sirve para una sola cosa: aislar el
+    recorte del modelo, o sea medir cuánto puede quitar el cupo por sí solo
+    suponiendo un modelo que no descarta nada. **No mide el acierto de la
+    palanca**: ver la advertencia de ``--cupo`` en el docstring del módulo.
+    """
+
+    def __init__(self, *, aplica_cupo: bool = False) -> None:
         self.entradas: list[list[Clave]] = []
+        self.cupos: list[int | None] = []
+        self._aplica_cupo = aplica_cupo
 
     def filter_candidates(
-        self, query_text: str, candidates: Sequence[RankedKnowledge]
+        self, query_text: str, candidates: Sequence[RankedKnowledge], *, cupo: int | None = None
     ) -> Sequence[RankedKnowledge]:
         self.entradas.append([(c.kind.value, c.item_id) for c in candidates])
-        return candidates
+        self.cupos.append(cupo)
+        if not self._aplica_cupo:
+            return candidates
+        return recortar_al_cupo(candidates, cupo)
 
 
 def _ambito_de_produccion(active_project_id: int | None) -> Ambito:
@@ -103,6 +129,7 @@ def _medir(
     *,
     con_ejes: bool,
     con_peticion: bool,
+    con_cupo: bool = False,
     peticion_alternativa: Callable[..., Peticion] | None = None,
 ) -> tuple[Any, list[list[Clave]], dict[str, int]]:
     """Mide la etapa de búsqueda con las palancas pedidas.
@@ -156,7 +183,7 @@ def _medir(
             limite_sin_atar=limite_sin_atar,
         )
 
-    filtro = _FiltroQueNoDescartaYRecuerda()
+    filtro = _FiltroQueNoDescartaYRecuerda(aplica_cupo=con_cupo)
     arnes._load_canon_item = cargar_y_registrar
     if con_ejes:
         arnes.build_staged_engine_port = puerto_con_ejes
@@ -179,6 +206,7 @@ def _medir(
 def main() -> int:
     con_ejes = "--ejes" in sys.argv[1:]
     con_peticion = "--peticion" in sys.argv[1:]
+    con_cupo = "--cupo" in sys.argv[1:]
     banco = json.loads(_BANCO.read_text(encoding="utf-8"))
     items = {item["id"]: item for item in banco["items"]}
     casos = banco["casos"]
@@ -188,16 +216,21 @@ def main() -> int:
         if (item.get("criticidad") or {}).get("nivel") == "CRITICO"
     )
 
-    ejecucion, entradas, llamadas = _medir(banco, con_ejes=con_ejes, con_peticion=con_peticion)
+    ejecucion, entradas, llamadas = _medir(
+        banco, con_ejes=con_ejes, con_peticion=con_peticion, con_cupo=con_cupo
+    )
     if len(entradas) != len(casos):
         msg = f"el filtro vio {len(entradas)} consultas y el banco tiene {len(casos)}"
         raise RuntimeError(msg)
 
     m = ejecucion.metricas
     etiqueta = f"ejes={'si' if con_ejes else 'no'} peticion={'real' if con_peticion else 'fija'}"
+    if con_cupo:
+        etiqueta += " cupo=si"
+    encabezado = "SOLO EL RECORTE POR CUPO (modelo que no descarta)" if con_cupo else "SIN FILTRO"
     print("=" * 74)
     print(
-        f"[{etiqueta}] SIN FILTRO: {m.aciertos_exactos}/47 exactos; "
+        f"[{etiqueta}] {encabezado}: {m.aciertos_exactos}/47 exactos; "
         f"{m.elementos_de_mas} de mas; {m.elementos_hallados}/81 hallados; "
         f"omisiones criticas={m.omisiones_criticas}"
     )
@@ -209,9 +242,17 @@ def main() -> int:
     criticas_perdidas: list[tuple[str, str]] = []
     extras_por_caso: list[tuple[str, int, int]] = []
     for caso, entraron_raw in zip(casos, entradas, strict=True):
-        entraron = {
-            ejecucion.real_a_canonico[c] for c in entraron_raw if c in ejecucion.real_a_canonico
-        }
+        # Sin ``--cupo`` el detalle es lo que ENTRÓ al filtro, que es lo que
+        # este guion mide (etapa de búsqueda). Con ``--cupo`` el filtro sí
+        # quita, así que el detalle tiene que ser lo que SALIÓ: mirar la
+        # entrada diría 162 de más al lado de una cabecera que dice 125.
+        entraron = (
+            set(ejecucion.obtenido_por_caso[caso["id"]])
+            if con_cupo
+            else {
+                ejecucion.real_a_canonico[c] for c in entraron_raw if c in ejecucion.real_a_canonico
+            }
+        )
         esperados = list(caso["resultado_esperado"])
         faltan = [e for e in esperados if e not in entraron]
         extras = sorted(entraron - set(esperados))

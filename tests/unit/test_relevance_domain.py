@@ -21,11 +21,20 @@ from sirius.domain.relevance import (
     category_index_activated,
     category_index_matches_query,
     category_matches_query,
+    cupo_del_filtro,
     pide_contexto,
     rank_relevant_knowledge,
+    recortar_al_cupo,
     rescue_max_criticality_candidates,
     subject_matches_query,
     truncate_to_hard_limit,
+)
+from sirius.domain.staged_engine_contracts import (
+    Ambito,
+    Cardinalidad,
+    Modo,
+    Peticion,
+    VentanaTemporal,
 )
 
 _NOW = datetime(2026, 7, 21, tzinfo=UTC)
@@ -969,3 +978,73 @@ def test_g12_hard_limit_exclusion_is_final_and_is_never_undone_by_rf25_rescue() 
 
     assert result == (kept_by_filter, rescuable_by_rf25)
     assert excluded_by_g12 not in result
+
+
+# --------------------------------------------------------------------------
+# P3 (ADR-169): la cardinalidad de la petición, traducida a cupo del filtro
+# --------------------------------------------------------------------------
+
+
+def _peticion(
+    cardinalidad: Cardinalidad, *, objetivos: int = 1, limite_objetivo: int = 100_000
+) -> Peticion:
+    return Peticion(
+        operation_id="op",
+        consulta="consulta",
+        proposito="responder_al_usuario con contexto",
+        modo=Modo.M1_ORDINARIO,
+        ambito=Ambito(global_=True, proyectos=()),
+        ventana=VentanaTemporal(tiempo_objetivo="2026-09-08T00:00:00Z"),
+        cardinalidad=cardinalidad,
+        limite_objetivo=limite_objetivo,
+        limite_duro=100_000,
+        objetivos=objetivos,
+    )
+
+
+def test_cupo_del_filtro_con_exacta_es_los_objetivos_de_la_peticion() -> None:
+    """ADR-169: ``EXACTA n`` → ``n``, y la ``n`` es ``objetivos``, el mismo
+    campo que ``_suficiente`` (``sirius.domain.staged_engine``) ya usa para
+    ``EXACTA``, para que el motor y el filtro no cuenten dos cosas
+    distintas."""
+    assert cupo_del_filtro(_peticion(Cardinalidad.EXACTA, objetivos=3)) == 3
+
+
+def test_cupo_del_filtro_con_exhaustiva_no_es_ningun_numero() -> None:
+    """``EXHAUSTIVA`` es "todo lo relevante, sin cuota": no hay número que
+    conservar, así que el filtro poda solo por relevancia."""
+    assert cupo_del_filtro(_peticion(Cardinalidad.EXHAUSTIVA, objetivos=3)) is None
+
+
+def test_cupo_del_filtro_con_acotada_es_el_limite_que_la_peticion_declara() -> None:
+    """``ACOTADA`` respeta el límite declarado — ``limite_objetivo``, el
+    mismo campo que ``_suficiente`` usa para ``ACOTADA``, nunca
+    ``objetivos``, que en ``ACOTADA`` no significa nada."""
+    assert cupo_del_filtro(_peticion(Cardinalidad.ACOTADA, objetivos=3, limite_objetivo=5)) == 5
+
+
+def test_cupo_del_filtro_no_devuelve_un_cupo_no_positivo() -> None:
+    """Un cero no es una cuota: obedecerlo vaciaría el resultado por un dato
+    que nadie declaró bien. Se degrada a "sin número", la misma dirección de
+    fallo (no descartar) que el resto de este camino."""
+    assert cupo_del_filtro(_peticion(Cardinalidad.ACOTADA, limite_objetivo=0)) is None
+
+
+def test_recortar_al_cupo_toma_un_prefijo_y_nunca_reordena() -> None:
+    """El recorte conserva las primeras del orden que §6.2 ya fijó: quien
+    ordena sigue siendo ``rank_relevant_knowledge``."""
+    candidates = tuple(_ranked_memory(_memory(n)) for n in (1, 2, 3, 4))
+
+    assert recortar_al_cupo(candidates, 2) == (candidates[0], candidates[1])
+
+
+def test_recortar_al_cupo_sin_cupo_devuelve_todo() -> None:
+    candidates = tuple(_ranked_memory(_memory(n)) for n in (1, 2, 3))
+
+    assert recortar_al_cupo(candidates, None) == candidates
+
+
+def test_recortar_al_cupo_con_un_cupo_mayor_que_lo_conservado_no_quita_nada() -> None:
+    candidates = tuple(_ranked_memory(_memory(n)) for n in (1, 2))
+
+    assert recortar_al_cupo(candidates, 9) == candidates

@@ -155,7 +155,7 @@ class _FiltroQueNoDescartaYRecuerda:
         self.entradas: list[frozenset[Clave]] = []
 
     def filter_candidates(
-        self, query_text: str, candidates: Sequence[RankedKnowledge]
+        self, query_text: str, candidates: Sequence[RankedKnowledge], *, cupo: int | None = None
     ) -> Sequence[RankedKnowledge]:
         self.entradas.append(frozenset((c.kind.value, c.item_id) for c in candidates))
         return candidates

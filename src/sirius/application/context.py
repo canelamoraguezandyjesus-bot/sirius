@@ -317,7 +317,9 @@ class ContextBuilder:
         memories — and then M10's relevance filter (§6.3), a second filter
         after precedence and before ``apply_context_budget``, guarded by its
         own candado."""
-        ranked_knowledge = self._rank_relevant_knowledge_use_case.rank(current_user_message)
+        ranked_knowledge, cupo = self._rank_relevant_knowledge_use_case.rank_con_cupo(
+            current_user_message
+        )
         current_decisions = self._decision_repository.list_current_decisions()
         after_precedence = tuple(
             candidate
@@ -326,10 +328,14 @@ class ContextBuilder:
         )
         if self._relevance_filter_port is None:
             return after_precedence
-        return self._apply_relevance_filter(current_user_message, after_precedence)
+        return self._apply_relevance_filter(current_user_message, after_precedence, cupo=cupo)
 
     def _apply_relevance_filter(
-        self, current_user_message: str, candidates: tuple[RankedKnowledge, ...]
+        self,
+        current_user_message: str,
+        candidates: tuple[RankedKnowledge, ...],
+        *,
+        cupo: int | None = None,
     ) -> tuple[RankedKnowledge, ...]:
         """The integrity mechanism after B6b's ranking (§6.3): a single call
         to ``RelevanceFilterPort``, never a second one.
@@ -366,11 +372,22 @@ class ContextBuilder:
 
         Either path preserves the order §6.2 already fixed on ``candidates``
         for every survivor.
+
+        P3 (ADR-169, incidencia #579): ``cupo`` es cuántas candidatas permite
+        conservar la cardinalidad de la petición de ESTA consulta
+        (``RankRelevantKnowledgeUseCase.rank_con_cupo``), y viaja hasta el
+        puerto sin que este método lo aplique. No es un detalle de reparto: el
+        recorte tiene que ocurrir donde se distingue el veredicto del modelo de
+        una rendición suya, y aquí no se distingue. Aplicarlo aquí recortaría
+        también un fallo abierto y, peor, actuaría DESPUÉS del rescate
+        RF-25/RF-26, de modo que podría tirar la crítica que el rescate acaba
+        de recuperar. Ni el candado de puerta cerrada ni el rescate se tocan:
+        siguen decidiendo sobre lo que el filtro devuelva, recortado o no.
         """
         assert self._relevance_filter_port is not None
         if not self._category_matching_enabled:
             filtered = self._relevance_filter_port.filter_candidates(
-                current_user_message, candidates
+                current_user_message, candidates, cupo=cupo
             )
             kept_positions = {id(candidate) for candidate in filtered}
             kept_positions.update(
@@ -396,7 +413,9 @@ class ContextBuilder:
             hard_limit=_HARD_LIMIT_SIN_ATAR,
             protection_rank=_criticality_protection_rank,
         )
-        filtered = self._relevance_filter_port.filter_candidates(current_user_message, gated)
+        filtered = self._relevance_filter_port.filter_candidates(
+            current_user_message, gated, cupo=cupo
+        )
         rescued = rescue_max_criticality_candidates(
             gated, filtered, is_protected=_is_protected_by_criticality
         )

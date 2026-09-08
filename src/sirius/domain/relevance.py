@@ -129,6 +129,7 @@ from typing import Final
 
 from sirius.domain.decision import Decision, DecisionStatus
 from sirius.domain.memory import Memory, MemoryStatus
+from sirius.domain.staged_engine_contracts import Cardinalidad, Peticion
 
 __all__ = [
     "PROPOSITO_DE_CONTEXTO",
@@ -139,8 +140,10 @@ __all__ = [
     "category_index_activated",
     "category_index_matches_query",
     "category_matches_query",
+    "cupo_del_filtro",
     "pide_contexto",
     "rank_relevant_knowledge",
+    "recortar_al_cupo",
     "rescue_max_criticality_candidates",
     "subject_matches_query",
     "truncate_to_hard_limit",
@@ -443,6 +446,64 @@ def truncate_to_hard_limit(
     prioritised = sorted(candidates, key=protection_rank)
     survivors = {id(candidate) for candidate in prioritised[:hard_limit]}
     return tuple(candidate for candidate in candidates if id(candidate) in survivors)
+
+
+def cupo_del_filtro(peticion: Peticion) -> int | None:
+    """P3 (ADR-169, palanca 3 de ADR-148): cuántas candidatas puede conservar
+    como mucho el filtro de relevancia (§6.3) para ESTA petición.
+
+    Traduce la cardinalidad —y solo la cardinalidad— a un número, con la
+    misma correspondencia que ``_suficiente``
+    (``src/sirius/domain/staged_engine.py``) ya usa para decidir la
+    insuficiencia entre etapas, para que el motor y el filtro no cuenten dos
+    cosas distintas:
+
+    - ``EXACTA`` → ``peticion.objetivos``. En producción ese número es
+      siempre 1 y lo es a propósito: ADR-164 lo dejó fijo porque la cuota que
+      el banco usa (``max(1, len(caso["resultado_esperado"]))``) es
+      **adjudicación** y producción no la tiene ni puede inventarla
+      (``src/sirius/application/interpret_query_request.py``).
+    - ``ACOTADA`` → ``peticion.limite_objetivo``, el límite que la petición
+      declara. Sin límite declarado ese campo degrada al «límite que no ata»,
+      y entonces el cupo no ata tampoco: es un número, pero no recorta nada.
+    - ``EXHAUSTIVA`` → ``None``: no hay número que conservar, la poda es solo
+      por relevancia. «Todo lo relevante, sin cuota» es su significado en el
+      contrato (``Cardinalidad``), y ``_suficiente`` ya declara que no se
+      satisface por cuota.
+
+    Un cupo no positivo no es una cuota: es un dato que nadie declaró bien, y
+    obedecerlo dejaría el resultado vacío por un cero. Se devuelve ``None``
+    —«sin número»— en vez de recortarlo todo, que es la misma dirección de
+    fallo (no descartar) que el resto de este camino.
+    """
+    if peticion.cardinalidad is Cardinalidad.EXHAUSTIVA:
+        return None
+    cupo = (
+        peticion.objetivos
+        if peticion.cardinalidad is Cardinalidad.EXACTA
+        else peticion.limite_objetivo
+    )
+    return cupo if cupo > 0 else None
+
+
+def recortar_al_cupo(
+    kept: Sequence[RankedKnowledge], cupo: int | None
+) -> tuple[RankedKnowledge, ...]:
+    """Las primeras ``cupo`` de ``kept``, en su orden de entrada.
+
+    ``None`` —``EXHAUSTIVA``, o un llamador que no declara cupo— devuelve
+    ``kept`` entero. Nunca reordena: toma un PREFIJO del orden que
+    ``rank_relevant_knowledge`` (§6.2) ya fijó, así que las conservadas
+    mantienen su posición relativa y la más relevante es la última en caer,
+    exactamente como ``truncate_to_hard_limit`` conserva el orden original.
+
+    Es responsabilidad de quien la llama no aplicarla a una rendición del
+    modelo: el recorte solo tiene sentido sobre un veredicto, nunca sobre un
+    fallo abierto (ver ``sirius.adapters.ollama_relevance_filter``).
+    """
+    if cupo is None:
+        return tuple(kept)
+    return tuple(kept)[:cupo]
 
 
 def rescue_max_criticality_candidates(

@@ -64,6 +64,7 @@ from sirius.domain.relevance import (
     category_index_activated,
     category_index_matches_query,
     category_matches_query,
+    cupo_del_filtro,
     pide_contexto,
     rank_relevant_knowledge,
     subject_matches_query,
@@ -221,13 +222,33 @@ class RankRelevantKnowledgeUseCase:
         etapas configurados, delega en ``_rank_via_staged_engine`` (ADR-109)
         en vez de en el filtro-y-orden de siempre.
         """
+        return self.rank_con_cupo(query_text)[0]
+
+    def rank_con_cupo(self, query_text: str) -> tuple[tuple[RankedKnowledge, ...], int | None]:
+        """Lo mismo que ``rank()``, más el **cupo** que la cardinalidad de la
+        ``Peticion`` de ESTA consulta impone al filtro de relevancia (P3,
+        ADR-169, ``sirius.domain.relevance.cupo_del_filtro``).
+
+        Existe porque el filtro (§6.3) lo aplica ``ContextBuilder``, ya fuera
+        de este caso de uso, y hasta ADR-169 no había forma de que la
+        cardinalidad llegara hasta allí sin interrogar dos veces al modelo:
+        ``rank()`` devolvía las candidatas y tiraba la petición con la que las
+        había pedido. Devolver las dos de una vez es lo que evita esa segunda
+        llamada.
+
+        El cupo es ``None`` —«sin número, poda solo por relevancia»— por el
+        camino de siempre: sin la puerta D7 punto 6 abierta no se construye
+        ninguna ``Peticion``, así que no hay cardinalidad que declarar. Y con
+        la puerta abierta sigue siendo ``None`` mientras el intérprete emita
+        la política uniforme (``EXHAUSTIVA``, ``INTENCION_ORDINARIA``).
+        """
         if (
             self._category_matching_enabled
             and self._staged_engine_port is not None
             and self._staged_engine_candidate is not None
         ):
-            return self._rank_via_staged_engine(query_text)
-        return self._rank_via_current_pipeline(query_text)
+            return self._recuperar_por_etapas(query_text)
+        return self._rank_via_current_pipeline(query_text), None
 
     def _peticion(
         self, query_text: str, *, operation_id: str, active_project_id: int | None
@@ -254,6 +275,17 @@ class RankRelevantKnowledgeUseCase:
         )
 
     def _rank_via_staged_engine(self, query_text: str) -> tuple[RankedKnowledge, ...]:
+        """Solo las candidatas de ``_recuperar_por_etapas``, sin el cupo.
+
+        La recuperación por etapas es una sola (``_recuperar_por_etapas``);
+        esto es la vista que necesita quien no aplica el filtro de relevancia
+        y por tanto no tiene nada que hacer con el cupo (ADR-169).
+        """
+        return self._recuperar_por_etapas(query_text)[0]
+
+    def _recuperar_por_etapas(
+        self, query_text: str
+    ) -> tuple[tuple[RankedKnowledge, ...], int | None]:
         """ADR-109: recuperación por ``E0-E5`` con las doce puertas y la
         agrupación de equivalentes, en vez del filtro-y-orden de S7.5.
 
@@ -603,8 +635,11 @@ class RankRelevantKnowledgeUseCase:
                         )
                     )
 
-        return _intercalar_por_categoria(
-            ranked, (*solo_por_categoria, *solo_por_criticidad, *siembra)
+        return (
+            _intercalar_por_categoria(
+                ranked, (*solo_por_categoria, *solo_por_criticidad, *siembra)
+            ),
+            cupo_del_filtro(peticion),
         )
 
     def _rank_via_current_pipeline(self, query_text: str) -> tuple[RankedKnowledge, ...]:

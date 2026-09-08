@@ -319,3 +319,91 @@ def test_filter_candidates_sends_the_request_body_the_lab_measured() -> None:
     assert peticion.method == "POST"
     assert peticion.url.path == "/api/chat"
     assert json.loads(peticion.content) == _SOBRE_DEL_LABORATORIO
+
+
+# --------------------------------------------------------------------------
+# P3 (ADR-169, palanca 3 de ADR-148): el cupo por cardinalidad
+# --------------------------------------------------------------------------
+
+
+def _responde(*posiciones: int) -> httpx.MockTransport:
+    """Un servidor que siempre conserva exactamente esas posiciones."""
+
+    def _handle(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200, json={"message": {"content": json.dumps({"responden": list(posiciones)})}}
+        )
+
+    return httpx.MockTransport(_handle)
+
+
+def test_con_cardinalidad_exacta_el_filtro_recorta_el_veredicto_a_n() -> None:
+    """ADR-169: con ``EXACTA n`` el filtro devuelve ``n``, aunque el modelo
+    conserve más. ``cupo`` es la ``n`` que ``cupo_del_filtro`` derivó de la
+    ``Peticion`` (``objetivos``), y el adaptador la honra sobre el veredicto
+    del modelo: cinco candidatas, el modelo dice que responden las cinco, la
+    petición declara dos, salen dos."""
+    candidates = tuple(_candidate(n, f"frase {n}") for n in range(1, 6))
+
+    adapter = _adapter(_responde(1, 2, 3, 4, 5))
+
+    assert adapter.filter_candidates("consulta", candidates, cupo=2) == candidates[:2]
+
+
+def test_con_cardinalidad_exhaustiva_el_filtro_no_recorta_a_un_numero_fijo() -> None:
+    """ADR-169: con ``EXHAUSTIVA`` el cupo es ``None`` y no hay número que
+    conservar — la poda es solo por relevancia, o sea el veredicto del modelo
+    tal cual. Se comprueba que NO es un número fijo: con el mismo cupo
+    ``None`` y la misma lista de candidatas, dos veredictos distintos dan dos
+    tamaños distintos, y ninguno de los dos está recortado."""
+    candidates = tuple(_candidate(n, f"frase {n}") for n in range(1, 6))
+
+    conserva_cuatro = _adapter(_responde(1, 2, 3, 4)).filter_candidates(
+        "consulta", candidates, cupo=None
+    )
+    conserva_una = _adapter(_responde(3)).filter_candidates("consulta", candidates, cupo=None)
+
+    assert conserva_cuatro == candidates[:4]
+    assert conserva_una == (candidates[2],)
+
+
+def test_el_cupo_no_recorta_cuando_el_modelo_falla_y_el_filtro_se_rinde() -> None:
+    """ADR-169: la garantía que el recorte no puede romper. Un fallo del
+    modelo devuelve las candidatas ENTERAS y sin tocar, con cupo o sin él —
+    recortar una rendición sería recortar por accidente. Se comprueba por
+    identidad del objeto, que es además la señal por la que
+    ``scripts/medir_banco_con_ollama_real.py`` cuenta rendiciones: si el
+    recorte pasara por aquí, devolvería una tupla nueva y esa cuenta se
+    volvería un cero falso."""
+
+    def _rechaza(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("connection refused")
+
+    candidates = (_candidate(1, "primero"), _candidate(2, "segundo"), _candidate(3, "tercero"))
+
+    resultado = _adapter(httpx.MockTransport(_rechaza)).filter_candidates(
+        "consulta", candidates, cupo=1
+    )
+
+    assert resultado is candidates
+
+
+def test_el_cupo_conserva_el_orden_de_entrada_y_nunca_reordena() -> None:
+    """ADR-169: el recorte es un PREFIJO del orden que §6.2 ya fijó, nunca
+    una selección reordenada — el orden sigue siendo responsabilidad de
+    ``sirius.domain.relevance`` y no de este puerto. El modelo nombra las
+    posiciones al revés (5, 4, 3, 2, 1) y aun así salen las dos primeras del
+    orden de entrada, en ese orden."""
+    candidates = tuple(_candidate(n, f"frase {n}") for n in range(1, 6))
+
+    resultado = _adapter(_responde(5, 4, 3, 2, 1)).filter_candidates("consulta", candidates, cupo=2)
+
+    assert resultado == (candidates[0], candidates[1])
+
+
+def test_sin_cupo_declarado_el_filtro_se_comporta_como_antes_de_adr_169() -> None:
+    """El valor por defecto del contrato: un llamador que no declara
+    cardinalidad recibe exactamente lo que recibía antes de ADR-169."""
+    candidates = tuple(_candidate(n, f"frase {n}") for n in range(1, 6))
+
+    assert _adapter(_responde(1, 2, 3)).filter_candidates("consulta", candidates) == candidates[:3]

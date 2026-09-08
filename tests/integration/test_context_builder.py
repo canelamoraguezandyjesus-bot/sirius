@@ -30,9 +30,16 @@ from sirius.adapters.persistence.sqlite_knowledge_search_repository import (
 )
 from sirius.adapters.persistence.sqlite_memory_repository import build_sqlite_memory_repository
 from sirius.adapters.persistence.sqlite_project_repository import build_sqlite_project_repository
+from sirius.adapters.persistence.staged_engine_candidate import (
+    candidato as staged_engine_candidato,
+)
+from sirius.adapters.persistence.staged_engine_port import build_staged_engine_port
 from sirius.application import context as context_module
 from sirius.application.context import Context, ContextAssemblyError, ContextBuilder
+from sirius.application.interpret_query_request import InterpreteDePeticion
 from sirius.application.rank_relevant_knowledge import RankRelevantKnowledgeUseCase
+from sirius.application.set_category import SetCategoryUseCase
+from sirius.application.tag_category import CategoryTargetKind
 from sirius.domain.conversation import MessageRole
 from sirius.domain.criticality import Criticality
 from sirius.domain.identity import (
@@ -41,7 +48,13 @@ from sirius.domain.identity import (
     INITIAL_PERSONALITY_INSTRUCTIONS,
 )
 from sirius.domain.project import blockers_to_text
-from sirius.domain.relevance import RankedKnowledge
+from sirius.domain.query_intent import IntencionDeConsulta
+from sirius.domain.relevance import RankedKnowledge, recortar_al_cupo
+from sirius.domain.staged_engine_contracts import (
+    Cardinalidad,
+    Modo,
+    PuertoDeRecuperacion,
+)
 from sirius.ports.relevance_filter import RelevanceFilterPort
 
 
@@ -90,6 +103,8 @@ def _build_context_builder(
     relevance_filter_port: RelevanceFilterPort | None = None,
     max_criticality_category: str | None = None,
     category_matching_enabled: bool = False,
+    staged_engine_port: PuertoDeRecuperacion | None = None,
+    query_request_interpreter: InterpreteDePeticion | None = None,
 ) -> ContextBuilder:
     memory_repository = build_sqlite_memory_repository(database_path)
     decision_repository = build_sqlite_decision_repository(database_path)
@@ -99,6 +114,12 @@ def _build_context_builder(
         decision_repository=decision_repository,
         project_repository=project_repository,
         knowledge_search_repository=build_sqlite_knowledge_search_repository(database_path),
+        category_matching_enabled=category_matching_enabled and staged_engine_port is not None,
+        staged_engine_port=staged_engine_port,
+        staged_engine_candidate=(
+            staged_engine_candidato() if staged_engine_port is not None else None
+        ),
+        query_request_interpreter=query_request_interpreter,
     )
     return ContextBuilder(
         identity_repository=build_sqlite_identity_repository(database_path),
@@ -134,7 +155,7 @@ class _ExcludeAllRelevanceFilterPort:
     candidates back, never a lenient double that happens to keep them."""
 
     def filter_candidates(
-        self, query_text: str, candidates: Sequence[RankedKnowledge]
+        self, query_text: str, candidates: Sequence[RankedKnowledge], *, cupo: int | None = None
     ) -> Sequence[RankedKnowledge]:
         return ()
 
@@ -146,7 +167,7 @@ class _FailOpenRelevanceFilterPort:
     problem is ``candidates`` unmodified."""
 
     def filter_candidates(
-        self, query_text: str, candidates: Sequence[RankedKnowledge]
+        self, query_text: str, candidates: Sequence[RankedKnowledge], *, cupo: int | None = None
     ) -> Sequence[RankedKnowledge]:
         return candidates
 
@@ -165,11 +186,14 @@ class _KeepOnlyRelevanceFilterPort:
     def __init__(self, kept_ids: frozenset[int]) -> None:
         self._kept_ids = kept_ids
         self.received_item_ids: list[frozenset[int]] = []
+        #: P3 (ADR-169): el cupo que el puerto recibió en cada llamada.
+        self.received_cupos: list[int | None] = []
 
     def filter_candidates(
-        self, query_text: str, candidates: Sequence[RankedKnowledge]
+        self, query_text: str, candidates: Sequence[RankedKnowledge], *, cupo: int | None = None
     ) -> Sequence[RankedKnowledge]:
         self.received_item_ids.append(frozenset(c.item_id for c in candidates))
+        self.received_cupos.append(cupo)
         return tuple(c for c in candidates if c.item_id in self._kept_ids)
 
 
@@ -1059,3 +1083,185 @@ def test_category_matching_enabled_without_a_port_never_calls_the_filter_at_all(
     context = builder.build("candidato")
 
     assert [m.id for m in context.memories] == [memory.id]
+
+
+# --------------------------------------------------------------------------
+# P3 (ADR-169, palanca 3 de ADR-148): la cardinalidad llega hasta el filtro
+# --------------------------------------------------------------------------
+
+
+class _ModeloDeIntencion:
+    """Doble determinista del modelo local (ADR-164): contesta la intención
+    que se le dé. En CI no hay Ollama, y estas pruebas fijan el CABLEADO —que
+    la cardinalidad de la petición llega al puerto del filtro—, nunca la
+    calidad de la inferencia."""
+
+    def __init__(self, intencion: IntencionDeConsulta) -> None:
+        self._intencion = intencion
+
+    def classify_intent(self, query_text: str) -> IntencionDeConsulta:
+        return self._intencion
+
+
+class _FiltroQueConservaTodoYAplicaElCupo:
+    """Doble del ADAPTADOR, no del modelo: reproduce su camino de éxito con
+    un modelo que declara relevante todo lo que recibe, y aplica el mismo
+    recorte real (`recortar_al_cupo`) que el adaptador de Ollama aplica sobre
+    el veredicto. Sirve para ver el efecto del cupo sin red y sin modelo."""
+
+    def __init__(self) -> None:
+        self.received_cupos: list[int | None] = []
+
+    def filter_candidates(
+        self, query_text: str, candidates: Sequence[RankedKnowledge], *, cupo: int | None = None
+    ) -> Sequence[RankedKnowledge]:
+        self.received_cupos.append(cupo)
+        return recortar_al_cupo(candidates, cupo)
+
+
+def _tres_candidatos_con_categoria(database_path: Path) -> None:
+    """Tres recuerdos con categoría puesta.
+
+    La categoría no es decorativa aquí: con la puerta abierta, un candidato
+    SIN categoría queda protegido incondicionalmente del veredicto del filtro
+    (`ContextBuilder._apply_relevance_filter`, sin cambios desde M10), así que
+    sin ella el recorte no se vería nunca en el resultado por más que el cupo
+    llegara. Se pone para que lo que estas pruebas midan sea el cupo y no esa
+    protección.
+    """
+    repositorio = build_sqlite_memory_repository(database_path)
+    set_category = SetCategoryUseCase(repositorio, build_sqlite_decision_repository(database_path))
+    for texto in ("candidato uno", "candidato dos", "candidato tres"):
+        memoria = repositorio.create_memory(texto, "manual")
+        set_category.set(CategoryTargetKind.MEMORY, memoria.id, "trabajo")
+
+
+def _interprete_exacta(objetivos_declarados: Cardinalidad) -> InterpreteDePeticion:
+    return InterpreteDePeticion(
+        intent_classifier=_ModeloDeIntencion(
+            IntencionDeConsulta(
+                modo=Modo.M1_ORDINARIO,
+                cardinalidad=objetivos_declarados,
+                limite=None,
+                tiempo_objetivo=None,
+                corte_de_registro=None,
+            )
+        )
+    )
+
+
+@pytest.mark.integration
+def test_la_cardinalidad_de_la_peticion_llega_hasta_el_puerto_del_filtro(
+    tmp_path: Path,
+) -> None:
+    """ADR-169: el criterio de aceptación del cableado. Hasta esta ficha el
+    contrato del puerto era `filter_candidates(query_text, candidates)` y la
+    cardinalidad no tenía por dónde llegar; ahora `ContextBuilder` la pide a
+    `rank_con_cupo` y la entrega al puerto en la misma llamada, sin
+    interrogar al modelo dos veces.
+
+    Con `EXACTA` el cupo es `objetivos`, que en producción vale 1 y lo vale a
+    propósito (ADR-164: la cuota del banco es adjudicación y producción no la
+    tiene). Que sea 1 es precisamente lo que esta prueba fija: no una `n`
+    inventada aquí."""
+    database_path = tmp_path / "sirius.db"
+    _prepare_schema(database_path)
+    _seed_bootstrap_singletons(database_path)
+    _tres_candidatos_con_categoria(database_path)
+    relevance_filter_port = _FiltroQueConservaTodoYAplicaElCupo()
+    staged_engine_port = build_staged_engine_port(database_path)
+    try:
+        builder = _build_context_builder(
+            database_path,
+            relevance_filter_port=relevance_filter_port,
+            category_matching_enabled=True,
+            staged_engine_port=staged_engine_port,
+            query_request_interpreter=_interprete_exacta(Cardinalidad.EXACTA),
+        )
+
+        context = builder.build("candidato")
+    finally:
+        staged_engine_port.close()
+
+    assert relevance_filter_port.received_cupos == [1]
+    # El recorte se ve en el resultado: sin cupo las tres sobrevivirían al
+    # doble, que no descarta nada por su cuenta.
+    assert len(context.memories) == 1
+
+
+@pytest.mark.integration
+def test_con_exhaustiva_el_puerto_del_filtro_no_recibe_ningun_numero(tmp_path: Path) -> None:
+    """La otra mitad del objetivo, y la razón por la que esta palanca no
+    puede mover la vía completa de hoy: con `EXHAUSTIVA` —la cardinalidad que
+    emite toda petición de producción— el cupo es `None`, el filtro poda solo
+    por relevancia y el resultado no queda recortado a ningún número."""
+    database_path = tmp_path / "sirius.db"
+    _prepare_schema(database_path)
+    _seed_bootstrap_singletons(database_path)
+    _tres_candidatos_con_categoria(database_path)
+    relevance_filter_port = _FiltroQueConservaTodoYAplicaElCupo()
+    staged_engine_port = build_staged_engine_port(database_path)
+    try:
+        builder = _build_context_builder(
+            database_path,
+            relevance_filter_port=relevance_filter_port,
+            category_matching_enabled=True,
+            staged_engine_port=staged_engine_port,
+            query_request_interpreter=_interprete_exacta(Cardinalidad.EXHAUSTIVA),
+        )
+
+        context = builder.build("candidato")
+    finally:
+        staged_engine_port.close()
+
+    assert relevance_filter_port.received_cupos == [None]
+    assert len(context.memories) == 3
+
+
+@pytest.mark.integration
+def test_el_recorte_por_cupo_nunca_pierde_una_critica(tmp_path: Path) -> None:
+    """El límite innegociable de la incidencia #579: ninguna poda puede
+    perder una crítica, y se fija con prueba, no solo con medición.
+
+    Con la puerta abierta, un cupo de 1 deja fuera del veredicto del filtro a
+    una crítica que llegaba detrás; RF-25/RF-26
+    (`rescue_max_criticality_candidates`) la devuelve, porque el filtro sí
+    conservó algo para esta consulta. El rescate actúa DESPUÉS del filtro y
+    por eso el recorte no puede deshacerlo — que es también la razón por la
+    que el cupo se aplica dentro del adaptador y no en `ContextBuilder`."""
+    database_path = tmp_path / "sirius.db"
+    _prepare_schema(database_path)
+    _seed_bootstrap_singletons(database_path)
+    memory_repository = build_sqlite_memory_repository(database_path)
+    set_category = SetCategoryUseCase(
+        memory_repository, build_sqlite_decision_repository(database_path)
+    )
+    primera = memory_repository.create_memory("candidato uno", "manual")
+    critica = memory_repository.create_memory("candidato dos", "manual")
+    memory_repository.set_user_criticality(critica.id, Criticality.CRITICO)
+    # Con categoría puesta: sin ella las dos quedarían protegidas
+    # incondicionalmente y la prueba no vería el rescate RF-25 que fija.
+    set_category.set(CategoryTargetKind.MEMORY, primera.id, "trabajo")
+    set_category.set(CategoryTargetKind.MEMORY, critica.id, "trabajo")
+    # Recencia fijada para que el orden de §6.2 sea determinista: primera,
+    # luego la crítica. Así el cupo de 1 deja la crítica fuera del veredicto.
+    _set_updated_at(database_path, primera.id, "2026-01-02T00:00:00")
+    _set_updated_at(database_path, critica.id, "2026-01-01T00:00:00")
+    relevance_filter_port = _FiltroQueConservaTodoYAplicaElCupo()
+    staged_engine_port = build_staged_engine_port(database_path)
+    try:
+        builder = _build_context_builder(
+            database_path,
+            relevance_filter_port=relevance_filter_port,
+            max_criticality_category="salud",
+            category_matching_enabled=True,
+            staged_engine_port=staged_engine_port,
+            query_request_interpreter=_interprete_exacta(Cardinalidad.EXACTA),
+        )
+
+        context = builder.build("candidato")
+    finally:
+        staged_engine_port.close()
+
+    assert relevance_filter_port.received_cupos == [1]
+    assert critica.id in {memoria.id for memoria in context.memories}

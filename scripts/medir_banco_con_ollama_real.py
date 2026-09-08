@@ -125,7 +125,7 @@ class _FiltroQueSeDejaContar:
         self._logger_reactivado = False
 
     def filter_candidates(
-        self, query_text: str, candidates: Sequence[RankedKnowledge]
+        self, query_text: str, candidates: Sequence[RankedKnowledge], *, cupo: int | None = None
     ) -> Sequence[RankedKnowledge]:
         if not self._logger_reactivado:
             logger = logging.getLogger("sirius.adapters.ollama_relevance_filter")
@@ -133,7 +133,7 @@ class _FiltroQueSeDejaContar:
             logger.addHandler(self._captura)
             self._logger_reactivado = True
         self.llamadas += 1
-        resultado = self._real.filter_candidates(query_text, candidates)
+        resultado = self._real.filter_candidates(query_text, candidates, cupo=cupo)
         if candidates and resultado is candidates:
             self.rendiciones += 1
         self.trazas.append((_claves(candidates), _claves(resultado)))
