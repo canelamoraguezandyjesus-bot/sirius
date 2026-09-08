@@ -2098,6 +2098,56 @@ ADR o su incidencia cuando se adopte.
   costó dos vueltas la noche del 07-09.
 
 
+### 50. La deuda 7 se reprodujo —y mi hipótesis estaba del revés—; una colisión de ADR cazada por siete minutos y renumerada a medias (08-09-2026, 02:00-03:00 UTC)
+
+- **El encargo #566 salió mejor que su encargo.** Yo lo redacté pidiendo el
+  INVARIANTE y no la reproducción, con el argumento de las 47 ejecuciones
+  limpias (entrada 47). El implementador **sí reprodujo el fallo**, pero no
+  repitiendo —que es lo que yo había intentado— sino **ocupando el bucle de
+  eventos** con un `QTimer` de intervalo 0, que imita un runner cargado:
+  `RUN 16: mid=54 final=32 → assert 32 >= 54`, idéntico al del 06-09. Sobre 160
+  ejecuciones: 149 normales, 10 vacuas y 1 fallo. La lección no es que el
+  encargo estuviera mal, es que **«no reproducible» quería decir «no
+  reproducible por repetición»**, y había otra vía.
+- **Mi hipótesis estaba invertida, y eso importaba.** Escribí que la lectura
+  INTERMEDIA capturaba el alto anterior al ajuste. Lo medido dice lo
+  contrario: en el caso que falla, la intermedia (54) es la asentada y la
+  prematura es **la final** (32). Consecuencia práctica: asentar solo la
+  intermedia —lo que yo sugería— **no habría eliminado el modo de fallo**. El
+  encargo se salvó porque la hipótesis iba marcada como NO confirmada y con la
+  frase «si el mecanismo es otro, dilo y corrige el que sea». Sin esa cláusula,
+  habría dirigido el arreglo al sitio equivocado con toda la autoridad de un
+  encargo.
+- **Hallazgo de regalo**: la prueba era **vacua una de cada dieciséis veces**
+  (comparaba 62 contra 24). Llevaba tiempo pasando sin comprobar nada en una
+  fracción de las ejecuciones.
+- **Colisión de ADR entre dos ramas vivas, cazada por siete minutos.** Las PR
+  #567 (separación Sirius/motor, de otra sesión) y #568 (deuda 7) reclamaban
+  las dos `ADR-160`. Git no da conflicto porque los nombres de fichero
+  difieren, y `test_registro_de_decisiones` solo ve duplicados dentro de un
+  mismo árbol: **ninguna de las dos ramas podía detectarlo sola**. La primera
+  en fusionarse entraría limpia y la segunda rompería Quality. Lo delató el
+  aviso de `scripts/siguiente_adr.py`, que **nombra las ramas**, no solo el
+  número. Renumerado #568 a **ADR-162**; #567 se fusionó a las 02:41:40
+  (`8ddb5f0`) con sus 160 y 161. Sin ese cambio, #568 habría entrado rota.
+- **Y la renumeración la hice A MEDIAS.** Cambié el fichero y sus cinco
+  referencias, pero **no el título de la PR**, y este repositorio fusiona por
+  squash **usando el título**: `main` habría recibido un commit «ADR-160: la
+  altura de la fila…» pegado al `8ddb5f0` que introduce el ADR-160 real. Es la
+  misma colisión que yo iba a evitar, **trasladada al historial de commits,
+  donde ningún guardián la vigila**. Lo cazó la revisión (CLAUDE-REV-566-002),
+  no yo. Regla nueva: renumerar un ADR incluye el título de su PR.
+- **Una cita falsa dentro de un ADR, y la semilla la puse yo**
+  (CLAUDE-REV-566-001). El ADR-162 atribuía a ADR-153 el cierre de la ventana
+  de alto prematuro, y ADR-153 es «check.ps1 se detiene en el primer paso
+  rojo»: no habla de la GUI. El origen: en el cuerpo del encargo yo escribí
+  «la última caída el 06-09 sobre **la rama de ADR-153**, en un cambio que no
+  toca ni la GUI ni Python». La mención era correcta —nombraba la rama y
+  avisaba de que no tocaba la GUI— pero bastó para que al redactar el ADR se
+  convirtiera en atribución. **Regla nueva**: al citar una rama por su ADR en
+  un encargo, dar el SHA o el nombre de rama, no el número, porque un número
+  de ADR junto a un fallo se lee como causa.
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
