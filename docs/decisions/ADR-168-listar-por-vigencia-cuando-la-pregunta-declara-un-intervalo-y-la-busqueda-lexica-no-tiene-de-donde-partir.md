@@ -165,6 +165,39 @@ por las palabras.** Tres piezas, y ninguna más:
    intervalo declarado no aporta nada y ``E3`` se comporta exactamente como
    antes.
 
+**El discriminante de la vía es el INTERVALO declarado, no la ausencia de
+tema** (CLAUDE-R2-003). ``_e3`` evalúa ``self._por_vigencia(contexto)`` antes
+de mirar ``terminos``, ``semillas``, ``puente`` o ``familias``, y la única
+guarda de ``_por_vigencia`` es ``intervalo is None``. De ahí que el tercer
+criterio de aceptación de la incidencia —«una pregunta que sí trae tema sigue
+comportándose exactamente igual que antes»— quede cumplido **en su lectura de
+«no puede secuestrar la búsqueda normal»**, y NO en su lectura literal:
+
+- Lo léxico **conserva su autoridad**: no se sustituye ni se desplaza, y la
+  ventana solo llega a consultarse si las etapas anteriores fueron
+  insuficientes. Fijado en
+  ``test_lo_lexico_conserva_su_autoridad_sobre_lo_enumerado_por_ventana`` y
+  en ``test_la_ventana_no_se_consulta_si_las_etapas_lexicas_ya_bastaron``.
+- Pero **existe un tercer caso en el que el comportamiento sí cambia**: una
+  pregunta CON tema que además declare un intervalo y no quede satisfecha en
+  ``E1``/``E2`` recibe elementos adicionales por la ventana. No es conjetura:
+  es lo que fija la primera de esas dos pruebas, con consulta CON tema y
+  resultado ``('DECISION:1', 'DECISION:9')``, donde el segundo entra por la
+  ventana.
+- Las dos pruebas que acompañan al criterio 3
+  (``test_una_pregunta_con_tema_no_activa_la_via_por_vigencia``, sobre
+  ``B04-CA-32``, que declara un INSTANTE y no un intervalo, y
+  ``test_sin_intervalo_declarado_e3_no_pregunta_por_la_ventana``) fijan «sin
+  intervalo declarado, todo igual que antes»: una afirmación sobre el
+  intervalo, no sobre el tema.
+- **El banco no mide ese tercer caso**, y que no se note en las cuatro cifras
+  es una propiedad del banco —un único caso con intervalo, y sin tema— y no
+  de la vía. Las cuatro cifras no son evidencia de que ese tercer caso no
+  cambie.
+
+Detectar «tema» para excluir la vía se descartó a propósito (ver las
+alternativas): sería un ajuste al caso.
+
 **Por qué ``E3`` y no ``E1``, cuando el banco mide lo mismo con las dos.** Dos
 propiedades que las cuatro cifras no ven, porque el único caso del banco con
 intervalo es ``EXHAUSTIVA`` y sin límite:
@@ -286,6 +319,51 @@ la señal de la ventana
 (`test_dec_014_sigue_entrando_y_la_ventana_lo_alcanza_aunque_cambie_la_redaccion`).
 Su presencia deja de depender de cómo esté redactado el ítem, aunque con la
 consulta real siga llegando primero por `E1`.
+
+### La dimensión que la contra-medición NO aislaba: el cargador
+
+Revisión de la ronda 2 (CLAUDE-R2-001). Lo de arriba aísla el **guion de
+recuento** —el veredicto de puerta se lee ítem a ítem y no se deduce del
+contador—, pero no aísla el **cargador**, y es el cargador el que fabrica la
+coincidencia entre lo que el banco mide y lo que la vía afirma. La condición,
+leída del árbol:
+
+- `_fecha_de_registro` (`tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py`,
+  ADR-166) devuelve `item["ejes_p2"]["valid_from"]` —y solo recurre a
+  `_REGISTRO_DE_LO_NO_FECHADO` cuando el corpus no lo declara—, y
+  `_fijar_fecha_de_registro` lo escribe verbatim en `created_at` (guardián ya
+  existente: `test_el_registro_escrito_lleva_la_forma_que_g8_compara`).
+- Es decir: **en el banco, `created_at == valid_from`, ítem a ítem**. En
+  producción no: el `created_at` de una decisión lo pone el reloj al
+  proponerla (`sqlite_decision_repository._utc_now_naive`) y no guarda
+  ninguna relación con `valid_from`; el propio ADR ya declara arriba que sin
+  la palanca 2 no hay `valid_from`/`valid_to` persistidos, así que `G8`
+  tampoco lo corrige aguas abajo (llega con `SIN_EJES`).
+
+Sustituyendo esa identidad en el predicado del puerto
+(`created_at <= :hasta AND status = 'approved'`), **lo que el banco mide es
+`valid_from <= hasta` y aprobada**, que sí es un predicado de vigencia. La
+degradación que la Decisión declara en abstracto —«en el sustrato real la vía
+degrada a lo que Sirius sí guarda»— **la medición no la observa**, porque el
+cargador anula la diferencia. Con esa condición a la vista, lo que la cifra
+`74/81` → `78/81` demuestra y lo que no:
+
+- **Demuestra** que la señal de la ventana es el camino de entrada que
+  faltaba, y que las cuatro ocurrencias entran por ella y no por accidente
+  léxico —eso está fijado ítem a ítem en el cuadro de arriba— y que la vía no
+  desplaza lo léxico.
+- **No demuestra** que la vía recupere lo vigente sobre un `created_at` real.
+  Ahí el predicado es de **registro**, no de vigencia, y el error tiene dos
+  direcciones concretas: se **pierde** lo vigente en la ventana pero
+  registrado después de `hasta`, y se **admite** lo registrado antes de
+  `hasta` cuya vigencia empieza después. El titular que el dato sostiene es
+  «las cuatro entran por la señal de la ventana», no «el motor entiende la
+  vigencia en el sustrato de Sirius 0.1».
+
+Queda como deuda declarada junto a las otras tres: cerrarla es la palanca 2
+(`valid_from`/`valid_to` persistidos), no este encargo. No se cambia ninguna
+cifra —son correctas— ni el predicado ni el cargador; lo que faltaba era que
+la afirmación y su condición viajaran juntas.
 
 ### La medición que decide dónde vive la vía
 
