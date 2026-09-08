@@ -2534,6 +2534,48 @@ ADR o su incidencia cuando se adopte.
   mejora el criterio de aceptación que ya había corregido: no basta con que
   `DEC-014` siga entrando; **si pasa a entrar por vigencia, deja de depender de
   cómo esté redactada**, y eso hay que decirlo.
+
+---
+
+### 57. Simular un cambio no es el cambio: hice el merge de verdad y mi propio número publicado se cayó (08-09-2026, 15:20-15:45 UTC)
+
+- **Publiqué en #572 que la palanca 2 «con H2» daba `16/47; 164; 73/81; 0`. No
+  era H2**: era un fechado mío **más completo** que el que H2 hace. Lo cacé
+  haciendo en local el merge real de la rama de H2 (`b1341e16`) sobre la rama
+  de la palanca (`58fa079`) y midiendo el árbol resultante.
+
+  | configuración | exactas | de más | hallados | críticas |
+  |---|---|---|---|---|
+  | `58fa079` sola | 17/47 | 57 | 39/81 | **9** |
+  | **`58fa079` + H2 real (merge)** | **18/47** | **57** | **40/81** | **9** |
+  | `58fa079` + fechado completo (el mío) | 16/47 | 164 | 73/81 | 0 |
+
+  **Con H2 tal como está implementada, la palanca sigue perdiendo las nueve
+  críticas.** H2 le suma exactamente lo suyo —una exacta y una ocurrencia, que
+  son B04-CA-32— y nada más.
+- **La causa, comprobada en el árbol y no deducida**: ADR-166 fecha `memories` y
+  `decisions`, y **no** `memory_revisions` ni `decision_revisions`. Solo hay dos
+  sentencias en el cargador, y ninguna toca revisiones. Para G8 eso es
+  **correcto y completo** —la puerta compara el `created_at` del ítem, que es la
+  fila que H2 fecha, y por eso sus números salen exactos—; pero la palanca 2
+  deriva la ventana de la **revisión vigente**, cuyo `created_at` sigue siendo
+  el día de la medición. **El arnés queda fechado para la puerta y sin fechar
+  para la derivación.**
+- **La lección, y es de método**: mi sonda era más fiel que la implementación,
+  y eso también es un error de medida. Escribí ayer que la contra-medición
+  tiene que ser **tan fiel como** la palanca que juzga (deuda 21, candidato d);
+  el enunciado estaba corto en la otra dirección: tiene que ser **tan fiel
+  como, y no más que**, el cambio que simula. Simular de más da un número que
+  nadie va a obtener. **La forma barata de no equivocarse es no simular: hacer
+  el merge y medir**, que aquí costó dos minutos y una copia de trabajo.
+- **Lo que no cambia**: la conclusión de fondo sobre la palanca 2 sigue en pie
+  —con fechado completo da peor que `main`+H2 en tres columnas, y con los ejes
+  del corpus las dos ramas dan exactamente lo mismo—. **Lo que sí cambia es el
+  siguiente paso**: reanudar #572 hoy gastaría una ronda para volver a las
+  nueve críticas y volver a pararse. Antes hace falta fechar también las
+  revisiones y `updated_at`, que es un H2b y no una ampliación de #574.
+- **Corregido en el sitio donde publiqué el error**, con la tabla nueva y la
+  causa, en la misma incidencia y sin reanudarla.
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
