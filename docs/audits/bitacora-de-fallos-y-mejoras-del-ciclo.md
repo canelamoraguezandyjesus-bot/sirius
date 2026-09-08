@@ -4558,3 +4558,30 @@ mejor.
     cifra que dependa de `created_at` viaja con esa condición escrita al lado.
     La segunda es gratis; la primera decide él, y sin ella hay una pregunta
     que este banco no puede responder por construcción.
+
+28. **La prosa que un cambio deja falsa no la comprueba nadie, y es la familia
+    más repetida de toda la línea de memoria.** Las pruebas comprueban
+    comportamiento; **ningún guardián comprueba afirmaciones**. Un docstring que
+    miente no cuesta nada en CI y lo cuesta todo al leerlo — y en H1 llegó a
+    salir por la cadena que ve el usuario. Instancias, todas de rondas
+    distintas y de encargos distintos:
+
+    - Tres rondas seguidas en #574 con «una afirmación de la ficha que el árbol
+      desmiente» (entrada 61).
+    - `CLAUDE-R3-001` en H1: la corrección de la ronda 2 escribió en el ADR la
+      limitación de `created_at`, y **la cadena entregada al usuario seguía
+      afirmando lo contrario** («vigente en la ventana»).
+    - `CLAUDE-P3-001` y `-002` en la palanca 3: dos docstrings de módulo que
+      afirman **en presente** lo que el diff acababa de dejar de ser cierto.
+
+    Y nótese lo que las tres tienen en común: **la prosa era correcta antes del
+    cambio**. No es descuido al escribirla; es que nadie vuelve a leerla cuando
+    deja de valer. Distinta de la deuda 19, que es sobre lo que un ADR afirma de
+    otro documento.
+
+    Propuesta barata, para decisión del propietario: **para cada símbolo tocado
+    por el diff, marcar su docstring como pendiente de relectura**. `git diff`
+    ya sabe qué funciones y módulos cambiaron; no automatiza el juicio —la
+    prosa no es comprobable a máquina— pero convierte «acuérdate de mirar» en
+    una lista concreta y corta. Hoy cada una de estas cuesta una ronda entera de
+    dos revisores.
