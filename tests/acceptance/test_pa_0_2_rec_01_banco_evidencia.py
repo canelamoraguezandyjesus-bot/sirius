@@ -111,6 +111,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -338,16 +339,27 @@ def _apply_criticidad(
 #: —la unica fecha que declara item a item—, y exactamente uno de los 97
 #: (`MEM-005`, «el contrato de mantenimiento se renovo, pero no consta desde
 #: cuando») la declara `null` a proposito. Para ese caso no se inventa una
-#: fecha: se usa el `ahora_declarado` del propio banco, es decir el instante
-#: mas TARDIO que el corpus admite, que es la eleccion conservadora frente a
-#: un corte de registro (lo no fechado no se cuela por un corte anterior).
+#: fecha: se usa el «ahora» que el propio banco declara para si mismo. No es
+#: el instante mas tardio que el corpus admite —`DEC-004` declara
+#: `valid_from: 2026-09-01`, posterior a el (ver
+#: `test_solo_dec_004_recibe_un_registro_posterior_al_ahora_del_banco`)—,
+#: pero si es posterior o igual a la fecha de registro de todos los demas
+#: items, y por tanto no anterior a ninguno de los dos unicos cortes de
+#: registro que el banco declara (`2026-02-15` y `2026-03-01`): frente a
+#: ellos, lo no fechado no se cuela por un corte anterior, que es justo lo
+#: que una fecha inventada haria.
 #: `test_el_registro_de_lo_no_fechado_es_el_ahora_que_el_corpus_declara` fija
 #: que esta constante es, byte a byte, el `ahora_declarado` del fixture.
 _REGISTRO_DE_LO_NO_FECHADO: Final[str] = "2026-06-15T00:00:00Z"
 
 #: Como el esquema de Sirius 0.1 escribe un `created_at` en SQLite (el mismo
 #: formato que produce el dialecto de SQLAlchemy para sus columnas `DateTime`,
-#: y por tanto el que ya llevan las filas que crean los casos de uso).
+#: y por tanto el que ya llevan las filas que crean los casos de uso). La
+#: forma importa y no solo el valor, porque `G8` compara `created_at` contra
+#: el corte LEXICOGRAFICAMENTE (`src/sirius/domain/staged_engine_gates.py`,
+#: lineas 213-215): quien la fije es
+#: `test_el_registro_escrito_lleva_la_forma_que_g8_compara`, que comprueba lo
+#: escrito contra un literal propio y no contra esta constante.
 _FORMATO_DE_REGISTRO_EN_SQLITE: Final[str] = "%Y-%m-%d %H:%M:%S.%f"
 
 #: Una sentencia literal por tabla en vez de interpolar el nombre: el par
@@ -1602,6 +1614,73 @@ def test_solo_mem_005_no_declara_fecha_y_el_corpus_dice_por_que() -> None:
     assert sin_fecha == ["MEM-005"]
     mem_005 = next(item for item in items if item["id"] == "MEM-005")
     assert "no consta desde cuándo" in mem_005["text"]
+
+
+def test_solo_dec_004_recibe_un_registro_posterior_al_ahora_del_banco() -> None:
+    """H2 (ADR-166): el detalle simétrico del de `MEM-005`, declarado y
+    contado en vez de redescubierto. El corpus **no separa** registro de
+    vigencia, y para exactamente un ítem la fecha que declara es una
+    vigencia futura: `DEC-004` («A partir de septiembre el proveedor de
+    mensajería cambia a Norte») declara `valid_from: 2026-09-01`, posterior
+    al `ahora_declarado` del propio banco (`2026-06-15`). Al escribirla en
+    `created_at`, ese ítem queda registrado en el futuro del corpus, y `G8`
+    lo descartaría como «posterior al corte de registro» ante cualquier corte
+    entre esas dos fechas.
+
+    Hoy no mueve ninguna métrica y esta prueba lo fija también: los dos
+    únicos casos que declaran corte (`B04-CA-32` y `B04-CA-47`) no esperan
+    `DEC-004`, y el único que lo espera (`B04-CA-06`) no declara corte. Quien
+    añada un caso con un corte posterior a `2026-06-15` que espere `DEC-004`
+    verá esta prueba en rojo y tendrá que contarlo."""
+    banco = _fixture()
+    ahora = str(banco["ahora_declarado"])
+    posteriores = [
+        item["id"]
+        for item in banco["items"]
+        if item["ejes_p2"]["valid_from"] is not None and str(item["ejes_p2"]["valid_from"]) > ahora
+    ]
+    assert posteriores == ["DEC-004"]
+
+    con_corte = [caso for caso in banco["casos"] if caso["peticion_p2"].get("corte_registro")]
+    assert [caso["id"] for caso in con_corte] == ["B04-CA-32", "B04-CA-47"]
+    assert [caso["id"] for caso in con_corte if "DEC-004" in caso["resultado_esperado"]] == []
+    espera_dec_004 = [
+        caso["id"] for caso in banco["casos"] if "DEC-004" in caso["resultado_esperado"]
+    ]
+    assert espera_dec_004 == ["B04-CA-06"]
+
+
+#: La forma en que `created_at` se escribe, escrita AQUÍ como literal
+#: independiente y no reutilizando `_FORMATO_DE_REGISTRO_EN_SQLITE`: si el
+#: guardián leyera la misma constante que el cargador, los dos lados se
+#: moverían a la vez y no fijaría nada.
+_FORMA_DEL_REGISTRO_ESCRITO: Final[re.Pattern[str]] = re.compile(
+    r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{6}$"
+)
+
+
+def test_el_registro_escrito_lleva_la_forma_que_g8_compara(tmp_path: Path) -> None:
+    """H2 (ADR-166): la FORMA importa, no solo el valor. `G8` compara
+    `created_at` contra el corte **lexicográficamente**
+    (`src/sirius/domain/staged_engine_gates.py:213-215`), así que una forma
+    con `T` y sufijo `Z` (`2026-01-01T00:00:00.000000Z`) ordenaría distinto
+    frente a un corte `2026-03-01T00:00:00Z` que la forma con separador
+    espacio que el esquema de Sirius 0.1 escribe de verdad — es la «deuda 20»
+    que la incidencia #574 nombra.
+
+    El guardián no pasa por `_FORMATO_DE_REGISTRO_EN_SQLITE`: comprueba
+    contra un literal propio (`_FORMA_DEL_REGISTRO_ESCRITO`) que **todos** los
+    `created_at` leídos crudos de `memories` y `decisions` tras cargar el
+    canon llevan `AAAA-MM-DD HH:MM:SS.ffffff`, sin `T` y sin `Z`."""
+    database_path = tmp_path / "sirius.db"
+    _cargar_el_canon(database_path)
+    escritos = _registros_escritos(database_path)
+
+    assert len(escritos) == 95  # 97 menos los dos que el canon porta sin texto
+    desviados = sorted(
+        valor for valor in escritos.values() if _FORMA_DEL_REGISTRO_ESCRITO.match(valor) is None
+    )
+    assert desviados == []
 
 
 def test_el_cargador_fecha_cada_item_con_el_registro_que_el_corpus_declara(
