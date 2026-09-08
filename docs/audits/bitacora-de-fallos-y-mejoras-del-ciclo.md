@@ -2387,3 +2387,45 @@ ADR o su incidencia cuando se adopte.
     y ninguna en el código. El código se aprobó en la ronda 1 y no volvió a
     tocarse. Lo que consume rondas en este ciclo no es el trabajo: es el
     registro del trabajo.
+
+---
+
+### 51. La deuda 7 cerrada, y la reprodujo quien yo dije que no podría (08-09-2026, 08:03-08:20 UTC)
+
+- **Codex recuperó cuota a las 08:06:48**, tres horas después del tope de las
+  04:03 —no los 52 minutos de la primera vez—, y con el mismo `continua` la
+  ronda corrió entera: aprobación de los dos revisores sobre `009d5b1f` y
+  **PR #568 fusionada como `cb728cc`**. La incidencia #566 queda `completed` y
+  **la deuda 7 cerrada**.
+- **El temporizador de tres horas fue del propietario, y acertó.** Yo venía
+  reintentando cada 45-50 min y cada intento con la cuota agotada costaba ~8
+  min de CI para nada. Él pidió esperar tres horas de una vez; la cuota tardó
+  justo eso.
+- **Balance de la deuda 7, que es una lección sobre encargos.** Yo escribí el
+  encargo diciendo que el fallo era irreproducible —47 ejecuciones limpias— y
+  pedí el invariante en vez de la reproducción. **El implementador lo
+  reprodujo**: no repitiendo, sino **ocupando el bucle de eventos** con un
+  `QTimer` de intervalo 0, que imita un runner cargado. `RUN 16: mid=54
+  final=32`, idéntico al fallo del 06-09. «No reproducible» significaba «no
+  reproducible por repetición», y no se me ocurrió que hubiera otra vía.
+- **Y mi hipótesis estaba invertida**, con consecuencia práctica: yo señalaba
+  la lectura INTERMEDIA como la prematura, y la prematura era la FINAL.
+  Asentar solo la intermedia —lo que yo sugería— **no habría eliminado el modo
+  de fallo**. El encargo se salvó porque la hipótesis iba marcada como NO
+  confirmada y con la frase «si el mecanismo es otro, dilo y corrige el que
+  sea». Sin esa cláusula, habría dirigido el arreglo al sitio equivocado con
+  toda la autoridad de un encargo. **Esa cláusula pasa a ser obligatoria en
+  todo encargo que ofrezca una pista.**
+- **Las cuatro rondas de #566 fueron en el ADR; ninguna en el código**, que se
+  aprobó en la ronda 1 y no volvió a tocarse. Dos de ellas (la cita falsa a
+  ADR-153 y la afirmación «no toca ni la GUI ni Python») nacieron de
+  imprecisiones **de mi propio texto de encargo**, copiadas de buena fe al
+  registro permanente. De ahí la regla que ya está en los encargos nuevos:
+  toda afirmación factual de un encargo va con el comando que la comprueba, y
+  una rama se cita por su SHA, no por el número de ADR que la bautizó.
+- **Palanca P1 de memoria lanzada** como incidencia **#570**, con las tres
+  lecciones incorporadas: la sección de validación en la forma de ADR-159, el
+  re-chequeo del número de ADR tras `fetch` antes de abrir la PR (y renumerar
+  incluye el título), y la tensión declarada de que la coincidencia campo a
+  campo de las 47 peticiones la cierra el propietario con Ollama real porque
+  no está en CI.
