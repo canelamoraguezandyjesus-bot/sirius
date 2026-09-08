@@ -377,33 +377,52 @@ ficha.
 
 **Cadena completa como UNA SOLA invocación** (ADR-145, ADR-153) con
 `pwsh -File scripts/check.ps1` y su código de salida capturado (ADR-154).
-Anclada al árbol de **`1b7a9e3`**, el que corrige a `214-216` la cita del
-corte de registro de `G8` en la ficha y en los guardianes:
+Anclada al árbol de **`4cde5a7`**, el que deriva por texto el lado esperado del
+guardián del registro y que ya incluye el merge `dcf9ded` de `main`:
 
 ```
-5185 passed, 17 skipped, 2 xfailed in 538.57s (0:08:58)
-check=0
+5205 passed, 17 skipped, 2 xfailed in 583.13s (0:09:43)
+EXIT_CODE_CHECK=0
 ```
 
 De esa invocación se transcribe la cola capturada —la terna de `pytest` y el
-código de salida—; `check=0` solo sale si `ruff format --check`, `ruff check`
-y `mypy src tests` pasaron antes, porque el guion corta en el primero que
-falle. La quinta validación que la incidencia exige transcribir también queda
-asentada sobre ese mismo árbol: `git diff --check 22e880e 1b7a9e3` no imprime
-nada y sale con código `0` —limpio—. Lo único posterior a `1b7a9e3` es **esta
-sección de la ficha**: cambios documentales que no tocan código ni pruebas, y
-que existen porque la sección tiene que anclarse al árbol que la cadena
-midió.
+código de salida—; el código `0` solo sale si `ruff format --check`,
+`ruff check` y `mypy src tests` pasaron antes, porque el guion corta en el
+primero que falle. La quinta validación que la incidencia exige transcribir
+también queda asentada sobre ese mismo árbol: `git diff --check 22e880e 4cde5a7`
+no imprime nada y sale con código `0` —limpio—. Lo único posterior a `4cde5a7`
+es **esta sección de la ficha** y la sección de validaciones del cuerpo de la
+PR: cambios documentales que no tocan código ni pruebas, y que existen porque la
+sección tiene que anclarse al árbol que la cadena midió.
 
 (Las cifras anteriores de esta sección —`5183 passed, 17 skipped, 2 xfailed in
 487.87s`, anclada a `5200b4f`; `5183 passed, 17 skipped, 2 xfailed in
-445.07s`, anclada a `63822b0`; y `5185 passed, 17 skipped, 2 xfailed in
-529.86s`, anclada a `c8dfbed`— seguían siendo cada una la de su árbol; se
+445.07s`, anclada a `63822b0`; `5185 passed, 17 skipped, 2 xfailed in
+529.86s`, anclada a `c8dfbed`; y `5185 passed, 17 skipped, 2 xfailed in
+538.57s`, anclada a `1b7a9e3`— seguían siendo cada una la de su árbol; se
 sustituyen porque cada ronda de correcciones tocó el fichero de pruebas, así
 que la cadena volvió a correr entera sobre el árbol nuevo. Los dos pasados de
 más —5183 a 5185— son exactamente los dos guardianes que la tercera revisión
-pidió; de `c8dfbed` a `1b7a9e3` la terna no se mueve porque lo único que
-cambió en las pruebas fueron comentarios y docstrings, ninguna aserción.)
+pidió; de `c8dfbed` a `1b7a9e3` la terna no se movió porque lo único que cambió
+en las pruebas fueron comentarios y docstrings, ninguna aserción.)
+
+(**Y por qué de `1b7a9e3` a `4cde5a7` la terna sube veinte pasados sin que esta
+ficha añada una sola prueba**: entre los dos árboles está `dcf9ded`, un **merge
+de `main`** en la rama —hecho porque la puerta de fusión bloquea si la PR va por
+detrás de su base—. Ese merge trae de `main` dieciocho ficheros ajenos a esta
+ficha: código de producto —`src/sirius_engine/carriles_retirados.py`,
+`dispatcher.py`, `dispatch_cli.py`, `domain/errors.py`— y cuatro de pruebas
+—`tests/automation/test_carriles_retirados.py`, `tests/engine/test_dispatcher.py`,
+`tests/engine/test_dispatch_cli.py`,
+`tests/automation/test_sirius_runner_python_compat.py`— con veintiuna funciones
+`def test_` nuevas y seis retiradas (`git diff 2b18086 dcf9ded -- tests/ | grep
+-c '^+.*def test_'` da `21`; con `^-` da `6`), cuyo efecto neto sobre la terna,
+contando parametrizaciones, son los veinte pasados de más. La sexta revisión
+levantó exactamente esto: sobre el head `dcf9ded`, esta sección seguía diciendo
+que lo único posterior a `1b7a9e3` era ella misma, «cambios documentales que no
+tocan código ni pruebas», y el merge lo había vuelto falso. La corrección es la
+vía (A): re-ejecutar la cadena entera sobre el árbol vigente y re-anclar, no
+retocar la cifra vieja.)
 
 (Por qué se re-ancla y no se arrastra el ancla de `c8dfbed`: sobre `fb31ca9`
 —el head de la ronda anterior— esta sección afirmaba que lo único posterior a
