@@ -414,10 +414,34 @@ ficha: código de producto —`src/sirius_engine/carriles_retirados.py`,
 `dispatcher.py`, `dispatch_cli.py`, `domain/errors.py`— y cuatro de pruebas
 —`tests/automation/test_carriles_retirados.py`, `tests/engine/test_dispatcher.py`,
 `tests/engine/test_dispatch_cli.py`,
-`tests/automation/test_sirius_runner_python_compat.py`— con veintiuna funciones
-`def test_` nuevas y seis retiradas (`git diff 2b18086 dcf9ded -- tests/ | grep
--c '^+.*def test_'` da `21`; con `^-` da `6`), cuyo efecto neto sobre la terna,
-contando parametrizaciones, son los veinte pasados de más. La sexta revisión
+`tests/automation/test_sirius_runner_python_compat.py`—. El inventario de los
+veinte, uno a uno, porque **el recuento textual del diff engaña**: `git diff
+2b18086 dcf9ded -- tests/ | grep -c '^+.*def test_'` da `21` y con `^-` da `6`,
+pero esos seis pares **no son altas ni bajas de pruebas**. Son las seis firmas
+de `tests/engine/test_dispatcher.py` y `tests/engine/test_dispatch_cli.py` que
+el merge reformatea a varias líneas o amplía con el fixture `carril_activo`
+—`test_una_auditoria_declara_el_perfil_auditor_y_no_el_implementador`, las
+cuatro `test_c4_*` y
+`test_b1_investigacion_recibe_las_mismas_etiquetas_que_programacion`—, y por
+eso aparecen a la vez en `-` y en `+`: la misma prueba
+contada dos veces. Funciones realmente nuevas hay **quince**, todas en
+`tests/automation/test_carriles_retirados.py`, y tres de ellas van
+parametrizadas con dos valores cada una
+—`test_el_despachador_rechaza_un_carril_retirado_con_su_explicacion` y
+`test_el_lector_del_runner_dice_retirado_con_codigo_cero` sobre
+`sorted(CARRILES)`, que son los dos carriles retirados, y
+`test_las_clases_vivas_no_constan_retiradas` sobre `["programacion",
+"documentacion"]`—, así que esas quince funciones recopilan **dieciocho casos**.
+El diecinueve lo pone `tests/automation/test_sirius_runner_python_compat.py`,
+que no añade ninguna función: mete `sirius_carril_retirado.py` en
+`SCRIPTS_RUN_ON_THE_RUNNER`, y esa tupla parametriza una prueba que ya existía
+(`tests/automation/test_sirius_runner_python_compat.py:75`), **un caso por
+guion**. Y el veinte no sale de `tests/` en absoluto: el merge trae también un
+ADR nuevo, el **ADR-163**, y `test_toda_ruta_citada_por_un_adr_existe` está
+parametrizada sobre `_adrs()`
+(`tests/automation/test_citas_de_los_adr.py:352-371`), que recopila **un caso
+por fichero `ADR-*.md`** del registro. Dieciocho más uno más uno: los veinte
+pasados de más, sin una sola prueba de esta ficha. La sexta revisión
 levantó exactamente esto: sobre el head `dcf9ded`, esta sección seguía diciendo
 que lo único posterior a `1b7a9e3` era ella misma, «cambios documentales que no
 tocan código ni pruebas», y el merge lo había vuelto falso. La corrección es la
