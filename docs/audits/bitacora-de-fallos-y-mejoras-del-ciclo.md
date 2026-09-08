@@ -3189,7 +3189,7 @@ ADR o su incidencia cuando se adopte.
   `ffd8d05`: `5227 passed, 17 skipped, 2 xfailed`, `EXIT_CODE_CHECK=0`.
 ---
 
-### 67. Audito el encargo de P3 contra el árbol ANTES de lanzarlo, y aparece el mismo error de categoría por tercera vez (08-09-2026, 18:40 UTC)
+### 67. Audito el encargo de P3 contra el árbol ANTES de lanzarlo, y aparece el mismo error de categoría por tercera vez (08-09-2026, 18:32 UTC)
 
 Con Quality corriendo sobre H1 no había nada que mirar, así que dediqué la hora
 a dos cosas que sí se pueden comprobar: **reproducir la medición de la PR #578
@@ -3246,7 +3246,7 @@ porque la busqué antes de lanzar.** Ésa es toda la diferencia, y es la razón
 de que auditar el encargo antes de publicarlo deba ser parte del encargo.
 ---
 
-### 68. El tercer hueco que quedaba NO era de nadie: `81/81` es inalcanzable hoy, y por dos razones distintas (08-09-2026, 19:05 UTC)
+### 68. El tercer hueco que quedaba NO era de nadie: `81/81` es inalcanzable hoy, y por dos razones distintas (08-09-2026, 18:40 UTC)
 
 Con H1 en revisión fui a por una pregunta que nadie había hecho: **de las tres
 ocurrencias que siguen faltando, tengo nombre para dos —`MEM-020` (H3) y
@@ -3312,7 +3312,7 @@ cambiarlo **no lo decide el ciclo**.
    `MEM-001`— son **decisiones del propietario, no trabajo de ingeniería**. La
    columna de hallados está terminada por parte del ciclo.
 
-   **CORRECCIÓN, 19:45 UTC, mía y antes de que nadie la pidiera.** Al escribir
+   **CORRECCIÓN, 18:47 UTC, mía y antes de que nadie la pidiera.** Al escribir
    esto puse «lo que sigue abierto es exactas (17/47) y de más (162)» como si
    fueran cifras del producto, y **no lo son**: salen de
    `diagnosticar_busqueda_del_banco.py`, que imprime `SIN FILTRO` porque mide
@@ -3354,7 +3354,7 @@ exactamente la lección de la entrada 66 —**un recuento agregado dice cuántas
 faltan, nunca por qué**— aplicada esta vez a tiempo.
 ---
 
-### 69. Ronda 1 de H1: dos hallazgos, y los dos señalan defectos MÍOS, no del implementador (08-09-2026, 19:25 UTC)
+### 69. Ronda 1 de H1: dos hallazgos, y los dos señalan defectos MÍOS, no del implementador (08-09-2026, 18:44 UTC)
 
 `pending=2`, `severity_total=4`. Los dos merecen quedarse, por razones
 distintas.
@@ -3411,6 +3411,20 @@ una afirmación falsa sobre una medición. Son **una comparación que se cumple
 por accidente de formato** y **una comprobación que se cumple por accidente de
 invocación**. Las dos las encontró la revisión leyendo el código, que es
 exactamente para lo que está y por qué no se salta.
+
+---
+
+### 70. Nota de higiene: las horas de las entradas 67-69 estaban mal, y las he anclado a los commits (08-09-2026, 18:50 UTC)
+
+Sellé las entradas 67, 68 y 69 con horas que se adelantaban solas —18:40, 19:05,
+19:25— cuando las reales eran 18:32, 18:40 y 18:44. Ninguna cifra técnica
+cambia; lo que cambiaba era **la secuencia**, y este documento existe para poder
+reconstruirla. Corregidas contra la hora de los commits que las introdujeron,
+que es la única autoridad que hay aquí.
+
+Lo anoto en vez de reescribir en silencio, porque una bitácora que se edita sin
+decirlo deja de servir para lo que sirve. Y encaja con lo demás del día: **una
+hora estimada es una cifra sin comprobar**, igual que las otras.
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
@@ -3815,7 +3829,7 @@ exactamente para lo que está y por qué no se salta.
     baja de prioridad hasta que otra palanca derive de esas columnas.
 
 
-    **REVISADA el 08-09 a las 18:50 UTC, y la deuda BAJA de rango: la mitad
+    **REVISADA el 08-09 a las 18:35 UTC, y la deuda BAJA de rango: la mitad
     sin fechar no contamina ninguna medición del banco.** Seguido el dato
     desde donde se declara hasta donde se consume, que es lo que la deuda 24
     exige y lo que yo no había hecho al registrar esto:
