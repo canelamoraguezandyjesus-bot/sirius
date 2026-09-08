@@ -2767,7 +2767,7 @@ ADR o su incidencia cuando se adopte.
 
 ---
 
-### 60. La ronda 3 la provocó el propio revisor, y aun así encontró lo mejor del ciclo: una mutación que sobrevivía (08-09-2026, 14:05-14:20 UTC)
+### 60. La ronda 3 la provocó el propio revisor y encontró una mutación que sobrevivía; la 4 encontró que la razón escrita para el arreglo era falsa (08-09-2026, 14:05-14:50 UTC)
 
 - **Tres hallazgos, y el revisor declara que los tres son culpa suya.** Los
   marca con «LLEGA TARDE POR GOTEO DEL REVISOR» y explica por qué: las líneas
@@ -2818,6 +2818,40 @@ ADR o su incidencia cuando se adopte.
   día, así que habrá que actualizar la rama **cuando llegue a
   `ready-for-merge`**, no ahora: mover el head en mitad de una ronda es
   justamente lo que en la entrada 46 costó una ronda entera.
+- **Ronda 4: dos hallazgos, los dos sobre texto que introdujo la corrección de
+  la ronda 3.** Convergencia `(3,6) → (2,3)`: mejora en las dos columnas, así
+  que el freno no llega a morder. Y el primero es de los buenos.
+- **El ejemplo con el que el ADR justificaba por qué la FORMA importa era
+  falso, y encima invertía el riesgo.** Decía que `2026-01-01T00:00:00.000000Z`
+  «ordenaría distinto» que `2026-01-01 00:00:00.000000` frente a un corte
+  `2026-03-01T00:00:00Z`. Lo comprobé yo antes de darlo por bueno: **las dos
+  dan `False`** —difieren del corte en el índice 6, `'1'` contra `'3'`—, así
+  que el ejemplo no distingue nada. El propio ADR se contradecía cuarenta
+  líneas más abajo («`B04-CA-32` decide su comparación en el sexto carácter,
+  donde las dos formas coinciden»).
+
+  **Y donde sí divergen, es la forma ELEGIDA la que se equivoca.** Solo
+  difieren cuando el registro cae el mismo día que el corte con hora distinta
+  de medianoche, y ahí `' '` (32) `< 'T'` (84): un ítem registrado
+  `2026-03-01 12:00:00.000000` frente al corte `2026-03-01T00:00:00Z`
+  **NO se descarta, cuando debería**; con la forma `T`/`Z` sí. La razón buena
+  para elegir el espacio es la otra que el ADR también da —es la que el
+  esquema de Sirius 0.1 escribe de verdad—, no la que el ejemplo pretendía
+  demostrar.
+- **El segundo hallazgo**: la ventana de riesgo de `DEC-004` estaba declarada
+  más estrecha que la real, y en el sentido que resta gravedad. Se decía «ante
+  cualquier corte entre `2026-06-15` y `2026-09-01`»; como su `created_at`
+  queda en `2026-09-01`, `G8` lo descarta frente a **cualquier** corte
+  anterior, incluidos **los dos que el banco ya declara**. O sea que el ítem ya
+  está siendo descartado hoy por el mismo artefacto que H2 cierra; lo que salva
+  las cifras no es la ventana, es que ninguno de esos dos casos lo espera.
+- **Cuatro rondas, y las cuatro sobre la ficha; el código se aprobó en la 1 y
+  no ha vuelto a tocarse.** Es la deuda 19 en estado puro: cada corrección
+  introduce la imprecisión que encuentra la siguiente. Pero conviene no leerlo
+  solo como coste: la ronda 3 mató una mutación que sobrevivía y la 4 impidió
+  que el registro permanente explicara la deuda 20 **al revés**. Lo que se
+  paga en rondas se ahorra en un ADR que habría enseñado algo falso a quien lo
+  leyera.
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
@@ -3119,6 +3153,19 @@ ADR o su incidencia cuando se adopte.
     el borde, y un guardián que la fije; (c) dejarlo y aceptar que cada emisor
     nuevo pague su ronda. La canonización del emisor que #570 está haciendo
     hace falta en cualquiera de los tres casos, así que no es trabajo perdido.
+
+    **AMPLIADA el 08-09 (entrada 60) con la consecuencia medida, que es peor de
+    lo que esta ficha decía.** No es solo que «cada formato nuevo sea una
+    trampa»: **el formato que el producto escribe hoy es el que se equivoca**.
+    Con el separador ESPACIO —el que el esquema de Sirius 0.1 escribe—, un ítem
+    registrado el MISMO día que el corte y a hora distinta de medianoche **no
+    se descarta cuando debería**, porque `' '` (0x20) `< 'T'` (0x54):
+    `'2026-03-01 12:00:00.000000' > '2026-03-01T00:00:00Z'` es `False`.
+    Comprobado carácter a carácter. Con la forma `T`/`Z` sí se descartaría.
+    O sea que la comparación lexicográfica no solo es frágil ante formatos
+    nuevos: **ya da hoy un resultado incorrecto para cualquier corte con
+    granularidad menor que el día**. Ninguno de los dos cortes que el banco
+    declara lo destapa, porque los dos son a medianoche.
 
 21. **El arnés del banco decide si el trabajo se acepta, y no tiene guardianes
     propios.** El corpus congelado, el cargador que lo mete en SQLite
