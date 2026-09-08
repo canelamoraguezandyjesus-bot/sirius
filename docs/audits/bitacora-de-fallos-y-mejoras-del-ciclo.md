@@ -2643,7 +2643,7 @@ ADR o su incidencia cuando se adopte.
 
 ---
 
-### 59. El revisor recogió lo que el implementador no leyó, y mi propia cifra estuvo a punto de entrar mal en un ADR permanente (08-09-2026, 12:58-13:10 UTC)
+### 59. El revisor recogió lo que el implementador no leyó; mi cifra falsa entró igualmente en el ADR; y el guardián que escribí para cazarla mintió dos veces (08-09-2026, 12:58-13:25 UTC)
 
 - **Ronda 1 de #575: cuatro hallazgos, los dos revisores en CHANGES_REQUESTED**,
   `pending=4`, `severity_total=5`. Revisión completa en **ocho minutos**, de
@@ -2685,6 +2685,39 @@ ADR o su incidencia cuando se adopte.
   sobre una sonda, **antes de publicarla** —no antes de que alguien la copie—.
   Una sonda vale para orientar mi trabajo; en cuanto la publico, se convierte
   en fuente para otros.
+- **No llegué a tiempo: el corrector escribió el 5.** El head `63822b0f` trae
+  en ADR-166, línea 337, «fechando solo `created_at` esa rama pierde **5
+  críticas**», y el párrafo la atribuye explícitamente —«el dato es del
+  propietario, publicado en la incidencia #574, no una estimación de esta
+  ficha»—. O sea que mi error quedó escrito **y firmado**. Los otros tres
+  hallazgos los cerró bien: el docstring dice 95, y el lado esperado ya lee
+  `ejes_p2.valid_from` del corpus en vez de llamar a `_fecha_de_registro`.
+  Publiqué un segundo aviso, esta vez citando fichero, línea y las dos
+  correcciones exactas (el 9, y que lo que falta por fechar incluye
+  `memory_revisions`/`decision_revisions`, no solo `updated_at`).
+- **Y entonces el guardián que había escrito para cazarlo me mintió dos veces
+  seguidas, las dos diciendo OK.** Escribí un guion de comprobación previa a la
+  fusión, precisamente para no fiarme de mi memoria:
+  1. **Clases de caracteres con acento.** `grep -E '5 (omisiones )?crit'` con
+     `[ií]` **no casa** el `5 críticas` real en UTF-8. El guion dijo «OK: ya no
+     dice 5 críticas» **con la frase delante**.
+  2. **`set -o pipefail` + `grep -q`.** Sobre el fichero de pruebas (131 KB),
+     `grep -q` sale al primer acierto, `printf` recibe SIGPIPE y devuelve 141,
+     y **pipefail convierte el acierto en fallo**. Con el ADR —pequeño— no
+     pasaba, porque `printf` termina antes de que grep salga. Resultado: el
+     mismo guion daba veredictos distintos según el tamaño de la entrada.
+- **Las dos veces el fallo tuvo el mismo signo: decir que todo está bien.** Un
+  guardián que se equivoca hacia el ruido se nota enseguida; uno que se
+  equivoca hacia el silencio no se nota nunca, y este iba a autorizar una
+  fusión con la cifra falsa dentro. **Es la deuda 21 otra vez y en su forma más
+  pura**: el instrumento que decide si algo pasa no tenía quien lo comprobara.
+  Lo cacé solo porque contrasté su «OK» con un `grep -F` a mano, que es
+  exactamente la contra-medición que la deuda pide.
+- **Arreglado y escrito dentro del propio guion, como comentario de cabecera**,
+  para que no se repita: nada de clases con acentos —cadenas literales— y
+  nada de `printf | grep -q` con `pipefail` —here-strings, que no tienen
+  tubería—. Con eso, el guion dice ahora lo que hay: tres hallazgos cerrados y
+  la fusión bloqueada por uno solo, el número.
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
