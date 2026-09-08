@@ -793,11 +793,25 @@ aplicar la etiqueta, y la etiqueta es lo que dispara el marcador—. Con eso:
   pruebas es la misma aunque cada una afirme más.
 
   Lo único que cambia en el árbol después de esta captura es la transcripción
-  de estas mismas cifras y, en la ronda 17, la redacción de este párrafo
-  (CODEX-001, P3): decía «sin cambiar ninguna de sus aserciones», que es falso
-  porque el diff sí añade aserciones, y ahora distingue las que se añaden de
-  las anteriores, que siguen intactas. Ni el código, ni las pruebas, ni las
-  cifras se tocaron, así que la terna sigue siendo la del árbol de `5e30caa`.
+  de estas mismas cifras.
+
+- **Comprobación de la ronda 17, sobre el árbol de `b532e3a`**: una sola
+  invocación de `pwsh -File scripts/check.ps1` (Ruff format, Ruff lint, mypy,
+  pytest), código de salida **0**,
+  `5102 passed, 17 skipped, 2 xfailed in 451.65s (0:07:31)`. La ronda corrige
+  CODEX-001 (P3), que es solo redacción: el párrafo de la ronda 16 decía «sin
+  cambiar ninguna de sus aserciones» y eso era falso -el diff sí añade
+  aserciones-, así que ahora distingue las aserciones AÑADIDAS de las
+  ANTERIORES, que siguen intactas. No se tocó ninguna línea de `src/` ni de
+  `tests/`, y por eso la terna es idéntica a la de las rondas 13-16 salvo en la
+  duración. Al no cambiar ni código ni pruebas, esta corrección no tiene
+  mutación que enseñar; lo que la sostiene es la salida de
+  `git diff c2db289..5e30caa -- tests/ | grep '^-.*assert'`, que no imprime
+  nada (ninguna aserción anterior borrada ni reescrita), frente a la del mismo
+  diff con `grep '^+.*assert'`, que imprime las nueve aserciones nuevas.
+
+  Lo único que cambia en el árbol después de esta captura es la transcripción
+  de estas mismas cifras.
 
 ## Consecuencias
 
