@@ -4216,6 +4216,27 @@ configuraciones donde **la pieza que decide no está encendida**. No es que
 mirara la población equivocada: es que miraba el sistema con lo interesante
 desconectado, y ninguna de mis comprobaciones podía notarlo, porque todas
 comprobaban coherencia interna de esas mismas corridas.
+
+**Cómo lo resolvió el corrector, que merece quedar porque es la salida
+honrada.** No maquilló la cifra ni la sustituyó por otra inventada:
+
+- Dice que `29/47; 50; 0; 63/81` **no sale de la vía completa** —es la fila del
+  arnés de examen, con cita a ADR-117:106 y ADR-115:103— y que además está
+  caducada: son `67/81` desde ADR-168, con la constante del árbol como testigo.
+- Declara que la vía completa **no tiene línea base vigente sobre este árbol**,
+  nombra la única publicada (ADR-125, `22/47; 39; 10; 59/81`) con su fecha, su
+  modelo y la advertencia de que se midió sobre un árbol anterior, y deja que
+  la corrida del propietario la establezca.
+- Re-funda la activación de la tercera condición sobre el número real —`39 >
+  20`— en vez de sobre el falso.
+- Y reformula la predicción de la única forma defendible cuando no hay línea
+  base: **«lo que la ficha predice no es un número, es una invariante: el
+  recorte no puede mover ninguna de las cuatro columnas»**.
+
+Esa última línea es la lección que a mí me faltaba hoy. **Cuando no hay contra
+qué comparar, predecir un número es inventarlo; predecir una invariante sigue
+siendo comprobable.** Yo he pasado el día publicando números; la salida elegante
+era publicar una propiedad.
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
