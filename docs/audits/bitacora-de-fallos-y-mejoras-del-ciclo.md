@@ -3325,6 +3325,65 @@ exactamente la lección de la entrada 66 —**un recuento agregado dice cuántas
 faltan, nunca por qué**— aplicada esta vez a tiempo.
 ---
 
+### 69. Ronda 1 de H1: dos hallazgos, y los dos señalan defectos MÍOS, no del implementador (08-09-2026, 19:25 UTC)
+
+`pending=2`, `severity_total=4`. Los dos merecen quedarse, por razones
+distintas.
+
+**CLAUDE-R1-001 (media): la familia de la deuda 20, por tercera vez.** La vía
+nueva compara `created_at <= :hasta` en SQL crudo, y los dos lados llegan en
+formas distintas que este repositorio **ya declara incompatibles por escrito**:
+`created_at` viene como `str(datetime)` de SQLite —`2026-03-20
+09:00:00.000000`, separador **espacio**— y `hasta` viene en la forma del corpus
+—`2026-03-20T00:00:00Z`, separador **`T`**—. Como el espacio (`0x20`) ordena
+antes que la `T` (`0x54`), `"2026-03-20 09:00:00.000000" <= "2026-03-20T00:00:00Z"`
+es **verdadero**: entra toda decisión aprobada registrada el mismo día civil de
+`hasta`, aunque sea posterior al instante final de la ventana.
+
+Lo mejor del hallazgo es lo que no se conformó con decir: **acotó el daño**
+—siempre inclusivo, nunca excluye canon, así que las cuatro cifras del banco
+siguen valiendo y `B04-CA-22` sigue con `extras=0`—, y señaló que **la prueba
+que parecía cubrirlo no lo cubre**, porque compara con seis años de separación
+en vez de en la frontera donde el formato decide. Una prueba que pasa por
+lejanía es una prueba que no sabe lo que mide.
+
+**Y es la tercera aparición de la misma familia** —el motor ordena instantes
+como texto—, después de la que originó la deuda 20 y de la comparación
+lexicográfica de `G8`. Aquí no aplico el freno de «dos rondas de la misma
+familia, buscar la raíz»: eso es dentro de una incidencia, y ésta es la ronda 1
+de la suya. Pero la deuda 20 deja de ser una observación y pasa a tener causa
+raíz nombrada: **el repositorio tiene DOS formas canónicas de escribir un
+instante, las compara por orden léxico en SQL crudo, y no hay ningún tipo que
+impida mezclarlas.** Cada comparación nueva es una tirada de dados. Mientras el
+sustrato no distinga los dos formatos por construcción, esto reaparecerá cada
+vez que alguien escriba un `<=`.
+
+**CODEX-001 (P2): un defecto de MIS encargos, no de este ADR.** `git diff
+--check` **sin argumentos** compara solo el árbol de trabajo contra el índice.
+En un checkout limpio devuelve `0` **pase lo que pase con el rango
+confirmado**. Lo comprobé: árbol limpio, código de salida `0`, sin haber mirado
+un solo commit.
+
+Y esa forma inútil está en la lista de «validaciones obligatorias» de **los
+SIETE encargos que he escrito** —`deuda7`, `h1`, `h2`, `h4`, `p1`, `p2`, `p3`—.
+O sea que llevo toda la línea pidiendo una quinta validación que **no demuestra
+nada**, y cinco incidencias la han ejecutado y transcrito obedientemente. Es el
+peor tipo de comprobación: una que se cumple siempre y por eso parece que
+protege. La forma correcta la documenta ADR-166 desde hace días —`git diff
+--check <base> <head>`, con las dos revisiones—, y yo la tenía delante.
+
+Corregido ya en `encargo_p3.md`, que es el único aún sin lanzar. Los otros seis
+son historia; lo que queda es no repetirlo.
+
+**Lo que las dos tienen en común, y es incómodo**: ninguna la habría cazado yo
+con lo que tenía montado. Mi guion de puerta previo a fusionar comprueba que
+las afirmaciones del cuerpo coincidan con lo medido; ninguna de estas dos es
+una afirmación falsa sobre una medición. Son **una comparación que se cumple
+por accidente de formato** y **una comprobación que se cumple por accidente de
+invocación**. Las dos las encontró la revisión leyendo el código, que es
+exactamente para lo que está y por qué no se salta.
+---
+
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
 
 1. `ollama_category_classifier.py`: ruta relativa y sin
@@ -3803,3 +3862,14 @@ faltan, nunca por qué**— aplicada esta vez a tiempo.
     ninguna afirmación de la forma «X ya viaja en Y» entre en un encargo sin
     esa traza al lado, y que el encargo se audite contra el árbol **antes** de
     publicarse, no después de que la revisión lo desmienta.
+
+25. **`git diff --check` sin argumentos está en las «validaciones
+    obligatorias» de los SIETE encargos que he escrito, y no demuestra nada.**
+    Sin revisiones compara el árbol de trabajo contra el índice, así que en un
+    checkout limpio devuelve `0` con independencia de lo que contenga el rango
+    confirmado (comprobado el 08-09; señalado por CODEX-001 en la ronda 1 de
+    ADR-168). Cinco incidencias la han ejecutado y transcrito creyendo que
+    protegía. La forma correcta —`git diff --check <base> <head>`— la documenta
+    ADR-166. Corregido en `encargo_p3.md`; pendiente decidir si se corrige
+    también la plantilla de encargos y si merece una pasada por los ADR que la
+    transcribieron con la forma inútil.
