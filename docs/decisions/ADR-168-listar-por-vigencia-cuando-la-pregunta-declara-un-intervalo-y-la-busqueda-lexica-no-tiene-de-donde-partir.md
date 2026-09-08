@@ -366,12 +366,11 @@ relajar una (`_MAXIMO_ELEMENTOS_DE_MAS_MOTOR` 50 → 69, y el suelo D1 de 21 a
 
 **Cadena completa como UNA SOLA invocación** (ADR-145, ADR-153), con
 `pwsh -File scripts/check.ps1` y su código de salida capturado (ADR-154).
-Anclada al árbol de **`ffd8d05`**, el que trae ya el código, las pruebas, esta
-ficha y la transcripción de las cuatro configuraciones en el guion de
-diagnóstico:
+Re-anclada al árbol de **`a8fe837`**, el que trae la corrección de
+CLAUDE-R1-001 y sus dos pruebas nuevas:
 
 ```
-5227 passed, 17 skipped, 2 xfailed in 566.49s (0:09:26)
+5229 passed, 17 skipped, 2 xfailed in 576.21s (0:09:36)
 EXIT_CODE_CHECK=0
 ```
 
@@ -379,23 +378,37 @@ De esa invocación se transcribe la cola capturada —la terna de `pytest` y el
 código de salida—; el código `0` solo sale si `ruff format --check`
 («618 files already formatted»), `ruff check` («All checks passed!») y
 `mypy src tests` («Success: no issues found in 583 source files») pasaron
-antes, porque el guion corta en el primero que falle (ADR-153). La quinta
-validación que la incidencia exige transcribir queda asentada sobre ese mismo
-árbol: `git diff --check` no imprime nada y sale con código `0` —limpio—.
+antes, porque el guion corta en el primero que falle (ADR-153).
 
-Lo único posterior a `ffd8d05` es **esta sección de la ficha** y la sección
+La quinta validación se ejecuta **sobre el rango de la PR** y no sin
+argumentos (CODEX-001): `git diff --check` sin revisiones compara el árbol de
+trabajo con el índice y sale `0` aunque el rango ya confirmado traiga errores
+de espacios, de modo que no demostraba nada sobre este cambio. La forma
+correcta es la que ADR-166 ya usaba, con las dos revisiones:
+
+```
+$ git diff --check 6371d4c a8fe837
+EXIT_DIFF_CHECK=0
+```
+
+Sin salida y con código `0`: el rango entero de la rama, desde su base en
+`main` hasta el árbol que midió la cadena, está limpio. La misma comprobación
+contra el árbol de trabajo que confirma esta sección —`git diff --check
+6371d4c` — tampoco imprime nada y sale `0`, así que el texto documental
+posterior queda igual de cubierto.
+
+Lo único posterior a `a8fe837` es **esta sección de la ficha** y la sección
 de validaciones del cuerpo de la PR: cambios documentales que no tocan código
 ni pruebas, y que existen porque la sección tiene que anclarse al árbol que la
 cadena midió. Si una corrección posterior toca el fichero de pruebas, la
 cadena se vuelve a ejecutar entera y esta sección se re-ancla al árbol nuevo,
 sin conservar la terna del anterior.
 
-(La terna anterior de esta rama —`5227 passed, 17 skipped, 2 xfailed in
-552.29s`, sobre `19581ee` más los dos ficheros documentales que aún no
-estaban confirmados— era la de ese mismo estado de código; se sustituye por
-la de `ffd8d05` porque una cifra sin árbol al lado no se cita como actual
-(ADR-154). Que la terna no se moviera entre las dos es la comprobación de que
-lo confirmado en medio fue documental.)
+(Las ternas anteriores de esta rama —`5227 passed, 17 skipped, 2 xfailed in
+566.49s` sobre `ffd8d05`, y `…552.29s` sobre `19581ee` más dos ficheros
+documentales sin confirmar— eran las de sus árboles y así se leen; la de
+`a8fe837` sube dos pruebas porque las dos que fijan la frontera de la ventana
+son nuevas. Una cifra sin árbol al lado no se cita como actual (ADR-154).)
 
 ## Consecuencias
 
