@@ -3951,6 +3951,70 @@ propietario (H3, H4 y el H5 hallado hoy)—. Lo que sigue abierto a trabajo es
 **exactas** y **de más**, y a eso apunta #579.
 ---
 
+### 80. Quinta premisa falsa en un encargo —sobre un campo que YO había auditado— y sexto veredicto falso del guion, por parchear el síntoma (08-09-2026, 21:08 UTC)
+
+Dos fallos míos en diez minutos, y los dos son reincidencias de raíces que
+nombré hoy mismo.
+
+## 1. `EXACTA n` no existe: la `n` es el oráculo
+
+La PR #580 abre diciendo que mi encargo parte de una premisa falsa. **Tiene
+razón, y el árbol lo dice en PROSA**, en el mismo fichero que yo cité para otra
+línea (`interpret_query_request.py:184-188`):
+
+> «`objetivos` se queda en 1 porque la cuota de `EXACTA` que el banco usa
+> (`max(1, len(caso["resultado_esperado"]))`) es **adjudicación** —el número de
+> elementos que alguien ya decidió que el caso espera—, y producción no la
+> tiene ni puede inventarla.»
+
+Y el arnés lo confirma: `objetivos = max(1, len(caso["resultado_esperado"])) if
+cardinalidad is Cardinalidad.EXACTA else 1`.
+
+O sea: **mi instrucción central —«con EXACTA n el filtro recorta a n»— manda
+recortar por el oráculo.** El primer caso de aceptación no se puede construir
+para producción.
+
+**Lo humillante es cómo pasó.** Esta misma tarde audité este encargo frase a
+frase y escribí, satisfecho, que `Peticion` **declara** `cardinalidad`,
+`limite_objetivo`, `limite_duro` **y `objetivos`**. Comprobé que el campo
+existe. **Nunca pregunté qué contiene.** Es la raíz 1 —«el dato está declarado»
+no es «el dato llega»— que yo mismo nombré hoy en la entrada 78, reincidiendo
+en el mismo documento y sobre un campo que había mirado con mis ojos.
+
+Publicada la corrección en #579 —sin orden detrás—, asumiendo el fallo entero y
+diciendo qué queda en pie: **ACOTADA sigue** (ahí el límite sí viaja en la
+petición y no es adjudicación), **EXHAUSTIVA sigue** (y es la que carga el ruido
+gordo), y **EXACTA deja de ser «recorta a n»** para ser una pregunta abierta:
+qué puede hacer el filtro cuando la petición declara `EXACTA` sin traer cuota.
+
+## 2. El guion vuelve a fallar por la misma causa que ya había «arreglado»
+
+Sexto veredicto falso. Dijo que el cuerpo no declaraba el árbol de la
+validación; lo declara —«anclada al árbol de `da6fea3`»—. Dos causas
+encadenadas:
+
+- La primera, la de siempre: mi patrón exigía **negritas** y el texto usaba
+  **comillas invertidas**. Forma, no contenido.
+- Y al arreglarlo escribí `.rbol` para esquivar la tilde. **`.` casa UN BYTE y
+  la «á» ocupa DOS**, así que no casa nunca. Es **el modo de fallo 1**, el
+  primero que documenté, reaparecido porque lo parcheé con un truco en vez de
+  quitar los acentos del patrón.
+
+Regla escrita ahora en el propio guion: **ningún patrón contiene un carácter
+acentuado ni un comodín que pretenda cubrirlo**; se usan clases negadas
+(`[^ ]+`). Comprobado con las dos formas al lado antes de darlo por bueno.
+
+## Lo que une los dos
+
+La entrada 78 dice que mis fallos son cuatro raíces y no once. **Estos dos
+demuestran que nombrar una raíz no la cierra**: las dos son reincidencias, y la
+segunda es literalmente el resultado de haber parcheado el síntoma de la
+primera vez. El contrato del repositorio dice «buscar la raíz, no seguir
+parcheando»; hoy he escrito la raíz **y he seguido parcheando**. La diferencia
+entre tener la pregunta escrita y hacérsela es todo, y no se salva escribiéndola
+mejor.
+---
+
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
 
 1. `ollama_category_classifier.py`: ruta relativa y sin
