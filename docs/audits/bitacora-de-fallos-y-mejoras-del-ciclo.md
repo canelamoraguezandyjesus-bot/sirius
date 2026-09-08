@@ -2729,6 +2729,17 @@ ADR o su incidencia cuando se adopte.
   `UPDATE memories/decisions SET created_at`, así que ninguna de las dos queda
   fechada. **Ésa es la razón exacta de las 9 críticas**, y ahora está publicada
   con fichero y línea en vez de como afirmación mía.
+- **Y la ronda produjo, de paso, un ejemplar de libro de la deuda 19.** El
+  segundo commit del corrector (`6ceeb532`) re-ancla la sección de validación
+  al árbol nuevo, que es exactamente lo que ADR-154 pide y está bien hecho…
+  pero **al reescribir el párrafo borró la frase «`git diff --check` sale
+  limpio (`0`) sobre ese árbol» y no la repuso**. `grep -F 'git diff --check'`
+  sobre el ADR en el head no devuelve nada, así que la ficha ya no deja
+  constancia de una de las validaciones obligatorias del encargo. **La
+  corrección de una ronda introdujo la imprecisión de la siguiente**, que es
+  literalmente el enunciado de la deuda 19, y lo hizo dentro de una corrección
+  por lo demás correcta. Añadido al guardián previo a la fusión y avisado junto
+  con la cifra, para que las dos se cierren en una sola ronda.
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
