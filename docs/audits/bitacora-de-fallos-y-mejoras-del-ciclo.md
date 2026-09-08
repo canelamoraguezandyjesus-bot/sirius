@@ -3724,6 +3724,48 @@ guardián de goteo ya sabe distinguir «esto estaba y no se miró» de «esto es
 nuevo», el freno podría no contar contra la mejor marca los hallazgos marcados
 como goteo. Tiene un riesgo evidente —crea un incentivo para etiquetar de goteo
 lo que convenga— y por eso lo dejo como observación suya, no como cambio.
+
+---
+
+### 76. La corrección de la ronda 2, verificada rama a rama: la elección la decide el SENTIDO del error (08-09-2026, 19:38 UTC)
+
+Tres commits, uno por hallazgo, y el cuarto re-anclando la validación. El de
+código (CLAUDE-R2-002) merece quedarse por cómo está decidido.
+
+**El problema**: una guarda nueva —«un intervalo con más de dos extremos no
+declara ninguno»— alcanzaba, sin declararlo, a una ruta ajena al encargo. Para
+el **tiempo objetivo** era intencionada y estaba fijada con prueba; para el
+**corte de registro** convertía «corta el 1 de marzo» en «no cortes nada».
+
+**La solución no elige la opción «coherente», elige por el sentido del error**,
+y eso es lo que la hace correcta: para el tiempo objetivo, quedarse con dos de
+tres extremos sería adivinar cuáles, y descartar la ventana entera es lo
+prudente. Para el corte de registro es al revés: **el corte existe para
+EXCLUIR**, así que perderlo entero entrega como «sabido entonces» lo que se
+registró después. La misma entrada patológica pide respuestas opuestas porque
+los dos filtros fallan hacia lados distintos. La guarda queda parametrizada
+(`exigir_dos_extremos`) con esa razón escrita en el docstring.
+
+**Verificado por mí, rama a rama, sobre `92c1b0b`** —no leído—:
+
+| llamada | resultado |
+|---|---|
+| tres extremos, `exigir=True` (tiempo objetivo) | `None` — sigue descartando |
+| tres extremos, `exigir=False` (corte de registro) | `'2026-03-01'` — último extremo |
+| tres extremos, `exigir=False` **pero `extremo=0`** | `None` — el extremo inicial sigue protegido |
+| `_corte_de_registro(tres)` | `'2026-03-01 23:59:59.999999'` |
+| `_tiempo_objetivo(dos)` | `'2026-03-20T00:00:00Z'` — la forma con `Z` de `G8`, intacta |
+
+El valor del corte coincide **verbatim** con el que la revisión había predicho
+para el árbol anterior a la PR. Y el detalle que más me gusta es la condición
+`extremo == 0` dentro de la guarda: aunque se pida no exigir dos extremos, el
+**extremo inicial** sigue rechazándose, porque de una escritura de tres no hay
+«inicial» que signifique nada. Es una guarda que no se relaja del todo cuando
+se le pide relajarse.
+
+Los otros dos hallazgos eran de ficha y se corrigen declarando lo que faltaba:
+la identidad `created_at == valid_from` del cargador (que es la deuda 27) y que
+el discriminante de la vía es el **intervalo** y no la ausencia de tema.
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
