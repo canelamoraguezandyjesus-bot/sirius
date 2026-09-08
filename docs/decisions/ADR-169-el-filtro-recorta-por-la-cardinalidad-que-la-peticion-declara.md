@@ -372,10 +372,12 @@ relajado, saltado ni reescrito para conseguir verde.**
 
 **Cadena completa como UNA SOLA invocación** (ADR-145, ADR-153), con
 `pwsh -File scripts/check.ps1` y su código de salida capturado (ADR-154),
-anclada al árbol de **`da6fea3`**:
+anclada al árbol de **`2380823`** —el head tras las dos correcciones
+documentales de la ronda 2 (`CLAUDE-P3-001`, `CLAUDE-P3-002`), que solo tocan
+docstrings—:
 
 ```
-5251 passed, 17 skipped, 2 xfailed in 523.33s (0:08:43)
+5251 passed, 17 skipped, 2 xfailed in 569.28s (0:09:29)
 EXIT_CODE_CHECK=0
 ```
 
@@ -396,7 +398,7 @@ aunque el rango ya confirmado traiga errores de espacios, así que no
 demostraría nada sobre este cambio.
 
 ```
-$ git diff --check ce94bdf da6fea3
+$ git diff --check ce94bdf 2380823
 EXIT_DIFF_CHECK=0
 $ git diff --check ce94bdf
 EXIT_DIFF_CHECK_ARBOL=0
@@ -406,11 +408,27 @@ Sin salida y con código `0` las dos: el rango entero de la rama —desde su bas
 en `main` (`ce94bdf`) hasta el árbol que midió la cadena— está limpio, y el
 árbol de trabajo que confirma esta sección también.
 
-Lo único posterior a `da6fea3` es **esta sección de la ficha** y el cuerpo de
+Lo único posterior a `2380823` es **esta sección de la ficha** y el cuerpo de
 la PR: documentales, sin tocar código ni pruebas, y existen porque la sección
 tiene que anclarse al árbol que la cadena midió. Si una corrección posterior
 toca código o pruebas, la cadena se vuelve a ejecutar entera y esta sección se
 re-ancla al árbol nuevo, sin conservar la terna del anterior (ADR-154).
+
+**Ronda 2 de revisión (documental).** `CLAUDE-P3-001` y `CLAUDE-P3-002`
+señalaron dos docstrings que el árbol desmentía: el de `rank()` seguía
+diciendo que delegaba en `_rank_via_staged_engine` cuando la cadena real es
+`rank()` → `rank_con_cupo()` → `_recuperar_por_etapas()`, y el de módulo de
+`context.py` afirmaba en presente que `ContextBuilder` «keeps calling …
+`rank()`» cuando esta misma ficha cambió esa llamada a `rank_con_cupo()`. Se
+corrigieron los dos textos —más el de `_rank_via_staged_engine`, que ahora
+declara que no tiene llamador en `src/` ni en `scripts/` y que el
+comportamiento normativo vive en `_recuperar_por_etapas`—. **No cambia ni una
+línea ejecutable ni una prueba**: la terna de arriba es la de `2380823`, con
+las mismas 5251 pruebas que medía `da6fea3`. Que el envoltorio no tenga
+llamador se comprueba con `git grep -n '_rank_via_staged_engine(' -- src
+scripts tests`: su definición y las dos llamadas de
+`tests/integration/test_rank_relevant_knowledge.py` (962 y 1216), ninguna
+más.
 
 ## Consecuencias
 
