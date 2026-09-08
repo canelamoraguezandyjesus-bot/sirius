@@ -3246,6 +3246,75 @@ porque la busqué antes de lanzar.** Ésa es toda la diferencia, y es la razón
 de que auditar el encargo antes de publicarlo deba ser parte del encargo.
 ---
 
+### 68. El tercer hueco que quedaba NO era de nadie: `81/81` es inalcanzable hoy, y por dos razones distintas (08-09-2026, 19:05 UTC)
+
+Con H1 en revisión fui a por una pregunta que nadie había hecho: **de las tres
+ocurrencias que siguen faltando, tengo nombre para dos —`MEM-020` (H3) y
+`MEM-001` (H4), las dos decisiones del propietario—; ¿y la tercera?** Medido
+sobre el head de H1, la tercera es **`DEC-001`, en el caso `B04-CA-22`**, y no
+estaba encargada a nadie.
+
+**Falta en las DOS configuraciones** —con ejes del corpus y sin ellos, `3` no
+encontrados en ambas—, así que no es el problema de «los ejes no se persisten»
+que cerró la palanca 2. Es otra cosa, y tiene dos capas.
+
+**Capa 1: el porte perdió un dato que el origen sí tenía.** `DEC-001` declara
+`ambito: MULTI_PROYECTO_CERRADO` con `project: LISTA-CERRADA-AB`, y es el
+**único** ítem así de los 97. La fixture portada **no tiene ningún campo de
+pertenencia** —ninguna clave con «miembro» existe en ningún ítem—, así que el
+cargador escribe `miembros_de_ambito=()` porque no hay nada que cargar, y `G4`
+se niega con una razón que dice exactamente lo que pasa: **«lista cerrada sin
+miembros resueltos: la duda no abre ámbito»**. La puerta está bien; le falta el
+dato.
+
+Y el dato **existía**. Leyendo el origen que el propio corpus cita —rama
+`evidence/adr001-spikes`, commit `dfdcdaff`, que es el que la fixture declara
+como fuente— la adjudicación de `DEC-001` dice, literal: **«pertenece a
+LISTA-CERRADA-AB; Gamma no es miembro y no hereda»**. O sea que en el origen la
+lista **sí** tiene miembros resolubles, y Gamma queda fuera **por no serlo**.
+`B04-CA-22` pregunta desde `PRJ-BETA`, que sí lo es. La semántica del origen es
+coherente y deliberada; lo que se perdió fue al portarla a JSON.
+
+**Capa 2: aunque el dato llegara, `G4` seguiría excluyéndolo.** Su rama
+multiproyecto exige `all(peticion.ambito.autoriza(m) for m in miembros)` —
+**contención**: «no te enseño algo que también vive en un proyecto que no
+puedes ver»—, y lo que la adjudicación del origen describe es **pertenencia**.
+Simulado con los miembros que el origen implica (`{PRJ-ALFA, PRJ-BETA}`):
+
+| caso | `all()` | `any()` | lo que el origen dice |
+|---|---|---|---|
+| `B04-CA-22`, ámbito `PRJ-BETA` | **False** | **True** | debe entrar |
+| caso con ámbito Gamma | False | False | no debe entrar |
+
+**`any` reproduce la adjudicación en los dos sentidos; `all` falla el
+positivo.** Y no es que `all` sea un descuido: es una postura de
+confidencialidad, la misma que la razón «la duda no abre ámbito». Por eso
+cambiarlo **no lo decide el ciclo**.
+
+**Lo que esto significa para el criterio de la línea, que es lo importante:**
+
+1. **`81/81` no se puede alcanzar hoy.** Ni arreglando ranking, ni filtro, ni
+   ninguna de las palancas. Hacen falta las dos cosas de arriba, y las dos son
+   del propietario: una toca la fixture del banco —que tengo prohibido
+   modificar, con razón— y la otra cambia una regla con forma de privacidad.
+2. **Y de ahí sale el enunciado limpio del estado de la línea**: tras H1, los
+   **tres** huecos que quedan en la columna de hallados —`DEC-001`, `MEM-020`,
+   `MEM-001`— son **decisiones del propietario, no trabajo de ingeniería**. La
+   columna de hallados está terminada por parte del ciclo. Lo que sigue abierto
+   a trabajo es **exactas** (17/47) y **de más** (162), que es justo donde
+   apunta la palanca 3.
+3. **ADR-148 no nombra este hueco.** Enumera H1-H4 y `DEC-001` no está entre
+   ellos: se contaba dentro de los cinco de H1, y H1 ha demostrado —midiendo—
+   que no era de vigencia sino de ámbito. Es un hueco nuevo, y lo llamo **H5**
+   para no seguir contándolo donde no está.
+
+**Cómo apareció, que es la parte reutilizable**: no lo encontró una revisión ni
+una prueba. Apareció por preguntar **«¿y el tercero?»** sobre un recuento
+agregado que llevaba tres días diciendo `3` sin que nadie lo desglosara. Es
+exactamente la lección de la entrada 66 —**un recuento agregado dice cuántas
+faltan, nunca por qué**— aplicada esta vez a tiempo.
+---
+
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
 
 1. `ollama_category_classifier.py`: ruta relativa y sin
