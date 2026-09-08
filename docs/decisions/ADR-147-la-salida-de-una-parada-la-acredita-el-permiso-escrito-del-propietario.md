@@ -735,6 +735,44 @@ aplicar la etiqueta, y la etiqueta es lo que dispara el marcador—. Con eso:
   Lo único que cambia en el árbol después de esta captura es la transcripción
   de estas mismas cifras.
 
+- **Ronda 16, CLAUDE-R16-001 (P3): la QUINTA aparición de «el doble emite una
+  forma que producción no emite», cerrada por el invariante y no por la
+  llamada.** La familia que este ADR ya registra como CLAUDE-R5-002 / R7-003 /
+  R11-002 / R12-002 volvió por un flanco nuevo: seis pruebas de recorrido de
+  `tests/engine/test_reflect.py` construían el espejo con
+  `paradas_publicadas=()` mientras su historial traía acreditados con
+  `orden_del_veredicto`. Eso es estructuralmente inalcanzable: el diagnóstico
+  de un `EstadoAcreditado` sale del MISMO comentario que
+  `mirror_projection._STOP_MARKER_RE` reconoce como veredicto de parada, así
+  que `proyectar_work_item` emite siempre su `ParadaPublicada`. El efecto era
+  de cobertura, no de comportamiento: con la lista vacía,
+  `reflect._paradas_que_el_recorrido_debe_recrear` devolvía `[]` y la rama del
+  saldo de veredictos por recrear -el trabajo entero de las rondas 10 y 11- no
+  se ejercitaba en ninguna de las seis.
+
+  La raíz se cierra en UN sitio, no en cada llamada: `_espejo` lleva ahora una
+  guarda que rechaza todo espejo con un `orden_del_veredicto` cuyo `orden` no
+  esté en `paradas_publicadas`, y
+  `test_el_doble_de_cronologia_proyecta_lo_mismo_que_la_proyeccion_real` mide
+  el mismo invariante sobre la proyección REAL. Las seis pruebas pasan a
+  declarar sus veredictos con el instante que le corresponde al `updated_at`
+  del motor que cada una construye (`_ANTES_DEL_ALMACEN` para el veredicto que
+  el almacén pudo guardar, `_TRAS_EL_ALMACEN` para el del tramo que el
+  recorrido reproduce, y un instante que los straddlea cuando conviven los
+  dos). Ninguna aserción existente se relajó ni se reescribió: los pasos, los
+  diagnósticos y las divergencias que afirmaban siguen afirmándose palabra por
+  palabra. No se tocó ninguna línea de `src/`.
+
+  Mutación vista fallar: añadida la guarda a `_espejo` y ANTES de fechar los
+  veredictos, `uv run pytest tests/engine/test_reflect.py` dejó en rojo cinco
+  de las seis -`5 failed, 58 passed`-, con la primera línea
+  `AssertionError: un acreditado con diagnóstico atribuido lo toma de un
+  comentario que `_STOP_MARKER_RE` reconoce: las posiciones [0] tienen que
+  traer su `ParadaPublicada` en `paradas_publicadas``; la sexta
+  (`test_una_parada_sin_diagnostico_atribuible_no_recrea_ninguno`) se abstiene
+  de atribuir y por eso la guarda no la alcanza, así que se fechó a mano con el
+  mismo criterio.
+
 ## Consecuencias
 
 - **Ronda 6, CLAUDE-R6-001 y CLAUDE-R6-002 (misma raíz): la cota de la parada
