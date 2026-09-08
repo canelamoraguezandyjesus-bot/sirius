@@ -4055,6 +4055,26 @@ Cuesta un `git log --since` sobre `docs/` y `main`. Lo hice hoy, para
 contestar, en dos comandos y treinta segundos — después de doce horas de
 trabajo.
 
+**Y al hacerlo por fin, apareció una segunda que tampoco tenía contada.** Hoy
+entraron diez fusiones en `main`. Yo llevaba la cuenta de las de la línea de
+memoria (`22e880e`, `6371d4c`, `ce94bdf`) y de la deuda 7 (`cb728cc`). Las dos
+que se me habían escapado son las dos de este mismo asunto:
+
+- `8ddb5f0`, **04:41** — la enmienda, antes de que yo empezara.
+- `afe704e`, **15:56** — «ADR-163: desactiva de forma reversible los carriles de
+  investigación y auditoría», que entró **mientras yo trabajaba**, en la
+  incidencia #569 que tengo instrucción de no tocar por ser de la otra sesión.
+
+O sea que **el suelo se movió dos veces en la misma jornada y no noté ninguna**,
+incluida una que ocurrió con mi sesión abierta y produciendo. No me afecta —lo
+que ADR-163 desactiva son los carriles del despachador, disparados por etiqueta
+y perfil, y yo conduzco el ciclo ordinario, que ADR-161 conserva nombrándolo—,
+pero el que no me afecte lo he sabido **después**, no antes.
+
+La consecuencia práctica no es «leer más»: es **cuándo** mirar. Mirar al
+planificar no basta si la jornada dura doce horas y hay otra sesión fusionando
+en paralelo.
+
 **Nota para quien lea esta bitácora más adelante**: las cifras y decisiones de
 las entradas 66 a 80 se tomaron sin este contexto delante. Ninguna queda
 invalidada por lo dicho arriba, pero conviene saber que el marco se enmendó el
