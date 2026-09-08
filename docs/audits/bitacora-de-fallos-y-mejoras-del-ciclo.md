@@ -2601,6 +2601,45 @@ ADR o su incidencia cuando se adopte.
   revisiones y `updated_at`, que es un H2b y no una ampliación de #574.
 - **Corregido en el sitio donde publiqué el error**, con la tabla nueva y la
   causa, en la misma incidencia y sin reanudarla.
+
+---
+
+### 58. ADR-148 clasifica mal el hueco H4, y lo descubrí comprobando la premisa de un encargo que aún no había lanzado (08-09-2026, 15:30-15:50 UTC)
+
+- **ADR-148 dice de H4: «entra en EXHAUSTIVA y queda fuera del límite en
+  ACOTADA; es de ranking, no de búsqueda».** Sobre esa frase escribí el
+  encargo entero: mejorar el orden para que `MEM-001` entre dentro del límite.
+  **La frase no se reproduce sobre el árbol de hoy.**
+- **La comprobación**: forcé `cardinalidad=EXHAUSTIVA` y `limite=None` **solo**
+  en B04-CA-30, sobre `22e880e` con `--peticion`. Resultado:
+  `faltan=['MEM-001'] extras=['DEC-010','MEM-010','MEM-011']`, cinco elementos
+  dentro. **Quitar el límite NO recupera `MEM-001`**, así que no es el límite
+  quien lo expulsa. Con `--ejes --peticion` —el techo— tampoco entra.
+- **Y sin embargo es recuperable**: sin banderas, con la política uniforme
+  anterior a la palanca 1, el caso **no pierde nada**. O sea que existe y la
+  búsqueda puede alcanzarlo; lo excluye algo de la petición.
+- **El dato que orienta**: con la petición real entran cinco elementos y **los
+  cinco son de `PRJ-ALFA`**. `MEM-001` es el único esperado que es
+  `PRJ-GLOBAL` con eje `ambito=GLOBAL` —«El usuario prefiere que redactes en
+  tono directo y sin adornos», una preferencia del usuario, global por
+  naturaleza—. Los otros dos esperados y los tres de más son `PRJ-ALFA`.
+  **No lo doy por causa**: `Ambito.autoriza` documenta que un candidato global
+  se admite «pase lo que pase»
+  (`staged_engine_contracts.py:138-147`), así que si el ámbito lo excluyera
+  sería a pesar de esa regla y no gracias a ella. Va al encargo como pista
+  **marcada como no confirmada y con invitación expresa a contradecirla**, que
+  es la cláusula que en la deuda 7 me salvó de sembrar una hipótesis invertida.
+- **Lo que cambia el encargo**: su primera tarea deja de ser «mejorar el
+  ranking» y pasa a ser **«establecer la causa con una medición y decirla»**,
+  con el contraste EXHAUSTIVA/ACOTADA ya hecho y descartando el límite. Si al
+  medirlo resulta que sí era de ranking, se dice con el número delante.
+- **La lección de fondo, que es incómoda**: ADR-148 es el documento que gobierna
+  toda la línea de memoria, lo escribió este mismo ciclo con evidencia, y una
+  de sus cuatro clasificaciones de hueco no se sostiene. **Un ADR aprobado no
+  es una fuente: es una hipótesis con fecha.** Las premisas de H1, H2, H3 y H4
+  las he comprobado las cuatro en las últimas dos horas; **tres se sostenían y
+  una no**. El coste de comprobarlas fue de minutos; el de heredarlas habría
+  sido un encargo entero apuntando al sitio equivocado.
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
