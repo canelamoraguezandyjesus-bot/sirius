@@ -950,10 +950,11 @@ desde la fusión de la PR de ADR-167:
 
 | Situación | Antes | Ahora |
 |---|---|---|
-| La transición de etiquetas se aplica solo en parte | Reejecutar salía en **verde** sin completarla: con `implement-requested` + `failed-safely` la tomaba por terminada, y sin ninguna etiqueta no encontraba activación | Reejecutar la **completa**. La puerta reconoce su propia transición a medias por el marcador que ella misma publicó, y por una firma de estado que el ciclo nunca produce |
-| Hay trabajo posterior además de la transición a medias | — | **No se impone ningún desenlace**: termina en rojo y pide revisión humana |
+| La transición de etiquetas se aplica solo en parte | Reejecutar salía en **verde** sin completarla | Reejecutar la **completa**, venga de donde venga: con el marcador presente la puerta no pregunta qué escrituras faltaron sino si el estado ya es el final, y si no lo es lo completa. Es la regla de `sirius_transition` (incidencia #50), y cubre las **ocho** combinaciones sin casos especiales |
+| Hay una intervención posterior: la incidencia se cerró, o el ciclo la movió a otro estado | La recuperación completaba igual, incluso sobre una incidencia **cerrada** | **No se impone ningún desenlace**: termina en rojo, sin escribir, y pide revisión humana |
 | Activación nueva sobre trabajo en curso (`implementing`, `reviewing`, `repairing`, `ci-pending`, los `*-requested`) | La puerta llevaba su propia lista de estados terminales, de **cuatro**, y añadía `failed-safely` **encima** del trabajo en curso | Lo decide `sirius_validate_activation.sh`, que conoce los **diez** estados incompatibles: explica, retira el evento y **no** toca el trabajo en curso |
 | El perfil del cuerpo cambió entre el evento y el arranque | O **ninguna** puerta la atendía —incidencia abandonada— o la atendían **las dos**, retirándola y ejecutándola a la vez | No la ejecuta nadie: se explica, se retira el evento y se conserva `sirius:planned`. Volver a aplicar la etiqueta reactiva |
+| Se reejecuta un evento rancio YA rechazado y la incidencia vuelve a llevar `sirius:implement-requested` | El reparto la retiraba otra vez y **borraba la activación nueva** | No se puede probar si esa etiqueta es nueva o la que no se retiró: **no se escribe nada** y el job termina en rojo explicando qué mirar |
 
 **Quién atiende una activación deja de decidirse dos veces.** Vive en
 `scripts/automation/sirius_reparto_activacion.sh`, que llaman las dos puertas:

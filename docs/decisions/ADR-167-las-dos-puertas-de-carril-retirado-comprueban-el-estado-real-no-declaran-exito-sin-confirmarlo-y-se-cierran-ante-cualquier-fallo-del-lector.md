@@ -314,15 +314,13 @@ lo que la reejecución reconoce.**
    porque una activación ya consumida no es suya.
 7. **Una transición a medias se completa al reejecutar (hallazgo 1).**
    `sirius_set_issue_labels` escribe en varias operaciones independientes y
-   GitHub puede aceptar unas y no otras. Lo que distingue «mi transición a
-   medias» de «trabajo posterior de otro» es la huella que la propia puerta
-   publica: **el marcador del comentario**. Con el marcador presente y una firma
-   de estado que el ciclo nunca produce —`failed-safely` junto a
-   `implement-requested` o `planned`, o ninguna etiqueta `sirius:`— la puerta
-   completa la transición. Si además hay **cualquier otra** etiqueta `sirius:`,
-   no impone nada: termina en rojo y pide revisión humana. Esa comprobación no
-   copia ninguna lista: es «todo `sirius:` que no sean las tres de esta
-   transición», así que un estado que se invente mañana también la dispara.
+   GitHub puede aceptar unas y no otras. Con el marcador del comentario
+   presente, la puerta completa la transición; si además hay **cualquier otra**
+   etiqueta `sirius:`, no impone nada: termina en rojo y pide revisión humana.
+   Esa comprobación no copia ninguna lista: es «todo `sirius:` que no sean las
+   tres de esta transición», así que un estado que se invente mañana también la
+   dispara. **La forma de reconocer qué faltaba —una «firma de estado»— quedó
+   SUSTITUIDA por el punto 10**: se le escapaban dos de las ocho combinaciones.
 8. **El reparto entre las dos puertas vive en un solo sitio (hallazgo 3).**
    `scripts/automation/sirius_reparto_activacion.sh`, que llaman las dos.
    Atiende la puerta cuyo perfil coincide con el cuerpo **actual** —uno solo, así
@@ -332,7 +330,9 @@ lo que la reejecución reconoce.**
    `sirius:implement-requested` y se conserva `sirius:planned`, así que volver a
    aplicar la etiqueta reactiva. Quién publica ese rechazo está **decidido**, no
    repartido al azar: lo hace la puerta que sería la dueña según el cuerpo
-   actual; la otra recibe «no es tuya» y se calla.
+   actual; la otra recibe «no es tuya» y se calla. **Esa retirada quedó ACOTADA
+   por el punto 11**: solo se hace la primera vez, porque después no se puede
+   probar que la etiqueta presente sea la de ese evento.
 9. **Ninguna prueba de comportamiento lee el registro real (hallazgo 4).** Todas
    reciben un registro controlado. El registro real solo se usa para comprobar
    que es válido y para enumerar qué entradas hay que cubrir. Así las cuatro
@@ -470,6 +470,68 @@ volver a inventar una regla de reconocimiento —una firma, una lista, una
 heurística— en vez de usar la que ya existe. Lo hace imposible **no tener nada
 que reconocer**: la puerta deja de preguntarse «¿qué escrituras faltaron?» y pasa
 a preguntar «¿es este el estado final?». Esa pregunta no tiene combinaciones.
+
+## Decisión de la tercera ronda
+
+10. **La puerta converge al estado final; no reconoce qué escrituras faltaron.**
+    Con el marcador presente, la pregunta es «¿es este el estado final?», no
+    «¿qué firma tiene esto?». Si el estado ya es `sirius:failed-safely` y nada
+    más, no hay nada que hacer. Si no lo es, **antes de completarlo** se descarta
+    que lo que falta sea obra de otro: incidencia cerrada o cualquier otra
+    etiqueta `sirius:` son señales de intervención posterior, y ante ellas se
+    para **en rojo sin escribir**. Solo si no hay ninguna se completa la
+    transición, sin republicar el comentario. Esto sustituye la firma del punto 7
+    y cubre las **ocho** combinaciones sin casos especiales, porque la pregunta
+    del estado final no tiene combinaciones. La regla no es nueva: es la de
+    `sirius_transition`, escrita para la incidencia #50.
+11. **El reparto no retira una etiqueta que no puede atribuir a su evento.** Su
+    marcador identifica el **par** de perfiles concreto. Si ese par ya tiene su
+    explicación publicada, el rechazo se entregó una vez; entonces una
+    `sirius:implement-requested` presente o es una activación **nueva** —el
+    propietario siguió el diagnóstico— o es la misma que no llegó a retirarse, y
+    **no hay forma de distinguirlas** con lo que la API deja ver. Se para sin
+    escribir, con código 4, y la puerta que llama termina en rojo. Borrar una
+    activación nueva por un evento viejo es peor que un job rojo.
+
+## Comprobación de la tercera ronda
+
+**Los tres, reproducidos sobre `05db7a9`:**
+
+| # | Lo observado |
+|---|---|
+| 1 | De las **ocho** combinaciones de fallo de las tres escrituras, **dos** no se recuperaban: con solo `planned` la reejecución salía **verde** sin completar, y con solo `implement-requested` terminaba **sin etiquetas y con un segundo comentario** |
+| 2 | Comentario publicado, falla añadir `failed-safely`, el propietario **cierra** la incidencia, se reejecuta → la recuperación le ponía `failed-safely` a una incidencia cerrada |
+| 3 | Rechazado un evento rancio y retirada su etiqueta, el propietario **vuelve a activar** siguiendo el diagnóstico; al reejecutar el job viejo, el reparto **borraba la activación nueva**. En las dos direcciones del cambio de perfil |
+
+**Después:** las ocho combinaciones convergen a `['sirius:failed-safely']` con **un**
+comentario; el cierre y el avance del trabajo detienen la recuperación en rojo
+**sin tocar** etiquetas ni estado; y el evento viejo respeta la activación nueva,
+que además se comprueba que **sí** la atiende exactamente una puerta cuando llega
+su propio evento.
+
+**Prueba de mutación.** Con los arreglos: **74 pasan**. Guardando los dos
+workflows y el guion de reparto: **6 fallan** —las dos combinaciones, las dos
+intervenciones posteriores y las dos direcciones del evento viejo—. Las cuatro
+configuraciones del registro siguen pasando las 74.
+
+## La ambigüedad que NO se resuelve, y por qué se para en vez de adivinar
+
+Cuando un evento rancio ya rechazado se reejecuta y la incidencia vuelve a llevar
+`sirius:implement-requested`, esa etiqueta puede ser:
+
+- una **activación nueva**, aplicada por el propietario siguiendo el diagnóstico; o
+- **la misma de antes**, si aquella retirada se publicó pero no llegó a confirmarse.
+
+Distinguirlas exigiría saber **cuándo** se aplicó la etiqueta y compararlo con el
+evento que se atiende. La API de GitHub no ofrece ni compare-and-swap sobre
+etiquetas ni una identidad del evento en la carga que recibe el workflow.
+Inventar esa identidad —una etiqueta nueva, un fichero de estado, un marcador que
+codifique lo que no se puede observar— sería ampliar la arquitectura para tapar
+la ambigüedad, que es justo lo que el criterio de parada (b) de esta ronda
+prohíbe. Así que **no se resuelve: se declara y se para en rojo sin escribir**,
+con un mensaje que dice exactamente qué mirar. Es una parada recuperable —la
+activación nueva sigue viva y su propio evento la atiende— y el coste es un job
+rojo que pide una mirada humana.
 
 ## Consecuencias
 

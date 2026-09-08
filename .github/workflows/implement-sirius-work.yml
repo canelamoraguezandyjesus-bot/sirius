@@ -201,6 +201,9 @@ jobs:
             2) echo "valid=false" >> "$GITHUB_OUTPUT"
                echo "Evento rancio en #${ISSUE_NUMBER}: el reparto ya lo explico y retiro la etiqueta. Hace falta una activacion nueva."
                exit 0 ;;
+            4) echo "valid=false" >> "$GITHUB_OUTPUT"
+               echo "::error::Evento rancio ya rechazado y la incidencia vuelve a llevar sirius:implement-requested: el reparto no puede saber si esa etiqueta es una activacion nueva o la que no llego a retirarse, asi que NO ha tocado nada. La explicacion del rechazo anterior sigue en la incidencia; requiere revision humana."
+               exit 1 ;;
             *) echo "::error::El reparto de la activacion no se pudo decidir (codigo ${reparto_rc}); no se consume el evento."
                exit 1 ;;
           esac

@@ -494,46 +494,48 @@ def test_un_codigo_inesperado_del_lector_detiene_la_puerta(tmp_path: Path, codig
 # --------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    ("falla", "estado_a_medias"),
-    [
-        pytest.param(
-            "--remove-label sirius:implement-requested",
-            ["sirius:implement-requested", "sirius:failed-safely"],
-            id="no-se-retiro-implement-requested",
-        ),
-        pytest.param(
-            "--add-label sirius:failed-safely",
-            [],
-            id="no-se-anadio-failed-safely",
-        ),
-        pytest.param(
-            "--remove-label sirius:planned",
-            ["sirius:planned", "sirius:failed-safely"],
-            id="no-se-retiro-planned",
-        ),
-    ],
+#: Las tres escrituras independientes de la transición de retirada, en el orden
+#: en que `sirius_set_issue_labels` las hace.
+ESCRITURAS = (
+    "--add-label sirius:failed-safely",
+    "--remove-label sirius:implement-requested",
+    "--remove-label sirius:planned",
 )
-def test_una_escritura_parcial_se_completa_al_reejecutar(
-    tmp_path: Path, falla: str, estado_a_medias: list[str]
+_CORTO = {ESCRITURAS[0]: "+FS", ESCRITURAS[1]: "-IR", ESCRITURAS[2]: "-PL"}
+
+
+def _las_ocho_combinaciones() -> list[Any]:
+    casos: list[Any] = []
+    for n in range(8):
+        fallan = tuple(e for i, e in enumerate(ESCRITURAS) if n >> i & 1)
+        casos.append(
+            pytest.param(fallan, id="+".join(_CORTO[e] for e in fallan) or "ninguna-falla")
+        )
+    return casos
+
+
+@pytest.mark.parametrize("fallan", _las_ocho_combinaciones())
+def test_las_ocho_combinaciones_de_escritura_convergen(
+    tmp_path: Path, fallan: tuple[str, ...]
 ) -> None:
-    """`sirius_set_issue_labels` hace VARIAS llamadas: unas pueden ir y otras no.
+    """La reejecución converge al estado final, venga de donde venga.
 
-    Los dos estados a medias se reprodujeron sobre `398017a`, y en los dos la
-    reejecución salía en **verde** sin arreglar nada:
+    La segunda ronda intentó **reconocer** una «retirada a medias» por su firma
+    —`failed-safely` junto a otra etiqueta, o ninguna etiqueta— y se le
+    escaparon dos de las ocho combinaciones: con solo `planned` la reejecución
+    salía en verde sin completar, y con solo `implement-requested` terminaba sin
+    etiquetas **y con un segundo comentario**.
 
-    - sin retirar `implement-requested` quedaba `implement-requested` +
-      `failed-safely`, y la reejecución lo tomaba por «ya terminado»;
-    - sin añadir `failed-safely` la incidencia se quedaba **sin etiquetas**, y la
-      reejecución no encontraba activación que atender.
-
-    Lo que distingue «mi transición a medias» de «trabajo de otro» es la huella
-    que la propia puerta publica: el marcador.
+    La regla correcta ya estaba en el repositorio, en `sirius_transition`
+    (incidencia #50): el marcador no basta; se verifica el **estado final** y se
+    completa sin duplicar el comentario. Por eso esta prueba no tiene casos
+    especiales: las ocho terminan igual.
     """
-    primera = _puerta("investigacion", tmp_path / "1", incidencia=incidencia_activa(), fallar=falla)
-    assert primera.codigo != 0, "una transición a medias no puede salir verde"
-    assert primera.etiquetas == estado_a_medias, primera.etiquetas
-    assert len(primera.comentarios) == 1, "la explicación se publicó antes de escribir"
+    primera = _puerta(
+        "investigacion", tmp_path / "1", incidencia=incidencia_activa(), fallar=",".join(fallan)
+    )
+    assert (primera.codigo == 0) is (not fallan), "solo el caso sin fallos sale verde"
+    assert len(primera.comentarios) == 1, "la explicación se publica antes de escribir"
 
     segunda = _puerta(
         "investigacion", tmp_path / "2", incidencia=estado_tras(primera, cuerpo_de_orden())
@@ -542,6 +544,72 @@ def test_una_escritura_parcial_se_completa_al_reejecutar(
     assert segunda.codigo == 0, segunda.stderr
     assert segunda.etiquetas == ["sirius:failed-safely"], segunda.etiquetas
     assert len(segunda.comentarios) == 1, "y sin republicar la explicación"
+
+
+@pytest.mark.parametrize(
+    ("descripcion", "cambio"),
+    [
+        pytest.param("el propietario la cierra", {"state": "closed"}, id="cerrada-despues"),
+        pytest.param(
+            "el ciclo avanza el trabajo",
+            {"labels": ["sirius:planned", "sirius:implementing"]},
+            id="trabajo-avanzado-despues",
+        ),
+    ],
+)
+def test_una_intervencion_posterior_detiene_la_recuperacion(
+    tmp_path: Path, descripcion: str, cambio: dict[str, Any]
+) -> None:
+    """Un comentario antiguo y unas etiquetas no prueban que siga pendiente lo mismo.
+
+    Entre la pasada que falló y el reintento puede haber pasado cualquier cosa.
+    Reproducido: la retirada publica su comentario, falla al añadir
+    `failed-safely`, el propietario **cierra** la incidencia, se reejecuta el
+    job — y la recuperación le ponía `failed-safely` a una incidencia cerrada.
+
+    Ahora, ante cualquier señal de intervención posterior, se para en **rojo sin
+    escribir**. Es lo contrario de adivinar.
+    """
+    primera = _puerta(
+        "investigacion",
+        tmp_path / "1",
+        incidencia=incidencia_activa(),
+        fallar="--add-label sirius:failed-safely",
+    )
+    despues = estado_tras(primera, cuerpo_de_orden())
+    despues.update(cambio)
+
+    segunda = _puerta("investigacion", tmp_path / "2", incidencia=despues)
+
+    assert segunda.codigo != 0, f"{descripcion}: no se puede resolver solo"
+    assert segunda.etiquetas == despues["labels"], f"{descripcion}: no se toca nada"
+    assert segunda.estado_incidencia == despues["state"]
+    assert len(segunda.comentarios) == 1, "y no se publica un segundo diagnóstico"
+
+
+def test_si_el_perfil_cambia_entre_la_pasada_y_el_reintento_no_se_recupera(
+    tmp_path: Path,
+) -> None:
+    """La orden ya no es de este carril: la recuperación no es suya."""
+    primera = _puerta(
+        "investigacion",
+        tmp_path / "1",
+        incidencia=incidencia_activa(),
+        fallar="--add-label sirius:failed-safely",
+    )
+    despues = estado_tras(primera, cuerpo_de_orden("programador"))
+
+    segunda = _puerta(
+        "investigacion",
+        tmp_path / "2",
+        incidencia=despues,
+        cuerpo_del_evento=cuerpo_de_orden("programador"),
+    )
+
+    assert segunda.codigo == 0
+    assert segunda.valid != "true"
+    assert segunda.etiquetas == despues["labels"], "no se toca nada"
+    assert len(segunda.comentarios) == 1
 
 
 def test_una_retirada_a_medias_no_se_completa_encima_de_trabajo_posterior(
@@ -702,6 +770,86 @@ def test_un_perfil_cambiado_no_lo_ejecuta_nadie_y_queda_recuperable(
     assert len(final["comments"]) == 1, "una sola explicación, corra quien corra primero"
     assert "perfil-cambiado" in final["comments"][0]
     assert "vuelve a aplicar" in final["comments"][0], "y dice cómo recuperarlo"
+
+
+@pytest.mark.parametrize(
+    ("evento", "actual"),
+    [
+        pytest.param("investigador", "programador", id="de-investigador-a-programador"),
+        pytest.param("programador", "investigador", id="de-programador-a-investigador"),
+    ],
+)
+def test_un_evento_viejo_no_borra_una_activacion_nueva(
+    tmp_path: Path, evento: str, actual: str
+) -> None:
+    """La secuencia entera, que es donde estaba el fallo.
+
+    Reproducido sobre `05db7a9`: el reparto rechaza un evento rancio y retira su
+    etiqueta; el propietario **sigue el diagnóstico** y vuelve a aplicarla; se
+    reejecuta el job viejo — y el reparto **borraba la activación nueva**.
+
+    La escritura que retira la etiqueta solo es legítima si la etiqueta que
+    retira es la que trajo ese evento, y eso no se puede probar. Lo que sí se
+    puede probar es que el rechazo ya se entregó una vez: entonces la etiqueta
+    que hay ahora o es nueva, o es la que no llegó a retirarse, y no hay forma de
+    distinguirlas. Se para en rojo **sin escribir**.
+    """
+    registro = _registro_controlado(tmp_path / "reg", "investigacion", "auditoria")
+    cuerpo_actual = cuerpo_de_orden(actual)
+    cuerpo_evento = cuerpo_de_orden(evento)
+    orden = ("investigacion", "implementacion")
+
+    # 1) El evento rancio llega a las dos puertas.
+    incidencia = incidencia_activa(body=cuerpo_actual)
+    for i, cual in enumerate(orden):
+        r = _puerta(
+            cual,
+            tmp_path / f"1-{i}",
+            registro=registro,
+            incidencia=incidencia,
+            cuerpo_del_evento=cuerpo_evento,
+        )
+        assert r.codigo == 0, f"{cual}: {r.stderr}"
+        incidencia = estado_tras(r, cuerpo_actual)
+    assert incidencia["labels"] == ["sirius:planned"], incidencia["labels"]
+    assert len(incidencia["comments"]) == 1
+
+    # 2) El propietario sigue el diagnóstico y vuelve a activar.
+    incidencia["labels"] = ["sirius:planned", "sirius:implement-requested"]
+
+    # 3) Alguien reejecuta el job del evento VIEJO.
+    for i, cual in enumerate(orden):
+        r = _puerta(
+            cual,
+            tmp_path / f"3-{i}",
+            registro=registro,
+            incidencia=incidencia,
+            cuerpo_del_evento=cuerpo_evento,
+        )
+        assert r.valid != "true", f"{cual} no puede ejecutar un evento rancio"
+        assert "sirius:implement-requested" in r.etiquetas, (
+            f"{cual} ha borrado una activación que no es de su evento"
+        )
+        assert len(r.comentarios) == 1, f"{cual} publicó un diagnóstico de más"
+        incidencia = estado_tras(r, cuerpo_actual)
+    assert incidencia["labels"] == ["sirius:planned", "sirius:implement-requested"]
+
+    # 4) Y el evento NUEVO -el que disparó esa reactivación- sí se atiende.
+    atienden = []
+    for i, cual in enumerate(orden):
+        r = _puerta(
+            cual,
+            tmp_path / f"4-{i}",
+            registro=registro,
+            incidencia=incidencia,
+            cuerpo_del_evento=cuerpo_actual,
+        )
+        paso = Paso(cual=cual, antes=list(incidencia["labels"]), resultado=r)
+        if _atendio(paso):
+            atienden.append(cual)
+        incidencia = estado_tras(r, cuerpo_actual)
+    esperada = "investigacion" if actual == "investigador" else "implementacion"
+    assert atienden == [esperada], f"la activación nueva la atiende {atienden}, no {esperada}"
 
 
 def test_el_reparto_no_deja_que_las_dos_puertas_ejecuten_el_mismo_encargo(

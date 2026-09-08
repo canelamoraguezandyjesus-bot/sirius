@@ -49,6 +49,14 @@
 #      incidencia y se ha retirado `sirius:implement-requested`. Declina.
 #   3  No se pudo decidir —lectura o escritura fallida—. La puerta que llama
 #      DEBE terminar en rojo: no se afirma nada que no se haya podido comprobar.
+#   4  AMBIGÜEDAD que este guion no puede resolver: este mismo evento rancio ya
+#      se rechazó y se retiró su etiqueta una vez, y la incidencia vuelve a
+#      llevar `sirius:implement-requested`. Esa etiqueta puede ser una activación
+#      NUEVA —el propietario siguió el diagnóstico y volvió a aplicarla— o la
+#      misma de antes si aquella retirada no llegó a confirmarse. No se puede
+#      distinguir con lo que la API deja ver, así que NO SE ESCRIBE NADA y la
+#      puerta que llama termina en rojo para que lo mire una persona. Borrar una
+#      activación nueva por un evento viejo es peor que un job rojo.
 #
 # Quien llame tiene que tratarlos con un `case`, nunca con un `if ... -ne 0`: ese
 # atajo es justo el defecto que ADR-167 corrigió en el lector del registro.
@@ -94,7 +102,40 @@ fi
 
 # El perfil cambió entre el evento y ahora. Ni el trabajo que pedía el evento ni
 # el que pide el cuerpo de ahora se ejecutan: hace falta una activación nueva.
-marcador="<!-- sirius-reparto:perfil-cambiado -->"
+#
+# EL MARCADOR IDENTIFICA EL PAR CONCRETO, no «hubo un rechazo alguna vez»: dos
+# eventos rancios distintos merecen cada uno su explicación, y el par es lo único
+# que los distingue.
+marcador="<!-- sirius-reparto:perfil-cambiado:${PERFIL_EVENTO:-ninguno}:${perfil_actual:-ninguno} -->"
+
+# UN EVENTO VIEJO NO PUEDE CONSUMIR UNA ACTIVACIÓN NUEVA (ADR-167, tercera
+# ronda). Esta rama retira `sirius:implement-requested`, y esa escritura solo es
+# legítima si la etiqueta que retira es la que trajo ESTE evento. Reproducido:
+# rechazado el evento y retirada la etiqueta, el propietario vuelve a aplicarla
+# siguiendo el diagnóstico; si se reejecuta el job viejo, la retiraba otra vez y
+# borraba la activación nueva.
+#
+# Lo que sí se puede probar: si este mismo par ya tiene su explicación publicada,
+# el rechazo YA se entregó una vez. Entonces, si la etiqueta vuelve a estar, o es
+# una activación nueva o es que aquella retirada no se confirmó, y **no hay forma
+# de distinguirlo** con lo que la API deja ver. Se para sin escribir (código 4).
+if ! _comentarios="$(sirius_read_issue_comments "$REPO" "$ISSUE")"; then
+  echo "::error::No se pudo leer el historial de #${ISSUE}; no se puede saber si este evento rancio ya se rechazo. Reintentable." >&2
+  exit 3
+fi
+if printf '%s' "$_comentarios" | grep -Fq "$marcador"; then
+  if ! _etiquetas="$(sirius_retry gh api "repos/${REPO}/issues/${ISSUE}" --jq '.labels[].name')"; then
+    echo "::error::No se pudieron leer las etiquetas de #${ISSUE}; reintentable." >&2
+    exit 3
+  fi
+  if ! printf '%s\n' "$_etiquetas" | grep -Fxq "sirius:implement-requested"; then
+    echo "Evento rancio en #${ISSUE}: ya se rechazo y la etiqueta no esta. Nada que hacer." >&2
+    exit 2
+  fi
+  echo "::error::#${ISSUE}: este evento rancio (perfil '${PERFIL_EVENTO:-ninguno}' -> '${perfil_actual:-ninguno}') ya se rechazo y se retiro su etiqueta, y la incidencia vuelve a llevar sirius:implement-requested. Puede ser una activacion NUEVA o la misma sin retirar, y no se puede distinguir: NO se toca nada. Si la activacion de ahora es buena, dejala correr; si no, retirala a mano." >&2
+  exit 4
+fi
+
 cuerpo="$(mktemp)"
 {
   printf '%s\n\n' "$marcador"
