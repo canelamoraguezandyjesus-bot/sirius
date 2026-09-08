@@ -25,10 +25,13 @@ prueba.
    con el alto prematuro: esa ventana de un turno del bucle de eventos sigue
    existiendo en producción y este cambio no la cierra. Quien ya la estrecha
    es `MessageItemWidget._sync_size_when_laid_out`, en
-   `src/sirius/presentation/message_view.py`, y ese código sigue igual; ningún
-   ADR del registro razona esa cadena, así que el sitio donde se lee es el
-   propio fichero. ADR-153 no pinta nada aquí: fue solo la rama sobre la que
-   se observó la caída del 06-09, y no toca ni la GUI ni Python. No
+   `src/sirius/presentation/message_view.py`, y ese código sigue igual; hasta
+   este ADR ningún otro del registro razonaba esa cadena, y es este mismo el
+   que la documenta, medida, en la sección 1 de la comprobación. ADR-153 no
+   pinta nada aquí: fue solo la rama sobre la que se observó la caída del
+   06-09, y no toca la GUI ni el Python relacionado con ella; sí añadió Python
+   en su commit `dc45b59`, la prueba
+   `tests/automation/test_check_ps1_se_detiene_en_el_primer_rojo.py`. No
    garantiza tampoco que ninguna otra prueba de la suite mida en la misma
    ventana: solo se corrige la que falla. Y no convierte el test en
    determinista frente a cualquier retraso de Qt: elimina la ventana conocida,
@@ -62,10 +65,10 @@ prueba.
 
 `test_streaming_message_grows_without_overlapping_neighbours` cae de forma
 intermitente en la cadena completa (bitácora del ciclo, entradas 16 y 44; la
-última el 06-09 a las 04:16 con `assert 32 >= 54` sobre una rama que no toca ni
-la GUI ni Python). La entrada 47 de la bitácora dejó 47 ejecuciones en verde sin
-reproducirlo: 25/25 en aislamiento, 10/10 de `tests/gui` y 12/12 de la cadena
-completa.
+última el 06-09 a las 04:16 con `assert 32 >= 54` sobre una rama que no toca la
+GUI ni el Python relacionado con ella). La entrada 47 de la bitácora dejó 47
+ejecuciones en verde sin reproducirlo: 25/25 en aislamiento, 10/10 de
+`tests/gui` y 12/12 de la cadena completa.
 
 La prueba mide así:
 
