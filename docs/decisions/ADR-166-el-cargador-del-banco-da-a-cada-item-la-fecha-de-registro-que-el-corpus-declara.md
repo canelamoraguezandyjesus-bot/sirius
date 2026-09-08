@@ -155,23 +155,33 @@ desde `_load_canon_item`).
   propio banco (`2026-06-15T00:00:00Z`). El cargador la escribe tal cual, así
   que ese ítem recibe una fecha de registro posterior al «ahora» del banco y
   `G8` lo descartaría como «posterior al corte de registro» ante cualquier
-  corte entre esas dos fechas. **Hoy no mueve ninguna métrica**, y también eso
-  está contado: los dos únicos casos que declaran corte (`B04-CA-32` y
-  `B04-CA-47`) no esperan `DEC-004`, y el único que lo espera (`B04-CA-06`) no
-  declara corte. Quien añada un caso con un corte posterior a `2026-06-15`
-  tiene que contarlo; el guardián
+  corte anterior al `2026-09-01` —lo que incluye los **dos que el banco ya
+  declara hoy**, `2026-03-01` (`B04-CA-32`) y `2026-02-15` (`B04-CA-47`)—, y
+  no solo ante cortes entre el `ahora_declarado` y esa fecha. **Hoy no mueve
+  ninguna métrica**, y también eso está contado: esos dos únicos casos que
+  declaran corte no esperan `DEC-004`, y el único que lo espera (`B04-CA-06`)
+  no declara corte. Quien añada **cualquier** caso con corte de registro tiene
+  que contarlo —y en particular tiene que contarlo si ese caso espera
+  `DEC-004` con un corte anterior al `2026-09-01`, porque `G8` lo
+  descartará—; el guardián
   `test_solo_dec_004_recibe_un_registro_posterior_al_ahora_del_banco` deja el
   hecho fijado en vez de esperar a que se redescubra.
 - **La FORMA en que se escribe `created_at` importa, no solo el valor.** `G8`
   compara `created_at` contra el corte **lexicográficamente**
   (`src/sirius/domain/staged_engine_gates.py:213-215`) — la «deuda 20» que la
   incidencia #574 nombra por su nombre—, así que la forma no es un detalle de
-  presentación: escrita como `2026-01-01T00:00:00.000000Z` ordenaría distinto
-  frente a un corte `2026-03-01T00:00:00Z` que escrita
-  `2026-01-01 00:00:00.000000`. Se elige la segunda —separador espacio, sin
-  `T` ni `Z`— porque es la que el esquema de Sirius 0.1 escribe de verdad (la
-  del dialecto de SQLAlchemy para sus columnas `DateTime`) y con la que se
-  hizo la medición de esta ficha. La fija
+  presentación: el arnés tiene que escribir la misma que escribe el producto.
+  Se elige `AAAA-MM-DD HH:MM:SS.ffffff` —separador espacio, sin `T` ni `Z`—
+  porque es la que el esquema de Sirius 0.1 escribe de verdad (la del dialecto
+  de SQLAlchemy para sus columnas `DateTime`) y con la que se hizo la medición
+  de esta ficha; así `G8` compara aquí exactamente lo mismo que comparará en
+  producto. Las dos formas no son intercambiables: divergen cuando el registro
+  cae el **mismo día** que el corte a una hora distinta de medianoche, porque
+  el espacio (`0x20`) ordena antes que la `T` (`0x54`) —un ítem registrado
+  `2026-03-01 12:00:00.000000` **no** se descarta frente al corte
+  `2026-03-01T00:00:00Z`, mientras que escrito `2026-03-01T12:00:00.000000Z`
+  **sí** se descartaría—. Ese desacuerdo de sub-día es la propia «deuda 20» y
+  cerrarlo queda fuera de esta incidencia: aquí solo se fija la forma. La fija
   `test_el_registro_escrito_lleva_la_forma_que_g8_compara` contra un literal
   propio, **sin pasar por `_FORMATO_DE_REGISTRO_EN_SQLITE`**: si el lado
   esperado leyera la misma constante que el cargador, los dos se moverían a la
