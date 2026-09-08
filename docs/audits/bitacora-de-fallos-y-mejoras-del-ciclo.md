@@ -4237,6 +4237,47 @@ Esa última línea es la lección que a mí me faltaba hoy. **Cuando no hay cont
 qué comparar, predecir un número es inventarlo; predecir una invariante sigue
 siendo comprobable.** Yo he pasado el día publicando números; la salida elegante
 era publicar una propiedad.
+
+---
+
+### 84. El guardián se muerde la cola: narrar el fallo dentro del ADR reproduce el fallo (08-09-2026, 22:45 UTC)
+
+#579 cayó a `failed-safely`. **No era la ronda 3**: Quality falló sobre
+`e01caf3d`, el corrector arrancó, su precomprobación dijo «el rol `corrector`
+no escribió ningún veredicto» —correcto: el fallo venía de Quality y no de una
+revisión, así que no había resultado estructurado del que partir— y el ciclo se
+detuvo. **La parada segura hizo exactamente lo que debía.**
+
+**Diagnosticado por mí antes de reanudar**, porque un `continua` a ciegas
+repite el fallo. Sobre el head exacto: `ruff format`, `ruff check` y `mypy` en
+verde; el único fallo es
+`tests/automation/test_citas_de_los_adr.py::test_toda_ruta_citada_por_un_adr_existe`
+para ADR-169.
+
+**Y la causa es un bucle que merece nombre.** Ese guardián exige que toda ruta
+citada por un ADR exista. Las citas **reales** del ADR ya estaban bien tras la
+corrección —forma corta `ADR-117:106`, sin ruta—. Lo que rompe son **dos líneas
+de la sección que narra esa misma corrección**, donde el ADR **transcribe el
+mensaje de error del guardián**… y ese mensaje contiene rutas abreviadas con
+puntos suspensivos. Al copiarlo dentro del ADR, **se vuelve a crear la cita que
+el guardián rechaza**.
+
+> **Documentar el fallo lo reproduce.** El guardián no distingue una cita de una
+> mención de una cita, así que la prosa que explica por qué algo falló vuelve a
+> hacerlo fallar.
+
+No es un defecto del guardián —comprobar que las rutas existen es correcto y
+barato— sino una **costura** entre él y la disciplina de esta casa, que exige
+transcribir los fallos literalmente. Las dos reglas son buenas y chocan justo
+aquí. Anotado para el propietario como observación, no como propuesta: si el
+guardián ignorase las rutas que aparecen dentro de un bloque de cita o de
+código, la costura desaparece; pero eso abre un hueco por el que una cita real
+podría colarse disfrazada, y esa contrapartida la decide él.
+
+**Publicado en la incidencia**: el diagnóstico con el comando, la línea de
+fallo, la confirmación de que el resto de la cadena está limpio y las dos líneas
+exactas que hay que tocar —ninguna cifra, ningún código, ninguna prueba—; y
+después, **un solo `continua`**, en comentario aparte.
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
