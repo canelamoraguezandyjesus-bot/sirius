@@ -288,9 +288,13 @@ check=0
 De esa invocación se transcribe la cola capturada —la terna de `pytest` y el
 código de salida—; `check=0` solo sale si `ruff format --check`, `ruff check`
 y `mypy src tests` pasaron antes, porque el guion corta en el primero que
-falle. Lo único posterior a `63822b0` es **esta sección de la ficha**: un
-cambio documental que no toca código ni pruebas, y que existe porque la
-sección tiene que anclarse al árbol que la cadena midió.
+falle. La quinta validación que la incidencia exige transcribir también queda
+asentada sobre ese mismo árbol: `git diff --check 22e880e 63822b0` no imprime
+nada y sale con código `0` —limpio—. Lo único posterior a `63822b0` es **esta
+sección de la ficha** y la corrección del límite conocido en «Consecuencias»:
+cambios documentales que no tocan código ni pruebas, y que existen porque la
+sección tiene que anclarse al árbol que la cadena midió y porque la cifra que
+el párrafo citaba era la que el propietario retractó.
 
 (La cifra anterior de esta sección —`5183 passed, 17 skipped, 2 xfailed in
 487.87s`, anclada a `5200b4f`— seguía siendo la de su árbol; se sustituye
@@ -323,27 +327,40 @@ todos en `tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py`:
 
 - El banco de 47 casos deja de medir, en su etapa de búsqueda, un artefacto
   del arnés. Medir la palanca 2 (incidencia #572) vuelve a medir la palanca.
-- **El arnés queda fechado a medias, y quien mida sobre `updated_at` tiene que
-  contarlo.** Esta ficha fecha `created_at` con lo que el corpus declara;
-  `updated_at` sigue llevando la fecha del reloj del día en que corre la
-  medición, porque `_fijar_fecha_de_registro` solo emite
-  `UPDATE memories/decisions SET created_at = :momento`. Para lo que este
-  encargo cierra es suficiente, y eso es comprobable: `G8` compara
-  `created_at` y solo `created_at`
-  (`src/sirius/domain/staged_engine_gates.py:213-215`), que es también la
-  única de las dos columnas que el puerto lee
+- **El arnés queda fechado a medias, y quien mida la ventana de vigencia tiene
+  que contarlo.** Esta ficha fecha con lo que el corpus declara `created_at` de
+  los ítems, y solo eso: `_fijar_fecha_de_registro` emite `UPDATE memories SET
+  created_at` y `UPDATE decisions SET created_at`, así que **quedan con el reloj
+  de la máquina dos columnas concretas, `memory_revisions.created_at` y
+  `decisions.updated_at`**. No son dos columnas cualesquiera: son justo de donde
+  la palanca 2 deriva su ventana de vigencia —las memorias, de la revisión
+  vigente (`58fa079e:src/sirius/adapters/persistence/staged_engine_port.py:86-89`
+  trae `r.created_at AS revision_created_at` y `:262` hace
+  `valid_from=_vigencia(fila["revision_created_at"])`); las decisiones, de
+  `d.updated_at` (`:98` y `:290`)—. Para lo que este encargo cierra es
+  suficiente, y eso es comprobable: `G8` compara `created_at` y solo
+  `created_at` (`src/sirius/domain/staged_engine_gates.py:213-215`), que es
+  también la única de las dos columnas que el puerto lee
   (`src/sirius/adapters/persistence/staged_engine_port.py:71` y `:78`). Pero
-  **cualquier palanca que derive su ventana de vigencia de `updated_at`
+  **cualquier palanca que derive su ventana de vigencia de esas dos columnas
   seguirá midiendo, en esa parte, el reloj de la máquina y no el corpus**, y
   quien la mida con este arnés tiene que descontarlo en vez de atribuir a la
-  palanca un efecto que es del arnés. La consecuencia no es hipotética y ya
-  está medida —el dato es del propietario, publicado en la incidencia #574,
-  no una estimación de esta ficha—: sobre la rama de la palanca 2
-  (`58fa079e`), fechando solo `created_at` esa rama pierde **5 críticas**, y
-  fechando también `updated_at` pierde **0**. No se fecha aquí porque el
-  propietario lo dejó expresamente fuera en esa misma incidencia («no hay que
-  fecharlo para cumplir este encargo»); queda declarado como límite conocido,
-  con su procedencia al lado, en vez de callado.
+  palanca un efecto que es del arnés. La consecuencia no es hipotética y está
+  medida sobre el merge real de esta rama con la de la palanca 2 —el dato es del
+  propietario, publicado en la incidencia #574 el 08-09-2026 a las 13:12 y
+  precisado a las 13:25, no una estimación de esta ficha—: sobre `58fa079e` con
+  ADR-166 dentro la terna es `18/47; 57; 40/81; 9 críticas`, o sea que esa rama
+  **sigue perdiendo NUEVE omisiones críticas**, exactamente las mismas que sola
+  (`17/47; 57; 39/81; 9`); lo que ADR-166 le aporta es un acierto exacto y una
+  ocurrencia, que son `B04-CA-32`. Fechando además `created_at` de las
+  revisiones y los `updated_at`, esa rama pierde `0` (`16/47; 164; 73/81; 0`).
+  (La cifra de cinco omisiones críticas que esta ficha publicó en el árbol
+  `63822b0` era errónea: venía de una sonda del propietario que fechaba también
+  las revisiones, y él mismo la retractó en la incidencia #574; su comentario de
+  las 12:45 no vale como procedencia.) No se fecha aquí porque el propietario
+  lo dejó expresamente fuera en esa misma incidencia («no hay que fecharlo para
+  cumplir este encargo»); queda declarado como límite conocido, con su
+  procedencia al lado, en vez de callado.
 - **El producto no cambia**: ni una línea de `src/`. En producción
   `created_at` ya era la fecha real de registro; lo que se corrige es el dato
   con el que se alimentaba al motor en el laboratorio.
