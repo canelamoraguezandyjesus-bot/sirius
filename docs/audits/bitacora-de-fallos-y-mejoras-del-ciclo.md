@@ -2351,6 +2351,16 @@ ADR o su incidencia cuando se adopte.
     tanto, la regla operativa es: **volver a ejecutar `siguiente_adr.py` tras
     `git fetch` justo antes de abrir la PR**, y recordar que renumerar incluye
     el TÍTULO de la PR, porque el squash lo usa como mensaje de commit.
+
+    **Trampa del propio guion, encontrada el 08-09 por el hook de git**:
+    `scripts/siguiente_adr.py` **NO es una consulta, CREA el fichero** del ADR
+    con su plantilla. Usarlo para «ver qué número está libre» deja un ADR
+    huérfano sin trackear que ocupa ese número en tu árbol local —y que otras
+    sesiones no ven, porque no está en ninguna rama—, así que te hace saltar
+    números sin motivo mientras no avisa a nadie más. Lo delató el hook de
+    ficheros sin trackear, no yo. **Regla**: si se ejecuta solo para consultar,
+    hay que borrar el fichero que crea; y el guardián de la deuda 18 debería
+    leer los números de las ramas remotas, no de ficheros sueltos del árbol.
 19. **Nada comprueba lo que un ADR afirma SOBRE otro documento.**
     `tests/automation/test_citas_de_los_adr.py` valida que las RUTAS citadas
     existan, y `test_registro_de_decisiones.py` vigila la numeración, pero
