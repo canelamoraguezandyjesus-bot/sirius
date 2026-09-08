@@ -2439,3 +2439,36 @@ ADR o su incidencia cuando se adopte.
   incluye el título), y la tensión declarada de que la coincidencia campo a
   campo de las 47 peticiones la cierra el propietario con Ollama real porque
   no está en CI.
+20. **El motor ordena instantes como TEXTO, y eso convierte cada formato nuevo
+    en una trampa.** `src/sirius/domain/staged_engine_contracts.py:263` declara
+    `created_at: str`, y la puerta G8
+    (`src/sirius/domain/staged_engine_gates.py:215`) decide con
+    `candidata.item.created_at > corte`: comparación **lexicográfica** entre
+    dos cadenas. En producción `created_at` viene de SQL crudo como
+    `'AAAA-MM-DD HH:MM:SS.ffffff'` —separador ESPACIO—, y el espacio (0x20)
+    ordena antes que la `T` (0x54), así que dos escrituras del mismo instante
+    admiten conjuntos distintos.
+
+    **Tres rondas de #570 y cuatro hallazgos son la misma familia**:
+    CLAUDE-R1-001 (el corte viajaba sin canonizar), CLAUDE-R2-001 (la
+    canonización elegida se justificó sobre la premisa falsa de que ningún caso
+    del banco declara corte, cuando lo declaran dos), CODEX-002 (el día del
+    corte se tomaba tras convertir a UTC y se movía al día anterior) y
+    CODEX-001 (el objetivo salía con `+00:00`, incomparable con la `Z`).
+    `CLAUDE.md` manda parar a la SEGUNDA aparición de una familia.
+
+    **La raíz está fuera del alcance del encargo**, y por eso esto es decisión
+    del propietario: #570 prohíbe expresamente tocar `staged_engine_gates.py`,
+    `staged_engine_port.py` y el formato con que se persiste `created_at`. Se
+    está parcheando el EMISOR porque no se puede arreglar el COMPARADOR, y ese
+    camino no tiene final: cada formato admisible que el modelo devuelva es una
+    trampa nueva. Nótese que P1 es justamente lo que hace ese camino de G8
+    alcanzable por primera vez —hasta ADR-164 producción nunca emitía corte—,
+    así que la deuda no la crea P1: la destapa.
+
+    Candidatos, para decisión del propietario: (a) que el contrato lleve
+    `datetime` y G8 compare instantes, con la migración que eso exija; (b) que
+    el contrato siga en `str` pero con una forma canónica única garantizada en
+    el borde, y un guardián que la fije; (c) dejarlo y aceptar que cada emisor
+    nuevo pague su ronda. La canonización del emisor que #570 está haciendo
+    hace falta en cualquiera de los tres casos, así que no es trabajo perdido.
