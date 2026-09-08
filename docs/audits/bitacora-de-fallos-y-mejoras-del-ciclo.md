@@ -1905,6 +1905,73 @@ ADR o su incidencia cuando se adopte.
   paradas fue un fallo: las cuatro veces el motor se negó a inventarse un
   permiso que no tenía.
 
+### 47. La cuota de Codex volvió en 52 minutos, y las dos rondas siguientes se dieron la vuelta: cada revisor aprobó lo que el otro no (07/08-09-2026, 22:55-00:45 UTC)
+
+- **El bloqueo duró 52 minutos, no la noche (22:55:19 → 23:47:50).** El tope de
+  uso de Codex dejó #546 en `sirius:failed-safely` con la PR verde y al día.
+  Decidí reintentar espaciado en vez de insistir, y el primer reintento —una
+  nota de operación en la incidencia explicando la política, y `continua` a
+  secas a las 23:47— pilló la cuota ya recuperada: Codex arrancó la revisión de
+  `c2db289` a las 23:47:50. **Dato para la deuda 16**: la ventana del tope fue
+  de unos 52 minutos, no de las doce horas que costó la vez del 06-09. Un
+  reintento por hora basta; machacar no.
+- **Ronda 16 (00:00:14): Codex APROBÓ y Claude dejó un P3 — la QUINTA aparición
+  de la familia del doble.** `CLAUDE-R16-001` señala que seis pruebas de
+  recorrido construían el espejo con `paradas_publicadas=()` mientras su
+  historial traía acreditados con `orden_del_veredicto`, forma que
+  `proyectar_work_item` no puede emitir: el diagnóstico de un acreditado sale
+  del MISMO comentario que `_STOP_MARKER_RE` reconoce como veredicto de parada.
+  Y el efecto no era cosmético: con la lista vacía,
+  `_paradas_que_el_recorrido_debe_recrear` devuelve siempre `[]`, así que **la
+  rama del saldo de veredictos por recrear —el trabajo entero de las rondas 10
+  y 11— no se ejercitaba ni una vez**. Estaba verde por no llegar a ejecutarse.
+  La mutación que lo prueba: sustituir esa función por `return []` dejaba las
+  seis en verde.
+- **Esta vez la familia se cerró por el invariante, no por la llamada.** Con
+  cinco apariciones a cuestas (R5-002, R7-003, R11-002, R12-002, R16-001) y con
+  el fallo de método de la tarde reciente, la comprobación de esta ronda no fue
+  «¿sale verde?» sino «¿arregla un sitio o seis?». El arreglo (`5e30caa`) pone
+  una **guarda en `_espejo`** que rechaza todo espejo con un
+  `orden_del_veredicto` cuyo `orden` no esté en `paradas_publicadas` —no se
+  puede olvidar en la siguiente llamada, revienta— y añade la misma afirmación
+  **sobre la proyección REAL** en la prueba de acoplamiento. Mutación vista
+  caer: con la guarda puesta y antes de fechar los veredictos, `5 failed, 58
+  passed`. Ni una línea de `src/`, ni una aserción existente relajada.
+- **Lo que ese arreglo NO cierra, y queda como deuda 17.** La guarda cierra
+  *esta forma*; la raíz de la familia es que estos espejos **se construyen a
+  mano** en vez de derivarse de `mirror_projection.proyectar_work_item`.
+  Mientras el doble se escriba a mano, cada forma nueva necesita su guarda
+  nueva, que es la misma tarea un piso más arriba. Cerrarlo de verdad es
+  fabricar el espejo de las pruebas de recorrido pasando un historial sintético
+  por la proyección real —cambio grande, fuera del alcance de un P3— y por eso
+  se registra en vez de colarse.
+- **Ronda 18 (00:33:20): la vuelta exacta — Claude APROBÓ y Codex encontró un
+  P3.** Y era bueno: la comprobación de la ronda 16 en ADR-147 decía que el
+  refuerzo iba «sin cambiar ninguna de sus aserciones», y el diff
+  `c2db289..5e30caa` **sí añade aserciones nuevas**. Lo cierto es que ninguna
+  aserción anterior se relajó ni se reescribió, pero añadidas hay varias: la
+  frase, tal cual estaba, era una afirmación factual falsa dentro de un ADR.
+  Corregido en `b532e3a` (solo redacción), Quality verde a las 00:43:26.
+- **Las dos rondas juntas dicen algo del modo dual que conviene tener escrito**:
+  cada revisor aprobó el head que el otro rechazó (Codex aprobó `c2db289`,
+  Claude aprobó `1705bd0a`), así que la convergencia no exige que los dos
+  aprueben, sino que los dos aprueben **el MISMO head**. Con hallazgos P3 de una
+  línea eso puede alternar varias vueltas sin que ninguna de las dos partes se
+  equivoque.
+- **Deuda 7, primera medición seria y sin reproducción.** El test inestable de
+  Qt (`test_streaming_message_grows_without_overlapping_neighbours`) se ejecutó
+  **25/25 en verde en aislamiento**, **10/10 en verde la suite `tests/gui`
+  entera** y **10/10 en verde la cadena completa** (~8 min por pasada). Diez
+  pasadas limpias de la suite entera son ya un dato: la inestabilidad es rara,
+  no habitual, y el encargo tendrá que decir eso con estas cifras en vez de
+  inventarse una tasa. Hipótesis viva, sin confirmar: el fallo observado
+  (`assert 32 >= 54`) compara la altura final de la fila contra
+  `mid_stream_height`, que se lee justo tras `rendered_plain_text() ==
+  "parcial"` y sin esperar a que el layout se asiente, así que puede capturar
+  una altura que todavía es del marcador previo. El texto final («parcial
+  completo») es MÁS largo que el intermedio («parcial»), o sea que encoger no
+  es un efecto de métrica de texto.
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
@@ -2055,3 +2122,14 @@ ADR o su incidencia cuando se adopte.
     ajustes del repositorio, reversible y sin tocar una línea. Lo que la
     decisión tiene que resolver no es cómo, sino **cuándo** se permite: a
     mano y siempre, o automáticamente ante un `codex-fallo-declarado`.
+17. El doble de las pruebas de recorrido (`_espejo` de
+    `tests/engine/test_reflect.py`) **se construye a mano** en vez de derivarse
+    de `mirror_projection.proyectar_work_item`. Es la raíz de la familia que
+    ADR-147 ya registra cinco veces (CLAUDE-R5-002, R7-003, R11-002, R12-002,
+    R16-001): cada vez que el doble estrena una forma que producción no emite,
+    la revisión lo encuentra y se cierra con una guarda para ESA forma. La
+    ronda 16 (08-09, entrada 47) puso la guarda que faltaba y ató el invariante
+    a la proyección real, pero mientras el espejo se escriba a mano cada forma
+    nueva necesitará la suya. Cerrarlo de verdad es fabricar el espejo pasando
+    un historial sintético por la proyección real; es un cambio grande y va en
+    ficha propia, después de #546.
