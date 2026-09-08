@@ -70,16 +70,57 @@ Dos funciones, deliberadamente separadas:
 5. **Idempotente por construcción.** Si el ``WorkItem`` ya está exactamente
    en el objetivo, el camino calculado está vacío: una segunda pasada sobre
    el mismo espejo no añade ningún suceso.
+6. **Recorrer lo acreditado, cuando la foto sola no basta** (ADR-147,
+   incidencia #545). Las cinco reglas de arriba comparan DOS FOTOS: el estado
+   guardado y lo que las etiquetas vigentes proyectan. Si entre esas dos
+   fotos pasó una recuperación entera sin que ninguna pasada la observara -el
+   caso real de WI-20260905-034826 / incidencia #537: parada a las 05:17,
+   segunda reanudación a las 05:29, dos vueltas de Quality y revisión, y
+   ``completed`` a las 07:00-, no hay salto legal entre las dos fotos y la
+   regla 3 declara divergencia, para siempre. Cuando -y solo cuando- eso
+   pasa, se intenta el **recorrido acreditado**: si el historial DE CONFIANZA
+   de la incidencia (``espejo.historial_estados``, los marcadores
+   ``sirius-notification`` que el bot publica al aplicarse cada etiqueta)
+   acredita una secuencia de estados que conecta el estado guardado con la
+   foto, se recorre entera, tramo a tramo, anotando cada transición
+   intermedia como suceso propio del diario. No hay ninguna arista nueva: lo
+   que se legaliza es RECORRER saltos ya legales -cada tramo lo calculan
+   estas mismas cinco reglas, y el ``WorkItem`` intermedio avanza llamando a
+   los métodos del dominio, que son los que dicen qué es legal-.
+
+   Y dentro del recorrido, **la salida de una parada la acredita únicamente un
+   PERMISO ESCRITO DEL PROPIETARIO posterior a ESA parada, consumido en
+   orden**: la k-ésima salida de parada consume el primer permiso aún no
+   consumido que sea posterior a ella en el historial
+   (``espejo.permisos_reanudacion``, las dos formas de ADR-147: el marcador de
+   reanudación y la orden exacta ``continua``). Ni la foto vigente, ni la
+   posición de un aviso de estado, ni ninguna otra heurística acreditan una
+   salida de parada -esa es la familia de defecto que tumbó las tres rondas de
+   la incidencia #539-.
+
+   Y el ORDEN DE PUBLICACIÓN de los avisos no es el orden de aplicación: el
+   notificador no serializa entre etiquetas, así que un aviso retrasado se
+   salta -no mueve el recorrido ni lo tumba- y lo que se reconstruye es una
+   SUBSECUENCIA legal hasta la foto. Nunca se salta un aviso de parada ni el
+   tramo final contra la foto (CODEX-001, ronda 2, PR #546). Cada parada que el
+   recorrido recrea lleva SU diagnóstico, el que el historial le atribuye, no
+   el de la última parada de toda la incidencia (CODEX-003, misma ronda).
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 
 from sirius_engine.domain.dispatch import DispatchEpisode
-from sirius_engine.domain.mirror import MirroredWorkItem
+from sirius_engine.domain.errors import EngineError
+from sirius_engine.domain.mirror import (
+    EstadoAcreditado,
+    MirroredWorkItem,
+    ParadaPublicada,
+    PermisoDeReanudacion,
+)
 from sirius_engine.domain.work_item import WorkItem, WorkItemPhase, WorkItemState
 from sirius_engine.ports.store import WorkEngineStore
 
@@ -185,14 +226,26 @@ def _camino_de_fase(
     return tuple(pasos)
 
 
-def reflejar_desenlace(
-    work_item: WorkItem, espejo: MirroredWorkItem, episodio: DispatchEpisode
+def _reflejar_por_foto(
+    work_item: WorkItem,
+    espejo: MirroredWorkItem,
+    episodio: DispatchEpisode,
+    *,
+    reanudacion_acreditada: bool,
 ) -> ResultadoReflejo:
-    """Calcula el plan MÍNIMO que lleva ``work_item`` a lo que ``espejo`` proyecta.
+    """El cálculo de siempre: el plan MÍNIMO hacia UNA foto del espejo.
 
     Pura: no llama al almacén, a GitHub ni al disco. ``episodio`` solo aporta
     ``numero_incidencia`` para el ``resultado`` de una entrega -el motor no
     puede afirmar «entregado» sin decir a qué incidencia corresponde.
+
+    ``reanudacion_acreditada`` es lo único que este cálculo no decide por sí
+    mismo: qué autoriza a salir de una parada. Desde la foto actual es
+    ``espejo.reanudacion_publicada`` -el permiso escrito del propietario
+    vigente, regla 3-; dentro del recorrido acreditado (regla 6) es el permiso
+    concreto que ese tramo consume, y nunca lo autoriza la foto. El parámetro
+    existe para que esa diferencia se vea en la firma en vez de esconderse en
+    un espejo fabricado con el campo cambiado.
     """
     if espejo.etiquetas_contradictorias:
         contradictorias = ", ".join(sorted(espejo.etiquetas))
@@ -251,14 +304,14 @@ def reflejar_desenlace(
     if (
         work_item.estado is WorkItemState.FAILED_SAFELY
         and espejo.estado is not WorkItemState.FAILED_SAFELY
-        and espejo.reanudacion_publicada
+        and reanudacion_acreditada
     ):
         pasos_reanudacion = (PasoReflejo(kind=PASO_REACTIVADO),)
         estado_efectivo = WorkItemState.ACTIVE
     elif (
         work_item.estado is WorkItemState.NEEDS_DECISION
         and espejo.estado is not WorkItemState.NEEDS_DECISION
-        and espejo.reanudacion_publicada
+        and reanudacion_acreditada
     ):
         pasos_reanudacion = (
             PasoReflejo(kind=PASO_DECISION_RESUELTA, resultado={"continuar": True}),
@@ -339,6 +392,546 @@ def reflejar_desenlace(
     if camino is None:
         return ResultadoReflejo(pasos=(), divergencia=_divergencia_atras(work_item, espejo))
     return ResultadoReflejo(pasos=(*pasos_reanudacion, *camino))
+
+
+#: Los dos estados detenidos del dominio. Salir de cualquiera de ellos dentro
+#: del recorrido exige un permiso escrito del propietario; ningún otro estado
+#: exige nada más que el camino de fase.
+_PARADAS: frozenset[WorkItemState] = frozenset(
+    {WorkItemState.FAILED_SAFELY, WorkItemState.NEEDS_DECISION}
+)
+
+
+def reflejar_desenlace(
+    work_item: WorkItem, espejo: MirroredWorkItem, episodio: DispatchEpisode
+) -> ResultadoReflejo:
+    """El plan que lleva ``work_item`` hasta donde la incidencia está HOY.
+
+    Dos cálculos, en este orden y nunca al revés (regla 6):
+
+    1. El de siempre, contra la foto actual del espejo
+       (:func:`_reflejar_por_foto`). Si encuentra camino -o si no hay nada que
+       decir- eso es la respuesta: el recorrido no puede alargar ni cambiar un
+       plan mínimo que ya existe.
+    2. Solo si ese cálculo declaró divergencia, el **recorrido acreditado**:
+       si el historial de confianza acredita una secuencia de saltos ya
+       legales que conecta el estado guardado con la foto, y cada salida de
+       parada del camino tiene su propio permiso escrito, se recorre entera.
+       Si no, se devuelve la divergencia del punto 1 tal cual -mismo texto,
+       mismo fail-open, cero pasos.
+
+    Sigue siendo pura: no llama al almacén, a GitHub ni al disco.
+    """
+    por_foto = _reflejar_por_foto(
+        work_item, espejo, episodio, reanudacion_acreditada=espejo.reanudacion_publicada
+    )
+    if por_foto.divergencia is None:
+        return por_foto
+    recorrido = _recorrer_historial_acreditado(work_item, espejo, episodio)
+    return recorrido if recorrido is not None else por_foto
+
+
+def _coincide_con_el_estado_guardado(acreditado: EstadoAcreditado, work_item: WorkItem) -> bool:
+    """Si este marcador acredita el mismo ``(estado, fase)`` en que está el motor.
+
+    Un marcador de parada no trae fase (``sirius:failed-safely`` y
+    ``sirius:blocked-decision`` proyectan ``fase=None``), así que en esos la
+    coincidencia es solo de estado; en los demás tienen que coincidir los dos
+    ejes.
+    """
+    if acreditado.estado is not work_item.estado:
+        return False
+    return acreditado.fase is None or acreditado.fase is work_item.fase
+
+
+def _el_almacen_pudo_guardarla(acreditado: EstadoAcreditado, work_item: WorkItem) -> bool:
+    """Si esta ocurrencia se publicó a tiempo de ser la que el almacén guardó.
+
+    El almacén no pudo guardar un marcador publicado DESPUÉS de su última
+    escritura (``work_item.updated_at``). Una ocurrencia sin instante viene del
+    CUERPO de la incidencia, anterior por construcción a todo comentario, y por
+    eso nunca se descarta.
+
+    Es una función y no una condición dentro de la comprensión porque el
+    instante es opcional y hay que estrecharlo antes de compararlo: en la
+    comprensión el estrechamiento no llegaba a la comparación -``mypy``:
+    ``Unsupported operand types for >= ("datetime" and "None")``- y el árbol
+    quedaba con un error de tipos que, en el árbol de entonces (el head
+    ``923202f``, anterior a la actualización de esta rama con ``main``),
+    ``scripts/check.ps1`` NO propagaba a su código de salida. Hoy sí lo
+    propaga: ADR-153 le añadió ``if ($LASTEXITCODE -ne 0) { exit
+    $LASTEXITCODE }`` tras cada comando nativo, así que un error de tipos ya
+    deja el guion en rojo. El motivo de que el estrechamiento viva en una
+    función con nombre no cambia por eso: es ``mypy``, no el guion.
+    """
+    publicado_en = acreditado.publicado_en
+    return publicado_en is None or publicado_en <= work_item.updated_at
+
+
+def _ancla_del_recorrido(
+    work_item: WorkItem,
+    historial: Sequence[EstadoAcreditado],
+    paradas: Sequence[ParadaPublicada] = (),
+) -> int | None:
+    """La OCURRENCIA del historial acreditado que el almacén guardó.
+
+    ``None`` -y entonces no hay recorrido- cuando el historial no menciona el
+    estado guardado: recorrerlo sería empezar por un punto que nadie acreditó.
+
+    Cuando el mismo ``(estado, fase)`` aparece varias veces -lo normal en un
+    ciclo con dos vueltas de reparación- la posición no dice cuál de ellas es.
+    Quedarse siempre con la última no lo demuestra: si el motor se quedó en la
+    PRIMERA parada, el recorrido se saltaría entero el tramo intermedio -la
+    primera recuperación y la segunda parada- y el diario registraría un salto
+    en vez de las transiciones reales (CODEX-002, ronda 2, PR #546). Así que se
+    correlaciona con la evidencia que hay, y en este orden:
+
+    1. **Tiempo.** El almacén no pudo guardar una ocurrencia publicada DESPUÉS
+       de su última escritura (``work_item.updated_at``): esas quedan
+       descartadas. Una ocurrencia sin instante viene del cuerpo de la
+       incidencia, anterior por construcción a todo comentario, y no se
+       descarta. Si el descarte se las lleva TODAS, el almacén es más antiguo
+       que el historial entero y no informa de nada: el recorrido empieza en la
+       primera.
+    2. **Compatibilidad del diagnóstico.** Si el almacén guarda un diagnóstico
+       de parada, una ocurrencia que lleva OTRO diagnóstico distinto no puede
+       ser la que el almacén guardó: lo dice su propio texto. Esas quedan
+       descartadas, y si el descarte se las lleva todas no hay ancla -el
+       recorrido se abandona en vez de anclar en una parada que el diagnóstico
+       guardado contradice-. Una ocurrencia SIN diagnóstico no contradice
+       nada y se conserva: el respaldo sigue existiendo cuando no hay
+       diagnóstico que discrimine (CODEX-002, ronda 3, PR #546; en los
+       historiales anteriores a ADR-157 el notificador deduplicaba por estado
+       y head, así que una segunda parada sobre el mismo head podía no dejar
+       marcador propio).
+    3. **Identidad del suceso.** Si exactamente una de las ocurrencias que
+       quedan lleva ESE diagnóstico, esa es: no es una preferencia, es el
+       mismo texto escrito dos veces.
+    4. Y solo si ninguna de las tres discrimina, la más reciente de las que la
+       evidencia no descartó, **salvo que quede una parada sin acreditar
+       detrás**: si el motor está PARADO y el historial de confianza trae un
+       veredicto de parada publicado DESPUÉS de la cota de esa ocurrencia y no
+       posterior a ``work_item.updated_at`` -es decir, una parada que el
+       almacén pudo guardar y que ningún aviso acredita, porque en los
+       historiales anteriores a ADR-157 ``sirius_comment_once`` deduplicaba el
+       marcador por ``(etiqueta, head)``-,
+       la evidencia no dice en cuál de las dos se quedó el motor y el recorrido
+       se abandona (``None``). Anclar en la anterior fijaría una cota que deja
+       pasar el permiso escrito para la parada ANTERIOR y acreditaría una
+       salida que nadie autorizó (CLAUDE-R7-001 y CLAUDE-R7-002, ronda 7, PR
+       #546). La ocurrencia identificada por su DIAGNÓSTICO (punto 3) no
+       necesita esta abstención: ahí el suceso está identificado por su propio
+       texto, no por la posición.
+    """
+    candidatos = [
+        indice
+        for indice, acreditado in enumerate(historial)
+        if _coincide_con_el_estado_guardado(acreditado, work_item)
+    ]
+    if not candidatos:
+        return None
+    anteriores = [
+        indice for indice in candidatos if _el_almacen_pudo_guardarla(historial[indice], work_item)
+    ]
+    base = anteriores or candidatos
+    if work_item.diagnostico is not None:
+        base = [
+            indice
+            for indice in base
+            if historial[indice].diagnostico in (None, work_item.diagnostico)
+        ]
+        if not base:
+            return None
+        por_identidad = [
+            indice for indice in base if historial[indice].diagnostico == work_item.diagnostico
+        ]
+        if len(por_identidad) == 1:
+            return por_identidad[0]
+    eleccion = base[-1] if anteriores else base[0]
+    if work_item.estado in _PARADAS and _hay_una_parada_posterior_sin_aviso(
+        historial[eleccion], paradas, work_item
+    ):
+        return None
+    return eleccion
+
+
+def _hay_una_parada_posterior_sin_aviso(
+    acreditado: EstadoAcreditado, paradas: Sequence[ParadaPublicada], work_item: WorkItem
+) -> bool:
+    """Si detrás de esta ocurrencia hay otra parada que el almacén pudo guardar.
+
+    Lo que mira es el VEREDICTO, no el aviso: la lista de
+    :class:`ParadaPublicada` son los veredictos de parada -que publica siempre
+    quien para- y esta función no consulta ``historial_estados`` en ningún
+    momento. Así que se abstiene ante CUALQUIER veredicto de parada posterior
+    a la cota de esta ocurrencia y publicado a tiempo de que el almacén lo
+    guardara, haya dejado esa parada su propio aviso o no. El nombre viene del
+    caso que la motivó, no del alcance que tiene.
+
+    El caso que la motivó son los historiales publicados ANTES de ADR-157
+    (07-09-2026), en los que ``sirius_comment_once`` deduplicaba el marcador
+    por ``(etiqueta, head)`` y la segunda parada sobre el mismo head no dejaba
+    aviso propio: mientras ese veredicto exista, la posición no dice en cuál de
+    las dos se quedó el motor. Desde ADR-157 el marcador lleva el run del
+    evento y cada parada cuyo evento llega a ejecutarse deja el suyo (con el
+    hueco que la cola del notificador puede seguir dejando: CODEX-001, ronda
+    14, PR #546), pero esta función NO lo aprovecha:
+    sobre un historial posterior sigue abandonando el recorrido en cuanto hay
+    un veredicto de parada detrás de la cota **y publicado a tiempo de que el
+    almacén lo guardara**, aunque su aviso esté escrito y aunque cada parada
+    traiga su ``continua``. El efecto observable está en un ancla que no
+    discrimina por identidad -un ``sirius:blocked-decision``, que llega sin
+    diagnóstico porque ``escalate`` no escribe ninguno-: una recuperación
+    autorizada por escrito se declara como divergencia
+    (``test_la_abstencion_tambien_alcanza_a_la_parada_posterior_con_aviso_propio``,
+    CLAUDE-R9-001, ronda 9, PR #546). Es una limitación viva, y conservadora:
+    no acredita ninguna salida que nadie autorizase, solo deja de acreditar
+    una que sí lo estaba.
+
+    Y su ALCANCE es solo ese: el veredicto que el almacén PUDO guardar
+    (``publicado_en <= work_item.updated_at``), que es el caso en que la
+    evidencia no dice en cuál de las dos paradas se quedó el motor. El
+    veredicto POSTERIOR a la última escritura del almacén -el caso normal, el
+    del tramo que el recorrido reproduce- no abstiene nada: ahí el recorrido
+    recrea la parada y le exige su permiso escrito, como fija
+    ``test_una_parada_posterior_a_la_ultima_escritura_no_abstiene_el_ancla``
+    (CLAUDE-R12-001, ronda 12, PR #546). Quien cubre ese tramo es
+    :func:`_paradas_que_el_recorrido_debe_recrear`, que no filtra por tiempo.
+
+    La referencia es la COTA (:func:`_orden_de_la_parada`), no la posición del
+    aviso: el veredicto que causó esta misma parada nunca cuenta como parada
+    posterior, esté su aviso donde esté.
+    """
+    cota = _orden_de_la_parada(acreditado)
+    return any(
+        parada.orden > cota
+        and (parada.publicado_en is None or parada.publicado_en <= work_item.updated_at)
+        for parada in paradas
+    )
+
+
+def _paradas_que_el_recorrido_debe_recrear(
+    ancla: EstadoAcreditado, paradas: Sequence[ParadaPublicada]
+) -> list[ParadaPublicada]:
+    """Los veredictos de parada que el recorrido tiene que atravesar recreándolos.
+
+    Hermana de :func:`_hay_una_parada_posterior_sin_aviso`, para el caso que
+    aquella no cubre: allí se pregunta por el ANCLA -y solo cuando el motor
+    está parado, que es cuando la posición del ancla no identifica el suceso-;
+    aquí se pregunta por el RECORRIDO entero, con el motor donde esté.
+
+    El bucle de tramos solo exige permiso cuando el ``WorkItem`` simulado ENTRA
+    en una parada, y solo entra si esa parada dejó su aviso en
+    ``historial_estados``. Un veredicto de parada publicado SIN aviso propio
+    -en los historiales anteriores a ADR-157 ``sirius_comment_once``
+    deduplicaba el marcador por ``(etiqueta, head)``, y también falta si el
+    workflow del notificador falló- se atravesaba sin recrear la parada y sin
+    consumir ningún permiso, aunque el motor estuviera anclado ANTES de ella
+    (CLAUDE-R10-001, ronda 10, PR #546).
+
+    Lo que se devuelve es la lista de veredictos posteriores a la cota del
+    ancla (:func:`_orden_de_la_parada`), y esa cota es la ÚNICA que delimita el
+    tramo: el historial de confianza termina en la foto, así que todo veredicto
+    por detrás del ancla cae dentro de lo que el recorrido reproduce. El bucle
+    va saldando uno por cada parada que recrea, en orden; si al terminar queda
+    alguno sin saldar, el recorrido se abandona. La abstención es la salida
+    correcta y suficiente: no se inventa ningún tramo de parada ni se relaja
+    :func:`_consumir_permiso`, y un veredicto que SÍ tiene su tramo se sigue
+    comportando exactamente igual que antes -consumiendo su permiso-.
+
+    Lo que NO se filtra aquí, y la ronda 10 filtraba, es el instante de
+    publicación contra ``work_item.updated_at``. Ese predicado es el de
+    :func:`_el_almacen_pudo_guardarla` y responde a la pregunta del ANCLA
+    -«¿en cuál de las ocurrencias se quedó el almacén?»-, donde es correcto.
+    Aquí la pregunta es otra -«¿qué veredictos caen en el tramo que el
+    recorrido reproduce?»- y el tramo es, por definición, lo POSTERIOR a la
+    última escritura del almacén: todo veredicto suyo tiene
+    ``publicado_en > updated_at`` y el filtro dejaba la lista siempre vacía,
+    devolviendo intacto el fallo de CLAUDE-R10-001. Un veredicto publicado
+    después de la última escritura del almacén es precisamente el que el
+    almacén NO vio y el que el recorrido tiene que recrear (CLAUDE-R11-001,
+    ronda 11, PR #546;
+    ``test_una_parada_fechada_que_ningun_tramo_recrea_abandona_el_recorrido``).
+    """
+    cota = _orden_de_la_parada(ancla)
+    return [parada for parada in paradas if parada.orden > cota]
+
+
+def _orden_de_la_parada(acreditado: EstadoAcreditado) -> int:
+    """La posición de la PARADA REAL, no la del aviso que la anunció.
+
+    El permiso que acredita salir de una parada tiene que ser posterior a la
+    parada, y hasta la ronda 5 «la parada» era la posición de su marcador
+    ``sirius-notification``. Pero ese marcador lo publica
+    ``notify-sirius-state.yml``, cuyo grupo de concurrencia lleva el nombre de
+    la etiqueta: los avisos de etiquetas DISTINTAS no se serializan entre sí,
+    así que el aviso de una parada puede publicarse DESPUÉS del ``continua``
+    que la levantó. Con la secuencia ``[veredicto de parada, continua, aviso de
+    la parada]`` no quedaba ningún permiso posterior al aviso y el recorrido
+    entero se abandonaba: una recuperación autorizada por escrito quedaba como
+    divergencia declarada para siempre (CLAUDE-R4-001, ronda 4, PR #546).
+
+    Lo que sí identifica el suceso es el comentario del VEREDICTO que causó la
+    parada (``orden_del_veredicto``): es síncrono, lo publica el propio rol, y
+    ``sirius_apply_verdict.sh`` lo escribe SIEMPRE antes de aplicar la etiqueta.
+    Cuando la proyección pudo atribuirlo, es él quien fija la posición de la
+    parada; si no hay ninguno atribuible, se vuelve a la del aviso, que es lo
+    único que hay.
+
+    Lo que NO cambia: el permiso sigue teniendo que ser ESTRICTAMENTE
+    posterior a la parada, y un permiso anterior no la levanta
+    (``test_un_permiso_anterior_a_la_parada_no_la_levanta``). Esto no relaja el
+    criterio de ADR-147: mueve la referencia del aviso al suceso.
+
+    La cota nunca se adelanta a la parada REAL. La proyección se ABSTIENE de
+    atribuir cuando hay más de un veredicto de parada pendiente publicado antes
+    del marcador y no quedan marcadores detrás que absorban al otro
+    (``_atribuir_diagnosticos``, CLAUDE-R6-002): en esa situación devolvemos la
+    posición del aviso, que es posterior a todos ellos y por tanto segura. Sin
+    esa abstención, el marcador de una serie NUEVA heredaba el veredicto de una
+    parada anterior y su cota acreditaba la salida con un permiso escrito ANTES
+    de la parada real (CLAUDE-R6-001, ronda 6, PR #546).
+
+    **Alcance: solo ``failed-safely``.** ``orden_del_veredicto`` únicamente lo
+    rellena ``_atribuir_diagnosticos`` para los acreditados ``FAILED_SAFELY``,
+    porque la identidad del suceso que se transporta es su DIAGNÓSTICO y
+    ``sirius:blocked-decision`` no publica ninguno. Un marcador
+    ``blocked-decision`` llega siempre con ``orden_del_veredicto is None`` y se
+    correlaciona por la posición de su AVISO, así que una recuperación
+    autorizada por escrito tras un ``blocked-decision`` con aviso retrasado se
+    sigue declarando como divergencia (CLAUDE-R6-003, ronda 6, PR #546).
+
+    Eso NO lo hacía conservador por sí solo, y la ronda 6 lo escribió mal aquí:
+    con dos ``blocked-decision`` sobre el mismo head, la cota del aviso de la
+    PRIMERA dejaba pasar su propio ``continua`` para resolver la SEGUNDA, cuyo
+    aviso deduplicó ``sirius_comment_once`` -así ocurrió en los historiales
+    publicados antes de ADR-157 (07-09-2026), que desde entonces da su propio
+    aviso a cada parada cuyo evento de etiqueta llega a ejecutarse-. Quien
+    cierra ese flanco, para aquellos historiales, es
+    :func:`_hay_una_parada_posterior_sin_aviso`, abandonando el recorrido
+    (CLAUDE-R7-001 y CLAUDE-R7-002, ronda 7, PR #546; ADR-147).
+    """
+    if acreditado.orden_del_veredicto is None:
+        return acreditado.orden
+    return acreditado.orden_del_veredicto
+
+
+def _consumir_permiso(
+    permisos: Sequence[PermisoDeReanudacion], desde: int, posterior_a: int
+) -> int | None:
+    """El permiso que acredita UNA salida de parada, consumido en orden.
+
+    Devuelve la posición desde la que seguirá buscando la salida SIGUIENTE
+    -es decir, el permiso consumido queda detrás- o ``None`` si no queda
+    ninguno posterior a ``posterior_a``, y entonces esa salida no está
+    acreditada y el recorrido entero se abandona.
+
+    Esta función **no recibe la foto ni el tramo**. No es que no los mire: es
+    que no los tiene. La familia de defecto que tumbó las tres rondas de la
+    incidencia #539 -acreditar una salida de parada con la etiqueta vigente,
+    por una puerta o por otra- deja así de ser expresable (ADR-147, pregunta 4
+    de la nota de arranque).
+
+    Que el puntero solo avance es la otra mitad: un permiso no puede acreditar
+    dos salidas, porque una vez consumido ya no está en la lista para nadie.
+    Y un permiso es UNA autorización, no cada rastro que deja: desde la ronda 6
+    la proyección colapsa el recibo de `sirius_resume_on_command.sh` con la
+    orden `continua` que lo provocó (CLAUDE-R5-003, decisión del propietario
+    del 07-09-2026 en ADR-147), así que esta frase es verdad también para el
+    propietario que escribió una sola palabra.
+    Un permiso ANTERIOR a la parada tampoco vale, y al saltárselo queda
+    descartado para siempre -las paradas siguientes son todavía más tardías-.
+    """
+    for indice in range(desde, len(permisos)):
+        if permisos[indice].orden > posterior_a:
+            return indice + 1
+    return None
+
+
+def _recorrer_historial_acreditado(
+    work_item: WorkItem, espejo: MirroredWorkItem, episodio: DispatchEpisode
+) -> ResultadoReflejo | None:
+    """El plan que recorre, tramo a tramo, lo que el historial de confianza acredita.
+
+    ``None`` cuando no hay recorrido posible -y entonces el llamador conserva
+    la divergencia de siempre-. Es TODO O NADA: o el recorrido llega hasta la
+    foto, o no se devuelve nada; nunca el trozo bueno. Aplicar media
+    recuperación dejaría el diario en un punto que nadie acreditó.
+
+    Cada tramo se calcula con la MISMA :func:`_reflejar_por_foto` que la foto
+    actual, sobre un espejo derivado del real al que se le cambian
+    ``estado``/``fase``/``etiquetas`` por los del estado acreditado y el
+    diagnóstico de fallo por el de ESA parada: el resto -el SHA de fusión-
+    sigue siendo el del espejo real, porque es el único que hay. El último
+    tramo va contra el espejo REAL, no contra un derivado: es el que trae el
+    SHA de fusión de la entrega, el diagnóstico de la foto vigente y el que
+    garantiza que el recorrido termina exactamente en la foto, no cerca.
+
+    Un aviso que no encaje donde está publicado **no tumba el recorrido: no lo
+    mueve**. Solo SEIS de las trece etiquetas se notifican y el notificador no
+    serializa entre etiquetas -su grupo de concurrencia lleva el nombre de la
+    etiqueta (`notify-sirius-state.yml`)-, así que el orden de publicación de
+    los avisos no acredita el orden real de aplicación (ADR-147, nota de
+    arranque, pregunta 2). Tratar ese orden como autoritativo hacía que un solo
+    aviso retrasado envenenara el recorrido para siempre (CODEX-001, ronda 2,
+    PR #546). Lo que se reconstruye es una SUBSECUENCIA legal hasta la foto.
+
+    Con dos excepciones que no se saltan nunca, porque saltarlas sí cambiaría
+    lo que el recorrido afirma: un aviso de PARADA -saltárselo sería pasar por
+    encima de una parada real sin exigir su permiso- y el tramo final contra la
+    foto -el recorrido tiene que TERMINAR en ella-. Y una salida de parada sin
+    permiso no es un aviso a destiempo: abandona el recorrido entero, como
+    siempre.
+
+    Entre tramo y tramo el ``WorkItem`` avanza llamando a los métodos REALES
+    del dominio (:func:`_avanzar`), no a una tabla paralela de estados: si un
+    tramo no fuera una transición legal, es la máquina de estados de
+    :mod:`sirius_engine.domain.work_item` la que lo dice, y el recorrido se
+    abandona. Este módulo no añade ninguna arista.
+
+    Y cada vez que un tramo tiene que SALIR de una parada, se le exige su
+    propio permiso escrito del propietario, posterior a esa parada concreta y
+    aún no consumido (:func:`_consumir_permiso`). ``orden_de_la_parada`` es la
+    posición, en el historial de confianza, del marcador que dejó al motor
+    parado: la del ancla mientras el motor sigue en la parada con la que
+    empezó, y la del propio tramo cuando el recorrido entra en una parada
+    nueva.
+    """
+    if espejo.etiquetas_contradictorias or espejo.estado is None:
+        # Una incidencia con etiquetas de estado contradictorias se sigue
+        # tratando como hoy -declarar y no tocar nada-, y sin foto no hay
+        # destino al que recorrer.
+        return None
+    ancla = _ancla_del_recorrido(work_item, espejo.historial_estados, espejo.paradas_publicadas)
+    if ancla is None:
+        return None
+    objetivos = espejo.historial_estados[ancla + 1 :]
+    if not objetivos:
+        return None
+
+    pasos: list[PasoReflejo] = []
+    simulado = work_item
+    permiso_siguiente = 0
+    orden_de_la_parada = _orden_de_la_parada(espejo.historial_estados[ancla])
+    paradas_por_recrear = _paradas_que_el_recorrido_debe_recrear(
+        espejo.historial_estados[ancla], espejo.paradas_publicadas
+    )
+    #: Los tramos: cada estado acreditado que queda por recorrer y, al final,
+    #: el espejo REAL. El último no lleva estado acreditado porque la foto no
+    #: está en el historial -y no hace falta: después de él no queda ninguna
+    #: parada de la que salir.
+    tramos: list[tuple[MirroredWorkItem, EstadoAcreditado | None]] = [
+        (
+            replace(
+                espejo,
+                estado=acreditado.estado,
+                fase=acreditado.fase,
+                etiquetas=(acreditado.etiqueta,),
+                diagnostico_fallo=acreditado.diagnostico,
+            ),
+            acreditado,
+        )
+        for acreditado in objetivos
+    ]
+    tramos.append((espejo, None))
+
+    for espejo_del_tramo, acreditado in tramos:
+        acreditada = False
+        permiso_tras_el_tramo = permiso_siguiente
+        if simulado.estado in _PARADAS and espejo_del_tramo.estado is not simulado.estado:
+            siguiente = _consumir_permiso(
+                espejo.permisos_reanudacion, permiso_siguiente, orden_de_la_parada
+            )
+            if siguiente is None:
+                return None
+            permiso_tras_el_tramo = siguiente
+            acreditada = True
+        tramo = _reflejar_por_foto(
+            simulado, espejo_del_tramo, episodio, reanudacion_acreditada=acreditada
+        )
+        avanzado = None if tramo.divergencia is not None else _avanzar(simulado, tramo.pasos)
+        if avanzado is None:
+            if acreditado is None or espejo_del_tramo.estado in _PARADAS:
+                return None
+            # Un aviso que no encaja aquí es un aviso publicado fuera del orden
+            # en que se aplicó: no mueve el recorrido y tampoco lo tumba. El
+            # permiso que este tramo hubiera consumido sigue sin consumir.
+            continue
+        permiso_siguiente = permiso_tras_el_tramo
+        # Un tramo que ENTRA en una parada la RECREA: el veredicto más antiguo
+        # de los que el recorrido debía recrear queda saldado. Se consumen en
+        # orden, como los permisos, porque la posición del aviso no identifica
+        # el suceso.
+        if (
+            paradas_por_recrear
+            and avanzado.estado in _PARADAS
+            and avanzado.estado is not simulado.estado
+        ):
+            paradas_por_recrear.pop(0)
+        simulado = avanzado
+        if simulado.estado in _PARADAS and acreditado is not None:
+            orden_de_la_parada = _orden_de_la_parada(acreditado)
+        pasos.extend(tramo.pasos)
+
+    if paradas_por_recrear:
+        # Queda un veredicto de parada que el almacén pudo guardar y que
+        # ningún tramo recreó: el recorrido habría pasado por encima de él sin
+        # exigir su permiso (CLAUDE-R10-001, ronda 10, PR #546).
+        return None
+    if not pasos:
+        return None
+    return ResultadoReflejo(pasos=tuple(pasos))
+
+
+#: Nombre del paso -> método del DOMINIO que lo ejecuta. Hermana de
+#: :data:`_APLICAR` (que apunta a los puertos del almacén) y deliberadamente
+#: separada: esta se usa para SIMULAR el recorrido antes de tocar nada, y la
+#: otra para aplicarlo. Que las dos existan es lo que permite comprobar la
+#: legalidad de un tramo sin escribir un solo suceso.
+_AVANZAR_DOMINIO: dict[str, str] = {
+    PASO_EJECUCION_INICIADA: "begin_execution",
+    PASO_COMPROBACION_INICIADA: "begin_check",
+    PASO_REVISION_INICIADA: "begin_review",
+    PASO_REVISION_APROBADA: "approve_review",
+    PASO_REPARACION_SOLICITADA: "request_repair",
+    PASO_REPARACION_REANUDADA: "resume_after_repair",
+    PASO_ESCALADO: "escalate",
+    PASO_REACTIVADO: "reactivate",
+}
+
+
+def _avanzar(work_item: WorkItem, pasos: Sequence[PasoReflejo]) -> WorkItem | None:
+    """Avanza una COPIA del ``WorkItem`` por ``pasos``, o ``None`` si alguno es ilegal.
+
+    No toca el almacén: son los métodos del dominio, que devuelven instancias
+    nuevas (``WorkItem`` es inmutable). El ``now`` que reciben es el
+    ``updated_at`` que el propio ``WorkItem`` ya trae, porque de esta
+    simulación solo se leen ``estado`` y ``fase``: la marca de tiempo real la
+    pone :func:`aplicar_pasos` cuando se aplica de verdad, y usar aquí un
+    ``datetime.now()`` rompería la pureza de :func:`reflejar_desenlace`.
+    """
+    simulado = work_item
+    for paso in pasos:
+        try:
+            if paso.kind == PASO_ENTREGADO:
+                assert paso.resultado is not None
+                simulado = simulado.deliver(resultado=paso.resultado, now=simulado.updated_at)
+            elif paso.kind == PASO_FALLO_SEGURO:
+                assert paso.diagnostico is not None
+                simulado = simulado.fail_safely(
+                    diagnostico=paso.diagnostico, now=simulado.updated_at
+                )
+            elif paso.kind == PASO_DECISION_RESUELTA:
+                assert paso.resultado is not None
+                simulado = simulado.resolve_decision(
+                    continuar=bool(paso.resultado["continuar"]), now=simulado.updated_at
+                )
+            else:
+                metodo = getattr(simulado, _AVANZAR_DOMINIO[paso.kind])
+                simulado = metodo(now=simulado.updated_at)
+        except EngineError:
+            return None
+    return simulado
 
 
 def _divergencia_atras(work_item: WorkItem, espejo: MirroredWorkItem) -> str:
