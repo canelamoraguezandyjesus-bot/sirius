@@ -2471,6 +2471,56 @@ ADR o su incidencia cuando se adopte.
   palanca 2**.
 - **Lo que NO prueba, y va escrito en el comentario**: que no exista una
   derivación mejor. Prueba que ésta, con el esquema de hoy, no paga.
+
+---
+
+### 56. H2 entrega la predicción dígito a dígito, y dejo H3 medido para que el propietario no decida a ciegas (08-09-2026, 14:10-15:00 UTC)
+
+- **PR #575 (ADR-166) cumple la predicción exacta que publiqué antes de que
+  implementara**: `--peticion` pasa de `16/47; 162; 73/81; 0` a **`17/47; 162;
+  74/81; 0`**, y el techo de `20/47; 144; 73/81; 0` a **`21/47; 144; 74/81;
+  0`**. Los cuatro números, los dos pares, dígito a dígito. Eligió
+  `ejes_p2.valid_from` como fuente y resolvió `MEM-005` —el único ítem sin
+  fecha— con el `ahora_declarado` del propio banco, razonado como la elección
+  conservadora frente a un corte, en vez de inventar una. Y comprobó el motivo
+  del descarte antes de tocar nada: `[('DECISION:12', 'G8', 'posterior al corte
+  de registro')]`, que era el caso de aceptación.
+- **Lo que eso valida no es solo el trabajo: es el método.** La predicción se
+  pudo publicar porque medí el encargo antes de lanzarlo (entrada 54). Un
+  encargo con la predicción medida delante convierte la revisión en una
+  comparación de números, no en una discusión.
+- **Anotado para antes de fusionar**: el título de la PR dice «la fecha de
+  registro que el corpus declara», y el corpus **no declara** fecha de
+  registro —es justo la premisa falsa que corregí—; declara `valid_from`, que
+  la implementación **elige** como fecha de registro y razona. Como el
+  repositorio fusiona por squash usando el título, esa frase quedaría en el
+  registro permanente. Se ajusta al fusionar (regla de la entrada 50).
+- **Y aproveché la espera para medir H3, que es decisión de producto del
+  propietario y hoy la tendría que tomar a ciegas.** Resulta estar muy acotado:
+  **solo dos ítems del canon son `CANDIDATA`** —`MEM-007` (autoridad INFORMAL)
+  y `MEM-020` (FUENTE_EXTERNA)— y **solo `MEM-020` lo espera un caso**.
+
+  | configuración (sobre el suelo con H2) | exactas | de más | hallados | críticas |
+  |---|---|---|---|---|
+  | lo candidato archivado, como hoy | 17/47 | 162 | 74/81 | 0 |
+  | lo candidato recuperable | 17/47 | **165** | **75/81** | 0 |
+
+  Caso a caso, cambian seis y el balance es nítido: **`B04-CA-29` pasa a
+  exacto** —recupera `MEM-020`, que es una de las siete ocurrencias que siguen
+  faltando tras H2— y **`B04-CA-10` deja de serlo**, porque ahí ese mismo
+  `MEM-020` es ruido. `MEM-007` aparece de más en cuatro casos. Las exactas no
+  se mueven: una gana, otra pierde.
+- **El argumento que inclina la decisión, y que sin medirlo no se ve**: las «de
+  más» las quita después el filtro —es literalmente el trabajo de la palanca
+  3—, pero **lo hallado no se puede recuperar más tarde, porque el filtro solo
+  resta**. O sea que H3 sube el **techo de cobertura** de `74/81` a `75/81`, y
+  eso es irreversible en el orden del plan; su coste, en cambio, cae en la
+  columna que otra palanca está para limpiar. Puesto así, la pregunta ya no es
+  «¿recuperamos lo no confirmado?» sino «¿aceptamos tres de más ahora para que
+  el techo de cobertura suba uno?».
+- **Lo que la medición NO es**: mi sonda trata lo candidato como memoria viva;
+  el producto lo trataría como **sugerencia marcada**, que es otra cosa y
+  podría presentarse distinto. Los números acotan la decisión; no la diseñan.
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
