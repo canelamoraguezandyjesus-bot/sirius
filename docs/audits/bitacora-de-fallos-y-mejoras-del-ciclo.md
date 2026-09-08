@@ -3151,6 +3151,18 @@ ADR o su incidencia cuando se adopte.
   ocurrencias más y —esto es lo notable— **las «de más» NO suben**: 162 y 144,
   iguales. Yo había dejado esa columna sin listón a propósito, temiendo que
   enumerar por ventana trajera ruido; no trajo ninguno.
+
+  > **CONDICIÓN QUE FALTABA EN ESTA ENTRADA, añadida a las 19:25 UTC tras la
+  > ronda 2 (ver entrada 74).** El titular de esta entrada —«entrega cuatro»—
+  > es cierto; lo que le falta es **bajo qué condición**. En el banco
+  > `created_at == valid_from` ítem a ítem, porque el cargador de ADR-166
+  > escribe ahí `ejes_p2.valid_from`; así que el predicado `created_at <=
+  > hasta` mide **vigencia en el banco y registro en producción**. Lo que estas
+  > cifras sostienen es que **la señal de ventana es el camino de entrada que
+  > faltaba y las cuatro entran por ella** —demostrado ítem a ítem—; lo que NO
+  > sostienen es que la vía recupere lo vigente sobre un `created_at` real.
+  > Escribí esta entrada sin esa condición al lado, que es el mismo defecto que
+  > la revisión señaló en el ADR.
 - **Dos afirmaciones de mi encargo que el árbol desmiente, y las dos las
   comprobé yo antes de darlas por buenas:**
   1. **«El intervalo llega en la `Peticion`» era FALSO.** En `main` (`6371d4c`)

@@ -20,6 +20,15 @@ criterio para abrir la puerta es mucho más estricto que D1 —`47/47`, `0` de
 más, `81/81`, `0` críticas, con Ollama de verdad— y ésa es la medición que
 manda.
 
+**Una condición más sobre esa cifra, descubierta en la ronda 2 de H1 y que
+también afecta a lo que puedas concluir de ella**: en el banco, el cargador
+escribe `ejes_p2.valid_from` dentro de `created_at`, así que las dos son la
+misma fecha ítem a ítem. Cualquier medición apoyada en `created_at` **parece
+medir vigencia y mide registro**, porque en producción `created_at` lo pone el
+reloj al proponer. No invalida ninguna cifra; invalida leerlas como prueba de
+que el motor entiende la vigencia. Está en la bitácora como deuda 27, y es de
+toda la línea, no de H1.
+
 **Las tres ocurrencias que faltan son las tres decisiones de abajo.** Ninguna
 es trabajo pendiente de nadie. Y esto **no** depende de qué medición se mire:
 el filtro solo puede quitar, nunca añadir, así que lo que falta en el techo
