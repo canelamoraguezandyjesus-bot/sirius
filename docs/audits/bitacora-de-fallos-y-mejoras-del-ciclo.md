@@ -2640,6 +2640,51 @@ ADR o su incidencia cuando se adopte.
   las he comprobado las cuatro en las últimas dos horas; **tres se sostenían y
   una no**. El coste de comprobarlas fue de minutos; el de heredarlas habría
   sido un encargo entero apuntando al sitio equivocado.
+
+---
+
+### 59. El revisor recogió lo que el implementador no leyó, y mi propia cifra estuvo a punto de entrar mal en un ADR permanente (08-09-2026, 12:58-13:10 UTC)
+
+- **Ronda 1 de #575: cuatro hallazgos, los dos revisores en CHANGES_REQUESTED**,
+  `pending=4`, `severity_total=5`. Revisión completa en **ocho minutos**, de
+  `12:58` a `13:06`.
+- **CLAUDE-REV-575-001 (media) es exactamente lo que yo había pedido por
+  comentario y el implementador no hizo**: ADR-166 no menciona `updated_at` ni
+  una vez, aunque la implementación lo deja como estaba. El revisor lo cita
+  literalmente y con procedencia. **Dato de método sobre el ciclo: un
+  comentario publicado DESPUÉS de que el implementador arranque no le llega a
+  él —llega al revisor.** Mi nota es de las 12:45 y el implementador ya estaba
+  trabajando desde las 12:24; la corrección del cuerpo, de las 12:38, sí llegó
+  (usó `valid_from` y resolvió `MEM-005` como pedía). O sea: **el cuerpo se lee
+  al arrancar; los comentarios posteriores los recoge la revisión.** Conviene
+  saberlo para elegir dónde escribir.
+- **Los otros tres son de precisión y están bien vistos**: el docstring dice
+  que recorre «los 97 ítems» cuando la propia prueba fija `== 95` —lo
+  encontraron **los dos revisores por separado**, CLAUDE-REV-575-002 y
+  CODEX-001—; y CLAUDE-REV-575-003 señala que el lado ESPERADO de la
+  comparación se calcula llamando a `_fecha_de_registro`, la misma función que
+  decide lo que se escribe: **la prueba compara la base con lo que la
+  implementación dice, no con lo que el corpus declara**, y trae la mutación
+  que hoy no se caza. Es el mismo defecto de circularidad que la deuda 21
+  persigue en el arnés, ahora dentro de una prueba.
+- **Y aquí lo mío.** El hallazgo 001 manda escribir en el ADR **mi cifra**:
+  «solo `created_at` → 5 críticas; ambos → 0». **Esa cifra está mal**, y la
+  publiqué yo el 08-09 a las 12:45: salió de una sonda que fechaba
+  `created_at` en los ítems **y en sus revisiones**, y ADR-166 no fecha las
+  revisiones. Con el merge real, esa rama con ADR-166 dentro pierde **NUEVE**
+  críticas, no cinco: `18/47; 57; 40/81; 9`.
+- **Estuvo a punto de repetirse la falta más cara de este ciclo**: que una
+  afirmación mía sin comprobar acabe fijada en el registro permanente de una
+  decisión, que es donde más cuesta sacarla. La diferencia con las veces
+  anteriores es solo el orden: esta vez medí el caso real **antes** de que el
+  corrector escribiera, no después. Publiqué la corrección a las 13:08, un
+  minuto después de que arrancara el corrector: **en el filo, y por suerte, no
+  por método.**
+- **Regla que se sigue de las dos cosas anteriores juntas**: si una cifra mía
+  va a acabar en un ADR, tiene que estar medida sobre **el árbol real**, no
+  sobre una sonda, **antes de publicarla** —no antes de que alguien la copie—.
+  Una sonda vale para orientar mi trabajo; en cuanto la publico, se convierte
+  en fuente para otros.
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
