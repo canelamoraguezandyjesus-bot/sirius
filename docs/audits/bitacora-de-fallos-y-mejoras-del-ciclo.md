@@ -2927,3 +2927,12 @@ ADR o su incidencia cuando se adopte.
     la magnitud es lo que ordena el plan. Candidato añadido: (d) cuando una
     contra-medición sustituya un dato del arnés, que lo sustituya **por ítem**
     y no por una constante, salvo que se declare por qué la constante basta.
+
+    **AFINADA el 08-09 (entrada 57), en la otra dirección.** El candidato (d)
+    decía «tan fiel como la palanca que juzga». Se quedó corto: **tan fiel
+    como, y no MÁS que, el cambio que simula**. Una sonda más completa que la
+    implementación real da un número que nadie va a obtener —me pasó al medir
+    la palanca 2 «con H2» fechando también las revisiones, que H2 no fecha— y
+    ese número engaña igual que uno corto. Corolario práctico: **cuando la
+    rama existe, no se simula: se hace el merge y se mide.** Cuesta dos
+    minutos y una copia de trabajo, y no admite este error.
