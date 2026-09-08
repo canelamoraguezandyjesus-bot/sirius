@@ -23,8 +23,12 @@ prueba.
    distintos, legibles ambos desde la prueba (24 px vs 54 px; 32 px vs 62 px).
 2. **¿Qué NO garantiza esto?** No garantiza que la GUI nunca enseñe una fila
    con el alto prematuro: esa ventana de un turno del bucle de eventos sigue
-   existiendo en producción y este cambio no la cierra (ADR-153 y la cadena
-   `_sync_size_when_laid_out` son quienes la resuelven, y siguen igual). No
+   existiendo en producción y este cambio no la cierra. Quien ya la estrecha
+   es `MessageItemWidget._sync_size_when_laid_out`, en
+   `src/sirius/presentation/message_view.py`, y ese código sigue igual; ningún
+   ADR del registro razona esa cadena, así que el sitio donde se lee es el
+   propio fichero. ADR-153 no pinta nada aquí: fue solo la rama sobre la que
+   se observó la caída del 06-09, y no toca ni la GUI ni Python. No
    garantiza tampoco que ninguna otra prueba de la suite mida en la misma
    ventana: solo se corrige la que falla. Y no convierte el test en
    determinista frente a cualquier retraso de Qt: elimina la ventana conocida,
