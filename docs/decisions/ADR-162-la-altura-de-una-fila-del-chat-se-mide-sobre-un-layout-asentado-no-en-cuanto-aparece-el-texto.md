@@ -1,4 +1,4 @@
-# ADR-160 — La altura de una fila del chat se mide sobre un layout asentado, no en cuanto aparece el texto
+# ADR-162 — La altura de una fila del chat se mide sobre un layout asentado, no en cuanto aparece el texto
 
 - Estado: PROPUESTO
 - Fecha: 2026-09-08

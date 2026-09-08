@@ -1232,7 +1232,7 @@ def _settled_row_height(qtbot: QtBot, window: MainWindow, index: int) -> int:
     pide 54, y 32 px donde pide 62— que Qt corrige un turno después.
 
     Leer ahí dentro es leer un número que va a cambiar, y era la causa del
-    fallo intermitente `assert 32 >= 54` de esta suite (ADR-160).
+    fallo intermitente `assert 32 >= 54` de esta suite (ADR-162).
 
     La espera es determinista y sin `sleep`: dos lecturas consecutivas del
     bucle de eventos que coincidan, y que no queden por debajo del alto que el
@@ -1382,7 +1382,7 @@ def test_streaming_message_grows_without_overlapping_neighbours(
     # hay un turno del bucle de eventos en el que la fila enseña un alto
     # transitorio. Comparar contra ese valor era el fallo intermitente
     # `assert 32 >= 54`, y compararlo consigo mismo dejaba la aserción vacua
-    # (ADR-160).
+    # (ADR-162).
     mid_stream_height = _settled_row_height(qtbot, window, 1)
     _assert_rows_do_not_overlap_in_chronological_order(window)
 
@@ -1420,7 +1420,7 @@ def test_row_height_read_as_soon_as_the_text_lands_is_not_the_settled_one(
 
     Si esta prueba se escribiera leyendo ``_row_rects`` en vez de
     ``_settled_row_height`` —es decir, como medía la prueba de streaming antes
-    de ADR-160— compararía el alto prematuro consigo mismo y fallaría.
+    de ADR-162— compararía el alto prematuro consigo mismo y fallaría.
     """
     database_path = _bootstrapped_database(tmp_path / "sirius.db")
     conversation_repository = build_sqlite_conversation_repository(database_path)
@@ -1444,7 +1444,7 @@ def test_row_height_read_as_soon_as_the_text_lands_is_not_the_settled_one(
     assert premature_height < settled_height, (
         f"la lectura inmediata ({premature_height} px) y la asentada "
         f"({settled_height} px) coinciden: esta prueba ya no está midiendo la "
-        "ventana que ADR-160 corrige"
+        "ventana que ADR-162 corrige"
     )
     assert settled_height >= widget.sizeHint().height()
     assert _row_rects(window)[1].height() == settled_height
