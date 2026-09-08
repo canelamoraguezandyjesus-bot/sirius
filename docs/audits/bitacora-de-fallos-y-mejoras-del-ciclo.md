@@ -3352,3 +3352,36 @@ ADR o su incidencia cuando se adopte.
     **No se lanza todavía a propósito**: solo hace falta si la palanca 2 sigue
     viva, y esa decisión está abierta. Si la palanca 2 se retira, esta deuda
     baja de prioridad hasta que otra palanca derive de esas columnas.
+
+23. **La puerta de fusión y la ruta de avance se contradicen: ponerse al día
+    para poder fusionar TE SACA de `ready-for-merge`.** Medido en vivo el
+    08-09 con #574/#575:
+
+    - `sirius_merge_on_command.sh:134-164` **bloquea** si `behind_by > 0`, con
+      un motivo correcto: «su Quality se calculó contra una base que ya no
+      existe». Y su mensaje ordena: actualiza la rama, espera a que Quality
+      vuelva a pasar, y escribe `fusiona` otra vez.
+    - Pero al actualizar la rama nace un head nuevo, y **un Quality verde sobre
+      un head nuevo devuelve la incidencia a revisión** (ADR-142). A las 15:43
+      la incidencia estaba en `ready-for-merge`; se actualizó la rama
+      (`dcf9deda`); a las 15:54, con Quality en verde, había pasado a
+      `sirius:review-requested`.
+
+    O sea: **el único camino que la puerta de fusión autoriza es también el que
+    deshace el estado que la puerta exige.** No es un fallo de ninguna de las
+    dos piezas por separado —las dos hacen algo razonable—, es que juntas no
+    componen.
+
+    **El riesgo real no es la ronda extra, es el bloqueo vivo**: si `main` se
+    mueve mientras corre esa revisión —y hoy hay dos sesiones fusionando—, al
+    aprobar vuelve a estar por detrás, hay que actualizar otra vez, y otra vez
+    a revisión. Con dos sesiones activas eso puede no converger nunca. Hoy no
+    pasó por poco: la otra sesión tenía #576 abierta y sin fusionar.
+
+    Candidatos, para decisión del propietario: (a) que un head cuyo ÚNICO
+    cambio es un merge de la base no dispare la ruta de avance —es comprobable:
+    `git diff head_anterior head_nuevo` contra la base es vacío—; (b) que la
+    puerta de fusión acepte `behind_by > 0` cuando el merge no tiene conflicto
+    y Quality corrió sobre el resultado del merge, que es justo lo que GitHub
+    ya calcula; (c) una ventana de gracia: tras aprobar, permitir fusionar
+    durante N minutos aunque la base se haya movido, con el riesgo declarado.
