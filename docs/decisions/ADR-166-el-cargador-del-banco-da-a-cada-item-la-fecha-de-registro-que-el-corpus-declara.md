@@ -393,7 +393,14 @@ también queda asentada sobre ese mismo árbol: `git diff --check 22e880e 4cde5a
 no imprime nada y sale con código `0` —limpio—. Lo único posterior a `4cde5a7`
 es **esta sección de la ficha** y la sección de validaciones del cuerpo de la
 PR: cambios documentales que no tocan código ni pruebas, y que existen porque la
-sección tiene que anclarse al árbol que la cadena midió.
+sección tiene que anclarse al árbol que la cadena midió. La séptima revisión
+solo pidió rehacer el inventario de los veinte pasados que trae el merge —prosa
+de esta misma sección, sin tocar una prueba—; aun así la cadena se volvió a
+invocar entera sobre `96b2448`, el árbol con ese inventario ya corregido, y dio
+exactamente la misma terna: `5205 passed, 17 skipped, 2 xfailed in 577.81s
+(0:09:37)`, `EXIT_CODE_CHECK=0`, con `git diff --check` limpio y código `0`. Que
+no se moviera ni un pasado es la comprobación de que la corrección fue de
+recuento, no de comportamiento.
 
 (Las cifras anteriores de esta sección —`5183 passed, 17 skipped, 2 xfailed in
 487.87s`, anclada a `5200b4f`; `5183 passed, 17 skipped, 2 xfailed in
