@@ -18,12 +18,15 @@ nombres para que citarlos contra la fuente original sea directo.
 
 Sobre los ejes que el esquema canónico de Sirius 0.1 no persiste hoy
 (``ambito``, ``sensibilidad``, ``property_key``, confirmación/validez
-granular, ventana de vigencia): ``EjesDeclarados`` los modela exactamente
-como el laboratorio — todos opcionales, con ``None`` significando "el
-sustrato no los declara" — y ``SIN_EJES`` es el valor por defecto que todo
-candidato real del producto recibe hasta que exista una migración que los
-persista (fuera del alcance de esta incidencia, que expresamente la
-prohíbe). El banco de 47 casos los suministra desde el corpus congelado
+granular): ``EjesDeclarados`` los modela exactamente como el laboratorio —
+todos opcionales, con ``None`` significando "el sustrato no los declara" — y
+``SIN_EJES`` es el valor por defecto de todo candidato al que nadie le
+declare ni le derive ninguno. Desde ADR-165 (palanca 2 de ADR-148) el puerto
+real deriva los tres que sí salen de datos existentes —``valid_from``,
+``valid_to`` y ``autoridad``, ver
+``sirius.adapters.persistence.staged_engine_port``—, sin migración; el resto
+sigue sin declararse. El banco de 47 casos los suministra desde el corpus
+congelado
 (``tests/acceptance/fixtures/evidence_bank_47_casos.json``, enriquecido con
 los ejes que ``experiments/adr002/benchmark/conformance_corpus_v0_6.json``
 y ``experiments/adr002/benchmark/property_keys_v0_2.json`` declaran en
@@ -232,7 +235,8 @@ class EjesDeclarados:
 
 
 #: Ejes ausentes: el sustrato no los declara y las puertas degradan al estado
-#: colapsado. Es el valor que todo candidato real del producto recibe hoy.
+#: colapsado. Hasta ADR-165 era el valor que recibía todo candidato real del
+#: producto; hoy lo sigue recibiendo aquel cuyas filas no dan ninguno.
 SIN_EJES: Final = EjesDeclarados()
 
 #: Vocabularios que las puertas comparan.
