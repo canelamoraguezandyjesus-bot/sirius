@@ -41,6 +41,7 @@ import re
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import replace
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Final
 
@@ -83,6 +84,19 @@ FROM decisions AS d
 JOIN decision_revisions AS r ON r.decision_id = d.id AND r.is_current = 1
 WHERE d.id IN ({marcas})
 """
+
+#: Forma con la que ``created_at`` está escrito en SQLite: el dialecto de
+#: SQLAlchemy escribe sus columnas ``DateTime`` como
+#: ``AAAA-MM-DD HH:MM:SS.ffffff`` —separador ESPACIO, sin zona—, y una
+#: comparación en SQL contra esa columna es una comparación de CADENAS por
+#: orden lexicográfico. El espacio (0x20) ordena antes que la ``T`` (0x54),
+#: así que comparar la forma del corpus (``...T00:00:00Z``) contra ella
+#: incluiría todo lo registrado más tarde del mismo día civil: el final de la
+#: ventana dejaría de ser un instante para ser un día. Por eso el extremo se
+#: reemite en ESTA forma antes de la consulta, igual que
+#: ``ollama_query_intent_classifier`` reemite el corte de registro para
+#: ``G8`` y por la misma razón.
+_FORMATO_DE_CREATED_AT: Final = "%Y-%m-%d %H:%M:%S.%f"
 
 #: Sentencia literal, sin interpolar el nombre de la tabla ni el del estado:
 #: los dos son constantes de este módulo, no entradas.
@@ -132,6 +146,24 @@ def _acotar(valores: Sequence[str], limite: int = ARGUMENTOS_MAXIMOS) -> list[st
         if valor and valor not in vistos:
             vistos[valor] = None
     return list(vistos)[:limite]
+
+
+def _en_forma_de_created_at(instante: str) -> str | None:
+    """Un ISO-8601 reescrito en la forma de ``created_at``, o ``None`` si no
+    es un instante legible.
+
+    Sin zona declarada se asume UTC —el ``created_at`` del canon es UTC por
+    construcción (``sqlite_memory_repository._utc_now_naive``)—, y una zona
+    declarada se convierte a UTC antes de escribirla, porque la columna no
+    guarda desfase y comparar contra ella un instante con otro huso compararía
+    dos relojes distintos.
+    """
+    try:
+        momento = datetime.fromisoformat(instante.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    en_utc = momento.replace(tzinfo=UTC) if momento.tzinfo is None else momento.astimezone(UTC)
+    return en_utc.replace(tzinfo=None).strftime(_FORMATO_DE_CREATED_AT)
 
 
 def _sanear(texto: str) -> str:
@@ -356,6 +388,16 @@ class StagedEnginePort:
         Dos condiciones, las dos sobre lo que Sirius 0.1 **sí** persiste: la
         decisión se registró no después del final de la ventana
         (``created_at <= hasta``) y sigue aprobada (``status = approved``).
+        La primera se compara con grano de INSTANTE, y para eso ``hasta`` se
+        reescribe antes en la forma en que ``created_at`` está guardado
+        (``_en_forma_de_created_at``): la comparación la hace SQLite entre
+        dos CADENAS, y la forma del corpus (``2026-03-20T00:00:00Z``) contra
+        la del canon (``2026-03-20 09:00:00.000000``) ordenaría por el
+        separador —el espacio (0x20) antes que la ``T`` (0x54)— y admitiría
+        todo lo registrado más tarde del mismo día civil. Un ``hasta`` que no
+        sea un instante legible no acota nada, así que no se consulta: la
+        ventana devuelve vacío en vez de afirmar vigencia bajo un extremo que
+        no sabe leer.
         Una decisión ``SUPERSEDED`` no entra aunque pudiera haber estado
         vigente dentro de la ventana: el esquema guarda QUÉ la sustituyó,
         pero no CUÁNDO —``updated_at`` es el último toque, no el fin de una
@@ -378,13 +420,16 @@ class StagedEnginePort:
         arrastre— y nunca lo registrado dentro de ella, y dos ejecuciones
         sobre la misma base devuelven lo mismo.
         """
+        corte = _en_forma_de_created_at(hasta)
+        if corte is None:
+            return ()
         with self._scope() as session:
             encontrados = [
                 ("decision", int(fila[0]))
                 for fila in session.execute(
                     text(_POR_VENTANA_DECISIONES),
                     {
-                        "hasta": hasta,
+                        "hasta": corte,
                         "estado": _ESTADO_DECISION_VIGENTE,
                         "cota": LIMITE_POR_VENTANA,
                     },

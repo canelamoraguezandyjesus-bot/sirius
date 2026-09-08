@@ -301,9 +301,41 @@ medía «vigencia en E1 **y E3 apagada**» — `19/47; 143; 74/81`. Se detectó
 porque las cifras se movían en casos sin intervalo, que la vía no puede
 tocar. Queda escrito porque la cifra equivocada llegó a existir.)
 
+### Corrección posterior: el final de la ventana se compara con grano de instante
+
+Revisión de la ronda 1 (CLAUDE-R1-001). El predicado `created_at <= :hasta`
+recibía el extremo final **en la forma del corpus** (`2026-03-20T00:00:00Z`)
+y lo comparaba, en SQLite y como CADENAS, contra un `created_at` escrito en
+la forma del dialecto de SQLAlchemy (`2026-03-20 09:00:00.000000`). El
+espacio (0x20) ordena antes que la `T` (0x54), así que
+`"2026-03-20 09:00:00.000000" <= "2026-03-20T00:00:00Z"` era **verdadero**:
+toda decisión aprobada registrada más tarde del mismo día civil que el final
+de la ventana entraba igualmente. El error estaba acotado a ese día y era
+siempre inclusivo —nunca excluía canon—, pero el docstring afirmaba un
+predicado de instante que el sustrato no sostenía, y ninguna prueba tocaba la
+frontera: las cuatro usaban extremos a años de distancia del registro.
+
+Es el mismo mecanismo que el encabezado de
+`ollama_query_intent_classifier` nombra para el corte de registro, y se
+corrige igual: el extremo se reescribe en la forma de `created_at`
+(`_en_forma_de_created_at`, en el propio puerto) antes de la consulta, de
+modo que los dos operandos son dos escrituras comparables del mismo instante.
+La forma con `Z` de `_tiempo_objetivo` no se toca: `G8` la compara contra
+`valid_from`/`valid_to`, que el corpus escribe así, y esa forma tiene su
+propia razón. Un `hasta` que no sea un instante legible ya no se compara:
+la ventana devuelve vacío en vez de afirmar vigencia bajo un extremo que no
+sabe leer.
+
+Las cuatro cifras del banco **no se mueven**: el cargador escribe cada
+`created_at` a la medianoche del día declarado (ADR-166), y la medianoche del
+día del corte sigue entrando por igualdad, que es el único caso del banco que
+la frontera toca. Comprobado sobre el árbol de la validación de abajo, donde
+las cuatro cotas del arnés del motor portado son aserciones de la prueba de
+aceptación y pasan sin cambiarlas.
+
 ### Pruebas vistas fallar (mutación transcrita)
 
-Nueve mutaciones, cada una revertida después. Ninguna prueba nueva pasa con
+Once mutaciones, cada una revertida después. Ninguna prueba nueva pasa con
 el código de antes:
 
 | Mutación | Qué se rompe | Rojo |
@@ -317,6 +349,8 @@ el código de antes:
 | M7 el lector del modelo vuelve a tirar el extremo inicial | el acarreo en producción | 1 |
 | M8 la vía se muda a `E1` | la elección de etapa | 3, entre ellas la de insuficiencia |
 | M9 la vía se dispara sin intervalo declarado | la no interferencia | 5, entre ellas el suelo D1 (`55 == 21`) |
+| M10 el extremo final viaja sin reescribir (`"hasta": hasta`) | el grano de instante en la frontera del mismo día | 1 (`test_por_ventana_de_vigencia_excluye_lo_registrado_el_mismo_dia_tras_el_final`) |
+| M11 un extremo ilegible se consulta igual (`corte = hasta`) | la guarda del extremo no legible | 1 (`test_por_ventana_de_vigencia_no_afirma_nada_con_un_final_ilegible`) |
 
 ### La cota que se mueve, y en qué dirección
 
