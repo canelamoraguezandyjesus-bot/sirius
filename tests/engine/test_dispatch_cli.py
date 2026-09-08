@@ -12,16 +12,49 @@ el resto del motor se cuida.
 from __future__ import annotations
 
 import io
+import json
 from datetime import UTC, datetime
+from functools import partial
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from sirius_engine import dispatch_cli
+from sirius_engine import dispatch_cli as modulo_bajo_prueba
+from sirius_engine import dispatcher as dispatcher_modulo
 from sirius_engine.adapters.durable.store import DurableWorkEngineStore
+from sirius_engine.carriles_retirados import carril_retirado as carril_retirado_real
 from sirius_engine.dispatcher import dispatch_work_item as _dispatch_real
 
 _AHORA = datetime(2026, 8, 21, 22, 30, tzinfo=UTC)
 _ORDEN = "Corrige la referencia rota a la seccion 6.7 del contrato"
+
+
+@pytest.fixture
+def carril_activo(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Describe el despacho **como si el carril no estuviera retirado**.
+
+    Las pruebas que la usan fijan el diseño de los carriles de `auditoria` e
+    `investigacion` -qué etiquetas reciben, qué perfil declaran, que sin orden
+    enlazada no se despachan-. ADR-162 los desactiva, pero **no borra ese
+    diseño**: `TABLA_ACTIVACION` conserva sus filas y el contrato §11.1 también,
+    justamente para que reactivarlos sea quitar una línea del registro. Si estas
+    pruebas se borraran, esa reversibilidad dejaría de estar cubierta y el día
+    que el propietario reactivara un carril nadie sabría si seguía funcionando.
+
+    No se falsea la función: se usa la de verdad contra un registro real y
+    vacío, que es lo que habrá cuando el carril vuelva.
+    """
+    registro = tmp_path / "sin_carriles_retirados.json"
+    registro.write_text(json.dumps({"version": 1, "carriles": {}}), encoding="utf-8")
+    activo = partial(carril_retirado_real, registro=registro)
+    # Dos sitios, porque hay dos comprobaciones: la del comando -que rechaza
+    # antes de crear nada- y la del despachador, que es la defensa de fondo para
+    # cualquier otro llamante. Parchear solo una dejaría la prueba describiendo
+    # un mundo que no existe.
+    monkeypatch.setattr(modulo_bajo_prueba, "carril_retirado", activo)
+    monkeypatch.setattr(dispatcher_modulo, "carril_retirado", activo)
 
 
 def _correr(
@@ -254,7 +287,9 @@ def test_repetir_la_misma_orden_no_crea_una_segunda_incidencia(
     assert "Ya estaba despachado" in salida_2
 
 
-def test_una_auditoria_declara_el_perfil_auditor_y_no_el_implementador(tmp_path: Path) -> None:
+def test_una_auditoria_declara_el_perfil_auditor_y_no_el_implementador(
+    tmp_path: Path, carril_activo: None
+) -> None:
     """CODEX-001 (#256, ronda 2): el perfil declarado depende de la clase despachada.
 
     Antes ``PERFIL_POR_DEFECTO`` era ``implementer@1`` sin condición: una orden
@@ -330,7 +365,7 @@ def test_el_diario_del_despachador_es_hermano_del_diario_del_motor(tmp_path: Pat
 
 
 def test_investiga_despacha_con_la_etiqueta_de_activacion_y_el_perfil_investigador(
-    tmp_path: Path, monkeypatch: Any
+    tmp_path: Path, monkeypatch: Any, carril_activo: None
 ) -> None:
     """B1 (ADR-099): una orden que empieza por «Investiga» da la vuelta
     completa -mismas etiquetas que programación y documentación- y declara
