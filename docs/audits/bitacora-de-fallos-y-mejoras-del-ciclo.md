@@ -3096,6 +3096,41 @@ ADR o su incidencia cuando se adopte.
   tenía—. El diff costaba un minuto y las habría ahorrado todas. **Antes de
   variar una variable, mirar en qué difieren de verdad las dos
   configuraciones.**
+
+---
+
+### 65. H2 dentro tras ocho rondas, P2 cerrada con resultado negativo medido, y H1 lanzada (08-09-2026, 17:20-17:35 UTC)
+
+- **ADR-166 fusionado como `6371d4c`.** El suelo del banco lo he vuelto a medir
+  yo sobre `main` ya fusionado: **`17/47 exactas; 162 de más; 74/81 hallados; 0
+  críticas`**. Es exactamente la predicción que publiqué antes de que el
+  implementador escribiera una línea, y el techo sube a `21/47; 144; 74/81; 0`.
+- **Ocho rondas, y el reparto es la lección**: la primera tocó código, **las
+  siete restantes solo la ficha**, y el cargador no se modificó desde la
+  primera. Lo que compraron esas siete: una mutación que sobrevivía (el formato
+  `T`/`Z`), un ADR que explicaba la deuda 20 **al revés**, una cifra falsa mía
+  firmada con el nombre del propietario, dos hechos del corpus sin declarar
+  (`DEC-004` y `MEM-005`), seis citas de fichero y línea desplazadas, y —en la
+  ronda que el propietario autorizó— **un agujero de cobertura real**: nada
+  ataba el valor escrito a un literal independiente, y una mutación de una hora
+  pasaba las seis pruebas. Ninguna de esas nueve cosas la caza una prueba
+  existente; todas las cazó una lectura contrastada.
+- **P2 cerrada con resultado negativo y medido.** Decisión registrada en #572,
+  PR #573 cerrada sin fusionar y **la rama sin borrar**. Contra el suelo con H2
+  dentro, la palanca da `16/47; 164; 73/81; 0` con el arnés fechado a fondo
+  —peor en tres columnas y mejor en ninguna—, y con los ejes del corpus
+  inyectados da **exactamente lo mismo que `main`**: el andamiaje ya está, lo
+  que falta son los ejes. **Un resultado negativo bien medido es conocimiento**:
+  costó una ronda y evitó fusionar una palanca que empeora el suelo.
+- **Lo que queda del plan de memoria, con las cuentas claras**: siete
+  ocurrencias faltan tras H2 y se reparten en H1 (cinco), H3 (`MEM-020`, una) y
+  H4 (`MEM-001`, una). **H3 y H4 son ya decisiones de producto del propietario,
+  las dos medidas**, así que del plan original solo quedan como trabajo del
+  motor **H1 y la palanca 3**.
+- **H1 lanzada como #577**, con el suelo medido dentro, las premisas
+  comprobadas contra el árbol y una regla nueva heredada de ADR-166: si una
+  corrección toca el fichero de pruebas, la cadena se vuelve a ejecutar entera
+  y la sección se re-ancla; no vale conservar la terna del árbol anterior.
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
