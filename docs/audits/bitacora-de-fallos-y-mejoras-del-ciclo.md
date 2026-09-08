@@ -2912,6 +2912,44 @@ ADR o su incidencia cuando se adopte.
     cuatro cifras del banco están verificadas por mí de forma independiente, y
     la predicción se cumplió dígito a dígito. Lo que está en discusión es la
     calidad del **registro**, no la del cambio.
+
+---
+
+### 62. La ronda 6 aprueba y el criterio publicado se cumple sin tener que interpretarlo (08-09-2026, 15:34-15:45 UTC)
+
+- **Ronda 6: APROBADA.** `sirius:ready-for-merge` a las 15:43. Se cumple la
+  primera rama del criterio que publiqué **antes** de verla (entrada 61):
+  aprobar → actualizar la rama → fusionar. No hubo que interpretar nada, que
+  es exactamente para lo que sirve escribir el criterio antes.
+- **Seis rondas, y el reparto es el dato**: la 1 tocó código y ficha; **las
+  cinco siguientes, solo la ficha**. El cargador no se ha modificado desde la
+  ronda 1. Lo que este ciclo cuesta no es hacer el cambio: es **dejarlo
+  escrito de forma que resista una lectura contrastada**.
+- **Lo que las seis rondas compraron, y conviene contarlo antes de quejarse del
+  precio**: una mutación que sobrevivía y ahora muere (el formato `T`/`Z`); un
+  ADR que explicaba la deuda 20 **al revés**; una cifra falsa mía firmada con
+  el nombre del propietario; dos hechos del corpus que nadie había declarado
+  (`DEC-004` y `MEM-005`); y seis citas de fichero y línea que apuntaban a un
+  cierre de docstring en vez de a la comparación. Nada de eso lo habría cazado
+  una prueba.
+- **Un momento raro, y sano**: a las 17:33 locales la incidencia mostró **dos
+  etiquetas de evento consumible a la vez** (`ci-pending` y
+  `review-requested`). Se resolvió sola en el siguiente sondeo. Era el
+  instante de la transición, no un estado inconsistente; anotado porque si
+  alguna vez se queda así, ahí hay un fallo de atomicidad.
+- **La secuencia de fusión, confirmada leyendo el guion y no suponiéndola**:
+  `sirius_merge_on_command.sh:134-164` bloquea si `behind_by > 0`, con el
+  motivo escrito —«su Quality se calculó contra una base que ya no existe»—.
+  `main` se había movido a `afe704e` mientras esta PR corregía, así que la
+  rama se actualizó (head `dcf9deda`) y **la etiqueta se mantuvo en
+  `ready-for-merge`**: mover el head aquí no devolvió la incidencia a
+  revisión, al contrario de lo que pasó en la entrada 46 cuando el ciclo
+  estaba parado. La diferencia es el estado desde el que se mueve.
+- **Comprobado a mano antes de fusionar, no solo con el guardián**: el cuerpo
+  de la PR —que el squash arrastra al mensaje de commit— cita
+  `18/47; 57; 40/81; 9 críticas`, nombra las dos columnas sin fechar con sus
+  líneas, declara `DEC-004` y la forma escrita con un guardián cada uno, y
+  explica el re-anclaje diciendo qué se tocó después del árbol anclado.
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
