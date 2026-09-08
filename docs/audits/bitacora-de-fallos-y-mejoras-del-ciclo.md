@@ -2643,7 +2643,7 @@ ADR o su incidencia cuando se adopte.
 
 ---
 
-### 59. El revisor recogió lo que el implementador no leyó; mi cifra falsa entró igualmente en el ADR; y el guardián que escribí para cazarla mintió dos veces (08-09-2026, 12:58-13:25 UTC)
+### 59. El revisor recogió lo que el implementador no leyó; mi cifra falsa entró en el ADR; el guardián que escribí para cazarla mintió dos veces; y la ronda 2 la cazó entera (08-09-2026, 12:58-13:45 UTC)
 
 - **Ronda 1 de #575: cuatro hallazgos, los dos revisores en CHANGES_REQUESTED**,
   `pending=4`, `severity_total=5`. Revisión completa en **ocho minutos**, de
@@ -2729,6 +2729,30 @@ ADR o su incidencia cuando se adopte.
   `UPDATE memories/decisions SET created_at`, así que ninguna de las dos queda
   fechada. **Ésa es la razón exacta de las 9 críticas**, y ahora está publicada
   con fichero y línea en vez de como afirmación mía.
+- **La ronda 2 recogió los dos puntos, y con más puntería que yo.**
+  `CLAUDE-REV2-575-001` (**alta**) exige el `9` y la terna `18/47; 57; 40/81;
+  9`, nombra **las dos** columnas sin fechar con sus líneas, y apunta la
+  procedencia «a los comentarios posteriores a las 13:05 UTC, no al de las
+  12:45 que él mismo declara erróneo». `CLAUDE-REV2-575-002` (media) recoge la
+  regresión de `git diff --check` y añade el criterio que a mí se me había
+  pasado: **si la orden no se ha vuelto a ejecutar sobre el árbol nuevo, se
+  ejecuta y se transcribe el resultado real; no se copia la frase del árbol
+  anterior como si fuera de éste**.
+- **Y encontró algo que yo no había visto: la misma frase falsa está en el
+  CUERPO de la PR**, sección «Límite conocido», y **el squash la arrastra al
+  mensaje de commit**. Yo venía vigilando el título por la regla de la entrada
+  50; el cuerpo también viaja. Regla ampliada: **al fusionar por squash, la
+  cifra hay que comprobarla en el ADR, en el título Y en el cuerpo de la PR.**
+- **Convergencia**: ronda 1 `pending=4, severity_total=5` → ronda 2
+  `pending=2, severity_total=5`. Codex **aprobó** esta ronda; Claude pidió
+  cambios. Las dos observaciones son de la ficha, ninguna de código: el código
+  se aprobó en la ronda 1 y no ha vuelto a tocarse —el mismo patrón que la
+  deuda 19 lleva registrado desde #566—.
+- **Lo que esto dice del ciclo, y es lo mejor del día**: el defecto lo introduje
+  yo, lo propagó una corrección correcta, y **lo cazó la revisión leyendo mis
+  propias retractaciones**. El mecanismo funcionó sin que yo tuviera que
+  intervenir en la rama: bastó con publicar la corrección con la medición al
+  lado, en el sitio donde el revisor lee.
 - **Y la ronda produjo, de paso, un ejemplar de libro de la deuda 19.** El
   segundo commit del corrector (`6ceeb532`) re-ancla la sección de validación
   al árbol nuevo, que es exactamente lo que ADR-154 pide y está bien hecho…
