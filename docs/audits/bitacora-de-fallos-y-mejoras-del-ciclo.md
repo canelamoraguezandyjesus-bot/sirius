@@ -2150,6 +2150,133 @@ ADR o su incidencia cuando se adopte.
 
 ---
 
+### 51. La deuda 7 cerrada, y la reprodujo quien yo dije que no podría (08-09-2026, 08:03-08:20 UTC)
+
+- **Codex recuperó cuota a las 08:06:48**, tres horas después del tope de las
+  04:03 —no los 52 minutos de la primera vez—, y con el mismo `continua` la
+  ronda corrió entera: aprobación de los dos revisores sobre `009d5b1f` y
+  **PR #568 fusionada como `cb728cc`**. La incidencia #566 queda `completed` y
+  **la deuda 7 cerrada**.
+- **El temporizador de tres horas fue del propietario, y acertó.** Yo venía
+  reintentando cada 45-50 min y cada intento con la cuota agotada costaba ~8
+  min de CI para nada. Él pidió esperar tres horas de una vez; la cuota tardó
+  justo eso.
+- **Balance de la deuda 7, que es una lección sobre encargos.** Yo escribí el
+  encargo diciendo que el fallo era irreproducible —47 ejecuciones limpias— y
+  pedí el invariante en vez de la reproducción. **El implementador lo
+  reprodujo**: no repitiendo, sino **ocupando el bucle de eventos** con un
+  `QTimer` de intervalo 0, que imita un runner cargado. `RUN 16: mid=54
+  final=32`, idéntico al fallo del 06-09. «No reproducible» significaba «no
+  reproducible por repetición», y no se me ocurrió que hubiera otra vía.
+- **Y mi hipótesis estaba invertida**, con consecuencia práctica: yo señalaba
+  la lectura INTERMEDIA como la prematura, y la prematura era la FINAL.
+  Asentar solo la intermedia —lo que yo sugería— **no habría eliminado el modo
+  de fallo**. El encargo se salvó porque la hipótesis iba marcada como NO
+  confirmada y con la frase «si el mecanismo es otro, dilo y corrige el que
+  sea». Sin esa cláusula, habría dirigido el arreglo al sitio equivocado con
+  toda la autoridad de un encargo. **Esa cláusula pasa a ser obligatoria en
+  todo encargo que ofrezca una pista.**
+- **Las cuatro rondas de #566 fueron en el ADR; ninguna en el código**, que se
+  aprobó en la ronda 1 y no volvió a tocarse. Dos de ellas (la cita falsa a
+  ADR-153 y la afirmación «no toca ni la GUI ni Python») nacieron de
+  imprecisiones **de mi propio texto de encargo**, copiadas de buena fe al
+  registro permanente. De ahí la regla que ya está en los encargos nuevos:
+  toda afirmación factual de un encargo va con el comando que la comprueba, y
+  una rama se cita por su SHA, no por el número de ADR que la bautizó.
+- **Palanca P1 de memoria lanzada** como incidencia **#570**, con las tres
+  lecciones incorporadas: la sección de validación en la forma de ADR-159, el
+  re-chequeo del número de ADR tras `fetch` antes de abrir la PR (y renumerar
+  incluye el título), y la tensión declarada de que la coincidencia campo a
+  campo de las 47 peticiones la cierra el propietario con Ollama real porque
+  no está en CI.
+20. **El motor ordena instantes como TEXTO, y eso convierte cada formato nuevo
+    en una trampa.** `src/sirius/domain/staged_engine_contracts.py:263` declara
+    `created_at: str`, y la puerta G8
+    (`src/sirius/domain/staged_engine_gates.py:215`) decide con
+    `candidata.item.created_at > corte`: comparación **lexicográfica** entre
+    dos cadenas. En producción `created_at` viene de SQL crudo como
+    `'AAAA-MM-DD HH:MM:SS.ffffff'` —separador ESPACIO—, y el espacio (0x20)
+    ordena antes que la `T` (0x54), así que dos escrituras del mismo instante
+    admiten conjuntos distintos.
+
+    **Tres rondas de #570 y cuatro hallazgos son la misma familia**:
+    CLAUDE-R1-001 (el corte viajaba sin canonizar), CLAUDE-R2-001 (la
+    canonización elegida se justificó sobre la premisa falsa de que ningún caso
+    del banco declara corte, cuando lo declaran dos), CODEX-002 (el día del
+    corte se tomaba tras convertir a UTC y se movía al día anterior) y
+    CODEX-001 (el objetivo salía con `+00:00`, incomparable con la `Z`).
+    `CLAUDE.md` manda parar a la SEGUNDA aparición de una familia.
+
+    **La raíz está fuera del alcance del encargo**, y por eso esto es decisión
+    del propietario: #570 prohíbe expresamente tocar `staged_engine_gates.py`,
+    `staged_engine_port.py` y el formato con que se persiste `created_at`. Se
+    está parcheando el EMISOR porque no se puede arreglar el COMPARADOR, y ese
+    camino no tiene final: cada formato admisible que el modelo devuelva es una
+    trampa nueva. Nótese que P1 es justamente lo que hace ese camino de G8
+    alcanzable por primera vez —hasta ADR-164 producción nunca emitía corte—,
+    así que la deuda no la crea P1: la destapa.
+
+    Candidatos, para decisión del propietario: (a) que el contrato lleve
+    `datetime` y G8 compare instantes, con la migración que eso exija; (b) que
+    el contrato siga en `str` pero con una forma canónica única garantizada en
+    el borde, y un guardián que la fije; (c) dejarlo y aceptar que cada emisor
+    nuevo pague su ronda. La canonización del emisor que #570 está haciendo
+    hace falta en cualquiera de los tres casos, así que no es trabajo perdido.
+
+---
+
+### 52. La primera palanca de memoria entra tras seis rondas, y cinco fueron sobre el ADR (08-09-2026, 08:16-11:43 UTC)
+
+- **ADR-164 fusionado como `22e880e`**: la pregunta del usuario se convierte ya
+  en una `Peticion` propia —modo, propósito, permiso, cardinalidad, límite,
+  tiempo objetivo y corte de registro— en vez de la política uniforme de
+  `_peticion_ordinaria`. **P1, la palanca de mayor salto medido, está en
+  `main`.**
+- **El hallazgo que salvó la medición: el instrumento tenía el defecto que
+  medía.** `CLAUDE-R1-002` encontró que
+  `scripts/medir_interprete_de_peticion.py` —el guion que el propietario iba a
+  ejecutar para decidir si la palanca pasa— comparaba un instante *naive* con
+  uno *aware*, lo que en Python siempre da «distintos». Puntuaba como fallo
+  seis casos correctos, y el listón declarado era ≥45/47: margen de dos. **Le
+  habría dado al propietario un número por debajo del criterio sin culpa del
+  intérprete**, y la conclusión habría sido que P1 no llega. La lección no es
+  del intérprete: es que **un instrumento de medida es código y necesita sus
+  propios guardianes**, sobre todo cuando su resultado decide si un trabajo se
+  acepta.
+- **Y el defecto de fondo, que P1 no crea sino que destapa** (`CLAUDE-R1-001`,
+  media): el corte de registro viajaba sin canonizar y G8 lo compara
+  **lexicográficamente** contra un `created_at` que SQLite entrega como
+  `'AAAA-MM-DD HH:MM:SS.ffffff'` —separador espacio—. Como el espacio (0x20)
+  ordena antes que la `T` (0x54), las tres escrituras válidas del mismo
+  instante admiten conjuntos distintos. La prueba que existía pasaba con el
+  defecto puesto porque usaba el año 2000 y la comparación se resolvía en los
+  dígitos del año. Hasta ADR-164 producción nunca emitía un corte: **ese camino
+  de G8 se vuelve alcanzable por primera vez con esta palanca**. Registrado
+  como **deuda 20**, con la raíz fuera del alcance del encargo y por tanto
+  planteado al propietario.
+- **Seis rondas, y cinco fueron sobre el ADR.** El código se estabilizó pronto;
+  lo que consumió el ciclo fue el registro: una premisa falsa escrita para
+  justificar no revisar la predicción («ningún caso del banco declara corte»,
+  cuando lo declaran dos), la sección de validación anclada a árboles viejos
+  con una frase ya falsa, un inventario que decía 16 pruebas donde había 26, y
+  dos guardianes declarados sin transcribir su mutación. **Todo eso es la deuda
+  19**, que con esto suma seis rondas en dos encargos.
+- **Lo que aprendí y ya está aplicado**: escribí la exigencia de la sección de
+  validación como límite explícito en el encargo de #570 y **se incumplió tres
+  veces igualmente**. Pedirlo por escrito no basta. Y el patrón real no es que
+  el ADR nazca mal, sino que **la corrección de cada ronda introduce la
+  imprecisión que encuentra la siguiente**, porque el documento crece y nadie
+  contrasta el conjunto: un guardián que valide el ADR solo al crearlo no
+  habría cazado ninguna de las seis.
+- **Convergencia**: 4 → 5 → 3 → 2 → 2 hallazgos, con la severidad bajando de
+  alta a media a baja. Codex aprobó desde la ronda 3 en adelante. El freno de
+  convergencia no llegó a morder.
+- **P2 lanzada como #572** con las dos lecciones escritas dentro del encargo y
+  el aviso de la deuda 20, que ahí es directamente relevante porque esa palanca
+  deriva la ventana de vigencia y el registro, o sea instantes que G8 va a
+  comparar.
+---
+
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
 
 1. `ollama_category_classifier.py`: ruta relativa y sin
@@ -2415,130 +2542,3 @@ ADR o su incidencia cuando se adopte.
     contrasta el conjunto. Un guardián que solo valide el ADR al crearlo no
     serviría: tiene que correr en CADA commit.
 
----
-
-### 51. La deuda 7 cerrada, y la reprodujo quien yo dije que no podría (08-09-2026, 08:03-08:20 UTC)
-
-- **Codex recuperó cuota a las 08:06:48**, tres horas después del tope de las
-  04:03 —no los 52 minutos de la primera vez—, y con el mismo `continua` la
-  ronda corrió entera: aprobación de los dos revisores sobre `009d5b1f` y
-  **PR #568 fusionada como `cb728cc`**. La incidencia #566 queda `completed` y
-  **la deuda 7 cerrada**.
-- **El temporizador de tres horas fue del propietario, y acertó.** Yo venía
-  reintentando cada 45-50 min y cada intento con la cuota agotada costaba ~8
-  min de CI para nada. Él pidió esperar tres horas de una vez; la cuota tardó
-  justo eso.
-- **Balance de la deuda 7, que es una lección sobre encargos.** Yo escribí el
-  encargo diciendo que el fallo era irreproducible —47 ejecuciones limpias— y
-  pedí el invariante en vez de la reproducción. **El implementador lo
-  reprodujo**: no repitiendo, sino **ocupando el bucle de eventos** con un
-  `QTimer` de intervalo 0, que imita un runner cargado. `RUN 16: mid=54
-  final=32`, idéntico al fallo del 06-09. «No reproducible» significaba «no
-  reproducible por repetición», y no se me ocurrió que hubiera otra vía.
-- **Y mi hipótesis estaba invertida**, con consecuencia práctica: yo señalaba
-  la lectura INTERMEDIA como la prematura, y la prematura era la FINAL.
-  Asentar solo la intermedia —lo que yo sugería— **no habría eliminado el modo
-  de fallo**. El encargo se salvó porque la hipótesis iba marcada como NO
-  confirmada y con la frase «si el mecanismo es otro, dilo y corrige el que
-  sea». Sin esa cláusula, habría dirigido el arreglo al sitio equivocado con
-  toda la autoridad de un encargo. **Esa cláusula pasa a ser obligatoria en
-  todo encargo que ofrezca una pista.**
-- **Las cuatro rondas de #566 fueron en el ADR; ninguna en el código**, que se
-  aprobó en la ronda 1 y no volvió a tocarse. Dos de ellas (la cita falsa a
-  ADR-153 y la afirmación «no toca ni la GUI ni Python») nacieron de
-  imprecisiones **de mi propio texto de encargo**, copiadas de buena fe al
-  registro permanente. De ahí la regla que ya está en los encargos nuevos:
-  toda afirmación factual de un encargo va con el comando que la comprueba, y
-  una rama se cita por su SHA, no por el número de ADR que la bautizó.
-- **Palanca P1 de memoria lanzada** como incidencia **#570**, con las tres
-  lecciones incorporadas: la sección de validación en la forma de ADR-159, el
-  re-chequeo del número de ADR tras `fetch` antes de abrir la PR (y renumerar
-  incluye el título), y la tensión declarada de que la coincidencia campo a
-  campo de las 47 peticiones la cierra el propietario con Ollama real porque
-  no está en CI.
-20. **El motor ordena instantes como TEXTO, y eso convierte cada formato nuevo
-    en una trampa.** `src/sirius/domain/staged_engine_contracts.py:263` declara
-    `created_at: str`, y la puerta G8
-    (`src/sirius/domain/staged_engine_gates.py:215`) decide con
-    `candidata.item.created_at > corte`: comparación **lexicográfica** entre
-    dos cadenas. En producción `created_at` viene de SQL crudo como
-    `'AAAA-MM-DD HH:MM:SS.ffffff'` —separador ESPACIO—, y el espacio (0x20)
-    ordena antes que la `T` (0x54), así que dos escrituras del mismo instante
-    admiten conjuntos distintos.
-
-    **Tres rondas de #570 y cuatro hallazgos son la misma familia**:
-    CLAUDE-R1-001 (el corte viajaba sin canonizar), CLAUDE-R2-001 (la
-    canonización elegida se justificó sobre la premisa falsa de que ningún caso
-    del banco declara corte, cuando lo declaran dos), CODEX-002 (el día del
-    corte se tomaba tras convertir a UTC y se movía al día anterior) y
-    CODEX-001 (el objetivo salía con `+00:00`, incomparable con la `Z`).
-    `CLAUDE.md` manda parar a la SEGUNDA aparición de una familia.
-
-    **La raíz está fuera del alcance del encargo**, y por eso esto es decisión
-    del propietario: #570 prohíbe expresamente tocar `staged_engine_gates.py`,
-    `staged_engine_port.py` y el formato con que se persiste `created_at`. Se
-    está parcheando el EMISOR porque no se puede arreglar el COMPARADOR, y ese
-    camino no tiene final: cada formato admisible que el modelo devuelva es una
-    trampa nueva. Nótese que P1 es justamente lo que hace ese camino de G8
-    alcanzable por primera vez —hasta ADR-164 producción nunca emitía corte—,
-    así que la deuda no la crea P1: la destapa.
-
-    Candidatos, para decisión del propietario: (a) que el contrato lleve
-    `datetime` y G8 compare instantes, con la migración que eso exija; (b) que
-    el contrato siga en `str` pero con una forma canónica única garantizada en
-    el borde, y un guardián que la fije; (c) dejarlo y aceptar que cada emisor
-    nuevo pague su ronda. La canonización del emisor que #570 está haciendo
-    hace falta en cualquiera de los tres casos, así que no es trabajo perdido.
-
----
-
-### 52. La primera palanca de memoria entra tras seis rondas, y cinco fueron sobre el ADR (08-09-2026, 08:16-11:43 UTC)
-
-- **ADR-164 fusionado como `22e880e`**: la pregunta del usuario se convierte ya
-  en una `Peticion` propia —modo, propósito, permiso, cardinalidad, límite,
-  tiempo objetivo y corte de registro— en vez de la política uniforme de
-  `_peticion_ordinaria`. **P1, la palanca de mayor salto medido, está en
-  `main`.**
-- **El hallazgo que salvó la medición: el instrumento tenía el defecto que
-  medía.** `CLAUDE-R1-002` encontró que
-  `scripts/medir_interprete_de_peticion.py` —el guion que el propietario iba a
-  ejecutar para decidir si la palanca pasa— comparaba un instante *naive* con
-  uno *aware*, lo que en Python siempre da «distintos». Puntuaba como fallo
-  seis casos correctos, y el listón declarado era ≥45/47: margen de dos. **Le
-  habría dado al propietario un número por debajo del criterio sin culpa del
-  intérprete**, y la conclusión habría sido que P1 no llega. La lección no es
-  del intérprete: es que **un instrumento de medida es código y necesita sus
-  propios guardianes**, sobre todo cuando su resultado decide si un trabajo se
-  acepta.
-- **Y el defecto de fondo, que P1 no crea sino que destapa** (`CLAUDE-R1-001`,
-  media): el corte de registro viajaba sin canonizar y G8 lo compara
-  **lexicográficamente** contra un `created_at` que SQLite entrega como
-  `'AAAA-MM-DD HH:MM:SS.ffffff'` —separador espacio—. Como el espacio (0x20)
-  ordena antes que la `T` (0x54), las tres escrituras válidas del mismo
-  instante admiten conjuntos distintos. La prueba que existía pasaba con el
-  defecto puesto porque usaba el año 2000 y la comparación se resolvía en los
-  dígitos del año. Hasta ADR-164 producción nunca emitía un corte: **ese camino
-  de G8 se vuelve alcanzable por primera vez con esta palanca**. Registrado
-  como **deuda 20**, con la raíz fuera del alcance del encargo y por tanto
-  planteado al propietario.
-- **Seis rondas, y cinco fueron sobre el ADR.** El código se estabilizó pronto;
-  lo que consumió el ciclo fue el registro: una premisa falsa escrita para
-  justificar no revisar la predicción («ningún caso del banco declara corte»,
-  cuando lo declaran dos), la sección de validación anclada a árboles viejos
-  con una frase ya falsa, un inventario que decía 16 pruebas donde había 26, y
-  dos guardianes declarados sin transcribir su mutación. **Todo eso es la deuda
-  19**, que con esto suma seis rondas en dos encargos.
-- **Lo que aprendí y ya está aplicado**: escribí la exigencia de la sección de
-  validación como límite explícito en el encargo de #570 y **se incumplió tres
-  veces igualmente**. Pedirlo por escrito no basta. Y el patrón real no es que
-  el ADR nazca mal, sino que **la corrección de cada ronda introduce la
-  imprecisión que encuentra la siguiente**, porque el documento crece y nadie
-  contrasta el conjunto: un guardián que valide el ADR solo al crearlo no
-  habría cazado ninguna de las seis.
-- **Convergencia**: 4 → 5 → 3 → 2 → 2 hallazgos, con la severidad bajando de
-  alta a media a baja. Codex aprobó desde la ronda 3 en adelante. El freno de
-  convergencia no llegó a morder.
-- **P2 lanzada como #572** con las dos lecciones escritas dentro del encargo y
-  el aviso de la deuda 20, que ahí es directamente relevante porque esa palanca
-  deriva la ventana de vigencia y el registro, o sea instantes que G8 va a
-  comparar.
