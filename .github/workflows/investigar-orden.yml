@@ -119,9 +119,14 @@ jobs:
             sirius_comment_once "$GH_REPO" "$ISSUE_NUMBER" \
               "sirius-carril-retirado:investigacion" "$cuerpo" || \
               echo "::warning::No se pudo publicar la explicacion; se continua para no dejar la incidencia en curso."
-            ( export GH_TOKEN="${SIRIUS_TRIGGER_TOKEN:-${GH_TOKEN:-}}"
-              sirius_set_issue_labels "$GH_REPO" "$ISSUE_NUMBER" \
-                "sirius:failed-safely" "sirius:implement-requested" "sirius:planned" ) || \
+            # La MISMA envoltura de una linea que el resto del ciclo: la
+            # etiqueta se escribe con el PAT, nunca con el GITHUB_TOKEN, porque
+            # GitHub suprime los eventos del token efimero (ADR-014, ADR-015).
+            trigger_set_labels() {
+              ( export GH_TOKEN="${SIRIUS_TRIGGER_TOKEN:-${GH_TOKEN:-}}"; sirius_set_issue_labels "$@" )
+            }
+            trigger_set_labels "$GH_REPO" "$ISSUE_NUMBER" \
+              "sirius:failed-safely" "sirius:implement-requested" "sirius:planned" || \
               echo "::error::No se pudo cerrar la incidencia en failed-safely; queda para el reconciliador."
             exit 0
           fi

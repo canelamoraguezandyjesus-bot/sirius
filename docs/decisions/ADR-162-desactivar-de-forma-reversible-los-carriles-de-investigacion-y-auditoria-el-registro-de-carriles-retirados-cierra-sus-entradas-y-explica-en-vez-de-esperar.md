@@ -101,7 +101,7 @@ enterarse del desenlace—. **No se tocan**: ni se cancelan ni se borran.
 
 ## Decisión
 
-1. **Un registro versionado, `docs/implementation/work_engine/carriles_retirados.yml`**,
+1. **Un registro versionado, `docs/implementation/work_engine/carriles_retirados.json`**,
    es la única fuente de verdad de qué carril está retirado y con qué mensaje.
    Dato, no código, como `registro_capacidades.yml` y `manifiesto.json`.
 2. **El despachador rechaza la clase retirada** con `CarrilRetiradoError`, que
