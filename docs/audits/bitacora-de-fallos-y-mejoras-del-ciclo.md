@@ -2314,6 +2314,59 @@ ADR o su incidencia cuando se adopte.
   enmendar por escrito mi propio criterio en vez de releerlo a mi favor
   (entrada 48). El criterio publicado antes es lo único que impide que el
   resultado elija el listón.
+
+---
+
+### 54. Medí mi propio encargo antes de que costara rondas: la premisa era falsa, el criterio era alcanzable, y la contra-medición que lo motivó estaba corta (08-09-2026, 12:35-13:00 UTC)
+
+- **Escribí #574 con dos afirmaciones que no había comprobado.** La primera,
+  falsa: «que el cargador fije el `created_at` a partir de la fecha que el
+  corpus congelado declara». El corpus **no declara fecha de registro** —los
+  campos de cada ítem son `id, kind, project, text, confirmacion, validez,
+  disponibilidad, criticidad, ejes_p2`—; lo que declaran 97 de 97 es
+  `ejes_p2.valid_from`. La segunda, sin verificar: «B04-CA-32 pasa de fallar a
+  acertar». Resultó cierta, pero **solo con la fuente correcta**, y por poco.
+- **Lo cacé aplicándome la regla que llevo dos encargos exigiendo a otros**: la
+  afirmación va con el comando que la comprueba. Dos sondas sobre `22e880e`
+  bastaron, y son baratas —el guion de diagnóstico corre sin Ollama—.
+- **Los tres números, medidos con `_medir(banco, con_ejes=False,
+  con_peticion=True)`:**
+
+  | configuración | exactas | de más | hallados | críticas |
+  |---|---|---|---|---|
+  | suelo de hoy | 16/47 | 162 | 73/81 | 0 |
+  | canon entero fechado el `2026-01-01` | 16/47 | **163** | 74/81 | 0 |
+  | cada ítem con su `valid_from` | **17/47** | **162** | **74/81** | **0** |
+
+- **La razón, y es del dominio, no del código.** B04-CA-32 pregunta por el
+  aforo **el 1 de marzo** y espera `DEC-012` («aforo 40», vigente del
+  `2026-01-01` al `2026-04-10`). `DEC-013` («aforo 25») nace el `2026-04-10`,
+  después del corte. Una fecha única para todo el canon **miente sobre
+  `DEC-013`** y lo cuela como extra; la fecha por ítem lo deja fuera, y el caso
+  queda `faltan=[] extras=[]`. Mi criterio era alcanzable; lo que estaba mal
+  era la premisa de dónde sacar la fecha.
+- **Y esto corrige hacia arriba la contra-medición del veredicto de #572.**
+  Allí se fechó el canon entero el `2026-01-01`, o sea la variante mentirosa,
+  y de ahí salió `16/47; 163; 74/81`. El valor real de H2 es `17/47; 162;
+  74/81`: **mejor que el suelo de hoy en las cuatro columnas a la vez**, no
+  igual con un extra de propina. La contra-medición acertó la CAUSA («el arnés
+  fecha mal») y falló la MAGNITUD («cuánto vale arreglarlo»), y la magnitud es
+  justamente lo que ordena el plan.
+- **Es la deuda 21 otra vez, y en el sitio más incómodo**: dentro de la
+  contra-medición que existe para aislar la deuda 21. **Una sonda de
+  aislamiento tiene que ser tan fiel como la palanca que juzga**; si no, mide
+  el instrumento por segunda vez. Refuerza el candidato (a) de esa deuda —el
+  arnés necesita guardianes propios— y añade uno: cuando una contra-medición
+  sustituya un dato del arnés, tiene que sustituirlo **por ítem**, no por una
+  constante, salvo que se declare por qué la constante basta.
+- **Corregido antes de que costara una ronda**: cuerpo de #574 reescrito y
+  corrección publicada como comentario fechado, con la predicción `17/47; 162;
+  74/81; 0` puesta **antes** de implementar, la forma exacta de la fecha
+  (`'AAAA-MM-DD HH:MM:SS.ffffff'`, separador ESPACIO, que es la deuda 20 en
+  vivo) y la reproducción de la sonda descrita para contrastarla.
+- **Dos datos que la sonda destapó y que el encargo ahora obliga a resolver**:
+  `MEM-005` es el único ítem del canon sin `valid_from`, y el cargador crea 95
+  filas y no 97 porque dos ítems portan texto vacío a propósito.
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
@@ -2654,3 +2707,14 @@ ADR o su incidencia cuando se adopte.
     arnés —que es lo que #572 hizo a mano, y funcionó—.
 
     **H2 (#574) arregla UNA de las dos apariciones. No arregla la familia.**
+
+    **AMPLIADA el 08-09 (entrada 54), y en el sitio más incómodo: dentro de la
+    contra-medición que existe para aislar esta misma deuda.** El veredicto de
+    #572 aisló la causa fechando el canon entero el `2026-01-01`; pero
+    `DEC-013` nace el `2026-04-10`, así que esa constante **miente sobre él** y
+    lo cuela como extra en B04-CA-32. De ahí salió `16/47; 163; 74/81` cuando
+    el valor real de fechar por ítem es `17/47; 162; 74/81` — mejor que el
+    suelo en las cuatro columnas. La causa estaba bien; **la magnitud, no**, y
+    la magnitud es lo que ordena el plan. Candidato añadido: (d) cuando una
+    contra-medición sustituya un dato del arnés, que lo sustituya **por ítem**
+    y no por una constante, salvo que se declare por qué la constante basta.
