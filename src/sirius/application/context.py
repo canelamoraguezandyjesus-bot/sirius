@@ -44,11 +44,14 @@ fixed for it. The owner's Decisión 2 (02-09-2026, cited in ADR-126 and
 through a third route neither of the two mutually exclusive ones that block
 named: porting it knowing the 47-case bank cannot validate it independently
 (only two cases exercise it), accepted instead by the lost-criticals
-measurement (3 → 0) and real use. ``ContextBuilder`` itself is untouched by
-this — it keeps calling ``rank_relevant_knowledge_use_case.rank()`` exactly
-as before, so the seeded candidates it now receives flow through the
+measurement (3 → 0) and real use. ``ContextBuilder`` itself was untouched by
+that wave — in M20 it kept calling ``rank_relevant_knowledge_use_case.rank()``
+exactly as before, so the seeded candidates it now receives flow through the
 existing relevance filter (§6.3) and budget (B6c) unchanged, the same way
-category/criticality-amplified candidates already did.
+category/criticality-amplified candidates already did. Since P3 (ADR-169,
+incidencia #579) that call is ``rank_con_cupo()``: the same candidates plus
+the cupo the request's cardinality imposes, so what reaches the §6.3 filter
+and the B6c budget is still exactly what M20 left there.
 """
 
 from __future__ import annotations
