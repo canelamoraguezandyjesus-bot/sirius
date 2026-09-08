@@ -167,6 +167,14 @@ que la palanca 1 mida y se revisa entonces.
   - los 8 huecos con ambas palancas, tal como los imprime el guion:
     B04-CA-22 (DEC-001, DEC-005, DEC-009, DEC-011, DEC-015), B04-CA-29
     (MEM-020), B04-CA-30 (MEM-001), B04-CA-32 (DEC-012).
+- **Repetido el 08-09 sobre `82b04b4`**, el árbol con el que esta ficha se
+  fusiona, que ya no es el que la midió: entre `a07c5d5` y él entraron
+  ADR-147, ADR-156, ADR-157, ADR-158 y ADR-159. Las cuatro configuraciones dan
+  **exactamente las mismas cifras** —`0/47; 487`, `0/47; 421`, `16/47; 162`,
+  `20/47; 144`, con 0 críticas perdidas en las cuatro—, así que el techo que
+  esta ficha afirma sigue siendo cierto sobre el árbol que entra. Se repitió
+  en vez de darlo por hecho porque una cifra heredada de otro árbol es
+  justamente lo que ADR-154 prohíbe citar como actual.
 - Ollama real en la máquina del propietario (05-09): ADR-128, ADR-129 y la
   sección «Resultado en la máquina del propietario (Ollama real,
   05-09-2026)» de la evidencia del experimento (PR #547).
