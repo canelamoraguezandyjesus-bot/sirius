@@ -2718,6 +2718,17 @@ ADR o su incidencia cuando se adopte.
   nada de `printf | grep -q` con `pipefail` —here-strings, que no tienen
   tubería—. Con eso, el guion dice ahora lo que hay: tres hallazgos cerrados y
   la fusión bloqueada por uno solo, el número.
+- **Y antes de insistir con la corrección, comprobé el mecanismo que yo mismo
+  estaba afirmando**, para no empujar una segunda afirmación sin respaldo. En
+  `58fa079e:staged_engine_port.py` la derivación toca **dos** columnas que
+  ADR-166 no fecha, no una: las **memorias** sacan `valid_from` de
+  `revision_created_at` —`r.created_at` de `memory_revisions` con
+  `is_current = 1`, líneas 86-89 y 262— y las **decisiones** lo sacan de
+  `d.updated_at` —líneas 98 y 290, con `approved → valid_from` y
+  `superseded → valid_to`—. `_fijar_fecha_de_registro` emite solo
+  `UPDATE memories/decisions SET created_at`, así que ninguna de las dos queda
+  fechada. **Ésa es la razón exacta de las 9 críticas**, y ahora está publicada
+  con fichero y línea en vez de como afirmación mía.
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
