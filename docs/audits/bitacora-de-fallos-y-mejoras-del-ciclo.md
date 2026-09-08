@@ -4015,6 +4015,52 @@ entre tener la pregunta escrita y hacérsela es todo, y no se salva escribiéndo
 mejor.
 ---
 
+### 81. Trabajé un día entero sin leer lo que había entrado en `main` esa madrugada (08-09-2026, 21:35 UTC)
+
+El propietario preguntó si había leído «la nueva visión de Sirius». **No la
+había leído.** Entró en `main` a las **04:41 de hoy** —PR #567, horas antes de
+que yo empezara— y planifiqué y ejecuté la jornada entera sin mirarla.
+
+**Qué es**, ya leída: ADR-160 y ADR-161, decisiones canónicas EV-015 a EV-019,
+la enmienda §19 del Documento Rector y el contrato v1.10. En una línea: **Sirius
+es el compañero, el motor ejecuta, y las IAs externas son el lugar de trabajo.**
+El Rector queda enmendado en cinco puntos —Sirius pasa a ser **una** interfaz y
+no el paso obligatorio; el trabajo habitual del propietario ocurre directamente
+con las IAs externas; la síntesis es a petición; junto a la memoria canónica
+aparecen el diario del motor y el «conocimiento común», que no es memoria
+canónica; y la delegación de encargos la hace el motor— y §19.2 declara que
+**no autoriza implementar nada** ni cambia el roadmap.
+
+**Qué cambia para el trabajo de hoy: nada, y lo comprobé en vez de suponerlo.**
+ADR-161 retira los **carriles** de investigación y auditoría —los agentes— y
+conserva enteros, nombrándolos uno a uno, «los revisores del ciclo, el
+corrector, la convergencia y Quality», que es exactamente la maquinaria que
+conduje todo el día. Y dice con todas las letras que **`docs/audits/` no es el
+auditor**: esta bitácora es un resultado, no un agente, y se conserva. La línea
+de memoria de ADR-148 es memoria **canónica** de Sirius 0.1 y §19.2 no toca el
+roadmap.
+
+**Pero el que no cambiara nada es suerte, no método.** Si la enmienda hubiera
+tocado el roadmap o el alcance de 0.1, habría gastado una jornada entera en
+dirección equivocada, y no me habría enterado hasta que alguien preguntara. Lo
+que falló es exactamente la familia que llevo registrando todas estas
+entradas, a escala de sesión: **leí el plan (ADR-148) y no el suelo donde se
+apoya.** La raíz 4 de la entrada 78 —«¿el estado dice que esto ha terminado, o
+solo que es consultable?»— tiene una hermana que hoy me faltaba:
+
+> **Antes de planificar sobre un documento, ¿qué se ha movido debajo de él
+> desde la última vez que lo miré?**
+
+Cuesta un `git log --since` sobre `docs/` y `main`. Lo hice hoy, para
+contestar, en dos comandos y treinta segundos — después de doce horas de
+trabajo.
+
+**Nota para quien lea esta bitácora más adelante**: las cifras y decisiones de
+las entradas 66 a 80 se tomaron sin este contexto delante. Ninguna queda
+invalidada por lo dicho arriba, pero conviene saber que el marco se enmendó el
+mismo día y que quien las escribió no lo sabía.
+---
+
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
 
 1. `ollama_category_classifier.py`: ruta relativa y sin
