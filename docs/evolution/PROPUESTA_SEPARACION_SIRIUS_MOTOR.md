@@ -80,19 +80,28 @@ sintetizar todo el trabajo.
 Esa es la única diferencia de fondo. Y es grande, porque toca documentos APROBADOS. Todo
 lo demás encaja mejor de lo que parece:
 
-1. **La separación técnica ya está hecha y hay una máquina que la vigila.** El producto
-   vive en `src/sirius/` y el motor en `src/sirius_engine/`; ninguno importa al otro, y
-   dos pruebas lo impiden en las dos direcciones (`tests/engine/test_boundary.py:44,50`)
-   [V]. No hay que separar nada: hay que **decir en los documentos** lo que el código ya
-   hace.
+1. **La separación de PAQUETES ya está hecha y hay una máquina que la vigila.** El
+   producto vive en `src/sirius/` y el motor en `src/sirius_engine/`; ninguno importa al
+   otro, y dos pruebas lo impiden en las dos direcciones
+   (`tests/engine/test_boundary.py:44,50`) [V]. Eso es exactamente lo que está
+   demostrado, y ni un paso más: **no** se ha demostrado independencia completa. Siguen
+   compartiendo distribución, número de versión y puerta de comprobación, y la
+   automatización lee el árbol del motor por ruta de fichero (apartado 5.3). Lo que no
+   hay que construir es la frontera de código; lo que falta es **decirla en los
+   documentos** y decidir qué se hace con las costuras que quedan.
 
-2. **La memoria ya está separada, y el propietario ya lo decidió.** La memoria del
-   producto vive en su equipo; la del motor, en la rama `estado-del-motor` (decisión D6
-   del 29-08-2026, `docs/evolution/STATUS.md`; ADR-083). Lo que **no** existe es la
-   tercera pieza que el propietario pide ahora: un conocimiento compartido de los
-   proyectos, accesible con su ordenador apagado. Buscado y no encontrado: ni «Obsidian»,
-   ni «Basic Memory», ni «memoria compartida» aparecen en ningún sitio del repositorio
-   [V]. Es alcance nuevo de verdad, no algo ya construido a lo que no llame nadie.
+2. **Las dos primeras memorias ya están separadas, y el propietario ya lo decidió.** La
+   del producto vive en su equipo; la del motor, en la rama `estado-del-motor` (decisión
+   D6 del 29-08-2026, `docs/evolution/STATUS.md`; ADR-083). La tercera —el conocimiento
+   compartido de los proyectos— **no está declarada en ninguna parte**: ni «Obsidian», ni
+   «Basic Memory», ni «memoria compartida» aparecen en el repositorio [V]. Con la cautela
+   que esa comprobación merece: **una búsqueda por nombres no prueba ausencia
+   funcional**. Piezas que ya cubren parte de la función sí existen, y hay que mirarlas
+   antes de construir: el propio repositorio es accesible con el equipo apagado, está
+   versionado, y ya guarda documentos, ADR e investigaciones con origen y caducidad
+   declarada; el diario del motor vive en su rama. Lo que **no** está resuelto no es
+   «dónde se guarda», sino quién escribe, con qué autoridad, con qué frontera de salida y
+   con qué disponibilidad para las IAs (apartado 6).
 
 3. **Retirar el auditor y el investigador dedicados no toca a los revisores del ciclo.**
    Son piezas distintas y se pueden nombrar una por una (apartado 2.3). Los revisores, el corrector, la convergencia y las comprobaciones de
@@ -112,15 +121,26 @@ lo demás encaja mejor de lo que parece:
    `REPOSITORY_STATUS.md`, ni en `README.md` [V, búsqueda vacía]. La visión nueva se
    apoya justo en esa capacidad, así que el hueco documental deja de ser inocuo.
 
-5. **Lo que Sirius NO puede hacer hoy es precisamente lo que el propietario más pide.**
-   «Que me ayude con un Arduino sin abrir ChatGPT» exige buscar y usar herramientas. El
-   adaptador del proveedor lo dice por escrito: «No tools, web search, file, or
-   code-execution capabilities are enabled» (`src/sirius/adapters/llm/openai_responses.py:5-6`)
-   [V]. Eso es la etapa 0.3 del roadmap («Habilidades y permisos»), hoy no autorizada.
+5. **A Sirius le falta una cosa concreta, y conviene no describirla de más.** «Que me
+   ayude con un Arduino sin abrir ChatGPT» pide que **el turno conversacional** pueda
+   buscar y usar herramientas, y eso hoy está apagado por diseño: el adaptador del
+   proveedor lo dice por escrito, «No tools, web search, file, or code-execution
+   capabilities are enabled» (`src/sirius/adapters/llm/openai_responses.py:5-6`) [V]. No
+   significa que Sirius no tenga integraciones: **sí las tiene**, y funcionando —OBS por
+   WebSocket, audio de entrada y salida, almacén de credenciales del sistema,
+   exportación—. La distinción importa porque cambia el trabajo: no hay que inventar la
+   forma de integrar nada, hay que dar al turno de conversación un contrato de
+   herramientas con permisos, que es la etapa 0.3 del roadmap («Habilidades y
+   permisos»), hoy no autorizada.
 
-En una frase: **no hay que construir la separación, hay que declararla**; lo que sí hay
-que construir es la memoria común y las manos de Sirius (herramientas y avisos), y las
-dos cosas ya tienen etapa asignada en el roadmap aprobado, sin inventar ninguna.
+En una frase: **la frontera de código no hay que construirla, hay que declararla**; lo
+que sí hay que construir es la memoria común y las manos de Sirius (herramientas del
+turno conversacional y avisos). Y las dos no están en la misma situación: las manos de
+Sirius encajan en etapas que el roadmap aprobado ya tiene (0.3 y 0.6), mientras que la
+**memoria común no tiene etapa asignada**: ninguna de las siete etapas de
+`docs/evolution/RECTOR.md` §9, leídas una a una, describe un conocimiento compartido que
+las IAs externas consulten y actualicen [V]. Su relación con Sirius 0.2 se puede estudiar, pero **no está
+decidida**, y esta propuesta no la decide.
 
 ---
 
@@ -130,14 +150,32 @@ dos cosas ya tienen etapa asignada en el roadmap aprobado, sin inventar ninguna.
 
 Cuatro actores, no dos. Los dos que el encargo nombra —Sirius y el motor— más los dos
 que la visión introduce de hecho: las **aplicaciones externas** (donde el propietario
-trabaja) y la **memoria común** (que todavía no existe).
+trabaja) y la **memoria común** (que no está declarada como tal en ninguna parte, aunque
+piezas sueltas cubran parte de su función).
 
 | Actor | De qué responde | Lo que explícitamente NO le corresponde | Estado hoy |
 |---|---|---|---|
-| **Sirius** (producto, `src/sirius/`) | Identidad y relación; memoria propia del producto; conversación; voz; cámaras y captura; percepción bajo demanda; ayuda directa de ingeniería y electrónica; manejo del ordenador y dispositivos autorizados; avisar al propietario de lo que termina, falla o necesita atención | Ejecutar los encargos del motor; revisar su trabajo; ser el paso obligatorio de las conversaciones del propietario con IAs externas; sintetizar todo el trabajo; poseer el estado operativo del motor | Identidad, memoria, conversación: construidas y aceptadas (0.1). Voz y captura: construidas (Model Studio). Herramientas de ingeniería y avisos propios: **no construidos**; son 0.3 y 0.6 del Rector |
+| **Sirius** (producto, `src/sirius/`) | Identidad y relación; memoria propia del producto; conversación; voz; cámaras y captura; percepción bajo demanda; ayuda directa de ingeniería y electrónica; manejo del ordenador y dispositivos autorizados; avisar al propietario de lo que termina, falla o necesita atención; **y, si el propietario lo quiere, delegar en un especialista una consulta de ingeniería suya** —cosa distinta de un encargo del motor (ver la nota bajo la tabla)— | Ejecutar los encargos del motor; revisar su trabajo; ser el paso obligatorio de las conversaciones del propietario con IAs externas; sintetizar todo el trabajo; poseer el estado operativo del motor | Identidad, memoria, conversación: construidas y aceptadas (0.1). Voz y captura: construidas (Model Studio). Herramientas del turno conversacional, avisos propios y delegación especializada: **no construidos**; caen en 0.3, 0.4 y 0.6 del Rector |
 | **Motor de trabajo** (`src/sirius_engine/` + `scripts/automation/` + `.github/workflows/`) | Coordinación; ejecución de encargos; documentación por encargo; comprobaciones; revisión; corrección; convergencia; recuperación de trabajos perdidos; diario operativo; escalado al propietario | Poseer la identidad de Sirius; conversar; decidir producto o arquitectura; fusionar; investigar por su cuenta; auditar por su cuenta (si el propietario retira esos dos carriles) | Construido y en circuito: ciclo por etiquetas, revisión dual, corrección, convergencia, supervisión, diario en rama propia. Pendiente: D1 (conmutación) y D4 (partir objetivos) |
-| **Aplicaciones externas** (ChatGPT, Claude, Codex) | Conversación de trabajo del propietario; investigación; auditoría y segunda opinión; redacción de encargos; decisiones tomadas con el propietario delante | Escribir directamente en el estado del motor; fusionar; aprobar sus propios cambios; convertir una exploración en decisión aprobada | En uso hoy. Codex ya participa **dentro** del ciclo como segundo revisor (contrato §4.1); eso es otra cosa y no se toca |
+| **Aplicaciones externas** (ChatGPT, Claude, Codex) | Conversación de trabajo del propietario; investigación; auditoría y segunda opinión; redacción de encargos; **ejecutar, cuando el propietario las autoriza, lo que él ha decidido** —incluida la escritura de documentos y enmiendas— | Decidir en su propio nombre; aprobar sus propios cambios; convertir una exploración en decisión aprobada; tomar la autoridad del estado del motor | En uso hoy. Codex ya participa **dentro** del ciclo como segundo revisor (contrato §4.1); eso es otra cosa y no se toca |
 | **Memoria común de proyectos** | Documentos, investigaciones, decisiones, aprendizajes y continuidad entre proyectos; consultable y actualizable por las IAs y por el motor; disponible con el ordenador del propietario apagado | Sustituir a la memoria del producto; sustituir al diario del motor; ser autoridad sobre el estado de un trabajo en curso | **No existe.** Ver apartado 6 |
+
+**Dos aclaraciones que la tabla, sola, no da:**
+
+- **Delegación especializada de Sirius: se conserva como posibilidad.** Que el
+  propietario trabaje desde aplicaciones externas no cierra la puerta a que Sirius, para
+  una consulta de ingeniería suya, abra una sesión especializada acotada y le traiga el
+  resultado. Es distinto de un encargo del motor en las tres cosas que importan: nace de
+  una conversación y no de un WorkItem, no produce PR ni pasa por el ciclo de
+  revisión-corrección, y su resultado vuelve a la conversación, no al diario operativo.
+  Esta propuesta **no la descarta ni la pide**: la deja explícitamente viva para que la
+  redefinición de 0.4 (apartado 3.1) no la borre por omisión.
+- **Autoridad y ejecución no son lo mismo.** Donde este documento dice «lo decide el
+  propietario» se refiere a la **autoridad**, no a quién teclea. Una IA autorizada por él
+  puede perfectamente redactar la enmienda, abrir la PR o preparar el ADR; lo que no
+  puede es decidir en su lugar ni darse la autorización a sí misma. El repositorio ya
+  funciona así en su punto más sensible: la fusión exige el gesto del propietario
+  (contrato §8), y todo lo demás lo ejecutan agentes.
 
 **La regla que ordena las tres memorias, sin obligar a tres bases de datos:** cada dato
 tiene **un** dueño, y quien no es dueño lo cita en vez de copiarlo. El repositorio ya usa
@@ -158,12 +196,12 @@ desactiva nada.
 | Supervisión, recuperación, reconciliador, contador de racha, reflejo del desenlace | **Conservar tal cual** | Son la parte «recuperación y diario operativo» que el encargo conserva |
 | Memoria y conversación del producto (`src/sirius/`) | **Conservar tal cual** | Es la identidad de Sirius; la visión la refuerza, no la recorta |
 | Model Studio (voz + captura OBS) | **Conservar, y reconciliar su documentación** | Construido y sin reflejo en ningún documento de estado (apartado 4.2, fila 15) |
-| Rol de Sirius como interlocutor obligatorio (RECTOR §4, EV-002) | **Redefinir** | Choca de frente con la visión. Requiere decisión del propietario, no edición |
+| Rol de Sirius como interlocutor obligatorio (RECTOR §4, EV-002) | **Redefinir** | La dirección ya está dada (7.1, dirección 1); lo que falta es el acto formal de enmienda, que es trabajo y puede ejecutarlo una IA autorizada |
 | Rol de Sirius como sintetizador de todo el trabajo (RECTOR §4.6) | **Redefinir** | Ídem: pasa a ser opcional, a petición |
 | «Superficie 3 — Desde Sirius» para lanzar agentes (`docs/implementation/AGENTES_SUPERFICIE_DE_INVOCACION.md:73`) | **Redefinir** | Se describía como «el final del camino»; con la visión nueva el final del camino es que Sirius **avise** y **ayude**, no que lance auditorías |
-| 0.4 «Delegación supervisada» (RECTOR §9.3) | **Redefinir** | La delegación supervisada ya la hace el motor; que la haga además Sirius es una decisión, no una consecuencia |
-| **Auditor dedicado** (carril `auditoria:solicitada`) | **Candidato a desactivarse** | El propietario mueve esos encargos a sus sesiones externas |
-| **Investigador dedicado** (carril `investigacion`) | **Candidato a desactivarse** | Ídem |
+| 0.4 «Delegación supervisada» (RECTOR §9.3) | **Redefinir, conservando su núcleo útil** | La delegación de *encargos de trabajo* ya la hace el motor. Lo que **no** hace el motor, y por eso se conserva expresamente como posibilidad, es que Sirius delegue una **consulta de ingeniería del propietario** en un especialista y le devuelva el resultado a la conversación (nota de 2.1) |
+| **Auditor dedicado** (carril `auditoria:solicitada`) | **Se retira** (dirección dada, 7.1 punto 2) | El propietario mueve esos encargos a sus sesiones externas. Lo que sigue abierto es **el modo** de retirada, no el hecho: T-1, con recomendación de desactivación reversible |
+| **Investigador dedicado** (carril `investigacion`) | **Se retira** (dirección dada, 7.1 punto 2) | Ídem, con su punto de contacto propio en la puerta del implementador (T-2) |
 | D3 «Hablar con Sirius por Telegram» (`docs/implementation/bloques_del_motor.yml:249`, hoy `fuera_de_alcance`) | **Revisar la clasificación** | La necesidad que lo motivaba —que un aviso llegue al propietario— vuelve, pero ahora el candidato natural a darlo es Sirius, no Telegram |
 | D4 «Partir un objetivo grande» (`docs/implementation/bloques_del_motor.yml:257`, pendiente; ADR-089 lo aplaza) | **Revisar la prioridad** | Si el propietario parte los objetivos en sus sesiones externas, este bloque pierde urgencia; no se descarta |
 
@@ -243,9 +281,9 @@ ahora mismo.
 
 | Etapa | Estado hoy | Impacto de la visión nueva | Propuesta |
 |---|---|---|---|
-| **0.2 Memoria útil** (`docs/evolution/RECTOR.md:140-146`) | **Autorizada y en construcción** (excepción del 28-08-2026, incidencia #412) | **Ninguno sobre su alcance.** Sí sobre su lectura: su puerta de salida es «puede construir un paquete de contexto fiable y trazable **para una tarea externa**» (`docs/evolution/RECTOR.md:146`). Con la visión nueva, «tarea externa» deja de ser un ejemplo y pasa a ser el caso de uso central: la tarea externa es una sesión de ChatGPT, Claude o Codex | **No tocar el alcance.** Registrar que su puerta es también la primera pieza de la memoria común (apartado 6) |
-| **0.3 Habilidades y permisos** (`docs/evolution/RECTOR.md:148-154`) | No autorizada | **Sube.** «Buscar información o recurrir a herramientas para ayudarme con ingeniería» y «abrir ChatGPT o Claude y activar su micrófono» son literalmente contrato de habilidades + permisos acotados + acción reversible + registro. Hoy el producto no tiene ninguna herramienta: el adaptador declara que no hay tools ni web (`src/sirius/adapters/llm/openai_responses.py:5-6`) [V] | **Candidata a ser la siguiente etapa** tras 0.2. Decisión del propietario (apartado 7, D-G) |
-| **0.4 Delegación supervisada** (`docs/evolution/RECTOR.md:156-162`) | No autorizada | **Se redefine o se reordena.** Su contenido —un especialista por tarea, paquete de contexto, presupuesto, seguimiento, revisión, síntesis— **ya lo hace el motor**, con perfiles versionados, presupuesto, convergencia y evidencia. Que Sirius lo haga *además* deja de ser consecuencia y pasa a ser decisión | Presentar al propietario dos lecturas: (a) 0.4 se conserva como «Sirius delega **al motor**» —una habilidad más—, o (b) 0.4 se pospone porque la necesidad ya está cubierta. **No se elige aquí** |
+| **0.2 Memoria útil** (`docs/evolution/RECTOR.md:140-146`) | **Autorizada y en construcción** (excepción del 28-08-2026, incidencia #412) | **Ninguno sobre su alcance.** Sí sobre su lectura: su puerta de salida es «puede construir un paquete de contexto fiable y trazable **para una tarea externa**» (`docs/evolution/RECTOR.md:146`). Con la visión nueva, «tarea externa» deja de ser un ejemplo y pasa a ser el caso de uso central: la tarea externa es una sesión de ChatGPT, Claude o Codex | **No tocar el alcance ni la puerta.** La relación entre esa puerta y la memoria común es una **hipótesis que se puede estudiar**, no una dependencia: esta propuesta **no** hace de 0.2 un requisito previo de la memoria común, ni al revés (apartado 6.1) |
+| **0.3 Habilidades y permisos** (`docs/evolution/RECTOR.md:148-154`) | No autorizada | **Sube.** «Buscar información o recurrir a herramientas para ayudarme con ingeniería» y «abrir ChatGPT o Claude y activar su micrófono» son literalmente contrato de habilidades + permisos acotados + acción reversible + registro. Lo apagado es el **turno conversacional**: el adaptador declara que no hay tools ni web (`src/sirius/adapters/llm/openai_responses.py:5-6`) [V]. Integraciones sí hay (OBS, audio, credenciales, exportación), así que lo que falta es el contrato de herramientas y permisos, no la capacidad de integrar | **Candidata a ser la siguiente etapa** tras 0.2, si el propietario lo ordena (apartado 7.2, T-7) |
+| **0.4 Delegación supervisada** (`docs/evolution/RECTOR.md:156-162`) | No autorizada | **Se redefine, conservando su núcleo útil.** La delegación de *encargos de trabajo* ya la hace el motor, con perfiles versionados, presupuesto, convergencia y evidencia. Lo que el motor **no** hace, y sigue siendo de Sirius, es delegar una **consulta de ingeniería del propietario** en un especialista y devolver el resultado a la conversación | **Conservar explícitamente esa delegación especializada** al redefinir la etapa, para que no se borre por omisión al decir «esto ya lo hace el motor» (nota de 2.1; decisión T-8). No se construye ahora |
 | **0.5 Voz** (`docs/evolution/RECTOR.md:164-170`) | No autorizada… **pero construida** | **Contradicción documental que la visión hace urgente.** Model Studio tiene entrada y salida de voz cableadas en el producto [V]. La visión conserva la voz explícitamente | Reconciliar: declarar qué parte de 0.5 quedó cubierta por Model Studio y qué falta (interrupción, misma conversación, escucha explícita). **No renumerar nada** |
 | **0.6 Percepción y automatización digital** (`docs/evolution/RECTOR.md:172-178`) | No autorizada… **parcialmente construida** | **Sube, y también tiene contradicción documental.** El control de OBS (escenas, grabación) es control limitado de una aplicación, y está construido y verificado [V el código / D la verificación]. «Manejo del ordenador y dispositivos» y «avisarme de que un trabajo terminó» caen aquí y en 0.3 | Reconciliar igual que 0.5, y decidir si el **aviso al propietario** entra por aquí o por 0.3 |
 | **0.7 Puente de laboratorio y dispositivos** (`docs/evolution/RECTOR.md:180-186`) | No autorizada | **Ninguno de fondo.** Ojo con una confusión fácil: «ayudar con electrónica y montaje» —conversar, calcular, leer una hoja de datos— es 0.3, no 0.7. 0.7 es el puente a dispositivos reales con controlador determinista | Sin cambios. Conviene dejar escrita la distinción para que no se planifique 0.7 por una necesidad que es de 0.3 |
@@ -278,7 +316,7 @@ porque el propietario debe poder decidir sin miedo a parar algo:
 | **S2** (medir el investigador externo) y **B1** (investigar desde una orden) | cerrados con evidencia | Si se retira el investigador, **sus bloques siguen cerrados**: un bloque cerrado registra lo que se midió, no lo que se usa. Lo que cambia es que su conclusión pasa a ser histórica | Añadir una línea de estado a cada uno cuando el propietario decida, sin borrar la evidencia |
 | **C4** (la auditoría dentro del motor) | cerrado | Igual que S2/B1 | Igual |
 | **D1** (pasar el mando de GitHub al motor, clase por clase) | **pendiente**; sus tres mitades tienen llamante desde el 27-08-2026, y los siete días no han empezado | **Se simplifica.** El orden de conmutación del contrato §11.3 es documental → programación → auditoría. Si la auditoría se retira, D1 pasa de tres clases a dos | Registrar el cambio de orden cuando la retirada se decida. **No conmutar nada** |
-| **D3** (Telegram) | `fuera_de_alcance` | **Vuelve la necesidad, no la herramienta.** La visión pide que al propietario le llegue el aviso; hoy el canal es GitHub Mobile (contrato §7, seis estados notificables) y el candidato nuevo es Sirius | Mantener `fuera_de_alcance` para Telegram y abrir «Sirius avisa» como capacidad del producto (0.3/0.6), **no** como bloque del motor |
+| **D3** (Telegram) | `fuera_de_alcance` | **Vuelve la necesidad, no la herramienta.** La dirección 6 del apartado 7.1 ya fija que **avisa Sirius**; hoy el canal es GitHub Mobile (contrato §7, seis estados notificables) y Sirius no lo lee | Mantener `fuera_de_alcance` para Telegram y tratar «Sirius avisa» como capacidad del producto (0.3/0.6), **no** como bloque del motor. Lo que queda abierto es el camino técnico, no el quién (T-9) |
 | **D4** (partir un objetivo grande) | **pendiente**; ADR-089 aplaza el descomponedor automático y lo deja en la sesión interactiva | **Pierde urgencia.** Si el propietario parte los objetivos en ChatGPT/Claude/Codex, el descomponedor automático resuelve un problema que deja de tener | Revisar la prioridad. No descartarlo: sigue siendo el único camino para un objetivo del tamaño de una versión |
 
 ---
@@ -286,9 +324,12 @@ porque el propietario debe poder decidir sin miedo a parar algo:
 ## 4. Documentos y decisiones que habría que enmendar
 
 Se listan con el apartado exacto, qué dice hoy, qué cambiaría y por qué. **Ninguna de
-estas enmiendas se ha hecho**, y varias tocan documentos APROBADOS, que solo el
-propietario puede cambiar (`RECTOR.md` §16 fija la jerarquía; AGENTS.md prohíbe cambiar
-documentos canónicos sin decisión explícita).
+estas enmiendas se ha hecho.** Varias tocan documentos APROBADOS, y ahí la regla es de
+**autoridad**, no de teclado: cambiarlos exige una decisión del propietario (`RECTOR.md`
+§16 fija la jerarquía; AGENTS.md prohíbe cambiar documentos canónicos sin decisión
+explícita), pero una vez tomada, redactarla y abrir la PR puede hacerlo una IA autorizada
+por él. Para la mayoría de estas filas la decisión **ya está tomada** (apartado 7.1); lo
+que falta es escribirla.
 
 ### 4.1 Las que la visión nueva obliga a tocar
 
@@ -298,7 +339,7 @@ documentos canónicos sin decisión explícita).
 | 2 | `docs/evolution/RECTOR.md` §4, líneas 58 y 63 | «1. El usuario habla normalmente con Sirius» … «6. Al cerrar, Sirius sintetiza el resultado y propone qué debe conservarse» | El modelo híbrido deja de ser el único; se admite que el propietario hable directamente con las IAs externas y que la síntesis sea opcional | Es el choque más directo con la visión, y está en un documento APROBADO |
 | 3 | `docs/evolution/DECISIONS.md` EV-002, línea 13 | «El usuario se relacionará principalmente con Sirius» | Enmienda o sustitución por una decisión nueva de la serie EV | Una decisión aprobada no se reinterpreta: se sustituye con otra decisión |
 | 4 | `docs/evolution/DECISIONS.md` EV-003 | Sirius abre sesiones especializadas, prepara el contexto y «recupera e integra el resultado» | Se conserva como capacidad **posible**, no como el camino por el que llega el trabajo | Ídem |
-| 5 | `docs/evolution/DECISIONS.md` EV-004 + `docs/evolution/RECTOR.md:69` (§5) | «Memoria canónica **exclusiva** de Sirius»; «Sirius mantiene una **única** memoria canónica»; los agentes «no poseerán ni modificarán directamente la memoria canónica» | Hace falta decir si la memoria común es (a) parte de la memoria canónica de Sirius, (b) una tercera cosa fuera de EV-004, o (c) el motivo para enmendar EV-004 | La visión pide que **las IAs externas la consulten y la actualicen**. Tal como está redactado EV-004, eso está prohibido. **No se elige aquí**: es la decisión D-D del apartado 7 |
+| 5 | `docs/evolution/DECISIONS.md` EV-004 + `docs/evolution/RECTOR.md:69` (§5) | «Memoria canónica **exclusiva** de Sirius»; «Sirius mantiene una **única** memoria canónica»; los agentes «no poseerán ni modificarán directamente la memoria canónica» | Hace falta decir si la memoria común es (a) parte de la memoria canónica de Sirius, (b) una tercera cosa fuera de EV-004, o (c) el motivo para enmendar EV-004 | La visión pide que **las IAs externas la consulten y la actualicen**. Tal como está redactado EV-004, eso está prohibido. **No se elige aquí**: es la decisión T-3 del apartado 7.2, y puede resolverse sin enmendar EV-004 si la memoria común se declara distinta de la memoria canónica |
 | 6 | `docs/evolution/STATUS.md`, apartado «Vigente», líneas 23-24 | «Sirius conserva … síntesis final»; «El modelo de interacción principal es híbrido: Sirius es el interlocutor principal» | Refleja lo que el Rector diga tras su enmienda | Es el espejo del Rector; si el Rector cambia y este no, se repite el error que el propio documento se reprocha (quince días diciendo que 0.1 no estaba aceptado) |
 | 7 | `docs/implementation/AUTOMATION_OPERATING_CONTRACT.md` §11.1, filas de las líneas 628 y 632 | `investigación` → «motor, desde su nacimiento»; `auditoría` → «sí (etiqueta propia) / incidencia / sí» | Retirar ambas filas, o marcarlas como clases sin ejecutor | La tabla es **cerrada a propósito** y su propia regla lo dice: «Una clase que no aparezca aquí no puede crear WorkItems». Quitar una fila es **enmienda del contrato**, igual que ADR-088 y ADR-099 lo fueron al añadirlas |
 | 8 | `docs/implementation/AUTOMATION_OPERATING_CONTRACT.md` §12.4, tabla cerrada | Fila `auditoria` → `auditoria:solicitada` | Retirar esa fila si se retira el carril | Ídem: es la única etiqueta fuera del espacio `sirius:*` que el motor puede aplicar |
@@ -362,8 +403,11 @@ apartado 4.
 | Dependencias de terceros del motor | Solo biblioteca estándar + `platformdirs` (`src/sirius_engine/cli.py:41`) + `yaml` (4 módulos). **No** necesita PySide6, SQLAlchemy, alembic, pydantic, keyring, openai, cryptography ni argon2 |
 | Dependencias de terceros del producto | Las once de `pyproject.toml:11-23` |
 
-Conclusión: **el motor no arrastra al producto ni al revés**. La separación de paquetes
-no hay que hacerla; ya está y está vigilada.
+Conclusión, dicha con su alcance exacto: **hay separación de paquetes, comprobada de
+forma estática y vigilada por prueba**. Eso significa que ningún módulo de uno importa a
+otro y que sus dependencias de terceros son disjuntas — no significa independencia
+completa demostrada. Lo que sigue compartido está en 5.3, y no se ha ejecutado nada para
+comprobar que cada lado arranca y funciona sin el otro.
 
 ### 5.3 Independencia de ejecución — **parcial**, con cuatro costuras reales [V]
 
@@ -463,11 +507,19 @@ alojada o cualquier otra cosa son candidatos, y esta propuesta no compara ningun
 sí hace falta antes de comparar es la lista de lo que tendría que cumplir, porque sin ella
 la comparación no tiene criterio.
 
+**Tampoco se fija su lugar en el roadmap.** La memoria común no tiene etapa asignada, y
+esta propuesta no se la asigna ni la ordena respecto a Sirius 0.2: son dos trabajos cuya
+relación está por estudiar (apartado 7.2, T-5).
+
 ### 6.1 Punto de partida comprobado
 
-- **No existe nada parecido hoy.** Ni «Obsidian», ni «Basic Memory», ni «memoria
-  compartida», ni «memoria común» aparecen en `docs/`, `src/` ni `scripts/` [V, búsqueda
-  vacía].
+- **No hay nada declarado como tal, y eso es lo único que la comprobación sostiene.** Ni
+  «Obsidian», ni «Basic Memory», ni «memoria compartida», ni «memoria común» aparecen en
+  `docs/`, `src/` ni `scripts/` [V, búsqueda vacía]. **Una búsqueda por nombres no prueba
+  ausencia funcional**: dice que nadie ha llamado a esto por su nombre, no que la función
+  no esté cubierta en parte por otra pieza. La evaluación funcional —qué requisitos de
+  6.3 cumple ya cada pieza existente— **no se ha hecho**, y es trabajo previo a elegir
+  nada.
 - **La separación de las otras dos memorias ya está decidida** (D6, 29-08-2026): la del
   producto en el equipo del propietario, la del motor en su rama. Esa decisión dice
   «permanecen separadas», no dice nada sobre una tercera.
@@ -475,9 +527,13 @@ la comparación no tiene criterio.
   construir: el repositorio mismo (documentos, ADR, `docs/investigaciones/` con caducidad
   declarada, historial de git), el diario del motor en `estado-del-motor`, y la memoria
   del producto (SQLite, con origen consultable y detección de conflictos).
-- **La puerta de salida de 0.2 ya apunta aquí**: «construir un paquete de contexto fiable
-  y trazable para una tarea externa» (`docs/evolution/RECTOR.md:146`). Es, literalmente, la operación que
-  una memoria común necesita del lado de Sirius.
+- **Hay un parecido con la puerta de salida de 0.2, y se deja como hipótesis, no como
+  dependencia.** Esa puerta pide «construir un paquete de contexto fiable y trazable para
+  una tarea externa» (`docs/evolution/RECTOR.md:146`), que se parece a lo que la memoria
+  común necesitaría del lado de Sirius. **Parecerse no es depender**: esta propuesta
+  **no** convierte 0.2 en requisito previo de la memoria común, ni la memoria común en
+  parte de 0.2. Si conviene ligarlas, eso se estudia y se decide aparte (apartado 7.2,
+  T-5).
 
 ### 6.2 Las tres responsabilidades, sin obligar a tres bases
 
@@ -545,38 +601,77 @@ cita en vez de copiar.
 - R14. **El propietario no escribe fichas.** El coste de mantenimiento recae en las IAs y
   en el motor; lo del propietario es confirmar o corregir, no redactar.
 
-### 6.4 Preguntas que la elección de herramienta tendrá que responder, y aquí no se responden
+### 6.4 Lo que la elección de herramienta tendrá que responder, y aquí no se responde
 
-1. ¿La memoria común **es** la memoria canónica de Sirius (EV-004) o una cosa distinta?
-   De esto depende si hay que enmendar una decisión aprobada.
-2. ¿Las IAs externas escriben **directamente**, o proponen y algo confirma?
-3. ¿Qué parte del repositorio privado puede reflejarse ahí?
-4. ¿Quién arbitra un conflicto: una regla, Sirius, o el propietario?
-5. ¿Qué ocurre cuando la memoria común y el diario del motor discrepan sobre un trabajo?
-   (La respuesta previsible —manda el motor— conviene escribirla antes, no después.)
+Dos cosas ya están dadas por la dirección del propietario y no se vuelven a preguntar: la
+memoria común es **memoria del trabajo**, y **las IAs la actualizan** (apartado 7.1,
+dirección 5). Lo que queda abierto son decisiones técnicas, y viven en el apartado 7.2:
+
+- **T-3** — si formalizarla fuera de EV-004 o enmendar EV-004.
+- **T-4** — con qué mecanismo escriben las IAs, y quién arbitra un conflicto.
+- **T-5** — cómo se conecta con la memoria propia de Sirius, con el diario del motor, con
+  el propio repositorio y con Sirius 0.2; y la evaluación funcional que falta antes de
+  decidirlo.
+- **T-6** — qué del repositorio privado puede reflejarse ahí.
+
+Una pregunta más, que ninguna de esas cuatro cubre y conviene contestar antes de escribir
+código: **qué ocurre cuando la memoria común y el diario del motor discrepan sobre un
+trabajo**. La respuesta previsible —manda el motor, que es quien tiene la autoridad del
+estado— conviene escribirla antes, no después.
 
 ---
 
-## 7. Decisiones mínimas pendientes antes de preparar la implementación
+## 7. Dirección expresada y decisiones técnicas pendientes
 
-Ordenadas por lo que bloquean. Ninguna se toma aquí.
+Este apartado separa dos cosas que la primera versión de esta propuesta mezclaba en un
+único interrogatorio: **lo que el propietario ya ha decidido** —y por tanto no se le
+vuelve a preguntar— y **lo que queda técnicamente abierto**.
 
-| Id | Decisión | Qué bloquea | Qué NO depende de ella |
+### 7.1 Dirección ya expresada por el propietario
+
+Estas seis afirmaciones son dirección dada. No son preguntas, no son hipótesis y esta
+propuesta no las reabre. Lo que sí hace es decir, para cada una, **qué documento vigente
+la contradice hoy**, porque mientras esos documentos digan lo contrario cualquier trabajo
+posterior chocará con ellos.
+
+| Dirección dada | Qué significa operativamente | Qué documento vigente la contradice hoy |
+|---|---|---|
+| **1. Sirius no intermedia obligatoriamente el trabajo.** El propietario conversa, encarga y decide desde ChatGPT, Claude o Codex | Sirius deja de ser el paso obligatorio y el sintetizador de todo; sigue siendo el compañero personal y de ingeniería | `docs/evolution/RECTOR.md:22`, `:25`, `:58`, `:63`; `docs/evolution/DECISIONS.md` EV-002 y EV-003; `docs/evolution/STATUS.md:23-24` (apartado 4.1, filas 1-4 y 6) |
+| **2. La investigación y la auditoría dedicadas pasan a las sesiones externas** | Los dos carriles propios dejan de ser el camino de esos encargos | `docs/implementation/AUTOMATION_OPERATING_CONTRACT.md` §11.1 (líneas 628 y 632) y §12.4; `docs/implementation/SIRIUS_WORK_ENGINE_ARQUITECTURA_MINIMA.md:476` («OBLIGATORIO en el MVP»); `docs/implementation/AGENTES_SUPERFICIE_DE_INVOCACION.md:73` (apartado 4.1, filas 7-11) |
+| **3. Se conservan los revisores y las comprobaciones del ciclo** | Revisor Claude, revisor Codex, agregador, convergencia, corrector y Quality siguen enteros (apartado 2.3) | Ninguno. La dirección coincide con lo vigente; se registra para que una retirada mal delimitada no se los lleve por delante |
+| **4. Sirius conserva su memoria propia** | La memoria del producto sigue siendo suya y vive en su equipo | Ninguno. Coincide con la decisión D6 del 29-08-2026 y con ADR-083 |
+| **5. La memoria común corresponde al trabajo, y las IAs la actualizan** | Es memoria del trabajo y de los proyectos, no de Sirius; las IAs escriben en ella | `docs/evolution/DECISIONS.md` EV-004 y `docs/evolution/RECTOR.md:69`, que reservan la memoria canónica a Sirius y prohíben que los agentes la modifiquen (apartado 4.1, fila 5). Ver T-3: puede resolverse declarando que la memoria común **no es** la memoria canónica, sin enmendar EV-004 |
+| **6. Sirius debe avisar sobre el estado de los trabajos** | Sirius es quien avisa de que algo terminó, falló o necesita atención | Ninguno lo prohíbe. Hoy simplemente no está construido: el canal vigente es GitHub (contrato §7, seis estados notificables) y Sirius no lo lee |
+
+**La dirección no es la enmienda, y conviene no confundirlas.** Que el propietario haya
+dicho hacia dónde va **no cambia por sí solo** los documentos aprobados: mientras
+`RECTOR.md` §4 y EV-002 sigan escritos como están, cualquier trabajo que los contradiga
+seguirá siendo, formalmente, una desviación. La enmienda es un **acto aparte**, con su
+forma propia: una decisión nueva de la serie EV o una versión nueva del Rector, y un ADR
+para lo que toque al motor y al contrato operativo.
+
+Y esa enmienda es **trabajo, no otra pregunta**. La autoridad es del propietario; la
+ejecución no tiene por qué serlo: una IA autorizada por él puede redactar la enmienda,
+abrir la PR y preparar el ADR. Lo único que no puede hacer es decidir en su lugar ni
+autorizarse a sí misma — igual que hoy con la fusión (contrato §8).
+
+### 7.2 Decisiones técnicas realmente pendientes
+
+Ninguna de estas la resuelve la dirección de 7.1. Donde hay recomendación, se dice; y
+**ninguna se ejecuta aquí**.
+
+| Id | Decisión técnica | Por qué sigue abierta | Recomendación inicial |
 |---|---|---|---|
-| **D-A** | ¿Deja Sirius de ser el interlocutor obligatorio, y la síntesis pasa a ser opcional? | Todo el apartado 4.1 (filas 1-6). Sin esto, cualquier trabajo posterior contradice documentos APROBADOS | Nada del motor; la ola de 0.2 sigue igual |
-| **D-B1** | ¿Se retira el **auditor** dedicado? | Filas 7, 8, 12 y 13 del apartado 4.1; el orden de conmutación de D1 | La revisión del ciclo y las comprobaciones, que se conservan |
-| **D-B2** | ¿Se retira el **investigador** dedicado? (decisión distinta de D-B1, aunque se contesten juntas) | Filas 7, 9 y 12; las filas `investigador@1/@2` del manifiesto de prompts | Ídem, y `docs/investigaciones/`, que es resultado, no agente |
-| **D-C** | Al retirar: ¿se **desactiva**, se **congela** o se **borra**? | El tamaño del trabajo. Desactivar (quitar el disparador) es reversible; borrar toca las piezas enumeradas en el apartado 2.3 —nueve filas en el auditor, diez en el investigador— y sus pruebas, sin contar los ADR, que no se borran (4.3) | La decisión D-B: se puede decidir retirar sin decidir aún el cómo |
-| **D-D** | ¿La memoria común es la memoria canónica de Sirius (EV-004), una tercera cosa, o el motivo para enmendar EV-004? | La fila 5 del apartado 4.1 y toda la elección de herramienta | Los requisitos R1-R14, que valen en los tres casos |
-| **D-E** | ¿Escriben las IAs externas **directamente** en la memoria común? | La frontera de confianza y el diseño entero. Tal como está EV-004, hoy la respuesta escrita es «no» | La disponibilidad con el ordenador apagado (R1), que es previa |
-| **D-F** | ¿Qué puede salir del repositorio privado hacia la memoria común y hacia las IAs externas? | R9, y cualquier prototipo que se quiera probar | R1, R2 y R11 |
-| **D-G** | ¿Sube **0.3 Habilidades y permisos** como siguiente etapa tras 0.2, para que Sirius pueda buscar, usar herramientas y avisar? | El orden del roadmap del producto. Es lo que el propietario pide más veces en la visión, y hoy no existe nada de eso | El cierre de la ola de 0.2, que va por su cuenta |
-| **D-H** | ¿Cómo se reconcilia **Model Studio** con las etapas 0.5 y 0.6, sin renumerar versiones? | La fila 15 del apartado 4.2 y las etapas 0.5/0.6 del apartado 3.1 | Todo lo demás |
-| **D-I** | ¿Quién avisa al propietario cuando un trabajo termina, falla o necesita atención: GitHub Mobile (hoy), Sirius, o ambos? | El bloque D3 y el §7 del contrato | La retirada de los dos carriles |
-
-**Decisiones que el propietario ya dio y que aquí NO se reabren:** conservar el
-repositorio actual; conservar Sirius y el motor construidos; mantener la IA local
-competente para más adelante; que el propietario trabaje desde ChatGPT, Claude y Codex.
+| **T-1** | **Modo de retirada de los dos carriles**: desactivación reversible, congelación o borrado | La dirección dice *que* se retiran; no dice *cómo*, y las tres opciones tienen costes muy distintos (apartado 2.3) | **Desactivación reversible**: quitar el disparador de cada carril y dejar de despachar esas clases, **conservando el código, los perfiles, los ADR, el historial y los resultados** —`docs/investigaciones/` y los informes de auditoría no se tocan—. Es lo más barato de deshacer si el traslado a las sesiones externas no rinde, y no destruye nada medido. **No ejecutada** |
+| **T-2** | Qué se hace con la puerta del implementador que cede el perfil `investigador` (`.github/workflows/implement-sirius-work.yml:171-180`) | Es el único punto de contacto entre un carril a retirar y un workflow del ciclo, y toca `.github/**`, donde la automatización no puede escribir (ADR-002): exige mano distinta | Bajo T-1, **dejarla puesta**: con el carril desactivado no se dispara, y quitarla es un cambio de workflow que no aporta nada mientras la retirada sea reversible |
+| **T-3** | Cómo se formaliza la memoria común frente a EV-004: ¿declararla **fuera** de la memoria canónica de Sirius, o enmendar EV-004? | La dirección fija que las IAs la actualizan; no fija si eso exige tocar una decisión aprobada o basta con declarar que es otra cosa | Explorar primero la vía que **no** enmienda EV-004 (memoria del trabajo ≠ memoria canónica de Sirius): es menos invasiva y coherente con la dirección 5 |
+| **T-4** | **Con qué mecanismo** escriben las IAs: escritura directa, o propuesta más confirmación; y quién arbitra un conflicto | «Las IAs la actualizan» fija el permiso, no el mecanismo ni el arbitraje; y el repositorio ya tiene una regla que debe sobrevivir: una exploración no se convierte en decisión aprobada (contrato §9) | Ninguna todavía: depende de T-3 |
+| **T-5** | **Conexión de la memoria común con lo que ya existe**: con la memoria propia de Sirius, con el diario del motor, con el propio repositorio y con Sirius 0.2 | Es la decisión que esta propuesta declaró mal en su primera versión. Hoy **no está decidida** ninguna de las dos direcciones: ni que 0.2 sea requisito previo, ni que la memoria común dependa de él | Antes de decidir nada, hacer la **evaluación funcional que falta**: qué requisitos de 6.3 cumple ya cada pieza existente. Sin ese dato, ligar 0.2 y la memoria común sería una decisión sin medida detrás |
+| **T-6** | **Frontera de salida**: qué del repositorio privado puede reflejarse en la memoria común y llegar a las IAs externas | La dirección no la menciona, y es la que decide si la memoria común es segura. El motor ya tiene la pieza conceptual (política de egress y `ExportSafeBrief`) | Que la protección sea **mecánica** y no una instrucción al modelo, como ya exige la arquitectura del motor §6.1 |
+| **T-7** | **Orden del roadmap del producto**: ¿0.3 «Habilidades y permisos» como siguiente etapa tras 0.2? | Es lo que dan las manos a Sirius —herramientas del turno conversacional y avisos—, y hoy no está autorizada. Ordenarlo es del propietario | Ninguna: es una decisión de prioridad suya, y la regla de activación del Rector §17 se aplica igual sea cual sea |
+| **T-8** | Si se construye la **delegación especializada de Sirius** para consultas de ingeniería, y cómo se distingue de un encargo del motor | Se conserva como posibilidad (nota de 2.1) y la dirección no la pide ni la descarta. Redefinir 0.4 sin decidir esto la borraría por omisión | Dejarla explícitamente viva al redefinir 0.4, y no construirla hasta que haya una consulta real que la justifique |
+| **T-9** | **Camino técnico del aviso**: cómo llega a Sirius el desenlace de un trabajo, y si GitHub Mobile sigue avisando en paralelo | La dirección fija que Sirius avisa; no fija por dónde se entera. Hoy Sirius no lee GitHub, y el motor notifica seis estados por ahí (contrato §7) | Ninguna todavía: conviene decidirlo con T-7 delante, porque el aviso es una habilidad más |
+| **T-10** | Reconciliación de **Model Studio** con las etapas 0.5 y 0.6, sin renumerar versiones | Voz y captura están construidas y no aparecen en ningún documento de estado (apartado 4.2, fila 15). La dirección conserva ambas capacidades, así que el hueco documental estorba | Declarar qué parte de 0.5 y 0.6 quedó cubierta y qué falta, sin tocar la numeración |
 
 **Lo que NO hay que decidir todavía:** la herramienta de la memoria común; la numeración
 o el alcance de ninguna versión; si el motor se extrae a otro repositorio; y el plan
@@ -626,17 +721,23 @@ repositorio**, no una verificación del historial de git.
 
 ## 9. Cómo seguir
 
-1. El propietario lee esta propuesta y responde las decisiones **D-A** a **D-I** del
-   apartado 7 —o las que quiera; no hace falta contestarlas todas de golpe: D-A y D-B son
-   las que desbloquean el resto—.
-2. Cada decisión que tome se registra donde corresponda: un ADR nuevo para lo que decide
-   sobre el motor o la memoria; una enmienda del Rector y de `DECISIONS.md` para lo que
-   cambia la visión aprobada. Este documento no las escribe.
+1. **La dirección del apartado 7.1 no necesita respuesta**: ya está dada. Lo que necesita
+   es que alguien la escriba donde hoy dice lo contrario — una decisión nueva de la serie
+   EV o una versión nueva del Rector, y un ADR para el motor y el contrato operativo. Es
+   trabajo, y el propietario puede encargarlo a una IA autorizada sin dejar de ser quien
+   decide.
+2. **Las diez decisiones técnicas del apartado 7.2 sí necesitan respuesta**, y no todas a
+   la vez: **T-1** (modo de retirada) desbloquea el trabajo sobre los dos carriles, y
+   **T-3/T-5** desbloquean el de la memoria común. Las demás pueden esperar sin bloquear
+   nada.
 3. Solo entonces se prepara el plan de implementación, que el encargo excluye
    expresamente de aquí.
 
 **Si falta información:** las nueve cuestiones no verificadas del apartado 5.5 son las que
-faltan, y ninguna de ellas bloquea las decisiones del apartado 7. La que más se acerca a
+faltan, y ninguna de ellas bloquea las decisiones del apartado 7.2. Se añade una décima
+que esta revisión deja abierta a propósito: la **evaluación funcional** de qué requisitos
+de 6.3 cumple ya cada pieza existente (T-5). No se ha hecho, y sin ella no debería
+decidirse la relación entre la memoria común y Sirius 0.2. La que más se acerca a
 bloquear es el coste de trasladar investigación y auditoría a las aplicaciones externas
 (5.5, punto 6): **no hay ninguna medida de eso en el repositorio**, y esta propuesta no la
 inventa.
