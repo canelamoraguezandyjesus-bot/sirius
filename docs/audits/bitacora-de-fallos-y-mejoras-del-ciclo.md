@@ -2329,3 +2329,20 @@ ADR o su incidencia cuando se adopte.
     tanto, la regla operativa es: **volver a ejecutar `siguiente_adr.py` tras
     `git fetch` justo antes de abrir la PR**, y recordar que renumerar incluye
     el TÍTULO de la PR, porque el squash lo usa como mensaje de commit.
+19. **Nada comprueba lo que un ADR afirma SOBRE otro documento.**
+    `tests/automation/test_citas_de_los_adr.py` valida que las RUTAS citadas
+    existan, y `test_registro_de_decisiones.py` vigila la numeración, pero
+    ninguna prueba comprueba que «ADR-X dice Y» sea cierto, ni que «ningún ADR
+    documenta Z» lo sea. Por eso Quality pasa en verde con una cita cruzada
+    falsa, y el defecto queda fijado en el registro permanente de la decisión,
+    que es donde más caro sale. **Dos rondas seguidas de #566 (08-09) son la
+    misma familia**: la ronda 1 atribuyó a ADR-153 —que trata de `check.ps1`—
+    el cierre de la ventana de alto prematuro de la GUI, y la ronda 2 afirmó
+    que «ningún ADR razona esa cadena» cuando el propio ADR-162 la razona en
+    sus líneas 101-109. Las dos las cazó un revisor leyendo, no una prueba.
+    Candidatos: (a) un guardián que extraiga toda referencia `ADR-<n>` de cada
+    ADR y exija que el título del ADR citado aparezca en la frase, o que la
+    afirmación venga con el comando que la comprueba; (b) prohibir las
+    afirmaciones universales sobre el registro («ningún ADR…») salvo con el
+    `grep` transcrito al lado. No cabe en el alcance de #566 —solo `tests/gui/`
+    y su ADR—, así que va en ficha propia.
