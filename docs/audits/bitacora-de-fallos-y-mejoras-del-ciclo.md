@@ -4160,6 +4160,64 @@ tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py -q -s -k paquete_completo
 > aquí?»**.
 ---
 
+### 83. Mi cifra falsa llegó al criterio de parada de un ADR, y el revisor encontró la medición que yo no tenía (08-09-2026, 22:10 UTC)
+
+`CLAUDE-P3-003` (moderada) señala que ADR-169 mezcla dos poblaciones. La línea
+que señala dice: «la cifra publicada **que la incidencia cita**: `29/47; 50; 0;
+63/81`». **La cita es exacta: esa frase la escribí yo en el encargo**, y sobre
+ella el implementador fundó su criterio de parada y la activación de la tercera
+condición de aceptación.
+
+O sea: mi error de medición **no se quedó en un comentario mío**. Entró en un
+encargo, de ahí a un ADR, y de ahí a un criterio de parada. Es el coste real de
+las cuatro confusiones de hoy, y el más caro no fue equivocarme: fue **que la
+equivocación tuviera curso legal** porque venía firmada como dato del encargo.
+
+**Y el revisor aporta la medición que a mí me faltaba, que es la que de verdad
+importa.** La única salida publicada de `scripts/medir_banco_con_ollama_real.py`
+en todo el árbol es del propietario, 02-09-2026, `qwen3:4b-instruct`
+(ADR-125). Comprobada por mí:
+
+| | sin filtro (doble que conserva todo) | **con el filtro fiel** |
+|---|---|---|
+| aciertos exactos | 7/47 | **22/47** |
+| elementos de más | 285 | **39** |
+| **críticas perdidas** | 9 | **10** |
+| cobertura | 62/81 | **59/81** |
+
+**Son CUATRO mediciones, no tres**, y la cuarta es la única que se parece a lo
+que recibiría una persona:
+
+| medición | exactas | de más | críticas | hallados |
+|---|---|---|---|---|
+| paquete completo, filtro inerte, política uniforme | 0/47 | 487 | 0 | 72/81 |
+| etapa de búsqueda con petición real, sin filtro | 17/47 | 162 | 0 | 78/81 |
+| arnés de examen, semántica de laboratorio | 29/47 | 50 | 0 | 67/81 |
+| **vía completa con Ollama REAL y filtro real (02-09)** | **22/47** | **39** | **10** | **59/81** |
+
+**Lo que la cuarta fila cambia, y es lo importante de esta entrada:**
+
+1. **Con modelo real, el filtro ya hacía casi todo el trabajo de ruido**:
+   `285 → 39` de más y `7/47 → 22/47` exactas. El problema de la palanca 3 no
+   era «bajar el ruido» a secas, como su encargo —el mío— daba por hecho.
+2. **Pierde 10 críticas**, y las 0 omisiones críticas son lo único que el
+   propietario declaró innegociable. Las tres primeras mediciones dan `0`
+   porque en todas el filtro no descarta: **la columna que importa solo se
+   mueve cuando el filtro funciona**, y entonces se rompe.
+3. **Esa medición es del 02-09** y desde entonces entraron M18b-M20, P1, H2 y
+   H1. **No hay línea base vigente**, y establecerla exige la máquina del
+   propietario. La decisión de la línea depende de un número que hoy nadie
+   tiene.
+
+**Lo que me deja esto sobre mí**: llevaba doce horas midiendo con el
+instrumento que corre en CI y que, precisamente por correr en CI, tiene el
+filtro apagado. Las cuatro columnas que he citado todo el día son de
+configuraciones donde **la pieza que decide no está encendida**. No es que
+mirara la población equivocada: es que miraba el sistema con lo interesante
+desconectado, y ninguna de mis comprobaciones podía notarlo, porque todas
+comprobaban coherencia interna de esas mismas corridas.
+---
+
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
 
 1. `ollama_category_classifier.py`: ruta relativa y sin
