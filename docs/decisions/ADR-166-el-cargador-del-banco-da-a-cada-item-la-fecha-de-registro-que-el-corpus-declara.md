@@ -29,7 +29,11 @@
    `created_at` ya es la fecha real de registro, así que ningún usuario ve
    diferencia — esto corrige el **arnés**, no el producto. Y no garantiza que
    ninguna otra métrica del banco se mueva: si se mueve, se transcribe y se
-   explica caso a caso, no se ajusta ninguna cota.
+   explica caso a caso, no se ajusta ninguna cota. *(Añadido tras la primera
+   revisión de esta PR, y por eso se dice cuándo: tampoco garantiza que
+   `updated_at` lleve la fecha del corpus — el arnés queda **fechado a
+   medias** y `updated_at` sigue siendo la del reloj del día de la medición.
+   El límite, con su dato medido y su procedencia, está en «Consecuencias».)*
 3. **Criterio de parada (decidido ANTES de ver ningún resultado).**
    - Si el motivo del descarte de `DEC-012` en `B04-CA-32` **antes** del
      cambio NO es `G8` «posterior al corte de registro», la premisa de
@@ -45,8 +49,13 @@
    banco pueda nacer con la fecha del reloj. Se hace de la única forma que lo
    consigue por construcción: la fecha se fija **dentro del propio cargador**,
    en el mismo punto donde se crea el ítem y antes de devolverlo, y la prueba
-   recorre **los 97 ítems del canon**, no una muestra, comparando `created_at`
-   con lo que el corpus declara para cada uno. Lo que NO queda imposible, y se
+   recorre **los 95 ítems que el canon crea** —los 97 que el corpus porta
+   menos los dos que porta sin texto a propósito, que no llegan a crear fila
+   y por tanto no tienen `created_at` que mirar—, no una muestra, comparando
+   `created_at` con lo que el corpus declara para cada uno. *(La cifra decía
+   «97» hasta la primera revisión de esta PR; se corrige aquí porque la
+   prueba fija `len(esperados) == 95` y una ficha no puede afirmar una
+   cobertura que su prueba no tiene.)* Lo que NO queda imposible, y se
    dice: que alguien escriba un cuarto arnés que llame a los casos de uso sin
    pasar por el cargador. Reunir en un único bucle las tres cargas que hoy
    existen (`_ejecutar_banco`, `_ejecutar_banco_motor_portado`,
@@ -162,16 +171,37 @@ ramas de `_load_canon_item`), es decir restaurada exactamente la conducta
 anterior a esta ficha, sobre el árbol ya construido:
 
 ```
-FAILED tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py::test_el_cargador_fecha_cada_item_con_el_registro_que_el_corpus_declara - AssertionError: assert {('memory', 1....561852', ...} == {('memory', 1....000000', ...}
+FAILED tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py::test_el_cargador_fecha_cada_item_con_el_registro_que_el_corpus_declara - AssertionError: assert {('memory', 1....100979', ...} == {('memory', 1....000000', ...}
 FAILED tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py::test_b04_ca_32_entra_porque_su_registro_ya_no_es_posterior_al_corte - AssertionError: assert [('DECISION:1...de registro')] == []
-2 failed, 3 passed, 29 deselected in 3.02s
+2 failed, 2 passed, 30 deselected in 2.20s
 ```
 
-El detalle que la primera imprime es la firma del artefacto: los 97 valores
-`'2026-09-08 12:35:12.8…'`, todos del mismo instante, donde el corpus declara
-once fechas distintas. El de la segunda es el descarte literal
+El detalle que la primera imprime es la firma del artefacto: los 95 valores
+escritos, todos del mismo instante del reloj de la máquina, donde el corpus
+declara once fechas distintas. El de la segunda es el descarte literal
 `('DECISION:12', 'G8', 'posterior al corte de registro')`. Restauradas las
 dos líneas, las dos pasan.
+
+**El lado esperado de la primera prueba se lee del corpus, no de la
+implementación, y también se vio fallar.** La primera revisión de esta PR
+señaló que `esperados` se calculaba llamando a `_fecha_de_registro`, la misma
+función que decide lo que el cargador escribe: los dos lados de la comparación
+se movían a la vez, así que la prueba comprobaba que la base coincide con la
+implementación y no con lo que el corpus declara. Ahora el lado esperado lee
+`item["ejes_p2"]["valid_from"]` del fixture (y, para el único `null`,
+`_REGISTRO_DE_LO_NO_FECHADO`). La mutación que lo demuestra es la que la
+revisión propuso, y que la versión anterior de la prueba dejaba en **verde**
+(`1 passed`): en `_fecha_de_registro`, la rama del `None` devuelve un instante
+ajeno al corpus, `2026-12-01T00:00:00Z`, en vez de
+`_REGISTRO_DE_LO_NO_FECHADO`. Con el lado esperado leído del corpus, esa misma
+mutación deja la prueba en rojo:
+
+```
+E       AssertionError: assert {('memory', 1....000000', ...} == {('memory', 1....000000', ...}
+E         Differing items:
+E         {('memory', 5): '2026-12-01 00:00:00.000000'} != {('memory', 5): '2026-06-15 00:00:00.000000'}
+1 failed, 33 deselected in 3.72s
+```
 
 **Los dos guardianes del corpus, vistos FALLAR por mutación.** No fijan
 conducta sino hechos del fixture sobre los que se apoya la decisión, así que
@@ -267,10 +297,13 @@ todos en `tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py`:
 
 - `test_el_cargador_fecha_cada_item_con_el_registro_que_el_corpus_declara`:
   recorre **los 95 ítems que el canon crea** (97 menos los dos que porta sin
-  texto a propósito), no una muestra, y compara `created_at` columna a
-  columna con lo que el corpus declara para cada uno; fija además que hay
-  once fechas distintas, porque el artefacto tenía la firma contraria —una
-  sola compartida por todos—.
+  texto a propósito, que no llegan a crear fila y por tanto no tienen
+  `created_at` que mirar), no una muestra, y compara `created_at` columna a
+  columna con lo que el corpus declara para cada uno —el lado esperado se
+  construye leyendo `ejes_p2.valid_from` del fixture, no llamando a
+  `_fecha_de_registro`, para que un cambio de la regla no mueva los dos lados
+  a la vez—; fija además que hay once fechas distintas, porque el artefacto
+  tenía la firma contraria —una sola compartida por todos—.
 - `test_b04_ca_32_entra_porque_su_registro_ya_no_es_posterior_al_corte`: no se
   conforma con que el caso acierte, mira el **motivo**: exige que la traza no
   traiga el descarte `G8` «posterior al corte de registro» para `DEC-012` y
@@ -285,6 +318,27 @@ todos en `tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py`:
 
 - El banco de 47 casos deja de medir, en su etapa de búsqueda, un artefacto
   del arnés. Medir la palanca 2 (incidencia #572) vuelve a medir la palanca.
+- **El arnés queda fechado a medias, y quien mida sobre `updated_at` tiene que
+  contarlo.** Esta ficha fecha `created_at` con lo que el corpus declara;
+  `updated_at` sigue llevando la fecha del reloj del día en que corre la
+  medición, porque `_fijar_fecha_de_registro` solo emite
+  `UPDATE memories/decisions SET created_at = :momento`. Para lo que este
+  encargo cierra es suficiente, y eso es comprobable: `G8` compara
+  `created_at` y solo `created_at`
+  (`src/sirius/domain/staged_engine_gates.py:213-215`), que es también la
+  única de las dos columnas que el puerto lee
+  (`src/sirius/adapters/persistence/staged_engine_port.py:71` y `:78`). Pero
+  **cualquier palanca que derive su ventana de vigencia de `updated_at`
+  seguirá midiendo, en esa parte, el reloj de la máquina y no el corpus**, y
+  quien la mida con este arnés tiene que descontarlo en vez de atribuir a la
+  palanca un efecto que es del arnés. La consecuencia no es hipotética y ya
+  está medida —el dato es del propietario, publicado en la incidencia #574,
+  no una estimación de esta ficha—: sobre la rama de la palanca 2
+  (`58fa079e`), fechando solo `created_at` esa rama pierde **5 críticas**, y
+  fechando también `updated_at` pierde **0**. No se fecha aquí porque el
+  propietario lo dejó expresamente fuera en esa misma incidencia («no hay que
+  fecharlo para cumplir este encargo»); queda declarado como límite conocido,
+  con su procedencia al lado, en vez de callado.
 - **El producto no cambia**: ni una línea de `src/`. En producción
   `created_at` ya era la fecha real de registro; lo que se corrige es el dato
   con el que se alimentaba al motor en el laboratorio.

@@ -1610,20 +1610,30 @@ def test_el_cargador_fecha_cada_item_con_el_registro_que_el_corpus_declara(
     """Hueco H2 de ADR-148 (ADR-166): cada ítem cargado lleva la fecha de
     registro que el corpus declara, no la del día en que corre la medición.
 
-    Recorre **los 97 ítems**, no una muestra: cualquier ruta del cargador
-    que dejase uno con la fecha del reloj deja esta prueba en rojo. Y fija
-    además el reparto de fechas distintas que el corpus declara (11 valores),
-    porque el artefacto que H2 describe tenía una firma inconfundible —una
-    sola fecha compartida por los 97—."""
+    Recorre **los 95 ítems que el canon crea** —los 97 que el corpus porta
+    menos los dos que porta sin texto a propósito, que no llegan a crear fila
+    y por tanto no tienen `created_at` que mirar—, no una muestra: cualquier
+    ruta del cargador que dejase uno con la fecha del reloj deja esta prueba
+    en rojo. Y fija además el reparto de fechas distintas que el corpus
+    declara (11 valores), porque el artefacto que H2 describe tenía una firma
+    inconfundible —una sola fecha compartida por todos—."""
     database_path = tmp_path / "sirius.db"
     cargado = _cargar_el_canon(database_path)
     escritos = _registros_escritos(database_path)
     items_por_id = {item["id"]: item for item in _fixture()["items"]}
 
-    esperados = {
-        real: _fecha_de_registro(items_por_id[corpus_id]).strftime(_FORMATO_DE_REGISTRO_EN_SQLITE)
-        for real, corpus_id in cargado.real_a_canonico.items()
-    }
+    # El lado ESPERADO se lee del corpus, no de `_fecha_de_registro`: calcularlo
+    # con la misma funcion que decide lo que el cargador escribe comprobaria
+    # que la base coincide con la implementacion —los dos lados se moverian a
+    # la vez ante cualquier cambio de la regla—, y lo que esta prueba tiene que
+    # comprobar es que coincide con lo que el corpus DECLARA.
+    esperados: dict[tuple[str, int], str] = {}
+    for real, corpus_id in cargado.real_a_canonico.items():
+        declarada = items_por_id[corpus_id]["ejes_p2"]["valid_from"]
+        instante = _instante_del_corpus(
+            _REGISTRO_DE_LO_NO_FECHADO if declarada is None else str(declarada)
+        )
+        esperados[real] = instante.strftime(_FORMATO_DE_REGISTRO_EN_SQLITE)
     assert len(esperados) == 95  # 97 menos los dos que el canon porta sin texto
     obtenidos = {real: escritos[real] for real in esperados}
     assert obtenidos == esperados
