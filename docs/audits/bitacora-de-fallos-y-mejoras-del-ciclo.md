@@ -3537,6 +3537,55 @@ igualdad.
 Tres afirmaciones de la PR, tres comprobadas ejecutándolas. Con eso, lo único
 que falta para la puerta de fusión es Quality verde sobre este head y que la
 revisión cierre.
+
+---
+
+### 73. Ensayo en seco de la puerta de fusión: un veredicto falso más y un hueco que era mi propio error incrustado (08-09-2026, 19:11 UTC)
+
+Pasé la puerta de fusión **antes** de necesitarla, con la ronda 2 aún corriendo,
+para que un veredicto equivocado saliera ahora y no en el momento de fusionar.
+Salieron dos cosas.
+
+**1. Un FALLA falso, el CUARTO veredicto equivocado de este guion.** Dijo que
+el cuerpo de la PR no llevaba `git diff --check` con rango. Lo lleva: dice
+«`git diff --check 6371d4c a8fe837` no imprime nada y sale con código `0`».
+Lo que pasa es que el cuerpo viene **partido por un salto de línea** justo
+entre el comando y el hash, y mi patrón exigía los dos en la misma línea.
+
+**Los cuatro veredictos equivocados de este guion tienen la misma causa**, y
+verlos juntos lo deja claro:
+
+| veredicto | por qué falló |
+|---|---|
+| OK falso sobre «5 críticas» | `grep -E` con `[ií]` no casa UTF-8 multibyte |
+| FALLA falso por SIGPIPE | `printf \| grep -q` bajo `pipefail` en 131 KB |
+| FALLA falso por contexto | casó una frase dentro de la negación que la corrige |
+| FALLA falso por salto de línea | exigía comando y hash en la misma línea |
+
+**Los cuatro comprueban la FORMA del texto, no lo que el texto dice.** Un guion
+que verifica afirmaciones leyendo su envoltorio se equivoca cada vez que el
+envoltorio cambia, y el envoltorio cambia siempre: lo escribe otro. Es el
+límite real de esta herramienta, y conviene tenerlo escrito en vez de seguir
+parcheando patrones: **sirve para cazar lo que FALTA, no para juzgar lo que
+hay.**
+
+**2. Y un hueco que era mi propio error de hoy, incrustado en la herramienta.**
+El guion daba «se puede fusionar» con la incidencia **todavía en
+`reviewing`**. Comprobaba que Quality estuviera verde y que `mergeable_state`
+fuera `clean`, y las dos cosas eran ciertas —pero **`clean` dice que GIT puede
+fusionar, no que el CICLO haya terminado**—. Es exactamente el error de la
+entrada 71, tomar un estado intermedio por final, solo que esta vez lo tenía
+automatizado y me habría dado la razón.
+
+Añadida la comprobación que faltaba: la incidencia tiene que llevar
+`sirius:ready-for-merge`. Con ella, el veredicto de ahora mismo es el correcto:
+**no fusionar todavía**.
+
+Lo que me deja pensando es que el error de la entrada 71 lo cometí a mano y me
+costó una predicción fallada; el mismo error, dentro de un guion, me habría
+costado una fusión prematura y habría venido **con la autoridad de una
+comprobación automática detrás**. Automatizar un criterio no lo mejora: lo
+repite más rápido y con mejor cara.
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
