@@ -35,13 +35,27 @@ M11 (incidencia #453, bloqueada) decida abrirla desde ajustes— ``rank()``
 sigue exactamente el camino de siempre, sin ejecutar ni importar nada del
 motor. ``staged_engine_port``/``staged_engine_candidate`` son opcionales
 porque un caller que nunca abre la puerta no tiene por qué construirlos.
+
+ADR-164 (palanca 1 de ADR-148) cambia CÓMO se interroga a ese motor, no
+cuándo: la pregunta deja de traducirse a una política uniforme para toda
+consulta y pasa por ``InterpreteDePeticion``
+(``sirius.application.interpret_query_request``), que produce su propia
+``Peticion`` —modo, cardinalidad, límite y tiempo inferidos por el modelo
+local; permiso y propósito por regla del producto—. El parámetro
+``query_request_interpreter`` es opcional y por defecto ``None``: sin él,
+este caso de uso emite exactamente la petición uniforme de antes.
 """
 
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import UTC, datetime
 
+from sirius.application.interpret_query_request import (
+    LIMITE_SIN_ATAR,
+    PROPOSITO_RECUPERACION_ORDINARIA,
+    InterpreteDePeticion,
+    PermisoDeRecuperacion,
+)
 from sirius.domain.criticality import Criticality
 from sirius.domain.relevance import (
     KnowledgeKind,
@@ -57,14 +71,10 @@ from sirius.domain.relevance import (
 from sirius.domain.staged_engine import recuperar
 from sirius.domain.staged_engine_contracts import (
     PLANO_COMUN_VACIO,
-    Ambito,
-    Cardinalidad,
     Clase,
-    Modo,
     Peticion,
     PuertoDeRecuperacion,
     SenalesDeCandidato,
-    VentanaTemporal,
 )
 from sirius.ports.decision_repository import DecisionRepository
 from sirius.ports.knowledge_search_repository import KnowledgeSearchRepository
@@ -73,10 +83,10 @@ from sirius.ports.project_repository import ProjectRepository
 
 __all__ = ["RankRelevantKnowledgeUseCase"]
 
-#: Propósito declarado de toda petición al motor por etapas: E0 exige uno no
-#: vacío (G1) y Sirius 0.1 no tiene hoy un permiso explícito por llamada —
-#: cada llamada a ``rank()`` es, por construcción, una recuperación de
-#: contexto ordinaria. M16 (SIRIUS-ARQ-0.2 §11.3/§11.5, incidencia #504)
+#: Propósito declarado de toda petición al motor por etapas: ``E0`` exige uno
+#: no vacío (``G1``) y Sirius 0.1 no tiene hoy un permiso explícito por
+#: llamada — cada llamada a ``rank()`` es, por construcción, una recuperación
+#: de contexto ordinaria. M16 (SIRIUS-ARQ-0.2 §11.3/§11.5, incidencia #504)
 #: confirma que este literal ya es honesto: contiene la subcadena
 #: ``"contexto"`` a propósito, la misma condición que la réplica del arnés
 #: ``pide_contexto``/``PROPOSITO_DE_CONTEXTO`` exige
@@ -85,13 +95,29 @@ __all__ = ["RankRelevantKnowledgeUseCase"]
 #: ``ContextBuilder._rank_related_knowledge`` para ensamblar el contexto de
 #: un turno — un hecho estructural sobre quién llama, no una adivinanza
 #: sobre la consulta.
-_PROPOSITO_RECUPERACION_ORDINARIA = "recuperacion de contexto relevante (B6b)"
+#:
+#: ADR-164 lo traslada a ``interpret_query_request`` (donde vive la regla del
+#: producto que lo gobierna) y lo reexporta aquí sin cambiar una letra: el
+#: nombre de módulo sigue siendo el punto que una prueba sustituye para
+#: ejercitar la rama sin siembra
+#: (``tests/integration/test_rank_relevant_knowledge.py``), y se lee en cada
+#: llamada, no una sola vez al importar.
+_PROPOSITO_RECUPERACION_ORDINARIA = PROPOSITO_RECUPERACION_ORDINARIA
+
+#: Permiso de la recuperación ordinaria, decidido por REGLA del producto y
+#: nunca por el modelo (ADR-164): la única llamada real a ``rank()`` ensambla
+#: el contexto de un turno que el propietario mismo ha iniciado sobre sus
+#: propios datos locales. Existe como nombre —en vez de quedar implícito en
+#: el valor por defecto del intérprete— para que el día en que Sirius tenga
+#: una operación no autorizada haya un solo sitio donde decirlo.
+_PERMISO_DE_LA_RECUPERACION_ORDINARIA = PermisoDeRecuperacion.AUTORIZADO
 
 #: Límite que "no ata" (misma convención que
 #: ``experiments/adr002/round/cases.py``: "los casos que no declaran limite
 #: reciben un limite que no ata"): mayor que cualquier canon real de Sirius
-#: 0.1 hoy, así que nunca es la causa de que algo se omita.
-_LIMITE_SIN_ATAR = 100_000
+#: 0.1 hoy, así que nunca es la causa de que algo se omita. Trasladado a
+#: ``interpret_query_request`` por ADR-164, reexportado aquí.
+_LIMITE_SIN_ATAR = LIMITE_SIN_ATAR
 
 #: M19a (ADR-127): los dos niveles no ordinarios del canon (M18b,
 #: ``sirius.domain.criticality.Criticality``) — ``None`` ("nadie la ha
@@ -99,53 +125,38 @@ _LIMITE_SIN_ATAR = 100_000
 #: nivel ``ORDINARIO`` implícito.
 _NIVELES_DE_CRITICIDAD_NO_ORDINARIOS = (Criticality.CRITICO, Criticality.IMPORTANTE)
 
+#: El intérprete SIN modelo: produce exactamente la política uniforme
+#: anterior a ADR-164. Es el respaldo de todo llamador que no cablea un
+#: intérprete propio (el estado por defecto de este caso de uso), no un
+#: camino nuevo.
+_INTERPRETE_SIN_MODELO = InterpreteDePeticion()
+
 
 def _peticion_ordinaria(
     query_text: str, operation_id: str, *, active_project_id: int | None
 ) -> Peticion:
-    """La política uniforme con la que ``rank()`` interroga al motor.
+    """La política uniforme con la que ``rank()`` interrogaba al motor antes
+    de ADR-164, y con la que lo sigue interrogando cuando no hay intérprete
+    cableado.
 
-    Modo M1 (ordinario) y cardinalidad EXHAUSTIVA — la misma semántica de
-    "todo lo relevante, sin cuota" que la política de hoy ya tiene, y la que
-    menos depende de un objetivo de resultados que ninguna llamada a
-    ``rank()`` declara. Ninguno de los dos cambia con M16.
+    Modo M1 (ordinario) y cardinalidad EXHAUSTIVA — la semántica de "todo lo
+    relevante, sin cuota" —, tiempo objetivo "ahora", sin corte de registro y
+    el propósito fijo de arriba. ADR-164 no la cambia: la degrada de política
+    a **respaldo**, y traslada su construcción al intérprete
+    (``InterpreteDePeticion`` sin clasificador produce este mismo valor), para
+    que no existan dos sitios donde se decida qué es una petición ordinaria.
 
-    M16 (SIRIUS-ARQ-0.2 §11.3/§11.5, incidencia #504): el ámbito deja de ser
-    siempre global y se deriva de ``active_project_id`` — el mismo valor que
-    ``_rank_via_staged_engine`` ya calcula para ``project_matches_active``
-    (``self._project_repository.get_active_project()``) — con la misma regla
-    que ``candidate_in_declared_scope``/``project_matches_active`` ya usan:
-    con proyecto activo, ``Ambito(global_=False, proyectos=(id,))``; sin él,
-    ``Ambito(global_=True, proyectos=())``, igual que antes de este encargo.
-    No es información inventada: es la misma señal que ``rank()`` ya lee para
-    otro propósito. A diferencia de la ampliación por categoría de M14
-    (que aplica su propia restricción de ámbito en Python, después de
-    consultar), este ámbito real alimenta directamente ``G4``
-    (``src/sirius/domain/staged_engine_gates.py:135-152``,
-    ``peticion.ambito.autoriza(item.project_id)``) dentro del motor por
-    etapas mismo — la restricción llega también a lo que el motor admite,
-    no solo a la ampliación de categoría. ``Ambito.proyectos`` exige
-    cadenas (``src/sirius/domain/staged_engine_contracts.py:136``, mismo
-    formato que los ids de proyecto que el motor ya persiste como texto,
-    ``src/sirius/adapters/persistence/staged_engine_port.py:129-133``), de
-    ahí ``str(active_project_id)``.
+    El ámbito sigue siendo el de M16 (SIRIUS-ARQ-0.2 §11.3/§11.5, incidencia
+    #504): derivado de ``active_project_id`` por
+    ``ambito_de_recuperacion``, la misma señal que ``_rank_via_staged_engine``
+    ya calcula para ``project_matches_active``.
     """
-    ahora = datetime.now(UTC).isoformat()
-    ambito = (
-        Ambito(global_=True, proyectos=())
-        if active_project_id is None
-        else Ambito(global_=False, proyectos=(str(active_project_id),))
-    )
-    return Peticion(
-        operation_id=operation_id,
-        consulta=query_text,
+    return _INTERPRETE_SIN_MODELO.interpretar(
+        query_text,
+        operation_id,
+        active_project_id=active_project_id,
+        permiso=_PERMISO_DE_LA_RECUPERACION_ORDINARIA,
         proposito=_PROPOSITO_RECUPERACION_ORDINARIA,
-        modo=Modo.M1_ORDINARIO,
-        ambito=ambito,
-        ventana=VentanaTemporal(tiempo_objetivo=ahora, corte_de_registro=None),
-        cardinalidad=Cardinalidad.EXHAUSTIVA,
-        limite_objetivo=_LIMITE_SIN_ATAR,
-        limite_duro=_LIMITE_SIN_ATAR,
     )
 
 
@@ -164,6 +175,7 @@ class RankRelevantKnowledgeUseCase:
         category_matching_enabled: bool = False,
         staged_engine_port: PuertoDeRecuperacion | None = None,
         staged_engine_candidate: SenalesDeCandidato | None = None,
+        query_request_interpreter: InterpreteDePeticion | None = None,
     ) -> None:
         self._memory_repository = memory_repository
         self._decision_repository = decision_repository
@@ -178,10 +190,27 @@ class RankRelevantKnowledgeUseCase:
         self._category_matching_enabled = category_matching_enabled
         self._staged_engine_port = staged_engine_port
         self._staged_engine_candidate = staged_engine_candidate
+        #: ADR-164 (palanca 1 de ADR-148): el intérprete que convierte ESTA
+        #: pregunta en su propia ``Peticion``. ``None`` —el estado por
+        #: defecto de todo llamador anterior— mantiene la política uniforme
+        #: de siempre (``_peticion_ordinaria``), así que cablearlo es lo
+        #: único que cambia el comportamiento, y solo donde se cablea.
+        self._query_request_interpreter = query_request_interpreter
 
     def rank(self, query_text: str) -> tuple[RankedKnowledge, ...]:
-        """Return every vigente memory/decision related to ``query_text``,
-        ordered by S7.5's explicit criteria tuple plus M9's category_match.
+        """Return the memories/decisions related to ``query_text``, ordered
+        by S7.5's explicit criteria tuple plus M9's category_match.
+
+        Con un intérprete cableado (ADR-164) lo devuelto ya no es solo lo
+        vigente: ``G6`` decide por el modo inferido, y el puerto real nunca
+        declara el eje de confirmación (``SIN_EJES``,
+        ``sirius.adapters.persistence.staged_engine_port``), así que con
+        ``confirmacion is None`` un item NO vigente solo lo rechaza ``M1``
+        (``sirius.domain.staged_engine_gates._g6``). Es decir: por el camino
+        de siempre y en ``M1``, lo vigente; en ``M2``, ``M3``, ``M4`` y
+        ``M5`` —los cuatro modos restantes que el modelo local puede
+        inferir— también memorias archivadas y decisiones sustituidas. Es la
+        semántica declarada del motor, no un efecto colateral.
 
         A blank or all-punctuation ``query_text`` never raises: it simply
         matches nothing via FTS5, and any candidate that also has no
@@ -199,6 +228,30 @@ class RankRelevantKnowledgeUseCase:
         ):
             return self._rank_via_staged_engine(query_text)
         return self._rank_via_current_pipeline(query_text)
+
+    def _peticion(
+        self, query_text: str, *, operation_id: str, active_project_id: int | None
+    ) -> Peticion:
+        """La ``Peticion`` con la que se interroga al motor (ADR-164).
+
+        Con intérprete cableado, la pregunta se convierte en una petición
+        PROPIA —modo, cardinalidad, límite y tiempo inferidos de la consulta
+        por el modelo local; permiso y propósito por regla del producto, que
+        este caso de uso declara aquí y ningún llamador de ``rank()`` puede
+        inyectar, porque ``rank()`` solo recibe la consulta—. Sin intérprete,
+        la política uniforme de siempre.
+        """
+        if self._query_request_interpreter is None:
+            return _peticion_ordinaria(
+                query_text, operation_id, active_project_id=active_project_id
+            )
+        return self._query_request_interpreter.interpretar(
+            query_text,
+            operation_id,
+            active_project_id=active_project_id,
+            permiso=_PERMISO_DE_LA_RECUPERACION_ORDINARIA,
+            proposito=_PROPOSITO_RECUPERACION_ORDINARIA,
+        )
 
     def _rank_via_staged_engine(self, query_text: str) -> tuple[RankedKnowledge, ...]:
         """ADR-109: recuperación por ``E0-E5`` con las doce puertas y la
@@ -320,7 +373,7 @@ class RankRelevantKnowledgeUseCase:
         active_project = self._project_repository.get_active_project()
         active_project_id = active_project.id if active_project is not None else None
 
-        peticion = _peticion_ordinaria(
+        peticion = self._peticion(
             query_text,
             operation_id=f"rank:{query_text[:64]}",
             active_project_id=active_project_id,
