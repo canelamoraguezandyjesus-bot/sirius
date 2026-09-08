@@ -359,7 +359,14 @@ relanzar_quality_si_ya_termino() {
     exit 1
   fi
   rm -f "$err_file"
-  activos="$(printf '%s' "$runs_json" | jq -r '[.[] | select(.status != "completed")] | length' 2>/dev/null || echo "")"
+  # `jq` itera también los VALORES de un objeto, así que `{}` daba `0` y se
+  # colaba como lista vacía legible (hallazgo P2 de Codex, ronda 5 de #546).
+  # Antes de contar hay que exigir que la respuesta sea una LISTA y que sus
+  # elementos sean objetos: cualquier otra cosa no es interpretable como runs.
+  activos="$(printf '%s' "$runs_json" \
+    | jq -r 'if type == "array" and all(.[]; type == "object")
+             then [.[] | select(.status != "completed")] | length
+             else "no-es-lista-de-runs" end' 2>/dev/null || echo "")"
   case "$activos" in
     ''|*[!0-9]*)
       # ADR-149, corrección del 07-09: código 0 con una salida que no es una
