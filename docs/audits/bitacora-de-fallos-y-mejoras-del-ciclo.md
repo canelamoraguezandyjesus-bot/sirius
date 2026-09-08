@@ -2489,12 +2489,18 @@ ADR o su incidencia cuando se adopte.
   pudo publicar porque medí el encargo antes de lanzarlo (entrada 54). Un
   encargo con la predicción medida delante convierte la revisión en una
   comparación de números, no en una discusión.
-- **Anotado para antes de fusionar**: el título de la PR dice «la fecha de
-  registro que el corpus declara», y el corpus **no declara** fecha de
-  registro —es justo la premisa falsa que corregí—; declara `valid_from`, que
-  la implementación **elige** como fecha de registro y razona. Como el
-  repositorio fusiona por squash usando el título, esa frase quedaría en el
-  registro permanente. Se ajusta al fusionar (regla de la entrada 50).
+- **Anoté que ajustaría el título al fusionar, y luego decidí que no. Lo dejo
+  escrito porque me equivoqué al anotarlo, no al decidirlo.** El título dice
+  «la fecha de registro que el corpus declara», y el corpus no declara fecha de
+  registro: declara `valid_from`. Al ir a cambiarlo leí el ADR entero, y su
+  punto 2 —«qué NO garantiza esto»— dice literalmente que `valid_from` no es la
+  fecha de registro «verdadera», que **el corpus no separa registro de
+  vigencia**, y que es la única fecha que declara por ítem. O sea: **el
+  documento desambigua su propio título dos párrafos después**, y lo hace mejor
+  de lo que yo lo habría hecho. Cambiar el título obligaría además a renombrar
+  el fichero del ADR por coherencia —otra ronda— para arreglar una compresión
+  que el texto ya aclara. **La regla de la entrada 50 sigue valiendo para
+  renumeraciones; no para convertir cada título en un resumen exacto.**
 - **Y aproveché la espera para medir H3, que es decisión de producto del
   propietario y hoy la tendría que tomar a ciegas.** Resulta estar muy acotado:
   **solo dos ítems del canon son `CANDIDATA`** —`MEM-007` (autoridad INFORMAL)
