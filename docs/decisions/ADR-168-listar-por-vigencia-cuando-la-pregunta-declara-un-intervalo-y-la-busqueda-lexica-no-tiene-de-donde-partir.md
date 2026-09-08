@@ -524,11 +524,11 @@ relajar una (`_MAXIMO_ELEMENTOS_DE_MAS_MOTOR` 50 → 69, y el suelo D1 de 21 a
 
 **Cadena completa como UNA SOLA invocación** (ADR-145, ADR-153), con
 `pwsh -File scripts/check.ps1` y su código de salida capturado (ADR-154).
-Re-anclada al árbol de **`41651d1`**, el que trae las correcciones de la
-ronda 2 y la prueba nueva de CLAUDE-R2-002:
+Re-anclada al árbol de **`bcf1a45`**, el que trae la corrección de la ronda 3
+y sus dos pruebas nuevas (CLAUDE-R3-001):
 
 ```
-5230 passed, 17 skipped, 2 xfailed in 569.96s (0:09:29)
+5232 passed, 17 skipped, 2 xfailed in 566.46s (0:09:26)
 EXIT_CODE_CHECK=0
 ```
 
@@ -545,7 +545,7 @@ de espacios, de modo que no demostraba nada sobre este cambio. La forma
 correcta es la que ADR-166 ya usaba, con las dos revisiones:
 
 ```
-$ git diff --check 6371d4c 41651d1
+$ git diff --check 6371d4c bcf1a45
 EXIT_DIFF_CHECK=0
 ```
 
@@ -555,19 +555,19 @@ contra el árbol de trabajo que confirma esta sección —`git diff --check
 6371d4c` — tampoco imprime nada y sale `0`, así que el texto documental
 posterior queda igual de cubierto.
 
-Lo único posterior a `41651d1` es **esta sección de la ficha** y la sección
+Lo único posterior a `bcf1a45` es **esta sección de la ficha** y la sección
 de validaciones del cuerpo de la PR: cambios documentales que no tocan código
 ni pruebas, y que existen porque la sección tiene que anclarse al árbol que la
 cadena midió. Si una corrección posterior toca el fichero de pruebas, la
 cadena se vuelve a ejecutar entera y esta sección se re-ancla al árbol nuevo,
 sin conservar la terna del anterior.
 
-(Las ternas anteriores de esta rama —`5229 passed, 17 skipped, 2 xfailed in
-576.21s` sobre `a8fe837`, `5227 … 566.49s` sobre `ffd8d05` y `…552.29s` sobre
-`19581ee` más dos ficheros documentales sin confirmar— eran las de sus árboles
-y así se leen; la de `41651d1` sube una prueba respecto de `a8fe837` porque la
-que fija el corte de registro con tres extremos es nueva. Una cifra sin árbol
-al lado no se cita como actual (ADR-154).)
+(Las ternas anteriores de esta rama —`5230 passed, 17 skipped, 2 xfailed in
+569.96s` sobre `41651d1`, `5229 … 576.21s` sobre `a8fe837`, `5227 … 566.49s`
+sobre `ffd8d05` y `…552.29s` sobre `19581ee` más dos ficheros documentales sin
+confirmar— eran las de sus árboles y así se leen; la de `bcf1a45` sube dos
+pruebas respecto de `41651d1` porque las dos de CLAUDE-R3-001 son nuevas. Una
+cifra sin árbol al lado no se cita como actual (ADR-154).)
 
 ## Consecuencias
 
