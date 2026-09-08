@@ -1220,6 +1220,40 @@ def _row_rects(window: MainWindow) -> list[QRect]:
     ]
 
 
+def _settled_row_height(qtbot: QtBot, window: MainWindow, index: int) -> int:
+    """El alto de la fila ``index`` una vez que Qt ha terminado de recalcularlo.
+
+    Que el texto esté puesto no significa que la fila ya mida lo que ese texto
+    necesita. ``MessageItemWidget`` mide dos veces cada cambio de contenido
+    (ver ``_sync_size_when_laid_out``): una síncrona, con el cuerpo todavía en
+    su geometría de construcción, y otra en el turno siguiente del bucle de
+    eventos, ya con el cuerpo colocado por el layout. Entre las dos la fila
+    enseña un alto prematuro —medido aquí: 24 px donde el contenido asentado
+    pide 54, y 32 px donde pide 62— que Qt corrige un turno después.
+
+    Leer ahí dentro es leer un número que va a cambiar, y era la causa del
+    fallo intermitente `assert 32 >= 54` de esta suite (ADR-160).
+
+    La espera es determinista y sin `sleep`: dos lecturas consecutivas del
+    bucle de eventos que coincidan, y que no queden por debajo del alto que el
+    widget pide. El ``QTimer.singleShot(0, ...)`` que dispara la segunda medida
+    tiene prioridad sobre el temporizador de sondeo de ``waitUntil``, así que
+    entre dos sondeos siempre ha corrido.
+    """
+    heights: list[int] = []
+
+    def settled() -> bool:
+        heights.append(_row_rects(window)[index].height())
+        return (
+            len(heights) >= 2
+            and heights[-1] == heights[-2]
+            and heights[-1] >= _widget_at(window, index).sizeHint().height()
+        )
+
+    qtbot.waitUntil(settled, timeout=5000)
+    return heights[-1]
+
+
 def _assert_rows_do_not_overlap_in_chronological_order(window: MainWindow) -> None:
     """Every row must start at or below the bottom of the previous row, in the
     same order as the underlying (chronological) list: no vertical overlap
@@ -1343,13 +1377,23 @@ def test_streaming_message_grows_without_overlapping_neighbours(
     window.send_button.click()
     qtbot.waitUntil(lambda: window.message_list.count() == 2, timeout=5000)
     qtbot.waitUntil(lambda: _widget_at(window, 1).rendered_plain_text() == "parcial", timeout=5000)
-    mid_stream_height = _row_rects(window)[1].height()
+    # Las dos alturas que compara la aserción de abajo se leen sobre una
+    # geometría ya asentada, no en cuanto aparece el texto: entre ambas cosas
+    # hay un turno del bucle de eventos en el que la fila enseña un alto
+    # transitorio. Comparar contra ese valor era el fallo intermitente
+    # `assert 32 >= 54`, y compararlo consigo mismo dejaba la aserción vacua
+    # (ADR-160).
+    mid_stream_height = _settled_row_height(qtbot, window, 1)
     _assert_rows_do_not_overlap_in_chronological_order(window)
 
     provider.release()
     qtbot.waitUntil(lambda: window.send_button.isEnabled(), timeout=5000)
+    qtbot.waitUntil(
+        lambda: _widget_at(window, 1).rendered_plain_text() == "parcial completo",
+        timeout=5000,
+    )
     _assert_rows_do_not_overlap_in_chronological_order(window)
-    assert _row_rects(window)[1].height() >= mid_stream_height
+    assert _settled_row_height(qtbot, window, 1) >= mid_stream_height
 
     # A message that arrives once the stream has finished must not be
     # invaded by the (now taller) row it grew into just before.
@@ -1358,6 +1402,52 @@ def test_streaming_message_grows_without_overlapping_neighbours(
     window.send_button.click()
     qtbot.waitUntil(lambda: window.message_list.count() == 4, timeout=5000)
     qtbot.waitUntil(lambda: window.send_button.isEnabled(), timeout=5000)
+    _assert_rows_do_not_overlap_in_chronological_order(window)
+
+
+@pytest.mark.gui
+def test_row_height_read_as_soon_as_the_text_lands_is_not_the_settled_one(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """Fija el invariante que necesita la medición de la prueba de streaming:
+    el alto de una fila leído en cuanto aparece el texto NO es el definitivo.
+
+    Reproduce de forma determinista lo que en la cadena completa ocurre por
+    azar. El texto nuevo se pone desde el propio hilo de la prueba, así que
+    entre ponerlo y leer el alto no pasa ni un turno del bucle de eventos:
+    justo la ventana en la que Qt todavía no ha colocado el cuerpo nuevo y la
+    fila enseña un alto transitorio.
+
+    Si esta prueba se escribiera leyendo ``_row_rects`` en vez de
+    ``_settled_row_height`` —es decir, como medía la prueba de streaming antes
+    de ADR-160— compararía el alto prematuro consigo mismo y fallaría.
+    """
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    conversation_repository = build_sqlite_conversation_repository(database_path)
+    conversation = conversation_repository.get_or_create_main_conversation()
+    conversation_repository.append_message(conversation.id, MessageRole.USER, "hola")
+    conversation_repository.append_message(conversation.id, MessageRole.SIRIUS, "parcial")
+
+    window = _build_window(database_path)
+    qtbot.addWidget(window)
+    _wait_for_real_layout(qtbot, window)
+
+    widget = _widget_at(window, 1)
+
+    # El mismo gesto que hace la ventana con cada trozo del stream.
+    widget.set_streaming_text("Sirius", "parcial", bold=True)
+    assert widget.rendered_plain_text() == "parcial"
+    premature_height = _row_rects(window)[1].height()
+
+    settled_height = _settled_row_height(qtbot, window, 1)
+
+    assert premature_height < settled_height, (
+        f"la lectura inmediata ({premature_height} px) y la asentada "
+        f"({settled_height} px) coinciden: esta prueba ya no está midiendo la "
+        "ventana que ADR-160 corrige"
+    )
+    assert settled_height >= widget.sizeHint().height()
+    assert _row_rects(window)[1].height() == settled_height
     _assert_rows_do_not_overlap_in_chronological_order(window)
 
 

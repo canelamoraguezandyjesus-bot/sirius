@@ -153,6 +153,36 @@ es la comparación vacua que ya documenta
 `test_finished_message_row_is_as_tall_as_its_widget_asks` («ambas medidas
 salían igual de obsoletas»).
 
+### 4. La prueba nueva, vista fallar antes del cambio (mutación)
+
+`test_row_height_read_as_soon_as_the_text_lands_is_not_the_settled_one` fija el
+invariante de forma determinista: pone el texto desde el propio hilo de la
+prueba —sin que pase un turno del bucle de eventos— y compara la lectura
+inmediata con la asentada.
+
+Mutación aplicada: sustituir el cuerpo de `_settled_row_height` por
+`return _row_rects(window)[index].height()`, es decir, deshacer el cambio y
+medir como se medía antes.
+
+```
+# con la mutación (medida de antes del cambio)
+assert premature_height < settled_height
+E       assert 24 < 24
+1 failed
+
+# sin la mutación
+1 passed
+```
+
+Las dos direcciones, como exige ADR-001 §3.
+
+### 5. Validaciones obligatorias
+
+`uv run ruff format --check .` (607 ficheros), `uv run ruff check .`,
+`uv run mypy src tests` (574 ficheros), `uv run pytest` y `git diff --check`,
+todas en verde. `tests/gui` completa: 482 pasadas, 2 saltadas (QtMultimedia
+ausente, MS-A02).
+
 ## Decisión
 
 **Las dos alturas que compara la aserción se leen sobre una geometría
