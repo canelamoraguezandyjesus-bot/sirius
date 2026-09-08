@@ -315,9 +315,8 @@ mecánico, y habría evitado los dos casos.
 > `docs/evolution/PROPUESTA_SEPARACION_SIRIUS_MOTOR.md`. El texto anterior se
 > conserva entero, con su fecha del 14 de agosto de 2026.
 
-**ADR-159 retira el carril dedicado del Auditor.** Es **enmienda preparada**: en
-vigor al fusionarse su Pull Request, y esa aprobación documental **no ejecuta**
-la retirada. Dos apartados de este documento quedan superados por esa decisión:
+**ADR-161 retira el carril dedicado del Auditor.** Entra en vigor con la fusión
+de su Pull Request, y esa aprobación documental **no ejecuta** la retirada. Dos apartados de este documento quedan superados por esa decisión:
 
 - **§2, «Superficie 3 — Desde Sirius» (línea 73).** Se describía como «el final
   del camino»: un control dentro de Sirius que creara la incidencia y aplicara la
@@ -328,14 +327,14 @@ la retirada. Dos apartados de este documento quedan superados por esa decisión:
 - **§6, «Orden recomendado», pasos 3 a 5.** Ya no describen el siguiente paso de
   nada: la línea multimodelo se resolvió por otra vía —ADR-095 (el atestado) y
   ADR-098 (la configuración medida)— y su destinatario, el investigador
-  dedicado, también queda retirado por ADR-159.
+  dedicado, también queda retirado por ADR-161.
 
 **Lo que NO queda superado:** §1, la distinción entre «desde dónde lanzo un
 agente» y «con qué IA lo ejecuto», y §8, la nota de arranque tardía con su tabla
 de afirmación → comprobación, que sigue siendo el precedente citable de esa
 práctica.
 
-**Ejecución pendiente:** ADR-159 registra la decisión, no la ejecuta. La
+**Ejecución pendiente:** ADR-161 registra la decisión, no la ejecuta. La
 superficie 2 —el workflow `audit-sirius-repository.yml`— sigue construida y
 operativa hoy, y seguirá estándolo después de fusionar.
 

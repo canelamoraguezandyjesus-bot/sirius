@@ -915,10 +915,10 @@ El plan de implementación NO se escribe aquí: es la fase posterior a la aproba
 > reescribe para que parezca que acertó.
 
 **§7.3 dice en su título «GPT Researcher (Worker de investigación, OBLIGATORIO en
-el MVP)». Esa obligatoriedad queda SUPERADA por ADR-159**, que retira el carril
+el MVP)». Esa obligatoriedad queda SUPERADA por ADR-161**, que retira el carril
 dedicado de investigación: esos encargos pasan a las sesiones externas del
-propietario. ADR-159 es **enmienda preparada**: entra en vigor al fusionarse su
-Pull Request, y esa aprobación documental **no ejecuta** la retirada.
+propietario. ADR-161 entra en vigor con la fusión de su Pull Request, y esa
+aprobación documental **no ejecuta** la retirada.
 
 Lo que eso cambia y lo que no:
 
@@ -927,11 +927,11 @@ Lo que eso cambia y lo que no:
 - **No cambia:** la política global de egress de §6.1 y el concepto de
   `ExportSafeBrief` siguen siendo la referencia de este repositorio sobre cómo se
   protege una frontera de confidencialidad —**mecánicamente, no diciéndole al
-  modelo que no filtre**—, y ADR-158 los cita como tal para el conocimiento común
+  modelo que no filtre**—, y ADR-160 los cita como tal para el conocimiento común
   del trabajo.
 - **No cambia:** §7.5, el comprobador determinista, y todo lo relativo a revisión
-  y corrección. Los revisores del ciclo se conservan enteros (ADR-159).
-- **Ejecución pendiente:** ADR-159 registra la decisión, **no la ejecuta**. El
+  y corrección. Los revisores del ciclo se conservan enteros (ADR-161).
+- **Ejecución pendiente:** ADR-161 registra la decisión, **no la ejecuta**. El
   carril de investigación sigue operativo hoy, y seguirá estándolo después de
   fusionar hasta que la retirada técnica se prepare y se ordene.
 

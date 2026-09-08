@@ -305,17 +305,17 @@ El usuario aprobó el 22 de julio de 2026 este documento y las decisiones EV-001
 
 **Origen:** dirección del propietario, recogida y comprobada en
 `docs/evolution/PROPUESTA_SEPARACION_SIRIUS_MOTOR.md` §7.1.
-**Registro:** ADR-158 y ADR-159 en `docs/decisions/`.
+**Registro:** ADR-160 y ADR-161 en `docs/decisions/`.
 **Decisiones canónicas:** EV-015 a EV-019 en `docs/evolution/DECISIONS.md`.
 **Aprobación:** la fusión de la Pull Request que introduce esta enmienda, por el
 propietario.
 **Relación con las decisiones canónicas anteriores:** **EV-015 precisa EV-001, EV-016 sustituye EV-002 y acota EV-003, y EV-004 se
 mantiene vigente sin enmienda.**
-**Estado documental: ENMIENDA PREPARADA.** Entra en vigor con la fusión de la
-Pull Request que la introduce, por el propietario, conforme al procedimiento
-establecido en este repositorio. **Aprobación documental y retirada técnica son
-cosas distintas**: la retirada de los carriles de investigación y auditoría
-(ADR-159) sigue sin ejecutar incluso después de fusionar.
+**Entrada en vigor:** la fusión de la Pull Request que introduce esta enmienda,
+por el propietario, conforme al procedimiento establecido en este repositorio.
+**Aprobación documental y retirada técnica son cosas distintas:** esa fusión
+aprueba los documentos y **no** desactiva ningún carril; la retirada de los
+carriles de investigación y auditoría (ADR-161) sigue siendo un acto posterior.
 
 ### 19.1 Qué queda enmendado
 

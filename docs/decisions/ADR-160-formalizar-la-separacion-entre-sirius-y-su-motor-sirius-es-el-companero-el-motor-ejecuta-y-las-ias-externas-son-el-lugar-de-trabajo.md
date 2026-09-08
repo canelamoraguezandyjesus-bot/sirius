@@ -1,21 +1,20 @@
-# ADR-158 — Formalizar la separación entre Sirius y su motor: Sirius es el compañero, el motor ejecuta y las IAs externas son el lugar de trabajo
+# ADR-160 — Formalizar la separación entre Sirius y su motor: Sirius es el compañero, el motor ejecuta y las IAs externas son el lugar de trabajo
 
 - Estado: PROPUESTO
 - Fecha: 2026-09-08
 - Aprobación: la fusión de la PR que introduce este ADR, por el propietario
 - Contexto: la dirección que el propietario expresó al encargar
   `docs/evolution/PROPUESTA_SEPARACION_SIRIUS_MOTOR.md` y al revisarla
-- Estado documental: **ENMIENDA PREPARADA.** Entra en vigor con la fusión de la
-  Pull Request que la introduce, por el propietario, conforme al procedimiento
-  establecido en este repositorio. **La aprobación documental no ejecuta ninguna
-  retirada técnica** (ver ADR-159)
+- Entrada en vigor: la fusión de la Pull Request que introduce este ADR, por el
+  propietario, conforme al procedimiento establecido en este repositorio. **La
+  aprobación documental no ejecuta ninguna retirada técnica** (ver ADR-161)
 - Relación con las decisiones canónicas vigentes, en una línea que se repite
   igual en todos los documentos de esta enmienda: **EV-015 precisa EV-001,
   EV-016 sustituye EV-002 y acota EV-003, y EV-004 se mantiene vigente sin
   enmienda.**
 - Relacionadas: `docs/evolution/DECISIONS.md` (donde viven EV-001 a EV-004 y las
   nuevas EV-015 a EV-019); `docs/evolution/RECTOR.md` §2, §4, §5 y §9.3, que
-  este ADR enmienda por la vía documental; ADR-159 (la retirada de los dos
+  este ADR enmienda por la vía documental; ADR-161 (la retirada de los dos
   carriles); ADR-083 y la decisión D6 (memoria del motor separada de la del
   producto); ADR-001 (disciplina de evidencia)
 
@@ -49,7 +48,7 @@ comprobación sería «he tenido cuidado», que no es una comprobación.
 
 - **No ejecuta la retirada.** Ningún workflow se desactiva, ningún código se
   toca, ninguna clase deja de despacharse. Lo que se registra es la decisión;
-  la ejecución queda pendiente y así se declara (ADR-159).
+  la ejecución queda pendiente y así se declara (ADR-161).
 - **No elige herramienta de memoria**, ni fija dónde vive la memoria común, ni
   la ordena respecto a Sirius 0.2.
 - **No cambia prioridades ni alcance de ninguna versión**, ni renumera nada.
@@ -93,7 +92,7 @@ documentos aprobados**, y mientras `RECTOR.md` §4 y EV-002 sigan escritos como
 están, cualquier trabajo posterior es formalmente una desviación.
 
 Este ADR registra la parte de esa formalización que define **quién responde de
-qué**. La retirada de los dos carriles dedicados va en ADR-159, porque tiene
+qué**. La retirada de los dos carriles dedicados va en ADR-161, porque tiene
 consecuencias y ejecución propias.
 
 ## Opciones consideradas
@@ -228,17 +227,21 @@ fingir que las tenía delante.
   vigente sin enmienda.** Ninguna decisión anterior pierde su texto.
 - `docs/evolution/RECTOR.md` gana un §19 de enmienda al final, que dice qué
   apartados quedan sustituidos y por qué no se editan en su sitio.
-- `docs/evolution/STATUS.md` y `docs/canonical/STATUS.md` registran el cambio.
+- `docs/evolution/STATUS.md` registra el cambio.
+- **`docs/canonical/STATUS.md` NO se toca en esta enmienda, y es deliberado.**
+  `.claude/settings.json` deniega editar `docs/canonical/**`, así que anotar allí
+  estas decisiones es un acto reservado al propietario. Queda como paso suyo,
+  posterior a la fusión, con el mismo formato que ya usa para EV-001 a EV-014.
 - La memoria común entra en el vocabulario del proyecto **sin etapa asignada**:
   no está en el roadmap del Rector y este ADR no se la da.
 - Queda una obligación explícita para quien redefina la etapa 0.4: conservar la
   delegación especializada del punto 6, que de otro modo se borraría por omisión
   al decir «esto ya lo hace el motor».
-- **Estado documental unificado en todos los documentos tocados:** enmiendas
-  **preparadas**, con entrada en vigor al fusionarse la Pull Request por el
-  propietario, conforme al procedimiento establecido. Ese acto es **aprobación
-  documental**; la **retirada técnica** de los dos carriles sigue pendiente
-  después de él, y ADR-159 la mantiene separada.
+- **Entrada en vigor, unificada en todos los documentos tocados:** la fusión de
+  la Pull Request que los introduce, por el propietario, conforme al
+  procedimiento establecido. Ese acto es **aprobación documental**; la
+  **retirada técnica** de los dos carriles es posterior a él, y ADR-161 la
+  mantiene separada.
 
 ## Alternativas descartadas y por qué
 
@@ -251,4 +254,4 @@ fingir que las tenía delante.
   falta la evaluación funcional de qué requisitos cubre ya cada pieza existente.
 - **Dar por retirados los dos carriles en este mismo ADR.** Descartada: tienen
   ejecución, riesgo y reversibilidad propios, y mezclarlos ocultaría que uno está
-  decidido y sin ejecutar. Van en ADR-159.
+  decidido y sin ejecutar. Van en ADR-161.

@@ -1,7 +1,7 @@
 # Propuesta de separación entre Sirius y su motor de trabajo
 
 - **Identificador:** `SIRIUS-PROPUESTA-SEPARACION-001`
-- **Estado:** **REVISADA**; su dirección está recogida en **enmiendas preparadas** el 8 de septiembre de 2026 —EV-015 a EV-019, la §19 del Rector, ADR-158 y ADR-159—, que entran en vigor al fusionarse su Pull Request por el propietario (ver el recuadro siguiente)
+- **Estado:** **REVISADA**; su dirección está recogida en las enmiendas del 8 de septiembre de 2026 —EV-015 a EV-019, la §19 del Rector, ADR-160 y ADR-161—, cuya entrada en vigor es la fusión de su Pull Request por el propietario (ver el recuadro siguiente)
 - **Fecha:** 8 de septiembre de 2026
 - **Árbol sobre el que se comprobó todo:** `main` en `f2085db`
   (`f2085dbbcdef9f33e084131984f1dd6c3daf0101`, 2026-09-07T23:48:23+02:00)
@@ -25,26 +25,25 @@
 Este documento **se conserva tal como quedó tras la revisión del propietario**:
 es el análisis con sus comprobaciones, y no se reescribe para que parezca que
 siempre supo el final. Lo que sigue dice qué partes suyas están ya recogidas en
-una enmienda preparada.
+las enmiendas de esa fecha.
 
-**Estado documental unificado:** las enmiendas están **preparadas**, y entran en
-vigor con la fusión de la Pull Request que las introduce, por el propietario,
-conforme al procedimiento establecido. **Aprobación documental y retirada
-técnica son cosas distintas:** fusionar aprueba los documentos y **no** desactiva
-ningún carril.
+**Entrada en vigor, unificada:** la fusión de la Pull Request que introduce esas
+enmiendas, por el propietario, conforme al procedimiento establecido.
+**Aprobación documental y retirada técnica son cosas distintas:** esa fusión
+aprueba los documentos y **no** desactiva ningún carril.
 
 | De esta propuesta | Dónde está formalizado |
 |---|---|
-| La dirección del apartado 7.1, sus seis puntos | **EV-015 a EV-019** (`docs/evolution/DECISIONS.md`) y **ADR-158** |
+| La dirección del apartado 7.1, sus seis puntos | **EV-015 a EV-019** (`docs/evolution/DECISIONS.md`) y **ADR-160** |
 | Las enmiendas del apartado 4.1, filas 1-4 y 6 | `docs/evolution/RECTOR.md` §19 y `docs/evolution/DECISIONS.md`, con la relación unificada: **EV-015 precisa EV-001, EV-016 sustituye EV-002 y acota EV-003, y EV-004 se mantiene vigente sin enmienda** |
 | La fila 5 del apartado 4.1 (EV-004 y la memoria común) | **EV-018**: el conocimiento común **no es** la memoria canónica, así que **EV-004 queda vigente sin enmienda**. La decisión T-3 del apartado 7.2 queda resuelta por esta vía |
-| Las enmiendas del apartado 4.1, filas 7-13 | **ADR-159**, contrato operativo **§13 (v1.10)**, `docs/implementation/bloques_del_motor.yml`, `docs/operations/MOTOR_DE_SIRIUS.md`, arquitectura mínima del motor §18, superficie de invocación §9 |
-| La recomendación de T-1 (desactivación reversible) | **ADR-159**, apartado «Recomendación técnica de ejecución (no ejecutada)». Sigue siendo recomendación de **forma**: nadie ha ordenado ejecutarla, y su paso 0 —inventariar todas las vías de entrada a cada carril, incluidas activaciones manuales y órdenes en curso— **no se ha hecho** |
-| Las decisiones T-2 y T-4 a T-10 del apartado 7.2 | **Siguen abiertas.** Ninguna se ha decidido aquí. En particular **T-2** —el tratamiento de la puerta del implementador— queda expresamente pendiente en ADR-159, punto 4, hasta comprobar todas las vías de entrada |
+| Las enmiendas del apartado 4.1, filas 7-13 | **ADR-161**, contrato operativo **§13 (v1.10)**, `docs/implementation/bloques_del_motor.yml`, `docs/operations/MOTOR_DE_SIRIUS.md`, arquitectura mínima del motor §18, superficie de invocación §9 |
+| La recomendación de T-1 (desactivación reversible) | **ADR-161**, apartado «Recomendación técnica de ejecución (no ejecutada)». Sigue siendo recomendación de **forma**: nadie ha ordenado ejecutarla, y su paso 0 —inventariar todas las vías de entrada a cada carril, incluidas activaciones manuales y órdenes en curso— **no se ha hecho** |
+| Las decisiones T-2 y T-4 a T-10 del apartado 7.2 | **Siguen abiertas.** Ninguna se ha decidido aquí. En particular **T-2** —el tratamiento de la puerta del implementador— queda expresamente pendiente en ADR-161, punto 4, hasta comprobar todas las vías de entrada |
 | Las filas 14 y 17 del apartado 4.2 (`README.md`, HEAD-R1) y el «Próximo paso» de la fila 16 | **No tocadas**, por orden expresa del propietario de no ampliar el trabajo a otros defectos documentales |
 
 **La retirada de los dos carriles está ACORDADA y NO EJECUTADA.** Hoy siguen
-funcionando si alguien los dispara: la distinción está escrita en ADR-159 y en el
+funcionando si alguien los dispara: la distinción está escrita en ADR-161 y en el
 §13 del contrato, y se puede contrastar con `TABLA_ACTIVACION`, que sigue
 teniendo las cuatro clases.
 
@@ -698,7 +697,7 @@ Ninguna de estas la resuelve la dirección de 7.1. Donde hay recomendación, se 
 
 | Id | Decisión técnica | Por qué sigue abierta | Recomendación inicial |
 |---|---|---|---|
-| **T-1** *(recomendación ya registrada en ADR-159; sigue sin ordenarse su ejecución)* | **Modo de retirada de los dos carriles**: desactivación reversible, congelación o borrado | La dirección dice *que* se retiran; no dice *cómo*, y las tres opciones tienen costes muy distintos (apartado 2.3) | **Desactivación reversible**: quitar el disparador de cada carril y dejar de despachar esas clases, **conservando el código, los perfiles, los ADR, el historial y los resultados** —`docs/investigaciones/` y los informes de auditoría no se tocan—. Es lo más barato de deshacer si el traslado a las sesiones externas no rinde, y no destruye nada medido. **No ejecutada** |
+| **T-1** *(recomendación ya registrada en ADR-161; sigue sin ordenarse su ejecución)* | **Modo de retirada de los dos carriles**: desactivación reversible, congelación o borrado | La dirección dice *que* se retiran; no dice *cómo*, y las tres opciones tienen costes muy distintos (apartado 2.3) | **Desactivación reversible**: quitar el disparador de cada carril y dejar de despachar esas clases, **conservando el código, los perfiles, los ADR, el historial y los resultados** —`docs/investigaciones/` y los informes de auditoría no se tocan—. Es lo más barato de deshacer si el traslado a las sesiones externas no rinde, y no destruye nada medido. **No ejecutada** |
 | **T-2** | Qué se hace con la puerta del implementador que cede el perfil `investigador` (`.github/workflows/implement-sirius-work.yml:171-180`) | Es el único punto de contacto entre un carril a retirar y un workflow del ciclo, y toca `.github/**`, donde la automatización no puede escribir (ADR-002): exige mano distinta | Bajo T-1, **dejarla puesta**: con el carril desactivado no se dispara, y quitarla es un cambio de workflow que no aporta nada mientras la retirada sea reversible |
 | **T-3** *(RESUELTA por EV-018: se declara fuera de la memoria canónica, y EV-004 queda sin enmendar)* | Cómo se formaliza la memoria común frente a EV-004: ¿declararla **fuera** de la memoria canónica de Sirius, o enmendar EV-004? | La dirección fija que las IAs la actualizan; no fija si eso exige tocar una decisión aprobada o basta con declarar que es otra cosa | Explorar primero la vía que **no** enmienda EV-004 (memoria del trabajo ≠ memoria canónica de Sirius): es menos invasiva y coherente con la dirección 5 |
 | **T-4** | **Con qué mecanismo** escriben las IAs: escritura directa, o propuesta más confirmación; y quién arbitra un conflicto | «Las IAs la actualizan» fija el permiso, no el mecanismo ni el arbitraje; y el repositorio ya tiene una regla que debe sobrevivir: una exploración no se convierte en decisión aprobada (contrato §9) | Ninguna todavía: depende de T-3 |

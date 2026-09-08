@@ -352,16 +352,16 @@ El propietario expresó una dirección sobre el reparto entre Sirius y su motor 
 trabajo; `docs/evolution/PROPUESTA_SEPARACION_SIRIUS_MOTOR.md` la recogió y
 comprobó qué documentos la contradecían. Esa dirección queda formalizada en
 **EV-015 a EV-019** (`docs/evolution/DECISIONS.md`), en la **§19** del Rector y
-en **ADR-158** y **ADR-159**.
+en **ADR-160** y **ADR-161**.
 
 **EV-015 precisa EV-001, EV-016 sustituye EV-002 y acota EV-003, y EV-004 se
 mantiene vigente sin enmienda.**
 
-**Estado documental: ENMIENDA PREPARADA.** Entra en vigor con la fusión de la
-Pull Request que la introduce, por el propietario, conforme al procedimiento
-establecido en este repositorio. **Aprobación documental y retirada técnica son
-cosas distintas**: la retirada de los carriles de investigación y auditoría
-(ADR-159) sigue sin ejecutar incluso después de fusionar.
+**Entrada en vigor:** la fusión de la Pull Request que introduce esta enmienda,
+por el propietario, conforme al procedimiento establecido en este repositorio.
+**Aprobación documental y retirada técnica son cosas distintas:** esa fusión
+aprueba los documentos y **no** desactiva ningún carril; la retirada de los
+carriles de investigación y auditoría (ADR-161) sigue siendo un acto posterior.
 
 ### Qué cambia en el apartado «Vigente» de este documento
 
@@ -384,7 +384,7 @@ quedan **enmendadas por EV-016**, y se leen así desde hoy:
 
 ### Los dos carriles dedicados: decisión tomada, ejecución pendiente
 
-ADR-159 registra que **se retiran** los carriles dedicados de investigación
+ADR-161 registra que **se retiran** los carriles dedicados de investigación
 (perfil `investigador`) y auditoría (`auditoria:solicitada`), y que **los
 revisores del ciclo y las comprobaciones se conservan enteros**.
 
@@ -392,7 +392,7 @@ revisores del ciclo y las comprobaciones se conservan enteros**.
 los workflows siguen en su sitio y las etiquetas siguen creadas: **hoy los dos
 carriles funcionan si alguien los dispara**. La forma de ejecución recomendada
 —desactivación reversible, conservando código, perfiles, ADR, historial y
-resultados— está en ADR-159 y **no está ordenada**.
+resultados— está en ADR-161 y **no está ordenada**.
 
 ### Lo que esta formalización NO cambia
 

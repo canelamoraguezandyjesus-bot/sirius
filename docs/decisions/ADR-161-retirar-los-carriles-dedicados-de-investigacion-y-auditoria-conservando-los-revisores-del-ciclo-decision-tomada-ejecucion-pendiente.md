@@ -1,22 +1,21 @@
-# ADR-159 — Retirar los carriles dedicados de investigación y auditoría, conservando los revisores del ciclo: decisión tomada, ejecución pendiente
+# ADR-161 — Retirar los carriles dedicados de investigación y auditoría, conservando los revisores del ciclo: decisión tomada, ejecución pendiente
 
 - Estado: PROPUESTO
 - Fecha: 2026-09-08
 - Aprobación: la fusión de la PR que introduce este ADR, por el propietario
-- Estado documental: **ENMIENDA PREPARADA.** Entra en vigor con la fusión de la
-  Pull Request que la introduce, por el propietario, conforme al procedimiento
-  establecido en este repositorio. **Esa aprobación documental NO ejecuta la
-  retirada**: la retirada técnica queda pendiente y sin fecha, incluso después
-  de fusionar
+- Entrada en vigor: la fusión de la Pull Request que introduce este ADR, por el
+  propietario, conforme al procedimiento establecido en este repositorio. **Esa
+  aprobación documental NO ejecuta la retirada**: la retirada técnica es un acto
+  posterior, sin fecha, y no ocurre por fusionar
 - Contexto: la dirección del propietario recogida en
   `docs/evolution/PROPUESTA_SEPARACION_SIRIUS_MOTOR.md` §7.1, punto 2. La nota
-  de arranque de este trabajo es la de **ADR-158**, publicada antes del primer
+  de arranque de este trabajo es la de **ADR-160**, publicada antes del primer
   cambio documental; este ADR se acoge a ella y no abre otra
 - Relacionadas: **ADR-010** y **ADR-016** (autorizan el carril del Auditor),
   **ADR-095**, **ADR-097**, **ADR-098** y **ADR-099** (autorizan el carril del
   Investigador), a los que **supera sin editarlos**; ADR-088 (precedente exacto
   de cómo se enmienda la tabla cerrada de clases); ADR-002 (la automatización no
-  escribe en `.github/**`); ADR-158 (el reparto de responsabilidades)
+  escribe en `.github/**`); ADR-160 (el reparto de responsabilidades)
 
 ## Contexto y problema
 
@@ -32,7 +31,7 @@ de decidir nada, y la propuesta las enumera fichero a fichero en su apartado 2.3
 
 ## Criterio de parada (escrito ANTES de decidir)
 
-Se hereda el de ADR-158 —al que este trabajo se acoge— y se le añaden dos
+Se hereda el de ADR-160 —al que este trabajo se acoge— y se le añaden dos
 condiciones propias, escritas antes de tocar el registro:
 
 - **(e)** Si al enumerar las piezas apareciera **una sola** compartida entre un
@@ -191,9 +190,8 @@ registro de ejecución ni un plan comprobado.
 - Queda **pendiente** el tratamiento de la puerta del implementador y de la
   etiqueta `auditoria:solicitada`, condicionado al inventario de vías de entrada
   del paso 0 de la recomendación.
-- **Estado documental:** enmienda preparada; entra en vigor al fusionarse la
-  Pull Request por el propietario. Ese acto aprueba el documento y **no** ejecuta
-  la retirada.
+- **Entrada en vigor:** la fusión de la Pull Request por el propietario. Ese
+  acto aprueba el documento y **no** ejecuta la retirada.
 
 ## Alternativas descartadas y por qué
 
