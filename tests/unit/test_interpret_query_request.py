@@ -24,7 +24,10 @@ from sirius.application.interpret_query_request import (
 from sirius.domain.query_intent import IntencionDeConsulta
 from sirius.domain.staged_engine_contracts import Ambito, Cardinalidad, Modo
 
-_AHORA = "2026-06-15T00:00:00+00:00"
+#: El respaldo escribe el «ahora» con el mismo sufijo ``Z`` con que el
+#: corpus declara ``valid_from``/``valid_to``, porque ``G8`` los compara
+#: como cadenas (ADR-164, incidencia #570 ronda 3).
+_AHORA = "2026-06-15T00:00:00Z"
 
 
 class _RelojFijo:

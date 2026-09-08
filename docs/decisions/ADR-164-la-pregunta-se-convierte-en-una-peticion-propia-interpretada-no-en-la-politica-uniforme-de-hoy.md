@@ -145,18 +145,36 @@ Seis traducciones no obvias, escritas aquí porque cada una es una decisión:
   vez, no la pregunta. Se canoniza, por tanto, en un solo sitio —el
   adaptador—, y con dos semánticas distintas porque las dos comparaciones lo
   son:
-  - **corte de registro → final del día que nombra**,
+  - **corte de registro → final del día CIVIL que nombra**,
     `"AAAA-MM-DD 23:59:59.999999"`, la misma forma de `created_at` y por
     tanto comparable con ella. La semántica elegida para «¿qué sabía yo el
     D?» es **lo registrado al final de D**: la pregunta es de grano día, la
     hora que el modelo escriba —o deje de escribir— es formato y no
     información, y la elección no puede quedar en manos del accidente. Errar
-    hacia incluir el día D nunca esconde canon; errar hacia excluirlo sí.
-  - **tiempo objetivo → instante en UTC con desfase explícito**
-    (`…+00:00`), porque `G8` lo compara con `valid_from`/`valid_to`, que son
-    ISO-8601 con zona; una fecha desnuda es su medianoche, que es como el
-    banco adjudica los casos con tiempo objetivo declarado
-    (`B04-CA-06`: `2026-09-15T00:00:00Z`).
+    hacia incluir el día D nunca esconde canon; errar hacia excluirlo sí. El
+    día se lee de lo **escrito**, antes de convertir a UTC (incidencia #570,
+    ronda 3): tomarlo después movería `2026-03-01T00:30:00+02:00` al 28 de
+    febrero y excluiría entero el 1 de marzo, que es el día por el que se
+    pregunta, y con un desfase negativo cerca de medianoche se iría al día
+    siguiente.
+  - **tiempo objetivo → instante en UTC escrito con el sufijo `Z`**, el
+    mismo con el que el corpus declara `valid_from`/`valid_to`. `G8` los
+    compara **como cadenas** (`valid_from > objetivo`), y `"…Z"` no es
+    lexicográficamente comparable con `"…+00:00"`: el `+` (`0x2B`) ordena
+    antes que la `Z` (`0x5A`), así que en una coincidencia EXACTA de
+    instante el veredicto se invertía —un ítem cuyo `valid_from` es justo el
+    tiempo objetivo pasaba de admitido a «aún no vigente», y uno cuyo
+    `valid_to` coincide, de expirado a admitido—. El corpus tiene tres de
+    esas fronteras exactas (`B04-CA-22`/`DEC-009`, `B04-CA-26`/`DEC-002` y
+    `DEC-003`, `B04-CA-44`/`DEC-011`), hoy latentes porque producción
+    entrega todo ítem con `SIN_EJES` y la medición corre con `con_ejes=False`
+    (incidencia #570, ronda 3). Se corrige emitiendo la forma con la que se
+    compara, no tocando `G8`. **El respaldo se alinea igual**: sin modelo, el
+    «ahora» de `InterpreteDePeticion` también sale con `Z`, porque un
+    respaldo con otra forma reintroduciría el mismo desajuste en la frontera.
+    Una fecha desnuda es su medianoche, que es como el banco adjudica los
+    casos con tiempo objetivo declarado (`B04-CA-06`:
+    `2026-09-15T00:00:00Z`).
 - **El «hoy» de la instrucción se resuelve en CADA consulta, no en el
   constructor** (incidencia #570). El adaptador se construye una sola vez por
   arranque (`composition_root.build_conversation_dependencies`) y Sirius es
@@ -208,14 +226,79 @@ La primera es la que importa: con la mutación puesta, la escritura con `T`
 que la forma elegida por el modelo decidiera el conjunto admitido.
 Restaurado el código, las tres escrituras devuelven `[1]`.
 
-**Lo que esto NO cambia en la predicción de la medición con Ollama.** La
-predicción escrita antes de medir (`coincidencia campo a campo >= 45/47`) se
-mantiene sin tocar. Ninguna cifra del banco depende del sentido de la
-corrección: **ningún** caso del banco declara `corte_de_registro`, así que el
-campo `corte` no puede moverse; y en `tiempo_objetivo` la normalización solo
-puede **añadir** coincidencias —una escritura sin zona que antes se puntuaba
-como fallo por comparar ingenuo con consciente ahora se lee como el mismo
-instante—, nunca quitarlas.
+**Lo que la ronda 2 canonizó MAL, visto FALLAR por mutación** (incidencia
+#570, ronda 3). Cuatro mutaciones más, cada una restaurando la conducta
+anterior a esta ronda, sobre el árbol ya construido:
+
+```
+# _corte_de_registro: date.fromisoformat(texto[:10]) -> momento.date()
+FAILED tests/unit/test_ollama_query_intent_classifier.py::test_el_corte_conserva_el_dia_civil_que_la_pregunta_nombra[2026-03-01T00:30:00+02:00]
+E  AssertionError: assert '2026-02-28 23:59:59.999999' == '2026-03-01 23:59:59.999999'
+
+# _tiempo_objetivo: .replace(_DESFASE_EXPLICITO, _SUFIJO_UTC_DEL_CORPUS) fuera
+FAILED tests/unit/test_ollama_query_intent_classifier.py::test_el_objetivo_emitido_da_el_mismo_veredicto_de_g8_que_el_del_banco
+E  AssertionError: assert (False, 'aun ...mpo objetivo') == (True, '')
+
+# _FINAL_DEL_DIA = time(23, 59, 59, 999999) -> time(0, 0, 0)
+FAILED tests/unit/test_ollama_query_intent_classifier.py::test_el_corte_emitido_no_es_el_instante_que_el_banco_declara_y_eso_esta_decidido
+E  AssertionError: assert '2026-03-01 00:00:00.000000' == '2026-03-01 23:59:59.999999'
+
+# respaldo: _ahora_como_lo_declara_el_corpus -> self._clock.utc_now().isoformat()
+FAILED tests/unit/test_interpret_query_request.py::test_sin_clasificador_la_peticion_es_la_uniforme_de_siempre
+E  AssertionError: assert '2026-06-15T00:00:00+00:00' == '2026-06-15T00:00:00Z'
+```
+
+La segunda es la que importa y la que ninguna prueba de la ronda 2 cubría:
+no afirma la CADENA emitida —eso ya lo hacía
+`test_el_tiempo_objetivo_sale_en_utc_con_el_sufijo_del_corpus`, y pasaba con
+el defecto puesto—, sino que el **veredicto de `_g8`** sea el mismo con la
+ventana que emite el intérprete y con la que declara el banco, sobre la
+frontera exacta real del corpus (`B04-CA-26` y el `valid_from` de `DEC-003`,
+ambos `2026-04-01T00:00:00Z`). Con `+00:00` el ítem se rechazaba como «aún no
+vigente»; con `Z` se admite, igual que con la ventana del banco. Restaurado
+el código, las cuatro pasan.
+
+**Lo que esto SÍ cambia en la predicción de la medición con Ollama, dicho
+sin ajustar la predicción.** La predicción escrita antes de medir
+(`coincidencia campo a campo >= 45/47`) **se mantiene sin tocar**: se declara
+aquí su efecto, no se reescribe el número.
+
+La ronda 2 de esta ficha afirmó que «ningún caso del banco declara
+`corte_de_registro`». **Era falso**, y la propia línea «`corte: 45/47`» que
+esta ficha imprime lo desmentía: **dos** de los 47 lo declaran —`B04-CA-32`
+(«¿Qué sabía Sirius sobre el aforo el 1 de marzo?», `2026-03-01T00:00:00Z`) y
+`B04-CA-47` (`2026-02-15T00:00:00Z`)—, y los dos lo declaran a **medianoche**.
+Corregida la premisa, la elección de semántica se pesa contra esos dos casos y
+**se conserva el final del día**, con su consecuencia declarada:
+
+- `scripts/medir_interprete_de_peticion.py::_campos` compara el campo `corte`
+  como **instante**. El intérprete emite `2026-03-01 23:59:59.999999` donde
+  `peticion_desde_caso` lee `2026-03-01T00:00:00Z`: son instantes distintos,
+  así que esos dos casos **no pueden coincidir nunca** en el campo `corte`, ni
+  con un modelo perfecto. El **techo** del campo queda en **45/47**, el mismo
+  número que el suelo sin modelo que esta ficha publica.
+- Es una diferencia de **semántica declarada**, no de inferencia: la
+  comparación campo a campo del guion la penaliza igual, y conviene leerla
+  así cuando se lea el resultado.
+- Se acepta, y por qué: el listón `>=45/47` es de **peticiones idénticas**, no
+  del campo `corte`; el margen de 2 que concede lo consume este artefacto solo
+  si esos dos casos coinciden en todo lo demás. La alternativa —canonizar el
+  corte a la medianoche declarada— reproduciría el número del banco pero
+  cambiaría la respuesta del producto: «¿qué sabía yo el 1 de marzo?» dejaría
+  fuera todo lo registrado durante el 1 de marzo. Errar hacia incluir el día D
+  no esconde canon; errar hacia excluirlo sí, y esa es la propiedad que manda
+  sobre una cifra de medición.
+- Lo que la corrección deja fijado en una prueba, no en la prosa:
+  `test_el_corte_emitido_no_es_el_instante_que_el_banco_declara_y_eso_esta_decidido`
+  lee el banco, comprueba que los casos que declaran corte son exactamente
+  esos dos y afirma que lo emitido es el final de su **mismo día civil** y no
+  su medianoche.
+
+En `tiempo_objetivo` la normalización solo puede **añadir** coincidencias —una
+escritura sin zona que antes se puntuaba como fallo por comparar ingenuo con
+consciente ahora se lee como el mismo instante—, nunca quitarlas; el cambio de
+`+00:00` a `Z` de la ronda 3 no la mueve, porque el guion compara ese campo
+como instante y las dos formas nombran el mismo.
 
 **El respaldo es el de siempre, medido de punta a punta.** Con Ollama
 inalcanzable —el adaptador falla abierto y el intérprete cae en la política

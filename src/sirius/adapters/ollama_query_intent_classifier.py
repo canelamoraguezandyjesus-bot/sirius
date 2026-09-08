@@ -50,14 +50,26 @@ reemiten aquí en una forma canónica única:
 
 - **corte de registro**: la pregunta que lo produce («¿qué sabía yo el 1 de
   marzo?») es de grano DÍA, y la respuesta es lo que estaba registrado **al
-  final** de ese día. El corte se canoniza, por tanto, al final del día que
-  nombra —``"AAAA-MM-DD 23:59:59.999999"``, misma forma que ``created_at``
-  y por tanto comparable con ella—, de modo que las tres escrituras del
-  mismo día admiten exactamente el mismo conjunto.
+  final** de ese día. El corte se canoniza, por tanto, al final del día
+  **civil que el modelo nombra** —``"AAAA-MM-DD 23:59:59.999999"``, misma
+  forma que ``created_at`` y por tanto comparable con ella—, de modo que
+  las tres escrituras del mismo día admiten exactamente el mismo conjunto.
+  El día se toma de lo escrito, ANTES de convertir a UTC: convertir
+  primero movería ``2026-03-01T00:30:00+02:00`` al 28 de febrero y
+  excluiría el 1 de marzo entero, que es justo el día por el que se
+  pregunta.
 - **tiempo objetivo**: es un instante, no un día, y ``G8`` lo compara con
-  ``valid_from``/``valid_to``, que son ISO-8601 con zona. Se canoniza a UTC
-  con desfase explícito (``…+00:00``); una fecha desnuda es su medianoche,
-  que es como el banco adjudica los casos con tiempo objetivo declarado.
+  ``valid_from``/``valid_to`` **por orden lexicográfico**. El único corpus
+  que puebla esos ejes los escribe con sufijo ``Z``, y ``"…Z"`` no es
+  lexicográficamente comparable con ``"…+00:00"``: el ``+`` (0x2B) ordena
+  antes que la ``Z`` (0x5A), de modo que ante una coincidencia EXACTA de
+  instante el veredicto se invertiría —un ítem cuyo ``valid_from`` es
+  justo el tiempo objetivo pasaría de admitido a «aún no vigente»—. Por eso
+  se canoniza a UTC y se emite con el mismo sufijo con que el corpus lo
+  declara, ``"AAAA-MM-DDTHH:MM:SS(.ffffff)Z"``, y no con ``+00:00``: así el
+  orden lexicográfico de ``G8`` coincide con el orden por instante en la
+  frontera exacta. Una fecha desnuda es su medianoche, que es como el banco
+  adjudica los casos con tiempo objetivo declarado.
 
 El «hoy» que el modelo necesita para resolver una fecha relativa se le da en
 la instrucción, resuelto **en cada consulta** —una aplicación de escritorio
@@ -69,7 +81,7 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import UTC, datetime, time
+from datetime import UTC, date, datetime, time
 
 import httpx
 
@@ -112,6 +124,13 @@ _FORMATO_DE_CREATED_AT = "%Y-%m-%d %H:%M:%S.%f"
 #: Último instante representable de un día en la forma de ``created_at``: el
 #: corte de registro de un día D admite todo lo registrado durante D.
 _FINAL_DEL_DIA = time(23, 59, 59, 999999)
+
+#: Sufijo con el que el corpus declara ``valid_from``/``valid_to``
+#: (``tests/acceptance/fixtures/evidence_bank_47_casos.json``). ``G8`` los
+#: compara como CADENAS, así que el tiempo objetivo se emite con este mismo
+#: sufijo y no con el ``+00:00`` de ``datetime.isoformat``.
+_DESFASE_EXPLICITO = "+00:00"
+_SUFIJO_UTC_DEL_CORPUS = "Z"
 
 _MODOS = tuple(modo.value for modo in Modo)
 _CARDINALIDADES = tuple(cardinalidad.value for cardinalidad in Cardinalidad)
@@ -299,20 +318,26 @@ def _iso_declarado(declarado: object) -> str | None:
 
 
 def _tiempo_objetivo(declarado: object) -> str | None:
-    """El instante al que se refiere la pregunta, canonizado a UTC.
+    """El instante al que se refiere la pregunta, canonizado a UTC y escrito
+    con el sufijo ``Z``.
 
-    Se emite con desfase explícito (``…+00:00``) porque ``G8`` lo compara
-    con ``valid_from``/``valid_to``, que son ISO-8601 con zona. Una fecha
-    desnuda es su medianoche: es un instante, no un día.
+    ``G8`` compara el tiempo objetivo con ``valid_from``/``valid_to`` como
+    CADENAS, y el corpus que puebla esos ejes los escribe con ``Z``. Emitir
+    ``+00:00`` invertiría el veredicto en la frontera exacta —el ``+``
+    (0x2B) ordena antes que la ``Z`` (0x5A)—, así que el mismo instante se
+    escribe aquí en la misma forma que el operando con el que se compara.
+    Una fecha desnuda es su medianoche: es un instante, no un día.
     """
     texto = _iso_declarado(declarado)
     momento = instante_utc(texto)
-    return None if momento is None else momento.isoformat()
+    if momento is None:
+        return None
+    return momento.isoformat().replace(_DESFASE_EXPLICITO, _SUFIJO_UTC_DEL_CORPUS)
 
 
 def _corte_de_registro(declarado: object) -> str | None:
-    """El corte de registro, canonizado al FINAL del día que nombra y en la
-    forma de ``created_at``.
+    """El corte de registro, canonizado al FINAL del día CIVIL que nombra y
+    en la forma de ``created_at``.
 
     Las tres escrituras que ``_PATRON_ISO`` admite para el mismo día
     —``AAAA-MM-DD``, ``AAAA-MM-DDT00:00:00Z`` y ``AAAA-MM-DD 00:00:00``—
@@ -322,8 +347,11 @@ def _corte_de_registro(declarado: object) -> str | None:
     encabezado del módulo.
     """
     texto = _iso_declarado(declarado)
-    momento = instante_utc(texto)
-    if momento is None:
+    if texto is None or instante_utc(texto) is None:
         return None
-    final = datetime.combine(momento.date(), _FINAL_DEL_DIA)
+    # El día es el que la escritura NOMBRA, no el que resulta de llevarla a
+    # UTC: «el 1 de marzo» escrito como ``2026-03-01T00:30:00+02:00`` cae en
+    # el 28 de febrero al convertirlo, y el corte excluiría entero el día por
+    # el que se pregunta (y con un desfase negativo, se iría al siguiente).
+    final = datetime.combine(date.fromisoformat(texto[:10]), _FINAL_DEL_DIA)
     return final.strftime(_FORMATO_DE_CREATED_AT)
