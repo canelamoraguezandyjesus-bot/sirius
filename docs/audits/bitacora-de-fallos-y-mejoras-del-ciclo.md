@@ -3813,6 +3813,64 @@ escribió la condición: en cuanto la ficha dijo en voz alta lo que la vía hace
 la cadena que contradecía esa declaración quedó a la vista. Escribir la
 condición no fue burocracia — fue lo que convirtió una sobreafirmación
 silenciosa en una contradicción localizable.
+
+---
+
+### 78. Once fallos míos en una tarde, y son cuatro raíces, no once (08-09-2026, 19:58 UTC)
+
+El contrato de este repositorio dice: **dos rondas con defectos de la misma
+familia → parar y buscar la raíz, no seguir parcheando**. Llevo la tarde
+aplicándoselo al ciclo y no a mí. Puestos en fila, mis once fallos de hoy son
+**cuatro** raíces.
+
+**Raíz 1 — «el dato existe» no es «el dato llega».** (deuda 24)
+- «El intervalo llega en la `Peticion`»: el contrato no tenía campo.
+- «La cardinalidad ya viaja»: viaja, pero la puerta cerrada la aplana a
+  `EXHAUSTIVA`.
+- Y su reverso, la fecha de registro de H2.
+**Pregunta que las caza**: *¿dónde se CONSUME este valor, y de qué puerta
+depende ese camino?* No dónde se declara.
+
+**Raíz 2 — comprobar que una cifra se REPRODUCE no es comprobar qué MIDE.**
+- Reproduje `78/81` al dígito y no vi que el banco no distingue registro de
+  vigencia (deuda 27), teniendo yo el dato escrito.
+- Mezclé la etapa de búsqueda (`17/47; 162`, sin filtro) con la vía completa
+  (`29/47; 50`) y saqué un objetivo halagador y falso para P3.
+**Pregunta**: *¿sobre qué población, y con qué dentro y qué fuera?* La
+reproducibilidad es barata y por eso resulta tentadora.
+
+**Raíz 3 — reviso donde la afirmación se ENUNCIA, no todas sus salidas.**
+- Predije `79/81` comprobando el mecanismo léxico de los cinco ítems y no si
+  alguno tenía **además** otro bloqueo.
+- Registré la deuda 27 en la bitácora, en la cifra de H2, en el informe y en el
+  encargo… y **nunca miré qué le dice el motor al usuario**, que es donde la
+  ronda 3 la encontró.
+- Mi guion de puerta comprueba la FORMA del texto y no lo que dice: cuatro
+  veredictos falsos.
+**Pregunta**: *¿por dónde más sale esta afirmación —traza, cadena al usuario,
+docstring, otra ficha—?*
+
+**Raíz 4 — tomar un estado intermedio por final.**
+- Juzgué `a8fe837` como entrega cuando era el primero de dos commits, con la
+  etiqueta diciendo `repairing`.
+- Y el mismo error incrustado en mi guion, que daba «se puede fusionar» con la
+  incidencia en revisión, porque `mergeable_state: clean` dice que **git**
+  puede, no que el **ciclo** haya terminado.
+**Pregunta**: *¿el estado dice que esto ha terminado, o solo que es
+consultable?*
+
+**Y una quinta, menor, que es higiene**: dos cifras dichas de memoria —«20
+casos sin extras» por 19, «97/97 con `valid_from`» por 96/97— y tres horas
+estimadas que se adelantaban solas. *¿Esto lo he contado o lo recuerdo?*
+
+**Lo incómodo, y por eso lo escribo**: hoy he verificado más que ningún otro
+día —mediciones reproducidas, mutaciones aplicadas, guiones probados contra sus
+propios modos de fallo— y **las raíces 2 y 3 son precisamente el fallo de
+verificar mucho por un solo lado**. Más comprobaciones del mismo tipo no las
+habrían cazado; ninguna de las cuatro se responde ejecutando algo. Se responden
+**antes** de ejecutar nada, decidiendo qué hay que preguntar. Las dejo escritas
+como cuatro preguntas y no como cuatro lecciones porque una pregunta se puede
+usar y una lección solo se puede recordar.
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
