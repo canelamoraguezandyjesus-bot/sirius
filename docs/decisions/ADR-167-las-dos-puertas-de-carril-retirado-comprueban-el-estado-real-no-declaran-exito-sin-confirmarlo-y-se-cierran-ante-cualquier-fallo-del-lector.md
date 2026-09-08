@@ -227,6 +227,74 @@ en el cuerpo de la PR.
   hallazgos y no se toca aquí; solo corre con el carril **activo**, y la puerta
   ya ha comprobado para entonces que el perfil del cuerpo actual es el suyo.
 
+## Segunda ronda: la regla de las dos rondas se dispara, y la raíz es otra
+
+La revisión de `398017a` encontró cuatro defectos más, todos ejecutando las
+puertas con el mismo arnés. **Son de la misma familia que los cinco anteriores**,
+así que ADR-001 obliga a parar de parchear y buscar la raíz. Esta es:
+
+> **La puerta de retirada se construyó como una segunda máquina de estados sobre
+> la misma incidencia, con copias locales de decisiones que el ciclo ya tiene en
+> un solo dueño. Las copias divergen.**
+
+Cuatro duplicaciones, una por defecto:
+
+| Lo que la puerta se copió | Quién es el dueño de verdad |
+|---|---|
+| Qué estados son incompatibles con una activación nueva | `sirius_validate_activation.sh`: `INCOMPATIBLE_STATES`, **diez** estados. La puerta copió **cuatro** |
+| Si la transición de etiquetas se completó | `sirius_set_issue_labels`, que verifica el estado final — pero escribe en **varias operaciones independientes**, y la puerta la trató como atómica |
+| Quién atiende una activación | el campo `Perfil:`. Dos puertas lo leían **de momentos distintos** |
+| Qué carriles están retirados | el registro. Las pruebas de comportamiento lo **fijaban** en vez de parametrizarlo |
+
+La primera ronda arregló cómo la puerta **informa**. Esta arregla de dónde
+**decide**: se deja de copiar y se usa al dueño; y donde no hay dueño —una
+transición a medias— la operación se hace re-entrante, con su propia huella
+publicada como lo que la reejecución reconoce.
+
+## Nota de arranque de la segunda ronda (publicada ANTES del primer cambio)
+
+**1. ¿Dónde vive el fallo y dónde va el arreglo?** En la puerta, otra vez, pero
+no en su forma de informar sino en su forma de decidir. Los cuatro se reprodujeron
+antes de escribir nada —el encargo lo exige— y el arreglo va donde está el dueño
+de cada decisión: llamar al validador en vez de reimplementarlo, reconocer la
+propia huella en vez de suponer atomicidad, un solo sitio que reparta la
+activación entre las dos puertas, y registros controlados en las pruebas.
+
+**2. ¿Qué NO va a garantizar esto?**
+
+- **No hace atómica la escritura de etiquetas.** `sirius_set_issue_labels` seguirá
+  haciendo varias llamadas y GitHub seguirá pudiendo aceptar unas y no otras. Lo
+  que se garantiza es que reejecutar **completa** lo que quedó a medias.
+- **No garantiza un único comentario bajo concurrencia real.** Dos jobs que
+  publiquen a la vez pueden duplicar; el marcador acota la ventana.
+- **No cambia `sirius_set_issue_labels`, `sirius_validate_activation.sh` ni el
+  reconciliador.** Son de todo el ciclo; tocarlos por un caso propio es
+  exactamente la clase de cambio que este encargo excluye.
+- **No reactiva ningún carril.** El registro entregado conserva los dos.
+
+**3. Criterio de parada (escrito ANTES de tocar el código).**
+
+- **(a)** Si algún defecto ya está resuelto en un commit posterior, se comprueba
+  y se dice; no se «arregla» dos veces.
+- **(b)** Si arreglar el reparto de perfiles obligara a **cambiar el tipo de
+  trabajo** de una orden en silencio, se rechaza el diseño: se exige activación
+  nueva, explicada y recuperable.
+- **(c)** Si la recuperación de una transición parcial no pudiera distinguirse
+  de un trabajo posterior legítimo, se para y se pide revisión humana en vez de
+  imponer un desenlace.
+- **(d)** Si arreglar las pruebas exigiera debilitar las comprobaciones de
+  formato o seguridad del registro, se rechaza aunque pase.
+- **(e)** Si apareciera una **tercera** ronda de la misma familia, el diseño de
+  la puerta está mal planteado y hay que rehacerlo, no parchearlo.
+
+**4. ¿Qué haría imposible el error más probable, en vez de improbable?** El error
+más probable es volver a copiar una decisión que ya tiene dueño —es lo que ha
+pasado dos veces—. Lo hace imposible **no tener dónde copiarla**: la lista de
+estados incompatibles desaparece de la puerta (la aplica el validador, llamado),
+y el reparto de perfiles desaparece de los dos workflows (lo aplica un solo
+guion, llamado por los dos). Lo que no se puede hacer imposible: que GitHub
+acepte una escritura y pierda otra.
+
 ## Consecuencias
 
 - Las dos puertas pueden terminar en rojo donde antes terminaban en verde. Es el
