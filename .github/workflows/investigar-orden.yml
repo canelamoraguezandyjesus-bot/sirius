@@ -95,7 +95,7 @@ jobs:
             exit 0
           fi
 
-          # CARRIL RETIRADO (ADR-161, ejecutado por ADR-162). Es una orden de
+          # CARRIL RETIRADO (ADR-161, ejecutado por ADR-163). Es una orden de
           # investigacion de verdad, y este workflow es el unico que la atiende:
           # el implementador la declina antes de consumir el evento. Por eso NO
           # basta con no investigar -eso dejaria la incidencia esperando para

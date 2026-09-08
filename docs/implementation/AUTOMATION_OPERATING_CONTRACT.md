@@ -853,11 +853,11 @@ filas a esas tablas.
 
 ### 13.2 La distinción que esta sección existe para no perder
 
-**La retirada se acordó en ADR-161 y la ejecuta ADR-162.** Las dos cosas siguen
+**La retirada se acordó en ADR-161 y la ejecuta ADR-163.** Las dos cosas siguen
 siendo distintas, y el estado de cada una se lee aquí:
 
 - **Acordada** desde la fusión de la PR de ADR-161.
-- **Ejecutada** desde la fusión de la PR de ADR-162, que es la que apaga las
+- **Ejecutada** desde la fusión de la PR de ADR-163, que es la que apaga las
   entradas. Antes de esa fusión los dos carriles funcionaban si alguien los
   disparaba.
 
@@ -873,7 +873,7 @@ Lo que **no** cambia, ni con una fusión ni con la otra:
 3. La etiqueta `auditoria:solicitada` **sigue creada** por el bootstrap: quien la
    aplique recibirá la explicación, no el silencio.
 
-### 13.2.1 Qué ocurre desde la fusión de ADR-162
+### 13.2.1 Qué ocurre desde la fusión de ADR-163
 
 | Entrada | Antes | Desde la fusión |
 |---|---|---|
@@ -887,7 +887,7 @@ La fuente de verdad de qué carril está retirado es
 es quitar su entrada de ese fichero y fusionar**: no hay que tocar código,
 workflows ni pruebas.
 
-Lo que esta ejecución **no** alcanza, declarado en ADR-162: una persona con
+Lo que esta ejecución **no** alcanza, declarado en ADR-163: una persona con
 permisos puede relanzar a mano un run antiguo desde Actions, que reejecuta el
 YAML de aquel commit; y `preflight-investigador.yml` y `medir-investigador.yml`
 siguen lanzables a mano, porque miden el instrumento y no aceptan encargos.

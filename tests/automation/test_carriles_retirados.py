@@ -1,7 +1,7 @@
-"""Las entradas de un carril retirado quedan cerradas, y las de los vivos no (ADR-162).
+"""Las entradas de un carril retirado quedan cerradas, y las de los vivos no (ADR-163).
 
 Lo que estas pruebas existen para impedir es el defecto que el inventario de
-ADR-162 encontró: **una entrada retirada que se queda esperando, o que acaba en
+ADR-163 encontró: **una entrada retirada que se queda esperando, o que acaba en
 programación por otra ruta**. Investigación comparte la etiqueta de activación
 con programación y se reparte por el campo ``Perfil:``; si se desactivara solo
 ``investigar-orden.yml`` la activación quedaría colgada, y si se quitara la
@@ -108,7 +108,7 @@ def test_la_clase_sigue_en_la_tabla_de_activacion_y_en_el_contrato() -> None:
 
     Si alguien 'limpiara' `TABLA_ACTIVACION`, el rechazo pasaría a ser
     `ClaseNoDespachableError` -«esta clase nunca tuvo despachador»- y se
-    perdería la distinción que ADR-162 existe para conservar.
+    perdería la distinción que ADR-163 existe para conservar.
     """
     from sirius_engine.dispatcher import TABLA_ACTIVACION
     from sirius_engine.domain.work_item import WorkItemClass
@@ -242,7 +242,7 @@ def test_toda_entrada_de_un_carril_retirado_esta_cubierta() -> None:
 def test_la_puerta_del_implementador_sigue_declinando_el_perfil_investigador() -> None:
     """Sin ella, una activación de investigación se implementaría como programación.
 
-    Es la decisión que ADR-161 dejó pendiente y que ADR-162 resuelve: la puerta
+    Es la decisión que ADR-161 dejó pendiente y que ADR-163 resuelve: la puerta
     se conserva. Esta prueba impide que una limpieza futura la quite.
     """
     guion = _guion("implement-sirius-work.yml", "implement", "gate")

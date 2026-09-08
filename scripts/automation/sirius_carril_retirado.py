@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""¿Está retirado este carril? Lector del registro para los workflows (ADR-162).
+"""¿Está retirado este carril? Lector del registro para los workflows (ADR-163).
 
 Misma fuente de verdad que el despachador —
 ``docs/implementation/work_engine/carriles_retirados.json``— y misma redacción de

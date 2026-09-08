@@ -52,7 +52,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      # CARRIL RETIRADO (ADR-161, ejecutado por ADR-162). No basta con no
+      # CARRIL RETIRADO (ADR-161, ejecutado por ADR-163). No basta con no
       # ejecutar el modelo: la etiqueta `auditoria:solicitada` no la vigila
       # nadie mas -el reconciliador solo mira estados `sirius:*`-, asi que un
       # run que se callara dejaria la incidencia esperando para siempre. Se

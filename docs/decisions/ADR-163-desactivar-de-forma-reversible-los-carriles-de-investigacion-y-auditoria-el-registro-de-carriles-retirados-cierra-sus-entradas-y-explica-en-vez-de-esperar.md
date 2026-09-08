@@ -1,4 +1,4 @@
-# ADR-162 — Desactivar de forma reversible los carriles de investigación y auditoría: el registro de carriles retirados cierra sus entradas y explica en vez de esperar
+# ADR-163 — Desactivar de forma reversible los carriles de investigación y auditoría: el registro de carriles retirados cierra sus entradas y explica en vez de esperar
 
 - Estado: PROPUESTO
 - Fecha: 2026-09-08

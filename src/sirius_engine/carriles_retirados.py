@@ -1,4 +1,4 @@
-"""Qué carriles están retirados, y con qué explicación (ADR-161, ejecutado por ADR-162).
+"""Qué carriles están retirados, y con qué explicación (ADR-161, ejecutado por ADR-163).
 
 La fuente de verdad es un dato versionado —
 ``docs/implementation/work_engine/carriles_retirados.json``— y no una constante

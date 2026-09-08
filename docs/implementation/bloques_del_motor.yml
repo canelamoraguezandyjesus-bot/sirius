@@ -72,7 +72,7 @@ bloques:
       08-09-2026, ADR-161: el propietario retira el carril dedicado de investigacion (medicion del instrumento);
       esos encargos pasan a sus sesiones de ChatGPT, Claude y Codex. El bloque
       SIGUE CERRADO y su evidencia no se toca: un bloque cerrado registra lo que
-      se midio, no lo que se usa. La retirada la ACUERDA ADR-161 y la EJECUTA ADR-162, desde
+      se midio, no lo que se usa. La retirada la ACUERDA ADR-161 y la EJECUTA ADR-163, desde
       la fusion de su PR: el carril deja de aceptar encargos y explica a donde
       van ahora, sin borrar nada. Reactivarlo es quitar su entrada de
       docs/implementation/work_engine/carriles_retirados.json y fusionar.
@@ -129,7 +129,7 @@ bloques:
       08-09-2026, ADR-161: el propietario retira el carril dedicado de investigacion (investigar desde una orden);
       esos encargos pasan a sus sesiones de ChatGPT, Claude y Codex. El bloque
       SIGUE CERRADO y su evidencia no se toca: un bloque cerrado registra lo que
-      se midio, no lo que se usa. La retirada la ACUERDA ADR-161 y la EJECUTA ADR-162, desde
+      se midio, no lo que se usa. La retirada la ACUERDA ADR-161 y la EJECUTA ADR-163, desde
       la fusion de su PR: el carril deja de aceptar encargos y explica a donde
       van ahora, sin borrar nada. Reactivarlo es quitar su entrada de
       docs/implementation/work_engine/carriles_retirados.json y fusionar.
@@ -205,7 +205,7 @@ bloques:
       08-09-2026, ADR-161: el propietario retira el carril dedicado de auditoria;
       esos encargos pasan a sus sesiones de ChatGPT, Claude y Codex. El bloque
       SIGUE CERRADO y su evidencia no se toca: un bloque cerrado registra lo que
-      se midio, no lo que se usa. La retirada la ACUERDA ADR-161 y la EJECUTA ADR-162, desde
+      se midio, no lo que se usa. La retirada la ACUERDA ADR-161 y la EJECUTA ADR-163, desde
       la fusion de su PR: el carril deja de aceptar encargos y explica a donde
       van ahora, sin borrar nada. Reactivarlo es quitar su entrada de
       docs/implementation/work_engine/carriles_retirados.json y fusionar.

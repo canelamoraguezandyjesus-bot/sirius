@@ -37,7 +37,7 @@ def carril_activo(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
 
     Las pruebas que la usan fijan el diseño de los carriles de `auditoria` e
     `investigacion` -qué etiquetas reciben, qué perfil declaran, que sin orden
-    enlazada no se despachan-. ADR-162 los desactiva, pero **no borra ese
+    enlazada no se despachan-. ADR-163 los desactiva, pero **no borra ese
     diseño**: `TABLA_ACTIVACION` conserva sus filas y el contrato §11.1 también,
     justamente para que reactivarlos sea quitar una línea del registro. Si estas
     pruebas se borraran, esa reversibilidad dejaría de estar cubierta y el día

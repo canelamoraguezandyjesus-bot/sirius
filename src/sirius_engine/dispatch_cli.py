@@ -216,7 +216,7 @@ def main(
         linea("así que el rechazo ocurre antes de escribir nada.")
         return 5
 
-    # ADR-161/ADR-162: el carril de esa clase está retirado. Se rechaza en el
+    # ADR-161/ADR-163: el carril de esa clase está retirado. Se rechaza en el
     # mismo sitio y por el mismo motivo que la comprobación de arriba -antes de
     # crear nada-, pero con mensaje propio: «esta clase nunca tuvo despachador»
     # y «lo tuvo y se retiró» son dos cosas distintas para quien lee, y el

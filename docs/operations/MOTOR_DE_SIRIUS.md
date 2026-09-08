@@ -39,7 +39,7 @@ rechazado (H-12). Un ensayo que no pasa por las guardas no ensaya nada.
   (ADR-043): para programación entiende «corrige» o «implementa» **al principio
   de la frase**. Una orden que empiece por otro verbo sale rechazada como
   «intención ambigua», y no crea nada.
-- **Qué clases despacha hoy.** Dos: `programacion` y `documentacion` (ADR-088). `auditoria` e `investigacion` siguen en `TABLA_ACTIVACION` y en el contrato §11.1, pero su carril está **retirado** (ADR-161, ejecutado por ADR-162): pedirlas no crea nada y el comando explica a dónde va ese trabajo, con código de salida 6.
+- **Qué clases despacha hoy.** Dos: `programacion` y `documentacion` (ADR-088). `auditoria` e `investigacion` siguen en `TABLA_ACTIVACION` y en el contrato §11.1, pero su carril está **retirado** (ADR-161, ejecutado por ADR-163): pedirlas no crea nada y el comando explica a dónde va ese trabajo, con código de salida 6.
   Reactivar un carril es quitar su entrada de `docs/implementation/work_engine/carriles_retirados.json`. Lo que el despachador rechaza, además, es cualquier clase que no esté en la tabla.
 - **`--ejecutar` necesita dos cosas, y falla en este orden.** Primero la
   variable `SIRIUS_BOT_TOKEN`: sin ella el escritor **no llega ni a

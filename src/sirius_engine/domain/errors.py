@@ -273,7 +273,7 @@ class CarrilRetiradoError(EngineError):
 
     La clase NO desaparece de ``TABLA_ACTIVACION`` ni del contrato §11.1: la
     retirada se declara en ``docs/implementation/work_engine/carriles_retirados.json``,
-    y quitar esa entrada la reactiva sin tocar código (ADR-161, ADR-162).
+    y quitar esa entrada la reactiva sin tocar código (ADR-161, ADR-163).
     """
 
     def __init__(self, work_id: str, clase: str, explicacion: str) -> None:

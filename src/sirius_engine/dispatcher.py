@@ -191,7 +191,7 @@ def dispatch_work_item(
         if entrada_tabla is None:
             raise ClaseNoDespachableError(work_item.work_id, work_item.clase.value)
 
-        # ADR-161/ADR-162: la clase sigue en la tabla -el contrato §11.1 la
+        # ADR-161/ADR-163: la clase sigue en la tabla -el contrato §11.1 la
         # describe y su fila no se borra-, pero su carril está retirado. Se
         # comprueba AQUÍ, junto al resto de guardas y antes de tocar GitHub o el
         # diario, para que no nazca ningún WorkItem nuevo de un carril que nadie
