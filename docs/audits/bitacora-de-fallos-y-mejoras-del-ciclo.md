@@ -2064,6 +2064,40 @@ ADR o su incidencia cuando se adopte.
   publica cuando ADR-159 esté dentro, para no desfasar su rama: es la misma
   regla que costó dos vueltas anoche.
 
+### 49. La línea de memoria arranca con base en `main`, y la guarda de activación me pilló un error (08-09-2026, 01:45-02:05 UTC)
+
+- **ADR-148 fusionado como `b6069a9`**: la línea de memoria ya tiene en `main`
+  su criterio —47/47 exactas, 81/81 hallados, 0 críticas perdidas, 0 de más,
+  con Ollama real— y su plan por palancas medidas (P1 → P2 → P3 → H2 → H1 → H4
+  → H3).
+- **La cifra que se repitió en vez de heredarse.** La ficha afirmaba un techo
+  medido el 05-09 sobre `a07c5d5`, y entre ese árbol y el de la fusión entraron
+  ADR-147, ADR-156, ADR-157, ADR-158 y ADR-159. Fusionarla tal cual habría
+  metido en `main` una cifra heredada presentada como vigente, que es
+  exactamente lo que ADR-154 prohíbe, y nadie lo habría notado. Se repitió el
+  diagnóstico sobre `82b04b4`: las cuatro configuraciones dan **idénticas**
+  cifras (`0/47; 487`, `0/47; 421`, `16/47; 162`, `20/47; 144`, 0 críticas en
+  las cuatro). El techo se sostiene, y ahora está comprobado.
+- **Un cabo suelto propio, encontrado por la vigilancia**: al cerrar #539 dejé
+  viva su PR **#540**, apuntando a un encargo muerto con una implementación
+  superada. Cerrada sin fusionar, con la explicación y el puntero a #546 y a
+  ADR-159. Lección: cerrar un encargo no cierra su PR, y hay que mirar las PRs
+  abiertas al hacerlo.
+- **La guarda de activación funcionó contra un error mío.** Para activar #566
+  puse `sirius:implement-requested` con la API de etiquetas, que **REEMPLAZA**
+  el conjunto en vez de añadir: borré `sirius:planned` sin querer. El motor
+  rechazó la activación con `sirius-activation:rejected:sin-planned` —«falta
+  la etiqueta que certifica que el alcance está definido»— en vez de arrancar
+  un encargo sin alcance certificado. Repuesto mandando las DOS etiquetas
+  juntas, el implementador arrancó (run 34178534771, 02:00:09). Regla para la
+  próxima: activar es mandar `planned` e `implement-requested` en la misma
+  llamada.
+- **Cinco fusiones seguidas sin que ninguna desfasara a la siguiente**
+  (`ae8b350`, `08ef994`, `6271fde`, `b6069a9`), porque se hicieron de una en
+  una y comprobando el `main` vigente antes de cada una. Es la regla que
+  costó dos vueltas la noche del 07-09.
+
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
