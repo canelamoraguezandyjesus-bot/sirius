@@ -3258,6 +3258,16 @@ estaba encargada a nadie.
 encontrados en ambas—, así que no es el problema de «los ejes no se persisten»
 que cerró la palanca 2. Es otra cosa, y tiene dos capas.
 
+**Antes de seguir, el crédito donde toca, porque al escribir esto lo estaba
+contando como si fuera hallazgo mío:** el veredicto exacto de la puerta ya lo
+había identificado **el implementador de H1**, leyendo los seis ítems uno a uno
+en vez de deducirlo del recuento; su parte cita literal «lista cerrada sin
+miembros resueltos» y lo dejó registrado caso a caso en ADR-168. Lo que añaden
+las dos capas de abajo es distinto y va más lejos: que **el origen sí declaraba
+la pertenencia** y la perdió el porte —lo que convierte «el corpus está
+incompleto» en «nuestro porte perdió un dato»—, y que **arreglar solo el dato
+no bastaría**, porque `G4` seguiría excluyéndolo.
+
 **Capa 1: el porte perdió un dato que el origen sí tenía.** `DEC-001` declara
 `ambito: MULTI_PROYECTO_CERRADO` con `project: LISTA-CERRADA-AB`, y es el
 **único** ítem así de los 97. La fixture portada **no tiene ningún campo de
