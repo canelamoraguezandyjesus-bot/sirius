@@ -348,11 +348,11 @@ ficha.
 
 **Cadena completa como UNA SOLA invocación** (ADR-145, ADR-153) con
 `pwsh -File scripts/check.ps1` y su código de salida capturado (ADR-154).
-Anclada al árbol de **`c8dfbed`**, el que trae los dos guardianes de la
-tercera revisión de esta PR:
+Anclada al árbol de **`1b7a9e3`**, el que corrige a `214-216` la cita del
+corte de registro de `G8` en la ficha y en los guardianes:
 
 ```
-5185 passed, 17 skipped, 2 xfailed in 529.86s (0:08:49)
+5185 passed, 17 skipped, 2 xfailed in 538.57s (0:08:58)
 check=0
 ```
 
@@ -360,18 +360,34 @@ De esa invocación se transcribe la cola capturada —la terna de `pytest` y el
 código de salida—; `check=0` solo sale si `ruff format --check`, `ruff check`
 y `mypy src tests` pasaron antes, porque el guion corta en el primero que
 falle. La quinta validación que la incidencia exige transcribir también queda
-asentada sobre ese mismo árbol: `git diff --check 22e880e c8dfbed` no imprime
-nada y sale con código `0` —limpio—. Lo único posterior a `c8dfbed` es **esta
+asentada sobre ese mismo árbol: `git diff --check 22e880e 1b7a9e3` no imprime
+nada y sale con código `0` —limpio—. Lo único posterior a `1b7a9e3` es **esta
 sección de la ficha**: cambios documentales que no tocan código ni pruebas, y
 que existen porque la sección tiene que anclarse al árbol que la cadena
 midió.
 
 (Las cifras anteriores de esta sección —`5183 passed, 17 skipped, 2 xfailed in
-487.87s`, anclada a `5200b4f`, y `5183 passed, 17 skipped, 2 xfailed in
-445.07s`, anclada a `63822b0`— seguían siendo cada una la de su árbol; se
-sustituyen porque cada ronda de correcciones tocó pruebas, así que la cadena
-volvió a correr entera sobre el árbol nuevo. Los dos pasados de más —5183 a
-5185— son exactamente los dos guardianes que la tercera revisión pidió.)
+487.87s`, anclada a `5200b4f`; `5183 passed, 17 skipped, 2 xfailed in
+445.07s`, anclada a `63822b0`; y `5185 passed, 17 skipped, 2 xfailed in
+529.86s`, anclada a `c8dfbed`— seguían siendo cada una la de su árbol; se
+sustituyen porque cada ronda de correcciones tocó el fichero de pruebas, así
+que la cadena volvió a correr entera sobre el árbol nuevo. Los dos pasados de
+más —5183 a 5185— son exactamente los dos guardianes que la tercera revisión
+pidió; de `c8dfbed` a `1b7a9e3` la terna no se mueve porque lo único que
+cambió en las pruebas fueron comentarios y docstrings, ninguna aserción.)
+
+(Por qué se re-ancla y no se arrastra el ancla de `c8dfbed`: sobre `fb31ca9`
+—el head de la ronda anterior— esta sección afirmaba que lo único posterior a
+`c8dfbed` era ella misma, «cambios documentales que no tocan código ni
+pruebas», y era falso. `fb31ca9` reescribió también el bullet «La FORMA en que
+se escribe `created_at` importa» de la sección «Decisión» y los docstrings de
+`test_solo_dec_004_recibe_un_registro_posterior_al_ahora_del_banco` y de
+`test_el_registro_escrito_lleva_la_forma_que_g8_compara` en
+`tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py`; ninguna aserción ni
+línea ejecutable cambió allí, pero eso no es lo que la frase decía. La
+corrección de la cita a `214-216` vuelve a tocar ese mismo fichero de pruebas,
+así que la cadena se ha vuelto a ejecutar entera sobre el árbol nuevo en vez
+de reutilizar un ancla que ya no describía el head.)
 
 **Guardianes deterministas añadidos** (los seis corren en CI, sin Ollama),
 todos en `tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py`:
