@@ -10,12 +10,17 @@ from __future__ import annotations
 
 import dataclasses
 import inspect
+import json
 import threading
 from datetime import UTC, datetime
+from functools import partial
+from pathlib import Path
 
 import pytest
 
+from sirius_engine import dispatcher as modulo_bajo_prueba
 from sirius_engine.adapters.memory_dispatch_journal import InMemoryDispatchJournal
+from sirius_engine.carriles_retirados import carril_retirado as carril_retirado_real
 from sirius_engine.dispatcher import (
     ETIQUETA_ACTIVACION,
     ETIQUETA_INICIAL,
@@ -37,6 +42,30 @@ from sirius_engine.profile_field import ProfileRef
 NOW = datetime(2026, 8, 21, 12, 0, tzinfo=UTC)
 PERFIL = ProfileRef(ref="implementer", version=1)
 ORDEN = f"{MARCADOR_ORDEN_PROPIETARIO}https://github.com/acme/repo/issues/241#issuecomment-1"
+
+
+@pytest.fixture
+def carril_activo(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Describe el despacho **como si el carril no estuviera retirado**.
+
+    Las pruebas que la usan fijan el diseño de los carriles de `auditoria` e
+    `investigacion` -qué etiquetas reciben, qué perfil declaran, que sin orden
+    enlazada no se despachan-. ADR-163 los desactiva, pero **no borra ese
+    diseño**: `TABLA_ACTIVACION` conserva sus filas y el contrato §11.1 también,
+    justamente para que reactivarlos sea quitar una línea del registro. Si estas
+    pruebas se borraran, esa reversibilidad dejaría de estar cubierta y el día
+    que el propietario reactivara un carril nadie sabría si seguía funcionando.
+
+    No se falsea la función: se usa la de verdad contra un registro real y
+    vacío, que es lo que habrá cuando el carril vuelva.
+    """
+    registro = tmp_path / "sin_carriles_retirados.json"
+    registro.write_text(json.dumps({"version": 1, "carriles": {}}), encoding="utf-8")
+    monkeypatch.setattr(
+        modulo_bajo_prueba,
+        "carril_retirado",
+        partial(carril_retirado_real, registro=registro),
+    )
 
 
 def _work_item(
@@ -268,7 +297,9 @@ def test_clase_fuera_de_la_tabla_no_se_despacha() -> None:
 # --- C4: el motor despacha auditorías (incidencia #256, contrato §12.4) --
 
 
-def test_c4_una_auditoria_con_orden_enlazada_recibe_la_etiqueta_de_auditoria() -> None:
+def test_c4_una_auditoria_con_orden_enlazada_recibe_la_etiqueta_de_auditoria(
+    carril_activo: None,
+) -> None:
     """Requisito 1 (#256): la auditoría se despacha por el mismo camino y recibe su etiqueta."""
     work_item = _work_item(evidencia=(ORDEN,), clase=WorkItemClass.AUDITORIA)
     writer = _EscritorSoloVerbosEnumerados()
@@ -293,7 +324,9 @@ def test_c4_una_auditoria_con_orden_enlazada_recibe_la_etiqueta_de_auditoria() -
     assert args_etiqueta["etiqueta"] == ETIQUETA_SOLICITUD_AUDITORIA
 
 
-def test_c4_la_incidencia_de_auditoria_no_lleva_ninguna_etiqueta_sirius() -> None:
+def test_c4_la_incidencia_de_auditoria_no_lleva_ninguna_etiqueta_sirius(
+    carril_activo: None,
+) -> None:
     """Requisito 2 (#256): ni al crearse ni al aplicar la etiqueta de activación.
 
     Esta es también la prueba por mutación del requisito 7: si la fila de
@@ -331,7 +364,7 @@ def test_c4_la_incidencia_de_auditoria_no_lleva_ninguna_etiqueta_sirius() -> Non
     assert etiqueta_aplicada == ETIQUETA_SOLICITUD_AUDITORIA
 
 
-def test_c4_la_escritura_de_auditoria_es_exactamente_la_enumerada() -> None:
+def test_c4_la_escritura_de_auditoria_es_exactamente_la_enumerada(carril_activo: None) -> None:
     """Requisito 3 (#256): crear_incidencia y aplicar_etiqueta, en ese orden, y ninguna más."""
     work_item = _work_item(evidencia=(ORDEN,), clase=WorkItemClass.AUDITORIA)
     writer = _EscritorSoloVerbosEnumerados()
@@ -406,7 +439,7 @@ def test_c3_documentacion_recibe_las_mismas_etiquetas_que_programacion() -> None
     assert args_etiqueta["etiqueta"] == ETIQUETA_ACTIVACION
 
 
-def test_c4_sin_orden_enlazada_una_auditoria_tampoco_se_despacha() -> None:
+def test_c4_sin_orden_enlazada_una_auditoria_tampoco_se_despacha(carril_activo: None) -> None:
     """Requisito 6 (#256): la condición de §12.1 vale igual para auditoria."""
     work_item = _work_item(evidencia=(), clase=WorkItemClass.AUDITORIA)
     writer = _EscritorSoloVerbosEnumerados()
@@ -598,7 +631,7 @@ def test_dos_hilos_concurrentes_para_el_mismo_work_id_producen_una_sola_activaci
 # --- B1: el motor despacha investigación (ADR-099) ------------------------
 
 
-def test_b1_investigacion_recibe_las_mismas_etiquetas_que_programacion() -> None:
+def test_b1_investigacion_recibe_las_mismas_etiquetas_que_programacion(carril_activo: None) -> None:
     """B1 (ADR-099): mismo ciclo que programación y documentación.
 
     `interpretar_intencion_v0` clasifica «investiga…» desde ADR-043; el

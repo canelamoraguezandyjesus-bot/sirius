@@ -72,10 +72,10 @@ bloques:
       08-09-2026, ADR-161: el propietario retira el carril dedicado de investigacion (medicion del instrumento);
       esos encargos pasan a sus sesiones de ChatGPT, Claude y Codex. El bloque
       SIGUE CERRADO y su evidencia no se toca: un bloque cerrado registra lo que
-      se midio, no lo que se usa. La retirada esta ACORDADA y NO EJECUTADA -hoy
-      el carril funciona si alguien lo dispara-; la forma recomendada es
-      desactivacion reversible, conservando codigo, perfiles, ADR, historial y
-      resultados.
+      se midio, no lo que se usa. La retirada la ACUERDA ADR-161 y la EJECUTA ADR-163, desde
+      la fusion de su PR: el carril deja de aceptar encargos y explica a donde
+      van ahora, sin borrar nada. Reactivarlo es quitar su entrada de
+      docs/implementation/work_engine/carriles_retirados.json y fusionar.
     estado: cerrado
     evidencia: >-
       Cerrado el 28-08-2026 con la pasada 6 del banco (run 33141864710,
@@ -129,10 +129,10 @@ bloques:
       08-09-2026, ADR-161: el propietario retira el carril dedicado de investigacion (investigar desde una orden);
       esos encargos pasan a sus sesiones de ChatGPT, Claude y Codex. El bloque
       SIGUE CERRADO y su evidencia no se toca: un bloque cerrado registra lo que
-      se midio, no lo que se usa. La retirada esta ACORDADA y NO EJECUTADA -hoy
-      el carril funciona si alguien lo dispara-; la forma recomendada es
-      desactivacion reversible, conservando codigo, perfiles, ADR, historial y
-      resultados.
+      se midio, no lo que se usa. La retirada la ACUERDA ADR-161 y la EJECUTA ADR-163, desde
+      la fusion de su PR: el carril deja de aceptar encargos y explica a donde
+      van ahora, sin borrar nada. Reactivarlo es quitar su entrada de
+      docs/implementation/work_engine/carriles_retirados.json y fusionar.
     estado: cerrado
     depende_de: S2
     evidencia: >-
@@ -205,10 +205,10 @@ bloques:
       08-09-2026, ADR-161: el propietario retira el carril dedicado de auditoria;
       esos encargos pasan a sus sesiones de ChatGPT, Claude y Codex. El bloque
       SIGUE CERRADO y su evidencia no se toca: un bloque cerrado registra lo que
-      se midio, no lo que se usa. La retirada esta ACORDADA y NO EJECUTADA -hoy
-      el carril funciona si alguien lo dispara-; la forma recomendada es
-      desactivacion reversible, conservando codigo, perfiles, ADR, historial y
-      resultados.
+      se midio, no lo que se usa. La retirada la ACUERDA ADR-161 y la EJECUTA ADR-163, desde
+      la fusion de su PR: el carril deja de aceptar encargos y explica a donde
+      van ahora, sin borrar nada. Reactivarlo es quitar su entrada de
+      docs/implementation/work_engine/carriles_retirados.json y fusionar.
     estado: cerrado
     evidencia: la clase `auditoria` está en TABLA_ACTIVACION y audit-sirius-repository.yml la atiende
 

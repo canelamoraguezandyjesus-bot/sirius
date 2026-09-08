@@ -82,6 +82,7 @@ jobs:
         shell: bash --noprofile --norc {0}
         env:
           GH_TOKEN: ${{ github.token }}
+          SIRIUS_TRIGGER_TOKEN: ${{ secrets.SIRIUS_BOT_TOKEN }}
           GH_REPO: ${{ github.repository }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           ISSUE_BODY: ${{ github.event.issue.body }}
@@ -91,6 +92,42 @@ jobs:
           if [ "$perfil" != "investigador" ]; then
             echo "valid=false" >> "$GITHUB_OUTPUT"
             echo "Perfil '${perfil:-ninguno}': no es una orden de investigacion; la atiende el implementador."
+            exit 0
+          fi
+
+          # CARRIL RETIRADO (ADR-161, ejecutado por ADR-163). Es una orden de
+          # investigacion de verdad, y este workflow es el unico que la atiende:
+          # el implementador la declina antes de consumir el evento. Por eso NO
+          # basta con no investigar -eso dejaria la incidencia esperando para
+          # siempre-: hay que RESPONDER y TERMINAR. Se explica en la incidencia
+          # y se la deja en `sirius:failed-safely`, que es terminal y no reentra
+          # en el ciclo, para que tampoco acabe en programacion por otra ruta.
+          retirado_rc=0
+          explicacion="$(python3 scripts/automation/sirius_carril_retirado.py investigacion)" || retirado_rc=$?
+          if [ "$retirado_rc" -eq 2 ]; then
+            echo "::error::No se pudo leer el registro de carriles retirados; reintentable."
+            exit 1
+          fi
+          if [ "$retirado_rc" -eq 0 ]; then
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+            source scripts/automation/sirius_issue.sh
+            cuerpo="$(mktemp)"
+            {
+              printf '%s\n\n' "$explicacion"
+              printf 'Esta incidencia queda en `sirius:failed-safely`: no se ha investigado nada y no espera a nadie.\n'
+            } > "$cuerpo"
+            sirius_comment_once "$GH_REPO" "$ISSUE_NUMBER" \
+              "sirius-carril-retirado:investigacion" "$cuerpo" || \
+              echo "::warning::No se pudo publicar la explicacion; se continua para no dejar la incidencia en curso."
+            # La MISMA envoltura de una linea que el resto del ciclo: la
+            # etiqueta se escribe con el PAT, nunca con el GITHUB_TOKEN, porque
+            # GitHub suprime los eventos del token efimero (ADR-014, ADR-015).
+            trigger_set_labels() {
+              ( export GH_TOKEN="${SIRIUS_TRIGGER_TOKEN:-${GH_TOKEN:-}}"; sirius_set_issue_labels "$@" )
+            }
+            trigger_set_labels "$GH_REPO" "$ISSUE_NUMBER" \
+              "sirius:failed-safely" "sirius:implement-requested" "sirius:planned" || \
+              echo "::error::No se pudo cerrar la incidencia en failed-safely; queda para el reconciliador."
             exit 0
           fi
           # La MISMA validacion de activacion que el implementador: llegar aqui
