@@ -33,6 +33,14 @@ Medido el 05-09-2026 sobre ``a07c5d5`` (ADR-148): sin banderas 0/47 exactos,
 487 de más, 72/81; ``--ejes`` 0/47, 421, 71/81; ``--peticion`` 16/47, 162,
 73/81; ``--ejes --peticion`` 20/47, 144, 73/81; críticas perdidas 0 en las
 cuatro configuraciones.
+
+Vuelto a medir el 08-09-2026, con el hueco H2 de ADR-148 cerrado en el
+cargador del banco (ADR-166: cada ítem lleva la fecha de registro que el
+corpus declara, no la del día de la medición): sin banderas y ``--ejes``
+**no se mueven**; ``--peticion`` pasa a 17/47, 162, 74/81 y
+``--ejes --peticion`` a 21/47, 144, 74/81; críticas perdidas siguen en 0 en
+las cuatro. El único caso que cambia de resultado es ``B04-CA-32``, el del
+corte de registro.
 """
 
 from __future__ import annotations
