@@ -3588,6 +3588,65 @@ comprobación automática detrás**. Automatizar un criterio no lo mejora: lo
 repite más rápido y con mejor cara.
 ---
 
+### 74. La ronda 2 encuentra que el banco NO puede distinguir registro de vigencia, y yo tenía el dato escrito de mi puño (08-09-2026, 19:22 UTC)
+
+Codex aprueba; Claude pide cambios con tres hallazgos, **los tres marcados por
+la propia revisión como goteo de la ronda 1** —contenido idéntico en
+`2c21f599` que aquella revisión no miró—. El primero es el que importa.
+
+**El hecho, comprobado por mí en el árbol**: `_fecha_de_registro`
+(`test_pa_0_2_rec_01_banco_evidencia.py:389`) devuelve
+`item['ejes_p2']['valid_from']` —su docstring lo dice literalmente: «La fecha
+declarada es `ejes_p2.valid_from`»— y `_fijar_fecha_de_registro` lo escribe
+verbatim en `created_at`. O sea: **en el banco, `created_at == valid_from`,
+ítem a ítem**. En producción `created_at` lo pone `_utc_now_naive()` en el
+momento de proponer la decisión, y no tiene ninguna relación con `valid_from`.
+
+**Consecuencia**: el predicado nuevo es `created_at <= hasta AND status =
+approved`. En el banco eso equivale a `valid_from <= hasta`, que **sí** es un
+predicado de vigencia. En el sustrato real **no lo es**: es un predicado de
+registro. Y la dirección del error en producción está acotada: se pierde lo
+vigente registrado después de `hasta`, y se admite lo registrado antes de
+`hasta` con vigencia posterior.
+
+Las cifras siguen siendo correctas. Lo que sobra es la **interpretación**: el
+dato sostiene «las cuatro entran por la señal de la ventana» —demostrado ítem a
+ítem— pero **no** «el motor entiende la vigencia sobre el sustrato de Sirius
+0.1». Y mi entrada 66 tituló «H1 entrega cuatro de las cinco» sin esa condición
+al lado, que es exactamente el error que la revisión describe.
+
+**Lo mío, sin adornos.** Verifiqué esta PR más que ninguna otra: reproduje la
+medición al dígito, apliqué la mutación y vi caer las dos pruebas nuevas, corrí
+el `git diff --check` con rango, volví a medir sobre el head final. **Todo eso
+comprueba que la cifra se REPRODUCE. Ninguna comprueba qué MIDE.** Y el dato que
+lo revela no lo tenía que descubrir: lo escribí yo el 08-09 al corregir mi
+propio encargo de H1 —«el corpus declara `ejes_p2.valid_from` (97/97), no
+`created_at`»—. Tenía la premisa y no la usé cuando apareció un predicado
+construido sobre `created_at`.
+
+**La lección, que es distinta de las de hoy y peor**: las cuatro comprobaciones
+que hice son de **reproducibilidad**, y la reproducibilidad es barata de
+comprobar y por eso resulta tentadora. La pregunta cara —«¿esta cifra mide lo
+que su titular dice?»— no se responde ejecutando nada: se responde sabiendo de
+dónde sale cada columna del dato. Hoy me he felicitado cuatro veces por hacer
+lo barato.
+
+**Y hay algo que va más allá de H1 y que conviene ver ahora** (deuda 27): esta
+identidad la creó **ADR-166, que fusioné yo esta mañana**. H2 era correcto en
+sus términos —la puerta necesitaba una fecha de registro declarada y la única
+que el corpus declara es `valid_from`—, pero su efecto lateral es que **el
+banco ya no puede distinguir «registrado antes de X» de «vigente desde antes de
+X»**. Cualquier palanca futura que se apoye en `created_at` medirá de más por
+la misma razón, y el banco no lo dirá.
+
+**Sobre el goteo**: los tres hallazgos estaban íntegros en `2c21f599` y la
+ronda 1 no los vio. La propia revisión lo marca con un guardián de goteo y se
+autoinculpa, que es lo correcto y es más de lo que hice yo. Pero el patrón
+—ronda 1 mira el diff, ronda 2 mira el conjunto— significa que **el número de
+rondas no mide la calidad del trabajo sino cuándo miró cada quien**, y eso
+distorsiona el freno de convergencia, que cuenta rondas.
+---
+
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
 
 1. `ollama_category_classifier.py`: ruta relativa y sin
@@ -4088,3 +4147,17 @@ repite más rápido y con mejor cara.
     revisión** —hoy cada desajuste cuesta una ronda entera de dos revisores—.
     Decide el propietario si entra como guardián del motor o como paso de la
     plantilla de encargos.
+
+27. **Desde ADR-166, el banco NO puede distinguir «registrado antes de X» de
+    «vigente desde antes de X»: `created_at == valid_from` ítem a ítem**
+    (`_fecha_de_registro` → `ejes_p2.valid_from`, comprobado en el árbol; en
+    producción lo pone `_utc_now_naive()` al proponer, sin relación con la
+    vigencia). H2 era correcto en sus términos —la única fecha que el corpus
+    declara es `valid_from`—, pero el efecto lateral es que **cualquier
+    medición del banco que se apoye en `created_at` parece medir vigencia y
+    mide registro**, y el banco no avisa. Lo destapó la ronda 2 de H1
+    (CLAUDE-R2-001) sobre un predicado nuevo; el riesgo es de toda la línea, no
+    de esa palanca. Para el propietario: o el corpus declara una fecha de
+    registro distinta de `valid_from` —lo que hoy no hace y yo no puedo
+    cambiar—, o toda cifra que dependa de `created_at` viaja con esa condición
+    escrita al lado. La segunda es gratis; la primera decide él.
