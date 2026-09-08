@@ -24,6 +24,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
@@ -37,17 +38,19 @@ WORKFLOWS = RAIZ / ".github" / "workflows"
 CARRILES = {"investigacion": "sirius:implement-requested", "auditoria": "auditoria:solicitada"}
 
 
-def _registro() -> dict[str, object]:
-    return dict(json.loads(REGISTRO.read_text(encoding="utf-8")))
+def _registro() -> dict[str, Any]:
+    datos: dict[str, Any] = json.loads(REGISTRO.read_text(encoding="utf-8"))
+    return datos
 
 
-def _workflow(nombre: str) -> dict[str, object]:
-    return dict(yaml.safe_load((WORKFLOWS / nombre).read_text(encoding="utf-8")))
+def _workflow(nombre: str) -> dict[str, Any]:
+    datos: dict[str, Any] = yaml.safe_load((WORKFLOWS / nombre).read_text(encoding="utf-8"))
+    return datos
 
 
-def _pasos(nombre: str, job: str) -> list[dict[str, object]]:
-    jobs = dict(_workflow(nombre)["jobs"])
-    return [dict(p) for p in list(dict(jobs[job])["steps"])]
+def _pasos(nombre: str, job: str) -> list[dict[str, Any]]:
+    pasos: list[dict[str, Any]] = _workflow(nombre)["jobs"][job]["steps"]
+    return pasos
 
 
 def _guion(nombre: str, job: str, step_id: str) -> str:
@@ -90,12 +93,12 @@ def _ejecutar(guion: str, tmp_path: Path, **entorno: str) -> tuple[int, str, str
 
 
 def test_el_registro_declara_los_dos_carriles_retirados() -> None:
-    carriles = dict(_registro()["carriles"])  # type: ignore[arg-type]
+    carriles: dict[str, Any] = _registro()["carriles"]
     assert set(carriles) == set(CARRILES), (
         "el registro tiene que declarar exactamente los carriles que ADR-161 retira"
     )
     for clase, fila in carriles.items():
-        datos = dict(fila)  # type: ignore[arg-type]
+        datos: dict[str, Any] = fila
         for campo in ("retirado_por", "ejecutado_por", "fecha", "motivo", "a_donde_va"):
             assert str(datos.get(campo, "")).strip(), f"{clase}: falta el campo {campo!r}"
 
@@ -143,7 +146,12 @@ def test_el_rechazo_del_despachador_es_un_error_propio_y_no_el_generico() -> Non
     from sirius_engine.domain.errors import CarrilRetiradoError, ClaseNoDespachableError
 
     assert issubclass(CarrilRetiradoError, Exception)
-    assert CarrilRetiradoError is not ClaseNoDespachableError
+    # Que mypy sepa que son tipos distintos es justo lo que se quiere: la prueba
+    # fija que el despachador NO reutiliza el error genérico, y por eso compara
+    # los nombres -comparar los tipos sería una identidad que el comprobador ya
+    # resuelve, y no probaría nada en ejecución-.
+    assert CarrilRetiradoError.__name__ != ClaseNoDespachableError.__name__
+    assert not issubclass(CarrilRetiradoError, ClaseNoDespachableError)
 
 
 # --------------------------------------------------------------------------

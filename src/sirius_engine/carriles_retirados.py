@@ -87,7 +87,7 @@ def carriles_retirados(*, registro: Path | None = None) -> dict[str, CarrilRetir
 
 
 def carril_retirado(
-    clase: "WorkItemClass | str", *, registro: Path | None = None
+    clase: WorkItemClass | str, *, registro: Path | None = None
 ) -> CarrilRetirado | None:
     """La entrada de ``clase`` si está retirada, o ``None`` si sigue activa.
 
