@@ -3659,6 +3659,58 @@ rondas no mide la calidad del trabajo sino cuándo miró cada quien**, y eso
 distorsiona el freno de convergencia, que cuenta rondas.
 ---
 
+### 75. El goteo se come la tolerancia del freno de convergencia, y eso es la interacción de dos mecanismos buenos (08-09-2026, 19:28 UTC)
+
+Leí la regla del freno en vez de recordarla (`sirius_convergence.py:245-310`), y
+la situación es más ajustada de lo que parecía:
+
+- La **mejor marca** es el mínimo **componente a componente sobre TODAS las
+  rondas**, y solo puede bajar. Hay progreso si el par
+  `(pendientes, gravedad)` queda `<=` en las dos magnitudes y `<` en al menos
+  una.
+- Y, textual: «entre dos progresos se tolera como mucho **una** ronda sin
+  progreso».
+
+Las cifras de esta incidencia:
+
+| ronda | pendientes | gravedad | ¿progresa sobre la mejor marca? |
+|---|---|---|---|
+| 1 | 2 | 4 | — (primera) |
+| 2 | **3** | 4 | **NO**: los pendientes suben |
+
+Mejor marca tras la ronda 2: `(2, 4)`. Para que la ronda 3 progrese hace falta
+`pendientes ≤ 1`, o bien `(2, gravedad ≤ 3)`. **Y la ronda 2 ya gastó la única
+ronda sin progreso que el freno tolera**: si la 3 tampoco progresa, salta.
+
+**Lo importante es POR QUÉ subieron los pendientes.** No porque el trabajo
+empeorase: los tres hallazgos de la ronda 2 **estaban íntegros en el head de la
+ronda 1**, y la propia revisión lo declara —los tres llevan «LLEGA TARDE POR
+GOTEO DE LA REVISIÓN DE LA RONDA 1»— y se autoinculpa con su guardián de goteo.
+El trabajo convergía; lo que cambió fue **cuánto miró el revisor**.
+
+**Y esto no es un defecto del freno.** Su propio docstring explica por qué las
+tres definiciones más laxas fallan, y las tres se vieron fallar en este mismo
+trabajo; comparar contra la mejor marca es lo que hace la terminación
+demostrable en vez de una esperanza. El problema es la **interacción**: el
+freno supone que los pendientes de cada ronda miden el estado del trabajo, y
+con goteo miden **el estado del trabajo más lo que al revisor le dio tiempo a
+mirar**. Dos mecanismos correctos que, juntos, pueden parar un trabajo que va
+bien.
+
+**Lo que NO voy a hacer**: tratar el freno como un estorbo. Si salta, salta con
+razón formal, y la salida existe y está documentada —una `DECISIÓN` registrada
+y un `continua` a secas—. **Lo que sí hago**: dejar esa decisión escrita ANTES
+de saber si hace falta (`scratchpad/decision_freno_577.md`), con el criterio de
+parada decidido ahora y no cuando el resultado esté a la vista. Es lo mismo que
+se le exige a cualquier encargo, aplicado a mi propia decisión.
+
+Para el propietario, como observación y no como propuesta cerrada: si el
+guardián de goteo ya sabe distinguir «esto estaba y no se miró» de «esto es
+nuevo», el freno podría no contar contra la mejor marca los hallazgos marcados
+como goteo. Tiene un riesgo evidente —crea un incentivo para etiquetar de goteo
+lo que convenga— y por eso lo dejo como observación suya, no como cambio.
+---
+
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
 
 1. `ollama_category_classifier.py`: ruta relativa y sin
