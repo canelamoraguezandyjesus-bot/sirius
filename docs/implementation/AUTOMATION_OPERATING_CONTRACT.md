@@ -918,7 +918,7 @@ la PR de ADR-167:
 |---|---|---|
 | No se puede publicar la explicación | `::warning::` y **seguía** a poner la etiqueta terminal: incidencia cerrada y muda | El paso termina en **rojo** y **no toca ninguna etiqueta**; la incidencia se queda como estaba |
 | No se puede confirmar la transición | `::error::` seguido de `exit 0`: job **verde** con la incidencia colgada en `implement-requested` | El paso termina en **rojo** con la explicación ya publicada; reejecutar converge |
-| Evento atrasado o repetido sobre una incidencia ya terminada | Decidía con el cuerpo del evento y podía dejar `sirius:completed` **y** `sirius:failed-safely` a la vez | Relee estado, etiquetas y cuerpo de la API en una sola instantánea y **no toca** lo que ya no espera |
+| Evento atrasado o repetido sobre una incidencia ya terminada | Decidía con el cuerpo del evento y podía dejar `sirius:completed` **y** `sirius:failed-safely` a la vez | Lo decide `sirius_validate_activation.sh`, que retira el evento y explica **sin** imponer `sirius:failed-safely` (§13.5) |
 | El lector del registro falla de un modo imprevisto | Solo el código `2` era error; cualquier otro se leía como «carril activo» y el trabajo **seguía** | Contrato explícito: `0` retirado, `1` activo, **cualquier otro detiene** el paso con diagnóstico |
 | Dos activaciones iguales | Dos comentarios: el marcador no iba en el cuerpo publicado | Un solo comentario: el marcador es la primera línea del cuerpo |
 
@@ -939,3 +939,32 @@ comprobaciones de formato y de seguridad del registro, y **demuestran** que las
 cuatro configuraciones posibles —los dos retirados, cada uno reactivado por
 separado, y ninguno— son válidas. El registro real no se ha tocado: los dos
 carriles siguen retirados.
+
+### 13.5 Segunda corrección de la ejecución (ADR-167, segunda ronda)
+
+Al revisar la corrección anterior aparecieron cuatro defectos más, **de la misma
+familia**. ADR-001 obliga entonces a buscar la raíz en vez de parchear, y la raíz
+era esta: **la puerta se había hecho copias locales de decisiones que el ciclo ya
+tiene en un solo dueño, y las copias divergían.** Lo que este contrato declara
+desde la fusión de la PR de ADR-167:
+
+| Situación | Antes | Ahora |
+|---|---|---|
+| La transición de etiquetas se aplica solo en parte | Reejecutar salía en **verde** sin completarla: con `implement-requested` + `failed-safely` la tomaba por terminada, y sin ninguna etiqueta no encontraba activación | Reejecutar la **completa**. La puerta reconoce su propia transición a medias por el marcador que ella misma publicó, y por una firma de estado que el ciclo nunca produce |
+| Hay trabajo posterior además de la transición a medias | — | **No se impone ningún desenlace**: termina en rojo y pide revisión humana |
+| Activación nueva sobre trabajo en curso (`implementing`, `reviewing`, `repairing`, `ci-pending`, los `*-requested`) | La puerta llevaba su propia lista de estados terminales, de **cuatro**, y añadía `failed-safely` **encima** del trabajo en curso | Lo decide `sirius_validate_activation.sh`, que conoce los **diez** estados incompatibles: explica, retira el evento y **no** toca el trabajo en curso |
+| El perfil del cuerpo cambió entre el evento y el arranque | O **ninguna** puerta la atendía —incidencia abandonada— o la atendían **las dos**, retirándola y ejecutándola a la vez | No la ejecuta nadie: se explica, se retira el evento y se conserva `sirius:planned`. Volver a aplicar la etiqueta reactiva |
+
+**Quién atiende una activación deja de decidirse dos veces.** Vive en
+`scripts/automation/sirius_reparto_activacion.sh`, que llaman las dos puertas:
+atiende aquella cuyo perfil coincide con el cuerpo **actual**. Por eso
+`implement-sirius-work.yml` cambia —lo único que cambia en él— y por eso la
+lista propia de estados terminales desaparece de `investigar-orden.yml`: una
+copia que no existe no puede quedarse corta.
+
+**Y la promesa de §13.2.1 se comprueba entera.** Antes de esta corrección,
+ninguna prueba de comportamiento pasaba un registro controlado: reactivar
+investigación dejaba **seis** en rojo. Ahora ninguna lee el registro real —solo
+lo hacen la que comprueba que es válido y la que enumera qué entradas cubrir—, y
+la suite se ejecutó con las **cuatro** configuraciones posibles, pasando en todas.
+El registro entregado conserva los dos carriles retirados.

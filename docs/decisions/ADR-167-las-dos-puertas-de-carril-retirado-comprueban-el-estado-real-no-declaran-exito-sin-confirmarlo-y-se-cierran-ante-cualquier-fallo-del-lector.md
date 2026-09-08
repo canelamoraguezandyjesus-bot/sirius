@@ -295,6 +295,117 @@ y el reparto de perfiles desaparece de los dos workflows (lo aplica un solo
 guion, llamado por los dos). Lo que no se puede hacer imposible: que GitHub
 acepte una escritura y pierda otra.
 
+## Decisión de la segunda ronda
+
+Una regla, de la que salen los cuatro arreglos: **la puerta no decide nada que
+ya tenga dueño; lo llama. Y lo que no tiene dueño —una transición que se aplica
+en varias escrituras— se hace re-entrante, con su propia huella publicada como
+lo que la reejecución reconoce.**
+
+6. **La legitimidad de la activación la decide su dueño (hallazgo 2).** La puerta
+   llama a `sirius_validate_activation.sh` **antes** de la rama de retirada, en
+   vez de llevar una lista propia de estados terminales. Ese guion ya conoce los
+   **diez** estados incompatibles y su política: explicar, retirar el evento y
+   **no** imponer `sirius:failed-safely` a un trabajo en curso. Esto **sustituye**
+   al punto 2 de la primera ronda, que resolvía lo mismo con una lista propia de
+   cuatro; aquella lista desaparece, que es la única forma de que no vuelva a
+   quedarse corta. La puerta conserva una sola comprobación propia, y es sobre
+   el evento y no sobre el estado: que `sirius:implement-requested` siga presente,
+   porque una activación ya consumida no es suya.
+7. **Una transición a medias se completa al reejecutar (hallazgo 1).**
+   `sirius_set_issue_labels` escribe en varias operaciones independientes y
+   GitHub puede aceptar unas y no otras. Lo que distingue «mi transición a
+   medias» de «trabajo posterior de otro» es la huella que la propia puerta
+   publica: **el marcador del comentario**. Con el marcador presente y una firma
+   de estado que el ciclo nunca produce —`failed-safely` junto a
+   `implement-requested` o `planned`, o ninguna etiqueta `sirius:`— la puerta
+   completa la transición. Si además hay **cualquier otra** etiqueta `sirius:`,
+   no impone nada: termina en rojo y pide revisión humana. Esa comprobación no
+   copia ninguna lista: es «todo `sirius:` que no sean las tres de esta
+   transición», así que un estado que se invente mañana también la dispara.
+8. **El reparto entre las dos puertas vive en un solo sitio (hallazgo 3).**
+   `scripts/automation/sirius_reparto_activacion.sh`, que llaman las dos.
+   Atiende la puerta cuyo perfil coincide con el cuerpo **actual** —uno solo, así
+   que no puede haber dos dueñas ni ninguna—, y si el perfil **cambió** desde el
+   evento no la atiende nadie: ese evento pedía otro trabajo, y hacer el de ahora
+   sería cambiar el tipo de trabajo en silencio. Se explica, se retira
+   `sirius:implement-requested` y se conserva `sirius:planned`, así que volver a
+   aplicar la etiqueta reactiva. Quién publica ese rechazo está **decidido**, no
+   repartido al azar: lo hace la puerta que sería la dueña según el cuerpo
+   actual; la otra recibe «no es tuya» y se calla.
+9. **Ninguna prueba de comportamiento lee el registro real (hallazgo 4).** Todas
+   reciben un registro controlado. El registro real solo se usa para comprobar
+   que es válido y para enumerar qué entradas hay que cubrir. Así las cuatro
+   configuraciones posibles pasan sin editar una sola prueba, que es lo que
+   §13.2.1 del contrato promete.
+
+## Comprobación de la segunda ronda
+
+**Los cuatro, reproducidos sobre `398017a` antes de tocar nada:**
+
+| # | Lo observado |
+|---|---|
+| 1a | Falla solo `--remove-label implement-requested` → queda `implement-requested` + `failed-safely`; **la reejecución sale en verde** sin limpiar |
+| 1b | Falla solo `--add-label failed-safely` → la incidencia queda **sin etiquetas**; la reejecución no encuentra activación y **sale en verde** |
+| 2 | Con `implementing`, `reviewing`, `repairing`, `ci-pending` o `review-requested` → salida 0 y `failed-safely` **encima** del trabajo en curso |
+| 3a | evento `investigador`, cuerpo `programador` → las dos declinan; queda `planned` + `implement-requested` **sin dueña** |
+| 3b | evento `programador`, cuerpo `investigador` → **las dos** se hacen cargo: investigación la cierra en `failed-safely` y el implementador ejecuta el modelo sobre la misma orden |
+| 4 | Con investigación reactivada en el registro real, **6 pruebas** de comportamiento en rojo |
+
+**Después del arreglo, lo observable:** 1a y 1b reejecutan a `['sirius:failed-safely']`
+con **un** comentario; los cinco estados en curso conservan su etiqueta, pierden
+el evento y reciben el diagnóstico del validador **sin** `failed-safely`; 3a y 3b
+terminan en `['sirius:planned']` con **un** comentario que dice cómo reactivar,
+en las dos direcciones y en los dos órdenes de encadenado.
+
+**Prueba de mutación.** Con los arreglos: **64 pasan**. Guardando *solo* los dos
+workflows y dejando el resto: **20 fallan**. Las tres escrituras independientes
+de la transición se prueban una a una: falla retirar `implement-requested`, falla
+añadir `failed-safely`, falla retirar `planned`; las tres se recuperan al
+reejecutar y las tres fallan contra el código de `398017a`. Dos pruebas nuevas **pasaron** al
+principio contra el código defectuoso, y las dos eran defectos de la prueba, no
+del código:
+
+- `test_el_reparto_no_deja_que_las_dos_puertas_ejecuten_el_mismo_encargo`
+  encadenaba siempre investigación primero. Con ese orden, la retirada dejaba
+  `failed-safely` y el validador frenaba después al implementador, así que el
+  caso 3b salía como «una sola dueña». Encadenando también al revés, falla.
+- La misma prueba contaba como «atender» solo `valid=true`. Retirar también es
+  atender: contando solo una, 3b se veía limpio.
+
+**Las cuatro configuraciones del registro**, ejecutadas con el registro real
+sustituido y **restaurado y verificado** al terminar
+(`git diff --exit-code` limpio, los dos carriles retirados en lo entregado):
+
+```
+retirados=[investigacion auditoria] → 64 passed
+retirados=[auditoria             ] → 64 passed
+retirados=[investigacion         ] → 64 passed
+retirados=[ninguno retirado      ] → 64 passed
+```
+
+**Una prueba de la primera ronda se retiró, y conviene decir por qué:** el modo
+«la API responde 200 con basura» del doble no es algo que `gh` produzca —con una
+respuesta que no es JSON, `--jq` falla y `gh` sale con error—, así que aquella
+prueba afirmaba un artefacto del arnés. El caso real, «la lectura falla», sigue
+cubierto. Y al escribirla se vio otra cosa que ahora es prueba propia: romper
+solo REST **no** impide decidir, porque `sirius_read_issue_body` cae a GraphQL.
+
+## Lo que la segunda ronda tampoco garantiza
+
+- **Un solo comentario bajo concurrencia real.** Si los dos workflows publican el
+  rechazo por perfil cambiado exactamente a la vez, el marcador no llega a verse
+  y puede haber dos. Encadenados —el caso normal— se comprueba que hay uno.
+- **Que la explicación del carril retirado llegue antes que el diagnóstico del
+  validador.** Con una activación improcedente sobre un carril retirado, quien
+  responde es el validador: la persona sabe que la activación no procedía, no
+  que además el carril está retirado. Es el precio de tener un solo dueño para
+  esa decisión, y se prefiere a dos listas que divergen.
+- **Que el paso que prepara el encargo del investigador use el cuerpo actual.**
+  Sigue usando el del evento. No es uno de los hallazgos, solo corre con el
+  carril **activo**, y para entonces el reparto ya ha comprobado que el cuerpo
+  actual declara ese perfil y que no cambió desde el evento.
+
 ## Consecuencias
 
 - Las dos puertas pueden terminar en rojo donde antes terminaban en verde. Es el
@@ -303,3 +414,9 @@ acepte una escritura y pierda otra.
 - Las pruebas de este mecanismo pasan a **ejecutar** los guiones de los pasos.
   El arnés vive en `tests/automation/fixtures/carriles_retirados/` y está
   disponible para cualquier otra puerta que quiera probarse igual.
+- **`implement-sirius-work.yml` cambia**, y la primera ronda decía que no se
+  tocaba. Cambia en una sola cosa: deja de decidir por su cuenta si la orden es
+  suya y llama al reparto. Sin eso la discrepancia entre las dos puertas no tiene
+  arreglo, porque vive precisamente en que cada una decidía sola.
+- El punto 2 de la primera ronda queda **sustituido** por el 6: la lista propia
+  de estados terminales desaparece de la puerta.
