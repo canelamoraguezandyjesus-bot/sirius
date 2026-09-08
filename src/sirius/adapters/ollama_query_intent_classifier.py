@@ -33,16 +33,43 @@ Las fechas se le piden en ISO-8601 y se validan aquí con un patrón: una
 fecha que no case se descarta como si el modelo no la hubiera declarado
 —``None``, «la pregunta no lo dice»—, en vez de viajar a ``G8``, donde una
 cadena arbitraria se compara con ``created_at`` por orden lexicográfico y
-podría excluir el canon entero en silencio. El «hoy» que el modelo necesita
-para resolver una fecha relativa se le da en la instrucción; el llamador
-puede fijarlo (la medición del banco usa su ``ahora_declarado``).
+podría excluir el canon entero en silencio.
+
+Validar no basta: hay que NORMALIZAR
+====================================
+
+El patrón admite tres escrituras del mismo instante —``2026-03-01``,
+``2026-03-01T00:00:00Z`` y ``2026-03-01 00:00:00``— y ``G8`` compara el
+corte con ``created_at`` por orden lexicográfico, donde el separador manda:
+``created_at`` llega de SQLite como ``str(datetime)``, es decir
+``"AAAA-MM-DD HH:MM:SS.ffffff"`` con **espacio**, y el espacio (0x20)
+siempre ordena antes que la ``T`` (0x54). Devolver la cadena verbatim
+dejaría que el formato que el modelo eligió esa vez decidiera, por
+accidente, si el día del corte entra o no. Por eso los dos instantes se
+reemiten aquí en una forma canónica única:
+
+- **corte de registro**: la pregunta que lo produce («¿qué sabía yo el 1 de
+  marzo?») es de grano DÍA, y la respuesta es lo que estaba registrado **al
+  final** de ese día. El corte se canoniza, por tanto, al final del día que
+  nombra —``"AAAA-MM-DD 23:59:59.999999"``, misma forma que ``created_at``
+  y por tanto comparable con ella—, de modo que las tres escrituras del
+  mismo día admiten exactamente el mismo conjunto.
+- **tiempo objetivo**: es un instante, no un día, y ``G8`` lo compara con
+  ``valid_from``/``valid_to``, que son ISO-8601 con zona. Se canoniza a UTC
+  con desfase explícito (``…+00:00``); una fecha desnuda es su medianoche,
+  que es como el banco adjudica los casos con tiempo objetivo declarado.
+
+El «hoy» que el modelo necesita para resolver una fecha relativa se le da en
+la instrucción, resuelto **en cada consulta** —una aplicación de escritorio
+se deja abierta durante días y el «hoy» del arranque envejece en silencio—;
+el llamador puede fijarlo (la medición del banco usa su ``ahora_declarado``).
 """
 
 from __future__ import annotations
 
 import json
 import re
-from datetime import UTC, datetime
+from datetime import UTC, datetime, time
 
 import httpx
 
@@ -50,7 +77,7 @@ from sirius.domain.query_intent import IntencionDeConsulta
 from sirius.domain.staged_engine_contracts import Cardinalidad, Modo
 from sirius.infrastructure.logging import get_logger
 
-__all__ = ["OllamaQueryIntentClassifierAdapter"]
+__all__ = ["OllamaQueryIntentClassifierAdapter", "instante_utc"]
 
 _logger = get_logger(__name__)
 
@@ -75,6 +102,16 @@ _SIN_DECLARAR = ""
 _PATRON_ISO = re.compile(
     r"^\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)?$"
 )
+
+#: Forma con la que ``created_at`` llega del canon: ``str(datetime)`` sobre
+#: una columna ``Mapped[datetime]`` de SQLite
+#: (``sirius.adapters.persistence.staged_engine_port``). El corte de registro
+#: se reemite en ESTA forma porque ``G8`` los compara por orden lexicográfico.
+_FORMATO_DE_CREATED_AT = "%Y-%m-%d %H:%M:%S.%f"
+
+#: Último instante representable de un día en la forma de ``created_at``: el
+#: corte de registro de un día D admite todo lo registrado durante D.
+_FINAL_DEL_DIA = time(23, 59, 59, 999999)
 
 _MODOS = tuple(modo.value for modo in Modo)
 _CARDINALIDADES = tuple(cardinalidad.value for cardinalidad in Cardinalidad)
@@ -135,9 +172,14 @@ class OllamaQueryIntentClassifierAdapter:
         timeout_seconds: float = _REQUEST_TIMEOUT_SECONDS,
     ) -> None:
         self._model = model
-        self._instruccion = _INSTRUCCION.format(
-            ahora=ahora if ahora is not None else datetime.now(UTC).date().isoformat()
-        )
+        # El «hoy» no se congela en el constructor: Sirius es una aplicación
+        # de escritorio que se deja abierta durante días, y el adaptador se
+        # construye UNA vez por arranque (``composition_root``). Con la
+        # fecha resuelta aquí, «¿qué decidí ayer?» seguiría anclada al día
+        # del arranque y el desfase crecería en silencio. Con ``ahora``
+        # fijado por el llamador —la medición del banco usa su
+        # ``ahora_declarado``— se respeta lo que declaró.
+        self._ahora = ahora
         # ``client`` existe solo como costura de prueba (un
         # ``httpx.MockTransport`` nunca sale del proceso); el código de
         # producción cae siempre en un cliente clavado a localhost — ningún
@@ -146,6 +188,12 @@ class OllamaQueryIntentClassifierAdapter:
         self._client = client or httpx.Client(
             base_url=_OLLAMA_LOCAL_BASE_URL, timeout=timeout_seconds
         )
+
+    def _instruccion(self) -> str:
+        """La instrucción de ESTA consulta, con el «hoy» del momento en que
+        se pregunta salvo que el llamador lo haya fijado."""
+        ahora = self._ahora if self._ahora is not None else datetime.now(UTC).date().isoformat()
+        return _INSTRUCCION.format(ahora=ahora)
 
     def classify_intent(self, query_text: str) -> IntencionDeConsulta | None:
         try:
@@ -159,7 +207,7 @@ class OllamaQueryIntentClassifierAdapter:
                 json={
                     "model": self._model,
                     "messages": [
-                        {"role": "system", "content": self._instruccion},
+                        {"role": "system", "content": self._instruccion()},
                         {"role": "user", "content": query_text},
                     ],
                     "stream": False,
@@ -199,8 +247,8 @@ def _parse_intencion(payload: object) -> IntencionDeConsulta:
         modo=Modo(str(answer["modo"]).strip()),
         cardinalidad=Cardinalidad(str(answer["cardinalidad"]).strip()),
         limite=_limite(answer.get("limite")),
-        tiempo_objetivo=_instante(answer.get("tiempo_objetivo")),
-        corte_de_registro=_instante(answer.get("corte_de_registro")),
+        tiempo_objetivo=_tiempo_objetivo(answer.get("tiempo_objetivo")),
+        corte_de_registro=_corte_de_registro(answer.get("corte_de_registro")),
     )
 
 
@@ -217,7 +265,25 @@ def _limite(declarado: object) -> int | None:
     return n if n > 0 else None
 
 
-def _instante(declarado: object) -> str | None:
+def instante_utc(valor: str | None) -> datetime | None:
+    """Un ISO-8601 leído como instante UTC, o ``None`` si no lo es.
+
+    Sin zona declarada se asume UTC, y no la zona local de la máquina: todo
+    lo que este módulo emite, y el ``created_at`` con el que se compara, son
+    UTC por construcción. Comparar un ingenuo con un consciente por ``!=``
+    no lanza —simplemente da siempre «distintos»—, así que asumir la zona
+    aquí es lo que hace comparables dos escrituras del mismo instante.
+    """
+    if valor is None:
+        return None
+    try:
+        momento = datetime.fromisoformat(valor.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return momento.replace(tzinfo=UTC) if momento.tzinfo is None else momento.astimezone(UTC)
+
+
+def _iso_declarado(declarado: object) -> str | None:
     """La fecha declarada si es ISO-8601 reconocible; ``None`` si no lo es o
     si el modelo contestó la cadena vacía. Un intervalo se resuelve por su
     extremo final, la misma traducción que el traductor del banco declara
@@ -230,3 +296,34 @@ def _instante(declarado: object) -> str | None:
     if "/" in texto:
         texto = texto.split("/")[-1].strip()
     return texto if _PATRON_ISO.match(texto) else None
+
+
+def _tiempo_objetivo(declarado: object) -> str | None:
+    """El instante al que se refiere la pregunta, canonizado a UTC.
+
+    Se emite con desfase explícito (``…+00:00``) porque ``G8`` lo compara
+    con ``valid_from``/``valid_to``, que son ISO-8601 con zona. Una fecha
+    desnuda es su medianoche: es un instante, no un día.
+    """
+    texto = _iso_declarado(declarado)
+    momento = instante_utc(texto)
+    return None if momento is None else momento.isoformat()
+
+
+def _corte_de_registro(declarado: object) -> str | None:
+    """El corte de registro, canonizado al FINAL del día que nombra y en la
+    forma de ``created_at``.
+
+    Las tres escrituras que ``_PATRON_ISO`` admite para el mismo día
+    —``AAAA-MM-DD``, ``AAAA-MM-DDT00:00:00Z`` y ``AAAA-MM-DD 00:00:00``—
+    tienen que admitir el mismo conjunto: la pregunta que produce un corte
+    («¿qué sabía yo el 1 de marzo?») es de grano día, y la hora que el
+    modelo escriba —o deje de escribir— es formato, no información. Ver el
+    encabezado del módulo.
+    """
+    texto = _iso_declarado(declarado)
+    momento = instante_utc(texto)
+    if momento is None:
+        return None
+    final = datetime.combine(momento.date(), _FINAL_DEL_DIA)
+    return final.strftime(_FORMATO_DE_CREATED_AT)

@@ -10,12 +10,16 @@ hand-written migration runs, so this is the only way to exercise a real FTS5
 
 from __future__ import annotations
 
+import json
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import httpx
 import pytest
 from sqlalchemy import text
 
+from sirius.adapters.ollama_query_intent_classifier import OllamaQueryIntentClassifierAdapter
 from sirius.adapters.persistence import staged_engine_candidate
 from sirius.adapters.persistence.database import build_engine
 from sirius.adapters.persistence.migrations import upgrade_to_head
@@ -1840,3 +1844,71 @@ def test_un_corte_de_registro_derivado_excluye_lo_registrado_despues(tmp_path: P
 
     assert _rank(None) == [memoria.id]
     assert _rank(con_corte) == []
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("separador", ["", "T00:00:00Z", " 00:00:00"])
+def test_las_tres_escrituras_del_corte_de_hoy_admiten_el_mismo_conjunto(
+    tmp_path: Path, separador: str
+) -> None:
+    """El corte que el adaptador emite tiene que ser COMPARABLE con el
+    formato en que producción persiste `created_at`, no solo válido.
+
+    `_PATRON_ISO` admite tres escrituras del mismo día —`AAAA-MM-DD`,
+    `AAAA-MM-DDT00:00:00Z` y `AAAA-MM-DD 00:00:00`— y `G8` las compara con
+    `created_at` por ORDEN LEXICOGRÁFICO. `created_at` llega de SQLite como
+    `str(datetime)`, con separador ESPACIO, y el espacio (0x20) ordena antes
+    que la `T` (0x54): sin canonizar, la forma con `T` no excluía nada
+    registrado el propio día del corte y las otras dos excluían el día
+    entero. La semántica declarada (ADR-164) es que «¿qué sabía yo el D?»
+    admite lo registrado durante D, así que las tres tienen que devolver la
+    memoria de hoy.
+
+    A diferencia de las otras pruebas de este bloque, el doble está en el
+    extremo HTTP y no en el puerto: lo que se ejercita es justamente la
+    normalización del adaptador, que un doble de `QueryIntentClassifierPort`
+    saltaría."""
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    active_project_id, _ = _two_projects(database_path)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+    memoria = SaveManualMemoryUseCase(unit_of_work).save(
+        "faroquenopalabraunica sobre la costa", project_id=active_project_id
+    )
+    hoy = datetime.now(UTC).date().isoformat()
+
+    def _handle(request: httpx.Request) -> httpx.Response:
+        cuerpo = {
+            "modo": "M1",
+            "cardinalidad": "EXACTA",
+            "limite": 0,
+            "tiempo_objetivo": "",
+            "corte_de_registro": f"{hoy}{separador}",
+        }
+        return httpx.Response(200, json={"message": {"content": json.dumps(cuerpo)}})
+
+    cliente = httpx.Client(
+        transport=httpx.MockTransport(_handle), base_url="http://localhost:11434"
+    )
+    interprete = InterpreteDePeticion(
+        intent_classifier=OllamaQueryIntentClassifierAdapter(
+            "qwen3:4b-instruct", ahora=hoy, client=cliente
+        )
+    )
+
+    puerto = build_staged_engine_port(database_path)
+    try:
+        recuperadas = [
+            c.item_id
+            for c in _use_case(
+                database_path,
+                category_matching_enabled=True,
+                staged_engine_port=puerto,
+                staged_engine_candidate=staged_engine_candidate.candidato(),
+                query_request_interpreter=interprete,
+            ).rank("faroquenopalabraunica")
+        ]
+    finally:
+        puerto.close()
+
+    assert recuperadas == [memoria.id]

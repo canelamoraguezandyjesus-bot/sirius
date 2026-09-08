@@ -50,8 +50,8 @@ es adjudicación (``max(1, len(resultado_esperado))``).
 El límite se compara en su significado, no en su número: el banco usa el
 tamaño del canon como "límite que no ata" y el intérprete usa su propia
 constante, así que "no ata" se normaliza a ``None`` en los dos lados. El
-tiempo se compara como instante, no como cadena: ``…Z`` y ``…+00:00`` son el
-mismo instante.
+tiempo se compara como instante, no como cadena: ``…Z``, ``…+00:00`` y una
+forma sin zona (que se lee como UTC) son el mismo instante.
 
 Cada caso se interroga UNA sola vez: la petición interpretada se reutiliza
 para las dos medidas, así que el guion hace 47 llamadas a Ollama, no 94.
@@ -77,6 +77,7 @@ from tests.acceptance.staged_engine_case_translation import peticion_desde_caso 
 
 from sirius.adapters.ollama_query_intent_classifier import (  # noqa: E402
     OllamaQueryIntentClassifierAdapter,
+    instante_utc,
 )
 from sirius.application.interpret_query_request import (  # noqa: E402
     LIMITE_SIN_ATAR,
@@ -97,19 +98,27 @@ class _RelojDelBanco:
     se ejecuta la medición."""
 
     def __init__(self, ahora: str) -> None:
-        self._ahora = datetime.fromisoformat(ahora.replace("Z", "+00:00"))
+        momento = instante_utc(ahora)
+        if momento is None:
+            raise ValueError(f"«ahora» del banco no es un ISO-8601 reconocible: {ahora!r}")
+        self._ahora = momento
 
     def utc_now(self) -> datetime:
         return self._ahora
 
 
 def _instante(valor: str | None) -> datetime | None:
-    if valor is None:
-        return None
-    try:
-        return datetime.fromisoformat(valor.replace("Z", "+00:00"))
-    except ValueError:
-        return None
+    """El instante que la cadena nombra, con UTC asumido si no declara zona.
+
+    Es la misma normalización que el adaptador usa para emitirlos
+    (``sirius.adapters.ollama_query_intent_classifier.instante_utc``), y se
+    comparte a propósito: el lado del banco siempre trae ``Z`` y sale
+    consciente, mientras que el intérprete puede emitir una forma sin zona.
+    Comparar un ingenuo con un consciente por ``!=`` no lanza —da siempre
+    «distintos»—, así que sin asumir la zona un instante semánticamente
+    idéntico se puntuaría como fallo.
+    """
+    return instante_utc(valor)
 
 
 def _limite_normalizado(peticion: Peticion, sin_atar: int) -> int | None:

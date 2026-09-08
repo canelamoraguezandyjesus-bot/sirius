@@ -118,7 +118,7 @@ decide cada campo es explícito.**
   del camino del motor. Con la puerta cerrada, el adaptador local **ni se
   instancia**.
 
-Cuatro traducciones no obvias, escritas aquí porque cada una es una decisión:
+Seis traducciones no obvias, escritas aquí porque cada una es una decisión:
 
 - **El límite inferido entra como OBJETIVO, nunca como duro.** `G12` trunca
   por el límite duro; truncar por una cifra que un modelo creyó leer en la
@@ -133,6 +133,38 @@ Cuatro traducciones no obvias, escritas aquí porque cada una es una decisión:
   silencio.
 - **Un límite no positivo se descarta.** Una cuota de 0 satisface la
   suficiencia de forma trivial y vaciaría la respuesta.
+- **Validar la fecha no basta: hay que NORMALIZARLA, y el corte de registro
+  es de grano DÍA** (incidencia #570). `_PATRON_ISO` admite tres escrituras
+  del mismo día —`2026-03-01`, `2026-03-01T00:00:00Z` y
+  `2026-03-01 00:00:00`— y `G8` compara el corte con `created_at` por orden
+  lexicográfico. `created_at` llega de SQLite como `str(datetime)`, con
+  separador **espacio** (`staged_engine_port`), y el espacio (`0x20`) ordena
+  siempre antes que la `T` (`0x54`): devolviendo la cadena verbatim, la forma
+  con `T` no excluía **nada** registrado el propio día del corte y las otras
+  dos excluían el día entero. Decidía el formato que el modelo eligiera esa
+  vez, no la pregunta. Se canoniza, por tanto, en un solo sitio —el
+  adaptador—, y con dos semánticas distintas porque las dos comparaciones lo
+  son:
+  - **corte de registro → final del día que nombra**,
+    `"AAAA-MM-DD 23:59:59.999999"`, la misma forma de `created_at` y por
+    tanto comparable con ella. La semántica elegida para «¿qué sabía yo el
+    D?» es **lo registrado al final de D**: la pregunta es de grano día, la
+    hora que el modelo escriba —o deje de escribir— es formato y no
+    información, y la elección no puede quedar en manos del accidente. Errar
+    hacia incluir el día D nunca esconde canon; errar hacia excluirlo sí.
+  - **tiempo objetivo → instante en UTC con desfase explícito**
+    (`…+00:00`), porque `G8` lo compara con `valid_from`/`valid_to`, que son
+    ISO-8601 con zona; una fecha desnuda es su medianoche, que es como el
+    banco adjudica los casos con tiempo objetivo declarado
+    (`B04-CA-06`: `2026-09-15T00:00:00Z`).
+- **El «hoy» de la instrucción se resuelve en CADA consulta, no en el
+  constructor** (incidencia #570). El adaptador se construye una sola vez por
+  arranque (`composition_root.build_conversation_dependencies`) y Sirius es
+  una aplicación de escritorio que se deja abierta durante días: con el «hoy»
+  congelado, «¿qué decidí ayer?» quedaría anclada al día del arranque y el
+  desfase crecería sin límite y en silencio. El parámetro `ahora` sigue
+  existiendo y manda cuando el llamador lo fija —la medición del banco usa su
+  `ahora_declarado`—; lo que cambia es solo el caso `ahora=None`.
 
 ## Comprobación que la sostiene
 
@@ -152,6 +184,39 @@ La tercera —`test_sin_interprete_la_peticion_emitida_sigue_siendo_la_uniforme`
 el candado del pasado— **pasa con la mutación y sin ella**, que es justo lo
 que se le pide. Restaurado el código, las tres pasan.
 
+**La normalización del instante, vista FALLAR por mutación** (incidencia
+#570, ronda 2). Cuatro mutaciones, una por cada pieza corregida, sobre el
+árbol ya construido:
+
+```
+# corte_de_registro=_corte_de_registro(...) -> _iso_declarado(...)
+FAILED tests/integration/test_rank_relevant_knowledge.py::test_las_tres_escrituras_del_corte_de_hoy_admiten_el_mismo_conjunto[] - assert [] == [1]
+FAILED tests/integration/test_rank_relevant_knowledge.py::test_las_tres_escrituras_del_corte_de_hoy_admiten_el_mismo_conjunto[ 00:00:00] - assert [] == [1]
+
+# tiempo_objetivo=_tiempo_objetivo(...) -> _iso_declarado(...)
+E  AssertionError: assert '2026-03-20T00:00:00Z' == '2026-03-20T00:00:00+00:00'
+
+# self._ahora = ahora  ->  congelado en el constructor (la conducta anterior)
+FAILED tests/unit/test_ollama_query_intent_classifier.py::test_el_hoy_de_la_instruccion_se_resuelve_en_cada_consulta
+
+# instante_utc: momento.replace(tzinfo=UTC) -> momento
+FAILED tests/unit/test_ollama_query_intent_classifier.py::test_instante_utc_lee_el_mismo_instante_escrito_de_tres_formas[2026-03-01 00:00:00]
+```
+
+La primera es la que importa: con la mutación puesta, la escritura con `T`
+**pasa** y las otras dos fallan devolviendo `[]` — exactamente el defecto,
+que la forma elegida por el modelo decidiera el conjunto admitido.
+Restaurado el código, las tres escrituras devuelven `[1]`.
+
+**Lo que esto NO cambia en la predicción de la medición con Ollama.** La
+predicción escrita antes de medir (`coincidencia campo a campo >= 45/47`) se
+mantiene sin tocar. Ninguna cifra del banco depende del sentido de la
+corrección: **ningún** caso del banco declara `corte_de_registro`, así que el
+campo `corte` no puede moverse; y en `tiempo_objetivo` la normalización solo
+puede **añadir** coincidencias —una escritura sin zona que antes se puntuaba
+como fallo por comparar ingenuo con consciente ahora se lee como el mismo
+instante—, nunca quitarlas.
+
 **El respaldo es el de siempre, medido de punta a punta.** Con Ollama
 inalcanzable —el adaptador falla abierto y el intérprete cae en la política
 uniforme—, `scripts/medir_interprete_de_peticion.py` reproduce **exactamente**
@@ -163,6 +228,11 @@ COINCIDENCIA CAMPO A CAMPO: 9/47 peticiones idénticas
    modo: 37/47   admite_no_vigentes: 42/47   cardinalidad: 13/47
    limite: 42/47  tiempo_objetivo: 43/47      corte: 45/47
 ```
+
+Esa captura es la de la ronda anterior y **no se ha vuelto a ejecutar** en
+esta: sin modelo, el intérprete no pasa por el adaptador —cae en la política
+uniforme— y las dos formas que la medición compara ya eran conscientes, así
+que la normalización de esta ronda no puede moverla.
 
 Dos cosas dice ese número, y conviene no confundirlas: la primera línea
 demuestra que **cablear el intérprete sin modelo no cambia nada** (`0/47;
@@ -244,6 +314,16 @@ adaptador ni se instancia; puerta abierta: recibe el modelo local) y tres en
   encuentre una revisión: es una declaración del caso, no algo derivable de la
   frase, y en producción lo fija la regla. Por eso la medición campo a campo
   compara los cinco campos inferidos y **no** el propósito.
+- **`rank()` deja de devolver solo lo vigente, y su contrato lo dice ahora**
+  (incidencia #570). El puerto real nunca declara el eje de confirmación
+  (`SIN_EJES`, `staged_engine_port`), y con `confirmacion is None` la puerta
+  `G6` (`staged_engine_gates._g6`, líneas 177-184) solo rechaza un item no
+  vigente en `M1`: en `M2`, `M3`, `M4` y `M5` —los cuatro modos restantes que
+  el modelo local puede inferir, no solo el histórico— `rank()` devuelve
+  también memorias archivadas y decisiones sustituidas, que `ContextBuilder`
+  inyecta en el contexto del turno. Es la semántica declarada del motor y la
+  que el banco espera; lo que faltaba era decirlo en el docstring de `rank()`,
+  que seguía prometiendo «every vigente memory/decision».
 
 ## Alternativas descartadas y por qué
 

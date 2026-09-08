@@ -198,8 +198,19 @@ class RankRelevantKnowledgeUseCase:
         self._query_request_interpreter = query_request_interpreter
 
     def rank(self, query_text: str) -> tuple[RankedKnowledge, ...]:
-        """Return every vigente memory/decision related to ``query_text``,
-        ordered by S7.5's explicit criteria tuple plus M9's category_match.
+        """Return the memories/decisions related to ``query_text``, ordered
+        by S7.5's explicit criteria tuple plus M9's category_match.
+
+        Con un intérprete cableado (ADR-164) lo devuelto ya no es solo lo
+        vigente: ``G6`` decide por el modo inferido, y el puerto real nunca
+        declara el eje de confirmación (``SIN_EJES``,
+        ``sirius.adapters.persistence.staged_engine_port``), así que con
+        ``confirmacion is None`` un item NO vigente solo lo rechaza ``M1``
+        (``sirius.domain.staged_engine_gates._g6``). Es decir: por el camino
+        de siempre y en ``M1``, lo vigente; en ``M2``, ``M3``, ``M4`` y
+        ``M5`` —los cuatro modos restantes que el modelo local puede
+        inferir— también memorias archivadas y decisiones sustituidas. Es la
+        semántica declarada del motor, no un efecto colateral.
 
         A blank or all-punctuation ``query_text`` never raises: it simply
         matches nothing via FTS5, and any candidate that also has no
