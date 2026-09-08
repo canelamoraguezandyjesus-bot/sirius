@@ -219,9 +219,7 @@ def test_los_objetivos_en_uno_adelantan_la_parada_s1_en_las_exactas_del_banco() 
         del_banco = peticion_desde_caso(
             caso, operation_id="op-1", ambito=ambito, limite_sin_atar=LIMITE_SIN_ATAR
         )
-        intencion = IntencionDeConsulta(
-            modo=Modo.M1_ORDINARIO, cardinalidad=Cardinalidad.EXACTA
-        )
+        intencion = IntencionDeConsulta(modo=Modo.M1_ORDINARIO, cardinalidad=Cardinalidad.EXACTA)
         del_interprete = _interprete(intencion).interpretar(
             caso["consulta"], "op-1", active_project_id=None
         )

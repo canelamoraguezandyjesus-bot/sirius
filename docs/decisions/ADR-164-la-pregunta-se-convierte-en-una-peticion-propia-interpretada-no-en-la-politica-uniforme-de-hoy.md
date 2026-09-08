@@ -411,14 +411,19 @@ de la ronda 1) y `d247af9` (el árbol que estrenó esta ficha) midieron los dos
 respectivamente. La diferencia hasta las 5176 de hoy son los guardianes
 añadidos en las rondas 2 y 3.
 
-**Guardianes deterministas añadidos** (los que corren en CI, sin Ollama):
-`tests/unit/test_interpret_query_request.py` (14: respaldo, los cuatro ejes,
+**Guardianes deterministas añadidos** (los que corren en CI, sin Ollama).
+El recuento es de funciones `test_` y está contado sobre el árbol al que se
+ancla la cadena de arriba, no sobre el de la ronda 1 —la ronda 3 re-ancló la
+terna de `pytest` y dejó este inventario describiendo un árbol anterior, que
+es el mismo defecto que venía a cerrar (incidencia #570, ronda 4)—:
+`tests/unit/test_interpret_query_request.py` (15: respaldo, los cuatro ejes,
 la regla del permiso campo a campo incluido el caso sin autorizar, el ámbito
-de M16), `tests/unit/test_ollama_query_intent_classifier.py` (16: fallo
-abierto, contrato HTTP literal, localhost-only, y que el esquema **no pide
-nunca** permiso ni propósito), dos en
+de M16, y el techo que `objetivos=1` impone),
+`tests/unit/test_ollama_query_intent_classifier.py` (26: fallo abierto,
+contrato HTTP literal, localhost-only, que el esquema **no pide nunca**
+permiso ni propósito, y la canonización de los dos instantes), dos en
 `tests/unit/test_composition_root_relevance_gate.py` (puerta cerrada: el
-adaptador ni se instancia; puerta abierta: recibe el modelo local) y tres en
+adaptador ni se instancia; puerta abierta: recibe el modelo local) y cinco en
 `tests/integration/test_rank_relevant_knowledge.py`.
 
 ## Consecuencias
