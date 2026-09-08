@@ -44,14 +44,19 @@ from __future__ import annotations
 
 import re
 from collections.abc import Sequence
+from dataclasses import replace
 from datetime import datetime
 
 from sirius_engine.domain.mirror import (
     EspejoIlegibleError,
+    EstadoAcreditado,
     EventoQuality,
+    FormaDePermiso,
     MirroredRun,
     MirroredWorkItem,
     OrigenLectura,
+    ParadaPublicada,
+    PermisoDeReanudacion,
     RondaHallazgos,
     VeredictoPublicado,
 )
@@ -90,6 +95,21 @@ def es_autor_de_confianza(contenido: ContenidoConAutor) -> bool:
     y se concatenaba sin filtrar (defecto H-1, incidencia #215, ADR-051).
     """
     return contenido.autor_asociacion == "OWNER" or contenido.autor_login == _BOT_LOGIN
+
+
+def es_del_propietario(contenido: ContenidoConAutor) -> bool:
+    """La mitad ESTRICTA del filtro de confianza: solo el propietario, no el bot.
+
+    Mismo `author_association == "OWNER"` con el que
+    `.github/workflows/resume-sirius-on-command.yml` filtra el evento antes de
+    invocar a `sirius_resume_on_command.sh`. Se separa de
+    :func:`es_autor_de_confianza` porque hay exactamente un hecho del historial
+    que no puede aceptarse del bot: la orden `continua`. Un marcador es un
+    recibo que la automatización emite; la orden es la palabra del propietario,
+    y dejar que el bot la escribiera sería dejar que la automatización se diera
+    permiso a sí misma (ADR-147).
+    """
+    return contenido.autor_asociacion == "OWNER"
 
 
 # --- Marcadores sin módulo Python de referencia -----------------------------
@@ -211,6 +231,104 @@ _STOP_MARKER_RE = re.compile(
     r"(?::[^>]*)?-->"
 )
 
+# Marcador que `notify-sirius-state.yml` publica cada vez que se APLICA una de
+# las seis etiquetas que vigila (`implementing`, `repair-requested`,
+# `ready-for-merge`, `blocked-decision`, `failed-safely`, `completed`):
+#
+#   marker="<!-- sirius-notification:${STATE_LABEL}:${head_sha}:${RUN_ID:-sin-run} -->"
+#
+# A diferencia de las etiquetas vigentes -que son la FOTO de ahora mismo-,
+# estos marcadores son el CAMINO: cada uno prueba, fechado y por escrito, que
+# la incidencia estuvo en ese estado. `head_sha` vale `no-head` cuando la
+# incidencia todavía no tenía ningún SHA publicado (mismo guion), así que aquí
+# se captura tal cual, sin exigir forma de SHA. El tramo del run se lee y se
+# DESCARTA: `head` es el head y solo el head, que es lo que su docstring
+# promete y lo único comparable con un SHA (CLAUDE-R8-001, ronda 8, PR #546).
+#
+# El tramo final del run existe desde ADR-157 (fusionado en `main` el
+# 07-09-2026): hasta entonces el marcador era `<etiqueta>:<head>` y el guion
+# deduplicaba por marcador COMPLETO, así que una etiqueta repuesta sobre el
+# mismo head NO publicaba un segundo marcador y la secuencia era incompleta.
+# Desde ADR-157 cada evento de etiqueta que LLEGA A EJECUTARSE deja su propio
+# aviso. Las dos formas tienen que convivir: los historiales publicados ANTES
+# de esa fusión -las incidencias ya vividas, que ADR-157 declara que
+# «conservan sus huecos»- siguen trayendo el marcador sin run, y de ellos
+# sigue siendo cierto que la secuencia es incompleta, nunca falsa; el
+# recorrido acreditado (ADR-147) solo necesita que lo que diga haya ocurrido,
+# no que diga todo lo que ocurrió.
+#
+# Ese «cada evento» tiene un límite conocido, y es del canal, no del motor
+# (CODEX-001, ronda 14, PR #546): el grupo de concurrencia de
+# `notify-sirius-state.yml` es `notify-sirius-<incidencia>-<etiqueta>` y
+# GitHub Actions guarda como mucho UNA ejecución en espera por grupo, así que
+# un tercer evento de la misma etiqueta puede desplazar al segundo antes de
+# que este publique nada. Por eso un historial POSTERIOR a ADR-157 también
+# puede traer un hueco, y los respaldos que este módulo mantiene para los
+# historiales antiguos siguen siendo la red de esos huecos y no solo la de
+# aquellos: la secuencia sigue siendo incompleta, nunca falsa. Cerrar el canal
+# se decide y se corrige en su propia ficha, no aquí (decisión del
+# propietario, 07-09-2026: no se toca `.github/**` desde esta PR).
+_NOTIFICATION_MARKER_RE = re.compile(
+    r"<!--\s*sirius-notification:(sirius:[a-z-]+):([^\s>:]*)(?::[^\s>]*)?\s*-->"
+)
+
+# La orden exacta del propietario que `sirius_resume_on_command.sh` acepta como
+# permiso para reanudar (líneas 72-89 de ese guion), reproducida aquí paso a
+# paso porque no hay forma de *importar* un `sed`:
+#
+#   sin_firma="$(printf '%s' "$COMMENT_BODY" | tr -d '\r' \
+#     | sed -e '/^[[:space:]]*---[[:space:]]*$/,$d')"
+#   trimmed="$(printf '%s' "$sin_firma" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+#   lowered="$(printf '%s' "$trimmed" | tr '[:upper:]' '[:lower:]')"
+#   if [ "$lowered" != "continua" ] && [ "$lowered" != "continúa" ]; then ... exit 0
+#
+# La excepción del bloque de atribución tras `---` es deliberada y medida en
+# ese guion: quien comenta por API no controla la firma que el servidor le
+# anexa. Cualquier OTRO texto sigue invalidando la orden.
+_ORDEN_FIRMA_RE = re.compile(r"^[ \t]*---[ \t]*$.*", re.DOTALL | re.MULTILINE)
+_ORDENES_DE_CONTINUAR = ("continua", "contin\u00faa")
+
+
+#: Los espacios que caben DENTRO de una línea, que es lo único que
+#: `[[:space:]]` puede recortar en un `sed` línea a línea.
+_ESPACIO_HORIZONTAL = " \t\x0b\x0c"
+
+
+def _recorte_como_el_guion(texto: str) -> str:
+    """El recorte de `sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'`, línea a línea.
+
+    NO es ``str.strip()``. `sed` procesa una línea cada vez, así que no puede
+    borrar una línea en blanco: recorta sus espacios y la deja vacía, y la
+    línea sigue ahí. `str.strip()` sí se come los saltos de línea iniciales, y
+    con eso aceptaba como orden un `"\ncontinua"` que el guion rechaza -es
+    decir, inventaba un permiso que el propietario no llegó a dar-
+    (CLAUDE-A1-001, ronda 3, PR #546).
+
+    Lo que sí desaparece por el final son los saltos de línea finales, porque
+    el guion mete cada recorte en una sustitución de órdenes -``$( … )``- y
+    bash se los quita. Por eso el recorte por línea va seguido de un
+    ``rstrip("\n")`` y de ningún otro.
+    """
+    lineas = [linea.strip(_ESPACIO_HORIZONTAL) for linea in texto.split("\n")]
+    return "\n".join(lineas).rstrip("\n")
+
+
+def _es_orden_de_continuar(texto: str) -> bool:
+    """El MISMO predicado que la guarda 1 de ``sirius_resume_on_command.sh``.
+
+    El paso de minúsculas es ASCII a propósito: `tr '[:upper:]' '[:lower:]'` en
+    la localización C del runner no toca la `Ú`, así que usar `str.lower()`
+    aceptaría un `CONTINÚA` que el guion rechaza -es decir, inventaría un
+    permiso que el propietario no llegó a dar-. Ser fiel aquí es ser
+    conservador.
+    """
+    sin_retornos = texto.replace("\r", "")
+    sin_firma = _ORDEN_FIRMA_RE.sub("", sin_retornos)
+    recortada = _recorte_como_el_guion(sin_firma)
+    normalizada = "".join(chr(ord(c) + 32) if "A" <= c <= "Z" else c for c in recortada)
+    return normalizada in _ORDENES_DE_CONTINUAR
+
+
 # --- Etiquetas -> (estado, fase) --------------------------------------------
 #
 # Vocabulario real de `.github/workflows/*.yml` (bootstrap-sirius-automation-labels.yml
@@ -279,6 +397,60 @@ def _estado_y_fase(
     return estado, fase, False
 
 
+def _historial_de_confianza(
+    cuerpo: CuerpoIncidencia, comentarios: Sequence[Comentario]
+) -> tuple[tuple[str, bool], ...]:
+    """``(texto, es_del_propietario)`` del cuerpo y los comentarios DE CONFIANZA, en orden.
+
+    Un único recorrido para todo el módulo: el cuerpo primero -es lo primero
+    que existe en una incidencia- y los comentarios en el orden en que ya
+    llegan del puerto. La posición en esta tupla es lo que
+    :class:`~sirius_engine.domain.mirror.EstadoAcreditado` y
+    :class:`~sirius_engine.domain.mirror.PermisoDeReanudacion` guardan como
+    ``orden``, y por eso las dos escalas son comparables sin ponerse de
+    acuerdo: son la misma.
+
+    El indicador de propietario viaja EMPAREJADO con su texto, no en una lista
+    paralela, para que no exista ninguna forma de desalinearlos.
+    """
+    historial: list[tuple[str, bool]] = []
+    if es_autor_de_confianza(cuerpo):
+        historial.append((cuerpo.texto, es_del_propietario(cuerpo)))
+    historial.extend(
+        (comentario.cuerpo, es_del_propietario(comentario))
+        for comentario in comentarios
+        if es_autor_de_confianza(comentario)
+    )
+    return tuple(historial)
+
+
+def _textos_de_confianza(
+    cuerpo: CuerpoIncidencia, comentarios: Sequence[Comentario]
+) -> tuple[str, ...]:
+    """Solo los textos de :func:`_historial_de_confianza`, mismas posiciones."""
+    return tuple(texto for texto, _ in _historial_de_confianza(cuerpo, comentarios))
+
+
+def _comentarios_de_confianza(
+    cuerpo: CuerpoIncidencia, comentarios: Sequence[Comentario]
+) -> tuple[tuple[int, Comentario], ...]:
+    """Los COMENTARIOS de confianza con su posición en :func:`_historial_de_confianza`.
+
+    Existe para lo que solo un comentario tiene y el cuerpo no: un instante de
+    publicación. El desplazamiento inicial se calcula con el MISMO predicado
+    que decide si el cuerpo entra en el historial, así que las dos numeraciones
+    no pueden desalinearse -no hay dos recorridos que mantener de acuerdo, hay
+    uno y un desplazamiento-.
+    """
+    inicio = 1 if es_autor_de_confianza(cuerpo) else 0
+    return tuple(
+        (inicio + posicion, comentario)
+        for posicion, comentario in enumerate(
+            comentario for comentario in comentarios if es_autor_de_confianza(comentario)
+        )
+    )
+
+
 def _texto_cronologico_de_confianza(
     cuerpo: CuerpoIncidencia, comentarios: Sequence[Comentario]
 ) -> str:
@@ -310,10 +482,7 @@ def _texto_cronologico_de_confianza(
     nuevo. Si algún día hiciera falta observarlo, es un campo de
     ``MirroredWorkItem`` y otra decisión.
     """
-    partes = [c.cuerpo for c in comentarios if es_autor_de_confianza(c)]
-    if es_autor_de_confianza(cuerpo):
-        partes.insert(0, cuerpo.texto)
-    return "\n".join(partes)
+    return "\n".join(_textos_de_confianza(cuerpo, comentarios))
 
 
 def _interpretar_rondas(texto_vigente: str) -> tuple[RondaHallazgos, ...]:
@@ -414,12 +583,7 @@ def _interpretar_reanudacion_publicada(
     marcador de parada (``_STOP_MARKER_RE``): sin parada posterior a la
     reanudación, o sin ninguna parada en absoluto, el marcador sigue vigente.
     """
-    textos: list[str] = []
-    if es_autor_de_confianza(cuerpo):
-        textos.append(cuerpo.texto)
-    textos.extend(
-        comentario.cuerpo for comentario in comentarios if es_autor_de_confianza(comentario)
-    )
+    textos = _textos_de_confianza(cuerpo, comentarios)
 
     ultimo_resume: int | None = None
     ultima_parada: int | None = None
@@ -433,22 +597,287 @@ def _interpretar_reanudacion_publicada(
     return ultima_parada is None or ultimo_resume > ultima_parada
 
 
-def _interpretar_diagnostico_fallo(comentarios: Sequence[Comentario]) -> str | None:
-    """El diagnóstico del último comentario de confianza que paró de forma segura.
+def _interpretar_historial_estados(
+    cuerpo: CuerpoIncidencia, comentarios: Sequence[Comentario]
+) -> tuple[EstadoAcreditado, ...]:
+    """Los estados acreditados por marcadores ``sirius-notification``, en orden.
+
+    Mismo filtro de confianza y mismo orden cronológico que
+    :func:`_textos_de_confianza` -cuerpo primero, comentarios en el orden en
+    que ya llegan del puerto-, y la MISMA tabla ``_LABEL_STATE`` que interpreta
+    la foto: una etiqueta no significa una cosa cuando está puesta y otra
+    cuando la nombra un marcador. Una etiqueta que la tabla no reconozca se
+    ignora en silencio, igual que en :func:`_estado_y_fase`.
+
+    Deliberadamente NO se corta por ``history_after_last_resume``: una orden de
+    reanudación mueve el listón de la convergencia -cuántas rondas cuentan-,
+    no borra los estados por los que la incidencia pasó antes. El recorrido
+    acreditado ancla en el estado guardado del motor, que puede ser anterior a
+    esa orden (ADR-147).
+
+    Cada ocurrencia se lleva su propia evidencia, no la del ciclo entero
+    (CODEX-002 y CODEX-003, ronda 2, PR #546):
+
+    - el **instante** del comentario que la publicó (``None`` si el marcador
+      viene del cuerpo, que no tiene instante propio);
+    - el **diagnóstico** que le corresponde, si acredita una parada
+      ``FAILED_SAFELY`` (:func:`_atribuir_diagnosticos`, CLAUDE-R5-001): cada
+      parada notificada, de la más antigua a la más reciente, toma el
+      diagnóstico no consumido más antiguo publicado ANTES de ella. ``None`` si
+      no le toca ninguno: entonces no se atribuye ninguno.
+    """
+    instantes = {
+        orden: comentario.creado_en
+        for orden, comentario in _comentarios_de_confianza(cuerpo, comentarios)
+    }
+    acreditados: list[EstadoAcreditado] = []
+    for orden, texto in enumerate(_textos_de_confianza(cuerpo, comentarios)):
+        for match in _NOTIFICATION_MARKER_RE.finditer(texto):
+            etiqueta = match.group(1)
+            if etiqueta not in _LABEL_STATE:
+                continue
+            estado, fase = _LABEL_STATE[etiqueta]
+            acreditados.append(
+                EstadoAcreditado(
+                    etiqueta=etiqueta,
+                    estado=estado,
+                    fase=fase,
+                    head=match.group(2),
+                    orden=orden,
+                    publicado_en=instantes.get(orden),
+                )
+            )
+    return _atribuir_diagnosticos(acreditados, _interpretar_diagnosticos_fallo(cuerpo, comentarios))
+
+
+def _atribuir_diagnosticos(
+    acreditados: Sequence[EstadoAcreditado], diagnosticos: Sequence[tuple[int, str]]
+) -> tuple[EstadoAcreditado, ...]:
+    """Le da a cada parada acreditada el diagnóstico del veredicto que la causó.
+
+    Dos hechos del sistema real, y la regla sale de los dos juntos:
+
+    1. **Un diagnóstico publicado DESPUÉS de un marcador no puede ser suyo.**
+       ``sirius_apply_verdict.sh`` publica el diagnóstico y solo después aplica
+       la etiqueta que dispara el aviso, así que el diagnóstico de una parada
+       precede siempre a su marcador en el historial de confianza.
+    2. **En los historiales anteriores a ADR-157, el marcador que sobrevivía
+       a la deduplicación era el de la PRIMERA parada de su serie.**
+       ``sirius_comment_once`` lee el historial y, si el marcador ya está
+       presente, devuelve sin publicar; hasta ADR-157 (fusionado en `main` el
+       07-09-2026) ese marcador era ``sirius-notification:<etiqueta>:<head>``,
+       así que conservaba el primero y suprimía los posteriores. Por eso,
+       cuando hay MÁS diagnósticos que marcadores, los que se quedan sin
+       contrapartida son los ÚLTIMOS, no los primeros. Desde ADR-157 el
+       marcador lleva además el run del evento y cada parada cuyo evento llega
+       a ejecutarse deja el suyo: este hecho, y la tercera condición que sale
+       de él, quedan como respaldo para los historiales ya publicados -las
+       incidencias que ADR-157 declara que «conservan sus huecos»- y para los
+       huecos que la cola del notificador siga dejando al descartar un evento
+       en espera (CODEX-001, ronda 14, PR #546; nota de
+       ``_NOTIFICATION_MARKER_RE``), sobre los que sigue habiendo más
+       diagnósticos que marcadores.
+
+    De ahí el emparejamiento: recorriendo las paradas notificadas de la más
+    antigua a la más reciente, cada una toma el diagnóstico **no consumido más
+    antiguo publicado antes de ella**, y ``None`` si no hay ninguno. Los
+    diagnósticos se consumen, así que un mismo diagnóstico nunca acredita dos
+    paradas.
+
+    Y una tercera condición, que es la que cierra la serie INTERRUMPIDA
+    (CLAUDE-R6-002, ronda 6, PR #546). El hecho 2 solo vale dentro de una misma
+    serie ``(etiqueta, head)``: los diagnósticos que la deduplicación deja sin
+    marcador son los de las paradas POSTERIORES al marcador superviviente, así
+    que están publicados DESPUÉS de él. Por eso todo diagnóstico no consumido
+    publicado ANTES de un marcador y que no sea el suyo tiene que pertenecer a
+    algún marcador POSTERIOR. Cuando no hay marcadores posteriores suficientes
+    para absorberlos -``candidatos - 1 > marcadores que quedan detrás``-, la
+    evidencia no discrimina cuál de ellos causó esta parada y la proyección se
+    abstiene: ``None``, sin ``orden_del_veredicto``, y entonces
+    :mod:`sirius_engine.reflect` vuelve a la posición del aviso, que es una
+    cota SEGURA porque el aviso es posterior a todos ellos. Con dos paradas
+    sobre H1 y una tercera sobre H2, el marcador de H2 dejaba de heredar el
+    veredicto de la segunda parada de H1 -diario mentiroso (CODEX-003 por el
+    flanco contrario) y, peor, cota adelantada que acreditaba la salida de la
+    parada de H2 con un permiso ANTERIOR a ella (CLAUDE-R6-001)-.
+
+    Esto sustituye a la alineación desde el final de la ronda 4 (CLAUDE-R5-001
+    y CODEX-001, ronda 5, PR #546), que razonaba la deduplicación al revés: con
+    dos paradas sobre un mismo head, le daba al único marcador —el de la
+    primera— el diagnóstico de la SEGUNDA. Y un diagnóstico mal atribuido no
+    solo copia mal el diario: el filtro del ancla de :mod:`sirius_engine.reflect`
+    descarta la ocurrencia cuyo diagnóstico contradice al guardado, así que
+    abandona el recorrido entero.
+
+    Cada parada se queda además con ``orden_del_veredicto``: la posición del
+    comentario que le dio el diagnóstico, que es la identidad del suceso y lo
+    que :mod:`sirius_engine.reflect` usa para correlacionar la parada con el
+    permiso que la levanta sin depender de dónde cayó su aviso
+    (CLAUDE-R4-001).
+
+    Sigue cubierto lo que la ronda 4 sí midió bien (CLAUDE-R4-002): un aviso
+    RETRASADO no le roba el diagnóstico a la otra parada. Con los dos
+    diagnósticos publicados antes de los dos avisos, el primer aviso toma el
+    primer diagnóstico y el segundo el segundo, porque el consumo va en orden y
+    no «el último publicado hasta aquí».
+    """
+    paradas = [
+        (indice, acreditado.orden)
+        for indice, acreditado in enumerate(acreditados)
+        if acreditado.estado is WorkItemState.FAILED_SAFELY
+    ]
+    atribuidos = list(acreditados)
+    siguiente = 0
+    for posicion, (indice, orden_marcador) in enumerate(paradas):
+        candidatos = sum(1 for orden, _ in diagnosticos[siguiente:] if orden < orden_marcador)
+        if candidatos == 0:
+            continue
+        if candidatos - 1 > len(paradas) - posicion - 1:
+            continue
+        atribuidos[indice] = replace(
+            atribuidos[indice],
+            diagnostico=diagnosticos[siguiente][1],
+            orden_del_veredicto=diagnosticos[siguiente][0],
+        )
+        siguiente += 1
+    return tuple(atribuidos)
+
+
+def _interpretar_paradas_publicadas(
+    cuerpo: CuerpoIncidencia, comentarios: Sequence[Comentario]
+) -> tuple[ParadaPublicada, ...]:
+    """La CRONOLOGÍA de los veredictos de PARADA, cada uno con su posición e instante.
+
+    Misma fuente y misma escala que :func:`_interpretar_historial_estados`,
+    pero mirando el comentario del VEREDICTO (``_STOP_MARKER_RE``) en vez del
+    aviso: el veredicto lo publica siempre el rol o la puerta que para, y
+    ``sirius_comment_once`` no lo deduplica -deduplicaba el marcador
+    ``sirius-notification``, que hasta ADR-157 (07-09-2026) llevaba solo
+    etiqueta y head-. Por eso, en los historiales publicados ANTES de esa
+    fusión, una SEGUNDA parada sobre el mismo head deja veredicto y no deja
+    aviso, y es justo la que :mod:`sirius_engine.reflect` necesita ver para
+    abstenerse en vez de anclar en el aviso de la primera (CLAUDE-R7-001,
+    ronda 7, PR #546). Desde ADR-157 cada parada deja su propio aviso siempre
+    que su evento de etiqueta llegue a ejecutarse, así que esta lista es sobre
+    todo el respaldo de aquellos historiales -y sigue siéndolo de los nuevos
+    cuando la cola del notificador descarta un evento en espera (CODEX-001,
+    ronda 14, PR #546; nota de ``_NOTIFICATION_MARKER_RE``).
+
+    Incluye las paradas SIN diagnóstico -``sirius:blocked-decision`` no publica
+    ninguno-, que es lo que la deja fuera del alcance de
+    :func:`_interpretar_diagnosticos_fallo`.
+    """
+    instantes = {
+        orden: comentario.creado_en
+        for orden, comentario in _comentarios_de_confianza(cuerpo, comentarios)
+    }
+    return tuple(
+        ParadaPublicada(orden=orden, publicado_en=instantes.get(orden))
+        for orden, texto in enumerate(_textos_de_confianza(cuerpo, comentarios))
+        if _STOP_MARKER_RE.search(texto)
+    )
+
+
+def _interpretar_permisos_reanudacion(
+    cuerpo: CuerpoIncidencia, comentarios: Sequence[Comentario]
+) -> tuple[PermisoDeReanudacion, ...]:
+    """La CRONOLOGÍA de los permisos escritos del propietario, del más antiguo al más reciente.
+
+    Dos formas, con el mismo peso y en la misma lista (ADR-147, decisión del
+    propietario en #545):
+
+    - el **marcador** de reanudación (``_RESUME_MARKER_RE``, los tres tipos que
+      ``sirius_resume_on_command.sh`` publica antes de reponer la etiqueta),
+      con el filtro de confianza de siempre: lo publica ``github-actions[bot]``;
+    - la **orden** exacta ``continua``, que exige ``author_association ==
+      "OWNER"`` y no el filtro general -``continua`` es palabra del
+      propietario, no del bot, y aceptarla del bot sería dejar que la
+      automatización se diera permiso a sí misma-.
+
+    El marcador es el recibo de la máquina y la orden es el permiso mismo. Las
+    dos formas hacen falta porque el recibo puede faltar ESTRUCTURALMENTE:
+    ``sirius_comment_once`` deduplica por el texto completo del marcador y el
+    de ``sirius-resume-stop`` solo lleva el head, así que dos reanudaciones
+    sobre un mismo head nunca dejan un segundo recibo (medición de la primera
+    ronda de #545 sobre el historial real de la #537).
+
+    ``orden`` es la posición del texto en el historial de confianza, la misma
+    escala que usa :func:`_interpretar_historial_estados`.
+
+    El recibo NO se suma a la orden que lo provocó (decisión del propietario
+    del 07-09-2026 sobre CLAUDE-R5-003, registrada en ADR-147): la orden
+    ``continua`` y el ``sirius-resume-stop`` que ``sirius_resume_on_command.sh``
+    publica al procesarla son el MISMO acto, y contarlos por separado dejaba
+    que una sola autorización acreditara DOS salidas de parada, en contra de
+    lo que afirma el contrato de :func:`sirius_engine.reflect._consumir_permiso`.
+    Por eso un recibo que sigue a una orden todavía sin recibo, y sin ninguna
+    PARADA publicada entre medias (``_STOP_MARKER_RE``, el veredicto que sí
+    abre un suceso nuevo), se colapsa con ella. Las dos formas siguen contando
+    una cada una cuando llegan solas: un recibo sin orden previa legible -la
+    reanudación que dispara otra automatización- y una orden sin recibo -el
+    recibo deduplicado por ``sirius_comment_once``, que es para lo que la
+    forma ``ORDEN`` existe (ADR-147)-.
+    """
+    permisos: list[PermisoDeReanudacion] = []
+    orden_sin_recibo: int | None = None
+    for orden, (texto, del_propietario) in enumerate(_historial_de_confianza(cuerpo, comentarios)):
+        for match in _RESUME_MARKER_RE.finditer(texto):
+            if orden_sin_recibo is not None:
+                orden_sin_recibo = None
+                continue
+            permisos.append(
+                PermisoDeReanudacion(
+                    forma=FormaDePermiso.MARCADOR, referencia=match.group(0), orden=orden
+                )
+            )
+        if del_propietario and _es_orden_de_continuar(texto):
+            permisos.append(
+                PermisoDeReanudacion(forma=FormaDePermiso.ORDEN, referencia="continua", orden=orden)
+            )
+            orden_sin_recibo = orden
+        elif _STOP_MARKER_RE.search(texto):
+            orden_sin_recibo = None
+    return tuple(permisos)
+
+
+def _interpretar_diagnosticos_fallo(
+    cuerpo: CuerpoIncidencia, comentarios: Sequence[Comentario]
+) -> tuple[tuple[int, str], ...]:
+    """La CRONOLOGÍA de los diagnósticos de parada, cada uno con su posición.
 
     Nunca en el cuerpo -a diferencia de SHA/PR-: ``FAILED_SAFELY`` es un
-    veredicto de un rol de ejecución, y esos solo se publican como
-    comentario (misma fuente que :func:`_interpretar_veredictos`).
+    veredicto de un rol de ejecución, y esos solo se publican como comentario
+    (misma fuente que :func:`_interpretar_veredictos`). El cuerpo entra igual
+    en el recorrido, pero solo para que la posición esté en la MISMA escala que
+    la de :func:`_interpretar_historial_estados`.
+
+    Antes de la ronda 2 de la PR #546 solo existía el último diagnóstico de
+    toda la incidencia, y el recorrido acreditado se lo ponía a TODAS las
+    paradas que recreaba: dos paradas seguidas con diagnósticos distintos se
+    escribían las dos con el segundo (CODEX-003). Conservar la cronología es lo
+    que permite atribuirle a cada parada la suya.
     """
-    for comentario in reversed(comentarios):
-        if not es_autor_de_confianza(comentario):
-            continue
+    diagnosticos: list[tuple[int, str]] = []
+    for orden, comentario in _comentarios_de_confianza(cuerpo, comentarios):
         match = _DIAGNOSTICO_FALLO_RE.search(comentario.cuerpo)
         if match:
             texto = match.group(1).strip()
             if texto:
-                return texto
-    return None
+                diagnosticos.append((orden, texto))
+    return tuple(diagnosticos)
+
+
+def _interpretar_diagnostico_fallo(
+    cuerpo: CuerpoIncidencia, comentarios: Sequence[Comentario]
+) -> str | None:
+    """El diagnóstico de la ÚLTIMA parada publicada: el que le toca a la foto vigente.
+
+    Es el último elemento de :func:`_interpretar_diagnosticos_fallo` y no un
+    segundo recorrido: la foto y las paradas históricas leen exactamente la
+    misma cronología, así que no pueden discrepar sobre qué es un diagnóstico.
+    """
+    diagnosticos = _interpretar_diagnosticos_fallo(cuerpo, comentarios)
+    return diagnosticos[-1][1] if diagnosticos else None
 
 
 def proyectar_work_item(
@@ -494,10 +923,15 @@ def proyectar_work_item(
         eventos_quality=_interpretar_eventos_quality(texto_vigente),
         fallos_quality_consecutivos=ci_failure_streak(texto_vigente),
         origen=OrigenLectura(fuente=f"github:{repo}#{numero}", leido_en=ahora),
-        diagnostico_fallo=_interpretar_diagnostico_fallo(comentarios.comentarios),
+        diagnostico_fallo=_interpretar_diagnostico_fallo(cuerpo.cuerpo, comentarios.comentarios),
         reanudacion_publicada=_interpretar_reanudacion_publicada(
             cuerpo.cuerpo, comentarios.comentarios
         ),
+        historial_estados=_interpretar_historial_estados(cuerpo.cuerpo, comentarios.comentarios),
+        permisos_reanudacion=_interpretar_permisos_reanudacion(
+            cuerpo.cuerpo, comentarios.comentarios
+        ),
+        paradas_publicadas=_interpretar_paradas_publicadas(cuerpo.cuerpo, comentarios.comentarios),
     )
 
 
