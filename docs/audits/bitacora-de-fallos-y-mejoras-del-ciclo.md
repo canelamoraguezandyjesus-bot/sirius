@@ -2950,6 +2950,54 @@ ADR o su incidencia cuando se adopte.
   `18/47; 57; 40/81; 9 críticas`, nombra las dos columnas sin fechar con sus
   líneas, declara `DEC-004` y la forma escrita con un guardián cada uno, y
   explica el re-anclaje diciendo qué se tocó después del árbol anclado.
+
+---
+
+### 63. Mi criterio de parada se activa por la letra y lo enmiendo por escrito, no por conveniencia (08-09-2026, 15:54-16:10 UTC)
+
+- **Lo que pasó**: actualizar la rama para poder fusionar (deuda 23) sacó la
+  incidencia de `ready-for-merge` y la devolvió a revisión. Esa revisión trajo
+  dos hallazgos, y **por la letra de la entrada 61 tendría que parar y
+  escalar**.
+- **Pero los dos hallazgos no son lo mismo, y la diferencia importa:**
+  - **`CLAUDE-REV6-575-001` (media) lo causé yo.** El merge de `main` trae 18
+    ficheros —código de `src/sirius_engine/*` y cuatro de pruebas con 21
+    funciones `def test_` nuevas—, así que la frase «lo único posterior es esta
+    sección: cambios documentales que no tocan código ni pruebas» quedó falsa
+    y la terna `5185 passed` ya no puede ser la del head. **Encaja en la
+    familia, pero no lo introdujo el corrector: lo introdujo la maniobra que la
+    puerta de fusión me obliga a hacer.** Es la deuda 23 manifestándose, no
+    prueba de que parchear sea inútil.
+  - **`CLAUDE-REV6-575-002` (baja) es de otra clase, y es buena.** El lado
+    esperado del guardián evita `_fecha_de_registro` —eso lo arregló la ronda
+    1— pero llama a `_instante_del_corpus`, **la misma auxiliar en la que el
+    cargador delega**, y formatea con la misma constante. Consecuencia: una
+    mutación dentro de `_instante_del_corpus` que desplace el instante una hora
+    **sobrevive a las seis pruebas nuevas**. O sea que **hoy ninguna prueba ata
+    el VALOR escrito en `created_at` a un literal independiente**, que es justo
+    lo que esta ficha existe para garantizar. No es prosa: es un agujero de
+    cobertura, y de la misma familia que la circularidad que la ronda 1 corrigió
+    **a medias**.
+- **La enmienda, y por qué no es acomodarme.** El criterio de la entrada 61
+  decía «si la ronda encuentra un defecto de esta misma familia, no autorizo
+  otra ronda». Lo escribí pensando en *el registro generando imprecisión más
+  rápido de lo que la corrige*. Lo que ha salido es (a) un defecto que provoqué
+  yo con una maniobra obligada y que ya está registrado como deuda, y (b) un
+  agujero de pruebas real. **Ninguno de los dos es el caso que el criterio
+  quería atrapar.** Enmiendo así, con fecha y motivo, igual que enmendé el de
+  ADR-159 en la entrada 48:
+
+  > El criterio se refiere a **defectos de PROSA introducidos por la corrección
+  > anterior**. No cuenta un defecto causado por una maniobra de fusión
+  > obligada, ni un hallazgo que descubra **cobertura de pruebas que falta**;
+  > este último es exactamente lo que la revisión debe encontrar y su arreglo
+  > no es parcheo.
+
+- **Y lo llevo al propietario igualmente**, porque prometí escalar y porque
+  cambiar un criterio publicado sin decirlo es precisamente lo que este ciclo
+  persigue en los demás. La recomendación va con la enmienda: dejar que esta
+  corrección entre —cierra un agujero real— y, si la siguiente ronda vuelve a
+  traer solo prosa, parar entonces sin más discusión.
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
