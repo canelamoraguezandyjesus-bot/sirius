@@ -2295,7 +2295,17 @@ ADR o su incidencia cuando se adopte.
     convierte la decisión en urgente y le añade un dato: el conector
     responde el tope en **nueve segundos**, o sea que degradar a
     solo-Claude se puede decidir al principio de la ronda y sin gastar los
-    nueve minutos del revisor. **Y el interruptor ya existe y no es código**:
+    nueve minutos del revisor.
+
+    **Tercera ocurrencia y el factor que faltaba (08-09, 04:03)**: el tope
+    volvió a saltar en la ronda 4 de #566, apenas cinco horas después del
+    anterior. La diferencia respecto de las veces anteriores es que **había DOS
+    ciclos consumiendo revisiones de Codex a la vez** —#566 en esta sesión y
+    #569 en otra—, así que la cuota se agota al doble de velocidad. Esto añade
+    a la decisión una pregunta que antes no se veía: **la cuota de los
+    revisores es un recurso COMPARTIDO entre sesiones, y nada la reparte ni
+    avisa de que se está agotando**. Dos sesiones trabajando en paralelo no se
+    ven entre sí ni en los números de ADR (deuda 18) ni en la cuota. **Y el interruptor ya existe y no es código**:
     `review-sirius-work.yml:127-131` pone `dual="true"` únicamente cuando la
     variable de repositorio `SIRIUS_CODEX_REVIEW_ENABLED` vale exactamente
     `true`; con cualquier otro valor la ronda corre solo con Claude. O sea
