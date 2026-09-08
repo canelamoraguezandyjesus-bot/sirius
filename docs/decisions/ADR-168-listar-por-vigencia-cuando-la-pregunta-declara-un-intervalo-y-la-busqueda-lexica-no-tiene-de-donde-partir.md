@@ -330,12 +330,38 @@ relajar una (`_MAXIMO_ELEMENTOS_DE_MAS_MOTOR` 50 → 69, y el suelo D1 de 21 a
 
 ### Validación obligatoria
 
-Una sola invocación de `scripts/check.ps1` (ADR-145), sobre el árbol de esta
-rama (ADR-154, en la forma de ADR-159). Terna, código de salida y ancla al
-árbol: ver la sección homónima del cuerpo de la PR, que se transcribe con el
-`HEAD` exacto con el que se ejecutó. Si una corrección posterior toca el
-fichero de pruebas, la cadena se vuelve a ejecutar entera y esta sección se
-re-ancla al árbol nuevo.
+**Cadena completa como UNA SOLA invocación** (ADR-145, ADR-153), con
+`pwsh -File scripts/check.ps1` y su código de salida capturado (ADR-154).
+Anclada al árbol de **`ffd8d05`**, el que trae ya el código, las pruebas, esta
+ficha y la transcripción de las cuatro configuraciones en el guion de
+diagnóstico:
+
+```
+5227 passed, 17 skipped, 2 xfailed in 566.49s (0:09:26)
+EXIT_CODE_CHECK=0
+```
+
+De esa invocación se transcribe la cola capturada —la terna de `pytest` y el
+código de salida—; el código `0` solo sale si `ruff format --check`
+(«618 files already formatted»), `ruff check` («All checks passed!») y
+`mypy src tests` («Success: no issues found in 583 source files») pasaron
+antes, porque el guion corta en el primero que falle (ADR-153). La quinta
+validación que la incidencia exige transcribir queda asentada sobre ese mismo
+árbol: `git diff --check` no imprime nada y sale con código `0` —limpio—.
+
+Lo único posterior a `ffd8d05` es **esta sección de la ficha** y la sección
+de validaciones del cuerpo de la PR: cambios documentales que no tocan código
+ni pruebas, y que existen porque la sección tiene que anclarse al árbol que la
+cadena midió. Si una corrección posterior toca el fichero de pruebas, la
+cadena se vuelve a ejecutar entera y esta sección se re-ancla al árbol nuevo,
+sin conservar la terna del anterior.
+
+(La terna anterior de esta rama —`5227 passed, 17 skipped, 2 xfailed in
+552.29s`, sobre `19581ee` más los dos ficheros documentales que aún no
+estaban confirmados— era la de ese mismo estado de código; se sustituye por
+la de `ffd8d05` porque una cifra sin árbol al lado no se cita como actual
+(ADR-154). Que la terna no se moviera entre las dos es la comprobación de que
+lo confirmado en medio fue documental.)
 
 ## Consecuencias
 
