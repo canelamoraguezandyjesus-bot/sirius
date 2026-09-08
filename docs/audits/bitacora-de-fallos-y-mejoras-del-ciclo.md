@@ -2640,6 +2640,24 @@ ADR o su incidencia cuando se adopte.
   las he comprobado las cuatro en las últimas dos horas; **tres se sostenían y
   una no**. El coste de comprobarlas fue de minutos; el de heredarlas habría
   sido un encargo entero apuntando al sitio equivocado.
+- **AMPLIACIÓN (15:25 UTC): probé mi propia pista y la medición la tumbó.** La
+  hipótesis que dejé escrita —marcada como no confirmada e invitando a
+  contradecirla— era que el ámbito excluye lo global cuando hay proyecto
+  activo. Declarando el ámbito como `global_=True` además del proyecto,
+  `MEM-001` **sigue sin entrar**; encima se pierde `MEM-016`, que antes sí
+  entraba, y el banco entero empeora a `12/47; 283; 69/81; 1 crítica`.
+
+  Así que H4 tiene ya **dos causas descartadas con número**: no es el límite de
+  ACOTADA —forzando EXHAUSTIVA sin límite entran cinco y `MEM-001` no está— y
+  no es el ámbito. Las dos van escritas en el encargo, porque **un callejón
+  cerrado con medición vale tanto como una pista**: son dos sitios donde el
+  implementador ya no tiene que mirar. Queda por aislar `tiempo_objetivo`,
+  `modo`, `permiso` y `propósito`, y el hecho firme de que `MEM-001` **sí es
+  recuperable** con la política uniforme.
+
+  La cláusula de «marcado como no confirmado y se agradece que se contradiga»
+  se ha cobrado su segunda pieza —la primera fue mi hipótesis invertida de la
+  deuda 7—, y esta vez el que la tumbó fui yo mismo antes de lanzar el encargo.
 
 ---
 
