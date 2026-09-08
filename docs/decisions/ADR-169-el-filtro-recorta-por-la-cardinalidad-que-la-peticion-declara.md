@@ -62,8 +62,8 @@ no el resultado**: ese guion corre SIN filtro, y esta palanca ES el filtro.
 
 **La cifra que la incidencia cita, `29/47; 50; 0; 63/81`, NO sale de la vía
 completa**, y esta ficha lo corrige: el árbol dice que es la fila del **arnés
-de examen** (`docs/decisions/ADR-117-…:106`, «Arnés de examen
-(ADR-109..ADR-115, ya fusionado)»; ADR-115:103 publica la misma fila 5). Y
+de examen** (ADR-117:106, «Arnés de examen (ADR-109..ADR-115, ya
+fusionado)»; ADR-115:103 publica la misma fila 5). Y
 además está caducada en su cuarta columna: ADR-168:515-516 —ya en `main`— la
 deja en **`29/47; 50; 0; 67/81`**, y la constante del árbol lo confirma
 (`tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py:243`,
@@ -75,7 +75,7 @@ que importa `_ejecutar_banco_paquete_completo` y por tanto mide el paquete
 completo de producción, **nunca el arnés**): **no tiene línea base vigente
 sobre este árbol**. La única salida de ese guion publicada en todo el
 repositorio es la del propietario del 02-09-2026, con `qwen3:4b-instruct`
-(`docs/decisions/ADR-125-…:150-160`): **`22/47; 39 de más; 10 críticas
+(ADR-125:150-160): **`22/47; 39 de más; 10 críticas
 perdidas; 59/81`**, medida sobre un árbol anterior. No se vuelve a medir aquí
 porque **no hay Ollama en CI**: la cierra el propietario en su máquina, con el
 comando y la predicción de más abajo.
