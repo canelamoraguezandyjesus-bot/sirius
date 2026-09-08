@@ -382,8 +382,12 @@ EXIT_CODE_CHECK=0
 De esa invocación se transcribe la cola capturada —la terna de `pytest` y el
 código de salida—; el código `0` solo sale si `ruff format --check`, `ruff
 check` y `mypy src tests` pasaron antes, porque el guion corta en el primero
-que falle (ADR-153). Sube de `5232` a `5251` pruebas: las **diecinueve** que
-esta ficha añade. Ninguna cota se ha movido y ninguna prueba se ha relajado.
+que falle (ADR-153). Esta ficha añade **18** pruebas nuevas, contadas contra
+`ce94bdf` fichero a fichero: 5 en `tests/unit/test_ollama_relevance_filter.py`
+(13 → 18), 7 en `tests/unit/test_relevance_domain.py` (74 → 81), 3 en
+`tests/integration/test_rank_relevant_knowledge.py` (48 → 51) y 3 en
+`tests/integration/test_context_builder.py` (34 → 37). Ninguna cota se ha
+movido y ninguna prueba se ha relajado.
 
 La quinta validación se ejecuta **sobre el rango de la rama y no sin
 argumentos** (CODEX-001, señalado en la revisión de ADR-168): `git diff
