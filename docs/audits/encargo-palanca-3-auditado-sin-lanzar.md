@@ -1,19 +1,5 @@
 <!-- Copia de trabajo, NO es un encargo vivo. -->
 
-# Encargo de la palanca 3 (ADR-148), auditado contra el árbol y SIN LANZAR
-
-**Qué es esto y por qué está aquí.** El borrador del encargo de la palanca 3,
-después de auditarlo frase a frase contra el árbol el 08-09-2026 (bitácora,
-entrada 67). Se guarda en la rama de auditoría porque el trabajo de
-comprobación que lleva dentro —ocho afirmaciones verificadas, tres corregidas—
-se perdería si viviera solo en un directorio temporal.
-
-**No está lanzado**: cuando se lance, el cuerpo va a la incidencia y manda
-aquél, no éste. Y la línea base que cita **se vuelve a medir al lanzar**, porque
-`main` se mueve.
-
----
-
 ## Work ID
 
 WI-20260908-P3
@@ -153,6 +139,14 @@ Si el 4B no llega, **el modelo se decide con número, no con opinión**: se mide
 - **Ninguna afirmación sin la comprobación al lado.** Este borrador se revisó antes de lanzarlo y traía cifras escritas de memoria que el árbol desmintió; si algo de lo de arriba no cuadra con el árbol, **manda el árbol** y la diferencia se registra en vez de acomodarse.
 - **La línea base se mide al empezar; no se hereda de otro documento**, ni siquiera de ADR-148.
 - **Toda medición que decida si la palanca pasa viene con una contra-medición que aísle el arnés** —corpus, cargador y guiones de recuento—, porque el arnés no tiene guardianes propios (deuda 21). Y si la contra-medición sustituye un dato del arnés, lo sustituye **por ítem y no por una constante**, salvo que se declare por qué la constante basta: una constante hizo infravalorar H2 el 08-09.
+- **Ninguna cifra que dependa de `created_at` se publica sin su condición al
+  lado** (deuda 27, descubierta el 08-09 en la ronda 2 de H1): en el banco el
+  cargador escribe `ejes_p2.valid_from` dentro de `created_at`, así que las dos
+  son la misma fecha ítem a ítem y **cualquier predicado sobre `created_at`
+  parece medir vigencia y mide registro**. El corpus no declara ninguna fecha
+  de registro, así que esto no tiene arreglo dentro del arnés. Esta palanca no
+  toca fechas, pero si en el camino aparece una cifra que sí, la condición
+  viaja con ella.
 - **La sección de validación del ADR** lleva la terna de `pytest`, el código de salida y el ancla al árbol, **actualizada en CADA corrección** (ADR-145, ADR-154, en la forma de ADR-159). Es el defecto más repetido del ciclo: seis rondas en dos encargos.
 
 ## Requisitos y pruebas de aceptación

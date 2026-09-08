@@ -4169,7 +4169,36 @@ distorsiona el freno de convergencia, que cuenta rondas.
     medición del banco que se apoye en `created_at` parece medir vigencia y
     mide registro**, y el banco no avisa. Lo destapó la ronda 2 de H1
     (CLAUDE-R2-001) sobre un predicado nuevo; el riesgo es de toda la línea, no
-    de esa palanca. Para el propietario: o el corpus declara una fecha de
-    registro distinta de `valid_from` —lo que hoy no hace y yo no puedo
-    cambiar—, o toda cifra que dependa de `created_at` viaja con esa condición
-    escrita al lado. La segunda es gratis; la primera decide él.
+    de esa palanca.
+
+    **PRECISADA a las 19:26 UTC, y la precisión exculpa a ADR-166 y agrava lo
+    demás.** Conté las claves del corpus: **no existe NINGUNA fecha de
+    registro**, ni en el ítem (`confirmacion`, `criticidad`, `disponibilidad`,
+    `ejes_p2`, `id`, `kind`, `project`, `text`, `validez`) ni en `ejes_p2`
+    (`ambito`, `autoridad`, `condicion`, `no_consolidable`,
+    `no_usar_como_memoria`, `polaridad`, `procedencia`, `property_key`,
+    `sensibilidad`, `valid_from`, `valid_to`). Solo hay vigencia. De ahí:
+
+    - **Ningún cargador puede separar registro de vigencia en este banco**, y
+      ADR-166 no «creó» la confusión: eligió la única fecha declarada que
+      existía. La alternativa —una constante para todos— es la que critiqué el
+      mismo día por infravalorar H2. **El límite es del corpus.**
+    - **Y alcanza también a `G8`, no solo a la vía nueva.** `G8` compara
+      `item.created_at > corte` para el corte de registro y `ejes.valid_from >
+      objetivo` para la vigencia, y su docstring dice que sin ejes «degrada al
+      corte de registro únicamente». Con `created_at == valid_from`, ese corte
+      es en el banco un corte de vigencia. **Es decir: la ganancia que midió el
+      propio H2 (`73/81` → `74/81`) lleva la misma condición**, y yo la fusioné
+      sin ella.
+    - Por tanto **el banco no puede validar NADA que dependa de distinguir
+      registro de vigencia**, y no por cómo esté escrito el arnés.
+
+    (Corrijo de paso una cifra mía: son **96/97** los ítems con `valid_from`
+    declarado, no 97/97 como cité al corregir el encargo de H1; el que falta es
+    justo el que recibe `_REGISTRO_DE_LO_NO_FECHADO`.)
+
+    Para el propietario: o el corpus gana una fecha de registro distinta de
+    `valid_from` —hoy no la tiene, y la fixture no la puedo tocar yo—, o toda
+    cifra que dependa de `created_at` viaja con esa condición escrita al lado.
+    La segunda es gratis; la primera decide él, y sin ella hay una pregunta
+    que este banco no puede responder por construcción.
