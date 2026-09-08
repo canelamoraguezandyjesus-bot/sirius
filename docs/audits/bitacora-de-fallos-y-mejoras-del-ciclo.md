@@ -2048,6 +2048,15 @@ ADR o su incidencia cuando se adopte.
   escribe antes de ver resultados, pero eso no lo hace infalsable; cuando el
   propio objetivo del cambio lo vuelve imposible, lo honesto es enmendarlo por
   escrito, no estirarlo.
+- **ADR-159 fusionado como `6271fde` (01:35): la deuda 15 queda arreglada en
+  `main`.** Cadena verde sobre `9a97150` (`5110 passed`, `check=0`) y Quality
+  verde. Los dos guardianes del emisor que cayeron fueron **exactamente** los
+  dos de la clase «forma emitida» que la enmienda del criterio había
+  anunciado, ni uno más: el inventario previo era correcto.
+- **Encargo de la deuda 7 publicado como incidencia #566**, en
+  `sirius:planned` y **deliberadamente sin activar**: activarlo antes de
+  fusionar #548 habría hecho nacer su rama ya desfasada, que es el error que
+  costó dos vueltas la noche anterior. Se activa cuando #548 esté dentro.
 - **Deuda 7 preparada como encargo, no como reproducción.** Con las 47
   ejecuciones limpias de la entrada 47, el encargo se redactó pidiendo el
   INVARIANTE —que la altura intermedia se lea sobre un layout asentado— y
