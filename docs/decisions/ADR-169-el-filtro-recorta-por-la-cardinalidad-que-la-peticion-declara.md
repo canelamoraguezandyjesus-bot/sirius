@@ -401,12 +401,12 @@ relajado, saltado ni reescrito para conseguir verde.**
 
 **Cadena completa como UNA SOLA invocación** (ADR-145, ADR-153), con
 `pwsh -File scripts/check.ps1` y su código de salida capturado (ADR-154),
-anclada al árbol de **`2380823`** —el head tras las dos correcciones
-documentales de la ronda 2 (`CLAUDE-P3-001`, `CLAUDE-P3-002`), que solo tocan
-docstrings—:
+anclada al árbol de **`cfe158e`** —el head tras las correcciones de la ronda 3
+(`CLAUDE-P3-003`, `CLAUDE-P3-004`), que tocan comentarios de `src/` y texto de
+esta ficha—:
 
 ```
-5251 passed, 17 skipped, 2 xfailed in 569.28s (0:09:29)
+5251 passed, 17 skipped, 2 xfailed in 544.17s (0:09:04)
 EXIT_CODE_CHECK=0
 ```
 
@@ -427,7 +427,7 @@ aunque el rango ya confirmado traiga errores de espacios, así que no
 demostraría nada sobre este cambio.
 
 ```
-$ git diff --check ce94bdf 2380823
+$ git diff --check ce94bdf cfe158e1
 EXIT_DIFF_CHECK=0
 $ git diff --check ce94bdf
 EXIT_DIFF_CHECK_ARBOL=0
@@ -437,11 +437,12 @@ Sin salida y con código `0` las dos: el rango entero de la rama —desde su bas
 en `main` (`ce94bdf`) hasta el árbol que midió la cadena— está limpio, y el
 árbol de trabajo que confirma esta sección también.
 
-Lo único posterior a `2380823` es **esta sección de la ficha** y el cuerpo de
+Lo único posterior a `cfe158e1` es **esta sección de la ficha** y el cuerpo de
 la PR: documentales, sin tocar código ni pruebas, y existen porque la sección
 tiene que anclarse al árbol que la cadena midió. Si una corrección posterior
 toca código o pruebas, la cadena se vuelve a ejecutar entera y esta sección se
-re-ancla al árbol nuevo, sin conservar la terna del anterior (ADR-154).
+re-ancla al árbol nuevo, sin conservar la terna del anterior (ADR-154). La
+terna de `2380823` (ronda 2) ya no se conserva aquí, por eso mismo.
 
 **Ronda 2 de revisión (documental).** `CLAUDE-P3-001` y `CLAUDE-P3-002`
 señalaron dos docstrings que el árbol desmentía: el de `rank()` seguía
@@ -452,12 +453,41 @@ diciendo que delegaba en `_rank_via_staged_engine` cuando la cadena real es
 corrigieron los dos textos —más el de `_rank_via_staged_engine`, que ahora
 declara que no tiene llamador en `src/` ni en `scripts/` y que el
 comportamiento normativo vive en `_recuperar_por_etapas`—. **No cambia ni una
-línea ejecutable ni una prueba**: la terna de arriba es la de `2380823`, con
-las mismas 5251 pruebas que medía `da6fea3`. Que el envoltorio no tenga
+línea ejecutable ni una prueba**: aquella ronda midió la cadena entera sobre
+`2380823` con las mismas 5251 pruebas que medía `da6fea3`. Que el envoltorio
+no tenga
 llamador se comprueba con `git grep -n '_rank_via_staged_engine(' -- src
 scripts tests`: su definición y las dos llamadas de
 `tests/integration/test_rank_relevant_knowledge.py` (962 y 1216), ninguna
 más.
+
+**Ronda 3 de revisión (documental, con una prueba que la vio fallar).**
+`CLAUDE-P3-003` señaló que la línea base «vía completa `29/47; 50; 0; 63/81`»
+mezclaba dos poblaciones: esa fila es del **arnés de examen** (ADR-117:106,
+ADR-115:103) y estaba caducada en su cuarta columna (ADR-168:515-516 la deja
+en `67/81`; `_MINIMO_ELEMENTOS_HALLADOS_MOTOR = 67`), mientras que la única
+salida publicada de `scripts/medir_banco_con_ollama_real.py` es la de
+ADR-125:150-160 (02-09-2026, `qwen3:4b-instruct`): `22/47; 39; 10; 59/81`. Se
+corrigen la línea base, el criterio de parada, la predicción que el
+propietario cierra y las dos consecuencias; la tercera condición de aceptación
+se re-funda sobre `39 > 20` y sigue activándose, así que la conclusión no
+cambia, solo su evidencia. El razonamiento de fondo no se toca: toda petición
+de esa vía sale `EXHAUSTIVA`, el cupo es `None` en las 47 y el recorte no
+puede dispararse. La primera redacción citó los ADR como rutas truncadas
+(`docs/decisions/ADR-117-…`) y
+`tests/automation/test_citas_de_los_adr.py::test_toda_ruta_citada_por_un_adr_existe[ADR-169-…]`
+falló en la cadena de esta misma ronda —`AssertionError: … cita rutas que ya
+no existen: ['docs/decisions/ADR-117-…', 'docs/decisions/ADR-125-…']`, `1
+failed, 5250 passed`—; se citan ahora como `ADR-117:106` y `ADR-125:150-160`,
+y la cadena que esta sección transcribe es la posterior, en verde.
+
+`CLAUDE-P3-004` señaló seis comentarios que seguían llamando `rank()` «la
+única llamada real» cuando esta misma ficha movió esa llamada a
+`rank_con_cupo()` (`src/sirius/application/context.py:320-322`): pasan a
+nombrar el caso de uso y su método vigente. **Solo comentarios y docstrings**;
+ninguna línea ejecutable ni ninguna prueba cambia. Como aun así tocan ficheros
+de `src/`, la cadena se ejecutó entera de nuevo —una sola invocación— y esta
+sección queda anclada al árbol de `cfe158e1`, no al de `2380823`.
 
 ## Consecuencias
 
