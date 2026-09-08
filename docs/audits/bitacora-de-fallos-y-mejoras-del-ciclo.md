@@ -2346,3 +2346,22 @@ ADR o su incidencia cuando se adopte.
     afirmaciones universales sobre el registro («ningún ADR…») salvo con el
     `grep` transcrito al lado. No cabe en el alcance de #566 —solo `tests/gui/`
     y su ADR—, así que va en ficha propia.
+
+    **AMPLIADA tras la ronda 3 de #566: la escribí demasiado estrecha.** El
+    hueco no es solo de citas cruzadas falsas; es que **un ADR nuevo no se
+    contrasta contra el registro que lo gobierna**, ni cuando lo cita ni cuando
+    tiene que aplicarlo. La ronda 3 encontró que la sección «Validaciones
+    obligatorias» de ADR-162 describía cinco invocaciones sueltas, cuando
+    ADR-145 exige UNA sola de `scripts/check.ps1` y ADR-154 exige la terna, el
+    código de salida y el ancla al árbol. Nada de eso lo detecta una prueba,
+    **y la forma correcta está a la vista en ADR-159**. El agravante que lo
+    hace caro: el cuerpo de la PR sí traía la evidencia bien formada, pero **el
+    cuerpo de la PR no se versiona** — lo único que sobrevive a la fusión es el
+    ADR. Candidato añadido: (c) un guardián que exija a todo ADR nuevo una
+    sección de validación con invocación única, terna y ancla, comparando
+    contra la plantilla que ADR-145 y ADR-154 fijan.
+
+    **Dato que ordena la prioridad**: las TRES rondas de #566 fueron en el ADR
+    y ninguna en el código. El código se aprobó en la ronda 1 y no volvió a
+    tocarse. Lo que consume rondas en este ciclo no es el trabajo: es el
+    registro del trabajo.
