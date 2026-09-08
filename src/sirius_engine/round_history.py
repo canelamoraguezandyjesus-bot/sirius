@@ -207,7 +207,18 @@ def _apply_sticky_severity(records: list[dict[str, Any]]) -> None:
 # la parada exige editar la incidencia a mano o hacer el trabajo fuera del
 # ciclo. Ocurrió en la #186: el propietario autorizó una ronda más y no había
 # forma de dársela a la máquina.
-RESUME_MARKER_RE = re.compile(r"<!--\s*sirius-convergence-reset:[0-9a-fA-F]+\s*-->")
+# El head puede venir SOLO o seguido de `:<run>-<intento>` (ADR-159): el guion
+# pasó a distinguir cada permiso escrito porque `sirius_comment_once` deduplica
+# por el texto completo y dos reanudaciones sobre el mismo head dejaban un
+# único recibo. Las DOS formas tienen que casar, y no por cortesía: todo
+# historial publicado antes de esa ficha lleva el head desnudo, y si dejara de
+# reconocerse, el `continua` de esas incidencias dejaría de mover el listón
+# retroactivamente. Si el tramo del run no casara, esta función no cortaría y
+# el freno de convergencia dejaría de honrar la orden del propietario sin que
+# nada fallase: una regresión muda.
+RESUME_MARKER_RE = re.compile(
+    r"<!--\s*sirius-convergence-reset:[0-9a-fA-F]+(?::[0-9A-Za-z_.-]+)?\s*-->"
+)
 
 
 def history_after_last_resume(text: str) -> str:

@@ -289,7 +289,7 @@ def test_la_parada_por_convergencia_sigue_reanudando_al_corrector(
     assert resultado.returncode == 0, resultado.stderr
     assert "sirius:repair-requested" in _etiquetas(env)
     assert "sirius:blocked-decision" not in _etiquetas(env)
-    assert f"<!-- sirius-convergence-reset:{HEAD} -->" in _comentarios(env)
+    assert f"<!-- sirius-convergence-reset:{HEAD}:" in _comentarios(env)
 
 
 # --------------------------------------------------------------------------- #
@@ -614,7 +614,7 @@ def test_manda_la_ultima_parada_tambien_entre_bloqueos(tmp_path: Path) -> None:
         "la parada vigente es la última publicada (convergencia, del corrector); "
         "una parada vieja del implementador no puede secuestrar la vuelta"
     )
-    assert f"<!-- sirius-convergence-reset:{HEAD} -->" in _comentarios(env), (
+    assert f"<!-- sirius-convergence-reset:{HEAD}:" in _comentarios(env), (
         "un bloqueo DE CONVERGENCIA sí resetea el listón al reanudarse: ese es "
         "el comportamiento de ADR-030 que no se quería cambiar"
     )
