@@ -2338,6 +2338,21 @@ ADR o su incidencia cuando se adopte.
   | canon entero fechado el `2026-01-01` | 16/47 | **163** | 74/81 | 0 |
   | cada ítem con su `valid_from` | **17/47** | **162** | **74/81** | **0** |
 
+  > **CONDICIÓN AÑADIDA EL 08-09 A LAS 19:35 UTC, y vale para TODA cita de
+  > `17/47; 162; 74/81` en esta bitácora, no solo para esta tabla** (deuda 27,
+  > descubierta por la ronda 2 de H1). Fechar «cada ítem con su `valid_from`»
+  > escribe la fecha de vigencia dentro de `created_at`, así que **en el banco
+  > las dos son la misma fecha** y todo predicado sobre `created_at` —incluido
+  > el corte de registro de `G8`, que es el que esta palanca desbloquea—
+  > **parece medir vigencia y mide registro**. En producción `created_at` lo
+  > pone el reloj al proponer, sin relación con la vigencia.
+  >
+  > No corrige ninguna cifra de arriba: son correctas y la elección fue la
+  > única posible, porque **el corpus no declara ninguna fecha de registro**
+  > (comprobado: sus claves son solo de vigencia). Lo que añade es **bajo qué
+  > condición se leen**. Yo fusioné H2 sin esta condición escrita, y la escribo
+  > aquí en vez de en cada una de las once citas del número.
+
 - **La razón, y es del dominio, no del código.** B04-CA-32 pregunta por el
   aforo **el 1 de marzo** y espera `DEC-012` («aforo 40», vigente del
   `2026-01-01` al `2026-04-10`). `DEC-013` («aforo 25») nace el `2026-04-10`,
