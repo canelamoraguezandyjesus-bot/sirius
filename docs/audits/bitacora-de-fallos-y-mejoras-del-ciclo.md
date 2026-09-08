@@ -1988,6 +1988,73 @@ ADR o su incidencia cuando se adopte.
   puede afirmar, y el encargo debe decirlo con esas palabras. El fallo observado
   fue `assert 32 >= 54`.
 
+### 48. #546 dentro tras 19 rondas, y la deuda 15 arreglada por el emisor; enmendé mi propio criterio de parada (08-09-2026, 00:45-01:30 UTC)
+
+- **PR #546 fusionada a las 01:06:22 como `ae8b350`.** 54 commits, **19 rondas**
+  de revisión, 5194 líneas. La ronda 19 aprobó por los dos revisores sobre el
+  MISMO head (`358bfd21`), que es lo que faltaba: las rondas 16 y 18 se habían
+  cruzado —Codex aprobó `c2db289` mientras Claude pedía cambios, y Claude
+  aprobó `1705bd0a` mientras Codex pedía cambios—. Antes de escribir `fusiona`
+  se comprobaron las tres condiciones y quedaron leídas, no supuestas:
+  aprobación sobre ese head, Quality verde sobre ese head, y `main` todavía en
+  `f2085db`, que la rama llevaba dentro desde las 21:58. **Tercer intento de
+  fusión, y el primero que no invalidé yo**: los dos anteriores cayeron porque
+  fusioné otra cosa en `main` con la PR en vuelo, y esta vez no toqué `main` en
+  toda la noche.
+- **La ronda 18 encontró una afirmación falsa mía dentro de un ADR**, y merece
+  quedar escrito: la comprobación de la ronda 16 decía que el refuerzo iba «sin
+  cambiar ninguna de sus aserciones» y el diff añadía nueve. Lo cierto era que
+  ninguna aserción ANTERIOR se relajó ni se reescribió. La diferencia entre
+  «no cambié aserciones» y «no relajé ninguna anterior» es exactamente el tipo
+  de imprecisión que la disciplina existe para cazar, y la cazó el revisor, no
+  yo.
+- **#539 cerrado como superado**, con su premisa falsa explicada y el puntero a
+  dónde fue el trabajo. Deja de haber dos encargos abiertos pidiendo lo mismo.
+- **PR #564 fusionada como `08ef994`** (ADR-158): el grupo de concurrencia del
+  notificador lleva ya el run, así que ningún evento de etiqueta puede
+  desplazar a otro en la cola y perderse. Con esto cierra el hilo que Codex
+  abrió a las 20:59 revisando #546.
+- **Deuda 15 arreglada por el emisor (ADR-159, rama
+  `claude/adr-159-recibo-por-permiso`).** `sirius-convergence-reset` y
+  `sirius-resume-stop` pasan a `<head>:<run>-<intento>`, la forma que
+  `sirius-restart-sin-pr` usa desde ADR-094: dos reanudaciones sobre el mismo
+  head ya dejan dos recibos distintos, y la premisa 4 de #539 deja de ser
+  falsa. Es la misma familia que ADR-157 —el emisor destruía al publicar la
+  evidencia que sus lectores necesitan después— aplicada a los dos marcadores
+  que faltaban.
+
+  **El lector que se habría roto en silencio**, y que es la razón de que esto
+  no fuera un cambio de una línea: `round_history.RESUME_MARKER_RE` exigía
+  hexadecimal PURO hasta el cierre del comentario. Añadir el run sin tocar ese
+  patrón habría hecho que `history_after_last_resume` dejara de cortar, y el
+  freno de convergencia habría dejado de honrar el `continua` del propietario
+  **sin que nada fallara**. El patrón toma ahora el tramo del run como
+  opcional, así que los historiales publicados antes se siguen leyendo igual.
+
+- **Enmendé mi propio criterio de parada, con fecha y en el ADR, antes de tocar
+  código.** El criterio (c) que escribí decía «los guardianes existentes siguen
+  verdes **sin tocar ninguno**». Al inventariarlos aparecieron dos que afirman
+  el literal cerrado `<!-- sirius-convergence-reset:{HEAD} -->`, o sea la forma
+  emitida que esta ficha cambia a propósito: **ninguna implementación correcta
+  podía cumplir ese criterio**, y un criterio así no separa el acierto del
+  error. En vez de reinterpretarlo en silencio —que es lo cómodo y lo que
+  invalida la disciplina entera— quedó registrado como error de redacción mío,
+  con el criterio correcto en su lugar: los guardianes que afirman la FORMA
+  EMITIDA se actualizan conservando su afirmación de comportamiento palabra por
+  palabra, y los que usan el marcador como DATO SEMBRADO no se tocan y tienen
+  que seguir verdes, porque son la prueba de que el pasado se sigue leyendo.
+  Cayeron exactamente esos dos, ni uno más, lo que confirma que el inventario
+  estaba bien hecho. **Lección para la disciplina**: el criterio de parada se
+  escribe antes de ver resultados, pero eso no lo hace infalsable; cuando el
+  propio objetivo del cambio lo vuelve imposible, lo honesto es enmendarlo por
+  escrito, no estirarlo.
+- **Deuda 7 preparada como encargo, no como reproducción.** Con las 47
+  ejecuciones limpias de la entrada 47, el encargo se redactó pidiendo el
+  INVARIANTE —que la altura intermedia se lea sobre un layout asentado— y
+  diciendo explícitamente que NO pide reproducir el fallo, con el motivo. Se
+  publica cuando ADR-159 esté dentro, para no desfasar su rama: es la misma
+  regla que costó dos vueltas anoche.
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
@@ -2113,8 +2180,13 @@ ADR o su incidencia cuando se adopte.
     attempt (patrón ADR-140) para que cada permiso escrito deje un
     rastro distinto. Mientras tanto, el reflector acredita también la
     orden exacta `continua` del propietario (decisión registrada en
-    #545). Aplazada a después de #546 (sus rondas siguen tocando
-    `mirror_projection.py` y `reflect.py`).
+    #545). **ARREGLADA el 08-09** (ADR-159, rama
+    `claude/adr-159-recibo-por-permiso`, entrada 48): los dos marcadores llevan
+    ya `<head>:<run>-<intento>` y `round_history.RESUME_MARKER_RE` admite las
+    dos formas, de modo que los historiales antiguos se siguen leyendo. Se
+    SALDA cuando la ficha esté fusionada y una incidencia reciba dos
+    reanudaciones sobre el mismo head con dos recibos distintos en su
+    historial.
 16. Cuotas de los agentes (06-09, entrada 44): el ciclo no sabe que una
     cuota está agotada hasta que gasta la ronda —Claude a las 05:23 (dos
     agentes muertos con coste 0, ocho horas de parada nocturna), Codex a
