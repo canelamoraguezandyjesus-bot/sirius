@@ -3450,6 +3450,29 @@ Comprobado leyendo el fichero en `a8fe837`, no deducido.
 señalar las dos cosas —el re-anclaje y el `git diff --check` sin rango—, y **no
 va a señalar nada del código**, que está bien. Si me equivoco, se anota igual.
 
+> **FALLADA, cinco minutos después (18:57 UTC), y por un error mío que vale más
+> que la predicción.** El corrector empujó `fa09887` y arregló **las dos**: la
+> ficha re-anclada a `a8fe837`, terna nueva `5229 passed, 17 skipped, 2 xfailed`
+> —dos pruebas más, que son las de frontera— y `git diff --check 6371d4c
+> a8fe837`, con el rango. Ninguna ronda de revisión hizo falta.
+>
+> **Por qué me equivoqué**: leí `a8fe837` y lo juzgué como si fuera el
+> resultado final, cuando era el primero de dos commits. Y el corrector lo hizo
+> en el ORDEN CORRECTO —arreglar el código primero, porque hasta que la cadena
+> no vuelve a correr no hay terna que transcribir; transcribirla antes habría
+> sido inventarla—. Mi «defecto» era, exactamente, trabajo a medio hacer.
+>
+> **Y lo peor es que tenía el aviso delante**: la etiqueta de la incidencia
+> decía `sirius:repairing`, o sea «corrección técnica EN CURSO». Fui a leer los
+> ficheros de todas formas. Es la misma familia que la deuda 24 —confundir un
+> estado con un resultado— aplicada al ciclo en vez de al código: **un árbol
+> intermedio no es una entrega, y la etiqueta lo estaba diciendo**.
+>
+> La deuda 26 sigue en pie: que este corrector re-anclase por su cuenta no
+> quita que el desajuste haya costado seis rondas antes, y la comprobación
+> mecánica que propone sigue siendo barata. Pero su justificación ya no puede
+> apoyarse en este caso, porque en este caso no hizo falta.
+
 **Y NO intervengo**, aunque podría escribirlo en la incidencia y ahorrar una
 ronda de cuarenta minutos. Inyectar yo un hallazgo de revisión corrompe lo
 único que hace fiable a este ciclo: que quien implementa, quien revisa y quien
