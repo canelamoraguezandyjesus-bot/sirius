@@ -3766,6 +3766,53 @@ se le pide relajarse.
 Los otros dos hallazgos eran de ficha y se corrigen declarando lo que faltaba:
 la identidad `created_at == valid_from` del cargador (que es la deuda 27) y que
 el discriminante de la vía es el **intervalo** y no la ausencia de tema.
+
+---
+
+### 77. La ronda 3 converge y encuentra que la sobreafirmación llegaba al USUARIO, no solo a la ficha (08-09-2026, 19:55 UTC)
+
+**El freno no muerde.** Ronda 3: `pending=1, severity_total=1`, contra una mejor
+marca de `(2,4)`. Mejora en las dos magnitudes, así que hay progreso y el ciclo
+sigue solo. La decisión que dejé preparada **se queda sin usar**, que es el
+mejor destino que podía tener: sirvió para tener el criterio decidido antes de
+necesitarlo, no para gastarlo.
+
+**El hallazgo, y es de los buenos.** La corrección de la ronda 2 añadió a
+ADR-168 la declaración que yo había subido a deuda 27: que sobre un `created_at`
+real la vía «admite lo registrado antes de `hasta` cuya vigencia empieza
+después». Pero **el motor le sigue diciendo al usuario** —vía
+`Explicacion.razon_de_orden`— la frase `«vigente en la ventana declarada por la
+petición (X a Y)»`. O sea: la ficha declara la limitación y **la cadena que ve
+la persona la contradice**.
+
+Y el fondo es peor que la contradicción. `created_at` es el instante en que la
+decisión se **PROPUSO**, no en que se aprobó: `DecisionModel` **no persiste
+ninguna fecha de aprobación**, y `updated_at` es el último toque. Así que una
+decisión propuesta antes del final de la ventana y **aprobada después** entra
+por la vía, y se le presenta al usuario como «vigente en la ventana». Es una
+afirmación sobre la vigencia que el sustrato no sostiene.
+
+**La observación que más me gusta de toda la revisión de hoy**: es la misma
+familia que ADR-166 evitó al negarse a inventar una fecha ausente, y que
+**ADR-168 ya evita para el extremo FINAL de la vigencia** —se niega, con razón,
+a datar una sustitución con `updated_at`— **pero no para el INICIAL**. Rigor
+asimétrico dentro de la misma ficha: el mismo autor rechazó inventar una fecha
+en un extremo y la dio por buena en el otro.
+
+**Lo mío, otra vez el mismo hueco.** Yo registré la deuda 27, escribí la
+condición en la bitácora, se la puse a la cifra de H2 y al informe del
+propietario. **Nunca miré qué le dice el motor al usuario.** Comprobé los
+números y las fichas —lo que se mide y lo que se declara— y no la salida del
+producto, que es donde la afirmación llega a alguien. Es la tercera variante
+hoy del mismo error: reviso el sitio donde se enuncia la afirmación y no todos
+los sitios por donde sale.
+
+**Y una cosa que conviene ver, porque es la disciplina pagando**: este defecto
+**no era visible antes de la ronda 2**. Lo hizo detectable la corrección que
+escribió la condición: en cuanto la ficha dijo en voz alta lo que la vía hace,
+la cadena que contradecía esa declaración quedó a la vista. Escribir la
+condición no fue burocracia — fue lo que convirtió una sobreafirmación
+silenciosa en una contradicción localizable.
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
