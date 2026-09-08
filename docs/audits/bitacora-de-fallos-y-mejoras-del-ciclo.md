@@ -4128,6 +4128,36 @@ lo que produce estos errores.
 Corregido en la incidencia #579 con las tres filas y el comando que las imprime,
 para que nadie tenga que fiarse de mí: `uv run pytest
 tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py -q -s -k paquete_completo`.
+
+> **CUARTA CORRECCIÓN, 21:58 UTC, y ésta es de INTERPRETACIÓN — la clase que
+> dos mensajes antes había dicho que quería evitar.** Leí el montaje de esa
+> prueba después de publicar la conclusión, y la cambia:
+>
+> - El filtro de relevancia es un doble, **`_FiltroDeRelevanciaQueNuncaDescarta`**,
+>   y el propio docstring dice que las piezas de M15 quedan ahí «**inertes** en
+>   la práctica, porque no descarta nada».
+> - La petición sale de **`_peticion_ordinaria`**, la política uniforme.
+> - Los ítems llegan `SIN_EJES`, esto sí igual que producción.
+>
+> Luego **las 487 «de más» son por construcción**: son lo que llega al filtro
+> cuando el filtro no filtra, no «lo mal que está producción con todo
+> funcionando». Y el `0/47` se sigue de eso, porque una exacta exige cero de
+> más. **La cifra es un techo de entrada, no un veredicto sobre el producto.**
+>
+> Y lo que de verdad importa: **ese filtro inerte es exactamente la pieza que
+> la palanca 3 está construyendo.** Mi lectura anterior —«producción está en
+> 0/47, la distancia es enorme, replantéate la prioridad»— era demasiado
+> pesimista, y se la trasladé al propietario **invitándole a decidir sobre
+> ella**. Eso es peor que equivocarse en una cifra: es equivocarse en una cifra
+> y empujar una decisión con ella.
+>
+> **El patrón, ya sin excusa**: la medición 3 no es «producción», es
+> «producción **con el filtro desactivado**». Cada una de mis cuatro
+> equivocaciones de hoy ha sido la misma: **tomar el nombre de una medición por
+> su definición.** «Vía completa», «producción», «el banco» — tres nombres que
+> usé sin abrir el montaje que los produce. La pregunta de la raíz 2 no era
+> «¿sobre qué población?», que es lo que escribí: era **«¿qué está desactivado
+> aquí?»**.
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
