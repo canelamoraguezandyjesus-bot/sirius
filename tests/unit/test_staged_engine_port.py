@@ -10,6 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from sqlalchemy import text
 
 from sirius.adapters.persistence.database import build_engine, build_session_factory
 from sirius.adapters.persistence.migrations import upgrade_to_head
@@ -20,6 +21,8 @@ from sirius.adapters.persistence.staged_engine_port import (
     StagedEnginePort,
     build_staged_engine_port,
 )
+from sirius.application.approve_decision import ApproveDecisionUseCase
+from sirius.application.propose_decision import ProposeDecisionUseCase
 from sirius.application.save_manual_memory import SaveManualMemoryUseCase
 from sirius.domain.staged_engine_contracts import SIN_EJES, Clase, EjesDeclarados
 
@@ -157,3 +160,225 @@ def test_ejes_por_identidad_overrides_sin_ejes_for_a_declared_item(tmp_path: Pat
         puerto.close()
 
     assert encontrado.ejes == ejes_declarados
+
+
+# -- Ventana de vigencia (ADR-168, hueco H1 de ADR-148) ----------------------
+
+
+def _proyecto_de_prueba(database_path: Path) -> int:
+    """El id del proyecto que `ensure_bootstrap_project` deja creado."""
+    repositorio = build_sqlite_project_repository(database_path)
+    proyecto = repositorio.get_active_project()
+    assert proyecto is not None
+    return proyecto.id
+
+
+def _decision_aprobada(database_path: Path, asunto: str, texto: str) -> int:
+    unidad = build_sqlite_unit_of_work(database_path)
+    decision = ProposeDecisionUseCase(unidad).propose(
+        asunto, _proyecto_de_prueba(database_path), texto
+    )
+    ApproveDecisionUseCase(unidad).approve(decision.id, confirmed=True)
+    return decision.id
+
+
+def test_por_ventana_de_vigencia_devuelve_la_decision_aprobada_de_la_ventana(
+    tmp_path: Path,
+) -> None:
+    """El camino de entrada que ADR-168 abre: sin una sola palabra de la
+    consulta, la ventana sola trae la decisión aprobada."""
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    decision_id = _decision_aprobada(
+        database_path, "descuento-invierno", "Se aplica el descuento de invierno."
+    )
+
+    puerto = build_staged_engine_port(database_path)
+    try:
+        encontrados = puerto.por_ventana_de_vigencia("2020-01-01T00:00:00Z", "2099-01-01T00:00:00Z")
+    finally:
+        puerto.close()
+
+    assert [item.id for item in encontrados] == [f"{Clase.DECISION.value}:{decision_id}"]
+
+
+def test_por_ventana_de_vigencia_no_devuelve_lo_registrado_despues_del_fin(
+    tmp_path: Path,
+) -> None:
+    """El final de la ventana es un predicado, no un adorno: lo registrado
+    después no entra."""
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    _decision_aprobada(database_path, "descuento-invierno", "Se aplica el descuento.")
+
+    puerto = build_staged_engine_port(database_path)
+    try:
+        assert puerto.por_ventana_de_vigencia("2020-01-01T00:00:00Z", "2020-12-31T00:00:00Z") == ()
+    finally:
+        puerto.close()
+
+
+#: Un registro fijado a mano, con hora dentro del día: la frontera que la
+#: forma de la cadena decide está en el MISMO día civil que el final de la
+#: ventana, así que una prueba con años de separación no la toca.
+_REGISTRO_FIJADO = "2026-03-20 09:00:00.000000"
+
+
+def _fijar_created_at(database_path: Path, decision_id: int, momento: str) -> None:
+    """Escribe `created_at` en la fila ya creada, con la forma literal en la
+    que el dialecto de SQLAlchemy guarda sus columnas `DateTime`.
+
+    Se hace por escritura directa —igual que el cargador del banco
+    (`tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py`, ADR-166)—
+    porque ningún caso de uso de Sirius 0.1 acepta una fecha de creación: la
+    pone el reloj. Sin fijarla, la frontera del mismo día civil dependería
+    del reloj del runner y la prueba no fijaría nada.
+    """
+    engine = build_engine(database_path)
+    try:
+        with engine.begin() as conexion:
+            conexion.execute(
+                text("UPDATE decisions SET created_at = :momento WHERE id = :id"),
+                {"momento": momento, "id": decision_id},
+            )
+    finally:
+        engine.dispose()
+
+
+def test_por_ventana_de_vigencia_excluye_lo_registrado_el_mismo_dia_tras_el_final(
+    tmp_path: Path,
+) -> None:
+    """La frontera real: `created_at` y el final de la ventana llegan en
+    formas distintas —espacio contra `T`/`Z`— y SQLite las compara como
+    CADENAS, así que sin reescribir el extremo a la forma de `created_at` el
+    espacio (0x20) ordena antes que la `T` (0x54) y entra todo lo registrado
+    más tarde del mismo día civil. Aquí el registro son las 09:00 del 20 de
+    marzo y la ventana acaba en la medianoche que abre ese día: no entra.
+    """
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    decision_id = _decision_aprobada(
+        database_path, "descuento-invierno", "Se aplica el descuento de invierno."
+    )
+    _fijar_created_at(database_path, decision_id, _REGISTRO_FIJADO)
+
+    puerto = build_staged_engine_port(database_path)
+    try:
+        assert puerto.por_ventana_de_vigencia("2020-01-01T00:00:00Z", "2026-03-20T00:00:00Z") == ()
+        # Simétrica, para que la prueba fije la frontera y no solo la
+        # exclusión: con la ventana acabando después del registro, entra.
+        entra = puerto.por_ventana_de_vigencia("2020-01-01T00:00:00Z", "2026-03-20T23:59:59Z")
+        assert [item.id for item in entra] == [f"{Clase.DECISION.value}:{decision_id}"]
+    finally:
+        puerto.close()
+
+
+def test_por_ventana_de_vigencia_no_afirma_nada_con_un_final_ilegible(tmp_path: Path) -> None:
+    """Un final que no es un instante legible no acota: la ventana devuelve
+    vacío en vez de comparar cadenas sueltas contra `created_at`."""
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    _decision_aprobada(database_path, "descuento-invierno", "Se aplica el descuento.")
+
+    puerto = build_staged_engine_port(database_path)
+    try:
+        assert puerto.por_ventana_de_vigencia("2020-01-01T00:00:00Z", "el mes que viene") == ()
+    finally:
+        puerto.close()
+
+
+def test_por_ventana_de_vigencia_admite_lo_aprobado_despues_del_final_de_la_ventana(
+    tmp_path: Path,
+) -> None:
+    """Lo que las dos condiciones del predicado NO afirman, fijado aquí para
+    que el texto entregado no pueda volver a afirmarlo (ADR-168, ronda 3).
+
+    `created_at` es el instante en que la decisión se PROPUSO, no aquel en
+    que se aprobó: `DecisionModel` no persiste fecha de aprobación. Así que
+    una decisión registrada DENTRO de la ventana y aprobada DESPUÉS de su
+    final entra por la vía —y debe entrar, porque el predicado es el que
+    es—, pero de ella solo puede decirse que está aprobada y que su registro
+    no es posterior al final de la ventana. Que estuviera vigente durante la
+    ventana es justo lo que el sustrato de Sirius 0.1 no sostiene (deuda de
+    la palanca 2 de ADR-148).
+
+    El `updated_at` que deja la aprobación —el reloj del runner, posterior a
+    la ventana de 2026-03— es la prueba de que la aprobación cae fuera.
+    """
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    unidad = build_sqlite_unit_of_work(database_path)
+    decision = ProposeDecisionUseCase(unidad).propose(
+        "descuento-invierno", _proyecto_de_prueba(database_path), "Se aplica el descuento."
+    )
+    _fijar_created_at(database_path, decision.id, _REGISTRO_FIJADO)
+    ApproveDecisionUseCase(unidad).approve(decision.id, confirmed=True)
+
+    registro, aprobacion = _fechas_de_la_decision(database_path, decision.id)
+    fin_de_la_ventana = "2026-03-20T23:59:59Z"
+    assert registro == _REGISTRO_FIJADO
+    assert aprobacion > "2026-03-20 23:59:59"
+
+    puerto = build_staged_engine_port(database_path)
+    try:
+        encontrados = puerto.por_ventana_de_vigencia("2026-01-10T00:00:00Z", fin_de_la_ventana)
+    finally:
+        puerto.close()
+
+    assert [item.id for item in encontrados] == [f"{Clase.DECISION.value}:{decision.id}"]
+
+
+def _fechas_de_la_decision(database_path: Path, decision_id: int) -> tuple[str, str]:
+    """`created_at` y `updated_at` tal como están guardados, sin pasar por el
+    dominio: lo que se comprueba es la forma literal de la fila."""
+    engine = build_engine(database_path)
+    try:
+        with engine.begin() as conexion:
+            fila = conexion.execute(
+                text("SELECT created_at, updated_at FROM decisions WHERE id = :id"),
+                {"id": decision_id},
+            ).one()
+    finally:
+        engine.dispose()
+    return str(fila[0]), str(fila[1])
+
+
+def test_por_ventana_de_vigencia_no_devuelve_una_propuesta_sin_aprobar(tmp_path: Path) -> None:
+    """Una decisión `PROPOSED` no ha empezado ninguna vigencia: aprobarla es
+    lo que la empieza (`sirius.domain.decision.DecisionStatus`)."""
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    ProposeDecisionUseCase(build_sqlite_unit_of_work(database_path)).propose(
+        "propuesta-sin-aprobar", _proyecto_de_prueba(database_path), "Aún no se ha decidido."
+    )
+
+    puerto = build_staged_engine_port(database_path)
+    try:
+        assert puerto.por_ventana_de_vigencia("2020-01-01T00:00:00Z", "2099-01-01T00:00:00Z") == ()
+    finally:
+        puerto.close()
+
+
+def test_por_ventana_de_vigencia_no_enumera_memorias(tmp_path: Path) -> None:
+    """La restricción de clase de ADR-168, fijada aquí porque es la que
+    impide que la ventana degenere en un barrido.
+
+    `MemoryStatus` no es un ciclo de vigencia y su propio modelo lo dice:
+    «Superseded revisions are a history concern, not a status of the memory
+    itself». Enumerar memorias por ventana obligaría a afirmar «esta memoria
+    estaba vigente en enero» sobre un dato que el sustrato no guarda. La
+    memoria sigue entrando por las vías léxicas, que no afirman nada sobre su
+    vigencia: `test_por_termino_lexico_finds_a_saved_memory`, arriba.
+    """
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    SaveManualMemoryUseCase(build_sqlite_unit_of_work(database_path)).save(
+        "terminounicoparalaventana en la memoria"
+    )
+
+    puerto = build_staged_engine_port(database_path)
+    try:
+        assert puerto.por_ventana_de_vigencia("2020-01-01T00:00:00Z", "2099-01-01T00:00:00Z") == ()
+        assert len(puerto.por_termino_lexico(["terminounicoparalaventana"])) == 1
+    finally:
+        puerto.close()

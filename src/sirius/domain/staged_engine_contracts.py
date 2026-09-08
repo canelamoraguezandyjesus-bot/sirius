@@ -155,10 +155,39 @@ class Ambito:
 
 @dataclass(frozen=True, slots=True)
 class VentanaTemporal:
-    """``G8``: aplicabilidad respecto del tiempo objetivo y corte de registro."""
+    """``G8``: aplicabilidad respecto del tiempo objetivo y corte de registro.
+
+    ``tiempo_objetivo`` es un instante, y sigue siéndolo: es lo que ``G8``
+    compara. Cuando la pregunta declara un **intervalo** («entre enero y
+    marzo»), ese instante es su extremo final —la convención que ya tenían
+    los dos traductores del tiempo— y ``tiempo_objetivo_desde`` conserva el
+    extremo inicial, que hasta ADR-168 se descartaba una línea antes de
+    construir la ``Peticion`` y no llegaba a ninguna parte.
+    """
 
     tiempo_objetivo: str
     corte_de_registro: str | None = None
+    #: Extremo INICIAL del intervalo, cuando la pregunta declara uno.
+    #: ``None`` significa que la pregunta declara un instante, no un
+    #: intervalo, que es lo que declaran 46 de los 47 casos del banco.
+    tiempo_objetivo_desde: str | None = None
+
+    @property
+    def intervalo_de_vigencia(self) -> tuple[str, str] | None:
+        """``(desde, hasta)`` si la pregunta declara un intervalo utilizable.
+
+        Un intervalo invertido (``desde`` posterior a ``hasta``) no es un
+        intervalo: se trata como si no se hubiera declarado ninguno, de modo
+        que el motor se comporte exactamente como antes de ADR-168 en vez de
+        enumerar sobre una ventana imposible. Es la misma degradación
+        documentada que aplican las puertas cuando un eje no viene declarado:
+        se vuelve al comportamiento colapsado, nunca a uno más permisivo.
+        """
+        if self.tiempo_objetivo_desde is None:
+            return None
+        if self.tiempo_objetivo_desde > self.tiempo_objetivo:
+            return None
+        return (self.tiempo_objetivo_desde, self.tiempo_objetivo)
 
 
 # --------------------------------------------------------------------------
@@ -495,6 +524,17 @@ class PuertoDeRecuperacion(Protocol):
 
     def historial_y_fuentes(self, terminos: Sequence[str]) -> tuple[ItemCanonico, ...]:
         """Evidencia atribuida no canónica (``E4``)."""
+        ...
+
+    def por_ventana_de_vigencia(self, desde: str, hasta: str) -> tuple[ItemCanonico, ...]:
+        """Lo vigente en la ventana ``[desde, hasta]`` (``E3``, ADR-168).
+
+        La ventana ES el predicado que dirige la consulta, igual que la clave,
+        el término o el prefijo dirigen las otras: no devuelve el canon entero
+        ni enumera un proyecto, y lleva su propia cota de filas. Es el único
+        camino de entrada de una pregunta cuyo criterio es la vigencia y no
+        una palabra.
+        """
         ...
 
 

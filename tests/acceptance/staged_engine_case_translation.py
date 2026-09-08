@@ -26,7 +26,12 @@ módulo original:
 - **El límite.** Un caso sin límite declarado recibe uno que **no ata**:
   el tamaño del canon, igual para todos los que no lo declaran.
 - **El tiempo.** Un caso puede declarar su instante objetivo como un
-  intervalo; se toma **el extremo final** como instante objetivo.
+  intervalo; se toma **el extremo final** como instante objetivo. Desde
+  ADR-168 el extremo inicial deja de tirarse: viaja en
+  ``VentanaTemporal.tiempo_objetivo_desde``, que es lo que la vía de
+  recuperación por vigencia necesita para enumerar. El instante objetivo no
+  cambia —sigue siendo el extremo final, que es lo que ``G8`` compara—, así
+  que ningún caso cambia de veredicto por esto solo.
 
 Una cuarta, no heredada del comentario original ni de ``_traducir`` (que
 nunca asigna ``objetivos`` y lo deja siempre en su valor por defecto)
@@ -107,6 +112,21 @@ def _instante(declarado: str) -> str:
     return declarado.split("/")[-1] if "/" in declarado else declarado
 
 
+def _instante_inicial(declarado: str) -> str | None:
+    """El extremo INICIAL, o ``None`` si el caso declara un instante suelto.
+
+    Un intervalo con más de dos extremos, o con alguno en blanco, no es un
+    intervalo declarado: se trata como si no lo hubiera (ADR-168), que es el
+    comportamiento anterior y no uno más permisivo.
+    """
+    if "/" not in declarado:
+        return None
+    extremos = declarado.split("/")
+    if len(extremos) != 2 or not all(extremo.strip() for extremo in extremos):
+        return None
+    return extremos[0]
+
+
 def _limites(limite: Mapping[str, Any] | None, *, sin_atar: int) -> tuple[int, int]:
     """``(objetivo, duro)``. Sin límite declarado, uno que no ata."""
     if limite is None:
@@ -146,6 +166,7 @@ def peticion_desde_caso(
         ventana=VentanaTemporal(
             tiempo_objetivo=_instante(str(peticion_p2["tiempo_objetivo"])),
             corte_de_registro=None if corte_registro is None else str(corte_registro),
+            tiempo_objetivo_desde=_instante_inicial(str(peticion_p2["tiempo_objetivo"])),
         ),
         cardinalidad=cardinalidad,
         limite_objetivo=objetivo,

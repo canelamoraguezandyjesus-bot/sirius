@@ -130,6 +130,58 @@ def test_los_cuatro_ejes_inferidos_llegan_a_la_peticion() -> None:
     assert peticion.consulta == "¿qué decisiones usábamos antes?"
 
 
+def test_el_intervalo_inferido_llega_entero_a_la_peticion() -> None:
+    """ADR-168: el extremo inicial viaja hasta la ``Peticion``, que es lo que
+    convierte «entre enero y marzo» en una ventana consultable."""
+    intencion = IntencionDeConsulta(
+        modo=Modo.M2_HISTORICO,
+        cardinalidad=Cardinalidad.EXHAUSTIVA,
+        tiempo_objetivo="2026-03-20T00:00:00Z",
+        tiempo_objetivo_desde="2026-01-10T00:00:00Z",
+    )
+
+    peticion = _interprete(intencion).interpretar(
+        "¿qué decisiones eran válidas entre enero y marzo?", "op-1", active_project_id=None
+    )
+
+    assert peticion.ventana.tiempo_objetivo == "2026-03-20T00:00:00Z"
+    assert peticion.ventana.tiempo_objetivo_desde == "2026-01-10T00:00:00Z"
+    assert peticion.ventana.intervalo_de_vigencia == (
+        "2026-01-10T00:00:00Z",
+        "2026-03-20T00:00:00Z",
+    )
+
+
+def test_sin_extremo_final_legible_el_inicial_no_viaja_solo() -> None:
+    """El respaldo pone «ahora» como tiempo objetivo cuando el final no es
+    legible. Dejar viajar al inicial entonces fabricaría una ventana
+    ``[inicio declarado, ahora]`` que nadie pidió: sin los dos extremos no
+    hay intervalo, y la petición vuelve a declarar un instante."""
+    intencion = IntencionDeConsulta(
+        modo=Modo.M2_HISTORICO,
+        cardinalidad=Cardinalidad.EXHAUSTIVA,
+        tiempo_objetivo=None,
+        tiempo_objetivo_desde="2026-01-10T00:00:00Z",
+    )
+
+    peticion = _interprete(intencion).interpretar("c", "op-1", active_project_id=None)
+
+    assert peticion.ventana.tiempo_objetivo == _AHORA
+    assert peticion.ventana.tiempo_objetivo_desde is None
+    assert peticion.ventana.intervalo_de_vigencia is None
+
+
+def test_el_respaldo_no_declara_ningun_intervalo() -> None:
+    """Sin modelo, la petición es la uniforme de siempre y no activa la vía
+    por vigencia: ADR-168 no cambia el respaldo."""
+    peticion = InterpreteDePeticion(clock=_RelojFijo()).interpretar(
+        "c", "op-1", active_project_id=None
+    )
+
+    assert peticion.ventana.tiempo_objetivo_desde is None
+    assert peticion.ventana.intervalo_de_vigencia is None
+
+
 def test_el_modo_historico_es_el_unico_que_admite_no_vigentes() -> None:
     """La misma traducción que el traductor del banco declara
     (``staged_engine_case_translation``: ``admite_no_vigentes = modo == M2``),

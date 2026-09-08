@@ -202,6 +202,17 @@ class InterpreteDePeticion:
                     else _ahora_como_lo_declara_el_corpus(self._clock.utc_now())
                 ),
                 corte_de_registro=intencion.corte_de_registro,
+                # El extremo inicial solo viaja si el final vino con él
+                # (ADR-168). Con un intervalo medio ilegible —el modelo
+                # contesta "2026-01-10/loquesea" y solo el inicio es una
+                # fecha— el final sería el «ahora» del respaldo, y la
+                # ventana resultante, `[2026-01-10, ahora]`, sería una que
+                # nadie declaró. Sin los dos extremos no hay intervalo.
+                tiempo_objetivo_desde=(
+                    intencion.tiempo_objetivo_desde
+                    if intencion.tiempo_objetivo is not None
+                    else None
+                ),
             ),
             cardinalidad=intencion.cardinalidad,
             limite_objetivo=objetivo,
