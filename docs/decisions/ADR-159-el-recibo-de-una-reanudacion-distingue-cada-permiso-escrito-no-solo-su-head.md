@@ -93,7 +93,41 @@ marcador y tampoco se rompe.
 
 ## Criterio de parada (escrito ANTES de decidir)
 
-Ver punto 3 de la nota de arranque.
+Ver punto 3 de la nota de arranque, **con la enmienda de abajo**.
+
+### Enmienda del criterio (c), 2026-09-08, ANTES de tocar código
+
+El criterio (c) decía: «los guardianes existentes de `round_history`, de
+`mirror_projection` y del guion siguen verdes con la forma HISTÓRICA, **sin
+tocar ninguno**». Esa última cláusula es un error de redacción mío, y lo
+registro en vez de reinterpretarla en silencio: al inventariar los guardianes
+aparecen DOS de
+`tests/automation/test_reanudar_ejecutando_el_guion.py` (líneas 292 y 617) que
+afirman el literal cerrado `<!-- sirius-convergence-reset:{HEAD} -->`, es decir
+la forma que el emisor publica. Cambiar esa forma es el objeto mismo de esta
+ficha, así que esos dos guardianes NO pueden seguir verdes sin tocarse: el
+criterio, tal como lo escribí, era imposible de cumplir para cualquier
+implementación correcta, y un criterio así no separa el acierto del error.
+
+El criterio correcto distingue dos clases de guardián, que es la distinción que
+me faltó hacer:
+
+- **Los que afirman la FORMA EMITIDA** (292 y 617). Se actualizan, porque la
+  forma emitida es lo que cambia. Lo que NO puede cambiar es la afirmación de
+  comportamiento que llevan detrás —«un bloqueo de convergencia sí resetea el
+  listón», «una parada operativa publica `resume-stop` y no `convergence-reset`»—,
+  que tiene que seguir afirmándose palabra por palabra. Para no volver a clavar
+  un literal que la próxima ficha romperá, pasan a exigir el head **seguido de
+  un separador** (`sirius-convergence-reset:{HEAD}:`), o sea «lleva el head y
+  algo más que lo distingue», sin fijar el run concreto.
+- **Los que usan el marcador como DATO DE ENTRADA** en un historial sembrado
+  (línea 653, y los de `round_history` y `mirror_projection`). Esos **no se
+  tocan** y tienen que seguir verdes tal cual: son la prueba de que un
+  historial publicado ANTES de esta ficha se sigue leyendo igual. Si alguno
+  cayera, el cambio estaría rompiendo el pasado y habría que parar.
+
+Lo que la enmienda NO relaja: ninguna aserción de comportamiento, ni la
+exigencia de ver fallar los guardianes nuevos contra `main`, ni (d).
 
 ## Opciones consideradas
 
