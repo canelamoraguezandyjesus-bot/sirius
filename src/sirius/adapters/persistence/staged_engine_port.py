@@ -8,11 +8,13 @@ esquema (``memories``/``memory_revisions``/``decisions``/
 ``sqlite_knowledge_search_repository``) en vez de ``sqlite3`` crudo.
 
 **Ninguna ruta ofrece un barrido.** Toda consulta lleva un predicado que la
-dirige —clave exacta, término del índice léxico medido o prefijo de
-sujeto— y una cota de filas; no existe método que devuelva el canon entero
-ni que enumere un proyecto: el ámbito es una puerta de seguridad
-(``sirius.domain.staged_engine_gates.aplicar_previas``/``G4``), no un
-generador de candidatas.
+dirige —clave exacta, término del índice léxico medido, prefijo de sujeto o,
+desde ADR-168, ventana de vigencia— y una cota de filas; no existe método
+que devuelva el canon entero ni que enumere un proyecto: el ámbito es una
+puerta de seguridad (``sirius.domain.staged_engine_gates.aplicar_previas``/
+``G4``), no un generador de candidatas. La ventana es el predicado más ancho
+de los cuatro y por eso lleva la cota más estrecha después de la del prefijo
+(``LIMITE_POR_VENTANA``).
 
 ``historial_y_fuentes`` (``E4``, evidencia atribuida no canónica) siempre
 devuelve vacío aquí: ``sirius.domain.relevance.RankedKnowledge`` solo modela
@@ -58,6 +60,7 @@ __all__ = [
     "ARGUMENTOS_MAXIMOS",
     "LIMITE_POR_CONSULTA",
     "LIMITE_POR_PREFIJO",
+    "LIMITE_POR_VENTANA",
     "IdentificadorInvalidoError",
     "StagedEnginePort",
     "build_staged_engine_port",
@@ -81,11 +84,25 @@ JOIN decision_revisions AS r ON r.decision_id = d.id AND r.is_current = 1
 WHERE d.id IN ({marcas})
 """
 
+#: Sentencia literal, sin interpolar el nombre de la tabla ni el del estado:
+#: los dos son constantes de este módulo, no entradas.
+_POR_VENTANA_DECISIONES: Final = (
+    "SELECT id FROM decisions WHERE created_at <= :hasta AND status = :estado "
+    "ORDER BY created_at DESC, id LIMIT :cota"
+)
+
 #: Cota dura de filas por consulta dirigida.
 LIMITE_POR_CONSULTA: Final = 512
 
 #: Cota de una consulta por prefijo de sujeto: más estrecha que la general.
 LIMITE_POR_PREFIJO: Final = 64
+
+#: Cota de una consulta por ventana de vigencia (ADR-168). Más estrecha que
+#: la general porque su predicado es el más ancho de los cuatro: una ventana
+#: larga alcanza a todo lo registrado antes de su final. La cota se declara
+#: aquí y no se amplía desde fuera; lo que la ventana no puede prometer es
+#: exhaustividad sobre un canon mayor que ella.
+LIMITE_POR_VENTANA: Final = 128
 
 #: Número máximo de términos o prefijos admitidos en una sola llamada. Sin
 #: esta cota, pedir "todos los términos del corpus" sería un barrido
@@ -310,6 +327,69 @@ class StagedEnginePort:
             )
             for fila in session.execute(text(consulta_decisiones), parametros).all():
                 encontrados.append(("decision", int(fila[0])))
+            return tuple(self._por_ids_mixtos(session, encontrados))
+
+    def por_ventana_de_vigencia(self, desde: str, hasta: str) -> tuple[ItemCanonico, ...]:
+        """``E3`` (ADR-168): lo que el sustrato afirma vigente en la ventana.
+
+        **Solo decisiones, y no por conveniencia.** De las dos clases del
+        canon, únicamente la decisión tiene en Sirius 0.1 un ciclo de vida
+        que es de VIGENCIA: ``DecisionStatus`` va de ``PROPOSED`` a
+        ``APPROVED`` y de ahí a ``SUPERSEDED``/``ARCHIVED``
+        (``sirius.domain.decision``) — aprobar empieza una vigencia y
+        sustituir la termina, y el esquema hasta guarda cuál sustituyó a cuál
+        (``DecisionModel.supersedes_decision_id``). El de la memoria no lo
+        es, y su propio modelo lo dice con todas las letras: «Superseded
+        revisions are a history concern, **not a status of the memory
+        itself**: the memory stays CURRENT while its ``current_revision``
+        pointer advances» (``sirius.domain.memory.MemoryStatus``).
+        ``CURRENT``/``ARCHIVED``/``DELETED`` es disponibilidad, no vigencia:
+        una memoria puede cambiar de contenido sin cambiar de estado, y su
+        ``created_at`` es cuándo se escribió, no desde cuándo vale. Enumerar
+        memorias por ventana obligaría a afirmar «esta memoria estaba vigente
+        entre enero y marzo» sobre un dato que el sustrato no tiene — la
+        misma invención que ADR-166 se negó a hacer con una fecha ausente.
+        Cuando el sustrato persista una vigencia por memoria (palanca 2 de
+        ADR-148, cerrada sin fusionar en #572), esta ruta las incluirá sin
+        cambiar de firma.
+
+        Dos condiciones, las dos sobre lo que Sirius 0.1 **sí** persiste: la
+        decisión se registró no después del final de la ventana
+        (``created_at <= hasta``) y sigue aprobada (``status = approved``).
+        Una decisión ``SUPERSEDED`` no entra aunque pudiera haber estado
+        vigente dentro de la ventana: el esquema guarda QUÉ la sustituyó,
+        pero no CUÁNDO —``updated_at`` es el último toque, no el fin de una
+        vigencia—, y datar la sustitución con él sería inventar la fecha que
+        falta. Queda declarado como deuda, no como olvido.
+
+        ``desde`` no aparece en el predicado, y es deliberado: sin fin de
+        vigencia persistido, la única afirmación disponible sobre el final es
+        el estado aprobado, y nada aprobado puede haber dejado de estarlo
+        antes de ``desde``. Recibirlo igualmente mantiene la ventana entera
+        en la firma —es la mitad del contrato— y deja que un sustrato que
+        algún día persista el fin lo use sin cambiar a ningún llamador.
+
+        Lo que esta ruta NO hace: decidir ámbito, criticidad ni elegibilidad.
+        Todo lo que devuelve pasa después por ``G1-G10`` como cualquier otra
+        candidata; en particular ``G4`` (ámbito) y ``G8`` (tiempo y corte).
+
+        El orden es por registro descendente y por identidad: si la cota
+        recorta, recorta lo más antiguo —lo que la ventana solo alcanza por
+        arrastre— y nunca lo registrado dentro de ella, y dos ejecuciones
+        sobre la misma base devuelven lo mismo.
+        """
+        with self._scope() as session:
+            encontrados = [
+                ("decision", int(fila[0]))
+                for fila in session.execute(
+                    text(_POR_VENTANA_DECISIONES),
+                    {
+                        "hasta": hasta,
+                        "estado": _ESTADO_DECISION_VIGENTE,
+                        "cota": LIMITE_POR_VENTANA,
+                    },
+                ).all()
+            ]
             return tuple(self._por_ids_mixtos(session, encontrados))
 
     def por_identificadores(self, identificadores: Sequence[str]) -> MaterializacionPorIdentidad:

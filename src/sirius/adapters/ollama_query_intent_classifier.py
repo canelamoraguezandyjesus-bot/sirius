@@ -274,6 +274,7 @@ def _parse_intencion(payload: object) -> IntencionDeConsulta:
         cardinalidad=Cardinalidad(str(answer["cardinalidad"]).strip()),
         limite=_limite(answer.get("limite")),
         tiempo_objetivo=_tiempo_objetivo(answer.get("tiempo_objetivo")),
+        tiempo_objetivo_desde=_tiempo_objetivo_desde(answer.get("tiempo_objetivo")),
         corte_de_registro=_corte_de_registro(answer.get("corte_de_registro")),
     )
 
@@ -309,18 +310,25 @@ def instante_utc(valor: str | None) -> datetime | None:
     return momento.replace(tzinfo=UTC) if momento.tzinfo is None else momento.astimezone(UTC)
 
 
-def _iso_declarado(declarado: object) -> str | None:
+def _iso_declarado(declarado: object, *, extremo: int = -1) -> str | None:
     """La fecha declarada si es ISO-8601 reconocible; ``None`` si no lo es o
     si el modelo contestó la cadena vacía. Un intervalo se resuelve por su
-    extremo final, la misma traducción que el traductor del banco declara
-    (``tests/acceptance/staged_engine_case_translation.py``)."""
+    extremo final (``extremo=-1``), la misma traducción que el traductor del
+    banco declara (``tests/acceptance/staged_engine_case_translation.py``);
+    ``extremo=0`` pide el inicial, y solo lo hay si el intervalo tiene
+    exactamente dos extremos."""
     if not isinstance(declarado, str):
         return None
     texto = declarado.strip()
     if texto == _SIN_DECLARAR:
         return None
     if "/" in texto:
-        texto = texto.split("/")[-1].strip()
+        extremos = [parte.strip() for parte in texto.split("/")]
+        if len(extremos) != 2:
+            return None
+        texto = extremos[extremo]
+    elif extremo == 0:
+        return None
     return texto if _PATRON_ISO.match(texto) else None
 
 
@@ -336,6 +344,29 @@ def _tiempo_objetivo(declarado: object) -> str | None:
     Una fecha desnuda es su medianoche: es un instante, no un día.
     """
     texto = _iso_declarado(declarado)
+    momento = instante_utc(texto)
+    if momento is None:
+        return None
+    return momento.isoformat().replace(_DESFASE_EXPLICITO, _SUFIJO_UTC_DEL_CORPUS)
+
+
+def _tiempo_objetivo_desde(declarado: object) -> str | None:
+    """El extremo INICIAL del intervalo, en la misma forma que
+    ``_tiempo_objetivo`` emite el final (ADR-168).
+
+    El modelo ya contesta el intervalo entero cuando la pregunta lo declara
+    —la instrucción se lo pide así («Si la pregunta abarca un intervalo, el
+    extremo final del intervalo») y el esquema cerrado lo admite como una
+    sola cadena—: hasta ADR-168 el extremo inicial se descartaba al leer la
+    respuesta, una línea antes de construir la ``Peticion``. Ni el esquema ni
+    la instrucción cambian; lo que cambia es que el dato deja de tirarse.
+
+    ``None`` cuando la pregunta declara un instante suelto, cuando el
+    intervalo no tiene exactamente dos extremos, o cuando el extremo inicial
+    no es un ISO-8601 reconocible: en los tres casos la petición vuelve a
+    declarar un instante, que es el comportamiento anterior.
+    """
+    texto = _iso_declarado(declarado, extremo=0)
     momento = instante_utc(texto)
     if momento is None:
         return None

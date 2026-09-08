@@ -112,8 +112,8 @@ from __future__ import annotations
 import json
 import os
 import re
-from collections.abc import Callable, Iterator, Mapping
-from dataclasses import dataclass, field
+from collections.abc import Callable, Iterator, Mapping, Sequence
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Final
@@ -156,6 +156,7 @@ from sirius.adapters.persistence.sqlite_knowledge_search_repository import (
 from sirius.adapters.persistence.sqlite_memory_repository import build_sqlite_memory_repository
 from sirius.adapters.persistence.sqlite_project_repository import build_sqlite_project_repository
 from sirius.adapters.persistence.sqlite_unit_of_work import build_sqlite_unit_of_work
+from sirius.adapters.persistence.staged_engine_candidate import MEDIO_POR_VIGENCIA
 from sirius.adapters.persistence.staged_engine_port import (
     StagedEnginePort,
     build_staged_engine_port,
@@ -185,6 +186,9 @@ from sirius.domain.staged_engine_contracts import (
     Criticidad,
     CriticidadAplicada,
     EjesDeclarados,
+    Etapa,
+    ItemCanonico,
+    MaterializacionPorIdentidad,
     Peticion,
 )
 from sirius.ports.relevance_filter import RelevanceFilterPort
@@ -224,10 +228,19 @@ _MINIMO_ELEMENTOS_HALLADOS_M7: Final[int] = 57
 #: abajo), el arnés mide 21 y sí alcanza su suelo D1. `_MAXIMO_ELEMENTOS_DE_
 #: MAS_MOTOR` (50) sigue siendo la cota de no regresión de la métrica sin esa
 #: salvedad, que el arnés también reporta.
+#:
+#: ADR-168 (hueco H1 de ADR-148, incidencia #577) sube la cobertura de 63 a
+#: 67/81: `B04-CA-22` («¿qué decisiones eran válidas entre enero y marzo?»)
+#: pasa de recuperar una de sus seis a recuperar cinco, por la vía de
+#: recuperación por vigencia. La cota SUBE a lo nuevo medido —es más
+#: exigente, no menos— y las otras tres no se tocan porque no se movieron:
+#: `aciertos_exactos` sigue en 29 (el caso mejora pero no llega a exacto:
+#: `DEC-001` queda fuera por ámbito, `G4`, y no por vigencia),
+#: `elementos_de_mas` sigue en 50 y `omisiones_criticas` en 0.
 _MINIMO_ACIERTOS_EXACTOS_MOTOR: Final[int] = 29
 _MAXIMO_ELEMENTOS_DE_MAS_MOTOR: Final[int] = 50
 _MAXIMO_OMISIONES_CRITICAS_MOTOR: Final[int] = 0
-_MINIMO_ELEMENTOS_HALLADOS_MOTOR: Final[int] = 63
+_MINIMO_ELEMENTOS_HALLADOS_MOTOR: Final[int] = 67
 
 #: Medición actual publicada en el docstring de
 #: `test_el_banco_se_ejecuta_contra_el_paquete_completo_de_produccion_como_evidencia_adicional`
@@ -1111,6 +1124,35 @@ def test_el_fichero_de_forma_tiene_42_limites_null_y_5_declarados() -> None:
     assert len(casos) - len(con_limite) == 42
 
 
+def test_el_traductor_conserva_el_extremo_inicial_del_unico_caso_con_intervalo() -> None:
+    """ADR-168: el traductor del banco deja de tirar el extremo inicial.
+
+    `_instante` sigue dando el extremo FINAL como instante objetivo —lo que
+    `G8` compara, sin cambios—; lo nuevo es que el inicial viaja en
+    `VentanaTemporal.tiempo_objetivo_desde`. La prueba fija además la
+    población: de los 47 casos, exactamente uno declara un intervalo, así que
+    la vía por vigencia no puede activarse en ningún otro sin que esto se
+    ponga en rojo.
+    """
+    banco = _fixture()
+    ambito = Ambito(global_=True, proyectos=())
+    limite_sin_atar = int(banco["conteos"]["items_del_canon"])
+
+    con_intervalo = {}
+    for caso in banco["casos"]:
+        peticion = peticion_desde_caso(
+            caso, operation_id="test", ambito=ambito, limite_sin_atar=limite_sin_atar
+        )
+        if peticion.ventana.intervalo_de_vigencia is not None:
+            con_intervalo[caso["id"]] = peticion.ventana.intervalo_de_vigencia
+
+    assert con_intervalo == {"B04-CA-22": ("2026-01-10T00:00:00Z", "2026-03-20T00:00:00Z")}
+    caso_22 = next(c for c in banco["casos"] if c["id"] == "B04-CA-22")
+    assert caso_22["peticion_p2"]["tiempo_objetivo"] == (
+        "2026-01-10T00:00:00Z/2026-03-20T00:00:00Z"
+    )
+
+
 def test_peticion_desde_caso_propaga_objetivos_de_exacta() -> None:
     """CODEX-002: un caso de cardinalidad `EXACTA` con más de un elemento
     esperado debe transportar esa cuota a `Peticion.objetivos`, no
@@ -1794,6 +1836,225 @@ def test_b04_ca_32_entra_porque_su_registro_ya_no_es_posterior_al_corte(
     descartes_de_dec_012 = [p for p in recuperacion.traza.puertas if p[0] == identidad]
     assert descartes_de_dec_012 == []
     assert [resultado.item.id for resultado in recuperacion.resultados] == [identidad]
+
+
+#: Los seis que `B04-CA-22` («¿Qué decisiones eran válidas entre enero y
+#: marzo?») espera, y el único que su texto alcanza por palabras: `DEC-014`
+#: dice «enero», y es la única coincidencia léxica de los seis con la
+#: consulta. El hueco H1 de ADR-148 son los otros cinco.
+_ESPERADOS_DE_B04_CA_22: Final[tuple[str, ...]] = (
+    "DEC-001",
+    "DEC-005",
+    "DEC-009",
+    "DEC-011",
+    "DEC-014",
+    "DEC-015",
+)
+_UNICO_DE_B04_CA_22_QUE_ALCANZA_UNA_PALABRA: Final[str] = "DEC-014"
+
+#: `DEC-001` no lo recupera este encargo, y no por vigencia: su proyecto en
+#: el corpus es `LISTA-CERRADA-AB`, distinto del ámbito del caso
+#: (`PRJ-BETA`), y su eje de ámbito es `MULTI_PROYECTO_CERRADO` sin miembros
+#: resueltos (ver `_ejes_declarados`). `G4` lo descarta por las dos vías; el
+#: motivo exacto se afirma abajo para que no pueda confundirse con un fallo
+#: de la vía por vigencia.
+_EL_QUE_QUEDA_FUERA_POR_AMBITO: Final[str] = "DEC-001"
+
+#: Una consulta sin un solo término significativo: `terminos_significativos`
+#: la vacía entera, así que ninguna etapa léxica puede aportar nada con ella.
+_CONSULTA_QUE_NO_DA_PALABRAS: Final[str] = "¿que hay entre uno y otro?"
+
+
+class _PuertoQueAnotaLaVentana:
+    """El puerto real, envuelto para anotar si se le pide la ventana.
+
+    No cambia ninguna respuesta: delega todo. Solo permite afirmar CUÁNDO se
+    consulta la vía por vigencia, que es lo que distingue «la vía no cambió
+    este caso» de «la vía ni siquiera se activó en este caso».
+    """
+
+    def __init__(self, puerto: StagedEnginePort) -> None:
+        self._puerto = puerto
+        self.ventanas: list[tuple[str, str]] = []
+
+    def por_clave_exacta(self, claves: Sequence[str]) -> tuple[ItemCanonico, ...]:
+        return self._puerto.por_clave_exacta(claves)
+
+    def por_termino_lexico(self, terminos: Sequence[str]) -> tuple[ItemCanonico, ...]:
+        return self._puerto.por_termino_lexico(terminos)
+
+    def por_prefijo_de_sujeto(self, prefijos: Sequence[str]) -> tuple[ItemCanonico, ...]:
+        return self._puerto.por_prefijo_de_sujeto(prefijos)
+
+    def por_identificadores(self, identificadores: Sequence[str]) -> MaterializacionPorIdentidad:
+        return self._puerto.por_identificadores(identificadores)
+
+    def historial_y_fuentes(self, terminos: Sequence[str]) -> tuple[ItemCanonico, ...]:
+        return self._puerto.historial_y_fuentes(terminos)
+
+    def por_ventana_de_vigencia(self, desde: str, hasta: str) -> tuple[ItemCanonico, ...]:
+        self.ventanas.append((desde, hasta))
+        return self._puerto.por_ventana_de_vigencia(desde, hasta)
+
+
+def _peticion_del_caso(cargado: _CanonCargado, caso_id: str) -> tuple[Mapping[str, Any], Peticion]:
+    """El caso del banco y su `Peticion`, con el ámbito ya resuelto contra
+    los proyectos reales — la configuración `--peticion` del diagnóstico."""
+    banco = _fixture()
+    caso = next(c for c in banco["casos"] if c["id"] == caso_id)
+    peticion = peticion_desde_caso(
+        caso,
+        operation_id=f"banco:{caso_id}",
+        ambito=Ambito(global_=False, proyectos=(str(cargado.project_ids[caso["ambito"]]),)),
+        limite_sin_atar=int(banco["conteos"]["items_del_canon"]),
+    )
+    return caso, peticion
+
+
+def test_b04_ca_22_recupera_por_vigencia_lo_que_ninguna_palabra_alcanza(
+    tmp_path: Path,
+) -> None:
+    """Hueco H1 de ADR-148 (ADR-168): `B04-CA-22` pasa de recuperar uno de
+    sus seis a recuperar cinco, y **por vigencia**, no por otro accidente.
+
+    La prueba no se conforma con el recuento. Mira la señal con la que entró
+    cada uno: los cuatro que faltaban llegan con `MEDIO_POR_VIGENCIA` y
+    `DEC-014` sigue llegando por la vía léxica de `E1`, la de siempre. Y
+    afirma el motivo por el que `DEC-001` NO entra —`G4`, ámbito—, para que
+    la diferencia entre 5 y 6 no pueda confundirse nunca con un fallo de la
+    vía que esta ficha añade.
+
+    Se mide con el puerto de PRODUCCIÓN (`build_staged_engine_port`, todo
+    ítem con `SIN_EJES`) y la petición del caso: la configuración
+    `--peticion` de `scripts/diagnosticar_busqueda_del_banco.py`.
+    """
+    database_path = tmp_path / "sirius.db"
+    cargado = _cargar_el_canon(database_path)
+    caso, peticion = _peticion_del_caso(cargado, "B04-CA-22")
+    assert tuple(caso["resultado_esperado"]) == _ESPERADOS_DE_B04_CA_22
+    assert peticion.ventana.intervalo_de_vigencia == (
+        "2026-01-10T00:00:00Z",
+        "2026-03-20T00:00:00Z",
+    )
+
+    identidad_de = {
+        corpus: _identidad_del_motor(*real) for real, corpus in cargado.real_a_canonico.items()
+    }
+    recuperacion = recuperar(
+        peticion, build_staged_engine_port(database_path), staged_engine_candidate.candidato()
+    )
+    senal_por_identidad = {r.item.id: r.explicacion.coincidencia for r in recuperacion.resultados}
+    entregados = set(senal_por_identidad)
+
+    recuperados = [c for c in _ESPERADOS_DE_B04_CA_22 if identidad_de[c] in entregados]
+    sin_el_de_ambito = [c for c in _ESPERADOS_DE_B04_CA_22 if c != _EL_QUE_QUEDA_FUERA_POR_AMBITO]
+    assert recuperados == sin_el_de_ambito
+
+    por_vigencia = [
+        corpus
+        for corpus in recuperados
+        if MEDIO_POR_VIGENCIA in senal_por_identidad[identidad_de[corpus]]
+    ]
+    assert por_vigencia == ["DEC-005", "DEC-009", "DEC-011", "DEC-015"]
+
+    # `DEC-001`: descartado por ámbito, con su motivo literal en la traza.
+    descartes = {
+        (item, puerta, motivo)
+        for item, puerta, motivo in recuperacion.traza.puertas
+        if item == identidad_de[_EL_QUE_QUEDA_FUERA_POR_AMBITO]
+    }
+    assert descartes == {
+        (identidad_de["DEC-001"], "G4", "fuera del ambito autorizado"),
+    }
+
+
+def test_dec_014_sigue_entrando_y_la_ventana_lo_alcanza_aunque_cambie_la_redaccion(
+    tmp_path: Path,
+) -> None:
+    """La vía nueva **añade**: no puede sustituir al camino léxico ni perder
+    lo que ese camino ya traía.
+
+    `DEC-014` entra hoy por accidente léxico —su texto dice «enero», la única
+    palabra que los seis comparten con la consulta—. Esta prueba fija las dos
+    mitades: (1) sigue entrando con la consulta real, y por `E1`; y (2) con la
+    MISMA ventana y una consulta que no deja un solo término significativo,
+    sigue entrando por vigencia. La segunda mitad es la que hace que su
+    presencia deje de depender de cómo esté redactado el ítem.
+    """
+    database_path = tmp_path / "sirius.db"
+    cargado = _cargar_el_canon(database_path)
+    _caso, peticion = _peticion_del_caso(cargado, "B04-CA-22")
+    (real_dec_014,) = [
+        real
+        for real, corpus in cargado.real_a_canonico.items()
+        if corpus == _UNICO_DE_B04_CA_22_QUE_ALCANZA_UNA_PALABRA
+    ]
+    identidad = _identidad_del_motor(*real_dec_014)
+
+    con_la_consulta_real = recuperar(
+        peticion, build_staged_engine_port(database_path), staged_engine_candidate.candidato()
+    )
+    por_identidad = {r.item.id: r for r in con_la_consulta_real.resultados}
+    assert identidad in por_identidad
+    assert por_identidad[identidad].etapa_de_origen is Etapa.E1
+
+    sin_palabras = recuperar(
+        replace(peticion, consulta=_CONSULTA_QUE_NO_DA_PALABRAS),
+        build_staged_engine_port(database_path),
+        staged_engine_candidate.candidato(),
+    )
+    por_identidad_sin_palabras = {r.item.id: r for r in sin_palabras.resultados}
+    assert identidad in por_identidad_sin_palabras
+    assert MEDIO_POR_VIGENCIA in por_identidad_sin_palabras[identidad].explicacion.coincidencia
+
+
+def test_una_pregunta_con_tema_no_activa_la_via_por_vigencia(tmp_path: Path) -> None:
+    """La vía no secuestra la búsqueda normal.
+
+    `B04-CA-32` («¿Qué sabía Sirius sobre el aforo el 1 de marzo?») declara un
+    INSTANTE, como 46 de los 47 casos del banco. Su petición no trae
+    intervalo, el puerto no recibe ninguna consulta por ventana, y el
+    resultado es exactamente el que ADR-166 fijó para él. La afirmación
+    fuerte es la del medio: no que el resultado coincida por casualidad, sino
+    que la vía ni siquiera llegó a preguntarse.
+    """
+    database_path = tmp_path / "sirius.db"
+    cargado = _cargar_el_canon(database_path)
+    caso, peticion = _peticion_del_caso(cargado, "B04-CA-32")
+    assert peticion.ventana.intervalo_de_vigencia is None
+
+    puerto = _PuertoQueAnotaLaVentana(build_staged_engine_port(database_path))
+    recuperacion = recuperar(peticion, puerto, staged_engine_candidate.candidato())
+
+    assert puerto.ventanas == []
+    esperados = [
+        _identidad_del_motor(
+            *next(real for real, corpus in cargado.real_a_canonico.items() if corpus == corpus_id)
+        )
+        for corpus_id in caso["resultado_esperado"]
+    ]
+    assert [r.item.id for r in recuperacion.resultados] == esperados
+
+
+def test_ninguna_critica_se_pierde_con_la_via_por_vigencia(
+    ejecucion_del_banco_motor_portado: _EjecucionDelBanco,
+) -> None:
+    """Las 0 omisiones críticas, FIJADAS y no solo medidas (incidencia #577).
+
+    La cota `_MAXIMO_OMISIONES_CRITICAS_MOTOR` ya las acota; esta prueba las
+    afirma como igualdad exacta sobre el mismo arnés —el que ejecuta los 47
+    casos con la petición de cada uno, y por tanto el único de los tres que
+    activa la vía por vigencia— y comprueba, al lado, que la vía estuvo de
+    verdad activa: `B04-CA-22` recupera cinco de sus seis. Sin esa segunda
+    aserción, la primera seguiría en verde con la vía apagada.
+    """
+    metricas = ejecucion_del_banco_motor_portado.metricas
+    assert metricas.omisiones_criticas == 0
+
+    entraron = ejecucion_del_banco_motor_portado.obtenido_por_caso["B04-CA-22"]
+    assert sorted(entraron & set(_ESPERADOS_DE_B04_CA_22)) == [
+        c for c in _ESPERADOS_DE_B04_CA_22 if c != _EL_QUE_QUEDA_FUERA_POR_AMBITO
+    ]
 
 
 def test_el_arnes_del_motor_portado_no_lee_razon_segura(

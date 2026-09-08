@@ -309,6 +309,9 @@ class _PuertoDePrueba:
     def historial_y_fuentes(self, terminos: Sequence[str]) -> tuple[ItemCanonico, ...]:
         return ()
 
+    def por_ventana_de_vigencia(self, desde: str, hasta: str) -> tuple[ItemCanonico, ...]:
+        return ()
+
 
 def test_recuperar_returns_admitted_items_ordered_and_stops_by_exhaustion() -> None:
     item = _item("MEMORIA:1")

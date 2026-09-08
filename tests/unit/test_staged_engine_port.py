@@ -20,6 +20,8 @@ from sirius.adapters.persistence.staged_engine_port import (
     StagedEnginePort,
     build_staged_engine_port,
 )
+from sirius.application.approve_decision import ApproveDecisionUseCase
+from sirius.application.propose_decision import ProposeDecisionUseCase
 from sirius.application.save_manual_memory import SaveManualMemoryUseCase
 from sirius.domain.staged_engine_contracts import SIN_EJES, Clase, EjesDeclarados
 
@@ -157,3 +159,100 @@ def test_ejes_por_identidad_overrides_sin_ejes_for_a_declared_item(tmp_path: Pat
         puerto.close()
 
     assert encontrado.ejes == ejes_declarados
+
+
+# -- Ventana de vigencia (ADR-168, hueco H1 de ADR-148) ----------------------
+
+
+def _proyecto_de_prueba(database_path: Path) -> int:
+    """El id del proyecto que `ensure_bootstrap_project` deja creado."""
+    repositorio = build_sqlite_project_repository(database_path)
+    proyecto = repositorio.get_active_project()
+    assert proyecto is not None
+    return proyecto.id
+
+
+def _decision_aprobada(database_path: Path, asunto: str, texto: str) -> int:
+    unidad = build_sqlite_unit_of_work(database_path)
+    decision = ProposeDecisionUseCase(unidad).propose(
+        asunto, _proyecto_de_prueba(database_path), texto
+    )
+    ApproveDecisionUseCase(unidad).approve(decision.id, confirmed=True)
+    return decision.id
+
+
+def test_por_ventana_de_vigencia_devuelve_la_decision_aprobada_de_la_ventana(
+    tmp_path: Path,
+) -> None:
+    """El camino de entrada que ADR-168 abre: sin una sola palabra de la
+    consulta, la ventana sola trae la decisión aprobada."""
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    decision_id = _decision_aprobada(
+        database_path, "descuento-invierno", "Se aplica el descuento de invierno."
+    )
+
+    puerto = build_staged_engine_port(database_path)
+    try:
+        encontrados = puerto.por_ventana_de_vigencia("2020-01-01T00:00:00Z", "2099-01-01T00:00:00Z")
+    finally:
+        puerto.close()
+
+    assert [item.id for item in encontrados] == [f"{Clase.DECISION.value}:{decision_id}"]
+
+
+def test_por_ventana_de_vigencia_no_devuelve_lo_registrado_despues_del_fin(
+    tmp_path: Path,
+) -> None:
+    """El final de la ventana es un predicado, no un adorno: lo registrado
+    después no entra."""
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    _decision_aprobada(database_path, "descuento-invierno", "Se aplica el descuento.")
+
+    puerto = build_staged_engine_port(database_path)
+    try:
+        assert puerto.por_ventana_de_vigencia("2020-01-01T00:00:00Z", "2020-12-31T00:00:00Z") == ()
+    finally:
+        puerto.close()
+
+
+def test_por_ventana_de_vigencia_no_devuelve_una_propuesta_sin_aprobar(tmp_path: Path) -> None:
+    """Una decisión `PROPOSED` no ha empezado ninguna vigencia: aprobarla es
+    lo que la empieza (`sirius.domain.decision.DecisionStatus`)."""
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    ProposeDecisionUseCase(build_sqlite_unit_of_work(database_path)).propose(
+        "propuesta-sin-aprobar", _proyecto_de_prueba(database_path), "Aún no se ha decidido."
+    )
+
+    puerto = build_staged_engine_port(database_path)
+    try:
+        assert puerto.por_ventana_de_vigencia("2020-01-01T00:00:00Z", "2099-01-01T00:00:00Z") == ()
+    finally:
+        puerto.close()
+
+
+def test_por_ventana_de_vigencia_no_enumera_memorias(tmp_path: Path) -> None:
+    """La restricción de clase de ADR-168, fijada aquí porque es la que
+    impide que la ventana degenere en un barrido.
+
+    `MemoryStatus` no es un ciclo de vigencia y su propio modelo lo dice:
+    «Superseded revisions are a history concern, not a status of the memory
+    itself». Enumerar memorias por ventana obligaría a afirmar «esta memoria
+    estaba vigente en enero» sobre un dato que el sustrato no guarda. La
+    memoria sigue entrando por las vías léxicas, que no afirman nada sobre su
+    vigencia: `test_por_termino_lexico_finds_a_saved_memory`, arriba.
+    """
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    SaveManualMemoryUseCase(build_sqlite_unit_of_work(database_path)).save(
+        "terminounicoparalaventana en la memoria"
+    )
+
+    puerto = build_staged_engine_port(database_path)
+    try:
+        assert puerto.por_ventana_de_vigencia("2020-01-01T00:00:00Z", "2099-01-01T00:00:00Z") == ()
+        assert len(puerto.por_termino_lexico(["terminounicoparalaventana"])) == 1
+    finally:
+        puerto.close()

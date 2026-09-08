@@ -183,6 +183,54 @@ def test_un_intervalo_se_resuelve_por_su_extremo_final() -> None:
     assert intencion.tiempo_objetivo == "2026-03-20T00:00:00Z"
 
 
+def test_el_extremo_inicial_del_intervalo_deja_de_tirarse() -> None:
+    """ADR-168 (hueco H1 de ADR-148): el modelo ya contestaba el intervalo
+    entero y el lector se quedaba solo con el final.
+
+    Ni el esquema cerrado ni la instrucción cambian —se sigue pidiendo «el
+    extremo final del intervalo»—: lo que cambia es que el extremo inicial
+    llega a ``IntencionDeConsulta`` en vez de descartarse, porque es lo que
+    la vía de recuperación por vigencia necesita para enumerar.
+    """
+
+    def _handle(request: httpx.Request) -> httpx.Response:
+        return _answer(tiempo_objetivo="2026-01-10T00:00:00Z/2026-03-20T00:00:00Z")
+
+    intencion = _adapter(httpx.MockTransport(_handle)).classify_intent("entre enero y marzo")
+
+    assert intencion is not None
+    assert intencion.tiempo_objetivo == "2026-03-20T00:00:00Z"
+    assert intencion.tiempo_objetivo_desde == "2026-01-10T00:00:00Z"
+
+
+def test_un_instante_suelto_no_declara_extremo_inicial() -> None:
+    """Sin barra no hay intervalo, y sin intervalo no hay extremo inicial:
+    46 de los 47 casos del banco declaran un instante."""
+
+    def _handle(request: httpx.Request) -> httpx.Response:
+        return _answer(tiempo_objetivo="2026-03-20T00:00:00Z")
+
+    intencion = _adapter(httpx.MockTransport(_handle)).classify_intent("pregunta")
+
+    assert intencion is not None
+    assert intencion.tiempo_objetivo == "2026-03-20T00:00:00Z"
+    assert intencion.tiempo_objetivo_desde is None
+
+
+def test_un_intervalo_de_mas_de_dos_extremos_no_declara_ninguno() -> None:
+    """Tres extremos no son un intervalo: ni el inicial ni el final se toman,
+    porque elegir dos de tres sería adivinar cuáles."""
+
+    def _handle(request: httpx.Request) -> httpx.Response:
+        return _answer(tiempo_objetivo="2026-01-10T00:00:00Z/2026-02-01T00:00:00Z/2026-03-20Z")
+
+    intencion = _adapter(httpx.MockTransport(_handle)).classify_intent("pregunta")
+
+    assert intencion is not None
+    assert intencion.tiempo_objetivo is None
+    assert intencion.tiempo_objetivo_desde is None
+
+
 def test_un_modo_fuera_de_m1_m5_devuelve_none() -> None:
     def _handle(request: httpx.Request) -> httpx.Response:
         return _answer(modo="M9")

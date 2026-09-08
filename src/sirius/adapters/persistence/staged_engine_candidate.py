@@ -9,6 +9,14 @@ escalonada solo léxica y estructurada en las cuatro etapas de expansión
 ni las puertas, ni el orden de etapas — los recibe de
 ``sirius.domain.staged_engine``. Lo único que decide es qué propone cuando
 el motor le pregunta por una etapa.
+
+Desde ADR-168 (hueco H1 de ADR-148) tiene una señal que no es léxica:
+``E3`` propone además lo vigente en la ventana cuando la petición declara un
+intervalo de vigencia. No es una excepción al párrafo anterior sino su
+límite medido: una pregunta cuyo único criterio es un intervalo —«¿qué
+decisiones eran válidas entre enero y marzo?»— no da ninguna palabra de la
+que partir, y sin esa señal no tiene camino de entrada por ninguna de las
+cuatro etapas.
 """
 
 from __future__ import annotations
@@ -47,6 +55,15 @@ MEDIOS_POR_ETAPA: Final[dict[Etapa, str]] = {
     Etapa.E4: "historial y fuentes como evidencia atribuida, cotejada con lo vigente",
 }
 
+#: Medio de la TERCERA señal de ``E3`` (ADR-168), la única de este candidato
+#: que no parte de una palabra: la ventana de vigencia que la propia petición
+#: declara. No está en ``MEDIOS_POR_ETAPA`` a propósito — ese mapa dice con
+#: qué medio se satisface cada etapa, y esta señal convive con los otros dos
+#: medios de ``E3`` en vez de sustituirlos.
+MEDIO_POR_VIGENCIA: Final = (
+    "ventana de vigencia declarada por la peticion, consultada de forma dirigida"
+)
+
 
 class CandidatoLexicoEstructurado:
     """Las señales léxico-estructuradas, etapa por etapa."""
@@ -76,17 +93,24 @@ class CandidatoLexicoEstructurado:
     # -- Señales por etapa -----------------------------------------------
 
     def candidatas(self, contexto: ContextoDeEtapa) -> Sequence[Candidata]:
-        """Candidatas de la etapa que el motor pide. Nunca de otra."""
+        """Candidatas de la etapa que el motor pide. Nunca de otra.
+
+        ``E3`` se pregunta aunque la consulta no deje ningún término
+        significativo (ADR-168): su señal por vigencia no sale del texto sino
+        de la ventana que la petición declara, y salir antes por «no hay
+        palabras» era exactamente lo que dejaba sin camino de entrada a una
+        pregunta cuyo único criterio es la vigencia.
+        """
         consulta = contexto.peticion.consulta
         terminos = lexical.terminos_significativos(consulta)
+        if contexto.etapa is Etapa.E3:
+            return self._e3(contexto, terminos)
         if not terminos:
             return ()
         if contexto.etapa is Etapa.E1:
             return self._e1(contexto, terminos)
         if contexto.etapa is Etapa.E2:
             return self._e2(contexto, terminos)
-        if contexto.etapa is Etapa.E3:
-            return self._e3(contexto, terminos)
         if contexto.etapa is Etapa.E4:
             return self._e4(contexto, terminos)
         return ()
@@ -157,36 +181,74 @@ class CandidatoLexicoEstructurado:
     def _e3(self, contexto: ContextoDeEtapa, terminos: Sequence[str]) -> list[Candidata]:
         """``E3`` semántica y relacional, por medios léxico-estructurados.
 
-        Expande desde lo ya recuperado —a diferencia de ``E2``, que expande
-        la consulta— con dos señales dirigidas: términos puente
-        (vocabulario discriminante de las semillas ausente de la consulta)
-        y familias de sujeto (prefijos estructurales de las claves de las
-        semillas). Ninguna enumera un espacio: el ámbito no genera
-        candidatas, filtra en ``G4``.
+        Tres señales dirigidas. Dos expanden desde lo ya recuperado —a
+        diferencia de ``E2``, que expande la consulta—: términos puente
+        (vocabulario discriminante de las semillas ausente de la consulta) y
+        familias de sujeto (prefijos estructurales de las claves de las
+        semillas). La tercera (ADR-168) expande desde lo que la **petición**
+        declara: la ventana de vigencia, cuando la pregunta declara un
+        intervalo en vez de un instante. Ninguna enumera un espacio: el
+        ámbito no genera candidatas, filtra en ``G4``.
+
+        La señal por vigencia va delante de las otras dos dentro de la etapa
+        porque no depende de qué se haya recuperado antes; el motor las trata
+        igual (misma etapa, misma autoridad de orden) y deduplica por
+        identidad, así que esta posición solo decide cuál de las dos razones
+        se registra cuando un mismo ítem cae por las dos señales.
         """
+        por_vigencia = self._por_vigencia(contexto)
+        vistos = {c.item.id for c in por_vigencia}
         if not contexto.semillas:
-            return []
+            return por_vigencia
 
         puente = self._terminos_puente(contexto, terminos)
         familias = self._familias_de_sujeto(contexto)
         if not puente and not familias:
-            return []
+            return por_vigencia
 
         por_puente = contexto.puerto.por_termino_lexico(puente) if puente else ()
         por_familia = contexto.puerto.por_prefijo_de_sujeto(familias) if familias else ()
 
-        vistos: set[str] = set()
         seleccion: list[ItemCanonico] = []
         for item in [*por_puente, *por_familia]:
             if item.id in vistos or item.id in contexto.ya_recuperados:
                 continue
             vistos.add(item.id)
             seleccion.append(item)
+        return [
+            *por_vigencia,
+            *self._construir(
+                seleccion,
+                contexto,
+                senal=MEDIOS_POR_ETAPA[Etapa.E3],
+                razon="dependencia con lo ya recuperado por termino puente o familia de sujeto",
+            ),
+        ]
+
+    def _por_vigencia(self, contexto: ContextoDeEtapa) -> list[Candidata]:
+        """Lo vigente en la ventana, cuando la petición declara un intervalo.
+
+        Es el camino de entrada que faltaba (hueco H1 de ADR-148): una
+        pregunta cuyo único criterio es un intervalo de vigencia no aporta
+        ninguna palabra de la que partir, y las otras señales de este
+        candidato son todas léxicas. Sin intervalo declarado —46 de los 47
+        casos del banco y toda pregunta ordinaria de producción— esta señal
+        no aporta nada y ``E3`` se comporta exactamente como antes.
+
+        No sustituye a ninguna señal léxica: **añade**. Lo que la búsqueda
+        léxica ya encontraba lo sigue encontrando, y antes, porque lo aportan
+        ``E1``/``E2``, cuya autoridad de orden es mayor que la de ``E3``
+        (``staged_engine._clave_de_orden``).
+        """
+        intervalo = contexto.peticion.ventana.intervalo_de_vigencia
+        if intervalo is None:
+            return []
+        desde, hasta = intervalo
         return self._construir(
-            seleccion,
+            contexto.puerto.por_ventana_de_vigencia(desde, hasta),
             contexto,
-            senal=MEDIOS_POR_ETAPA[Etapa.E3],
-            razon="dependencia con lo ya recuperado por termino puente o familia de sujeto",
+            senal=MEDIO_POR_VIGENCIA,
+            razon=f"vigente en la ventana declarada por la peticion ({desde} a {hasta})",
         )
 
     def _terminos_puente(self, contexto: ContextoDeEtapa, terminos: Sequence[str]) -> list[str]:
@@ -233,6 +295,7 @@ def candidato() -> CandidatoLexicoEstructurado:
 __all__ = [
     "IDENTIFICADOR",
     "MEDIOS_POR_ETAPA",
+    "MEDIO_POR_VIGENCIA",
     "SENAL_TARDIA",
     "CandidatoLexicoEstructurado",
     "candidato",
