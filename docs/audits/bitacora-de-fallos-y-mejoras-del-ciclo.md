@@ -3425,6 +3425,43 @@ que es la única autoridad que hay aquí.
 Lo anoto en vez de reescribir en silencio, porque una bitácora que se edita sin
 decirlo deja de servir para lo que sirve. Y encaja con lo demás del día: **una
 hora estimada es una cifra sin comprobar**, igual que las otras.
+
+---
+
+### 71. Predicción publicada ANTES del resultado: la ronda 2 va a señalar la ficha, no el código (08-09-2026, 18:58 UTC)
+
+El corrector empujó `a8fe837` y **arregló bien** CLAUDE-R1-001: reescribe el
+extremo de la ventana a la forma de `created_at` antes de consultar, respeta la
+prohibición de tocar `_tiempo_objetivo`, añade la prueba de frontera con el
+registro fijado a mano —para que no dependa del reloj del runner— y su
+simétrica, dos mutaciones más (once, no nueve), y una guarda para un extremo
+ilegible. Lo mejor: **argumenta** por qué las cifras del banco no se mueven en
+vez de afirmarlo —el cargador escribe cada `created_at` a la medianoche del día
+declarado (ADR-166), y la medianoche del corte sigue entrando por igualdad, que
+es el único caso del banco que la frontera toca—.
+
+**Pero la ficha de ADR-168 sigue anclada a `ffd8d05`**, con la terna y el
+código de salida de un árbol anterior a esta corrección, y su línea de
+validación sigue diciendo «`git diff --check` no imprime nada y sale con código
+`0`» **sin rango de revisiones**, que es exactamente lo que CODEX-001 señaló.
+Comprobado leyendo el fichero en `a8fe837`, no deducido.
+
+**Predicción, escrita ahora y sin haber visto la ronda 2**: la revisión va a
+señalar las dos cosas —el re-anclaje y el `git diff --check` sin rango—, y **no
+va a señalar nada del código**, que está bien. Si me equivoco, se anota igual.
+
+**Y NO intervengo**, aunque podría escribirlo en la incidencia y ahorrar una
+ronda de cuarenta minutos. Inyectar yo un hallazgo de revisión corrompe lo
+único que hace fiable a este ciclo: que quien implementa, quien revisa y quien
+fusiona no son la misma voz. Ahorrar una ronda a cambio de eso es un mal
+cambio, y la tentación de hacerlo es justo la razón de escribirlo aquí.
+
+**Lo que sí propongo, porque es mecánico y no sustituye a nadie** (deuda 26):
+el ancla de la ficha es un hash en un texto y el head de la PR es un hash; una
+comprobación previa a pasar a revisión puede compararlos y devolver el trabajo
+al corrector **sin gastar una ronda de revisión**. Este defecto lleva seis
+rondas en dos encargos y va camino de la séptima; no es un descuido de nadie en
+particular, es un paso que ningún guardián comprueba.
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
@@ -3916,3 +3953,14 @@ hora estimada es una cifra sin comprobar**, igual que las otras.
     ADR-166. Corregido en `encargo_p3.md`; pendiente decidir si se corrige
     también la plantilla de encargos y si merece una pasada por los ADR que la
     transcribieron con la forma inútil.
+
+26. **Nada comprueba que el ancla de la ficha coincida con el head de la PR, y
+    ese desajuste lleva SEIS rondas en dos encargos** (va camino de la
+    séptima: `a8fe837` corrige el código y deja la ficha anclada a `ffd8d05`).
+    Es el defecto más repetido del ciclo y el más mecánico de todos: el ancla
+    es un hash escrito en el ADR y el head es un hash; compararlos es una
+    línea. Propuesta: una comprobación previa al paso a revisión que, si no
+    coinciden, devuelva el trabajo al corrector **sin gastar una ronda de
+    revisión** —hoy cada desajuste cuesta una ronda entera de dos revisores—.
+    Decide el propietario si entra como guardián del motor o como paso de la
+    plantilla de encargos.
