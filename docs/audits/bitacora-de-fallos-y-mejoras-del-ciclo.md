@@ -2474,7 +2474,7 @@ ADR o su incidencia cuando se adopte.
 
 ---
 
-### 56. H2 entrega la predicción dígito a dígito, y dejo medidos H3 y la premisa de H1 (08-09-2026, 14:10-15:20 UTC)
+### 56. H2 entrega la predicción dígito a dígito, y dejo comprobadas las premisas de H3, H1 y P3 (08-09-2026, 14:10-15:30 UTC)
 
 - **PR #575 (ADR-166) cumple la predicción exacta que publiqué antes de que
   implementara**: `--peticion` pasa de `16/47; 162; 73/81; 0` a **`17/47; 162;
@@ -2540,6 +2540,25 @@ ADR o su incidencia cuando se adopte.
   mejora el criterio de aceptación que ya había corregido: no basta con que
   `DEC-014` siga entrando; **si pasa a entrar por vigencia, deja de depender de
   cómo esté redactada**, y eso hay que decirlo.
+- **Y la premisa de P3, que resultó ser más cara de lo que yo la había
+  escrito.** El borrador decía «la cardinalidad ya viaja en la `Peticion` y el
+  motor la honra; lo que falta es que el filtro la use». El contrato real es
+  `filter_candidates(query_text, candidates)`
+  (`src/sirius/ports/relevance_filter.py:33-35`): **el filtro no recibe la
+  `Peticion`, ni la cardinalidad, ni el límite**. Así que no es «que use un
+  dato que ya tiene»: hay que **hacer que el dato le llegue**, y eso toca el
+  contrato del puerto y sus dos llamadas en `application/context.py`. Con la
+  frase original, el implementador habría descubierto eso a mitad de camino y
+  con el alcance ya fijado.
+
+  Además el puerto declara dos invariantes que el encargo no mencionaba y que
+  un recorte por cardinalidad puede romper sin darse cuenta: **el filtro nunca
+  reordena** —el orden es de `domain.relevance`— y **falla abierto**, o sea que
+  ante cualquier fallo devuelve los candidatos intactos. Las dos están ya
+  escritas como límite.
+- **Cuatro borradores, cuatro premisas corregidas** (H1 dos veces, P3 dos). El
+  patrón es siempre el mismo: la frase de contexto se escribe de memoria
+  porque «eso ya lo sé», y es justo la que el implementador hereda como cierta.
 
 ---
 
