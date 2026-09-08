@@ -2936,3 +2936,32 @@ ADR o su incidencia cuando se adopte.
     ese número engaña igual que uno corto. Corolario práctico: **cuando la
     rama existe, no se simula: se hace el merge y se mide.** Cuesta dos
     minutos y una copia de trabajo, y no admite este error.
+
+22. **El arnés del banco queda fechado A MEDIAS tras ADR-166, y la mitad que
+    falta es la que usan las palancas.** H2 fecha `memories` y `decisions`
+    —las dos únicas sentencias del cargador— y deja sin fechar:
+
+    - `memory_revisions.created_at` y `decision_revisions.created_at`, y
+    - `updated_at` en todas las tablas.
+
+    **Para la puerta G8 eso es correcto y completo**: compara el `created_at`
+    del ítem, que es justo la fila que H2 fecha, y por eso los números de
+    ADR-166 salen exactos y su alcance no debía ser mayor. **El problema es
+    para quien derive de lo otro.** La palanca 2 deriva la ventana de vigencia
+    de la **revisión vigente** y del `updated_at` de la decisión: con H2 dentro
+    sigue midiendo `18/47; 57; 40/81; 9 críticas`, o sea el artefacto del arnés
+    y no la palanca. Medido el 08-09 con el merge real, no simulado.
+
+    Consecuencia inmediata: **reanudar #572 antes de esto gasta una ronda para
+    volver al mismo sitio.**
+
+    Es de la familia de la deuda 21 —el arnés decide y no tiene guardianes—
+    pero se registra aparte porque es concreta, acotada y tiene arreglo
+    conocido: **un H2b que feche las revisiones y `updated_at` con el mismo
+    criterio que ADR-166 razonó para `created_at`**, con la salvedad de que el
+    suelo de hoy no puede moverse (sobre `main` no cambia ninguna cifra, porque
+    el puerto de producción entrega `SIN_EJES` y no deriva ventana: comprobado).
+
+    **No se lanza todavía a propósito**: solo hace falta si la palanca 2 sigue
+    viva, y esa decisión está abierta. Si la palanca 2 se retira, esta deuda
+    baja de prioridad hasta que otra palanca derive de esas columnas.
