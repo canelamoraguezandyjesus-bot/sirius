@@ -185,10 +185,9 @@ cifras del banco. La predicción escrita ANTES de ejecutarlo está arriba y en
 el propio guion. Si sale por debajo, se registra el número tal cual y se para;
 la palanca 1 no se da por cerrada hasta que el propietario la corra.
 
-**Cadena completa como UNA SOLA invocación** (ADR-145, ADR-153), anclada al
-árbol de `882b796` —este mismo cambio; lo único posterior es esta ficha, que
-no es código— con `pwsh -File scripts/check.ps1` y su código de salida
-capturado (ADR-154):
+**Cadena completa como UNA SOLA invocación** (ADR-145, ADR-153) con
+`pwsh -File scripts/check.ps1` y su código de salida capturado (ADR-154).
+Anclada al árbol de `882b796`, el commit del código:
 
 ```
 614 files already formatted
@@ -198,7 +197,20 @@ Success: no issues found in 580 source files
 check=0
 ```
 
-`git diff --check` sale limpio sobre el mismo árbol.
+**Repetida sobre `d247af9`**, el árbol que ya trae esta ficha —en vez de dar
+por hecho que un cambio documental no mueve nada, que es justo lo que ADR-154
+prohíbe suponer—:
+
+```
+614 files already formatted
+All checks passed!
+Success: no issues found in 580 source files
+5154 passed, 17 skipped, 2 xfailed in 436.89s (0:07:16)
+check=0
+```
+
+`git diff --check` sale limpio (`0`) sobre los dos árboles. Lo único posterior
+a `d247af9` es este párrafo.
 
 **Guardianes deterministas añadidos** (los que corren en CI, sin Ollama):
 `tests/unit/test_interpret_query_request.py` (14: respaldo, los cuatro ejes,
