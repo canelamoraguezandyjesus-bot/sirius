@@ -167,10 +167,43 @@ exigencia de ver fallar los guardianes nuevos contra `main`, ni (d).
 
 ## Comprobación que la sostiene
 
-- Guardianes vistos fallar contra el emisor y el lector de `main`, y en verde
-  con el cambio: transcritos en el cuerpo de la PR.
-- Cadena completa como una sola invocación, anclada a su árbol (ADR-154):
-  transcrita en el cuerpo de la PR.
+**Guardianes del lector, vistos fallar contra `main`** (`uv run pytest
+tests/automation/test_reanudar_una_parada.py -k "..."`, sobre el árbol anterior
+al cambio):
+
+- `test_dos_recibos_del_mismo_head_con_runs_distintos_son_dos_ordenes` →
+  `AssertionError: ... assert [1, 2] == [2]` / `At index 0 diff: 1 != 2`. El
+  lector de `main` no distingue dos recibos del mismo head, así que la segunda
+  orden no corta nada.
+- `test_el_marcador_que_lleva_el_run_del_evento_tambien_reinicia_la_medida` →
+  falla igualmente contra `main`: el marcador con run no casa y el listón no se
+  mueve.
+- `test_el_recibo_historico_sin_run_se_sigue_leyendo_igual` → **pasa ya contra
+  `main`**, y tiene que seguir pasando: es el candado del pasado.
+
+Con el cambio, `tests/automation/test_reanudar_una_parada.py` da **15 passed**
+(los tres nuevos y los doce existentes, ninguno tocado).
+
+**Guardianes del emisor**: `tests/automation/test_reanudar_ejecutando_el_guion.py`
+cae en exactamente DOS —`test_la_parada_por_convergencia_sigue_reanudando_al_corrector`
+y `test_manda_la_ultima_parada_tambien_entre_bloqueos`—, los dos de la clase
+«forma emitida» que la enmienda del criterio (c) anunció, y ninguno más
+(`2 failed, 20 passed`). Actualizados a exigir `<head>:` en vez del literal
+cerrado, el fichero da **22 passed**. La línea 653, que siembra un historial con
+el head DESNUDO, no se tocó y sigue verde.
+
+**Cadena completa como una sola invocación**, anclada al árbol de `9a97150`
+(ADR-154; sin `pwsh` en este contenedor: los cuatro comandos de
+`scripts/check.ps1` en un único `bash -ec`, con el código de salida capturado):
+
+```
+606 files already formatted
+All checks passed!
+Success: no issues found in 574 source files
+5110 passed, 16 skipped, 2 xfailed in 481.51s (0:08:01)
+check=0
+```
+
 - Lo que NO se ha medido: el caso en vivo. Se salda cuando una incidencia
   reciba DOS reanudaciones sobre el mismo head y el historial muestre dos
   recibos distintos.
