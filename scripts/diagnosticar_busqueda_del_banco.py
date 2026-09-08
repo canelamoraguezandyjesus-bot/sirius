@@ -41,6 +41,16 @@ corpus declara, no la del día de la medición): sin banderas y ``--ejes``
 ``--ejes --peticion`` a 21/47, 144, 74/81; críticas perdidas siguen en 0 en
 las cuatro. El único caso que cambia de resultado es ``B04-CA-32``, el del
 corte de registro.
+
+Vuelto a medir el 08-09-2026 con el hueco H1 cerrado (ADR-168: la vía de
+recuperación por vigencia, que enumera lo vigente en la ventana cuando la
+petición declara un intervalo). Sin banderas y ``--ejes`` **tampoco se
+mueven** —la petición fija no declara ningún intervalo, así que la vía no se
+activa—; ``--peticion`` pasa a **17/47, 162, 78/81** y ``--ejes --peticion``
+a **21/47, 144, 78/81**; críticas perdidas siguen en 0 en las cuatro. El
+único caso que cambia de resultado es ``B04-CA-22``, que pasa de recuperar
+uno de sus seis a recuperar cinco **sin añadir un solo elemento de más**.
+El sexto, ``DEC-001``, queda fuera por ámbito (``G4``) y no por vigencia.
 """
 
 from __future__ import annotations
