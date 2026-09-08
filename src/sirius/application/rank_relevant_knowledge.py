@@ -219,8 +219,11 @@ class RankRelevantKnowledgeUseCase:
         ``sirius.domain.relevance``) — an empty result, never an error.
 
         Con la puerta D7 punto 6 abierta y un puerto/candidato del motor por
-        etapas configurados, delega en ``_rank_via_staged_engine`` (ADR-109)
-        en vez de en el filtro-y-orden de siempre.
+        etapas configurados, la recuperación es la del motor por etapas
+        (ADR-109) en vez del filtro-y-orden de siempre. La cadena real desde
+        P3 (ADR-169) es ``rank()`` -> ``rank_con_cupo()`` ->
+        ``_recuperar_por_etapas()``: ``rank()`` se queda solo con las
+        candidatas y descarta el cupo.
         """
         return self.rank_con_cupo(query_text)[0]
 
@@ -277,9 +280,15 @@ class RankRelevantKnowledgeUseCase:
     def _rank_via_staged_engine(self, query_text: str) -> tuple[RankedKnowledge, ...]:
         """Solo las candidatas de ``_recuperar_por_etapas``, sin el cupo.
 
-        La recuperación por etapas es una sola (``_recuperar_por_etapas``);
-        esto es la vista que necesita quien no aplica el filtro de relevancia
-        y por tanto no tiene nada que hacer con el cupo (ADR-169).
+        La recuperación por etapas es una sola (``_recuperar_por_etapas``,
+        que devuelve candidatas **y** cupo) y desde P3 (ADR-169) la cadena de
+        producción pasa entera por ella: este método NO tiene ningún llamador
+        en ``src/`` ni en ``scripts/``. Es la vista sin cupo que conservan las
+        dos pruebas que lo invocan (``tests/integration/
+        test_rank_relevant_knowledge.py``). El comportamiento que las citas
+        normativas a ``_rank_via_staged_engine`` describen —las tres
+        amplificaciones, ``solo_por_categoria``, ``siembra``— vive en
+        ``_recuperar_por_etapas``, no en este envoltorio de dos líneas.
         """
         return self._recuperar_por_etapas(query_text)[0]
 
