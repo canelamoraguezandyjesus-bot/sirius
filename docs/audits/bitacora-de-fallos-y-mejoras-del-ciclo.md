@@ -3829,6 +3829,23 @@ vez `historial_y_fuentes`, esa frase empieza a entregar un cotejo que el código
 no hace, y nadie lo notará porque el texto ya estaba ahí y parecerá revisado.
 Es la familia de `CLAUDE-R3-001` esperando a que le pongan datos delante.
 
+**Cierre de la ronda 3, verificado por mutación (`91820ce`).** La cadena pasa a
+enunciar las dos condiciones reales —«decisión aprobada cuyo registro no es
+posterior al final de la ventana declarada por la petición (desde a hasta)»— y
+nombra el intervalo solo para identificar cuál, diciendo «el **final**», que es
+lo único que restringe. Dos pruebas nuevas, y las dos bien pensadas:
+
+- Una **documenta la limitación como comportamiento esperado** en vez de
+  taparla: propone una decisión con el caso de uso real, le fija el registro
+  DENTRO de la ventana, la aprueba DESPUÉS —dejando `updated_at` meses fuera— y
+  afirma que el puerto **sí la devuelve**, porque el predicado es el que es.
+- La otra fija la cadena **y además afirma que la palabra «vigente» no
+  aparece**. Eso no protege la redacción: protege contra que vuelva la clase
+  entera de afirmación.
+
+Revertí la cadena a su forma anterior y corrí las dos suites: **`1 failed, 21
+passed`**, y la que cae es exactamente la nueva. Mutación revertida.
+
 ---
 
 ### 78. Once fallos míos en una tarde, y son cuatro raíces, no once (08-09-2026, 19:58 UTC)
