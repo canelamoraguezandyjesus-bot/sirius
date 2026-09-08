@@ -10,10 +10,11 @@ el modelo local, que **no está en CI**. ADR-148 ya preveía separar las dos
 medidas, y ADR-164 lo cumple así:
 
 - **en CI, determinista** (``tests/unit/test_interpret_query_request.py``,
-  ``tests/unit/test_ollama_query_intent_classifier.py`` y las tres pruebas de
-  ``tests/integration/test_rank_relevant_knowledge.py``): la parte por reglas
-  —permiso y propósito—, la forma de la ``Peticion`` y el cableado, con un
-  doble del modelo;
+  ``tests/unit/test_ollama_query_intent_classifier.py`` y las cinco pruebas
+  de ADR-164 en ``tests/integration/test_rank_relevant_knowledge.py`` —las
+  tres de la ronda 1, la de las tres escrituras del corte y la del corte con
+  desfase negativo—): la parte por reglas —permiso y propósito—, la forma de
+  la ``Peticion`` y el cableado, con un doble del modelo;
 - **aquí, con Ollama real en la máquina del propietario**: la coincidencia
   campo a campo con las 47 y las cuatro cifras del banco.
 
