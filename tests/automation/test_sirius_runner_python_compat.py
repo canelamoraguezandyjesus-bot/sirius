@@ -50,6 +50,9 @@ SCRIPTS_RUN_ON_THE_RUNNER = (
     "sirius_convergence.py",
     "validate_issue_body.py",
     "resolver_prompt.py",
+    # ADR-163: lo invocan las dos puertas de carril retirado, con el python3 del
+    # runner. Solo stdlib, y por eso el registro que lee es JSON y no YAML.
+    "sirius_carril_retirado.py",
     "sirius_drip_guard_cli.py",
 )
 
