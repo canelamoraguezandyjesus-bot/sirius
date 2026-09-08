@@ -126,7 +126,10 @@ Seis traducciones no obvias, escritas aquí porque cada una es una decisión:
   `OBJETIVO` porque es adjudicación declarada, no inferencia.
 - **`objetivos` se queda en 1.** La cuota de `EXACTA` del banco es
   `max(1, len(caso["resultado_esperado"]))`: adjudicación que producción no
-  tiene y no inventa.
+  tiene y no inventa. Tiene un precio, y se declara en «Comprobación que la
+  sostiene»: con `objetivos=1` la parada S1 se adjudica antes que con la
+  petición del banco en las `EXACTA` que esperan más de un elemento, lo que
+  acota lo alcanzable de la predicción.
 - **Una fecha que no es ISO-8601 se descarta como si no se hubiera
   declarado.** `G8` compara la fecha con `created_at` por orden
   lexicográfico: una cadena arbitraria podría excluir el canon entero en
@@ -300,6 +303,44 @@ Corregida la premisa, la elección de semántica se pesa contra esos dos casos y
   lee el banco, comprueba que los casos que declaran corte son exactamente
   esos dos y afirma que lo emitido es el final de su **mismo día civil** y no
   su medianoche.
+
+**El otro techo estructural, y también sin ajustar la predicción:
+`objetivos=1` adelanta la parada S1** (incidencia #570, ronda 4). Las cuatro
+cifras del banco —`>=16/47 exactos`, `<=162 de mas`, `0 criticas perdidas`,
+`>=73/81 hallados`— **se mantienen sin tocar**: se declara aquí su efecto, no
+se reescribe ninguna.
+
+- `InterpreteDePeticion.interpretar` nunca fija `objetivos` y deja el 1 por
+  defecto de `Peticion`, por la razón que la sección «Decisión» ya da: la
+  cuota de `EXACTA` del banco es `max(1, len(caso["resultado_esperado"]))`, y
+  eso es adjudicación que producción no tiene. Lo que faltaba decir es el
+  precio.
+- `staged_engine_stops.evaluar_suficiencia` adjudica S1 en cuanto
+  `cardinalidad_semantica >= peticion.objetivos`, y `recuperar` rompe el bucle
+  de etapas al adjudicarla. Con `objetivos=1`, cualquier consulta que el modelo
+  clasifique `EXACTA` —29 de los 47 casos del banco— se detiene en la primera
+  etapa que admita **un** solo elemento, E1 (coincidencia literal), sin llegar
+  a E2 (variantes morfológicas), E3 (semántica) ni E4 (historial).
+- Los casos `EXACTA` del banco que esperan más de un elemento son exactamente
+  **tres**: `B04-CA-19` (3 esperados), `B04-CA-23` (2) y `B04-CA-43` (2). En la
+  medición de ADR-148 corren con `objetivos` 3/2/2 —los que `peticion_desde_caso`
+  deriva del banco— y con el intérprete corren con 1, así que su S1 se adjudica
+  una o más etapas antes y sus `elementos_hallados` **solo pueden bajar o
+  quedarse igual**.
+- La consecuencia, dicha antes de medir: las cuatro cifras del banco pueden
+  salir **por debajo** del techo que ADR-148 midió con la petición del banco
+  sin que eso sea un fallo de inferencia del modelo. Es capacidad que el
+  intérprete no tiene por construcción, no una clasificación equivocada, y
+  conviene leer el resultado así.
+- La alternativa —derivar `objetivos` en producción— **no se toma**: sería
+  inventar la adjudicación que la sección «Decisión» descarta con razón. El
+  producto prefiere no fingir que sabe cuántos elementos espera la pregunta.
+- Lo que la corrección deja fijado en una prueba, no en la prosa:
+  `test_los_objetivos_en_uno_adelantan_la_parada_s1_en_las_exactas_del_banco`
+  lee el banco, comprueba que las `EXACTA` con más de un `resultado_esperado`
+  son exactamente esas tres con 3/2/2, y afirma que `peticion_desde_caso`
+  emite esas cuotas mientras el intérprete emite 1 para las tres — de modo que
+  si el banco cambia, avisa en vez de que esta ficha envejezca en silencio.
 
 En `tiempo_objetivo` la normalización solo puede **añadir** coincidencias —una
 escritura sin zona que antes se puntuaba como fallo por comparar ingenuo con

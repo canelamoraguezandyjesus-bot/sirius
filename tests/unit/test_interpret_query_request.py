@@ -11,7 +11,11 @@ local no está en CI, y fingir que sí lo está mediría el doble, no el modelo.
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
+from pathlib import Path
+
+from staged_engine_case_translation import peticion_desde_caso
 
 from sirius.application.interpret_query_request import (
     LIMITE_SIN_ATAR,
@@ -28,6 +32,10 @@ from sirius.domain.staged_engine_contracts import Ambito, Cardinalidad, Modo
 #: corpus declara ``valid_from``/``valid_to``, porque ``G8`` los compara
 #: como cadenas (ADR-164, incidencia #570 ronda 3).
 _AHORA = "2026-06-15T00:00:00Z"
+
+#: El banco de evidencia de ADR-111/ADR-148, la fuente de la que ADR-164 toma
+#: las cuatro cifras que su predicción fija.
+_BANCO = Path(__file__).resolve().parents[1] / "acceptance/fixtures/evidence_bank_47_casos.json"
 
 
 class _RelojFijo:
@@ -178,6 +186,48 @@ def test_los_objetivos_se_quedan_en_uno_porque_la_cuota_de_exacta_es_adjudicacio
     peticion = _interprete(intencion).interpretar("c", "op-1", active_project_id=None)
 
     assert peticion.objetivos == 1
+
+
+def test_los_objetivos_en_uno_adelantan_la_parada_s1_en_las_exactas_del_banco() -> None:
+    """Y esa elección tiene un precio que la ficha declara: acota lo
+    alcanzable de la predicción.
+
+    ``evaluar_suficiencia`` adjudica S1 en cuanto
+    ``cardinalidad_semantica >= peticion.objetivos``, y ``recuperar`` rompe
+    el bucle de etapas al adjudicarla. Con ``objetivos=1``, una EXACTA se
+    detiene en la primera etapa que admita UN elemento —E1, coincidencia
+    literal— sin llegar a E2/E3/E4. Los tres casos EXACTA del banco que
+    esperan MÁS de un elemento corren con ``objetivos`` 3/2/2 en la medición
+    de ADR-148 y con 1 aquí, así que sus ``elementos_hallados`` solo pueden
+    bajar o quedarse igual (incidencia #570, ronda 4).
+
+    Este guardián fija el hecho para que, si el banco cambia, avise en vez de
+    que la ficha envejezca en silencio."""
+    banco = json.loads(_BANCO.read_text(encoding="utf-8"))
+    exactas_con_varios = {
+        caso["id"]: len(caso["resultado_esperado"])
+        for caso in banco["casos"]
+        if caso["peticion_p2"]["cardinalidad"] == Cardinalidad.EXACTA.value
+        and len(caso["resultado_esperado"]) > 1
+    }
+
+    assert exactas_con_varios == {"B04-CA-19": 3, "B04-CA-23": 2, "B04-CA-43": 2}
+
+    ambito = Ambito(global_=True, proyectos=())
+    for identificador, esperados in exactas_con_varios.items():
+        caso = next(c for c in banco["casos"] if c["id"] == identificador)
+        del_banco = peticion_desde_caso(
+            caso, operation_id="op-1", ambito=ambito, limite_sin_atar=LIMITE_SIN_ATAR
+        )
+        intencion = IntencionDeConsulta(
+            modo=Modo.M1_ORDINARIO, cardinalidad=Cardinalidad.EXACTA
+        )
+        del_interprete = _interprete(intencion).interpretar(
+            caso["consulta"], "op-1", active_project_id=None
+        )
+
+        assert del_banco.objetivos == esperados
+        assert del_interprete.objetivos == 1
 
 
 # --------------------------------------------------------------------------
