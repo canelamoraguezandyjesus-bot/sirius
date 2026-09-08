@@ -168,7 +168,7 @@ desde `_load_canon_item`).
   hecho fijado en vez de esperar a que se redescubra.
 - **La FORMA en que se escribe `created_at` importa, no solo el valor.** `G8`
   compara `created_at` contra el corte **lexicográficamente**
-  (`src/sirius/domain/staged_engine_gates.py:213-215`) — la «deuda 20» que la
+  (`src/sirius/domain/staged_engine_gates.py:214-216`) — la «deuda 20» que la
   incidencia #574 nombra por su nombre—, así que la forma no es un detalle de
   presentación: el arnés tiene que escribir la misma que escribe el producto.
   Se elige `AAAA-MM-DD HH:MM:SS.ffffff` —separador espacio, sin `T` ni `Z`—
@@ -420,7 +420,7 @@ todos en `tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py`:
   `valid_from=_vigencia(fila["revision_created_at"])`); las decisiones, de
   `d.updated_at` (`:98` y `:290`)—. Para lo que este encargo cierra es
   suficiente, y eso es comprobable: `G8` compara `created_at` y solo
-  `created_at` (`src/sirius/domain/staged_engine_gates.py:213-215`), que es
+  `created_at` (`src/sirius/domain/staged_engine_gates.py:214-216`), que es
   también la única de las dos columnas que el puerto lee
   (`src/sirius/adapters/persistence/staged_engine_port.py:71` y `:78`). Pero
   **cualquier palanca que derive su ventana de vigencia de esas dos columnas

@@ -81,7 +81,7 @@ que es donde vivía: `_load_canon_item` creaba los 97 ítems llamando a los
 casos de uso reales, que fechan con el reloj de la máquina, así que todos
 nacían con la fecha del día de la medición y cualquier corte de registro
 anterior los descartaba en `G8`
-(`src/sirius/domain/staged_engine_gates.py:213-215`). No era un defecto del
+(`src/sirius/domain/staged_engine_gates.py:214-216`). No era un defecto del
 producto —ahí `created_at` es real— sino un artefacto de este arnés. Desde
 ADR-166 el cargador escribe en `created_at` la fecha que el corpus declara
 (`ejes_p2.valid_from`; para el único ítem que no la declara, `MEM-005`, el
@@ -357,7 +357,7 @@ _REGISTRO_DE_LO_NO_FECHADO: Final[str] = "2026-06-15T00:00:00Z"
 #: y por tanto el que ya llevan las filas que crean los casos de uso). La
 #: forma importa y no solo el valor, porque `G8` compara `created_at` contra
 #: el corte LEXICOGRAFICAMENTE (`src/sirius/domain/staged_engine_gates.py`,
-#: lineas 213-215): quien la fije es
+#: lineas 214-216): quien la fije es
 #: `test_el_registro_escrito_lleva_la_forma_que_g8_compara`, que comprueba lo
 #: escrito contra un literal propio y no contra esta constante.
 _FORMATO_DE_REGISTRO_EN_SQLITE: Final[str] = "%Y-%m-%d %H:%M:%S.%f"
@@ -393,7 +393,7 @@ def _fecha_de_registro(item: Mapping[str, Any]) -> datetime:
     de uso reales, que fechan con el reloj de la maquina, asi que todos
     nacian con la fecha del dia de la medicion y cualquier corte de registro
     anterior los descartaba en `G8`
-    (`src/sirius/domain/staged_engine_gates.py:213-215`). La puerta estaba
+    (`src/sirius/domain/staged_engine_gates.py:214-216`). La puerta estaba
     bien; el dato que se le daba, no. La fecha declarada es
     `ejes_p2.valid_from`; cuando el corpus no la declara, ver
     `_REGISTRO_DE_LO_NO_FECHADO`.
@@ -1665,7 +1665,7 @@ _FORMA_DEL_REGISTRO_ESCRITO: Final[re.Pattern[str]] = re.compile(
 def test_el_registro_escrito_lleva_la_forma_que_g8_compara(tmp_path: Path) -> None:
     """H2 (ADR-166): la FORMA importa, no solo el valor. `G8` compara
     `created_at` contra el corte **lexicográficamente**
-    (`src/sirius/domain/staged_engine_gates.py:213-215`) — es la «deuda 20»
+    (`src/sirius/domain/staged_engine_gates.py:214-216`) — es la «deuda 20»
     que la incidencia #574 nombra—, así que el arnés tiene que escribir la
     misma forma que escribe el producto: `AAAA-MM-DD HH:MM:SS.ffffff`, la del
     dialecto de SQLAlchemy para sus columnas `DateTime`, con la que además se
