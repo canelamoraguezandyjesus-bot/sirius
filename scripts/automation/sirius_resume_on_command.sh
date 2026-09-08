@@ -15,8 +15,8 @@
 # autorizó una ronda más y hubo que hacerla a mano, fuera de la automatización.
 #
 # Este script no relaja la política. Publica un marcador
-# `<!-- sirius-convergence-reset:<head> -->` que `history_after_last_resume()`
-# usa como frontera: las rondas anteriores siguen publicadas y auditables, pero
+# `<!-- sirius-convergence-reset:<head>:<run>-<intento> -->` que
+# `history_after_last_resume()` usa como frontera: las rondas anteriores siguen publicadas y auditables, pero
 # dejan de servir de listón. Una parada por `sin-progreso` volverá a saltar en
 # cuanto haya dos rondas planas POSTERIORES al marcador.
 #
@@ -314,14 +314,14 @@ if [ "$sin_pr" = "true" ]; then
     "Esta incidencia se detuvo **antes de producir ninguna rama ni PR**, así que no hay ningún head sobre el que continuar: lo que se autoriza es **repetir desde cero** la fase que se paró (\`${etiqueta_destino}\`)." \
     "El historial queda intacto y no se perdona ninguna ronda: sin PR no hubo rondas que contar. Si la fase se vuelve a caer, se detendrá otra vez con su diagnóstico." >"$body_file"
 elif [ "$parada" = "sirius:blocked-decision" ] && [ "${bloqueo_de_convergencia:-true}" = "true" ]; then
-  marker="<!-- sirius-convergence-reset:${head_sha} -->"
+  marker="<!-- sirius-convergence-reset:${head_sha}:${GITHUB_RUN_ID:-manual}-${GITHUB_RUN_ATTEMPT:-1} -->"
   printf '%s\n\n%s\n\n%s\n\n%s\n' \
     "$marker" \
     "🟢 **Ciclo reanudado por orden del propietario**" \
     "Las rondas anteriores siguen publicadas y son auditables, pero dejan de contar como listón de convergencia. La medida vuelve a empezar desde aquí, sobre el head \`${head_sha}\`." \
     "Si el ciclo vuelve a estancarse —dos rondas consecutivas sin progreso a partir de este punto— se detendrá otra vez, con el mismo criterio." >"$body_file"
 else
-  marker="<!-- sirius-resume-stop:${head_sha} -->"
+  marker="<!-- sirius-resume-stop:${head_sha}:${GITHUB_RUN_ID:-manual}-${GITHUB_RUN_ATTEMPT:-1} -->"
   printf '%s\n\n%s\n\n%s\n\n%s\n' \
     "$marker" \
     "🟢 **Parada segura levantada por orden del propietario**" \

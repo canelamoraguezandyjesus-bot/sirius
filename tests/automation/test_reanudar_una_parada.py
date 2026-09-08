@@ -151,6 +151,58 @@ def test_la_orden_reinicia_tambien_la_racha_de_fallos_de_ci() -> None:
     assert _decidir(texto)["decision"] == "CONTINUE"
 
 
+def test_el_marcador_que_lleva_el_run_del_evento_tambien_reinicia_la_medida() -> None:
+    """ADR-159: el recibo pasa a `<head>:<run>-<intento>` y el listón sigue moviéndose.
+
+    `RESUME_MARKER_RE` exigía hexadecimal puro hasta el cierre del comentario,
+    así que un marcador con el run NO casaba y `history_after_last_resume` no
+    cortaba: el freno de convergencia dejaría de honrar el `continua` del
+    propietario, en silencio y sin que nada fallara. Es la regresión que ADR-159
+    tiene que impedir, no un detalle de formato.
+    """
+    texto = ESTANCADO + "<!-- sirius-convergence-reset:ddd4:34174253492-1 -->\n"
+
+    vigente = _module().history_after_last_resume(texto)
+    assert "sirius-round:1" not in vigente, (
+        "un recibo con el run del evento sigue siendo un permiso escrito: "
+        "tiene que mover el listón igual que el que solo lleva el head"
+    )
+    assert _decidir(texto)["decision"] == "CONTINUE"
+
+
+def test_dos_recibos_del_mismo_head_con_runs_distintos_son_dos_ordenes() -> None:
+    """ADR-159, la deuda 15: manda la última, y con el run hay una última distinta.
+
+    Con el recibo llevando solo el head, dos reanudaciones sobre el MISMO head
+    producían el MISMO texto y `sirius_comment_once` suprimía la segunda: el
+    historial guardaba una autorización donde hubo dos. Con el run, cada una
+    deja su propia marca y el corte se hace por la más reciente.
+    """
+    texto = (
+        "<!-- sirius-convergence-reset:ddd4:100-1 -->\n"
+        + _ronda(1, "bbb2", [("h1", "P1")])
+        + "<!-- sirius-convergence-reset:ddd4:101-1 -->\n"
+        + _ronda(2, "ddd4", [("h2", "P1")])
+    )
+    convergencia = _module()
+    vigente = convergencia.history_after_last_resume(texto)
+    assert [r["round"] for r in convergencia.parse_round_records(vigente)] == [2], (
+        "los dos recibos son del mismo head y solo se distinguen por el run: "
+        "si el lector no los distingue, la segunda orden no corta nada"
+    )
+
+
+def test_el_recibo_historico_sin_run_se_sigue_leyendo_igual() -> None:
+    """Lo que ADR-159 NO puede romper: los historiales ya publicados.
+
+    Toda incidencia anterior a esta ficha lleva recibos con el head desnudo.
+    Si el patrón nuevo dejara de reconocerlos, el `continua` de esas
+    incidencias dejaría de contar retroactivamente.
+    """
+    texto = ESTANCADO + "<!-- sirius-convergence-reset:ddd4 -->\n"
+    assert "sirius-round:1" not in _module().history_after_last_resume(texto)
+
+
 def test_solo_cuenta_la_ultima_orden() -> None:
     """Dos órdenes seguidas no son dos permisos acumulados: manda la última."""
     texto = (
