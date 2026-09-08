@@ -2305,7 +2305,19 @@ ADR o su incidencia cuando se adopte.
     a la decisión una pregunta que antes no se veía: **la cuota de los
     revisores es un recurso COMPARTIDO entre sesiones, y nada la reparte ni
     avisa de que se está agotando**. Dos sesiones trabajando en paralelo no se
-    ven entre sí ni en los números de ADR (deuda 18) ni en la cuota. **Y el interruptor ya existe y no es código**:
+    ven entre sí ni en los números de ADR (deuda 18) ni en la cuota.
+
+    **Y un efecto secundario que costó una ronda, aprendido en el acto**: con
+    la incidencia parada por cuota, hice el «Update branch» de #568 por higiene
+    —la rama estaba desfasada y había que ponerla al día igualmente—. Eso
+    produjo un head nuevo, Quality pasó verde sobre él y **la ruta de ADR-142
+    revivió la incidencia y abrió una ronda de revisión** (04:18) que estaba
+    condenada de antemano: Codex volvió a declarar el tope a las 04:25. La ruta
+    hizo exactamente lo que debe hacer; lo que faltó fue mi previsión. **Regla
+    operativa**: mientras el ciclo esté parado por `codex-fallo-declarado`, no
+    se mueve el head —ni siquiera para actualizar la rama— hasta que la cuota
+    vuelva, porque el avance automático gastará la ronda contra una cuota que
+    sigue agotada. **Y el interruptor ya existe y no es código**:
     `review-sirius-work.yml:127-131` pone `dual="true"` únicamente cuando la
     variable de repositorio `SIRIUS_CODEX_REVIEW_ENABLED` vale exactamente
     `true`; con cualquier otro valor la ronda corre solo con Claude. O sea
