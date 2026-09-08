@@ -277,20 +277,25 @@ ficha.
 
 **Cadena completa como UNA SOLA invocación** (ADR-145, ADR-153) con
 `pwsh -File scripts/check.ps1` y su código de salida capturado (ADR-154).
-Anclada al árbol de **`5200b4f`**:
+Anclada al árbol de **`63822b0`**, el que trae las correcciones de la
+primera revisión de esta PR:
 
 ```
-5183 passed, 17 skipped, 2 xfailed in 487.87s (0:08:07)
+5183 passed, 17 skipped, 2 xfailed in 445.07s (0:07:25)
 check=0
 ```
 
 De esa invocación se transcribe la cola capturada —la terna de `pytest` y el
 código de salida—; `check=0` solo sale si `ruff format --check`, `ruff check`
 y `mypy src tests` pasaron antes, porque el guion corta en el primero que
-falle. `git diff --check` sale limpio (`0`) sobre ese árbol. Lo único
-posterior a `5200b4f` es **esta sección de la ficha**: un cambio documental que
-no toca código ni pruebas, y que existe porque la sección tiene que anclarse
-al árbol que la cadena midió.
+falle. Lo único posterior a `63822b0` es **esta sección de la ficha**: un
+cambio documental que no toca código ni pruebas, y que existe porque la
+sección tiene que anclarse al árbol que la cadena midió.
+
+(La cifra anterior de esta sección —`5183 passed, 17 skipped, 2 xfailed in
+487.87s`, anclada a `5200b4f`— seguía siendo la de su árbol; se sustituye
+porque las correcciones de la revisión tocaron una prueba, así que la cadena
+volvió a correr entera sobre el árbol nuevo.)
 
 **Guardianes deterministas añadidos** (los cuatro corren en CI, sin Ollama),
 todos en `tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py`:
