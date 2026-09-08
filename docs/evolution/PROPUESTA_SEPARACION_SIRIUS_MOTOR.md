@@ -1,7 +1,7 @@
 # Propuesta de separación entre Sirius y su motor de trabajo
 
 - **Identificador:** `SIRIUS-PROPUESTA-SEPARACION-001`
-- **Estado:** **PROPUESTA PARA REVISIÓN DEL PROPIETARIO**
+- **Estado:** **REVISADA Y FORMALIZADA** el 8 de septiembre de 2026. Nació como propuesta para revisión del propietario; su dirección está hoy registrada en EV-015 a EV-019, ADR-158 y ADR-159 (ver el recuadro siguiente)
 - **Fecha:** 8 de septiembre de 2026
 - **Árbol sobre el que se comprobó todo:** `main` en `f2085db`
   (`f2085dbbcdef9f33e084131984f1dd6c3daf0101`, 2026-09-07T23:48:23+02:00)
@@ -19,6 +19,36 @@
 > trabajo que produjo una decisión; este no produjo ninguna, porque las decisiones que
 > aquí se enumeran son del propietario y siguen abiertas. Se declara explícitamente,
 > como esa misma disciplina pide cuando no hay ADR que escribir.
+
+## 0.0 Qué de esta propuesta está ya formalizado (8 de septiembre de 2026)
+
+Este documento **se conserva tal como quedó tras la revisión del propietario**:
+es el análisis con sus comprobaciones, y no se reescribe para que parezca que
+siempre supo el final. Lo que sigue dice qué partes suyas dejaron de ser
+propuesta.
+
+| De esta propuesta | Dónde está formalizado |
+|---|---|
+| La dirección del apartado 7.1, sus seis puntos | **EV-015 a EV-019** (`docs/evolution/DECISIONS.md`) y **ADR-158** |
+| Las enmiendas del apartado 4.1, filas 1-4 y 6 | `docs/evolution/RECTOR.md` §19; EV-002 marcada como sustituida y EV-003 como acotada |
+| La fila 5 del apartado 4.1 (EV-004 y la memoria común) | **EV-018**: el conocimiento común **no es** la memoria canónica, así que **EV-004 queda vigente sin enmienda**. La decisión T-3 del apartado 7.2 queda resuelta por esta vía |
+| Las enmiendas del apartado 4.1, filas 7-13 | **ADR-159**, contrato operativo **§13 (v1.10)**, `docs/implementation/bloques_del_motor.yml`, `docs/operations/MOTOR_DE_SIRIUS.md`, arquitectura mínima del motor §18, superficie de invocación §9 |
+| La recomendación de T-1 (desactivación reversible) | **ADR-159**, apartado «Recomendación técnica de ejecución (no ejecutada)». Sigue siendo recomendación: **nadie ha ordenado ejecutarla** |
+| Las decisiones T-2 y T-4 a T-10 del apartado 7.2 | **Siguen abiertas.** Ninguna se ha decidido aquí |
+| Las filas 14 y 17 del apartado 4.2 (`README.md`, HEAD-R1) y el «Próximo paso» de la fila 16 | **No tocadas**, por orden expresa del propietario de no ampliar el trabajo a otros defectos documentales |
+
+**La retirada de los dos carriles está ACORDADA y NO EJECUTADA.** Hoy siguen
+funcionando si alguien los dispara: la distinción está escrita en ADR-159 y en el
+§13 del contrato, y se puede contrastar con `TABLA_ACTIVACION`, que sigue
+teniendo las cuatro clases.
+
+Dos afirmaciones de este documento envejecieron con la formalización, y se dicen
+aquí en vez de editarlas en su sitio: el apartado 2.1 decía que la memoria común
+«no está declarada como tal en ninguna parte» —**ahora lo está, en EV-018**—, y
+el apartado 2.2 llamaba «candidatos a desactivarse» a los dos carriles —**la
+decisión de retirarlos ya está tomada; lo que queda pendiente es ejecutarla**—.
+
+---
 
 ## 0. Nota de arranque y convención de evidencia
 
@@ -202,8 +232,8 @@ desactiva nada.
 | 0.4 «Delegación supervisada» (RECTOR §9.3) | **Redefinir, conservando su núcleo útil** | La delegación de *encargos de trabajo* ya la hace el motor. Lo que **no** hace el motor, y por eso se conserva expresamente como posibilidad, es que Sirius delegue una **consulta de ingeniería del propietario** en un especialista y le devuelva el resultado a la conversación (nota de 2.1) |
 | **Auditor dedicado** (carril `auditoria:solicitada`) | **Se retira** (dirección dada, 7.1 punto 2) | El propietario mueve esos encargos a sus sesiones externas. Lo que sigue abierto es **el modo** de retirada, no el hecho: T-1, con recomendación de desactivación reversible |
 | **Investigador dedicado** (carril `investigacion`) | **Se retira** (dirección dada, 7.1 punto 2) | Ídem, con su punto de contacto propio en la puerta del implementador (T-2) |
-| D3 «Hablar con Sirius por Telegram» (`docs/implementation/bloques_del_motor.yml:249`, hoy `fuera_de_alcance`) | **Revisar la clasificación** | La necesidad que lo motivaba —que un aviso llegue al propietario— vuelve, pero ahora el candidato natural a darlo es Sirius, no Telegram |
-| D4 «Partir un objetivo grande» (`docs/implementation/bloques_del_motor.yml:257`, pendiente; ADR-089 lo aplaza) | **Revisar la prioridad** | Si el propietario parte los objetivos en sus sesiones externas, este bloque pierde urgencia; no se descarta |
+| D3 «Hablar con Sirius por Telegram» (`docs/implementation/bloques_del_motor.yml:273`, hoy `fuera_de_alcance`) | **Revisar la clasificación** | La necesidad que lo motivaba —que un aviso llegue al propietario— vuelve, pero ahora el candidato natural a darlo es Sirius, no Telegram |
+| D4 «Partir un objetivo grande» (`docs/implementation/bloques_del_motor.yml:281`, pendiente; ADR-089 lo aplaza) | **Revisar la prioridad** | Si el propietario parte los objetivos en sus sesiones externas, este bloque pierde urgencia; no se descarta |
 
 ### 2.3 Lo que NO es candidato a nada: revisores y comprobaciones
 
@@ -233,7 +263,7 @@ proponer retiradas. Aquí están, comprobados uno a uno en el árbol [V].
 | Clase, tabla de activación y de perfiles | `src/sirius_engine/domain/work_item.py:80`; `src/sirius_engine/dispatcher.py:110-113`; `src/sirius_engine/dispatch_cli.py:69` |
 | Etiqueta propia (fuera del espacio `sirius:*`) | `auditoria:solicitada`, `.github/workflows/bootstrap-sirius-automation-labels.yml` |
 | Filas en el contrato operativo | §11.1 línea 632; §12.4, tabla cerrada |
-| Bloque del motor | C4, `docs/implementation/bloques_del_motor.yml:186` (cerrado) |
+| Bloque del motor | C4, `docs/implementation/bloques_del_motor.yml:202` (cerrado) |
 | ADR de origen | ADR-010, ADR-016 |
 | Pruebas que lo sostienen | `tests/automation/test_auditor_workflow.py`, y las filas de auditoría de `tests/engine/test_{authority,dispatcher,dispatch_cli,intent_interpreter,seven_day_streak}.py` |
 
@@ -662,9 +692,9 @@ Ninguna de estas la resuelve la dirección de 7.1. Donde hay recomendación, se 
 
 | Id | Decisión técnica | Por qué sigue abierta | Recomendación inicial |
 |---|---|---|---|
-| **T-1** | **Modo de retirada de los dos carriles**: desactivación reversible, congelación o borrado | La dirección dice *que* se retiran; no dice *cómo*, y las tres opciones tienen costes muy distintos (apartado 2.3) | **Desactivación reversible**: quitar el disparador de cada carril y dejar de despachar esas clases, **conservando el código, los perfiles, los ADR, el historial y los resultados** —`docs/investigaciones/` y los informes de auditoría no se tocan—. Es lo más barato de deshacer si el traslado a las sesiones externas no rinde, y no destruye nada medido. **No ejecutada** |
+| **T-1** *(recomendación ya registrada en ADR-159; sigue sin ordenarse su ejecución)* | **Modo de retirada de los dos carriles**: desactivación reversible, congelación o borrado | La dirección dice *que* se retiran; no dice *cómo*, y las tres opciones tienen costes muy distintos (apartado 2.3) | **Desactivación reversible**: quitar el disparador de cada carril y dejar de despachar esas clases, **conservando el código, los perfiles, los ADR, el historial y los resultados** —`docs/investigaciones/` y los informes de auditoría no se tocan—. Es lo más barato de deshacer si el traslado a las sesiones externas no rinde, y no destruye nada medido. **No ejecutada** |
 | **T-2** | Qué se hace con la puerta del implementador que cede el perfil `investigador` (`.github/workflows/implement-sirius-work.yml:171-180`) | Es el único punto de contacto entre un carril a retirar y un workflow del ciclo, y toca `.github/**`, donde la automatización no puede escribir (ADR-002): exige mano distinta | Bajo T-1, **dejarla puesta**: con el carril desactivado no se dispara, y quitarla es un cambio de workflow que no aporta nada mientras la retirada sea reversible |
-| **T-3** | Cómo se formaliza la memoria común frente a EV-004: ¿declararla **fuera** de la memoria canónica de Sirius, o enmendar EV-004? | La dirección fija que las IAs la actualizan; no fija si eso exige tocar una decisión aprobada o basta con declarar que es otra cosa | Explorar primero la vía que **no** enmienda EV-004 (memoria del trabajo ≠ memoria canónica de Sirius): es menos invasiva y coherente con la dirección 5 |
+| **T-3** *(RESUELTA por EV-018: se declara fuera de la memoria canónica, y EV-004 queda sin enmendar)* | Cómo se formaliza la memoria común frente a EV-004: ¿declararla **fuera** de la memoria canónica de Sirius, o enmendar EV-004? | La dirección fija que las IAs la actualizan; no fija si eso exige tocar una decisión aprobada o basta con declarar que es otra cosa | Explorar primero la vía que **no** enmienda EV-004 (memoria del trabajo ≠ memoria canónica de Sirius): es menos invasiva y coherente con la dirección 5 |
 | **T-4** | **Con qué mecanismo** escriben las IAs: escritura directa, o propuesta más confirmación; y quién arbitra un conflicto | «Las IAs la actualizan» fija el permiso, no el mecanismo ni el arbitraje; y el repositorio ya tiene una regla que debe sobrevivir: una exploración no se convierte en decisión aprobada (contrato §9) | Ninguna todavía: depende de T-3 |
 | **T-5** | **Conexión de la memoria común con lo que ya existe**: con la memoria propia de Sirius, con el diario del motor, con el propio repositorio y con Sirius 0.2 | Es la decisión que esta propuesta declaró mal en su primera versión. Hoy **no está decidida** ninguna de las dos direcciones: ni que 0.2 sea requisito previo, ni que la memoria común dependa de él | Antes de decidir nada, hacer la **evaluación funcional que falta**: qué requisitos de 6.3 cumple ya cada pieza existente. Sin ese dato, ligar 0.2 y la memoria común sería una decisión sin medida detrás |
 | **T-6** | **Frontera de salida**: qué del repositorio privado puede reflejarse en la memoria común y llegar a las IAs externas | La dirección no la menciona, y es la que decide si la memoria común es segura. El motor ya tiene la pieza conceptual (política de egress y `ExportSafeBrief`) | Que la protección sea **mecánica** y no una instrucción al modelo, como ya exige la arquitectura del motor §6.1 |

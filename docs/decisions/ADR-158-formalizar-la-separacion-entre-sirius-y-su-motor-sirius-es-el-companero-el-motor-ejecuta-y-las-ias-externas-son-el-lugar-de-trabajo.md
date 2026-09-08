@@ -160,18 +160,40 @@ final de `docs/evolution/RECTOR.md` (§19).
 
 ## Comprobación que la sostiene
 
-**(1) Ninguna línea citada se ha movido.** Antes de editar se fotografiaron
-**3.469 líneas** citadas por número desde `docs/**/*.md` y los `.md` de la raíz,
-repartidas en **100 ficheros**. Tras las ediciones se comparó línea a línea:
+**(1) Ninguna línea citada ajena se ha movido.** Antes de editar se
+fotografiaron **3.469 líneas** citadas por número desde `docs/**/*.md` y los
+`.md` de la raíz, repartidas en **100 ficheros**. Tras las ediciones se comparó
+línea a línea:
 
 ```
-$ python3 (foto previa)  -> líneas citadas registradas: 3469 / ficheros: 100
-$ python3 (verificación) -> citas desplazadas: 0
+foto previa   -> líneas citadas registradas: 3469 / ficheros: 100
+verificación  -> citas desplazadas: 3
 ```
 
-Es la comprobación que hace imposible el error del criterio (a), y se ve fallar:
-insertando una línea al principio de `docs/evolution/RECTOR.md` la verificación
-declara desplazadas las citas de ese fichero, en vez de pasar en verde.
+**Tres, no cero, y conviene decirlo tal cual.** Las tres son
+`docs/implementation/bloques_del_motor.yml:186`, `:249` y `:257`, desplazadas a
+`:202`, `:273` y `:281` al añadir la marca de retirada a los bloques S2, B1 y C4.
+Las tres las cita **un solo documento, y es de este mismo trabajo**:
+`docs/evolution/PROPUESTA_SEPARACION_SIRIUS_MOTOR.md`. Se corrigieron en el
+mismo commit que las desplazó. El criterio (a) prohíbe mover una cita **ajena**;
+una cita propia se arregla en el acto, y se enseña que se arregló:
+
+```
+grep -rn 'bloques_del_motor.yml:20[0-9]|:27[0-9]|:28[0-9]' docs/
+  cita bloques_del_motor.yml:202  <- PROPUESTA_SEPARACION_SIRIUS_MOTOR.md
+  cita bloques_del_motor.yml:273  <- PROPUESTA_SEPARACION_SIRIUS_MOTOR.md
+  cita bloques_del_motor.yml:281  <- PROPUESTA_SEPARACION_SIRIUS_MOTOR.md
+sed -n '202p;273p;281p' docs/implementation/bloques_del_motor.yml
+  - id: C4
+  - id: D3
+  - id: D4
+```
+
+**Y la comprobación se ha visto FALLAR, que es lo que la hace valer.** Insertando
+una sola línea intrusa al principio de `docs/evolution/RECTOR.md`, la
+verificación pasa de 3 citas desplazadas a **81**: las 78 de ese fichero más las
+tres conocidas. Con la mutación revertida vuelve a 3. Una guarda que solo se ha
+visto pasar no prueba nada.
 
 **(2) El árbol no ha cambiado.** `git status` no muestra ningún fichero
 modificado fuera de `docs/`, y ninguno bajo `src/`, `tests/`, `scripts/` o

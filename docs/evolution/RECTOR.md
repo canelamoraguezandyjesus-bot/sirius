@@ -292,3 +292,45 @@ Una etapa post-0.1 solo comienza cuando:
 ## 18. Aprobación
 
 El usuario aprobó el 22 de julio de 2026 este documento y las decisiones EV-001 a EV-014. La aprobación fija dirección y gobernanza, pero no activa ninguna implementación posterior a Sirius 0.1.
+
+## 19. Enmienda del 8 de septiembre de 2026 — separación entre Sirius y su motor
+
+> **Por qué esta enmienda está al final y no en su sitio.** Los apartados que
+> modifica están citados por número de línea desde la Arquitectura Técnica 0.2,
+> el Plan de Pruebas 0.2, la Definición de Producto 0.2, `docs/evolution/STATUS.md`
+> y ADR-102. Insertar texto antes de esas líneas las desplazaría y falsearía
+> citas ya publicadas que no son de este trabajo. Es la misma restricción que
+> `docs/evolution/STATUS.md` se aplicó a sí mismo, y por el mismo motivo. Este
+> apartado **continúa** el documento; no lo sustituye.
+
+**Origen:** dirección del propietario, recogida y comprobada en
+`docs/evolution/PROPUESTA_SEPARACION_SIRIUS_MOTOR.md` §7.1.
+**Registro:** ADR-158 y ADR-159 en `docs/decisions/`.
+**Decisiones canónicas:** EV-015 a EV-019 en `docs/evolution/DECISIONS.md`.
+**Aprobación:** la fusión de la Pull Request que introduce esta enmienda, por el
+propietario.
+
+### 19.1 Qué queda enmendado
+
+| Apartado de este documento | Qué decía | Qué dice desde esta enmienda |
+|---|---|---|
+| §2, «Sirius es… la interfaz principal con el ecosistema digital y físico» y «el integrador de resultados» | Sirius es el paso obligatorio y el integrador | Sirius es **una** interfaz —la personal, de ingeniería y del robot—, no el paso obligatorio; integra resultados **cuando se le pide** (EV-015, EV-016) |
+| §4, punto 1: «El usuario habla normalmente con Sirius» | El modelo híbrido es el único | El trabajo habitual del propietario se realiza **directamente con las IAs externas**; el modelo híbrido queda como capacidad, no como camino obligatorio (EV-016) |
+| §4, punto 6: «Al cerrar, Sirius sintetiza el resultado» | Síntesis obligatoria al cerrar | La síntesis es **a petición** (EV-016) |
+| §5, «Sirius mantiene una única memoria canónica» | Una sola memoria canónica | Sigue siendo cierto **de la memoria canónica de Sirius**. Junto a ella existen el diario operativo del motor y el **conocimiento común del trabajo y los proyectos**, que no es memoria canónica (EV-018) |
+| §9.3, etapa 0.4 «Delegación supervisada» | Un especialista por tarea, como capacidad futura de Sirius | Se conserva **la delegación de una consulta de ingeniería del propietario**; la delegación de *encargos de trabajo* la hace el motor (EV-019) |
+
+### 19.2 Qué NO queda enmendado
+
+Se dice explícitamente para que no se deduzca de más:
+
+- **§17, la regla de activación**, entera. Ninguna etapa post-0.1 empieza sin
+  Definición de Producto aprobada, pruebas de aceptación reproducibles y
+  arquitectura técnica aprobada. Esta enmienda **no autoriza implementar nada**.
+- **§9, el roadmap**: no cambia el orden, ni el alcance, ni la numeración de
+  ninguna versión. El conocimiento común **no recibe etapa**.
+- **§12**, HEAD-R1 y el control físico; **§15**, las señales de parada; **§16**,
+  la jerarquía documental.
+- **EV-004**: sigue vigente sin enmienda, porque el conocimiento común no es la
+  memoria canónica de Sirius.
+
