@@ -198,13 +198,200 @@ sobre lo derivado. Es el canal con el que el arnés de examen del banco inyecta
 los ejes del corpus congelado, y esta palanca no le cambia el significado: lo
 derivado es el suelo del camino de producción, no un sustituto de lo declarado.
 
+### La forma de los instantes derivados (corregida al medirla)
+
+La primera escritura de este ADR eligió **truncar al segundo**, con el
+argumento de que así la vigencia tendría el mismo ancho que el corpus. Al
+comprobarlo antes de darlo por bueno resultó **falso y peligroso**: hoy el
+tiempo objetivo llega en DOS anchos —el del corpus y el de una fecha
+interpretada, sin fracción, y el del respaldo «ahora» de
+`InterpreteDePeticion`, que es `datetime.isoformat()` y sí la lleva
+(ADR-164)—, y contra el segundo la forma truncada **invierte** el veredicto:
+
+```
+>>> "2026-09-08T12:00:00Z"        > "2026-09-08T12:00:00.123456Z"   # truncado
+True    # G8: "aun no vigente" para un item registrado ANTES de la consulta
+>>> "2026-09-08T12:00:00.000000Z" > "2026-09-08T12:00:00.123456Z"   # emitido
+False   # admitido, que es lo correcto
+```
+
+Se emite, por tanto, **ISO-8601 UTC con `Z` y los seis dígitos de
+microsegundo siempre**: contra un objetivo con fracción la comparación es
+dígito a dígito y sale exacta, y contra uno sin fracción el `.` (`0x2E`)
+ordena antes que la `Z` (`0x5A`), de modo que un ítem del mismo segundo se lee
+como inmediatamente anterior — que admite en `valid_from` y da por terminada
+en `valid_to`, el lado seguro en los dos. El registro se canoniza a
+`AAAA-MM-DD hh:mm:ss.ffffff`, que ya es de ancho fijo y es la forma exacta en
+la que ADR-164 emite el corte.
+
 ## Comprobación que la sostiene
 
-PENDIENTE: se completa antes de abrir la PR.
+Todo lo que sigue se midió sobre esta rama; las cifras del banco llevan el
+árbol que las produjo (ADR-154).
+
+### Las afirmaciones sobre el código, con el comando que las comprueba
+
+- **`build_staged_engine_port` no poblaba `ejes_por_identidad`**:
+  `git show f8855c8:src/sirius/adapters/persistence/staged_engine_port.py |
+  grep -n "ejes_por_identidad"` — el parámetro solo se propaga, y ningún
+  llamante de producción lo pasa
+  (`grep -rn "build_staged_engine_port(" src/`).
+- **El producto escribe exactamente tres orígenes de revisión**:
+  `grep -rn "_ORIGIN = " src/sirius/application/` da `MANUAL_MEMORY_ORIGIN`,
+  `MEMORY_CORRECTION_ORIGIN` y `CONFIRMED_MEMORY_SUGGESTION_ORIGIN`, y
+  `grep -rn "create_memory(\|correct_memory(" src/sirius/application/` que
+  no hay ningún cuarto camino. `decision_revisions` no tiene columna `origin`
+  (`grep -n "class DecisionRevisionModel" -A 14
+  src/sirius/adapters/persistence/models.py`). Esto es lo que hace que
+  `FUENTE_EXTERNA` no se derive: no hay dato del que salga.
+- **`updated_at` de una decisión solo lo escriben las transiciones de
+  estado**: `grep -n "updated_at" src/sirius/adapters/persistence/
+  sqlite_decision_repository.py` — `create_proposal`, `approve_decision`,
+  `supersede_decision` y `archive_decision`, y ninguna de `set_category`,
+  `set_user_category` o `set_user_criticality`.
+- **`SUPERSEDED` es terminal**: `ensure_can_archive` solo admite `APPROVED`
+  (`src/sirius/domain/decision.py:185-195`) y `DecisionStatus` declara que no
+  hay camino de vuelta (`:40-50`).
+- **Ninguna puerta lee `autoridad`**: `grep -n "autoridad"
+  src/sirius/domain/staged_engine_gates.py` no devuelve nada. Por eso este
+  ADR no le atribuye ninguna mejora de métrica.
+- **`MEM-017` del corpus es `CONFIRMADA` e `INFORMAL` a la vez**, que es el
+  precedente de la traducción de la sugerencia confirmada:
+  `python -c "import json;[print(i['id'],i['confirmacion'],
+  i['ejes_p2']['autoridad']) for i in
+  json.load(open('tests/acceptance/fixtures/evidence_bank_47_casos.json'))
+  ['items'] if i['id']=='MEM-017']"` → `MEM-017 CONFIRMADA INFORMAL`.
+
+### Las pruebas, vistas fallar (prueba por mutación, ADR-001)
+
+`uv run pytest tests/unit/test_staged_engine_port.py` da **28 passed** con el
+cambio. Sin él, y contra cinco mutaciones distintas, cae siempre:
+
+| Mutación aplicada al puerto | Resultado |
+|---|---|
+| Se quita la derivación entera (`ejes=` y `_registro`) | **14 failed**, 14 passed |
+| La ventana se deriva sin mirar el estado de la decisión | **6 failed** |
+| La autoridad cae en `ACTO_EXPLICITO_USUARIO` por defecto | **1 failed** |
+| Un recuerdo recibe `valid_to` de su revisión | **1 failed** |
+| La vigencia se trunca al segundo | **5 failed** |
+
+Las tres primeras filas son las que impiden inventar un eje; las dos últimas,
+las que impiden inventarlo por la puerta de atrás (un fin de vigencia que
+nadie declaró, y una forma que `G8` compara mal). El caso de aceptación de la
+incidencia —`test_un_item_real_del_camino_de_produccion_llega_con_sus_ejes_
+derivados`— está en la primera fila: contra el árbol anterior falla con
+`assert EjesDeclarados(...) != EjesDeclarados(...)`, es decir, con `SIN_EJES`.
+
+### La cadena completa, una sola invocación
+
+`pwsh -File scripts/check.ps1`, sobre el árbol de **`79a7051`** (ADR-145,
+ADR-153, ADR-154):
+
+```
+614 files already formatted
+All checks passed!
+Success: no issues found in 580 source files
+5199 passed, 17 skipped, 2 xfailed in 475.56s (0:07:55)
+check=0
+```
+
+`git diff --check` no encuentra nada.
+
+### El banco: la medición, y por qué NO se da por buena
+
+Doble sin Ollama, `scripts/diagnosticar_busqueda_del_banco.py`, sobre
+`f8855c8` (el árbol anterior al cambio, idéntico en código a `main`
+`22e880e`) y sobre `79a7051` (con el cambio). Las cuatro configuraciones del
+árbol anterior reproducen exactamente ADR-148, así que el suelo del que se
+parte es el que esa ficha declara:
+
+| Configuración | `f8855c8` (antes) | `79a7051` (después) |
+|---|---|---|
+| petición fija, sin inyectar ejes | 0/47; 487; 72/81; 0 | 0/47; 487; 72/81; 0 |
+| `--ejes` (corpus) | 0/47; 421; 71/81; 0 | 0/47; 421; 71/81; 0 |
+| `--peticion` | 16/47; 162; 73/81; 0 | **17/47; 57; 39/81; 9** |
+| `--ejes --peticion` (techo) | 20/47; 144; 73/81; 0 | 20/47; 144; 73/81; 0 |
+
+La celda en negrita **está por debajo del suelo publicado** en el criterio de
+parada (≥16/47, ≤162 de más, **0** críticas perdidas, ≥73/81 hallados): pierde
+34 hallados y 9 críticas. Según ese criterio, escrito antes de medir, esto
+**se registra y se para**; no se ajusta la predicción después de ver el
+número. Lo que sigue es la raíz, buscada antes de tocar nada más.
+
+**La raíz no es la derivación: es la fecha con la que el arnés carga el
+canon.** Tres mediciones lo separan:
+
+1. **Con la ventana desactivada y solo la autoridad derivada**, `--peticion`
+   vuelve a `16/47; 162; 73/81; 0`, el suelo exacto. Toda la caída viene de
+   `valid_from`/`valid_to`.
+2. **Con el reloj de los dos repositorios fijado en `2026-01-01`** —es decir,
+   con un canon fechado en el pasado, como lo estaría en el producto real— la
+   misma configuración da `16/47; 163; 74/81; **0**`: la caída desaparece
+   entera. El cargador del banco crea los 97 ítems el día de la medición
+   (`_load_canon_item` → `SaveManualMemoryUseCase`/`ApproveDecisionUseCase`,
+   sin fecha), y **43 de los 47 casos declaran un tiempo objetivo de
+   `2026-06-15`**: derivada de una fila creada hoy, la vigencia empieza
+   DESPUÉS del tiempo por el que se pregunta, y `G8` descarta casi todo. Es
+   exactamente el hueco **H2** que ADR-148 ya describe («el cargador del banco
+   crea todos los ítems el día de la medición — artefacto del arnés; en el
+   producto la fecha es real»), solo que P2 lo convierte de un caso
+   (`B04-CA-32`) en casi todos, porque hasta ahora ninguna fecha viajaba en
+   los ejes.
+3. **El techo de `20/47; 144` lo producen los tres ejes de esta palanca y
+   nadie más.** Inyectando del corpus **solo** `valid_from`, `valid_to` y
+   `autoridad` —recortando el resto— la medición da `20/47; 144; 73/81; 0`,
+   idéntica al techo completo. Es decir: la derivación de esta palanca es la
+   palanca correcta; lo que le falta para demostrarlo sobre el banco no son
+   más ejes, son las fechas reales del canon.
+
+Los dos guiones de diagnóstico (2) y (3) son desechables y **no se
+commitean**: se describen aquí con lo que hacen —fijar
+`sqlite_memory_repository._utc_now_naive`/`sqlite_decision_repository.
+_utc_now_naive` en `2026-01-01`, y recortar `_ejes_declarados` a los tres
+ejes— para que cualquiera los reconstruya en diez líneas.
+
+**Lo que NO se ha medido**: la medición con Ollama real en la máquina del
+propietario. El comando es el de ADR-148 y ADR-164:
+
+```
+uv run python scripts/medir_banco_con_ollama_real.py --diagnostico
+```
+
+y su predicción, escrita en la orden y en el criterio de parada de arriba,
+sigue siendo **20/47 exactas, ≤144 de más, 0 críticas perdidas, ≥73/81
+hallados**. Pero esa medición **corre sobre el mismo cargador**, así que
+medirá el mismo artefacto en todos los casos en los que el intérprete infiera
+un tiempo objetivo pasado. Ejecutarla antes de H2 no mediría esta palanca.
 
 ## Consecuencias
 
-PENDIENTE: se completa antes de abrir la PR.
+- **Producción entrega los ejes que el esquema sabe.** Todo ítem real que
+  `build_staged_engine_port` devuelve lleva ya su ventana de vigencia y su
+  autoridad cuando las filas las declaran, y `SIN_EJES` solo cuando no las
+  declaran. Las puertas siguen degradando exactamente igual cuando el eje
+  falta: no se ha tocado ninguna.
+- **En el uso real esto no puede excluir lo que hoy admite por el tiempo.**
+  Un ítem se registra antes de la consulta que lo busca, y el tiempo objetivo
+  por defecto es «ahora», así que su `valid_from` derivado es siempre anterior.
+  La exclusión solo aparece cuando la pregunta declara un tiempo objetivo
+  **anterior** al registro del ítem, que es lo que `G8` significa.
+- **Queda una decisión del propietario, y es de plan, no de código**: el
+  orden `P1 → P2 → P3 → H2` de ADR-148 no es medible tal cual, porque la
+  medición de P2 sobre el banco necesita H2 (fechar el canon como el corpus
+  lo declara, en el cargador, sin tocar el corpus ni `resultado_esperado`).
+  H2 está **fuera del alcance** de la incidencia #572, así que no se ha hecho
+  aquí. Las opciones son fusionar esta palanca y adelantar H2 antes de
+  medirla, o retenerla hasta que H2 esté. No se decide por iniciativa propia.
+- **La deuda 20 (`created_at` como cadena, ordenado lexicográficamente) sigue
+  abierta y ahora tiene un segundo cliente**: la ventana de vigencia. Este ADR
+  no la salda —su raíz está fuera de alcance—; lo que hace es dejar por
+  escrito, y con pruebas de frontera, cuál es la única escritura que ordena
+  bien contra los dos anchos de tiempo objetivo que hoy existen.
+- **`EjesDeclarados.declarados` sigue siendo `False`** para todo ítem real,
+  porque mira `confirmacion`/`validez`, que ningún dato del esquema declara.
+  Nadie lo consulta hoy (`grep -rn "\.declarados" src/ --include=*.py`, que
+  sale vacío), así que no cambia nada; se dice para que no se lea como un
+  olvido.
 
 ## Alternativas descartadas y por qué
 
