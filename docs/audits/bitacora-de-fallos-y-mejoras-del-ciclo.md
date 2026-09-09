@@ -4310,6 +4310,48 @@ que falta no es capacidad, es **una vía de entrada**: el ciclo sabe convertir
 un hallazgo de revisión en encargo de corrección, y no sabe convertir un fallo
 de Quality en lo mismo. Queda como deuda 29.
 
+
+---
+
+### 86. El propietario me autoriza a empujar a la rama que acompaño, y eso cambia lo que tengo que escribir antes de tocarla (08-09-2026, 22:55 UTC)
+
+Ante el atasco de la entrada 85 —donde el ciclo no podía recoger un fallo de
+CI y yo no podía escribir en la rama— el propietario autorizó explícitamente el
+desatasco. **Es una excepción declarada a una separación que existe por buenas
+razones**, así que la trato como tal: nota de arranque publicada en la
+incidencia antes del primer commit (ADR-001), con las cuatro preguntas y **un
+criterio de parada que incluye devolvérselo**.
+
+**El criterio que más me importa de esa nota**: si arreglar la cita exigiera
+tocar cualquier otra cosa —una cifra, código, una prueba, otra sección—, me
+detengo y se lo devuelvo sin empujar. **La autorización era para dos líneas, no
+para entrar en el trabajo.** Escribirlo antes es lo que impide que el alcance
+se estire solo.
+
+**Y el diagnóstico mejoró al leer el guardián en vez de deducirlo.** Su regla
+es concreta: solo juzga spans entre comillas invertidas **sin espacios** que
+empiecen por una raíz del repositorio, y descarta los que contienen `*`, `{`,
+`}`, `<`, `>` o `://` (`ruta_citada`, `NO_ES_UNA_RUTA_CONCRETA`). De ahí dos
+cosas que yo había supuesto mal:
+
+1. **El `AssertionError` largo que el ADR transcribe NO ofende**: lleva
+   espacios, así que el guardián lo ignora entero. Mi diagnóstico anterior
+   señalaba dos líneas; la ofensora es **una sola**, la de la cita suelta. Mi
+   corrida local ya lo decía —la lista de rutas inexistentes traía un elemento,
+   no dos— y yo había escrito «dos líneas» leyendo el texto en vez de la
+   salida.
+2. **Hay un arreglo mejor que borrar la cita**: escribirla como **glob real**,
+   `docs/decisions/ADR-117-*.md`. Queda excluida por construcción —el `*` está
+   en la lista de descartes—, dice lo mismo, y a diferencia de unos puntos
+   suspensivos **es una ruta que se puede ejecutar**.
+
+Eso último es la parte que me gusta: leer la regla del guardián no solo dio el
+arreglo correcto, dio uno **mejor que el que yo tenía pensado**. Llevo el día
+entero registrando que leo el nombre de las cosas en vez de su definición; aquí,
+por una vez, leí la definición primero y salió gratis.
+
+Guardián en verde tras el cambio (`195 passed`). Cadena completa en marcha, en
+una sola invocación.
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
