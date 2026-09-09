@@ -4462,6 +4462,57 @@ del que el propio ciclo podía hacer**, porque yo no tenía la herramienta y él
 sí. La regla no era solo «no escribas en la rama que juzgas» — era también
 **«el que tiene el entorno correcto es el que debe ejecutar»**, y eso no lo
 había visto hasta verlo hecho.
+
+---
+
+### 89. La línea de palancas de ADR-148 queda cerrada, y su valor no lo puede enseñar ninguna medición de CI (09-09-2026, 01:00 UTC)
+
+`main = 5fc5fdc`. Dentro: **P1** (ADR-164), **H2** (ADR-166), **H1** (ADR-168) y
+**P3** (ADR-169). Fuera, con negativo medido y por eso mismo útil: **P2**.
+
+**Estado final, medido por mí sobre `main` y no heredado:**
+
+| medición | exactas | de más | críticas | hallados |
+|---|---|---|---|---|
+| etapa de búsqueda (`--peticion`) | 17/47 | 162 | 0 | 78/81 |
+| arnés de examen | 29/47 | 50 | 0 | 67/81 |
+| paquete de producción (filtro inerte, política uniforme) | 0/47 | 487 | 0 | 72/81 |
+
+**Y aquí está la conclusión incómoda de toda la jornada, que solo se ve al
+final**: ninguna de las tres se mueve con P3, **y no puede moverse**. Las tres
+corren con el filtro desactivado o ausente —la primera por diseño del
+diagnóstico, la tercera con un doble que nunca descarta— y **P3 es el filtro**.
+
+> **Se ha construido, revisado en cinco rondas y fusionado una palanca cuyo
+> efecto ninguna medición de CI puede observar.** No es un defecto del trabajo
+> —la ficha lo dice y predijo exactamente eso: «ninguna de las cuatro columnas
+> se mueve por esta palanca»—. Es que el banco, tal como corre en integración
+> continua, **no tiene instrumento para esta pieza**.
+
+La única medición que sí lo tiene es `medir_banco_con_ollama_real.py`, que exige
+Ollama y por tanto la máquina del propietario, y **su última salida publicada es
+del 02-09**: `22/47; 39; 10 críticas perdidas; 59/81`. Desde entonces han
+entrado M18b-M20, P1, H2, H1 y P3. **No hay línea base vigente**, y sin ella no
+se sabe si esta línea está cerca o lejos.
+
+**Lo que sí queda establecido, y no depende de esa medición:**
+
+- La columna de **hallados** está terminada por parte del ciclo: los tres huecos
+  que quedan —`DEC-001`, `MEM-020`, `MEM-001`— son decisiones del propietario,
+  no trabajo pendiente.
+- El banco **no puede distinguir registro de vigencia** (deuda 27), por
+  construcción del corpus.
+- Y la cifra que de verdad decide, la de las **críticas perdidas**, solo se
+  mueve cuando el filtro funciona — y la última vez que funcionó, perdió diez.
+
+**Lo que me llevo de estas doce horas**, y está repartido por las entradas 66 a
+88: cuatro raíces que nombré y en las que volví a caer, dos falsos verdes
+propios, cinco premisas falsas en encargos míos —una de ellas llegó al criterio
+de parada de un ADR—, tres defectos P2 que introduje al desatascar una rama que
+no era mía, y una parada del freno que provoqué yo. Todo ello mientras
+verificaba más que ningún otro día. **La lección no es que hiciera pocas
+comprobaciones: es que casi todas comprobaban que las cifras se reproducían, y
+casi ninguna qué medían.**
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
