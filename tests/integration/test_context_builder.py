@@ -1107,16 +1107,23 @@ class _FiltroQueConservaTodoYAplicaElCupo:
     """Doble del ADAPTADOR, no del modelo: reproduce su camino de éxito con
     un modelo que declara relevante todo lo que recibe, y aplica el mismo
     recorte real (`recortar_al_cupo`) que el adaptador de Ollama aplica sobre
-    el veredicto. Sirve para ver el efecto del cupo sin red y sin modelo."""
+    el veredicto. Sirve para ver el efecto del cupo sin red y sin modelo.
+
+    Registra también el veredicto que devuelve —las identidades, en orden—
+    para que una prueba pueda AFIRMAR qué candidata dejó fuera el cupo en vez
+    de suponerlo en un comentario."""
 
     def __init__(self) -> None:
         self.received_cupos: list[int | None] = []
+        self.veredictos: list[tuple[int, ...]] = []
 
     def filter_candidates(
         self, query_text: str, candidates: Sequence[RankedKnowledge], *, cupo: int | None = None
     ) -> Sequence[RankedKnowledge]:
         self.received_cupos.append(cupo)
-        return recortar_al_cupo(candidates, cupo)
+        veredicto = recortar_al_cupo(candidates, cupo)
+        self.veredictos.append(tuple(candidata.item.id for candidata in veredicto))
+        return veredicto
 
 
 def _tres_candidatos_con_categoria(database_path: Path) -> None:
@@ -1243,10 +1250,14 @@ def test_el_recorte_por_cupo_nunca_pierde_una_critica(tmp_path: Path) -> None:
     # incondicionalmente y la prueba no vería el rescate RF-25 que fija.
     set_category.set(CategoryTargetKind.MEMORY, primera.id, "trabajo")
     set_category.set(CategoryTargetKind.MEMORY, critica.id, "trabajo")
-    # Recencia fijada para que el orden de §6.2 sea determinista: primera,
-    # luego la crítica. Así el cupo de 1 deja la crítica fuera del veredicto.
-    _set_updated_at(database_path, primera.id, "2026-01-02T00:00:00")
-    _set_updated_at(database_path, critica.id, "2026-01-01T00:00:00")
+    # El orden de `ranked` en este camino NO lo fija la recencia de §6.2: el
+    # motor por etapas ya lo devuelve ordenado por `_clave_de_orden`
+    # (-criticidad aplicada, autoridad de etapa, sujeto, identidad canónica) y
+    # `_recuperar_por_etapas` lo invoca con `PLANO_COMUN_VACIO`, así que
+    # `criticidad_de` da ORDINARIA para las dos y el desempate cae en la
+    # identidad canónica. Por eso la precondición del escenario —que el cupo
+    # de 1 dejó la crítica FUERA del veredicto— se afirma abajo contra el
+    # veredicto que el puerto devolvió, en vez de confiarla a este comentario.
     relevance_filter_port = _FiltroQueConservaTodoYAplicaElCupo()
     staged_engine_port = build_staged_engine_port(database_path)
     try:
@@ -1264,4 +1275,7 @@ def test_el_recorte_por_cupo_nunca_pierde_una_critica(tmp_path: Path) -> None:
         staged_engine_port.close()
 
     assert relevance_filter_port.received_cupos == [1]
+    # Precondición afirmada: el cupo de 1 dejó la crítica fuera del veredicto.
+    assert relevance_filter_port.veredictos == [(primera.id,)]
+    # Y aun así llega al contexto, porque el rescate actúa después del filtro.
     assert critica.id in {memoria.id for memoria in context.memories}

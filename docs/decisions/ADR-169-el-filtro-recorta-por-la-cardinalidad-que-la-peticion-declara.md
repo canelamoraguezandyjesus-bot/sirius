@@ -381,7 +381,7 @@ código de antes:
 
 | Mutación | Qué se rompe | Rojo |
 |---|---|---|
-| M1 `recortar_al_cupo` devuelve `tuple(kept)` sin cortar | el recorte entero | 4 pruebas |
+| M1 `recortar_al_cupo` devuelve `tuple(kept)` sin cortar | el recorte entero | 5 pruebas |
 | M2 `cupo_del_filtro` deja caer la rama `EXHAUSTIVA` | «sin número fijo» | 3 |
 | M3 `ACOTADA` usa `objetivos` en vez de `limite_objetivo` | el límite declarado | 3 |
 | M4 sin la guarda del cupo no positivo (`return cupo`) | el cero que vaciaría | 1 (`test_cupo_del_filtro_no_devuelve_un_cupo_no_positivo`) |
