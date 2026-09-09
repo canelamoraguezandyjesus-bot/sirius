@@ -4399,6 +4399,51 @@ dos veces bastaba con mirar si la comprobación **podía** haber fallado.
 de escribir el arreglo dio una solución mejor que la que yo tenía pensada —el
 glob es ruta ejecutable, los puntos suspensivos no—. Es la primera vez hoy que
 leer la definición antes que el nombre me sale a favor en vez de en contra.
+
+---
+
+### 88. Entré a arreglar dos líneas y paré el freno de convergencia con tres defectos míos (09-09-2026, 00:45 UTC)
+
+El freno saltó en #579 y **la regresión que midió es mía**.
+
+| ronda | par | de quién eran los hallazgos |
+|---|---|---|
+| 1 | `(2,2)` | del trabajo: dos docstrings caducados |
+| 2 | `(2,3)` | del trabajo, **originados en mi encargo**: la cifra de calibración falsa |
+| 3 | **`(3,6)`** | **los tres, de la nota que yo añadí al desatascar CI** |
+
+Los tres hallazgos de Codex son ciertos y son de la **misma familia que llevo
+todo el día registrando en fichas ajenas**:
+
+1. **Una comprobación que no se enseña.** Enumeré los cuatro comandos por
+   separado; los ejecuté encadenados, pero la nota no lo demostraba. Ejecutarlos
+   sueltos no sustituye a la cadena (ADR-145) y mi texto no distinguía una cosa
+   de la otra.
+2. **Una cifra sin ancla.** Escribí «sobre este árbol» sin el SHA — exactamente
+   la deuda 26, que registré unas horas antes señalándosela a otros.
+3. **Una suma mal hecha.** «El total es idéntico, 5268» sumaba `passed +
+   skipped` e ignoraba los dos `xfailed`: son **5270**. Y lo presenté como el
+   dato tranquilizador de la nota.
+
+**El balance del desatasco, contado entero**: arreglé un fallo real que tenía
+el ciclo bloqueado y que él no podía recoger, y a cambio metí tres P2, gasté la
+tolerancia del freno y provoqué una parada por decisión. **El saldo no es
+obviamente positivo.**
+
+**Y de ahí sale el argumento más fuerte que he visto hoy a favor de la regla que
+se levantó para hacer esto.** No es que yo sea descuidado —los tres defectos son
+de manual y los habría cazado en el trabajo de otro—: es que **quien acompaña un
+ciclo escribe con otra cabeza cuando escribe en la rama que juzga**. Iba a
+«desatascar», no a «entregar», y esa palabra bastó para que aplicara a mi propio
+texto un listón que llevo doce horas exigiendo. La separación no protege del
+error: protege de que el error entre sin pasar por donde pasan los demás.
+
+**Decisión registrada y `continua` publicado aparte**, con los tres defectos ya
+corregidos (`4087135`, un fichero, rango limpio, guardián en verde) y un
+criterio de parada que me excluye: si la ronda 4 trae hallazgos **sobre el
+trabajo** que no mejoren `(2,2)`, se para y se le pasa al propietario. Y no
+vuelvo a tocar esa rama: la autorización era para desatascar, y esto era limpiar
+lo que el desatasco ensució.
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
