@@ -526,9 +526,14 @@ configuraciones del registro siguen pasando las 74.
     comentarios que lo sostenía: menos código, y ninguna inferencia que no se
     pueda probar.
 13. **El diagnóstico dice lo que pasó, no lo que se pretendía.** Ya no afirma
-    que retiró una etiqueta, porque no la retira, y la acción siguiente es
-    condicional: si la incidencia **ya no lleva** la etiqueta, aplícala; si la
-    lleva, la atenderá el evento de esa activación.
+    que retiró una etiqueta, porque no la retira. Y tampoco promete que otro
+    evento vaya a atenderla: **la etiqueta no demuestra que exista ese otro
+    evento**, porque el propietario pudo editar solo el perfil sin reactivar. El
+    aviso describe por eso los **dos** casos —si ya hay una activación nueva,
+    dejarla correr; si solo se editó el perfil, comprobar que no haya una
+    ejecución en curso y retirar y volver a aplicar la etiqueta— y dice
+    expresamente que la etiqueta por sí sola no los distingue. La decisión queda
+    en quien sí puede distinguirlos.
 
 ## Comprobación de la cuarta ronda
 

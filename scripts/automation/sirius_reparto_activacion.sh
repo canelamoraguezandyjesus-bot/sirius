@@ -115,8 +115,12 @@ fi
 #
 # Así que la salida es la conservadora: se explica y se para. La activación que
 # haya se CONSERVA, para que la atienda el evento que sí le corresponde; y si no
-# hay ninguna otra, el comentario dice qué aplicar. Dejar este evento sin atender
-# es peor que un encargo perdido, pero mucho menos malo que borrar el de otro.
+# hay ninguna otra, el comentario dice qué hacer. Y no promete que otro evento
+# vaya a atenderla: la etiqueta no demuestra que exista ese otro evento -el
+# propietario pudo editar solo el perfil, sin reactivar-, así que el aviso
+# describe los DOS casos y deja la decisión en quien sí puede distinguirlos.
+# Dejar este evento sin atender es peor que un encargo perdido, pero mucho menos
+# malo que borrar el de otro.
 #
 # EL MARCADOR IDENTIFICA EL PAR CONCRETO, no «hubo un rechazo alguna vez»: dos
 # eventos rancios distintos merecen cada uno su explicación.
@@ -129,7 +133,9 @@ cuerpo="$(mktemp)"
     "${PERFIL_EVENTO:-ninguno}" "${perfil_actual:-ninguno}"
   printf 'Esa activación pedía un trabajo distinto del que describe la orden de ahora, y ejecutar el de ahora seria cambiar el tipo de trabajo sin que nadie lo haya pedido. **No se ha ejecutado nada.**\n\n'
   printf '**Tampoco se ha tocado ninguna etiqueta.** No hay forma de saber si la `sirius:implement-requested` que hay ahora es la de esta activacion o la de otra posterior, y retirar la activacion de otro seria peor que dejar este evento sin atender.\n\n'
-  printf '**Siguiente accion:** comprueba que el cuerpo dice el trabajo que quieres. Si la incidencia **ya no lleva** `sirius:implement-requested`, vuelve a aplicarla; si la lleva, la atendera el evento de esa activacion y aqui no hay nada mas que hacer.\n\n'
+  printf '**Siguiente accion.** La etiqueta, por si sola, NO permite distinguir estos dos casos, asi que lo decides tu:\n\n'
+  printf -- '- **Si ya volviste a activar** con el perfil de ahora, esa activacion tiene su propio evento y lo atendera la puerta que corresponda: dejala correr, aqui no hay nada mas que hacer.\n'
+  printf -- '- **Si solo editaste el perfil** y no volviste a activar, la `sirius:implement-requested` que hay es la de esta activacion y ya no la va a atender nadie. Comprueba que no haya una ejecucion en curso, retira la etiqueta y vuelve a aplicarla para generar una activacion nueva.\n\n'
   printf '@%s\n' "$OWNER_LOGIN"
 } > "$cuerpo"
 

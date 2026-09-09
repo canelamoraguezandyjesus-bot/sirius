@@ -772,8 +772,26 @@ def test_un_perfil_cambiado_no_lo_ejecuta_nadie_y_no_retira_nada(
     assert "Tampoco se ha tocado ninguna etiqueta" in comentario, (
         "el diagnóstico no puede decir que retiró una etiqueta cuando la conservó"
     )
-    assert "ya no lleva" in comentario, (
-        "ni pedir que se reactive algo que puede estar ya activado: la acción es condicional"
+    # El aviso tiene que servir para los DOS casos, porque la etiqueta no los
+    # distingue: puede haber una activación nueva ya en marcha, o puede que solo
+    # se editara el perfil y esa etiqueta sea la de este mismo evento.
+    assert "NO permite distinguir" in comentario, (
+        "el aviso tiene que decir que la etiqueta, por sí sola, no distingue los dos casos"
+    )
+    assert "Si ya volviste a activar" in comentario and "dejala correr" in comentario, (
+        "falta el caso en que ya existe una activación nueva: hay que dejarla continuar"
+    )
+    assert "Si solo editaste el perfil" in comentario, (
+        "falta el caso en que solo se editó el perfil y nadie va a atender la etiqueta"
+    )
+    assert "no haya una ejecucion en curso" in comentario, (
+        "antes de retirar la etiqueta hay que comprobar que no hay trabajo corriendo"
+    )
+    assert "retira la etiqueta y vuelve a aplicarla" in comentario, (
+        "y decir cómo generar una activación nueva"
+    )
+    assert "la atendera el evento de esa activacion y aqui no hay nada mas" not in comentario, (
+        "no puede afirmar que otro evento la atenderá: la etiqueta no lo demuestra"
     )
 
 
