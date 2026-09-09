@@ -4352,6 +4352,53 @@ por una vez, leí la definición primero y salió gratis.
 
 Guardián en verde tras el cambio (`195 passed`). Cadena completa en marcha, en
 una sola invocación.
+
+---
+
+### 87. Desatasco aplicado, y dos falsos verdes míos en el mismo cuarto de hora (09-09-2026, 00:20 UTC)
+
+`e01caf3d → d4e985c`, un fichero, `+36/-1`. Una sola cita, escrita como glob
+real en vez de con puntos suspensivos. Quality en verde sobre el head nuevo, y
+un `continua` —éste sí con sentido, porque la causa ya no está—.
+
+**Las tres condiciones del criterio de parada que publiqué antes de tocar,
+cumplidas y transcritas**: guardián en verde (`195 passed`), cadena entera en
+verde (`5252 passed, 16 skipped, 2 xfailed`, `EXIT_CODE_CHECK=0`) y diff
+mínimo con `git diff --check` **con rango** en cero.
+
+**Pero lo que hay que registrar son los dos falsos verdes que me cacé por el
+camino**, porque los dos son de manual y los dos los produje yo esta noche:
+
+1. **`EXIT_CODE_CHECK=0` sin que la cadena hubiera corrido.** Ejecuté
+   `pwsh -File scripts/check.ps1 | tail -25; echo "EXIT_CODE_CHECK=$?"`. No hay
+   `pwsh` en este entorno: el comando no existió, y `$?` capturó el código de
+   **`tail`**, que salió bien. Verde perfecto sobre una cadena que nunca
+   arrancó. Lo salvó leer la salida entera —«`pwsh: command not found`»— en vez
+   de quedarme con la última línea, que era justo la que mentía.
+2. **`git diff --check` con el rango vacío.** Lo ejecuté **antes de
+   confirmar**, así que `HEAD` seguía siendo el commit de partida y el rango
+   comparaba un árbol consigo mismo. Cero errores de espacios porque no había
+   nada que mirar. **Es literalmente la deuda 25, que registré hace dos horas
+   señalando el mismo defecto en mis siete encargos.**
+
+**Lo que tienen en común, y es la lección**: los dos son **comandos que
+devuelven éxito por no haber hecho nada**. No fallan, no avisan, y su salida
+es indistinguible de la del éxito real. La deuda 25 decía «`git diff --check`
+sin argumentos no demuestra nada»; la forma general es más ancha:
+
+> **Una comprobación que puede pasar sin haber mirado nada es una comprobación
+> que hay que comprobar.** Y la forma de comprobarla es hacerla fallar a
+> propósito una vez —igual que una prueba se ve fallar antes de darla por
+> buena—.
+
+Aplicado aquí: `check.ps1` debía haberse comprobado ejecutando algo que
+existiera; el `diff --check`, corriéndolo cuando el rango tenía contenido. Las
+dos veces bastaba con mirar si la comprobación **podía** haber fallado.
+
+**Y el desatasco en sí dejó una cosa buena**: leer la regla del guardián antes
+de escribir el arreglo dio una solución mejor que la que yo tenía pensada —el
+glob es ruta ejecutable, los puntos suspensivos no—. Es la primera vez hoy que
+leer la definición antes que el nombre me sale a favor en vez de en contra.
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
