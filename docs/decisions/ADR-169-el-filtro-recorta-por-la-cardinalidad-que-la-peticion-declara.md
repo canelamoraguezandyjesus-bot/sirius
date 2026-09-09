@@ -609,6 +609,22 @@ el head no nombra más fichero que esta ficha.
   aplicar dos veces la misma puerta y no la cardinalidad. Es además el campo
   que degrada al «límite que no ata» en los 47 casos, así que no recortaría
   nada.
+  Lo que esa elección arrastra, y hay que dejarlo escrito porque **invierte
+  una razón que el árbol ya tenía**: `_limites`
+  (`src/sirius/application/interpret_query_request.py`) metía el límite
+  inferido en `limite_objetivo` precisamente para que NO truncara —«truncar
+  por una cifra que un modelo creyó leer en la pregunta perdería elementos sin
+  recurso»—, y la rama `ACOTADA` de `cupo_del_filtro` lo convierte ahora en
+  cota de recorte. Ya no trunca en `G12`, pero sí descarta en el filtro. El
+  recurso que queda cubre lo crítico y no todo: RF-25/RF-26 devuelve las
+  candidatas de criticidad máxima y los candidatos sin categoría siguen
+  protegidos incondicionalmente, pero **una candidata ordinaria con categoría
+  que caiga por debajo del cupo se pierde sin recurso** —es exactamente lo que
+  mide `B04-CA-34` (`ACOTADA n=10`), que pasa de 23 a 16 elementos perdiendo
+  `MEM-914`, en «Las tres ocurrencias que el recorte pierde»—. La reversión no
+  la decide esta ficha: la ordena la incidencia #579 («Con `ACOTADA`: respeta
+  el límite que la petición declara»). Aquí solo queda registrada, con su
+  precio.
 - **Inventar una `n` para `EXACTA` a partir de la consulta** (contar los
   sustantivos, buscar «cuál» frente a «cuáles»…). Sería fabricar una
   adjudicación con una heurística que nadie ha medido, exactamente lo que

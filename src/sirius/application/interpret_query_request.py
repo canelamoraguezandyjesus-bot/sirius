@@ -250,9 +250,15 @@ def _limites(limite: int | None) -> tuple[int, int]:
     """``(objetivo, duro)``. Sin límite declarado, uno que no ata.
 
     Un límite inferido de la frase entra como **objetivo**, nunca como duro:
-    ``G12`` trunca por el límite duro (``truncate_to_hard_limit``), y truncar
-    por una cifra que un modelo creyó leer en la pregunta perdería elementos
-    sin recurso. El banco distingue ``DURO`` de ``OBJETIVO`` porque es
+    ``G12`` trunca por el límite duro (``truncate_to_hard_limit``), y este
+    campo lo mantiene fuera de esa puerta. Lo que ya no puede afirmarse es la
+    consecuencia que aquí se daba —que la cifra inferida no descarta nada—:
+    ADR-169 reutiliza ``limite_objetivo`` como cupo del filtro de relevancia
+    para ``ACOTADA``, así que hoy sí descarta, no en ``G12`` sino en el filtro,
+    con RF-25/RF-26 y la protección de los candidatos sin categoría como único
+    recurso (una candidata ordinaria con categoría por debajo del cupo se
+    pierde). Esa reversión la ordena la incidencia #579 y está registrada en
+    ADR-169. El banco distingue ``DURO`` de ``OBJETIVO`` porque es
     adjudicación declarada, no inferencia; producción no la tiene.
     Un límite no positivo se descarta como si no se hubiera declarado: una
     cuota de 0 vaciaría la respuesta entera.
