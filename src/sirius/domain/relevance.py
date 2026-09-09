@@ -453,11 +453,21 @@ def cupo_del_filtro(peticion: Peticion) -> int | None:
     """P3 (ADR-169, palanca 3 de ADR-148): cuántas candidatas puede conservar
     como mucho el filtro de relevancia (§6.3) para ESTA petición.
 
-    Traduce la cardinalidad —y solo la cardinalidad— a un número, con la
-    misma correspondencia que ``_suficiente``
-    (``src/sirius/domain/staged_engine.py``) ya usa para decidir la
-    insuficiencia entre etapas, para que el motor y el filtro no cuenten dos
-    cosas distintas:
+    Traduce la cardinalidad —y solo la cardinalidad— a un número, con los
+    MISMOS CAMPOS que ``_suficiente`` (``src/sirius/domain/staged_engine.py``)
+    ya usa para decidir la insuficiencia entre etapas. Los campos coinciden,
+    la UNIDAD DE CUENTA no: ``_suficiente`` compara contra la cardinalidad
+    SEMÁNTICA (``Cardinalidades.semantica``, donde un grupo de equivalentes
+    cuenta una vez), mientras que ``recortar_al_cupo`` corta una lista plana
+    de ``RankedKnowledge`` donde cada miembro del grupo ocupa su propia
+    posición. Hoy eso no diverge porque ``_recuperar_por_etapas``
+    (``src/sirius/application/rank_relevant_knowledge.py``) recupera con
+    ``PLANO_COMUN_VACIO``, cuyo ``property_key`` no agrupa nada y por tanto no
+    se forma ningún grupo. El día en que el plano traiga ``property_key``
+    habrá que decidir cuál de las dos unidades gobierna el cupo, porque con un
+    grupo de dos miembros y ``objetivos=2`` el motor daría por satisfechas dos
+    necesidades distintas y el cupo podría conservar dos documentos del mismo
+    grupo, partiéndolo:
 
     - ``EXACTA`` → ``peticion.objetivos``. En producción ese número es
       siempre 1 y lo es a propósito: ADR-164 lo dejó fijo porque la cuota que

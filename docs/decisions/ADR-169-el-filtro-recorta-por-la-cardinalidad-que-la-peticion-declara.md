@@ -197,12 +197,18 @@ sobre una rendición suya.** Tres piezas, y ninguna más:
 
 1. **`sirius.domain.relevance.cupo_del_filtro(peticion) -> int | None`**: la
    regla pura. `EXACTA` → `peticion.objetivos`; `ACOTADA` →
-   `peticion.limite_objetivo`; `EXHAUSTIVA` → `None`. Es la MISMA
-   correspondencia de campos que `_suficiente`
-   (`src/sirius/domain/staged_engine.py`) ya usa entre etapas, para que el
-   motor y el filtro no cuenten dos cosas distintas. Un cupo no positivo
-   degrada a `None`: un cero no es una cuota, y obedecerlo vaciaría el
-   resultado por un dato mal declarado.
+   `peticion.limite_objetivo`; `EXHAUSTIVA` → `None`. Son los MISMOS CAMPOS
+   que `_suficiente` (`src/sirius/domain/staged_engine.py`) ya usa entre
+   etapas, pero **no la misma unidad de cuenta**: `_suficiente` cuenta
+   cardinalidad semántica —un grupo de equivalentes vale uno— y el recorte
+   cuenta documentos de la lista plana. Hoy no diverge, y la condición que lo
+   sostiene se escribe aquí en vez de darse por supuesta:
+   `_recuperar_por_etapas` recupera con `PLANO_COMUN_VACIO`, cuyo
+   `property_key` no agrupa nada, así que no hay grupos que partir. Si algún
+   día el plano trae `property_key`, habrá que decidir cuál de las dos
+   unidades gobierna el cupo. Un cupo no positivo degrada a `None`: un cero no
+   es una cuota, y obedecerlo vaciaría el resultado por un dato mal
+   declarado.
 2. **El contrato del puerto lo transporta**:
    `filter_candidates(query_text, candidates, *, cupo: int | None = None)`
    (`src/sirius/ports/relevance_filter.py`). Un solo dato ya derivado, no la
