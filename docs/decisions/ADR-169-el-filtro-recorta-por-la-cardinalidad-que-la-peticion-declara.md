@@ -510,10 +510,10 @@ Cadena completa re-ejecutada **sobre el árbol de `d4e985c`**, que es el que
 trae la corrección de la cita. Lo único posterior a ese árbol es **documental**
 —esta transcripción y las correcciones que la ronda 3 pidió sobre ella—, y es
 comprobable en una línea: `git diff --stat d4e985c <head>` no toca más fichero
-que esta ficha. `pwsh` no está disponible en ese entorno, así que se
-ejecutó el equivalente exacto de `scripts/check.ps1` **como UNA SOLA orden**,
-encadenada y deteniéndose en el primer fallo —no cuatro invocaciones sueltas,
-que no sustituyen a la cadena (ADR-145)—:
+que esta ficha. En aquel runner no había `pwsh`, así que se ejecutó el
+equivalente exacto de `scripts/check.ps1` **como UNA SOLA orden**, encadenada y
+deteniéndose en el primer fallo —no cuatro invocaciones sueltas, que no
+sustituyen a la cadena (ADR-145)—:
 
 ```
 bash -ec 'uv run ruff format --check . && uv run ruff check . \
@@ -535,6 +535,32 @@ La terna difiere en un caso de la de arriba (`5251 passed, 17 skipped` frente a
 —`5251 + 17 + 2` y `5252 + 16 + 2`, contando los dos `xfailed` que las dos
 ternas declaran—: una prueba que el runner de Quality salta, aquí se ejecuta.
 Se transcribe la diferencia en vez de esconderla.
+
+**Ronda 4 de revisión (documental).** `CODEX-001`, `CODEX-002` y `CODEX-003`
+apuntaron a esta misma nota, no al trabajo, y los tres eran ciertos: la cadena
+sustituta se enumeraba «paso a paso» en vez de como una orden única, la cifra
+se presentaba «sobre este árbol» sin nombrar el SHA, y el total sumaba solo
+`passed + skipped` ignorando los dos `xfailed`. Los tres quedan corregidos en
+el texto de arriba, y esta ronda cierra el flanco que quedaba: **el runner de
+esta ronda sí trae `pwsh`** (`/usr/bin/pwsh`), así que no hay equivalente que
+justificar. La cadena se ejecutó como **una sola invocación del guion real**,
+`pwsh -File scripts/check.ps1`, **sobre el árbol de `4087135a`** —el head que
+trae las tres correcciones—, con su código de salida capturado:
+
+```
+618 files already formatted
+All checks passed!
+Success: no issues found in 583 source files
+5251 passed, 17 skipped, 2 xfailed in 516.40s (0:08:36)
+EXIT_CODE_CHECK=0
+```
+
+Esta terna vuelve a la del árbol de `cfe158e` —`5251 + 17 + 2`, los mismos
+**5270** resultados—, porque el caso que en el árbol de `d4e985c` se ejecutaba
+en vez de saltarse depende del runner, no del código: ninguna de las tres
+correcciones toca código ni pruebas. Lo único posterior a `4087135a` es **esta
+transcripción**, y se comprueba en una línea: `git diff --stat 4087135a` contra
+el head no nombra más fichero que esta ficha.
 
 ## Consecuencias
 
