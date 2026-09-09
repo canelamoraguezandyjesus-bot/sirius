@@ -506,10 +506,21 @@ ninguna cifra, ni código, ni pruebas, ni el fondo de esta ficha**, así que el
 anclaje de arriba sigue siendo cierto: lo único posterior a `cfe158e1` sigue
 siendo documental.
 
-Cadena completa re-ejecutada sobre este árbol, paso a paso y parando al primero
-que fallara (`pwsh` no está disponible en ese entorno, así que se ejecutó el
-equivalente exacto de `scripts/check.ps1`: `ruff format --check`, `ruff check`,
-`mypy src tests`, `pytest`):
+Cadena completa re-ejecutada **sobre el árbol de `d4e985c`**, que es el que
+trae la corrección de la cita. Lo único posterior a ese árbol es **documental**
+—esta transcripción y las correcciones que la ronda 3 pidió sobre ella—, y es
+comprobable en una línea: `git diff --stat d4e985c <head>` no toca más fichero
+que esta ficha. `pwsh` no está disponible en ese entorno, así que se
+ejecutó el equivalente exacto de `scripts/check.ps1` **como UNA SOLA orden**,
+encadenada y deteniéndose en el primer fallo —no cuatro invocaciones sueltas,
+que no sustituyen a la cadena (ADR-145)—:
+
+```
+bash -ec 'uv run ruff format --check . && uv run ruff check . \
+          && uv run mypy src tests && uv run pytest'
+```
+
+Salida y código de salida de esa única orden:
 
 ```
 618 files already formatted
@@ -520,9 +531,10 @@ EXIT_CODE_CHECK=0
 ```
 
 La terna difiere en un caso de la de arriba (`5251 passed, 17 skipped` frente a
-`5252 passed, 16 skipped`) y **el total es idéntico, 5268**: una prueba que el
-runner de Quality salta aquí se ejecuta. Se transcribe la diferencia en vez de
-esconderla.
+`5252 passed, 16 skipped`) y **el total de resultados es idéntico, 5270**
+—`5251 + 17 + 2` y `5252 + 16 + 2`, contando los dos `xfailed` que las dos
+ternas declaran—: una prueba que el runner de Quality salta, aquí se ejecuta.
+Se transcribe la diferencia en vez de esconderla.
 
 ## Consecuencias
 
