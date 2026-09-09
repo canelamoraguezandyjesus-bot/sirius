@@ -407,12 +407,12 @@ relajado, saltado ni reescrito para conseguir verde.**
 
 **Cadena completa como UNA SOLA invocación** (ADR-145, ADR-153), con
 `pwsh -File scripts/check.ps1` y su código de salida capturado (ADR-154),
-anclada al árbol de **`cfe158e`** —el head tras las correcciones de la ronda 3
-(`CLAUDE-P3-003`, `CLAUDE-P3-004`), que tocan comentarios de `src/` y texto de
-esta ficha—:
+anclada al árbol de **`85ab6c1e`** —el head tras las correcciones de la ronda 5
+(`CLAUDE-P3-005`, `CLAUDE-P3-006`, `CLAUDE-P3-007`), que tocan una prueba de
+integración, dos docstrings de `src/` y texto de esta ficha—:
 
 ```
-5251 passed, 17 skipped, 2 xfailed in 544.17s (0:09:04)
+5251 passed, 17 skipped, 2 xfailed in 561.80s (0:09:21)
 EXIT_CODE_CHECK=0
 ```
 
@@ -433,7 +433,7 @@ aunque el rango ya confirmado traiga errores de espacios, así que no
 demostraría nada sobre este cambio.
 
 ```
-$ git diff --check ce94bdf cfe158e1
+$ git diff --check ce94bdf 85ab6c1e
 EXIT_DIFF_CHECK=0
 $ git diff --check ce94bdf
 EXIT_DIFF_CHECK_ARBOL=0
@@ -443,12 +443,13 @@ Sin salida y con código `0` las dos: el rango entero de la rama —desde su bas
 en `main` (`ce94bdf`) hasta el árbol que midió la cadena— está limpio, y el
 árbol de trabajo que confirma esta sección también.
 
-Lo único posterior a `cfe158e1` es **esta sección de la ficha** y el cuerpo de
+Lo único posterior a `85ab6c1e` es **esta sección de la ficha** y el cuerpo de
 la PR: documentales, sin tocar código ni pruebas, y existen porque la sección
 tiene que anclarse al árbol que la cadena midió. Si una corrección posterior
 toca código o pruebas, la cadena se vuelve a ejecutar entera y esta sección se
-re-ancla al árbol nuevo, sin conservar la terna del anterior (ADR-154). La
-terna de `2380823` (ronda 2) ya no se conserva aquí, por eso mismo.
+re-ancla al árbol nuevo, sin conservar la terna del anterior (ADR-154). Las
+ternas de `2380823` (ronda 2) y `cfe158e1` (ronda 3) ya no se conservan aquí,
+por eso mismo.
 
 **Ronda 2 de revisión (documental).** `CLAUDE-P3-001` y `CLAUDE-P3-002`
 señalaron dos docstrings que el árbol desmentía: el de `rank()` seguía
@@ -492,8 +493,8 @@ y la cadena que esta sección transcribe es la posterior, en verde.
 `rank_con_cupo()` (`src/sirius/application/context.py:320-322`): pasan a
 nombrar el caso de uso y su método vigente. **Solo comentarios y docstrings**;
 ninguna línea ejecutable ni ninguna prueba cambia. Como aun así tocan ficheros
-de `src/`, la cadena se ejecutó entera de nuevo —una sola invocación— y esta
-sección queda anclada al árbol de `cfe158e1`, no al de `2380823`.
+de `src/`, la cadena se ejecutó entera de nuevo —una sola invocación—; su
+terna, la de `cfe158e1`, la sustituye ahora la de la ronda 5.
 
 **Desatasco documental posterior, hecho por la sesión que acompaña el ciclo con
 autorización explícita del propietario (nota de arranque publicada en la
@@ -564,9 +565,29 @@ EXIT_CODE_CHECK=0
 Esta terna vuelve a la del árbol de `cfe158e` —`5251 + 17 + 2`, los mismos
 **5270** resultados—, porque el caso que en el árbol de `d4e985c` se ejecutaba
 en vez de saltarse depende del runner, no del código: ninguna de las tres
-correcciones toca código ni pruebas. Lo único posterior a `4087135a` es **esta
-transcripción**, y se comprueba en una línea: `git diff --stat 4087135a` contra
-el head no nombra más fichero que esta ficha.
+correcciones toca código ni pruebas.
+
+**Ronda 5 de revisión (una prueba reforzada y dos textos).** `CLAUDE-P3-005`
+señaló que `test_el_recorte_por_cupo_nunca_pierde_una_critica` confiaba a un
+comentario la precondición de todo su escenario —que el cupo de 1 dejó la
+crítica FUERA del veredicto del filtro— y que además ese comentario nombraba un
+mecanismo que este camino no usa (la recencia de §6.2, cuando el orden lo fija
+`_clave_de_orden` con `PLANO_COMUN_VACIO`). El doble del adaptador registra
+ahora el veredicto que devuelve y la prueba lo afirma; las dos llamadas inertes
+a `_set_updated_at` se retiran. La mutación de la ficha que antes no la
+alcanzaba ahora sí: **M1 pasa de 4 a 5 pruebas en rojo** en la tabla de arriba,
+y la del escenario —crear la crítica antes que `primera`, que hoy dejaba la
+prueba en verde sin ejercitar el rescate— la pone en rojo
+(`assert [(1,)] == [(2,)]`). `CLAUDE-P3-006` y `CLAUDE-P3-007` son texto: el
+docstring de `cupo_del_filtro` y el punto 1 de «Decisión» ya no afirman que el
+motor y el filtro «cuenten lo mismo» —comparten campos, no unidad de cuenta— y
+«Alternativas descartadas» registra que la rama `ACOTADA` revierte la razón que
+`_limites` daba para mantener el límite inferido fuera del campo truncante.
+Como todo eso toca `src/` y una prueba, la cadena se re-ejecutó entera —una
+sola invocación— y esta sección queda anclada al árbol de `85ab6c1e`. Lo único
+posterior a ese árbol es **esta transcripción** y el cuerpo de la PR, y se
+comprueba en una línea: `git diff --stat 85ab6c1e` contra el head no nombra más
+fichero que esta ficha.
 
 ## Consecuencias
 
