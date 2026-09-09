@@ -4444,6 +4444,24 @@ criterio de parada que me excluye: si la ronda 4 trae hallazgos **sobre el
 trabajo** que no mejoren `(2,2)`, se para y se le pasa al propietario. Y no
 vuelvo a tocar esa rama: la autorización era para desatascar, y esto era limpiar
 lo que el desatasco ensució.
+
+**Cierre, y remata la lección mejor de lo que yo la había escrito.** El
+corrector no repitió mis arreglos: los conservó y **cerró el flanco que yo no
+podía cerrar**. Mi nota decía «`pwsh` no está disponible en ese entorno, así
+que se ejecutó el equivalente exacto» —cierto, y aun así una concesión—. Su
+runner **sí trae `pwsh`**, así que ejecutó el guion real, una sola invocación,
+anclado al árbol de mis correcciones, y **ya no hay equivalente que
+justificar**.
+
+Y explicó la diferencia entre su terna y la mía en vez de esconderla: el caso
+que en mi entorno se ejecuta y en el suyo se salta **depende del runner, no del
+código**, con el mismo total de 5270 resultados.
+
+O sea que mi intervención no solo metió tres defectos: **hizo un trabajo peor
+del que el propio ciclo podía hacer**, porque yo no tenía la herramienta y él
+sí. La regla no era solo «no escribas en la rama que juzgas» — era también
+**«el que tiene el entorno correcto es el que debe ejecutar»**, y eso no lo
+había visto hasta verlo hecho.
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
