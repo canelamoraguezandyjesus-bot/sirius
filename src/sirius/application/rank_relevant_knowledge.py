@@ -64,6 +64,7 @@ from sirius.domain.relevance import (
     category_index_activated,
     category_index_matches_query,
     category_matches_query,
+    cupo_del_filtro,
     pide_contexto,
     rank_relevant_knowledge,
     subject_matches_query,
@@ -91,7 +92,8 @@ __all__ = ["RankRelevantKnowledgeUseCase"]
 #: ``"contexto"`` a propósito, la misma condición que la réplica del arnés
 #: ``pide_contexto``/``PROPOSITO_DE_CONTEXTO`` exige
 #: (``tests/acceptance/staged_engine_category_and_relevance.py:257,403-409``),
-#: porque la única llamada real a ``rank()`` ocurre desde
+#: porque la única llamada real al caso de uso (hoy ``rank_con_cupo()``,
+#: ADR-169) ocurre desde
 #: ``ContextBuilder._rank_related_knowledge`` para ensamblar el contexto de
 #: un turno — un hecho estructural sobre quién llama, no una adivinanza
 #: sobre la consulta.
@@ -105,7 +107,8 @@ __all__ = ["RankRelevantKnowledgeUseCase"]
 _PROPOSITO_RECUPERACION_ORDINARIA = PROPOSITO_RECUPERACION_ORDINARIA
 
 #: Permiso de la recuperación ordinaria, decidido por REGLA del producto y
-#: nunca por el modelo (ADR-164): la única llamada real a ``rank()`` ensambla
+#: nunca por el modelo (ADR-164): la única llamada real al caso de uso (hoy
+#: ``rank_con_cupo()``, ADR-169) ensambla
 #: el contexto de un turno que el propietario mismo ha iniciado sobre sus
 #: propios datos locales. Existe como nombre —en vez de quedar implícito en
 #: el valor por defecto del intérprete— para que el día en que Sirius tenga
@@ -218,16 +221,39 @@ class RankRelevantKnowledgeUseCase:
         ``sirius.domain.relevance``) — an empty result, never an error.
 
         Con la puerta D7 punto 6 abierta y un puerto/candidato del motor por
-        etapas configurados, delega en ``_rank_via_staged_engine`` (ADR-109)
-        en vez de en el filtro-y-orden de siempre.
+        etapas configurados, la recuperación es la del motor por etapas
+        (ADR-109) en vez del filtro-y-orden de siempre. La cadena real desde
+        P3 (ADR-169) es ``rank()`` -> ``rank_con_cupo()`` ->
+        ``_recuperar_por_etapas()``: ``rank()`` se queda solo con las
+        candidatas y descarta el cupo.
+        """
+        return self.rank_con_cupo(query_text)[0]
+
+    def rank_con_cupo(self, query_text: str) -> tuple[tuple[RankedKnowledge, ...], int | None]:
+        """Lo mismo que ``rank()``, más el **cupo** que la cardinalidad de la
+        ``Peticion`` de ESTA consulta impone al filtro de relevancia (P3,
+        ADR-169, ``sirius.domain.relevance.cupo_del_filtro``).
+
+        Existe porque el filtro (§6.3) lo aplica ``ContextBuilder``, ya fuera
+        de este caso de uso, y hasta ADR-169 no había forma de que la
+        cardinalidad llegara hasta allí sin interrogar dos veces al modelo:
+        ``rank()`` devolvía las candidatas y tiraba la petición con la que las
+        había pedido. Devolver las dos de una vez es lo que evita esa segunda
+        llamada.
+
+        El cupo es ``None`` —«sin número, poda solo por relevancia»— por el
+        camino de siempre: sin la puerta D7 punto 6 abierta no se construye
+        ninguna ``Peticion``, así que no hay cardinalidad que declarar. Y con
+        la puerta abierta sigue siendo ``None`` mientras el intérprete emita
+        la política uniforme (``EXHAUSTIVA``, ``INTENCION_ORDINARIA``).
         """
         if (
             self._category_matching_enabled
             and self._staged_engine_port is not None
             and self._staged_engine_candidate is not None
         ):
-            return self._rank_via_staged_engine(query_text)
-        return self._rank_via_current_pipeline(query_text)
+            return self._recuperar_por_etapas(query_text)
+        return self._rank_via_current_pipeline(query_text), None
 
     def _peticion(
         self, query_text: str, *, operation_id: str, active_project_id: int | None
@@ -254,6 +280,23 @@ class RankRelevantKnowledgeUseCase:
         )
 
     def _rank_via_staged_engine(self, query_text: str) -> tuple[RankedKnowledge, ...]:
+        """Solo las candidatas de ``_recuperar_por_etapas``, sin el cupo.
+
+        La recuperación por etapas es una sola (``_recuperar_por_etapas``,
+        que devuelve candidatas **y** cupo) y desde P3 (ADR-169) la cadena de
+        producción pasa entera por ella: este método NO tiene ningún llamador
+        en ``src/`` ni en ``scripts/``. Es la vista sin cupo que conservan las
+        dos pruebas que lo invocan (``tests/integration/
+        test_rank_relevant_knowledge.py``). El comportamiento que las citas
+        normativas a ``_rank_via_staged_engine`` describen —las tres
+        amplificaciones, ``solo_por_categoria``, ``siembra``— vive en
+        ``_recuperar_por_etapas``, no en este envoltorio de dos líneas.
+        """
+        return self._recuperar_por_etapas(query_text)[0]
+
+    def _recuperar_por_etapas(
+        self, query_text: str
+    ) -> tuple[tuple[RankedKnowledge, ...], int | None]:
         """ADR-109: recuperación por ``E0-E5`` con las doce puertas y la
         agrupación de equivalentes, en vez del filtro-y-orden de S7.5.
 
@@ -362,7 +405,8 @@ class RankRelevantKnowledgeUseCase:
         ``tests/acceptance/staged_engine_category_and_relevance.py:412-445``).
         ``_peticion_ordinaria`` (arriba) fija ese propósito a un literal fijo
         que ya contiene la subcadena "contexto" a propósito (M16, ADR-124) —
-        así que, en producción, toda llamada real a ``rank()`` siembra en
+        así que, en producción, toda llamada real al caso de uso (hoy
+        ``rank_con_cupo()``, ADR-169) siembra en
         cada turno, sin depender de que la consulta nombre ninguna palabra
         de ningún vocabulario: quien poda el ruido resultante es el filtro
         de relevancia (ADR-125), con el rescate RF-25/RF-26 (M19b)
@@ -603,8 +647,11 @@ class RankRelevantKnowledgeUseCase:
                         )
                     )
 
-        return _intercalar_por_categoria(
-            ranked, (*solo_por_categoria, *solo_por_criticidad, *siembra)
+        return (
+            _intercalar_por_categoria(
+                ranked, (*solo_por_categoria, *solo_por_criticidad, *siembra)
+            ),
+            cupo_del_filtro(peticion),
         )
 
     def _rank_via_current_pipeline(self, query_text: str) -> tuple[RankedKnowledge, ...]:

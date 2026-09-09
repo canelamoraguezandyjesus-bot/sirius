@@ -35,7 +35,9 @@ class _RecordingRelevanceFilterAdapter:
     def __init__(self, model: str, *, timeout_seconds: float) -> None:
         type(self).captured.append(model)
 
-    def filter_candidates(self, query_text: str, candidates: Any) -> Any:  # pragma: no cover
+    def filter_candidates(
+        self, query_text: str, candidates: Any, *, cupo: int | None = None
+    ) -> Any:  # pragma: no cover
         return candidates
 
 

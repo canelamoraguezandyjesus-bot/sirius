@@ -31,10 +31,32 @@ class RelevanceFilterPort(Protocol):
     """
 
     def filter_candidates(
-        self, query_text: str, candidates: Sequence[RankedKnowledge]
+        self,
+        query_text: str,
+        candidates: Sequence[RankedKnowledge],
+        *,
+        cupo: int | None = None,
     ) -> Sequence[RankedKnowledge]:
         """Return the subset of ``candidates`` to keep, in no particular
         order relative to the input — the caller decides how to recombine
         it. Never raises; a fresh, unmodified ``candidates`` is the
-        contractual answer to every internal failure."""
+        contractual answer to every internal failure.
+
+        ``cupo`` (P3, ADR-169) is how many candidates the request's own
+        cardinality allows this filter to keep at most, already derived by
+        ``sirius.domain.relevance.cupo_del_filtro``: ``EXACTA`` yields its
+        ``objetivos``, ``ACOTADA`` the declared limit, and ``EXHAUSTIVA``
+        ``None`` — "no number at all, prune by relevance only". ``None`` is
+        also the default, so a caller that declares no cardinality (every
+        one before ADR-169) keeps the exact behaviour it had.
+
+        Two guarantees the cupo must not break, and that this port already
+        required before it existed. It still **never reorders**: a cupo
+        keeps a PREFIX of §6.2's order, never a re-sorted selection. And it
+        still **fails open**: the cupo applies to a verdict of the model,
+        never to a surrender — an implementation that could not reach its
+        model returns ``candidates`` unchanged, at full length, because a
+        failure that silently cut the answer down to ``cupo`` would be
+        exactly the accidental truncation this contract exists to forbid.
+        """
         ...

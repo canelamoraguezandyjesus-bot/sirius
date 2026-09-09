@@ -1983,3 +1983,98 @@ def test_el_corte_con_desfase_negativo_no_esconde_el_final_del_dia_que_nombra(
         puerto.close()
 
     assert recuperadas == [memoria.id]
+
+
+# --------------------------------------------------------------------------
+# P3 (ADR-169, palanca 3 de ADR-148): el cupo viaja con las candidatas
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+def test_rank_con_cupo_entrega_el_cupo_que_la_cardinalidad_de_la_peticion_declara(
+    tmp_path: Path,
+) -> None:
+    """ADR-169: hasta esta ficha, `rank()` devolvía las candidatas y tiraba
+    la petición con la que las había pedido, de modo que la cardinalidad no
+    tenía por dónde llegar al filtro (§6.3), que se aplica ya fuera de este
+    caso de uso. `rank_con_cupo` devuelve las dos cosas de una sola
+    interrogación: `ACOTADA` con límite 3 declara un cupo de 3.
+
+    Se construye la `Peticion` explícitamente —con el intérprete cableado y
+    un doble del modelo—: por el camino por defecto toda petición sale
+    `EXHAUSTIVA` (`INTENCION_ORDINARIA`), así que una prueba que no la
+    construyera no estaría probando nada."""
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    _two_projects(database_path)
+    puerto = build_staged_engine_port(database_path)
+    interprete = InterpreteDePeticion(
+        intent_classifier=_ModeloDeIntencion(
+            IntencionDeConsulta(
+                modo=Modo.M1_ORDINARIO,
+                cardinalidad=Cardinalidad.ACOTADA,
+                limite=3,
+                tiempo_objetivo=None,
+                corte_de_registro=None,
+            )
+        )
+    )
+
+    try:
+        _, cupo = _use_case(
+            database_path,
+            category_matching_enabled=True,
+            staged_engine_port=puerto,
+            staged_engine_candidate=staged_engine_candidate.candidato(),
+            query_request_interpreter=interprete,
+        ).rank_con_cupo("¿qué restricciones de viaje tengo?")
+    finally:
+        puerto.close()
+
+    assert cupo == 3
+
+
+@pytest.mark.integration
+def test_rank_con_cupo_no_declara_cupo_con_la_peticion_uniforme(tmp_path: Path) -> None:
+    """La cara opuesta y el candado del pasado: con la política uniforme
+    —`EXHAUSTIVA`, lo que emite todo llamador sin intérprete y también el
+    intérprete sin modelo— no hay número que conservar, así que el cupo es
+    `None` y el filtro poda solo por relevancia. Es, además, la razón por la
+    que esta palanca no puede mover ninguna cifra de la vía completa de hoy
+    (ADR-169)."""
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    _two_projects(database_path)
+    puerto = build_staged_engine_port(database_path)
+
+    try:
+        _, cupo = _use_case(
+            database_path,
+            category_matching_enabled=True,
+            staged_engine_port=puerto,
+            staged_engine_candidate=staged_engine_candidate.candidato(),
+        ).rank_con_cupo("¿qué restricciones de viaje tengo?")
+    finally:
+        puerto.close()
+
+    assert cupo is None
+
+
+@pytest.mark.integration
+def test_rank_con_cupo_por_el_camino_de_siempre_no_declara_cupo(tmp_path: Path) -> None:
+    """Con la puerta D7 punto 6 cerrada —el estado por defecto— no se
+    construye ninguna `Peticion`, así que no hay cardinalidad que declarar y
+    el cupo es `None`. `rank()` sigue devolviendo exactamente lo mismo que
+    antes de ADR-169."""
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    _two_projects(database_path)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+    SaveManualMemoryUseCase(unit_of_work).save("recuerdodelcupounico")
+
+    use_case = _use_case(database_path)
+    candidatas, cupo = use_case.rank_con_cupo("recuerdodelcupounico")
+
+    assert cupo is None
+    assert candidatas == use_case.rank("recuerdodelcupounico")
+    assert [c.item_id for c in candidatas] != []

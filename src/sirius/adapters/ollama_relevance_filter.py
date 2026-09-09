@@ -19,7 +19,7 @@ from collections.abc import Sequence
 
 import httpx
 
-from sirius.domain.relevance import RankedKnowledge
+from sirius.domain.relevance import RankedKnowledge, recortar_al_cupo
 from sirius.infrastructure.logging import get_logger
 
 __all__ = ["OllamaRelevanceFilterAdapter"]
@@ -101,8 +101,20 @@ class OllamaRelevanceFilterAdapter:
         )
 
     def filter_candidates(
-        self, query_text: str, candidates: Sequence[RankedKnowledge]
+        self,
+        query_text: str,
+        candidates: Sequence[RankedKnowledge],
+        *,
+        cupo: int | None = None,
     ) -> Sequence[RankedKnowledge]:
+        """P3 (ADR-169): ``cupo`` recorta el veredicto del modelo a lo que la
+        cardinalidad de la petición permite conservar, y **solo** el
+        veredicto. La rendición de más abajo —el ``return candidates`` del
+        ``except``, que devuelve el MISMO objeto que entró— no pasa por el
+        recorte: un fallo del modelo no puede acabar recortando por
+        accidente, que es lo único que el recorte no puede permitirse. El
+        recorte es un prefijo del orden de §6.2, así que sigue sin reordenar
+        (``sirius.domain.relevance.recortar_al_cupo``)."""
         if not candidates:
             return candidates
         try:
@@ -139,10 +151,13 @@ class OllamaRelevanceFilterAdapter:
                 type(exc).__name__,
             )
             return candidates
-        return tuple(
-            candidate
-            for position, candidate in enumerate(candidates, start=1)
-            if position in kept_positions
+        return recortar_al_cupo(
+            [
+                candidate
+                for position, candidate in enumerate(candidates, start=1)
+                if position in kept_positions
+            ],
+            cupo,
         )
 
 

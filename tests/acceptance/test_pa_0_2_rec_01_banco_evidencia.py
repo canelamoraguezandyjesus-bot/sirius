@@ -2662,7 +2662,9 @@ class _FiltroDeRelevanciaQueNuncaDescarta:
     contractual a "no sé decidir", nunca una aproximación al comportamiento
     real de Ollama."""
 
-    def filter_candidates(self, query_text: str, candidates: Any) -> Any:
+    def filter_candidates(
+        self, query_text: str, candidates: Any, *, cupo: int | None = None
+    ) -> Any:
         return candidates
 
 
