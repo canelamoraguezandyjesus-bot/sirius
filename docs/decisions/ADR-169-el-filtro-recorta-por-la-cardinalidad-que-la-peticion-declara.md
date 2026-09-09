@@ -474,7 +474,7 @@ se re-funda sobre `39 > 20` y sigue activándose, así que la conclusión no
 cambia, solo su evidencia. El razonamiento de fondo no se toca: toda petición
 de esa vía sale `EXHAUSTIVA`, el cupo es `None` en las 47 y el recorte no
 puede dispararse. La primera redacción citó los ADR como rutas truncadas
-(`docs/decisions/ADR-117-…`) y
+(`docs/decisions/ADR-117-*.md`) y
 `tests/automation/test_citas_de_los_adr.py::test_toda_ruta_citada_por_un_adr_existe[ADR-169-…]`
 falló en la cadena de esta misma ronda —`AssertionError: … cita rutas que ya
 no existen: ['docs/decisions/ADR-117-…', 'docs/decisions/ADR-125-…']`, `1
@@ -488,6 +488,41 @@ nombrar el caso de uso y su método vigente. **Solo comentarios y docstrings**;
 ninguna línea ejecutable ni ninguna prueba cambia. Como aun así tocan ficheros
 de `src/`, la cadena se ejecutó entera de nuevo —una sola invocación— y esta
 sección queda anclada al árbol de `cfe158e1`, no al de `2380823`.
+
+**Desatasco documental posterior, hecho por la sesión que acompaña el ciclo con
+autorización explícita del propietario (nota de arranque publicada en la
+incidencia antes del commit).** Tras la ronda 3 la cadena de Quality quedó en
+rojo por este mismo guardián: la frase que narra la corrección anterior citaba
+un ADR como ruta truncada entre comillas invertidas, y `ruta_citada` la juzga
+—solo descarta los spans con espacios o con `*`, `{`, `}`, `<`, `>` o `://`—,
+así que **narrar el fallo lo reproducía**. El ciclo no podía recogerlo: el
+corrector exige un veredicto de revisión y un fallo de Quality no produce
+ninguno, de modo que dos reanudaciones seguidas volvieron al mismo sitio.
+
+Cambia **una sola cita**, y se escribe como glob real (`*.md`) en vez de con
+puntos suspensivos: queda fuera del guardián por construcción y, a diferencia
+de los puntos suspensivos, es una ruta que se puede ejecutar. **No cambia
+ninguna cifra, ni código, ni pruebas, ni el fondo de esta ficha**, así que el
+anclaje de arriba sigue siendo cierto: lo único posterior a `cfe158e1` sigue
+siendo documental.
+
+Cadena completa re-ejecutada sobre este árbol, paso a paso y parando al primero
+que fallara (`pwsh` no está disponible en ese entorno, así que se ejecutó el
+equivalente exacto de `scripts/check.ps1`: `ruff format --check`, `ruff check`,
+`mypy src tests`, `pytest`):
+
+```
+618 files already formatted
+All checks passed!
+Success: no issues found in 583 source files
+5252 passed, 16 skipped, 2 xfailed in 626.35s (0:10:26)
+EXIT_CODE_CHECK=0
+```
+
+La terna difiere en un caso de la de arriba (`5251 passed, 17 skipped` frente a
+`5252 passed, 16 skipped`) y **el total es idéntico, 5268**: una prueba que el
+runner de Quality salta aquí se ejecuta. Se transcribe la diferencia en vez de
+esconderla.
 
 ## Consecuencias
 
