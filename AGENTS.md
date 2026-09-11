@@ -10,17 +10,9 @@ disparaba. El 25-08-2026 el propietario tuvo que decir tres veces en una sesión
 «búscalo, no me lo digas de memoria», y tenía razón las tres.
 
 **Toda afirmación sobre qué está planeado, decidido, medido o pendiente sale de
-leer este repositorio, y se dice DÓNDE se leyó.** Nunca de memoria, nunca de lo
-que parezca razonable. Si no se encontró, se dice «no lo he encontrado», que es
-una respuesta legítima; inventarlo no lo es.
-
-**Empieza por `MEMORIA.md`, en la raíz, y léela entera antes de abrir nada
-más.** Es la memoria común del trabajo (ADR-171), generada a partir del árbol:
-qué se decidió (cada ADR con su resumen), qué registros hay y en qué estado, qué
-documentos existen y de cuándo, y dónde están los desenlaces del motor. Desde
-ahí, abre solo lo que la tarea necesite. No se edita a mano: se regenera con
-`uv run sirius-memoria conocimiento`, y una prueba de Quality falla si está
-desactualizada.
+leer este repositorio —empezando por `MEMORIA.md`, en la raíz, entera— y se
+dice DÓNDE se leyó.** Nunca de memoria ni de lo que parezca razonable. Si no se
+encontró, se dice «no lo he encontrado», que es legítimo; inventarlo no lo es.
 
 Antes de proponer construir algo, **busca si ya existe**. En este repositorio ha
 aparecido seis veces una pieza correcta a la que no llamaba nadie, y una séptima
@@ -31,8 +23,7 @@ ya existía con otro nombre: el auditor-.
 
 | Qué buscas | Dónde está |
 |---|---|
-| Por dónde empezar, siempre | `MEMORIA.md` (raíz), generada; los desenlaces del motor, en `estado-del-motor:DESENLACES.md` |
-| Qué se decidió y por qué | `docs/decisions/ADR-*.md` |
+| Por dónde empezar, siempre; qué se decidió y por qué | `MEMORIA.md` (raíz), generada: cada ADR con su resumen, los registros con estado y los documentos con su fecha; los desenlaces del motor, en `estado-del-motor:DESENLACES.md` (ADR-171) |
 | Qué bloques del MOTOR hay y cómo van | `docs/implementation/bloques_del_motor.yml` |
 | Qué defectos hay abiertos | `docs/audits/registro_defectos.yml` |
 | El plan del motor, bloque a bloque | `docs/implementation/SIRIUS_WORK_ENGINE_PLAN_IMPLEMENTACION.md` |
@@ -63,13 +54,12 @@ Cuatro avisos que ya han costado tiempo:
 
 ## Antes de modificar código
 
-1. Lee `MEMORIA.md` entera.
-2. Lee `docs/canonical/STATUS.md`.
-3. Lee `docs/implementation/PLAN.md`.
-4. Identifica la vertical activa.
-5. No añadas funciones fuera de alcance.
-6. Si la tarea afecta Claude Code, Routines, cloud, permisos, revisión automática, PR automáticas o cualquier flujo de agentes, lee obligatoriamente `docs/implementation/AUTOMATION_OPERATING_CONTRACT.md` y ejecuta únicamente la fase vigente descrita allí.
-7. Si la tarea afecta hardware local de IA, DGX Spark o equivalente, Sirius Core, modelos open-weight, proveedores de IA, model routing, benchmarks de modelos, costes de inferencia o políticas local/nube, lee obligatoriamente `docs/evolution/SIRIUS_AI_CORE_AND_MODEL_STRATEGY.md`. Ese documento es una recolección informativa de ideas futuras: no constituye aprobación para implementarlas.
+1. Lee `MEMORIA.md` entera; después `docs/canonical/STATUS.md`.
+2. Lee `docs/implementation/PLAN.md`.
+3. Identifica la vertical activa.
+4. No añadas funciones fuera de alcance.
+5. Si la tarea afecta Claude Code, Routines, cloud, permisos, revisión automática, PR automáticas o cualquier flujo de agentes, lee obligatoriamente `docs/implementation/AUTOMATION_OPERATING_CONTRACT.md` y ejecuta únicamente la fase vigente descrita allí.
+6. Si la tarea afecta hardware local de IA, DGX Spark o equivalente, Sirius Core, modelos open-weight, proveedores de IA, model routing, benchmarks de modelos, costes de inferencia o políticas local/nube, lee obligatoriamente `docs/evolution/SIRIUS_AI_CORE_AND_MODEL_STRATEGY.md`. Ese documento es una recolección informativa de ideas futuras: no constituye aprobación para implementarlas.
 
 ## Reglas obligatorias
 
@@ -83,7 +73,6 @@ Cuatro avisos que ya han costado tiempo:
 - Ejecuta `scripts/check.ps1` antes de entregar.
 - Haz cambios pequeños, trazables y reversibles.
 - Actualiza la documentación cuando cambie el comportamiento aprobado.
-- Si cambias un ADR, un documento de `docs/` o un registro YAML, ejecuta `uv run sirius-memoria conocimiento` y confirma `MEMORIA.md` en la misma PR: Quality falla si no coincide con lo generado (ADR-171).
 - No introduzcas disparador API, eventos de GitHub, auto-fix, merge automático, coordinación de agentes ni otro nivel de automatización antes de la puerta y aprobación expresa definidas en `AUTOMATION_OPERATING_CONTRACT.md`.
 - No pidas repetir una acción ya realizada. Antes de indicar el siguiente paso, verifica el estado real y la fase vigente.
 
@@ -95,6 +84,24 @@ Cuatro avisos que ya han costado tiempo:
   código introducido por la corrección anterior o ser una regresión suya; un
   hallazgo sobre líneas ya idénticas en la ronda previa se reporta igualmente,
   declarando que llega tarde por goteo del revisor.
+
+## La memoria común: `MEMORIA.md` (ADR-171)
+
+`MEMORIA.md`, en la raíz, es la memoria común del trabajo, **generada** a partir
+del árbol: qué se decidió (cada ADR con su resumen), qué registros hay y en qué
+estado, qué documentos existen y de cuándo, y dónde están los desenlaces del
+motor. Es lo primero que se lee, antes de responder y antes de modificar; desde
+ahí, solo lo que la tarea necesite.
+
+- **No se edita a mano.** Se regenera con `uv run sirius-memoria conocimiento`,
+  y `tests/engine/test_memoria.py` (en Quality) falla si el fichero confirmado no
+  coincide con lo generado.
+- **Si cambias un ADR, un documento de `docs/` o un registro YAML, regenérala y
+  confírmala en la misma PR.**
+- **Quality comprueba el commit de fusión con `main`.** Si `main` ganó un ADR o un
+  documento después de abrir tu rama, tu PR sale en rojo aunque tu rama esté al
+  día: trae `main`, regenera, confirma. Un conflicto en `MEMORIA.md` se resuelve
+  siempre regenerando, nunca a mano.
 
 ## Criterio de parada
 

@@ -334,3 +334,26 @@ resultado está en la descripción de la PR.
 `DESENLACES.md` en la rama real: eso solo ocurre tras la fusión, en la primera
 pasada (`workflow_dispatch` la adelanta). Si esa pasada no deja el fichero en
 `estado-del-motor`, este ADR no está cumplido y hay que mirar el run.
+
+## Consecuencias
+
+- **Quality comprueba el commit de fusión, no la rama.** `quality.yml` corre en
+  `pull_request` con el checkout por defecto, que es la fusión de la rama con
+  `main`. Si `main` gana un ADR, un documento o un registro después de abrir una
+  rama, la prueba de frescura de esa PR sale en **rojo** aunque la rama esté al
+  día. Es el mismo coste que un fichero de bloqueo de dependencias, y se paga
+  igual: traer `main`, regenerar, confirmar. `AGENTS.md` lo dice. Las PR abiertas
+  hoy que añaden un ADR (#583, ADR-170) tendrán que regenerar `MEMORIA.md` tras
+  la fusión de esta.
+- **Un conflicto en `MEMORIA.md` se resuelve regenerando**, nunca eligiendo
+  líneas a mano: el fichero es salida del generador, no fuente.
+- **`AGENTS.md` cambia sin mover ninguna línea citada.** Otros documentos citan
+  `AGENTS.md:17-20`, `AGENTS.md:68` y `AGENTS.md:81-86`; los cambios son
+  sustituciones línea por línea y una sección nueva después de la 86, y la
+  comprobación de que esas líneas quedan intactas se hizo al aplicarlos.
+- **La vista hace visible lo que faltaba:** 84 documentos sin fecha declarada
+  y 21 encargos que el diario nunca vio avanzar. No se arreglan aquí; quien los
+  toque, los data o los refleja.
+- **Sin gasto nuevo y sin permisos nuevos** (R10, R12): un comando, una prueba y
+  un paso aditivo en un workflow que ya escribe en la rama del motor.
+
