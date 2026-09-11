@@ -969,3 +969,21 @@ investigación dejaba **seis** en rojo. Ahora ninguna lee el registro real —so
 lo hacen la que comprueba que es válido y la que enumera qué entradas cubrir—, y
 la suite se ejecutó con las **cuatro** configuraciones posibles, pasando en todas.
 El registro entregado conserva los dos carriles retirados.
+
+### 13.6 La memoria común: el motor publica sus desenlaces (ADR-171)
+
+Desde la fusión de la PR de ADR-171, `reflejar-desenlace.yml` tiene un paso más,
+**después** de reflejar y **antes** de confirmar, en el mismo grupo de
+concurrencia `motor-sirius` y con los mismos permisos: `uv run sirius-memoria
+desenlaces --diario <memoria>/diario.jsonl`, que escribe `DESENLACES.md` en la
+rama `estado-del-motor` a partir del diario y del diario de despacho. Es la
+obligación del motor en la propuesta de separación (§6.2): *publicar desenlaces
+—qué se encargó, qué salió, dónde está la evidencia— sin ceder la autoridad del
+estado en curso*. Cuatro cosas quedan fijadas:
+
+| Qué | Cómo |
+|---|---|
+| Solo se deriva del diario | Sin reloj, sin red, sin `gh`: la vista es función de los dos ficheros. Un diario sin cambios da una vista sin cambios, y el paso de confirmación no confirma nada |
+| Corre aunque el reflejo falle (`if: always()`) | Un reflejo a medias es justo lo que hay que poder ver. Si no hay diario, el paso sale en verde sin escribir |
+| No escribe en `main` ni en GitHub | Solo en el worktree de la rama de memoria, que confirma el paso siguiente ya existente |
+| La vista de conocimiento va por otro cauce | `MEMORIA.md`, en la raíz de `main`, la regenera quien cambia un ADR, un documento o un registro, en su PR; `tests/engine/test_memoria.py` la rechaza desactualizada |

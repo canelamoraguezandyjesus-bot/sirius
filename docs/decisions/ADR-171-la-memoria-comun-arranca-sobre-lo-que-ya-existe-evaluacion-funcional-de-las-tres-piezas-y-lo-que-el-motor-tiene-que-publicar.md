@@ -281,5 +281,56 @@ Lo que no se puede hacer imposible desde aquí: que una IA no la lea.
 
 ## Comprobación que la sostiene
 
-*(Se rellena con la evidencia al terminar; hasta entonces, nada de lo anterior
-sobre el generador está demostrado.)*
+Todo `[V]`, ejecutado en esta rama el 11-09-2026 sobre el árbol de esta PR.
+
+**Lo que se generó.**
+
+- `uv run sirius-memoria conocimiento` escribe `MEMORIA.md`: **92,625 bytes**
+  (criterio (c): por debajo de 120 KB), con 165 decisiones, 20 bloques del
+  motor (17 cerrados, 2 pendientes, 1 fuera de alcance), 32 defectos (todos
+  cerrados), 7 investigaciones y 127 documentos, de los que **84 no declaran
+  fecha** con la regla del generador (una fecha en una línea de las veinte
+  primeras que hable de «fecha» o «actualización», en ISO o en DD-MM-AAAA). La
+  cifra de «14 de 36» de la fila R4 de la evaluación salió de otra regla, más
+  laxa (cualquier fecha en la cabecera); la del generador es la que cuenta desde
+  ahora, porque es la que se puede repetir.
+- `uv run sirius-memoria desenlaces --diario diario.jsonl` sobre el diario real
+  de `estado-del-motor` (451 sucesos, el último el 08-09-2026 01:06 UTC) escribe
+  `DESENLACES.md` de 23.757 bytes con **76 encargos**: 46 `delivered`, 21
+  `active`, 5 `failed_safely`, 4 `needs_decision`; cada uno con su incidencia
+  enlazada (del diario de despacho cuando el resultado aún no la trae), la
+  fusión y el run de evidencia cuando el diagnóstico lo cita. Los 21 `active`
+  son encargos del 25 al 28 de agosto que el diario nunca vio avanzar: la vista
+  no lo esconde, porque el diario manda.
+
+**Criterio (a), solo el árbol.** `tests/engine/test_memoria.py::
+test_el_generador_no_mira_el_reloj_ni_la_red_ni_git` inspecciona el código del
+módulo: sin `datetime`, `subprocess`, `urllib`, `httpx`, `time.time` ni
+`os.environ`. Dos generaciones seguidas del mismo árbol son idénticas.
+
+**Criterio (b), la guardia falla contra la mutación.** Cuatro mutaciones, cada
+una vista FALLAR y el árbol restaurado después:
+
+| Mutación | Prueba | Resultado |
+|---|---|---|
+| Cambiar el título de `ADR-001` sin regenerar | `test_la_memoria_confirmada_en_este_arbol_esta_al_dia` | **Falla** con el mensaje que nombra `uv run sirius-memoria conocimiento` |
+| Añadir una línea a mano a `MEMORIA.md` | la misma | **Falla** |
+| Quitar el paso «Publicar la vista de desenlaces» del workflow | `test_el_reflejo_publica_la_vista_de_desenlaces_aunque_el_reflejo_falle` | **Falla**: «la vista existiría y nadie la escribiría» |
+| Quitar la regla de `AGENTS.md` | `test_agents_ordena_leer_la_memoria_primero` | **Falla** |
+
+**Criterios (d) y (e), el cableado.** El paso nuevo de `reflejar-desenlace.yml`
+es aditivo: mismo grupo `motor-sirius`, mismos permisos, `if: always()`, antes
+de «Confirmar el diario», que ya confirma cualquier fichero del worktree.
+`tests/automation/test_serializacion_del_motor.py` deriva `sirius-memoria` de
+`[project.scripts]` y lo acepta sin tocar la prueba.
+
+**Las validaciones.** `ruff format --check`, `ruff check`, `mypy src tests`
+(588 ficheros) en verde; `tests/engine/test_memoria.py` (18 pruebas) más las
+de serialización del motor y las de prompts de rol: 78 en verde, 11 saltadas
+por su propia condición. La suite completa se corrió antes del push; su
+resultado está en la descripción de la PR.
+
+**Lo que NO se ha comprobado.** Que `reflejar-desenlace.yml` escriba
+`DESENLACES.md` en la rama real: eso solo ocurre tras la fusión, en la primera
+pasada (`workflow_dispatch` la adelanta). Si esa pasada no deja el fichero en
+`estado-del-motor`, este ADR no está cumplido y hay que mirar el run.
