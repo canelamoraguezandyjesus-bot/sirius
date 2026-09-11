@@ -4717,7 +4717,7 @@ runners distintos y a mitad de trabajo:
 
 Ninguno agotó turnos ni tiempo; los dos terminaron con `subtype: success` e
 `is_error: true`, que es como el SDK cuenta que la API dejó de contestar. Es
-el mismo perfil que la entrada 41 («los dos agentes murieron a la vez a las
+el mismo perfil que la entrada 44 («los dos agentes murieron a la vez a las
 05:23-05:24»): **el tope de uso de la suscripción**, alcanzado tras 45 min del
 implementador de H5, 60 del primero de H4, 26 del revisor de H5 y 11 del
 segundo de H4, todos Opus, en una hora y veinte. Codex, por su lado, no
