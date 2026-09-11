@@ -68,17 +68,23 @@ jobs:
         shell: bash --noprofile --norc {0}
         run: |
           set -uo pipefail
+
+          # CONTRATO DEL LECTOR, EXPLÍCITO (ADR-167, hallazgo 3). Solo dos
+          # codigos significan algo: 0 retirado, 1 activo. Antes solo el 2 se
+          # trataba como error, asi que cualquier otro -126 o 127 si `python3`
+          # o el guion no estan donde se espera, una senal- caia en la rama
+          # «activo» y el trabajo seguia hasta el modelo, que es justo lo
+          # contrario de lo que se decidio. Ahora lo desconocido detiene el paso
+          # con diagnostico y sin ejecutar el carril.
           rc=0
           explicacion="$(python3 scripts/automation/sirius_carril_retirado.py auditoria)" || rc=$?
-          if [ "$rc" -eq 2 ]; then
-            echo "::error::No se pudo leer el registro de carriles retirados; reintentable."
-            exit 1
-          fi
-          if [ "$rc" -ne 0 ]; then
-            echo "retirado=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          echo "retirado=true" >> "$GITHUB_OUTPUT"
+          case "$rc" in
+            0) echo "retirado=true" >> "$GITHUB_OUTPUT" ;;
+            1) echo "retirado=false" >> "$GITHUB_OUTPUT"
+               exit 0 ;;
+            *) echo "::error::El lector del registro de carriles retirados termino con un codigo inesperado (${rc}); no se ejecuta el carril."
+               exit 1 ;;
+          esac
           {
             echo "## Carril de auditoria retirado"
             echo ""

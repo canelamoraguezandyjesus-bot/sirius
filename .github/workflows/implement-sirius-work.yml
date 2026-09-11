@@ -168,26 +168,42 @@ jobs:
           ISSUE_BODY: ${{ github.event.issue.body }}
         run: |
           set -uo pipefail
-          # El perfil `investigador` NO lo atiende este workflow. La exclusion
+          # EL PERFIL `investigador` NO LO ATIENDE ESTE WORKFLOW, y la exclusion
           # va AQUI, ANTES de consumir el evento: si se excluyera despues, las
-          # etiquetas ya estarian movidas y nadie atenderia la orden. Se sale
-          # con valid=false, que es "no es mio", no un fallo.
+          # etiquetas ya estarian movidas y nadie atenderia la orden. Se sale con
+          # valid=false, que es "no es mio", no un fallo.
           #
-          # ESTA PUERTA SE CONSERVA TRAS LA RETIRADA DEL CARRIL (ADR-161,
-          # ejecutado por ADR-163), y conviene decir por que, porque la
-          # tentacion de quitarla es exactamente el defecto: investigacion
-          # comparte la etiqueta de activacion con programacion (ADR-099), asi
-          # que sin esta linea una activacion con perfil `investigador`
-          # **se implementaria como programacion**. Quien responde ahora es
-          # `investigar-orden.yml`, que en vez de investigar explica que el
-          # carril esta retirado y deja la incidencia en `sirius:failed-safely`:
-          # ni espera, ni cambia de carril.
-          perfil=$(printf '%s' "$ISSUE_BODY" | sed -n 's/^Perfil: *\([A-Za-z_-][A-Za-z_-]*\)@.*/\1/p' | head -1)
-          if [ "$perfil" = "investigador" ]; then
-            echo "valid=false" >> "$GITHUB_OUTPUT"
-            echo "Perfil investigador: esta activacion no la consume el implementador; la atiende y la cierra investigar-orden.yml (carril retirado, ADR-163)."
-            exit 0
-          fi
+          # ESTA EXCLUSION SE CONSERVA TRAS LA RETIRADA DEL CARRIL (ADR-161,
+          # ejecutado por ADR-163), y conviene decir por que, porque la tentacion
+          # de quitarla es exactamente el defecto: investigacion comparte la
+          # etiqueta de activacion con programacion (ADR-099), asi que sin ella
+          # una activacion con perfil `investigador` **se implementaria como
+          # programacion**. Quien responde ahora es `investigar-orden.yml`, que
+          # en vez de investigar explica que el carril esta retirado.
+          #
+          # LO QUE CAMBIA (ADR-167, segunda ronda, hallazgo 3): la decision ya no
+          # se toma aqui. Esta puerta leia el perfil del cuerpo del EVENTO y la
+          # de investigacion el del cuerpo ACTUAL, asi que un cuerpo editado
+          # entre el evento y el arranque producia los dos desenlaces peores -o
+          # ninguna atendia la orden, o la atendian las dos a la vez-. El reparto
+          # vive ahora en `sirius_reparto_activacion.sh`, que llaman las dos y
+          # que exige una activacion NUEVA cuando el perfil cambio, en vez de
+          # cambiar el tipo de trabajo en silencio.
+          reparto_rc=0
+          bash scripts/automation/sirius_reparto_activacion.sh \
+            "$GH_REPO" "$ISSUE_NUMBER" "$(printf '%s' "$ISSUE_BODY" | sed -n 's/^Perfil: *\([A-Za-z_-][A-Za-z_-]*\)@.*/\1/p' | head -1)" \
+            "otros" || reparto_rc=$?
+          case "$reparto_rc" in
+            0) : ;;
+            1) echo "valid=false" >> "$GITHUB_OUTPUT"
+               echo "El cuerpo actual de #${ISSUE_NUMBER} declara el perfil investigador: esta activacion no la consume el implementador."
+               exit 0 ;;
+            2) echo "valid=false" >> "$GITHUB_OUTPUT"
+               echo "::error::El perfil del cuerpo cambio desde que se aplico la etiqueta: este evento pedia otro trabajo y no se ha ejecutado nada. NO se ha tocado ninguna etiqueta -no se puede probar que la activacion presente sea la de este evento-. El diagnostico esta en la incidencia."
+               exit 1 ;;
+            *) echo "::error::El reparto de la activacion no se pudo decidir (codigo ${reparto_rc}); no se consume el evento."
+               exit 1 ;;
+          esac
           if bash scripts/automation/sirius_validate_activation.sh "$GH_REPO" "$ISSUE_NUMBER"; then
             script_rc=0
           else

@@ -905,3 +905,67 @@ siguen lanzables a mano, porque miden el instrumento y no aceptan encargos.
   auditoría— seguirá teniendo tres clases mientras la retirada no se ejecute.
 - **§12.1**, la condición sin excepción de la orden enlazada. Intacta.
 
+
+### 13.4 Corrección de la ejecución (ADR-167)
+
+**Esto no cambia lo que §13 decide, y por eso no sube la versión del contrato:**
+corrige cómo se ejecutaba. La revisión de la implementación de ADR-163 (en
+`929b673`) encontró cinco defectos en las dos puertas, y ADR-167 los arregla.
+Lo que cambia en lo observable, y que este contrato declara desde la fusión de
+la PR de ADR-167:
+
+| Situación | Antes (ADR-163) | Ahora (ADR-167) |
+|---|---|---|
+| No se puede publicar la explicación | `::warning::` y **seguía** a poner la etiqueta terminal: incidencia cerrada y muda | El paso termina en **rojo** y **no toca ninguna etiqueta**; la incidencia se queda como estaba |
+| No se puede confirmar la transición | `::error::` seguido de `exit 0`: job **verde** con la incidencia colgada en `implement-requested` | El paso termina en **rojo** con la explicación ya publicada; reejecutar converge |
+| Evento atrasado o repetido sobre una incidencia ya terminada | Decidía con el cuerpo del evento y podía dejar `sirius:completed` **y** `sirius:failed-safely` a la vez | Lo decide `sirius_validate_activation.sh`, que retira el evento y explica **sin** imponer `sirius:failed-safely` (§13.5) |
+| El lector del registro falla de un modo imprevisto | Solo el código `2` era error; cualquier otro se leía como «carril activo» y el trabajo **seguía** | Contrato explícito: `0` retirado, `1` activo, **cualquier otro detiene** el paso con diagnóstico |
+| Dos activaciones iguales | Dos comentarios: el marcador no iba en el cuerpo publicado | Un solo comentario: el marcador es la primera línea del cuerpo |
+
+**La recuperación de estas puertas es reejecutar el job, no el reconciliador.**
+Se comprobó, y consta en ADR-167: §9.1 solo repara los casos A y B, un
+`planned` + `implement-requested` atascado lo excluye a propósito, y un
+`completed` + `failed-safely` simultáneo se le presenta como CONTRADICCIÓN que
+pide revisión humana. Cada operación de la puerta es idempotente, así que
+reejecutarla converge sin duplicar el comentario.
+
+**Y la promesa de reversibilidad de §13.2.1 —«reactivar un carril es quitar su
+entrada de ese fichero y fusionar: no hay que tocar código, workflows ni
+pruebas»— es cierta desde ADR-167, y no lo era antes.** La suite de ADR-163
+exigía que el registro declarase siempre los dos carriles, así que la
+reactivación documentada habría dejado las pruebas en rojo. Ahora las pruebas
+comprueban el mecanismo contra registros controlados, conservan las
+comprobaciones de formato y de seguridad del registro, y **demuestran** que las
+cuatro configuraciones posibles —los dos retirados, cada uno reactivado por
+separado, y ninguno— son válidas. El registro real no se ha tocado: los dos
+carriles siguen retirados.
+
+### 13.5 Segunda corrección de la ejecución (ADR-167, segunda ronda)
+
+Al revisar la corrección anterior aparecieron cuatro defectos más, **de la misma
+familia**. ADR-001 obliga entonces a buscar la raíz en vez de parchear, y la raíz
+era esta: **la puerta se había hecho copias locales de decisiones que el ciclo ya
+tiene en un solo dueño, y las copias divergían.** Lo que este contrato declara
+desde la fusión de la PR de ADR-167:
+
+| Situación | Antes | Ahora |
+|---|---|---|
+| La transición de etiquetas se aplica solo en parte | Reejecutar salía en **verde** sin completarla | Reejecutar la **completa**, venga de donde venga: con el marcador presente la puerta no pregunta qué escrituras faltaron sino si el estado ya es el final, y si no lo es lo completa. Es la regla de `sirius_transition` (incidencia #50), y cubre las **ocho** combinaciones sin casos especiales |
+| Hay una intervención posterior: la incidencia se cerró, o el ciclo la movió a otro estado | La recuperación completaba igual, incluso sobre una incidencia **cerrada** | **No se impone ningún desenlace**: termina en rojo, sin escribir, y pide revisión humana |
+| Activación nueva sobre trabajo en curso (`implementing`, `reviewing`, `repairing`, `ci-pending`, los `*-requested`) | La puerta llevaba su propia lista de estados terminales, de **cuatro**, y añadía `failed-safely` **encima** del trabajo en curso | Lo decide `sirius_validate_activation.sh`, que conoce los **diez** estados incompatibles: explica, retira el evento y **no** toca el trabajo en curso |
+| El perfil del cuerpo cambió entre el evento y el arranque | O **ninguna** puerta la atendía —incidencia abandonada— o la atendían **las dos**, retirándola y ejecutándola a la vez | No la ejecuta nadie y **no se toca ninguna etiqueta**: se explica en la incidencia y el job termina en rojo. La activación que haya se conserva para que la atienda el evento que sí le corresponde |
+| Un evento antiguo llega cuando la etiqueta ya es de una activación posterior | El reparto la retiraba y **borraba la activación nueva**, que entonces se quedaba sin atender | No se puede probar que la etiqueta sea la de ese evento —lo haya procesado antes o no—, así que **no se escribe nada**. El evento antiguo para en rojo; el nuevo sigue su curso |
+
+**Quién atiende una activación deja de decidirse dos veces.** Vive en
+`scripts/automation/sirius_reparto_activacion.sh`, que llaman las dos puertas:
+atiende aquella cuyo perfil coincide con el cuerpo **actual**. Por eso
+`implement-sirius-work.yml` cambia —lo único que cambia en él— y por eso la
+lista propia de estados terminales desaparece de `investigar-orden.yml`: una
+copia que no existe no puede quedarse corta.
+
+**Y la promesa de §13.2.1 se comprueba entera.** Antes de esta corrección,
+ninguna prueba de comportamiento pasaba un registro controlado: reactivar
+investigación dejaba **seis** en rojo. Ahora ninguna lee el registro real —solo
+lo hacen la que comprueba que es válido y la que enumera qué entradas cubrir—, y
+la suite se ejecutó con las **cuatro** configuraciones posibles, pasando en todas.
+El registro entregado conserva los dos carriles retirados.
