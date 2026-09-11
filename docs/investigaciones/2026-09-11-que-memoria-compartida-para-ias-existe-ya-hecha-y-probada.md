@@ -9,7 +9,7 @@ pregunta: >-
   vista generada en el repositorio (ADR-171), y a qué precio?
 caduca_con:
   - los precios y límites gratuitos de los servicios alojados (Mem0, Supermemory, Basic Memory Cloud, Letta Cloud, Zep)
-  - qué clientes admiten MCP y cómo (Claude Code, Codex, ChatGPT): cambia cada pocos meses
+  - "qué clientes admiten MCP y cómo (Claude Code, Codex, ChatGPT), que cambia cada pocos meses"
   - las versiones y la actividad de cada proyecto, medidas el día de la clonación
   - la lista de herramientas que leen AGENTS.md
 estado: VIGENTE
