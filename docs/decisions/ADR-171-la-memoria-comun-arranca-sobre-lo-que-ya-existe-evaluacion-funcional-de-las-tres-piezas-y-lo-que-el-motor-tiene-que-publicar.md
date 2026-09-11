@@ -90,12 +90,134 @@ corpus igualmente; eso es conducta, y se ordena en `AGENTS.md`.
 
 ## Evaluación funcional (T-5)
 
-Se rellena con la evidencia, requisito a requisito y pieza a pieza.
+Tres piezas, catorce requisitos. `[V]` = comprobado en el repositorio en esta
+rama; `[H]` = hipótesis o dato que solo el propietario puede confirmar.
+
+### El hallazgo que va primero
+
+**El repositorio es PÚBLICO** `[V, API de la plataforma: visibility=public]`. La
+propuesta §6.3 (R9) y la decisión pendiente T-6 hablan de *«qué del repositorio
+**privado** puede reflejarse en la memoria común y llegar a las IAs externas»*.
+Hoy esa frontera no existe: todo `docs/`, todos los ADR, el contrato y el diario
+del motor son legibles por cualquiera sin credenciales. Este ADR **no cambia la
+visibilidad** —es decisión del propietario— pero tiene dos consecuencias que
+sí le tocan: si es intencionado, cualquier IA lee la memoria común por una URL
+sin configurar nada; si no lo es, hay que cerrarlo antes de seguir, y T-6
+vuelve a ser real. La guía del final lo pone como primer paso.
+
+### Pieza 1 — el repositorio (`main`)
+
+| Req. | Cumple | Evidencia |
+|---|---|---|
+| R1 disponible con el PC apagado | **Sí** | Está en GitHub `[V]` |
+| R2 leen/escriben las IAs y el motor | **Parcial** | Claude Code lee y escribe `[V, esta sesión]`; el revisor Codex del ciclo lee `[V, review-sirius-work.yml]`; el motor escribe por PR y por su rama `[V]`. Las sesiones de Codex y de ChatGPT del propietario: `[H]`, lo confirma él |
+| R3 sobrevive a dejar una IA | **Sí** | Nada vive en el historial de un proveedor: todo está en git `[V]` |
+| R4 origen y fecha por elemento | **Parcial** | Los 165 ADR llevan `Fecha` `[V]`; de 36 documentos en `evolution/` e `implementation/`, **14 no declaran fecha** en cabecera, entre ellos `PLAN.md` y `SIRIUS_AI_CORE_AND_MODEL_STRATEGY.md` `[V]` |
+| R5 caducidad declarada | **Solo en `docs/investigaciones/`** | Campo `caduca_con` con prueba que lo exige (4 casos) `[V]`. ADR y demás documentos: sin caducidad |
+| R6 exploración ≠ decisión | **Sí** | Contrato línea 147: *«ausencia de señales no es aprobación»* `[V]`; y el mecanismo real es que nada entra en `main` sin PR fusionada por el propietario `[V]` |
+| R7 regla de conflicto | **No** | `sirius_check_docs.py` comprueba rutas y citas, no contradicciones `[V]`. No hay regla escrita |
+| R8 un dueño por dato | **Sí, por convención** | Las citas por `fichero:línea` son la práctica del repositorio `[V]`; no hay comprobación de copias |
+| R9 frontera de confidencialidad | **No existe** | Repositorio público `[V]`. Ver el hallazgo |
+| R10 sin permisos generales | **Sí** | Tokens por workflow, `.claude/settings.json` con denegaciones `[V]` |
+| R11 «qué sabíamos y cuándo» | **Sí** | `git log` `[V]` |
+| R12 sin gasto nuevo | **Sí** | Nada que pagar `[V]` |
+| R13 independiente de proveedor | **Sí** | Markdown, JSON y git `[V]` |
+| R14 el propietario no escribe fichas | **Sí, y es lo caro** | 57 de los últimos 58 commits de ADR son de la identidad bot que usan las IAs `[V]`. Pero **ninguno de los 165 ADR tiene resumen** y el índice `docs/decisions/README.md` tiene **cero entradas** `[V]`: para saber qué se decidió hay que abrir ficheros de 15–80 KB |
+
+### Pieza 2 — el diario del motor (rama `estado-del-motor`)
+
+| Req. | Cumple | Evidencia |
+|---|---|---|
+| R1, R3, R11, R12, R13 | **Sí** | Rama de GitHub, JSONL append-only con `checksum_sha256` por entrada `[V]` |
+| R2 | **Escribe el motor; leen quienes lean el repositorio** | `reflejar-desenlace.yml` la escribe tras cada cambio de etiqueta del ciclo `[V, ADR-137]` |
+| R4 | **Sí** | Cada entrada lleva `recorded_at`, `aggregate_id` y `contexto_origen` `[V]` |
+| **§6.2 «publicar desenlaces»** | **Los registra; no los publica** | 451 entradas tipadas —`work_item_delivered` 46, `work_item_failed_safely` 10, `work_item_escalated` 7…— y el `diagnostico` lleva la URL del run `[V]`. Pero son **3,6 MB de JSON sin ninguna vista**: ni `sirius-motor` ni ningún otro guion imprime «qué se encargó, qué salió, dónde está la evidencia» de forma legible `[V, entry points de pyproject]` |
+| R5, R6, R7 | No aplican / no hay | Es estado, no conocimiento; su regla de autoridad está escrita: *manda el motor* |
+
+### Pieza 3 — la memoria del producto (SQLite, en el equipo del propietario)
+
+**No es candidata a lugar** —falla R1 por diseño, y D6 la deja aparte a propósito
+`[V, ADR-083]`—, pero **sí es fuente de dos patrones** que las otras piezas no
+tienen: origen consultable por dato (`GetMemoryOriginUseCase`,
+`GetDecisionOriginUseCase`) y detección determinista de conflictos de
+precedencia (`DetectPrecedenceConflictsUseCase`) `[V, src/sirius]`.
+
+### Lo que dice la evaluación, en tres frases
+
+1. **El repositorio más el diario ya cumplen R1, R3, R10, R11, R12 y R13 sin
+   hacer nada**, que son justo los requisitos que descartarían soluciones. Se
+   cumple el criterio de parada **(a)**: no hace falta nada nuevo para arrancar.
+2. **Lo que falla no es dónde está el conocimiento, sino que nadie lo puede
+   consultar barato**: cero resúmenes, cero índice, cero vista del diario. Es la
+   causa directa del gasto que el propietario sufre.
+3. **Los huecos reales son cuatro y se cierran generando, no curando**: una
+   vista de decisiones, una vista de desenlaces, fechas en los documentos que no
+   la tienen, y una regla de conflicto escrita.
 
 ## Decisión
 
-Se rellena después de la evaluación.
+1. **La memoria común arranca sobre lo que ya existe: `main` para el
+   conocimiento y `estado-del-motor` para los desenlaces.** No se elige ni se
+   instala herramienta alguna. Se cumple el criterio (a) de la nota de arranque.
+2. **Toda vista de la memoria común se genera; nunca se cura.** Un guion con
+   prueba produce las vistas, y CI falla si una está desactualizada o si una
+   pieza nueva no trae lo que la vista necesita. Es la regla de la pregunta 4 de
+   la nota de arranque, y la que hace imposible el «mapa» que envejece.
+3. **Las vistas viven en `estado-del-motor`, escritas por el motor.** Es la rama
+   donde el motor ya tiene permiso de escritura (ADR-083, ADR-137) y la única
+   forma de que las vistas estén siempre frescas sin que la automatización
+   escriba en `main` (ADR-002). El punto de entrada de cualquier IA pasa a ser
+   **un solo fichero**: `estado-del-motor:MEMORIA.md`.
+4. **Qué contiene `MEMORIA.md`**, generado:
+   - **Decisiones**: una línea por ADR —número, fecha, estado, título, resumen—
+     y las decisiones EV vigentes. Exige un campo `Resumen` en cada ADR: se añade
+     a la plantilla y a la skill `adr`, y se rellena en los 165 existentes
+     (borrador generado de la primera frase de cada Decisión, revisado).
+   - **Desenlaces**: los últimos N encargos del diario, con clase, estado,
+     desenlace, fecha y enlace a la evidencia. Es la fila del motor en §6.2,
+     cumplida.
+   - **Estado y visión**: enlaces a `STATUS.md`, `RECTOR.md` y a los documentos
+     de dirección, con su fecha; **sin copiar su contenido** (R8).
+5. **T-4 queda resuelta por lo que ya existe.** Las IAs escriben conocimiento
+   **por PR que fusiona el propietario** —eso es «propuesta más confirmación», y
+   ya cumple R6 y R10—; el motor escribe su diario **directamente**, porque es
+   suyo; las vistas se derivan de ambos. No se crea un mecanismo nuevo.
+6. **Regla de conflicto (R7), escrita ahora:** si el diario del motor y
+   cualquier documento discrepan sobre un trabajo, **manda el diario**; si dos
+   documentos discrepan entre sí, manda el más reciente **fusionado**, y la vista
+   los marca como discrepantes en vez de elegir por su cuenta.
+7. **`AGENTS.md` cambia una regla**: la lectura obligatoria pasa a ser
+   `MEMORIA.md` y, desde ahí, solo lo que la tarea necesite. El contrato entero
+   se lee cuando la tarea toca automatización, como ahora. Este cambio es lo que
+   convierte la vista en ahorro; sin él, es un fichero más.
+8. **T-6 no se decide aquí, porque su premisa no se cumple**: el repositorio es
+   público. Se pone al propietario como primer paso de la guía.
+
+**Lo que este ADR deja fuera a propósito:** la herramienta definitiva; Sirius
+0.2 y la memoria del producto; la frontera de salida hasta que el propietario
+decida la visibilidad; y cualquier permiso de escritura nuevo para una IA.
+
+## Lo que viene después, en orden
+
+- **PR siguiente (motor):** el generador `sirius-memoria` con sus pruebas, la
+  vista de desenlaces, y `reflejar-desenlace.yml` escribiendo `MEMORIA.md` tras
+  cada reflejo. Nota de arranque propia.
+- **PR siguiente (documentos):** campo `Resumen` en plantilla y skill, los 165
+  borradores para revisión, fechas en los 14 documentos sin ella, y la prueba
+  que impide un ADR sin resumen.
+- **PR siguiente (conducta):** la regla nueva de `AGENTS.md`.
 
 ## Lo que el propietario tiene que hacer
 
-Se rellena después de la evaluación, como guía concreta.
+1. **Decidir si el repositorio debe ser público.** Compruébalo en
+   `github.com/canelamoraguezandyjesus-bot/sirius` → *Settings* → *General* →
+   abajo del todo, *Danger Zone* → *Change repository visibility*. Si es
+   intencionado, dilo y T-6 queda cerrada por ausencia de frontera; si no,
+   cámbialo a privado **antes** de la PR de conducta, porque entonces las IAs
+   externas necesitarán acceso explícito.
+2. **Decir qué IAs tuyas pueden leer GitHub** (R2): tu Codex de sesiones y tu
+   ChatGPT. Con el repositorio público, ambas pueden leer `MEMORIA.md` por su URL
+   sin configurar nada; con el repositorio privado, ChatGPT necesita el conector
+   de GitHub y Codex el acceso al repositorio.
+3. **Fusionar este ADR** si la decisión es la que quieres. La fusión es el «go»
+   de la PR del motor, que arranca en el momento.
