@@ -4630,6 +4630,65 @@ y la respuesta solo hace falta para fusionar—. Sin su sí, #583 no se fusiona
 aunque el ciclo cierre.
 ---
 
+### 92. H4 murió por tiempo sin decir nada, y al medir antes de relanzar el encargo resultó insatisfacible (11-09-2026, 06:30 UTC)
+
+**Qué pasó.** El implementador de #581 (run 34565569031, job 103156881364)
+corrió de 05:20:37Z a 06:20:32Z y lo canceló el tope de 60 minutos del job:
+59:52, sin rama, sin PR y sin veredicto («este veredicto provisional se
+escribió al empezar y no llegó a sustituirse»). La salida del agente no va al
+log (ADR-044) y el run no dejó artefactos: **no hay dato de en qué minuto se
+quedó**. Familia de M18a (entrada 1). H5, lanzada en el mismo minuto y con la
+misma clase de runner, abrió su PR a los 45 minutos.
+
+**La raíz es mía, y estaba escrita en esta bitácora.** El encargo que redacté
+pedía la línea base y la medición final en **las cuatro configuraciones** del
+diagnóstico (ocho corridas, a 2-3 minutos cada una aquí y más en el runner),
+la cadena entera (≈10 minutos) **y** una pregunta de diseño abierta («decide
+con medida, no de antemano, dónde vive la señal y qué la enciende»). No cabía.
+La lección de M18a —«partir los encargos hasta que quepan en ~30 minutos»—
+la escribí yo, y no la apliqué a H4 porque lo llamé «el más pequeño»: estimé
+en vez de contar (raíz 2). Cuenta que hago desde ahora antes de lanzar:
+corridas del diagnóstico × 3 min + cadena 10 min; si pasa de 25, se recorta.
+
+**Lo que medí antes de relanzar, y cambió el encargo.** El primer cuerpo
+pedía a la vez que `B04-CA-30` recuperase `MEM-001` «con la regla elegida y
+sin ajustar la regla al caso» y que ninguna columna empeorase. Sonda de un
+solo uso sobre `5fc5fdc`, etapa de búsqueda con peticiones reales,
+sustituyendo solo la regla de activación en el consumidor real:
+
+| regla | sin ejes | con ejes |
+|---|---|---|
+| hoy (subcadena) | 17/47; 162; 78/81; 0 | 21/47; 144; 78/81; 0 |
+| `responder_al_usuario` o la de hoy | 7/47; 309; 79/81; 0 | 8/47; 293; 79/81; 0 |
+| siempre | 0/47; 368; 79/81; 0 | 0/47; 352; 79/81; 0 |
+
+`MEM-001` entra en `B04-CA-30` con las dos reglas; las dos hunden las exactas
+y disparan los de más. **Las dos condiciones eran insatisfacibles a la vez
+con una regla de clase de propósito**, y yo las había escrito como si la
+regla existiera: el 08-09 medí solo la sustitución del propósito en **ese**
+caso (+2 de más) y nunca el coste de una regla sobre los 27 casos de
+`responder_al_usuario`. Raíz 2 y raíz 4 (un caso no es la regla). Si el
+implementador pasó su hora descubriendo esto, murió sin poder decirlo.
+
+**Qué hice.** Reencargo **en la misma incidencia**: cuerpo sustituido y
+validado con `validate_issue_body.py`; nota publicada a las 06:29Z y
+`continua` a las 06:30Z. El encargo nuevo cierra solo el mecanismo —señal
+explícita fijada por los tres constructores de la `Peticion` con criterio
+escrito, subcadena fuera— **sin cambiar qué peticiones activan hoy** la
+ampliación. Su predicción es que el banco **no se mueve en una sola cifra**,
+que es una prueba fuerte de la raíz 1: si se mueve, la señal se consume en
+algún sitio que no tracé. Una configuración medida dos veces, la cadena una
+vez, presupuesto de tiempo explícito con orden de parar con `FAILED_SAFELY` a
+los 40 minutos, y prohibido tocar el docstring del guion de diagnóstico, que
+#583 también edita. La elección `MEM-001` frente a esas columnas va al
+propietario con las cifras (informe de decisiones, sección nueva 2).
+
+**Lo que queda como deuda (30).** El implementador no sabe qué hora es: su
+prompt le manda parar con `FAILED_SAFELY` si algo no cabe, pero sin reloj no
+puede saber que no cabe, y a los 59:52 el tope lo mata sin que quede una
+línea de diagnóstico. Una hora de runner y de modelo a cambio de nada.
+---
+
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
 
 1. `ollama_category_classifier.py`: ruta relativa y sin
@@ -5223,3 +5282,17 @@ aunque el ciclo cierre.
     camino existente sirva sin tocarlo; (c) dejarlo como intervención humana
     declarada, pero entonces documentarlo, porque hoy la incidencia dice
     «corrección autorizada» y no hay quien la haga.
+
+30. **El implementador muere en silencio al tope del job.** Reproducido el
+    11-09 en #581 (run 34565569031): 59:52 de ejecución, cancelado por
+    `timeout-minutes: 60`, sin rama, PR ni veredicto, sin salida en el log
+    (ADR-044) ni artefactos. Su prompt le ordena parar con `FAILED_SAFELY`
+    cuando algo no cabe, pero no le dice cuánto tiempo tiene ni le da reloj.
+    Candidatos, para decisión del propietario: (a) que el prompt del
+    implementador (y del corrector) declare el presupuesto en minutos y una
+    hora límite para arrancar la cadena, con orden de parar y escribir el
+    veredicto si no llega; (b) que la orden de cada encargo lleve el coste de
+    medición contado (corridas × minutos + cadena), y que quien lo redacta lo
+    sume antes de lanzar; (c) que un `failed-safely` por tope publique al
+    menos la duración y que fue el tope, para distinguirlo de un fallo del
+    modelo (hoy los dos dicen lo mismo).

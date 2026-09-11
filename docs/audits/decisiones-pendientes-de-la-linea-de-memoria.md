@@ -79,6 +79,49 @@ del head final.
 
 ---
 
+# NUEVA 2, 11-09-2026 06:30 UTC — H4: ¿pagar `MEM-001` en `B04-CA-30` con las otras columnas?
+
+**Qué ha pasado.** El primer intento de H4 (#581) murió a los 60 minutos sin
+dejar nada. Antes de relanzarlo medí lo que el encargo daba por hecho: que
+existía una regla de activación que recuperase `MEM-001` en `B04-CA-30`
+(`responder_al_usuario`) sin empeorar el banco. **No existe entre las reglas
+de clase de propósito.** Sobre `main` (`5fc5fdc`), etapa de búsqueda con
+peticiones reales, cambiando solo la regla en el consumidor real:
+
+| regla | sin ejes | con ejes |
+|---|---|---|
+| hoy (subcadena «contexto») | 17/47; 162; 78/81; 0 | 21/47; 144; 78/81; 0 |
+| `responder_al_usuario` o la de hoy | 7/47; 309; 79/81; 0 | 8/47; 293; 79/81; 0 |
+| siempre | 0/47; 368; 79/81; 0 | 0/47; 352; 79/81; 0 |
+
+`MEM-001` entra con las dos reglas nuevas; el precio es pasar de 17 a 7
+exactas y de 162 a 309 elementos de más (sin ejes), por un hallado más.
+
+**Lo que hice sin ti.** Relancé H4 recortado a lo que decidiste —la señal
+explícita, sin subcadena— **sin cambiar qué peticiones la activan hoy**. Su
+predicción es que el banco no se mueve. Eso cierra el mecanismo; no cierra
+`B04-CA-30`.
+
+**Opciones**
+
+- **(A) Dejarlo así** — *recomendada ahora*. `MEM-001` en `B04-CA-30` queda
+  como hueco medido y nombrado: recuperarlo cuesta lo de la tabla. La
+  adjudicación del corpus lo espera, pero ninguna regla de clase lo paga.
+- **(B) Pagarlo con una regla de clase**: activar la ampliación para
+  `responder_al_usuario`. Es la fila 2 de la tabla, y la etapa de búsqueda no
+  es lo que se entrega (el filtro quita después), pero el filtro real solo lo
+  mide Ollama en tu máquina. No lo recomiendo sin esa medición.
+- **(C) Buscar una regla más fina** que no dependa del propósito: los otros
+  campos declarados de la petición (modo, cardinalidad, permiso) o la
+  intención que infiere el intérprete de ADR-164. **No está medido.** Si lo
+  quieres, mido primero cuántos casos separa cada campo y qué cuesta, y solo
+  después se escribe un encargo.
+
+Si no dices nada, sigue (A): H4 cierra el mecanismo y `B04-CA-30` queda en la
+lista de huecos con su precio escrito.
+
+---
+
 # Cuatro decisiones tuyas, y una consecuencia que cambia el criterio de la línea
 
 **Estado al 08-09-2026, 18:50 UTC.** Nada de esto bloquea el trabajo: la
