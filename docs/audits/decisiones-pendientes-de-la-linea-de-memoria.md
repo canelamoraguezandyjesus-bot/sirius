@@ -1,4 +1,4 @@
-<!-- Informe para el propietario. Las cuatro decisiones quedaron TOMADAS el 11-09-2026; ver el bloque de arriba. -->
+<!-- Informe para el propietario. Las cuatro decisiones del 11-09 quedaron TOMADAS (bloque de arriba). Hay UNA NUEVA pendiente, D1, más abajo. -->
 
 # DECIDIDAS el 11-09-2026 — las cuatro, por la vía recomendada
 
@@ -16,6 +16,66 @@ Lo que **no** cambia con esto: la puerta `category_matching_enabled` sigue
 cerrada; el modelo mayor y la prioridad de la línea siguen siendo decisiones
 suyas; y la medición con Ollama real sigue caducada desde el 02-09 y solo la
 puede correr él.
+
+---
+
+# NUEVA, 11-09-2026 06:25 UTC — D1: ¿se acepta perder por uno el suelo de «elementos de más»?
+
+**Qué ha pasado.** La PR de H5 (#583, ADR-170) hace exactamente lo que
+decidiste: los miembros de la lista cerrada vuelven al corpus, portados del
+origen, y `G4` decide por pertenencia. La predicción se cumple al dígito
+(`--ejes --peticion`: `21/47; 144; 78/81; 0` → `22/47; 146; 79/81; 0`; el
+control `--peticion` intacto). **El precio, medido**: `DEC-001` entra también
+en `B04-CA-43` («¿Quién valida los entregables de calidad?», ámbito
+`PRJ-ALFA`, miembro de la lista), donde no se le espera. En el arnés del motor
+portado eso lleva «elementos de más» de 21 a 22 sobre la población del umbral
+D1, y **el suelo D1 (≤21), alcanzado desde ADR-115 el 31-08, deja de
+alcanzarse por uno.** La PR no lo maquilla: lo dice en el ADR, en el cuerpo de
+la PR y en la prueba, y lo deja para ti.
+
+**Lo que no te dije antes de que decidieras, y debí**: que la pertenencia
+podía costar ese suelo. No lo medí; lo midió la implementación. Por eso esta
+decisión es nueva y no está incluida en la del 11-09.
+
+**Tres matices que pesan** (verificados por mí sobre el head `3b64c55f`):
+
+1. El 22 sale de un arnés **sin filtro de relevancia**: usa el veredicto
+   congelado del laboratorio ítem a ítem y **deja pasar lo que el laboratorio
+   nunca examinó**. `DEC-001` en `B04-CA-43` es exactamente eso. En el único
+   caso donde el laboratorio sí lo examinó (`B04-CA-14`), su filtro lo quitó.
+   Si el filtro real lo quitaría en `B04-CA-43` solo lo mide Ollama en tu
+   máquina (`scripts/medir_banco_con_ollama_real.py --diagnostico`), y esa
+   medición está caducada desde el 02-09. No se puede afirmar en ningún
+   sentido.
+2. El 21 lo publicó una corrida del laboratorio que en `B04-CA-22` recuperaba
+   **uno de seis** y que no traía `DEC-001` en ningún caso. El motor portado
+   ahora recupera los seis ahí. Ya no se persigue «igualar al laboratorio»:
+   tu decisión lo hace divergir a propósito.
+3. El encargo dejó «de más» sin listón a propósito, pero el suelo D1 es una
+   cota publicada aparte (ADR-113/115; la Arquitectura 0.2 dice que M17 la
+   evalúa «registrando el resultado real —alcanzado o no— sin maquillarlo»).
+   Aceptar la regresión es coherente con ese texto; lo que no sería
+   aceptable es no decirlo, y la PR lo dice.
+
+**Opciones**
+
+- **(A) Aceptar** — *recomendada*. El suelo de «elementos de más» queda
+  formalmente «no alcanzado desde ADR-170, por uno, por un ítem nombrado». Se
+  fusiona #583 cuando el ciclo cierre. Coste real: uno, y visible. Lo que te
+  compra: la semántica que decidiste, y `B04-CA-22` completo.
+- **(B) Aceptar con condición**: que la prueba que hoy se llama «alcanza el
+  suelo D1» diga en su nombre lo que afirma (que no lo alcanza). Es (A) más
+  una corrección de forma, que puede salir de la revisión o quedar como
+  deuda. No la he inyectado al ciclo.
+- **(C) No aceptar.** Entonces H5 no puede fusionarse como está, porque el
+  extra es consecuencia necesaria de «pertenencia»: cualquier ámbito miembro
+  recibe `DEC-001` cuando su texto coincide. Mantener el 21 exige o volver a
+  contención (deshacer tu decisión) o un listón sobre «de más» que el encargo
+  prohibió. (C) es revertir el 11-09, no afinarlo.
+
+**Lo que hago sin ti**: acompañar el ciclo hasta `ready-for-merge` y **no
+fusionar** sin tu sí. Te lo pregunto cuando el ciclo cierre, con las cifras
+del head final.
 
 ---
 

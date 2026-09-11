@@ -4551,6 +4551,85 @@ Se lanzan **en paralelo**: tocan ficheros disjuntos, afectan a casos distintos
 antes de la PR por la numeración (deuda 18, con #576 aún en vuelo).
 ---
 
+### 91. La PR de H5 cumple la predicción al dígito y pierde por uno un suelo publicado del que no avisé al propietario (11-09-2026, 06:25 UTC)
+
+PR #583 (ADR-170) abierta a las 06:05Z sobre `5fc5fdc`, head `3b64c55f`;
+Quality verde a las 06:16Z; en revisión. Antes de opinar medí yo, sobre el
+árbol de `3b64c55f` y con el guion de la propia rama (que cambia: captura la
+tabla nombre→id real que crea el cargador para traducir la membresía; no la
+reconstruye):
+
+| configuración | mío sobre `3b64c55f` | lo que declara la PR |
+|---|---|---|
+| `--peticion` (control) | `17/47; 162; 78/81; 0` | idéntico |
+| `--ejes --peticion` (decide) | `22/47; 146; 79/81; 0` | idéntico |
+
+Y con una sonda sobre el mismo `_medir` (un solo uso, no confirmada): con
+ejes, `DEC-001` entra en tres casos —`B04-CA-22` (esperado), `B04-CA-14` y
+`B04-CA-43` (de más)—; sin ejes, solo en `B04-CA-14`, antes y después, que es
+el ámbito GLOBAL que `autoriza` cualquier proyecto. La predicción se cumple
+exacta y el control no se mueve. Códigos de salida 0 en las tres corridas.
+
+**Lo que la PR señala «para que lo vea el propietario, no para darlo por
+bueno en su nombre»**: en el arnés del motor portado, `elementos_de_mas` bajo
+la población del umbral D1 (los 31 casos con contenido) pasa de 21 a 22. El
+suelo D1 (≤21), alcanzado desde ADR-115 (`5cc3f18`, 31-08; es literalmente el
+título de ese ADR), **deja de alcanzarse por uno**. El ítem es `DEC-001` en
+`B04-CA-43` («¿Quién valida los entregables de calidad?»; el texto de la
+decisión lleva «calidad»).
+
+Tres cosas que miré antes de formar opinión, y que cambian cómo hay que leer
+«22 contra 21»:
+
+1. **Por qué uno y no dos.** Con ejes, `DEC-001` entra de más en dos casos,
+   pero el arnés no ejecuta el filtro de relevancia: usa el doble congelado
+   (`relevance_filter_frozen_run.json`, incidencia #463), que reproduce el
+   veredicto del laboratorio ítem a ítem y **falla abierto** con lo que el
+   laboratorio nunca examinó. En `B04-CA-14` el laboratorio examinó `DEC-001`
+   y lo quitó → el doble lo quita. En `B04-CA-43` nunca lo vio → el doble lo
+   conserva. **El +1 es, por construcción, un ítem sobre el que la capa que
+   quita este ruido no tiene veredicto.** Que el filtro real lo quitara solo
+   lo mide Ollama en la máquina del propietario, y esa medición lleva caducada
+   desde el 02-09. No se puede afirmar ni que lo quitaría ni que no.
+2. **Qué medía el laboratorio cuando publicó el 21.** Su fila 5
+   (`lab_final_run_row5.json`) recupera en `B04-CA-22` **uno de seis**
+   (`obtenido=['DEC-014']`), y `DEC-001` no está en `obtenido` de ningún
+   caso. El motor portado hoy recupera los seis. El 21 se publicó con ese caso
+   sin resolver; ADR-170 lo dice en el docstring de su divergencia declarada,
+   y está bien dicho.
+3. **Qué le dije al propietario antes de que decidiera.** La sección H5 del
+   informe de decisiones (líneas 66-118) no contiene «de más», «D1», «21» ni
+   «ruido»: `grep` vacío. **No le advertí que decidir pertenencia tenía un
+   precio en un suelo publicado**, porque no lo medí antes de recomendar; lo
+   midió la implementación. Eso lo convierte en decisión nueva suya, no en
+   consecuencia ya aceptada. Fallo mío, de la familia de la raíz 2
+   (reproducir ≠ medir): simulé `any` frente a `all` sobre dos casos y no
+   corrí el banco entero con la membresía puesta.
+
+**Lo que no inyecto en el ciclo, y anoto**: la prueba sigue llamándose
+`test_elementos_de_mas_alcanza_el_suelo_d1_bajo_la_poblacion_del_umbral_publicado`
+y afirma 22 (`assert x == 22` y, detrás, `assert x - 1 == 21`, que ya no
+puede fallar); su docstring conserva «lo mide en exactamente 21» dos párrafos
+antes de «desde ADR-170 mide 22». Familia de la deuda 28 (prosa que el cambio
+deja falsa). Los revisores lo verán o no; yo no lo meto como hallazgo.
+
+**Las dos superficies menos visibles del diff (raíz 3)**: el guardián de
+citas solo añade «experiments/adr002/projection/build.py» a la lista de rama
+de origen no fusionada, para ADR-170 (la cita es de dónde se perdió la
+membresía; nada se relaja); y el guion de diagnóstico captura, no
+reconstruye. La cota `_MAXIMO_ELEMENTOS_DE_MAS_MOTOR` sube 50→51 con el
+comentario de por qué; `_MINIMO_ACIERTOS_EXACTOS_MOTOR` 29→30 y
+`_MINIMO_ELEMENTOS_HALLADOS_MOTOR` 67→68 suben a lo medido, que es más
+exigente.
+
+**Qué hago**: la decisión queda escrita en
+`docs/audits/decisiones-pendientes-de-la-linea-de-memoria.md` con las tres
+opciones y mi recomendación. Se la planteo al llegar a `ready-for-merge`, con
+las cifras del head final —no ahora: preguntar bloquearía el acompañamiento
+y la respuesta solo hace falta para fusionar—. Sin su sí, #583 no se fusiona
+aunque el ciclo cierre.
+---
+
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
 
 1. `ollama_category_classifier.py`: ruta relativa y sin
