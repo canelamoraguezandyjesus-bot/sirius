@@ -10,9 +10,9 @@ disparaba. El 25-08-2026 el propietario tuvo que decir tres veces en una sesión
 «búscalo, no me lo digas de memoria», y tenía razón las tres.
 
 **Toda afirmación sobre qué está planeado, decidido, medido o pendiente sale de
-leer este repositorio, y se dice DÓNDE se leyó.** Nunca de memoria, nunca de lo
-que parezca razonable. Si no se encontró, se dice «no lo he encontrado», que es
-una respuesta legítima; inventarlo no lo es.
+leer este repositorio —empezando por `MEMORIA.md`, en la raíz, entera— y se
+dice DÓNDE se leyó.** Nunca de memoria ni de lo que parezca razonable. Si no se
+encontró, se dice «no lo he encontrado», que es legítimo; inventarlo no lo es.
 
 Antes de proponer construir algo, **busca si ya existe**. En este repositorio ha
 aparecido seis veces una pieza correcta a la que no llamaba nadie, y una séptima
@@ -23,7 +23,7 @@ ya existía con otro nombre: el auditor-.
 
 | Qué buscas | Dónde está |
 |---|---|
-| Qué se decidió y por qué | `docs/decisions/ADR-*.md` |
+| Por dónde empezar, siempre; qué se decidió y por qué | `MEMORIA.md` (raíz), generada: cada ADR con su resumen, los registros con estado y los documentos con su fecha; los desenlaces del motor, en `estado-del-motor:DESENLACES.md` (ADR-171) |
 | Qué bloques del MOTOR hay y cómo van | `docs/implementation/bloques_del_motor.yml` |
 | Qué defectos hay abiertos | `docs/audits/registro_defectos.yml` |
 | El plan del motor, bloque a bloque | `docs/implementation/SIRIUS_WORK_ENGINE_PLAN_IMPLEMENTACION.md` |
@@ -54,7 +54,7 @@ Cuatro avisos que ya han costado tiempo:
 
 ## Antes de modificar código
 
-1. Lee `docs/canonical/STATUS.md`.
+1. Lee `MEMORIA.md` entera; después `docs/canonical/STATUS.md`.
 2. Lee `docs/implementation/PLAN.md`.
 3. Identifica la vertical activa.
 4. No añadas funciones fuera de alcance.
@@ -84,6 +84,24 @@ Cuatro avisos que ya han costado tiempo:
   código introducido por la corrección anterior o ser una regresión suya; un
   hallazgo sobre líneas ya idénticas en la ronda previa se reporta igualmente,
   declarando que llega tarde por goteo del revisor.
+
+## La memoria común: `MEMORIA.md` (ADR-171)
+
+`MEMORIA.md`, en la raíz, es la memoria común del trabajo, **generada** a partir
+del árbol: qué se decidió (cada ADR con su resumen), qué registros hay y en qué
+estado, qué documentos existen y de cuándo, y dónde están los desenlaces del
+motor. Es lo primero que se lee, antes de responder y antes de modificar; desde
+ahí, solo lo que la tarea necesite.
+
+- **No se edita a mano.** Se regenera con `uv run sirius-memoria conocimiento`,
+  y `tests/engine/test_memoria.py` (en Quality) falla si el fichero confirmado no
+  coincide con lo generado.
+- **Si cambias un ADR, un documento de `docs/` o un registro YAML, regenérala y
+  confírmala en la misma PR.**
+- **Quality comprueba el commit de fusión con `main`.** Si `main` ganó un ADR o un
+  documento después de abrir tu rama, tu PR sale en rojo aunque tu rama esté al
+  día: trae `main`, regenera, confirma. Un conflicto en `MEMORIA.md` se resuelve
+  siempre regenerando, nunca a mano.
 
 ## Criterio de parada
 
