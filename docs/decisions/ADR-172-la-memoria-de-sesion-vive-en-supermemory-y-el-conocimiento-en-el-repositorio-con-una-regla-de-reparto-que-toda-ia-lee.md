@@ -71,13 +71,24 @@ Hecha el 11 y 12-09-2026, superficie por superficie. `[V]` = observado.
 | Claude Code en la nube | Conector personalizado en claude.ai, misma URL | **Lee y escribe** `[V]`: recuperó PRUEBA-M1 y guardó el estado del montaje |
 | Codex en el móvil | — | **Sin comprobar** |
 
-**Lo que queda por comprobar, y sin ello este ADR no está cumplido** (criterio
-(c)): un recuerdo escrito **una sola vez** en `repo_sirius__e87a5bbe75fe00b6`,
-sin copiarlo a ningún otro espacio, recuperado desde una herramienta distinta de
-la que lo escribió. Queda sembrado desde la sesión de la nube con la marca
-`PRUEBA-M2`; lo recupera el propietario desde su Codex o su Claude Code local.
-Hasta entonces, lo único demostrado es que las cuatro superficies hablan con el
-servicio, no que compartan cajón.
+**El criterio (c), ahora sí, cumplido** `[V, 12-09]`. Se sembró `PRUEBA-M2`
+desde la sesión de la nube, **una sola vez y solo** en
+`repo_sirius__e87a5bbe75fe00b6`, sin copiarla a ningún otro espacio. El
+complemento de Claude Code del propietario la recuperó, copia única, en ese
+espacio. Escrita por una herramienta, leída por otra, sin duplicar: eso es lo
+que PRUEBA-M1 no demostraba.
+
+Y la misma comprobación **midió el modo de fallo que la regla evita**, que es lo
+que la convierte en necesaria y no en una precaución de papel:
+
+| Búsqueda | Espacio en que buscó | ¿La encontró? |
+|---|---|---|
+| Complemento local, **nombrando** el espacio | `repo_sirius__e87a5bbe75fe00b6` | **Sí**, la primera |
+| Complemento local, sin nombrarlo | `sm_project_default` | **No** |
+| Conector de claude.ai, sin nombrarlo | `sm_project_default` | **No** |
+
+Dos de cada tres búsquedas fallan si nadie nombra el espacio. Por eso la regla
+dice «en **cada** búsqueda y en **cada** guardado», y no «cuando convenga».
 
 **Esa tabla afirmaba de más, y la revisión de la PR lo encontró** (12-09). Las
 cuatro superficies alcanzaron PRUEBA-M1, sí, **pero PRUEBA-M1 estaba copiada a
@@ -128,6 +139,12 @@ llamar `npx.cmd` y `npm.cmd`; y `setx` no afecta a las ventanas ya abiertas.
    carga el contexto al empezar.
 3. Los hooks salen sin error cuando el servicio no responde. Un fallo de captura
    no se distingue de una sesión sin nada que capturar.
+4. **El recuerdo automático va por detrás de lo guardado** `[V, 12-09]`. Al
+   recuperar `PRUEBA-M2`, el recuerdo automático de esa misma sesión trajo
+   `PRUEBA-M1` y no `PRUEBA-M2`: se alimenta del resumen del espacio, que
+   todavía no la incluía. Lo escrito hace un momento **solo** aparece buscándolo
+   a propósito. Consecuencia práctica: no confíes en que lo último quede
+   recordado solo; si importa, búscalo.
 
 ## Decisión
 
@@ -163,6 +180,13 @@ llamar `npx.cmd` y `npm.cmd`; y `setx` no afecta a las ventanas ya abiertas.
 6. **Los tres defectos quedan registrados y sin arreglar**, porque son
    configuración de productos de terceros y no código de este repositorio. Se
    revisan cuando estorben.
+
+**El espacio viejo no se migra ni se borra.** Los 12 recuerdos que quedaron en
+`sm_project_default` son de antes de esta regla; lo que de ellos importaba —el
+reparto, los defectos, las preferencias del propietario— se reescribió en el
+espacio canónico, así que nada se pierde. Borrarlos exigiría una máquina que no
+compensa, y dejarlos no hace daño: nadie los busca, porque la regla manda
+nombrar el espacio.
 
 **Lo que este ADR deja fuera a propósito:** cambiar el ciclo automático, dar el
 conector a los agentes de GitHub Actions, y el registro de pendientes como dato
