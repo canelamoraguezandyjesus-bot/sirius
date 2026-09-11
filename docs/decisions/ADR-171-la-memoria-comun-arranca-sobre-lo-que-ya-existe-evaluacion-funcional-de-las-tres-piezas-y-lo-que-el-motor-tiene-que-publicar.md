@@ -218,6 +218,20 @@ precedencia (`DetectPrecedenceConflictsUseCase`) `[V, src/sirius]`.
     `MEMORIA.md` primero**. Con el repositorio público, cualquier IA la lee por
     su URL sin configurar nada. No se pregunta más por esto.
 
+11. **La captura de lo que pasa en una sesión no la resuelve el repositorio, y
+    se cubre con una memoria alojada que elige el propietario.** El 11-09 el
+    propietario pidió, con razón, mirar el mercado antes de dar por buena esta
+    decisión; la investigación
+    `docs/investigaciones/2026-09-11-que-memoria-compartida-para-ias-existe-ya-hecha-y-probada.md`
+    lo hizo sobre once repositorios y concluye: lo generado aquí es el patrón
+    que usan 60.000 proyectos (AGENTS.md) hecho de forma que no se pudra, y se
+    queda; el hueco real es la captura sin esfuerzo, y la cubren Mem0 o
+    Supermemory con servidor alojado, plugin para Claude Code y MCP para Codex.
+    Reparto: **decisiones y documentos, al repositorio con prueba; contexto de
+    sesión, pendientes y preferencias, a la memoria alojada.** «El diario manda»
+    no cambia. Qué producto, lo decide el propietario con las dos comprobaciones
+    que la investigación deja; montarlo es una PR aparte.
+
 **Lo que este ADR deja fuera a propósito:** la herramienta definitiva; Sirius
 0.2 y la memoria del producto; cualquier permiso de escritura nuevo para una
 IA; y datar a mano los documentos que no declaran fecha (la vista los señala;
