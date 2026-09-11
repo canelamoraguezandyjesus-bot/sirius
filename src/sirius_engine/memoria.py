@@ -260,6 +260,17 @@ def _portada(texto: str) -> Mapping[str, Any] | None:
     return datos if isinstance(datos, Mapping) else None
 
 
+def _texto_de_item(item: object) -> str:
+    """Un elemento de `caduca_con` como texto.
+
+    YAML lee «los clientes MCP: cambian» como un mapa de una clave; se devuelve
+    «los clientes MCP: cambian», no la repr del diccionario.
+    """
+    if isinstance(item, Mapping):
+        return "; ".join(f"{_limpiar(str(k))}: {_limpiar(str(v))}" for k, v in item.items())
+    return _limpiar(str(item))
+
+
 def leer_documento(ruta: Path, raiz: Path) -> Documento:
     texto = ruta.read_text(encoding="utf-8")
     lineas = texto.splitlines()
@@ -271,7 +282,7 @@ def leer_documento(ruta: Path, raiz: Path) -> Documento:
             titulo=_limpiar(str(portada.get("titulo") or _titulo_de(lineas) or ruta.stem)),
             fecha=str(portada["fecha"]) if portada.get("fecha") else _fecha_declarada(lineas),
             estado=str(portada["estado"]) if portada.get("estado") else None,
-            caduca_con=tuple(_limpiar(str(c)) for c in caduca) if isinstance(caduca, list) else (),
+            caduca_con=tuple(_texto_de_item(c) for c in caduca) if isinstance(caduca, list) else (),
         )
     return Documento(
         ruta=ruta.relative_to(raiz).as_posix(),

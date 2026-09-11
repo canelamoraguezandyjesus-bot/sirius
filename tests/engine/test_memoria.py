@@ -101,6 +101,7 @@ def _arbol_minimo(raiz: Path) -> Path:
     _escribir(
         raiz / "docs" / "investigaciones" / "2026-01-02-una-foto.md",
         "---\ntitulo: Una foto\nfecha: 2026-01-02\ncaduca_con:\n  - los precios\n  - los modelos\n"
+        "  - los clientes MCP: cambian cada mes\n"
         "estado: VIGENTE\n---\n\n# Otro título\n",
     )
     _escribir(raiz / "docs" / "implementation" / "PLAN.md", "# El plan\n\nSin fecha.\n")
@@ -171,7 +172,7 @@ def test_una_investigacion_declara_fecha_estado_y_de_que_depende(arbol: Path) ->
     texto = generar_memoria(arbol)
     assert (
         "| 2026-01-02 | VIGENTE | [Una foto](docs/investigaciones/2026-01-02-una-foto.md) "
-        "| los precios; los modelos |"
+        "| los precios; los modelos; los clientes MCP: cambian cada mes |"
     ) in texto
 
 
