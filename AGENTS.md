@@ -119,6 +119,23 @@ salió.** Dos momentos:
 - **Al terminar**, guarda lo que quede pendiente y lo aprendido que no vaya a un
   fichero. Concreto y con fecha; una memoria vaga no le sirve a nadie.
 
+### El espacio canónico, que hay que nombrar SIEMPRE
+
+El espacio de este proyecto es **`repo_sirius__e87a5bbe75fe00b6`**. Pásalo como
+`containerTag` en **cada** búsqueda y en **cada** guardado, sin excepción.
+
+No basta con buscar y guardar: si no nombras el espacio, cada herramienta usa el
+suyo por omisión y acabáis escribiendo en sitios distintos. El 11-09-2026 pasó
+exactamente eso, medido: la captura automática del complemento local fue al
+espacio del repositorio y todo lo escrito por MCP —desde la nube, desde
+ChatGPT— al espacio por defecto de la cuenta. Dos memorias paralelas que no se
+veían la una a la otra.
+
+Si ese espacio no aparece al listar los espacios disponibles, no inventes otro
+ni escribas en el que salga: **dilo y para**. El nombre lo deriva el complemento
+del remoto de git, así que cambia si el repositorio se renombra, y entonces esta
+línea hay que corregirla aquí.
+
 Y el reparto, que es la regla entera:
 
 | Qué | Dónde |

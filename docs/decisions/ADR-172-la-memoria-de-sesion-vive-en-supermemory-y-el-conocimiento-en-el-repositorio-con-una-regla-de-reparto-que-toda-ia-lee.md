@@ -71,17 +71,44 @@ Hecha el 11 y 12-09-2026, superficie por superficie. `[V]` = observado.
 | Claude Code en la nube | Conector personalizado en claude.ai, misma URL | **Lee y escribe** `[V]`: recuperó PRUEBA-M1 y guardó el estado del montaje |
 | Codex en el móvil | — | **Sin comprobar** |
 
-Se cumple el criterio (c): cuatro superficies, no tres, con al menos una lectura
-y una escritura reales entre herramientas distintas.
+**Lo que queda por comprobar, y sin ello este ADR no está cumplido** (criterio
+(c)): un recuerdo escrito **una sola vez** en `repo_sirius__e87a5bbe75fe00b6`,
+sin copiarlo a ningún otro espacio, recuperado desde una herramienta distinta de
+la que lo escribió. Queda sembrado desde la sesión de la nube con la marca
+`PRUEBA-M2`; lo recupera el propietario desde su Codex o su Claude Code local.
+Hasta entonces, lo único demostrado es que las cuatro superficies hablan con el
+servicio, no que compartan cajón.
 
-**La regla, y su guardia** `[V]`. La sección nueva de `AGENTS.md` no rompió
-ninguna prueba —criterio (a) satisfecho— pero eso era, en sí, el defecto: una
-regla que se puede borrar sin que salte nada es la que se pudre, que es la
-lección de ADR-171. Así que se le puso guardia,
-`tests/engine/test_memoria.py::test_agents_declara_el_reparto_entre_las_dos_memorias`,
-**vista fallar** con la sección quitada y pasar con ella puesta. No comprueba
-conducta, que no se puede: comprueba que la regla siga escrita donde toda IA la
-lee. El criterio (b) también se cumple: la sección empieza diciendo que solo
+**Esa tabla afirmaba de más, y la revisión de la PR lo encontró** (12-09). Las
+cuatro superficies alcanzaron PRUEBA-M1, sí, **pero PRUEBA-M1 estaba copiada a
+mano en los dos espacios**: recuperarla no demostraba que compartieran nada. Al
+medirlo, el reparto real era este `[V, listMemories el 12-09]`:
+
+| Espacio | Qué contenía | Quién lo escribió |
+|---|---|---|
+| `repo_sirius__e87a5bbe75fe00b6` | 7 recuerdos | **solo** la captura automática del complemento local |
+| `sm_project_default` | 12 recuerdos, entre ellos toda esta decisión | **solo** lo escrito por MCP: la nube, ChatGPT |
+
+Dos memorias paralelas que no se veían. El criterio (c) **no estaba cumplido**:
+no había ni una lectura, desde una herramienta, de algo escrito por otra y no
+copiado. La corrección es el punto 3 de la Decisión, y su comprobación queda
+pendiente de una sola cosa que no se puede hacer desde aquí y consta como tal.
+
+**La regla, y su guardia** `[V]`. La sección nueva de `AGENTS.md` no rompía
+ninguna prueba —criterio (a) satisfecho— y eso era, en sí, el defecto: una regla
+que se puede borrar sin que salte nada es la que se pudre (ADR-171). Se le puso
+guardia, y **la primera versión de esa guardia era mala**: comprobaba cuatro
+expresiones sueltas sobre el fichero entero, así que se podían borrar las dos
+instrucciones y la tabla de reparto completa y seguía en verde. Lo encontró la
+misma revisión, reproduciéndolo.
+
+La guardia buena comprueba **doce obligaciones, una a una y dentro de su
+sección** —dejar la frase suelta en otra parte del fichero no vale—, y una
+segunda prueba parametrizada demuestra que ninguna sobra. Se ejecutó además la
+mutación de verdad, sobre el fichero: retirar cada una de las doce de
+`AGENTS.md` hace fallar la comprobación, **las doce** `[V, 12-09]`. No comprueba
+conducta, que no se puede: comprueba que la regla siga escrita y completa donde
+toda IA la lee. El criterio (b) se cumple: la sección empieza diciendo que solo
 aplica a quien tenga la herramienta.
 
 **Las validaciones:** `ruff format --check` y `ruff check` en verde, `mypy src
@@ -104,9 +131,12 @@ llamar `npx.cmd` y `npm.cmd`; y `setx` no afecta a las ventanas ya abiertas.
 
 ## Decisión
 
-1. **Supermemory es la memoria de sesión del propietario.** Espacio `Sirius`,
-   plan gratuito. No sustituye a nada de ADR-171: lo completa por el lado que
-   el repositorio no puede cubrir.
+1. **Supermemory es la memoria de sesión del propietario.** Cuenta suya, espacio
+   de trabajo `Sirius`, plan gratuito. Ojo con los nombres, que en esta
+   herramienta no son lo mismo: el **espacio de trabajo** es la cuenta y el
+   **espacio** (`containerTag`) es el cajón donde caen los recuerdos; el punto 3
+   fija cuál. No sustituye a nada de ADR-171: lo completa por el lado que el
+   repositorio no puede cubrir.
 2. **La regla de reparto, que es lo único que este repositorio versiona:**
    - **Al repositorio, con PR, ADR y prueba**: lo decidido, lo investigado, lo
      medido, lo acordado. Nada de esto vale si solo está en la memoria.
@@ -114,13 +144,23 @@ llamar `npx.cmd` y `npm.cmd`; y `setx` no afecta a las ventanas ya abiertas.
      preferencias de trabajo del propietario, lo que se intentó y no salió.
    - **Ninguna de las dos manda sobre el diario del motor.** Si Supermemory y
      el diario discrepan sobre un trabajo, manda el diario (ADR-171, punto 7).
-3. **`AGENTS.md` gana una regla**, condicionada a tener la herramienta: buscar
-   en la memoria al empezar algo que pueda tener antecedentes, y guardar al
-   terminar lo pendiente y lo aprendido que no vaya a un fichero. Quien no tenga
-   el conector —los agentes del ciclo— no hace nada distinto de hoy.
-4. **Lo capturado es de un tercero y sale de aquí.** El propietario lo sabe y lo
+3. **El espacio canónico es `repo_sirius__e87a5bbe75fe00b6`, y se nombra en
+   cada llamada.** Buscar y guardar no basta: sin `containerTag` explícito cada
+   herramienta usa el suyo por omisión, que es como nacieron las dos memorias
+   paralelas de arriba. Se elige el del repositorio, y no el de la cuenta, por
+   dos razones: es donde ya cae la captura automática —la parte que nadie
+   controla— y lo deriva el complemento del remoto de git, así que no mezcla
+   este proyecto con lo que el propietario hable de cualquier otra cosa. Si el
+   espacio no aparece, la regla obliga a **parar y decirlo**, nunca a escribir
+   en otro. No se confía en el «espacio activo»: es un selector interactivo y
+   `whoAmI` lo devolvía vacío `[V]`.
+4. **`AGENTS.md` gana la regla entera**, condicionada a tener la herramienta:
+   buscar al empezar, guardar al terminar, nombrar el espacio siempre, y el
+   reparto de abajo. Quien no tenga el conector —los agentes del ciclo— no hace
+   nada distinto de hoy.
+5. **Lo capturado es de un tercero y sale de aquí.** El propietario lo sabe y lo
    acepta; se dice en `AGENTS.md` para que ninguna IA lo descubra por su cuenta.
-5. **Los tres defectos quedan registrados y sin arreglar**, porque son
+6. **Los tres defectos quedan registrados y sin arreglar**, porque son
    configuración de productos de terceros y no código de este repositorio. Se
    revisan cuando estorben.
 

@@ -405,21 +405,74 @@ def test_agents_ordena_leer_la_memoria_primero() -> None:
     assert f"uv run {COMANDO} conocimiento" in texto
 
 
-def test_agents_declara_el_reparto_entre_las_dos_memorias() -> None:
-    """La regla de ADR-172, que ninguna otra prueba sostiene.
+# --- La regla de la memoria de sesión (ADR-172) -------------------------------
+#
+# Una obligación por entrada, y cada una con el trozo de texto que la sostiene.
+# La primera versión de esta prueba comprobaba cuatro expresiones sueltas sobre
+# el fichero entero: se podían borrar las dos instrucciones y la tabla de reparto
+# completa y seguía pasando (hallazgo de la revisión de la PR #585). Ahora cada
+# obligación se comprueba por separado y **dentro de su sección**, y
+# `test_cada_obligacion_del_reparto_es_imprescindible` demuestra, retirando cada
+# una, que ninguna sobra.
 
-    No comprueba conducta -no se puede- sino que la regla siga ESCRITA donde
-    toda IA la lee. Sin esto, borrarla de `AGENTS.md` no rompía nada, y una
-    regla que se puede borrar sin que salte nada es la que se pudre (ADR-171).
-    """
-    texto = (RAIZ_REPO / "AGENTS.md").read_text(encoding="utf-8")
-    assert "memoria de sesión" in texto, (
-        "AGENTS.md ya no nombra la memoria de sesión: el reparto de ADR-172 "
-        "desapareció y nadie sabe qué va a cada sitio"
+TITULO_SECCION_SESION = "## La memoria de sesión, si tienes su herramienta (ADR-172)"
+
+OBLIGACIONES_DEL_REPARTO: tuple[tuple[str, str], ...] = (
+    ("solo aplica a quien tenga la herramienta", "solo existe si tu entorno trae la herramienta"),
+    ("buscar al empezar", "**Al empezar**"),
+    ("guardar al terminar", "**Al terminar**"),
+    ("el espacio canónico, con su nombre", "`repo_sirius__e87a5bbe75fe00b6`"),
+    ("pasar el espacio en cada llamada", "`containerTag` en **cada** búsqueda"),
+    ("parar si el espacio no aparece", "**dilo y para**"),
+    ("lo decidido va al repositorio", "**El repositorio**, con su PR, su ADR y su prueba"),
+    ("lo pendiente va a la memoria de sesión", "**La memoria de sesión** |"),
+    ("sobre el motor manda su diario", "**Su diario**, que manda sobre las dos"),
+    ("lo que solo vive ahí no está decidido", "no está tomada"),
+    ("sale a un tercero", "sale a un servicio de terceros"),
+    ("ahí no van secretos", "no van claves ni secretos"),
+)
+
+
+def _seccion_de_la_memoria_de_sesion(texto: str) -> str:
+    """El cuerpo de la sección de ADR-172, del título al siguiente `## `."""
+    _, marca, resto = texto.partition(TITULO_SECCION_SESION)
+    assert marca, (
+        f"AGENTS.md ya no tiene la sección {TITULO_SECCION_SESION!r}: la regla de "
+        "la memoria de sesión desapareció entera (ADR-172)"
     )
-    for exigido in (
-        "ADR-172",
-        "no está tomada",  # una decisión que solo vive en la memoria de sesión
-        "terceros",  # de dónde sale lo que se guarda
-    ):
-        assert exigido in texto, f"AGENTS.md perdió «{exigido}» del reparto de ADR-172"
+    cuerpo, _, _ = resto.partition("\n## ")
+    return cuerpo
+
+
+def test_agents_declara_el_reparto_entre_las_dos_memorias() -> None:
+    """Las doce obligaciones de ADR-172, cada una dentro de su sección.
+
+    No comprueba conducta -no se puede-: comprueba que la regla siga ESCRITA
+    donde toda IA la lee, y completa. Se exige dentro de la sección a propósito:
+    dejar la frase suelta en otra parte del fichero no vale.
+    """
+    seccion = _seccion_de_la_memoria_de_sesion((RAIZ_REPO / "AGENTS.md").read_text("utf-8"))
+    perdidas = [nombre for nombre, marca in OBLIGACIONES_DEL_REPARTO if marca not in seccion]
+    assert perdidas == [], (
+        f"la sección de la memoria de sesión perdió estas obligaciones: {perdidas}. "
+        "Una regla incompleta es peor que ninguna: dice qué hacer y calla lo que "
+        "hace falta para hacerlo bien (ADR-172)"
+    )
+
+
+@pytest.mark.parametrize(("nombre", "marca"), OBLIGACIONES_DEL_REPARTO, ids=lambda v: v[:28])
+def test_cada_obligacion_del_reparto_es_imprescindible(nombre: str, marca: str) -> None:
+    """Retirar CUALQUIERA de las doce tiene que hacer fallar la prueba de arriba.
+
+    Es la prueba por mutación de ADR-001, automatizada: sin esto, nada impide que
+    la lista de obligaciones se quede corta otra vez y la comprobación siga en
+    verde, que es justo el defecto que la revisión de la PR #585 encontró.
+    """
+    seccion = _seccion_de_la_memoria_de_sesion((RAIZ_REPO / "AGENTS.md").read_text("utf-8"))
+    mutada = seccion.replace(marca, "")
+    assert marca not in mutada
+    supervivientes = [n for n, m in OBLIGACIONES_DEL_REPARTO if m in mutada]
+    assert nombre not in supervivientes, (
+        f"quitar «{nombre}» de la sección no lo hace detectable: la marca {marca!r} "
+        "no distingue esa obligación de las demás"
+    )
