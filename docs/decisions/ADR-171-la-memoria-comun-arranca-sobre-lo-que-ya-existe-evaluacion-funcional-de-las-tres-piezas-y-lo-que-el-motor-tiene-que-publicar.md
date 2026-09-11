@@ -160,64 +160,126 @@ precedencia (`DetectPrecedenceConflictsUseCase`) `[V, src/sirius]`.
    conocimiento y `estado-del-motor` para los desenlaces.** No se elige ni se
    instala herramienta alguna. Se cumple el criterio (a) de la nota de arranque.
 2. **Toda vista de la memoria común se genera; nunca se cura.** Un guion con
-   prueba produce las vistas, y CI falla si una está desactualizada o si una
-   pieza nueva no trae lo que la vista necesita. Es la regla de la pregunta 4 de
-   la nota de arranque, y la que hace imposible el «mapa» que envejece.
-3. **Las vistas viven en `estado-del-motor`, escritas por el motor.** Es la rama
-   donde el motor ya tiene permiso de escritura (ADR-083, ADR-137) y la única
-   forma de que las vistas estén siempre frescas sin que la automatización
-   escriba en `main` (ADR-002). El punto de entrada de cualquier IA pasa a ser
-   **un solo fichero**: `estado-del-motor:MEMORIA.md`.
-4. **Qué contiene `MEMORIA.md`**, generado:
-   - **Decisiones**: una línea por ADR —número, fecha, estado, título, resumen—
-     y las decisiones EV vigentes. Exige un campo `Resumen` en cada ADR: se añade
-     a la plantilla y a la skill `adr`, y se rellena en los 165 existentes
-     (borrador generado de la primera frase de cada Decisión, revisado).
-   - **Desenlaces**: los últimos N encargos del diario, con clase, estado,
-     desenlace, fecha y enlace a la evidencia. Es la fila del motor en §6.2,
-     cumplida.
-   - **Estado y visión**: enlaces a `STATUS.md`, `RECTOR.md` y a los documentos
-     de dirección, con su fecha; **sin copiar su contenido** (R8).
-5. **T-4 queda resuelta por lo que ya existe.** Las IAs escriben conocimiento
+   prueba produce las vistas, y CI falla si una está desactualizada. Es la regla
+   de la pregunta 4 de la nota de arranque, y la que hace imposible el «mapa»
+   que envejece.
+3. **El punto de entrada de cualquier IA es un solo fichero en la raíz de
+   `main`: `MEMORIA.md`.** Lo genera `uv run sirius-memoria conocimiento` a
+   partir del árbol —sin reloj, sin red, sin `git log`—, se confirma en cada PR
+   que cambie lo que refleja, y una prueba de Quality falla si el fichero
+   confirmado no coincide con lo que el generador produce. Vive en `main` y no
+   en la rama del motor porque **es lo primero que tiene que leer una IA al
+   entrar**, y una IA entra por `main`: un fichero en otra rama no es «lo
+   primero», es una búsqueda más. (Esto corrige la primera versión de este
+   ADR, que lo ponía en `estado-del-motor`.)
+4. **Los desenlaces del motor se publican en `estado-del-motor:DESENLACES.md`**,
+   escrito por `reflejar-desenlace.yml` tras cada reflejo con
+   `uv run sirius-memoria desenlaces`, a partir de `diario.jsonl` y
+   `diario-despacho.jsonl`. Es la obligación de la propuesta §6.2 —*qué se
+   encargó, qué salió, dónde está la evidencia*— cumplida, y `MEMORIA.md` la
+   enlaza. Van separadas porque cambian por cauces distintos: el conocimiento
+   por PR fusionada; los desenlaces, solos, sin PR (ADR-083, ADR-137).
+5. **Qué contiene `MEMORIA.md`**, todo generado:
+   - **Decisiones**: una fila por ADR —número, fecha, estado, título y un
+     resumen **extraído** del primer párrafo de su sección `## Decisión`—, de
+     la más reciente a la más antigua. No se añade ningún campo nuevo a la
+     plantilla ni se redactan 165 resúmenes: el resumen es lo que el propio ADR
+     dice que decidió, tal cual está escrito. Si eso sale pobre en algún ADR, se
+     arregla en ese ADR, no en la vista.
+   - **Registros con estado**: los bloques del motor y los defectos, con su
+     estado, leídos de sus registros YAML.
+   - **Investigaciones**: fecha, estado y de qué dependen para caducar.
+   - **Documentos**: cada documento de `docs/` y de la raíz, con su título y la
+     fecha que **declara** en cabecera; el que no la declara sale como «sin
+     fecha declarada». La vista no data nada por su cuenta (R4, R8).
+   - **Las reglas de lectura**: dónde están los desenlaces, la regla de
+     conflicto y dónde están las prohibiciones (`AGENTS.md`), sin copiarlas.
+6. **T-4 queda resuelta por lo que ya existe.** Las IAs escriben conocimiento
    **por PR que fusiona el propietario** —eso es «propuesta más confirmación», y
    ya cumple R6 y R10—; el motor escribe su diario **directamente**, porque es
    suyo; las vistas se derivan de ambos. No se crea un mecanismo nuevo.
-6. **Regla de conflicto (R7), escrita ahora:** si el diario del motor y
+7. **Regla de conflicto (R7), escrita ahora:** si el diario del motor y
    cualquier documento discrepan sobre un trabajo, **manda el diario**; si dos
-   documentos discrepan entre sí, manda el más reciente **fusionado**, y la vista
-   los marca como discrepantes en vez de elegir por su cuenta.
-7. **`AGENTS.md` cambia una regla**: la lectura obligatoria pasa a ser
-   `MEMORIA.md` y, desde ahí, solo lo que la tarea necesite. El contrato entero
-   se lee cuando la tarea toca automatización, como ahora. Este cambio es lo que
-   convierte la vista en ahorro; sin él, es un fichero más.
-8. **T-6 no se decide aquí, porque su premisa no se cumple**: el repositorio es
-   público. Se pone al propietario como primer paso de la guía.
+   documentos discrepan entre sí, manda el más reciente **fusionado**. La vista
+   no elige por su cuenta: enuncia la regla.
+8. **`AGENTS.md` cambia una regla, en esta misma PR**: lo primero que lee
+   cualquier IA, antes de responder y antes de modificar, es `MEMORIA.md`; desde
+   ahí, solo lo que la tarea necesite. El contrato entero se sigue leyendo
+   cuando la tarea toca automatización. Sin este cambio la vista es un fichero
+   más; con él, es el ahorro.
+9. **T-6 queda cerrada por decisión del propietario, no por omisión.** El
+   repositorio es público **a propósito**: los minutos de GitHub Actions que el
+   ciclo consume solo salen gratis en un repositorio público, y pagarlos no es
+   una opción (propietario, 11-09-2026). En consecuencia, no hay frontera de
+   confidencialidad que construir: **lo que entra en el repositorio es público,
+   y quien lo escribe lo sabe**. R9 se cumple por esa regla y no por un filtro.
+10. **Qué IAs leen la memoria: cualquiera.** El propietario lo ha dicho igual
+    de claro: da igual qué IA entre; la regla es que **toda IA que entre lee
+    `MEMORIA.md` primero**. Con el repositorio público, cualquier IA la lee por
+    su URL sin configurar nada. No se pregunta más por esto.
 
 **Lo que este ADR deja fuera a propósito:** la herramienta definitiva; Sirius
-0.2 y la memoria del producto; la frontera de salida hasta que el propietario
-decida la visibilidad; y cualquier permiso de escritura nuevo para una IA.
+0.2 y la memoria del producto; cualquier permiso de escritura nuevo para una
+IA; y datar a mano los documentos que no declaran fecha (la vista los señala;
+quien los toque, los data).
 
-## Lo que viene después, en orden
+## Nota de arranque del generador (publicada ANTES del primer commit de código)
 
-- **PR siguiente (motor):** el generador `sirius-memoria` con sus pruebas, la
-  vista de desenlaces, y `reflejar-desenlace.yml` escribiendo `MEMORIA.md` tras
-  cada reflejo. Nota de arranque propia.
-- **PR siguiente (documentos):** campo `Resumen` en plantilla y skill, los 165
-  borradores para revisión, fechas en los 14 documentos sin ella, y la prueba
-  que impide un ADR sin resumen.
-- **PR siguiente (conducta):** la regla nueva de `AGENTS.md`.
+La decisión de arriba se ejecuta en esta misma PR, no en tres. El propietario
+lo pidió con estas palabras: *«quiero terminar, no seguir acumulando parches ni
+documentos»*. Estas cuatro respuestas quedan escritas antes de la primera
+línea de código.
 
-## Lo que el propietario tiene que hacer
+**1. ¿Dónde vive el fallo y dónde va el arreglo?** El fallo: no existe ninguna
+vista consultable del conocimiento ni de los desenlaces (evaluación de arriba).
+El arreglo, pieza a pieza:
 
-1. **Decidir si el repositorio debe ser público.** Compruébalo en
-   `github.com/canelamoraguezandyjesus-bot/sirius` → *Settings* → *General* →
-   abajo del todo, *Danger Zone* → *Change repository visibility*. Si es
-   intencionado, dilo y T-6 queda cerrada por ausencia de frontera; si no,
-   cámbialo a privado **antes** de la PR de conducta, porque entonces las IAs
-   externas necesitarán acceso explícito.
-2. **Decir qué IAs tuyas pueden leer GitHub** (R2): tu Codex de sesiones y tu
-   ChatGPT. Con el repositorio público, ambas pueden leer `MEMORIA.md` por su URL
-   sin configurar nada; con el repositorio privado, ChatGPT necesita el conector
-   de GitHub y Codex el acceso al repositorio.
-3. **Fusionar este ADR** si la decisión es la que quieres. La fusión es el «go»
-   de la PR del motor, que arranca en el momento.
+| Pieza | Dónde | Qué hace |
+|---|---|---|
+| Generador | `src/sirius_engine/memoria.py` | Funciones puras: lee el árbol y devuelve texto. Sin reloj, sin red, sin git |
+| Comando | `src/sirius_engine/memoria_cli.py`, entrada `sirius-memoria` | `conocimiento` escribe `MEMORIA.md` (o `--comprobar`); `desenlaces` escribe la vista del diario |
+| La vista | `MEMORIA.md` en la raíz de `main` | Generada y confirmada |
+| La guardia | `tests/engine/test_memoria.py` | Falla si `MEMORIA.md` no coincide con lo generado; y las pruebas del generador con árboles de prueba |
+| Los desenlaces | paso nuevo en `reflejar-desenlace.yml` | Escribe `DESENLACES.md` en la rama del motor tras cada reflejo, en el mismo grupo de concurrencia |
+| La conducta | `AGENTS.md` | `MEMORIA.md` pasa a ser la primera lectura |
+
+**2. ¿Qué NO va a garantizar esto?**
+
+- **No garantiza que una IA la lea.** `AGENTS.md` lo ordena; nada lo fuerza.
+- **No resume con criterio.** Extrae el primer párrafo de cada `## Decisión`
+  tal cual está escrito. Un ADR mal escrito da un resumen malo, y eso se ve.
+- **No data documentos.** El que no declara fecha sale como «sin fecha
+  declarada», y son muchos (se cuenta en la comprobación).
+- **No mete los desenlaces en `main`.** Cambian sin PR; viven en su rama y
+  `MEMORIA.md` los enlaza. Una IA que quiera el estado en curso del motor sigue
+  teniendo que ir a la rama.
+- **No toca Sirius, la memoria del producto, los permisos, ni ningún workflow
+  aparte de `reflejar-desenlace.yml`.**
+
+**3. Criterio de parada (escrito ANTES de ver resultados).**
+
+- **(a)** Si el generador necesitara reloj, red o `git log` para producir la
+  vista de conocimiento, se para: una vista que cambia sin que cambie el árbol
+  no puede guardarse con una prueba, y sin prueba es un mapa que envejece.
+- **(b)** Si la prueba de frescura **no falla** contra una mutación —cambiar el
+  título de un ADR sin regenerar; editar `MEMORIA.md` a mano—, no se entrega.
+- **(c)** Si `MEMORIA.md` supera **120 KB**, se recorta (resúmenes más cortos o
+  una sección fuera): el objetivo es leerla entera de una vez, y un fichero que
+  no se lee entero vuelve a ser un corpus.
+- **(d)** Si cablear `DESENLACES.md` exigiera tocar los cuatro workflows
+  críticos, ampliar permisos o salir del grupo `motor-sirius`, se para
+  (ADR-002, ADR-137: puramente aditivo o nada).
+- **(e)** Si `tests/automation/test_serializacion_del_motor.py` rechazara el
+  cableado, se corrige el cableado, nunca la prueba.
+
+**4. ¿Qué haría imposible el error más probable?** El error más probable es que
+la vista se quede vieja. Lo hace imposible la prueba de frescura dentro del
+`pytest` de Quality: **ninguna PR entra en `main` con `MEMORIA.md`
+desactualizada**, y el mensaje de fallo dice el comando exacto que hay que
+ejecutar. El segundo error probable, editarla a mano, cae en la misma prueba.
+Lo que no se puede hacer imposible desde aquí: que una IA no la lea.
+
+## Comprobación que la sostiene
+
+*(Se rellena con la evidencia al terminar; hasta entonces, nada de lo anterior
+sobre el generador está demostrado.)*
