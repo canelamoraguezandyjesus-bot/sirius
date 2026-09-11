@@ -4513,6 +4513,42 @@ no era mía, y una parada del freno que provoqué yo. Todo ello mientras
 verificaba más que ningún otro día. **La lección no es que hiciera pocas
 comprobaciones: es que casi todas comprobaban que las cifras se reproducían, y
 casi ninguna qué medían.**
+
+---
+
+### 90. Cuatro decisiones tomadas desde fuera de casa, y lo que cada una resulta ser al mirar el árbol (11-09-2026)
+
+Dos días sin movimiento en `main` (`5fc5fdc`), nadie corrió la medición real. El
+propietario, sin ordenador, decidió las cuatro pendientes por la vía
+recomendada. Antes de escribir un solo encargo miré qué era cada decisión **en
+el árbol**, y dos cambiaron de forma:
+
+- **H5 es más limpio de lo que le vendí.** «Restaurar los miembros» no exige
+  inferirlos del nombre ni de la prosa de la adjudicación: el origen los declara
+  **estructurados**, `build_corpus.py:87` en `dfdcdaff` —
+  `"miembros_lista_cerrada": ["PRJ-ALFA", "PRJ-BETA"]`—. La nota de la fixture
+  lo confirma: la proyección a JSON «no la expone». Portar es restaurar.
+- **H3 no es un encargo, y descubrirlo simplifica.** «Candidata de fuente
+  externa» son los ejes `confirmacion` y `autoridad`, que el esquema no
+  persiste; el arnés la aproxima **archivándola**, que no significa eso; y las
+  sugerencias canónicas nunca entran en recuperación. **H3 es la decisión 4
+  aplicada a un ítem** y va con los ejes por el Rector. Se lo he dicho así al
+  propietario y sigo con esa lectura salvo que la corrija.
+- **H4 y H5 llevan escrita su condición de producción** (raíz 1, deuda 24): H4
+  queda detrás de `category_matching_enabled`; H5 no entra en producción hasta
+  que `miembros_de_ambito` se persista, porque el puerto entrega `SIN_EJES`. Los
+  dos cierran **techo de laboratorio y semántica**, y lo dicen.
+- **Los ejes** tienen su nota preparatoria para el Rector
+  (`docs/audits/nota-para-el-rector-persistir-los-ejes.md`), con lo medido y lo
+  que ese proceso tendrá que decidir. No se lanza: §17 del Rector sigue en pie.
+
+**Los dos encargos, esta vez con las cuatro preguntas de la entrada 78 hechas
+frase a frase**: cada línea citada es una que vi en esta sesión; cada cifra
+lleva su medición y su configuración; cada afirmación «ya viaja» va con dónde
+se consume y de qué puerta depende; y ninguno afirma cerrar nada en producción.
+Se lanzan **en paralelo**: tocan ficheros disjuntos, afectan a casos distintos
+(`B04-CA-30` y `B04-CA-22`), y los dos mandan re-ejecutar `siguiente_adr.py`
+antes de la PR por la numeración (deuda 18, con #576 aún en vuelo).
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
