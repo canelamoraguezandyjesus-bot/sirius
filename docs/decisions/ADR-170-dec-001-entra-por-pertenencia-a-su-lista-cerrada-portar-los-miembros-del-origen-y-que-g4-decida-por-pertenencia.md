@@ -177,9 +177,168 @@ Lo que **no** cambia: sin miembros resueltos se sigue excluyendo; la puerta
 
 ## Comprobación que la sostiene
 
-[Se completa tras medir. Predicción arriba, publicada antes.]
+### 1. La medición que decide, y la que controla
+
+`uv run python scripts/diagnosticar_busqueda_del_banco.py`, antes sobre
+`5fc5fdc` y después sobre el árbol de esta rama. Las dos configuraciones
+**no se comparan entre sí**: cada fila se compara consigo misma.
+
+| Configuración | Antes | Después |
+|---|---|---|
+| `--peticion` (control) | 17/47; 162; 78/81; 0 | **17/47; 162; 78/81; 0** |
+| `--ejes --peticion` (decide) | 21/47; 144; 78/81; 0 | **22/47; 146; 79/81; 0** |
+
+- **La predicción se cumple**: hallados `78/81 → 79/81`, exactas
+  `21/47 → 22/47`, **0 críticas perdidas**. `B04-CA-22` desaparece de la
+  lista de casos con faltantes; los dos que quedan (`B04-CA-29`/`MEM-020` y
+  `B04-CA-30`/`MEM-001`) son los mismos de antes y son otros huecos.
+- **El control no se mueve, ni en una cifra.** Es lo que la nota de arranque
+  predijo: con `SIN_EJES`, `G4` no llega a la rama de lista cerrada. Si se
+  hubiera movido, el criterio de parada 2 obligaba a explicarlo antes de
+  seguir.
+
+Qué está desactivado en las dos: no hay Ollama, así que **no hay filtro de
+relevancia**; el guion mide el **techo de la etapa de búsqueda**. Y el techo
+del laboratorio, no el de producción: `--ejes` es una palanca del guion,
+no algo que `main` tenga.
+
+### 2. «De más»: la transcripción, antes y después
+
+La incidencia deja «de más» **sin listón a propósito** y pide transcribir.
+Con `--ejes --peticion`, el total pasa de **144 a 146**. Los dos son el
+mismo `DEC-001`. Contra-medición ítem a ítem, con el mismo `_medir` del
+guion (script de un solo uso, no confirmado al árbol):
+
+| | Antes (`5fc5fdc`) | Después |
+|---|---|---|
+| casos en los que entra `DEC-001` | **0** | **3** |
+
+| caso | ámbito | ¿lo espera? |
+|---|---|---|
+| `B04-CA-22` «¿Qué decisiones eran válidas entre enero y marzo?» | `PRJ-BETA` | **sí** — es la sexta |
+| `B04-CA-14` «¿De qué se ocupa Juan?» | `GLOBAL` | no — **de más** |
+| `B04-CA-43` «¿Quién valida los entregables de calidad?» | `PRJ-ALFA` | no — **de más** |
+
+**Por qué entra en cada uno, y de qué capa es el ruido.** `B04-CA-14` es de
+ámbito `GLOBAL`: `Ambito.autoriza` admite cualquier proyecto, así que
+bastaba con que la lista tuviera **algún** miembro —es la capa 1, no la 2—.
+`B04-CA-43` es de ámbito `PRJ-ALFA`, que **es** miembro de
+`LISTA-CERRADA-AB`: ahí sí decide la pertenencia. En los dos, lo que alcanza
+el ítem es la coincidencia léxica de su texto («La revisión de **calidad**
+es obligatoria antes de publicar»), y en los dos `G4` hace lo correcto: el
+ítem pertenece a una lista cerrada que incluye el ámbito de la pregunta.
+
+Es **ruido del filtro, no del ámbito**, y no es una opinión: en la corrida
+final del laboratorio (`lab_final_run_row5.json`, fila 5), `DEC-001` llegó a
+`entraron_al_filtro` exactamente en `B04-CA-14` y **el filtro lo quitó** —su
+`obtenido` de ese caso no lo trae—. La capa que descarta esta clase de
+coincidencia temática es la relevancia (M10/Ollama), que ni el guion ni el
+arnés determinista ejecutan.
+
+### 3. Contra-medición que aísla el arnés (deuda 21)
+
+`test_dec_001_entra_en_b04_ca_22_por_pertenencia_a_su_lista_cerrada` no mide
+el banco: carga el canon real, construye el puerto con los ejes del corpus y
+llama a `recuperar` **sin** índice de categoría, sin siembra y sin filtro.
+Ahí `DEC-001` entra y su traza no tiene ni un veredicto de puerta. Y la
+mutación cierra el «y no por otro camino»: con la misma petición y el mismo
+canon, borrando **solo** sus miembros, el motor lo descarta con
+`("G4", "lista cerrada sin miembros resueltos: la duda no abre ambito")`.
+Lo que lo hace entrar es la membresía.
+
+### 4. Las pruebas vistas fallar antes del cambio (ADR-001)
+
+Transcrito, no afirmado:
+
+```
+# Con los tres tests de G4 escritos y `_g4` todavía en `all`:
+$ uv run pytest tests/unit/test_staged_engine.py -k "lista_cerrada" -q
+FAILED ...::test_g4_lista_cerrada_admite_el_ambito_que_es_miembro
+FAILED ...::test_g4_lista_cerrada_descarta_el_ambito_que_no_es_miembro
+    At index 0 diff: ('DECISION:1', 'G4', 'lista cerrada con miembros fuera del ambito')
+                  != ('DECISION:1', 'G4', 'el ambito de la peticion no es miembro de la lista cerrada')
+2 failed, 1 passed, 29 deselected
+```
+
+El que pasa desde el principio es
+`test_g4_lista_cerrada_sin_miembros_resueltos_sigue_sin_entrar`: es la
+propiedad que ADR-170 **conserva**, así que pasar antes y después es
+exactamente lo que debe hacer.
+
+Mutación 1 — devolver `_g4` a `all` con todo lo demás ya puesto:
+
+```
+$ uv run pytest tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py -k pertenencia -q
+FAILED ...::test_dec_001_entra_en_b04_ca_22_por_pertenencia_a_su_lista_cerrada
+  AssertionError: assert 'DECISION:1' in {'DECISION:11','DECISION:14','DECISION:15','DECISION:5','DECISION:9'}
+1 failed, 1 passed
+```
+
+Mutación 2 — quitar `miembros_lista_cerrada` de la fixture, con `_g4` ya en
+`any`:
+
+```
+$ uv run pytest tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py \
+      -k "pertenencia or lista_cerrada" -q
+  + ()
+  - ('2', '3')
+2 failed
+```
+
+Las dos mitades, por separado, son necesarias. Restaurado el árbol, las dos
+vuelven a verde.
+
+### 5. Lo que cambia en el arnés del motor portado
+
+`_ejecutar_banco_motor_portado` (los 47 casos con los ejes del corpus y la
+petición de cada caso; **no** es la misma medición que el guion de arriba,
+y por eso sus números son otros):
+
+| | Antes | Después |
+|---|---|---|
+| `aciertos_exactos` | 29/47 | **30/47** |
+| `elementos_de_mas` | 50 | **51** |
+| `omisiones_criticas` | 0 | **0** |
+| `elementos_hallados` | 67/81 | **68/81** |
+
+Tres cotas suben —son más exigentes—. La cuarta,
+`_MAXIMO_ELEMENTOS_DE_MAS_MOTOR`, sube de 50 a 51 por **un** elemento
+nombrado: el `DEC-001` de `B04-CA-43`. No se abre ninguna puerta a cambio:
+`test_los_elementos_de_mas_restantes_son_los_del_laboratorio` deja de
+afirmar `== {}` y pasa a afirmar `== {"B04-CA-43": ["DEC-001"]}`, una
+igualdad exacta; cualquier otra divergencia frente a la corrida del
+laboratorio sigue poniendo la prueba en rojo.
 
 ## Consecuencias
+
+**Lo que mejora.** `B04-CA-22` recupera sus seis. Con `--ejes --peticion`,
+`79/81` hallados y `22/47` exactas, sin perder ninguna crítica. El hueco H5
+queda cerrado en el techo del laboratorio.
+
+**Lo que empeora, dicho sin maquillar.** El suelo D1 de `elementos_de_mas`
+(≤21 sobre los 31 `casos_con_contenido`) **deja de alcanzarse por uno**: el
+arnés del motor portado pasa de 21 a 22. Es el `DEC-001` de `B04-CA-43`.
+`test_elementos_de_mas_alcanza_el_suelo_d1_bajo_la_poblacion_del_umbral_publicado`
+lo afirma así, en su docstring y en su aserción, en vez de relajar el
+listón. Esto no es un efecto colateral inadvertido: la incidencia #582 deja
+«de más» sin listón a propósito, porque la decisión del propietario del
+11-09-2026 es que `G4` decida por pertenencia, y este elemento es el precio
+medido de esa decisión. **Se señala aquí para que el propietario lo vea al
+fusionar, no para darlo por bueno en su nombre.**
+
+**Lo que NO cambia.** En **producción** `DEC-001` sigue sin entrar, y esta
+ficha no afirma lo contrario: el puerto real entrega todo ítem con
+`SIN_EJES`, así que `G4` toma la rama `ambito is None`. El control
+`--peticion` lo demuestra midiendo: no se mueve. Persistir los ejes es otra
+decisión, del Rector (deuda 24). La puerta `category_matching_enabled` sigue
+cerrada. `criticidad.razon_segura` sigue sin leerse jamás.
+
+**Deuda que este trabajo deja escrita.** Un ítem `MULTI_PROYECTO_CERRADO`
+nuevo podría volver a entrar al corpus sin miembros, y nada lo impediría:
+`G4` lo descartaría con su razón correcta y el hueco sería invisible otra
+vez. Hacerlo imposible pedía un invariante sobre el corpus o un porte
+automático desde el origen, los dos fuera del alcance de #582 (ver la cuarta
+pregunta de la nota de arranque).
 
 ## Alternativas descartadas y por qué
 
