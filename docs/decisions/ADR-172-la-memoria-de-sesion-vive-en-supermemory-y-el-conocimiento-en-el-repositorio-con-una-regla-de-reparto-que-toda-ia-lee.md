@@ -74,6 +74,19 @@ Hecha el 11 y 12-09-2026, superficie por superficie. `[V]` = observado.
 Se cumple el criterio (c): cuatro superficies, no tres, con al menos una lectura
 y una escritura reales entre herramientas distintas.
 
+**La regla, y su guardia** `[V]`. La sección nueva de `AGENTS.md` no rompió
+ninguna prueba —criterio (a) satisfecho— pero eso era, en sí, el defecto: una
+regla que se puede borrar sin que salte nada es la que se pudre, que es la
+lección de ADR-171. Así que se le puso guardia,
+`tests/engine/test_memoria.py::test_agents_declara_el_reparto_entre_las_dos_memorias`,
+**vista fallar** con la sección quitada y pasar con ella puesta. No comprueba
+conducta, que no se puede: comprueba que la regla siga escrita donde toda IA la
+lee. El criterio (b) también se cumple: la sección empieza diciendo que solo
+aplica a quien tenga la herramienta.
+
+**Las validaciones:** `ruff format --check` y `ruff check` en verde, `mypy src
+tests` sobre 588 ficheros sin incidencias, y la suite completa antes del push.
+
 **Lo que costó, y consta porque la próxima vez importa:** Node, Bun y el propio
 Codex CLI no estaban instalados; la política de scripts de PowerShell obliga a
 llamar `npx.cmd` y `npm.cmd`; y `setx` no afecta a las ventanas ya abiertas.

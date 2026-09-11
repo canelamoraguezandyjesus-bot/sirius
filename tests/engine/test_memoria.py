@@ -403,3 +403,23 @@ def test_agents_ordena_leer_la_memoria_primero() -> None:
     texto = (RAIZ_REPO / "AGENTS.md").read_text(encoding="utf-8")
     assert f"`{FICHERO_MEMORIA}`" in texto
     assert f"uv run {COMANDO} conocimiento" in texto
+
+
+def test_agents_declara_el_reparto_entre_las_dos_memorias() -> None:
+    """La regla de ADR-172, que ninguna otra prueba sostiene.
+
+    No comprueba conducta -no se puede- sino que la regla siga ESCRITA donde
+    toda IA la lee. Sin esto, borrarla de `AGENTS.md` no rompía nada, y una
+    regla que se puede borrar sin que salte nada es la que se pudre (ADR-171).
+    """
+    texto = (RAIZ_REPO / "AGENTS.md").read_text(encoding="utf-8")
+    assert "memoria de sesión" in texto, (
+        "AGENTS.md ya no nombra la memoria de sesión: el reparto de ADR-172 "
+        "desapareció y nadie sabe qué va a cada sitio"
+    )
+    for exigido in (
+        "ADR-172",
+        "no está tomada",  # una decisión que solo vive en la memoria de sesión
+        "terceros",  # de dónde sale lo que se guarda
+    ):
+        assert exigido in texto, f"AGENTS.md perdió «{exigido}» del reparto de ADR-172"

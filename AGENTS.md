@@ -24,6 +24,7 @@ ya existía con otro nombre: el auditor-.
 | Qué buscas | Dónde está |
 |---|---|
 | Por dónde empezar, siempre; qué se decidió y por qué | `MEMORIA.md` (raíz), generada: cada ADR con su resumen, los registros con estado y los documentos con su fecha; los desenlaces del motor, en `estado-del-motor:DESENLACES.md` (ADR-171) |
+| Qué quedó pendiente y el contexto de sesiones anteriores | la memoria de sesión, si tu entorno trae su herramienta (ADR-172) |
 | Qué bloques del MOTOR hay y cómo van | `docs/implementation/bloques_del_motor.yml` |
 | Qué defectos hay abiertos | `docs/audits/registro_defectos.yml` |
 | El plan del motor, bloque a bloque | `docs/implementation/SIRIUS_WORK_ENGINE_PLAN_IMPLEMENTACION.md` |
@@ -102,6 +103,36 @@ ahí, solo lo que la tarea necesite.
   documento después de abrir tu rama, tu PR sale en rojo aunque tu rama esté al
   día: trae `main`, regenera, confirma. Un conflicto en `MEMORIA.md` se resuelve
   siempre regenerando, nunca a mano.
+
+## La memoria de sesión, si tienes su herramienta (ADR-172)
+
+Hay un segundo sitio, y **solo existe si tu entorno trae la herramienta de
+Supermemory**. Si no la tienes —es el caso de los agentes del ciclo, en GitHub
+Actions—, esta sección no te aplica: sigue como siempre.
+
+Guarda lo que el repositorio no guarda: **lo pendiente, el contexto de una
+sesión, las preferencias de trabajo del propietario y lo que se intentó y no
+salió.** Dos momentos:
+
+- **Al empezar** algo que pueda tener antecedentes, búscalo ahí antes de
+  preguntarle al propietario lo que ya te dijo una vez.
+- **Al terminar**, guarda lo que quede pendiente y lo aprendido que no vaya a un
+  fichero. Concreto y con fecha; una memoria vaga no le sirve a nadie.
+
+Y el reparto, que es la regla entera:
+
+| Qué | Dónde |
+|---|---|
+| Lo decidido, investigado, medido o acordado | **El repositorio**, con su PR, su ADR y su prueba |
+| Lo pendiente, el contexto de sesión, las preferencias | **La memoria de sesión** |
+| El estado de un trabajo del motor | **Su diario**, que manda sobre las dos |
+
+**Una decisión que solo está en la memoria de sesión no está tomada.** Si no
+llegó a una PR fusionada, no existe.
+
+**Lo que se guarda ahí sale a un servicio de terceros**, y una sesión contiene
+más que este repositorio público. El propietario lo sabe y lo acepta; aun así,
+ahí no van claves ni secretos, nunca.
 
 ## Criterio de parada
 
