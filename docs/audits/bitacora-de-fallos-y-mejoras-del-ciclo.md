@@ -4705,6 +4705,43 @@ comentario de rechazo en la incidencia. No es deuda nueva; es una regla que
 hay que tener delante cada vez que se reanuda un `failed-safely` sin PR.
 ---
 
+### 94. Los dos ciclos murieron el mismo minuto, y esta vez el dato exacto está en el log (11-09-2026, 09:50 UTC)
+
+**Qué pasó.** A las 06:43Z pararon los dos agentes que había en marcha, en dos
+runners distintos y a mitad de trabajo:
+
+| agente | run | duración | turnos | coste | resultado |
+|---|---|---|---|---|---|
+| implementador de H4 (segundo intento, cuerpo recortado) | 34570341534 | 10:35 | 56 | 3,68 USD | `is_error: true` a las 06:43:21Z |
+| revisor Claude de H5 (reintento de ADR-141) | 34571073509 | 0:32 | 10 | 0,23 USD | `is_error: true` a las 06:43:30Z |
+
+Ninguno agotó turnos ni tiempo; los dos terminaron con `subtype: success` e
+`is_error: true`, que es como el SDK cuenta que la API dejó de contestar. Es
+el mismo perfil que la entrada 41 («los dos agentes murieron a la vez a las
+05:23-05:24»): **el tope de uso de la suscripción**, alcanzado tras 45 min del
+implementador de H5, 60 del primero de H4, 26 del revisor de H5 y 11 del
+segundo de H4, todos Opus, en una hora y veinte. Codex, por su lado, no
+reaccionó a ningún `@codex review` desde las 06:16Z (ni un veredicto, ni una
+reacción): su cuota es otra, y también parece agotada. Con Codex mudo, el
+modo dual no puede cerrar aunque Claude vuelva: el reintento único de ADR-141
+ya se gastó en este head (`3b64c55f`), y #582 queda en `failed-safely` del
+revisor a las 07:02:48Z. #581 queda en `failed-safely` del implementador sin
+rama (comprobado: ninguna rama nueva en `origin`).
+
+**Lo que no vi a tiempo.** Entre las 06:45Z y las 09:46Z esta sesión no tuvo
+acceso a GitHub (el servidor de herramientas se desconectó y se reconectó a
+ratos), así que las dos paradas las leí tres horas tarde. No cambia el
+diagnóstico ni lo que se puede hacer —con el tope agotado no había nada que
+relanzar—, pero es la razón de que no haya una entrada entre las 06:33 y ahora.
+
+**Qué hago.** Aviso programado a las 10:24Z para relanzar **primero** H4 (es
+Claude solo y cabe en una ventana), con el gesto completo de activación —las
+dos etiquetas juntas— y sin `continua`; si el implementador vuelve a morir en
+menos de dos minutos con `is_error`, el tope sigue y se reprograma. H5 se
+reanuda **después** y con un único `continua`, y solo cierra si Codex ha
+vuelto. Dos ciclos en paralelo con Opus agotan la ventana: hoy quedó medido.
+---
+
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
 
 1. `ollama_category_classifier.py`: ruta relativa y sin
