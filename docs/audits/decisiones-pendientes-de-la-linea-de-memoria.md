@@ -1,3 +1,24 @@
+<!-- Informe para el propietario. Las cuatro decisiones quedaron TOMADAS el 11-09-2026; ver el bloque de arriba. -->
+
+# DECIDIDAS el 11-09-2026 — las cuatro, por la vía recomendada
+
+El propietario decidió las cuatro desde fuera de casa, sin poder ejecutar nada;
+lo que sigue es lo que se hace con cada una **sin él**:
+
+| decisión | qué eligió | qué se hace ahora |
+|---|---|---|
+| **H5 — `DEC-001`** | restaurar los miembros de la lista cerrada **y** pasar `G4` de contención a pertenencia | **encargo**, auditado contra el árbol antes de lanzar |
+| **H3 — `MEM-020`** | sí: lo no confirmado de fuente externa **sale, marcado como no confirmado** | **encargo**, con la parte de presentación como diseño explícito |
+| **H4 — `MEM-001`** | sustituir la subcadena «contexto» por una **señal explícita** | **encargo**, el más pequeño; primero |
+| **Ejes** | sí **en principio**: guardarlos; formalizar por el Rector | **no se lanza**: es cambio de esquema y §17 del Rector exige definición y arquitectura aprobadas. Se prepara la nota para ese proceso |
+
+Lo que **no** cambia con esto: la puerta `category_matching_enabled` sigue
+cerrada; el modelo mayor y la prioridad de la línea siguen siendo decisiones
+suyas; y la medición con Ollama real sigue caducada desde el 02-09 y solo la
+puede correr él.
+
+---
+
 # Cuatro decisiones tuyas, y una consecuencia que cambia el criterio de la línea
 
 **Estado al 08-09-2026, 18:50 UTC.** Nada de esto bloquea el trabajo: la
