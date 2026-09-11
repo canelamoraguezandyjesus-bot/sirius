@@ -4689,6 +4689,22 @@ puede saber que no cabe, y a los 59:52 el tope lo mata sin que quede una
 línea de diagnóstico. Una hora de runner y de modelo a cambio de nada.
 ---
 
+### 93. El `continua` de un `failed-safely` sin PR no arranca solo, y ya lo sabía (11-09-2026, 06:33 UTC)
+
+El reanudador aplicó `sirius:implement-requested` (recibo `sirius-restart-sin-pr`,
+06:30:10Z) y la puerta de activación lo rechazó a los catorce segundos con
+`sirius-activation:rejected:sin-planned`, retirando la etiqueta y dejando la
+incidencia **sin ninguna**. Es por diseño y está en esta bitácora dos veces
+(la parada de #545 y el error mío de #566): la certificación humana de
+alcance no sobrevive a la parada, y la reanudación de una fase que nunca
+produjo PR es «repetir desde cero», que exige el gesto de lanzamiento entero.
+Lo que fallé fue leer mi propia regla: **activar es mandar `planned` e
+`implement-requested` en la misma llamada.** Repuestas las dos a las 06:32Z;
+el implementador arranca con el cuerpo recortado. Coste: tres minutos y un
+comentario de rechazo en la incidencia. No es deuda nueva; es una regla que
+hay que tener delante cada vez que se reanuda un `failed-safely` sin PR.
+---
+
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
 
 1. `ollama_category_classifier.py`: ruta relativa y sin
