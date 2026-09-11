@@ -243,3 +243,19 @@ sesión más allá de clonar repositorios. Todo lo de arriba es lo que cada
 proyecto **dice** en su repositorio el 11-09-2026, y una afirmación en un README
 no es una medición. La primera semana de uso real es la que dirá si la captura
 automática recoge lo que importa o ruido.
+
+## Enmienda del mismo día (tarde): el orden de la recomendación cambia
+
+La investigación externa archivada en
+`2026-09-11-flujos-reales-de-agentes-comparados-con-el-motor.md`, verificada
+sobre los repositorios el 11-09-2026, añade dos hechos que esta investigación no
+había visto: **Supermemory publica una guía oficial para ChatGPT Web**
+(`apps/docs/supermemory-mcp/chatgpt-web.mdx`) `[V]` y su plugin de Codex captura
+solo, por hooks, con contenedor por repositorio
+(`supermemoryai/codex-supermemory`) `[V]`; Mem0, en cambio, no tiene guía de
+ChatGPT y en Codex Cloud solo ofrece el MCP directo sin hooks
+(`docs/integrations/codex.mdx:66-84`) `[V]`. Con eso, para la combinación del
+propietario (Claude Code, Codex CLI y en la nube, ChatGPT) la evidencia pública
+más directa es la de **Supermemory**, que pasa a ser la primera opción a probar;
+Mem0 queda como segunda. Las dos comprobaciones del propietario siguen siendo
+las mismas: créditos del plan Free y si su ChatGPT admite conectores MCP.

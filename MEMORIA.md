@@ -29,7 +29,7 @@
 - Decisiones (ADR): **165**.
 - Bloques del motor: 17 cerrado, 1 fuera_de_alcance, 2 pendiente.
 - Defectos registrados: 32 cerrado.
-- Investigaciones: **8** (fotos con fecha; caducan).
+- Investigaciones: **9** (fotos con fecha; caducan).
 - Documentos: **127**, de los que **84** no declaran fecha.
 
 ## Qué se decidió: los ADR, del más reciente al más antiguo
@@ -253,6 +253,7 @@ algo vivo (`AGENTS.md`). Cada una declara de qué depende para caducar.
 | 2026-08-28 | VIGENTE | [Investigación de la orden](docs/investigaciones/2026-08-28-orden-386-investiga-cuales-son-los-limites-actuales-de-la-capa-gratuit.md) | los datos y las fuentes que cita el informe; la fecha de esta ejecución: es UNA pasada del investigador, no un hecho estable |
 | 2026-08-28 | VIGENTE | [Investigación de la orden](docs/investigaciones/2026-08-28-orden-392-investiga-y-compara-los-proveedores-de-api-de-modelos-nvidia.md) | los datos y las fuentes que cita el informe; la fecha de esta ejecución: es UNA pasada del investigador, no un hecho estable |
 | 2026-08-31 | VIGENTE | [Investigación de la orden](docs/investigaciones/2026-08-31-orden-483-investiga-una-sola-pregunta-acotada-el-marco-de-agentes-herm.md) | los datos y las fuentes que cita el informe; la fecha de esta ejecución: es UNA pasada del investigador, no un hecho estable |
+| 2026-09-11 | VIGENTE | [Flujos reales de agentes de código, comparados con el motor de Sirius](docs/investigaciones/2026-09-11-flujos-reales-de-agentes-comparados-con-el-motor.md) | el contenido de los trece repositorios citados, verificado el 11-09-2026 en su último commit; la documentación de Supermemory y Mem0 sobre Claude Code, Codex y ChatGPT, que cambia cada pocas semanas; los artículos, vídeos y fechas de publicación, que esta sesión no pudo abrir |
 | 2026-09-11 | VIGENTE | [Qué memoria compartida para IAs existe ya hecha y probada, y si supera a la generada en el repositorio](docs/investigaciones/2026-09-11-que-memoria-compartida-para-ias-existe-ya-hecha-y-probada.md) | los precios y límites gratuitos de los servicios alojados (Mem0, Supermemory, Basic Memory Cloud, Letta Cloud, Zep); qué clientes admiten MCP y cómo (Claude Code, Codex, ChatGPT), que cambia cada pocos meses; las versiones y la actividad de cada proyecto, medidas el día de la clonación; la lista de herramientas que leen AGENTS.md |
 | sin fecha declarada | — | [Investigaciones](docs/investigaciones/README.md) | — |
 
