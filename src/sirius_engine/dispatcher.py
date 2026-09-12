@@ -104,6 +104,12 @@ class _ActivacionPorClase:
 #: contrato, no una decisión de implementación -la fila ``DOCUMENTACION``
 #: la autoriza ADR-088 (incidencia #336): mismo ciclo que ``programacion``,
 #: sin etiquetas de activación nuevas (su criterio de parada (b)).
+#:
+#: Sus claves son EXACTAMENTE ``CLASES_CON_VIA_GITHUB``
+#: (``sirius_engine.domain.authority``, ADR-177): la autoridad de una clase se
+#: deriva de estar aquí, y ``tests/engine/test_authority.py`` falla si las dos
+#: divergen. Hasta ADR-177 divergieron dos semanas sin que nadie lo viera:
+#: esta tabla ganó documentación e investigación y la de autoridad no.
 TABLA_ACTIVACION: dict[WorkItemClass, _ActivacionPorClase] = {
     WorkItemClass.PROGRAMACION: _ActivacionPorClase(
         etiquetas_iniciales=(ETIQUETA_INICIAL,),

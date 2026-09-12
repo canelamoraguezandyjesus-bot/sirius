@@ -625,12 +625,14 @@ Cubre todas las clases de trabajo, sin huecos. Una clase que no aparezca aquí n
 | Clase de trabajo | ¿Existe en la vía GitHub? | Autoridad desde la v1.7 | ¿Conmuta? |
 |---|---|---|---|
 | conversación / exploración / consulta | no (no crea WorkItem) | motor, o ningún WorkItem | — |
-| investigación | no | **motor, desde su nacimiento** — **RETIRADA ACORDADA** (§13, ADR-161) y **EJECUCIÓN PENDIENTE**: la fila sigue aquí porque `TABLA_ACTIVACION` sigue teniendo la clase | — |
-| documental no publicada | no | **motor** | — |
-| documental publicada (PR en el repo) | sí | incidencia | sí |
+| investigación | **sí**, desde ADR-099 y mientras la clase siga en `TABLA_ACTIVACION` — **RETIRADA ACORDADA** (§13, ADR-161) y **EJECUCIÓN PENDIENTE** | **incidencia** (ADR-177; hasta entonces el código decía «motor» y el contador de §11.2 no la midió nunca) | sí, mientras la clase exista |
+| documental no publicada | no — y sin clase en el motor hoy: toda la documentación que el motor despacha va por la vía GitHub (ADR-088; medido en ADR-177) | **motor** | — |
+| documental publicada (PR en el repo) | sí (ADR-088: `documentacion` en `TABLA_ACTIVACION`) | incidencia | sí |
 | programación | sí | incidencia | sí |
 | auditoría | sí (etiqueta propia) | incidencia — **RETIRADA ACORDADA** (§13, ADR-161) y **EJECUCIÓN PENDIENTE**: la fila sigue aquí porque `TABLA_ACTIVACION` sigue teniendo la clase | sí, mientras la clase exista |
 | reparación / espera / cancelación | son fases o estados, no clases | la de su WorkItem | — |
+
+La columna «¿Existe en la vía GitHub?» es la definición de la que el código deriva la autoridad (`CLASES_CON_VIA_GITHUB`, en `src/sirius_engine/domain/authority.py`, ADR-177), y `tests/engine/test_authority.py` lee esta tabla y la comprueba contra el código: una fila y el código no pueden decir cosas distintas y fusionarse en verde.
 
 Para las clases nativas del motor **no hay periodo previo**: nacen canónicas en el almacén del motor. Si algo de ellas se refleja en GitHub, ese reflejo es informativo y se etiqueta como tal.
 

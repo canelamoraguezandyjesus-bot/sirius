@@ -120,28 +120,116 @@ aparece una decisión que es del propietario.
 
 ## Opciones consideradas
 
-*(Se escriben al terminar el trabajo; esta versión del ADR es la nota de
-arranque, confirmada antes de la primera línea de código.)*
+1. **Corregir a mano las dos filas** de la tabla de autoridad (documentación e
+   investigación a `incidencia`). Arregla el síntoma y deja las dos listas: la
+   próxima clase que entre en la vía GitHub volverá a divergir, igual que
+   divergieron ADR-088 y ADR-099. Descartada.
+2. **Derivar la autoridad de `TABLA_ACTIVACION` importándola desde el
+   dominio.** Invierte la dependencia -el dominio importaría al despachador,
+   que importa puertos y proyección-: es la parada anticipada que la nota de
+   arranque preveía. Descartada.
+3. **Una sola definición en el dominio, autoridad derivada, despachador atado
+   por una guarda, contrato leído como dato.** Elegida; es la decisión de
+   abajo.
+4. **Partir `DOCUMENTACION` en dos clases** (publicada y no publicada) para
+   calcar las dos filas del contrato. El motor no tiene ninguna vía para la no
+   publicada -diez de diez encargos de documentación se despacharon a GitHub-,
+   así que sería una clase sin fila en la tabla de activación ni forma de
+   nacer. Descartada, y el contrato lo dice ahora en su propia fila.
 
 ## Decisión
 
-Pendiente: esta versión es la nota de arranque (ADR-001), confirmada antes de
-tocar código. Lo que se propone medir y decidir: que la autoridad por clase se
-derive de una sola definición de las clases con vía GitHub, de la que también
-dependa `TABLA_ACTIVACION`, y que el contrato §11.1 se compruebe contra el
-código en la batería.
+La autoridad por clase se deriva de una sola definición en el dominio de qué clases existen en la vía GitHub (`CLASES_CON_VIA_GITHUB`, en `src/sirius_engine/domain/authority.py`), con su complemento `CLASES_SIN_VIA_GITHUB` declarado también a propósito para que la función siga siendo total y una clase nueva sin declarar reviente como fijó ADR-041; `TABLA_ACTIVACION` queda atada a esa definición por una guarda, y la tabla §11.1 del contrato se lee como dato en la batería y se comprueba fila a fila contra el código. Con eso, documentación e investigación pasan a nacer con autoridad «incidencia», que es lo que llevan siendo de hecho desde ADR-088 y ADR-099.
+
+En concreto:
+
+- `src/sirius_engine/domain/authority.py`: `CLASES_CON_VIA_GITHUB` (programación,
+  auditoría, documentación, investigación), `CLASES_SIN_VIA_GITHUB`
+  (conversación, consulta larga, mixta) y `_TABLA_AUTORIDAD` construida SOLO
+  con lo declarado en una de las dos. `_CLASES_CONMUTABLES` sigue derivándose
+  de la tabla, así que documentación e investigación pueden ahora aparecer en
+  el registro de conmutaciones (§11.3) y revertir (§11.4).
+- `src/sirius_engine/dispatcher.py`: `TABLA_ACTIVACION` no cambia; su
+  comentario dice de qué depende. La atadura es
+  `test_la_via_github_del_despachador_es_exactamente_la_de_la_autoridad`.
+- Contrato §11.1: la fila de investigación dice «sí» en la vía GitHub y
+  «incidencia», con su retirada acordada anotada como estaba; la de
+  «documental no publicada» dice que no tiene clase en el motor; la de
+  «documental publicada» cita ADR-088. Y un párrafo nuevo dice que esa
+  columna es la definición y que la batería la comprueba.
+- `tests/engine/test_authority.py`: las particiones que fijaban la copia
+  cambian de lado; y cinco pruebas nuevas: derivación y totalidad, las dos
+  clases del defecto, la atadura al despachador, el contrato leído como dato
+  (con anti-vacua: la tabla entera cartografiada, fila por fila) y la
+  mutación del lector del contrato.
+- `tests/engine/test_seven_day_streak_cli.py` y `tests/engine/test_supervisor.py`
+  usaban documentación e investigación como ejemplos de «clase MOTOR»:
+  fijaban la copia. Pasan a `CONSULTA_LARGA`, y la racha gana la prueba de
+  que documentación **entra** en la medición.
+
+Quién cambia de comportamiento, medido sobre los llamadores de
+`autoridad_de_clase`: `sirius-racha` (§11.2) empieza a medir esas dos clases;
+`supervisor._bajo_jurisdiccion_del_motor` deja de tratarlas como del motor, así
+que el reconciliador las vigila; `work_intake` las hace nacer con
+`incidencia`; `authority_reversion` puede revertirlas. `dispatch_cli` solo las
+enseña.
 
 ## Comprobación que la sostiene
 
-*(Pendiente: comandos y resultados, al terminar.)*
+Sobre el árbol de esta rama, el 12-09-2026:
+
+- `uv run ruff format --check`, `uv run ruff check src tests`: en verde.
+  `uv run mypy src`: en verde.
+- Pruebas afectadas (`test_authority`, `test_supervisor`,
+  `test_seven_day_streak_cli`, `test_authority_reversion`,
+  `test_seven_day_streak`, `test_dispatcher`, `test_reflect_cli`,
+  `test_carriles_retirados`): **393 en verde**.
+- Las cuatro mutaciones del criterio de parada, sembradas y vistas caer sobre
+  `test_authority.py`, `test_seven_day_streak_cli.py` y `test_supervisor.py`:
+
+| Mutación | Pruebas que caen |
+|---|---|
+| Documentación fuera de la vía GitHub, a mano, como antes | **6**, entre ellas la atadura al despachador y el contrato como dato |
+| La tabla vuelve a escribirse a mano con `MOTOR` para documentación | **6**, entre ellas la de derivación y totalidad |
+| Alguien añade una clase al despachador y no a la autoridad | 1: la atadura |
+| El contrato cambia una fila sin tocar el código | 2: el contrato como dato y el lector mutado |
+
+- Medición (e), sobre el diario real de `estado-del-motor` (76 encargos, 3 no
+  terminales): la racha medía **2** y con la autoridad nueva mide **3**. El
+  que entra es `WI-20260828-122242`, investigación, `active` desde el 28-08,
+  de un carril ya retirado. Ningún encargo de documentación entra hoy: los diez
+  son terminales.
+- Batería entera: se anota en la PR con la cifra medida.
 
 ## Consecuencias
 
-*(Pendiente, al terminar.)*
+- **Documentación e investigación se miden** para la conmutación (§11.2)
+  desde la próxima pasada de `sirius-racha`, y el reconciliador las vigila.
+  Hasta hoy, cero líneas de esas clases en el registro de la racha.
+- **`WI-20260828-122242` va a salir en la próxima pasada** como divergencia
+  vigilada: es una investigación activa de un carril retirado, atascada desde
+  el 28-08. Qué hacer con ella -cancelarla o cerrar su incidencia- es una
+  decisión del propietario, y este ADR solo la hace visible.
+- Los quince encargos históricos no se reescriben: la autoridad se consulta
+  por clase, así que a efectos de racha, supervisor y reversión ya cuentan
+  como `incidencia`; el diario conserva lo que fue.
+- **Añadir una clase a la vía GitHub toca tres sitios**, y olvidar cualquiera
+  pone Quality en rojo: `CLASES_CON_VIA_GITHUB`, `TABLA_ACTIVACION` y la fila
+  del contrato. Antes tocaba dos y nadie vigilaba el tercero.
+- Una clase nueva de `WorkItemClass` sin declarar en ninguno de los dos lados
+  sigue reventando con `KeyError` (ADR-041): derivar no ha abierto ningún
+  valor por defecto en silencio.
+- No decide la ejecución pendiente de ADR-161 (quitar investigación y
+  auditoría de `TABLA_ACTIVACION`): mientras estén, su autoridad es
+  `incidencia`, que es lo que el contrato ya anotaba para ellas.
 
 ## Alternativas descartadas y por qué
 
-*(Pendiente, al terminar.)*
+Las cuatro opciones de arriba, con su razón cada una. Y una quinta: **dejar
+la tabla como estaba y cambiar solo el contrato** para que dijera «motor».
+Descartada porque sería escribir en el contrato lo que el código hace por
+error: quince encargos gobernados por una incidencia con la que el motor no
+se comparaba nunca.
 
 ## La lección
 

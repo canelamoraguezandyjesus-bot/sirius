@@ -9,12 +9,16 @@ exactamente la garantía que este bloque no puede romper.
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 
 from sirius_engine.domain import authority
 from sirius_engine.domain.authority import (
+    CLASES_CON_VIA_GITHUB,
+    CLASES_SIN_VIA_GITHUB,
     Autoridad,
     EntradaConmutacion,
     autoridad_de_clase,
@@ -23,14 +27,20 @@ from sirius_engine.domain.authority import (
 )
 from sirius_engine.domain.work_item import WorkItemClass
 
+# Hasta ADR-177 estas dos tuplas ponían DOCUMENTACION e INVESTIGACION del lado
+# MOTOR: fijaban la copia de la tabla, no la relación con la vía GitHub, y por
+# eso el defecto que ADR-177 corrige pasó dos semanas en verde.
 _CLASES_MOTOR = (
     WorkItemClass.CONVERSACION_NO_APLICA,
-    WorkItemClass.INVESTIGACION,
-    WorkItemClass.DOCUMENTACION,
     WorkItemClass.CONSULTA_LARGA,
     WorkItemClass.MIXTA,
 )
-_CLASES_INCIDENCIA = (WorkItemClass.PROGRAMACION, WorkItemClass.AUDITORIA)
+_CLASES_INCIDENCIA = (
+    WorkItemClass.PROGRAMACION,
+    WorkItemClass.AUDITORIA,
+    WorkItemClass.DOCUMENTACION,
+    WorkItemClass.INVESTIGACION,
+)
 
 
 def _instante(dia: int = 1) -> datetime:
@@ -210,3 +220,134 @@ def test_formatear_es_deterministico() -> None:
         motivo="x",
     )
     assert formatear_entrada_conmutacion(entrada) == formatear_entrada_conmutacion(entrada)
+
+
+# --- ADR-177: la autoridad se deriva de la vía GitHub, y el contrato se lee como dato ---
+
+
+def test_la_autoridad_se_deriva_de_la_via_github_y_es_total() -> None:
+    """La propiedad entera: con vía GitHub, INCIDENCIA; sin ella, MOTOR; y sin huecos."""
+    assert CLASES_CON_VIA_GITHUB.isdisjoint(CLASES_SIN_VIA_GITHUB)
+    assert frozenset(WorkItemClass) == CLASES_CON_VIA_GITHUB | CLASES_SIN_VIA_GITHUB, (
+        "una clase de WorkItemClass no está declarada en ninguno de los dos lados: "
+        "la función dejó de ser total"
+    )
+    for clase in WorkItemClass:
+        esperada = Autoridad.INCIDENCIA if clase in CLASES_CON_VIA_GITHUB else Autoridad.MOTOR
+        assert autoridad_de_clase(clase) is esperada, clase
+
+
+def test_documentacion_e_investigacion_nacen_con_autoridad_incidencia() -> None:
+    """El defecto de ADR-177, con sus dos clases exactas.
+
+    Están en la vía GitHub desde ADR-088 y ADR-099 -quince encargos reales
+    corrieron enteros en ella- y la tabla de autoridad seguía diciendo MOTOR.
+    """
+    assert autoridad_de_clase(WorkItemClass.DOCUMENTACION) is Autoridad.INCIDENCIA
+    assert autoridad_de_clase(WorkItemClass.INVESTIGACION) is Autoridad.INCIDENCIA
+
+
+def test_la_via_github_del_despachador_es_exactamente_la_de_la_autoridad() -> None:
+    """La guarda que faltó dos semanas: las dos tablas hablan del mismo hecho.
+
+    `TABLA_ACTIVACION` decide qué clases se despachan a GitHub; la autoridad se
+    deriva de ese mismo hecho. Si alguien añade una clase a una y no a la
+    otra, esto cae, que es justo lo que ADR-088 y ADR-099 hicieron sin que
+    nada cayera.
+    """
+    from sirius_engine.dispatcher import TABLA_ACTIVACION
+
+    assert set(TABLA_ACTIVACION) == set(CLASES_CON_VIA_GITHUB)
+
+
+_CONTRATO = (
+    Path(__file__).resolve().parents[2]
+    / "docs"
+    / "implementation"
+    / "AUTOMATION_OPERATING_CONTRACT.md"
+)
+
+#: Qué fila de la tabla §11.1 del contrato es qué clase del motor. Las filas
+#: que no están aquí no tienen clase en el motor, y se comprueba que sean
+#: exactamente las esperadas para que un cambio en la tabla no pase en vacío.
+_FILAS_CON_CLASE: dict[str, WorkItemClass] = {
+    "conversación / exploración / consulta": WorkItemClass.CONVERSACION_NO_APLICA,
+    "investigación": WorkItemClass.INVESTIGACION,
+    "documental publicada (PR en el repo)": WorkItemClass.DOCUMENTACION,
+    "programación": WorkItemClass.PROGRAMACION,
+    "auditoría": WorkItemClass.AUDITORIA,
+}
+_FILAS_SIN_CLASE = frozenset({"documental no publicada", "reparación / espera / cancelación"})
+
+
+def _tabla_de_autoridad_del_contrato(texto: str) -> dict[str, tuple[str, str]]:
+    """{clase de trabajo: (¿existe en la vía GitHub?, autoridad)}, tal como está escrita."""
+    seccion = texto.split("### 11.1 Tabla de autoridad", 1)[1].split("### 11.2", 1)[0]
+    filas: dict[str, tuple[str, str]] = {}
+    for linea in seccion.splitlines():
+        if not linea.startswith("|") or set(linea) <= set("-| "):
+            continue
+        celdas = [celda.strip() for celda in linea.strip().strip("|").split("|")]
+        if len(celdas) < 3 or celdas[0] == "Clase de trabajo":
+            continue
+        filas[celdas[0]] = (celdas[1], celdas[2])
+    return filas
+
+
+def _existe_en_la_via_github(celda: str) -> bool:
+    limpio = celda.replace("*", "").strip().lower()
+    if limpio.startswith("sí"):
+        return True
+    if limpio.startswith("no"):
+        return False
+    raise AssertionError(f"la celda «¿Existe en la vía GitHub?» no empieza por sí/no: {celda!r}")
+
+
+def _autoridad_escrita(celda: str) -> Autoridad:
+    limpio = celda.replace("*", "").strip().lower()
+    palabra = re.match(r"[a-záéíóúñ]+", limpio)
+    assert palabra is not None, f"la celda de autoridad no empieza por una palabra: {celda!r}"
+    return Autoridad(palabra.group(0))
+
+
+def test_la_tabla_del_contrato_y_el_codigo_dicen_lo_mismo() -> None:
+    """El contrato §11.1 leído como dato, fila a fila, contra el código.
+
+    Es lo que hace imposible -no improbable- la divergencia que ADR-177
+    encontró: la tabla del contrato decía «documental publicada: sí,
+    incidencia» y el código decía MOTOR, y las dos cosas convivieron desde
+    ADR-088 sin que nada las enfrentara.
+    """
+    filas = _tabla_de_autoridad_del_contrato(_CONTRATO.read_text(encoding="utf-8"))
+
+    # Anti-vacua: la tabla entera está cartografiada, fila por fila.
+    assert set(filas) == set(_FILAS_CON_CLASE) | _FILAS_SIN_CLASE, sorted(filas)
+    # Toda clase con vía GitHub tiene su fila; si mañana entra una nueva, hay
+    # que escribir su fila en el contrato ANTES de poder fusionar.
+    assert frozenset(_FILAS_CON_CLASE.values()) >= CLASES_CON_VIA_GITHUB
+
+    for etiqueta, clase in _FILAS_CON_CLASE.items():
+        via_github, autoridad = filas[etiqueta]
+        assert _existe_en_la_via_github(via_github) == (clase in CLASES_CON_VIA_GITHUB), (
+            f"§11.1 «{etiqueta}»: el contrato dice {via_github!r} y el código "
+            f"{'sí' if clase in CLASES_CON_VIA_GITHUB else 'no'}"
+        )
+        assert _autoridad_escrita(autoridad) is autoridad_de_clase(clase), (
+            f"§11.1 «{etiqueta}»: el contrato dice {autoridad!r} y el código "
+            f"{autoridad_de_clase(clase).value}"
+        )
+
+
+def test_el_lector_de_la_tabla_del_contrato_distingue_una_fila_cambiada() -> None:
+    """Mutación del contrato: un «no» donde el código dice sí no pasa desapercibido."""
+    texto = _CONTRATO.read_text(encoding="utf-8")
+    fila = "| documental publicada (PR en el repo) | sí"
+    assert texto.count(fila) == 1
+    filas = _tabla_de_autoridad_del_contrato(
+        texto.replace(fila, "| documental publicada (PR en el repo) | no", 1)
+    )
+    assert _existe_en_la_via_github(filas["documental publicada (PR en el repo)"][0]) is False
+    # Y con el texto real, dice sí.
+    assert _existe_en_la_via_github(
+        _tabla_de_autoridad_del_contrato(texto)["documental publicada (PR en el repo)"][0]
+    )
