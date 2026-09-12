@@ -15,6 +15,7 @@ Requisitos ejercitados aquí:
 from __future__ import annotations
 
 import importlib
+import itertools
 import json
 import re
 import sys
@@ -34,6 +35,7 @@ from sirius_engine.domain.work_item import WorkItemPhase, WorkItemState
 from sirius_engine.mirror_projection import (
     _LABEL_PRIORITY,
     _LABEL_STATE,
+    _estado_y_fase,
     leer_y_proyectar_run,
     leer_y_proyectar_work_item,
     proyectar_run,
@@ -359,9 +361,11 @@ def test_etiquetas_de_estado_contradictorias_no_eligen_una_ganadora() -> None:
 
 
 def test_par_de_activacion_planned_e_implement_requested_no_es_contradiccion() -> None:
-    """La única excepción real: `sirius_validate_activation.sh` exige
-    `sirius:planned` y `implement-sirius-work.yml` retira las dos juntas al
-    consumir el evento, así que esta combinación es una activación normal.
+    """`sirius_validate_activation.sh` exige `sirius:planned` y
+    `implement-sirius-work.yml` retira las dos juntas al consumir el evento:
+    esta combinación es una activación normal. Ya no está exenta por una lista
+    escrita a mano, sino porque las dos etiquetas proyectan `(PLANNED,
+    PREPARAR)` -es una de las cuatro parejas que la tabla exime sola.
     """
     metadatos = LecturaMetadatos(
         estado=LecturaEstado.OK,
@@ -386,6 +390,117 @@ def test_par_de_activacion_planned_e_implement_requested_no_es_contradiccion() -
     assert mirrored.etiquetas_contradictorias is False
     assert mirrored.estado is WorkItemState.PLANNED
     assert mirrored.fase is WorkItemPhase.PREPARAR
+
+
+# --- La contradicción es de destinos, no de cardinalidad ---------------------
+#
+# Reproducido el 12-09-2026 sobre la incidencia real #592: contar etiquetas en
+# vez de mirar a dónde apuntan convertía una incidencia sana en una avería de
+# tablero. Las tres pruebas de abajo fijan las tres mitades del criterio: la
+# pareja que convive por diseño, la puerta que NO se puede debilitar, y que la
+# exención se derive de `_LABEL_STATE` en vez de escribirse a mano.
+
+
+def test_repair_requested_y_repairing_conviven_sin_contradiccion() -> None:
+    """El fallo de #592: las dos etiquetas del corrector a la vez.
+
+    `sirius:repair-requested` y `sirius:repairing` son las dos `(ACTIVE,
+    REPARAR)` en `_LABEL_STATE` y conviven por diseño mientras el corrector
+    trabaja. Con el criterio de cardinalidad la proyección devolvía `(None,
+    None, True)` y el tablero de ADR-175 acusaba al propietario de unas
+    etiquetas contradictorias que no lo eran.
+
+    Mutación: volver a `len(presentes) > 1` -con o sin la pareja de activación
+    exenta a mano- deja esta prueba en rojo.
+    """
+    metadatos = LecturaMetadatos(
+        estado=LecturaEstado.OK,
+        metadatos=MetadatosIncidencia(
+            numero=592,
+            titulo="t",
+            estado_gh="open",
+            etiquetas=("sirius:repair-requested", "sirius:repairing"),
+        ),
+    )
+    cuerpo = _cuerpo_de_confianza("")
+    comentarios = LecturaComentarios(estado=LecturaEstado.OK, comentarios=())
+
+    mirrored = proyectar_work_item(
+        repo=_REPO,
+        numero=592,
+        metadatos=metadatos,
+        cuerpo=cuerpo,
+        comentarios=comentarios,
+        ahora=_AHORA,
+    )
+    assert mirrored.etiquetas_contradictorias is False
+    assert mirrored.estado is WorkItemState.ACTIVE
+    assert mirrored.fase is WorkItemPhase.REPARAR
+
+
+def test_completed_y_failed_safely_siguen_siendo_contradiccion() -> None:
+    """Lo que la puerta protege y no se puede debilitar al derivar el criterio.
+
+    Es el caso MEDIDO EN PRODUCCIÓN que cita `_ventana_contradiccion`
+    (incidencia #353): dos desenlaces incompatibles pegados a la vez. Apuntan a
+    estados distintos -`DELIVERED` y `FAILED_SAFELY`-, así que siguen dando
+    contradicción.
+
+    Mutación: eximir por «más de una etiqueta» o por «mismo estado» sin mirar
+    la fase deja esta prueba en rojo.
+    """
+    metadatos = LecturaMetadatos(
+        estado=LecturaEstado.OK,
+        metadatos=MetadatosIncidencia(
+            numero=353,
+            titulo="t",
+            estado_gh="closed",
+            etiquetas=("sirius:completed", "sirius:failed-safely"),
+        ),
+    )
+    cuerpo = _cuerpo_de_confianza("")
+    comentarios = LecturaComentarios(estado=LecturaEstado.OK, comentarios=())
+
+    mirrored = proyectar_work_item(
+        repo=_REPO,
+        numero=353,
+        metadatos=metadatos,
+        cuerpo=cuerpo,
+        comentarios=comentarios,
+        ahora=_AHORA,
+    )
+    assert mirrored.estado is None
+    assert mirrored.fase is None
+    assert mirrored.etiquetas_contradictorias is True
+
+
+def test_la_exencion_se_deriva_de_la_tabla_y_no_de_una_lista_a_mano() -> None:
+    """Las 78 parejas del vocabulario, decididas por `_LABEL_STATE`.
+
+    Ninguna pareja está exenta por figurar en una lista: lo está si y solo si
+    las dos etiquetas proyectan el MISMO `(estado, fase)`. Hoy eso exime 4 de
+    78 parejas -activación, ejecución, revisión y reparación- y deja 74 como
+    contradicción; la prueba no escribe ese reparto, lo deriva, así que una
+    fila nueva en la tabla entra sola.
+
+    Mutación: cualquier exención escrita a mano -incluida la
+    `_PAR_DE_ACTIVACION_VALIDO` que este cambio retira- deja esta prueba en
+    rojo en cuanto no coincide con la tabla.
+    """
+    parejas = list(itertools.combinations(sorted(_LABEL_STATE), 2))
+    assert len(parejas) == 78, "el vocabulario cambió de tamaño: revisa la medición del ADR"
+
+    exentas = [(a, b) for a, b in parejas if _LABEL_STATE[a] == _LABEL_STATE[b]]
+    assert exentas, "sin ninguna pareja exenta la prueba no comprobaría nada"
+
+    for a, b in parejas:
+        estado, fase, contradictorias = _estado_y_fase((a, b))
+        if _LABEL_STATE[a] == _LABEL_STATE[b]:
+            assert contradictorias is False, f"{a} + {b} proyectan lo mismo: no es contradicción"
+            assert (estado, fase) == _LABEL_STATE[a], f"{a} + {b} deben proyectar su destino común"
+        else:
+            assert contradictorias is True, f"{a} + {b} apuntan a destinos distintos"
+            assert estado is None and fase is None
 
 
 def test_comentario_no_confiable_no_se_interpreta_como_marcador() -> None:
