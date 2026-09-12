@@ -81,6 +81,7 @@ from sirius_engine.ports.github_mirror import (
     MetadatosIncidencia,
 )
 from sirius_engine.reflect import (
+    PASO_CANCELADO,
     PASO_COMPROBACION_INICIADA,
     PASO_DECISION_RESUELTA,
     PASO_EJECUCION_INICIADA,
@@ -126,6 +127,7 @@ def _espejo(
     fase: WorkItemPhase | None,
     etiquetas: tuple[str, ...] = (),
     etiquetas_contradictorias: bool = False,
+    cerrada: bool = False,
     head_sha: str | None = None,
     diagnostico_fallo: str | None = None,
     reanudacion_publicada: bool = False,
@@ -165,7 +167,7 @@ def _espejo(
         fase=fase,
         etiquetas=etiquetas,
         etiquetas_contradictorias=etiquetas_contradictorias,
-        cerrada=False,
+        cerrada=cerrada,
         pr_url=None,
         head_sha=head_sha,
         rondas=(),
@@ -2754,3 +2756,220 @@ def test_una_parada_con_su_tramo_en_el_recorrido_se_sigue_recorriendo_entera() -
 
     assert resultado.divergencia is None
     assert PASO_ESCALADO in tuple(paso.kind for paso in resultado.pasos)
+
+
+# --- Sección H: el cierre de la incidencia es un desenlace (regla 7, ADR-173) ---
+#
+# Lo medido el 12-09-2026, que es de donde sale esta sección: `DESENLACES.md`
+# de `estado-del-motor` (commit 9c573a8) contaba 21 encargos en `active`, el
+# más viejo del 25-08, y las 21 incidencias estaban CERRADAS en GitHub. La
+# pasada de esa madrugada (run 34671426587) imprimió una sola línea: `Pasos
+# aplicados en total: 0.`. Las seis reglas anteriores leen etiquetas, y una
+# etiqueta se congela el día que alguien cierra la incidencia.
+
+
+def _plan_y_estado_final(
+    store: InMemoryWorkEngineStore, work_item: WorkItem, espejo: MirroredWorkItem
+) -> tuple[tuple[str, ...], WorkItem]:
+    """El plan que sale, y el ``WorkItem`` al que llega aplicándolo de verdad."""
+    resultado = reflejar_desenlace(work_item, espejo, _episodio())
+    aplicar_pasos(store, work_item.work_id, resultado.pasos, now=_AHORA)
+    final = store.get_work_item(work_item.work_id)
+    assert final is not None
+    return tuple(paso.kind for paso in resultado.pasos), final
+
+
+def test_cerrada_con_etiqueta_no_terminal_termina_el_encargo_como_cancelado() -> None:
+    """El caso de #489: `sirius:ci-pending` congelado en una incidencia cerrada.
+
+    La etiqueta proyecta el MISMO `(ACTIVE, COMPROBAR)` en el que el encargo
+    ya está, así que la regla 5 -idempotencia- devuelve el plan vacío y el
+    encargo se queda `active` para siempre. Con el cierre leído, se acaba.
+    """
+    store = InMemoryWorkEngineStore()
+    activo = _work_item_activo(store)
+    en_comprobar = store.begin_work_item_check(
+        store.begin_work_item_execution(activo.work_id, now=_AHORA).work_id, now=_AHORA
+    )
+    espejo = _espejo(
+        estado=WorkItemState.ACTIVE,
+        fase=WorkItemPhase.COMPROBAR,
+        etiquetas=("sirius:ci-pending",),
+        cerrada=True,
+    )
+
+    kinds, final = _plan_y_estado_final(store, en_comprobar, espejo)
+
+    assert kinds == (PASO_ESCALADO, PASO_DECISION_RESUELTA)
+    assert final.estado is WorkItemState.CANCELLED
+
+
+def test_la_misma_incidencia_abierta_no_cancela_nada() -> None:
+    """El contraste exacto del caso anterior: lo único que cambia es `cerrada`."""
+    store = InMemoryWorkEngineStore()
+    activo = _work_item_activo(store)
+    en_comprobar = store.begin_work_item_check(
+        store.begin_work_item_execution(activo.work_id, now=_AHORA).work_id, now=_AHORA
+    )
+    espejo = _espejo(
+        estado=WorkItemState.ACTIVE,
+        fase=WorkItemPhase.COMPROBAR,
+        etiquetas=("sirius:ci-pending",),
+        cerrada=False,
+    )
+
+    kinds, final = _plan_y_estado_final(store, en_comprobar, espejo)
+
+    assert kinds == ()
+    assert final.estado is WorkItemState.ACTIVE
+    assert final.fase is WorkItemPhase.COMPROBAR
+
+
+def test_cerrada_con_completed_entrega_y_no_cancela() -> None:
+    """El cierre llega DESPUÉS de las etiquetas: si entregan, aquí no queda nada."""
+    store = InMemoryWorkEngineStore()
+    activo = _work_item_activo(store)
+    espejo = _espejo(
+        estado=WorkItemState.DELIVERED,
+        fase=WorkItemPhase.ENTREGAR,
+        etiquetas=("sirius:completed",),
+        cerrada=True,
+        head_sha="abc123",
+    )
+
+    kinds, final = _plan_y_estado_final(store, activo, espejo)
+
+    assert PASO_CANCELADO not in kinds
+    assert kinds[-1] == PASO_ENTREGADO
+    assert final.estado is WorkItemState.DELIVERED
+
+
+def test_cerrada_sobre_una_parada_segura_la_cancela() -> None:
+    """El caso de #481: `sirius:failed-safely` en una incidencia que ya se cerró.
+
+    La parada se refleja igual que siempre -con su diagnóstico- y el cierre la
+    termina: una incidencia cerrada no se puede reanudar, así que esa parada no
+    va a salir de ahí nunca.
+    """
+    store = InMemoryWorkEngineStore()
+    activo = _work_item_activo(store)
+    espejo = _espejo(
+        estado=WorkItemState.FAILED_SAFELY,
+        fase=None,
+        etiquetas=("sirius:failed-safely",),
+        cerrada=True,
+        diagnostico_fallo="se acabó el tiempo",
+    )
+
+    kinds, final = _plan_y_estado_final(store, activo, espejo)
+
+    assert kinds == (PASO_FALLO_SEGURO, PASO_CANCELADO)
+    assert final.estado is WorkItemState.CANCELLED
+    assert final.diagnostico == "se acabó el tiempo"
+
+
+def test_cerrada_sobre_una_decision_pendiente_la_cancela_por_decision() -> None:
+    """El caso de #459: `sirius:blocked-decision` en una incidencia cerrada.
+
+    Se sale por `resolve_decision(continuar=False)` y no por `cancel` porque
+    el dominio no admite `cancel` desde `NEEDS_DECISION` (§3.2): cancelar ahí
+    es parte de la decisión registrada, no un «cancelar» a secas.
+    """
+    store = InMemoryWorkEngineStore()
+    activo = _work_item_activo(store)
+    espejo = _espejo(
+        estado=WorkItemState.NEEDS_DECISION,
+        fase=None,
+        etiquetas=("sirius:blocked-decision",),
+        cerrada=True,
+    )
+
+    kinds, final = _plan_y_estado_final(store, activo, espejo)
+
+    assert kinds == (PASO_ESCALADO, PASO_DECISION_RESUELTA)
+    assert final.estado is WorkItemState.CANCELLED
+
+
+def test_el_cierre_no_pisa_unas_etiquetas_contradictorias() -> None:
+    """El caso de #392: `sirius:failed-safely` y `sirius:completed` a la vez.
+
+    El cierre cierra lo que las etiquetas dejaron SIN cerrar, no lo que
+    dejaron en disputa. Este encargo se queda `active` a propósito, con su
+    divergencia impresa en cada pasada: es el único que un humano tiene que
+    mirar.
+    """
+    store = InMemoryWorkEngineStore()
+    activo = _work_item_activo(store)
+    espejo = _espejo(
+        estado=None,
+        fase=None,
+        etiquetas=("sirius:failed-safely", "sirius:completed"),
+        etiquetas_contradictorias=True,
+        cerrada=True,
+    )
+
+    resultado = reflejar_desenlace(activo, espejo, _episodio())
+
+    assert resultado.pasos == ()
+    assert resultado.divergencia is not None
+    assert "se contradicen" in resultado.divergencia
+
+
+def test_el_cierre_no_pisa_una_divergencia_hacia_atras() -> None:
+    """Una parada sin permiso escrito sigue conservándose, cerrada o no.
+
+    Es la familia que costó cuatro rondas en la PR #530: sin el marcador de
+    reanudación no hay reanudación. El cierre no es un permiso.
+    """
+    store = InMemoryWorkEngineStore()
+    activo = _work_item_activo(store)
+    parado = store.fail_work_item_safely(activo.work_id, diagnostico="se paró", now=_AHORA)
+    espejo = _espejo(
+        estado=WorkItemState.ACTIVE,
+        fase=WorkItemPhase.EJECUTAR,
+        etiquetas=("sirius:implementing",),
+        cerrada=True,
+    )
+
+    resultado = reflejar_desenlace(parado, espejo, _episodio())
+
+    assert resultado.pasos == ()
+    assert resultado.divergencia is not None
+    final = store.get_work_item(parado.work_id)
+    assert final is not None and final.estado is WorkItemState.FAILED_SAFELY
+
+
+def test_cerrada_sin_ninguna_etiqueta_de_estado_tambien_termina_el_encargo() -> None:
+    """El caso de #333 y #349: la incidencia se cerró sin etiqueta ninguna.
+
+    La regla 2 devuelve plan vacío «sin motivo» porque ese es el estado normal
+    de una incidencia recién despachada. Cerrada, ya no lo es.
+    """
+    store = InMemoryWorkEngineStore()
+    activo = _work_item_activo(store)
+    espejo = _espejo(estado=None, fase=None, etiquetas=(), cerrada=True)
+
+    kinds, final = _plan_y_estado_final(store, activo, espejo)
+
+    assert kinds == (PASO_ESCALADO, PASO_DECISION_RESUELTA)
+    assert final.estado is WorkItemState.CANCELLED
+
+
+def test_el_cierre_no_inventa_una_transicion_que_el_dominio_no_admita() -> None:
+    """Criterio de parada (b) de ADR-173: antes que inventar, se dice qué falta.
+
+    `WAITING` es el único estado no terminal sin ruta al cierre en el
+    vocabulario de hoy -`cancel` no es legal desde ahí-. En vez de forzar una
+    transición nueva, se devuelve el motivo y no se toca nada.
+    """
+    store = InMemoryWorkEngineStore()
+    activo = _work_item_activo(store)
+    esperando = store.dispatch_work_item_async(activo.work_id, now=_AHORA)
+    espejo = _espejo(estado=None, fase=None, etiquetas=(), cerrada=True)
+
+    resultado = reflejar_desenlace(esperando, espejo, _episodio())
+
+    assert resultado.pasos == ()
+    assert resultado.divergencia is not None
+    assert "waiting" in resultado.divergencia
+    assert "no sabe salir" in resultado.divergencia
