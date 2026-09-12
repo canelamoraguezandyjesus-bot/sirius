@@ -10,6 +10,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from sirius.domain import relevance as relevance_module
 from sirius.domain.criticality import Criticality
 from sirius.domain.decision import Decision, DecisionRevision, DecisionStatus
 from sirius.domain.memory import Memory, MemoryRevision, MemoryStatus
@@ -22,7 +23,6 @@ from sirius.domain.relevance import (
     category_index_matches_query,
     category_matches_query,
     cupo_del_filtro,
-    pide_contexto,
     rank_relevant_knowledge,
     recortar_al_cupo,
     rescue_max_criticality_candidates,
@@ -579,30 +579,22 @@ def test_a_criticality_match_alone_is_not_enough_when_the_gate_is_closed() -> No
     assert rank_relevant_knowledge([candidate]) == ()
 
 
-# --- M20 (ADR-129, incidencia #516): pide_contexto — the request's own ---
-# --- proposito, never a guess over the query text, replica of the ---
-# --- harness's _pide_contexto (staged_engine_category_and_relevance.py: ---
-# --- 403-409). ---
+# --- ADR-177 (H4 de ADR-148, incidencia #581): el dominio ya no decide -----
+# --- la siembra por subcadena. `pide_contexto`/`PROPOSITO_DE_CONTEXTO` ----
+# --- se retiran de `relevance` con sus cuatro pruebas: lo que activaba ----
+# --- aquella función lo declara ahora `Peticion.amplia_por_categoria`, y --
+# --- lo fijan las pruebas de integración del consumidor real -------------
+# --- (`test_rank_relevant_knowledge.py`), la del traductor del banco y ----
+# --- la del intérprete. Esta prueba es el candado de la retirada: si el ---
+# --- nombre reaparece en el dominio, alguien está volviendo a decidir -----
+# --- un camino de recuperación leyendo texto libre. ----------------------
 
 
-def test_pide_contexto_is_true_when_proposito_names_context() -> None:
-    assert pide_contexto("ensamblar_contexto_b05")
-
-
-def test_pide_contexto_is_true_for_the_real_production_purpose() -> None:
-    # M16 (ADR-124): la única llamada real a rank() declara este propósito,
-    # que contiene la subcadena "contexto" a propósito.
-    assert pide_contexto("recuperacion de contexto relevante (B6b)")
-
-
-def test_pide_contexto_is_case_insensitive() -> None:
-    assert pide_contexto("ENSAMBLAR EL CONTEXTO")
-    assert pide_contexto("Contexto")
-
-
-def test_pide_contexto_is_false_without_the_word_contexto() -> None:
-    assert not pide_contexto("consultar")
-    assert not pide_contexto("")
+def test_el_dominio_ya_no_expone_ninguna_regla_de_subcadena_sobre_el_proposito() -> None:
+    assert not hasattr(relevance_module, "pide_contexto")
+    assert not hasattr(relevance_module, "PROPOSITO_DE_CONTEXTO")
+    assert "pide_contexto" not in relevance_module.__all__
+    assert "PROPOSITO_DE_CONTEXTO" not in relevance_module.__all__
 
 
 # --- M20 (ADR-129, incidencia #516): seeded, the sixth structural signal, --

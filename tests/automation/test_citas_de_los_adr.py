@@ -172,6 +172,10 @@ _ADR_170 = (
     "ADR-170-dec-001-entra-por-pertenencia-a-su-lista-cerrada-portar-los-miembros-del-origen-"
     "y-que-g4-decida-por-pertenencia.md"
 )
+_ADR_177 = (
+    "ADR-177-la-ampliacion-por-categoria-entra-por-una-senal-explicita-de-la-peticion-"
+    "no-por-la-subcadena-contexto.md"
+)
 
 RAMA_DE_ORIGEN_NO_FUSIONADA: dict[str, list[str]] = {
     "experiments/adr002/round/cases.py": [
@@ -266,7 +270,16 @@ RAMA_DE_ORIGEN_NO_FUSIONADA: dict[str, list[str]] = {
         # sigue sin fusionarse a Sirius.
         _ADR_129,
     ],
-    "experiments/adr002/lateral/categoria.py:_pide_contexto": [_ADR_112, _ADR_113, _ADR_115],
+    # ADR-177 (H4 de ADR-148, incidencia #581) cita el mismo símbolo del
+    # laboratorio para decir de dónde venía la regla de subcadena que retira
+    # del dominio: la cita es histórica —cuenta qué se portó y por qué deja
+    # de decidir— y el fichero de origen sigue sin fusionarse a Sirius.
+    "experiments/adr002/lateral/categoria.py:_pide_contexto": [
+        _ADR_112,
+        _ADR_113,
+        _ADR_115,
+        _ADR_177,
+    ],
     # ADR-132 (G1, incidencia #522) registra el guardián del contrato local de
     # Ollama y la corrección de ollama_category_classifier.py. Cita la mina de
     # aprendizaje operativo de 2026-09 que aprobó la propuesta y la nota de

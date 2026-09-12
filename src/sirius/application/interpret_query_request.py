@@ -21,13 +21,17 @@ QUÉ INFIERE EL MODELO Y QUÉ NO
 - **El modelo local** (``QueryIntentClassifierPort``) infiere lo que la
   pregunta declara: modo, cardinalidad, límite y tiempo (objetivo y corte de
   registro). Es lo que depende de entender la frase.
-- **Las reglas del producto** deciden el **permiso** y el **propósito**. El
-  permiso gobierna qué se puede mirar: no puede depender de lo que un modelo
-  crea entender de una frase, porque una frase persuasiva ampliaría entonces
-  lo que Sirius se autoriza a leer. La regla es la misma que el traductor
+- **Las reglas del producto** deciden el **permiso**, el **propósito** y la
+  **ampliación por categoría** (``AMPLIACION_POR_CATEGORIA_ORDINARIA``,
+  ADR-177). El permiso gobierna qué se puede mirar: no puede depender de lo
+  que un modelo crea entender de una frase, porque una frase persuasiva
+  ampliaría entonces lo que Sirius se autoriza a leer. Por la misma razón la
+  ampliación entra como señal explícita y no por el texto del propósito. La
+  regla es la misma que el traductor
   del banco declara (``tests/acceptance/staged_engine_case_translation.py``):
   ``Peticion`` no tiene campo de permiso, y un permiso sin autorizar se
-  traduce como **propósito vacío**, que ``G1`` bloquea antes de recuperar.
+  traduce como **propósito vacío**, que ``G1`` bloquea antes de recuperar —y
+  que apaga también la ampliación.
 
 RESPALDO
 ========
@@ -57,25 +61,50 @@ from sirius.ports.clock import Clock
 from sirius.ports.query_intent_classifier import QueryIntentClassifierPort
 
 __all__ = [
+    "AMPLIACION_POR_CATEGORIA_ORDINARIA",
     "INTENCION_ORDINARIA",
     "LIMITE_SIN_ATAR",
     "PROPOSITO_RECUPERACION_ORDINARIA",
     "InterpreteDePeticion",
     "PermisoDeRecuperacion",
     "ambito_de_recuperacion",
+    "ampliacion_efectiva",
     "proposito_efectivo",
 ]
 
 #: Propósito declarado de una recuperación de contexto ordinaria: ``E0``
-#: exige uno no vacío (``G1``). Contiene la subcadena ``"contexto"`` a
-#: propósito, la misma condición que ``pide_contexto`` exige para la siembra
-#: de M20 (ADR-129), porque la única llamada real al caso de uso (hoy
-#: ``rank_con_cupo()``, ADR-169) ocurre desde
-#: ``ContextBuilder._rank_related_knowledge`` para ensamblar el contexto de
-#: un turno — un hecho estructural sobre quién llama, no una adivinanza
-#: sobre la consulta. Estaba en ``rank_relevant_knowledge`` hasta ADR-164 y
-#: se mueve aquí sin cambiar una letra.
+#: exige uno no vacío (``G1``). Describe lo que la llamada hace, porque la
+#: única llamada real al caso de uso (hoy ``rank_con_cupo()``, ADR-169)
+#: ocurre desde ``ContextBuilder._rank_related_knowledge`` para ensamblar el
+#: contexto de un turno — un hecho estructural sobre quién llama, no una
+#: adivinanza sobre la consulta. Estaba en ``rank_relevant_knowledge`` hasta
+#: ADR-164 y se mueve aquí sin cambiar una letra.
+#:
+#: Hasta ADR-177 este literal encendía además la ampliación por categoría,
+#: por el accidente de contener la subcadena ``"contexto"``. Ya no: el texto
+#: del propósito no decide nada (H4 de ADR-148, incidencia #581), y quien
+#: pide la ampliación es ``AMPLIACION_POR_CATEGORIA_ORDINARIA``, abajo.
 PROPOSITO_RECUPERACION_ORDINARIA: Final = "recuperacion de contexto relevante (B6b)"
+
+#: Si una petición interpretada pide la ampliación por categoría (M20,
+#: ADR-129; ``Peticion.amplia_por_categoria``): **sí**, y este es el porqué
+#: (H4 de ADR-148, ADR-177, incidencia #581).
+#:
+#: El intérprete traduce la consulta a modo, cardinalidad, límite y tiempo,
+#: pero **no infiere para qué** se recupera: no hay hoy ninguna señal en la
+#: pregunta que separe «esto merece toda la identidad no ordinaria del
+#: ámbito» de «esto no». Mientras no la haya, lo honesto es pedir la
+#: recuperación más amplia y dejar el recorte a quien sabe recortar —el
+#: filtro de relevancia (ADR-125) con el rescate RF-25/RF-26 (M19b) y el
+#: presupuesto de contexto—, porque el coste de recuperar de más es ruido
+#: que el filtro poda, y el de recuperar de menos es una identidad crítica
+#: que no llega nunca.
+#:
+#: Es la decisión que el sistema ya aplicaba sin que nadie la hubiera
+#: tomado: toda petición de producción amplía hoy, porque el literal del
+#: propósito lleva dentro la palabra «contexto». ADR-177 no la cambia —el
+#: conjunto de peticiones que amplían es el mismo, medido—, la deja escrita.
+AMPLIACION_POR_CATEGORIA_ORDINARIA: Final = True
 
 #: Límite que "no ata" (misma convención que
 #: ``experiments/adr002/round/cases.py``: "los casos que no declaran limite
@@ -141,6 +170,22 @@ def proposito_efectivo(permiso: PermisoDeRecuperacion, proposito_declarado: str)
     return proposito_declarado
 
 
+def ampliacion_efectiva(permiso: PermisoDeRecuperacion, amplia_declarada: bool) -> bool:
+    """La misma regla del permiso, ahora dicha en voz alta (ADR-177).
+
+    Un permiso sin autorizar ya apagaba la ampliación, pero lo hacía **de
+    rebote**: ``proposito_efectivo`` vaciaba el propósito y el propósito
+    vacío no contenía la subcadena «contexto». Nadie lo había decidido y
+    ninguna prueba lo fijaba. Con la señal explícita eso dejaría de ocurrir
+    solo, así que se escribe: una operación que no está autorizada a
+    recuperar tampoco lo está a recuperar MÁS, y la ampliación se apaga
+    aquí, en el mismo sitio y por la misma razón que el propósito se vacía.
+    """
+    if permiso is PermisoDeRecuperacion.NO_AUTORIZADO:
+        return False
+    return amplia_declarada
+
+
 class _RelojDelSistema:
     """El reloj real, el único que este módulo usa fuera de las pruebas."""
 
@@ -178,12 +223,14 @@ class InterpreteDePeticion:
         active_project_id: int | None,
         permiso: PermisoDeRecuperacion = PermisoDeRecuperacion.AUTORIZADO,
         proposito: str = PROPOSITO_RECUPERACION_ORDINARIA,
+        amplia_por_categoria: bool = AMPLIACION_POR_CATEGORIA_ORDINARIA,
     ) -> Peticion:
         """La ``Peticion`` de esta consulta concreta.
 
         El modelo decide modo, cardinalidad, límite y tiempo; las reglas
-        deciden permiso y propósito; el ámbito sale del proyecto activo
-        (M16). Nada más entra: ``objetivos`` se queda en 1 porque la cuota de
+        deciden permiso, propósito y ampliación por categoría (ADR-177); el
+        ámbito sale del proyecto activo (M16). Nada más entra: ``objetivos``
+        se queda en 1 porque la cuota de
         ``EXACTA`` que el banco usa
         (``max(1, len(caso["resultado_esperado"]))``) es **adjudicación** —el
         número de elementos que alguien ya decidió que el caso espera—, y
@@ -195,6 +242,7 @@ class InterpreteDePeticion:
             operation_id=operation_id,
             consulta=query_text,
             proposito=proposito_efectivo(permiso, proposito),
+            amplia_por_categoria=ampliacion_efectiva(permiso, amplia_por_categoria),
             modo=intencion.modo,
             ambito=ambito_de_recuperacion(active_project_id),
             ventana=VentanaTemporal(

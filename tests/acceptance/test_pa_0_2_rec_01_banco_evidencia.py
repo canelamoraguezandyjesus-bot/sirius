@@ -120,7 +120,11 @@ from typing import Any, Final
 
 import pytest
 from sqlalchemy import text
-from staged_engine_case_translation import peticion_desde_caso
+from staged_engine_case_translation import (
+    PERMISO_SIN_AUTORIZAR,
+    PROPOSITOS_QUE_AMPLIAN_POR_CATEGORIA,
+    peticion_desde_caso,
+)
 from staged_engine_category_and_relevance import (
     CATEGORIA_DE_MAXIMA_CRITICIDAD,
     VOCABULARIO_DE_CATEGORIA,
@@ -280,11 +284,14 @@ _MINIMO_ELEMENTOS_HALLADOS_MOTOR: Final[int] = 68
 #:
 #: M20 (ADR-129, incidencia #516) porta la siembra en contexto
 #: (`RankRelevantKnowledgeUseCase._rank_via_staged_engine`'s bloque
-#: `siembra`): dado que `_peticion_ordinaria` declara el mismo propósito fijo
-#: para las 47 consultas (M16, ADR-124), `pide_contexto` es cierto para
-#: TODAS, no solo para las dos que el fixture del arnés de examen declara con
-#: propósito de contexto — la siembra actúa en cada turno, tal como registra
-#: el docstring de `_rank_via_staged_engine`. Eso amplía cada una de las 47
+#: `siembra`): dado que `_peticion_ordinaria` enciende la señal explícita de
+#: ampliación (`Peticion.amplia_por_categoria`, vía
+#: `_AMPLIACION_DE_LA_RECUPERACION_ORDINARIA`) para las 47 consultas (M16,
+#: ADR-124; ADR-177), la siembra actúa en TODAS, no solo en las dos que el
+#: fixture del arnés de examen declara con propósito de contexto — actúa en
+#: cada turno, tal como registra el docstring de `_rank_via_staged_engine`.
+#: Hasta ADR-177 el mecanismo era otro (`pide_contexto` sobre el texto del
+#: propósito) y el efecto medido aquí, el mismo. Eso amplía cada una de las 47
 #: filas con todo lo no ordinario de su ámbito, sin cota (predicho: "elementos
 #: de más suben claramente y sin cota", ADR-129) — ningún caso conserva ya un
 #: acierto exacto (`aciertos_exactos` 7 → 0/47), mientras que
@@ -1278,6 +1285,86 @@ def test_peticion_desde_caso_no_asigna_cuota_cero_a_exacta_sin_resultado() -> No
             caso, operation_id="test", ambito=ambito, limite_sin_atar=limite_sin_atar
         )
         assert peticion.objetivos == 1
+
+
+#: ADR-177 (H4 de ADR-148, incidencia #581): los dos únicos casos del banco
+#: que piden la ampliación por categoría. Son exactamente los dos que la
+#: pedían antes del cambio —los únicos con propósito `ensamblar_contexto_b05`,
+#: el único de los siete propósitos declarados que contenía la subcadena
+#: «contexto»—, y esa igualdad es el criterio de equivalencia de ADR-177: la
+#: lista cerrada no amplía ni recorta el conjunto, solo lo dice.
+_CASOS_QUE_AMPLIAN_POR_CATEGORIA: Final[frozenset[str]] = frozenset({"B04-CA-33", "B04-CA-34"})
+
+
+def test_la_traduccion_enciende_la_ampliacion_exactamente_en_los_dos_casos_de_contexto() -> None:
+    """ADR-177, tercer caso de aceptación: `peticion_desde_caso` enciende
+    `amplia_por_categoria` por PERTENENCIA a
+    `PROPOSITOS_QUE_AMPLIAN_POR_CATEGORIA`, y el conjunto resultante sobre
+    las 47 filas es el mismo que la subcadena producía.
+
+    Se recorre el banco entero en vez de los dos casos nombrados: así la
+    prueba falla tanto si alguno de los dos deja de encenderse como si un
+    tercero se enciende, que es la mitad que una lista de dos no cubriría.
+    Y se comprueba, al lado, que la equivalencia no es una coincidencia de
+    nombres: el conjunto que la regla RETIRADA (la subcadena «contexto»
+    sobre el propósito declarado) producía es exactamente este."""
+    banco = _fixture()
+    ambito = Ambito(global_=True, proyectos=())
+    limite_sin_atar = banco["conteos"]["items_del_canon"]
+
+    amplian = set()
+    amplian_con_la_regla_retirada = set()
+    for caso in banco["casos"]:
+        peticion = peticion_desde_caso(
+            caso, operation_id="test", ambito=ambito, limite_sin_atar=limite_sin_atar
+        )
+        if peticion.amplia_por_categoria:
+            amplian.add(caso["id"])
+        proposito_declarado = str(caso["peticion_p2"]["proposito"])
+        if (
+            caso["peticion_p2"]["permiso"] != PERMISO_SIN_AUTORIZAR
+            and "contexto" in proposito_declarado.casefold()
+        ):
+            amplian_con_la_regla_retirada.add(caso["id"])
+
+    assert amplian == _CASOS_QUE_AMPLIAN_POR_CATEGORIA
+    assert amplian == amplian_con_la_regla_retirada
+    assert frozenset({"ensamblar_contexto_b05"}) == PROPOSITOS_QUE_AMPLIAN_POR_CATEGORIA
+
+
+def test_la_traduccion_apaga_la_ampliacion_sin_permiso() -> None:
+    """ADR-177: `PERMISO_SIN_AUTORIZAR` apaga la ampliación en el banco, y
+    ahora explícitamente en vez de de rebote (antes salía de que el propósito
+    se vaciaba y el vacío no contenía la subcadena).
+
+    Se ejercita sobre `B04-CA-33`, uno de los dos que SÍ amplían, con su
+    permiso sustituido: sin ese contraste la prueba pasaría por la razón
+    equivocada —cualquier caso que no ampliase de todos modos la cumpliría—.
+    El propósito declarado sigue estando en la lista cerrada; lo que lo apaga
+    es el permiso."""
+    banco = _fixture()
+    casos_por_id = {caso["id"]: caso for caso in banco["casos"]}
+    ambito = Ambito(global_=True, proyectos=())
+    limite_sin_atar = banco["conteos"]["items_del_canon"]
+
+    caso = casos_por_id["B04-CA-33"]
+    assert caso["peticion_p2"]["proposito"] in PROPOSITOS_QUE_AMPLIAN_POR_CATEGORIA
+    assert caso["peticion_p2"]["permiso"] != PERMISO_SIN_AUTORIZAR
+    con_permiso = peticion_desde_caso(
+        caso, operation_id="test", ambito=ambito, limite_sin_atar=limite_sin_atar
+    )
+    assert con_permiso.amplia_por_categoria is True
+
+    sin_permiso_p2 = dict(caso["peticion_p2"])
+    sin_permiso_p2["permiso"] = PERMISO_SIN_AUTORIZAR
+    sin_permiso = peticion_desde_caso(
+        {**caso, "peticion_p2": sin_permiso_p2},
+        operation_id="test",
+        ambito=ambito,
+        limite_sin_atar=limite_sin_atar,
+    )
+    assert sin_permiso.proposito == ""
+    assert sin_permiso.amplia_por_categoria is False
 
 
 def test_el_banco_se_ejecuta_contra_el_pipeline_actual_y_reporta_las_cuatro_metricas(
