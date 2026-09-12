@@ -79,6 +79,10 @@ _ESPERA_FUSION = "**fusiona** en un comentario, si lo apruebas"
 _NEUTRALIZACIONES: tuple[tuple[str, str], ...] = (
     ("<!--", "&lt;!--"),
     ("```", "'''"),
+    # `PR abierta: <url>` es de donde `_interpretar_pr_url` saca la PR del
+    # encargo, y no es un comentario HTML: neutralizarlo aparte. Sin esto,
+    # una PR citada COMO EJEMPLO en el objetivo sustituía a la de verdad.
+    ("PR abierta:", "PR-abierta:"),
 )
 
 #: `head sha: <x>` y `merge sha: <x>` son de donde `sirius_extract_sha` saca
@@ -98,12 +102,20 @@ def _fila(clave: str, valor: str | None) -> str | None:
 
 
 def _ajeno(texto: str, limite: int = 400) -> str:
-    """Texto que NO escribió el motor, listo para ponerlo en el tablero.
+    """Recorta por palabras: un objetivo entero puede ocupar veinte líneas.
 
-    Todo lo que el tablero enseña del cuerpo de la incidencia o de sus
-    comentarios pasa por aquí, y por eso la función se llama así: si hubiera
-    que acordarse de neutralizar en cada sitio, el primer campo que alguien
-    añadiera sin acordarse reabriría el agujero.
+    **Ya no neutraliza nada**, y eso es el arreglo de la segunda ronda de
+    revisión. La primera versión neutralizaba aquí, en el punto de uso, y con
+    eso tres campos -``work_id``, ``bloque`` y ``rama_base``- se quedaron
+    fuera por no pasar por esta función: reproducido, el tablero republicaba
+    tres marcadores y el espejo sacaba de él tres ejecuciones de Quality que
+    nunca ocurrieron.
+
+    Escapar en cada sitio exige acordarse en cada sitio, y ese es el mismo
+    fallo que este repositorio lleva todo el día encontrando. Ahora se
+    neutraliza **una vez, sobre el texto entero**, al final de
+    :func:`generar_tablero`: ningún campo puede quedarse fuera, ni los de hoy
+    ni los que alguien añada mañana.
 
     **El agujero, medido el 12-09-2026 antes de cerrarlo.** El tablero lo
     publica ``github-actions[bot]``, que es un autor DE CONFIANZA, y el espejo
@@ -116,13 +128,8 @@ def _ajeno(texto: str, limite: int = 400) -> str:
     mismo valía para ``sirius-verdict``, ``sirius-round`` y
     ``sirius-notification``, que acreditan transiciones de estado.
 
-    Se neutraliza LO MISMO y de la misma forma que
-    ``scripts/automation/sirius_issue.sh::sanitize_untrusted_text``, que existe
-    para esto desde antes y a la que este módulo no llamaba: la apertura de
-    comentario HTML, la valla de código y el ``head sha:``/``merge sha:`` del
-    que otros lectores sacan el SHA.
     """
-    limpio = _neutralizar(" ".join(texto.split()))
+    limpio = " ".join(texto.split())
     if len(limpio) <= limite:
         return limpio
     return limpio[:limite].rsplit(" ", 1)[0] + "…"
@@ -156,8 +163,8 @@ def _comprobado(espejo: MirroredWorkItem) -> list[str]:
         )
         lineas.append(
             f"- **Quality**: {len(espejo.eventos_quality)} ejecución(es) observada(s); "
-            f"la última, `{_neutralizar(ultimo.conclusion)}` sobre "
-            f"`{_neutralizar(ultimo.head[:7]) or 'sin head'}`{racha}."
+            f"la última, `{ultimo.conclusion}` sobre "
+            f"`{ultimo.head[:7] or 'sin head'}`{racha}."
         )
     else:
         lineas.append("- **Quality**: ninguna ejecución observada todavía.")
@@ -166,7 +173,7 @@ def _comprobado(espejo: MirroredWorkItem) -> list[str]:
         lineas.append(
             f"- **Revisión**: ronda **{ronda.numero}**, con **{ronda.pendientes}** "
             f"hallazgo(s) pendiente(s) (gravedad total {ronda.gravedad_total}) sobre "
-            f"`{_neutralizar(ronda.head[:7]) or 'sin head'}`."
+            f"`{ronda.head[:7] or 'sin head'}`."
         )
     else:
         lineas.append("- **Revisión**: ninguna ronda registrada todavía.")
@@ -195,8 +202,6 @@ def generar_tablero(declarado: CuerpoDeclarado, espejo: MirroredWorkItem, *, num
         estado_texto += " · incidencia **cerrada**"
 
     lineas = [
-        MARCADOR,
-        "",
         f"## 🗒️ Tablero de la incidencia #{numero}",
         "",
         "> Un solo comentario, que el motor reescribe en cada cambio de estado",
@@ -262,21 +267,25 @@ def generar_tablero(declarado: CuerpoDeclarado, espejo: MirroredWorkItem, *, num
         "",
         *_evidencia(espejo),
     ]
-    return "\n".join(lineas) + "\n"
+    # AQUÍ, y en ningún otro sitio, se neutraliza. El marcador se añade
+    # DESPUÉS: es lo único del tablero que el motor sí quiere que se
+    # interprete, y pasarlo por el neutralizador lo convertiría en `&lt;!--`,
+    # dejando al publicador sin nada que reconocer.
+    return MARCADOR + "\n\n" + _neutralizar("\n".join(lineas)) + "\n"
 
 
 def _evidencia(espejo: MirroredWorkItem) -> Sequence[str]:
     lineas = []
     if espejo.pr_url:
-        lineas.append(f"- Pull Request: {_neutralizar(espejo.pr_url)}")
+        lineas.append(f"- Pull Request: {espejo.pr_url}")
     else:
         lineas.append("- Pull Request: todavía no hay ninguna enlazada.")
     lineas.append(
-        f"- Último head observado: `{_neutralizar(espejo.head_sha)}`."
+        f"- Último head observado: `{espejo.head_sha}`."
         if espejo.head_sha
         else "- Último head observado: ninguno."
     )
-    etiquetas = ", ".join(f"`{_neutralizar(e)}`" for e in sorted(espejo.etiquetas)) or "ninguna"
+    etiquetas = ", ".join(f"`{e}`" for e in sorted(espejo.etiquetas)) or "ninguna"
     lineas.append(f"- Etiquetas vigentes: {etiquetas}.")
-    lineas.append(f"- Leído de: {_neutralizar(espejo.origen.fuente)}.")
+    lineas.append(f"- Leído de: {espejo.origen.fuente}.")
     return lineas

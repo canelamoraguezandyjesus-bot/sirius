@@ -116,20 +116,27 @@ jobs:
           # medio se descarta y su tablero se quedaría viejo para siempre.
           #
           # Se arregla cubriendo, en cada pasada, un SUPERCONJUNTO que contiene
-          # con seguridad a la descartada: la incidencia del evento más las
-          # últimas movidas del ciclo. Una incidencia cuyo evento se descartó
-          # acaba de recibir una etiqueta -eso la mueve al principio de la lista
-          # por `updated`-, así que la siguiente pasada la recoge, esté abierta
-          # o cerrada. El tope de 20 acota el trabajo de una pasada; el reflejo
-          # de un tablero cuesta segundos.
+          # a la descartada: la incidencia del evento más las últimas movidas
+          # DEL CICLO. Una incidencia cuyo evento se descartó acaba de recibir
+          # una etiqueta -eso la mueve al principio de la lista por `updated`-,
+          # así que la siguiente pasada la recoge, esté abierta o cerrada.
+          #
+          # Se PIDEN 100 y se recortan a 20 DESPUÉS de filtrar, no antes, y esa
+          # diferencia es el arreglo de la segunda ronda de revisión: pidiendo
+          # 20 en crudo, el filtro se aplicaba sobre una lista que ya venía
+          # recortada, así que 20 PR recién tocadas dejaban CERO incidencias del
+          # ciclo y la descartada no se recogía nunca. Ahora hacen falta 20
+          # incidencias DEL CICLO movidas más recientemente para perder una, y
+          # eso a este ritmo -unos pocos encargos vivos- no se alcanza. No es
+          # una cola de pendientes: es una cota, y queda dicha.
           recientes="$(sirius_retry _sirius_gh api \
-            "repos/${GH_REPO}/issues?state=all&sort=updated&direction=desc&per_page=20" \
+            "repos/${GH_REPO}/issues?state=all&sort=updated&direction=desc&per_page=100" \
             --jq '.[] | select(has("pull_request") | not)
                       | select([.labels[].name] | any(. == "sirius:implementing"
                           or . == "sirius:repair-requested" or . == "sirius:ready-for-merge"
                           or . == "sirius:blocked-decision" or . == "sirius:failed-safely"
                           or . == "sirius:completed"))
-                      | .number' 2>/dev/null)" || recientes=""
+                      | .number' 2>/dev/null | head -n 20)" || recientes=""
           if [ -z "$recientes" ]; then
             echo "::warning::no pude listar las incidencias recientes; refresco solo la del evento."
           fi

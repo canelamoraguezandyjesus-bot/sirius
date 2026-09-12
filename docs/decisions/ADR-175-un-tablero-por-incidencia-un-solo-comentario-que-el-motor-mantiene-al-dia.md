@@ -319,6 +319,59 @@ siguieron todas en verde**: la prueba no probaba lo que decía probar. Con el
 marcador al principio, la mutación cae. Es la cuarta forma de prueba vacua del
 catálogo de `patrones.md`, y sin mutación no se ve.
 
+## La segunda ronda, y la regla de las dos rondas (ADR-001 §2)
+
+Dos hallazgos más sobre este mismo ADR, **los dos ciertos y los dos
+reproducidos**. Y el primero es de la MISMA familia que el primero de la ronda
+anterior, así que aquí se aplica la regla: **no se sigue parcheando, se busca
+la raíz.**
+
+### El parche anterior escapaba en el punto de uso, y tres campos se quedaron fuera
+
+`work_id`, `bloque` y `rama_base` no pasaban por `_ajeno`, sencillamente porque
+no me acordé de los tres. Reproducido: con un marcador en cada uno, el tablero
+publicaba **cuatro** comentarios HTML en vez de uno y el espejo sacaba de él
+**tres** ejecuciones de Quality que nunca ocurrieron. Y una forma más, que no es
+comentario HTML y por eso se escapaba de cualquier comprobación que solo mire
+`<!--`: **`PR abierta: <url>`**, de donde `_interpretar_pr_url` saca la PR del
+encargo. Una PR citada **como ejemplo** en el objetivo sustituía a la de verdad.
+
+**La raíz no es «faltaban tres campos»: es que escapar en el punto de uso exige
+acordarse en el punto de uso**, que es la misma forma de fallo que este
+repositorio lleva todo el día encontrando —la misma que ADR-174 nombra como
+`regla-que-depende-de-que-alguien-se-acuerde`—.
+
+Así que la neutralización deja de estar en cada sitio y pasa a estar **una sola
+vez, sobre el texto entero**, justo antes de devolverlo, con el marcador del
+tablero añadido **después** —es lo único que sí queremos que se interprete—.
+Ningún campo puede quedarse fuera: ni los de hoy ni los que alguien añada
+mañana.
+
+Y la prueba del invariante se arregla igual de fondo. Estaba bien escrita —«el
+único comentario HTML del tablero es el suyo»— pero su cuerpo envenenado
+enumeraba cinco campos de ocho **a mano**, así que pasaba en verde con tres
+campos sin neutralizar. Ahora el cuerpo se construye recorriendo
+`dataclasses.fields(CuerpoDeclarado)`, y una prueba aparte falla si algún campo
+se queda sin veneno. Además se comprueba contra **todos** los intérpretes del
+espejo, no solo el de Quality: rondas, PR y SHA incluidos.
+
+*(La orden `continua` no entra en la lista a propósito:
+`_interpretar_permisos_reanudacion` solo la acepta de un autor `OWNER`, nunca
+del bot, así que el tablero no puede fabricarse un permiso. Comprobado leyendo
+esa función, no supuesto.)*
+
+### Y el «repaso de las últimas veinte» recortaba antes de filtrar
+
+El tope de 20 se pedía a la API **antes** de quitar las PR y de filtrar por
+etiqueta, así que veinte PR recién tocadas dejaban **cero** incidencias del
+ciclo en la lista y la descartada no se recogía nunca. Ahora se piden 100 y se
+recorta a 20 **después** de filtrar: hacen falta veinte incidencias DEL CICLO
+movidas más recientemente para perder una.
+
+**No es una cola de pendientes, y no se vende como tal**: es una cota, y a este
+ritmo —unos pocos encargos vivos— no se alcanza. Una cola durable exigiría un
+sitio donde guardar el pendiente, y eso es otro trabajo.
+
 ## Alternativas descartadas y por qué
 
 Las seis de arriba. Y una quinta: **que el tablero incluyera el texto
