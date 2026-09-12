@@ -102,23 +102,63 @@ _LEIDAS_POR_EL_ESPEJO: tuple[re.Pattern[str], ...] = (
 )
 
 
-def _romper_el_primer_espacio(coincidencia: re.Match[str]) -> str:
+#: El blanco que separa la palabra clave del resto -`Head SHA:`, `PR abierta:`-
+#: es el MISMO `\s` del lector, del mismo motor de expresiones; no el espacio
+#: ASCII. La cuarta ronda de revisión encontró que aquí se sustituía el espacio
+#: a secas: un tabulador real entre `Head` y `SHA:` lo acepta `\s+` y pasaba de
+#: largo en los campos que no se recortan. Es la misma familia que la tercera
+#: ronda -el neutralizador con una idea PROPIA de lo que el lector reconoce-,
+#: y por eso :func:`_neutralizar` ya no se fía de su sustitución: termina
+#: preguntándole al propio lector.
+_BLANCO = re.compile(r"\s+")
+
+
+class NeutralizacionIncompletaError(ValueError):
+    """Quedó una forma que el espejo aún lee. Ese tablero NO se publica.
+
+    Con los lectores de hoy no puede ocurrir -las dos formas textuales llevan
+    un blanco antes de los dos puntos y ese blanco es lo que se rompe-, y la
+    prueba que lo fija recorre la clase entera de blancos del lector. Existe
+    para el lector que alguien añada mañana con una forma que romper el primer
+    blanco no toque: ese día el tablero de esa incidencia se queda como estaba,
+    con un aviso en el registro, en vez de publicar algo de lo que el motor
+    sacaría un hecho.
+    """
+
+
+def _romper_el_primer_blanco(coincidencia: re.Match[str]) -> str:
     """`Head SHA: abc` -> `Head-SHA: abc`. Se lee igual y ya no coincide.
 
-    Un guion en el primer espacio basta para que ninguna de las expresiones del
-    espejo vuelva a encontrar la forma -las dos exigen espacio ahí- y deja el
+    Un guion en el primer blanco basta para que ninguna de las expresiones del
+    espejo vuelva a encontrar la forma -las dos exigen blanco ahí- y deja el
     texto perfectamente legible para la persona que abra la incidencia. No se
     borra nada: lo que ponía se sigue viendo.
     """
-    return coincidencia.group(0).replace(" ", "-", 1)
+    return _BLANCO.sub("-", coincidencia.group(0), count=1)
 
 
 def _neutralizar(texto: str) -> str:
-    """Le quita el poder de marcador a un texto, sin quitarle el sentido."""
+    """Le quita el poder de marcador a un texto, sin quitarle el sentido.
+
+    Y lo COMPRUEBA antes de devolverlo, con los ojos del espejo: que no quede
+    apertura de comentario HTML ni coincidencia de ninguna de sus expresiones.
+    Si queda, se niega. Es lo que hace imposible -no improbable- que este
+    módulo vuelva a divergir del lector sin que se note: las dos rondas
+    anteriores fueron exactamente eso, y una divergencia que se ve en el
+    registro se arregla; una que publica en silencio se cree.
+    """
     for viejo, nuevo in _NEUTRALIZACIONES:
         texto = texto.replace(viejo, nuevo)
     for patron in _LEIDAS_POR_EL_ESPEJO:
-        texto = patron.sub(_romper_el_primer_espacio, texto)
+        texto = patron.sub(_romper_el_primer_blanco, texto)
+    if "<!--" in texto:
+        raise NeutralizacionIncompletaError("queda una apertura de comentario HTML")
+    for patron in _LEIDAS_POR_EL_ESPEJO:
+        resto = patron.search(texto)
+        if resto is not None:
+            raise NeutralizacionIncompletaError(
+                f"el espejo aún leería {resto.group(0)!r} (patrón {patron.pattern!r})"
+            )
     return texto
 
 

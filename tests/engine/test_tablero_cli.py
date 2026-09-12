@@ -9,10 +9,13 @@ distingue de un tablero vacío en vez de confundirse con él.
 from __future__ import annotations
 
 import io
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 
-from sirius_engine import tablero_cli
+import pytest
+
+from sirius_engine import tablero, tablero_cli
 from sirius_engine.adapters.fixture_mirror import FixedGitHubMirrorReader
 from sirius_engine.ports.github_mirror import (
     CuerpoIncidencia,
@@ -55,6 +58,7 @@ def _mirror(
     etiquetas: tuple[str, ...] = ("sirius:implementing",),
     estado_cuerpo: LecturaEstado = LecturaEstado.OK,
     estado_meta: LecturaEstado = LecturaEstado.OK,
+    texto: str = _CUERPO_REAL,
 ) -> FixedGitHubMirrorReader:
     return FixedGitHubMirrorReader(
         metadatos_por_incidencia={
@@ -73,7 +77,7 @@ def _mirror(
             (_REPO, _NUMERO): LecturaCuerpo(
                 estado=estado_cuerpo,
                 cuerpo=(
-                    CuerpoIncidencia(autor_login="x", autor_asociacion="OWNER", texto=_CUERPO_REAL)
+                    CuerpoIncidencia(autor_login="x", autor_asociacion="OWNER", texto=texto)
                     if estado_cuerpo is LecturaEstado.OK
                     else None
                 ),
@@ -128,6 +132,26 @@ def test_un_espejo_ilegible_sale_con_2_y_no_escribe_nada() -> None:
     codigo, texto = _correr(_mirror(estado_meta=LecturaEstado.NO_DISPONIBLE))
     assert codigo == 2
     assert texto == ""
+
+
+def test_lo_que_no_se_puede_neutralizar_sale_con_3_y_no_escribe_nada(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Cerrado, no abierto: antes que un tablero del que el espejo sacaría un hecho, ninguno.
+
+    El workflow trata cualquier salida distinta de 0 como «hoy no hay tablero»
+    y deja el anterior donde está; lo que aquí se fija es que el 3 se distinga
+    del 2, que no se escriba ni una línea, y que el registro diga por qué.
+    """
+    monkeypatch.setattr(
+        tablero,
+        "_LEIDAS_POR_EL_ESPEJO",
+        (*tablero._LEIDAS_POR_EL_ESPEJO, re.compile(r"PR#(\d+)")),
+    )
+    codigo, texto = _correr(_mirror(texto=_CUERPO_REAL.replace("WI-20260912-120000", "PR#7")))
+    assert codigo == 3
+    assert texto == ""
+    assert "PR#7" in capsys.readouterr().err
 
 
 def test_la_primera_linea_es_el_marcador_que_el_workflow_busca() -> None:

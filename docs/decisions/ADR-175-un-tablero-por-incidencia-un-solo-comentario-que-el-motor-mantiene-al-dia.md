@@ -446,6 +446,104 @@ real. Se conserva porque su error va en la dirección peligrosa —clasificar co
 de solo lectura algo que sí puede mover trabajo—, y se prueba con un grafo de
 mentira para que no sea una rama muerta que nadie ve romperse.
 
+## La cuarta ronda: la misma familia por segunda vez, y lo que la cierra
+
+Dos hallazgos, **los dos ciertos y los dos reproducidos** antes de tocar nada.
+El revisor confirmó además que los dos de la ronda anterior -la cola por
+incidencia y la tubería muerta- quedaron resueltos.
+
+### 1. El neutralizador rompía el espacio; el lector acepta cualquier blanco (grave)
+
+`_SHA_MARKER_RE` separa `Head` de `SHA:` con `\s+`, y la sustitución de la
+tercera ronda hacía `replace(" ", "-", 1)`: **el espacio ASCII, y solo ese**.
+Reproducido: `Head<tab>SHA:<tab>deadbeef1234`, con tabuladores reales, salía del
+neutralizador **intacto** y el lector sacaba de ahí `deadbeef1234`. Sobrevivía
+en los campos que no se recortan -`work_id`, `bloque`, `rama_base`-: el recorte
+de los demás colapsa blancos, y por eso allí nunca se vio.
+
+Es la **misma familia que la tercera ronda**: entonces el neutralizador tenía su
+propia expresión (con un `\b` que el lector no tiene); ahora tenía su propia
+idea del separador. Dos rondas, la misma familia, y la regla de ADR-001 §2
+manda buscar la raíz. La raíz no es el espacio ni la frontera de palabra: es que
+**el neutralizador afirmaba haber neutralizado sin que nadie se lo comprobara
+con los ojos del lector.** Cada divergencia publicaba en silencio, y lo que se
+publica en silencio se cree.
+
+El arreglo tiene las dos mitades:
+
+- **El separador es el del lector.** `_BLANCO = re.compile(r"\s+")`, del mismo
+  motor de expresiones, y se rompe el primer blanco de la coincidencia, sea el
+  que sea. La prueba no lleva una lista de blancos escrita a mano: **recorre
+  todo el Unicode y le pregunta al propio lector** qué caracteres acepta como
+  separador -29 en este intérprete- y ejercita cada uno. Si mañana el motor de
+  expresiones acepta uno más, entra solo.
+- **Y lo que hace imposible la familia entera:** `_neutralizar` relee su propio
+  resultado con las expresiones del espejo antes de devolverlo. Si alguna aún
+  coincide -o queda una apertura de comentario HTML-, lanza
+  `NeutralizacionIncompletaError`; `sirius-tablero` sale con **3 sin escribir
+  nada**, y el workflow deja el tablero anterior donde estaba, con su aviso en
+  el registro. **Cerrado, no abierto**: antes que un tablero del que el motor
+  sacaría un hecho, ningún tablero. Con los lectores de hoy no puede saltar
+  -las dos formas llevan blanco y el blanco es lo que se rompe-, y se prueba
+  con un lector inventado cuya forma no lleva ninguno, que es justo el que
+  alguien añadiría mañana sin pasar por aquí.
+
+Lo que esto **no** garantiza: que el neutralizador pueda con cualquier forma
+futura. Garantiza que cuando no pueda, no publique y se sepa.
+
+### 2. La guarda de serialización no veía dos formas de importar (media)
+
+`_importados` registraba, de `from sirius_engine.ports import store`, solo
+`sirius_engine.ports` -sin prefijo común con la puerta `ports.store`- y, de
+`from .ports import store`, `ports` a secas, que no es de nadie. Reproducido con
+esas dos líneas. Las dos cosas van en **la dirección peligrosa**: clasificar
+como de solo lectura a un comando que sí puede mover trabajo, y con eso
+dejarle tener un grupo de concurrencia variable.
+
+Arreglo: de `from X import a, b` salen `X`, `X.a` y `X.b` -sin importar de
+verdad no se sabe si `a` es submódulo o nombre, y un candidato que no es módulo
+no tiene fichero y no lleva a ningún sitio-; las relativas se resuelven con la
+regla del intérprete (`importlib.util.resolve_name`) contra el paquete del
+fichero, donde un `__init__.py` ES su paquete; y una relativa sin paquete
+conocido es un **error**, no un import que se ignora. Con los candidatos `X.a`
+el prefijo a secas dejaba de valer -`ports.store_ayuda` pasaría por
+`ports.store`-, así que la frontera de paquete es ahora **el punto**.
+
+Medido sobre este árbol, antes y después: **el mismo reparto** -mutan
+`sirius-motor`, `sirius-despachar`, `sirius-racha`, `sirius-reflejar` y
+`sirius-supervisar`; solo leen `sirius-memoria`, `sirius-familia-repetida` y
+`sirius-tablero`-. El agujero era latente: hoy ningún comando usa esas formas.
+Por eso hay tres pruebas y no una: los casos exactos sobre `_importados`; un
+**árbol de mentira** que ejercita el lector de ficheros real de punta a punta
+-un grafo inyectado, como el de la ronda anterior, esquivaba justo el sitio
+del fallo-; y una anti-vacua sobre el árbol REAL **sin lista a mano**: se
+importa cada comando en un proceso aparte y **el intérprete es el juez**: todo
+lo que Python carga al importar, la derivación tiene que verlo también.
+
+### Y una anti-vacua que estaba ciega, y que se vio caer
+
+`test_el_cuerpo_envenenado_cubre_todos_los_campos` buscaba el veneno en
+`str(valor)`; con un tabulador real dentro del veneno, `str(tupla)` lo escapa y
+la prueba dijo que `plan` iba sin veneno cuando lo llevaba entero. Ahora mira
+dentro de las tuplas. Lo encontró la propia prueba al fallar, no yo.
+
+### Las mutaciones, vistas caer
+
+| Mutación | Cae |
+|---|---|
+| M1 tablero: vuelve a sustituir solo el espacio ASCII | 5, entre ellas la del blanco entero y la de punta a punta con tabuladores |
+| M2 tablero: sin la relectura final con el lector | 2: la del lector inventado y la del CLI con salida 3 |
+| M3 CLI: la excepción se propaga en vez de salir con 3 | 1: la del CLI |
+| M4 guarda: de `from X import a` solo se registra `X` | 2: casos exactos y árbol de mentira |
+| M5 guarda: las relativas se ignoran | 3: las dos anteriores y la de la relativa sin paquete |
+| M6 guarda: la frontera vuelve a ser un prefijo a secas | 1: la de la frontera |
+| M7 guarda: nada alcanza el estado | 5, entre ellas la del intérprete como juez |
+
+Y lo que hay que decir: **M4 y M5 no las caza la prueba del intérprete**,
+porque ningún comando real usa esas formas hoy; las cazan las de caso exacto.
+La del intérprete vigila el árbol real; las otras, la forma. Hacen falta las
+dos.
+
 ## Alternativas descartadas y por qué
 
 Las seis de arriba. Y una quinta: **que el tablero incluyera el texto

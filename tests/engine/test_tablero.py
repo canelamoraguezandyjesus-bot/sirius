@@ -11,6 +11,7 @@ lo que el espejo sabe se enseñe, y que lo que NO sabe no se invente.
 
 from __future__ import annotations
 
+import re
 from dataclasses import fields
 from datetime import UTC, datetime
 
@@ -264,6 +265,12 @@ _VENENO = (
     # frontera de palabra delante, así que `xHead SHA:` le vale igual.
     " xHead SHA: cafe99988877"
     " zzPR abierta: https://github.com/o/r/pull/777"
+    # Y los blancos que NO son el espacio (cuarta ronda): el `\s+` del lector
+    # acepta un tabulador o un espacio duro entre `Head` y `SHA:`, y la
+    # sustitución de la tercera ronda solo cambiaba el espacio ASCII. Van con
+    # los caracteres REALES, no con una secuencia que nadie interpreta.
+    " Head\tSHA:\tbeefbeef1234"
+    " Merge\u00a0SHA:\u00a0feedfeed1234"
 )
 
 
@@ -292,10 +299,18 @@ _CUERPO_ENVENENADO = _cuerpo_envenenado()
 
 def test_el_cuerpo_envenenado_cubre_todos_los_campos() -> None:
     """Anti-vacua: si el veneno dejara de llegar a algún campo, las de abajo pasarían solas."""
+
+    def trozos(valor: object) -> tuple[str, ...]:
+        # Se mira DENTRO de las tuplas: `str(tupla)` escapa el tabulador y el
+        # espacio duro que el veneno lleva desde la cuarta ronda, y la búsqueda
+        # literal sobre esa forma decía que `plan` iba sin veneno cuando lo
+        # llevaba entero.
+        return tuple(valor) if isinstance(valor, tuple) else (str(valor),)
+
     sin_veneno = [
         campo.name
         for campo in fields(CuerpoDeclarado)
-        if _VENENO not in str(getattr(_CUERPO_ENVENENADO, campo.name))
+        if not any(_VENENO in trozo for trozo in trozos(getattr(_CUERPO_ENVENENADO, campo.name)))
     ]
     assert not sin_veneno, f"estos campos no llevan veneno: {sin_veneno}"
 
@@ -356,6 +371,7 @@ def test_lo_neutralizado_se_sigue_leyendo() -> None:
     texto = generar_tablero(_CUERPO_ENVENENADO, _espejo(), numero=508)
     assert "sirius-quality:abc1234:success" in texto
     assert "deadbeef1234" in texto
+    assert "beefbeef1234" in texto
     assert "github.com/o/r/pull/999" in texto
 
 
@@ -393,6 +409,87 @@ def test_una_forma_pegada_a_otra_palabra_tampoco_pasa() -> None:
         assert not _PR_ABIERTA_RE.search(limpio), forma
         # Y se sigue leyendo: neutralizar no es censurar.
         assert forma.split()[-1].strip("`") in limpio
+
+
+def test_un_blanco_que_no_es_el_espacio_tampoco_pasa() -> None:
+    """El hallazgo de la cuarta ronda, con su caso exacto y con la clase entera.
+
+    El lector separa `Head` de `SHA:` con `\\s+`, y el neutralizador rompía el
+    primer ESPACIO: `Head<tab>SHA:<tab>deadbeef1234`, con tabuladores reales,
+    pasaba intacto y el lector sacaba de ahí un SHA. Misma familia que la
+    tercera ronda: el neutralizador con una idea propia de lo que el lector
+    reconoce.
+
+    No se prueba con una lista de blancos escrita a mano: se recorre TODO el
+    Unicode y se ejercita cada carácter que el propio lector acepta como
+    separador. El juez es el lector, no `str.isspace()` ni una tabla.
+    """
+    from sirius_engine.mirror_projection import _SHA_MARKER_RE
+    from sirius_engine.tablero import _neutralizar
+
+    blancos = [
+        blanco
+        for blanco in map(chr, range(0x110000))
+        if _SHA_MARKER_RE.search(f"Head{blanco}SHA: deadbeef1234")
+    ]
+    # Anti-vacua: el tabulador del revisor y el espacio duro tienen que estar.
+    assert "\t" in blancos
+    assert "\u00a0" in blancos
+    for blanco in blancos:
+        forma = f"Head{blanco}SHA:{blanco}deadbeef1234"
+        limpio = _neutralizar(forma)
+        assert not _SHA_MARKER_RE.search(limpio), f"sobrevive con U+{ord(blanco):04X}"
+        assert "deadbeef1234" in limpio
+
+
+def test_un_sha_con_tabuladores_en_el_encargo_no_llega_al_espejo() -> None:
+    """El escenario del revisor de punta a punta, leído con los ojos del espejo.
+
+    `work_id` no pasa por el recorte que colapsa blancos, así que sus
+    tabuladores llegan enteros al tablero: es el campo donde la forma con
+    tabuladores sobrevivía. Antes del arreglo, esto devolvía `deadbeef1234`.
+    """
+    from sirius_engine.mirror_projection import _interpretar_head_sha
+
+    texto = generar_tablero(
+        CuerpoDeclarado(work_id="WI-1 Head\tSHA:\tdeadbeef1234"),
+        _espejo(head_sha=None),
+        numero=508,
+    )
+    comentario = Comentario(
+        autor_login="github-actions[bot]",
+        autor_asociacion="NONE",
+        cuerpo=texto,
+        creado_en=_AHORA,
+    )
+    assert _interpretar_head_sha("", (comentario,)) is None
+    assert "deadbeef1234" in texto
+
+
+def test_si_el_neutralizador_no_puede_con_una_forma_se_niega_a_publicar(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """La raíz de la familia: el juez es el lector, no la sustitución.
+
+    Las dos rondas anteriores fueron el neutralizador divergiendo del lector en
+    silencio: publicaba, y el espejo leía. Ahora, antes de devolver el texto,
+    se relee con las expresiones del espejo, y si alguna aún coincide se lanza
+    `NeutralizacionIncompletaError` en vez de devolver un tablero. Se prueba
+    con un lector inventado cuya forma no lleva blanco -romper el primer blanco
+    no la toca-, que es justo el lector que alguien añadiría mañana sin pasar
+    por aquí.
+    """
+    from sirius_engine import tablero
+
+    sin_blanco = re.compile(r"PR#(\d+)")
+    monkeypatch.setattr(
+        tablero, "_LEIDAS_POR_EL_ESPEJO", (*tablero._LEIDAS_POR_EL_ESPEJO, sin_blanco)
+    )
+    with pytest.raises(tablero.NeutralizacionIncompletaError, match="PR#7"):
+        generar_tablero(CuerpoDeclarado(work_id="PR#7"), _espejo(), numero=508)
+    # Con el mismo lector de más y sin la forma, sigue publicando: se niega a
+    # lo que no puede neutralizar, no a todo.
+    assert generar_tablero(_CUERPO, _espejo(), numero=508).startswith(MARCADOR)
 
 
 def test_el_neutralizador_no_tiene_expresiones_propias_de_lo_que_el_espejo_lee() -> None:

@@ -10,9 +10,12 @@ Separarlo así no es ceremonia: es lo que permite probar el cuerpo entero sin
 GitHub delante, y lo que deja al workflow con una sola responsabilidad —pegar
 el texto donde toca—.
 
-Códigos de salida: 0 escrito; 2 no se pudo leer la incidencia. El llamador
-trata el 2 como «hoy no hay tablero» y sigue: este paso es secundario y jamás
-debe bloquear el ciclo.
+Códigos de salida: 0 escrito; 2 no se pudo leer la incidencia; 3 el tablero
+contenía algo que el espejo leería como un hecho del motor y el neutralizador
+no pudo con ello (:class:`sirius_engine.tablero.NeutralizacionIncompletaError`).
+El llamador trata cualquier código distinto de 0 como «hoy no hay tablero» y
+sigue: este paso es secundario y jamás debe bloquear el ciclo. Lo que NO hace
+nunca es publicar a medias: con 2 y con 3 no se escribe nada.
 """
 
 from __future__ import annotations
@@ -27,7 +30,7 @@ from sirius_engine.domain.mirror import EspejoIlegibleError
 from sirius_engine.issue_body_parsing import leer_cuerpo_declarado
 from sirius_engine.mirror_projection import proyectar_work_item
 from sirius_engine.ports.github_mirror import GitHubMirrorPort
-from sirius_engine.tablero import generar_tablero
+from sirius_engine.tablero import NeutralizacionIncompletaError, generar_tablero
 
 COMANDO = "sirius-tablero"
 
@@ -77,9 +80,20 @@ def main(
         return 2
 
     assert cuerpo.cuerpo is not None, "la proyección habría fallado sin cuerpo legible"
-    escribir(
-        generar_tablero(leer_cuerpo_declarado(cuerpo.cuerpo.texto), espejo, numero=args.incidencia)
-    )
+    try:
+        texto = generar_tablero(
+            leer_cuerpo_declarado(cuerpo.cuerpo.texto), espejo, numero=args.incidencia
+        )
+    except NeutralizacionIncompletaError as error:
+        # Cerrado, no abierto: antes que un tablero del que el espejo sacaría un
+        # hecho, ningún tablero. El anterior se queda donde está.
+        print(
+            f"{COMANDO}: el tablero de #{args.incidencia} contiene algo que el espejo "
+            f"leería como un hecho del motor ({error}); no lo publico.",
+            file=sys.stderr,
+        )
+        return 3
+    escribir(texto)
     return 0
 
 
