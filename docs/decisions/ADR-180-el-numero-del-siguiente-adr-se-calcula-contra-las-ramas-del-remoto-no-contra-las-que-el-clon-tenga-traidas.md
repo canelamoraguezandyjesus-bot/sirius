@@ -80,8 +80,8 @@ puerta que ya existe en `main` lo hace **visible** cuando ocurra.
 
 ## Contexto y problema
 
-*(Pendiente: esta versión es la nota de arranque, confirmada antes del primer
-cambio de código, como manda ADR-001.)*
+El de la nota de arranque, medido: el guion veía el **3,4 %** de las ramas y
+repartió el mismo número, 177, a tres ramas abiertas el mismo día.
 
 ## Criterio de parada (escrito ANTES de decidir)
 
@@ -89,26 +89,73 @@ El del apartado 3 de la nota de arranque.
 
 ## Opciones consideradas
 
-*(Pendiente, al terminar.)*
+1. **Avisar más fuerte y dejar que quien lo use haga `git fetch`.** Es lo que
+   ya hacía -el aviso estaba ahí- y no evitó nada: quien pide un número no
+   sabe que su clon está corto. Descartada.
+2. **Consultar la API de GitHub** en vez de git. Añade una dependencia de red
+   autenticada a un guion que hoy funciona sin credenciales, y dejaría de
+   servir en un clon sin remoto de GitHub. Descartada.
+3. **Traer las cabezas del remoto antes de calcular, degradando sin abortar.**
+   Elegida; cuesta 4 segundos medidos y no añade ninguna dependencia nueva.
+4. **Que el número se asigne al fusionar, no al crear.** Haría el fallo
+   imposible en vez de raro, pero cambia el convenio del registro entero y
+   rompe las citas de los ADR abiertos. Descartada aquí y dicha en la nota.
 
 ## Decisión
 
-Pendiente: esta versión es la nota de arranque. Lo que se propone: que
-`scripts/siguiente_adr.py` traiga las cabezas del remoto antes de calcular el
-número, degradando sin abortar cuando no haya red, y que diga cuál de las dos
-cosas hizo.
+`scripts/siguiente_adr.py` trae las cabezas del remoto antes de calcular el número, con el refspec explícito `+refs/heads/*:refs/remotes/origin/*` para que un clon estrecho -el de una sesión remota, que clona una sola rama- también las reciba; si no puede traer -sin red, sin git, fuera de un repositorio- no aborta: calcula con lo que el clon tenga, como antes, y **lo dice con otra frase**, porque un número calculado sobre el 3,4 % de las ramas y uno calculado sobre todas no merecen la misma confianza.
+
+En concreto:
+
+- `_git` se parte en dos: `_correr_git` devuelve `(funcionó, salida)` y `_git`
+  sigue devolviendo solo el texto para los lectores. La razón no es estética:
+  `git fetch --quiet` **no imprime nada cuando va bien**, así que con la forma
+  anterior «trajo» y «no pudo traer» eran la misma cadena vacía.
+- `traer_las_cabezas` hace el fetch y devuelve si lo consiguió.
+- `_como_se_consulto` produce el aviso, distinto en cada caso, y el de fallo
+  dice qué hacer.
+- `--sin-traer` conserva el comportamiento anterior para quien lo quiera.
 
 ## Comprobación que la sostiene
 
-*(Pendiente: comandos y resultados, al terminar.)*
+- Medición previa, sobre este clon: **14** refs remotas frente a **409** en el
+  remoto; traerlas, **4 segundos**; máximo de ADR visto, **176 antes** y
+  **179 después**.
+- En vivo, tras el cambio: `traidas las cabezas del remoto; consultadas 308
+  ramas con ADR`, y con `--sin-traer`, el aviso de cobertura parcial.
+- `ruff format --check`, `ruff check scripts tests` y `mypy` en verde.
+- Batería entera: **5.457 en verde** (17 omitidas, 2 xfail, 9 min 35 s).
+
+**Seis mutaciones sembradas, y la sexta es la que enseña algo:**
+
+| Mutación | Prueba que cae |
+|---|---|
+| El guion vuelve a no traer | la de traer antes de calcular |
+| Se trae DESPUÉS de calcular, que es no traer | la misma |
+| Refspec estrecho (`git fetch origin` a secas) | la del refspec explícito |
+| El fallo del fetch se propaga y aborta | la de degradar sin abortar |
+| El aviso deja de distinguir las dos situaciones | la del aviso |
+| `_correr_git` vuelve a no distinguir fallo de salida vacía | **ninguna, al principio** |
+
+La sexta pasó en verde con las once pruebas puestas, y el hueco era real: todas
+inyectaban un git de mentira, así que nadie comprobaba que el booleano del que
+cuelga todo lo demás valiera algo. Con la prueba que ejercita git **de verdad**
+-una invocación que funciona y otra que falla-, la mutación cae. Es la cuarta
+forma de prueba vacua del catálogo, encontrada por su mutación y no por mí.
 
 ## Consecuencias
 
-*(Pendiente, al terminar.)*
+- **Crear un ADR cuesta 4 segundos más**, y los paga quien lo crea.
+- **Sin red el guion sigue funcionando**, y ahora se sabe cuándo fue así.
+- La ventana de carrera -dos sesiones pidiendo a la vez- **sigue abierta**, y
+  la caza la puerta que ya existe en `main` al fusionar. Hacerla imposible es
+  la opción 4, que es otra decisión.
+- Los dos ADR-016 históricos y los tres ADR-177 de hoy no se tocan: ADR-177 se
+  queda en la PR #590, y los otros dos ya son 178 y 179.
 
 ## Alternativas descartadas y por qué
 
-*(Pendiente, al terminar.)*
+Las cuatro opciones de arriba, con su razón cada una.
 
 ## La lección
 
