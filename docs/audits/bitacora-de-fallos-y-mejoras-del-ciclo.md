@@ -5070,6 +5070,57 @@ escribo como orden todavía porque toca `composition_root` y la §6.3, y eso es
 decisión suya, no del ciclo.
 ---
 
+### 100. La ronda repetida cierra, y el revisor encuentra solo las dos cosas que yo vi y NO inyecté (12-09-2026, 05:10 UTC)
+
+**Codex funciona con la cuenta nueva.** Comprobado dos veces sobre la PR #583:
+contestó al disparador del ciclo a las **00:11:08Z**, cuatro minutos después de
+pedírselo, y a una petición manual mía a las **04:36:50Z**, tres minutos
+después. Lo del 11-09 fue el tope de uso del último día de la cuenta anterior,
+**no** el conector. La instalación de GitHub está intacta y con acceso a este
+repositorio; no hubo que tocar `SIRIUS_CODEX_REVIEW_ENABLED` ni el conector.
+Mi recomendación de apagar el modo dual habría tirado el segundo revisor por un
+diagnóstico que no había comprobado.
+
+**Falso negativo mío, el tercero con mis propias herramientas.** El guion que
+escribí para esperar a Codex miraba **comentarios**, y Codex responde como
+**review**. Declaró «sin respuesta» a los quince minutos con la respuesta
+publicada desde hacía doce. Regla: cuando se vigile a un actor de GitHub, mirar
+`comments` **y** `reviews`, o mirar el estado que produce el efecto, no el
+mensaje.
+
+**Lo que estaba realmente atascado.** El run 34660530297 hizo la ronda entera
+—revisor Claude 8:40, Codex recogido, veredicto agregado `CHANGES_REQUESTED`—
+y **falló al publicarla**: la etiqueta no quedó aplicada y el comentario del
+veredicto no llegó nunca. La incidencia se quedó en `sirius:reviewing`, que no
+tiene evento que lo reviva, con tres observaciones perdidas en el `RUNNER_TEMP`
+del run. A esa hora esta sesión sondeaba la API cada 45 s con el mismo token y
+la agotó catorce minutos más tarde: la causa que encaja es mi propio ruido.
+Repetida la ronda con permiso del propietario, cerró limpia.
+
+**Y aquí está lo que de verdad vale de esta entrada.** El 11-09 (entrada 91) vi
+dos defectos en esta PR y decidí **no inyectarlos** en el ciclo, porque
+acompañar no es revisar. Eran: la aserción `x - 1 == 21`, que no puede fallar, y
+el nombre de la prueba que sigue diciendo «alcanza el suelo D1» cuando afirma lo
+contrario. **El revisor los ha encontrado los dos, solo, y mejor argumentados
+que yo**: `CLAUDE-H5-003` los liga a ADR-134 y demuestra la inutilidad con una
+mutación de lectura; `CLAUDE-H5-002` los liga a `CLAUDE-R3-001` de ADR-168 y
+nota que el nombre es lo único que imprime `pytest` al fallar. Es la primera
+evidencia directa de que **callarme no cuesta hallazgos**, que era la apuesta de
+la regla y hasta hoy no estaba medida.
+
+Veredicto conjunto: Claude `CHANGES_REQUESTED` con **5 observaciones** (3 medias,
+2 bajas), Codex **APPROVED**. Las otras tres son de transcripción y de orden:
+prosa que el diff dejó falsa en tres sitios, una cita que declara un rango de
+siete líneas y transcribe seis, y una constante insertada fuera de orden.
+
+**Defecto del motor destapado por el fallo, y anotado sin arreglarlo**:
+`scripts/automation/sirius_apply_verdict.sh:720` hace `printf '- PR: %s\n'`. El
+formato empieza por guion y `bash` lo rechaza (`printf: - : invalid option`, en
+el log del run), así que **todo veredicto de cambios solicitados se publica sin
+la línea de la PR** desde el 05-08 (`aedb071`). No es lo que rompió la etiqueta.
+Arreglo: `printf -- '- PR: %s\n'`.
+---
+
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
 
 1. `ollama_category_classifier.py`: ruta relativa y sin
