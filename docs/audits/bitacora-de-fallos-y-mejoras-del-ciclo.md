@@ -4990,6 +4990,86 @@ por vuelta, más las mías. Bajado a 5 minutos. Vigilar no es gratis, ni en
 tokens ni en cuota.
 ---
 
+### 99. No falta ninguna pieza: TODA la línea está detrás de un solo booleano, y abrirlo enciende siete cosas a la vez (12-09-2026, 03:00 UTC)
+
+Cerré la entrada 98 diciendo que «falta la pieza: quien construye la petición
+de producción». **Miré el árbol y es falso: la pieza existe, está cableada, y
+está apagada.** Lo corrijo aquí porque la diferencia cambia lo que hay que
+decidir.
+
+**El intérprete de ADR-164 SÍ está en producción**
+(`src/sirius/composition_root.py:541-547`), pero se construye así:
+
+```
+query_request_interpreter=InterpreteDePeticion(
+    intent_classifier=(
+        OllamaQueryIntentClassifierAdapter(ollama_model)
+        if category_matching_enabled
+        else None
+    )
+),
+```
+
+Y su propio docstring dice qué hace sin clasificador
+(`interpret_query_request.py:153-156`): «sin él, `interpretar` produce la misma
+petición uniforme que `_peticion_ordinaria` producía antes de ADR-164». O sea:
+**el intérprete está puesto y emite la política uniforme**, que es M1 con
+cardinalidad EXHAUSTIVA y sin intervalo. Por eso H1 no se acciona: no le falta
+un consumidor, le falta que alguien declare el intervalo que lee, y quien lo
+declararía está desconectado.
+
+**Y no es solo el intérprete.** `category_matching_enabled` se lee de
+`settings.json` con **`False` por defecto** (`composition_root.py:516`) y
+gobierna, en el mismo bloque:
+
+| línea | qué apaga con la puerta cerrada |
+|---|---|
+| 523 | el vocabulario de categoría |
+| 525 | el vocabulario de criticidad |
+| 527 | la coincidencia por categoría del caso de uso |
+| 541-547 | **el clasificador de intención** (y con él, las peticiones reales) |
+| 555-561 | **el filtro de relevancia entero** (`relevance_filter_port=None`) |
+| 565 | el techo de criticidad |
+| 566 | la coincidencia por categoría del `ContextBuilder` |
+
+Y el comentario de `composition_root.py:533-536` lo dice de la única forma que
+no admite discusión: con la puerta en `False`, **«`_rank_via_staged_engine` no
+se ejecuta siquiera»**. Es decir: hoy, en producción, **no corre el motor por
+etapas, ni el intérprete con clasificador, ni el filtro de relevancia, ni los
+vocabularios**. Ninguna de las doce puertas `G`, ningún `G4`, ningún `M14`,
+ningún cupo.
+
+**Consecuencia sobre lo que hemos estado midiendo.** El «camino real» del guion
+de Ollama es el **paquete completo con la puerta ABIERTA**: el arnés que usa
+(`_ejecutar_banco_paquete_completo`) declara `category_matching_enabled=True`
+en su propio docstring. Las cifras de anoche —`8/47`; `218`; `71/81`; 0
+críticas— describen **cómo se comportaría producción con la puerta abierta**,
+no cómo se comporta hoy. Nunca lo habíamos dicho así, y hay que decirlo cada
+vez que se cite esa cifra: es la cuarta medición del banco y su condición
+desactivada no es el filtro, es **la puerta**.
+
+**La lectura buena, y es mejor que la de la entrada 98.** Las palancas no están
+varadas. Están **montadas detrás de un interruptor**, que es exactamente lo que
+la arquitectura mandaba (D7 punto 6, §6.3: puerta de activación contra datos
+reales, cerrada por defecto). H1, H2, P1, P3, H5 y lo que salga de H4 esperan
+todas al mismo gesto.
+
+**La lectura incómoda, que es la que hay que llevarle al propietario.** Ese
+gesto **no es gradual**: un solo booleano enciende a la vez el motor por
+etapas, el clasificador que manda la pregunta al modelo local, el filtro de
+relevancia, los dos vocabularios y el techo de criticidad. **No hay forma de
+encender una cosa y observar.** Para un sistema cuyo criterio de apertura el
+propietario puso deliberadamente por encima de D1, eso es un problema de
+gobierno del cambio, no de código: el día que abra, cambian siete cosas y
+cualquier regresión llegará sin poder atribuirse a ninguna.
+
+**Candidato a encargo, NO lanzado** (queda para que lo apruebe el propietario):
+separar la puerta única en interruptores nombrados —o, como mínimo, un modo de
+apertura por etapas— para que abrir se pueda hacer por pasos observables. No lo
+escribo como orden todavía porque toca `composition_root` y la §6.3, y eso es
+decisión suya, no del ciclo.
+---
+
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
 
 1. `ollama_category_classifier.py`: ruta relativa y sin
