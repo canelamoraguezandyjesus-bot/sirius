@@ -35,6 +35,7 @@ faltaba las ocho veces.
 from __future__ import annotations
 
 import ast
+import re
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -107,7 +108,10 @@ def piezas_del_motor() -> tuple[Pieza, ...]:
 
     - `modulo:<ruta.punteada>` — cada `.py` público del paquete.
     - `definicion:<ruta.punteada>.<nombre>` — clases, funciones y constantes
-      públicas de nivel superior.
+      públicas de nivel superior, **con anotación o sin ella**: `TABLA = {...}`
+      y `TABLA: dict[...] = {...}` son la misma pieza escrita de dos formas, y
+      mirar solo una es la misma ceguera POR FORMA que tumbó a la guarda vieja
+      con `cerrada`.
     - `campo:<ruta.punteada>.<Clase>.<campo>` — cada campo anotado público de
       una clase. Aquí es donde entra `MirroredWorkItem.cerrada`.
 
@@ -148,6 +152,13 @@ def piezas_del_motor() -> tuple[Pieza, ...]:
                     if isinstance(destino, ast.Name) and not destino.id.startswith("_"):
                         identidad = f"definicion:{punteada}.{destino.id}"
                         piezas.append(Pieza("definicion", identidad, destino.id, relativa))
+            elif isinstance(nodo, ast.AnnAssign) and isinstance(nodo.target, ast.Name):
+                # Una constante anotada es una constante. `EJES_DECLARADOS` se
+                # escapaba por aquí: construida, probada y sin un solo lector en
+                # `src/`, y la batería pasaba en verde por encima de ella.
+                if not nodo.target.id.startswith("_"):
+                    identidad = f"definicion:{punteada}.{nodo.target.id}"
+                    piezas.append(Pieza("definicion", identidad, nodo.target.id, relativa))
     return tuple(piezas)
 
 
@@ -203,6 +214,21 @@ def _usos_de_produccion() -> dict[str, _UsosDeUnFichero]:
     return indice
 
 
+def _sin_comentarios(ruta: Path, crudo: str) -> str:
+    """El texto de un fichero no-Python sin nada que sea comentario.
+
+    Recortar por `#` línea a línea no basta en PowerShell: `<# … #>` es un
+    comentario de BLOQUE, sus líneas interiores no empiezan por `#` y sobreviven
+    intactas al recorte. `scripts/build_windows.ps1` y
+    `scripts/build_windows_impl.ps1` tienen bloques así, y un módulo nombrado
+    solo ahí dentro habría parecido vivo: exactamente el defecto que esta guarda
+    cierra en el lado Python leyendo el AST.
+    """
+    if ruta.suffix == ".ps1":
+        crudo = re.sub(r"<#.*?#>", " ", crudo, flags=re.DOTALL)
+    return "\n".join(linea.split("#", 1)[0] for linea in crudo.splitlines())
+
+
 @lru_cache(maxsize=1)
 def _textos_de_produccion() -> dict[str, str]:
     """Workflows, guiones de shell y `pyproject.toml`, sin sus comentarios."""
@@ -216,8 +242,7 @@ def _textos_de_produccion() -> dict[str, str]:
         if not ruta.is_file():
             continue
         crudo = ruta.read_text(encoding="utf-8", errors="ignore")
-        sin_comentarios = "\n".join(linea.split("#", 1)[0] for linea in crudo.splitlines())
-        textos[str(ruta.relative_to(RAIZ))] = sin_comentarios
+        textos[str(ruta.relative_to(RAIZ))] = _sin_comentarios(ruta, crudo)
     return textos
 
 
@@ -230,6 +255,23 @@ def _nombrado_en_texto(pieza: Pieza) -> list[str]:
     por texto sobre un campo llamado `estado` o `motivo` acierta en cualquier
     workflow por casualidad: aplicarla a definiciones y campos habría dado por
     vivas 9 piezas que están muertas, medido en ADR-177.
+
+    Para los módulos SÍ es una búsqueda por subcadena del stem, y eso es un
+    falso negativo declarado, no un descuido: nueve stems del motor casan por
+    casualidad en estos ficheros (`run` en 36 de ellos —basta un `uv run`—,
+    `profile` en 16, `intent` en 11, `dispatch` en 10, `gate` en 6, `store` en
+    4, `cli` en 3, `errors` en 2, `events` y `budget` en 1), y el motor tiene
+    `domain/run.py`, `gate.py`, `cli.py`, `ports/store.py`, `domain/intent.py`
+    y `domain/errors.py`. Hoy ninguno produce un verde falso —los únicos módulos
+    sin mención en `.py` de producción son los cinco `*_cli`, que son puntos de
+    entrada declarados, y los ya exceptuados—, pero el día que uno de esos seis
+    pierda su último llamante la guarda lo dará por vivo. Estrecharlo a lo que
+    solo puede ser una invocación (objetivo de `[project.scripts]`, `-m`, nombre
+    del guion) se probó en la ronda 2 y da un falso POSITIVO: `drip_guard` lo
+    invoca `scripts/automation/sirius_drip_guard_cli.py` cargándolo **por
+    nombre de fichero**, una forma que ni el AST ni el punto de entrada ven. Un
+    falso positivo es la dirección en la que esta guarda no puede equivocarse,
+    así que se queda la subcadena y la limitación queda medida en ADR-177 §2.
     """
     if pieza.tipo != "modulo":
         return []
@@ -242,7 +284,13 @@ def llamantes(pieza: Pieza) -> list[str]:
     """Ficheros de PRODUCCIÓN cuyo CÓDIGO usa esta pieza.
 
     Para un módulo, el llamante tiene que estar en otro fichero: un módulo no se
-    importa a sí mismo. Para una definición o un campo, vale su propio módulo,
+    importa a sí mismo. El descarte es por RUTA y no por stem, porque tres
+    stems del motor están repetidos (`store.py`, `dispatch_journal.py` y
+    `supervisor_journal.py`, cada uno en `ports/` y en `adapters/durable/`):
+    descartando por stem, el adaptador —que es el llamante natural de su
+    puerto— no contaba, y un puerto cuyo único importador fuera su adaptador
+    habría dado ROJO estando vivo. Un falso POSITIVO, que es la dirección en la
+    que esta guarda no puede equivocarse. Para una definición o un campo, vale su propio módulo,
     porque la pieza puede estar cableada ahí dentro y llegar viva a producción
     por el módulo que la contiene —lo que se persigue es la pieza a la que no
     llama NADIE, que es lo que decía la evidencia de ADR-173:
@@ -254,7 +302,7 @@ def llamantes(pieza: Pieza) -> list[str]:
     """
     encontrados: list[str] = []
     for fichero, usos in _usos_de_produccion().items():
-        if pieza.tipo == "modulo" and Path(fichero).stem == pieza.clave:
+        if pieza.tipo == "modulo" and fichero == pieza.ruta:
             continue
         disponibles = usos.atributos_leidos if pieza.tipo == "campo" else usos.nombres
         if pieza.clave in disponibles:
@@ -445,6 +493,11 @@ SIN_LLAMANTE_CONOCIDO: dict[str, str] = {
         "es la cuenta de días verdes seguidos del §11.2: se calcula y nadie la lee, "
         "solo dos baterías de `tests/engine/`"
     ),
+    "definicion:projection_verifier.EJES_DECLARADOS": (
+        "es la tupla de los tres ejes que se verifican, y no la nombra nadie en `src/` "
+        "ni en `scripts/`: solo `tests/engine/test_projection_verifier.py`. La destapó "
+        "la rama de constantes anotadas el 12-09-2026"
+    ),
     "campo:worker_request.WorkerRequest.capacidades_resueltas": (
         "son las capacidades ya resueltas del encargo; solo las lee "
         "`tests/engine/test_worker_request.py`"
@@ -457,6 +510,12 @@ SIN_LLAMANTE_CONOCIDO: dict[str, str] = {
 #: aparición de la familia la encontró una persona leyendo código y no la
 #: batería que existe para encontrarla.
 PIEZA_QUE_TUMBO_LA_GUARDA = "campo:domain.mirror.MirroredWorkItem.cerrada"
+
+#: Una constante pública declarada CON anotación, que es la forma que la
+#: derivación no veía hasta la ronda 2: `EJES_DECLARADOS: tuple[str, ...] = (...)`
+#: estaba construida, probada y sin un solo lector en `src/`, y la batería pasaba
+#: en verde por encima. Es la misma ceguera POR FORMA DE PIEZA que la de `cerrada`.
+PIEZA_ANOTADA_DE_NIVEL_SUPERIOR = "definicion:projection_verifier.EJES_DECLARADOS"
 
 #: Las cuatro que vigilaba la lista a mano, para que la derivación no pueda
 #: perder en silencio la cobertura que ya había.
@@ -510,6 +569,18 @@ def test_ninguna_excepcion_sobra(identidad: str) -> None:
     Este es el cierre que la lista a mano no podía tener. Una lista de inclusión
     a la que le falta una entrada está callada; una de exclusión que ya no hace
     falta grita, y por eso restar es mejor que sumar.
+
+    **Aquí la ambigüedad de homónimos se invierte y hay que decirlo.** `llamantes`
+    compara por `clave`, no por `identidad`, y 84 identificadores del motor los
+    comparten 274 piezas. En `test_cada_pieza_publica_tiene_quien_la_llame` eso
+    produce falsos negativos —una pieza muerta parece viva—, que es la dirección
+    aceptada por ADR-177. En ESTA prueba el mismo mecanismo obliga a borrar una
+    excepción que sigue siendo cierta: si aparece un uso de un campo homónimo de
+    otra clase, la batería afirma que la pieza exceptuada ya tiene llamante. Dos
+    `Pieza` de tipo `campo` con la misma `clave` y distinta `identidad` reciben
+    exactamente el mismo resultado, así que este rojo dice «revisa la excepción»,
+    no «la pieza está viva». Distinguirlo de verdad pide el grafo de
+    alcanzabilidad que ADR-177 descarta; queda declarado, no resuelto.
     """
     por_identidad = {pieza.identidad: pieza for pieza in piezas_del_motor()}
     pieza = por_identidad.get(identidad)
@@ -604,4 +675,73 @@ def test_las_cuatro_de_la_lista_a_mano_siguen_vigiladas(identidad: str) -> None:
     )
     assert identidad not in SIN_LLAMANTE_CONOCIDO, (
         f"`{identidad}` estaba vigilado y ahora está exceptuado, sin decir por qué"
+    )
+
+
+def test_las_constantes_anotadas_entran_en_el_inventario() -> None:
+    """Una constante anotada es una constante: `TABLA: dict[...] = {...}` cuenta.
+
+    La primera versión de esta derivación solo miraba `ast.Assign`, así que las
+    cinco constantes anotadas del motor no estaban vigiladas por nada — y una de
+    ellas, `EJES_DECLARADOS`, es exactamente la familia que esta batería existe
+    para cazar: sin lector en `src/` ni en `scripts/`. Con la rama de
+    `ast.AnnAssign` quitada, esta prueba se pone en rojo.
+    """
+    por_identidad = {pieza.identidad: pieza for pieza in piezas_del_motor()}
+    assert PIEZA_ANOTADA_DE_NIVEL_SUPERIOR in por_identidad, (
+        f"`{PIEZA_ANOTADA_DE_NIVEL_SUPERIOR}` no está en el inventario derivado: la "
+        "derivación volvió a ser ciega para las constantes públicas anotadas, que es "
+        "la misma ceguera por forma de pieza que la tumbó con `cerrada`"
+    )
+    anotadas = {
+        "definicion:dispatch_cli.TABLA_PERFILES",
+        "definicion:dispatcher.TABLA_ACTIVACION",
+        "definicion:projection_verifier.CLASES_CON_ESTADO_PROPIO",
+        "definicion:projection_verifier.EJES_DECLARADOS",
+        "definicion:round_history.SEVERITY_WEIGHTS",
+    }
+    faltan = sorted(anotadas - set(por_identidad))
+    assert not faltan, f"constantes anotadas fuera del inventario: {faltan}"
+
+
+def test_un_modulo_homonimo_puede_ser_llamante_de_su_puerto() -> None:
+    """El descarte del propio fichero es por ruta, no por stem.
+
+    Tres stems del motor están repetidos entre `ports/` y `adapters/durable/`.
+    Descartando por stem, el adaptador —el llamante natural de su puerto— no
+    contaba, y un puerto cuyo único importador fuera su adaptador habría dado
+    ROJO estando vivo: un falso positivo, que es la dirección en la que esta
+    guarda no puede equivocarse.
+    """
+    por_identidad = {pieza.identidad: pieza for pieza in piezas_del_motor()}
+    puerto = por_identidad["modulo:ports.dispatch_journal"]
+    adaptador = "src/sirius_engine/adapters/durable/dispatch_journal.py"
+    assert _usos_de_produccion()[adaptador].nombres >= {puerto.clave}, (
+        "el adaptador homónimo ya no nombra a su puerto; revisa esta prueba"
+    )
+    assert adaptador in llamantes(puerto), (
+        f"`{adaptador}` importa el puerto y no cuenta como llamante: el descarte del "
+        "propio fichero volvió a hacerse por stem y puede dar un falso positivo"
+    )
+
+
+def test_un_comentario_de_bloque_de_powershell_no_mantiene_vivo_un_modulo() -> None:
+    """`<# … #>` es un comentario, y un comentario no llama a nada.
+
+    Recortar por `#` línea a línea deja intactas las líneas INTERIORES de un
+    bloque: solo desaparece la primera. Hay bloques reales en
+    `scripts/build_windows.ps1` y en `scripts/build_windows_impl.ps1`, y un
+    módulo nombrado solo ahí dentro habría parecido vivo, que es justo el
+    defecto que esta guarda cierra en el lado Python leyendo el AST.
+    """
+    sembrado = "modulo_sembrado_solo_en_un_bloque"
+    ruta = RAIZ / "scripts" / "build_windows.ps1"
+    crudo = ruta.read_text(encoding="utf-8")
+    assert "<#" in crudo, "ya no hay comentario de bloque aquí; revisa esta prueba"
+    corte = crudo.index("<#") + crudo[crudo.index("<#") :].index("\n") + 1
+    con_semilla = crudo[:corte] + f"    Invoca {sembrado} aquí dentro.\n" + crudo[corte:]
+    assert sembrado not in _sin_comentarios(ruta, con_semilla), (
+        "un nombre escrito dentro de un `<# … #>` sobrevivió a la normalización: "
+        "`_nombrado_en_texto` lo tomaría por una invocación y daría por vivo un "
+        "módulo al que solo menciona un comentario"
     )

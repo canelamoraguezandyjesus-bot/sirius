@@ -84,7 +84,9 @@ Escrito antes, no como excusa después:
   vale por la otra: la guarda puede dar por viva una pieza muerta que comparte
   nombre con otra viva. Es un falso negativo, nunca un falso positivo, y esa es
   la dirección en la que una guarda debe equivocarse.
-- **No decide qué hacer con las 36 piezas sin llamante que descubre.** Cablearlas
+- **No decide qué hacer con las piezas sin llamante que descubre** (36 con la
+  medida de esta nota; 46 con la guarda ya terminada —ver la conciliación en
+  «Comprobación que la sostiene»—).** Cablearlas
   o retirarlas es trabajo de otras incidencias —está fuera del alcance de
   WI-20260912-154847—. Aquí quedan declaradas como dato, con su razón escrita y
   la fecha en que se encontraron, y la guarda impide que la lista crezca en
@@ -182,17 +184,36 @@ Con el árbol de `9efaa3c` y el guion de derivación de la propia guarda:
 |---|---|
 | lista a mano `PIEZAS` | **4** módulos, 0 definiciones, 0 campos |
 | módulos públicos del motor | 75 |
-| inventario derivado | **826** — 75 módulos, 354 definiciones, 397 campos |
-| sin llamante en producción | **45** — 7 módulos, 17 definiciones, 21 campos |
+| inventario derivado | **831** — 75 módulos, 359 definiciones, 397 campos |
+| sin llamante en producción | **46** — 7 módulos, 18 definiciones, 21 campos |
 
 La lista a mano cubría el **5,3 %** de los módulos y el **0,48 %** de las piezas
 públicas, y ninguna de las cuatro estaba muerta: por eso no encontró nada en
 tres meses. El inventario derivado corre en 2 s y la batería pasa de 5 pruebas a
-923.
+933.
 
-Las 45 piezas sin llamante son deuda que la derivación destapó, no un fallo
-nuevo. Tres son dobles de sustitución que viven en `src/` a propósito; las otras
-42 están muertas de verdad, y entre ellas hay dos que valen por sí solas:
+**Por qué la nota de arranque dice 36 y aquí dice 46.** Son medidas del mismo
+guion en dos momentos distintos y ninguna es un error de la otra; la nota de
+arranque no se reescribe porque es evidencia fechada, así que la conciliación va
+aquí:
+
+| medida | piezas | sin llamante | qué cambió después |
+|---|---|---|---|
+| nota de arranque (antes de escribir la guarda) | 826 | **36** — 7 módulos, 17 definiciones, **12 campos** | contaba como lectura CUALQUIER aparición del atributo |
+| guarda terminada (ronda 1) | 826 | **45** — 7, 17, **21 campos** | para `campo:` solo cuenta `ast.Attribute` en contexto `Load`: escribir un campo dejó de mantenerlo vivo, que es el caso `cerrada` |
+| guarda terminada (ronda 2, esta) | **831** | **46** — 7, **18**, 21 | la derivación pasó a ver también `ast.AnnAssign` de nivel superior: cinco constantes anotadas más, una de ellas sin llamante |
+
+La cifra vigente es la de la última fila, y es la que sostiene el diccionario:
+`SIN_LLAMANTE_CONOCIDO` tiene 46 claves —7 `modulo:`, 18 `definicion:`, 21
+`campo:`—. Las nueve campos de diferencia entre la primera fila y la segunda son
+campos que se ESCRIBEN y no se leen; la definición de diferencia entre la
+segunda y la tercera es `projection_verifier.EJES_DECLARADOS`.
+
+Las 46 piezas sin llamante son deuda que la derivación destapó, no un fallo
+nuevo. Tres son dobles de sustitución que viven en `src/` a propósito, y ocupan
+**seis** de las 46 entradas —el módulo y la clase de cada uno—; contando en la
+misma unidad que el resto de las cifras, las otras **40 piezas** están muertas
+de verdad, y entre ellas hay dos que valen por sí solas:
 `governance.registrar_gasto` —«la ÚNICA función de este bloque que actualiza el
 gasto», dice su propio docstring, y no la llama ningún camino de producción— y
 `memoria.problemas_de_la_leccion`, que ADR-174 declaró «la única definición de
@@ -247,18 +268,32 @@ proyecto**, y esta guarda es una de ellas —lee el motor entero con `ast`—. B
 ## Consecuencias
 
 - La familia «pieza sin lector» tiene por primera vez un detector que **encuentra
-  casos nuevos** en vez de confirmar los viejos: hoy encontró 42 piezas muertas
-  de verdad, entre ellas dos que dos ADR distintos daban por cableadas.
+  casos nuevos** en vez de confirmar los viejos: hoy encontró 40 piezas muertas
+  de verdad —46 entradas menos las seis de los tres dobles de sustitución—,
+  entre ellas dos que dos ADR distintos daban por cableadas.
 - Una pieza pública nueva del motor **nace vigilada**. Quien la escriba sin
   cablearla tendrá que cablearla, retirarla, o declararla con su razón.
-- La deuda queda contada y con fecha. Las 45 entradas de
+- La deuda queda contada y con fecha. Las 46 entradas de
   `SIN_LLAMANTE_CONOCIDO` son un inventario que se puede vaciar por incidencias,
   y cada vez que se cablea una, la batería exige borrar su entrada.
-- La batería pasa de 5 a 923 casos y tarda 2 s. El coste es real y está medido.
+- La batería pasa de 5 a 933 casos y tarda 2 s. El coste es real y está medido.
 - Lo que sigue sin cubrirse está en la sección 2 de la nota de arranque: no se
   mira el paquete `sirius`, no se ven los métodos ni los miembros de `Enum`, y
-  84 identificadores homónimos pueden dar por viva una pieza muerta. Son falsos
-  negativos, nunca falsos positivos.
+  84 identificadores homónimos pueden dar por viva una pieza muerta. En la
+  prueba principal son falsos negativos; el mismo mecanismo se invierte en
+  `test_ninguna_excepcion_sobra`, donde un homónimo puede obligar a borrar una
+  excepción que sigue siendo cierta, y eso queda declarado en su docstring.
+  Y para los MÓDULOS la vía de texto sigue siendo una búsqueda por subcadena del
+  stem: nueve stems del motor casan por casualidad en los ficheros no-Python de
+  producción (`run` en 36 —basta `uv run`—, `profile` en 16, `intent` en 11,
+  `dispatch` en 10, `gate` en 6, `store` en 4, `cli` en 3, `errors` en 2,
+  `events` y `budget` en 1), y hay módulos del motor con esos mismos stems. Hoy
+  no produce ningún verde falso, pero el día que uno de ellos pierda su último
+  llamante la guarda lo dará por vivo: otro falso negativo declarado. Estrecharlo
+  a lo que solo puede ser una invocación se probó en la ronda 2 y da un falso
+  POSITIVO —`drip_guard` lo carga `sirius_drip_guard_cli.py` por nombre de
+  fichero, forma que ni el AST ni el punto de entrada ven—, así que se queda la
+  subcadena.
 
 ## Alternativas descartadas y por qué
 
