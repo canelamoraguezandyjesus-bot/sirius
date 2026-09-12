@@ -1,6 +1,6 @@
 # Desenlaces del motor de Sirius
 
-> **Generado por `uv run sirius-memoria desenlaces`** a partir de `diario.jsonl` y `diario-despacho.jsonl`: 549 sucesos, el último el 2026-09-12 23:48 UTC. Lo escribe el motor en la rama
+> **Generado por `uv run sirius-memoria desenlaces`** a partir de `diario.jsonl` y `diario-despacho.jsonl`: 550 sucesos, el último el 2026-09-12 23:55 UTC. Lo escribe el motor en la rama
 > `estado-del-motor` tras cada reflejo (ADR-171). **El diario manda**: si un documento
 > dice otra cosa sobre un encargo, vale esto.
 
@@ -11,12 +11,13 @@
 | active | 2 |
 | cancelled | 18 |
 | delivered | 56 |
-| needs_decision | 2 |
+| needs_decision | 3 |
 
 ## Los encargos, del más reciente al más antiguo
 
 | Encargo | Clase | Estado / fase | Creado | Último suceso | Objetivo | Evidencia |
 |---|---|---|---|---|---|---|
+| WI-20260912-235558 | programacion | needs_decision / preparar | 2026-09-12 23:55 UTC | 2026-09-12 23:55 UTC | Corrige que el registro de defectos pueda quedarse dormido sin que nada lo note.… | — |
 | WI-20260912-154847 | programacion | cancelled / revisar | 2026-09-12 15:48 UTC | 2026-09-12 23:48 UTC | Corrige tests/automation/test_piezas_con_llamante.py, la guarda de la familia «pieza sin lector», que hoy… | [#592](https://github.com/canelamoraguezandyjesus-bot/sirius/issues/592) |
 | WI-20260912-223921 | programacion | active / comprobar | 2026-09-12 22:39 UTC | 2026-09-12 23:34 UTC | Corrige src/sirius_engine/mirror_projection.py: _estado_y_fase declara «etiquetas contradictorias» contando… | [#594](https://github.com/canelamoraguezandyjesus-bot/sirius/issues/594) |
 | WI-20260905-103516 | programacion | cancelled / revisar | 2026-09-05 10:35 UTC | 2026-09-12 05:46 UTC | Implementa que el reflector sepa recorrer una recuperación completa acreditada por el historial | [#539](https://github.com/canelamoraguezandyjesus-bot/sirius/issues/539) |
