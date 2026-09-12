@@ -4811,6 +4811,81 @@ la etiqueta real antes de decir nada al propietario, que es lo que evitó que el
 falso final llegara a ser un informe falso.
 ---
 
+### 96. Los 239 elementos de más no son una regresión: son el precio del rescate de críticas, medido por primera vez de punta a punta (12-09-2026, 01:15 UTC)
+
+**La corrida limpia.** El propietario repitió con `--espera 90`:
+**`Rendiciones del filtro. 0`**, o sea que el filtro juzgó las 47 consultas y
+la medición **es válida**. Resultado: `7/47` exactas; **239** de más;
+`71/81` de cobertura; **0 omisiones críticas**. La corrida contaminada de la
+víspera daba 240: las dos rendiciones valían **un** elemento. La sospecha de
+que el «0 críticas» pudiera venir de que el filtro no llegara a juzgar
+`B04-CA-33`/`B04-CA-34` queda **descartada midiendo**, no razonando.
+
+**Lo primero, porque es lo que se perseguía desde junio:** cero críticas
+perdidas en el camino real, con el modelo real, en una medición que el propio
+guion declara válida. Es la primera vez.
+
+**Frente a la única medición publicada antes** (ADR-125, 02-09, mismo modelo,
+árbol `9ad873a`):
+
+| | 02-09 | 12-09 |
+|---|---|---|
+| omisiones críticas | 10 | **0** |
+| cobertura | 59/81 | 71/81 |
+| aciertos exactos | 22/47 | 7/47 |
+| elementos de más | 39 | 239 |
+
+**Primera comprobación, la que suele dinamitar una comparación: ¿cuenta
+distinto el instrumento?** No. Entre `9ad873a` y `4087b8a`,
+`medir_banco_con_ollama_real.py` tiene **un solo** commit (ADR-169) y lo único
+que cambia es pasar `cupo` al filtro en la firma del envoltorio. Ni una línea
+de cómo se cuentan las métricas. **El salto es de comportamiento, no de
+instrumento**, y eso hay que decirlo antes de explicarlo.
+
+**Segunda: ¿cuánto le llega al filtro hoy?** Medido por mí, determinista,
+**sobre el árbol de `4087b8a`**, con el paquete de producción y el filtro
+inerte (`diagnosticar_busqueda_del_banco.py` sin banderas, código de salida 0):
+`0/47`; **487** de más; `72/81`; 0 críticas. O sea: **el filtro ve 487 y deja
+pasar 239** —quita algo más de la mitad— y por el camino cuesta **un** hallado
+(72 → 71).
+
+**Tercera, y es la que reordena el resultado: qué entró entre las dos
+mediciones.** Cuarenta y ocho fusiones, y entre ellas **toda la línea de
+criticidad, que existe precisamente para devolver lo que el filtro tira**:
+
+| | |
+|---|---|
+| `ea79523` | M18b, la señal de criticidad como dato propio |
+| `cacc632` | M19a, índice de criticidad en la búsqueda |
+| `b1d6c34` | **M19b, el rescate RF-25/RF-26** y la prioridad de G12 |
+| `1d5e2d2` | **M20, la siembra en contexto por criticidad** |
+| `1b96508`, `dc731d4` | M21a/b, la interfaz de la criticidad |
+
+Las seis son **posteriores** a `9ad873a`. En el árbol que midió ADR-125 el
+filtro estaba **solo**: por eso perdía 10 críticas. Hoy el rescate y la siembra
+ponen de vuelta lo que el filtro descarta, y por eso pierde 0.
+
+**La lectura, dicha con su límite.** `10 → 0` y `39 → 239` no son dos noticias,
+una buena y otra mala: **son la misma máquina vista por sus dos caras.** El
+rescate no sabe distinguir «crítica que el filtro tiró por error» de «ruido que
+el filtro tiró con razón»; devuelve por criticidad y por categoría, y devuelve
+de más. Nadie había medido ese coste de punta a punta hasta hoy, porque la
+única medición con el modelo real era anterior a que el rescate existiera.
+
+**Lo que esto NO es todavía.** La atribución a cada mecanismo es **inferencia
+fechada, no medida**: sé que las seis fusiones son posteriores y sé lo que hace
+cada una, pero no he medido cuánto pone cada una. Localizarlo pide repetir la
+corrida en los árboles intermedios, y son cuarenta segundos cada uno en la
+máquina del propietario.
+
+**Y le falta el ancla.** La corrida es del propietario, en su copia, y **no
+tengo el `sha` de su árbol**: se lo he pedido. Hasta tenerlo, esta cifra **no
+entra en ningún ADR** ni sustituye a la de ADR-125 como «la única salida
+publicada». Queda aquí, en la bitácora, que es registro de auditoría y no
+fuente normativa. La regla que lo exige es la misma que CODEX-002 impuso a
+ADR-169: «sobre este árbol» sin nombrar el árbol es una frase que caduca.
+---
+
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
 
 1. `ollama_category_classifier.py`: ruta relativa y sin
