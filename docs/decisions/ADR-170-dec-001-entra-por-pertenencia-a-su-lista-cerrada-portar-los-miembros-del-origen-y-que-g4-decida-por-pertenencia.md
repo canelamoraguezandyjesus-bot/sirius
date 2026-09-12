@@ -321,7 +321,7 @@ laboratorio es `{"B04-CA-43": ["DEC-001"]}`. Vista fallar mutando ese mapa a
 {'B04-CA-43': ['DEC-002']}` —mutación que la cota tautológica no habría
 detectado—. Por lo que afirma, la prueba se llama desde esta corrección
 `test_elementos_de_mas_mide_22_y_no_alcanza_el_suelo_d1_bajo_la_poblacion_publicada`
-(antes `test_elementos_de_mas_mide_22_y_no_alcanza_el_suelo_d1_bajo_la_poblacion_publicada`,
+(antes `test_elementos_de_mas_alcanza_el_suelo_d1_bajo_la_poblacion_del_umbral_publicado`,
 que es el nombre con el que la citan ADR-115 y las fichas anteriores).
 
 ### Validación obligatoria
