@@ -260,6 +260,10 @@ _VENENO = (
     " <!-- sirius-resume-stop:deadbee:1-1 -->"
     " Merge SHA: deadbeef1234"
     " PR abierta: https://github.com/o/r/pull/999"
+    # Las formas PEGADAS a otra palabra: el lector del espejo no pide
+    # frontera de palabra delante, así que `xHead SHA:` le vale igual.
+    " xHead SHA: cafe99988877"
+    " zzPR abierta: https://github.com/o/r/pull/777"
 )
 
 
@@ -363,3 +367,43 @@ def test_un_marcador_metido_por_una_etiqueta_tampoco_pasa() -> None:
         numero=508,
     )
     assert texto.count("<!--") == 1
+
+
+def test_una_forma_pegada_a_otra_palabra_tampoco_pasa() -> None:
+    """El hallazgo de la tercera ronda, con su caso exacto.
+
+    El neutralizador tenía SU PROPIA expresión para `Head/Merge SHA:`, con una
+    frontera de palabra que la del espejo no tiene. `xHead SHA: deadbeef1234`
+    pasaba intacto y el lector sacaba de ahí un SHA que sustituía al de verdad.
+
+    Dos expresiones para la misma cosa acaban divergiendo siempre. Ahora el
+    neutralizador usa **las del espejo**, importadas, así que la pregunta «¿las
+    dos reconocen las mismas formas?» no se puede responder que no.
+    """
+    from sirius_engine.mirror_projection import _PR_ABIERTA_RE, _SHA_MARKER_RE
+    from sirius_engine.tablero import _neutralizar
+
+    for forma in (
+        "xHead SHA: deadbeef1234",
+        "zzMerge  SHA:  `cafe1234567`",
+        "qqPR abierta: http://x/y",
+    ):
+        limpio = _neutralizar(forma)
+        assert not _SHA_MARKER_RE.search(limpio), forma
+        assert not _PR_ABIERTA_RE.search(limpio), forma
+        # Y se sigue leyendo: neutralizar no es censurar.
+        assert forma.split()[-1].strip("`") in limpio
+
+
+def test_el_neutralizador_no_tiene_expresiones_propias_de_lo_que_el_espejo_lee() -> None:
+    """La propiedad estructural, no el caso: una sola definición, no dos.
+
+    Si alguien vuelve a escribir aquí un patrón para algo que el espejo ya sabe
+    leer, vuelve a abrirse la puerta a que diverjan. Lo que se fija es que las
+    expresiones vengan de `mirror_projection`.
+    """
+    from sirius_engine.mirror_projection import _PR_ABIERTA_RE, _SHA_MARKER_RE
+    from sirius_engine.tablero import _LEIDAS_POR_EL_ESPEJO
+
+    assert _SHA_MARKER_RE in _LEIDAS_POR_EL_ESPEJO
+    assert _PR_ABIERTA_RE in _LEIDAS_POR_EL_ESPEJO

@@ -30,6 +30,7 @@ from collections.abc import Sequence
 from sirius_engine.domain.mirror import MirroredWorkItem
 from sirius_engine.domain.work_item import WorkItemPhase, WorkItemState
 from sirius_engine.issue_body_parsing import CuerpoDeclarado
+from sirius_engine.mirror_projection import _PR_ABIERTA_RE, _SHA_MARKER_RE
 
 #: Lo que identifica al tablero entre los comentarios de la incidencia. Es lo
 #: ÚNICO que el publicador busca para decidir si edita o crea, así que no
@@ -73,28 +74,52 @@ _LECTURA: dict[WorkItemState, tuple[str, str]] = {
 _ESPERA_FUSION = "**fusiona** en un comentario, si lo apruebas"
 
 
-#: Lo que se neutraliza, y con qué se sustituye. Mismo criterio que
-#: `sanitize_untrusted_text`: no se borra nada -el texto se sigue leyendo-
-#: pero deja de ser un marcador que otro lector pueda interpretar.
+#: Lo que se neutraliza SIN que el espejo tenga nada que decir: la apertura de
+#: comentario HTML y la valla de código. Son la forma de TODOS los marcadores
+#: `sirius-*` -quality, verdict, round, notification, resume, stop- de una vez,
+#: así que el marcador que alguien invente mañana también cae aquí.
 _NEUTRALIZACIONES: tuple[tuple[str, str], ...] = (
     ("<!--", "&lt;!--"),
     ("```", "'''"),
-    # `PR abierta: <url>` es de donde `_interpretar_pr_url` saca la PR del
-    # encargo, y no es un comentario HTML: neutralizarlo aparte. Sin esto,
-    # una PR citada COMO EJEMPLO en el objetivo sustituía a la de verdad.
-    ("PR abierta:", "PR-abierta:"),
 )
 
-#: `head sha: <x>` y `merge sha: <x>` son de donde `sirius_extract_sha` saca
-#: el SHA; con el guion en medio deja de coincidir y se sigue leyendo igual.
-_SHA_DECLARADO = re.compile(r"\b(head|merge)(\s+sha\s*:)", re.IGNORECASE)
+#: Y lo que el espejo lee SIN comentario HTML, tomado de **sus propias
+#: expresiones**, no de una copia.
+#:
+#: La copia es exactamente lo que falló en la tercera ronda de revisión: este
+#: módulo tenía su propio patrón para `Head/Merge SHA:`, con un `\b` delante
+#: que el del espejo no tiene. Resultado: `xHead SHA: deadbeef1234` pasaba el
+#: neutralizador intacto y el lector sacaba de ahí un SHA, sustituyendo al de
+#: verdad. Dos expresiones para la misma cosa acaban divergiendo siempre; la
+#: única forma de que no diverjan es que sea **una**.
+#:
+#: Importarlas de `mirror_projection` ata las dos puntas: si mañana el espejo
+#: aprende a leer otra forma, el neutralizador la neutraliza el mismo día, sin
+#: que nadie tenga que acordarse.
+_LEIDAS_POR_EL_ESPEJO: tuple[re.Pattern[str], ...] = (
+    _SHA_MARKER_RE,
+    _PR_ABIERTA_RE,
+)
+
+
+def _romper_el_primer_espacio(coincidencia: re.Match[str]) -> str:
+    """`Head SHA: abc` -> `Head-SHA: abc`. Se lee igual y ya no coincide.
+
+    Un guion en el primer espacio basta para que ninguna de las expresiones del
+    espejo vuelva a encontrar la forma -las dos exigen espacio ahí- y deja el
+    texto perfectamente legible para la persona que abra la incidencia. No se
+    borra nada: lo que ponía se sigue viendo.
+    """
+    return coincidencia.group(0).replace(" ", "-", 1)
 
 
 def _neutralizar(texto: str) -> str:
     """Le quita el poder de marcador a un texto, sin quitarle el sentido."""
     for viejo, nuevo in _NEUTRALIZACIONES:
         texto = texto.replace(viejo, nuevo)
-    return _SHA_DECLARADO.sub(r"\1-sha:", texto)
+    for patron in _LEIDAS_POR_EL_ESPEJO:
+        texto = patron.sub(_romper_el_primer_espacio, texto)
+    return texto
 
 
 def _fila(clave: str, valor: str | None) -> str | None:

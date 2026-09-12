@@ -201,11 +201,10 @@ actualizarse sin que nadie lo notara.
 ## Consecuencias
 
 - **Un workflow más, y `notify-sirius-state.yml` sin tocar una coma.**
-- **Los tableros se serializan entre sí en todo el repositorio.** Con un grupo
-  constante, dos cambios de etiqueta en incidencias distintas hacen cola, y
-  Actions descarta la pendiente cuando llega otra. Por eso cada pasada refresca
-  la incidencia del evento **y las últimas veinte movidas del ciclo**: la
-  descartada está siempre entre ellas. Cada tablero cuesta segundos.
+- **Cada incidencia tiene su propia ranura** (`tablero-sirius-<número>`), así
+  que dos incidencias no se pisan y dos eventos de la misma hacen cola. Ahí
+  perder la pendiente no pierde nada: la que sobreviva recalcula el tablero
+  entero del espejo más nuevo.
 - **Coste en minutos de Actions: irrelevante.** El repositorio es público a
   propósito y los runners estándar no consumen cuota en un repositorio público
   (ADR-044).
@@ -371,6 +370,81 @@ movidas más recientemente para perder una.
 **No es una cola de pendientes, y no se vende como tal**: es una cota, y a este
 ritmo —unos pocos encargos vivos— no se alcanza. Una cola durable exigiría un
 sitio donde guardar el pendiente, y eso es otro trabajo.
+
+## La tercera ronda: dos parches míos que estaban mal, y la raíz
+
+Tres hallazgos, **los tres ciertos y los tres reproducidos**. Y el segundo era
+el mismo que ya había «arreglado» en la ronda anterior, así que aquí la regla de
+las dos rondas se aplica de verdad: se tira el mecanismo, no se parchea otra vez.
+
+### 1. El neutralizador tenía SU PROPIA expresión, y divergía de la del lector
+
+`_SHA_MARKER_RE`, la del espejo, es `(?:Head|Merge)\s+SHA:` — **sin frontera de
+palabra**. La mía llevaba `\b` delante. Resultado, reproducido:
+`xHead SHA: deadbeef1234` pasaba el neutralizador **intacto** y el lector sacaba
+de ahí un SHA que sustituía al de verdad.
+
+Dos expresiones para la misma cosa acaban divergiendo siempre. La única forma
+de que no diverjan es que sea **una**: el neutralizador importa ahora
+`_SHA_MARKER_RE` y `_PR_ABIERTA_RE` **de `mirror_projection`** y sustituye sobre
+sus propias coincidencias. Si mañana el espejo aprende a leer otra forma, queda
+neutralizada el mismo día sin que nadie se acuerde de nada. Una prueba fija esa
+estructura, no solo el caso.
+
+*(El revisor marcó este hallazgo como tardío, por goteo suyo: el caso existía
+desde la primera versión. Queda dicho, y no cambia nada de lo que hay que
+arreglar.)*
+
+### 2 y 3. El «repaso de las últimas veinte» estaba muerto al nacer
+
+Dos hallazgos sobre el mismo mecanismo:
+
+- Entre las últimas movidas entran las **incidencias cerradas**, y hay ~170 con
+  `sirius:completed`: veinte cerradas recién tocadas desplazan a la que
+  importaba.
+- Y el `head -n 20` que recortaba la lista **cierra la tubería**: el productor
+  recibe SIGPIPE y, con `set -o pipefail` activo en ese paso, el `|| recientes=""`
+  se dispara. Reproducido con el bloque real: **5 de 5 veces la lista salía
+  vacía.** El mecanismo no refrescaba nada; solo la incidencia del evento.
+
+Dos rondas, el mismo sitio, y la segunda versión peor que la primera. La raíz no
+es ninguno de los dos fallos: es que **estaba reconstruyendo con una heurística
+lo que no debería haberse perdido nunca.** Y se perdía por una sola razón: un
+grupo de concurrencia común a todo el repositorio.
+
+**Así que el grupo pasa a ser por incidencia** —`tablero-sirius-<número>`— y el
+repaso desaparece entero, con su lista, su `head` y su tubería. Dentro de una
+sola incidencia, descartar la pendiente sí es inofensivo, que es lo que la
+primera versión afirmaba sin que fuera cierto.
+
+### Y por qué eso obligó a tocar una guarda, sin debilitarla
+
+Un grupo por incidencia lleva `${{ }}`, y
+`tests/automation/test_serializacion_del_motor.py` exige grupo **constante** a
+todo trabajo que invoque un comando del motor. Su razón, escrita en su propio
+encabezado, es concreta: dos lecturas independientes del diario **crean el mismo
+trabajo dos veces** (ADR-082). Ese peligro lo tiene quien puede llegar al
+almacén o al diario de despacho. `sirius-tablero` no puede: solo lee el espejo
+de GitHub y escribe un comentario.
+
+La guarda no distinguía, y ahora **lo deriva del código**: recorre los imports
+del punto de entrada hacia dentro y pregunta si alcanza
+`ports.store`, `ports.dispatch_journal` o `adapters.durable`. No es una lista a
+mano —esa es la familia que ADR-033 nombró y que aquí ha mordido cuatro veces—.
+El reparto que produce sobre este árbol: **mutan** `sirius-motor`,
+`sirius-despachar`, `sirius-racha`, `sirius-reflejar` y `sirius-supervisar`;
+**solo leen** `sirius-memoria`, `sirius-familia-repetida` y `sirius-tablero`.
+
+Que sigue mordiendo se comprueba sembrando la mutación «todo alcanza el
+almacén»: entonces la guarda **rechaza este mismo workflow** por tener grupo
+variable. Y con «nada alcanza el almacén», caen las anti-vacuas. Las dos
+direcciones, vistas caer.
+
+Una honestidad más: en este árbol **ningún** comando llega al almacén sin
+importarlo directamente, así que el recorrido en profundidad no lo ejercita nada
+real. Se conserva porque su error va en la dirección peligrosa —clasificar como
+de solo lectura algo que sí puede mover trabajo—, y se prueba con un grafo de
+mentira para que no sea una rama muerta que nadie ve romperse.
 
 ## Alternativas descartadas y por qué
 

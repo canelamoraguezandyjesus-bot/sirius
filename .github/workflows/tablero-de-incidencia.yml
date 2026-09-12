@@ -16,23 +16,28 @@ name: Mantener el tablero de la incidencia
 #   cuando llega otra, así que con un grupo compartido un tercer evento
 #   desplazaría al segundo y ese hecho no dejaría marcador. Un hecho perdido no
 #   se recupera.
-# - El tablero publica un ESTADO, recalculado entero del espejo en cada pasada,
-#   así que descartar una pendiente no pierde nada... SIEMPRE QUE la que
-#   sobrevive cubra también lo que la descartada iba a hacer. Ese "siempre que"
-#   faltaba en la primera versión y lo encontró la revisión del 12-09-2026: con
-#   un grupo común, si A está corriendo, B espera y llega C, Actions descarta B
-#   —y B era OTRA incidencia—, así que su tablero se quedaba viejo sin que nada
-#   volviera a tocarlo. Por eso cada pasada no refresca solo su incidencia:
-#   refresca también las últimas movidas del ciclo (ver el paso de abajo). Una
-#   incidencia cuyo evento se descartó es, por construcción, de las últimas
-#   movidas, así que la siguiente pasada la recoge.
+# - El tablero publica un ESTADO, recalculado entero del espejo en cada pasada.
 #
-# Y el grupo tiene que ser CONSTANTE por otra razón, que es una regla del
-# repositorio y no una preferencia: `tests/automation/test_serializacion_del_motor.py`
-# exige que todo trabajo que invoque un comando del motor se serialice con un
-# grupo constante (ADR-082). `sirius-tablero` solo LEE el espejo -no abre el
-# diario, no despacha, no muta nada-, pero la guarda no distingue, y hace bien
-# en no distinguir: la protección vale lo que vale su regla más simple.
+# Y EL GRUPO ES POR INCIDENCIA, que es la corrección de la tercera ronda de
+# revisión. Con un grupo común a todo el repositorio, Actions descartaba la
+# pendiente de OTRA incidencia y su tablero se quedaba viejo. Se intentó
+# compensarlo repasando «las últimas movidas del ciclo» en cada pasada, y esa
+# compensación fue peor que el problema: entraban 170 incidencias cerradas que
+# desplazaban a la que importaba, y el `head` que recortaba la lista cerraba la
+# tubería, mataba al productor con SIGPIPE y, con `pipefail`, dejaba la lista
+# VACÍA -reproducido 5 de 5-. El mecanismo no refrescaba nada.
+#
+# Con una ranura por incidencia no hay nada que compensar: cada incidencia tiene
+# la suya, y dentro de una sola incidencia descartar la pendiente sí es
+# inofensivo -la que sobrevive lee el espejo más nuevo y pinta el tablero más
+# nuevo-. Eso es lo que la primera versión afirmaba sin que fuera cierto,
+# y ahora lo es.
+#
+# Un grupo por incidencia lleva `${{ }}`, y `tests/automation/test_serializacion_del_motor.py`
+# exige grupo CONSTANTE a todo trabajo que invoque un comando del motor capaz de
+# mover trabajo (ADR-082). `sirius-tablero` no lo es -no alcanza el almacén ni
+# el diario de despacho, y esa guarda ahora lo DERIVA de los imports en vez de
+# suponerlo-, así que esta ranura no le quita ninguna protección a nadie.
 
 on:
   issues:
@@ -43,7 +48,10 @@ permissions:
   issues: write
 
 concurrency:
-  group: tablero-sirius
+  # Una ranura POR INCIDENCIA: dos incidencias distintas no se pisan, y dos
+  # eventos de la misma sí hacen cola -donde perder la pendiente no pierde
+  # nada, porque el tablero se recalcula entero del espejo-.
+  group: tablero-sirius-${{ github.event.issue.number }}
   cancel-in-progress: false
 
 jobs:
@@ -108,76 +116,29 @@ jobs:
 
           source scripts/automation/sirius_issue.sh
 
-          # QUÉ INCIDENCIAS SE REFRESCAN, y por qué no solo la del evento.
-          #
-          # El grupo de concurrencia es común a todo el repositorio (ver la
-          # cabecera), y Actions guarda como mucho UNA ejecución en espera por
-          # grupo: con tres eventos seguidos de incidencias distintas, la de en
-          # medio se descarta y su tablero se quedaría viejo para siempre.
-          #
-          # Se arregla cubriendo, en cada pasada, un SUPERCONJUNTO que contiene
-          # a la descartada: la incidencia del evento más las últimas movidas
-          # DEL CICLO. Una incidencia cuyo evento se descartó acaba de recibir
-          # una etiqueta -eso la mueve al principio de la lista por `updated`-,
-          # así que la siguiente pasada la recoge, esté abierta o cerrada.
-          #
-          # Se PIDEN 100 y se recortan a 20 DESPUÉS de filtrar, no antes, y esa
-          # diferencia es el arreglo de la segunda ronda de revisión: pidiendo
-          # 20 en crudo, el filtro se aplicaba sobre una lista que ya venía
-          # recortada, así que 20 PR recién tocadas dejaban CERO incidencias del
-          # ciclo y la descartada no se recogía nunca. Ahora hacen falta 20
-          # incidencias DEL CICLO movidas más recientemente para perder una, y
-          # eso a este ritmo -unos pocos encargos vivos- no se alcanza. No es
-          # una cola de pendientes: es una cota, y queda dicha.
-          recientes="$(sirius_retry _sirius_gh api \
-            "repos/${GH_REPO}/issues?state=all&sort=updated&direction=desc&per_page=100" \
-            --jq '.[] | select(has("pull_request") | not)
-                      | select([.labels[].name] | any(. == "sirius:implementing"
-                          or . == "sirius:repair-requested" or . == "sirius:ready-for-merge"
-                          or . == "sirius:blocked-decision" or . == "sirius:failed-safely"
-                          or . == "sirius:completed"))
-                      | .number' 2>/dev/null | head -n 20)" || recientes=""
-          if [ -z "$recientes" ]; then
-            echo "::warning::no pude listar las incidencias recientes; refresco solo la del evento."
+          cuerpo="$(mktemp)"
+          if ! uv run sirius-tablero --repo "$GH_REPO" --incidencia "$ISSUE_NUMBER" > "$cuerpo"; then
+            rm -f "$cuerpo"
+            echo "::warning::no se pudo calcular el tablero de #${ISSUE_NUMBER}; se deja como estaba."
+            exit 0
           fi
 
-          # La del evento SIEMPRE, aunque el listado fallara o ya no lleve
-          # ninguna de las seis etiquetas (una etiqueta retirada también cambia
-          # el estado que el tablero enseña).
-          numeros="$(printf '%s\n%s\n' "$ISSUE_NUMBER" "$recientes" | awk 'NF && !vistos[$0]++')"
-
-          fallos=0
-          for numero in $numeros; do
-            cuerpo="$(mktemp)"
-            if ! uv run sirius-tablero --repo "$GH_REPO" --incidencia "$numero" > "$cuerpo"; then
+          # El marcador se toma de la PRIMERA LÍNEA del propio cuerpo, que el
+          # generador garantiza y `tests/engine/test_tablero.py` fija. Copiarlo
+          # aquí sería el mismo dato en dos sitios, y el día que cambiara en uno
+          # el motor publicaría un tablero nuevo dejando huérfano al anterior.
+          marcador="$(sed -n '1p' "$cuerpo")"
+          case "$marcador" in
+            "<!--"*"-->") ;;
+            *)
               rm -f "$cuerpo"
-              echo "::warning::no se pudo calcular el tablero de #${numero}; se deja como estaba."
-              fallos=$((fallos + 1))
-              continue
-            fi
+              echo "::warning::el tablero no empieza por su marcador; no publico a ciegas."
+              exit 0
+              ;;
+          esac
 
-            # El marcador se toma de la PRIMERA LÍNEA del propio cuerpo, que el
-            # generador garantiza y `tests/engine/test_tablero.py` fija.
-            # Copiarlo aquí sería el mismo dato en dos sitios, y el día que
-            # cambiara en uno el motor publicaría un tablero nuevo dejando
-            # huérfano al anterior.
-            marcador="$(sed -n '1p' "$cuerpo")"
-            case "$marcador" in
-              "<!--"*"-->") ;;
-              *)
-                rm -f "$cuerpo"
-                echo "::warning::el tablero de #${numero} no empieza por su marcador; no publico a ciegas."
-                fallos=$((fallos + 1))
-                continue
-                ;;
-            esac
-
-            if ! sirius_comment_upsert "$GH_REPO" "$numero" "$marcador" "$cuerpo"; then
-              echo "::warning::no se pudo publicar el tablero de #${numero}; el ciclo continúa."
-              fallos=$((fallos + 1))
-            fi
-            rm -f "$cuerpo"
-          done
-
-          echo "Tableros repasados: $(printf '%s\n' "$numeros" | wc -l), con ${fallos} sin publicar."
+          if ! sirius_comment_upsert "$GH_REPO" "$ISSUE_NUMBER" "$marcador" "$cuerpo"; then
+            echo "::warning::no se pudo publicar el tablero de #${ISSUE_NUMBER}; el ciclo continúa."
+          fi
+          rm -f "$cuerpo"
           exit 0

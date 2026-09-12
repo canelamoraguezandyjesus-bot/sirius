@@ -29,9 +29,10 @@ ADR-033 nombró y que en este repositorio ha mordido cuatro veces.
 
 from __future__ import annotations
 
+import ast
 import re
 import tomllib
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -39,11 +40,87 @@ import yaml
 
 RAIZ = Path(__file__).resolve().parents[2]
 WORKFLOWS = RAIZ / ".github" / "workflows"
+FUENTE = RAIZ / "src" / "sirius_engine"
 PYPROJECT = RAIZ / "pyproject.toml"
 
 #: Cualquier forma de invocar al motor: sus comandos instalados, el módulo por
 #: `python -m`, o el paquete a secas.
 _PAQUETE = "sirius_engine"
+
+
+#: Los puertos por los que se llega al estado del motor: el almacén de
+#: `WorkItem` y el diario de despacho. Alcanzar cualquiera de los dos es poder
+#: CREAR o MOVER trabajo, que es el peligro exacto que esta batería vigila.
+_PUERTAS_DEL_ESTADO = (
+    "sirius_engine.adapters.durable",
+    "sirius_engine.ports.store",
+    "sirius_engine.ports.dispatch_journal",
+)
+
+
+def _importados(ruta: Path) -> set[str]:
+    """Los módulos que un fichero importa, leídos del árbol sintáctico."""
+    arbol = ast.parse(ruta.read_text(encoding="utf-8"))
+    nombres: set[str] = set()
+    for nodo in ast.walk(arbol):
+        if isinstance(nodo, ast.ImportFrom) and nodo.module:
+            nombres.add(nodo.module)
+        elif isinstance(nodo, ast.Import):
+            nombres.update(alias.name for alias in nodo.names)
+    return nombres
+
+
+def _fichero_de(modulo: str) -> Path | None:
+    if not modulo.startswith(_PAQUETE):
+        return None
+    resto = modulo.split(".")[1:]
+    suelto = FUENTE.joinpath(*resto).with_suffix(".py")
+    if suelto.is_file():
+        return suelto
+    paquete = FUENTE.joinpath(*resto, "__init__.py")
+    return paquete if paquete.is_file() else None
+
+
+def _importados_de_modulo(modulo: str) -> set[str]:
+    """Lo que importa un módulo del motor, o nada si no se encuentra su fichero."""
+    fichero = _fichero_de(modulo)
+    return _importados(fichero) if fichero is not None else set()
+
+
+def _alcanza_el_estado(
+    modulo: str, *, importados: Callable[[str], set[str]] = _importados_de_modulo
+) -> bool:
+    """¿Este punto de entrada puede llegar al almacén o al diario de despacho?
+
+    Recorre sus imports **hacia dentro**, no solo el primer nivel, y solo dentro
+    del paquete del motor. No es una lista escrita a mano -que es la familia de
+    defecto que ADR-033 nombró y que aquí ha mordido cuatro veces-: se deriva
+    del código, así que un comando nuevo queda clasificado sin que nadie lo
+    apunte.
+
+    Hoy, en este árbol, TODOS los comandos que alcanzan el almacén lo importan
+    directamente, así que el recorrido en profundidad no lo ejercita ningún
+    comando real. Se conserva igual, y se prueba con un grafo de mentira
+    (``importados`` es inyectable por eso), porque el error que evita va en la
+    dirección peligrosa: un comando que llegara al almacén a través de un
+    ayudante se clasificaría como de solo lectura y **perdería** su grupo
+    constante sin que nadie lo notara.
+    """
+    vistos: set[str] = set()
+    pendientes = [modulo]
+    while pendientes:
+        actual = pendientes.pop()
+        if actual in vistos:
+            continue
+        vistos.add(actual)
+        if any(actual.startswith(puerta) for puerta in _PUERTAS_DEL_ESTADO):
+            return True
+        for hijo in importados(actual):
+            if any(hijo.startswith(puerta) for puerta in _PUERTAS_DEL_ESTADO):
+                return True
+            if hijo.startswith(_PAQUETE):
+                pendientes.append(hijo)
+    return False
 
 
 def _comandos_del_motor() -> frozenset[str]:
@@ -55,6 +132,32 @@ def _comandos_del_motor() -> frozenset[str]:
     )
 
 
+def _comandos_que_mutan_el_estado() -> frozenset[str]:
+    """De los comandos del motor, los que pueden crear o mover trabajo.
+
+    **Por qué esta distinción existe** (ADR-175, tercera ronda de revisión). El
+    peligro que mide `test_exclusion_entre_invocaciones.py` y que ADR-082
+    convirtió en la única protección es concreto: dos lecturas independientes
+    del diario crean el mismo trabajo dos veces. Ese peligro lo tiene quien
+    puede llegar al almacén o al diario de despacho; quien solo LEE el espejo
+    de GitHub y escribe un comentario no lo tiene, y exigirle el mismo grupo
+    constante obliga a serializar entre sí cosas que no comparten nada -y eso
+    tuvo su propio precio: un tablero por incidencia con un grupo común pierde
+    actualizaciones de otras incidencias-.
+
+    La distinción **se deriva del código**, no se declara: lo que la sostiene
+    es `_alcanza_el_estado`, y las pruebas de abajo fijan los dos lados con
+    comandos reales del árbol.
+    """
+    datos = tomllib.loads(PYPROJECT.read_text(encoding="utf-8"))
+    scripts: dict[str, str] = datos.get("project", {}).get("scripts", {})
+    return frozenset(
+        nombre
+        for nombre, destino in scripts.items()
+        if destino.startswith(f"{_PAQUETE}.") and _alcanza_el_estado(destino.split(":")[0])
+    )
+
+
 def _invoca_al_motor(texto: str) -> bool:
     """¿Este workflow EJECUTA el motor, o solo lo nombra?
 
@@ -62,7 +165,7 @@ def _invoca_al_motor(texto: str) -> bool:
     un `run:`, un `uv run`, un `&&` o similar- y no dentro de una frase. Un
     comentario que diga «esto todavía no llama a `sirius-motor`» no cuenta.
     """
-    for comando in _comandos_del_motor():
+    for comando in _comandos_que_mutan_el_estado():
         if re.search(rf"(?m)(?:^|[|&;]|\brun:|\buv run )\s*{re.escape(comando)}\b", texto):
             return True
     return bool(re.search(rf"(?m)python3?\s+-m\s+{re.escape(_PAQUETE)}\b", texto))
@@ -216,3 +319,60 @@ def test_el_motor_espera_su_turno_en_vez_de_matar_al_que_va() -> None:
         f"estos trabajos cancelan una ejecución en curso del motor: {cancelan}. "
         "Cancelar no protege el diario: lo deja a medias. Se espera, no se mata."
     )
+
+
+def test_los_dos_lados_de_la_distincion_existen_de_verdad() -> None:
+    """Anti-vacua de la derivación, con comandos reales de este árbol.
+
+    Si `_alcanza_el_estado` se rompiera y devolviera siempre `False`, la puerta
+    entera dejaría de vigilar nada y todas las pruebas de arriba pasarían en
+    vacío. Si devolviera siempre `True`, volveríamos al criterio ancho sin que
+    nadie se enterase. Esto fija los dos lados.
+    """
+    mutan = _comandos_que_mutan_el_estado()
+    todos = _comandos_del_motor()
+
+    assert mutan, "ningún comando del motor alcanza el almacén: la derivación se rompió"
+    assert mutan < todos, (
+        "todos los comandos del motor alcanzan el almacén: la derivación no distingue nada"
+    )
+    # `sirius-reflejar` escribe en el almacén; `sirius-tablero` solo lee el
+    # espejo de GitHub y escribe un comentario.
+    assert "sirius-reflejar" in mutan
+    assert "sirius-motor" in mutan
+    assert "sirius-tablero" in todos
+    assert "sirius-tablero" not in mutan
+
+
+def test_la_derivacion_sigue_los_imports_hacia_dentro() -> None:
+    """El almacén a dos saltos también cuenta, con un grafo de mentira.
+
+    En este árbol no hay hoy ningún comando que llegue al almacén sin
+    importarlo directamente, así que el recorrido en profundidad no lo
+    ejercita nada real y sin esta prueba sería una rama muerta que nadie ve
+    romperse. El error que evita va en la dirección peligrosa: clasificar como
+    de solo lectura algo que sí puede mover trabajo.
+    """
+    grafo = {
+        "sirius_engine.entrada_falsa": {"sirius_engine.ayudante_falso"},
+        "sirius_engine.ayudante_falso": {"sirius_engine.ports.store"},
+        "sirius_engine.entrada_inocua": {"sirius_engine.otro_inocuo"},
+        "sirius_engine.otro_inocuo": {"json"},
+    }
+    importados = grafo.get
+
+    assert _alcanza_el_estado(
+        "sirius_engine.entrada_falsa", importados=lambda m: importados(m, set())
+    )
+    assert not _alcanza_el_estado(
+        "sirius_engine.entrada_inocua", importados=lambda m: importados(m, set())
+    )
+
+
+def test_la_derivacion_no_se_cuelga_con_imports_circulares() -> None:
+    """Dos módulos que se importan entre sí no pueden dejar la puerta girando."""
+    grafo = {
+        "sirius_engine.uno": {"sirius_engine.dos"},
+        "sirius_engine.dos": {"sirius_engine.uno"},
+    }
+    assert not _alcanza_el_estado("sirius_engine.uno", importados=lambda m: grafo.get(m, set()))
