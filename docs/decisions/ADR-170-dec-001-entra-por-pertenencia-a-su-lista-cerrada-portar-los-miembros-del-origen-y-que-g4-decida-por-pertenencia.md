@@ -328,12 +328,12 @@ que es el nombre con el que la citan ADR-115 y las fichas anteriores).
 
 **Cadena completa como UNA SOLA invocación** (ADR-145, ADR-153), con
 `pwsh -File scripts/check.ps1` y su código de salida capturado (ADR-154),
-anclada **al árbol de `68f510f7`** —el head con el código, las pruebas y el
+anclada **al árbol de `f95579a2`** —el head con el código, las pruebas y el
 cuerpo de esta ficha, ya con las correcciones de la ronda 2 (CLAUDE-H5-001 a
 CLAUDE-H5-005)—:
 
 ```
-5257 passed, 17 skipped, 2 xfailed in 563.91s (0:09:23)
+5257 passed, 17 skipped, 2 xfailed in 547.66s (0:09:07)
 EXIT_CODE_CHECK=0
 ```
 
@@ -354,7 +354,7 @@ La quinta validación se ejecuta **sobre el rango de la rama y no sin
 argumentos** (CODEX-001, señalado en la revisión de ADR-168):
 
 ```
-$ git diff --check 5fc5fdc 68f510f7
+$ git diff --check 5fc5fdc f95579a2
 EXIT_DIFF_CHECK=0
 $ git diff --check 5fc5fdc
 EXIT_DIFF_CHECK_ARBOL=0
@@ -364,7 +364,7 @@ Sin salida y con código `0` las dos: el rango entero de la rama —desde su
 base en `main` (`5fc5fdc`) hasta el árbol que midió la cadena— está limpio,
 y el árbol de trabajo que confirma esta sección también.
 
-Lo único posterior a `68f510f7` es **esta sección de la ficha** y el cuerpo
+Lo único posterior a `f95579a2` es **esta sección de la ficha** y el cuerpo
 de la PR: documentales, sin tocar código ni pruebas, y existen porque la
 sección tiene que anclarse al árbol que la cadena midió. Si una corrección
 posterior toca código o pruebas, la cadena se vuelve a ejecutar entera y
