@@ -266,6 +266,33 @@ propio `pide_contexto`: replica
 `experiments/adr002/lateral/categoria.py:_pide_contexto`, no producción, y
 sus cotas no cambian.
 
+Queda **una** ocurrencia viva que este trabajo deja falsa y que aquí no se
+corrige: `docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md:2053`
+escribe, como criterio de aceptación de M16, que «una prueba confirma que el
+`proposito` declarado por toda llamada real activa `pide_contexto`». Ese
+criterio ya no lo puede cumplir nada: la prueba que lo satisfacía
+(`tests/unit/test_peticion_ordinaria.py::test_purpose_activates_pide_contexto_with_or_without_an_active_project`)
+pasa en esta PR a llamarse
+`test_la_ampliacion_por_categoria_viene_encendida_con_proyecto_activo_y_sin_el`
+y afirma sobre `amplia_por_categoria`, y `pide_contexto` ya no existe en
+producción. Se deja sin corregir porque la salvaguarda de la incidencia #581
+prohíbe cambiar la Arquitectura Técnica sin decisión explícita del
+propietario, y no la hay. El día que esa decisión exista, lo que hay que
+escribir en la línea 2053 es el criterio equivalente sobre la señal explícita:
+que una prueba confirma que toda llamada real construye la petición con
+`amplia_por_categoria` encendida, y que una petición construida sin pasar por
+`ContextBuilder` no se ve afectada porque la señal la fija `rank()` mismo.
+
+Las otras dos menciones del mismo documento **no** entran, y conviene decir
+por qué para que nadie las arrastre a esa corrección: la línea 1625 describe
+el `pide_contexto` **del arnés**
+(`tests/acceptance/staged_engine_category_and_relevance.py:403-409`), que esta
+PR deja intacto a propósito y que por tanto sigue siendo cierta; y la 1633
+(«ninguna función de producción llega a inspeccionar con `pide_contexto`») ya
+era falsa **antes** de este trabajo, por M20/ADR-129, y lo que este cambio
+hace con ella es volverla cierta. La única línea que este trabajo deja falsa
+es la 2053.
+
 ### Validación obligatoria
 
 **Cadena completa como UNA SOLA invocación** (ADR-145, ADR-153), con
@@ -354,3 +381,9 @@ porque este trabajo añade **tres** casos netos al total recolectado:
 
 +2 de los ficheros de pruebas y +1 de la ficha son los +3 que 5369 → 5372
 exige. Ninguna prueba se ha relajado; ninguna cota del arnés se mueve.
+
+## La lección
+
+- familia: `prosa-que-el-cambio-deja-falsa`
+- sin esto se repetiría: retirar un símbolo de producción y dejar vivas las frases que lo daban por cierto; al quitar `pide_contexto` quedaron falsos seis docstrings, 21 referencias en pruebas y el criterio de aceptación de M16 de la Arquitectura Técnica, y el barrido que las buscó en `scripts/` y `tests/` no miró en `docs/evolution/`.
+- lo hace cumplir: `ninguna prueba`: ninguna prueba de este repositorio vigila la coherencia de la prosa de `docs/` con el árbol, y la ocurrencia que queda viva está en la Arquitectura Técnica, que la salvaguarda de #581 prohíbe tocar sin decisión del propietario.
