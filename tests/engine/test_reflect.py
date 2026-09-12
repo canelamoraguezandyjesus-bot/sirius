@@ -2915,11 +2915,43 @@ def test_el_cierre_no_pisa_unas_etiquetas_contradictorias() -> None:
     assert "se contradicen" in resultado.divergencia
 
 
-def test_el_cierre_no_pisa_una_divergencia_hacia_atras() -> None:
-    """Una parada sin permiso escrito sigue conservándose, cerrada o no.
+def test_con_la_incidencia_abierta_una_parada_sin_permiso_se_conserva() -> None:
+    """La familia que costó cuatro rondas en la PR #530: sin marcador no hay reanudación.
 
-    Es la familia que costó cuatro rondas en la PR #530: sin el marcador de
-    reanudación no hay reanudación. El cierre no es un permiso.
+    Mientras la incidencia siga ABIERTA, la parada se puede reanudar de verdad
+    -basta con que el propietario escriba la orden-, así que conservarla es lo
+    correcto y el reflector declara la divergencia sin tocar nada.
+    """
+    store = InMemoryWorkEngineStore()
+    activo = _work_item_activo(store)
+    parado = store.fail_work_item_safely(activo.work_id, diagnostico="se paró", now=_AHORA)
+    espejo = _espejo(
+        estado=WorkItemState.ACTIVE,
+        fase=WorkItemPhase.EJECUTAR,
+        etiquetas=("sirius:implementing",),
+        cerrada=False,
+    )
+
+    resultado = reflejar_desenlace(parado, espejo, _episodio())
+
+    assert resultado.pasos == ()
+    assert resultado.divergencia is not None
+    final = store.get_work_item(parado.work_id)
+    assert final is not None and final.estado is WorkItemState.FAILED_SAFELY
+
+
+def test_con_la_incidencia_cerrada_esa_misma_parada_se_termina() -> None:
+    """Lo que ADR-176 cambia, y por qué no reabre lo de la PR #530.
+
+    Misma parada, mismo espejo, mismas etiquetas: lo único que cambia es que la
+    incidencia está cerrada. Y entonces conservar la parada no la protege de
+    nada -reanudar se hace sobre la incidencia, y esa ya no se puede reanudar-:
+    la deja muerta, declarando la misma divergencia en cada pasada para
+    siempre.
+
+    La mitad que la PR #530 protegía se conserva y se comprueba: el encargo
+    **no vuelve a ACTIVE**. Sin permiso escrito no se reanuda nada; cancelar no
+    es reanudar.
     """
     store = InMemoryWorkEngineStore()
     activo = _work_item_activo(store)
@@ -2931,12 +2963,44 @@ def test_el_cierre_no_pisa_una_divergencia_hacia_atras() -> None:
         cerrada=True,
     )
 
-    resultado = reflejar_desenlace(parado, espejo, _episodio())
+    kinds, final = _plan_y_estado_final(store, parado, espejo)
 
-    assert resultado.pasos == ()
-    assert resultado.divergencia is not None
-    final = store.get_work_item(parado.work_id)
-    assert final is not None and final.estado is WorkItemState.FAILED_SAFELY
+    assert kinds == (PASO_CANCELADO,)
+    assert final.estado is WorkItemState.CANCELLED
+    assert PASO_REACTIVADO not in kinds
+
+
+def test_una_cancelacion_interrumpida_a_la_mitad_se_retoma() -> None:
+    """El hallazgo de la revisión del 12-09-2026, con su caso real (ADR-176).
+
+    Cerrar desde `ACTIVE` son dos pasos porque el dominio no tiene arista
+    directa a `CANCELLED`. Si la pasada muere entre los dos -y `aplicar_pasos`
+    avisa de que los anteriores ya quedaron aplicados-, la siguiente veía
+    `NEEDS_DECISION` contra una etiqueta congelada y declaraba divergencia:
+    reproducido, el reintento devolvía **cero pasos** y el encargo se quedaba a
+    medio cancelar para siempre.
+    """
+    store = InMemoryWorkEngineStore()
+    activo = _work_item_activo(store)
+    espejo = _espejo(
+        estado=WorkItemState.ACTIVE,
+        fase=WorkItemPhase.PREPARAR,
+        etiquetas=("sirius:ci-pending",),
+        cerrada=True,
+    )
+
+    plan = reflejar_desenlace(activo, espejo, _episodio())
+    assert [paso.kind for paso in plan.pasos] == [PASO_ESCALADO, PASO_DECISION_RESUELTA]
+
+    # La pasada se corta después del primer paso.
+    aplicar_pasos(store, activo.work_id, plan.pasos[:1], now=_AHORA)
+    a_medias = store.get_work_item(activo.work_id)
+    assert a_medias is not None and a_medias.estado is WorkItemState.NEEDS_DECISION
+
+    kinds, final = _plan_y_estado_final(store, a_medias, espejo)
+
+    assert kinds == (PASO_DECISION_RESUELTA,)
+    assert final.estado is WorkItemState.CANCELLED
 
 
 def test_cerrada_sin_ninguna_etiqueta_de_estado_tambien_termina_el_encargo() -> None:
@@ -2973,3 +3037,41 @@ def test_el_cierre_no_inventa_una_transicion_que_el_dominio_no_admita() -> None:
     assert resultado.divergencia is not None
     assert "waiting" in resultado.divergencia
     assert "no sabe salir" in resultado.divergencia
+
+
+def test_un_encargo_activo_por_delante_de_su_incidencia_conserva_su_divergencia() -> None:
+    """`ACTIVE` queda fuera del cierre a propósito, y esto es lo que lo sostiene.
+
+    ADR-176 termina las paradas que una incidencia cerrada ya no puede sacar de
+    donde están. Un encargo `ACTIVE` no es eso: su divergencia -el motor por
+    delante de lo que la incidencia proyecta- es información que un humano
+    tiene que ver, y ADR-173 decidió conservarla. Cancelarlo en silencio
+    borraría justo el aviso.
+
+    Sin esta prueba la exclusión era una frase en un docstring: al sembrar la
+    mutación «ACTIVE deja de quedar fuera», las 88 pruebas seguían en verde.
+    """
+    store = InMemoryWorkEngineStore()
+    activo = _work_item_activo(store)
+    adelantado = store.begin_work_item_review(
+        store.begin_work_item_check(
+            store.begin_work_item_execution(activo.work_id, now=_AHORA).work_id, now=_AHORA
+        ).work_id,
+        now=_AHORA,
+    )
+    # La incidencia se quedó en PREPARAR: hacia atrás no hay camino.
+    espejo = _espejo(
+        estado=WorkItemState.ACTIVE,
+        fase=WorkItemPhase.PREPARAR,
+        etiquetas=("sirius:implement-requested",),
+        cerrada=True,
+    )
+
+    resultado = reflejar_desenlace(adelantado, espejo, _episodio())
+
+    assert resultado.pasos == ()
+    assert resultado.divergencia is not None
+    final = store.get_work_item(adelantado.work_id)
+    assert final is not None
+    assert final.estado is WorkItemState.ACTIVE
+    assert final.fase is WorkItemPhase.REVISAR
