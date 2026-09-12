@@ -393,7 +393,7 @@ def _estado_y_fase(
     arrancar al corrector), de forma indefinida si ese run muere antes-
     la proyección devolvía `(None, None, True)` y el tablero de ADR-175 le
     decía al propietario que sus etiquetas se contradecían en una incidencia
-    que iba perfectamente (ADR-177).
+    que iba perfectamente (ADR-181).
 
     Derivarlo de :data:`_LABEL_STATE` exime hoy 3 de las 66 parejas del
     vocabulario -activación, revisión y reparación- y deja las 63

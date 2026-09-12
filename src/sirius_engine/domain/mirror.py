@@ -243,7 +243,7 @@ class MirroredWorkItem:
     el run que lo consume retira la primera (``repair-sirius-work.yml``, paso
     «Consumir el evento y marcar en curso»), e indefinidamente si ese run muere
     antes- no se contradicen: proyectan ese destino con la marca en ``False``
-    (ADR-177).
+    (ADR-181).
     """
 
     work_id: str

@@ -1,8 +1,28 @@
-# ADR-177 — La contradicción de etiquetas se decide por lo que proyectan, no por cuántas son
+# ADR-181 — La contradicción de etiquetas se decide por lo que proyectan, no por cuántas son
 
 - Estado: PROPUESTO
 - Fecha: 2026-09-12
 - Aprobación: la fusión de la PR por el propietario
+
+> **Nació como ADR-177 y se renumeró a 181.** El 12-09-2026 hubo **cuatro**
+> ADR-177 distintos, cada uno en su rama abierta y ninguno en `main`: la
+> ampliación por categoría (PR #590, la más antigua, conserva el 177), la
+> autoridad por clase (PR #591, renumerada a 178), la guarda de piezas sin
+> llamante (PR #593, renumerada a 179) y este, nacido a las 22:54, después de
+> que se escribieran los dos anteriores —por eso ADR-179 y ADR-180 dicen
+> «tres» y no se corrigen: son evidencia fechada—.
+> `scripts/siguiente_adr.py` consultaba las ramas **del clon**, así que una
+> rama que no se ha traído no existía para él, y `test_registro_de_decisiones.py`
+> mira el árbol local: las cuatro ramas pasaban por separado y el rojo habría
+> aparecido en `main` al fusionar la segunda. Es el modo exacto en que nacieron
+> los dos ADR-016 que ADR-032 conserva.
+>
+> **Esta es la última renumeración hecha bajo el régimen viejo.** ADR-180
+> (PR #595, ya en `main`) hace que el guion traiga las cabezas del remoto antes
+> de contar: corrido sobre este árbol consulta 309 ramas y devuelve 181, que es
+> justo el número que esta rama toma. La familia que obligó a las tres
+> renumeraciones del día la cierra ahora una comprobación, no la memoria de
+> nadie.
 
 Este ADR es además la **nota de arranque** de la rama
 `fix/contradiccion-de-etiquetas-por-lo-que-proyectan` (incidencia #594,

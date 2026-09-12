@@ -168,7 +168,7 @@ PASO_CANCELADO = "work_item_cancelled"
 #: Única etiqueta que `sirius_resume_on_command.sh:180-186` repone para volver
 #: a PLANNED (`destino_de_rol("implementer")`); `sirius:planned` proyecta el
 #: mismo (estado, fase), así que las dos juntas no se contradicen
-#: (`mirror_projection._estado_y_fase`, ADR-177) -pero ningún guion de
+#: (`mirror_projection._estado_y_fase`, ADR-181) -pero ningún guion de
 #: reanudación repone `sirius:planned` nunca (CODEX-003, ronda 5, PR #530).
 _ETIQUETA_REANUDACION_A_PLANNED = "sirius:implement-requested"
 
