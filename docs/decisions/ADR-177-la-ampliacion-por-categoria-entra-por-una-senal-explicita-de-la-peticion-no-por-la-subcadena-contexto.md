@@ -46,8 +46,8 @@ encendía porque un **texto libre contenía una subcadena**:
 
 - `PROPOSITO_DE_CONTEXTO: Final = "contexto"` y
   `pide_contexto(proposito) -> PROPOSITO_DE_CONTEXTO in proposito.casefold()`
-  (`src/sirius/domain/relevance.py`, antes de este cambio en las líneas 156 y
-  345-354).
+  (`src/sirius/domain/relevance.py`, en el árbol base `433fb11` líneas 160 y
+  349-358).
 - Un solo consumidor:
   `if self._category_matching_enabled and pide_contexto(peticion.proposito):`
   (`src/sirius/application/rank_relevant_knowledge.py:583`).
@@ -298,12 +298,27 @@ literal, que es exactamente el defecto que H4 viene a cerrar.
 De la invocación se transcribe la cola capturada —la terna de `pytest` y el
 código de salida—; el `0` solo sale si `ruff format --check .`,
 `ruff check .` y `mypy src tests` pasaron antes, porque el guion corta en el
-primero que falle (ADR-153). La terna sube de las 5369 que midió `433bf11`
-(ADR-170) a 5372 porque esta ficha añade **tres** pruebas netas: +2 en
-`tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py` (la traducción que
-enciende y la que apaga), +2 en `tests/integration/test_rank_relevant_
-knowledge.py` (los dos casos de aceptación), +1 en
-`tests/unit/test_interpret_query_request.py` (la regla escrita del
-intérprete) y **-4** en `tests/unit/test_relevance_domain.py` (las cuatro de
-la función retirada, sustituidas por un candado). Ninguna prueba se ha
-relajado; ninguna cota del arnés se mueve.
+primero que falle (ADR-153). La terna sube de las 5369 que midió `3f9f752`
+—el árbol al que ADR-170 ancla esa ejecución; `433fb11` es el commit con el
+que aquella rama entró en `main`, y es la base del rango de ésta— a 5372
+porque este trabajo añade **tres** casos netos al total recolectado:
+
+- **+2** en `tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py` (la
+  traducción que enciende y la que apaga);
+- **+2** en `tests/integration/test_rank_relevant_knowledge.py` (tres
+  añadidas —los dos casos de aceptación y el candado de la señal— y una
+  retirada, la que pedía un propósito de contexto);
+- **+1** en `tests/unit/test_interpret_query_request.py` (la regla escrita
+  del intérprete);
+- **0** en `tests/unit/test_peticion_ordinaria.py` (una renombrada: entra y
+  sale una);
+- **−3** en `tests/unit/test_relevance_domain.py` (cuatro retiradas con la
+  función, y un candado añadido en su lugar);
+- **+1** que no sale de ningún fichero de pruebas: `_adrs()` devuelve
+  `REGISTRO.glob("ADR-*.md")` y parametriza
+  `test_toda_ruta_citada_por_un_adr_existe`
+  (`tests/automation/test_citas_de_los_adr.py:394`), así que esta misma
+  ficha añade exactamente un caso recolectado.
+
++2 de los ficheros de pruebas y +1 de la ficha son los +3 que 5369 → 5372
+exige. Ninguna prueba se ha relajado; ninguna cota del arnés se mueve.

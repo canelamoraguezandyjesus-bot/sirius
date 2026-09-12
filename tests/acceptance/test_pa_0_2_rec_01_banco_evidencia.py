@@ -284,11 +284,14 @@ _MINIMO_ELEMENTOS_HALLADOS_MOTOR: Final[int] = 68
 #:
 #: M20 (ADR-129, incidencia #516) porta la siembra en contexto
 #: (`RankRelevantKnowledgeUseCase._rank_via_staged_engine`'s bloque
-#: `siembra`): dado que `_peticion_ordinaria` declara el mismo propósito fijo
-#: para las 47 consultas (M16, ADR-124), `pide_contexto` es cierto para
-#: TODAS, no solo para las dos que el fixture del arnés de examen declara con
-#: propósito de contexto — la siembra actúa en cada turno, tal como registra
-#: el docstring de `_rank_via_staged_engine`. Eso amplía cada una de las 47
+#: `siembra`): dado que `_peticion_ordinaria` enciende la señal explícita de
+#: ampliación (`Peticion.amplia_por_categoria`, vía
+#: `_AMPLIACION_DE_LA_RECUPERACION_ORDINARIA`) para las 47 consultas (M16,
+#: ADR-124; ADR-177), la siembra actúa en TODAS, no solo en las dos que el
+#: fixture del arnés de examen declara con propósito de contexto — actúa en
+#: cada turno, tal como registra el docstring de `_rank_via_staged_engine`.
+#: Hasta ADR-177 el mecanismo era otro (`pide_contexto` sobre el texto del
+#: propósito) y el efecto medido aquí, el mismo. Eso amplía cada una de las 47
 #: filas con todo lo no ordinario de su ámbito, sin cota (predicho: "elementos
 #: de más suben claramente y sin cota", ADR-129) — ningún caso conserva ya un
 #: acierto exacto (`aciertos_exactos` 7 → 0/47), mientras que

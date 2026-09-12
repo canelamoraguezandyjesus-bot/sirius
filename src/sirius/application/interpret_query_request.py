@@ -21,13 +21,17 @@ QUÉ INFIERE EL MODELO Y QUÉ NO
 - **El modelo local** (``QueryIntentClassifierPort``) infiere lo que la
   pregunta declara: modo, cardinalidad, límite y tiempo (objetivo y corte de
   registro). Es lo que depende de entender la frase.
-- **Las reglas del producto** deciden el **permiso** y el **propósito**. El
-  permiso gobierna qué se puede mirar: no puede depender de lo que un modelo
-  crea entender de una frase, porque una frase persuasiva ampliaría entonces
-  lo que Sirius se autoriza a leer. La regla es la misma que el traductor
+- **Las reglas del producto** deciden el **permiso**, el **propósito** y la
+  **ampliación por categoría** (``AMPLIACION_POR_CATEGORIA_ORDINARIA``,
+  ADR-177). El permiso gobierna qué se puede mirar: no puede depender de lo
+  que un modelo crea entender de una frase, porque una frase persuasiva
+  ampliaría entonces lo que Sirius se autoriza a leer. Por la misma razón la
+  ampliación entra como señal explícita y no por el texto del propósito. La
+  regla es la misma que el traductor
   del banco declara (``tests/acceptance/staged_engine_case_translation.py``):
   ``Peticion`` no tiene campo de permiso, y un permiso sin autorizar se
-  traduce como **propósito vacío**, que ``G1`` bloquea antes de recuperar.
+  traduce como **propósito vacío**, que ``G1`` bloquea antes de recuperar —y
+  que apaga también la ampliación.
 
 RESPALDO
 ========

@@ -184,8 +184,11 @@ def peticion_desde_caso(
     # apaga por la misma razón que vacía el propósito — una operación que no
     # está autorizada a recuperar tampoco lo está a recuperar más. Hasta
     # ADR-177 ese apagado ocurría de rebote (el propósito vacío no contenía
-    # la subcadena); ahora está dicho, y ``test_peticion_desde_caso_apaga_la_
-    # ampliacion_sin_permiso`` lo fija.
+    # la subcadena); ahora está dicho, y lo fija
+    # ``test_la_traduccion_apaga_la_ampliacion_sin_permiso``. La equivalencia
+    # con la regla retirada (encendido exactamente en los dos casos de
+    # contexto del banco) la fija
+    # ``test_la_traduccion_enciende_la_ampliacion_exactamente_en_los_dos_casos_de_contexto``.
     amplia_por_categoria = (
         permiso != PERMISO_SIN_AUTORIZAR
         and str(peticion_p2["proposito"]) in PROPOSITOS_QUE_AMPLIAN_POR_CATEGORIA
