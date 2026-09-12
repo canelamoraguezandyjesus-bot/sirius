@@ -105,6 +105,25 @@ Dos funciones, deliberadamente separadas:
    tramo final contra la foto (CODEX-001, ronda 2, PR #546). Cada parada que el
    recorrido recrea lleva SU diagnóstico, el que el historial le atribuye, no
    el de la última parada de toda la incidencia (CODEX-003, misma ronda).
+
+7. **Una incidencia CERRADA no puede producir ningún desenlace más** (ADR-173).
+   Las seis reglas de arriba leen ETIQUETAS, y una etiqueta es un estado
+   intermedio que se queda congelado el día que alguien cierra la incidencia:
+   `sirius:ci-pending` proyecta el mismo `(ACTIVE, COMPROBAR)` en el que el
+   encargo ya está, así que la regla 5 devuelve el plan vacío, y así se queda
+   para siempre. Medido el 12-09-2026: 21 encargos en `active` en
+   `DESENLACES.md`, los 21 con la incidencia cerrada, el más viejo del 25-08.
+   El dato que faltaba no había que ir a buscarlo: `espejo.cerrada` ya llegaba
+   hasta aquí en cada pasada y no lo leía nadie -ni este módulo ni ningún otro
+   de `src/` o `scripts/`-. Así que, DESPUÉS del plan que dictan las etiquetas
+   y solo si tras aplicarlo el `WorkItem` sigue en un estado no terminal, el
+   cierre lo termina como `CANCELLED` por las transiciones que el dominio ya
+   admite (`_CIERRE_POR_ESTADO`). No inventa una entrega: un encargo cuya
+   incidencia se cerró sin que las etiquetas proyecten `DELIVERED` acaba
+   cancelado, no entregado. Y no pisa ninguna divergencia: si el plan declaró
+   contradicción, camino hacia atrás o parada sin permiso, se devuelve tal
+   cual y el cierre no entra -lo que esta regla cierra es lo que las etiquetas
+   dejaron sin cerrar, no lo que dejaron en disputa-.
 """
 
 from __future__ import annotations
@@ -121,7 +140,12 @@ from sirius_engine.domain.mirror import (
     ParadaPublicada,
     PermisoDeReanudacion,
 )
-from sirius_engine.domain.work_item import WorkItem, WorkItemPhase, WorkItemState
+from sirius_engine.domain.work_item import (
+    TERMINAL_STATES,
+    WorkItem,
+    WorkItemPhase,
+    WorkItemState,
+)
 from sirius_engine.ports.store import WorkEngineStore
 
 #: Los nombres de paso son exactamente los ``EventKind`` que produce cada
@@ -139,6 +163,7 @@ PASO_FALLO_SEGURO = "work_item_failed_safely"
 PASO_ESCALADO = "work_item_escalated"
 PASO_REACTIVADO = "work_item_reactivated"
 PASO_DECISION_RESUELTA = "work_item_decision_resolved"
+PASO_CANCELADO = "work_item_cancelled"
 
 #: Única etiqueta que `sirius_resume_on_command.sh:180-186` repone para volver
 #: a PLANNED (`destino_de_rol("implementer")`); `sirius:planned` proyecta el
@@ -426,9 +451,77 @@ def reflejar_desenlace(
         work_item, espejo, episodio, reanudacion_acreditada=espejo.reanudacion_publicada
     )
     if por_foto.divergencia is None:
-        return por_foto
+        return _con_el_cierre(work_item, espejo, episodio, por_foto)
     recorrido = _recorrer_historial_acreditado(work_item, espejo, episodio)
-    return recorrido if recorrido is not None else por_foto
+    if recorrido is not None:
+        return _con_el_cierre(work_item, espejo, episodio, recorrido)
+    return por_foto
+
+
+#: Cómo termina un ``WorkItem`` no terminal cuando su incidencia se cierra, por
+#: el estado en que lo deja el plan de las etiquetas. Ni una transición nueva:
+#: son las que el dominio ya admite (``domain/work_item.py:122-141``), y cada
+#: una llama al puerto del almacén que ya existía para ella. ``CANCELLED``
+#: desde ``NEEDS_DECISION`` va por ``resolve_decision(continuar=False)`` y no
+#: por ``cancel`` porque §3.2 lo modela como parte de la decisión registrada,
+#: no como un «cancelar» a secas -y el dominio lo hace cumplir-.
+_CIERRE_POR_ESTADO: Mapping[WorkItemState, tuple[PasoReflejo, ...]] = {
+    WorkItemState.ACTIVE: (
+        PasoReflejo(kind=PASO_ESCALADO),
+        PasoReflejo(kind=PASO_DECISION_RESUELTA, resultado={"continuar": False}),
+    ),
+    WorkItemState.NEEDS_DECISION: (
+        PasoReflejo(kind=PASO_DECISION_RESUELTA, resultado={"continuar": False}),
+    ),
+    WorkItemState.FAILED_SAFELY: (PasoReflejo(kind=PASO_CANCELADO),),
+    WorkItemState.PLANNED: (PasoReflejo(kind=PASO_CANCELADO),),
+}
+
+
+def _con_el_cierre(
+    work_item: WorkItem,
+    espejo: MirroredWorkItem,
+    episodio: DispatchEpisode,
+    plan: ResultadoReflejo,
+) -> ResultadoReflejo:
+    """Regla 7: una incidencia CERRADA no puede producir ningún desenlace más.
+
+    El cierre no compite con las etiquetas: llega DESPUÉS. Primero se aplica
+    el plan que las etiquetas dictan -si dicen ``sirius:completed``, el
+    encargo se entrega y aquí no queda nada que hacer-, y solo si tras ese
+    plan el ``WorkItem`` sigue en un estado NO terminal entra esta regla, que
+    lo termina como ``CANCELLED``.
+
+    **No inventa una entrega.** Un encargo cuya incidencia se cerró sin que
+    las etiquetas proyecten ``DELIVERED`` acaba en ``CANCELLED``, aunque su PR
+    se hubiera fusionado a mano sin que el ciclo aplicara ``sirius:completed``:
+    el motor no puede afirmar una fusión que no observó, y el enlace a la
+    incidencia queda en el diario para que un humano lo mire.
+
+    **No pisa ninguna divergencia**: si el plan de las etiquetas declaró una
+    -contradicción, camino hacia atrás, parada sin permiso-, se devuelve tal
+    cual y el cierre no entra. Lo que esta regla cierra es lo que las
+    etiquetas dejaron sin cerrar, no lo que dejaron en disputa.
+    """
+    if not espejo.cerrada:
+        return plan
+    tras_el_plan = _avanzar(work_item, plan.pasos)
+    if tras_el_plan is None or tras_el_plan.estado in TERMINAL_STATES:
+        return plan
+    cierre = _CIERRE_POR_ESTADO.get(tras_el_plan.estado)
+    if cierre is None:
+        # Criterio de parada (b) de ADR-173: antes que inventar una
+        # transición, se dice qué falta y no se toca nada.
+        return ResultadoReflejo(
+            pasos=(),
+            divergencia=(
+                f"{work_item.work_id}: la incidencia #{episodio.numero_incidencia} está "
+                f"cerrada y el motor queda en {tras_el_plan.estado.value}, del que el "
+                "vocabulario del almacén no sabe salir hacia un estado terminal; "
+                "no se toca nada"
+            ),
+        )
+    return ResultadoReflejo(pasos=(*plan.pasos, *cierre))
 
 
 def _coincide_con_el_estado_guardado(acreditado: EstadoAcreditado, work_item: WorkItem) -> bool:
@@ -897,6 +990,7 @@ _AVANZAR_DOMINIO: dict[str, str] = {
     PASO_REPARACION_REANUDADA: "resume_after_repair",
     PASO_ESCALADO: "escalate",
     PASO_REACTIVADO: "reactivate",
+    PASO_CANCELADO: "cancel",
 }
 
 
@@ -950,6 +1044,7 @@ _APLICAR: dict[str, str] = {
     PASO_REPARACION_REANUDADA: "resume_work_item_after_repair",
     PASO_ESCALADO: "escalate_work_item",
     PASO_REACTIVADO: "reactivate_work_item",
+    PASO_CANCELADO: "cancel_work_item",
 }
 
 
