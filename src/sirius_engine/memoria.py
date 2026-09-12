@@ -77,9 +77,18 @@ CLAVE_REPETIRIA = "sin esto se repetiría"
 CLAVE_GUARDIAN = "lo hace cumplir"
 CLAVE_SIN_LECCION = "ninguna"
 
-#: Lo que vale como «todavía no hay prueba que lo haga cumplir»: la razón va
-#: detrás, y sin razón no cuenta.
+#: Lo que vale como «todavía no hay prueba que lo haga cumplir». La razón va
+#: detrás de los dos puntos y **es obligatoria**: «ninguna prueba» a secas
+#: pasaba, y dejaba una lección sin prueba y sin explicación de por qué no la
+#: tiene, que es peor que no declarar nada (revisión del 12-09-2026).
 SIN_GUARDIAN = "ninguna prueba"
+
+#: Dónde vive lo que hace cumplir una lección. En este repositorio lo que hace
+#: imposible un fallo es una prueba de la batería, y comprobar solo que la RUTA
+#: existe dejaba pasar `tests/automation` -una carpeta- haciendo que la vista
+#: dijera que esa lección tiene prueba. La tenía tan poco como la que no
+#: declara ninguna (revisión del 12-09-2026).
+CARPETA_DE_PRUEBAS = "tests/"
 
 _ITEM_DE_LECCION = re.compile(r"^\s*-\s*([^:]+?)\s*:\s*(.*?)\s*$")
 _FAMILIA_VALIDA = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
@@ -313,9 +322,24 @@ def problemas_de_la_leccion(texto: str, *, raiz: Path | None = None) -> tuple[st
             f"no declara «{CLAVE_GUARDIAN}»: o la prueba que la hace imposible, o "
             f"«{SIN_GUARDIAN}: <razón>»"
         )
-    elif leccion.tiene_guardian and raiz is not None and not (raiz / leccion.guardian).exists():
+    elif not leccion.tiene_guardian:
+        # Declaró que no hay prueba: entonces hay que decir POR QUÉ no la hay.
+        razon = leccion.guardian[len(SIN_GUARDIAN) :].lstrip(" :").strip()
+        if not razon:
+            problemas.append(
+                f"declara «{SIN_GUARDIAN}» sin decir por qué: una lección sin prueba "
+                "y sin explicación no se puede revisar después"
+            )
+    elif not leccion.guardian.startswith(CARPETA_DE_PRUEBAS):
         problemas.append(
-            f"dice que la hace cumplir «{leccion.guardian}», y ese fichero no existe en el árbol"
+            f"dice que la hace cumplir «{leccion.guardian}», que no está en "
+            f"`{CARPETA_DE_PRUEBAS}`: lo que hace imposible un fallo aquí es una "
+            f"prueba de la batería (o declara «{SIN_GUARDIAN}: <razón>»)"
+        )
+    elif raiz is not None and not (raiz / leccion.guardian).is_file():
+        problemas.append(
+            f"dice que la hace cumplir «{leccion.guardian}», y eso no es un fichero "
+            "de este árbol: una carpeta que existe no es una prueba"
         )
     return tuple(problemas)
 

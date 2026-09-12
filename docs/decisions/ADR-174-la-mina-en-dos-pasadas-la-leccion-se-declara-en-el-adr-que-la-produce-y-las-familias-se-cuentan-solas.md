@@ -210,6 +210,31 @@ una puerta parametrizada sobre una lista vacía siempre está verde), y otra fal
 si TODOS los ADR anteriores al corte ya declararan su lección, porque entonces
 el corte no separaría nada y habría que bajarlo.
 
+## La revisión del 12-09-2026, y lo que se coló en la primera versión
+
+Un hallazgo, cierto, con las dos mitades reproducidas antes de tocar nada:
+**la validación aceptaba cosas que no son pruebas.**
+
+- `lo hace cumplir: tests/automation` pasaba, porque solo se comprobaba que la
+  ruta **existiera**, y una carpeta existe siempre. El daño no es cosmético: la
+  columna «hay prueba que la haga cumplir» de `MEMORIA.md` salía en **sí** para
+  una lección que no tiene ninguna, que es exactamente el dato para el que esa
+  columna existe. Una mina que miente sobre lo que está cubierto es peor que no
+  tener mina.
+- `ninguna prueba` **a secas** también pasaba, dejando una lección sin prueba y
+  sin explicación de por qué no la tiene. La razón es lo único que permite
+  volver dentro de un mes y decidir si ya se puede escribir.
+
+Ahora: lo que hace cumplir una lección tiene que ser **un fichero**, y estar
+**en `tests/`** —en este repositorio lo que hace imposible un fallo es una
+prueba de la batería, no un módulo de producción—; y declarar que no hay prueba
+obliga a decir por qué. Las tres mutaciones correspondientes caen cada una en
+su prueba.
+
+Es la misma forma que el propio ADR-174 nombra: **una comprobación más débil de
+lo que su línea promete.** La declaraba yo dos secciones más arriba y la había
+escrito igualmente.
+
 ## Consecuencias
 
 - **Todo ADR nuevo cuesta tres líneas más**, y el coste cae sobre quien escribe

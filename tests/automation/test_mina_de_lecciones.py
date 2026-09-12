@@ -29,6 +29,7 @@ from pathlib import Path
 import pytest
 
 from sirius_engine.memoria import (
+    CARPETA_DE_PRUEBAS,
     CLAVE_FAMILIA,
     CLAVE_GUARDIAN,
     CLAVE_REPETIRIA,
@@ -151,7 +152,7 @@ def test_una_prueba_que_no_existe_se_senala() -> None:
         "tests/automation/test_que_no_existe_en_este_arbol.py",
     )
     problemas = problemas_de_la_leccion(roto, raiz=RAIZ)
-    assert any("no existe en el árbol" in problema for problema in problemas)
+    assert any("no es un fichero" in problema for problema in problemas), problemas
 
 
 def test_declarar_que_no_hay_leccion_vale_y_exige_razon() -> None:
@@ -214,3 +215,50 @@ def test_sin_prueba_que_lo_haga_cumplir_es_una_respuesta_valida() -> None:
     assert problemas_de_la_leccion(solo_prosa, raiz=RAIZ) == ()
     leccion = leer_leccion(solo_prosa.splitlines())
     assert leccion is not None and not leccion.tiene_guardian
+
+
+# --- Lo que la revisión del 12-09-2026 encontró que se colaba ---------------
+
+
+def test_una_carpeta_que_existe_no_es_una_prueba() -> None:
+    """«lo hace cumplir: tests/automation» pasaba, y la vista decía que tenía prueba.
+
+    Comprobar que la RUTA existe es más débil de lo que la línea promete: una
+    carpeta existe siempre. Y el daño no es cosmético: la columna «hay prueba
+    que la haga cumplir» de `MEMORIA.md` salía en «sí» para una lección que no
+    tiene ninguna, que es justo el dato para el que esa columna existe.
+    """
+    roto = LECCION_BUENA.replace(
+        "`tests/automation/test_piezas_con_llamante.py`", "`tests/automation`"
+    )
+    problemas = problemas_de_la_leccion(roto, raiz=RAIZ)
+    assert any("no es un fichero" in problema for problema in problemas), problemas
+
+
+def test_lo_que_hace_cumplir_una_leccion_vive_entre_las_pruebas() -> None:
+    """Un módulo de producción no hace cumplir nada: lo hace la prueba que lo fija."""
+    roto = LECCION_BUENA.replace(
+        "`tests/automation/test_piezas_con_llamante.py`", "`src/sirius_engine/memoria.py`"
+    )
+    problemas = problemas_de_la_leccion(roto, raiz=RAIZ)
+    assert any(CARPETA_DE_PRUEBAS in problema for problema in problemas), problemas
+
+
+def test_declarar_que_no_hay_prueba_exige_decir_por_que() -> None:
+    """«ninguna prueba» a secas pasaba, y no se puede revisar después.
+
+    Una lección sin prueba es legítima -no todo se puede hacer imposible con
+    una-, pero entonces la razón es lo único que permite volver dentro de un
+    mes y decidir si ya se puede.
+    """
+    sin_razon = LECCION_BUENA.replace(
+        "`tests/automation/test_piezas_con_llamante.py`", SIN_GUARDIAN
+    )
+    problemas = problemas_de_la_leccion(sin_razon, raiz=RAIZ)
+    assert any("sin decir por qué" in problema for problema in problemas), problemas
+
+    con_razon = LECCION_BUENA.replace(
+        "`tests/automation/test_piezas_con_llamante.py`",
+        f"{SIN_GUARDIAN}: exigiría un analizador estático que hoy daría falsos positivos",
+    )
+    assert problemas_de_la_leccion(con_razon, raiz=RAIZ) == ()

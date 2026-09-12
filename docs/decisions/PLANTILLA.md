@@ -39,5 +39,7 @@ Y si la hay, las tres líneas, con el encabezado `## La lección` EXACTO:
   Es lo que permite contar cuántas veces ha mordido lo mismo; reutiliza una
   familia ya declarada en `MEMORIA.md` antes de inventar otra]
 - sin esto se repetiría: [el error concreto, en una frase]
-- lo hace cumplir: [la ruta de la prueba que lo hace imposible, o
-  `ninguna prueba: <razón>` si de momento es solo prosa]]
+- lo hace cumplir: [la ruta de **un fichero de prueba** de `tests/` que lo hace
+  imposible, o `ninguna prueba: <razón>` —con la razón, que es obligatoria— si
+  de momento es solo prosa. Una carpeta no vale: `tests/automation` existe
+  siempre y no hace cumplir nada]]
