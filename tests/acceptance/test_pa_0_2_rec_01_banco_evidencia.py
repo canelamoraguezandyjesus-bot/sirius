@@ -1471,10 +1471,11 @@ def test_el_banco_se_ejecuta_contra_el_motor_portado_y_reporta_las_cuatro_metric
     medición de 47 filas, que ya alcanza su suelo D1/D2 sin ninguna
     salvedad de población. `elementos_de_mas` no se afirma como aserción
     dura aquí frente a ≤21 sobre las 47 filas —esa comparación mezclaría
-    poblaciones distintas, el defecto que corrige CODEX-001—; su suelo D1 se
-    afirma como aserción dura por separado, sobre la población que lo
-    origina, en
-    `test_elementos_de_mas_mide_22_y_no_alcanza_el_suelo_d1_bajo_la_poblacion_publicada`.
+    poblaciones distintas, el defecto que corrige CODEX-001—; lo que mide
+    sobre la población que originó ese umbral se afirma como aserción dura
+    por separado, en
+    `test_elementos_de_mas_mide_22_y_no_alcanza_el_suelo_d1_bajo_la_poblacion_publicada`,
+    que desde ADR-170 afirma 22 y, con ello, que el suelo D1 no se alcanza.
 
     **ADR-168** (hueco H1 de ADR-148) sube la cobertura a 67/81:
     `B04-CA-22` pasa de una de sus seis a cinco, por la vía de recuperación
@@ -1520,10 +1521,11 @@ def test_el_banco_se_ejecuta_contra_el_motor_portado_y_reporta_las_cuatro_metric
     # aquí como aserciones duras aparte de las cotas de no regresión de
     # arriba (D1: aciertos exactos ≥ 29/47, omisiones críticas ≤ 1; D1/D2:
     # cobertura ≥ 63/81) — nunca `metricas.elementos_de_mas <= 21` aquí, que
-    # compararía las 47 filas sin salvedad (50) contra un umbral que la
-    # fuente fija solo sobre los 31 `casos_con_contenido` (CODEX-001). El
-    # suelo D1 de `elementos_de_mas` sí se afirma como aserción dura, sobre
-    # esa misma población, en
+    # compararía las 47 filas sin salvedad (51 desde ADR-170) contra un
+    # umbral que la fuente fija solo sobre los 31 `casos_con_contenido`
+    # (CODEX-001). Lo que `elementos_de_mas` mide sobre esa misma población
+    # —22 desde ADR-170, o sea el suelo D1 sin alcanzar por uno— sí se
+    # afirma como aserción dura en
     # `test_elementos_de_mas_mide_22_y_no_alcanza_el_suelo_d1_bajo_la_poblacion_publicada`.
     assert metricas.aciertos_exactos >= 29
     assert metricas.omisiones_criticas <= 1
