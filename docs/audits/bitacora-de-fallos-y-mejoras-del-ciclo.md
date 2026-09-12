@@ -5121,6 +5121,60 @@ la línea de la PR** desde el 05-08 (`aedb071`). No es lo que rompió la etiquet
 Arreglo: `printf -- '- PR: %s\n'`.
 ---
 
+### 101. H5 fusionado en `433fb11`, y lo que costó no fue el trabajo sino un guardián nuevo cayendo sobre ramas abiertas (12-09-2026, 11:50 UTC)
+
+**ADR-170 en `main`.** `DEC-001` entra por pertenencia a su lista cerrada: la
+membresía portada del origen vive en el corpus y `G4` decide con `any`.
+Comprobado en `main` tras la fusión, no en la PR.
+
+**La puerta previa, con mi propia medición sobre el head final `75f15bd2`:**
+
+| configuración | la ficha declara | lo que mido yo |
+|---|---|---|
+| `--peticion` (control) | 17/47; 162; 78/81; 0 | **idéntico** |
+| `--ejes --peticion` (decide) | 22/47; 146; 79/81; 0 | **idéntico** |
+
+Las cuatro cifras al dígito, códigos de salida 0, `behind_by` 0 comprobado dos
+veces —al pasar la puerta y en el minuto anterior al `fusiona`—, Quality verde
+sobre ese head y la validación del ADR anclada al árbol de `3f9f752` con el
+salto de 5257 a 5369 pruebas explicado por la traída de `main`.
+
+**El ciclo hizo su trabajo.** Tres rondas: cinco observaciones de Claude en la
+primera, dos más y una de Codex después. Entre ellas, las dos que yo había
+visto el 11-09 y decidí no inyectar (entrada 100).
+
+**Lo que costó el día no fue H5.** Fue que el guardián de `MEMORIA.md`
+(ADR-171) entrara en `main` con esta rama abierta. Quality prueba la **mezcla**
+de la rama con su base, así que ejecutaba un guardián que la rama no tenía
+contra un fichero generado que la rama tampoco tenía. **Tres fallos de Quality
+por una sola causa que ninguna ronda podía tocar**, y el freno parando por
+`ci-sin-arreglo` una falta de convergencia que no era del trabajo. La salida
+fue traer `main` a la rama y regenerar el fichero: **dos líneas**, la cuenta de
+ADR de 167 a 168 y la fila del ADR-170.
+
+**La regla que sale de aquí, y es general.** Un guardián que compara un
+artefacto **generado** contra el árbol rompe, al entrar en `main`, **toda rama
+abierta que toque lo que ese artefacto resume**, y la rompe de una forma que la
+rama no puede arreglar sola: el generador tampoco está en ella. Quien meta un
+guardián así tiene dos obligaciones que hoy nadie tiene escritas: **decirlo en
+las ramas en vuelo** y **dejar dicho que la salida es traer `main` primero**.
+Sin eso, el ciclo gasta rondas contra una pared y el freno acaba pareciendo el
+problema.
+
+**Lo que hice yo en la rama, y con qué permiso**, para que quede separado de lo
+que hizo el ciclo: dos commits, los dos con autorización explícita del
+propietario pedida y concedida en el momento. Uno trae `main` (mezcla normal,
+sin conflictos, 4 commits de retraso a 0); otro regenera `MEMORIA.md` con su
+propio generador. **Ninguno toca una línea del trabajo de H5**, comprobado
+fichero a fichero antes de empujar, y los dos lo dicen en su mensaje de commit.
+Es la segunda vez en esta línea que escribo en una rama que juzgo; la primera
+fue el desatasco de P3, también autorizada y también registrada.
+
+**Queda cerrada la línea de huecos de ADR-148 salvo H4**, que sigue parada en
+#581 esperando relanzamiento, y H3, que fue absorbida por la decisión de los
+ejes y va por el Rector.
+---
+
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
 
 1. `ollama_category_classifier.py`: ruta relativa y sin
