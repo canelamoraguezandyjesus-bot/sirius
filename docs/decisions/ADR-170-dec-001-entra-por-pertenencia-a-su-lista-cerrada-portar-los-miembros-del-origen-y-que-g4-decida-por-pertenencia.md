@@ -371,9 +371,13 @@ Sin salida y con código `0` las dos: el rango entero de la rama —desde su
 base en `main` (`5fc5fdc`) hasta el árbol que midió la cadena— está limpio,
 y el árbol de trabajo que confirma esta sección también.
 
-Lo único posterior a `ddf3516` es **esta sección de la ficha** y el cuerpo
-de la PR: documentales, sin tocar código ni pruebas, y existen porque la
-sección tiene que anclarse al árbol que la cadena midió. Si una corrección
+Lo posterior a `ddf3516` es **esta sección de la ficha** y el cuerpo de la
+PR —documentales, sin tocar código ni pruebas, y existen porque la sección
+tiene que anclarse al árbol que la cadena midió— más la actualización de la
+rama con `main` (`0e4def7`, traída por el paso automático para que Quality
+pueda pasar), que no cambia nada de este trabajo: la terna de arriba es la
+del árbol de `ddf3516` y así se lee, sin presentarse como la del head
+vigente (ADR-154). Si una corrección
 posterior toca código o pruebas, la cadena se vuelve a ejecutar entera y
 esta sección se re-ancla al árbol nuevo, sin conservar la terna del anterior
 (ADR-154).
