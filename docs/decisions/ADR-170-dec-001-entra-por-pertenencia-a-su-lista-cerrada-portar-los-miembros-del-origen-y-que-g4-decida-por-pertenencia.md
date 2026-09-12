@@ -328,11 +328,12 @@ que es el nombre con el que la citan ADR-115 y las fichas anteriores).
 
 **Cadena completa como UNA SOLA invocación** (ADR-145, ADR-153), con
 `pwsh -File scripts/check.ps1` y su código de salida capturado (ADR-154),
-anclada **al árbol de `db982c6d`** —el head con el código, las pruebas y el
-cuerpo de esta ficha—:
+anclada **al árbol de `17f6dcbf`** —el head con el código, las pruebas y el
+cuerpo de esta ficha, ya con las correcciones de la ronda 2 (CLAUDE-H5-001 a
+CLAUDE-H5-005)—:
 
 ```
-5257 passed, 17 skipped, 2 xfailed in 574.58s (0:09:34)
+5257 passed, 17 skipped, 2 xfailed in 578.04s (0:09:38)
 EXIT_CODE_CHECK=0
 ```
 
@@ -342,16 +343,17 @@ código de salida—; el `0` solo sale si `ruff format --check .`,
 primero que falle (ADR-153). Esta ficha añade **5** pruebas, contadas contra
 `5fc5fdc` fichero a fichero: 3 en `tests/unit/test_staged_engine.py`
 (27 → 30) y 2 en
-`tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py` (41 → 43). Ninguna
-prueba se ha relajado; tres cotas del arnés del motor portado suben (más
-exigentes) y una sube por un elemento nombrado, con la aserción convertida
+`tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py` (41 → 43). La ronda
+2 no añade ni quita ninguna: renombra una y sustituye una aserción por otra
+(ver el final de la sección 5). Ninguna prueba se ha relajado; tres cotas
+del arnés del motor portado suben (más exigentes) y una sube por un elemento nombrado, con la aserción convertida
 en igualdad exacta en vez de en permiso abierto (ver «Consecuencias»).
 
 La quinta validación se ejecuta **sobre el rango de la rama y no sin
 argumentos** (CODEX-001, señalado en la revisión de ADR-168):
 
 ```
-$ git diff --check 5fc5fdc db982c6d
+$ git diff --check 5fc5fdc 17f6dcbf
 EXIT_DIFF_CHECK=0
 $ git diff --check 5fc5fdc
 EXIT_DIFF_CHECK_ARBOL=0
@@ -361,7 +363,7 @@ Sin salida y con código `0` las dos: el rango entero de la rama —desde su
 base en `main` (`5fc5fdc`) hasta el árbol que midió la cadena— está limpio,
 y el árbol de trabajo que confirma esta sección también.
 
-Lo único posterior a `db982c6d` es **esta sección de la ficha** y el cuerpo
+Lo único posterior a `17f6dcbf` es **esta sección de la ficha** y el cuerpo
 de la PR: documentales, sin tocar código ni pruebas, y existen porque la
 sección tiene que anclarse al árbol que la cadena midió. Si una corrección
 posterior toca código o pruebas, la cadena se vuelve a ejecutar entera y
