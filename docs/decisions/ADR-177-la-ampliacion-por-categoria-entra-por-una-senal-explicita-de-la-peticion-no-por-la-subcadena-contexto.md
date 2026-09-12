@@ -302,7 +302,7 @@ es la 2053.
 
 **Cadena completa como UNA SOLA invocación** (ADR-145, ADR-153), con
 `pwsh -File scripts/check.ps1` y su código de salida capturado (ADR-154),
-anclada **al árbol de @@ANCLA@@** —el commit inmediatamente anterior a éste,
+anclada **al árbol de `6c248ea`** —el commit inmediatamente anterior a éste,
 ya con `main` (`9efaa3c`, el head que deja ADR-176 en #589) fusionado en la
 rama—. Lo posterior a ese árbol es **solo esta misma sección de validación**,
 que transcribe la cola de aquella ejecución: prosa de esta ficha y nada más,
@@ -311,8 +311,8 @@ comprobable con `gh api` sobre el compare de las dos revisiones, que devuelve
 la terna:
 
 ```
-@@TERNA@@
-@@EXIT@@
+5454 passed, 17 skipped, 2 xfailed in 618.69s (0:10:18)
+EXIT_CODE_CHECK=0
 ```
 
 **La terna sube por la fusión de `main`, no por esta vertical, y hay que
