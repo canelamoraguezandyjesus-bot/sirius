@@ -39,6 +39,7 @@ El dato existe, estructurado, en el origen que la propia fixture cita
 {
     "id": "LISTA-CERRADA-AB",
     "nombre": "Lista cerrada Alfa+Beta v1",
+    "alias": [],
     "tipo": "MULTI_PROYECTO_CERRADO",
     "miembros_lista_cerrada": ["PRJ-ALFA", "PRJ-BETA"],
 },
@@ -309,6 +310,20 @@ afirmar `== {}` y pasa a afirmar `== {"B04-CA-43": ["DEC-001"]}`, una
 igualdad exacta; cualquier otra divergencia frente a la corrida del
 laboratorio sigue poniendo la prueba en rojo.
 
+La prueba que mide bajo la población del umbral D1 pasa de afirmar el suelo
+(`<= 21`) a afirmar la medición exacta (`== 22`). La cota vieja no se
+sustituye por una reformulación del mismo recuento —`x - 1 == 21` no puede
+fallar si `x == 22` ya pasó, y ADR-134 retiró de este fichero justo esa
+familia—, sino por una aserción que ata el elemento que cruza el suelo a su
+causa: bajo esa misma población, el único sobrante ausente de la corrida del
+laboratorio es `{"B04-CA-43": ["DEC-001"]}`. Vista fallar mutando ese mapa a
+`["DEC-002"]`: `AssertionError: assert {'B04-CA-43': ['DEC-001']} ==
+{'B04-CA-43': ['DEC-002']}` —mutación que la cota tautológica no habría
+detectado—. Por lo que afirma, la prueba se llama desde esta corrección
+`test_elementos_de_mas_mide_22_y_no_alcanza_el_suelo_d1_bajo_la_poblacion_publicada`
+(antes `test_elementos_de_mas_mide_22_y_no_alcanza_el_suelo_d1_bajo_la_poblacion_publicada`,
+que es el nombre con el que la citan ADR-115 y las fichas anteriores).
+
 ### Validación obligatoria
 
 **Cadena completa como UNA SOLA invocación** (ADR-145, ADR-153), con
@@ -362,7 +377,7 @@ queda cerrado en el techo del laboratorio.
 **Lo que empeora, dicho sin maquillar.** El suelo D1 de `elementos_de_mas`
 (≤21 sobre los 31 `casos_con_contenido`) **deja de alcanzarse por uno**: el
 arnés del motor portado pasa de 21 a 22. Es el `DEC-001` de `B04-CA-43`.
-`test_elementos_de_mas_alcanza_el_suelo_d1_bajo_la_poblacion_del_umbral_publicado`
+`test_elementos_de_mas_mide_22_y_no_alcanza_el_suelo_d1_bajo_la_poblacion_publicada`
 lo afirma así, en su docstring y en su aserción, en vez de relajar el
 listón. Esto no es un efecto colateral inadvertido: la incidencia #582 deja
 «de más» sin listón a propósito, porque la decisión del propietario del

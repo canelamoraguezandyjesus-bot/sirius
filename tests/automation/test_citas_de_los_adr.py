@@ -167,11 +167,11 @@ _ADR_135 = (
     "ADR-135-el-corrector-actualiza-en-el-mismo-commit-el-papel-que-depende-de-su-correccion.md"
 )
 _ADR_139 = "ADR-139-la-reconciliacion-pasa-cada-hora-activa-en-vez-de-cada-seis.md"
+_ADR_140 = "ADR-140-el-corrector-firma-su-run-y-demuestra-cada-mutacion.md"
 _ADR_170 = (
     "ADR-170-dec-001-entra-por-pertenencia-a-su-lista-cerrada-portar-los-miembros-del-origen-"
     "y-que-g4-decida-por-pertenencia.md"
 )
-_ADR_140 = "ADR-140-el-corrector-firma-su-run-y-demuestra-cada-mutacion.md"
 
 RAMA_DE_ORIGEN_NO_FUSIONADA: dict[str, list[str]] = {
     "experiments/adr002/round/cases.py": [
