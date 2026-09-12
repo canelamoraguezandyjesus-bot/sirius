@@ -280,6 +280,19 @@ _FILAS_CON_CLASE: dict[str, WorkItemClass] = {
 _FILAS_SIN_CLASE = frozenset({"documental no publicada", "reparación / espera / cancelación"})
 
 
+def _filas_de_la_tabla(texto: str) -> dict[str, str]:
+    """{clase de trabajo: la fila entera}, para lo que no cabe en una celda concreta."""
+    seccion = texto.split("### 11.1 Tabla de autoridad", 1)[1].split("### 11.2", 1)[0]
+    filas: dict[str, str] = {}
+    for linea in seccion.splitlines():
+        if not linea.startswith("|") or set(linea) <= set("-| "):
+            continue
+        primera = linea.strip().strip("|").split("|")[0].strip()
+        if primera and primera != "Clase de trabajo":
+            filas[primera] = linea
+    return filas
+
+
 def _tabla_de_autoridad_del_contrato(texto: str) -> dict[str, tuple[str, str]]:
     """{clase de trabajo: (¿existe en la vía GitHub?, autoridad)}, tal como está escrita."""
     seccion = texto.split("### 11.1 Tabla de autoridad", 1)[1].split("### 11.2", 1)[0]
@@ -351,3 +364,59 @@ def test_el_lector_de_la_tabla_del_contrato_distingue_una_fila_cambiada() -> Non
     assert _existe_en_la_via_github(
         _tabla_de_autoridad_del_contrato(texto)["documental publicada (PR en el repo)"][0]
     )
+
+
+# --- ADR-177, primera ronda de revisión: la retirada de un carril, leída del dato ---
+#
+# La primera versión de ADR-177 escribió que la retirada de los carriles de
+# investigación y auditoría estaba PENDIENTE y que consistía en quitar esas
+# clases de `TABLA_ACTIVACION`. Las dos cosas eran falsas, y la segunda es lo
+# CONTRARIO de lo que el contrato manda (§13.2). El error no salió de la nada:
+# las dos filas de §11.1 decían «EJECUCIÓN PENDIENTE» mientras §13.2 decía que
+# ADR-163 la había ejecutado. El contrato se contradecía a sí mismo, y el ADR
+# copió la mitad equivocada.
+#
+# Misma familia que el defecto que ADR-177 arregla -dos sitios que hablan del
+# mismo hecho y divergen-, así que se cierra igual: derivando del dato que el
+# propio contrato declara fuente de verdad.
+
+
+def test_una_clase_con_el_carril_retirado_sigue_en_la_via_github() -> None:
+    """§13.2, con sus palabras: `TABLA_ACTIVACION` **sigue conteniendo** esas clases.
+
+    Es la guarda contra el cambio que el ADR equivocado invitaba a hacer.
+    Retirar un carril y quitar la clase de la vía GitHub no son lo mismo: lo
+    primero está hecho, lo segundo el contrato lo prohíbe, porque dejaría la
+    retirada sin vuelta atrás y al registro describiendo una clase que el
+    contrato declararía inexistente.
+    """
+    from sirius_engine.carriles_retirados import carriles_retirados
+    from sirius_engine.dispatcher import TABLA_ACTIVACION
+
+    retiradas = {WorkItemClass(valor) for valor in carriles_retirados()}
+    assert retiradas, "el registro de carriles retirados está vacío: esta prueba no mide nada"
+    for clase in retiradas:
+        assert clase in CLASES_CON_VIA_GITHUB, clase
+        assert clase in TABLA_ACTIVACION, clase
+
+
+def test_la_tabla_del_contrato_no_da_por_pendiente_una_retirada_ya_ejecutada() -> None:
+    """El texto de la fila, contra el registro de carriles que §13.2 declara fuente de verdad."""
+    from sirius_engine.carriles_retirados import carriles_retirados
+
+    filas = _filas_de_la_tabla(_CONTRATO.read_text(encoding="utf-8"))
+    por_clase = {clase: etiqueta for etiqueta, clase in _FILAS_CON_CLASE.items()}
+    retiradas = {WorkItemClass(valor) for valor in carriles_retirados()}
+    assert retiradas, "el registro de carriles retirados está vacío: esta prueba no mide nada"
+
+    for clase in retiradas:
+        etiqueta = por_clase[clase]
+        fila = filas[etiqueta]
+        assert "RETIRAD" in fila.upper(), (
+            f"§11.1 «{etiqueta}»: el carril está retirado en carriles_retirados.json y la "
+            "fila no lo dice"
+        )
+        assert "PENDIENTE" not in fila.upper(), (
+            f"§11.1 «{etiqueta}»: la fila da la retirada por pendiente y "
+            "carriles_retirados.json dice que está ejecutada (§13.2)"
+        )

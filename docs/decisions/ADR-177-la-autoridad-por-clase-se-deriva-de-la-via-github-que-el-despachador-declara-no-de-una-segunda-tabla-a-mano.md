@@ -193,23 +193,39 @@ Sobre el árbol de esta rama, el 12-09-2026:
 | La tabla vuelve a escribirse a mano con `MOTOR` para documentación | **6**, entre ellas la de derivación y totalidad |
 | Alguien añade una clase al despachador y no a la autoridad | 1: la atadura |
 | El contrato cambia una fila sin tocar el código | 2: el contrato como dato y el lector mutado |
+| (ronda 1) Una fila vuelve a dar por pendiente una retirada ejecutada | 1 |
+| (ronda 1) Se saca una clase retirada de la vía GitHub | 6, y 5 si además se quita del despachador |
 
 - Medición (e), sobre el diario real de `estado-del-motor` (76 encargos, 3 no
-  terminales): la racha medía **2** y con la autoridad nueva mide **3**. El
-  que entra es `WI-20260828-122242`, investigación, `active` desde el 28-08,
-  de un carril ya retirado. Ningún encargo de documentación entra hoy: los diez
-  son terminales.
+  terminales): la pasada de la racha **recorría** 2 encargos y con la autoridad
+  nueva recorre **3**. El que entra es `WI-20260828-122242`, investigación,
+  `active` desde el 28-08, de un carril ya retirado. Ningún encargo de
+  documentación entra hoy: los diez son terminales.
 - Batería entera sobre el árbol de `9366581` (`uv run pytest -q`, sin `-x`): **5.462 en verde**, 17 omitidas, 2 xfail, en 10 minutos. Con `-x`, la primera pasada se paró en `tests/engine/test_work_intake.py`, otra prueba que fijaba la copia; se arregló y se relanzó entera.
 
 ## Consecuencias
 
-- **Documentación e investigación se miden** para la conmutación (§11.2)
-  desde la próxima pasada de `sirius-racha`, y el reconciliador las vigila.
-  Hasta hoy, cero líneas de esas clases en el registro de la racha.
-- **`WI-20260828-122242` va a salir en la próxima pasada** como divergencia
-  vigilada: es una investigación activa de un carril retirado, atascada desde
-  el 28-08. Qué hacer con ella -cancelarla o cerrar su incidencia- es una
-  decisión del propietario, y este ADR solo la hace visible.
+- **Documentación e investigación entran en la pasada de `sirius-racha`**, que
+  hasta hoy ni las miraba (cero líneas suyas en el registro), y el
+  reconciliador las vigila.
+
+  **Entrar en la pasada no es empezar a medir para conmutar, y la diferencia
+  importa** (hallazgo de la primera ronda de revisión; la primera versión de
+  este ADR las confundía). La precondición de §11.2 la implementa
+  `projection_verifier.precondicion_estado_propio`, y su conjunto
+  `CLASES_CON_ESTADO_PROPIO` está **vacío**: reproducido, el verificador
+  devuelve `NO_COMPARABLE` para **las siete clases**, incluida `programacion`.
+  Un `NO_COMPARABLE` no es un día verde -lo dice el propio módulo- así que
+  siete días así acumulan **cero**. Lo que ADR-177 cambia es que esas dos
+  clases **entren** en el bucle y dejen líneas en el registro; el día en que la
+  medición empiece de verdad lo decide otro bloque, el que cablee el retorno
+  del desenlace de GitHub al almacén (H-25, incidencia #376), y ese es el único
+  sitio desde el que una clase entra en `CLASES_CON_ESTADO_PROPIO`.
+- **`WI-20260828-122242` va a salir en la próxima pasada**, con resultado
+  `NO_COMPARABLE` por esa precondición -no como divergencia-: es una
+  investigación activa de un carril retirado, atascada desde el 28-08. Qué
+  hacer con ella -cancelarla o cerrar su incidencia- es una decisión del
+  propietario, y este ADR solo la hace visible en el registro.
 - Los quince encargos históricos no se reescriben: la autoridad se consulta
   por clase, así que a efectos de racha, supervisor y reversión ya cuentan
   como `incidencia`; el diario conserva lo que fue.
@@ -219,9 +235,86 @@ Sobre el árbol de esta rama, el 12-09-2026:
 - Una clase nueva de `WorkItemClass` sin declarar en ninguno de los dos lados
   sigue reventando con `KeyError` (ADR-041): derivar no ha abierto ningún
   valor por defecto en silencio.
-- No decide la ejecución pendiente de ADR-161 (quitar investigación y
-  auditoría de `TABLA_ACTIVACION`): mientras estén, su autoridad es
-  `incidencia`, que es lo que el contrato ya anotaba para ellas.
+- **No toca la retirada de los carriles de investigación y auditoría, que ya
+  está ejecutada** (ADR-161 la acordó, ADR-163 la ejecutó, ADR-167 la
+  corrigió). La primera versión de este ADR la daba por pendiente y decía que
+  consistía en quitar esas clases de `TABLA_ACTIVACION`: las dos cosas son
+  falsas, y la segunda es **lo contrario** de lo que el contrato manda. §13.2
+  dice, con esas palabras, que `TABLA_ACTIVACION` **sigue conteniendo**
+  `AUDITORIA` e `INVESTIGACION` y que las filas de §11.1 y §12.4 no se borran,
+  porque «un contrato que declarase inexistente una clase que el registro sigue
+  describiendo sería falso, y la retirada dejaría de ser reversible con solo
+  quitar una línea». La fuente de verdad de qué carril está retirado es
+  `docs/implementation/work_engine/carriles_retirados.json`, y reactivar uno es
+  quitar su entrada de ahí y fusionar.
+
+  **Retirada y autoridad son cosas distintas**, y por eso esto no cambia nada
+  de lo que ADR-177 decide: una clase con el carril retirado sigue en la vía
+  GitHub -sus encargos históricos viven ahí- y conserva su autoridad; lo que
+  cambia es que `sirius-despachar` ya no admite órdenes suyas.
+
+## La primera ronda de revisión: dos textos míos que eran falsos
+
+Ningún hallazgo en el cambio de autoridad. Los dos son **documentales, ciertos y
+reproducidos**, y los dos con el mismo patrón: yo afirmando de memoria en vez de
+preguntarle al código.
+
+### 1. Prometí una divergencia que el verificador no va a ver
+
+Escribí que `WI-20260828-122242` «va a salir en la próxima pasada como
+divergencia vigilada». Falso. `projection_verifier.CLASES_CON_ESTADO_PROPIO`
+está **vacío**, y `precondicion_estado_propio` va ANTES que cualquier ventana
+de tolerancia: reproducido, el verificador devuelve `NO_COMPARABLE` para **las
+siete clases**, `programacion` incluida. Un `NO_COMPARABLE` no es un día verde
+-lo dice el propio módulo-, así que siete días así acumulan cero.
+
+La distinción que me faltaba, y que ahora está escrita en las consecuencias:
+**entrar en la pasada y añadir líneas al registro no es empezar a medir para
+conmutar.** ADR-177 hace lo primero para documentación e investigación. Lo
+segundo empieza el día en que algo devuelva el desenlace de GitHub al almacén
+(H-25, incidencia #376), que es el único sitio desde el que una clase entra en
+ese conjunto.
+
+### 2. Di por pendiente una retirada ejecutada, y la describí al revés
+
+Escribí que ADR-177 «no decide la ejecución pendiente de ADR-161 (sacar
+investigación y auditoría de `TABLA_ACTIVACION`)». Dos errores en una frase: la
+retirada **está ejecutada** desde ADR-163 (corregida por ADR-167), y sacar esas
+clases de `TABLA_ACTIVACION` es **lo contrario** de lo que el contrato manda.
+§13.2 lo dice con estas palabras: «`TABLA_ACTIVACION` **sigue conteniendo**
+`AUDITORIA` e `INVESTIGACION`, y las filas de §11.1 y §12.4 tampoco se borran»,
+porque un contrato que declarase inexistente una clase que el registro sigue
+describiendo sería falso y la retirada dejaría de ser reversible. La fuente de
+verdad es `docs/implementation/work_engine/carriles_retirados.json`, y
+reactivar un carril es quitar su entrada de ahí y fusionar.
+
+El revisor señaló el riesgo real: ese texto **podría llevar a otra IA a hacer un
+cambio contrario a lo aprobado**. Y en este repositorio eso no es teórico: el
+primer párrafo de `## Decisión` de cada ADR se publica en `MEMORIA.md`, que es
+lo primero que lee toda IA que entra (ADR-171, y la misma familia que costó una
+ronda en ADR-176).
+
+### De dónde salió mi error, que es lo que de verdad hay que arreglar
+
+No lo inventé: **las dos filas de §11.1 decían «EJECUCIÓN PENDIENTE»** mientras
+§13.2, en el mismo documento, decía que ADR-163 la había ejecutado. El contrato
+se contradecía a sí mismo desde ADR-163, y yo copié la mitad equivocada de la
+fila que estaba editando.
+
+Es la misma familia que este ADR arregla -dos sitios que hablan del mismo hecho
+y divergen-, así que se cierra igual, **derivando del dato**: las dos filas
+dicen ahora «CARRIL RETIRADO … EJECUTADO por ADR-163», y dos guardas nuevas lo
+sostienen contra `carriles_retirados.json`, que §13.2 declara fuente de verdad.
+
+| Mutación | Pruebas que caen |
+|---|---|
+| Una fila del contrato vuelve a dar la retirada por pendiente | 1: la del texto contra el registro |
+| Alguien saca investigación de la vía GitHub, que es lo que el texto erróneo invitaba a hacer | **6** |
+| …y además la quita del despachador, para que la atadura no lo tape | **5**, entre ellas la de §13.2 |
+
+La tercera es la que justifica la guarda nueva: quitando la clase de los **dos**
+sitios a la vez, las dos tablas vuelven a coincidir y la atadura de arriba se
+queda callada. Lo que no se calla es §13.2.
 
 ## Alternativas descartadas y por qué
 

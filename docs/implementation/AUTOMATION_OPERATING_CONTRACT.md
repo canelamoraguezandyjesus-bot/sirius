@@ -625,14 +625,16 @@ Cubre todas las clases de trabajo, sin huecos. Una clase que no aparezca aquí n
 | Clase de trabajo | ¿Existe en la vía GitHub? | Autoridad desde la v1.7 | ¿Conmuta? |
 |---|---|---|---|
 | conversación / exploración / consulta | no (no crea WorkItem) | motor, o ningún WorkItem | — |
-| investigación | **sí**, desde ADR-099 y mientras la clase siga en `TABLA_ACTIVACION` — **RETIRADA ACORDADA** (§13, ADR-161) y **EJECUCIÓN PENDIENTE** | **incidencia** (ADR-177; hasta entonces el código decía «motor» y el contador de §11.2 no la midió nunca) | sí, mientras la clase exista |
+| investigación | **sí**, desde ADR-099 (`investigacion` en `TABLA_ACTIVACION`) | **incidencia** (ADR-177; hasta entonces el código decía «motor» y el contador de §11.2 no la midió nunca) — **CARRIL RETIRADO**, acordado en §13/ADR-161 y **EJECUTADO** por ADR-163 (corregido por ADR-167): la fila y la clase se conservan porque §13.2 lo exige | sí, mientras la clase exista |
 | documental no publicada | no — y sin clase en el motor hoy: toda la documentación que el motor despacha va por la vía GitHub (ADR-088; medido en ADR-177) | **motor** | — |
 | documental publicada (PR en el repo) | sí (ADR-088: `documentacion` en `TABLA_ACTIVACION`) | incidencia | sí |
 | programación | sí | incidencia | sí |
-| auditoría | sí (etiqueta propia) | incidencia — **RETIRADA ACORDADA** (§13, ADR-161) y **EJECUCIÓN PENDIENTE**: la fila sigue aquí porque `TABLA_ACTIVACION` sigue teniendo la clase | sí, mientras la clase exista |
+| auditoría | sí (etiqueta propia) | incidencia — **CARRIL RETIRADO**, acordado en §13/ADR-161 y **EJECUTADO** por ADR-163 (corregido por ADR-167): la fila y la clase se conservan porque §13.2 lo exige | sí, mientras la clase exista |
 | reparación / espera / cancelación | son fases o estados, no clases | la de su WorkItem | — |
 
-La columna «¿Existe en la vía GitHub?» es la definición de la que el código deriva la autoridad (`CLASES_CON_VIA_GITHUB`, en `src/sirius_engine/domain/authority.py`, ADR-177), y `tests/engine/test_authority.py` lee esta tabla y la comprueba contra el código: una fila y el código no pueden decir cosas distintas y fusionarse en verde.
+La columna «¿Existe en la vía GitHub?» es la definición de la que el código deriva la autoridad (`CLASES_CON_VIA_GITHUB`, en `src/sirius_engine/domain/authority.py`, ADR-177), y `tests/engine/test_authority.py` lee esta tabla y la comprueba contra el código: una fila y el código no pueden decir cosas distintas y fusionarse en verde. Esa misma prueba comprueba el estado de los carriles retirados contra `docs/implementation/work_engine/carriles_retirados.json`, que §13.2 declara fuente de verdad: hasta ADR-177 estas dos filas decían «EJECUCIÓN PENDIENTE» mientras §13.2 decía que ADR-163 la había ejecutado, y el contrato se contradecía a sí mismo.
+
+**Retirada y autoridad son cosas distintas, y esta tabla las dice por separado.** Una clase con el carril retirado sigue existiendo en la vía GitHub y conserva su autoridad: lo que cambia es que `sirius-despachar` ya no admite órdenes suyas (§13.2.1). Confundirlas llevaría a quitar la clase de `TABLA_ACTIVACION`, que es justo lo que §13.2 prohíbe.
 
 Para las clases nativas del motor **no hay periodo previo**: nacen canónicas en el almacén del motor. Si algo de ellas se refleja en GitHub, ese reflejo es informativo y se etiqueta como tal.
 
