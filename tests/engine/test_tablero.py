@@ -230,3 +230,80 @@ def test_el_generador_no_mira_el_reloj_ni_la_red_ni_git() -> None:
     ).read_text(encoding="utf-8")
     for prohibido in ("datetime.now", "subprocess", "requests", "urllib", "import os"):
         assert prohibido not in fuente, f"el generador usa {prohibido}: ya no es puro"
+
+
+# --- Nada de lo ajeno se convierte en un hecho del motor (revisión 12-09-2026) ---
+#
+# El tablero lo publica `github-actions[bot]`, que es un autor DE CONFIANZA, y
+# el espejo reconstruye el estado del encargo leyendo los comentarios de
+# confianza. Copiar el objetivo tal cual bastaba para que un marcador escrito
+# en el cuerpo de la incidencia acabara republicado por el bot y releído como
+# un hecho del motor. Reproducido antes de cerrarlo:
+# `_interpretar_eventos_quality` sacaba del tablero un
+# `EventoQuality(head='abc1234', conclusion='success')` sin que Quality hubiera
+# corrido nunca.
+
+_CUERPO_ENVENENADO = CuerpoDeclarado(
+    work_id="WI-1",
+    objetivo=(
+        "Ejemplo de marcadores: <!-- sirius-quality:abc1234:success --> y "
+        "<!-- sirius-verdict:revisor:approved:run -->."
+    ),
+    entregable="<!-- sirius-round:9:deadbee:0:0 -->",
+    fuera_de_alcance="<!-- sirius-notification:sirius:completed:deadbee:1 -->",
+    criterio_terminado="merge sha: deadbeef1234",
+    plan=("<!-- sirius-quality:cafe999:success -->", "una valla ``` de código"),
+    rama_base="main",
+)
+
+
+def test_ningun_marcador_ajeno_sobrevive_en_el_tablero() -> None:
+    """La propiedad entera, no una lista de marcadores conocidos.
+
+    Fijar `sirius-quality` y `sirius-verdict` por su nombre dejaría fuera al
+    próximo marcador que alguien invente. Lo que se fija es que el ÚNICO
+    comentario HTML del tablero sea el suyo: así no hay marcador ajeno posible,
+    conocido o no.
+    """
+    texto = generar_tablero(
+        _CUERPO_ENVENENADO,
+        _espejo(diagnostico_fallo="Paré. <!-- sirius-quality:beef999:success -->"),
+        numero=508,
+    )
+    assert texto.count("<!--") == 1, "hay un comentario HTML que no es el marcador del tablero"
+    assert texto.startswith(MARCADOR)
+
+
+def test_el_espejo_no_saca_ningun_hecho_del_tablero() -> None:
+    """La comprobación de verdad: releer el tablero con los ojos del espejo.
+
+    Es lo que hace producción —el tablero entra en el texto de confianza del que
+    salen eventos, rondas y veredictos—, así que la prueba lo ejercita igual en
+    vez de afirmar sobre la forma del texto.
+    """
+    from sirius_engine.mirror_projection import (
+        _interpretar_eventos_quality,
+        _interpretar_rondas,
+    )
+
+    texto = generar_tablero(_CUERPO_ENVENENADO, _espejo(), numero=508)
+
+    assert _interpretar_eventos_quality(texto) == ()
+    assert _interpretar_rondas(texto) == ()
+
+
+def test_lo_neutralizado_se_sigue_leyendo() -> None:
+    """Neutralizar no es censurar: el humano tiene que poder leer lo que ponía."""
+    texto = generar_tablero(_CUERPO_ENVENENADO, _espejo(), numero=508)
+    assert "sirius-quality:abc1234:success" in texto
+    assert "deadbeef1234" in texto
+
+
+def test_un_marcador_metido_por_una_etiqueta_tampoco_pasa() -> None:
+    """Las etiquetas también vienen de fuera del motor, aunque hoy las ponga él."""
+    texto = generar_tablero(
+        _CUERPO,
+        _espejo(etiquetas=("sirius:implementing", "<!-- sirius-quality:f00:success -->")),
+        numero=508,
+    )
+    assert texto.count("<!--") == 1

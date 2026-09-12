@@ -16,10 +16,16 @@ name: Mantener el tablero de la incidencia
 #   cuando llega otra, así que con un grupo compartido un tercer evento
 #   desplazaría al segundo y ese hecho no dejaría marcador. Un hecho perdido no
 #   se recupera.
-# - El tablero publica un ESTADO, recalculado entero del espejo en cada pasada.
-#   Aquí que Actions descarte la pendiente no es un defecto: es lo correcto. La
-#   que sobreviva leerá el espejo MÁS NUEVO y pintará el tablero MÁS NUEVO; la
-#   intermedia no aportaba nada que la última no traiga.
+# - El tablero publica un ESTADO, recalculado entero del espejo en cada pasada,
+#   así que descartar una pendiente no pierde nada... SIEMPRE QUE la que
+#   sobrevive cubra también lo que la descartada iba a hacer. Ese "siempre que"
+#   faltaba en la primera versión y lo encontró la revisión del 12-09-2026: con
+#   un grupo común, si A está corriendo, B espera y llega C, Actions descarta B
+#   —y B era OTRA incidencia—, así que su tablero se quedaba viejo sin que nada
+#   volviera a tocarlo. Por eso cada pasada no refresca solo su incidencia:
+#   refresca también las últimas movidas del ciclo (ver el paso de abajo). Una
+#   incidencia cuyo evento se descartó es, por construcción, de las últimas
+#   movidas, así que la siguiente pasada la recoge.
 #
 # Y el grupo tiene que ser CONSTANTE por otra razón, que es una regla del
 # repositorio y no una preferencia: `tests/automation/test_serializacion_del_motor.py`
@@ -102,29 +108,69 @@ jobs:
 
           source scripts/automation/sirius_issue.sh
 
-          cuerpo="$(mktemp)"
-          if ! uv run sirius-tablero --repo "$GH_REPO" --incidencia "$ISSUE_NUMBER" > "$cuerpo"; then
-            rm -f "$cuerpo"
-            echo "::warning::no se pudo calcular el tablero de #${ISSUE_NUMBER}; se deja como estaba."
-            exit 0
+          # QUÉ INCIDENCIAS SE REFRESCAN, y por qué no solo la del evento.
+          #
+          # El grupo de concurrencia es común a todo el repositorio (ver la
+          # cabecera), y Actions guarda como mucho UNA ejecución en espera por
+          # grupo: con tres eventos seguidos de incidencias distintas, la de en
+          # medio se descarta y su tablero se quedaría viejo para siempre.
+          #
+          # Se arregla cubriendo, en cada pasada, un SUPERCONJUNTO que contiene
+          # con seguridad a la descartada: la incidencia del evento más las
+          # últimas movidas del ciclo. Una incidencia cuyo evento se descartó
+          # acaba de recibir una etiqueta -eso la mueve al principio de la lista
+          # por `updated`-, así que la siguiente pasada la recoge, esté abierta
+          # o cerrada. El tope de 20 acota el trabajo de una pasada; el reflejo
+          # de un tablero cuesta segundos.
+          recientes="$(sirius_retry _sirius_gh api \
+            "repos/${GH_REPO}/issues?state=all&sort=updated&direction=desc&per_page=20" \
+            --jq '.[] | select(has("pull_request") | not)
+                      | select([.labels[].name] | any(. == "sirius:implementing"
+                          or . == "sirius:repair-requested" or . == "sirius:ready-for-merge"
+                          or . == "sirius:blocked-decision" or . == "sirius:failed-safely"
+                          or . == "sirius:completed"))
+                      | .number' 2>/dev/null)" || recientes=""
+          if [ -z "$recientes" ]; then
+            echo "::warning::no pude listar las incidencias recientes; refresco solo la del evento."
           fi
 
-          # El marcador se toma de la PRIMERA LÍNEA del propio cuerpo, que el
-          # generador garantiza y `tests/engine/test_tablero.py` fija. Copiarlo
-          # aquí sería el mismo dato en dos sitios, y el día que cambiara en uno
-          # el motor publicaría un tablero nuevo dejando huérfano al anterior.
-          marcador="$(sed -n '1p' "$cuerpo")"
-          case "$marcador" in
-            "<!--"*"-->") ;;
-            *)
+          # La del evento SIEMPRE, aunque el listado fallara o ya no lleve
+          # ninguna de las seis etiquetas (una etiqueta retirada también cambia
+          # el estado que el tablero enseña).
+          numeros="$(printf '%s\n%s\n' "$ISSUE_NUMBER" "$recientes" | awk 'NF && !vistos[$0]++')"
+
+          fallos=0
+          for numero in $numeros; do
+            cuerpo="$(mktemp)"
+            if ! uv run sirius-tablero --repo "$GH_REPO" --incidencia "$numero" > "$cuerpo"; then
               rm -f "$cuerpo"
-              echo "::warning::el tablero no empieza por su marcador; no publico a ciegas."
-              exit 0
-              ;;
-          esac
+              echo "::warning::no se pudo calcular el tablero de #${numero}; se deja como estaba."
+              fallos=$((fallos + 1))
+              continue
+            fi
 
-          if ! sirius_comment_upsert "$GH_REPO" "$ISSUE_NUMBER" "$marcador" "$cuerpo"; then
-            echo "::warning::no se pudo publicar el tablero de #${ISSUE_NUMBER}; el ciclo continúa."
-          fi
-          rm -f "$cuerpo"
+            # El marcador se toma de la PRIMERA LÍNEA del propio cuerpo, que el
+            # generador garantiza y `tests/engine/test_tablero.py` fija.
+            # Copiarlo aquí sería el mismo dato en dos sitios, y el día que
+            # cambiara en uno el motor publicaría un tablero nuevo dejando
+            # huérfano al anterior.
+            marcador="$(sed -n '1p' "$cuerpo")"
+            case "$marcador" in
+              "<!--"*"-->") ;;
+              *)
+                rm -f "$cuerpo"
+                echo "::warning::el tablero de #${numero} no empieza por su marcador; no publico a ciegas."
+                fallos=$((fallos + 1))
+                continue
+                ;;
+            esac
+
+            if ! sirius_comment_upsert "$GH_REPO" "$numero" "$marcador" "$cuerpo"; then
+              echo "::warning::no se pudo publicar el tablero de #${numero}; el ciclo continúa."
+              fallos=$((fallos + 1))
+            fi
+            rm -f "$cuerpo"
+          done
+
+          echo "Tableros repasados: $(printf '%s\n' "$numeros" | wc -l), con ${fallos} sin publicar."
           exit 0

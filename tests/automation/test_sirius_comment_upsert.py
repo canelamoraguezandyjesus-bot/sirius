@@ -124,7 +124,9 @@ _CUERPO = f"{MARCADOR}\n\n## Tablero\n\nEstado: «trabajando»\n"
 
 
 def test_sin_tablero_previo_lo_crea(tmp_path: Path) -> None:
-    entorno = _entorno(tmp_path, [{"id": 1, "author_association": "OWNER", "body": "hola"}])
+    entorno = _entorno(
+        tmp_path, [{"id": 1, "user": {"login": "github-actions[bot]"}, "body": "hola"}]
+    )
     resultado = _correr(tmp_path, entorno, _CUERPO)
     assert resultado.returncode == 0, resultado.stderr
     assert (_mock(entorno) / "creados.txt").exists()
@@ -135,8 +137,8 @@ def test_con_tablero_previo_lo_edita_y_no_crea_otro(tmp_path: Path) -> None:
     entorno = _entorno(
         tmp_path,
         [
-            {"id": 1, "author_association": "OWNER", "body": "hola"},
-            {"id": 77, "author_association": "OWNER", "body": f"{MARCADOR}\nviejo"},
+            {"id": 1, "user": {"login": "github-actions[bot]"}, "body": "hola"},
+            {"id": 77, "user": {"login": "github-actions[bot]"}, "body": f"{MARCADOR}\nviejo"},
         ],
     )
     resultado = _correr(tmp_path, entorno, _CUERPO)
@@ -154,8 +156,8 @@ def test_con_dos_tableros_edita_siempre_el_mas_antiguo(tmp_path: Path) -> None:
     entorno = _entorno(
         tmp_path,
         [
-            {"id": 10, "author_association": "OWNER", "body": f"{MARCADOR}\nprimero"},
-            {"id": 20, "author_association": "OWNER", "body": f"{MARCADOR}\nsegundo"},
+            {"id": 10, "user": {"login": "github-actions[bot]"}, "body": f"{MARCADOR}\nprimero"},
+            {"id": 20, "user": {"login": "github-actions[bot]"}, "body": f"{MARCADOR}\nsegundo"},
         ],
     )
     resultado = _correr(tmp_path, entorno, _CUERPO)
@@ -167,7 +169,7 @@ def test_un_marcador_sembrado_por_un_tercero_no_se_reescribe(tmp_path: Path) -> 
     """La frontera de confianza: el motor no edita el comentario de un extraño."""
     entorno = _entorno(
         tmp_path,
-        [{"id": 99, "author_association": "NONE", "body": f"{MARCADOR}\nsoy un extraño"}],
+        [{"id": 99, "user": {"login": "un-tercero"}, "body": f"{MARCADOR}\nsoy un extraño"}],
     )
     resultado = _correr(tmp_path, entorno, _CUERPO)
     assert resultado.returncode == 0, resultado.stderr
@@ -197,9 +199,59 @@ def test_el_cuerpo_llega_intacto_aunque_lleve_comillas_acentos_y_saltos(tmp_path
     """Un tablero lleva todo eso; armar el JSON a mano lo habría roto."""
     dificil = f'{MARCADOR}\n\n## «Tablero»\n\nDijo: "así" y \\ también\n- línea\n'
     entorno = _entorno(
-        tmp_path, [{"id": 5, "author_association": "OWNER", "body": f"{MARCADOR}\nviejo"}]
+        tmp_path,
+        [{"id": 5, "user": {"login": "github-actions[bot]"}, "body": f"{MARCADOR}\nviejo"}],
     )
     resultado = _correr(tmp_path, entorno, dificil)
     assert resultado.returncode == 0, resultado.stderr
     enviado = json.loads((_mock(entorno) / "cuerpo_editado.json").read_text(encoding="utf-8"))
     assert enviado["body"] == dificil
+
+
+def test_una_nota_del_propietario_que_cita_el_marcador_no_se_reescribe(tmp_path: Path) -> None:
+    """El hallazgo de la revisión del 12-09-2026, cerrado y con su prueba.
+
+    El propietario es autor DE CONFIANZA: el filtro ancho lo incluía, así que
+    bastaba con que una nota suya MENCIONARA el marcador para que el tablero se
+    publicara encima y la borrara. Reproducido antes de arreglarlo: el
+    publicador editó su comentario 4242 en vez de crear el suyo.
+    """
+    # El marcador va AL PRINCIPIO de su nota, que es el caso que de verdad
+    # ejercita el filtro de autor: pegar el tablero para comentarlo encima es
+    # lo más natural del mundo. Con el marcador en medio lo rechazaría la otra
+    # condición y esta prueba no probaría nada -la mutación lo enseñó-.
+    nota = MARCADOR + "\n\nEste tablero está mal, el estado no es ese. No lo pises."
+    entorno = _entorno(
+        tmp_path,
+        [{"id": 4242, "author_association": "OWNER", "user": {"login": "andy"}, "body": nota}],
+    )
+    resultado = _correr(tmp_path, entorno, _CUERPO)
+    assert resultado.returncode == 0, resultado.stderr
+    assert not (_mock(entorno) / "editado.txt").exists(), (
+        "se reescribió un comentario del propietario"
+    )
+    assert (_mock(entorno) / "creados.txt").exists()
+
+
+def test_un_comentario_del_bot_que_solo_menciona_el_marcador_no_es_el_tablero(
+    tmp_path: Path,
+) -> None:
+    """La segunda condición: el marcador ABRE el tablero, no aparece en él.
+
+    Sin esto, cualquier aviso del propio bot que citara el marcador -una
+    explicación, un ejemplo- se convertiría en el tablero y sería sustituido.
+    """
+    entorno = _entorno(
+        tmp_path,
+        [
+            {
+                "id": 31,
+                "user": {"login": "github-actions[bot]"},
+                "body": "Aviso: el tablero se reconoce por " + MARCADOR + " en su cabecera.",
+            }
+        ],
+    )
+    resultado = _correr(tmp_path, entorno, _CUERPO)
+    assert resultado.returncode == 0, resultado.stderr
+    assert not (_mock(entorno) / "editado.txt").exists()
+    assert (_mock(entorno) / "creados.txt").exists()

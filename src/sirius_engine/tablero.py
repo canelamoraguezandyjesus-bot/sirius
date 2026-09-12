@@ -24,6 +24,7 @@ ronda siguen exactamente igual: son la película. Esto es la foto.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Sequence
 
 from sirius_engine.domain.mirror import MirroredWorkItem
@@ -72,13 +73,56 @@ _LECTURA: dict[WorkItemState, tuple[str, str]] = {
 _ESPERA_FUSION = "**fusiona** en un comentario, si lo apruebas"
 
 
+#: Lo que se neutraliza, y con qué se sustituye. Mismo criterio que
+#: `sanitize_untrusted_text`: no se borra nada -el texto se sigue leyendo-
+#: pero deja de ser un marcador que otro lector pueda interpretar.
+_NEUTRALIZACIONES: tuple[tuple[str, str], ...] = (
+    ("<!--", "&lt;!--"),
+    ("```", "'''"),
+)
+
+#: `head sha: <x>` y `merge sha: <x>` son de donde `sirius_extract_sha` saca
+#: el SHA; con el guion en medio deja de coincidir y se sigue leyendo igual.
+_SHA_DECLARADO = re.compile(r"\b(head|merge)(\s+sha\s*:)", re.IGNORECASE)
+
+
+def _neutralizar(texto: str) -> str:
+    """Le quita el poder de marcador a un texto, sin quitarle el sentido."""
+    for viejo, nuevo in _NEUTRALIZACIONES:
+        texto = texto.replace(viejo, nuevo)
+    return _SHA_DECLARADO.sub(r"\1-sha:", texto)
+
+
 def _fila(clave: str, valor: str | None) -> str | None:
     return f"| {clave} | {valor} |" if valor else None
 
 
-def _recorte(texto: str, limite: int = 400) -> str:
-    """Recorta por palabras: un objetivo entero puede ocupar veinte líneas."""
-    limpio = " ".join(texto.split())
+def _ajeno(texto: str, limite: int = 400) -> str:
+    """Texto que NO escribió el motor, listo para ponerlo en el tablero.
+
+    Todo lo que el tablero enseña del cuerpo de la incidencia o de sus
+    comentarios pasa por aquí, y por eso la función se llama así: si hubiera
+    que acordarse de neutralizar en cada sitio, el primer campo que alguien
+    añadiera sin acordarse reabriría el agujero.
+
+    **El agujero, medido el 12-09-2026 antes de cerrarlo.** El tablero lo
+    publica ``github-actions[bot]``, que es un autor DE CONFIANZA, y el espejo
+    reconstruye el estado del encargo leyendo los comentarios de confianza
+    (``_texto_cronologico_de_confianza``). Copiar el objetivo tal cual bastaba
+    para que un ``sirius-quality`` escrito en el cuerpo de la incidencia
+    acabara republicado por el bot y releído como una ejecución de Quality que
+    nunca ocurrió: reproducido, ``_interpretar_eventos_quality`` devolvía
+    ``EventoQuality(head=..., conclusion='success')`` a partir del tablero. Lo
+    mismo valía para ``sirius-verdict``, ``sirius-round`` y
+    ``sirius-notification``, que acreditan transiciones de estado.
+
+    Se neutraliza LO MISMO y de la misma forma que
+    ``scripts/automation/sirius_issue.sh::sanitize_untrusted_text``, que existe
+    para esto desde antes y a la que este módulo no llamaba: la apertura de
+    comentario HTML, la valla de código y el ``head sha:``/``merge sha:`` del
+    que otros lectores sacan el SHA.
+    """
+    limpio = _neutralizar(" ".join(texto.split()))
     if len(limpio) <= limite:
         return limpio
     return limpio[:limite].rsplit(" ", 1)[0] + "…"
@@ -112,7 +156,8 @@ def _comprobado(espejo: MirroredWorkItem) -> list[str]:
         )
         lineas.append(
             f"- **Quality**: {len(espejo.eventos_quality)} ejecución(es) observada(s); "
-            f"la última, `{ultimo.conclusion}` sobre `{ultimo.head[:7] or 'sin head'}`{racha}."
+            f"la última, `{_neutralizar(ultimo.conclusion)}` sobre "
+            f"`{_neutralizar(ultimo.head[:7]) or 'sin head'}`{racha}."
         )
     else:
         lineas.append("- **Quality**: ninguna ejecución observada todavía.")
@@ -121,7 +166,7 @@ def _comprobado(espejo: MirroredWorkItem) -> list[str]:
         lineas.append(
             f"- **Revisión**: ronda **{ronda.numero}**, con **{ronda.pendientes}** "
             f"hallazgo(s) pendiente(s) (gravedad total {ronda.gravedad_total}) sobre "
-            f"`{ronda.head[:7] or 'sin head'}`."
+            f"`{_neutralizar(ronda.head[:7]) or 'sin head'}`."
         )
     else:
         lineas.append("- **Revisión**: ninguna ronda registrada todavía.")
@@ -167,7 +212,7 @@ def generar_tablero(declarado: CuerpoDeclarado, espejo: MirroredWorkItem, *, num
     ]
     if espejo.diagnostico_fallo:
         lineas += [
-            "> **Por qué se detuvo:** " + _recorte(espejo.diagnostico_fallo, 600),
+            "> **Por qué se detuvo:** " + _ajeno(espejo.diagnostico_fallo, 600),
             "",
         ]
 
@@ -176,15 +221,15 @@ def generar_tablero(declarado: CuerpoDeclarado, espejo: MirroredWorkItem, *, num
         for f in (
             _fila("Encargo", f"`{declarado.work_id}`" if declarado.work_id else None),
             _fila("Bloque", declarado.bloque),
-            _fila("Objetivo", _recorte(declarado.objetivo) if declarado.objetivo else None),
-            _fila("Entregable", _recorte(declarado.entregable) if declarado.entregable else None),
+            _fila("Objetivo", _ajeno(declarado.objetivo) if declarado.objetivo else None),
+            _fila("Entregable", _ajeno(declarado.entregable) if declarado.entregable else None),
             _fila(
                 "Fuera de alcance",
-                _recorte(declarado.fuera_de_alcance) if declarado.fuera_de_alcance else None,
+                _ajeno(declarado.fuera_de_alcance) if declarado.fuera_de_alcance else None,
             ),
             _fila(
                 "Criterio de terminado",
-                _recorte(declarado.criterio_terminado) if declarado.criterio_terminado else None,
+                _ajeno(declarado.criterio_terminado) if declarado.criterio_terminado else None,
             ),
             _fila("Rama base", f"`{declarado.rama_base}`" if declarado.rama_base else None),
         )
@@ -201,7 +246,7 @@ def generar_tablero(declarado: CuerpoDeclarado, espejo: MirroredWorkItem, *, num
 
     if declarado.plan:
         lineas += ["**El plan declarado:**", ""]
-        lineas += [f"{i}. {_recorte(paso, 200)}" for i, paso in enumerate(declarado.plan, start=1)]
+        lineas += [f"{i}. {_ajeno(paso, 200)}" for i, paso in enumerate(declarado.plan, start=1)]
         lineas.append("")
 
     lineas += [
@@ -223,15 +268,15 @@ def generar_tablero(declarado: CuerpoDeclarado, espejo: MirroredWorkItem, *, num
 def _evidencia(espejo: MirroredWorkItem) -> Sequence[str]:
     lineas = []
     if espejo.pr_url:
-        lineas.append(f"- Pull Request: {espejo.pr_url}")
+        lineas.append(f"- Pull Request: {_neutralizar(espejo.pr_url)}")
     else:
         lineas.append("- Pull Request: todavía no hay ninguna enlazada.")
     lineas.append(
-        f"- Último head observado: `{espejo.head_sha}`."
+        f"- Último head observado: `{_neutralizar(espejo.head_sha)}`."
         if espejo.head_sha
         else "- Último head observado: ninguno."
     )
-    etiquetas = ", ".join(f"`{e}`" for e in sorted(espejo.etiquetas)) or "ninguna"
+    etiquetas = ", ".join(f"`{_neutralizar(e)}`" for e in sorted(espejo.etiquetas)) or "ninguna"
     lineas.append(f"- Etiquetas vigentes: {etiquetas}.")
-    lineas.append(f"- Leído de: {espejo.origen.fuente}.")
+    lineas.append(f"- Leído de: {_neutralizar(espejo.origen.fuente)}.")
     return lineas

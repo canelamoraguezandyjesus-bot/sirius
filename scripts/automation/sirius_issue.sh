@@ -903,8 +903,26 @@ sirius_comment_upsert() {
   return "$status"
 }
 
+# El autor del tablero, y solo él. NO vale `SIRIUS_TRUSTED_AUTHOR_JQ`: ese
+# filtro incluye al PROPIETARIO, que es de confianza para LEER pero cuyos
+# comentarios este publicador no debe reescribir jamás. Con el filtro ancho
+# bastaba con que una nota suya MENCIONARA el marcador para que el tablero se
+# publicara encima, borrándola: reproducido el 12-09-2026 contra la API
+# simulada, el publicador editó el comentario 4242 del propietario en vez de
+# crear el suyo.
+SIRIUS_AUTOR_DEL_TABLERO_JQ='select((.user.login // "") == "github-actions[bot]")'
+
 # _sirius_comment_ids_con_marcador <repo> <issue> <marcador> — los ids de los
-# comentarios DE CONFIANZA que llevan el marcador, del más antiguo al más nuevo.
+# comentarios que SON el tablero, del más antiguo al más nuevo.
+#
+# "Ser el tablero" son DOS condiciones, y ninguna de las dos sobra:
+#
+# 1. Lo escribió el autor del tablero (arriba), no cualquier autor de confianza.
+# 2. El marcador ABRE el comentario, no aparece en cualquier parte de él. Lo
+#    garantiza el generador -`tablero.py` lo emite como primera línea- y lo fija
+#    `tests/engine/test_tablero.py`. Así, citar el marcador dentro de un texto
+#    -en una explicación, en un ejemplo- no convierte ese texto en el tablero.
+#
 # La lectura y la transformación van separadas a propósito, por la misma razón
 # que en `_sirius_comments_newest_first`: encadenadas, el estado de salida sería
 # el de `python3` -que siempre acierta- y un 503 se leería como "no hay
@@ -912,7 +930,7 @@ sirius_comment_upsert() {
 _sirius_comment_ids_con_marcador() {
   local raw=""
   raw="$(_sirius_gh api --paginate "repos/${1}/issues/${2}/comments?per_page=100" \
-    --jq "[.[] | ${SIRIUS_TRUSTED_AUTHOR_JQ}] | .[] | @json")" || return 1
+    --jq "[.[] | ${SIRIUS_AUTOR_DEL_TABLERO_JQ}] | .[] | @json")" || return 1
   printf '%s\n' "$raw" | python3 -c '
 import json, sys
 marcador = sys.argv[1]
@@ -924,7 +942,8 @@ for linea in sys.stdin:
         dato = json.loads(linea)
     except json.JSONDecodeError:
         continue
-    if marcador in (dato.get("body") or ""):
+    cuerpo = (dato.get("body") or "").lstrip()
+    if cuerpo.startswith(marcador):
         print(dato.get("id"))
 ' "$marcador"
 }

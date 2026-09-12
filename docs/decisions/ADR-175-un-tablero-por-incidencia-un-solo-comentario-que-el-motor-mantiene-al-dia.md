@@ -202,9 +202,10 @@ actualizarse sin que nadie lo notara.
 
 - **Un workflow más, y `notify-sirius-state.yml` sin tocar una coma.**
 - **Los tableros se serializan entre sí en todo el repositorio.** Con un grupo
-  constante, dos cambios de etiqueta en incidencias distintas hacen cola. Cada
-  pasada dura segundos, y perder una pendiente **no pierde nada**: la que
-  sobreviva lee el espejo más nuevo y pinta el tablero más nuevo.
+  constante, dos cambios de etiqueta en incidencias distintas hacen cola, y
+  Actions descarta la pendiente cuando llega otra. Por eso cada pasada refresca
+  la incidencia del evento **y las últimas veinte movidas del ciclo**: la
+  descartada está siempre entre ellas. Cada tablero cuesta segundos.
 - **Coste en minutos de Actions: irrelevante.** El repositorio es público a
   propósito y los runners estándar no consumen cuota en un repositorio público
   (ADR-044).
@@ -251,6 +252,72 @@ repositorio, y las dos tenían razón:
 
 Las dos salieron de correr la batería ENTERA antes de dar nada por bueno, no de
 la revisión de nadie.
+
+## La revisión del 12-09-2026, y lo que enseñó
+
+Tres hallazgos sobre este ADR. **Los tres eran ciertos**, y los tres se
+reprodujeron antes de tocar nada.
+
+### 1. El tablero convertía texto ajeno en hechos del motor (grave)
+
+El tablero lo publica `github-actions[bot]`, que es un autor **de confianza**, y
+el espejo reconstruye el estado del encargo leyendo los comentarios de
+confianza. Copiar el objetivo tal cual bastaba para que un marcador escrito en
+el cuerpo de la incidencia acabara republicado por el bot y releído como un
+hecho. Reproducido: con `<!-- sirius-quality:abc1234:success -->` en el
+objetivo, `_interpretar_eventos_quality` sacaba del tablero un
+`EventoQuality(head='abc1234', conclusion='success')` **sin que Quality hubiera
+corrido nunca**. Lo mismo con `sirius-verdict`, `sirius-round` y
+`sirius-notification`, que acreditan transiciones de estado.
+
+Y el antídoto llevaba meses escrito: `sanitize_untrusted_text`, en la misma
+biblioteca de shell que este trabajo usa, hace exactamente esto. **No lo
+llamaba nadie desde aquí.** Es la tercera vez en esta misma sesión que aparece
+la familia «pieza correcta sin lector» —`cerrada` en ADR-173, el estado
+proyectado que no se enseñaba a nadie en este mismo ADR, y ahora el saneador—.
+
+El arreglo no es escapar en cada sitio: es que **no haya sitio donde no se
+escape**. Todo lo que viene de fuera del motor pasa por una única función,
+`_ajeno`, y lo fija una prueba que no enumera marcadores conocidos sino que
+exige que **el único comentario HTML del tablero sea el suyo**. Así el marcador
+que alguien invente mañana tampoco pasa.
+
+### 2. El publicador podía sobrescribir un comentario del propietario (grave)
+
+`sirius_comment_upsert` buscaba el tablero entre los comentarios de autor de
+confianza que **contuvieran** el marcador. El propietario es autor de
+confianza. Reproducido contra la API simulada: una nota suya que empezaba por
+el marcador —pegar el tablero para comentarlo encima es lo más natural— hacía
+que el publicador **editara su comentario 4242** en vez de crear el suyo,
+borrándolo entero.
+
+Ser el tablero pasa a ser dos condiciones: lo escribió **el autor del tablero**
+(`github-actions[bot]`, no cualquier autor de confianza) **y** el marcador
+**abre** el comentario, no aparece en cualquier parte de él.
+
+### 3. Se podían perder tableros de otras incidencias (media) — y el error era mío
+
+Este ADR afirmaba que descartar una pasada pendiente «no pierde nada, porque la
+que sobrevive lee el espejo más nuevo». **Eso solo es cierto si las dos son de
+la misma incidencia.** Con el grupo común, si A corre, B espera y llega C,
+Actions descarta B —que era otra incidencia— y su tablero se quedaba viejo sin
+que nada volviera a tocarlo.
+
+El razonamiento era correcto para el caso que miré y lo generalicé a uno que no
+había mirado. El arreglo mantiene el grupo constante —la regla de serialización
+no se toca— y hace que cada pasada refresque un **superconjunto** que contiene
+con seguridad a la descartada: la incidencia del evento más las últimas veinte
+movidas del ciclo. Una incidencia cuyo evento se descartó acaba de recibir una
+etiqueta, así que está entre las últimas movidas.
+
+### Y una prueba vacua que cazó la mutación, no yo
+
+La primera prueba del hallazgo 2 ponía el marcador **en medio** de la nota del
+propietario. Pasaba, pero no por el filtro de autor: la rechazaba la otra
+condición. Al sembrar la mutación «vuelve al filtro ancho», **las pruebas
+siguieron todas en verde**: la prueba no probaba lo que decía probar. Con el
+marcador al principio, la mutación cae. Es la cuarta forma de prueba vacua del
+catálogo de `patrones.md`, y sin mutación no se ve.
 
 ## Alternativas descartadas y por qué
 
