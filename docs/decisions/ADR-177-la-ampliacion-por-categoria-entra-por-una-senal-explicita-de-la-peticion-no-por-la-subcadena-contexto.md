@@ -231,12 +231,17 @@ siembra dejaría de rescatar y esa cota rompería. Su gemela del motor portado,
 
 ### 6. La prosa que el cambio dejaba falsa (deuda 28)
 
-Corregida en el mismo trabajo, no en otro: el docstring de módulo de
-`relevance.py` y el de `RankedKnowledge.seeded`; los de
-`_PROPOSITO_RECUPERACION_ORDINARIA` y `_rank_via_staged_engine` en
-`rank_relevant_knowledge.py`; el de `PROPOSITO_RECUPERACION_ORDINARIA` y el
-de `interpretar` en `interpret_query_request.py`; el de módulo del traductor
-del banco (quinta traducción no obvia); y las **21** referencias a
+Corregida en el mismo trabajo, no en otro. Son **nueve** trozos de prosa, y
+esta es la lista completa: el docstring de módulo de `relevance.py` y el de
+`RankedKnowledge.seeded`; los de `_PROPOSITO_RECUPERACION_ORDINARIA` y
+`_rank_via_staged_engine` en `rank_relevant_knowledge.py`; el de **módulo**
+de `interpret_query_request.py`, el de `PROPOSITO_RECUPERACION_ORDINARIA` y
+el de `interpretar` en ese mismo fichero; el de módulo del traductor del
+banco (quinta traducción no obvia); y el de módulo de
+`scripts/medir_variantes_de_criticidad.py:29-38`, cuyo único cambio en toda
+esta PR es justamente ese: decía que la siembra de M20 la activaba «el
+PROPÓSITO de la petición (`pide_contexto`)» y ahora dice que la activa la
+señal explícita. A ellos se suman las **21** referencias a
 `pide_contexto` que las pruebas escribían sobre el árbol base `433fb11`
 —`tests/unit/test_relevance_domain.py` (13, las cuatro pruebas de la función
 retirada se sustituyen por el candado
@@ -299,9 +304,12 @@ es la 2053.
 `pwsh -File scripts/check.ps1` y su código de salida capturado (ADR-154),
 anclada **al árbol de `f6ed801`** —el head de la ronda 4 de corrección, el
 que trae `main` (`e468113`) a la rama, declara la lección de esta ficha y
-regenera `MEMORIA.md`; lo único posterior es esta misma sección de
-validación, que no toca código ni pruebas y por tanto no puede mover la
-terna—:
+regenera `MEMORIA.md`—. Lo posterior a ese árbol son **solo ajustes
+documentales**, y estos son todos: esta misma sección de validación; el
+desglose de los casos netos bajo «Alternativas descartadas»; la enumeración
+de la sección 6 y el bloque «## La lección» de la ronda 5, con `MEMORIA.md`
+regenerado a partir de él. Ninguno toca código ni pruebas, y por eso ninguno
+puede mover la terna:
 
 ```
 5392 passed, 17 skipped, 2 xfailed in 818.41s (0:13:38)
@@ -407,5 +415,5 @@ ninguna cota del arnés se mueve.
 ## La lección
 
 - familia: `prosa-que-el-cambio-deja-falsa`
-- sin esto se repetiría: retirar un símbolo de producción y dejar vivas las frases que lo daban por cierto; al quitar `pide_contexto` quedaron falsos seis docstrings, 21 referencias en pruebas y el criterio de aceptación de M16 de la Arquitectura Técnica, y el barrido que las buscó en `scripts/` y `tests/` no miró en `docs/evolution/`.
-- lo hace cumplir: `ninguna prueba`: ninguna prueba de este repositorio vigila la coherencia de la prosa de `docs/` con el árbol, y la ocurrencia que queda viva está en la Arquitectura Técnica, que la salvaguarda de #581 prohíbe tocar sin decisión del propietario.
+- sin esto se repetiría: retirar un símbolo de producción y dejar vivas las frases que lo daban por cierto; al quitar `pide_contexto` quedaron falsos los nueve trozos de prosa que la sección 6 de esta ficha enumera, 21 referencias en pruebas y el criterio de aceptación de M16 de la Arquitectura Técnica, y el barrido que las buscó en `scripts/` y `tests/` no miró en `docs/evolution/`.
+- lo hace cumplir: ninguna prueba: nada en este repositorio vigila la coherencia de la prosa de `docs/` con el árbol, y la ocurrencia que queda viva está en la Arquitectura Técnica, que la salvaguarda de #581 prohíbe tocar sin decisión del propietario.

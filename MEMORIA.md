@@ -226,7 +226,7 @@ de memoria.
 
 ### `prosa-que-el-cambio-deja-falsa`
 
-- **[ADR-177](docs/decisions/ADR-177-la-ampliacion-por-categoria-entra-por-una-senal-explicita-de-la-peticion-no-por-la-subcadena-contexto.md)** — retirar un símbolo de producción y dejar vivas las frases que lo daban por cierto; al quitar `pide_contexto` quedaron falsos seis docstrings, 21 referencias en pruebas y el criterio de aceptación de M16 de la Arquitectura Técnica, y el barrido que las buscó en `scripts/` y `tests/` no miró en `docs/evolution/`. (sin prueba que lo haga cumplir: ninguna prueba`: ninguna prueba de este repositorio vigila la coherencia de la prosa de `docs/` con el árbol, y la ocurrencia que queda viva está en la Arquitectura Técnica, que la salvaguarda de #581 prohíbe tocar sin decisión del propietario.).
+- **[ADR-177](docs/decisions/ADR-177-la-ampliacion-por-categoria-entra-por-una-senal-explicita-de-la-peticion-no-por-la-subcadena-contexto.md)** — retirar un símbolo de producción y dejar vivas las frases que lo daban por cierto; al quitar `pide_contexto` quedaron falsos los nueve trozos de prosa que la sección 6 de esta ficha enumera, 21 referencias en pruebas y el criterio de aceptación de M16 de la Arquitectura Técnica, y el barrido que las buscó en `scripts/` y `tests/` no miró en `docs/evolution/`. (sin prueba que lo haga cumplir: ninguna prueba: nada en este repositorio vigila la coherencia de la prosa de `docs/` con el árbol, y la ocurrencia que queda viva está en la Arquitectura Técnica, que la salvaguarda de #581 prohíbe tocar sin decisión del propietario.).
 
 ### `regla-que-depende-de-que-alguien-se-acuerde`
 
