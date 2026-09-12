@@ -1,8 +1,18 @@
-# ADR-177 — La guarda de piezas sin llamante deriva su inventario del codigo del motor
+# ADR-179 — La guarda de piezas sin llamante deriva su inventario del codigo del motor
 
 - Estado: PROPUESTO
 - Fecha: 2026-09-12
 - Aprobación: la fusión de la PR por el propietario
+
+> **Nació como ADR-177 y se renumeró a 179.** El 12-09-2026 había **tres**
+> ADR-177 distintos, cada uno en su rama abierta y ninguno en `main`: la
+> ampliación por categoría (PR #590, la más antigua, conserva el 177), la
+> autoridad por clase (PR #591, renumerada a 178) y este (PR #593).
+> `scripts/siguiente_adr.py` consulta las ramas **del clon**, así que una rama
+> que no se ha traído no existe para él, y `test_registro_de_decisiones.py`
+> mira el árbol local: las tres ramas pasaban por separado y el rojo habría
+> aparecido en `main` al fusionar la segunda. Es el modo exacto en que
+> nacieron los dos ADR-016 que ADR-032 conserva.
 
 ## Nota de arranque (escrita ANTES de tocar el código de la guarda)
 

@@ -25,7 +25,7 @@ Así que el inventario ya no se escribe: **se deriva** del árbol de
 `src/sirius_engine` con `ast`. Lo escrito a mano es ahora lo que se RESTA
 —`SIN_LLAMANTE_CONOCIDO`—, y restar tiene la ventaja de que se nota: una
 excepción que sobra pone la batería en rojo, mientras que una entrada que falta
-en una lista de inclusión no la pone en rojo nunca. Es la decisión de ADR-177.
+en una lista de inclusión no la pone en rojo nunca. Es la decisión de ADR-179.
 
 Esta batería no comprueba que las piezas estén bien hechas —eso lo hacen sus
 propias pruebas—. Comprueba que **alguien las llame**, que es la mitad que
@@ -70,7 +70,7 @@ class Pieza:
     `clave` es el identificador que hay que ver USADO en producción. No es
     único: 84 identificadores del motor los comparten 274 piezas, así que la
     guarda puede dar por viva una pieza muerta homónima de una viva. Es un falso
-    negativo, nunca un falso positivo, y está medido y declarado en ADR-177.
+    negativo, nunca un falso positivo, y está medido y declarado en ADR-179.
     """
 
     tipo: str
@@ -117,7 +117,7 @@ def piezas_del_motor() -> tuple[Pieza, ...]:
 
     Lo privado (`_`) queda fuera, y también los métodos, los miembros de `Enum`
     y las claves de diccionario: la cobertura que esto gana está medida en
-    ADR-177, no es total, y decirlo es parte del trato.
+    ADR-179, no es total, y decirlo es parte del trato.
     """
     piezas: list[Pieza] = []
     for ruta in _ficheros_py(MOTOR):
@@ -254,7 +254,7 @@ def _nombrado_en_texto(pieza: Pieza) -> list[str]:
     —`sirius-racha` es ese caso—, y ahí no hay AST que leer. Pero una búsqueda
     por texto sobre un campo llamado `estado` o `motivo` acierta en cualquier
     workflow por casualidad: aplicarla a definiciones y campos habría dado por
-    vivas 9 piezas que están muertas, medido en ADR-177.
+    vivas 9 piezas que están muertas, medido en ADR-179.
 
     Para los módulos SÍ es una búsqueda por subcadena del stem, y eso es un
     falso negativo declarado, no un descuido: nueve stems del motor casan por
@@ -271,7 +271,7 @@ def _nombrado_en_texto(pieza: Pieza) -> list[str]:
     invoca `scripts/automation/sirius_drip_guard_cli.py` cargándolo **por
     nombre de fichero**, una forma que ni el AST ni el punto de entrada ven. Un
     falso positivo es la dirección en la que esta guarda no puede equivocarse,
-    así que se queda la subcadena y la limitación queda medida en ADR-177 §2.
+    así que se queda la subcadena y la limitación queda medida en ADR-179 §2.
     """
     if pieza.tipo != "modulo":
         return []
@@ -574,13 +574,13 @@ def test_ninguna_excepcion_sobra(identidad: str) -> None:
     compara por `clave`, no por `identidad`, y 84 identificadores del motor los
     comparten 274 piezas. En `test_cada_pieza_publica_tiene_quien_la_llame` eso
     produce falsos negativos —una pieza muerta parece viva—, que es la dirección
-    aceptada por ADR-177. En ESTA prueba el mismo mecanismo obliga a borrar una
+    aceptada por ADR-179. En ESTA prueba el mismo mecanismo obliga a borrar una
     excepción que sigue siendo cierta: si aparece un uso de un campo homónimo de
     otra clase, la batería afirma que la pieza exceptuada ya tiene llamante. Dos
     `Pieza` de tipo `campo` con la misma `clave` y distinta `identidad` reciben
     exactamente el mismo resultado, así que este rojo dice «revisa la excepción»,
     no «la pieza está viva». Distinguirlo de verdad pide el grafo de
-    alcanzabilidad que ADR-177 descarta; queda declarado, no resuelto.
+    alcanzabilidad que ADR-179 descarta; queda declarado, no resuelto.
     """
     por_identidad = {pieza.identidad: pieza for pieza in piezas_del_motor()}
     pieza = por_identidad.get(identidad)
