@@ -70,11 +70,23 @@ def test_el_implementador_excluye_al_investigador_antes_de_consumir() -> None:
 
 
 def test_el_investigador_exige_su_perfil_y_valida_la_activacion() -> None:
-    puerta = _paso_puerta(INVESTIGADOR)
-    orden = str(puerta.get("run", ""))
-    assert '"$perfil" != "investigador"' in orden, (
-        "la puerta del investigador no exige el perfil: atendería encargos del implementador"
+    """La propiedad no cambia; su dueño sí (ADR-167, segunda ronda).
+
+    La puerta comprobaba el perfil con un `if` propio, y la del implementador con
+    OTRO `if` propio sobre un cuerpo de otro momento: de ahí salían los dos
+    desenlaces peores -que no la atendiera nadie, o que la atendieran las dos-.
+    El reparto vive ahora en un solo guion que llaman las dos, así que aquí se
+    comprueba que lo llaman **y con qué puerta se identifican**; que el reparto
+    reparte bien se comprueba ejecutándolo, en
+    `tests/automation/test_carriles_retirados.py`.
+    """
+    orden = str(_paso_puerta(INVESTIGADOR).get("run", ""))
+    assert "sirius_reparto_activacion.sh" in orden, (
+        "la puerta del investigador no consulta el reparto: decidiría por su cuenta "
+        "quién atiende la orden, que es de donde salieron las activaciones "
+        "abandonadas y las atendidas dos veces"
     )
+    assert '"investigador"' in orden, "no se identifica como la puerta del investigador"
     assert "sirius_validate_activation.sh" in orden, (
         "no valida la activación: la etiqueta sola no basta, es la misma regla que el implementador"
     )

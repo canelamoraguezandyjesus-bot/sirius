@@ -140,6 +140,23 @@ jobs:
           # (ADR-083, ADR-093), no en main: mismas razones que el contador.
           uv run sirius-reflejar
 
+      - name: Publicar la vista de desenlaces
+        # La memoria común (ADR-171): DESENLACES.md, generado del diario tal y
+        # como esté, en la misma rama. Corre aunque el reflejo haya fallado: un
+        # reflejo a medias es justo lo que hay que poder ver, y la vista se
+        # deriva del diario, no del resultado de la pasada. Si el diario no
+        # cambió, la vista tampoco, y el paso siguiente no confirma nada.
+        if: always()
+        env:
+          MEMORIA: ${{ runner.temp }}/memoria
+        run: |
+          set -uo pipefail
+          if [ ! -f "$MEMORIA/diario.jsonl" ]; then
+            echo "No hay diario del motor; no hay desenlaces que publicar."
+            exit 0
+          fi
+          uv run sirius-memoria desenlaces --diario "$MEMORIA/diario.jsonl"
+
       - name: Confirmar el diario
         # Se ejecuta aunque el reflejo falle: si llegó a aplicar transiciones
         # y luego murió, esos sucesos ya están escritos y perderlos sería

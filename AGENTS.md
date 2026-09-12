@@ -10,9 +10,9 @@ disparaba. El 25-08-2026 el propietario tuvo que decir tres veces en una sesión
 «búscalo, no me lo digas de memoria», y tenía razón las tres.
 
 **Toda afirmación sobre qué está planeado, decidido, medido o pendiente sale de
-leer este repositorio, y se dice DÓNDE se leyó.** Nunca de memoria, nunca de lo
-que parezca razonable. Si no se encontró, se dice «no lo he encontrado», que es
-una respuesta legítima; inventarlo no lo es.
+leer este repositorio —empezando por `MEMORIA.md`, en la raíz, entera— y se
+dice DÓNDE se leyó.** Nunca de memoria ni de lo que parezca razonable. Si no se
+encontró, se dice «no lo he encontrado», que es legítimo; inventarlo no lo es.
 
 Antes de proponer construir algo, **busca si ya existe**. En este repositorio ha
 aparecido seis veces una pieza correcta a la que no llamaba nadie, y una séptima
@@ -23,7 +23,8 @@ ya existía con otro nombre: el auditor-.
 
 | Qué buscas | Dónde está |
 |---|---|
-| Qué se decidió y por qué | `docs/decisions/ADR-*.md` |
+| Por dónde empezar, siempre; qué se decidió y por qué | `MEMORIA.md` (raíz), generada: cada ADR con su resumen, los registros con estado y los documentos con su fecha; los desenlaces del motor, en `estado-del-motor:DESENLACES.md` (ADR-171) |
+| Qué quedó pendiente y el contexto de sesiones anteriores | la memoria de sesión, si tu entorno trae su herramienta (ADR-172) |
 | Qué bloques del MOTOR hay y cómo van | `docs/implementation/bloques_del_motor.yml` |
 | Qué defectos hay abiertos | `docs/audits/registro_defectos.yml` |
 | El plan del motor, bloque a bloque | `docs/implementation/SIRIUS_WORK_ENGINE_PLAN_IMPLEMENTACION.md` |
@@ -54,7 +55,7 @@ Cuatro avisos que ya han costado tiempo:
 
 ## Antes de modificar código
 
-1. Lee `docs/canonical/STATUS.md`.
+1. Lee `MEMORIA.md` entera; después `docs/canonical/STATUS.md`.
 2. Lee `docs/implementation/PLAN.md`.
 3. Identifica la vertical activa.
 4. No añadas funciones fuera de alcance.
@@ -84,6 +85,71 @@ Cuatro avisos que ya han costado tiempo:
   código introducido por la corrección anterior o ser una regresión suya; un
   hallazgo sobre líneas ya idénticas en la ronda previa se reporta igualmente,
   declarando que llega tarde por goteo del revisor.
+
+## La memoria común: `MEMORIA.md` (ADR-171)
+
+`MEMORIA.md`, en la raíz, es la memoria común del trabajo, **generada** a partir
+del árbol: qué se decidió (cada ADR con su resumen), qué registros hay y en qué
+estado, qué documentos existen y de cuándo, y dónde están los desenlaces del
+motor. Es lo primero que se lee, antes de responder y antes de modificar; desde
+ahí, solo lo que la tarea necesite.
+
+- **No se edita a mano.** Se regenera con `uv run sirius-memoria conocimiento`,
+  y `tests/engine/test_memoria.py` (en Quality) falla si el fichero confirmado no
+  coincide con lo generado.
+- **Si cambias un ADR, un documento de `docs/` o un registro YAML, regenérala y
+  confírmala en la misma PR.**
+- **Quality comprueba el commit de fusión con `main`.** Si `main` ganó un ADR o un
+  documento después de abrir tu rama, tu PR sale en rojo aunque tu rama esté al
+  día: trae `main`, regenera, confirma. Un conflicto en `MEMORIA.md` se resuelve
+  siempre regenerando, nunca a mano.
+
+## La memoria de sesión, si tienes su herramienta (ADR-172)
+
+Hay un segundo sitio, y **solo existe si tu entorno trae la herramienta de
+Supermemory**. Si no la tienes —es el caso de los agentes del ciclo, en GitHub
+Actions—, esta sección no te aplica: sigue como siempre.
+
+Guarda lo que el repositorio no guarda: **lo pendiente, el contexto de una
+sesión, las preferencias de trabajo del propietario y lo que se intentó y no
+salió.** Dos momentos:
+
+- **Al empezar** algo que pueda tener antecedentes, búscalo ahí antes de
+  preguntarle al propietario lo que ya te dijo una vez.
+- **Al terminar**, guarda lo que quede pendiente y lo aprendido que no vaya a un
+  fichero. Concreto y con fecha; una memoria vaga no le sirve a nadie.
+
+### El espacio canónico, que hay que nombrar SIEMPRE
+
+El espacio de este proyecto es **`repo_sirius__e87a5bbe75fe00b6`**. Pásalo como
+`containerTag` en **cada** búsqueda y en **cada** guardado, sin excepción.
+
+No basta con buscar y guardar: si no nombras el espacio, cada herramienta usa el
+suyo por omisión y acabáis escribiendo en sitios distintos. El 11-09-2026 pasó
+exactamente eso, medido: la captura automática del complemento local fue al
+espacio del repositorio y todo lo escrito por MCP —desde la nube, desde
+ChatGPT— al espacio por defecto de la cuenta. Dos memorias paralelas que no se
+veían la una a la otra.
+
+Si ese espacio no aparece al listar los espacios disponibles, no inventes otro
+ni escribas en el que salga: **dilo y para**. El nombre lo deriva el complemento
+del remoto de git, así que cambia si el repositorio se renombra, y entonces esta
+línea hay que corregirla aquí.
+
+Y el reparto, que es la regla entera:
+
+| Qué | Dónde |
+|---|---|
+| Lo decidido, investigado, medido o acordado | **El repositorio**, con su PR, su ADR y su prueba |
+| Lo pendiente, el contexto de sesión, las preferencias | **La memoria de sesión** |
+| El estado de un trabajo del motor | **Su diario**, que manda sobre las dos |
+
+**Una decisión que solo está en la memoria de sesión no está tomada.** Si no
+llegó a una PR fusionada, no existe.
+
+**Lo que se guarda ahí sale a un servicio de terceros**, y una sesión contiene
+más que este repositorio público. El propietario lo sabe y lo acepta; aun así,
+ahí no van claves ni secretos, nunca.
 
 ## Criterio de parada
 

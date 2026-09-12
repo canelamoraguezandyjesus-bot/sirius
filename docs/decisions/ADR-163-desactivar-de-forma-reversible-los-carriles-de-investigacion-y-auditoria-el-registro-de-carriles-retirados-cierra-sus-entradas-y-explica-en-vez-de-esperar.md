@@ -9,6 +9,7 @@
   ADR-088 (la tabla cerrada de clases), ADR-136 y ADR-101 (por qué el diario
   del motor tiene WorkItems parados en `active`), ADR-002 (la automatización no
   escribe en `.github/**`), ADR-001
+- Corregida por: **ADR-167**, que arregla cinco defectos de esta ejecución —no de esta decisión— encontrados al revisarla en `929b673`
 
 > **Este ADR es también la nota de arranque de la rama**, publicado en su propio
 > commit antes del primer cambio de código.
