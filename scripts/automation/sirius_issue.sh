@@ -951,7 +951,7 @@ _sirius_comment_upsert_bounded() {
   id="$(printf '%s\n' "$ids" | sed -n '1p')"
 
   if [ -z "$id" ]; then
-    if sirius_retry gh issue comment "$num" --repo "$repo" --body-file "$fichero"; then
+    if sirius_retry _sirius_gh issue comment "$num" --repo "$repo" --body-file "$fichero"; then
       echo "sirius_comment_upsert: tablero creado en #${num}" >&2
       return 0
     fi

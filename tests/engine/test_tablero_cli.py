@@ -141,7 +141,7 @@ def test_la_primera_linea_es_el_marcador_que_el_workflow_busca() -> None:
 def test_el_workflow_llama_al_comando_tal_como_esta_declarado() -> None:
     """Que el paso del workflow y el punto de entrada no se separen en silencio."""
     raiz = Path(__file__).resolve().parents[2]
-    workflow = (raiz / ".github" / "workflows" / "notify-sirius-state.yml").read_text(
+    workflow = (raiz / ".github" / "workflows" / "tablero-de-incidencia.yml").read_text(
         encoding="utf-8"
     )
     assert "uv run sirius-tablero --repo" in workflow

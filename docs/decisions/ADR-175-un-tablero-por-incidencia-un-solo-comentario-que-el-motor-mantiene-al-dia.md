@@ -37,10 +37,10 @@ nuestro es un historial; el suyo, un tablero. Se puede tener las dos cosas»*.
 ### 1. ¿Dónde vive el fallo y dónde va el arreglo? ¿Puede el sitio del arreglo OBSERVAR el fallo?
 
 El fallo no está en lo que el motor sabe, sino en lo que **enseña**. El arreglo
-va a `notify-sirius-state.yml`, que es el workflow que ya escribe comentarios de
-estado, que ya se dispara con las seis etiquetas del ciclo y que **ya tiene
-`issues: write`**. Ni un disparador nuevo, ni un permiso nuevo, ni otro nivel de
-automatización: el motor ya escribe en esa incidencia, en ese mismo evento.
+va a un workflow propio, `tablero-de-incidencia.yml`, disparado por el mismo
+evento (`issues: labeled`) y con el mismo permiso (`issues: write`) que el aviso
+de estado: ni un disparador nuevo, ni un permiso nuevo, ni otro nivel de
+automatización.
 
 Se descartó alojarlo en `reflejar-desenlace.yml` —que ya lee el espejo de cada
 encargo vivo y ya monta `uv`— por una razón escrita en su propia cabecera: *«Sin
@@ -122,12 +122,18 @@ tener las dos cosas»**. Esto añade el tablero sin tocar el historial.
    encargo vivo y ya monta `uv`. Descartada por lo que ese workflow declara en
    su propia cabecera: *«Sin `issues: write`: este comando solo LEE el espejo
    por `gh`»*. Esa frontera la puso alguien a propósito.
-3. **Publicarlo desde `notify-sirius-state.yml`** (la elegida): ya se dispara
-   con las seis etiquetas del ciclo, ya tiene `issues: write` y ya escribe en
-   esa misma incidencia en ese mismo evento.
-4. **Un fichero `TABLERO.md` por encargo en la rama del motor.** Descartada: el
+3. **Un paso más dentro de `notify-sirius-state.yml`**, que ya se dispara con
+   las seis etiquetas y ya tiene `issues: write`. Se intentó, y lo tumbaron dos
+   guardas del repositorio -está contado abajo, en «lo que la primera versión de
+   esto tuvo mal»-: los dos trabajos necesitan `concurrency` OPUESTAS.
+4. **Un workflow propio con el mismo disparador y el mismo permiso** (la
+   elegida): `tablero-de-incidencia.yml`.
+5. **Un fichero `TABLERO.md` por encargo en la rama del motor.** Descartada: el
    propietario mira las incidencias, no la rama de memoria, y `DESENLACES.md`
    ya cubre la vista agregada (ADR-171).
+6. **Publicarlo desde `reconcile-sirius-states.yml`**, que sí tiene grupo
+   constante y `issues: write`. Descartada: corre cada 6 horas, y un tablero que
+   dice lo de hace seis horas no es un tablero.
 
 ## Decisión
 
@@ -194,12 +200,14 @@ actualizarse sin que nadie lo notara.
 
 ## Consecuencias
 
-- **El plazo del workflow sube de 5 a 8 minutos.** El paso monta `uv` y
-  sincroniza; con caché son segundos —medido en `reflejar-desenlace.yml`:
-  instalar 2 s, sincronizar 3 s—, pero una caché fría no cabía en el anterior.
-  Sigue siendo la red de seguridad de un workflow secundario.
-- **Coste en minutos de Actions: prácticamente cero.** El job ya existía y ya
-  se facturaba por minuto empezado; esto le añade segundos, no minutos.
+- **Un workflow más, y `notify-sirius-state.yml` sin tocar una coma.**
+- **Los tableros se serializan entre sí en todo el repositorio.** Con un grupo
+  constante, dos cambios de etiqueta en incidencias distintas hacen cola. Cada
+  pasada dura segundos, y perder una pendiente **no pierde nada**: la que
+  sobreviva lee el espejo más nuevo y pinta el tablero más nuevo.
+- **Coste en minutos de Actions: irrelevante.** El repositorio es público a
+  propósito y los runners estándar no consumen cuota en un repositorio público
+  (ADR-044).
 - **El tablero no se actualiza con `sirius:ci-pending`**, que no está entre las
   seis etiquetas que disparan este workflow: en esa ventana enseña el estado
   anterior. Ampliar el disparador es cambiar cuándo corre un workflow y no
@@ -210,9 +218,43 @@ actualizarse sin que nadie lo notara.
   convergen en el más antiguo y el duplicado se queda quieto.
 - **El historial no cambia en nada.**
 
+## Lo que la primera versión de esto tuvo mal, y cómo se vio
+
+La primera versión metía el tablero como un paso más de
+`notify-sirius-state.yml`. La suite completa la tumbó con **dos** guardas del
+repositorio, y las dos tenían razón:
+
+1. **`test_serializacion_del_motor.py`**: todo trabajo que invoque un comando
+   del motor tiene que serializarse con un grupo **constante**, porque dos
+   lecturas concurrentes del diario crean el mismo trabajo dos veces y ADR-082
+   concluyó que serializar es la única protección. El aviso de estado usa, a
+   propósito, una ranura POR EVENTO (ADR-158). Los dos requisitos son
+   incompatibles **en el mismo fichero**.
+
+   Lo que esa guarda enseñó, y que la primera versión no había visto: **no son
+   la misma clase de cosa.** Un aviso publica un HECHO y perderlo es perderlo
+   para siempre, así que necesita su ranura. Un tablero publica un ESTADO que se
+   recalcula entero en cada pasada, así que descartar una pendiente es
+   exactamente lo correcto. Separarlos en dos workflows no es un rodeo para
+   pasar la guarda: es la forma que el problema tenía desde el principio.
+
+   Y se respeta la guarda **sin tocarla**, aunque `sirius-tablero` solo lea:
+   una protección vale lo que vale su regla más simple, y «los comandos del
+   motor corren serializados» es más simple —y más difícil de erosionar— que
+   «los que además escriben».
+
+2. **`test_sirius_issue.py::test_every_gh_call_goes_through_the_bounded_wrapper`**:
+   la primera versión de `sirius_comment_upsert` creaba el comentario con
+   `sirius_retry gh issue comment`, saltándose `_sirius_gh`, que es la puerta
+   que acota la llamada con el plazo compartido. Sin ella, una publicación podía
+   quedarse colgada más allá del presupuesto del paso.
+
+Las dos salieron de correr la batería ENTERA antes de dar nada por bueno, no de
+la revisión de nadie.
+
 ## Alternativas descartadas y por qué
 
-Las cuatro de arriba. Y una quinta: **que el tablero incluyera el texto
+Las seis de arriba. Y una quinta: **que el tablero incluyera el texto
 completo del objetivo y del criterio**. Descartada: los cuerpos de este
 repositorio llegan a mil palabras y el tablero dejaría de leerse de un vistazo,
 que es su única razón de ser. Se recorta por palabras y el cuerpo entero está a
