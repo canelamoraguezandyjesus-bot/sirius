@@ -39,20 +39,258 @@ revisión traen defectos de la misma familia, se para y se busca la raíz.
 
 ## Contexto y problema
 
-Pendiente de redactar con la evidencia del trabajo.
+**Hueco H4 de ADR-148.** Un camino de recuperación entero —el bloque
+`siembra` de `RankRelevantKnowledgeUseCase._rank_via_staged_engine` (M20,
+ADR-129), que suma a lo admitido toda identidad no ordinaria del ámbito— se
+encendía porque un **texto libre contenía una subcadena**:
+
+- `PROPOSITO_DE_CONTEXTO: Final = "contexto"` y
+  `pide_contexto(proposito) -> PROPOSITO_DE_CONTEXTO in proposito.casefold()`
+  (`src/sirius/domain/relevance.py`, antes de este cambio en las líneas 156 y
+  345-354).
+- Un solo consumidor:
+  `if self._category_matching_enabled and pide_contexto(peticion.proposito):`
+  (`src/sirius/application/rank_relevant_knowledge.py:583`).
+- Tres constructores rellenan `Peticion.proposito`: el intérprete
+  (`PROPOSITO_RECUPERACION_ORDINARIA = "recuperacion de contexto relevante
+  (B6b)"`), la política uniforme (el mismo literal) y la traducción del banco
+  (`tests/acceptance/staged_engine_case_translation.py`, que pasa
+  `peticion_p2["proposito"]` tal cual).
+
+De ahí salían **dos decisiones que nadie tomó**:
+
+1. **Toda petición de producción amplía**, porque al literal del propósito le
+   tocó llevar dentro la palabra «contexto». Si mañana alguien reescribe ese
+   literal como «recuperación relevante (B6b)» —una mejora de redacción, sin
+   más— la ampliación se apaga en todo el producto sin que ninguna prueba lo
+   diga.
+2. **`PERMISO_SIN_AUTORIZAR` la apaga**, pero de rebote: la regla del permiso
+   vacía el propósito (`proposito_efectivo`) y el vacío no contiene la
+   subcadena. Es el comportamiento que se quiere, obtenido por accidente.
+
+En el banco, de los siete propósitos declarados solo `ensamblar_contexto_b05`
+contiene «contexto», así que la ampliación se activaba en **2 de 47** casos:
+`B04-CA-33` y `B04-CA-34`.
 
 ## Decisión
 
-Pendiente.
+**`Peticion` gana un campo booleano propio, `amplia_por_categoria`, apagado
+por defecto, y el consumidor lee ese campo y nada más.** `pide_contexto` y
+`PROPOSITO_DE_CONTEXTO` se retiran del dominio: ningún consumidor decide ya
+por subcadena sobre texto libre.
+
+Los tres constructores lo fijan, **con el criterio escrito al lado**:
+
+- **La traducción del banco** (`staged_engine_case_translation.py`), por
+  **pertenencia** a `PROPOSITOS_QUE_AMPLIAN_POR_CATEGORIA`, una lista cerrada
+  cuyo contenido es exactamente `{"ensamblar_contexto_b05"}` — el mismo
+  patrón que `_modo`, `_cardinalidad` y los vocabularios de las puertas, y el
+  mismo que ADR-170 usó para la pertenencia de `DEC-001` a su lista cerrada.
+  Un propósito nuevo no amplía por accidente de redacción: hay que añadirlo
+  ahí, y eso es justamente lo que se quiere que cueste.
+- **El intérprete y la política uniforme**: **encendida**
+  (`AMPLIACION_POR_CATEGORIA_ORDINARIA = True`,
+  `_AMPLIACION_DE_LA_RECUPERACION_ORDINARIA`). El porqué, que hasta hoy no
+  estaba escrito en ninguna parte: esta política es **uniforme**, no infiere
+  intención y declara la misma petición para cualquier consulta, así que lo
+  único honesto que puede pedir es la recuperación **más amplia**, dejando el
+  recorte a quien sabe recortar —el filtro de relevancia (ADR-125) con el
+  rescate RF-25/RF-26 (M19b) y el presupuesto de contexto—. El coste de
+  recuperar de más es ruido que el filtro poda; el de recuperar de menos es
+  una identidad crítica que no llega nunca.
+- **`PERMISO_SIN_AUTORIZAR` la apaga en los dos sitios, ahora
+  explícitamente**: `ampliacion_efectiva(permiso, amplia_declarada)` en el
+  intérprete y la condición sobre `permiso` en la traducción del banco. Una
+  operación que no está autorizada a recuperar tampoco lo está a recuperar
+  más — dicho, no deducido de un propósito vacío.
+
+**Lo que esta decisión NO hace: cambiar qué peticiones amplían.** El primer
+cuerpo de la incidencia #581 pedía además que `B04-CA-30`
+(`responder_al_usuario`) recuperase `MEM-001` sin empeorar ninguna columna
+del banco. Medido sobre `main` (`5fc5fdc`) sustituyendo solo la regla de
+activación en el consumidor:
+
+| regla | sin ejes | con ejes |
+|---|---|---|
+| subcadena (la de antes de este ADR) | 17/47; 162; 78/81; 0 | 21/47; 144; 78/81; 0 |
+| `responder_al_usuario` o la anterior | 7/47; 309; 79/81; 0 | 8/47; 293; 79/81; 0 |
+| siempre | 0/47; 368; 79/81; 0 | 0/47; 352; 79/81; 0 |
+
+`MEM-001` entra en `B04-CA-30` con las dos reglas nuevas, y las dos hunden
+los aciertos exactos y disparan los elementos de más: **las dos condiciones
+no se pueden cumplir a la vez con una regla de clase de propósito**. El
+propietario decidió el 12-09-2026 no pagarlo; `B04-CA-30` queda como hueco
+medido, con su precio escrito, reabrible el día que haya una señal más fina
+que el propósito.
+
+## Opciones consideradas
+
+1. **Campo booleano explícito en `Peticion`, fijado por quien la construye**
+   (la decisión). Hace visible y comprobable lo que hoy es un efecto del
+   texto, sin mover una sola petición de lado.
+2. **Vocabulario cerrado de propósitos también en producción**, en vez de un
+   booleano. Descartada: los tres constructores de producción declaran **un
+   solo** propósito, así que el vocabulario tendría un miembro y seguiría
+   atando la activación a la redacción de un literal — el mismo defecto con
+   otra forma. En el banco sí es lo correcto, porque ahí hay siete propósitos
+   declarados por el fixture y la pertenencia es la traducción honesta de lo
+   que había.
+3. **Dejar `pide_contexto` y encender el campo desde él.** Descartada: no
+   retira la decisión por subcadena, solo la esconde un nivel más abajo.
 
 ## Comprobación que la sostiene
 
-Pendiente.
+### 1. Predicción, publicada ANTES de medir
+
+En la nota de arranque de arriba, escrita y **comiteada antes del primer
+cambio de código** (`55d6995`): *el banco no se mueve en una sola cifra*.
+
+### 2. Recuento del banco, antes y después
+
+Etapa de búsqueda con peticiones reales y **sin filtro de relevancia**
+(`scripts/diagnosticar_busqueda_del_banco.py --peticion`, configuración
+`ejes=no peticion=real`). No es comparable con el arnés determinista ni con
+la medición con Ollama, que miden otra cosa.
+
+```
+$ uv run python scripts/diagnosticar_busqueda_del_banco.py --peticion
+# sobre el árbol de 433fb11 (main, antes del cambio)
+[ejes=no peticion=real] SIN FILTRO: 17/47 exactos; 162 de mas; 78/81 hallados; omisiones criticas=0
+EXIT=0
+
+# sobre el árbol de fa2c6f8 (la rama, con el cambio completo)
+[ejes=no peticion=real] SIN FILTRO: 17/47 exactos; 162 de mas; 78/81 hallados; omisiones criticas=0
+EXIT=0
+```
+
+Las cuatro cifras son idénticas, y también lo es el desglose: `RESUMEN
+[ejes=no peticion=real]: distintos no encontrados=3; ocurrencias=3; criticas
+perdidas=0 []`, `extras: total=162; media=3.4; casos con 0 extras=19;
+peores=[('B04-CA-17', 34, 0), ('B04-CA-28', 20, 0), ('B04-CA-35', 16, 0),
+('B04-CA-34', 13, 10), ('B04-CA-03', 12, 0), ('B04-CA-44', 8, 5)]`. La
+predicción se cumple y el criterio de parada no se activa.
+
+### 3. Las pruebas, vistas FALLAR antes del cambio (ADR-001)
+
+**Mutación A** — devolver la condición del consumidor a la subcadena:
+
+```python
+# src/sirius/application/rank_relevant_knowledge.py
+- if self._category_matching_enabled and peticion.amplia_por_categoria:
++ if self._category_matching_enabled and "contexto" in peticion.proposito.casefold():
+```
+
+```
+$ uv run pytest tests/integration/test_rank_relevant_knowledge.py -k "..." -q
+3 failed, 57 deselected in 1.01s
+```
+
+Las tres: `test_un_proposito_con_la_palabra_contexto_no_siembra_sin_la_senal`
+(el propósito arbitrario «poner el contexto en su sitio» vuelve a sembrar y
+el resultado deja de ser vacío),
+`test_la_senal_explicita_siembra_sea_cual_sea_el_texto_del_proposito`
+(`assert [] == [1]`: con el propósito «consultar» la siembra no aporta nada)
+y `test_siembra_seeds_nothing_without_the_explicit_signal` (apagar la señal
+deja de apagar la siembra, porque quien decide vuelve a ser el texto).
+
+**Mutación B** — que la traducción del banco no encienda nunca la señal
+(`amplia_por_categoria = False and (…)`):
+
+```
+$ uv run pytest tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py -k "traduccion_enciende or traduccion_apaga" -q
+2 failed, 43 deselected in 1.34s
+```
+
+`test_la_traduccion_enciende_la_ampliacion_exactamente_en_los_dos_casos_de_contexto`
+falla con `set() != frozenset({'B04-CA-33', 'B04-CA-34'})`, y
+`test_la_traduccion_apaga_la_ampliacion_sin_permiso` con `assert False is
+True` sobre el caso que sí debe ampliar — esa mitad es la que impide que la
+prueba del permiso pase por la razón equivocada.
+
+Con el código real, las dos mutaciones revertidas, las cinco pasan.
+
+### 4. Que el conjunto activado es el MISMO, no solo que el recuento no se mueve
+
+`test_la_traduccion_enciende_la_ampliacion_exactamente_en_los_dos_casos_de_contexto`
+recorre las **47** filas y compara dos conjuntos calculados en la misma
+prueba: el que produce la lista cerrada y el que producía **la regla
+retirada** (subcadena sobre el propósito declarado, con el permiso). Son
+iguales, y son `{B04-CA-33, B04-CA-34}`. Recorre el banco entero, no los dos
+casos nombrados, para fallar también si un tercero se enciende.
+
+### 5. Las 0 omisiones críticas, fijadas y no solo medidas
+
+`_MAXIMO_OMISIONES_CRITICAS_PAQUETE_COMPLETO: Final[int] = 0`
+(`tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py`), afirmado sobre el
+**camino de código real de producción** —`RankRelevantKnowledgeUseCase` /
+`ContextBuilder` tal como `composition_root` los construye—, que es
+exactamente el que construye la petición con `_peticion_ordinaria` y por
+tanto el que esta decisión gobierna. Si la señal se apagara en producción, la
+siembra dejaría de rescatar y esa cota rompería. Su gemela del motor portado,
+`_MAXIMO_OMISIONES_CRITICAS_MOTOR: Final[int] = 0`, cubre el arnés.
+
+### 6. La prosa que el cambio dejaba falsa (deuda 28)
+
+Corregida en el mismo trabajo, no en otro: el docstring de módulo de
+`relevance.py` y el de `RankedKnowledge.seeded`; los de
+`_PROPOSITO_RECUPERACION_ORDINARIA` y `_rank_via_staged_engine` en
+`rank_relevant_knowledge.py`; el de `PROPOSITO_RECUPERACION_ORDINARIA` y el
+de `interpretar` en `interpret_query_request.py`; el de módulo del traductor
+del banco (quinta traducción no obvia); y las 25 referencias a
+`pide_contexto` en pruebas —`tests/unit/test_relevance_domain.py` (14, las
+cuatro pruebas de la función retirada se sustituyen por el candado
+`test_el_dominio_ya_no_expone_ninguna_regla_de_subcadena_sobre_el_proposito`),
+`tests/unit/test_peticion_ordinaria.py` (7) y
+`tests/integration/test_rank_relevant_knowledge.py` (4)—. Ninguna se ha
+relajado: la única que queda escrita es la mención histórica dentro del
+docstring de la prueba nueva, que cuenta por qué fallaba antes.
+
+El arnés de examen
+(`tests/acceptance/staged_engine_category_and_relevance.py`) conserva su
+propio `pide_contexto`: replica
+`experiments/adr002/lateral/categoria.py:_pide_contexto`, no producción, y
+sus cotas no cambian.
+
+### Validación obligatoria
+
+**Cadena completa como UNA SOLA invocación** (ADR-145, ADR-153), con
+`pwsh -File scripts/check.ps1` y su código de salida capturado (ADR-154),
+anclada **al árbol de `PENDIENTE_SHA`**:
+
+```
+PENDIENTE_TERNA
+EXIT_CODE_CHECK=PENDIENTE
+```
+
+La quinta validación, **sobre el rango de la rama y no sin argumentos**
+(deuda 25), sobre ese mismo árbol:
+
+```
+$ git diff --check 433fb11 PENDIENTE_SHA
+PENDIENTE_DIFF_CHECK
+```
 
 ## Consecuencias
 
-Pendiente.
+- **Ninguna petición cambia de lado.** Las cuatro cifras del banco son las
+  mismas, y el conjunto de casos que amplían es el mismo conjunto, no solo el
+  mismo tamaño.
+- **Dos decisiones dejan de ser accidentes.** Que producción amplíe siempre y
+  que una operación sin autorizar no amplíe están ahora escritas, con su
+  porqué, y fijadas por pruebas. Reescribir el literal del propósito ya no
+  puede apagar la ampliación en todo el producto.
+- **Retirar la subcadena cierra una clase de defecto, no una instancia.** El
+  dominio ya no expone ninguna función que decida un camino de recuperación
+  leyendo texto libre, y una prueba lo fija por ausencia.
+- **El coste está en el banco, no en producción**: añadir un propósito nuevo
+  al fixture ya no basta para que amplíe; hay que declararlo en la lista
+  cerrada. Es deliberado.
+- `B04-CA-30`/`MEM-001` **sigue siendo un hueco**, ahora con su precio medido
+  y escrito arriba. Este ADR no lo cierra ni lo empeora.
 
 ## Alternativas descartadas y por qué
 
-Pendiente.
+Las tres de «Opciones consideradas». La que más cerca estuvo es el
+vocabulario cerrado también en producción: descartada porque con un único
+propósito declarado seguiría atando la activación a la redacción de un
+literal, que es exactamente el defecto que H4 viene a cerrar.

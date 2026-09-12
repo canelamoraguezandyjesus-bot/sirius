@@ -26,7 +26,7 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **168**.
+- Decisiones (ADR): **169**.
 - Bloques del motor: 17 cerrado, 1 fuera_de_alcance, 2 pendiente.
 - Defectos registrados: 32 cerrado.
 - Investigaciones: **9** (fotos con fecha; caducan).
@@ -39,6 +39,7 @@ está escrito. Si sale pobre, se arregla en el ADR.
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| [177](docs/decisions/ADR-177-la-ampliacion-por-categoria-entra-por-una-senal-explicita-de-la-peticion-no-por-la-subcadena-contexto.md) | 2026-09-12 | PROPUESTO | La ampliación por categoría entra por una señal explícita de la petición, no por la subcadena «contexto» | `Peticion` gana un campo booleano propio, `amplia_por_categoria`, apagado por defecto, y el consumidor lee ese campo y nada más. `pide_contexto` y `PROPOSITO_DE_CONTEXTO` se retiran del dominio: ningún consumidor decide ya por subcadena… |
 | [173](docs/decisions/ADR-173-el-cierre-de-la-incidencia-es-un-desenlace-y-el-reflector-mira-todas-las-clases-que-el-despachador-despacha.md) | 2026-09-12 | PROPUESTO | El cierre de la incidencia es un desenlace, y el reflector mira todas las clases que el despachador despacha | Uno. La puerta de clase del reflector se deriva de `TABLA_ACTIVACION`, la tabla que decide qué se despacha. Leía la tabla de autoridad de ADR-041, que es de agosto y anterior a ADR-088 (`documentacion`) y ADR-099 (`investigacion`), las dos… |
 | [172](docs/decisions/ADR-172-la-memoria-de-sesion-vive-en-supermemory-y-el-conocimiento-en-el-repositorio-con-una-regla-de-reparto-que-toda-ia-lee.md) | 2026-09-12 | PROPUESTO | La memoria de sesión vive en Supermemory y el conocimiento en el repositorio, con una regla de reparto que toda IA lee | Supermemory es la memoria de sesión del propietario. Cuenta suya, espacio de trabajo `Sirius`, plan gratuito. Ojo con los nombres, que en esta herramienta no son lo mismo: el espacio de trabajo es la cuenta y el espacio (`containerTag`) es… |
 | [171](docs/decisions/ADR-171-la-memoria-comun-arranca-sobre-lo-que-ya-existe-evaluacion-funcional-de-las-tres-piezas-y-lo-que-el-motor-tiene-que-publicar.md) | 2026-09-11 | PROPUESTO | La memoria común arranca sobre lo que ya existe: evaluación funcional de las tres piezas (T-5) y lo que el motor tiene que publicar | La memoria común arranca sobre lo que ya existe: `main` para el conocimiento y `estado-del-motor` para los desenlaces. No se elige ni se instala herramienta alguna. Se cumple el criterio (a) de la nota de arranque. Toda vista de la memoria… |
