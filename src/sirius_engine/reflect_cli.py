@@ -37,9 +37,9 @@ from sirius_engine.adapters.durable.dispatch_journal import DurableDispatchJourn
 from sirius_engine.adapters.durable.store import DurableWorkEngineStore
 from sirius_engine.adapters.github_cli_mirror import GitHubCliMirrorReader
 from sirius_engine.cli import resolver_diario
-from sirius_engine.domain.authority import Autoridad, autoridad_de_clase
+from sirius_engine.dispatcher import TABLA_ACTIVACION
 from sirius_engine.domain.events import AggregateType
-from sirius_engine.domain.mirror import EspejoIlegibleError
+from sirius_engine.domain.mirror import EspejoIlegibleError, MirroredWorkItem
 from sirius_engine.domain.work_item import TERMINAL_STATES
 from sirius_engine.mirror_projection import leer_y_proyectar_work_item
 from sirius_engine.ports.dispatch_journal import DispatchJournal
@@ -73,6 +73,17 @@ def _work_ids_conocidos(store: WorkEngineStore) -> tuple[str, ...]:
         if evento.aggregate_type is AggregateType.WORK_ITEM and evento.aggregate_id not in vistos:
             vistos.append(evento.aggregate_id)
     return tuple(vistos)
+
+
+def _proyeccion(espejo: MirroredWorkItem) -> str:
+    """Qué proyectan las etiquetas vigentes, dicho para un humano que lee el log."""
+    if espejo.etiquetas_contradictorias:
+        return "etiquetas que se contradicen"
+    if espejo.estado is None:
+        return "ninguna etiqueta de estado reconocida"
+    if espejo.fase is None:
+        return espejo.estado.value
+    return f"{espejo.estado.value}/{espejo.fase.value}"
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -138,10 +149,24 @@ def main(
         item = store.get_work_item(work_id)
         if item is None or item.estado in TERMINAL_STATES:
             continue
-        if autoridad_de_clase(item.clase) is not Autoridad.INCIDENCIA:
+        # La puerta de clase se deriva de la tabla que decide QUÉ SE DESPACHA
+        # (`dispatcher.TABLA_ACTIVACION`), no de la de autoridad de ADR-041.
+        # Leía la de autoridad, y esa tabla es de agosto: `DOCUMENTACION` entró
+        # en el ciclo de GitHub con ADR-088 e `INVESTIGACION` con ADR-099, las
+        # dos «con el mismo ciclo y las mismas etiquetas que programacion», y
+        # las dos siguen con autoridad MOTOR en la tabla de ADR-041. Resultado
+        # medido el 12-09-2026: los 15 encargos de esas dos clases que se
+        # despacharon a GitHub -10 de `documentacion`, 5 de `investigacion`-
+        # seguían los 15 en `active`, ninguno había alcanzado jamás un estado
+        # terminal, y ninguno podía. Derivarla de `TABLA_ACTIVACION` no es una
+        # segunda lista que mantener: es la misma tabla que abre la puerta de
+        # ida, leída también a la vuelta (ADR-173).
+        if item.clase not in TABLA_ACTIVACION:
+            linea(f"{work_id}: la clase {item.clase.value} no se despacha a GitHub; no se refleja.")
             continue
         episodio = dispatch_journal.episode_for(work_id)
         if episodio is None:
+            linea(f"{work_id}: no consta despachado a ninguna incidencia; no se refleja.")
             continue
         try:
             espejo = leer_y_proyectar_work_item(
@@ -157,8 +182,24 @@ def main(
         resultado: ResultadoReflejo = reflejar_desenlace(item, espejo, episodio)
 
         if not resultado.pasos:
+            # Ninguna rama se va en silencio (ADR-173). Las cuatro salidas sin
+            # plan -idempotencia, etiqueta no reconocida, sin etiqueta,
+            # divergencia- dejaban al encargo exactamente igual y no imprimían
+            # nada, así que un encargo varado era indistinguible de uno sano:
+            # la pasada del 12-09-2026 03:50 UTC, con 21 encargos varados,
+            # imprimió una sola línea. Ahora cada pasada dice de cada encargo
+            # dónde está y qué proyecta su incidencia, que es lo único que
+            # convierte «no pasa nada» en «esto lleva doce días sin moverse».
             if resultado.divergencia:
                 linea(resultado.divergencia)
+            else:
+                estado_incidencia = "cerrada" if espejo.cerrada else "abierta"
+                linea(
+                    f"{work_id}: sin cambios; el motor está en "
+                    f"{item.estado.value}/{item.fase.value} y la incidencia "
+                    f"#{episodio.numero_incidencia} ({estado_incidencia}) "
+                    f"proyecta {_proyeccion(espejo)}."
+                )
             continue
 
         if args.ensayo:
