@@ -255,18 +255,24 @@ sus cotas no cambian.
 
 **Cadena completa como UNA SOLA invocación** (ADR-145, ADR-153), con
 `pwsh -File scripts/check.ps1` y su código de salida capturado (ADR-154),
-anclada **al árbol de `379ea5da`** —el head con el código, las pruebas y esta ficha; lo único posterior es esta misma sección de validación, que no toca código—:
+anclada **al árbol de `393f5aab`** —el head de la ronda 2 de corrección, con
+el código, las pruebas y esta ficha ya corregida; lo único posterior es esta
+misma sección de validación, que no toca código ni pruebas y por tanto no
+puede mover la terna—:
 
 ```
-5372 passed, 17 skipped, 2 xfailed in 492.43s (0:08:12)
+5372 passed, 17 skipped, 2 xfailed in 528.58s (0:08:48)
 EXIT_CODE_CHECK=0
 ```
 
 La quinta validación, **sobre el rango de la rama y no sin argumentos**
-(deuda 25), sobre ese mismo árbol:
+(deuda 25), se corre **sin segunda revisión**: así compara la base contra el
+**árbol de trabajo**, que es el contenido final de la rama incluida esta
+misma sección, y no contra un head ya superado. Es la comprobación barata
+que sí puede cubrir el árbol entero, y lo cubre:
 
 ```
-$ git diff --check 433fb11 379ea5da
+$ git diff --check 433fb11
 EXIT=0
 ```
 
