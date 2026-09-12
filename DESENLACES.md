@@ -1,6 +1,6 @@
 # Desenlaces del motor de Sirius
 
-> **Generado por `uv run sirius-memoria desenlaces`** a partir de `diario.jsonl` y `diario-despacho.jsonl`: 535 sucesos, el último el 2026-09-12 15:49 UTC. Lo escribe el motor en la rama
+> **Generado por `uv run sirius-memoria desenlaces`** a partir de `diario.jsonl` y `diario-despacho.jsonl`: 536 sucesos, el último el 2026-09-12 16:15 UTC. Lo escribe el motor en la rama
 > `estado-del-motor` tras cada reflejo (ADR-171). **El diario manda**: si un documento
 > dice otra cosa sobre un encargo, vale esto.
 
@@ -17,7 +17,7 @@
 
 | Encargo | Clase | Estado / fase | Creado | Último suceso | Objetivo | Evidencia |
 |---|---|---|---|---|---|---|
-| WI-20260912-154847 | programacion | active / ejecutar | 2026-09-12 15:48 UTC | 2026-09-12 15:49 UTC | Corrige tests/automation/test_piezas_con_llamante.py, la guarda de la familia «pieza sin lector», que hoy… | [#592](https://github.com/canelamoraguezandyjesus-bot/sirius/issues/592) |
+| WI-20260912-154847 | programacion | active / comprobar | 2026-09-12 15:48 UTC | 2026-09-12 16:15 UTC | Corrige tests/automation/test_piezas_con_llamante.py, la guarda de la familia «pieza sin lector», que hoy… | [#592](https://github.com/canelamoraguezandyjesus-bot/sirius/issues/592) |
 | WI-20260905-103516 | programacion | cancelled / revisar | 2026-09-05 10:35 UTC | 2026-09-12 05:46 UTC | Implementa que el reflector sepa recorrer una recuperación completa acreditada por el historial | [#539](https://github.com/canelamoraguezandyjesus-bot/sirius/issues/539) |
 | WI-20260902-130213 | programacion | cancelled / preparar | 2026-09-02 13:02 UTC | 2026-09-12 05:46 UTC | Implementa M18 de la memoria: la CRITICIDAD como señal propia de Memory y Decision, y el filtro de relevancia… | [#507](https://github.com/canelamoraguezandyjesus-bot/sirius/issues/507) |
 | WI-20260831-202513 | programacion | cancelled / preparar | 2026-08-31 20:25 UTC | 2026-09-12 05:46 UTC | Implementa la propuesta 2 del informe de la mina (docs/audits/SIRIUS_MINA_APRENDIZAJE_OPERATIVO_2026-08.md… | [#496](https://github.com/canelamoraguezandyjesus-bot/sirius/issues/496), [run](https://github.com/canelamoraguezandyjesus-bot/sirius/actions/runs/33440018700/attempts/1) |
