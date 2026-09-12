@@ -4886,6 +4886,49 @@ fuente normativa. La regla que lo exige es la misma que CODEX-002 impuso a
 ADR-169: «sobre este árbol» sin nombrar el árbol es una frase que caduca.
 ---
 
+### 97. El ancla llegó y corrige la entrada anterior: la medición es de hace una semana, y el árbol del propietario no lleva la línea de memoria (12-09-2026, 01:45 UTC)
+
+**El dato que faltaba.** `git rev-parse --short HEAD` en la copia del
+propietario: **`a07c5d5`**, del **05-09-2026**. No es `main` de hoy
+(`4087b8a`) ni el de la semana: su `origin/main` local también apunta ahí, o
+sea que **no ha traído nada desde el 5**. Las dos corridas de Ollama, la
+contaminada y la limpia, son de ese árbol.
+
+**Qué invalida de la entrada 96.** Escribí que el salto lo explicaba que «la
+línea de memoria subió mucho lo que la búsqueda encuentra» y nombré H2, H1 y
+P3. **Ninguna de las tres está en `a07c5d5`**: se fusionaron el 08 y el 09 de
+septiembre, después de su árbol. Esa frase era falsa y la escribí sin conocer
+el ancla, que es exactamente el error que el ancla existe para impedir. Es la
+tercera vez en esta sesión que afirmo sobre un árbol que no había fijado
+(raíz 2). La diferencia con las otras dos es que esta vez la afirmación ya
+estaba empujada cuando llegó el dato.
+
+**Qué refuerza, en cambio.** La ventana entre las dos mediciones —`9ad873a`
+(02-09) y `a07c5d5` (05-09)— es **más limpia** de lo que supuse: contiene la
+línea de criticidad entera (M18b, M19a, **M19b con el rescate RF-25/RF-26**,
+**M20 con la siembra en contexto**, M21a, M21b) y, por encima, trabajo de
+**motor y automatización** que no toca la recuperación (G1, G2, G3, C1 y
+ADR-135 a ADR-146). Con H1/H2/P3 fuera de la ventana, la atribución del
+`10 → 0` y del `39 → 239` al rescate y la siembra queda **mejor sostenida**,
+no peor.
+
+**Y el emparejamiento entrada/salida sí es del mismo árbol**, que era mi otra
+duda: el `487` de entrada al filtro sobre `a07c5d5` está publicado en el
+docstring del propio guion de diagnóstico, medido el 05-09 (`0/47`; `487`;
+`72/81`). Mi corrida de hoy sobre `4087b8a` da **lo mismo** (`0/47`; `487`;
+`72/81`), así que la entrada al filtro **no se ha movido** entre los dos
+árboles. Lo que no sé es qué hace el filtro real hoy: **nadie ha medido el
+camino real sobre `main` de esta semana.**
+
+**Lo que queda sin comprobar, y es lo que más pesa.** La comprobación de
+deriva del entorno —repetir ADR-125 en su propio árbol para ver si el Ollama
+de hoy se comporta como el del 02-09— **no se pudo hacer**: `git checkout
+9ad873a` murió pidiendo reintentar el borrado de `tests/automation/fixtures`.
+Sin ella, la comparación entre el 02 y el 05 sigue apoyada en el supuesto de
+que el modelo y el programa no se movieron en tres días. Es plausible y no
+está comprobado, y así queda dicho.
+---
+
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
 
 1. `ollama_category_classifier.py`: ruta relativa y sin
@@ -5493,3 +5536,17 @@ ADR-169: «sobre este árbol» sin nombrar el árbol es una frase que caduca.
     sume antes de lanzar; (c) que un `failed-safely` por tope publique al
     menos la duración y que fue el tope, para distinguirlo de un fallo del
     modelo (hoy los dos dicen lo mismo).
+
+31. **La única medición que nadie más puede correr vive en una copia que
+    `git` no puede actualizar.** El repositorio del propietario está dentro de
+    `OneDrive`, y el 12-09 un `git checkout` falló pidiendo reintentar el
+    borrado de un directorio: el patrón de un fichero enganchado por la
+    sincronización. Consecuencias medidas ese mismo día: su copia lleva una
+    semana sin actualizar, la medición con el modelo real es de `a07c5d5` y no
+    de `main`, y la comprobación de deriva del entorno no se pudo ejecutar.
+    El riesgo no acaba ahí: una sincronización a destiempo sobre `.git` puede
+    dejar el repositorio inconsistente. Candidatos, para decisión del
+    propietario: (a) mover el repositorio fuera de `OneDrive`, que es lo único
+    que quita la causa; (b) excluir esa carpeta de la sincronización; (c)
+    pausar la sincronización antes de cada `checkout`, que es apaño y hay que
+    acordarse.
