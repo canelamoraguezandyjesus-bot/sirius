@@ -13,3 +13,7 @@ A partir del repositorio, cada cambio importante se registrará aquí como `ADR-
 - fecha y aprobación.
 
 No se usa un ADR para documentar detalles triviales de implementación.
+
+El índice de todos los ADR —número, fecha, estado, título y resumen— no se
+escribe aquí: se genera en `MEMORIA.md`, en la raíz, con
+`uv run sirius-memoria conocimiento` (ADR-171).

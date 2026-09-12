@@ -51,6 +51,10 @@ sirius-supervisar = "sirius_engine.supervise_cli:main"
 # del contador de los siete dias (contrato parrafo 11.2) que este comando
 # empieza a satisfacer.
 sirius-reflejar = "sirius_engine.reflect_cli:main"
+# La memoria común (ADR-171): `conocimiento` escribe MEMORIA.md en la raíz a
+# partir del árbol (una prueba de Quality falla si está desactualizada) y
+# `desenlaces` escribe DESENLACES.md en la rama del motor tras cada reflejo.
+sirius-memoria = "sirius_engine.memoria_cli:main"
 
 [build-system]
 requires = ["uv_build>=0.11.28,<0.12"]
@@ -131,7 +135,9 @@ testpaths = ["tests"]
 # scripts/: helpers de empaquetado invocados desde PowerShell.
 # tests/unit: ayudantes compartidos entre pruebas (tests/ no es un paquete).
 # tests/acceptance: traductor del arnes de aceptacion (incidencia #461).
-pythonpath = ["scripts", "tests/unit", "tests/acceptance"]
+# tests/automation/fixtures: arnes que EJECUTA los pasos de los workflows contra
+# un `gh` doble, con su registro de carriles controlado (ADR-167).
+pythonpath = ["scripts", "tests/unit", "tests/acceptance", "tests/automation/fixtures"]
 addopts = [
   "--import-mode=importlib",
   "--strict-config",
