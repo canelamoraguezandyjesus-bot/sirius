@@ -95,15 +95,26 @@ mismo día, antes de que ocurriera en producción.
 
 ## Decisión
 
-**El cierre se comprueba ANTES que las etiquetas, y se retoma desde el estado
-real.** Si la incidencia está cerrada, sus etiquetas no se contradicen, y el
-`WorkItem` ya está en un estado con salida directa a `CANCELLED`
+**El cierre de una parada sin salida se comprueba DESPUÉS de todo lo demás, y
+se retoma desde el estado en que el motor está.** Primero se calcula el plan
+por etiquetas y, si hace falta, el recorrido acreditado, exactamente como
+siempre. Solo cuando ese cálculo no ha encontrado NINGÚN paso entra esta
+regla: si la incidencia está cerrada, sus etiquetas no se contradicen y el
+`WorkItem` está en un estado con salida directa a `CANCELLED`
 —`NEEDS_DECISION`, `FAILED_SAFELY` o `PLANNED`—, el plan es esa salida y nada
-más. Solo si no se da ese caso se calcula el plan por etiquetas como siempre, y
-se le añade el cierre al final como hizo ADR-173.
+más.
+
+**El orden es la mitad de la decisión, no un detalle de implementación**: que
+el cálculo de siempre no haya encontrado ningún paso es precisamente lo que
+distingue una parada sin salida de una recuperación acreditada. Comprobarlo
+antes cancelaba recuperaciones válidas, y está contado abajo.
+
+`ACTIVE` queda fuera a propósito: su divergencia —el motor por delante de lo
+que la incidencia proyecta— es información que un humano tiene que ver, y
+ADR-173 decidió conservarla.
 
 Ni un puerto nuevo ni una arista nueva: son las mismas transiciones que ADR-173
-ya usaba, consultadas antes.
+ya usaba, consultadas en otro momento.
 
 ## Comprobación que la sostiene
 
@@ -152,6 +163,27 @@ dos cada una —incidencia abierta, que conserva el comportamiento exacto de hoy
 e incidencia cerrada, que termina la parada— y la mitad que protegía se
 comprueba explícitamente: el encargo **no vuelve a `ACTIVE`** y no aparece
 ningún `work_item_reactivated`.
+
+## La contradicción que este ADR llegó a tener, y por qué importa más de lo que parece
+
+La primera versión de la sección «Decisión» decía **«el cierre se comprueba
+ANTES que las etiquetas»**. Era la descripción de la versión que yo mismo había
+descartado dos secciones más abajo, en el mismo documento, por cancelar
+recuperaciones válidas. La escribí para el primer diseño y no la actualicé al
+cambiarlo.
+
+Lo encontró la segunda ronda de revisión, y el daño no se queda en el ADR:
+**`MEMORIA.md` toma el primer párrafo de la sección «Decisión» de cada ADR y lo
+publica como el resumen que toda IA que entre lee primero** (ADR-171). Así que
+la afirmación equivocada no estaba en un rincón de un documento largo: estaba
+en la vista generada, en la fila de este ADR, contando lo contrario de lo que
+hace el código.
+
+Es la familia F5 del informe de la mina —«contradicción interna dentro del
+mismo documento»— con un multiplicador que el informe no tenía cuando se
+escribió: desde ADR-171, el primer párrafo de «Decisión» es el texto de mayor
+alcance de todo el repositorio, y hay que escribirlo como si fuera lo único que
+alguien va a leer. Corregido el párrafo y regenerada la vista.
 
 ## Consecuencias
 
