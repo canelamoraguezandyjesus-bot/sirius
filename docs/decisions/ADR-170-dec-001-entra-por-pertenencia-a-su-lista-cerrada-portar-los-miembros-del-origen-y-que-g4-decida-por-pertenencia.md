@@ -319,7 +319,14 @@ causa: bajo esa misma población, el único sobrante ausente de la corrida del
 laboratorio es `{"B04-CA-43": ["DEC-001"]}`. Vista fallar mutando ese mapa a
 `["DEC-002"]`: `AssertionError: assert {'B04-CA-43': ['DEC-001']} ==
 {'B04-CA-43': ['DEC-002']}` —mutación que la cota tautológica no habría
-detectado—. Por lo que afirma, la prueba se llama desde esta corrección
+detectado—. Y vista fallar también por el otro lado, mutando el mundo en vez
+de lo esperado: quitando `MEM-001` de `casos["B04-CA-02"].obtenido` en
+`tests/acceptance/fixtures/lab_final_run_row5.json` —un sobrante del arnés
+que el laboratorio sí traía— el recuento sigue midiendo 22 y la aserción
+`== 22` pasa, pero la nueva cae con
+`AssertionError: assert {'B04-CA-02':...: ['DEC-001']} == {'B04-CA-43': ['DEC-001']}`
+(`1 failed, 42 deselected in 1.95s`). Es exactamente el estado que la cota
+retirada no distinguía: otro sobrante, u otro caso, con el mismo total. Por lo que afirma, la prueba se llama desde esta corrección
 `test_elementos_de_mas_mide_22_y_no_alcanza_el_suelo_d1_bajo_la_poblacion_publicada`
 (antes `test_elementos_de_mas_alcanza_el_suelo_d1_bajo_la_poblacion_del_umbral_publicado`,
 que es el nombre con el que la citan ADR-115 y las fichas anteriores).
@@ -328,12 +335,12 @@ que es el nombre con el que la citan ADR-115 y las fichas anteriores).
 
 **Cadena completa como UNA SOLA invocación** (ADR-145, ADR-153), con
 `pwsh -File scripts/check.ps1` y su código de salida capturado (ADR-154),
-anclada **al árbol de `f95579a2`** —el head con el código, las pruebas y el
+anclada **al árbol de `ddf3516`** —el head con el código, las pruebas y el
 cuerpo de esta ficha, ya con las correcciones de la ronda 2 (CLAUDE-H5-001 a
 CLAUDE-H5-005)—:
 
 ```
-5257 passed, 17 skipped, 2 xfailed in 547.66s (0:09:07)
+5257 passed, 17 skipped, 2 xfailed in 555.98s (0:09:15)
 EXIT_CODE_CHECK=0
 ```
 
@@ -354,7 +361,7 @@ La quinta validación se ejecuta **sobre el rango de la rama y no sin
 argumentos** (CODEX-001, señalado en la revisión de ADR-168):
 
 ```
-$ git diff --check 5fc5fdc f95579a2
+$ git diff --check 5fc5fdc ddf3516
 EXIT_DIFF_CHECK=0
 $ git diff --check 5fc5fdc
 EXIT_DIFF_CHECK_ARBOL=0
@@ -364,7 +371,7 @@ Sin salida y con código `0` las dos: el rango entero de la rama —desde su
 base en `main` (`5fc5fdc`) hasta el árbol que midió la cadena— está limpio,
 y el árbol de trabajo que confirma esta sección también.
 
-Lo único posterior a `f95579a2` es **esta sección de la ficha** y el cuerpo
+Lo único posterior a `ddf3516` es **esta sección de la ficha** y el cuerpo
 de la PR: documentales, sin tocar código ni pruebas, y existen porque la
 sección tiene que anclarse al árbol que la cadena midió. Si una corrección
 posterior toca código o pruebas, la cadena se vuelve a ejecutar entera y
