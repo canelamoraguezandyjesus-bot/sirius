@@ -96,7 +96,7 @@ def _make_motor_work_item(
 ) -> None:
     """Un ``WorkItem`` de autoridad MOTOR (arquitectura §11): la única que el motor supervisa.
 
-    Hasta ADR-177 este ayudante usaba ``INVESTIGACION`` como ejemplo de clase
+    Hasta ADR-178 este ayudante usaba ``INVESTIGACION`` como ejemplo de clase
     MOTOR: fijaba la copia vieja de la tabla de autoridad. Investigación existe
     en la vía GitHub desde ADR-099, así que su autoridad es ``INCIDENCIA``;
     ``CONSULTA_LARGA`` sí es nativa del motor.

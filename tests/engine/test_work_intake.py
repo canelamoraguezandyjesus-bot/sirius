@@ -147,7 +147,7 @@ def test_crear_y_escalar_notifica(store: WorkEngineStore) -> None:
 def test_autoridad_motor_para_clase_nativa(store: WorkEngineStore) -> None:
     """Una clase nativa del motor nace con autoridad MOTOR.
 
-    Hasta ADR-177 el ejemplo era `INVESTIGACION`, y fijaba la copia vieja de la
+    Hasta ADR-178 el ejemplo era `INVESTIGACION`, y fijaba la copia vieja de la
     tabla de autoridad: investigación existe en la vía GitHub desde ADR-099.
     `CONSULTA_LARGA` sí es nativa del motor.
     """
@@ -166,7 +166,7 @@ def test_autoridad_motor_para_clase_nativa(store: WorkEngineStore) -> None:
 def test_documentacion_e_investigacion_nacen_con_autoridad_incidencia(
     store: WorkEngineStore, clase: Clase
 ) -> None:
-    """El defecto de ADR-177 en el punto exacto donde nace la autoridad.
+    """El defecto de ADR-178 en el punto exacto donde nace la autoridad.
 
     Quince encargos reales de estas dos clases nacieron aquí con MOTOR y
     corrieron enteros en la vía GitHub.

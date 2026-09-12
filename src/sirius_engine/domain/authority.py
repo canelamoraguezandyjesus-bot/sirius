@@ -8,7 +8,7 @@ WorkItem nace siempre con autoridad asignada" (requisito de la incidencia
 
 La regla de la tabla §11.1 es una sola pregunta: **¿existe la clase en la vía
 GitHub?** Si sí, la incidencia es la fuente de verdad hasta que conmute; si
-no, el almacén del motor lo es desde el nacimiento. **Desde ADR-177 la tabla
+no, el almacén del motor lo es desde el nacimiento. **Desde ADR-178 la tabla
 se deriva de esa pregunta** (:data:`CLASES_CON_VIA_GITHUB`) en vez de
 escribirse aparte. Hasta entonces era una copia a mano de agosto (ADR-041)
 que decía ``MOTOR`` para documentación e investigación -«A5 nunca publica
@@ -64,7 +64,7 @@ class Autoridad(StrEnum):
 
 #: Las clases que existen en la vía GitHub: la columna «¿Existe en la vía
 #: GitHub?» de la tabla §11.1 del contrato, y la ÚNICA definición de ese
-#: hecho en el código (ADR-177). ``TABLA_ACTIVACION`` -el despachador- tiene
+#: hecho en el código (ADR-178). ``TABLA_ACTIVACION`` -el despachador- tiene
 #: que tener exactamente estas claves, y ``tests/engine/test_authority.py``
 #: falla si las dos divergen; la autoridad de abajo se deriva de aquí.
 CLASES_CON_VIA_GITHUB: frozenset[WorkItemClass] = frozenset(

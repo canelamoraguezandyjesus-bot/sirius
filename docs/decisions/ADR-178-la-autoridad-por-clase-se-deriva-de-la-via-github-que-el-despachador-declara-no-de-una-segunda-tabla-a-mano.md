@@ -1,4 +1,4 @@
-# ADR-177 — La autoridad por clase se deriva de la vía GitHub que el despachador declara, no de una segunda tabla a mano
+# ADR-178 — La autoridad por clase se deriva de la vía GitHub que el despachador declara, no de una segunda tabla a mano
 
 - Estado: PROPUESTO
 - Fecha: 2026-09-12
@@ -92,6 +92,15 @@ clases con vía GitHub, y que el contrato se lea en la batería como dato, no
 como prosa. Con las dos cosas, «añadir una clase a la vía GitHub» toca un solo
 sitio y el resto se deriva; y «el contrato dice una cosa y el código otra» ya
 no puede fusionarse en verde.
+
+> **Nació como ADR-177 y se renumeró a 178 el 12-09-2026.** Ese día había
+> **tres** ADR-177 distintos, cada uno en su rama abierta y ninguno en `main`:
+> la ampliación por categoría (PR #590, la más antigua), este, y la guarda de
+> piezas sin llamante (PR #593, del motor). `scripts/siguiente_adr.py` no lo
+> evita y lo dice él mismo: consulta las ramas **del clon**, y una rama que no
+> se ha traído no existe para él. Es el modo exacto en que nacieron los dos
+> ADR-016 que ADR-032 conserva. Se renumeró el más nuevo de los dos que podían
+> moverse; la PR #590 conserva el 177 por ser la primera.
 
 ## Contexto y problema
 
@@ -216,7 +225,7 @@ Sobre el árbol de esta rama, el 12-09-2026:
   `CLASES_CON_ESTADO_PROPIO` está **vacío**: reproducido, el verificador
   devuelve `NO_COMPARABLE` para **las siete clases**, incluida `programacion`.
   Un `NO_COMPARABLE` no es un día verde -lo dice el propio módulo- así que
-  siete días así acumulan **cero**. Lo que ADR-177 cambia es que esas dos
+  siete días así acumulan **cero**. Lo que ADR-178 cambia es que esas dos
   clases **entren** en el bucle y dejen líneas en el registro; el día en que la
   medición empiece de verdad lo decide otro bloque, el que cablee el retorno
   del desenlace de GitHub al almacén (H-25, incidencia #376), y ese es el único
@@ -249,7 +258,7 @@ Sobre el árbol de esta rama, el 12-09-2026:
   quitar su entrada de ahí y fusionar.
 
   **Retirada y autoridad son cosas distintas**, y por eso esto no cambia nada
-  de lo que ADR-177 decide: una clase con el carril retirado sigue en la vía
+  de lo que ADR-178 decide: una clase con el carril retirado sigue en la vía
   GitHub -sus encargos históricos viven ahí- y conserva su autoridad; lo que
   cambia es que `sirius-despachar` ya no admite órdenes suyas.
 
@@ -270,14 +279,14 @@ siete clases**, `programacion` incluida. Un `NO_COMPARABLE` no es un día verde
 
 La distinción que me faltaba, y que ahora está escrita en las consecuencias:
 **entrar en la pasada y añadir líneas al registro no es empezar a medir para
-conmutar.** ADR-177 hace lo primero para documentación e investigación. Lo
+conmutar.** ADR-178 hace lo primero para documentación e investigación. Lo
 segundo empieza el día en que algo devuelva el desenlace de GitHub al almacén
 (H-25, incidencia #376), que es el único sitio desde el que una clase entra en
 ese conjunto.
 
 ### 2. Di por pendiente una retirada ejecutada, y la describí al revés
 
-Escribí que ADR-177 «no decide la ejecución pendiente de ADR-161 (sacar
+Escribí que ADR-178 «no decide la ejecución pendiente de ADR-161 (sacar
 investigación y auditoría de `TABLA_ACTIVACION`)». Dos errores en una frase: la
 retirada **está ejecutada** desde ADR-163 (corregida por ADR-167), y sacar esas
 clases de `TABLA_ACTIVACION` es **lo contrario** de lo que el contrato manda.

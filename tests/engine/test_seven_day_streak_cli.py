@@ -237,7 +237,7 @@ def test_un_trabajo_sin_despachar_todavia_no_produce_linea_ni_falla(tmp_path: Pa
 def test_una_clase_sin_autoridad_de_incidencia_se_ignora(tmp_path: Path) -> None:
     """Una clase nativa del motor no tiene incidencia que gobierne su estado: nada que medir.
 
-    Hasta ADR-177 el ejemplo era DOCUMENTACION, y fijaba la copia vieja de la
+    Hasta ADR-178 el ejemplo era DOCUMENTACION, y fijaba la copia vieja de la
     tabla de autoridad: documentación existe en la vía GitHub desde ADR-088.
     `CONSULTA_LARGA` sí es nativa del motor.
     """
@@ -263,7 +263,7 @@ def test_una_clase_sin_autoridad_de_incidencia_se_ignora(tmp_path: Path) -> None
 
 
 def test_documentacion_entra_en_la_medicion_desde_adr_177(tmp_path: Path) -> None:
-    """El defecto de ADR-177 visto desde el contador: diez encargos reales de
+    """El defecto de ADR-178 visto desde el contador: diez encargos reales de
     documentación corrieron enteros en GitHub y esta pasada no midió ninguno,
     porque la tabla de autoridad decía MOTOR. Ahora se miden como los de
     programación."""

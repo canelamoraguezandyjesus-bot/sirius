@@ -27,9 +27,9 @@ from sirius_engine.domain.authority import (
 )
 from sirius_engine.domain.work_item import WorkItemClass
 
-# Hasta ADR-177 estas dos tuplas ponían DOCUMENTACION e INVESTIGACION del lado
+# Hasta ADR-178 estas dos tuplas ponían DOCUMENTACION e INVESTIGACION del lado
 # MOTOR: fijaban la copia de la tabla, no la relación con la vía GitHub, y por
-# eso el defecto que ADR-177 corrige pasó dos semanas en verde.
+# eso el defecto que ADR-178 corrige pasó dos semanas en verde.
 _CLASES_MOTOR = (
     WorkItemClass.CONVERSACION_NO_APLICA,
     WorkItemClass.CONSULTA_LARGA,
@@ -222,7 +222,7 @@ def test_formatear_es_deterministico() -> None:
     assert formatear_entrada_conmutacion(entrada) == formatear_entrada_conmutacion(entrada)
 
 
-# --- ADR-177: la autoridad se deriva de la vía GitHub, y el contrato se lee como dato ---
+# --- ADR-178: la autoridad se deriva de la vía GitHub, y el contrato se lee como dato ---
 
 
 def test_la_autoridad_se_deriva_de_la_via_github_y_es_total() -> None:
@@ -238,7 +238,7 @@ def test_la_autoridad_se_deriva_de_la_via_github_y_es_total() -> None:
 
 
 def test_documentacion_e_investigacion_nacen_con_autoridad_incidencia() -> None:
-    """El defecto de ADR-177, con sus dos clases exactas.
+    """El defecto de ADR-178, con sus dos clases exactas.
 
     Están en la vía GitHub desde ADR-088 y ADR-099 -quince encargos reales
     corrieron enteros en ella- y la tabla de autoridad seguía diciendo MOTOR.
@@ -326,7 +326,7 @@ def _autoridad_escrita(celda: str) -> Autoridad:
 def test_la_tabla_del_contrato_y_el_codigo_dicen_lo_mismo() -> None:
     """El contrato §11.1 leído como dato, fila a fila, contra el código.
 
-    Es lo que hace imposible -no improbable- la divergencia que ADR-177
+    Es lo que hace imposible -no improbable- la divergencia que ADR-178
     encontró: la tabla del contrato decía «documental publicada: sí,
     incidencia» y el código decía MOTOR, y las dos cosas convivieron desde
     ADR-088 sin que nada las enfrentara.
@@ -366,9 +366,9 @@ def test_el_lector_de_la_tabla_del_contrato_distingue_una_fila_cambiada() -> Non
     )
 
 
-# --- ADR-177, primera ronda de revisión: la retirada de un carril, leída del dato ---
+# --- ADR-178, primera ronda de revisión: la retirada de un carril, leída del dato ---
 #
-# La primera versión de ADR-177 escribió que la retirada de los carriles de
+# La primera versión de ADR-178 escribió que la retirada de los carriles de
 # investigación y auditoría estaba PENDIENTE y que consistía en quitar esas
 # clases de `TABLA_ACTIVACION`. Las dos cosas eran falsas, y la segunda es lo
 # CONTRARIO de lo que el contrato manda (§13.2). El error no salió de la nada:
@@ -376,7 +376,7 @@ def test_el_lector_de_la_tabla_del_contrato_distingue_una_fila_cambiada() -> Non
 # ADR-163 la había ejecutado. El contrato se contradecía a sí mismo, y el ADR
 # copió la mitad equivocada.
 #
-# Misma familia que el defecto que ADR-177 arregla -dos sitios que hablan del
+# Misma familia que el defecto que ADR-178 arregla -dos sitios que hablan del
 # mismo hecho y divergen-, así que se cierra igual: derivando del dato que el
 # propio contrato declara fuente de verdad.
 
