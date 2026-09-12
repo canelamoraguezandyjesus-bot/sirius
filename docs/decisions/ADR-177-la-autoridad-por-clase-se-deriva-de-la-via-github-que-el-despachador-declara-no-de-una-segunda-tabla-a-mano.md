@@ -199,7 +199,7 @@ Sobre el árbol de esta rama, el 12-09-2026:
   que entra es `WI-20260828-122242`, investigación, `active` desde el 28-08,
   de un carril ya retirado. Ningún encargo de documentación entra hoy: los diez
   son terminales.
-- Batería entera: se anota con la cifra medida sobre el árbol final.
+- Batería entera sobre el árbol de `9366581` (`uv run pytest -q`, sin `-x`): **5.462 en verde**, 17 omitidas, 2 xfail, en 10 minutos. Con `-x`, la primera pasada se paró en `tests/engine/test_work_intake.py`, otra prueba que fijaba la copia; se arregló y se relanzó entera.
 
 ## Consecuencias
 
