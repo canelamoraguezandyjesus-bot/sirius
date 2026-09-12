@@ -403,3 +403,115 @@ def test_agents_ordena_leer_la_memoria_primero() -> None:
     texto = (RAIZ_REPO / "AGENTS.md").read_text(encoding="utf-8")
     assert f"`{FICHERO_MEMORIA}`" in texto
     assert f"uv run {COMANDO} conocimiento" in texto
+
+
+# --- La regla de la memoria de sesión (ADR-172) -------------------------------
+#
+# Una obligación por entrada, y cada una con el trozo de texto que la sostiene.
+# Dos defectos encontrados por la revisión de la PR #585, los dos arreglados aquí:
+#
+# 1. La primera versión comprobaba cuatro expresiones sueltas sobre el fichero
+#    entero: se podían borrar las dos instrucciones y la tabla de reparto y seguía
+#    pasando. Ahora son doce obligaciones, cada una DENTRO de su sección.
+# 2. La primera prueba por mutación no llamaba al detector: borraba una frase y
+#    comprobaba que la frase ya no estaba, que es cierto por construcción. Anular
+#    el detector entero la dejaba en verde. Ahora el detector es UNA función,
+#    `_obligaciones_ausentes`, y la mutación la EJECUTA sobre el texto mutado y
+#    exige que acuse la que falta. Si alguien vacía esa función, las doce caen.
+
+TITULO_SECCION_SESION = "## La memoria de sesión, si tienes su herramienta (ADR-172)"
+
+OBLIGACIONES_DEL_REPARTO: tuple[tuple[str, str], ...] = (
+    ("solo aplica a quien tenga la herramienta", "solo existe si tu entorno trae la herramienta"),
+    ("buscar al empezar", "**Al empezar**"),
+    ("guardar al terminar", "**Al terminar**"),
+    ("el espacio canónico, con su nombre", "`repo_sirius__e87a5bbe75fe00b6`"),
+    ("pasar el espacio en cada llamada", "`containerTag` en **cada** búsqueda"),
+    ("parar si el espacio no aparece", "**dilo y para**"),
+    ("lo decidido va al repositorio", "**El repositorio**, con su PR, su ADR y su prueba"),
+    ("lo pendiente va a la memoria de sesión", "**La memoria de sesión** |"),
+    ("sobre el motor manda su diario", "**Su diario**, que manda sobre las dos"),
+    ("lo que solo vive ahí no está decidido", "no está tomada"),
+    ("sale a un tercero", "sale a un servicio de terceros"),
+    ("ahí no van secretos", "no van claves ni secretos"),
+)
+
+
+def _seccion_de_la_memoria_de_sesion(texto: str) -> str:
+    """El cuerpo de la sección de ADR-172, del título al siguiente `## `."""
+    _, marca, resto = texto.partition(TITULO_SECCION_SESION)
+    assert marca, (
+        f"AGENTS.md ya no tiene la sección {TITULO_SECCION_SESION!r}: la regla de "
+        "la memoria de sesión desapareció entera (ADR-172)"
+    )
+    cuerpo, _, _ = resto.partition("\n## ")
+    return cuerpo
+
+
+def _obligaciones_ausentes(texto_de_agents: str) -> list[str]:
+    """EL detector: qué obligaciones de ADR-172 faltan en la sección, por nombre.
+
+    Una sola función, y las dos pruebas de abajo la llaman. Es lo que hace que la
+    mutación valga: si esta devolviera siempre la lista vacía —o siempre todas—,
+    una de las dos pruebas lo vería.
+    """
+    seccion = _seccion_de_la_memoria_de_sesion(texto_de_agents)
+    return [nombre for nombre, marca in OBLIGACIONES_DEL_REPARTO if marca not in seccion]
+
+
+def test_agents_declara_el_reparto_entre_las_dos_memorias() -> None:
+    """Las doce obligaciones de ADR-172, cada una dentro de su sección.
+
+    No comprueba conducta -no se puede-: comprueba que la regla siga ESCRITA
+    donde toda IA la lee, y completa. Se exige dentro de la sección a propósito:
+    dejar la frase suelta en otra parte del fichero no vale.
+    """
+    perdidas = _obligaciones_ausentes((RAIZ_REPO / "AGENTS.md").read_text(encoding="utf-8"))
+    assert perdidas == [], (
+        f"la sección de la memoria de sesión perdió estas obligaciones: {perdidas}. "
+        "Una regla incompleta es peor que ninguna: dice qué hacer y calla lo que "
+        "hace falta para hacerlo bien (ADR-172)"
+    )
+
+
+@pytest.mark.parametrize(("nombre", "marca"), OBLIGACIONES_DEL_REPARTO, ids=lambda v: v[:28])
+def test_cada_obligacion_del_reparto_es_imprescindible(nombre: str, marca: str) -> None:
+    """Quitar CUALQUIERA de las doce tiene que hacer que el detector la acuse.
+
+    La mutación de ADR-001, automatizada y **ejecutando el detector de verdad**
+    sobre una copia del fichero. Sostiene dos cosas a la vez: que ninguna de las
+    doce sobra, y que `_obligaciones_ausentes` sigue detectando; anularla deja
+    estas doce en rojo, que es lo que la versión anterior no conseguía.
+    """
+    original = (RAIZ_REPO / "AGENTS.md").read_text(encoding="utf-8")
+    mutado = original.replace(marca, "", 1)
+    assert mutado != original, f"la marca {marca!r} ya no está en AGENTS.md; nada que mutar"
+
+    acusadas = _obligaciones_ausentes(mutado)
+
+    assert nombre in acusadas, (
+        f"quitar «{nombre}» de AGENTS.md no lo detecta el detector: devolvió {acusadas}. "
+        "Sin esto, la protección de la regla no protege nada (ADR-172)"
+    )
+    assert _obligaciones_ausentes(original) == [], (
+        "el detector acusa obligaciones ausentes sobre el fichero SIN mutar: "
+        "no está midiendo la mutación, está roto de base"
+    )
+
+
+def test_la_obligacion_escrita_fuera_de_su_seccion_no_cuenta() -> None:
+    """Mover una obligación fuera de la sección tiene que seguir acusándola.
+
+    Sin esto, un detector que buscara sobre el fichero entero pasaría igual, y
+    la regla se podría desperdigar por `AGENTS.md` hasta que nadie la lea junta.
+    Se comprobó: un detector así superaba las doce mutaciones de arriba.
+    """
+    original = (RAIZ_REPO / "AGENTS.md").read_text(encoding="utf-8")
+    for nombre, marca in OBLIGACIONES_DEL_REPARTO:
+        # Quitada de su sección y reescrita al final del fichero, fuera de ella.
+        desperdigada = original.replace(marca, "", 1) + f"\n\n{marca}\n"
+        assert nombre in _obligaciones_ausentes(desperdigada), (
+            f"«{nombre}» fuera de su sección sigue contando como presente: la "
+            "comprobación no mira dentro de la sección, así que la regla se puede "
+            "desmontar repartiéndola por el fichero (ADR-172)"
+        )
