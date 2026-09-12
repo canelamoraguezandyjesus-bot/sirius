@@ -15,9 +15,15 @@ dice DÓNDE se leyó.** Nunca de memoria ni de lo que parezca razonable. Si no s
 encontró, se dice «no lo he encontrado», que es legítimo; inventarlo no lo es.
 
 Antes de proponer construir algo, **busca si ya existe**. En este repositorio ha
-aparecido seis veces una pieza correcta a la que no llamaba nadie, y una séptima
-casi se construye por duplicado el 25-08 -un «investigador del repositorio» que
-ya existía con otro nombre: el auditor-.
+aparecido **ocho veces** una pieza correcta a la que no llamaba nadie -la octava,
+el 12-09-2026: el campo `cerrada` del espejo, que se calculaba en cada pasada y
+no leía nadie (ADR-173)-, y una novena casi se construye por duplicado el 25-08
+-un «investigador del repositorio» que ya existía con otro nombre: el auditor-.
+
+Este párrafo llevaba diciendo «seis veces» desde agosto porque el número lo
+lleva una persona a mano. Desde ADR-174 la cuenta de cuántas veces ha mordido
+cada familia la lleva la máquina: **«Las lecciones, por familia» en
+`MEMORIA.md`**, generada de los propios ADR.
 
 ### Dónde mirar, para que buscar sea barato
 
@@ -25,6 +31,7 @@ ya existía con otro nombre: el auditor-.
 |---|---|
 | Por dónde empezar, siempre; qué se decidió y por qué | `MEMORIA.md` (raíz), generada: cada ADR con su resumen, los registros con estado y los documentos con su fecha; los desenlaces del motor, en `estado-del-motor:DESENLACES.md` (ADR-171) |
 | Qué quedó pendiente y el contexto de sesiones anteriores | la memoria de sesión, si tu entorno trae su herramienta (ADR-172) |
+| Qué error se repetiría si no se supiera, y cuántas veces ha mordido ya | «Las lecciones, por familia», en `MEMORIA.md` (ADR-174) |
 | Qué bloques del MOTOR hay y cómo van | `docs/implementation/bloques_del_motor.yml` |
 | Qué defectos hay abiertos | `docs/audits/registro_defectos.yml` |
 | El plan del motor, bloque a bloque | `docs/implementation/SIRIUS_WORK_ENGINE_PLAN_IMPLEMENTACION.md` |
@@ -71,6 +78,13 @@ Cuatro avisos que ya han costado tiempo:
 - No guardes claves en código, SQLite, logs o archivos de texto.
 - No uses el proveedor externo en pruebas normales; usa adaptadores simulados.
 - Añade o actualiza pruebas con cada cambio.
+- **Todo ADR desde el 174 declara su lección** en un bloque `## La lección`: la
+  familia del fallo, qué se repetiría sin él y qué prueba lo hace cumplir -o
+  `ninguna: <razón>` si no dejó ninguna, que también es una respuesta. Lo
+  comprueba `tests/automation/test_mina_de_lecciones.py`, y de ahí sale la
+  cuenta por familia de `MEMORIA.md` (ADR-174). El criterio es el de Compound
+  Engineering: se escribe una lección **solo si sin ella alguien repetiría el
+  error**.
 - Ejecuta `scripts/check.ps1` antes de entregar.
 - Haz cambios pequeños, trazables y reversibles.
 - Actualiza la documentación cuando cambie el comportamiento aprobado.
