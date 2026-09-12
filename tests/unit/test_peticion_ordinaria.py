@@ -63,10 +63,21 @@ def test_mode_cardinality_and_limits_stay_fixed_regardless_of_the_active_project
         assert peticion.limite_duro == _LIMITE_SIN_ATAR
 
 
-def test_no_caller_can_override_the_purpose() -> None:
+def test_no_caller_can_override_the_purpose_nor_the_category_widening() -> None:
     """El propósito lo fija ``_peticion_ordinaria`` misma, no quien la llama
     (§11.5-M16, criterio de aceptación): su firma no admite ``proposito``
     como argumento, así que ningún caller —incluida una petición construida
     fuera de ``ContextBuilder``, como ``peticion_desde_caso`` del arnés de
-    aceptación, que nunca pasa por esta función— puede inyectar uno propio."""
-    assert "proposito" not in inspect.signature(_peticion_ordinaria).parameters
+    aceptación, que nunca pasa por esta función— puede inyectar uno propio.
+
+    ADR-177 (H4 de ADR-148, incidencia #581) añade un segundo campo decidido
+    por la MISMA regla y con el mismo criterio escrito —«la fija quien
+    construye la petición; el consumidor solo la lee»—, así que
+    ``amplia_por_categoria`` necesita el candado gemelo: sin él, añadir el
+    campo a la firma para que un llamante lo ponga dejaría la suite entera en
+    verde y devolvería al caller la decisión que esta ficha acaba de cerrar.
+    La prueba hermana de este fichero comprueba el VALOR (encendido con
+    proyecto activo y sin él); ésta comprueba la propiedad estructural."""
+    parametros = inspect.signature(_peticion_ordinaria).parameters
+    assert "proposito" not in parametros
+    assert "amplia_por_categoria" not in parametros

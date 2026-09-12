@@ -236,14 +236,29 @@ Corregida en el mismo trabajo, no en otro: el docstring de módulo de
 `_PROPOSITO_RECUPERACION_ORDINARIA` y `_rank_via_staged_engine` en
 `rank_relevant_knowledge.py`; el de `PROPOSITO_RECUPERACION_ORDINARIA` y el
 de `interpretar` en `interpret_query_request.py`; el de módulo del traductor
-del banco (quinta traducción no obvia); y las 25 referencias a
-`pide_contexto` en pruebas —`tests/unit/test_relevance_domain.py` (14, las
-cuatro pruebas de la función retirada se sustituyen por el candado
+del banco (quinta traducción no obvia); y las **21** referencias a
+`pide_contexto` que las pruebas escribían sobre el árbol base `433fb11`
+—`tests/unit/test_relevance_domain.py` (13, las cuatro pruebas de la función
+retirada se sustituyen por el candado
 `test_el_dominio_ya_no_expone_ninguna_regla_de_subcadena_sobre_el_proposito`),
-`tests/unit/test_peticion_ordinaria.py` (7) y
-`tests/integration/test_rank_relevant_knowledge.py` (4)—. Ninguna se ha
-relajado: la única que queda escrita es la mención histórica dentro del
-docstring de la prueba nueva, que cuenta por qué fallaba antes.
+`tests/unit/test_peticion_ordinaria.py` (6) y
+`tests/integration/test_rank_relevant_knowledge.py` (2)—. El criterio de
+conteo es el literal `pide_contexto`; no se suma `PROPOSITO_DE_CONTEXTO`, que
+añadiría 2 en `test_peticion_ordinaria.py` y daría 23. Cada cifra sale de
+`git show 433fb11:<ruta> | grep -o 'pide_contexto' | wc -l` sobre el árbol
+base que esta ficha declara, no del cuerpo de la incidencia #581: el 14/7/4
+que esta sección transcribía antes no sale de `433fb11` ni de `5fc5fdc`, y esa
+—heredar una cifra en vez de re-medirla sobre el árbol declarado— es la raíz
+común que la segunda ronda de revisión señaló.
+
+Ninguna se ha relajado. Sobre el head quedan escritas tres menciones y
+ninguna afirma ya la regla vieja: el candado de
+`tests/unit/test_relevance_domain.py:583-597`, que comprueba que el dominio ya
+no expone `pide_contexto` ni `PROPOSITO_DE_CONTEXTO`; y dos menciones
+históricas dentro de sendos docstrings, que cuentan por qué la prueba fallaba
+antes —`tests/integration/test_rank_relevant_knowledge.py:1670` y
+`tests/unit/test_peticion_ordinaria.py:44`—. Medido con
+`git grep -n 'pide_contexto\|PROPOSITO_DE_CONTEXTO' -- tests/unit tests/integration`.
 
 El arnés de examen
 (`tests/acceptance/staged_engine_category_and_relevance.py`) conserva su
@@ -316,8 +331,14 @@ porque este trabajo añade **tres** casos netos al total recolectado:
   retirada, la que pedía un propósito de contexto);
 - **+1** en `tests/unit/test_interpret_query_request.py` (la regla escrita
   del intérprete);
-- **0** en `tests/unit/test_peticion_ordinaria.py` (una renombrada: entra y
-  sale una);
+- **0** en `tests/unit/test_peticion_ordinaria.py` (dos renombradas, ninguna
+  añadida ni retirada: la que fijaba el propósito por la subcadena pasa a
+  fijar la señal —`test_la_ampliacion_por_categoria_viene_encendida_con_proyecto_activo_y_sin_el`—
+  y el candado estructural
+  `test_no_caller_can_override_the_purpose_nor_the_category_widening` extiende
+  al campo nuevo lo que ya afirmaba del propósito: que la firma de
+  `_peticion_ordinaria` no lo admite como argumento, así que ningún llamante
+  puede inyectarlo);
 - **−3** en `tests/unit/test_relevance_domain.py` (cuatro retiradas con la
   función, y un candado añadido en su lugar);
 - **+1** que no sale de ningún fichero de pruebas: `_adrs()` devuelve
