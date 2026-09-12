@@ -26,7 +26,7 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **171**.
+- Decisiones (ADR): **172**.
 - Bloques del motor: 17 cerrado, 1 fuera_de_alcance, 2 pendiente.
 - Defectos registrados: 32 cerrado.
 - Investigaciones: **9** (fotos con fecha; caducan).
@@ -39,6 +39,7 @@ está escrito. Si sale pobre, se arregla en el ADR.
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| [180](docs/decisions/ADR-180-el-numero-del-siguiente-adr-se-calcula-contra-las-ramas-del-remoto-no-contra-las-que-el-clon-tenga-traidas.md) | 2026-09-12 | PROPUESTO | El numero del siguiente ADR se calcula contra las ramas del remoto, no contra las que el clon tenga traidas | Pendiente: esta versión es la nota de arranque. Lo que se propone: que `scripts/siguiente_adr.py` traiga las cabezas del remoto antes de calcular el número, degradando sin abortar cuando no haya red, y que diga cuál de las dos cosas hizo. |
 | [176](docs/decisions/ADR-176-el-cierre-de-una-incidencia-se-retoma-desde-donde-se-quedo.md) | 2026-09-12 | PROPUESTO | El cierre de una incidencia se retoma desde donde se quedó | El cierre de una parada sin salida se comprueba DESPUÉS de todo lo demás, y se retoma desde el estado en que el motor está. Primero se calcula el plan por etiquetas y, si hace falta, el recorrido acreditado, exactamente como siempre. Solo… |
 | [175](docs/decisions/ADR-175-un-tablero-por-incidencia-un-solo-comentario-que-el-motor-mantiene-al-dia.md) | 2026-09-12 | PROPUESTO | Un tablero por incidencia: un solo comentario que el motor mantiene al día | Uno. Un solo comentario por incidencia, reescrito en cada cambio de estado. Lleva: qué se pidió (del cuerpo declarado), por dónde va el ciclo, qué se ha comprobado (Quality y rondas, con sus números), dónde está la evidencia (PR, head… |
 | [174](docs/decisions/ADR-174-la-mina-en-dos-pasadas-la-leccion-se-declara-en-el-adr-que-la-produce-y-las-familias-se-cuentan-solas.md) | 2026-09-12 | PROPUESTO | La mina en dos pasadas: la lección se declara en el ADR que la produce y las familias se cuentan solas | Uno. La lección se declara en el ADR que la produce, en un bloque `## La lección` con tres líneas —`familia`, `sin esto se repetiría`, `lo hace cumplir`— o con `ninguna: <razón>`, que es una respuesta legítima y frecuente. El criterio de… |
@@ -222,9 +223,14 @@ de memoria.
 
 | Familia | Veces | Hay prueba que la haga cumplir | ADR |
 |---|---|---|---|
+| `medir-lo-que-se-tiene-en-vez-de-lo-que-hay` | 1 | sí | [180](docs/decisions/ADR-180-el-numero-del-siguiente-adr-se-calcula-contra-las-ramas-del-remoto-no-contra-las-que-el-clon-tenga-traidas.md) |
 | `pieza-sin-lector` | 1 | sí | [175](docs/decisions/ADR-175-un-tablero-por-incidencia-un-solo-comentario-que-el-motor-mantiene-al-dia.md) |
 | `plan-que-hay-que-terminar-de-una-sentada` | 1 | sí | [176](docs/decisions/ADR-176-el-cierre-de-una-incidencia-se-retoma-desde-donde-se-quedo.md) |
 | `regla-que-depende-de-que-alguien-se-acuerde` | 1 | sí | [174](docs/decisions/ADR-174-la-mina-en-dos-pasadas-la-leccion-se-declara-en-el-adr-que-la-produce-y-las-familias-se-cuentan-solas.md) |
+
+### `medir-lo-que-se-tiene-en-vez-de-lo-que-hay`
+
+- **[ADR-180](docs/decisions/ADR-180-el-numero-del-siguiente-adr-se-calcula-contra-las-ramas-del-remoto-no-contra-las-que-el-clon-tenga-traidas.md)** — preguntarle a la copia local por un hecho que vive fuera -las ramas traídas en vez de las que existen- y creer que la respuesta cubre el caso; aquí el guion veía el 3,4% de las ramas y repartió el mismo número tres veces en un día. (lo hace cumplir `tests/automation/test_registro_de_decisiones.py`).
 
 ### `pieza-sin-lector`
 
