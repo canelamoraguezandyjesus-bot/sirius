@@ -107,12 +107,51 @@ ya usaba, consultadas antes.
 
 ## Comprobación que la sostiene
 
-Sobre el caso real reproducido arriba —el encargo a medio cancelar—, el
-reintento pasa de `[]` con divergencia a `[work_item_decision_resolved]`, y el
-encargo acaba en `cancelled`.
+Sobre el caso reproducido arriba —el encargo a medio cancelar—, el reintento
+pasa de `[]` con divergencia a `[work_item_decision_resolved]`, y el encargo
+acaba en `cancelled`. Es la prueba
+`test_una_cancelacion_interrumpida_a_la_mitad_se_retoma`, que corta la pasada
+después del primer paso igual que lo haría un runner que se muere.
 
-**Cuatro mutaciones sembradas y vistas caer**, y una prueba existente que
-cambia de resultado a propósito, explicada abajo.
+**Cuatro mutaciones, sembradas y vistas caer:**
+
+| Mutación | Pruebas que caen |
+|---|---|
+| No se retoma nada (el comportamiento de ADR-173) | 3, entre ellas la de la cancelación a medias |
+| Se retoma también con la incidencia **abierta** | **23**, todo el bloque de «sin permiso no se reanuda» |
+| El cierre se comprueba ANTES del recorrido acreditado | la recuperación real de la #537 |
+| `ACTIVE` deja de quedar fuera | la del encargo por delante de su incidencia |
+
+La segunda importa más que las otras: 23 pruebas caen de golpe, y son
+exactamente las que la PR #530 dejó para que nadie reabriera la puerta de
+reanudar sin permiso. Que sigan en verde con el arreglo puesto es la
+comprobación de que **cancelar no es reanudar**.
+
+### Dos cosas que salieron mal y no las encontró ninguna persona
+
+**La primera versión de este arreglo tenía una regresión.** Puse la
+comprobación del cierre al PRINCIPIO, antes de calcular nada, porque parecía lo
+más directo. Con eso, la recuperación real de la incidencia #537 —parada en
+`REPARAR`, con el `continua` del propietario en el historial y la incidencia
+cerrada en `sirius:completed`— se **cancelaba** en vez de entregarse: cinco
+pasos acreditados convertidos en uno equivocado. Lo cazó
+`test_una_pasada_real_recorre_la_recuperacion_de_la_537` en la primera
+ejecución. De ahí sale el orden correcto: que el cálculo de siempre no haya
+encontrado NINGÚN paso es precisamente lo que distingue una parada sin salida
+de una recuperación acreditada.
+
+**Y la exclusión de `ACTIVE` no la defendía nada.** Al sembrar la mutación que
+la quita, las 88 pruebas seguían en verde: era una frase en un docstring, no
+una propiedad comprobada. Es la cuarta forma de prueba vacua del catálogo. Con
+`test_un_encargo_activo_por_delante_de_su_incidencia_conserva_su_divergencia`,
+la mutación cae.
+
+**Dos pruebas existentes cambian de resultado a propósito**, y las dos por lo
+mismo: fijaban «con la incidencia cerrada tampoco se toca nada». Se parten en
+dos cada una —incidencia abierta, que conserva el comportamiento exacto de hoy,
+e incidencia cerrada, que termina la parada— y la mitad que protegía se
+comprueba explícitamente: el encargo **no vuelve a `ACTIVE`** y no aparece
+ningún `work_item_reactivated`.
 
 ## Consecuencias
 
