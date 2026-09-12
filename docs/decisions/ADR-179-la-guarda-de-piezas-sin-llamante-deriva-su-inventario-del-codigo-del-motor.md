@@ -142,7 +142,7 @@ encontró una persona leyendo código para ADR-173.
 
 El de la sección 3 de la nota de arranque, publicado en el commit `969f2c0`
 antes de tocar el código de la guarda. Ninguna de las tres condiciones se
-cumplió: las siete mutaciones sembradas pusieron la guarda en rojo, las 45
+cumplió: las siete mutaciones sembradas pusieron la guarda en rojo, las 46
 excepciones tienen detrás la comprobación que las sostiene, y no hubo dos rondas
 con defectos de la misma familia.
 
@@ -186,7 +186,7 @@ Dos detalles de la derivación no son cosméticos:
 
 ## Comprobación que la sostiene
 
-### La medida: 4 piezas a mano contra 826 derivadas
+### La medida: 4 piezas a mano contra 831 derivadas
 
 Con el árbol de `9efaa3c` y el guion de derivación de la propia guarda:
 

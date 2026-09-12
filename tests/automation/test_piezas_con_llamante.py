@@ -313,12 +313,16 @@ def llamantes(pieza: Pieza) -> list[str]:
 #: Pieza -> por qué no tiene llamante, en una frase que se lee en el fallo. Sin
 #: el motivo, un rojo aquí parece burocracia y se silencia.
 #:
-#: **Esto es lo que se RESTA del inventario derivado, no lo que se suma.** Las 45
+#: **Esto es lo que se RESTA del inventario derivado, no lo que se suma.** Estas
 #: entradas son la deuda que la derivación destapó el 12-09-2026, el día que se
 #: escribió esta guarda: la lista a mano vieja vigilaba 4 piezas y ninguna de
-#: ellas estaba muerta, así que en tres meses no encontró nada. Cablear o retirar
-#: cada una de estas 45 es trabajo de otras incidencias —queda fuera del alcance
-#: de WI-20260912-154847—, y por eso entran aquí en vez de ponerse el rojo hoy.
+#: ellas estaba muerta, así que en tres meses no encontró nada. Cuántas son se
+#: cuenta en la tabla de conciliación de ADR-179, sección «Comprobación que la
+#: sostiene», que es la única fuente que se actualiza al añadir o borrar una
+#: excepción; aquí no se repite el número para que no pueda desfasarse. Cablear
+#: o retirar cada una de ellas es trabajo de otras incidencias —queda fuera del
+#: alcance de WI-20260912-154847—, y por eso entran aquí en vez de ponerse el
+#: rojo hoy.
 #:
 #: Tres cierres impiden que esta lista se convierta en el escondite que era la
 #: otra: una entrada que ya no corresponde a ninguna pieza pone la batería en
@@ -423,6 +427,11 @@ SIN_LLAMANTE_CONOCIDO: dict[str, str] = {
         "es la proyección del encargo hacia el trabajador; solo la usa "
         "`tests/engine/test_worker_request.py`"
     ),
+    "definicion:projection_verifier.EJES_DECLARADOS": (
+        "es la tupla de los tres ejes que se verifican, y no la nombra nadie en `src/` "
+        "ni en `scripts/`: solo `tests/engine/test_projection_verifier.py`. La destapó "
+        "la rama de constantes anotadas el 12-09-2026"
+    ),
     # --- Deuda destapada el 12-09-2026: campos escritos y nunca leídos ------
     # Esta es la forma exacta de `cerrada`: alguien los rellena en el
     # constructor y nadie los lee después.
@@ -493,11 +502,6 @@ SIN_LLAMANTE_CONOCIDO: dict[str, str] = {
         "es la cuenta de días verdes seguidos del §11.2: se calcula y nadie la lee, "
         "solo dos baterías de `tests/engine/`"
     ),
-    "definicion:projection_verifier.EJES_DECLARADOS": (
-        "es la tupla de los tres ejes que se verifican, y no la nombra nadie en `src/` "
-        "ni en `scripts/`: solo `tests/engine/test_projection_verifier.py`. La destapó "
-        "la rama de constantes anotadas el 12-09-2026"
-    ),
     "campo:worker_request.WorkerRequest.capacidades_resueltas": (
         "son las capacidades ya resueltas del encargo; solo las lee "
         "`tests/engine/test_worker_request.py`"
@@ -527,7 +531,8 @@ PIEZAS_DE_LA_LISTA_A_MANO = (
 )
 
 #: Suelo del inventario. La lista a mano tenía 4 entradas y la derivación
-#: encontró 826 el 12-09-2026; un inventario que cayera por debajo de 400 sería
+#: encuentra hoy más de ochocientas piezas —la cifra exacta se mide en la tabla
+#: de conciliación de ADR-179—; un inventario que cayera por debajo de 400 sería
 #: una derivación rota, no un motor adelgazado, y esta batería lo diría en vez
 #: de pasar en vacío sobre lo poco que quedara.
 SUELO_DEL_INVENTARIO = 400
