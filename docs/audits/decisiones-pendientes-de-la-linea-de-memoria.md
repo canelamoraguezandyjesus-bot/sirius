@@ -19,6 +19,64 @@ puede correr él.
 
 ---
 
+# NUEVA 3, 12-09-2026 — abrir la puerta de la memoria enciende SIETE cosas a la vez, y no hay forma de hacerlo por pasos
+
+**Por qué esto llega ahora.** Al medir el camino real con tu Ollama descubrí que
+H1 y H2 no mueven **nada** en producción. Buscando el porqué, encontré algo más
+grande, y lo verifiqué hoy otra vez sobre `main` (`433fb11`).
+
+**Ninguna pieza falta. Están todas montadas detrás de un solo interruptor.**
+`category_matching_enabled` se lee de `settings.json` con **`False` por
+defecto** (`composition_root.py:516`) y, en el mismo bloque, apaga:
+
+| | qué queda apagado con la puerta cerrada |
+|---|---|
+| 523 | el vocabulario de categoría |
+| 525 | el vocabulario de criticidad |
+| 527 | la coincidencia por categoría del caso de uso |
+| 541-547 | **el clasificador de intención**, y con él las peticiones reales |
+| 555-561 | **el filtro de relevancia entero** (`relevance_filter_port=None`) |
+| 565 | el techo de criticidad |
+| 566 | la coincidencia por categoría del `ContextBuilder` |
+
+Y el comentario de `composition_root.py:533-536` lo dice sin ambigüedad: con la
+puerta en `False`, **«`_rank_via_staged_engine` no se ejecuta siquiera»**.
+
+**Qué significa en cristiano.** Hoy, en tu Sirius, **no corre el motor por
+etapas, ni el filtro de relevancia, ni el intérprete que convierte tu pregunta
+en una petición propia**. Nada de lo que hemos construido en esta línea está
+vivo. Y es **correcto**: la arquitectura mandaba que naciera detrás de una
+puerta cerrada (D7 punto 6, §6.3). No es un fallo, es el diseño.
+
+**El problema es cómo se abre.** No hay forma de encender una cosa y mirar. Un
+solo booleano enciende las siete. El día que lo pongas en `true`, cambian a la
+vez el camino de recuperación, quién construye la petición, si hay filtro, y
+dos vocabularios. **Si algo empeora, no habrá manera de saber cuál de las siete
+fue.** Y tu criterio para abrir es deliberadamente más estricto que D1, así que
+vas a querer mirar.
+
+**Opciones**
+
+- **(A) Partir la puerta antes de abrir** — *recomendada*. Un encargo que
+  sustituya el booleano único por interruptores nombrados, o por un modo de
+  apertura por etapas, para que abrir se pueda hacer por pasos observables.
+  Cuesta un trabajo del ciclo y no cambia ningún comportamiento: con todos los
+  interruptores cerrados, hoy es idéntico a hoy. Lo que compra es poder medir
+  qué aporta cada pieza por separado, que es justo lo que la línea entera ha
+  estado intentando hacer a ciegas.
+- **(B) Abrirla entera y medir** con la medición real de tu máquina antes y
+  después. Es más rápido y más barato. Si sale bien, has terminado. Si sale
+  mal, sabes que algo de las siete lo hizo y no cuál.
+- **(C) No tocarlo todavía** y seguir cerrando huecos con el laboratorio. Es lo
+  que veníamos haciendo, y hoy sabemos lo que cuesta: H1 y H2 se midieron,
+  se revisaron y se fusionaron sin mover una sola cifra de producción.
+
+**Lo que NO cambia con ninguna.** Nada de esto abre la puerta por su cuenta ni
+toca `settings.json`. Y (A) toca `composition_root` y la §6.3, así que es
+decisión tuya y no del ciclo: por eso está aquí y no como encargo escrito.
+
+---
+
 # DECIDIDA el 12-09-2026 — (A) SÍ se acepta perder por uno el suelo de «elementos de más»
 
 > El propietario eligió **(A) aceptar**. Queda registrada en la incidencia #582
