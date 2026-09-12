@@ -18,9 +18,26 @@ atascada— y estuvo a punto de repetirse con el 043 el mismo día. Ahora el má
 se calcula contra el árbol **y** contra los ADR que ya existen en cualquier rama
 que el clon conozca.
 
-Queda un límite, y conviene decirlo en vez de disimularlo: el guion solo ve las
-ramas **traídas**. Un `git fetch` incompleto vuelve a dejar el hueco abierto, así
-que el guion imprime cuántas ramas consultó para que la cobertura se vea.
+Ese límite -«el guion solo ve las ramas TRAÍDAS»- estuvo escrito aquí desde
+ADR-044 y no era teórico. **ADR-180 lo cierra**: medido el 12-09-2026, este
+clon tenía **14** refs remotas de las **409** que hay en el remoto -el
+**3,4 %**-, y con esa cobertura el guion repartió el mismo número, 177, a
+**tres** ramas abiertas el mismo día; dos hubo que renumerarlos a mano. En una
+sesión remota el clon nace con las ramas del arranque y nadie trae las demás,
+así que la cobertura parcial es la norma, no la excepción.
+
+Desde ADR-180 el guion **trae las cabezas del remoto** antes de calcular -4
+segundos medidos- y **dice cuál de las dos cosas hizo**: si trajo, la cuenta de
+ramas es toda la verdad; si no pudo -sin red, sin git, fuera de un
+repositorio-, degrada al comportamiento anterior y avisa de que la cuenta es
+solo lo que el clon ya tenía. Nunca aborta por no poder traer: quedarse sin
+crear el ADR es peor que crearlo con la cobertura de ayer.
+
+Lo que sigue sin garantizar, y por eso la puerta de `main` no sobra: dos
+sesiones que pidan número **a la vez**, antes de que ninguna haya empujado,
+seguirán recibiendo el mismo. El remoto no puede decir lo que aún no le han
+contado. Esa colisión la caza `tests/automation/test_registro_de_decisiones.py`
+al fusionar.
 
 La fecha se inyecta en vez de leerse del reloj para que el resultado sea
 función únicamente de los argumentos: una prueba que dependiera del día en que
@@ -61,13 +78,15 @@ def numeros_por_archivo(directorio: Path) -> dict[str, int]:
     return encontrados
 
 
-def _git(argumentos: list[str], raiz: Path) -> str:
-    """Salida de un comando git, o cadena vacía si no se puede preguntar.
+def _correr_git(argumentos: list[str], raiz: Path) -> tuple[bool, str]:
+    """`(funcionó, salida)` de un comando git. Nunca propaga el fallo.
 
-    Nunca propaga el fallo: este guion tiene que seguir funcionando fuera de un
-    repositorio, sin git instalado o con el clon a medias. Perder la consulta a
-    las ramas degrada el resultado al comportamiento anterior; abortar por ella
-    impediría crear un ADR, que es peor.
+    Se parte en dos lo que antes era una sola cadena porque `git fetch --quiet`
+    **no imprime nada cuando va bien**: con la forma anterior, «trajo» y «no
+    pudo traer» eran indistinguibles, las dos cadena vacía. Y esa distinción es
+    justo lo que ADR-180 necesita decir en voz alta, porque un número calculado
+    sobre el 3,4 % de las ramas y uno calculado sobre todas no merecen la misma
+    confianza.
     """
     try:
         completado = subprocess.run(
@@ -87,10 +106,46 @@ def _git(argumentos: list[str], raiz: Path) -> str:
     # documenta. Este guion se invoca hoy siempre con `uv run`, así que la trampa
     # es latente, no viva: se cierra igual, porque cuesta nada.
     except OSError:
-        return ""
+        return False, ""
     except subprocess.SubprocessError:
-        return ""
-    return completado.stdout if completado.returncode == 0 else ""
+        return False, ""
+    if completado.returncode != 0:
+        return False, ""
+    return True, completado.stdout
+
+
+def _git(argumentos: list[str], raiz: Path) -> str:
+    """Salida de un comando git, o cadena vacía si no se puede preguntar.
+
+    La forma que usan los lectores -`for-each-ref`, `ls-tree`-, a los que solo
+    les importa el texto: para ellos «no pude preguntar» y «no hay nada» llevan
+    al mismo sitio, que es calcular con lo que haya. Quien necesita distinguir
+    las dos cosas usa :func:`_correr_git`.
+    """
+    return _correr_git(argumentos, raiz)[1]
+
+
+#: El refspec, explícito a propósito: trae TODAS las cabezas aunque el clon se
+#: creara con uno estrecho, que es exactamente lo que hace una sesión remota al
+#: clonar una sola rama. Con `git fetch origin` a secas, un clon así se queda
+#: con las mismas 14 refs con las que nació.
+REFSPEC_DE_LAS_CABEZAS = "+refs/heads/*:refs/remotes/origin/*"
+
+
+def traer_las_cabezas(
+    directorio: Path,
+    correr: Callable[[list[str], Path], tuple[bool, str]] = _correr_git,
+) -> bool:
+    """Trae las cabezas del remoto al clon; dice si lo consiguió (ADR-180).
+
+    Sin esto, «las ramas que el clon conoce» y «las ramas que hay» son cosas
+    distintas, y la diferencia medida el 12-09-2026 era 14 frente a 409.
+
+    No aborta nunca: un fallo solo significa que se calculará con lo que ya
+    hubiera, como antes de ADR-180. Lo que no se hace es callarlo.
+    """
+    raiz = directorio.resolve().parent
+    return correr(["fetch", "--quiet", "origin", REFSPEC_DE_LAS_CABEZAS], raiz)[0]
 
 
 def numeros_en_ramas(
@@ -228,6 +283,23 @@ def _avisar_de_duplicados(directorio: Path) -> None:
         )
 
 
+def _como_se_consulto(ramas: int, *, trajo: bool) -> str:
+    """El aviso de cobertura, que distingue lo que antes no se distinguía.
+
+    Antes de ADR-180 decía siempre «consultadas N ramas del clon», y esa N
+    podía ser el 3,4 % de la verdad sin que nada lo dijera. Ahora la frase
+    cambia según lo que de verdad ocurrió, porque las dos situaciones piden
+    cosas distintas de quien lee.
+    """
+    if trajo:
+        return f"traidas las cabezas del remoto; consultadas {ramas} ramas con ADR"
+    return (
+        f"NO se pudieron traer las cabezas del remoto: consultadas solo las {ramas} ramas "
+        "con ADR que el clon ya tenia. El numero puede estar cogido en una rama sin traer; "
+        "haz `git fetch` y repite si puedes"
+    )
+
+
 def _avisar_de_reservas(reservas: dict[int, list[str]], tope_local: int) -> None:
     """Dice qué números están cogidos fuera de este árbol, y por quién."""
     fuera = {numero: ramas for numero, ramas in reservas.items() if numero > tope_local}
@@ -259,19 +331,26 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="no consultar las ramas del clon (comportamiento anterior a ADR-044)",
     )
+    analizador.add_argument(
+        "--sin-traer",
+        action="store_true",
+        help=(
+            "no traer las cabezas del remoto antes de calcular; usa solo las ramas que el "
+            "clon ya tenga (comportamiento anterior a ADR-180)"
+        ),
+    )
     args = analizador.parse_args(argv)
     directorio: Path = args.directorio
 
     try:
         _avisar_de_duplicados(directorio)
+        trajo = False
+        if not args.solo_local and not args.sin_traer:
+            trajo = traer_las_cabezas(directorio)
         reservas: dict[int, list[str]] = {} if args.solo_local else numeros_en_ramas(directorio)
         ramas = len({rama for ramas_ in reservas.values() for rama in ramas_})
         if not args.solo_local:
-            print(
-                f"consultadas {ramas} ramas del clon con ADR; "
-                "haz `git fetch` antes si sospechas que faltan",
-                file=sys.stderr,
-            )
+            print(_como_se_consulto(ramas, trajo=trajo), file=sys.stderr)
         numeros_locales = list(numeros_por_archivo(directorio).values())
         _avisar_de_reservas(reservas, max(numeros_locales, default=0))
         if args.solo_numero:
