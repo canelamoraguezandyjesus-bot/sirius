@@ -4929,6 +4929,67 @@ que el modelo y el programa no se movieron en tres días. Es plausible y no
 está comprobado, y así queda dicho.
 ---
 
+### 98. Medido el camino real sobre `main` de hoy: H1 y H2 son INERTES en producción, y se ve con dos cifras idénticas (12-09-2026, 02:30 UTC)
+
+El propietario pausó la sincronización, trajo `main` con `git merge --ff-only
+origin/main` desde `a07c5d5` y repitió la medición. **`Rendiciones del filtro.
+0`**: válida.
+
+**Ancla, dicha con su límite.** No tengo la lectura directa del `sha`. Lo que
+tengo: `origin/main` valía `4087b8a` antes y después de su avance rápido, el
+avance fue `--ff-only` (o no habría movido nada), `uv` reconstruyó el paquete
+—o sea que el árbol cambió— y las cifras se movieron. De ahí que el árbol sea
+`4087b8a`. **Es inferencia, no lectura**, y se confirma con un `git rev-parse`
+cuando el propietario encienda.
+
+| | `a07c5d5` (05-09) | `4087b8a` (12-09) |
+|---|---|---|
+| omisiones críticas | 0 | 0 |
+| cobertura | 71/81 | 71/81 |
+| aciertos exactos | 7/47 | 8/47 |
+| elementos de más | 239 | **218** |
+
+**Y ahora la cifra que de verdad importa, que no está en esa tabla.** Medí con
+el filtro **inerte**, determinista, lo que le LLEGA al filtro en el camino de
+producción: **`0/47`; `487`; `72/81`; 0 críticas sobre `4087b8a`** (corrida de
+hoy, código de salida 0), y el docstring del guion publica **exactamente lo
+mismo** sobre `a07c5d5` el 05-09: `0/47`; `487`; `72/81`.
+
+**Idénticas. Ni un elemento de diferencia.** Es decir: **H2 (ADR-166) y H1
+(ADR-168) no mueven NADA en el camino de producción.** No es una sospecha ni
+una lectura de código: son dos mediciones de la misma configuración en los dos
+árboles, y dan el mismo número.
+
+**Por qué, y está en una línea del árbol.** La petición uniforme que produce
+producción (`_peticion_ordinaria`, `rank_relevant_knowledge.py:138-162`) es
+**modo M1 con cardinalidad EXHAUSTIVA**, y **no declara intervalo**. H1 cierra
+el hueco de «listar por vigencia **cuando la pregunta declara un intervalo**»:
+si nadie declara intervalo, la palanca no se acciona nunca. H2 vive en el
+cargador del banco, que es arnés, así que en producción es inerte por
+construcción y eso ya estaba dicho.
+
+**La única de las tres visible en producción es P3**, y se le ve el efecto
+aislado de manera limpia: con la **misma** entrada al filtro (487) la salida
+baja de 239 a 218. Los 21 elementos los quita el `cupo` que P3 empezó a pasarle
+al filtro. **Es la primera vez que una palanca de esta línea se mide sola en el
+camino real.**
+
+**La lectura para el propietario, sin adornos.** La línea de memoria de esta
+semana ha entregado, en producción, **un acierto exacto y veintiún elementos
+menos de ruido**. Todo lo demás que se midió —el `78/81` de la etapa de
+búsqueda, el `79/81` de H5— vive en configuraciones con **peticiones reales o
+con los ejes del corpus**, y producción **no construye ninguna de las dos**.
+Es la raíz 1 en su forma más cara: las palancas existen, están probadas, y el
+único consumidor real no las acciona porque no declara lo que leen. Esto no
+dice que el trabajo esté mal; dice **dónde falta la pieza**: quien construye la
+petición de producción.
+
+**Nota de operación.** La API de GitHub me devolvió `rate limit exceeded` a las
+00:31Z. La causa es mía: el vigilante consulta cada 45 s y hace tres llamadas
+por vuelta, más las mías. Bajado a 5 minutos. Vigilar no es gratis, ni en
+tokens ni en cuota.
+---
+
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
 
 1. `ollama_category_classifier.py`: ruta relativa y sin
