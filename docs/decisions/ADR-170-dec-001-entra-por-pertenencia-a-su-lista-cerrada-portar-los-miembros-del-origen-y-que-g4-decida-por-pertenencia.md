@@ -335,12 +335,13 @@ que es el nombre con el que la citan ADR-115 y las fichas anteriores).
 
 **Cadena completa como UNA SOLA invocación** (ADR-145, ADR-153), con
 `pwsh -File scripts/check.ps1` y su código de salida capturado (ADR-154),
-anclada **al árbol de `0969062`** —el head con el código, las pruebas, esta
+anclada **al árbol de `3f9f752`** —el head con el código, las pruebas, esta
 ficha y `MEMORIA.md`, ya con las correcciones de la ronda 2 (CLAUDE-H5-001 a
-CLAUDE-H5-005) y ya con `main` traído a la rama—:
+CLAUDE-H5-005) y las de la ronda 3 (CLAUDE-H5-006, CLAUDE-H5-007 y
+CODEX-001), y ya con `main` traído a la rama—:
 
 ```
-5369 passed, 17 skipped, 2 xfailed in 505.28s (0:08:25)
+5369 passed, 17 skipped, 2 xfailed in 444.59s (0:07:24)
 EXIT_CODE_CHECK=0
 ```
 
@@ -355,7 +356,10 @@ Esta ficha añade **5** pruebas, contadas contra
 (27 → 30) y 2 en
 `tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py` (41 → 43). La ronda
 2 no añade ni quita ninguna: renombra una y sustituye una aserción por otra
-(ver el final de la sección 5). Ninguna prueba se ha relajado; tres cotas
+(ver el final de la sección 5). La ronda 3 tampoco toca ninguna: corrige dos
+docstrings del banco (CLAUDE-H5-006 y CLAUDE-H5-007) y esta sección
+(CODEX-001), sin mover una constante, una aserción, la fixture ni el
+cargador; por eso la terna no se mueve de 5369. Ninguna prueba se ha relajado; tres cotas
 del arnés del motor portado suben (más exigentes) y una sube por un elemento
 nombrado, con la aserción convertida en igualdad exacta en vez de en permiso
 abierto (ver «Consecuencias»).
@@ -365,11 +369,11 @@ argumentos** (CODEX-001, señalado en la revisión de ADR-168), sobre ese mismo
 árbol:
 
 ```
-$ git diff --check 5fc5fdc 6b0da2a
+$ git diff --check 5fc5fdc 3f9f752
 docs/decisions/ADR-171-la-memoria-comun-arranca-sobre-lo-que-ya-existe-evaluacion-funcional-de-las-tres-piezas-y-lo-que-el-motor-tiene-que-publicar.md:373: new blank line at EOF.
 docs/investigaciones/2026-09-11-flujos-reales-de-agentes-comparados-con-el-motor.md:277: new blank line at EOF.
 EXIT_DIFF_CHECK=2
-$ git diff --check origin/main 6b0da2a
+$ git diff --check origin/main 3f9f752
 EXIT_DIFF_CHECK_VS_MAIN=0
 ```
 
@@ -396,7 +400,7 @@ que el trabajo cambia (`MEMORIA.md`, esta ficha,
 defectuoso. Antes de traer `main`, sobre el árbol de `ddf3516`, las dos
 invocaciones del rango daban código `0` sin salida.
 
-Lo único posterior a `0969062` es **esta sección de la ficha** —documental,
+Lo único posterior a `3f9f752` es **esta sección de la ficha** —documental,
 sin tocar código ni pruebas, y existe porque la sección tiene que anclarse al
 árbol que midió la cadena (ADR-154)— y el cuerpo de la PR. Si una corrección
 posterior toca código o pruebas, la cadena se vuelve a ejecutar entera y
