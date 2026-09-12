@@ -13,6 +13,8 @@ import io
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
+
 from sirius_engine import reflect_cli
 from sirius_engine.adapters.fixture_mirror import FixedGitHubMirrorReader
 from sirius_engine.adapters.memory_dispatch_journal import InMemoryDispatchJournal
@@ -84,6 +86,7 @@ def _preparar(
     *,
     work_id: str = _WORK_ID,
     numero: int = _NUMERO,
+    clase: WorkItemClass = WorkItemClass.PROGRAMACION,
 ) -> None:
     store.create_work_item(
         work_id=work_id,
@@ -94,7 +97,7 @@ def _preparar(
         criterio_terminado="criterio",
         limites={},
         prioridad=1,
-        clase=WorkItemClass.PROGRAMACION,
+        clase=clase,
         now=_AHORA,
     )
     store.activate_work_item(work_id, now=_AHORA)
@@ -195,7 +198,15 @@ def test_una_incidencia_illegible_no_impide_seguir_con_las_demas(tmp_path: Path)
     assert final_2 is not None and final_2.fase is WorkItemPhase.PREPARAR
 
 
-def test_espejo_sin_etiqueta_de_estado_no_dice_nada(tmp_path: Path) -> None:
+def test_espejo_sin_etiqueta_de_estado_no_mueve_nada_pero_lo_cuenta(tmp_path: Path) -> None:
+    """Contar no es mover: no se aplica ningún paso, pero la pasada dice dónde está.
+
+    Esta prueba fijaba lo contrario -que la pasada no dijera NADA- y ADR-173
+    revierte esa decisión a propósito, con lo medido: ese silencio dejó 21
+    encargos varados durante hasta doce días sin que ninguna pasada los
+    nombrara. La propiedad que importa sigue intacta -el almacén no se toca-,
+    y la que cambia es la que escondía el fallo.
+    """
     store = InMemoryWorkEngineStore()
     journal = InMemoryDispatchJournal()
     _preparar(store, journal)
@@ -227,8 +238,14 @@ def test_espejo_sin_etiqueta_de_estado_no_dice_nada(tmp_path: Path) -> None:
     )
 
     assert codigo == 0
-    assert _WORK_ID not in texto
+    assert f"{_WORK_ID}: sin cambios" in texto
+    assert "ninguna etiqueta de estado reconocida" in texto
+    assert f"#{_NUMERO} (abierta)" in texto
     assert "Pasos aplicados en total: 0." in texto
+    sin_tocar = store.get_work_item(_WORK_ID)
+    assert sin_tocar is not None
+    assert sin_tocar.estado is WorkItemState.ACTIVE
+    assert sin_tocar.fase is WorkItemPhase.PREPARAR
 
 
 def test_completed_con_sha_de_fusion_entrega_el_workitem(tmp_path: Path) -> None:
@@ -503,3 +520,90 @@ def test_sin_la_orden_del_propietario_la_misma_pasada_declara_y_no_toca_nada(
     item = store.get_work_item(_WORK_ID)
     assert item is not None
     assert item.estado is WorkItemState.FAILED_SAFELY
+
+
+# --- La puerta de clase se deriva de lo que el despachador despacha (ADR-173) ---
+
+
+@pytest.mark.parametrize(
+    "clase",
+    [
+        WorkItemClass.DOCUMENTACION,
+        WorkItemClass.INVESTIGACION,
+        WorkItemClass.AUDITORIA,
+        WorkItemClass.PROGRAMACION,
+    ],
+)
+def test_el_reflector_mira_toda_clase_que_el_despachador_despacha(
+    tmp_path: Path, clase: WorkItemClass
+) -> None:
+    """Las cuatro filas de `TABLA_ACTIVACION`, no las dos de la tabla de autoridad.
+
+    Medido el 12-09-2026 sobre el diario real: de los 74 encargos despachados
+    a GitHub, 15 eran de `documentacion` (10) o `investigacion` (5) —clases
+    que ADR-088 y ADR-099 metieron en el ciclo con las mismas etiquetas que
+    `programacion`— y los 15 seguían en `active`, ninguno había alcanzado
+    jamás un estado terminal, porque la puerta leía la tabla de autoridad de
+    ADR-041, que es anterior a esas dos decisiones.
+    """
+    store = InMemoryWorkEngineStore()
+    journal = InMemoryDispatchJournal()
+    _preparar(store, journal, clase=clase)
+    mirror = FixedGitHubMirrorReader(
+        metadatos_por_incidencia={
+            (_REPO, _NUMERO): LecturaMetadatos(
+                estado=LecturaEstado.OK,
+                metadatos=MetadatosIncidencia(
+                    numero=_NUMERO,
+                    titulo="t",
+                    estado_gh="closed",
+                    etiquetas=("sirius:completed",),
+                ),
+            )
+        },
+        cuerpos_por_incidencia={
+            (_REPO, _NUMERO): LecturaCuerpo(
+                estado=LecturaEstado.OK,
+                cuerpo=CuerpoIncidencia(autor_login="x", autor_asociacion="OWNER", texto=""),
+            )
+        },
+        comentarios_por_incidencia={
+            (_REPO, _NUMERO): LecturaComentarios(estado=LecturaEstado.OK, comentarios=())
+        },
+    )
+
+    codigo, texto = _correr(
+        ["--diario", str(tmp_path / "diario.jsonl")],
+        store=store,
+        journal=journal,
+        mirror=mirror,
+    )
+
+    assert codigo == 0
+    assert f"{_WORK_ID}: aplicados" in texto
+    final = store.get_work_item(_WORK_ID)
+    assert final is not None
+    assert final.estado is WorkItemState.DELIVERED
+
+
+def test_una_clase_que_el_despachador_no_despacha_se_salta_diciendolo(tmp_path: Path) -> None:
+    """`mixta` no está en `TABLA_ACTIVACION`: no se refleja, y se dice por qué."""
+    store = InMemoryWorkEngineStore()
+    journal = InMemoryDispatchJournal()
+    _preparar(store, journal, clase=WorkItemClass.MIXTA)
+    mirror = FixedGitHubMirrorReader(
+        metadatos_por_incidencia={}, cuerpos_por_incidencia={}, comentarios_por_incidencia={}
+    )
+
+    codigo, texto = _correr(
+        ["--diario", str(tmp_path / "diario.jsonl")],
+        store=store,
+        journal=journal,
+        mirror=mirror,
+    )
+
+    assert codigo == 0
+    assert f"{_WORK_ID}: la clase mixta no se despacha a GitHub" in texto
+    final = store.get_work_item(_WORK_ID)
+    assert final is not None
+    assert final.estado is WorkItemState.ACTIVE

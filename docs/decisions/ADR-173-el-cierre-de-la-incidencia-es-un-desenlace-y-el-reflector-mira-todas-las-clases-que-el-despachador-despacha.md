@@ -152,16 +152,137 @@ invisible aunque la regla que lo vara sea una que hoy no conocemos.
 
 ## Contexto y problema
 
-(se completa al cerrar el trabajo)
+El motor despacha por la vía GitHub y desde ahí no vuelve a tocar su propio
+almacén: lo dice el encabezado de `reflect.py` desde que se escribió. El
+reflector (C1, ADR-147) es la costura que faltaba, y funciona —46 encargos
+entregados lo demuestran—, pero tiene dos huecos por los que un encargo se
+cae y no vuelve a salir nunca. Los dos estaban a la vista y ninguno hacía
+ruido, que es exactamente por lo que duraron tres semanas.
+
+## Opciones consideradas
+
+1. **Limpiar el diario a mano.** Escribir los sucesos que faltan en
+   `estado-del-motor` y seguir. Descartada: no es una corrección, es tapar la
+   medida. Mañana hay otros veintiuno.
+2. **Que el reflector mire el cierre y la tabla de despacho** (la elegida).
+3. **Caducar por tiempo**: cerrar todo encargo que lleve N días sin moverse.
+   Descartada: el tiempo no es el hecho. Un encargo puede llevar un mes
+   legítimamente parado esperando una decisión del propietario con su
+   incidencia abierta, y otro estar muerto a las dos horas. El hecho es el
+   cierre de la incidencia, no el calendario.
+4. **Enmendar la tabla de autoridad de ADR-041** para que `DOCUMENTACION` e
+   `INVESTIGACION` pasen a autoridad `INCIDENCIA`. Descartada: es una
+   decisión de contrato mucho más ancha que este defecto —la autoridad
+   gobierna quién manda sobre el estado, no solo a quién mira el reflector—, y
+   no hace falta para cerrar este hueco.
 
 ## Decisión
 
-(se completa al cerrar el trabajo)
+**Uno. La puerta de clase del reflector se deriva de `TABLA_ACTIVACION`, la
+tabla que decide qué se despacha.** Leía la tabla de autoridad de ADR-041, que
+es de agosto y anterior a ADR-088 (`documentacion`) y ADR-099
+(`investigacion`), las dos decisiones que metieron esas clases en el ciclo de
+GitHub «con el mismo ciclo y las mismas etiquetas que `programacion`». La
+misma tabla que abre la puerta de ida se lee ahora también a la vuelta: no es
+una segunda lista que mantener. La tabla de autoridad **no se toca**.
+
+**Dos. Regla 7: una incidencia CERRADA no puede producir ningún desenlace
+más.** El cierre no compite con las etiquetas; llega después. Primero se
+aplica el plan que las etiquetas dictan —si dicen `sirius:completed`, el
+encargo se entrega y aquí no queda nada—, y solo si tras ese plan el
+`WorkItem` sigue en un estado no terminal, el cierre lo termina como
+`CANCELLED` por las transiciones que el dominio ya admitía. Ni un puerto
+nuevo, ni una arista nueva: `escalate` + `resolve_decision(continuar=False)`
+desde `ACTIVE`, `resolve_decision(continuar=False)` desde `NEEDS_DECISION`,
+`cancel` desde `FAILED_SAFELY` y desde `PLANNED`. Desde `WAITING` no hay ruta
+legal, y ahí el reflector **no inventa una**: lo dice y no toca nada.
+
+**Tres. Ninguna rama del reflector se va en silencio.** Las cuatro salidas sin
+plan —idempotencia, etiqueta no reconocida, ninguna etiqueta, divergencia—
+dejaban al encargo igual y no imprimían nada. Ahora cada pasada dice, de cada
+encargo, dónde está el motor, si su incidencia está abierta o cerrada y qué
+proyectan sus etiquetas. Eso es lo que convierte «no pasa nada» en «esto lleva
+doce días sin moverse».
 
 ## Comprobación que la sostiene
 
-(se completa al cerrar el trabajo)
+**La simulación de la próxima pasada sobre el diario real.** Con el diario de
+`estado-del-motor` (451 sucesos) copiado a un temporal, el espejo alimentado
+con las etiquetas y el estado de cierre REALES de las 28 incidencias
+implicadas, y el comando entero corriendo —`reflect_cli.main` con los
+adaptadores durables—, el recuento de `DESENLACES.md` pasa de esto a esto:
+
+| Estado | Hoy | Tras el cambio |
+|---|---|---|
+| active | 21 | **1** |
+| delivered | 46 | 56 |
+| cancelled | 0 | 17 |
+| failed_safely | 5 | 0 |
+| needs_decision | 4 | 2 |
+
+El único encargo que sigue `active` es **WI-20260828-122242 / #392**, el de
+las etiquetas contradictorias, que es exactamente el que la regla 7 se niega a
+tocar y el único que un humano tiene que mirar. Los 10 que pasan a
+`delivered` son los de `documentacion` e `investigacion` que llevaban
+`sirius:completed` desde agosto y a los que la puerta de clase no dejaba
+llegar. Criterio de parada (a): **cumplido**.
+
+Dos límites de esa simulación, dichos: los hilos de comentarios van vacíos, así
+que no hay historial acreditado ni permisos de reanudación —la pasada real
+puede hacer MÁS, nunca menos— y los diagnósticos de parada reales no aparecen.
+Y no se escribió nada en `estado-del-motor`: la copia es de un directorio
+temporal.
+
+**Las cinco mutaciones, vistas caer** (ADR-001 §3, criterio de parada (d)).
+Cada una se sembró en el código de producción, se corrieron las 85 pruebas de
+`test_reflect.py` y `test_reflect_cli.py`, y se restauró:
+
+| Mutación | Pruebas que caen |
+|---|---|
+| La regla 7 no hace nada (`if True: return plan`) | las 4 de cancelación + la de «no inventa» |
+| El cierre no respeta que el plan ya termine (sin la guardia `TERMINAL_STATES`) | 7, entre ellas la entrega con SHA de fusión y las 4 clases |
+| El cierre se aplica también sobre un resultado con divergencia | las 2 de «no pisa» + la del permiso del propietario |
+| El cierre inventa una salida desde `WAITING` | la de «no inventa una transición» |
+| La puerta de clase vuelve a la tabla de autoridad de ADR-041 | `documentacion` e `investigacion` |
+
+Con el código restaurado, 85 en verde.
+
+**Criterio de parada (c), cumplido con un matiz que hay que decir.** Revertir
+la puerta de clase solo tumba las dos pruebas nuevas: ninguna prueba existente
+dependía de la tabla de autoridad. Lo que sí cambió de resultado fue
+`test_espejo_sin_etiqueta_de_estado_no_dice_nada`, que fijaba que la pasada
+**no dijera nada**. No es un daño colateral: es la decisión tres de este ADR,
+que revierte a propósito una propiedad anterior, y la prueba se reescribió
+diciéndolo —conserva intacta la parte que importa (el almacén no se toca) y
+cambia la que escondía el fallo.
 
 ## Consecuencias
 
-(se completa al cerrar el trabajo)
+- **17 encargos pasan a `cancelled`**, y `cancelled` es terminal: el reflector
+  deja de mirarlos en cada pasada. Entre ellos los 5 `failed_safely` y 2 de
+  los 4 `needs_decision`, cuyo alcance va más allá de los 21 `active` con los
+  que empezó este trabajo. Es deliberado y la razón es la misma: una parada
+  cuya incidencia está cerrada no se puede reanudar, porque reanudar se hace
+  sobre la incidencia.
+- **`cancelled` no dice «no se hizo», dice «el motor no observó que se
+  hiciera».** Un encargo cuyo PR se fusionó a mano sin que el ciclo aplicara
+  `sirius:completed` —el caso de #424 y #389— queda cancelado, no entregado.
+  El motor no puede afirmar una fusión que no vio; el enlace a la incidencia
+  queda en el diario para quien quiera comprobarlo.
+- **La pasada pasa de una línea a unas treinta**, y bajará según los encargos
+  vivos bajen. Es el precio de que un encargo varado se vea.
+- **Sigue sin arreglarse el hueco de origen**: el despachador despacha y nadie
+  vuelve a tocar el almacén salvo el reflector. Esto cierra desenlaces, no
+  adelanta el ciclo.
+- **#392 queda vivo a propósito**, con su divergencia impresa en cada pasada.
+
+## Alternativas descartadas y por qué
+
+Las cuatro de arriba. Y una quinta que se consideró y no entró: **leer el
+`state_reason` de GitHub** (`completed` frente a `not_planned`) para
+distinguir un cierre por trabajo hecho de uno por abandono. Hoy el espejo no
+lo lee —`mirror_projection.py:926` solo mira `estado_gh`— y traerlo obliga a
+tocar el puerto, el adaptador y las fixtures. No hace falta para esta
+decisión: con o sin ese dato, el motor no observó la entrega, y `cancelled` es
+lo que puede afirmar. Si algún día hiciera falta distinguirlos, ese es el
+sitio.
