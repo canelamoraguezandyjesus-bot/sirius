@@ -55,6 +55,7 @@ sirius-reflejar = "sirius_engine.reflect_cli:main"
 # partir del árbol (una prueba de Quality falla si está desactualizada) y
 # `desenlaces` escribe DESENLACES.md en la rama del motor tras cada reflejo.
 sirius-memoria = "sirius_engine.memoria_cli:main"
+sirius-tablero = "sirius_engine.tablero_cli:main"
 
 [build-system]
 requires = ["uv_build>=0.11.28,<0.12"]

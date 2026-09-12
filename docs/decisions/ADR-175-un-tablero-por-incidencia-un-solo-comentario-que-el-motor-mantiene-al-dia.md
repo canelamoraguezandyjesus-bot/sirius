@@ -103,20 +103,123 @@ que el espejo dice, y dice que eso es lo que enseña.
 
 ## Contexto y problema
 
-(se completa al cerrar el trabajo)
+El motor habla mucho y no dice dónde está. Cada hecho deja su comentario con su
+marcador —y eso está bien, y costó rondas afinarlo (ADR-157, ADR-158)—, pero
+el resultado es que una incidencia de veintiún comentarios no tiene ni una
+línea que diga «voy por comprobar, Quality pasó, hay un hallazgo pendiente y la
+PR es esta».
+
+Symphony lo llama *workpad* y la investigación del 11-09 ya lo anotó como
+**«distinto, no peor: el nuestro es un historial; el suyo, un tablero. Se puede
+tener las dos cosas»**. Esto añade el tablero sin tocar el historial.
+
+## Opciones consideradas
+
+1. **Reescribir el aviso de estado para que sea el tablero.** Descartada: los
+   avisos son el registro de lo que pasó, los lee el espejo para acreditar
+   transiciones (`sirius-notification`) y reescribirlos rompería ADR-157.
+2. **Publicarlo desde `reflejar-desenlace.yml`**, que ya lee el espejo de cada
+   encargo vivo y ya monta `uv`. Descartada por lo que ese workflow declara en
+   su propia cabecera: *«Sin `issues: write`: este comando solo LEE el espejo
+   por `gh`»*. Esa frontera la puso alguien a propósito.
+3. **Publicarlo desde `notify-sirius-state.yml`** (la elegida): ya se dispara
+   con las seis etiquetas del ciclo, ya tiene `issues: write` y ya escribe en
+   esa misma incidencia en ese mismo evento.
+4. **Un fichero `TABLERO.md` por encargo en la rama del motor.** Descartada: el
+   propietario mira las incidencias, no la rama de memoria, y `DESENLACES.md`
+   ya cubre la vista agregada (ADR-171).
 
 ## Decisión
 
-(se completa al cerrar el trabajo)
+**Uno. Un solo comentario por incidencia, reescrito en cada cambio de estado.**
+Lleva: qué se pidió (del cuerpo declarado), por dónde va el ciclo, qué se ha
+comprobado (Quality y rondas, con sus números), dónde está la evidencia (PR,
+head, etiquetas) y **qué se espera del propietario ahora**. Si el encargo está
+detenido, enseña el diagnóstico.
+
+**Dos. El cuerpo lo produce una función pura** —`sirius_engine.tablero`— a
+partir de lo que el espejo YA proyecta y de lo que `leer_cuerpo_declarado` YA
+extrae. Ni una lectura nueva de GitHub: `sirius-tablero` hace las tres lecturas
+del puerto una sola vez y las reparte entre la proyección y el lector de
+secciones.
+
+**Tres. Publicarlo es `sirius_comment_upsert`**, la otra mitad de
+`sirius_comment_once`: aquella publica un HECHO, que ocurre una vez; esta
+mantiene un ESTADO, que cambia. Dos reglas, las dos para no acabar con dos
+tableros: si el historial no se puede leer **no se crea nada** —crear a ciegas
+publicaría un tablero más en cada mal minuto de la API—, y cuando hay varios se
+edita **el más antiguo**, para que todas las pasadas converjan en el mismo. No
+borra nada: esta biblioteca no borra.
+
+**Cuatro. El marcador no se copia.** El workflow lo saca de la primera línea
+del cuerpo que el propio generador produce. Tenerlo escrito en dos sitios
+significaría que el día que cambiara en uno el motor publicaría un tablero
+nuevo dejando huérfano al anterior.
+
+**Cinco. El paso falla abierto**, como el aviso que ya vive ahí: sin `uv`, sin
+entorno, sin espejo legible o sin poder publicar, deja un `::warning::` y sale
+en verde. Un tablero que no se pudo pintar no altera el estado de la incidencia
+ni bloquea el ciclo.
 
 ## Comprobación que la sostiene
 
-(se completa al cerrar el trabajo)
+**45 pruebas nuevas**, y las mutaciones que las sostienen.
+
+Del publicador (`sirius_comment_upsert`), que es donde puede salir algo caro —
+una incidencia con una colección de tableros—, cuatro mutaciones sembradas en
+la biblioteca de shell y vistas caer:
+
+| Mutación | Prueba que cae |
+|---|---|
+| Edita el tablero más NUEVO en vez del más antiguo | la de converger siempre en el mismo |
+| Si el historial no se puede leer, crea a ciegas | la de no publicar nada |
+| Se quita la frontera de confianza del filtro | la de no reescribir el comentario de un tercero |
+| El cuerpo se manda en crudo en vez de como JSON | la de comillas, acentos y saltos |
+
+Cada una tumba exactamente una prueba y ninguna más; con la biblioteca
+restaurada, las 7 en verde.
+
+Del generador, 20 pruebas que fijan lo que enseña y —igual de importante— lo
+que **no inventa**: sin PR dice que no hay ninguna, sin Quality dice que no se
+ha observado ninguna ejecución, y un cuerpo sin secciones da media foto en vez
+de una tabla falsa. Una prueba comprueba que el módulo no importa `datetime`,
+`subprocess`, `urllib` ni `os`: si dejara de ser puro, dos pasadas seguidas
+darían cuerpos distintos y el tablero parpadearía.
+
+Y una prueba que ata el workflow al comando: si alguien renombrara el punto de
+entrada o el paso, se ve en rojo en vez de en un tablero que dejó de
+actualizarse sin que nadie lo notara.
+
+`ruff format --check`, `ruff check` y `mypy src tests` en verde.
 
 ## Consecuencias
 
-(se completa al cerrar el trabajo)
+- **El plazo del workflow sube de 5 a 8 minutos.** El paso monta `uv` y
+  sincroniza; con caché son segundos —medido en `reflejar-desenlace.yml`:
+  instalar 2 s, sincronizar 3 s—, pero una caché fría no cabía en el anterior.
+  Sigue siendo la red de seguridad de un workflow secundario.
+- **Coste en minutos de Actions: prácticamente cero.** El job ya existía y ya
+  se facturaba por minuto empezado; esto le añade segundos, no minutos.
+- **El tablero no se actualiza con `sirius:ci-pending`**, que no está entre las
+  seis etiquetas que disparan este workflow: en esa ventana enseña el estado
+  anterior. Ampliar el disparador es cambiar cuándo corre un workflow y no
+  entra aquí.
+- **No puede ser exactamente-una-vez.** La edición sí es idempotente; la
+  primera publicación no, por la limitación que `sirius_comment_once` ya
+  documenta. Si llegaran a existir dos tableros, las pasadas siguientes
+  convergen en el más antiguo y el duplicado se queda quieto.
+- **El historial no cambia en nada.**
+
+## Alternativas descartadas y por qué
+
+Las cuatro de arriba. Y una quinta: **que el tablero incluyera el texto
+completo del objetivo y del criterio**. Descartada: los cuerpos de este
+repositorio llegan a mil palabras y el tablero dejaría de leerse de un vistazo,
+que es su única razón de ser. Se recorta por palabras y el cuerpo entero está a
+un clic, arriba, en la propia incidencia.
 
 ## La lección
 
-- ninguna: se completa al cerrar el trabajo
+- familia: `pieza-sin-lector`
+- sin esto se repetiría: proyectar en cada pasada el estado entero de una incidencia -fase, rondas, Quality, PR, diagnóstico- y no enseñárselo nunca a quien tiene que decidir; es la novena vez que un dato correcto de esta casa no tiene lector, tres días después de la octava.
+- lo hace cumplir: `tests/engine/test_tablero.py`

@@ -32,7 +32,13 @@ jobs:
       github.event.label.name == 'sirius:failed-safely' ||
       github.event.label.name == 'sirius:completed'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # Sube de 5 a 8 desde ADR-175: el paso del tablero monta `uv` y sincroniza
+    # el entorno. Con la caché de `setup-uv` eso son segundos -medido en
+    # `reflejar-desenlace.yml`: instalar 2 s, sincronizar 3 s-, pero una caché
+    # fría descarga las dependencias de ejecución y no cabía en el plazo
+    # anterior. El plazo sigue siendo una red de seguridad de un workflow
+    # secundario, no una garantía de la que dependa nada del ciclo.
+    timeout-minutes: 8
     steps:
       - name: Checkout automation library
         uses: actions/checkout@v6
@@ -131,4 +137,83 @@ jobs:
           fi
 
           echo "Notificacion publicada para ${STATE_LABEL} (${head_sha})."
+          exit 0
+
+      # --- El tablero de la incidencia (ADR-175) ------------------------------
+      #
+      # Un solo comentario con la foto de AHORA, reescrito en cada cambio de
+      # estado. Las 40 incidencias más recientes del ciclo acumulan 1.019
+      # comentarios -mediana 21, máximo 157- y ninguno dice el estado: son
+      # hechos, publicados una vez y nunca vueltos a tocar. El historial no se
+      # toca; esto se añade al lado.
+      #
+      # Va aquí y no en `reflejar-desenlace.yml` -que ya lee el espejo de cada
+      # encargo y ya monta `uv`- porque ese workflow declara en su cabecera
+      # «Sin `issues: write`: este comando solo LEE el espejo por `gh`». Esa
+      # frontera la puso alguien a propósito y no se cruza para ahorrar cinco
+      # segundos de instalación. Aquí no hace falta cruzarla: este workflow ya
+      # escribe comentarios en esta misma incidencia, en este mismo evento, con
+      # este mismo permiso.
+      - name: Preparar el motor para el tablero
+        continue-on-error: true
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          enable-cache: true
+          # Igual que en el resto: con el `python3` del sistema (3.12 en
+          # `ubuntu-latest`) el paquete, que exige >=3.14, no arranca.
+          python-version: "3.14.6"
+
+      - name: Mantener el tablero de la incidencia al día
+        # `always()` porque el paso de arriba lleva `continue-on-error` y porque
+        # el aviso de estado y el tablero son independientes: que uno no salga
+        # no es razón para saltarse el otro.
+        if: always()
+        shell: bash --noprofile --norc {0}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          set -u
+          set -o pipefail
+
+          # Secundario, igual que el aviso: ante CUALQUIER problema se deja un
+          # aviso en el log y se sale en verde. Un tablero que no se pudo pintar
+          # no altera el estado de la incidencia ni bloquea el ciclo.
+          if ! command -v uv >/dev/null 2>&1; then
+            echo "::warning::uv no disponible; esta pasada no actualiza el tablero."
+            exit 0
+          fi
+          if ! uv sync --locked >/dev/null 2>&1; then
+            echo "::warning::no se pudo preparar el entorno; esta pasada no actualiza el tablero."
+            exit 0
+          fi
+
+          source scripts/automation/sirius_issue.sh
+
+          cuerpo="$(mktemp)"
+          if ! uv run sirius-tablero --repo "$GH_REPO" --incidencia "$ISSUE_NUMBER" > "$cuerpo"; then
+            rm -f "$cuerpo"
+            echo "::warning::no se pudo calcular el tablero de #${ISSUE_NUMBER}; se deja como estaba."
+            exit 0
+          fi
+
+          # El marcador se toma de la PRIMERA LÍNEA del propio cuerpo, que el
+          # generador garantiza y `tests/engine/test_tablero.py` fija. Copiarlo
+          # aquí sería el mismo dato en dos sitios, y el día que cambiara en uno
+          # el motor publicaría un tablero nuevo dejando huérfano al anterior.
+          marcador="$(sed -n '1p' "$cuerpo")"
+          case "$marcador" in
+            "<!--"*"-->") ;;
+            *)
+              rm -f "$cuerpo"
+              echo "::warning::el tablero no empieza por su marcador; no publico a ciegas."
+              exit 0
+              ;;
+          esac
+
+          if ! sirius_comment_upsert "$GH_REPO" "$ISSUE_NUMBER" "$marcador" "$cuerpo"; then
+            echo "::warning::no se pudo publicar el tablero de #${ISSUE_NUMBER}; el flujo principal continua."
+          fi
+          rm -f "$cuerpo"
           exit 0
