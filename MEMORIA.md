@@ -26,7 +26,7 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **168**.
+- Decisiones (ADR): **169**.
 - Bloques del motor: 17 cerrado, 1 fuera_de_alcance, 2 pendiente.
 - Defectos registrados: 32 cerrado.
 - Investigaciones: **9** (fotos con fecha; caducan).
