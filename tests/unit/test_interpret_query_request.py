@@ -18,6 +18,8 @@ from pathlib import Path
 from staged_engine_case_translation import peticion_desde_caso
 
 from sirius.application.interpret_query_request import (
+    AMPLIACION_POR_CATEGORIA_ORDINARIA,
+    INTENCION_ORDINARIA,
     LIMITE_SIN_ATAR,
     PROPOSITO_RECUPERACION_ORDINARIA,
     InterpreteDePeticion,
@@ -337,8 +339,40 @@ def test_el_permiso_sin_autorizar_no_toca_ningun_otro_campo() -> None:
 
     assert sin_permiso.proposito == ""
     assert con_permiso.proposito == PROPOSITO_RECUPERACION_ORDINARIA
+    # ADR-177: y apagar la ampliación por categoría, que hasta entonces se
+    # apagaba sola —el propósito vacío no contenía la subcadena «contexto»— y
+    # que nadie había decidido ni fijado. Sigue siendo la MISMA consecuencia
+    # (una operación no autorizada a recuperar tampoco lo está a recuperar
+    # más), dicha ahora en voz alta por ``ampliacion_efectiva``.
+    assert sin_permiso.amplia_por_categoria is False
+    assert con_permiso.amplia_por_categoria is True
     for campo in ("modo", "cardinalidad", "limite_objetivo", "limite_duro", "ventana", "ambito"):
         assert getattr(sin_permiso, campo) == getattr(con_permiso, campo)
+
+
+def test_el_interprete_enciende_la_ampliacion_por_categoria_por_regla_escrita() -> None:
+    """ADR-177 (H4 de ADR-148, incidencia #581): el valor por defecto de
+    ``interpretar`` es ``AMPLIACION_POR_CATEGORIA_ORDINARIA`` (encendida), y
+    el criterio está escrito junto a la constante: esta política no infiere
+    intención, así que pide la recuperación más amplia y deja el recorte al
+    filtro y al presupuesto. Quien construye la petición puede apagarla
+    explícitamente; ningún texto la enciende ni la apaga."""
+    interprete = _interprete(INTENCION_ORDINARIA)
+
+    assert AMPLIACION_POR_CATEGORIA_ORDINARIA is True
+    por_defecto = interprete.interpretar("c", "op-1", active_project_id=None)
+    assert por_defecto.amplia_por_categoria is True
+
+    # El texto del propósito no decide: un propósito con la palabra
+    # «contexto» no la enciende si quien construye la petición no la pide.
+    apagada = interprete.interpretar(
+        "c",
+        "op-1",
+        active_project_id=None,
+        proposito="ensamblar el contexto de algo",
+        amplia_por_categoria=False,
+    )
+    assert apagada.amplia_por_categoria is False
 
 
 def test_lo_que_el_modelo_conteste_nunca_cambia_el_permiso_ni_el_proposito() -> None:

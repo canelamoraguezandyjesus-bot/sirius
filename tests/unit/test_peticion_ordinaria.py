@@ -17,8 +17,7 @@ from __future__ import annotations
 
 import inspect
 
-from staged_engine_category_and_relevance import PROPOSITO_DE_CONTEXTO, pide_contexto
-
+from sirius.application.interpret_query_request import PROPOSITO_RECUPERACION_ORDINARIA
 from sirius.application.rank_relevant_knowledge import _LIMITE_SIN_ATAR, _peticion_ordinaria
 from sirius.domain.staged_engine_contracts import Ambito, Cardinalidad, Modo
 
@@ -33,19 +32,23 @@ def test_ambito_is_global_without_an_active_project() -> None:
     assert peticion.ambito == Ambito(global_=True, proyectos=())
 
 
-def test_purpose_activates_pide_contexto_with_or_without_an_active_project() -> None:
-    """§11.3: la única llamada real a ``rank()`` ocurre desde
-    ``ContextBuilder._rank_related_knowledge`` para ensamblar el contexto de
-    un turno, así que el propósito debe activar ``pide_contexto`` siempre —
-    con proyecto activo o sin él, porque el hecho de que la llamada ensambla
-    contexto no depende del proyecto."""
+def test_la_ampliacion_por_categoria_viene_encendida_con_proyecto_activo_y_sin_el() -> None:
+    """§11.3 + ADR-177 (H4 de ADR-148): la única llamada real a ``rank()``
+    ocurre desde ``ContextBuilder._rank_related_knowledge`` para ensamblar el
+    contexto de un turno, y esta política es uniforme —no infiere intención—,
+    así que pide la recuperación más amplia siempre, con proyecto activo o
+    sin él: que la llamada ensamble contexto no depende del proyecto.
+
+    Hasta ADR-177 esto mismo se afirmaba de rebote, comprobando que el
+    literal del propósito contuviera la subcadena «contexto»
+    (``pide_contexto``). Ahora se afirma sobre la señal que de verdad decide,
+    y el propósito se comprueba aparte, como lo que es: un texto declarado
+    que ya no activa nada."""
     con_proyecto = _peticion_ordinaria("consulta", "op-1", active_project_id=7)
     sin_proyecto = _peticion_ordinaria("consulta", "op-1", active_project_id=None)
-    assert pide_contexto(con_proyecto.proposito) is True
-    assert pide_contexto(sin_proyecto.proposito) is True
-    # La propia condición de ``pide_contexto`` sobre el literal de producción,
-    # sin duplicar su lógica: contiene la subcadena que activa la siembra.
-    assert PROPOSITO_DE_CONTEXTO in con_proyecto.proposito.casefold()
+    assert con_proyecto.amplia_por_categoria is True
+    assert sin_proyecto.amplia_por_categoria is True
+    assert con_proyecto.proposito == PROPOSITO_RECUPERACION_ORDINARIA
 
 
 def test_mode_cardinality_and_limits_stay_fixed_regardless_of_the_active_project() -> None:

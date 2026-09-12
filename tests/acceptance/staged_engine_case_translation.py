@@ -59,6 +59,15 @@ el banco no tiene nada que el motor pueda encontrar en ninguna etapa
 autorizada, así que detenerse antes o después no cambia el conjunto
 final admitido.
 
+Una quinta, nueva de ADR-177 (H4 de ADR-148, incidencia #581): **la
+ampliación por categoría**. Hasta entonces no se traducía en absoluto —el
+motor la deducía mirando si el propósito traducido contenía la subcadena
+«contexto»—, así que el banco activaba la siembra en sus dos únicos casos
+con propósito ``ensamblar_contexto_b05`` sin que este traductor dijera una
+palabra al respecto. Ahora la traduce, y por pertenencia a
+``PROPOSITOS_QUE_AMPLIAN_POR_CATEGORIA``: mismo conjunto activado, dicho en
+vez de deducido.
+
 Ámbito no se traduce aquí: a diferencia del laboratorio (que numera
 proyectos del corpus), el arnés del banco ya resuelve ``caso["ambito"]``
 contra los ``Project`` reales que él mismo crea, así que el llamador
@@ -137,6 +146,25 @@ def _limites(limite: Mapping[str, Any] | None, *, sin_atar: int) -> tuple[int, i
     return n, sin_atar
 
 
+#: Los propósitos declarados del banco que piden la ampliación por categoría
+#: (M20, ADR-129; ``Peticion.amplia_por_categoria``). **Lista cerrada**, y
+#: esa es la diferencia que introduce ADR-177 (H4 de ADR-148, incidencia
+#: #581): la activación se decide por PERTENENCIA a un vocabulario cerrado
+#: —el mismo patrón que ``_modo``, ``_cardinalidad`` o los vocabularios de
+#: las puertas—, no por buscar una subcadena dentro de un texto libre.
+#:
+#: Su contenido es exactamente el conjunto que el banco activaba antes del
+#: cambio: de los siete propósitos que las 47 filas declaran, solo
+#: ``ensamblar_contexto_b05`` contenía «contexto», y por eso solo
+#: ``B04-CA-33`` y ``B04-CA-34`` sembraban. No se amplía ni se recorta: la
+#: incidencia #581 deja fuera, por decisión del propietario del 12-09-2026,
+#: cambiar qué peticiones activan la ampliación.
+#:
+#: Un propósito nuevo en el banco NO amplía por accidente de redacción: hay
+#: que añadirlo aquí, que es justamente lo que se quiere que cueste.
+PROPOSITOS_QUE_AMPLIAN_POR_CATEGORIA: Final[frozenset[str]] = frozenset({"ensamblar_contexto_b05"})
+
+
 def peticion_desde_caso(
     caso: Mapping[str, Any],
     *,
@@ -151,6 +179,17 @@ def peticion_desde_caso(
     modo_declarado = str(peticion_p2["modo"])
     permiso = str(peticion_p2["permiso"])
     proposito = "" if permiso == PERMISO_SIN_AUTORIZAR else str(peticion_p2["proposito"])
+    # ADR-177: la ampliación por categoría sale del propósito DECLARADO por
+    # pertenencia a la lista cerrada de arriba, y un permiso sin autorizar la
+    # apaga por la misma razón que vacía el propósito — una operación que no
+    # está autorizada a recuperar tampoco lo está a recuperar más. Hasta
+    # ADR-177 ese apagado ocurría de rebote (el propósito vacío no contenía
+    # la subcadena); ahora está dicho, y ``test_peticion_desde_caso_apaga_la_
+    # ampliacion_sin_permiso`` lo fija.
+    amplia_por_categoria = (
+        permiso != PERMISO_SIN_AUTORIZAR
+        and str(peticion_p2["proposito"]) in PROPOSITOS_QUE_AMPLIAN_POR_CATEGORIA
+    )
     objetivo, duro = _limites(peticion_p2["limite"], sin_atar=limite_sin_atar)
     corte_registro = peticion_p2["corte_registro"]
     cardinalidad = _cardinalidad(str(peticion_p2["cardinalidad"]))
@@ -161,6 +200,7 @@ def peticion_desde_caso(
         operation_id=operation_id,
         consulta=str(caso["consulta"]),
         proposito=proposito,
+        amplia_por_categoria=amplia_por_categoria,
         modo=_modo(modo_declarado),
         ambito=ambito,
         ventana=VentanaTemporal(
@@ -179,6 +219,7 @@ def peticion_desde_caso(
 __all__ = [
     "MODO_HISTORICO",
     "PERMISO_SIN_AUTORIZAR",
+    "PROPOSITOS_QUE_AMPLIAN_POR_CATEGORIA",
     "CasoNoTraducibleError",
     "peticion_desde_caso",
 ]

@@ -1325,14 +1325,23 @@ def test_staged_engine_gate_open_without_a_configured_port_falls_back_to_current
 
 # --- M20 (ADR-129, incidencia #516, Decisión 2 del propietario del ---------
 # --- 02-09-2026): siembra, el tercer bloque de ampliación — activado por ---
-# --- el PROPÓSITO de la petición (pide_contexto), no por vocabulario. ------
+# --- una SEÑAL EXPLÍCITA de la petición (`amplia_por_categoria`, ADR-177, ---
+# --- H4 de ADR-148), no por vocabulario y no por el texto del propósito. ---
 
-#: `_peticion_ordinaria` declara siempre este propósito fijo (M16, ADR-124),
-#: que ya contiene la subcadena "contexto" — así que toda llamada real a
-#: ``rank()`` siembra por defecto. Estas pruebas lo confirman con el mismo
-#: propósito real de producción, sin monkeypatch, salvo la única prueba que
-#: comprueba el caso contrario (sin propósito de contexto).
+#: `_peticion_ordinaria` enciende siempre la señal (ADR-177), así que toda
+#: llamada real a ``rank()`` siembra por defecto. Estas pruebas lo confirman
+#: con la política real de producción, sin monkeypatch, salvo las que
+#: ejercitan la rama contraria.
+#:
+#: Este propósito NO contiene la subcadena "contexto": hasta ADR-177 era la
+#: única forma de apagar la siembra, y desde ADR-177 es lo que demuestra que
+#: el texto del propósito ya no la enciende ni la apaga.
 _PROPOSITO_SIN_CONTEXTO = "consultar"
+
+#: Un propósito arbitrario que SÍ contiene la subcadena "contexto". Antes de
+#: ADR-177 bastaba para sembrar; después no basta, y eso es lo que fija
+#: `test_un_proposito_con_la_palabra_contexto_no_siembra_sin_la_senal`.
+_PROPOSITO_CON_CONTEXTO_ARBITRARIO = "poner el contexto en su sitio"
 
 
 @pytest.mark.integration
@@ -1605,19 +1614,20 @@ def test_siembra_never_duplicates_a_candidate_the_category_block_already_admitte
 
 
 @pytest.mark.integration
-def test_siembra_seeds_nothing_without_a_context_purpose(
+def test_siembra_seeds_nothing_without_the_explicit_signal(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """M20: sin propósito de contexto (``pide_contexto`` falso), la siembra
-    no aporta nada — réplica de
+    """M20: sin la señal explícita (``amplia_por_categoria`` falsa), la
+    siembra no aporta nada — réplica de
     ``test_siembra_de_contexto_respeta_el_ambito_declarado``'s segunda mitad
-    en el arnés de examen. ``_peticion_ordinaria`` fija el propósito real de
-    producción (M16), así que esta prueba lo sustituye por uno sin la
-    subcadena "contexto" para poder ejercitar la rama contraria."""
+    en el arnés de examen. ``_peticion_ordinaria`` la enciende (ADR-177), así
+    que esta prueba la apaga para poder ejercitar la rama contraria; el
+    propósito se deja en el real de producción, que contiene la palabra
+    «contexto» y ya no basta para sembrar."""
     monkeypatch.setattr(
         rank_relevant_knowledge_module,
-        "_PROPOSITO_RECUPERACION_ORDINARIA",
-        _PROPOSITO_SIN_CONTEXTO,
+        "_AMPLIACION_DE_LA_RECUPERACION_ORDINARIA",
+        False,
     )
     database_path = tmp_path / "sirius.db"
     _bootstrap(database_path)
@@ -1649,11 +1659,110 @@ def test_siembra_seeds_nothing_without_a_context_purpose(
 
 
 @pytest.mark.integration
+def test_un_proposito_con_la_palabra_contexto_no_siembra_sin_la_senal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ADR-177 (H4 de ADR-148, incidencia #581), primer caso de aceptación:
+    un propósito **arbitrario** que contiene la subcadena «contexto» NO
+    activa la ampliación si la señal explícita está apagada.
+
+    Antes del cambio esta prueba fallaba: el consumidor leía
+    ``pide_contexto(peticion.proposito)``, la subcadena estaba ahí y la
+    siembra devolvía la memoria CRÍTICA que la consulta no nombra. Es la
+    mutación que ADR-001 exige ver fallar: devolver la condición del
+    consumidor a la subcadena la hace fallar otra vez."""
+    monkeypatch.setattr(
+        rank_relevant_knowledge_module,
+        "_AMPLIACION_DE_LA_RECUPERACION_ORDINARIA",
+        False,
+    )
+    monkeypatch.setattr(
+        rank_relevant_knowledge_module,
+        "_PROPOSITO_RECUPERACION_ORDINARIA",
+        _PROPOSITO_CON_CONTEXTO_ARBITRARIO,
+    )
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    _two_projects(database_path)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+
+    memoria_critica = SaveManualMemoryUseCase(unit_of_work).save(
+        "contenido sin ninguna palabra en comun con la consulta"
+    )
+    SetCriticalityUseCase(
+        build_sqlite_memory_repository(database_path),
+        build_sqlite_decision_repository(database_path),
+    ).set(CriticalityTargetKind.MEMORY, memoria_critica.id, Criticality.CRITICO)
+
+    puerto = build_staged_engine_port(database_path)
+    candidato = staged_engine_candidate.candidato()
+    try:
+        resultado = _use_case(
+            database_path,
+            criticality_vocabulary=_CRITICALITY_VOCABULARY,
+            category_matching_enabled=True,
+            staged_engine_port=puerto,
+            staged_engine_candidate=candidato,
+        ).rank("Prepara el contexto de planificacion de Alfa.")
+    finally:
+        puerto.close()
+
+    assert resultado == ()
+
+
+@pytest.mark.integration
+def test_la_senal_explicita_siembra_sea_cual_sea_el_texto_del_proposito(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ADR-177, segundo caso de aceptación y la cara opuesta de la anterior:
+    con la señal encendida la ampliación actúa aunque el propósito NO
+    contenga la palabra «contexto» en ninguna parte.
+
+    Antes del cambio esta prueba también fallaba —el consumidor exigía la
+    subcadena y ``"consultar"`` no la tiene, así que la siembra no aportaba
+    nada y el resultado era vacío—, y las dos juntas son lo que demuestra
+    que quien decide ya no es el texto."""
+    monkeypatch.setattr(
+        rank_relevant_knowledge_module,
+        "_PROPOSITO_RECUPERACION_ORDINARIA",
+        _PROPOSITO_SIN_CONTEXTO,
+    )
+    database_path = tmp_path / "sirius.db"
+    _bootstrap(database_path)
+    _two_projects(database_path)
+    unit_of_work = build_sqlite_unit_of_work(database_path)
+
+    memoria_critica = SaveManualMemoryUseCase(unit_of_work).save(
+        "contenido sin ninguna palabra en comun con la consulta"
+    )
+    SetCriticalityUseCase(
+        build_sqlite_memory_repository(database_path),
+        build_sqlite_decision_repository(database_path),
+    ).set(CriticalityTargetKind.MEMORY, memoria_critica.id, Criticality.CRITICO)
+
+    puerto = build_staged_engine_port(database_path)
+    candidato = staged_engine_candidate.candidato()
+    try:
+        resultado = _use_case(
+            database_path,
+            criticality_vocabulary=_CRITICALITY_VOCABULARY,
+            category_matching_enabled=True,
+            staged_engine_port=puerto,
+            staged_engine_candidate=candidato,
+        ).rank("Prepara el contexto de planificacion de Alfa.")
+    finally:
+        puerto.close()
+
+    assert [c.item_id for c in resultado] == [memoria_critica.id]
+    assert resultado[0].seeded is True
+
+
+@pytest.mark.integration
 def test_siembra_seeds_nothing_with_the_gate_closed(tmp_path: Path) -> None:
     """M20: con ``category_matching_enabled=False``,
     ``_rank_via_staged_engine`` ni siquiera se ejecuta —``rank()`` sigue
     ``_rank_via_current_pipeline`` en su lugar—, así que la siembra nunca
-    puede aportar nada, aunque el propósito real ya declare contexto."""
+    puede aportar nada, aunque la petición pida la ampliación."""
     database_path = tmp_path / "sirius.db"
     _bootstrap(database_path)
     _two_projects(database_path)
@@ -1766,8 +1875,10 @@ def test_produccion_emite_la_peticion_derivada_de_la_consulta_no_la_uniforme(
     assert peticion.limite_objetivo == 3
     assert peticion.ventana.tiempo_objetivo == "2026-03-20T00:00:00Z"
     assert peticion.ventana.corte_de_registro == "2026-03-01T00:00:00Z"
-    # Las reglas del producto, intactas: propósito fijo y ámbito de M16.
+    # Las reglas del producto, intactas: propósito fijo, ámbito de M16 y la
+    # ampliación por categoría encendida por regla escrita (ADR-177).
     assert peticion.proposito == PROPOSITO_RECUPERACION_ORDINARIA
+    assert peticion.amplia_por_categoria is True
     assert peticion.ambito == Ambito(global_=False, proyectos=(str(active_project_id),))
 
 
