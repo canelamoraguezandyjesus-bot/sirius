@@ -179,7 +179,7 @@ from sirius.domain.criticality import Criticality
 from sirius.domain.memory import Memory, MemoryRevision, MemoryStatus
 from sirius.domain.precedence import find_prevailing_decision
 from sirius.domain.relevance import KnowledgeKind, RankedKnowledge, category_matches_query
-from sirius.domain.staged_engine import recuperar
+from sirius.domain.staged_engine import Recuperacion, recuperar
 from sirius.domain.staged_engine_contracts import (
     Ambito,
     Clase,
@@ -218,16 +218,19 @@ _MINIMO_ELEMENTOS_HALLADOS_M7: Final[int] = 57
 #: del índice de categoría y las dos puertas (G8/G12) que la ampliación del
 #: arnés no heredaba — incidencias #465/#467/#469, ADR-113/ADR-114/ADR-115).
 #: Misma convención de cotas unidireccionales de no regresión, no el suelo de
-#: D1 (29/47, ≤21, ≤1, ≥63/81): `aciertos_exactos` alcanza su suelo (29/47) y
-#: se afirma como aserción dura aparte, más abajo; `omisiones_criticas` y
-#: `cobertura` también (0 ≤ 1, 63/81 ≥ 63/81). `elementos_de_mas` mide 50
-#: sobre las 47 filas sin salvedad, por encima de 21 — pero el umbral D1
-#: publicado de ≤21 lo fija la fuente sumando solo sobre los 31 `casos_con_
-#: contenido` (CODEX-001): medido con esa misma población (`test_elementos_
-#: de_mas_alcanza_el_suelo_d1_bajo_la_poblacion_del_umbral_publicado`, más
-#: abajo), el arnés mide 21 y sí alcanza su suelo D1. `_MAXIMO_ELEMENTOS_DE_
-#: MAS_MOTOR` (50) sigue siendo la cota de no regresión de la métrica sin esa
-#: salvedad, que el arnés también reporta.
+#: D1 (29/47, ≤21, ≤1, ≥63/81): `aciertos_exactos` alcanzaba ya su suelo
+#: (29/47) y se afirma como aserción dura aparte, más abajo;
+#: `omisiones_criticas` y `cobertura` también (0 ≤ 1, 63/81 ≥ 63/81).
+#: `elementos_de_mas` medía entonces 50 sobre las 47 filas sin salvedad, por
+#: encima de 21 — pero el umbral D1 publicado de ≤21 lo fija la fuente sumando
+#: solo sobre los 31 `casos_con_contenido` (CODEX-001): medido con esa misma
+#: población (`test_elementos_de_mas_mide_22_y_no_alcanza_el_suelo_d1_bajo_la_
+#: poblacion_publicada`, más abajo), el arnés medía 21 y alcanzaba su suelo D1.
+#: Eso **dejó de ser cierto con ADR-170**, que lo lleva a 22: lo cuenta el
+#: párrafo de ADR-170, al final de este bloque, y es la medición que manda hoy.
+#: `_MAXIMO_ELEMENTOS_DE_MAS_MOTOR` es la cota de no regresión de la métrica
+#: sin esa salvedad, que el arnés también reporta (50 entonces, 51 desde
+#: ADR-170).
 #:
 #: ADR-168 (hueco H1 de ADR-148, incidencia #577) sube la cobertura de 63 a
 #: 67/81: `B04-CA-22` («¿qué decisiones eran válidas entre enero y marzo?»)
@@ -237,10 +240,27 @@ _MINIMO_ELEMENTOS_HALLADOS_M7: Final[int] = 57
 #: `aciertos_exactos` sigue en 29 (el caso mejora pero no llega a exacto:
 #: `DEC-001` queda fuera por ámbito, `G4`, y no por vigencia),
 #: `elementos_de_mas` sigue en 50 y `omisiones_criticas` en 0.
-_MINIMO_ACIERTOS_EXACTOS_MOTOR: Final[int] = 29
-_MAXIMO_ELEMENTOS_DE_MAS_MOTOR: Final[int] = 50
+#:
+#: ADR-170 (hueco H5 de ADR-148, incidencia #582) cierra la sexta de
+#: `B04-CA-22`: `DEC-001` entra por pertenencia a su lista cerrada. La
+#: cobertura sube de 67 a 68/81 y `aciertos_exactos` de 29 a 30/47 (el caso
+#: tenía `extras=0`, así que al completarse pasa a exacto); las dos cotas
+#: SUBEN a lo nuevo medido, que es más exigente. `omisiones_criticas` sigue
+#: en 0. `elementos_de_mas` sube de 50 a **51**, y esto no es una cota que
+#: se relaja sino la consecuencia medida y anticipada de la decisión del
+#: propietario: con pertenencia, `DEC-001` también alcanza `B04-CA-43`
+#: («¿Quién valida los entregables de calidad?», ámbito `PRJ-ALFA`, que es
+#: miembro de `LISTA-CERRADA-AB`), donde su texto coincide léxicamente en
+#: «calidad» pero la adjudicación no lo espera. Es **un** elemento, está
+#: nombrado, y `test_los_elementos_de_mas_restantes_son_los_del_laboratorio`
+#: lo fija por su nombre en vez de abrir la puerta a cualquiera. Bajo la
+#: población del umbral D1 publicado eso lleva la métrica de 21 a 22: el
+#: suelo D1 de `elementos_de_mas` (≤21) **deja de alcanzarse por uno**, y
+#: así se afirma abajo, sin maquillarlo (ADR-170, «Consecuencias»).
+_MINIMO_ACIERTOS_EXACTOS_MOTOR: Final[int] = 30
+_MAXIMO_ELEMENTOS_DE_MAS_MOTOR: Final[int] = 51
 _MAXIMO_OMISIONES_CRITICAS_MOTOR: Final[int] = 0
-_MINIMO_ELEMENTOS_HALLADOS_MOTOR: Final[int] = 67
+_MINIMO_ELEMENTOS_HALLADOS_MOTOR: Final[int] = 68
 
 #: Medición actual publicada en el docstring de
 #: `test_el_banco_se_ejecuta_contra_el_paquete_completo_de_produccion_como_evidencia_adicional`
@@ -775,10 +795,20 @@ def _identidad_del_motor(kind: str, real_id: int) -> str:
     return f"{clase}:{real_id}"
 
 
-def _ejes_declarados(item: Mapping[str, Any]) -> EjesDeclarados:
+def _ejes_declarados(item: Mapping[str, Any], *, project_ids: Mapping[str, int]) -> EjesDeclarados:
     """Los ejes P2 que el ítem del corpus congelado declara (ver
     `ejes_p2` en el fixture, incidencia #457): el mismo eje que
-    `staged_engine_gates` necesita, tal como el corpus lo fija."""
+    `staged_engine_gates` necesita, tal como el corpus lo fija.
+
+    `project_ids` es la misma tabla `nombre del corpus -> id real` que
+    `_create_projects` devuelve y que el arnés ya usa para construir el
+    `Ambito` de cada caso. Hace falta aquí por la membresía de lista
+    cerrada (incidencia #582/ADR-170): `G4` compara los miembros contra
+    `peticion.ambito.proyectos`, que vive en el espacio de identidades
+    reales, así que los nombres del corpus se traducen con la MISMA tabla
+    con la que se traduce el ámbito del caso. Lo que se lee del corpus son
+    los nombres; la traducción no inventa ninguna membresía.
+    """
     ejes = item["ejes_p2"]
     return EjesDeclarados(
         confirmacion=item["confirmacion"],
@@ -792,13 +822,17 @@ def _ejes_declarados(item: Mapping[str, Any]) -> EjesDeclarados:
         no_usar_como_memoria=ejes["no_usar_como_memoria"],
         no_consolidable=ejes["no_consolidable"],
         procedencia=tuple(ejes["procedencia"]),
-        # La única decisión `MULTI_PROYECTO_CERRADO` del banco (`DEC-001`)
-        # no trae miembros resueltos: el corpus portado no declara la
-        # membresía de listas cerradas del laboratorio (ver
-        # "nota_incidencia_457" del fixture). `G4` la trata como lista sin
-        # miembros y la descarta ("la duda no abre ámbito"), en vez de que
-        # este arnés invente una membresía que no está en la fuente.
-        miembros_de_ambito=(),
+        # La membresía de la lista cerrada, leída del corpus y nunca
+        # fijada aquí: `miembros_lista_cerrada` es el mismo nombre de clave
+        # y el mismo valor que `build_corpus.py:82-88` declara en el origen
+        # (ver "nota_incidencia_582" del fixture, incidencia #582/ADR-170).
+        # Solo `DEC-001` la declara —es el único ítem
+        # `MULTI_PROYECTO_CERRADO` de los 97—; los demás no traen la clave
+        # y llegan con la tupla vacía, que es lo que `G4` sigue tratando
+        # como "lista sin miembros resueltos: la duda no abre ámbito".
+        miembros_de_ambito=tuple(
+            str(project_ids[nombre]) for nombre in ejes.get("miembros_lista_cerrada", ())
+        ),
     )
 
 
@@ -913,7 +947,7 @@ def _ejecutar_banco_motor_portado(database_path: Path) -> _EjecucionDelBanco:
     for (kind, real_id), corpus_id in real_a_canonico.items():
         identidad = _identidad_del_motor(kind, real_id)
         item = _TrackingMapping(items_por_id[corpus_id], accesos_del_motor_portado)
-        ejes_por_identidad[identidad] = _ejes_declarados(item)
+        ejes_por_identidad[identidad] = _ejes_declarados(item, project_ids=project_ids)
         propiedades[identidad] = item["ejes_p2"]["property_key"]
         nivel_bruto = item["criticidad"]["nivel"] if item["criticidad"] else None
         if nivel_bruto is not None:
@@ -1342,22 +1376,26 @@ def test_el_banco_se_ejecuta_contra_el_motor_portado_y_reporta_las_cuatro_metric
     | 4. + índice de categoría por ámbito (#467, ADR-114) | 27/47 | 62 | 0 | 63/81 |
     | 5. + G8/G12 sobre la ampliación (#469) | **29/47** | **50** | 0 | 63/81 |
 
-    La fila 5 es la medición final de este test. `aciertos_exactos` (29/47),
-    `omisiones_criticas` (0 ≤ 1) y `cobertura` (63/81 ≥ 63/81) alcanzan su
-    suelo D1/D2 sobre las 47 filas sin salvedad. `elementos_de_mas` mide 50
+    La fila 5 fue la medición de este test hasta ADR-168; la que mide hoy la
+    dan los párrafos de ADR-168 y ADR-170 del final de este docstring
+    (**30/47; 51; 0; 68/81**). Sobre la fila 5: `aciertos_exactos` (29/47),
+    `omisiones_criticas` (0 ≤ 1) y `cobertura` (63/81 ≥ 63/81) alcanzaban su
+    suelo D1/D2 sobre las 47 filas sin salvedad. `elementos_de_mas` medía 50
     sobre las 47 filas — por encima del ≤21 publicado si se compara sin más—,
     pero el umbral D1 de ≤21 lo fija la fuente sobre una población distinta
     (los 31 `casos_con_contenido`, no los 47): medido con esa misma
-    población, el arnés mide exactamente 21 y sí alcanza su suelo D1
+    población, el arnés medía entonces exactamente 21 y alcanzaba su suelo D1
     (CODEX-001,
-    `test_elementos_de_mas_alcanza_el_suelo_d1_bajo_la_poblacion_del_umbral_publicado`,
-    más abajo). Las cuatro métricas D1/D2 quedan así alcanzadas por este
+    `test_elementos_de_mas_mide_22_y_no_alcanza_el_suelo_d1_bajo_la_poblacion_publicada`,
+    más abajo). Las cuatro métricas D1/D2 quedaban así alcanzadas por este
     arnés, cada una medida bajo la población que su propio umbral publicado
-    usa — sin que eso cierre PA-0.2-REC-01 en `main`, que exige el pipeline
-    de producto integrado (M8-M12), no este arnés de evaluación (ver
-    docstring del módulo). `elementos_de_mas` baja además un 19% frente a la
-    fila 4 (62 → 50) al cerrar la infidelidad de porte que ADR-114 dejó sin
-    explicar.
+    usa — **hasta ADR-170**, que deja `elementos_de_mas` en 22 bajo esa
+    población y su suelo D1 sin alcanzar por uno (párrafo de ADR-170, abajo);
+    las otras tres siguen alcanzadas —. Nada de esto cierra PA-0.2-REC-01 en
+    `main`, que exige el pipeline de producto integrado (M8-M12), no este
+    arnés de evaluación (ver docstring del módulo). `elementos_de_mas` bajó
+    además un 19% frente a la fila 4 (62 → 50) al cerrar la infidelidad de
+    porte que ADR-114 dejó sin explicar.
 
     **Método de la incidencia #469**: para cada uno de los 62 elementos de
     más que ADR-114 nombró (elemento a elemento, agrupados A/B/C), comprobar
@@ -1422,20 +1460,44 @@ def test_el_banco_se_ejecuta_contra_el_motor_portado_y_reporta_las_cuatro_metric
     ya lo declaró para el grupo A/C. Bajo la población que sí originó el
     umbral D1 (los 31 `casos_con_contenido`), esos mismos 50 se reparten en
     21 dentro de esa población y 29 en los 16 `casos_de_ausencia` que el
-    umbral nunca contó — el suelo D1 de `elementos_de_mas` (≤21) sí se
-    alcanza, medido así (CODEX-001, más abajo).
+    umbral nunca contó — el suelo D1 de `elementos_de_mas` (≤21) se alcanzaba
+    así, medido con esa población (CODEX-001, más abajo). **Desde ADR-170 ya
+    no**: ver el párrafo de ADR-170 al final de este docstring.
 
-    Las cotas de no regresión se actualizan a la medición de la fila 5 sobre
-    las 47 filas sin salvedad (≥29/47, ≤50, ≤0, ≥63/81), nunca por debajo de
-    lo medido; `aciertos_exactos`, `omisiones_criticas` y `cobertura` se
+    Las cotas de no regresión se fijaron en su día en la medición de la fila
+    5 sobre las 47 filas sin salvedad (≥29/47, ≤50, ≤0, ≥63/81), nunca por
+    debajo de lo medido; ADR-168 y ADR-170 las movieron después, así que hoy
+    las cuatro constantes `_*_MOTOR` de arriba valen ≥30/47, ≤51, ≤0 y
+    ≥68/81; `aciertos_exactos`, `omisiones_criticas` y `cobertura` se
     afirman además como aserción dura aparte, cada una sobre esa misma
     medición de 47 filas, que ya alcanza su suelo D1/D2 sin ninguna
     salvedad de población. `elementos_de_mas` no se afirma como aserción
     dura aquí frente a ≤21 sobre las 47 filas —esa comparación mezclaría
-    poblaciones distintas, el defecto que corrige CODEX-001—; su suelo D1 se
-    afirma como aserción dura por separado, sobre la población que lo
-    origina, en
-    `test_elementos_de_mas_alcanza_el_suelo_d1_bajo_la_poblacion_del_umbral_publicado`."""
+    poblaciones distintas, el defecto que corrige CODEX-001—; lo que mide
+    sobre la población que originó ese umbral se afirma como aserción dura
+    por separado, en
+    `test_elementos_de_mas_mide_22_y_no_alcanza_el_suelo_d1_bajo_la_poblacion_publicada`,
+    que desde ADR-170 afirma 22 y, con ello, que el suelo D1 no se alcanza.
+
+    **ADR-168** (hueco H1 de ADR-148) sube la cobertura a 67/81:
+    `B04-CA-22` pasa de una de sus seis a cinco, por la vía de recuperación
+    por vigencia.
+
+    **ADR-170** (hueco H5, incidencia #582) cierra la sexta: `DEC-001` entra
+    por pertenencia a su lista cerrada. La medición pasa a **30/47; 51; 0;
+    68/81** —`B04-CA-22` tenía `extras=0`, así que al completarse se vuelve
+    acierto exacto—. Los tres movimientos buenos suben sus cotas. El cuarto,
+    `elementos_de_mas` 50 → 51, es un elemento nombrado y anticipado:
+    `DEC-001` alcanza también `B04-CA-43` (ámbito `PRJ-ALFA`, miembro de la
+    lista cerrada), donde su texto coincide en «calidad» y la adjudicación no
+    lo espera. Bajo la población del umbral D1 eso lleva la métrica de 21 a
+    22, o sea **el suelo D1 de `elementos_de_mas` deja de alcanzarse por
+    uno**, y así se afirma —sin maquillarlo— en
+    `test_elementos_de_mas_mide_22_y_no_alcanza_el_suelo_d1_bajo_la_poblacion_publicada`.
+    La incidencia #582 declara «de más» sin listón a propósito: la decisión
+    del propietario del 11-09-2026 es que `G4` decida por pertenencia, y este
+    elemento es su precio medido, no un efecto colateral sin explicar.
+    """
     metricas = ejecucion_del_banco_motor_portado.metricas
 
     print(
@@ -1452,7 +1514,7 @@ def test_el_banco_se_ejecuta_contra_el_motor_portado_y_reporta_las_cuatro_metric
     )
 
     # CODEX-003: misma convención que el test anterior, sobre la medición ya
-    # publicada arriba (29/47, 50, 0, 63/81).
+    # publicada arriba (ADR-170: 30/47, 51, 0, 68/81).
     assert metricas.aciertos_exactos >= _MINIMO_ACIERTOS_EXACTOS_MOTOR
     assert metricas.elementos_de_mas <= _MAXIMO_ELEMENTOS_DE_MAS_MOTOR
     assert metricas.omisiones_criticas <= _MAXIMO_OMISIONES_CRITICAS_MOTOR
@@ -1461,11 +1523,12 @@ def test_el_banco_se_ejecuta_contra_el_motor_portado_y_reporta_las_cuatro_metric
     # aquí como aserciones duras aparte de las cotas de no regresión de
     # arriba (D1: aciertos exactos ≥ 29/47, omisiones críticas ≤ 1; D1/D2:
     # cobertura ≥ 63/81) — nunca `metricas.elementos_de_mas <= 21` aquí, que
-    # compararía las 47 filas sin salvedad (50) contra un umbral que la
-    # fuente fija solo sobre los 31 `casos_con_contenido` (CODEX-001). El
-    # suelo D1 de `elementos_de_mas` sí se afirma como aserción dura, sobre
-    # esa misma población, en
-    # `test_elementos_de_mas_alcanza_el_suelo_d1_bajo_la_poblacion_del_umbral_publicado`.
+    # compararía las 47 filas sin salvedad (51 desde ADR-170) contra un
+    # umbral que la fuente fija solo sobre los 31 `casos_con_contenido`
+    # (CODEX-001). Lo que `elementos_de_mas` mide sobre esa misma población
+    # —22 desde ADR-170, o sea el suelo D1 sin alcanzar por uno— sí se
+    # afirma como aserción dura en
+    # `test_elementos_de_mas_mide_22_y_no_alcanza_el_suelo_d1_bajo_la_poblacion_publicada`.
     assert metricas.aciertos_exactos >= 29
     assert metricas.omisiones_criticas <= 1
     assert metricas.cobertura >= 63 / 81
@@ -1545,6 +1608,17 @@ def test_la_corrida_del_laboratorio_reproduce_las_metricas_publicadas_de_la_fuen
     assert omisiones_criticas == 0
 
 
+#: La única divergencia declarada del arnés frente a la corrida final del
+#: laboratorio (`lab_final_run_row5.json`, fila 5), y por qué está ahí: ver
+#: el docstring de `test_los_elementos_de_mas_restantes_son_los_del_
+#: laboratorio` (hueco H5 de ADR-148, incidencia #582/ADR-170). Se escribe
+#: como mapa exacto —no como permiso general— para que cualquier otra
+#: divergencia siga poniendo la prueba en rojo.
+_DIVERGENCIA_DECLARADA_FRENTE_AL_LABORATORIO: Final[dict[str, list[str]]] = {
+    "B04-CA-43": ["DEC-001"],
+}
+
+
 def test_los_elementos_de_mas_restantes_son_los_del_laboratorio(
     ejecucion_del_banco_motor_portado: _EjecucionDelBanco,
 ) -> None:
@@ -1559,7 +1633,23 @@ def test_los_elementos_de_mas_restantes_son_los_del_laboratorio(
     docstring del test anterior). Se vio fallar antes del cambio: el arnés
     sin `vigente_en_tiempo_objetivo`/`truncar_por_limite_duro` producía
     `MEM-112` para `B04-CA-26` y `MEM-001`/`MEM-111`/`MEM-112` para
-    `B04-CA-38`, ninguno en la corrida del laboratorio para esos casos."""
+    `B04-CA-38`, ninguno en la corrida del laboratorio para esos casos.
+
+    **La única divergencia declarada** (ADR-170, hueco H5 de ADR-148): con
+    la membresía de lista cerrada portada y `G4` decidiendo por pertenencia,
+    `DEC-001` alcanza `B04-CA-43` («¿Quién valida los entregables de
+    calidad?», ámbito `PRJ-ALFA`) y la corrida del laboratorio no lo trae
+    ahí. No es infidelidad del porte: en esa corrida `DEC-001` **no aparece
+    en `obtenido` de ningún caso**, ni siquiera en `B04-CA-22`, que lo
+    espera — la fila 5 del laboratorio es anterior a H1 y a H5. Y el único
+    sitio donde esa corrida sí lo vio —`B04-CA-14`, donde `DEC-001` llegó a
+    `entraron_al_filtro` y el filtro lo quitó— dice de qué capa es el ruido:
+    del **filtro**, no del ámbito. `PRJ-ALFA` es miembro de
+    `LISTA-CERRADA-AB`, así que `G4` hace lo correcto al admitirlo; lo que
+    lo quitaría es la relevancia (M10/Ollama), que este arnés determinista
+    no ejecuta. La divergencia se fija **por su nombre**, no como permiso
+    general: cualquier otra sigue poniendo la prueba en rojo.
+    """
     banco = _fixture()
     lab = json.loads(LAB_FINAL_RUN_ROW5_PATH.read_text(encoding="utf-8"))["casos"]
     obtenido_por_caso = ejecucion_del_banco_motor_portado.obtenido_por_caso
@@ -1574,17 +1664,17 @@ def test_los_elementos_de_mas_restantes_son_los_del_laboratorio(
         if no_explicados:
             sin_explicar[caso_id] = no_explicados
 
-    assert sin_explicar == {}
+    assert sin_explicar == _DIVERGENCIA_DECLARADA_FRENTE_AL_LABORATORIO
 
 
-def test_elementos_de_mas_alcanza_el_suelo_d1_bajo_la_poblacion_del_umbral_publicado(
+def test_elementos_de_mas_mide_22_y_no_alcanza_el_suelo_d1_bajo_la_poblacion_publicada(
     ejecucion_del_banco_motor_portado: _EjecucionDelBanco,
 ) -> None:
     """CODEX-001: el umbral D1 publicado para `elementos_de_mas` (≤21) lo fija
     la fuente (`experiments/adr002/modelo_local/medir.py:255-269`) sumando
     `obtenido - esperado` solo sobre los 31 `casos_con_contenido`
     (`resultado_esperado` no vacío) — nunca sobre los 47. El `elementos_de_
-    mas=50` que reporta `test_el_banco_se_ejecuta_contra_el_motor_portado_y_
+    mas=51` (50 antes de ADR-170) que reporta `test_el_banco_se_ejecuta_contra_el_motor_portado_y_
     reporta_las_cuatro_metricas` suma sobre las 47 filas sin esa salvedad, así
     que compararlo contra ≤21 compara dos poblaciones distintas — el defecto
     que corrige esta prueba, midiendo la misma población que originó el
@@ -1592,21 +1682,34 @@ def test_elementos_de_mas_alcanza_el_suelo_d1_bajo_la_poblacion_del_umbral_publi
     caso`), no sobre el fixture del laboratorio.
 
     `test_la_corrida_del_laboratorio_reproduce_las_metricas_publicadas_de_la_
-    fuente` ya demuestra que, sobre esa misma población, el laboratorio mide
-    exactamente 21. `test_los_elementos_de_mas_restantes_son_los_del_
-    laboratorio` demuestra que, para cada caso, los sobrantes del arnés
-    (`obtenido - esperado`) son subconjunto de `obtenido` del laboratorio —y
-    como ambos comparten el mismo `esperado` por caso, un sobrante del arnés
-    nunca puede ser un elemento esperado, así que ese subconjunto cae dentro
-    de `obtenido - esperado` del laboratorio, acotando el recuento de
-    sobrantes del arnés por el recuento de sobrantes del laboratorio, caso a
-    caso. Sumando esa cota sobre los 31 `casos_con_contenido`, el arnés no
-    puede medir más de 21 bajo esta población — esta prueba lo confirma
-    midiéndolo directamente en vez de solo derivarlo por cota, y lo mide en
-    exactamente 21: bajo la definición de población que originó el umbral
-    D1 de `elementos_de_mas`, el arnés SÍ lo alcanza (≤21), aunque el total
-    sin esa salvedad sobre las 47 filas (50) siga por encima — son dos
-    métricas distintas, no la misma con dos resultados."""
+    fuente` sigue demostrando que, sobre esa misma población, el laboratorio
+    mide exactamente 21. Hasta ADR-170 esa cota se heredaba: mientras
+    `test_los_elementos_de_mas_restantes_son_los_del_laboratorio` afirmaba
+    `sin_explicar == {}`, los sobrantes del arnés eran subconjunto de los del
+    laboratorio caso a caso, y sumando esa cota sobre los 31
+    `casos_con_contenido` el arnés no podía medir más de 21. **Esa derivación
+    ya no vale**, y se retira en vez de dejarla escrita: desde ADR-170 esa
+    prueba declara la divergencia `{"B04-CA-43": ["DEC-001"]}` —un sobrante
+    del arnés que precisamente NO está en `obtenido` del laboratorio—, así
+    que la premisa del subconjunto está rota y con ella la cota de 21. Lo que
+    queda es lo que esta prueba siempre hizo: medir directamente sobre la
+    ejecución real del arnés, sin derivar nada.
+
+    **Desde ADR-170 mide 22 y el suelo D1 deja de alcanzarse, por uno.** Se
+    dice así, sin maquillarlo: el elemento que lo cruza es `DEC-001` en
+    `B04-CA-43`, y entra porque `G4` decide por pertenencia y `PRJ-ALFA` es
+    miembro de su lista cerrada (hueco H5 de ADR-148; el propietario decidió
+    esa semántica el 11-09-2026 y la incidencia #582 declara «de más» sin
+    listón a propósito). El elemento está nombrado en
+    `test_los_elementos_de_mas_restantes_son_los_del_laboratorio`, que razona
+    de qué capa es el ruido —del filtro de relevancia, no del ámbito—. La
+    aserción sigue siendo una **igualdad exacta** (`== 22`): si apareciera un
+    elemento de más adicional, la prueba lo diría. Y a su lado, en vez de una
+    cota que repita ese mismo recuento con otra forma, esta prueba ata el
+    elemento que cruza el suelo a su causa: bajo esta misma población, el
+    único sobrante ausente de la corrida del laboratorio es ese `DEC-001` de
+    `B04-CA-43`, así que si el que sobrara fuera otro —u otro caso— la prueba
+    caería aunque el recuento siguiera midiendo 22."""
     banco = _fixture()
     obtenido_por_caso = ejecucion_del_banco_motor_portado.obtenido_por_caso
 
@@ -1617,8 +1720,27 @@ def test_elementos_de_mas_alcanza_el_suelo_d1_bajo_la_poblacion_del_umbral_publi
             continue
         elementos_de_mas_con_contenido += len(obtenido_por_caso[caso["id"]] - esperado)
 
-    assert elementos_de_mas_con_contenido == 21
-    assert elementos_de_mas_con_contenido <= 21  # suelo D1, sobre la población publicada
+    assert elementos_de_mas_con_contenido == 22
+    # Suelo D1 (≤21), sobre la población publicada: NO se alcanza desde
+    # ADR-170, y el elemento que lo cruza queda atado a su causa en vez de
+    # repetir el recuento de arriba con otra forma (ADR-134: una cota que no
+    # puede fallar por su cuenta no es una prueba). Bajo esta misma
+    # población, el único sobrante del arnés ausente de la corrida final del
+    # laboratorio es `DEC-001` en `B04-CA-43`: si el que sobrara fuera otro
+    # elemento, u otro caso, esta aserción cae aunque el recuento siguiera
+    # midiendo 22.
+    lab = json.loads(LAB_FINAL_RUN_ROW5_PATH.read_text(encoding="utf-8"))["casos"]
+    sobrantes_ausentes_del_laboratorio: dict[str, list[str]] = {}
+    for caso in banco["casos"]:
+        esperado = set(caso["resultado_esperado"])
+        if not esperado:
+            continue
+        caso_id = caso["id"]
+        ausentes = sorted((obtenido_por_caso[caso_id] - esperado) - set(lab[caso_id]["obtenido"]))
+        if ausentes:
+            sobrantes_ausentes_del_laboratorio[caso_id] = ausentes
+
+    assert sobrantes_ausentes_del_laboratorio == _DIVERGENCIA_DECLARADA_FRENTE_AL_LABORATORIO
 
 
 def test_el_cargador_no_lee_criticidad(ejecucion_del_banco: _EjecucionDelBanco) -> None:
@@ -1852,12 +1974,16 @@ _ESPERADOS_DE_B04_CA_22: Final[tuple[str, ...]] = (
 )
 _UNICO_DE_B04_CA_22_QUE_ALCANZA_UNA_PALABRA: Final[str] = "DEC-014"
 
-#: `DEC-001` no lo recupera este encargo, y no por vigencia: su proyecto en
-#: el corpus es `LISTA-CERRADA-AB`, distinto del ámbito del caso
-#: (`PRJ-BETA`), y su eje de ámbito es `MULTI_PROYECTO_CERRADO` sin miembros
-#: resueltos (ver `_ejes_declarados`). `G4` lo descarta por las dos vías; el
-#: motivo exacto se afirma abajo para que no pueda confundirse con un fallo
-#: de la vía por vigencia.
+#: `DEC-001` no entra **con el puerto de PRODUCCIÓN**, y no por vigencia:
+#: ese puerto entrega todo ítem con `SIN_EJES`
+#: (`src/sirius/adapters/persistence/staged_engine_port.py`), así que `G4`
+#: no llega a la rama de lista cerrada y compara el `project_id` del ítem
+#: —`LISTA-CERRADA-AB`— con el ámbito del caso (`PRJ-BETA`): fuera de
+#: ámbito. Con los ejes del corpus declarados sí entra, por pertenencia a
+#: su lista cerrada (incidencia #582/ADR-170), y eso es lo que mide el
+#: arnés `ejecucion_del_banco_motor_portado`, no esta prueba. El motivo
+#: exacto se afirma abajo para que la diferencia entre 5 y 6 aquí no pueda
+#: confundirse con un fallo de la vía por vigencia.
 _EL_QUE_QUEDA_FUERA_POR_AMBITO: Final[str] = "DEC-001"
 
 #: Una consulta sin un solo término significativo: `terminos_significativos`
@@ -2045,16 +2171,152 @@ def test_ninguna_critica_se_pierde_con_la_via_por_vigencia(
     afirma como igualdad exacta sobre el mismo arnés —el que ejecuta los 47
     casos con la petición de cada uno, y por tanto el único de los tres que
     activa la vía por vigencia— y comprueba, al lado, que la vía estuvo de
-    verdad activa: `B04-CA-22` recupera cinco de sus seis. Sin esa segunda
+    verdad activa: `B04-CA-22` recupera **sus seis**. Sin esa segunda
     aserción, la primera seguiría en verde con la vía apagada.
+
+    Las seis, y no cinco, desde la incidencia #582/ADR-170: cinco llegan por
+    la vía por vigencia de ADR-168 y `DEC-001` por pertenencia a su lista
+    cerrada, que este arnés sí puede ver porque declara los ejes del corpus
+    (`_ejes_declarados`). La igualdad es exacta a propósito: fija a la vez
+    que no se pierde nada y que no entra nada de más entre los esperados.
     """
     metricas = ejecucion_del_banco_motor_portado.metricas
     assert metricas.omisiones_criticas == 0
 
     entraron = ejecucion_del_banco_motor_portado.obtenido_por_caso["B04-CA-22"]
-    assert sorted(entraron & set(_ESPERADOS_DE_B04_CA_22)) == [
-        c for c in _ESPERADOS_DE_B04_CA_22 if c != _EL_QUE_QUEDA_FUERA_POR_AMBITO
-    ]
+    assert sorted(entraron & set(_ESPERADOS_DE_B04_CA_22)) == sorted(_ESPERADOS_DE_B04_CA_22)
+
+
+#: Los miembros que el origen declara para `LISTA-CERRADA-AB`
+#: (`experiments/adr002/benchmark/build_corpus.py:82-88` en `dfdcdaff`),
+#: escritos aquí solo para poder afirmar que el cargador los lee del corpus
+#: y no de ningún sitio más (incidencia #582/ADR-170).
+_MIEMBROS_DEL_ORIGEN_DE_LA_LISTA_CERRADA: Final[tuple[str, ...]] = ("PRJ-ALFA", "PRJ-BETA")
+
+
+def _proyectos_de_prueba() -> dict[str, int]:
+    """Una tabla `nombre -> id` con la forma de la que `_create_projects`
+    devuelve, para las pruebas del cargador que no necesitan base de datos.
+    Los números no significan nada: lo que se comprueba es que el cargador
+    traduce por esta tabla y no por otra cosa."""
+    banco = _fixture()
+    nombres = sorted({item["project"] for item in banco["items"]})
+    return {nombre: numero for numero, nombre in enumerate(nombres, start=1)}
+
+
+def test_el_cargador_lee_del_corpus_la_pertenencia_de_la_lista_cerrada() -> None:
+    """Hueco H5 de ADR-148 (incidencia #582/ADR-170), capa 1: el dato llega.
+
+    `DEC-001` es el único ítem `MULTI_PROYECTO_CERRADO` de los 97, y ahora
+    el corpus declara su membresía (`ejes_p2.miembros_lista_cerrada`,
+    portada verbatim del origen: ver `fuente.nota_incidencia_582`). Esta
+    prueba fija las tres mitades del «lo lee»:
+
+    1. lo que llega al motor son esos miembros, traducidos al espacio de
+       identidades reales con la misma tabla que traduce el ámbito del caso;
+    2. **no está fijado en código**: con una membresía distinta en el ítem,
+       el cargador devuelve la distinta —así que borrar el dato del corpus
+       pone esta prueba en rojo, en vez de dejarla en verde por su cuenta;
+    3. los otros 96 ítems no declaran la clave y siguen llegando con la
+       tupla vacía, que es lo que `G4` trata como «lista sin miembros
+       resueltos».
+    """
+    banco = _fixture()
+    items = {item["id"]: item for item in banco["items"]}
+    project_ids = _proyectos_de_prueba()
+
+    dec_001 = items["DEC-001"]
+    assert dec_001["ejes_p2"]["ambito"] == "MULTI_PROYECTO_CERRADO"
+    assert tuple(dec_001["ejes_p2"]["miembros_lista_cerrada"]) == (
+        _MIEMBROS_DEL_ORIGEN_DE_LA_LISTA_CERRADA
+    )
+
+    ejes = _ejes_declarados(dec_001, project_ids=project_ids)
+    assert ejes.miembros_de_ambito == tuple(
+        str(project_ids[nombre]) for nombre in _MIEMBROS_DEL_ORIGEN_DE_LA_LISTA_CERRADA
+    )
+
+    otra_membresia = {
+        **dec_001,
+        "ejes_p2": {**dec_001["ejes_p2"], "miembros_lista_cerrada": ["PRJ-GAMMA"]},
+    }
+    assert _ejes_declarados(otra_membresia, project_ids=project_ids).miembros_de_ambito == (
+        str(project_ids["PRJ-GAMMA"]),
+    )
+
+    con_membresia = {
+        item["id"]
+        for item in banco["items"]
+        if _ejes_declarados(item, project_ids=project_ids).miembros_de_ambito
+    }
+    assert con_membresia == {"DEC-001"}
+
+
+def test_dec_001_entra_en_b04_ca_22_por_pertenencia_a_su_lista_cerrada(tmp_path: Path) -> None:
+    """Hueco H5 de ADR-148 (incidencia #582/ADR-170), capa 2: `G4` decide por
+    pertenencia, y es `G4` quien lo deja entrar.
+
+    Contra-medición que aísla el arnés (deuda 21): aquí no hay índice de
+    categoría, ni siembra, ni filtro de relevancia —solo el canon real, el
+    puerto con los ejes que el corpus declara y `recuperar`—, así que si
+    `DEC-001` aparece solo puede haber entrado por el motor. La mutación de
+    abajo cierra el «y no por otro camino»: con la MISMA petición y el mismo
+    canon, borrando únicamente sus miembros, el motor lo descarta con el
+    motivo literal de `G4`. Lo que lo hace entrar es la membresía, no la
+    vía por vigencia de ADR-168 ni ninguna otra.
+    """
+    database_path = tmp_path / "sirius.db"
+    cargado = _cargar_el_canon(database_path)
+    _caso, peticion = _peticion_del_caso(cargado, "B04-CA-22")
+    items_por_id = {item["id"]: item for item in _fixture()["items"]}
+    identidad_de = {
+        corpus: _identidad_del_motor(*real) for real, corpus in cargado.real_a_canonico.items()
+    }
+    ejes_por_identidad = {
+        identidad_de[corpus]: _ejes_declarados(
+            items_por_id[corpus], project_ids=cargado.project_ids
+        )
+        for corpus in cargado.real_a_canonico.values()
+    }
+    assert ejes_por_identidad[identidad_de["DEC-001"]].miembros_de_ambito == tuple(
+        str(cargado.project_ids[nombre]) for nombre in _MIEMBROS_DEL_ORIGEN_DE_LA_LISTA_CERRADA
+    )
+    # El ámbito del caso es `PRJ-BETA`: uno de los dos miembros, no los dos.
+    # Con la regla anterior (contención) esto era exactamente el `False`.
+    assert peticion.ambito.proyectos == (str(cargado.project_ids["PRJ-BETA"]),)
+
+    def _recuperar_con(ejes: Mapping[str, EjesDeclarados]) -> Recuperacion:
+        engine = build_engine(database_path)
+        puerto = StagedEnginePort(
+            build_session_factory(engine), engine, ejes_por_identidad=dict(ejes)
+        )
+        try:
+            return recuperar(peticion, puerto, staged_engine_candidate.candidato())
+        finally:
+            puerto.close()
+
+    con_pertenencia = _recuperar_con(ejes_por_identidad)
+    assert identidad_de["DEC-001"] in {r.item.id for r in con_pertenencia.resultados}
+    assert [
+        (puerta, motivo)
+        for item, puerta, motivo in con_pertenencia.traza.puertas
+        if item == identidad_de["DEC-001"]
+    ] == []
+
+    sin_pertenencia = _recuperar_con(
+        {
+            **ejes_por_identidad,
+            identidad_de["DEC-001"]: replace(
+                ejes_por_identidad[identidad_de["DEC-001"]], miembros_de_ambito=()
+            ),
+        }
+    )
+    assert identidad_de["DEC-001"] not in {r.item.id for r in sin_pertenencia.resultados}
+    assert [
+        (puerta, motivo)
+        for item, puerta, motivo in sin_pertenencia.traza.puertas
+        if item == identidad_de["DEC-001"]
+    ] == [("G4", "lista cerrada sin miembros resueltos: la duda no abre ambito")]
 
 
 def test_el_arnes_del_motor_portado_no_lee_razon_segura(
@@ -2912,8 +3174,12 @@ def test_el_banco_se_ejecuta_contra_el_paquete_completo_de_produccion_como_evide
     deterministas, publicando las cuatro métricas del paquete completo como
     evidencia adicional — sin tocar el arnés del examen ya fusionado ni sus
     aserciones». No afirma ningún suelo de D1/D2 — el arnés de examen de
-    arriba (`ejecucion_del_banco_motor_portado`) ya los alcanza y sigue
-    siendo la medición que cuenta para D1/D2 (ver el docstring del módulo);
+    arriba (`ejecucion_del_banco_motor_portado`) alcanza tres de los cuatro
+    (`aciertos_exactos` 30/47 ≥ 29/47, `omisiones_criticas` 0 ≤ 1 y
+    `cobertura` 68/81 ≥ 63/81) y desde ADR-170 **no** el de
+    `elementos_de_mas` (≤21, que mide 22 bajo la población publicada), y
+    sigue siendo la medición que cuenta para D1/D2 (ver el párrafo de
+    ADR-170 en el docstring del módulo);
     esta prueba solo publica, sin afirmarla como aserción dura, la cifra que
     el camino de código real de producción mide sobre el mismo banco.
 

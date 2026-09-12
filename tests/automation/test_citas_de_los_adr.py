@@ -168,6 +168,10 @@ _ADR_135 = (
 )
 _ADR_139 = "ADR-139-la-reconciliacion-pasa-cada-hora-activa-en-vez-de-cada-seis.md"
 _ADR_140 = "ADR-140-el-corrector-firma-su-run-y-demuestra-cada-mutacion.md"
+_ADR_170 = (
+    "ADR-170-dec-001-entra-por-pertenencia-a-su-lista-cerrada-portar-los-miembros-del-origen-"
+    "y-que-g4-decida-por-pertenencia.md"
+)
 
 RAMA_DE_ORIGEN_NO_FUSIONADA: dict[str, list[str]] = {
     "experiments/adr002/round/cases.py": [
@@ -285,6 +289,13 @@ RAMA_DE_ORIGEN_NO_FUSIONADA: dict[str, list[str]] = {
     # propietario que salió de la misma mina: vive en la misma rama de
     # auditoría que nunca se fusiona entera.
     "docs/audits/mina-2026-09-cambios-para-el-propietario.md": [_ADR_139, _ADR_140],
+    # ADR-170 (hueco H5 de ADR-148, incidencia #582) porta a la fixture del
+    # banco la membresía de lista cerrada de `DEC-001` y cita el proyector
+    # del laboratorio para documentar DÓNDE se perdió: es el fichero que no
+    # exponía esa tabla de membresía como JSON. Vive en
+    # `evidence/adr001-spikes`, que a propósito nunca se fusiona entera a
+    # `main`; el porte cita su fuente, la fuente sigue sin fusionarse.
+    "experiments/adr002/projection/build.py": [_ADR_170],
 }
 
 
