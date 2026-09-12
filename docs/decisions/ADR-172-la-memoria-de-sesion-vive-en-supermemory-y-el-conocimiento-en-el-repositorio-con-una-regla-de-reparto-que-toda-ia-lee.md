@@ -100,10 +100,10 @@ medirlo, el reparto real era este `[V, listMemories el 12-09]`:
 | `repo_sirius__e87a5bbe75fe00b6` | 7 recuerdos | **solo** la captura automática del complemento local |
 | `sm_project_default` | 12 recuerdos, entre ellos toda esta decisión | **solo** lo escrito por MCP: la nube, ChatGPT |
 
-Dos memorias paralelas que no se veían. El criterio (c) **no estaba cumplido**:
-no había ni una lectura, desde una herramienta, de algo escrito por otra y no
-copiado. La corrección es el punto 3 de la Decisión, y su comprobación queda
-pendiente de una sola cosa que no se puede hacer desde aquí y consta como tal.
+Dos memorias paralelas que no se veían. El criterio (c) **no estaba cumplido**
+con esa evidencia: no había ni una lectura, desde una herramienta, de algo
+escrito por otra y no copiado. La corrección es el punto 3 de la Decisión, y su
+comprobación está **hecha**, justo debajo: no queda nada por repetir.
 
 **La regla, y su guardia** `[V]`. La sección nueva de `AGENTS.md` no rompía
 ninguna prueba —criterio (a) satisfecho— y eso era, en sí, el defecto: una regla
@@ -113,11 +113,28 @@ expresiones sueltas sobre el fichero entero, así que se podían borrar las dos
 instrucciones y la tabla de reparto completa y seguía en verde. Lo encontró la
 misma revisión, reproduciéndolo.
 
-La guardia buena comprueba **doce obligaciones, una a una y dentro de su
-sección** —dejar la frase suelta en otra parte del fichero no vale—, y una
-segunda prueba parametrizada demuestra que ninguna sobra. Se ejecutó además la
-mutación de verdad, sobre el fichero: retirar cada una de las doce de
-`AGENTS.md` hace fallar la comprobación, **las doce** `[V, 12-09]`. No comprueba
+La segunda versión comprobaba doce obligaciones, una a una y dentro de su
+sección, con una prueba parametrizada que retiraba cada una. **Y también estaba
+mal**, lo encontró la misma revisión en la ronda siguiente: esa prueba borraba
+la frase y comprobaba que la frase ya no estaba, que es cierto por construcción.
+**Nunca llamaba al detector**, así que anularlo entero la dejaba en verde.
+
+La versión buena, la tercera, tiene el detector en **una sola función**,
+`_obligaciones_ausentes`, y las pruebas la **ejecutan** sobre el texto mutado.
+Comprobado anulando el detector de tres maneras `[V, 12-09]`:
+
+| Detector anulado así | ¿Lo detectan las pruebas? |
+|---|---|
+| Devuelve siempre la lista vacía | **Sí**, caen las doce |
+| Devuelve siempre todas | **Sí** |
+| Busca en el fichero entero y no en la sección | **No** — hueco real |
+
+El tercero destapó que nada obligaba a mirar dentro de la sección, así que la
+regla se podía desmontar repartiéndola por `AGENTS.md`. Se cerró con
+`test_la_obligacion_escrita_fuera_de_su_seccion_no_cuenta`, que mueve cada
+obligación fuera de su sección y exige que el detector siga acusándola; con
+ella, las **tres** anulaciones caen. Y la mutación de las doce sigue,
+ahora ejecutando el detector de verdad. No comprueba
 conducta, que no se puede: comprueba que la regla siga escrita y completa donde
 toda IA la lee. El criterio (b) se cumple: la sección empieza diciendo que solo
 aplica a quien tenga la herramienta.
@@ -145,6 +162,23 @@ llamar `npx.cmd` y `npm.cmd`; y `setx` no afecta a las ventanas ya abiertas.
    todavía no la incluía. Lo escrito hace un momento **solo** aparece buscándolo
    a propósito. Consecuencia práctica: no confíes en que lo último quede
    recordado solo; si importa, búscalo.
+
+## La raíz, porque fueron dos rondas de la misma familia (ADR-001)
+
+Las dos primeras guardias fallaron por lo mismo, y conviene nombrarlo antes de
+seguir: **afirmaban comprobar algo sin ejecutarlo nunca contra un caso malo
+conocido.** La primera buscaba cuatro expresiones sueltas y llamaba a eso
+«proteger la regla». La segunda borraba una frase y comprobaba que la frase ya
+no estaba —cierto por construcción— y llamaba a eso «prueba por mutación». Las
+dos pasaban en verde sin medir nada.
+
+La regla de las dos rondas obliga a no poner un tercer parche, así que la
+corrección no es una aserción más: es **un solo detector, y todas las pruebas lo
+ejecutan**. Eso es lo que permite anularlo y ver caer las pruebas, que es la
+única forma de saber que una guardia guarda. Vale para cualquier guardia futura
+de este repositorio: *si no la has visto fallar contra una versión rota a
+propósito, no sabes si comprueba algo*. Es la anti-vacuidad que el repositorio
+ya aplica en otras pruebas, y que aquí se saltó dos veces seguidas.
 
 ## Decisión
 
