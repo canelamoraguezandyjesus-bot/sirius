@@ -256,6 +256,43 @@ que revierte a propósito una propiedad anterior, y la prueba se reescribió
 diciéndolo —conserva intacta la parte que importa (el almacén no se toca) y
 cambia la que escondía el fallo.
 
+## Lo que este ADR NO decide, y el tercer defecto que deja nombrado
+
+**§11.1 del contrato operativo no se toca.** La tabla de autoridad dice quién
+es canónico sobre el ESTADO de una clase; la puerta del reflector dice a quién
+MIRA. Son dos preguntas distintas y este cambio solo responde la segunda.
+
+Pero al mirar la tabla del contrato para asegurarse de eso apareció un tercer
+defecto, que no se arregla aquí y queda nombrado con su medida:
+
+- **El código no implementa la tabla del contrato.** §11.1 tiene DOS filas de
+  documentación —«documental no publicada» con autoridad `motor` y «documental
+  publicada (PR en el repo)» con autoridad **`incidencia`**— y
+  `domain/authority.py:65` las colapsa en una sola,
+  `DOCUMENTACION: Autoridad.MOTOR`. Los 10 encargos de `documentacion` que este
+  trabajo desatasca son todos del segundo tipo: abrieron su PR en el
+  repositorio. Bajo la tabla del contrato su autoridad es `incidencia` y sus
+  etiquetas mandan, que es exactamente lo que hace este cambio.
+- **La fila de `investigación` dice «¿Existe en la vía GitHub? no»** y lo
+  medido dice que sí: 5 encargos con su incidencia, sus etiquetas y su ciclo,
+  desde que ADR-099 metió la clase en `TABLA_ACTIVACION`. El propio contrato lo
+  admite en esa misma fila —«la fila sigue aquí porque `TABLA_ACTIVACION` sigue
+  teniendo la clase»— y ADR-161 ya acordó retirar ese carril, con ejecución
+  pendiente.
+
+**La consecuencia concreta, dicha para que se pueda rechazar:** dos encargos de
+`investigacion` —#483 y #386— pasan a `delivered` por sus etiquetas, y bajo la
+lectura más estricta de §11.1 (autoridad `motor`, el reflejo de GitHub es
+«informativo») tendrían que pasar a `cancelled` como el resto. Se eligió
+`delivered` porque es lo que de verdad ocurrió y porque el carril está acordado
+en retirada; la diferencia entre las dos lecturas es de esos dos encargos y de
+ninguno más. Si el propietario prefiere la lectura estricta, la corrección es
+una línea y este ADR se enmienda.
+
+Arreglar la tabla de autoridad para que implemente §11.1 —partir
+`DOCUMENTACION` en dos y decidir qué hacer con la fila de `investigación`— es
+un trabajo propio, con su ADR, y no entra aquí.
+
 ## Consecuencias
 
 - **17 encargos pasan a `cancelled`**, y `cancelled` es terminal: el reflector
