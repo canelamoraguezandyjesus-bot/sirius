@@ -335,19 +335,22 @@ que es el nombre con el que la citan ADR-115 y las fichas anteriores).
 
 **Cadena completa como UNA SOLA invocación** (ADR-145, ADR-153), con
 `pwsh -File scripts/check.ps1` y su código de salida capturado (ADR-154),
-anclada **al árbol de `ddf3516`** —el head con el código, las pruebas y el
-cuerpo de esta ficha, ya con las correcciones de la ronda 2 (CLAUDE-H5-001 a
-CLAUDE-H5-005)—:
+anclada **al árbol de `0969062`** —el head con el código, las pruebas, esta
+ficha y `MEMORIA.md`, ya con las correcciones de la ronda 2 (CLAUDE-H5-001 a
+CLAUDE-H5-005) y ya con `main` traído a la rama—:
 
 ```
-5257 passed, 17 skipped, 2 xfailed in 555.98s (0:09:15)
+5369 passed, 17 skipped, 2 xfailed in 505.28s (0:08:25)
 EXIT_CODE_CHECK=0
 ```
 
 De esa invocación se transcribe la cola capturada —la terna de `pytest` y el
 código de salida—; el `0` solo sale si `ruff format --check .`,
 `ruff check .` y `mypy src tests` pasaron antes, porque el guion corta en el
-primero que falle (ADR-153). Esta ficha añade **5** pruebas, contadas contra
+primero que falle (ADR-153). La terna sube de las 5257 pruebas que midió el
+árbol de `ddf3516` a 5369 porque entre medias la rama trajo `main` (`0e4def7`,
+hasta `6d91482`), que aporta esas pruebas: ninguna la añade este trabajo.
+Esta ficha añade **5** pruebas, contadas contra
 `5fc5fdc` fichero a fichero: 3 en `tests/unit/test_staged_engine.py`
 (27 → 30) y 2 en
 `tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py` (41 → 43). La ronda
@@ -358,26 +361,37 @@ nombrado, con la aserción convertida en igualdad exacta en vez de en permiso
 abierto (ver «Consecuencias»).
 
 La quinta validación se ejecuta **sobre el rango de la rama y no sin
-argumentos** (CODEX-001, señalado en la revisión de ADR-168):
+argumentos** (CODEX-001, señalado en la revisión de ADR-168), sobre ese mismo
+árbol:
 
 ```
-$ git diff --check 5fc5fdc ddf3516
-EXIT_DIFF_CHECK=0
+$ git diff --check 5fc5fdc 0969062
+docs/decisions/ADR-171-la-memoria-comun-arranca-sobre-lo-que-ya-existe-evaluacion-funcional-de-las-tres-piezas-y-lo-que-el-motor-tiene-que-publicar.md:373: new blank line at EOF.
+docs/investigaciones/2026-09-11-flujos-reales-de-agentes-comparados-con-el-motor.md:277: new blank line at EOF.
+EXIT_DIFF_CHECK=2
 $ git diff --check 5fc5fdc
-EXIT_DIFF_CHECK_ARBOL=0
+EXIT_DIFF_CHECK_ARBOL=2   (misma salida: el árbol coincide con `0969062`)
+$ git diff --check origin/main 0969062
+EXIT_DIFF_CHECK_VS_MAIN=0
 ```
 
-Sin salida y con código `0` las dos: el rango entero de la rama —desde su
-base en `main` (`5fc5fdc`) hasta el árbol que midió la cadena— está limpio,
-y el árbol de trabajo que confirma esta sección también.
+Las dos líneas señaladas **no son de este trabajo y no se tocan aquí**: las
+trae `main` en `6d91482` (ADR-173, PR #586), que entró en la rama con la
+actualización `0e4def7`, y por eso aparecen desde que el rango `5fc5fdc..`
+incluye también los commits de `main`. Lo que sí es de esta rama se mide
+frente a `origin/main` y sale **limpio y con código `0`**: los ocho ficheros
+que el trabajo cambia (`MEMORIA.md`, esta ficha,
+`scripts/diagnosticar_busqueda_del_banco.py`,
+`src/sirius/domain/staged_engine_gates.py`, la fixture del banco,
+`tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py`,
+`tests/automation/test_citas_de_los_adr.py` y
+`tests/unit/test_staged_engine.py`) no introducen ni un espacio en blanco
+defectuoso. Antes de traer `main`, sobre el árbol de `ddf3516`, las dos
+invocaciones del rango daban código `0` sin salida.
 
-Lo posterior a `ddf3516` es **esta sección de la ficha** y el cuerpo de la
-PR —documentales, sin tocar código ni pruebas, y existen porque la sección
-tiene que anclarse al árbol que la cadena midió— más la actualización de la
-rama con `main` (`0e4def7`, traída por el paso automático para que Quality
-pueda pasar), que no cambia nada de este trabajo: la terna de arriba es la
-del árbol de `ddf3516` y así se lee, sin presentarse como la del head
-vigente (ADR-154). Si una corrección
+Lo único posterior a `0969062` es **esta sección de la ficha** —documental,
+sin tocar código ni pruebas, y existe porque la sección tiene que anclarse al
+árbol que midió la cadena (ADR-154)— y el cuerpo de la PR. Si una corrección
 posterior toca código o pruebas, la cadena se vuelve a ejecutar entera y
 esta sección se re-ancla al árbol nuevo, sin conservar la terna del anterior
 (ADR-154).
