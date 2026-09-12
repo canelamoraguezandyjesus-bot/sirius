@@ -302,51 +302,63 @@ es la 2053.
 
 **Cadena completa como UNA SOLA invocación** (ADR-145, ADR-153), con
 `pwsh -File scripts/check.ps1` y su código de salida capturado (ADR-154),
-anclada **al árbol de `f6ed801`** —el head de la ronda 4 de corrección, el
-que trae `main` (`e468113`) a la rama, declara la lección de esta ficha y
-regenera `MEMORIA.md`—. Lo posterior a ese árbol son **solo ajustes
-documentales**, y estos son todos: esta misma sección de validación; el
-desglose de los casos netos bajo «Alternativas descartadas»; la enumeración
-de la sección 6 y el bloque «## La lección» de la ronda 5, con `MEMORIA.md`
-regenerado a partir de él. Ninguno toca código ni pruebas, y por eso ninguno
-puede mover la terna:
+anclada **al árbol de @@ANCLA@@** —el commit inmediatamente anterior a éste,
+ya con `main` (`9efaa3c`, el head que deja ADR-176 en #589) fusionado en la
+rama—. Lo posterior a ese árbol es **solo esta misma sección de validación**,
+que transcribe la cola de aquella ejecución: prosa de esta ficha y nada más,
+comprobable con `gh api` sobre el compare de las dos revisiones, que devuelve
+únicamente este fichero. No toca código ni pruebas, y por eso no puede mover
+la terna:
 
 ```
-5392 passed, 17 skipped, 2 xfailed in 818.41s (0:13:38)
-EXIT_CODE_CHECK=0
+@@TERNA@@
+@@EXIT@@
 ```
 
-La terna **sí** se mueve respecto de la ronda 3 (`5f1f346`, donde midió
-`5372 passed, 17 skipped, 2 xfailed in 716.83s`), y se mueve exactamente
-+20 por traer `main`, no por nada que esta rama haya cambiado en el código:
+**La terna sube por la fusión de `main`, no por esta vertical, y hay que
+decirlo porque la ronda anterior lo daba por imposible.** La ronda 4 ancló
+`5392 passed, 17 skipped, 2 xfailed` al árbol de `f6ed801`, anterior a la
+fusión, y afirmaba que lo posterior eran «solo ajustes documentales». Dejó de
+ser cierto en cuanto entraron los dos commits que traen `main` a la rama
+—`1e3e11e6` («Trae main a la rama de H4 y desatasca la espera de Quality») y
+`836f2b8d` («Regenera MEMORIA.md tras traer main a la rama de H4»)—, que
+incorporan el trabajo de otras verticales: ADR-175 (#588, el tablero por
+incidencia) y ADR-176 (#589, el cierre que se retoma desde donde se quedó).
+Ese código y esas pruebas **entran desde `main`**, no de H4: el compare
+`f6ed8014...836f2b8d` devuelve `src/sirius_engine/reflect.py`,
+`src/sirius_engine/tablero.py`, `src/sirius_engine/tablero_cli.py`,
+`tests/engine/test_tablero.py`, `tests/engine/test_tablero_cli.py`,
+`tests/automation/test_sirius_comment_upsert.py`,
+`tests/automation/test_serializacion_del_motor.py`,
+`tests/engine/test_reflect.py`, `tests/engine/test_reflect_cli.py`,
+`pyproject.toml`, `scripts/automation/sirius_issue.sh` y
+`.github/workflows/tablero-de-incidencia.yml`, y **ni una sola línea** de
+`src/sirius/`, `tests/unit/`, `tests/integration/` ni `tests/acceptance/`,
+que es donde vive todo lo que H4 cambia. Por eso la terna sube sin que el
+trabajo de esta ficha se haya movido desde la ronda 2: lo que mide de más son
+casos ajenos que llegan con la fusión, no cobertura nueva de H4.
 
-- **+19** por `tests/automation/test_mina_de_lecciones.py`, que entra con
-  ADR-174 (#587, en `main` desde `e468113`) y que este head recolecta entero
-  (`uv run pytest tests/automation/test_mina_de_lecciones.py --collect-only -q`
-  → `19 tests collected`). Uno de esos 19 es el caso parametrizado
-  `test_todo_adr_obligado_declara_su_leccion[ADR-177-la-]`, que sale de esta
-  misma ficha: `_adr_obligados()` recorre `docs/decisions/ADR-*.md` y
-  parametriza sobre todo ADR con número `>= PRIMER_ADR_CON_LECCION` (174), y
-  177 lo es. Los otros 18 vienen de `main`;
-- **+1** por la ficha de ADR-174 en `_adrs()`
-  (`tests/automation/test_citas_de_los_adr.py:394`), que parametriza
-  `test_toda_ruta_citada_por_un_adr_existe` sobre `REGISTRO.glob("ADR-*.md")`.
-
-Eso hace que el desglose de «+3 netos» de más abajo deje de ser la cuenta
-completa del head: sigue siendo exacto como cuenta de lo que **este trabajo**
-aporta sobre su base, pero la base ya no es `433fb11` sino `e468113`, y al
-entrar `main` esta ficha aporta un caso parametrizado más —el de la mina de
-lecciones—, así que lo que este trabajo suma sobre `main` son **+4**, no +3.
-La duración cambia, como cualquier medición de reloj en un runner distinto.
+Ese mismo movimiento hace que el desglose de «+3 netos» de más abajo deje de
+ser la cuenta completa del head: sigue siendo exacto como cuenta de lo que
+**este trabajo** aporta sobre su base, pero la base ya no es `433fb11` sino
+`9efaa3c`, y al entrar `main` esta ficha aporta un caso parametrizado más
+—`test_todo_adr_obligado_declara_su_leccion[ADR-177-la-]`, de
+`tests/automation/test_mina_de_lecciones.py`, que entró con ADR-174 (#587):
+`_adr_obligados()` recorre `docs/decisions/ADR-*.md` y parametriza sobre todo
+ADR con número `>= PRIMER_ADR_CON_LECCION` (174), y 177 lo es—, así que lo
+que este trabajo suma sobre `main` son **+4**, no +3. La duración cambia,
+como cualquier medición de reloj en un runner distinto.
 
 La quinta validación, **sobre el rango de la rama y no sin argumentos**
-(deuda 25), se corre **sin segunda revisión**: así compara la base contra el
-**árbol de trabajo**, que es el contenido final de la rama incluida esta
-misma sección, y no contra un head ya superado. Es la comprobación barata
-que sí puede cubrir el árbol entero, y lo cubre:
+(deuda 25), se corre **sin segunda revisión**: así compara la base vigente
+—`9efaa3c`, el commit de `main` que la rama ya tiene fusionado, y no el
+`e468113` de rondas anteriores— contra el **árbol de trabajo**, que es el
+contenido final de la rama incluida esta misma sección, y no contra un head
+ya superado. Es la comprobación barata que sí puede cubrir el árbol entero, y
+lo cubre:
 
 ```
-$ git diff --check e468113
+$ git diff --check 9efaa3c
 EXIT=0
 ```
 
@@ -407,7 +419,8 @@ porque este trabajo añade **tres** casos netos al total recolectado:
   ficha añade exactamente un caso recolectado.
 
 +2 de los ficheros de pruebas y +1 de la ficha son los +3 que 5369 → 5372
-exigía sobre la base vieja `433fb11`. Sobre la base vigente `e468113` son +4,
+exigía sobre la base vieja `433fb11`. Sobre la base vigente `9efaa3c` son
++4,
 porque esta ficha aporta además el caso de `test_mina_de_lecciones.py` que la
 sección «Validación obligatoria» desglosa. Ninguna prueba se ha relajado;
 ninguna cota del arnés se mueve.
