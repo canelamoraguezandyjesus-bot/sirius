@@ -4742,6 +4742,75 @@ reanuda **después** y con un único `continua`, y solo cierra si Codex ha
 vuelto. Dos ciclos en paralelo con Opus agotan la ventana: hoy quedó medido.
 ---
 
+### 95. La medición que pedí no podía contestar la pregunta que le puse, y el propietario decide las dos pendientes (12-09-2026, 00:30 UTC)
+
+**Las dos decisiones, tomadas.** El propietario eligió **(A) en las dos**: se
+acepta que `elementos_de_mas` pase de 21 a 22 y el suelo D1 deje de alcanzarse
+por uno, y **no** se paga `MEM-001` en `B04-CA-30`. La primera queda publicada
+en #582 como comentario `DECISIÓN DEL PROPIETARIO` **antes** de cualquier
+fusión, con las cuatro razones y con lo que la decisión **no** concede. La
+segunda no obliga a tocar nada: el encargo recortado de #581 ya estaba escrito
+para no cambiar qué peticiones activan la ampliación.
+
+**Mi error, y es de la raíz 2 otra vez.** Le pedí al propietario que corriera
+`medir_banco_con_ollama_real.py` diciéndole que aclararía la decisión del suelo
+D1 —si el filtro real quitaría el `DEC-001` de `B04-CA-43`—. **Ese instrumento
+no puede contestar esa pregunta, y no por un fallo: por construcción.** Corre
+el camino real, el puerto real entrega todo ítem con `SIN_EJES`, así que
+`DEC-001` no entra en ningún caso de producción ni antes ni después de H5. El
+elemento que cruza el suelo **solo existe en el arnés con los ejes del corpus**,
+que ese guion no ejecuta. Pedí una medición sin comprobar que su configuración
+contuviera el fenómeno. Gasté tiempo del propietario en su única máquina.
+
+**Y deja un hueco de instrumentación que no tiene dueño**: hoy **ningún**
+instrumento combina los ejes del corpus con el filtro real. `diagnosticar_
+busqueda_del_banco.py --ejes` usa un filtro inerte; `medir_banco_con_ollama_
+real.py` usa el puerto de producción. La pregunta «¿qué haría el filtro de
+verdad con lo que los ejes dejan entrar?» no es medible con lo que hay.
+
+**La corrida salió inválida, y el guion lo dijo solo.** Dos consultas pasaron
+de los 30 s de espera y el filtro se rindió en ellas —falla abierto, o sea que
+no descartó nada—, así que las cifras mezclan consultas filtradas y sin
+filtrar. El aviso lo imprime el propio guion. Lo que **no** imprime, y es la
+pregunta que hay que hacerle: **las cuatro críticas del diagnóstico están en
+dos casos** (`B04-CA-33` y `B04-CA-34`) **y hubo exactamente dos rendiciones**.
+`B04-CA-34` es el caso con más candidatos del banco, el que más tarda. Si las
+dos rendiciones fueron esos dos casos, el «0 críticas perdidas» no dice que el
+filtro las conservara, sino que **nunca llegó a juzgarlas**. Pendiente:
+repetir con `--espera 90` y exigir `Rendiciones del filtro. 0`.
+
+**Aun inválida, la forma pide explicación.** Frente a la única medición
+publicada con el mismo modelo (ADR-125, 02-09):
+
+| | 02-09 | 11-09, contaminada |
+|---|---|---|
+| aciertos exactos | 22/47 | 7/47 |
+| elementos de más | 39 | 240 |
+| cobertura | 59/81 | 71/81 |
+| críticas perdidas | 10 | 0 |
+
+Las dos columnas que el propietario persigue mejoran mucho; las otras dos
+empeoran igual de fuerte. Dos consultas sin filtrar de 47 no explican +201
+elementos de más: en el camino de producción con filtro inerte el total es 487,
+o sea ~10 por caso, así que dos casos valen ~20. **Queda por explicar con la
+corrida limpia**, y no se anota ninguna cifra en ningún ADR hasta tenerla.
+
+**Dos fusiones de la noche que nadie me avisó.** `main` pasó de `5fc5fdc` a
+`4087b8a`: ADR-167 (#576, el que esperaba al propietario) y ADR-171 (#584, la
+memoria común). #583 queda **dos commits por detrás**, lo que bloquea su puerta
+de fusión. No la actualizo yo: es la rama que estoy juzgando.
+
+**Y un falso final mío.** Al armar el vigilante de #582 justo después de
+publicar `continua`, leyó en su primera vuelta la etiqueta `failed-safely`
+**anterior** y salió anunciando una parada que no existía: la incidencia ya
+estaba en `review-requested`. Es la familia de la entrada 71 —tomar un estado
+intermedio, o en este caso caduco, por final— aplicada a mi propia
+herramienta. Arreglado en `vigila_581.sh` y `vigila_582.sh`: la primera lectura
+nunca dispara una parada, con el porqué escrito en el guion. Comprobado contra
+la etiqueta real antes de decir nada al propietario, que es lo que evitó que el
+falso final llegara a ser un informe falso.
+---
+
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
 
 1. `ollama_category_classifier.py`: ruta relativa y sin

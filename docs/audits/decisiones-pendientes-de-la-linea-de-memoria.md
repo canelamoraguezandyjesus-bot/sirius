@@ -19,7 +19,13 @@ puede correr él.
 
 ---
 
-# NUEVA, 11-09-2026 06:25 UTC — D1: ¿se acepta perder por uno el suelo de «elementos de más»?
+# DECIDIDA el 12-09-2026 — (A) SÍ se acepta perder por uno el suelo de «elementos de más»
+
+> El propietario eligió **(A) aceptar**. Queda registrada en la incidencia #582
+> como comentario `DECISIÓN DEL PROPIETARIO` antes de cualquier fusión. Lo que
+> sigue es el informe con el que se decidió.
+
+## El informe original
 
 **Qué ha pasado.** La PR de H5 (#583, ADR-170) hace exactamente lo que
 decidiste: los miembros de la lista cerrada vuelven al corpus, portados del
@@ -79,7 +85,14 @@ del head final.
 
 ---
 
-# NUEVA 2, 11-09-2026 06:30 UTC — H4: ¿pagar `MEM-001` en `B04-CA-30` con las otras columnas?
+# DECIDIDA el 12-09-2026 — (A) NO se paga `MEM-001` en `B04-CA-30`
+
+> El propietario eligió **(A) dejarlo**: queda como hueco medido, con su precio
+> escrito, reabrible el día que haya una señal más fina que el propósito. El
+> encargo recortado de #581 ya estaba escrito para no cambiar qué peticiones
+> activan la ampliación, así que no hay que tocarlo.
+
+## El informe original
 
 **Qué ha pasado.** El primer intento de H4 (#581) murió a los 60 minutos sin
 dejar nada. Antes de relanzarlo medí lo que el encargo daba por hecho: que
