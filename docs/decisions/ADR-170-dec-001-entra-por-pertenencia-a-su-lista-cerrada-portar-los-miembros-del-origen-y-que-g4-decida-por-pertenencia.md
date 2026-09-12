@@ -365,15 +365,22 @@ argumentos** (CODEX-001, señalado en la revisión de ADR-168), sobre ese mismo
 árbol:
 
 ```
-$ git diff --check 5fc5fdc 0969062
+$ git diff --check 5fc5fdc 6b0da2a
 docs/decisions/ADR-171-la-memoria-comun-arranca-sobre-lo-que-ya-existe-evaluacion-funcional-de-las-tres-piezas-y-lo-que-el-motor-tiene-que-publicar.md:373: new blank line at EOF.
 docs/investigaciones/2026-09-11-flujos-reales-de-agentes-comparados-con-el-motor.md:277: new blank line at EOF.
 EXIT_DIFF_CHECK=2
-$ git diff --check 5fc5fdc
-EXIT_DIFF_CHECK_ARBOL=2   (misma salida: el árbol coincide con `0969062`)
-$ git diff --check origin/main 0969062
+$ git diff --check origin/main 6b0da2a
 EXIT_DIFF_CHECK_VS_MAIN=0
 ```
+
+**Las dos invocaciones nombran sus dos extremos** (CODEX-001, r3995995955).
+La ficha traía antes una tercera, `git diff --check 5fc5fdc` sin segundo
+extremo, con el paréntesis «misma salida: el árbol coincide con `0969062`»:
+esa invocación medía el **árbol de trabajo**, que en ese momento ya llevaba
+esta sección sin confirmar y por tanto **no** coincidía con `0969062`, así
+que atribuía su resultado a un árbol que no era el suyo y no se reproducía
+al extraer `0969062`. Se retira: lo que se registra aquí son rangos con sus
+dos extremos escritos, reproducibles por cualquiera que extraiga los SHA.
 
 Las dos líneas señaladas **no son de este trabajo y no se tocan aquí**: las
 trae `main` en `6d91482` (ADR-173, PR #586), que entró en la rama con la
