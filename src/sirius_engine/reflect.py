@@ -427,6 +427,55 @@ _PARADAS: frozenset[WorkItemState] = frozenset(
 )
 
 
+def _cierre_de_una_parada_sin_salida(
+    work_item: WorkItem, espejo: MirroredWorkItem, divergente: ResultadoReflejo
+) -> ResultadoReflejo:
+    """Terminar una parada que la incidencia CERRADA ya no puede sacar de ahí (ADR-176).
+
+    Llega al final de todo, y esa posición es la mitad del arreglo. Cerrar un
+    encargo desde ``ACTIVE`` son DOS pasos, porque el dominio no tiene arista
+    directa a ``CANCELLED``: ``escalate`` y después
+    ``resolve_decision(continuar=False)``. Si la pasada se corta entre los dos
+    -y ``aplicar_pasos`` lo dice en su propio docstring: los pasos anteriores
+    ya quedaron aplicados-, la siguiente veía el motor en ``NEEDS_DECISION``,
+    la incidencia proyectando ``ACTIVE`` por una etiqueta congelada, y
+    declaraba divergencia. La regla 7 no entraba, porque solo actúa cuando el
+    plan por etiquetas no declaró ninguna: el encargo se quedaba a medio
+    cancelar para siempre.
+
+    **Va después del recorrido acreditado, no antes**, y la primera versión de
+    este arreglo lo puso antes: cancelaba la recuperación real de la
+    incidencia #537 -parada en REPARAR, con el ``continua`` del propietario en
+    el historial y la incidencia cerrada en ``sirius:completed``- en vez de
+    entregarla. Lo cazó su propia prueba. Que el cálculo de siempre no haya
+    encontrado NINGÚN paso es, precisamente, lo que distingue una parada sin
+    salida de una recuperación acreditada.
+
+    Tres condiciones, y ninguna sobra:
+
+    - La incidencia está **cerrada**: mientras siga abierta, la parada se puede
+      reanudar por la vía de siempre y aquí no se decide nada.
+    - Sus etiquetas **no se contradicen**: ahí gana la regla 1, como siempre.
+    - El motor está en un estado con salida **directa** a ``CANCELLED``.
+      ``ACTIVE`` queda fuera a propósito: su divergencia -el motor por delante
+      de lo que la incidencia proyecta- es información que un humano debe ver,
+      y ADR-173 decidió conservarla.
+
+    **No reanuda nada**: termina la parada como ``CANCELLED`` y jamás la
+    devuelve a ``ACTIVE``. La regla que CODEX-001 defendió en la PR #530 -sin
+    permiso escrito del propietario no se reanuda- sigue intacta, porque
+    cancelar no es reanudar.
+    """
+    if not espejo.cerrada or espejo.etiquetas_contradictorias:
+        return divergente
+    if work_item.estado is WorkItemState.ACTIVE:
+        return divergente
+    cierre = _CIERRE_POR_ESTADO.get(work_item.estado)
+    if cierre is None:
+        return divergente
+    return ResultadoReflejo(pasos=cierre)
+
+
 def reflejar_desenlace(
     work_item: WorkItem, espejo: MirroredWorkItem, episodio: DispatchEpisode
 ) -> ResultadoReflejo:
@@ -455,7 +504,7 @@ def reflejar_desenlace(
     recorrido = _recorrer_historial_acreditado(work_item, espejo, episodio)
     if recorrido is not None:
         return _con_el_cierre(work_item, espejo, episodio, recorrido)
-    return por_foto
+    return _cierre_de_una_parada_sin_salida(work_item, espejo, por_foto)
 
 
 #: Cómo termina un ``WorkItem`` no terminal cuando su incidencia se cierra, por

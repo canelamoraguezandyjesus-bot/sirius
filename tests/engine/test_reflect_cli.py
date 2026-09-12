@@ -389,6 +389,7 @@ def _mirror_537(
     *,
     numero: int = _NUMERO,
     entradas: tuple[tuple[int, int, str, str], ...] = _COMENTARIOS_537,
+    cerrada: bool = True,
 ) -> FixedGitHubMirrorReader:
     comentarios = tuple(
         Comentario(
@@ -406,7 +407,7 @@ def _mirror_537(
                 metadatos=MetadatosIncidencia(
                     numero=numero,
                     titulo="t",
-                    estado_gh="closed",
+                    estado_gh="closed" if cerrada else "open",
                     etiquetas=("sirius:completed",),
                 ),
             )
@@ -490,16 +491,20 @@ def test_una_pasada_real_recorre_la_recuperacion_de_la_537(tmp_path: Path) -> No
     assert len(store.list_events()) == sucesos_antes
 
 
-def test_sin_la_orden_del_propietario_la_misma_pasada_declara_y_no_toca_nada(
+def test_sin_la_orden_del_propietario_con_la_incidencia_abierta_no_se_toca_nada(
     tmp_path: Path,
 ) -> None:
     """Contraejemplo 1 de la incidencia #545, sobre la misma pasada real.
 
-    Mismo motor, misma foto (`sirius:completed`) y EL MISMO historial de
-    estados notificados: la recuperación ocurrió igual. Lo único que se quita
-    es el `continua` de las 05:29. Sin esa palabra escrita no hay permiso, y
-    el reflector conserva exactamente el comportamiento de hoy -declarar la
-    divergencia, no tocar nada, exit 0-.
+    Mismo motor, mismo historial de estados notificados: la recuperación
+    ocurrió igual. Lo único que se quita es el `continua` de las 05:29. Sin esa
+    palabra escrita no hay permiso, y el reflector declara la divergencia y no
+    toca nada.
+
+    La incidencia va **abierta** aquí, y eso no es un detalle: mientras lo
+    esté, la parada se puede reanudar de verdad -basta con que el propietario
+    escriba la orden-, así que conservarla es lo correcto. El caso de la
+    incidencia CERRADA es el de abajo, y ADR-176 lo separa a propósito.
     """
     store = InMemoryWorkEngineStore()
     journal = InMemoryDispatchJournal()
@@ -511,7 +516,7 @@ def test_sin_la_orden_del_propietario_la_misma_pasada_declara_y_no_toca_nada(
         ["--diario", str(tmp_path / "diario.jsonl")],
         store=store,
         journal=journal,
-        mirror=_mirror_537(entradas=sin_orden),
+        mirror=_mirror_537(entradas=sin_orden, cerrada=False),
     )
 
     assert codigo == 0
@@ -520,6 +525,45 @@ def test_sin_la_orden_del_propietario_la_misma_pasada_declara_y_no_toca_nada(
     item = store.get_work_item(_WORK_ID)
     assert item is not None
     assert item.estado is WorkItemState.FAILED_SAFELY
+
+
+def test_sin_la_orden_y_con_la_incidencia_cerrada_la_parada_se_termina(
+    tmp_path: Path,
+) -> None:
+    """Lo que ADR-176 cambia, dicho entero: la parada se TERMINA, no se reanuda.
+
+    Misma pasada que la de arriba y sin el `continua`, pero con la incidencia
+    cerrada. Una parada cuya incidencia está cerrada no se puede reanudar
+    -reanudar se hace sobre la incidencia-, así que dejarla declarando
+    divergencia en cada pasada no la protege: la deja muerta y ruidosa.
+
+    Y la mitad que SÍ protegía se comprueba aquí explícitamente: el encargo no
+    pasa por `ACTIVE` en ningún momento. Sin permiso escrito no se reanuda
+    nada, que es lo que costó cuatro rondas en la PR #530; cancelar no es
+    reanudar.
+    """
+    store = InMemoryWorkEngineStore()
+    journal = InMemoryDispatchJournal()
+    _motor_parado_en_reparar(store, journal)
+    sin_orden = tuple(entrada for entrada in _COMENTARIOS_537 if entrada[:2] != (5, 29))
+
+    codigo, _ = _correr(
+        ["--diario", str(tmp_path / "diario.jsonl")],
+        store=store,
+        journal=journal,
+        mirror=_mirror_537(entradas=sin_orden),
+    )
+
+    assert codigo == 0
+    item = store.get_work_item(_WORK_ID)
+    assert item is not None
+    assert item.estado is WorkItemState.CANCELLED
+    kinds = tuple(evento.kind for evento in store.list_events() if evento.aggregate_id == _WORK_ID)
+    assert "work_item_reactivated" not in kinds, (
+        "el encargo se reactivó sin permiso escrito del propietario"
+    )
+    # Desde FAILED_SAFELY el dominio admite `cancel` directo: un solo paso.
+    assert kinds[-1] == "work_item_cancelled"
 
 
 # --- La puerta de clase se deriva de lo que el despachador despacha (ADR-173) ---

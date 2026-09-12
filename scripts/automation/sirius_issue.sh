@@ -868,3 +868,133 @@ sanitize_untrusted_text() {
 sanitize_untrusted_json() {
   jq -c 'walk(if type == "string" then gsub("```"; "\u0027\u0027\u0027") | gsub("(?<p>[Hh][Ee][Aa][Dd]|[Mm][Ee][Rr][Gg][Ee])(\\s+[Ss][Hh][Aa]\\s*:)"; "\(.p)-sha:") | gsub("<!--"; "&lt;!--") else . end)'
 }
+
+# --- El tablero de la incidencia (ADR-175) -----------------------------------
+#
+# sirius_comment_upsert <repo> <issue> <marcador> <fichero> — mantiene UN solo
+# comentario al día: si ya existe uno de confianza que lleve ese marcador, lo
+# EDITA; si no, lo crea. Devuelve !=0 si no pudo hacer ninguna de las dos.
+#
+# Es la otra mitad de `sirius_comment_once`, y la diferencia importa: aquella
+# publica un HECHO -que ocurre una vez y no se vuelve a tocar- y esta mantiene
+# un ESTADO, que por definición cambia. Compartir función habría obligado a una
+# de las dos a mentir sobre lo que hace.
+#
+# Dos decisiones, las dos por la misma razón -no acabar con dos tableros-:
+#
+# 1. **Si el historial no se puede leer, NO se crea nada.** Crear a ciegas
+#    publicaría un segundo tablero cada vez que la API tuviera un mal minuto, y
+#    la incidencia acabaría con la colección de fotos que este comentario existe
+#    para evitar. Fallar sin publicar es recuperable; duplicar, no.
+# 2. **Se edita el PRIMERO**, el más antiguo. Si alguna vez llegaran a existir
+#    dos -el POST de un comentario no es idempotente y una respuesta perdida
+#    puede dejar uno publicado sin que esta ejecución lo sepa, la misma
+#    limitación que `sirius_comment_once` ya documenta-, todas las pasadas
+#    siguientes convergen en el mismo y el duplicado se queda quieto en vez de
+#    alternar. Nunca se borra ningún comentario: esta biblioteca no borra.
+#
+# Y solo mira comentarios de autor de confianza, con el mismo filtro que el
+# resto (`SIRIUS_TRUSTED_AUTHOR_JQ`): un tercero no puede sembrar el marcador
+# para que el motor le reescriba un comentario suyo.
+sirius_comment_upsert() {
+  local status=0
+  _sirius_comment_upsert_bounded "$@" || status=$?
+  unset SIRIUS_GH_DEADLINE
+  return "$status"
+}
+
+# El autor del tablero, y solo él. NO vale `SIRIUS_TRUSTED_AUTHOR_JQ`: ese
+# filtro incluye al PROPIETARIO, que es de confianza para LEER pero cuyos
+# comentarios este publicador no debe reescribir jamás. Con el filtro ancho
+# bastaba con que una nota suya MENCIONARA el marcador para que el tablero se
+# publicara encima, borrándola: reproducido el 12-09-2026 contra la API
+# simulada, el publicador editó el comentario 4242 del propietario en vez de
+# crear el suyo.
+SIRIUS_AUTOR_DEL_TABLERO_JQ='select((.user.login // "") == "github-actions[bot]")'
+
+# _sirius_comment_ids_con_marcador <repo> <issue> <marcador> — los ids de los
+# comentarios que SON el tablero, del más antiguo al más nuevo.
+#
+# "Ser el tablero" son DOS condiciones, y ninguna de las dos sobra:
+#
+# 1. Lo escribió el autor del tablero (arriba), no cualquier autor de confianza.
+# 2. El marcador ABRE el comentario, no aparece en cualquier parte de él. Lo
+#    garantiza el generador -`tablero.py` lo emite como primera línea- y lo fija
+#    `tests/engine/test_tablero.py`. Así, citar el marcador dentro de un texto
+#    -en una explicación, en un ejemplo- no convierte ese texto en el tablero.
+#
+# La lectura y la transformación van separadas a propósito, por la misma razón
+# que en `_sirius_comments_newest_first`: encadenadas, el estado de salida sería
+# el de `python3` -que siempre acierta- y un 503 se leería como "no hay
+# ninguno", que aquí significa publicar un tablero de más.
+_sirius_comment_ids_con_marcador() {
+  local raw=""
+  raw="$(_sirius_gh api --paginate "repos/${1}/issues/${2}/comments?per_page=100" \
+    --jq "[.[] | ${SIRIUS_AUTOR_DEL_TABLERO_JQ}] | .[] | @json")" || return 1
+  printf '%s\n' "$raw" | python3 -c '
+import json, sys
+marcador = sys.argv[1]
+for linea in sys.stdin:
+    linea = linea.strip()
+    if not linea:
+        continue
+    try:
+        dato = json.loads(linea)
+    except json.JSONDecodeError:
+        continue
+    cuerpo = (dato.get("body") or "").lstrip()
+    if cuerpo.startswith(marcador):
+        print(dato.get("id"))
+' "$marcador"
+}
+
+_sirius_comment_upsert_bounded() {
+  local repo="$1" num="$2" marcador="$3" fichero="$4" ids="" id="" json="" ok=1
+
+  if [ ! -s "$fichero" ]; then
+    echo "sirius_comment_upsert: cuerpo vacío para #${num}; no publico nada" >&2
+    return 1
+  fi
+
+  local budget="${SIRIUS_COMMENT_BUDGET_SECONDS:-90}"
+  local deadline=$(( $(_sirius_now) + budget ))
+  if [ "${SIRIUS_GH_DEADLINE:-0}" -gt 0 ] && [ "$SIRIUS_GH_DEADLINE" -lt "$deadline" ]; then
+    deadline="$SIRIUS_GH_DEADLINE"
+  fi
+  export SIRIUS_GH_DEADLINE="$deadline"
+
+  if ! ids="$(sirius_retry _sirius_comment_ids_con_marcador "$repo" "$num" "$marcador")"; then
+    echo "sirius_comment_upsert: historial ilegible para #${num}; no publico a ciegas" >&2
+    return 1
+  fi
+  id="$(printf '%s\n' "$ids" | sed -n '1p')"
+
+  if [ -z "$id" ]; then
+    if sirius_retry _sirius_gh issue comment "$num" --repo "$repo" --body-file "$fichero"; then
+      echo "sirius_comment_upsert: tablero creado en #${num}" >&2
+      return 0
+    fi
+    return 1
+  fi
+
+  # El cuerpo va como JSON construido por python3 y no por interpolación de
+  # shell: un tablero lleva comillas, acentos, barras y saltos de línea, y
+  # cualquiera de ellos rompería un `-f body=...` armado a mano.
+  json="$(mktemp)" || return 1
+  if ! python3 -c '
+import json, sys
+with open(sys.argv[1], encoding="utf-8") as f:
+    sys.stdout.write(json.dumps({"body": f.read()}))
+' "$fichero" > "$json"; then
+    rm -f "$json"
+    echo "sirius_comment_upsert: no pude preparar el cuerpo para #${num}" >&2
+    return 1
+  fi
+  if sirius_retry _sirius_gh api --method PATCH \
+    "repos/${repo}/issues/comments/${id}" --input "$json" >/dev/null; then
+    ok=0
+    echo "sirius_comment_upsert: tablero de #${num} actualizado (comentario ${id})" >&2
+  fi
+  rm -f "$json"
+  return "$ok"
+}

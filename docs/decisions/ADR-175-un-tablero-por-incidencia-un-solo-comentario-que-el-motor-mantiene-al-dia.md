@@ -1,0 +1,559 @@
+# ADR-175 — Un tablero por incidencia: un solo comentario que el motor mantiene al día
+
+- Estado: PROPUESTO
+- Fecha: 2026-09-12
+- Aprobación: la fusión de la PR por el propietario
+
+## Nota de arranque (escrita ANTES de tocar una línea de código)
+
+### Lo medido antes de escribir esta nota
+
+Las **40 incidencias más recientes del ciclo** (de la #473 a la #579) acumulan
+**1.019 comentarios**. Mediana: **21 por incidencia**. Media: 25,5. Máximo:
+**157** (#545). **21 de las 40 pasan de veinte comentarios**; 13 pasan de
+treinta.
+
+Para saber qué está pasando en una incidencia hay que leerse veintiún
+comentarios, y ninguno de ellos dice el estado: cada uno es un **hecho** con su
+marcador —un aviso de estado, un veredicto, un registro de ronda, un reparto—,
+publicado una vez y nunca vuelto a tocar. El motor publica **historial**. No
+publica **estado**.
+
+Y no es que no lo sepa: el espejo ya proyecta el estado entero en cada pasada.
+`MirroredWorkItem` trae `estado`, `fase`, `etiquetas`, `pr_url`, `head_sha`,
+`rondas` (número, head, pendientes, gravedad), `veredictos`, `eventos_quality`,
+`fallos_quality_consecutivos`, `diagnostico_fallo` y `cerrada`. Y
+`leer_cuerpo_declarado` ya parte el cuerpo de la incidencia en objetivo,
+entregable, fuera de alcance, criterio de terminado y plan. **Todo eso se
+calcula ya, y a un humano no se le enseña nunca.** Es la misma forma que ADR-173
+encontró con el campo `cerrada`: el dato está, lo lee la máquina para lo suyo, y
+nadie lo pone donde haga falta.
+
+La investigación del 11-09-2026 lo dejó anotado tal cual, comparando con el
+«workpad» de Symphony: *«Un solo comentario de trabajo por incidencia,
+actualizado | Un comentario por hecho, con marcador | **Distinto, no peor: el
+nuestro es un historial; el suyo, un tablero. Se puede tener las dos cosas»*.
+
+### 1. ¿Dónde vive el fallo y dónde va el arreglo? ¿Puede el sitio del arreglo OBSERVAR el fallo?
+
+El fallo no está en lo que el motor sabe, sino en lo que **enseña**. El arreglo
+va a un workflow propio, `tablero-de-incidencia.yml`, disparado por el mismo
+evento (`issues: labeled`) y con el mismo permiso (`issues: write`) que el aviso
+de estado: ni un disparador nuevo, ni un permiso nuevo, ni otro nivel de
+automatización.
+
+Se descartó alojarlo en `reflejar-desenlace.yml` —que ya lee el espejo de cada
+encargo vivo y ya monta `uv`— por una razón escrita en su propia cabecera: *«Sin
+`issues: write`: este comando solo LEE el espejo por `gh`»*. Esa frontera la
+puso alguien a propósito y no se cruza para ahorrar cinco segundos de
+instalación.
+
+**¿Puede el sitio del arreglo observar el fallo?** Sí: el cuerpo del tablero se
+calcula del mismo espejo que se lee en ese paso, y si el espejo no se puede
+leer, no hay tablero y se dice —el paso es secundario y falla abierto, como la
+notificación que ya vive ahí.
+
+### 2. ¿Qué NO va a garantizar esto?
+
+- **No sustituye al historial.** Los avisos, veredictos y registros de ronda
+  siguen igual: son el registro de lo que pasó, y ADR-157/ADR-158 se pelearon
+  por ellos. El tablero es la foto de AHORA; el historial, la película.
+- **No se actualiza con todas las etiquetas.** Solo con las seis que disparan
+  ese workflow (`implementing`, `repair-requested`, `ready-for-merge`,
+  `blocked-decision`, `failed-safely`, `completed`). Con `sirius:ci-pending`,
+  que no está entre ellas, el tablero se queda en el estado anterior. Ampliar el
+  disparador es cambiar cuándo corre un workflow y no entra aquí.
+- **No puede ser exactamente-una-vez.** Es la limitación que
+  `sirius_comment_once` ya documenta: el POST de un comentario no es idempotente
+  y una respuesta perdida puede dejar un tablero publicado sin que esta
+  ejecución lo sepa. La EDICIÓN sí es idempotente, así que el riesgo se limita a
+  la primera publicación. Mitigación: se busca el tablero por su marcador y se
+  edita **el primero**; nunca se borra ni se toca ningún otro comentario.
+- **No inventa estado.** Lo que el espejo no expone no aparece. El tablero dice
+  de dónde sale cada cosa.
+- **No toca comentarios ajenos.** Solo su propio marcador, y solo entre
+  comentarios de autor de confianza, con el mismo filtro que ya usa el resto de
+  la biblioteca.
+- **No arregla que el ciclo esté parado.** El último encargo se despachó el
+  06-09-2026; el tablero se verá cuando vuelva a haber trabajo.
+
+### 3. Criterio de parada (decidido ANTES de ver ningún resultado)
+
+- **(a)** Si el tablero exigiera un permiso que el workflow no tenga ya, o un
+  disparador nuevo, **se para**: sería ampliar la automatización, y eso tiene su
+  puerta en el contrato operativo.
+- **(b)** Si el cuerpo necesitara un dato que el espejo no expone hoy, **se
+  para**: no se añade una lectura nueva de GitHub para pintar un tablero.
+- **(c)** Si un fallo del tablero pudiera alterar el estado de la incidencia o
+  bloquear el ciclo, **se para y se rediseña**. El paso tiene que fallar abierto
+  igual que la notificación que ya vive ahí.
+- **(d)** Ninguna prueba nueva se da por buena sin haberla visto fallar contra
+  una versión rota a propósito (ADR-001 §3).
+
+### 4. ¿Qué haría el fallo IMPOSIBLE en vez de improbable?
+
+Que el tablero no se pueda olvidar: **su cuerpo lo produce una función pura, con
+su prueba, y se publica en el mismo paso que ya publica la notificación**. No
+hay un camino aparte que alguien pueda saltarse, ni un fichero que alguien deba
+acordarse de actualizar —que es exactamente el fallo que ADR-174 midió en la
+mina—.
+
+Lo que esto NO hace imposible: que el espejo se equivoque. El tablero enseña lo
+que el espejo dice, y dice que eso es lo que enseña.
+
+## Contexto y problema
+
+El motor habla mucho y no dice dónde está. Cada hecho deja su comentario con su
+marcador —y eso está bien, y costó rondas afinarlo (ADR-157, ADR-158)—, pero
+el resultado es que una incidencia de veintiún comentarios no tiene ni una
+línea que diga «voy por comprobar, Quality pasó, hay un hallazgo pendiente y la
+PR es esta».
+
+Symphony lo llama *workpad* y la investigación del 11-09 ya lo anotó como
+**«distinto, no peor: el nuestro es un historial; el suyo, un tablero. Se puede
+tener las dos cosas»**. Esto añade el tablero sin tocar el historial.
+
+## Opciones consideradas
+
+1. **Reescribir el aviso de estado para que sea el tablero.** Descartada: los
+   avisos son el registro de lo que pasó, los lee el espejo para acreditar
+   transiciones (`sirius-notification`) y reescribirlos rompería ADR-157.
+2. **Publicarlo desde `reflejar-desenlace.yml`**, que ya lee el espejo de cada
+   encargo vivo y ya monta `uv`. Descartada por lo que ese workflow declara en
+   su propia cabecera: *«Sin `issues: write`: este comando solo LEE el espejo
+   por `gh`»*. Esa frontera la puso alguien a propósito.
+3. **Un paso más dentro de `notify-sirius-state.yml`**, que ya se dispara con
+   las seis etiquetas y ya tiene `issues: write`. Se intentó, y lo tumbaron dos
+   guardas del repositorio -está contado abajo, en «lo que la primera versión de
+   esto tuvo mal»-: los dos trabajos necesitan `concurrency` OPUESTAS.
+4. **Un workflow propio con el mismo disparador y el mismo permiso** (la
+   elegida): `tablero-de-incidencia.yml`.
+5. **Un fichero `TABLERO.md` por encargo en la rama del motor.** Descartada: el
+   propietario mira las incidencias, no la rama de memoria, y `DESENLACES.md`
+   ya cubre la vista agregada (ADR-171).
+6. **Publicarlo desde `reconcile-sirius-states.yml`**, que sí tiene grupo
+   constante y `issues: write`. Descartada: corre cada 6 horas, y un tablero que
+   dice lo de hace seis horas no es un tablero.
+
+## Decisión
+
+**Uno. Un solo comentario por incidencia, reescrito en cada cambio de estado.**
+Lleva: qué se pidió (del cuerpo declarado), por dónde va el ciclo, qué se ha
+comprobado (Quality y rondas, con sus números), dónde está la evidencia (PR,
+head, etiquetas) y **qué se espera del propietario ahora**. Si el encargo está
+detenido, enseña el diagnóstico.
+
+**Dos. El cuerpo lo produce una función pura** —`sirius_engine.tablero`— a
+partir de lo que el espejo YA proyecta y de lo que `leer_cuerpo_declarado` YA
+extrae. Ni una lectura nueva de GitHub: `sirius-tablero` hace las tres lecturas
+del puerto una sola vez y las reparte entre la proyección y el lector de
+secciones.
+
+**Tres. Publicarlo es `sirius_comment_upsert`**, la otra mitad de
+`sirius_comment_once`: aquella publica un HECHO, que ocurre una vez; esta
+mantiene un ESTADO, que cambia. Dos reglas, las dos para no acabar con dos
+tableros: si el historial no se puede leer **no se crea nada** —crear a ciegas
+publicaría un tablero más en cada mal minuto de la API—, y cuando hay varios se
+edita **el más antiguo**, para que todas las pasadas converjan en el mismo. No
+borra nada: esta biblioteca no borra.
+
+**Cuatro. El marcador no se copia.** El workflow lo saca de la primera línea
+del cuerpo que el propio generador produce. Tenerlo escrito en dos sitios
+significaría que el día que cambiara en uno el motor publicaría un tablero
+nuevo dejando huérfano al anterior.
+
+**Cinco. El paso falla abierto**, como el aviso que ya vive ahí: sin `uv`, sin
+entorno, sin espejo legible o sin poder publicar, deja un `::warning::` y sale
+en verde. Un tablero que no se pudo pintar no altera el estado de la incidencia
+ni bloquea el ciclo.
+
+## Comprobación que la sostiene
+
+**45 pruebas nuevas**, y las mutaciones que las sostienen.
+
+Del publicador (`sirius_comment_upsert`), que es donde puede salir algo caro —
+una incidencia con una colección de tableros—, cuatro mutaciones sembradas en
+la biblioteca de shell y vistas caer:
+
+| Mutación | Prueba que cae |
+|---|---|
+| Edita el tablero más NUEVO en vez del más antiguo | la de converger siempre en el mismo |
+| Si el historial no se puede leer, crea a ciegas | la de no publicar nada |
+| Se quita la frontera de confianza del filtro | la de no reescribir el comentario de un tercero |
+| El cuerpo se manda en crudo en vez de como JSON | la de comillas, acentos y saltos |
+
+Cada una tumba exactamente una prueba y ninguna más; con la biblioteca
+restaurada, las 7 en verde.
+
+Del generador, 20 pruebas que fijan lo que enseña y —igual de importante— lo
+que **no inventa**: sin PR dice que no hay ninguna, sin Quality dice que no se
+ha observado ninguna ejecución, y un cuerpo sin secciones da media foto en vez
+de una tabla falsa. Una prueba comprueba que el módulo no importa `datetime`,
+`subprocess`, `urllib` ni `os`: si dejara de ser puro, dos pasadas seguidas
+darían cuerpos distintos y el tablero parpadearía.
+
+Y una prueba que ata el workflow al comando: si alguien renombrara el punto de
+entrada o el paso, se ve en rojo en vez de en un tablero que dejó de
+actualizarse sin que nadie lo notara.
+
+`ruff format --check`, `ruff check` y `mypy src tests` en verde.
+
+## Consecuencias
+
+- **Un workflow más, y `notify-sirius-state.yml` sin tocar una coma.**
+- **Cada incidencia tiene su propia ranura** (`tablero-sirius-<número>`), así
+  que dos incidencias no se pisan y dos eventos de la misma hacen cola. Ahí
+  perder la pendiente no pierde nada: la que sobreviva recalcula el tablero
+  entero del espejo más nuevo.
+- **Coste en minutos de Actions: irrelevante.** El repositorio es público a
+  propósito y los runners estándar no consumen cuota en un repositorio público
+  (ADR-044).
+- **El tablero no se actualiza con `sirius:ci-pending`**, que no está entre las
+  seis etiquetas que disparan este workflow: en esa ventana enseña el estado
+  anterior. Ampliar el disparador es cambiar cuándo corre un workflow y no
+  entra aquí.
+- **No puede ser exactamente-una-vez.** La edición sí es idempotente; la
+  primera publicación no, por la limitación que `sirius_comment_once` ya
+  documenta. Si llegaran a existir dos tableros, las pasadas siguientes
+  convergen en el más antiguo y el duplicado se queda quieto.
+- **El historial no cambia en nada.**
+
+## Lo que la primera versión de esto tuvo mal, y cómo se vio
+
+La primera versión metía el tablero como un paso más de
+`notify-sirius-state.yml`. La suite completa la tumbó con **dos** guardas del
+repositorio, y las dos tenían razón:
+
+1. **`test_serializacion_del_motor.py`**: todo trabajo que invoque un comando
+   del motor tiene que serializarse con un grupo **constante**, porque dos
+   lecturas concurrentes del diario crean el mismo trabajo dos veces y ADR-082
+   concluyó que serializar es la única protección. El aviso de estado usa, a
+   propósito, una ranura POR EVENTO (ADR-158). Los dos requisitos son
+   incompatibles **en el mismo fichero**.
+
+   Lo que esa guarda enseñó, y que la primera versión no había visto: **no son
+   la misma clase de cosa.** Un aviso publica un HECHO y perderlo es perderlo
+   para siempre, así que necesita su ranura. Un tablero publica un ESTADO que se
+   recalcula entero en cada pasada, así que descartar una pendiente es
+   exactamente lo correcto. Separarlos en dos workflows no es un rodeo para
+   pasar la guarda: es la forma que el problema tenía desde el principio.
+
+   Y se respeta la guarda **sin tocarla**, aunque `sirius-tablero` solo lea:
+   una protección vale lo que vale su regla más simple, y «los comandos del
+   motor corren serializados» es más simple —y más difícil de erosionar— que
+   «los que además escriben».
+
+2. **`test_sirius_issue.py::test_every_gh_call_goes_through_the_bounded_wrapper`**:
+   la primera versión de `sirius_comment_upsert` creaba el comentario con
+   `sirius_retry gh issue comment`, saltándose `_sirius_gh`, que es la puerta
+   que acota la llamada con el plazo compartido. Sin ella, una publicación podía
+   quedarse colgada más allá del presupuesto del paso.
+
+Las dos salieron de correr la batería ENTERA antes de dar nada por bueno, no de
+la revisión de nadie.
+
+## La revisión del 12-09-2026, y lo que enseñó
+
+Tres hallazgos sobre este ADR. **Los tres eran ciertos**, y los tres se
+reprodujeron antes de tocar nada.
+
+### 1. El tablero convertía texto ajeno en hechos del motor (grave)
+
+El tablero lo publica `github-actions[bot]`, que es un autor **de confianza**, y
+el espejo reconstruye el estado del encargo leyendo los comentarios de
+confianza. Copiar el objetivo tal cual bastaba para que un marcador escrito en
+el cuerpo de la incidencia acabara republicado por el bot y releído como un
+hecho. Reproducido: con `<!-- sirius-quality:abc1234:success -->` en el
+objetivo, `_interpretar_eventos_quality` sacaba del tablero un
+`EventoQuality(head='abc1234', conclusion='success')` **sin que Quality hubiera
+corrido nunca**. Lo mismo con `sirius-verdict`, `sirius-round` y
+`sirius-notification`, que acreditan transiciones de estado.
+
+Y el antídoto llevaba meses escrito: `sanitize_untrusted_text`, en la misma
+biblioteca de shell que este trabajo usa, hace exactamente esto. **No lo
+llamaba nadie desde aquí.** Es la tercera vez en esta misma sesión que aparece
+la familia «pieza correcta sin lector» —`cerrada` en ADR-173, el estado
+proyectado que no se enseñaba a nadie en este mismo ADR, y ahora el saneador—.
+
+El arreglo no es escapar en cada sitio: es que **no haya sitio donde no se
+escape**. Todo lo que viene de fuera del motor pasa por una única función,
+`_ajeno`, y lo fija una prueba que no enumera marcadores conocidos sino que
+exige que **el único comentario HTML del tablero sea el suyo**. Así el marcador
+que alguien invente mañana tampoco pasa.
+
+### 2. El publicador podía sobrescribir un comentario del propietario (grave)
+
+`sirius_comment_upsert` buscaba el tablero entre los comentarios de autor de
+confianza que **contuvieran** el marcador. El propietario es autor de
+confianza. Reproducido contra la API simulada: una nota suya que empezaba por
+el marcador —pegar el tablero para comentarlo encima es lo más natural— hacía
+que el publicador **editara su comentario 4242** en vez de crear el suyo,
+borrándolo entero.
+
+Ser el tablero pasa a ser dos condiciones: lo escribió **el autor del tablero**
+(`github-actions[bot]`, no cualquier autor de confianza) **y** el marcador
+**abre** el comentario, no aparece en cualquier parte de él.
+
+### 3. Se podían perder tableros de otras incidencias (media) — y el error era mío
+
+Este ADR afirmaba que descartar una pasada pendiente «no pierde nada, porque la
+que sobrevive lee el espejo más nuevo». **Eso solo es cierto si las dos son de
+la misma incidencia.** Con el grupo común, si A corre, B espera y llega C,
+Actions descarta B —que era otra incidencia— y su tablero se quedaba viejo sin
+que nada volviera a tocarlo.
+
+El razonamiento era correcto para el caso que miré y lo generalicé a uno que no
+había mirado. El arreglo mantiene el grupo constante —la regla de serialización
+no se toca— y hace que cada pasada refresque un **superconjunto** que contiene
+con seguridad a la descartada: la incidencia del evento más las últimas veinte
+movidas del ciclo. Una incidencia cuyo evento se descartó acaba de recibir una
+etiqueta, así que está entre las últimas movidas.
+
+### Y una prueba vacua que cazó la mutación, no yo
+
+La primera prueba del hallazgo 2 ponía el marcador **en medio** de la nota del
+propietario. Pasaba, pero no por el filtro de autor: la rechazaba la otra
+condición. Al sembrar la mutación «vuelve al filtro ancho», **las pruebas
+siguieron todas en verde**: la prueba no probaba lo que decía probar. Con el
+marcador al principio, la mutación cae. Es la cuarta forma de prueba vacua del
+catálogo de `patrones.md`, y sin mutación no se ve.
+
+## La segunda ronda, y la regla de las dos rondas (ADR-001 §2)
+
+Dos hallazgos más sobre este mismo ADR, **los dos ciertos y los dos
+reproducidos**. Y el primero es de la MISMA familia que el primero de la ronda
+anterior, así que aquí se aplica la regla: **no se sigue parcheando, se busca
+la raíz.**
+
+### El parche anterior escapaba en el punto de uso, y tres campos se quedaron fuera
+
+`work_id`, `bloque` y `rama_base` no pasaban por `_ajeno`, sencillamente porque
+no me acordé de los tres. Reproducido: con un marcador en cada uno, el tablero
+publicaba **cuatro** comentarios HTML en vez de uno y el espejo sacaba de él
+**tres** ejecuciones de Quality que nunca ocurrieron. Y una forma más, que no es
+comentario HTML y por eso se escapaba de cualquier comprobación que solo mire
+`<!--`: **`PR abierta: <url>`**, de donde `_interpretar_pr_url` saca la PR del
+encargo. Una PR citada **como ejemplo** en el objetivo sustituía a la de verdad.
+
+**La raíz no es «faltaban tres campos»: es que escapar en el punto de uso exige
+acordarse en el punto de uso**, que es la misma forma de fallo que este
+repositorio lleva todo el día encontrando —la misma que ADR-174 nombra como
+`regla-que-depende-de-que-alguien-se-acuerde`—.
+
+Así que la neutralización deja de estar en cada sitio y pasa a estar **una sola
+vez, sobre el texto entero**, justo antes de devolverlo, con el marcador del
+tablero añadido **después** —es lo único que sí queremos que se interprete—.
+Ningún campo puede quedarse fuera: ni los de hoy ni los que alguien añada
+mañana.
+
+Y la prueba del invariante se arregla igual de fondo. Estaba bien escrita —«el
+único comentario HTML del tablero es el suyo»— pero su cuerpo envenenado
+enumeraba cinco campos de ocho **a mano**, así que pasaba en verde con tres
+campos sin neutralizar. Ahora el cuerpo se construye recorriendo
+`dataclasses.fields(CuerpoDeclarado)`, y una prueba aparte falla si algún campo
+se queda sin veneno. Además se comprueba contra **todos** los intérpretes del
+espejo, no solo el de Quality: rondas, PR y SHA incluidos.
+
+*(La orden `continua` no entra en la lista a propósito:
+`_interpretar_permisos_reanudacion` solo la acepta de un autor `OWNER`, nunca
+del bot, así que el tablero no puede fabricarse un permiso. Comprobado leyendo
+esa función, no supuesto.)*
+
+### Y el «repaso de las últimas veinte» recortaba antes de filtrar
+
+El tope de 20 se pedía a la API **antes** de quitar las PR y de filtrar por
+etiqueta, así que veinte PR recién tocadas dejaban **cero** incidencias del
+ciclo en la lista y la descartada no se recogía nunca. Ahora se piden 100 y se
+recorta a 20 **después** de filtrar: hacen falta veinte incidencias DEL CICLO
+movidas más recientemente para perder una.
+
+**No es una cola de pendientes, y no se vende como tal**: es una cota, y a este
+ritmo —unos pocos encargos vivos— no se alcanza. Una cola durable exigiría un
+sitio donde guardar el pendiente, y eso es otro trabajo.
+
+## La tercera ronda: dos parches míos que estaban mal, y la raíz
+
+Tres hallazgos, **los tres ciertos y los tres reproducidos**. Y el segundo era
+el mismo que ya había «arreglado» en la ronda anterior, así que aquí la regla de
+las dos rondas se aplica de verdad: se tira el mecanismo, no se parchea otra vez.
+
+### 1. El neutralizador tenía SU PROPIA expresión, y divergía de la del lector
+
+`_SHA_MARKER_RE`, la del espejo, es `(?:Head|Merge)\s+SHA:` — **sin frontera de
+palabra**. La mía llevaba `\b` delante. Resultado, reproducido:
+`xHead SHA: deadbeef1234` pasaba el neutralizador **intacto** y el lector sacaba
+de ahí un SHA que sustituía al de verdad.
+
+Dos expresiones para la misma cosa acaban divergiendo siempre. La única forma
+de que no diverjan es que sea **una**: el neutralizador importa ahora
+`_SHA_MARKER_RE` y `_PR_ABIERTA_RE` **de `mirror_projection`** y sustituye sobre
+sus propias coincidencias. Si mañana el espejo aprende a leer otra forma, queda
+neutralizada el mismo día sin que nadie se acuerde de nada. Una prueba fija esa
+estructura, no solo el caso.
+
+*(El revisor marcó este hallazgo como tardío, por goteo suyo: el caso existía
+desde la primera versión. Queda dicho, y no cambia nada de lo que hay que
+arreglar.)*
+
+### 2 y 3. El «repaso de las últimas veinte» estaba muerto al nacer
+
+Dos hallazgos sobre el mismo mecanismo:
+
+- Entre las últimas movidas entran las **incidencias cerradas**, y hay ~170 con
+  `sirius:completed`: veinte cerradas recién tocadas desplazan a la que
+  importaba.
+- Y el `head -n 20` que recortaba la lista **cierra la tubería**: el productor
+  recibe SIGPIPE y, con `set -o pipefail` activo en ese paso, el `|| recientes=""`
+  se dispara. Reproducido con el bloque real: **5 de 5 veces la lista salía
+  vacía.** El mecanismo no refrescaba nada; solo la incidencia del evento.
+
+Dos rondas, el mismo sitio, y la segunda versión peor que la primera. La raíz no
+es ninguno de los dos fallos: es que **estaba reconstruyendo con una heurística
+lo que no debería haberse perdido nunca.** Y se perdía por una sola razón: un
+grupo de concurrencia común a todo el repositorio.
+
+**Así que el grupo pasa a ser por incidencia** —`tablero-sirius-<número>`— y el
+repaso desaparece entero, con su lista, su `head` y su tubería. Dentro de una
+sola incidencia, descartar la pendiente sí es inofensivo, que es lo que la
+primera versión afirmaba sin que fuera cierto.
+
+### Y por qué eso obligó a tocar una guarda, sin debilitarla
+
+Un grupo por incidencia lleva `${{ }}`, y
+`tests/automation/test_serializacion_del_motor.py` exige grupo **constante** a
+todo trabajo que invoque un comando del motor. Su razón, escrita en su propio
+encabezado, es concreta: dos lecturas independientes del diario **crean el mismo
+trabajo dos veces** (ADR-082). Ese peligro lo tiene quien puede llegar al
+almacén o al diario de despacho. `sirius-tablero` no puede: solo lee el espejo
+de GitHub y escribe un comentario.
+
+La guarda no distinguía, y ahora **lo deriva del código**: recorre los imports
+del punto de entrada hacia dentro y pregunta si alcanza
+`ports.store`, `ports.dispatch_journal` o `adapters.durable`. No es una lista a
+mano —esa es la familia que ADR-033 nombró y que aquí ha mordido cuatro veces—.
+El reparto que produce sobre este árbol: **mutan** `sirius-motor`,
+`sirius-despachar`, `sirius-racha`, `sirius-reflejar` y `sirius-supervisar`;
+**solo leen** `sirius-memoria`, `sirius-familia-repetida` y `sirius-tablero`.
+
+Que sigue mordiendo se comprueba sembrando la mutación «todo alcanza el
+almacén»: entonces la guarda **rechaza este mismo workflow** por tener grupo
+variable. Y con «nada alcanza el almacén», caen las anti-vacuas. Las dos
+direcciones, vistas caer.
+
+Una honestidad más: en este árbol **ningún** comando llega al almacén sin
+importarlo directamente, así que el recorrido en profundidad no lo ejercita nada
+real. Se conserva porque su error va en la dirección peligrosa —clasificar como
+de solo lectura algo que sí puede mover trabajo—, y se prueba con un grafo de
+mentira para que no sea una rama muerta que nadie ve romperse.
+
+## La cuarta ronda: la misma familia por segunda vez, y lo que la cierra
+
+Dos hallazgos, **los dos ciertos y los dos reproducidos** antes de tocar nada.
+El revisor confirmó además que los dos de la ronda anterior -la cola por
+incidencia y la tubería muerta- quedaron resueltos.
+
+### 1. El neutralizador rompía el espacio; el lector acepta cualquier blanco (grave)
+
+`_SHA_MARKER_RE` separa `Head` de `SHA:` con `\s+`, y la sustitución de la
+tercera ronda hacía `replace(" ", "-", 1)`: **el espacio ASCII, y solo ese**.
+Reproducido: `Head<tab>SHA:<tab>deadbeef1234`, con tabuladores reales, salía del
+neutralizador **intacto** y el lector sacaba de ahí `deadbeef1234`. Sobrevivía
+en los campos que no se recortan -`work_id`, `bloque`, `rama_base`-: el recorte
+de los demás colapsa blancos, y por eso allí nunca se vio.
+
+Es la **misma familia que la tercera ronda**: entonces el neutralizador tenía su
+propia expresión (con un `\b` que el lector no tiene); ahora tenía su propia
+idea del separador. Dos rondas, la misma familia, y la regla de ADR-001 §2
+manda buscar la raíz. La raíz no es el espacio ni la frontera de palabra: es que
+**el neutralizador afirmaba haber neutralizado sin que nadie se lo comprobara
+con los ojos del lector.** Cada divergencia publicaba en silencio, y lo que se
+publica en silencio se cree.
+
+El arreglo tiene las dos mitades:
+
+- **El separador es el del lector.** `_BLANCO = re.compile(r"\s+")`, del mismo
+  motor de expresiones, y se rompe el primer blanco de la coincidencia, sea el
+  que sea. La prueba no lleva una lista de blancos escrita a mano: **recorre
+  todo el Unicode y le pregunta al propio lector** qué caracteres acepta como
+  separador -29 en este intérprete- y ejercita cada uno. Si mañana el motor de
+  expresiones acepta uno más, entra solo.
+- **Y lo que hace imposible la familia entera:** `_neutralizar` relee su propio
+  resultado con las expresiones del espejo antes de devolverlo. Si alguna aún
+  coincide -o queda una apertura de comentario HTML-, lanza
+  `NeutralizacionIncompletaError`; `sirius-tablero` sale con **3 sin escribir
+  nada**, y el workflow deja el tablero anterior donde estaba, con su aviso en
+  el registro. **Cerrado, no abierto**: antes que un tablero del que el motor
+  sacaría un hecho, ningún tablero. Con los lectores de hoy no puede saltar
+  -las dos formas llevan blanco y el blanco es lo que se rompe-, y se prueba
+  con un lector inventado cuya forma no lleva ninguno, que es justo el que
+  alguien añadiría mañana sin pasar por aquí.
+
+Lo que esto **no** garantiza: que el neutralizador pueda con cualquier forma
+futura. Garantiza que cuando no pueda, no publique y se sepa.
+
+### 2. La guarda de serialización no veía dos formas de importar (media)
+
+`_importados` registraba, de `from sirius_engine.ports import store`, solo
+`sirius_engine.ports` -sin prefijo común con la puerta `ports.store`- y, de
+`from .ports import store`, `ports` a secas, que no es de nadie. Reproducido con
+esas dos líneas. Las dos cosas van en **la dirección peligrosa**: clasificar
+como de solo lectura a un comando que sí puede mover trabajo, y con eso
+dejarle tener un grupo de concurrencia variable.
+
+Arreglo: de `from X import a, b` salen `X`, `X.a` y `X.b` -sin importar de
+verdad no se sabe si `a` es submódulo o nombre, y un candidato que no es módulo
+no tiene fichero y no lleva a ningún sitio-; las relativas se resuelven con la
+regla del intérprete (`importlib.util.resolve_name`) contra el paquete del
+fichero, donde un `__init__.py` ES su paquete; y una relativa sin paquete
+conocido es un **error**, no un import que se ignora. Con los candidatos `X.a`
+el prefijo a secas dejaba de valer -`ports.store_ayuda` pasaría por
+`ports.store`-, así que la frontera de paquete es ahora **el punto**.
+
+Medido sobre este árbol, antes y después: **el mismo reparto** -mutan
+`sirius-motor`, `sirius-despachar`, `sirius-racha`, `sirius-reflejar` y
+`sirius-supervisar`; solo leen `sirius-memoria`, `sirius-familia-repetida` y
+`sirius-tablero`-. El agujero era latente: hoy ningún comando usa esas formas.
+Por eso hay tres pruebas y no una: los casos exactos sobre `_importados`; un
+**árbol de mentira** que ejercita el lector de ficheros real de punta a punta
+-un grafo inyectado, como el de la ronda anterior, esquivaba justo el sitio
+del fallo-; y una anti-vacua sobre el árbol REAL **sin lista a mano**: se
+importa cada comando en un proceso aparte y **el intérprete es el juez**: todo
+lo que Python carga al importar, la derivación tiene que verlo también.
+
+### Y una anti-vacua que estaba ciega, y que se vio caer
+
+`test_el_cuerpo_envenenado_cubre_todos_los_campos` buscaba el veneno en
+`str(valor)`; con un tabulador real dentro del veneno, `str(tupla)` lo escapa y
+la prueba dijo que `plan` iba sin veneno cuando lo llevaba entero. Ahora mira
+dentro de las tuplas. Lo encontró la propia prueba al fallar, no yo.
+
+### Las mutaciones, vistas caer
+
+| Mutación | Cae |
+|---|---|
+| M1 tablero: vuelve a sustituir solo el espacio ASCII | 5, entre ellas la del blanco entero y la de punta a punta con tabuladores |
+| M2 tablero: sin la relectura final con el lector | 2: la del lector inventado y la del CLI con salida 3 |
+| M3 CLI: la excepción se propaga en vez de salir con 3 | 1: la del CLI |
+| M4 guarda: de `from X import a` solo se registra `X` | 2: casos exactos y árbol de mentira |
+| M5 guarda: las relativas se ignoran | 3: las dos anteriores y la de la relativa sin paquete |
+| M6 guarda: la frontera vuelve a ser un prefijo a secas | 1: la de la frontera |
+| M7 guarda: nada alcanza el estado | 5, entre ellas la del intérprete como juez |
+
+Y lo que hay que decir: **M4 y M5 no las caza la prueba del intérprete**,
+porque ningún comando real usa esas formas hoy; las cazan las de caso exacto.
+La del intérprete vigila el árbol real; las otras, la forma. Hacen falta las
+dos.
+
+## Alternativas descartadas y por qué
+
+Las seis de arriba. Y una quinta: **que el tablero incluyera el texto
+completo del objetivo y del criterio**. Descartada: los cuerpos de este
+repositorio llegan a mil palabras y el tablero dejaría de leerse de un vistazo,
+que es su única razón de ser. Se recorta por palabras y el cuerpo entero está a
+un clic, arriba, en la propia incidencia.
+
+## La lección
+
+- familia: `pieza-sin-lector`
+- sin esto se repetiría: proyectar en cada pasada el estado entero de una incidencia -fase, rondas, Quality, PR, diagnóstico- y no enseñárselo nunca a quien tiene que decidir; es la novena vez que un dato correcto de esta casa no tiene lector, tres días después de la octava.
+- lo hace cumplir: `tests/engine/test_tablero.py`
