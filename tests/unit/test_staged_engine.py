@@ -155,6 +155,78 @@ def test_g4_project_scoped_item_without_project_id_passes_a_global_peticion() ->
     assert filtrado.admitidas == (_candidata(item),)
 
 
+def test_g4_lista_cerrada_admite_el_ambito_que_es_miembro() -> None:
+    """``G4``, rama multiproyecto: **pertenencia**, no contencion.
+
+    Incidencia #582/ADR-170 (hueco H5 de ADR-148). El origen del corpus
+    declara ``miembros_lista_cerrada: ["PRJ-ALFA", "PRJ-BETA"]`` para
+    ``LISTA-CERRADA-AB`` y adjudica por pertenencia ("pertenece a
+    LISTA-CERRADA-AB; Gamma no es miembro y no hereda",
+    ``cases_v0_5.json``, CA-03). Una peticion de ambito ``PRJ-BETA`` es uno
+    de los miembros, asi que el item entra — aunque ``PRJ-ALFA`` quede
+    fuera de su ambito, que es justo lo que la regla anterior (``all``:
+    contencion) exigia y lo que dejaba a ``DEC-001`` fuera de
+    ``B04-CA-22``.
+    """
+    item = _item(
+        "DECISION:1",
+        project_id="LISTA-CERRADA-AB",
+        ejes=EjesDeclarados(
+            ambito="MULTI_PROYECTO_CERRADO",
+            miembros_de_ambito=("PRJ-ALFA", "PRJ-BETA"),
+        ),
+    )
+    peticion = _peticion(ambito=Ambito(global_=False, proyectos=("PRJ-BETA",)))
+    filtrado = gates.aplicar_previas([_candidata(item)], peticion)
+    assert filtrado.admitidas == (_candidata(item),)
+    assert filtrado.descartes == ()
+
+
+def test_g4_lista_cerrada_descarta_el_ambito_que_no_es_miembro() -> None:
+    """La otra mitad de la adjudicacion del origen: Gamma no hereda.
+
+    Sin esta prueba, ``any`` podria degenerar en "toda lista cerrada con
+    algun miembro entra". El motivo se afirma literal porque viaja a la
+    explicacion que ve el usuario (ADR-170).
+    """
+    item = _item(
+        "DECISION:1",
+        project_id="LISTA-CERRADA-AB",
+        ejes=EjesDeclarados(
+            ambito="MULTI_PROYECTO_CERRADO",
+            miembros_de_ambito=("PRJ-ALFA", "PRJ-BETA"),
+        ),
+    )
+    peticion = _peticion(ambito=Ambito(global_=False, proyectos=("PRJ-GAMMA",)))
+    filtrado = gates.aplicar_previas([_candidata(item)], peticion)
+    assert filtrado.admitidas == ()
+    assert filtrado.descartes == (
+        ("DECISION:1", "G4", "el ambito de la peticion no es miembro de la lista cerrada"),
+    )
+
+
+def test_g4_lista_cerrada_sin_miembros_resueltos_sigue_sin_entrar() -> None:
+    """Lo que ADR-170 **conserva** de la regla anterior: la duda no abre
+    ambito. Pasar de contencion a pertenencia solo cambia como se decide
+    cuando los miembros se conocen; sin miembros resueltos la puerta sigue
+    negandose, con su motivo intacto."""
+    item = _item(
+        "DECISION:1",
+        project_id="LISTA-CERRADA-AB",
+        ejes=EjesDeclarados(ambito="MULTI_PROYECTO_CERRADO"),
+    )
+    peticion = _peticion(ambito=Ambito(global_=False, proyectos=("PRJ-BETA",)))
+    filtrado = gates.aplicar_previas([_candidata(item)], peticion)
+    assert filtrado.admitidas == ()
+    assert filtrado.descartes == (
+        (
+            "DECISION:1",
+            "G4",
+            "lista cerrada sin miembros resueltos: la duda no abre ambito",
+        ),
+    )
+
+
 def test_g8_item_not_yet_valid_at_target_time_is_discarded_even_with_no_vigentes() -> None:
     item = _item("MEMORIA:1", ejes=EjesDeclarados(valid_from="2027-01-01T00:00:00Z"))
     peticion = _peticion(admite_no_vigentes=True)

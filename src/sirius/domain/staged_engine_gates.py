@@ -133,7 +133,23 @@ def _g3(candidata: Candidata, peticion: Peticion) -> VeredictoDePuerta:
 
 
 def _g4(candidata: Candidata, peticion: Peticion) -> VeredictoDePuerta:
-    """``G4``: tres clases de ámbito, no una."""
+    """``G4``: tres clases de ámbito, no una.
+
+    La rama de lista cerrada decide por **pertenencia**: el candidato entra
+    si el ámbito de la petición es uno de los miembros que la lista declara,
+    no si la lista entera cabe dentro del ámbito de la petición
+    (contención). Es la semántica del origen del que se portó el corpus,
+    que adjudica «pertenece a ``LISTA-CERRADA-AB``; Gamma no es miembro y
+    no hereda» (``cases_v0_5.json``, CA-03). Con contención, un ámbito de
+    un solo proyecto no podía entrar nunca en una lista de dos, y eso
+    dejaba a ``DEC-001`` fuera de ``B04-CA-22`` (hueco H5 de ADR-148,
+    incidencia #582/ADR-170).
+
+    Lo que la pertenencia **no** relaja: sin miembros resueltos la puerta
+    sigue negándose. La postura de confidencialidad —«la duda no abre
+    ámbito»— se conserva entera; lo que cambia es solo cómo se decide
+    cuando los miembros sí se conocen.
+    """
     item = candidata.item
     ambito = item.ejes.ambito
     if ambito == AMBITO_GLOBAL:
@@ -144,9 +160,11 @@ def _g4(candidata: Candidata, peticion: Peticion) -> VeredictoDePuerta:
             return VeredictoDePuerta(
                 "G4", False, "lista cerrada sin miembros resueltos: la duda no abre ambito"
             )
-        dentro = all(peticion.ambito.autoriza(m) for m in miembros)
+        dentro = any(peticion.ambito.autoriza(m) for m in miembros)
         return VeredictoDePuerta(
-            "G4", dentro, "" if dentro else "lista cerrada con miembros fuera del ambito"
+            "G4",
+            dentro,
+            "" if dentro else "el ambito de la peticion no es miembro de la lista cerrada",
         )
     if ambito is None:
         dentro = peticion.ambito.autoriza(item.project_id)

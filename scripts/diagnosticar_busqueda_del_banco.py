@@ -64,6 +64,20 @@ a **21/47, 144, 78/81**; críticas perdidas siguen en 0 en las cuatro. El
 único caso que cambia de resultado es ``B04-CA-22``, que pasa de recuperar
 uno de sus seis a recuperar cinco **sin añadir un solo elemento de más**.
 El sexto, ``DEC-001``, queda fuera por ámbito (``G4``) y no por vigencia.
+
+Vuelto a medir el 11-09-2026 con el hueco H5 cerrado (ADR-170: la membresía
+de lista cerrada que el corpus no portaba, y ``G4`` decidiendo la rama
+multiproyecto por **pertenencia** en vez de por contención). ``--peticion``
+**no se mueve** —17/47, 162, 78/81—: el puerto real entrega todo ítem con
+``SIN_EJES``, así que ``G4`` ni llega a la rama de lista cerrada.
+``--ejes --peticion`` pasa a **22/47, 146, 79/81**; críticas perdidas siguen
+en 0. ``B04-CA-22`` completa sus seis y, como tenía ``extras=0``, se vuelve
+acierto exacto. Los dos elementos de más nuevos son el mismo ``DEC-001``,
+que ahora alcanza ``B04-CA-14`` (ámbito GLOBAL, «¿De qué se ocupa Juan?») y
+``B04-CA-43`` (ámbito ``PRJ-ALFA``, miembro de la lista, «¿Quién valida los
+entregables de calidad?»): ruido del **filtro** de relevancia, que este
+guion no ejecuta, no del ámbito — la corrida final del laboratorio también
+llevó ``DEC-001`` al filtro en ``B04-CA-14`` y el filtro lo quitó.
 """
 
 from __future__ import annotations
@@ -150,7 +164,14 @@ def _medir(
     limite_sin_atar = int(banco["conteos"]["items_del_canon"])
 
     registro: dict[Clave, Mapping[str, Any]] = {}
+    #: La tabla ``nombre del corpus -> id real`` que el arnés crea, capturada
+    #: tal cual: ``_ejes_declarados`` la necesita para traducir la membresía
+    #: de lista cerrada al espacio de identidades en el que ``G4`` compara
+    #: (incidencia #582/ADR-170). Se captura, no se reconstruye: reconstruirla
+    #: aquí mediría otra cosa.
+    proyectos_reales: dict[str, int] = {}
     cargador_original = arnes._load_canon_item
+    proyectos_original = arnes._create_projects
     puerto_original = arnes.build_staged_engine_port
     peticion_original = recuperacion._peticion_ordinaria
     llamadas = {"peticiones": 0, "sin_caso": 0}
@@ -161,9 +182,16 @@ def _medir(
             registro[real] = item
         return real
 
+    def crear_y_registrar_proyectos(database_path: Path, names: list[str]) -> dict[str, int]:
+        creados = proyectos_original(database_path, names)
+        proyectos_reales.update(creados)
+        return creados
+
     def puerto_con_ejes(database_path: Path, **kw: Any) -> Any:
         ejes = {
-            arnes._identidad_del_motor(kind, real_id): arnes._ejes_declarados(item)
+            arnes._identidad_del_motor(kind, real_id): arnes._ejes_declarados(
+                item, project_ids=proyectos_reales
+            )
             for (kind, real_id), item in registro.items()
         }
         return puerto_original(database_path, ejes_por_identidad=ejes)
@@ -185,6 +213,7 @@ def _medir(
 
     filtro = _FiltroQueNoDescartaYRecuerda(aplica_cupo=con_cupo)
     arnes._load_canon_item = cargar_y_registrar
+    arnes._create_projects = crear_y_registrar_proyectos
     if con_ejes:
         arnes.build_staged_engine_port = puerto_con_ejes
     if peticion_alternativa is not None:
@@ -198,6 +227,7 @@ def _medir(
             )
     finally:
         arnes._load_canon_item = cargador_original
+        arnes._create_projects = proyectos_original
         arnes.build_staged_engine_port = puerto_original
         recuperacion._peticion_ordinaria = peticion_original
     return ejecucion, filtro.entradas, llamadas
