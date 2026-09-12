@@ -255,19 +255,19 @@ sus cotas no cambian.
 
 **Cadena completa como UNA SOLA invocación** (ADR-145, ADR-153), con
 `pwsh -File scripts/check.ps1` y su código de salida capturado (ADR-154),
-anclada **al árbol de `PENDIENTE_SHA`**:
+anclada **al árbol de `379ea5da`** —el head con el código, las pruebas y esta ficha; lo único posterior es esta misma sección de validación, que no toca código—:
 
 ```
-PENDIENTE_TERNA
-EXIT_CODE_CHECK=PENDIENTE
+5372 passed, 17 skipped, 2 xfailed in 492.43s (0:08:12)
+EXIT_CODE_CHECK=0
 ```
 
 La quinta validación, **sobre el rango de la rama y no sin argumentos**
 (deuda 25), sobre ese mismo árbol:
 
 ```
-$ git diff --check 433fb11 PENDIENTE_SHA
-PENDIENTE_DIFF_CHECK
+$ git diff --check 433fb11 379ea5da
+EXIT=0
 ```
 
 ## Consecuencias
@@ -294,3 +294,16 @@ Las tres de «Opciones consideradas». La que más cerca estuvo es el
 vocabulario cerrado también en producción: descartada porque con un único
 propósito declarado seguiría atando la activación a la redacción de un
 literal, que es exactamente el defecto que H4 viene a cerrar.
+
+De la invocación se transcribe la cola capturada —la terna de `pytest` y el
+código de salida—; el `0` solo sale si `ruff format --check .`,
+`ruff check .` y `mypy src tests` pasaron antes, porque el guion corta en el
+primero que falle (ADR-153). La terna sube de las 5369 que midió `433bf11`
+(ADR-170) a 5372 porque esta ficha añade **tres** pruebas netas: +2 en
+`tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py` (la traducción que
+enciende y la que apaga), +2 en `tests/integration/test_rank_relevant_
+knowledge.py` (los dos casos de aceptación), +1 en
+`tests/unit/test_interpret_query_request.py` (la regla escrita del
+intérprete) y **-4** en `tests/unit/test_relevance_domain.py` (las cuatro de
+la función retirada, sustituidas por un candado). Ninguna prueba se ha
+relajado; ninguna cota del arnés se mueve.
