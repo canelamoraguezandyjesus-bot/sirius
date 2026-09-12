@@ -38,8 +38,9 @@ guarda cuya cobertura es un dato de entrada escrito a mano no puede ver lo que
 no se escribió en ella, y en esa lista no cabía siquiera la forma de la pieza:
 las cuatro entradas son nombres de módulo.
 
-**La medida, sobre el árbol de `9efaa3c`** (el guion está en la sección
-«Comprobación que la sostiene»):
+**La medida, sobre el árbol de `9efaa3c`** con la versión del guion de derivación
+que se escribió para la nota de arranque (el guion terminado, y la conciliación
+de las tres medidas, están en la sección «Comprobación que la sostiene»):
 
 | | piezas |
 |---|---|
@@ -84,8 +85,9 @@ Escrito antes, no como excusa después:
   cambia es a cuántas piezas se aplica.
 - **No ve las piezas que no son públicas ni de nivel superior.** Quedan fuera:
   los nombres con `_` delante, los métodos de instancia, los miembros de `Enum`
-  y las claves de diccionario. La cobertura que gana está medida (826 de un
-  total mayor), no es total.
+  y las claves de diccionario. La cobertura que gana está medida (las 831
+  piezas de la sección «Comprobación que la sostiene», de un total mayor), no
+  es total.
 - **No mira el paquete `sirius`**, solo `sirius_engine`. El objetivo dice «el
   paquete del motor» y esto no se extiende por iniciativa propia.
 - **Confunde homónimos.** La derivación reconoce piezas por su identificador, y
@@ -188,7 +190,13 @@ Dos detalles de la derivación no son cosméticos:
 
 ### La medida: 4 piezas a mano contra 831 derivadas
 
-Con el árbol de `9efaa3c` y el guion de derivación de la propia guarda:
+Con el guion de derivación de la propia guarda **sobre el árbol de `6ce3655`**
+—el head de esta rama cuando se midió—. Las 826 piezas de la sección anterior
+son de `9efaa3c`, y la diferencia no está en el código medido sino en la versión
+del guion: `git diff 9efaa3c..6ce3655 -- src/` no devuelve nada, así que el
+`src/sirius_engine` que ve esta medida es el mismo, y las cinco piezas de más
+las aporta el `ast.AnnAssign` que la ronda 2 añadió a la derivación (fila
+tercera de la conciliación de más abajo):
 
 | | piezas |
 |---|---|
@@ -202,8 +210,9 @@ públicas, y ninguna de las cuatro estaba muerta: por eso no encontró nada en
 tres meses. El inventario derivado corre en 2 s y la batería pasa de 5 pruebas a
 933.
 
-**Por qué la nota de arranque dice 36 y aquí dice 46.** Son medidas del mismo
-guion en dos momentos distintos y ninguna es un error de la otra; la nota de
+**Por qué la nota de arranque dice 826 y 36, y aquí 831 y 46.** Son medidas de
+tres versiones sucesivas del mismo guion y ninguna es un error de la otra —el
+`src/` medido no cambió en ninguna—; la nota de
 arranque no se reescribe porque es evidencia fechada, así que la conciliación va
 aquí:
 
@@ -211,7 +220,7 @@ aquí:
 |---|---|---|---|
 | nota de arranque (antes de escribir la guarda) | 826 | **36** — 7 módulos, 17 definiciones, **12 campos** | contaba como lectura CUALQUIER aparición del atributo |
 | guarda terminada (ronda 1) | 826 | **45** — 7, 17, **21 campos** | para `campo:` solo cuenta `ast.Attribute` en contexto `Load`: escribir un campo dejó de mantenerlo vivo, que es el caso `cerrada` |
-| guarda terminada (ronda 2, esta) | **831** | **46** — 7, **18**, 21 | la derivación pasó a ver también `ast.AnnAssign` de nivel superior: cinco constantes anotadas más, una de ellas sin llamante |
+| guarda terminada (ronda 2, esta, `ad48d0c`) | **831** | **46** — 7, **18**, 21 | la derivación pasó a ver también `ast.AnnAssign` de nivel superior: cinco constantes anotadas más, una de ellas sin llamante |
 
 La cifra vigente es la de la última fila, y es la que sostiene el diccionario:
 `SIN_LLAMANTE_CONOCIDO` tiene 46 claves —7 `modulo:`, 18 `definicion:`, 21
