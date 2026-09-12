@@ -6,19 +6,27 @@ implementa esa función total sobre :class:`WorkItemClass`, para que "un
 WorkItem nace siempre con autoridad asignada" (requisito de la incidencia
 #206) sea una propiedad comprobable en vez de una promesa.
 
-Interpretación de las dos clases sin fila explícita en la tabla del
-contrato (``consulta-larga``, ``mixta``): ambas se resuelven a ``MOTOR`` por
-el mismo criterio que la tabla aplica al resto de clases sin proyección en
-GitHub (investigación, documental no publicada) — ninguna tiene una
-proyección GitHub definida en ningún documento aprobado. Es la lectura
-conservadora que completa un patrón ya aprobado, no una fila nueva
-inventada (ADR-043).
+La regla de la tabla §11.1 es una sola pregunta: **¿existe la clase en la vía
+GitHub?** Si sí, la incidencia es la fuente de verdad hasta que conmute; si
+no, el almacén del motor lo es desde el nacimiento. **Desde ADR-178 la tabla
+se deriva de esa pregunta** (:data:`CLASES_CON_VIA_GITHUB`) en vez de
+escribirse aparte. Hasta entonces era una copia a mano de agosto (ADR-041)
+que decía ``MOTOR`` para documentación e investigación -«A5 nunca publica
+nada en GitHub»- mientras ADR-088 y ADR-099 metían esas dos clases en la
+vía GitHub del despachador sin tocarla: quince encargos reales corrieron
+enteros en GitHub con autoridad «motor», y el contador de los siete días no
+midió nunca ninguno. Dos listas para el mismo hecho acaban divergiendo; la
+única forma de que no diverjan es que sea una, y que ``TABLA_ACTIVACION``
+esté atada a ella por una prueba.
 
-``WorkItemClass.DOCUMENTACION`` se resuelve a ``MOTOR`` porque A5 nunca
-publica nada en GitHub (fuera de alcance de esta incidencia): la única
-variante de "documentación" que A5 puede producir es la no publicada. La
-distinción con "documental publicada (PR en el repo)" -autoridad
-``incidencia``- es trabajo de C3, que sí escribe en GitHub.
+Interpretación de las dos clases sin fila explícita en la tabla del contrato
+(``consulta-larga``, ``mixta``): ambas se resuelven a ``MOTOR`` porque ninguna
+tiene vía GitHub definida en ningún documento aprobado. Es la lectura
+conservadora que completa un patrón ya aprobado, no una fila nueva inventada
+(ADR-043). Y «documental no publicada», que el contrato lista con autoridad
+``motor``, no tiene clase en el motor: toda la documentación que el motor
+despacha va por la vía GitHub (ADR-088), así que ``DOCUMENTACION`` es la fila
+«documental publicada (PR en el repo)».
 
 **D1c (incidencia #276, contrato §11.3) añade el segundo término de la
 función total**: la autoridad de una clase ya no es solo la tabla estática
@@ -54,16 +62,36 @@ class Autoridad(StrEnum):
     INCIDENCIA = "incidencia"
 
 
-#: Tabla de autoridad al entrar en vigor la v1.7 (contrato §11.1, ADR-041).
-#: Función total sobre TODO ``WorkItemClass``: sin huecos.
+#: Las clases que existen en la vía GitHub: la columna «¿Existe en la vía
+#: GitHub?» de la tabla §11.1 del contrato, y la ÚNICA definición de ese
+#: hecho en el código (ADR-178). ``TABLA_ACTIVACION`` -el despachador- tiene
+#: que tener exactamente estas claves, y ``tests/engine/test_authority.py``
+#: falla si las dos divergen; la autoridad de abajo se deriva de aquí.
+CLASES_CON_VIA_GITHUB: frozenset[WorkItemClass] = frozenset(
+    {
+        WorkItemClass.PROGRAMACION,
+        WorkItemClass.AUDITORIA,
+        WorkItemClass.DOCUMENTACION,
+        WorkItemClass.INVESTIGACION,
+    }
+)
+
+#: Y las nativas del motor, declaradas también a propósito: la tabla se
+#: construye SOLO con lo declarado en una de las dos, así que una clase nueva
+#: que no se declare en ninguna sigue reventando con ``KeyError`` (ADR-041) en
+#: vez de recibir una autoridad por defecto en silencio.
+CLASES_SIN_VIA_GITHUB: frozenset[WorkItemClass] = frozenset(
+    {
+        WorkItemClass.CONVERSACION_NO_APLICA,
+        WorkItemClass.CONSULTA_LARGA,
+        WorkItemClass.MIXTA,
+    }
+)
+
+#: La función total de §11.1, DERIVADA de las dos declaraciones de arriba.
 _TABLA_AUTORIDAD: Mapping[WorkItemClass, Autoridad] = {
-    WorkItemClass.CONVERSACION_NO_APLICA: Autoridad.MOTOR,
-    WorkItemClass.INVESTIGACION: Autoridad.MOTOR,
-    WorkItemClass.DOCUMENTACION: Autoridad.MOTOR,
-    WorkItemClass.PROGRAMACION: Autoridad.INCIDENCIA,
-    WorkItemClass.AUDITORIA: Autoridad.INCIDENCIA,
-    WorkItemClass.CONSULTA_LARGA: Autoridad.MOTOR,
-    WorkItemClass.MIXTA: Autoridad.MOTOR,
+    **dict.fromkeys(CLASES_CON_VIA_GITHUB, Autoridad.INCIDENCIA),
+    **dict.fromkeys(CLASES_SIN_VIA_GITHUB, Autoridad.MOTOR),
 }
 
 

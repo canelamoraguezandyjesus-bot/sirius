@@ -94,7 +94,13 @@ class NotificadorQueFallaLaPrimeraVez:
 def _make_motor_work_item(
     store: WorkEngineStore, *, now: datetime, work_id: str = "WI-0001"
 ) -> None:
-    """Un ``WorkItem`` de autoridad MOTOR (arquitectura §11): la única que el motor supervisa."""
+    """Un ``WorkItem`` de autoridad MOTOR (arquitectura §11): la única que el motor supervisa.
+
+    Hasta ADR-178 este ayudante usaba ``INVESTIGACION`` como ejemplo de clase
+    MOTOR: fijaba la copia vieja de la tabla de autoridad. Investigación existe
+    en la vía GitHub desde ADR-099, así que su autoridad es ``INCIDENCIA``;
+    ``CONSULTA_LARGA`` sí es nativa del motor.
+    """
     store.create_work_item(
         work_id=work_id,
         peticion_original="texto literal de la petición",
@@ -104,7 +110,7 @@ def _make_motor_work_item(
         criterio_terminado="el entregable existe y pasa sus pruebas",
         limites={"presupuesto_turnos": 10},
         prioridad=1,
-        clase=WorkItemClass.INVESTIGACION,
+        clase=WorkItemClass.CONSULTA_LARGA,
         now=now,
         plan=("paso-1",),
     )
