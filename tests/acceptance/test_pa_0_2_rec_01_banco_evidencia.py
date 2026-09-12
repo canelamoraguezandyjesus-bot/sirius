@@ -1464,9 +1464,11 @@ def test_el_banco_se_ejecuta_contra_el_motor_portado_y_reporta_las_cuatro_metric
     así, medido con esa población (CODEX-001, más abajo). **Desde ADR-170 ya
     no**: ver el párrafo de ADR-170 al final de este docstring.
 
-    Las cotas de no regresión se actualizan a la medición de la fila 5 sobre
-    las 47 filas sin salvedad (≥29/47, ≤50, ≤0, ≥63/81), nunca por debajo de
-    lo medido; `aciertos_exactos`, `omisiones_criticas` y `cobertura` se
+    Las cotas de no regresión se fijaron en su día en la medición de la fila
+    5 sobre las 47 filas sin salvedad (≥29/47, ≤50, ≤0, ≥63/81), nunca por
+    debajo de lo medido; ADR-168 y ADR-170 las movieron después, así que hoy
+    las cuatro constantes `_*_MOTOR` de arriba valen ≥30/47, ≤51, ≤0 y
+    ≥68/81; `aciertos_exactos`, `omisiones_criticas` y `cobertura` se
     afirman además como aserción dura aparte, cada una sobre esa misma
     medición de 47 filas, que ya alcanza su suelo D1/D2 sin ninguna
     salvedad de población. `elementos_de_mas` no se afirma como aserción
@@ -3172,8 +3174,12 @@ def test_el_banco_se_ejecuta_contra_el_paquete_completo_de_produccion_como_evide
     deterministas, publicando las cuatro métricas del paquete completo como
     evidencia adicional — sin tocar el arnés del examen ya fusionado ni sus
     aserciones». No afirma ningún suelo de D1/D2 — el arnés de examen de
-    arriba (`ejecucion_del_banco_motor_portado`) ya los alcanza y sigue
-    siendo la medición que cuenta para D1/D2 (ver el docstring del módulo);
+    arriba (`ejecucion_del_banco_motor_portado`) alcanza tres de los cuatro
+    (`aciertos_exactos` 30/47 ≥ 29/47, `omisiones_criticas` 0 ≤ 1 y
+    `cobertura` 68/81 ≥ 63/81) y desde ADR-170 **no** el de
+    `elementos_de_mas` (≤21, que mide 22 bajo la población publicada), y
+    sigue siendo la medición que cuenta para D1/D2 (ver el párrafo de
+    ADR-170 en el docstring del módulo);
     esta prueba solo publica, sin afirmarla como aserción dura, la cifra que
     el camino de código real de producción mide sobre el mismo banco.
 
