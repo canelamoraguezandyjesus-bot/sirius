@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+import pytest
+
 from sirius_engine.domain.authority import Autoridad
 from sirius_engine.domain.escalation import CausaEscalado, Escalada
 from sirius_engine.domain.intent import DatosNuevoTrabajo
@@ -143,12 +145,38 @@ def test_crear_y_escalar_notifica(store: WorkEngineStore) -> None:
 
 
 def test_autoridad_motor_para_clase_nativa(store: WorkEngineStore) -> None:
+    """Una clase nativa del motor nace con autoridad MOTOR.
+
+    Hasta ADR-177 el ejemplo era `INVESTIGACION`, y fijaba la copia vieja de la
+    tabla de autoridad: investigación existe en la vía GitHub desde ADR-099.
+    `CONSULTA_LARGA` sí es nativa del motor.
+    """
     decision = DecisionPuerta(
         resultado=ResultadoPuerta.CREAR_Y_ACTIVAR,
         motivo="orden inequívoca",
-        datos_trabajo=_datos(clase=Clase.INVESTIGACION),
+        datos_trabajo=_datos(clase=Clase.CONSULTA_LARGA),
     )
     resultado = aplicar_decision(
-        decision, store=store, work_id="WI-INTAKE-0006", peticion_original="investiga X", now=_NOW
+        decision, store=store, work_id="WI-INTAKE-0006", peticion_original="consulta X", now=_NOW
     )
     assert resultado.autoridad is Autoridad.MOTOR
+
+
+@pytest.mark.parametrize("clase", [Clase.DOCUMENTACION, Clase.INVESTIGACION])
+def test_documentacion_e_investigacion_nacen_con_autoridad_incidencia(
+    store: WorkEngineStore, clase: Clase
+) -> None:
+    """El defecto de ADR-177 en el punto exacto donde nace la autoridad.
+
+    Quince encargos reales de estas dos clases nacieron aquí con MOTOR y
+    corrieron enteros en la vía GitHub.
+    """
+    decision = DecisionPuerta(
+        resultado=ResultadoPuerta.CREAR_Y_ACTIVAR,
+        motivo="orden inequívoca",
+        datos_trabajo=_datos(clase=clase),
+    )
+    resultado = aplicar_decision(
+        decision, store=store, work_id="WI-INTAKE-0007", peticion_original="haz X", now=_NOW
+    )
+    assert resultado.autoridad is Autoridad.INCIDENCIA

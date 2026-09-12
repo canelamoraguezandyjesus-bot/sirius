@@ -199,7 +199,7 @@ Sobre el árbol de esta rama, el 12-09-2026:
   que entra es `WI-20260828-122242`, investigación, `active` desde el 28-08,
   de un carril ya retirado. Ningún encargo de documentación entra hoy: los diez
   son terminales.
-- Batería entera: se anota en la PR con la cifra medida.
+- Batería entera: se anota con la cifra medida sobre el árbol final.
 
 ## Consecuencias
 
