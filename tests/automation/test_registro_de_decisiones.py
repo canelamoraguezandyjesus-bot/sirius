@@ -21,7 +21,19 @@ import re
 from collections.abc import Callable
 from pathlib import Path
 
-from siguiente_adr import duplicados, numeros_en_ramas, numeros_por_archivo, siguiente_numero
+import pytest
+
+from siguiente_adr import (
+    REFSPEC_DE_LAS_CABEZAS,
+    _como_se_consulto,
+    _correr_git,
+    duplicados,
+    main,
+    numeros_en_ramas,
+    numeros_por_archivo,
+    siguiente_numero,
+    traer_las_cabezas,
+)
 
 REGISTRO = Path(__file__).resolve().parents[2] / "docs" / "decisions"
 
@@ -130,3 +142,120 @@ def test_a_branch_that_only_has_older_adrs_does_not_move_the_number(tmp_path: Pa
 
     assert reservados == {30: ["refs/remotes/origin/vieja"]}
     assert siguiente_numero(registro, reservados) == 43
+
+
+# --- ADR-180: el número se calcula contra las ramas del REMOTO ---------------
+#
+# ADR-044 hizo que el guion mirara las ramas del clon y dejó su límite escrito:
+# «solo ve las ramas TRAÍDAS». El 12-09-2026 ese límite se cobró tres ADR-177 a
+# la vez -PR #590, #591 y #593-, dos de ellos renumerados a mano. Medido ese
+# día: el clon tenía 14 refs remotas de las 409 del remoto, el 3,4 %, y traerlas
+# todas costaba 4 segundos.
+
+
+def _git_que_trae(
+    exito: bool, registro: list[list[str]]
+) -> Callable[[list[str], Path], tuple[bool, str]]:
+    """Sustituto de git que apunta lo que se le pide y contesta lo que se le diga."""
+
+    def correr(argumentos: list[str], _raiz: Path) -> tuple[bool, str]:
+        registro.append(argumentos)
+        return exito, ""
+
+    return correr
+
+
+def test_traer_las_cabezas_pide_todas_y_no_solo_las_que_el_clon_tenga(tmp_path: Path) -> None:
+    """El refspec explícito es el cambio: sin él, un clon estrecho se queda como nació.
+
+    Una sesión remota clona una sola rama, y `git fetch origin` a secas respeta
+    ese refspec estrecho: seguiría viendo 14 de 409.
+    """
+    pedido: list[list[str]] = []
+    assert traer_las_cabezas(_registro(tmp_path, []), _git_que_trae(True, pedido))
+    assert pedido == [["fetch", "--quiet", "origin", REFSPEC_DE_LAS_CABEZAS]]
+    assert REFSPEC_DE_LAS_CABEZAS == "+refs/heads/*:refs/remotes/origin/*"
+
+
+def test_si_no_se_pueden_traer_las_cabezas_el_guion_no_aborta(tmp_path: Path) -> None:
+    """Sin red, sin git o fuera de un repositorio: se degrada, nunca se aborta.
+
+    Quedarse sin crear el ADR es peor que crearlo con la cobertura de ayer.
+    """
+    registro = _registro(tmp_path, ["ADR-041-x.md"])
+    assert traer_las_cabezas(registro, _git_que_trae(False, [])) is False
+    # Y el número se sigue calculando, con lo que hubiera.
+    assert siguiente_numero(registro) == 42
+
+
+def test_el_aviso_distingue_haber_traido_de_no_haber_podido() -> None:
+    """Las dos situaciones piden cosas distintas de quien lee, y antes se decían igual.
+
+    `git fetch --quiet` no imprime nada cuando va bien, así que con la forma
+    anterior -solo la salida- «trajo» y «no pudo» eran la misma cadena vacía.
+    """
+    trajo = _como_se_consulto(409, trajo=True)
+    no_pudo = _como_se_consulto(14, trajo=False)
+
+    assert "409" in trajo
+    assert "NO" not in trajo
+    assert "14" in no_pudo
+    assert "NO se pudieron traer" in no_pudo
+    assert "git fetch" in no_pudo, "quien lee tiene que saber qué hacer al respecto"
+    assert trajo != no_pudo
+
+
+def test_el_guion_trae_antes_de_calcular_y_sin_traer_lo_impide(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """La mitad que importa: que traer ocurra ANTES de calcular, en la pasada real.
+
+    Se comprueba sobre `main`, no sobre la función suelta, porque el defecto de
+    ADR-180 no era que `traer_las_cabezas` no existiera: era que nadie la
+    llamaba antes de decidir el número.
+    """
+    import siguiente_adr
+
+    registro = _registro(tmp_path, ["ADR-041-x.md"])
+    llamadas: list[str] = []
+
+    def traer_falso(_directorio: Path, _correr: object = None) -> bool:
+        llamadas.append("traer")
+        return True
+
+    def numeros_falsos(_directorio: Path, _ejecutar: object = None) -> dict[int, list[str]]:
+        llamadas.append("calcular")
+        return {}
+
+    monkeypatch.setattr(siguiente_adr, "traer_las_cabezas", traer_falso)
+    monkeypatch.setattr(siguiente_adr, "numeros_en_ramas", numeros_falsos)
+
+    assert main(["--solo-numero", "--directorio", str(registro)]) == 0
+    assert llamadas == ["traer", "calcular"], "traer tiene que ocurrir antes de calcular"
+    assert capsys.readouterr().out.strip() == "42"
+
+    llamadas.clear()
+    assert main(["--solo-numero", "--sin-traer", "--directorio", str(registro)]) == 0
+    assert llamadas == ["calcular"], "--sin-traer no debe traer nada"
+
+
+def test_correr_git_distingue_de_verdad_un_fallo_de_una_salida_vacia(tmp_path: Path) -> None:
+    """La única prueba que ejercita git DE VERDAD, y la que faltaba.
+
+    Lo encontró una mutación: devolviendo siempre `True` en `_correr_git`, las
+    once pruebas seguían en verde, porque todas las demás inyectan un git de
+    mentira. Y sobre ese booleano descansa todo lo que ADR-180 dice en voz
+    alta: si «no pude traer» se cuela como «traje», el guion afirmaría una
+    cobertura que no tiene, que es peor que la cobertura parcial de ayer.
+
+    Los dos casos con git real: uno que funciona y no imprime casi nada, y uno
+    que falla. Si git no estuviera instalado, el primero también daría `False`
+    y la prueba lo dice en vez de pasar en vacío.
+    """
+    funciono, salida = _correr_git(["--version"], tmp_path)
+    assert funciono, "sin git instalado esta prueba no puede medir nada"
+    assert "git" in salida.lower()
+
+    fallo, vacia = _correr_git(["rev-parse", "--esta-opcion-no-existe"], tmp_path)
+    assert fallo is False
+    assert vacia == ""
