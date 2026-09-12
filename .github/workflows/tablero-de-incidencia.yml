@@ -1,0 +1,144 @@
+name: Mantener el tablero de la incidencia
+
+# Un SOLO comentario por incidencia con la foto de AHORA, reescrito en cada
+# cambio de estado (ADR-175). Las 40 incidencias más recientes del ciclo
+# acumulan 1.019 comentarios -mediana 21, máximo 157- y ninguno dice el estado:
+# cada uno es un HECHO con su marcador, publicado una vez y nunca vuelto a
+# tocar. El historial no se toca; esto se pone al lado.
+#
+# POR QUÉ ES UN WORKFLOW APARTE y no un paso más de `notify-sirius-state.yml`,
+# que se dispara con las mismas seis etiquetas y ya tiene `issues: write`:
+# porque los dos necesitan `concurrency` OPUESTAS, y compartir fichero
+# obligaría a uno de los dos a aceptar la del otro.
+#
+# - El aviso publica un HECHO. Necesita una ranura POR EVENTO (ADR-158): Actions
+#   guarda como mucho UNA ejecución en espera por grupo y descarta la pendiente
+#   cuando llega otra, así que con un grupo compartido un tercer evento
+#   desplazaría al segundo y ese hecho no dejaría marcador. Un hecho perdido no
+#   se recupera.
+# - El tablero publica un ESTADO, recalculado entero del espejo en cada pasada.
+#
+# Y EL GRUPO ES POR INCIDENCIA, que es la corrección de la tercera ronda de
+# revisión. Con un grupo común a todo el repositorio, Actions descartaba la
+# pendiente de OTRA incidencia y su tablero se quedaba viejo. Se intentó
+# compensarlo repasando «las últimas movidas del ciclo» en cada pasada, y esa
+# compensación fue peor que el problema: entraban 170 incidencias cerradas que
+# desplazaban a la que importaba, y el `head` que recortaba la lista cerraba la
+# tubería, mataba al productor con SIGPIPE y, con `pipefail`, dejaba la lista
+# VACÍA -reproducido 5 de 5-. El mecanismo no refrescaba nada.
+#
+# Con una ranura por incidencia no hay nada que compensar: cada incidencia tiene
+# la suya, y dentro de una sola incidencia descartar la pendiente sí es
+# inofensivo -la que sobrevive lee el espejo más nuevo y pinta el tablero más
+# nuevo-. Eso es lo que la primera versión afirmaba sin que fuera cierto,
+# y ahora lo es.
+#
+# Un grupo por incidencia lleva `${{ }}`, y `tests/automation/test_serializacion_del_motor.py`
+# exige grupo CONSTANTE a todo trabajo que invoque un comando del motor capaz de
+# mover trabajo (ADR-082). `sirius-tablero` no lo es -no alcanza el almacén ni
+# el diario de despacho, y esa guarda ahora lo DERIVA de los imports en vez de
+# suponerlo-, así que esta ranura no le quita ninguna protección a nadie.
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  # Una ranura POR INCIDENCIA: dos incidencias distintas no se pisan, y dos
+  # eventos de la misma sí hacen cola -donde perder la pendiente no pierde
+  # nada, porque el tablero se recalcula entero del espejo-.
+  group: tablero-sirius-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  tablero:
+    name: Reescribir el tablero de la incidencia
+    # Las mismas seis etiquetas que notifica `notify-sirius-state.yml`. No se
+    # amplía a `sirius:ci-pending` ni al resto: ampliar el disparador es cambiar
+    # cuándo corre un workflow, y eso tiene su puerta en el contrato operativo.
+    # En esa ventana el tablero enseña el estado anterior, y queda dicho.
+    if: >-
+      github.event.label.name == 'sirius:implementing' ||
+      github.event.label.name == 'sirius:repair-requested' ||
+      github.event.label.name == 'sirius:ready-for-merge' ||
+      github.event.label.name == 'sirius:blocked-decision' ||
+      github.event.label.name == 'sirius:failed-safely' ||
+      github.event.label.name == 'sirius:completed'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Install uv
+        continue-on-error: true
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          enable-cache: true
+          # Igual que en el resto de workflows del motor: con el `python3` del
+          # sistema (3.12 en `ubuntu-latest`) el paquete, que exige >=3.14, no
+          # arranca. Es la familia de H-13.
+          python-version: "3.14.6"
+
+      - name: Reescribir el tablero
+        # `always()` porque el paso de arriba lleva `continue-on-error`: si `uv`
+        # no se pudo instalar, este paso lo dice y sale en verde en vez de dejar
+        # el trabajo en un estado que nadie mira.
+        if: always()
+        shell: bash --noprofile --norc {0}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          set -u
+          set -o pipefail
+
+          # Secundario de principio a fin: ante CUALQUIER problema se deja un
+          # aviso en el registro y se sale en verde. Un tablero que no se pudo
+          # pintar no altera el estado de la incidencia ni bloquea el ciclo, y
+          # el anterior se queda donde está, que es mejor que pisarlo.
+          if ! command -v uv >/dev/null 2>&1; then
+            echo "::warning::uv no disponible; esta pasada no actualiza el tablero."
+            exit 0
+          fi
+          if ! uv sync --locked >/dev/null 2>&1; then
+            echo "::warning::no se pudo preparar el entorno; esta pasada no actualiza el tablero."
+            exit 0
+          fi
+
+          source scripts/automation/sirius_issue.sh
+
+          cuerpo="$(mktemp)"
+          if ! uv run sirius-tablero --repo "$GH_REPO" --incidencia "$ISSUE_NUMBER" > "$cuerpo"; then
+            rm -f "$cuerpo"
+            echo "::warning::no se pudo calcular el tablero de #${ISSUE_NUMBER}; se deja como estaba."
+            exit 0
+          fi
+
+          # El marcador se toma de la PRIMERA LÍNEA del propio cuerpo, que el
+          # generador garantiza y `tests/engine/test_tablero.py` fija. Copiarlo
+          # aquí sería el mismo dato en dos sitios, y el día que cambiara en uno
+          # el motor publicaría un tablero nuevo dejando huérfano al anterior.
+          marcador="$(sed -n '1p' "$cuerpo")"
+          case "$marcador" in
+            "<!--"*"-->") ;;
+            *)
+              rm -f "$cuerpo"
+              echo "::warning::el tablero no empieza por su marcador; no publico a ciegas."
+              exit 0
+              ;;
+          esac
+
+          if ! sirius_comment_upsert "$GH_REPO" "$ISSUE_NUMBER" "$marcador" "$cuerpo"; then
+            echo "::warning::no se pudo publicar el tablero de #${ISSUE_NUMBER}; el ciclo continúa."
+          fi
+          rm -f "$cuerpo"
+          exit 0

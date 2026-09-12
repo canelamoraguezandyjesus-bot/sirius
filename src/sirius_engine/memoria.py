@@ -61,6 +61,38 @@ _ENFASIS = re.compile(r"\*\*|__")
 _ESPACIOS = re.compile(r"\s+")
 _URL_DE_RUN = re.compile(r"https://github\.com/\S+/actions/runs/\d+\S*")
 
+#: Desde este ADR, declarar la lección es obligatorio (ADR-174). Los anteriores
+#: quedan exentos a propósito: rellenarlos hoy sería escribir de memoria lo que
+#: en su día no se capturó, que es justo lo que este mecanismo existe para no
+#: volver a hacer.
+PRIMER_ADR_CON_LECCION = 174
+
+#: El encabezado del bloque, EXACTO: `_seccion` compara la línea entera, y un
+#: encabezado aproximado deja la lección invisible sin que nadie se entere.
+TITULO_LECCION = "## La lección"
+
+#: Las tres claves de una lección, y la cuarta que declara que no hay ninguna.
+CLAVE_FAMILIA = "familia"
+CLAVE_REPETIRIA = "sin esto se repetiría"
+CLAVE_GUARDIAN = "lo hace cumplir"
+CLAVE_SIN_LECCION = "ninguna"
+
+#: Lo que vale como «todavía no hay prueba que lo haga cumplir». La razón va
+#: detrás de los dos puntos y **es obligatoria**: «ninguna prueba» a secas
+#: pasaba, y dejaba una lección sin prueba y sin explicación de por qué no la
+#: tiene, que es peor que no declarar nada (revisión del 12-09-2026).
+SIN_GUARDIAN = "ninguna prueba"
+
+#: Dónde vive lo que hace cumplir una lección. En este repositorio lo que hace
+#: imposible un fallo es una prueba de la batería, y comprobar solo que la RUTA
+#: existe dejaba pasar `tests/automation` -una carpeta- haciendo que la vista
+#: dijera que esa lección tiene prueba. La tenía tan poco como la que no
+#: declara ninguna (revisión del 12-09-2026).
+CARPETA_DE_PRUEBAS = "tests/"
+
+_ITEM_DE_LECCION = re.compile(r"^\s*-\s*([^:]+?)\s*:\s*(.*?)\s*$")
+_FAMILIA_VALIDA = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+
 
 # --- Lo que se lee del árbol ------------------------------------------------
 
@@ -75,6 +107,27 @@ class Decision:
     fecha: str
     estado: str
     resumen: str
+    leccion: Leccion | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class Leccion:
+    """Lo que un ADR declara que alguien repetiría sin él (ADR-174).
+
+    ``familia`` vacía con ``sin_leccion`` escrito es la forma «este ADR no dejó
+    ninguna lección, y esta es la razón»: una declaración explícita, que no es
+    lo mismo que no haber escrito nada.
+    """
+
+    familia: str
+    repetiria: str
+    guardian: str
+    sin_leccion: str = ""
+
+    @property
+    def tiene_guardian(self) -> bool:
+        """Si una prueba la hace cumplir, o solo es prosa que alguien debe recordar."""
+        return bool(self.familia) and not self.guardian.startswith(SIN_GUARDIAN)
 
 
 @dataclass(frozen=True, slots=True)
@@ -197,6 +250,100 @@ def _estado_normalizado(texto: str) -> str:
     return coincidencia.group(0) if coincidencia else _recortar(texto, 40)
 
 
+def leer_leccion(lineas: Sequence[str]) -> Leccion | None:
+    """La lección que un ADR declara, o ``None`` si no declara ninguna.
+
+    ``None`` es «no hay bloque», que no es lo mismo que «no hay lección»: eso
+    último se dice con ``- ninguna: <razón>`` y produce una ``Leccion`` con
+    ``familia`` vacía.
+    """
+    seccion = _seccion(lineas, TITULO_LECCION)
+    if not seccion:
+        return None
+    campos: dict[str, str] = {}
+    for linea in seccion:
+        if (m := _ITEM_DE_LECCION.match(linea)) is not None:
+            campos.setdefault(m.group(1).strip().lower(), _limpiar(m.group(2)).strip("`"))
+    if (sin_leccion := campos.get(CLAVE_SIN_LECCION)) and not campos.get(CLAVE_FAMILIA):
+        return Leccion(familia="", repetiria="", guardian="", sin_leccion=sin_leccion)
+    return Leccion(
+        familia=campos.get(CLAVE_FAMILIA, ""),
+        repetiria=campos.get(CLAVE_REPETIRIA, ""),
+        guardian=campos.get(CLAVE_GUARDIAN, ""),
+        sin_leccion=campos.get(CLAVE_SIN_LECCION, ""),
+    )
+
+
+def problemas_de_la_leccion(texto: str, *, raiz: Path | None = None) -> tuple[str, ...]:
+    """Qué le falta al bloque de lección de un ADR; vacío si está bien (ADR-174).
+
+    Es EL detector: lo ejecutan la vista generada y la batería que obliga a
+    declarar, y es lo que las pruebas de mutación rompen a propósito. Vive aquí
+    y no en la batería por la lección de ADR-172: una guardia que no ejecuta el
+    detector que dice probar no prueba nada.
+
+    Con ``raiz`` comprueba además que la prueba citada exista de verdad; sin
+    ella se queda en lo que el texto dice, que es lo que necesita cualquiera que
+    quiera comprobar el formato sin árbol delante.
+    """
+    lineas = texto.splitlines()
+    leccion = leer_leccion(lineas)
+    if leccion is None:
+        return (
+            f"no trae el bloque «{TITULO_LECCION}»: sin él nadie sabrá qué se "
+            "repetiría sin este ADR",
+        )
+    if leccion.sin_leccion and leccion.familia:
+        return (
+            f"declara «{CLAVE_SIN_LECCION}» y «{CLAVE_FAMILIA}» a la vez: o hay "
+            "lección o no la hay",
+        )
+    if leccion.sin_leccion:
+        return ()
+    problemas: list[str] = []
+    if not leccion.familia:
+        problemas.append(
+            f"no declara «{CLAVE_FAMILIA}»: sin familia nadie puede contar cuántas "
+            f"veces ha mordido (o declara «{CLAVE_SIN_LECCION}: <razón>»)"
+        )
+    elif not _FAMILIA_VALIDA.match(leccion.familia):
+        problemas.append(
+            f"la familia «{leccion.familia}» no es un identificador estable: en "
+            "minúsculas y con guiones, para que dos ADR de la misma familia se "
+            "cuenten juntos"
+        )
+    if not leccion.repetiria:
+        problemas.append(
+            f"no declara «{CLAVE_REPETIRIA}»: el criterio de captura es que sin "
+            "esto alguien repetiría el error, y hay que decir cuál"
+        )
+    if not leccion.guardian:
+        problemas.append(
+            f"no declara «{CLAVE_GUARDIAN}»: o la prueba que la hace imposible, o "
+            f"«{SIN_GUARDIAN}: <razón>»"
+        )
+    elif not leccion.tiene_guardian:
+        # Declaró que no hay prueba: entonces hay que decir POR QUÉ no la hay.
+        razon = leccion.guardian[len(SIN_GUARDIAN) :].lstrip(" :").strip()
+        if not razon:
+            problemas.append(
+                f"declara «{SIN_GUARDIAN}» sin decir por qué: una lección sin prueba "
+                "y sin explicación no se puede revisar después"
+            )
+    elif not leccion.guardian.startswith(CARPETA_DE_PRUEBAS):
+        problemas.append(
+            f"dice que la hace cumplir «{leccion.guardian}», que no está en "
+            f"`{CARPETA_DE_PRUEBAS}`: lo que hace imposible un fallo aquí es una "
+            f"prueba de la batería (o declara «{SIN_GUARDIAN}: <razón>»)"
+        )
+    elif raiz is not None and not (raiz / leccion.guardian).is_file():
+        problemas.append(
+            f"dice que la hace cumplir «{leccion.guardian}», y eso no es un fichero "
+            "de este árbol: una carpeta que existe no es una prueba"
+        )
+    return tuple(problemas)
+
+
 def leer_decision(ruta: Path, raiz: Path) -> Decision | None:
     """Interpretar un ADR; `None` si el nombre no es el de un ADR."""
     coincidencia = _NOMBRE_ADR.match(ruta.name)
@@ -220,6 +367,7 @@ def leer_decision(ruta: Path, raiz: Path) -> Decision | None:
         fecha=fecha,
         estado=estado,
         resumen=_recortar(resumen, LONGITUD_RESUMEN) if resumen else "(sin sección Decisión)",
+        leccion=leer_leccion(lineas),
     )
 
 
@@ -382,6 +530,62 @@ def _carpeta_de(ruta: str) -> str:
     return ruta.rpartition("/")[0] or "(raíz)"
 
 
+def _lineas_de_lecciones(decisiones: Sequence[Decision]) -> list[str]:
+    """La tabla de familias, y debajo las lecciones de cada una (ADR-174).
+
+    Determinista y sin más fuente que los propios ADR: una familia existe
+    porque un ADR la declara, y muerde tantas veces como ADR la declaren.
+    """
+    con_leccion = [
+        (d, d.leccion) for d in decisiones if d.leccion is not None and d.leccion.familia
+    ]
+    if not con_leccion:
+        return [
+            "*Todavía no hay ninguna lección declarada.* La primera la traerá el primer",
+            f"ADR desde el {PRIMER_ADR_CON_LECCION} que encuentre un fallo repetible.",
+        ]
+    familias: dict[str, list[tuple[Decision, Leccion]]] = {}
+    for decision, leccion in con_leccion:
+        familias.setdefault(leccion.familia, []).append((decision, leccion))
+    orden = sorted(familias.items(), key=lambda par: (-len(par[1]), par[0]))
+    lineas = list(
+        _tabla(
+            ("Familia", "Veces", "Hay prueba que la haga cumplir", "ADR"),
+            (
+                (
+                    f"`{familia}`",
+                    str(len(entradas)),
+                    ("sí" if all(le.tiene_guardian for _, le in entradas) else "no en todas"),
+                    ", ".join(f"[{d.numero:03d}]({d.ruta})" for d, _ in entradas),
+                )
+                for familia, entradas in orden
+            ),
+        )
+    )
+    for familia, entradas in orden:
+        lineas += ["", f"### `{familia}`", ""]
+        for decision, leccion in sorted(entradas, key=lambda par: -par[0].numero):
+            guardian = (
+                f"lo hace cumplir `{leccion.guardian}`"
+                if leccion.tiene_guardian
+                else f"sin prueba que lo haga cumplir: {leccion.guardian}"
+            )
+            lineas.append(
+                f"- **[ADR-{decision.numero:03d}]({decision.ruta})** — "
+                f"{leccion.repetiria} ({guardian})."
+            )
+    sin_leccion = [d for d in decisiones if d.leccion is not None and d.leccion.sin_leccion]
+    if sin_leccion:
+        lineas += [
+            "",
+            f"Y **{len(sin_leccion)}** ADR declaran expresamente que no dejaron lección: "
+            + ", ".join(f"[{d.numero:03d}]({d.ruta})" for d in sin_leccion[:12])
+            + ("…" if len(sin_leccion) > 12 else "")
+            + ".",
+        ]
+    return lineas
+
+
 def generar_memoria(raiz: Path) -> str:
     """El texto de `MEMORIA.md` para este árbol. Determinista: solo depende del árbol."""
     arbol = leer_arbol(raiz)
@@ -444,6 +648,17 @@ def generar_memoria(raiz: Path) -> str:
                 for d in arbol.decisiones
             ),
         ),
+        "",
+        "## Las lecciones, por familia (ADR-174)",
+        "",
+        "Lo que alguien repetiría sin cada ADR, agrupado por familia de fallo y",
+        "contado por la máquina. **La cuenta no la lleva nadie**: un número escrito a",
+        "mano caduca en silencio -`AGENTS.md` decía «seis veces» cuando ya iban ocho-.",
+        f"Declararla es obligatorio desde ADR-{PRIMER_ADR_CON_LECCION}; los anteriores",
+        "quedan exentos, así que esta vista crece desde cero en vez de nacer rellenada",
+        "de memoria.",
+        "",
+        *_lineas_de_lecciones(arbol.decisiones),
         "",
         "## Los bloques del motor",
         "",
