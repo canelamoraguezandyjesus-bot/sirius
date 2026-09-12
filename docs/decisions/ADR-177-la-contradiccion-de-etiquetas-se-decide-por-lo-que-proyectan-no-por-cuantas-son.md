@@ -25,9 +25,17 @@ Es decir: más de una etiqueta `sirius:*` reconocida es contradicción, salvo la
 la PR #146).
 
 **Reproducido el 12-09-2026 sobre la incidencia real #592.** Lleva
-`sirius:repair-requested` y `sirius:repairing` a la vez, que es lo normal
-mientras el corrector trabaja: la primera es el encargo y la segunda el acuse.
-Las dos son `(ACTIVE, REPARAR)` en `_LABEL_STATE`. La proyección devolvía
+`sirius:repair-requested` y `sirius:repairing` a la vez: la primera es el
+encargo y la segunda el acuse. Las dos conviven durante la VENTANA que va desde
+que se aplica la etiqueta de encargo hasta que el run que la consume la retira
+-el paso «Consumir el evento y marcar en curso» de
+`.github/workflows/repair-sirius-work.yml:597-617` añade `sirius:repairing` y
+retira `sirius:repair-requested` ANTES de arrancar al corrector, y
+`review-sirius-work.yml:229` e `implement-sirius-work.yml:267` hacen el mismo
+relevo con sus parejas-. La ventana es corta cuando el relevo ocurre, y queda
+abierta de forma indefinida si ese run muere antes de consumir el evento, que
+es justamente el caso que la red de reconciliación existe para cubrir. Las dos
+etiquetas son `(ACTIVE, REPARAR)` en `_LABEL_STATE`. La proyección devolvía
 `(None, None, True)` y, aguas abajo, el tablero de ADR-175
 (`tablero.py:255-257`) le decía al propietario:
 
@@ -73,6 +81,18 @@ el sitio donde se enseña, no donde se produce.
 - **No arregla ninguna incidencia ya reflejada.** El registro del verificador no
   se reescribe hacia atrás; las pasadas futuras sobre #592 dejan de acusarla,
   las líneas ya escritas se quedan como están.
+- **No alcanza a la red de reconciliación.** El criterio por cardinalidad con
+  su exención escrita a mano sigue vivo e intacto en
+  `scripts/automation/sirius_reconcile.sh:250-269`: cuenta TODAS las etiquetas
+  `sirius:*` de la incidencia (línea 184) y solo exime literalmente
+  `"sirius:implement-requested sirius:planned "`. Así que las tres parejas que
+  este cambio exime en el espejo -activación, revisión y reparación- siguen
+  produciendo ahí `report CONTRADICCION "#N: varias etiquetas sirius
+  simultáneas (...)"`, y el `continue` de la línea 268 sigue saltándose el
+  resto de comprobaciones de esa pasada para esa incidencia -incluido el Caso B
+  de `ci-pending`-. Arreglarlo está **fuera del alcance de #594**, que autoriza
+  el cambio en `src/sirius_engine/mirror_projection.py` y sus pruebas: queda
+  registrado aquí como pendiente y necesita su propio encargo.
 - **No toca el desempate `_LABEL_PRIORITY`.** Sigue existiendo y sigue atado por
   su prueba, aunque con este criterio todas las etiquetas que llegan a él
   proyecten ya lo mismo.
@@ -99,18 +119,20 @@ parejas, el fallo solo es improbable: depende de que alguien recuerde ampliarla
 cada vez que el vocabulario crezca. Derivarlo de `_LABEL_STATE` lo hace
 imposible por construcción —una fila nueva en la tabla entra sola— y
 `test_la_exencion_se_deriva_de_la_tabla_y_no_de_una_lista_a_mano` recorre las
-78 parejas del vocabulario comprobando el reparto contra la tabla, sin
+66 parejas del vocabulario comprobando el reparto contra la tabla, sin
 escribirlo, así que cualquier vuelta a una lista a mano sale en rojo.
 
 ## La medición (hecha ANTES de decidir)
 
-`uv run python` sobre `_LABEL_STATE`, las 13 etiquetas del vocabulario y sus
-78 parejas:
+`uv run python` sobre `_LABEL_STATE`, las 12 etiquetas del vocabulario y sus
+66 parejas (la medición inicial contaba 13 etiquetas y 78 parejas porque
+`_LABEL_STATE` incluía `sirius:audit-requested`, una etiqueta que el bootstrap
+NO crea; ver «La etiqueta retirada» más abajo):
 
 | Destino `(estado, fase)` | Etiquetas que apuntan ahí |
 |---|---|
 | `(PLANNED, PREPARAR)` | `sirius:planned`, `sirius:implement-requested` |
-| `(ACTIVE, EJECUTAR)` | `sirius:implementing`, `sirius:audit-requested` |
+| `(ACTIVE, EJECUTAR)` | `sirius:implementing` |
 | `(ACTIVE, COMPROBAR)` | `sirius:ci-pending` |
 | `(ACTIVE, REVISAR)` | `sirius:review-requested`, `sirius:reviewing` |
 | `(ACTIVE, REPARAR)` | `sirius:repair-requested`, `sirius:repairing` |
@@ -119,15 +141,14 @@ escribirlo, así que cualquier vuelta a una lista a mano sale en rojo.
 | `(FAILED_SAFELY, None)` | `sirius:failed-safely` |
 | `(DELIVERED, ENTREGAR)` | `sirius:completed` |
 
-- **4 parejas de 78 apuntan al mismo `(estado, fase)`**: activación
-  (`planned` + `implement-requested`), ejecución (`implementing` +
-  `audit-requested`), revisión (`review-requested` + `reviewing`) y reparación
-  (`repair-requested` + `repairing`).
-- **74 apuntan a estado o fase distintos**, y siguen siendo contradicción. Entre
+- **3 parejas de 66 apuntan al mismo `(estado, fase)`**: activación
+  (`planned` + `implement-requested`), revisión (`review-requested` +
+  `reviewing`) y reparación (`repair-requested` + `repairing`).
+- **63 apuntan a estado o fase distintos**, y siguen siendo contradicción. Entre
   ellas las dos que la puerta protege: `completed` + `failed-safely` (estados
   distintos) y `completed` + `ready-for-merge` (misma fase `ENTREGAR`, estados
   `DELIVERED` y `ACTIVE`).
-- **25 parejas comparten estado pero no fase** —todas las combinaciones de
+- **19 parejas comparten estado pero no fase** —todas las combinaciones de
   `ACTIVE` entre fases distintas—. Son el motivo por el que el criterio compara
   el par completo y no solo el estado: eximirlas convertiría un
   `implementing` + `ready-for-merge` en una entrega silenciosa.
@@ -137,6 +158,31 @@ escribirlo, así que cualquier vuelta a una lista a mano sale en rojo.
 
 Ninguna pareja que hoy dé contradicción legítima apunta al mismo destino, así
 que no se activó la condición de escalar.
+
+## La etiqueta retirada (`sirius:audit-requested`)
+
+Al medir el vocabulario apareció una cuarta pareja compatible que **no existe**:
+`sirius:implementing` + `sirius:audit-requested`. Esa segunda etiqueta está
+retirada: `.github/workflows/bootstrap-sirius-automation-labels.yml:55-62` dice
+expresamente que fue un error -el prefijo `sirius:` la metía en la máquina de
+estados- y crea en su lugar `auditoria:solicitada`, FUERA del espacio
+`sirius:*`, como fijan ADR-016 y
+`docs/implementation/AUTOMATION_OPERATING_CONTRACT.md:784-796`. El bootstrap no
+la crea; solo la NOMBRA en ese comentario.
+
+La prueba que ata el vocabulario interpretado al que de verdad se crea no lo
+detectaba porque leía el workflow con `re.findall(r"sirius:[a-z-]+", ...)` sobre
+el fichero entero, y ese patrón recogía el nombre citado en el comentario. Con
+esa lectura, una etiqueta que el workflow declara NO crear contaba como creada.
+
+Se corrige donde nace: la lectura pasa a tomar solo los argumentos de
+`ensure_label` -la única línea que crea una etiqueta- y `sirius:audit-requested`
+sale de `_LABEL_STATE` y de `_LABEL_PRIORITY`. A partir de ahí es una etiqueta
+no reconocida más, como cualquier `sirius:` que nadie haya definido, y el espejo
+la ignora en vez de derivar de ella una compatibilidad: la ejecución deja de
+tener pareja y el reparto queda en 3 exentas de 66. No se añade ninguna lista de
+etiquetas retiradas —sería exactamente la `lista-a-mano` que este ADR retira—:
+el vocabulario es el que el bootstrap crea, y la prueba lo comprueba leyéndolo.
 
 ## Opciones consideradas
 
@@ -187,9 +233,27 @@ sitio de este módulo vuelve a decidir qué etiqueta significa qué estado»).
   `test_completed_y_failed_safely_siguen_siendo_contradiccion` fija el caso
   MEDIDO EN PRODUCCIÓN que cita `_ventana_contradiccion` (incidencia #353), y
   pasa igual antes y después del cambio.
-- **Validaciones obligatorias** en verde: `uv run ruff format --check .`,
-  `uv run ruff check .`, `uv run mypy src tests`, `uv run pytest`,
-  `git diff --check`.
+- **Validaciones obligatorias**: una sola invocación de
+  `pwsh -File scripts/check.ps1` sobre el árbol final de la rama; su terna de
+  `pytest` y su código de salida quedan anclados al head en el cuerpo de la PR.
+
+### Ronda 2 de corrección (la etiqueta retirada y la prosa)
+
+- **La lectura del bootstrap, vista FALLAR con la mutación** que la devuelve a
+  `re.findall(r"sirius:[a-z-]+", texto)` sobre el fichero entero:
+  `test_el_vocabulario_interpretado_es_el_que_de_verdad_se_crea` cae con
+  `AssertionError: solo se crean: ['sirius:audit-requested']; solo se
+  interpretan: []`.
+- **La salida de la etiqueta del vocabulario, vista FALLAR con la mutación**
+  que devuelve `sirius:audit-requested` a `_LABEL_STATE` y `_LABEL_PRIORITY`:
+  `test_la_exencion_se_deriva_de_la_tabla_y_no_de_una_lista_a_mano` cae con
+  `AssertionError: el vocabulario cambió de tamaño: revisa la medición del ADR`
+  (`assert 78 == 66`), y con ella
+  `test_el_vocabulario_interpretado_es_el_que_de_verdad_se_crea` y
+  `test_una_etiqueta_solo_citada_en_un_comentario_no_cuenta_como_creada`.
+- Con las dos correcciones puestas, `uv run pytest
+  tests/engine/test_mirror_projection.py` da `63 passed` (eran 62 antes de
+  añadir la prueba de la etiqueta citada solo en un comentario).
 
 ## Consecuencias
 
@@ -200,8 +264,9 @@ sitio de este módulo vuelve a decidir qué etiqueta significa qué estado»).
 - Ampliar el vocabulario ya no obliga a tocar ninguna lista de exenciones: basta
   con dar a la etiqueta nueva su fila en `_LABEL_STATE` (y en `_LABEL_PRIORITY`,
   que su propia prueba sigue exigiendo).
-- La contradicción queda más estrecha a propósito: 74 de 78 parejas, en vez de
-  77. Las 3 que dejan de serlo son las que decían lo mismo dos veces.
+- La contradicción queda más estrecha a propósito: 63 de 66 parejas, en vez de
+  65. Las 2 que dejan de serlo -revisión y reparación- son las que decían lo
+  mismo dos veces; la de activación ya estaba exenta a mano.
 - Los comentarios que citaban `_PAR_DE_ACTIVACION_VALIDO` —`reflect.py` y el
   docstring de `MirroredWorkItem`— se actualizan para no dejar una referencia
   colgada a una constante que ya no existe. ADR-136, que también la cita, no se
@@ -222,9 +287,5 @@ sitio de este módulo vuelve a decidir qué etiqueta significa qué estado»).
 ## La lección
 
 - familia: `lista-a-mano`
-- sin esto se repetiría: escribir como lista de excepciones un criterio que el
-  dato de al lado ya define —aquí, «qué etiquetas pueden convivir», enumerado a
-  mano habiendo una tabla que dice a dónde apunta cada una—, de modo que la
-  lista solo contiene lo que alguien recordó el día que la escribió y acusa de
-  avería a todo lo demás.
+- sin esto se repetiría: escribir como lista de excepciones un criterio que el dato de al lado ya define —aquí «qué etiquetas pueden convivir», enumerado a mano habiendo una tabla que dice a dónde apunta cada una—, de modo que la lista solo contiene lo que alguien recordó el día que la escribió y acusa de avería a todo lo demás.
 - lo hace cumplir: `tests/engine/test_mirror_projection.py`

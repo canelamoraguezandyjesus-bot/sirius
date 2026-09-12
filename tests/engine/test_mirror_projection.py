@@ -475,11 +475,11 @@ def test_completed_y_failed_safely_siguen_siendo_contradiccion() -> None:
 
 
 def test_la_exencion_se_deriva_de_la_tabla_y_no_de_una_lista_a_mano() -> None:
-    """Las 78 parejas del vocabulario, decididas por `_LABEL_STATE`.
+    """Las 66 parejas del vocabulario, decididas por `_LABEL_STATE`.
 
     Ninguna pareja está exenta por figurar en una lista: lo está si y solo si
-    las dos etiquetas proyectan el MISMO `(estado, fase)`. Hoy eso exime 4 de
-    78 parejas -activación, ejecución, revisión y reparación- y deja 74 como
+    las dos etiquetas proyectan el MISMO `(estado, fase)`. Hoy eso exime 3 de
+    66 parejas -activación, revisión y reparación- y deja 63 como
     contradicción; la prueba no escribe ese reparto, lo deriva, así que una
     fila nueva en la tabla entra sola.
 
@@ -488,7 +488,7 @@ def test_la_exencion_se_deriva_de_la_tabla_y_no_de_una_lista_a_mano() -> None:
     rojo en cuanto no coincide con la tabla.
     """
     parejas = list(itertools.combinations(sorted(_LABEL_STATE), 2))
-    assert len(parejas) == 78, "el vocabulario cambió de tamaño: revisa la medición del ADR"
+    assert len(parejas) == 66, "el vocabulario cambió de tamaño: revisa la medición del ADR"
 
     exentas = [(a, b) for a, b in parejas if _LABEL_STATE[a] == _LABEL_STATE[b]]
     assert exentas, "sin ninguna pareja exenta la prueba no comprobaría nada"
@@ -1291,7 +1291,17 @@ _BOOTSTRAP = (
 
 
 def _etiquetas_que_crea_el_bootstrap() -> set[str]:
-    return set(re.findall(r"sirius:[a-z-]+", _BOOTSTRAP.read_text(encoding="utf-8")))
+    """Las etiquetas que el bootstrap CREA, no las que su texto menciona.
+
+    Se leen solo los argumentos de `ensure_label`, que es la única línea del
+    workflow que crea una etiqueta. Buscar `sirius:[a-z-]+` en todo el fichero
+    -como se hacía- recogía también los nombres citados en los comentarios, y
+    el propio bootstrap cita ahí `sirius:audit-requested` para explicar que fue
+    un error y que se sustituyó por `auditoria:solicitada`: la prueba daba por
+    creada una etiqueta que el workflow dice expresamente NO crear.
+    """
+    texto = _BOOTSTRAP.read_text(encoding="utf-8")
+    return set(re.findall(r'^\s*ensure_label\s+"(sirius:[a-z-]+)"', texto, re.MULTILINE))
 
 
 def test_interpretar_y_desempatar_cubren_exactamente_las_mismas_etiquetas() -> None:
@@ -1314,6 +1324,27 @@ def test_el_vocabulario_interpretado_es_el_que_de_verdad_se_crea() -> None:
         f"solo se crean: {sorted(creadas - set(_LABEL_STATE))}; "
         f"solo se interpretan: {sorted(set(_LABEL_STATE) - creadas)}"
     )
+
+
+def test_una_etiqueta_solo_citada_en_un_comentario_no_cuenta_como_creada() -> None:
+    """El bootstrap NOMBRA `sirius:audit-requested` para decir que fue un error.
+
+    La lectura anterior la recogía del comentario y la daba por creada, así que
+    `test_el_vocabulario_interpretado_es_el_que_de_verdad_se_crea` seguía en
+    verde con esa etiqueta retirada dentro de `_LABEL_STATE` -donde formaba una
+    cuarta pareja compatible con `sirius:implementing` que el vocabulario
+    aprobado no tiene-. El bootstrap crea `auditoria:solicitada`, fuera del
+    espacio `sirius:*` (ADR-016), y la auditoría no vive en la máquina de
+    estados.
+    """
+    texto = _BOOTSTRAP.read_text(encoding="utf-8")
+    assert "sirius:audit-requested" in texto, (
+        "el bootstrap ya no cita la etiqueta retirada: esta prueba deja de "
+        "distinguir la lectura buena de la mala y hay que revisarla"
+    )
+    assert "sirius:audit-requested" not in _etiquetas_que_crea_el_bootstrap()
+    assert "sirius:audit-requested" not in _LABEL_STATE
+    assert "sirius:audit-requested" not in _LABEL_PRIORITY
 
 
 # --- H-13 (incidencia #275): ejecutar la proyección ya no exige el árbol ---

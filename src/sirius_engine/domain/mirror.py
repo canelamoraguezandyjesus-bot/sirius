@@ -239,8 +239,11 @@ class MirroredWorkItem:
     ``etiquetas_contradictorias`` es ``True`` y expone la contradicción en
     vez de que el espejo elija una etiqueta ganadora en silencio. Varias
     etiquetas que apuntan al MISMO destino -``sirius:repair-requested`` y
-    ``sirius:repairing`` mientras el corrector trabaja, por ejemplo- no se
-    contradicen: proyectan ese destino con la marca en ``False`` (ADR-177).
+    ``sirius:repairing``, que conviven desde que se aplica el encargo hasta que
+    el run que lo consume retira la primera (``repair-sirius-work.yml``, paso
+    «Consumir el evento y marcar en curso»), e indefinidamente si ese run muere
+    antes- no se contradicen: proyectan ese destino con la marca en ``False``
+    (ADR-177).
     """
 
     work_id: str

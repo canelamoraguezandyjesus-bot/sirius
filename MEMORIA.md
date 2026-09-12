@@ -230,7 +230,7 @@ de memoria.
 
 ### `lista-a-mano`
 
-- **[ADR-177](docs/decisions/ADR-177-la-contradiccion-de-etiquetas-se-decide-por-lo-que-proyectan-no-por-cuantas-son.md)** — escribir como lista de excepciones un criterio que el (lo hace cumplir `tests/engine/test_mirror_projection.py`).
+- **[ADR-177](docs/decisions/ADR-177-la-contradiccion-de-etiquetas-se-decide-por-lo-que-proyectan-no-por-cuantas-son.md)** — escribir como lista de excepciones un criterio que el dato de al lado ya define —aquí «qué etiquetas pueden convivir», enumerado a mano habiendo una tabla que dice a dónde apunta cada una—, de modo que la lista solo contiene lo que alguien recordó el día que la escribió y acusa de avería a todo lo demás. (lo hace cumplir `tests/engine/test_mirror_projection.py`).
 
 ### `pieza-sin-lector`
 
