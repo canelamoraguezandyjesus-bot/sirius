@@ -256,13 +256,16 @@ que la llamara.
   tiene `--terminar`.
 - **La cadena obligatoria completa, en verde**: una sola invocación de
   `pwsh -File scripts/check.ps1` —que encadena `ruff format --check`,
-  `ruff check`, `mypy src tests` y `pytest`— **sobre el árbol de `5c5d8827`**,
-  con código de salida **0** y **6581 pasan, 17 se saltan, 2 xfail**, en
-  530,90 s (0:08:50). La cifra anterior de este ADR —6579 pasan, en 667,37 s—
-  era la del árbol de `8f194d4d`, antes de la corrección de la ronda 4; las dos
-  pruebas nuevas son las de CLAUDE-R3-001, una por pieza: que `sirius-decidir`
-  no reanuda un alcance vetado aunque parase otra causa, y que `sirius-despachar`
-  no ofrece `--continuar` en esa misma parada. La aserción reescrita de
+  `ruff check`, `mypy src tests` y `pytest`— **sobre el árbol de `0adc795b`**,
+  con código de salida **0** y **6583 pasan, 17 se saltan, 2 xfail**, en
+  626,84 s (0:10:26). La cifra anterior de este ADR —6581 pasan, en 530,90 s—
+  era la del árbol de `5c5d8827`, antes de la corrección de la ronda 5; las dos
+  pruebas nuevas son las de CLAUDE-R4-001 y CLAUDE-R4-002, y ninguna de las dos
+  cambia un fuente: que `--continuar --repo … --bloque …` despacha DE VERDAD en
+  ese repositorio y bajo ese bloque —hasta ahora solo estaba fijada la mitad que
+  IMPRIME la orden copiable—, y que `--continuar` sobre un trabajo ya terminado
+  sale con 4 sin tocar nada, que es la rama negativa de `_ESTADOS_QUE_CONTINUAN`.
+  Antes de esa ronda, el árbol de `8f194d4d` medía 6579. La aserción reescrita de
   `test_una_parada_por_una_causa_anterior_no_promete_el_despacho_de_la_quinta`
   no suma un test: acota a la ATRIBUCIÓN lo que antes prohibía en todo el texto,
   porque el paréntesis que niega `--continuar` sí remite a la sesión interactiva
