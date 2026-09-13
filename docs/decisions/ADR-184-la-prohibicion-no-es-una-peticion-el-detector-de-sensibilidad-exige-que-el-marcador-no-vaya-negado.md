@@ -360,6 +360,19 @@ La primera línea de cada fallo:
   2 xfailed** en 583.62 s y **código de salida 0**. Lo único que cambia después
   de esa medición es la prosa de este ADR. Las cifras de las rondas anteriores quedan ancladas a su
   propio árbol, arriba.
+- **Ronda 4**, sobre el árbol de `938a968e` —el head con las tres correcciones
+  de la ronda ya dentro—: `pwsh -File scripts/check.ps1` da **6492 passed, 17
+  skipped, 2 xfailed** en 558.68 s y **código de salida 0**. La subida de 6426 a
+  6492 viene de traer `main` a la rama (commit `12eef5f9`), no de esta ronda:
+  las tres correcciones de la ronda 4 no añaden ni quitan ninguna prueba, porque
+  ninguna cambia comportamiento —dos son prosa de ADR y la tercera mueve un
+  bloque de comentario `#:` para que vuelva a quedar pegado a
+  `_CORTES_DE_ORACION`, la constante que describe—. Por eso la ronda 4 no trae
+  mutación: no hay aserción nueva que sembrar. Lo que sí se comprueba y se deja
+  escrito es que la mina de lecciones ya publica esta lección entera —`sed -n
+  '253p' MEMORIA.md` la devuelve completa, hasta «…la operación.»— y que
+  `uv run sirius-memoria conocimiento --comprobar` responde «MEMORIA.md está al
+  día» con código 0 sobre ese mismo árbol.
 
 ### Ronda 3: el subjuntivo, el corte incondicional, la doble negación y la ruta
 
