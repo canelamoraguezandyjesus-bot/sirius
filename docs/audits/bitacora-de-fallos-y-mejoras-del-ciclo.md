@@ -5404,6 +5404,54 @@ mientras escribo, con Quality en verde sobre `d3d84a7a` y la puerta previa a la
 fusión ya corrida y verificada. Queda escrito aparte, en la incidencia.
 ---
 
+### 106. La cuota de Codex para H4 a un paso del final, y cada parada de esas tira una revisión entera ya hecha: 3,31 $ medidos (13-09-2026, 02:47 UTC)
+
+**Qué pasó.** Ronda 11 de #581, sobre `d3d84a7a`. El revisor de Claude corrió
+entero —run 34733643021, paso «Ejecutar Claude Code (revisor)» de 02:41:11 a
+02:47:13, `success`, `is_error: false`, **44 turnos**, 0 denegaciones— y escribió
+su archivo de veredicto. Codex contestó con
+«You have reached your Codex usage limits for code reviews». El agregador de
+modo dual exige a los dos, así que el resultado fue `FAILED_SAFELY`
+(`codex-fallo-declarado`) y **el veredicto de Claude se descartó sin
+publicarse**.
+
+**Lo que esto cuesta, y ahora está medido.** El propio ejecutor cifra esa
+revisión descartada en `"total_cost_usd": 3.3107680000000004`. No es una
+estimación mía: es la línea `result` del log. Cada parada por cuota del OTRO
+revisor tira una revisión completa que ya se hizo y ya se pagó.
+
+**No es la primera.** Es la **tercera** parada por cuota de esta línea:
+
+| fecha | quién agotó | incidencia |
+|---|---|---|
+| 07-09 05:23 | Claude | #545 |
+| 07-09 16:00 | Codex | #545 (`3f620cf`) |
+| 13-09 02:47 | Codex | **#581** (`d3d84a7a`) |
+
+Y con un dato nuevo: la de hoy es **con la cuenta Plus**. El propietario pasó de
+Business a Plus el 12-09; la anterior de Codex en esta vertical (#582) fue el
+último día de la Business. O sea que no era el final de un ciclo de
+facturación: **el modo dual agota la cuota de revisiones de código de Plus con
+el ritmo de rondas que tiene este motor.**
+
+**Lo que agrava el caso de hoy**: la parada llega cuando lo único que Codex no
+ha visto es la ronda 10, que son **dos ficheros** —`MEMORIA.md` (una línea) y
+prosa del ADR—, porque sus dos hallazgos anteriores (`CODEX-001`, `CODEX-002`,
+sobre `f9151ef1`) ya están corregidos. Se gasta una ronda entera y una revisión
+de 3,31 $ para no mirar dos ficheros de texto.
+
+**Lo que NO hice, y es lo importante.** A las 04:08 locales publiqué en #581
+que si esta ronda no dejaba el veredicto conjunto en aprobado, esta sesión **no
+enviaría otro `continua`**. Lo he cumplido: diagnóstico publicado, puerta previa
+a la fusión verificada y escrita, y parada. La tentación era obvia —la causa es
+externa, el trabajo está verde, un `continua` más y quizá cierra—, y es
+exactamente la forma de razonar que el límite existía para cortar.
+
+**Confirmación de la deuda 12 ampliada, dicha el 07-09 y todavía sin pagar**:
+una cuota agotada debería leerse ANTES de disparar la ronda, no después. Hoy se
+sabría en una llamada y se habría ahorrado la revisión entera.
+---
+
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
 
 1. `ollama_category_classifier.py`: ruta relativa y sin
@@ -6025,3 +6073,35 @@ fusión ya corrida y verificada. Queda escrito aparte, en la incidencia.
     que quita la causa; (b) excluir esa carpeta de la sincronización; (c)
     pausar la sincronización antes de cada `checkout`, que es apaño y hay que
     acordarse.
+
+32. **Una cifra en un ADR es una medición, y ninguna lleva escrito su
+    barrido — así que se afirma de TODO un conjunto habiendo mirado menos que
+    el conjunto.** Familia distinta de la deuda 28: allí la prosa era cierta y
+    el cambio la dejó falsa; aquí **nació falsa**, más ancha que su evidencia,
+    y ningún merge la invalidó porque nunca fue cierta. Tres instancias
+    verificadas, todas en la sección 6 de `ADR-177` y todas de las rondas 9 y
+    10 de #581:
+
+    - «**21** referencias en pruebas», presentado como la lista completa de
+      `tests/`, derivado de un barrido sobre **tres ficheros elegidos a mano**.
+    - «Son **nueve docstrings**», cuando dos de los nueve son comentarios de
+      documentación Sphinx `#:` que Python no liga a ningún objeto — y la
+      clasificación falsa se propagó a `MEMORIA.md` por el bloque
+      «## La lección».
+    - «Las **23** ocurrencias no-arnés tampoco hablan de producción sino del
+      experimento», cuando **20** son el diario de M20, que ordena
+      explícitamente portar `pide_contexto` a `src/sirius/domain/relevance.py`.
+
+    Cada una costó una ronda entera de dos revisores, y las tres salieron de
+    Codex o de la revisión de Claude, no de ningún guardián.
+
+    **El arreglo de raíz ya está probado en la propia ronda 9**: rehacer el
+    barrido sobre el conjunto entero y **escribir el criterio de conteo y el
+    comando junto a la cifra**. Con el criterio escrito, la ronda 10 pudo
+    re-medir y cuadrar (20 + 2 + 1 + 8 = 31) sin discutir. Candidatos para
+    decisión del propietario: (a) que `PLANTILLA.md` exija, para toda cifra que
+    afirme completitud, el comando y el árbol que la produjeron en la línea de
+    al lado; (b) un guardián que rechace en un ADR las palabras «todas», «las
+    N» o «la lista completa» cuando no haya un bloque de comando adyacente
+    —comprobable a máquina, a diferencia del juicio de la deuda 28—; (c) no
+    hacer nada y seguir pagándolo a una ronda por instancia.
