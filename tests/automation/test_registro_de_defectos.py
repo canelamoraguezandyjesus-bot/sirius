@@ -530,15 +530,38 @@ def test_el_adr_que_un_defecto_acusa_existe_de_verdad() -> None:
     )
 
 
+def _inventario_vivo_que_el_registro_acusa() -> set[int]:
+    """Los ADR del inventario DERIVADO, menos los exentos, que el registro acusa.
+
+    Es el conjunto contra el que se mide la anti-vacua del enlace, y las dos
+    operaciones son deliberadas. La **intersección** con el inventario impide
+    que un acuse a un ADR ajeno a él -`adr: 1`- sostenga la guarda. La **resta**
+    de `SIN_DEFECTO_REGISTRADO` es la que cierra la salida fácil: eximir uno a
+    uno los ADR con lección deja este conjunto vacío en vez de dejarlo intacto.
+
+    Vive aquí abajo y no junto a `_acuses_del_registro()` porque necesita la
+    lista de excepciones, que se declara más arriba pero después de aquella.
+    """
+    inventario = set(_adr_que_declaran_un_defecto()) - set(SIN_DEFECTO_REGISTRADO)
+    return inventario & set(_acuses_del_registro())
+
+
 def test_al_menos_un_defecto_acusa_el_adr_que_lo_corrigio() -> None:
     """Anti-vacua del enlace: eximirlo todo dejaría el mecanismo dormido otra vez.
 
-    Sin esto, la salida fácil ante un rojo sería añadir una línea a
-    SIN_DEFECTO_REGISTRADO hasta que la lista de exclusión cubriera el
-    inventario entero, y el registro volvería a estar donde estaba: verde y
-    vacío de novedades.
+    Mide los acuses contra el inventario derivado **menos las excepciones**, no
+    contra «cualquier campo `adr` del registro». Así la salida fácil ante un
+    rojo -añadir una línea a SIN_DEFECTO_REGISTRADO hasta que la lista de
+    exclusión cubriera el inventario entero- vacía este conjunto y pone la
+    batería en rojo, en vez de dejarla verde sostenida por una entrada
+    histórica; y un acuse que apunta fuera del inventario tampoco la sostiene.
     """
-    assert _acuses_del_registro(), (
-        f"ninguna entrada de {REGISTRO.name} declara el ADR que la corrigió: el "
-        f"enlace `{CAMPO_ADR}` no lo usa nadie y esta guarda no está comprobando nada"
+    assert _inventario_vivo_que_el_registro_acusa(), (
+        f"ninguna entrada de {REGISTRO.name} acusa a un ADR que declare una "
+        f"lección y no esté exento. Inventario derivado: "
+        f"{sorted(_adr_que_declaran_un_defecto())}; exentos: "
+        f"{sorted(SIN_DEFECTO_REGISTRADO)}; acusados: "
+        f"{sorted(_acuses_del_registro())}. Si la lista de exclusión cubre el "
+        f"inventario entero, el enlace `{CAMPO_ADR}` no vigila nada vivo y el "
+        "registro ha vuelto a quedarse dormido."
     )
