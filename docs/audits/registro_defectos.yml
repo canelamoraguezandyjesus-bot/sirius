@@ -503,7 +503,9 @@ defectos:
       - scripts/automation/sirius_apply_verdict.sh
       - tests/automation/test_sirius_apply_verdict.py
 
-  - id: H-38
+  # H-39 y no H-38: al traer main a la rama llego el H-38 de ADR-185 (#603),
+  # que entro antes en main y se queda con el numero.
+  - id: H-39
     titulo: El detector de sensibilidad confundia una prohibicion con una peticion
     bloque: motor
     gravedad: media
