@@ -1,6 +1,6 @@
 # Desenlaces del motor de Sirius
 
-> **Generado por `uv run sirius-memoria desenlaces`** a partir de `diario.jsonl` y `diario-despacho.jsonl`: 631 sucesos, el último el 2026-09-13 17:40 UTC. Lo escribe el motor en la rama
+> **Generado por `uv run sirius-memoria desenlaces`** a partir de `diario.jsonl` y `diario-despacho.jsonl`: 632 sucesos, el último el 2026-09-13 20:09 UTC. Lo escribe el motor en la rama
 > `estado-del-motor` tras cada reflejo (ADR-171). **El diario manda**: si un documento
 > dice otra cosa sobre un encargo, vale esto.
 
@@ -9,15 +9,15 @@
 | Estado | Encargos |
 |---|---|
 | active | 1 |
-| cancelled | 25 |
+| cancelled | 26 |
 | delivered | 56 |
-| needs_decision | 5 |
+| needs_decision | 4 |
 
 ## Los encargos, del más reciente al más antiguo
 
 | Encargo | Clase | Estado / fase | Creado | Último suceso | Objetivo | Evidencia |
 |---|---|---|---|---|---|---|
-| WI-20260913-143715 | programacion | needs_decision / revisar | 2026-09-13 14:37 UTC | 2026-09-13 17:40 UTC | Implementa la quinta causa de la puerta del despachador: un encargo cuyo alcance declarado cae bajo .github/… | [#612](https://github.com/canelamoraguezandyjesus-bot/sirius/issues/612) |
+| WI-20260913-143715 | programacion | cancelled / revisar | 2026-09-13 14:37 UTC | 2026-09-13 20:09 UTC | Implementa la quinta causa de la puerta del despachador: un encargo cuyo alcance declarado cae bajo .github/… | [#612](https://github.com/canelamoraguezandyjesus-bot/sirius/issues/612) |
 | WI-20260913-142937 | programacion | needs_decision / preparar | 2026-09-13 14:29 UTC | 2026-09-13 14:29 UTC | Implementa la quinta causa de la puerta del despachador: un encargo cuyo alcance declarado cae bajo .github/… | — |
 | WI-20260913-042508 | programacion | cancelled / comprobar | 2026-09-13 04:25 UTC | 2026-09-13 14:15 UTC | Corrige que el detector de sensibilidad del despachador confunda una PROHIBICION con una PETICION. En… | [#601](https://github.com/canelamoraguezandyjesus-bot/sirius/issues/601) |
 | WI-20260913-132115 | programacion | cancelled / ejecutar | 2026-09-13 13:21 UTC | 2026-09-13 13:26 UTC | Implementa el cierre entero de la cadena del contador de los siete dias, para que pueda contar de verdad. El… | [#610](https://github.com/canelamoraguezandyjesus-bot/sirius/issues/610) |
