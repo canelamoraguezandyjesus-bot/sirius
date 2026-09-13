@@ -326,10 +326,11 @@ anti-vacua nueva lo caza sin depender de cómo esté el registro.
 `pwsh -File scripts/check.ps1` —que encadena `ruff format --check`,
 `ruff check`, `mypy src tests` y `pytest`— en verde sobre el árbol de esta rama
 tras las correcciones de la ronda 2, **sobre el árbol de `9aa427a6`**:
-**6411 passed, 17 skipped, 2 xfailed** en 8 min 41 s, código de salida `0`. El
-único commit posterior a ese árbol cambia este párrafo y nada más. La guarda de este fichero pasa de 40 a 62
-casos —61 que corren y el que se salta sin historia de `main`— y sigue costando
-medio segundo.
+**6411 passed, 17 skipped, 2 xfailed** en 8 min 41 s, código de salida `0`.
+Ningún commit posterior a ese árbol toca código ejecutable, aserciones ni el
+registro: todos son correcciones de texto, así que la terna sigue siendo la de
+este head. La guarda de este fichero pasa de 40 a 62 casos —61 que corren y el
+que se salta sin historia de `main`— y sigue costando medio segundo.
 
 ## Consecuencias
 
