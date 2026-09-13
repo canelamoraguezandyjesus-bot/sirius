@@ -105,14 +105,17 @@ el sitio donde se enseña, no donde se produce.
   su exención escrita a mano sigue vivo e intacto en
   `scripts/automation/sirius_reconcile.sh:250-269`: cuenta TODAS las etiquetas
   `sirius:*` de la incidencia (línea 184) y solo exime literalmente
-  `"sirius:implement-requested sirius:planned "`. Así que las tres parejas que
-  este cambio exime en el espejo -activación, revisión y reparación- siguen
-  produciendo ahí `report CONTRADICCION "#N: varias etiquetas sirius
-  simultáneas (...)"`, y el `continue` de la línea 268 sigue saltándose el
-  resto de comprobaciones de esa pasada para esa incidencia -incluido el Caso B
-  de `ci-pending`-. Arreglarlo está **fuera del alcance de #594**, que autoriza
-  el cambio en `src/sirius_engine/mirror_projection.py` y sus pruebas: queda
-  registrado aquí como pendiente y necesita su propio encargo.
+  `"sirius:implement-requested sirius:planned "`. Así que las parejas que este
+  cambio exime en el espejo y esa exención literal no cubre -la de revisión
+  (`review-requested` + `reviewing`) y la de reparación (`repair-requested` +
+  `repairing`); la de activación ya está exenta allí desde la auditoría de la
+  PR #146- siguen produciendo ahí `report CONTRADICCION "#N: varias etiquetas
+  sirius simultáneas (...)"`, y el `continue` de la línea 268 sigue
+  saltándose el resto de comprobaciones de esa pasada para esa incidencia
+  -incluido el Caso B de `ci-pending`-. Arreglarlo está **fuera del alcance de
+  #594**, que autoriza el cambio en `src/sirius_engine/mirror_projection.py` y
+  sus pruebas: queda registrado aquí como pendiente y necesita su propio
+  encargo.
 - **No toca el desempate `_LABEL_PRIORITY`.** Sigue existiendo y sigue atado por
   su prueba, aunque con este criterio todas las etiquetas que llegan a él
   proyecten ya lo mismo.
@@ -298,6 +301,27 @@ código ni asertos, y por eso no llevan mutación; lo que las verifica es que
 sobre este ADR, `tests/engine/test_mirror_projection.py` y
 `src/sirius_engine/mirror_projection.py` ya no devuelve nada (salida 1), y que
 `pwsh -File scripts/check.ps1` sigue en verde sobre el árbol final.
+
+### Ronda 4 de corrección (lo que el reconciliador sí exime)
+
+**CLAUDE-R3-001.** La viñeta «No alcanza a la red de reconciliación» de la nota
+de arranque se contradecía dentro de la misma frase: decía, bien, que
+`sirius_reconcile.sh` «solo exime literalmente
+`"sirius:implement-requested sirius:planned "`», y acto seguido afirmaba que
+«las tres parejas que este cambio exime en el espejo -activación, revisión y
+reparación- siguen produciendo ahí `report CONTRADICCION`». La de activación es
+exactamente la que el guion exime: con esas dos etiquetas `par_de_activacion`
+(línea 262) vale literalmente esa cadena, la guarda de las líneas 264-265 no
+entra y no hay ni `report` ni `continue`. Las que el guion sigue acusando son
+las que su exención literal no cubre. Como en la ronda 3, el remedio es
+**quitar la cifra** y nombrar las parejas: la viñeta ya no cuenta parejas, dice
+cuáles no cubre esa exención literal y deja escrito que la de activación está
+exenta allí desde la auditoría de la PR #146. No se toca `sirius_reconcile.sh`
+—arreglarlo sigue **fuera del alcance de #594** y necesita su propio encargo—,
+ni código, ni pruebas: es corrección de prosa y por eso no lleva mutación. Lo
+que la verifica es leer la guarda del guion
+(`sed -n '260,270p' scripts/automation/sirius_reconcile.sh`) junto a la viñeta
+corregida.
 
 ## Consecuencias
 
