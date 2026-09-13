@@ -268,7 +268,7 @@ que la llamara.
   porque el paréntesis que niega `--continuar` sí remite a la sesión interactiva
   —y la mutación de la atribución se sigue viendo caer con ella, ahora en la
   aserción de «vuelve a despachar»—.
-- **25 mutaciones vistas caer**, una por regla nueva (ADR-001 §3), cada una
+- **28 mutaciones vistas caer**, una por regla nueva (ADR-001 §3), cada una
   anotada en el docstring de la prueba que la caza con el mensaje exacto del
   rojo. La lista, con la prueba que la detiene:
 
@@ -285,11 +285,14 @@ que la llamara.
   | `bloqueo = None` (quinta causa) | la quinta causa no se reanuda |
   | exigir la quinta causa también en `_terminar` | la quinta causa sí se termina |
   | quitar `ACTIVE` de `_ESTADOS_QUE_CONTINUAN` | un despacho cortado se retoma |
+  | quitar la condición `estado not in _ESTADOS_QUE_CONTINUAN` de `_continuar` | la rama NEGATIVA: desde `cancelled` se rechaza con 4, no con una traza (CLAUDE-R4-002) |
   | quitar la guarda de `episodio_previo` | con incidencia detrás decide el reflector |
   | `return 0` en vez de `return 2` | un work_id que no existe no inventa nada |
   | quitar el bloque de la salida de la parada | la parada dice con qué orden se sale |
   | quitar `--diario` de la orden copiable | la orden se copia tal cual |
-  | quitar `--repo` de la orden copiable | la orden despacha donde pidió la original, no en el repo por defecto |
+  | quitar `--repo` de la orden copiable | la orden que imprime la parada ARRASTRA el repo y el bloque de la original |
+  | `repo=REPO` en la llamada a `dispatch_work_item` de `_continuar` | y la orden copiada despacha DE VERDAD en ese repo, no en el de por defecto (CLAUDE-R4-001) |
+  | `bloque="ENCARGO"` en esa misma llamada | ni bajo otro bloque: el título creado empieza por el que se pidió |
   | ofrecer `--continuar` en la quinta causa | ahí no se ofrece lo que no lleva a nada |
   | ofrecer `--continuar` con una clase sin despachador | tampoco se ofrece lo que saldría con 5 |
   | `alcance_vetado=prefijo_vetado` en la llamada de `sirius-despachar` | el alcance vetado niega `--continuar` aunque parase otra causa |

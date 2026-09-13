@@ -275,6 +275,51 @@ def test_continuar_reanuda_y_despacha_en_el_mismo_gesto(
     )
 
 
+def test_continuar_despacha_en_el_repo_y_el_bloque_que_pidio_la_orden(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CLAUDE-R4-001: la mitad CONSUMIDORA de lo que fija `sirius-despachar`.
+
+    La orden copiable que imprime la parada arrastra `--repo` y `--bloque` para
+    que reanudar ocurra donde el propietario pidió, y esa mitad ya tiene prueba
+    en `test_dispatch_cli.py`. Faltaba esta: que el comando que se copia
+    REALMENTE despache ahí. Ignorar el argumento crearía la incidencia -una
+    escritura externa irreversible de la que cuelga un ciclo entero- en un
+    repositorio o bajo un bloque que nadie pidió.
+
+    Mutación vista caer: poniendo `repo=REPO` en vez de `repo=repo` en la
+    llamada a `dispatch_work_item` de `_continuar`, la prueba falla con
+    ``AssertionError: la incidencia se crea donde pidió la orden, no en el
+    repositorio por defecto``. Y poniendo `bloque="ENCARGO"` en esa misma
+    llamada, falla con ``AssertionError: [SIRIUS] ENCARGO — Corrige el arranque
+    y borra la base de produccion``.
+    """
+    escritor = _EscritorQueCrea(numero=906)
+    monkeypatch.setattr(decision_cli, "GitHubCliWriter", lambda: escritor)
+    diario = tmp_path / "diario.jsonl"
+    _parar(diario)
+
+    codigo, texto = _decidir(
+        [
+            _WORK_ID,
+            "--continuar",
+            "--ejecutar",
+            "--repo",
+            "otra-org/otro-repo",
+            "--bloque",
+            "AUDITORIA",
+        ],
+        diario=diario,
+    )
+
+    assert codigo == 0, texto
+    assert "https://github.com/otra-org/otro-repo/issues/906" in texto, (
+        "la incidencia se crea donde pidió la orden, no en el repositorio por defecto"
+    )
+    assert escritor.titulo.startswith("[SIRIUS] AUDITORIA — "), escritor.titulo
+    assert _estado(diario) == "active"
+
+
 def test_sin_credencial_no_se_reanuda_nada(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """La misma propiedad por el camino que más fácil se olvida.
 
@@ -371,6 +416,47 @@ def test_una_parada_sin_orden_enlazada_no_se_reanuda(
     assert codigo == 5, texto
     assert "§12.1" in texto
     assert _estado(diario, "WI-SIN-ORDEN") == "needs_decision"
+
+
+def test_continuar_un_trabajo_ya_terminado_se_rechaza_sin_tocar_nada(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CLAUDE-R4-002: la rama NEGATIVA de `_ESTADOS_QUE_CONTINUAN`.
+
+    El camino es corriente: el propietario da la parada por terminada con
+    `--terminar --ejecutar` -queda `cancelled`- y después prueba `--continuar`
+    sobre ese mismo identificador. La guarda lo rechaza limpio, diciendo el
+    estado real, sin tocar el almacén ni el diario de despacho.
+
+    Mutación vista caer: quitando la condición `work_item.estado not in
+    _ESTADOS_QUE_CONTINUAN` de `_continuar`, la prueba falla con
+    ``EstadoNoDespachableError: work item 'WI-20260821-223000' is in state
+    'cancelled'; the C2 dispatcher only dispatches work items in state
+    'active'``, levantada por
+    `dispatch_work_item` SIN capturar -`_no_se_puede_despachar` no mira el
+    estado-: el propietario vería una traza en vez de un mensaje, que es la
+    familia que ADR-184 cerró.
+
+    El escritor falso está puesto a propósito, por el mismo motivo que en
+    `test_una_clase_sin_despachador_no_se_reanuda`: sin él, quitar la guarda
+    haría caer la prueba por la credencial que falta, y eso no demostraría nada
+    sobre el estado.
+    """
+    escritor = _EscritorQueCrea(numero=907)
+    monkeypatch.setattr(decision_cli, "GitHubCliWriter", lambda: escritor)
+    diario = tmp_path / "diario.jsonl"
+    _parar(diario)
+    codigo, texto = _decidir([_WORK_ID, "--terminar", "--ejecutar"], diario=diario)
+    assert codigo == 0, texto
+    assert _estado(diario) == "cancelled"
+
+    codigo, texto = _decidir([_WORK_ID, "--continuar", "--ejecutar"], diario=diario)
+
+    assert codigo == 4, texto
+    assert "«cancelled»" in texto, "el estado que se nombra es el real"
+    assert _estado(diario) == "cancelled", "no se toca nada"
+    assert not _hay_episodio(diario)
+    assert escritor.llamadas == [], "no se toca GitHub: no hay nada que despachar"
 
 
 # --- ADR-188: la quinta causa no sale por aquí -------------------------------
