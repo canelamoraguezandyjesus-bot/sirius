@@ -1,6 +1,6 @@
 # Desenlaces del motor de Sirius
 
-> **Generado por `uv run sirius-memoria desenlaces`** a partir de `diario.jsonl` y `diario-despacho.jsonl`: 637 sucesos, el último el 2026-09-13 21:05 UTC. Lo escribe el motor en la rama
+> **Generado por `uv run sirius-memoria desenlaces`** a partir de `diario.jsonl` y `diario-despacho.jsonl`: 638 sucesos, el último el 2026-09-13 21:13 UTC. Lo escribe el motor en la rama
 > `estado-del-motor` tras cada reflejo (ADR-171). **El diario manda**: si un documento
 > dice otra cosa sobre un encargo, vale esto.
 
@@ -17,7 +17,7 @@
 
 | Encargo | Clase | Estado / fase | Creado | Último suceso | Objetivo | Evidencia |
 |---|---|---|---|---|---|---|
-| WI-20260913-201621 | programacion | active / revisar | 2026-09-13 20:16 UTC | 2026-09-13 21:05 UTC | Corrige que las paradas de la puerta de sensibilidad no tengan salida: hoy un trabajo que la puerta detiene… | [#615](https://github.com/canelamoraguezandyjesus-bot/sirius/issues/615) |
+| WI-20260913-201621 | programacion | active / reparar | 2026-09-13 20:16 UTC | 2026-09-13 21:13 UTC | Corrige que las paradas de la puerta de sensibilidad no tengan salida: hoy un trabajo que la puerta detiene… | [#615](https://github.com/canelamoraguezandyjesus-bot/sirius/issues/615) |
 | WI-20260913-143715 | programacion | cancelled / revisar | 2026-09-13 14:37 UTC | 2026-09-13 20:09 UTC | Implementa la quinta causa de la puerta del despachador: un encargo cuyo alcance declarado cae bajo .github/… | [#612](https://github.com/canelamoraguezandyjesus-bot/sirius/issues/612) |
 | WI-20260913-142937 | programacion | needs_decision / preparar | 2026-09-13 14:29 UTC | 2026-09-13 14:29 UTC | Implementa la quinta causa de la puerta del despachador: un encargo cuyo alcance declarado cae bajo .github/… | — |
 | WI-20260913-042508 | programacion | cancelled / comprobar | 2026-09-13 04:25 UTC | 2026-09-13 14:15 UTC | Corrige que el detector de sensibilidad del despachador confunda una PROHIBICION con una PETICION. En… | [#601](https://github.com/canelamoraguezandyjesus-bot/sirius/issues/601) |
