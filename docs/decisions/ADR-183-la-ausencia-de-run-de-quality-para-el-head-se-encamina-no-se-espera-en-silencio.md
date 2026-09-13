@@ -145,11 +145,28 @@ Se distinguen las dos formas de llegar ahí, con fase propia en el marcador:
 - `runs-sin-id-relanzable`: hay runs terminados, pero ninguno con `id` con el
   que relanzar.
 
-Y el aviso del primer caso **cambia su texto**: decirle al operador «relanza a
-mano el run de este head (Actions → Re-run all jobs)» cuando no existe ningún
-run lo manda a un sitio vacío. Dice en su lugar qué hace correr Quality para
-ese head (un push a la rama de la PR, o cerrar y reabrir la PR) y que después
-reejecute el paso.
+Y **cada una de las dos fases lleva su propio texto**, porque ninguna de las
+dos es «no se pudo consultar»: en ambas la consulta de Actions funcionó, y el
+aviso genérico —pensado para las lecturas caídas— afirmaría lo contrario.
+
+- `sin-runs-para-el-head`: decirle al operador «relanza a mano el run de este
+  head (Actions → Re-run all jobs)» cuando no se encontró ninguno lo manda a un
+  sitio vacío. Dice en su lugar qué hace correr Quality para ese head (un push
+  a la rama de la PR, o cerrar y reabrir la PR) y que, cuando ese run termine,
+  su `workflow_run` despierta a `advance-sirius-after-quality.yml` y la
+  incidencia avanza sola. **No** pide reejecutar este job: `transition` ya dejó
+  la incidencia en `ci-pending` y retiró la etiqueta consumible, así que la
+  puerta del workflow ya no daría `valid=true`
+  (`implement-sirius-work.yml:239-247`, `repair-sirius-work.yml:593-599`) y el
+  paso que publica el aviso no volvería a ejecutarse. Además, el texto describe
+  la **observación** y no un hecho sobre GitHub: una lista vacía no distingue
+  «GitHub no creó el run» de «la consulta se adelantó a su creación o
+  indexación», y el aviso nombra las dos posibilidades en vez de afirmar la
+  primera.
+- `runs-sin-id-relanzable`: dice que la consulta funcionó y que hay runs
+  terminados para el head pero ninguno con `id` con el que relanzar. Aquí sí
+  existe un run que el operador puede relanzar a mano, así que conserva el
+  gesto genérico que desbloquea.
 
 Lo que **no** cambia: el run en curso sigue esperando y sigue terminando en
 verde; el run terminado sigue relanzándose una sola vez con su marcador; las
@@ -208,6 +225,21 @@ FAILED …::test_unos_runs_terminados_sin_id_tampoco_salen_en_silencio
 todas por lo mismo —`assert 0 != 0`: el paso terminaba en verde—, y con el
 cambio aplicado el fichero entero queda en verde (65 pruebas).
 
+**Ronda 2 de corrección: el CUERPO del aviso, no solo su código de salida.** Las
+cuatro pruebas de arriba no miraban el texto publicado, así que dos avisos
+falsos pasaban en verde. Se amplían dos de ellas con afirmaciones sobre el
+cuerpo (no se añade ninguna prueba nueva: el fichero sigue en 65) y se ven caer
+contra el guion **sin** la corrección de los textos:
+
+```
+FAILED …::test_sin_ningun_run_de_quality_la_incidencia_se_encamina_y_no_espera
+E       AssertionError: una lista vacía no prueba que GitHub no lo creara
+E       'GitHub no creó' is contained here: NINGUNO. GitHub no creó ninguno.
+FAILED …::test_unos_runs_terminados_sin_id_tampoco_salen_en_silencio
+E       assert 'no se pudo consultar' not in …
+E       'no se pudo consultar' is contained here:  Quality: no se pudo consultar.
+```
+
 `test_sin_runs_de_quality_no_se_relanza_nada` **fijaba el fallo**: afirmaba
 `returncode == 0` para cero runs. Se sustituye por la primera de las cuatro, que
 afirma lo contrario sobre la misma entrada. Otras cinco pruebas de forma del
@@ -244,7 +276,5 @@ afirmaciones.
 ## La lección
 
 - familia: `pieza-sin-lector`
-- sin esto se repetiría: escribir la rama «no hay nada que hacer» de un
-  encaminador como un `return 0` con un `echo`, de modo que la única prueba de
-  que el ciclo se ha parado viva en un log que nadie lee.
+- sin esto se repetiría: escribir la rama «no hay nada que hacer» de un encaminador como un `return 0` con un `echo`, de modo que la única prueba de que el ciclo se ha parado viva en un log que nadie lee.
 - lo hace cumplir: `tests/automation/test_sirius_apply_verdict.py`

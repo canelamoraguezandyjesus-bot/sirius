@@ -1916,10 +1916,24 @@ def test_sin_ningun_run_de_quality_la_incidencia_se_encamina_y_no_espera(tmp_pat
     comments = _comments(env)
     assert f"sirius-quality-sin-encaminar:{head}:sin-runs-para-el-head" in comments
     assert "## QUALITY_SIN_ENCAMINAR" in comments
-    assert "NINGUNO" in comments, "el aviso dice que no existe ningún run para este head"
+    assert "NINGUNO" in comments, "el aviso dice que la consulta no encontró ningún run"
     assert "Actions → Re-run all jobs" not in comments, (
         "no se puede mandar al operador a relanzar un run que no existe"
     )
+    # La lista vacía solo demuestra que la consulta no encontró nada: puede que
+    # se adelantara a la creación o a la indexación del run. El aviso describe
+    # la observación, no un hecho sobre lo que GitHub hizo.
+    assert "GitHub no creó" not in comments, "una lista vacía no prueba que GitHub no lo creara"
+    assert "no existe ningún run" not in comments
+    assert "la consulta funcionó" in comments
+    assert "indexación" in comments, "el aviso nombra la carrera que no sabe distinguir"
+    # Y el gesto que desbloquea no puede ser reejecutar este mismo job: la
+    # puerta del workflow ya no da `valid=true` porque la etiqueta consumible
+    # se retiró, así que «Aplicar el veredicto» no volvería a correr.
+    assert "advance-sirius-after-quality.yml" in comments, (
+        "lo que encamina es la finalización natural de Quality, no este paso"
+    )
+    assert "Reejecutar este job NO sirve" in comments
 
 
 def test_el_aviso_de_que_no_hay_ningun_run_se_publica_una_sola_vez(tmp_path: Path) -> None:
@@ -1954,7 +1968,18 @@ def test_unos_runs_terminados_sin_id_tampoco_salen_en_silencio(tmp_path: Path) -
     assert "runs-sin-id-relanzable" in r.stdout + r.stderr
     assert "RERUN" not in _actions_log(env)
     assert "sirius:ci-pending" in _labels(env)
-    assert f"sirius-quality-sin-encaminar:{head}:runs-sin-id-relanzable" in _comments(env)
+    comments = _comments(env)
+    assert f"sirius-quality-sin-encaminar:{head}:runs-sin-id-relanzable" in comments
+    # El cuerpo del aviso también tiene que ser cierto: aquí la consulta SÍ
+    # funcionó, así que no puede publicar el «no se pudo consultar» genérico ni
+    # el «Qué pasa» de ADR-149, que describen otro escenario.
+    assert "no se pudo consultar" not in comments
+    assert "ANTES de que la incidencia entrara" not in comments
+    assert "ninguno trae `id` con el que relanzar" in comments
+    assert "runs TERMINADOS" in comments
+    # Aquí sí existe un run que el operador puede relanzar a mano, así que el
+    # gesto genérico que desbloquea se conserva.
+    assert "Actions → Re-run all jobs" in comments
 
 
 def test_un_run_en_curso_se_distingue_de_no_haber_ninguno(tmp_path: Path) -> None:
