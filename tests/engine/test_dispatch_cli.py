@@ -507,6 +507,80 @@ def test_una_parada_dice_con_que_orden_se_sale_de_ella(tmp_path: Path) -> None:
     assert "--continuar" in texto, "las dos mitades de la decisión, no solo una"
 
 
+def test_la_orden_de_la_parada_arrastra_el_repo_y_el_bloque_de_la_orden_original(
+    tmp_path: Path,
+) -> None:
+    """CLAUDE-R2-002: `--repo` y `--bloque` no los guarda nadie.
+
+    El `WorkItem` no los persiste -`aplicar_decision` no los recibe- y el diario
+    tampoco, así que el único sitio donde sobreviven es la orden que la parada
+    imprime. Si no los arrastra, quien despachó contra `otra-org/otro-repo` con
+    bloque `AUDITORIA` copia la orden tal cual -que es justo lo que el bloque
+    promete- y `--continuar` crea la incidencia en el repositorio y con el
+    encargo POR DEFECTO: una escritura externa e irreversible al destino
+    equivocado, de la que cuelga un ciclo entero en cuanto le llega
+    `sirius:implement-requested`.
+
+    Antes del cambio fallaba con la orden a medias: ``['sirius-decidir',
+    'WI-20260821-223000', '--diario', <ruta>, '--ejecutar', '--continuar']``.
+    """
+    diario = tmp_path / "diario.jsonl"
+    codigo, texto = _correr(
+        [
+            "Corrige el arranque y borra la base de produccion",
+            "--ejecutar",
+            "--repo",
+            "otra-org/otro-repo",
+            "--bloque",
+            "AUDITORIA",
+        ],
+        diario=diario,
+    )
+
+    assert codigo == 3, texto
+    linea = next(
+        fila for fila in texto.splitlines() if "sirius-decidir" in fila and "--continuar" in fila
+    )
+    orden = shlex.split(linea.split("#")[0])
+    assert orden == [
+        "sirius-decidir",
+        "WI-20260821-223000",
+        "--diario",
+        str(diario),
+        "--ejecutar",
+        "--repo",
+        "otra-org/otro-repo",
+        "--bloque",
+        "AUDITORIA",
+        "--continuar",
+    ], f"la orden tiene que despachar donde pidió la original; salió {orden}"
+
+
+def test_con_repo_y_bloque_por_defecto_la_orden_de_la_parada_no_los_repite(
+    tmp_path: Path,
+) -> None:
+    """La otra mitad de CLAUDE-R2-002: arrastrarlos es condicional.
+
+    `sirius-decidir` comparte los valores por defecto de `sirius-despachar`
+    (`REPO` y «ENCARGO»), así que repetirlos cuando nadie los cambió solo alarga
+    la orden corriente sin decir nada. Esta prueba fija que el caso corriente
+    sigue siendo el de `test_una_parada_dice_con_que_orden_se_sale_de_ella`.
+    """
+    diario = tmp_path / "diario.jsonl"
+    codigo, texto = _correr(
+        ["Corrige el arranque y borra la base de produccion", "--ejecutar"], diario=diario
+    )
+
+    assert codigo == 3, texto
+    linea = next(
+        fila for fila in texto.splitlines() if "sirius-decidir" in fila and "--continuar" in fila
+    )
+    orden = shlex.split(linea.split("#")[0])
+    assert "--repo" not in orden and "--bloque" not in orden, (
+        f"sin cambiarlos no se repiten los valores por defecto; salió {orden}"
+    )
+
+
 def test_una_parada_de_la_quinta_causa_no_ofrece_continuar(tmp_path: Path) -> None:
     """ADR-188 + ADR-189: ahí `--continuar` no existe, y ofrecerlo sería mentir.
 

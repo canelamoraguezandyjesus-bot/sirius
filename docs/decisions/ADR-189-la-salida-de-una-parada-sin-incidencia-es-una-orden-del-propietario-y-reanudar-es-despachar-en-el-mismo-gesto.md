@@ -203,7 +203,11 @@ sirius-decidir <work_id> (--continuar | --terminar) [--ejecutar] [--repo] [--blo
   diario ya puestos, y `/trabajos` lo recuerda cuando lista algo en
   `needs_decision` —también con `--diario` y `--ejecutar`, porque la sesión se
   abre a menudo contra un diario que `sirius-decidir` no resolvería solo y sin
-  `--ejecutar` la orden copiada solo haría el ensayo—. Y la condición para
+  `--ejecutar` la orden copiada solo haría el ensayo, y con `--repo`/`--bloque`
+  cuando la orden original no usó sus valores por defecto, porque el `WorkItem`
+  NO los persiste y sin ellos la orden copiada crearía la incidencia en el
+  repositorio y con el encargo por defecto: una escritura externa e irreversible
+  al destino equivocado (CLAUDE-R2-002)—. Y la condición para
   ofrecer `--continuar` es **«este trabajo puede despacharse»**, no «no es la
   quinta causa»: se comprueban también la clase (`TABLA_ACTIVACION`) y el carril
   retirado, que son los otros dos motivos por los que `_no_se_puede_despachar`
@@ -253,6 +257,7 @@ que la llamara.
   | `return 0` en vez de `return 2` | un work_id que no existe no inventa nada |
   | quitar el bloque de la salida de la parada | la parada dice con qué orden se sale |
   | quitar `--diario` de la orden copiable | la orden se copia tal cual |
+  | quitar `--repo` de la orden copiable | la orden despacha donde pidió la original, no en el repo por defecto |
   | ofrecer `--continuar` en la quinta causa | ahí no se ofrece lo que no lleva a nada |
   | ofrecer `--continuar` con una clase sin despachador | tampoco se ofrece lo que saldría con 5 |
   | quitar `--diario`/`--ejecutar` de la orden de `/trabajos` | el aviso de la sesión se copia tal cual |

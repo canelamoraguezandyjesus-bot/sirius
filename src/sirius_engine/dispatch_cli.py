@@ -469,7 +469,21 @@ def main(
                 prefijo_vetado=prefijo_vetado,
                 clase=decision.datos_trabajo.clase if decision.datos_trabajo else None,
             )
-            comun = f"{work_id} --diario {ruta_copiable(diario_efectivo)} --ejecutar"
+            # CLAUDE-R2-002: `--repo` y `--bloque` NO se persisten en el
+            # `WorkItem` ni en el diario, así que si la orden que se imprime no
+            # los arrastra, quien copió `sirius-despachar ... --repo otra-org/x
+            # --bloque AUDITORIA` crea la incidencia en el repositorio y con el
+            # bloque POR DEFECTO: una escritura externa e irreversible dirigida
+            # a un sitio que el propietario no pidió. Se añaden solo cuando
+            # difieren del valor por defecto -que `sirius-decidir` comparte-,
+            # para que la orden corriente siga siendo la corta, y entrecomillados
+            # con la misma disciplina que la ruta del diario.
+            extras = ""
+            if args.repo != REPO:
+                extras += f" --repo {shlex.quote(args.repo)}"
+            if args.bloque != "ENCARGO":
+                extras += f" --bloque {shlex.quote(args.bloque)}"
+            comun = f"{work_id} --diario {ruta_copiable(diario_efectivo)} --ejecutar{extras}"
             linea(f"    sirius-decidir {comun} --terminar    # se da por terminado")
             if motivo_sin_continuar is None:
                 linea(f"    sirius-decidir {comun} --continuar    # continúa: crea la incidencia")
