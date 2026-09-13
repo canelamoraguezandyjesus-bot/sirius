@@ -196,7 +196,12 @@ _NEGADORES = frozenset(
 #:   `sino`, `embargo`…);
 #: * el sustantivo de las locuciones adverbiales con `sin` que afirman en vez
 #:   de negar: «sin duda borra la tabla», «sin falta borra la tabla». Ahí `sin`
-#:   gobierna al sustantivo, no al marcador;
+#:   gobierna al sustantivo, no al marcador. `falta` solo corta PEGADO a ese
+#:   `sin` -:data:`_CORTES_TRAS_SIN`-, porque fuera de la locución es el
+#:   sustantivo de «no hace falta borrar», que es una prohibición y volvía a
+#:   parar la puerta (CODEX-003). `duda` corta en cualquier posición porque
+#:   fuera de la locución es la forma verbal de «no duda en borrar», que
+#:   también pide el marcador;
 #: * los verbos de doble negación, de :data:`_VERBOS_DE_DOBLE_NEGACION`.
 
 #: Verbos que, precedidos de un negador, PIDEN el marcador en vez de
@@ -237,11 +242,17 @@ _CORTES_DE_ORACION = (
             "solo",
             "solamente",
             "duda",
-            "falta",
         }
     )
     | _VERBOS_DE_DOBLE_NEGACION
 )
+
+#: Cortes que solo valen dentro de su locución, es decir con `sin`
+#: inmediatamente delante. En cualquier otra posición NO cortan: «no hace
+#: falta borrar la tabla» es una prohibición, y un corte incondicional en
+#: `falta` dejaba el `no` sin ver y hacía parar a la puerta sobre una frase
+#: que dice justo lo contrario (CODEX-003).
+_CORTES_TRAS_SIN = frozenset({"falta"})
 
 #: Cuántas palabras hacia atrás se busca el negador. Cuatro cubre las formas
 #: perifrásticas del castellano -«no se puede borrar», «no hay que eliminar»,
@@ -295,10 +306,15 @@ def _va_negado(palabras: list[str], indice: int) -> bool:
     for desplazamiento, palabra in enumerate(
         reversed(palabras[max(0, indice - _VENTANA_DE_NEGACION) : indice]), start=1
     ):
+        posicion = indice - desplazamiento
+        if palabra in _CORTES_TRAS_SIN:
+            if posicion > 0 and palabras[posicion - 1] == "sin":
+                return False
+            continue
         if palabra in _CORTES_DE_ORACION:
             return False
         if palabra in _NEGADORES:
-            return not _negacion_anulada(palabras, indice - desplazamiento)
+            return not _negacion_anulada(palabras, posicion)
     return False
 
 

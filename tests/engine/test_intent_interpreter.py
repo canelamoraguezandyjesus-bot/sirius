@@ -290,6 +290,12 @@ def test_una_salvaguarda_que_prohibe_la_operacion_no_es_una_orden_sensible(mensa
         # Las cuatro tuplas de _SENSIBILIDAD comparten el mismo detector, así que
         # el criterio las alcanza a las cuatro: prohibir no es pedir en ninguna.
         ("implementa el importador sin borrar la tabla de origen", None),
+        # La salvaguarda más común del castellano, y la que el corte
+        # incondicional en `falta` había vuelto a romper: ahí `falta` no abre
+        # la locución «sin falta», así que no corta y el `no` se ve
+        # (CODEX-003, CLAUDE-R2-002).
+        ("implementa esto: no hace falta borrar ninguna fila", None),
+        ("implementa esto: no hace falta borrar la tabla de origen", None),
         ("implementa el importador y borra la tabla de origen", _DESTRUCTIVO),
         ("implementa esto sin gastar en una clave real de pago", None),
         ("implementa esto con una clave real de pago", CausaEscalado.GASTO_O_PRESUPUESTO),
