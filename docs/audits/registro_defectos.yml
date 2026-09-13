@@ -496,14 +496,15 @@ defectos:
     titulo: La rama sin ningun run de Quality salia en silencio y dejaba la incidencia esperando para siempre
     bloque: automatizacion
     gravedad: media
-    estado: abierto
+    estado: cerrado
+    cerrado_por: 8912e1d65beb0a5bbe071d612428fa106c338538
     adr: 183
     incidencia: 599
     ficheros:
       - scripts/automation/sirius_apply_verdict.sh
       - tests/automation/test_sirius_apply_verdict.py
 
-  - id: H-38
+  - id: H-39
     titulo: El detector de sensibilidad confundia una prohibicion con una peticion
     bloque: motor
     gravedad: media
@@ -518,7 +519,8 @@ defectos:
     titulo: El registro de defectos podia quedarse dormido sin que ninguna comprobacion lo notara
     bloque: automatizacion
     gravedad: media
-    estado: abierto
+    estado: cerrado
+    cerrado_por: f4a201f3172b913e1d58dccd6f9d1e73fb8d1aa0
     adr: 182
     incidencia: 597
     ficheros:
@@ -531,7 +533,8 @@ defectos:
     titulo: Una sola puerta encendia siete piezas y no dejaba medir ninguna por separado
     bloque: producto
     gravedad: baja
-    estado: abierto
+    estado: cerrado
+    cerrado_por: e36fc551e8b52ffae7ecb598201069572ef261d3
     adr: 185
     incidencia: 603
     ficheros:
