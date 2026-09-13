@@ -210,9 +210,10 @@ el vocabulario es el que el bootstrap crea, y la prueba lo comprueba leyéndolo.
 
 ## Opciones consideradas
 
-1. **Añadir las tres parejas que faltan a `_PAR_DE_ACTIVACION_VALIDO`** (o
-   convertirlo en un conjunto de parejas). Es la reparación mínima y la que el
-   código invitaba a hacer.
+1. **Añadir a `_PAR_DE_ACTIVACION_VALIDO` las parejas que le faltan** —las que
+   la medición de arriba cuenta como compatibles y la lista a mano no recoge—
+   (o convertirlo en un conjunto de parejas). Es la reparación mínima y la que
+   el código invitaba a hacer.
 2. **Derivar el criterio de `_LABEL_STATE`**: hay contradicción si y solo si las
    etiquetas presentes proyectan más de un `(estado, fase)` distinto.
 3. **Agrupar las etiquetas por «etapa» en una tabla nueva** y comparar etapas.
@@ -355,6 +356,41 @@ nueva no es vacua se vio sembrando en la sección «Decisión» la línea
 `MUTACION: una de las cuatro parejas que la tabla exime sola.`: el filtro la
 imprime y sale con código 0; retirada, vuelve a salir 1. No se toca ni el
 comportamiento ni ningún aserto.
+
+**CLAUDE-R3-002.** La opción 1 de «Opciones consideradas» seguía diciendo
+«añadir las tres parejas que faltan»: era cierto con el vocabulario de 13
+etiquetas de la medición inicial, y dejó de serlo al retirar
+`sirius:audit-requested`. Como en la ronda 3, la cifra **se quita** y la frase
+remite a la medición, que es lo único que se actualiza al cambiar el
+vocabulario.
+
+Y, por ser la tercera ronda con defectos de la misma familia (ADR-001: dos
+rondas iguales → buscar la raíz), esta corrección va con un **barrido completo
+de todas las afirmaciones numéricas o enumerativas del ADR sobre parejas y
+etiquetas**. Criterio del barrido: se listaron con
+`grep -n "parejas\|pareja\|etiquetas" <adr>` todas las frases con cifra o
+enumeración, y cada una se contrastó contra el reparto recalculado sobre la
+tabla viva, no contra otra frase del documento:
+
+```sh
+uv run python -c "
+from itertools import combinations
+from sirius_engine.mirror_projection import _LABEL_STATE
+pares = list(combinations(sorted(_LABEL_STATE), 2))
+mismo = [p for p in pares if _LABEL_STATE[p[0]] == _LABEL_STATE[p[1]]]
+print(len(_LABEL_STATE), len(pares), len(mismo), len(pares) - len(mismo))
+"
+# -> 12 66 3 63
+```
+
+Resultado del barrido: la única afirmación falsa que quedaba era la de la
+opción 1 (más la viñeta del reconciliador, CLAUDE-R3-001, que no es de cuenta
+sino de qué exime el guion). Las demás —la medición y sus tres viñetas, «3
+exentas de 66» de la etiqueta retirada, «63 de 66 parejas, en vez de 65» de
+las consecuencias, «su única pareja» de la decisión y la mención histórica de
+la cuarta pareja inexistente— coinciden con ese recuento y se dejan intactas.
+Las cifras del vocabulario de 13 etiquetas que aún aparecen lo hacen siempre
+marcadas como medición inicial o como cita de una frase ya corregida.
 
 ## Consecuencias
 
