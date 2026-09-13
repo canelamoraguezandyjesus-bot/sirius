@@ -19,8 +19,9 @@ medirlo.
 de `tests/automation/test_registro_de_defectos.py` verifican la **coherencia de
 lo ya escrito** —que no haya identificadores repetidos, que los ficheros
 citados existan, que un abierto tenga incidencia, que un cerrado diga su commit
-de cierre— y **ninguna pregunta si lo que pasó se escribió**. Por eso llevan
-doce días y 61 ADR en verde sobre un registro dormido.
+de cierre— y **ninguna pregunta si lo que pasó se escribió**. Por eso llevaban
+doce días en verde sobre un registro dormido, mientras entraban a `main` todos
+los ADR que cuenta la sección de medición.
 
 Las dos consecuencias, reproducidas en este árbol (`673b2f4`, el head de `main`)
 antes de decidir nada:
@@ -237,8 +238,13 @@ Tres detalles no son cosméticos:
 
 Con el criterio publicado en `738298b` y ejecutado sobre el árbol de `673b2f4`,
 sobre los **62** ADR distintos que el rango 116–180 tiene en `docs/decisions/`
-(el encargo dice 61; la diferencia son los huecos 165, 177 y 178, que no
-existen, y el conteo por ficheros presentes da 62):
+(el encargo decía 61, y la diferencia no son los huecos: 165, 177 y 178
+explican por qué 65 números dan 62 ficheros, no por qué el encargo contaba
+uno menos. La causa es que aquella cuenta se midió con `main` en `f6fa1e6`,
+y la fusión de ADR-179 (#593) la subió a 62 antes de que el encargo se
+despachara: `git log --diff-filter=A --name-only 5cc3f18..f6fa1e6 --
+docs/decisions/` da 61 y `5cc3f18..673b2f4` da 62, con ADR-179 como único
+fichero de diferencia):
 
 | señal | ADR que la cumplen | cuáles |
 |---|---|---|
@@ -294,13 +300,13 @@ Nueve. En dos de ellas se comprueban **las dos direcciones** que exige ADR-001
 
 | # | mutación | guarda vieja | guarda nueva |
 |---|---|---|---|
-| M1 | quitar `adr: 182` de `H-33`: ADR-182 declara lección y el registro no lo acusa | **40 passed** | **rojo** en `test_todo_adr_que_declara_un_defecto_deja_su_entrada_en_el_registro` y en `test_al_menos_un_defecto_acusa_el_adr_que_lo_corrigio` |
+| M1 | quitar `adr: 182` de `H-33`: ADR-182 declara lección y el registro no lo acusa | **40 passed**, sin saltos: medida en un clon CON historia de `main`, donde corren los 40 casos | **rojo** en `test_todo_adr_que_declara_un_defecto_deja_su_entrada_en_el_registro` y en `test_al_menos_un_defecto_acusa_el_adr_que_lo_corrigio` |
 | M2 | eximir a ADR-182, que el registro **sí** acusa | — | rojo en `test_ninguna_excepcion_sobra[ADR-182]` |
 | M3 | eximir a un ADR que no existe (999) | — | rojo en `test_cada_excepcion_sigue_correspondiendo_a_un_adr_que_declara_un_defecto[ADR-999]` |
 | M4 | dejar una excepción sin razón escrita | — | rojo en `test_cada_excepcion_declara_su_razon[ADR-180]` |
 | M5 | que una entrada acuse un ADR inventado (`adr: 999`) | — | rojo en `test_el_adr_que_un_defecto_acusa_existe_de_verdad` |
 | M6 | que la derivación deje de ver `familia:` | — | rojo en 6, empezando por `test_el_inventario_de_adr_con_defecto_se_deriva_y_no_esta_vacio` |
-| M7 | aflojar el criterio del corazón **y** dejar el registro sin ningún abierto | **39 passed** | **rojo** en `test_el_criterio_del_corazon_muerde_aunque_no_haya_ningun_abierto` |
+| M7 | aflojar el criterio del corazón **y** dejar el registro sin ningún abierto | **39 passed**, 1 skipped: medida en un árbol SUPERFICIAL, donde `test_ningun_defecto_abierto_tiene_ya_su_arreglo_en_main` se salta | **rojo** en `test_el_criterio_del_corazon_muerde_aunque_no_haya_ningun_abierto` |
 | M8 | eximir **todos** los ADR del inventario **y** hacer que `H-33` acuse a un ADR ajeno a él (`adr: 1`): la salida fácil ante un rojo, sin que `test_ninguna_excepcion_sobra` la delate | **verde**: la aserción original solo pedía que existiera algún campo `adr` | **rojo** en `test_al_menos_un_defecto_acusa_el_adr_que_lo_corrigio`, y solo ahí (`1 failed, 63 passed, 1 skipped`, resembrada sobre el árbol de `187ba694`) |
 | M9 | estrechar el patrón de nombre a `\d{3}` exactos, que es como estaba escrito | — | **rojo** en `test_los_lectores_de_adr_ven_un_numero_de_cuatro_cifras`: «el patrón de nombre no reconoce ADR-1000-…» |
 
@@ -320,12 +326,20 @@ falta añade además tres casos parametrizados sobre
 `sorted(SIN_DEFECTO_REGISTRADO)`, que son los que llevan la batería mutada de
 62 a 65 casos.
 
-**M1 y M7 son las que miden lo que se ganó.** En M1 la guarda vieja pasa entera
-—40 passed— con un ADR que dice haber corregido un defecto y un registro que no
-lo menciona: es la sequía, reproducida en pequeño. En M7 el criterio del corazón
-se afloja hasta invertirse y la guarda vieja sigue verde —39 passed— porque con
+**M1 y M7 son las que miden lo que se ganó.** En M1 la guarda vieja pasa
+entera con un ADR que dice haber corregido un defecto y un registro que no
+lo menciona: es la sequía, reproducida en pequeño. En M7 el criterio del
+corazón se afloja hasta invertirse y la guarda vieja sigue verde porque con
 los 32 defectos cerrados filtra sobre el vacío y no llega a ejercerlo; la
 anti-vacua nueva lo caza sin depender de cómo esté el registro.
+
+Las dos se midieron en entornos distintos, y por eso sus totales no
+coinciden: la guarda vieja tiene **40 casos**, de los que
+`test_ningun_defecto_abierto_tiene_ya_su_arreglo_en_main` corre o se salta
+según el árbol traiga o no la historia de `main`. Ninguna de las dos
+mutaciones altera ese número, así que el total delata el entorno: 40 passed
+es un clon completo y 39 passed + 1 skipped uno superficial. Cada celda lo
+dice ahora.
 
 ### La batería completa
 
@@ -381,5 +395,5 @@ que se salta sin historia de `main`— y sigue costando medio segundo.
 ## La lección
 
 - familia: `regla-que-depende-de-que-alguien-se-acuerde`
-- sin esto se repetiría: poner a vigilar un registro con comprobaciones que solo miran la coherencia de lo ya escrito; el registro deja de recibir lo que pasa, ninguna de ellas puede notarlo y el verde lo confirma —aquí fueron doce días y 61 ADR sin una entrada.
+- sin esto se repetiría: poner a vigilar un registro con comprobaciones que solo miran la coherencia de lo ya escrito; el registro deja de recibir lo que pasa, ninguna de ellas puede notarlo y el verde lo confirma —aquí fueron doce días sin una sola entrada, con todos los ADR de ese intervalo entrando entretanto.
 - lo hace cumplir: `tests/automation/test_registro_de_defectos.py`

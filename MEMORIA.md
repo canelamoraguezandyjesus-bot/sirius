@@ -232,7 +232,7 @@ de memoria.
 
 ### `regla-que-depende-de-que-alguien-se-acuerde`
 
-- **[ADR-182](docs/decisions/ADR-182-la-guarda-del-registro-de-defectos-deriva-de-los-adr-que-declaran-leccion.md)** — poner a vigilar un registro con comprobaciones que solo miran la coherencia de lo ya escrito; el registro deja de recibir lo que pasa, ninguna de ellas puede notarlo y el verde lo confirma —aquí fueron doce días y 61 ADR sin una entrada. (lo hace cumplir `tests/automation/test_registro_de_defectos.py`).
+- **[ADR-182](docs/decisions/ADR-182-la-guarda-del-registro-de-defectos-deriva-de-los-adr-que-declaran-leccion.md)** — poner a vigilar un registro con comprobaciones que solo miran la coherencia de lo ya escrito; el registro deja de recibir lo que pasa, ninguna de ellas puede notarlo y el verde lo confirma —aquí fueron doce días sin una sola entrada, con todos los ADR de ese intervalo entrando entretanto. (lo hace cumplir `tests/automation/test_registro_de_defectos.py`).
 - **[ADR-179](docs/decisions/ADR-179-la-guarda-de-piezas-sin-llamante-deriva-su-inventario-del-codigo-del-motor.md)** — escribir un guardián sobre una lista de inclusión (lo hace cumplir `tests/automation/test_piezas_con_llamante.py`).
 - **[ADR-174](docs/decisions/ADR-174-la-mina-en-dos-pasadas-la-leccion-se-declara-en-el-adr-que-la-produce-y-las-familias-se-cuentan-solas.md)** — escribir la regla de captura en un catálogo y dar por hecho que alguien la aplicará; los dos sitios de lecciones de este repositorio llevaban 48 ADR sin una sola entrada, con sus reglas escritas dentro. (lo hace cumplir `tests/automation/test_mina_de_lecciones.py`).
 
