@@ -492,6 +492,17 @@ defectos:
       - src/sirius_engine/mirror_projection.py
       - tests/engine/test_mirror_projection.py
 
+  - id: H-37
+    titulo: La rama sin ningun run de Quality salia en silencio y dejaba la incidencia esperando para siempre
+    bloque: automatizacion
+    gravedad: media
+    estado: abierto
+    adr: 183
+    incidencia: 599
+    ficheros:
+      - scripts/automation/sirius_apply_verdict.sh
+      - tests/automation/test_sirius_apply_verdict.py
+
   - id: H-33
     titulo: El registro de defectos podia quedarse dormido sin que ninguna comprobacion lo notara
     bloque: automatizacion
