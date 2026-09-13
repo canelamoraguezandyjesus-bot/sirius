@@ -5540,6 +5540,48 @@ que ahorran:
    **apuntado** que prueba que nada le sigue atribuyendo comportamiento, y el
    guardián lo re-corre.
 
+4. **«Solo prosa», comprobable.** Escrito y **medido esta misma noche**, 30
+   líneas. Compara el **AST** de cada `.py` cambiado entre dos árboles con los
+   docstrings vaciados: si los dos árboles dan el mismo árbol sintáctico, el
+   cambio no movió ninguna expresión, firma, `assert` ni cota.
+
+   ```python
+   def sin_docstrings(nodo: ast.AST) -> ast.AST:
+       for n in ast.walk(nodo):
+           if isinstance(n, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+               c = n.body
+               if c and isinstance(c[0], ast.Expr) and isinstance(c[0].value, ast.Constant) \
+                  and isinstance(c[0].value.value, str):
+                   c[0].value.value = ""
+       return nodo
+   # por cada fichero de `git diff --name-only base..head -- '*.py'`:
+   #   ast.dump(sin_docstrings(ast.parse(fuente_base))) == ast.dump(... head ...)
+   ```
+
+   **Medición, en los dos sentidos** (el control negativo es la mutación vista
+   fallar):
+
+   | rango | qué es | veredicto | salida |
+   |---|---|---|---|
+   | `967a7a20..237a423c` | la ronda 11, que se declara solo prosa | los 3 ficheros **PROSA** | 0 |
+   | `fa2c6f8~1..fa2c6f8` | el commit que SÍ cambia H4 | los 10 ficheros **CÓDIGO** | 1 |
+
+   **Qué se lleva por delante.** Desde la ronda 5, cada ronda gasta prosa en
+   argumentar «no se movió ni una expresión» y el revisor gasta lectura en
+   comprobarlo. Pasa a ser un comando con código de salida. Y retira la
+   **enumeración auto-referencial** que apareció en las rondas 11 y 12 —el ADR
+   describiendo su propio diff, donde escribir la descripción cambia el diff—:
+   en vez de enumerar qué añadió cada commit sobre el árbol medido, el ADR dice
+   «desde `967a7a20` el cambio es solo prosa» y transcribe esta salida. Esa
+   frase **no caduca**, porque el commit siguiente también es prosa y el comando
+   lo sigue diciendo.
+
+   **Aviso de un invariante que NO vale**, por si alguien lo intenta primero:
+   `git diff base..head -- src tests scripts` **no** sale vacío en un cambio de
+   prosa, porque los docstrings viven dentro de los `.py`. Comprobado: devuelve
+   tres ficheros para `967a7a20..237a423c`. Hace falta mirar el AST, no el
+   fichero.
+
 Lo que se queda con los revisores es el **juicio** —si el diseño es el correcto,
 si la prueba prueba lo que dice, si el argumento se sostiene—, que es donde dos
 revisores valen lo que cuestan. En contabilidad de prosa, no.
