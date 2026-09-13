@@ -355,8 +355,10 @@ La primera línea de cada fallo:
   ronda 3 con todo el código y todas las pruebas ya dentro— da **6426 passed,
   17 skipped, 2 xfailed** en 509.73 s y **código de salida 0**. La misma cadena
   sobre `4b71b0eb`, que llevaba ese mismo `src/` y ese mismo `tests/`, dio las
-  mismas 6426 en 520.01 s. Lo único que cambia después de esa medición es la
-  prosa de este ADR. Las cifras de las rondas anteriores quedan ancladas a su
+  mismas 6426 en 520.01 s. La **verificación de cierre** de la ronda volvió a
+  encadenarla entera sobre el árbol de `6c978ae1`: **6426 passed, 17 skipped,
+  2 xfailed** en 583.62 s y **código de salida 0**. Lo único que cambia después
+  de esa medición es la prosa de este ADR. Las cifras de las rondas anteriores quedan ancladas a su
   propio árbol, arriba.
 
 ### Ronda 3: el subjuntivo, el corte incondicional, la doble negación y la ruta
@@ -390,6 +392,29 @@ La primera línea de cada fallo:
   crezca borra los logs».
 - M14 — `AssertionError: la ruta tiene que llegar entera como valor de
   --diario, no partida en dos`.
+
+Las cuatro se **resembraron una a una sobre el árbol final** —el head
+`6c978ae1`, que ya lleva todas las correcciones y todas las pruebas de la
+ronda— en la verificación independiente que la cierra, para que ninguna fila
+dependa de un árbol intermedio. Los fallos son los mismos, con la misma primera
+línea; lo que cambia es el control, que ahí ya es el completo:
+
+| Mutación resembrada sobre `6c978ae1` | Fichero de prueba | Resultado |
+|---|---|---|
+| sin mutar (control) | `test_intent_interpreter.py` | 75 passed |
+| sin mutar (control) | `test_dispatch_cli.py` | 16 passed |
+| M11 | `test_intent_interpreter.py` | 2 failed, 73 passed |
+| M12 | `test_intent_interpreter.py` | 2 failed, 73 passed |
+| M13 | `test_intent_interpreter.py` | 2 failed, 73 passed |
+| M14 | `test_dispatch_cli.py` | 1 failed, 15 passed |
+
+M12 pide sus **dos** mitades a la vez —`falta` de vuelta en
+`_CORTES_DE_ORACION` **y** `_CORTES_TRAS_SIN` vacío—, y al resembrarla se vio
+por qué: `_va_negado` consulta `_CORTES_TRAS_SIN` **antes** que
+`_CORTES_DE_ORACION`, así que una palabra que esté en las dos listas nunca
+llega a cortar de forma incondicional. Vaciar solo `_CORTES_TRAS_SIN` no
+reproduce el defecto de CODEX-003: quita también el corte de «sin falta borra»
+y lo que cae es esa otra prueba (1 failed, 74 passed).
 
 ### Un aviso sobre el método, porque costó una medición falsa
 
