@@ -292,20 +292,47 @@ La primera fija que `runs-sin-id-relanzable` deja de ofrecer «reejecutar este
 paso»; la segunda, que `sin-runs-para-el-head` deja de prometer que un push
 hace correr Quality «para este head».
 
+**Ronda 4 de corrección: el paso no es reintentable y la indexación no lo cura.**
+Otra vez las mismas dos pruebas, otra vez sin añadir ninguna (el fichero sigue
+en 65), y cada afirmación nueva vista caer con su mutación aislada sobre el
+árbol de la ronda 3:
+
+```
+FAILED …::test_sin_ningun_run_de_quality_la_incidencia_se_encamina_y_no_espera
+E       AssertionError: el aviso no puede ofrecer un reintento del paso que él mismo desmiente
+E       assert 'este paso, reintentable' not in …
+FAILED …::test_unos_runs_terminados_sin_id_tampoco_salen_en_silencio
+E       AssertionError: el aviso no puede ofrecer un reintento del paso que él mismo desmiente
+E       assert 'este paso, reintentable' not in …
+FAILED …::test_sin_ningun_run_de_quality_la_incidencia_se_encamina_y_no_espera
+E       AssertionError: un run ya terminado antes de la consulta no vuelve a emitir su workflow_run
+E       assert 'lo mismo si...en indexarse' not in …
+```
+
+Las dos primeras fijan que ninguna de las dos fases se llama reintentable a sí
+misma; la tercera, que el aviso ya no promete que la incidencia avance sola por
+un run preexistente que ya había terminado cuando se consultó.
+
 ### La cadena completa, anclada a su árbol
 
 Una sola invocación de `pwsh -File scripts/check.ps1` (Ruff format, Ruff lint,
-mypy, pytest) sobre el árbol de `2277a48a`, el commit que cierra los tres
-hallazgos de la ronda 3 (los dos textos y el comentario del `case`):
+mypy, pytest) sobre el árbol de `a05bc3a3`, el commit de la ronda 4 que corrige
+los dos textos. Ese árbol es el que se entrega salvo por este mismo párrafo: el
+único fichero que difiere del head es este ADR, y solo en las líneas que
+transcriben estas cifras.
 
 ```
-=========== 6392 passed, 17 skipped, 2 xfailed in 461.46s (0:07:41) ============
+=========== 6392 passed, 17 skipped, 2 xfailed in 510.15s (0:08:30) ============
 EXITCODE=0
 ```
 
-La cifra anterior, sobre el árbol de `9bb54ea3` (ronda 2), era
-`6392 passed, 17 skipped, 2 xfailed in 548.44s`: el recuento no cambia porque
-esta ronda no añadió pruebas, solo afirmaciones a dos ya existentes.
+El código de salida es el del propio `pwsh -File scripts/check.ps1`, capturado
+sin tubería (`> /tmp/check2.log 2>&1; echo "EXITCODE=$?"`).
+
+Cifras anteriores, cada una con su árbol: `6392 passed, 17 skipped, 2 xfailed in
+461.46s` sobre el árbol de `2277a48a` (ronda 3) y `… in 548.44s` sobre el de
+`9bb54ea3` (ronda 2). El recuento no cambia en ninguna ronda de corrección
+porque ninguna añadió pruebas, solo afirmaciones a dos ya existentes.
 
 ## Consecuencias
 
