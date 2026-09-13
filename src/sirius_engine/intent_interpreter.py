@@ -139,6 +139,132 @@ _SENSIBILIDAD: tuple[tuple[tuple[str, ...], CausaEscalado], ...] = (
     (_MARCADORES_PRIVACIDAD, CausaEscalado.PRIVACIDAD_O_INFORMACION_SENSIBLE),
 )
 
+#: Lo que, delante de un marcador y dentro de su misma oración, lo convierte en
+#: una PROHIBICIÓN o una NEGACIÓN en vez de una petición (ADR-184). La lista es
+#: CERRADA y está declarada: lo que FALTE aquí no silencia nada, así que una
+#: lista incompleta sigue parando -fail-closed, el mismo criterio del
+#: propietario en #324 (H-19)-.
+#:
+#: Lo que SOBRA, en cambio, sí es fail-open: una palabra que aparece delante
+#: del marcador sin negarlo silencia una petición de verdad. Por eso NO están
+#: los infinitivos `evitar` e `impedir`: en castellano encabezan la subordinada
+#: final «para evitar/impedir X, borra Y», donde la negación gobierna el
+#: propósito y NO al verbo principal, que sí se está pidiendo. Por el mismo
+#: motivo NO están las formas de subjuntivo -`evites`, `eviten`, `impidas`,
+#: `impidan`-: son las que selecciona «para que», y «para que impidan que
+#: crezca borra los logs» es el MISMO giro final con otro sujeto
+#: (CLAUDE-R2-001). Se quedan solo las formas que no lo encabezan: el
+#: imperativo y el presente de indicativo -«evita borrar», «impide que se
+#: borre»-. El resto de giros con negador que no niega se corta desde
+#: :data:`_CORTES_DE_ORACION`.
+_NEGADORES = frozenset(
+    {
+        "no",
+        "ni",
+        "nunca",
+        "jamas",
+        "tampoco",
+        "sin",
+        "ningun",
+        "ninguna",
+        "ninguno",
+        "ningunos",
+        "ningunas",
+        "prohibido",
+        "prohibida",
+        "prohibidos",
+        "prohibidas",
+        "prohibe",
+        "prohiben",
+        "prohibir",
+        "evita",
+        "impide",
+    }
+)
+
+#: Verbos que, precedidos de un negador, PIDEN el marcador en vez de
+#: prohibirlo: «no olvides borrar», «no dudes en borrar», «no dejes de
+#: borrar». Cortan la mirada hacia atrás como cualquier otro corte y, además,
+#: ANULAN al negador que quede entre ellos y el marcador: «no dejes ninguna
+#: fila sin borrar» PIDE borrarlas todas, aunque el `sin` esté pegado al
+#: marcador y la mirada se pare en él antes de llegar al corte (CODEX-002).
+_VERBOS_DE_DOBLE_NEGACION = frozenset(
+    {
+        "olvides",
+        "olvide",
+        "olviden",
+        "olvidar",
+        "dudes",
+        "dude",
+        "duden",
+        "dudar",
+        "dejes",
+        "deje",
+        "dejen",
+        "dejar",
+    }
+)
+
+#: Palabras que CORTAN la mirada hacia atrás: si aparecen entre el negador y el
+#: marcador, el negador ya no gobierna al marcador. Sin ellas, «no toques la
+#: cola y borra la tabla» quedaría silenciado por el «no» de la otra oración
+#: coordinada, y «sin embargo borra la tabla» o «no solo borra X sino Y» lo
+#: quedarían por un «sin» y un «no» que no niegan nada. Cortar es la dirección
+#: SEGURA: un corte de más hace que la puerta pare, no que deje pasar.
+#:
+#: Van aquí tres familias, y las tres por el mismo motivo -el negador que las
+#: precede no niega al marcador-:
+#:
+#: * los nexos que abren otra oración coordinada o adversativa (`y`, `pero`,
+#:   `sino`, `embargo`…);
+#: * el sustantivo de las locuciones adverbiales con `sin` que afirman en vez
+#:   de negar: «sin duda borra la tabla», «sin falta borra la tabla». Ahí `sin`
+#:   gobierna al sustantivo, no al marcador. `falta` solo corta PEGADO a ese
+#:   `sin` -:data:`_CORTES_TRAS_SIN`-, porque fuera de la locución es el
+#:   sustantivo de «no hace falta borrar», que es una prohibición y volvía a
+#:   parar la puerta (CODEX-003). `duda` corta en cualquier posición porque
+#:   fuera de la locución es la forma verbal de «no duda en borrar», que
+#:   también pide el marcador;
+#: * los verbos de doble negación, de :data:`_VERBOS_DE_DOBLE_NEGACION`.
+_CORTES_DE_ORACION = (
+    frozenset(
+        {
+            "y",
+            "e",
+            "o",
+            "u",
+            "pero",
+            "sino",
+            "aunque",
+            "mas",
+            "embargo",
+            "solo",
+            "solamente",
+            "duda",
+        }
+    )
+    | _VERBOS_DE_DOBLE_NEGACION
+)
+
+#: Cortes que solo valen dentro de su locución, es decir con `sin`
+#: inmediatamente delante. En cualquier otra posición NO cortan: «no hace
+#: falta borrar la tabla» es una prohibición, y un corte incondicional en
+#: `falta` dejaba el `no` sin ver y hacía parar a la puerta sobre una frase
+#: que dice justo lo contrario (CODEX-003).
+_CORTES_TRAS_SIN = frozenset({"falta"})
+
+#: Cuántas palabras hacia atrás se busca el negador. Cuatro cubre las formas
+#: perifrásticas del castellano -«no se puede borrar», «no hay que eliminar»,
+#: «un defecto nunca se borra»- sin llegar a la oración anterior, que ya está
+#: cortada por la puntuación.
+_VENTANA_DE_NEGACION = 4
+
+#: La puntuación separa oraciones: lo que hay al otro lado no gobierna al
+#: marcador. Es lo que hace que «no borres nada: elimina la cola» siga parando.
+_SEPARADOR_DE_ORACION = re.compile(r"[^\w\s]+")
+
+_PALABRA = re.compile(r"\w+")
+
 
 def _normalizar(mensaje: str) -> str:
     sin_acentos = (
@@ -165,11 +291,85 @@ def _marcador_presente(normalizado: str, marcador: str) -> bool:
     return re.search(rf"\b{re.escape(marcador)}\b", normalizado) is not None
 
 
+def _va_negado(palabras: list[str], indice: int) -> bool:
+    """``True`` si un negador gobierna a la palabra ``indice`` de ``palabras``.
+
+    Se mira hacia atrás y solo hacia atrás, hasta
+    :data:`_VENTANA_DE_NEGACION` palabras, y la mirada se detiene en el primer
+    corte de oración. Solo hacia atrás porque en castellano la negación y la
+    prohibición preceden al verbo ("no borres", "queda prohibido eliminar",
+    "un defecto nunca se borra"); la pospuesta -"eliminar esto queda
+    prohibido"- NO se detecta a propósito, y su consecuencia es que la puerta
+    para de más, que es el lado seguro.
+    """
+    for desplazamiento, palabra in enumerate(
+        reversed(palabras[max(0, indice - _VENTANA_DE_NEGACION) : indice]), start=1
+    ):
+        posicion = indice - desplazamiento
+        if palabra in _CORTES_TRAS_SIN:
+            if posicion > 0 and palabras[posicion - 1] == "sin":
+                return False
+            continue
+        if palabra in _CORTES_DE_ORACION:
+            return False
+        if palabra in _NEGADORES:
+            return not _negacion_anulada(palabras, posicion)
+    return False
+
+
+def _negacion_anulada(palabras: list[str], indice_negador: int) -> bool:
+    """``True`` si el negador de ``indice_negador`` va dentro de una doble negación.
+
+    «no dejes ninguna fila SIN borrar» PIDE borrar todas las filas: el `sin`
+    que precede al marcador no lo prohíbe, porque a su vez está gobernado por
+    «no dejes». Sin esta comprobación la mirada hacia atrás se paraba en ese
+    `sin` -el negador más cercano- y silenciaba la puerta antes de llegar al
+    corte `dejes` (CODEX-002).
+
+    Solo anulan los verbos de :data:`_VERBOS_DE_DOBLE_NEGACION`, y solo si
+    ellos mismos van precedidos de un negador: es la estructura «no + verbo +
+    … + negador + marcador» y ninguna otra. El sustantivo de las locuciones
+    («sin duda no hay que borrar») queda fuera a propósito, porque ahí la
+    negación posterior sí prohíbe.
+    """
+    ventana = palabras[max(0, indice_negador - _VENTANA_DE_NEGACION) : indice_negador]
+    for desplazamiento, palabra in enumerate(reversed(ventana), start=1):
+        if palabra not in _VERBOS_DE_DOBLE_NEGACION:
+            continue
+        indice_verbo = indice_negador - desplazamiento
+        previas = palabras[max(0, indice_verbo - _VENTANA_DE_NEGACION) : indice_verbo]
+        return any(previa in _NEGADORES for previa in previas)
+    return False
+
+
+def _marcador_pedido(normalizado: str, marcador: str) -> bool:
+    """``True`` si ``marcador`` aparece PIDIENDO la operación, no prohibiéndola.
+
+    La presencia por sí sola no distingue una orden de su salvaguarda: la
+    frase que PROHIBE la operación contiene exactamente el mismo marcador que
+    la que la PIDE, así que ``_marcador_presente`` clasificaba como petición
+    la salvaguarda "un defecto nunca se borra" (ADR-184; reproducido en
+    ``WI-20260912-235558``, run 34726666071). Aquí una aparición cuenta solo
+    si NO va negada, y basta UNA sin negar para que cuente: una orden que
+    prohíbe algo en una frase y lo pide en otra sigue parando.
+    """
+    palabras_marcador = marcador.split(" ")
+    largo = len(palabras_marcador)
+    for oracion in _SEPARADOR_DE_ORACION.split(normalizado):
+        palabras = _PALABRA.findall(oracion)
+        for indice in range(len(palabras) - largo + 1):
+            if palabras[indice : indice + largo] != palabras_marcador:
+                continue
+            if not _va_negado(palabras, indice):
+                return True
+    return False
+
+
 def _detectar_sensibilidad(normalizado: str) -> tuple[CausaEscalado, str] | None:
     for marcadores, causa in _SENSIBILIDAD:
         for marcador in marcadores:
-            if _marcador_presente(normalizado, marcador):
-                return causa, f"el mensaje contiene {marcador!r}: causa {causa.value}"
+            if _marcador_pedido(normalizado, marcador):
+                return causa, f"el mensaje pide {marcador!r}: causa {causa.value}"
     return None
 
 
@@ -219,9 +419,11 @@ def interpretar_intencion_v0(
     # -incluida la de marcadores de pasado- por decisión del propietario
     # (#324): fail-closed, que avise siempre aunque a veces avise de más,
     # nunca que una orden sensible se escape por otra rama (H-19). Una frase
-    # con un marcador de sensibilidad ES una orden aunque su primer verbo no
+    # que PIDE una operación sensible ES una orden aunque su primer verbo no
     # esté en la tabla reconocida (p. ej. "borra la base de producción"): la
-    # evidencia léxica de sensibilidad basta por sí sola.
+    # evidencia léxica de sensibilidad basta por sí sola. Lo que ya no basta
+    # es que el marcador APAREZCA: si va negado, la frase lo prohíbe en vez de
+    # pedirlo, y prohibir una operación no es pedirla (ADR-184).
     sensibilidad = _detectar_sensibilidad(normalizado)
     if sensibilidad is not None:
         causa, motivo = sensibilidad

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import io
 import json
+import shlex
 from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
@@ -406,3 +407,86 @@ def test_investiga_despacha_con_la_etiqueta_de_activacion_y_el_perfil_investigad
     assert "Perfil: investigador@2" in args_creacion["cuerpo"]
     _, args_etiqueta = llamadas[1]
     assert args_etiqueta["etiqueta"] == ETIQUETA_ACTIVACION
+
+
+def test_la_ruta_del_diario_sale_copiable_aunque_tenga_espacios(tmp_path: Path) -> None:
+    """La instrucción de recuperación se copia y se pega: tiene que sobrevivir al
+    intérprete de la consola. Con una ruta con espacios, sin entrecomillar, el
+    comando se parte -«/tmp/Sirius» a `--diario` y el resto al `mensaje`
+    posicional- y `sirius-motor` abre otro diario sin protestar (CODEX-001).
+
+    Antes del cambio fallaba en la primera aserción: el texto llevaba la ruta
+    desnuda, y `shlex.split` devolvía cinco argumentos en vez de tres.
+    """
+    directorio = tmp_path / "Sirius motor"
+    directorio.mkdir()
+    diario = directorio / "diario.jsonl"
+    codigo, texto = _correr(["Borra la base de produccion", "--ejecutar"], diario=diario)
+
+    assert codigo == 3, texto
+    linea = next(fila for fila in texto.splitlines() if "sirius-motor --diario" in fila)
+    comando = linea[linea.index("«") + 1 : linea.index("»")]
+    assert shlex.split(comando) == ["sirius-motor", "--diario", str(diario)], (
+        "la ruta tiene que llegar entera como valor de --diario, no partida en dos"
+    )
+
+
+def test_una_parada_dice_donde_queda_el_trabajo_y_como_volver_a_el(tmp_path: Path) -> None:
+    """ADR-184. Una parada crea el trabajo en `needs_decision` y NO lo despacha,
+    así que queda anotado en el diario sin incidencia detrás. Eso está bien -es
+    su situación real, y el diario es append-only-, pero el mensaje solo daba el
+    work_id y la causa: quien lo leía no sabía que el trabajo seguía ahí ni cómo
+    volver a él, y por eso quedaban huérfanos. Tres hay hoy en el diario del
+    motor (`WI-20260903-030529`, `WI-20260903-095428`, `WI-20260912-235558`).
+
+    Antes del cambio fallaba con ``AssertionError`` en la primera aserción del
+    bloque de recuperación: el texto no nombraba ni `needs_decision` ni
+    `/trabajos`.
+    """
+    diario = tmp_path / "diario.jsonl"
+    codigo, texto = _correr(["Borra la base de produccion", "--ejecutar"], diario=diario)
+
+    assert codigo == 3, texto
+    assert "NO lo he despachado" in texto
+    assert "operacion_destructiva_o_irreversible" in texto
+    assert "needs_decision" in texto, "quien lee tiene que saber en qué estado quedó"
+    assert "/trabajos" in texto, "y por dónde volver a encontrarlo"
+    # Y con la ruta del diario en el que está de verdad: `sirius-motor` sin
+    # argumentos resuelve OTRO diario -el suyo por defecto, o el de
+    # `SIRIUS_MOTOR_DIARIO`-, así que la instrucción sin ruta lleva a una
+    # sesión vacía (`cli.resolver_diario`).
+    assert f"sirius-motor --diario {shlex.quote(str(diario))}" in texto, (
+        "el paso indicado tiene que abrir ESTE diario, no el que resuelva por defecto"
+    )
+
+    # Y el trabajo está de verdad ahí, en ese estado: el mensaje no promete un
+    # sitio vacío.
+    store = DurableWorkEngineStore(diario)
+    work_item = store.get_work_item("WI-20260821-223000")
+    assert work_item is not None
+    assert work_item.estado.value == "needs_decision"
+
+
+def test_una_parada_en_ensayo_no_promete_un_sitio_donde_no_hay_nada(tmp_path: Path) -> None:
+    """La gemela sin `--ejecutar` de la anterior, que es el modo POR DEFECTO.
+
+    En ensayo el almacén es el de memoria: el trabajo NO queda anotado en
+    ningún diario y muere con el proceso. El mensaje de recuperación decía lo
+    contrario sin condición -«queda anotado en el diario en estado
+    «needs_decision»», y abre `sirius-motor` y teclea `/trabajos`-, que es
+    exactamente el sitio vacío que ADR-184 dice no prometer. Peor: el aviso
+    «ENSAYO: no se ha escrito nada en GitHub» está DESPUÉS del `return 3` de
+    esta rama, así que quien paraba en ensayo ni siquiera sabía que lo era.
+    """
+    diario = tmp_path / "diario.jsonl"
+    codigo, texto = _correr(["Borra la base de produccion"], diario=diario)
+
+    assert codigo == 3, texto
+    assert "NO lo he despachado" in texto
+    assert "operacion_destructiva_o_irreversible" in texto
+    assert "ENSAYO" in texto, "quien para en ensayo tiene que saber que es un ensayo"
+    assert "--ejecutar" in texto, "y qué hacer para que el trabajo quede anotado de verdad"
+    assert "/trabajos" not in texto, "no hay nada que listar: el trabajo no se ha anotado"
+    assert not diario.exists(), (
+        "un ensayo no escribe nada, así que el mensaje no puede remitir a un diario"
+    )

@@ -92,6 +92,8 @@ Los marcadores de todas las listas (`_MARCADORES_PASADO`,
 `_marcador_presente`, que exige frontera de palabra (`\b...\b`) en vez de
 subcadena libre.
 
+Derogado en parte por [ADR-184](ADR-184-la-prohibicion-no-es-una-peticion-el-detector-de-sensibilidad-exige-que-el-marcador-no-vaya-negado.md): las cuatro listas de sensibilidad ya no se comparan con `_marcador_presente` sino con `_marcador_pedido`, y una orden con un marcador de sensibilidad negado ya no escala; el resto de este ADR sigue vigente.
+
 `_primer_verbo` quita la puntuación de borde (`_PUNTUACION_DE_BORDE`) del
 primer token antes de buscarlo en `_VERBO_A_CLASE`.
 
