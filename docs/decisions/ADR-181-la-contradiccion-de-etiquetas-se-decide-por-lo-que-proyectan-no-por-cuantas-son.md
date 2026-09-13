@@ -172,9 +172,10 @@ NO crea; ver «La etiqueta retirada» más abajo):
   `ACTIVE` entre fases distintas—. Son el motivo por el que el criterio compara
   el par completo y no solo el estado: eximirlas convertiría un
   `implementing` + `ready-for-merge` en una entrega silenciosa.
-- La única pareja que `_PAR_DE_ACTIVACION_VALIDO` eximía a mano es exactamente
-  una de las cuatro que el criterio derivado exime solo. **Queda innecesaria**,
-  y el criterio de parada decía que en ese caso se retira: se retira.
+- La única pareja que `_PAR_DE_ACTIVACION_VALIDO` eximía a mano —activación— es
+  una de las que el criterio derivado exime solo, según la medición de arriba.
+  **Queda innecesaria**, y el criterio de parada decía que en ese caso se
+  retira: se retira.
 
 Ninguna pareja que hoy dé contradicción legítima apunta al mismo destino, así
 que no se activó la condición de escalar.
@@ -278,8 +279,8 @@ sitio de este módulo vuelve a decidir qué etiqueta significa qué estado»).
 ## Consecuencias
 
 - Una incidencia con `sirius:repair-requested` + `sirius:repairing` —o con las
-  parejas equivalentes de activación, ejecución y revisión— proyecta su estado y
-  su fase de verdad. El tablero de ADR-175 deja de acusarla y el verificador
+  parejas equivalentes de activación y revisión— proyecta su estado y su fase
+  de verdad. El tablero de ADR-175 deja de acusarla y el verificador
   vuelve a compararla en vez de marcarla `NO_COMPARABLE`.
 - Ampliar el vocabulario ya no obliga a tocar ninguna lista de exenciones: basta
   con dar a la etiqueta nueva su fila en `_LABEL_STATE` (y en `_LABEL_PRIORITY`,
