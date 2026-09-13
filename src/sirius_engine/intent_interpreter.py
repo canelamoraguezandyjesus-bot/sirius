@@ -149,9 +149,13 @@ _SENSIBILIDAD: tuple[tuple[tuple[str, ...], CausaEscalado], ...] = (
 #: del marcador sin negarlo silencia una petición de verdad. Por eso NO están
 #: los infinitivos `evitar` e `impedir`: en castellano encabezan la subordinada
 #: final «para evitar/impedir X, borra Y», donde la negación gobierna el
-#: propósito y NO al verbo principal, que sí se está pidiendo. Las formas
-#: personales -«evita borrar», «impide que se borre»- no encabezan ese giro y
-#: se quedan. El resto de giros con negador que no niega se corta desde
+#: propósito y NO al verbo principal, que sí se está pidiendo. Por el mismo
+#: motivo NO están las formas de subjuntivo -`evites`, `eviten`, `impidas`,
+#: `impidan`-: son las que selecciona «para que», y «para que impidan que
+#: crezca borra los logs» es el MISMO giro final con otro sujeto
+#: (CLAUDE-R2-001). Se quedan solo las formas que no lo encabezan: el
+#: imperativo y el presente de indicativo -«evita borrar», «impide que se
+#: borre»-. El resto de giros con negador que no niega se corta desde
 #: :data:`_CORTES_DE_ORACION`.
 _NEGADORES = frozenset(
     {
@@ -174,11 +178,7 @@ _NEGADORES = frozenset(
         "prohiben",
         "prohibir",
         "evita",
-        "evites",
-        "eviten",
         "impide",
-        "impidas",
-        "impidan",
     }
 )
 

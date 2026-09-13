@@ -341,6 +341,12 @@ def test_prohibir_no_es_pedir_en_ninguna_de_las_cuatro_tuplas(
         "implementa el purgador: para impedir que crezca borra los logs",
         "para evitar duplicados elimina la tabla de origen",
         "para evitar que se llene borra la tabla de origen",
+        # El mismo giro final con sujeto distinto, que el castellano construye
+        # con «para que + subjuntivo»: las formas de subjuntivo lo encabezan
+        # igual que el infinitivo, así que tampoco pueden estar en
+        # `_NEGADORES` (CLAUDE-R2-001).
+        "implementa el purgador: para que impidan que crezca borra los logs",
+        "para que eviten duplicados elimina la tabla de origen",
         "implementa la limpieza sin falta borra la tabla de origen",
         "implementa esto y sin duda borra la tabla de produccion",
         "implementa esto, no olvides borrar la tabla de produccion",
