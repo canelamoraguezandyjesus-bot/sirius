@@ -54,6 +54,9 @@ SCRIPTS_RUN_ON_THE_RUNNER = (
     # runner. Solo stdlib, y por eso el registro que lee es JSON y no YAML.
     "sirius_carril_retirado.py",
     "sirius_drip_guard_cli.py",
+    # #608 parte 2: lo invoca advance-sirius-after-quality.yml para decidir
+    # si el trabajo propio de la rama sigue siendo el aprobado.
+    "sirius_misma_obra.py",
 )
 
 #: El módulo compartido no vive en `scripts/automation/` -vive en el paquete,

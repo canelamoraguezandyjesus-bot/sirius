@@ -81,7 +81,7 @@ jobs:
             exit 0
           fi
 
-          pr_json="$(sirius_retry gh api "repos/${GH_REPO}/pulls/${pr_number}" --jq '{state: .state, draft: .draft, head: .head.sha}')"
+          pr_json="$(sirius_retry gh api "repos/${GH_REPO}/pulls/${pr_number}" --jq '{state: .state, draft: .draft, head: .head.sha, base: .base.ref}')"
           if [ -z "${pr_json:-}" ]; then
             echo "::warning::No se pudo leer la PR #${pr_number}; se omite sin cambios."
             exit 0
@@ -243,7 +243,37 @@ jobs:
               echo "La aprobacion registrada de #${issue_number} ya cubre el head ${HEAD_SHA}; nada que reponer."
               exit 0
             fi
+            # Incidencia #608, parte 2. Ponerse al dia con `main` mueve el head
+            # SIN tocar el trabajo, y hasta hoy eso caducaba la aprobacion y
+            # costaba la ronda de revision entera -el coste que el propietario
+            # nota cada vez que fusiona algo-. Si la aprobacion registrada cubre
+            # OTRO head pero el trabajo PROPIO de la rama es el mismo, sigue
+            # valiendo. «Trabajo propio» es el diff contra la BASE DE MEZCLA,
+            # que es lo que `compare/BASE...SHA` devuelve: lo que entro por
+            # `main` no cuenta como trabajo de la rama.
+            #
+            # Quien decide es `sirius_misma_obra.py`, probado en
+            # tests/automation/test_misma_obra.py, y no este YAML: la leccion de
+            # H-14. Aqui solo se leen las dos comparaciones con el reintento de
+            # siempre. Y es fail-closed por construccion: si cualquiera de las
+            # dos lecturas falla o la decision dice que no, se sigue al camino
+            # normal y se repone la revision, que es lo que pasa hoy.
+            aprobado_sha="$(grep -o 'sirius-verdict:reviewer:approved:[0-9a-f]\{7,40\}' "$aprobacion_file" | tail -1 | awk -F: '{print $NF}')"
             rm -f "$aprobacion_file"
+            if [ -n "${aprobado_sha:-}" ]; then
+              base_ref="$(printf '%s' "$pr_json" | jq -r '.base')"
+              cmp_aprobado="$(mktemp)"
+              cmp_vigente="$(mktemp)"
+              if [ -n "${base_ref:-}" ] && [ "$base_ref" != "null" ] \
+                 && sirius_retry gh api "repos/${GH_REPO}/compare/${base_ref}...${aprobado_sha}" >"$cmp_aprobado" \
+                 && sirius_retry gh api "repos/${GH_REPO}/compare/${base_ref}...${HEAD_SHA}" >"$cmp_vigente" \
+                 && python3 scripts/automation/sirius_misma_obra.py "$cmp_aprobado" "$cmp_vigente"; then
+                rm -f "$cmp_aprobado" "$cmp_vigente"
+                echo "La aprobacion de #${issue_number} cubre ${aprobado_sha} y el trabajo propio de la rama no ha cambiado; nada que reponer."
+                exit 0
+              fi
+              rm -f "$cmp_aprobado" "$cmp_vigente"
+            fi
           fi
 
           body_file="$(mktemp)"
