@@ -26,9 +26,9 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **180**.
+- Decisiones (ADR): **181**.
 - Bloques del motor: 17 cerrado, 1 fuera_de_alcance, 2 pendiente.
-- Defectos registrados: 4 abierto, 35 cerrado.
+- Defectos registrados: 40 cerrado.
 - Investigaciones: **9** (fotos con fecha; caducan).
 - Documentos: **129**, de los que **84** no declaran fecha.
 
@@ -311,13 +311,7 @@ producto Sirius 0.1, cerrados el 10-08-2026.
 Registro: `docs/audits/registro_defectos.yml`. Solo se listan los que no están
 cerrados; el recuento completo está arriba.
 
-| Defecto | Estado | Título |
-|---|---|---|
-| H-37 | abierto | La rama sin ningun run de Quality salia en silencio y dejaba la incidencia esperando para siempre |
-| H-39 | abierto | El detector de sensibilidad confundia una prohibicion con una peticion |
-| H-33 | abierto | El registro de defectos podia quedarse dormido sin que ninguna comprobacion lo notara |
-| H-38 | abierto | Una sola puerta encendia siete piezas y no dejaba medir ninguna por separado |
-| H-39 | abierto | Ponerse al dia con main tiraba la aprobacion de revision aunque el trabajo no cambiara |
+Ningún defecto sin cerrar.
 
 ## Las investigaciones: fotos con fecha, que caducan
 
