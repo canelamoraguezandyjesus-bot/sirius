@@ -5230,6 +5230,62 @@ ventaja real. Y el coste de esa elección —un turno cada media hora al rearmar
 queda dicho en voz alta para que lo decida él, no yo por mi cuenta.
 ---
 
+### 103. Un conflicto en un fichero generado apaga la integración continua sin dejar rastro (13-09-2026, 00:40 UTC)
+
+**El síntoma, tres veces en una tarde.** #581 se quedaba en `sirius:ci-pending`
+y Quality **no llegaba a ejecutarse**: ni un run, ni encolado, ni error. Ese
+estado no tiene quien lo reviva, así que la incidencia se quedaba muerta sin
+un solo diagnóstico que leer.
+
+**Mi primera hipótesis era falsa, y la escribo porque llegué a publicarla**:
+supuse que los empujones del corrector no disparaban el evento por el token.
+`repair-sirius-work.yml:112-116` hace el checkout con el **PAT** justamente
+para que el re-disparo ocurra, y lo dice en su comentario. Descartada leyendo
+el árbol.
+
+**Descarté otras dos midiendo, no razonando:** que `quality.yml` tuviera filtro
+de rutas y los commits documentales no lo dispararan (**no tiene** filtro), y
+que fuera una avería del repositorio (**Quality se ejecutaba sin parar en las
+demás ramas** en esos mismos minutos: `fix/…`, `claude/…`, `feature/…`).
+
+**La causa.** La PR estaba en **`mergeable_state: dirty`** por conflicto con
+`main` en `MEMORIA.md`. Con la PR en conflicto **GitHub no puede construir el
+commit de mezcla y no ejecuta los checks de `pull_request`**. Y `quality.yml`
+solo se dispara con `push` a `main` o con `pull_request`. La rama queda **sin
+ninguna comprobación posible**, en silencio.
+
+| empujón | quién | ¿resolvía el conflicto? | ¿Quality? |
+|---|---|---|---|
+| 13:40–14:15 | corrector | sí (rama al día) | **sí** |
+| 21:56 | corrector | no | **no** |
+| 22:54 | yo, trayendo `main` | **sí** | **sí** |
+| 23:27 | corrector | no | **no** |
+| 23:41 | yo, trayendo `main` | **sí** | **sí** |
+| 00:12 | corrector | no | **no** |
+
+Seis casos, ni una excepción. **Lo que yo creía que arreglaba empujando no era
+empujar: era resolver el conflicto.**
+
+**Por qué esto no es mala suerte sino estructura.** `MEMORIA.md` es un fichero
+**generado que toda rama toca**, porque toda rama añade un ADR y el fichero
+lleva la cuenta. Dos ramas abiertas a la vez chocan en él **con certeza**. Y el
+choque no solo bloquea la fusión: **apaga la CI**. Es la tercera cara de la
+misma pieza en tres días —ADR-171 la metió el 11-09, rompió #582 por
+desactualización, rompió #581 por conflicto— y la tercera es la peor, porque
+las dos primeras al menos dejaban un fallo que leer.
+
+**Desatascado** con autorización explícita del propietario, por tercera vez en
+esta rama: `a8bb7b6` → `5ae1662`, `main` traído, conflicto resuelto
+**regenerando** y no a mano, `55 passed` en los dos guardianes, `behind_by` 0 y
+el trabajo de H4 intacto fichero a fichero.
+
+**Candidatos que quedan para el propietario**, publicados también en #581: (a)
+que el guardián regenere y compare **en memoria** en vez de exigir el fichero
+confirmado en cada rama; (b) que el motor trate `mergeable_state: dirty` como
+**parada con diagnóstico** en vez de esperar en `ci-pending`; (c) dejarlo y
+traer `main` a mano cada vez.
+---
+
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
 
 1. `ollama_category_classifier.py`: ruta relativa y sin
