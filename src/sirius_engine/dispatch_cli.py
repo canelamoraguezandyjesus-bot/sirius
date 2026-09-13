@@ -44,9 +44,13 @@ from sirius_engine.cli import REPO, resolver_diario
 from sirius_engine.dispatcher import TABLA_ACTIVACION, dispatch_work_item
 from sirius_engine.domain.authority import autoridad_de_clase
 from sirius_engine.domain.dispatch import MARCADOR_ORDEN_PROPIETARIO
+from sirius_engine.domain.intent import IntentSignal
 from sirius_engine.domain.work_item import WorkItemClass
 from sirius_engine.gate import ResultadoPuerta, decidir
-from sirius_engine.intent_interpreter import interpretar_intencion_v0
+from sirius_engine.intent_interpreter import (
+    alcance_que_el_motor_no_puede_escribir,
+    interpretar_intencion_v0,
+)
 from sirius_engine.issue_body_projection import generar_cuerpo_incidencia
 from sirius_engine.ports.dispatch_journal import DispatchJournal
 from sirius_engine.ports.github_writer import GitHubWriterPort, IncidenciaCreada
@@ -144,6 +148,29 @@ def _work_id(ahora: datetime) -> str:
     reproducible es más fácil de rastrear después en el diario.
     """
     return f"WI-{ahora.strftime('%Y%m%d-%H%M%S')}"
+
+
+#: Con lo que el intérprete empieza el motivo cuando quien paró fue la QUINTA
+#: causa (ADR-188). Las cuatro anteriores escriben «el mensaje pide '<marcador>'
+#: ...», así que el motivo -que la señal ya trae interpretado- es lo único que
+#: distingue la quinta de la tercera, con la que comparte causa. Que la cadena
+#: viva aquí y allí es acoplamiento declarado, no accidental: si el intérprete
+#: cambiara ese texto,
+#: `test_la_parada_dice_por_que_para_y_remite_a_la_sesion_interactiva` se pone en
+#: rojo, porque el bloque entero dejaría de emitirse.
+_MOTIVO_DE_LA_QUINTA_CAUSA = "el alcance declarado cae bajo"
+
+
+def _paro_la_quinta_causa(señal: IntentSignal) -> bool:
+    """¿Fue la quinta causa (ADR-188) la que paró esta orden, y no una de las cuatro?
+
+    La pregunta no es «¿la orden nombra un alcance vetado?». Una orden puede
+    nombrarlo Y disparar además una causa anterior, y entonces gana la anterior
+    -es lo que fija `test_las_cuatro_causas_anteriores_siguen_ganando_a_la_quinta`-.
+    Mirando solo el texto, el comando contaba esa parada como si fuera de la
+    quinta y daba instrucciones que no llevaban a ninguna parte.
+    """
+    return (señal.motivo_sensibilidad or "").startswith(_MOTIVO_DE_LA_QUINTA_CAUSA)
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -315,11 +342,55 @@ def main(
     # efectiva del diario: `sirius-motor` sin argumentos resuelve el suyo
     # (`resolver_diario`), que no tiene por qué ser este.
     if decision.resultado is ResultadoPuerta.CREAR_Y_ESCALAR:
+        #: El prefijo que la orden pide tocar y el motor no puede escribir, o
+        #: ``None`` si NO fue la quinta causa la que paró. Las dos preguntas
+        #: hacen falta y ninguna sobra. La causa no basta: la quinta comparte
+        #: `permisos_o_credenciales_sensibles` con la tercera, que es léxica y no
+        #: sabe nada de rutas. El texto de la orden tampoco: las cuatro
+        #: anteriores GANAN a la quinta cuando una orden dispara las dos cosas
+        #: -«Borra la cola y arregla `.github/workflows/quality.yml`» para por
+        #: destructiva-, y ahí el bloque de abajo mentía dos veces: atribuía la
+        #: parada al alcance, y prometía que negando la mención la orden se
+        #: despacharía, cuando lo que va a hacer es parar otra vez por la causa
+        #: anterior. Prometer un despacho que no va a ocurrir es la misma
+        #: familia que prometer un sitio vacío (ADR-184, ADR-188).
+        prefijo_vetado = (
+            alcance_que_el_motor_no_puede_escribir(args.orden)
+            if _paro_la_quinta_causa(señal)
+            else None
+        )
         linea("He creado el trabajo, pero NO lo he despachado: necesita tu decisión.")
         linea(f"  Trabajo: {work_id}")
         if resultado.escalada is not None:
             linea(f"  Causa:   {resultado.escalada.causa.value}")
         linea("")
+        # ADR-188, la QUINTA causa. Esta parada tiene un motivo que ninguna de
+        # las otras cuatro tiene -no es la orden lo que es peligroso, es que el
+        # motor no llega a donde la orden apunta- y una salida concreta que
+        # ADR-002 ya prescribió: hacerlo en sesión interactiva. Decirlo aquí no
+        # es cortesía: sin esto, la parada dice «permisos_o_credenciales_
+        # sensibles» y quien la lee no tiene forma de saber que el trabajo es
+        # perfectamente legítimo y que solo cambia de sitio.
+        if prefijo_vetado is not None:
+            linea(f"El alcance declarado cae bajo «{prefijo_vetado}», y ahí el motor no puede")
+            linea("escribir: ADR-002 decidió NO darle ese alcance a su credencial, así que")
+            linea("GitHub rechaza el push. No es una precaución teórica: la incidencia #607")
+            linea("se despachó al ciclo automático, el encargo hizo el trabajo entero -código,")
+            linea("pruebas, ADR y validaciones en verde- y lo perdió al empujar, porque el")
+            linea("commit vivía solo en el runner. Por eso la parada ocurre AQUÍ, antes de")
+            linea("crear la incidencia, y no después.")
+            linea("")
+            linea("ADR-002 prescribe hacer este trabajo en sesión interactiva, donde el")
+            linea("propietario tiene el alcance que al motor le falta. La orden, lista para")
+            linea("copiar tal cual:")
+            linea("")
+            for parrafo in args.orden.splitlines() or [""]:
+                linea(f"    {parrafo}")
+            linea("")
+            linea("Y si de verdad NO tocas esa carpeta -la orden solo la nombra para")
+            linea("excluirla-, dilo con un negador delante y vuelve a despachar: «no toques")
+            linea(f"{prefijo_vetado}**» se despacha como cualquier otra orden (ADR-184).")
+            linea("")
         if diario_efectivo is None:
             linea("ENSAYO: no se ha escrito nada. El trabajo NO queda anotado en el")
             linea("diario -este ensayo usa un almacén en memoria- y muere con este")

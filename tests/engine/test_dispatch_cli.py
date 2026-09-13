@@ -490,3 +490,164 @@ def test_una_parada_en_ensayo_no_promete_un_sitio_donde_no_hay_nada(tmp_path: Pa
     assert not diario.exists(), (
         "un ensayo no escribe nada, así que el mensaje no puede remitir a un diario"
     )
+
+
+# --- ADR-188: la parada ocurre ANTES de crear la incidencia ------------------
+
+
+def test_un_encargo_con_alcance_vetado_para_antes_de_crear_la_incidencia(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    """El sitio de la parada es el punto entero de ADR-188.
+
+    La incidencia #607 se despachó, el ciclo arrancó, el encargo hizo el trabajo
+    entero y GitHub rechazó el push: una hora de motor perdida por una regla que
+    solo vivía en la cabeza de quien despacha. Parar DESPUÉS de crear la
+    incidencia no habría servido de nada. Así que aquí se comprueba lo único
+    que importa: que ni el escritor de GitHub ni el despachador llegan a
+    tocarse, ni siquiera con `--ejecutar`.
+
+    Antes del cambio fallaba -observado revirtiendo `dispatch_cli.py` e
+    `intent_interpreter.py` a main- con ``AssertionError: no se puede construir
+    el escritor de GitHub en esta parada``, levantada por `_escritor_prohibido`
+    desde `writer = GitHubCliWriter()` (dispatch_cli.py:353 en main). La orden
+    salía como orden inequívoca y el flujo llegaba al escritor; como el único
+    try/except del módulo captura solo MissingCredentialError, la AssertionError
+    se propagaba fuera de `main` y de `_correr`, así que la prueba no alcanzaba
+    ninguna aserción y `llamadas` quedaba en ``['GitHubCliWriter']`` -una sola
+    anotación, no las dos: `dispatch_work_item` nunca se llegaba a llamar-.
+    """
+    llamadas: list[str] = []
+
+    def _escritor_prohibido() -> Any:
+        llamadas.append("GitHubCliWriter")
+        raise AssertionError("no se puede construir el escritor de GitHub en esta parada")
+
+    def _despachador_prohibido(*_args: Any, **_kwargs: Any) -> Any:
+        llamadas.append("dispatch_work_item")
+        raise AssertionError("no se puede llegar al despachador en esta parada")
+
+    monkeypatch.setattr(dispatch_cli, "GitHubCliWriter", _escritor_prohibido)
+    monkeypatch.setattr(dispatch_cli, "dispatch_work_item", _despachador_prohibido)
+
+    orden = (
+        "Corrige que la puerta del corrector no confirme su etiqueta consumible "
+        "contra el estado vigente, en .github/workflows/repair-sirius-work.yml"
+    )
+    diario = tmp_path / "diario.jsonl"
+    codigo, texto = _correr([orden, "--ejecutar"], diario=diario)
+
+    assert codigo == 3, texto
+    assert llamadas == [], (
+        f"no se puede escribir nada en GitHub en esta parada; se hizo: {llamadas}"
+    )
+    assert "permisos_o_credenciales_sensibles" in texto
+
+    # Y el trabajo queda donde el mensaje promete: `needs_decision`, sin
+    # incidencia detrás. Es su situación real, no un residuo (ADR-184).
+    store = DurableWorkEngineStore(diario)
+    work_item = store.get_work_item("WI-20260821-223000")
+    assert work_item is not None
+    assert work_item.estado.value == "needs_decision"
+
+
+def test_la_parada_dice_por_que_para_y_remite_a_la_sesion_interactiva(tmp_path: Path) -> None:
+    """ADR-188 (c), al nivel de detalle que ADR-184 fijó: un mensaje que promete
+    un sitio vacío es peor que ninguno.
+
+    `permisos_o_credenciales_sensibles` a secas no le dice a nadie que el
+    trabajo es legítimo y que solo cambia de sitio. El mensaje tiene que decir
+    el alcance que lo paró, por qué el motor no llega ahí, a dónde va ese
+    trabajo, y traer la orden lista para copiar -sin ella, quien lee tiene que
+    reconstruirla a mano, que es justo donde se pierde-.
+
+    Antes del cambio fallaba -observado revirtiendo `dispatch_cli.py` e
+    `intent_interpreter.py` a main- en la PRIMERA aserción, la del código de
+    salida (`assert codigo == 3`), con ``assert 4 == 3``: la orden salía como
+    orden inequívoca, el comando construía el GitHubCliWriter real y sin
+    SIRIUS_BOT_TOKEN salía por MissingCredentialError con código 4. Lo que
+    fijan las aserciones SEGUNDA y TERCERA -que el texto nombre el alcance
+    `.github/` y ADR-002- no llegaba a comprobarse; ese texto tampoco existía,
+    pero el rojo que se ve al revertir es el del código de salida.
+    """
+    orden = "Implementa el aviso que falta en `.github/workflows/despachar-orden.yml`"
+    diario = tmp_path / "diario.jsonl"
+    codigo, texto = _correr([orden, "--ejecutar"], diario=diario)
+
+    assert codigo == 3, texto
+    assert ".github/" in texto, "el mensaje tiene que decir QUÉ alcance lo paró"
+    assert "ADR-002" in texto, "y por qué el motor no puede escribir ahí"
+    assert "sesión interactiva" in texto, "y a dónde va ese trabajo en vez del ciclo"
+    assert orden in texto, "la orden tiene que salir entera y lista para copiar"
+    # Lo de ADR-184 sigue: dónde queda el trabajo y cómo volver a él.
+    assert "needs_decision" in texto
+    assert f"sirius-motor --diario {shlex.quote(str(diario))}" in texto
+
+
+def test_una_orden_que_no_toca_esa_carpeta_se_sigue_despachando_como_hoy(tmp_path: Path) -> None:
+    """La otra mitad, exigida por el encargo: no debilitar lo que ya hay.
+
+    Una orden legítima -incluida la que nombra la carpeta solo para excluirla,
+    que es como están escritas 19 de las 29 del diario- tiene que llegar al
+    despachador igual que antes.
+    """
+    orden = "Corrige la referencia rota a la seccion 6.7 del contrato. No toques `.github/**`."
+    codigo, texto = _correr([orden], diario=tmp_path / "diario.jsonl")
+
+    assert codigo == 0, texto
+    assert "cuerpo que llevaría la incidencia" in texto
+    assert "NO lo he despachado" not in texto
+
+
+def test_una_parada_por_una_causa_anterior_no_promete_el_despacho_de_la_quinta(
+    tmp_path: Path,
+) -> None:
+    """La quinta explica; las cuatro anteriores ganan. El bloque no puede hacer las dos cosas.
+
+    Esta orden dispara las dos: es destructiva Y nombra la carpeta vetada. El
+    intérprete consulta la quinta DESPUÉS, así que para por destructiva -lo fija
+    `test_las_cuatro_causas_anteriores_siguen_ganando_a_la_quinta`-. El comando,
+    en cambio, decidía mirando SOLO el texto de la orden, así que imprimía el
+    bloque entero de ADR-188 encima de una causa que no era la suya: atribuía la
+    parada al alcance («Por eso la parada ocurre AQUÍ») dos líneas después de
+    haber anunciado otra causa, y remataba prometiendo que negando la mención de
+    la carpeta la orden se despacharía. No se despacharía: volvería a parar por
+    destructiva. Un mensaje que promete un despacho que no va a ocurrir es la
+    misma familia que uno que promete un sitio vacío, que es la que ADR-184
+    cerró para este mismo mensaje.
+
+    Antes del cambio fallaba con ``AssertionError`` en la aserción de la
+    promesa: el texto traía «vuelve a despachar» y el «no toques .github/**».
+    """
+    orden = "Borra la cola y arregla .github/workflows/quality.yml"
+    codigo, texto = _correr([orden, "--ejecutar"], diario=tmp_path / "diario.jsonl")
+
+    assert codigo == 3, texto
+    assert "operacion_destructiva_o_irreversible" in texto, (
+        "la causa que para sigue siendo la anterior, y es la que se anuncia"
+    )
+    assert "vuelve a despachar" not in texto, (
+        "negando la carpeta esta orden NO se despacha: sigue parando por destructiva"
+    )
+    assert "sesión interactiva" not in texto, (
+        "ADR-002 no manda este trabajo a ninguna parte: no paró por el alcance"
+    )
+    assert "la parada ocurre AQUÍ" not in texto, (
+        "la parada no la produjo el alcance, así que no puede atribuírsele"
+    )
+
+
+def test_la_quinta_causa_sigue_dando_su_bloque_cuando_es_ella_la_que_para(
+    tmp_path: Path,
+) -> None:
+    """La otra mitad de la anterior, para que el arreglo no sea «no imprimir nunca».
+
+    Sin esta, apagar el bloque entero dejaría la prueba de arriba en verde y
+    borraría lo que ADR-188 vino a añadir.
+    """
+    orden = "Implementa el aviso que falta en `.github/workflows/despachar-orden.yml`"
+    codigo, texto = _correr([orden, "--ejecutar"], diario=tmp_path / "diario.jsonl")
+
+    assert codigo == 3, texto
+    assert "sesión interactiva" in texto
+    assert "vuelve a despachar" in texto
