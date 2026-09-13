@@ -222,6 +222,18 @@ class Peticion:
     #: Cuota de ``ACOTADA``. En ``EXACTA`` son los objetivos identificados.
     objetivos: int = 1
     traza_detallada: bool = True
+    #: Señal EXPLÍCITA con la que la petición pide la ampliación por
+    #: categoría (H4 de ADR-148, ADR-177, incidencia #581): el bloque de
+    #: siembra de ``RankRelevantKnowledgeUseCase`` (M20, ADR-129) que suma
+    #: toda identidad no ordinaria del ámbito a lo que el motor ya admitió.
+    #: La fija **quien construye la petición**, con su criterio escrito al
+    #: lado; el consumidor solo la lee. Hasta ADR-177 se deducía de que
+    #: ``proposito`` contuviera la subcadena "contexto", de modo que un texto
+    #: libre decidía un camino de recuperación entero sin que nadie lo
+    #: hubiera decidido. Apagada por defecto por la misma razón que
+    #: ``category_match``/``criticality_match`` nacen en ``False``: una
+    #: petición que no la pide no amplía.
+    amplia_por_categoria: bool = False
 
 
 # --------------------------------------------------------------------------

@@ -94,20 +94,25 @@ never calls either function and keeps comparing ``category`` inline, byte
 for byte, unchanged by this incidence.
 
 M20 (ADR-129, incidencia #516, Decisión 2 del propietario del 02-09-2026,
-citada en ADR-126) ports ``pide_contexto``/``PROPOSITO_DE_CONTEXTO``, the
-laboratory's third piece of the PR #117 semantics (replica of
-``experiments/adr002/lateral/categoria.py:_pide_contexto``, harness twin
-``tests/acceptance/staged_engine_category_and_relevance.py:403-409``):
-whether a request's own ``Peticion.proposito`` field — never a guess over
-the query text — declares that it assembles context (the literal substring
-``"contexto"``, case-insensitive). Wired only in
+citada en ADR-126) ported the laboratory's third piece of the PR #117
+semantics as ``pide_contexto``/``PROPOSITO_DE_CONTEXTO``: whether the
+request's own ``Peticion.proposito`` — never a guess over the query text —
+contained the literal substring ``"contexto"``. **ADR-177 (hueco H4 de
+ADR-148, incidencia #581) retires both**: the amplification is asked for by
+an explicit field of the request, ``Peticion.amplia_por_categoria``, set by
+whoever builds the request with its criterion written next to it, and this
+module no longer decides anything by substring over free text. The harness
+twin (``tests/acceptance/staged_engine_category_and_relevance.py:403-409``)
+keeps its own replica of the experiment untouched, because it replicates
+``experiments/adr002/lateral/categoria.py:_pide_contexto`` and not
+production. The block itself is unchanged and still lives in
 ``RankRelevantKnowledgeUseCase._rank_via_staged_engine``'s third
 amplification block (``siembra``, parallel to ``solo_por_categoria`` and
 ``solo_por_criticidad``), behind the same ``category_matching_enabled``
 gate. Unlike ``solo_por_criticidad``, which activates on the query's
-*vocabulary*, ``siembra`` activates on the request's *purpose* — a query
-with no criticality vocabulary at all still seeds every non-ordinary
-identity of the declared scope when the request assembles context (M20's
+*vocabulary*, ``siembra`` activates on the request's *explicit signal* — a
+query with no criticality vocabulary at all still seeds every non-ordinary
+identity of the declared scope when the request asks for it (M20's
 own test, mirroring B04-CA-34's "Prepara el contexto de planificación de
 Alfa"). ``RankedKnowledge`` gains a sixth structural signal, ``seeded``,
 parallel to ``category_match``/``criticality_match``: inserted right after
@@ -125,14 +130,12 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
-from typing import Final
 
 from sirius.domain.decision import Decision, DecisionStatus
 from sirius.domain.memory import Memory, MemoryStatus
 from sirius.domain.staged_engine_contracts import Cardinalidad, Peticion
 
 __all__ = [
-    "PROPOSITO_DE_CONTEXTO",
     "KnowledgeKind",
     "RankedKnowledge",
     "candidate_currently_valid",
@@ -141,23 +144,12 @@ __all__ = [
     "category_index_matches_query",
     "category_matches_query",
     "cupo_del_filtro",
-    "pide_contexto",
     "rank_relevant_knowledge",
     "recortar_al_cupo",
     "rescue_max_criticality_candidates",
     "subject_matches_query",
     "truncate_to_hard_limit",
 ]
-
-#: M20 (ADR-129, incidencia #516): réplica exacta de
-#: ``experiments/adr002/lateral/categoria.py:_pide_contexto`` (rama
-#: ``evidence/adr001-spikes``), calcada del arnés
-#: (``tests/acceptance/staged_engine_category_and_relevance.py:257``). El
-#: propósito real que toda llamada al caso de uso (hoy ``rank_con_cupo()``,
-#: ADR-169) declara ya contiene esta
-#: subcadena a propósito (M16, ADR-124,
-#: ``rank_relevant_knowledge._PROPOSITO_RECUPERACION_ORDINARIA``).
-PROPOSITO_DE_CONTEXTO: Final = "contexto"
 
 
 class KnowledgeKind(StrEnum):
@@ -206,12 +198,13 @@ class RankedKnowledge:
     seeded: bool = False
     """The sixth structural signal (M20, ADR-129, incidencia #516): whether
     the candidate was found through the context-assembly seeding —
-    ``pide_contexto(peticion.proposito)`` true and the candidate's
-    ``criticality`` non-ordinary within the declared scope — exactly
-    parallel to ``category_match``/``criticality_match`` above, but
-    activated by the request's declared *purpose* instead of the query's
-    vocabulary. ``False`` by default for the same reason the other two
-    are."""
+    ``peticion.amplia_por_categoria`` true (ADR-177: the request's own
+    explicit signal, which until then was read off the ``proposito``
+    substring) and the candidate's ``criticality`` non-ordinary within the
+    declared scope — exactly parallel to
+    ``category_match``/``criticality_match`` above, but activated by what
+    the request explicitly *asks for* instead of by the query's vocabulary.
+    ``False`` by default for the same reason the other two are."""
 
     def __post_init__(self) -> None:
         if self.kind is KnowledgeKind.MEMORY and self.subject_matches_query:
@@ -344,18 +337,6 @@ def category_index_matches_query(
     if category is None:
         return False
     return category_index_activated(query_text, vocabulary)
-
-
-def pide_contexto(proposito: str) -> bool:
-    """M20 (ADR-129, incidencia #516): réplica de
-    ``experiments/adr002/lateral/categoria.py:_pide_contexto`` (rama
-    ``evidence/adr001-spikes``): si ``proposito`` —el campo propio de la
-    petición (``Peticion.proposito``), nunca una adivinanza sobre el texto
-    de la consulta— declara que se ensambla el contexto de un proyecto.
-    Calcada del arnés (``tests/acceptance/staged_engine_category_and_relevance.
-    py:403-409``): subcadena ``PROPOSITO_DE_CONTEXTO`` ("contexto"),
-    insensible a mayúsculas, en cualquier posición del propósito."""
-    return PROPOSITO_DE_CONTEXTO in proposito.casefold()
 
 
 def candidate_in_declared_scope(
