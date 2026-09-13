@@ -231,8 +231,20 @@ siembra dejaría de rescatar y esa cota rompería. Su gemela del motor portado,
 
 ### 6. La prosa que el cambio dejaba falsa (deuda 28)
 
-Corregida en el mismo trabajo, no en otro. Son **nueve** trozos de prosa, y
-esta es la lista completa: el docstring de módulo de `relevance.py` y el de
+Corregida en el mismo trabajo, no en otro. Son **nueve** docstrings. Ocho
+están en `src/` y `scripts/`, y de esos ocho la lista sí es completa porque
+sale del barrido de esos dos árboles enteros —`for f in $(git ls-tree -r
+--name-only 433fb11 -- src/ scripts/); do n=$(git show 433fb11:$f | grep -o
+'pide_contexto' | wc -l); [ "$n" -gt 0 ] && echo "$n $f"; done` devuelve
+exactamente los cuatro ficheros que los contienen:
+`scripts/medir_variantes_de_criticidad.py` (1),
+`src/sirius/application/interpret_query_request.py` (1),
+`src/sirius/application/rank_relevant_knowledge.py` (4) y
+`src/sirius/domain/relevance.py` (7)—. El noveno está en el traductor del
+banco (`tests/acceptance/staged_engine_case_translation.py`), describía el
+mecanismo viejo sin nombrar el literal y por eso no lo devuelve ningún barrido
+de `pide_contexto`: lo encontró la lectura, no el `grep`. Son: el docstring de
+módulo de `relevance.py` y el de
 `RankedKnowledge.seeded`; los de `_PROPOSITO_RECUPERACION_ORDINARIA` y
 `_rank_via_staged_engine` en `rank_relevant_knowledge.py`; el de **módulo**
 de `interpret_query_request.py`, el de `PROPOSITO_RECUPERACION_ORDINARIA` y
@@ -241,33 +253,60 @@ banco (quinta traducción no obvia); y el de módulo de
 `scripts/medir_variantes_de_criticidad.py:29-38`, cuyo único cambio en toda
 esta PR es justamente ese: decía que la siembra de M20 la activaba «el
 PROPÓSITO de la petición (`pide_contexto`)» y ahora dice que la activa la
-señal explícita. A ellos se suman las **21** referencias a
-`pide_contexto` que las pruebas escribían sobre el árbol base `433fb11`
-—`tests/unit/test_relevance_domain.py` (13, las cuatro pruebas de la función
-retirada se sustituyen por el candado
+señal explícita. A ellos se suman las referencias a `pide_contexto` que las
+pruebas escribían sobre el árbol base `433fb11`. Esa cifra sale del mismo
+barrido, aplicado a **todo** `tests/` y no a un puñado de ficheros elegidos
+—`for f in $(git ls-tree -r --name-only 433fb11 -- tests/); do n=$(git show
+433fb11:$f | grep -o 'pide_contexto' | wc -l); [ "$n" -gt 0 ] && echo "$n $f";
+done`—, que devuelve ocho ficheros y 53 ocurrencias. De ellas este trabajo
+corrige **22**: `tests/unit/test_relevance_domain.py` (13, las cuatro pruebas
+de la función retirada se sustituyen por el candado
 `test_el_dominio_ya_no_expone_ninguna_regla_de_subcadena_sobre_el_proposito`),
-`tests/unit/test_peticion_ordinaria.py` (6) y
-`tests/integration/test_rank_relevant_knowledge.py` (2)—. El criterio de
-conteo es el literal `pide_contexto`; no se suma `PROPOSITO_DE_CONTEXTO`, que
-añadiría 2 en `test_peticion_ordinaria.py` y daría 23. Cada cifra sale de
-`git show 433fb11:<ruta> | grep -o 'pide_contexto' | wc -l` sobre el árbol
-base que esta ficha declara, no del cuerpo de la incidencia #581: el 14/7/4
-que esta sección transcribía antes no sale de `433fb11` ni de `5fc5fdc`, y esa
-—heredar una cifra en vez de re-medirla sobre el árbol declarado— es la raíz
-común que la segunda ronda de revisión señaló.
+`tests/unit/test_peticion_ordinaria.py` (6),
+`tests/integration/test_rank_relevant_knowledge.py` (2) y
+`tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py` (1: la línea 284
+decía que «para las 47 consultas (M16, ADR-124), `pide_contexto` es cierto
+para…», y pasa a decir lo mismo sobre `Peticion.amplia_por_categoria`, con la
+mención histórica al mecanismo viejo marcada como tal).
 
-Ninguna se ha relajado. Sobre el head quedan escritas tres menciones y
-ninguna afirma ya la regla vieja: el candado de
+Las **31** restantes se quedan escritas, y aquí está por qué cada una: el
+arnés de examen `tests/acceptance/staged_engine_category_and_relevance.py`
+(8), que replica `experiments/adr002/lateral/categoria.py:_pide_contexto` y no
+producción; y otras 23 que tampoco hablan de producción sino de ese mismo
+experimento, que sigue existiendo y sobre el que este cambio no dice nada
+—`tests/automation/fixtures/diario_ola_criticidad.jsonl` (20, el diario
+histórico de la ola M20: registra lo que se decidió entonces, no lo que es
+cierto ahora), `tests/automation/test_citas_de_los_adr.py` (2, el mapa de
+citas de esa pieza del experimento) y
+`tests/acceptance/fixtures/relevance_filter_frozen_run.json` (1, la nota de
+una corrida congelada)—.
+
+El criterio de conteo es el literal `pide_contexto`; no se suma
+`PROPOSITO_DE_CONTEXTO`, que añadiría 2 en `test_peticion_ordinaria.py`. Cada
+cifra sale del barrido transcrito arriba sobre el árbol base que esta ficha
+declara, no del cuerpo de la incidencia #581: el 14/7/4 que esta sección
+transcribía antes no sale de `433fb11` ni de `5fc5fdc`, y esa —heredar una
+cifra en vez de re-medirla sobre el árbol declarado— es la raíz común que la
+segunda ronda de revisión señaló. El 21 que esta sección transcribió desde la
+ronda 3 hasta la 8 tenía la misma raíz en su forma más fina: la cifra sí se
+midió sobre `433fb11`, pero sobre tres ficheros elegidos a mano, y se presentó
+como si viniera de `tests/` entero. Por eso el barrido va escrito con el árbol
+al que se aplica: una lista solo puede declararse completa sobre el alcance
+del barrido que la produjo.
+
+Ninguna de las 22 se ha relajado. En esos cuatro ficheros quedan escritas sobre
+el head cuatro menciones, y ninguna afirma ya la regla vieja: el candado de
 `tests/unit/test_relevance_domain.py:583-597`, que comprueba que el dominio ya
-no expone `pide_contexto` ni `PROPOSITO_DE_CONTEXTO`; y dos menciones
-históricas dentro de sendos docstrings, que cuentan por qué la prueba fallaba
-antes —`tests/integration/test_rank_relevant_knowledge.py:1670` y
-`tests/unit/test_peticion_ordinaria.py:44`—. Medido con
-`git grep -n 'pide_contexto\|PROPOSITO_DE_CONTEXTO' -- tests/unit tests/integration`.
+no expone `pide_contexto` ni `PROPOSITO_DE_CONTEXTO`; y tres menciones
+históricas dentro de sendos docstrings o comentarios, que cuentan cómo era
+antes —`tests/integration/test_rank_relevant_knowledge.py:1670`,
+`tests/unit/test_peticion_ordinaria.py:44` y
+`tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py:293`—. Medido con
+`git grep -n 'pide_contexto\|PROPOSITO_DE_CONTEXTO' -- tests/unit tests/integration tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py`.
 
 El arnés de examen
-(`tests/acceptance/staged_engine_category_and_relevance.py`) conserva su
-propio `pide_contexto`: replica
+(`tests/acceptance/staged_engine_category_and_relevance.py`) conserva sus ocho
+`pide_contexto`: replica
 `experiments/adr002/lateral/categoria.py:_pide_contexto`, no producción, y
 sus cotas no cambian.
 
@@ -358,7 +397,7 @@ que se corrieron**, no como lista cerrada de lo que la rama ha recibido:
   ADR-180, `scripts/siguiente_adr.py` y
   `tests/automation/test_registro_de_decisiones.py` (+130/−1, cinco pruebas
   nuevas) —ADR-180 (#595) llegando **desde `main`**—.
-- `a8bb7b60...5ae16624` devuelve `MEMORIA.md`, la ficha de ADR-179 y
+- `a8bb7b6...5ae16624` devuelve `MEMORIA.md`, la ficha de ADR-179 y
   `tests/automation/test_piezas_con_llamante.py` (+712/−71) —ADR-179 (#593)
   llegando **desde `main`**—.
 
@@ -473,5 +512,5 @@ Ninguna prueba se ha relajado; ninguna cota del arnés se mueve.
 ## La lección
 
 - familia: `prosa-que-el-cambio-deja-falsa`
-- sin esto se repetiría: retirar un símbolo de producción y dejar vivas las frases que lo daban por cierto; al quitar `pide_contexto` quedaron falsos los nueve trozos de prosa que la sección 6 de esta ficha enumera, 21 referencias en pruebas y el criterio de aceptación de M16 de la Arquitectura Técnica, y el barrido que las buscó en `scripts/` y `tests/` no miró en `docs/evolution/`.
+- sin esto se repetiría: retirar un símbolo de producción y dejar vivas las frases que lo daban por cierto; al quitar `pide_contexto` quedaron falsos los nueve docstrings que la sección 6 de esta ficha enumera, 22 referencias de las pruebas y el criterio de aceptación de M16 de la Arquitectura Técnica, y el barrido que las buscó en `scripts/` y `tests/` no miró en `docs/evolution/`.
 - lo hace cumplir: ninguna prueba: nada en este repositorio vigila la coherencia de la prosa de `docs/` con el árbol, y la ocurrencia que queda viva está en la Arquitectura Técnica, que la salvaguarda de #581 prohíbe tocar sin decisión del propietario.
