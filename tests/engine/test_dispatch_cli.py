@@ -490,3 +490,98 @@ def test_una_parada_en_ensayo_no_promete_un_sitio_donde_no_hay_nada(tmp_path: Pa
     assert not diario.exists(), (
         "un ensayo no escribe nada, así que el mensaje no puede remitir a un diario"
     )
+
+
+# --- ADR-188: la parada ocurre ANTES de crear la incidencia ------------------
+
+
+def test_un_encargo_con_alcance_vetado_para_antes_de_crear_la_incidencia(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    """El sitio de la parada es el punto entero de ADR-188.
+
+    La incidencia #607 se despachó, el ciclo arrancó, el encargo hizo el trabajo
+    entero y GitHub rechazó el push: una hora de motor perdida por una regla que
+    solo vivía en la cabeza de quien despacha. Parar DESPUÉS de crear la
+    incidencia no habría servido de nada. Así que aquí se comprueba lo único
+    que importa: que ni el escritor de GitHub ni el despachador llegan a
+    tocarse, ni siquiera con `--ejecutar`.
+
+    Antes del cambio fallaba con ``assert 0 == 3``: la orden salía como orden
+    inequívoca, el despachador la aceptaba y `llamadas` recogía las dos
+    escrituras.
+    """
+    llamadas: list[str] = []
+
+    def _escritor_prohibido() -> Any:
+        llamadas.append("GitHubCliWriter")
+        raise AssertionError("no se puede construir el escritor de GitHub en esta parada")
+
+    def _despachador_prohibido(*_args: Any, **_kwargs: Any) -> Any:
+        llamadas.append("dispatch_work_item")
+        raise AssertionError("no se puede llegar al despachador en esta parada")
+
+    monkeypatch.setattr(dispatch_cli, "GitHubCliWriter", _escritor_prohibido)
+    monkeypatch.setattr(dispatch_cli, "dispatch_work_item", _despachador_prohibido)
+
+    orden = (
+        "Corrige que la puerta del corrector no confirme su etiqueta consumible "
+        "contra el estado vigente, en .github/workflows/repair-sirius-work.yml"
+    )
+    diario = tmp_path / "diario.jsonl"
+    codigo, texto = _correr([orden, "--ejecutar"], diario=diario)
+
+    assert codigo == 3, texto
+    assert llamadas == [], (
+        f"no se puede escribir nada en GitHub en esta parada; se hizo: {llamadas}"
+    )
+    assert "permisos_o_credenciales_sensibles" in texto
+
+    # Y el trabajo queda donde el mensaje promete: `needs_decision`, sin
+    # incidencia detrás. Es su situación real, no un residuo (ADR-184).
+    store = DurableWorkEngineStore(diario)
+    work_item = store.get_work_item("WI-20260821-223000")
+    assert work_item is not None
+    assert work_item.estado.value == "needs_decision"
+
+
+def test_la_parada_dice_por_que_para_y_remite_a_la_sesion_interactiva(tmp_path: Path) -> None:
+    """ADR-188 (c), al nivel de detalle que ADR-184 fijó: un mensaje que promete
+    un sitio vacío es peor que ninguno.
+
+    `permisos_o_credenciales_sensibles` a secas no le dice a nadie que el
+    trabajo es legítimo y que solo cambia de sitio. El mensaje tiene que decir
+    el alcance que lo paró, por qué el motor no llega ahí, a dónde va ese
+    trabajo, y traer la orden lista para copiar -sin ella, quien lee tiene que
+    reconstruirla a mano, que es justo donde se pierde-.
+
+    Antes del cambio fallaba con ``AssertionError`` en la primera aserción: el
+    texto no nombraba el alcance ni ADR-002.
+    """
+    orden = "Implementa el aviso que falta en `.github/workflows/despachar-orden.yml`"
+    diario = tmp_path / "diario.jsonl"
+    codigo, texto = _correr([orden, "--ejecutar"], diario=diario)
+
+    assert codigo == 3, texto
+    assert ".github/" in texto, "el mensaje tiene que decir QUÉ alcance lo paró"
+    assert "ADR-002" in texto, "y por qué el motor no puede escribir ahí"
+    assert "sesión interactiva" in texto, "y a dónde va ese trabajo en vez del ciclo"
+    assert orden in texto, "la orden tiene que salir entera y lista para copiar"
+    # Lo de ADR-184 sigue: dónde queda el trabajo y cómo volver a él.
+    assert "needs_decision" in texto
+    assert f"sirius-motor --diario {shlex.quote(str(diario))}" in texto
+
+
+def test_una_orden_que_no_toca_esa_carpeta_se_sigue_despachando_como_hoy(tmp_path: Path) -> None:
+    """La otra mitad, exigida por el encargo: no debilitar lo que ya hay.
+
+    Una orden legítima -incluida la que nombra la carpeta solo para excluirla,
+    que es como están escritas 28 de las 29 del diario- tiene que llegar al
+    despachador igual que antes.
+    """
+    orden = "Corrige la referencia rota a la seccion 6.7 del contrato. No toques `.github/**`."
+    codigo, texto = _correr([orden], diario=tmp_path / "diario.jsonl")
+
+    assert codigo == 0, texto
+    assert "cuerpo que llevaría la incidencia" in texto
+    assert "NO lo he despachado" not in texto

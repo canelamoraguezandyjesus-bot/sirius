@@ -46,7 +46,10 @@ from sirius_engine.domain.authority import autoridad_de_clase
 from sirius_engine.domain.dispatch import MARCADOR_ORDEN_PROPIETARIO
 from sirius_engine.domain.work_item import WorkItemClass
 from sirius_engine.gate import ResultadoPuerta, decidir
-from sirius_engine.intent_interpreter import interpretar_intencion_v0
+from sirius_engine.intent_interpreter import (
+    alcance_que_el_motor_no_puede_escribir,
+    interpretar_intencion_v0,
+)
 from sirius_engine.issue_body_projection import generar_cuerpo_incidencia
 from sirius_engine.ports.dispatch_journal import DispatchJournal
 from sirius_engine.ports.github_writer import GitHubWriterPort, IncidenciaCreada
@@ -315,11 +318,44 @@ def main(
     # efectiva del diario: `sirius-motor` sin argumentos resuelve el suyo
     # (`resolver_diario`), que no tiene por qué ser este.
     if decision.resultado is ResultadoPuerta.CREAR_Y_ESCALAR:
+        #: El prefijo que la orden pide tocar y el motor no puede escribir, o
+        #: ``None``. Se pregunta aparte de la causa a propósito: la quinta causa
+        #: comparte `permisos_o_credenciales_sensibles` con la tercera, que es
+        #: léxica y no sabe nada de rutas, así que la causa sola no distingue
+        #: cuál de las dos paró (ADR-188).
+        prefijo_vetado = alcance_que_el_motor_no_puede_escribir(args.orden)
         linea("He creado el trabajo, pero NO lo he despachado: necesita tu decisión.")
         linea(f"  Trabajo: {work_id}")
         if resultado.escalada is not None:
             linea(f"  Causa:   {resultado.escalada.causa.value}")
         linea("")
+        # ADR-188, la QUINTA causa. Esta parada tiene un motivo que ninguna de
+        # las otras cuatro tiene -no es la orden lo que es peligroso, es que el
+        # motor no llega a donde la orden apunta- y una salida concreta que
+        # ADR-002 ya prescribió: hacerlo en sesión interactiva. Decirlo aquí no
+        # es cortesía: sin esto, la parada dice «permisos_o_credenciales_
+        # sensibles» y quien la lee no tiene forma de saber que el trabajo es
+        # perfectamente legítimo y que solo cambia de sitio.
+        if prefijo_vetado is not None:
+            linea(f"El alcance declarado cae bajo «{prefijo_vetado}», y ahí el motor no puede")
+            linea("escribir: ADR-002 decidió NO darle ese alcance a su credencial, así que")
+            linea("GitHub rechaza el push. No es una precaución teórica: la incidencia #607")
+            linea("se despachó al ciclo automático, el encargo hizo el trabajo entero -código,")
+            linea("pruebas, ADR y validaciones en verde- y lo perdió al empujar, porque el")
+            linea("commit vivía solo en el runner. Por eso la parada ocurre AQUÍ, antes de")
+            linea("crear la incidencia, y no después.")
+            linea("")
+            linea("ADR-002 prescribe hacer este trabajo en sesión interactiva, donde el")
+            linea("propietario tiene el alcance que al motor le falta. La orden, lista para")
+            linea("copiar tal cual:")
+            linea("")
+            for parrafo in args.orden.splitlines() or [""]:
+                linea(f"    {parrafo}")
+            linea("")
+            linea("Y si de verdad NO tocas esa carpeta -la orden solo la nombra para")
+            linea("excluirla-, dilo con un negador delante y vuelve a despachar: «no toques")
+            linea(f"{prefijo_vetado}**» se despacha como cualquier otra orden (ADR-184).")
+            linea("")
         if diario_efectivo is None:
             linea("ENSAYO: no se ha escrito nada. El trabajo NO queda anotado en el")
             linea("diario -este ensayo usa un almacén en memoria- y muere con este")

@@ -139,6 +139,68 @@ _SENSIBILIDAD: tuple[tuple[tuple[str, ...], CausaEscalado], ...] = (
     (_MARCADORES_PRIVACIDAD, CausaEscalado.PRIVACIDAD_O_INFORMACION_SENSIBLE),
 )
 
+#: La QUINTA causa (ADR-188): los prefijos de ruta que el motor NO puede
+#: escribir. ADR-002 decidió no darle a la credencial de la automatización el
+#: alcance sobre los ficheros de workflow, y dejó escrito que los encargos con
+#: ese alcance se hagan en sesión interactiva -avisando él mismo de que eso era
+#: «un procedimiento operativo manual, no una garantía»-. La incidencia #607
+#: cobró el aviso: se despachó al ciclo automático, el encargo hizo el trabajo
+#: entero y GitHub rechazó el push. La lista es cerrada y vive aquí, con sus
+#: cuatro hermanas, porque esta causa es de la misma forma que ellas: la orden
+#: pide tocar algo que el motor no puede escribir, así que no se despacha, se
+#: escala.
+PREFIJOS_QUE_EL_MOTOR_NO_PUEDE_ESCRIBIR: tuple[str, ...] = (".github/",)
+
+#: La palabra por la que se sustituye una ruta bajo un prefijo vetado antes de
+#: pasarla por :func:`_marcador_pedido`. Es un rodeo con un motivo medido: esa
+#: función parte el texto en oraciones por la puntuación
+#: (:data:`_SEPARADOR_DE_ORACION`) y saca las palabras con ``\w+``, así que una
+#: ruta -que empieza por un punto y lleva barras, asteriscos y puntos dentro- no
+#: es UNA palabra para ella, sino un montón de cortes de oración. Sustituida por
+#: una palabra corriente, la ruta atraviesa intacta la misma maquinaria que ya
+#: distingue pedir de prohibir (ADR-184), sin duplicar ni una línea de ella.
+_MARCADOR_DE_RUTA_VETADA = "rutabajounprefijovetado"
+
+#: Lo que se traga la sustitución ALREDEDOR de la ruta: las comillas y los
+#: acentos graves que la citan. No es cosmético. Si el acento grave de «no
+#: toques `.github/**`» se quedara donde está, partiría la oración justo entre
+#: el negador y la ruta, el negador quedaría al otro lado y la puerta pararía
+#: sobre una frase que dice exactamente lo contrario. Los paréntesis y los
+#: corchetes NO entran: ahí sí son puntuación de la oración, y tragárselos
+#: uniría dos oraciones que el castellano tiene separadas.
+_COMILLAS_QUE_CITAN_UNA_RUTA = "[`'\"«»]*"
+
+#: El resto de la ruta tras el prefijo: lo que un camino de fichero puede
+#: llevar, comodines incluidos, porque «.github/**» nombra el mismo sitio que
+#: «.github/workflows/x.yml».
+_RESTO_DE_LA_RUTA = r"[\w./*?+-]*"
+
+
+def _patron_de_ruta_vetada(prefijo: str) -> re.Pattern[str]:
+    r"""El patrón que reconoce una ruta bajo ``prefijo``, derivado del propio prefijo.
+
+    Derivado y no escrito aparte, para que añadir un prefijo a
+    :data:`PREFIJOS_QUE_EL_MOTOR_NO_PUEDE_ESCRIBIR` no exija acordarse de
+    escribir también su expresión -que es la familia de defecto que este ADR
+    viene a cerrar-.
+
+    ``(?!\w)`` es la frontera que hace falta: sin ella ``.github`` casaba dentro
+    de ``sirius_engine.ports.github_mirror``, que es un módulo de Python y no una
+    carpeta de workflows. Salió midiendo, no razonando: era 1 de los 29 encargos
+    del diario que nombran la carpeta (ADR-188).
+    """
+    carpeta = prefijo.rstrip("/")
+    return re.compile(
+        f"{_COMILLAS_QUE_CITAN_UNA_RUTA}{re.escape(carpeta)}"
+        f"(?!\\w){_RESTO_DE_LA_RUTA}{_COMILLAS_QUE_CITAN_UNA_RUTA}"
+    )
+
+
+_RUTAS_VETADAS: tuple[tuple[str, re.Pattern[str]], ...] = tuple(
+    (prefijo, _patron_de_ruta_vetada(prefijo))
+    for prefijo in PREFIJOS_QUE_EL_MOTOR_NO_PUEDE_ESCRIBIR
+)
+
 #: Lo que, delante de un marcador y dentro de su misma oración, lo convierte en
 #: una PROHIBICIÓN o una NEGACIÓN en vez de una petición (ADR-184). La lista es
 #: CERRADA y está declarada: lo que FALTE aquí no silencia nada, así que una
@@ -365,11 +427,56 @@ def _marcador_pedido(normalizado: str, marcador: str) -> bool:
     return False
 
 
+def _prefijo_vetado_pedido(normalizado: str) -> str | None:
+    """El prefijo que ``normalizado`` PIDE tocar y el motor no puede escribir, o ``None``.
+
+    La QUINTA causa (ADR-188). Es de la misma forma que las otras cuatro y usa
+    exactamente su maquinaria: la ruta se sustituye por
+    :data:`_MARCADOR_DE_RUTA_VETADA` -una palabra corriente- y se pregunta por
+    ella a :func:`_marcador_pedido`, que ya sabe que una aparición NEGADA
+    prohíbe en vez de pedir (ADR-184).
+
+    Que la reutilice no es ahorro de líneas, es lo que hace utilizable la
+    puerta. De los 29 encargos del diario del motor que nombran la carpeta, 28
+    la nombran para EXCLUIRLA -«no toques `.github/**` (ADR-002)»- y uno solo
+    declaró alcance sobre ella. Sin la negación, la puerta pararía las 29; con
+    ella para 9. La medida entera está en ADR-188, incluido lo que sigue
+    parando de más y por qué se acepta.
+    """
+    for prefijo, patron in _RUTAS_VETADAS:
+        sustituido = patron.sub(f" {_MARCADOR_DE_RUTA_VETADA} ", normalizado)
+        if _marcador_pedido(sustituido, _MARCADOR_DE_RUTA_VETADA):
+            return prefijo
+    return None
+
+
+def alcance_que_el_motor_no_puede_escribir(mensaje: str) -> str | None:
+    """El prefijo vetado que ``mensaje`` pide tocar, o ``None`` si no pide ninguno.
+
+    Público a propósito: ``sirius-despachar`` lo necesita para dar la parada con
+    su motivo real -la credencial del motor no llega ahí, ADR-002- y remitir a
+    la sesión interactiva. La causa por sí sola no bastaría para distinguirlo:
+    ``permisos_o_credenciales_sensibles`` la comparte con la tercera causa, que
+    es léxica y no tiene nada que ver con rutas.
+    """
+    return _prefijo_vetado_pedido(_normalizar(mensaje))
+
+
 def _detectar_sensibilidad(normalizado: str) -> tuple[CausaEscalado, str] | None:
     for marcadores, causa in _SENSIBILIDAD:
         for marcador in marcadores:
             if _marcador_pedido(normalizado, marcador):
                 return causa, f"el mensaje pide {marcador!r}: causa {causa.value}"
+    # La quinta se consulta DESPUÉS de las cuatro, y el orden es la garantía de
+    # que no las toca: ninguna entrada que antes daba una de ellas puede dar
+    # otra cosa ahora, porque para llegar aquí las cuatro han dicho que no.
+    prefijo = _prefijo_vetado_pedido(normalizado)
+    if prefijo is not None:
+        causa = CausaEscalado.PERMISOS_O_CREDENCIALES_SENSIBLES
+        return causa, (
+            f"el alcance declarado cae bajo {prefijo!r}, donde el motor no puede escribir "
+            f"(ADR-002): causa {causa.value}"
+        )
     return None
 
 

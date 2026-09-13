@@ -12,7 +12,11 @@ import pytest
 from sirius_engine.domain.escalation import CausaEscalado
 from sirius_engine.domain.intent import TipoIntencion
 from sirius_engine.domain.work_item import WorkItemClass
-from sirius_engine.intent_interpreter import interpretar_intencion_v0
+from sirius_engine.intent_interpreter import (
+    PREFIJOS_QUE_EL_MOTOR_NO_PUEDE_ESCRIBIR,
+    alcance_que_el_motor_no_puede_escribir,
+    interpretar_intencion_v0,
+)
 
 
 @pytest.mark.parametrize("mensaje", ("hola", "Hola", "gracias", "vale", "  ", ""))
@@ -382,3 +386,129 @@ def test_la_mencion_entre_comillas_sigue_parando_y_esta_declarado() -> None:
     """
     mensaje = "su lista de marcadores contiene la palabra «borrar» y mi texto la usaba dentro"
     assert interpretar_intencion_v0(mensaje).tipo is TipoIntencion.SENSIBLE_O_MATERIAL
+
+
+# --- ADR-188: la QUINTA causa, el alcance que el motor no puede escribir -----
+#
+# ADR-002 decidió que la credencial del motor no escriba bajo `.github/`. Lo
+# que faltaba era que alguien lo comprobara ANTES de despachar: la incidencia
+# #607 se mandó al ciclo automático, el encargo hizo el trabajo entero y lo
+# perdió en el push. Estas pruebas fijan las dos direcciones, porque la medida
+# de ADR-188 dice que la segunda es la corriente: de los 29 encargos del diario
+# del motor que nombran la carpeta, 28 la nombran **para excluirla**.
+
+_PERMISOS = CausaEscalado.PERMISOS_O_CREDENCIALES_SENSIBLES
+
+
+@pytest.mark.parametrize(
+    "mensaje",
+    (
+        # El caso real: `WI-20260913-075355`, la incidencia #607, tal y como se
+        # despachó. Es el ÚNICO de los 87 encargos del diario que declaró
+        # alcance sobre la carpeta (ADR-188).
+        "Corrige que la puerta del corrector no confirme su etiqueta consumible contra el "
+        "estado vigente. En .github/workflows/repair-sirius-work.yml, la condicion de la "
+        "linea 51 no se relee",
+        # Citada con acentos graves, que es como se escribe casi siempre.
+        "Implementa el aviso que falta en `.github/workflows/despachar-orden.yml`",
+        # Con comodín: nombra el mismo sitio, y ahí el push muere igual.
+        "Implementa el cableado del carril nuevo en .github/**",
+        # La carpeta desnuda, sin fichero: el motor tampoco escribe ahí.
+        "Documenta en .github la política de etiquetas",
+    ),
+)
+def test_una_orden_que_pide_tocar_lo_que_el_motor_no_puede_escribir_escala(mensaje: str) -> None:
+    """La quinta causa para y pide la decisión del propietario, como sus cuatro
+    hermanas: no crea incidencia, escala.
+
+    Antes del cambio las cuatro fallaban con ``assert <ORDEN_INEQUIVOCA> is
+    <SENSIBLE_O_MATERIAL>``: el intérprete no miraba ninguna ruta, así que la
+    orden salía como orden inequívoca y el despachador le abría una incidencia.
+    """
+    signal = interpretar_intencion_v0(mensaje)
+    assert signal.tipo is TipoIntencion.SENSIBLE_O_MATERIAL
+    assert signal.causa_sensibilidad is _PERMISOS
+    assert signal.motivo_sensibilidad is not None
+    assert ".github/" in signal.motivo_sensibilidad, (
+        "el motivo tiene que decir QUÉ alcance para la orden, no solo que algo la paró"
+    )
+
+
+@pytest.mark.parametrize(
+    "mensaje",
+    (
+        # Las cuatro formas exactas con las que el diario del motor excluye la
+        # carpeta, contadas en ADR-188. Ninguna pide tocarla: la nombran para
+        # prohibirla, y despacharlas es el comportamiento de hoy.
+        "Implementa el guardián de goteo. No toques `.github/**`.",
+        "Implementa M18a: porta el filtro. PROHIBICIONES DURAS: no tocar `.github/**` (ADR-002)",
+        "Implementa que el reflector recorra la recuperación. Límites: ni `.github/**` ni "
+        "ningún workflow cambian",
+        "Implementa el carril de investigación. NO toques nada de .github: eso lo hace la "
+        "sesión interactiva",
+    ),
+)
+def test_una_orden_que_solo_prohibe_tocar_esa_carpeta_se_sigue_despachando(mensaje: str) -> None:
+    """La dirección que hace utilizable la puerta, y la que casi siempre se da.
+
+    La quinta causa reutiliza `_marcador_pedido` -la maquinaria de ADR-184- en
+    vez de buscar la subcadena, justamente por esto. Con la subcadena a secas
+    estas cuatro pararían, y con ellas 28 de los 29 encargos del diario que
+    nombran la carpeta: la puerta sería inservible el mismo día que entra.
+    """
+    signal = interpretar_intencion_v0(mensaje)
+    assert signal.tipo is TipoIntencion.ORDEN_INEQUIVOCA
+    assert signal.causa_sensibilidad is None
+
+
+def test_un_modulo_que_lleva_github_en_el_nombre_no_es_la_carpeta_de_workflows() -> None:
+    """La frontera de ruta, y no salió razonando sino midiendo.
+
+    `sirius_engine.ports.github_mirror` contiene `.github` y es un módulo de
+    Python. Sin `(?!\\w)` era 1 de los 29 encargos que la puerta paraba
+    (`WI-20260906-023326`, entregado sin tocar ningún workflow).
+    """
+    mensaje = (
+        "Implementa que el reflector lea un run con "
+        "sirius_engine.ports.github_mirror.GitHubMirrorPort"
+    )
+    assert interpretar_intencion_v0(mensaje).tipo is TipoIntencion.ORDEN_INEQUIVOCA
+
+
+def test_las_cuatro_causas_anteriores_siguen_ganando_a_la_quinta() -> None:
+    """El orden es la garantía de que la quinta no toca a las cuatro: se
+    consulta DESPUÉS, así que ninguna entrada que antes daba una de ellas puede
+    dar otra cosa ahora. Si la quinta se adelantara, esta orden pasaría de
+    `operacion_destructiva_o_irreversible` a `permisos_o_credenciales_sensibles`
+    y la causa que se le enseña al propietario sería la menos grave de las dos.
+    """
+    signal = interpretar_intencion_v0("Borra la cola y arregla .github/workflows/quality.yml")
+    assert signal.tipo is TipoIntencion.SENSIBLE_O_MATERIAL
+    assert signal.causa_sensibilidad is CausaEscalado.OPERACION_DESTRUCTIVA_O_IRREVERSIBLE
+
+
+def test_el_prefijo_vetado_se_declara_y_el_patron_se_deriva_de_el() -> None:
+    """Anti-vacua de la derivación: si la lista se vaciara, las pruebas de
+    arriba dejarían de fijar nada y ninguna se pondría roja por ello. Y el
+    patrón sale del prefijo, no escrito aparte, para que añadir uno no exija
+    acordarse de escribir también su expresión -la familia que ADR-188 cierra-.
+    """
+    assert PREFIJOS_QUE_EL_MOTOR_NO_PUEDE_ESCRIBIR, (
+        "sin ningún prefijo declarado la quinta causa no puede parar nada"
+    )
+    for prefijo in PREFIJOS_QUE_EL_MOTOR_NO_PUEDE_ESCRIBIR:
+        assert alcance_que_el_motor_no_puede_escribir(f"Implementa el cambio en {prefijo}x") == (
+            prefijo
+        )
+
+
+def test_una_orden_corriente_no_declara_ningun_alcance_vetado() -> None:
+    """La otra mitad de la anti-vacua: si la función dijera que sí a todo, las
+    pruebas de arriba pasarían igual y no fijarían nada.
+    """
+    assert (
+        alcance_que_el_motor_no_puede_escribir(
+            "Corrige la referencia rota a la seccion 6.7 del contrato"
+        )
+        is None
+    )
