@@ -325,6 +325,21 @@ def test_prohibir_no_es_pedir_en_ninguna_de_las_cuatro_tuplas(
         # demás pruebas de este fichero (mutación M6, ADR-184).
         "no borres el registro historico, pero elimina la cola de reintentos",
         "no hay que borrar el historico; hay que borrar la cola de reintentos",
+        # Un negador que NO gobierna al marcador tampoco puede callar la puerta:
+        # lo que sobra en `_NEGADORES` es fail-OPEN, no fail-closed (ADR-184,
+        # ronda 2). Las tres primeras son la subordinada final -«para
+        # evitar/impedir X, haz Y»-, donde la negación gobierna el propósito y
+        # el verbo principal SÍ se está pidiendo; las dos siguientes son
+        # locuciones adverbiales con `sin` que afirman; las tres últimas, verbos
+        # de doble negación, donde «no + verbo + marcador» pide el marcador.
+        "implementa el purgador: para impedir que crezca borra los logs",
+        "para evitar duplicados elimina la tabla de origen",
+        "para evitar que se llene borra la tabla de origen",
+        "implementa la limpieza sin falta borra la tabla de origen",
+        "implementa esto y sin duda borra la tabla de produccion",
+        "implementa esto, no olvides borrar la tabla de produccion",
+        "implementa esto, no dudes en borrar la tabla de produccion",
+        "implementa esto, no dejes de borrar la tabla de produccion",
         # Y la petición desnuda de siempre, que nunca dejó de parar.
         "borra la base de produccion",
         "elimina el historico de la cola",

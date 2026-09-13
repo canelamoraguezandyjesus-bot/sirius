@@ -141,10 +141,18 @@ _SENSIBILIDAD: tuple[tuple[tuple[str, ...], CausaEscalado], ...] = (
 
 #: Lo que, delante de un marcador y dentro de su misma oración, lo convierte en
 #: una PROHIBICIÓN o una NEGACIÓN en vez de una petición (ADR-184). La lista es
-#: CERRADA y está declarada: lo que no esté aquí no silencia nada, así que el
-#: modo de fallo de una lista incompleta es seguir parando -fail-closed, el
-#: mismo criterio del propietario en #324 (H-19)-, nunca dejar pasar una orden
-#: destructiva de verdad.
+#: CERRADA y está declarada: lo que FALTE aquí no silencia nada, así que una
+#: lista incompleta sigue parando -fail-closed, el mismo criterio del
+#: propietario en #324 (H-19)-.
+#:
+#: Lo que SOBRA, en cambio, sí es fail-open: una palabra que aparece delante
+#: del marcador sin negarlo silencia una petición de verdad. Por eso NO están
+#: los infinitivos `evitar` e `impedir`: en castellano encabezan la subordinada
+#: final «para evitar/impedir X, borra Y», donde la negación gobierna el
+#: propósito y NO al verbo principal, que sí se está pidiendo. Las formas
+#: personales -«evita borrar», «impide que se borre»- no encabezan ese giro y
+#: se quedan. El resto de giros con negador que no niega se corta desde
+#: :data:`_CORTES_DE_ORACION`.
 _NEGADORES = frozenset(
     {
         "no",
@@ -166,12 +174,11 @@ _NEGADORES = frozenset(
         "prohiben",
         "prohibir",
         "evita",
-        "evitar",
         "evites",
         "eviten",
         "impide",
-        "impedir",
         "impidas",
+        "impidan",
     }
 )
 
@@ -181,8 +188,45 @@ _NEGADORES = frozenset(
 #: coordinada, y «sin embargo borra la tabla» o «no solo borra X sino Y» lo
 #: quedarían por un «sin» y un «no» que no niegan nada. Cortar es la dirección
 #: SEGURA: un corte de más hace que la puerta pare, no que deje pasar.
+#:
+#: Van aquí tres familias, y las tres por el mismo motivo -el negador que las
+#: precede no niega al marcador-:
+#:
+#: * los nexos que abren otra oración coordinada o adversativa (`y`, `pero`,
+#:   `sino`, `embargo`…);
+#: * el sustantivo de las locuciones adverbiales con `sin` que afirman en vez
+#:   de negar: «sin duda borra la tabla», «sin falta borra la tabla». Ahí `sin`
+#:   gobierna al sustantivo, no al marcador;
+#: * los verbos de doble negación, donde «no + verbo + marcador» PIDE el
+#:   marcador: «no olvides borrar», «no dudes en borrar», «no dejes de borrar».
 _CORTES_DE_ORACION = frozenset(
-    {"y", "e", "o", "u", "pero", "sino", "aunque", "mas", "embargo", "solo", "solamente"}
+    {
+        "y",
+        "e",
+        "o",
+        "u",
+        "pero",
+        "sino",
+        "aunque",
+        "mas",
+        "embargo",
+        "solo",
+        "solamente",
+        "duda",
+        "falta",
+        "olvides",
+        "olvide",
+        "olviden",
+        "olvidar",
+        "dudes",
+        "dude",
+        "duden",
+        "dudar",
+        "dejes",
+        "deje",
+        "dejen",
+        "dejar",
+    }
 )
 
 #: Cuántas palabras hacia atrás se busca el negador. Cuatro cubre las formas

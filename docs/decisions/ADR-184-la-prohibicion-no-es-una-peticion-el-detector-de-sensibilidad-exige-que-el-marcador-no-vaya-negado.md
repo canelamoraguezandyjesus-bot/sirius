@@ -140,13 +140,29 @@ El criterio mira la **negación gramatical local**, no la forma imperativa:
   `nunca`, `jamas`, `sin`, `ningun…`, `prohibido…`, `prohibe`, `evita`,
   `impide`… ), esa aparición prohíbe en vez de pedir y no cuenta.
 - La mirada se detiene antes en un **corte de oración** (`y`, `e`, `o`, `u`,
-  `pero`, `sino`, `aunque`, `mas`, `embargo`, `solo`, `solamente`): si eso está
-  entre el negador y el marcador, el negador gobierna otra cosa.
+  `pero`, `sino`, `aunque`, `mas`, `embargo`, `solo`, `solamente`, `duda`,
+  `falta`, `olvides…`, `dudes…`, `dejes…`): si eso está entre el negador y el
+  marcador, el negador gobierna otra cosa.
 
-Las dos listas son **cerradas y están escritas**. Su modo de fallo es
-deliberado: lo que falte en la lista de negadores hace que la puerta **pare de
-más**, nunca que deje pasar una orden destructiva. Es el mismo criterio
-fail-closed que el propietario fijó en #324 (H-19).
+Las dos listas son **cerradas y están escritas**, y sus dos modos de fallo NO
+son simétricos:
+
+- lo que **falte** en la lista de negadores hace que la puerta **pare de más**:
+  fail-closed, el mismo criterio que el propietario fijó en #324 (H-19);
+- lo que **sobre** —una palabra que aparece delante del marcador sin negarlo—
+  hace lo contrario: **calla una petición de verdad**. Eso es fail-OPEN, y por
+  eso la lista de negadores no admite formas ambiguas. Los infinitivos `evitar`
+  e `impedir` estuvieron en ella y se retiraron (ronda 2 de #601): en castellano
+  encabezan la subordinada final «para evitar/impedir X, borra Y», donde la
+  negación gobierna el propósito y el verbo principal **sí** se está pidiendo.
+  Las formas personales —«evita borrar», «impide que se borre»— no encabezan ese
+  giro y se quedan. Por el mismo motivo cortan `duda` y `falta` («sin duda
+  borra», «sin falta borra»: ahí `sin` gobierna al sustantivo) y los verbos de
+  doble negación `olvides`/`dudes`/`dejes` («no olvides borrar» **pide** borrar).
+
+Mantener esa asimetría a la vista es lo que impide volver a escribir que el modo
+de fallo del criterio es «siempre parar de más»: solo lo es por el lado de la
+lista incompleta.
 
 ### Alcanza a las cuatro tuplas, y esa es la razón de ponerlo donde se pone
 
@@ -211,6 +227,18 @@ Escrito antes de que nadie lo descubra por su cuenta, y escrito entero:
    ADR-184 y sigue igual que antes: lo que no está en la lista no lo ve nadie.
 6. **Entender la orden.** Sigue siendo el marcador de posición v0 que ADR-043
    declara provisional. Este ADR lo hace menos tonto, no inteligente.
+7. **El negador que no gobierna al marcador, y este SÍ es un falso negativo.**
+   Los seis puntos anteriores caen del lado de parar de más; este no. Un giro
+   que lleva dentro una palabra de `_NEGADORES` sin negar al marcador **calla la
+   puerta**: la orden sale `ORDEN_INEQUIVOCA` y `dispatch_cli` la despacha sola.
+   Los tres giros medidos en la ronda 2 de #601 —«para evitar/impedir X, borra
+   Y», «sin duda/sin falta borra Y», «no olvides borrar Y»— están cubiertos con
+   prueba, pero **la familia no está cerrada**: cerrar «qué palabra niega de
+   verdad a cuál» es análisis sintáctico, y eso es el intérprete con modelo de
+   arquitectura §11, no este apaño. Lo que sí queda fijado es la regla de
+   mantenimiento: **antes de añadir un negador hay que comprobar que no
+   encabeza un giro final o adverbial**, porque añadirlo a la ligera abre este
+   agujero, no lo cierra.
 
 ## Comprobación que la sostiene
 
@@ -282,7 +310,10 @@ puesta: si no, no está midiendo lo que cree.
   antes leía «contiene»: la frase dice lo que la comprobación comprueba.
 - Una orden que prohíbe algo en una frase y lo pide en otra sigue parando.
 - Las dos listas —negadores y cortes— son ahora superficie que mantener. Están
-  cerradas, escritas y probadas, y su modo de fallo es parar de más.
+  cerradas, escritas y probadas. Su modo de fallo por **omisión** es parar de
+  más; el de **exceso** es callar una petición real (punto 7 de «Lo que este
+  criterio NO detecta»), así que ampliar `_NEGADORES` no es una operación
+  inocua y hay que medirla como tal.
 - El encargo #601 sigue sin poder escribirse en lenguaje natural directo (punto
   2 de «Lo que este criterio NO detecta»). Este ADR no cierra eso y no finge
   cerrarlo.
