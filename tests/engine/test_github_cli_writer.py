@@ -135,9 +135,10 @@ def test_los_fallos_operativos_de_gh_salen_como_el_error_del_puerto(
 ) -> None:
     """CODEX-002: `gh` no falla solo con `returncode != 0`.
 
-    Si `gh` no está instalado sale `FileNotFoundError`; si se pasa de los 60
-    segundos, `subprocess.TimeoutExpired`; si la respuesta de adopción no es
-    JSON, `JSONDecodeError`. Las tres escapaban por encima de
+    Si `gh` no está instalado sale `FileNotFoundError`; si existe pero no es
+    ejecutable -permisos, un montaje `noexec`-, `PermissionError`; si se pasa
+    de los 60 segundos, `subprocess.TimeoutExpired`; si la respuesta de
+    adopción no es JSON, `JSONDecodeError`. Las cuatro escapaban por encima de
     `GitHubWriteError`, que es lo ÚNICO que captura `decision_cli._continuar`,
     y lo hacían justo después de haber persistido `needs_decision -> active`:
     el comando terminaba con una traza en vez de decir que hay que repetir la
@@ -145,7 +146,9 @@ def test_los_fallos_operativos_de_gh_salen_como_el_error_del_puerto(
     no tiene por qué conocer `subprocess`.
 
     Antes del cambio fallaba en la primera aserción, con la excepción nativa
-    sin traducir: ``FileNotFoundError: no hay ningún «gh»``.
+    sin traducir: ``FileNotFoundError: no hay ningún «gh»``. Con la cláusula
+    estrechada de nuevo a `except FileNotFoundError` (CLAUDE-R2-001) falla en
+    la de `PermissionError`: enumerar dos miembros no cubre la familia.
     """
     monkeypatch.setenv(CREDENCIAL_ENV_VAR, "s3cr3t0")
 
@@ -157,6 +160,15 @@ def test_los_fallos_operativos_de_gh_salen_como_el_error_del_puerto(
             repo="acme/repo", titulo="t", cuerpo="c", etiquetas=()
         )
     assert "gh" in str(sin_gh.value)
+
+    def _sin_permiso(argv: list[str], token: str) -> subprocess.CompletedProcess[str]:
+        raise PermissionError(13, "Permission denied: 'gh'")
+
+    with pytest.raises(GitHubWriteError) as sin_permiso:
+        GitHubCliWriter(ejecutar=_sin_permiso).crear_incidencia(
+            repo="acme/repo", titulo="t", cuerpo="c", etiquetas=()
+        )
+    assert "gh" in str(sin_permiso.value)
 
     def _se_cuelga(argv: list[str], token: str) -> subprocess.CompletedProcess[str]:
         raise subprocess.TimeoutExpired(cmd=["gh", *argv], timeout=60)

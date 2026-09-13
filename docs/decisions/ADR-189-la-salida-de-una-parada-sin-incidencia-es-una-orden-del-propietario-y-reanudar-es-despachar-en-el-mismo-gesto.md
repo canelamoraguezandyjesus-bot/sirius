@@ -183,14 +183,21 @@ sirius-decidir <work_id> (--continuar | --terminar) [--ejecutar] [--repo] [--blo
   `needs_decision` y el dominio no tiene arista `ACTIVE -> CANCELLED` (§3.2).
   Ese trabajo queda como asunto del propietario en sesión interactiva: el
   dominio no se enmienda, se corrige lo que el mensaje promete.
-- **Los fallos operativos de `gh` se traducen en el adaptador.** `gh` no falla
-  solo con código distinto de cero: si no está instalado sale
-  `FileNotFoundError`, si se pasa de los 60 s `subprocess.TimeoutExpired`, y si
-  la respuesta de adopción no es JSON, `JSONDecodeError`. `GitHubCliWriter` las
-  convierte en `GitHubWriteError` —el error del puerto—, que es lo único que
-  `_continuar` captura; si no, el comando terminaba con una traza justo después
-  de haber persistido `needs_decision -> active`, sin decir que hay que repetir
-  la orden para retomar el despacho.
+- **Los fallos operativos de `gh` se traducen en el adaptador, por FAMILIA y
+  no por enumeración.** `gh` no falla solo con código distinto de cero: lanzar
+  el proceso hijo falla con tantos errnos como tiene el `exec` —no instalado es
+  `FileNotFoundError` [Errno 2], instalado pero no ejecutable (permisos, un
+  montaje `noexec`) es `PermissionError` [Errno 13], binario corrupto o de otra
+  arquitectura es `OSError` [Errno 8]—, todos ellos `OSError`; aparte quedan
+  `subprocess.TimeoutExpired` a los 60 s, que NO es `OSError` y lleva su propia
+  cláusula, y `JSONDecodeError` cuando la respuesta de adopción no es JSON.
+  `GitHubCliWriter` los convierte en `GitHubWriteError` —el error del puerto—,
+  que es lo único que `_continuar` captura; si no, el comando terminaba con una
+  traza justo después de haber persistido `needs_decision -> active`, sin decir
+  que hay que repetir la orden para retomar el despacho. La primera versión de
+  esta guarda enumeraba dos miembros en vez de la familia (CLAUDE-R2-001): la
+  lección del repositorio —«una lista siempre tiene un hueco más»— también
+  gobierna una cláusula `except`.
 - **La salida queda al alcance del propietario sin tocar el diario**: la parada
   de `sirius-despachar` nombra el comando exacto con el `work_id` y la ruta del
   diario ya puestos, y `/trabajos` lo recuerda cuando lista algo en
@@ -249,7 +256,7 @@ que la llamara.
   | ofrecer `--continuar` en la quinta causa | ahí no se ofrece lo que no lleva a nada |
   | ofrecer `--continuar` con una clase sin despachador | tampoco se ofrece lo que saldría con 5 |
   | quitar `--diario`/`--ejecutar` de la orden de `/trabajos` | el aviso de la sesión se copia tal cual |
-  | no traducir `FileNotFoundError` en `GitHubCliWriter._invocar` | los fallos operativos de `gh` salen como el error del puerto |
+  | estrechar `except OSError` a `except FileNotFoundError` en `GitHubCliWriter._invocar` | TODO fallo operativo de `gh` sale como el error del puerto, no solo dos |
   | fijar «needs_decision» en el mensaje sin credencial | el estado se nombra, no se fija: al retomar es «active» |
   | ofrecer `--terminar` también desde `active` | `--terminar` solo es salida desde `needs_decision` (§3.2) |
   | avisar en `/trabajos` sin condición / no avisar | el aviso sale cuando hay algo que decidir, y solo entonces |

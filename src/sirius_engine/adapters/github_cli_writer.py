@@ -97,10 +97,16 @@ class GitHubCliWriter:
         """Invocar ``gh`` traduciendo TODO fallo operativo al error del puerto.
 
         Un código de retorno distinto de cero no es la única forma de que esto
-        falle: si `gh` no está instalado el `subprocess` levanta
-        ``FileNotFoundError``, y si el proceso se pasa de los 60 segundos
-        levanta ``subprocess.TimeoutExpired``. Las dos son fallos del adaptador,
-        no del dominio, y escapaban por encima de `GitHubWriteError`: quien
+        falle: lanzar el proceso hijo puede fallar de tantas maneras como
+        errnos tiene el `exec`, y la guarda correcta es la FAMILIA, no dos de
+        sus miembros. Que `gh` no esté instalado es `FileNotFoundError`
+        [Errno 2], pero que esté y no sea ejecutable -permisos, un envoltorio
+        sin `+x`, un montaje `noexec`- es `PermissionError` [Errno 13], y que
+        el binario esté corrupto o sea de otra arquitectura es `OSError`
+        [Errno 8]. Todas son `OSError` y todas son fallos del adaptador, no del
+        dominio; aparte queda `subprocess.TimeoutExpired`, que NO es `OSError`
+        y necesita su propia cláusula. Sin traducir escapaban por encima de
+        `GitHubWriteError`, que es lo ÚNICO que captura `decision_cli`: quien
         llama solo captura el error del puerto, así que `sirius-decidir`
         terminaba con una traza JUSTO después de haber persistido
         `needs_decision -> active`, sin llegar a decir que hay que repetir la
@@ -109,7 +115,7 @@ class GitHubCliWriter:
         """
         try:
             return self.ejecutar(argv, self.token)
-        except FileNotFoundError as error:
+        except OSError as error:
             raise GitHubWriteError(argv, f"no se pudo ejecutar «gh»: {error}") from error
         except subprocess.TimeoutExpired as error:
             raise GitHubWriteError(
