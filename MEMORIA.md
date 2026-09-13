@@ -30,7 +30,7 @@
 - Bloques del motor: 17 cerrado, 1 fuera_de_alcance, 2 pendiente.
 - Defectos registrados: 4 abierto, 35 cerrado.
 - Investigaciones: **9** (fotos con fecha; caducan).
-- Documentos: **128**, de los que **84** no declaran fecha.
+- Documentos: **129**, de los que **84** no declaran fecha.
 
 ## Qué se decidió: los ADR, del más reciente al más antiguo
 
@@ -401,6 +401,7 @@ nada por su cuenta. «Sin fecha declarada» es un aviso, no un dato.
 | 2026-08-28 | [Evidencia — el interruptor de profundidad](docs/audits/evidencia-interruptor-de-profundidad.md) |
 | sin fecha declarada | [Evidencia — Probar seis al azar no es probar](docs/audits/evidencia-mas-candidatos.md) |
 | sin fecha declarada | [Evidencia — cerrar S2: medir de verdad la calidad del investigador](docs/audits/evidencia-medir-investigador.md) |
+| 2026-09-13 | [Evidencia — Que una revisión sobreviva a ponerse al día con `main`](docs/audits/evidencia-mejora-la-revision-sobrevive-a-ponerse-al-dia.md) |
 | sin fecha declarada | [Evidencia — Los cuatro que responden, encontrados probándolos](docs/audits/evidencia-modelos-que-responden.md) |
 | sin fecha declarada | [Evidencia — Los modelos, sacados del servidor y no de un papel](docs/audits/evidencia-modelos-vivos.md) |
 | sin fecha declarada | [Evidencia — «Ocupado» no es «muerto», y confundirlos cuesta lo mismo](docs/audits/evidencia-ocupado-no-es-muerto.md) |
