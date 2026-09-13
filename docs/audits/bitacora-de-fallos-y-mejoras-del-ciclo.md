@@ -5587,6 +5587,68 @@ si la prueba prueba lo que dice, si el argumento se sostiene—, que es donde do
 revisores valen lo que cuestan. En contabilidad de prosa, no.
 ---
 
+### 108. H4 fusionado en `7aae33c` tras 14 rondas, y el defecto que ninguna ronda podía arreglar: un SHA escrito a mano que debe ser «este commit» (13-09-2026, 06:17 UTC)
+
+**El cierre.** El freno de convergencia disparó a las 06:16:11Z —`sin-progreso`,
+rondas 12 → 13 → 14, el par `(2, 4)` no mejora la mejor marca `(1, 1)`— y el
+propietario fusionó la PR #590 a las 06:17:18Z. Un minuto. Es exactamente lo que
+la **regla de parada** que él mismo había publicado minutos antes decía que
+pasara: la ronda 14 volvió con dos hallazgos, los dos **nacidos de su propia
+corrección** y autodeclarados como tales, así que la incidencia no encadenaba
+otra ronda.
+
+**Medido por mí sobre `main` YA FUSIONADO** (`7aae33c`),
+`scripts/diagnosticar_busqueda_del_banco.py`, código de salida 0:
+
+| configuración | exactos | de más | hallados | omisiones críticas |
+|---|---|---|---|---|
+| `--peticion` | **17/47** | **162** | **78/81** | **0** |
+| `--ejes --peticion` | **22/47** | **146** | **79/81** | **0** |
+
+Las mismas cuatro cifras de la predicción publicada **antes** de medir en la
+nota de arranque (`55d6995`): «el banco no se mueve en una sola cifra». Aguantó
+**14 rondas y 33 commits**.
+
+**El recuento de la revisión, que es el dato del que hay que aprender.** Desde la
+ronda 10 hasta la 14: **doce hallazgos, los doce prosa, cero de código**. El
+código de H4 no se tocó desde la ronda 2.
+
+**Y el hallazgo que vale por todos los demás: `CODEX-002` no se podía arreglar.**
+La sección «Validación obligatoria» transcribía un `compare` que debía terminar
+en «este head». La ronda 13 lo puso en `237a423c`; al escribirlo, el commit que
+lo escribía pasó a ser `5818d41a`, así que el SHA quedó siendo el **padre**.
+Codex lo señaló. La ronda 14 lo corrigió a `5818d41a`; al escribirlo, el commit
+pasó a ser `45e5c8fd`, y volvió a quedar siendo el padre. Codex lo señaló otra
+vez, con la misma frase.
+
+**No es torpeza del corrector: es imposible.** Un SHA literal que deba ser igual
+a «el commit que lo contiene» no puede existir, porque escribirlo crea un commit
+más nuevo. El punto fijo no existe. Las dos rondas son la demostración
+experimental, hecha dos veces con el mismo resultado.
+
+La salida es la que ya había encontrado la ronda 13 para la enumeración y que
+aquí no se aplicó: **quitar el literal**. Un rango escrito como
+`967a7a20..HEAD` —o producido por un guardián en el momento de comprobar— es
+correcto siempre; uno escrito como `967a7a20..<sha>` es falso en cuanto se
+guarda. Es el mismo movimiento de la ronda 8 («quita la forma que caduca, no la
+re-ancles»), y esta vertical lo ha tenido que redescubrir tres veces: para la
+terna, para la enumeración y para el compare.
+
+**Lo que queda abierto**, y va a incidencia de seguimiento por la regla de
+parada, ya fusionado en `main`:
+
+1. `CODEX-001` (P2): la sección 6 dice «siete ocurrencias» donde el barrido
+   devuelve trece, siete de ellas agrupadas en seis pasajes. Falta decir «siete
+   ocurrencias agrupadas en seis pasajes» para que el desglose sume trece.
+2. `CODEX-002` (P2): el `compare` de «Validación obligatoria» termina en
+   `5818d41a`, padre del head fusionado. **No se arregla poniendo `45e5c8fd`**
+   —eso reabre el mismo bucle—: se arregla retirando el literal.
+
+**Estado de la línea de memoria de ADR-148**: H1, H2, H5, la palanca 3 y ahora
+H4, todos en `main`. H3 y `B04-CA-30`/`MEM-001` siguen siendo huecos medidos con
+su precio escrito, por decisión del propietario del 12-09.
+---
+
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
 
 1. `ollama_category_classifier.py`: ruta relativa y sin
