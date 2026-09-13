@@ -426,15 +426,30 @@ enumerado para que el ancla sea auditable, porque enunciarlo de menos ya costó
 un hallazgo: (1) el commit que transcribe la cola añade, además de la
 transcripción que sigue, el reanclado de `beffc7a1` a `967a7a20` en la
 explicación de la distancia entre recuentos, doce líneas más abajo en esta
-misma sección; y (2) la ronda 11 corrige docstrings, comentarios `#:` y esta
+misma sección; (2) la ronda 11 corrige docstrings, comentarios `#:` y esta
 ficha —la sección 6, la de alternativas y «La lección»—, sin una sola línea
 ejecutable de `src/**` ni de `tests/**`, así que no añade ni retira ningún caso
-recolectado y la terna sigue siendo la de su árbol.
+recolectado y la terna sigue siendo la de su árbol; y (3) el último commit de
+la ronda 11 añade la transcripción de la cadena que esa ronda corrió sobre el
+árbol de `0878b95f`, la que va más abajo.
 
 ```
 6391 passed, 17 skipped, 2 xfailed in 477.56s (0:07:57)
 EXIT_CODE_CHECK=0
 ```
+
+La ronda 11 volvió a correr la cadena entera sobre **su** árbol, el de
+`0878b95f`, y va anclada igual —no sustituye a la de arriba, la acompaña:
+
+```
+6391 passed, 17 skipped, 2 xfailed in 499.27s (0:08:19)
+EXIT_CODE_CHECK=0
+```
+
+Que la terna coincida al caso es la comprobación de lo que la enumeración de
+arriba afirma: la ronda 11 no movió una línea ejecutable, así que no podía
+mover el recuento. Lo único que este commit añade sobre el árbol de `0878b95f`
+es esta transcripción.
 
 **Esa terna es la de su árbol y no pretende ser la del head vigente**, y ésta
 fue la corrección de fondo de la ronda 8: las dos rondas anteriores fallaron por
