@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import shlex
 import sys
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
@@ -109,6 +110,18 @@ class _EscritorDeEnsayo:
         # y si algún día se llamara, «no hay ninguna» es la única respuesta
         # que no inventa estado.
         return None
+
+
+def _ruta_copiable(ruta: Path) -> str:
+    """``ruta`` tal y como hay que teclearla en una consola, entrecomillada si hace falta.
+
+    Sin esto, una ruta con espacios -«/tmp/Sirius motor/diario.jsonl»- se parte
+    al copiar la instrucción: el intérprete da «/tmp/Sirius» a `--diario` y el
+    resto al `mensaje` posicional, y `sirius-motor` abre otro diario sin
+    protestar. `shlex.quote` deja la ruta intacta cuando no lo necesita, que es
+    el caso corriente.
+    """
+    return shlex.quote(str(ruta))
 
 
 def _diario_de_despacho(diario_del_motor: Path) -> Path:
@@ -318,7 +331,7 @@ def main(
             linea("detrás. No se borra ni se cancela solo: el diario es append-only y")
             linea("cancelarlo es tu decisión, no la de este comando.")
             linea("Para verlo junto a todo lo demás que espera decisión, abre la sesión")
-            linea(f"«sirius-motor --diario {diario_efectivo}» y teclea «/trabajos».")
+            linea(f"«sirius-motor --diario {_ruta_copiable(diario_efectivo)}» y teclea «/trabajos».")
         return 3
 
     assert resultado.work_item is not None

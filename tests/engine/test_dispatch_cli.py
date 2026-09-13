@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import io
 import json
+import shlex
 from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
@@ -408,6 +409,28 @@ def test_investiga_despacha_con_la_etiqueta_de_activacion_y_el_perfil_investigad
     assert args_etiqueta["etiqueta"] == ETIQUETA_ACTIVACION
 
 
+def test_la_ruta_del_diario_sale_copiable_aunque_tenga_espacios(tmp_path: Path) -> None:
+    """La instrucción de recuperación se copia y se pega: tiene que sobrevivir al
+    intérprete de la consola. Con una ruta con espacios, sin entrecomillar, el
+    comando se parte -«/tmp/Sirius» a `--diario` y el resto al `mensaje`
+    posicional- y `sirius-motor` abre otro diario sin protestar (CODEX-001).
+
+    Antes del cambio fallaba en la primera aserción: el texto llevaba la ruta
+    desnuda, y `shlex.split` devolvía cinco argumentos en vez de tres.
+    """
+    directorio = tmp_path / "Sirius motor"
+    directorio.mkdir()
+    diario = directorio / "diario.jsonl"
+    codigo, texto = _correr(["Borra la base de produccion", "--ejecutar"], diario=diario)
+
+    assert codigo == 3, texto
+    linea = next(l for l in texto.splitlines() if "sirius-motor --diario" in l)
+    comando = linea[linea.index("«") + 1 : linea.index("»")]
+    assert shlex.split(comando) == ["sirius-motor", "--diario", str(diario)], (
+        "la ruta tiene que llegar entera como valor de --diario, no partida en dos"
+    )
+
+
 def test_una_parada_dice_donde_queda_el_trabajo_y_como_volver_a_el(tmp_path: Path) -> None:
     """ADR-184. Una parada crea el trabajo en `needs_decision` y NO lo despacha,
     así que queda anotado en el diario sin incidencia detrás. Eso está bien -es
@@ -432,7 +455,7 @@ def test_una_parada_dice_donde_queda_el_trabajo_y_como_volver_a_el(tmp_path: Pat
     # argumentos resuelve OTRO diario -el suyo por defecto, o el de
     # `SIRIUS_MOTOR_DIARIO`-, así que la instrucción sin ruta lleva a una
     # sesión vacía (`cli.resolver_diario`).
-    assert f"sirius-motor --diario {diario}" in texto, (
+    assert f"sirius-motor --diario {shlex.quote(str(diario))}" in texto, (
         "el paso indicado tiene que abrir ESTE diario, no el que resuelva por defecto"
     )
 
