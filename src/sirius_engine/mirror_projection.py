@@ -343,7 +343,6 @@ _LABEL_STATE: dict[str, tuple[WorkItemState, WorkItemPhase | None]] = {
     "sirius:planned": (WorkItemState.PLANNED, WorkItemPhase.PREPARAR),
     "sirius:implement-requested": (WorkItemState.PLANNED, WorkItemPhase.PREPARAR),
     "sirius:implementing": (WorkItemState.ACTIVE, WorkItemPhase.EJECUTAR),
-    "sirius:audit-requested": (WorkItemState.ACTIVE, WorkItemPhase.EJECUTAR),
     "sirius:ci-pending": (WorkItemState.ACTIVE, WorkItemPhase.COMPROBAR),
     "sirius:review-requested": (WorkItemState.ACTIVE, WorkItemPhase.REVISAR),
     "sirius:reviewing": (WorkItemState.ACTIVE, WorkItemPhase.REVISAR),
@@ -362,7 +361,6 @@ _LABEL_PRIORITY: tuple[str, ...] = (
     "sirius:planned",
     "sirius:implement-requested",
     "sirius:implementing",
-    "sirius:audit-requested",
     "sirius:ci-pending",
     "sirius:review-requested",
     "sirius:reviewing",
@@ -375,20 +373,39 @@ _LABEL_PRIORITY: tuple[str, ...] = (
 )
 
 
-# Único par de etiquetas de estado que puede coexistir sin ser una
-# contradicción: `sirius_validate_activation.sh` EXIGE `sirius:planned` y
-# `implement-sirius-work.yml` retira las dos juntas al consumir el evento
-# (scripts/automation/sirius_reconcile.sh:250-268, auditoría de la PR #146).
-_PAR_DE_ACTIVACION_VALIDO = frozenset({"sirius:planned", "sirius:implement-requested"})
-
-
 def _estado_y_fase(
     etiquetas: Sequence[str],
 ) -> tuple[WorkItemState | None, WorkItemPhase | None, bool]:
+    """Qué `(estado, fase)` proyectan las etiquetas, y si se contradicen.
+
+    Hay contradicción cuando las etiquetas presentes apuntan a `(estado,
+    fase)` DISTINTOS, no cuando hay más de una. Varias etiquetas que apuntan
+    al mismo sitio no son un desacuerdo: son el mismo hecho dicho dos veces, y
+    el espejo proyecta ese sitio sin marcar nada.
+
+    Antes se contaban las etiquetas y se eximía a mano la única pareja que
+    alguien se acordó de escribir, `sirius:planned` + `sirius:implement-requested`.
+    Reproducido el 12-09-2026 sobre la incidencia real #592: con
+    `sirius:repair-requested` y `sirius:repairing` a la vez -las dos son
+    `(ACTIVE, REPARAR)`, y conviven desde que se aplica la etiqueta de encargo
+    hasta que el run que la consume la retira (`repair-sirius-work.yml:597-617`
+    añade `sirius:repairing` y retira `sirius:repair-requested` antes de
+    arrancar al corrector), de forma indefinida si ese run muere antes-
+    la proyección devolvía `(None, None, True)` y el tablero de ADR-175 le
+    decía al propietario que sus etiquetas se contradecían en una incidencia
+    que iba perfectamente (ADR-181).
+
+    Derivarlo de :data:`_LABEL_STATE` exime hoy 3 de las 66 parejas del
+    vocabulario -activación, revisión y reparación- y deja las 63
+    restantes como contradicción, así que la puerta no se debilita:
+    `sirius:completed` junto a `sirius:failed-safely` apuntan a estados
+    distintos y siguen dándola. Y una fila nueva en la tabla entra sola, sin
+    que nadie tenga que acordarse de ampliar una lista.
+    """
     presentes = set(etiquetas) & _LABEL_STATE.keys()
     if not presentes:
         return None, None, False
-    if len(presentes) > 1 and presentes != _PAR_DE_ACTIVACION_VALIDO:
+    if len({_LABEL_STATE[etiqueta] for etiqueta in presentes}) > 1:
         return None, None, True
     reconocida: str | None = None
     for candidata in _LABEL_PRIORITY:

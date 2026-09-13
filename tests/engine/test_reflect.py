@@ -205,7 +205,7 @@ def _work_item_activo(store: InMemoryWorkEngineStore) -> WorkItem:
 @pytest.mark.parametrize(
     ("estado_objetivo", "fase_objetivo", "kinds_esperados"),
     [
-        # sirius:implementing / sirius:audit-requested
+        # sirius:implementing
         (WorkItemState.ACTIVE, WorkItemPhase.EJECUTAR, (PASO_EJECUCION_INICIADA,)),
         # sirius:ci-pending
         (

@@ -235,6 +235,38 @@ def test_un_trabajo_sin_despachar_todavia_no_produce_linea_ni_falla(tmp_path: Pa
 
 
 def test_una_clase_sin_autoridad_de_incidencia_se_ignora(tmp_path: Path) -> None:
+    """Una clase nativa del motor no tiene incidencia que gobierne su estado: nada que medir.
+
+    Hasta ADR-178 el ejemplo era DOCUMENTACION, y fijaba la copia vieja de la
+    tabla de autoridad: documentación existe en la vía GitHub desde ADR-088.
+    `CONSULTA_LARGA` sí es nativa del motor.
+    """
+    store = InMemoryWorkEngineStore()
+    journal = InMemoryDispatchJournal()
+    _preparar_trabajo_activo(
+        store, journal, work_id="WI-CONSULTA", clase=WorkItemClass.CONSULTA_LARGA
+    )
+    registro = tmp_path / "registro.jsonl"
+
+    _correr(
+        registro=registro,
+        diario=tmp_path / "diario.jsonl",
+        store=store,
+        journal=journal,
+        mirror=_mirror_verde(),
+    )
+
+    assert leer_registro(registro) == (), (
+        "consulta larga tiene autoridad MOTOR: nada que comparar contra una incidencia "
+        "que no gobierna su estado"
+    )
+
+
+def test_documentacion_entra_en_la_medicion_desde_adr_177(tmp_path: Path) -> None:
+    """El defecto de ADR-178 visto desde el contador: diez encargos reales de
+    documentación corrieron enteros en GitHub y esta pasada no midió ninguno,
+    porque la tabla de autoridad decía MOTOR. Ahora se miden como los de
+    programación."""
     store = InMemoryWorkEngineStore()
     journal = InMemoryDispatchJournal()
     _preparar_trabajo_activo(store, journal, work_id="WI-DOC", clase=WorkItemClass.DOCUMENTACION)
@@ -248,10 +280,9 @@ def test_una_clase_sin_autoridad_de_incidencia_se_ignora(tmp_path: Path) -> None
         mirror=_mirror_verde(),
     )
 
-    assert leer_registro(registro) == (), (
-        "documentación tiene autoridad MOTOR (ADR-041): nada que comparar contra una "
-        "incidencia que no gobierna su estado"
-    )
+    lineas = leer_registro(registro)
+    assert len(lineas) == 1
+    assert lineas[0].clase is WorkItemClass.DOCUMENTACION
 
 
 def test_la_pasada_no_cambia_la_autoridad_de_ninguna_clase(tmp_path: Path) -> None:
