@@ -395,7 +395,8 @@ def test_la_mencion_entre_comillas_sigue_parando_y_esta_declarado() -> None:
 # #607 se mandó al ciclo automático, el encargo hizo el trabajo entero y lo
 # perdió en el push. Estas pruebas fijan las dos direcciones, porque la medida
 # de ADR-188 dice que la segunda es la corriente: de los 29 encargos del diario
-# del motor que nombran la carpeta, 28 la nombran **para excluirla**.
+# del motor que nombran la carpeta, uno solo declara alcance sobre ella y 19 la
+# nombran **negada, para excluirla**.
 
 _PERMISOS = CausaEscalado.PERMISOS_O_CREDENCIALES_SENSIBLES
 
@@ -453,8 +454,9 @@ def test_una_orden_que_solo_prohibe_tocar_esa_carpeta_se_sigue_despachando(mensa
 
     La quinta causa reutiliza `_marcador_pedido` -la maquinaria de ADR-184- en
     vez de buscar la subcadena, justamente por esto. Con la subcadena a secas
-    estas cuatro pararían, y con ellas 28 de los 29 encargos del diario que
-    nombran la carpeta: la puerta sería inservible el mismo día que entra.
+    estas cuatro pararían, y con ellas los 28 encargos del diario que nombran la
+    carpeta SIN declarar alcance sobre ella -19 de ellos negándola, como estas
+    cuatro-: la puerta sería inservible el mismo día que entra.
     """
     signal = interpretar_intencion_v0(mensaje)
     assert signal.tipo is TipoIntencion.ORDEN_INEQUIVOCA

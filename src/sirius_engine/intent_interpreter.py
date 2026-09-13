@@ -437,11 +437,12 @@ def _prefijo_vetado_pedido(normalizado: str) -> str | None:
     prohíbe en vez de pedir (ADR-184).
 
     Que la reutilice no es ahorro de líneas, es lo que hace utilizable la
-    puerta. De los 29 encargos del diario del motor que nombran la carpeta, 28
-    la nombran para EXCLUIRLA -«no toques `.github/**` (ADR-002)»- y uno solo
-    declaró alcance sobre ella. Sin la negación, la puerta pararía las 29; con
-    ella para 9. La medida entera está en ADR-188, incluido lo que sigue
-    parando de más y por qué se acepta.
+    puerta. De los 29 encargos del diario del motor que nombran la carpeta, uno
+    solo declaró alcance sobre ella y 19 la nombran NEGADA, para excluirla -«no
+    toques `.github/**` (ADR-002)»-; el resto son condicionales, encabezados de
+    exclusión, menciones de lectura y una referencia a un módulo de Python. Sin
+    la negación, la puerta pararía las 29; con ella para 9. La medida entera
+    está en ADR-188, incluido lo que sigue parando de más y por qué se acepta.
     """
     for prefijo, patron in _RUTAS_VETADAS:
         sustituido = patron.sub(f" {_MARCADOR_DE_RUTA_VETADA} ", normalizado)

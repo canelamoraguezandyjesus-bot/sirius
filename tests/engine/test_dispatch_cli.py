@@ -576,7 +576,7 @@ def test_una_orden_que_no_toca_esa_carpeta_se_sigue_despachando_como_hoy(tmp_pat
     """La otra mitad, exigida por el encargo: no debilitar lo que ya hay.
 
     Una orden legítima -incluida la que nombra la carpeta solo para excluirla,
-    que es como están escritas 28 de las 29 del diario- tiene que llegar al
+    que es como están escritas 19 de las 29 del diario- tiene que llegar al
     despachador igual que antes.
     """
     orden = "Corrige la referencia rota a la seccion 6.7 del contrato. No toques `.github/**`."
@@ -585,3 +585,57 @@ def test_una_orden_que_no_toca_esa_carpeta_se_sigue_despachando_como_hoy(tmp_pat
     assert codigo == 0, texto
     assert "cuerpo que llevaría la incidencia" in texto
     assert "NO lo he despachado" not in texto
+
+
+def test_una_parada_por_una_causa_anterior_no_promete_el_despacho_de_la_quinta(
+    tmp_path: Path,
+) -> None:
+    """La quinta explica; las cuatro anteriores ganan. El bloque no puede hacer las dos cosas.
+
+    Esta orden dispara las dos: es destructiva Y nombra la carpeta vetada. El
+    intérprete consulta la quinta DESPUÉS, así que para por destructiva -lo fija
+    `test_las_cuatro_causas_anteriores_siguen_ganando_a_la_quinta`-. El comando,
+    en cambio, decidía mirando SOLO el texto de la orden, así que imprimía el
+    bloque entero de ADR-188 encima de una causa que no era la suya: atribuía la
+    parada al alcance («Por eso la parada ocurre AQUÍ») dos líneas después de
+    haber anunciado otra causa, y remataba prometiendo que negando la mención de
+    la carpeta la orden se despacharía. No se despacharía: volvería a parar por
+    destructiva. Un mensaje que promete un despacho que no va a ocurrir es la
+    misma familia que uno que promete un sitio vacío, que es la que ADR-184
+    cerró para este mismo mensaje.
+
+    Antes del cambio fallaba con ``AssertionError`` en la aserción de la
+    promesa: el texto traía «vuelve a despachar» y el «no toques .github/**».
+    """
+    orden = "Borra la cola y arregla .github/workflows/quality.yml"
+    codigo, texto = _correr([orden, "--ejecutar"], diario=tmp_path / "diario.jsonl")
+
+    assert codigo == 3, texto
+    assert "operacion_destructiva_o_irreversible" in texto, (
+        "la causa que para sigue siendo la anterior, y es la que se anuncia"
+    )
+    assert "vuelve a despachar" not in texto, (
+        "negando la carpeta esta orden NO se despacha: sigue parando por destructiva"
+    )
+    assert "sesión interactiva" not in texto, (
+        "ADR-002 no manda este trabajo a ninguna parte: no paró por el alcance"
+    )
+    assert "la parada ocurre AQUÍ" not in texto, (
+        "la parada no la produjo el alcance, así que no puede atribuírsele"
+    )
+
+
+def test_la_quinta_causa_sigue_dando_su_bloque_cuando_es_ella_la_que_para(
+    tmp_path: Path,
+) -> None:
+    """La otra mitad de la anterior, para que el arreglo no sea «no imprimir nunca».
+
+    Sin esta, apagar el bloque entero dejaría la prueba de arriba en verde y
+    borraría lo que ADR-188 vino a añadir.
+    """
+    orden = "Implementa el aviso que falta en `.github/workflows/despachar-orden.yml`"
+    codigo, texto = _correr([orden, "--ejecutar"], diario=tmp_path / "diario.jsonl")
+
+    assert codigo == 3, texto
+    assert "sesión interactiva" in texto
+    assert "vuelve a despachar" in texto

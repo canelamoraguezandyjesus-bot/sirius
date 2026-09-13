@@ -86,9 +86,21 @@ que es la incidencia #607 y acabó en `cancelled` tras pasar por
 `needs_decision`. Y se decide igualmente, porque una puerta que depende de que
 nadie se despiste es justo la familia que hay que cerrar.
 
-Los otros 28 nombran la carpeta **para excluirla**: «no toques `.github/**`
-(ADR-002)», «Ni `.github/**` ni ningún workflow cambian», «PROHIBICIONES DURAS:
-no tocar `.github/**`». La mención dice exactamente lo contrario del alcance.
+Los otros 28 **no** declaran alcance, pero no lo hacen todos de la misma
+manera, y decir «los 28 la nombran para excluirla» afirmaría más de lo que esta
+misma medida sostiene: la tabla de falsos positivos de más abajo lista
+condicionales y una mención de *lectura*, y la frontera de ruta descarta uno que
+no nombra la carpeta en absoluto. De las 29 apariciones, leídas una por una:
+
+| Qué es la mención | Cuántas |
+|---|---|
+| Declara alcance de verdad | 1 |
+| La nombra **negada**, para excluirla: «no toques `.github/**` (ADR-002)», «Ni `.github/**` ni ningún workflow cambian», «PROHIBICIONES DURAS: no tocar `.github/**`» | 19 |
+| No es la carpeta: `sirius_engine.ports.github_mirror`, un módulo de Python | 1 |
+| Condicionales, paréntesis, encabezados de exclusión y menciones de lectura (las 8 de la tabla de más abajo) | 8 |
+
+Las 19 negadas son las que dicen exactamente lo contrario del alcance, y son las
+que la maquinaria de ADR-184 descarta sin una línea nueva de detección.
 
 ### ¿Basta el objetivo en lenguaje natural? Tres variantes, medidas
 
@@ -104,9 +116,8 @@ escalaría; «acierta» = el encargo declaraba alcance de verdad.
 La frontera de ruta de B quita un falso positivo que A tenía y que no era
 lingüístico sino de tokenización: `sirius_engine.ports.github_mirror` contiene
 `.github`. La maquinaria de ADR-184 —`_marcador_pedido`, que solo cuenta una
-aparición si **no va negada**— quita 19 de las 28 menciones que excluían la
-carpeta, sin una línea nueva de detección: son las que llevan `no`, `ni` o `sin`
-delante.
+aparición si **no va negada**— quita 19 de las 29 apariciones, sin una línea
+nueva de detección: son las que llevan `no`, `ni` o `sin` delante.
 
 Los 8 falsos positivos que B conserva, con la frase exacta que los dispara:
 
@@ -193,6 +204,13 @@ ningún ciclo, que es lo que costó una hora de motor en #607.
 - Las pruebas nuevas están en `tests/engine/test_intent_interpreter.py` y
   `tests/engine/test_dispatch_cli.py`, y cada regla nueva se vio caer con su
   mutación; las mutaciones y lo que rompió cada una están anotadas en la PR.
+- Que el bloque de esta causa NO se emita sobre una parada de las cuatro
+  anteriores lo fija
+  `test_una_parada_por_una_causa_anterior_no_promete_el_despacho_de_la_quinta`,
+  y que siga emitiéndose cuando sí es la quinta —para que el arreglo no sea
+  «no imprimirlo nunca»—
+  `test_la_quinta_causa_sigue_dando_su_bloque_cuando_es_ella_la_que_para`.
+  Las dos direcciones se vieron caer con su mutación.
 - Las cuatro causas anteriores no se tocaron: sus pruebas siguen en verde sin
   retocarlas, y la quinta se consulta **después** de ellas, así que ninguna
   entrada que antes daba una de las cuatro da otra cosa ahora.
@@ -202,6 +220,18 @@ ningún ciclo, que es lo que costó una hora de motor en #607.
 - Un encargo que nombre una ruta bajo `.github/` sin negarla no llega al ciclo
   automático: queda anotado en `needs_decision`, sin incidencia detrás, y el
   mensaje remite a la sesión interactiva con la orden lista para copiar.
+- Ese mensaje se emite **solo cuando quien paró fue la quinta causa**, y no cada
+  vez que la orden nombra la carpeta. Una orden puede disparar las dos cosas
+  —«Borra la cola y arregla `.github/workflows/quality.yml`»— y entonces gana la
+  causa anterior. Decidiendo por el texto de la orden, el mensaje atribuía la
+  parada al alcance sobre una causa que no era la suya y remataba prometiendo
+  que negando la mención la orden se despacharía: no se despacharía, volvería a
+  parar por destructiva. Prometer un despacho que no va a ocurrir es la misma
+  familia que prometer un sitio vacío, la que ADR-184 cerró para este mismo
+  mensaje. Lo que distingue es el **motivo** que la señal ya trae interpretado:
+  la quinta escribe «el alcance declarado cae bajo …» y las cuatro anteriores
+  «el mensaje pide …» (la causa sola no sirve: la quinta comparte
+  `permisos_o_credenciales_sensibles` con la tercera).
 - **Para de más, y está medido:** 8 de 87 encargos del corpus (9 %) se habrían
   parado sin necesitarlo, y 6 de ellos acabaron entregados. La salida no es un
   interruptor: es redactar la mención como exclusión —«no toques `.github/**`»—,
