@@ -351,10 +351,13 @@ La primera línea de cada fallo:
   releyendo `git show origin/estado-del-motor:diario.jsonl` y pasando cada
   `peticion_original` por los dos criterios.
 - Las cuatro validaciones obligatorias, en verde, sobre el árbol de la rama:
-  una sola invocación de `pwsh -File scripts/check.ps1` sobre el árbol de
-  `4b71b0eb`, el head de la ronda 3, da **6426 passed, 17 skipped, 2 xfailed**
-  en 520.01 s y **código de salida 0**. Las cifras de las rondas anteriores
-  quedan ancladas a su propio árbol, arriba.
+  `pwsh -File scripts/check.ps1` sobre el árbol de `3ed94aa5` —el head de la
+  ronda 3 con todo el código y todas las pruebas ya dentro— da **6426 passed,
+  17 skipped, 2 xfailed** en 509.73 s y **código de salida 0**. La misma cadena
+  sobre `4b71b0eb`, que llevaba ese mismo `src/` y ese mismo `tests/`, dio las
+  mismas 6426 en 520.01 s. Lo único que cambia después de esa medición es la
+  prosa de este ADR. Las cifras de las rondas anteriores quedan ancladas a su
+  propio árbol, arriba.
 
 ### Ronda 3: el subjuntivo, el corte incondicional, la doble negación y la ruta
 
