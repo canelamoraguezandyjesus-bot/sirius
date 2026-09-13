@@ -5717,6 +5717,58 @@ propietario.
 del propietario.
 ---
 
+### 111. La puerta de la memoria ya se puede abrir por pasos: ADR-185 en `main` (`e36fc55`), aprobado a la PRIMERA ronda (13-09-2026, 08:27 UTC)
+
+**Lo que entra.** `src/sirius/config/memory_gates.py`: `puertas_de_memoria()`,
+función pura sobre un `dataclass(frozen=True)` de tres booleanos.
+`composition_root` la lee **una vez** y cablea cada pieza por su interruptor:
+`staged_engine_enabled` (motor + índices + siembra), `query_intent_enabled`
+(petición propia, **solo si el motor también está encendido**) y
+`relevance_filter_enabled` (filtro + techo + camino de puerta abierta).
+`category_matching_enabled` conserva intacto su significado de §6.3: enciende
+las tres.
+
+**Y no abre nada.** Comprobado sobre `main` ya fusionado: el banco da
+`17/47; 162; 78/81; 0`, salida 0 —la misma cifra de siempre—, y las **16**
+pruebas de `test_composition_root_relevance_gate.py` pasan, las **siete
+originales intactas**, que es la definición de «idéntico a hoy».
+
+**Una ronda. Una.** Contra las 14 de H4. La diferencia no es suerte:
+
+| H4 (#581) | esta (#603) |
+|---|---|
+| el ADR afirmaba cosas sobre su propio árbol —anclas, recuentos, distancias— | el encargo **prohibió por escrito** esa forma: «sin enumerar a mano la distancia entre commits ni clavar un SHA como este head» |
+| cada cifra de completitud nacía más ancha que su barrido | «junto a cada cifra, el comando y el árbol que la produjeron» |
+| 12 hallazgos desde la ronda 10, los 12 prosa | 0 hallazgos |
+
+**Lo que costó igualmente, y no es del encargo**: `main` se movió **dos veces**
+durante la revisión (ADR-182 y ADR-183), la PR quedó `dirty` por `MEMORIA.md`
+—generado— y, al traer `main`, la guarda **nueva** de ADR-182 exigía que
+ADR-185 tuviera entrada en el registro de defectos. Tercera vez que una guarda
+recién fusionada cae sobre una rama abierta (entradas 101 y 104). El
+propietario autorizó actualizar; la mezcla se hizo en tres commits y **los
+guardianes cazaron dos errores míos antes de empujar**:
+
+1. di de alta el defecto como `H-37`, y `main` ya había ocupado ese id con
+   ADR-183 → `test_ningun_identificador_repetido`;
+2. no regeneré `MEMORIA.md` tras tocar el registro, porque **el generador lee
+   también `registro_defectos.yml`** (`sirius_engine/memoria.py:42`), cosa que
+   yo no sabía → `test_la_memoria_confirmada_en_este_arbol_esta_al_dia`.
+
+Las dos son exactamente lo que un guardián debe hacer: convertir en rojo lo que
+yo habría empujado en verde creyendo que estaba bien. Es la tesis de la entrada
+107 comprobada sobre mí mismo.
+
+**El propietario fusionó a mano** en cuanto Quality pasó, para no pagar la
+re-revisión que el motor repone solo (ADR-142) cuando el head aprobado caduca.
+Es legítimo y está registrado: la aprobación dual cubría `cc493c63` y los tres
+commits añadidos eran la mezcla, la regeneración y 13 líneas de registro.
+
+**Lo que queda, y es la secuencia que compra esta pieza**: abrir de uno en uno
+—motor (determinista, sin Ollama), petición propia, filtro—, cada uno con su
+medición en la máquina del propietario. Hasta hoy eso no se podía ni intentar.
+---
+
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
 
 1. `ollama_category_classifier.py`: ruta relativa y sin
