@@ -168,6 +168,10 @@ for line in raw.splitlines():
       comment)
         bf=""; prev=""
         for a in "$@"; do [ "$prev" = "--body-file" ] && bf="$a"; prev="$a"; done
+        if [ -f "$D/comment_fails" ] && [ -n "$bf" ] \
+          && grep -q 'sirius-quality-sin-encaminar' "$bf"; then
+          echo "gh: HTTP 502 publicando" >&2; exit 1
+        fi
         if [ -n "$bf" ]; then
           cat "$bf" >> "$D/comments_${num}.txt"
           printf '\n' >> "$D/comments_${num}.txt"
@@ -308,6 +312,12 @@ def test_implementer_ready_for_review_with_pr(tmp_path: Path) -> None:
         env, ["sirius:implementing"], comments="PR abierta: https://github.com/owner/repo/pull/9\n"
     )
     _seed_pr(env, 9, head="c4d482267d9a")
+    # ADR-183: con cero runs de Quality para el head, el paso ya no termina en
+    # verde —ese silencio era el fallo—, así que estas pruebas de forma del
+    # marcador se sitúan en el caso ordinario: Quality corriendo para el head.
+    _seed_quality_runs(
+        env, "c4d482267d9a", [{"id": 556, "status": "in_progress", "conclusion": None}]
+    )
     vf = _verdict_file(tmp_path, {"verdict": "READY_FOR_REVIEW", "summary": "listo"})
     r = _run(env, "implementer", vf)
     assert r.returncode == 0, r.stdout + r.stderr
@@ -1256,6 +1266,12 @@ def test_corrector_fixed_with_cycle_marker(tmp_path: Path) -> None:
         env, ["sirius:repairing"], comments="PR abierta: https://github.com/owner/repo/pull/9\n"
     )
     _seed_pr(env, 9, head="d5e5f5061234")
+    # ADR-183: con cero runs de Quality para el head, el paso ya no termina en
+    # verde —ese silencio era el fallo—, así que estas pruebas de forma del
+    # marcador se sitúan en el caso ordinario: Quality corriendo para el head.
+    _seed_quality_runs(
+        env, "d5e5f5061234", [{"id": 556, "status": "in_progress", "conclusion": None}]
+    )
     vf = _verdict_file(tmp_path, {"verdict": "FIXED", "summary": "corregido"})
     r = _run(env, "corrector", vf, cycle="1")
     assert r.returncode == 0, r.stdout + r.stderr
@@ -1359,6 +1375,12 @@ def test_corrector_fixed_firma_el_marcador_con_su_run(tmp_path: Path) -> None:
         env, ["sirius:repairing"], comments="PR abierta: https://github.com/owner/repo/pull/9\n"
     )
     _seed_pr(env, 9, head="d5e5f5061234")
+    # ADR-183: con cero runs de Quality para el head, el paso ya no termina en
+    # verde —ese silencio era el fallo—, así que estas pruebas de forma del
+    # marcador se sitúan en el caso ordinario: Quality corriendo para el head.
+    _seed_quality_runs(
+        env, "d5e5f5061234", [{"id": 556, "status": "in_progress", "conclusion": None}]
+    )
     vf = _verdict_file(tmp_path, {"verdict": "FIXED", "summary": "corregido"})
     r = _run(env, "corrector", vf, cycle="1")
     assert r.returncode == 0, r.stdout + r.stderr
@@ -1375,6 +1397,12 @@ def test_corrector_fixed_sin_entorno_de_run_firma_manual(tmp_path: Path) -> None
         env, ["sirius:repairing"], comments="PR abierta: https://github.com/owner/repo/pull/9\n"
     )
     _seed_pr(env, 9, head="d5e5f5061234")
+    # ADR-183: con cero runs de Quality para el head, el paso ya no termina en
+    # verde —ese silencio era el fallo—, así que estas pruebas de forma del
+    # marcador se sitúan en el caso ordinario: Quality corriendo para el head.
+    _seed_quality_runs(
+        env, "d5e5f5061234", [{"id": 556, "status": "in_progress", "conclusion": None}]
+    )
     vf = _verdict_file(tmp_path, {"verdict": "FIXED", "summary": "corregido"})
     r = _run(env, "corrector", vf, cycle="1")
     assert r.returncode == 0, r.stdout + r.stderr
@@ -1393,6 +1421,12 @@ def test_implementer_ready_no_cambia_de_forma_con_entorno_de_run(tmp_path: Path)
         env, ["sirius:implementing"], comments="PR abierta: https://github.com/owner/repo/pull/9\n"
     )
     _seed_pr(env, 9, head="d5e5f5061234")
+    # ADR-183: con cero runs de Quality para el head, el paso ya no termina en
+    # verde —ese silencio era el fallo—, así que estas pruebas de forma del
+    # marcador se sitúan en el caso ordinario: Quality corriendo para el head.
+    _seed_quality_runs(
+        env, "d5e5f5061234", [{"id": 556, "status": "in_progress", "conclusion": None}]
+    )
     vf = _verdict_file(tmp_path, {"verdict": "READY_FOR_REVIEW", "summary": "listo"})
     r = _run(env, "implementer", vf)
     assert r.returncode == 0, r.stdout + r.stderr
@@ -1861,13 +1895,136 @@ def test_un_quality_en_curso_no_se_relanza(tmp_path: Path) -> None:
     assert "sirius-quality-relanzado" not in _comments(env)
 
 
-def test_sin_runs_de_quality_no_se_relanza_nada(tmp_path: Path) -> None:
+def test_sin_ningun_run_de_quality_la_incidencia_se_encamina_y_no_espera(tmp_path: Path) -> None:
+    """ADR-183: cero runs para el head NO es «ya llegará su cierre».
+
+    Reproducido el 12-09-2026 en la incidencia #594: el corrector empujó
+    `1c408f86`, GitHub no creó ningún run de Quality para ese sha y el paso
+    imprimió «Sin run de Quality terminado para …» y terminó en verde con un
+    `return 0` mudo. La incidencia se quedó en `sirius:ci-pending` esperando un
+    `workflow_run` que nadie podía emitir —no había ningún run que cerrar— y no
+    avisó a nadie. Aquí se fija lo contrario: sigue en `ci-pending`, no se
+    relanza nada (no hay id que relanzar), el paso queda ROJO y el aviso llega
+    a la incidencia como en los otros tres modos de fallo.
+    """
     env = _setup(tmp_path)
-    vf = _implementador_listo(env, tmp_path, "c4d482267d9a")
+    head = "c4d482267d9a"
+    vf = _implementador_listo(env, tmp_path, head)
+    r = _run(env, "implementer", vf)
+    assert r.returncode != 0, "la parada en silencio es el fallo: el paso tiene que quedar rojo"
+    assert "QUALITY_RUNS c4d482267d9a" in _actions_log(env), "tiene que consultar los runs"
+    assert "RERUN" not in _actions_log(env), "sin runs no hay id con el que relanzar"
+    assert "sin-runs-para-el-head" in r.stdout + r.stderr
+    assert "sirius:ci-pending" in _labels(env)
+    assert "sirius:failed-safely" not in _labels(env)
+    comments = _comments(env)
+    assert f"sirius-quality-sin-encaminar:{head}:sin-runs-para-el-head" in comments
+    assert "## QUALITY_SIN_ENCAMINAR" in comments
+    assert "NINGUNO" in comments, "el aviso dice que la consulta no encontró ningún run"
+    assert "Actions → Re-run all jobs" not in comments, (
+        "no se puede mandar al operador a relanzar un run que no existe"
+    )
+    # La lista vacía solo demuestra que la consulta no encontró nada: puede que
+    # se adelantara a la creación o a la indexación del run. El aviso describe
+    # la observación, no un hecho sobre lo que GitHub hizo.
+    assert "GitHub no creó" not in comments, "una lista vacía no prueba que GitHub no lo creara"
+    assert "no existe ningún run" not in comments
+    assert "la consulta funcionó" in comments
+    assert "indexación" in comments, "el aviso nombra la carrera que no sabe distinguir"
+    assert "advance-sirius-after-quality.yml" in comments, (
+        "lo que encamina es la finalización natural de Quality, no este paso"
+    )
+    # Y los dos gestos no son intercambiables: `quality.yml` se dispara con
+    # `on: pull_request` sin lista de `types`, así que reabrir la PR emite
+    # `reopened` y el run sale sobre ESTE head; un push emite `synchronize`,
+    # que por definición mueve el head, así que su run es el de OTRO head. El
+    # aviso no puede prometer del segundo lo que solo cumple el primero.
+    assert "cerrar y reabrir la PR" in comments
+    assert "mueve el head" in comments, "el push encamina, pero sobre un head nuevo"
+    assert "para este head —un push" not in comments
+    # Lo que sigue vivo y recuperable es la INCIDENCIA, no este paso. Que el
+    # aviso no hable del reintento del paso lo fija
+    # `test_ningun_aviso_de_quality_sin_encaminar_habla_del_reintento_del_paso`
+    # sobre las CINCO fases, no aquí sobre una.
+    assert "La INCIDENCIA queda viva en `sirius:ci-pending`" in comments
+    # Ni puede prometer que la incidencia avanzará sola por un run preexistente
+    # que YA había terminado cuando se consultó: ese `workflow_run` se emitió y
+    # se consumió con la incidencia aún en curso (deuda 3 de ADR-149).
+    assert "lo mismo si el run ya existía y solo tardó en indexarse" not in comments, (
+        "un run ya terminado antes de la consulta no vuelve a emitir su workflow_run"
+    )
+    assert "ya había TERMINADO antes de la consulta" in comments
+
+
+def test_el_aviso_de_que_no_hay_ningun_run_se_publica_una_sola_vez(tmp_path: Path) -> None:
+    """Idempotencia por head y fase: reejecutar el paso no repite el aviso."""
+    env = _setup(tmp_path)
+    head = "c4d482267d9a"
+    _seed_issue(
+        env,
+        ["sirius:implementing"],
+        comments=(
+            "PR abierta: https://github.com/owner/repo/pull/9\n"
+            f"<!-- sirius-quality-sin-encaminar:{head}:sin-runs-para-el-head -->\n"
+        ),
+    )
+    _seed_pr(env, 9, head=head)
+    vf = _verdict_file(tmp_path, {"verdict": "READY_FOR_REVIEW", "summary": "listo"})
+    r = _run(env, "implementer", vf)
+    assert r.returncode != 0
+    assert _comments(env).count("sirius-quality-sin-encaminar") == 1
+    assert "## QUALITY_SIN_ENCAMINAR" not in _comments(env)
+
+
+def test_unos_runs_terminados_sin_id_tampoco_salen_en_silencio(tmp_path: Path) -> None:
+    """La otra forma de llegar sin nada que relanzar: hay runs, pero ninguno
+    trae `id`. Tampoco hay id con el que relanzar, así que tampoco se calla."""
+    env = _setup(tmp_path)
+    head = "c4d482267d9a"
+    vf = _implementador_listo(env, tmp_path, head)
+    _seed_quality_runs(env, head, [{"status": "completed", "conclusion": "success"}])
+    r = _run(env, "implementer", vf)
+    assert r.returncode != 0
+    assert "runs-sin-id-relanzable" in r.stdout + r.stderr
+    assert "RERUN" not in _actions_log(env)
+    assert "sirius:ci-pending" in _labels(env)
+    comments = _comments(env)
+    assert f"sirius-quality-sin-encaminar:{head}:runs-sin-id-relanzable" in comments
+    # El cuerpo del aviso también tiene que ser cierto: aquí la consulta SÍ
+    # funcionó, así que no puede publicar el «no se pudo consultar» genérico ni
+    # el «Qué pasa» de ADR-149, que describen otro escenario.
+    assert "no se pudo consultar" not in comments
+    assert "ANTES de que la incidencia entrara" not in comments
+    assert "ninguno trae `id` con el que relanzar" in comments
+    assert "runs TERMINADOS" in comments
+    # Aquí sí existe un run que el operador puede relanzar a mano, así que ese
+    # gesto se conserva. Que el aviso no hable del reintento de ESTE paso lo
+    # fija la prueba compartida de las cinco fases, no esta.
+    assert "Actions → Re-run all jobs" in comments
+    assert "La INCIDENCIA queda viva en `sirius:ci-pending`" in comments
+
+
+def test_un_run_en_curso_se_distingue_de_no_haber_ninguno(tmp_path: Path) -> None:
+    """La distinción que el fallo no hacía. Con un run en cola el paso espera y
+    termina en VERDE sin avisar; con cero runs no hay nada que esperar. La
+    misma entrada no puede dar los dos resultados, así que se comprueban los
+    dos aquí, uno al lado del otro."""
+    env = _setup(tmp_path)
+    head = "c4d482267d9a"
+    vf = _implementador_listo(env, tmp_path, head)
+    _seed_quality_runs(env, head, [{"id": 556, "status": "queued", "conclusion": None}])
     r = _run(env, "implementer", vf)
     assert r.returncode == 0, r.stdout + r.stderr
-    assert "QUALITY_RUNS c4d482267d9a" in _actions_log(env), "tiene que consultar los runs"
-    assert "RERUN" not in _actions_log(env)
+    assert "Quality sigue en curso" in r.stdout
+    assert "sirius-quality-sin-encaminar" not in _comments(env)
+
+    aparte = tmp_path / "sin-runs"
+    aparte.mkdir()
+    otro = _setup(aparte)
+    vf2 = _implementador_listo(otro, aparte, head)
+    r2 = _run(otro, "implementer", vf2)
+    assert r2.returncode != 0
+    assert f"sirius-quality-sin-encaminar:{head}:sin-runs-para-el-head" in _comments(otro)
 
 
 def test_el_fixed_del_corrector_tambien_relanza(tmp_path: Path) -> None:
@@ -2004,6 +2161,148 @@ def test_si_la_respuesta_de_runs_es_ilegible_el_aviso_tambien_se_publica(tmp_pat
     assert f"sirius-quality-sin-encaminar:{head}:consulta-runs-ilegible" in comments
     assert "## QUALITY_SIN_ENCAMINAR" in comments
     assert "not-json" in comments, "el aviso cita lo que devolvió gh"
+
+
+def _cuerpo_de(funcion: str) -> str:
+    """El cuerpo de una función del guion, del `{` de apertura al `}` en columna 0."""
+    fuente = APPLY_VERDICT.read_text(encoding="utf-8")
+    inicio = fuente.index(f"{funcion}() {{")
+    fin = re.search(r"^\}$", fuente[inicio:], re.MULTILINE)
+    assert fin is not None, f"no encuentro el cierre de {funcion}"
+    return fuente[inicio : inicio + fin.end()]
+
+
+# La cola compartida, tal y como tiene que aparecer al final de cada texto. Son
+# los DOS únicos sitios del guion que hablan de lo que este paso deja tras de sí.
+COLA_DEL_LOG = '$(cola_del_paso)" >&2'
+COLA_DEL_AVISO = '${cola_aviso}"'
+
+
+# Las CINCO fases con las que `relanzar_quality_si_ya_termino` puede avisar.
+# La lista vive aquí, y no repartida en una aserción por prueba, porque la
+# propiedad de abajo es de la FUNCIÓN, no de ninguna fase: añadir una sexta sin
+# cumplirla tiene que poner esto en rojo sin que nadie se acuerde (ADR-183).
+FASES_SIN_ENCAMINAR: tuple[tuple[str, str], ...] = (
+    ("sin-runs-para-el-head", "sin_runs"),
+    ("runs-sin-id-relanzable", "runs_sin_id"),
+    ("consulta-runs-fallida", "quality_runs_fail"),
+    ("consulta-runs-ilegible", "quality_runs_illegible"),
+    ("relanzamiento-fallido", "rerun_fails"),
+)
+
+
+def _forzar_fase(env: dict[str, str], head: str, escenario: str) -> None:
+    """Coloca al guion en la fase pedida, sin tocar nada más."""
+    if escenario == "sin_runs":
+        return  # por omisión no hay ningún run para el head
+    if escenario == "runs_sin_id":
+        _seed_quality_runs(env, head, [{"status": "completed", "conclusion": "success"}])
+        return
+    if escenario == "rerun_fails":
+        _seed_quality_runs(env, head, [{"id": 555, "status": "completed", "conclusion": "failure"}])
+    (_md(env) / escenario).write_text("", encoding="utf-8")
+
+
+@pytest.mark.parametrize(("fase", "escenario"), FASES_SIN_ENCAMINAR)
+def test_ningun_aviso_de_quality_sin_encaminar_habla_del_reintento_del_paso(
+    tmp_path: Path, fase: str, escenario: str
+) -> None:
+    """La clase, no la instancia (ADR-001 §2).
+
+    Tres rondas seguidas corrigieron una a una frases que afirmaban algo sobre
+    el sitio de llamada de `avisar_quality_sin_encaminar`: que este paso era
+    «reintentable», que bastaba «reejecutar este paso», que «reejecutar este
+    job NO sirve». Ninguna de las tres se comprobó contra el sitio de llamada, y
+    no podían comprobarse desde ahí: quien decide si el paso vuelve a correr es
+    la puerta del workflow que lo invocó, y **son dos puertas distintas**. La
+    del implementador relee las etiquetas y exige `sirius:implement-requested`,
+    que `transition` ya retiró, así que ahí no vuelve a correr; la del
+    corrector no relee su etiqueta consumible en ningún punto, así que ahí no
+    está comprobado. Un aviso al operador no puede apoyarse en la mitad
+    comprobada de una disyuntiva.
+
+    Así que la propiedad no es «di la frase correcta» sino «no hables de eso, y
+    di en cambio lo único observable desde este fichero»: que la INCIDENCIA
+    queda viva en `ci-pending` y que lo que la encamina es un `workflow_run` de
+    Quality. Se comprueba sobre las cinco fases a la vez, para que una sexta no
+    pueda volver a entrar con la frase de siempre.
+    """
+    env = _setup(tmp_path)
+    head = "c4d482267d9a"
+    vf = _implementador_listo(env, tmp_path, head)
+    _forzar_fase(env, head, escenario)
+    r = _run(env, "implementer", vf)
+
+    assert r.returncode != 0, "las cinco fases dejan el paso en rojo"
+    salida = r.stdout + r.stderr
+    assert fase in salida, "la fase tiene que quedar nombrada en el log"
+    comments = _comments(env)
+    assert f"sirius-quality-sin-encaminar:{head}:{fase}" in comments
+
+    # 1) LA PROPIEDAD, DERIVADA DEL FUENTE, no enumerada. Las rondas 3, 4 y 5
+    #    comprobaron esto con una lista de palabras prohibidas, y la ronda 5 la
+    #    dejó en verde con la frase «este paso no vuelve a ejecutarse» delante:
+    #    a una lista de exclusión siempre le falta el sinónimo siguiente. A una
+    #    de inclusión con un solo elemento se le ve lo que sobra, y por eso
+    #    ahora se exige que TODO texto de estas dos funciones termine con la
+    #    cola compartida. Una fase nueva que escriba la suya cae aquí, diga lo
+    #    que diga, sin que nadie tenga que acordarse (ADR-179, ADR-182).
+    errores = [
+        ln.strip()
+        for ln in _cuerpo_de("relanzar_quality_si_ya_termino").splitlines()
+        if "::error::" in ln
+    ]
+    assert len(errores) == 4, f"cambió el número de ::error::; revisa la propiedad: {errores}"
+    for linea in errores:
+        assert linea.endswith(COLA_DEL_LOG), f"este ::error:: escribe su propia cola: {linea}"
+    que_pasas = [
+        ln.strip()
+        for ln in _cuerpo_de("avisar_quality_sin_encaminar").splitlines()
+        if ln.strip().startswith("que_pasa=")
+    ]
+    assert len(que_pasas) == 3, f"cambió el número de `que_pasa`: {que_pasas}"
+    for linea in que_pasas:
+        assert linea.endswith(COLA_DEL_AVISO), (
+            f"este `que_pasa` escribe su propia cola: {linea[-80:]}"
+        )
+
+    # 2) Y lo emitido dice lo observable: la incidencia viva y qué la encamina.
+    assert "La INCIDENCIA queda viva en `sirius:ci-pending`" in comments
+    assert "con el aviso y su gesto ya publicados en ella" in salida, (
+        "el log tiene que declarar que el aviso SÍ llegó cuando llegó"
+    )
+    assert "advance-sirius-after-quality.yml" in comments, (
+        "el aviso nombra lo que de verdad encamina la incidencia"
+    )
+    assert "sirius:ci-pending" in _labels(env)
+
+
+def test_si_el_aviso_no_se_puede_publicar_el_gesto_viaja_en_el_log(tmp_path: Path) -> None:
+    """CODEX-002 de la ronda 4: `sirius_comment_once` puede fallar y
+    `avisar_quality_sin_encaminar` lo absorbe con un `::warning::`. Hasta la
+    ronda 5 el `::error::` afirmaba igualmente que el gesto estaba «ya publicado
+    en ella», así que en una caída de la API el operador recibía un paso rojo
+    que lo remitía a instrucciones inexistentes. Ahora la cola compartida
+    distingue los dos casos y, si el aviso no llegó, el gesto viaja en el único
+    sitio que queda: el propio log."""
+    env = _setup(tmp_path)
+    head = "c4d482267d9a"
+    vf = _implementador_listo(env, tmp_path, head)
+    (_md(env) / "comment_fails").write_text("", encoding="utf-8")
+    r = _run(env, "implementer", vf)
+    salida = r.stdout + r.stderr
+
+    assert r.returncode != 0
+    assert "sirius:ci-pending" in _labels(env)
+    assert "No se pudo publicar el aviso QUALITY_SIN_ENCAMINAR" in salida
+    # Lo que NO puede hacer: dar por publicado lo que no consta.
+    assert "ya publicados en ella" not in salida, (
+        "el log no puede afirmar una publicación que falló"
+    )
+    assert "el aviso NO llegó a publicarse en ella" in salida
+    # Y el gesto de ESTA fase, entero, en el log.
+    assert "cerrar y reabrir la PR" in salida, "el gesto que desbloquea tiene que ir en el log"
+    assert "advance-sirius-after-quality.yml" in salida
 
 
 def test_la_lectura_va_con_el_token_de_lectura_y_el_relanzamiento_con_el_pat(
