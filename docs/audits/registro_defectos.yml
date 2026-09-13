@@ -503,6 +503,17 @@ defectos:
       - scripts/automation/sirius_apply_verdict.sh
       - tests/automation/test_sirius_apply_verdict.py
 
+  - id: H-38
+    titulo: El detector de sensibilidad confundia una prohibicion con una peticion
+    bloque: motor
+    gravedad: media
+    estado: abierto
+    adr: 184
+    incidencia: 601
+    ficheros:
+      - src/sirius_engine/intent_interpreter.py
+      - tests/engine/test_intent_interpreter.py
+
   - id: H-33
     titulo: El registro de defectos podia quedarse dormido sin que ninguna comprobacion lo notara
     bloque: automatizacion
