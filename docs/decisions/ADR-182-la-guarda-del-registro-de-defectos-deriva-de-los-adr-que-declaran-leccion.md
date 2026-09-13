@@ -322,10 +322,12 @@ anti-vacua nueva lo caza sin depender de cómo esté el registro.
 
 ### La batería completa
 
-`uv run ruff format --check .`, `uv run ruff check .`, `uv run mypy src tests` y
-`uv run pytest` en verde sobre esta rama: **6410 passed, 17 skipped, 2 xfailed**
-en 9 min 50 s. La guarda de este fichero pasa de 40 a 63 casos y sigue costando
-milisegundos.
+`pwsh -File scripts/check.ps1` —que encadena `ruff format --check`,
+`ruff check`, `mypy src tests` y `pytest`— en verde sobre el árbol de esta rama
+tras las correcciones de la ronda 2: **6411 passed, 17 skipped, 2 xfailed** en
+9 min 05 s, código de salida `0`. La guarda de este fichero pasa de 40 a 62
+casos —61 que corren y el que se salta sin historia de `main`— y sigue costando
+medio segundo.
 
 ## Consecuencias
 
