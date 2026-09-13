@@ -233,8 +233,8 @@ siembra dejaría de rescatar y esa cota rompería. Su gemela del motor portado,
 
 Corregida en el mismo trabajo, no en otro. Son **once** pasajes de prosa:
 nueve docstrings y dos comentarios de documentación Sphinx (`#:`). Diez
-están en `src/` y `scripts/`. De esos diez, ocho salen del barrido de esos dos
-árboles enteros, y la lista es completa **solo dentro del alcance de ese
+están en `src/` y `scripts/`. De esos diez, **seis** salen del barrido de esos
+dos árboles enteros, y la lista es completa **solo dentro del alcance de ese
 barrido**, que es el literal `pide_contexto` —lo que escribe el literal, no lo
 que describe el mecanismo sin nombrarlo—: `for f in $(git ls-tree -r
 --name-only 433fb11 -- src/ scripts/); do n=$(git show 433fb11:$f | grep -o
@@ -243,14 +243,33 @@ exactamente los cuatro ficheros que los contienen:
 `scripts/medir_variantes_de_criticidad.py` (1),
 `src/sirius/application/interpret_query_request.py` (1),
 `src/sirius/application/rank_relevant_knowledge.py` (4) y
-`src/sirius/domain/relevance.py` (7). Los **tres** que ese barrido no podía
-devolver describían el mecanismo viejo sin nombrar el literal: los encontró la
+`src/sirius/domain/relevance.py` (7). Del fichero hay que bajar al pasaje, y de
+eso responde el mismo barrido con `grep -n` en vez de `grep -o`: de esas trece
+ocurrencias, **seis** caen dentro de uno de los once pasajes —el docstring de
+módulo de `relevance.py` (líneas 97 y 99, una sola vez cada pasaje aunque el
+literal aparezca dos), el de `RankedKnowledge.seeded` (209), el de
+`_rank_via_staged_engine` (`rank_relevant_knowledge.py:403`), el de módulo de
+`scripts/medir_variantes_de_criticidad.py` (33) y los dos comentarios `#:`
+(`rank_relevant_knowledge.py:93` e `interpret_query_request.py:71`)— y el resto
+no es ninguno de los once: el import (`rank_relevant_knowledge.py:68`) y el
+consumidor (583), y en `relevance.py` la entrada de `__all__` (144), el `#:` que
+cita la pieza del experimento (153), la firma (349) y el docstring de la propia
+función retirada (351). Los **cinco** que ese barrido no podía devolver
+describían el mecanismo viejo sin nombrar el literal: los encontró la
 lectura, no el `grep`. Son el traductor del banco
-(`tests/acceptance/staged_engine_case_translation.py`) y, ya en la ronda 11,
-los dos de `rank_relevant_knowledge.py` que enumeraban «lo que decide la regla
+(`tests/acceptance/staged_engine_case_translation.py`); los **dos** de
+`interpret_query_request.py` —el docstring de **módulo** y el de `interpretar`—,
+cuyo fichero escribe el literal una sola vez y lo escribe fuera de todo
+docstring: `git show 433fb11:src/sirius/application/interpret_query_request.py |
+grep -n pide_contexto` devuelve solo la línea 71, la del bloque `#:` de
+`PROPOSITO_RECUPERACION_ORDINARIA` que ya se cuenta entre los dos comentarios;
+y, ya en la ronda 11, los dos de
+`rank_relevant_knowledge.py` que enumeraban «lo que decide la regla
 del producto» dejando fuera la tercera regla: el docstring de módulo (línea 44)
-y el de `_peticion` (línea 288), que decían «permiso y propósito por regla del
-producto» y ahora dicen «permiso, propósito y ampliación por categoría
+y el de `_peticion` (línea 288) —el mismo `grep -n` sobre ese fichero devuelve
+68, 93, 403 y 583, y ninguna de las cuatro cae en esos dos docstrings—, que
+decían «permiso y propósito por regla del producto» y ahora dicen
+«permiso, propósito y ampliación por categoría
 (ADR-177)», lo mismo que ya decía el docstring gemelo de
 `InterpreteDePeticion.interpretar`. Los **nueve
 docstrings** son: el de módulo de `relevance.py` y el de
@@ -450,19 +469,32 @@ respecto del árbol medido es, por definición, la que devuelve
 ningún otro —esta ficha; `src/sirius/application/rank_relevant_knowledge.py`,
 `tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py` y
 `tests/integration/test_rank_relevant_knowledge.py`, cuyos cambios de la ronda
-11 son solo comentarios (`git diff --numstat 967a7a20..HEAD -- src tests` da
-`6/5`, `8/4` y `12/7`); y `MEMORIA.md` regenerado—. Ninguno aporta una línea
-ejecutable, luego el recuento del árbol medido no se mueve. Lo mismo desde
+11 caen **todos dentro de docstrings** —dos en `rank_relevant_knowledge.py` (el
+de módulo y el de `_peticion`), uno en el del banco de aceptación
+(`_ejecutar_banco_paquete_completo`) y tres en los de sendas pruebas de
+integración—, no en comentarios: son prosa ligada al objeto, y como tal no
+añaden ni retiran ningún caso recolectado (`git diff --numstat 967a7a20..HEAD --
+src tests` da `6/5`, `8/4` y `12/7`, y `git diff 967a7a20..HEAD -- src tests`
+muestra que las seis ediciones están entre `"""`); y `MEMORIA.md` regenerado—.
+Ninguno aporta una línea ejecutable, luego el recuento del árbol medido no se mueve. Lo mismo desde
 fuera del árbol de trabajo:
-`gh api repos/canelamoraguezandyjesus-bot/sirius/compare/967a7a20b2aa...237a423c8c48344d569cf259dda4ed265f636727 --jq '[.files[].filename]'`
-devuelve esos cinco nombres, y
+`gh api repos/canelamoraguezandyjesus-bot/sirius/compare/967a7a20b2aa...5818d41a15477aafeda2552cfc4ed27584390f7a --jq '[.files[].filename]'`
+devuelve esos cinco nombres. El rango termina en el head al que se atribuye el
+inventario y no en su padre: cerrarlo en `237a423c…`, como hizo la ronda 13,
+excluía justamente el commit de esa ronda y coincidía solo porque ese commit
+volvía a tocar una ficha ya listada —una evidencia fija que acredita el árbol
+anterior al que dice acreditar—. Y
 `gh api repos/canelamoraguezandyjesus-bot/sirius/commits/0878b95f16b9 --jq '[.files[].filename]'`
 devuelve `["MEMORIA.md", "docs/decisions/ADR-177-…md"]`, que es por donde
-`MEMORIA.md` entró al rango. Cerrado así, el cierre se cubre a sí mismo: el
-commit de la ronda 13 —el que escribe este párrafo— toca solo esta ficha, que
-ya está en la lista, y un commit futuro que tocase un fichero nuevo no dejaría
-un hueco silencioso sino que aparecería en ese `git diff --name-only`,
-obligando a rehacer la lista o la terna en vez de a añadir un punto más.
+`MEMORIA.md` entró al rango. Cerrado así, el cierre se cubre a sí mismo: los
+commits de corrección que siguen —el de la ronda 13, que escribió este párrafo,
+y el de la 14, que lo ancla al head revisado y clasifica como docstrings lo que
+antes llamaba comentarios— tocan solo esta ficha, que ya está en la lista; quien
+audite el head vigente repite el mismo `compare` terminándolo en ese head (o en
+la punta de la rama) y obtiene la misma lista, y un commit futuro que tocase un
+fichero nuevo no dejaría un hueco silencioso sino que aparecería en ese
+`git diff --name-only`, obligando a rehacer la lista o la terna en vez de a
+añadir un punto más.
 
 ```
 6391 passed, 17 skipped, 2 xfailed in 477.56s (0:07:57)
