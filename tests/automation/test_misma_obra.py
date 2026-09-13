@@ -181,16 +181,38 @@ def test_el_workflow_invoca_la_decision_exactamente_una_vez() -> None:
     )
 
 
-def test_la_decision_solo_se_consulta_con_aprobacion_vigente_y_verde() -> None:
-    """No puede consultarse en cualquier rama: solo donde ADR-142 ya protege una
-    aprobación registrada -origen `ready-for-merge` y Quality en verde-. Fuera de
-    ahí, saltarse la reposición de `review-requested` sería aprobar sin revisar."""
-    codigo = "\n".join(_lineas_de_codigo(WORKFLOW.read_text(encoding="utf-8")))
-    guarda = codigo.find('origen_de[$issue_number]}" = "sirius:ready-for-merge"')
-    invocacion = codigo.find("python3 scripts/automation/sirius_misma_obra.py")
-    assert guarda != -1, "la guarda de ADR-142 tiene que seguir existiendo"
-    assert invocacion > guarda, (
-        "la decisión se consulta DENTRO de la guarda de ADR-142, nunca antes"
+def test_la_decision_se_consulta_dentro_de_la_guarda_de_adr_142() -> None:
+    """No puede consultarse en cualquier rama: solo DENTRO de la guarda que ya
+    protege una aprobación registrada -origen `ready-for-merge` y Quality en
+    verde-. Fuera de ella, saltarse la reposición de `review-requested` sería
+    aprobar trabajo sin revisar.
+
+    Comprueba ANIDAMIENTO, no posición en el fichero: la primera versión de esta
+    prueba solo miraba que la invocación apareciera DESPUÉS de la guarda, y una
+    mutación que la sacaba del bloque pasaba en verde. Es la familia vacua, que
+    en este repositorio ha mordido cinco veces.
+    """
+    lineas = WORKFLOW.read_text(encoding="utf-8").splitlines()
+    apertura = next(
+        i
+        for i, linea in enumerate(lineas)
+        if 'origen_de[$issue_number]}" = "sirius:ready-for-merge"' in linea
+        and linea.lstrip().startswith("if [")
+    )
+    # El `fi` a la sangría de la guarda (diez espacios) es el que la cierra; los
+    # de dentro llevan más.
+    cierre = next(
+        i for i, linea in enumerate(lineas[apertura + 1 :], apertura + 1) if linea == "          fi"
+    )
+    invocacion = next(
+        i
+        for i, linea in enumerate(lineas)
+        if "python3 scripts/automation/sirius_misma_obra.py" in linea
+        and not linea.strip().startswith("#")
+    )
+    assert apertura < invocacion < cierre, (
+        f"la decisión (línea {invocacion + 1}) tiene que quedar DENTRO de la guarda de "
+        f"ADR-142 (líneas {apertura + 1}-{cierre + 1})"
     )
 
 

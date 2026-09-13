@@ -526,3 +526,17 @@ defectos:
     ficheros:
       - src/sirius/composition_root.py
       - src/sirius/config/memory_gates.py
+
+  # ADR-187 (#608, parte 2): la guarda de ADR-142 exigia el MISMO head, asi que
+  # ponerse al dia con `main` caducaba la aprobacion y costaba una ronda entera.
+  - id: H-39
+    titulo: Ponerse al dia con main tiraba la aprobacion de revision aunque el trabajo no cambiara
+    bloque: ciclo
+    gravedad: media
+    estado: abierto
+    adr: 187
+    incidencia: 608
+    ficheros:
+      - .github/workflows/advance-sirius-after-quality.yml
+      - scripts/automation/sirius_misma_obra.py
+      - tests/automation/test_misma_obra.py
