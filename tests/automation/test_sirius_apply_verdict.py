@@ -308,6 +308,12 @@ def test_implementer_ready_for_review_with_pr(tmp_path: Path) -> None:
         env, ["sirius:implementing"], comments="PR abierta: https://github.com/owner/repo/pull/9\n"
     )
     _seed_pr(env, 9, head="c4d482267d9a")
+    # ADR-183: con cero runs de Quality para el head, el paso ya no termina en
+    # verde —ese silencio era el fallo—, así que estas pruebas de forma del
+    # marcador se sitúan en el caso ordinario: Quality corriendo para el head.
+    _seed_quality_runs(
+        env, "c4d482267d9a", [{"id": 556, "status": "in_progress", "conclusion": None}]
+    )
     vf = _verdict_file(tmp_path, {"verdict": "READY_FOR_REVIEW", "summary": "listo"})
     r = _run(env, "implementer", vf)
     assert r.returncode == 0, r.stdout + r.stderr
@@ -1256,6 +1262,12 @@ def test_corrector_fixed_with_cycle_marker(tmp_path: Path) -> None:
         env, ["sirius:repairing"], comments="PR abierta: https://github.com/owner/repo/pull/9\n"
     )
     _seed_pr(env, 9, head="d5e5f5061234")
+    # ADR-183: con cero runs de Quality para el head, el paso ya no termina en
+    # verde —ese silencio era el fallo—, así que estas pruebas de forma del
+    # marcador se sitúan en el caso ordinario: Quality corriendo para el head.
+    _seed_quality_runs(
+        env, "d5e5f5061234", [{"id": 556, "status": "in_progress", "conclusion": None}]
+    )
     vf = _verdict_file(tmp_path, {"verdict": "FIXED", "summary": "corregido"})
     r = _run(env, "corrector", vf, cycle="1")
     assert r.returncode == 0, r.stdout + r.stderr
@@ -1359,6 +1371,12 @@ def test_corrector_fixed_firma_el_marcador_con_su_run(tmp_path: Path) -> None:
         env, ["sirius:repairing"], comments="PR abierta: https://github.com/owner/repo/pull/9\n"
     )
     _seed_pr(env, 9, head="d5e5f5061234")
+    # ADR-183: con cero runs de Quality para el head, el paso ya no termina en
+    # verde —ese silencio era el fallo—, así que estas pruebas de forma del
+    # marcador se sitúan en el caso ordinario: Quality corriendo para el head.
+    _seed_quality_runs(
+        env, "d5e5f5061234", [{"id": 556, "status": "in_progress", "conclusion": None}]
+    )
     vf = _verdict_file(tmp_path, {"verdict": "FIXED", "summary": "corregido"})
     r = _run(env, "corrector", vf, cycle="1")
     assert r.returncode == 0, r.stdout + r.stderr
@@ -1375,6 +1393,12 @@ def test_corrector_fixed_sin_entorno_de_run_firma_manual(tmp_path: Path) -> None
         env, ["sirius:repairing"], comments="PR abierta: https://github.com/owner/repo/pull/9\n"
     )
     _seed_pr(env, 9, head="d5e5f5061234")
+    # ADR-183: con cero runs de Quality para el head, el paso ya no termina en
+    # verde —ese silencio era el fallo—, así que estas pruebas de forma del
+    # marcador se sitúan en el caso ordinario: Quality corriendo para el head.
+    _seed_quality_runs(
+        env, "d5e5f5061234", [{"id": 556, "status": "in_progress", "conclusion": None}]
+    )
     vf = _verdict_file(tmp_path, {"verdict": "FIXED", "summary": "corregido"})
     r = _run(env, "corrector", vf, cycle="1")
     assert r.returncode == 0, r.stdout + r.stderr
@@ -1393,6 +1417,12 @@ def test_implementer_ready_no_cambia_de_forma_con_entorno_de_run(tmp_path: Path)
         env, ["sirius:implementing"], comments="PR abierta: https://github.com/owner/repo/pull/9\n"
     )
     _seed_pr(env, 9, head="d5e5f5061234")
+    # ADR-183: con cero runs de Quality para el head, el paso ya no termina en
+    # verde —ese silencio era el fallo—, así que estas pruebas de forma del
+    # marcador se sitúan en el caso ordinario: Quality corriendo para el head.
+    _seed_quality_runs(
+        env, "d5e5f5061234", [{"id": 556, "status": "in_progress", "conclusion": None}]
+    )
     vf = _verdict_file(tmp_path, {"verdict": "READY_FOR_REVIEW", "summary": "listo"})
     r = _run(env, "implementer", vf)
     assert r.returncode == 0, r.stdout + r.stderr
@@ -1861,13 +1891,93 @@ def test_un_quality_en_curso_no_se_relanza(tmp_path: Path) -> None:
     assert "sirius-quality-relanzado" not in _comments(env)
 
 
-def test_sin_runs_de_quality_no_se_relanza_nada(tmp_path: Path) -> None:
+def test_sin_ningun_run_de_quality_la_incidencia_se_encamina_y_no_espera(tmp_path: Path) -> None:
+    """ADR-183: cero runs para el head NO es «ya llegará su cierre».
+
+    Reproducido el 12-09-2026 en la incidencia #594: el corrector empujó
+    `1c408f86`, GitHub no creó ningún run de Quality para ese sha y el paso
+    imprimió «Sin run de Quality terminado para …» y terminó en verde con un
+    `return 0` mudo. La incidencia se quedó en `sirius:ci-pending` esperando un
+    `workflow_run` que nadie podía emitir —no había ningún run que cerrar— y no
+    avisó a nadie. Aquí se fija lo contrario: sigue en `ci-pending`, no se
+    relanza nada (no hay id que relanzar), el paso queda ROJO y reintentable, y
+    el aviso llega a la incidencia como en los otros tres modos de fallo.
+    """
     env = _setup(tmp_path)
-    vf = _implementador_listo(env, tmp_path, "c4d482267d9a")
+    head = "c4d482267d9a"
+    vf = _implementador_listo(env, tmp_path, head)
+    r = _run(env, "implementer", vf)
+    assert r.returncode != 0, "la parada en silencio es el fallo: el paso tiene que quedar rojo"
+    assert "QUALITY_RUNS c4d482267d9a" in _actions_log(env), "tiene que consultar los runs"
+    assert "RERUN" not in _actions_log(env), "sin runs no hay id con el que relanzar"
+    assert "sin-runs-para-el-head" in r.stdout + r.stderr
+    assert "sirius:ci-pending" in _labels(env)
+    assert "sirius:failed-safely" not in _labels(env)
+    comments = _comments(env)
+    assert f"sirius-quality-sin-encaminar:{head}:sin-runs-para-el-head" in comments
+    assert "## QUALITY_SIN_ENCAMINAR" in comments
+    assert "NINGUNO" in comments, "el aviso dice que no existe ningún run para este head"
+    assert "Actions → Re-run all jobs" not in comments, (
+        "no se puede mandar al operador a relanzar un run que no existe"
+    )
+
+
+def test_el_aviso_de_que_no_hay_ningun_run_se_publica_una_sola_vez(tmp_path: Path) -> None:
+    """Idempotencia por head y fase: reejecutar el paso no repite el aviso."""
+    env = _setup(tmp_path)
+    head = "c4d482267d9a"
+    _seed_issue(
+        env,
+        ["sirius:implementing"],
+        comments=(
+            "PR abierta: https://github.com/owner/repo/pull/9\n"
+            f"<!-- sirius-quality-sin-encaminar:{head}:sin-runs-para-el-head -->\n"
+        ),
+    )
+    _seed_pr(env, 9, head=head)
+    vf = _verdict_file(tmp_path, {"verdict": "READY_FOR_REVIEW", "summary": "listo"})
+    r = _run(env, "implementer", vf)
+    assert r.returncode != 0
+    assert _comments(env).count("sirius-quality-sin-encaminar") == 1
+    assert "## QUALITY_SIN_ENCAMINAR" not in _comments(env)
+
+
+def test_unos_runs_terminados_sin_id_tampoco_salen_en_silencio(tmp_path: Path) -> None:
+    """La otra forma de llegar sin nada que relanzar: hay runs, pero ninguno
+    trae `id`. Tampoco hay id con el que relanzar, así que tampoco se calla."""
+    env = _setup(tmp_path)
+    head = "c4d482267d9a"
+    vf = _implementador_listo(env, tmp_path, head)
+    _seed_quality_runs(env, head, [{"status": "completed", "conclusion": "success"}])
+    r = _run(env, "implementer", vf)
+    assert r.returncode != 0
+    assert "runs-sin-id-relanzable" in r.stdout + r.stderr
+    assert "RERUN" not in _actions_log(env)
+    assert "sirius:ci-pending" in _labels(env)
+    assert f"sirius-quality-sin-encaminar:{head}:runs-sin-id-relanzable" in _comments(env)
+
+
+def test_un_run_en_curso_se_distingue_de_no_haber_ninguno(tmp_path: Path) -> None:
+    """La distinción que el fallo no hacía. Con un run en cola el paso espera y
+    termina en VERDE sin avisar; con cero runs no hay nada que esperar. La
+    misma entrada no puede dar los dos resultados, así que se comprueban los
+    dos aquí, uno al lado del otro."""
+    env = _setup(tmp_path)
+    head = "c4d482267d9a"
+    vf = _implementador_listo(env, tmp_path, head)
+    _seed_quality_runs(env, head, [{"id": 556, "status": "queued", "conclusion": None}])
     r = _run(env, "implementer", vf)
     assert r.returncode == 0, r.stdout + r.stderr
-    assert "QUALITY_RUNS c4d482267d9a" in _actions_log(env), "tiene que consultar los runs"
-    assert "RERUN" not in _actions_log(env)
+    assert "Quality sigue en curso" in r.stdout
+    assert "sirius-quality-sin-encaminar" not in _comments(env)
+
+    aparte = tmp_path / "sin-runs"
+    aparte.mkdir()
+    otro = _setup(aparte)
+    vf2 = _implementador_listo(otro, aparte, head)
+    r2 = _run(otro, "implementer", vf2)
+    assert r2.returncode != 0
+    assert f"sirius-quality-sin-encaminar:{head}:sin-runs-para-el-head" in _comments(otro)
 
 
 def test_el_fixed_del_corrector_tambien_relanza(tmp_path: Path) -> None:

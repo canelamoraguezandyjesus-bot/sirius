@@ -117,12 +117,134 @@ de por qué GitHub no creó el run.
 
 ## Opciones consideradas
 
+1. **Lanzar Quality para ese head desde el paso.** Es lo que de verdad
+   encaminaría la incidencia. Necesita `workflow_dispatch` en `quality.yml` y
+   que `advance-sirius-after-quality.yml` acepte un `workflow_run` de evento
+   distinto de `pull_request`: dos workflows fuera del alcance de este encargo,
+   y ADR-002 en contra de ampliar la credencial de la automatización sobre sus
+   propios workflows.
+2. **Esperar y reconsultar** unos segundos por si el run aún no existía. Solo
+   tiene sentido si la lista vacía fuera una carrera con la creación del run.
+   La medida dice que no lo es (abajo).
+3. **Avisar en la incidencia y dejar el paso rojo y reintentable**, igual que
+   los otros tres modos de fallo de la misma función. Es la segunda salida que
+   el encargo autoriza expresamente.
+4. **Dejarlo como está** —el `return 0` mudo—. Es el fallo.
+
 ## Decisión
+
+**Opción 3.** En `relanzar_quality_si_ya_termino`, la rama que hoy sale con
+`return 0` cuando no hay ningún run relanzable pasa a llamar a
+`avisar_quality_sin_encaminar` y a terminar en rojo, exactamente como
+`consulta-runs-fallida`, `consulta-runs-ilegible` y `relanzamiento-fallido`.
+
+Se distinguen las dos formas de llegar ahí, con fase propia en el marcador:
+
+- `sin-runs-para-el-head`: la lista vino **vacía**. No hay ningún run que pueda
+  cerrarse, así que no hay nada que esperar.
+- `runs-sin-id-relanzable`: hay runs terminados, pero ninguno con `id` con el
+  que relanzar.
+
+Y el aviso del primer caso **cambia su texto**: decirle al operador «relanza a
+mano el run de este head (Actions → Re-run all jobs)» cuando no existe ningún
+run lo manda a un sitio vacío. Dice en su lugar qué hace correr Quality para
+ese head (un push a la rama de la PR, o cerrar y reabrir la PR) y que después
+reejecute el paso.
+
+Lo que **no** cambia: el run en curso sigue esperando y sigue terminando en
+verde; el run terminado sigue relanzándose una sola vez con su marcador; las
+guardias de consulta fallida e ilegible quedan intactas.
 
 ## Comprobación que la sostiene
 
+### La medida, con el criterio de conteo declarado antes (arriba)
+
+Universo: los 40 últimos runs de `implement-sirius-work.yml` (2 no saltados) y
+de `repair-sirius-work.yml` (5 no saltados) el 13-09-2026. De esos **7 runs con
+veredicto aplicado, 3 imprimieron la línea** `Sin run de Quality terminado
+para`:
+
+| run | head | ¿hay hoy algún run de Quality para ese head? |
+|---|---|---|
+| [34726776261](https://github.com/canelamoraguezandyjesus-bot/sirius/actions/runs/34726776261) | `a8bb7b64…` | **no**, `[]` |
+| [34724754322](https://github.com/canelamoraguezandyjesus-bot/sirius/actions/runs/34724754322) | `1c408f86…` (el caso del encargo, #594) | **no**, `[]` |
+| [34724720944](https://github.com/canelamoraguezandyjesus-bot/sirius/actions/runs/34724720944) | `7ab8fb64…` | **no**, `[]` |
+
+Comandos: `gh run list --workflow … --limit 40`, `gh run view <id> --log | grep
+-c "Sin run de Quality terminado para"` y, para la tercera columna, `gh api
+"repos/…/actions/workflows/quality.yml/runs?head_sha=<head>&per_page=20"`, que
+devuelve `[]` en los tres.
+
+Dos lecturas de esa tabla:
+
+- **No es raro: es 3 de 7** en las dos horas de ciclo que cabían en el universo
+  declarado.
+- **No es una carrera.** El criterio de parada decía que si la lista vacía fuera
+  el caso normal de un run sano —la consulta adelantándose a la creación del
+  run— había que parar y escalar, porque el arreglo sería esperar y no avisar.
+  No lo es: un día después, los tres heads siguen sin ningún run de Quality. El
+  run no llegó tarde, no llegó nunca. El criterio no se dispara y se sigue.
+
+**Contraste que da la vuelta al argumento:** buscando en las incidencias del
+repositorio el aviso de los modos que **sí** hablan (`gh search issues …
+"QUALITY_SIN_ENCAMINAR"`) aparece **1** incidencia, la #545. Tres paradas del
+modo mudo no dejaron ni una. Un modo de fallo que avisa se puede contar desde
+fuera; uno que calla solo se puede contar bajando a los logs, que es
+exactamente lo que nadie hace.
+
+### Las pruebas, vistas fallar antes del cambio (ADR-001 §3)
+
+En `tests/automation/test_sirius_apply_verdict.py`, contra el guion **sin**
+modificar (`git stash push scripts/automation/sirius_apply_verdict.sh`), las
+cuatro nuevas caen:
+
+```
+FAILED …::test_sin_ningun_run_de_quality_la_incidencia_se_encamina_y_no_espera
+FAILED …::test_un_run_en_curso_se_distingue_de_no_haber_ninguno
+FAILED …::test_el_aviso_de_que_no_hay_ningun_run_se_publica_una_sola_vez
+FAILED …::test_unos_runs_terminados_sin_id_tampoco_salen_en_silencio
+```
+
+todas por lo mismo —`assert 0 != 0`: el paso terminaba en verde—, y con el
+cambio aplicado el fichero entero queda en verde (65 pruebas).
+
+`test_sin_runs_de_quality_no_se_relanza_nada` **fijaba el fallo**: afirmaba
+`returncode == 0` para cero runs. Se sustituye por la primera de las cuatro, que
+afirma lo contrario sobre la misma entrada. Otras cinco pruebas de forma del
+marcador (`…ready_for_review_with_pr`, las tres de la firma de ADR-140 y su
+adversaria) no sembraban runs y caían de rebote: se les siembra el caso
+ordinario —Quality corriendo para el head—, sin tocar ninguna de sus
+afirmaciones.
+
 ## Consecuencias
+
+- Una parada por ausencia de run deja de ser silenciosa: comentario en la
+  incidencia con la causa y el gesto, paso rojo y reintentable. La incidencia
+  sigue en `sirius:ci-pending`, como en los otros tres modos.
+- El paso **fallará en rojo** en un caso en que antes pasaba en verde. Es el
+  cambio que se pide: el verde anterior era falso, porque lo que declaraba
+  —«su cierre llegará»— no podía ocurrir.
+- Quien reciba el aviso todavía tiene que hacer algo a mano. Encaminarlo solo
+  necesita poder lanzar Quality, y eso es otro encargo, que además depende del
+  diagnóstico —también pendiente— de por qué GitHub no crea el run.
 
 ## Alternativas descartadas y por qué
 
+- **Lanzar Quality (opción 1):** fuera del alcance del encargo, toca dos
+  workflows y choca con ADR-002. Es lo único que haría el fallo imposible, y se
+  deja escrito arriba como tal.
+- **Esperar y reconsultar (opción 2):** la medida lo descarta. Los tres heads
+  medidos siguen sin run un día después; esperar solo retrasaría la misma
+  parada, ahora con un plazo inventado.
+- **Avisar pero salir en verde:** el aviso llegaría a la incidencia, pero el run
+  saldría verde y el tablero diría que el paso hizo su trabajo. Los otros tres
+  modos de fallo salen en rojo por la misma razón, y ADR-149 lo dejó escrito:
+  una lectura caída no es «no hay nada que relanzar».
+
 ## La lección
+
+- familia: `pieza-sin-lector`
+- sin esto se repetiría: escribir la rama «no hay nada que hacer» de un
+  encaminador como un `return 0` con un `echo`, de modo que la única prueba de
+  que el ciclo se ha parado viva en un log que nadie lee.
+- lo hace cumplir: `tests/automation/test_sirius_apply_verdict.py`

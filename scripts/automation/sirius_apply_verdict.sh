@@ -296,7 +296,10 @@ sha_matches() {
 # corrector: si ya hay un run de Quality TERMINADO para este head, se relanza,
 # y su nueva finalización emite el `workflow_run` que el avance consumirá con
 # la incidencia ya en `ci-pending`. Si hay uno en cola o corriendo, su
-# finalización natural basta y no se toca nada.
+# finalización natural basta y no se toca nada. Y si no hay NINGUNO, no hay
+# nada que esperar ni nada que relanzar: se avisa en la incidencia y el paso
+# queda rojo (ADR-183), porque callarse ahí dejaba la incidencia esperando
+# para siempre un evento que nadie iba a emitir.
 #
 # Tokens: las LECTURAS de Actions van con SIRIUS_READ_TOKEN (el github.token
 # del paso, con actions:read) cuando el workflow lo da; el POST va con el token
@@ -324,12 +327,24 @@ primera_linea_de_gh() {
 # run, con la causa citada y el gesto que desbloquea.
 avisar_quality_sin_encaminar() {
   local fase="$1" run="$2" detalle="$3" marker="" body_file="" run_line=""
+  local que_pasa="" desbloquea=""
   if [ -n "$run" ]; then
     marker="<!-- sirius-quality-sin-encaminar:${head_sha}:${fase}:${run} -->"
     run_line="- Run de Quality terminado y sin encaminar: https://github.com/${REPO}/actions/runs/${run}"
   else
     marker="<!-- sirius-quality-sin-encaminar:${head_sha}:${fase} -->"
     run_line="- Run de Quality: no se pudo consultar."
+  fi
+  que_pasa="- Qué pasa: Quality puede haber terminado para este head ANTES de que la incidencia entrara en \`sirius:ci-pending\`, y ese resultado no se encaminará solo (deuda 3 de la bitácora, ADR-149). La incidencia queda en \`sirius:ci-pending\` y este paso, reintentable."
+  desbloquea="- Qué la desbloquea: relanzar a mano el run de Quality de este head (Actions → Re-run all jobs) o reejecutar este paso. Si el detalle dice \`HTTP 403 … personal access token\`, el PAT necesita el permiso «Actions: Read and write» en el repositorio."
+  # ADR-183: cuando NO hay ningún run para este head, el gesto que desbloquea
+  # no puede ser «relanza el run»: no hay ninguno que relanzar. El aviso lo
+  # dice tal cual, porque un aviso que manda al operador a un run inexistente
+  # es peor que no avisar.
+  if [ "$fase" = "sin-runs-para-el-head" ]; then
+    run_line="- Run de Quality para este head: NINGUNO. GitHub no creó ninguno."
+    que_pasa="- Qué pasa: no existe ningún run de Quality para este head, así que no hay ningún \`workflow_run\` que pueda encaminar la incidencia, y este paso solo sabe RE-lanzar un run existente, no LANZAR uno (ADR-183). La incidencia queda en \`sirius:ci-pending\` y este paso, reintentable."
+    desbloquea="- Qué la desbloquea: hacer que Quality corra para este head —un push a la rama de la PR, o cerrar y reabrir la PR— y después reejecutar este paso, que encontrará el run y lo encaminará. Por qué GitHub no creó el run es un diagnóstico aparte."
   fi
   body_file="$(mktemp)"
   printf '%s\n\n%s\n\n%s\n%s\n%s\n%s\n%s\n' \
@@ -338,8 +353,8 @@ avisar_quality_sin_encaminar() {
     "- Head SHA: \`${head_sha}\`" \
     "$run_line" \
     "- Fase que falló: \`${fase}\`. Detalle de \`gh\`: ${detalle:-sin detalle}" \
-    "- Qué pasa: Quality puede haber terminado para este head ANTES de que la incidencia entrara en \`sirius:ci-pending\`, y ese resultado no se encaminará solo (deuda 3 de la bitácora, ADR-149). La incidencia queda en \`sirius:ci-pending\` y este paso, reintentable." \
-    "- Qué la desbloquea: relanzar a mano el run de Quality de este head (Actions → Re-run all jobs) o reejecutar este paso. Si el detalle dice \`HTTP 403 … personal access token\`, el PAT necesita el permiso «Actions: Read and write» en el repositorio." >"$body_file"
+    "$que_pasa" \
+    "$desbloquea" >"$body_file"
   sirius_comment_once "$REPO" "$ISSUE" "$marker" "$body_file" \
     || echo "::warning::No se pudo publicar el aviso QUALITY_SIN_ENCAMINAR en la incidencia." >&2
   rm -f "$body_file"
@@ -347,6 +362,7 @@ avisar_quality_sin_encaminar() {
 
 relanzar_quality_si_ya_termino() {
   local runs_json="" activos="" terminado="" marker="" scan_file="" body_file="" err_file=""
+  local fase_sin_relanzable="" detalle_sin_relanzable=""
   err_file="$(mktemp)"
   if ! runs_json="$( ( export GH_TOKEN="${SIRIUS_READ_TOKEN:-${GH_TOKEN:-}}"
       sirius_retry gh api \
@@ -385,8 +401,35 @@ relanzar_quality_si_ya_termino() {
   fi
   terminado="$(printf '%s' "$runs_json" | jq -r '[.[] | select(.status == "completed")] | .[0].id // empty' 2>/dev/null || true)"
   if [ -z "$terminado" ]; then
-    echo "Sin run de Quality terminado para ${head_sha}; su cierre llegará con la incidencia ya en ci-pending."
-    return 0
+    # ADR-183. Aquí no hay ningún run sin terminar —eso ya salió arriba, y ese
+    # camino sigue esperando—, así que solo quedan dos formas de llegar y
+    # ninguna de las dos deja nada que pueda encaminar la incidencia:
+    #
+    #  * la lista viene VACÍA: GitHub no creó ningún run de Quality para este
+    #    head. La incidencia se quedaría en `ci-pending` esperando un
+    #    `workflow_run` que nadie va a emitir, porque no hay ningún run que
+    #    pueda cerrarse. Ocurrió el 12-09-2026 con el head `1c408f86` de la
+    #    incidencia #594, y en 3 de los 7 runs con veredicto de aquella noche;
+    #    ninguno de los tres heads tiene run de Quality a día de hoy.
+    #  * la lista trae runs completed pero ninguno con `id` legible: tampoco
+    #    hay id con el que relanzar.
+    #
+    # Este paso sabe RE-lanzar un run, no LANZAR uno: `quality.yml` solo se
+    # dispara por `push` a `main` y por `pull_request`, y el avance solo acepta
+    # `workflow_run.event == 'pull_request'`. Así que se toma la segunda salida
+    # del encargo, la misma que los otros tres modos de fallo: avisar en la
+    # incidencia y dejar el paso rojo y reintentable. Lo que NO puede volver a
+    # pasar es el `return 0` mudo que esto sustituye.
+    if [ "$(printf '%s' "$runs_json" | jq -r 'length' 2>/dev/null || echo 0)" = "0" ]; then
+      fase_sin_relanzable="sin-runs-para-el-head"
+      detalle_sin_relanzable="la consulta no devolvió ningún run de Quality para este head"
+    else
+      fase_sin_relanzable="runs-sin-id-relanzable"
+      detalle_sin_relanzable="hay runs de Quality terminados para este head, pero ninguno con id con el que relanzar: $(printf '%s' "$runs_json" | tr -d '\n' | head -c 120)"
+    fi
+    avisar_quality_sin_encaminar "$fase_sin_relanzable" "" "$detalle_sin_relanzable"
+    echo "::error::Sin run de Quality relanzable para el head ${head_sha} (${fase_sin_relanzable}); la incidencia queda en ci-pending y este paso, reintentable." >&2
+    exit 1
   fi
   marker="<!-- sirius-quality-relanzado:${head_sha}:${terminado} -->"
   scan_file="$(mktemp)"

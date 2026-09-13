@@ -26,7 +26,7 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **173**.
+- Decisiones (ADR): **174**.
 - Bloques del motor: 17 cerrado, 1 fuera_de_alcance, 2 pendiente.
 - Defectos registrados: 32 cerrado.
 - Investigaciones: **9** (fotos con fecha; caducan).
@@ -39,6 +39,7 @@ está escrito. Si sale pobre, se arregla en el ADR.
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| [183](docs/decisions/ADR-183-la-ausencia-de-run-de-quality-para-el-head-se-encamina-no-se-espera-en-silencio.md) | 2026-09-13 | PROPUESTO | La ausencia de run de Quality para el head se encamina, no se espera en silencio | Opción 3. En `relanzar_quality_si_ya_termino`, la rama que hoy sale con `return 0` cuando no hay ningún run relanzable pasa a llamar a `avisar_quality_sin_encaminar` y a terminar en rojo, exactamente como `consulta-runs-fallida`… |
 | [180](docs/decisions/ADR-180-el-numero-del-siguiente-adr-se-calcula-contra-las-ramas-del-remoto-no-contra-las-que-el-clon-tenga-traidas.md) | 2026-09-12 | PROPUESTO | El numero del siguiente ADR se calcula contra las ramas del remoto, no contra las que el clon tenga traidas | `scripts/siguiente_adr.py` trae las cabezas del remoto antes de calcular el número, con el refspec explícito `+refs/heads/*:refs/remotes/origin/*` para que un clon estrecho -el de una sesión remota, que clona una sola rama- también las… |
 | [179](docs/decisions/ADR-179-la-guarda-de-piezas-sin-llamante-deriva-su-inventario-del-codigo-del-motor.md) | 2026-09-12 | PROPUESTO | La guarda de piezas sin llamante deriva su inventario del codigo del motor | El inventario de `tests/automation/test_piezas_con_llamante.py` se deriva de `src/sirius_engine` con `ast`, en tres formas de pieza: `modulo:`, `definicion:` y `campo:`. Lo escrito a mano pasa a ser `SIN_LLAMANTE_CONOCIDO`, lo que se resta. |
 | [176](docs/decisions/ADR-176-el-cierre-de-una-incidencia-se-retoma-desde-donde-se-quedo.md) | 2026-09-12 | PROPUESTO | El cierre de una incidencia se retoma desde donde se quedó | El cierre de una parada sin salida se comprueba DESPUÉS de todo lo demás, y se retoma desde el estado en que el motor está. Primero se calcula el plan por etiquetas y, si hace falta, el recorrido acreditado, exactamente como siempre. Solo… |
@@ -224,10 +225,15 @@ de memoria.
 
 | Familia | Veces | Hay prueba que la haga cumplir | ADR |
 |---|---|---|---|
+| `pieza-sin-lector` | 2 | sí | [183](docs/decisions/ADR-183-la-ausencia-de-run-de-quality-para-el-head-se-encamina-no-se-espera-en-silencio.md), [175](docs/decisions/ADR-175-un-tablero-por-incidencia-un-solo-comentario-que-el-motor-mantiene-al-dia.md) |
 | `regla-que-depende-de-que-alguien-se-acuerde` | 2 | sí | [179](docs/decisions/ADR-179-la-guarda-de-piezas-sin-llamante-deriva-su-inventario-del-codigo-del-motor.md), [174](docs/decisions/ADR-174-la-mina-en-dos-pasadas-la-leccion-se-declara-en-el-adr-que-la-produce-y-las-familias-se-cuentan-solas.md) |
 | `medir-lo-que-se-tiene-en-vez-de-lo-que-hay` | 1 | sí | [180](docs/decisions/ADR-180-el-numero-del-siguiente-adr-se-calcula-contra-las-ramas-del-remoto-no-contra-las-que-el-clon-tenga-traidas.md) |
-| `pieza-sin-lector` | 1 | sí | [175](docs/decisions/ADR-175-un-tablero-por-incidencia-un-solo-comentario-que-el-motor-mantiene-al-dia.md) |
 | `plan-que-hay-que-terminar-de-una-sentada` | 1 | sí | [176](docs/decisions/ADR-176-el-cierre-de-una-incidencia-se-retoma-desde-donde-se-quedo.md) |
+
+### `pieza-sin-lector`
+
+- **[ADR-183](docs/decisions/ADR-183-la-ausencia-de-run-de-quality-para-el-head-se-encamina-no-se-espera-en-silencio.md)** — escribir la rama «no hay nada que hacer» de un (lo hace cumplir `tests/automation/test_sirius_apply_verdict.py`).
+- **[ADR-175](docs/decisions/ADR-175-un-tablero-por-incidencia-un-solo-comentario-que-el-motor-mantiene-al-dia.md)** — proyectar en cada pasada el estado entero de una incidencia -fase, rondas, Quality, PR, diagnóstico- y no enseñárselo nunca a quien tiene que decidir; es la novena vez que un dato correcto de esta casa no tiene lector, tres días después de la octava. (lo hace cumplir `tests/engine/test_tablero.py`).
 
 ### `regla-que-depende-de-que-alguien-se-acuerde`
 
@@ -237,10 +243,6 @@ de memoria.
 ### `medir-lo-que-se-tiene-en-vez-de-lo-que-hay`
 
 - **[ADR-180](docs/decisions/ADR-180-el-numero-del-siguiente-adr-se-calcula-contra-las-ramas-del-remoto-no-contra-las-que-el-clon-tenga-traidas.md)** — preguntarle a la copia local por un hecho que vive fuera -las ramas traídas en vez de las que existen- y creer que la respuesta cubre el caso; aquí el guion veía el 3,4% de las ramas y repartió el mismo número tres veces en un día. (lo hace cumplir `tests/automation/test_registro_de_decisiones.py`).
-
-### `pieza-sin-lector`
-
-- **[ADR-175](docs/decisions/ADR-175-un-tablero-por-incidencia-un-solo-comentario-que-el-motor-mantiene-al-dia.md)** — proyectar en cada pasada el estado entero de una incidencia -fase, rondas, Quality, PR, diagnóstico- y no enseñárselo nunca a quien tiene que decidir; es la novena vez que un dato correcto de esta casa no tiene lector, tres días después de la octava. (lo hace cumplir `tests/engine/test_tablero.py`).
 
 ### `plan-que-hay-que-terminar-de-una-sentada`
 
