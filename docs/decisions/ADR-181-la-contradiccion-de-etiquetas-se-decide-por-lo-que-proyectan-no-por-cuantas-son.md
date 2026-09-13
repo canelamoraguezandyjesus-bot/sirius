@@ -392,6 +392,14 @@ la cuarta pareja inexistente— coinciden con ese recuento y se dejan intactas.
 Las cifras del vocabulario de 13 etiquetas que aún aparecen lo hacen siempre
 marcadas como medición inicial o como cita de una frase ya corregida.
 
+**Validación de la ronda.** Una sola invocación de
+`pwsh -File scripts/check.ps1` sobre el árbol de `9eb997a3` —las tres
+correcciones ya puestas—: `ruff format --check` sin cambios, `ruff check`
+«All checks passed!», `mypy src tests` «Success: no issues found in 594 source
+files» y `pytest` **6393 passed, 17 skipped, 2 xfailed en 658.24s**, **código
+de salida 0**. El único commit posterior es documental: registra aquí y en el cuerpo de la PR esta misma
+terna, y no toca código ni pruebas.
+
 ## Consecuencias
 
 - Una incidencia con `sirius:repair-requested` + `sirius:repairing` —o con las
