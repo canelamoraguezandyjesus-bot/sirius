@@ -331,7 +331,9 @@ def main(
             linea("detrás. No se borra ni se cancela solo: el diario es append-only y")
             linea("cancelarlo es tu decisión, no la de este comando.")
             linea("Para verlo junto a todo lo demás que espera decisión, abre la sesión")
-            linea(f"«sirius-motor --diario {_ruta_copiable(diario_efectivo)}» y teclea «/trabajos».")
+            linea(
+                f"«sirius-motor --diario {_ruta_copiable(diario_efectivo)}» y teclea «/trabajos»."
+            )
         return 3
 
     assert resultado.work_item is not None
