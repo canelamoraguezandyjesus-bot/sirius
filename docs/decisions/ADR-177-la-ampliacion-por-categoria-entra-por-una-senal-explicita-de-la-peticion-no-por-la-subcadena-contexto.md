@@ -361,17 +361,17 @@ es la 2053.
 
 **Cadena completa como UNA SOLA invocación** (ADR-145, ADR-153), con
 `pwsh -File scripts/check.ps1` y su código de salida capturado (ADR-154). Su
-cola va **anclada al árbol sobre el que se corrió**: el de `cea84f1f` más la
-reformulación de esta misma sección; lo único que este commit añade sobre el
-árbol medido es la transcripción de la cola que sigue.
+cola va **anclada al árbol sobre el que se corrió**: el de `beffc7a1` más la
+transcripción que sigue; lo único que este commit añade sobre el árbol medido
+es esa transcripción y el re-anclado de este párrafo.
 
 ```
-5461 passed, 17 skipped, 2 xfailed in 537.49s (0:08:57)
+6391 passed, 17 skipped, 2 xfailed in 469.48s (0:07:49)
 EXIT_CODE_CHECK=0
 ```
 
 **Esa terna es la de su árbol y no pretende ser la del head vigente**, y ésta
-es la corrección de fondo que trae esta ronda: las dos anteriores fallaron por
+fue la corrección de fondo de la ronda 8: las dos rondas anteriores fallaron por
 lo mismo —una con `f6ed801`, la siguiente con `6c248ea`—, y el defecto no
 estaba en el SHA elegido sino en la forma de afirmar algo sobre «lo posterior»
 a un ancla que esta ficha no controla. Sesiones ajenas a esta vertical empujan
@@ -384,8 +384,13 @@ regla que sí se sostiene entre fusiones es ésta: la cifra del head publicado e
 reporta la ejecución de Quality de ese head**, y ahí es donde hay que leerla,
 no aquí. Para `cea84f1f`, la ejecución de Quality —run 34726068458, conclusión
 `success`; es de Quality, no una corrida local de `check.ps1`— reportó
-`5461 passed, 17 skipped, 2 xfailed in 509.08s`; la de un head posterior será
-otra y se lee en su propio run.
+`5461 passed, 17 skipped, 2 xfailed in 509.08s`, cifra que sigue siendo la de
+**su** árbol y no la de este head; la de un head posterior será otra y se lee
+en su propio run. La distancia entre aquel 5461 y el 6391 de `beffc7a1` la
+explica entera la tercera fusión de `main` (`a8bb7b6...5ae16624`, ADR-179 con
+su `tests/automation/test_piezas_con_llamante.py` parametrizado), que el
+compare de abajo ya tiene verificada: ningún fichero de `src/sirius/`,
+`tests/unit/`, `tests/integration/` ni `tests/acceptance/`.
 
 Que las fusiones suben la terna **sin tocar H4** sí es comprobable, y conviene
 dejarlo escrito porque una ronda anterior lo daba por imposible: ancló
