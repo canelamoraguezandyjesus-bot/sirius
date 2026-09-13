@@ -1900,8 +1900,8 @@ def test_sin_ningun_run_de_quality_la_incidencia_se_encamina_y_no_espera(tmp_pat
     `return 0` mudo. La incidencia se quedó en `sirius:ci-pending` esperando un
     `workflow_run` que nadie podía emitir —no había ningún run que cerrar— y no
     avisó a nadie. Aquí se fija lo contrario: sigue en `ci-pending`, no se
-    relanza nada (no hay id que relanzar), el paso queda ROJO y reintentable, y
-    el aviso llega a la incidencia como en los otros tres modos de fallo.
+    relanza nada (no hay id que relanzar), el paso queda ROJO y el aviso llega
+    a la incidencia como en los otros tres modos de fallo.
     """
     env = _setup(tmp_path)
     head = "c4d482267d9a"
@@ -1927,13 +1927,9 @@ def test_sin_ningun_run_de_quality_la_incidencia_se_encamina_y_no_espera(tmp_pat
     assert "no existe ningún run" not in comments
     assert "la consulta funcionó" in comments
     assert "indexación" in comments, "el aviso nombra la carrera que no sabe distinguir"
-    # Y el gesto que desbloquea no puede ser reejecutar este mismo job: la
-    # puerta del workflow ya no da `valid=true` porque la etiqueta consumible
-    # se retiró, así que «Aplicar el veredicto» no volvería a correr.
     assert "advance-sirius-after-quality.yml" in comments, (
         "lo que encamina es la finalización natural de Quality, no este paso"
     )
-    assert "Reejecutar este job NO sirve" in comments
     # Y los dos gestos no son intercambiables: `quality.yml` se dispara con
     # `on: pull_request` sin lista de `types`, así que reabrir la PR emite
     # `reopened` y el run sale sobre ESTE head; un push emite `synchronize`,
@@ -1942,13 +1938,10 @@ def test_sin_ningun_run_de_quality_la_incidencia_se_encamina_y_no_espera(tmp_pat
     assert "cerrar y reabrir la PR" in comments
     assert "mueve el head" in comments, "el push encamina, pero sobre un head nuevo"
     assert "para este head —un push" not in comments
-    # Y el aviso no puede prometer a la vez «este paso, reintentable» y
-    # «Reejecutar este job NO sirve»: la segunda es la cierta, porque la puerta
-    # del workflow exige la etiqueta consumible que `transition` ya retiró. Lo
-    # que sigue vivo y recuperable es la INCIDENCIA, no este paso.
-    assert "este paso, reintentable" not in comments, (
-        "el aviso no puede ofrecer un reintento del paso que él mismo desmiente"
-    )
+    # Lo que sigue vivo y recuperable es la INCIDENCIA, no este paso. Que el
+    # aviso no hable del reintento del paso lo fija
+    # `test_ningun_aviso_de_quality_sin_encaminar_habla_del_reintento_del_paso`
+    # sobre las CINCO fases, no aquí sobre una.
     assert "La INCIDENCIA queda viva en `sirius:ci-pending`" in comments
     # Ni puede prometer que la incidencia avanzará sola por un run preexistente
     # que YA había terminado cuando se consultó: ese `workflow_run` se emitió y
@@ -2001,17 +1994,9 @@ def test_unos_runs_terminados_sin_id_tampoco_salen_en_silencio(tmp_path: Path) -
     assert "ninguno trae `id` con el que relanzar" in comments
     assert "runs TERMINADOS" in comments
     # Aquí sí existe un run que el operador puede relanzar a mano, así que ese
-    # gesto se conserva. Lo que NO vale es el «o reejecutar este paso» del
-    # texto genérico: se llega aquí después de `transition`, que ya retiró la
-    # etiqueta consumible, así que la puerta del workflow no volvería a dar
-    # `valid=true` y «Aplicar el veredicto» no volvería a correr.
+    # gesto se conserva. Que el aviso no hable del reintento de ESTE paso lo
+    # fija la prueba compartida de las cinco fases, no esta.
     assert "Actions → Re-run all jobs" in comments
-    assert "reejecutar este paso" not in comments
-    # Y tampoco aquí puede el aviso llamar reintentable a un paso que dos
-    # líneas más abajo declara irrepetible: lo reintentable es la incidencia.
-    assert "este paso, reintentable" not in comments, (
-        "el aviso no puede ofrecer un reintento del paso que él mismo desmiente"
-    )
     assert "La INCIDENCIA queda viva en `sirius:ci-pending`" in comments
 
 
@@ -2172,6 +2157,81 @@ def test_si_la_respuesta_de_runs_es_ilegible_el_aviso_tambien_se_publica(tmp_pat
     assert f"sirius-quality-sin-encaminar:{head}:consulta-runs-ilegible" in comments
     assert "## QUALITY_SIN_ENCAMINAR" in comments
     assert "not-json" in comments, "el aviso cita lo que devolvió gh"
+
+
+# Las CINCO fases con las que `relanzar_quality_si_ya_termino` puede avisar.
+# La lista vive aquí, y no repartida en una aserción por prueba, porque la
+# propiedad de abajo es de la FUNCIÓN, no de ninguna fase: añadir una sexta sin
+# cumplirla tiene que poner esto en rojo sin que nadie se acuerde (ADR-183).
+FASES_SIN_ENCAMINAR: tuple[tuple[str, str], ...] = (
+    ("sin-runs-para-el-head", "sin_runs"),
+    ("runs-sin-id-relanzable", "runs_sin_id"),
+    ("consulta-runs-fallida", "quality_runs_fail"),
+    ("consulta-runs-ilegible", "quality_runs_illegible"),
+    ("relanzamiento-fallido", "rerun_fails"),
+)
+
+
+def _forzar_fase(env: dict[str, str], head: str, escenario: str) -> None:
+    """Coloca al guion en la fase pedida, sin tocar nada más."""
+    if escenario == "sin_runs":
+        return  # por omisión no hay ningún run para el head
+    if escenario == "runs_sin_id":
+        _seed_quality_runs(env, head, [{"status": "completed", "conclusion": "success"}])
+        return
+    if escenario == "rerun_fails":
+        _seed_quality_runs(env, head, [{"id": 555, "status": "completed", "conclusion": "failure"}])
+    (_md(env) / escenario).write_text("", encoding="utf-8")
+
+
+@pytest.mark.parametrize(("fase", "escenario"), FASES_SIN_ENCAMINAR)
+def test_ningun_aviso_de_quality_sin_encaminar_habla_del_reintento_del_paso(
+    tmp_path: Path, fase: str, escenario: str
+) -> None:
+    """La clase, no la instancia (ADR-001 §2).
+
+    Tres rondas seguidas corrigieron una a una frases que afirmaban algo sobre
+    el sitio de llamada de `avisar_quality_sin_encaminar`: que este paso era
+    «reintentable», que bastaba «reejecutar este paso», que «reejecutar este
+    job NO sirve». Ninguna de las tres se comprobó contra el sitio de llamada, y
+    no podían comprobarse desde ahí: quien decide si el paso vuelve a correr es
+    la puerta del workflow que lo invocó, y **son dos puertas distintas**. La
+    del implementador relee las etiquetas y exige `sirius:implement-requested`,
+    que `transition` ya retiró, así que ahí no vuelve a correr; la del
+    corrector no relee su etiqueta consumible en ningún punto, así que ahí no
+    está comprobado. Un aviso al operador no puede apoyarse en la mitad
+    comprobada de una disyuntiva.
+
+    Así que la propiedad no es «di la frase correcta» sino «no hables de eso, y
+    di en cambio lo único observable desde este fichero»: que la INCIDENCIA
+    queda viva en `ci-pending` y que lo que la encamina es un `workflow_run` de
+    Quality. Se comprueba sobre las cinco fases a la vez, para que una sexta no
+    pueda volver a entrar con la frase de siempre.
+    """
+    env = _setup(tmp_path)
+    head = "c4d482267d9a"
+    vf = _implementador_listo(env, tmp_path, head)
+    _forzar_fase(env, head, escenario)
+    r = _run(env, "implementer", vf)
+
+    assert r.returncode != 0, "las cinco fases dejan el paso en rojo"
+    salida = r.stdout + r.stderr
+    assert fase in salida, "la fase tiene que quedar nombrada en el log"
+    comments = _comments(env)
+    assert f"sirius-quality-sin-encaminar:{head}:{fase}" in comments
+
+    # 1) Ni el aviso ni el `::error::` afirman nada sobre reejecutar el paso.
+    for texto, donde in ((comments, "el aviso"), (salida, "el log")):
+        assert "reintentable" not in texto, f"{donde} llama reintentable a un paso que no lo sabe"
+        assert "reejecutar este paso" not in texto, f"{donde} ofrece un gesto sin comprobar"
+        assert "Reejecutar este job" not in texto, f"{donde} desaconseja un gesto sin comprobar"
+
+    # 2) Y sí dicen lo observable: la incidencia sigue viva y qué la encamina.
+    assert "La INCIDENCIA queda viva en `sirius:ci-pending`" in comments
+    assert "advance-sirius-after-quality.yml" in comments, (
+        "el aviso nombra lo que de verdad encamina la incidencia"
+    )
+    assert "sirius:ci-pending" in _labels(env)
 
 
 def test_la_lectura_va_con_el_token_de_lectura_y_el_relanzamiento_con_el_pat(

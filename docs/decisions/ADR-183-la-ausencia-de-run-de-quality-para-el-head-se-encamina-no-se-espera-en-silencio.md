@@ -313,31 +313,95 @@ Las dos primeras fijan que ninguna de las dos fases se llama reintentable a sí
 misma; la tercera, que el aviso ya no promete que la incidencia avance sola por
 un run preexistente que ya había terminado cuando se consultó.
 
-### La cadena completa, anclada a su árbol
+**Ronda 5: la CLASE, no la instancia (ADR-001 §2).** Las rondas 2, 3 y 4
+corrigieron, una a una, frases de la misma familia: afirmaciones sobre el sitio
+de llamada de `avisar_quality_sin_encaminar` —cuántas fases hay, si el paso
+vuelve a ejecutarse, qué gesto desbloquea— que nadie comprobó contra el sitio de
+llamada. Tres rondas seguidas de la misma familia es exactamente lo que ADR-001
+§2 prohíbe seguir parcheando, así que aquí se busca la raíz.
 
-Una sola invocación de `pwsh -File scripts/check.ps1` (Ruff format, Ruff lint,
-mypy, pytest) sobre el árbol de `a05bc3a3`, el commit de la ronda 4 que corrige
-los dos textos. Ese árbol es el que se entrega salvo por este mismo párrafo: el
-único fichero que difiere del head es este ADR, y solo en las líneas que
-transcriben estas cifras.
+**La raíz: el texto habla de una puerta que su fichero no puede observar.** Y
+además la da por una sola cuando **son dos, y no se comportan igual**:
+
+| Puerta | ¿Relee la etiqueta consumible? | ¿Vuelve a correr «Aplicar el veredicto»? |
+|---|---|---|
+| `implement-sirius-work.yml` | Sí: exige `sirius:implement-requested`, que ya se retiró | No. **Comprobado** |
+| `repair-sirius-work.yml` | No la relee en ningún punto | **No comprobado** |
+
+La frase de la ronda 4 —«Reejecutar este job NO sirve: la etiqueta que abre su
+puerta ya se consumió»— es cierta del implementador y no está comprobada del
+corrector. Era la misma falta de siempre con el signo cambiado.
+
+**El barrido.** Se deja de afirmar lo que este fichero no puede ver, y se dice
+solo lo observable desde aquí: que la INCIDENCIA queda viva en `ci-pending`, que
+la recupera el gesto que el aviso nombra, y que este paso ya no puede
+encaminarla porque termina aquí y en rojo. Eso vale para las cinco fases a la
+vez, así que vive en el texto compartido. Con ello caen seis afirmaciones
+falsas: el `que_pasa` y el `desbloquea` genéricos, los tres `::error::` de
+`consulta-runs-fallida`, `consulta-runs-ilegible` y `relanzamiento-fallido`, y
+dos comentarios; y se retiran las dos frases sobre la puerta que las rondas 3 y
+4 habían escrito en los textos de fase. El comentario del `case` también contaba
+mal: el genérico no gobierna «las otras dos», sino **tres** —las dos lecturas
+caídas y `relanzamiento-fallido`—.
+
+**La prueba que lo hace imposible, no improbable.** Las afirmaciones de las
+rondas 3 y 4 eran una por fase, y por eso una sexta fase habría entrado con la
+frase de siempre. Se sustituyen por **una sola prueba parametrizada sobre las
+CINCO fases** —`test_ningun_aviso_de_quality_sin_encaminar_habla_del_`
+`reintento_del_paso`— que afirma la propiedad sobre el aviso publicado Y sobre
+el log.
+Añadir una fase sin cumplirla la pone en rojo sin que nadie tenga que acordarse.
+Vista caer contra el guion **sin** este barrido, las cinco parametrizaciones:
 
 ```
-=========== 6392 passed, 17 skipped, 2 xfailed in 510.15s (0:08:30) ============
+FAILED …[sin-runs-para-el-head-sin_runs]
+FAILED …[runs-sin-id-relanzable-runs_sin_id]
+FAILED …[consulta-runs-fallida-quality_runs_fail]
+FAILED …[consulta-runs-ilegible-quality_runs_illegible]
+FAILED …[relanzamiento-fallido-rerun_fails]
+5 failed, 65 deselected
+```
+
+Es la primera ronda que añade pruebas: el fichero pasa de 65 a 70 (una por
+parametrización), porque la propiedad es de la función y no de ninguna fase.
+
+**Lo que esta ronda NO arregla, y queda escrito para no perderse.** La asimetría
+de las dos puertas es un defecto real y ajeno a esta PR: la del corrector no
+relee `sirius:repair-requested`, así que reejecutar ese workflow tras la
+transición a `ci-pending` no está fenced como en el implementador. Vive en otro
+fichero y fuera del objetivo de esta incidencia, así que se registra aquí y se
+eleva, no se toca. Tampoco se tocan los `::error::` de `stop_safely`, que
+también dicen «reintentable»: ahí el remedio del operador es otro —aplicar la
+etiqueta a mano— y el criterio de parada publicado antes de esta ronda no los
+incluía.
+
+### La cadena completa, anclada a su árbol
+
+La cadena de la **ronda 5** corre sobre el árbol que se entrega: idéntico al
+head salvo este mismo párrafo, que transcribe sus cifras. Los cuatro
+validadores encadenados —`ruff format --check`, `ruff check`, `mypy src tests`,
+`pytest` y `git diff --check`—, en el entorno de esta rama, que no tiene `pwsh`:
+
+```
+6397 passed, 17 skipped, 2 xfailed in 577.84s (0:09:37)
 EXITCODE=0
 ```
 
-El código de salida es el del propio `pwsh -File scripts/check.ps1`, capturado
-sin tubería (`> /tmp/check2.log 2>&1; echo "EXITCODE=$?"`).
+El código de salida es el de la cadena entera, capturado sin tubería
+(`> check600.log 2>&1; echo "EXITCODE=$?"`). Es la primera ronda en la que el
+recuento SUBE —6392 → 6397—, y sube exactamente cinco: una por parametrización
+de la prueba nueva. Las rondas 2, 3 y 4 no añadieron ninguna prueba, solo
+afirmaciones a dos ya existentes, y por eso todas midieron 6392.
 
-Cifras anteriores, cada una con su árbol: `6392 passed, 17 skipped, 2 xfailed in
-461.46s` sobre el árbol de `2277a48a` (ronda 3) y `… in 548.44s` sobre el de
-`9bb54ea3` (ronda 2). El recuento no cambia en ninguna ronda de corrección
-porque ninguna añadió pruebas, solo afirmaciones a dos ya existentes.
+Cifras anteriores, cada una con su árbol, medidas con `pwsh -File
+scripts/check.ps1`: `6392 passed, 17 skipped, 2 xfailed in 510.15s` sobre el
+árbol de `a05bc3a3` (ronda 4), `… in 461.46s` sobre el de `2277a48a` (ronda 3) y
+`… in 548.44s` sobre el de `9bb54ea3` (ronda 2).
 
 ## Consecuencias
 
 - Una parada por ausencia de run deja de ser silenciosa: comentario en la
-  incidencia con la causa y el gesto, paso rojo y reintentable. La incidencia
+  incidencia con la causa y el gesto, y paso rojo. La incidencia
   sigue en `sirius:ci-pending`, como en los otros tres modos.
 - El paso **fallará en rojo** en un caso en que antes pasaba en verde. Es el
   cambio que se pide: el verde anterior era falso, porque lo que declaraba
