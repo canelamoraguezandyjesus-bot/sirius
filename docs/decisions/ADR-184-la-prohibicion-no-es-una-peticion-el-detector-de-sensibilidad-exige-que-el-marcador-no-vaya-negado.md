@@ -141,8 +141,21 @@ El criterio mira la **negación gramatical local**, no la forma imperativa:
   `impide`… ), esa aparición prohíbe en vez de pedir y no cuenta.
 - La mirada se detiene antes en un **corte de oración** (`y`, `e`, `o`, `u`,
   `pero`, `sino`, `aunque`, `mas`, `embargo`, `solo`, `solamente`, `duda`,
-  `falta`, `olvides…`, `dudes…`, `dejes…`): si eso está entre el negador y el
+  `olvides…`, `dudes…`, `dejes…`): si eso está entre el negador y el
   marcador, el negador gobierna otra cosa.
+- `falta` corta **solo pegado a su `sin`** (`_CORTES_TRAS_SIN`). Como corte
+  incondicional dejaba sin ver el `no` de «no hace falta borrar la tabla», que
+  es una prohibición, y la puerta volvía a parar sobre ella: el corte de más
+  NO es gratis, resucita el falso positivo que este ADR cierra (ronda 3 de
+  #601). `duda` sí corta en cualquier posición, porque fuera de la locución es
+  la forma verbal de «no duda en borrar», que también **pide** el marcador.
+- Los verbos de doble negación (`_VERBOS_DE_DOBLE_NEGACION`: `olvides…`,
+  `dudes…`, `dejes…`) además **anulan** al negador que quede entre ellos y el
+  marcador: «no dejes ninguna fila **sin** borrar» pide borrarlas todas, y sin
+  esa anulación la mirada se paraba en ese `sin` antes de llegar al corte
+  `dejes` (ronda 3 de #601). Solo anulan si ellos mismos van precedidos de un
+  negador: es la estructura «no + verbo + … + negador + marcador» y ninguna
+  otra, para que «sin duda no hay que borrar» siga siendo una prohibición.
 
 Las dos listas son **cerradas y están escritas**, y sus dos modos de fallo NO
 son simétricos:
@@ -155,8 +168,14 @@ son simétricos:
   e `impedir` estuvieron en ella y se retiraron (ronda 2 de #601): en castellano
   encabezan la subordinada final «para evitar/impedir X, borra Y», donde la
   negación gobierna el propósito y el verbo principal **sí** se está pidiendo.
-  Las formas personales —«evita borrar», «impide que se borre»— no encabezan ese
-  giro y se quedan. Por el mismo motivo cortan `duda` y `falta` («sin duda
+  En la ronda 3 salieron por el mismo motivo las formas de **subjuntivo**
+  —`evites`, `eviten`, `impidas`, `impidan`—: son las que selecciona «para
+  que», y «para que impidan que crezca borra los logs» es el MISMO giro final
+  con otro sujeto. `impidan` se había añadido en la ronda 2 sin medirlo, junto
+  a la frase —hoy corregida— de que «las formas personales no encabezan ese
+  giro»: era falsa para el subjuntivo. Se quedan solo las formas que de verdad
+  no lo encabezan: el imperativo y el presente de indicativo «evita borrar»,
+  «impide que se borre». Por motivo análogo cortan `duda` y `falta` («sin duda
   borra», «sin falta borra»: ahí `sin` gobierna al sustantivo) y los verbos de
   doble negación `olvides`/`dudes`/`dejes` («no olvides borrar» **pide** borrar).
 
@@ -248,14 +267,27 @@ Escrito antes de que nadie lo descubra por su cuenta, y escrito entero:
    Los seis puntos anteriores caen del lado de parar de más; este no. Un giro
    que lleva dentro una palabra de `_NEGADORES` sin negar al marcador **calla la
    puerta**: la orden sale `ORDEN_INEQUIVOCA` y `dispatch_cli` la despacha sola.
-   Los tres giros medidos en la ronda 2 de #601 —«para evitar/impedir X, borra
-   Y», «sin duda/sin falta borra Y», «no olvides borrar Y»— están cubiertos con
-   prueba, pero **la familia no está cerrada**: cerrar «qué palabra niega de
-   verdad a cuál» es análisis sintáctico, y eso es el intérprete con modelo de
-   arquitectura §11, no este apaño. Lo que sí queda fijado es la regla de
-   mantenimiento: **antes de añadir un negador hay que comprobar que no
-   encabeza un giro final o adverbial**, porque añadirlo a la ligera abre este
-   agujero, no lo cierra.
+   Los giros medidos en las rondas 2 y 3 de #601 —«para evitar/impedir X, borra
+   Y», **«para que eviten/impidan X, borra Y»** (el mismo giro final con sujeto
+   distinto, que el castellano construye con «para que + subjuntivo»), «sin
+   duda/sin falta borra Y», «no olvides borrar Y» y **«no dejes X sin borrar»**—
+   están cubiertos con prueba, pero **la familia no está cerrada**: cerrar «qué
+   palabra niega de verdad a cuál» es análisis sintáctico, y eso es el
+   intérprete con modelo de arquitectura §11, no este apaño. Lo que sí queda
+   fijado es la regla de mantenimiento: **antes de añadir un negador hay que
+   comprobar que no encabeza un giro final o adverbial** —y el subjuntivo
+   cuenta—, porque añadirlo a la ligera abre este agujero, no lo cierra.
+8. **El corte de oración tampoco es gratis, y falla al revés.** Un corte de más
+   no «solo hace parar»: hace que una PROHIBICIÓN vuelva a parar, que es el
+   falso positivo que este ADR viene a cerrar. Pasó con `falta` en la ronda 2
+   —«no hace falta borrar la tabla» paraba porque el corte tapaba el `no`— y se
+   arregló en la ronda 3 estrechando el corte a su locución (`_CORTES_TRAS_SIN`).
+   La regla de mantenimiento simétrica a la del punto 7: **antes de añadir un
+   corte hay que comprobar que la palabra no aparece también dentro de una
+   negación real**. La tabla de «Medición» no se rehízo por esto, y está
+   comprobado que no hace falta: ninguno de los tres textos del diario
+   atraviesa un corte —`WI-20260912-235558` se silencia por `nunca` y
+   `WI-20260903-030529` por `ni`—, así que las cifras siguen siendo las suyas.
 
 ## Comprobación que la sostiene
 
@@ -320,6 +352,38 @@ La primera línea de cada fallo:
   `peticion_original` por los dos criterios.
 - Las cuatro validaciones obligatorias, en verde, sobre el árbol de la rama.
 
+### Ronda 3: el subjuntivo, el corte incondicional, la doble negación y la ruta
+
+Cuatro mutaciones más, sembradas sobre el árbol de la rama en la ronda 3 y
+vistas caer con `PYTHONDONTWRITEBYTECODE=1 uv run pytest <fichero> -q`. Cada
+una se sembró sobre el árbol que ya llevaba las correcciones anteriores, y por
+eso su control crece:
+
+| Mutación | Fichero de prueba | Resultado |
+|---|---|---|
+| sin mutar (control, árbol final) | `test_intent_interpreter.py` | 75 passed |
+| sin mutar (control, árbol final) | `test_dispatch_cli.py` | 16 passed |
+| M11 — `_va_negado` vuelve a `return True` sin consultar `_negacion_anulada` | `test_intent_interpreter.py` | 2 failed, 69 passed |
+| M12 — `falta` vuelve a ser corte incondicional (`_CORTES_TRAS_SIN` vacío) | `test_intent_interpreter.py` | 2 failed, 71 passed |
+| M13 — `evites`, `eviten`, `impidas` e `impidan` vuelven a `_NEGADORES` | `test_intent_interpreter.py` | 2 failed, 73 passed |
+| M14 — la ruta del diario vuelve a salir sin `shlex.quote` | `test_dispatch_cli.py` | 1 failed, 15 passed |
+
+La primera línea de cada fallo:
+
+- M11 — `AssertionError: assert <TipoIntencion.ORDEN_INEQUIVOCA:
+  'orden_inequivoca'> is <TipoIntencion.SENSIBLE_O_MATERIAL:
+  'sensible_o_material'>` sobre «implementa esto: no dejes ninguna fila sin
+  borrar».
+- M12 — `assert <CausaEscalado.OPERACION_DESTRUCTIVA_O_IRREVERSIBLE:
+  'operacion_destructiva_o_irreversible'> is None` sobre «implementa esto: no
+  hace falta borrar ninguna fila».
+- M13 — `AssertionError: assert <TipoIntencion.ORDEN_INEQUIVOCA:
+  'orden_inequivoca'> is <TipoIntencion.SENSIBLE_O_MATERIAL:
+  'sensible_o_material'>` sobre «implementa el purgador: para que impidan que
+  crezca borra los logs».
+- M14 — `AssertionError: la ruta tiene que llegar entera como valor de
+  --diario, no partida en dos`.
+
 ### Un aviso sobre el método, porque costó una medición falsa
 
 Durante el ciclo de mutaciones, restaurar el fichero original con `cp` dejó al
@@ -360,7 +424,11 @@ puesta: si no, no está midiendo lo que cree.
   cerradas, escritas y probadas. Su modo de fallo por **omisión** es parar de
   más; el de **exceso** es callar una petición real (punto 7 de «Lo que este
   criterio NO detecta»), así que ampliar `_NEGADORES` no es una operación
-  inocua y hay que medirla como tal.
+  inocua y hay que medirla como tal. Los **cortes** tienen su propio modo de
+  fallo, y es el contrario del que sugiere el comentario del código: un corte
+  de más hace parar, sí, pero parar **sobre una prohibición**, que es el
+  defecto que este ADR cierra (punto 8). Ninguna de las dos listas se amplía
+  sin medir.
 - El encargo #601 sigue sin poder escribirse en lenguaje natural directo (punto
   2 de «Lo que este criterio NO detecta»). Este ADR no cierra eso y no finge
   cerrarlo.
