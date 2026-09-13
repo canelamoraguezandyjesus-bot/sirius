@@ -216,8 +216,13 @@ ningún ciclo, que es lo que costó una hora de motor en #607.
   entrada que antes daba una de las cuatro da otra cosa ahora.
 - La cadena entera —`pwsh -File scripts/check.ps1`, una sola invocación: Ruff
   format, Ruff lint, `mypy src tests` y `pytest`— pasa **sobre el árbol de
-  `c50de78`**: `6546 passed, 17 skipped, 2 xfailed in 625.10s (0:10:25)`. El
-  único cambio posterior a ese árbol es este mismo punto de documentación.
+  `941751a`**, en una captura recién tomada sobre ese árbol (no la de la ronda
+  anterior): `6546 passed, 17 skipped, 2 xfailed in 618.72s (0:10:18)` y
+  **código de salida `0`**. Los dos datos hacen falta y no se sustituyen: la
+  terna dice qué hizo `pytest`, y el 0 —que `scripts/check.ps1` propaga desde
+  `$LASTEXITCODE`— es lo único que acredita que la invocación **entera** (Ruff
+  format, Ruff lint y `mypy` incluidos) terminó en verde. El único cambio
+  posterior a ese árbol es este mismo punto de documentación.
 
 ## Consecuencias
 
