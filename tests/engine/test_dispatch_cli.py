@@ -428,6 +428,13 @@ def test_una_parada_dice_donde_queda_el_trabajo_y_como_volver_a_el(tmp_path: Pat
     assert "operacion_destructiva_o_irreversible" in texto
     assert "needs_decision" in texto, "quien lee tiene que saber en qué estado quedó"
     assert "/trabajos" in texto, "y por dónde volver a encontrarlo"
+    # Y con la ruta del diario en el que está de verdad: `sirius-motor` sin
+    # argumentos resuelve OTRO diario -el suyo por defecto, o el de
+    # `SIRIUS_MOTOR_DIARIO`-, así que la instrucción sin ruta lleva a una
+    # sesión vacía (`cli.resolver_diario`).
+    assert f"sirius-motor --diario {diario}" in texto, (
+        "el paso indicado tiene que abrir ESTE diario, no el que resuelva por defecto"
+    )
 
     # Y el trabajo está de verdad ahí, en ese estado: el mensaje no promete un
     # sitio vacío.
@@ -435,3 +442,28 @@ def test_una_parada_dice_donde_queda_el_trabajo_y_como_volver_a_el(tmp_path: Pat
     work_item = store.get_work_item("WI-20260821-223000")
     assert work_item is not None
     assert work_item.estado.value == "needs_decision"
+
+
+def test_una_parada_en_ensayo_no_promete_un_sitio_donde_no_hay_nada(tmp_path: Path) -> None:
+    """La gemela sin `--ejecutar` de la anterior, que es el modo POR DEFECTO.
+
+    En ensayo el almacén es el de memoria: el trabajo NO queda anotado en
+    ningún diario y muere con el proceso. El mensaje de recuperación decía lo
+    contrario sin condición -«queda anotado en el diario en estado
+    «needs_decision»», y abre `sirius-motor` y teclea `/trabajos`-, que es
+    exactamente el sitio vacío que ADR-184 dice no prometer. Peor: el aviso
+    «ENSAYO: no se ha escrito nada en GitHub» está DESPUÉS del `return 3` de
+    esta rama, así que quien paraba en ensayo ni siquiera sabía que lo era.
+    """
+    diario = tmp_path / "diario.jsonl"
+    codigo, texto = _correr(["Borra la base de produccion"], diario=diario)
+
+    assert codigo == 3, texto
+    assert "NO lo he despachado" in texto
+    assert "operacion_destructiva_o_irreversible" in texto
+    assert "ENSAYO" in texto, "quien para en ensayo tiene que saber que es un ensayo"
+    assert "--ejecutar" in texto, "y qué hacer para que el trabajo quede anotado de verdad"
+    assert "/trabajos" not in texto, "no hay nada que listar: el trabajo no se ha anotado"
+    assert not diario.exists(), (
+        "un ensayo no escribe nada, así que el mensaje no puede remitir a un diario"
+    )

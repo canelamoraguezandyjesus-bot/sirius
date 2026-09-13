@@ -244,10 +244,14 @@ def main(
     # despacha, seguía sin usarlo.
     store: WorkEngineStore
     journal: DispatchJournal
+    #: La ruta del diario donde de verdad queda el trabajo, o ``None`` en
+    #: ensayo, donde no queda en ninguna. El mensaje de la parada la necesita
+    #: para no prometer un sitio que no existe ni una ruta que no es la suya.
+    diario_efectivo: Path | None = None
     if args.ejecutar:
-        diario = resolver_diario(argumento=args.diario, entorno=entorno)
-        store = DurableWorkEngineStore(diario)
-        journal = DurableDispatchJournal(_diario_de_despacho(diario))
+        diario_efectivo = resolver_diario(argumento=args.diario, entorno=entorno)
+        store = DurableWorkEngineStore(diario_efectivo)
+        journal = DurableDispatchJournal(_diario_de_despacho(diario_efectivo))
     else:
         store = InMemoryWorkEngineStore()
         journal = InMemoryDispatchJournal()
@@ -288,17 +292,33 @@ def main(
     # que aquí falta-. Lo que sí faltaba es DECIRLO: el mensaje daba el
     # work_id y la causa y callaba dónde quedaba el trabajo y cómo volver a
     # él, así que quedaba huérfano por invisible, no por estado (ADR-184).
+    #
+    # Pero decirlo solo vale si es verdad, y esta rama se alcanza también en
+    # ENSAYO, que es el modo POR DEFECTO: allí el almacén es el de memoria y no
+    # se escribe nada, así que el texto durable prometería un sitio vacío -y el
+    # aviso de ensayo queda más abajo, detrás de este `return`, o sea que quien
+    # para en ensayo ni siquiera lo leía-. Cada modo dice lo suyo. Y cuando el
+    # trabajo SÍ queda anotado, la instrucción de recuperación lleva la ruta
+    # efectiva del diario: `sirius-motor` sin argumentos resuelve el suyo
+    # (`resolver_diario`), que no tiene por qué ser este.
     if decision.resultado is ResultadoPuerta.CREAR_Y_ESCALAR:
         linea("He creado el trabajo, pero NO lo he despachado: necesita tu decisión.")
         linea(f"  Trabajo: {work_id}")
         if resultado.escalada is not None:
             linea(f"  Causa:   {resultado.escalada.causa.value}")
         linea("")
-        linea("Queda anotado en el diario en estado «needs_decision», sin incidencia")
-        linea("detrás. No se borra ni se cancela solo: el diario es append-only y")
-        linea("cancelarlo es tu decisión, no la de este comando.")
-        linea("Para verlo junto a todo lo demás que espera decisión, abre la sesión")
-        linea("«sirius-motor» y teclea «/trabajos».")
+        if diario_efectivo is None:
+            linea("ENSAYO: no se ha escrito nada. El trabajo NO queda anotado en el")
+            linea("diario -este ensayo usa un almacén en memoria- y muere con este")
+            linea("proceso: no hay nada que listar ni a lo que volver.")
+            linea("Repite la orden con «--ejecutar» para que quede anotado en estado")
+            linea("«needs_decision» y puedas decidir sobre él más tarde.")
+        else:
+            linea("Queda anotado en el diario en estado «needs_decision», sin incidencia")
+            linea("detrás. No se borra ni se cancela solo: el diario es append-only y")
+            linea("cancelarlo es tu decisión, no la de este comando.")
+            linea("Para verlo junto a todo lo demás que espera decisión, abre la sesión")
+            linea(f"«sirius-motor --diario {diario_efectivo}» y teclea «/trabajos».")
         return 3
 
     assert resultado.work_item is not None

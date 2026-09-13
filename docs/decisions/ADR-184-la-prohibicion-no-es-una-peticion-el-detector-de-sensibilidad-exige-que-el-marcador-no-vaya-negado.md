@@ -193,11 +193,28 @@ con 3 sin despachar. El trabajo queda en el diario **sin incidencia detrás**.
   dónde volver a él.
 
 Así que el mensaje de la parada ahora lo dice: en qué estado queda, que no se
-borra ni se cancela solo, y que la sesión `sirius-motor` lo lista con
-`/trabajos` junto a todo lo demás que espera decisión. Lo fija
+borra ni se cancela solo, y que la sesión `sirius-motor --diario <ruta>` lo
+lista con `/trabajos` junto a todo lo demás que espera decisión. **La ruta va
+en la instrucción, y es la efectiva**: `sirius-motor` sin argumentos resuelve
+el diario que le toque a él —el de `SIRIUS_MOTOR_DIARIO`, o el de por defecto
+(`cli.resolver_diario`)—, que no tiene por qué ser aquel en el que acaba de
+quedar el trabajo. Lo fija
 `test_una_parada_dice_donde_queda_el_trabajo_y_como_volver_a_el`, que además
 comprueba que el trabajo está de verdad en el diario en ese estado: el mensaje
 no promete un sitio vacío.
+
+**Y solo lo dice cuando es verdad.** Esta rama se alcanza también en ENSAYO,
+que es el modo POR DEFECTO (sin `--ejecutar`), y allí el almacén y el diario
+del despachador son los de memoria: no se escribe nada y el trabajo muere con
+el proceso. El texto durable prometía ahí, sin condición, un sitio vacío —el
+fallo exacto del que este apartado dice cuidarse—, y encima el aviso «ENSAYO:
+no se ha escrito nada en GitHub» vive **después** del `return 3` de esta rama,
+así que quien paraba en ensayo ni siquiera sabía que lo era. Ahora el ensayo
+dice que es un ensayo, que el trabajo NO queda anotado y que la orden se repita
+con `--ejecutar` si se quiere que quede. El código de salida sigue siendo 3 en
+los dos modos. Lo fija la gemela
+`test_una_parada_en_ensayo_no_promete_un_sitio_donde_no_hay_nada`, que además
+comprueba que el diario no llega a existir.
 
 Y la otra mitad del problema la arregla el criterio nuevo: de las tres paradas
 registradas, dos no habrían ocurrido. Los huérfanos se dejan de fabricar por
