@@ -360,6 +360,12 @@ avisar_quality_sin_encaminar() {
     runs-sin-id-relanzable)
       run_line="- Runs de Quality para este head: la consulta funcionó y devolvió runs TERMINADOS, pero ninguno trae \`id\` con el que relanzar."
       que_pasa="- Qué pasa: hay runs de Quality terminados para este head, pero ninguno con \`id\` utilizable, así que este paso no tiene a qué run pedirle un relanzamiento y no habrá ningún \`workflow_run\` nuevo que encamine la incidencia (ADR-183). La incidencia queda en \`sirius:ci-pending\` y este paso, reintentable."
+      # El gesto que SÍ funciona es el relanzamiento manual —aquí el run existe,
+      # solo que este paso no le vio el `id`—. El «o reejecutar este paso» del
+      # texto genérico NO: se llega aquí después de `transition`, que ya retiró
+      # la etiqueta consumible, así que la puerta del workflow ya no daría
+      # `valid=true` y «Aplicar el veredicto» no volvería a ejecutarse.
+      desbloquea="- Qué la desbloquea: relanzar a mano desde Actions → Re-run all jobs el run de Quality terminado de este head; cuando termine, su \`workflow_run\` despierta a \`advance-sirius-after-quality.yml\` y la incidencia avanza sola. Reejecutar este job NO sirve: la etiqueta que abre su puerta ya se consumió, así que el paso que publica este aviso no volvería a ejecutarse."
       ;;
   esac
   body_file="$(mktemp)"

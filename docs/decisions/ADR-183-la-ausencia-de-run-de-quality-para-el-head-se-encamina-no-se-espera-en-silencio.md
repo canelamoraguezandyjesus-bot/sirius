@@ -165,8 +165,12 @@ aviso genérico —pensado para las lecturas caídas— afirmaría lo contrario.
   primera.
 - `runs-sin-id-relanzable`: dice que la consulta funcionó y que hay runs
   terminados para el head pero ninguno con `id` con el que relanzar. Aquí sí
-  existe un run que el operador puede relanzar a mano, así que conserva el
-  gesto genérico que desbloquea.
+  existe un run que el operador puede relanzar a mano, así que conserva ese
+  gesto —Actions → Re-run all jobs—, pero **no** el «o reejecutar este paso»
+  del texto genérico: esta rama se alcanza después de `transition`, igual que
+  la anterior, así que la etiqueta consumible ya se retiró y el paso que
+  publica el aviso no volvería a ejecutarse. Por eso lleva su propio
+  `desbloquea` en vez del genérico.
 
 Lo que **no** cambia: el run en curso sigue esperando y sigue terminando en
 verde; el run terminado sigue relanzándose una sola vez con su marcador; las

@@ -1977,9 +1977,13 @@ def test_unos_runs_terminados_sin_id_tampoco_salen_en_silencio(tmp_path: Path) -
     assert "ANTES de que la incidencia entrara" not in comments
     assert "ninguno trae `id` con el que relanzar" in comments
     assert "runs TERMINADOS" in comments
-    # Aquí sí existe un run que el operador puede relanzar a mano, así que el
-    # gesto genérico que desbloquea se conserva.
+    # Aquí sí existe un run que el operador puede relanzar a mano, así que ese
+    # gesto se conserva. Lo que NO vale es el «o reejecutar este paso» del
+    # texto genérico: se llega aquí después de `transition`, que ya retiró la
+    # etiqueta consumible, así que la puerta del workflow no volvería a dar
+    # `valid=true` y «Aplicar el veredicto» no volvería a correr.
     assert "Actions → Re-run all jobs" in comments
+    assert "reejecutar este paso" not in comments
 
 
 def test_un_run_en_curso_se_distingue_de_no_haber_ninguno(tmp_path: Path) -> None:
