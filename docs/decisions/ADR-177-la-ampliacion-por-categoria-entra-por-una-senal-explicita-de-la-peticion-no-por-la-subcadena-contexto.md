@@ -301,64 +301,79 @@ es la 2053.
 ### Validación obligatoria
 
 **Cadena completa como UNA SOLA invocación** (ADR-145, ADR-153), con
-`pwsh -File scripts/check.ps1` y su código de salida capturado (ADR-154),
-anclada **al árbol de `6c248ea`** —el commit inmediatamente anterior a éste,
-ya con `main` (`9efaa3c`, el head que deja ADR-176 en #589) fusionado en la
-rama—. Lo posterior a ese árbol es **solo esta misma sección de validación**,
-que transcribe la cola de aquella ejecución: prosa de esta ficha y nada más,
-comprobable con `gh api` sobre el compare de las dos revisiones, que devuelve
-únicamente este fichero. No toca código ni pruebas, y por eso no puede mover
-la terna:
+`pwsh -File scripts/check.ps1` y su código de salida capturado (ADR-154). Su
+cola va **anclada al árbol sobre el que se corrió**: el de `cea84f1f` más la
+reformulación de esta misma sección; lo único que este commit añade sobre el
+árbol medido es la transcripción de la cola que sigue.
 
 ```
-5454 passed, 17 skipped, 2 xfailed in 618.69s (0:10:18)
+5461 passed, 17 skipped, 2 xfailed in 537.49s (0:08:57)
 EXIT_CODE_CHECK=0
 ```
 
-**La terna sube por la fusión de `main`, no por esta vertical, y hay que
-decirlo porque la ronda anterior lo daba por imposible.** La ronda 4 ancló
+**Esa terna es la de su árbol y no pretende ser la del head vigente**, y ésta
+es la corrección de fondo que trae esta ronda: las dos anteriores fallaron por
+lo mismo —una con `f6ed801`, la siguiente con `6c248ea`—, y el defecto no
+estaba en el SHA elegido sino en la forma de afirmar algo sobre «lo posterior»
+a un ancla que esta ficha no controla. Sesiones ajenas a esta vertical empujan
+sobre la rama fusiones de `main` que suben el total recolectado sin mover una
+línea de H4: han entrado dos —`1e3e11e6`/`836f2b8d` y `c7179dcf`/`cea84f1f`— y
+no hay motivo para suponer que sean las últimas. Así que esta sección **no
+afirma nada sobre los commits que vengan después**. La regla que sí se
+sostiene entre fusiones es ésta: la cifra del head publicado es **la que
+reporta la ejecución de Quality de ese head**, y ahí es donde hay que leerla,
+no aquí. Para `cea84f1f`, la ejecución de Quality —run 34726068458, conclusión
+`success`; es de Quality, no una corrida local de `check.ps1`— reportó
+`5461 passed, 17 skipped, 2 xfailed in 509.08s`; la de un head posterior será
+otra y se lee en su propio run.
+
+Que las fusiones suben la terna **sin tocar H4** sí es comprobable, y conviene
+dejarlo escrito porque una ronda anterior lo daba por imposible: ancló
 `5392 passed, 17 skipped, 2 xfailed` al árbol de `f6ed801`, anterior a la
-fusión, y afirmaba que lo posterior eran «solo ajustes documentales». Dejó de
-ser cierto en cuanto entraron los dos commits que traen `main` a la rama
-—`1e3e11e6` («Trae main a la rama de H4 y desatasca la espera de Quality») y
-`836f2b8d` («Regenera MEMORIA.md tras traer main a la rama de H4»)—, que
-incorporan el trabajo de otras verticales: ADR-175 (#588, el tablero por
-incidencia) y ADR-176 (#589, el cierre que se retoma desde donde se quedó).
-Ese código y esas pruebas **entran desde `main`**, no de H4: el compare
-`f6ed8014...836f2b8d` devuelve `src/sirius_engine/reflect.py`,
-`src/sirius_engine/tablero.py`, `src/sirius_engine/tablero_cli.py`,
-`tests/engine/test_tablero.py`, `tests/engine/test_tablero_cli.py`,
+primera fusión, y la presentó como vigente. El compare `f6ed8014...836f2b8d`
+devuelve `src/sirius_engine/reflect.py`, `src/sirius_engine/tablero.py`,
+`src/sirius_engine/tablero_cli.py`, `tests/engine/test_tablero.py`,
+`tests/engine/test_tablero_cli.py`,
 `tests/automation/test_sirius_comment_upsert.py`,
 `tests/automation/test_serializacion_del_motor.py`,
 `tests/engine/test_reflect.py`, `tests/engine/test_reflect_cli.py`,
 `pyproject.toml`, `scripts/automation/sirius_issue.sh` y
-`.github/workflows/tablero-de-incidencia.yml`, y **ni una sola línea** de
-`src/sirius/`, `tests/unit/`, `tests/integration/` ni `tests/acceptance/`,
-que es donde vive todo lo que H4 cambia. Por eso la terna sube sin que el
-trabajo de esta ficha se haya movido desde la ronda 2: lo que mide de más son
-casos ajenos que llegan con la fusión, no cobertura nueva de H4.
+`.github/workflows/tablero-de-incidencia.yml` —ADR-175 (#588) y ADR-176
+(#589)—. La segunda fusión es igual de ajena: el compare
+`6c248ea9...cea84f1f` devuelve `MEMORIA.md`, esta ficha, la ficha de ADR-180,
+`scripts/siguiente_adr.py` y `tests/automation/test_registro_de_decisiones.py`
+(+130/−1, cinco pruebas nuevas), que son ADR-180 (#595) llegando **desde
+`main`**. Ni uno solo de esos ficheros vive en `src/sirius/`, `tests/unit/`,
+`tests/integration/` ni `tests/acceptance/`, que es donde está todo lo que H4
+cambia. Lo que la terna mide de más son casos ajenos que entran con la fusión,
+no cobertura nueva de esta vertical.
 
-Ese mismo movimiento hace que el desglose de «+3 netos» de más abajo deje de
-ser la cuenta completa del head: sigue siendo exacto como cuenta de lo que
-**este trabajo** aporta sobre su base, pero la base ya no es `433fb11` sino
-`9efaa3c`, y al entrar `main` esta ficha aporta un caso parametrizado más
-—`test_todo_adr_obligado_declara_su_leccion[ADR-177-la-]`, de
-`tests/automation/test_mina_de_lecciones.py`, que entró con ADR-174 (#587):
-`_adr_obligados()` recorre `docs/decisions/ADR-*.md` y parametriza sobre todo
-ADR con número `>= PRIMER_ADR_CON_LECCION` (174), y 177 lo es—, así que lo
-que este trabajo suma sobre `main` son **+4**, no +3. La duración cambia,
-como cualquier medición de reloj en un runner distinto.
+**La base contra la que se mide esta rama no se clava: se calcula.** Es la
+base de mezcla del head con `main` —`gh api
+repos/canelamoraguezandyjesus-bot/sirius/compare/main...<head> --jq
+'.merge_base_commit.sha'`—, que para `cea84f1f` devuelve `f6fa1e68` (ADR-180,
+#595) y que la siguiente fusión volverá a mover. Sobre esa base el diff de la
+rama es exactamente el trabajo de H4 más `MEMORIA.md`. El desglose de «+3
+netos» de más abajo sigue siendo exacto como cuenta de lo que **este trabajo**
+aporta sobre su base, con una salvedad que no depende de ningún SHA: en cuanto
+la base incluye ADR-174 (#587) —y toda base posterior lo hace—, esta ficha
+aporta además un caso parametrizado,
+`test_todo_adr_obligado_declara_su_leccion[ADR-177-la-]` de
+`tests/automation/test_mina_de_lecciones.py` (`_adr_obligados()` recorre
+`docs/decisions/ADR-*.md` y parametriza sobre todo ADR con número
+`>= PRIMER_ADR_CON_LECCION`, que es 174, y 177 lo es), así que lo que suma
+sobre la base son **+4**, no +3. La duración cambia, como cualquier medición
+de reloj en un runner distinto.
 
 La quinta validación, **sobre el rango de la rama y no sin argumentos**
-(deuda 25), se corre **sin segunda revisión**: así compara la base vigente
-—`9efaa3c`, el commit de `main` que la rama ya tiene fusionado, y no el
-`e468113` de rondas anteriores— contra el **árbol de trabajo**, que es el
-contenido final de la rama incluida esta misma sección, y no contra un head
-ya superado. Es la comprobación barata que sí puede cubrir el árbol entero, y
-lo cubre:
+(deuda 25), se corre **sin segunda revisión**: compara esa base de mezcla
+—`f6fa1e68` para este head— contra el **árbol de trabajo**, que es el
+contenido final de la rama incluida esta misma sección, y no contra un head ya
+superado. Es la comprobación barata que sí puede cubrir el árbol entero, y lo
+cubre:
 
 ```
-$ git diff --check 9efaa3c
+$ git diff --check f6fa1e68
 EXIT=0
 ```
 
@@ -419,11 +434,11 @@ porque este trabajo añade **tres** casos netos al total recolectado:
   ficha añade exactamente un caso recolectado.
 
 +2 de los ficheros de pruebas y +1 de la ficha son los +3 que 5369 → 5372
-exigía sobre la base vieja `433fb11`. Sobre la base vigente `9efaa3c` son
-+4,
-porque esta ficha aporta además el caso de `test_mina_de_lecciones.py` que la
-sección «Validación obligatoria» desglosa. Ninguna prueba se ha relajado;
-ninguna cota del arnés se mueve.
+exigía sobre la base vieja `433fb11`. Sobre la base de mezcla del head
+—`f6fa1e68` para `cea84f1f`, y cualquiera posterior, porque todas incluyen ya
+ADR-174— son **+4**, porque esta ficha aporta además el caso de
+`test_mina_de_lecciones.py` que la sección «Validación obligatoria» desglosa.
+Ninguna prueba se ha relajado; ninguna cota del arnés se mueve.
 
 ## La lección
 
