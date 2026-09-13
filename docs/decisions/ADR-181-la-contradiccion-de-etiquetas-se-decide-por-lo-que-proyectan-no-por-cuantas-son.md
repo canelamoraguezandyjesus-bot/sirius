@@ -276,6 +276,29 @@ sitio de este módulo vuelve a decidir qué etiqueta significa qué estado»).
   tests/engine/test_mirror_projection.py` da `63 passed` (eran 62 antes de
   añadir la prueba de la etiqueta citada solo en un comentario).
 
+### Ronda 3 de corrección (la cifra que quedaba escrita dos veces)
+
+Dos frases seguían contando parejas con el vocabulario de 13 etiquetas, y por
+eso contradecían a la medición de este mismo ADR: «una de las cuatro que el
+criterio derivado exime solo» (arriba, dos viñetas bajo «3 parejas de 66») y la
+enumeración «activación, ejecución y revisión» de las consecuencias, que nombra
+una pareja de ejecución que ya no existe —tras retirar `sirius:audit-requested`,
+`sirius:implementing` es la única etiqueta en `(ACTIVE, EJECUTAR)`—. El mismo
+defecto estaba en el docstring de
+`test_par_de_activacion_planned_e_implement_requested_no_es_contradiccion`
+(«una de las cuatro parejas que la tabla exime sola»), que contradecía a su
+prueba hermana del mismo archivo.
+
+La raíz es escribir la cifra dos veces, así que el remedio no es corregirla sino
+**quitarla** (como ADR-179 en su ronda 3): las tres frases remiten ahora a la
+medición o al criterio —proyectar el mismo `(estado, fase)`—, que es lo único
+que se actualiza al cambiar el vocabulario. Son correcciones de prosa: no tocan
+código ni asertos, y por eso no llevan mutación; lo que las verifica es que
+`grep -rn "cuatro parejas\|una de las cuatro\|ejecución y revisión\|4 parejas\|de 78"`
+sobre este ADR, `tests/engine/test_mirror_projection.py` y
+`src/sirius_engine/mirror_projection.py` ya no devuelve nada (salida 1), y que
+`pwsh -File scripts/check.ps1` sigue en verde sobre el árbol final.
+
 ## Consecuencias
 
 - Una incidencia con `sirius:repair-requested` + `sirius:repairing` —o con las
