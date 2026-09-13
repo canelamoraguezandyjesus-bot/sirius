@@ -340,10 +340,11 @@ avisar_quality_sin_encaminar() {
   # ADR-183: cuando NO hay ningún run para este head, el gesto que desbloquea
   # no puede ser «relanza el run»: no hay ninguno que relanzar. El aviso lo
   # dice tal cual, porque un aviso que manda al operador a un run inexistente
-  # es peor que no avisar. Y las dos fases que este paso avisa sin `run`
-  # —ninguno para el head, o algunos sin `id`— no son «no se pudo consultar»:
-  # ahí la consulta funcionó, así que cada una lleva su propio texto y el
-  # genérico queda para los fallos de lectura de verdad.
+  # es peor que no avisar. De las cuatro fases que este paso avisa sin `run`,
+  # las dos NUEVAS —`sin-runs-para-el-head` y `runs-sin-id-relanzable`— no son
+  # «no se pudo consultar»: ahí la consulta funcionó, así que cada una lleva su
+  # propio texto. El genérico queda para las otras dos, que sí son fallos de
+  # lectura de verdad (`consulta-runs-fallida` y `consulta-runs-ilegible`).
   case "$fase" in
     sin-runs-para-el-head)
       # La lista vacía es una OBSERVACIÓN, no un hecho sobre GitHub: esta rama
