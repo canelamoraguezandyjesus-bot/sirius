@@ -351,16 +351,16 @@ avisar_quality_sin_encaminar() {
       # no distingue «GitHub no creó el run» de «la consulta se adelantó a su
       # creación o indexación», así que el aviso no afirma ninguna de las dos.
       run_line="- Runs de Quality encontrados para este head: NINGUNO (la consulta funcionó y devolvió una lista vacía)."
-      que_pasa="- Qué pasa: la consulta de Actions no encontró ningún run de Quality para este head, así que no consta ningún \`workflow_run\` que pueda encaminar la incidencia, y este paso solo sabe RE-lanzar un run existente, no LANZAR uno (ADR-183). Puede que GitHub no llegara a crearlo o que la consulta se adelantara a su creación o indexación: aquí no se distinguen los dos casos. La incidencia queda en \`sirius:ci-pending\` y este paso, reintentable."
+      que_pasa="- Qué pasa: la consulta de Actions no encontró ningún run de Quality para este head, así que no consta ningún \`workflow_run\` que pueda encaminar la incidencia, y este paso solo sabe RE-lanzar un run existente, no LANZAR uno (ADR-183). Puede que GitHub no llegara a crearlo o que la consulta se adelantara a su creación o indexación: aquí no se distinguen los dos casos. La INCIDENCIA queda viva en \`sirius:ci-pending\` y la recupera el gesto de abajo; ESTE paso, en cambio, no vuelve a ejecutarse."
       # No se pide reejecutar ESTE paso: `transition` ya dejó la incidencia en
       # `ci-pending` y retiró la etiqueta consumible, así que la puerta del
       # workflow ya no daría `valid=true` y «Aplicar el veredicto» no volvería
       # a correr. Lo que sí encamina es la finalización natural de Quality.
-      desbloquea="- Qué la desbloquea: hacer que Quality corra. Sobre ESTE MISMO head solo lo consigue cerrar y reabrir la PR (\`quality.yml\` se dispara con \`on: pull_request\` sin lista de \`types\`, así que \`reopened\` cuenta). Un push a la rama también encamina la incidencia, pero mueve el head: su run sería el de un head NUEVO, no el de este. Cuando ese run termine, su \`workflow_run\` despierta a \`advance-sirius-after-quality.yml\` y la incidencia avanza sola; lo mismo si el run ya existía y solo tardó en indexarse. Reejecutar este job NO sirve: la etiqueta que abre su puerta ya se consumió, así que el paso que publica este aviso no volvería a ejecutarse. Por qué no apareció el run es un diagnóstico aparte."
+      desbloquea="- Qué la desbloquea: hacer que Quality corra. Sobre ESTE MISMO head solo lo consigue cerrar y reabrir la PR (\`quality.yml\` se dispara con \`on: pull_request\` sin lista de \`types\`, así que \`reopened\` cuenta). Un push a la rama también encamina la incidencia, pero mueve el head: su run sería el de un head NUEVO, no el de este. Cuando ese run termine, su \`workflow_run\` despierta a \`advance-sirius-after-quality.yml\` y la incidencia avanza sola; lo mismo si el run ya existía y AÚN NO había terminado cuando se consultó. Si ya existía y ya había TERMINADO antes de la consulta, en cambio, su \`workflow_run\` ya se emitió y se consumió con la incidencia todavía en curso (deuda 3 de ADR-149): ese run no vuelve a avisar y hace falta igualmente uno de los dos gestos. Reejecutar este job NO sirve: la etiqueta que abre su puerta ya se consumió, así que el paso que publica este aviso no volvería a ejecutarse. Por qué no apareció el run es un diagnóstico aparte."
       ;;
     runs-sin-id-relanzable)
       run_line="- Runs de Quality para este head: la consulta funcionó y devolvió runs TERMINADOS, pero ninguno trae \`id\` con el que relanzar."
-      que_pasa="- Qué pasa: hay runs de Quality terminados para este head, pero ninguno con \`id\` utilizable, así que este paso no tiene a qué run pedirle un relanzamiento y no habrá ningún \`workflow_run\` nuevo que encamine la incidencia (ADR-183). La incidencia queda en \`sirius:ci-pending\` y este paso, reintentable."
+      que_pasa="- Qué pasa: hay runs de Quality terminados para este head, pero ninguno con \`id\` utilizable, así que este paso no tiene a qué run pedirle un relanzamiento y no habrá ningún \`workflow_run\` nuevo que encamine la incidencia (ADR-183). La INCIDENCIA queda viva en \`sirius:ci-pending\` y la recupera el gesto de abajo; ESTE paso, en cambio, no vuelve a ejecutarse."
       # El gesto que SÍ funciona es el relanzamiento manual —aquí el run existe,
       # solo que este paso no le vio el `id`—. El «o reejecutar este paso» del
       # texto genérico NO: se llega aquí después de `transition`, que ya retiró
@@ -451,7 +451,7 @@ relanzar_quality_si_ya_termino() {
       detalle_sin_relanzable="hay runs de Quality terminados para este head, pero ninguno con id con el que relanzar: $(printf '%s' "$runs_json" | tr -d '\n' | head -c 120)"
     fi
     avisar_quality_sin_encaminar "$fase_sin_relanzable" "" "$detalle_sin_relanzable"
-    echo "::error::Sin run de Quality relanzable para el head ${head_sha} (${fase_sin_relanzable}); la incidencia queda en ci-pending y este paso, reintentable." >&2
+    echo "::error::Sin run de Quality relanzable para el head ${head_sha} (${fase_sin_relanzable}); la incidencia queda viva en ci-pending y la recupera el gesto del aviso, pero este paso no vuelve a ejecutarse." >&2
     exit 1
   fi
   marker="<!-- sirius-quality-relanzado:${head_sha}:${terminado} -->"

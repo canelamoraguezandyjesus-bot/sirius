@@ -1942,6 +1942,21 @@ def test_sin_ningun_run_de_quality_la_incidencia_se_encamina_y_no_espera(tmp_pat
     assert "cerrar y reabrir la PR" in comments
     assert "mueve el head" in comments, "el push encamina, pero sobre un head nuevo"
     assert "para este head —un push" not in comments
+    # Y el aviso no puede prometer a la vez «este paso, reintentable» y
+    # «Reejecutar este job NO sirve»: la segunda es la cierta, porque la puerta
+    # del workflow exige la etiqueta consumible que `transition` ya retiró. Lo
+    # que sigue vivo y recuperable es la INCIDENCIA, no este paso.
+    assert "este paso, reintentable" not in comments, (
+        "el aviso no puede ofrecer un reintento del paso que él mismo desmiente"
+    )
+    assert "La INCIDENCIA queda viva en `sirius:ci-pending`" in comments
+    # Ni puede prometer que la incidencia avanzará sola por un run preexistente
+    # que YA había terminado cuando se consultó: ese `workflow_run` se emitió y
+    # se consumió con la incidencia aún en curso (deuda 3 de ADR-149).
+    assert "lo mismo si el run ya existía y solo tardó en indexarse" not in comments, (
+        "un run ya terminado antes de la consulta no vuelve a emitir su workflow_run"
+    )
+    assert "ya había TERMINADO antes de la consulta" in comments
 
 
 def test_el_aviso_de_que_no_hay_ningun_run_se_publica_una_sola_vez(tmp_path: Path) -> None:
@@ -1992,6 +2007,12 @@ def test_unos_runs_terminados_sin_id_tampoco_salen_en_silencio(tmp_path: Path) -
     # `valid=true` y «Aplicar el veredicto» no volvería a correr.
     assert "Actions → Re-run all jobs" in comments
     assert "reejecutar este paso" not in comments
+    # Y tampoco aquí puede el aviso llamar reintentable a un paso que dos
+    # líneas más abajo declara irrepetible: lo reintentable es la incidencia.
+    assert "este paso, reintentable" not in comments, (
+        "el aviso no puede ofrecer un reintento del paso que él mismo desmiente"
+    )
+    assert "La INCIDENCIA queda viva en `sirius:ci-pending`" in comments
 
 
 def test_un_run_en_curso_se_distingue_de_no_haber_ninguno(tmp_path: Path) -> None:

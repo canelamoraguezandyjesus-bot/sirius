@@ -159,7 +159,14 @@ aviso genérico —pensado para las lecturas caídas— afirmaría lo contrario.
   es el de un head NUEVO —encamina la incidencia igual, pero no cumple la
   promesa «para este head»—. En ambos casos, cuando ese run termine,
   su `workflow_run` despierta a `advance-sirius-after-quality.yml` y la
-  incidencia avanza sola. **No** pide reejecutar este job: `transition` ya dejó
+  incidencia avanza sola; y **lo mismo, pero solo**, si el run ya existía y
+  AÚN NO había terminado cuando se consultó. Si ya existía y ya había
+  TERMINADO antes de la consulta, su `workflow_run` se emitió y se consumió con
+  la incidencia todavía en `implementing`/`repairing` —que es justo la deuda 3
+  de ADR-149 que esta función existe para reparar—, no vuelve a emitirse y la
+  incidencia **no** avanza sola: hace falta igualmente uno de los dos gestos.
+  El aviso distingue los dos subcasos en vez de tranquilizar al operador
+  precisamente en el que no debe. **No** pide reejecutar este job: `transition` ya dejó
   la incidencia en `ci-pending` y retiró la etiqueta consumible, así que la
   puerta del workflow ya no daría `valid=true`
   (`implement-sirius-work.yml:239-247`, `repair-sirius-work.yml:593-599`) y el
@@ -176,6 +183,16 @@ aviso genérico —pensado para las lecturas caídas— afirmaría lo contrario.
   la anterior, así que la etiqueta consumible ya se retiró y el paso que
   publica el aviso no volvería a ejecutarse. Por eso lleva su propio
   `desbloquea` en vez del genérico.
+
+Y, por la misma razón, **ninguna de las dos fases llama reintentable a ESTE
+paso**: sería la promesa contraria a la que el propio aviso hace seis líneas más
+abajo («Reejecutar este job NO sirve»), y la verdadera es la segunda —la puerta
+de los dos workflows exige la etiqueta consumible que «Consumir el evento y
+marcar en curso» ya retiró, y «Aplicar el veredicto» está condicionado a
+`always() && steps.gate.outputs.valid == 'true'`, así que un «Re-run failed
+jobs» lo salta—. Lo que sigue vivo y recuperable es la **incidencia**, en
+`sirius:ci-pending`, por el gesto que cada fase describe; y eso es lo que dicen
+ahora las dos cadenas `que_pasa` y el `::error::` de esa rama.
 
 Lo que **no** cambia: el run en curso sigue esperando y sigue terminando en
 verde; el run terminado sigue relanzándose una sola vez con su marcador; las
