@@ -209,7 +209,7 @@ que la llamara.
   `ruff format --check .` (634 ficheros), `ruff check .`, `mypy src tests` (598
   ficheros) y `pytest`: **6573 pasan, 17 se saltan, 2 xfail**, en 631 s. Más
   `git diff --check`, sin avisos.
-- **19 mutaciones vistas caer**, una por regla nueva (ADR-001 §3), cada una
+- **20 mutaciones vistas caer**, una por regla nueva (ADR-001 §3), cada una
   anotada en el docstring de la prueba que la caza con el mensaje exacto del
   rojo. La lista, con la prueba que la detiene:
 
@@ -233,6 +233,7 @@ que la llamara.
   | ofrecer `--continuar` en la quinta causa | ahí no se ofrece lo que no lleva a nada |
   | ofrecer `--continuar` con una clase sin despachador | tampoco se ofrece lo que saldría con 5 |
   | quitar `--diario`/`--ejecutar` de la orden de `/trabajos` | el aviso de la sesión se copia tal cual |
+  | no traducir `FileNotFoundError` en `GitHubCliWriter._invocar` | los fallos operativos de `gh` salen como el error del puerto |
   | avisar en `/trabajos` sin condición / no avisar | el aviso sale cuando hay algo que decidir, y solo entonces |
 
   **Una de esas mutaciones enseñó algo que no se buscaba**: sustituir `return 2`
