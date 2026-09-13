@@ -365,7 +365,7 @@ def test_par_de_activacion_planned_e_implement_requested_no_es_contradiccion() -
     `implement-sirius-work.yml` retira las dos juntas al consumir el evento:
     esta combinación es una activación normal. Ya no está exenta por una lista
     escrita a mano, sino porque las dos etiquetas proyectan `(PLANNED,
-    PREPARAR)` -es una de las cuatro parejas que la tabla exime sola.
+    PREPARAR)` -queda exenta por proyectar el mismo destino, no por su cuenta.
     """
     metadatos = LecturaMetadatos(
         estado=LecturaEstado.OK,
