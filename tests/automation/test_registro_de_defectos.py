@@ -414,11 +414,16 @@ def test_los_lectores_de_adr_ven_un_numero_de_cuatro_cifras(tmp_path: Path) -> N
     """El contador llegará a ADR-1000 y el inventario no puede dejar de verlo.
 
     `test_registro_de_decisiones.py` admite `\\d{3,}` y `scripts/siguiente_adr.py`
-    genera con `\\d+`: el único sitio que exigía tres dígitos EXACTOS era este
-    fichero. El día del ADR-1000 su lección habría quedado fuera del inventario
-    derivado y un acuse `adr: 1000` habría pasado por ADR inventado, las dos
-    cosas sin que nada se pusiera en rojo —que es el modo de fallo que toda
-    esta guarda existe para impedir—.
+    genera con `\\d+`: de los lectores que ESTA guarda usa, el único que exigía
+    tres dígitos EXACTOS era este fichero. El día del ADR-1000 su lección
+    habría quedado fuera del inventario derivado y un acuse `adr: 1000` habría
+    pasado por ADR inventado, las dos cosas sin que nada se pusiera en rojo
+    —que es el modo de fallo que toda esta guarda existe para impedir—.
+
+    Aguas arriba el mismo modo de fallo sigue abierto: `_NUMERO` en
+    `tests/automation/test_mina_de_lecciones.py:46` conserva `^ADR-(\\d{3})-` y
+    con él filtra los ADR obligados. Ensancharlo cae fuera del alcance de
+    WI-20260913-000235 y pide incidencia propia.
     """
     (tmp_path / _ADR_DE_CUATRO_CIFRAS).write_text(_ADR_SEMBRADO, encoding="utf-8")
 
