@@ -180,7 +180,16 @@ sirius-decidir <work_id> (--continuar | --terminar) [--ejecutar] [--repo] [--blo
 - **La salida queda al alcance del propietario sin tocar el diario**: la parada
   de `sirius-despachar` nombra el comando exacto con el `work_id` y la ruta del
   diario ya puestos, y `/trabajos` lo recuerda cuando lista algo en
-  `needs_decision`. El camino que ADR-184 abrió —«abre `sirius-motor` y teclea
+  `needs_decision` —también con `--diario` y `--ejecutar`, porque la sesión se
+  abre a menudo contra un diario que `sirius-decidir` no resolvería solo y sin
+  `--ejecutar` la orden copiada solo haría el ensayo—. Y la condición para
+  ofrecer `--continuar` es **«este trabajo puede despacharse»**, no «no es la
+  quinta causa»: se comprueban también la clase (`TABLA_ACTIVACION`) y el carril
+  retirado, que son los otros dos motivos por los que `_no_se_puede_despachar`
+  sale con 5. Una orden sensible que el intérprete v0 no clasifica como
+  programación —«Borra la base de producción»— para por la cuarta causa con clase
+  `consulta-larga`, y ofrecerle `--continuar` sería prometer un despacho que no
+  va a ocurrir. El camino que ADR-184 abrió —«abre `sirius-motor` y teclea
   `/trabajos`»— dejaba de existir justo donde hacía falta.
 
 Ni un puerto nuevo ni una arista nueva en el dominio: `resolve_decision` ya
@@ -200,7 +209,7 @@ que la llamara.
   `ruff format --check .` (634 ficheros), `ruff check .`, `mypy src tests` (598
   ficheros) y `pytest`: **6573 pasan, 17 se saltan, 2 xfail**, en 631 s. Más
   `git diff --check`, sin avisos.
-- **17 mutaciones vistas caer**, una por regla nueva (ADR-001 §3), cada una
+- **19 mutaciones vistas caer**, una por regla nueva (ADR-001 §3), cada una
   anotada en el docstring de la prueba que la caza con el mensaje exacto del
   rojo. La lista, con la prueba que la detiene:
 
@@ -222,6 +231,8 @@ que la llamara.
   | quitar el bloque de la salida de la parada | la parada dice con qué orden se sale |
   | quitar `--diario` de la orden copiable | la orden se copia tal cual |
   | ofrecer `--continuar` en la quinta causa | ahí no se ofrece lo que no lleva a nada |
+  | ofrecer `--continuar` con una clase sin despachador | tampoco se ofrece lo que saldría con 5 |
+  | quitar `--diario`/`--ejecutar` de la orden de `/trabajos` | el aviso de la sesión se copia tal cual |
   | avisar en `/trabajos` sin condición / no avisar | el aviso sale cuando hay algo que decidir, y solo entonces |
 
   **Una de esas mutaciones enseñó algo que no se buscaba**: sustituir `return 2`

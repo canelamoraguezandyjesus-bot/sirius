@@ -534,6 +534,38 @@ def test_una_parada_de_la_quinta_causa_no_ofrece_continuar(tmp_path: Path) -> No
     assert "no está disponible en esta parada" in texto, "y hay que decir por qué no está"
 
 
+def test_una_parada_de_una_clase_sin_despachador_tampoco_ofrece_continuar(
+    tmp_path: Path,
+) -> None:
+    """La otra mitad de la anterior: la quinta causa no es el único «--continuar» muerto.
+
+    «Borra la base de producción» para por la CUARTA causa -destructiva-, no por
+    la quinta, así que `prefijo_vetado` es `None`; pero el intérprete v0 no la
+    clasifica como programación y el trabajo nace con clase «consulta-larga»,
+    que no está en `TABLA_ACTIVACION`. `sirius-decidir --continuar --ejecutar`
+    sobre ese trabajo sale con código 5 -lo fija
+    `test_decision_cli.py::test_una_clase_sin_despachador_no_se_reanuda`-, así
+    que ofrecer aquí esa orden es prometer un despacho que no va a ocurrir: la
+    misma familia que prometer un sitio vacío (ADR-184, ADR-188, ADR-189).
+
+    Las dos mitades de la demostración estaban en esta PR y nadie las juntaba.
+    Antes del cambio fallaba en `ofrecidas == []`: el bloque solo descartaba la
+    quinta causa.
+    """
+    diario = tmp_path / "diario.jsonl"
+    codigo, texto = _correr(["Borra la base de produccion", "--ejecutar"], diario=diario)
+
+    assert codigo == 3, texto
+    ofrecidas = [
+        fila for fila in texto.splitlines() if "sirius-decidir" in fila and "--continuar" in fila
+    ]
+    assert ofrecidas == [], (
+        f"«sirius-decidir --continuar» saldría con 5 sobre este trabajo: {ofrecidas}"
+    )
+    assert "--terminar" in texto, "la salida que sí tiene sigue ofreciéndose"
+    assert "no tiene" in texto and "despachador" in texto, "y hay que decir por qué no está"
+
+
 def test_una_parada_en_ensayo_no_promete_un_sitio_donde_no_hay_nada(tmp_path: Path) -> None:
     """La gemela sin `--ejecutar` de la anterior, que es el modo POR DEFECTO.
 

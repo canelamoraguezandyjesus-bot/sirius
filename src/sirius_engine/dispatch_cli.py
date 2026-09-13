@@ -116,6 +116,47 @@ class _EscritorDeEnsayo:
         return None
 
 
+def _por_que_no_se_puede_continuar(
+    *, prefijo_vetado: str | None, clase: WorkItemClass | None
+) -> tuple[str, ...] | None:
+    """Por qué «--continuar» NO puede despachar esta parada, o ``None`` si sí puede.
+
+    La condición es «puede despacharse», no «no es la quinta causa»:
+    `decision_cli._no_se_puede_despachar` rechaza «--continuar» con código 5 por
+    tres motivos más -clase fuera de `TABLA_ACTIVACION`, carril retirado y orden
+    no enlazada-, y los dos primeros son alcanzables por el mismo camino que
+    imprime este bloque. Una orden sensible que el intérprete v0 no clasifica
+    como programación -«Borra la base de producción»- para por la cuarta causa y
+    sale con clase «consulta-larga», que no tiene despachador: ofrecerle
+    «--continuar» es prometer un despacho que no va a ocurrir, la misma familia
+    que prometer un sitio vacío (ADR-184, ADR-188, ADR-189).
+
+    La tercera -orden no enlazada- no se comprueba aquí porque no puede fallar:
+    `aplicar_decision` acaba de guardar la orden del propietario en la evidencia
+    del trabajo que este bloque describe.
+    """
+    if prefijo_vetado is not None:
+        return (
+            "(«--continuar» no está disponible en esta parada: el despacho",
+            " moriría en el push, como la #607. La vía es la sesión interactiva.)",
+        )
+    if clase is None or clase not in TABLA_ACTIVACION:
+        nombre = clase.value if clase is not None else "-"
+        return (
+            f"(«--continuar» no está disponible: la clase «{nombre}» no tiene",
+            " despachador (contrato §12.4), así que reanudarlo dejaría el trabajo",
+            " ACTIVE sin nada que lo atienda. La salida que sí tiene es «--terminar».)",
+        )
+    retirado = carril_retirado(clase)
+    if retirado is not None:
+        return (
+            f"(«--continuar» no está disponible: el carril de «{clase.value}» está",
+            " retirado (ADR-161/ADR-163), así que el despacho no ocurriría.)",
+            *(f" {parrafo}" for parrafo in retirado.explicacion().splitlines()),
+        )
+    return None
+
+
 def ruta_copiable(ruta: Path) -> str:
     """``ruta`` tal y como hay que teclearla en una consola, entrecomillada si hace falta.
 
@@ -424,13 +465,17 @@ def main(
             # reflector, que necesita una incidencia que mirar.
             linea("Y cuando lo hayas decidido, la salida es una orden tuya:")
             linea("")
+            motivo_sin_continuar = _por_que_no_se_puede_continuar(
+                prefijo_vetado=prefijo_vetado,
+                clase=decision.datos_trabajo.clase if decision.datos_trabajo else None,
+            )
             comun = f"{work_id} --diario {ruta_copiable(diario_efectivo)} --ejecutar"
             linea(f"    sirius-decidir {comun} --terminar    # se da por terminado")
-            if prefijo_vetado is None:
+            if motivo_sin_continuar is None:
                 linea(f"    sirius-decidir {comun} --continuar    # continúa: crea la incidencia")
             else:
-                linea("    («--continuar» no está disponible en esta parada: el despacho")
-                linea("     moriría en el push, como la #607. La vía es la sesión interactiva.)")
+                for parrafo in motivo_sin_continuar:
+                    linea(f"    {parrafo}")
         return 3
 
     assert resultado.work_item is not None
