@@ -26,7 +26,7 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **176**.
+- Decisiones (ADR): **177**.
 - Bloques del motor: 17 cerrado, 1 fuera_de_alcance, 2 pendiente.
 - Defectos registrados: 32 cerrado.
 - Investigaciones: **9** (fotos con fecha; caducan).
@@ -39,6 +39,7 @@ está escrito. Si sale pobre, se arregla en el ADR.
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| [185](docs/decisions/ADR-185-la-puerta-de-la-memoria-se-parte-en-tres-interruptores-antes-de-abrirla.md) | 2026-09-13 | PROPUESTO | la puerta de la memoria se parte en tres interruptores antes de abrirla | Se añade `src/sirius/config/memory_gates.py` con una función pura, `puertas_de_memoria(settings) -> PuertasDeMemoria`, y un `dataclass(frozen=True)` de tres booleanos. `composition_root` la llama una vez y cablea según esta tabla: |
 | [181](docs/decisions/ADR-181-la-contradiccion-de-etiquetas-se-decide-por-lo-que-proyectan-no-por-cuantas-son.md) | 2026-09-12 | PROPUESTO | La contradicción de etiquetas se decide por lo que proyectan, no por cuántas son | Opción 2. `_estado_y_fase` calcula el conjunto de destinos de las etiquetas presentes y marca contradicción si y solo si hay más de uno: |
 | [180](docs/decisions/ADR-180-el-numero-del-siguiente-adr-se-calcula-contra-las-ramas-del-remoto-no-contra-las-que-el-clon-tenga-traidas.md) | 2026-09-12 | PROPUESTO | El numero del siguiente ADR se calcula contra las ramas del remoto, no contra las que el clon tenga traidas | `scripts/siguiente_adr.py` trae las cabezas del remoto antes de calcular el número, con el refspec explícito `+refs/heads/*:refs/remotes/origin/*` para que un clon estrecho -el de una sesión remota, que clona una sola rama- también las… |
 | [179](docs/decisions/ADR-179-la-guarda-de-piezas-sin-llamante-deriva-su-inventario-del-codigo-del-motor.md) | 2026-09-12 | PROPUESTO | La guarda de piezas sin llamante deriva su inventario del codigo del motor | El inventario de `tests/automation/test_piezas_con_llamante.py` se deriva de `src/sirius_engine` con `ast`, en tres formas de pieza: `modulo:`, `definicion:` y `campo:`. Lo escrito a mano pasa a ser `SIN_LLAMANTE_CONOCIDO`, lo que se resta. |
@@ -229,6 +230,7 @@ de memoria.
 |---|---|---|---|
 | `lista-a-mano` | 2 | sí | [181](docs/decisions/ADR-181-la-contradiccion-de-etiquetas-se-decide-por-lo-que-proyectan-no-por-cuantas-son.md), [178](docs/decisions/ADR-178-la-autoridad-por-clase-se-deriva-de-la-via-github-que-el-despachador-declara-no-de-una-segunda-tabla-a-mano.md) |
 | `regla-que-depende-de-que-alguien-se-acuerde` | 2 | sí | [179](docs/decisions/ADR-179-la-guarda-de-piezas-sin-llamante-deriva-su-inventario-del-codigo-del-motor.md), [174](docs/decisions/ADR-174-la-mina-en-dos-pasadas-la-leccion-se-declara-en-el-adr-que-la-produce-y-las-familias-se-cuentan-solas.md) |
+| `interruptor-que-enciende-mas-de-lo-que-se-puede-medir` | 1 | sí | [185](docs/decisions/ADR-185-la-puerta-de-la-memoria-se-parte-en-tres-interruptores-antes-de-abrirla.md) |
 | `medir-lo-que-se-tiene-en-vez-de-lo-que-hay` | 1 | sí | [180](docs/decisions/ADR-180-el-numero-del-siguiente-adr-se-calcula-contra-las-ramas-del-remoto-no-contra-las-que-el-clon-tenga-traidas.md) |
 | `pieza-sin-lector` | 1 | sí | [175](docs/decisions/ADR-175-un-tablero-por-incidencia-un-solo-comentario-que-el-motor-mantiene-al-dia.md) |
 | `plan-que-hay-que-terminar-de-una-sentada` | 1 | sí | [176](docs/decisions/ADR-176-el-cierre-de-una-incidencia-se-retoma-desde-donde-se-quedo.md) |
@@ -243,6 +245,10 @@ de memoria.
 
 - **[ADR-179](docs/decisions/ADR-179-la-guarda-de-piezas-sin-llamante-deriva-su-inventario-del-codigo-del-motor.md)** — escribir un guardián sobre una lista de inclusión (lo hace cumplir `tests/automation/test_piezas_con_llamante.py`).
 - **[ADR-174](docs/decisions/ADR-174-la-mina-en-dos-pasadas-la-leccion-se-declara-en-el-adr-que-la-produce-y-las-familias-se-cuentan-solas.md)** — escribir la regla de captura en un catálogo y dar por hecho que alguien la aplicará; los dos sitios de lecciones de este repositorio llevaban 48 ADR sin una sola entrada, con sus reglas escritas dentro. (lo hace cumplir `tests/automation/test_mina_de_lecciones.py`).
+
+### `interruptor-que-enciende-mas-de-lo-que-se-puede-medir`
+
+- **[ADR-185](docs/decisions/ADR-185-la-puerta-de-la-memoria-se-parte-en-tres-interruptores-antes-de-abrirla.md)** — poner una sola puerta delante de varias piezas (lo hace cumplir `tests/unit/test_composition_root_relevance_gate.py`).
 
 ### `medir-lo-que-se-tiene-en-vez-de-lo-que-hay`
 
