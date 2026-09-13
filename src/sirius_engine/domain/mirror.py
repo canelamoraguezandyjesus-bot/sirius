@@ -234,11 +234,16 @@ class MirroredWorkItem:
 
     ``estado``/``fase`` son ``None`` cuando la incidencia no lleva ninguna
     etiqueta ``sirius:*`` reconocida -eso también es un hecho observado, no
-    una ausencia de lectura-. También son ``None`` cuando lleva VARIAS
-    etiquetas de estado a la vez fuera del único par de activación válido
-    (``sirius:planned`` + ``sirius:implement-requested``): en ese caso
+    una ausencia de lectura-. También son ``None`` cuando las etiquetas de
+    estado presentes apuntan a ``(estado, fase)`` DISTINTOS: en ese caso
     ``etiquetas_contradictorias`` es ``True`` y expone la contradicción en
-    vez de que el espejo elija una etiqueta ganadora en silencio.
+    vez de que el espejo elija una etiqueta ganadora en silencio. Varias
+    etiquetas que apuntan al MISMO destino -``sirius:repair-requested`` y
+    ``sirius:repairing``, que conviven desde que se aplica el encargo hasta que
+    el run que lo consume retira la primera (``repair-sirius-work.yml``, paso
+    «Consumir el evento y marcar en curso»), e indefinidamente si ese run muere
+    antes- no se contradicen: proyectan ese destino con la marca en ``False``
+    (ADR-181).
     """
 
     work_id: str
