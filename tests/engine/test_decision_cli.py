@@ -28,6 +28,7 @@ import pytest
 from sirius_engine import decision_cli, dispatch_cli
 from sirius_engine.adapters.durable.store import DurableWorkEngineStore
 from sirius_engine.adapters.github_cli_writer import GitHubWriteError, MissingCredentialError
+from sirius_engine.carriles_retirados import CarrilRetirado
 from sirius_engine.dispatcher import dispatch_work_item as _dispatch_real
 from sirius_engine.domain.work_item import WorkItemClass
 from sirius_engine.ports.github_writer import IncidenciaCreada
@@ -526,3 +527,80 @@ def test_hay_que_decir_que_se_decide(tmp_path: Path) -> None:
     with pytest.raises(SystemExit) as error:
         _decidir([_WORK_ID], diario=tmp_path / "diario.jsonl")
     assert error.value.code == 2
+
+
+def test_sin_credencial_al_retomar_no_dice_needs_decision(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CLAUDE-R1-002: el estado se nombra, no se fija en el texto.
+
+    Este comando admite DOS estados de partida (`_ESTADOS_QUE_CONTINUAN`), y al
+    retomar un despacho cortado el trabajo está en `active`. El mensaje de la
+    credencial que falta afirmaba en literal «sigue en «needs_decision»,
+    intacto», que ahí es falso justo cuando el propietario necesita saber dónde
+    quedó el trabajo -la familia que abrió ADR-184-.
+
+    Antes del cambio fallaba en la última aserción: el texto traía
+    «needs_decision» sobre un trabajo que el diario tiene en «active».
+    """
+    monkeypatch.setattr(decision_cli, "GitHubCliWriter", lambda: _EscritorQueFalla())
+    diario = tmp_path / "diario.jsonl"
+    _parar(diario)
+    codigo, _ = _decidir([_WORK_ID, "--continuar", "--ejecutar"], diario=diario)
+    assert codigo == 7
+    assert _estado(diario) == "active"
+
+    def _sin_credencial() -> Any:
+        raise MissingCredentialError("SIRIUS_BOT_TOKEN")
+
+    monkeypatch.setattr(decision_cli, "GitHubCliWriter", _sin_credencial)
+    codigo, texto = _decidir([_WORK_ID, "--continuar", "--ejecutar"], diario=diario)
+
+    assert codigo == 6, texto
+    assert _estado(diario) == "active", "sin credencial no se toca nada"
+    assert "«active»" in texto, "el estado que se nombra es el real"
+    assert "needs_decision" not in texto, texto
+
+
+def test_un_trabajo_active_rechazado_no_ofrece_terminar_que_no_existe(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CLAUDE-R1-003: `--terminar` solo es salida desde `needs_decision`.
+
+    `_terminar` exige ese estado y sale con 4 sin tocar nada, porque el dominio
+    no tiene arista `ACTIVE -> CANCELLED` (§3.2). Un trabajo `active` sin
+    incidencia cuyo carril se retire después -`carriles_retirados.json` es un
+    dato que se cambia fusionando- tiene `--continuar` rechazado con 5 y
+    `--terminar` rechazado con 4: ofrecerle «--terminar» es prometer una salida
+    que no existe. El dominio NO se toca: lo que se corrige es el texto.
+
+    Antes del cambio fallaba en la aserción de «--terminar»: el rechazo lo
+    ofrecía sin mirar el estado.
+    """
+    monkeypatch.setattr(decision_cli, "GitHubCliWriter", lambda: _EscritorQueFalla())
+    diario = tmp_path / "diario.jsonl"
+    _parar(diario)
+    codigo, _ = _decidir([_WORK_ID, "--continuar", "--ejecutar"], diario=diario)
+    assert codigo == 7
+    assert _estado(diario) == "active"
+
+    retirado = CarrilRetirado(
+        clase="programacion",
+        retirado_por="ADR-999",
+        ejecutado_por="la prueba",
+        fecha="2026-09-13",
+        motivo="el carril se retiró después de reanudar este trabajo",
+        a_donde_va="a sesión interactiva",
+    )
+    monkeypatch.setattr(decision_cli, "carril_retirado", lambda clase: retirado)
+
+    codigo, texto = _decidir([_WORK_ID, "--continuar", "--ejecutar"], diario=diario)
+    assert codigo == 5, texto
+    assert "«--terminar» tampoco" in texto, texto
+    assert "§3.2" in texto, "y por qué no: el dominio no admite cancelar desde active"
+
+    # La otra mitad: el texto no miente, `--terminar` de verdad sale con 4.
+    monkeypatch.undo()
+    codigo, texto = _decidir([_WORK_ID, "--terminar", "--ejecutar"], diario=diario)
+    assert codigo == 4, texto
+    assert _estado(diario) == "active"

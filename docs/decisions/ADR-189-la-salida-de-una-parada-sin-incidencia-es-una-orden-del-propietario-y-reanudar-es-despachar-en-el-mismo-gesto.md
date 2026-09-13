@@ -176,7 +176,21 @@ sirius-decidir <work_id> (--continuar | --terminar) [--ejecutar] [--repo] [--blo
   tiene episodio, `--continuar` no vuelve a pedir la transición: despacha desde
   donde está. Es la lección de ADR-176 aplicada aquí —mirar el estado en el que
   el motor ESTÁ, no el que se esperaba— y es lo que hace que un corte entre las
-  dos escrituras no deje otro trabajo inmortal.
+  dos escrituras no deje otro trabajo inmortal. Y **todo texto de este comando
+  nombra el estado real** en vez de fijarlo: el rechazo por falta de credencial
+  dice «active» cuando el trabajo está en `active`, y los rechazos de
+  `--continuar` no ofrecen `--terminar` desde ahí, porque `_terminar` exige
+  `needs_decision` y el dominio no tiene arista `ACTIVE -> CANCELLED` (§3.2).
+  Ese trabajo queda como asunto del propietario en sesión interactiva: el
+  dominio no se enmienda, se corrige lo que el mensaje promete.
+- **Los fallos operativos de `gh` se traducen en el adaptador.** `gh` no falla
+  solo con código distinto de cero: si no está instalado sale
+  `FileNotFoundError`, si se pasa de los 60 s `subprocess.TimeoutExpired`, y si
+  la respuesta de adopción no es JSON, `JSONDecodeError`. `GitHubCliWriter` las
+  convierte en `GitHubWriteError` —el error del puerto—, que es lo único que
+  `_continuar` captura; si no, el comando terminaba con una traza justo después
+  de haber persistido `needs_decision -> active`, sin decir que hay que repetir
+  la orden para retomar el despacho.
 - **La salida queda al alcance del propietario sin tocar el diario**: la parada
   de `sirius-despachar` nombra el comando exacto con el `work_id` y la ruta del
   diario ya puestos, y `/trabajos` lo recuerda cuando lista algo en
@@ -209,7 +223,7 @@ que la llamara.
   `ruff format --check .` (634 ficheros), `ruff check .`, `mypy src tests` (598
   ficheros) y `pytest`: **6573 pasan, 17 se saltan, 2 xfail**, en 631 s. Más
   `git diff --check`, sin avisos.
-- **20 mutaciones vistas caer**, una por regla nueva (ADR-001 §3), cada una
+- **22 mutaciones vistas caer**, una por regla nueva (ADR-001 §3), cada una
   anotada en el docstring de la prueba que la caza con el mensaje exacto del
   rojo. La lista, con la prueba que la detiene:
 
@@ -234,6 +248,8 @@ que la llamara.
   | ofrecer `--continuar` con una clase sin despachador | tampoco se ofrece lo que saldría con 5 |
   | quitar `--diario`/`--ejecutar` de la orden de `/trabajos` | el aviso de la sesión se copia tal cual |
   | no traducir `FileNotFoundError` en `GitHubCliWriter._invocar` | los fallos operativos de `gh` salen como el error del puerto |
+  | fijar «needs_decision» en el mensaje sin credencial | el estado se nombra, no se fija: al retomar es «active» |
+  | ofrecer `--terminar` también desde `active` | `--terminar` solo es salida desde `needs_decision` (§3.2) |
   | avisar en `/trabajos` sin condición / no avisar | el aviso sale cuando hay algo que decidir, y solo entonces |
 
   **Una de esas mutaciones enseñó algo que no se buscaba**: sustituir `return 2`

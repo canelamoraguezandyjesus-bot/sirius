@@ -135,6 +135,27 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _la_salida_que_queda(work_item: WorkItem) -> tuple[str, ...]:
+    """A dónde va el trabajo cuando «--continuar» lo rechaza, según DÓNDE está.
+
+    `--terminar` solo es una salida desde `needs_decision`: `_terminar` exige ese
+    estado y sale con 4 sin tocar nada, porque el dominio no tiene arista
+    `ACTIVE -> CANCELLED` (§3.2). Este comando admite a propósito los dos estados
+    de partida (`_ESTADOS_QUE_CONTINUAN`), así que ofrecer «--terminar» a un
+    trabajo `active` sería cerrarle las dos puertas con un texto que promete una
+    que no existe -la misma familia de «prometer lo que no va a ocurrir» que
+    ADR-184 y ADR-188 cerraron para los otros mensajes-. El dominio no se toca:
+    lo que se corrige es el TEXTO.
+    """
+    if work_item.estado is WorkItemState.NEEDS_DECISION:
+        return ("La salida que sí tiene es «--terminar».",)
+    return (
+        f"Y «--terminar» tampoco: «{work_item.work_id}» ya está reanudado -«active»-, y",
+        "de ahí el dominio no admite cancelar (§3.2), así que saldría con 4 sin tocar",
+        "nada. Este trabajo queda como asunto del propietario en sesión interactiva.",
+    )
+
+
 def _no_se_puede_despachar(work_item: WorkItem) -> tuple[str, ...] | None:
     """Por qué ``--continuar`` no puede despachar ``work_item``, o ``None`` si puede.
 
@@ -151,16 +172,16 @@ def _no_se_puede_despachar(work_item: WorkItem) -> tuple[str, ...] | None:
         return (
             f"la clase «{work_item.clase.value}» no tiene despachador (contrato §12.4).",
             "Reanudarlo lo dejaría ACTIVE sin nada que lo atienda, así que no se reanuda.",
-            "La salida que sí tiene es «--terminar».",
+            *_la_salida_que_queda(work_item),
         )
     retirado = carril_retirado(work_item.clase)
     if retirado is not None:
-        return (*retirado.explicacion().splitlines(), "La salida que sí tiene es «--terminar».")
+        return (*retirado.explicacion().splitlines(), *_la_salida_que_queda(work_item))
     if orden_enlazada(work_item) is None:
         return (
             "su evidencia no enlaza ninguna orden del propietario (contrato §12.1),",
             "así que el despachador se negaría a activarlo. No se reanuda.",
-            "La salida que sí tiene es «--terminar».",
+            *_la_salida_que_queda(work_item),
         )
     return None
 
@@ -198,7 +219,11 @@ def _bloque_de_la_quinta_causa(work_item: WorkItem) -> tuple[str, ...] | None:
         "",
         *(f"    {parrafo}" for parrafo in work_item.peticion_original.splitlines() or [""]),
         "",
-        "Y si aquí ya no hay nada que hacer, «--terminar» lo da por terminado.",
+        *(
+            ("Y si aquí ya no hay nada que hacer, «--terminar» lo da por terminado.",)
+            if work_item.estado is WorkItemState.NEEDS_DECISION
+            else _la_salida_que_queda(work_item)
+        ),
     )
 
 
@@ -353,8 +378,19 @@ def _continuar(
             linea(f"NO he reanudado «{work_item.work_id}»: no puedo escribir en GitHub.")
             linea(f"  {error}")
             linea("")
-            linea("Reanudar sin poder despachar dejaría el trabajo ACTIVE sin incidencia")
-            linea("detrás, y de ahí no sale: sigue en «needs_decision», intacto.")
+            # El estado se NOMBRA, no se fija en el texto: este comando admite dos
+            # estados de partida (`_ESTADOS_QUE_CONTINUAN`), y al retomar un
+            # despacho cortado el trabajo está en «active». Decir «needs_decision»
+            # ahí es falso justo cuando el propietario necesita saber dónde quedó
+            # el trabajo -la familia que abrió ADR-184-. El ensayo de más abajo
+            # ya lo hacía bien.
+            if work_item.estado is WorkItemState.NEEDS_DECISION:
+                linea("Reanudar sin poder despachar dejaría el trabajo ACTIVE sin incidencia")
+                linea("detrás, y de ahí no sale: sigue en «needs_decision», intacto.")
+            else:
+                linea(f"No se ha tocado nada: sigue en «{work_item.estado.value}», sin incidencia")
+                linea("detrás. El despacho que quedó a medias se retoma repitiendo esta misma")
+                linea("orden con la credencial puesta.")
             return 6
         registro_efectivo = registro_despachos
     else:
