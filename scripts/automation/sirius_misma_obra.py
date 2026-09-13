@@ -45,6 +45,22 @@ import json
 import sys
 from pathlib import Path
 
+#: Vistas que el repositorio GENERA y vigila, y que por tanto no son trabajo que
+#: nadie tenga que revisar dos veces. Ponerse al día con `main` obliga a
+#: regenerar `MEMORIA.md` -toda rama con un ADR lo toca, y por eso todas chocan
+#: entre sí (#608)-, así que sin esta lista esta mejora no ahorraría ninguna
+#: ronda en el caso que de verdad ocurre.
+#:
+#: Ignorarlas es seguro porque su corrección la garantiza OTRA guarda, no un
+#: revisor: `tests/engine/test_memoria.py::test_la_memoria_confirmada_en_este_arbol_esta_al_dia`
+#: falla en Quality si el fichero confirmado no es exactamente lo que
+#: `uv run sirius-memoria conocimiento` produce a partir del árbol (ADR-171). Un
+#: humano releyendo una vista generada no añade nada que esa prueba no diga ya.
+#:
+#: Entrar en esta lista exige ser eso: una vista con generador y con prueba que
+#: la vigile. `tests/automation/test_misma_obra.py` lo comprueba.
+VISTAS_GENERADAS: tuple[str, ...] = ("MEMORIA.md",)
+
 
 def _huella(ruta: Path) -> str | None:
     """Huella del trabajo propio descrito por una comparación, o ``None``.
@@ -78,6 +94,8 @@ def _huella(ruta: Path) -> str | None:
         nombre = fichero.get("filename")
         if not isinstance(nombre, str) or not nombre:
             return None
+        if nombre in VISTAS_GENERADAS:
+            continue
         parche = fichero.get("patch")
         # Un binario no trae `patch`; su `sha` de blob sí lo caracteriza. Si no
         # hay ninguno de los dos, no se puede decir qué contiene ese fichero.
@@ -87,6 +105,11 @@ def _huella(ruta: Path) -> str | None:
         if not texto and not identidad:
             return None
         entradas.append((nombre, texto, identidad))
+
+    # Si quitadas las vistas generadas no queda nada, no hay trabajo propio que
+    # comparar: se responde que no, igual que ante una comparación vacía.
+    if not entradas:
+        return None
 
     # GitHub no promete orden estable en `files`, y un orden distinto no es
     # trabajo distinto: sin ordenar, esto cobraría rondas de revisión por nada.

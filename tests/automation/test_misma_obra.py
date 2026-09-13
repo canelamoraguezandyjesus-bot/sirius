@@ -108,6 +108,73 @@ def test_el_orden_de_los_ficheros_no_cambia_la_respuesta(
     assert misma_obra.es_la_misma_obra(aprobado, vigente) is True
 
 
+# --- las vistas generadas no son trabajo que revisar -------------------------------------
+
+
+def test_una_vista_generada_no_cuenta_como_trabajo_distinto(
+    misma_obra: ModuleType, tmp_path: Path
+) -> None:
+    """LO QUE HACE ÚTIL A ESTA MEJORA. Ponerse al día con `main` obliga a
+    regenerar `MEMORIA.md` -toda rama con un ADR lo toca, y por eso todas chocan
+    (#608)-. Si esa regeneración contara como trabajo distinto, la aprobación
+    caducaría igual y esto no ahorraría ninguna ronda en el caso que de verdad
+    ocurre.
+
+    Ignorarla es seguro porque su corrección la garantiza OTRA guarda:
+    `test_la_memoria_confirmada_en_este_arbol_esta_al_dia` falla en Quality si el
+    fichero confirmado no es exactamente lo que el generador produce (ADR-171).
+    Un humano releyendo una vista generada no añade nada que esa prueba no diga.
+    """
+    trabajo = ("src/a.py", "@@ -1 +1 @@\n+x")
+    aprobado = _escribir(
+        tmp_path, "aprobado.json", _comparacion(trabajo, ("MEMORIA.md", "@@ -1 +1 @@\n+viejo"))
+    )
+    vigente = _escribir(
+        tmp_path, "vigente.json", _comparacion(trabajo, ("MEMORIA.md", "@@ -1 +9 @@\n+nuevo"))
+    )
+
+    assert misma_obra.es_la_misma_obra(aprobado, vigente) is True
+
+
+def test_la_vista_generada_no_tapa_un_cambio_de_verdad(
+    misma_obra: ModuleType, tmp_path: Path
+) -> None:
+    """El agujero que habría que evitar: que ignorar la vista dejara pasar un
+    cambio real escondido en el mismo push."""
+    aprobado = _escribir(
+        tmp_path,
+        "aprobado.json",
+        _comparacion(("src/a.py", "@@ -1 +1 @@\n+x"), ("MEMORIA.md", "@@ -1 +1 @@\n+viejo")),
+    )
+    vigente = _escribir(
+        tmp_path,
+        "vigente.json",
+        _comparacion(("src/a.py", "@@ -1 +1 @@\n+DISTINTO"), ("MEMORIA.md", "@@ -1 +1 @@\n+viejo")),
+    )
+
+    assert misma_obra.es_la_misma_obra(aprobado, vigente) is False
+
+
+def test_una_rama_que_solo_cambia_la_vista_generada_no_se_atajo(
+    misma_obra: ModuleType, tmp_path: Path
+) -> None:
+    """Si quitada la vista no queda nada, no hay trabajo propio que comparar: se
+    responde que no y se abre ronda, igual que con una comparación vacía."""
+    solo_vista = _comparacion(("MEMORIA.md", "@@ -1 +1 @@\n+x"))
+    aprobado = _escribir(tmp_path, "aprobado.json", solo_vista)
+    vigente = _escribir(tmp_path, "vigente.json", solo_vista)
+
+    assert misma_obra.es_la_misma_obra(aprobado, vigente) is False
+
+
+def test_las_vistas_ignoradas_estan_declaradas_y_son_generadas(misma_obra: ModuleType) -> None:
+    """Ninguna ruta se ignora «porque sí»: cada una tiene que ser una vista que
+    el repositorio genera y vigila. Si alguien añade una a mano sin generador,
+    esta prueba obliga a mirarlo."""
+    assert misma_obra.VISTAS_GENERADAS == ("MEMORIA.md",)
+    assert (REPO_ROOT / "MEMORIA.md").is_file()
+
+
 # --- fail-closed: si no se puede afirmar, no se afirma ---------------------------------
 
 

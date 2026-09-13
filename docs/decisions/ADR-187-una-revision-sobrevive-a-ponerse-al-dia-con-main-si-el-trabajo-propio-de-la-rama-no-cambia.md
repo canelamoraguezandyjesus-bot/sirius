@@ -71,6 +71,22 @@ un workflow no la ejecutaba ninguna prueba. El workflow hace las dos lecturas co
 su `sirius_retry` de siempre y se ramifica por el **código de salida**, no por un
 texto que pueda cambiar de redacción.
 
+**Las vistas generadas no cuentan como trabajo.** `VISTAS_GENERADAS` declara
+hoy un solo fichero, `MEMORIA.md`, y la huella lo descarta. Sin esto la mejora
+no serviría para el caso que de verdad ocurre: ponerse al día con `main` obliga
+a regenerar esa vista -toda rama con un ADR la toca, y por eso todas chocan
+entre sí (#608)-, así que la aprobación caducaría igual. Ignorarla es seguro
+porque su corrección la garantiza OTRA guarda, no un revisor:
+`test_la_memoria_confirmada_en_este_arbol_esta_al_dia` falla en Quality si el
+fichero confirmado no es exactamente lo que el generador produce (ADR-171). Un
+humano releyendo una vista generada no añade nada que esa prueba no diga ya. Y
+si, quitadas las vistas, no queda nada que comparar, se responde que no.
+
+Esto es lo que hace innecesario tocar cómo se mantiene `MEMORIA.md`: ADR-171
+decidió que viviera versionado en `main` porque «es lo primero que tiene que
+leer una IA al entrar, y una IA entra por `main`». Esa decisión se respeta
+entera; lo que cambia es que regenerarla deje de costar una ronda de revisión.
+
 **Fail-closed sin excepciones.** Cualquier cosa que impida afirmar que el trabajo
 es el mismo —un fichero que no está, un JSON roto, una comparación sin la clave
 `files`, un binario sin `sha`, una lectura caída— responde que NO y se repone la
@@ -89,6 +105,16 @@ Cuatro mutaciones sembradas y vistas caer:
 | M2: una comparación sin ficheros afirma igualdad | CAE |
 | M3: un fichero ilegible afirma igualdad | CAE |
 | M4: la decisión queda FUERA de la guarda de ADR-142 | CAE |
+| M5: la vista generada vuelve a contar como trabajo | CAE |
+| M6': la lista de vistas crece con un fichero de código | CAE |
+| M7: sin vistas queda huella vacía y afirma igualdad | CAE |
+
+Una mutación **no cayó, y queda escrita porque enseña algo**: ignorar
+*cualquier* fichero (`if nombre: continue`) deja las dos huellas vacías, y la
+guarda de huella vacía convierte eso en «no es la misma obra». Es decir, la
+degradación de esa lista es fail-closed por construcción: una lista demasiado
+ancha desactiva el atajo en vez de regalar aprobaciones. La mutación peligrosa
+de verdad -meter un fichero de código en la lista- sí cae (M6').
 
 M4 **no cayó a la primera**, y eso queda escrito porque es el hallazgo del día:
 la primera versión de su guardián comprobaba que la invocación apareciera

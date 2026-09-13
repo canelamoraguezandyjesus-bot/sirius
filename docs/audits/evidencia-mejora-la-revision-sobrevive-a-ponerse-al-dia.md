@@ -65,10 +65,27 @@ dos rondas de la misma familia.
 `tests/automation`: en verde. Validaciones completas y suite entera: en el
 resumen de la PR.
 
+## La segunda mitad: las vistas generadas
+
+Tras la primera versión se vio que la mejora no alcanzaba al caso REAL: toda
+rama con un ADR regenera `MEMORIA.md`, así que ponerse al día sí cambiaba el
+trabajo propio y la aprobación caducaba igual. Se añadió `VISTAS_GENERADAS`
+—hoy solo ese fichero— a la huella, con cuatro pruebas más (16 en total) y tres
+mutaciones: la vista vuelve a contar (CAE), la lista crece con un fichero de
+código (CAE), y desaparece la guarda de huella vacía (CAE).
+
+Antes de decidirlo se leyó ADR-171, que puso ese fichero en `main` a propósito
+—«es lo primero que tiene que leer una IA al entrar»—. Esa decisión queda
+intacta: no se saca de `main`, no se cambia quién lo genera y no se abre ningún
+permiso de escritura. Lo único que cambia es que regenerarlo deje de costar una
+ronda de revisión.
+
 ## Lo que esto NO arregla, dicho aquí
 
-Mientras `MEMORIA.md` siga viajando en las ramas, ponerse al día con `main`
-**sí** cambia el trabajo propio (hay que regenerarlo), así que esta mejora no se
-aplica a ese caso. Es la parte 1 de #608, ya decidida por el propietario por la
-vía que no abre permisos: que las ramas dejen de tocar ese fichero y se regenere
-al fusionar. Las dos juntas son las que dejan la reconciliación en cero rondas.
+Queda el **conflicto de git** en `MEMORIA.md` y la vuelta de Quality: una
+reconciliación sigue costando traer `main`, regenerar y esperar ~10 minutos de
+máquina. Lo que desaparece es la **ronda de revisión**, que es el coste que el
+propietario nota y el que #608 llama «el caro». Si el resto sigue molestando, la
+cola de fusión (parte 3 de #608) es el siguiente paso, y ahora sí tendría
+sentido: con las vistas fuera de la huella, lo único que quedaría por automatizar
+es actualizar ramas.
