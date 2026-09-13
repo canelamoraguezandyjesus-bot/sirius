@@ -51,6 +51,17 @@ _ORDEN_SIN_DESPACHADOR = "Borra la base de produccion"
 #: donde la credencial del motor no llega.
 _ORDEN_DE_LA_QUINTA = "Implementa el aviso que falta en `.github/workflows/despachar-orden.yml`"
 
+#: Una orden que para por la CUARTA causa -«borra»- pero cuyo alcance declarado
+#: cae donde el motor no puede escribir. Las dos cosas a la vez: las cuatro
+#: causas anteriores ganan a la quinta (`_detectar_sensibilidad` la consulta la
+#: última), así que `paro_la_quinta_causa` dice False mientras
+#: `alcance_que_el_motor_no_puede_escribir` dice «.github/». Y la clase es
+#: `programacion`, que SÍ tiene despachador y cuyo carril sigue vivo: nada más
+#: la detiene.
+_ORDEN_DESTRUCTIVA_CON_ALCANCE_VETADO = (
+    "Corrige el arranque y borra `.github/workflows/quality.yml`"
+)
+
 
 class _EscritorQueCrea:
     """Escritor de GitHub falso: cuenta lo que se le pide y no toca la red."""
@@ -393,6 +404,40 @@ def test_una_parada_de_la_quinta_causa_no_se_reanuda_y_remite_a_la_sesion(
     assert _ORDEN_DE_LA_QUINTA in texto, "la orden, lista para copiar"
     assert _estado(diario) == "needs_decision"
     assert not _hay_episodio(diario)
+
+
+def test_una_parada_con_alcance_vetado_no_se_reanuda_aunque_parara_otra_causa(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Lo que mata el push es el ALCANCE, no cuál de las cinco causas paró (CLAUDE-R3-001).
+
+    «Corrige el arranque y borra `.github/workflows/quality.yml`» dispara las dos
+    cosas: el marcador «borra» la para por la CUARTA causa -y las cuatro
+    anteriores ganan a la quinta, que `_detectar_sensibilidad` consulta la
+    última- mientras el alcance declarado sigue cayendo bajo `.github/`. Con la
+    guarda preguntando por `paro_la_quinta_causa`, este trabajo -clase
+    `programacion`, carril vivo, orden enlazada- se despachaba: la incidencia se
+    creaba y de ahí colgaba un ciclo entero que haría el trabajo y lo perdería al
+    empujar. Exactamente la pérdida de la #607 que ADR-188 cerró.
+
+    Mutación vista caer: devolviendo la guarda anterior en
+    `_bloque_de_la_quinta_causa` -`if not paro_la_quinta_causa(interpretar_intencion_v0(
+    work_item.peticion_original)): return None`-, la prueba falla en
+    ``assert codigo == 5`` con 0, y con la incidencia #998 ya creada.
+    """
+    escritor = _EscritorQueCrea(numero=998)
+    monkeypatch.setattr(decision_cli, "GitHubCliWriter", lambda: escritor)
+    diario = tmp_path / "diario.jsonl"
+    _parar(diario, _ORDEN_DESTRUCTIVA_CON_ALCANCE_VETADO)
+
+    codigo, texto = _decidir([_WORK_ID, "--continuar", "--ejecutar"], diario=diario)
+
+    assert codigo == 5, texto
+    assert ".github/" in texto, "tiene que decir QUÉ alcance lo impide"
+    assert "sesión interactiva" in texto, "y a dónde va ese trabajo"
+    assert _estado(diario) == "needs_decision"
+    assert not _hay_episodio(diario)
+    assert escritor.llamadas == [], "no se toca GitHub: la #607 se perdió por crearla"
 
 
 def test_una_parada_de_la_quinta_causa_si_se_puede_terminar(tmp_path: Path) -> None:

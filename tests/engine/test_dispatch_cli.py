@@ -640,6 +640,40 @@ def test_una_parada_de_una_clase_sin_despachador_tampoco_ofrece_continuar(
     assert "no tiene" in texto and "despachador" in texto, "y hay que decir por qué no está"
 
 
+def test_una_parada_con_alcance_vetado_no_ofrece_continuar_aunque_parara_otra_causa(
+    tmp_path: Path,
+) -> None:
+    """El ofrecimiento lo decide el ALCANCE, no la causa (CLAUDE-R3-001).
+
+    «Corrige el arranque y borra `.github/workflows/quality.yml`» para por la
+    CUARTA causa -el marcador «borra»-, así que `prefijo_vetado` es `None` y el
+    bloque de atribución de ADR-188 no sale, que es lo correcto. Pero la clase es
+    `programacion`, tiene despachador y su carril sigue vivo: nada impedía
+    ofrecer `--continuar`. Y continuar es despachar una orden cuyo alcance cae
+    bajo `.github/`, donde el motor no puede escribir (ADR-002): el ciclo haría
+    el trabajo entero y lo perdería al empujar, la #607 otra vez.
+
+    Mutación vista caer: devolviendo `alcance_vetado=prefijo_vetado` en la
+    llamada a `_por_que_no_se_puede_continuar`, la prueba falla en
+    ``ofrecidas == []`` con la línea «sirius-decidir ... --continuar    #
+    continúa: crea la incidencia».
+    """
+    orden = "Corrige el arranque y borra `.github/workflows/quality.yml`"
+    diario = tmp_path / "diario.jsonl"
+    codigo, texto = _correr([orden, "--ejecutar"], diario=diario)
+
+    assert codigo == 3, texto
+    ofrecidas = [
+        fila for fila in texto.splitlines() if "sirius-decidir" in fila and "--continuar" in fila
+    ]
+    assert ofrecidas == [], f"despachar esta orden la mata en el push, como la #607: {ofrecidas}"
+    assert "--terminar" in texto, "la salida que sí tiene sigue ofreciéndose"
+    assert "no está disponible en esta parada" in texto, "y hay que decir por qué no está"
+    assert "operacion_destructiva_o_irreversible" in texto, (
+        "la atribución de la causa NO cambia: paró la cuarta, y eso es lo que se dice"
+    )
+
+
 def test_una_parada_en_ensayo_no_promete_un_sitio_donde_no_hay_nada(tmp_path: Path) -> None:
     """La gemela sin `--ejecutar` de la anterior, que es el modo POR DEFECTO.
 
@@ -802,8 +836,17 @@ def test_una_parada_por_una_causa_anterior_no_promete_el_despacho_de_la_quinta(
     assert "vuelve a despachar" not in texto, (
         "negando la carpeta esta orden NO se despacha: sigue parando por destructiva"
     )
-    assert "sesión interactiva" not in texto, (
-        "ADR-002 no manda este trabajo a ninguna parte: no paró por el alcance"
+    # CLAUDE-R3-001: lo que esta prueba fija es la ATRIBUCIÓN, y ahí «sesión
+    # interactiva» sigue sin poder aparecer. Donde sí aparece -y tiene que
+    # aparecer- es en el paréntesis que NIEGA «--continuar»: el alcance vetado
+    # hace indespachable este trabajo pare por la causa que pare, y quitarle la
+    # salida sin decir cuál le queda es el sitio vacío que ADR-184 cerró.
+    fuera_del_rechazo = [
+        fila for fila in texto.splitlines() if "sesión interactiva" in fila and "#607" not in fila
+    ]
+    assert fuera_del_rechazo == [], (
+        f"la parada no la produjo el alcance: nada la remite a ADR-002 salvo el rechazo "
+        f"de «--continuar»: {fuera_del_rechazo}"
     )
     assert "la parada ocurre AQUÍ" not in texto, (
         "la parada no la produjo el alcance, así que no puede atribuírsele"

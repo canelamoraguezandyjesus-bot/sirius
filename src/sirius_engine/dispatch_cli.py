@@ -117,9 +117,17 @@ class _EscritorDeEnsayo:
 
 
 def _por_que_no_se_puede_continuar(
-    *, prefijo_vetado: str | None, clase: WorkItemClass | None
+    *, alcance_vetado: str | None, clase: WorkItemClass | None
 ) -> tuple[str, ...] | None:
     """Por qué «--continuar» NO puede despachar esta parada, o ``None`` si sí puede.
+
+    ``alcance_vetado`` NO es el ``prefijo_vetado`` que gobierna el texto de
+    atribución de ADR-188: ese se condiciona a que la QUINTA causa fuera la que
+    paró, y aquí esa pregunta sobra. Las cuatro causas anteriores ganan a la
+    quinta cuando una orden dispara las dos cosas -«Corrige el arranque y borra
+    ``.github/workflows/quality.yml``» sale por destructiva-, pero el alcance
+    vetado sigue estando ahí y el despacho moriría en el push igual. Lo que
+    decide el ofrecimiento es el alcance, no la causa.
 
     La condición es «puede despacharse», no «no es la quinta causa»:
     `decision_cli._no_se_puede_despachar` rechaza «--continuar» con código 5 por
@@ -135,7 +143,7 @@ def _por_que_no_se_puede_continuar(
     `aplicar_decision` acaba de guardar la orden del propietario en la evidencia
     del trabajo que este bloque describe.
     """
-    if prefijo_vetado is not None:
+    if alcance_vetado is not None:
         return (
             "(«--continuar» no está disponible en esta parada: el despacho",
             " moriría en el push, como la #607. La vía es la sesión interactiva.)",
@@ -465,8 +473,14 @@ def main(
             # reflector, que necesita una incidencia que mirar.
             linea("Y cuando lo hayas decidido, la salida es una orden tuya:")
             linea("")
+            # CLAUDE-R3-001: el ofrecimiento lo decide el ALCANCE, sin pasar por
+            # `paro_la_quinta_causa`. `prefijo_vetado` es None cuando paró una
+            # causa anterior, y con él «Corrige el arranque y borra
+            # `.github/workflows/quality.yml`» -clase `programacion`, carril
+            # vivo- se ofrecía a `--continuar`: la #607 otra vez, reabierta por
+            # esta salida.
             motivo_sin_continuar = _por_que_no_se_puede_continuar(
-                prefijo_vetado=prefijo_vetado,
+                alcance_vetado=alcance_que_el_motor_no_puede_escribir(args.orden),
                 clase=decision.datos_trabajo.clase if decision.datos_trabajo else None,
             )
             # CLAUDE-R2-002: `--repo` y `--bloque` NO se persisten en el

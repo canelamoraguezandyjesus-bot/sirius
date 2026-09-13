@@ -71,16 +71,12 @@ from sirius_engine.dispatch_cli import (
     TABLA_PERFILES,
     _EscritorDeEnsayo,
     diario_de_despacho,
-    paro_la_quinta_causa,
     ruta_copiable,
 )
 from sirius_engine.dispatcher import TABLA_ACTIVACION, dispatch_work_item
 from sirius_engine.domain.dispatch import orden_enlazada
 from sirius_engine.domain.work_item import WorkItem, WorkItemState
-from sirius_engine.intent_interpreter import (
-    alcance_que_el_motor_no_puede_escribir,
-    interpretar_intencion_v0,
-)
+from sirius_engine.intent_interpreter import alcance_que_el_motor_no_puede_escribir
 from sirius_engine.ports.dispatch_journal import DispatchJournal
 from sirius_engine.ports.github_writer import GitHubWriterPort
 from sirius_engine.ports.store import WorkEngineStore
@@ -187,7 +183,7 @@ def _no_se_puede_despachar(work_item: WorkItem) -> tuple[str, ...] | None:
 
 
 def _bloque_de_la_quinta_causa(work_item: WorkItem) -> tuple[str, ...] | None:
-    """El motivo por el que una parada de la QUINTA causa no se reanuda por aquí.
+    """El motivo por el que una parada con alcance vetado no se reanuda por aquí.
 
     ADR-188 movió esta parada a ANTES de crear la incidencia porque despachar el
     trabajo lo mataba en el push: el alcance que la orden declara cae donde la
@@ -196,16 +192,19 @@ def _bloque_de_la_quinta_causa(work_item: WorkItem) -> tuple[str, ...] | None:
     reproduciría esa pérdida, así que se rechaza y se remite a la sesión
     interactiva, que es la vía que ADR-002 prescribe.
 
-    La pregunta se le hace a la ``peticion_original`` guardada, con las MISMAS
-    funciones puras que pararon la orden en su día -no con una regla nueva-, y
-    en el mismo orden: si la que paró fue una de las cuatro causas anteriores,
-    esta no entra (``paro_la_quinta_causa``).
+    La pregunta que gobierna el rechazo es «¿el alcance declarado cae donde el
+    motor no puede escribir?» (``alcance_que_el_motor_no_puede_escribir``), y NO
+    «¿paró la quinta causa?» (``paro_la_quinta_causa``). No son la misma
+    pregunta, y el propio repositorio lo fija por escrito: las cuatro causas
+    anteriores GANAN a la quinta cuando una orden dispara las dos cosas -«Corrige
+    el arranque y borra ``.github/workflows/quality.yml``» sale por destructiva-,
+    y el alcance vetado sigue ahí. El push muere por el alcance, no por la causa,
+    así que es el alcance lo que decide. La ATRIBUCIÓN de la causa no cambia por
+    esto: quien la emite es el bloque de ADR-188 de ``dispatch_cli``, que sigue
+    preguntando por la quinta (CLAUDE-REV-612-001).
     """
-    señal = interpretar_intencion_v0(work_item.peticion_original)
-    if not paro_la_quinta_causa(señal):
-        return None
     prefijo = alcance_que_el_motor_no_puede_escribir(work_item.peticion_original)
-    if prefijo is None:  # pragma: no cover - la señal ya dijo que ese alcance está ahí
+    if prefijo is None:
         return None
     return (
         f"el alcance declarado cae bajo «{prefijo}», y ahí el motor no puede escribir:",

@@ -216,6 +216,30 @@ sirius-decidir <work_id> (--continuar | --terminar) [--ejecutar] [--repo] [--blo
   `consulta-larga`, y ofrecerle `--continuar` sería prometer un despacho que no
   va a ocurrir. El camino que ADR-184 abrió —«abre `sirius-motor` y teclea
   `/trabajos`»— dejaba de existir justo donde hacía falta.
+- **Y «puede despacharse» pregunta por el ALCANCE, no por la causa
+  (CLAUDE-R3-001).** La primera versión de esta decisión daba por equivalentes
+  «no paró la quinta causa» y «se puede despachar», y razonaba solo sobre «Borra
+  la base de producción», que la guarda de clase ya atrapa. No son equivalentes,
+  y el repositorio lo tenía fijado por escrito desde antes
+  (`test_las_cuatro_causas_anteriores_siguen_ganando_a_la_quinta`): las cuatro
+  causas anteriores GANAN a la quinta cuando una orden dispara las dos cosas,
+  porque `_detectar_sensibilidad` consulta la quinta la última. «Corrige el
+  arranque y borra `.github/workflows/quality.yml`» sale con causa
+  `operacion_destructiva_o_irreversible` —así que `paro_la_quinta_causa` dice
+  `False`— y con clase `programacion`, que tiene despachador y carril vivo: se
+  le ofrecía `--continuar`, y `--continuar` creaba la incidencia. De ahí colgaba
+  un ciclo entero que haría el trabajo y lo perdería al empujar, porque el
+  alcance cae bajo `.github/**` (ADR-002): la pérdida de la #607, reabierta por
+  la salida que este ADR añade —antes de ella ninguna parada podía despacharse,
+  así que la protección de ADR-188 se sostenía sola—. Lo que mata el push es el
+  alcance, no la causa, así que la pregunta que gobierna el ofrecimiento
+  (`dispatch_cli._por_que_no_se_puede_continuar`) y el rechazo
+  (`decision_cli._bloque_de_la_quinta_causa`) es
+  `alcance_que_el_motor_no_puede_escribir(...) is not None`. La ATRIBUCIÓN de la
+  causa NO cambia: el bloque de ADR-188 de `sirius-despachar` se sigue emitiendo
+  solo cuando fue la quinta la que paró (CLAUDE-REV-612-001), y en una parada
+  por causa anterior la única mención de la sesión interactiva es el paréntesis
+  que niega `--continuar`.
 
 Ni un puerto nuevo ni una arista nueva en el dominio: `resolve_decision` ya
 existía y era la única salida de `NEEDS_DECISION`; lo que faltaba era alguien
@@ -240,7 +264,7 @@ que la llamara.
   la de que con los valores por defecto la orden no los repite (CLAUDE-R2-002).
   La aserción de `PermissionError` de CLAUDE-R2-001 no suma un test: amplía el
   que ya cazaba los fallos operativos de `gh`.
-- **23 mutaciones vistas caer**, una por regla nueva (ADR-001 §3), cada una
+- **25 mutaciones vistas caer**, una por regla nueva (ADR-001 §3), cada una
   anotada en el docstring de la prueba que la caza con el mensaje exacto del
   rojo. La lista, con la prueba que la detiene:
 
@@ -264,6 +288,8 @@ que la llamara.
   | quitar `--repo` de la orden copiable | la orden despacha donde pidió la original, no en el repo por defecto |
   | ofrecer `--continuar` en la quinta causa | ahí no se ofrece lo que no lleva a nada |
   | ofrecer `--continuar` con una clase sin despachador | tampoco se ofrece lo que saldría con 5 |
+  | `alcance_vetado=prefijo_vetado` en la llamada de `sirius-despachar` | el alcance vetado niega `--continuar` aunque parase otra causa |
+  | devolver la guarda `paro_la_quinta_causa` en `_bloque_de_la_quinta_causa` | `sirius-decidir` no despacha un alcance vetado, pare la causa que pare |
   | quitar `--diario`/`--ejecutar` de la orden de `/trabajos` | el aviso de la sesión se copia tal cual |
   | estrechar `except OSError` a `except FileNotFoundError` en `GitHubCliWriter._invocar` | TODO fallo operativo de `gh` sale como el error del puerto, no solo dos |
   | fijar «needs_decision» en el mensaje sin credencial | el estado se nombra, no se fija: al retomar es «active» |
