@@ -232,11 +232,15 @@ que la llamara.
   tiene `--terminar`.
 - **La cadena obligatoria completa, en verde**: una sola invocación de
   `pwsh -File scripts/check.ps1` —que encadena `ruff format --check`,
-  `ruff check`, `mypy src tests` y `pytest`— **sobre el árbol de `6e01987c`**,
-  con código de salida **0** y **6577 pasan, 17 se saltan, 2 xfail**, en
-  662,52 s (0:11:02). La cifra anterior de este ADR —6573 pasan, en 631 s— era
-  la del árbol de `ce4156cc`, antes de las seis correcciones de la ronda 2.
-- **22 mutaciones vistas caer**, una por regla nueva (ADR-001 §3), cada una
+  `ruff check`, `mypy src tests` y `pytest`— **sobre el árbol de `8f194d4d`**,
+  con código de salida **0** y **6579 pasan, 17 se saltan, 2 xfail**, en
+  667,37 s (0:11:07). La cifra anterior de este ADR —6577 pasan, en 662,52 s—
+  era la del árbol de `6e01987c`, antes de las dos correcciones de la ronda 3;
+  las dos pruebas nuevas son la de `--repo`/`--bloque` en la orden copiable y
+  la de que con los valores por defecto la orden no los repite (CLAUDE-R2-002).
+  La aserción de `PermissionError` de CLAUDE-R2-001 no suma un test: amplía el
+  que ya cazaba los fallos operativos de `gh`.
+- **23 mutaciones vistas caer**, una por regla nueva (ADR-001 §3), cada una
   anotada en el docstring de la prueba que la caza con el mensaje exacto del
   rojo. La lista, con la prueba que la detiene:
 
