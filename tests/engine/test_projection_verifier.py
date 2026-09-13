@@ -671,3 +671,53 @@ def test_h25_el_conjunto_declarado_esta_vacio_hoy() -> None:
     from sirius_engine.projection_verifier import CLASES_CON_ESTADO_PROPIO
 
     assert frozenset() == CLASES_CON_ESTADO_PROPIO
+
+
+def test_h25_una_parada_publicada_saldria_divergencia_en_fase_si_se_declarase() -> None:
+    """Por qué C2 sigue sin declararse: el caso real de la incidencia #597 (ADR-186).
+
+    MEDIDO el 13-09-2026 sobre la rama `estado-del-motor` (paso (a) del encargo
+    `WI-20260913-072231`, tabla en el ADR): `WI-20260913-000235` está parado en
+    `NEEDS_DECISION`/`REVISAR` y su incidencia lleva `sirius:blocked-decision`,
+    que `_LABEL_STATE` proyecta como `(NEEDS_DECISION, None)` -el vocabulario
+    de etiquetas NO tiene fase para los dos estados detenidos, y el propio
+    módulo lo dice: «estado cubre lo que fase no puede»-.
+
+    `reflejar_desenlace`, sobre ese mismo par, devuelve cero pasos y cero
+    divergencia: para el reflejo, el motor está exactamente donde la incidencia
+    dice. Y aun así, con la clase declarada, el eje `fase` compara `REVISAR`
+    contra `None` y firma DIVERGENCIA. Dos instrumentos de esta casa,
+    contradiciéndose sobre el mismo dato, y el que acusa al motor es el que se
+    equivoca. Basta una línea así para que `evaluar_racha` deje el día rojo,
+    así que declarar hoy cambiaría un silencio honesto por una acusación falsa.
+
+    ESTA PRUEBA FIJA UN DEFECTO, NO UNA GARANTÍA, y por eso se escribe al
+    revés que sus vecinas: existe para que el bloqueo no dependa de que alguien
+    se acuerde. El día en que el eje `fase` aprenda a distinguir «no hay dato»
+    de «no coinciden» -la ventana simétrica de la 2, que ya exime al eje
+    `estado` cuando «el vocabulario de etiquetas no puede expresarlo»-, esta
+    prueba caerá. Cuando caiga NO se adapta: se borra, y se reabre C2 con la
+    medida del ADR-186 corrida otra vez.
+    """
+    linea = verificar_dia(
+        motor=_motor(estado=WorkItemState.NEEDS_DECISION, fase=WorkItemPhase.REVISAR),
+        espejo=_espejo(
+            estado=WorkItemState.NEEDS_DECISION,
+            fase=None,
+            etiquetas=("sirius:blocked-decision",),
+        ),
+        contexto=_SIN_VENTANA,
+        ventana_tolerancia=_TOLERANCIA,
+        instante=_AHORA,
+        clases_con_estado_propio=frozenset({WorkItemClass.PROGRAMACION}),
+    )
+    por_eje = {v.eje: v for v in linea.veredictos}
+    assert por_eje[EJE_ESTADO].resultado is ResultadoEje.COINCIDE, (
+        "el eje estado sí sabe leer una parada publicada: si esto cambia, "
+        "la medida del ADR-186 ya no describe el sistema"
+    )
+    assert por_eje[EJE_FASE].resultado is ResultadoEje.DIVERGENCIA, (
+        "el eje fase ya no acusa al motor de una parada que el vocabulario no "
+        "sabe proyectar: revisa ADR-186, borra esta prueba y reabre C2"
+    )
+    assert linea.es_verde is False

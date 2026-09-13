@@ -26,11 +26,11 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **176**.
+- Decisiones (ADR): **177**.
 - Bloques del motor: 17 cerrado, 1 fuera_de_alcance, 2 pendiente.
 - Defectos registrados: 32 cerrado.
 - Investigaciones: **9** (fotos con fecha; caducan).
-- Documentos: **127**, de los que **84** no declaran fecha.
+- Documentos: **128**, de los que **84** no declaran fecha.
 
 ## Qué se decidió: los ADR, del más reciente al más antiguo
 
@@ -39,6 +39,7 @@ está escrito. Si sale pobre, se arregla en el ADR.
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| [186](docs/decisions/ADR-186-medir-antes-de-declarar-programacion-y-documentacion-no-entran-hoy-en-clases-con-estado-propio.md) | 2026-09-13 | PROPUESTO | Medir antes de declarar: programacion y documentacion no entran hoy en CLASES_CON_ESTADO_PROPIO | Opción 2: hoy no entra ninguna de las dos. La medida no sostiene la declaración, y el encargo manda parar con `BLOCKED_BY_DECISION` en ese caso. `CLASES_CON_ESTADO_PROPIO` sigue vacío y `test_h25_el_conjunto_declarado_esta_vacio_hoy` sigue… |
 | [181](docs/decisions/ADR-181-la-contradiccion-de-etiquetas-se-decide-por-lo-que-proyectan-no-por-cuantas-son.md) | 2026-09-12 | PROPUESTO | La contradicción de etiquetas se decide por lo que proyectan, no por cuántas son | Opción 2. `_estado_y_fase` calcula el conjunto de destinos de las etiquetas presentes y marca contradicción si y solo si hay más de uno: |
 | [180](docs/decisions/ADR-180-el-numero-del-siguiente-adr-se-calcula-contra-las-ramas-del-remoto-no-contra-las-que-el-clon-tenga-traidas.md) | 2026-09-12 | PROPUESTO | El numero del siguiente ADR se calcula contra las ramas del remoto, no contra las que el clon tenga traidas | `scripts/siguiente_adr.py` trae las cabezas del remoto antes de calcular el número, con el refspec explícito `+refs/heads/*:refs/remotes/origin/*` para que un clon estrecho -el de una sesión remota, que clona una sola rama- también las… |
 | [179](docs/decisions/ADR-179-la-guarda-de-piezas-sin-llamante-deriva-su-inventario-del-codigo-del-motor.md) | 2026-09-12 | PROPUESTO | La guarda de piezas sin llamante deriva su inventario del codigo del motor | El inventario de `tests/automation/test_piezas_con_llamante.py` se deriva de `src/sirius_engine` con `ast`, en tres formas de pieza: `modulo:`, `definicion:` y `campo:`. Lo escrito a mano pasa a ser `SIN_LLAMANTE_CONOCIDO`, lo que se resta. |
@@ -228,8 +229,8 @@ de memoria.
 | Familia | Veces | Hay prueba que la haga cumplir | ADR |
 |---|---|---|---|
 | `lista-a-mano` | 2 | sí | [181](docs/decisions/ADR-181-la-contradiccion-de-etiquetas-se-decide-por-lo-que-proyectan-no-por-cuantas-son.md), [178](docs/decisions/ADR-178-la-autoridad-por-clase-se-deriva-de-la-via-github-que-el-despachador-declara-no-de-una-segunda-tabla-a-mano.md) |
+| `medir-lo-que-se-tiene-en-vez-de-lo-que-hay` | 2 | sí | [186](docs/decisions/ADR-186-medir-antes-de-declarar-programacion-y-documentacion-no-entran-hoy-en-clases-con-estado-propio.md), [180](docs/decisions/ADR-180-el-numero-del-siguiente-adr-se-calcula-contra-las-ramas-del-remoto-no-contra-las-que-el-clon-tenga-traidas.md) |
 | `regla-que-depende-de-que-alguien-se-acuerde` | 2 | sí | [179](docs/decisions/ADR-179-la-guarda-de-piezas-sin-llamante-deriva-su-inventario-del-codigo-del-motor.md), [174](docs/decisions/ADR-174-la-mina-en-dos-pasadas-la-leccion-se-declara-en-el-adr-que-la-produce-y-las-familias-se-cuentan-solas.md) |
-| `medir-lo-que-se-tiene-en-vez-de-lo-que-hay` | 1 | sí | [180](docs/decisions/ADR-180-el-numero-del-siguiente-adr-se-calcula-contra-las-ramas-del-remoto-no-contra-las-que-el-clon-tenga-traidas.md) |
 | `pieza-sin-lector` | 1 | sí | [175](docs/decisions/ADR-175-un-tablero-por-incidencia-un-solo-comentario-que-el-motor-mantiene-al-dia.md) |
 | `plan-que-hay-que-terminar-de-una-sentada` | 1 | sí | [176](docs/decisions/ADR-176-el-cierre-de-una-incidencia-se-retoma-desde-donde-se-quedo.md) |
 | `prosa-que-el-cambio-deja-falsa` | 1 | no en todas | [177](docs/decisions/ADR-177-la-ampliacion-por-categoria-entra-por-una-senal-explicita-de-la-peticion-no-por-la-subcadena-contexto.md) |
@@ -239,14 +240,15 @@ de memoria.
 - **[ADR-181](docs/decisions/ADR-181-la-contradiccion-de-etiquetas-se-decide-por-lo-que-proyectan-no-por-cuantas-son.md)** — escribir como lista de excepciones un criterio que el dato de al lado ya define —aquí «qué etiquetas pueden convivir», enumerado a mano habiendo una tabla que dice a dónde apunta cada una—, de modo que la lista solo contiene lo que alguien recordó el día que la escribió y acusa de avería a todo lo demás. (lo hace cumplir `tests/engine/test_mirror_projection.py`).
 - **[ADR-178](docs/decisions/ADR-178-la-autoridad-por-clase-se-deriva-de-la-via-github-que-el-despachador-declara-no-de-una-segunda-tabla-a-mano.md)** — escribir dos veces «qué clases existen en la vía GitHub» -una tabla que decide y una copia que se queda vieja- y comprobar la copia en vez de la relación; es la familia que ADR-033 nombró, y aquí dejó quince encargos sin medir durante dos semanas. (lo hace cumplir `tests/engine/test_authority.py`).
 
+### `medir-lo-que-se-tiene-en-vez-de-lo-que-hay`
+
+- **[ADR-186](docs/decisions/ADR-186-medir-antes-de-declarar-programacion-y-documentacion-no-entran-hoy-en-clases-con-estado-propio.md)** — dar por buena una precondición porque la pieza que la bloqueaba ya existe -C1 lleva nueve días corriendo- en vez de ejecutar el verificador sobre los datos reales y leer lo que sale; aquí eso habría escrito dos acusaciones falsas al motor en la primera pasada, una de ellas contradiciendo al reflejo sobre el mismo dato. (lo hace cumplir `tests/engine/test_projection_verifier.py`).
+- **[ADR-180](docs/decisions/ADR-180-el-numero-del-siguiente-adr-se-calcula-contra-las-ramas-del-remoto-no-contra-las-que-el-clon-tenga-traidas.md)** — preguntarle a la copia local por un hecho que vive fuera -las ramas traídas en vez de las que existen- y creer que la respuesta cubre el caso; aquí el guion veía el 3,4% de las ramas y repartió el mismo número tres veces en un día. (lo hace cumplir `tests/automation/test_registro_de_decisiones.py`).
+
 ### `regla-que-depende-de-que-alguien-se-acuerde`
 
 - **[ADR-179](docs/decisions/ADR-179-la-guarda-de-piezas-sin-llamante-deriva-su-inventario-del-codigo-del-motor.md)** — escribir un guardián sobre una lista de inclusión (lo hace cumplir `tests/automation/test_piezas_con_llamante.py`).
 - **[ADR-174](docs/decisions/ADR-174-la-mina-en-dos-pasadas-la-leccion-se-declara-en-el-adr-que-la-produce-y-las-familias-se-cuentan-solas.md)** — escribir la regla de captura en un catálogo y dar por hecho que alguien la aplicará; los dos sitios de lecciones de este repositorio llevaban 48 ADR sin una sola entrada, con sus reglas escritas dentro. (lo hace cumplir `tests/automation/test_mina_de_lecciones.py`).
-
-### `medir-lo-que-se-tiene-en-vez-de-lo-que-hay`
-
-- **[ADR-180](docs/decisions/ADR-180-el-numero-del-siguiente-adr-se-calcula-contra-las-ramas-del-remoto-no-contra-las-que-el-clon-tenga-traidas.md)** — preguntarle a la copia local por un hecho que vive fuera -las ramas traídas en vez de las que existen- y creer que la respuesta cubre el caso; aquí el guion veía el 3,4% de las ramas y repartió el mismo número tres veces en un día. (lo hace cumplir `tests/automation/test_registro_de_decisiones.py`).
 
 ### `pieza-sin-lector`
 
@@ -331,6 +333,7 @@ nada por su cuenta. «Sin fecha declarada» es un aviso, no un dato.
 | 2026-08-28 | [Nota de arranque — atestar al buscador antes de gastar en medirlo](docs/audits/arranque-atestar-al-buscador.md) |
 | 2026-08-28 | [Nota de arranque — B1: que una orden de investigación produzca un informe](docs/audits/arranque-b1-investigar-desde-una-orden.md) |
 | 2026-08-27 | [Nota de arranque — un buscador que devuelva fuentes](docs/audits/arranque-buscador-con-fuentes.md) |
+| 2026-09-13 | [Nota de arranque — C2: medir ANTES de declarar la precondición (§11.2)](docs/audits/arranque-c2-medir-antes-de-declarar-la-precondicion.md) |
 | 2026-08-28 | [Nota de arranque — el medidor cuenta un registro que Tavily no alimenta](docs/audits/arranque-contar-las-dos-fuentes.md) |
 | 2026-08-27 | [Nota de arranque — una contradicción de etiquetas no es una divergencia](docs/audits/arranque-contradiccion-no-es-divergencia.md) |
 | 2026-08-27 | [Nota de arranque — que el banco diga por qué no midió](docs/audits/arranque-el-banco-dice-por-que.md) |
