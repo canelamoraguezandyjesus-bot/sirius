@@ -516,7 +516,7 @@ defectos:
 
   # ADR-185 (#603): dado de alta al traer main a la rama, porque la guarda
   # derivada de ADR-182 entro en main mientras esta rama estaba en revision.
-  - id: H-37
+  - id: H-38
     titulo: Una sola puerta encendia siete piezas y no dejaba medir ninguna por separado
     bloque: producto
     gravedad: baja

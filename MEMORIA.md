@@ -28,7 +28,7 @@
 
 - Decisiones (ADR): **179**.
 - Bloques del motor: 17 cerrado, 1 fuera_de_alcance, 2 pendiente.
-- Defectos registrados: 2 abierto, 35 cerrado.
+- Defectos registrados: 3 abierto, 35 cerrado.
 - Investigaciones: **9** (fotos con fecha; caducan).
 - Documentos: **127**, de los que **84** no declaran fecha.
 
@@ -307,6 +307,7 @@ cerrados; el recuento completo está arriba.
 |---|---|---|
 | H-37 | abierto | La rama sin ningun run de Quality salia en silencio y dejaba la incidencia esperando para siempre |
 | H-33 | abierto | El registro de defectos podia quedarse dormido sin que ninguna comprobacion lo notara |
+| H-38 | abierto | Una sola puerta encendia siete piezas y no dejaba medir ninguna por separado |
 
 ## Las investigaciones: fotos con fecha, que caducan
 
