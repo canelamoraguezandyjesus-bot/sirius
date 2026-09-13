@@ -373,6 +373,30 @@ La primera línea de cada fallo:
   '253p' MEMORIA.md` la devuelve completa, hasta «…la operación.»— y que
   `uv run sirius-memoria conocimiento --comprobar` responde «MEMORIA.md está al
   día» con código 0 sobre ese mismo árbol.
+- **Ronda 4 (bis): la mina se había vuelto a quedar sin la lección.** Las dos
+  cifras del punto anterior son las del árbol de `938a968e` y siguen siendo
+  ciertas para él, pero no para el head que quedó publicado: el paso intermedio
+  `7b0b6b0f` tomó `MEMORIA.md` de `main` y el merge `d0519b4` lo dejó así, de
+  modo que en `d0519b4` **ninguna** línea de `MEMORIA.md` nombraba a ADR-184
+  (`grep -n 'ADR-184' MEMORIA.md` no devolvía nada). Se regeneró con
+  `uv run sirius-memoria conocimiento`, el único camino permitido —la salida es
+  generada y no se edita a mano—. Al regenerar afloró una colisión que había
+  traído el merge: `main` dio de alta H-38 para ADR-185 (#604) y esta rama ya
+  había dado de alta H-38 para ADR-184, así que la mina listaba dos H-38. La
+  entrada de esta rama pasa a **H-39**; `main` entró antes y conserva el número.
+  Sobre el árbol resultante, `9a26695`:
+
+  | Comprobación | Salida |
+  |---|---|
+  | `pwsh -File scripts/check.ps1` | **6504 passed, 17 skipped, 2 xfailed** en 628.49 s, **código de salida 0** |
+  | `sed -n '255p' MEMORIA.md` | la entrada de ADR-184 completa, hasta «…paró sobre las salvaguardas que prohibían justo la operación.» y su `(lo hace cumplir …)` |
+  | `grep -n 'id: H-3[7-9]' docs/audits/registro_defectos.yml` | `H-37`, `H-39` (ADR-184) y `H-38` (ADR-185): ya no hay dos iguales |
+
+  La subida de 6492 a 6504 viene entera de traer `main` a la rama (merge
+  `d0519b4`, que incorpora ADR-185): esta corrección no añade ni quita ninguna
+  prueba, porque no cambia comportamiento —regenera un artefacto generado y
+  renumera un identificador del registro de defectos—. Por eso tampoco trae
+  mutación: no hay aserción nueva que sembrar.
 
 ### Ronda 3: el subjuntivo, el corte incondicional, la doble negación y la ruta
 
