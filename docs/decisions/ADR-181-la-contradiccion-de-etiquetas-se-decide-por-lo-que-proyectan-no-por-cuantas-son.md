@@ -301,8 +301,9 @@ sitio de este módulo vuelve a decidir qué etiqueta significa qué estado»).
   `sirius:repairing`**: cambia el contrato de la automatización para acomodar un
   defecto de lectura, y está fuera del alcance de esta incidencia.
 - **Marcar contradicción solo cuando los ESTADOS difieran**, ignorando la fase:
-  la medición dice que eximiría 25 parejas más, entre ellas
-  `implementing` + `ready-for-merge`. La mutación 3 lo comprueba en rojo.
+  eximiría además todas las parejas que comparten estado y no fase —las que la
+  medición de arriba cuenta—, entre ellas `implementing` + `ready-for-merge`.
+  La mutación 3 lo comprueba en rojo.
 
 ## La lección
 
