@@ -5676,6 +5676,47 @@ a leer contenido a propósito) y el motor solo vectorial (BM25 gana en este
 corpus).
 ---
 
+### 110. NUEVA 3 decidida y lanzada: #603 parte la puerta de la memoria en tres interruptores, sin abrir ninguno (13-09-2026, 07:20 UTC)
+
+**La decisión.** El propietario eligió (A), «partir la puerta antes de
+abrirla», con un «Venga adelante como me recomiendas» tras el cierre de H4.
+Registrada en `decisiones-pendientes-de-la-linea-de-memoria.md` y en el cuerpo
+de #603. **No abre nada**: `category_matching_enabled` sigue en `False` y la
+regla de `STATUS.md` (umbral de D7 punto 6 + cierre de la ola) sigue intacta.
+
+**Lo que cambió el diseño al leer el código, y que la nota de NUEVA 3 no
+sabía.** Imaginaba cuatro interruptores. Son **tres**, porque la siembra M20
+cuelga del **mismo booleano** del caso de uso que el motor por etapas, no del
+vocabulario: los bucles por criticidad de `rank_relevant_knowledge.py:611-676`
+corren dentro de `if self._category_matching_enabled and
+peticion.amplia_por_categoria`, y el vocabulario solo alimenta la marca
+`criticality_match`. «Motor sin índices ni siembra» exigiría un segundo
+booleano dentro del caso de uso y tocar el arnés del banco: fuera de este
+encargo, posible segundo paso.
+
+| interruptor | enciende | dónde |
+|---|---|---|
+| `staged_engine_enabled` | motor por etapas + índices + siembra | `RankRelevantKnowledgeUseCase(category_matching_enabled=True, vocabularios reales)` |
+| `query_intent_enabled` | petición propia (clasificador local), **solo con motor** | `InterpreteDePeticion(intent_classifier=…)` |
+| `relevance_filter_enabled` | filtro local + camino de puerta abierta | `ContextBuilder(relevance_filter_port=…, techo, bandera)` |
+| `category_matching_enabled` | las tres | maestra **o** cada clave |
+
+Todo en `composition_root`; ni caso de uso, ni `ContextBuilder`, ni adaptadores,
+ni arnés, ni guion del banco (comprobado: el guion reutiliza
+`_ejecutar_banco_paquete_completo` del arnés, que construye los casos de uso a
+mano con la puerta abierta; no pasa por `build_conversation_dependencies`).
+
+**Lo que este encargo hereda de #581, escrito en su cuerpo**: nada de enumerar
+a mano la distancia entre commits ni clavar un SHA como «este head»; junto a
+cada cifra, su comando y su árbol; regla de parada para prosa. Y la
+autorización de fusión de #581 **no se traslada**: la fusión de #603 es del
+propietario.
+
+**Secuencia de apertura prevista, después**: motor (sin Ollama, sin latencia)
+→ petición propia → filtro, cada uno un encargo y una medición en la máquina
+del propietario.
+---
+
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
 
 1. `ollama_category_classifier.py`: ruta relativa y sin
