@@ -257,16 +257,38 @@ adversaria) no sembraban runs y caían de rebote: se les siembra el caso
 ordinario —Quality corriendo para el head—, sin tocar ninguna de sus
 afirmaciones.
 
+**Ronda 3 de corrección: los dos textos que seguían prometiendo de más.** Se
+amplían otra vez las mismas dos pruebas (el fichero sigue **sin** ninguna
+prueba nueva) y se ven caer contra el guion **sin** la corrección de esta
+ronda:
+
+```
+FAILED …::test_unos_runs_terminados_sin_id_tampoco_salen_en_silencio
+E       assert 'reejecutar este paso' not in …
+E       'reejecutar este paso' is contained here: l jobs) o reejecutar este paso.
+FAILED …::test_sin_ningun_run_de_quality_la_incidencia_se_encamina_y_no_espera
+E       AssertionError: el push encamina, pero sobre un head nuevo
+E       assert 'mueve el head' in …
+```
+
+La primera fija que `runs-sin-id-relanzable` deja de ofrecer «reejecutar este
+paso»; la segunda, que `sin-runs-para-el-head` deja de prometer que un push
+hace correr Quality «para este head».
+
 ### La cadena completa, anclada a su árbol
 
 Una sola invocación de `pwsh -File scripts/check.ps1` (Ruff format, Ruff lint,
-mypy, pytest) sobre el árbol de `9bb54ea3`, el commit que trae la corrección de
-los textos de las dos fases:
+mypy, pytest) sobre el árbol de `2277a48a`, el commit que cierra los tres
+hallazgos de la ronda 3 (los dos textos y el comentario del `case`):
 
 ```
-=========== 6392 passed, 17 skipped, 2 xfailed in 548.44s (0:09:08) ============
+=========== 6392 passed, 17 skipped, 2 xfailed in 461.46s (0:07:41) ============
 EXITCODE=0
 ```
+
+La cifra anterior, sobre el árbol de `9bb54ea3` (ronda 2), era
+`6392 passed, 17 skipped, 2 xfailed in 548.44s`: el recuento no cambia porque
+esta ronda no añadió pruebas, solo afirmaciones a dos ya existentes.
 
 ## Consecuencias
 
