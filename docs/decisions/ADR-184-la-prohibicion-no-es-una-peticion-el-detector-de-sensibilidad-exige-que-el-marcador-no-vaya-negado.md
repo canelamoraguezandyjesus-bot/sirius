@@ -464,6 +464,20 @@ puesta: si no, no está midiendo lo que cree.
 - El encargo #601 sigue sin poder escribirse en lenguaje natural directo (punto
   2 de «Lo que este criterio NO detecta»). Este ADR no cierra eso y no finge
   cerrarlo.
+- **Deroga en parte ADR-085**, que es el acta que escribió el criterio que aquí
+  se cambia. Dos de sus frases dejan de valer: (a) «Los marcadores de todas las
+  listas (`_MARCADORES_PASADO`, `_MARCADORES_EXPLORACION`,
+  `_MARCADORES_DESTRUCTIVO`, `_MARCADORES_GASTO`, `_MARCADORES_CREDENCIALES`,
+  `_MARCADORES_PRIVACIDAD`) se comparan con `_marcador_presente`», que desde
+  este cambio solo es cierta para `_MARCADORES_PASADO` y
+  `_MARCADORES_EXPLORACION`: las cuatro listas de sensibilidad pasan ahora por
+  `_marcador_pedido`; y (b) «Una orden con un marcador de sensibilidad siempre
+  escala o pide confirmación, sin importar qué más contenga la frase», que es
+  exactamente la propiedad que este ADR deroga —si el marcador va negado y la
+  negación no está anulada, no escala—. Lo demás de ADR-085 sigue intacto y este
+  ADR se apoya en ello: el orden de comprobación (sensibilidad antes que
+  marcadores de pasado) y `_marcador_presente` con frontera de palabra como
+  comparación de `_MARCADORES_PASADO` y `_MARCADORES_EXPLORACION`.
 
 ## Alternativas descartadas y por qué
 
@@ -474,9 +488,5 @@ justamente para que nadie la vuelva a proponer como simplificación.
 ## La lección
 
 - familia: `medir-lo-que-se-tiene-en-vez-de-lo-que-hay`
-- sin esto se repetiría: poner una guarda a responder la pregunta que sabe
-  contestar barata —«¿aparece la palabra?»— en lugar de la que tiene que
-  contestar —«¿la orden lo pide?»—, y no notarlo porque el sustituto acierta
-  casi siempre: aquí acertó en 1 de 3 paradas reales y paró sobre las
-  salvaguardas que prohibían justo la operación.
+- sin esto se repetiría: poner una guarda a responder la pregunta que sabe contestar barata —«¿aparece la palabra?»— en lugar de la que tiene que contestar —«¿la orden lo pide?»—, y no notarlo porque el sustituto acierta casi siempre: aquí acertó en 1 de 3 paradas reales y paró sobre las salvaguardas que prohibían justo la operación.
 - lo hace cumplir: `tests/engine/test_intent_interpreter.py`

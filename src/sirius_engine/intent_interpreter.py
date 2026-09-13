@@ -182,28 +182,6 @@ _NEGADORES = frozenset(
     }
 )
 
-#: Palabras que CORTAN la mirada hacia atrás: si aparecen entre el negador y el
-#: marcador, el negador ya no gobierna al marcador. Sin ellas, «no toques la
-#: cola y borra la tabla» quedaría silenciado por el «no» de la otra oración
-#: coordinada, y «sin embargo borra la tabla» o «no solo borra X sino Y» lo
-#: quedarían por un «sin» y un «no» que no niegan nada. Cortar es la dirección
-#: SEGURA: un corte de más hace que la puerta pare, no que deje pasar.
-#:
-#: Van aquí tres familias, y las tres por el mismo motivo -el negador que las
-#: precede no niega al marcador-:
-#:
-#: * los nexos que abren otra oración coordinada o adversativa (`y`, `pero`,
-#:   `sino`, `embargo`…);
-#: * el sustantivo de las locuciones adverbiales con `sin` que afirman en vez
-#:   de negar: «sin duda borra la tabla», «sin falta borra la tabla». Ahí `sin`
-#:   gobierna al sustantivo, no al marcador. `falta` solo corta PEGADO a ese
-#:   `sin` -:data:`_CORTES_TRAS_SIN`-, porque fuera de la locución es el
-#:   sustantivo de «no hace falta borrar», que es una prohibición y volvía a
-#:   parar la puerta (CODEX-003). `duda` corta en cualquier posición porque
-#:   fuera de la locución es la forma verbal de «no duda en borrar», que
-#:   también pide el marcador;
-#: * los verbos de doble negación, de :data:`_VERBOS_DE_DOBLE_NEGACION`.
-
 #: Verbos que, precedidos de un negador, PIDEN el marcador en vez de
 #: prohibirlo: «no olvides borrar», «no dudes en borrar», «no dejes de
 #: borrar». Cortan la mirada hacia atrás como cualquier otro corte y, además,
@@ -227,6 +205,27 @@ _VERBOS_DE_DOBLE_NEGACION = frozenset(
     }
 )
 
+#: Palabras que CORTAN la mirada hacia atrás: si aparecen entre el negador y el
+#: marcador, el negador ya no gobierna al marcador. Sin ellas, «no toques la
+#: cola y borra la tabla» quedaría silenciado por el «no» de la otra oración
+#: coordinada, y «sin embargo borra la tabla» o «no solo borra X sino Y» lo
+#: quedarían por un «sin» y un «no» que no niegan nada. Cortar es la dirección
+#: SEGURA: un corte de más hace que la puerta pare, no que deje pasar.
+#:
+#: Van aquí tres familias, y las tres por el mismo motivo -el negador que las
+#: precede no niega al marcador-:
+#:
+#: * los nexos que abren otra oración coordinada o adversativa (`y`, `pero`,
+#:   `sino`, `embargo`…);
+#: * el sustantivo de las locuciones adverbiales con `sin` que afirman en vez
+#:   de negar: «sin duda borra la tabla», «sin falta borra la tabla». Ahí `sin`
+#:   gobierna al sustantivo, no al marcador. `falta` solo corta PEGADO a ese
+#:   `sin` -:data:`_CORTES_TRAS_SIN`-, porque fuera de la locución es el
+#:   sustantivo de «no hace falta borrar», que es una prohibición y volvía a
+#:   parar la puerta (CODEX-003). `duda` corta en cualquier posición porque
+#:   fuera de la locución es la forma verbal de «no duda en borrar», que
+#:   también pide el marcador;
+#: * los verbos de doble negación, de :data:`_VERBOS_DE_DOBLE_NEGACION`.
 _CORTES_DE_ORACION = (
     frozenset(
         {

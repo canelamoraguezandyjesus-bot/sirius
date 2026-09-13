@@ -250,7 +250,7 @@ de memoria.
 
 ### `medir-lo-que-se-tiene-en-vez-de-lo-que-hay`
 
-- **[ADR-184](docs/decisions/ADR-184-la-prohibicion-no-es-una-peticion-el-detector-de-sensibilidad-exige-que-el-marcador-no-vaya-negado.md)** — poner una guarda a responder la pregunta que sabe (lo hace cumplir `tests/engine/test_intent_interpreter.py`).
+- **[ADR-184](docs/decisions/ADR-184-la-prohibicion-no-es-una-peticion-el-detector-de-sensibilidad-exige-que-el-marcador-no-vaya-negado.md)** — poner una guarda a responder la pregunta que sabe contestar barata —«¿aparece la palabra?»— en lugar de la que tiene que contestar —«¿la orden lo pide?»—, y no notarlo porque el sustituto acierta casi siempre: aquí acertó en 1 de 3 paradas reales y paró sobre las salvaguardas que prohibían justo la operación. (lo hace cumplir `tests/engine/test_intent_interpreter.py`).
 - **[ADR-180](docs/decisions/ADR-180-el-numero-del-siguiente-adr-se-calcula-contra-las-ramas-del-remoto-no-contra-las-que-el-clon-tenga-traidas.md)** — preguntarle a la copia local por un hecho que vive fuera -las ramas traídas en vez de las que existen- y creer que la respuesta cubre el caso; aquí el guion veía el 3,4% de las ramas y repartió el mismo número tres veces en un día. (lo hace cumplir `tests/automation/test_registro_de_decisiones.py`).
 
 ### `pieza-sin-lector`
