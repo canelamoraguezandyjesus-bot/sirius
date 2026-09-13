@@ -214,6 +214,10 @@ ningún ciclo, que es lo que costó una hora de motor en #607.
 - Las cuatro causas anteriores no se tocaron: sus pruebas siguen en verde sin
   retocarlas, y la quinta se consulta **después** de ellas, así que ninguna
   entrada que antes daba una de las cuatro da otra cosa ahora.
+- La cadena entera —`pwsh -File scripts/check.ps1`, una sola invocación: Ruff
+  format, Ruff lint, `mypy src tests` y `pytest`— pasa **sobre el árbol de
+  `c50de78`**: `6546 passed, 17 skipped, 2 xfailed in 625.10s (0:10:25)`. El
+  único cambio posterior a ese árbol es este mismo punto de documentación.
 
 ## Consecuencias
 
