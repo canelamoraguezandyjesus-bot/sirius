@@ -445,3 +445,19 @@ defectos:
     ficheros:
       - docs/canonical/STATUS.md
       - docs/implementation/PLAN.md
+
+  # Primera entrada desde el 31-08-2026. La sequia -doce dias, 61 ADR, cero
+  # entradas- no la vio ninguna de las ocho comprobaciones porque todas miraban
+  # la coherencia de lo ya escrito. El campo `adr` es el acuse que la guarda
+  # derivada de ADR-182 exige a partir de aqui; las 32 entradas de arriba no lo
+  # traen y no se reescriben.
+  - id: H-33
+    titulo: El registro de defectos podia quedarse dormido sin que ninguna comprobacion lo notara
+    bloque: automatizacion
+    gravedad: media
+    estado: abierto
+    adr: 182
+    incidencia: 597
+    ficheros:
+      - tests/automation/test_registro_de_defectos.py
+      - docs/audits/registro_defectos.yml

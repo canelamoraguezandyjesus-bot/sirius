@@ -157,16 +157,203 @@ la segunda no va nada mecánico, y así queda dicho.
 
 ## Contexto y problema
 
+Un registro puede morir de dos maneras y este repositorio solo vigilaba una.
+Puede **pudrirse** —un defecto abierto sin incidencia, una ruta que ya no
+existe, una fila borrada en vez de cerrada—, y contra eso hay ocho
+comprobaciones desde el 21-08-2026. Y puede **dormirse**: seguir siendo
+perfectamente coherente y dejar de recibir lo que pasa. Contra eso no había
+nada, porque las ocho leen el registro y solo el registro: sin una segunda
+fuente, un registro dormido es indistinguible de un repositorio sin defectos.
+
 ## Criterio de parada (escrito ANTES de decidir)
+
+El de la sección 3 de la nota de arranque, publicado en el commit `738298b`
+antes de contar nada y antes de tocar la guarda. Ninguna de las cuatro
+condiciones se cumplió: la señal elegida produce hoy seis ADR y no un conjunto
+vacío, las ocho mutaciones sembradas pusieron la guarda en rojo, las cinco
+excepciones tienen detrás una comprobación que las sostiene, y no hubo dos
+rondas con defectos de la misma familia.
 
 ## Opciones consideradas
 
+Las tres señales candidatas de la nota de arranque, ya contadas (la medida está
+abajo):
+
+1. **(A) El ADR declara una lección con `familia:`** — 5 de los 62 ADR del
+   rango. La elegida.
+2. **(B) El ADR nombra un `H-N` que está en el registro** — 4 de 62.
+3. **(C) (A) y además una prueba que la hace cumplir** — 5 de 62, exactamente
+   los mismos que (A).
+
 ## Decisión
+
+La guarda del registro de defectos gana una segunda mitad, y esa mitad **deriva
+su inventario de `docs/decisions/`**: un ADR que declara una lección con
+`familia:` declara, por la definición que ADR-174 ya fijó —una lección se
+escribe *solo si sin ella alguien repetiría el error*—, que algo mordió. El
+registro tiene que acusarlo con una entrada que diga `adr: <número>`.
+
+Lo escrito a mano es `SIN_DEFECTO_REGISTRADO`: **lo que se resta**, con su
+razón al lado. Restar en vez de sumar es la mitad de la decisión, y es la que
+hace que esto no vuelva a pasar: *a una lista de inclusión le puede faltar una
+entrada y sigue verde; a una de exclusión que sobra se la ve.* Es la misma
+inversión que ADR-179 hizo con `PIEZAS`, aplicada a la tercera aparición de la
+misma familia.
+
+Cuatro cierres mecánicos la sostienen:
+
+- una excepción para un ADR que **ya no existe o ya no declara lección** pone la
+  batería en rojo;
+- una excepción para un ADR que el registro **ya acusa** también, para que se
+  borre en cuanto sobra;
+- una excepción **sin razón escrita** también;
+- y —el que cierra la salida fácil— **si ninguna entrada del registro acusa a
+  ningún ADR**, rojo. Sin él, la respuesta cómoda a cualquier rojo sería añadir
+  una línea a la lista de exclusión hasta cubrir el inventario entero, y el
+  registro volvería a estar donde estaba.
+
+Tres detalles no son cosméticos:
+
+- **`adr` es un campo opcional y solo de las entradas nuevas.** Ninguna de las
+  32 entradas anteriores se retira ni se reescribe: el registro conserva todo
+  defecto pasado con su commit de cierre, y las cifras fechadas de ADR-174 son
+  evidencia y no se tocan.
+- **No se toca git.** La comprobación que sí lo toca
+  (`test_ningun_defecto_abierto_tiene_ya_su_arreglo_en_main`) no llega a correr
+  en Quality; esta lee dos ficheros del árbol y corre en todas partes.
+- **La anti-vacua del corazón no exige que haya defectos abiertos.** Que todos
+  estén cerrados es un estado sano, no un fallo. Lo que exige es que el
+  criterio siga distinguiendo, y para eso lo ejerce sobre defectos sembrados en
+  la propia prueba.
 
 ## Comprobación que la sostiene
 
+### La medida: tres señales contadas después de declararlas
+
+Con el criterio publicado en `738298b` y ejecutado sobre el árbol de `673b2f4`,
+sobre los **62** ADR distintos que el rango 116–180 tiene en `docs/decisions/`
+(el encargo dice 61; la diferencia son los huecos 165, 177 y 178, que no
+existen, y el conteo por ficheros presentes da 62):
+
+| señal | ADR que la cumplen | cuáles |
+|---|---|---|
+| (A) declara lección con `familia:` | **5** | 174, 175, 176, 179, 180 |
+| (B) nombra un `H-N` del registro | **4** | 118, 136, 145, 154 |
+| (C) (A) + prueba que la hace cumplir | **5** | 174, 175, 176, 179, 180 |
+
+**Por qué (B) queda descartada, y no por poco: es circular.** Solo encuentra
+ADR que ya nombran un defecto **que ya está en el registro**, así que por
+construcción no puede exigir jamás una entrada nueva. Como guarda contra un
+registro dormido vale exactamente cero: los cuatro que caza —118, 136, 145,
+154— citan H-14, H-23, H-25 y H-28, todos escritos ya. Y encima es la señal por
+mención, que es el falso positivo que ADR-080 descartó midiendo en esta misma
+familia de ficheros.
+
+**(C) no aporta nada sobre (A):** hoy produce el mismo conjunto, y añade una
+condición que responde a otra pregunta —si la lección llegó a código—, no a la
+que aquí se hace. Se queda (A), que además es la única de las tres que cumple
+las tres condiciones declaradas: sale del árbol, se lee sin git y produce un
+conjunto no vacío.
+
+**Estado del registro y de la guarda vieja, medido en el mismo árbol:**
+
+```
+$ ... print(len(d), collections.Counter(x['estado'] for x in d))
+32 Counter({'cerrado': 32})
+$ uv run pytest tests/automation/test_registro_de_defectos.py -q -rs
+39 passed, 1 skipped in 0.17s
+$ git rev-list --count HEAD
+1
+```
+
+### Lo que este ADR deja escrito en el registro
+
+`H-33`, la primera entrada desde el 31-08-2026: «el registro de defectos podía
+quedarse dormido sin que ninguna comprobación lo notara», con `adr: 182` y
+`incidencia: 597`. Queda en `abierto` a propósito: mientras esta PR no se
+fusione, el defecto **sigue vivo en `main`**, y escribir `cerrado` con un
+`cerrado_por` que todavía no existe sería exactamente la clase de dato de
+memoria que este ADR se niega a producir. Como efecto secundario, el corazón de
+la prueba deja de aseverar sobre el conjunto vacío también con los datos reales.
+
+Los otros cinco ADR con lección quedan en `SIN_DEFECTO_REGISTRADO`, uno a uno y
+con su razón. No se registran retroactivamente por el mismo motivo por el que
+ADR-174 no rellenó los anteriores a él —sería escribir hoy, de memoria, lo que
+en su día no se capturó— y por un impedimento medido: su `cerrado_por` es un
+commit de `main` que este árbol no tiene.
+
+### Las mutaciones, sembradas y vistas caer
+
+Ocho. En dos de ellas se comprueban **las dos direcciones** que exige ADR-001
+§3: la guarda vieja pasa con la mutación puesta y la nueva falla.
+
+| # | mutación | guarda vieja | guarda nueva |
+|---|---|---|---|
+| M1 | quitar `adr: 182` de `H-33`: ADR-182 declara lección y el registro no lo acusa | **40 passed** | **rojo** en `test_todo_adr_que_declara_un_defecto_deja_su_entrada_en_el_registro` y en `test_al_menos_un_defecto_acusa_el_adr_que_lo_corrigio` |
+| M2 | eximir a ADR-182, que el registro **sí** acusa | — | rojo en `test_ninguna_excepcion_sobra[ADR-182]` |
+| M3 | eximir a un ADR que no existe (999) | — | rojo en `test_cada_excepcion_sigue_correspondiendo_a_un_adr_que_declara_un_defecto[ADR-999]` |
+| M4 | dejar una excepción sin razón escrita | — | rojo en `test_cada_excepcion_declara_su_razon[ADR-180]` |
+| M5 | que una entrada acuse un ADR inventado (`adr: 999`) | — | rojo en `test_el_adr_que_un_defecto_acusa_existe_de_verdad` |
+| M6 | que la derivación deje de ver `familia:` | — | rojo en 6, empezando por `test_el_inventario_de_adr_con_defecto_se_deriva_y_no_esta_vacio` |
+| M7 | aflojar el criterio del corazón **y** dejar el registro sin ningún abierto | **39 passed** | **rojo** en `test_el_criterio_del_corazon_muerde_aunque_no_haya_ningun_abierto` |
+| M8 | eximir **todos** los ADR del inventario, que es la salida fácil ante un rojo | — | rojo en `test_al_menos_un_defecto_acusa_el_adr_que_lo_corrigio` |
+
+**M1 y M7 son las que miden lo que se ganó.** En M1 la guarda vieja pasa entera
+—40 passed— con un ADR que dice haber corregido un defecto y un registro que no
+lo menciona: es la sequía, reproducida en pequeño. En M7 el criterio del corazón
+se afloja hasta invertirse y la guarda vieja sigue verde —39 passed— porque con
+los 32 defectos cerrados filtra sobre el vacío y no llega a ejercerlo; la
+anti-vacua nueva lo caza sin depender de cómo esté el registro.
+
+### La batería completa
+
+`uv run ruff format --check .`, `uv run ruff check .`, `uv run mypy src tests` y
+`uv run pytest` en verde sobre esta rama: **6410 passed, 17 skipped, 2 xfailed**
+en 9 min 50 s. La guarda de este fichero pasa de 40 a 63 casos y sigue costando
+milisegundos.
+
 ## Consecuencias
+
+- **El registro no puede volver a dormirse en silencio.** El día en que un ADR
+  declare una lección sin que el registro acuse su defecto, la batería se pone
+  en rojo. Es la primera comprobación de este fichero que pregunta si lo que
+  pasó se escribió.
+- **El registro se despierta**: `H-33` es la primera entrada en trece días.
+- **La deuda queda contada y con fecha**: cinco ADR con lección y sin entrada,
+  uno a uno y con su razón, en vez de una sequía que nadie mide.
+- **Un defecto nuevo cuesta una línea más**, el `adr:`. A cambio, los dos
+  documentos dejan de poder contradecirse en silencio.
+- **La guarda no depende de git**, así que corre entera en Quality —a
+  diferencia de la comprobación 8, que sigue saltándose ahí—.
+- Lo que sigue sin cubrirse está en la sección 2 de la nota de arranque, y hay
+  dos puertas abiertas que conviene no olvidar: un ADR puede declarar
+  `ninguna:` y quedarse fuera del inventario, y un arreglo sin ADR no entra en
+  él. La primera la sostiene `test_mina_de_lecciones.py`, que obliga a escribir
+  la razón; la segunda no la sostiene nada mecánico.
 
 ## Alternativas descartadas y por qué
 
+- **Exigir que el registro reciba una entrada cada N días.** Mide el reloj, no
+  el trabajo: en una semana sin defectos obligaría a inventar uno, y esa es la
+  forma más rápida de que un registro deje de significar algo.
+- **Derivar la señal de las menciones `H-N` en los ADR (opción B).** Circular,
+  como está medido arriba: solo ve defectos ya escritos, así que nunca puede
+  pedir una entrada nueva. Y es la señal por mención que ADR-080 ya descartó.
+- **Registrar retroactivamente los cinco ADR con lección.** Sería escribir hoy,
+  de memoria, lo que en su día no se capturó —lo que ADR-174 declinó hacer con
+  los ADR anteriores a él—, y además su `cerrado_por` no está en este árbol.
+  Quedan declarados como excepción, con su razón y su fecha, que es un dato
+  verdadero en vez de uno reconstruido.
+- **Exigir que el conjunto de defectos abiertos no esté vacío**, como anti-vacua
+  del corazón. Es falso como criterio: que todo defecto conocido esté cerrado es
+  el estado sano. Lo que hay que impedir es que el criterio deje de morder, y
+  eso se comprueba ejerciéndolo sobre defectos sembrados.
+- **Arreglar de paso el salto de la comprobación 8** en el clon superficial de
+  Quality. ADR-080 explica qué haría falta y está fuera del alcance de
+  WI-20260913-000235; la guarda nueva evita el problema no dependiendo de git.
+
 ## La lección
+
+- familia: `regla-que-depende-de-que-alguien-se-acuerde`
+- sin esto se repetiría: poner a vigilar un registro con comprobaciones que solo miran la coherencia de lo ya escrito; el registro deja de recibir lo que pasa, ninguna de ellas puede notarlo y el verde lo confirma —aquí fueron doce días y 61 ADR sin una entrada.
+- lo hace cumplir: `tests/automation/test_registro_de_defectos.py`

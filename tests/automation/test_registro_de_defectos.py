@@ -10,20 +10,31 @@ ya encontrado **no se pierda**: si un defecto abierto se queda sin incidencia, o
 cita un fichero que ya no existe, o alguien lo borra del registro en vez de
 cerrarlo, la batería se rompe.
 
-Es deterministaa propósito: lee un fichero y comprueba si una ruta existe. No
-razona, no llama a ningún modelo y cuesta milisegundos. Sigue funcionando igual
-el día en que el ciclo lo mueva un modelo pequeño y barato.
+Y garantiza, desde ADR-182, la mitad que faltaba: **que lo que pasó se
+escriba**. Las ocho comprobaciones originales miraban la coherencia de lo ya
+escrito, ninguna preguntaba si el registro seguía vivo, y por eso pasaron doce
+días y 61 ADR en verde sobre un registro cuya última entrada era del 31-08-2026.
+La segunda mitad DERIVA de `docs/decisions/` los ADR que declaran una lección
+-que es como este repositorio dice «aquí mordió algo»- y exige que el registro
+los acuse; lo escrito a mano es `SIN_DEFECTO_REGISTRADO`, lo que se RESTA.
+
+Es determinista a propósito: lee dos ficheros del árbol y comprueba si una ruta
+existe. No razona, no llama a ningún modelo y cuesta milisegundos. Sigue
+funcionando igual el día en que el ciclo lo mueva un modelo pequeño y barato.
 """
 
 from __future__ import annotations
 
 import re
 import subprocess
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
 import pytest
 import yaml
+
+from sirius_engine.memoria import PRIMER_ADR_CON_LECCION, leer_leccion
 
 RAIZ = Path(__file__).resolve().parents[2]
 REGISTRO = RAIZ / "docs" / "audits" / "registro_defectos.yml"
@@ -58,16 +69,66 @@ def test_ningun_identificador_repetido() -> None:
     assert repetidos == [], f"identificadores repetidos: {repetidos}"
 
 
-def test_todo_defecto_abierto_tiene_una_incidencia_que_lo_siga() -> None:
-    """El corazón de la prueba: sin incidencia, un defecto se olvida."""
-    sin_incidencia = [
+def _abiertos_sin_incidencia(defectos: Iterable[Mapping[str, Any]]) -> list[str]:
+    """EL criterio del corazón, en una función que se puede alimentar a mano.
+
+    Vive aparte por lo que midió ADR-182: el 13-09-2026 los 32 defectos del
+    registro estaban cerrados, así que la prueba de abajo filtraba por
+    `abierto`, se quedaba con la lista vacía y aseveraba `[] == []`. Verde en
+    vacío, y sin forma de distinguir «no hay ninguno suelto» de «el criterio ya
+    no muerde». Con el criterio extraído, `test_el_criterio_del_corazon_...` lo
+    ejerce sobre defectos sembrados y no depende de cómo esté el registro hoy.
+    """
+    return [
         defecto["id"]
-        for defecto in _defectos()
+        for defecto in defectos
         if defecto["estado"] == "abierto" and not isinstance(defecto.get("incidencia"), int)
     ]
+
+
+def test_todo_defecto_abierto_tiene_una_incidencia_que_lo_siga() -> None:
+    """El corazón de la prueba: sin incidencia, un defecto se olvida."""
+    sin_incidencia = _abiertos_sin_incidencia(_defectos())
     assert sin_incidencia == [], (
         f"defectos abiertos sin incidencia que los siga: {sin_incidencia}. "
         "Abre una incidencia y pon su número, o ciérralo con `cerrado_por`."
+    )
+
+
+# Defectos sembrados, no leídos del registro: el criterio se ejerce sobre ellos
+# aunque el registro no tenga ni un abierto. No se exige que lo tenga -que todo
+# defecto conocido esté cerrado es un estado sano, no un fallo-; lo que se exige
+# es que el criterio siga distinguiendo, que es lo que el conjunto vacío ocultó.
+_SEMBRADO_SUELTO: dict[str, Any] = {"id": "S-1", "estado": "abierto"}
+_SEMBRADO_SEGUIDO: dict[str, Any] = {"id": "S-2", "estado": "abierto", "incidencia": 597}
+_SEMBRADO_CERRADO: dict[str, Any] = {"id": "S-3", "estado": "cerrado", "cerrado_por": "0" * 40}
+_SEMBRADO_CON_INCIDENCIA_NO_NUMERICA: dict[str, Any] = {
+    "id": "S-4",
+    "estado": "abierto",
+    "incidencia": "pronto",
+}
+
+
+def test_el_criterio_del_corazon_muerde_aunque_no_haya_ningun_abierto() -> None:
+    """Anti-vacua que NO depende del registro: el corazón no puede quedarse inerte.
+
+    Es la comprobación que faltaba. Las otras siete miran la coherencia de lo ya
+    escrito, así que un registro dormido -o cerrado entero- las deja a todas en
+    verde; esta mira el criterio en sí.
+    """
+    sembrados = [
+        _SEMBRADO_SUELTO,
+        _SEMBRADO_SEGUIDO,
+        _SEMBRADO_CERRADO,
+        _SEMBRADO_CON_INCIDENCIA_NO_NUMERICA,
+    ]
+    assert _abiertos_sin_incidencia(sembrados) == ["S-1", "S-4"], (
+        "el criterio del corazón ya no distingue el defecto abierto que nadie "
+        "sigue: tiene que cazar S-1 (sin incidencia) y S-4 (incidencia que no "
+        "es un número), y dejar pasar S-2 (seguido) y S-3 (cerrado)."
+    )
+    assert _abiertos_sin_incidencia([]) == [], (
+        "sobre nada, el criterio no puede inventarse un suelto"
     )
 
 
@@ -254,4 +315,230 @@ def test_ningun_defecto_abierto_tiene_ya_su_arreglo_en_main() -> None:
         f"{asuntos}. Ciérralo con su `cerrado_por`, o renombra el commit si no "
         "era el arreglo."
         for hid, asuntos in contradicciones
+    )
+
+
+# --- La mitad que faltaba: ¿se ESCRIBIÓ lo que pasó? -------------------------
+#
+# Las ocho comprobaciones de arriba verifican la COHERENCIA DE LO YA ESCRITO.
+# Ninguna pregunta si lo que pasó llegó a escribirse, y por eso el registro
+# estuvo doce días y 61 ADR en verde estando dormido: la última entrada es del
+# 31-08-2026 (`5cc3f18`) y entre medias entraron a `main` los ADR 116 a 180.
+#
+# El arreglo es el de ADR-179, aplicado aquí: **el inventario se DERIVA del
+# repositorio y lo escrito a mano es lo que se RESTA**. A una lista de inclusión
+# le puede faltar una entrada y sigue verde; a una de exclusión que sobra se la
+# ve.
+#
+# La señal derivada, elegida midiendo tres candidatas (ADR-182): **un ADR que
+# declara una lección con `familia:` corrige un defecto**. No es un criterio
+# inventado aquí, es el que ADR-174 ya fijó -una lección se escribe *solo si sin
+# ella alguien repetiría el error*-, lo emite el propio árbol y lo lee
+# `sirius_engine.memoria.leer_leccion`, que su propia batería comprueba.
+#
+# Y no depende de git, a propósito: la comprobación de más arriba que sí depende
+# (`test_ningun_defecto_abierto_tiene_ya_su_arreglo_en_main`) no llega a correr
+# en Quality, que clona superficialmente. Esta lee dos ficheros del árbol.
+
+DECISIONES = RAIZ / "docs" / "decisions"
+_NOMBRE_DE_ADR = re.compile(r"^ADR-(\d{3})-")
+
+#: Cómo una entrada del registro dice qué ADR corrigió su defecto. Es un campo
+#: OPCIONAL: las 32 entradas anteriores al 13-09-2026 no lo traen y no se
+#: reescriben -el registro conserva todo defecto pasado tal como se escribió-.
+CAMPO_ADR = "adr"
+
+
+def _adr_que_declaran_un_defecto() -> dict[int, str]:
+    """Número de ADR -> familia de la lección que declara. EL inventario derivado.
+
+    Se salta los anteriores a ``PRIMER_ADR_CON_LECCION`` porque ahí no hay
+    bloque que leer: ADR-174 los eximió a propósito, y rellenarlos hoy sería
+    escribir de memoria lo que en su día no se capturó.
+
+    Con dos ficheros que compartan número -este registro tiene un `ADR-016`
+    duplicado histórico- gana el primero por orden alfabético; los duplicados
+    conocidos son muy anteriores a 174 y no declaran lección.
+    """
+    inventario: dict[int, str] = {}
+    for ruta in sorted(DECISIONES.glob("ADR-*.md")):
+        casa = _NOMBRE_DE_ADR.match(ruta.name)
+        if casa is None or int(casa.group(1)) < PRIMER_ADR_CON_LECCION:
+            continue
+        leccion = leer_leccion(ruta.read_text(encoding="utf-8").splitlines())
+        if leccion is not None and leccion.familia:
+            inventario.setdefault(int(casa.group(1)), leccion.familia)
+    return inventario
+
+
+def _acuses_del_registro() -> dict[int, list[str]]:
+    """Número de ADR -> los defectos del registro que dicen haberlo acusado."""
+    acuses: dict[int, list[str]] = {}
+    for defecto in _defectos():
+        numero = defecto.get(CAMPO_ADR)
+        if isinstance(numero, int) and not isinstance(numero, bool):
+            acuses.setdefault(numero, []).append(defecto["id"])
+    return acuses
+
+
+def _numeros_de_adr_del_arbol() -> set[int]:
+    return {
+        int(casa.group(1))
+        for ruta in DECISIONES.glob("ADR-*.md")
+        if (casa := _NOMBRE_DE_ADR.match(ruta.name)) is not None
+    }
+
+
+# Lo escrito a mano, y es lo que se RESTA: los ADR que declaran un defecto y no
+# tienen entrada en el registro, cada uno con su razón al lado. Añadir un ADR
+# aquí es un gesto visible en el diff; olvidarse de él pone la batería en rojo.
+#
+# Los cinco de abajo son la sequía misma, medida el 13-09-2026 sobre `673b2f4`:
+# son los ÚNICOS ADR de `main` que declaran lección -la obligación empezó en el
+# 174, dos días antes- y ninguno dejó entrada. No se registran ahora por la
+# misma razón por la que ADR-174 no rellenó los anteriores a él: hacerlo sería
+# escribir hoy, de memoria, lo que en su día no se capturó. Y hay un impedimento
+# medido además del principio: su `cerrado_por` es un commit de `main` que este
+# árbol no tiene -Quality y este runner clonan con profundidad 1,
+# `git rev-list --count HEAD` → `1`-, así que ni siquiera se puede citar.
+SIN_DEFECTO_REGISTRADO: dict[int, str] = {
+    174: (
+        "la sequía que este mecanismo cierra: ADR-174 midió que los dos sitios de "
+        "lecciones llevaban 48 ADR sin una entrada y dejó el registro de defectos "
+        "FUERA DE ALCANCE por escrito. Registrar hoy su propio defecto sería "
+        "reconstruirlo de memoria, que es lo que ese ADR declinó hacer (13-09-2026)"
+    ),
+    175: (
+        "novena aparición de `pieza-sin-lector`, corregida y fusionada antes de que "
+        "existiera esta guarda; su commit de cierre no está en este árbol "
+        "(13-09-2026)"
+    ),
+    176: (
+        "`plan-que-hay-que-terminar-de-una-sentada`, corregida y fusionada antes de "
+        "que existiera esta guarda; su commit de cierre no está en este árbol "
+        "(13-09-2026)"
+    ),
+    179: (
+        "segunda aparición de `regla-que-depende-de-que-alguien-se-acuerde`, "
+        "fusionada en `673b2f4` la madrugada del 13-09-2026, horas antes de esta "
+        "guarda; su ADR declara las 46 piezas sin llamante que destapó y esas son "
+        "deuda de otras incidencias, no defectos de este registro"
+    ),
+    180: (
+        "`medir-lo-que-se-tiene-en-vez-de-lo-que-hay`, corregida y fusionada antes "
+        "de que existiera esta guarda; su commit de cierre no está en este árbol "
+        "(13-09-2026)"
+    ),
+}
+
+
+def test_el_inventario_de_adr_con_defecto_se_deriva_y_no_esta_vacio() -> None:
+    """Anti-vacua del inventario: sin ADR que mirar, todo lo de abajo pasaría solo.
+
+    Y no basta con que no esté vacío: se fijan dos ADR que declaran lección de
+    verdad, para que aflojar la derivación -leer otro encabezado, dejar de ver
+    `familia:`- no se salde con un inventario pequeño pero no vacío.
+    """
+    inventario = _adr_que_declaran_un_defecto()
+    assert inventario, (
+        "ningún ADR del árbol declara una lección con `familia:`; o la "
+        "derivación se rompió, o `docs/decisions/` no es lo que esta guarda cree"
+    )
+    for numero in (174, 179):
+        assert numero in inventario, (
+            f"ADR-{numero} declara una lección con familia y la derivación no la "
+            "ve: el inventario dejó de derivarse de lo que hay escrito"
+        )
+
+
+def test_todo_adr_que_declara_un_defecto_deja_su_entrada_en_el_registro() -> None:
+    """La comprobación que faltaba: lo que pasó tiene que estar escrito.
+
+    Un ADR que declara una lección declara, por la definición de ADR-174, que
+    algo mordió. Si eso no llega al registro, el registro se duerme y ninguna de
+    las otras comprobaciones lo nota.
+    """
+    acusados = _acuses_del_registro()
+    sin_escribir = sorted(
+        numero
+        for numero in _adr_que_declaran_un_defecto()
+        if numero not in acusados and numero not in SIN_DEFECTO_REGISTRADO
+    )
+    assert sin_escribir == [], (
+        f"estos ADR declaran una lección -o sea, un defecto que mordió- y el "
+        f"registro no dice nada de ellos: {[f'ADR-{n}' for n in sin_escribir]}. "
+        f"Da de alta el defecto en {REGISTRO.name} con `{CAMPO_ADR}: <número>`, o "
+        "declara la excepción en SIN_DEFECTO_REGISTRADO con su razón escrita."
+    )
+
+
+@pytest.mark.parametrize("numero", sorted(SIN_DEFECTO_REGISTRADO), ids=lambda n: f"ADR-{n}")
+def test_cada_excepcion_sigue_correspondiendo_a_un_adr_que_declara_un_defecto(
+    numero: int,
+) -> None:
+    """Una excepción que ya no señala nada es una excepción que hay que borrar."""
+    assert numero in _numeros_de_adr_del_arbol(), (
+        f"SIN_DEFECTO_REGISTRADO exime a ADR-{numero} y ese ADR no está en "
+        f"{DECISIONES.name}: bórralo de la lista"
+    )
+    assert numero in _adr_que_declaran_un_defecto(), (
+        f"SIN_DEFECTO_REGISTRADO exime a ADR-{numero} y ese ADR ya no declara "
+        "ninguna lección con `familia:`: no hay defecto que eximir, bórralo"
+    )
+
+
+@pytest.mark.parametrize("numero", sorted(SIN_DEFECTO_REGISTRADO), ids=lambda n: f"ADR-{n}")
+def test_ninguna_excepcion_sobra(numero: int) -> None:
+    """En cuanto el defecto se escribe, la excepción estorba y hay que quitarla.
+
+    Es el cierre que impide que la lista de exclusión crezca y se quede: una
+    excepción y una entrada del registro para el mismo ADR se contradicen.
+    """
+    acusado_por = _acuses_del_registro().get(numero, [])
+    assert not acusado_por, (
+        f"ADR-{numero} está exento en SIN_DEFECTO_REGISTRADO y el registro ya lo "
+        f"acusa en {acusado_por}: la excepción sobra, bórrala"
+    )
+
+
+@pytest.mark.parametrize("numero", sorted(SIN_DEFECTO_REGISTRADO), ids=lambda n: f"ADR-{n}")
+def test_cada_excepcion_declara_su_razon(numero: int) -> None:
+    """Una excepción sin razón escrita es un agujero con permiso."""
+    razon = SIN_DEFECTO_REGISTRADO[numero].strip()
+    assert len(razon) >= 40, (
+        f"ADR-{numero} está exento sin decir por qué (razón: {razon!r}). La razón "
+        "es lo único que distingue una excepción medida de un agujero."
+    )
+
+
+def test_el_adr_que_un_defecto_acusa_existe_de_verdad() -> None:
+    """Coherencia del campo nuevo: `adr: 999` no vale de acuse."""
+    del_arbol = _numeros_de_adr_del_arbol()
+    inventados = sorted(numero for numero in _acuses_del_registro() if numero not in del_arbol)
+    assert inventados == [], (
+        "defectos que dicen haber sido corregidos por un ADR que no existe: "
+        f"{[f'ADR-{n}' for n in inventados]}"
+    )
+    mal_escrito = [
+        defecto["id"]
+        for defecto in _defectos()
+        if CAMPO_ADR in defecto
+        and not (isinstance(defecto[CAMPO_ADR], int) and not isinstance(defecto[CAMPO_ADR], bool))
+    ]
+    assert mal_escrito == [], (
+        f"`{CAMPO_ADR}` tiene que ser el número del ADR, y en {mal_escrito} no lo es"
+    )
+
+
+def test_al_menos_un_defecto_acusa_el_adr_que_lo_corrigio() -> None:
+    """Anti-vacua del enlace: eximirlo todo dejaría el mecanismo dormido otra vez.
+
+    Sin esto, la salida fácil ante un rojo sería añadir una línea a
+    SIN_DEFECTO_REGISTRADO hasta que la lista de exclusión cubriera el
+    inventario entero, y el registro volvería a estar donde estaba: verde y
+    vacío de novedades.
+    """
+    assert _acuses_del_registro(), (
+        f"ninguna entrada de {REGISTRO.name} declara el ADR que la corrigió: el "
+        f"enlace `{CAMPO_ADR}` no lo usa nadie y esta guarda no está comprobando nada"
     )
