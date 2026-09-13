@@ -429,9 +429,14 @@ explicación de la distancia entre recuentos, doce líneas más abajo en esta
 misma sección; (2) la ronda 11 corrige docstrings, comentarios `#:` y esta
 ficha —la sección 6, la de alternativas y «La lección»—, sin una sola línea
 ejecutable de `src/**` ni de `tests/**`, así que no añade ni retira ningún caso
-recolectado y la terna sigue siendo la de su árbol; y (3) el último commit de
+recolectado y la terna sigue siendo la de su árbol; (3) el último commit de
 la ronda 11 añade la transcripción de la cadena que esa ronda corrió sobre el
-árbol de `0878b95f`, la que va más abajo.
+árbol de `0878b95f`, la que va más abajo, y además el propio punto (3) de esta
+enumeración; y (4) la ronda 12 reescribe el párrafo que audita lo que añadió
+ese último commit, el punto (3) que acabas de leer y esta cláusula (4) que se
+enumera a sí misma, también sin una línea de `src/**` ni de `tests/**`. La
+enumeración se cierra aquí: toda línea de prosa posterior al árbol de
+`967a7a20` queda cubierta por uno de estos cuatro puntos.
 
 ```
 6391 passed, 17 skipped, 2 xfailed in 477.56s (0:07:57)
@@ -448,8 +453,13 @@ EXIT_CODE_CHECK=0
 
 Que la terna coincida al caso es la comprobación de lo que la enumeración de
 arriba afirma: la ronda 11 no movió una línea ejecutable, así que no podía
-mover el recuento. Lo único que este commit añade sobre el árbol de `0878b95f`
-es esta transcripción.
+mover el recuento. Sobre el árbol de `0878b95f`, ese commit añade dos cosas y
+ninguna más: esta transcripción y el punto (3) con el que la enumeración de
+arriba se enumera a sí misma —con el traslado de la conjunción «y» que
+encadenar un punto nuevo obliga a mover al último—. Enumerar la transcripción
+y callar el retoque de la enumeración misma costó un hallazgo en la ronda 12:
+la distancia auditable respecto del árbol medido es toda la que muestra el
+`git diff`, incluidas las líneas que describen esa distancia.
 
 **Esa terna es la de su árbol y no pretende ser la del head vigente**, y ésta
 fue la corrección de fondo de la ronda 8: las dos rondas anteriores fallaron por
