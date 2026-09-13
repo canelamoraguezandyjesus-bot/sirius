@@ -319,8 +319,10 @@ def test_un_permiso_autorizado_conserva_el_proposito_declarado() -> None:
 
 
 def test_el_permiso_sin_autorizar_no_toca_ningun_otro_campo() -> None:
-    """Vaciar el propósito es la ÚNICA consecuencia de la regla: quien
-    bloquea es ``G1``, no una petición mutilada por otro sitio."""
+    """La regla del permiso tiene DOS consecuencias: el propósito se vacía y
+    la ampliación por categoría se apaga (``ampliacion_efectiva``, ADR-177).
+    Lo ÚNICO que no ocurre es cualquier otra mutilación de la petición: quien
+    bloquea es ``G1``, no una petición recortada por otro sitio."""
     intencion = IntencionDeConsulta(
         modo=Modo.M2_HISTORICO,
         cardinalidad=Cardinalidad.ACOTADA,
@@ -339,11 +341,12 @@ def test_el_permiso_sin_autorizar_no_toca_ningun_otro_campo() -> None:
 
     assert sin_permiso.proposito == ""
     assert con_permiso.proposito == PROPOSITO_RECUPERACION_ORDINARIA
-    # ADR-177: y apagar la ampliación por categoría, que hasta entonces se
-    # apagaba sola —el propósito vacío no contenía la subcadena «contexto»— y
-    # que nadie había decidido ni fijado. Sigue siendo la MISMA consecuencia
-    # (una operación no autorizada a recuperar tampoco lo está a recuperar
-    # más), dicha ahora en voz alta por ``ampliacion_efectiva``.
+    # ADR-177: la segunda consecuencia. La ampliación por categoría hasta
+    # entonces se apagaba sola —el propósito vacío no contenía la subcadena
+    # «contexto»— y nadie lo había decidido ni lo fijaba ninguna prueba. Sale
+    # de la MISMA regla (una operación no autorizada a recuperar tampoco lo
+    # está a recuperar más), dicha ahora en voz alta por
+    # ``ampliacion_efectiva``.
     assert sin_permiso.amplia_por_categoria is False
     assert con_permiso.amplia_por_categoria is True
     for campo in ("modo", "cardinalidad", "limite_objetivo", "limite_duro", "ventana", "ambito"):

@@ -29,9 +29,13 @@ QUÉ INFIERE EL MODELO Y QUÉ NO
   ampliación entra como señal explícita y no por el texto del propósito. La
   regla es la misma que el traductor
   del banco declara (``tests/acceptance/staged_engine_case_translation.py``):
-  ``Peticion`` no tiene campo de permiso, y un permiso sin autorizar se
-  traduce como **propósito vacío**, que ``G1`` bloquea antes de recuperar —y
-  que apaga también la ampliación.
+  ``Peticion`` no tiene campo de permiso, y un permiso sin autorizar tiene
+  dos efectos a la vez, decididos los dos por el permiso: **vacía el
+  propósito**, que ``G1`` bloquea antes de recuperar, y **apaga la
+  ampliación** (``ampliacion_efectiva`` aquí; ``permiso !=
+  PERMISO_SIN_AUTORIZAR`` en el traductor del banco). La ampliación no se
+  apaga porque el propósito quede vacío: desde ADR-177 nadie lee el texto del
+  propósito para decidirla.
 
 RESPALDO
 ========
