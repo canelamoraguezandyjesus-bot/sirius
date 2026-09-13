@@ -231,7 +231,8 @@ siembra dejaría de rescatar y esa cota rompería. Su gemela del motor portado,
 
 ### 6. La prosa que el cambio dejaba falsa (deuda 28)
 
-Corregida en el mismo trabajo, no en otro. Son **nueve** docstrings. Ocho
+Corregida en el mismo trabajo, no en otro. Son **nueve** pasajes de prosa:
+siete docstrings y dos comentarios de documentación Sphinx (`#:`). Ocho
 están en `src/` y `scripts/`, y de esos ocho la lista sí es completa porque
 sale del barrido de esos dos árboles enteros —`for f in $(git ls-tree -r
 --name-only 433fb11 -- src/ scripts/); do n=$(git show 433fb11:$f | grep -o
@@ -243,18 +244,25 @@ exactamente los cuatro ficheros que los contienen:
 `src/sirius/domain/relevance.py` (7)—. El noveno está en el traductor del
 banco (`tests/acceptance/staged_engine_case_translation.py`), describía el
 mecanismo viejo sin nombrar el literal y por eso no lo devuelve ningún barrido
-de `pide_contexto`: lo encontró la lectura, no el `grep`. Son: el docstring de
-módulo de `relevance.py` y el de
-`RankedKnowledge.seeded`; los de `_PROPOSITO_RECUPERACION_ORDINARIA` y
-`_rank_via_staged_engine` en `rank_relevant_knowledge.py`; el de **módulo**
-de `interpret_query_request.py`, el de `PROPOSITO_RECUPERACION_ORDINARIA` y
-el de `interpretar` en ese mismo fichero; el de módulo del traductor del
+de `pide_contexto`: lo encontró la lectura, no el `grep`. Los **siete
+docstrings** son: el de módulo de `relevance.py` y el de
+`RankedKnowledge.seeded`; el de `_rank_via_staged_engine` en
+`rank_relevant_knowledge.py`; el de **módulo** de `interpret_query_request.py`
+y el de `interpretar` en ese mismo fichero; el de módulo del traductor del
 banco (quinta traducción no obvia); y el de módulo de
 `scripts/medir_variantes_de_criticidad.py:29-38`, cuyo único cambio en toda
 esta PR es justamente ese: decía que la siembra de M20 la activaba «el
 PROPÓSITO de la petición (`pide_contexto`)» y ahora dice que la activa la
-señal explícita. A ellos se suman las referencias a `pide_contexto` que las
-pruebas escribían sobre el árbol base `433fb11`. Esa cifra sale del mismo
+señal explícita. Los **dos comentarios de documentación** son los bloques
+`#:` que anteceden a `_PROPOSITO_RECUPERACION_ORDINARIA`
+(`rank_relevant_knowledge.py:87-106`) y a `PROPOSITO_RECUPERACION_ORDINARIA`
+(`interpret_query_request.py:79-91`): no son docstrings —Python no los liga al
+objeto, los recoge Sphinx por la sintaxis `#:`— y por eso se cuentan aparte,
+aunque para lo que aquí importa hagan el mismo trabajo que un docstring,
+declarar por escrito qué hace el literal.
+
+A los nueve se suman las referencias a `pide_contexto` que las pruebas
+escribían sobre el árbol base `433fb11`. Esa cifra sale del mismo
 barrido, aplicado a **todo** `tests/` y no a un puñado de ficheros elegidos
 —`for f in $(git ls-tree -r --name-only 433fb11 -- tests/); do n=$(git show
 433fb11:$f | grep -o 'pide_contexto' | wc -l); [ "$n" -gt 0 ] && echo "$n $f";
@@ -269,17 +277,29 @@ decía que «para las 47 consultas (M16, ADR-124), `pide_contexto` es cierto
 para…», y pasa a decir lo mismo sobre `Peticion.amplia_por_categoria`, con la
 mención histórica al mecanismo viejo marcada como tal).
 
-Las **31** restantes se quedan escritas, y aquí está por qué cada una: el
-arnés de examen `tests/acceptance/staged_engine_category_and_relevance.py`
-(8), que replica `experiments/adr002/lateral/categoria.py:_pide_contexto` y no
-producción; y otras 23 que tampoco hablan de producción sino de ese mismo
-experimento, que sigue existiendo y sobre el que este cambio no dice nada
-—`tests/automation/fixtures/diario_ola_criticidad.jsonl` (20, el diario
-histórico de la ola M20: registra lo que se decidió entonces, no lo que es
-cierto ahora), `tests/automation/test_citas_de_los_adr.py` (2, el mapa de
-citas de esa pieza del experimento) y
-`tests/acceptance/fixtures/relevance_filter_frozen_run.json` (1, la nota de
-una corrida congelada)—.
+Las **31** restantes se quedan escritas, y aquí está por qué cada una. Son de
+**dos clases distintas**, y conviene no mezclarlas:
+
+- **Referencias al experimento** (11): frases cuyo sujeto es
+  `experiments/adr002/lateral/categoria.py:_pide_contexto`, la pieza del
+  laboratorio que sigue existiendo y sobre la que este cambio no dice nada.
+  Son el arnés de examen
+  `tests/acceptance/staged_engine_category_and_relevance.py` (8), que replica
+  esa pieza y no producción; `tests/automation/test_citas_de_los_adr.py` (2,
+  el mapa de citas de esa misma pieza, cuya clave es literalmente esa ruta); y
+  `tests/acceptance/fixtures/relevance_filter_frozen_run.json` (1, la nota de
+  una corrida congelada, que también nombra esa ruta).
+- **Historial inmutable de decisiones sobre producción** (20):
+  `tests/automation/fixtures/diario_ola_criticidad.jsonl`, el diario de la ola
+  M20. Estas **sí** hablan de producción —el registro de M20 ordena «porta
+  `pide_contexto` y `PROPOSITO_DE_CONTEXTO` al dominio
+  (`src/sirius/domain/relevance.py`)» y describe el bloque `siembra` con
+  `pide_contexto(peticion.proposito)`—, y por eso no valía la categoría que
+  esta sección les daba antes. Se quedan escritas por un motivo distinto del
+  de las once anteriores: un diario registra lo que se decidió **entonces**,
+  no lo que es cierto ahora, y reescribirlo para que cuadre con el código de
+  hoy lo destruiría como evidencia. La corrección de ese registro es esta
+  ficha, no una edición del diario.
 
 El criterio de conteo es el literal `pide_contexto`; no se suma
 `PROPOSITO_DE_CONTEXTO`, que añadiría 2 en `test_peticion_ordinaria.py`. Cada
@@ -512,5 +532,5 @@ Ninguna prueba se ha relajado; ninguna cota del arnés se mueve.
 ## La lección
 
 - familia: `prosa-que-el-cambio-deja-falsa`
-- sin esto se repetiría: retirar un símbolo de producción y dejar vivas las frases que lo daban por cierto; al quitar `pide_contexto` quedaron falsos los nueve docstrings que la sección 6 de esta ficha enumera, 22 referencias de las pruebas y el criterio de aceptación de M16 de la Arquitectura Técnica, y el barrido que las buscó en `scripts/` y `tests/` no miró en `docs/evolution/`.
+- sin esto se repetiría: retirar un símbolo de producción y dejar vivas las frases que lo daban por cierto; al quitar `pide_contexto` quedaron falsos los nueve pasajes de prosa que la sección 6 de esta ficha enumera, 22 referencias de las pruebas y el criterio de aceptación de M16 de la Arquitectura Técnica, y el barrido que las buscó en `scripts/` y `tests/` no miró en `docs/evolution/`.
 - lo hace cumplir: ninguna prueba: nada en este repositorio vigila la coherencia de la prosa de `docs/` con el árbol, y la ocurrencia que queda viva está en la Arquitectura Técnica, que la salvaguarda de #581 prohíbe tocar sin decisión del propietario.
