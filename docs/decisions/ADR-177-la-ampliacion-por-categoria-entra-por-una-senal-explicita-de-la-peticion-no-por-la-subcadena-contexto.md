@@ -317,10 +317,11 @@ lo mismo —una con `f6ed801`, la siguiente con `6c248ea`—, y el defecto no
 estaba en el SHA elegido sino en la forma de afirmar algo sobre «lo posterior»
 a un ancla que esta ficha no controla. Sesiones ajenas a esta vertical empujan
 sobre la rama fusiones de `main` que suben el total recolectado sin mover una
-línea de H4: han entrado dos —`1e3e11e6`/`836f2b8d` y `c7179dcf`/`cea84f1f`— y
-no hay motivo para suponer que sean las últimas. Así que esta sección **no
-afirma nada sobre los commits que vengan después**. La regla que sí se
-sostiene entre fusiones es ésta: la cifra del head publicado es **la que
+línea de H4, y esta ficha no lleva —ni debe llevar— la cuenta de cuántas han
+entrado: cualquier recuento escrito aquí lo desmiente la fusión siguiente. Así
+que esta sección **no afirma nada sobre los commits que vengan después**. La
+regla que sí se sostiene entre fusiones es ésta: la cifra del head publicado es
+**la que
 reporta la ejecución de Quality de ese head**, y ahí es donde hay que leerla,
 no aquí. Para `cea84f1f`, la ejecución de Quality —run 34726068458, conclusión
 `success`; es de Quality, no una corrida local de `check.ps1`— reportó
@@ -330,23 +331,40 @@ otra y se lee en su propio run.
 Que las fusiones suben la terna **sin tocar H4** sí es comprobable, y conviene
 dejarlo escrito porque una ronda anterior lo daba por imposible: ancló
 `5392 passed, 17 skipped, 2 xfailed` al árbol de `f6ed801`, anterior a la
-primera fusión, y la presentó como vigente. El compare `f6ed8014...836f2b8d`
-devuelve `src/sirius_engine/reflect.py`, `src/sirius_engine/tablero.py`,
-`src/sirius_engine/tablero_cli.py`, `tests/engine/test_tablero.py`,
-`tests/engine/test_tablero_cli.py`,
-`tests/automation/test_sirius_comment_upsert.py`,
-`tests/automation/test_serializacion_del_motor.py`,
-`tests/engine/test_reflect.py`, `tests/engine/test_reflect_cli.py`,
-`pyproject.toml`, `scripts/automation/sirius_issue.sh` y
-`.github/workflows/tablero-de-incidencia.yml` —ADR-175 (#588) y ADR-176
-(#589)—. La segunda fusión es igual de ajena: el compare
-`6c248ea9...cea84f1f` devuelve `MEMORIA.md`, esta ficha, la ficha de ADR-180,
-`scripts/siguiente_adr.py` y `tests/automation/test_registro_de_decisiones.py`
-(+130/−1, cinco pruebas nuevas), que son ADR-180 (#595) llegando **desde
-`main`**. Ni uno solo de esos ficheros vive en `src/sirius/`, `tests/unit/`,
-`tests/integration/` ni `tests/acceptance/`, que es donde está todo lo que H4
-cambia. Lo que la terna mide de más son casos ajenos que entran con la fusión,
-no cobertura nueva de esta vertical.
+primera fusión, y la presentó como vigente. Lo comprobable se enuncia como
+**regla**, no como inventario, porque un inventario caduca con la fusión
+siguiente igual que caducaba el ancla: **cada fusión de `main` se comprueba en
+su propio compare —`gh api
+repos/canelamoraguezandyjesus-bot/sirius/compare/<antes>...<después> --jq
+'[.files[].filename]'`, donde `<antes>` es el commit de la rama previo a esa
+fusión— y ninguno devuelve un solo fichero de `src/sirius/`, `tests/unit/`,
+`tests/integration/` ni `tests/acceptance/`**, que es donde está todo lo que H4
+cambia. Quien audite un head posterior corre ese compare para la fusión nueva;
+esta sección no hay que reescribirla, y no dice cuántas fusiones lleva la rama.
+
+Los compares ya verificados quedan como evidencia **anclada al árbol sobre el
+que se corrieron**, no como lista cerrada de lo que la rama ha recibido:
+
+- `f6ed8014...836f2b8d` devuelve `src/sirius_engine/reflect.py`,
+  `src/sirius_engine/tablero.py`, `src/sirius_engine/tablero_cli.py`,
+  `tests/engine/test_tablero.py`, `tests/engine/test_tablero_cli.py`,
+  `tests/automation/test_sirius_comment_upsert.py`,
+  `tests/automation/test_serializacion_del_motor.py`,
+  `tests/engine/test_reflect.py`, `tests/engine/test_reflect_cli.py`,
+  `pyproject.toml`, `scripts/automation/sirius_issue.sh` y
+  `.github/workflows/tablero-de-incidencia.yml` —ADR-175 (#588) y ADR-176
+  (#589) llegando **desde `main`**—.
+- `6c248ea9...cea84f1f` devuelve `MEMORIA.md`, esta ficha, la ficha de
+  ADR-180, `scripts/siguiente_adr.py` y
+  `tests/automation/test_registro_de_decisiones.py` (+130/−1, cinco pruebas
+  nuevas) —ADR-180 (#595) llegando **desde `main`**—.
+- `a8bb7b60...5ae16624` devuelve `MEMORIA.md`, la ficha de ADR-179 y
+  `tests/automation/test_piezas_con_llamante.py` (+712/−71) —ADR-179 (#593)
+  llegando **desde `main`**—.
+
+Ni uno solo de esos ficheros vive en los cuatro directorios de H4. Lo que la
+terna mide de más son casos ajenos que entran con la fusión, no cobertura nueva
+de esta vertical.
 
 **La base contra la que se mide esta rama no se clava: se calcula.** Es la
 base de mezcla del head con `main` —`gh api
@@ -366,11 +384,23 @@ sobre la base son **+4**, no +3. La duración cambia, como cualquier medición
 de reloj en un runner distinto.
 
 La quinta validación, **sobre el rango de la rama y no sin argumentos**
-(deuda 25), se corre **sin segunda revisión**: compara esa base de mezcla
-—`f6fa1e68` para este head— contra el **árbol de trabajo**, que es el
-contenido final de la rama incluida esta misma sección, y no contra un head ya
-superado. Es la comprobación barata que sí puede cubrir el árbol entero, y lo
-cubre:
+(deuda 25), se corre **sin segunda revisión**: compara contra el **árbol de
+trabajo** —el contenido final de la rama, incluida esta misma sección, y no un
+head ya superado— la base de mezcla que devuelva `gh api
+repos/canelamoraguezandyjesus-bot/sirius/compare/main...<head> --jq
+'.merge_base_commit.sha'` **para el head que se consulte**. Es la comprobación
+barata que sí puede cubrir el árbol entero, y lo cubre.
+
+La transcripción que sigue va **anclada al árbol sobre el que se corrió** —el
+de trabajo de esta ronda— y su argumento es el SHA que aquella llamada
+devolvió cuando se capturó, no «la base de este head»: esto último sería falso
+en cuanto entrase otra fusión, que es exactamente lo que ya ocurrió una vez con
+esta línea. Que siga sirviendo no depende de que el SHA sea la base vigente,
+sino de que toda base anterior es antepasado de la vigente y por tanto el rango
+cubierto es un **superconjunto** del de la rama —comprobado, no supuesto:
+`gh api repos/canelamoraguezandyjesus-bot/sirius/compare/f6fa1e68...673b2f4`
+devuelve `status: ahead`, `behind_by: 0` y `merge_base_commit.sha:
+f6fa1e6884d558a04fa29c8b72e6c740339bbf2d`—.
 
 ```
 $ git diff --check f6fa1e68
