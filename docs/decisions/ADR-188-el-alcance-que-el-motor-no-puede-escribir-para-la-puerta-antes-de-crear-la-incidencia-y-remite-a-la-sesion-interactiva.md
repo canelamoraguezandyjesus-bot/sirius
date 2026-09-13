@@ -234,8 +234,11 @@ ningún ciclo, que es lo que costó una hora de motor en #607.
   anterior): `6546 passed, 17 skipped, 2 xfailed in 884.87s (0:14:44)` y
   **código de salida `0`**. La ronda anterior la había medido sobre el árbol de
   `941751a` —`6546 passed, 17 skipped, 2 xfailed in 618.72s (0:10:18)`, también
-  con código `0`—; el recuento no cambia porque la corrección de
-  CLAUDE-REV-188-001 solo reescribe texto de dos docstrings. Los dos datos
+  con código `0`—; el recuento observado es el mismo. La corrección de
+  CLAUDE-REV-188-001 cambió dos ficheros, y `git show --numstat fcbc679` los
+  enumera: prosa de este mismo ADR y el texto de dos docstrings de
+  `tests/engine/test_dispatch_cli.py`. Ninguno de los dos altera lo que
+  `pytest` recolecta. Los dos datos
   hacen falta y no se sustituyen: la terna dice qué hizo `pytest`, y el 0 —que `scripts/check.ps1` propaga desde
   `$LASTEXITCODE`— es lo único que acredita que la invocación **entera** (Ruff
   format, Ruff lint y `mypy` incluidos) terminó en verde. El único cambio
