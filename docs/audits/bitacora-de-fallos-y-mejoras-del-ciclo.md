@@ -5649,6 +5649,33 @@ H4, todos en `main`. H3 y `B04-CA-30`/`MEM-001` siguen siendo huecos medidos con
 su precio escrito, por decisión del propietario del 12-09.
 ---
 
+### 109. Las cuatro piezas de Memanto quedan aparcadas con su momento de disparo: no se hacen ahora, saltan cuando el mapa pase por ahí (13-09-2026, 06:55 UTC)
+
+**Decisión del propietario, en sus términos.** Estas cosas no se hacen ahora
+salvo que mejoren algo *ya* o se puedan implementar *ya* sin complicar nada.
+Se sigue el mapa que hay (Memoria útil 0.2, lo decidido). Lo de Memanto es
+mejora: se anota, salta cuando tenga que saltar y se implementa cuando toque.
+Sin prisa.
+
+**El análisis completo**, con fichero y línea de cada afirmación sobre Sirius:
+`docs/investigaciones/2026-09-13-memanto-contra-la-capa-de-memoria-de-sirius.md`
+(rama de auditoría).
+
+**Los momentos de disparo**, para que nadie tenga que acordarse:
+
+| pieza | salta cuando… | por qué entonces y no antes | tamaño |
+|---|---|---|---|
+| **B** motivo al archivar + desarchivar | la primera vez que una memoria archivada tenga que volver, **o** la próxima migración que toque `events`/`memories` | el motivo pide una columna en el evento; si ya hay migración abierta, entra gratis | pequeño: un caso de uso espejo de archivar y una columna |
+| **D** Markdown de solo lectura | la próxima vez que se toque la exportación S12.1, **o** cuando el propietario quiera leer su memoria fuera de la app | es un segundo formato del mismo contenido; sin importación, nunca | pequeño: un método en el adaptador de exportación |
+| **C-1** «cambiado desde» | cuando haga falta un listado «qué cambió desde X» — lo más probable, al montar el paquete de contexto de la puerta de salida (§7.1: «recupera información de sesiones anteriores») | hasta entonces nadie lo pide; el dato (`created_at` por revisión) ya existe | trivial: consulta de solo lectura |
+| **C-4** vigencia persistida (`valid_from/valid_to`) en memorias reales | al decidir la deuda 27 **o** al abrir la puerta (NUEVA 3), porque es lo que hace que `G8` cuente fuera del banco | una `valid_to` pasada saca el ítem del contexto ordinario: es semántica de producción, no un adorno | medio: migración + escritura manual como `criticality` |
+| **A** retención, solo como sugerencia | después de C-4 **y** de que el flujo de sugerencias (M4–M6) se haya usado de verdad | nada automático toca una memoria (PA-015); sin fechas de vigencia las reglas serían toscas | medio; **nunca** como proceso que aplique solo |
+
+**Lo que no se copia, ya decidido**: el tipo de conflicto por LLM (Sirius se niega
+a leer contenido a propósito) y el motor solo vectorial (BM25 gana en este
+corpus).
+---
+
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
 
 1. `ollama_category_classifier.py`: ruta relativa y sin
