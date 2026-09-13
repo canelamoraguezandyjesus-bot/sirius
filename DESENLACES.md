@@ -1,6 +1,6 @@
 # Desenlaces del motor de Sirius
 
-> **Generado por `uv run sirius-memoria desenlaces`** a partir de `diario.jsonl` y `diario-despacho.jsonl`: 602 sucesos, el último el 2026-09-13 07:52 UTC. Lo escribe el motor en la rama
+> **Generado por `uv run sirius-memoria desenlaces`** a partir de `diario.jsonl` y `diario-despacho.jsonl`: 605 sucesos, el último el 2026-09-13 07:54 UTC. Lo escribe el motor en la rama
 > `estado-del-motor` tras cada reflejo (ADR-171). **El diario manda**: si un documento
 > dice otra cosa sobre un encargo, vale esto.
 
@@ -8,7 +8,7 @@
 
 | Estado | Encargos |
 |---|---|
-| active | 2 |
+| active | 3 |
 | cancelled | 21 |
 | delivered | 56 |
 | needs_decision | 4 |
@@ -17,6 +17,7 @@
 
 | Encargo | Clase | Estado / fase | Creado | Último suceso | Objetivo | Evidencia |
 |---|---|---|---|---|---|---|
+| WI-20260913-075355 | programacion | active / ejecutar | 2026-09-13 07:53 UTC | 2026-09-13 07:54 UTC | Corrige que la puerta del corrector no confirme su etiqueta consumible contra el estado vigente, a diferencia… | [#607](https://github.com/canelamoraguezandyjesus-bot/sirius/issues/607) |
 | WI-20260913-003150 | programacion | cancelled / revisar | 2026-09-13 00:31 UTC | 2026-09-13 07:52 UTC | Corrige que sirius_apply_verdict.sh deje una incidencia esperando para siempre un cierre de Quality que no… | [#599](https://github.com/canelamoraguezandyjesus-bot/sirius/issues/599) |
 | WI-20260913-072231 | programacion | needs_decision / ejecutar | 2026-09-13 07:22 UTC | 2026-09-13 07:44 UTC | Implementa C2 (ADR-101, #376): declarar en CLASES_CON_ESTADO_PROPIO… | [#605](https://github.com/canelamoraguezandyjesus-bot/sirius/issues/605) |
 | WI-20260913-000235 | programacion | cancelled / revisar | 2026-09-13 00:02 UTC | 2026-09-13 07:33 UTC | Corrige que el registro de defectos pueda quedarse dormido sin que nada lo note.… | [#597](https://github.com/canelamoraguezandyjesus-bot/sirius/issues/597) |
