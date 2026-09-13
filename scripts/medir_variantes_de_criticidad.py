@@ -29,9 +29,10 @@ gobierna el candado del camino cerrado.
 
 M20 (ADR-129, incidencia #516, Decisión 2 del propietario del 02-09-2026)
 porta la siembra en contexto (``RankRelevantKnowledgeUseCase.
-_rank_via_staged_engine``'s tercer bloque, ``siembra``): activada por el
-PROPÓSITO de la petición (``pide_contexto``), no por vocabulario, y
-``_peticion_ordinaria`` declara el mismo propósito fijo para las 47
+_rank_via_staged_engine``'s tercer bloque, ``siembra``): activada por una
+SEÑAL EXPLÍCITA de la petición (``Peticion.amplia_por_categoria``, ADR-177),
+no por vocabulario ni por el texto del propósito, y ``_peticion_ordinaria``
+la enciende (``_AMPLIACION_DE_LA_RECUPERACION_ORDINARIA``) para las 47
 consultas del banco — así que, desde este encargo, la variante ``hoy`` (y
 también ``A_porte_fiel``/``B_arreglo_ingenuo``, que comparten el mismo
 ``criticality`` real por item) siembra en cada una de las 47 consultas, no

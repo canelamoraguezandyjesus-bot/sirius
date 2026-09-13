@@ -41,7 +41,8 @@ cuándo: la pregunta deja de traducirse a una política uniforme para toda
 consulta y pasa por ``InterpreteDePeticion``
 (``sirius.application.interpret_query_request``), que produce su propia
 ``Peticion`` —modo, cardinalidad, límite y tiempo inferidos por el modelo
-local; permiso y propósito por regla del producto—. El parámetro
+local; permiso, propósito y ampliación por categoría (ADR-177) por regla del
+producto—. El parámetro
 ``query_request_interpreter`` es opcional y por defecto ``None``: sin él,
 este caso de uso emite exactamente la petición uniforme de antes.
 """
@@ -51,6 +52,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from sirius.application.interpret_query_request import (
+    AMPLIACION_POR_CATEGORIA_ORDINARIA,
     LIMITE_SIN_ATAR,
     PROPOSITO_RECUPERACION_ORDINARIA,
     InterpreteDePeticion,
@@ -65,7 +67,6 @@ from sirius.domain.relevance import (
     category_index_matches_query,
     category_matches_query,
     cupo_del_filtro,
-    pide_contexto,
     rank_relevant_knowledge,
     subject_matches_query,
 )
@@ -88,23 +89,45 @@ __all__ = ["RankRelevantKnowledgeUseCase"]
 #: no vacío (``G1``) y Sirius 0.1 no tiene hoy un permiso explícito por
 #: llamada — cada llamada a ``rank()`` es, por construcción, una recuperación
 #: de contexto ordinaria. M16 (SIRIUS-ARQ-0.2 §11.3/§11.5, incidencia #504)
-#: confirma que este literal ya es honesto: contiene la subcadena
-#: ``"contexto"`` a propósito, la misma condición que la réplica del arnés
-#: ``pide_contexto``/``PROPOSITO_DE_CONTEXTO`` exige
-#: (``tests/acceptance/staged_engine_category_and_relevance.py:257,403-409``),
-#: porque la única llamada real al caso de uso (hoy ``rank_con_cupo()``,
-#: ADR-169) ocurre desde
-#: ``ContextBuilder._rank_related_knowledge`` para ensamblar el contexto de
-#: un turno — un hecho estructural sobre quién llama, no una adivinanza
-#: sobre la consulta.
+#: confirma que este literal describe lo que la llamada hace: la única
+#: llamada real al caso de uso (hoy ``rank_con_cupo()``, ADR-169) ocurre
+#: desde ``ContextBuilder._rank_related_knowledge`` para ensamblar el
+#: contexto de un turno — un hecho estructural sobre quién llama, no una
+#: adivinanza sobre la consulta.
+#:
+#: Hasta ADR-177 este literal hacía **dos** trabajos: declarar el propósito
+#: y, por contener la subcadena ``"contexto"``, encender la ampliación por
+#: categoría. Eso segundo ya no lo hace nadie por texto: la ampliación la
+#: pide ``_AMPLIACION_DE_LA_RECUPERACION_ORDINARIA`` (abajo), explícita.
 #:
 #: ADR-164 lo traslada a ``interpret_query_request`` (donde vive la regla del
 #: producto que lo gobierna) y lo reexporta aquí sin cambiar una letra: el
-#: nombre de módulo sigue siendo el punto que una prueba sustituye para
-#: ejercitar la rama sin siembra
-#: (``tests/integration/test_rank_relevant_knowledge.py``), y se lee en cada
-#: llamada, no una sola vez al importar.
+#: nombre de módulo sigue siendo un punto que una prueba puede sustituir, y
+#: se lee en cada llamada, no una sola vez al importar.
 _PROPOSITO_RECUPERACION_ORDINARIA = PROPOSITO_RECUPERACION_ORDINARIA
+
+#: Ampliación por categoría de la recuperación ordinaria (H4 de ADR-148,
+#: ADR-177, incidencia #581): **encendida**, y por escrito.
+#:
+#: El criterio: esta política es UNIFORME —no infiere intención, declara la
+#: misma petición para cualquier consulta—, así que lo único honesto que
+#: puede pedir es la recuperación MÁS AMPLIA, y dejar el recorte a quien
+#: sabe recortar: el filtro de relevancia (ADR-125, con el rescate RF-25/
+#: RF-26 de M19b) y el presupuesto de contexto. Una política que no
+#: distingue casos no puede decidir cuándo NO ampliar sin acertar por azar.
+#:
+#: No es una decisión nueva: es exactamente la que el sistema ya tomaba
+#: —toda petición de producción ampliaba— pero que nadie había tomado,
+#: porque salía de que el literal del propósito llevase dentro la palabra
+#: «contexto». ADR-177 la deja escrita y medible en lugar de emergente; el
+#: conjunto de peticiones que amplían no cambia (ver la sección de
+#: comprobación de ADR-177).
+#:
+#: Existe como nombre de módulo, igual que ``_PROPOSITO_RECUPERACION_
+#: ORDINARIA``, para que una prueba pueda sustituirlo y ejercitar la rama
+#: sin siembra (``tests/integration/test_rank_relevant_knowledge.py``), y se
+#: lee en cada llamada, no una sola vez al importar.
+_AMPLIACION_DE_LA_RECUPERACION_ORDINARIA = AMPLIACION_POR_CATEGORIA_ORDINARIA
 
 #: Permiso de la recuperación ordinaria, decidido por REGLA del producto y
 #: nunca por el modelo (ADR-164): la única llamada real al caso de uso (hoy
@@ -160,6 +183,7 @@ def _peticion_ordinaria(
         active_project_id=active_project_id,
         permiso=_PERMISO_DE_LA_RECUPERACION_ORDINARIA,
         proposito=_PROPOSITO_RECUPERACION_ORDINARIA,
+        amplia_por_categoria=_AMPLIACION_DE_LA_RECUPERACION_ORDINARIA,
     )
 
 
@@ -262,10 +286,10 @@ class RankRelevantKnowledgeUseCase:
 
         Con intérprete cableado, la pregunta se convierte en una petición
         PROPIA —modo, cardinalidad, límite y tiempo inferidos de la consulta
-        por el modelo local; permiso y propósito por regla del producto, que
-        este caso de uso declara aquí y ningún llamador de ``rank()`` puede
-        inyectar, porque ``rank()`` solo recibe la consulta—. Sin intérprete,
-        la política uniforme de siempre.
+        por el modelo local; permiso, propósito y ampliación por categoría
+        (ADR-177) por regla del producto, que este caso de uso declara aquí y
+        ningún llamador de ``rank()`` puede inyectar, porque ``rank()`` solo
+        recibe la consulta—. Sin intérprete, la política uniforme de siempre.
         """
         if self._query_request_interpreter is None:
             return _peticion_ordinaria(
@@ -277,6 +301,7 @@ class RankRelevantKnowledgeUseCase:
             active_project_id=active_project_id,
             permiso=_PERMISO_DE_LA_RECUPERACION_ORDINARIA,
             proposito=_PROPOSITO_RECUPERACION_ORDINARIA,
+            amplia_por_categoria=_AMPLIACION_DE_LA_RECUPERACION_ORDINARIA,
         )
 
     def _rank_via_staged_engine(self, query_text: str) -> tuple[RankedKnowledge, ...]:
@@ -399,13 +424,16 @@ class RankRelevantKnowledgeUseCase:
         anteriores, restricción de ámbito, sobre
         ``Memory.criticality``/``Decision.criticality``) pero con una
         condición de activación distinta: en vez del VOCABULARIO de la
-        consulta (``category_index_activated``), la siembra se activa por el
-        PROPÓSITO de la propia petición (``pide_contexto(peticion.proposito)``,
-        réplica de ``siembra_de_contexto`` del arnés,
-        ``tests/acceptance/staged_engine_category_and_relevance.py:412-445``).
-        ``_peticion_ordinaria`` (arriba) fija ese propósito a un literal fijo
-        que ya contiene la subcadena "contexto" a propósito (M16, ADR-124) —
-        así que, en producción, toda llamada real al caso de uso (hoy
+        consulta (``category_index_activated``), la siembra se activa por una
+        SEÑAL EXPLÍCITA de la propia petición
+        (``peticion.amplia_por_categoria``, H4 de ADR-148, ADR-177). Hasta
+        ADR-177 esa señal se deducía de que ``peticion.proposito`` contuviera
+        la subcadena "contexto", de modo que un texto libre decidía este
+        camino entero; ahora la fija quien construye la petición, con su
+        criterio escrito al lado, y el conjunto de peticiones que la activan
+        es el mismo. ``_peticion_ordinaria`` (arriba) la enciende
+        (``_AMPLIACION_DE_LA_RECUPERACION_ORDINARIA``) — así que, en
+        producción, toda llamada real al caso de uso (hoy
         ``rank_con_cupo()``, ADR-169) siembra en
         cada turno, sin depender de que la consulta nombre ninguna palabra
         de ningún vocabulario: quien poda el ruido resultante es el filtro
@@ -580,7 +608,7 @@ class RankRelevantKnowledgeUseCase:
             (candidato.kind, candidato.item_id) for candidato in solo_por_criticidad
         }
         siembra: list[RankedKnowledge] = []
-        if self._category_matching_enabled and pide_contexto(peticion.proposito):
+        if self._category_matching_enabled and peticion.amplia_por_categoria:
             criticidad_index_activada = category_index_activated(
                 query_text, self._criticality_vocabulary
             )
