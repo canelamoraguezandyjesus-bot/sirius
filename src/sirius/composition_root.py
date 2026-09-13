@@ -115,6 +115,7 @@ from sirius.config.llm_provider_settings import (
     resolve_openai_provider_settings,
     resolve_provider_kind,
 )
+from sirius.config.memory_gates import puertas_de_memoria
 from sirius.config.settings import load_settings, save_settings
 from sirius.domain.capture import build_scene_registry
 from sirius.infrastructure.logging import get_logger
@@ -507,41 +508,51 @@ def build_conversation_dependencies(
     # M11 (incidencia #453, bloqueada) la abra desde ajustes persistidos.
     staged_engine_port = build_staged_engine_port(database_path)
     # D7 punto 6 / §6.3: puerta de activación contra datos reales, cerrada
-    # por defecto. Con la clave ausente o en False, RankRelevantKnowledgeUseCase
+    # por defecto. Con las claves ausentes o en False, RankRelevantKnowledgeUseCase
     # y ContextBuilder se construyen con exactamente los mismos parámetros
     # que sus valores por defecto ya producen — ningún camino de código
     # nuevo para el estado cerrado. M11 cablea el parámetro; abrirlo en
     # settings.json no es trabajo suyo (§6.3, docs/evolution/STATUS.md, D7).
+    #
+    # Incidencia #603 (ADR-185): la puerta única se lee ahora como TRES
+    # interruptores —motor por etapas, petición propia, filtro de relevancia—
+    # para poder abrirla por pasos observables y atribuir a una pieza lo que
+    # hoy solo se puede atribuir al paquete entero (RNF-003: 438-780 ms P95
+    # con las siete cosas abiertas a la vez). `category_matching_enabled`
+    # conserva intacto su significado de §6.3: enciende las tres. Aquí no se
+    # abre ninguna; la lectura vive en una función pura y probada en tabla.
     persisted_settings = load_settings()
-    category_matching_enabled = persisted_settings.get("category_matching_enabled", False) is True
+    puertas = puertas_de_memoria(persisted_settings)
     ollama_model = _ollama_model(persisted_settings)
     rank_relevant_knowledge_use_case = RankRelevantKnowledgeUseCase(
         memory_repository=memory_repository,
         decision_repository=decision_repository,
         project_repository=project_repository,
         knowledge_search_repository=knowledge_search_repository,
-        category_vocabulary=_CATEGORY_VOCABULARY if category_matching_enabled else frozenset(),
+        category_vocabulary=_CATEGORY_VOCABULARY if puertas.motor_por_etapas else frozenset(),
         criticality_vocabulary=(
-            _CRITICALITY_VOCABULARY if category_matching_enabled else frozenset()
+            _CRITICALITY_VOCABULARY if puertas.motor_por_etapas else frozenset()
         ),
-        category_matching_enabled=category_matching_enabled,
+        category_matching_enabled=puertas.motor_por_etapas,
         staged_engine_port=staged_engine_port,
         staged_engine_candidate=staged_engine_candidato(),
         # ADR-164 (palanca 1 de ADR-148): la pregunta se convierte en una
-        # `Peticion` propia en vez de en la política uniforme de antes. Va
-        # detrás de la MISMA puerta cerrada por defecto que el resto del
-        # camino del motor por etapas: con `category_matching_enabled` en
-        # False, `_rank_via_staged_engine` no se ejecuta siquiera, y el
-        # intérprete se construye sin clasificador —es decir, emitiendo la
-        # política uniforme— para que la puerta cerrada no dependa de que
-        # este parámetro sea `None`. El adaptador es el TERCER cliente del
-        # mismo servicio Ollama local (D7 punto 5), nunca un segundo
-        # componente de red ni el proveedor de pago: la pregunta del usuario
-        # no sale de la máquina para decidir cómo buscar en su memoria.
+        # `Peticion` propia en vez de en la política uniforme de antes. Tiene
+        # ya su propio interruptor (`query_intent_enabled`), pero sigue
+        # exigiendo el motor por etapas, porque sin él `_rank_via_staged_engine`
+        # no se ejecuta siquiera y `_peticion` no llega a llamarse: un
+        # interruptor encendido pero inerte prometería una observación que no
+        # existe, y por eso `puertas_de_memoria` no lo enciende a solas. Con la
+        # petición propia apagada, el intérprete se construye sin clasificador
+        # —es decir, emitiendo la política uniforme— para que la puerta cerrada
+        # no dependa de que este parámetro sea `None`. El adaptador es el
+        # TERCER cliente del mismo servicio Ollama local (D7 punto 5), nunca un
+        # segundo componente de red ni el proveedor de pago: la pregunta del
+        # usuario no sale de la máquina para decidir cómo buscar en su memoria.
         query_request_interpreter=InterpreteDePeticion(
             intent_classifier=(
                 OllamaQueryIntentClassifierAdapter(ollama_model)
-                if category_matching_enabled
+                if puertas.peticion_propia
                 else None
             )
         ),
@@ -559,11 +570,13 @@ def build_conversation_dependencies(
             OllamaRelevanceFilterAdapter(
                 ollama_model, timeout_seconds=_RELEVANCE_FILTER_TIMEOUT_SECONDS
             )
-            if category_matching_enabled
+            if puertas.filtro_de_relevancia
             else None
         ),
-        max_criticality_category=(_MAX_CRITICALITY_CATEGORY if category_matching_enabled else None),
-        category_matching_enabled=category_matching_enabled,
+        max_criticality_category=(
+            _MAX_CRITICALITY_CATEGORY if puertas.filtro_de_relevancia else None
+        ),
+        category_matching_enabled=puertas.filtro_de_relevancia,
     )
     send_message_use_case = SendMessageUseCase(
         context_builder=context_builder,
