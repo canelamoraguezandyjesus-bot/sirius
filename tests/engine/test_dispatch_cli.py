@@ -362,7 +362,7 @@ def test_documenta_despacha_con_la_etiqueta_de_activacion_y_el_perfil_documental
 def test_el_diario_del_despachador_es_hermano_del_diario_del_motor(tmp_path: Path) -> None:
     """Diario propio, no el del motor: el de eventos no tiene sitio para «qué incidencia»."""
     diario = tmp_path / "sub" / "motor.jsonl"
-    assert dispatch_cli._diario_de_despacho(diario) == tmp_path / "sub" / "motor-despacho.jsonl"
+    assert dispatch_cli.diario_de_despacho(diario) == tmp_path / "sub" / "motor-despacho.jsonl"
 
 
 def test_investiga_despacha_con_la_etiqueta_de_activacion_y_el_perfil_investigador(
@@ -465,6 +465,73 @@ def test_una_parada_dice_donde_queda_el_trabajo_y_como_volver_a_el(tmp_path: Pat
     work_item = store.get_work_item("WI-20260821-223000")
     assert work_item is not None
     assert work_item.estado.value == "needs_decision"
+
+
+def test_una_parada_dice_con_que_orden_se_sale_de_ella(tmp_path: Path) -> None:
+    """ADR-189. ADR-184 hizo que la parada dijera DÓNDE queda el trabajo; faltaba
+    decir CÓMO sale de ahí, y no salía: de `needs_decision` solo sale
+    `resolve_decision`, cuyo único llamante de producción era el reflector, que
+    necesita una incidencia que mirar. Las cuatro paradas del diario del motor
+    llevaban hasta diez días sin salida (medido el 13-09-2026).
+
+    La orden sale con el work_id y la ruta del diario ya puestos: reconstruirla a
+    mano es donde se pierde, y el diario que `sirius-decidir` resuelva por defecto
+    no tiene por qué ser este.
+
+    Antes del cambio fallaba en la primera aserción con ``AssertionError: la parada
+    tiene que decir con qué orden se sale``: el texto no nombraba `sirius-decidir`.
+    Y se la vio caer también con la orden a medias -dejando el bloque pero quitando
+    `--diario` de la orden copiable-, en ``AssertionError: la orden tiene que poder
+    copiarse tal cual; salió ['sirius-decidir', 'WI-20260821-223000', '--ejecutar',
+    '--terminar']``.
+    """
+    diario = tmp_path / "diario.jsonl"
+    codigo, texto = _correr(
+        ["Corrige el arranque y borra la base de produccion", "--ejecutar"], diario=diario
+    )
+
+    assert codigo == 3, texto
+    assert "sirius-decidir" in texto, "la parada tiene que decir con qué orden se sale"
+    linea = next(
+        fila for fila in texto.splitlines() if "sirius-decidir" in fila and "--terminar" in fila
+    )
+    orden = shlex.split(linea.split("#")[0])
+    assert orden == [
+        "sirius-decidir",
+        "WI-20260821-223000",
+        "--diario",
+        str(diario),
+        "--ejecutar",
+        "--terminar",
+    ], f"la orden tiene que poder copiarse tal cual; salió {orden}"
+    assert "--continuar" in texto, "las dos mitades de la decisión, no solo una"
+
+
+def test_una_parada_de_la_quinta_causa_no_ofrece_continuar(tmp_path: Path) -> None:
+    """ADR-188 + ADR-189: ahí `--continuar` no existe, y ofrecerlo sería mentir.
+
+    Continuar es despachar, y despachar esta orden la mata en el push: es la
+    pérdida de la #607, que ADR-188 vino a impedir. La salida que sí tiene -la
+    sesión interactiva, y `--terminar` cuando ya no haga falta- ya la dice el
+    bloque de ADR-188.
+
+    Antes del cambio fallaba en la segunda aserción: el bloque de la salida
+    ofrecía `--continuar` sin condición, en una parada en la que no lleva a
+    ninguna parte.
+    """
+    orden = "Implementa el aviso que falta en `.github/workflows/despachar-orden.yml`"
+    diario = tmp_path / "diario.jsonl"
+    codigo, texto = _correr([orden, "--ejecutar"], diario=diario)
+
+    assert codigo == 3, texto
+    assert "sirius-decidir" in texto and "--terminar" in texto
+    ofrecidas = [
+        fila for fila in texto.splitlines() if "sirius-decidir" in fila and "--continuar" in fila
+    ]
+    assert ofrecidas == [], (
+        f"ofrecer continuar aquí es prometer un despacho que muere en el push: {ofrecidas}"
+    )
+    assert "no está disponible en esta parada" in texto, "y hay que decir por qué no está"
 
 
 def test_una_parada_en_ensayo_no_promete_un_sitio_donde_no_hay_nada(tmp_path: Path) -> None:

@@ -116,7 +116,7 @@ class _EscritorDeEnsayo:
         return None
 
 
-def _ruta_copiable(ruta: Path) -> str:
+def ruta_copiable(ruta: Path) -> str:
     """``ruta`` tal y como hay que teclearla en una consola, entrecomillada si hace falta.
 
     Sin esto, una ruta con espacios -«/tmp/Sirius motor/diario.jsonl»- se parte
@@ -124,11 +124,14 @@ def _ruta_copiable(ruta: Path) -> str:
     resto al `mensaje` posicional, y `sirius-motor` abre otro diario sin
     protestar. `shlex.quote` deja la ruta intacta cuando no lo necesita, que es
     el caso corriente.
+
+    Pública porque la usa también ``sirius-decidir`` (ADR-189), que escribe la
+    misma clase de instrucción para copiar.
     """
     return shlex.quote(str(ruta))
 
 
-def _diario_de_despacho(diario_del_motor: Path) -> Path:
+def diario_de_despacho(diario_del_motor: Path) -> Path:
     """El diario del despachador, hermano del del motor y en su mismo directorio.
 
     Diario propio y no el del motor por el mismo criterio que separó el del
@@ -136,6 +139,12 @@ def _diario_de_despacho(diario_del_motor: Path) -> Path:
     del ``WorkEngineStore`` modela transiciones tipadas de ``WorkItem``/``Run``
     y no tiene sitio para «qué orden» ni «qué incidencia» nació de una
     activación.
+
+    Pública desde ADR-189 porque ``sirius-decidir`` necesita ESTE diario -el que
+    sabe si una parada tiene incidencia detrás- y no otro. Se importa en vez de
+    copiarse: de esta regla hay ya cuatro copias en el motor
+    (``reflect_cli``, ``seven_day_streak_cli``, ``memoria_cli``), y una quinta
+    sería la `lista-a-mano` que ADR-178 cerró.
     """
     return diario_del_motor.with_name(f"{diario_del_motor.stem}-despacho.jsonl")
 
@@ -161,7 +170,7 @@ def _work_id(ahora: datetime) -> str:
 _MOTIVO_DE_LA_QUINTA_CAUSA = "el alcance declarado cae bajo"
 
 
-def _paro_la_quinta_causa(señal: IntentSignal) -> bool:
+def paro_la_quinta_causa(señal: IntentSignal) -> bool:
     """¿Fue la quinta causa (ADR-188) la que paró esta orden, y no una de las cuatro?
 
     La pregunta no es «¿la orden nombra un alcance vetado?». Una orden puede
@@ -169,6 +178,10 @@ def _paro_la_quinta_causa(señal: IntentSignal) -> bool:
     -es lo que fija `test_las_cuatro_causas_anteriores_siguen_ganando_a_la_quinta`-.
     Mirando solo el texto, el comando contaba esa parada como si fuera de la
     quinta y daba instrucciones que no llevaban a ninguna parte.
+
+    Pública desde ADR-189: ``sirius-decidir`` hace la misma pregunta sobre la
+    ``peticion_original`` guardada para negarse a REANUDAR una parada de la
+    quinta causa, que es la única que no puede salir por el ciclo automático.
     """
     return (señal.motivo_sensibilidad or "").startswith(_MOTIVO_DE_LA_QUINTA_CAUSA)
 
@@ -291,7 +304,7 @@ def main(
     if args.ejecutar:
         diario_efectivo = resolver_diario(argumento=args.diario, entorno=entorno)
         store = DurableWorkEngineStore(diario_efectivo)
-        journal = DurableDispatchJournal(_diario_de_despacho(diario_efectivo))
+        journal = DurableDispatchJournal(diario_de_despacho(diario_efectivo))
     else:
         store = InMemoryWorkEngineStore()
         journal = InMemoryDispatchJournal()
@@ -356,7 +369,7 @@ def main(
         #: familia que prometer un sitio vacío (ADR-184, ADR-188).
         prefijo_vetado = (
             alcance_que_el_motor_no_puede_escribir(args.orden)
-            if _paro_la_quinta_causa(señal)
+            if paro_la_quinta_causa(señal)
             else None
         )
         linea("He creado el trabajo, pero NO lo he despachado: necesita tu decisión.")
@@ -402,9 +415,22 @@ def main(
             linea("detrás. No se borra ni se cancela solo: el diario es append-only y")
             linea("cancelarlo es tu decisión, no la de este comando.")
             linea("Para verlo junto a todo lo demás que espera decisión, abre la sesión")
-            linea(
-                f"«sirius-motor --diario {_ruta_copiable(diario_efectivo)}» y teclea «/trabajos»."
-            )
+            linea(f"«sirius-motor --diario {ruta_copiable(diario_efectivo)}» y teclea «/trabajos».")
+            # ADR-189: decir dónde queda el trabajo sin decir cómo salir de ahí
+            # dejaba el camino de ADR-184 cortado justo al final. Las cuatro
+            # paradas que el diario tenía el 13-09-2026 llevaban hasta diez días
+            # ahí, y ninguna podía salir: de `needs_decision` solo sale
+            # `resolve_decision`, y el único llamante de producción era el
+            # reflector, que necesita una incidencia que mirar.
+            linea("Y cuando lo hayas decidido, la salida es una orden tuya:")
+            linea("")
+            comun = f"{work_id} --diario {ruta_copiable(diario_efectivo)} --ejecutar"
+            linea(f"    sirius-decidir {comun} --terminar    # se da por terminado")
+            if prefijo_vetado is None:
+                linea(f"    sirius-decidir {comun} --continuar    # continúa: crea la incidencia")
+            else:
+                linea("    («--continuar» no está disponible en esta parada: el despacho")
+                linea("     moriría en el push, como la #607. La vía es la sesión interactiva.)")
         return 3
 
     assert resultado.work_item is not None

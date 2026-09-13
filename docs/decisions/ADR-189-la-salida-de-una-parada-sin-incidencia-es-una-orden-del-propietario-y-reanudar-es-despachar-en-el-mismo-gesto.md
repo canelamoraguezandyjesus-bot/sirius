@@ -189,11 +189,48 @@ que la llamara.
 
 ## Comprobación que la sostiene
 
-- La medida del diario real, arriba: 635 sucesos, 4 paradas sin salida, 21
-  `work_item_decision_resolved` y ninguna instancia del agujero de (b).
-- `tests/engine/test_decision_cli.py`, nuevo, con las propiedades del comando.
-- **Mutaciones vistas caer**, una por regla nueva (ADR-001 §3): cada una está
-  anotada junto a la prueba que la caza, en el docstring de la prueba.
+- **La medida del diario real**, arriba: `git show origin/estado-del-motor:diario.jsonl`
+  y `:diario-despacho.jsonl`, 635 sucesos, 88 trabajos, 4 paradas sin salida, 21
+  `work_item_decision_resolved` -16 a `cancelled`, 5 a `active` y las cinco con
+  incidencia detrás- y ninguna instancia del agujero de (b).
+- **Las cuatro paradas son de clase `programacion`**, así que las cuatro tienen
+  las dos salidas disponibles salvo la que pare por la quinta causa, que solo
+  tiene `--terminar`.
+- **Las cuatro validaciones obligatorias, en verde** sobre el head de la rama:
+  `ruff format --check .` (634 ficheros), `ruff check .`, `mypy src tests` (598
+  ficheros) y `pytest`: **6573 pasan, 17 se saltan, 2 xfail**, en 631 s. Más
+  `git diff --check`, sin avisos.
+- **17 mutaciones vistas caer**, una por regla nueva (ADR-001 §3), cada una
+  anotada en el docstring de la prueba que la caza con el mensaje exacto del
+  rojo. La lista, con la prueba que la detiene:
+
+  | Mutación | Lo que deja de cumplirse |
+  |---|---|
+  | `continuar=False` → `True` en `_terminar` | terminar termina |
+  | quitar la rama `estado is CANCELLED` | terminar dos veces no es un error |
+  | quitar la guarda `if not ejecutar` | el ensayo no aplica nada |
+  | volver antes de `dispatch_work_item` en ensayo | el ensayo atraviesa las guardas (H-12) |
+  | quitar `dispatch_work_item` de `_continuar` | reanudar despacha en el mismo gesto |
+  | construir el escritor DESPUÉS de la transición | sin credencial no se reanuda nada |
+  | quitar la comprobación de clase | una clase sin despachador no se reanuda |
+  | quitar la de `orden_enlazada` | §12.1 sin excepción |
+  | `bloqueo = None` (quinta causa) | la quinta causa no se reanuda |
+  | exigir la quinta causa también en `_terminar` | la quinta causa sí se termina |
+  | quitar `ACTIVE` de `_ESTADOS_QUE_CONTINUAN` | un despacho cortado se retoma |
+  | quitar la guarda de `episodio_previo` | con incidencia detrás decide el reflector |
+  | `return 0` en vez de `return 2` | un work_id que no existe no inventa nada |
+  | quitar el bloque de la salida de la parada | la parada dice con qué orden se sale |
+  | quitar `--diario` de la orden copiable | la orden se copia tal cual |
+  | ofrecer `--continuar` en la quinta causa | ahí no se ofrece lo que no lleva a nada |
+  | avisar en `/trabajos` sin condición / no avisar | el aviso sale cuando hay algo que decidir, y solo entonces |
+
+  **Una de esas mutaciones enseñó algo que no se buscaba**: sustituir `return 2`
+  por `return 0` no cambia el TAMAÑO del fichero, y restaurarlo dentro del mismo
+  segundo deja el `.pyc` viejo dado por válido -Python compara mtime en segundos
+  y tamaño-, así que la pasada siguiente corría bytecode mutado sin que nada lo
+  dijera. El guion de mutación borra ahora `__pycache__` en los dos sentidos.
+  Vale la pena anotarlo: una prueba por mutación que no controle eso puede dar
+  por bueno un rojo o un verde que no son del código en disco.
 
 ## Consecuencias
 
@@ -235,8 +272,5 @@ fuga de (b): criterio de parada (b), y por eso el despacho va en el mismo gesto.
 ## La lección
 
 - familia: `estado-en-el-que-se-entra-y-del-que-no-se-sale`
-- sin esto se repetiría: dar por buena una arista del dominio que nadie llama en
-  producción y dejar así un estado en el que el motor entra solo y del que solo
-  puede salir un mecanismo que necesita un dato que ese estado, por definición,
-  no tiene.
+- sin esto se repetiría: dar por buena una arista del dominio que en producción no llama nadie, y dejar así un estado en el que el motor entra solo y del que solo puede salir un mecanismo que necesita un dato que ese estado, por definición, no tiene.
 - lo hace cumplir: `tests/engine/test_decision_cli.py`

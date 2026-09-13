@@ -577,3 +577,19 @@ defectos:
       - src/sirius_engine/dispatch_cli.py
       - tests/engine/test_intent_interpreter.py
       - tests/engine/test_dispatch_cli.py
+
+  # ADR-189 (#615): la puerta acertaba y la parada no tenia salida. H-42 y no
+  # H-41: ese numero lo ocupa ya la entrada de ADR-188 (#612), que entro en main
+  # con la PR #614 -el commit cabeza de `main` al abrir esta rama-.
+  - id: H-42
+    titulo: Una parada de la puerta sin incidencia detras no tenia ninguna salida y se quedaba en needs_decision para siempre
+    bloque: motor
+    gravedad: alta
+    estado: abierto
+    adr: 189
+    incidencia: 615
+    ficheros:
+      - src/sirius_engine/decision_cli.py
+      - src/sirius_engine/dispatch_cli.py
+      - src/sirius_engine/cli.py
+      - tests/engine/test_decision_cli.py
