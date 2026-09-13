@@ -424,7 +424,7 @@ def test_la_ruta_del_diario_sale_copiable_aunque_tenga_espacios(tmp_path: Path) 
     codigo, texto = _correr(["Borra la base de produccion", "--ejecutar"], diario=diario)
 
     assert codigo == 3, texto
-    linea = next(l for l in texto.splitlines() if "sirius-motor --diario" in l)
+    linea = next(fila for fila in texto.splitlines() if "sirius-motor --diario" in fila)
     comando = linea[linea.index("«") + 1 : linea.index("»")]
     assert shlex.split(comando) == ["sirius-motor", "--diario", str(diario)], (
         "la ruta tiene que llegar entera como valor de --diario, no partida en dos"
