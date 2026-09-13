@@ -170,9 +170,10 @@ fuente, un registro dormido es indistinguible de un repositorio sin defectos.
 El de la sección 3 de la nota de arranque, publicado en el commit `738298b`
 antes de contar nada y antes de tocar la guarda. Ninguna de las cuatro
 condiciones se cumplió: la señal elegida produce hoy seis ADR y no un conjunto
-vacío, las ocho mutaciones sembradas pusieron la guarda en rojo, las cinco
-excepciones tienen detrás una comprobación que las sostiene, y no hubo dos
-rondas con defectos de la misma familia.
+vacío, las nueve mutaciones sembradas pusieron la guarda en rojo —M8 a la
+segunda, después de corregir la aserción que dejaba pasar la primera—, las
+cinco excepciones tienen detrás una comprobación que las sostiene, y no hubo
+dos rondas con defectos de la misma familia.
 
 ## Opciones consideradas
 
