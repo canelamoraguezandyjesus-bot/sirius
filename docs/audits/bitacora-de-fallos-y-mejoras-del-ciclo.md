@@ -5337,6 +5337,73 @@ anclaje fuera solo «esta terna salió de este árbol», sin la cláusula sobre 
 posterior, una mezcla no lo invalidaría.
 ---
 
+### 105. Once rondas de H4, y desde la quinta no se ha movido ni un `assert`: la segunda familia es «afirmo de todo X habiendo barrido menos que X» (13-09-2026, 02:50 UTC)
+
+**El recuento, que es el dato duro.** 23 commits sin mezclas en
+`origin/main..d3d84a7a`. Cuántos ficheros de `src/`, `tests/` o `scripts/`
+toca cada uno (`git show --name-only --format= <c> | grep -cE '^(src/|tests/|scripts/)'`):
+
+| commit | ficheros de código | qué es |
+|---|---|---|
+| `fa2c6f8` | **10** | **el cambio de H4**: la señal explícita |
+| `379ea5d` | 1 | candado nuevo (cita histórica del laboratorio) |
+| `393f5aa` | 4 | ronda 2: **solo prosa dentro** de esos cuatro ficheros |
+| `5f1f346` | 1 | ronda 3: candado estructural sobre la firma |
+| `116ee20` | 2 | ronda 9: **solo docstring y comentario** |
+| los otros **18** | 0 | prosa del ADR y `MEMORIA.md` regenerada |
+
+Un solo commit de los 23 cambia producción. Dos añaden candados. **Los otros
+veinte no mueven una expresión.** Lo comprobé en el que más sospechoso parecía,
+`116ee20` sobre `tests/unit/test_interpret_query_request.py`: 17 inserciones y
+7 borrados, y **ni un `assert` cambia** — es un docstring que decía «la ÚNICA
+consecuencia» cuando sus propios `assert` de debajo enseñaban dos.
+
+**Desde la ronda 5 —`66378f1`— hasta la 10 no se ha movido ni una expresión,
+ni una firma, ni una cota, ni un `assert`.** Seis rondas seguidas de revisión
+independiente, con sus dos revisores y sus dos ejecuciones de la cadena
+completa, sobre prosa.
+
+**La entrada 104 explicó la primera familia**: el ancla que caduca cuando
+`main` se mueve. Rondas 6, 7 y 8, la misma. La 8 **atacó la raíz de verdad**:
+en vez de re-anclar por cuarta vez, **quitó las formas que caducan** —el
+recuento enumerado de fusiones y la base de mezcla clavada a un SHA— y dejó lo
+comprobable enunciado como regla. **Funcionó**: ni la ronda 9 ni la 10 han
+vuelto a encontrar un defecto de anclaje.
+
+**Pero apareció una segunda familia, y esta no la había visto nadie.** Tres
+hallazgos de las rondas 9 y 10, y los tres tienen exactamente la misma forma:
+
+1. «**21** referencias en pruebas», derivadas de un barrido sobre **tres
+   ficheros elegidos a mano** y presentadas como la lista completa de `tests/`.
+2. «Son **nueve docstrings**», cuando dos de los nueve son comentarios de
+   documentación Sphinx `#:` que Python no liga a ningún objeto.
+3. «Las **23** ocurrencias no-arnés **tampoco hablan de producción** sino del
+   experimento», cuando **20** de ellas son el diario de M20, que ordena
+   explícitamente portar `pide_contexto` a `src/sirius/domain/relevance.py`.
+
+La forma común: **el documento afirma algo sobre TODO un conjunto, y la
+medición que hay detrás cubrió menos que ese conjunto, o lo clasificó sin
+mirar.** No es un ancla caducada —ninguna de las tres se rompió porque `main`
+se moviera—: es una afirmación que nació más ancha que su evidencia.
+
+**La raíz, y es la misma disciplina de siempre dicha para los recuentos.** Un
+número en un ADR es una medición, y una medición sin su alcance escrito al lado
+es una afirmación sin comprobación. La ronda 9 hizo lo correcto: rehizo el
+barrido sobre `tests/` entero y **escribió el criterio de conteo y el comando
+junto a la cifra**. La ronda 10 pudo entonces re-medir y cuadrar (20 + 2 + 1 +
+8 = 31) porque el criterio estaba escrito. Ese es el arreglo de raíz de esta
+segunda familia: **junto a cada cifra, el barrido que la produjo**.
+
+**Lo que cuesta esto, medido**: nueve rondas de corrección, seis de ellas sin
+tocar código, para un cambio cuyo código lleva estable desde la ronda 2 y cuyas
+cuatro cifras del banco —`17/47; 162; 78/81; 0` y `22/47; 146; 79/81; 0`— no se
+han movido nunca.
+
+**Lo que NO puedo afirmar todavía**: si la ronda 11 cierra. Está en curso
+mientras escribo, con Quality en verde sobre `d3d84a7a` y la puerta previa a la
+fusión ya corrida y verificada. Queda escrito aparte, en la incidencia.
+---
+
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
 
 1. `ollama_category_classifier.py`: ruta relativa y sin
