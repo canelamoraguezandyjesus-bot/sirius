@@ -397,6 +397,9 @@ La primera línea de cada fallo:
   prueba, porque no cambia comportamiento —regenera un artefacto generado y
   renumera un identificador del registro de defectos—. Por eso tampoco trae
   mutación: no hay aserción nueva que sembrar.
+  La **misma cadena, reejecutada** sobre el árbol de `4a3c32a` —que sobre
+  `9a26695` solo añade la prosa de este apartado— da la **misma terna**: 6504
+  passed, 17 skipped, 2 xfailed, en 632.02 s y **código de salida 0**.
 
 ### Ronda 3: el subjuntivo, el corte incondicional, la doble negación y la ruta
 
