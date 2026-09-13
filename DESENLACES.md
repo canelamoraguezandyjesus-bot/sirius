@@ -1,6 +1,6 @@
 # Desenlaces del motor de Sirius
 
-> **Generado por `uv run sirius-memoria desenlaces`** a partir de `diario.jsonl` y `diario-despacho.jsonl`: 612 sucesos, el último el 2026-09-13 13:21 UTC. Lo escribe el motor en la rama
+> **Generado por `uv run sirius-memoria desenlaces`** a partir de `diario.jsonl` y `diario-despacho.jsonl`: 614 sucesos, el último el 2026-09-13 13:26 UTC. Lo escribe el motor en la rama
 > `estado-del-motor` tras cada reflejo (ADR-171). **El diario manda**: si un documento
 > dice otra cosa sobre un encargo, vale esto.
 
@@ -8,8 +8,8 @@
 
 | Estado | Encargos |
 |---|---|
-| active | 2 |
-| cancelled | 23 |
+| active | 1 |
+| cancelled | 24 |
 | delivered | 56 |
 | failed_safely | 1 |
 | needs_decision | 3 |
@@ -18,7 +18,7 @@
 
 | Encargo | Clase | Estado / fase | Creado | Último suceso | Objetivo | Evidencia |
 |---|---|---|---|---|---|---|
-| WI-20260913-132115 | programacion | active / ejecutar | 2026-09-13 13:21 UTC | 2026-09-13 13:21 UTC | Implementa el cierre entero de la cadena del contador de los siete dias, para que pueda contar de verdad. El… | [#610](https://github.com/canelamoraguezandyjesus-bot/sirius/issues/610) |
+| WI-20260913-132115 | programacion | cancelled / ejecutar | 2026-09-13 13:21 UTC | 2026-09-13 13:26 UTC | Implementa el cierre entero de la cadena del contador de los siete dias, para que pueda contar de verdad. El… | [#610](https://github.com/canelamoraguezandyjesus-bot/sirius/issues/610) |
 | WI-20260913-075355 | programacion | cancelled / ejecutar | 2026-09-13 07:53 UTC | 2026-09-13 13:21 UTC | Corrige que la puerta del corrector no confirme su etiqueta consumible contra el estado vigente, a diferencia… | [#607](https://github.com/canelamoraguezandyjesus-bot/sirius/issues/607) |
 | WI-20260913-072231 | programacion | cancelled / ejecutar | 2026-09-13 07:22 UTC | 2026-09-13 08:23 UTC | Implementa C2 (ADR-101, #376): declarar en CLASES_CON_ESTADO_PROPIO… | [#605](https://github.com/canelamoraguezandyjesus-bot/sirius/issues/605) |
 | WI-20260913-042508 | programacion | failed_safely / comprobar | 2026-09-13 04:25 UTC | 2026-09-13 07:59 UTC | Corrige que el detector de sensibilidad del despachador confunda una PROHIBICION con una PETICION. En… | [#601](https://github.com/canelamoraguezandyjesus-bot/sirius/issues/601) |
