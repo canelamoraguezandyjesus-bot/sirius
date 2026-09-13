@@ -507,9 +507,15 @@ def test_un_encargo_con_alcance_vetado_para_antes_de_crear_la_incidencia(
     que importa: que ni el escritor de GitHub ni el despachador llegan a
     tocarse, ni siquiera con `--ejecutar`.
 
-    Antes del cambio fallaba con ``assert 0 == 3``: la orden salía como orden
-    inequívoca, el despachador la aceptaba y `llamadas` recogía las dos
-    escrituras.
+    Antes del cambio fallaba -observado revirtiendo `dispatch_cli.py` e
+    `intent_interpreter.py` a main- con ``AssertionError: no se puede construir
+    el escritor de GitHub en esta parada``, levantada por `_escritor_prohibido`
+    desde `writer = GitHubCliWriter()` (dispatch_cli.py:353 en main). La orden
+    salía como orden inequívoca y el flujo llegaba al escritor; como el único
+    try/except del módulo captura solo MissingCredentialError, la AssertionError
+    se propagaba fuera de `main` y de `_correr`, así que la prueba no alcanzaba
+    ninguna aserción y `llamadas` quedaba en ``['GitHubCliWriter']`` -una sola
+    anotación, no las dos: `dispatch_work_item` nunca se llegaba a llamar-.
     """
     llamadas: list[str] = []
 
@@ -555,8 +561,14 @@ def test_la_parada_dice_por_que_para_y_remite_a_la_sesion_interactiva(tmp_path: 
     trabajo, y traer la orden lista para copiar -sin ella, quien lee tiene que
     reconstruirla a mano, que es justo donde se pierde-.
 
-    Antes del cambio fallaba con ``AssertionError`` en la primera aserción: el
-    texto no nombraba el alcance ni ADR-002.
+    Antes del cambio fallaba -observado revirtiendo `dispatch_cli.py` e
+    `intent_interpreter.py` a main- en la PRIMERA aserción, la del código de
+    salida (`assert codigo == 3`), con ``assert 4 == 3``: la orden salía como
+    orden inequívoca, el comando construía el GitHubCliWriter real y sin
+    SIRIUS_BOT_TOKEN salía por MissingCredentialError con código 4. Lo que
+    fijan las aserciones SEGUNDA y TERCERA -que el texto nombre el alcance
+    `.github/` y ADR-002- no llegaba a comprobarse; ese texto tampoco existía,
+    pero el rojo que se ve al revertir es el del código de salida.
     """
     orden = "Implementa el aviso que falta en `.github/workflows/despachar-orden.yml`"
     diario = tmp_path / "diario.jsonl"

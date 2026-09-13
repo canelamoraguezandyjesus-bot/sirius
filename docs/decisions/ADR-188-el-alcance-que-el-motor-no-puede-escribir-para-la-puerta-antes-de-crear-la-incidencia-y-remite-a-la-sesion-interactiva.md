@@ -204,6 +204,20 @@ ningún ciclo, que es lo que costó una hora de motor en #607.
 - Las pruebas nuevas están en `tests/engine/test_intent_interpreter.py` y
   `tests/engine/test_dispatch_cli.py`, y cada regla nueva se vio caer con su
   mutación; las mutaciones y lo que rompió cada una están anotadas en la PR.
+- El párrafo «Antes del cambio fallaba …» de las dos pruebas de
+  `tests/engine/test_dispatch_cli.py` decía un rojo que su propio montaje no
+  puede producir (CLAUDE-REV-188-001). Se reescribió con el rojo **observado**
+  al revertir `src/sirius_engine/dispatch_cli.py` e
+  `src/sirius_engine/intent_interpreter.py` a `main` y correr solo esas dos:
+  `test_un_encargo_con_alcance_vetado_para_antes_de_crear_la_incidencia` cae
+  con `AssertionError: no se puede construir el escritor de GitHub en esta
+  parada` desde `writer = GitHubCliWriter()` —antes de cualquier aserción, con
+  `llamadas == ['GitHubCliWriter']`, no las dos escrituras que el texto
+  anunciaba— y `test_la_parada_dice_por_que_para_y_remite_a_la_sesion_interactiva`
+  cae en la PRIMERA aserción con `assert 4 == 3`, el código de
+  MissingCredentialError, no en la del contenido del texto. Atribuir un rojo a
+  la causa que no es la suya es, en la evidencia, el mismo defecto que esta PR
+  corrige en el mensaje del comando.
 - Que el bloque de esta causa NO se emita sobre una parada de las cuatro
   anteriores lo fija
   `test_una_parada_por_una_causa_anterior_no_promete_el_despacho_de_la_quinta`,
