@@ -77,6 +77,41 @@ decisión tuya y no del ciclo: por eso está aquí y no como encargo escrito.
 
 ---
 
+# DECIDIDA el 13-09-2026 — NUEVA 3: (A) se PARTE la puerta antes de abrirla
+
+> El propietario eligió **(A)** («Venga adelante como me recomiendas», 13-09,
+> tras el cierre de H4). Queda registrada aquí y en el cuerpo del encargo que
+> la ejecuta. **No abre nada**: `category_matching_enabled` sigue en `False`
+> y la regla de `STATUS.md` (umbral de D7 punto 6 + cierre de la ola) sigue
+> intacta. Lo que compra es poder abrir por pasos observables.
+
+**Cómo se parte, leído de las costuras reales del código (main `f5295be`):**
+
+| interruptor (`settings.json`) | qué enciende | dónde |
+|---|---|---|
+| `staged_engine_enabled` | el motor por etapas **con** sus índices de categoría y criticidad y la siembra M20 — un solo booleano en el caso de uso los gobierna juntos (`rank_relevant_knowledge.py:274-280, 500, 551, 611`) | `RankRelevantKnowledgeUseCase(category_matching_enabled=True, vocabularios reales)` |
+| `query_intent_enabled` | la petición propia: el clasificador de intención local en el intérprete (ADR-164) | `InterpreteDePeticion(intent_classifier=Ollama…)`; **solo si el motor también está encendido**, porque sin motor `_peticion` no se llama nunca |
+| `relevance_filter_enabled` | el filtro de relevancia local y su camino de puerta abierta (G8 + cota dura + rescate por criticidad) | `ContextBuilder(relevance_filter_port=Ollama…, max_criticality_category="salud", category_matching_enabled=True)` |
+| `category_matching_enabled` (la de siempre) | **las tres a la vez**, exactamente lo que §6.3 dice hoy | efectivo = maestra **o** cada una |
+
+Con todo en `False`: construcción **idéntica** a hoy (las pruebas de identidad
+de `tests/unit/test_composition_root_relevance_gate.py` no se tocan). Con la
+maestra en `True`: idéntica a la apertura de hoy.
+
+**Lo que NO se parte en este paso, y por qué**: «motor sin índices ni siembra».
+Exigiría un segundo booleano en el caso de uso y tocar el arnés del banco y el
+guion de diagnóstico. Queda como posible segundo paso si al abrir el motor
+hiciera falta aislar más.
+
+**Secuencia de apertura prevista** (encargos posteriores, uno por interruptor,
+medidos en la máquina del propietario con `medir_banco_con_ollama_real.py`):
+1. `staged_engine_enabled` — determinista, sin Ollama, sin coste de latencia.
+2. `query_intent_enabled` — primera llamada a Ollama por consulta.
+3. `relevance_filter_enabled` — segunda llamada; aquí vive el grueso de
+   RNF-003 (438–780 ms P95 medidos con el paquete entero abierto).
+
+---
+
 # DECIDIDA el 12-09-2026 — (A) SÍ se acepta perder por uno el suelo de «elementos de más»
 
 > El propietario eligió **(A) aceptar**. Queda registrada en la incidencia #582
