@@ -266,9 +266,12 @@ Escrito antes de que nadie lo descubra por su cuenta, y escrito entero:
   `src/sirius_engine/intent_interpreter.py` revertido,
   `uv run pytest tests/engine/test_intent_interpreter.py` da **6 failed, 54
   passed**; con el cambio, **61 passed**. La de `dispatch_cli` falla antes con
-  `AssertionError: quien lee tiene que saber en qué estado quedó`.
+  `AssertionError: quien lee tiene que saber en qué estado quedó`. Las dos
+  cifras son las del árbol de `1972d8a2`, el head de la ronda 1; la ronda 2
+  añadió pruebas y las recuenta en su propia tabla, más abajo.
 - **Seis mutaciones sembradas y vistas caer** (`uv run pytest
-  tests/engine/test_intent_interpreter.py` tras cada una):
+  tests/engine/test_intent_interpreter.py` tras cada una, sobre el árbol de
+  `1972d8a2`):
 
   | Mutación | Resultado |
   |---|---|
@@ -279,6 +282,33 @@ Escrito antes de que nadie lo descubra por su cuenta, y escrito entero:
   | M4 — se ignora la negación (el defecto original) | 6 failed |
   | M5 — se mira hacia delante en vez de hacia atrás | 6 failed |
   | M6 — decide la PRIMERA aparición en vez de cualquiera | 1 failed |
+
+### Ronda 2: el negador que no gobierna, y la parada en ensayo
+
+Cuatro mutaciones más, sembradas sobre el árbol de la ronda 2 y vistas caer
+con `PYTHONDONTWRITEBYTECODE=1 uv run pytest <fichero> -q`:
+
+| Mutación | Fichero de prueba | Resultado |
+|---|---|---|
+| sin mutar (control) | `test_intent_interpreter.py` | 69 passed |
+| sin mutar (control) | `test_dispatch_cli.py` | 15 passed |
+| M7 — `evitar` vuelve a `_NEGADORES` | `test_intent_interpreter.py` | 2 failed, 67 passed |
+| M8 — se quitan los cortes `duda`, `falta` y `olvides` | `test_intent_interpreter.py` | 3 failed, 66 passed |
+| M9 — la parada vuelve a dar el texto durable también en ensayo | `test_dispatch_cli.py` | 1 failed, 14 passed |
+| M10 — la instrucción de recuperación pierde `--diario <ruta>` | `test_dispatch_cli.py` | 1 failed, 14 passed |
+
+La primera línea de cada fallo:
+
+- M7 — `AssertionError: assert <TipoIntencion.AMBIGUA: 'ambigua'> is
+  <TipoIntencion.SENSIBLE_O_MATERIAL: 'sensible_o_material'>` sobre «para
+  evitar duplicados elimina la tabla de origen».
+- M8 — `AssertionError: assert <TipoIntencion.ORDEN_INEQUIVOCA:
+  'orden_inequivoca'> is <TipoIntencion.SENSIBLE_O_MATERIAL:
+  'sensible_o_material'>` sobre «implementa la limpieza sin falta borra la
+  tabla de origen».
+- M9 — `AssertionError: quien para en ensayo tiene que saber que es un ensayo`.
+- M10 — `AssertionError: el paso indicado tiene que abrir ESTE diario, no el
+  que resuelva por defecto`.
 
   **M6 sobrevivió en la primera pasada** y por eso está aquí: las pruebas
   fijaban «basta una aparición sin negar» en la prosa y no en ninguna
