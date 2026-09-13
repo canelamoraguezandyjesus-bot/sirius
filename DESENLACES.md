@@ -1,6 +1,6 @@
 # Desenlaces del motor de Sirius
 
-> **Generado por `uv run sirius-memoria desenlaces`** a partir de `diario.jsonl` y `diario-despacho.jsonl`: 595 sucesos, el último el 2026-09-13 06:56 UTC. Lo escribe el motor en la rama
+> **Generado por `uv run sirius-memoria desenlaces`** a partir de `diario.jsonl` y `diario-despacho.jsonl`: 596 sucesos, el último el 2026-09-13 06:57 UTC. Lo escribe el motor en la rama
 > `estado-del-motor` tras cada reflejo (ADR-171). **El diario manda**: si un documento
 > dice otra cosa sobre un encargo, vale esto.
 
@@ -9,19 +9,19 @@
 | Estado | Encargos |
 |---|---|
 | active | 2 |
-| cancelled | 18 |
+| cancelled | 19 |
 | delivered | 56 |
-| failed_safely | 2 |
+| failed_safely | 1 |
 | needs_decision | 4 |
 
 ## Los encargos, del más reciente al más antiguo
 
 | Encargo | Clase | Estado / fase | Creado | Último suceso | Objetivo | Evidencia |
 |---|---|---|---|---|---|---|
+| WI-20260912-223921 | programacion | cancelled / revisar | 2026-09-12 22:39 UTC | 2026-09-13 06:57 UTC | Corrige src/sirius_engine/mirror_projection.py: _estado_y_fase declara «etiquetas contradictorias» contando… | [#594](https://github.com/canelamoraguezandyjesus-bot/sirius/issues/594), [run](https://github.com/canelamoraguezandyjesus-bot/sirius/actions/runs/34727056673/attempts/1) |
 | WI-20260913-042508 | programacion | active / comprobar | 2026-09-13 04:25 UTC | 2026-09-13 06:56 UTC | Corrige que el detector de sensibilidad del despachador confunda una PROHIBICION con una PETICION. En… | [#601](https://github.com/canelamoraguezandyjesus-bot/sirius/issues/601) |
 | WI-20260913-003150 | programacion | failed_safely / revisar | 2026-09-13 00:31 UTC | 2026-09-13 03:03 UTC | Corrige que sirius_apply_verdict.sh deje una incidencia esperando para siempre un cierre de Quality que no… | [#599](https://github.com/canelamoraguezandyjesus-bot/sirius/issues/599) |
 | WI-20260913-000235 | programacion | needs_decision / revisar | 2026-09-13 00:02 UTC | 2026-09-13 02:23 UTC | Corrige que el registro de defectos pueda quedarse dormido sin que nada lo note.… | [#597](https://github.com/canelamoraguezandyjesus-bot/sirius/issues/597) |
-| WI-20260912-223921 | programacion | failed_safely / revisar | 2026-09-12 22:39 UTC | 2026-09-13 00:14 UTC | Corrige src/sirius_engine/mirror_projection.py: _estado_y_fase declara «etiquetas contradictorias» contando… | [#594](https://github.com/canelamoraguezandyjesus-bot/sirius/issues/594), [run](https://github.com/canelamoraguezandyjesus-bot/sirius/actions/runs/34727056673/attempts/1) |
 | WI-20260912-235558 | programacion | needs_decision / preparar | 2026-09-12 23:55 UTC | 2026-09-12 23:55 UTC | Corrige que el registro de defectos pueda quedarse dormido sin que nada lo note.… | — |
 | WI-20260912-154847 | programacion | cancelled / revisar | 2026-09-12 15:48 UTC | 2026-09-12 23:48 UTC | Corrige tests/automation/test_piezas_con_llamante.py, la guarda de la familia «pieza sin lector», que hoy… | [#592](https://github.com/canelamoraguezandyjesus-bot/sirius/issues/592) |
 | WI-20260905-103516 | programacion | cancelled / revisar | 2026-09-05 10:35 UTC | 2026-09-12 05:46 UTC | Implementa que el reflector sepa recorrer una recuperación completa acreditada por el historial | [#539](https://github.com/canelamoraguezandyjesus-bot/sirius/issues/539) |
