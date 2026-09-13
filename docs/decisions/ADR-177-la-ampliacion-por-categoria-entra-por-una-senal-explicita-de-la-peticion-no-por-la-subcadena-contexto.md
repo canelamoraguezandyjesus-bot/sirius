@@ -361,12 +361,12 @@ es la 2053.
 
 **Cadena completa como UNA SOLA invocación** (ADR-145, ADR-153), con
 `pwsh -File scripts/check.ps1` y su código de salida capturado (ADR-154). Su
-cola va **anclada al árbol sobre el que se corrió**: el de `beffc7a1` más la
-transcripción que sigue; lo único que este commit añade sobre el árbol medido
-es esa transcripción y el re-anclado de este párrafo.
+cola va **anclada al árbol sobre el que se corrió**: el de `967a7a20`; lo
+único que este commit añade sobre el árbol medido es la transcripción que
+sigue.
 
 ```
-6391 passed, 17 skipped, 2 xfailed in 469.48s (0:07:49)
+6391 passed, 17 skipped, 2 xfailed in 477.56s (0:07:57)
 EXIT_CODE_CHECK=0
 ```
 
@@ -386,7 +386,7 @@ no aquí. Para `cea84f1f`, la ejecución de Quality —run 34726068458, conclusi
 `success`; es de Quality, no una corrida local de `check.ps1`— reportó
 `5461 passed, 17 skipped, 2 xfailed in 509.08s`, cifra que sigue siendo la de
 **su** árbol y no la de este head; la de un head posterior será otra y se lee
-en su propio run. La distancia entre aquel 5461 y el 6391 de `beffc7a1` la
+en su propio run. La distancia entre aquel 5461 y el 6391 de `967a7a20` la
 explica entera la tercera fusión de `main` (`a8bb7b6...5ae16624`, ADR-179 con
 su `tests/automation/test_piezas_con_llamante.py` parametrizado), que el
 compare de abajo ya tiene verificada: ningún fichero de `src/sirius/`,
