@@ -5452,6 +5452,99 @@ una cuota agotada debería leerse ANTES de disparar la ronda, no después. Hoy s
 sabría en una llamada y se habría ahorrado la revisión entera.
 ---
 
+### 107. La diferencia entre un barrido que LOCALIZA y uno que CIERRA: 70 líneas contra 1, y por fin una afirmación de «no queda ninguna» comprobable (13-09-2026, 04:25 UTC)
+
+**Qué pasó.** Reanudada la línea por decisión del propietario, la ronda 10 del
+motor abrió **5 observaciones (severidad 7)** sobre `d3d84a7a`. **Cuatro de las
+cinco las declara «goteo del revisor» el propio revisor**: prosa idéntica desde
+la ronda 2 que once rondas no habían señalado. Textual de
+`CLAUDE-H4R10-001`:
+
+> estas dos líneas están idénticas desde la ronda 2 —precisamente el commit
+> titulado «corregir … la prosa que este cambio dejó falsa»— y nueve rondas de
+> revisión no las señalaron.
+
+**Por qué goteaban, y el dato es estructural.** El inventario de la sección 6
+se construyó con un barrido del **literal** `pide_contexto`. Los pasajes que
+describen el mecanismo **sin nombrarlo** no pueden salir de ahí. Mientras la
+lista se construya con ese criterio, cada ronda descubre una instancia más: el
+bucle no tiene punto fijo, y el final depende de la suerte de una lectura.
+
+**Y los dos revisores no gotean igual, porque no miran lo mismo.** Verificado
+sobre los hallazgos de las rondas 5, 9, 10 y 11: los de Codex versan siempre
+sobre texto que la corrección **inmediatamente anterior** acababa de escribir
+—el de la ronda 11 lo dice literal, «este hallazgo nace de esa modificación
+nueva de la corrección actual»—. **Codex revisa el delta; Claude lee el árbol.**
+Consecuencia: Codex no puede gotear porque no mira hacia atrás, y por eso
+tampoco puede cerrar nada; Claude sí mira, pero leer no es exhaustivo. **Ninguno
+de los dos puede afirmar «no queda ninguna».**
+
+**Decisión del propietario (13-09, 04:10Z)**: el inventario de prosa de #581 se
+cierra con UN barrido transcrito; lo que ese barrido no devuelva y aparezca
+después va a incidencia nueva. No acota código, cifras ni pruebas.
+
+**Y aquí está el hallazgo que vale para todo lo demás.** El corrector ejecutó el
+barrido ancho que la observación proponía —`proposito` a ±3 líneas de
+`siembra|amplia|activa` sobre `src/`, `scripts/` y `tests/`— y devolvió **70
+líneas**, la mayoría ruido legítimo. En vez de venderlo como «la lista», lo
+declaró **localizador para leer**. Después construyó un segundo barrido, apuntado
+a la **familia real del defecto** —prosa que atribuye al propósito el encendido
+de la siembra—:
+
+    grep -rn -E 'prop[oó]sito[^\n]{0,80}(activa|enciende|produce|dispara|hace que|declara contexto)|(activa|enciende|dispara)[^\n]{0,60}prop[oó]sito' --include='*.py' --include='*.md' src scripts tests
+
+que sobre el head devuelve **una sola línea**:
+`tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py:3087`, cuyo sujeto es el
+`peticion_p2.proposito` del **arnés de examen** y sigue siendo cierta.
+**Comprobado por mí** sobre `22f4d363`, junto con las cuatro frases retiradas
+(`que activa la siembra`, `propósito fijo para las 47`, `permiso y propósito por
+regla del producto`, `aunque el propósito declare contexto`, `es la base del
+rango de ésta`): todas vacías en fuente.
+
+**La regla, y es transferible:**
+
+| barrido | criterio | devuelve | sirve para |
+|---|---|---|---|
+| ancho | términos que rodean el tema | 70 líneas, casi todo ruido | **localizar para leer** |
+| apuntado | la forma del defecto | 1 línea, justificada | **cerrar** |
+
+Un barrido ancho no cierra nada: reintroduce el problema de la lectura con más
+líneas. **Cierra el que está apuntado a la forma del defecto**, porque su salida
+vacía (o justificada una a una) *es* la demostración. Es la primera vez en once
+rondas que esta vertical produce una afirmación de completitud comprobable con
+un comando en vez de con una lectura.
+
+**La ronda 11, medida**: cinco ficheros tocados, **cada línea cambiada es
+prosa** —comprobado línea a línea, ni una expresión, ni una firma, ni un
+`assert`, ni una cota—, y la terna no se movió (`6391 passed, 17 skipped,
+2 xfailed`, idéntica a la de `967a7a20`), que es exactamente lo que tenía que
+pasar.
+
+**Lo que esto propone para el proceso, y es decisión del propietario.** Casi
+todo lo que costó once rondas lo comprueba un comando: que un SHA exista, que el
+ancla no haya caducado, que una cifra cuadre con su barrido, que nada siga
+atribuyendo comportamiento a un símbolo retirado. Se encontró leyendo solo
+porque **nada lo comprueba**. Y el repositorio ya tiene la costumbre y la
+maquinaria: `tests/automation/test_citas_de_los_adr.py`, 596 líneas, comprueba
+que toda ruta citada en un ADR existe, con categorías de excepción nombradas y
+explicadas ahí mismo. Tres guardianes más de esa familia, por orden de rondas
+que ahorran:
+
+1. **Anclas.** Todo SHA escrito en `docs/decisions/**` existe, y ninguno se
+   presenta en presente como «la base de la rama» si no coincide con la base de
+   mezcla calculada. Habría matado las rondas 6, 7 y 8 y dos hallazgos de la 10.
+2. **Cifra → comando** (deuda 32). Una cifra que afirme completitud va pegada al
+   comando que la produjo, con su resultado declarado; el guardián re-corre el
+   comando —solo formas permitidas, `git grep` y `git cat-file`— y compara.
+3. **Mecanismo retirado.** Un ADR que retira un símbolo transcribe el barrido
+   **apuntado** que prueba que nada le sigue atribuyendo comportamiento, y el
+   guardián lo re-corre.
+
+Lo que se queda con los revisores es el **juicio** —si el diseño es el correcto,
+si la prueba prueba lo que dice, si el argumento se sostiene—, que es donde dos
+revisores valen lo que cuestan. En contabilidad de prosa, no.
+---
+
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
 
 1. `ollama_category_classifier.py`: ruta relativa y sin
