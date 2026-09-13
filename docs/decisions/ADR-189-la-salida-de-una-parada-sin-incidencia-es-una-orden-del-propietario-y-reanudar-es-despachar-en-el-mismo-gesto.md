@@ -256,14 +256,18 @@ que la llamara.
   tiene `--terminar`.
 - **La cadena obligatoria completa, en verde**: una sola invocación de
   `pwsh -File scripts/check.ps1` —que encadena `ruff format --check`,
-  `ruff check`, `mypy src tests` y `pytest`— **sobre el árbol de `8f194d4d`**,
-  con código de salida **0** y **6579 pasan, 17 se saltan, 2 xfail**, en
-  667,37 s (0:11:07). La cifra anterior de este ADR —6577 pasan, en 662,52 s—
-  era la del árbol de `6e01987c`, antes de las dos correcciones de la ronda 3;
-  las dos pruebas nuevas son la de `--repo`/`--bloque` en la orden copiable y
-  la de que con los valores por defecto la orden no los repite (CLAUDE-R2-002).
-  La aserción de `PermissionError` de CLAUDE-R2-001 no suma un test: amplía el
-  que ya cazaba los fallos operativos de `gh`.
+  `ruff check`, `mypy src tests` y `pytest`— **sobre el árbol de `5c5d8827`**,
+  con código de salida **0** y **6581 pasan, 17 se saltan, 2 xfail**, en
+  530,90 s (0:08:50). La cifra anterior de este ADR —6579 pasan, en 667,37 s—
+  era la del árbol de `8f194d4d`, antes de la corrección de la ronda 4; las dos
+  pruebas nuevas son las de CLAUDE-R3-001, una por pieza: que `sirius-decidir`
+  no reanuda un alcance vetado aunque parase otra causa, y que `sirius-despachar`
+  no ofrece `--continuar` en esa misma parada. La aserción reescrita de
+  `test_una_parada_por_una_causa_anterior_no_promete_el_despacho_de_la_quinta`
+  no suma un test: acota a la ATRIBUCIÓN lo que antes prohibía en todo el texto,
+  porque el paréntesis que niega `--continuar` sí remite a la sesión interactiva
+  —y la mutación de la atribución se sigue viendo caer con ella, ahora en la
+  aserción de «vuelve a despachar»—.
 - **25 mutaciones vistas caer**, una por regla nueva (ADR-001 §3), cada una
   anotada en el docstring de la prueba que la caza con el mensaje exacto del
   rojo. La lista, con la prueba que la detiene:
