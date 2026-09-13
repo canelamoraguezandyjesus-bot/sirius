@@ -524,3 +524,16 @@ defectos:
     ficheros:
       - tests/automation/test_registro_de_defectos.py
       - docs/audits/registro_defectos.yml
+
+  # ADR-185 (#603): dado de alta al traer main a la rama, porque la guarda
+  # derivada de ADR-182 entro en main mientras esta rama estaba en revision.
+  - id: H-38
+    titulo: Una sola puerta encendia siete piezas y no dejaba medir ninguna por separado
+    bloque: producto
+    gravedad: baja
+    estado: abierto
+    adr: 185
+    incidencia: 603
+    ficheros:
+      - src/sirius/composition_root.py
+      - src/sirius/config/memory_gates.py
