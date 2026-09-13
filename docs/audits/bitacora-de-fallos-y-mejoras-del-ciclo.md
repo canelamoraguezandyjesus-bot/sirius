@@ -5286,6 +5286,57 @@ confirmado en cada rama; (b) que el motor trate `mergeable_state: dirty` como
 traer `main` a mano cada vez.
 ---
 
+### 104. Desatascar y converger se estorban: mis propias mezclas alimentan el bucle de H4 (13-09-2026, 04:15 UTC)
+
+**La serie, extraída de los `RONDA_HALLAZGOS` de #581**, que es el dato que la
+política de convergencia mira y que nadie había puesto en fila:
+
+| ronda | pendientes | severidad | hora |
+|---|---|---|---|
+| 1 | 9 | 13 | 12:48Z |
+| 2 | 3 | 4 | 13:23Z |
+| 3 | 3 | 6 | 13:56Z |
+| 4 | 3 | 4 | 15:44Z |
+| 5 | 1 | 2 | 23:10Z |
+| 6 | 1 | 2 | 23:58Z |
+| **7** | **1** | **1** | 00:48Z |
+| 8 | **4** | **7** | 01:22Z |
+| 9 | 2 | 4 | 02:05Z |
+
+**Convergía.** De 9 a 1, y en la ronda 7 quedaba **un** hallazgo de severidad
+**1**: lo más cerca de cerrar que ha estado. Y entonces subió a 4.
+
+**Lo que pasó entre la 7 y la 8 lo hice yo.** Mis tres mezclas de `main`
+(22:54, 23:41, 00:28) para desatascar la CI apagada por el conflicto (entrada
+103). Cada una mete en la rama código de `main` que **invalida las
+afirmaciones de anclaje del ADR** —«lo posterior a este árbol son solo ajustes
+documentales», la terna de `pytest`, el rango de `git diff --check`— y la
+revisión siguiente las encuentra, con razón.
+
+**La forma del problema, y es nueva.** No es que H4 no converja, ni que la
+revisión sea excesiva. Es que **las dos cosas que hay que hacer se estorban**:
+
+- si **no** traigo `main`, el conflicto apaga la CI y la rama queda muerta;
+- si **sí** lo traigo, el ADR pierde su anclaje y la revisión abre hallazgos.
+
+Y el ciclo de la otra sesión fusiona a `main` cada pocas horas, así que el
+segundo lado se repite indefinidamente. **El punto fijo no existe mientras
+`main` se mueva.**
+
+**Lo que esto NO es**: culpa del trabajo de H4, cuyo código no cambia desde la
+ronda 2 y cuyas cifras del banco están verificadas y estables desde entonces.
+Todo lo que se corrige desde la ronda 5 es prosa del ADR persiguiendo un árbol
+que se mueve.
+
+**Decisión que queda para el propietario**, y no la puede tomar el ciclo:
+congelar `main` hasta cerrar H4 —parar las fusiones de la otra sesión unas
+horas—, o aceptar que H4 se cierra cuando `main` se calme. Una tercera, más de
+fondo: que la sección de validación del ADR **no afirme nada sobre «lo
+posterior a este árbol»**, que es la frase que cada mezcla vuelve falsa; si el
+anclaje fuera solo «esta terna salió de este árbol», sin la cláusula sobre lo
+posterior, una mezcla no lo invalidaría.
+---
+
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
 
 1. `ollama_category_classifier.py`: ruta relativa y sin
