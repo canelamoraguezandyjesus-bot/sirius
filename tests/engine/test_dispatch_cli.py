@@ -406,3 +406,32 @@ def test_investiga_despacha_con_la_etiqueta_de_activacion_y_el_perfil_investigad
     assert "Perfil: investigador@2" in args_creacion["cuerpo"]
     _, args_etiqueta = llamadas[1]
     assert args_etiqueta["etiqueta"] == ETIQUETA_ACTIVACION
+
+
+def test_una_parada_dice_donde_queda_el_trabajo_y_como_volver_a_el(tmp_path: Path) -> None:
+    """ADR-184. Una parada crea el trabajo en `needs_decision` y NO lo despacha,
+    así que queda anotado en el diario sin incidencia detrás. Eso está bien -es
+    su situación real, y el diario es append-only-, pero el mensaje solo daba el
+    work_id y la causa: quien lo leía no sabía que el trabajo seguía ahí ni cómo
+    volver a él, y por eso quedaban huérfanos. Tres hay hoy en el diario del
+    motor (`WI-20260903-030529`, `WI-20260903-095428`, `WI-20260912-235558`).
+
+    Antes del cambio fallaba con ``AssertionError`` en la primera aserción del
+    bloque de recuperación: el texto no nombraba ni `needs_decision` ni
+    `/trabajos`.
+    """
+    diario = tmp_path / "diario.jsonl"
+    codigo, texto = _correr(["Borra la base de produccion", "--ejecutar"], diario=diario)
+
+    assert codigo == 3, texto
+    assert "NO lo he despachado" in texto
+    assert "operacion_destructiva_o_irreversible" in texto
+    assert "needs_decision" in texto, "quien lee tiene que saber en qué estado quedó"
+    assert "/trabajos" in texto, "y por dónde volver a encontrarlo"
+
+    # Y el trabajo está de verdad ahí, en ese estado: el mensaje no promete un
+    # sitio vacío.
+    store = DurableWorkEngineStore(diario)
+    work_item = store.get_work_item("WI-20260821-223000")
+    assert work_item is not None
+    assert work_item.estado.value == "needs_decision"

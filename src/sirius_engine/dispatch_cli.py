@@ -281,11 +281,24 @@ def main(
             evidencia=(f"{MARCADOR_ORDEN_PROPIETARIO}{referencia_orden}",),
         )
 
+    # Una parada deja el trabajo anotado en `needs_decision` y SIN incidencia
+    # detrás. Eso no es un residuo: es su situación real, y el diario es
+    # append-only (ADR-026), así que no se borra ni se cancela por iniciativa
+    # del comando -cancelar es una decisión del propietario, que es justo lo
+    # que aquí falta-. Lo que sí faltaba es DECIRLO: el mensaje daba el
+    # work_id y la causa y callaba dónde quedaba el trabajo y cómo volver a
+    # él, así que quedaba huérfano por invisible, no por estado (ADR-184).
     if decision.resultado is ResultadoPuerta.CREAR_Y_ESCALAR:
         linea("He creado el trabajo, pero NO lo he despachado: necesita tu decisión.")
         linea(f"  Trabajo: {work_id}")
         if resultado.escalada is not None:
             linea(f"  Causa:   {resultado.escalada.causa.value}")
+        linea("")
+        linea("Queda anotado en el diario en estado «needs_decision», sin incidencia")
+        linea("detrás. No se borra ni se cancela solo: el diario es append-only y")
+        linea("cancelarlo es tu decisión, no la de este comando.")
+        linea("Para verlo junto a todo lo demás que espera decisión, abre la sesión")
+        linea("«sirius-motor» y teclea «/trabajos».")
         return 3
 
     assert resultado.work_item is not None

@@ -73,6 +73,7 @@ def test_ordenes_inequivocas_infieren_la_clase_por_el_verbo(
 
 
 _CREDENCIALES = CausaEscalado.PERMISOS_O_CREDENCIALES_SENSIBLES
+_DESTRUCTIVO = CausaEscalado.OPERACION_DESTRUCTIVA_O_IRREVERSIBLE
 _PRIVACIDAD = CausaEscalado.PRIVACIDAD_O_INFORMACION_SENSIBLE
 
 
@@ -240,3 +241,111 @@ def test_el_criterio_de_terminado_nombra_una_comprobacion_no_una_tautologia() ->
     assert "validaciones obligatorias" in datos.criterio_terminado
     assert "FALLAR" in datos.criterio_terminado
     assert "ADR-001" in datos.criterio_terminado
+
+
+# --- ADR-184: una PROHIBICIÓN no es una PETICIÓN -------------------------------
+#
+# El detector comparaba el marcador contra el texto entero y respondía «¿aparece?»
+# en vez de «¿la orden lo PIDE?». La frase que prohíbe la operación contiene
+# exactamente el mismo marcador que la que la pide, así que el despachador paraba
+# sobre salvaguardas. Reproducido el 12-09-2026: run 34726666071 de
+# `despachar-orden.yml`, trabajo `WI-20260912-235558` anotado en el diario
+# `estado-del-motor` (commit e51072e) sin incidencia detrás.
+#
+# Los dos textos de abajo son LITERALES del diario, no paráfrasis cómodas: son
+# las dos únicas órdenes de las 82 que guarda el diario que cambian de
+# clasificación con el criterio nuevo, y las dos prohibían la operación.
+
+_SALVAGUARDA_DE_WI_20260912_235558 = (
+    "No borres ni reescribas ninguna entrada historica del registro: un defecto "
+    "nunca se borra, y las cifras fechadas de ADR-174 son evidencia y no se tocan."
+)
+
+_SALVAGUARDA_DE_WI_20260903_030529 = (
+    "AÑADE al bloque :1744-1759 una nota BREVE (dos o tres frases, sin reescribir "
+    "ni borrar el bloque) que registre que la precondición quedó resuelta"
+)
+
+
+@pytest.mark.parametrize(
+    "mensaje",
+    (
+        _SALVAGUARDA_DE_WI_20260912_235558,
+        _SALVAGUARDA_DE_WI_20260903_030529,
+    ),
+)
+def test_una_salvaguarda_que_prohibe_la_operacion_no_es_una_orden_sensible(mensaje: str) -> None:
+    """Antes del cambio las dos fallaban con ``assert <SENSIBLE_O_MATERIAL> is not
+    <SENSIBLE_O_MATERIAL>``: el detector devolvía
+    ``"el mensaje contiene 'borra'"`` sobre «un defecto nunca **se borra**» y
+    ``"el mensaje contiene 'borrar'"`` sobre «sin reescribir ni **borrar** el
+    bloque», que es justo lo contrario de pedirlo.
+    """
+    assert interpretar_intencion_v0(mensaje).tipo is not TipoIntencion.SENSIBLE_O_MATERIAL
+
+
+@pytest.mark.parametrize(
+    ("mensaje", "causa_esperada"),
+    (
+        # Las cuatro tuplas de _SENSIBILIDAD comparten el mismo detector, así que
+        # el criterio las alcanza a las cuatro: prohibir no es pedir en ninguna.
+        ("implementa el importador sin borrar la tabla de origen", None),
+        ("implementa el importador y borra la tabla de origen", _DESTRUCTIVO),
+        ("implementa esto sin gastar en una clave real de pago", None),
+        ("implementa esto con una clave real de pago", CausaEscalado.GASTO_O_PRESUPUESTO),
+        ("implementa esto sin pedir ninguna credencial", None),
+        ("implementa esto con la credencial del administrador", _CREDENCIALES),
+        ("implementa el informe sin publicar ningun dato personal", None),
+        ("implementa el informe publicando el dato personal del cliente", _PRIVACIDAD),
+    ),
+)
+def test_prohibir_no_es_pedir_en_ninguna_de_las_cuatro_tuplas(
+    mensaje: str, causa_esperada: CausaEscalado | None
+) -> None:
+    signal = interpretar_intencion_v0(mensaje)
+    assert signal.causa_sensibilidad is causa_esperada
+
+
+@pytest.mark.parametrize(
+    "mensaje",
+    (
+        # La negación de OTRA oración no gobierna al marcador: la puntuación corta.
+        "no toques la cola. borra la tabla de usuarios",
+        "no borres el historico: elimina la cola de reintentos",
+        # Ni la de otra oración coordinada, aunque no haya puntuación.
+        "no toques la cola y borra la tabla de usuarios",
+        # «sin embargo» y «no solo» llevan dentro un negador que no niega nada.
+        "revisa el esquema; sin embargo borra la tabla de usuarios",
+        "no solo elimina la cola sino tambien el indice",
+        # Una prohibición en una frase no tapa una petición en otra: basta UNA
+        # aparición sin negar para que la puerta pare. La segunda línea repite
+        # el MISMO marcador -negado y luego pedido-, que es el caso que
+        # distingue «basta una sin negar» de «decide la primera»: sin ella, una
+        # versión que se quedara con la primera aparición pasaba todas las
+        # demás pruebas de este fichero (mutación M6, ADR-184).
+        "no borres el registro historico, pero elimina la cola de reintentos",
+        "no hay que borrar el historico; hay que borrar la cola de reintentos",
+        # Y la petición desnuda de siempre, que nunca dejó de parar.
+        "borra la base de produccion",
+        "elimina el historico de la cola",
+    ),
+)
+def test_la_puerta_sigue_parando_ante_una_peticion_destructiva_de_verdad(mensaje: str) -> None:
+    """ADR-184 no debilita la puerta: solo calla cuando la ÚNICA evidencia
+    léxica va negada. Si estas frases dejaran de parar, el criterio sería
+    fail-open en una puerta que el propietario decidió fail-closed (#324).
+    """
+    signal = interpretar_intencion_v0(mensaje)
+    assert signal.tipo is TipoIntencion.SENSIBLE_O_MATERIAL
+    assert signal.causa_sensibilidad is _DESTRUCTIVO
+
+
+def test_la_mencion_entre_comillas_sigue_parando_y_esta_declarado() -> None:
+    """Límite DECLARADO de ADR-184: el criterio mira la negación, no la
+    diferencia entre USAR la palabra y NOMBRARLA. Es el texto literal de
+    `WI-20260903-095428`, que sigue parando -y debe seguir-, porque el lado
+    seguro del error es parar de más. Esta prueba existe para que ese límite
+    sea visible y deliberado, no un descubrimiento del próximo que lo pise.
+    """
+    mensaje = "su lista de marcadores contiene la palabra «borrar» y mi texto la usaba dentro"
+    assert interpretar_intencion_v0(mensaje).tipo is TipoIntencion.SENSIBLE_O_MATERIAL

@@ -90,6 +90,215 @@ El del punto 3 de la nota de arranque, íntegro. Se publicó en este mismo
 fichero, en el commit que abre la rama, antes de medir y antes de escribir
 código.
 
+## Medición (criterio declarado ANTES de contar)
+
+Sobre `diario.jsonl` de la rama `estado-del-motor` (585 registros, traída con
+`git fetch origin estado-del-motor`), comparando el criterio viejo —presencia
+con frontera de palabra— contra el nuevo, orden por orden:
+
+| Medida | Cifra |
+|---|---|
+| Órdenes distintas que guarda el diario | 82 |
+| Clasificadas `SENSIBLE_O_MATERIAL` con el criterio VIEJO | 3 |
+| Clasificadas `SENSIBLE_O_MATERIAL` con el criterio NUEVO | 1 |
+| **Cambian de clasificación** | **2** |
+| Paradas registradas (`work_item_created_needing_decision`) | 3 |
+| De ellas, por `operacion_destructiva_o_irreversible` | 3 |
+
+Las tres paradas que el diario guarda son `WI-20260903-030529`,
+`WI-20260903-095428` y `WI-20260912-235558`, y las tres por esta causa. **Dos de
+las tres eran falsos positivos**: el diario no registra ni una sola parada por
+esta causa que fuera una petición real.
+
+Las dos que cambian, revisadas a mano una a una como exigía el criterio de
+parada, con su texto literal del diario:
+
+- `WI-20260912-235558` — «…un defecto nunca **se borra**…». Prohibición.
+- `WI-20260903-030529` — «…(dos o tres frases, sin reescribir ni **borrar** el
+  bloque)…». Prohibición.
+
+**Ninguna de las dos pedía la operación**, así que el criterio de parada no se
+disparó y el trabajo siguió. La tercera, `WI-20260903-095428`, **sigue
+parando**, y es el caso más instructivo: es la orden que denunciaba este mismo
+defecto, y su marcador aparece NOMBRADO, no usado —«su lista de marcadores
+contiene la palabra «borrar»»—, sin negación delante. Ver «Lo que este criterio
+NO detecta».
+
 ## Decisión
 
-[pendiente: se completa tras la medición]
+`_detectar_sensibilidad` deja de preguntar **¿aparece el marcador?** y pregunta
+**¿la orden lo PIDE?**. Una aparición cuenta solo si **no va negada**, y basta
+**una** aparición sin negar —de cualquier marcador— para que la puerta pare.
+
+El criterio mira la **negación gramatical local**, no la forma imperativa:
+
+- La oración se corta por la puntuación: lo que hay al otro lado no gobierna al
+  marcador.
+- Dentro de su oración se miran las **cuatro palabras anteriores** al marcador,
+  de atrás hacia delante.
+- Si en esa ventana aparece un **negador** de una lista cerrada (`no`, `ni`,
+  `nunca`, `jamas`, `sin`, `ningun…`, `prohibido…`, `prohibe`, `evita`,
+  `impide`… ), esa aparición prohíbe en vez de pedir y no cuenta.
+- La mirada se detiene antes en un **corte de oración** (`y`, `e`, `o`, `u`,
+  `pero`, `sino`, `aunque`, `mas`, `embargo`, `solo`, `solamente`): si eso está
+  entre el negador y el marcador, el negador gobierna otra cosa.
+
+Las dos listas son **cerradas y están escritas**. Su modo de fallo es
+deliberado: lo que falte en la lista de negadores hace que la puerta **pare de
+más**, nunca que deje pasar una orden destructiva. Es el mismo criterio
+fail-closed que el propietario fijó en #324 (H-19).
+
+### Alcanza a las cuatro tuplas, y esa es la razón de ponerlo donde se pone
+
+Las cuatro tuplas —destructiva, gasto, credenciales, privacidad— comparten un
+único detector, así que el arreglo las cubre a las cuatro sin una línea extra.
+No es un efecto colateral: **el defecto no vive en ninguna tupla, vive en la
+comparación**, y arreglarlo solo para la tupla que lo destapó habría dejado las
+otras tres esperando su turno con el mismo agujero. «No uses una clave real de
+pago», «esto no toca ninguna credencial» y «sin publicar ningún dato personal»
+son prohibiciones exactamente igual que «no borres nada», y las cuatro tienen
+su pareja de prueba —prohibición que calla, petición que para— en
+`tests/engine/test_intent_interpreter.py`.
+
+### Los trabajos que quedan anotados sin incidencia
+
+Cuando la puerta para, `dispatch_cli` crea el trabajo en `needs_decision` y sale
+con 3 sin despachar. El trabajo queda en el diario **sin incidencia detrás**.
+
+**Decisión: no se borra, no se cancela y no se despacha solo. Se hace visible.**
+
+- No se borra: el diario es append-only con checksum por registro (ADR-026).
+- No se cancela: cancelar es una decisión del propietario —es *exactamente* la
+  decisión que la parada está pidiendo—, y que el comando la tomara por él
+  vaciaría de sentido la parada.
+- `needs_decision` **es** su situación real. El trabajo no estaba huérfano por
+  estar en mal estado: estaba huérfano **por invisible**. El mensaje de la
+  parada daba el `work_id` y la causa, y callaba dónde quedaba el trabajo y por
+  dónde volver a él.
+
+Así que el mensaje de la parada ahora lo dice: en qué estado queda, que no se
+borra ni se cancela solo, y que la sesión `sirius-motor` lo lista con
+`/trabajos` junto a todo lo demás que espera decisión. Lo fija
+`test_una_parada_dice_donde_queda_el_trabajo_y_como_volver_a_el`, que además
+comprueba que el trabajo está de verdad en el diario en ese estado: el mensaje
+no promete un sitio vacío.
+
+Y la otra mitad del problema la arregla el criterio nuevo: de las tres paradas
+registradas, dos no habrían ocurrido. Los huérfanos se dejan de fabricar por
+donde más se fabricaban.
+
+## Lo que este criterio NO detecta
+
+Escrito antes de que nadie lo descubra por su cuenta, y escrito entero:
+
+1. **La prohibición pospuesta.** «Eliminar esto queda prohibido» sigue parando:
+   solo se mira hacia atrás. Es deliberado —mirar hacia delante abre la puerta a
+   silenciar «borra la cola, esto no es opcional»— y el error cae del lado de
+   parar.
+2. **La mención frente al uso.** Nombrar el marcador entre comillas para hablar
+   de él —«su lista contiene la palabra «borrar»»— sigue parando, porque no hay
+   negación delante. Es `WI-20260903-095428`, medido arriba, y es la razón de
+   que **este encargo (#601) siga sin poder redactarse en lenguaje natural
+   directo**: el criterio nuevo hace mucho menos ruidosa la puerta, pero **no
+   cura que el defecto se proteja de ser reportado**. Distinguir mención de uso
+   necesita entender la frase, y eso es el intérprete con modelo de
+   arquitectura §11, no este apaño.
+3. **La negación a más de cuatro palabras**, o al otro lado de un signo de
+   puntuación, o de una conjunción coordinante.
+4. **La negación implícita**, la ironía y el condicional: «si hiciera falta,
+   borra la tabla» para, y debe parar.
+5. **Cualquier marcador que no esté en las cuatro tuplas.** Esto no lo toca
+   ADR-184 y sigue igual que antes: lo que no está en la lista no lo ve nadie.
+6. **Entender la orden.** Sigue siendo el marcador de posición v0 que ADR-043
+   declara provisional. Este ADR lo hace menos tonto, no inteligente.
+
+## Comprobación que la sostiene
+
+- **Reproducción del fallo**, sobre `main` en 673b2f4 y con el texto literal de
+  `WI-20260912-235558` leído del diario:
+  `(<CausaEscalado.OPERACION_DESTRUCTIVA_O_IRREVERSIBLE>, "el mensaje contiene 'borra': …")`.
+- **Las pruebas nuevas, vistas FALLAR antes del cambio**: con
+  `src/sirius_engine/intent_interpreter.py` revertido,
+  `uv run pytest tests/engine/test_intent_interpreter.py` da **6 failed, 54
+  passed**; con el cambio, **61 passed**. La de `dispatch_cli` falla antes con
+  `AssertionError: quien lee tiene que saber en qué estado quedó`.
+- **Seis mutaciones sembradas y vistas caer** (`uv run pytest
+  tests/engine/test_intent_interpreter.py` tras cada una):
+
+  | Mutación | Resultado |
+  |---|---|
+  | sin mutar (control) | 61 passed |
+  | M1 — sin cortes de oración | 2 failed |
+  | M2 — ventana de 1 palabra en vez de 4 | 2 failed |
+  | M3 — sin separador de oración | 2 failed |
+  | M4 — se ignora la negación (el defecto original) | 6 failed |
+  | M5 — se mira hacia delante en vez de hacia atrás | 6 failed |
+  | M6 — decide la PRIMERA aparición en vez de cualquiera | 1 failed |
+
+  **M6 sobrevivió en la primera pasada** y por eso está aquí: las pruebas
+  fijaban «basta una aparición sin negar» en la prosa y no en ninguna
+  aserción. Se añadió el caso que la distingue —el mismo marcador negado en una
+  frase y pedido en la siguiente— y la mutación cayó. Sin la mutación, esa
+  garantía habría quedado escrita y sin sostener.
+- **Medición sobre el diario real**: la tabla de «Medición», reproducible
+  releyendo `git show origin/estado-del-motor:diario.jsonl` y pasando cada
+  `peticion_original` por los dos criterios.
+- Las cuatro validaciones obligatorias, en verde, sobre el árbol de la rama.
+
+### Un aviso sobre el método, porque costó una medición falsa
+
+Durante el ciclo de mutaciones, restaurar el fichero original con `cp` dejó al
+código fuente y a su `.pyc` **dentro del mismo segundo** de `mtime`. Python
+valida la caché por `mtime` en segundos, así que la suite siguió ejecutando el
+bytecode de la última mutación y dio ocho fallos sobre un árbol correcto. La
+medición se repitió entera con `PYTHONDONTWRITEBYTECODE=1` y las cifras de
+arriba son las de esa segunda pasada. Quien siembre mutaciones en este
+repositorio con ciclos de menos de un segundo, que lo haga con esa variable
+puesta: si no, no está midiendo lo que cree.
+
+## Opciones consideradas
+
+1. **Exigir forma imperativa** al marcador. Descartada: la mitad de los
+   marcadores son infinitivos (`borrar`, `eliminar`) y aparecen en peticiones
+   perfectamente reales —«hay que eliminar la tabla»—, así que exigir
+   imperativo habría dejado pasar órdenes destructivas de verdad. Fail-open en
+   una puerta fail-closed: exactamente el fallo del que este repositorio ya
+   tiene una lección (H-19).
+2. **Negación gramatical local.** La elegida. Solo calla cuando hay evidencia
+   POSITIVA de negación, así que todo lo que no entiende lo sigue parando.
+3. **Análisis sintáctico de verdad** (una dependencia de PLN). Descartada: mete
+   una dependencia nueva en el módulo que ADR-043 declara explícitamente
+   provisional, para una precisión que el intérprete con modelo va a sustituir
+   entera.
+4. **Quitar los marcadores conflictivos de la tupla.** Descartada sin discutir:
+   es debilitar la puerta, que es lo que la incidencia prohíbe.
+
+## Consecuencias
+
+- La puerta avisa menos y sigue siendo fail-closed: el silencio exige evidencia
+  positiva de negación, y su ausencia siempre se resuelve parando.
+- Las cuatro causas léxicas cambian de comportamiento a la vez. Quien lea el
+  campo `motivo_sensibilidad` verá ahora «el mensaje **pide** 'borra'» donde
+  antes leía «contiene»: la frase dice lo que la comprobación comprueba.
+- Una orden que prohíbe algo en una frase y lo pide en otra sigue parando.
+- Las dos listas —negadores y cortes— son ahora superficie que mantener. Están
+  cerradas, escritas y probadas, y su modo de fallo es parar de más.
+- El encargo #601 sigue sin poder escribirse en lenguaje natural directo (punto
+  2 de «Lo que este criterio NO detecta»). Este ADR no cierra eso y no finge
+  cerrarlo.
+
+## Alternativas descartadas y por qué
+
+Las de «Opciones consideradas», 1, 3 y 4. La 4 merece una línea aparte: era la
+más barata y la única que la incidencia prohibía por escrito. Está anotada
+justamente para que nadie la vuelva a proponer como simplificación.
+
+## La lección
+
+- familia: `medir-lo-que-se-tiene-en-vez-de-lo-que-hay`
+- sin esto se repetiría: poner una guarda a responder la pregunta que sabe
+  contestar barata —«¿aparece la palabra?»— en lugar de la que tiene que
+  contestar —«¿la orden lo pide?»—, y no notarlo porque el sustituto acierta
+  casi siempre: aquí acertó en 1 de 3 paradas reales y paró sobre las
+  salvaguardas que prohibían justo la operación.
+- lo hace cumplir: `tests/engine/test_intent_interpreter.py`
