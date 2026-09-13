@@ -427,16 +427,42 @@ un hallazgo: (1) el commit que transcribe la cola añade, además de la
 transcripción que sigue, el reanclado de `beffc7a1` a `967a7a20` en la
 explicación de la distancia entre recuentos, doce líneas más abajo en esta
 misma sección; (2) la ronda 11 corrige docstrings, comentarios `#:` y esta
-ficha —la sección 6, la de alternativas y «La lección»—, sin una sola línea
-ejecutable de `src/**` ni de `tests/**`, así que no añade ni retira ningún caso
-recolectado y la terna sigue siendo la de su árbol; (3) el último commit de
+ficha —la sección 6, la de alternativas y «La lección»— y, como consecuencia
+mecánica de haber reescrito «La lección», regenera `MEMORIA.md` con
+`uv run sirius-memoria conocimiento` (un solo renglón, +1/−1: el de
+`prosa-que-el-cambio-deja-falsa`), sin una sola línea ejecutable de `src/**`
+ni de `tests/**`, así que no añade ni retira ningún caso recolectado y la
+terna sigue siendo la de su árbol; (3) el último commit de
 la ronda 11 añade la transcripción de la cadena que esa ronda corrió sobre el
 árbol de `0878b95f`, la que va más abajo, y además el propio punto (3) de esta
 enumeración; y (4) la ronda 12 reescribe el párrafo que audita lo que añadió
 ese último commit, el punto (3) que acabas de leer y esta cláusula (4) que se
-enumera a sí misma, también sin una línea de `src/**` ni de `tests/**`. La
-enumeración se cierra aquí: toda línea de prosa posterior al árbol de
-`967a7a20` queda cubierta por uno de estos cuatro puntos.
+enumera a sí misma, también sin una línea de `src/**` ni de `tests/**`.
+
+**La enumeración no se cierra por sus categorías, se cierra por el rango**, y
+esa es la corrección de la ronda 13: mientras la distancia se enunciase
+nombrando clases de prosa —«docstrings», «comentarios `#:`», «esta ficha»—
+siempre habría un fichero del rango que ninguna clase nombra, y así se coló
+`MEMORIA.md`, que no es ninguna de las tres y que la ronda 12 dio por cubierto
+al declarar cerrada la lista. Lo auditable es el rango entero: la distancia
+respecto del árbol medido es, por definición, la que devuelve
+`git diff --name-only 967a7a20..HEAD`, y sobre este head son cinco ficheros y
+ningún otro —esta ficha; `src/sirius/application/rank_relevant_knowledge.py`,
+`tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py` y
+`tests/integration/test_rank_relevant_knowledge.py`, cuyos cambios de la ronda
+11 son solo comentarios (`git diff --numstat 967a7a20..HEAD -- src tests` da
+`6/5`, `8/4` y `12/7`); y `MEMORIA.md` regenerado—. Ninguno aporta una línea
+ejecutable, luego el recuento del árbol medido no se mueve. Lo mismo desde
+fuera del árbol de trabajo:
+`gh api repos/canelamoraguezandyjesus-bot/sirius/compare/967a7a20b2aa...237a423c8c48344d569cf259dda4ed265f636727 --jq '[.files[].filename]'`
+devuelve esos cinco nombres, y
+`gh api repos/canelamoraguezandyjesus-bot/sirius/commits/0878b95f16b9 --jq '[.files[].filename]'`
+devuelve `["MEMORIA.md", "docs/decisions/ADR-177-…md"]`, que es por donde
+`MEMORIA.md` entró al rango. Cerrado así, el cierre se cubre a sí mismo: el
+commit de la ronda 13 —el que escribe este párrafo— toca solo esta ficha, que
+ya está en la lista, y un commit futuro que tocase un fichero nuevo no dejaría
+un hueco silencioso sino que aparecería en ese `git diff --name-only`,
+obligando a rehacer la lista o la terna en vez de a añadir un punto más.
 
 ```
 6391 passed, 17 skipped, 2 xfailed in 477.56s (0:07:57)
