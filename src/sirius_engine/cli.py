@@ -191,21 +191,39 @@ def _turno(
     escribir(_SIN_INCIDENCIAS)
 
 
-#: Lo que `/trabajos` añade cuando algo de lo que lista espera una decisión.
-#: Sin esta línea el camino de ADR-184 -«abre la sesión y teclea /trabajos»- se
-#: acababa justo aquí: el propietario veía la parada y no tenía ninguna vía para
-#: resolverla, y las cuatro que el diario tenía el 13-09-2026 llevaban hasta diez
-#: días esperando (ADR-189). Esta lista no sabe cuáles tienen incidencia detrás
-#: -eso lo sabe el diario de despacho, que esta sesión no lee-, así que lo dice
-#: con su condición puesta en vez de prometer más de lo que puede.
-_CON_DECISION_PENDIENTE = (
-    "Hay trabajo esperando decisión. El que paró la puerta sin incidencia detrás se\n"
-    "resuelve con «sirius-decidir <work_id> --continuar» o «--terminar» (ADR-189);\n"
-    "el que sí tiene incidencia lo resuelve su cierre en GitHub, vía «sirius-reflejar»."
-)
+# Lo que `/trabajos` añade cuando algo de lo que lista espera una decisión.
+# Sin esta línea el camino de ADR-184 -«abre la sesión y teclea /trabajos»- se
+# acababa justo aquí: el propietario veía la parada y no tenía ninguna vía para
+# resolverla, y las cuatro que el diario tenía el 13-09-2026 llevaban hasta diez
+# días esperando (ADR-189). Esta lista no sabe cuáles tienen incidencia detrás
+# -eso lo sabe el diario de despacho, que esta sesión no lee-, así que lo dice
+# con su condición puesta en vez de prometer más de lo que puede.
+def _con_decision_pendiente(diario: Path) -> str:
+    """El aviso, con la orden ya copiable: el diario de ESTA sesión y «--ejecutar».
+
+    Sin `--diario` la orden buscaría el identificador en el diario que
+    `sirius-decidir` resolviera por su cuenta -que no tiene por qué ser este:
+    la sesión se abre a menudo con `--diario` o `SIRIUS_MOTOR_DIARIO`-, y sin
+    `--ejecutar` solo haría el ensayo, porque `sirius-decidir` deja la ejecución
+    desactivada por defecto. Es el mismo criterio que ya fija la parada de
+    `sirius-despachar` (`test_una_parada_dice_con_que_orden_se_sale_de_ella`).
+    """
+    # Import diferido a propósito: `dispatch_cli` importa este módulo, así que
+    # traerlo arriba cerraría el ciclo. La función se comparte igualmente para
+    # que las dos órdenes entrecomillen la ruta con el mismo criterio.
+    from sirius_engine.dispatch_cli import ruta_copiable
+
+    comun = f"<work_id> --diario {ruta_copiable(diario)} --ejecutar"
+    return (
+        "Hay trabajo esperando decisión. El que paró la puerta sin incidencia detrás se\n"
+        f"resuelve con «sirius-decidir {comun} --continuar» o «--terminar» (ADR-189);\n"
+        "el que sí tiene incidencia lo resuelve su cierre en GitHub, vía «sirius-reflejar»."
+    )
 
 
-def _listar_trabajos(store: WorkEngineStore, escribir: Callable[[str], None]) -> None:
+def _listar_trabajos(
+    store: WorkEngineStore, escribir: Callable[[str], None], *, diario: Path
+) -> None:
     """Los trabajos que el diario ya contiene. Solo lee: no crea nada, ni el fichero."""
     vistos: list[str] = []
     for evento in store.list_events():
@@ -222,7 +240,7 @@ def _listar_trabajos(store: WorkEngineStore, escribir: Callable[[str], None]) ->
         esperando_decision = esperando_decision or item.estado is WorkItemState.NEEDS_DECISION
         escribir(f"  {work_id}  {item.estado.value}/{item.fase.value}  {item.objetivo}")
     if esperando_decision:
-        escribir(_CON_DECISION_PENDIENTE)
+        escribir(_con_decision_pendiente(diario))
 
 
 # --- El comando ----------------------------------------------------------------
@@ -331,7 +349,7 @@ def main(
             escribir(_AYUDA)
             continue
         if mensaje == "/trabajos":
-            _listar_trabajos(store, escribir)
+            _listar_trabajos(store, escribir, diario=diario)
             continue
         _turno(sesion, mensaje, numero=numero, escribir=escribir, aviso_historial=aviso_historial)
     return 0

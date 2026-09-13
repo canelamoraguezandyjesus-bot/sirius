@@ -304,6 +304,14 @@ def test_trabajos_dice_como_se_resuelve_lo_que_espera_decision(tmp_path: Path) -
     assert "sirius-decidir" in salida, "la salida de la parada tiene que estar al alcance"
     assert "--terminar" in salida
     assert "sirius-reflejar" in salida, "y el otro caso, el que sí tiene incidencia"
+    # La orden tiene que servir copiada TAL CUAL: sin `--diario` buscaría el
+    # identificador en el diario que `sirius-decidir` resolviera por su cuenta
+    # -esta sesión se abrió con otro- y sin `--ejecutar` solo haría el ensayo.
+    # Es el mismo criterio que la parada de `sirius-despachar` ya tiene fijado
+    # en `test_una_parada_dice_con_que_orden_se_sale_de_ella`.
+    (orden,) = [linea for linea in salida.splitlines() if "sirius-decidir" in linea]
+    assert f"--diario {diario}" in orden, orden
+    assert "--ejecutar" in orden, orden
 
 
 def test_trabajos_no_habla_de_decisiones_cuando_no_hay_ninguna_esperando(
