@@ -231,20 +231,28 @@ siembra dejaría de rescatar y esa cota rompería. Su gemela del motor portado,
 
 ### 6. La prosa que el cambio dejaba falsa (deuda 28)
 
-Corregida en el mismo trabajo, no en otro. Son **nueve** pasajes de prosa:
-siete docstrings y dos comentarios de documentación Sphinx (`#:`). Ocho
-están en `src/` y `scripts/`, y de esos ocho la lista sí es completa porque
-sale del barrido de esos dos árboles enteros —`for f in $(git ls-tree -r
+Corregida en el mismo trabajo, no en otro. Son **once** pasajes de prosa:
+nueve docstrings y dos comentarios de documentación Sphinx (`#:`). Diez
+están en `src/` y `scripts/`. De esos diez, ocho salen del barrido de esos dos
+árboles enteros, y la lista es completa **solo dentro del alcance de ese
+barrido**, que es el literal `pide_contexto` —lo que escribe el literal, no lo
+que describe el mecanismo sin nombrarlo—: `for f in $(git ls-tree -r
 --name-only 433fb11 -- src/ scripts/); do n=$(git show 433fb11:$f | grep -o
 'pide_contexto' | wc -l); [ "$n" -gt 0 ] && echo "$n $f"; done` devuelve
 exactamente los cuatro ficheros que los contienen:
 `scripts/medir_variantes_de_criticidad.py` (1),
 `src/sirius/application/interpret_query_request.py` (1),
 `src/sirius/application/rank_relevant_knowledge.py` (4) y
-`src/sirius/domain/relevance.py` (7)—. El noveno está en el traductor del
-banco (`tests/acceptance/staged_engine_case_translation.py`), describía el
-mecanismo viejo sin nombrar el literal y por eso no lo devuelve ningún barrido
-de `pide_contexto`: lo encontró la lectura, no el `grep`. Los **siete
+`src/sirius/domain/relevance.py` (7). Los **tres** que ese barrido no podía
+devolver describían el mecanismo viejo sin nombrar el literal: los encontró la
+lectura, no el `grep`. Son el traductor del banco
+(`tests/acceptance/staged_engine_case_translation.py`) y, ya en la ronda 11,
+los dos de `rank_relevant_knowledge.py` que enumeraban «lo que decide la regla
+del producto» dejando fuera la tercera regla: el docstring de módulo (línea 44)
+y el de `_peticion` (línea 288), que decían «permiso y propósito por regla del
+producto» y ahora dicen «permiso, propósito y ampliación por categoría
+(ADR-177)», lo mismo que ya decía el docstring gemelo de
+`InterpreteDePeticion.interpretar`. Los **nueve
 docstrings** son: el de módulo de `relevance.py` y el de
 `RankedKnowledge.seeded`; el de `_rank_via_staged_engine` en
 `rank_relevant_knowledge.py`; el de **módulo** de `interpret_query_request.py`
@@ -253,7 +261,8 @@ banco (quinta traducción no obvia); y el de módulo de
 `scripts/medir_variantes_de_criticidad.py:29-38`, cuyo único cambio en toda
 esta PR es justamente ese: decía que la siembra de M20 la activaba «el
 PROPÓSITO de la petición (`pide_contexto`)» y ahora dice que la activa la
-señal explícita. Los **dos comentarios de documentación** son los bloques
+señal explícita; y los dos de `rank_relevant_knowledge.py` que añade la
+ronda 11. Los **dos comentarios de documentación** son los bloques
 `#:` que anteceden a `_PROPOSITO_RECUPERACION_ORDINARIA`
 (`rank_relevant_knowledge.py:87-106`) y a `PROPOSITO_RECUPERACION_ORDINARIA`
 (`interpret_query_request.py:79-91`): no son docstrings —Python no los liga al
@@ -261,7 +270,7 @@ objeto, los recoge Sphinx por la sintaxis `#:`— y por eso se cuentan aparte,
 aunque para lo que aquí importa hagan el mismo trabajo que un docstring,
 declarar por escrito qué hace el literal.
 
-A los nueve se suman las referencias a `pide_contexto` que las pruebas
+A los once se suman las referencias a `pide_contexto` que las pruebas
 escribían sobre el árbol base `433fb11`. Esa cifra sale del mismo
 barrido, aplicado a **todo** `tests/` y no a un puñado de ficheros elegidos
 —`for f in $(git ls-tree -r --name-only 433fb11 -- tests/); do n=$(git show
@@ -314,15 +323,65 @@ como si viniera de `tests/` entero. Por eso el barrido va escrito con el árbol
 al que se aplica: una lista solo puede declararse completa sobre el alcance
 del barrido que la produjo.
 
-Ninguna de las 22 se ha relajado. En esos cuatro ficheros quedan escritas sobre
-el head cuatro menciones, y ninguna afirma ya la regla vieja: el candado de
+Y por eso la ronda 11 añade **cuatro** pasajes de pruebas que este trabajo
+también dejaba falsos y que el barrido del literal no podía alcanzar, porque
+describen el mecanismo viejo sin escribirlo: el docstring del banco de
+evidencia (`tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py:3087-3089`),
+gemelo del comentario `#:` que este trabajo sí corrigió 2.800 líneas más arriba
+en ese mismo fichero, que atribuía la siembra en las 47 consultas al «mismo
+propósito fijo»; el docstring de
+`test_produccion_emite_la_peticion_derivada_de_la_consulta_no_la_uniforme`
+(`tests/integration/test_rank_relevant_knowledge.py:1839-1841`), que llamaba al
+propósito «el que activa la siembra de M20» tres párrafos por encima del
+`assert peticion.amplia_por_categoria is True` que este trabajo le añadió; y las
+dos concesiones «aunque el propósito declare contexto» de
+`test_siembra_never_seeds_an_ordinary_candidate` y
+`test_siembra_rejects_a_critico_decision_scoped_to_a_different_project`
+(mismas líneas 1394 y 1426 del árbol de la ronda 10), que ahora conceden sobre
+la señal. Los cuatro se corrigen a texto, sin mover un assert.
+
+El barrido que los encuentra no es el del literal, y conviene dejar escrito
+qué alcance tiene el que sí llega. Sobre el árbol base `433fb11`,
+`for f in $(git ls-tree -r --name-only 433fb11 -- src/ scripts/ tests/); do git
+show "433fb11:$f" | awk -v f="$f" '{l[NR]=$0} END{for(i=1;i<=NR;i++) if
+(tolower(l[i]) ~ /prop[^ ]*sito/){lo=(i>3?i-3:1);hi=(i+3<NR?i+3:NR);w="";for
+(j=lo;j<=hi;j++) w=w" " tolower(l[j]); if (w ~ /siembra|amplia|amplía|activa/)
+print f":"i}}'; done` devuelve **70** líneas, y los cuatro pasajes de arriba
+están entre ellas —igual que el traductor del banco—, pero también decenas que
+nada tienen que ver (el «propósito» del despachador del motor, el de
+`studio_capture`, el arnés de examen). Es un **localizador para leer**, no un
+productor de listas: de sus 70 candidatas solo la lectura separa las que
+afirman el mecanismo viejo. Lo que la ronda 11 sí deja cerrado con un criterio
+mecánico es la ausencia de atribución causal al propósito:
+`grep -rn -E 'prop[oó]sito[^\n]{0,80}(activa|enciende|produce|dispara|hace
+que|declara contexto)|(activa|enciende|dispara)[^\n]{0,60}prop[oó]sito'
+--include='*.py' --include='*.md' src scripts tests` devuelve sobre el head una
+sola línea de este territorio,
+`tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py:3087`, y ahí el sujeto
+es el `peticion_p2.proposito` **del arnés de examen**, que esta PR deja intacto
+a propósito y del que la frase sigue siendo cierta.
+
+Ninguna de las 22 se ha relajado. En esos cuatro ficheros quedan escritos sobre
+el head **cinco pasajes**, y ninguno afirma ya la regla vieja: el candado de
 `tests/unit/test_relevance_domain.py:583-597`, que comprueba que el dominio ya
-no expone `pide_contexto` ni `PROPOSITO_DE_CONTEXTO`; y tres menciones
+no expone `pide_contexto` ni `PROPOSITO_DE_CONTEXTO`; y cuatro menciones
 históricas dentro de sendos docstrings o comentarios, que cuentan cómo era
-antes —`tests/integration/test_rank_relevant_knowledge.py:1670`,
-`tests/unit/test_peticion_ordinaria.py:44` y
-`tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py:293`—. Medido con
-`git grep -n 'pide_contexto\|PROPOSITO_DE_CONTEXTO' -- tests/unit tests/integration tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py`.
+antes —`tests/integration/test_rank_relevant_knowledge.py:1672`,
+`tests/unit/test_peticion_ordinaria.py:44`,
+`tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py:293` y
+`tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py:3093` (esta última la
+añade la ronda 11, al marcar como histórica la gemela del docstring del banco)—.
+El comando que los **localiza** —no el que produce la cifra— es
+`git grep -n 'pide_contexto\|PROPOSITO_DE_CONTEXTO' -- tests/unit tests/integration tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py`,
+que devuelve **9** líneas sobre el head porque suma los dos literales. Bajo el
+criterio de conteo que esta sección declara —el literal `pide_contexto`, sin
+sumar `PROPOSITO_DE_CONTEXTO`— las ocurrencias son **7**:
+`git grep -c 'pide_contexto' -- tests/unit tests/integration tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py`
+devuelve 3 en `test_relevance_domain.py`, 1 en `test_peticion_ordinaria.py`, 1
+en `test_rank_relevant_knowledge.py` y 2 en el banco. Las 7 se agrupan en los
+cinco pasajes porque el candado concentra 3 en sus líneas 583-597. Cifra y
+comando, con su criterio al lado: es lo que esta sección exige del barrido del
+árbol base y no se cumplía aquí.
 
 El arnés de examen
 (`tests/acceptance/staged_engine_category_and_relevance.py`) conserva sus ocho
@@ -361,9 +420,16 @@ es la 2053.
 
 **Cadena completa como UNA SOLA invocación** (ADR-145, ADR-153), con
 `pwsh -File scripts/check.ps1` y su código de salida capturado (ADR-154). Su
-cola va **anclada al árbol sobre el que se corrió**: el de `967a7a20`; lo
-único que este commit añade sobre el árbol medido es la transcripción que
-sigue.
+cola va **anclada al árbol sobre el que se corrió**: el de `967a7a20`. Lo que
+los commits posteriores añaden sobre ese árbol medido es solo prosa, y aquí va
+enumerado para que el ancla sea auditable, porque enunciarlo de menos ya costó
+un hallazgo: (1) el commit que transcribe la cola añade, además de la
+transcripción que sigue, el reanclado de `beffc7a1` a `967a7a20` en la
+explicación de la distancia entre recuentos, doce líneas más abajo en esta
+misma sección; y (2) la ronda 11 corrige docstrings, comentarios `#:` y esta
+ficha —la sección 6, la de alternativas y «La lección»—, sin una sola línea
+ejecutable de `src/**` ni de `tests/**`, así que no añade ni retira ningún caso
+recolectado y la terna sigue siendo la de su árbol.
 
 ```
 6391 passed, 17 skipped, 2 xfailed in 477.56s (0:07:57)
@@ -501,7 +567,11 @@ código de salida—; el `0` solo sale si `ruff format --check .`,
 `ruff check .` y `mypy src tests` pasaron antes, porque el guion corta en el
 primero que falle (ADR-153). La terna sube de las 5369 que midió `3f9f752`
 —el árbol al que ADR-170 ancla esa ejecución; `433fb11` es el commit con el
-que aquella rama entró en `main`, y es la base del rango de ésta— a 5372
+que aquella rama entró en `main`, y es el **árbol base sobre el que esta ficha
+midió** el banco, el barrido de prosa y este delta de 5369 → 5372, no «la base
+de la rama»: eso es lo que calcula
+`gh api …/compare/main...<head> --jq '.merge_base_commit.sha'` para el head que
+se consulte, como ya dice la sección «Validación obligatoria»— a 5372
 porque este trabajo añade **tres** casos netos al total recolectado:
 
 - **+2** en `tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py` (la
@@ -537,5 +607,5 @@ Ninguna prueba se ha relajado; ninguna cota del arnés se mueve.
 ## La lección
 
 - familia: `prosa-que-el-cambio-deja-falsa`
-- sin esto se repetiría: retirar un símbolo de producción y dejar vivas las frases que lo daban por cierto; al quitar `pide_contexto` quedaron falsos los nueve pasajes de prosa que la sección 6 de esta ficha enumera, 22 referencias de las pruebas y el criterio de aceptación de M16 de la Arquitectura Técnica, y el barrido que las buscó en `scripts/` y `tests/` no miró en `docs/evolution/`.
+- sin esto se repetiría: retirar un símbolo de producción y dejar vivas las frases que lo daban por cierto; al quitar `pide_contexto` quedaron falsos los once pasajes de prosa que la sección 6 de esta ficha enumera, 22 referencias del literal en las pruebas más otros cuatro pasajes de pruebas que describían el mecanismo sin nombrarlo, y el criterio de aceptación de M16 de la Arquitectura Técnica; y el barrido que las buscó en `scripts/` y `tests/` no miró en `docs/evolution/` ni podía ver lo que no escribe el literal, así que una lista solo se declara completa sobre el alcance del barrido que la produjo y el resto se dice cubierto por lectura.
 - lo hace cumplir: ninguna prueba: nada en este repositorio vigila la coherencia de la prosa de `docs/` con el árbol, y la ocurrencia que queda viva está en la Arquitectura Técnica, que la salvaguarda de #581 prohíbe tocar sin decisión del propietario.
