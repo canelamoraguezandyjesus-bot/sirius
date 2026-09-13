@@ -248,6 +248,17 @@ adversaria) no sembraban runs y caían de rebote: se les siembra el caso
 ordinario —Quality corriendo para el head—, sin tocar ninguna de sus
 afirmaciones.
 
+### La cadena completa, anclada a su árbol
+
+Una sola invocación de `pwsh -File scripts/check.ps1` (Ruff format, Ruff lint,
+mypy, pytest) sobre el árbol de `9bb54ea3`, el commit que trae la corrección de
+los textos de las dos fases:
+
+```
+=========== 6392 passed, 17 skipped, 2 xfailed in 548.44s (0:09:08) ============
+EXITCODE=0
+```
+
 ## Consecuencias
 
 - Una parada por ausencia de run deja de ser silenciosa: comentario en la
