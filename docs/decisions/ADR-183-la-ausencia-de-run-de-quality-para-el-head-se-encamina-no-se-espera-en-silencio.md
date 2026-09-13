@@ -151,8 +151,13 @@ aviso genérico —pensado para las lecturas caídas— afirmaría lo contrario.
 
 - `sin-runs-para-el-head`: decirle al operador «relanza a mano el run de este
   head (Actions → Re-run all jobs)» cuando no se encontró ninguno lo manda a un
-  sitio vacío. Dice en su lugar qué hace correr Quality para ese head (un push
-  a la rama de la PR, o cerrar y reabrir la PR) y que, cuando ese run termine,
+  sitio vacío. Dice en su lugar qué hace correr Quality, **distinguiendo los
+  dos gestos en vez de igualarlos**: cerrar y reabrir la PR lo hace correr
+  sobre ESTE mismo head (`quality.yml` declara `on: pull_request` sin lista de
+  `types`, así que los tipos por defecto incluyen `reopened`), mientras que un
+  push emite `synchronize` y por definición mueve el head, de modo que su run
+  es el de un head NUEVO —encamina la incidencia igual, pero no cumple la
+  promesa «para este head»—. En ambos casos, cuando ese run termine,
   su `workflow_run` despierta a `advance-sirius-after-quality.yml` y la
   incidencia avanza sola. **No** pide reejecutar este job: `transition` ya dejó
   la incidencia en `ci-pending` y retiró la etiqueta consumible, así que la

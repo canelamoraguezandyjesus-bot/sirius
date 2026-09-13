@@ -355,7 +355,7 @@ avisar_quality_sin_encaminar() {
       # `ci-pending` y retiró la etiqueta consumible, así que la puerta del
       # workflow ya no daría `valid=true` y «Aplicar el veredicto» no volvería
       # a correr. Lo que sí encamina es la finalización natural de Quality.
-      desbloquea="- Qué la desbloquea: hacer que Quality corra para este head —un push a la rama de la PR, o cerrar y reabrir la PR—. Cuando ese run termine, su \`workflow_run\` despierta a \`advance-sirius-after-quality.yml\` y la incidencia avanza sola; lo mismo si el run ya existía y solo tardó en indexarse. Reejecutar este job NO sirve: la etiqueta que abre su puerta ya se consumió, así que el paso que publica este aviso no volvería a ejecutarse. Por qué no apareció el run es un diagnóstico aparte."
+      desbloquea="- Qué la desbloquea: hacer que Quality corra. Sobre ESTE MISMO head solo lo consigue cerrar y reabrir la PR (\`quality.yml\` se dispara con \`on: pull_request\` sin lista de \`types\`, así que \`reopened\` cuenta). Un push a la rama también encamina la incidencia, pero mueve el head: su run sería el de un head NUEVO, no el de este. Cuando ese run termine, su \`workflow_run\` despierta a \`advance-sirius-after-quality.yml\` y la incidencia avanza sola; lo mismo si el run ya existía y solo tardó en indexarse. Reejecutar este job NO sirve: la etiqueta que abre su puerta ya se consumió, así que el paso que publica este aviso no volvería a ejecutarse. Por qué no apareció el run es un diagnóstico aparte."
       ;;
     runs-sin-id-relanzable)
       run_line="- Runs de Quality para este head: la consulta funcionó y devolvió runs TERMINADOS, pero ninguno trae \`id\` con el que relanzar."

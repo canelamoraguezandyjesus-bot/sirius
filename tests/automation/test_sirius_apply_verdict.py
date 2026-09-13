@@ -1934,6 +1934,14 @@ def test_sin_ningun_run_de_quality_la_incidencia_se_encamina_y_no_espera(tmp_pat
         "lo que encamina es la finalización natural de Quality, no este paso"
     )
     assert "Reejecutar este job NO sirve" in comments
+    # Y los dos gestos no son intercambiables: `quality.yml` se dispara con
+    # `on: pull_request` sin lista de `types`, así que reabrir la PR emite
+    # `reopened` y el run sale sobre ESTE head; un push emite `synchronize`,
+    # que por definición mueve el head, así que su run es el de OTRO head. El
+    # aviso no puede prometer del segundo lo que solo cumple el primero.
+    assert "cerrar y reabrir la PR" in comments
+    assert "mueve el head" in comments, "el push encamina, pero sobre un head nuevo"
+    assert "para este head —un push" not in comments
 
 
 def test_el_aviso_de_que_no_hay_ningun_run_se_publica_una_sola_vez(tmp_path: Path) -> None:
