@@ -314,6 +314,34 @@ sha_matches() {
 # hay dos puertas distintas —la del implementador relee la etiqueta
 # consumible y la del corrector no—, así que desde este fichero no se puede
 # ver (ADR-183).
+# cola_del_paso — la ÚNICA frase que este guion dice sobre lo que queda
+# después. Vive en un solo sitio a propósito (ADR-183, ronda 6): los cuatro
+# `::error::` de `relanzar_quality_si_ya_termino` terminan con ella, y la prueba
+# lo DERIVA del fuente en vez de prohibir palabras. Cinco rondas demostraron que
+# una lista de palabras prohibidas siempre olvida el sinónimo siguiente; una de
+# inclusión con un solo elemento deja ver lo que sobra (mismo giro que ADR-179
+# y ADR-182). Lo que NO dice —ni afirma ni niega— es si este paso vuelve a
+# ejecutarse: eso lo decide la puerta del workflow que lo invocó, hay dos y no
+# se comportan igual, y desde este fichero no se ve ninguna de las dos.
+#
+# Y no da por publicado lo que no consta: `sirius_comment_once` puede fallar y
+# `avisar_quality_sin_encaminar` lo absorbe con un `::warning::`. Si el aviso no
+# llegó a la incidencia, el gesto que la desbloquea viaja en el propio log, que
+# es el único sitio que queda.
+# cola_aviso — la hermana de `cola_del_paso` para el CUERPO del aviso. Misma
+# razón: la frase sobre lo que este paso deja tras de sí se escribía a mano en
+# las tres cadenas `que_pasa`, y tres copias son tres sitios desde los que la
+# siguiente puede desviarse. La prueba exige que las tres terminen con ella.
+cola_aviso="La INCIDENCIA queda viva en \`sirius:ci-pending\` y la recupera el gesto de abajo; este paso, en cambio, ya no puede encaminarla: termina aquí y en rojo."
+
+cola_del_paso() {
+  if [ "${aviso_publicado:-0}" = "1" ]; then
+    printf 'la incidencia queda viva en ci-pending, con el aviso y su gesto ya publicados en ella, y este paso termina en rojo.'
+  else
+    printf 'la incidencia queda viva en ci-pending, pero el aviso NO llegó a publicarse en ella, así que el gesto que la desbloquea va aquí: %s. Este paso termina en rojo.' "${desbloquea_publicado:-sin gesto disponible}"
+  fi
+}
+
 # primera_linea_de_gh — el detalle que `gh` dejó en stderr (su primera línea
 # `gh: …`, o la primera línea que haya), para citarlo en el aviso.
 primera_linea_de_gh() {
@@ -339,7 +367,7 @@ avisar_quality_sin_encaminar() {
     marker="<!-- sirius-quality-sin-encaminar:${head_sha}:${fase} -->"
     run_line="- Run de Quality: no se pudo consultar."
   fi
-  que_pasa="- Qué pasa: Quality puede haber terminado para este head ANTES de que la incidencia entrara en \`sirius:ci-pending\`, y ese resultado no se encaminará solo (deuda 3 de la bitácora, ADR-149). La INCIDENCIA queda viva en \`sirius:ci-pending\` y la recupera el gesto de abajo; este paso, en cambio, ya no puede encaminarla: termina aquí y en rojo."
+  que_pasa="- Qué pasa: Quality puede haber terminado para este head ANTES de que la incidencia entrara en \`sirius:ci-pending\`, y ese resultado no se encaminará solo (deuda 3 de la bitácora, ADR-149). ${cola_aviso}"
   desbloquea="- Qué la desbloquea: relanzar a mano el run de Quality de este head (Actions → Re-run all jobs); cuando termine, su \`workflow_run\` despierta a \`advance-sirius-after-quality.yml\` y la incidencia avanza sola. Si el detalle dice \`HTTP 403 … personal access token\`, el PAT necesita el permiso «Actions: Read and write» en el repositorio."
   # ADR-183: cuando NO hay ningún run para este head, el gesto que desbloquea
   # no puede ser «relanza el run»: no hay ninguno que relanzar. El aviso lo
@@ -358,7 +386,7 @@ avisar_quality_sin_encaminar() {
       # no distingue «GitHub no creó el run» de «la consulta se adelantó a su
       # creación o indexación», así que el aviso no afirma ninguna de las dos.
       run_line="- Runs de Quality encontrados para este head: NINGUNO (la consulta funcionó y devolvió una lista vacía)."
-      que_pasa="- Qué pasa: la consulta de Actions no encontró ningún run de Quality para este head, así que no consta ningún \`workflow_run\` que pueda encaminar la incidencia, y este paso solo sabe RE-lanzar un run existente, no LANZAR uno (ADR-183). Puede que GitHub no llegara a crearlo o que la consulta se adelantara a su creación o indexación: aquí no se distinguen los dos casos. La INCIDENCIA queda viva en \`sirius:ci-pending\` y la recupera el gesto de abajo; este paso, en cambio, ya no puede encaminarla: termina aquí y en rojo."
+      que_pasa="- Qué pasa: la consulta de Actions no encontró ningún run de Quality para este head, así que no consta ningún \`workflow_run\` que pueda encaminar la incidencia, y este paso solo sabe RE-lanzar un run existente, no LANZAR uno (ADR-183). Puede que GitHub no llegara a crearlo o que la consulta se adelantara a su creación o indexación: aquí no se distinguen los dos casos. ${cola_aviso}"
       # El gesto que se ofrece es el que encamina la incidencia, y nada se dice
       # de reejecutar este paso —ni para pedirlo ni para desaconsejarlo—. Este
       # fichero no puede saberlo: lo decide la puerta del workflow que lo
@@ -371,7 +399,7 @@ avisar_quality_sin_encaminar() {
       ;;
     runs-sin-id-relanzable)
       run_line="- Runs de Quality para este head: la consulta funcionó y devolvió runs TERMINADOS, pero ninguno trae \`id\` con el que relanzar."
-      que_pasa="- Qué pasa: hay runs de Quality terminados para este head, pero ninguno con \`id\` utilizable, así que este paso no tiene a qué run pedirle un relanzamiento y no habrá ningún \`workflow_run\` nuevo que encamine la incidencia (ADR-183). La INCIDENCIA queda viva en \`sirius:ci-pending\` y la recupera el gesto de abajo; este paso, en cambio, ya no puede encaminarla: termina aquí y en rojo."
+      que_pasa="- Qué pasa: hay runs de Quality terminados para este head, pero ninguno con \`id\` utilizable, así que este paso no tiene a qué run pedirle un relanzamiento y no habrá ningún \`workflow_run\` nuevo que encamine la incidencia (ADR-183). ${cola_aviso}"
       # El gesto que SÍ funciona es el relanzamiento manual: aquí el run existe,
       # solo que este paso no le vio el `id`. De reejecutar este paso no se dice
       # nada, por el mismo motivo que arriba: las dos puertas que invocan este
@@ -388,8 +416,15 @@ avisar_quality_sin_encaminar() {
     "- Fase que falló: \`${fase}\`. Detalle de \`gh\`: ${detalle:-sin detalle}" \
     "$que_pasa" \
     "$desbloquea" >"$body_file"
-  sirius_comment_once "$REPO" "$ISSUE" "$marker" "$body_file" \
-    || echo "::warning::No se pudo publicar el aviso QUALITY_SIN_ENCAMINAR en la incidencia." >&2
+  # `aviso_publicado` y `desbloquea_publicado` son la memoria que `cola_del_paso`
+  # necesita: sin ellas, el log afirmaría una publicación que pudo no ocurrir.
+  aviso_publicado=0
+  if sirius_comment_once "$REPO" "$ISSUE" "$marker" "$body_file"; then
+    aviso_publicado=1
+  else
+    echo "::warning::No se pudo publicar el aviso QUALITY_SIN_ENCAMINAR en la incidencia." >&2
+  fi
+  desbloquea_publicado="${desbloquea#- Qué la desbloquea: }"
   rm -f "$body_file"
 }
 
@@ -404,7 +439,7 @@ relanzar_quality_si_ya_termino() {
     cat "$err_file" >&2
     avisar_quality_sin_encaminar "consulta-runs-fallida" "" "$(primera_linea_de_gh "$err_file")"
     rm -f "$err_file"
-    echo "::error::No se pudo consultar los runs de Quality del head ${head_sha} (consulta-runs-fallida); la incidencia queda en ci-pending, con el gesto que la desbloquea ya publicado en ella, y este paso termina en rojo." >&2
+    echo "::error::No se pudo consultar los runs de Quality del head ${head_sha} (consulta-runs-fallida); $(cola_del_paso)" >&2
     exit 1
   fi
   rm -f "$err_file"
@@ -424,7 +459,7 @@ relanzar_quality_si_ya_termino() {
       # ni la incidencia se queda en silencio.
       avisar_quality_sin_encaminar "consulta-runs-ilegible" "" \
         "respuesta no interpretable como lista de runs: $(printf '%s' "$runs_json" | tr -d '\n' | head -c 120)"
-      echo "::error::Respuesta ilegible al consultar los runs de Quality del head ${head_sha} (consulta-runs-ilegible); la incidencia queda en ci-pending, con el gesto que la desbloquea ya publicado en ella, y este paso termina en rojo." >&2
+      echo "::error::Respuesta ilegible al consultar los runs de Quality del head ${head_sha} (consulta-runs-ilegible); $(cola_del_paso)" >&2
       exit 1
       ;;
   esac
@@ -438,10 +473,13 @@ relanzar_quality_si_ya_termino() {
     # camino sigue esperando—, así que solo quedan dos formas de llegar y
     # ninguna de las dos deja nada que pueda encaminar la incidencia:
     #
-    #  * la lista viene VACÍA: GitHub no creó ningún run de Quality para este
-    #    head. La incidencia se quedaría en `ci-pending` esperando un
-    #    `workflow_run` que nadie va a emitir, porque no hay ningún run que
-    #    pueda cerrarse. Ocurrió el 12-09-2026 con el head `1c408f86` de la
+    #  * la lista viene VACÍA: la consulta no encontró ningún run de Quality
+    #    para este head. Igual que el texto publicado treinta líneas más
+    #    abajo, esto es la OBSERVACIÓN y no un hecho sobre GitHub: no
+    #    distingue que no se creara de que la consulta se adelantara a su
+    #    creación o indexación. Sin ningún run del que consten, la incidencia
+    #    se quedaría en `ci-pending` esperando un `workflow_run` que nadie va
+    #    a emitir. Ocurrió el 12-09-2026 con el head `1c408f86` de la
     #    incidencia #594, y en 3 de los 7 runs con veredicto de aquella noche;
     #    ninguno de los tres heads tiene run de Quality a día de hoy.
     #  * la lista trae runs completed pero ninguno con `id` legible: tampoco
@@ -461,7 +499,7 @@ relanzar_quality_si_ya_termino() {
       detalle_sin_relanzable="hay runs de Quality terminados para este head, pero ninguno con id con el que relanzar: $(printf '%s' "$runs_json" | tr -d '\n' | head -c 120)"
     fi
     avisar_quality_sin_encaminar "$fase_sin_relanzable" "" "$detalle_sin_relanzable"
-    echo "::error::Sin run de Quality relanzable para el head ${head_sha} (${fase_sin_relanzable}); la incidencia queda viva en ci-pending y la recupera el gesto del aviso, pero este paso no vuelve a ejecutarse." >&2
+    echo "::error::Sin run de Quality relanzable para el head ${head_sha} (${fase_sin_relanzable}); $(cola_del_paso)" >&2
     exit 1
   fi
   marker="<!-- sirius-quality-relanzado:${head_sha}:${terminado} -->"
@@ -478,7 +516,7 @@ relanzar_quality_si_ya_termino() {
     cat "$err_file" >&2
     avisar_quality_sin_encaminar "relanzamiento-fallido" "$terminado" "$(primera_linea_de_gh "$err_file")"
     rm -f "$err_file"
-    echo "::error::No se pudo relanzar el run ${terminado} de Quality (relanzamiento-fallido); la incidencia queda en ci-pending, con el gesto que la desbloquea ya publicado en ella, y este paso termina en rojo." >&2
+    echo "::error::No se pudo relanzar el run ${terminado} de Quality (relanzamiento-fallido); $(cola_del_paso)" >&2
     exit 1
   fi
   rm -f "$err_file"

@@ -168,6 +168,10 @@ for line in raw.splitlines():
       comment)
         bf=""; prev=""
         for a in "$@"; do [ "$prev" = "--body-file" ] && bf="$a"; prev="$a"; done
+        if [ -f "$D/comment_fails" ] && [ -n "$bf" ] \
+          && grep -q 'sirius-quality-sin-encaminar' "$bf"; then
+          echo "gh: HTTP 502 publicando" >&2; exit 1
+        fi
         if [ -n "$bf" ]; then
           cat "$bf" >> "$D/comments_${num}.txt"
           printf '\n' >> "$D/comments_${num}.txt"
@@ -2159,6 +2163,21 @@ def test_si_la_respuesta_de_runs_es_ilegible_el_aviso_tambien_se_publica(tmp_pat
     assert "not-json" in comments, "el aviso cita lo que devolvió gh"
 
 
+def _cuerpo_de(funcion: str) -> str:
+    """El cuerpo de una función del guion, del `{` de apertura al `}` en columna 0."""
+    fuente = APPLY_VERDICT.read_text(encoding="utf-8")
+    inicio = fuente.index(f"{funcion}() {{")
+    fin = re.search(r"^\}$", fuente[inicio:], re.MULTILINE)
+    assert fin is not None, f"no encuentro el cierre de {funcion}"
+    return fuente[inicio : inicio + fin.end()]
+
+
+# La cola compartida, tal y como tiene que aparecer al final de cada texto. Son
+# los DOS únicos sitios del guion que hablan de lo que este paso deja tras de sí.
+COLA_DEL_LOG = '$(cola_del_paso)" >&2'
+COLA_DEL_AVISO = '${cola_aviso}"'
+
+
 # Las CINCO fases con las que `relanzar_quality_si_ya_termino` puede avisar.
 # La lista vive aquí, y no repartida en una aserción por prueba, porque la
 # propiedad de abajo es de la FUNCIÓN, no de ninguna fase: añadir una sexta sin
@@ -2220,18 +2239,70 @@ def test_ningun_aviso_de_quality_sin_encaminar_habla_del_reintento_del_paso(
     comments = _comments(env)
     assert f"sirius-quality-sin-encaminar:{head}:{fase}" in comments
 
-    # 1) Ni el aviso ni el `::error::` afirman nada sobre reejecutar el paso.
-    for texto, donde in ((comments, "el aviso"), (salida, "el log")):
-        assert "reintentable" not in texto, f"{donde} llama reintentable a un paso que no lo sabe"
-        assert "reejecutar este paso" not in texto, f"{donde} ofrece un gesto sin comprobar"
-        assert "Reejecutar este job" not in texto, f"{donde} desaconseja un gesto sin comprobar"
+    # 1) LA PROPIEDAD, DERIVADA DEL FUENTE, no enumerada. Las rondas 3, 4 y 5
+    #    comprobaron esto con una lista de palabras prohibidas, y la ronda 5 la
+    #    dejó en verde con la frase «este paso no vuelve a ejecutarse» delante:
+    #    a una lista de exclusión siempre le falta el sinónimo siguiente. A una
+    #    de inclusión con un solo elemento se le ve lo que sobra, y por eso
+    #    ahora se exige que TODO texto de estas dos funciones termine con la
+    #    cola compartida. Una fase nueva que escriba la suya cae aquí, diga lo
+    #    que diga, sin que nadie tenga que acordarse (ADR-179, ADR-182).
+    errores = [
+        ln.strip()
+        for ln in _cuerpo_de("relanzar_quality_si_ya_termino").splitlines()
+        if "::error::" in ln
+    ]
+    assert len(errores) == 4, f"cambió el número de ::error::; revisa la propiedad: {errores}"
+    for linea in errores:
+        assert linea.endswith(COLA_DEL_LOG), f"este ::error:: escribe su propia cola: {linea}"
+    que_pasas = [
+        ln.strip()
+        for ln in _cuerpo_de("avisar_quality_sin_encaminar").splitlines()
+        if ln.strip().startswith("que_pasa=")
+    ]
+    assert len(que_pasas) == 3, f"cambió el número de `que_pasa`: {que_pasas}"
+    for linea in que_pasas:
+        assert linea.endswith(COLA_DEL_AVISO), (
+            f"este `que_pasa` escribe su propia cola: {linea[-80:]}"
+        )
 
-    # 2) Y sí dicen lo observable: la incidencia sigue viva y qué la encamina.
+    # 2) Y lo emitido dice lo observable: la incidencia viva y qué la encamina.
     assert "La INCIDENCIA queda viva en `sirius:ci-pending`" in comments
+    assert "con el aviso y su gesto ya publicados en ella" in salida, (
+        "el log tiene que declarar que el aviso SÍ llegó cuando llegó"
+    )
     assert "advance-sirius-after-quality.yml" in comments, (
         "el aviso nombra lo que de verdad encamina la incidencia"
     )
     assert "sirius:ci-pending" in _labels(env)
+
+
+def test_si_el_aviso_no_se_puede_publicar_el_gesto_viaja_en_el_log(tmp_path: Path) -> None:
+    """CODEX-002 de la ronda 4: `sirius_comment_once` puede fallar y
+    `avisar_quality_sin_encaminar` lo absorbe con un `::warning::`. Hasta la
+    ronda 5 el `::error::` afirmaba igualmente que el gesto estaba «ya publicado
+    en ella», así que en una caída de la API el operador recibía un paso rojo
+    que lo remitía a instrucciones inexistentes. Ahora la cola compartida
+    distingue los dos casos y, si el aviso no llegó, el gesto viaja en el único
+    sitio que queda: el propio log."""
+    env = _setup(tmp_path)
+    head = "c4d482267d9a"
+    vf = _implementador_listo(env, tmp_path, head)
+    (_md(env) / "comment_fails").write_text("", encoding="utf-8")
+    r = _run(env, "implementer", vf)
+    salida = r.stdout + r.stderr
+
+    assert r.returncode != 0
+    assert "sirius:ci-pending" in _labels(env)
+    assert "No se pudo publicar el aviso QUALITY_SIN_ENCAMINAR" in salida
+    # Lo que NO puede hacer: dar por publicado lo que no consta.
+    assert "ya publicados en ella" not in salida, (
+        "el log no puede afirmar una publicación que falló"
+    )
+    assert "el aviso NO llegó a publicarse en ella" in salida
+    # Y el gesto de ESTA fase, entero, en el log.
+    assert "cerrar y reabrir la PR" in salida, "el gesto que desbloquea tiene que ir en el log"
+    assert "advance-sirius-after-quality.yml" in salida
 
 
 def test_la_lectura_va_con_el_token_de_lectura_y_el_relanzamiento_con_el_pat(

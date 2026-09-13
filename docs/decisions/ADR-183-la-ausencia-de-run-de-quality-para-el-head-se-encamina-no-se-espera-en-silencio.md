@@ -166,11 +166,13 @@ aviso genérico —pensado para las lecturas caídas— afirmaría lo contrario.
   de ADR-149 que esta función existe para reparar—, no vuelve a emitirse y la
   incidencia **no** avanza sola: hace falta igualmente uno de los dos gestos.
   El aviso distingue los dos subcasos en vez de tranquilizar al operador
-  precisamente en el que no debe. **No** pide reejecutar este job: `transition` ya dejó
-  la incidencia en `ci-pending` y retiró la etiqueta consumible, así que la
-  puerta del workflow ya no daría `valid=true`
-  (`implement-sirius-work.yml:239-247`, `repair-sirius-work.yml:593-599`) y el
-  paso que publica el aviso no volvería a ejecutarse. Además, el texto describe
+  precisamente en el que no debe. Y **no dice nada** sobre si este job vuelve a
+  ejecutarse: quien lo decide es la puerta del workflow que invocó al guion, hay
+  **dos y no se comportan igual** —`implement-sirius-work.yml:239` relee las
+  etiquetas y exige `sirius:implement-requested`; `repair-sirius-work.yml:51` se
+  evalúa sobre la carga del evento y su puerta no relee `sirius:repair-requested`
+  en ningún punto—, y desde este fichero no se ve ninguna de las dos. La ronda 6
+  lo detalla más abajo. Además, el texto describe
   la **observación** y no un hecho sobre GitHub: una lista vacía no distingue
   «GitHub no creó el run» de «la consulta se adelantó a su creación o
   indexación», y el aviso nombra las dos posibilidades en vez de afirmar la
@@ -178,21 +180,22 @@ aviso genérico —pensado para las lecturas caídas— afirmaría lo contrario.
 - `runs-sin-id-relanzable`: dice que la consulta funcionó y que hay runs
   terminados para el head pero ninguno con `id` con el que relanzar. Aquí sí
   existe un run que el operador puede relanzar a mano, así que conserva ese
-  gesto —Actions → Re-run all jobs—, pero **no** el «o reejecutar este paso»
-  del texto genérico: esta rama se alcanza después de `transition`, igual que
-  la anterior, así que la etiqueta consumible ya se retiró y el paso que
-  publica el aviso no volvería a ejecutarse. Por eso lleva su propio
-  `desbloquea` en vez del genérico.
+  gesto —Actions → Re-run all jobs— y no ofrece ninguno más. Por eso lleva su
+  propio `desbloquea` en vez del genérico, que apunta al run de este head.
 
-Y, por la misma razón, **ninguna de las dos fases llama reintentable a ESTE
-paso**: sería la promesa contraria a la que el propio aviso hace seis líneas más
-abajo («Reejecutar este job NO sirve»), y la verdadera es la segunda —la puerta
-de los dos workflows exige la etiqueta consumible que «Consumir el evento y
-marcar en curso» ya retiró, y «Aplicar el veredicto» está condicionado a
-`always() && steps.gate.outputs.valid == 'true'`, así que un «Re-run failed
-jobs» lo salta—. Lo que sigue vivo y recuperable es la **incidencia**, en
-`sirius:ci-pending`, por el gesto que cada fase describe; y eso es lo que dicen
-ahora las dos cadenas `que_pasa` y el `::error::` de esa rama.
+Y **ningún texto de este guion afirma ni niega que el paso vuelva a
+ejecutarse**, porque el fichero no puede observarlo. Lo único que sí es
+observable desde aquí, y lo que dicen los cuatro `::error::` y los tres
+`que_pasa`, es que la **incidencia** sigue viva y recuperable en
+`sirius:ci-pending` por el gesto que cada fase describe, y que este paso termina
+en rojo. Desde la ronda 6 esa frase no se escribe a mano en cada sitio: vive en
+`cola_del_paso` y `cola_aviso`, y una prueba derivada del fuente exige que todos
+terminen con ella.
+
+La asimetría entre las dos puertas es un **defecto real y ajeno a esta
+incidencia**, verificado por dos partes independientes (la ronda 6 de esta PR y
+su revisión). Queda registrado aquí y elevado al propietario; no se toca desde
+este trabajo, que es de otro fichero y de otro objetivo.
 
 Lo que **no** cambia: el run en curso sigue esperando y sigue terminando en
 verde; el run terminado sigue relanzándose una sola vez con su marcador; las
@@ -375,23 +378,95 @@ también dicen «reintentable»: ahí el remedio del operador es otro —aplicar
 etiqueta a mano— y el criterio de parada publicado antes de esta ronda no los
 incluía.
 
-### La cadena completa, anclada a su árbol
+**Ronda 6: la lista negra ERA la familia.** La ronda 5 dijo cerrar la clase con
+una prueba parametrizada sobre las cinco fases. La revisión de la ronda 4
+demostró que no: esa prueba implementaba **tres literales prohibidos**
+(`reintentable`, `reejecutar este paso`, `Reejecutar este job`) y el `::error::`
+de la rama sin run relanzable seguía diciendo «este paso no vuelve a
+ejecutarse», que no casa con ninguno. **La quinta instancia convivía con la
+prueba en verde.** Y el mismo commit dejó otras tres de la misma familia: la
+sección «Decisión» de este ADR seguía afirmando lo que su propia sección de
+evidencia refuta —con una cita a `repair-sirius-work.yml:593-599` que no
+sostiene lo que se le atribuía—, el comentario de la lista vacía seguía
+diciendo como hecho «GitHub no creó ningún run», y la cola nueva daba por
+publicado un aviso que `sirius_comment_once` puede no haber publicado.
 
-La cadena de la **ronda 5** corre sobre el árbol que se entrega: idéntico al
-head salvo este mismo párrafo, que transcribe sus cifras. Los cuatro
-validadores encadenados —`ruff format --check`, `ruff check`, `mypy src tests`,
-`pytest` y `git diff --check`—, en el entorno de esta rama, que no tiene `pwsh`:
+La raíz, por tanto, no era «el texto habla de una puerta invisible»: eso era el
+síntoma. Era **cómo se vigila el texto**. Una lista de palabras prohibidas no
+puede observar lo que vigila, porque a la siguiente frase le basta otro verbo:
+cinco rondas seguidas lo demostraron, y la quinta la escribí creyendo cerrarla.
+
+El arreglo aplica el giro que este repositorio ya decidió en ADR-179 (inventario
+de piezas) y ADR-182 (registro de defectos): **lo vigilado se deriva, y lo
+escrito a mano es lo que se resta.**
+
+- `cola_del_paso` y `cola_aviso` son los **dos únicos sitios** donde el guion
+  habla de lo que deja tras de sí. Los cuatro `::error::` de
+  `relanzar_quality_si_ya_termino` y las tres cadenas `que_pasa` terminan con
+  ellas; ninguna escribe la suya.
+- La prueba **lee el fuente**: extrae del cuerpo de las dos funciones todos los
+  `::error::` y todos los `que_pasa=`, y exige que cada uno termine con la cola
+  que le toca. Es una lista de **inclusión de un solo elemento**: a una de
+  exclusión siempre le falta el sinónimo siguiente; a esta se le ve lo que sobra.
+- `cola_del_paso` tampoco da por publicado lo que no consta:
+  `avisar_quality_sin_encaminar` informa de si `sirius_comment_once` publicó, y
+  cuando no, el gesto que desbloquea la incidencia viaja en el propio log.
+
+**Tres mutaciones sembradas y vistas caer** (ADR-001 §3):
 
 ```
-6397 passed, 17 skipped, 2 xfailed in 577.84s (0:09:37)
+1. La 496 recupera su cola propia («…pero este paso no vuelve a
+   ejecutarse») -> caen las CINCO parametrizaciones:
+   E  assert False
+   E   + where False = 'echo "::error::Sin run de Quality relanzable …'
+   E                     .endswith('$(cola_del_paso)" >&2')
+
+2. Un `que_pasa` se escribe la suya («La incidencia sigue viva y este paso no
+   volverá a correr.») -> caen las cinco:
+   E  AssertionError: este `que_pasa` escribe su propia cola
+
+3. `cola_del_paso` afirma siempre la publicación (`if true`) ->
+   E  AssertionError: el log no puede afirmar una publicación que falló
+```
+
+Las dos primeras frases sembradas **habrían pasado los tres literales de la
+ronda 5**: es la medida de cuánto más fuerte es derivar que enumerar. Y caen
+desde las cinco parametrizaciones a la vez, porque la propiedad es del
+fuente y no de la fase que corre.
+
+Se añade **una** prueba,
+`test_si_el_aviso_no_se_puede_publicar_el_gesto_viaja_en_el_log`, que es la que
+la revisión pidió para el fallo de publicación; el doble de `gh` aprende a
+fallar solo al publicar el aviso, no cualquier comentario. El fichero pasa de 70
+a 71.
+
+**Lo que esta ronda NO arregla, y queda dicho:** el punto de entrada canónico.
+`AGENTS.md:88` manda `scripts/check.ps1` y este entorno **no tiene `pwsh`** ni
+permiso para descargarlo, así que la cadena se ejecuta comando a comando. Lo
+verificable es que `check.ps1` no hace otra cosa: `uv run ruff format --check
+.`, `uv run ruff check .`, `uv run mypy src tests` y `uv run pytest`, en ese
+orden y cortando al primer rojo. No se afirma que corriera el comprobador
+canónico, porque no corrió.
+
+### La cadena completa, anclada a su árbol
+
+La cadena de la **ronda 6** corre sobre el árbol que se entrega: idéntico al
+head salvo este mismo párrafo, que transcribe sus cifras. Los cinco validadores
+encadenados —`ruff format --check`, `ruff check`, `mypy src tests`, `pytest` y
+`git diff --check`—, en el entorno de esta rama, que **no tiene `pwsh`**:
+
+```
+6398 passed, 17 skipped, 2 xfailed in 659.32s (0:10:59)
 EXITCODE=0
 ```
 
 El código de salida es el de la cadena entera, capturado sin tubería
-(`> check600.log 2>&1; echo "EXITCODE=$?"`). Es la primera ronda en la que el
-recuento SUBE —6392 → 6397—, y sube exactamente cinco: una por parametrización
-de la prueba nueva. Las rondas 2, 3 y 4 no añadieron ninguna prueba, solo
-afirmaciones a dos ya existentes, y por eso todas midieron 6392.
+(`> check600.log 2>&1; echo "EXITCODE=$?"`). El recuento sube por segunda vez,
+6397 → **6398**: la prueba del fallo de publicación que pidió la revisión. La
+ronda 5 lo había subido de 6392 a 6397, cinco, una por parametrización. Las
+rondas 2, 3 y 4 no añadieron ninguna prueba —solo afirmaciones a dos ya
+existentes— y por eso todas midieron 6392. Cifra de la ronda 5, sobre el árbol
+de `d1e7d793`: `6397 passed, 17 skipped, 2 xfailed in 577.84s`, EXITCODE=0.
 
 Cifras anteriores, cada una con su árbol, medidas con `pwsh -File
 scripts/check.ps1`: `6392 passed, 17 skipped, 2 xfailed in 510.15s` sobre el
