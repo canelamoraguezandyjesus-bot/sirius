@@ -341,7 +341,12 @@ def test_ningun_defecto_abierto_tiene_ya_su_arreglo_en_main() -> None:
 # en Quality, que clona superficialmente. Esta lee dos ficheros del árbol.
 
 DECISIONES = RAIZ / "docs" / "decisions"
-_NOMBRE_DE_ADR = re.compile(r"^ADR-(\d{3})-")
+
+#: Tres dígitos **o más**, igual que `test_registro_de_decisiones.py` y que el
+#: generador `scripts/siguiente_adr.py`. Con `\d{3}` exactos, el día del ADR-1000
+#: este fichero habría dejado su lección fuera del inventario y habría rechazado
+#: un acuse `adr: 1000` —en silencio y en verde—.
+_NOMBRE_DE_ADR = re.compile(r"^ADR-(\d{3,})-")
 
 #: Cómo una entrada del registro dice qué ADR corrigió su defecto. Es un campo
 #: OPCIONAL: las 32 entradas anteriores al 13-09-2026 no lo traen y no se
@@ -349,7 +354,7 @@ _NOMBRE_DE_ADR = re.compile(r"^ADR-(\d{3})-")
 CAMPO_ADR = "adr"
 
 
-def _adr_que_declaran_un_defecto() -> dict[int, str]:
+def _adr_que_declaran_un_defecto(directorio: Path = DECISIONES) -> dict[int, str]:
     """Número de ADR -> familia de la lección que declara. EL inventario derivado.
 
     Se salta los anteriores a ``PRIMER_ADR_CON_LECCION`` porque ahí no hay
@@ -361,7 +366,7 @@ def _adr_que_declaran_un_defecto() -> dict[int, str]:
     conocidos son muy anteriores a 174 y no declaran lección.
     """
     inventario: dict[int, str] = {}
-    for ruta in sorted(DECISIONES.glob("ADR-*.md")):
+    for ruta in sorted(directorio.glob("ADR-*.md")):
         casa = _NOMBRE_DE_ADR.match(ruta.name)
         if casa is None or int(casa.group(1)) < PRIMER_ADR_CON_LECCION:
             continue
@@ -381,12 +386,50 @@ def _acuses_del_registro() -> dict[int, list[str]]:
     return acuses
 
 
-def _numeros_de_adr_del_arbol() -> set[int]:
+def _numeros_de_adr_del_arbol(directorio: Path = DECISIONES) -> set[int]:
     return {
         int(casa.group(1))
-        for ruta in DECISIONES.glob("ADR-*.md")
+        for ruta in directorio.glob("ADR-*.md")
         if (casa := _NOMBRE_DE_ADR.match(ruta.name)) is not None
     }
+
+
+#: Un ADR sembrado con el número que rompía el patrón viejo. No se renombra
+#: ningún ADR real: lo que se ejerce es el lector, sobre un directorio de
+#: mentira, que es la única forma de ver hoy el día en que el contador llegue a
+#: cuatro cifras.
+_ADR_DE_CUATRO_CIFRAS = "ADR-1000-el-contador-llega-a-cuatro-cifras.md"
+_FAMILIA_SEMBRADA = "regla-que-depende-de-que-alguien-se-acuerde"
+_ADR_SEMBRADO = f"""# ADR-1000 — El contador llega a cuatro cifras
+
+## La lección
+
+- familia: `{_FAMILIA_SEMBRADA}`
+- sin esto se repetiría: fijar el ancho de un número que solo sabe crecer.
+- lo hace cumplir: `tests/automation/test_registro_de_defectos.py`
+"""
+
+
+def test_los_lectores_de_adr_ven_un_numero_de_cuatro_cifras(tmp_path: Path) -> None:
+    """El contador llegará a ADR-1000 y el inventario no puede dejar de verlo.
+
+    `test_registro_de_decisiones.py` admite `\\d{3,}` y `scripts/siguiente_adr.py`
+    genera con `\\d+`: el único sitio que exigía tres dígitos EXACTOS era este
+    fichero. El día del ADR-1000 su lección habría quedado fuera del inventario
+    derivado y un acuse `adr: 1000` habría pasado por ADR inventado, las dos
+    cosas sin que nada se pusiera en rojo —que es el modo de fallo que toda
+    esta guarda existe para impedir—.
+    """
+    (tmp_path / _ADR_DE_CUATRO_CIFRAS).write_text(_ADR_SEMBRADO, encoding="utf-8")
+
+    assert _numeros_de_adr_del_arbol(tmp_path) == {1000}, (
+        f"el patrón de nombre no reconoce {_ADR_DE_CUATRO_CIFRAS}: un acuse "
+        "`adr: 1000` se tomaría por un ADR que no existe"
+    )
+    assert _adr_que_declaran_un_defecto(tmp_path) == {1000: _FAMILIA_SEMBRADA}, (
+        f"la derivación no ve la lección de {_ADR_DE_CUATRO_CIFRAS}: a partir "
+        "del ADR-1000 el inventario dejaría de crecer en silencio"
+    )
 
 
 # Lo escrito a mano, y es lo que se RESTA: los ADR que declaran un defecto y no

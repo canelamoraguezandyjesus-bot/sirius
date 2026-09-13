@@ -288,7 +288,7 @@ commit de `main` que este árbol no tiene.
 
 ### Las mutaciones, sembradas y vistas caer
 
-Ocho. En dos de ellas se comprueban **las dos direcciones** que exige ADR-001
+Nueve. En dos de ellas se comprueban **las dos direcciones** que exige ADR-001
 §3: la guarda vieja pasa con la mutación puesta y la nueva falla.
 
 | # | mutación | guarda vieja | guarda nueva |
@@ -301,6 +301,7 @@ Ocho. En dos de ellas se comprueban **las dos direcciones** que exige ADR-001
 | M6 | que la derivación deje de ver `familia:` | — | rojo en 6, empezando por `test_el_inventario_de_adr_con_defecto_se_deriva_y_no_esta_vacio` |
 | M7 | aflojar el criterio del corazón **y** dejar el registro sin ningún abierto | **39 passed** | **rojo** en `test_el_criterio_del_corazon_muerde_aunque_no_haya_ningun_abierto` |
 | M8 | eximir **todos** los ADR del inventario **y** hacer que `H-33` acuse a un ADR ajeno a él (`adr: 1`): la salida fácil ante un rojo, sin que `test_ninguna_excepcion_sobra` la delate | **verde**: la aserción original solo pedía que existiera algún campo `adr` | **rojo** en `test_al_menos_un_defecto_acusa_el_adr_que_lo_corrigio`, y solo ahí (`1 failed, 62 passed, 1 skipped`) |
+| M9 | estrechar el patrón de nombre a `\d{3}` exactos, que es como estaba escrito | — | **rojo** en `test_los_lectores_de_adr_ven_un_numero_de_cuatro_cifras`: «el patrón de nombre no reconoce ADR-1000-…» |
 
 **M8 se sembró dos veces, y la primera no cayó.** Tal como se escribió al
 principio, esta comprobación aseveraba que `_acuses_del_registro()` no estuviera
