@@ -229,8 +229,5 @@ ningún ciclo, que es lo que costó una hora de motor en #607.
 ## La lección
 
 - familia: `regla-que-depende-de-que-alguien-se-acuerde`
-- sin esto se repetiría: un encargo con alcance sobre ficheros que la credencial
-  del motor no puede escribir se manda al ciclo automático, hace el trabajo
-  entero y lo pierde en el push, porque la única regla que lo evitaba vivía en
-  la cabeza de quien despacha.
+- sin esto se repetiría: despachar al ciclo automático un encargo cuyo alcance cae donde la credencial del motor no llega, hacer el trabajo entero y perderlo en el push, porque la única regla que lo evitaba vivía en la cabeza de quien despacha.
 - lo hace cumplir: `tests/engine/test_intent_interpreter.py`

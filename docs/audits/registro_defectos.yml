@@ -542,7 +542,14 @@ defectos:
 
   # ADR-187 (#608, parte 2): la guarda de ADR-142 exigia el MISMO head, asi que
   # ponerse al dia con `main` caducaba la aprobacion y costaba una ronda entera.
-  - id: H-39
+  #
+  # H-40 y no H-39: esta entrada y la de ADR-184 (#601) eligieron el mismo
+  # numero cada una en su rama y las dos llegaron a `main`, que quedo con dos
+  # H-39 y `test_ningun_identificador_repetido` en rojo (medido el 13-09-2026
+  # sobre `b8ecb2d`). Se aplica el criterio que este mismo fichero ya declara
+  # doce lineas mas arriba: el que entro antes en `main` se queda con el numero,
+  # y esta entro despues -es el commit cabeza de `main`, la PR #611-.
+  - id: H-40
     titulo: Ponerse al dia con main tiraba la aprobacion de revision aunque el trabajo no cambiara
     bloque: ciclo
     gravedad: media
@@ -553,3 +560,18 @@ defectos:
       - .github/workflows/advance-sirius-after-quality.yml
       - scripts/automation/sirius_misma_obra.py
       - tests/automation/test_misma_obra.py
+
+  # ADR-188 (#612): la corrección de raíz que ADR-002 dejó anotada como
+  # pendiente el 09-08-2026 y que #607 cobró trece meses después.
+  - id: H-41
+    titulo: Un encargo con alcance sobre lo que el motor no puede escribir se despachaba igual y moria en el push
+    bloque: motor
+    gravedad: alta
+    estado: abierto
+    adr: 188
+    incidencia: 612
+    ficheros:
+      - src/sirius_engine/intent_interpreter.py
+      - src/sirius_engine/dispatch_cli.py
+      - tests/engine/test_intent_interpreter.py
+      - tests/engine/test_dispatch_cli.py

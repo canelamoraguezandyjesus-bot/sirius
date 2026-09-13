@@ -26,9 +26,9 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **180**.
+- Decisiones (ADR): **182**.
 - Bloques del motor: 17 cerrado, 1 fuera_de_alcance, 2 pendiente.
-- Defectos registrados: 4 abierto, 35 cerrado.
+- Defectos registrados: 6 abierto, 35 cerrado.
 - Investigaciones: **9** (fotos con fecha; caducan).
 - Documentos: **129**, de los que **84** no declaran fecha.
 
@@ -39,6 +39,7 @@ está escrito. Si sale pobre, se arregla en el ADR.
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| [188](docs/decisions/ADR-188-el-alcance-que-el-motor-no-puede-escribir-para-la-puerta-antes-de-crear-la-incidencia-y-remite-a-la-sesion-interactiva.md) | 2026-09-13 | PROPUESTO | Parar antes de crear la incidencia cuando la orden pide tocar lo que el motor no puede escribir | Opción 1 (variante B), como QUINTA causa de sensibilidad del intérprete, con la causa `permisos_o_credenciales_sensibles`. |
 | [187](docs/decisions/ADR-187-una-revision-sobrevive-a-ponerse-al-dia-con-main-si-el-trabajo-propio-de-la-rama-no-cambia.md) | 2026-09-13 | APROBADO | Una revision sobrevive a ponerse al dia con main si el trabajo propio de la rama no cambia | La guarda de ADR-142 pasa de «mismo head» a «mismo trabajo»: la aprobación registrada sigue valiendo si el trabajo PROPIO de la rama es el mismo en el head aprobado y en el vigente. |
 | [185](docs/decisions/ADR-185-la-puerta-de-la-memoria-se-parte-en-tres-interruptores-antes-de-abrirla.md) | 2026-09-13 | PROPUESTO | la puerta de la memoria se parte en tres interruptores antes de abrirla | Se añade `src/sirius/config/memory_gates.py` con una función pura, `puertas_de_memoria(settings) -> PuertasDeMemoria`, y un `dataclass(frozen=True)` de tres booleanos. `composition_root` la llama una vez y cablea según esta tabla: |
 | [184](docs/decisions/ADR-184-la-prohibicion-no-es-una-peticion-el-detector-de-sensibilidad-exige-que-el-marcador-no-vaya-negado.md) | 2026-09-13 | PROPUESTO | La prohibicion no es una peticion: el detector de sensibilidad exige que el marcador no vaya negado | `_detectar_sensibilidad` deja de preguntar ¿aparece el marcador? y pregunta ¿la orden lo PIDE?. Una aparición cuenta solo si no va negada, y basta una aparición sin negar —de cualquier marcador— para que la puerta pare. |
@@ -232,7 +233,7 @@ de memoria.
 
 | Familia | Veces | Hay prueba que la haga cumplir | ADR |
 |---|---|---|---|
-| `regla-que-depende-de-que-alguien-se-acuerde` | 3 | sí | [182](docs/decisions/ADR-182-la-guarda-del-registro-de-defectos-deriva-de-los-adr-que-declaran-leccion.md), [179](docs/decisions/ADR-179-la-guarda-de-piezas-sin-llamante-deriva-su-inventario-del-codigo-del-motor.md), [174](docs/decisions/ADR-174-la-mina-en-dos-pasadas-la-leccion-se-declara-en-el-adr-que-la-produce-y-las-familias-se-cuentan-solas.md) |
+| `regla-que-depende-de-que-alguien-se-acuerde` | 4 | sí | [188](docs/decisions/ADR-188-el-alcance-que-el-motor-no-puede-escribir-para-la-puerta-antes-de-crear-la-incidencia-y-remite-a-la-sesion-interactiva.md), [182](docs/decisions/ADR-182-la-guarda-del-registro-de-defectos-deriva-de-los-adr-que-declaran-leccion.md), [179](docs/decisions/ADR-179-la-guarda-de-piezas-sin-llamante-deriva-su-inventario-del-codigo-del-motor.md), [174](docs/decisions/ADR-174-la-mina-en-dos-pasadas-la-leccion-se-declara-en-el-adr-que-la-produce-y-las-familias-se-cuentan-solas.md) |
 | `lista-a-mano` | 2 | sí | [181](docs/decisions/ADR-181-la-contradiccion-de-etiquetas-se-decide-por-lo-que-proyectan-no-por-cuantas-son.md), [178](docs/decisions/ADR-178-la-autoridad-por-clase-se-deriva-de-la-via-github-que-el-despachador-declara-no-de-una-segunda-tabla-a-mano.md) |
 | `medir-lo-que-se-tiene-en-vez-de-lo-que-hay` | 2 | sí | [184](docs/decisions/ADR-184-la-prohibicion-no-es-una-peticion-el-detector-de-sensibilidad-exige-que-el-marcador-no-vaya-negado.md), [180](docs/decisions/ADR-180-el-numero-del-siguiente-adr-se-calcula-contra-las-ramas-del-remoto-no-contra-las-que-el-clon-tenga-traidas.md) |
 | `pieza-sin-lector` | 2 | sí | [183](docs/decisions/ADR-183-la-ausencia-de-run-de-quality-para-el-head-se-encamina-no-se-espera-en-silencio.md), [175](docs/decisions/ADR-175-un-tablero-por-incidencia-un-solo-comentario-que-el-motor-mantiene-al-dia.md) |
@@ -243,6 +244,7 @@ de memoria.
 
 ### `regla-que-depende-de-que-alguien-se-acuerde`
 
+- **[ADR-188](docs/decisions/ADR-188-el-alcance-que-el-motor-no-puede-escribir-para-la-puerta-antes-de-crear-la-incidencia-y-remite-a-la-sesion-interactiva.md)** — despachar al ciclo automático un encargo cuyo alcance cae donde la credencial del motor no llega, hacer el trabajo entero y perderlo en el push, porque la única regla que lo evitaba vivía en la cabeza de quien despacha. (lo hace cumplir `tests/engine/test_intent_interpreter.py`).
 - **[ADR-182](docs/decisions/ADR-182-la-guarda-del-registro-de-defectos-deriva-de-los-adr-que-declaran-leccion.md)** — poner a vigilar un registro con comprobaciones que solo miran la coherencia de lo ya escrito; el registro deja de recibir lo que pasa, ninguna de ellas puede notarlo y el verde lo confirma —aquí fueron doce días sin una sola entrada, con todos los ADR de ese intervalo entrando entretanto. (lo hace cumplir `tests/automation/test_registro_de_defectos.py`).
 - **[ADR-179](docs/decisions/ADR-179-la-guarda-de-piezas-sin-llamante-deriva-su-inventario-del-codigo-del-motor.md)** — escribir un guardián sobre una lista de inclusión (lo hace cumplir `tests/automation/test_piezas_con_llamante.py`).
 - **[ADR-174](docs/decisions/ADR-174-la-mina-en-dos-pasadas-la-leccion-se-declara-en-el-adr-que-la-produce-y-las-familias-se-cuentan-solas.md)** — escribir la regla de captura en un catálogo y dar por hecho que alguien la aplicará; los dos sitios de lecciones de este repositorio llevaban 48 ADR sin una sola entrada, con sus reglas escritas dentro. (lo hace cumplir `tests/automation/test_mina_de_lecciones.py`).
@@ -317,7 +319,8 @@ cerrados; el recuento completo está arriba.
 | H-39 | abierto | El detector de sensibilidad confundia una prohibicion con una peticion |
 | H-33 | abierto | El registro de defectos podia quedarse dormido sin que ninguna comprobacion lo notara |
 | H-38 | abierto | Una sola puerta encendia siete piezas y no dejaba medir ninguna por separado |
-| H-39 | abierto | Ponerse al dia con main tiraba la aprobacion de revision aunque el trabajo no cambiara |
+| H-40 | abierto | Ponerse al dia con main tiraba la aprobacion de revision aunque el trabajo no cambiara |
+| H-41 | abierto | Un encargo con alcance sobre lo que el motor no puede escribir se despachaba igual y moria en el push |
 
 ## Las investigaciones: fotos con fecha, que caducan
 
