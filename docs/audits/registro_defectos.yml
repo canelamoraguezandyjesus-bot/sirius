@@ -445,3 +445,71 @@ defectos:
     ficheros:
       - docs/canonical/STATUS.md
       - docs/implementation/PLAN.md
+
+  # Primera entrada desde el 31-08-2026. La sequia -doce dias, cero
+  # entradas- no la vio ninguna de las ocho comprobaciones porque todas miraban
+  # la coherencia de lo ya escrito. El campo `adr` es el acuse que la guarda
+  # derivada de ADR-182 exige a partir de aqui; las 32 entradas de arriba no lo
+  # traen y no se reescriben.
+  # Las tres primeras entradas que la guarda derivada de ADR-182 exige por si
+  # misma: los tres ADR se fusionaron en `main` la manana del 13-09-2026, con
+  # sus commits de cierre en este mismo arbol, y ninguno habia dejado su
+  # defecto escrito. No son excepciones de `SIN_DEFECTO_REGISTRADO` -esa lista
+  # es para los ADR cuyo commit de cierre NO esta en el arbol-: son tres
+  # defectos reales que mordieron y que ahora constan.
+  - id: H-34
+    titulo: Retirar un simbolo de produccion deja vivas las frases que lo daban por cierto
+    bloque: producto
+    gravedad: baja
+    estado: cerrado
+    cerrado_por: 7aae33cd246074f1472f3adf4ffbf20833c8b592
+    adr: 177
+    incidencia: 581
+    ficheros:
+      - src/sirius/application/rank_relevant_knowledge.py
+      - src/sirius/application/interpret_query_request.py
+
+  - id: H-35
+    titulo: La autoridad por clase se escribia dos veces y se comprobaba la copia, no la relacion
+    bloque: motor
+    gravedad: media
+    estado: cerrado
+    cerrado_por: f5295bec850b13da36ed7f14405c7f1cc624277f
+    adr: 178
+    ficheros:
+      - src/sirius_engine/domain/authority.py
+      - tests/engine/test_authority.py
+
+  - id: H-36
+    titulo: La contradiccion de etiquetas se decidia contandolas en vez de comparar a donde apuntan
+    bloque: motor
+    gravedad: media
+    estado: cerrado
+    cerrado_por: c64f4164f73c0ef4ea9af8d63cbfdcbc0e0cacdb
+    adr: 181
+    incidencia: 594
+    ficheros:
+      - src/sirius_engine/mirror_projection.py
+      - tests/engine/test_mirror_projection.py
+
+  - id: H-37
+    titulo: La rama sin ningun run de Quality salia en silencio y dejaba la incidencia esperando para siempre
+    bloque: automatizacion
+    gravedad: media
+    estado: abierto
+    adr: 183
+    incidencia: 599
+    ficheros:
+      - scripts/automation/sirius_apply_verdict.sh
+      - tests/automation/test_sirius_apply_verdict.py
+
+  - id: H-33
+    titulo: El registro de defectos podia quedarse dormido sin que ninguna comprobacion lo notara
+    bloque: automatizacion
+    gravedad: media
+    estado: abierto
+    adr: 182
+    incidencia: 597
+    ficheros:
+      - tests/automation/test_registro_de_defectos.py
+      - docs/audits/registro_defectos.yml

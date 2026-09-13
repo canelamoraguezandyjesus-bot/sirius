@@ -26,9 +26,9 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **177**.
+- Decisiones (ADR): **179**.
 - Bloques del motor: 17 cerrado, 1 fuera_de_alcance, 2 pendiente.
-- Defectos registrados: 32 cerrado.
+- Defectos registrados: 2 abierto, 35 cerrado.
 - Investigaciones: **9** (fotos con fecha; caducan).
 - Documentos: **127**, de los que **84** no declaran fecha.
 
@@ -40,6 +40,8 @@ está escrito. Si sale pobre, se arregla en el ADR.
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
 | [185](docs/decisions/ADR-185-la-puerta-de-la-memoria-se-parte-en-tres-interruptores-antes-de-abrirla.md) | 2026-09-13 | PROPUESTO | la puerta de la memoria se parte en tres interruptores antes de abrirla | Se añade `src/sirius/config/memory_gates.py` con una función pura, `puertas_de_memoria(settings) -> PuertasDeMemoria`, y un `dataclass(frozen=True)` de tres booleanos. `composition_root` la llama una vez y cablea según esta tabla: |
+| [183](docs/decisions/ADR-183-la-ausencia-de-run-de-quality-para-el-head-se-encamina-no-se-espera-en-silencio.md) | 2026-09-13 | PROPUESTO | La ausencia de run de Quality para el head se encamina, no se espera en silencio | Opción 3. En `relanzar_quality_si_ya_termino`, la rama que hoy sale con `return 0` cuando no hay ningún run relanzable pasa a llamar a `avisar_quality_sin_encaminar` y a terminar en rojo, exactamente como `consulta-runs-fallida`… |
+| [182](docs/decisions/ADR-182-la-guarda-del-registro-de-defectos-deriva-de-los-adr-que-declaran-leccion.md) | 2026-09-13 | PROPUESTO | La guarda del registro de defectos deriva de los ADR que declaran leccion | La guarda del registro de defectos gana una segunda mitad, y esa mitad deriva su inventario de `docs/decisions/`: un ADR que declara una lección con `familia:` declara, por la definición que ADR-174 ya fijó —una lección se escribe *solo si… |
 | [181](docs/decisions/ADR-181-la-contradiccion-de-etiquetas-se-decide-por-lo-que-proyectan-no-por-cuantas-son.md) | 2026-09-12 | PROPUESTO | La contradicción de etiquetas se decide por lo que proyectan, no por cuántas son | Opción 2. `_estado_y_fase` calcula el conjunto de destinos de las etiquetas presentes y marca contradicción si y solo si hay más de uno: |
 | [180](docs/decisions/ADR-180-el-numero-del-siguiente-adr-se-calcula-contra-las-ramas-del-remoto-no-contra-las-que-el-clon-tenga-traidas.md) | 2026-09-12 | PROPUESTO | El numero del siguiente ADR se calcula contra las ramas del remoto, no contra las que el clon tenga traidas | `scripts/siguiente_adr.py` trae las cabezas del remoto antes de calcular el número, con el refspec explícito `+refs/heads/*:refs/remotes/origin/*` para que un clon estrecho -el de una sesión remota, que clona una sola rama- también las… |
 | [179](docs/decisions/ADR-179-la-guarda-de-piezas-sin-llamante-deriva-su-inventario-del-codigo-del-motor.md) | 2026-09-12 | PROPUESTO | La guarda de piezas sin llamante deriva su inventario del codigo del motor | El inventario de `tests/automation/test_piezas_con_llamante.py` se deriva de `src/sirius_engine` con `ast`, en tres formas de pieza: `modulo:`, `definicion:` y `campo:`. Lo escrito a mano pasa a ser `SIN_LLAMANTE_CONOCIDO`, lo que se resta. |
@@ -228,23 +230,29 @@ de memoria.
 
 | Familia | Veces | Hay prueba que la haga cumplir | ADR |
 |---|---|---|---|
+| `regla-que-depende-de-que-alguien-se-acuerde` | 3 | sí | [182](docs/decisions/ADR-182-la-guarda-del-registro-de-defectos-deriva-de-los-adr-que-declaran-leccion.md), [179](docs/decisions/ADR-179-la-guarda-de-piezas-sin-llamante-deriva-su-inventario-del-codigo-del-motor.md), [174](docs/decisions/ADR-174-la-mina-en-dos-pasadas-la-leccion-se-declara-en-el-adr-que-la-produce-y-las-familias-se-cuentan-solas.md) |
 | `lista-a-mano` | 2 | sí | [181](docs/decisions/ADR-181-la-contradiccion-de-etiquetas-se-decide-por-lo-que-proyectan-no-por-cuantas-son.md), [178](docs/decisions/ADR-178-la-autoridad-por-clase-se-deriva-de-la-via-github-que-el-despachador-declara-no-de-una-segunda-tabla-a-mano.md) |
-| `regla-que-depende-de-que-alguien-se-acuerde` | 2 | sí | [179](docs/decisions/ADR-179-la-guarda-de-piezas-sin-llamante-deriva-su-inventario-del-codigo-del-motor.md), [174](docs/decisions/ADR-174-la-mina-en-dos-pasadas-la-leccion-se-declara-en-el-adr-que-la-produce-y-las-familias-se-cuentan-solas.md) |
+| `pieza-sin-lector` | 2 | sí | [183](docs/decisions/ADR-183-la-ausencia-de-run-de-quality-para-el-head-se-encamina-no-se-espera-en-silencio.md), [175](docs/decisions/ADR-175-un-tablero-por-incidencia-un-solo-comentario-que-el-motor-mantiene-al-dia.md) |
 | `interruptor-que-enciende-mas-de-lo-que-se-puede-medir` | 1 | sí | [185](docs/decisions/ADR-185-la-puerta-de-la-memoria-se-parte-en-tres-interruptores-antes-de-abrirla.md) |
 | `medir-lo-que-se-tiene-en-vez-de-lo-que-hay` | 1 | sí | [180](docs/decisions/ADR-180-el-numero-del-siguiente-adr-se-calcula-contra-las-ramas-del-remoto-no-contra-las-que-el-clon-tenga-traidas.md) |
-| `pieza-sin-lector` | 1 | sí | [175](docs/decisions/ADR-175-un-tablero-por-incidencia-un-solo-comentario-que-el-motor-mantiene-al-dia.md) |
 | `plan-que-hay-que-terminar-de-una-sentada` | 1 | sí | [176](docs/decisions/ADR-176-el-cierre-de-una-incidencia-se-retoma-desde-donde-se-quedo.md) |
 | `prosa-que-el-cambio-deja-falsa` | 1 | no en todas | [177](docs/decisions/ADR-177-la-ampliacion-por-categoria-entra-por-una-senal-explicita-de-la-peticion-no-por-la-subcadena-contexto.md) |
+
+### `regla-que-depende-de-que-alguien-se-acuerde`
+
+- **[ADR-182](docs/decisions/ADR-182-la-guarda-del-registro-de-defectos-deriva-de-los-adr-que-declaran-leccion.md)** — poner a vigilar un registro con comprobaciones que solo miran la coherencia de lo ya escrito; el registro deja de recibir lo que pasa, ninguna de ellas puede notarlo y el verde lo confirma —aquí fueron doce días sin una sola entrada, con todos los ADR de ese intervalo entrando entretanto. (lo hace cumplir `tests/automation/test_registro_de_defectos.py`).
+- **[ADR-179](docs/decisions/ADR-179-la-guarda-de-piezas-sin-llamante-deriva-su-inventario-del-codigo-del-motor.md)** — escribir un guardián sobre una lista de inclusión (lo hace cumplir `tests/automation/test_piezas_con_llamante.py`).
+- **[ADR-174](docs/decisions/ADR-174-la-mina-en-dos-pasadas-la-leccion-se-declara-en-el-adr-que-la-produce-y-las-familias-se-cuentan-solas.md)** — escribir la regla de captura en un catálogo y dar por hecho que alguien la aplicará; los dos sitios de lecciones de este repositorio llevaban 48 ADR sin una sola entrada, con sus reglas escritas dentro. (lo hace cumplir `tests/automation/test_mina_de_lecciones.py`).
 
 ### `lista-a-mano`
 
 - **[ADR-181](docs/decisions/ADR-181-la-contradiccion-de-etiquetas-se-decide-por-lo-que-proyectan-no-por-cuantas-son.md)** — escribir como lista de excepciones un criterio que el dato de al lado ya define —aquí «qué etiquetas pueden convivir», enumerado a mano habiendo una tabla que dice a dónde apunta cada una—, de modo que la lista solo contiene lo que alguien recordó el día que la escribió y acusa de avería a todo lo demás. (lo hace cumplir `tests/engine/test_mirror_projection.py`).
 - **[ADR-178](docs/decisions/ADR-178-la-autoridad-por-clase-se-deriva-de-la-via-github-que-el-despachador-declara-no-de-una-segunda-tabla-a-mano.md)** — escribir dos veces «qué clases existen en la vía GitHub» -una tabla que decide y una copia que se queda vieja- y comprobar la copia en vez de la relación; es la familia que ADR-033 nombró, y aquí dejó quince encargos sin medir durante dos semanas. (lo hace cumplir `tests/engine/test_authority.py`).
 
-### `regla-que-depende-de-que-alguien-se-acuerde`
+### `pieza-sin-lector`
 
-- **[ADR-179](docs/decisions/ADR-179-la-guarda-de-piezas-sin-llamante-deriva-su-inventario-del-codigo-del-motor.md)** — escribir un guardián sobre una lista de inclusión (lo hace cumplir `tests/automation/test_piezas_con_llamante.py`).
-- **[ADR-174](docs/decisions/ADR-174-la-mina-en-dos-pasadas-la-leccion-se-declara-en-el-adr-que-la-produce-y-las-familias-se-cuentan-solas.md)** — escribir la regla de captura en un catálogo y dar por hecho que alguien la aplicará; los dos sitios de lecciones de este repositorio llevaban 48 ADR sin una sola entrada, con sus reglas escritas dentro. (lo hace cumplir `tests/automation/test_mina_de_lecciones.py`).
+- **[ADR-183](docs/decisions/ADR-183-la-ausencia-de-run-de-quality-para-el-head-se-encamina-no-se-espera-en-silencio.md)** — escribir la rama «no hay nada que hacer» de un encaminador como un `return 0` con un `echo`, de modo que la única prueba de que el ciclo se ha parado viva en un log que nadie lee. (lo hace cumplir `tests/automation/test_sirius_apply_verdict.py`).
+- **[ADR-175](docs/decisions/ADR-175-un-tablero-por-incidencia-un-solo-comentario-que-el-motor-mantiene-al-dia.md)** — proyectar en cada pasada el estado entero de una incidencia -fase, rondas, Quality, PR, diagnóstico- y no enseñárselo nunca a quien tiene que decidir; es la novena vez que un dato correcto de esta casa no tiene lector, tres días después de la octava. (lo hace cumplir `tests/engine/test_tablero.py`).
 
 ### `interruptor-que-enciende-mas-de-lo-que-se-puede-medir`
 
@@ -253,10 +261,6 @@ de memoria.
 ### `medir-lo-que-se-tiene-en-vez-de-lo-que-hay`
 
 - **[ADR-180](docs/decisions/ADR-180-el-numero-del-siguiente-adr-se-calcula-contra-las-ramas-del-remoto-no-contra-las-que-el-clon-tenga-traidas.md)** — preguntarle a la copia local por un hecho que vive fuera -las ramas traídas en vez de las que existen- y creer que la respuesta cubre el caso; aquí el guion veía el 3,4% de las ramas y repartió el mismo número tres veces en un día. (lo hace cumplir `tests/automation/test_registro_de_decisiones.py`).
-
-### `pieza-sin-lector`
-
-- **[ADR-175](docs/decisions/ADR-175-un-tablero-por-incidencia-un-solo-comentario-que-el-motor-mantiene-al-dia.md)** — proyectar en cada pasada el estado entero de una incidencia -fase, rondas, Quality, PR, diagnóstico- y no enseñárselo nunca a quien tiene que decidir; es la novena vez que un dato correcto de esta casa no tiene lector, tres días después de la octava. (lo hace cumplir `tests/engine/test_tablero.py`).
 
 ### `plan-que-hay-que-terminar-de-una-sentada`
 
@@ -299,7 +303,10 @@ producto Sirius 0.1, cerrados el 10-08-2026.
 Registro: `docs/audits/registro_defectos.yml`. Solo se listan los que no están
 cerrados; el recuento completo está arriba.
 
-Ningún defecto sin cerrar.
+| Defecto | Estado | Título |
+|---|---|---|
+| H-37 | abierto | La rama sin ningun run de Quality salia en silencio y dejaba la incidencia esperando para siempre |
+| H-33 | abierto | El registro de defectos podia quedarse dormido sin que ninguna comprobacion lo notara |
 
 ## Las investigaciones: fotos con fecha, que caducan
 
