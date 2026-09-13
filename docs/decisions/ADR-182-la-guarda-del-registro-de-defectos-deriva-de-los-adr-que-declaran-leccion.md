@@ -301,10 +301,10 @@ Nueve. En dos de ellas se comprueban **las dos direcciones** que exige ADR-001
 | M5 | que una entrada acuse un ADR inventado (`adr: 999`) | — | rojo en `test_el_adr_que_un_defecto_acusa_existe_de_verdad` |
 | M6 | que la derivación deje de ver `familia:` | — | rojo en 6, empezando por `test_el_inventario_de_adr_con_defecto_se_deriva_y_no_esta_vacio` |
 | M7 | aflojar el criterio del corazón **y** dejar el registro sin ningún abierto | **39 passed** | **rojo** en `test_el_criterio_del_corazon_muerde_aunque_no_haya_ningun_abierto` |
-| M8 | eximir **todos** los ADR del inventario **y** hacer que `H-33` acuse a un ADR ajeno a él (`adr: 1`): la salida fácil ante un rojo, sin que `test_ninguna_excepcion_sobra` la delate | **verde**: la aserción original solo pedía que existiera algún campo `adr` | **rojo** en `test_al_menos_un_defecto_acusa_el_adr_que_lo_corrigio`, y solo ahí (`1 failed, 62 passed, 1 skipped`) |
+| M8 | eximir **todos** los ADR del inventario **y** hacer que `H-33` acuse a un ADR ajeno a él (`adr: 1`): la salida fácil ante un rojo, sin que `test_ninguna_excepcion_sobra` la delate | **verde**: la aserción original solo pedía que existiera algún campo `adr` | **rojo** en `test_al_menos_un_defecto_acusa_el_adr_que_lo_corrigio`, y solo ahí (`1 failed, 63 passed, 1 skipped`, resembrada sobre el árbol de `187ba694`) |
 | M9 | estrechar el patrón de nombre a `\d{3}` exactos, que es como estaba escrito | — | **rojo** en `test_los_lectores_de_adr_ven_un_numero_de_cuatro_cifras`: «el patrón de nombre no reconoce ADR-1000-…» |
 
-**M8 se sembró dos veces, y la primera no cayó.** Tal como se escribió al
+**M8 se sembró tres veces, y la primera no cayó.** Tal como se escribió al
 principio, esta comprobación aseveraba que `_acuses_del_registro()` no estuviera
 vacío, y esa función solo lee `docs/audits/registro_defectos.yml`: eximir ADR no
 la tocaba, así que la salida por exclusión seguía abierta y el verde lo sostenía
@@ -312,7 +312,13 @@ una entrada histórica. Lo vio la revisión de la ronda 1 (CLAUDE-REV-597-001,
 CODEX-001). La aserción se midió ahora contra el inventario derivado menos las
 excepciones, y con eso la mutación de la fila M8 sí cae. La columna «guarda
 vieja» de esa fila es la aserción anterior a la corrección, no la batería de
-antes de este ADR.
+antes de este ADR. La terna que publica es la de la **tercera** siembra, hecha
+sobre el árbol de `187ba694`: la anterior —`1 failed, 62 passed, 1 skipped`— se
+midió cuando la batería tenía 61 casos y caducó al añadir `fd0529f4` el caso
+`test_los_lectores_de_adr_ven_un_numero_de_cuatro_cifras`. Eximir el ADR que
+falta añade además tres casos parametrizados sobre
+`sorted(SIN_DEFECTO_REGISTRADO)`, que son los que llevan la batería mutada de
+62 a 65 casos.
 
 **M1 y M7 son las que miden lo que se ganó.** En M1 la guarda vieja pasa entera
 —40 passed— con un ADR que dice haber corregido un defecto y un registro que no
