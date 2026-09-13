@@ -41,7 +41,8 @@ cuándo: la pregunta deja de traducirse a una política uniforme para toda
 consulta y pasa por ``InterpreteDePeticion``
 (``sirius.application.interpret_query_request``), que produce su propia
 ``Peticion`` —modo, cardinalidad, límite y tiempo inferidos por el modelo
-local; permiso y propósito por regla del producto—. El parámetro
+local; permiso, propósito y ampliación por categoría (ADR-177) por regla del
+producto—. El parámetro
 ``query_request_interpreter`` es opcional y por defecto ``None``: sin él,
 este caso de uso emite exactamente la petición uniforme de antes.
 """
@@ -285,10 +286,10 @@ class RankRelevantKnowledgeUseCase:
 
         Con intérprete cableado, la pregunta se convierte en una petición
         PROPIA —modo, cardinalidad, límite y tiempo inferidos de la consulta
-        por el modelo local; permiso y propósito por regla del producto, que
-        este caso de uso declara aquí y ningún llamador de ``rank()`` puede
-        inyectar, porque ``rank()`` solo recibe la consulta—. Sin intérprete,
-        la política uniforme de siempre.
+        por el modelo local; permiso, propósito y ampliación por categoría
+        (ADR-177) por regla del producto, que este caso de uso declara aquí y
+        ningún llamador de ``rank()`` puede inyectar, porque ``rank()`` solo
+        recibe la consulta—. Sin intérprete, la política uniforme de siempre.
         """
         if self._query_request_interpreter is None:
             return _peticion_ordinaria(

@@ -1391,7 +1391,8 @@ def test_siembra_never_seeds_an_ordinary_candidate(tmp_path: Path) -> None:
     """M20: la siembra solo amplía lo no ordinario
     (``_NIVELES_DE_CRITICIDAD_NO_ORDINARIOS``) — un recuerdo sin
     ``criticality`` (``None``, el nivel ordinario implícito) nunca se
-    siembra, aunque el propósito declare contexto."""
+    siembra, aunque la petición pida la ampliación por categoría
+    (``Peticion.amplia_por_categoria``, ADR-177)."""
     database_path = tmp_path / "sirius.db"
     _bootstrap(database_path)
     _two_projects(database_path)
@@ -1423,9 +1424,10 @@ def test_siembra_rejects_a_critico_decision_scoped_to_a_different_project(
 ) -> None:
     """M20: la misma restricción de ámbito (``candidate_in_declared_scope``)
     que protege categoría/criticidad protege también la siembra — un CRITICO
-    de otro proyecto no entra, aunque el propósito declare contexto (mismo
-    caso que ``test_siembra_de_contexto_respeta_el_ambito_declarado`` del
-    arnés de examen)."""
+    de otro proyecto no entra, aunque la petición pida la ampliación por
+    categoría (``Peticion.amplia_por_categoria``, ADR-177; mismo caso que
+    ``test_siembra_de_contexto_respeta_el_ambito_declarado`` del arnés de
+    examen)."""
     database_path = tmp_path / "sirius.db"
     _bootstrap(database_path)
     active_project_id, other_project_id = _two_projects(database_path)
@@ -1836,9 +1838,12 @@ def test_produccion_emite_la_peticion_derivada_de_la_consulta_no_la_uniforme(
     `_peticion_ordinaria` ponía para toda pregunta (M1, EXHAUSTIVA, sin
     límite que ate, «ahora» sin corte).
 
-    El permiso y el propósito NO se derivan: son reglas del producto, y esta
-    prueba comprueba a la vez que el propósito emitido sigue siendo el fijo
-    de producción — el que activa la siembra de M20 (ADR-129)."""
+    El permiso, el propósito y la ampliación por categoría NO se derivan: son
+    reglas del producto, y esta prueba comprueba a la vez que el propósito
+    emitido sigue siendo el fijo de producción y que la petición llega con
+    ``amplia_por_categoria`` encendida — la señal explícita que activa la
+    siembra de M20 (ADR-129) desde ADR-177, en lugar del texto del
+    propósito."""
     database_path = tmp_path / "sirius.db"
     _bootstrap(database_path)
     active_project_id, _ = _two_projects(database_path)

@@ -3084,10 +3084,14 @@ def _ejecutar_banco_paquete_completo(
     (ADR-129, incidencia #516) porta también `siembra_de_contexto` (bloque
     `siembra` de `_rank_via_staged_engine`): a diferencia del arnés de examen
     de arriba, que solo la ejercita para los dos casos cuyo `peticion_p2.
-    proposito` propio declara contexto, aquí `_peticion_ordinaria` declara el
-    mismo propósito fijo para las 47 consultas — así que la siembra actúa en
-    cada una, no solo en dos, exactamente como actuaría en producción real
-    (ver el docstring de `_rank_via_staged_engine`). `_set_active_project`
+    proposito` propio declara contexto, aquí `_peticion_ordinaria` enciende la
+    señal explícita de ampliación (`Peticion.amplia_por_categoria`, vía
+    `_AMPLIACION_DE_LA_RECUPERACION_ORDINARIA`; ADR-177) para las 47
+    consultas — así que la siembra actúa en cada una, no solo en dos,
+    exactamente como actuaría en producción real (ver el docstring de
+    `_rank_via_staged_engine`). Hasta ADR-177 el mecanismo era otro
+    (`pide_contexto` sobre el texto del propósito) y el efecto medido aquí, el
+    mismo. `_set_active_project`
     (arriba) simula, caso a caso, qué proyecto estaba `ACTIVE` en el momento
     de cada consulta según su propio campo `ambito` — sin eso, los 47 casos
     compartirían un único proyecto activo arbitrario (el que
