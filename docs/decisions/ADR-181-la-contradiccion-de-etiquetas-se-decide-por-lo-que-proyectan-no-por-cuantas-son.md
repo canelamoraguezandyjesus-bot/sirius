@@ -296,11 +296,30 @@ La raíz es escribir la cifra dos veces, así que el remedio no es corregirla si
 **quitarla** (como ADR-179 en su ronda 3): las tres frases remiten ahora a la
 medición o al criterio —proyectar el mismo `(estado, fase)`—, que es lo único
 que se actualiza al cambiar el vocabulario. Son correcciones de prosa: no tocan
-código ni asertos, y por eso no llevan mutación; lo que las verifica es que
-`grep -rn "cuatro parejas\|una de las cuatro\|ejecución y revisión\|4 parejas\|de 78"`
-sobre este ADR, `tests/engine/test_mirror_projection.py` y
-`src/sirius_engine/mirror_projection.py` ya no devuelve nada (salida 1), y que
-`pwsh -File scripts/check.ps1` sigue en verde sobre el árbol final.
+código ni asertos, y por eso no llevan mutación.
+
+Lo que las verifica es que esas cifras viejas no aparecen en ninguna
+afirmación del ADR **fuera de este registro de correcciones**, que las cita
+entrecomilladas precisamente para decir qué se quitó. La comprobación
+registrada en la ronda 3 no distinguía las dos cosas —buscaba los mismos
+patrones en el archivo entero, así que se encontraba a sí misma y nunca podría
+dar la salida 1 que se le atribuía—, de modo que aquí queda la que sí
+distingue: filtrar los apartados «Ronda N de corrección» antes de buscar, y
+buscar sin filtro en el código y las pruebas, donde no hay registro que las
+cite.
+
+```sh
+adr=docs/decisions/ADR-181-la-contradiccion-de-etiquetas-se-decide-por-lo-que-proyectan-no-por-cuantas-son.md
+patron='cuatro parejas\|una de las cuatro\|ejecución y revisión\|4 parejas\|de 78'
+awk '/^## /{fuera=0} /^### Ronda [0-9]+ de corrección/{fuera=1} !fuera' "$adr" |
+  grep -n "$patron"                       # sin coincidencias, salida 1
+grep -rn "$patron" tests/engine/test_mirror_projection.py \
+  src/sirius_engine/mirror_projection.py  # sin coincidencias, salida 1
+```
+
+Ejecutada sobre el árbol de esta ronda, ninguna de las dos imprime nada y las
+dos salen con código 1. Y `pwsh -File scripts/check.ps1` sigue en verde sobre
+el árbol final.
 
 ### Ronda 4 de corrección (lo que el reconciliador sí exime)
 
@@ -322,6 +341,20 @@ ni código, ni pruebas: es corrección de prosa y por eso no lleva mutación. Lo
 que la verifica es leer la guarda del guion
 (`sed -n '260,270p' scripts/automation/sirius_reconcile.sh`) junto a la viñeta
 corregida.
+
+**CODEX-001.** La comprobación que la ronda 3 dejó escrita para sus tres
+frases era irrepetible: buscaba sus propios patrones en el archivo entero, de
+modo que encontraba las cuatro citas del registro de correcciones y salía con
+código 0, nunca con la salida 1 que se le atribuía. Se sustituye por una que
+distingue las ubicaciones corregidas del registro que las cita —filtra los
+apartados «Ronda N de corrección» antes de buscar en el ADR, y busca sin
+filtro en el código y las pruebas—, y se documenta su resultado real, que
+ahora sí es «sin coincidencias, salida 1» en las dos. Queda arriba, en la
+sección de la ronda 3, junto a las frases que verifica. Que la comprobación
+nueva no es vacua se vio sembrando en la sección «Decisión» la línea
+`MUTACION: una de las cuatro parejas que la tabla exime sola.`: el filtro la
+imprime y sale con código 0; retirada, vuelve a salir 1. No se toca ni el
+comportamiento ni ningún aserto.
 
 ## Consecuencias
 
