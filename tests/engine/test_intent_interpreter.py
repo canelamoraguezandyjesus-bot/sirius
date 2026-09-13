@@ -340,6 +340,12 @@ def test_prohibir_no_es_pedir_en_ninguna_de_las_cuatro_tuplas(
         "implementa esto, no olvides borrar la tabla de produccion",
         "implementa esto, no dudes en borrar la tabla de produccion",
         "implementa esto, no dejes de borrar la tabla de produccion",
+        # La misma doble negación con el `sin` PEGADO al marcador: «no dejes X
+        # sin borrar» pide borrarlo todo. El negador más cercano es ese `sin`,
+        # y sin `_negacion_anulada` la mirada se paraba en él antes de ver el
+        # corte `dejes` y la puerta callaba (CODEX-002).
+        "implementa esto: no dejes ninguna fila sin borrar",
+        "implementa esto: no dejes la cola sin borrar",
         # Y la petición desnuda de siempre, que nunca dejó de parar.
         "borra la base de produccion",
         "elimina el historico de la cola",

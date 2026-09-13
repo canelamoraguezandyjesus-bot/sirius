@@ -197,23 +197,16 @@ _NEGADORES = frozenset(
 #: * el sustantivo de las locuciones adverbiales con `sin` que afirman en vez
 #:   de negar: «sin duda borra la tabla», «sin falta borra la tabla». Ahí `sin`
 #:   gobierna al sustantivo, no al marcador;
-#: * los verbos de doble negación, donde «no + verbo + marcador» PIDE el
-#:   marcador: «no olvides borrar», «no dudes en borrar», «no dejes de borrar».
-_CORTES_DE_ORACION = frozenset(
+#: * los verbos de doble negación, de :data:`_VERBOS_DE_DOBLE_NEGACION`.
+
+#: Verbos que, precedidos de un negador, PIDEN el marcador en vez de
+#: prohibirlo: «no olvides borrar», «no dudes en borrar», «no dejes de
+#: borrar». Cortan la mirada hacia atrás como cualquier otro corte y, además,
+#: ANULAN al negador que quede entre ellos y el marcador: «no dejes ninguna
+#: fila sin borrar» PIDE borrarlas todas, aunque el `sin` esté pegado al
+#: marcador y la mirada se pare en él antes de llegar al corte (CODEX-002).
+_VERBOS_DE_DOBLE_NEGACION = frozenset(
     {
-        "y",
-        "e",
-        "o",
-        "u",
-        "pero",
-        "sino",
-        "aunque",
-        "mas",
-        "embargo",
-        "solo",
-        "solamente",
-        "duda",
-        "falta",
         "olvides",
         "olvide",
         "olviden",
@@ -227,6 +220,27 @@ _CORTES_DE_ORACION = frozenset(
         "dejen",
         "dejar",
     }
+)
+
+_CORTES_DE_ORACION = (
+    frozenset(
+        {
+            "y",
+            "e",
+            "o",
+            "u",
+            "pero",
+            "sino",
+            "aunque",
+            "mas",
+            "embargo",
+            "solo",
+            "solamente",
+            "duda",
+            "falta",
+        }
+    )
+    | _VERBOS_DE_DOBLE_NEGACION
 )
 
 #: Cuántas palabras hacia atrás se busca el negador. Cuatro cubre las formas
@@ -278,11 +292,38 @@ def _va_negado(palabras: list[str], indice: int) -> bool:
     prohibido"- NO se detecta a propósito, y su consecuencia es que la puerta
     para de más, que es el lado seguro.
     """
-    for palabra in reversed(palabras[max(0, indice - _VENTANA_DE_NEGACION) : indice]):
+    for desplazamiento, palabra in enumerate(
+        reversed(palabras[max(0, indice - _VENTANA_DE_NEGACION) : indice]), start=1
+    ):
         if palabra in _CORTES_DE_ORACION:
             return False
         if palabra in _NEGADORES:
-            return True
+            return not _negacion_anulada(palabras, indice - desplazamiento)
+    return False
+
+
+def _negacion_anulada(palabras: list[str], indice_negador: int) -> bool:
+    """``True`` si el negador de ``indice_negador`` va dentro de una doble negación.
+
+    «no dejes ninguna fila SIN borrar» PIDE borrar todas las filas: el `sin`
+    que precede al marcador no lo prohíbe, porque a su vez está gobernado por
+    «no dejes». Sin esta comprobación la mirada hacia atrás se paraba en ese
+    `sin` -el negador más cercano- y silenciaba la puerta antes de llegar al
+    corte `dejes` (CODEX-002).
+
+    Solo anulan los verbos de :data:`_VERBOS_DE_DOBLE_NEGACION`, y solo si
+    ellos mismos van precedidos de un negador: es la estructura «no + verbo +
+    … + negador + marcador» y ninguna otra. El sustantivo de las locuciones
+    («sin duda no hay que borrar») queda fuera a propósito, porque ahí la
+    negación posterior sí prohíbe.
+    """
+    ventana = palabras[max(0, indice_negador - _VENTANA_DE_NEGACION) : indice_negador]
+    for desplazamiento, palabra in enumerate(reversed(ventana), start=1):
+        if palabra not in _VERBOS_DE_DOBLE_NEGACION:
+            continue
+        indice_verbo = indice_negador - desplazamiento
+        previas = palabras[max(0, indice_verbo - _VENTANA_DE_NEGACION) : indice_verbo]
+        return any(previa in _NEGADORES for previa in previas)
     return False
 
 
