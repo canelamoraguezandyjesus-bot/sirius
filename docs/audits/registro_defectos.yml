@@ -593,3 +593,22 @@ defectos:
       - src/sirius_engine/dispatch_cli.py
       - src/sirius_engine/cli.py
       - tests/engine/test_decision_cli.py
+
+  # ADR-190 (#619): el unico hueco declarado de la mina de lecciones -ADR-177
+  # escribio "lo hace cumplir: ninguna prueba: nada en este repositorio vigila
+  # la coherencia de la prosa de docs/ con el arbol"- llevaba desde el
+  # 12-09-2026 sin que nadie midiera si taparlo salia a cuenta. El defecto no es
+  # que docs/ no se vigile: es que la decision de vigilarlo o no se venia
+  # tomando por intuicion. Medido el 14-09-2026: 590 citas, 23 rotas, CERO
+  # defectos reales; la ampliacion se declina con su medida delante y el hueco
+  # queda abierto a proposito, que es lo que ahora consta.
+  - id: H-43
+    titulo: El hueco declarado de la prosa de docs/ llevaba sin medir si taparlo salia a cuenta
+    bloque: ciclo
+    gravedad: baja
+    estado: abierto
+    adr: 190
+    incidencia: 619
+    ficheros:
+      - tests/automation/test_citas_de_los_adr.py
+      - docs/decisions/ADR-190-la-guarda-de-citas-no-sale-de-docs-decisions-medidos-590-citas-y-23-rotas-fuera-del-registro-cero-son-defectos-de-este-arbol.md
