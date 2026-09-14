@@ -30,7 +30,7 @@
 - Bloques del motor: 17 cerrado, 1 fuera_de_alcance, 2 pendiente.
 - Defectos registrados: 1 abierto, 48 cerrado.
 - Investigaciones: **9** (fotos con fecha; caducan).
-- Documentos: **140**, de los que **94** no declaran fecha.
+- Documentos: **141**, de los que **95** no declaran fecha.
 
 ## Qué se decidió: los ADR, del más reciente al más antiguo
 
@@ -448,6 +448,7 @@ nada por su cuenta. «Sin fecha declarada» es un aviso, no un dato.
 | 2026-08-28 | [Evidencia — El motor está preparado para recibir órdenes reales](docs/audits/evidencia-el-motor-esta-preparado.md) |
 | 2026-08-28 | [Evidencia — el examen lado a lado](docs/audits/evidencia-examen-lado-a-lado.md) |
 | 2026-09-01 | [Evidencia — Experimento: el filtro de relevancia, fiel a la corrida del laboratorio](docs/audits/evidencia-experimento-filtro-fiel-al-laboratorio.md) |
+| sin fecha declarada | [Evidencia — seis defectos decían `abierto` con su arreglo ya fusionado (14-09-2026)](docs/audits/evidencia-fix-cierra-los-defectos-de-la-noche.md) |
 | 2026-08-28 | [Evidencia — H-25: el contador declara su precondición (§11.2)](docs/audits/evidencia-h25-el-contador-declara-su-precondicion.md) |
 | sin fecha declarada | [Evidencia — H-26: LOST no libera la cancelación sin confirmar](docs/audits/evidencia-h26-lost-no-libera.md) |
 | 2026-08-28 | [Evidencia — H-27: la frontera WorkItem–Run](docs/audits/evidencia-h27-frontera-workitem-run.md) |
