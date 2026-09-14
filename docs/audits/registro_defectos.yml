@@ -684,3 +684,20 @@ defectos:
     ficheros:
       - scripts/automation/sirius_reconcile.sh
       - tests/automation/test_sirius_reconcile.py
+
+  # ADR-196 (#632): la vista que existe para caber en una sola lectura copiaba,
+  # por cada ADR y para siempre, el primer parrafo de su seccion «Decision». La
+  # seccion de decisiones pesaba 81.037 de los 119.370 bytes del fichero -el
+  # 68 %-, el margen habia bajado a 630 bytes y cada ADR fusionado añade unos
+  # 1.350: el siguiente, fuera cual fuera, rompia la guarda de ADR-171 y dejaba
+  # al motor sin poder fusionar ninguna decision nueva.
+  - id: H-196
+    titulo: La vista de memoria copiaba el resumen de cada decision para siempre y dejo de caber en una sola lectura
+    bloque: motor
+    gravedad: alta
+    estado: abierto
+    adr: 196
+    incidencia: 632
+    ficheros:
+      - src/sirius_engine/memoria.py
+      - tests/engine/test_memoria.py

@@ -632,8 +632,16 @@ def generar_memoria(raiz: Path) -> str:
         "",
         "## Qué se decidió: los ADR, del más reciente al más antiguo",
         "",
-        "El resumen es el primer párrafo de la sección «Decisión» de cada ADR, tal cual",
-        "está escrito. Si sale pobre, se arregla en el ADR.",
+        "**Están todos**: el índice completo -número, fecha, estado, título y enlace-",
+        "se queda entero aquí, porque saber QUÉ se decidió es la orientación que esta",
+        "vista existe para dar.",
+        "",
+        "El resumen -el primer párrafo de la sección «Decisión»- solo lo llevan los ADR",
+        f"desde el {PRIMER_ADR_CON_LECCION}. De los anteriores está en el ADR que la fila",
+        "enlaza, a un clic, sin copiarlo aquí. No es una poda: el texto no se ha ido a",
+        "ninguna parte -aquí no se borra nada-. Es que llevar el párrafo de las ciento",
+        "y pico decisiones viejas convertía esta vista en el corpus del que venía",
+        "huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).",
         "",
         *_tabla(
             ("ADR", "Fecha", "Estado", "Decisión", "Resumen"),
@@ -643,7 +651,7 @@ def generar_memoria(raiz: Path) -> str:
                     d.fecha,
                     d.estado,
                     d.titulo,
-                    d.resumen,
+                    d.resumen if d.numero >= PRIMER_ADR_CON_LECCION else "—",
                 )
                 for d in arbol.decisiones
             ),
