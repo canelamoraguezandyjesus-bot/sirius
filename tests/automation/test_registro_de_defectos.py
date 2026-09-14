@@ -54,6 +54,17 @@ from sirius_engine.memoria import PRIMER_ADR_CON_LECCION, leer_leccion
 #: arreglo no puede reproducir-.
 PRIMER_ADR_CON_ID_DERIVADO = 192
 
+#: Último identificador que llegó a elegir el contador viejo. Este bloque —`H-1`
+#: a `H-43`— está CERRADO para siempre: ADR-192 mató el contador, así que no
+#: puede aparecer ninguno nuevo ahí dentro. Por eso se puede exigir entero, y
+#: exigirlo entero es lo único comprobable de ADR-195: «podar» es archivar, y una
+#: entrada archivada se queda donde está.
+#:
+#: No se escribe a mano: `test_la_frontera_del_contador_es_la_que_el_registro
+#: _declara` la deriva del propio registro, así que bajarla para desactivar la
+#: guarda —la mutación que de verdad hace daño— cae sola.
+CONTADOR_MAXIMO = 43
+
 RAIZ = Path(__file__).resolve().parents[2]
 REGISTRO = RAIZ / "docs" / "audits" / "registro_defectos.yml"
 
@@ -174,6 +185,65 @@ def _abiertos_sin_incidencia(defectos: Iterable[Mapping[str, Any]]) -> list[str]
         for defecto in defectos
         if defecto["estado"] == "abierto" and not isinstance(defecto.get("incidencia"), int)
     ]
+
+
+def _numeros_del_registro() -> set[int]:
+    """Los identificadores del registro, como números."""
+    numeros: set[int] = set()
+    for defecto in _defectos():
+        casa = re.match(r"H-(\d+)$", str(defecto["id"]))
+        if casa is not None:
+            numeros.add(int(casa.group(1)))
+    return numeros
+
+
+def _numeros_que_eligio_el_contador() -> set[int]:
+    """Los que eligió el contador viejo: por debajo de la frontera de ADR-192 y
+    cuyo número NO es el de su propio ADR.
+
+    `H-190` está por debajo de 192 y aun así lo derivó su ADR, así que no es del
+    contador. Distinguirlos importa: si se colara, la frontera derivada saltaría
+    a 190 y la guarda exigiría cien entradas que nunca existieron.
+    """
+    elegidos: set[int] = set()
+    for defecto in _defectos():
+        casa = re.match(r"H-(\d+)$", str(defecto["id"]))
+        if casa is None:
+            continue
+        numero = int(casa.group(1))
+        if numero >= PRIMER_ADR_CON_ID_DERIVADO or defecto.get(CAMPO_ADR) == numero:
+            continue
+        elegidos.add(numero)
+    return elegidos
+
+
+def test_ninguna_entrada_del_contador_viejo_ha_desaparecido() -> None:
+    """«Podar» es archivar: una entrada cerrada se queda (ADR-195).
+
+    El bloque del contador está cerrado —no puede nacer ninguno nuevo ahí—, así
+    que se puede exigir completo. Un hueco solo puede significar que alguien
+    quitó una entrada, y con ella la única prueba de por qué se decidió algo.
+    """
+    faltan = sorted(set(range(1, CONTADOR_MAXIMO + 1)) - _numeros_del_registro())
+    assert not faltan, (
+        f"faltan entradas del bloque del contador viejo: {faltan}. "
+        "Un defecto no se borra: se cierra con su `cerrado_por` y se queda "
+        "(ADR-195, ADR-047)."
+    )
+
+
+def test_la_frontera_del_contador_es_la_que_el_registro_declara() -> None:
+    """Sin esto, bajar `CONTADOR_MAXIMO` desactiva la guarda en silencio.
+
+    Es la misma mutación que sobrevivió en ADR-192 —mover una frontera fuera de
+    alcance deja la regla pasando sin mirar nada—, así que aquí se mata de
+    entrada: la frontera se deriva del registro y tiene que coincidir.
+    """
+    assert max(_numeros_que_eligio_el_contador()) == CONTADOR_MAXIMO, (
+        "la frontera del contador tiene que ser el mayor identificador que el "
+        "contador llegó a elegir; si no, la guarda de ADR-195 mira menos de lo "
+        "que dice mirar"
+    )
 
 
 def test_todo_defecto_abierto_tiene_una_incidencia_que_lo_siga() -> None:

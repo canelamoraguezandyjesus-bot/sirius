@@ -121,6 +121,9 @@ que las escrituras externas del motor pasen por gestos declarados.
   volver a preguntarla o, peor, se actúa en contra sin saber que existía; con
   esta regla en concreto el daño no se puede deshacer, porque lo borrado no
   vuelve.
-- lo hace cumplir: `tests/automation/test_registro_de_defectos.py` para el
-  registro de defectos; para incidencias, ramas y PR no hay prueba posible desde
-  dentro del repositorio y así queda dicho arriba.
+- lo hace cumplir: `tests/automation/test_registro_de_defectos.py`
+
+Esa prueba cubre **solo el registro de defectos**, que es la única mitad
+comprobable desde dentro. Para incidencias, ramas y PR no hay prueba posible
+—el repositorio no puede ver lo que se borró en GitHub— y así queda dicho en
+«La guarda, y hasta dónde llega», arriba.
