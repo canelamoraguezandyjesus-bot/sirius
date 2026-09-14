@@ -600,3 +600,14 @@ defectos:
       - src/sirius_engine/dispatch_cli.py
       - src/sirius_engine/cli.py
       - tests/engine/test_decision_cli.py
+
+  - id: H-43
+    titulo: Una rama se fusionaba sin que nadie probara su combinacion con main
+    bloque: automatizacion
+    gravedad: media
+    estado: abierto
+    adr: 191
+    incidencia: 608
+    ficheros:
+      - scripts/automation/sirius_cola.py
+      - tests/automation/test_cola.py

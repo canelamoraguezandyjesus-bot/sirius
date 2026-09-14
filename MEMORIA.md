@@ -26,11 +26,11 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **183**.
+- Decisiones (ADR): **184**.
 - Bloques del motor: 17 cerrado, 1 fuera_de_alcance, 2 pendiente.
-- Defectos registrados: 42 cerrado.
+- Defectos registrados: 1 abierto, 42 cerrado.
 - Investigaciones: **9** (fotos con fecha; caducan).
-- Documentos: **130**, de los que **85** no declaran fecha.
+- Documentos: **132**, de los que **87** no declaran fecha.
 
 ## Qué se decidió: los ADR, del más reciente al más antiguo
 
@@ -39,6 +39,7 @@ está escrito. Si sale pobre, se arregla en el ADR.
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| [191](docs/decisions/ADR-191-la-revision-es-una-cola-una-rama-entra-a-revision-solo-si-main-ya-esta-dentro-de-ella.md) | 2026-09-14 | PROPUESTO | La revision es una cola: una rama entra a revision solo si main ya esta dentro de ella | Uno. La condición es una sola pregunta: ¿es la punta de `main` ancestro del head de la rama? Si lo es, lo que se revise es lo que aterrizará. Si no, la combinación que aterrizaría no la ha probado nadie y la rama espera. |
 | [189](docs/decisions/ADR-189-la-salida-de-una-parada-sin-incidencia-es-una-orden-del-propietario-y-reanudar-es-despachar-en-el-mismo-gesto.md) | 2026-09-13 | PROPUESTO | La salida de una parada sin incidencia es una orden del propietario, y reanudar es despachar en el mismo gesto | Se elige la opción 1: un comando del propietario, `sirius-decidir`. Y la respuesta a «qué pasa al reanudar» es que reanudar es despachar en el mismo gesto: si el despacho no puede ocurrir, la reanudación no ocurre. |
 | [188](docs/decisions/ADR-188-el-alcance-que-el-motor-no-puede-escribir-para-la-puerta-antes-de-crear-la-incidencia-y-remite-a-la-sesion-interactiva.md) | 2026-09-13 | PROPUESTO | Parar antes de crear la incidencia cuando la orden pide tocar lo que el motor no puede escribir | Opción 1 (variante B), como QUINTA causa de sensibilidad del intérprete, con la causa `permisos_o_credenciales_sensibles`. |
 | [187](docs/decisions/ADR-187-una-revision-sobrevive-a-ponerse-al-dia-con-main-si-el-trabajo-propio-de-la-rama-no-cambia.md) | 2026-09-13 | APROBADO | Una revision sobrevive a ponerse al dia con main si el trabajo propio de la rama no cambia | La guarda de ADR-142 pasa de «mismo head» a «mismo trabajo»: la aprobación registrada sigue valiendo si el trabajo PROPIO de la rama es el mismo en el head aprobado y en el vigente. |
@@ -234,7 +235,7 @@ de memoria.
 
 | Familia | Veces | Hay prueba que la haga cumplir | ADR |
 |---|---|---|---|
-| `regla-que-depende-de-que-alguien-se-acuerde` | 4 | sí | [188](docs/decisions/ADR-188-el-alcance-que-el-motor-no-puede-escribir-para-la-puerta-antes-de-crear-la-incidencia-y-remite-a-la-sesion-interactiva.md), [182](docs/decisions/ADR-182-la-guarda-del-registro-de-defectos-deriva-de-los-adr-que-declaran-leccion.md), [179](docs/decisions/ADR-179-la-guarda-de-piezas-sin-llamante-deriva-su-inventario-del-codigo-del-motor.md), [174](docs/decisions/ADR-174-la-mina-en-dos-pasadas-la-leccion-se-declara-en-el-adr-que-la-produce-y-las-familias-se-cuentan-solas.md) |
+| `regla-que-depende-de-que-alguien-se-acuerde` | 5 | sí | [191](docs/decisions/ADR-191-la-revision-es-una-cola-una-rama-entra-a-revision-solo-si-main-ya-esta-dentro-de-ella.md), [188](docs/decisions/ADR-188-el-alcance-que-el-motor-no-puede-escribir-para-la-puerta-antes-de-crear-la-incidencia-y-remite-a-la-sesion-interactiva.md), [182](docs/decisions/ADR-182-la-guarda-del-registro-de-defectos-deriva-de-los-adr-que-declaran-leccion.md), [179](docs/decisions/ADR-179-la-guarda-de-piezas-sin-llamante-deriva-su-inventario-del-codigo-del-motor.md), [174](docs/decisions/ADR-174-la-mina-en-dos-pasadas-la-leccion-se-declara-en-el-adr-que-la-produce-y-las-familias-se-cuentan-solas.md) |
 | `lista-a-mano` | 2 | sí | [181](docs/decisions/ADR-181-la-contradiccion-de-etiquetas-se-decide-por-lo-que-proyectan-no-por-cuantas-son.md), [178](docs/decisions/ADR-178-la-autoridad-por-clase-se-deriva-de-la-via-github-que-el-despachador-declara-no-de-una-segunda-tabla-a-mano.md) |
 | `medir-lo-que-se-tiene-en-vez-de-lo-que-hay` | 2 | sí | [184](docs/decisions/ADR-184-la-prohibicion-no-es-una-peticion-el-detector-de-sensibilidad-exige-que-el-marcador-no-vaya-negado.md), [180](docs/decisions/ADR-180-el-numero-del-siguiente-adr-se-calcula-contra-las-ramas-del-remoto-no-contra-las-que-el-clon-tenga-traidas.md) |
 | `pieza-sin-lector` | 2 | sí | [183](docs/decisions/ADR-183-la-ausencia-de-run-de-quality-para-el-head-se-encamina-no-se-espera-en-silencio.md), [175](docs/decisions/ADR-175-un-tablero-por-incidencia-un-solo-comentario-que-el-motor-mantiene-al-dia.md) |
@@ -246,6 +247,7 @@ de memoria.
 
 ### `regla-que-depende-de-que-alguien-se-acuerde`
 
+- **[ADR-191](docs/decisions/ADR-191-la-revision-es-una-cola-una-rama-entra-a-revision-solo-si-main-ya-esta-dentro-de-ella.md)** — fusionar una rama cuya combinación con `main` no ha (lo hace cumplir `tests/automation/test_cola.py`).
 - **[ADR-188](docs/decisions/ADR-188-el-alcance-que-el-motor-no-puede-escribir-para-la-puerta-antes-de-crear-la-incidencia-y-remite-a-la-sesion-interactiva.md)** — despachar al ciclo automático un encargo cuyo alcance cae donde la credencial del motor no llega, hacer el trabajo entero y perderlo en el push, porque la única regla que lo evitaba vivía en la cabeza de quien despacha. (lo hace cumplir `tests/engine/test_intent_interpreter.py`).
 - **[ADR-182](docs/decisions/ADR-182-la-guarda-del-registro-de-defectos-deriva-de-los-adr-que-declaran-leccion.md)** — poner a vigilar un registro con comprobaciones que solo miran la coherencia de lo ya escrito; el registro deja de recibir lo que pasa, ninguna de ellas puede notarlo y el verde lo confirma —aquí fueron doce días sin una sola entrada, con todos los ADR de ese intervalo entrando entretanto. (lo hace cumplir `tests/automation/test_registro_de_defectos.py`).
 - **[ADR-179](docs/decisions/ADR-179-la-guarda-de-piezas-sin-llamante-deriva-su-inventario-del-codigo-del-motor.md)** — escribir un guardián sobre una lista de inclusión (lo hace cumplir `tests/automation/test_piezas_con_llamante.py`).
@@ -319,7 +321,9 @@ producto Sirius 0.1, cerrados el 10-08-2026.
 Registro: `docs/audits/registro_defectos.yml`. Solo se listan los que no están
 cerrados; el recuento completo está arriba.
 
-Ningún defecto sin cerrar.
+| Defecto | Estado | Título |
+|---|---|---|
+| H-43 | abierto | Una rama se fusionaba sin que nadie probara su combinacion con main |
 
 ## Las investigaciones: fotos con fecha, que caducan
 
@@ -371,6 +375,7 @@ nada por su cuenta. «Sin fecha declarada» es un aviso, no un dato.
 | 2026-08-28 | [Nota de arranque — H-32: STATUS.md contradice a PLAN.md](docs/audits/arranque-h32-status-contradice-a-plan.md) |
 | 2026-08-28 | [Nota de arranque — implementar el descarte de ADR-098](docs/audits/arranque-implementar-el-descarte.md) |
 | 2026-08-28 | [Nota de arranque — el interruptor de profundidad](docs/audits/arranque-interruptor-de-profundidad.md) |
+| sin fecha declarada | [Nota de arranque — la revisión es una cola](docs/audits/arranque-la-revision-es-una-cola.md) |
 | 2026-09-13 | [Nota de arranque — Que una revisión sobreviva a ponerse al día con `main`](docs/audits/arranque-mejora-la-revision-sobrevive-a-ponerse-al-dia.md) |
 | 2026-08-28 | [Nota de arranque — las tres palancas del examen](docs/audits/arranque-tres-palancas.md) |
 | sin fecha declarada | [Evidencia — H-17](docs/audits/evidencia-H-17.md) |
@@ -407,6 +412,7 @@ nada por su cuenta. «Sin fecha declarada» es un aviso, no un dato.
 | 2026-08-28 | [Evidencia — el interruptor de profundidad](docs/audits/evidencia-interruptor-de-profundidad.md) |
 | sin fecha declarada | [Evidencia — Probar seis al azar no es probar](docs/audits/evidencia-mas-candidatos.md) |
 | sin fecha declarada | [Evidencia — cerrar S2: medir de verdad la calidad del investigador](docs/audits/evidencia-medir-investigador.md) |
+| sin fecha declarada | [Evidencia — la revisión es una cola](docs/audits/evidencia-mejora-la-revision-es-una-cola.md) |
 | 2026-09-13 | [Evidencia — Que una revisión sobreviva a ponerse al día con `main`](docs/audits/evidencia-mejora-la-revision-sobrevive-a-ponerse-al-dia.md) |
 | sin fecha declarada | [Evidencia — Los cuatro que responden, encontrados probándolos](docs/audits/evidencia-modelos-que-responden.md) |
 | sin fecha declarada | [Evidencia — Los modelos, sacados del servidor y no de un papel](docs/audits/evidencia-modelos-vivos.md) |
