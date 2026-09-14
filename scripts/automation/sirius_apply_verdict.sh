@@ -827,20 +827,39 @@ case "$verdict" in
     # terminar sería el único que no termina. Con head + run, una reejecución del
     # mismo run sigue siendo idempotente y una ronda nueva siempre se registra.
     # El sufijo es el de RONDA (run sin intento): ver SIRIUS_ROUND_TAG.
-    marker="<!-- sirius-verdict:reviewer:changes:${head_sha}:${SIRIUS_ROUND_TAG} -->"
+    #
+    # ADR-199: con familia repetida detectada, esta ronda NO pide otra
+    # corrección: detiene el ciclo. El marcador lleva la razón -igual que los
+    # `precheck:<razón>:`- porque `sirius_resume_on_command.sh` enruta la
+    # vuelta leyéndolo, y esta parada es la única que NO vuelve a la fase que
+    # la emitió: la emite el revisor y vuelve al corrector.
+    if [ -n "$family_notice" ]; then
+      marker="<!-- sirius-verdict:reviewer:blocked:familia-repetida:${head_sha}:${SIRIUS_ROUND_TAG} -->"
+      destino_etiqueta="sirius:blocked-decision"
+      destino_color="D4C5F9"
+      destino_desc="Estado: requiere una decisión humana"
+    else
+      marker="<!-- sirius-verdict:reviewer:changes:${head_sha}:${SIRIUS_ROUND_TAG} -->"
+      destino_etiqueta="sirius:repair-requested"
+      destino_color="FBCA04"
+      destino_desc="Evento consumible: corregir observaciones técnicas registradas"
+    fi
     body_file="$(mktemp)"
     {
       printf '%s\n\n%s\n' "$marker" "## CHANGES_REQUESTED"
       printf '- PR: %s\n' "$pr_hint"
       printf '%s\n\n%s\n\n## OBSERVACIONES_ESTRUCTURADAS\n```json\n%s\n```\n' "${summary}" "${readable}" "${observations}"
       if [ -n "$family_notice" ]; then
-        printf '\n## AVISO_FAMILIA_REPETIDA\n%s\n\nAviso informativo (ADR-078, incidencia #495): no bloquea ni cambia esta transición.\n' \
-          "$family_notice"
+        printf '\n## AVISO_FAMILIA_REPETIDA\n%s\n\n%s\n%s\n%s\n' \
+          "$family_notice" \
+          "**El ciclo se detiene aquí (ADR-199).** Estas rondas están dando vueltas sobre la misma familia de defecto. Otra corrección sería otro parche sobre la misma capa: lo que toca es buscar la raíz (ADR-001, regla de las dos rondas)." \
+          "El detector está medido: 4 aciertos y 0 falsos sobre 14 incidencias (ADR-078) y 14 aciertos y 2 falsos sobre 16 (ADR-197). Dos de cada dieciséis serán falsos positivos, y esta es la salida barata para ellos." \
+          "**Para seguir, comenta \`continua\`**: el trabajo vuelve al corrector con estas mismas observaciones, sin perder ninguna ronda."
       fi
       printf '\n<!-- sirius-round:%s -->\n\n## RONDA_HALLAZGOS\n```json\n%s\n```\n' \
         "${round_number}" "${round_json}"
     } >"$body_file"
-    if ! transition "$marker" "$body_file" "sirius:repair-requested" "FBCA04" "Evento consumible: corregir observaciones técnicas registradas"; then
+    if ! transition "$marker" "$body_file" "$destino_etiqueta" "$destino_color" "$destino_desc"; then
       rm -f "$body_file"
       exit 1
     fi

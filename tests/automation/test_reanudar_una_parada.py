@@ -241,6 +241,7 @@ def test_solo_cuenta_la_ultima_orden() -> None:
 
 ACTIVACION = SCRIPTS_DIR / "sirius_validate_activation.sh"
 REANUDAR = SCRIPTS_DIR / "sirius_resume_on_command.sh"
+VEREDICTO = SCRIPTS_DIR / "sirius_apply_verdict.sh"
 
 # Un `sirius:*-requested` es un EVENTO: aplicarlo dispara un workflow, así que
 # por construcción no deja nada esperando a una persona.
@@ -310,6 +311,55 @@ def test_toda_parada_que_espera_a_una_persona_declara_quien_la_levanta() -> None
         assert quien, (
             f"{estado} deja el ciclo esperando a una persona y ningún ejecutor "
             f"de órdenes lo levanta: es una parada sin salida"
+        )
+
+
+def _razones_de_bloqueo_que_emite_el_veredicto() -> list[str]:
+    """Las razones declaradas en los marcadores `:blocked:` de la puerta.
+
+    Un marcador sin razón -`...:blocked:${SIRIUS_RUN_TAG}`- es el bloqueo
+    genérico de rol, que ya enruta `destino_de_rol`. Uno CON razón literal
+    -`...:blocked:familia-repetida:...`- es una parada nueva, y el guion de
+    reanudación no puede enrutarla sin saber de ella.
+
+    No interpreta shell: lee literales de marcador, que es justo lo que el
+    guion de reanudación también lee del historial. Por eso se puede afirmar.
+    """
+    codigo = _codigo_sin_comentarios(VEREDICTO)
+    razones = []
+    for marcador in re.findall(r"<!-- sirius-verdict:[^>]*:blocked:[^>]*-->", codigo):
+        resto = marcador.split(":blocked:", 1)[1]
+        primer_campo = resto.split(":", 1)[0].strip()
+        if primer_campo and not primer_campo.startswith("$"):
+            razones.append(primer_campo)
+    return razones
+
+
+def test_toda_parada_de_bloqueo_con_razon_propia_declara_su_vuelta() -> None:
+    """H-33 se descubrió en producción, sobre dos incidencias reales.
+
+    `sirius:blocked-decision` lo emite más de un sitio, y cada emisor nuevo se
+    ha ido enrutando A MANO en `sirius_resume_on_command.sh`. Cuando el
+    enrutado se olvida, la parada no falla: reanuda la fase equivocada, que es
+    peor, porque tiene aspecto de haber funcionado. Le pasó a las incidencias
+    #453 y #471.
+
+    Esta prueba cierra la CLASE, no el caso: una parada de bloqueo que se
+    invente mañana una razón propia y no la declare en el guion de reanudación
+    suspende aquí, sin que nadie tenga que acordarse de nada.
+    """
+    razones = _razones_de_bloqueo_que_emite_el_veredicto()
+    assert "familia-repetida" in razones, (
+        "la extracción no encontró la razón que sí existe (ADR-199): si el "
+        "formato del marcador cambió, esta prueba dejó de comprobar nada y hay "
+        "que reescribirla, no borrarla"
+    )
+    reanudar = _codigo_sin_comentarios(REANUDAR)
+    for razon in razones:
+        assert razon in reanudar, (
+            f"la puerta del veredicto publica una parada `blocked` con razón "
+            f"propia «{razon}» y {REANUDAR.name} no la nombra: al reanudarla "
+            f"caería en la vuelta por rol, que es la fase equivocada (H-33)"
         )
 
 

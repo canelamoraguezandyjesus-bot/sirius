@@ -769,3 +769,24 @@ defectos:
     incidencia: 640
     ficheros:
       - docs/decisions/ADR-198-partir-un-objetivo-grande-lo-hace-la-sesion-interactiva-el-descomponedor-automatico-queda-descartado.md
+
+  # ADR-199 (#642): el detector de familia repetida se cablea en la #495 a
+  # proposito SIN autoridad, para medir su tasa antes de darsela (criterio de la
+  # #267). La medida se completo -4/0 sobre 14 en ADR-078, 14/2 sobre 16 en
+  # ADR-197- y el ciclo siguio aplicando repair-requested igual que si el aviso
+  # no existiera. Coste pagado mientras tanto: 7 rondas en la #501 (media 2,93)
+  # y 15 vueltas en la #545. El defecto no es del detector: el disparador decia
+  # «cuando haya datos suficientes» y no decia quien comprueba si ya los hay.
+  - id: H-199
+    titulo: El detector de familia repetida llevaba medido y acertando y el ciclo seguia mandando otra vuelta de parche
+    bloque: ciclo
+    gravedad: media
+    estado: abierto
+    adr: 199
+    incidencia: 642
+    ficheros:
+      - scripts/automation/sirius_apply_verdict.sh
+      - scripts/automation/sirius_resume_on_command.sh
+      - tests/automation/test_reanudar_una_parada.py
+      - tests/automation/test_reanudar_ejecutando_el_guion.py
+      - tests/automation/test_sirius_apply_verdict.py
