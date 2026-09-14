@@ -36,6 +36,7 @@ jobs:
           persist-credentials: false
 
       - name: Advance matching Sirius work item
+        id: avanzar
         shell: bash --noprofile --norc {0}
         env:
           # Las LECTURAS de este paso (API de Actions para localizar la PR,
@@ -81,7 +82,7 @@ jobs:
             exit 0
           fi
 
-          pr_json="$(sirius_retry gh api "repos/${GH_REPO}/pulls/${pr_number}" --jq '{state: .state, draft: .draft, head: .head.sha, base: .base.ref}')"
+          pr_json="$(sirius_retry gh api "repos/${GH_REPO}/pulls/${pr_number}" --jq '{state: .state, draft: .draft, head: .head.sha, base: .base.ref, rama: .head.ref}')"
           if [ -z "${pr_json:-}" ]; then
             echo "::warning::No se pudo leer la PR #${pr_number}; se omite sin cambios."
             exit 0
@@ -280,6 +281,62 @@ jobs:
           rc=0
           case "$CONCLUSION" in
             success)
+              # ADR-200 (incidencia #608): LA COLA, que hasta hoy era una
+              # condición sin mecanismo. ADR-191 construyó `sirius_cola.py` y
+              # dejó escrito que NO la cableaba, porque cablear la condición sin
+              # que nadie ponga al día la rama que espera crearía un atasco
+              # nuevo. Las dos mitades entran juntas: aquí se pregunta, y el paso
+              # siguiente pone al día la rama que tiene que esperar.
+              #
+              # El dato es el mismo que ya se lee unas líneas más arriba para
+              # ADR-187: `compare/{base}...{head}`. No se añade ninguna llamada
+              # de clase nueva.
+              #
+              # FAIL-CLOSED: cualquier cosa que impida AFIRMAR que la punta de la
+              # base está dentro responde «espera». Se puede ser estricto porque
+              # esperar es recuperable -la condición se reevalúa en el run
+              # siguiente-, mientras que dejar pasar de más mete en `main` una
+              # combinación que no probó nadie. Es la #611 otra vez.
+              cola_base="$(printf '%s' "$pr_json" | jq -r '.base')"
+              cola_rama="$(printf '%s' "$pr_json" | jq -r '.rama')"
+              cola_cmp="$(mktemp)"
+              cola_motivo="no se pudo comparar la rama con su base, así que no puedo afirmar que la punta esté dentro"
+              cola_al_dia=0
+              if [ -n "${cola_base:-}" ] && [ "$cola_base" != "null" ] \
+                 && sirius_retry gh api "repos/${GH_REPO}/compare/${cola_base}...${HEAD_SHA}" >"$cola_cmp"; then
+                if cola_motivo="$(python3 scripts/automation/sirius_cola.py "$cola_cmp")"; then
+                  cola_al_dia=1
+                fi
+              fi
+              rm -f "$cola_cmp"
+
+              if [ "$cola_al_dia" != "1" ]; then
+                # ESPERAR ES UNA NO-TRANSICIÓN: no se aplica `review-requested` y
+                # la incidencia se queda donde estaba. Lo que NO puede ser es
+                # esperar en silencio -ADR-183: una espera que no se cuenta no se
+                # distingue de un atasco-, así que se dice, una sola vez por head.
+                cola_marker="<!-- sirius-cola:${HEAD_SHA}:espera -->"
+                cola_body="$(mktemp)"
+                printf '%s\n\n%s\n\n%s\n%s\n%s\n\n%s\n' \
+                  "${cola_marker}" \
+                  "## LA RAMA ESPERA SU TURNO" \
+                  "- PR: ${pr_url}" \
+                  "- Head SHA: \`${HEAD_SHA}\`" \
+                  "- Motivo: ${cola_motivo}" \
+                  "Quality dio verde sobre esta versión, pero la combinación que aterrizaría en \`${cola_base}\` no la ha probado nadie. Traigo \`${cola_base}\` a la rama y Quality volverá a correr sobre la combinación real; entonces entrará a revisión sola. No hace falta que hagas nada (ADR-200, incidencia #608)." >"$cola_body"
+                ( export GH_TOKEN="$SIRIUS_TRIGGER_TOKEN"; sirius_comment_once "$GH_REPO" "$issue_number" "$cola_marker" "$cola_body" ) \
+                  || echo "::warning::no se pudo publicar el aviso de espera en #${issue_number}."
+                rm -f "$cola_body" "$body_file"
+                {
+                  echo "ponerse_al_dia=true"
+                  echo "rama=${cola_rama}"
+                  echo "base=${cola_base}"
+                  echo "incidencia=${issue_number}"
+                } >>"$GITHUB_OUTPUT"
+                echo "#${issue_number} espera: ${cola_motivo}. Se pone al día la rama ${cola_rama}."
+                exit 0
+              fi
+
               marker="<!-- sirius-quality:${HEAD_SHA}:success -->"
               printf '%s\n\n%s\n\n%s\n%s\n%s\n%s\n%s\n' \
                 "${marker}" \
@@ -334,3 +391,79 @@ jobs:
             echo "::error::La transicion de #${issue_number} no se completo; se deja reintentable."
             exit 1
           fi
+
+      # --- La otra mitad de ADR-200: quien pone al día la rama que espera -----
+      #
+      # Sin esto, cablear la cola solo cambiaría un atasco por otro: la rama
+      # esperaría para siempre porque nadie la actualiza. Por eso ADR-191 dejó la
+      # condición sin llamante, a propósito, hasta que hubiera decisión sobre
+      # esto (opción A de la incidencia #608, elegida por el propietario el
+      # 14-09-2026).
+      #
+      # EL TOKEN NO ES UN DETALLE. Un push hecho con `GITHUB_TOKEN` NO dispara
+      # workflows, así que Quality no volvería a correr sobre la combinación y la
+      # rama quedaría esperando otra vez -el mismo atasco con otra cara-. Va con
+      # `SIRIUS_BOT_TOKEN`, que es la misma credencial con la que
+      # `repair-sirius-work.yml` ya empuja los commits del corrector a la rama de
+      # una PR. NO se amplía `permissions:`: ese bloque gobierna el
+      # `GITHUB_TOKEN`, no el PAT, así que esto no abre ninguna clase de permiso
+      # nueva -que es justo lo que ADR-002 protege-.
+      #
+      # NUNCA REESCRIBE HISTORIA. Una fusión, no un rebase: el checkout de quien
+      # esté trabajando en esa rama sigue siendo válido. Y si hay conflicto real
+      # se aborta y se dice; eso no lo puede decidir una máquina.
+      - name: Traer la base a la rama que espera
+        if: steps.avanzar.outputs.ponerse_al_dia == 'true'
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.avanzar.outputs.rama }}
+          token: ${{ secrets.SIRIUS_BOT_TOKEN }}
+          persist-credentials: true
+          # La fusión necesita la historia entera: con un checkout superficial
+          # `git merge` no puede encontrar el antepasado común.
+          fetch-depth: 0
+
+      - name: Fusionar la base y empujar
+        if: steps.avanzar.outputs.ponerse_al_dia == 'true'
+        shell: bash --noprofile --norc {0}
+        env:
+          GH_TOKEN: ${{ secrets.SIRIUS_BOT_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RAMA: ${{ steps.avanzar.outputs.rama }}
+          BASE: ${{ steps.avanzar.outputs.base }}
+          ISSUE: ${{ steps.avanzar.outputs.incidencia }}
+        run: |
+          set -uo pipefail
+          git config user.name "sirius-motor"
+          git config user.email "canelamoraguezandyjesus@gmail.com"
+
+          if ! git fetch origin "$BASE"; then
+            echo "::error::no se pudo traer ${BASE}; la rama ${RAMA} sigue esperando y se reintentara en el proximo run."
+            exit 1
+          fi
+
+          if git merge --no-edit --no-ff FETCH_HEAD -m "Trae ${BASE} a ${RAMA} para que la revision vea la combinacion real (ADR-200)"; then
+            if git push origin "HEAD:refs/heads/${RAMA}"; then
+              echo "Rama ${RAMA} al dia con ${BASE}; Quality volvera a correr sobre la combinacion."
+              exit 0
+            fi
+            echo "::error::la fusion salio bien pero el push a ${RAMA} fallo; se reintentara en el proximo run."
+            exit 1
+          fi
+
+          # Conflicto real: las dos partes tocaron lo mismo. Se deshace la
+          # fusion -la rama queda EXACTAMENTE como estaba- y se dice, porque una
+          # espera que no se cuenta no se distingue de un atasco (ADR-183).
+          git merge --abort || true
+          cuerpo="$(mktemp)"
+          printf '%s\n\n%s\n\n%s\n%s\n\n%s\n' \
+            "<!-- sirius-cola:${RAMA}:conflicto -->" \
+            "## LA PUESTA AL DIA CHOCA CON LA BASE" \
+            "- Rama: \`${RAMA}\`" \
+            "- Base: \`${BASE}\`" \
+            "He intentado traer \`${BASE}\` a esta rama para que la revision viera la combinacion real, y hay conflicto: las dos partes tocaron lo mismo. La fusion se ha deshecho y la rama esta como estaba. Esto no lo puede decidir una maquina: hace falta una persona que resuelva el conflicto (ADR-200, incidencia #608)." >"$cuerpo"
+          gh issue comment "$ISSUE" --repo "$GH_REPO" --body-file "$cuerpo" \
+            || echo "::warning::no se pudo publicar el aviso de conflicto en #${ISSUE}."
+          rm -f "$cuerpo"
+          echo "::warning::conflicto entre ${RAMA} y ${BASE}; hace falta una persona."
+          exit 0

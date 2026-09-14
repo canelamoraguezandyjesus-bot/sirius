@@ -769,3 +769,22 @@ defectos:
     incidencia: 640
     ficheros:
       - docs/decisions/ADR-198-partir-un-objetivo-grande-lo-hace-la-sesion-interactiva-el-descomponedor-automatico-queda-descartado.md
+
+  # ADR-200 (#608): ADR-191 construyo sirius_cola.py -la condicion de la cola- y
+  # dejo escrito, a proposito, que NO la cableaba: sin nadie que pusiera al dia la
+  # rama que espera, cablearla habria cambiado un atasco por otro peor. La razon
+  # era buena y quedo en el ADR, no en ninguna prueba, asi que la pieza se quedo
+  # sin gobernar nada. Noveno caso contado de «pieza correcta sin llamante» en
+  # este repositorio; test_piezas_con_llamante.py no podia verlo porque deriva su
+  # inventario de src/sirius_engine y esta pieza vive en scripts/automation/.
+  # Coste medido mientras tanto: 3 PR muertas de obsolescencia en 12 horas.
+  - id: H-200
+    titulo: La condicion de la cola existia desde ADR-191 y no la llamaba nadie, asi que la rama que esperaba no tenia quien la pusiera al dia
+    bloque: ciclo
+    gravedad: alta
+    estado: abierto
+    adr: 200
+    incidencia: 608
+    ficheros:
+      - .github/workflows/advance-sirius-after-quality.yml
+      - tests/automation/test_cola.py

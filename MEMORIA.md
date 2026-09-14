@@ -26,11 +26,11 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **192**.
+- Decisiones (ADR): **193**.
 - Bloques del motor: 17 cerrado, 1 fuera_de_alcance, 2 pendiente.
-- Defectos registrados: 3 abierto, 48 cerrado.
+- Defectos registrados: 4 abierto, 48 cerrado.
 - Investigaciones: **9** (fotos con fecha; caducan).
-- Documentos: **142**, de los que **96** no declaran fecha.
+- Documentos: **143**, de los que **96** no declaran fecha.
 
 ## Qué se decidió: los ADR, del más reciente al más antiguo
 
@@ -47,6 +47,7 @@ huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| [200](docs/decisions/ADR-200-la-cola-deja-de-ser-una-condicion-y-pasa-a-ser-un-mecanismo-el-ciclo-trae-la-base-a-la-rama-que-espera.md) | 2026-09-14 | PROPUESTO | La cola deja de ser una condición y pasa a ser un mecanismo: el ciclo trae la base a la rama que espera | 1. La cola se consulta antes de reponer la revisión. En la rama `success)` de `.github/workflows/advance-sirius-after-quality.yml`, antes de aplicar `sirius:review-requested`, se lee `compare/{base}...{head}` —el mismo dato que ese paso ya… |
 | [198](docs/decisions/ADR-198-partir-un-objetivo-grande-lo-hace-la-sesion-interactiva-el-descomponedor-automatico-queda-descartado.md) | 2026-09-14 | PROPUESTO | Partir un objetivo grande lo hace la sesión interactiva; el descomponedor automático queda descartado | (sin sección Decisión) |
 | [197](docs/decisions/ADR-197-el-detector-de-familia-repetida-agrupa-por-la-ruta-que-el-revisor-escribe-no-por-el-recorte-anclado.md) | 2026-09-14 | PROPUESTO | El detector de familia repetida agrupa por la ruta que el revisor escribe, no por el recorte anclado | El detector agrupa por la ruta que encabeza la cita, extraída con `parse_archivo_location`, y normalizada con `_normalize_text` para que la comparación siga siendo insensible a mayúsculas y espacios. |
 | [196](docs/decisions/ADR-196-la-vista-de-memoria-lleva-el-indice-completo-de-decisiones-y-el-resumen-solo-de-las-vigentes-como-metodo.md) | 2026-09-14 | PROPUESTO | La vista de memoria lleva el índice completo de decisiones, y el resumen solo de las que siguen vigentes como método | El índice se queda entero; la copia del resumen, no. |
@@ -255,6 +256,7 @@ de memoria.
 | `lista-a-mano` | 2 | sí | [181](docs/decisions/ADR-181-la-contradiccion-de-etiquetas-se-decide-por-lo-que-proyectan-no-por-cuantas-son.md), [178](docs/decisions/ADR-178-la-autoridad-por-clase-se-deriva-de-la-via-github-que-el-despachador-declara-no-de-una-segunda-tabla-a-mano.md) |
 | `medir-lo-que-se-tiene-en-vez-de-lo-que-hay` | 2 | sí | [184](docs/decisions/ADR-184-la-prohibicion-no-es-una-peticion-el-detector-de-sensibilidad-exige-que-el-marcador-no-vaya-negado.md), [180](docs/decisions/ADR-180-el-numero-del-siguiente-adr-se-calcula-contra-las-ramas-del-remoto-no-contra-las-que-el-clon-tenga-traidas.md) |
 | `pieza-sin-lector` | 2 | sí | [183](docs/decisions/ADR-183-la-ausencia-de-run-de-quality-para-el-head-se-encamina-no-se-espera-en-silencio.md), [175](docs/decisions/ADR-175-un-tablero-por-incidencia-un-solo-comentario-que-el-motor-mantiene-al-dia.md) |
+| `condicion-construida-sin-el-mecanismo-que-la-hace-cumplible` | 1 | sí | [200](docs/decisions/ADR-200-la-cola-deja-de-ser-una-condicion-y-pasa-a-ser-un-mecanismo-el-ciclo-trae-la-base-a-la-rama-que-espera.md) |
 | `doble-mas-permisivo-que-la-herramienta-que-dobla` | 1 | sí | [193](docs/decisions/ADR-193-el-doble-de-gh-rechaza-lo-que-el-gh-real-rechaza-y-la-red-de-seguridad-vuelve-a-poder-fechar.md) |
 | `espera-sin-fin-por-un-suceso-que-nadie-va-a-emitir` | 1 | sí | [194](docs/decisions/ADR-194-ci-pending-distingue-quality-todavia-no-ha-contestado-de-quality-no-va-a-contestar-nunca.md) |
 | `estado-en-el-que-se-entra-y-del-que-no-se-sale` | 1 | sí | [189](docs/decisions/ADR-189-la-salida-de-una-parada-sin-incidencia-es-una-orden-del-propietario-y-reanudar-es-despachar-en-el-mismo-gesto.md) |
@@ -291,6 +293,10 @@ de memoria.
 
 - **[ADR-183](docs/decisions/ADR-183-la-ausencia-de-run-de-quality-para-el-head-se-encamina-no-se-espera-en-silencio.md)** — escribir la rama «no hay nada que hacer» de un encaminador como un `return 0` con un `echo`, de modo que la única prueba de que el ciclo se ha parado viva en un log que nadie lee. (lo hace cumplir `tests/automation/test_sirius_apply_verdict.py`).
 - **[ADR-175](docs/decisions/ADR-175-un-tablero-por-incidencia-un-solo-comentario-que-el-motor-mantiene-al-dia.md)** — proyectar en cada pasada el estado entero de una incidencia -fase, rondas, Quality, PR, diagnóstico- y no enseñárselo nunca a quien tiene que decidir; es la novena vez que un dato correcto de esta casa no tiene lector, tres días después de la octava. (lo hace cumplir `tests/engine/test_tablero.py`).
+
+### `condicion-construida-sin-el-mecanismo-que-la-hace-cumplible`
+
+- **[ADR-200](docs/decisions/ADR-200-la-cola-deja-de-ser-una-condicion-y-pasa-a-ser-un-mecanismo-el-ciclo-trae-la-base-a-la-rama-que-espera.md)** — una guarda se construye entera y se deja sin llamante (lo hace cumplir `tests/automation/test_cola.py`).
 
 ### `doble-mas-permisivo-que-la-herramienta-que-dobla`
 
@@ -378,6 +384,7 @@ cerrados; el recuento completo está arriba.
 | H-43 | abierto | Una rama se fusionaba sin que nadie probara su combinacion con main |
 | H-197 | abierto | El detector de familia repetida agrupaba por el recorte anclado y no veia 6 familias reales de cada 14 |
 | H-198 | abierto | Una pregunta que solo el propietario puede contestar se quedo veinte dias en una incidencia sin que nadie se la volviera a poner delante |
+| H-200 | abierto | La condicion de la cola existia desde ADR-191 y no la llamaba nadie, asi que la rama que esperaba no tenia quien la pusiera al dia |
 
 ## Las investigaciones: fotos con fecha, que caducan
 
@@ -434,6 +441,7 @@ nada por su cuenta. «Sin fecha declarada» es un aviso, no un dato.
 | 2026-08-28 | [Nota de arranque — H-32: STATUS.md contradice a PLAN.md](docs/audits/arranque-h32-status-contradice-a-plan.md) |
 | 2026-08-28 | [Nota de arranque — implementar el descarte de ADR-098](docs/audits/arranque-implementar-el-descarte.md) |
 | 2026-08-28 | [Nota de arranque — el interruptor de profundidad](docs/audits/arranque-interruptor-de-profundidad.md) |
+| 2026-09-14 | [Nota de arranque — la cola deja de ser una condición y pasa a ser un mecanismo](docs/audits/arranque-la-cola-trae-main-a-la-rama.md) |
 | sin fecha declarada | [Nota de arranque — la memoria cabe en una sola lectura, y dejó de caber](docs/audits/arranque-la-memoria-cabe-en-una-sola-lectura.md) |
 | sin fecha declarada | [Nota de arranque — la revisión es una cola](docs/audits/arranque-la-revision-es-una-cola.md) |
 | 2026-09-13 | [Nota de arranque — Que una revisión sobreviva a ponerse al día con `main`](docs/audits/arranque-mejora-la-revision-sobrevive-a-ponerse-al-dia.md) |
