@@ -790,3 +790,23 @@ defectos:
       - tests/automation/test_reanudar_una_parada.py
       - tests/automation/test_reanudar_ejecutando_el_guion.py
       - tests/automation/test_sirius_apply_verdict.py
+  # ADR-200 (#608): ADR-191 construyo sirius_cola.py -la condicion de la cola- y
+  # dejo escrito, a proposito, que NO la cableaba: sin nadie que pusiera al dia la
+  # rama que espera, cablearla habria cambiado un atasco por otro peor. La razon
+  # era buena y quedo en el ADR, no en ninguna prueba, asi que la pieza se quedo
+  # sin gobernar nada. Noveno caso contado de «pieza correcta sin llamante» en
+  # este repositorio; test_piezas_con_llamante.py no podia verlo porque deriva su
+  # inventario de src/sirius_engine y esta pieza vive en scripts/automation/.
+  # Coste medido mientras tanto: 3 PR muertas de obsolescencia en 12 horas.
+  - id: H-200
+    titulo: La condicion de la cola existia desde ADR-191 y no la llamaba nadie, asi que la rama que esperaba no tenia quien la pusiera al dia
+    bloque: ciclo
+    gravedad: alta
+    estado: abierto
+    adr: 200
+    incidencia: 608
+    ficheros:
+      - .github/workflows/advance-sirius-after-quality.yml
+      - scripts/automation/sirius_reconcile.sh
+      - tests/automation/test_cola.py
+      - tests/automation/test_sirius_reconcile.py

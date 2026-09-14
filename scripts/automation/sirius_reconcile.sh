@@ -312,7 +312,7 @@ for issue in "${open_issues[@]:-}"; do
       cat "$body_file" "$comments_file" \
         | grep -oE "https://github\.com/${REPO}/pull/[0-9]+" | sort -u
     )
-    open_pr="" open_head="" open_draft="" open_mergeable="" pr_ilegible=""
+    open_pr="" open_head="" open_draft="" open_mergeable="" open_base="" pr_ilegible=""
     for url in "${pr_urls[@]:-}"; do
       [ -z "${url:-}" ] && continue
       prnum="${url##*/}"
@@ -326,7 +326,7 @@ for issue in "${open_issues[@]:-}"; do
       # borraba del recuento, y si era la unica el guion afirmaba despues "sin PR
       # abierta referenciada": la cuarta vez en este fichero que una lectura
       # caida se cuenta como un hecho. Se anota y se decide al salir del bucle.
-      if ! prjson="$(sirius_retry gh api "repos/${REPO}/pulls/${prnum}" --jq '{state: .state, head: .head.sha, draft: (.draft // false), mergeable: .mergeable}')"; then
+      if ! prjson="$(sirius_retry gh api "repos/${REPO}/pulls/${prnum}" --jq '{state: .state, head: .head.sha, draft: (.draft // false), mergeable: .mergeable, base: .base.ref}')"; then
         pr_ilegible="si"
         continue
       fi
@@ -340,6 +340,7 @@ for issue in "${open_issues[@]:-}"; do
         # interpreta; se guarda tal cual y el unico caso que decide algo es el
         # "false" explicito (ADR-194).
         open_mergeable="$(printf '%s' "$prjson" | jq -r '.mergeable')"
+        open_base="$(printf '%s' "$prjson" | jq -r '.base')"
       fi
     done
     # Basta con que UNA sea ilegible para no afirmar nada del conjunto, aunque
@@ -369,6 +370,32 @@ for issue in "${open_issues[@]:-}"; do
       elif [ -z "$conclusion" ]; then
         report AVISO "#${issue}: ci-pending; no se pudo leer el resultado de Quality para ${open_head}, no afirmo en que quedo."
       elif [ "$conclusion" = "success" ]; then
+        # ADR-200: LA RED DE SEGURIDAD NO PUEDE SALTARSE LA COLA.
+        #
+        # Desde ADR-200 el productor del evento -advance-sirius-after-quality.yml-
+        # ya NO transiciona a revision cuando la punta de la base no esta dentro
+        # de la rama: la deja esperar y la pone al dia. Si esto reconciliara sin
+        # mirar lo mismo, meteria en revision exactamente las ramas que aquel
+        # decidio detener, y encima con aspecto de haber arreglado algo.
+        #
+        # Es el error que los comentarios de este mismo fichero llaman «decidir
+        # por otro sistema sin leer su predicado» (auditoria #146), que ya costo
+        # una vez arrancar al revisor sobre una PR en borrador. El predicado
+        # cambio; esto lo lee. Fail-closed como el resto del guion: si no se
+        # puede AFIRMAR que la rama esta al dia, no se transiciona.
+        cola_cmp="$(mktemp)"
+        cola_motivo="no se pudo comparar la rama con su base"
+        cola_al_dia=0
+        if [ -n "${open_base:-}" ] && [ "$open_base" != "null" ] \
+           && sirius_retry gh api "repos/${REPO}/compare/${open_base}...${open_head}" >"$cola_cmp"; then
+          if cola_motivo="$(python3 "${SIRIUS_RECONCILE_DIR}/sirius_cola.py" "$cola_cmp")"; then
+            cola_al_dia=1
+          fi
+        fi
+        rm -f "$cola_cmp"
+        if [ "$cola_al_dia" != "1" ]; then
+          report EN-CURSO "#${issue}: ci-pending con Quality en verde, pero la rama espera su turno (${cola_motivo}); el ciclo la pone al dia y Quality volvera a correr (ADR-200)."
+        else
         report ATASCO "#${issue}: ci-pending pero Quality esta en verde para ${open_head}; se reintenta la transicion."
         marker="<!-- sirius-quality:${open_head}:success -->"
         tfile="$(mktemp)"
@@ -388,6 +415,7 @@ for issue in "${open_issues[@]:-}"; do
           overall_rc=1
         fi
         rm -f "$tfile"
+        fi
       elif [ "$conclusion" = "none" ]; then
         # «Sin resultado» tiene DOS significados y hasta ADR-194 se trataban
         # igual. El corriente es «todavia no ha llegado», y ahi no hay nada que

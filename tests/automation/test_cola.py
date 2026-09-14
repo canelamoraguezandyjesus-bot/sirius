@@ -189,3 +189,91 @@ def test_el_modulo_no_importa_nada_de_fuera_de_la_estandar() -> None:
     assert importados <= set(sys.stdlib_module_names), (
         f"solo biblioteca estándar; sobran {importados - set(sys.stdlib_module_names)}"
     )
+
+
+# --- La mitad que faltó las ocho veces: alguien que la llame -----------------
+
+AVANCE = RAIZ / ".github" / "workflows" / "advance-sirius-after-quality.yml"
+
+
+def _avance_sin_comentarios() -> str:
+    """El workflow sin sus líneas de comentario.
+
+    Buscar el nombre del módulo en el fichero entero no vale: la cabecera de
+    este workflow y sus comentarios explican la historia, así que una mutación
+    que quitara la llamada seguiría encontrando el nombre escrito. Es la misma
+    lección que `_codigo_sin_comentarios` en test_reanudar_una_parada.py: una
+    prueba que se conforma con que algo se MENCIONE certifica documentación.
+    """
+    return "\n".join(
+        linea
+        for linea in AVANCE.read_text(encoding="utf-8").splitlines()
+        if not linea.lstrip().startswith("#")
+    )
+
+
+def test_el_avance_llama_a_la_cola() -> None:
+    """ADR-191 construyó la condición y dejó escrito que NO la cableaba.
+
+    Ocho veces ha pasado ya en esta casa que una pieza correcta se quedara sin
+    llamante, con sus pruebas en verde vigilando código que no se ejecutaba.
+    `tests/automation/test_piezas_con_llamante.py` cierra esa clase para los
+    módulos de `src/sirius_engine`; `scripts/automation/` queda fuera de su
+    inventario, y ahí es donde vive esta pieza. Así que aquí va su llamante.
+    """
+    assert "sirius_cola.py" in _avance_sin_comentarios(), (
+        "`sirius_cola.py` decide si una rama puede entrar a revisión y el "
+        "workflow que repone `sirius:review-requested` no lo llama: la "
+        "condición existiría sin gobernar nada"
+    )
+
+
+def test_la_cola_se_consulta_antes_de_reponer_la_revision() -> None:
+    """Preguntar después de haber repuesto la etiqueta no es preguntar.
+
+    Sin esta, una mutación que dejara la llamada DESPUÉS de la transición
+    pasaría la prueba de arriba en verde y la rama entraría a revisión igual.
+    """
+    texto = _avance_sin_comentarios()
+    consulta = texto.find("sirius_cola.py")
+    repone = texto.find('"sirius:review-requested"')
+    assert consulta != -1, "no se encontró la llamada a la cola"
+    assert repone != -1, "no se encontró la transición que repone la revisión"
+    assert consulta < repone, (
+        "la cola se consulta DESPUÉS de reponer `sirius:review-requested`: "
+        "la rama ya habría entrado a revisión cuando se pregunta si podía"
+    )
+
+
+def test_la_puesta_al_dia_no_empuja_con_el_token_del_workflow() -> None:
+    """Un push con `GITHUB_TOKEN` no dispara workflows (ADR-183).
+
+    Si la rama se pusiera al día con él, Quality no volvería a correr y la rama
+    quedaría esperando otra vez: el mismo atasco con otra cara. Por eso el
+    checkout que hace la puesta al día lleva el PAT, igual que el del corrector.
+    """
+    import yaml
+
+    flujo = yaml.safe_load(AVANCE.read_text(encoding="utf-8"))
+    pasos = [
+        paso
+        for trabajo in flujo["jobs"].values()
+        for paso in trabajo.get("steps", [])
+        if str(paso.get("uses", "")).startswith("actions/checkout")
+    ]
+    con_pat = [
+        paso for paso in pasos if "SIRIUS_BOT_TOKEN" in str(paso.get("with", {}).get("token", ""))
+    ]
+    assert con_pat, (
+        "ningún checkout de este workflow lleva el PAT: un push hecho con "
+        "`GITHUB_TOKEN` no dispara workflows, así que Quality no volvería a "
+        "correr y la rama se quedaría esperando otra vez (ADR-183)"
+    )
+    for paso in con_pat:
+        assert paso.get("with", {}).get("persist-credentials") is True, (
+            "el checkout que trae el PAT tiene que persistir credenciales o el "
+            "push no podrá autenticarse"
+        )
+    assert "--force" not in _avance_sin_comentarios(), (
+        "la puesta al día nunca reescribe la historia de una rama que no es suya"
+    )
