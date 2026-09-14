@@ -66,16 +66,79 @@ def test_detecta_la_incidencia_246_seis_rondas_sobre_el_mismo_archivo() -> None:
     resultado = detectar_familia_repetida(registros)
 
     assert resultado.hay_familia_repetida
-    # La ronda 4 no cuenta para este archivo: su hallazgo lleva la anotación
-    # de la revisora pegada al nombre ("... (ruta_citada líneas 132-146)"),
-    # así que normaliza a una ubicación distinta -limitación conocida y
-    # aceptada, documentada en el módulo-. El tramo 5-6 que queda tras el
-    # corte no llega al umbral (longitud 2), así que el único tramo
-    # detectado es 1-3.
+    # LAS SEIS RONDAS, y esto es lo que ADR-197 cambia sobre un caso REAL que
+    # ya estaba en la suite. La ronda 4 lleva la anotación de la revisora
+    # pegada al nombre ("... (ruta_citada líneas 132-146)"); con el recorte
+    # anclado de `_normalize_location` eso normalizaba a otra ubicación, el
+    # tramo se partía en 1-3 y 5-6, y el segundo no llegaba al umbral. Este
+    # párrafo decía «limitación conocida y aceptada» — y era exactamente el
+    # defecto que la mina de septiembre midió seis veces más.
+    #
+    # Agrupando por la ruta que `parse_archivo_location` extrae, las seis
+    # rondas son el mismo archivo y el tramo sale entero, que es lo que la
+    # incidencia #246 fue de verdad: seis rondas sin resolver.
     assert len(resultado.evidencias) == 1
     evidencia = resultado.evidencias[0]
     assert evidencia.archivo == archivo
-    assert evidencia.rondas == (1, 2, 3)
+    assert evidencia.rondas == (1, 2, 3, 4, 5, 6)
+
+
+def test_agrupa_por_la_ruta_aunque_la_cita_no_acabe_en_el_numero_de_linea() -> None:
+    """#601, con las tres citas REALES que la mina de septiembre midió.
+
+    Son las tres formas en que los revisores escribieron el mismo fichero en
+    tres rondas seguidas. La tercera no termina en ``:NNN``, así que el
+    recorte anclado de ``_normalize_location`` la contaba como otro archivo,
+    el tramo se rompía en la ronda 2 y el aviso nunca salía.
+
+    Es uno de los seis falsos negativos que §4.4 de
+    ``docs/audits/SIRIUS_MINA_APRENDIZAJE_OPERATIVO_2026-09-14.md`` documenta,
+    y el que aquel informe eligió como más difícil de los seis.
+    """
+    ruta = "src/sirius_engine/intent_interpreter.py"
+    registros = [
+        _registro(
+            1,
+            [
+                _hallazgo(ruta, "a1"),
+                _hallazgo(f"{ruta}:148 (_NEGADORES 148-182, _va_negado 226-243)", "a2"),
+            ],
+        ),
+        _registro(
+            2,
+            [
+                _hallazgo(ruta, "b1"),
+                _hallazgo(f"{ruta}:153 y :181 (_NEGADORES 156-184)", "b2"),
+            ],
+        ),
+        _registro(3, [_hallazgo(f"{ruta}:185-205 y :230", "c1")]),
+    ]
+
+    resultado = detectar_familia_repetida(registros)
+
+    assert resultado.hay_familia_repetida, (
+        "las tres rondas citan el mismo fichero; que la tercera no acabe en «:NNN» "
+        "no lo convierte en otro archivo (ADR-197)"
+    )
+    assert len(resultado.evidencias) == 1
+    assert resultado.evidencias[0].archivo == ruta
+    assert resultado.evidencias[0].rondas == (1, 2, 3)
+
+
+def test_una_cita_que_no_tiene_ruta_reconocible_se_agrupa_consigo_misma() -> None:
+    """Fallo abierto: sin ruta reconocible, el texto entero hace de clave.
+
+    `parse_archivo_location` devuelve el texto tal cual cuando no reconoce
+    ninguna ruta, y eso es lo que se quiere: una cita rara sigue contando
+    como su propia ubicación -que es lo que hacía el recorte anterior- en vez
+    de desaparecer del recuento y llevarse por delante un tramo real.
+    """
+    registros = [_registro(n, [_hallazgo("el modulo de memoria", f"x{n}")]) for n in (1, 2, 3)]
+
+    resultado = detectar_familia_repetida(registros)
+
+    assert resultado.hay_familia_repetida
+    assert resultado.evidencias[0].archivo == "el modulo de memoria"
 
 
 def test_detecta_la_incidencia_211_la_propia_revision_confirma_la_familia() -> None:

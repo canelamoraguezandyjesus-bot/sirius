@@ -732,3 +732,23 @@ defectos:
       - docs/decisions/ADR-195-podar-significa-archivar-en-este-repositorio-no-se-borra-nada.md
       - tests/automation/test_registro_de_defectos.py
       - docs/investigaciones/2026-09-11-flujos-reales-de-agentes-comparados-con-el-motor.md
+
+  # ADR-197 (#638): el detector de familia repetida agrupaba con el recorte
+  # anclado de `_normalize_location`, que solo quita el sufijo de linea cuando la
+  # cadena TERMINA en el. Los revisores escriben «fichero.py:185-205 y :230», asi
+  # que la misma ruta contaba como otro archivo y el tramo se rompia. Medido por
+  # la mina de septiembre: 6 familias reales no vistas de cada 14. La pieza que
+  # lo resuelve -parse_archivo_location- existe desde ADR-133 y el detector no la
+  # llamaba; y la propia suite documentaba el defecto como «limitacion conocida y
+  # aceptada» sobre un caso real de seis rondas.
+  - id: H-197
+    titulo: El detector de familia repetida agrupaba por el recorte anclado y no veia 6 familias reales de cada 14
+    bloque: motor
+    gravedad: media
+    estado: abierto
+    adr: 197
+    incidencia: 638
+    ficheros:
+      - src/sirius_engine/round_family_detector.py
+      - scripts/automation/sirius_convergence.py
+      - tests/engine/test_round_family_detector.py

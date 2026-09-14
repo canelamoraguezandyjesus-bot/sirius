@@ -26,11 +26,11 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **190**.
+- Decisiones (ADR): **191**.
 - Bloques del motor: 17 cerrado, 1 fuera_de_alcance, 2 pendiente.
-- Defectos registrados: 1 abierto, 48 cerrado.
+- Defectos registrados: 2 abierto, 48 cerrado.
 - Investigaciones: **9** (fotos con fecha; caducan).
-- Documentos: **141**, de los que **95** no declaran fecha.
+- Documentos: **142**, de los que **96** no declaran fecha.
 
 ## Qué se decidió: los ADR, del más reciente al más antiguo
 
@@ -47,6 +47,7 @@ huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| [197](docs/decisions/ADR-197-el-detector-de-familia-repetida-agrupa-por-la-ruta-que-el-revisor-escribe-no-por-el-recorte-anclado.md) | 2026-09-14 | PROPUESTO | El detector de familia repetida agrupa por la ruta que el revisor escribe, no por el recorte anclado | El detector agrupa por la ruta que encabeza la cita, extraída con `parse_archivo_location`, y normalizada con `_normalize_text` para que la comparación siga siendo insensible a mayúsculas y espacios. |
 | [196](docs/decisions/ADR-196-la-vista-de-memoria-lleva-el-indice-completo-de-decisiones-y-el-resumen-solo-de-las-vigentes-como-metodo.md) | 2026-09-14 | PROPUESTO | La vista de memoria lleva el índice completo de decisiones, y el resumen solo de las que siguen vigentes como método | El índice se queda entero; la copia del resumen, no. |
 | [195](docs/decisions/ADR-195-podar-significa-archivar-en-este-repositorio-no-se-borra-nada.md) | 2026-09-14 | PROPUESTO | «Podar» significa archivar: en este repositorio no se borra nada | (sin sección Decisión) |
 | [194](docs/decisions/ADR-194-ci-pending-distingue-quality-todavia-no-ha-contestado-de-quality-no-va-a-contestar-nunca.md) | 2026-09-14 | PROPUESTO | `ci-pending` distingue «Quality todavía no ha contestado» de «Quality no va a contestar nunca» | El caso «sin resultado» se parte en dos, y solo lo parte un hecho explícito. |
@@ -259,6 +260,7 @@ de memoria.
 | `guarda-ampliada-a-un-corpus-que-no-es-el-suyo` | 1 | sí | [190](docs/decisions/ADR-190-la-guarda-de-citas-no-sale-de-docs-decisions-medidos-590-citas-y-23-rotas-fuera-del-registro-cero-son-defectos-de-este-arbol.md) |
 | `guardian-que-mide-posicion-en-vez-de-estructura` | 1 | sí | [187](docs/decisions/ADR-187-una-revision-sobrevive-a-ponerse-al-dia-con-main-si-el-trabajo-propio-de-la-rama-no-cambia.md) |
 | `interruptor-que-enciende-mas-de-lo-que-se-puede-medir` | 1 | sí | [185](docs/decisions/ADR-185-la-puerta-de-la-memoria-se-parte-en-tres-interruptores-antes-de-abrirla.md) |
+| `pieza-correcta-a-la-que-no-llama-quien-la-necesita` | 1 | sí | [197](docs/decisions/ADR-197-el-detector-de-familia-repetida-agrupa-por-la-ruta-que-el-revisor-escribe-no-por-el-recorte-anclado.md) |
 | `plan-que-hay-que-terminar-de-una-sentada` | 1 | sí | [176](docs/decisions/ADR-176-el-cierre-de-una-incidencia-se-retoma-desde-donde-se-quedo.md) |
 | `prosa-que-el-cambio-deja-falsa` | 1 | no en todas | [177](docs/decisions/ADR-177-la-ampliacion-por-categoria-entra-por-una-senal-explicita-de-la-peticion-no-por-la-subcadena-contexto.md) |
 | `regla-del-propietario-que-solo-vive-en-una-conversacion` | 1 | sí | [195](docs/decisions/ADR-195-podar-significa-archivar-en-este-repositorio-no-se-borra-nada.md) |
@@ -312,6 +314,10 @@ de memoria.
 
 - **[ADR-185](docs/decisions/ADR-185-la-puerta-de-la-memoria-se-parte-en-tres-interruptores-antes-de-abrirla.md)** — poner una sola puerta delante de varias piezas (lo hace cumplir `tests/unit/test_composition_root_relevance_gate.py`).
 
+### `pieza-correcta-a-la-que-no-llama-quien-la-necesita`
+
+- **[ADR-197](docs/decisions/ADR-197-el-detector-de-familia-repetida-agrupa-por-la-ruta-que-el-revisor-escribe-no-por-el-recorte-anclado.md)** — dos piezas del mismo árbol leen la misma clase de dato (lo hace cumplir `tests/engine/test_round_family_detector.py`).
+
 ### `plan-que-hay-que-terminar-de-una-sentada`
 
 - **[ADR-176](docs/decisions/ADR-176-el-cierre-de-una-incidencia-se-retoma-desde-donde-se-quedo.md)** — escribir un plan de varios pasos contra un almacén que los aplica uno a uno, y comprobar la precondición del primero en vez del estado real en que el motor está, de modo que una interrupción a la mitad deja el trabajo atascado para siempre. (lo hace cumplir `tests/engine/test_reflect.py`).
@@ -364,6 +370,7 @@ cerrados; el recuento completo está arriba.
 | Defecto | Estado | Título |
 |---|---|---|
 | H-43 | abierto | Una rama se fusionaba sin que nadie probara su combinacion con main |
+| H-197 | abierto | El detector de familia repetida agrupaba por el recorte anclado y no veia 6 familias reales de cada 14 |
 
 ## Las investigaciones: fotos con fecha, que caducan
 
@@ -406,6 +413,7 @@ nada por su cuenta. «Sin fecha declarada» es un aviso, no un dato.
 | 2026-08-28 | [Nota de arranque — el medidor cuenta un registro que Tavily no alimenta](docs/audits/arranque-contar-las-dos-fuentes.md) |
 | 2026-08-27 | [Nota de arranque — una contradicción de etiquetas no es una divergencia](docs/audits/arranque-contradiccion-no-es-divergencia.md) |
 | 2026-08-27 | [Nota de arranque — que el banco diga por qué no midió](docs/audits/arranque-el-banco-dice-por-que.md) |
+| sin fecha declarada | [Nota de arranque — el detector de familia agrupa por la ruta, no por el recorte final](docs/audits/arranque-el-detector-de-familia-agrupa-por-la-ruta.md) |
 | sin fecha declarada | [Nota de arranque — el doble de `gh` acepta lo que el `gh` real rechaza](docs/audits/arranque-el-doble-de-gh-rechaza-lo-que-el-real-rechaza.md) |
 | sin fecha declarada | [Nota de arranque — el identificador de un defecto deja de escribirse a mano](docs/audits/arranque-el-identificador-de-defecto-no-se-escribe-a-mano.md) |
 | 2026-08-28 | [Nota de arranque — ¿Está el motor preparado para recibir órdenes reales?](docs/audits/arranque-el-motor-esta-preparado.md) |

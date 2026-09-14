@@ -63,7 +63,8 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from sirius_engine.round_history import _normalize_location
+from sirius_engine.drip_guard import parse_archivo_location
+from sirius_engine.round_history import _normalize_text
 
 #: Medido sobre las 14 incidencias reales del repositorio con más de una
 #: ronda (ver el docstring del módulo): 3 rondas consecutivas sobre el mismo
@@ -103,6 +104,18 @@ class DeteccionFamiliaRepetida:
         return bool(self.evidencias)
 
 
+def _ruta_del_hallazgo(valor: object) -> str:
+    """La ruta que encabeza la cita, normalizada, para agrupar por archivo.
+
+    Fallo abierto por construcción: cuando `parse_archivo_location` no
+    reconoce ninguna ruta devuelve el texto entero, así que una cita rara se
+    agrupa consigo misma -que es lo que hacía el recorte anterior- en vez de
+    desaparecer del recuento.
+    """
+    ruta, _ = parse_archivo_location(valor)
+    return _normalize_text(ruta)
+
+
 def detectar_familia_repetida(
     registros: Sequence[Mapping[str, Any]],
 ) -> DeteccionFamiliaRepetida:
@@ -114,18 +127,28 @@ def detectar_familia_repetida(
     entrada no importa -se reordena por ``round`- así que un historial ya
     cronológico y uno que no lo fuera dan el mismo resultado.
 
-    La ubicación se normaliza con
-    :func:`sirius_engine.round_history._normalize_location` -la misma
-    función que usa la huella de ``sirius_convergence.fingerprint``-, para
-    que un sufijo de línea (``:120``, que se desplaza con cualquier edición
-    anterior del archivo) no separe artificialmente dos apariciones del
-    mismo archivo.
+    La ubicación se agrupa por la RUTA que encabeza el campo ``archivo``,
+    extraída con :func:`sirius_engine.drip_guard.parse_archivo_location` -la
+    misma pieza que usa el guardián de goteo, construida para la incidencia
+    #523 precisamente porque los revisores no escriben la cita como una
+    lectura mecánica ingenua esperaría-.
+
+    Antes se usaba ``round_history._normalize_location``, que solo recorta el
+    sufijo de línea cuando la cadena TERMINA en él. Los revisores escriben
+    ``fichero.py:185-205 y :230``, así que la misma ruta contaba como otro
+    archivo y el tramo se rompía: medido en la mina de septiembre, seis
+    familias reales que el detector no llegaba a ver, y las seis por eso
+    (ADR-197).
+
+    ``_normalize_location`` NO cambia y se sigue usando donde estaba: la
+    comparte ``sirius_convergence.fingerprint``, que es el mecanismo de
+    *sin-progreso*, otro distinto y no medido aquí.
     """
     archivo_a_rondas: dict[str, list[int]] = {}
     for registro in sorted(registros, key=lambda registro: int(registro["round"])):
         numero = int(registro["round"])
         archivos_en_ronda = {
-            _normalize_location(hallazgo["file"])
+            _ruta_del_hallazgo(hallazgo["file"])
             for hallazgo in registro["findings"]
             if hallazgo.get("file")
         }
