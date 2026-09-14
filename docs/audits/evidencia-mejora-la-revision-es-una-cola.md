@@ -81,3 +81,48 @@ Es la misma forma que H-18 (#311): un comprobador que pide algo y no reconoce el
 sitio donde eso vive de verdad enseña a saltárselo. No se arregla en esta rama
 —`.claude/**` está en la lista `deny` y el arreglo es de otro alcance—; queda
 anotado aquí para que no se pierda.
+
+## El hallazgo que decide la forma: «esperar» no puede ser una parada
+
+La puerta de `review-sirius-work.yml` tiene una sola forma de decir que no:
+`stop_gate`, que aplica **`sirius:failed-safely`** (líneas 139-151). Eso es un
+estado **terminal**: la incidencia se para y no vuelve sola.
+
+Si la cola dijera «todavía no te toca» por ahí, **mataría a toda rama que hiciera
+cola**. Cuanto mejor funcionara la cola, más trabajo muerto dejaría —exactamente
+la forma del defecto que la #613 acaba de cerrar para la puerta de sensibilidad—.
+
+Así que la cola **no puede ser una parada**. Tiene que ser una **no-transición**:
+la etiqueta de revisión simplemente no se aplica todavía, y la incidencia se queda
+donde ya estaba, en `sirius:ci-pending`, que no es un estado terminal y del que el
+motor sale solo cuando la condición se cumple.
+
+Eso mueve la puerta de sitio: no va en `review-sirius-work.yml`, que solo sabe
+decir que no de forma terminal, sino en **`advance-sirius-after-quality.yml`**,
+que es quien decide aplicar `sirius:review-requested` cuando Quality da verde.
+
+## La condición, escrita
+
+**Una rama entra a revisión si, y solo si, la punta de `main` es ancestro de su
+head.** Nada más. Ni turnos, ni tickets, ni cerrojos: dos datos que se leen y se
+comparan en el momento.
+
+Y de esa sola condición sale la cola que el propietario describió, sin añadir
+nada:
+
+- Si A y B están las dos al día y A se fusiona, B **deja de estarlo**
+  automáticamente. Tiene que ponerse al día para seguir, y mientras tanto no
+  avanza. Una a una.
+- Ponerse al día es gratis desde ADR-187: si el trabajo propio de B no cambió, su
+  aprobación sobrevive. Sin esa pieza esto cambiaría un coste por otro.
+- Nadie tiene que soltar nada. Un cerrojo se queda pillado cuando muere quien lo
+  tenía —y aquí los procesos mueren—; una condición derivada no puede quedarse
+  pillada porque no guarda nada.
+- El orden que el propietario pidió —FIFO, la que lleve más tiempo esperando— no
+  necesita un registro aparte: sale de ordenar por cuándo entró en espera, un dato
+  que ya existe.
+
+**Lo que esta condición NO cubre, y hay que decidir en el ADR:** `main` puede
+moverse mientras la revisión está en curso. La condición hay que volver a
+comprobarla antes de fusionar, o el caso de esta noche —#611 aprobada contra un
+`main` y aterrizando en otro— vuelve por la puerta de atrás.
