@@ -601,6 +601,13 @@ defectos:
       - src/sirius_engine/cli.py
       - tests/engine/test_decision_cli.py
 
+  # SIGUE ABIERTO A PROPOSITO, y no se cierra en el barrido del 14-09-2026: el
+  # ADR-191 fusionado trae la CONDICION -sirius_cola.py- pero dejo escrito que NO
+  # cablea la puerta, porque advance-sirius-after-quality.yml tiene contents:read
+  # y no puede poner al dia la rama que espera. Mientras nadie la cablee, una
+  # rama se puede seguir fusionando sin que su combinacion con main la haya
+  # probado nadie, que es literalmente lo que dice el titulo. La decision que lo
+  # desbloquea esta puesta en la #608.
   - id: H-43
     titulo: Una rama se fusionaba sin que nadie probara su combinacion con main
     bloque: automatizacion
@@ -616,7 +623,8 @@ defectos:
     titulo: El identificador de un defecto se elegia a mano y dos ramas elegian el mismo
     bloque: automatizacion
     gravedad: media
-    estado: abierto
+    estado: cerrado
+    cerrado_por: c3f2884eb00264943fac0833ce813bf0d2456b7d
     adr: 192
     incidencia: 608
     ficheros:
@@ -641,7 +649,8 @@ defectos:
     titulo: El hueco declarado de la prosa de docs/ llevaba sin medir si taparlo salia a cuenta
     bloque: ciclo
     gravedad: baja
-    estado: abierto
+    estado: cerrado
+    cerrado_por: 2fd882dfadef4d92cc9ae0a63003ce72b0de17d2
     adr: 190
     incidencia: 619
     ficheros:
@@ -661,7 +670,8 @@ defectos:
     titulo: El doble de gh aceptaba una invocacion que el gh real rechaza y la red de seguridad de estados atascados llevaba 35 dias ciega
     bloque: automatizacion
     gravedad: alta
-    estado: abierto
+    estado: cerrado
+    cerrado_por: 345dc8542885aa5a118ddde7927f7d77fb0d4f54
     adr: 193
     incidencia: 625
     ficheros:
@@ -678,7 +688,8 @@ defectos:
     titulo: Una incidencia en ci-pending con la PR en conflicto esperaba en silencio un run de Quality que no podia existir
     bloque: automatizacion
     gravedad: media
-    estado: abierto
+    estado: cerrado
+    cerrado_por: 8324a65a07e55bb0223a714f578b62f1109c2d64
     adr: 194
     incidencia: 628
     ficheros:
@@ -695,7 +706,8 @@ defectos:
     titulo: La vista de memoria copiaba el resumen de cada decision para siempre y dejo de caber en una sola lectura
     bloque: motor
     gravedad: alta
-    estado: abierto
+    estado: cerrado
+    cerrado_por: 0bc8ed1466d7b891b23189debd71746425c7460b
     adr: 196
     incidencia: 632
     ficheros:
@@ -712,7 +724,8 @@ defectos:
     titulo: Una regla del propietario -podar es archivar, aqui no se borra nada- no estaba escrita en ninguna parte del arbol
     bloque: ciclo
     gravedad: media
-    estado: abierto
+    estado: cerrado
+    cerrado_por: ab801b856725f69a573fe850d5da6c6679e7314d
     adr: 195
     incidencia: 630
     ficheros:
