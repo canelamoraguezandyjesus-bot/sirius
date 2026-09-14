@@ -269,6 +269,86 @@ def test_trabajos_lista_lo_que_el_diario_ya_contiene_sin_escribir_en_el(
     assert diario.read_bytes() == antes, "consultar no puede escribir en el diario"
 
 
+def test_trabajos_dice_como_se_resuelve_lo_que_espera_decision(tmp_path: Path) -> None:
+    """ADR-189. El camino que ADR-184 abrió -«abre la sesión y teclea /trabajos»-
+    se acababa exactamente aquí: el propietario veía la parada listada y no tenía
+    ninguna vía para resolverla. Las cuatro paradas que el diario del motor
+    contenía el 13-09-2026 llevaban hasta diez días así.
+
+    La lista no sabe cuáles tienen incidencia detrás -eso lo sabe el diario de
+    despacho, que esta sesión no lee-, así que el aviso lleva su condición puesta
+    y nombra también al reflector para el otro caso.
+
+    Antes del cambio fallaba en la primera aserción, con ``AssertionError``: la
+    salida de `/trabajos` no nombraba `sirius-decidir` en ningún sitio.
+    """
+    diario = tmp_path / "diario.jsonl"
+    DurableWorkEngineStore(diario).create_and_escalate_work_item(
+        work_id="WI-PARADO",
+        peticion_original="Corrige el arranque y borra la base de produccion",
+        objetivo="objetivo de prueba",
+        contexto_origen=(),
+        entregable="un entregable",
+        criterio_terminado="existe",
+        limites={},
+        prioridad=3,
+        clase=WorkItemClass.PROGRAMACION,
+        now=datetime(2026, 8, 21, 3, 0, tzinfo=UTC),
+    )
+
+    codigo, salida = _ejecutar(
+        "--diario", str(diario), "--raiz", str(tmp_path), entrada="/trabajos\n"
+    )
+
+    assert codigo == 0
+    assert "sirius-decidir" in salida, "la salida de la parada tiene que estar al alcance"
+    assert "--terminar" in salida
+    assert "sirius-reflejar" in salida, "y el otro caso, el que sí tiene incidencia"
+    # La orden tiene que servir copiada TAL CUAL: sin `--diario` buscaría el
+    # identificador en el diario que `sirius-decidir` resolviera por su cuenta
+    # -esta sesión se abrió con otro- y sin `--ejecutar` solo haría el ensayo.
+    # Es el mismo criterio que la parada de `sirius-despachar` ya tiene fijado
+    # en `test_una_parada_dice_con_que_orden_se_sale_de_ella`.
+    (orden,) = [linea for linea in salida.splitlines() if "sirius-decidir" in linea]
+    assert f"--diario {diario}" in orden, orden
+    assert "--ejecutar" in orden, orden
+
+
+def test_trabajos_no_habla_de_decisiones_cuando_no_hay_ninguna_esperando(
+    tmp_path: Path,
+) -> None:
+    """La otra mitad: el aviso no sale cuando no hay nada que decidir.
+
+    Un aviso incondicional le diría a quien lista cinco trabajos sanos que alguno
+    espera su decisión, que es falso y es la familia de ADR-184 al revés.
+
+    Antes del cambio no existía ningún aviso, así que esta prueba pasaba sin
+    decir nada; se la vio caer poniendo el aviso fuera del `if`
+    (``AssertionError: assert 'sirius-decidir' not in ...``).
+    """
+    diario = tmp_path / "diario.jsonl"
+    DurableWorkEngineStore(diario).create_work_item(
+        work_id="WI-SANO",
+        peticion_original="algo que alguien encargó antes",
+        objetivo="objetivo de prueba",
+        contexto_origen=(),
+        entregable="un entregable",
+        criterio_terminado="existe",
+        limites={},
+        prioridad=3,
+        clase=WorkItemClass.PROGRAMACION,
+        now=datetime(2026, 8, 21, 3, 0, tzinfo=UTC),
+    )
+
+    codigo, salida = _ejecutar(
+        "--diario", str(diario), "--raiz", str(tmp_path), entrada="/trabajos\n"
+    )
+
+    assert codigo == 0
+    assert "WI-SANO" in salida
+    assert "sirius-decidir" not in salida
+
+
 def test_trabajos_sobre_un_diario_que_todavia_no_existe_no_lo_crea(tmp_path: Path) -> None:
     diario = tmp_path / "sin_estrenar.jsonl"
     codigo, salida = _ejecutar(

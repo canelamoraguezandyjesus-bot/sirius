@@ -116,7 +116,56 @@ class _EscritorDeEnsayo:
         return None
 
 
-def _ruta_copiable(ruta: Path) -> str:
+def _por_que_no_se_puede_continuar(
+    *, alcance_vetado: str | None, clase: WorkItemClass | None
+) -> tuple[str, ...] | None:
+    """Por qué «--continuar» NO puede despachar esta parada, o ``None`` si sí puede.
+
+    ``alcance_vetado`` NO es el ``prefijo_vetado`` que gobierna el texto de
+    atribución de ADR-188: ese se condiciona a que la QUINTA causa fuera la que
+    paró, y aquí esa pregunta sobra. Las cuatro causas anteriores ganan a la
+    quinta cuando una orden dispara las dos cosas -«Corrige el arranque y borra
+    ``.github/workflows/quality.yml``» sale por destructiva-, pero el alcance
+    vetado sigue estando ahí y el despacho moriría en el push igual. Lo que
+    decide el ofrecimiento es el alcance, no la causa.
+
+    La condición es «puede despacharse», no «no es la quinta causa»:
+    `decision_cli._no_se_puede_despachar` rechaza «--continuar» con código 5 por
+    tres motivos más -clase fuera de `TABLA_ACTIVACION`, carril retirado y orden
+    no enlazada-, y los dos primeros son alcanzables por el mismo camino que
+    imprime este bloque. Una orden sensible que el intérprete v0 no clasifica
+    como programación -«Borra la base de producción»- para por la cuarta causa y
+    sale con clase «consulta-larga», que no tiene despachador: ofrecerle
+    «--continuar» es prometer un despacho que no va a ocurrir, la misma familia
+    que prometer un sitio vacío (ADR-184, ADR-188, ADR-189).
+
+    La tercera -orden no enlazada- no se comprueba aquí porque no puede fallar:
+    `aplicar_decision` acaba de guardar la orden del propietario en la evidencia
+    del trabajo que este bloque describe.
+    """
+    if alcance_vetado is not None:
+        return (
+            "(«--continuar» no está disponible en esta parada: el despacho",
+            " moriría en el push, como la #607. La vía es la sesión interactiva.)",
+        )
+    if clase is None or clase not in TABLA_ACTIVACION:
+        nombre = clase.value if clase is not None else "-"
+        return (
+            f"(«--continuar» no está disponible: la clase «{nombre}» no tiene",
+            " despachador (contrato §12.4), así que reanudarlo dejaría el trabajo",
+            " ACTIVE sin nada que lo atienda. La salida que sí tiene es «--terminar».)",
+        )
+    retirado = carril_retirado(clase)
+    if retirado is not None:
+        return (
+            f"(«--continuar» no está disponible: el carril de «{clase.value}» está",
+            " retirado (ADR-161/ADR-163), así que el despacho no ocurriría.)",
+            *(f" {parrafo}" for parrafo in retirado.explicacion().splitlines()),
+        )
+    return None
+
+
+def ruta_copiable(ruta: Path) -> str:
     """``ruta`` tal y como hay que teclearla en una consola, entrecomillada si hace falta.
 
     Sin esto, una ruta con espacios -«/tmp/Sirius motor/diario.jsonl»- se parte
@@ -124,11 +173,14 @@ def _ruta_copiable(ruta: Path) -> str:
     resto al `mensaje` posicional, y `sirius-motor` abre otro diario sin
     protestar. `shlex.quote` deja la ruta intacta cuando no lo necesita, que es
     el caso corriente.
+
+    Pública porque la usa también ``sirius-decidir`` (ADR-189), que escribe la
+    misma clase de instrucción para copiar.
     """
     return shlex.quote(str(ruta))
 
 
-def _diario_de_despacho(diario_del_motor: Path) -> Path:
+def diario_de_despacho(diario_del_motor: Path) -> Path:
     """El diario del despachador, hermano del del motor y en su mismo directorio.
 
     Diario propio y no el del motor por el mismo criterio que separó el del
@@ -136,6 +188,12 @@ def _diario_de_despacho(diario_del_motor: Path) -> Path:
     del ``WorkEngineStore`` modela transiciones tipadas de ``WorkItem``/``Run``
     y no tiene sitio para «qué orden» ni «qué incidencia» nació de una
     activación.
+
+    Pública desde ADR-189 porque ``sirius-decidir`` necesita ESTE diario -el que
+    sabe si una parada tiene incidencia detrás- y no otro. Se importa en vez de
+    copiarse: de esta regla hay ya cuatro copias en el motor
+    (``reflect_cli``, ``seven_day_streak_cli``, ``memoria_cli``), y una quinta
+    sería la `lista-a-mano` que ADR-178 cerró.
     """
     return diario_del_motor.with_name(f"{diario_del_motor.stem}-despacho.jsonl")
 
@@ -161,7 +219,7 @@ def _work_id(ahora: datetime) -> str:
 _MOTIVO_DE_LA_QUINTA_CAUSA = "el alcance declarado cae bajo"
 
 
-def _paro_la_quinta_causa(señal: IntentSignal) -> bool:
+def paro_la_quinta_causa(señal: IntentSignal) -> bool:
     """¿Fue la quinta causa (ADR-188) la que paró esta orden, y no una de las cuatro?
 
     La pregunta no es «¿la orden nombra un alcance vetado?». Una orden puede
@@ -169,6 +227,10 @@ def _paro_la_quinta_causa(señal: IntentSignal) -> bool:
     -es lo que fija `test_las_cuatro_causas_anteriores_siguen_ganando_a_la_quinta`-.
     Mirando solo el texto, el comando contaba esa parada como si fuera de la
     quinta y daba instrucciones que no llevaban a ninguna parte.
+
+    Pública desde ADR-189: ``sirius-decidir`` hace la misma pregunta sobre la
+    ``peticion_original`` guardada para negarse a REANUDAR una parada de la
+    quinta causa, que es la única que no puede salir por el ciclo automático.
     """
     return (señal.motivo_sensibilidad or "").startswith(_MOTIVO_DE_LA_QUINTA_CAUSA)
 
@@ -291,7 +353,7 @@ def main(
     if args.ejecutar:
         diario_efectivo = resolver_diario(argumento=args.diario, entorno=entorno)
         store = DurableWorkEngineStore(diario_efectivo)
-        journal = DurableDispatchJournal(_diario_de_despacho(diario_efectivo))
+        journal = DurableDispatchJournal(diario_de_despacho(diario_efectivo))
     else:
         store = InMemoryWorkEngineStore()
         journal = InMemoryDispatchJournal()
@@ -356,7 +418,7 @@ def main(
         #: familia que prometer un sitio vacío (ADR-184, ADR-188).
         prefijo_vetado = (
             alcance_que_el_motor_no_puede_escribir(args.orden)
-            if _paro_la_quinta_causa(señal)
+            if paro_la_quinta_causa(señal)
             else None
         )
         linea("He creado el trabajo, pero NO lo he despachado: necesita tu decisión.")
@@ -402,9 +464,46 @@ def main(
             linea("detrás. No se borra ni se cancela solo: el diario es append-only y")
             linea("cancelarlo es tu decisión, no la de este comando.")
             linea("Para verlo junto a todo lo demás que espera decisión, abre la sesión")
-            linea(
-                f"«sirius-motor --diario {_ruta_copiable(diario_efectivo)}» y teclea «/trabajos»."
+            linea(f"«sirius-motor --diario {ruta_copiable(diario_efectivo)}» y teclea «/trabajos».")
+            # ADR-189: decir dónde queda el trabajo sin decir cómo salir de ahí
+            # dejaba el camino de ADR-184 cortado justo al final. Las cuatro
+            # paradas que el diario tenía el 13-09-2026 llevaban hasta diez días
+            # ahí, y ninguna podía salir: de `needs_decision` solo sale
+            # `resolve_decision`, y el único llamante de producción era el
+            # reflector, que necesita una incidencia que mirar.
+            linea("Y cuando lo hayas decidido, la salida es una orden tuya:")
+            linea("")
+            # CLAUDE-R3-001: el ofrecimiento lo decide el ALCANCE, sin pasar por
+            # `paro_la_quinta_causa`. `prefijo_vetado` es None cuando paró una
+            # causa anterior, y con él «Corrige el arranque y borra
+            # `.github/workflows/quality.yml`» -clase `programacion`, carril
+            # vivo- se ofrecía a `--continuar`: la #607 otra vez, reabierta por
+            # esta salida.
+            motivo_sin_continuar = _por_que_no_se_puede_continuar(
+                alcance_vetado=alcance_que_el_motor_no_puede_escribir(args.orden),
+                clase=decision.datos_trabajo.clase if decision.datos_trabajo else None,
             )
+            # CLAUDE-R2-002: `--repo` y `--bloque` NO se persisten en el
+            # `WorkItem` ni en el diario, así que si la orden que se imprime no
+            # los arrastra, quien copió `sirius-despachar ... --repo otra-org/x
+            # --bloque AUDITORIA` crea la incidencia en el repositorio y con el
+            # bloque POR DEFECTO: una escritura externa e irreversible dirigida
+            # a un sitio que el propietario no pidió. Se añaden solo cuando
+            # difieren del valor por defecto -que `sirius-decidir` comparte-,
+            # para que la orden corriente siga siendo la corta, y entrecomillados
+            # con la misma disciplina que la ruta del diario.
+            extras = ""
+            if args.repo != REPO:
+                extras += f" --repo {shlex.quote(args.repo)}"
+            if args.bloque != "ENCARGO":
+                extras += f" --bloque {shlex.quote(args.bloque)}"
+            comun = f"{work_id} --diario {ruta_copiable(diario_efectivo)} --ejecutar{extras}"
+            linea(f"    sirius-decidir {comun} --terminar    # se da por terminado")
+            if motivo_sin_continuar is None:
+                linea(f"    sirius-decidir {comun} --continuar    # continúa: crea la incidencia")
+            else:
+                for parrafo in motivo_sin_continuar:
+                    linea(f"    {parrafo}")
         return 3
 
     assert resultado.work_item is not None

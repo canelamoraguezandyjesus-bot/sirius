@@ -56,6 +56,12 @@ sirius-reflejar = "sirius_engine.reflect_cli:main"
 # `desenlaces` escribe DESENLACES.md en la rama del motor tras cada reflejo.
 sirius-memoria = "sirius_engine.memoria_cli:main"
 sirius-tablero = "sirius_engine.tablero_cli:main"
+# La salida que a una parada de la puerta le faltaba (ADR-189). Medido el
+# 13-09-2026 sobre el diario del motor: las 4 paradas que existen seguian las 4
+# en `needs_decision`, ninguna con incidencia detras y ninguna capaz de salir
+# -de ese estado solo sale `resolve_decision`, y su unico llamante de produccion
+# era el reflector, que necesita una incidencia que mirar-.
+sirius-decidir = "sirius_engine.decision_cli:main"
 
 [build-system]
 requires = ["uv_build>=0.11.28,<0.12"]

@@ -362,7 +362,7 @@ def test_documenta_despacha_con_la_etiqueta_de_activacion_y_el_perfil_documental
 def test_el_diario_del_despachador_es_hermano_del_diario_del_motor(tmp_path: Path) -> None:
     """Diario propio, no el del motor: el de eventos no tiene sitio para «qué incidencia»."""
     diario = tmp_path / "sub" / "motor.jsonl"
-    assert dispatch_cli._diario_de_despacho(diario) == tmp_path / "sub" / "motor-despacho.jsonl"
+    assert dispatch_cli.diario_de_despacho(diario) == tmp_path / "sub" / "motor-despacho.jsonl"
 
 
 def test_investiga_despacha_con_la_etiqueta_de_activacion_y_el_perfil_investigador(
@@ -465,6 +465,213 @@ def test_una_parada_dice_donde_queda_el_trabajo_y_como_volver_a_el(tmp_path: Pat
     work_item = store.get_work_item("WI-20260821-223000")
     assert work_item is not None
     assert work_item.estado.value == "needs_decision"
+
+
+def test_una_parada_dice_con_que_orden_se_sale_de_ella(tmp_path: Path) -> None:
+    """ADR-189. ADR-184 hizo que la parada dijera DÓNDE queda el trabajo; faltaba
+    decir CÓMO sale de ahí, y no salía: de `needs_decision` solo sale
+    `resolve_decision`, cuyo único llamante de producción era el reflector, que
+    necesita una incidencia que mirar. Las cuatro paradas del diario del motor
+    llevaban hasta diez días sin salida (medido el 13-09-2026).
+
+    La orden sale con el work_id y la ruta del diario ya puestos: reconstruirla a
+    mano es donde se pierde, y el diario que `sirius-decidir` resuelva por defecto
+    no tiene por qué ser este.
+
+    Antes del cambio fallaba en la primera aserción con ``AssertionError: la parada
+    tiene que decir con qué orden se sale``: el texto no nombraba `sirius-decidir`.
+    Y se la vio caer también con la orden a medias -dejando el bloque pero quitando
+    `--diario` de la orden copiable-, en ``AssertionError: la orden tiene que poder
+    copiarse tal cual; salió ['sirius-decidir', 'WI-20260821-223000', '--ejecutar',
+    '--terminar']``.
+    """
+    diario = tmp_path / "diario.jsonl"
+    codigo, texto = _correr(
+        ["Corrige el arranque y borra la base de produccion", "--ejecutar"], diario=diario
+    )
+
+    assert codigo == 3, texto
+    assert "sirius-decidir" in texto, "la parada tiene que decir con qué orden se sale"
+    linea = next(
+        fila for fila in texto.splitlines() if "sirius-decidir" in fila and "--terminar" in fila
+    )
+    orden = shlex.split(linea.split("#")[0])
+    assert orden == [
+        "sirius-decidir",
+        "WI-20260821-223000",
+        "--diario",
+        str(diario),
+        "--ejecutar",
+        "--terminar",
+    ], f"la orden tiene que poder copiarse tal cual; salió {orden}"
+    assert "--continuar" in texto, "las dos mitades de la decisión, no solo una"
+
+
+def test_la_orden_de_la_parada_arrastra_el_repo_y_el_bloque_de_la_orden_original(
+    tmp_path: Path,
+) -> None:
+    """CLAUDE-R2-002: `--repo` y `--bloque` no los guarda nadie.
+
+    El `WorkItem` no los persiste -`aplicar_decision` no los recibe- y el diario
+    tampoco, así que el único sitio donde sobreviven es la orden que la parada
+    imprime. Si no los arrastra, quien despachó contra `otra-org/otro-repo` con
+    bloque `AUDITORIA` copia la orden tal cual -que es justo lo que el bloque
+    promete- y `--continuar` crea la incidencia en el repositorio y con el
+    encargo POR DEFECTO: una escritura externa e irreversible al destino
+    equivocado, de la que cuelga un ciclo entero en cuanto le llega
+    `sirius:implement-requested`.
+
+    Antes del cambio fallaba con la orden a medias: ``['sirius-decidir',
+    'WI-20260821-223000', '--diario', <ruta>, '--ejecutar', '--continuar']``.
+    """
+    diario = tmp_path / "diario.jsonl"
+    codigo, texto = _correr(
+        [
+            "Corrige el arranque y borra la base de produccion",
+            "--ejecutar",
+            "--repo",
+            "otra-org/otro-repo",
+            "--bloque",
+            "AUDITORIA",
+        ],
+        diario=diario,
+    )
+
+    assert codigo == 3, texto
+    linea = next(
+        fila for fila in texto.splitlines() if "sirius-decidir" in fila and "--continuar" in fila
+    )
+    orden = shlex.split(linea.split("#")[0])
+    assert orden == [
+        "sirius-decidir",
+        "WI-20260821-223000",
+        "--diario",
+        str(diario),
+        "--ejecutar",
+        "--repo",
+        "otra-org/otro-repo",
+        "--bloque",
+        "AUDITORIA",
+        "--continuar",
+    ], f"la orden tiene que despachar donde pidió la original; salió {orden}"
+
+
+def test_con_repo_y_bloque_por_defecto_la_orden_de_la_parada_no_los_repite(
+    tmp_path: Path,
+) -> None:
+    """La otra mitad de CLAUDE-R2-002: arrastrarlos es condicional.
+
+    `sirius-decidir` comparte los valores por defecto de `sirius-despachar`
+    (`REPO` y «ENCARGO»), así que repetirlos cuando nadie los cambió solo alarga
+    la orden corriente sin decir nada. Esta prueba fija que el caso corriente
+    sigue siendo el de `test_una_parada_dice_con_que_orden_se_sale_de_ella`.
+    """
+    diario = tmp_path / "diario.jsonl"
+    codigo, texto = _correr(
+        ["Corrige el arranque y borra la base de produccion", "--ejecutar"], diario=diario
+    )
+
+    assert codigo == 3, texto
+    linea = next(
+        fila for fila in texto.splitlines() if "sirius-decidir" in fila and "--continuar" in fila
+    )
+    orden = shlex.split(linea.split("#")[0])
+    assert "--repo" not in orden and "--bloque" not in orden, (
+        f"sin cambiarlos no se repiten los valores por defecto; salió {orden}"
+    )
+
+
+def test_una_parada_de_la_quinta_causa_no_ofrece_continuar(tmp_path: Path) -> None:
+    """ADR-188 + ADR-189: ahí `--continuar` no existe, y ofrecerlo sería mentir.
+
+    Continuar es despachar, y despachar esta orden la mata en el push: es la
+    pérdida de la #607, que ADR-188 vino a impedir. La salida que sí tiene -la
+    sesión interactiva, y `--terminar` cuando ya no haga falta- ya la dice el
+    bloque de ADR-188.
+
+    Antes del cambio fallaba en la segunda aserción: el bloque de la salida
+    ofrecía `--continuar` sin condición, en una parada en la que no lleva a
+    ninguna parte.
+    """
+    orden = "Implementa el aviso que falta en `.github/workflows/despachar-orden.yml`"
+    diario = tmp_path / "diario.jsonl"
+    codigo, texto = _correr([orden, "--ejecutar"], diario=diario)
+
+    assert codigo == 3, texto
+    assert "sirius-decidir" in texto and "--terminar" in texto
+    ofrecidas = [
+        fila for fila in texto.splitlines() if "sirius-decidir" in fila and "--continuar" in fila
+    ]
+    assert ofrecidas == [], (
+        f"ofrecer continuar aquí es prometer un despacho que muere en el push: {ofrecidas}"
+    )
+    assert "no está disponible en esta parada" in texto, "y hay que decir por qué no está"
+
+
+def test_una_parada_de_una_clase_sin_despachador_tampoco_ofrece_continuar(
+    tmp_path: Path,
+) -> None:
+    """La otra mitad de la anterior: la quinta causa no es el único «--continuar» muerto.
+
+    «Borra la base de producción» para por la CUARTA causa -destructiva-, no por
+    la quinta, así que `prefijo_vetado` es `None`; pero el intérprete v0 no la
+    clasifica como programación y el trabajo nace con clase «consulta-larga»,
+    que no está en `TABLA_ACTIVACION`. `sirius-decidir --continuar --ejecutar`
+    sobre ese trabajo sale con código 5 -lo fija
+    `test_decision_cli.py::test_una_clase_sin_despachador_no_se_reanuda`-, así
+    que ofrecer aquí esa orden es prometer un despacho que no va a ocurrir: la
+    misma familia que prometer un sitio vacío (ADR-184, ADR-188, ADR-189).
+
+    Las dos mitades de la demostración estaban en esta PR y nadie las juntaba.
+    Antes del cambio fallaba en `ofrecidas == []`: el bloque solo descartaba la
+    quinta causa.
+    """
+    diario = tmp_path / "diario.jsonl"
+    codigo, texto = _correr(["Borra la base de produccion", "--ejecutar"], diario=diario)
+
+    assert codigo == 3, texto
+    ofrecidas = [
+        fila for fila in texto.splitlines() if "sirius-decidir" in fila and "--continuar" in fila
+    ]
+    assert ofrecidas == [], (
+        f"«sirius-decidir --continuar» saldría con 5 sobre este trabajo: {ofrecidas}"
+    )
+    assert "--terminar" in texto, "la salida que sí tiene sigue ofreciéndose"
+    assert "no tiene" in texto and "despachador" in texto, "y hay que decir por qué no está"
+
+
+def test_una_parada_con_alcance_vetado_no_ofrece_continuar_aunque_parara_otra_causa(
+    tmp_path: Path,
+) -> None:
+    """El ofrecimiento lo decide el ALCANCE, no la causa (CLAUDE-R3-001).
+
+    «Corrige el arranque y borra `.github/workflows/quality.yml`» para por la
+    CUARTA causa -el marcador «borra»-, así que `prefijo_vetado` es `None` y el
+    bloque de atribución de ADR-188 no sale, que es lo correcto. Pero la clase es
+    `programacion`, tiene despachador y su carril sigue vivo: nada impedía
+    ofrecer `--continuar`. Y continuar es despachar una orden cuyo alcance cae
+    bajo `.github/`, donde el motor no puede escribir (ADR-002): el ciclo haría
+    el trabajo entero y lo perdería al empujar, la #607 otra vez.
+
+    Mutación vista caer: devolviendo `alcance_vetado=prefijo_vetado` en la
+    llamada a `_por_que_no_se_puede_continuar`, la prueba falla en
+    ``ofrecidas == []`` con la línea «sirius-decidir ... --continuar    #
+    continúa: crea la incidencia».
+    """
+    orden = "Corrige el arranque y borra `.github/workflows/quality.yml`"
+    diario = tmp_path / "diario.jsonl"
+    codigo, texto = _correr([orden, "--ejecutar"], diario=diario)
+
+    assert codigo == 3, texto
+    ofrecidas = [
+        fila for fila in texto.splitlines() if "sirius-decidir" in fila and "--continuar" in fila
+    ]
+    assert ofrecidas == [], f"despachar esta orden la mata en el push, como la #607: {ofrecidas}"
+    assert "--terminar" in texto, "la salida que sí tiene sigue ofreciéndose"
+    assert "no está disponible en esta parada" in texto, "y hay que decir por qué no está"
+    assert "operacion_destructiva_o_irreversible" in texto, (
+        "la atribución de la causa NO cambia: paró la cuarta, y eso es lo que se dice"
+    )
 
 
 def test_una_parada_en_ensayo_no_promete_un_sitio_donde_no_hay_nada(tmp_path: Path) -> None:
@@ -629,8 +836,17 @@ def test_una_parada_por_una_causa_anterior_no_promete_el_despacho_de_la_quinta(
     assert "vuelve a despachar" not in texto, (
         "negando la carpeta esta orden NO se despacha: sigue parando por destructiva"
     )
-    assert "sesión interactiva" not in texto, (
-        "ADR-002 no manda este trabajo a ninguna parte: no paró por el alcance"
+    # CLAUDE-R3-001: lo que esta prueba fija es la ATRIBUCIÓN, y ahí «sesión
+    # interactiva» sigue sin poder aparecer. Donde sí aparece -y tiene que
+    # aparecer- es en el paréntesis que NIEGA «--continuar»: el alcance vetado
+    # hace indespachable este trabajo pare por la causa que pare, y quitarle la
+    # salida sin decir cuál le queda es el sitio vacío que ADR-184 cerró.
+    fuera_del_rechazo = [
+        fila for fila in texto.splitlines() if "sesión interactiva" in fila and "#607" not in fila
+    ]
+    assert fuera_del_rechazo == [], (
+        f"la parada no la produjo el alcance: nada la remite a ADR-002 salvo el rechazo "
+        f"de «--continuar»: {fuera_del_rechazo}"
     )
     assert "la parada ocurre AQUÍ" not in texto, (
         "la parada no la produjo el alcance, así que no puede atribuírsele"

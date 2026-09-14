@@ -128,3 +128,61 @@ def test_el_adapter_real_solo_expone_los_dos_verbos_enumerados() -> None:
         "aplicar_etiqueta",
         "buscar_incidencia_por_work_id",
     }
+
+
+def test_los_fallos_operativos_de_gh_salen_como_el_error_del_puerto(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CODEX-002: `gh` no falla solo con `returncode != 0`.
+
+    Si `gh` no está instalado sale `FileNotFoundError`; si existe pero no es
+    ejecutable -permisos, un montaje `noexec`-, `PermissionError`; si se pasa
+    de los 60 segundos, `subprocess.TimeoutExpired`; si la respuesta de
+    adopción no es JSON, `JSONDecodeError`. Las cuatro escapaban por encima de
+    `GitHubWriteError`, que es lo ÚNICO que captura `decision_cli._continuar`,
+    y lo hacían justo después de haber persistido `needs_decision -> active`:
+    el comando terminaba con una traza en vez de decir que hay que repetir la
+    orden para retomar el despacho. Traducirlas es del adaptador: quien llama
+    no tiene por qué conocer `subprocess`.
+
+    Antes del cambio fallaba en la primera aserción, con la excepción nativa
+    sin traducir: ``FileNotFoundError: no hay ningún «gh»``. Con la cláusula
+    estrechada de nuevo a `except FileNotFoundError` (CLAUDE-R2-001) falla en
+    la de `PermissionError`: enumerar dos miembros no cubre la familia.
+    """
+    monkeypatch.setenv(CREDENCIAL_ENV_VAR, "s3cr3t0")
+
+    def _sin_gh(argv: list[str], token: str) -> subprocess.CompletedProcess[str]:
+        raise FileNotFoundError(2, "no hay ningún «gh»")
+
+    with pytest.raises(GitHubWriteError) as sin_gh:
+        GitHubCliWriter(ejecutar=_sin_gh).crear_incidencia(
+            repo="acme/repo", titulo="t", cuerpo="c", etiquetas=()
+        )
+    assert "gh" in str(sin_gh.value)
+
+    def _sin_permiso(argv: list[str], token: str) -> subprocess.CompletedProcess[str]:
+        raise PermissionError(13, "Permission denied: 'gh'")
+
+    with pytest.raises(GitHubWriteError) as sin_permiso:
+        GitHubCliWriter(ejecutar=_sin_permiso).crear_incidencia(
+            repo="acme/repo", titulo="t", cuerpo="c", etiquetas=()
+        )
+    assert "gh" in str(sin_permiso.value)
+
+    def _se_cuelga(argv: list[str], token: str) -> subprocess.CompletedProcess[str]:
+        raise subprocess.TimeoutExpired(cmd=["gh", *argv], timeout=60)
+
+    with pytest.raises(GitHubWriteError) as colgado:
+        GitHubCliWriter(ejecutar=_se_cuelga).aplicar_etiqueta(
+            repo="acme/repo", numero=1, etiqueta="x"
+        )
+    assert "60" in str(colgado.value)
+
+    def _basura(argv: list[str], token: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(argv, returncode=0, stdout="no soy JSON\n", stderr="")
+
+    with pytest.raises(GitHubWriteError):
+        GitHubCliWriter(ejecutar=_basura).buscar_incidencia_por_work_id(
+            repo="acme/repo", work_id="WI-1"
+        )

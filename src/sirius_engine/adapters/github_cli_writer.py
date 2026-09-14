@@ -94,7 +94,33 @@ class GitHubCliWriter:
             raise MissingCredentialError(CREDENCIAL_ENV_VAR)
 
     def _invocar(self, argv: list[str]) -> subprocess.CompletedProcess[str]:
-        return self.ejecutar(argv, self.token)
+        """Invocar ``gh`` traduciendo TODO fallo operativo al error del puerto.
+
+        Un código de retorno distinto de cero no es la única forma de que esto
+        falle: lanzar el proceso hijo puede fallar de tantas maneras como
+        errnos tiene el `exec`, y la guarda correcta es la FAMILIA, no dos de
+        sus miembros. Que `gh` no esté instalado es `FileNotFoundError`
+        [Errno 2], pero que esté y no sea ejecutable -permisos, un envoltorio
+        sin `+x`, un montaje `noexec`- es `PermissionError` [Errno 13], y que
+        el binario esté corrupto o sea de otra arquitectura es `OSError`
+        [Errno 8]. Todas son `OSError` y todas son fallos del adaptador, no del
+        dominio; aparte queda `subprocess.TimeoutExpired`, que NO es `OSError`
+        y necesita su propia cláusula. Sin traducir escapaban por encima de
+        `GitHubWriteError`, que es lo ÚNICO que captura `decision_cli`: quien
+        llama solo captura el error del puerto, así que `sirius-decidir`
+        terminaba con una traza JUSTO después de haber persistido
+        `needs_decision -> active`, sin llegar a decir que hay que repetir la
+        orden para retomar el despacho. Un adaptador que deja escapar su
+        excepción nativa obliga a cada llamante a conocer su tecnología.
+        """
+        try:
+            return self.ejecutar(argv, self.token)
+        except OSError as error:
+            raise GitHubWriteError(argv, f"no se pudo ejecutar «gh»: {error}") from error
+        except subprocess.TimeoutExpired as error:
+            raise GitHubWriteError(
+                argv, f"«gh» no respondió en {error.timeout} s y se abandonó"
+            ) from error
 
     def crear_incidencia(
         self, *, repo: str, titulo: str, cuerpo: str, etiquetas: tuple[str, ...]
@@ -148,5 +174,14 @@ class GitHubCliWriter:
             return None
         import json as _json
 
-        datos = _json.loads(salida.splitlines()[0])
-        return IncidenciaCreada(numero=int(datos["numero"]), url=str(datos["url"]))
+        # La respuesta de la adopción puede no ser JSON -`gh` ha devuelto avisos
+        # por stdout- o no traer los campos esperados. `JSONDecodeError` es una
+        # `ValueError`, y `KeyError`/`TypeError` cubren el JSON válido pero de
+        # otra forma: todas son el mismo fallo operativo del adaptador.
+        try:
+            datos = _json.loads(salida.splitlines()[0])
+            return IncidenciaCreada(numero=int(datos["numero"]), url=str(datos["url"]))
+        except (ValueError, KeyError, TypeError) as error:
+            raise GitHubWriteError(
+                argv, f"la respuesta de «gh» no es la esperada ({error}): {salida!r}"
+            ) from error
