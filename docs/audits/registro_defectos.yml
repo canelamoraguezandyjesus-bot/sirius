@@ -496,7 +496,8 @@ defectos:
     titulo: La rama sin ningun run de Quality salia en silencio y dejaba la incidencia esperando para siempre
     bloque: automatizacion
     gravedad: media
-    estado: abierto
+    estado: cerrado
+    cerrado_por: 8912e1d65beb0a5bbe071d612428fa106c338538
     adr: 183
     incidencia: 599
     ficheros:
@@ -509,7 +510,8 @@ defectos:
     titulo: El detector de sensibilidad confundia una prohibicion con una peticion
     bloque: motor
     gravedad: media
-    estado: abierto
+    estado: cerrado
+    cerrado_por: 1b8dd409568d00ebf1d2a1737039405f69f0bafb
     adr: 184
     incidencia: 601
     ficheros:
@@ -520,7 +522,8 @@ defectos:
     titulo: El registro de defectos podia quedarse dormido sin que ninguna comprobacion lo notara
     bloque: automatizacion
     gravedad: media
-    estado: abierto
+    estado: cerrado
+    cerrado_por: f4a201f3172b913e1d58dccd6f9d1e73fb8d1aa0
     adr: 182
     incidencia: 597
     ficheros:
@@ -533,7 +536,8 @@ defectos:
     titulo: Una sola puerta encendia siete piezas y no dejaba medir ninguna por separado
     bloque: producto
     gravedad: baja
-    estado: abierto
+    estado: cerrado
+    cerrado_por: e36fc551e8b52ffae7ecb598201069572ef261d3
     adr: 185
     incidencia: 603
     ficheros:
@@ -554,7 +558,8 @@ defectos:
     titulo: Ponerse al dia con main tiraba la aprobacion de revision aunque el trabajo no cambiara
     bloque: ciclo
     gravedad: media
-    estado: abierto
+    estado: cerrado
+    cerrado_por: b8ecb2d607b1eb8d4ceb5ae6293ae2799e2d1b72
     adr: 187
     incidencia: 608
     ficheros:
@@ -569,7 +574,8 @@ defectos:
     titulo: Un encargo con alcance sobre lo que el motor no puede escribir se despachaba igual y moria en el push
     bloque: motor
     gravedad: alta
-    estado: abierto
+    estado: cerrado
+    cerrado_por: 67f336e071375161b583ebd692439857a4103766
     adr: 188
     incidencia: 612
     ficheros:
@@ -585,7 +591,8 @@ defectos:
     titulo: Una parada de la puerta sin incidencia detras no tenia ninguna salida y se quedaba en needs_decision para siempre
     bloque: motor
     gravedad: alta
-    estado: abierto
+    estado: cerrado
+    cerrado_por: 0f54bc28392325174f39af02440e00443aacba38
     adr: 189
     incidencia: 615
     ficheros:
