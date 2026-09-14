@@ -752,3 +752,20 @@ defectos:
       - src/sirius_engine/round_family_detector.py
       - scripts/automation/sirius_convergence.py
       - tests/engine/test_round_family_detector.py
+
+  # ADR-198 (#640): la incidencia #341 formulaba una pregunta que solo el
+  # propietario podia contestar, se declaraba a si misma bloqueada hasta que se
+  # contestara, y estuvo VEINTE DIAS sin que nadie se la volviera a poner
+  # delante. La respuesta no costo investigacion: estaba tomada en cuanto se
+  # pregunto. La red de seguridad que vigila lo parado solo mira incidencias con
+  # etiqueta sirius:* del ciclo, y una pregunta no la lleva: estaba fuera de su
+  # alcance por construccion.
+  - id: H-198
+    titulo: Una pregunta que solo el propietario puede contestar se quedo veinte dias en una incidencia sin que nadie se la volviera a poner delante
+    bloque: ciclo
+    gravedad: media
+    estado: abierto
+    adr: 198
+    incidencia: 640
+    ficheros:
+      - docs/decisions/ADR-198-partir-un-objetivo-grande-lo-hace-la-sesion-interactiva-el-descomponedor-automatico-queda-descartado.md
