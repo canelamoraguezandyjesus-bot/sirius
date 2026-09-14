@@ -28,7 +28,7 @@
 
 - Decisiones (ADR): **190**.
 - Bloques del motor: 17 cerrado, 1 fuera_de_alcance, 2 pendiente.
-- Defectos registrados: 7 abierto, 42 cerrado.
+- Defectos registrados: 1 abierto, 48 cerrado.
 - Investigaciones: **9** (fotos con fecha; caducan).
 - Documentos: **140**, de los que **94** no declaran fecha.
 
@@ -364,12 +364,6 @@ cerrados; el recuento completo está arriba.
 | Defecto | Estado | Título |
 |---|---|---|
 | H-43 | abierto | Una rama se fusionaba sin que nadie probara su combinacion con main |
-| H-192 | abierto | El identificador de un defecto se elegia a mano y dos ramas elegian el mismo |
-| H-190 | abierto | El hueco declarado de la prosa de docs/ llevaba sin medir si taparlo salia a cuenta |
-| H-193 | abierto | El doble de gh aceptaba una invocacion que el gh real rechaza y la red de seguridad de estados atascados llevaba 35 dias ciega |
-| H-194 | abierto | Una incidencia en ci-pending con la PR en conflicto esperaba en silencio un run de Quality que no podia existir |
-| H-196 | abierto | La vista de memoria copiaba el resumen de cada decision para siempre y dejo de caber en una sola lectura |
-| H-195 | abierto | Una regla del propietario -podar es archivar, aqui no se borra nada- no estaba escrita en ninguna parte del arbol |
 
 ## Las investigaciones: fotos con fecha, que caducan
 
