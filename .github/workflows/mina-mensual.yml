@@ -19,14 +19,24 @@ name: Mina mensual de aprendizaje
 # «que el motor decida»: aprueba ESTE texto y ESTE reloj. ADR-082 ya movió una vez
 # esta frontera -«lo invoca un workflow»-; esto es el siguiente paso de la misma.
 #
-# POR QUÉ LAS 04:00 UTC Y NO EL HUECO QUE RECOMIENDA EL COMANDO. `sirius-racha
-# --hora-recomendada` devuelve 03:24 UTC, que es justo la hora a la que YA corre
-# `contador-siete-dias.yml`, y esa hora no es una preferencia: el contador exige
-# que NADA se mueva en los 170 minutos previos a su pasada, y tiene 2 minutos de
-# margen sobre los 172 que hay desde las 00:32. Meter un disparo dentro de esa
-# ventana haría que ningún día pudiera salir verde otra vez, EN SILENCIO: la racha
-# de D1 dejaría de completarse y nadie sabría por qué. Las 04:00 caen fuera de la
-# ventana y antes del siguiente periódico (06:17).
+# POR QUÉ LAS 09:24 UTC, Y POR QUÉ NO BASTABA CON «FUERA DE LA VENTANA».
+#
+# `contador-siete-dias.yml` no elige su hora: la DERIVA. `sirius-racha
+# --hora-recomendada` busca el mayor hueco libre de disparos periódicos de este
+# directorio y devuelve su punto medio, y una guarda exige que el cron cableado
+# del contador sea EXACTAMENTE esa hora (ADR-144). Así la frase de su cabecera es
+# verdad sola.
+#
+# La consecuencia, que no es obvia: un `schedule:` nuevo no solo tiene que caer
+# fuera de la ventana de silencio del contador. Si parte el mayor hueco, la hora
+# derivada SE MUEVE y el contador deja de estar donde su propia guarda exige.
+#
+# Se comprobó pagándolo: la primera versión de este fichero disparaba a las 04:00
+# —fuera de la ventana, correcto por ese lado— y la derivación pasó a devolver
+# 09:24, así que las dos pruebas del contador se pusieron en rojo. El criterio
+# bueno es más fuerte: **el contador se queda con el mayor hueco y este trabajo se
+# va al punto medio del siguiente**. Con 09:24, el mayor hueco sigue siendo
+# 00:32 -> 06:17 (345 min) y la derivación sigue devolviendo 03:24.
 #
 # MISMO GRUPO DE CONCURRENCIA QUE `motor-sirius.yml`, por la misma razón que
 # `despachar-orden.yml`: los dos escriben el MISMO diario en la misma rama, y dos
@@ -35,7 +45,7 @@ name: Mina mensual de aprendizaje
 on:
   schedule:
     # Día 1 de cada mes. La edición cubre el mes que acaba de cerrarse.
-    - cron: '0 4 1 * *'
+    - cron: '24 9 1 * *'
   workflow_dispatch:
     inputs:
       ejecutar:

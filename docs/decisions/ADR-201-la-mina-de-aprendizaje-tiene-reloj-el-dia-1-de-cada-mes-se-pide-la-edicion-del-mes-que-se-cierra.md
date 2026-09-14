@@ -63,23 +63,45 @@ de la misma, y se registra como enmienda, no como excepción.
 anterior deja de estar vigente, se mueve a un fichero de archivo fechado y se
 deja en su sitio la cita que dice dónde está. Nunca se borra.
 
-## Por qué las 04:00 UTC y no la hora que recomienda el comando
+## La hora: 09:24 UTC, y por qué «fuera de la ventana» no bastaba
 
-`sirius-racha --hora-recomendada` devuelve **03:24 UTC**. Es exactamente la hora
-a la que ya corre `contador-siete-dias.yml`, y esa hora no es una preferencia:
-el contador exige que **nada se mueva en los 170 minutos previos** a su pasada, y
-tiene **2 minutos de margen** sobre los 172 que hay desde las 00:32.
+Esta sección estaba escrita antes de correr la suite y **decía otra cosa**. Se
+deja corregida, con lo que la comprobación enseñó.
 
-Meter un disparo dentro de esa ventana haría que ningún día pudiera volver a
-salir verde, **en silencio**: la racha de D1 dejaría de completarse y nadie
-sabría por qué. Está escrito en la cabecera de ese workflow y casi se pisa al
-escribir esto.
+**Lo que se creía.** `contador-siete-dias.yml` corre a las 03:24 UTC y exige que
+nada se mueva en los **170 minutos previos** a su pasada, con **2 minutos de
+margen** sobre los 172 que hay desde las 00:32. De ahí salió la primera elección:
+las 04:00, que caen fuera de esa ventana.
 
-Las 04:00 caen fuera de la ventana y antes del siguiente periódico (06:17).
+**Lo que la suite enseñó.** El contador no elige su hora: la **deriva**.
+`sirius-racha --hora-recomendada` busca el mayor hueco libre de disparos
+periódicos del directorio y devuelve su punto medio, y una guarda exige que el
+cron cableado sea **exactamente** esa hora (ADR-144), para que la frase de su
+cabecera sea verdad sola.
 
-Por la misma razón, el trabajo declara `timeout-minutes: 15`: la tolerancia del
-contador es `max(timeout-minutes de todos los jobs) x 2`, así que un trabajo
-nuevo con un tope mayor que el actual movería esa cuenta y rompería lo mismo.
+Así que un `schedule:` nuevo tiene una condición **más fuerte** que «caer fuera
+de la ventana»: **si parte el mayor hueco, la hora derivada se mueve** y el
+contador deja de estar donde su propia guarda exige. Con las 04:00, la derivación
+pasó a devolver **09:24** y las dos pruebas del contador se pusieron en rojo:
+
+```
+el contador dispara en [204] (minutos del día) y la derivación devuelve 564
+(09:24 UTC, punto medio del mayor hueco libre ... tras las 06:32 UTC)
+```
+
+**El criterio bueno, que es el que queda escrito:** el contador se queda con el
+mayor hueco, y un trabajo periódico nuevo se va al **punto medio del siguiente**.
+Con 09:24 el mayor hueco sigue siendo 00:32 → 06:17 (345 min), la derivación
+sigue devolviendo 03:24, y el contador no se toca.
+
+Había una segunda salida —mover el contador a 09:24, que es lo que su propio
+mensaje de error sugiere— y **no se tomó**: habría hecho que un trabajo mensual
+nuevo moviera la pasada diaria de la que depende el hito D1. Mover lo estable
+para acomodar lo nuevo es la dirección equivocada.
+
+Por una cuenta parecida, el trabajo declara `timeout-minutes: 15`: la tolerancia
+del contador es `max(timeout-minutes de todos los jobs) × 2`, así que un tope
+mayor que el actual la movería y rompería lo mismo por el otro lado.
 
 ## Lo que este ADR NO hace
 
