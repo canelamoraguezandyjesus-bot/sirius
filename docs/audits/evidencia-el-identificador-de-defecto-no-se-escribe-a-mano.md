@@ -143,3 +143,40 @@ En contra, y hay que decirlo:
 - **Qué pasa con las 32 entradas sin `adr`.** No se renumeran (criterio de
   parada), así que el formato tiene que admitir las dos formas a la vez, y la
   guarda tiene que saber cuál exigir a una entrada nueva.
+
+## Las dos comprobaciones que faltaban, hechas
+
+**¿Puede un ADR declarar más de un defecto?** Hoy no lo hace ninguno: **11 ADR
+citados, 11 entradas**, uno a uno. Y la guarda de ADR-182 exige *al menos* una
+entrada por ADR que declare lección, no *exactamente* una, así que la relación
+uno-a-uno es una costumbre, no una regla. Se convierte en regla aquí, que es
+justo lo que hace derivable el identificador.
+
+**¿Qué pasa con las entradas sin `adr`?** Son 32 y no se tocan. No hace falta un
+formato doble ni una lista de excepciones: **el identificador sigue siendo
+`H-<número>`, y lo único que cambia es de dónde sale el número**. Los
+identificadores históricos llegan hasta `H-43`; los ADR van por el 191. Como los
+números de ADR ya están muy por encima del máximo histórico, `H-<adr>` no puede
+chocar con ninguno de los viejos. Sin cambio de formato, sin dos formas
+conviviendo, sin nada que recordar.
+
+## La forma elegida
+
+**El número de un defecto nuevo ES el número de su ADR.** `H-191` para el defecto
+que declara ADR-191. Nadie elige nada: se copia un dato que la entrada ya está
+obligada a declarar desde ADR-182.
+
+**La frontera se escribe una vez y no crece.** La regla vale para toda entrada
+cuyo `adr` sea mayor o igual que el ADR que introduce esta decisión. Es **una
+constante**, no una lista de excepciones que alguien tenga que ampliar —esa es
+justamente la familia `lista-a-mano` que este arreglo no debe reproducir—. Las
+once entradas anteriores que tienen `adr` (`H-33`…`H-43`) se quedan como están:
+renumerarlas rompería el vínculo con su commit de cierre, cuyo mensaje empieza
+por `H-N: ` y que la guarda de ADR-080 lee.
+
+**Lo que esto es y lo que no es**, otra vez y sin adornos: reduce **dos sistemas
+de numeración a uno**, y el que queda es el único que tiene guion que lo coordina
+entre ramas (ADR-180) y guarda que caza los repetidos
+(`test_registro_de_decisiones.py`). No es imposible —los dos ADR-016 demuestran
+que ese número ha chocado— pero pasa a haber **un solo sitio donde puede chocar**
+en vez de dos, y ese sitio es el que sí está defendido.
