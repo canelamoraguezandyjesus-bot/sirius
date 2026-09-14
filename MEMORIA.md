@@ -26,11 +26,11 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **192**.
+- Decisiones (ADR): **193**.
 - Bloques del motor: 17 cerrado, 1 fuera_de_alcance, 2 pendiente.
-- Defectos registrados: 3 abierto, 48 cerrado.
+- Defectos registrados: 4 abierto, 48 cerrado.
 - Investigaciones: **9** (fotos con fecha; caducan).
-- Documentos: **142**, de los que **96** no declaran fecha.
+- Documentos: **143**, de los que **96** no declaran fecha.
 
 ## Qué se decidió: los ADR, del más reciente al más antiguo
 
@@ -47,6 +47,7 @@ huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| [199](docs/decisions/ADR-199-el-detector-de-familia-repetida-detiene-el-ciclo-y-esa-parada-vuelve-al-corrector-no-al-revisor-que-la-emitio.md) | 2026-09-14 | PROPUESTO | El detector de familia repetida detiene el ciclo, y esa parada vuelve al corrector, no al revisor que la emitió | 1. Con familia repetida detectada, la puerta del veredicto detiene el ciclo. En vez de `sirius:repair-requested`, publica `sirius:blocked-decision`. El comentario conserva todo lo que ya publicaba —las observaciones estructuradas y el `##… |
 | [198](docs/decisions/ADR-198-partir-un-objetivo-grande-lo-hace-la-sesion-interactiva-el-descomponedor-automatico-queda-descartado.md) | 2026-09-14 | PROPUESTO | Partir un objetivo grande lo hace la sesión interactiva; el descomponedor automático queda descartado | (sin sección Decisión) |
 | [197](docs/decisions/ADR-197-el-detector-de-familia-repetida-agrupa-por-la-ruta-que-el-revisor-escribe-no-por-el-recorte-anclado.md) | 2026-09-14 | PROPUESTO | El detector de familia repetida agrupa por la ruta que el revisor escribe, no por el recorte anclado | El detector agrupa por la ruta que encabeza la cita, extraída con `parse_archivo_location`, y normalizada con `_normalize_text` para que la comparación siga siendo insensible a mayúsculas y espacios. |
 | [196](docs/decisions/ADR-196-la-vista-de-memoria-lleva-el-indice-completo-de-decisiones-y-el-resumen-solo-de-las-vigentes-como-metodo.md) | 2026-09-14 | PROPUESTO | La vista de memoria lleva el índice completo de decisiones, y el resumen solo de las que siguen vigentes como método | El índice se queda entero; la copia del resumen, no. |
@@ -259,6 +260,7 @@ de memoria.
 | `espera-sin-fin-por-un-suceso-que-nadie-va-a-emitir` | 1 | sí | [194](docs/decisions/ADR-194-ci-pending-distingue-quality-todavia-no-ha-contestado-de-quality-no-va-a-contestar-nunca.md) |
 | `estado-en-el-que-se-entra-y-del-que-no-se-sale` | 1 | sí | [189](docs/decisions/ADR-189-la-salida-de-una-parada-sin-incidencia-es-una-orden-del-propietario-y-reanudar-es-despachar-en-el-mismo-gesto.md) |
 | `guarda-ampliada-a-un-corpus-que-no-es-el-suyo` | 1 | sí | [190](docs/decisions/ADR-190-la-guarda-de-citas-no-sale-de-docs-decisions-medidos-590-citas-y-23-rotas-fuera-del-registro-cero-son-defectos-de-este-arbol.md) |
+| `guarda-medida-que-se-queda-sin-autoridad-porque-nadie-relee-la-medida` | 1 | sí | [199](docs/decisions/ADR-199-el-detector-de-familia-repetida-detiene-el-ciclo-y-esa-parada-vuelve-al-corrector-no-al-revisor-que-la-emitio.md) |
 | `guardian-que-mide-posicion-en-vez-de-estructura` | 1 | sí | [187](docs/decisions/ADR-187-una-revision-sobrevive-a-ponerse-al-dia-con-main-si-el-trabajo-propio-de-la-rama-no-cambia.md) |
 | `interruptor-que-enciende-mas-de-lo-que-se-puede-medir` | 1 | sí | [185](docs/decisions/ADR-185-la-puerta-de-la-memoria-se-parte-en-tres-interruptores-antes-de-abrirla.md) |
 | `pieza-correcta-a-la-que-no-llama-quien-la-necesita` | 1 | sí | [197](docs/decisions/ADR-197-el-detector-de-familia-repetida-agrupa-por-la-ruta-que-el-revisor-escribe-no-por-el-recorte-anclado.md) |
@@ -307,6 +309,10 @@ de memoria.
 ### `guarda-ampliada-a-un-corpus-que-no-es-el-suyo`
 
 - **[ADR-190](docs/decisions/ADR-190-la-guarda-de-citas-no-sale-de-docs-decisions-medidos-590-citas-y-23-rotas-fuera-del-registro-cero-son-defectos-de-este-arbol.md)** — llevar una comprobación al sitio donde el hueco está declarado sin medir antes qué cosecharía allí, y pagar la ampliación con excepciones escritas a mano; aquí el criterio calibrado sobre `docs/decisions/` —un corpus homogéneo, donde un ADR cita este árbol— habría gritado 17 veces en falso y cazado cero defectos al salir a `docs/`, donde una investigación cita los árboles de otros repositorios. (lo hace cumplir `tests/automation/test_citas_de_los_adr.py`).
+
+### `guarda-medida-que-se-queda-sin-autoridad-porque-nadie-relee-la-medida`
+
+- **[ADR-199](docs/decisions/ADR-199-el-detector-de-familia-repetida-detiene-el-ciclo-y-esa-parada-vuelve-al-corrector-no-al-revisor-que-la-emitio.md)** — una guarda se fusiona a propósito sin autoridad para (lo hace cumplir `tests/automation/test_reanudar_una_parada.py`).
 
 ### `guardian-que-mide-posicion-en-vez-de-estructura`
 
@@ -378,6 +384,7 @@ cerrados; el recuento completo está arriba.
 | H-43 | abierto | Una rama se fusionaba sin que nadie probara su combinacion con main |
 | H-197 | abierto | El detector de familia repetida agrupaba por el recorte anclado y no veia 6 familias reales de cada 14 |
 | H-198 | abierto | Una pregunta que solo el propietario puede contestar se quedo veinte dias en una incidencia sin que nadie se la volviera a poner delante |
+| H-199 | abierto | El detector de familia repetida llevaba medido y acertando y el ciclo seguia mandando otra vuelta de parche |
 
 ## Las investigaciones: fotos con fecha, que caducan
 
@@ -421,6 +428,7 @@ nada por su cuenta. «Sin fecha declarada» es un aviso, no un dato.
 | 2026-08-27 | [Nota de arranque — una contradicción de etiquetas no es una divergencia](docs/audits/arranque-contradiccion-no-es-divergencia.md) |
 | 2026-08-27 | [Nota de arranque — que el banco diga por qué no midió](docs/audits/arranque-el-banco-dice-por-que.md) |
 | sin fecha declarada | [Nota de arranque — el detector de familia agrupa por la ruta, no por el recorte final](docs/audits/arranque-el-detector-de-familia-agrupa-por-la-ruta.md) |
+| 2026-09-14 | [Nota de arranque — el detector de familia repetida detiene el ciclo](docs/audits/arranque-el-detector-de-familia-detiene-el-ciclo.md) |
 | sin fecha declarada | [Nota de arranque — el doble de `gh` acepta lo que el `gh` real rechaza](docs/audits/arranque-el-doble-de-gh-rechaza-lo-que-el-real-rechaza.md) |
 | sin fecha declarada | [Nota de arranque — el identificador de un defecto deja de escribirse a mano](docs/audits/arranque-el-identificador-de-defecto-no-se-escribe-a-mano.md) |
 | 2026-08-28 | [Nota de arranque — ¿Está el motor preparado para recibir órdenes reales?](docs/audits/arranque-el-motor-esta-preparado.md) |

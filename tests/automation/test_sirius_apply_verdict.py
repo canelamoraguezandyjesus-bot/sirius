@@ -1004,10 +1004,27 @@ def test_reviewer_changes_requested_publishes_family_repeated_notice(tmp_path: P
     aviso = comments.split("AVISO_FAMILIA_REPETIDA", 1)[1].split("RONDA_HALLAZGOS", 1)[0]
     assert "src/x.py" in aviso
     assert "rondas 1-3" in aviso
-    # Es puramente informativo (requisito (b) de la incidencia #495): la
-    # transición sigue siendo exactamente la misma que sin el aviso.
-    assert "sirius:repair-requested" in _labels(env)
+    # ADR-199: el aviso DEJA de ser informativo. Medido el detector (ADR-078:
+    # 4 aciertos y 0 falsos sobre 14; ADR-197: 14 y 2 sobre 16), el propietario
+    # le dio autoridad el 14-09-2026. Una familia repetida ya no manda otra
+    # vuelta de parche: detiene el ciclo y pide la raíz.
+    assert "sirius:blocked-decision" in _labels(env), (
+        "con familia repetida el ciclo se detiene; seguir aplicando "
+        "repair-requested es dar otra vuelta de parche sobre la misma familia"
+    )
+    assert "sirius:repair-requested" not in _labels(env)
     assert "sirius:reviewing" not in _labels(env)
+    # La parada no puede COSTAR nada de lo que la ronda ya publicaba: sin el
+    # registro de ronda la política de convergencia deja de medir progreso, y
+    # sin las observaciones el corrector no tendría qué corregir al reanudar.
+    assert "## RONDA_HALLAZGOS" in comments
+    assert "## OBSERVACIONES_ESTRUCTURADAS" in comments
+    assert "CODEX-003" in comments
+    # El marcador declara la razón de la parada: es lo que permite al guion de
+    # reanudación devolverla al corrector en vez de a la fase que la emitió.
+    assert "sirius-verdict:reviewer:blocked:familia-repetida:" in comments
+    # Y dice cómo se sale, porque 2 de cada 16 serán falsos positivos.
+    assert "continua" in aviso
 
 
 def test_reviewer_changes_requested_without_three_consecutive_rounds_has_no_family_notice(

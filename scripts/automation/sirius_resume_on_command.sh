@@ -259,6 +259,17 @@ case "$parada" in
     if ! etiqueta_destino="$(destino_de_rol "$rol_parado")"; then
       etiqueta_destino="sirius:repair-requested"
     fi
+    # ADR-199: la parada por familia repetida es la UNICA que no vuelve a la
+    # fase que la emitio. La emite el REVISOR -es quien ve el patron entre
+    # rondas-, pero `continua` significa «ya lo he mirado, sigue y corrigelo»:
+    # lo que queda por hacer es una correccion, no otra revision. Devolverla a
+    # revision daria otra vuelta sobre la misma familia y volveria a parar en el
+    # acto, que es el rebote de H-33 (#453, #471) con otra cara. Y el corrector
+    # no arranca vacio -el defecto de H-33-: el revisor publico sus
+    # observaciones estructuradas en el mismo comentario de la parada.
+    if printf '%s' "$marcador_vigente" | grep -q ':blocked:familia-repetida:'; then
+      etiqueta_destino="sirius:repair-requested"
+    fi
     ;;
   sirius:failed-safely)
     dump_file="$(mktemp)"

@@ -662,3 +662,62 @@ def test_un_marcador_de_una_parada_ya_reanudada_no_decide_la_vuelta(tmp_path: Pa
         "convergencia"
     )
     assert "sirius:implement-requested" not in _etiquetas(env)
+
+
+def test_una_parada_por_familia_repetida_vuelve_al_corrector(tmp_path: Path) -> None:
+    """La parada que ADR-199 añade la emite el REVISOR y vuelve al CORRECTOR.
+
+    Es la única de las tres paradas cuyo destino no es la fase que la emitió, y
+    no es un capricho: `continua` sobre ella significa «ya lo he mirado, sigue y
+    corrígelo». Devolverla a revisión daría otra vuelta sobre la misma familia
+    -exactamente lo que la parada existe para cortar- y el ciclo rebotaría entre
+    revisión y parada sin avanzar nunca. Es la forma del defecto H-33
+    (incidencias #453 y #471), donde `blocked-decision` reanudaba la fase
+    equivocada y la orden del propietario moría en el rebote.
+
+    El revisor ya publicó sus observaciones en el mismo comentario de la parada,
+    así que el corrector arranca con trabajo que hacer: no es el corrector vacío
+    de H-33.
+    """
+    env = _setup(tmp_path)
+    _sembrar(
+        env,
+        etiquetas=["sirius:blocked-decision"],
+        historial=_historial(
+            f"<!-- sirius-verdict:reviewer:blocked:familia-repetida:{HEAD}:run-9 -->"
+        ),
+    )
+    resultado = _ejecutar(env)
+    assert resultado.returncode == 0, resultado.stderr
+    assert "sirius:repair-requested" in _etiquetas(env), (
+        "`continua` sobre una parada por familia repetida manda el trabajo al "
+        "corrector; devolverlo a revisión repetiría la misma ronda y la misma "
+        "parada, que es el rebote de H-33 con otra cara"
+    )
+    assert "sirius:review-requested" not in _etiquetas(env)
+    assert "sirius:blocked-decision" not in _etiquetas(env)
+    assert "sirius-convergence-reset" not in _comentarios(env), (
+        "esta parada no la emite la política de convergencia: perdonar rondas "
+        "aquí debilitaría el guarda del bucle justo cuando el ciclo ya ha "
+        "demostrado que da vueltas"
+    )
+    assert "sirius-resume-stop" in _comentarios(env)
+
+
+def test_una_parada_de_rol_del_revisor_sigue_volviendo_a_revision(tmp_path: Path) -> None:
+    """El control de la prueba de arriba: solo desvía la parada por familia.
+
+    Sin esta, cambiar el desvío por un «todo `blocked` del revisor va al
+    corrector» pasaría en verde y reabriría H-33 para el caso que sí tiene que
+    repetir su fase: un revisor que se para a pedir una decisión de verdad.
+    """
+    env = _setup(tmp_path)
+    _sembrar(
+        env,
+        etiquetas=["sirius:blocked-decision"],
+        historial=_historial("<!-- sirius-verdict:reviewer:blocked:run-4 -->"),
+    )
+    resultado = _ejecutar(env)
+    assert resultado.returncode == 0, resultado.stderr
+    assert "sirius:review-requested" in _etiquetas(env)
+    assert "sirius:repair-requested" not in _etiquetas(env)
