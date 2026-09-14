@@ -85,7 +85,7 @@ def _leer(comparacion: Path) -> dict[str, object] | None:
     """El JSON de `compare`, o ``None`` si no hay forma de leerlo."""
     try:
         datos = json.loads(comparacion.read_text(encoding="utf-8"))
-    except OSError, ValueError:
+    except (OSError, ValueError):
         return None
     return datos if isinstance(datos, dict) else None
 
