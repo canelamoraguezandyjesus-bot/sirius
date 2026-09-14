@@ -118,6 +118,36 @@ de ese workflow explica toda esta historia: buscar el nombre del módulo en el
 fichero entero daría verde con la llamada quitada. Es la lección que
 `test_reanudar_una_parada.py` ya había pagado.
 
+El doble de `gh` aprende a contestar `/compare/`, con la disciplina de ADR-193:
+un doble que no sabe lo que sabe el `gh` real certifica una ficción. Y la PR
+sembrada declara ahora su `base` como objeto, igual que la API real, por la
+misma razón por la que ya declaraba `head` así.
+
+### La guarda que se puso en rojo sola, y es la mejor prueba de todas
+
+La corrida completa de esta rama **suspendió**, y no en una de las pruebas
+nuevas:
+
+```
+tests/automation/test_sirius_runner_python_compat.py::
+test_the_listed_scripts_are_the_ones_the_workflows_invoke
+
+Estos scripts se invocan desde workflows o desde la biblioteca Bash pero no
+están cubiertos por la comprobación de sintaxis del runner: ['sirius_cola.py']
+```
+
+Esa batería **deriva del árbol** qué scripts invocan los workflows, en vez de
+leer una lista escrita a mano (ADR-179). Y el docstring de `sirius_cola.py`
+llevaba desde ADR-191 prometiendo que esa batería lo vigilaba — **lo cual era
+falso**, por una razón exacta: la derivación busca quién lo llama, y hasta hoy
+**no lo llamaba nadie**.
+
+La guarda no estaba rota: decía la verdad sobre un árbol en el que la pieza no se
+ejecutaba. Al darle llamante, lo encontró sola y se puso en rojo. Es la
+comprobación **independiente** de que el cableado de esta decisión es real y no
+decorativo: ninguna prueba escrita para este trabajo podría haberlo demostrado
+igual de bien, porque todas las escribí yo sabiendo lo que quería que dijeran.
+
 ## Lo que este ADR NO hace, y hay que saberlo
 
 - **No prueba el `git merge` de verdad en este árbol.** `git merge` está
