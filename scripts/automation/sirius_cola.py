@@ -83,9 +83,18 @@ class Veredicto(NamedTuple):
 
 def _leer(comparacion: Path) -> dict[str, object] | None:
     """El JSON de `compare`, o ``None`` si no hay forma de leerlo."""
+    # Dos cláusulas y no una tupla A PROPÓSITO: `ruff format` con `py314` quita
+    # los paréntesis de `except (OSError, ValueError):` -PEP 758, legal desde
+    # 3.14- y el `python3` del runner no llega a esa versión, así que el fichero
+    # deja de compilar allí. Es el defecto que la incidencia #267 ya tenía
+    # apuntado -«el formateador del proyecto mete sintaxis que mata al runner»- y
+    # que mordió a este mismo fichero al escribirlo. Separadas, el formateador no
+    # tiene nada que colapsar.
     try:
         datos = json.loads(comparacion.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+    except OSError:
+        return None
+    except ValueError:
         return None
     return datos if isinstance(datos, dict) else None
 
