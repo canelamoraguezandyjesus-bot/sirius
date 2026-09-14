@@ -602,7 +602,11 @@ defectos:
   # tomando por intuicion. Medido el 14-09-2026: 590 citas, 23 rotas, CERO
   # defectos reales; la ampliacion se declina con su medida delante y el hueco
   # queda abierto a proposito, que es lo que ahora consta.
-  - id: H-43
+  # El identificador era H-43 y choco con el H-43 que ADR-191 metio en main
+  # mientras esta rama esperaba: la tercera colision de la noche, y la que
+  # motivo ADR-192. Pasa a H-190, el numero de su propio ADR, que es la forma
+  # que ADR-192 fija.
+  - id: H-190
     titulo: El hueco declarado de la prosa de docs/ llevaba sin medir si taparlo salia a cuenta
     bloque: ciclo
     gravedad: baja

@@ -334,7 +334,7 @@ cerrados; el recuento completo está arriba.
 | H-40 | abierto | Ponerse al dia con main tiraba la aprobacion de revision aunque el trabajo no cambiara |
 | H-41 | abierto | Un encargo con alcance sobre lo que el motor no puede escribir se despachaba igual y moria en el push |
 | H-42 | abierto | Una parada de la puerta sin incidencia detras no tenia ninguna salida y se quedaba en needs_decision para siempre |
-| H-43 | abierto | El hueco declarado de la prosa de docs/ llevaba sin medir si taparlo salia a cuenta |
+| H-190 | abierto | El hueco declarado de la prosa de docs/ llevaba sin medir si taparlo salia a cuenta |
 
 ## Las investigaciones: fotos con fecha, que caducan
 
