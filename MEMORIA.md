@@ -26,11 +26,11 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **195**.
+- Decisiones (ADR): **196**.
 - Bloques del motor: 17 cerrado, 1 fuera_de_alcance, 2 pendiente.
-- Defectos registrados: 6 abierto, 48 cerrado.
+- Defectos registrados: 1 abierto, 54 cerrado.
 - Investigaciones: **9** (fotos con fecha; caducan).
-- Documentos: **144**, de los que **96** no declaran fecha.
+- Documentos: **145**, de los que **97** no declaran fecha.
 
 ## Qué se decidió: los ADR, del más reciente al más antiguo
 
@@ -47,6 +47,7 @@ huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| [202](docs/decisions/ADR-202-m17-la-medicion-que-cerraba-la-ola-de-paridad-no-se-hace-y-la-razon-no-consta.md) | 2026-09-14 | PROPUESTO | M17, la medición que cerraba la ola de paridad, no se hace; y la razón no consta | 1. M17 no se hace. Es una decisión del propietario, tomada antes de hoy. Si algún día se hace, es una decisión nueva: nada de lo escrito aquí la prepara. |
 | [201](docs/decisions/ADR-201-la-mina-de-aprendizaje-tiene-reloj-el-dia-1-de-cada-mes-se-pide-la-edicion-del-mes-que-se-cierra.md) | 2026-09-14 | PROPUESTO | La mina de aprendizaje tiene reloj: el día 1 de cada mes se pide la edición del mes que se cierra | (sin sección Decisión) |
 | [200](docs/decisions/ADR-200-la-cola-deja-de-ser-una-condicion-y-pasa-a-ser-un-mecanismo-el-ciclo-trae-la-base-a-la-rama-que-espera.md) | 2026-09-14 | PROPUESTO | La cola deja de ser una condición y pasa a ser un mecanismo: el ciclo trae la base a la rama que espera | 1. La cola se consulta antes de reponer la revisión. En la rama `success)` de `.github/workflows/advance-sirius-after-quality.yml`, antes de aplicar `sirius:review-requested`, se lee `compare/{base}...{head}` —el mismo dato que ese paso ya… |
 | [199](docs/decisions/ADR-199-el-detector-de-familia-repetida-detiene-el-ciclo-y-esa-parada-vuelve-al-corrector-no-al-revisor-que-la-emitio.md) | 2026-09-14 | PROPUESTO | El detector de familia repetida detiene el ciclo, y esa parada vuelve al corrector, no al revisor que la emitió | 1. Con familia repetida detectada, la puerta del veredicto detiene el ciclo. En vez de `sirius:repair-requested`, publica `sirius:blocked-decision`. El comentario conserva todo lo que ya publicaba —las observaciones estructuradas y el `##… |
@@ -259,6 +260,7 @@ de memoria.
 | `medir-lo-que-se-tiene-en-vez-de-lo-que-hay` | 2 | sí | [184](docs/decisions/ADR-184-la-prohibicion-no-es-una-peticion-el-detector-de-sensibilidad-exige-que-el-marcador-no-vaya-negado.md), [180](docs/decisions/ADR-180-el-numero-del-siguiente-adr-se-calcula-contra-las-ramas-del-remoto-no-contra-las-que-el-clon-tenga-traidas.md) |
 | `pieza-sin-lector` | 2 | sí | [183](docs/decisions/ADR-183-la-ausencia-de-run-de-quality-para-el-head-se-encamina-no-se-espera-en-silencio.md), [175](docs/decisions/ADR-175-un-tablero-por-incidencia-un-solo-comentario-que-el-motor-mantiene-al-dia.md) |
 | `condicion-construida-sin-el-mecanismo-que-la-hace-cumplible` | 1 | sí | [200](docs/decisions/ADR-200-la-cola-deja-de-ser-una-condicion-y-pasa-a-ser-un-mecanismo-el-ciclo-trae-la-base-a-la-rama-que-espera.md) |
+| `decision-que-solo-vive-en-una-conversacion` | 1 | no en todas | [202](docs/decisions/ADR-202-m17-la-medicion-que-cerraba-la-ola-de-paridad-no-se-hace-y-la-razon-no-consta.md) |
 | `doble-mas-permisivo-que-la-herramienta-que-dobla` | 1 | sí | [193](docs/decisions/ADR-193-el-doble-de-gh-rechaza-lo-que-el-gh-real-rechaza-y-la-red-de-seguridad-vuelve-a-poder-fechar.md) |
 | `espera-sin-fin-por-un-suceso-que-nadie-va-a-emitir` | 1 | sí | [194](docs/decisions/ADR-194-ci-pending-distingue-quality-todavia-no-ha-contestado-de-quality-no-va-a-contestar-nunca.md) |
 | `estado-en-el-que-se-entra-y-del-que-no-se-sale` | 1 | sí | [189](docs/decisions/ADR-189-la-salida-de-una-parada-sin-incidencia-es-una-orden-del-propietario-y-reanudar-es-despachar-en-el-mismo-gesto.md) |
@@ -301,6 +303,10 @@ de memoria.
 ### `condicion-construida-sin-el-mecanismo-que-la-hace-cumplible`
 
 - **[ADR-200](docs/decisions/ADR-200-la-cola-deja-de-ser-una-condicion-y-pasa-a-ser-un-mecanismo-el-ciclo-trae-la-base-a-la-rama-que-espera.md)** — una guarda se construye entera y se deja sin llamante (lo hace cumplir `tests/automation/test_cola.py`).
+
+### `decision-que-solo-vive-en-una-conversacion`
+
+- **[ADR-202](docs/decisions/ADR-202-m17-la-medicion-que-cerraba-la-ola-de-paridad-no-se-hace-y-la-razon-no-consta.md)** — una decisión de NO hacer algo no deja rastro —no hay (sin prueba que lo haga cumplir: ninguna prueba: una decisión tomada de viva voz fuera del).
 
 ### `doble-mas-permisivo-que-la-herramienta-que-dobla`
 
@@ -393,12 +399,7 @@ cerrados; el recuento completo está arriba.
 
 | Defecto | Estado | Título |
 |---|---|---|
-| H-43 | abierto | Una rama se fusionaba sin que nadie probara su combinacion con main |
-| H-197 | abierto | El detector de familia repetida agrupaba por el recorte anclado y no veia 6 familias reales de cada 14 |
-| H-198 | abierto | Una pregunta que solo el propietario puede contestar se quedo veinte dias en una incidencia sin que nadie se la volviera a poner delante |
-| H-199 | abierto | El detector de familia repetida llevaba medido y acertando y el ciclo seguia mandando otra vuelta de parche |
-| H-200 | abierto | La condicion de la cola existia desde ADR-191 y no la llamaba nadie, asi que la rama que esperaba no tenia quien la pusiera al dia |
-| H-201 | abierto | La mina de aprendizaje solo se escribia cuando a alguien se le ocurria pedirla, y una de sus dos ediciones existe por casualidad |
+| H-202 | abierto | Una decision de no hacer algo no dejaba rastro, y una precondicion escrita antes que ella bloqueo trabajo real trece dias |
 
 ## Las investigaciones: fotos con fecha, que caducan
 
@@ -428,6 +429,7 @@ nada por su cuenta. «Sin fecha declarada» es un aviso, no un dato.
 |---|---|
 | sin fecha declarada | [Auditoría integral de incorporación de Claude — Proyecto Sirius (julio 2026)](docs/audits/AUDITORIA_INTEGRAL_INCORPORACION_CLAUDE_2026-07.md) |
 | sin fecha declarada | [Defectos encontrados en el Work Engine — parte para actuar](docs/audits/DEFECTOS_ENCONTRADOS_2026-08-20.md) |
+| sin fecha declarada | [Lo que queda, y por qué no está hecho — 14 de septiembre de 2026](docs/audits/PENDIENTE_Y_POR_QUE_2026-09-14.md) |
 | sin fecha declarada | [SIRIUS — Auditoría de la cadena de activación y estados (20-jul-2026, 2ª pasada)](docs/audits/SIRIUS_AUDITORIA_ACTIVACION_2026-07.md) |
 | sin fecha declarada | [SIRIUS — Auditoría de robustez de la automatización de roles (Claude Code)](docs/audits/SIRIUS_AUDITORIA_AUTOMATIZACION_ROLES_2026-07.md) |
 | 2026-07-20 | [SIRIUS — Auditoría integral del repositorio (julio de 2026)](docs/audits/SIRIUS_AUDITORIA_INTEGRAL_REPOSITORIO_2026-07.md) |
