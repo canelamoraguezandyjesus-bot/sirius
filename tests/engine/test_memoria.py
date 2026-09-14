@@ -87,6 +87,18 @@ def _arbol_minimo(raiz: Path) -> Path:
         "# ADR-003 — Sin decisión\n\n- Estado: RECHAZADO\n- Fecha: 2026-03-01\n\n"
         "## Contexto\n\nNada.\n",
     )
+    # Uno POR ENCIMA de la frontera: sin él, la regla de ADR-196 -solo los ADR
+    # desde PRIMER_ADR_CON_LECCION llevan resumen en la vista- solo se podría
+    # medir por un lado, y «ninguno lleva resumen» pasaría igual.
+    _escribir(
+        decisiones / f"ADR-{memoria.PRIMER_ADR_CON_LECCION}-la-moderna.md",
+        _adr(
+            str(memoria.PRIMER_ADR_CON_LECCION),
+            "La moderna",
+            "Esta sí conserva su resumen en la vista.",
+            estado="APROBADO",
+        ),
+    )
     _escribir(decisiones / "PLANTILLA.md", "# ADR-NNN — plantilla\n\n## Decisión\n\nNo cuenta.\n")
     _escribir(
         raiz / "docs" / "implementation" / "bloques_del_motor.yml",
@@ -126,8 +138,8 @@ def test_las_decisiones_van_de_la_mas_reciente_a_la_mas_antigua_y_no_pierden_rep
     arbol: Path,
 ) -> None:
     decisiones = leer_decisiones(arbol)
-    assert [d.numero for d in decisiones] == [3, 2, 2, 1]
-    assert [d.ruta for d in decisiones][1:3] == [
+    assert [d.numero for d in decisiones] == [memoria.PRIMER_ADR_CON_LECCION, 3, 2, 2, 1]
+    assert [d.ruta for d in decisiones][2:4] == [
         "docs/decisions/ADR-002-la-repetida.md",
         "docs/decisions/ADR-002-la-segunda.md",
     ]
@@ -145,6 +157,47 @@ def test_el_resumen_es_el_primer_parrafo_de_la_decision_tal_cual(arbol: Path) ->
     assert repetida.resumen.endswith("…") and len(repetida.resumen) <= memoria.LONGITUD_RESUMEN + 1
     assert repetida.estado == "SUPERADO por ADR-003"
     assert por_ruta["ADR-003-sin-decision.md"].resumen == "(sin sección Decisión)"
+
+
+def test_el_indice_de_decisiones_esta_completo_aunque_el_resumen_no(arbol: Path) -> None:
+    """Quitar el resumen NO es quitar la fila: el índice se queda entero.
+
+    Es la mitad de ADR-196 que de verdad importa proteger. Aligerar la vista
+    borrando decisiones viejas de la tabla sería podar en el sentido que el
+    propietario prohibió (ADR-195), y además se llevaría por delante la
+    orientación que esta vista existe para dar: saber QUÉ se decidió.
+    """
+    texto = generar_memoria(arbol)
+    for decision in leer_decisiones(arbol):
+        assert f"[{decision.numero:03d}]({decision.ruta})" in texto, (
+            f"falta la fila de {decision.ruta} en la vista: el índice tiene que estar completo"
+        )
+
+
+def test_solo_las_decisiones_desde_la_frontera_llevan_resumen_en_la_vista(
+    arbol: Path,
+) -> None:
+    """La regla de ADR-196, medida por sus dos lados.
+
+    El resumen de las viejas no se ha perdido: está en el ADR que la fila
+    enlaza. Lo que deja de estar es la COPIA, que es lo que hacía crecer la
+    vista sin techo hasta dejarla a 630 bytes de no caber.
+    """
+    texto = generar_memoria(arbol)
+    por_ruta = {d.ruta.rsplit("/", 1)[1]: d for d in leer_decisiones(arbol)}
+
+    moderna = por_ruta[f"ADR-{memoria.PRIMER_ADR_CON_LECCION}-la-moderna.md"]
+    assert f"| {moderna.resumen} |" in texto, (
+        "un ADR desde la frontera tiene que llevar su resumen en la vista"
+    )
+
+    primera = por_ruta["ADR-001-la-primera.md"]
+    assert f"| {primera.resumen} |" not in texto, (
+        "un ADR anterior a la frontera no copia su resumen en la vista (ADR-196)"
+    )
+    assert f"[001]({primera.ruta}) | {primera.fecha} | {primera.estado} |" in texto, (
+        "...pero su fila sigue ahí entera hasta la columna del título"
+    )
 
 
 # --- Documentos, registros e investigaciones -----------------------------------
