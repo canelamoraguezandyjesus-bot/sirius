@@ -612,7 +612,8 @@ defectos:
     titulo: Una rama se fusionaba sin que nadie probara su combinacion con main
     bloque: automatizacion
     gravedad: media
-    estado: abierto
+    estado: cerrado
+    cerrado_por: ba3c528c0739b42deb96326178db3075c09b515c
     adr: 191
     incidencia: 608
     ficheros:
@@ -745,7 +746,8 @@ defectos:
     titulo: El detector de familia repetida agrupaba por el recorte anclado y no veia 6 familias reales de cada 14
     bloque: motor
     gravedad: media
-    estado: abierto
+    estado: cerrado
+    cerrado_por: c9df403baaece94a49fe446289f0323281ff359b
     adr: 197
     incidencia: 638
     ficheros:
@@ -764,7 +766,8 @@ defectos:
     titulo: Una pregunta que solo el propietario puede contestar se quedo veinte dias en una incidencia sin que nadie se la volviera a poner delante
     bloque: ciclo
     gravedad: media
-    estado: abierto
+    estado: cerrado
+    cerrado_por: 44425225593e3bc0e9aa1a848144a3bafd704186
     adr: 198
     incidencia: 640
     ficheros:
@@ -781,7 +784,8 @@ defectos:
     titulo: El detector de familia repetida llevaba medido y acertando y el ciclo seguia mandando otra vuelta de parche
     bloque: ciclo
     gravedad: media
-    estado: abierto
+    estado: cerrado
+    cerrado_por: 4cf4e9b131c756d69650d8db77f7c4cb8e76cf3c
     adr: 199
     incidencia: 642
     ficheros:
@@ -802,7 +806,8 @@ defectos:
     titulo: La condicion de la cola existia desde ADR-191 y no la llamaba nadie, asi que la rama que esperaba no tenia quien la pusiera al dia
     bloque: ciclo
     gravedad: alta
-    estado: abierto
+    estado: cerrado
+    cerrado_por: ba3c528c0739b42deb96326178db3075c09b515c
     adr: 200
     incidencia: 608
     ficheros:
@@ -822,9 +827,29 @@ defectos:
     titulo: La mina de aprendizaje solo se escribia cuando a alguien se le ocurria pedirla, y una de sus dos ediciones existe por casualidad
     bloque: ciclo
     gravedad: media
-    estado: abierto
+    estado: cerrado
+    cerrado_por: def6c2710888f041d75bd5c87f175dc6b10e923b
     adr: 201
     incidencia: 646
     ficheros:
       - .github/workflows/mina-mensual.yml
       - docs/decisions/ADR-201-la-mina-de-aprendizaje-tiene-reloj-el-dia-1-de-cada-mes-se-pide-la-edicion-del-mes-que-se-cierra.md
+
+  # ADR-202 (#647): una decision de NO hacer algo no deja rastro por
+  # construccion -no hay incidencia que cerrar ni ADR que escribir, porque el
+  # trabajo no llego a existir-, y mientras tanto lo que SI estaba escrito sigue
+  # mandando. M17 se decidio que no se hacia; la incidencia #503 declaraba como
+  # precondicion «M16 y M17 cerrados» y estuvo TRECE DIAS bloqueada contra un
+  # hito que nadie iba a hacer, sin que nadie pudiera saberlo leyendo el arbol.
+  # La razon de la decision no consta y el propietario no la recuerda; este ADR
+  # registra lo decidido y NO se inventa el porque.
+  - id: H-202
+    titulo: Una decision de no hacer algo no dejaba rastro, y una precondicion escrita antes que ella bloqueo trabajo real trece dias
+    bloque: ciclo
+    gravedad: media
+    estado: abierto
+    adr: 202
+    incidencia: 647
+    ficheros:
+      - docs/decisions/ADR-202-m17-la-medicion-que-cerraba-la-ola-de-paridad-no-se-hace-y-la-razon-no-consta.md
+      - docs/audits/PENDIENTE_Y_POR_QUE_2026-09-14.md
