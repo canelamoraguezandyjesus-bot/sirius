@@ -1,6 +1,6 @@
 # Desenlaces del motor de Sirius
 
-> **Generado por `uv run sirius-memoria desenlaces`** a partir de `diario.jsonl` y `diario-despacho.jsonl`: 663 sucesos, el último el 2026-09-14 07:40 UTC. Lo escribe el motor en la rama
+> **Generado por `uv run sirius-memoria desenlaces`** a partir de `diario.jsonl` y `diario-despacho.jsonl`: 664 sucesos, el último el 2026-09-14 08:29 UTC. Lo escribe el motor en la rama
 > `estado-del-motor` tras cada reflejo (ADR-171). **El diario manda**: si un documento
 > dice otra cosa sobre un encargo, vale esto.
 
@@ -17,7 +17,7 @@
 
 | Encargo | Clase | Estado / fase | Creado | Último suceso | Objetivo | Evidencia |
 |---|---|---|---|---|---|---|
-| WI-20260914-073945 | documentacion | active / ejecutar | 2026-09-14 07:39 UTC | 2026-09-14 07:40 UTC | Documenta en docs/audits/SIRIUS_MINA_APRENDIZAJE_OPERATIVO_2026-09.md la segunda edicion de la mina de… | [#627](https://github.com/canelamoraguezandyjesus-bot/sirius/issues/627) |
+| WI-20260914-073945 | documentacion | active / comprobar | 2026-09-14 07:39 UTC | 2026-09-14 08:29 UTC | Documenta en docs/audits/SIRIUS_MINA_APRENDIZAJE_OPERATIVO_2026-09.md la segunda edicion de la mina de… | [#627](https://github.com/canelamoraguezandyjesus-bot/sirius/issues/627) |
 | WI-20260914-010842 | programacion | delivered / entregar | 2026-09-14 01:08 UTC | 2026-09-14 07:18 UTC | Implementa la ampliacion de la guarda de citas de fichero, que hoy solo mira docs/decisions/, a toda la… | [#619](https://github.com/canelamoraguezandyjesus-bot/sirius/issues/619), fusión `2fd882d` |
 | WI-20260914-003058 | programacion | cancelled / preparar | 2026-09-14 00:30 UTC | 2026-09-14 07:04 UTC | Implementa la ampliacion de la guarda de citas de fichero, que hoy solo mira docs/decisions/, a toda la… | — |
 | WI-20260913-201621 | programacion | delivered / entregar | 2026-09-13 20:16 UTC | 2026-09-14 00:21 UTC | Corrige que las paradas de la puerta de sensibilidad no tengan salida: hoy un trabajo que la puerta detiene… | [#615](https://github.com/canelamoraguezandyjesus-bot/sirius/issues/615), fusión `0f54bc2` |
