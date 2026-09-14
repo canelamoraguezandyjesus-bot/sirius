@@ -30,7 +30,7 @@
 - Bloques del motor: 17 cerrado, 1 fuera_de_alcance, 2 pendiente.
 - Defectos registrados: 6 abierto, 42 cerrado.
 - Investigaciones: **9** (fotos con fecha; caducan).
-- Documentos: **139**, de los que **94** no declaran fecha.
+- Documentos: **140**, de los que **94** no declaran fecha.
 
 ## Qué se decidió: los ADR, del más reciente al más antiguo
 
@@ -397,6 +397,7 @@ nada por su cuenta. «Sin fecha declarada» es un aviso, no un dato.
 | 2026-07-20 | [SIRIUS — Auditoría integral del repositorio (julio de 2026)](docs/audits/SIRIUS_AUDITORIA_INTEGRAL_REPOSITORIO_2026-07.md) |
 | sin fecha declarada | [SIRIUS — Auditoría de Model Studio (7 de agosto de 2026)](docs/audits/SIRIUS_AUDITORIA_MODEL_STUDIO_2026-08.md) |
 | 2026-08-31 | [La mina: primer informe de aprendizaje sobre nuestros propios datos operativos](docs/audits/SIRIUS_MINA_APRENDIZAJE_OPERATIVO_2026-08.md) |
+| 2026-09-14 | [La mina, segunda edición: cuánta razón tiene el detector de familia repetida](docs/audits/SIRIUS_MINA_APRENDIZAJE_OPERATIVO_2026-09-14.md) |
 | 2026-08-28 | [Nota de arranque — atestar al buscador antes de gastar en medirlo](docs/audits/arranque-atestar-al-buscador.md) |
 | 2026-08-28 | [Nota de arranque — B1: que una orden de investigación produzca un informe](docs/audits/arranque-b1-investigar-desde-una-orden.md) |
 | 2026-08-27 | [Nota de arranque — un buscador que devuelva fuentes](docs/audits/arranque-buscador-con-fuentes.md) |
