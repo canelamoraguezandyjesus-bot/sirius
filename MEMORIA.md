@@ -26,11 +26,11 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **186**.
+- Decisiones (ADR): **187**.
 - Bloques del motor: 17 cerrado, 1 fuera_de_alcance, 2 pendiente.
-- Defectos registrados: 3 abierto, 42 cerrado.
+- Defectos registrados: 4 abierto, 42 cerrado.
 - Investigaciones: **9** (fotos con fecha; caducan).
-- Documentos: **134**, de los que **89** no declaran fecha.
+- Documentos: **136**, de los que **91** no declaran fecha.
 
 ## Qué se decidió: los ADR, del más reciente al más antiguo
 
@@ -39,6 +39,7 @@ está escrito. Si sale pobre, se arregla en el ADR.
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| [193](docs/decisions/ADR-193-el-doble-de-gh-rechaza-lo-que-el-gh-real-rechaza-y-la-red-de-seguridad-vuelve-a-poder-fechar.md) | 2026-09-14 | PROPUESTO | El doble de `gh` rechaza lo que el `gh` real rechaza, y la red de seguridad vuelve a poder fechar | Dos mitades, y ninguna vale sola. |
 | [192](docs/decisions/ADR-192-el-numero-de-un-defecto-es-el-numero-de-su-adr-no-un-contador-aparte.md) | 2026-09-14 | PROPUESTO | El numero de un defecto es el numero de su ADR, no un contador aparte | Uno. El número de un defecto nuevo es el número de su ADR. `H-192` para el defecto que declara ADR-192. Nadie elige nada: se copia un dato que la entrada ya está obligada a declarar desde ADR-182. |
 | [191](docs/decisions/ADR-191-la-revision-es-una-cola-una-rama-entra-a-revision-solo-si-main-ya-esta-dentro-de-ella.md) | 2026-09-14 | PROPUESTO | La revision es una cola: una rama entra a revision solo si main ya esta dentro de ella | Uno. La condición es una sola pregunta: ¿es la punta de `main` ancestro del head de la rama? Si lo es, lo que se revise es lo que aterrizará. Si no, la combinación que aterrizaría no la ha probado nadie y la rama espera. |
 | [190](docs/decisions/ADR-190-la-guarda-de-citas-no-sale-de-docs-decisions-medidos-590-citas-y-23-rotas-fuera-del-registro-cero-son-defectos-de-este-arbol.md) | 2026-09-14 | PROPUESTO | La guarda de citas no sale de docs/decisions/: medidas 590 citas y 23 rotas fuera del registro, cero son defectos de este árbol | La guarda de citas no sale de `docs/decisions/`. Con 0 defectos reales y 23 falsos positivos, el criterio de la incidencia #267 no se salva cambiándole la forma a la comprobación: se pueden escribir las reglas que callan cada familia —la… |
@@ -241,6 +242,7 @@ de memoria.
 | `lista-a-mano` | 2 | sí | [181](docs/decisions/ADR-181-la-contradiccion-de-etiquetas-se-decide-por-lo-que-proyectan-no-por-cuantas-son.md), [178](docs/decisions/ADR-178-la-autoridad-por-clase-se-deriva-de-la-via-github-que-el-despachador-declara-no-de-una-segunda-tabla-a-mano.md) |
 | `medir-lo-que-se-tiene-en-vez-de-lo-que-hay` | 2 | sí | [184](docs/decisions/ADR-184-la-prohibicion-no-es-una-peticion-el-detector-de-sensibilidad-exige-que-el-marcador-no-vaya-negado.md), [180](docs/decisions/ADR-180-el-numero-del-siguiente-adr-se-calcula-contra-las-ramas-del-remoto-no-contra-las-que-el-clon-tenga-traidas.md) |
 | `pieza-sin-lector` | 2 | sí | [183](docs/decisions/ADR-183-la-ausencia-de-run-de-quality-para-el-head-se-encamina-no-se-espera-en-silencio.md), [175](docs/decisions/ADR-175-un-tablero-por-incidencia-un-solo-comentario-que-el-motor-mantiene-al-dia.md) |
+| `doble-mas-permisivo-que-la-herramienta-que-dobla` | 1 | sí | [193](docs/decisions/ADR-193-el-doble-de-gh-rechaza-lo-que-el-gh-real-rechaza-y-la-red-de-seguridad-vuelve-a-poder-fechar.md) |
 | `estado-en-el-que-se-entra-y-del-que-no-se-sale` | 1 | sí | [189](docs/decisions/ADR-189-la-salida-de-una-parada-sin-incidencia-es-una-orden-del-propietario-y-reanudar-es-despachar-en-el-mismo-gesto.md) |
 | `guarda-ampliada-a-un-corpus-que-no-es-el-suyo` | 1 | sí | [190](docs/decisions/ADR-190-la-guarda-de-citas-no-sale-de-docs-decisions-medidos-590-citas-y-23-rotas-fuera-del-registro-cero-son-defectos-de-este-arbol.md) |
 | `guardian-que-mide-posicion-en-vez-de-estructura` | 1 | sí | [187](docs/decisions/ADR-187-una-revision-sobrevive-a-ponerse-al-dia-con-main-si-el-trabajo-propio-de-la-rama-no-cambia.md) |
@@ -271,6 +273,10 @@ de memoria.
 
 - **[ADR-183](docs/decisions/ADR-183-la-ausencia-de-run-de-quality-para-el-head-se-encamina-no-se-espera-en-silencio.md)** — escribir la rama «no hay nada que hacer» de un encaminador como un `return 0` con un `echo`, de modo que la única prueba de que el ciclo se ha parado viva en un log que nadie lee. (lo hace cumplir `tests/automation/test_sirius_apply_verdict.py`).
 - **[ADR-175](docs/decisions/ADR-175-un-tablero-por-incidencia-un-solo-comentario-que-el-motor-mantiene-al-dia.md)** — proyectar en cada pasada el estado entero de una incidencia -fase, rondas, Quality, PR, diagnóstico- y no enseñárselo nunca a quien tiene que decidir; es la novena vez que un dato correcto de esta casa no tiene lector, tres días después de la octava. (lo hace cumplir `tests/engine/test_tablero.py`).
+
+### `doble-mas-permisivo-que-la-herramienta-que-dobla`
+
+- **[ADR-193](docs/decisions/ADR-193-el-doble-de-gh-rechaza-lo-que-el-gh-real-rechaza-y-la-red-de-seguridad-vuelve-a-poder-fechar.md)** — una prueba en verde sobre una invocación que la (lo hace cumplir `tests/automation/test_sirius_reconcile.py`).
 
 ### `estado-en-el-que-se-entra-y-del-que-no-se-sale`
 
@@ -334,6 +340,7 @@ cerrados; el recuento completo está arriba.
 | H-43 | abierto | Una rama se fusionaba sin que nadie probara su combinacion con main |
 | H-192 | abierto | El identificador de un defecto se elegia a mano y dos ramas elegian el mismo |
 | H-190 | abierto | El hueco declarado de la prosa de docs/ llevaba sin medir si taparlo salia a cuenta |
+| H-193 | abierto | El doble de gh aceptaba una invocacion que el gh real rechaza y la red de seguridad de estados atascados llevaba 35 dias ciega |
 
 ## Las investigaciones: fotos con fecha, que caducan
 
@@ -374,6 +381,7 @@ nada por su cuenta. «Sin fecha declarada» es un aviso, no un dato.
 | 2026-08-28 | [Nota de arranque — el medidor cuenta un registro que Tavily no alimenta](docs/audits/arranque-contar-las-dos-fuentes.md) |
 | 2026-08-27 | [Nota de arranque — una contradicción de etiquetas no es una divergencia](docs/audits/arranque-contradiccion-no-es-divergencia.md) |
 | 2026-08-27 | [Nota de arranque — que el banco diga por qué no midió](docs/audits/arranque-el-banco-dice-por-que.md) |
+| sin fecha declarada | [Nota de arranque — el doble de `gh` acepta lo que el `gh` real rechaza](docs/audits/arranque-el-doble-de-gh-rechaza-lo-que-el-real-rechaza.md) |
 | sin fecha declarada | [Nota de arranque — el identificador de un defecto deja de escribirse a mano](docs/audits/arranque-el-identificador-de-defecto-no-se-escribe-a-mano.md) |
 | 2026-08-28 | [Nota de arranque — ¿Está el motor preparado para recibir órdenes reales?](docs/audits/arranque-el-motor-esta-preparado.md) |
 | 2026-08-28 | [Nota de arranque — H-25: el contador declara su precondición (§11.2)](docs/audits/arranque-h25-el-contador-declara-su-precondicion.md) |
@@ -408,6 +416,7 @@ nada por su cuenta. «Sin fecha declarada» es un aviso, no un dato.
 | 2026-08-28 | [Evidencia — contar las dos fuentes](docs/audits/evidencia-contar-las-dos-fuentes.md) |
 | sin fecha declarada | [Evidencia — D1, anotado sin exagerar](docs/audits/evidencia-d1-anotado.md) |
 | 2026-08-27 | [Evidencia — que el banco diga por qué no midió](docs/audits/evidencia-el-banco-dice-por-que.md) |
+| sin fecha declarada | [Evidencia — el doble de `gh` rechaza lo que el `gh` real rechaza](docs/audits/evidencia-el-doble-de-gh-rechaza-lo-que-el-real-rechaza.md) |
 | sin fecha declarada | [Evidencia — el identificador de un defecto no puede seguir eligiéndose](docs/audits/evidencia-el-identificador-de-defecto-no-se-escribe-a-mano.md) |
 | 2026-08-28 | [Evidencia — El motor está preparado para recibir órdenes reales](docs/audits/evidencia-el-motor-esta-preparado.md) |
 | 2026-08-28 | [Evidencia — el examen lado a lado](docs/audits/evidencia-examen-lado-a-lado.md) |

@@ -76,15 +76,31 @@ label_applied_at() {
   # de Codex en la PR #143; la otra llamada paginada de este script ya lo hacía
   # bien, así que la regla estaba escrita aquí al lado.
   #
-  # `--slurp` es igual de obligatorio. Con `--paginate` a secas, `gh` emite un
-  # array JSON POR PÁGINA y `--jq` se aplica a cada uno por separado: `last`
-  # daría el último de CADA página, una línea por página, y el llamador acabaría
-  # cogiendo la fecha de una y el id de otra. Con `--slurp` llega un solo array
-  # de páginas, y `add` las aplana en una sola lista. Hallazgo P2 de Codex.
-  sirius_retry gh api -X GET "repos/${1}/issues/${2}/events" -f per_page=100 \
-    --paginate --slurp \
-    --jq "(add // []) | [.[] | select(.event == \"labeled\" and .label.name == \"${3}\")] \
-          | if length == 0 then empty else (last | \"\(.created_at) \(.id)\") end"
+  # Y `--slurp` NO se puede usar aquí, aunque el problema que venía a resolver
+  # sea real. `gh api` lo rechaza en cuanto hay `--jq` —«the `--slurp` option is
+  # not supported with `--jq` or `--template`»—, así que la corrección del
+  # hallazgo P2 volvió a matar esta lectura EXACTAMENTE igual que P1: la llamada
+  # fallaba siempre, `marca` salía vacía y el aviso de estados atascados no
+  # podía publicarse. Treinta y cinco días así, del 10-08 al 14-09-2026, con las
+  # pruebas en verde porque el doble de `gh` aceptaba lo que el `gh` real
+  # rechaza. La raíz y el arreglo de fondo, en ADR-193.
+  #
+  # El problema de P2 sigue siendo real y se resuelve con la forma que esta casa
+  # ya tenía escrita en `sirius_issue.sh`: con `--paginate --jq`, el filtro se
+  # aplica por página y las salidas se CONCATENAN en orden. Cada suceso que casa
+  # sale en su propia línea con su fecha y su id JUNTOS —que es lo que P2 pedía,
+  # que no se mezclen los de sucesos distintos—, y la última línea es la última
+  # aplicación de la etiqueta, venga de la página que venga.
+  #
+  # Lectura y transformación van SEPARADAS, como en `sirius_issue.sh`: en una
+  # tubería el estado de salida sería el de `tail`, que siempre acierta, y un
+  # 503 se convertiría en «esta etiqueta no se ha puesto nunca».
+  local lineas=""
+  lineas="$(sirius_retry gh api -X GET "repos/${1}/issues/${2}/events" -f per_page=100 \
+    --paginate \
+    --jq "[.[] | select(.event == \"labeled\" and .label.name == \"${3}\")] \
+          | .[] | \"\(.created_at) \(.id)\"")" || return 1
+  printf '%s' "$lineas" | tail -n 1
 }
 
 # reactivation_labels <etiqueta> — las etiquetas que hay que APLICAR, en orden,

@@ -647,3 +647,23 @@ defectos:
     ficheros:
       - tests/automation/test_citas_de_los_adr.py
       - docs/decisions/ADR-190-la-guarda-de-citas-no-sale-de-docs-decisions-medidos-590-citas-y-23-rotas-fuera-del-registro-cero-son-defectos-de-este-arbol.md
+
+  # ADR-193 (#625; lo destapo una medida de otro trabajo, no se buscaba): el
+  # reconciliador de estados llevaba 35 dias sin poder fechar una sola etiqueta
+  # porque `gh api` rechaza `--slurp` junto con `--jq`. La llamada entro el
+  # 10-08-2026 como correccion del hallazgo P2 de Codex y volvio a matar la
+  # deteccion igual que P1, dos lineas mas arriba, con las pruebas en verde. La
+  # raiz no es la opcion: es que el doble de `gh` modelaba lo que `gh` hace y no
+  # lo que `gh` rechaza.
+  # Primer defecto cuyo numero lo fija ADR-192 por estar POR ENCIMA de la
+  # frontera: H-193 porque su ADR es el 193, y la guarda se lo exige.
+  - id: H-193
+    titulo: El doble de gh aceptaba una invocacion que el gh real rechaza y la red de seguridad de estados atascados llevaba 35 dias ciega
+    bloque: automatizacion
+    gravedad: alta
+    estado: abierto
+    adr: 193
+    incidencia: 625
+    ficheros:
+      - scripts/automation/sirius_reconcile.sh
+      - tests/automation/test_sirius_reconcile.py
