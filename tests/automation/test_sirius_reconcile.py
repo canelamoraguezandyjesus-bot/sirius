@@ -374,7 +374,11 @@ def test_reconcile_ambiguous_completed_marker_not_fixed(tmp_path: Path) -> None:
 
 
 def _seed_ci_pending(
-    env: dict[str, str], conclusion: str, edad_min: int = 1000, borrador: bool = False
+    env: dict[str, str],
+    conclusion: str,
+    edad_min: int = 1000,
+    borrador: bool = False,
+    mergeable: bool | None = True,
 ) -> None:
     md = _md(env)
     _seed_issue(
@@ -392,7 +396,17 @@ def _seed_ci_pending(
         # Mientras el simulado devolvia el fichero entero sin aplicar el `--jq`,
         # una forma inventada pasaba igual; en produccion `.head.sha` habria
         # fallado. Un simulado fiel obliga a que la siembra tambien lo sea.
-        json.dumps({"state": "open", "head": {"sha": "c4d482267d9a"}, "draft": borrador}),
+        # `mergeable` es tri-estado en la API REAL: true, false o null mientras
+        # GitHub la calcula. Sembrarla como booleano a secas habria dejado sin
+        # medir el caso que de verdad importa distinguir (ADR-194).
+        json.dumps(
+            {
+                "state": "open",
+                "head": {"sha": "c4d482267d9a"},
+                "draft": borrador,
+                "mergeable": mergeable,
+            }
+        ),
         encoding="utf-8",
     )
     (md / "checks_c4d482267d9a.txt").write_text(conclusion, encoding="utf-8")
@@ -862,6 +876,70 @@ def test_recon_stuck_009_las_lecturas_no_pueden_convertirse_en_post(
     assert "sirius-stuck:sirius:repairing:5" in (_md(env) / "comments_15.txt").read_text(
         encoding="utf-8"
     ), "sin `-X GET` la lectura de eventos falla y no se publica nada"
+
+
+def test_recon_conflicto_001_una_pr_en_conflicto_sin_quality_recibe_aviso(
+    tmp_path: Path,
+) -> None:
+    """«Sin resultado» y «no va a haberlo» no son lo mismo (ADR-194).
+
+    Una PR en conflicto con su base no tiene combinación que construir, así que
+    el suceso `pull_request` no produce ni un run de Quality. Medido en la #619:
+    cinco horas y veinte minutos con `total_count: 0` para su rama, mientras la
+    misma rama sin conflicto arrancó un run en 40 segundos.
+    """
+    env = _setup(tmp_path)
+    _seed_ci_pending(env, "none", mergeable=False)
+
+    r = _run_reconcile(env)
+    assert r.returncode == 0, r.stdout + r.stderr
+    publicado = (_md(env) / "comments_55.txt").read_text(encoding="utf-8")
+    assert "<!-- sirius-stuck:ci-pending-en-conflicto:c4d482267d9a -->" in publicado, (
+        f"tiene que publicarse el aviso, con marcador por head: {publicado!r}"
+    )
+    assert "EN CONFLICTO" in publicado, f"el aviso tiene que decir la causa: {publicado!r}"
+    # La lección de ADR-183: un aviso que solo constata deja el atasco igual de
+    # atascado. Esta aserción es la que mata la mutación de quitar el qué hacer.
+    assert "Update branch" in publicado and "rehacer la rama" in publicado, (
+        f"el aviso tiene que decir QUE HACER, no solo que pasa: {publicado!r}"
+    )
+    # Y no repara: `ci-pending` lo mueve solo la máquina.
+    labels = (_md(env) / "labels_55.txt").read_text(encoding="utf-8")
+    assert "sirius:ci-pending" in labels and "sirius:review-requested" not in labels
+
+
+def test_recon_conflicto_002_mergeable_desconocida_no_afirma_nada(tmp_path: Path) -> None:
+    """GitHub calcula `mergeable` en diferido y contesta `null` mientras tanto.
+
+    Tratar ese `null` como conflicto avisaría a cada PR recién abierta de un
+    atasco que no existe. Fallo cerrado, como el resto del guion.
+    """
+    env = _setup(tmp_path)
+    _seed_ci_pending(env, "none", mergeable=None)
+
+    r = _run_reconcile(env)
+    assert r.returncode == 0, r.stdout + r.stderr
+    publicado = (_md(env) / "comments_55.txt").read_text(encoding="utf-8")
+    assert "ci-pending-en-conflicto" not in publicado, (
+        f"con `mergeable` desconocida no se afirma que haya conflicto: {publicado!r}"
+    )
+    assert "Quality aun sin resultado" in r.stdout
+
+
+def test_recon_conflicto_003_una_pr_sana_sin_resultado_sigue_sin_ser_un_atasco(
+    tmp_path: Path,
+) -> None:
+    """El caso corriente no cambia: sin conflicto, «todavía no» sigue siendo eso."""
+    env = _setup(tmp_path)
+    _seed_ci_pending(env, "none", mergeable=True)
+
+    r = _run_reconcile(env)
+    assert r.returncode == 0, r.stdout + r.stderr
+    publicado = (_md(env) / "comments_55.txt").read_text(encoding="utf-8")
+    assert "ci-pending-en-conflicto" not in publicado, (
+        f"una PR mezclable esperando su run no es un atasco: {publicado!r}"
+    )
+    assert "nada que reconciliar" in r.stdout
 
 
 def test_recon_slurp_001_el_doble_de_gh_rechaza_slurp_con_jq_como_el_real(

@@ -667,3 +667,20 @@ defectos:
     ficheros:
       - scripts/automation/sirius_reconcile.sh
       - tests/automation/test_sirius_reconcile.py
+
+  # ADR-194 (#628): `sirius:ci-pending` lo mueve solo la maquina, y quien vigila
+  # los atascos leia «no hay resultado de Quality» y concluia «todavia no». Con
+  # una PR en conflicto la conclusion es falsa: GitHub no construye la
+  # combinacion que `pull_request` necesita y no hay ni un run, asi que la
+  # espera no termina nunca. Medido con la misma rama, con y sin conflicto: 0
+  # runs en 5h20m contra 1 run a los 40 segundos.
+  - id: H-194
+    titulo: Una incidencia en ci-pending con la PR en conflicto esperaba en silencio un run de Quality que no podia existir
+    bloque: automatizacion
+    gravedad: media
+    estado: abierto
+    adr: 194
+    incidencia: 628
+    ficheros:
+      - scripts/automation/sirius_reconcile.sh
+      - tests/automation/test_sirius_reconcile.py

@@ -312,7 +312,7 @@ for issue in "${open_issues[@]:-}"; do
       cat "$body_file" "$comments_file" \
         | grep -oE "https://github\.com/${REPO}/pull/[0-9]+" | sort -u
     )
-    open_pr="" open_head="" open_draft="" pr_ilegible=""
+    open_pr="" open_head="" open_draft="" open_mergeable="" pr_ilegible=""
     for url in "${pr_urls[@]:-}"; do
       [ -z "${url:-}" ] && continue
       prnum="${url##*/}"
@@ -326,7 +326,7 @@ for issue in "${open_issues[@]:-}"; do
       # borraba del recuento, y si era la unica el guion afirmaba despues "sin PR
       # abierta referenciada": la cuarta vez en este fichero que una lectura
       # caida se cuenta como un hecho. Se anota y se decide al salir del bucle.
-      if ! prjson="$(sirius_retry gh api "repos/${REPO}/pulls/${prnum}" --jq '{state: .state, head: .head.sha, draft: (.draft // false)}')"; then
+      if ! prjson="$(sirius_retry gh api "repos/${REPO}/pulls/${prnum}" --jq '{state: .state, head: .head.sha, draft: (.draft // false), mergeable: .mergeable}')"; then
         pr_ilegible="si"
         continue
       fi
@@ -335,6 +335,11 @@ for issue in "${open_issues[@]:-}"; do
         open_pr="$prnum"
         open_head="$(printf '%s' "$prjson" | jq -r '.head')"
         open_draft="$(printf '%s' "$prjson" | jq -r '.draft')"
+        # `mergeable` vale "true", "false" o "null": GitHub la calcula en
+        # diferido y contesta `null` mientras no la tiene. Aqui NO se
+        # interpreta; se guarda tal cual y el unico caso que decide algo es el
+        # "false" explicito (ADR-194).
+        open_mergeable="$(printf '%s' "$prjson" | jq -r '.mergeable')"
       fi
     done
     # Basta con que UNA sea ilegible para no afirmar nada del conjunto, aunque
@@ -384,7 +389,40 @@ for issue in "${open_issues[@]:-}"; do
         fi
         rm -f "$tfile"
       elif [ "$conclusion" = "none" ]; then
-        report AVISO "#${issue}: ci-pending y Quality aun sin resultado para ${open_head}; nada que reconciliar."
+        # «Sin resultado» tiene DOS significados y hasta ADR-194 se trataban
+        # igual. El corriente es «todavia no ha llegado», y ahi no hay nada que
+        # hacer. El otro es «no va a llegar nunca»: si la PR esta en conflicto
+        # con su base, GitHub no construye la combinacion que `pull_request`
+        # necesita, `quality.yml` no produce NI UN run, y la incidencia se queda
+        # en `ci-pending` esperando un suceso que nadie va a emitir. Medido en la
+        # #619: cinco horas y veinte minutos con `total_count: 0` de runs para su
+        # rama, mientras la misma rama sin conflicto arranco uno en 40 segundos.
+        #
+        # Solo decide el "false" EXPLICITO. Con "null" -GitHub calculando- o con
+        # la lectura fallida no se afirma nada, que es la disciplina del resto
+        # del guion.
+        if [ "$open_mergeable" = "false" ]; then
+          report ATASCO "#${issue}: ci-pending y la PR #${open_pr} en conflicto con su base; Quality no va a correr para ${open_head}, se avisa."
+          marker_conf="<!-- sirius-stuck:ci-pending-en-conflicto:${open_head} -->"
+          conf_file="$(mktemp)"
+          printf '%s\n\n%s\n\n%s\n\n%s\n\n%s\n%s\n\n%s\n' \
+            "$marker_conf" \
+            "🔀 **Este bloque espera un suceso que no va a llegar**" \
+            "Sigue en \`sirius:ci-pending\`, pero la PR #${open_pr} esta EN CONFLICTO con su base. GitHub no construye la combinacion que el suceso \`pull_request\` necesita, asi que Quality no va a producir ningun run para \`${open_head}\`: no es que tarde, es que no lo habra." \
+            "El reconciliador **no ha reparado nada**: poner la rama al dia es un cambio en la rama, y eso no lo decide esta red de seguridad." \
+            "1. Resolver el conflicto trayendo \`main\` a la rama de la PR #${open_pr} -el boton «Update branch», o una fusion de \`main\` en la rama-." \
+            "2. Si el conflicto es irresoluble asi, rehacer la rama sobre el \`main\` vigente y abrir una PR nueva, dejando escrito en esta incidencia cual la sustituye." \
+            "En cuanto el head deje de estar en conflicto, el empujon correspondiente dispara Quality y el ciclo sigue solo. Marcador por head: si se empuja un head nuevo y sigue en conflicto, este aviso se vuelve a publicar." >"$conf_file"
+          if sirius_comment_once "$REPO" "$issue" "$marker_conf" "$conf_file"; then
+            report AVISADO "#${issue}: aviso de PR en conflicto publicado (o ya estaba)."
+          else
+            report ERROR "#${issue}: no se pudo publicar el aviso de PR en conflicto; reintentable."
+            overall_rc=1
+          fi
+          rm -f "$conf_file"
+        else
+          report AVISO "#${issue}: ci-pending y Quality aun sin resultado para ${open_head}; nada que reconciliar."
+        fi
       else
         report AVISO "#${issue}: ci-pending con Quality '${conclusion}' para ${open_head}; aqui no se transiciona."
         # Solo `failure` y `timed_out` son corregibles: es lo que
