@@ -26,9 +26,9 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **194**.
+- Decisiones (ADR): **195**.
 - Bloques del motor: 17 cerrado, 1 fuera_de_alcance, 2 pendiente.
-- Defectos registrados: 5 abierto, 48 cerrado.
+- Defectos registrados: 6 abierto, 48 cerrado.
 - Investigaciones: **9** (fotos con fecha; caducan).
 - Documentos: **144**, de los que **96** no declaran fecha.
 
@@ -47,6 +47,7 @@ huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| [201](docs/decisions/ADR-201-la-mina-de-aprendizaje-tiene-reloj-el-dia-1-de-cada-mes-se-pide-la-edicion-del-mes-que-se-cierra.md) | 2026-09-14 | PROPUESTO | La mina de aprendizaje tiene reloj: el día 1 de cada mes se pide la edición del mes que se cierra | (sin sección Decisión) |
 | [200](docs/decisions/ADR-200-la-cola-deja-de-ser-una-condicion-y-pasa-a-ser-un-mecanismo-el-ciclo-trae-la-base-a-la-rama-que-espera.md) | 2026-09-14 | PROPUESTO | La cola deja de ser una condición y pasa a ser un mecanismo: el ciclo trae la base a la rama que espera | 1. La cola se consulta antes de reponer la revisión. En la rama `success)` de `.github/workflows/advance-sirius-after-quality.yml`, antes de aplicar `sirius:review-requested`, se lee `compare/{base}...{head}` —el mismo dato que ese paso ya… |
 | [199](docs/decisions/ADR-199-el-detector-de-familia-repetida-detiene-el-ciclo-y-esa-parada-vuelve-al-corrector-no-al-revisor-que-la-emitio.md) | 2026-09-14 | PROPUESTO | El detector de familia repetida detiene el ciclo, y esa parada vuelve al corrector, no al revisor que la emitió | 1. Con familia repetida detectada, la puerta del veredicto detiene el ciclo. En vez de `sirius:repair-requested`, publica `sirius:blocked-decision`. El comentario conserva todo lo que ya publicaba —las observaciones estructuradas y el `##… |
 | [198](docs/decisions/ADR-198-partir-un-objetivo-grande-lo-hace-la-sesion-interactiva-el-descomponedor-automatico-queda-descartado.md) | 2026-09-14 | PROPUESTO | Partir un objetivo grande lo hace la sesión interactiva; el descomponedor automático queda descartado | (sin sección Decisión) |
@@ -270,6 +271,7 @@ de memoria.
 | `pregunta-al-propietario-que-nadie-vuelve-a-poner-delante` | 1 | no en todas | [198](docs/decisions/ADR-198-partir-un-objetivo-grande-lo-hace-la-sesion-interactiva-el-descomponedor-automatico-queda-descartado.md) |
 | `prosa-que-el-cambio-deja-falsa` | 1 | no en todas | [177](docs/decisions/ADR-177-la-ampliacion-por-categoria-entra-por-una-senal-explicita-de-la-peticion-no-por-la-subcadena-contexto.md) |
 | `regla-del-propietario-que-solo-vive-en-una-conversacion` | 1 | sí | [195](docs/decisions/ADR-195-podar-significa-archivar-en-este-repositorio-no-se-borra-nada.md) |
+| `tarea-periodica-sin-reloj` | 1 | no en todas | [201](docs/decisions/ADR-201-la-mina-de-aprendizaje-tiene-reloj-el-dia-1-de-cada-mes-se-pide-la-edicion-del-mes-que-se-cierra.md) |
 | `vista-que-copia-el-corpus-del-que-venia-huyendo` | 1 | sí | [196](docs/decisions/ADR-196-la-vista-de-memoria-lleva-el-indice-completo-de-decisiones-y-el-resumen-solo-de-las-vigentes-como-metodo.md) |
 
 ### `regla-que-depende-de-que-alguien-se-acuerde`
@@ -348,6 +350,10 @@ de memoria.
 
 - **[ADR-195](docs/decisions/ADR-195-podar-significa-archivar-en-este-repositorio-no-se-borra-nada.md)** — una regla dada de viva voz —«no se elimina nada»— que no (lo hace cumplir `tests/automation/test_registro_de_defectos.py`).
 
+### `tarea-periodica-sin-reloj`
+
+- **[ADR-201](docs/decisions/ADR-201-la-mina-de-aprendizaje-tiene-reloj-el-dia-1-de-cada-mes-se-pide-la-edicion-del-mes-que-se-cierra.md)** — el único trabajo que mide los ciclos de este (sin prueba que lo haga cumplir: ninguna prueba: que el reloj dispare de verdad no lo puede).
+
 ### `vista-que-copia-el-corpus-del-que-venia-huyendo`
 
 - **[ADR-196](docs/decisions/ADR-196-la-vista-de-memoria-lleva-el-indice-completo-de-decisiones-y-el-resumen-solo-de-las-vigentes-como-metodo.md)** — una vista que existe para caber en una sola lectura (lo hace cumplir `tests/engine/test_memoria.py`).
@@ -392,6 +398,7 @@ cerrados; el recuento completo está arriba.
 | H-198 | abierto | Una pregunta que solo el propietario puede contestar se quedo veinte dias en una incidencia sin que nadie se la volviera a poner delante |
 | H-199 | abierto | El detector de familia repetida llevaba medido y acertando y el ciclo seguia mandando otra vuelta de parche |
 | H-200 | abierto | La condicion de la cola existia desde ADR-191 y no la llamaba nadie, asi que la rama que esperaba no tenia quien la pusiera al dia |
+| H-201 | abierto | La mina de aprendizaje solo se escribia cuando a alguien se le ocurria pedirla, y una de sus dos ediciones existe por casualidad |
 
 ## Las investigaciones: fotos con fecha, que caducan
 
