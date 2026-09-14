@@ -26,11 +26,11 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **187**.
+- Decisiones (ADR): **188**.
 - Bloques del motor: 17 cerrado, 1 fuera_de_alcance, 2 pendiente.
-- Defectos registrados: 4 abierto, 42 cerrado.
+- Defectos registrados: 5 abierto, 42 cerrado.
 - Investigaciones: **9** (fotos con fecha; caducan).
-- Documentos: **136**, de los que **91** no declaran fecha.
+- Documentos: **138**, de los que **93** no declaran fecha.
 
 ## Qué se decidió: los ADR, del más reciente al más antiguo
 
@@ -39,6 +39,7 @@ está escrito. Si sale pobre, se arregla en el ADR.
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| [194](docs/decisions/ADR-194-ci-pending-distingue-quality-todavia-no-ha-contestado-de-quality-no-va-a-contestar-nunca.md) | 2026-09-14 | PROPUESTO | `ci-pending` distingue «Quality todavía no ha contestado» de «Quality no va a contestar nunca» | El caso «sin resultado» se parte en dos, y solo lo parte un hecho explícito. |
 | [193](docs/decisions/ADR-193-el-doble-de-gh-rechaza-lo-que-el-gh-real-rechaza-y-la-red-de-seguridad-vuelve-a-poder-fechar.md) | 2026-09-14 | PROPUESTO | El doble de `gh` rechaza lo que el `gh` real rechaza, y la red de seguridad vuelve a poder fechar | Dos mitades, y ninguna vale sola. |
 | [192](docs/decisions/ADR-192-el-numero-de-un-defecto-es-el-numero-de-su-adr-no-un-contador-aparte.md) | 2026-09-14 | PROPUESTO | El numero de un defecto es el numero de su ADR, no un contador aparte | Uno. El número de un defecto nuevo es el número de su ADR. `H-192` para el defecto que declara ADR-192. Nadie elige nada: se copia un dato que la entrada ya está obligada a declarar desde ADR-182. |
 | [191](docs/decisions/ADR-191-la-revision-es-una-cola-una-rama-entra-a-revision-solo-si-main-ya-esta-dentro-de-ella.md) | 2026-09-14 | PROPUESTO | La revision es una cola: una rama entra a revision solo si main ya esta dentro de ella | Uno. La condición es una sola pregunta: ¿es la punta de `main` ancestro del head de la rama? Si lo es, lo que se revise es lo que aterrizará. Si no, la combinación que aterrizaría no la ha probado nadie y la rama espera. |
@@ -243,6 +244,7 @@ de memoria.
 | `medir-lo-que-se-tiene-en-vez-de-lo-que-hay` | 2 | sí | [184](docs/decisions/ADR-184-la-prohibicion-no-es-una-peticion-el-detector-de-sensibilidad-exige-que-el-marcador-no-vaya-negado.md), [180](docs/decisions/ADR-180-el-numero-del-siguiente-adr-se-calcula-contra-las-ramas-del-remoto-no-contra-las-que-el-clon-tenga-traidas.md) |
 | `pieza-sin-lector` | 2 | sí | [183](docs/decisions/ADR-183-la-ausencia-de-run-de-quality-para-el-head-se-encamina-no-se-espera-en-silencio.md), [175](docs/decisions/ADR-175-un-tablero-por-incidencia-un-solo-comentario-que-el-motor-mantiene-al-dia.md) |
 | `doble-mas-permisivo-que-la-herramienta-que-dobla` | 1 | sí | [193](docs/decisions/ADR-193-el-doble-de-gh-rechaza-lo-que-el-gh-real-rechaza-y-la-red-de-seguridad-vuelve-a-poder-fechar.md) |
+| `espera-sin-fin-por-un-suceso-que-nadie-va-a-emitir` | 1 | sí | [194](docs/decisions/ADR-194-ci-pending-distingue-quality-todavia-no-ha-contestado-de-quality-no-va-a-contestar-nunca.md) |
 | `estado-en-el-que-se-entra-y-del-que-no-se-sale` | 1 | sí | [189](docs/decisions/ADR-189-la-salida-de-una-parada-sin-incidencia-es-una-orden-del-propietario-y-reanudar-es-despachar-en-el-mismo-gesto.md) |
 | `guarda-ampliada-a-un-corpus-que-no-es-el-suyo` | 1 | sí | [190](docs/decisions/ADR-190-la-guarda-de-citas-no-sale-de-docs-decisions-medidos-590-citas-y-23-rotas-fuera-del-registro-cero-son-defectos-de-este-arbol.md) |
 | `guardian-que-mide-posicion-en-vez-de-estructura` | 1 | sí | [187](docs/decisions/ADR-187-una-revision-sobrevive-a-ponerse-al-dia-con-main-si-el-trabajo-propio-de-la-rama-no-cambia.md) |
@@ -277,6 +279,10 @@ de memoria.
 ### `doble-mas-permisivo-que-la-herramienta-que-dobla`
 
 - **[ADR-193](docs/decisions/ADR-193-el-doble-de-gh-rechaza-lo-que-el-gh-real-rechaza-y-la-red-de-seguridad-vuelve-a-poder-fechar.md)** — una prueba en verde sobre una invocación que la (lo hace cumplir `tests/automation/test_sirius_reconcile.py`).
+
+### `espera-sin-fin-por-un-suceso-que-nadie-va-a-emitir`
+
+- **[ADR-194](docs/decisions/ADR-194-ci-pending-distingue-quality-todavia-no-ha-contestado-de-quality-no-va-a-contestar-nunca.md)** — una incidencia en un estado que solo mueve la máquina, (lo hace cumplir `tests/automation/test_sirius_reconcile.py`).
 
 ### `estado-en-el-que-se-entra-y-del-que-no-se-sale`
 
@@ -341,6 +347,7 @@ cerrados; el recuento completo está arriba.
 | H-192 | abierto | El identificador de un defecto se elegia a mano y dos ramas elegian el mismo |
 | H-190 | abierto | El hueco declarado de la prosa de docs/ llevaba sin medir si taparlo salia a cuenta |
 | H-193 | abierto | El doble de gh aceptaba una invocacion que el gh real rechaza y la red de seguridad de estados atascados llevaba 35 dias ciega |
+| H-194 | abierto | Una incidencia en ci-pending con la PR en conflicto esperaba en silencio un run de Quality que no podia existir |
 
 ## Las investigaciones: fotos con fecha, que caducan
 
@@ -378,6 +385,7 @@ nada por su cuenta. «Sin fecha declarada» es un aviso, no un dato.
 | 2026-08-28 | [Nota de arranque — atestar al buscador antes de gastar en medirlo](docs/audits/arranque-atestar-al-buscador.md) |
 | 2026-08-28 | [Nota de arranque — B1: que una orden de investigación produzca un informe](docs/audits/arranque-b1-investigar-desde-una-orden.md) |
 | 2026-08-27 | [Nota de arranque — un buscador que devuelva fuentes](docs/audits/arranque-buscador-con-fuentes.md) |
+| sin fecha declarada | [Nota de arranque — `ci-pending` no distingue «todavía no» de «nunca»](docs/audits/arranque-ci-pending-no-espera-un-suceso-que-no-va-a-llegar.md) |
 | 2026-08-28 | [Nota de arranque — el medidor cuenta un registro que Tavily no alimenta](docs/audits/arranque-contar-las-dos-fuentes.md) |
 | 2026-08-27 | [Nota de arranque — una contradicción de etiquetas no es una divergencia](docs/audits/arranque-contradiccion-no-es-divergencia.md) |
 | 2026-08-27 | [Nota de arranque — que el banco diga por qué no midió](docs/audits/arranque-el-banco-dice-por-que.md) |
@@ -411,6 +419,7 @@ nada por su cuenta. «Sin fecha declarada» es un aviso, no un dato.
 | 2026-08-27 | [Evidencia — un buscador que devuelva fuentes](docs/audits/evidencia-buscador-con-fuentes.md) |
 | 2026-08-28 | [Evidencia — cerrar B1](docs/audits/evidencia-cerrar-b1.md) |
 | 2026-08-28 | [Evidencia — cerrar S2](docs/audits/evidencia-cerrar-s2.md) |
+| sin fecha declarada | [Evidencia — `ci-pending` no espera un suceso que no va a llegar](docs/audits/evidencia-ci-pending-no-espera-un-suceso-que-no-va-a-llegar.md) |
 | sin fecha declarada | [Evidencia — siete defectos decían `abierto` con su arreglo ya fusionado](docs/audits/evidencia-cierra-los-defectos-ya-arreglados.md) |
 | 2026-09-08 | [Evidencia — Propuesta de separación entre Sirius y su motor](docs/audits/evidencia-claude-sirius-motor-separation-proposal-svoy0a.md) |
 | 2026-08-28 | [Evidencia — contar las dos fuentes](docs/audits/evidencia-contar-las-dos-fuentes.md) |
