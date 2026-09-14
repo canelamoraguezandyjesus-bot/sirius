@@ -80,3 +80,66 @@ elegir la forma.
   observación, no una medida.
 - **La forma todavía no está elegida.** Esta nota descarta dos candidatas y dice
   qué falta medir; la decisión va en su ADR.
+
+## La segunda medida: la incidencia tampoco sirve, y por dos motivos
+
+La nota de arranque dejaba pendiente medir si toda entrada **nueva** trae
+incidencia. Se midió sobre las 20 últimas entradas, y el resultado descarta la
+incidencia por dos razones distintas, ninguna de las cuales estaba prevista:
+
+**Uno. La incidencia no es única por defecto.** Siete entradas —`H-26` a
+`H-32`— declaran la **misma** incidencia, la #396. Y dos más, `H-40` y `H-43`,
+declaran las dos la #608, cada una en una rama distinta. Así que `H-<incidencia>`
+no solo no resuelve la colisión: la **provoca** en un caso que hoy no la tiene.
+
+**Dos. Tampoco está siempre.** `H-35` es reciente —de la tanda de ADR-178— y no
+tiene incidencia; tiene ADR. Así que «toda entrada nueva trae incidencia» es
+falso, y con un contraejemplo de esta misma semana.
+
+**Lo que sí está siempre desde ADR-182:** el campo `adr`. De las once entradas
+desde `H-33` —que es cuando la guarda de ADR-182 empezó a exigirlo— **las once lo
+tienen**, incluida la que no tiene incidencia. Las nueve anteriores no lo tienen,
+y son justamente las de antes de esa guarda.
+
+| Entrada | incidencia | adr |
+|---|---|---|
+| H-33 … H-43 | 10 de 11 | **11 de 11** |
+| H-24 … H-32 | 8 de 9 | 0 de 9 |
+
+## Lo que esto deja sobre la mesa
+
+Queda una sola candidata con sentido: **que el identificador del defecto sea su
+ADR**, en vez de un segundo número paralelo. Dicho de otra forma: **dejar de
+tener dos sistemas de numeración** y quedarse con el que ya está coordinado.
+
+A favor:
+
+- El número de ADR **sí se coordina entre ramas** desde ADR-180: el guion
+  consulta las ramas del remoto y se salta los números cogidos. Funcionó esta
+  misma noche —se saltó el 190 porque estaba cogido en una rama sin fusionar—.
+  El `H-N`, en cambio, no lo coordina nadie.
+- Hay **una** guarda de unicidad que mantener en vez de dos
+  (`test_registro_de_decisiones.py` ya falla si dos ADR comparten número).
+- La relación defecto↔ADR ya es obligatoria desde ADR-182, así que no se inventa
+  ningún dato: se deja de duplicar uno.
+
+En contra, y hay que decirlo:
+
+- **No es «imposible», es «coordinado».** Los dos ADR-016 existen y demuestran
+  que ese número ha chocado. Lo que cambia es que pasa a haber **un solo sitio**
+  donde puede chocar, con un guion que lo coordina y una guarda que lo caza, en
+  vez de dos sitios de los que uno no tiene ninguna de las dos cosas.
+- El criterio de parada de esta rama pedía **imposible**. Esto no lo es, y no se
+  va a vender como si lo fuera: lo honesto es decir que reduce dos namespaces a
+  uno y que el que queda es el que ya tiene coordinación y guarda.
+
+## Lo que falta comprobar antes de decidir
+
+- **Si un ADR puede declarar más de un defecto.** Si puede, el identificador
+  derivado del ADR necesita un desempate dentro del mismo ADR, y entonces vuelve
+  a haber algo que elegir —aunque sea dentro de una sola rama, donde sí se ven
+  los dos—. La guarda de ADR-182 sugiere una lección por ADR, pero eso hay que
+  leerlo en el código, no suponerlo.
+- **Qué pasa con las 32 entradas sin `adr`.** No se renumeran (criterio de
+  parada), así que el formato tiene que admitir las dos formas a la vez, y la
+  guarda tiene que saber cuál exigir a una entrada nueva.
