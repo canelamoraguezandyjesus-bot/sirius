@@ -118,6 +118,15 @@ case "$sub" in
       fi
       cat "$D/open_issues.txt" 2>/dev/null; exit 0
     fi
+    if printf '%s' "$args" | grep -q '/compare/'; then
+      # ADR-200: la cola. El reconciliador pregunta si la punta de la base esta
+      # dentro de la rama ANTES de reconciliar la transicion a revision.
+      if [ "${MOCK_FAIL_COMPARE:-0}" = "1" ]; then
+        echo "gh: HTTP 503 (compare)" >&2; exit 1
+      fi
+      cat "$D/compare.json" 2>/dev/null || echo '{"status":"ahead"}'
+      exit 0
+    fi
     if printf '%s' "$args" | grep -q '/check-runs'; then
       if [ "${MOCK_FAIL_CHECKS:-0}" = "1" ]; then
         echo "gh: HTTP 503 (check-runs)" >&2; exit 1
@@ -379,6 +388,7 @@ def _seed_ci_pending(
     edad_min: int = 1000,
     borrador: bool = False,
     mergeable: bool | None = True,
+    cola: str = "ahead",
 ) -> None:
     md = _md(env)
     _seed_issue(
@@ -405,11 +415,17 @@ def _seed_ci_pending(
                 "head": {"sha": "c4d482267d9a"},
                 "draft": borrador,
                 "mergeable": mergeable,
+                # ADR-200: la cola necesita saber contra que base comparar, y en
+                # la API real `base` tambien es un objeto, no una cadena.
+                "base": {"ref": "main"},
             }
         ),
         encoding="utf-8",
     )
     (md / "checks_c4d482267d9a.txt").write_text(conclusion, encoding="utf-8")
+    # `ahead` e `identical` significan «la punta de la base ya esta dentro»;
+    # `behind` y `diverged`, lo contrario.
+    (md / "compare.json").write_text(json.dumps({"status": cola}), encoding="utf-8")
 
 
 def test_reconcile_ci_pending_with_green_quality_transitions(tmp_path: Path) -> None:
@@ -423,6 +439,47 @@ def test_reconcile_ci_pending_with_green_quality_transitions(tmp_path: Path) -> 
     assert "sirius:review-requested" in labels
     assert "sirius:ci-pending" not in labels
     assert "sirius-quality:c4d482267d9a:success" in (md / "comments_55.txt").read_text()
+
+
+def test_reconcile_ci_pending_verde_pero_la_rama_espera_su_turno(tmp_path: Path) -> None:
+    """La red de seguridad no puede saltarse la cola (ADR-200).
+
+    Desde ADR-200 el productor del evento NO manda a revision una rama que no
+    tiene dentro la punta de su base: la deja esperar y la pone al dia. Si esto
+    reconciliara mirando solo a Quality, meteria en revision exactamente las
+    ramas que aquel decidio detener -y encima con aspecto de haber arreglado
+    algo-. Es el error que este guion ya cometio una vez con las PR en borrador:
+    decidir por otro sistema sin leer su predicado (auditoria #146).
+    """
+    env = _setup(tmp_path)
+    _seed_ci_pending(env, "success", cola="behind")
+    r = _run_reconcile(env)
+    assert r.returncode == 0, r.stdout + r.stderr
+    labels = (_md(env) / "labels_55.txt").read_text()
+    assert "sirius:review-requested" not in labels, (
+        "la rama no tiene la punta de su base dentro: mandarla a revision "
+        "revisaria una combinacion que no ha probado nadie"
+    )
+    assert "sirius:ci-pending" in labels, "esperar es una NO-transicion: la etiqueta se queda"
+    assert "EN-CURSO" in r.stdout
+    assert "espera su turno" in r.stdout
+
+
+def test_reconcile_ci_pending_sin_poder_comparar_no_transiciona(tmp_path: Path) -> None:
+    """Fail-closed, como el resto del guion.
+
+    Si no se puede AFIRMAR que la rama esta al dia, no se transiciona. Dejar
+    pasar de mas mete en `main` una combinacion que nadie probo; esperar de mas
+    solo cuesta una vuelta, y se recupera sola.
+    """
+    env = _setup(tmp_path)
+    _seed_ci_pending(env, "success")
+    env["MOCK_FAIL_COMPARE"] = "1"
+    r = _run_reconcile(env)
+    assert r.returncode == 0, r.stdout + r.stderr
+    labels = (_md(env) / "labels_55.txt").read_text()
+    assert "sirius:review-requested" not in labels
+    assert "sirius:ci-pending" in labels
 
 
 def test_reconcile_ci_pending_without_result_reports_only(tmp_path: Path) -> None:

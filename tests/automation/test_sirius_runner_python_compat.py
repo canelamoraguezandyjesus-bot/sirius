@@ -57,6 +57,14 @@ SCRIPTS_RUN_ON_THE_RUNNER = (
     # #608 parte 2: lo invoca advance-sirius-after-quality.yml para decidir
     # si el trabajo propio de la rama sigue siendo el aprobado.
     "sirius_misma_obra.py",
+    # ADR-200 (#608): la cola. Lo invocan advance-sirius-after-quality.yml y
+    # sirius_reconcile.sh. Su docstring ya prometía que esta bateria lo
+    # vigilaba, y era mentira por una razon concreta: la derivacion recorre los
+    # workflows buscando quien lo llama, y hasta ADR-200 NO LO LLAMABA NADIE.
+    # La guarda no estaba rota; decia la verdad sobre un arbol en el que la
+    # pieza no se ejecutaba. Al darle llamante, la derivacion lo encontro sola y
+    # puso esta bateria en rojo: es la prueba de que el cableado es real.
+    "sirius_cola.py",
 )
 
 #: El módulo compartido no vive en `scripts/automation/` -vive en el paquete,
