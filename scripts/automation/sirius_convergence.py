@@ -122,12 +122,36 @@ _RUTA_FAMILY_DETECTOR = (
     Path(__file__).resolve().parents[2] / "src" / "sirius_engine" / "round_family_detector.py"
 )
 
+#: Desde ADR-197, `round_family_detector.py` agrupa por la RUTA que
+#: `drip_guard.parse_archivo_location` extrae, así que el simulacro de arriba
+#: tiene que registrar también ese submódulo: con solo `round_history`, el
+#: import nuevo moría con `ModuleNotFoundError` bajo el `python3` desnudo del
+#: runner, y las pruebas con el proyecto instalado no lo habrían notado. Lo
+#: vigila `test_cli_family_check_runs_under_the_bare_system_python_without_the_project_installed`.
+#:
+#: `drip_guard.py` solo importa biblioteca estándar, así que cargarlo por ruta
+#: no arrastra nada más.
+_RUTA_DRIP_GUARD = Path(__file__).resolve().parents[2] / "src" / "sirius_engine" / "drip_guard.py"
+
+
+def _cargar_por_ruta(nombre: str, ruta: Path) -> ModuleType:
+    spec = importlib.util.spec_from_file_location(nombre, ruta)
+    if spec is None or spec.loader is None:  # pragma: no cover - defensivo
+        raise ImportError(f"No se pudo cargar el módulo compartido en {ruta}")
+    modulo = importlib.util.module_from_spec(spec)
+    sys.modules[nombre] = modulo
+    spec.loader.exec_module(modulo)
+    return modulo
+
 
 def _cargar_round_family_detector() -> ModuleType:
     paquete_previo = sys.modules.get("sirius_engine")
     round_history_previo = sys.modules.get("sirius_engine.round_history")
+    drip_guard_previo = sys.modules.get("sirius_engine.drip_guard")
     tenia_atributo = paquete_previo is not None and hasattr(paquete_previo, "round_history")
     atributo_previo = getattr(paquete_previo, "round_history", None)
+    tenia_drip = paquete_previo is not None and hasattr(paquete_previo, "drip_guard")
+    drip_atributo_previo = getattr(paquete_previo, "drip_guard", None)
 
     paquete_simulado = paquete_previo
     if paquete_simulado is None:
@@ -136,6 +160,11 @@ def _cargar_round_family_detector() -> ModuleType:
     sys.modules["sirius_engine"] = paquete_simulado
     sys.modules["sirius_engine.round_history"] = _round_history
     paquete_simulado.round_history = _round_history  # type: ignore[attr-defined]
+    # El propio `drip_guard` se carga con su nombre completo a propósito: es el
+    # nombre por el que `round_family_detector` lo importa, y registrarlo con
+    # otro dejaría el import buscando en el sistema real.
+    drip_guard = _cargar_por_ruta("sirius_engine.drip_guard", _RUTA_DRIP_GUARD)
+    paquete_simulado.drip_guard = drip_guard  # type: ignore[attr-defined]
 
     ruta = _RUTA_FAMILY_DETECTOR
     spec = importlib.util.spec_from_file_location("sirius_round_family_detector", ruta)
@@ -165,6 +194,15 @@ def _cargar_round_family_detector() -> ModuleType:
             sys.modules.pop("sirius_engine.round_history", None)
         else:
             sys.modules["sirius_engine.round_history"] = round_history_previo
+        if drip_guard_previo is None:
+            sys.modules.pop("sirius_engine.drip_guard", None)
+        else:
+            sys.modules["sirius_engine.drip_guard"] = drip_guard_previo
+        if paquete_previo is not None:
+            if tenia_drip:
+                paquete_previo.drip_guard = drip_atributo_previo  # type: ignore[attr-defined]
+            elif hasattr(paquete_previo, "drip_guard"):
+                del paquete_previo.drip_guard  # type: ignore[attr-defined]
     return modulo
 
 
