@@ -701,3 +701,21 @@ defectos:
     ficheros:
       - src/sirius_engine/memoria.py
       - tests/engine/test_memoria.py
+
+  # ADR-195 (#630): «podar» no estaba definido en ninguna parte. La regla la dio
+  # el propietario de viva voz -«a podar te refieres a archivar, no se elimina
+  # nada»- y la palabra no aparecia ni una vez en docs/ ni en AGENTS.md; peor,
+  # habia prosa que la contradecia y que habria guiado a quien implementara la
+  # poda. El defecto no es la poda: es que una regla suya se quedara solo en una
+  # conversacion.
+  - id: H-195
+    titulo: Una regla del propietario -podar es archivar, aqui no se borra nada- no estaba escrita en ninguna parte del arbol
+    bloque: ciclo
+    gravedad: media
+    estado: abierto
+    adr: 195
+    incidencia: 630
+    ficheros:
+      - docs/decisions/ADR-195-podar-significa-archivar-en-este-repositorio-no-se-borra-nada.md
+      - tests/automation/test_registro_de_defectos.py
+      - docs/investigaciones/2026-09-11-flujos-reales-de-agentes-comparados-con-el-motor.md

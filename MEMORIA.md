@@ -26,9 +26,9 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **189**.
+- Decisiones (ADR): **190**.
 - Bloques del motor: 17 cerrado, 1 fuera_de_alcance, 2 pendiente.
-- Defectos registrados: 6 abierto, 42 cerrado.
+- Defectos registrados: 7 abierto, 42 cerrado.
 - Investigaciones: **9** (fotos con fecha; caducan).
 - Documentos: **140**, de los que **94** no declaran fecha.
 
@@ -48,6 +48,7 @@ huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
 | [196](docs/decisions/ADR-196-la-vista-de-memoria-lleva-el-indice-completo-de-decisiones-y-el-resumen-solo-de-las-vigentes-como-metodo.md) | 2026-09-14 | PROPUESTO | La vista de memoria lleva el índice completo de decisiones, y el resumen solo de las que siguen vigentes como método | El índice se queda entero; la copia del resumen, no. |
+| [195](docs/decisions/ADR-195-podar-significa-archivar-en-este-repositorio-no-se-borra-nada.md) | 2026-09-14 | PROPUESTO | «Podar» significa archivar: en este repositorio no se borra nada | (sin sección Decisión) |
 | [194](docs/decisions/ADR-194-ci-pending-distingue-quality-todavia-no-ha-contestado-de-quality-no-va-a-contestar-nunca.md) | 2026-09-14 | PROPUESTO | `ci-pending` distingue «Quality todavía no ha contestado» de «Quality no va a contestar nunca» | El caso «sin resultado» se parte en dos, y solo lo parte un hecho explícito. |
 | [193](docs/decisions/ADR-193-el-doble-de-gh-rechaza-lo-que-el-gh-real-rechaza-y-la-red-de-seguridad-vuelve-a-poder-fechar.md) | 2026-09-14 | PROPUESTO | El doble de `gh` rechaza lo que el `gh` real rechaza, y la red de seguridad vuelve a poder fechar | Dos mitades, y ninguna vale sola. |
 | [192](docs/decisions/ADR-192-el-numero-de-un-defecto-es-el-numero-de-su-adr-no-un-contador-aparte.md) | 2026-09-14 | PROPUESTO | El numero de un defecto es el numero de su ADR, no un contador aparte | Uno. El número de un defecto nuevo es el número de su ADR. `H-192` para el defecto que declara ADR-192. Nadie elige nada: se copia un dato que la entrada ya está obligada a declarar desde ADR-182. |
@@ -260,6 +261,7 @@ de memoria.
 | `interruptor-que-enciende-mas-de-lo-que-se-puede-medir` | 1 | sí | [185](docs/decisions/ADR-185-la-puerta-de-la-memoria-se-parte-en-tres-interruptores-antes-de-abrirla.md) |
 | `plan-que-hay-que-terminar-de-una-sentada` | 1 | sí | [176](docs/decisions/ADR-176-el-cierre-de-una-incidencia-se-retoma-desde-donde-se-quedo.md) |
 | `prosa-que-el-cambio-deja-falsa` | 1 | no en todas | [177](docs/decisions/ADR-177-la-ampliacion-por-categoria-entra-por-una-senal-explicita-de-la-peticion-no-por-la-subcadena-contexto.md) |
+| `regla-del-propietario-que-solo-vive-en-una-conversacion` | 1 | sí | [195](docs/decisions/ADR-195-podar-significa-archivar-en-este-repositorio-no-se-borra-nada.md) |
 | `vista-que-copia-el-corpus-del-que-venia-huyendo` | 1 | sí | [196](docs/decisions/ADR-196-la-vista-de-memoria-lleva-el-indice-completo-de-decisiones-y-el-resumen-solo-de-las-vigentes-como-metodo.md) |
 
 ### `regla-que-depende-de-que-alguien-se-acuerde`
@@ -318,6 +320,10 @@ de memoria.
 
 - **[ADR-177](docs/decisions/ADR-177-la-ampliacion-por-categoria-entra-por-una-senal-explicita-de-la-peticion-no-por-la-subcadena-contexto.md)** — retirar un símbolo de producción y dejar vivas las frases que lo daban por cierto; al quitar `pide_contexto` quedaron falsos los once pasajes de prosa que la sección 6 de esta ficha enumera, 22 referencias del literal en las pruebas más otros cuatro pasajes de pruebas que describían el mecanismo sin nombrarlo, y el criterio de aceptación de M16 de la Arquitectura Técnica; y el barrido que las buscó en `scripts/` y `tests/` no miró en `docs/evolution/` ni podía ver lo que no escribe el literal, así que una lista solo se declara completa sobre el alcance del barrido que la produjo y el resto se dice cubierto por lectura. (sin prueba que lo haga cumplir: ninguna prueba: nada en este repositorio vigila la coherencia de la prosa de `docs/` con el árbol, y la ocurrencia que queda viva está en la Arquitectura Técnica, que la salvaguarda de #581 prohíbe tocar sin decisión del propietario.).
 
+### `regla-del-propietario-que-solo-vive-en-una-conversacion`
+
+- **[ADR-195](docs/decisions/ADR-195-podar-significa-archivar-en-este-repositorio-no-se-borra-nada.md)** — una regla dada de viva voz —«no se elimina nada»— que no (lo hace cumplir `tests/automation/test_registro_de_defectos.py`).
+
 ### `vista-que-copia-el-corpus-del-que-venia-huyendo`
 
 - **[ADR-196](docs/decisions/ADR-196-la-vista-de-memoria-lleva-el-indice-completo-de-decisiones-y-el-resumen-solo-de-las-vigentes-como-metodo.md)** — una vista que existe para caber en una sola lectura (lo hace cumplir `tests/engine/test_memoria.py`).
@@ -363,6 +369,7 @@ cerrados; el recuento completo está arriba.
 | H-193 | abierto | El doble de gh aceptaba una invocacion que el gh real rechaza y la red de seguridad de estados atascados llevaba 35 dias ciega |
 | H-194 | abierto | Una incidencia en ci-pending con la PR en conflicto esperaba en silencio un run de Quality que no podia existir |
 | H-196 | abierto | La vista de memoria copiaba el resumen de cada decision para siempre y dejo de caber en una sola lectura |
+| H-195 | abierto | Una regla del propietario -podar es archivar, aqui no se borra nada- no estaba escrita en ninguna parte del arbol |
 
 ## Las investigaciones: fotos con fecha, que caducan
 

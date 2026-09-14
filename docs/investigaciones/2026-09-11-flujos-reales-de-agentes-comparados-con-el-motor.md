@@ -52,6 +52,31 @@ repositorios públicos, y eso es lo que comprobó:
   fechas de publicación, la PR de BAML y el hilo de Boris Cherny. Se toman como
   lo que el informe dice de ellos, que él mismo marca como «relato» o «demo».
 
+### Dónde está lo de Curator, buscado el 14-09-2026
+
+El propietario preguntó por un componente que recordaba haber mirado —«era
+Curator lo que tenía que buscar»— y no encontraba. **Sí está en el árbol**, y
+esta es su única aparición, para no volver a buscarla:
+
+`docs/investigaciones/2026-08-31-orden-483-investiga-una-sola-pregunta-acotada-el-marco-de-agentes-herm.md`
+—la investigación de la orden #483 sobre el marco **Hermes Agent** de
+NousResearch— lo lista como uno de sus once componentes. Y ahí está el problema:
+esa tabla declara **ND (no determinado) la ubicación, la función, el estado y la
+fuente de las once filas**, Curator incluido, porque ninguna de sus 33 fuentes
+sustentaba una atribución por fila. Lo único que aquella investigación recuperó
+fue **el nombre**.
+
+Así que no hay ninguna decisión perdida sobre Curator: **no se decidió nada
+porque no había dato sobre el que decidir**. Lo que sí está decidido y registrado
+es el veredicto de la incidencia #172: Hermes **no** como núcleo de Sirius.
+
+Lo que falta, si alguna vez interesa: una investigación que lea el **código
+fuente** del repositorio de Hermes —no texto sobre él— y conteste qué hace
+Curator, qué datos consume, qué decide, si se auto-aplica o propone, y si sirve
+suelto. No se ha lanzado: el investigador del motor trabaja con fuentes web, que
+es justo lo que ya falló en agosto, así que lanzarlo tal cual probablemente
+devolvería otra tabla de ND.
+
 ## Lo que el motor ya hace, punto por punto
 
 | Lo que hacen ellos | Lo que hay en el motor | Estado |
@@ -88,8 +113,11 @@ repositorios públicos, y eso es lo que comprobó:
    corrección que termina en verde, capturar una lección solo si «sin este
    documento, otro volvería a cometer el error o a repetir la investigación»;
    cada pocas semanas, revisar las lecciones contra el código y mantenerlas,
-   actualizarlas, consolidarlas, sustituirlas o borrarlas, con evidencia. Las
-   lecciones que puedan hacerse cumplir con una prueba se convierten en prueba.
+   actualizarlas, consolidarlas, sustituirlas o **archivarlas**, con evidencia.
+   Las lecciones que puedan hacerse cumplir con una prueba se convierten en
+   prueba. *(Decía «borrarlas». El propietario corrigió el término el
+   14-09-2026 —«a podar te refieres a archivar, no se elimina nada»— y esa
+   corrección es ahora ADR-195: aquí no se borra nada.)*
 4. **Un tablero por incidencia** al estilo del workpad de Symphony: un
    comentario que el motor actualiza con plan, criterios y validación, además
    de los avisos por hecho que ya existen. Reduce lo que el propietario tiene
