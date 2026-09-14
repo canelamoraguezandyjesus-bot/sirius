@@ -1,6 +1,6 @@
 # Desenlaces del motor de Sirius
 
-> **Generado por `uv run sirius-memoria desenlaces`** a partir de `diario.jsonl` y `diario-despacho.jsonl`: 651 sucesos, el último el 2026-09-14 00:21 UTC. Lo escribe el motor en la rama
+> **Generado por `uv run sirius-memoria desenlaces`** a partir de `diario.jsonl` y `diario-despacho.jsonl`: 652 sucesos, el último el 2026-09-14 00:30 UTC. Lo escribe el motor en la rama
 > `estado-del-motor` tras cada reflejo (ADR-171). **El diario manda**: si un documento
 > dice otra cosa sobre un encargo, vale esto.
 
@@ -11,12 +11,13 @@
 | active | 1 |
 | cancelled | 26 |
 | delivered | 57 |
-| needs_decision | 4 |
+| needs_decision | 5 |
 
 ## Los encargos, del más reciente al más antiguo
 
 | Encargo | Clase | Estado / fase | Creado | Último suceso | Objetivo | Evidencia |
 |---|---|---|---|---|---|---|
+| WI-20260914-003058 | programacion | needs_decision / preparar | 2026-09-14 00:30 UTC | 2026-09-14 00:30 UTC | Implementa la ampliacion de la guarda de citas de fichero, que hoy solo mira docs/decisions/, a toda la… | — |
 | WI-20260913-201621 | programacion | delivered / entregar | 2026-09-13 20:16 UTC | 2026-09-14 00:21 UTC | Corrige que las paradas de la puerta de sensibilidad no tengan salida: hoy un trabajo que la puerta detiene… | [#615](https://github.com/canelamoraguezandyjesus-bot/sirius/issues/615), fusión `0f54bc2` |
 | WI-20260913-143715 | programacion | cancelled / revisar | 2026-09-13 14:37 UTC | 2026-09-13 20:09 UTC | Implementa la quinta causa de la puerta del despachador: un encargo cuyo alcance declarado cae bajo .github/… | [#612](https://github.com/canelamoraguezandyjesus-bot/sirius/issues/612) |
 | WI-20260913-142937 | programacion | needs_decision / preparar | 2026-09-13 14:29 UTC | 2026-09-13 14:29 UTC | Implementa la quinta causa de la puerta del despachador: un encargo cuyo alcance declarado cae bajo .github/… | — |
