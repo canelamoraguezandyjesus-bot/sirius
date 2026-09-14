@@ -36,6 +36,24 @@ import yaml
 
 from sirius_engine.memoria import PRIMER_ADR_CON_LECCION, leer_leccion
 
+#: Desde este ADR, el número de un defecto ES el número de su ADR (ADR-192).
+#: Antes era un contador aparte que cada rama elegía mirando su propio árbol, y
+#: dos ramas abiertas a la vez acertaban las dos: tres colisiones en una sola
+#: noche -H-38, H-39 y H-43-, y la segunda dejó `main` en rojo.
+#:
+#: Vive AQUÍ y no junto a `PRIMER_ADR_CON_LECCION` -que es su hermana y gobierna
+#: lo mismo para ADR-174- porque aquella la usa el generador de `MEMORIA.md` y
+#: esta no la usa nadie en producción: la regla es una guarda y nada más. Puesta
+#: en `src/`, la guarda de ADR-179 la señaló como pieza sin llamante, y tenía
+#: razón.
+#:
+#: Los defectos anteriores conservan su número: renumerarlos rompería el vínculo
+#: con su commit de cierre, cuyo mensaje empieza por `H-N: ` y que la guarda de
+#: ADR-080 lee. La frontera es UNA constante y no crece, que es lo que la
+#: distingue de una lista de excepciones -la familia `lista-a-mano`, que este
+#: arreglo no puede reproducir-.
+PRIMER_ADR_CON_ID_DERIVADO = 192
+
 RAIZ = Path(__file__).resolve().parents[2]
 REGISTRO = RAIZ / "docs" / "audits" / "registro_defectos.yml"
 
@@ -61,6 +79,78 @@ def test_cada_defecto_trae_sus_campos_y_un_estado_conocido() -> None:
         assert defecto["estado"] in ESTADOS, (
             f"{defecto['id']}: estado {defecto['estado']!r} desconocido; usa {sorted(ESTADOS)}"
         )
+
+
+def test_el_numero_de_un_defecto_nuevo_es_el_de_su_adr() -> None:
+    """Nadie elige el número: se copia del ADR, que ya está coordinado (ADR-192).
+
+    Elegirlo era el defecto. Cada rama leía el máximo que veía y sumaba uno, las
+    dos acertaban, y las dos escribían lo mismo: `H-38`, `H-39` y `H-43`
+    chocaron en una sola noche, y la segunda dejó `main` en rojo. El número de
+    ADR, en cambio, lo coordina `scripts/siguiente_adr.py` contra las ramas del
+    remoto (ADR-180) y lo vigila `test_registro_de_decisiones.py`: hay UN sitio
+    donde puede chocar, y es el que está defendido.
+
+    Los defectos anteriores a la frontera conservan su número a propósito:
+    renumerarlos rompería el vínculo con su commit de cierre, que empieza por
+    `H-N: ` (ADR-080).
+    """
+    desviados = [
+        (defecto["id"], defecto["adr"])
+        for defecto in _defectos()
+        if isinstance(defecto.get("adr"), int)
+        and defecto["adr"] >= PRIMER_ADR_CON_ID_DERIVADO
+        and defecto["id"] != f"H-{defecto['adr']}"
+    ]
+    assert desviados == [], (
+        f"desde ADR-{PRIMER_ADR_CON_ID_DERIVADO} el identificador de un defecto es el de "
+        f"su ADR, y estos no lo son: "
+        f"{[f'{ident} declara adr {adr}, tendría que ser H-{adr}' for ident, adr in desviados]}. "
+        "No elijas número: copia el del ADR que lo declara."
+    )
+
+
+def test_la_regla_del_identificador_se_ejercita_de_verdad() -> None:
+    """Anti-vacua: mover la frontera hacia delante apagaría la regla en silencio.
+
+    `test_el_numero_de_un_defecto_nuevo_es_el_de_su_adr` recorre solo las
+    entradas por encima de la frontera. Si la frontera se pone en un número que
+    ningún defecto alcanza, esa prueba pasa sin mirar nada y la regla deja de
+    existir sin que ninguna batería lo note. Esto exige que haya al menos una
+    entrada que la regla gobierne de verdad.
+    """
+    gobernadas = [
+        defecto["id"]
+        for defecto in _defectos()
+        if isinstance(defecto.get("adr"), int) and defecto["adr"] >= PRIMER_ADR_CON_ID_DERIVADO
+    ]
+    assert gobernadas, (
+        f"ningún defecto tiene `adr` >= {PRIMER_ADR_CON_ID_DERIVADO}, así que la regla del "
+        "identificador derivado no gobierna nada y su prueba pasa sola. O la frontera se "
+        "movió hacia delante, o el registro perdió las entradas que la ejercitaban."
+    )
+
+
+def test_la_frontera_deja_fuera_a_los_defectos_de_antes() -> None:
+    """Anti-vacua por el otro lado: la regla NO puede aplicarse hacia atrás.
+
+    Sin esta prueba, mover la frontera a 0 -o quitarla- pasaría inadvertido
+    hasta que alguien renumerara once entradas y rompiera sus commits de cierre.
+    """
+    anteriores = [
+        defecto
+        for defecto in _defectos()
+        if isinstance(defecto.get("adr"), int) and defecto["adr"] < PRIMER_ADR_CON_ID_DERIVADO
+    ]
+    assert anteriores, (
+        "el registro tiene que conservar defectos anteriores a la frontera; si no, "
+        "esta prueba no comprueba nada y la de arriba tampoco distingue nada"
+    )
+    assert any(d["id"] != f"H-{d['adr']}" for d in anteriores), (
+        "ninguno de los defectos anteriores a la frontera tiene ya un número distinto "
+        "del de su ADR: o se renumeraron -que es justo lo que no hay que hacer- o la "
+        "frontera se movió"
+    )
 
 
 def test_ningun_identificador_repetido() -> None:

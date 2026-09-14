@@ -611,3 +611,14 @@ defectos:
     ficheros:
       - scripts/automation/sirius_cola.py
       - tests/automation/test_cola.py
+
+  - id: H-192
+    titulo: El identificador de un defecto se elegia a mano y dos ramas elegian el mismo
+    bloque: automatizacion
+    gravedad: media
+    estado: abierto
+    adr: 192
+    incidencia: 608
+    ficheros:
+      - src/sirius_engine/memoria.py
+      - tests/automation/test_registro_de_defectos.py
