@@ -296,7 +296,18 @@ RAMA_DE_ORIGEN_NO_FUSIONADA: dict[str, list[str]] = {
     # ADR-135 (el prompt del corrector) cita el mismo informe como origen de
     # las dos familias que motivan su cambio (prosa desincronizada y cifras
     # a mano).
-    "docs/audits/SIRIUS_MINA_APRENDIZAJE_OPERATIVO_2026-09.md": [_ADR_132, _ADR_134, _ADR_135],
+    #
+    # `docs/audits/SIRIUS_MINA_APRENDIZAJE_OPERATIVO_2026-09.md` estaba aquí
+    # hasta la incidencia #627, que escribió en esa misma ruta la SEGUNDA
+    # EDICIÓN de la mina —otro documento, con otros §4 y §8—. La excepción se
+    # retira porque ya no excepciona nada: la ruta existe en `main` y
+    # `test_lo_fijado_como_rama_de_origen_no_fusionada_sigue_sin_existir_en_main`
+    # lo exige. Lo que NO se resuelve al retirarla, y queda declarado en
+    # `docs/audits/SIRIUS_MINA_APRENDIZAJE_OPERATIVO_2026-09.md` §7 para que lo
+    # decida el propietario: las tres citas de ADR-132, ADR-134 y ADR-135
+    # siguen escritas, ahora resuelven a un documento distinto del que
+    # nombran, y esta guarda solo comprueba que la ruta exista —así que pasa
+    # en verde sin que el desajuste se haya arreglado—.
     "docs/audits/mina-2026-09-medicion-de-guardianes.md": [_ADR_132, _ADR_134],
     # ADR-139 (el cron del reconciliador) cita el papel de cambios para el
     # propietario que salió de la misma mina: vive en la misma rama de
