@@ -91,6 +91,25 @@ case "$sub" in
       echo "gh: HTTP 404 (metodo $metodo sobre un endpoint de solo lectura)" >&2
       exit 1
     fi
+    # SEGUNDA regla de argumentos del `gh` REAL, y por la misma razon que la de
+    # arriba: `--slurp` NO se puede combinar con `--jq` ni con `--template`. El
+    # `gh` real lo rechaza con codigo 1 antes de hacer ninguna peticion, asi que
+    # aqui se rechaza igual. Sin esto el simulado era MAS PERMISIVO que la
+    # herramienta que dobla, y eso mato la deteccion de estados atascados
+    # durante 35 dias sin que ninguna prueba se enterara: la correccion del
+    # hallazgo P2 anadio `--slurp` junto a `--jq`, el simulado lo dio por bueno
+    # y en produccion la llamada fallaba siempre (ADR-193).
+    tiene_slurp=0; tiene_filtro=0
+    for a in "$@"; do
+      case "$a" in
+        --slurp) tiene_slurp=1;;
+        --jq|-q|--template|-t) tiene_filtro=1;;
+      esac
+    done
+    if [ "$tiene_slurp" = 1 ] && [ "$tiene_filtro" = 1 ]; then
+      echo "the \`--slurp\` option is not supported with \`--jq\` or \`--template\`" >&2
+      exit 1
+    fi
     if printf '%s' "$args" | grep -qE 'issues\?|issues -f|repos/[^ ]+/issues($| -f)'; then
       # GitHub falla: 503, 403 por limite de tasa... Sin poder simularlo, el
       # camino en que la pasada entera no comprueba nada no se puede medir.
@@ -133,10 +152,25 @@ case "$sub" in
       # documento JSON por pagina, y `--slurp` emite un unico array con todas.
       # Modelar eso importa: con `--paginate` a secas, `--jq` se aplica a cada
       # pagina por separado y `last` da el ultimo de CADA una (hallazgo P2).
+      #
+      # Y SIN `--paginate` solo llega la PRIMERA pagina, que es lo que este
+      # simulado no modelaba: quitar `--paginate` de la llamada real dejaba las
+      # 43 pruebas en verde -mutacion M4 de ADR-193, que sobrevivio a la primera
+      # pasada- mientras en produccion la fecha saldria de la pagina mas vieja.
+      # Es la misma familia que el defecto que ADR-193 arregla: un doble que no
+      # modela una opcion deja de medir lo que esa opcion decide.
+      paginado=0
+      for a in "$@"; do [ "$a" = "--paginate" ] && paginado=1; done
       if printf '%s' "$args" | grep -q -- '--slurp'; then
-        entrada="$(cat "$raw")"
-      else
+        if [ "$paginado" = 1 ]; then
+          entrada="$(cat "$raw")"
+        else
+          entrada="$(jq -c '[.[0]]' "$raw")"
+        fi
+      elif [ "$paginado" = 1 ]; then
         entrada="$(jq -c '.[]' "$raw")"
+      else
+        entrada="$(jq -c '.[0]' "$raw")"
       fi
       # Se aplica el `--jq` REAL del llamador. Si el simulado devolviera la
       # linea ya filtrada, el filtro —que es donde puede estar el defecto— no
@@ -828,6 +862,76 @@ def test_recon_stuck_009_las_lecturas_no_pueden_convertirse_en_post(
     assert "sirius-stuck:sirius:repairing:5" in (_md(env) / "comments_15.txt").read_text(
         encoding="utf-8"
     ), "sin `-X GET` la lectura de eventos falla y no se publica nada"
+
+
+def test_recon_slurp_001_el_doble_de_gh_rechaza_slurp_con_jq_como_el_real(
+    tmp_path: Path,
+) -> None:
+    """El simulado no puede ser MÁS PERMISIVO que la herramienta que dobla.
+
+    `gh api` rechaza `--slurp` junto a `--jq` o `--template` antes de hacer
+    ninguna petición. Mientras el simulado lo aceptaba, la corrección del
+    hallazgo P2 —que añadió justo esa combinación— pasó las 41 pruebas en verde
+    y en producción falló SIEMPRE: 35 días sin poder fechar una sola etiqueta,
+    del 10-08 al 14-09-2026 (ADR-193).
+
+    Esta prueba fija la regla en el simulado. Si alguien la quita, la llamada
+    rota vuelve a pasar desapercibida, que es exactamente lo que pasó.
+    """
+    env = _setup(tmp_path)
+    _seed_events(env, 21, [_evento("labeled", "sirius:repairing", _iso(10), 7)])
+
+    for filtro in (["--jq", ".[]"], ["--template", "{{.}}"]):
+        r = subprocess.run(
+            ["gh", "api", "-X", "GET", "repos/owner/repo/issues/21/events", "--slurp", *filtro],
+            capture_output=True,
+            text=True,
+            env=env,
+            check=False,
+        )
+        assert r.returncode != 0, (
+            f"`gh api --slurp {filtro[0]}` tiene que fallar como el real: {r.stdout!r}"
+        )
+        assert "--slurp" in r.stderr and "not supported" in r.stderr, (
+            f"el fallo tiene que ser el del `gh` real, no otro: {r.stderr!r}"
+        )
+
+    sin_filtro = subprocess.run(
+        ["gh", "api", "-X", "GET", "repos/owner/repo/issues/21/events", "--slurp"],
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
+    )
+    assert sin_filtro.returncode == 0, (
+        "`--slurp` a solas SÍ es legal en `gh`; rechazarlo también sería modelar "
+        f"otra herramienta distinta: {sin_filtro.stderr!r}"
+    )
+
+
+def test_recon_slurp_002_ningun_guion_de_automatizacion_combina_slurp_con_un_filtro() -> None:
+    """La regla vale para TODO `scripts/automation/`, no solo donde ya picó.
+
+    La prueba de arriba sostiene la fidelidad del simulado, y con ella cae
+    cualquier llamada rota que las pruebas del reconciliador ejerciten. Pero una
+    llamada nueva en otro guion —o en un camino que ninguna prueba recorra—
+    volvería a fallar solo en producción. Esto lo cierra leyendo los guiones.
+    """
+    filtros = ("--jq", "--template")
+    ofensores: list[str] = []
+    for guion in sorted((RECONCILE.parent).glob("*.sh")):
+        texto = guion.read_text(encoding="utf-8")
+        # Las líneas continuadas con «\\» son una sola invocación: se pegan antes
+        # de mirar, o una llamada partida en dos líneas se escaparía.
+        pegado = texto.replace("\\\n", " ")
+        for linea in pegado.splitlines():
+            codigo = linea.split("#", 1)[0]
+            if "--slurp" in codigo and any(f in codigo for f in filtros):
+                ofensores.append(f"{guion.name}: {linea.strip()}")
+    assert not ofensores, (
+        "`gh api` rechaza `--slurp` con `--jq` o `--template`; estas llamadas "
+        f"fallarían siempre en producción (ADR-193): {ofensores}"
+    )
 
 
 def test_recon_case_b_does_not_overtake_a_healthy_cycle(tmp_path: Path) -> None:
