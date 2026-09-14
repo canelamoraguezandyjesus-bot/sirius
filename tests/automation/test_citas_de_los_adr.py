@@ -594,3 +594,316 @@ def test_una_excepcion_de_todavia_no_existe_se_retira_cuando_el_fichero_nace() -
         f"estas rutas ya existen: {ya_existen}. Quítalas de TODAVIA_NO_EXISTEN: "
         "la excepción se puso porque no existían, y ya no es cierto."
     )
+
+
+# --- Por qué esta guarda NO sale de `docs/decisions/` (ADR-190) ---------------
+#
+# ADR-177 dejó declarado el único hueco de la mina de lecciones: «lo hace
+# cumplir: ninguna prueba … nada en este repositorio vigila la coherencia de la
+# prosa de `docs/` con el árbol». La incidencia #619 encargó **medir antes de
+# taparlo**, con el criterio que ADR-078 escribió para la incidencia #267: una
+# comprobación entra solo si caza más defectos reales que falsos positivos.
+#
+# La medida, el 14-09-2026, ejecutando `citas_de` sobre los 132 documentos de
+# `docs/` que quedan fuera de `docs/decisions/`: **590 citas reconocidas, 23
+# rotas repartidas en 17 ficheros**. Clasificadas una a una abajo: **ninguna de
+# las 23 es un defecto de este árbol**. Las 23 son prosa correcta sobre algo que
+# no es este árbol en este commit —una rama, otro repositorio, una ruta elidida,
+# una ruta propuesta, un directorio que solo existe durante una construcción—.
+#
+# Con cero defectos reales y 23 falsos, el criterio no se salva cambiándole la
+# forma a la guarda: se puede escribir la regla que calla a cada familia, pero
+# la cosecha sigue siendo cero. Por eso el barrido **se queda en
+# `docs/decisions/`**, y las tres pruebas de abajo fijan esa decisión: que la
+# medida siga siendo la que se midió, que ninguna categoría nueva entre sin
+# veredicto, y que el barrido no se amplíe sin volver a medir.
+#
+# Lo que esta decisión acepta a cambio, escrito para que nadie lo descubra
+# después: una cita que se rompa mañana en `docs/` fuera del registro **no la
+# va a ver nadie**. Se aceptó con la medida delante, no por descuido.
+
+CARPETA_DOCUMENTACION = RAIZ / "docs"
+
+#: Las siete categorías con las que ADR-190 clasificó las 23. Todas significan
+#: lo mismo para el saldo —«la prosa acierta, la que se equivoca es la guarda»—
+#: y por eso el recuento de defectos reales es cero.
+SIN_DEFECTO_DE_ESTE_ARBOL: dict[str, str] = {
+    "rama-del-repositorio": (
+        "la cita es el nombre de una RAMA que empieza por una raíz del "
+        "repositorio (`docs/...`), no una ruta de fichero"
+    ),
+    "ruta-elidida": (
+        "la prosa abrevió la ruta con `…` o `...` a propósito: no hay ninguna "
+        "ruta concreta que abrir, igual que en un globo o una plantilla"
+    ),
+    "rama-de-origen-no-fusionada": (
+        "el fichero existe hoy en otra rama que a propósito nunca se fusiona "
+        "entera; es la categoría que ADR-105 ya reconoció para los ADR"
+    ),
+    "adr-citado-por-su-numero": (
+        "`docs/decisions/ADR-002` sin el resto del nombre: el ADR existe, lo "
+        "que la prosa escribe es su número, no su fichero"
+    ),
+    "ruta-propuesta-todavia-no-creada": (
+        "un documento de propuesta nombra dónde IRÍA algo; la ausencia no "
+        "invalida la frase, es la frase"
+    ),
+    "directorio-efimero-de-la-construccion": (
+        "lo crea una herramienta durante el empaquetado dentro de un worktree "
+        "temporal y se borra al terminar: nunca está en el árbol confirmado"
+    ),
+    "sustituido-a-proposito": (
+        "el fichero se sustituyó por otro y el documento lo cita justo para "
+        "pedir esa sustitución: exigir que exista sería exigir que no se hiciera"
+    ),
+}
+
+#: Las 23, una a una: `(documento, cita, categoría)`. Es la tabla que sostiene
+#: la decisión de ADR-190, y por eso se comprueba que siga reproduciéndose.
+MEDICION_FUERA_DEL_REGISTRO: tuple[tuple[str, str, str], ...] = (
+    (
+        "docs/audits/AUDITORIA_INTEGRAL_INCORPORACION_CLAUDE_2026-07.md",
+        "docs/claude-project-onboarding-20260720",
+        "rama-del-repositorio",
+    ),
+    (
+        "docs/audits/SIRIUS_AUDITORIA_MODEL_STUDIO_2026-08.md",
+        "docs/model-studio-ui-001",
+        "rama-del-repositorio",
+    ),
+    (
+        "docs/audits/SIRIUS_MINA_APRENDIZAJE_OPERATIVO_2026-08.md",
+        "tests/.../test_pa_0_2_rec_01_banco_evidencia.py",
+        "ruta-elidida",
+    ),
+    (
+        "docs/audits/evidencia-cerrar-b1.md",
+        "docs/investigaciones/2026-08-28-orden-386-….md",
+        "ruta-elidida",
+    ),
+    (
+        "docs/implementation/SIRIUS_WORK_ENGINE_ARQUITECTURA_MINIMA.md",
+        "docs/decisions/ADR-016-…md",
+        "ruta-elidida",
+    ),
+    (
+        "docs/implementation/SIRIUS_WORK_ENGINE_PLAN_IMPLEMENTACION.md",
+        "docs/decisions/ADR-019-…md",
+        "ruta-elidida",
+    ),
+    (
+        "docs/audits/DEFECTOS_ENCONTRADOS_2026-08-20.md",
+        "docs/audits/SIRIUS_LEARNING_SEAM_AUDIT_2026-08.md",
+        "rama-de-origen-no-fusionada",
+    ),
+    (
+        "docs/audits/evidencia-experimento-filtro-fiel-al-laboratorio.md",
+        "experiments/adr002/modelo_local/",
+        "rama-de-origen-no-fusionada",
+    ),
+    (
+        "docs/audits/evidencia-experimento-filtro-fiel-al-laboratorio.md",
+        "experiments/adr002/lateral/categoria.py",
+        "rama-de-origen-no-fusionada",
+    ),
+    (
+        "docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md",
+        "experiments/adr002/lateral/categoria.py",
+        "rama-de-origen-no-fusionada",
+    ),
+    (
+        "docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md",
+        "docs/decisions/ADR-002",
+        "adr-citado-por-su-numero",
+    ),
+    (
+        "docs/evolution/SIRIUS_PLAN_PRUEBAS_0.2_v0.1_PROPUESTO.md",
+        "docs/decisions/ADR-002",
+        "adr-citado-por-su-numero",
+    ),
+    (
+        "docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md",
+        "docs/decisions/ADR-002",
+        "adr-citado-por-su-numero",
+    ),
+    (
+        "docs/implementation/AGENT_OPPORTUNITY_MATRIX.md",
+        "docs/implementation/agent_runs/",
+        "ruta-propuesta-todavia-no-creada",
+    ),
+    (
+        "docs/implementation/SIRIUS_0.2_ADR001_PAQUETE_OPERATIVO_SPIKES_v1.0.md",
+        "experiments/adr001/",
+        "ruta-propuesta-todavia-no-creada",
+    ),
+    (
+        "docs/implementation/B13_PACKAGING.md",
+        "src/sirius/deployment/",
+        "directorio-efimero-de-la-construccion",
+    ),
+    (
+        "docs/implementation/model_studio/SIRIUS_MODEL_STUDIO_RECONCILIACION_v1.0_PROPUESTA.md",
+        "src/sirius/presentation/studio_mode_widget.py",
+        "sustituido-a-proposito",
+    ),
+    (
+        "docs/investigaciones/2026-09-11-flujos-reales-de-agentes-comparados-con-el-motor.md",
+        "docs/architecture.md",
+        "arbol-de-otro-proyecto",
+    ),
+    (
+        "docs/investigaciones/2026-09-11-flujos-reales-de-agentes-comparados-con-el-motor.md",
+        "docs/AGENT-SETUP.md",
+        "arbol-de-otro-proyecto",
+    ),
+    (
+        "docs/investigaciones/2026-09-11-flujos-reales-de-agentes-comparados-con-el-motor.md",
+        "docs/intended-usage.md",
+        "arbol-de-otro-proyecto",
+    ),
+    (
+        "docs/investigaciones/2026-09-11-flujos-reales-de-agentes-comparados-con-el-motor.md",
+        "docs/integrations/codex.mdx",
+        "arbol-de-otro-proyecto",
+    ),
+    (
+        "docs/investigaciones/2026-09-11-flujos-reales-de-agentes-comparados-con-el-motor.md",
+        "docs/solutions/",
+        "arbol-de-otro-proyecto",
+    ),
+    (
+        "docs/investigaciones/2026-09-11-que-memoria-compartida-para-ias-existe-ya-hecha-y-probada.md",
+        "docs/integrations/codex.mdx",
+        "arbol-de-otro-proyecto",
+    ),
+)
+
+#: `arbol-de-otro-proyecto` no está en `SIN_DEFECTO_DE_ESTE_ARBOL` por
+#: comodidad: es la categoría que NO existe en `docs/decisions/` —un ADR cita
+#: este árbol— y que aparece en cuanto la guarda sale a `docs/investigaciones/`,
+#: donde una investigación compara repositorios ajenos y cita SUS rutas. Es la
+#: que mejor explica por qué el criterio calibrado sobre los ADR no se traslada:
+#: 6 de las 13 citas de esa carpeta son de otros árboles.
+CATEGORIA_DE_OTRO_PROYECTO = "arbol-de-otro-proyecto"
+CATEGORIAS_CLASIFICADAS = frozenset(SIN_DEFECTO_DE_ESTE_ARBOL) | {CATEGORIA_DE_OTRO_PROYECTO}
+
+
+def documentos_de_docs_fuera_del_registro() -> list[Path]:
+    """Los `.md` de `docs/` que esta guarda **no** mira, y no va a mirar."""
+    return [
+        documento
+        for documento in sorted(CARPETA_DOCUMENTACION.rglob("*.md"))
+        if documento.parent != REGISTRO
+    ]
+
+
+def citas_rotas_de(documento: Path) -> list[str]:
+    """Las citas de un documento que hoy no se pueden abrir, sin excepciones."""
+    return [
+        ruta
+        for ruta in citas_de(documento.read_text(encoding="utf-8"))
+        if not (RAIZ / _ruta_de_fichero(ruta)).exists()
+    ]
+
+
+@pytest.mark.parametrize(
+    ("documento", "cita", "categoria"),
+    MEDICION_FUERA_DEL_REGISTRO,
+    ids=lambda valor: str(valor),
+)
+def test_cada_cita_clasificada_por_adr_190_sigue_siendo_la_que_se_midio(
+    documento: str, cita: str, categoria: str
+) -> None:
+    """La tabla que sostiene ADR-190 no puede quedarse vieja en silencio.
+
+    Esto **no** es la guarda ampliada: no exige que la prosa de `docs/` sea
+    correcta ni se rompe porque aparezca una cita rota nueva -eso es justo lo
+    que ADR-190 decidió no vigilar-. Exige lo contrario: que las 23 que se
+    clasificaron sigan siendo exactamente lo que el ADR dice que son.
+    """
+    ruta = RAIZ / documento
+    assert ruta.is_file(), f"{documento} ya no existe: la tabla de ADR-190 apunta a la nada"
+    assert cita in citas_de(ruta.read_text(encoding="utf-8")), (
+        f"{documento} ya no cita `{cita}`. La medida de ADR-190 cambió: vuelve a medirla "
+        "y re-decide si la ampliación sale a cuenta, en vez de retocar la tabla a ojo."
+    )
+    assert not (RAIZ / _ruta_de_fichero(cita)).exists(), (
+        f"`{cita}` ya existe en el árbol, así que dejó de ser un falso positivo "
+        f"de la categoría `{categoria}`: quita la fila de MEDICION_FUERA_DEL_REGISTRO."
+    )
+
+
+def test_la_medicion_no_admite_una_categoria_sin_veredicto() -> None:
+    """Una fila con categoría nueva sería un veredicto que nadie escribió."""
+    sin_veredicto = sorted(
+        {categoria for _, _, categoria in MEDICION_FUERA_DEL_REGISTRO} - CATEGORIAS_CLASIFICADAS
+    )
+    assert sin_veredicto == [], (
+        f"categorías sin veredicto escrito: {sin_veredicto}. Cada categoría de "
+        "MEDICION_FUERA_DEL_REGISTRO explica por qué NO es un defecto de este árbol."
+    )
+    documentos = {documento for documento, _, _ in MEDICION_FUERA_DEL_REGISTRO}
+    assert len(MEDICION_FUERA_DEL_REGISTRO) == 23, "ADR-190 midió 23 citas rotas"
+    assert len(documentos) == 17, "ADR-190 las midió repartidas en 17 ficheros"
+
+
+def test_la_guarda_sigue_barriendo_solo_el_registro_de_decisiones() -> None:
+    """La decisión de ADR-190, fijada: el barrido no sale de `docs/decisions/`.
+
+    Si alguien amplía `_adrs()` a `docs/`, esto se pone rojo y le manda a
+    ADR-190 a volver a medir. No es una prohibición: es la exigencia de que la
+    ampliación traiga su medida, que es lo que la incidencia #267 pide.
+    """
+    barridos = _adrs()
+    assert len(barridos) >= 184, (
+        f"solo {len(barridos)} ADR barridos; el 14-09-2026 eran 184 y el registro solo crece"
+    )
+    fuera = sorted(str(documento) for documento in barridos if documento.parent != REGISTRO)
+    assert fuera == [], (
+        f"el barrido salió de docs/decisions/: {fuera}. ADR-190 midió que ahí fuera la "
+        "guarda caza 0 defectos reales y 23 falsos; para ampliarla, vuelve a medir."
+    )
+
+
+def test_el_corpus_de_fuera_del_registro_se_sigue_pudiendo_medir() -> None:
+    """Anti-vacua de la medida: sin esto, un barrido roto la daría por buena.
+
+    Suelos holgados y solo hacia abajo, como el resto de este fichero: el
+    14-09-2026 eran 132 documentos y 590 citas.
+    """
+    documentos = documentos_de_docs_fuera_del_registro()
+    assert len(documentos) >= 100, f"solo {len(documentos)} documentos: ¿se movió docs/?"
+    total = sum(len(citas_de(documento.read_text(encoding="utf-8"))) for documento in documentos)
+    assert total >= 400, f"solo {total} citas encontradas; el 14-09-2026 había 590 en 132 ficheros"
+
+
+def test_la_guarda_sigue_cazando_una_cita_rota_sembrada_en_un_adr_de_verdad(
+    tmp_path: Path,
+) -> None:
+    """«Que siguen cazando lo que cazaban», demostrado con una mutación.
+
+    El corpus real está limpio, así que las 184 comprobaciones pasarían igual
+    con la guarda desarmada. Aquí se siembra el defecto en el texto de un ADR
+    de verdad -no en uno sintético- y se comprueba que `_rotas` lo ve, y que
+    sin la siembra no ve nada.
+    """
+    original = REGISTRO / "ADR-052-una-ruta-citada-por-un-adr-existe-o-esta-fijada-como-historia.md"
+    texto = original.read_text(encoding="utf-8")
+    assert "tests/automation/test_citas_de_los_adr.py" in citas_de(texto), (
+        "ADR-052 dejó de citar su propia prueba: elige otra semilla"
+    )
+
+    sano = tmp_path / original.name
+    sano.write_text(texto, encoding="utf-8")
+    assert _rotas(sano) == [], "el control falla: el ADR de verdad ya traía citas rotas"
+
+    sembrado = tmp_path / "sembrado" / original.name
+    sembrado.parent.mkdir()
+    sembrado.write_text(
+        texto.replace(
+            "tests/automation/test_citas_de_los_adr.py",
+            "tests/automation/test_no_existe_de_ninguna_manera.py",
+        ),
+        encoding="utf-8",
+    )
+    assert "tests/automation/test_no_existe_de_ninguna_manera.py" in _rotas(sembrado)

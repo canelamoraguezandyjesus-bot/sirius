@@ -26,9 +26,9 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **185**.
+- Decisiones (ADR): **186**.
 - Bloques del motor: 17 cerrado, 1 fuera_de_alcance, 2 pendiente.
-- Defectos registrados: 2 abierto, 42 cerrado.
+- Defectos registrados: 3 abierto, 42 cerrado.
 - Investigaciones: **9** (fotos con fecha; caducan).
 - Documentos: **134**, de los que **89** no declaran fecha.
 
@@ -41,6 +41,7 @@ está escrito. Si sale pobre, se arregla en el ADR.
 |---|---|---|---|---|
 | [192](docs/decisions/ADR-192-el-numero-de-un-defecto-es-el-numero-de-su-adr-no-un-contador-aparte.md) | 2026-09-14 | PROPUESTO | El numero de un defecto es el numero de su ADR, no un contador aparte | Uno. El número de un defecto nuevo es el número de su ADR. `H-192` para el defecto que declara ADR-192. Nadie elige nada: se copia un dato que la entrada ya está obligada a declarar desde ADR-182. |
 | [191](docs/decisions/ADR-191-la-revision-es-una-cola-una-rama-entra-a-revision-solo-si-main-ya-esta-dentro-de-ella.md) | 2026-09-14 | PROPUESTO | La revision es una cola: una rama entra a revision solo si main ya esta dentro de ella | Uno. La condición es una sola pregunta: ¿es la punta de `main` ancestro del head de la rama? Si lo es, lo que se revise es lo que aterrizará. Si no, la combinación que aterrizaría no la ha probado nadie y la rama espera. |
+| [190](docs/decisions/ADR-190-la-guarda-de-citas-no-sale-de-docs-decisions-medidos-590-citas-y-23-rotas-fuera-del-registro-cero-son-defectos-de-este-arbol.md) | 2026-09-14 | PROPUESTO | La guarda de citas no sale de docs/decisions/: medidas 590 citas y 23 rotas fuera del registro, cero son defectos de este árbol | La guarda de citas no sale de `docs/decisions/`. Con 0 defectos reales y 23 falsos positivos, el criterio de la incidencia #267 no se salva cambiándole la forma a la comprobación: se pueden escribir las reglas que callan cada familia —la… |
 | [189](docs/decisions/ADR-189-la-salida-de-una-parada-sin-incidencia-es-una-orden-del-propietario-y-reanudar-es-despachar-en-el-mismo-gesto.md) | 2026-09-13 | PROPUESTO | La salida de una parada sin incidencia es una orden del propietario, y reanudar es despachar en el mismo gesto | Se elige la opción 1: un comando del propietario, `sirius-decidir`. Y la respuesta a «qué pasa al reanudar» es que reanudar es despachar en el mismo gesto: si el despacho no puede ocurrir, la reanudación no ocurre. |
 | [188](docs/decisions/ADR-188-el-alcance-que-el-motor-no-puede-escribir-para-la-puerta-antes-de-crear-la-incidencia-y-remite-a-la-sesion-interactiva.md) | 2026-09-13 | PROPUESTO | Parar antes de crear la incidencia cuando la orden pide tocar lo que el motor no puede escribir | Opción 1 (variante B), como QUINTA causa de sensibilidad del intérprete, con la causa `permisos_o_credenciales_sensibles`. |
 | [187](docs/decisions/ADR-187-una-revision-sobrevive-a-ponerse-al-dia-con-main-si-el-trabajo-propio-de-la-rama-no-cambia.md) | 2026-09-13 | APROBADO | Una revision sobrevive a ponerse al dia con main si el trabajo propio de la rama no cambia | La guarda de ADR-142 pasa de «mismo head» a «mismo trabajo»: la aprobación registrada sigue valiendo si el trabajo PROPIO de la rama es el mismo en el head aprobado y en el vigente. |
@@ -241,6 +242,7 @@ de memoria.
 | `medir-lo-que-se-tiene-en-vez-de-lo-que-hay` | 2 | sí | [184](docs/decisions/ADR-184-la-prohibicion-no-es-una-peticion-el-detector-de-sensibilidad-exige-que-el-marcador-no-vaya-negado.md), [180](docs/decisions/ADR-180-el-numero-del-siguiente-adr-se-calcula-contra-las-ramas-del-remoto-no-contra-las-que-el-clon-tenga-traidas.md) |
 | `pieza-sin-lector` | 2 | sí | [183](docs/decisions/ADR-183-la-ausencia-de-run-de-quality-para-el-head-se-encamina-no-se-espera-en-silencio.md), [175](docs/decisions/ADR-175-un-tablero-por-incidencia-un-solo-comentario-que-el-motor-mantiene-al-dia.md) |
 | `estado-en-el-que-se-entra-y-del-que-no-se-sale` | 1 | sí | [189](docs/decisions/ADR-189-la-salida-de-una-parada-sin-incidencia-es-una-orden-del-propietario-y-reanudar-es-despachar-en-el-mismo-gesto.md) |
+| `guarda-ampliada-a-un-corpus-que-no-es-el-suyo` | 1 | sí | [190](docs/decisions/ADR-190-la-guarda-de-citas-no-sale-de-docs-decisions-medidos-590-citas-y-23-rotas-fuera-del-registro-cero-son-defectos-de-este-arbol.md) |
 | `guardian-que-mide-posicion-en-vez-de-estructura` | 1 | sí | [187](docs/decisions/ADR-187-una-revision-sobrevive-a-ponerse-al-dia-con-main-si-el-trabajo-propio-de-la-rama-no-cambia.md) |
 | `interruptor-que-enciende-mas-de-lo-que-se-puede-medir` | 1 | sí | [185](docs/decisions/ADR-185-la-puerta-de-la-memoria-se-parte-en-tres-interruptores-antes-de-abrirla.md) |
 | `plan-que-hay-que-terminar-de-una-sentada` | 1 | sí | [176](docs/decisions/ADR-176-el-cierre-de-una-incidencia-se-retoma-desde-donde-se-quedo.md) |
@@ -273,6 +275,10 @@ de memoria.
 ### `estado-en-el-que-se-entra-y-del-que-no-se-sale`
 
 - **[ADR-189](docs/decisions/ADR-189-la-salida-de-una-parada-sin-incidencia-es-una-orden-del-propietario-y-reanudar-es-despachar-en-el-mismo-gesto.md)** — dar por buena una arista del dominio que en producción no llama nadie, y dejar así un estado en el que el motor entra solo y del que solo puede salir un mecanismo que necesita un dato que ese estado, por definición, no tiene. (lo hace cumplir `tests/engine/test_decision_cli.py`).
+
+### `guarda-ampliada-a-un-corpus-que-no-es-el-suyo`
+
+- **[ADR-190](docs/decisions/ADR-190-la-guarda-de-citas-no-sale-de-docs-decisions-medidos-590-citas-y-23-rotas-fuera-del-registro-cero-son-defectos-de-este-arbol.md)** — llevar una comprobación al sitio donde el hueco está declarado sin medir antes qué cosecharía allí, y pagar la ampliación con excepciones escritas a mano; aquí el criterio calibrado sobre `docs/decisions/` —un corpus homogéneo, donde un ADR cita este árbol— habría gritado 17 veces en falso y cazado cero defectos al salir a `docs/`, donde una investigación cita los árboles de otros repositorios. (lo hace cumplir `tests/automation/test_citas_de_los_adr.py`).
 
 ### `guardian-que-mide-posicion-en-vez-de-estructura`
 
@@ -327,6 +333,7 @@ cerrados; el recuento completo está arriba.
 |---|---|---|
 | H-43 | abierto | Una rama se fusionaba sin que nadie probara su combinacion con main |
 | H-192 | abierto | El identificador de un defecto se elegia a mano y dos ramas elegian el mismo |
+| H-190 | abierto | El hueco declarado de la prosa de docs/ llevaba sin medir si taparlo salia a cuenta |
 
 ## Las investigaciones: fotos con fecha, que caducan
 
