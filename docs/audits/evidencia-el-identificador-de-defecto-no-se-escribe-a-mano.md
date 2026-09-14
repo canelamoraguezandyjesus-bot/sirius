@@ -155,15 +155,15 @@ justo lo que hace derivable el identificador.
 **¿Qué pasa con las entradas sin `adr`?** Son 32 y no se tocan. No hace falta un
 formato doble ni una lista de excepciones: **el identificador sigue siendo
 `H-<número>`, y lo único que cambia es de dónde sale el número**. Los
-identificadores históricos llegan hasta `H-43`; los ADR van por el 191. Como los
+identificadores históricos llegan hasta `H-43`; los ADR van por el 192. Como los
 números de ADR ya están muy por encima del máximo histórico, `H-<adr>` no puede
 chocar con ninguno de los viejos. Sin cambio de formato, sin dos formas
 conviviendo, sin nada que recordar.
 
 ## La forma elegida
 
-**El número de un defecto nuevo ES el número de su ADR.** `H-191` para el defecto
-que declara ADR-191. Nadie elige nada: se copia un dato que la entrada ya está
+**El número de un defecto nuevo ES el número de su ADR.** `H-192` para el defecto
+que declara ADR-192. Nadie elige nada: se copia un dato que la entrada ya está
 obligada a declarar desde ADR-182.
 
 **La frontera se escribe una vez y no crece.** La regla vale para toda entrada
@@ -180,3 +180,29 @@ entre ramas (ADR-180) y guarda que caza los repetidos
 (`test_registro_de_decisiones.py`). No es imposible —los dos ADR-016 demuestran
 que ese número ha chocado— pero pasa a haber **un solo sitio donde puede chocar**
 en vez de dos, y ese sitio es el que sí está defendido.
+
+## Lo que la implementación enseñó, después de decidir
+
+Tres cosas que la decisión escrita no preveía y que aparecieron al construirla:
+
+**Una guarda ajena me corrigió el sitio.** La constante de la frontera se puso
+primero en `src/sirius_engine/memoria.py`, junto a su hermana
+`PRIMER_ADR_CON_LECCION`. La guarda de ADR-179 la señaló como **pieza sin
+llamante**, y tenía razón: aquella la usa el generador de `MEMORIA.md`, esta no
+la usa nadie en producción, porque la regla **es** una guarda. Se movió a la
+guarda, que es donde se usa.
+
+**Una mutación sobrevivió, y era la importante.** Poner la frontera en `9999`
+—fuera del alcance de cualquier defecto— deja la prueba de la regla pasando sin
+mirar nada: la regla **deja de existir en silencio**. Se añadió
+`test_la_regla_del_identificador_se_ejercita_de_verdad`, que exige que al menos
+una entrada esté gobernada de verdad, y entonces cae.
+
+Las tres mutaciones, con su resultado: frontera a 0 → 2 pruebas caen; frontera a
+9999 → **sobrevivía**, y con la tercera guarda 1 cae; renumerar `H-192` a `H-44`
+→ 1 prueba cae.
+
+**Y el número acabó siendo el 192, no el 191.** Al crear el ADR, el guion de
+ADR-180 se saltó el 190 porque estaba cogido en una rama sin fusionar —la del
+encargo de las citas— y ADR-191 ya era el de la cola. Es la coordinación que esta
+decisión aprovecha, funcionando delante de mí mientras la escribía.
