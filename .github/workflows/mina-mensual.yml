@@ -1,0 +1,162 @@
+name: Mina mensual de aprendizaje
+
+# EL RELOJ QUE LE FALTABA A LA MINA. La mina de aprendizaje operativo es el único
+# sitio donde este repositorio mira sus propios ciclos y saca de ellos una cifra
+# en vez de una impresión. Tiene dos ediciones -agosto y septiembre- y las dos se
+# pidieron A MANO, porque a alguien se le ocurrió. La de septiembre existe porque
+# hacía falta una medida concreta para una decisión concreta; si esa decisión no
+# hubiera estado encima de la mesa, no se habría escrito.
+#
+# Eso es exactamente H-198 otra vez: algo que hay que hacer periódicamente y no
+# tiene quien lo vuelva a poner delante de nadie.
+#
+# LO QUE ESTE FICHERO EXTIENDE, Y HAY QUE DECIRLO EN VOZ ALTA. `despachar-orden.yml`
+# dice que «la automatización nunca crea trabajo por su cuenta», que es lo que
+# protege ADR-063. Un reloj que despacha SÍ crea trabajo sin que nadie lo pida ese
+# día. La diferencia -y es la que sostiene esta decisión- es que la orden no la
+# inventa la máquina: está escrita aquí abajo, palabra por palabra, y entra en
+# `main` por el mismo gesto que cualquier otro cambio. El propietario no aprueba
+# «que el motor decida»: aprueba ESTE texto y ESTE reloj. ADR-082 ya movió una vez
+# esta frontera -«lo invoca un workflow»-; esto es el siguiente paso de la misma.
+#
+# POR QUÉ LAS 09:24 UTC, Y POR QUÉ NO BASTABA CON «FUERA DE LA VENTANA».
+#
+# `contador-siete-dias.yml` no elige su hora: la DERIVA. `sirius-racha
+# --hora-recomendada` busca el mayor hueco libre de disparos periódicos de este
+# directorio y devuelve su punto medio, y una guarda exige que el cron cableado
+# del contador sea EXACTAMENTE esa hora (ADR-144). Así la frase de su cabecera es
+# verdad sola.
+#
+# La consecuencia, que no es obvia: un `schedule:` nuevo no solo tiene que caer
+# fuera de la ventana de silencio del contador. Si parte el mayor hueco, la hora
+# derivada SE MUEVE y el contador deja de estar donde su propia guarda exige.
+#
+# Se comprobó pagándolo: la primera versión de este fichero disparaba a las 04:00
+# —fuera de la ventana, correcto por ese lado— y la derivación pasó a devolver
+# 09:24, así que las dos pruebas del contador se pusieron en rojo. El criterio
+# bueno es más fuerte: **el contador se queda con el mayor hueco y este trabajo se
+# va al punto medio del siguiente**. Con 09:24, el mayor hueco sigue siendo
+# 00:32 -> 06:17 (345 min) y la derivación sigue devolviendo 03:24.
+#
+# MISMO GRUPO DE CONCURRENCIA QUE `motor-sirius.yml`, por la misma razón que
+# `despachar-orden.yml`: los dos escriben el MISMO diario en la misma rama, y dos
+# invocaciones a la vez crean el mismo trabajo dos veces.
+
+on:
+  schedule:
+    # Día 1 de cada mes. La edición cubre el mes que acaba de cerrarse.
+    - cron: '24 9 1 * *'
+  workflow_dispatch:
+    inputs:
+      ejecutar:
+        description: "Despachar de verdad. Sin marcar, solo ensaya."
+        type: boolean
+        default: false
+
+concurrency:
+  group: motor-sirius
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  mina:
+    name: Pedir la mina del mes que se cierra
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      RAMA_MEMORIA: estado-del-motor
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: true
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          enable-cache: true
+          python-version: "3.14.6"
+
+      - name: Sync environment
+        run: uv sync --locked --all-groups
+
+      - name: Traer la memoria del motor
+        env:
+          MEMORIA: ${{ runner.temp }}/memoria
+        run: |
+          set -uo pipefail
+          git config user.name "sirius-motor"
+          git config user.email "canelamoraguezandyjesus@gmail.com"
+          codigo=0
+          git ls-remote --exit-code --heads origin "$RAMA_MEMORIA" >/dev/null || codigo=$?
+          case "$codigo" in
+            0)
+              git fetch --depth=1 origin "$RAMA_MEMORIA"
+              git worktree add "$MEMORIA" "origin/$RAMA_MEMORIA"
+              ;;
+            2)
+              echo "La rama $RAMA_MEMORIA no existe todavía; se crea vacía."
+              git worktree add --orphan -b "$RAMA_MEMORIA" "$MEMORIA"
+              ;;
+            *)
+              echo "::error::no se pudo consultar el remoto (ls-remote salió con $codigo)." >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Despachar la mina del mes
+        env:
+          SIRIUS_BOT_TOKEN: ${{ secrets.SIRIUS_BOT_TOKEN }}
+          SIRIUS_MOTOR_DIARIO: ${{ runner.temp }}/memoria/diario.jsonl
+          # En `schedule` no hay `inputs`, así que el reloj ejecuta de verdad y el
+          # disparo a mano ensaya salvo que se marque. Si esto fuera al revés, la
+          # pasada mensual no haría nada y el fallo sería invisible durante meses.
+          EJECUTAR: ${{ github.event_name == 'schedule' || inputs.ejecutar }}
+        run: |
+          set -uo pipefail
+
+          # El mes que se cierra: el día 1 a las 04:00, "ayer" cae en el mes
+          # anterior. Se calcula con `date -u`, no con el número del mes menos
+          # uno, para que enero no pida la mina del mes 0.
+          MES="$(date -u -d "$(date -u +%Y-%m-01) -1 day" +%Y-%m)"
+          NOMBRE="$(date -u -d "$(date -u +%Y-%m-01) -1 day" +%B\ %Y)"
+          echo "Mes a minar: $MES ($NOMBRE)"
+
+          # La orden viaja por una variable, no interpolada en el guion. Aquí no
+          # hay entrada de nadie -el único dato variable es una fecha que calcula
+          # este mismo paso-, pero la forma se respeta igual.
+          ORDEN="Documenta en docs/audits/SIRIUS_MINA_APRENDIZAJE_OPERATIVO_${MES}.md la edicion de la mina de aprendizaje operativo correspondiente a ${MES}, con el mismo metodo y la misma estructura que la edicion anterior que encuentres en docs/audits/ con ese mismo prefijo: leela entera antes de empezar, es tu plantilla. Alcance: SOLO LECTURA de la API de GitHub sobre este mismo repositorio. El unico fichero que creas es ese informe, mas los ficheros de archivo que pida el parrafo siguiente. PODA (ADR-195): si alguna leccion de la edicion anterior ha dejado de estar vigente, NO la borres: muevela a un fichero de archivo fechado y deja en su sitio la cita que dice donde esta. En este repositorio archivar no es eliminar. Sigue la disciplina de ADR-001 como la plantilla ya hace: nota de metodo ANTES de los resultados, con el criterio de parada y el apartado de que NO garantiza este informe. Si el numero de casos de algun apartado es demasiado pequeno para sostener una tasa, DILO CON ESAS PALABRAS y da el numero. QUE NO HACE ESTE ENCARGO: no implementa ninguna propuesta, no cablea nada, no toma ninguna decision y NO escribe ningun ADR ni da de alta ningun defecto. Queda fuera de alcance docs/canonical/, el contrato operativo, el Producto y la Arquitectura Tecnica. Y no toques .github/**."
+
+          echo "Longitud de la orden: ${#ORDEN} caracteres"
+
+          if [ "$EJECUTAR" = "true" ]; then
+            uv run sirius-despachar "$ORDEN" --ejecutar
+          else
+            uv run sirius-despachar "$ORDEN"
+          fi
+
+      - name: Confirmar la memoria del motor
+        if: always()
+        env:
+          MEMORIA: ${{ runner.temp }}/memoria
+        run: |
+          set -uo pipefail
+          if [ ! -d "$MEMORIA" ]; then
+            echo "No se llegó a preparar la memoria; no hay nada que confirmar."
+            exit 0
+          fi
+          cd "$MEMORIA"
+          if ! estado=$(git status --porcelain); then
+            echo "::error::no se pudo leer el estado de la memoria; esto NO es un despacho sin cambios." >&2
+            exit 1
+          fi
+          if [ -z "$estado" ]; then
+            echo "El despacho no anotó nada (ensayo, o la orden no creó trabajo)."
+            exit 0
+          fi
+          git add -A
+          git commit -m "Mina mensual del $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          git push origin "HEAD:refs/heads/$RAMA_MEMORIA"

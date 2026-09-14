@@ -810,3 +810,21 @@ defectos:
       - scripts/automation/sirius_reconcile.sh
       - tests/automation/test_cola.py
       - tests/automation/test_sirius_reconcile.py
+
+  # ADR-201 (#646): la mina de aprendizaje operativo es el unico sitio donde este
+  # repositorio mide sus propios ciclos, y sus dos ediciones se pidieron A MANO.
+  # La de septiembre existe porque esa noche hacia falta medir el detector de
+  # familia para decidir su autoridad: si esa decision no hubiera estado encima
+  # de la mesa, no se habria escrito, y la medida que sostiene ADR-199 no
+  # existiria. Hermana de H-198: algo periodico sin quien lo vuelva a poner
+  # delante de nadie.
+  - id: H-201
+    titulo: La mina de aprendizaje solo se escribia cuando a alguien se le ocurria pedirla, y una de sus dos ediciones existe por casualidad
+    bloque: ciclo
+    gravedad: media
+    estado: abierto
+    adr: 201
+    incidencia: 646
+    ficheros:
+      - .github/workflows/mina-mensual.yml
+      - docs/decisions/ADR-201-la-mina-de-aprendizaje-tiene-reloj-el-dia-1-de-cada-mes-se-pide-la-edicion-del-mes-que-se-cierra.md
