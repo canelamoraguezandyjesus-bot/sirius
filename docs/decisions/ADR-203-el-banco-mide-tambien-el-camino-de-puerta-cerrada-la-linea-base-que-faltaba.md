@@ -153,6 +153,17 @@ byte** a la anterior (ver abajo), y (ii) no se tocó una sola línea de
    lo que devuelve `_rank_related_knowledge` **es** el conjunto tras precedencia
    —el mismo que en puerta abierta entraría al filtro—, así que el detalle dice
    lo mismo y la construcción medida deja de tener una rama de más.
+4. Y esa ausencia se comprueba **sobre el argumento real** (CODEX-001, segunda
+   vuelta). La primera versión de esta guarda instanciaba el doble contador
+   igualmente y miraba luego sus `entradas`: como en modo cerrado ese doble no
+   se conecta a nada, sus entradas están vacías **pase lo que pase dentro del
+   arnés**, así que la guarda decía «sin filtro» también si el arnés volviera a
+   fabricarse el suyo —la regresión exacta de CODEX-001— y el guion habría
+   publicado como cerrada una medición que no lo era. Ahora `_medir` envuelve
+   `ContextBuilder` con un espía que delega en la clase real y anota qué
+   `relevance_filter_port` recibió, y `_incoherencia_del_puerto_de_relevancia`
+   —función pura, probada sin medir el banco— rechaza tanto un puerto presente
+   como la ausencia de toda observación: sin observación no hay guarda.
 
 ## Comprobación que la sostiene
 
@@ -301,17 +312,60 @@ abajo: la prueba de **comportamiento** también la deja pasar, porque el doble
 conserva el conjunto. Solo la prueba de cableado distingue «la construcción de
 producción cerrada» de «una construcción que da hoy el mismo número».
 
+**Mutación 5 — la guarda mira un contador desconectado en vez del argumento
+real** (en `_medir`, el espía anota `filtro` —que en modo cerrado es `None`—
+en lugar de `kw.get("relevance_filter_port")`), que es exactamente lo que
+hacía la primera versión de esta guarda:
+
+```
+uv run pytest tests/automation/test_diagnosticar_busqueda_del_banco.py -k argumento_real
+FAILED ...::test_la_puerta_cerrada_vigila_el_argumento_real_de_context_builder[True]
+       - assert None is not None
+1 failed, 1 passed, 14 deselected
+```
+
+**Mutación 6 — la guarda ve el puerto presente y se calla** (`if presentes:`
+pasa a `if False:`):
+
+```
+uv run pytest tests/automation/test_diagnosticar_busqueda_del_banco.py -k "guarda or argumento_real"
+FAILED ...::test_la_guarda_de_puerta_cerrada_se_queja_de_lo_que_debe[observados1-object]
+FAILED ...::test_la_guarda_de_puerta_cerrada_se_queja_de_lo_que_debe[observados2-object]
+FAILED ...::test_la_puerta_cerrada_vigila_el_argumento_real_de_context_builder[True]
+3 failed, 3 passed, 10 deselected
+```
+
+**Mutación 7 — la regresión de CODEX-001, de punta a punta**: se restituye en
+el arnés `else _FiltroDeRelevanciaQueNuncaDescarta()` sin condicionar al estado
+de la puerta (la mutación 4) y se corre el guion de verdad. Con la guarda
+anterior el guion habría terminado en 0 y publicado la cifra como cerrada;
+ahora:
+
+```
+uv run pytest tests/automation/test_diagnosticar_busqueda_del_banco.py -k mide_la_puerta_cerrada_a_secas
+RuntimeError: con la puerta cerrada ContextBuilder no debia recibir filtro de
+relevancia, y recibio 1: ['_FiltroDeRelevanciaQueNuncaDescarta']
+FAILED ...::test_el_guion_mide_la_puerta_cerrada_a_secas
+```
+
+Esta es la que da sentido a las otras dos: la guarda no solo se queja en una
+prueba unitaria, sino que **detiene la publicación de la cifra** cuando el
+cableado del arnés deja de ser el de producción cerrada.
+
 **Mutación 3 — el guion avisa pero mide igual** (se quita el `return 2` y se
-deja el mensaje):
+deja el mensaje), vuelta a capturar sobre el árbol de esta ronda:
 
 ```
-FAILED test_el_guion_sale_con_error_y_sin_medir_nada - assert 0 != 0
-1 failed, 9 passed
+uv run pytest tests/automation/test_diagnosticar_busqueda_del_banco.py -q
+FAILED test_el_guion_sale_con_error_y_sin_medir_nada - AssertionError: assert 0 != 0
+1 failed, 15 passed
 ```
 
-Las nueve que siguen pasando son justo las que miran el mensaje: un aviso
-impecable con código de salida 0 no detiene a nadie, y esa es la propiedad que
-la prueba del guion protege.
+Las quince que siguen pasando son justo las que miran el mensaje, la tabla de
+banderas y la guarda del puerto: un aviso impecable con código de salida 0 no
+detiene a nadie, y esa es la propiedad que la prueba del guion protege. (Eran
+nueve antes de que la segunda vuelta de CODEX-001 añadiera las seis pruebas de
+la guarda del puerto de relevancia.)
 
 ### Validaciones obligatorias
 

@@ -102,3 +102,72 @@ def test_el_guion_mide_la_puerta_cerrada_a_secas() -> None:
     assert resultado.returncode == 0, resultado.stderr
     assert "[puerta=cerrada] SIN FILTRO:" in resultado.stdout
     assert "/47 exactos" in resultado.stdout
+
+
+#: Un banco de juguete: `_medir` solo lee las consultas (para detectar
+#: repetidas y construir la tabla por consulta) y el límite sin atar. Todo lo
+#: caro queda fuera porque el arnés se sustituye por un doble.
+_BANCO_MINIMO = {"casos": [{"consulta": "una consulta"}], "conteos": {"items_del_canon": 3}}
+
+
+@pytest.mark.parametrize(
+    ("observados", "esperado_en_el_mensaje"),
+    [
+        ([], "ninguna construccion"),
+        ([object()], "object"),
+        ([None, object()], "object"),
+    ],
+)
+def test_la_guarda_de_puerta_cerrada_se_queja_de_lo_que_debe(
+    observados: list[Any], esperado_en_el_mensaje: str
+) -> None:
+    """La guarda mira lo que `ContextBuilder` recibió, y una lista vacía es
+    tan sospechosa como un puerto presente: sin observación no hay guarda."""
+    queja = _guion._incoherencia_del_puerto_de_relevancia(observados)
+    assert queja is not None
+    assert esperado_en_el_mensaje in queja
+
+
+def test_la_guarda_de_puerta_cerrada_calla_ante_la_construccion_de_produccion() -> None:
+    assert _guion._incoherencia_del_puerto_de_relevancia([None]) is None
+
+
+@pytest.mark.parametrize("el_arnes_se_fabrica_su_filtro", [False, True])
+def test_la_puerta_cerrada_vigila_el_argumento_real_de_context_builder(
+    monkeypatch: pytest.MonkeyPatch, el_arnes_se_fabrica_su_filtro: bool
+) -> None:
+    """La propiedad que la guarda anterior no tenía (CODEX-001, segunda
+    vuelta): si el arnés volviera a fabricarse su propio filtro de relevancia
+    en modo cerrado, el guion tiene que verlo.
+
+    El doble contador del guion ya no se instancia en modo cerrado, así que
+    `entradas` sale vacío en los DOS escenarios —por eso mirarlo no
+    distinguía nada—. Lo que sí los distingue es el `relevance_filter_port`
+    que `ContextBuilder` recibió de verdad, que es lo que `_medir` captura.
+    """
+    arnes = _guion.arnes
+    monkeypatch.setattr(arnes, "ContextBuilder", lambda **kw: object(), raising=True)
+
+    def falso_ejecutar(_ruta: Any, **kw: Any) -> Any:
+        propio = _guion._FiltroQueNoDescartaYRecuerda()
+        arnes.ContextBuilder(
+            relevance_filter_port=(
+                propio if el_arnes_se_fabrica_su_filtro else kw.get("relevance_filter_port")
+            )
+        )
+        return object()
+
+    monkeypatch.setattr(arnes, "_ejecutar_banco_paquete_completo", falso_ejecutar, raising=True)
+
+    _ejecucion, entradas, _llamadas, puertos = _guion._medir(
+        _BANCO_MINIMO, con_ejes=False, con_peticion=False, motor_por_etapas=False
+    )
+
+    assert entradas == []
+    queja = _guion._incoherencia_del_puerto_de_relevancia(puertos)
+    if el_arnes_se_fabrica_su_filtro:
+        assert queja is not None
+        assert "_FiltroQueNoDescartaYRecuerda" in queja
+    else:
+        assert puertos == [None]
+        assert queja is None

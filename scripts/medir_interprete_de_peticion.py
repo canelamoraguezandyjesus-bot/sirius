@@ -210,7 +210,7 @@ def main() -> int:
             ambito=_ambito_de_produccion(active_project_id),
         )
 
-    ejecucion, entradas, _ = _medir(
+    ejecucion, entradas, _, _ = _medir(
         banco, con_ejes=False, con_peticion=False, peticion_alternativa=peticion_interpretada
     )
     if len(entradas) != len(casos):

@@ -107,7 +107,12 @@ guion no construye filtro **de ninguna clase** —ni siquiera el doble contador
 que usa en las demás corridas—, porque con la puerta cerrada
 ``composition_root`` pasa ``relevance_filter_port=None`` (CODEX-001 de la
 incidencia #650); el detalle por caso sale entonces de lo que devuelve
-``_rank_related_knowledge``, que sin filtro es el conjunto tras precedencia. La
+``_rank_related_knowledge``, que sin filtro es el conjunto tras precedencia. Y
+antes de publicar la cifra el guion comprueba esa ausencia sobre el
+``relevance_filter_port`` que ``ContextBuilder`` recibió **de verdad**, no
+sobre las entradas de un contador que en ese modo no se conecta: un contador
+desconectado está vacío tanto si el arnés recibió ``None`` como si se fabricó
+un filtro por su cuenta, así que mirarlo no vigilaba nada. La
 comparación que comparte condiciones es la corrida SIN banderas de arriba
 —``0/47; 487; 72/81; 0``, vuelta a medir el mismo día sobre este árbol y sin
 moverse—, que es la de puerta ABIERTA sin petición declarada. Ninguna otra
@@ -181,7 +186,7 @@ def _medir(
     con_cupo: bool = False,
     peticion_alternativa: Callable[..., Peticion] | None = None,
     motor_por_etapas: bool = True,
-) -> tuple[Any, list[list[Clave]], dict[str, int]]:
+) -> tuple[Any, list[list[Clave]], dict[str, int], list[Any]]:
     """Mide la etapa de búsqueda con las palancas pedidas.
 
     ``peticion_alternativa`` sustituye a la petición del caso cuando se mide
@@ -194,7 +199,14 @@ def _medir(
     ``motor_por_etapas=False`` pide el camino de puerta cerrada (ADR-203). Las
     tres palancas no pueden influir allí —no hay ``Peticion``—, así que
     ``main`` rechaza la combinación antes de llegar aquí; esta función no
-    vuelve a comprobarlo porque no es quien publica la cifra.
+    vuelve a comprobarlo porque no es quien publica la cifra. En ese modo no
+    se construye doble de relevancia de ninguna clase (CODEX-001).
+
+    El cuarto elemento devuelto es lo que ``ContextBuilder`` recibió DE VERDAD
+    en ``relevance_filter_port``, cada vez que se construyó: es el único dato
+    con el que ``main`` puede comprobar que la medición de puerta cerrada es
+    la de producción cerrada, y no una con un filtro fabricado dentro del
+    arnés.
     """
     casos = banco["casos"]
     consultas = [caso["consulta"] for caso in casos]
@@ -253,12 +265,28 @@ def _medir(
         )
 
     # CODEX-001 (incidencia #650): con la puerta cerrada, `composition_root`
-    # pasa `relevance_filter_port=None`, así que aquí tampoco se construye
-    # ninguno. Registrar las entradas con un doble obligaría a ejecutar
-    # `_apply_relevance_filter`, una rama que la producción cerrada no
-    # ejecuta; el detalle por caso sale entonces de `obtenido_por_caso`, que
-    # sin filtro ES el conjunto tras precedencia.
-    filtro = _FiltroQueNoDescartaYRecuerda(aplica_cupo=con_cupo)
+    # pasa `relevance_filter_port=None`, así que aquí no se construye ninguno
+    # —ni siquiera el doble contador, que antes se instanciaba igual y solo
+    # servía para hacer creer que se vigilaba algo—. Registrar las entradas
+    # con un doble obligaría a ejecutar `_apply_relevance_filter`, una rama
+    # que la producción cerrada no ejecuta; el detalle por caso sale entonces
+    # de `obtenido_por_caso`, que sin filtro ES el conjunto tras precedencia.
+    filtro = _FiltroQueNoDescartaYRecuerda(aplica_cupo=con_cupo) if motor_por_etapas else None
+
+    #: Espía que delega en la clase real y anota qué `relevance_filter_port`
+    #: recibió `ContextBuilder`. Mirar `filtro` no vigila nada en modo
+    #: cerrado: un doble que no se conecta deja `entradas` vacío pase lo que
+    #: pase dentro del arnés, así que la guarda pasaría igual si el arnés
+    #: volviera a fabricarse el suyo —la regresión exacta de CODEX-001—. El
+    #: único dato que distingue las dos situaciones es el argumento real.
+    puertos_de_relevancia: list[Any] = []
+    constructor_original = arnes.ContextBuilder
+
+    def constructor_espia(**kw: Any) -> Any:
+        puertos_de_relevancia.append(kw.get("relevance_filter_port"))
+        return constructor_original(**kw)
+
+    arnes.ContextBuilder = constructor_espia
     arnes._load_canon_item = cargar_y_registrar
     arnes._create_projects = crear_y_registrar_proyectos
     if con_ejes:
@@ -271,15 +299,17 @@ def _medir(
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as carpeta:
             ejecucion = arnes._ejecutar_banco_paquete_completo(
                 Path(carpeta) / "diagnostico.db",
-                relevance_filter_port=filtro if motor_por_etapas else None,
+                relevance_filter_port=filtro,
                 motor_por_etapas=motor_por_etapas,
             )
     finally:
         arnes._load_canon_item = cargador_original
         arnes._create_projects = proyectos_original
         arnes.build_staged_engine_port = puerto_original
+        arnes.ContextBuilder = constructor_original
         recuperacion._peticion_ordinaria = peticion_original
-    return ejecucion, filtro.entradas, llamadas
+    entradas = [] if filtro is None else filtro.entradas
+    return ejecucion, entradas, llamadas, puertos_de_relevancia
 
 
 #: Las banderas de laboratorio que el camino de puerta cerrada no puede
@@ -314,6 +344,37 @@ def _rechazo_de_puerta_cerrada(argumentos: Sequence[str]) -> str | None:
     )
 
 
+def _incoherencia_del_puerto_de_relevancia(puertos_observados: Sequence[Any]) -> str | None:
+    """Lo que impide publicar como «cerrada» una medición que no lo es, o
+    ``None`` si la construcción observada es la de producción cerrada.
+
+    Recibe los ``relevance_filter_port`` que ``ContextBuilder`` recibió de
+    verdad, no los que el guion creyó pasar, y esa diferencia es la razón de
+    que exista: la guarda anterior miraba las entradas del doble contador, y
+    un contador que no se conecta está vacío tanto si el arnés recibió
+    ``None`` como si se fabricó un filtro por su cuenta. Con esas dos
+    situaciones indistinguibles, la guarda decía «sin filtro» siempre y no
+    podía fallar nunca.
+
+    Una lista vacía es tan sospechosa como un puerto presente: si no se
+    observó ninguna construcción, no hay nada que sostenga la afirmación.
+    Función aparte, y pura, para poder probarla sin medir el banco.
+    """
+    if not puertos_observados:
+        return (
+            "con la puerta cerrada no se observo ninguna construccion de ContextBuilder, "
+            "asi que nada demuestra que no recibiera filtro de relevancia"
+        )
+    presentes = [p for p in puertos_observados if p is not None]
+    if presentes:
+        nombres = sorted({type(p).__name__ for p in presentes})
+        return (
+            "con la puerta cerrada ContextBuilder no debia recibir filtro de relevancia, "
+            f"y recibio {len(presentes)}: {nombres}"
+        )
+    return None
+
+
 def main() -> int:
     argumentos = sys.argv[1:]
     rechazo = _rechazo_de_puerta_cerrada(argumentos)
@@ -333,7 +394,7 @@ def main() -> int:
         if (item.get("criticidad") or {}).get("nivel") == "CRITICO"
     )
 
-    ejecucion, entradas, llamadas = _medir(
+    ejecucion, entradas, llamadas, puertos_de_relevancia = _medir(
         banco,
         con_ejes=con_ejes,
         con_peticion=con_peticion,
@@ -341,9 +402,9 @@ def main() -> int:
         motor_por_etapas=not puerta_cerrada,
     )
     if puerta_cerrada:
-        if entradas:
-            msg = f"con la puerta cerrada no debia construirse filtro, y vio {len(entradas)}"
-            raise RuntimeError(msg)
+        incoherencia = _incoherencia_del_puerto_de_relevancia(puertos_de_relevancia)
+        if incoherencia is not None:
+            raise RuntimeError(incoherencia)
     elif len(entradas) != len(casos):
         msg = f"el filtro vio {len(entradas)} consultas y el banco tiene {len(casos)}"
         raise RuntimeError(msg)
