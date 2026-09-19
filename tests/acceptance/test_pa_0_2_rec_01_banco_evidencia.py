@@ -3078,14 +3078,30 @@ def _ejecutar_banco_paquete_completo(
     el de **puerta cerrada**, que es el que ejecuta hoy el Sirius del
     propietario, porque las cuatro claves de `memory_gates.py` nacen
     apagadas. Los dos colaboradores se construyen entonces como
-    `composition_root` los construye con el interruptor `staged_engine_enabled`
-    apagado (ADR-185): `category_matching_enabled=False`, los dos vocabularios
-    vacíos y el techo de criticidad en `None`
-    (`src/sirius/composition_root.py`) — así `rank_con_cupo` se va por
-    `_rank_via_current_pipeline`, el filtro-y-orden de S7.5/M9, en vez de por
-    el motor por etapas. Existe para que haya una **línea base** contra la
-    que comparar cuando se abra el primer interruptor: sin ella, «el motor
-    aporta X» no tiene minuendo.
+    `composition_root` los construye con TODAS las claves de
+    `memory_gates.py` apagadas (ADR-185) —el estado de producción de hoy—:
+    `category_matching_enabled=False`, los dos vocabularios vacíos y el techo
+    de criticidad en `None` (`src/sirius/composition_root.py`) — así
+    `rank_con_cupo` se va por `_rank_via_current_pipeline`, el filtro-y-orden
+    de S7.5/M9, en vez de por el motor por etapas. No es «con
+    `staged_engine_enabled` apagado» y nada más: en `composition_root` el caso
+    de uso toma sus tres parámetros de `puertas.motor_por_etapas`, pero el
+    `ContextBuilder` toma `max_criticality_category` y
+    `category_matching_enabled` de `puertas.filtro_de_relevancia` —la clave
+    que `src/sirius/config/memory_gates.py` documenta como «el filtro de
+    relevancia local y el camino de puerta abierta del ContextBuilder»—, así
+    que este parámetro único mueve las dos claves a la vez, y por eso lo que
+    reproduce es el estado de hoy con las cuatro apagadas. Aquí eso no cambia
+    ninguna cifra, porque el camino del `ContextBuilder` es inerte en este
+    arnés —el doble de relevancia devuelve todas las candidatas,
+    `candidate_currently_valid(None, None)` es siempre `True` y
+    `_HARD_LIMIT_SIN_ATAR` vale 100_000, de modo que las dos ramas de
+    `_apply_relevance_filter` devuelven el mismo conjunto—, pero sí limita lo
+    que la resta puede atribuir: el arnés no tiene ningún modo que reproduzca
+    «solo el primer interruptor abierto» (limitación conocida de ADR-203).
+    Existe para que haya una **línea base** contra la que comparar cuando se
+    abra el primer interruptor: sin ella, «el motor aporta X» no tiene
+    minuendo.
 
     El valor por defecto es `True`, que es exactamente lo que este arnés
     hacía antes de existir el parámetro: ningún llamador de hoy —los tres
@@ -3456,10 +3472,10 @@ def test_con_el_motor_apagado_el_banco_toma_el_camino_de_puerta_cerrada(
     print(
         "\nPA-0.2-REC-01 (ADR-203, línea base de PUERTA CERRADA: "
         "RankRelevantKnowledgeUseCase y ContextBuilder como los construye "
-        "composition_root con staged_engine_enabled apagado — "
-        "category_matching_enabled=False, vocabularios vacíos, techo de "
-        "criticidad None—, o sea _rank_via_current_pipeline, el "
-        "filtro-y-orden de S7.5/M9): "
+        "composition_root con TODAS las claves de memory_gates.py apagadas "
+        "—el estado de producción de hoy—: category_matching_enabled=False, "
+        "vocabularios vacíos, techo de criticidad None, o sea "
+        "_rank_via_current_pipeline, el filtro-y-orden de S7.5/M9): "
         f"aciertos_exactos={cerrada.metricas.aciertos_exactos}/47 "
         f"elementos_de_mas={cerrada.metricas.elementos_de_mas} "
         f"omisiones_criticas={cerrada.metricas.omisiones_criticas} "

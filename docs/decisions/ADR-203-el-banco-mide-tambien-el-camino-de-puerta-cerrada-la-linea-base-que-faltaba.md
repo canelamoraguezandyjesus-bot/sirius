@@ -116,11 +116,20 @@ byte** a la anterior (ver abajo), y (ii) no se tocó una sola línea de
 
 1. `_ejecutar_banco_paquete_completo` gana `motor_por_etapas: bool = True`. Con
    `False`, los dos colaboradores se construyen como los construye
-   `composition_root` con `staged_engine_enabled` apagado:
-   `category_matching_enabled=False`, los dos vocabularios vacíos y el techo de
-   criticidad en `None`. El valor por defecto es el comportamiento de hoy, así
-   que ningún llamador existente —los tres guiones y las pruebas— cambia de
-   resultado.
+   `composition_root` con **todas** las claves de `memory_gates.py` apagadas
+   —el estado de producción de hoy—: `category_matching_enabled=False`, los dos
+   vocabularios vacíos y el techo de criticidad en `None`. No es «con
+   `staged_engine_enabled` apagado» y nada más: en `composition_root` el caso de
+   uso toma sus tres parámetros de `puertas.motor_por_etapas`, pero el
+   `ContextBuilder` toma `max_criticality_category` y `category_matching_enabled`
+   de `puertas.filtro_de_relevancia` —la clave que `memory_gates.py` documenta
+   como «el filtro de relevancia local y el camino de puerta abierta del
+   ContextBuilder»—, así que el parámetro único de este arnés mueve las dos
+   claves a la vez. En el arnés esa segunda clave es inerte y no mueve ninguna
+   cifra —lo observó y lo explicó la Mutación 1 de más abajo—, pero sí limita lo
+   que la resta puede atribuir: ver la limitación conocida en «Consecuencias».
+   El valor por defecto es el comportamiento de hoy, así que ningún llamador
+   existente —los tres guiones y las pruebas— cambia de resultado.
 2. `scripts/diagnosticar_busqueda_del_banco.py` gana `--puerta-cerrada`, que
    **rechaza la ejecución con código 2, antes de medir nada**, si se combina con
    `--peticion`, `--ejes` o `--cupo`. Por el camino cerrado
@@ -132,8 +141,12 @@ byte** a la anterior (ver abajo), y (ii) no se tocó una sola línea de
 
 ## Comprobación que la sostiene
 
-Todo lo de abajo, sobre el árbol de esta rama (base `main` en `3062a31`; el
-único commit previo de la rama, `02df4f18`, solo añade este ADR).
+Todo lo de abajo, sobre el árbol de esta rama con el cambio de este encargo
+aplicado —base `main` en `3062a31`, `src/` intacto respecto de esa base—. El
+ancla no enumera los commits de la rama a propósito: `main` se integra por
+squash, así que los SHA de rama no sobreviven a la fusión, y la regla
+comprobable que sí sobrevive es «`3062a31` más el diff de este encargo, sin
+tocar `src/`».
 
 ### La línea base que faltaba
 
@@ -269,9 +282,24 @@ transcritos en la PR.
 
 - El banco sabe medir los dos lados de la puerta, y el lado cerrado tiene por
   fin una cifra: `10/47; 218; 57/81; 10`.
-- Cuando el propietario abra `staged_engine_enabled`, la resta se puede hacer
-  con el mismo instrumento y el mismo corpus, no con dos mediciones de origen
-  distinto.
+- Cuando el propietario abra `staged_engine_enabled`, la comparación se puede
+  hacer con el mismo instrumento y el mismo corpus, no con dos mediciones de
+  origen distinto.
+- **Limitación conocida: el modo `True` no abre solo el primer interruptor.**
+  Porque `_ejecutar_banco_paquete_completo` reproduce con un único parámetro dos
+  claves de `composition_root` —`motor_por_etapas` en el caso de uso y
+  `filtro_de_relevancia` en el `ContextBuilder`—, el modo `True` abre también el
+  camino de puerta abierta del `ContextBuilder`, y este encargo **no** entrega un
+  tercer modo que reproduzca «solo `staged_engine_enabled` abierto». Lo que hace
+  usables las dos cifras publicadas es que ese segundo camino es inerte en este
+  arnés (Mutación 1), no una separación que el instrumento garantice: es una
+  propiedad de los dobles del banco. Así que la resta entre `0/47; 487; 72/81; 0`
+  y `10/47; 218; 57/81; 10` es la distancia entre dos configuraciones completas
+  —la producción de hoy contra el paquete completo—, y presentarla sin más como
+  «lo que aporta el motor por etapas» sería la familia
+  `instrumento-que-solo-mide-un-lado` que ADR-185 existe para evitar. Aislar el
+  aporte del motor a solas exige antes un modo del arnés que separe las dos
+  claves.
 - Nada se abre ni se cierra: `memory_gates.py`, `settings.json`, `STATUS.md` y
   la Arquitectura Técnica quedan como estaban. El umbral de D7 punto 6 sigue
   sin registrar.

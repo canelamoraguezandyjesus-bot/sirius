@@ -97,8 +97,10 @@ guion no ejecuta, no del ámbito — la corrida final del laboratorio también
 llevó ``DEC-001`` al filtro en ``B04-CA-14`` y el filtro lo quitó.
 
 Medida por primera vez la **línea base de puerta cerrada** el 19-09-2026
-(ADR-203, incidencia #650), sobre el árbol de esta rama —``02df4f18`` más el
-cambio de este encargo, ``main`` en ``3062a31``—, con
+(ADR-203, incidencia #650), sobre el árbol de esta rama con el cambio de este
+encargo aplicado —base ``main`` en ``3062a31``, ``src/`` intacto respecto de
+esa base; el ancla no enumera commits de rama porque ``main`` se integra por
+squash y esos SHA no sobreviven a la fusión—, con
 ``uv run python scripts/diagnosticar_busqueda_del_banco.py --puerta-cerrada``:
 **10/47 exactos; 218 de más; 57/81 hallados; 10 omisiones críticas**. La
 comparación que comparte condiciones es la corrida SIN banderas de arriba
