@@ -28,7 +28,7 @@
 
 - Decisiones (ADR): **197**.
 - Bloques del motor: 17 cerrado, 1 fuera_de_alcance, 2 pendiente.
-- Defectos registrados: 1 abierto, 54 cerrado.
+- Defectos registrados: 2 abierto, 54 cerrado.
 - Investigaciones: **9** (fotos con fecha; caducan).
 - Documentos: **145**, de los que **97** no declaran fecha.
 
@@ -406,6 +406,7 @@ cerrados; el recuento completo está arriba.
 | Defecto | Estado | Título |
 |---|---|---|
 | H-202 | abierto | Una decision de no hacer algo no dejaba rastro, y una precondicion escrita antes que ella bloqueo trabajo real trece dias |
+| H-203 | abierto | El banco solo sabia medir el camino con el motor encendido, asi que la linea base contra la que comparar no existia |
 
 ## Las investigaciones: fotos con fecha, que caducan
 
