@@ -30,7 +30,7 @@
 - Bloques del motor: 17 cerrado, 1 fuera_de_alcance, 2 pendiente.
 - Defectos registrados: 1 abierto, 54 cerrado.
 - Investigaciones: **9** (fotos con fecha; caducan).
-- Documentos: **146**, de los que **97** no declaran fecha.
+- Documentos: **147**, de los que **97** no declaran fecha.
 
 ## Qué se decidió: los ADR, del más reciente al más antiguo
 
@@ -427,6 +427,7 @@ nada por su cuenta. «Sin fecha declarada» es un aviso, no un dato.
 
 | Fecha | Documento |
 |---|---|
+| 2026-09-19 | [La auditoría de la forma de trabajar, segunda edición: las 21 fichas de agosto, revalidadas el 19 de septiembre de 2026](docs/audits/AUDITORIA_FORMA_DE_TRABAJO_2026-09.md) |
 | sin fecha declarada | [Auditoría integral de incorporación de Claude — Proyecto Sirius (julio 2026)](docs/audits/AUDITORIA_INTEGRAL_INCORPORACION_CLAUDE_2026-07.md) |
 | sin fecha declarada | [Defectos encontrados en el Work Engine — parte para actuar](docs/audits/DEFECTOS_ENCONTRADOS_2026-08-20.md) |
 | sin fecha declarada | [Lo que queda, y por qué no está hecho — 14 de septiembre de 2026](docs/audits/PENDIENTE_Y_POR_QUE_2026-09-14.md) |
