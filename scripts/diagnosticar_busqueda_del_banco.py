@@ -102,7 +102,12 @@ encargo aplicado —base ``main`` en ``3062a31``, ``src/`` intacto respecto de
 esa base; el ancla no enumera commits de rama porque ``main`` se integra por
 squash y esos SHA no sobreviven a la fusión—, con
 ``uv run python scripts/diagnosticar_busqueda_del_banco.py --puerta-cerrada``:
-**10/47 exactos; 218 de más; 57/81 hallados; 10 omisiones críticas**. La
+**10/47 exactos; 218 de más; 57/81 hallados; 10 omisiones críticas**. Ahí el
+guion no construye filtro **de ninguna clase** —ni siquiera el doble contador
+que usa en las demás corridas—, porque con la puerta cerrada
+``composition_root`` pasa ``relevance_filter_port=None`` (CODEX-001 de la
+incidencia #650); el detalle por caso sale entonces de lo que devuelve
+``_rank_related_knowledge``, que sin filtro es el conjunto tras precedencia. La
 comparación que comparte condiciones es la corrida SIN banderas de arriba
 —``0/47; 487; 72/81; 0``, vuelta a medir el mismo día sobre este árbol y sin
 moverse—, que es la de puerta ABIERTA sin petición declarada. Ninguna otra
@@ -247,6 +252,12 @@ def _medir(
             limite_sin_atar=limite_sin_atar,
         )
 
+    # CODEX-001 (incidencia #650): con la puerta cerrada, `composition_root`
+    # pasa `relevance_filter_port=None`, así que aquí tampoco se construye
+    # ninguno. Registrar las entradas con un doble obligaría a ejecutar
+    # `_apply_relevance_filter`, una rama que la producción cerrada no
+    # ejecuta; el detalle por caso sale entonces de `obtenido_por_caso`, que
+    # sin filtro ES el conjunto tras precedencia.
     filtro = _FiltroQueNoDescartaYRecuerda(aplica_cupo=con_cupo)
     arnes._load_canon_item = cargar_y_registrar
     arnes._create_projects = crear_y_registrar_proyectos
@@ -260,7 +271,7 @@ def _medir(
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as carpeta:
             ejecucion = arnes._ejecutar_banco_paquete_completo(
                 Path(carpeta) / "diagnostico.db",
-                relevance_filter_port=filtro,
+                relevance_filter_port=filtro if motor_por_etapas else None,
                 motor_por_etapas=motor_por_etapas,
             )
     finally:
@@ -329,7 +340,11 @@ def main() -> int:
         con_cupo=con_cupo,
         motor_por_etapas=not puerta_cerrada,
     )
-    if len(entradas) != len(casos):
+    if puerta_cerrada:
+        if entradas:
+            msg = f"con la puerta cerrada no debia construirse filtro, y vio {len(entradas)}"
+            raise RuntimeError(msg)
+    elif len(entradas) != len(casos):
         msg = f"el filtro vio {len(entradas)} consultas y el banco tiene {len(casos)}"
         raise RuntimeError(msg)
 
@@ -355,18 +370,21 @@ def main() -> int:
     faltan_total: dict[str, list[str]] = {}
     criticas_perdidas: list[tuple[str, str]] = []
     extras_por_caso: list[tuple[str, int, int]] = []
-    for caso, entraron_raw in zip(casos, entradas, strict=True):
-        # Sin ``--cupo`` el detalle es lo que ENTRÓ al filtro, que es lo que
-        # este guion mide (etapa de búsqueda). Con ``--cupo`` el filtro sí
-        # quita, así que el detalle tiene que ser lo que SALIÓ: mirar la
-        # entrada diría 162 de más al lado de una cabecera que dice 125.
-        entraron = (
-            set(ejecucion.obtenido_por_caso[caso["id"]])
-            if con_cupo
-            else {
-                ejecucion.real_a_canonico[c] for c in entraron_raw if c in ejecucion.real_a_canonico
-            }
-        )
+    # Sin ``--cupo`` el detalle es lo que ENTRÓ al filtro, que es lo que
+    # este guion mide (etapa de búsqueda). Con ``--cupo`` el filtro sí
+    # quita, así que el detalle tiene que ser lo que SALIÓ: mirar la
+    # entrada diría 162 de más al lado de una cabecera que dice 125. Con
+    # ``--puerta-cerrada`` no hay filtro que registre nada, y lo que sale de
+    # ``_rank_related_knowledge`` es ya el conjunto tras precedencia: el
+    # mismo que en puerta abierta entraría al filtro.
+    if con_cupo or puerta_cerrada:
+        conjuntos = [set(ejecucion.obtenido_por_caso[caso["id"]]) for caso in casos]
+    else:
+        conjuntos = [
+            {ejecucion.real_a_canonico[c] for c in entraron_raw if c in ejecucion.real_a_canonico}
+            for entraron_raw in entradas
+        ]
+    for caso, entraron in zip(casos, conjuntos, strict=True):
         esperados = list(caso["resultado_esperado"])
         faltan = [e for e in esperados if e not in entraron]
         extras = sorted(entraron - set(esperados))

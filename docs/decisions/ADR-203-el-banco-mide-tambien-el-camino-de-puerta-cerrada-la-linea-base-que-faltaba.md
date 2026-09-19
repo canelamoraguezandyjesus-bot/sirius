@@ -118,16 +118,25 @@ byte** a la anterior (ver abajo), y (ii) no se tocó una sola línea de
    `False`, los dos colaboradores se construyen como los construye
    `composition_root` con **todas** las claves de `memory_gates.py` apagadas
    —el estado de producción de hoy—: `category_matching_enabled=False`, los dos
-   vocabularios vacíos y el techo de criticidad en `None`. No es «con
-   `staged_engine_enabled` apagado» y nada más: en `composition_root` el caso de
-   uso toma sus tres parámetros de `puertas.motor_por_etapas`, pero el
-   `ContextBuilder` toma `max_criticality_category` y `category_matching_enabled`
+   vocabularios vacíos, el techo de criticidad en `None` y
+   **`relevance_filter_port=None`**. No es «con `staged_engine_enabled` apagado»
+   y nada más: en `composition_root` el caso de uso toma sus tres parámetros de
+   `puertas.motor_por_etapas`, pero el `ContextBuilder` toma
+   `relevance_filter_port`, `max_criticality_category` y
+   `category_matching_enabled`
    de `puertas.filtro_de_relevancia` —la clave que `memory_gates.py` documenta
    como «el filtro de relevancia local y el camino de puerta abierta del
    ContextBuilder»—, así que el parámetro único de este arnés mueve las dos
-   claves a la vez. En el arnés esa segunda clave es inerte y no mueve ninguna
-   cifra —lo observó y lo explicó la Mutación 1 de más abajo—, pero sí limita lo
-   que la resta puede atribuir: ver la limitación conocida en «Consecuencias».
+   claves a la vez. El puerto de relevancia entra en esa lista por **CODEX-001**
+   (revisión de la PR #651): la primera versión dejaba puesto el doble
+   `_FiltroDeRelevanciaQueNuncaDescarta` también en el modo cerrado, así que
+   `_rank_related_knowledge` ejecutaba `_apply_relevance_filter`, una rama que
+   la producción cerrada no ejecuta jamás. Que conservara el mismo conjunto era
+   una propiedad del doble, no de la construcción que la etiqueta afirmaba
+   medir; las cifras coinciden (se vuelven a medir abajo, salida idéntica byte a
+   byte), pero ahora las sostiene el cableado fiel y no una coincidencia. Lo que
+   sigue limitando lo que la resta puede atribuir es el modo `True`: ver la
+   limitación conocida en «Consecuencias».
    El valor por defecto es el comportamiento de hoy, así que ningún llamador
    existente —los tres guiones y las pruebas— cambia de resultado.
 2. `scripts/diagnosticar_busqueda_del_banco.py` gana `--puerta-cerrada`, que
@@ -138,6 +147,12 @@ byte** a la anterior (ver abajo), y (ii) no se tocó una sola línea de
    idéntico al de `--puerta-cerrada` a secas pero pareciendo comparable con uno
    de puerta abierta que sí las usa. El fallo es ruidoso a propósito, no una
    nota al pie.
+3. Con `--puerta-cerrada` el guion tampoco construye su propio doble contador
+   (CODEX-001): pasa `relevance_filter_port=None`, y el detalle por caso sale de
+   `obtenido_por_caso` en vez de las entradas registradas del filtro. Sin filtro,
+   lo que devuelve `_rank_related_knowledge` **es** el conjunto tras precedencia
+   —el mismo que en puerta abierta entraría al filtro—, así que el detalle dice
+   lo mismo y la construcción medida deja de tener una rama de más.
 
 ## Comprobación que la sostiene
 
@@ -154,6 +169,14 @@ tocar `src/`».
 uv run python scripts/diagnosticar_busqueda_del_banco.py --puerta-cerrada   # salida 0
 [puerta=cerrada] SIN FILTRO: 10/47 exactos; 218 de mas; 57/81 hallados; omisiones criticas=10
 ```
+
+Vuelta a capturar tras CODEX-001, con el cableado ya fiel (`--puerta-cerrada`
+sin filtro de ninguna clase): la salida **completa** del guion —cabecera, las
+líneas de detalle y el resumen final— es idéntica byte a byte a la de antes de
+la corrección (`diff` de las dos capturas, descontando las líneas `INFO` de
+alembic, sin diferencias). Es decir: la cifra que este ADR publica ya no
+depende de que el doble conservara el conjunto, y además no cambió al dejar de
+depender de ello.
 
 La única corrida que comparte condiciones con ella —misma ausencia de petición
 declarada— es la de puerta ABIERTA **sin banderas**. ADR-148 la cita como
@@ -246,10 +269,11 @@ Lo que esta mutación enseña, y es la razón de que la prueba de cableado exist
 al lado de la de comportamiento: **la prueba de comportamiento la deja pasar**.
 Con el motor apagado en el caso de uso, las 47 consultas ya toman el camino
 cerrado, y el `category_matching_enabled=True` colgado del `ContextBuilder`
-solo cambia qué rama del candado se ejecuta —inerte aquí, porque el doble de
-relevancia no descarta nada—. Una ejecución así no es ninguno de los dos
-caminos de producción, y sin la prueba de cableado se publicaría su cifra
-creyéndola la de puerta cerrada.
+solo cambia qué rama del candado se ejecuta —hoy ni siquiera eso, porque tras
+CODEX-001 el modo cerrado no construye filtro y `_apply_relevance_filter` no
+llega a llamarse—. Una ejecución así no es ninguno de los dos caminos de
+producción, y sin la prueba de cableado se publicaría su cifra creyéndola la de
+puerta cerrada.
 
 **Mutación 2 — el parámetro no llega a `RankRelevantKnowledgeUseCase`**:
 
@@ -259,6 +283,23 @@ FAILED test_con_el_motor_apagado_el_banco_toma_el_camino_de_puerta_cerrada
 FAILED test_el_estado_de_la_puerta_llega_a_los_dos_colaboradores[False]
 2 failed, 1 passed
 ```
+
+**Mutación 4 — el modo cerrado vuelve a recibir el doble de relevancia**
+(CODEX-001; se restituye `else _FiltroDeRelevanciaQueNuncaDescarta()` sin
+condicionar al estado de la puerta, que es exactamente lo que hacía la primera
+versión de esta rama):
+
+```
+uv run pytest tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py -k dos_colaboradores
+FAILED ...::test_el_estado_de_la_puerta_llega_a_los_dos_colaboradores[False]
+       - assert <..._FiltroDeRelevanciaQueNuncaDescarta object at 0x7f59db844190> is None
+1 failed, 1 passed, 46 deselected
+```
+
+Y la lección de esta cuarta es la misma que la de la primera, un nivel más
+abajo: la prueba de **comportamiento** también la deja pasar, porque el doble
+conserva el conjunto. Solo la prueba de cableado distingue «la construcción de
+producción cerrada» de «una construcción que da hoy el mismo número».
 
 **Mutación 3 — el guion avisa pero mide igual** (se quita el `return 2` y se
 deja el mensaje):
@@ -291,9 +332,10 @@ transcritos en la PR.
   `filtro_de_relevancia` en el `ContextBuilder`—, el modo `True` abre también el
   camino de puerta abierta del `ContextBuilder`, y este encargo **no** entrega un
   tercer modo que reproduzca «solo `staged_engine_enabled` abierto». Lo que hace
-  usables las dos cifras publicadas es que ese segundo camino es inerte en este
-  arnés (Mutación 1), no una separación que el instrumento garantice: es una
-  propiedad de los dobles del banco. Así que la resta entre `0/47; 487; 72/81; 0`
+  usables las dos cifras publicadas es que en el modo cerrado ese segundo camino
+  no existe —`relevance_filter_port=None`, como en `composition_root`
+  (CODEX-001)—, no una separación entre las dos claves que el instrumento
+  garantice en el modo abierto. Así que la resta entre `0/47; 487; 72/81; 0`
   y `10/47; 218; 57/81; 10` es la distancia entre dos configuraciones completas
   —la producción de hoy contra el paquete completo—, y presentarla sin más como
   «lo que aporta el motor por etapas» sería la familia
