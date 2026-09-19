@@ -5767,6 +5767,82 @@ commits añadidos eran la mezcla, la regeneración y 13 líneas de registro.
 **Lo que queda, y es la secuencia que compra esta pieza**: abrir de uno en uno
 —motor (determinista, sin Ollama), petición propia, filtro—, cada uno con su
 medición en la máquina del propietario. Hasta hoy eso no se podía ni intentar.
+
+### 112. Tres rondas, una sola familia: la regla de parada se dispara en #650, y la raíz es afirmar el cableado desde donde no se ve (19-09-2026, 15:35 UTC)
+
+Incidencia #650, PR #651, head `31acd5d4`. Tres rondas de revisión, tres
+hallazgos, **una familia**: *una afirmación —prosa, etiqueta o guarda— sostiene
+una fidelidad que el cableado real no tiene.*
+
+| ronda | hallazgo | qué afirmaba | qué había |
+|---|---|---|---|
+| 1 | `CLAUDE-REV-650-001` (media) | la prosa del encargo y del ADR: «el modo cerrado apaga solo el motor» | apaga **los cuatro** interruptores |
+| 2 | `CODEX-001` (P2) | la etiqueta `puerta=cerrada`: reproduce la construcción de producción | el arnés cableaba un filtro doble que producción no cablea (`composition_root.py:560-578` pasa `relevance_filter_port=None`) |
+| 3 | `CODEX-001` (P2) | la guarda nueva: «con la puerta cerrada no debía construirse filtro» | observa un doble que **nunca se cableó** |
+
+**La tercera, comprobada aquí, sobre `31acd5d4`.** En
+`scripts/diagnosticar_busqueda_del_banco.py`:
+
+- la línea **261** construye `filtro = _FiltroQueNoDescartaYRecuerda(...)`
+  **siempre**, en los dos modos;
+- la línea **274** le pasa al arnés
+  `relevance_filter_port=filtro if motor_por_etapas else None`: con la puerta
+  cerrada ese objeto **no se conecta a nada**;
+- la línea **282** devuelve `filtro.entradas`;
+- la línea **344** comprueba `if entradas: raise RuntimeError(...)`. Con la
+  puerta cerrada `entradas` es `[]` **por construcción, no por observación**:
+  la guarda no puede fallar nunca.
+- Y el comentario de las líneas **255-260** dice «aquí tampoco se construye
+  ninguno» justo encima de la línea que lo construye.
+
+Codex lo formula mejor que yo: restaurar dentro del arnés el *fallback* exacto
+de `CODEX-001` de la ronda 2 dejaría `entradas == []` igual, el guion saldría
+con éxito y publicaría la cifra bajo la etiqueta `puerta=cerrada` mientras
+ejecuta `_apply_relevance_filter`. La guarda puesta para impedir esa regresión
+es precisamente ciega a ella.
+
+**La raíz, y por qué las tres son la misma.** Las tres intentan sostener una
+propiedad **del cableado** desde un sitio que no ve el cableado: la prosa (1),
+la etiqueta del guion (2), una guarda del guion (3). El arnés construye los
+colaboradores; el guion solo ve lo que el arnés le devuelve. Desde ahí, toda
+afirmación sobre «qué argumento llegó a `ContextBuilder`» es o tautológica o un
+decir. No es goteo ni mala suerte: cada corrección parió el defecto de la ronda
+siguiente, una capa más afuera.
+
+**Y el sitio que sí lo ve ya existe, vivo, desde la ronda 2.**
+`tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py:3493`,
+`test_el_estado_de_la_puerta_llega_a_los_dos_colaboradores`, parametrizada
+`True/False`, con espías que **delegan en las clases de verdad** y miran el
+`kwargs` real de la construcción; con la puerta cerrada afirma
+`constructor["relevance_filter_port"] is None` (línea **3547**), y el corrector
+vio caer su mutante en la ronda 2. O sea: la guarda de la línea 344 no es solo
+muerta, es **redundante** con una prueba viva puesta donde la propiedad existe.
+De las dos salidas que el propio hallazgo enumera, la buena es la segunda:
+**retirar la guarda**, no intentar hacerla real.
+
+**Qué hice y qué no.** Publiqué al propietario, **antes** de la ronda 3, que una
+tercera de la misma familia me hacía parar en vez de encadenar. Se ha dado.
+Esto es la parada: escrita, con la raíz nombrada y anclada al árbol. Lo que
+**no** pude hacer es impedir la ronda 4 —el motor despachó `repair-requested`
+por su cuenta a los seis minutos del veredicto, 15:29 UTC—. Y hay un hecho que
+cambia la lectura de esa ronda: **el hallazgo lleva dentro la salida
+estructural**, enunciada por Codex, las dos opciones. La ronda 4 no es otro
+parche a ciegas; es la primera que recibe la raíz por escrito. Si vuelve una
+cuarta de esta familia, lo que toca es parar el ciclo, y queda dicho antes y no
+después.
+
+**Lo que esto le cuesta a la línea base: nada.** Las cuatro cifras no se han
+movido en ninguna de las tres rondas —`10/47` exactos; `218` de más; `57/81`
+hallados; `10` omisiones críticas—, y el corrector lo comprobó `diff`
+byte a byte entre el árbol corregido y el anterior. Lo que cambiaba no era el
+número sino qué lo sostenía.
+
+**Guardián candidato (quinto de la lista de la entrada 107).** Una guarda cuyo
+sujeto es un doble que no aparece en ninguna llamada de construcción es una
+guarda que no puede fallar. Es detectable leyendo el AST del guion: objeto
+instanciado, nunca pasado como argumento a nadie, y aun así leído en un
+`assert`/`raise`. Misma forma que `solo_prosa.py`, misma familia de guardián.
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
