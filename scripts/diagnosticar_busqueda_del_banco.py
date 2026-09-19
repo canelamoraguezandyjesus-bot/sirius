@@ -32,6 +32,22 @@ techo de dos palancas que producción no tiene y el laboratorio sí (ADR-148):
   ``--peticion``: sin ella toda petición es ``EXHAUSTIVA`` y el cupo es
   ``None`` en las 47.
 
+Y mide, desde ADR-203, **el otro camino**:
+
+- ``--puerta-cerrada``: el camino que ejecuta hoy el Sirius del propietario,
+  porque las cuatro claves de ``src/sirius/config/memory_gates.py`` nacen
+  apagadas. Pide el arnés con ``motor_por_etapas=False``, así que
+  ``rank_con_cupo`` se va por ``_rank_via_current_pipeline`` —el
+  filtro-y-orden de S7.5/M9— en vez de por el motor por etapas. Es la
+  **línea base** contra la que comparar cuando se abra el primer
+  interruptor de ADR-185. **Incompatible con las tres banderas de arriba, y
+  el guion lo rechaza en vez de medir**: por el camino cerrado
+  ``_rank_via_current_pipeline(query_text)`` solo recibe el texto de la
+  consulta, no se construye ninguna ``Peticion``, y ni la petición del
+  corpus ni los ejes ni el cupo pueden influir en el resultado. Una cifra
+  sacada con esas banderas parecería comparable con la de puerta abierta que
+  sí las usa, y no lo sería; el fallo es ruidoso a propósito.
+
 Reutiliza ``_ejecutar_banco_paquete_completo`` sin reimplementarlo — la única
 forma de no medir otra cosa por accidente — e inyecta las dos palancas por
 parches sobre nombres de módulo, restaurados al salir. Corre sin Ollama: solo
@@ -41,6 +57,7 @@ USO
 ===
 
     uv run python scripts/diagnosticar_busqueda_del_banco.py [--ejes] [--peticion] [--cupo]
+    uv run python scripts/diagnosticar_busqueda_del_banco.py --puerta-cerrada
 
 Medido el 05-09-2026 sobre ``a07c5d5`` (ADR-148): sin banderas 0/47 exactos,
 487 de más, 72/81; ``--ejes`` 0/47, 421, 71/81; ``--peticion`` 16/47, 162,
@@ -78,6 +95,17 @@ que ahora alcanza ``B04-CA-14`` (ámbito GLOBAL, «¿De qué se ocupa Juan?») y
 entregables de calidad?»): ruido del **filtro** de relevancia, que este
 guion no ejecuta, no del ámbito — la corrida final del laboratorio también
 llevó ``DEC-001`` al filtro en ``B04-CA-14`` y el filtro lo quitó.
+
+Medida por primera vez la **línea base de puerta cerrada** el 19-09-2026
+(ADR-203, incidencia #650), sobre el árbol de esta rama —``02df4f18`` más el
+cambio de este encargo, ``main`` en ``3062a31``—, con
+``uv run python scripts/diagnosticar_busqueda_del_banco.py --puerta-cerrada``:
+**10/47 exactos; 218 de más; 57/81 hallados; 10 omisiones críticas**. La
+comparación que comparte condiciones es la corrida SIN banderas de arriba
+—``0/47; 487; 72/81; 0``, vuelta a medir el mismo día sobre este árbol y sin
+moverse—, que es la de puerta ABIERTA sin petición declarada. Ninguna otra
+corrida de esta lista es comparable con la de puerta cerrada: todas las demás
+llevan banderas que allí no pueden actuar.
 """
 
 from __future__ import annotations
@@ -145,6 +173,7 @@ def _medir(
     con_peticion: bool,
     con_cupo: bool = False,
     peticion_alternativa: Callable[..., Peticion] | None = None,
+    motor_por_etapas: bool = True,
 ) -> tuple[Any, list[list[Clave]], dict[str, int]]:
     """Mide la etapa de búsqueda con las palancas pedidas.
 
@@ -154,6 +183,11 @@ def _medir(
     ``_peticion_ordinaria`` (``query_text, operation_id, *,
     active_project_id``) y manda sobre ``con_peticion``, que sigue siendo el
     techo declarado del banco.
+
+    ``motor_por_etapas=False`` pide el camino de puerta cerrada (ADR-203). Las
+    tres palancas no pueden influir allí —no hay ``Peticion``—, así que
+    ``main`` rechaza la combinación antes de llegar aquí; esta función no
+    vuelve a comprobarlo porque no es quien publica la cifra.
     """
     casos = banco["casos"]
     consultas = [caso["consulta"] for caso in casos]
@@ -223,7 +257,9 @@ def _medir(
     try:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as carpeta:
             ejecucion = arnes._ejecutar_banco_paquete_completo(
-                Path(carpeta) / "diagnostico.db", relevance_filter_port=filtro
+                Path(carpeta) / "diagnostico.db",
+                relevance_filter_port=filtro,
+                motor_por_etapas=motor_por_etapas,
             )
     finally:
         arnes._load_canon_item = cargador_original
@@ -233,10 +269,48 @@ def _medir(
     return ejecucion, filtro.entradas, llamadas
 
 
+#: Las banderas de laboratorio que el camino de puerta cerrada no puede
+#: honrar, porque allí no se construye ninguna ``Peticion``: ver el docstring
+#: del módulo y ADR-203.
+_BANDERAS_INCOMPATIBLES_CON_PUERTA_CERRADA = ("--ejes", "--peticion", "--cupo")
+
+
+def _rechazo_de_puerta_cerrada(argumentos: Sequence[str]) -> str | None:
+    """El mensaje con el que se rechaza medir, o ``None`` si no hay nada que
+    rechazar.
+
+    Función aparte, y pura, porque es lo único que hace imposible —no
+    improbable— publicar una cifra de puerta cerrada contaminada: se prueba
+    sin medir el banco.
+    """
+    if "--puerta-cerrada" not in argumentos:
+        return None
+    presentes = [b for b in _BANDERAS_INCOMPATIBLES_CON_PUERTA_CERRADA if b in argumentos]
+    if not presentes:
+        return None
+    return (
+        f"ERROR: --puerta-cerrada no admite {' '.join(presentes)}, y no se mide nada.\n"
+        "Por el camino de puerta cerrada rank_con_cupo se va por "
+        "_rank_via_current_pipeline(query_text), que SOLO recibe el texto de la\n"
+        "consulta: no se construye ninguna Peticion, asi que ni la peticion del "
+        "corpus (--peticion) ni los ejes declarados (--ejes) ni el cupo (--cupo)\n"
+        "pueden influir en el resultado. El numero saldria identico al de "
+        "--puerta-cerrada a secas y pareceria comparable con el de puerta abierta\n"
+        "que si usa esas palancas, que es justo la comparacion que no vale. "
+        "Mide --puerta-cerrada a secas y comparala con la corrida SIN banderas."
+    )
+
+
 def main() -> int:
-    con_ejes = "--ejes" in sys.argv[1:]
-    con_peticion = "--peticion" in sys.argv[1:]
-    con_cupo = "--cupo" in sys.argv[1:]
+    argumentos = sys.argv[1:]
+    rechazo = _rechazo_de_puerta_cerrada(argumentos)
+    if rechazo is not None:
+        print(rechazo, file=sys.stderr)
+        return 2
+    puerta_cerrada = "--puerta-cerrada" in argumentos
+    con_ejes = "--ejes" in argumentos
+    con_peticion = "--peticion" in argumentos
+    con_cupo = "--cupo" in argumentos
     banco = json.loads(_BANCO.read_text(encoding="utf-8"))
     items = {item["id"]: item for item in banco["items"]}
     casos = banco["casos"]
@@ -247,14 +321,22 @@ def main() -> int:
     )
 
     ejecucion, entradas, llamadas = _medir(
-        banco, con_ejes=con_ejes, con_peticion=con_peticion, con_cupo=con_cupo
+        banco,
+        con_ejes=con_ejes,
+        con_peticion=con_peticion,
+        con_cupo=con_cupo,
+        motor_por_etapas=not puerta_cerrada,
     )
     if len(entradas) != len(casos):
         msg = f"el filtro vio {len(entradas)} consultas y el banco tiene {len(casos)}"
         raise RuntimeError(msg)
 
     m = ejecucion.metricas
-    etiqueta = f"ejes={'si' if con_ejes else 'no'} peticion={'real' if con_peticion else 'fija'}"
+    etiqueta = (
+        "puerta=cerrada"
+        if puerta_cerrada
+        else f"ejes={'si' if con_ejes else 'no'} peticion={'real' if con_peticion else 'fija'}"
+    )
     if con_cupo:
         etiqueta += " cupo=si"
     encabezado = "SOLO EL RECORTE POR CUPO (modelo que no descarta)" if con_cupo else "SIN FILTRO"
