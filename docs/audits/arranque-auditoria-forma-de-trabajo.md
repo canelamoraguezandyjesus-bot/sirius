@@ -265,3 +265,79 @@ Este trabajo produce un mapa y recomendaciones, no decisiones. No se registra
 ADR al abrirlo. Si al cerrarlo el propietario decide algo —qué mecanizar, qué
 no, dónde se escriben las decisiones de viva voz—, esa decisión dejará su ADR,
 creado con la skill `adr`.
+
+## Adenda — la muestra, fijada antes de leer (2026-09-19 23:55 UTC)
+
+**Lo recibido el 19-09 y el 20-09**, todo fuera del repositorio, en el espacio
+temporal de la sesión: el manifiesto de la exportación de Anthropic (seis
+zips); `conversations.json` (38 conversaciones de claude.ai, del 12-06 al
+19-09: junio 10, julio 13, agosto 7, septiembre 8; 1 234 mensajes, 618 del
+propietario y 616 del asistente; 1 482 k caracteres de texto; 334 adjuntos);
+los metadatos ligeros (cuenta y 17 inicios de sesión entre el 12-06 y el
+15-09: 8 desde iPhone, 9 desde Windows —Edge 5, aplicación de escritorio 3,
+Chrome 1—); los siete proyectos de claude.ai («Sirius 0.2», 14 documentos;
+«Robótica Sirius», 5 documentos y una plantilla; los demás vacíos o ajenos);
+la memoria de claude.ai (22 ficheros, tres memorias de proyecto y una de
+conversaciones); las reflexiones mensuales generadas por claude.ai (junio y
+julio; no hay de agosto ni de septiembre) y la lista de feedback, vacía. Los
+artefactos («frames») no se han subido: no describen el proceso; se pedirán
+si una conversación de la muestra los necesita.
+
+**Lo visto antes de fijar la muestra, y nada más:** de cada conversación, el
+título, las fechas, el número de mensajes, el tamaño y los primeros ~230
+caracteres del `summary` que la exportación trae generado; las dos
+reflexiones mensuales; la estructura de la memoria (rutas y tamaños, no
+contenido); los nombres de los documentos de los proyectos. **Ningún
+mensaje.** Se declara porque las reflexiones y los resúmenes son fuentes
+secundarias, escritas por un modelo, y podrían orientar la lectura.
+
+**Criterio.** Por tema, decidido sobre título y resumen; por fecha, todo el
+rango. La muestra es la población dentro del alcance: no se muestrea dentro
+de ella.
+
+- **Dentro — 12 conversaciones, 237 mensajes, ~472 k caracteres:** Bloque 01
+  de Sirius 0.2 (23-07 00:48); Auditoría exhaustiva de documento (23-07
+  01:16; 101 mensajes, 278 k, 91 adjuntos); Límite de uso consumido (24-07
+  00:10); Automatización con agentes y revisión por bloques (24-07 03:13);
+  Investigación de capacidades de plataformas IA (24-07 05:17); MCP para
+  Sirius (04-08); Evidence discipline architecture for Claude Code (07-08);
+  Integrar skills de memoria en Sirius (16-08); Configurar Ultracode en
+  sesiones de cloud (21-08); Repositorio Sirius en GitHub (04-09); Niveles
+  ocultos del ingeniero de IA (11-09); N8N y Claude para agentes de Sirius
+  (16-09).
+- **Fuera — la cabeza robótica, 8:** Primera sesión del proyecto (22-07),
+  Clarificación del orden de fases (22-07), Segunda sesión (24-08), Sesión
+  tres (24-08), Diseño de cuello móvil (02-09), Documentales de robots y IA
+  caseros (06-09), Sesión 4 (18-09), Diseño de mecanismo de ojos v0.2
+  (19-09). Decisión del propietario del 19-09-2026.
+- **Fuera — proyectos ajenos a Sirius, 13:** la barbería Zona Cero (6), el
+  canal de YouTube y Mente Financiera (3), un sitio de ropa (1), una decisión
+  personal (1), Warzone (1), un coche (1), el trabajo (1).
+- **Sin texto en la exportación, 5:** del 18-07 al 22-07, sin título, sin
+  resumen y sin bloques de contenido (2, 4, 8, 80 y 10 mensajes). No se
+  pueden leer: quedan fuera **por imposibilidad, no por criterio**. Se anota
+  que la de 80 mensajes (21-07 21:15) coincide con la noche en que nació el
+  contrato de automatización, y que ese hueco existe.
+- **Casos límite, decididos ahora:** «Niveles ocultos del ingeniero de IA»
+  entra porque trata de cómo el propietario trabaja con IA aunque mezcle
+  temas; «Documentales de robots» sale como robótica y contenido.
+
+**Cómo se lee.** Las 12 enteras, en orden cronológico. Los mensajes del
+propietario, íntegros; los del asistente, íntegros hasta 2 500 caracteres y
+recortados después con la cuenta de lo omitido, porque lo que se audita es la
+forma de trabajar del propietario y no la prosa del modelo; los adjuntos, por
+nombre y tamaño, no por contenido. **Después** de las 12, y no antes, se leen
+como fuentes secundarias la memoria de claude.ai y las reflexiones completas,
+para contrastar sin anclar la lectura. De cada conversación se extrae lo
+mismo: (1) cómo entra la idea —voz, captura, documento, pregunta—; (2) el
+debate: correcciones, rechazos y decisiones tomadas dentro; (3) qué sale y
+hacia dónde —repositorio, incidencia, ADR, otra herramienta, ningún sitio—;
+(4) marcas de tiempo; (5) reglas de trabajo que el propietario enuncia. Toda
+cita que llegue al repositorio será corta y sin datos personales.
+
+**Parada de esta lectura:** cumplido el punto 2 del criterio de parada —las
+tres fichas, o «no observable» escrito— o agotadas las 12.
+
+**Lo que tendrá su propia adenda al llegar**, con el mismo criterio: las
+transcripciones locales de Claude Code —entran solo las carpetas del
+repositorio de Sirius— y la exportación de ChatGPT.
