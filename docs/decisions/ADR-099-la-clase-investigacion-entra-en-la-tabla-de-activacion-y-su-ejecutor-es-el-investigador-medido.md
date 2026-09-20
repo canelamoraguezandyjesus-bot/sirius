@@ -1,6 +1,6 @@
 # ADR-099 — La clase investigacion entra en la tabla de activación, y su ejecutor es el investigador medido
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-28
 - Aprobación: la fusión de la PR por el propietario
 - Contexto: B1. El propietario pidió que Sirius haga «investigaciones como las

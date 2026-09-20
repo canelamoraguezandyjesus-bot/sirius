@@ -586,3 +586,75 @@ def test_un_atraso_ilegible_por_vacio_tambien_bloquea(tmp_path: Path) -> None:
     r = _run_merge(env)
     assert r.returncode != 0
     assert "MERGE" not in _actions(env)
+
+
+# --------------------------------------------------------------------------- #
+# Autorización por revisión dual (ADR-205)
+# --------------------------------------------------------------------------- #
+
+
+def test_revision_dual_fusiona_sin_comentario_del_propietario(tmp_path: Path) -> None:
+    """La aprobación de los dos revisores ES la autorización (ADR-205).
+
+    `sirius:ready-for-merge` solo la pone `sirius_apply_verdict.sh` con el
+    veredicto agregado `REVIEW_APPROVED`, que en modo dual exige a Claude y a
+    Codex: si uno pide cambios o no contesta, la incidencia no llega aquí. Por
+    eso en este modo no hace falta pedirle al propietario una palabra que solo
+    repetiría lo que la etiqueta ya dice.
+    """
+    env = _setup(tmp_path)
+    env["SIRIUS_MERGE_AUTORIZACION"] = "revision-dual"
+    _ready_issue(env)
+    r = _run_merge(env, comment_body="")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "MERGE" in _actions(env)
+
+
+def test_revision_dual_no_relaja_ninguna_otra_comprobacion(tmp_path: Path) -> None:
+    """El modo decide quién autoriza, no cuánto se verifica.
+
+    Sin la etiqueta no hay aprobación de nadie, así que tampoco hay merge — y
+    esa reverificación por REST es la que protege de la condición de carrera
+    entre el evento y la ejecución.
+    """
+    env = _setup(tmp_path)
+    env["SIRIUS_MERGE_AUTORIZACION"] = "revision-dual"
+    _seed_issue(env, ISSUE, ["sirius:reviewing"])
+    r = _run_merge(env, comment_body="")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "MERGE" not in _actions(env)
+
+
+def test_revision_dual_no_fusiona_con_quality_en_rojo(tmp_path: Path) -> None:
+    """La otra mitad de lo mismo: el verde de Quality sigue siendo obligatorio."""
+    env = _setup(tmp_path)
+    env["SIRIUS_MERGE_AUTORIZACION"] = "revision-dual"
+    _ready_issue(env)
+    _seed_checks(env, "c4d482267d9a", "failure")
+    _run_merge(env, comment_body="")
+    assert "MERGE" not in _actions(env)
+
+
+def test_un_modo_de_autorizacion_desconocido_no_fusiona(tmp_path: Path) -> None:
+    """Fail-closed: un modo mal escrito en un workflow no puede fusionar.
+
+    Es la diferencia entre una guarda y un adorno. Si un valor desconocido
+    cayera en el caso por omisión permisivo, cualquier errata en un YAML
+    fusionaría sin autorización de nadie.
+    """
+    env = _setup(tmp_path)
+    env["SIRIUS_MERGE_AUTORIZACION"] = "revision-triple"
+    _ready_issue(env)
+    r = _run_merge(env, comment_body="fusiona")
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert "MERGE" not in _actions(env)
+
+
+def test_sin_modo_declarado_sigue_exigiendo_la_palabra(tmp_path: Path) -> None:
+    """El modo por omisión es el de siempre: la orden del propietario."""
+    env = _setup(tmp_path)
+    env.pop("SIRIUS_MERGE_AUTORIZACION", None)
+    _ready_issue(env)
+    r = _run_merge(env, comment_body="")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "MERGE" not in _actions(env)

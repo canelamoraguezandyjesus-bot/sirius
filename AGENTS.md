@@ -42,6 +42,7 @@ cada familia la lleva la máquina: **«Las lecciones, por familia» en
 | La memoria del motor: diario, despachos y racha | la rama **`estado-del-motor`**, nunca `main` (ADR-083, ADR-093) |
 | Las investigaciones que informaron una decisión | `docs/investigaciones/` — **con su fecha y de qué dependen para caducar** |
 | Qué modelo de IA funciona HOY | `scripts/investigacion/modelos_atestiguados.yml`, que escribe una máquina tras llamar (ADR-095) |
+| Cómo se hace una tarea que esta casa ya ha hecho antes | las **skills** de `.claude/skills/`; la tabla de «Las skills» en `MEMORIA.md` dice cuándo carga cada una (ADR-211) |
 
 Cuatro avisos que ya han costado tiempo:
 
@@ -60,6 +61,22 @@ Cuatro avisos que ya han costado tiempo:
   la rama `estado-del-motor` (ADR-093). Mirar el de `main` y concluir «el
   contador no ha corrido nunca» sería exactamente el error del aviso anterior.
 
+## Lo que ya se averiguó dos veces: las skills (ADR-211)
+
+Antes de resolver desde cero algo que parece rutinario —pasar la cadena de
+comprobación, registrar un defecto, escribir un ADR, comprobar que no hay otra
+sesión en tus ficheros, escribirle al propietario— **mira si hay una skill que
+ya lo cuente**. Están en `.claude/skills/`, una carpeta por skill, y la tabla
+«Las skills» de `MEMORIA.md` dice cuándo carga cada una.
+
+Y al revés: cuando termines un trabajo en el que hayas tenido que averiguar
+**dos veces** lo mismo, esa es la señal de que falta una skill o de que una
+existente se quedó corta. Cómo se decide y cómo se escribe está en
+`.claude/skills/crear-una-skill/SKILL.md`. Lo mecánico lo sostiene
+`tests/automation/test_skills.py`: una skill que cite una ruta o un ADR que ya
+no existen rompe la batería. Lo que ninguna prueba puede decirte es si el texto
+sigue siendo verdad; eso se mira al usarla.
+
 ## Antes de modificar código
 
 1. Lee `MEMORIA.md` entera; después `docs/canonical/STATUS.md`.
@@ -68,6 +85,13 @@ Cuatro avisos que ya han costado tiempo:
 4. No añadas funciones fuera de alcance.
 5. Si la tarea afecta Claude Code, Routines, cloud, permisos, revisión automática, PR automáticas o cualquier flujo de agentes, lee obligatoriamente `docs/implementation/AUTOMATION_OPERATING_CONTRACT.md` y ejecuta únicamente la fase vigente descrita allí.
 6. Si la tarea afecta hardware local de IA, DGX Spark o equivalente, Sirius Core, modelos open-weight, proveedores de IA, model routing, benchmarks de modelos, costes de inferencia o políticas local/nube, lee obligatoriamente `docs/evolution/SIRIUS_AI_CORE_AND_MODEL_STRATEGY.md`. Ese documento es una recolección informativa de ideas futuras: no constituye aprobación para implementarlas.
+7. **Comprueba que no hay otra sesión sobre tus mismos ficheros** (ADR-206).
+   Lista las pull requests abiertas con los ficheros que tocan y pásalas a
+   `scripts/automation/sirius_obra_en_curso.py` junto con los tuyos. Si nombra
+   otra obra viva, **no empieces**: dilo y espera, o cambia de vertical. Si no
+   puede afirmar que no hay solape, tampoco empieces: no saber no es un
+   permiso. Y **declara la tuya** abriendo tu pull request en cuanto tengas el
+   primer commit, aunque sea borrador; mientras no exista, nadie puede verte.
 
 ## Reglas obligatorias
 
@@ -88,7 +112,12 @@ Cuatro avisos que ya han costado tiempo:
 - Ejecuta `scripts/check.ps1` antes de entregar.
 - Haz cambios pequeños, trazables y reversibles.
 - Actualiza la documentación cuando cambie el comportamiento aprobado.
-- No introduzcas disparador API, eventos de GitHub, auto-fix, merge automático, coordinación de agentes ni otro nivel de automatización antes de la puerta y aprobación expresa definidas en `AUTOMATION_OPERATING_CONTRACT.md`.
+- No introduzcas disparador API, eventos de GitHub, auto-fix, coordinación de
+  agentes ni otro nivel de automatización antes de la puerta y aprobación
+  expresa definidas en `AUTOMATION_OPERATING_CONTRACT.md`. **El merge sí está
+  aprobado desde ADR-205**: una incidencia que llega a `sirius:ready-for-merge`
+  se fusiona sola, porque esa etiqueta ya significa que los dos revisores
+  aprobaron. Las comprobaciones previas al merge no cambian (contrato §14).
 - No pidas repetir una acción ya realizada. Antes de indicar el siguiente paso, verifica el estado real y la fase vigente.
 
 ## Política de revisión (revisores automáticos)
@@ -175,4 +204,77 @@ Detente y pide decisión cuando una tarea implique:
 - introducir otro proceso, servidor, agente o base de datos;
 - ejecutar acciones externas autónomas;
 - aumentar el presupuesto o reducir controles de seguridad;
-- contradecir, saltar o reinterpretar el contrato operativo de automatización.
+- contradecir, saltar o reinterpretar el contrato operativo de automatización;
+- hacer algo irreversible que no se pueda archivar: borrar una rama o un
+  fichero, reescribir historia, retirar una prueba. En este repositorio no se
+  borra nada (ADR-195); lo que no se puede archivar, se pregunta.
+
+## Qué se le pregunta al propietario, y qué no (ADR-204)
+
+El propietario decide **producto, dinero y salud**. Lo técnico y lo de orden lo
+resuelve la sesión: lo decide, lo ejecuta y lo deja escrito en un ADR con su
+comprobación. Sus palabras, del 20-09-2026: «solo pregúntame cosas que
+realmente sean importantes: de dinero, salud, cambio de producto, no confundir
+con arreglo de producto».
+
+**Se le pregunta por tres cosas, y solo por tres:**
+
+1. **Dinero** — gasto, suscripciones, compras, límites de uso, cualquier cosa
+   que consuma su cuota.
+2. **Salud y seguridad** — lo que afecte a su salud, a su descanso cuando él lo
+   ha pedido, o a la seguridad de sus datos, credenciales y máquina.
+3. **Cambio de producto** — qué es Sirius, qué hace y qué no hace: alcance,
+   dirección, prioridad. **Arreglar no es cambiar**: corregir un defecto,
+   elegir cómo se implementa algo ya aprobado u ordenar el repositorio son
+   decisiones de la sesión.
+
+**No se le pregunta** qué nombre poner a algo, dónde colocar un fichero, si
+archivar o regenerar un documento caducado, cuál de dos formas técnicas cumple
+mejor lo mismo, ni se le devuelve un menú de opciones para que elija. Si la
+sesión no puede decidir con lo que tiene, **investiga primero**; solo escala si
+después la decisión sigue dependiendo de algo que únicamente él sabe.
+
+Y una decisión que toma la sesión **nunca se declara del propietario**: el ADR
+dice quién la tomó.
+
+## Cómo conversa el propietario, y qué espera (ADR-208)
+
+Esto no es cortesía: es método suyo, observado en catorce meses de
+conversaciones y transcripciones, y respetarlo ahorra rondas. Está medido en
+`docs/audits/AUDITORIA_FORMA_DE_TRABAJO_2026-09.md`, fichas C-03 y E-01 a E-04.
+
+1. **Nada de planes mientras se explora.** «Estamos explorando, hablando, deja
+   de hacer planes.» Primero se habla; el plan viene cuando él lo pide.
+2. **Realidad antes que opinión.** No opines sobre cómo está algo sin haberlo
+   mirado. Si hace falta mirar en su máquina, dale el comando exacto.
+3. **Una recomendación, no un menú.** «No me des opciones, dime cuál es el
+   mejor.» Si hay alternativas, van después de la recomendación y en una línea.
+4. **Audita lo que acabas de proponer.** Pedirle que lo haga es suyo: hazlo
+   antes de que lo pida.
+5. **Corrige con datos, y acepta que los suyos no están en el repositorio.**
+   Cuando dice que algo ya está hecho, o que estás perdido, **suele tener
+   razón**: de seis correcciones suyas medidas, acertó las seis, y en cinco el
+   hecho vivía en una rama sin fusionar, en una prueba manual que hizo él o en
+   su cabeza. Compruébalo antes de contradecirle.
+6. **Poco a poco, y cerrando por tamaño.** Un corte que se pueda terminar.
+7. **Cuando dirige la ejecución, un comando cada vez**, y con las tres cosas:
+   dónde se pega, qué hay que hacer y qué va a salir. Sin eso se pierde, y lo
+   ha dicho: «no sé ni dónde ponerla».
+8. **El alcance se da por exclusión tanto como por inclusión.** «Deja Model
+   Studio y los ADR» acota igual que un encargo.
+9. **Sus autorizaciones son acotadas.** «Permiso mientras no toques las otras
+   sesiones», o un merge autorizado para una incidencia concreta, no valen para
+   la siguiente.
+10. **Texto corto.** «Me pones mucho texto y no puedo responderte a todo.»
+    Tablas y frases, no párrafos.
+
+## Dónde va una idea que no se hace ahora (ADR-208)
+
+En `docs/ideas/registro_de_ideas.yml`, nunca solo en la conversación. Una
+**aparcada** declara qué tendría que pasar para volver a mirarla; una
+**descartada**, por qué no se hace; una **promovida**, a qué ADR o incidencia.
+Sin ese campo la entrada no vale, y `tests/automation/test_registro_de_ideas.py`
+la rechaza. Aparecen en `MEMORIA.md`, así que se leen al empezar.
+
+La razón está medida: una idea aparcada el 24-07-2026 volvió el 16-09 como si
+fuera nueva, porque no había dónde anotarla.

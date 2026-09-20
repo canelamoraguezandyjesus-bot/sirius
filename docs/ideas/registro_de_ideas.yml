@@ -1,0 +1,112 @@
+# EL REGISTRO DE LAS IDEAS: LAS APARCADAS Y LAS DESCARTADAS
+#
+# Este fichero existe por una frase del propietario, el 20-09-2026, cuando la
+# auditoria le pregunto donde deberia escribirse una idea que no se hace ahora:
+# «pues en algun sitio o carpeta para identificarlas».
+#
+# EL COSTE QUE QUITA, medido en el paso 3 de la auditoria: una idea aparcada el
+# 24-07-2026 -la orquestacion grande de agentes- volvio el 16-09 como si fuera
+# nueva, y hubo que pensarla entera otra vez. La propia IA habia dicho el 10-08
+# «apuntalo como idea aparcada» y no habia donde. Es la misma leccion que
+# ADR-198 escribio para las decisiones: un «aplazado» vuelve a aparecer en cada
+# repaso; un «descartado, con la razon escrita» se lee una vez.
+#
+# QUE ENTRA AQUI. Una idea que se penso y NO se va a hacer ahora. No entra lo
+# que se esta haciendo -eso es una incidencia- ni lo que se decidio hacer de
+# una forma concreta -eso es un ADR-.
+#
+# Estados:
+#   aparcada   - no ahora; se declara QUE tendria que pasar para volver a
+#                mirarla. Sin ese disparador no es una idea aparcada, es una
+#                idea olvidada con mejor nombre.
+#   descartada - no se hace, con la razon escrita. Se lee una vez y se acabo.
+#   promovida  - dejo de ser idea: tiene ADR o incidencia, y se cita cual.
+#
+# REGLA: `aparcada` exige `volver_si`; `descartada` exige `porque`; `promovida`
+# exige `promovida_a`. Lo hace cumplir `tests/automation/test_registro_de_ideas.py`,
+# igual que ADR-087 hace con los bloques y ADR-080 con los defectos.
+#
+# Aqui tampoco se borra nada (ADR-195): una idea que se promueve o se descarta
+# se queda con su nuevo estado, no desaparece.
+
+lista: ideas-aparcadas-y-descartadas
+ideas:
+  - id: I-001
+    titulo: Orquestacion grande y tuberias multiagente para construir Sirius
+    estado: aparcada
+    nacida: 2026-07-24
+    origen: conversacion en claude.ai, «quiero poderme ir a dormir, decirte implementa 0.2 y que empieces bloque a bloque»
+    volver_si: >-
+      haya volumen real de trabajo en paralelo y evidencia de que el ciclo
+      actual se queda corto; hoy el ciclo de una incidencia a la vez llega.
+    nota: >-
+      Aparcada el 24-07-2026 y vuelta a plantear el 16-09 como si fuera nueva,
+      porque no habia donde anotarla. Es el caso que hizo nacer este registro.
+
+  - id: I-002
+    titulo: n8n como orquestador de agentes para el motor
+    estado: descartada
+    nacida: 2026-09-16
+    origen: conversacion en claude.ai
+    porque: >-
+      el corazon del motor son garantias que viven en codigo con migraciones y
+      pruebas; partirlo entre codigo y un lienzo visual deja media logica sin
+      historial ni pruebas, y anade un servidor que tiene que estar encendido.
+      Queda la puerta abierta a n8n como BRAZO -que el motor dispare un flujo-,
+      nunca como cerebro.
+
+  - id: I-003
+    titulo: Obsidian como capa de conocimiento de Sirius
+    estado: descartada
+    nacida: 2026-08-10
+    origen: conversacion en claude.ai, dos rondas
+    porque: >-
+      contrastada contra el banco de 47 casos del propio repositorio y no
+      mejoraba lo que ya hay. El banco es el que decidio, no una opinion.
+
+  - id: I-004
+    titulo: Piezas de Memanto para la capa de memoria (motivo y desarchivar, exportacion Markdown, «cambiado desde», valid_from/valid_to persistidos, retencion como sugerencia)
+    estado: aparcada
+    nacida: 2026-09-13
+    origen: investigacion docs/investigaciones/2026-09-13-memanto-contra-la-capa-de-memoria-de-sirius.md
+    volver_si: >-
+      cada pieza tiene su momento de disparo escrito en esa investigacion; la
+      de retencion, solo despues de que valid_from/valid_to esten persistidos.
+    nota: >-
+      El propietario fue explicito el 19-09: «no las quiero hacer ahora, a menos
+      que me mejoren algo ya». Aparcadas con su disparador, no olvidadas.
+
+  - id: I-005
+    titulo: Un agente que revise el repositorio por modulos, en rondas, cuando nadie esta delante
+    estado: aparcada
+    nacida: 2026-09-16
+    origen: conversacion en claude.ai, «un agente que revise el repo por modulos»
+    volver_si: >-
+      la mina de aprendizaje mensual (ADR-201) lleve tres ediciones y se vea que
+      deja huecos que una pasada por modulos llenaria. Hoy la mina cubre la
+      misma necesidad y ya tiene reloj.
+
+  - id: I-006
+    titulo: Un cazador de contradicciones entre los documentos canonicos y el codigo
+    estado: promovida
+    nacida: 2026-09-16
+    origen: conversacion en claude.ai
+    promovida_a: >-
+      ADR-005 y `tests/unit/test_documentation_single_source.py`, que rompen CI
+      si un documento vuelve a afirmar estado fuera del registro unico; y
+      ADR-190 con la guarda de citas. La idea se construyo sin llamarse asi.
+  - id: I-007
+    titulo: Traer a local las 28 sesiones de Claude Code de la nube que le faltan a la auditoria
+    estado: aparcada
+    nacida: 2026-09-20
+    origen: paso 4 de docs/audits/AUDITORIA_FORMA_DE_TRABAJO_2026-09.md, que declara esas 28 como fuente que falta
+    volver_si: >-
+      Claude Code ofrezca una forma de exportar una sesion de la nube sin
+      gastar un turno de modelo, o el propietario decida que vale la pena
+      pagarlo. Las cuatro vias probadas el 20-09 estan medidas en la auditoria,
+      seccion «Las cuatro vias probadas»: ninguna escribe la transcripcion en
+      local sin que la sesion tenga un turno.
+    nota: >-
+      No es un pendiente del trabajo: es una fuente que la auditoria ya declara
+      como faltante y cuyo limite esta escrito. Se aparca para no volver a
+      gastar una tarde probando las mismas cuatro cosas.

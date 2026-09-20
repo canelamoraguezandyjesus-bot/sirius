@@ -1,6 +1,6 @@
 # ADR-102 — Las pruebas de aceptación de Sirius 0.2 no resuelven las decisiones que la Definición deja abiertas
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-29
 - Aprobación: la fusión de la PR que introduce este ADR, por el propietario
 

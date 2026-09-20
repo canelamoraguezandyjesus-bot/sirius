@@ -1,6 +1,6 @@
 # ADR-098 — El investigador se queda con NVIDIA, porque fue el único que pudo correr la prueba
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-27
 - Aprobación: la fusión de la PR por el propietario
 - Contexto: S2/B1. El propietario pidió «una comparación entre NVIDIA y Google AI

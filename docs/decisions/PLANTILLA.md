@@ -1,6 +1,11 @@
 # ADR-NNN — [Título en imperativo: «Usar X para Y»]
 
-- Estado: PROPUESTO | APROBADO | RECHAZADO | SUPERADO por ADR-NNN
+- Estado: APROBADO | RECHAZADO | SUPERADO por ADR-NNN
+  <!-- Se escribe APROBADO, y la línea de abajo dice qué lo aprueba: en este
+  repositorio, la fusión de la PR. Un ADR fusionado que siguiera diciendo
+  PROPUESTO estaría contradiciendo su propia línea de aprobación, y eso le pasó
+  a 150 de los primeros 203 (ADR-209). Lo impide
+  `tests/automation/test_estado_de_los_adr.py`. -->
 - Fecha: AAAA-MM-DD
 - Aprobación: [quién y cómo; en este repositorio, la fusión de la PR por el propietario]
 

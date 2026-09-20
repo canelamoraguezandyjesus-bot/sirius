@@ -1,6 +1,6 @@
 # ADR-172 — La memoria de sesión vive en Supermemory y el conocimiento en el repositorio, con una regla de reparto que toda IA lee
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-12
 - Aprobación: la fusión de la PR que introduce este ADR, por el propietario
 - Ejecuta: la decisión 11 de ADR-171, que identificó la captura de sesión como

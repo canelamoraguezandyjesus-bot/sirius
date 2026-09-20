@@ -1,6 +1,6 @@
 # ADR-055 — Dar al motor un comando de consola que conversa y consulta, y que no puede crear trabajo
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-21
 - Enmendado: ADR-082 supera «el diario vive fuera del repositorio» solo dentro de GitHub Actions; para la consola sigue vigente (decisión I4, #270)
 - Aprobación: la fusión de la PR por el propietario

@@ -1,6 +1,6 @@
 # ADR-158 — Cada evento de etiqueta tiene su propia ranura de notificación
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-07
 - Aprobación: decisión del propietario registrada en #545 el 07-09-2026 a las
   22:22 y 22:36 UTC («el canal se cierra en ficha propia del operador: grupo de

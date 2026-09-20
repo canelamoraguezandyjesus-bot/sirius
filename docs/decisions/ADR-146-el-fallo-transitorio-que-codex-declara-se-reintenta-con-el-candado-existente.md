@@ -1,6 +1,6 @@
 # ADR-146 — El fallo transitorio que Codex declara se reintenta con el candado existente
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-05
 - Aprobación: la fusión de la PR que introduce este ADR, por el propietario o
   por su operador bajo la autorización vigente del 05-09. No toca `.github/**`:

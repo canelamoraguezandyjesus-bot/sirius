@@ -1,6 +1,6 @@
 # ADR-160 — Formalizar la separación entre Sirius y su motor: Sirius es el compañero, el motor ejecuta y las IAs externas son el lugar de trabajo
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-08
 - Aprobación: la fusión de la PR que introduce este ADR, por el propietario
 - Contexto: la dirección que el propietario expresó al encargar

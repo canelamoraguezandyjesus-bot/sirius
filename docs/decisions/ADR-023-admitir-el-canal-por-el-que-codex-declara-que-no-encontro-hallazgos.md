@@ -1,6 +1,6 @@
 # ADR-023 — Admitir como aprobación de Codex el comentario en el que declara no haber encontrado hallazgos
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-16
 - Aprobación: la fusión de la PR de esta rama por el propietario. Entra en vigor con ella
   el contrato operativo **v1.6.1** (§10.6).

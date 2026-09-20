@@ -1,6 +1,6 @@
 # ADR-013 — La contraseña de OBS vive en el almacén del sistema, y sin él no se guarda
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-14
 - Aprobación: la fusión de la PR que introduce este ADR, por el propietario
 - Numeración: 011 y 012 están tomados por ramas abiertas (correlación de OBS y

@@ -1,6 +1,6 @@
 # ADR-167 — Las dos puertas de carril retirado comprueban el estado real, no declaran éxito sin confirmarlo y se cierran ante cualquier fallo del lector
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-08
 - Aprobación: la fusión de la PR que introduce este ADR, por el propietario
 - Corrige: **ADR-163** (PR #569, fusionada como `afe704e`), cuya implementación

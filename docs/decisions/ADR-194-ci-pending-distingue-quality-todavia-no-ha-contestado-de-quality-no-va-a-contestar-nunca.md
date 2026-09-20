@@ -1,6 +1,6 @@
 # ADR-194 — `ci-pending` distingue «Quality todavía no ha contestado» de «Quality no va a contestar nunca»
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-14
 - Aprobación: el propietario, fusionando la PR de esta rama.
 

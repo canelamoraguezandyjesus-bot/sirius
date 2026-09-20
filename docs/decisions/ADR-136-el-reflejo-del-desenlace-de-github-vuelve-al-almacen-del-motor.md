@@ -1,6 +1,6 @@
 # ADR-136 — El reflejo del desenlace de GitHub vuelve al almacén del motor
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-04
 - Aprobación: la fusión de la PR de la incidencia #529 por el propietario.
 

@@ -1,6 +1,6 @@
 # ADR-070 — Las defensas de workflow reconocen «acción clasificada», no un nombre
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-22
 - Aprobación: la fusión de la PR de esta rama por el propietario
 - Nota de arranque de esta rama: este ADR. Publicado antes del primer commit.

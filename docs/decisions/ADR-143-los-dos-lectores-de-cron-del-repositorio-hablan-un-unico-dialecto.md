@@ -1,6 +1,6 @@
 # ADR-143 — Los dos lectores de cron del repositorio hablan un único dialecto
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-05
 - Aprobación: [quién y cómo; en este repositorio, la fusión de la PR por el propietario]
 - Encargo: WI-20260905-034826 (incidencia #537)

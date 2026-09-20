@@ -1,6 +1,6 @@
 # ADR-153 — check.ps1 se detiene en el primer paso rojo y propaga su código de salida
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-06
 - Aprobación: la fusión de esta PR por el propietario (ficha del operador; no
   toca `.github/**`: vive en `scripts/check.ps1` y en su guardián).

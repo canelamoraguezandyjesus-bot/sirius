@@ -1,6 +1,6 @@
 # ADR-105 — Añadir RAMA_DE_ORIGEN_NO_FUSIONADA al guardián de citas de los ADR
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-29
 - Aprobación: [quién y cómo; en este repositorio, la fusión de la PR por el propietario]
 

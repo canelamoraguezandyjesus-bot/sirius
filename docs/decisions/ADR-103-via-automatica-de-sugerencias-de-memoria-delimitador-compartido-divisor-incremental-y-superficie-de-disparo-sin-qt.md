@@ -1,6 +1,6 @@
 # ADR-103 — Vía automática de sugerencias de memoria: delimitador compartido, divisor incremental y superficie de disparo sin Qt
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-29
 - Aprobación: pendiente (fusión de la PR de la incidencia #437 por el propietario)
 

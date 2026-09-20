@@ -1,6 +1,6 @@
 # ADR-169 — El filtro recorta por la cardinalidad que la peticion declara
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-08
 - Aprobación: la fusión de esta PR por el propietario.
 - Esta ficha es además la **nota de arranque** de la rama (ADR-001, skill

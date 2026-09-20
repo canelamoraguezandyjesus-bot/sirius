@@ -874,3 +874,136 @@ defectos:
       - tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py
       - scripts/diagnosticar_busqueda_del_banco.py
       - docs/decisions/ADR-203-el-banco-mide-tambien-el-camino-de-puerta-cerrada-la-linea-base-que-faltaba.md
+
+  # ADR-204: la regla que gobierna que se le pregunta al propietario y que no
+  # la dio el en una conversacion y estuvo catorce meses sin estar escrita en
+  # ninguna parte del repositorio. El paso 3 de la auditoria la encontro dicha
+  # el 24-07-2026 y el paso 4 la vio aplicada el 10-08-2026. Mientras tanto, la
+  # sesion le devolvia decisiones tecnicas que el no podia tomar: de las diez
+  # que la auditoria le puso delante, SIETE volvieron sin contestar.
+  - id: H-204
+    titulo: La regla de que se le pregunta al propietario vivia solo en conversaciones, y el trabajo se paraba esperando respuestas que no iban a llegar
+    bloque: ciclo
+    gravedad: media
+    estado: cerrado
+    cerrado_por: e5e5c542a56ea182ad2150faa3bbfd5686343cf5
+    adr: 204
+    ficheros:
+      - AGENTS.md
+      - tests/automation/test_reglas_de_agents.py
+
+  # ADR-205: llegar a `ready-for-merge` con todo verde no bastaba; hacia falta
+  # ademas una palabra que solo podia escribir el propietario y que no verifica
+  # nada, porque el mismo dice que no puede comprobar lo tecnico. Medido: la
+  # incidencia #650 espero 5 h 40 min con los dos revisores aprobando, y la
+  # #148 espero de las 05:12 a las 21:34 del 11-08.
+  - id: H-205
+    titulo: El merge esperaba un tramite que solo podia hacer una persona y que no anadia ninguna comprobacion
+    bloque: ciclo
+    gravedad: media
+    estado: cerrado
+    cerrado_por: e5e5c542a56ea182ad2150faa3bbfd5686343cf5
+    adr: 205
+    ficheros:
+      - .github/workflows/merge-sirius-work.yml
+      - scripts/automation/sirius_merge_on_command.sh
+      - tests/automation/test_sirius_merge.py
+
+  # ADR-206: una sesion no puede ver que ficheros esta tocando otra. El
+  # 10-08-2026 el propietario tenia cuatro abiertas a la vez; una encargo
+  # construir un bloque que otra habia cerrado cuatro dias antes (#165), y otra
+  # escribio un ADR que invalido las ediciones de una tercera. ADR-016 y
+  # ADR-180 cierran dos de las cuatro colisiones medidas; estas dos no.
+  - id: H-206
+    titulo: Dos sesiones interactivas no se ven entre si y trabajan sobre los mismos ficheros sin saberlo
+    bloque: ciclo
+    gravedad: media
+    estado: cerrado
+    cerrado_por: e5e5c542a56ea182ad2150faa3bbfd5686343cf5
+    adr: 206
+    ficheros:
+      - scripts/automation/sirius_obra_en_curso.py
+      - tests/automation/test_obra_en_curso.py
+
+  # ADR-207: dos mapas escritos en julio seguian en docs/operations/ diciendo
+  # cosas falsas -uno afirmaba que el contrato iba por la v1.1 cuando va por la
+  # v1.11- y nadie los mantenia; un workflow convertia dos documentos a Word en
+  # cada push sin que nadie los usara; y la linea de D4 decia APLAZADO seis dias
+  # despues de que ADR-198 lo descartara. Misma familia las tres: pieza sin
+  # lector.
+  - id: H-207
+    titulo: Dos mapas de julio, un workflow de Word y una linea de registro seguian vivos diciendo lo que ya no era verdad
+    bloque: documentacion
+    gravedad: baja
+    estado: cerrado
+    cerrado_por: 1e04a39e9611d814db0c18ee607e29ef1cd414a5
+    adr: 207
+    ficheros:
+      - docs/operations/CLAUDE_SIRIUS_KNOWLEDGE_BASE.md
+      - docs/operations/CLAUDE_PROJECT_ONBOARDING.md
+      - .github/workflows/materialize-approved-docx.yml
+      - docs/implementation/bloques_del_motor.yml
+
+  # ADR-208: una idea aparcada no tenia donde escribirse, asi que volvia como
+  # nueva -la orquestacion grande, aparcada el 24-07 y replanteada el 16-09-; y
+  # las once reglas de como conversa el propietario vivian en la memoria de
+  # claude.ai, no en el repositorio, asi que cada sesion las reaprendia a base
+  # de escaladas.
+  - id: H-208
+    titulo: Las ideas aparcadas no tenian donde vivir y volvian como nuevas, y el metodo de conversacion del propietario no estaba escrito
+    bloque: ciclo
+    gravedad: media
+    estado: cerrado
+    cerrado_por: 0b8fa354b34cee1d5f896c688b42bb52cae815a0
+    adr: 208
+    ficheros:
+      - docs/ideas/registro_de_ideas.yml
+      - src/sirius_engine/memoria.py
+      - tests/automation/test_registro_de_ideas.py
+      - AGENTS.md
+
+  # ADR-209: 150 de los 203 ADR declaraban `Estado: PROPUESTO` con la linea de
+  # al lado diciendo que los aprueba la fusion de su PR, estando fusionados. El
+  # campo que existe para saber si una decision esta en vigor decia lo mismo en
+  # el 74 % de las filas y era falso.
+  - id: H-209
+    titulo: El estado de 150 ADR contradecia su propia linea de aprobacion
+    bloque: documentacion
+    gravedad: media
+    estado: cerrado
+    cerrado_por: d74e70d13310941de33fe528e3029c75b9f96e04
+    adr: 209
+    ficheros:
+      - docs/decisions/PLANTILLA.md
+      - tests/automation/test_estado_de_los_adr.py
+
+  # ADR-210: quince incidencias abiertas y nueve de ellas no describian nada que
+  # siguiera pasando -la mas vieja del 15-07-2026-, asi que el tablero no servia
+  # para saber que queda. Y 128 entradas de bitacora del ciclo vivian en una
+  # rama sin que nadie fuera de esa sesion supiera que existian.
+  - id: H-210
+    titulo: El tablero de incidencias estaba lleno de trabajo terminado y la bitacora del ciclo era invisible desde main
+    bloque: documentacion
+    gravedad: baja
+    estado: cerrado
+    cerrado_por: 79ab7131d415b912ea36cf7f613c69f5a63aacfd
+    adr: 210
+    ficheros:
+      - docs/audits/DONDE_VIVE_LA_BITACORA_DEL_CICLO.md
+
+  # ADR-211: lo que esta casa ya habia averiguado dos veces se volvia a
+  # averiguar cada sesion -el conocimiento estaba repartido entre AGENTS.md,
+  # 210 ADR y 21 fichas-, las dos unicas skills no las miraba ninguna prueba ni
+  # las nombraba ninguna de las dos puertas por las que entra una sesion, y
+  # `.gitignore` descartaba en silencio cualquier skill nueva: las dos que
+  # existian estaban seguidas solo porque se anadieron con `git add -f`.
+  - id: H-211
+    titulo: Las skills no las vigilaba nada y una nueva ni siquiera llegaba al repositorio
+    bloque: documentacion
+    gravedad: media
+    estado: cerrado
+    cerrado_por: f5741b573b0383a2c44268809021c289743830cd
+    adr: 211
+    ficheros:
+      - tests/automation/test_skills.py
+      - .gitignore

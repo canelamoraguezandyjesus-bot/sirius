@@ -1,6 +1,6 @@
 # ADR-132 — El guardián del contrato local de Ollama convierte ADR-125 en prueba y corrige ollama_category_classifier
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-04
 - Aprobación: [quién y cómo; en este repositorio, la fusión de la PR por el propietario]
 

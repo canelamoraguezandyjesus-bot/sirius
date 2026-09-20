@@ -1,6 +1,6 @@
 # ADR-004 — Una red de seguridad periódica, porque un run muerto no puede avisar
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-10
 - Aprobación: la fusión de la PR que introduce este ADR, por el propietario
 

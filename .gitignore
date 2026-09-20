@@ -47,3 +47,10 @@ Desktop.ini
 .claude/settings.local.json
 
 !.claude/commands/work.md
+
+# Las skills van versionadas ENTERAS (ADR-211). Hasta el 20-09-2026 la lista de
+# arriba no las nombraba: las dos que existían estaban seguidas porque se
+# añadieron con `git add -f`, y cualquier skill nueva se quedaba fuera sin que
+# nada lo dijera. Lo impide `tests/automation/test_skills.py`.
+!.claude/skills/
+!.claude/skills/**

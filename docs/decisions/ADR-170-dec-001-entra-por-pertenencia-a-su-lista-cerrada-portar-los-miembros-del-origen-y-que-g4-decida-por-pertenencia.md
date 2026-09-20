@@ -1,6 +1,6 @@
 # ADR-170 — DEC-001 entra por pertenencia a su lista cerrada: portar los miembros del origen y que G4 decida por pertenencia
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-11
 - Aprobación: la fusión de esta PR por el propietario.
 - Esta ficha es además la **nota de arranque** de la rama (ADR-001, skill

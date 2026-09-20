@@ -1,6 +1,6 @@
 # ADR-046 — Spike I1: bordes de STATUS sobre runs de Actions
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-21
 - Aprobación: la fusión de la PR que cierra la incidencia #211, por el propietario.
 - Contexto: incidencia #211 (S3, spike I1 del plan de implementación del Work Engine)

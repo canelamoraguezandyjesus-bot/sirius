@@ -1,6 +1,6 @@
 # ADR-094 — Una parada anterior a la primera PR se reanuda repitiendo la fase, no continuando sobre un head
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-25
 - Aprobación: la fusión de la PR por el propietario
 - Contexto: H-23, incidencia #337. Cierra el defecto medido sobre la #333

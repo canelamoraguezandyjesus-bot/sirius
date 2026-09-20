@@ -1,6 +1,6 @@
 # ADR-116 — Categoría de máxima criticidad y etiquetas canónicas provisionales del banco de 47 casos para M11
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-31
 - Aprobación: fusión de la PR por el propietario
 

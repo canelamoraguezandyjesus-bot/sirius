@@ -1,6 +1,6 @@
 # ADR-029 — Promocionar el patrón de escritura de S1 a almacén de referencia del Work Engine, más el barrido de recuperación (A2)
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-18
 - Aprobación: la fusión de la PR que cierra la incidencia #186, por el propietario.
 

@@ -1,6 +1,6 @@
 # ADR-110 — El motor por etapas portado mejora el banco a 11/47 pero no alcanza el suelo D1 porque la petición por caso del laboratorio no está autorizada a portarse
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-30
 - Aprobación: fusión de la PR por el propietario — este ADR documenta el
   diagnóstico que la propia incidencia #457 pide si, tras portar todo lo

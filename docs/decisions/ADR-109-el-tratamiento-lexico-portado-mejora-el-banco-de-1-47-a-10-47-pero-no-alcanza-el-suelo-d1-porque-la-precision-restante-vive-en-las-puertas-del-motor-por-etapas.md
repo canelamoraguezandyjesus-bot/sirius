@@ -1,6 +1,6 @@
 # ADR-109 — El tratamiento léxico portado mejora el banco de 1/47 a 10/47, pero no alcanza el suelo D1 porque la precisión restante vive en las puertas del motor por etapas
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-30
 - Aprobación: fusión de la PR por el propietario — este ADR documenta el
   diagnóstico que la propia incidencia #455 pide si, tras portar el

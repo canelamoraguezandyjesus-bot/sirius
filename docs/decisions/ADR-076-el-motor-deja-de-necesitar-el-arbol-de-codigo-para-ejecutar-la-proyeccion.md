@@ -1,6 +1,6 @@
 # ADR-076 — El motor deja de necesitar el árbol de código para ejecutar la proyección
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-23
 - Aprobación: [quién y cómo; en este repositorio, la fusión de la PR por el propietario]
 

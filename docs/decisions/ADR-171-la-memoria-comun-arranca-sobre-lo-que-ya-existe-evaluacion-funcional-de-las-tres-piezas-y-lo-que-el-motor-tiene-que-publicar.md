@@ -1,6 +1,6 @@
 # ADR-171 — La memoria común arranca sobre lo que ya existe: evaluación funcional de las tres piezas (T-5) y lo que el motor tiene que publicar
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-11
 - Aprobación: la fusión de la PR que introduce este ADR, por el propietario
 - Ejecuta: la decisión técnica pendiente **T-5** de

@@ -1,6 +1,6 @@
 # ADR-113 — El índice de categoría buscable, la regla de las críticas original y la siembra en contexto cierran las dos causas de ADR-112 pero no alcanzan D1 (incidencia #465)
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-30
 - Aprobación: fusión de la PR por el propietario — este ADR documenta el
   diagnóstico que la propia incidencia #465 pide si, tras cerrar las dos

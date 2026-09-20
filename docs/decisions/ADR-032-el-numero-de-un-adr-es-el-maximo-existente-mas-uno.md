@@ -1,6 +1,6 @@
 # ADR-032 — Calcular el número de un ADR como el máximo existente más uno
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-17
 - Aprobación: pendiente; en este repositorio, la fusión de la PR por el propietario
 

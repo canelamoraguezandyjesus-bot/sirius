@@ -1,6 +1,6 @@
 # ADR-200 — La cola deja de ser una condición y pasa a ser un mecanismo: el ciclo trae la base a la rama que espera
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-14
 - Aprobación: el propietario, el 14-09-2026, eligiendo la **opción A** de las
   tres que se le pusieron delante en la incidencia #608.

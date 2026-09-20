@@ -1,6 +1,6 @@
 # ADR-149 — Relanzar Quality al entrar en `ci-pending` cuando su cierre ya se consumió con la incidencia en otro estado
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-06
 - Aprobación: la fusión de esta PR por el propietario (toca `.github/**`, que
   el propietario abrió al operador para el motor; ficha del operador, deuda 3

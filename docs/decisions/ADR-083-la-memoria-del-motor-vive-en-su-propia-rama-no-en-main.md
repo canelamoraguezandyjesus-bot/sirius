@@ -1,6 +1,6 @@
 # ADR-083 — La memoria del motor vive en su propia rama, no en `main`
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-24
 - Aprobación: fusión de la PR por el propietario
 - Contexto: D2, incidencia #296. Afina **ADR-082**, que fijó que la memoria del
