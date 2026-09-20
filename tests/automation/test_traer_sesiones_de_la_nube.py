@@ -31,8 +31,12 @@ GUION = RAIZ / "scripts" / "traer_sesiones_de_la_nube.ps1"
 TEXTO = GUION.read_text(encoding="utf-8")
 EJECUTABLE = executable_text(TEXTO)
 
-# Un identificador de sesión de Claude Code: `session_` y 22 caracteres.
-_SESION = re.compile(r"session_[A-Za-z0-9]{22}")
+# Un identificador de sesión tal y como el guion lo declara: entrecomillado y
+# entero. Sin las comillas, `session_[A-Za-z0-9]{N}` casaría un PREFIJO de cada
+# identificador, y entonces la comprobación de duplicados compararía trozos en
+# vez de identificadores: pasaría en verde con dos sesiones que solo se
+# diferencian en el último carácter.
+_SESION = re.compile(r'"(session_[A-Za-z0-9]+)"')
 
 
 def test_el_guion_existe_y_no_esta_vacio() -> None:
