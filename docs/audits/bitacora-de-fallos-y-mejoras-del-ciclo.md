@@ -6674,6 +6674,70 @@ falta las dos. Lo que no puede quedarse es anunciar un reinicio que se rechaza
 solo y dejar la incidencia muerta.
 
 
+### 127. El filtro es más seguro de lo que dije, y su único defecto de instrucción es el que ya conocíamos (20-09-2026, 15:05 UTC)
+
+Nota de arranque previa (`arranque-que-tira-el-filtro-y-por-que.md`).
+Determinista, sobre la grabación congelada.
+
+**Corrijo la entrada 125.** Allí escribí que el filtro «no es seguro tal cual»
+porque tira el 15.7% de lo esperado. **El desglose lo desmiente**: de los 11
+que descarta, **siete caen en un solo caso**, `B04-CA-34` «Prepara el contexto
+de planificación de Alfa», y son estos:
+
+```
+MEM-903  «Nota ordinaria 3 sobre planificacion de vacaciones SIN VALOR CRITICO»
+MEM-910  «Nota ordinaria 10 sobre control de versiones documentales SIN VALOR CRITICO»
+MEM-911, MEM-912, MEM-914, MEM-915, MEM-919 — iguales
+```
+
+**Eso no es un fallo del filtro.** `CA-34` es uno de los tres casos `ACOTADA`
+de **cuota** que la entrada 117 ya identificó: su conjunto esperado son «los 10
+del ámbito», no «los 10 más relevantes». Preguntado si una nota ordinaria sobre
+vacaciones responde a «prepara el contexto de planificación», el filtro dice
+que no, **y tiene razón**; quien no está midiendo relevancia es el caso.
+
+**El número honesto, entonces**: errores reales del filtro, **4 de 70 = 5.7%**,
+por debajo de la línea de seguridad del 10% que la nota de arranque fijó. **El
+filtro sí es seguro.** Y de esos cuatro, dos son flagrantes:
+
+| caso | consulta | lo que tiró |
+|---|---|---|
+| `CA-14` | «¿De qué se ocupa **Juan**?» | «**Juan Torres** es el responsable de calidad» |
+| `CA-32` | «¿Qué sabía Sirius sobre el **aforo**?» | «El **aforo** máximo de la sala es de 40 personas» |
+
+**Y la instrucción del filtro es buena**, al revés que la del intérprete: regla
+por regla, cada una atada a un caso medido, portada **literal** del laboratorio
+que alcanzó 29/47 (M18a). Trae incluso la disposición correcta: «Ante duda
+razonable, inclúyela: es peor perder algo importante que entregar de más».
+
+**Pero una de sus reglas repite el defecto de esta noche:**
+
+> «Respeta el tiempo: si preguntan solo por lo **ANTERIOR**, lo vigente no
+> responde»
+
+**Confunde el tiempo válido con el corte de registro.** «¿Qué sabía Sirius
+sobre el aforo el 1 de marzo?» no pide «lo anterior»: pide **todo lo registrado
+hasta esa fecha**, incluido lo que sigue vigente. Es exactamente la distinción
+que B04 §5 hace en `M2` —«separa **tiempo válido** de **corte de registro**»— y
+que nuestra instrucción del intérprete también perdió (entrada 122). **Tres
+sitios, el mismo matiz del canon, perdido en los tres.**
+
+Se enuncia como **hipótesis fundada, no como prueba**: no se puede demostrar
+desde la grabación cómo razonó el modelo. Pero el ítem que tira en `CA-32` es
+exactamente el que esa confusión haría tirar.
+
+**Predicciones**: «los 11 están concentrados en 5 casos o menos» **acertada**
+(5 casos, y 7 de los 11 en uno solo). «La instrucción del filtro no reduce el
+canon» **acertada** (70% de confianza). Dos de dos, después de ocho falladas
+esta noche.
+
+**Qué deja esto.** La línea de «alinear instrucciones con el canon» **no se
+agota en #653**: hay una regla más, la del tiempo, en dos instrucciones
+distintas. Y el filtro, con 5.7% de error real y una instrucción buena, es una
+pieza mejor de lo que la entrada 125 dio a entender — lo que hace su techo de
+44/47 más creíble, no menos.
+
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
