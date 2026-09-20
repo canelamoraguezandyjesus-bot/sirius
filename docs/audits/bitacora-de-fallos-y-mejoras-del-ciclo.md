@@ -7230,6 +7230,42 @@ y búsqueda: cerradas. Lo que queda es #653 esperando su gesto, el segundo
 encargo bloqueado hasta que #653 sea terminal, el filtro —que exige Ollama, o
 sea su máquina— y cinco deudas suyas (38, 39, 42, 43 y `CA-29`).
 
+### 138. El guardián número 6, redactado y sin lanzar; y la comprobación que me faltaba al preparar un encargo (20-09-2026, 20:30 UTC)
+
+Cerradas las cuatro líneas de medición y sin nada que pueda medir sin Ollama,
+redacté el **guardián candidato 6** de la lista de la entrada 107:
+`encargo-preparado-el-perfil-se-valida-al-escribir.md`. **No se ha lanzado.**
+
+**Qué arregla.** `validate_issue_body.py` y `resolver_prompt.py` **no comprueban
+lo mismo**: el primero mira once encabezados y una longitud; el segundo exige
+`Perfil: rol@N` y lo resuelve contra el manifiesto verificando `sha256`. Un
+cuerpo puede pasar el primero y reventar en el segundo — que es exactamente lo
+que le pasó a #653 el 20-09: aprobado con **exit 0**, muerto a los **6
+segundos**, un run consumido y un `continua` que además destapó el defecto de la
+entrada 126.
+
+Lleva también un **aviso, no un rechazo**, cuando la versión declarada no es la
+vigente: #650 se fusionó el 19-09 declarando `implementer@2` con el perfil
+vigente en **4**, y nadie se enteró. Avisar y no rechazar, porque puede haber
+una razón para fijar una versión vieja y este encargo no la conoce.
+
+**Y aquí va la lección de método, que es lo que vale de esta entrada.** Al
+preparar el cuerpo lo validé con **las dos** herramientas:
+
+```
+validate_issue_body.py  -> exit 0
+resolver_prompt.py --carril ejecucion -> scripts/automation/prompts/implementer-v4.md, exit 0
+```
+
+**Eso es justo lo que no hice con #653.** Validé con la herramienta que el
+contrato nombra y di por bueno el resultado, cuando la herramienta que decide si
+la incidencia arranca es otra. *Pasar el validador no es lo mismo que poder
+ejecutarse*, y la diferencia costó un ciclo entero.
+
+Queda como regla propia: **un cuerpo de encargo no está listo hasta que lo
+aprueban las dos**. El encargo preparado de `modo y corte` también la pasa; lo
+comprobé al redactarlo.
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)

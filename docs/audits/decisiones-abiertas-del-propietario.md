@@ -125,5 +125,12 @@ cualquiera de las tres cambia la cifra sin que el sistema mejore.
 revisores sobre `ca847501`, con la puerta previa corrida y publicada (pasa las
 cinco comprobaciones). Espera un `fusiona` en un comentario de **la incidencia**.
 
-Detrás va el segundo encargo (`WI-20260920-MODO-Y-CORTE`), preparado, validado y
-**sin lanzar** hasta que #653 sea terminal.
+Detrás van **dos encargos preparados, validados y sin lanzar**:
+
+| encargo | qué hace | cuándo |
+|---|---|---|
+| `WI-20260920-MODO-Y-CORTE` | alinea `modo` y `corte_de_registro` con B04 §5; se lleva `CA-32`, uno de los cinco ganables | cuando #653 sea terminal |
+| `WI-20260920-PERFIL-AL-ESCRIBIR` | que un cuerpo sin `Perfil: rol@N` se rechace **al escribirlo** en vez de matar el ciclo a los 6 segundos, como pasó con #653 | cuando él diga |
+
+Los dos pasan **las dos** comprobaciones —`validate_issue_body.py` y
+`resolver_prompt.py`—, que es la regla que #653 me enseñó por las malas.
