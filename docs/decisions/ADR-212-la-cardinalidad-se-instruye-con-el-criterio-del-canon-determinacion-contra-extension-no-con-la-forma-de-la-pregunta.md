@@ -1,6 +1,6 @@
 # ADR-212 — La cardinalidad se instruye con el criterio del canon: determinacion contra extension, no la forma de la pregunta
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-20
 - Aprobación: [quién y cómo; en este repositorio, la fusión de la PR por el propietario]
 
