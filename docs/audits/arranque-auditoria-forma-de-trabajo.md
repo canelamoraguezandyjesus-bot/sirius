@@ -407,3 +407,75 @@ las tres largas de la nube, de menor a mayor → las dos de julio.
 **Parada:** revisadas C-01, C-02, C-03 y N-03 con lo que estas fuentes añadan
 o desmientan, y escrita la sección «el lado de la ejecución»; o agotadas las
 fuentes.
+
+## Adenda 3 — la tanda de skills: cuatro preguntas y criterio de parada, escritos antes de elegir ningún candidato (2026-09-20 15:09 UTC)
+
+Esta adenda no amplía la muestra: abre un trabajo **derivado** de la auditoría.
+El propietario lo pidió con estas palabras el 20-09: «tenemos si o sí q hacer q
+se creen skills como en Hermes para no tener q buscar mil veces como hacer la
+misma tarea o trabajo y poder aprender dia a dia de lo q hacemos y de cómo
+trabajamos». Los candidatos salen de las fichas de esta auditoría, así que su
+nota de arranque va aquí, y se escribe **antes** de mirar cuáles pasan el
+filtro.
+
+**Las tres condiciones que tiene que cumplir un candidato, a la vez** (fijadas
+ahora, no después de ver la lista):
+
+1. **Se repite**: al menos dos ocurrencias fechadas en la auditoría o en el
+   árbol, no una impresión.
+2. **Tiene fricción medida**: un número, una fecha o un defecto registrado que
+   diga cuánto cuesta hacerlo mal o buscarlo otra vez.
+3. **La decisión no es del propietario**: es técnica o de lógica, y por tanto
+   entra en lo que ADR-204 dice que se resuelve sin preguntarle.
+
+### 1. ¿Dónde vive el fallo y dónde va el arreglo?
+
+El fallo tiene dos caras. La primera: lo que se repite se vuelve a averiguar
+desde cero en cada sesión, porque el conocimiento está repartido entre
+`AGENTS.md`, 210 ADR y las fichas de esta auditoría, y nadie carga 210 ADR. La
+segunda, peor: **un documento que nadie mantiene se pudre en silencio**, y de
+eso hay medida en este mismo repositorio —PROC-010, la base de conocimiento que
+se quedó nueve versiones de contrato atrás sin que nadie lo notara, porque
+nadie la hacía y nadie la leía.
+
+El arreglo de la primera cara vive en el propio texto de las skills, dentro de
+lo que falla; el de la segunda **no puede** vivir ahí: un documento no observa
+su propia podredumbre. Por eso la guarda va en `tests/`, fuera del documento, y
+corre en la batería de cada sesión. La pregunta que caza la raíz —¿puede el
+sitio del arreglo OBSERVAR el fallo que arregla?— se responde sí solo para la
+guarda: una prueba que abre cada ruta citada por una skill ve exactamente la
+cita que dejó de resolver.
+
+### 2. ¿Qué NO va a garantizar esto?
+
+- **No garantiza que nadie las cargue.** Quien decide cargar una skill es el
+  modelo, leyendo su descripción; no hay puerta que lo obligue, igual que no la
+  hay para `AGENTS.md`.
+- **No garantiza que el contenido sea correcto**, solo que lo que cita existe.
+  Una skill puede tener todas sus rutas vivas y el texto obsoleto.
+- **No mide si ahorran tiempo.** No hay instrumento para eso en este
+  repositorio y no se va a inventar uno aquí.
+- **No cubre la cabeza robótica ni el laboratorio físico**, fuera de alcance
+  desde el 19-09 por decisión del propietario.
+- **No convierte en skill lo que pasó una vez.** Un caso único se queda en su
+  ADR.
+
+### 3. Criterio de parada — decidido ahora, antes de escribir una sola línea
+
+| # | Si ocurre esto | Entonces |
+|---|---|---|
+| 1 | Una skill no se puede escribir sin repetir palabra por palabra lo que ya dice `AGENTS.md` | no es una skill, es un puntero: se descarta |
+| 2 | La guarda no falla al mutar cada una de sus reglas | la guarda es vacua: no entra |
+| 3 | Pasan el filtro más de siete candidatos | entran los cinco de fricción mayor; el resto va a `docs/ideas/registro_de_ideas.yml` como aparcado |
+| 4 | La batería completa no vuelve verde | no se empuja nada |
+| 5 | La cadena de comprobación de esta misma sesión se alarga por culpa de esto | la skill de la cadena ha fracasado en su propósito y se revisa |
+
+### 4. ¿Qué haría el fallo imposible en vez de improbable?
+
+Imposible queda: que una skill cite una ruta que no existe, que le falte el
+nombre o la descripción, que su nombre no coincida con su carpeta, o que cite
+un ADR inexistente — todo eso tumba la batería. **Improbable, no imposible,
+queda lo único que importa de verdad**: que la prosa esté caducada aunque cada
+ruta resuelva. Contra eso no hay prueba posible, solo la revisión trimestral
+que `patrones.md` ya declara; queda escrito aquí para que nadie confunda una
+skill verde con una skill al día.
