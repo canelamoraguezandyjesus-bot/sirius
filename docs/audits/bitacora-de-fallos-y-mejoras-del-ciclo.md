@@ -6453,6 +6453,56 @@ varios días en septiembre. Se lanza cuando #653 llegue a estado terminal. Y
 registrada en un ADR por una corazonada es lo que esta disciplina prohíbe.
 
 
+### 123. Un cuerpo de encargo puede pasar el validador y ser inejecutable: #653 paró en seis segundos por una línea que yo omití (20-09-2026, 14:21 UTC)
+
+**Lo que pasó.** Lancé #653 (`WI-20260920-CARDINALIDAD`) y el motor paró con
+`failed-safely` **a los seis segundos**, sin que el implementador escribiera
+veredicto. El paso 9 del run 35516200406, «Preparar instrucciones para Claude
+Code», falló en cero segundos:
+
+```
+prompt sin resolver (ejecucion): el cuerpo no declara 'Perfil: rol@N'
+y sin él no se puede elegir prompt
+```
+
+Claude Code **no llegó a ejecutarse** (paso 10, `skipped`). El motor hizo
+exactamente lo que debía: `resolver_prompt.py` **falla en cerrado** en vez de
+adivinar qué prompt usar. La salvaguarda de H-28 funcionó.
+
+**El defecto es mío.** Redacté el cuerpo desde la lista de secciones
+obligatorias y omití la línea `Perfil: rol@N`.
+
+**Y lo que lo convierte en hallazgo, no en despiste**: antes de publicar lo
+comprobé con `scripts/automation/validate_issue_body.py` y **pasó con código de
+salida 0**. Me fié de esa luz verde. El validador solo verifica las once
+secciones obligatorias y **no comprueba el campo `Perfil:`**, así que **un
+cuerpo puede validar y ser inejecutable**.
+
+Es la misma familia de las entradas 112-115 y 122, otra vez: **una comprobación
+que afirma más de lo que mira.** «Cuerpo de incidencia completo: todas las
+secciones presentes» se lee como «este encargo se puede ejecutar», y no lo
+garantiza.
+
+**Guardián candidato, el sexto de la lista que empezó en la entrada 107.**
+`validate_issue_body.py` debería resolver el campo `Perfil:` contra
+`prompts/manifiesto.json`, exactamente como hace `resolver_prompt.py`, y
+rechazar el cuerpo si falta o si el `rol@N` no está registrado en el carril
+`ejecucion`. Convertiría un fallo en ejecución —que consume un run, marca la
+incidencia y obliga a un `continua`— en un fallo al escribir. **No se arregla
+dentro de #653**, que tiene otro alcance.
+
+**La corrección aplicada.** El cuerpo declara ahora `Perfil: implementer@4`,
+el perfil vigente (`perfiles/implementer.yml` dice `version: 4`), comprobado
+**antes** de escribirlo: la fila `implementer@4` del carril `ejecucion` apunta
+a `implementer-v4.md` y su `sha256` coincide byte a byte con el fichero del
+árbol. Diagnóstico publicado en la incidencia y **un solo `continua`**.
+
+**Detalle que conviene no perder**: #650, que se fusionó ayer, declaraba
+`implementer@2`. El perfil vigente es el 4. No se investiga aquí si eso fue
+deliberado o inercia, pero queda anotado: **hay encargos recientes corriendo
+con un prompt que no es el vigente**.
+
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
