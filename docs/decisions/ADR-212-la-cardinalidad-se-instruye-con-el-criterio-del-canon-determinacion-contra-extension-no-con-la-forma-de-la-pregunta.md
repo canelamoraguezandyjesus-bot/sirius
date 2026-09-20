@@ -206,12 +206,23 @@ issues found in 600 source files») y `pytest`:
 Una sola invocación y sin partir `pytest` en tandas (ADR-145). La terna es la
 del árbol de `c866d76` y así se lee (ADR-154).
 
-**Qué añade el head de la rama a `c866d76`, enumerado.** Exactamente este
-bloque de transcripción dentro de este mismo fichero: la terna de arriba, el
-código de salida y esta enumeración. Ningún otro fichero, ninguna otra
-sección: `git diff --stat c866d76..HEAD` es una sola línea, la de este ADR.
-Nada del comportamiento, de las pruebas ni del registro de defectos queda fuera
-de lo que la corrida validó.
+**Qué añade el head de la rama a `c866d76`, enumerado entero.** La ronda 3
+dejó aquí una enumeración corta —decía «la terna, el código de salida y esta
+enumeración» cuando el head traía además la tabla y el párrafo retrospectivo de
+más abajo—, y una enumeración incompleta no delimita nada. Esta es la lista
+completa, y son cuatro cosas, todas dentro de este mismo fichero y en ningún
+otro —`git diff --stat c866d76..HEAD` es una sola línea, la de este ADR—:
+
+1. el párrafo de la validación obligatoria de arriba, con la terna de `pytest`,
+   su duración, el código de salida y el árbol al que se anclan;
+2. esta enumeración, con el párrafo que explica por qué se rehace;
+3. la tabla «Corridas anteriores de la rama» que viene a continuación;
+4. el párrafo retrospectivo que corrige lo que la ronda 2 escribió sobre el
+   árbol de `d8cf2756`.
+
+Ni el comportamiento, ni las pruebas, ni el registro de defectos, ni la vista
+regenerada cambian después de `c866d76`: todo eso está dentro de lo que la
+corrida anclada validó.
 
 **Corridas anteriores de la rama**, que ya no son las del head y se leen como
 lo que son:
