@@ -52,9 +52,20 @@ def test_trae_las_sesiones_de_la_nube_del_indice_sin_repetir_ninguna() -> None:
 
 
 def test_apunta_el_resultado_de_cada_sesion() -> None:
-    """Sin registro, el intento siguiente vuelve a no saber cuál falló."""
-    assert "Add-Content $Registro" in EJECUTABLE, (
-        "el guion no apunta el resultado de cada sesión: es el defecto que vino a arreglar"
+    """Sin registro, el intento siguiente vuelve a no saber cuál falló.
+
+    Se exige que apunten **las dos ramas**, la de OK y la de FALLO, y no que la
+    orden aparezca en algún sitio: un guion que solo apunta los aciertos deja
+    el registro diciendo que todo fue bien, que es la misma ceguera del intento
+    del 20-09. La mutación lo destapó: quitar una de las dos no tumbaba nada.
+    """
+    apuntes = EJECUTABLE.count("Add-Content $Registro")
+    assert apuntes >= 2, (
+        f"el guion apunta en el registro {apuntes} vez/veces: hacen falta las dos ramas, "
+        "la que sale bien y la que falla"
+    )
+    assert "Add-Content $Diario" in EJECUTABLE, (
+        "el guion no guarda el error de la sesión que falla, que es lo que hay que leer después"
     )
 
 
