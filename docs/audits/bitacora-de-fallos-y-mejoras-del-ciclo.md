@@ -6738,6 +6738,73 @@ pieza mejor de lo que la entrada 125 dio a entender — lo que hace su techo de
 44/47 más creíble, no menos.
 
 
+### 128. La predicción de ADR-164 era inalcanzable: el banco declara campos que la consulta no lleva (20-09-2026, 15:25 UTC)
+
+Investigación que empezó por un cabo suelto y acabó en el método.
+
+**El cabo suelto, resuelto.** La entrada 122 dejó abierto por qué `CA-22`
+espera `2026-03-20` si la regla de ADR-111 toma el extremo final del intervalo.
+**No había anomalía**: el banco declara ese caso con un intervalo ISO-8601
+literal, `2026-01-10T00:00:00Z/2026-03-20T00:00:00Z`, y la regla toma su
+extremo, que es el 20 de marzo. La confusión fue mía, por suponer que «entre
+enero y marzo» acababa el 31.
+
+**Pero eso abrió la pregunta buena**: si el intervalo lo **declara el caso**,
+no está en la pregunta. ¿Cuántos campos más son así?
+
+**Seis casos tienen al menos un campo de `peticion_p2` que la consulta no
+lleva:**
+
+| caso | campo no derivable |
+|---|---|
+| `CA-06` | «¿Qué proveedor de mensajería aplica?» → `tiempo_objetivo` **2026-09-15**, una fecha futura que la frase no menciona |
+| `CA-22` | intervalo declarado que acaba el **20 de marzo** |
+| `CA-26` | «Enumera las restricciones… de Gamma» → `tiempo_objetivo` **2026-04-01** y `limite` **10** |
+| `CA-30` | `limite` **3** |
+| `CA-34` | «Prepara el contexto de planificación de Alfa» → `limite` **10** |
+| `CA-44` | «Restricciones esenciales, máximo duro 5» → `tiempo_objetivo` **2026-02-01** |
+
+**Consecuencia: el techo de «coincidencia campo a campo» para CUALQUIER
+intérprete es 41/47.** Ningún modelo puede sacar «septiembre» de «¿qué
+proveedor de mensajería aplica?».
+
+**Y la predicción que ADR-164 publicó era `>= 45/47`.**
+
+**Era inalcanzable por construcción.** La medición del 20-09 dio 24/47 y se
+registró como fallada, y lo está; pero cuatro de los puntos que le faltaban
+**no los podía ganar nadie**.
+
+**Esto no es un fallo de la disciplina: es la disciplina funcionando.** La
+predicción se publicó antes de medir, la medición la contradijo, y al buscar
+por qué apareció que el listón estaba puesto sobre algo imposible. Sin la
+predicción escrita, la conclusión habría sido «el modelo va mal» y nadie habría
+mirado el banco.
+
+**Lo que cambia, en concreto:**
+
+- **Nadie debe perseguir 45/47.** El objetivo real de la palanca 1 es de 24/47
+  hacia **41/47** como máximo absoluto.
+- **`tiempo_objetivo` casi no es atacable**: de sus 6 fallos, **4 no son
+  derivables** y solo 2 lo son —`CA-05` y `CA-36`, donde el banco dice «ahora»
+  y el modelo inventa un pasado porque nuestra instrucción dice «el instante al
+  que **se refiere la pregunta**» donde el canon dice «el momento **respecto
+  del cual debe ser aplicable la información**»—. Un encargo que persiga los
+  seis perseguirá cuatro imposibles.
+- La predicción que escribí para #653 —campo a campo `>= 30/47`— **sí cabe**
+  bajo el techo de 41. Comprobado después de calcularlo, no antes, y por poco.
+
+**Cautela sobre la fuerza de la afirmación.** «No derivable» se ha decidido con
+un criterio mecánico: para `limite` de tipo `OBJETIVO`, que el número no esté
+en la consulta; para `tiempo_objetivo` distinto de «ahora», que no haya ningún
+mes ni cifra de esa fecha en la consulta. Es razonable y conservador, pero no
+es una demostración. El techo es **41/47 o menos**, no exactamente 41.
+
+**Y queda una pregunta que no es mía**: si el banco declara valores que la
+pregunta no lleva, ¿está bien medir al intérprete contra ellos campo a campo, o
+esos campos deberían excluirse de esa métrica concreta? Es decisión del
+propietario y afecta a cómo se lee la palanca 1 entera.
+
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
