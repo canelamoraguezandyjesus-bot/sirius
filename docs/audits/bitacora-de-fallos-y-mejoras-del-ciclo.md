@@ -5843,6 +5843,79 @@ guarda que no puede fallar. Es detectable leyendo el AST del guion: objeto
 instanciado, nunca pasado como argumento a nadie, y aun así leído en un
 `assert`/`raise`. Misma forma que `solo_prosa.py`, misma familia de guardián.
 
+### 113. La línea base del Sirius de hoy ya existe: ADR-203 en `main` (`66f11424`), y la ronda 4 cerró la familia que abrió la 1 (19-09-2026, 23:58 UTC)
+
+**Lo que entra.** `_ejecutar_banco_paquete_completo` gana
+`motor_por_etapas: bool = True`; con `False` construye los dos colaboradores
+como los construye `composition_root` con las cuatro claves de
+`memory_gates.py` apagadas —el estado de producción de hoy—, incluido
+`relevance_filter_port=None`. Y
+`scripts/diagnosticar_busqueda_del_banco.py` gana `--puerta-cerrada`, que
+**rechaza con código 2, antes de medir nada**, combinarse con `--peticion`,
+`--ejes` o `--cupo`: por el camino cerrado no se construye ninguna `Peticion`,
+así que esas palancas no pueden influir y un número sacado con ellas parecería
+comparable con uno que sí las usa. Siete ficheros, +1007/−34, **ni una línea de
+`src/`**.
+
+**Las dos cifras, vueltas a medir sobre el `main` fusionado** —no sobre la
+rama, que el squash no conserva—, árbol `66f11424`:
+
+```
+[ejes=no peticion=real] SIN FILTRO: 17/47 exactos; 162 de mas; 78/81 hallados; omisiones criticas=0   (salida 0)
+[puerta=cerrada]        SIN FILTRO: 10/47 exactos; 218 de mas; 57/81 hallados; omisiones criticas=10  (salida 0)
+```
+
+La primera es **la identidad**: la cifra de siempre, que el parámetro nuevo no
+puede mover, y no la mueve. La segunda es lo que no existía: **el Sirius que
+corre hoy pierde diez elementos críticos**, nombrados uno a uno
+(`B04-CA-02/MEM-002`, `B04-CA-31/DEC-003`, `DEC-010`, `MEM-014`, `MEM-016`,
+`MEM-025`, `B04-CA-33/DEC-003`, `B04-CA-34/DEC-003`, `MEM-014`, `MEM-016`).
+
+**Y lo que esta cifra NO es, que es la mitad del valor de tenerla.** La resta
+contra la corrida de puerta abierta sin banderas
+(`0/47; 487; 72/81; 0`) **no mide el aporte del motor por etapas**: el modo
+abierto del arnés abre también el camino del `ContextBuilder`, que en
+`composition_root` gobierna `relevance_filter_enabled`. Es la distancia entre
+dos configuraciones completas. Aislar el aporte del motor exige antes un tercer
+modo que separe las dos claves, y este encargo **no lo entrega**. Queda escrito
+en «Consecuencias» de ADR-203, no en una nota al pie de nadie.
+
+**Cuatro rondas, y tres de ellas la misma familia.** La raíz está en la entrada
+112, escrita **antes** de ver el resultado de la ronda 4, junto con la
+predicción de que la familia no volvería. No volvió. La ronda 4 la atacó donde
+estaba: el doble ya no se instancia en modo cerrado, la ausencia se comprueba
+sobre el `relevance_filter_port` que `ContextBuilder` recibió de verdad —un
+espía que delega en la clase real—, y `_incoherencia_del_puerto_de_relevancia`
+rechaza **también** el caso de no haber observado ninguna construcción, que era
+exactamente la tautología que dejaba muerta a la guarda anterior. La mutación 7
+lo demuestra de punta a punta: restituida la regresión, el guion ya no publica
+la cifra.
+
+**Me equivoqué en la recomendación, y conviene que conste.** Publiqué al
+propietario que la salida buena era **borrar** la guarda del guion, porque la
+prueba de cableado ya afirmaba la propiedad. El corrector tomó la otra, y es
+mejor: la prueba de cableado protege el arnés, pero quien publica la cifra bajo
+la etiqueta `puerta=cerrada` es **el guion**, y una guarda ahí cubre el caso de
+correrlo contra un arnés tocado. No era redundancia.
+
+**La puerta previa y la fusión.** Las cuatro partes se corrieron sobre el head
+aprobado `e8bace1d` y se publicaron en la incidencia antes de tocar nada: 0
+commits por detrás de `main`, Quality `success` sobre ese head exacto, las dos
+mediciones con salida 0, y un diff que no toca `src/sirius/**`, los adaptadores
+de Ollama, el corpus, `test_local_performance.py`, los dos guiones de medición
+con Ollama ni `.github/**`. El propietario autorizó la fusión en conversación y
+la orden `fusiona` se publicó en la incidencia a las 23:57:48 UTC; el guion
+reverificó todo por REST y fusionó a las 23:58:03. #650 quedó en
+`sirius:completed`.
+
+**Lo que sigue sin estar hecho, y no lo tapa esta cifra**: el umbral de D7
+punto 6 sigue sin registrar en `STATUS.md` —hasta que esté, no se abre nada—;
+el plan de latencia de RNF-003 sigue abierto; y de los tres interruptores de
+ADR-185 no hay ninguno abierto. La medición de la palanca 1 con Ollama real
+—`scripts/medir_interprete_de_peticion.py`, ADR-164, que nunca se corrió con
+modelo— sigue pendiente en la máquina del propietario.
+
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
