@@ -6348,6 +6348,59 @@ El trabajo determinista que se podía hacer sin él está hecho. Lo que queda
 necesita o una decisión suya o su ordenador.
 
 
+### 121. §15.2 sí estaba en el repositorio, en otra rama: el encargo se desbloquea, y yo había dado un salto (20-09-2026, 04:00 UTC)
+
+Corrige la entrada 119. Hallazgo completo en
+`hallazgo-b04-15-2-encontrado-el-encargo-se-desbloquea.md`.
+
+**El error, primero.** Escribí que «§15.2 no está en el repositorio» tras
+comprobar los ocho DOCX de `docs/canonical/` **en `main`**. Está en la rama
+`evidence/adr001-spikes`, en
+`docs/architecture/canonical_sources/SIRIUS_0.2_BLOQUE_04_BUSQUEDA_Y_RECUPERACION_v1.0_APROBADO.docx`
+— B04 v1.0 **APROBADO**. La lección: **«no está» es una afirmación sobre todo
+el repositorio y yo solo había mirado una rama.** Es el mismo salto que esta
+disciplina persigue en todo lo demás, cometido por quien la aplica.
+
+**El criterio, literal:**
+
+| cardinalidad | definición de B04 §15.2 |
+|---|---|
+| `EXACTA` | «Busca **uno o varios objetivos identificados** o una **respuesta cerrada**.» |
+| `ACOTADA` | «Busca N resultados, **una lista definida** o exploración con **límite/criterio explícito**.» |
+| `EXHAUSTIVA` | «Busca **todos los elementos que cumplen una condición**.» |
+
+Y §15.3 desde el otro lado: la parada por suficiencia S1 vale para `EXACTA` y
+`ACOTADA` y **nunca** para `EXHAUSTIVA`.
+
+**El par que tenía atascada la investigación, resuelto.** `CA-08` «¿Cuál es el
+presupuesto de Beta?» es `EXHAUSTIVA` porque «presupuesto de Beta» es **una
+condición** y se piden **todos** los elementos que la cumplen (son dos, y los
+dos se esperan). `CA-50` «¿Qué condiciones de acceso al almacén hay?» es
+`EXACTA` porque es **una respuesta cerrada**. **No es singular contra plural:
+es determinación contra extensión.**
+
+**Lo que le falta a nuestra instrucción**, campo por campo: `EXACTA` pierde «o
+**varios** objetivos» y «o una **respuesta cerrada**», y al quedarse en «un dato
+concreto» se convierte en un criterio sobre la cardinalidad **gramatical** de la
+pregunta —que es exactamente el error medido—; `ACOTADA` pierde «una lista
+definida» y «criterio explícito», por eso el modelo solo la produce al ver un
+número; y `EXHAUSTIVA` dice «un tema» donde el canon dice «una condición».
+
+**Esto revisa un límite que yo mismo declaré.** Dije que `CA-26` y `CA-34` eran
+cuota de producto y había que excluirlas. Con §15.2 delante, eso vale **solo
+para su `limite.n`**: «Enumera las restricciones esenciales» encaja en «una
+lista definida o exploración con criterio explícito», así que su **cardinalidad
+sí es derivable**. El encargo puede atacar los 47 casos; solo el número de los
+tres `OBJETIVO` queda fuera.
+
+**El encargo queda DESBLOQUEADO.** El criterio no hay que inventarlo ni pedirlo:
+está escrito, aprobado y citable con fichero y sección. La decisión del
+propietario sobre los `limite.n` sigue pendiente pero **ya no bloquea**.
+
+**Deuda nueva**: B04 v1.0 APROBADO define criterios de aceptación vivos y vive
+en una rama de evidencia, no en `main`. Por eso se pudo creer que no existía.
+
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
