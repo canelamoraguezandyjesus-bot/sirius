@@ -6234,6 +6234,65 @@ Descomponer los 218 de verdad exige Ollama, o sea la máquina del propietario.
 No se presenta como otra cosa.
 
 
+### 119. El encargo sobre el intérprete queda BLOQUEADO, y ése es el resultado útil de la noche (20-09-2026, 03:05 UTC)
+
+Nota de arranque previa; hallazgo en
+`hallazgo-la-cardinalidad-no-se-deriva-del-conjunto-esperado.md`.
+
+**Por qué se hizo.** Las entradas 117 y 118 convergían en el mismo trabajo:
+arreglar el intérprete. Pero alinear su instrucción con el criterio del canon
+exige **leer §15.2, que no está en el repositorio**. Escribir una definición
+nueva *interpretando* una regla que no se puede leer es la forma de quemar un
+encargo y una medición del propietario. Así que antes: ¿deja esa regla huella
+en los datos?
+
+**No la deja.** La mejor regla simple —`EXACTA` si y solo si el conjunto
+esperado tiene un elemento— acierta **32/47**, por debajo del suelo de 35 que
+la nota de arranque fijó. Y los fallos explican por qué ninguna regla de tamaño
+va a funcionar: **16 casos tienen el conjunto esperado vacío** (los de
+ausencia), y entre los no vacíos los tamaños **se solapan**: `EXACTA` usa
+{1,2,3} y `EXHAUSTIVA` usa {1,1,2,2,2,5,6}.
+
+**El par que lo deja desnudo:**
+
+| caso | consulta | canon | esperados |
+|---|---|---|---|
+| `B04-CA-08` | «¿Cuál es **el** presupuesto de Beta?» | **EXHAUSTIVA** | 2 |
+| `B04-CA-50` | «¿Qué **condiciones** de acceso al almacén hay?» | **EXACTA** | 1 |
+
+Al revés de lo que dice la gramática y al revés de lo que dice el tamaño. Y son
+dos de los casos que el modelo falla, **en sentidos opuestos**. El modelo no es
+torpe: aplica el criterio que le damos.
+
+**Hipótesis, señalada y no afirmada**: que el criterio dependa del **contenido
+de la memoria** —dos elementos de presupuesto que hay que cerrar, un único
+elemento canónico de condiciones—. Si fuera cierta, tendría una consecuencia
+que excede esta investigación: el intérprete de ADR-164 produce la `Peticion`
+**desde la pregunta sola**, y uno de sus campos dependería de lo guardado. No
+se afirma. Se señala, para el propietario.
+
+**El criterio de parada, escrito antes, dispara.** Decía: por debajo de 35/47,
+el encargo sobre la instrucción **queda bloqueado** hasta que §15.2 entre en el
+repositorio o el propietario enuncie el criterio. 32 < 35. **No se lanza.**
+
+**Predicciones**: las dos sobre el tamaño, **falladas** (32/47 en vez de 38-43;
+y los fallos son los conjuntos vacíos, no los `EXACTA` de varios elementos). La
+tercera —«la respuesta será NO y el encargo quedará bloqueado», 65%—
+**acertada**.
+
+**Y eso es lo que vale.** La nota de arranque lo dejó escrito antes de empezar:
+*si acierto en esto último, el resultado útil de la noche es haber evitado el
+encargo, no haberlo lanzado.* Sin esta comprobación, el paso siguiente obvio era
+un ciclo completo tocando producción, cuya medición habría tenido que correr el
+propietario en su máquina para descubrir entonces que la regla que se pretendía
+enunciar no se puede enunciar con lo que consta.
+
+**Lo que hace falta, y es suyo.** Una de dos: que §15.2 entre en el
+repositorio, o que enuncie el criterio en una frase. La pregunta concreta que
+lo resuelve es el par de arriba. Con cualquiera de las dos, el encargo se
+desbloquea con el alcance ya acotado por la entrada 117.
+
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
