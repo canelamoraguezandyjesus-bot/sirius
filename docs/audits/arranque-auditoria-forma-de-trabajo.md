@@ -341,3 +341,69 @@ tres fichas, o «no observable» escrito— o agotadas las 12.
 **Lo que tendrá su propia adenda al llegar**, con el mismo criterio: las
 transcripciones locales de Claude Code —entran solo las carpetas del
 repositorio de Sirius— y la exportación de ChatGPT.
+
+## Adenda 2 — la segunda muestra: las transcripciones de Claude Code (2026-09-20 00:52 UTC)
+
+**Lo recibido el 20-09**, fuera del repositorio, en el espacio temporal de la
+sesión: un zip **local** (0,7 MB) con 8 sesiones `.jsonl` de
+`%USERPROFILE%\.claude\projects\` —todas de la carpeta del repositorio de
+Sirius— y `history.jsonl`, las **72 órdenes tecleadas** por el propietario en
+Claude Code local entre el 13-07 y el 11-09; y un zip de la **nube** (3,6 MB)
+con **6 de las 34 sesiones** de la nube que se intentaron traer con
+`claude --teleport` en un clon aparte. Por qué solo seis, no se sabe todavía:
+queda como límite hasta que el propietario confirme si el bucle terminó o se
+cortó. Antes de traerlas, el propietario subió la retención local a 3 650
+días: hasta hoy, Claude Code borraba las sesiones locales a los 30, y por eso
+las 8 locales que quedan son del 16-08 en adelante.
+
+**Lo visto para clasificar, y nada más:** el nombre de la carpeta (que es el
+repositorio), las fechas, el número de registros por tipo, el título generado
+por la herramienta, la rama, la versión, los nombres de las herramientas
+invocadas con su recuento, y el tamaño del texto del propietario y del
+asistente. **Ningún mensaje.**
+
+**Criterio.** Por carpeta: entra todo lo que esté en una carpeta del
+repositorio de Sirius, que es todo lo recibido.
+
+- **Dentro — locales (8 + history):** dos con sustancia, 17-08 (rama
+  `evidence/adr001-spikes`, 1 h 30, 13 mensajes del propietario y 162 del
+  asistente) y 18-08 (rama `herramienta/skill-adr`, 3 h 35, 21 y 183); seis
+  pequeñas del 16-08 y del 11-09 (instalar la memoria entre sesiones, probar
+  Supermemory); y `history.jsonl` entero.
+- **Dentro — nube (5 de las 6):** dos pruebas de julio (18-07 y 23-07, las
+  primeras sesiones de Claude Code en la nube; entran aunque sean cortas), y
+  tres largas: rama `feat/b13-reproducible-windows-package` (del 08-08 en
+  adelante; 100 mensajes del propietario, 685 del asistente; probablemente la
+  sesión que cerró la PR #122), rama `claude/ciclo-pendientes-prs-issues`
+  (del 10-08; 38 y 604; probablemente «Pendientes del ciclo») y rama
+  `claude/adr002-tol209-forensic-audit` (registros desde el 19-09; 35 y 230;
+  probablemente la cola de «Auditoría forense TOL-209», que figuraba en marcha
+  desde julio). La correspondencia con los títulos del índice de sesiones es
+  por rama y fecha, no por identificador: se marca como probable.
+- **Fuera por descarte:** el fichero del 20-09 con tres mensajes, que es el
+  propio teleport de prueba.
+- **Fuera por imposibilidad:** las 28 sesiones de la nube que no bajaron, y
+  todo lo local anterior al 16-08, borrado por la retención de 30 días.
+
+**Cómo se lee**, adaptado a transcripciones de Claude Code, que son sobre todo
+tráfico de herramientas: los mensajes del propietario, íntegros; el texto del
+asistente hasta 2 500 caracteres; de cada llamada a herramienta, solo su
+nombre y la primera línea de su entrada (el comando, la ruta); los resultados
+de herramienta **no se leen** —son el repositorio y salidas de comandos—, con
+dos excepciones: los que registran una denegación de permiso o un rechazo del
+propietario, y las respuestas del propietario a una pregunta de la IA, que se
+leen enteras porque son dirección suya. Los registros de sistema, adjuntos,
+modo y coste se cuentan, no se leen.
+
+**Qué se extrae:** los cinco campos de la adenda 1 y un sexto: (6) **cómo
+dirige la sesión** —permisos concedidos y denegados, interrupciones,
+respuestas a preguntas de la IA, órdenes de corrección—, que es exactamente el
+límite 2 de la auditoría de agosto: «la dirección verbal del propietario
+dentro de la sesión es no observable».
+
+**Orden:** `history.jsonl` → las dos locales con sustancia → las pequeñas →
+las tres largas de la nube, de menor a mayor → las dos de julio.
+
+**Parada:** revisadas C-01, C-02, C-03 y N-03 con lo que estas fuentes añadan
+o desmientan, y escrita la sección «el lado de la ejecución»; o agotadas las
+fuentes.
