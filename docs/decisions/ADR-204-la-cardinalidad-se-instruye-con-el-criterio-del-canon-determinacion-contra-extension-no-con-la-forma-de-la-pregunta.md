@@ -192,7 +192,19 @@ sobre la cardinalidad.
 pasa de 39 a 45 pruebas; las 39 anteriores están intactas.
 
 **Validación obligatoria: una sola invocación** de `pwsh -File scripts/check.ps1`
-sobre el árbol final. `TERNA_Y_CODIGO_DE_SALIDA`
+sobre el árbol de `d9768650`, que es el que trae el cambio entero —código,
+pruebas, ADR, registro de defectos y la vista regenerada—. Código de salida
+**0**, con los cuatro pasos en verde: `ruff format --check` («637 files already
+formatted»), `ruff check` («All checks passed!»), `mypy src tests` («Success: no
+issues found in 600 source files») y `pytest`:
+
+```
+=========== 6726 passed, 17 skipped, 2 xfailed in 1283.68s (0:21:23) ===========
+```
+
+Una sola invocación y sin partir `pytest` en tandas (ADR-145). El head final de
+la rama añade a `d9768650` solo este párrafo del ADR: la terna es la de su
+árbol y así se lee (ADR-154).
 
 **Lo que esta comprobación NO dice:** nada sobre el efecto en la cifra del
 banco. Aquí no hay Ollama, y no se ha simulado ninguna medición.
