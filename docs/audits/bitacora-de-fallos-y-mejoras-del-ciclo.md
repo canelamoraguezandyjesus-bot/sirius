@@ -7099,6 +7099,49 @@ El patrón no es «me equivoqué de cuenta»: es que **calculé un techo sin mir
 qué hay entre el veredicto y la salida**, y lo publiqué tres veces antes de
 mirarlo.
 
+### 135. Negativo medido: el lazo no es la palanca, la ampliación por criticidad es portante (20-09-2026, 19:10 UTC)
+
+Nota de arranque previa (`arranque-el-lazo-entre-la-ampliacion-y-el-rescate.md`).
+Hallazgo completo en `hallazgo-el-lazo-no-es-la-palanca-la-ampliacion-es-portante.md`.
+
+La entrada 134 dijo que el techo lo fija el rescate y que la salida es proteger
+menos. Antes de dejarle esa decisión al propietario había que comprobar si había
+una mejor, porque el motor tiene un paso que no miré: cuando la consulta activa
+el vocabulario de criticidad, inyecta **todas** las no-ordinarias del ámbito
+(`rank_relevant_knowledge.py:550-600`) y después RF-25 las protege del filtro.
+**El motor inyecta, el filtro intenta tirar, el rescate devuelve**; el filtro no
+puede deshacer el paso 1.
+
+Apagada la inyección (por parche en la medición, restaurado):
+
+| | `--peticion` ON→OFF | `--ejes --peticion` ON→OFF |
+|---|---|---|
+| techo real | 32 → **34** | 33 → **36** |
+| hallados /81 | 78 → **72** | 79 → **73** |
+| **omisiones críticas** | **0 → 6** | **0 → 6** |
+
+**Sube dos o tres casos y cuesta seis críticas.** Se liberan de verdad `CA-38` y
+`CA-44` —los que recibían el bloque entero—; `CA-02` y `CA-31` salen de
+«bloqueados» pero **no se ganan**: pasan a perder lo esperado, porque la
+ampliación era lo único que se lo traía (`CA-31` pierde **cinco de sus cinco**).
+
+**Negativo registrado. La deuda 42 sigue siendo la única palanca.**
+
+**Y esto, al revés que las tres entradas anteriores, no es un defecto mío ni del
+sistema: es el diseño funcionando.** El motor inyecta para no perder ninguna y
+el rescate la protege por lo mismo, y consiguen lo que prometen —**cero
+omisiones críticas en las cuatro configuraciones, desde el 05-09**—. El precio
+es el techo de ~34/47. Es una decisión registrada (ADR-128) pagando precisión
+por seguridad. Lo que estaba mal es que **el precio no estaba escrito en ninguna
+parte**, y yo publiqué tres veces un techo que lo ignoraba.
+
+**Predicciones**: la primera fallada (dije >= 40/47; salió 34 y 36). La tercera
+acertada a medias. **La segunda es la lección**: acerté «pierde esperado en <= 3
+casos» —fueron 2— y **me faltó preguntar el número que decidía**. Conté casos con
+esperado perdido y no conté **críticas** perdidas, cuando «no perder una crítica»
+es la propiedad entera que este mecanismo existe para sostener. Acertar la
+pregunta que hiciste no sirve si era la pregunta equivocada.
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
@@ -7815,7 +7858,8 @@ mirarlo.
    la deuda 42.
 
 42. **Decisión del propietario: el techo de TODO el sistema son ~34/47, y lo
-   fija el candado.** Suelo D1 29/47; techos reales 32, 33 y 34 según
+   fija el candado.** *(Confirmada como única palanca por la entrada 135: apagar
+   la ampliación por criticidad sube el techo 2-3 casos y cuesta 6 críticas.)* Suelo D1 29/47; techos reales 32, 33 y 34 según
    configuración. **Ninguna palanca sobre filtro, búsqueda o intérprete puede
    pasar de ahí** mientras el rescate proteja CRÍTICO **e** IMPORTANTE
    (entrada 134). Y peor: **buscar mejor baja el techo** —más candidatas, más
