@@ -853,3 +853,53 @@ defectos:
     ficheros:
       - docs/decisions/ADR-202-m17-la-medicion-que-cerraba-la-ola-de-paridad-no-se-hace-y-la-razon-no-consta.md
       - docs/audits/PENDIENTE_Y_POR_QUE_2026-09-14.md
+
+  # ADR-204: la regla que gobierna que se le pregunta al propietario y que no
+  # la dio el en una conversacion y estuvo catorce meses sin estar escrita en
+  # ninguna parte del repositorio. El paso 3 de la auditoria la encontro dicha
+  # el 24-07-2026 y el paso 4 la vio aplicada el 10-08-2026. Mientras tanto, la
+  # sesion le devolvia decisiones tecnicas que el no podia tomar: de las diez
+  # que la auditoria le puso delante, SIETE volvieron sin contestar.
+  - id: H-204
+    titulo: La regla de que se le pregunta al propietario vivia solo en conversaciones, y el trabajo se paraba esperando respuestas que no iban a llegar
+    bloque: ciclo
+    gravedad: media
+    estado: cerrado
+    cerrado_por: e5e5c542a56ea182ad2150faa3bbfd5686343cf5
+    adr: 204
+    ficheros:
+      - AGENTS.md
+      - tests/automation/test_reglas_de_agents.py
+
+  # ADR-205: llegar a `ready-for-merge` con todo verde no bastaba; hacia falta
+  # ademas una palabra que solo podia escribir el propietario y que no verifica
+  # nada, porque el mismo dice que no puede comprobar lo tecnico. Medido: la
+  # incidencia #650 espero 5 h 40 min con los dos revisores aprobando, y la
+  # #148 espero de las 05:12 a las 21:34 del 11-08.
+  - id: H-205
+    titulo: El merge esperaba un tramite que solo podia hacer una persona y que no anadia ninguna comprobacion
+    bloque: ciclo
+    gravedad: media
+    estado: cerrado
+    cerrado_por: e5e5c542a56ea182ad2150faa3bbfd5686343cf5
+    adr: 205
+    ficheros:
+      - .github/workflows/merge-sirius-work.yml
+      - scripts/automation/sirius_merge_on_command.sh
+      - tests/automation/test_sirius_merge.py
+
+  # ADR-206: una sesion no puede ver que ficheros esta tocando otra. El
+  # 10-08-2026 el propietario tenia cuatro abiertas a la vez; una encargo
+  # construir un bloque que otra habia cerrado cuatro dias antes (#165), y otra
+  # escribio un ADR que invalido las ediciones de una tercera. ADR-016 y
+  # ADR-180 cierran dos de las cuatro colisiones medidas; estas dos no.
+  - id: H-206
+    titulo: Dos sesiones interactivas no se ven entre si y trabajan sobre los mismos ficheros sin saberlo
+    bloque: ciclo
+    gravedad: media
+    estado: cerrado
+    cerrado_por: e5e5c542a56ea182ad2150faa3bbfd5686343cf5
+    adr: 206
+    ficheros:
+      - scripts/automation/sirius_obra_en_curso.py
+      - tests/automation/test_obra_en_curso.py
