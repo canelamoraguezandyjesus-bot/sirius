@@ -854,6 +854,27 @@ defectos:
       - docs/decisions/ADR-202-m17-la-medicion-que-cerraba-la-ola-de-paridad-no-se-hace-y-la-razon-no-consta.md
       - docs/audits/PENDIENTE_Y_POR_QUE_2026-09-14.md
 
+  # ADR-203 (#650): el banco de 47 casos es el unico instrumento que mide la
+  # recuperacion de memoria, y solo sabia medir el camino con el motor por
+  # etapas ENCENDIDO: `category_matching_enabled=True` estaba clavado a mano en
+  # el arnes. Las cuatro cifras que se citan siempre -17/47; 162; 78/81; 0- son
+  # todas de ese lado. Del camino que ejecuta hoy el Sirius del propietario -el
+  # de puerta cerrada, porque las cuatro claves de memory_gates.py nacen
+  # apagadas- no habia ninguna medida, asi que «el motor aporta X» no se podia
+  # afirmar: faltaba el minuendo. Se descubrio al ir a abrir el primer
+  # interruptor de ADR-185, no antes.
+  - id: H-203
+    titulo: El banco solo sabia medir el camino con el motor encendido, asi que la linea base contra la que comparar no existia
+    bloque: memoria
+    gravedad: media
+    estado: abierto
+    adr: 203
+    incidencia: 650
+    ficheros:
+      - tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py
+      - scripts/diagnosticar_busqueda_del_banco.py
+      - docs/decisions/ADR-203-el-banco-mide-tambien-el-camino-de-puerta-cerrada-la-linea-base-que-faltaba.md
+
   # ADR-204: la regla que gobierna que se le pregunta al propietario y que no
   # la dio el en una conversacion y estuvo catorce meses sin estar escrita en
   # ninguna parte del repositorio. El paso 3 de la auditoria la encontro dicha

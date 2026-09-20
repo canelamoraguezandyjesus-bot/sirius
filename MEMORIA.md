@@ -26,9 +26,9 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **204**.
+- Decisiones (ADR): **205**.
 - Bloques del motor: 17 cerrado, 2 fuera_de_alcance, 1 pendiente.
-- Defectos registrados: 1 abierto, 62 cerrado.
+- Defectos registrados: 2 abierto, 62 cerrado.
 - Ideas aparcadas o descartadas: 3 aparcada, 2 descartada, 1 promovida.
 - Skills: **7**.
 - Investigaciones: **9** (fotos con fecha; caducan).
@@ -75,6 +75,7 @@ huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 | [206](docs/decisions/ADR-206-cada-sesion-declara-su-obra-antes-de-empezar-y-la-cola-impide-que-dos-se-pisen.md) | 2026-09-20 | APROBADO | Cada sesión declara su obra antes de empezar, y una guarda impide que dos se pisen | Una sesión declara su obra abriendo su pull request en cuanto tiene su primer commit, aunque sea borrador, y antes de empezar comprueba si otra obra viva toca sus mismos ficheros. La comprobación la hace… |
 | [205](docs/decisions/ADR-205-la-fusion-no-espera-al-propietario-cuando-los-dos-revisores-aprueban.md) | 2026-09-20 | APROBADO | La fusión no espera al propietario cuando los dos revisores aprueban | La aprobación de los dos revisores es la autorización de merge. El comentario `fusiona` del propietario deja de ser necesario y se conserva como mando manual: sigue funcionando igual, y es la vía para reintentar después de resolver un… |
 | [204](docs/decisions/ADR-204-el-propietario-decide-producto-dinero-y-salud-y-lo-tecnico-lo-resuelve-la-sesion.md) | 2026-09-20 | APROBADO | El propietario decide producto, dinero y salud, y lo técnico lo resuelve la sesión | Se pregunta al propietario solo por tres cosas: |
+| [203](docs/decisions/ADR-203-el-banco-mide-tambien-el-camino-de-puerta-cerrada-la-linea-base-que-faltaba.md) | 2026-09-19 | PROPUESTO | El banco mide tambien el camino de puerta cerrada: la linea base que faltaba | El instrumento aprende el otro camino; el sistema medido no se toca. |
 | [202](docs/decisions/ADR-202-m17-la-medicion-que-cerraba-la-ola-de-paridad-no-se-hace-y-la-razon-no-consta.md) | 2026-09-14 | APROBADO | M17, la medición que cerraba la ola de paridad, no se hace; y la razón no consta | 1. M17 no se hace. Es una decisión del propietario, tomada antes de hoy. Si algún día se hace, es una decisión nueva: nada de lo escrito aquí la prepara. |
 | [201](docs/decisions/ADR-201-la-mina-de-aprendizaje-tiene-reloj-el-dia-1-de-cada-mes-se-pide-la-edicion-del-mes-que-se-cierra.md) | 2026-09-14 | APROBADO | La mina de aprendizaje tiene reloj: el día 1 de cada mes se pide la edición del mes que se cierra | (sin sección Decisión) |
 | [200](docs/decisions/ADR-200-la-cola-deja-de-ser-una-condicion-y-pasa-a-ser-un-mecanismo-el-ciclo-trae-la-base-a-la-rama-que-espera.md) | 2026-09-14 | APROBADO | La cola deja de ser una condición y pasa a ser un mecanismo: el ciclo trae la base a la rama que espera | 1. La cola se consulta antes de reponer la revisión. En la rama `success)` de `.github/workflows/advance-sirius-after-quality.yml`, antes de aplicar `sirius:review-requested`, se lee `compare/{base}...{head}` —el mismo dato que ese paso ya… |
@@ -298,6 +299,7 @@ de memoria.
 | `guarda-ampliada-a-un-corpus-que-no-es-el-suyo` | 1 | sí | [190](docs/decisions/ADR-190-la-guarda-de-citas-no-sale-de-docs-decisions-medidos-590-citas-y-23-rotas-fuera-del-registro-cero-son-defectos-de-este-arbol.md) |
 | `guarda-medida-que-se-queda-sin-autoridad-porque-nadie-relee-la-medida` | 1 | sí | [199](docs/decisions/ADR-199-el-detector-de-familia-repetida-detiene-el-ciclo-y-esa-parada-vuelve-al-corrector-no-al-revisor-que-la-emitio.md) |
 | `guardian-que-mide-posicion-en-vez-de-estructura` | 1 | sí | [187](docs/decisions/ADR-187-una-revision-sobrevive-a-ponerse-al-dia-con-main-si-el-trabajo-propio-de-la-rama-no-cambia.md) |
+| `instrumento-que-solo-mide-un-lado` | 1 | sí | [203](docs/decisions/ADR-203-el-banco-mide-tambien-el-camino-de-puerta-cerrada-la-linea-base-que-faltaba.md) |
 | `interruptor-que-enciende-mas-de-lo-que-se-puede-medir` | 1 | sí | [185](docs/decisions/ADR-185-la-puerta-de-la-memoria-se-parte-en-tres-interruptores-antes-de-abrirla.md) |
 | `pieza-correcta-a-la-que-no-llama-quien-la-necesita` | 1 | sí | [197](docs/decisions/ADR-197-el-detector-de-familia-repetida-agrupa-por-la-ruta-que-el-revisor-escribe-no-por-el-recorte-anclado.md) |
 | `plan-que-hay-que-terminar-de-una-sentada` | 1 | sí | [176](docs/decisions/ADR-176-el-cierre-de-una-incidencia-se-retoma-desde-donde-se-quedo.md) |
@@ -380,6 +382,10 @@ de memoria.
 
 - **[ADR-187](docs/decisions/ADR-187-una-revision-sobrevive-a-ponerse-al-dia-con-main-si-el-trabajo-propio-de-la-rama-no-cambia.md)** — escribir un guardián que comprueba que algo aparece (lo hace cumplir `tests/automation/test_misma_obra.py`).
 
+### `instrumento-que-solo-mide-un-lado`
+
+- **[ADR-203](docs/decisions/ADR-203-el-banco-mide-tambien-el-camino-de-puerta-cerrada-la-linea-base-que-faltaba.md)** — publicar «la pieza X aporta tanto» citando solo la (lo hace cumplir `tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py`).
+
 ### `interruptor-que-enciende-mas-de-lo-que-se-puede-medir`
 
 - **[ADR-185](docs/decisions/ADR-185-la-puerta-de-la-memoria-se-parte-en-tres-interruptores-antes-de-abrirla.md)** — poner una sola puerta delante de varias piezas (lo hace cumplir `tests/unit/test_composition_root_relevance_gate.py`).
@@ -444,6 +450,7 @@ cerrados; el recuento completo está arriba.
 | Defecto | Estado | Título |
 |---|---|---|
 | H-202 | abierto | Una decision de no hacer algo no dejaba rastro, y una precondicion escrita antes que ella bloqueo trabajo real trece dias |
+| H-203 | abierto | El banco solo sabia medir el camino con el motor encendido, asi que la linea base contra la que comparar no existia |
 
 ## Las ideas aparcadas y descartadas (ADR-208)
 

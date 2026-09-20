@@ -112,6 +112,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import sys
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
@@ -3063,6 +3064,7 @@ def _ejecutar_banco_paquete_completo(
     criticality_vocabulary: frozenset[str] | None = None,
     categoria_por_item: Callable[[Mapping[str, Any]], str | None] | None = None,
     max_criticality_category: str | None = None,
+    motor_por_etapas: bool = True,
 ) -> _EjecucionDelBanco:
     """El mismo banco de 47 casos, contra `RankRelevantKnowledgeUseCase`/
     `ContextBuilder` construidos exactamente como `composition_root` los
@@ -3071,6 +3073,52 @@ def _ejecutar_banco_paquete_completo(
     producción, nunca el arnés de examen de arriba (incidencias #457-#469),
     que sigue siendo la única medición que afirma los suelos D1/D2 (ver el
     docstring del módulo).
+
+    `motor_por_etapas=False` (ADR-203, incidencia #650) pide el OTRO camino:
+    el de **puerta cerrada**, que es el que ejecuta hoy el Sirius del
+    propietario, porque las cuatro claves de `memory_gates.py` nacen
+    apagadas. Los dos colaboradores se construyen entonces como
+    `composition_root` los construye con TODAS las claves de
+    `memory_gates.py` apagadas (ADR-185) —el estado de producción de hoy—:
+    `category_matching_enabled=False`, los dos vocabularios vacíos, el techo
+    de criticidad en `None` y **`relevance_filter_port=None`**
+    (`src/sirius/composition_root.py:560-578`) — así `rank_con_cupo` se va por
+    `_rank_via_current_pipeline`, el filtro-y-orden de S7.5/M9, en vez de por
+    el motor por etapas, y `_rank_related_knowledge` devuelve el conjunto tras
+    precedencia sin llegar a `_apply_relevance_filter`. No es «con
+    `staged_engine_enabled` apagado» y nada más: en `composition_root` el caso
+    de uso toma sus tres parámetros de `puertas.motor_por_etapas`, pero el
+    `ContextBuilder` toma `relevance_filter_port`, `max_criticality_category` y
+    `category_matching_enabled` de `puertas.filtro_de_relevancia` —la clave
+    que `src/sirius/config/memory_gates.py` documenta como «el filtro de
+    relevancia local y el camino de puerta abierta del ContextBuilder»—, así
+    que este parámetro único mueve las dos claves a la vez, y por eso lo que
+    reproduce es el estado de hoy con las cuatro apagadas. El puerto de
+    relevancia se apaga aquí porque con la clave cerrada `composition_root` no
+    construye ninguno (CODEX-001 de la incidencia #650): dejar puesto el doble
+    ejecutaba `_apply_relevance_filter`, una rama que en producción cerrada no
+    se ejecuta nunca, y aunque hoy conserve el mismo conjunto, la equivalencia
+    sería una coincidencia del doble, no la construcción etiquetada. Lo que sí
+    limita la resta: el arnés no tiene ningún modo que reproduzca «solo el
+    primer interruptor abierto» (limitación conocida de ADR-203).
+    Existe para que haya una **línea base** contra la que comparar cuando se
+    abra el primer interruptor: sin ella, «el motor aporta X» no tiene
+    minuendo.
+
+    El valor por defecto es `True`, que es exactamente lo que este arnés
+    hacía antes de existir el parámetro: ningún llamador de hoy —los tres
+    guiones y las pruebas— cambia de resultado. Y los tres parámetros
+    explícitos mandan sobre el estado de la puerta: quien pase un
+    vocabulario o un techo a mano recibe el suyo, abierta o cerrada.
+
+    Aviso que acompaña a toda cifra sacada con `motor_por_etapas=False`: por
+    el camino cerrado `_rank_via_current_pipeline(query_text)` **solo recibe
+    el texto de la consulta**. No se construye ninguna `Peticion`, así que las
+    palancas de laboratorio de ADR-148/ADR-169 —petición del corpus, ejes
+    declarados, cupo— no pueden influir en el resultado, y una cifra de puerta
+    cerrada obtenida «con» ellas no es comparable con una de puerta abierta
+    que sí las usa. `scripts/diagnosticar_busqueda_del_banco.py` lo hace
+    ruidoso: rechaza la combinación en vez de imprimir el número.
 
     M13-M16 (SIRIUS-ARQ-0.2 §11, incidencias #486/#489/#490/#504) ya cablean,
     tras la misma puerta, buena parte de la semántica que el arnés de examen
@@ -3108,8 +3156,10 @@ def _ejecutar_banco_paquete_completo(
     `category` se asigna a cada item real desde las etiquetas canónicas de
     ADR-116 vía `SetCategoryUseCase` — el mismo caso de uso que D7 punto 3
     expone en producción para una edición explícita, nunca una escritura
-    directa al repositorio. El filtro de relevancia es
-    `_FiltroDeRelevanciaQueNuncaDescarta` (ver arriba): nunca Ollama real.
+    directa al repositorio. Con la puerta abierta el filtro de relevancia es
+    `_FiltroDeRelevanciaQueNuncaDescarta` (ver arriba): nunca Ollama real. Con
+    la puerta cerrada no hay filtro en absoluto (`None`), igual que en
+    `composition_root`.
 
     M19a (ADR-127, incidencia #512): `criticality_vocabulary` por defecto
     (`None`) es `_CRITICALITY_VOCABULARY`, el vocabulario real de
@@ -3175,14 +3225,16 @@ def _ejecutar_banco_paquete_completo(
             project_repository=project_repository,
             knowledge_search_repository=build_sqlite_knowledge_search_repository(database_path),
             category_vocabulary=(
-                category_vocabulary if category_vocabulary is not None else _CATEGORY_VOCABULARY
+                category_vocabulary
+                if category_vocabulary is not None
+                else (_CATEGORY_VOCABULARY if motor_por_etapas else frozenset())
             ),
             criticality_vocabulary=(
                 criticality_vocabulary
                 if criticality_vocabulary is not None
-                else _CRITICALITY_VOCABULARY
+                else (_CRITICALITY_VOCABULARY if motor_por_etapas else frozenset())
             ),
-            category_matching_enabled=True,
+            category_matching_enabled=motor_por_etapas,
             staged_engine_port=staged_engine_port,
             staged_engine_candidate=staged_engine_candidate.candidato(),
         )
@@ -3198,14 +3250,14 @@ def _ejecutar_banco_paquete_completo(
             relevance_filter_port=(
                 relevance_filter_port
                 if relevance_filter_port is not None
-                else _FiltroDeRelevanciaQueNuncaDescarta()
+                else (_FiltroDeRelevanciaQueNuncaDescarta() if motor_por_etapas else None)
             ),
             max_criticality_category=(
                 max_criticality_category
                 if max_criticality_category is not None
-                else _MAX_CRITICALITY_CATEGORY
+                else (_MAX_CRITICALITY_CATEGORY if motor_por_etapas else None)
             ),
-            category_matching_enabled=True,
+            category_matching_enabled=motor_por_etapas,
         )
 
         items_por_id = {item["id"]: item for item in banco["items"]}
@@ -3365,6 +3417,134 @@ def test_el_guardia_del_paquete_completo_ya_no_es_tautologico() -> None:
     )
     assert degenerada.omisiones_criticas > _MAXIMO_OMISIONES_CRITICAS_PAQUETE_COMPLETO
     assert degenerada.elementos_hallados < _MINIMO_ELEMENTOS_HALLADOS_PAQUETE_COMPLETO
+
+
+@pytest.fixture(scope="module")
+def ejecucion_del_banco_puerta_cerrada(
+    tmp_path_factory: pytest.TempPathFactory,
+) -> _EjecucionDelBanco:
+    """El mismo banco por el camino de PUERTA CERRADA (ADR-203): el que
+    ejecuta hoy el Sirius del propietario, porque las cuatro claves de
+    `memory_gates.py` nacen apagadas."""
+    database_path = tmp_path_factory.mktemp("evidence_bank_47_casos_puerta_cerrada") / "sirius.db"
+    return _ejecutar_banco_paquete_completo(database_path, motor_por_etapas=False)
+
+
+#: El caso y el elemento con los que se comprueba, sin ambigüedad, que la
+#: ejecución tomó el camino de puerta cerrada. `MEM-002` es CRÍTICO y lo
+#: alcanza el motor por etapas (índice de categoría, índice de criticidad y
+#: siembra viven los tres dentro de `_rank_via_staged_engine`); el
+#: filtro-y-orden de S7.5/M9 no llega a él. Medido, no supuesto: ver el
+#: cuerpo de la prueba.
+_CASO_QUE_SOLO_ALCANZA_EL_MOTOR = "B04-CA-02"
+_CRITICO_QUE_SOLO_ALCANZA_EL_MOTOR = "MEM-002"
+
+
+def test_con_el_motor_apagado_el_banco_toma_el_camino_de_puerta_cerrada(
+    ejecucion_del_banco_paquete_completo: _EjecucionDelBanco,
+    ejecucion_del_banco_puerta_cerrada: _EjecucionDelBanco,
+) -> None:
+    """ADR-203 (incidencia #650): `motor_por_etapas=False` mide el OTRO
+    camino, no una variante del mismo.
+
+    Lo que fija es una diferencia OBSERVABLE, no la forma del cableado: un
+    crítico que la puerta abierta recupera y la cerrada no, y el hecho de
+    que la puerta cerrada pierde críticas donde la abierta no pierde
+    ninguna. Con el motor por etapas apagado no hay índice de criticidad
+    que rescate lo que el orden no alcanza, así que esa pérdida es la firma
+    del camino, y una implementación que dijera «cerrada» y siguiera
+    ejecutando el motor no podría producirla.
+
+    No afirma ningún suelo: la puerta cerrada es peor en cobertura y en
+    críticas perdidas, y precisamente por eso existe esta medición — es el
+    minuendo que faltaba para poder decir qué aporta abrir el primer
+    interruptor de ADR-185, no una cota que defender.
+    """
+    abierta = ejecucion_del_banco_paquete_completo
+    cerrada = ejecucion_del_banco_puerta_cerrada
+
+    assert (
+        _CRITICO_QUE_SOLO_ALCANZA_EL_MOTOR
+        in abierta.obtenido_por_caso[_CASO_QUE_SOLO_ALCANZA_EL_MOTOR]
+    )
+    assert (
+        _CRITICO_QUE_SOLO_ALCANZA_EL_MOTOR
+        not in cerrada.obtenido_por_caso[_CASO_QUE_SOLO_ALCANZA_EL_MOTOR]
+    )
+    assert cerrada.metricas.omisiones_criticas > abierta.metricas.omisiones_criticas
+
+    print(
+        "\nPA-0.2-REC-01 (ADR-203, línea base de PUERTA CERRADA: "
+        "RankRelevantKnowledgeUseCase y ContextBuilder como los construye "
+        "composition_root con TODAS las claves de memory_gates.py apagadas "
+        "—el estado de producción de hoy—: category_matching_enabled=False, "
+        "vocabularios vacíos, techo de criticidad None y sin puerto de "
+        "relevancia (None), o sea _rank_via_current_pipeline, el "
+        "filtro-y-orden de S7.5/M9, sin _apply_relevance_filter): "
+        f"aciertos_exactos={cerrada.metricas.aciertos_exactos}/47 "
+        f"elementos_de_mas={cerrada.metricas.elementos_de_mas} "
+        f"omisiones_criticas={cerrada.metricas.omisiones_criticas} "
+        f"cobertura={cerrada.metricas.elementos_hallados}/"
+        f"{cerrada.metricas.elementos_esperados_total}"
+    )
+
+
+@pytest.mark.parametrize("motor_por_etapas", [True, False])
+def test_el_estado_de_la_puerta_llega_a_los_dos_colaboradores(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, motor_por_etapas: bool
+) -> None:
+    """La prueba de la mutación (ADR-001 §3): el estado de la puerta tiene
+    que llegar a `RankRelevantKnowledgeUseCase` **y** a `ContextBuilder`, con
+    los vocabularios, el techo y el puerto de relevancia que
+    `composition_root` usa en ese estado (`src/sirius/composition_root.py`).
+    Propagarlo a uno solo deja una ejecución híbrida que no es ninguno de los
+    dos caminos de producción, y cuya cifra no sería comparable con nada.
+
+    Se comprueba sobre la construcción real —espías que delegan en las
+    clases de verdad—, no sobre una firma: una prueba que solo mirase el
+    argumento por defecto pasaría con el parámetro desconectado.
+    """
+    argumentos_del_motor: list[dict[str, Any]] = []
+    argumentos_del_constructor: list[dict[str, Any]] = []
+    rank_real = RankRelevantKnowledgeUseCase
+    context_real = ContextBuilder
+
+    def rank_espia(**kwargs: Any) -> RankRelevantKnowledgeUseCase:
+        argumentos_del_motor.append(kwargs)
+        return rank_real(**kwargs)
+
+    def context_espia(**kwargs: Any) -> ContextBuilder:
+        argumentos_del_constructor.append(kwargs)
+        return context_real(**kwargs)
+
+    monkeypatch.setattr(
+        sys.modules[__name__], "RankRelevantKnowledgeUseCase", rank_espia, raising=True
+    )
+    monkeypatch.setattr(sys.modules[__name__], "ContextBuilder", context_espia, raising=True)
+
+    _ejecutar_banco_paquete_completo(tmp_path / "sirius.db", motor_por_etapas=motor_por_etapas)
+
+    (motor,) = argumentos_del_motor
+    (constructor,) = argumentos_del_constructor
+    assert motor["category_matching_enabled"] is motor_por_etapas
+    assert constructor["category_matching_enabled"] is motor_por_etapas
+    if motor_por_etapas:
+        assert motor["category_vocabulary"] == _CATEGORY_VOCABULARY
+        assert motor["criticality_vocabulary"] == _CRITICALITY_VOCABULARY
+        assert constructor["max_criticality_category"] == _MAX_CRITICALITY_CATEGORY
+        assert isinstance(constructor["relevance_filter_port"], _FiltroDeRelevanciaQueNuncaDescarta)
+    else:
+        assert motor["category_vocabulary"] == frozenset()
+        assert motor["criticality_vocabulary"] == frozenset()
+        assert constructor["max_criticality_category"] is None
+        # CODEX-001 (incidencia #650): con `filtro_de_relevancia` cerrada,
+        # `composition_root` pasa `relevance_filter_port=None`, y entonces
+        # `_rank_related_knowledge` ni siquiera llama a
+        # `_apply_relevance_filter`. Un doble puesto aquí ejecutaría una rama
+        # que la producción cerrada no ejecuta: que hoy conservase el mismo
+        # conjunto sería una propiedad del doble, no de la construcción que
+        # la etiqueta afirma medir.
+        assert constructor["relevance_filter_port"] is None
 
 
 @pytest.mark.xfail(
