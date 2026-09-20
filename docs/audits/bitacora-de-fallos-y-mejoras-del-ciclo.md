@@ -7393,10 +7393,26 @@ Empujado como `178b1bee`. La PR pasa de `dirty` a `blocked` (Quality corriendo)
 y **sigue en 5 ficheros, +492/−6**: idéntica a antes de la fusión, que es la
 prueba de que el trabajo propio de la rama no se tocó.
 
-Y **no cuesta la ronda de revisión**: el motor ya tiene la salvaguarda para
-esto —`sirius_misma_obra.py`, incidencia #608 parte 2—, que compara el diff
-contra la base de mezcla y conserva la aprobación si el trabajo propio no ha
-cambiado. Lo comprobé **antes** de empujar, en vez de empujar y ver qué pasaba.
+**Y aquí me equivoqué, en la misma entrada.** Escribí —y se lo dije al
+propietario— que esto **no costaría la ronda de revisión**, porque el motor
+tiene la salvaguarda de `sirius_misma_obra.py` (incidencia #608 parte 2) que
+conserva la aprobación cuando el trabajo propio de la rama no cambia.
+
+**Costó la ronda.** Al empujar, la etiqueta pasó de `ready-for-merge` a
+`reviewing`. Y **el motor hizo lo correcto**: el trabajo propio de la rama
+**sí** había cambiado —la línea `Estado` del ADR-212 y la suya en el índice de
+`MEMORIA.md`—, así que la salvaguarda decidió bien y la aprobación caducó.
+
+**De dónde salió mi error**: miré que la PR seguía en «5 ficheros, +492/−6»
+antes y después, y de ahí concluí que el contenido era el mismo. **Un `--stat`
+igual no es contenido igual**, y menos cuando la base de comparación ha
+cambiado debajo. El diff de verdad —`git diff ca847501 178b1bee -- ADR-212`—
+enseña la línea cambiada en dos segundos, y no lo miré hasta que la etiqueta me
+contradijo.
+
+La ronda, además, **era inevitable**: sin ese cambio de `Estado` fallan dos
+pruebas y Quality se pone roja. Lo que no era inevitable es que yo anunciara de
+antemano un coste cero que no había comprobado.
 
 ## Las tres reglas que deja la noche
 
