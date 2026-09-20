@@ -280,7 +280,7 @@ bloques:
 
   - id: D4
     titulo: Partir un objetivo grande en bloques
-    estado: pendiente
+    estado: fuera_de_alcance
     incidencia: 341
     que_lo_cerraria: >-
       que un objetivo del tamaño de una versión entera se convierta en varios
@@ -291,7 +291,10 @@ bloques:
       padre/hijo en el dominio, y la clase MIXTA es inalcanzable por construcción
       (ADR-079). Es alcance nuevo, nombrado el 25-08-2026.
     decidido: >-
-      ADR-089: lo hace la sesión interactiva. El descomponedor automático queda
-      APLAZADO, no descartado. Qué modelo lo haría NO está decidido: sólo consta
-      la preferencia apuntada por el propietario -local, gratuito «o algo así»-,
-      y una API de pago barata sigue sobre la mesa.
+      ADR-198 (14-09-2026): lo hace la sesión interactiva y el descomponedor
+      automático queda DESCARTADO, no aplazado, con la razón escrita: decidir un
+      reparto exige un modelo, y el motor no ejecuta ninguno -es la premisa de
+      ADR-082, no una carencia-. Esta línea decía «APLAZADO» desde ADR-089 y se
+      quedó atrás; un aplazado obliga a volver a pensarlo entero en cada repaso,
+      que es justo el coste que ADR-198 quitó. Por eso el bloque queda fuera del
+      alcance del motor: el trabajo se hace, pero no lo hace él.

@@ -1,5 +1,13 @@
 # Incorporación de Claude al Proyecto Sirius
 
+> **DEROGADO el 20-09-2026 (ADR-207).** Este documento es una foto del
+> 20-07-2026 y ya no describe el repositorio: dice que el contrato operativo va
+> por la versión 1.1 cuando va por la 1.11, y su mapa lo hace hoy `MEMORIA.md`,
+> que se genera del árbol y no puede quedarse atrás. **No se borra** —aquí no se
+> borra nada (ADR-195)— y se conserva como el retrato de julio: la línea base
+> contra la que se lee lo que cambió después. La puerta de entrada real es
+> `AGENTS.md`, y el estado vivo, `MEMORIA.md`. **No lo actualices.**
+
 ## Propósito
 
 Este documento sirve como puerta de entrada operativa para Claude, Claude Code o Cowork. No sustituye a las fuentes canónicas ni al estado vivo del repositorio. Su función es indicar qué debe leer, en qué orden, cómo resolver contradicciones y qué debe producir antes de modificar código.
