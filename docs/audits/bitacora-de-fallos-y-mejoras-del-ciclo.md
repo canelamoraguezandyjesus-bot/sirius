@@ -6173,6 +6173,67 @@ propietario: qué política fija esas cuotas, y si §15.2 entra en el repositori
 o se registra que no va a entrar.
 
 
+### 118. La siembra no era el problema: lo parecía porque la petición está mal, y el ruido lo mete el motor (20-09-2026, 02:45 UTC)
+
+Nota de arranque previa (`arranque-de-donde-salen-los-elementos-de-mas.md`),
+hallazgo completo en `hallazgo-de-donde-salen-los-elementos-de-mas.md`.
+Determinista, sin Ollama, instrumentando `_intercalar_por_categoria`
+(`rank_relevant_knowledge.py:680`). 47 llamadas para 47 casos.
+
+**Dos mediciones, y la segunda da la vuelta a la primera.**
+
+| fuente de los elementos de más | petición FIJA (487) | petición DECLARADA (162) |
+|---|---|---|
+| motor | 255 (52.4%) | **110 (67.9%)** |
+| siembra | 197 (**40.5%**) | 8 (**4.9%**) |
+| categoría/criticidad | 35 (7.2%) | 44 (27.2%) |
+
+**Con la petición declarada la siembra pasa de 201 elementos sembrados a 12**,
+y su precisión del 2% al 33%. La causa está en el código:
+`rank_relevant_knowledge.py:611` activa la siembra con
+`peticion.amplia_por_categoria`; con la petición fija ese interruptor se
+enciende a lo ancho y con la declarada solo donde el caso lo pide, que es lo
+que ADR-177 decidió.
+
+**La siembra no es el problema: lo parece cuando la petición está mal.**
+
+**Esto acota ADR-129 sin contradecirlo.** El «precio aceptado por escrito antes
+de medirlo» —la siembra trae de más y los exactos bajan— es en buena parte un
+**artefacto de medir con petición fija**. Con la petición correcta el precio son
+8 elementos de más, no 197. La decisión sigue siendo buena; lo que caduca es la
+creencia de que ese precio es inherente.
+
+**Y el verdadero generador de ruido es el motor**, en las dos configuraciones:
+52.4% y 67.9%. El ranking ordinario, no la siembra ni la ampliación.
+
+**Predicción**: dije que la siembra explicaría entre el 55% y el 80%.
+**FALLADA** — 40.5% y 4.9%. La otra mitad, que menos del 15% de lo sembrado
+estaría en lo esperado, **acertada** (2.0%). Y otra vez la fallada es la que
+enseña: si la siembra hubiera dominado, la palanca sería podarla, y podar la
+siembra amenaza las 0 omisiones críticas. Al fallar, la palanca aparece en otro
+sitio y es más segura.
+
+**El criterio de parada, escrito antes, resuelve solo.** Decía: menos de un
+tercio → la siembra no es el problema, se registra y NO se toca. Con petición
+declarada aporta 4.9%. **No se toca la siembra**, y no hace falta arriesgar
+ninguna crítica.
+
+**Dónde queda el trabajo, y enlaza con la entrada 117 del mismo día:**
+
+1. **Arreglar el intérprete vale mucho más de lo que parecía**: no solo mejora
+   los campos de la petición, **colapsa la siembra de 201 a 12**, baja los de
+   más de 487 a 162 y sube los exactos de 0 a 17. Es la palanca 1, cuyo defecto
+   concreto se identificó hoy: la instrucción define la cardinalidad por la
+   gramática de la pregunta y el canon por la forma del conjunto de respuesta.
+2. **Después, el ranking del motor**: 110 de los 162 restantes.
+3. **La siembra, quieta.**
+
+**Limitación declarada**: esto descompone lo que la etapa de búsqueda entrega
+(487 y 162), no lo que sobrevive al filtro real (los 218 del banco completo).
+Descomponer los 218 de verdad exige Ollama, o sea la máquina del propietario.
+No se presenta como otra cosa.
+
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
