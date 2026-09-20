@@ -106,7 +106,7 @@ mirar y una sección corta con las dos direcciones del bucle.
 |---|---|---|
 | La guarda pasa sobre el árbol | `uv run --no-sync pytest tests/automation/test_skills.py -q` | 71 pruebas en verde, 0,19 s |
 | La guarda no es vacua | mutación de sus nueve reglas en el árbol, una a una, restaurando desde copia | **9 de 9 cazadas**; árbol limpio al terminar |
-| Las skills no rompen nada | `uv run --no-sync pytest` | pendiente de la pasada final sobre el árbol fusionado; la cifra se anota aquí antes de empujar |
+| Las skills no rompen nada | `uv run --no-sync pytest` | pasada 1 sobre el árbol fusionado: 7 283 pasaron y **2 fallaron**, las dos por ADR-203 (abajo). Pasada 2, ya con ADR-203 volteado: **7 285 en verde**, 17 saltadas, 2 xfailed |
 | Formato, estilo y tipos | `ruff format --check .`, `ruff check .`, `mypy src tests` | limpio; 604 ficheros |
 | Los documentos no tienen citas rotas | `sirius_check_docs.py` sobre los siete `SKILL.md`, `patrones.md`, `AGENTS.md` y `MEMORIA.md` | sin defectos |
 | `MEMORIA.md` está al día | `uv run --no-sync sirius-memoria conocimiento` | regenerada en el mismo commit (ADR-171) |
@@ -119,6 +119,13 @@ todo fichero ya versionado, así que al borrar la regla de admisión de
 «puerta global que se abre sola» del catálogo de
 `.claude/skills/disciplina-evidencia/patrones.md`. Corregido en `f5741b5`, y
 la segunda pasada caza las nueve.
+
+Y una segunda cosa que la pasada final destapó, que no es de esta decisión
+pero sí de esta rama: al traer `main`, la guarda de ADR-209 tumbó **ADR-203**,
+que llegó fusionado y declarando `PROPUESTO`. Se escribió en paralelo, antes
+de que la regla existiera. Volteado a `APROBADO`, igual que los 150 de su
+tanda. Era exactamente el trabajo que la guarda existe para hacer, y lo hizo
+el primer día que se cruzó con una rama ajena.
 
 ## Consecuencias
 

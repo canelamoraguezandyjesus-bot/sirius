@@ -1,6 +1,6 @@
 # ADR-203 — El banco mide tambien el camino de puerta cerrada: la linea base que faltaba
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-19
 - Aprobación: [quién y cómo; en este repositorio, la fusión de la PR por el propietario]
 
