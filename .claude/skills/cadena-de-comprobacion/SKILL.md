@@ -17,9 +17,9 @@ cadena es más larga que `scripts/check.ps1`.**
 
 ## El orden, y por qué es este
 
-De lo más barato a lo más caro. La batería tarda **11 min 30 s** (7 179
+De lo más barato a lo más caro. La batería tarda **11 min 49 s** (7 285
 pruebas medidas el 20-09-2026): lanzarla antes que `ruff` significa descubrir
-un espacio en blanco al final de once minutos y medio.
+un espacio en blanco al final de doce minutos.
 
 ```bash
 uv run --no-sync ruff format --check .      # segundos
@@ -27,7 +27,7 @@ uv run --no-sync ruff check .               # segundos
 uv run --no-sync mypy src tests             # ~1 min
 uv run --no-sync python scripts/automation/sirius_check_docs.py <ficheros .md tocados>
 uv run --no-sync sirius-memoria conocimiento   # solo si tocaste docs/ o un registro
-uv run --no-sync pytest                     # ~11 min 30 s: lánzala en segundo plano
+uv run --no-sync pytest                     # ~12 min: lánzala en segundo plano
 ```
 
 En Windows, los cuatro primeros pasos de `check.ps1` son los mismos y se
