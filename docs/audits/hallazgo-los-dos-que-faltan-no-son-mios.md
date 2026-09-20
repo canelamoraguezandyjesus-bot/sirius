@@ -19,13 +19,31 @@ and item["validez"] == "VIGENTE"
 and item["disponibilidad"] == "DISPONIBLE"
 ```
 
-`MEM-020` **nunca llega a la base de datos**. Comprobado: entra en **0 de 47**
-casos en las tres configuraciones, y el otro elemento `CANDIDATA` del corpus
-(`MEM-007`) también entra en 0 — y ése no se espera en ningún caso.
+**Corrección de precisión, sobre la primera versión de este documento.** Escribí
+que `MEM-020` «nunca llega a la base de datos». **No es exacto y lo comprobé
+después de publicarlo.** El cargador (líneas 501-503) sí la crea y **acto
+seguido la archiva**:
+
+```python
+memory = SaveManualMemoryUseCase(unit_of_work).save(text, project_id=project_id)
+if not _vigente(item):
+    ArchiveMemoryUseCase(unit_of_work).archive(memory.id)
+```
+
+Archivada, su `status` deja de ser `CURRENT`, y `list_current_memories`
+—`sqlite_memory_repository.py:220`, `where(MemoryModel.status ==
+MemoryStatus.CURRENT)`— no la devuelve **nunca**. El efecto medido es idéntico,
+pero el mecanismo es **archivado**, no ausencia. Merece decirse bien: el banco
+no ignora la candidata, la **representa fielmente** como lo que Sirius haría con
+ella.
+
+Comprobado: entra en **0 de 47** casos en las tres configuraciones, y el otro
+elemento `CANDIDATA` del corpus (`MEM-007`) también entra en 0 — y ése no se
+espera en ningún caso.
 
 > **`B04-CA-29` es inalcanzable por construcción.** Ningún filtro, ningún
 > modelo, ninguna configuración puede acertarlo, porque el único elemento que
-> espera no existe dentro de Sirius.
+> espera está archivado y la recuperación solo mira lo `CURRENT`.
 
 Y es una **contradicción dentro del propio banco**: la adjudicación espera un
 elemento que los campos de estado del mismo banco declaran no vigente. Hay tres

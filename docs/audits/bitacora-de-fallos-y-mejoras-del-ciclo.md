@@ -7194,11 +7194,16 @@ Nota de arranque previa (`arranque-los-dos-que-la-mejor-busqueda-no-trae.md`).
 Hallazgo en `hallazgo-los-dos-que-faltan-no-son-mios.md`.
 
 **`CA-29` es inalcanzable por construcción.** Espera `MEM-020` y su conjunto de
-candidatas está **vacío**: `MEM-020` declara `confirmacion: "CANDIDATA"`, y el
-cargador del banco (`_vigente`) mete un elemento en Sirius **solo si sus tres
-estados lo dicen a la vez**. Nunca llega a la base de datos —entra en **0 de 47**
-casos en las tres configuraciones—. Ningún filtro ni modelo puede acertar ese
-caso jamás.
+candidatas está **vacío**: `MEM-020` declara `confirmacion: "CANDIDATA"`, el
+cargador la crea y **acto seguido la archiva** (`_vigente` exige los tres
+estados a la vez), y la recuperación solo mira lo `CURRENT`. Entra en **0 de
+47** casos en las tres configuraciones. Ningún filtro ni modelo puede acertar
+ese caso jamás.
+
+**Corregido después de publicarlo**: escribí «nunca llega a la base de datos» y
+es archivado, no ausencia. El efecto medido es el mismo y la conclusión no se
+mueve, pero el banco no ignora la candidata: la **representa fielmente** como lo
+que Sirius haría con ella, y eso hay que decirlo bien.
 
 Es una **contradicción dentro del banco**: la adjudicación espera un elemento
 que los campos de estado del mismo banco declaran no vigente. Tres salidas
