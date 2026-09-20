@@ -301,7 +301,13 @@ def test_ninguna_skill_esta_ignorada_por_git() -> None:
     )
     assert ficheros, "no hay ni un fichero de skill que comprobar"
     consulta = subprocess.run(
-        ["git", "check-ignore", "--stdin"],
+        # `--no-index` es la diferencia entre una guarda y una puerta que se
+        # abre sola. Sin él, `git check-ignore` calla sobre todo fichero ya
+        # versionado, así que la prueba pasaría en verde aunque alguien
+        # borrase la regla de admisión: las skills de hoy seguirían seguidas
+        # por estar en el índice, y solo se enteraría quien escribiera la
+        # siguiente. Con él se comprueba la REGLA, que es lo que se pudre.
+        ["git", "check-ignore", "--no-index", "--stdin"],
         cwd=RAIZ,
         input="\n".join(ficheros),
         capture_output=True,
