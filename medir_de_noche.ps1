@@ -76,6 +76,13 @@ try {
     Medir "interprete"     { uv run python scripts/medir_interprete_de_peticion.py }
     Medir "d7-punto-6"     { uv run pytest tests/acceptance/test_d7_punto_6_coincidencia_etiquetado.py -q -s }
 
+    # Cuarta, opcional: el techo real (peticion declarada + filtro real).
+    # Solo si el guion esta presente en la raiz del clon; se copia a mano
+    # desde la rama de auditoria. Es la pregunta abierta mas valiosa.
+    if (Test-Path (Join-Path $repo "medir_techo_con_filtro_real.py")) {
+        Medir "techo-con-filtro" { uv run python medir_techo_con_filtro_real.py }
+    }
+
     # --- 4) Empujar los resultados a la rama de mediciones -------------------
     # Sin force: el historico de noches anteriores se conserva.
     $existe = git ls-remote --heads origin $rama
