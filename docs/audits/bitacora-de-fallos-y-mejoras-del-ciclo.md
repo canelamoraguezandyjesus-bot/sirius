@@ -6972,6 +6972,94 @@ a tomar el camino A y aparece una tercera enumeración incompleta, **se para el
 ciclo** y se le entrega cerrado a mano, en vez de seguir girando.
 
 
+### 132. #653 llega a `ready-for-merge` en 5 rondas; la ronda 4 atacó la raíz sola (20-09-2026, 17:40 UTC)
+
+La entrada 131 nombró la raíz —*describir lo que cambió, lo cambia; es un punto
+fijo que no se alcanza editando*— y dejó publicada mi posición: si la ronda 4
+volvía a alargar la enumeración, se paraba el ciclo.
+
+**No hizo falta.** La ronda 4 tomó el camino bueno por su cuenta, y lo dice con
+sus palabras: «en vez de dejarlo en una lista más larga, **se atacó la raíz**:
+se volvió a correr la cadena entera sobre el árbol que YA contiene la tabla y
+el párrafo retrospectivo, de modo que lo único que queda fuera de una corrida
+es la transcripción del propio resultado, que no puede validarse a sí misma».
+`check.ps1` dos veces, la segunda sobre el head final `ca847501`: salida 0,
+`6726 passed, 17 skipped, 2 xfailed`. Ronda 5: **REVIEW_APPROVED** por Claude y
+Codex sobre el mismo head.
+
+**Puerta previa corrida y publicada** sobre `ca847501`: `HEAD..origin/main`=0,
+Quality `success`, cinco ficheros y ninguna ruta prohibida, la línea `limite`
+idéntica, el registro de defectos solo añade, 45 pruebas del adaptador verdes.
+**PASA.**
+
+**Un defecto mío dentro de la propia puerta**, que vale la pena anotar: la
+primera pasada dio NO PASA en la comprobación de la línea `limite` porque
+comparé la salida de `grep -n` —que **lleva el número de línea**— y la línea se
+había movido del 176 al 198 al añadirse encima el comentario que cita el canon.
+El texto era idéntico desde el principio. **Una puerta que compara posición
+cuando quiere comparar contenido acusa en falso**, y una puerta que acusa en
+falso se desactiva sola a la tercera. Corregido a `grep -A2` y vuelta a correr
+entera.
+
+No he fusionado y no voy a publicar `fusiona`: la autorización de #650 era para
+#650.
+
+
+### 133. El techo del filtro estaba mal calculado: no es 44/47, es 34/47, y quien lo baja es el candado (20-09-2026, 18:05 UTC)
+
+Nota de arranque previa (`arranque-el-hueco-que-queda-en-el-filtro.md`).
+Determinista, sobre la grabación congelada. Hallazgo completo en
+`hallazgo-el-techo-no-es-44-es-34-y-lo-baja-el-candado.md`.
+
+**Corrijo mi propio hallazgo del techo.** Calculé «un caso es exacto si y solo
+si la búsqueda le trae todo su `resultado_esperado`», suponiendo que un filtro
+perfecto **entrega** lo que conserva. No lo entrega: entre el veredicto y la
+salida está el **rescate de criticidad** RF-25 (M15/M19b, ADR-128), que vuelve
+a meter toda protegida que el filtro tiró —siempre que el filtro conservara
+algo—. Protegida = `criticality is not None`, 19 identidades de 97, y el arnés
+usa la misma condición por otro nombre (`categoria_del_item` devuelve
+`restriccion` si y solo si `criticidad is not None`).
+
+| | casos exactos |
+|---|---|
+| techo ingenuo, como lo publiqué | 42/47 |
+| **techo real, con RF-25 puesto** | **34/47** |
+| alcanzado hoy por la grabación | **29/47** |
+
+El 29/47 **es exactamente el suelo D1**: que la aritmética reproduzca el número
+que el arnés mide de verdad es la comprobación de que el modelo es correcto.
+
+**Al filtro le quedan cinco casos, no quince.** Ocho de los trece inalcanzables
+los bloquea el rescate, no el filtro ni la búsqueda.
+
+**Y mató un encargo que yo estaba redactando.** `CA-20`/`CA-21` son espejo
+—cada una espera una de dos frases opuestas y el filtro conserva las dos— y la
+instrucción del filtro **ordena exactamente eso**: «Si hay dos frases opuestas
+sobre lo mismo, devuelve LAS DOS». Mismo defecto que ADR-212 acaba de arreglar
+en el intérprete. **No sirve**: las dos son CRÍTICAS, así que el rescate mete la
+otra de vuelta diga lo que diga el filtro. Lo miré **antes** de proponerlo, que
+es la única diferencia con las dos veces de esta noche en que afirmé «no se
+puede» sin mirar.
+
+**La palanca que sí aparece no es mía.** De las 19 protegidas, 18 son CRÍTICO y
+**una** es IMPORTANTE: `MEM-001`, una preferencia de estilo, que se cuela en las
+tres preguntas por «restricciones esenciales». Proteger **solo CRÍTICO** da
+**31/47 medidos** (de 29) y **37/47 de techo** (de 34), en una condición de una
+línea. Coste medido: **cero** —donde `MEM-001` se espera, el filtro la conserva
+igualmente—. **Y ese cero no dice lo que parece**: el banco tiene **una sola**
+identidad IMPORTANTE, y un banco con un ejemplar de una clase no puede medir una
+regla sobre esa clase. Además ADR-128 eligió `criticality is not None` a
+propósito. **Decisión del propietario, y antes necesita un banco que sepa
+medirla.** Décima de la lista.
+
+**Predicciones**: dos falladas (el exceso no domina —6 de 15—; y no está
+repartido —27 de 35 elementos en dos casos—) y una acertada. La acertada enseña
+lo mismo que las falladas: acerté que el ruido conservado sería «mismo tema, no
+responde», y **la conclusión que colgué de ella era falsa**. Escribí «si acierto
+la tercera, es un cierre, no una palanca». Hay palanca, y está donde la nota de
+arranque no miró.
+
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
@@ -7670,3 +7758,19 @@ ciclo** y se le entrega cerrado a mano, en vez de seguir girando.
    que lo bloqueaba **ya existe** (49/95, entrada 115), así que el umbral ya se
    puede registrar. Con el dato de que mediría coincidencia con la regla de
    palabras clave de ADR-116, no con un criterio de producto.
+
+40. **Decisión del propietario: qué cuenta como «protegida» en el rescate
+   RF-25.** Hoy es `criticality is not None` —CRÍTICO **o** IMPORTANTE—,
+   elegido a propósito por ADR-128 replicando la etiqueta `restriccion` del
+   laboratorio. Protegiendo **solo CRÍTICO**, la misma grabación da **31/47
+   medidos** (de 29) y **37/47 de techo** (de 34): +2 casos hoy, sin modelo
+   (entrada 133). Coste medido: cero. **Pero el banco tiene una sola identidad
+   IMPORTANTE**, así que no puede medir el riesgo de la regla que se cambiaría:
+   antes de decidir hace falta un banco con más de un ejemplar. No se toca nada
+   hasta que él lo diga.
+
+41. **El techo del filtro para la configuración «petición declarada» sigue
+   sin corregir.** El 44/47 publicado ignora el candado igual que el 42/47, así
+   que **no es alcanzable**; cuánto baja exige correr la búsqueda con
+   `--peticion` y aplicarle la fórmula de RF-25, no leer un fixture (entrada
+   133).
