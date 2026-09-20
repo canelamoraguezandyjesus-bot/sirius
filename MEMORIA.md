@@ -30,7 +30,7 @@
 - Bloques del motor: 17 cerrado, 1 fuera_de_alcance, 2 pendiente.
 - Defectos registrados: 1 abierto, 54 cerrado.
 - Investigaciones: **9** (fotos con fecha; caducan).
-- Documentos: **147**, de los que **97** no declaran fecha.
+- Documentos: **148**, de los que **97** no declaran fecha.
 
 ## Qué se decidió: los ADR, del más reciente al más antiguo
 
@@ -472,6 +472,7 @@ nada por su cuenta. «Sin fecha declarada» es un aviso, no un dato.
 | sin fecha declarada | [Evidencia — H-23](docs/audits/evidencia-H-23.md) |
 | sin fecha declarada | [Evidencia — La raíz de las cuatro rondas, y el arreglo que la hace imposible](docs/audits/evidencia-atestado-de-modelos.md) |
 | 2026-08-28 | [Evidencia — atestar al buscador antes de gastar en medirlo](docs/audits/evidencia-atestar-al-buscador.md) |
+| 2026-09-20 | [Evidencia — la auditoría de la forma de trabajar, segunda edición](docs/audits/evidencia-auditoria-forma-de-trabajo.md) |
 | sin fecha declarada | [Evidencia — La quinta pieza sin llamante era la salida de emergencia](docs/audits/evidencia-autoridad-sin-llamante.md) |
 | 2026-08-28 | [Evidencia — B1: investigar desde una orden](docs/audits/evidencia-b1-investigar-desde-una-orden.md) |
 | sin fecha declarada | [Evidencia — El lazo que faltaba entre atestiguar y medir](docs/audits/evidencia-banco-atestigua-en-su-pasada.md) |

@@ -1,9 +1,11 @@
 # La auditoría de la forma de trabajar, segunda edición: las 21 fichas de agosto, revalidadas el 19 de septiembre de 2026
 
 - Fecha: 2026-09-19
-- Estado: **EN CURSO** — paso 2 de 3 (revalidar las fichas de agosto) cerrado
-  el 19-09-2026; paso 3 (el punto ciego: conversación, ideas, debate) pendiente
-  de las fuentes de conversación y de la adenda con la muestra.
+- Estado: **CERRADA SOBRE LAS FUENTES DISPONIBLES** — paso 2 (revalidar las
+  fichas de agosto) cerrado el 19-09-2026; paso 3 (conversación, ideas,
+  debate) cerrado el 20-09-2026 sobre las conversaciones de claude.ai. Quedan
+  por leer, con su propia adenda, las transcripciones locales de Claude Code y
+  la exportación de ChatGPT; las fichas C se revisarán entonces.
 - Nota de arranque: `docs/audits/arranque-auditoria-forma-de-trabajo.md`,
   publicada antes de abrir ninguna conversación. Ahí están el encargo, el
   alcance, las cuatro preguntas, el criterio de parada y las hipótesis.
@@ -561,77 +563,312 @@ Observaciones del paso 2, a confirmar o desmentir en el 3:
 5. **El dinero está donde no hay libro mayor**: en tres sesiones largas desde
    el móvil, no en el motor.
 
-## Las ocho categorías del propietario, actualizadas
+## Las ocho categorías del propietario, actualizadas tras el paso 3
 
-| Categoría | Fichas de agosto | Estado tras el paso 2 |
+| Categoría | Fichas | Estado |
 |---|---|---|
 | investigación | PROC-014 | transformada dos veces |
-| decisiones | PROC-011 | vigente, multiplicada; más N-02 |
+| decisiones | PROC-011, N-02 | vigente, multiplicada; se decide en ráfaga |
 | documentación | PROC-009, 010, 012, 013 | tres transformadas, una vigente sin dueño |
 | ejecución | PROC-002…007, 020, 021 | una caducada, cuatro transformadas, tres vigentes |
-| cierre | PROC-004, 009 | vigente; transformada; más el ritual N-01 |
-| **conversación** | — | **sigue sin ficha**: solo se ve por sus efectos (N-01, N-02, N-03) |
-| **ideas** | — | **sigue sin ficha**: paso 3 |
-| **debate** | — | **sigue sin ficha**: N-02 y N-03 lo rozan por sus salidas, no por su contenido |
+| cierre | PROC-004, 009, N-01 | vigente; transformada; el ritual |
+| **conversación** | **C-01** | **con ficha desde el paso 3**, vista desde el lado claude.ai |
+| **ideas** | **C-02** | **con ficha desde el paso 3** |
+| **debate** | **C-03, N-03** | **con ficha desde el paso 3** |
 
-**Regla de las dos rondas, aplicada:** la única familia de proceso que este
-paso encontró omitida en el inventario de agosto es la misma en los tres casos
-nuevos: lo que la sesión interactiva hace por el propietario entre la
-conversación y el repositorio. Es exactamente el punto ciego que la nota de
-arranque declaró, no un fallo de la taxonomía: no se revisa la taxonomía
-todavía. Si el paso 3 vuelve a destapar otra familia distinta, se para y se
-revisa entera.
+**Regla de las dos rondas: disparada.** El paso 2 encontró omitida en el
+inventario de agosto una sola familia —lo que la sesión interactiva hace por el
+propietario entre la conversación y el repositorio— y el paso 3, con las
+conversaciones delante, encuentra exactamente la misma: las tres fichas nuevas
+y N-03 son todas de esa familia. Dos rondas seguidas con la misma familia
+omitida obligan a revisar la taxonomía, no a seguir añadiendo fichas. La
+taxonomía A–F de agosto (transferencia, documentación, investigación/decisión,
+GitHub/coordinación, validación/evidencia, administración de agentes) no tiene
+sitio para el trabajo que ocurre de viva voz. Se añade una letra:
 
-## Criterio de parada — estado a 19-09-2026
+- **G — conversación y decisión de viva voz**: cómo entra una idea, cómo se
+  debate hasta decidir, y por dónde sale (o no) hacia el repositorio. Fichas:
+  C-01, C-02, C-03, N-03; y N-02 comparte frontera con C-03.
+
+## Paso 3 — el punto ciego, visto desde claude.ai (20-09-2026)
+
+**Qué se leyó**, según la adenda de la nota de arranque: las 12 conversaciones
+de claude.ai dentro del alcance, enteras y en orden (237 mensajes; los del
+propietario íntegros, los del asistente hasta 2 500 caracteres); después, y no
+antes, las fuentes secundarias: la memoria que claude.ai guarda del proyecto
+«Sirius 0.2» y de las preferencias generales (nueve ficheros; los de la cabeza
+robótica, de otros proyectos y de personas quedaron sin abrir) y las dos
+reflexiones mensuales generadas por claude.ai (junio y julio). **Qué no se
+leyó**: el lado ChatGPT de la conversación —que en julio era el que redactaba
+los documentos— porque su exportación no ha llegado; las transcripciones
+locales de Claude Code; y las cinco conversaciones de julio que la exportación
+trae vacías. Las tres fichas que siguen están construidas sobre el lado
+claude.ai y así hay que leerlas.
+
+**Cómo se cita.** El repositorio es público. De las conversaciones se citan
+solo frases cortas del propietario sobre cómo quiere trabajar; nada personal,
+ninguna cifra de dinero, ningún dato de terceros, y las escaladas de
+frustración —que existen y son datos— se describen, no se transcriben.
+
+### C-01 — La conversación: cómo entra el trabajo
+
+- **Disparador:** una idea, una duda o un documento que auditar; casi siempre
+  desde el móvil.
+- **Objetivo:** que la IA entienda qué quiere sin que él tenga que escribir un
+  encargo formal.
+- **Entradas observadas:** dictado por voz, con erratas sistemáticas que el
+  propio modelo anota («sus mensajes llegan por dictado de voz», memoria de
+  claude.ai del 21-07); capturas y fotos en vez de descripciones (una lista de
+  skills ajena, una infografía, la pantalla del ordenador, la elección de rama
+  en Claude Code); documentos `.docx` adjuntos; y encargos largos redactados
+  por otra IA y pegados tal cual (24-07 05:17; 25-07 00:56).
+- **Pasos:** mensaje corto o dictado → la IA propone → él corrige (ver C-03)
+  → cuando hace falta ejecutar o consultar otra herramienta, la IA escribe un
+  **prompt puente** que él pega en Claude Code, ChatGPT o Codex y cuyo
+  resultado trae de vuelta. El prompt puente aparece al menos ocho veces en las
+  doce conversaciones.
+- **Quién:** el propietario como bus entre tres IA; la memoria de claude.ai lo
+  describe igual: Claude audita e investiga, ChatGPT redacta, «documents
+  transferred between them».
+- **Frecuencia:** 12 conversaciones dentro del alcance en ocho semanas; 8 de
+  ellas con fotos o adjuntos; 334 adjuntos en las 38 de la exportación.
+- **Tiempo humano:** las horas son de madrugada: cinco de las doce empiezan
+  entre la 01:15 y las 05:50, y la reflexión de julio sitúa el pico a las dos
+  de la madrugada. La conversación 02 ocupó dos noches; la 04, una hora y
+  cuarenta minutos. EST: no hay medida de esfuerzo.
+- **Fricción, medida:** el pegado largo desde el móvil llegó vacío tres veces
+  seguidas (25-07, 14:03–14:17); cinco conversaciones de julio están vacías en
+  la exportación; y tres veces la IA no miró lo que ya estaba subido a las
+  fuentes del proyecto —el repositorio (25-07 21:09), un documento aprobado
+  (25-07 23:19) y un fichero que faltó seis rondas (23-07 a 24-07)—; las tres
+  produjeron escaladas. La memoria de claude.ai lo tiene registrado como regla
+  desde entonces: «comprobar primero las fuentes del proyecto antes de pedir
+  que se vuelva a subir nada».
+- **Riesgo si se automatiza:** ninguno aquí: es el canal humano, y es el que
+  el propietario quiere conservar.
+- **Decisión humana:** toda.
+- **Evidencia:** conversaciones 01–12; memoria de claude.ai (preferencias,
+  21-07; proyecto Sirius 0.2, 07-09); reflexión de junio («el contexto llega
+  en notas de voz y capturas, no en encargos escritos»).
+- **Oportunidad:** la que él mismo pidió el 15-09 al abrir este encargo: no
+  tener que pensar en cada momento cómo se hace lo que ya se ha hecho mil
+  veces. La IA lo dijo el 24-07 con otras palabras —un sitio que guarde el
+  estado y las reglas ahorraría re-explicar cada sesión— y hoy existen dos:
+  `MEMORIA.md` y la memoria de sesión (ADR-171, 172). Lo que aún no está
+  escrito en el repositorio es el **método de la conversación** (C-03).
+- **Métrica:** mensajes de re-explicación por conversación; adjuntos vacíos;
+  veces que la IA pide algo que ya estaba subido.
+
+### C-02 — Las ideas: cómo nace y se filtra una idea
+
+- **Disparador:** algo visto fuera —una infografía, una skill ajena, un
+  producto (n8n, Obsidian, Memanto, un control de cámaras)— o una molestia
+  propia («quiero poderme ir a dormir y que trabaje», «el revisor siempre
+  encuentra algo», «siempre hacemos igual»).
+- **Objetivo:** saber si merece la pena sin que le «vendan la moto», que es
+  su expresión.
+- **Pasos:** la trae dictada → pide opinión o investigación acotada
+  («investigación normal, no te flipes») → la IA la contrasta con lo que ya
+  existe y, cuando puede, con datos suyos —el banco de 47 casos contra
+  Obsidian y contra Memanto— → él decide: adoptar (el revisor independiente, la
+  memoria entre sesiones), aparcar (la orquestación grande; n8n como brazo, no
+  como cerebro), descartar (Obsidian; el control de cámaras) o aplazar la
+  decisión a sí mismo («lo decidiré yo más adelante»).
+- **Quién:** él propone; la IA hace de contrario con datos.
+- **Salida, y aquí está el hueco:** casi nunca un registro. De las ideas
+  leídas, las que llegaron al repositorio lo hicieron semanas después y por
+  otra vía: la del revisor y los permisos (24-07) es la frontera de ADR-002
+  (09-08), sin cita; la del modelo local intercambiable (10-08) es la serie
+  ADR-104…132 (29-08 a 04-09), sin cita; la del investigador que lee blogs en
+  vez de código (04-09) es ADR-161/163 (08-09), sin cita. Y **«aparcado» no
+  tiene sitio**: la propia IA dijo el 10-08 «apúntalo como idea aparcada» y no
+  había dónde; la orquestación grande, aparcada el 24-07, volvió a aparecer el
+  16-09 como si fuera nueva.
+- **Frecuencia:** nueve ideas en doce conversaciones.
+- **Fricción:** la IA se desvía del encargo literal o sobreplanifica, y eso
+  produce las escaladas; las ideas aparcadas sin registro reaparecen.
+- **Riesgo si se automatiza:** convertir exploración en decisión, que
+  `AGENTS.md` prohíbe.
+- **Decisión humana:** siempre.
+- **Evidencia:** conversaciones 04, 05, 06, 08, 10, 11, 12; reflexión de junio
+  («detectas lo que no encaja antes de poder decir por qué»).
+- **Oportunidad:** un sitio para «aparcado» y «descartado, con la razón». Es la
+  lección de ADR-198 y ADR-202 aplicada a las ideas y no solo a las
+  decisiones; `docs/audits/PENDIENTE_Y_POR_QUE_2026-09-14.md` §E lo hizo una
+  vez para incidencias y no volvió a hacerse.
+- **Métrica:** ideas que reaparecen sin registro / ideas aparcadas.
+
+### C-03 — El debate: cómo se discute hasta decidir
+
+- **Disparador:** una propuesta de la IA que, en sus palabras, «seguro tiene
+  fallos».
+- **Objetivo:** llegar a una conclusión hablando, no aceptar la primera
+  respuesta.
+- **Pasos, en el orden en que la conversación 04 (24-07, 03:13–04:54) los
+  enseña, y que las demás repiten:**
+  1. **Veto al plan prematuro:** «estamos explorando, hablando, deja de hacer
+     planes».
+  2. **Exigir realidad antes de opinión:** «ni siquiera sabes cómo es
+     realmente la automatización que tengo» → prompt de diagnóstico a Claude
+     Code → resultado de vuelta.
+  3. **Recortar el alcance:** «lo de los tokens bórralo».
+  4. **Una recomendación, no un menú:** «no me des opciones, dime cuál es el
+     mejor».
+  5. **Autoauditoría:** pedir a la IA que contradiga y audite lo que ella
+     misma acaba de proponer (24-07 04:36; también el 10-08 con Obsidian).
+  6. **Corregir con datos cuando la IA se equivoca**, y ganar: la versión de
+     un modelo (24-07), el repositorio que sí estaba en las fuentes (25-07),
+     el banco de 47 casos (10-08).
+  7. **Cerrar por tamaño:** «hablando se llega a conclusiones… hay que ir poco
+     a poco… dentro de una semana vengo y te digo cómo mejorarlo».
+- **Quién:** él dirige; la IA propone y se audita.
+- **Salida:** una decisión pequeña —«revisor sí; la orquestación, no ahora»—
+  que sale como prompt puente o como documento «con las decisiones cerradas
+  dentro, para que no me las reabra» (10-08). Casi nunca como registro en el
+  momento: ver la trazabilidad de C-02.
+- **Frecuencia:** ocho correcciones en la 04; dos rondas sobre Obsidian en la
+  05; tres en la 10; dos en la 12; dos preguntas de método en la 02 («¿qué te
+  parece la estructura que recomienda ChatGPT?», «¿qué documentos nos faltan,
+  lo estamos complicando?»).
+- **Tiempo humano:** una hora y cuarenta minutos la 04, de madrugada.
+- **Fricción:** la IA responde con planes, menús o texto largo; el propietario
+  declara que no puede verificar por sí mismo buena parte de lo técnico —lo
+  dice en la 04 y la memoria de claude.ai lo registra— y por eso exige
+  «práctico, profesional y directo; si hay un problema, plantéame la
+  solución». Cuando se repite, escala. Dos reglas suyas más, de la misma
+  familia: «primero desarrollamos y armamos, y ya luego me preguntas» (junio,
+  según la reflexión) y «si te falta un documento, para a mitad y pídemelo; no
+  termines sin él» (25-07).
+- **Riesgo si se automatiza:** el debate es exactamente la parte que él quiere
+  conservar: «yo seguiría siendo el que decide» (15-09).
+- **Decisión humana:** toda.
+- **Evidencia:** conversación 04 entera; memoria de claude.ai del proyecto
+  («prefiere poner a prueba las ideas en diálogo antes de cualquier salida
+  concreta; recomendar un solo camino, no varias opciones; rechaza la
+  sobreelaboración»); reflexión de julio («mantuviste tu posición cuando la
+  auditoría pasó por alto algo que tú veías»).
+- **Oportunidad:** dos, y las dos las ha pedido él. Que el método del debate
+  esté escrito donde toda IA lo lea —hoy vive en la memoria de claude.ai y en
+  la de sesión, no en el repositorio; `AGENTS.md` solo tiene una de sus
+  reglas, «búscalo, no me lo digas de memoria» (ADR-091)—. Y que la decisión
+  con que termina el debate deje rastro en el momento (ADR-195, 202).
+- **Métrica:** correcciones hasta la primera respuesta aceptada; decisiones del
+  debate que llegan a un registro el mismo día.
+
+### N-03 — La revisión externa traída a mano: confirmada, y con dos formas
+
+La hipótesis H1 de la nota de arranque queda confirmada y precisada.
+
+- **Forma de julio:** ChatGPT redacta el documento, Claude lo audita, ChatGPT
+  corrige; él transporta el `.docx` en cada sentido. En la conversación 02, de
+  B02 a B08 más el Método, la Corrección Transversal, el Plan de Pruebas,
+  ARQ-00 y ADR-001: unas veinte versiones auditadas en dos días y medio, con
+  20–30 minutos por versión producida fuera y 3–5 por auditoría dentro. Sus
+  mensajes en ese tramo son de una a tres palabras o solo el adjunto. El
+  paquete de fuentes incompleto —un fichero que faltó seis rondas seguidas,
+  unas 41 horas de reloj— es la fricción más cara que se ha medido en esta
+  auditoría; la reflexión de julio lo señala también: «el arreglo a veces iba
+  por detrás del hallazgo».
+- **Forma de agosto y septiembre:** Claude ↔ Claude Code por prompt puente
+  (diagnósticos, instalaciones, cambios de configuración), y la revisión
+  externa de las PR de sesión traída a mano y convertida en regla («no
+  fusionar sin revisión externa», memoria de sesión del 12-09, cuatro rondas).
+- **Lo que el repositorio absorbió:** el tramo Codex → tubería (ADR-156). **Lo
+  que sigue a mano:** todo lo que pasa por claude.ai, y el transporte de
+  cualquier decisión tomada allí.
+
+### Las cinco hipótesis, contrastadas
+
+| | Hipótesis | Resultado |
+|---|---|---|
+| H1 | revisión externa traída a mano | **confirmada**, con las dos formas de N-03 |
+| H2 | el lote de decisiones antes de dormir | **confirmada** como deseo explícito («quiero poderme ir a dormir, decirte implementa 0.2 y que empieces bloque a bloque», 24-07) y como práctica (la 02 es nocturna; la memoria de sesión del 14-09 lo repite) |
+| H3 | el ritual de evidencia es un proceso con coste | **confirmada y anterior al repositorio**: el 25-07 la propia IA avisó de «quince documentos canónicos y unas treinta auditorías para una funcionalidad que todavía no tiene una sola línea de código»; el ritual del repositorio nació doce días después (ADR-001) |
+| H4 | partir un objetivo grande es conversación | **confirmada**: «¿cuál sería el siguiente documento?» (25-07), «¿qué te parece la estructura que recomienda ChatGPT?» (25-07), «dime el siguiente paso y empezamos» (04-09) |
+| H5 | reconstruir contexto cambió de mecanismo | **confirmada**: el 04-08 la IA proponía un `ESTADO-SIRIUS.md` generado por Claude Code y subido a mano; hoy es `MEMORIA.md` generado y una memoria de sesión |
+
+### Dónde se va la atención del propietario (punto 6 del criterio)
+
+Con el límite de siempre —no hay medida de tiempo; esto es recuento de
+mensajes, fechas y horas— y solo sobre el lado claude.ai más los indicios del
+paso 2:
+
+1. **El taller: método, automatización y herramientas de IA.** Cinco de las
+   doce conversaciones (04, 06, 07, 08, 09), y del lado del repositorio 152 de
+   196 ADR (EST). Es donde más decide y donde más corrige.
+2. **La documentación de producto de 0.2 y su auditoría.** Dos conversaciones
+   (01, 02) pero 105 mensajes y dos noches enteras, en julio; después
+   desaparece de claude.ai y pasa al motor (clase `documentacion`).
+3. **La investigación** (05, 10, parte de 11): ocho investigaciones profundas
+   en una sola conversación; el modelo hace el trabajo y él dirige y decide.
+4. **El uso y el coste de las herramientas** (03, 09, 12, parte de 11): una
+   preocupación constante, sin instrumento propio (PROC-021).
+5. **El código de la aplicación**: casi no aparece en claude.ai. Se delega a
+   Claude Code y al motor; en la conversación solo entra como resultado de un
+   prompt puente.
+
+Lo que este ranking **no** ve: el lado ChatGPT, que en julio llevaba la
+redacción; y las sesiones locales de Claude Code, donde vive la ejecución.
+
+## Criterio de parada — estado a 20-09-2026
 
 | # | Condición | Estado |
 |---|---|---|
-| 1 | veredicto fechado por ficha, con evidencia | **cumplido**: 21 de 21 |
-| 2 | ficha para conversación, ideas y debate, o «no observable» escrito | **pendiente**: paso 3 |
-| 3 | ficha para todo proceso repetido nacido después del 11-08 | **parcial**: N-01 y N-02 con ficha; N-03 candidato |
-| 4 | las ocho categorías mapeadas; taxonomía confirmada o revisada | **parcial**: mapa actualizado; sin revisión, dos rondas no disparadas |
-| 5 | cada afirmación con fuente, o marcada EST/hipótesis | **cumplido** para este paso |
-| 6 | ranking de dónde se va la atención del propietario | **pendiente**: solo hay proxies (ADR por tema, sesiones por origen, coste por sesión) |
+| 1 | veredicto fechado por ficha, con evidencia | **cumplido**: 21 de 21 (paso 2) |
+| 2 | ficha para conversación, ideas y debate, o «no observable» escrito | **cumplido sobre el lado claude.ai**: C-01, C-02, C-03; el lado ChatGPT y el local, pendientes de sus fuentes |
+| 3 | ficha para todo proceso repetido nacido después del 11-08 | **cumplido**: N-01, N-02, N-03 |
+| 4 | las ocho categorías mapeadas; taxonomía confirmada o revisada | **cumplido**: revisada por la regla de las dos rondas, con la letra G |
+| 5 | cada afirmación con fuente, o marcada EST/hipótesis | **cumplido** |
+| 6 | ranking de dónde se va la atención | **cumplido con límite**: recuento, no tiempo; sin ChatGPT ni local |
 | 7 | se detiene sin elegir skills | **cumplido**: ninguna elegida |
-| 8 | parada por muestra agotada | no aplica todavía |
+| 8 | parada por muestra agotada | no aplicó: las doce se leyeron enteras |
 
-## Decisiones que este paso pone delante del propietario, sin tomarlas
+La auditoría queda **cerrada sobre las fuentes disponibles**. Cuando lleguen
+las transcripciones locales y la exportación de ChatGPT, cada una tendrá su
+adenda de muestra en la nota de arranque y una sección propia aquí; las tres
+fichas C se revisan entonces, no se dan por definitivas.
 
-Seis, todas pequeñas, todas suyas. Se listan aquí porque la lección de
-ADR-198 es que una pregunta que nadie vuelve a poner delante se pudre.
+## Decisiones que esta auditoría pone delante del propietario, sin tomarlas
+
+Las seis del paso 2, que siguen abiertas, y dos que añade el paso 3. Se listan
+porque la lección de ADR-198 es que una pregunta que nadie vuelve a poner
+delante se pudre.
 
 1. `docs/operations/CLAUDE_SIRIUS_KNOWLEDGE_BASE.md` y
    `docs/operations/CLAUDE_PROJECT_ONBOARDING.md`: archivar o regenerar.
-2. Las incidencias de gobernanza #8–#25: mantener, archivar o sustituir; la
-   misma pregunta que agosto dejó abierta.
-3. `.github/workflows/materialize-approved-docx.yml`: retirar o arreglar; su
-   última ejecución está en rojo desde el 08-09.
-4. La prueba intermitente de #137: registrarla en `registro_defectos.yml` o
-   darla por muerta con la razón escrita.
+2. Las incidencias de gobernanza #8–#25: mantener, archivar o sustituir.
+3. `.github/workflows/materialize-approved-docx.yml`: retirar o arreglar.
+4. La prueba intermitente de #137: registrarla o darla por muerta con razón.
 5. Qué significa PROPUESTO en un ADR fusionado: 150 de 196 lo dicen.
-6. `bloques_del_motor.yml`, bloque D4: corregir la línea que ADR-198 dejó
-   falsa es aplicar ADR-198; cambiar su estado es decisión nueva.
+6. `bloques_del_motor.yml`, bloque D4: la línea es aplicar ADR-198; el estado
+   es decisión nueva.
+7. **Dónde se escribe una idea aparcada o descartada, con su razón**, para
+   que no vuelva como nueva (C-02). Hoy no hay sitio.
+8. **Si el método del debate** —las siete reglas de C-03, que hoy viven en la
+   memoria de claude.ai y en la de sesión— **se escribe en el repositorio**,
+   donde toda IA lo lea, como ya está una de ellas en `AGENTS.md`.
 
-## Lo que este paso NO dice
+Y una acción, no una decisión, para la pila del ordenador: Claude Code borra
+las sesiones locales a los treinta días por defecto (lo advirtió la propia IA
+el 15-09); mientras no se suba `cleanupPeriodDays`, cada semana se pierde
+material de esta auditoría.
 
-- Qué se dijo en ninguna conversación, ni cuánto tiempo costó nada: no hay
-  registro de tiempo, y las latencias son cotas inferiores de atención.
-- Cuántas fusiones hubo por `fusiona` en total desde agosto: se leyeron 100
-  ejecuciones de 2 992.
-- Si la prueba de #137 sigue siendo intermitente: una ejecución no lo dice.
-- Nada sobre la cabeza robótica.
+## Lo que esta auditoría NO dice
 
-## Paso 3 — pendiente
-
-Necesita, en este orden: la adenda de la nota de arranque con la muestra
-(recuento, rango y criterio, escritos antes de leer); la exportación de
-Anthropic y, cuando lleguen, las transcripciones locales y la de ChatGPT. Su
-salida son las fichas de conversación, ideas y debate —o el «no observable»
-escrito— y el ranking de atención. Este documento se ampliará; no se
-reescribirá.
+- Qué se dijo en ChatGPT ni en las sesiones locales de Claude Code: no se han
+  leído. En julio, ChatGPT era el que redactaba; esa mitad del debate no se ha
+  visto.
+- Cuánto tiempo costó nada: las horas son marcas de reloj, no esfuerzo.
+- Qué había en las cinco conversaciones de julio que la exportación trae
+  vacías; una de ellas, de 80 mensajes, es de la noche en que nació el
+  contrato de automatización.
+- Nada sobre la cabeza robótica, por decisión del propietario.
+- La memoria y las reflexiones de claude.ai las escribió un modelo: se usaron
+  para contrastar, nunca como fuente única de ninguna afirmación.
 
 ## Declaración de alcance de decisión
 
-Este paso produce veredictos y una lista de decisiones pendientes; no toma
-ninguna. No se registra ADR. Si el propietario decide alguna de las seis de
-arriba, esa decisión dejará su ADR con la skill `adr`.
+Esta auditoría produce veredictos, fichas y una lista de decisiones
+pendientes; no toma ninguna. No se registra ADR. Si el propietario decide
+alguna de las ocho de arriba —o la que el encargo tenía detrás, qué merece
+mecanizarse y qué no—, esa decisión dejará su ADR con la skill `adr`.
