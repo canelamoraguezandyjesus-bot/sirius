@@ -73,55 +73,18 @@ Se guarda como `medir_de_noche.ps1` en la raíz del repositorio. **No se
 commitea a `main`**: vive en la rama de mediciones o fuera del control de
 versiones, a elección del propietario.
 
-```powershell
-# medir_de_noche.ps1 - mediciones con Ollama real, sin nadie delante.
-# Solo lee, mide y empuja texto. No ejecuta nada que venga de fuera.
-$ErrorActionPreference = "Continue"
-$repo = "C:\Users\ASUS\OneDrive\Desktop\laboratorio sirius\sirius"
-$rama = "mediciones/maquina-del-propietario"
-Set-Location $repo
+Se entrega como fichero: **`medir_de_noche.ps1`**, en la raíz de esta rama
+de auditoría. Es seguro por construcción:
 
-# 1. Traer main y anotar el arbol exacto que se mide.
-git fetch origin main
-git checkout -B $rama origin/main
-$sha = (git rev-parse --short HEAD)
-$fecha = Get-Date -Format "yyyy-MM-dd-HHmm"
-$destino = Join-Path $repo "mediciones"
-New-Item -ItemType Directory -Force -Path $destino | Out-Null
-
-# 2. Precalentar con los MISMOS parametros del adaptador.
-$cuerpo = @{
-  model = "qwen3:4b-instruct"; messages = @(@{ role = "user"; content = "ok" })
-  stream = $false; think = $false; keep_alive = "60m"
-  options = @{ temperature = 0.1; num_ctx = 8192 }
-} | ConvertTo-Json -Depth 5
-try { Invoke-RestMethod -Uri http://localhost:11434/api/chat -Method Post `
-        -Body $cuerpo -ContentType "application/json" | Out-Null }
-catch { "Ollama no responde: no se mide nada." | Out-File `
-        (Join-Path $destino "$fecha-$sha-FALLO.txt") -Encoding utf8; exit 1 }
-
-# 3. Las tres mediciones.
-function Medir($nombre, $bloque) {
-  $f = Join-Path $destino "$fecha-$sha-$nombre.txt"
-  & $bloque 2>&1 | Out-File $f -Encoding utf8
-  $t = Get-Content $f -Raw
-  if ($t -match "Rendiciones del filtro\.\s*(\d+)" -and $Matches[1] -ne "0") {
-    "CONTAMINADA: rendiciones=$($Matches[1])`n" + $t | Out-File $f -Encoding utf8
-  }
-  if ($t -match "no disponible, se falla abierto") {
-    "CONTAMINADA: el adaptador fallo abierto al menos una vez`n" + $t |
-      Out-File $f -Encoding utf8
-  }
-}
-Medir "banco-completo" { uv run python scripts/medir_banco_con_ollama_real.py --diagnostico }
-Medir "interprete"     { uv run python scripts/medir_interprete_de_peticion.py }
-Medir "d7-punto-6"     { uv run pytest tests/acceptance/test_d7_punto_6_coincidencia_etiquetado.py -q -s }
-
-# 4. Empujar los resultados. Nunca a main.
-git add mediciones
-git commit -m "Mediciones con Ollama real sobre $sha ($fecha)"
-git push -u origin $rama --force-with-lease
-```
+- **se aborta si el árbol de trabajo tiene cambios sin guardar**, en vez de
+  destruirlos (la primera versión de este documento hacía `checkout -B` y
+  `--force-with-lease`, que habría borrado el histórico de mediciones cada
+  noche y podía pisar trabajo local; corregido);
+- **nunca hace force-push** y nunca toca `main` más allá de un fast-forward;
+- escribe los resultados **fuera del repositorio** y solo los copia al final;
+- **devuelve el clon a la rama en la que estaba**, pase lo que pase;
+- marca `CONTAMINADA` en la primera línea cualquier medición con rendiciones
+  distintas de cero o con un fallo abierto del adaptador.
 
 ### Programarlo
 
