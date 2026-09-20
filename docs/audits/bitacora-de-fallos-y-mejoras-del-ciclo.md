@@ -6293,6 +6293,61 @@ lo resuelve es el par de arriba. Con cualquiera de las dos, el encargo se
 desbloquea con el alcance ya acotado por la entrada 117.
 
 
+### 120. El ruido del motor no se puede separar de la señal: negativo medido, y el filtro pasa a ser la pieza clave (20-09-2026, 03:30 UTC)
+
+Nota de arranque previa; hallazgo en
+`hallazgo-el-ruido-del-motor-no-se-puede-separar.md`. Determinista, petición
+declarada, 47 llamadas para 47 casos.
+
+**El resultado, y es rotundo.** De los 110 elementos de más que admite el
+motor, **106 (96.4%)** entran con la combinación de señales
+`fts_match` + `project_matches_active`, sin categoría y sin asunto. Y de los
+**68 elementos esperados** que el motor trae, **65 (95.6%)** entran con **la
+misma combinación exacta**.
+
+```
+quitar fts/-/-/proj  ->  -106 de mas,  PIERDE 65 esperados
+```
+
+**Con las señales que el motor registra hoy, el ruido y la señal son
+indistinguibles.** No es una puerta mal calibrada: no hay nada en lo que
+registra que separe los 65 que se quieren de los 106 que no.
+
+**El criterio de parada, escrito antes, cierra la línea.** Exigía un grupo
+dominante **y** que quitarlo no perdiera ningún hallado. Lo primero se cumple
+con creces; lo segundo, en absoluto. Y la regla dura decía que no se propone
+nada que baje los 78/81. **No hay palanca simple en el motor.**
+
+**Lo que el negativo enseña, que vale más que el negativo.** Quedan dos
+caminos, y ninguno es «afinar el ranking»: una **señal que el motor hoy no
+tiene**, o **que discrimine el filtro de relevancia**. Esto reencuadra el
+filtro: deja de ser «la pieza que además mete ruido» y pasa a ser **la única
+capaz de separar lo que la búsqueda no puede** — y explica por qué el banco con
+filtro real da 218 donde la búsqueda sola da 487.
+
+**Predicciones**: acerté la identidad del grupo y **fallé la banda** (predije
+45-75%, es 96.4%). Y acerté la que decidía: que quitarlo pondría en riesgo los
+hallados. La banda fallada es peor noticia de lo que esperaba — un reparto
+habría dejado algún subgrupo separable; la concentración no deja ninguno.
+
+**Y el dato incómodo, que estaba escrito antes de medir**: con la petición
+declarada, el techo de un intérprete perfecto, la búsqueda da **17/47** y el
+suelo es **29/47**. Arreglar el intérprete es **necesario pero no suficiente**,
+y los 12 que faltan no salen de podar el motor.
+
+**El mapa, después de las cuatro investigaciones de la noche:**
+
+| línea | estado |
+|---|---|
+| intérprete / cardinalidad | **bloqueada** — §15.2 o el criterio del propietario (117, 119) |
+| siembra | **cerrada** — no es el problema (118) |
+| ranking del motor | **cerrada** — negativo medido (esta) |
+| filtro de relevancia | **abierta, solo medible en su máquina** |
+
+El trabajo determinista que se podía hacer sin él está hecho. Lo que queda
+necesita o una decisión suya o su ordenador.
+
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
