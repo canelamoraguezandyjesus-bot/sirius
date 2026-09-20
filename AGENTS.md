@@ -68,6 +68,13 @@ Cuatro avisos que ya han costado tiempo:
 4. No añadas funciones fuera de alcance.
 5. Si la tarea afecta Claude Code, Routines, cloud, permisos, revisión automática, PR automáticas o cualquier flujo de agentes, lee obligatoriamente `docs/implementation/AUTOMATION_OPERATING_CONTRACT.md` y ejecuta únicamente la fase vigente descrita allí.
 6. Si la tarea afecta hardware local de IA, DGX Spark o equivalente, Sirius Core, modelos open-weight, proveedores de IA, model routing, benchmarks de modelos, costes de inferencia o políticas local/nube, lee obligatoriamente `docs/evolution/SIRIUS_AI_CORE_AND_MODEL_STRATEGY.md`. Ese documento es una recolección informativa de ideas futuras: no constituye aprobación para implementarlas.
+7. **Comprueba que no hay otra sesión sobre tus mismos ficheros** (ADR-206).
+   Lista las pull requests abiertas con los ficheros que tocan y pásalas a
+   `scripts/automation/sirius_obra_en_curso.py` junto con los tuyos. Si nombra
+   otra obra viva, **no empieces**: dilo y espera, o cambia de vertical. Si no
+   puede afirmar que no hay solape, tampoco empieces: no saber no es un
+   permiso. Y **declara la tuya** abriendo tu pull request en cuanto tengas el
+   primer commit, aunque sea borrador; mientras no exista, nadie puede verte.
 
 ## Reglas obligatorias
 
@@ -88,7 +95,12 @@ Cuatro avisos que ya han costado tiempo:
 - Ejecuta `scripts/check.ps1` antes de entregar.
 - Haz cambios pequeños, trazables y reversibles.
 - Actualiza la documentación cuando cambie el comportamiento aprobado.
-- No introduzcas disparador API, eventos de GitHub, auto-fix, merge automático, coordinación de agentes ni otro nivel de automatización antes de la puerta y aprobación expresa definidas en `AUTOMATION_OPERATING_CONTRACT.md`.
+- No introduzcas disparador API, eventos de GitHub, auto-fix, coordinación de
+  agentes ni otro nivel de automatización antes de la puerta y aprobación
+  expresa definidas en `AUTOMATION_OPERATING_CONTRACT.md`. **El merge sí está
+  aprobado desde ADR-205**: una incidencia que llega a `sirius:ready-for-merge`
+  se fusiona sola, porque esa etiqueta ya significa que los dos revisores
+  aprobaron. Las comprobaciones previas al merge no cambian (contrato §14).
 - No pidas repetir una acción ya realizada. Antes de indicar el siguiente paso, verifica el estado real y la fase vigente.
 
 ## Política de revisión (revisores automáticos)
@@ -175,4 +187,35 @@ Detente y pide decisión cuando una tarea implique:
 - introducir otro proceso, servidor, agente o base de datos;
 - ejecutar acciones externas autónomas;
 - aumentar el presupuesto o reducir controles de seguridad;
-- contradecir, saltar o reinterpretar el contrato operativo de automatización.
+- contradecir, saltar o reinterpretar el contrato operativo de automatización;
+- hacer algo irreversible que no se pueda archivar: borrar una rama o un
+  fichero, reescribir historia, retirar una prueba. En este repositorio no se
+  borra nada (ADR-195); lo que no se puede archivar, se pregunta.
+
+## Qué se le pregunta al propietario, y qué no (ADR-204)
+
+El propietario decide **producto, dinero y salud**. Lo técnico y lo de orden lo
+resuelve la sesión: lo decide, lo ejecuta y lo deja escrito en un ADR con su
+comprobación. Sus palabras, del 20-09-2026: «solo pregúntame cosas que
+realmente sean importantes: de dinero, salud, cambio de producto, no confundir
+con arreglo de producto».
+
+**Se le pregunta por tres cosas, y solo por tres:**
+
+1. **Dinero** — gasto, suscripciones, compras, límites de uso, cualquier cosa
+   que consuma su cuota.
+2. **Salud y seguridad** — lo que afecte a su salud, a su descanso cuando él lo
+   ha pedido, o a la seguridad de sus datos, credenciales y máquina.
+3. **Cambio de producto** — qué es Sirius, qué hace y qué no hace: alcance,
+   dirección, prioridad. **Arreglar no es cambiar**: corregir un defecto,
+   elegir cómo se implementa algo ya aprobado u ordenar el repositorio son
+   decisiones de la sesión.
+
+**No se le pregunta** qué nombre poner a algo, dónde colocar un fichero, si
+archivar o regenerar un documento caducado, cuál de dos formas técnicas cumple
+mejor lo mismo, ni se le devuelve un menú de opciones para que elija. Si la
+sesión no puede decidir con lo que tiene, **investiga primero**; solo escala si
+después la decisión sigue dependiendo de algo que únicamente él sabe.
+
+Y una decisión que toma la sesión **nunca se declara del propietario**: el ADR
+dice quién la tomó.
