@@ -166,7 +166,7 @@ _ESQUEMA_RESPUESTA: dict[str, object] = {
 #: S1 vale para EXACTA y ACOTADA y nunca para EXHAUSTIVA.
 #:
 #: Ese es el criterio con el que el banco de 47 casos PUNTÚA la cardinalidad
-#: (ADR-204), y por eso es el que se le da al modelo. La redacción anterior
+#: (ADR-212), y por eso es el que se le da al modelo. La redacción anterior
 #: —«un dato concreto», «una cantidad concreta», «todo lo que haya de un
 #: tema»— definía por la forma gramatical de la pregunta: el modelo la
 #: aplicaba bien y se le puntuaba con otra, en los dos sentidos, y medía

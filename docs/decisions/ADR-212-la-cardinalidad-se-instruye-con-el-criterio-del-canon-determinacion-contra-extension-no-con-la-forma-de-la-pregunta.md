@@ -1,4 +1,4 @@
-# ADR-204 — La cardinalidad se instruye con el criterio del canon: determinacion contra extension, no la forma de la pregunta
+# ADR-212 — La cardinalidad se instruye con el criterio del canon: determinacion contra extension, no la forma de la pregunta
 
 - Estado: PROPUESTO
 - Fecha: 2026-09-20

@@ -875,7 +875,7 @@ defectos:
       - scripts/diagnosticar_busqueda_del_banco.py
       - docs/decisions/ADR-203-el-banco-mide-tambien-el-camino-de-puerta-cerrada-la-linea-base-que-faltaba.md
 
-  # ADR-204 (#653): al interprete de peticiones se le pedia la cardinalidad con
+  # ADR-212 (#653): al interprete de peticiones se le pedia la cardinalidad con
   # un criterio GRAMATICAL -«un dato concreto», «una cantidad concreta», «todo
   # lo que haya de un tema»- y el banco de 47 casos la puntuaba con el del
   # canon, B04 §15.2: determinacion contra extension. Dos criterios distintos,
@@ -885,14 +885,14 @@ defectos:
   # de acceso hay?») es EXACTA y suena a «todo lo que haya». Medido con Ollama
   # real el 20-09-2026 en dos corridas: `cardinalidad 30/47` en las dos, mas de
   # la mitad del error de la palanca 1, con los demas campos entre 41 y 43.
-  - id: H-204
+  - id: H-212
     titulo: La instruccion pedia la cardinalidad por la forma de la pregunta y el banco la puntuaba por el criterio del canon
     bloque: memoria
     gravedad: media
     estado: abierto
-    adr: 204
+    adr: 212
     incidencia: 653
     ficheros:
       - src/sirius/adapters/ollama_query_intent_classifier.py
       - tests/unit/test_ollama_query_intent_classifier.py
-      - docs/decisions/ADR-204-la-cardinalidad-se-instruye-con-el-criterio-del-canon-determinacion-contra-extension-no-con-la-forma-de-la-pregunta.md
+      - docs/decisions/ADR-212-la-cardinalidad-se-instruye-con-el-criterio-del-canon-determinacion-contra-extension-no-con-la-forma-de-la-pregunta.md
