@@ -1084,9 +1084,15 @@ Y tres acciones, no decisiones, para la pila del ordenador. La retención de
 sesiones locales de Claude Code ya está subida a 3 650 días (20-09): antes se
 borraban a los treinta y por eso no queda nada local anterior al 16-08. Quedan
 dos: desinstalar claude-mem, que sigue cargando 21 skills y 14 herramientas
-MCP en cada sesión local aunque ADR-172 eligió Supermemory (E-05); y decidir
-qué hacer con las dos ramas `wip/` del 09-08, creadas para salvar dos stashes
-antes de una mudanza y no tocadas desde entonces.
+MCP en cada sesión local aunque ADR-172 eligió Supermemory (E-05). La de las
+dos ramas `wip/` del 09-08 **queda resuelta aquí**: se comparó su contenido con
+`main` el 20-09 y no guardan nada que no esté ya fusionado. `main` tiene 19
+ficheros de Model Studio y ellas 16, y **ninguno existe solo en ellas**; lo
+único que traen de más son versiones viejas de documentos y pruebas. Los 143
+commits que `git log origin/main..` lista como suyos son la historia previa al
+aplastado de la rama, no trabajo perdido: se comprobó fichero a fichero antes
+de decirlo, porque el recuento de commits, solo, decía lo contrario. Se pueden
+archivar cuando se quiera (ADR-195: archivar, nunca borrar) y no corre prisa.
 
 ## Lo que esta auditoría NO dice
 

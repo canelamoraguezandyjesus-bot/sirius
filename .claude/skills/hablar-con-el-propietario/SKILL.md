@@ -65,6 +65,16 @@ veces, cinco en una sola noche.
 - **Sin jerga y sin nombres internos** salvo que él los haya usado antes.
 - **Corto.** Si el mensaje no cabe en una pantalla de móvil, sobra algo.
 
+## Datos de su máquina, para que el comando funcione a la primera
+
+Entran aquí los que ya han hecho fallar un comando. Hoy hay uno:
+
+- **Su escritorio está redirigido a OneDrive.** `C:\Users\ASUS\Desktop` **no
+  existe**; el real es `C:\Users\ASUS\OneDrive\Desktop`. Así que `$HOME\Desktop`
+  falla, y hay que escribir `[Environment]::GetFolderPath('Desktop')`, que lo
+  resuelve solo. El 20-09-2026 esto tumbó dos comandos seguidos —el de descarga
+  y el de ejecución— y las dos veces el error fue del comando, no suyo.
+
 ## Cuando dice «haz lo que tú creas»
 
 Es una decisión, no un permiso para volver a preguntar. Significa: decide,
