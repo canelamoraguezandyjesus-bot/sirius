@@ -133,3 +133,56 @@ Y queda dicho, para que nadie lo lea de más: **esto destraba una de las dos
 condiciones** que `STATUS.md` pone a `category_matching_enabled`. La otra —la
 ola de paridad alcanzando su suelo— sigue abierta, y ADR-202 registra que M17,
 la medición que la cerraba, no se hace y la razón no consta.
+
+---
+
+## CORRECCIÓN, el mismo día, unas horas después
+
+Lo de arriba se queda corto en su diagnóstico y hay que decirlo aquí, no en
+otro documento: dije que la causa candidata era que **la instrucción no define
+nada**. Es cierto, pero es la capa de arriba. Debajo hay algo que cambia lo que
+esta medición significa.
+
+**Las etiquetas canónicas no son un juicio humano: son la salida de una regla
+de palabras clave.** ADR-116 las calculó con prioridad estricta —la primera
+categoría cuya lista de palabras aparece como subcadena en el `text` gana; si
+ninguna aparece, `otros`—:
+
+| orden | categoría | palabras clave |
+|---|---|---|
+| 1 | `salud` | salud, médic, hospital, enfermed, dolor, vacuna, clínic |
+| 2 | `finanzas` | presupuesto, €, nómina, pago, factura, coste, sueldo, gasto, ahorr |
+| 3 | `aprendizaje` | aprend, curso, estudi, formaci, clase, libro |
+| 4 | `personal` | familia, amig, mascota, pareja, hobby, vacacion, viaje, coche, vuelo |
+| 5 | `proyecto` | proyecto, expediente, entregable, hito, alcance, plataforma de despliegue, atlas |
+| 6 | `trabajo` | reunión, oficina, responsable, informe, operaciones, calidad, proveedor, cliente, empresa, compras, turno, revisión, publicaci, almacén, logística, documental, contrato, mantenimiento, plataforma, postgresql, autorización |
+| 7 | `otros` | — |
+
+La fila 6 se lleva cualquier cosa que contenga «informe», «calidad»,
+«revisión», «plataforma» o «postgresql», hable de un proyecto o no. La 5 solo
+se lleva lo que diga literalmente «proyecto», «expediente», «hito», «alcance» o
+«atlas».
+
+**Entonces lo que mide D7 punto 6 no es «qué bien etiqueta el modelo».** Es:
+*qué bien reproduce un clasificador semántico la salida de una expresión
+regular que nadie le ha enseñado.* Los 29 fallos `trabajo` → `proyecto` son, en
+su mayoría, el modelo haciendo una lectura razonable que la regla mecánica
+contradice.
+
+**Y por eso el experimento que iba a proponerse —definir la frontera en la
+instrucción— queda cancelado antes de correrse.** Definirla significaría
+pegarle al modelo la lista de palabras clave de ADR-116: subiría el número y no
+significaría nada, porque si ya se tiene la regla no hace falta el modelo para
+reproducirla.
+
+**La raíz, entonces, es que las categorías nunca se definieron.** ADR-106 las
+inventó como provisionales porque «el vocabulario real de `category` sigue sin
+existir», y ADR-116 las repartió con una regla que él mismo llama «mecánica
+provisional», dejando escrito que sus consecuencias quedan condicionadas a
+ella. Los dos avisaron. Lo que faltaba era conectar ese aviso con el umbral de
+D7 punto 6, y eso solo pasa cuando la medición por fin se corre.
+
+**Consecuencia para el umbral**: un umbral registrado contra este 50.5% sería
+un umbral sobre «coincidencia con una regex provisional», no sobre la
+fiabilidad de la señal. Sigue siendo decisión del propietario, y ahora con este
+dato delante.

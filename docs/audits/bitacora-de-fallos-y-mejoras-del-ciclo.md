@@ -6047,6 +6047,68 @@ de paridad en su suelo— sigue abierta, con M17 registrado en ADR-202 como no
 hecho y sin razón que conste.
 
 
+### 116. El banco entero con Ollama real: dos de los tres suelos de D1 alcanzados, y el tercero resulta ser otro problema del que creíamos (20-09-2026, 01:35 UTC)
+
+Evidencia en `docs/audits/medicion-banco-completo-ollama-real-2026-09-20.md`.
+`main` en `66f11424`, máquina del propietario, 47 llamadas, **0 rendiciones**.
+
+**El resultado**, y es el motor abierto **con el filtro real**, no la etapa de
+búsqueda sola como todo lo demás que se midió hoy:
+
+| suelo D1 | objetivo | hoy | |
+|---|---|---|---|
+| omisiones críticas | <= 1 | **0** | **ALCANZA** |
+| cobertura | >= 63/81 | **70/81** | **ALCANZA** |
+| aciertos exactos | >= 29/47 | 8/47 | por debajo |
+
+Y el diagnóstico caso por caso: las cuatro críticas que el **laboratorio**
+pierde por `NO_ENTRO` —`B04-CA-33/DEC-003`, `B04-CA-34/DEC-003`, `MEM-014`,
+`MEM-016`— salen `OK` en producción. **El Sirius de hoy pierde menos que el
+laboratorio del que salió su diseño.** El laboratorio pierde 4; éste, 0.
+
+**Reproduce exactamente la medición del 05-09** sobre `a07c5d5`: `8/47; 218;
+0; 70/81`, las cuatro cifras idénticas y la misma tabla de diagnóstico. Quince
+días, dos árboles, mismo resultado: **esta medición es reproducible**, al
+contrario que la de D7 punto 6.
+
+**Mi predicción falló en dos de cuatro, por un error concreto que conviene no
+repetir.** Anclé en el `22/47; 39 de más` del **02-09**, que está superado: es
+anterior a M19b y M20. El documento de evidencia tenía la medición del 05-09
+—la vigente— y cité la vieja, que además venía con **10 críticas perdidas**, o
+sea que tampoco alcanzaba el suelo y fallaba justo en lo intolerable. Le dije
+al propietario «estabas a siete casos» y fue engañoso. **La lección: antes de
+anclar una predicción en una cifra de un documento, comprobar que no hay otra
+más reciente en ese mismo documento.** Esa sección estaba 40 líneas más abajo.
+
+**Y el 8/47 no es un defecto: es un precio firmado antes de pagarlo.** Del
+02-09 al 05-09: críticas **10 → 0**, cobertura **59 → 70/81**, exactos 22 → 8,
+ruido 39 → 218. La siembra (M20, ADR-129) pone lo crítico delante del filtro y
+el rescate por criticidad (M19b, ADR-128) impide que el modelo lo tire; y
+**ADR-129 aceptó el precio por escrito ANTES de medirlo**: la respuesta trae de
+más, no de menos.
+
+**Lo que esto reencuadra, y es lo que vale de esta entrada.** El propietario
+llegó a decir hoy que «todo es en vano, no llegamos a los números con nada». No
+es así, y la confusión tenía una causa material: **todas las cifras que se le
+enseñaron hoy decían `SIN FILTRO`** —la etapa de búsqueda sola, con el filtro
+deliberadamente fuera—, y él las leyó como el estado del sistema. Con el filtro
+puesto, dos de los tres suelos están alcanzados.
+
+El problema pendiente **no es que Sirius olvide: es que trae demasiado.** Son
+dos problemas distintos y solo uno queda abierto. Lo que falta para el tercer
+suelo es podar 218 sin volver a perder lo crítico.
+
+**Corrección registrada aparte.** El diagnóstico de la entrada 115 —«la causa
+es que la instrucción no define nada»— se queda en la capa de arriba: las
+etiquetas canónicas de D7 punto 6 son la salida de una **regla de palabras
+clave** (ADR-116, prioridad estricta), no un juicio. Así que esa medición
+compara un clasificador semántico contra una regex que nadie le enseñó, y el
+experimento de «definir la frontera en la instrucción» queda **cancelado antes
+de correrse**: equivaldría a pegarle al modelo la lista de ADR-116. La
+corrección completa está al final de
+`docs/audits/medicion-d7-punto-6-etiquetado-de-categoria-2026-09-20.md`.
+
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
