@@ -192,29 +192,43 @@ sobre la cardinalidad.
 pasa de 39 a 45 pruebas; las 39 anteriores están intactas.
 
 **Validación obligatoria: una sola invocación** de `pwsh -File scripts/check.ps1`
-sobre el árbol de `d8cf2756`, que es el que trae el cambio entero —código,
-pruebas, ADR con su número definitivo, registro de defectos y la vista
-regenerada—. Código de salida **0**, con los cuatro pasos en verde:
-`ruff format --check` («637 files already formatted»), `ruff check` («All checks
-passed!»), `mypy src tests` («Success: no issues found in 600 source files») y
-`pytest`:
+sobre el árbol de `c866d76`, que es el que trae el cambio entero —código,
+pruebas, ADR con su número definitivo y con las dos correcciones documentales
+de la ronda 3, registro de defectos y la vista regenerada—. Código de salida
+**0**, con los cuatro pasos en verde: `ruff format --check` («637 files already
+formatted»), `ruff check` («All checks passed!»), `mypy src tests` («Success: no
+issues found in 600 source files») y `pytest`:
 
 ```
-=========== 6726 passed, 17 skipped, 2 xfailed in 758.73s (0:12:38) ============
+=========== 6726 passed, 17 skipped, 2 xfailed in 635.71s (0:10:35) ============
 ```
 
-Una sola invocación y sin partir `pytest` en tandas (ADR-145). Esa terna es la
-del árbol de `d8cf2756` y así se lee (ADR-154): **no** es la del head, porque
-`f57c1c1` no se validó. Lo que la ronda 2 escribió de aquella corrida —que el
-head final añadía a `d8cf2756` «solo este párrafo»— era falso y se corrige
-aquí: `git diff --stat d8cf2756..f57c1c1` da `27 insertions(+), 8 deletions(-)`
-sobre este fichero, porque `f57c1c1` añadía además la sección «El número de
-este ADR» entera y reescribía el párrafo de la evidencia. Sin código ni
-pruebas de por medio, sí, pero «solo este párrafo» no describía el árbol.
+Una sola invocación y sin partir `pytest` en tandas (ADR-145). La terna es la
+del árbol de `c866d76` y así se lee (ADR-154).
 
-La corrida anterior de la rama, sobre el árbol de `d9768650` —el mismo cambio
-con el número 204—, dio la misma terna (`6726 passed, 17 skipped, 2 xfailed`)
-en 1283.68 s.
+**Qué añade el head de la rama a `c866d76`, enumerado.** Exactamente este
+bloque de transcripción dentro de este mismo fichero: la terna de arriba, el
+código de salida y esta enumeración. Ningún otro fichero, ninguna otra
+sección: `git diff --stat c866d76..HEAD` es una sola línea, la de este ADR.
+Nada del comportamiento, de las pruebas ni del registro de defectos queda fuera
+de lo que la corrida validó.
+
+**Corridas anteriores de la rama**, que ya no son las del head y se leen como
+lo que son:
+
+| árbol | qué traía | terna | duración |
+| --- | --- | --- | --- |
+| `d9768650` | el cambio con el número 204 | `6726 passed, 17 skipped, 2 xfailed` | 1283.68 s |
+| `d8cf2756` | el mismo cambio renumerado a 212 | `6726 passed, 17 skipped, 2 xfailed` | 758.73 s |
+
+De aquella segunda corrida, la ronda 2 escribió que el head final añadía a
+`d8cf2756` «solo este párrafo», y **era falso**: `git diff --stat
+d8cf2756..f57c1c1` da `27 insertions(+), 8 deletions(-)` sobre este fichero,
+porque `f57c1c1` añadía además la sección «El número de este ADR» entera y
+reescribía el párrafo de la evidencia. Sin código ni pruebas de por medio, sí,
+pero «solo este párrafo» no describía ese árbol, y por eso esta ronda vuelve a
+correr la cadena sobre el árbol que sí se entrega en lugar de seguir estirando
+un anclaje viejo.
 
 **Lo que esta comprobación NO dice:** nada sobre el efecto en la cifra del
 banco. Aquí no hay Ollama, y no se ha simulado ninguna medición.
