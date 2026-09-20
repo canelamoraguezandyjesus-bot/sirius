@@ -969,3 +969,20 @@ defectos:
     adr: 210
     ficheros:
       - docs/audits/DONDE_VIVE_LA_BITACORA_DEL_CICLO.md
+
+  # ADR-211: lo que esta casa ya habia averiguado dos veces se volvia a
+  # averiguar cada sesion -el conocimiento estaba repartido entre AGENTS.md,
+  # 210 ADR y 21 fichas-, las dos unicas skills no las miraba ninguna prueba ni
+  # las nombraba ninguna de las dos puertas por las que entra una sesion, y
+  # `.gitignore` descartaba en silencio cualquier skill nueva: las dos que
+  # existian estaban seguidas solo porque se anadieron con `git add -f`.
+  - id: H-211
+    titulo: Las skills no las vigilaba nada y una nueva ni siquiera llegaba al repositorio
+    bloque: documentacion
+    gravedad: media
+    estado: cerrado
+    cerrado_por: f5741b573b0383a2c44268809021c289743830cd
+    adr: 211
+    ficheros:
+      - tests/automation/test_skills.py
+      - .gitignore

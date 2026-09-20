@@ -26,9 +26,9 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **203**.
+- Decisiones (ADR): **204**.
 - Bloques del motor: 17 cerrado, 2 fuera_de_alcance, 1 pendiente.
-- Defectos registrados: 1 abierto, 61 cerrado.
+- Defectos registrados: 1 abierto, 62 cerrado.
 - Ideas aparcadas o descartadas: 3 aparcada, 2 descartada, 1 promovida.
 - Skills: **7**.
 - Investigaciones: **9** (fotos con fecha; caducan).
@@ -67,6 +67,7 @@ huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| [211](docs/decisions/ADR-211-convertir-en-skills-lo-que-ya-costo-averiguar-dos-veces-con-una-guarda-que-impida-que-se-pudran.md) | 2026-09-20 | APROBADO | Convertir en skills lo que ya costó averiguar dos veces, con una guarda que impida que se pudran | La tercera. Cinco skills nuevas, una guarda, y las dos puertas de entrada de una sesión enterándose de que existen. |
 | [210](docs/decisions/ADR-210-archivar-las-incidencias-que-ya-no-describen-nada-y-decir-donde-vive-la-bitacora-del-ciclo.md) | 2026-09-20 | APROBADO | Archivar las incidencias que ya no describen nada, y decir dónde vive la bitácora del ciclo | De las nueve abiertas que la decisión 2 nombraba: |
 | [209](docs/decisions/ADR-209-un-adr-fusionado-esta-aprobado-y-propuesto-deja-de-existir-como-estado.md) | 2026-09-20 | APROBADO | Un ADR fusionado está aprobado, y PROPUESTO deja de existir como estado | Un ADR que está en el árbol está aprobado, porque lo que lo aprueba, según él mismo, es la fusión de su PR. `PROPUESTO` deja de existir como estado. |
 | [208](docs/decisions/ADR-208-las-ideas-aparcadas-tienen-registro-y-el-metodo-de-conversacion-del-propietario-entra-en-agents.md) | 2026-09-20 | APROBADO | Las ideas aparcadas tienen registro, y el método de conversación del propietario entra en AGENTS.md | `docs/ideas/registro_de_ideas.yml`, con tres estados y un campo que cada uno exige: |
@@ -287,6 +288,7 @@ de memoria.
 | `regla-del-propietario-que-solo-vive-en-una-conversacion` | 3 | sí | [208](docs/decisions/ADR-208-las-ideas-aparcadas-tienen-registro-y-el-metodo-de-conversacion-del-propietario-entra-en-agents.md), [204](docs/decisions/ADR-204-el-propietario-decide-producto-dinero-y-salud-y-lo-tecnico-lo-resuelve-la-sesion.md), [195](docs/decisions/ADR-195-podar-significa-archivar-en-este-repositorio-no-se-borra-nada.md) |
 | `lista-a-mano` | 2 | sí | [181](docs/decisions/ADR-181-la-contradiccion-de-etiquetas-se-decide-por-lo-que-proyectan-no-por-cuantas-son.md), [178](docs/decisions/ADR-178-la-autoridad-por-clase-se-deriva-de-la-via-github-que-el-despachador-declara-no-de-una-segunda-tabla-a-mano.md) |
 | `medir-lo-que-se-tiene-en-vez-de-lo-que-hay` | 2 | sí | [184](docs/decisions/ADR-184-la-prohibicion-no-es-una-peticion-el-detector-de-sensibilidad-exige-que-el-marcador-no-vaya-negado.md), [180](docs/decisions/ADR-180-el-numero-del-siguiente-adr-se-calcula-contra-las-ramas-del-remoto-no-contra-las-que-el-clon-tenga-traidas.md) |
+| `prosa-que-el-cambio-deja-falsa` | 2 | no en todas | [211](docs/decisions/ADR-211-convertir-en-skills-lo-que-ya-costo-averiguar-dos-veces-con-una-guarda-que-impida-que-se-pudran.md), [177](docs/decisions/ADR-177-la-ampliacion-por-categoria-entra-por-una-senal-explicita-de-la-peticion-no-por-la-subcadena-contexto.md) |
 | `condicion-construida-sin-el-mecanismo-que-la-hace-cumplible` | 1 | sí | [200](docs/decisions/ADR-200-la-cola-deja-de-ser-una-condicion-y-pasa-a-ser-un-mecanismo-el-ciclo-trae-la-base-a-la-rama-que-espera.md) |
 | `decision-que-solo-vive-en-una-conversacion` | 1 | no en todas | [202](docs/decisions/ADR-202-m17-la-medicion-que-cerraba-la-ola-de-paridad-no-se-hace-y-la-razon-no-consta.md) |
 | `doble-mas-permisivo-que-la-herramienta-que-dobla` | 1 | sí | [193](docs/decisions/ADR-193-el-doble-de-gh-rechaza-lo-que-el-gh-real-rechaza-y-la-red-de-seguridad-vuelve-a-poder-fechar.md) |
@@ -300,7 +302,6 @@ de memoria.
 | `pieza-correcta-a-la-que-no-llama-quien-la-necesita` | 1 | sí | [197](docs/decisions/ADR-197-el-detector-de-familia-repetida-agrupa-por-la-ruta-que-el-revisor-escribe-no-por-el-recorte-anclado.md) |
 | `plan-que-hay-que-terminar-de-una-sentada` | 1 | sí | [176](docs/decisions/ADR-176-el-cierre-de-una-incidencia-se-retoma-desde-donde-se-quedo.md) |
 | `pregunta-al-propietario-que-nadie-vuelve-a-poner-delante` | 1 | no en todas | [198](docs/decisions/ADR-198-partir-un-objetivo-grande-lo-hace-la-sesion-interactiva-el-descomponedor-automatico-queda-descartado.md) |
-| `prosa-que-el-cambio-deja-falsa` | 1 | no en todas | [177](docs/decisions/ADR-177-la-ampliacion-por-categoria-entra-por-una-senal-explicita-de-la-peticion-no-por-la-subcadena-contexto.md) |
 | `tarea-periodica-sin-reloj` | 1 | no en todas | [201](docs/decisions/ADR-201-la-mina-de-aprendizaje-tiene-reloj-el-dia-1-de-cada-mes-se-pide-la-edicion-del-mes-que-se-cierra.md) |
 | `tramite-que-solo-puede-hacer-una-persona-y-no-anade-comprobacion` | 1 | sí | [205](docs/decisions/ADR-205-la-fusion-no-espera-al-propietario-cuando-los-dos-revisores-aprueban.md) |
 | `vista-que-copia-el-corpus-del-que-venia-huyendo` | 1 | sí | [196](docs/decisions/ADR-196-la-vista-de-memoria-lleva-el-indice-completo-de-decisiones-y-el-resumen-solo-de-las-vigentes-como-metodo.md) |
@@ -337,6 +338,11 @@ de memoria.
 
 - **[ADR-184](docs/decisions/ADR-184-la-prohibicion-no-es-una-peticion-el-detector-de-sensibilidad-exige-que-el-marcador-no-vaya-negado.md)** — poner una guarda a responder la pregunta que sabe contestar barata —«¿aparece la palabra?»— en lugar de la que tiene que contestar —«¿la orden lo pide?»—, y no notarlo porque el sustituto acierta casi siempre: aquí acertó en 1 de 3 paradas reales y paró sobre las salvaguardas que prohibían justo la operación. (lo hace cumplir `tests/engine/test_intent_interpreter.py`).
 - **[ADR-180](docs/decisions/ADR-180-el-numero-del-siguiente-adr-se-calcula-contra-las-ramas-del-remoto-no-contra-las-que-el-clon-tenga-traidas.md)** — preguntarle a la copia local por un hecho que vive fuera -las ramas traídas en vez de las que existen- y creer que la respuesta cubre el caso; aquí el guion veía el 3,4% de las ramas y repartió el mismo número tres veces en un día. (lo hace cumplir `tests/automation/test_registro_de_decisiones.py`).
+
+### `prosa-que-el-cambio-deja-falsa`
+
+- **[ADR-211](docs/decisions/ADR-211-convertir-en-skills-lo-que-ya-costo-averiguar-dos-veces-con-una-guarda-que-impida-que-se-pudran.md)** — escribir un documento de método que nadie vuelve a (lo hace cumplir `tests/automation/test_skills.py`).
+- **[ADR-177](docs/decisions/ADR-177-la-ampliacion-por-categoria-entra-por-una-senal-explicita-de-la-peticion-no-por-la-subcadena-contexto.md)** — retirar un símbolo de producción y dejar vivas las frases que lo daban por cierto; al quitar `pide_contexto` quedaron falsos los once pasajes de prosa que la sección 6 de esta ficha enumera, 22 referencias del literal en las pruebas más otros cuatro pasajes de pruebas que describían el mecanismo sin nombrarlo, y el criterio de aceptación de M16 de la Arquitectura Técnica; y el barrido que las buscó en `scripts/` y `tests/` no miró en `docs/evolution/` ni podía ver lo que no escribe el literal, así que una lista solo se declara completa sobre el alcance del barrido que la produjo y el resto se dice cubierto por lectura. (sin prueba que lo haga cumplir: ninguna prueba: nada en este repositorio vigila la coherencia de la prosa de `docs/` con el árbol, y la ocurrencia que queda viva está en la Arquitectura Técnica, que la salvaguarda de #581 prohíbe tocar sin decisión del propietario.).
 
 ### `condicion-construida-sin-el-mecanismo-que-la-hace-cumplible`
 
@@ -389,10 +395,6 @@ de memoria.
 ### `pregunta-al-propietario-que-nadie-vuelve-a-poner-delante`
 
 - **[ADR-198](docs/decisions/ADR-198-partir-un-objetivo-grande-lo-hace-la-sesion-interactiva-el-descomponedor-automatico-queda-descartado.md)** — una incidencia formula una pregunta que solo el (sin prueba que lo haga cumplir: ninguna prueba: nada en este repositorio distingue una).
-
-### `prosa-que-el-cambio-deja-falsa`
-
-- **[ADR-177](docs/decisions/ADR-177-la-ampliacion-por-categoria-entra-por-una-senal-explicita-de-la-peticion-no-por-la-subcadena-contexto.md)** — retirar un símbolo de producción y dejar vivas las frases que lo daban por cierto; al quitar `pide_contexto` quedaron falsos los once pasajes de prosa que la sección 6 de esta ficha enumera, 22 referencias del literal en las pruebas más otros cuatro pasajes de pruebas que describían el mecanismo sin nombrarlo, y el criterio de aceptación de M16 de la Arquitectura Técnica; y el barrido que las buscó en `scripts/` y `tests/` no miró en `docs/evolution/` ni podía ver lo que no escribe el literal, así que una lista solo se declara completa sobre el alcance del barrido que la produjo y el resto se dice cubierto por lectura. (sin prueba que lo haga cumplir: ninguna prueba: nada en este repositorio vigila la coherencia de la prosa de `docs/` con el árbol, y la ocurrencia que queda viva está en la Arquitectura Técnica, que la salvaguarda de #581 prohíbe tocar sin decisión del propietario.).
 
 ### `tarea-periodica-sin-reloj`
 
