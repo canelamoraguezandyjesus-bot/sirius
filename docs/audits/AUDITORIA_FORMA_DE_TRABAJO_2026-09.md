@@ -1117,11 +1117,14 @@ pidió. La idea queda aparcada con su disparador en
 desde dónde se dirigió, modelo, rama de salida y desenlace—, en
 `docs/audits/las-sesiones-de-la-nube-2026-09.md`. No es la conversación, pero
 convierte «28 sesiones desconocidas» en 35 con nombre, fecha y rama. Y destapa
-un hallazgo que esta auditoría no tenía: **cuatro sesiones terminaron esperando
-una respuesta del propietario que nunca llegó**, la más vieja del 18-07-2026 y
-dos todavía bloqueadas hoy. Ninguna llegó a una incidencia ni a un ADR. Es la
-familia `pregunta-al-propietario-que-nadie-vuelve-a-poner-delante` con cuatro
-casos fechados, y refuerza la ficha C-02.
+un hallazgo que esta auditoría no tenía: **cuatro sesiones terminaron su último
+turno esperando una respuesta del propietario**, la más vieja del 18-07-2026 y
+dos todavía bloqueadas hoy. Al comprobar una a una si esas preguntas se
+contestaron, el hallazgo cambió de forma: **tres de las cuatro sí tienen
+respuesta** —una quedó sin sentido a los siete minutos, y dos se decidieron en
+ADR-054 y ADR-083— y aun así sus sesiones siguen esperando. Lo que falla no es
+que él no conteste: es que **la respuesta llega por otro camino y la sesión que
+preguntó no se entera nunca**. Refuerza E-02 con cuatro casos más.
 
 Dos cosas más que este intento dejó, y que sí valen: el guion
 `scripts/traer_sesiones_de_la_nube.ps1`, que registra por sesión y se reanuda

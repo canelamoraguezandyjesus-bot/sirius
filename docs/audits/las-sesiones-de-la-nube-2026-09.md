@@ -20,23 +20,30 @@ trabajo y cómo acabó. No es la conversación —eso sigue faltando— pero con
 sesión, que la fuente sí da. El repositorio es público y eso es dinero del
 propietario. Si él quiere la tabla con esa columna, se añade.
 
-## Las cuatro preguntas que se quedaron sin contestar
+## Las cuatro preguntas que se quedaron colgadas, y qué fue de ellas
 
-El hallazgo que esta lectura destapa, y que no estaba en la auditoría. Cuatro
-sesiones terminaron **esperando una respuesta suya que nunca llegó**, la más
-vieja de hace dos meses. Dos siguen marcadas como bloqueadas hoy.
+Cuatro sesiones terminaron su último turno **esperando una respuesta del
+propietario**. La primera lectura de esta tabla concluyó que ninguna se
+contestó nunca. **Esa conclusión era falsa y se comprobó antes de publicarla**:
+tres de las cuatro sí tienen respuesta, solo que llegó por otro sitio y la
+sesión que preguntó no se enteró jamás.
 
-| Última actividad | Sesión | Estado | Qué pedía |
-|---|---|---|---|
-| 2026-07-18 | Validar suite Qt headless en Sirius | Archived | ¿Quieres que me suscriba a la actividad de la PR #33 para vigilar CI y comentarios de revisión, o la dejo así? |
-| 2026-07-27 | Revisión forense ADR002-TOL-207 | Archived | approve classifications: ENVOLVENTE_REPRODUCIBLE, pico-inclusive semantics, 5.670-element corpus, memory values (1.6GB/8.5GB/30GB), package 04 executi |
-| 2026-08-21 | Sirius learning vertical integration audit | Idle | decide: does GAP-1 (modelo by Run) attach to B1 or C2, or is it unowned? |
-| 2026-08-24 | Sirius motor: PR y primer workflow | Idle | choose: (1) diary to own branch, (2) exempt automations from rule, or (3) diary as PR per turn |
+| Última actividad | Qué pedía | Qué pasó de verdad |
+|---|---|---|
+| 2026-07-18 | si se suscribía a la PR #33 para vigilarla | **Quedó sin sentido en siete minutos**: la PR #33 se fusionó a las 15:23 del mismo día, y la pregunta es de las 15:16 |
+| 2026-07-27 | aprobar las clasificaciones de la revisión forense ADR002-TOL-207 | **Sin rastro.** `ENVOLVENTE_REPRODUCIBLE` no aparece en ningún documento de `docs/`. Es la única de las cuatro que sigue perdida |
+| 2026-08-21 | si GAP-1 (el modelo por Run) es del bloque B1 o del C2 | **Contestada, y con ADR propio**: ADR-054 la recoge citando «hallazgo H-6 (GAP-1)» e incidencia #217 |
+| 2026-08-24 | dónde va el diario del motor: rama propia, exento, o una PR por turno | **Contestada**: ADR-083 decide que la memoria del motor vive en su propia rama, que es la opción (1) |
 
-Es exactamente la familia `pregunta-al-propietario-que-nadie-vuelve-a-poner-delante`,
-con cuatro casos fechados. Ninguna de las cuatro llegó a una incidencia ni a un
-ADR: se quedaron dentro de su sesión, donde solo se ven si alguien va a
-buscarlas.
+**La lección no es la que parecía.** No es «el propietario no contesta»: es que
+**la respuesta llega por otro camino y la sesión que preguntó se queda con la
+pregunta abierta para siempre**. Tres de cuatro estaban resueltas en el árbol y
+sus sesiones siguen hoy marcadas como bloqueadas o archivadas esperando.
+
+Es la familia `pregunta-al-propietario-que-nadie-vuelve-a-poner-delante` vista
+desde el otro lado: el problema no está en quien no responde, sino en que nadie
+cierra el lazo hacia atrás. Y refuerza el hallazgo E-02 —las sesiones no se ven
+entre sí— con cuatro casos más, todos fechados.
 
 ## Las 35, por orden de nacimiento
 
