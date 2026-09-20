@@ -26,9 +26,10 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **200**.
+- Decisiones (ADR): **201**.
 - Bloques del motor: 17 cerrado, 2 fuera_de_alcance, 1 pendiente.
 - Defectos registrados: 1 abierto, 57 cerrado.
+- Ideas aparcadas o descartadas: 3 aparcada, 2 descartada, 1 promovida.
 - Investigaciones: **9** (fotos con fecha; caducan).
 - Documentos: **148**, de los que **97** no declaran fecha.
 
@@ -47,6 +48,7 @@ huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| [208](docs/decisions/ADR-208-las-ideas-aparcadas-tienen-registro-y-el-metodo-de-conversacion-del-propietario-entra-en-agents.md) | 2026-09-20 | APROBADO | Las ideas aparcadas tienen registro, y el método de conversación del propietario entra en AGENTS.md | `docs/ideas/registro_de_ideas.yml`, con tres estados y un campo que cada uno exige: |
 | [207](docs/decisions/ADR-207-archivar-los-dos-mapas-caducados-de-julio-retirar-el-workflow-de-word-y-poner-en-d4-el-estado-que-ya-tenia.md) | 2026-09-20 | APROBADO | Archivar los dos mapas caducados de julio, retirar el workflow de Word y poner en D4 el estado que ya tenía | `docs/operations/CLAUDE_SIRIUS_KNOWLEDGE_BASE.md` y `docs/operations/CLAUDE_PROJECT_ONBOARDING.md` son fotos del 20-07-2026. El primero dice que el contrato operativo va por la v1.1 cuando va por la v1.11, y el trabajo de los dos lo hace… |
 | [206](docs/decisions/ADR-206-cada-sesion-declara-su-obra-antes-de-empezar-y-la-cola-impide-que-dos-se-pisen.md) | 2026-09-20 | APROBADO | Cada sesión declara su obra antes de empezar, y una guarda impide que dos se pisen | Una sesión declara su obra abriendo su pull request en cuanto tiene su primer commit, aunque sea borrador, y antes de empezar comprueba si otra obra viva toca sus mismos ficheros. La comprobación la hace… |
 | [205](docs/decisions/ADR-205-la-fusion-no-espera-al-propietario-cuando-los-dos-revisores-aprueban.md) | 2026-09-20 | APROBADO | La fusión no espera al propietario cuando los dos revisores aprueban | La aprobación de los dos revisores es la autorización de merge. El comentario `fusiona` del propietario deja de ser necesario y se conserva como mando manual: sigue funcionando igual, y es la vía para reintentar después de resolver un… |
@@ -261,9 +263,9 @@ de memoria.
 |---|---|---|---|
 | `regla-que-depende-de-que-alguien-se-acuerde` | 6 | sí | [192](docs/decisions/ADR-192-el-numero-de-un-defecto-es-el-numero-de-su-adr-no-un-contador-aparte.md), [191](docs/decisions/ADR-191-la-revision-es-una-cola-una-rama-entra-a-revision-solo-si-main-ya-esta-dentro-de-ella.md), [188](docs/decisions/ADR-188-el-alcance-que-el-motor-no-puede-escribir-para-la-puerta-antes-de-crear-la-incidencia-y-remite-a-la-sesion-interactiva.md), [182](docs/decisions/ADR-182-la-guarda-del-registro-de-defectos-deriva-de-los-adr-que-declaran-leccion.md), [179](docs/decisions/ADR-179-la-guarda-de-piezas-sin-llamante-deriva-su-inventario-del-codigo-del-motor.md), [174](docs/decisions/ADR-174-la-mina-en-dos-pasadas-la-leccion-se-declara-en-el-adr-que-la-produce-y-las-familias-se-cuentan-solas.md) |
 | `pieza-sin-lector` | 3 | sí | [207](docs/decisions/ADR-207-archivar-los-dos-mapas-caducados-de-julio-retirar-el-workflow-de-word-y-poner-en-d4-el-estado-que-ya-tenia.md), [183](docs/decisions/ADR-183-la-ausencia-de-run-de-quality-para-el-head-se-encamina-no-se-espera-en-silencio.md), [175](docs/decisions/ADR-175-un-tablero-por-incidencia-un-solo-comentario-que-el-motor-mantiene-al-dia.md) |
+| `regla-del-propietario-que-solo-vive-en-una-conversacion` | 3 | sí | [208](docs/decisions/ADR-208-las-ideas-aparcadas-tienen-registro-y-el-metodo-de-conversacion-del-propietario-entra-en-agents.md), [204](docs/decisions/ADR-204-el-propietario-decide-producto-dinero-y-salud-y-lo-tecnico-lo-resuelve-la-sesion.md), [195](docs/decisions/ADR-195-podar-significa-archivar-en-este-repositorio-no-se-borra-nada.md) |
 | `lista-a-mano` | 2 | sí | [181](docs/decisions/ADR-181-la-contradiccion-de-etiquetas-se-decide-por-lo-que-proyectan-no-por-cuantas-son.md), [178](docs/decisions/ADR-178-la-autoridad-por-clase-se-deriva-de-la-via-github-que-el-despachador-declara-no-de-una-segunda-tabla-a-mano.md) |
 | `medir-lo-que-se-tiene-en-vez-de-lo-que-hay` | 2 | sí | [184](docs/decisions/ADR-184-la-prohibicion-no-es-una-peticion-el-detector-de-sensibilidad-exige-que-el-marcador-no-vaya-negado.md), [180](docs/decisions/ADR-180-el-numero-del-siguiente-adr-se-calcula-contra-las-ramas-del-remoto-no-contra-las-que-el-clon-tenga-traidas.md) |
-| `regla-del-propietario-que-solo-vive-en-una-conversacion` | 2 | sí | [204](docs/decisions/ADR-204-el-propietario-decide-producto-dinero-y-salud-y-lo-tecnico-lo-resuelve-la-sesion.md), [195](docs/decisions/ADR-195-podar-significa-archivar-en-este-repositorio-no-se-borra-nada.md) |
 | `condicion-construida-sin-el-mecanismo-que-la-hace-cumplible` | 1 | sí | [200](docs/decisions/ADR-200-la-cola-deja-de-ser-una-condicion-y-pasa-a-ser-un-mecanismo-el-ciclo-trae-la-base-a-la-rama-que-espera.md) |
 | `decision-que-solo-vive-en-una-conversacion` | 1 | no en todas | [202](docs/decisions/ADR-202-m17-la-medicion-que-cerraba-la-ola-de-paridad-no-se-hace-y-la-razon-no-consta.md) |
 | `doble-mas-permisivo-que-la-herramienta-que-dobla` | 1 | sí | [193](docs/decisions/ADR-193-el-doble-de-gh-rechaza-lo-que-el-gh-real-rechaza-y-la-red-de-seguridad-vuelve-a-poder-fechar.md) |
@@ -297,6 +299,12 @@ de memoria.
 - **[ADR-183](docs/decisions/ADR-183-la-ausencia-de-run-de-quality-para-el-head-se-encamina-no-se-espera-en-silencio.md)** — escribir la rama «no hay nada que hacer» de un encaminador como un `return 0` con un `echo`, de modo que la única prueba de que el ciclo se ha parado viva en un log que nadie lee. (lo hace cumplir `tests/automation/test_sirius_apply_verdict.py`).
 - **[ADR-175](docs/decisions/ADR-175-un-tablero-por-incidencia-un-solo-comentario-que-el-motor-mantiene-al-dia.md)** — proyectar en cada pasada el estado entero de una incidencia -fase, rondas, Quality, PR, diagnóstico- y no enseñárselo nunca a quien tiene que decidir; es la novena vez que un dato correcto de esta casa no tiene lector, tres días después de la octava. (lo hace cumplir `tests/engine/test_tablero.py`).
 
+### `regla-del-propietario-que-solo-vive-en-una-conversacion`
+
+- **[ADR-208](docs/decisions/ADR-208-las-ideas-aparcadas-tienen-registro-y-el-metodo-de-conversacion-del-propietario-entra-en-agents.md)** — las ideas aparcadas volverían como nuevas y cada (lo hace cumplir `tests/automation/test_registro_de_ideas.py`).
+- **[ADR-204](docs/decisions/ADR-204-el-propietario-decide-producto-dinero-y-salud-y-lo-tecnico-lo-resuelve-la-sesion.md)** — la sesión seguiría devolviéndole decisiones técnicas (lo hace cumplir `tests/automation/test_reglas_de_agents.py`).
+- **[ADR-195](docs/decisions/ADR-195-podar-significa-archivar-en-este-repositorio-no-se-borra-nada.md)** — una regla dada de viva voz —«no se elimina nada»— que no (lo hace cumplir `tests/automation/test_registro_de_defectos.py`).
+
 ### `lista-a-mano`
 
 - **[ADR-181](docs/decisions/ADR-181-la-contradiccion-de-etiquetas-se-decide-por-lo-que-proyectan-no-por-cuantas-son.md)** — escribir como lista de excepciones un criterio que el dato de al lado ya define —aquí «qué etiquetas pueden convivir», enumerado a mano habiendo una tabla que dice a dónde apunta cada una—, de modo que la lista solo contiene lo que alguien recordó el día que la escribió y acusa de avería a todo lo demás. (lo hace cumplir `tests/engine/test_mirror_projection.py`).
@@ -306,11 +314,6 @@ de memoria.
 
 - **[ADR-184](docs/decisions/ADR-184-la-prohibicion-no-es-una-peticion-el-detector-de-sensibilidad-exige-que-el-marcador-no-vaya-negado.md)** — poner una guarda a responder la pregunta que sabe contestar barata —«¿aparece la palabra?»— en lugar de la que tiene que contestar —«¿la orden lo pide?»—, y no notarlo porque el sustituto acierta casi siempre: aquí acertó en 1 de 3 paradas reales y paró sobre las salvaguardas que prohibían justo la operación. (lo hace cumplir `tests/engine/test_intent_interpreter.py`).
 - **[ADR-180](docs/decisions/ADR-180-el-numero-del-siguiente-adr-se-calcula-contra-las-ramas-del-remoto-no-contra-las-que-el-clon-tenga-traidas.md)** — preguntarle a la copia local por un hecho que vive fuera -las ramas traídas en vez de las que existen- y creer que la respuesta cubre el caso; aquí el guion veía el 3,4% de las ramas y repartió el mismo número tres veces en un día. (lo hace cumplir `tests/automation/test_registro_de_decisiones.py`).
-
-### `regla-del-propietario-que-solo-vive-en-una-conversacion`
-
-- **[ADR-204](docs/decisions/ADR-204-el-propietario-decide-producto-dinero-y-salud-y-lo-tecnico-lo-resuelve-la-sesion.md)** — la sesión seguiría devolviéndole decisiones técnicas (lo hace cumplir `tests/automation/test_reglas_de_agents.py`).
-- **[ADR-195](docs/decisions/ADR-195-podar-significa-archivar-en-este-repositorio-no-se-borra-nada.md)** — una regla dada de viva voz —«no se elimina nada»— que no (lo hace cumplir `tests/automation/test_registro_de_defectos.py`).
 
 ### `condicion-construida-sin-el-mecanismo-que-la-hace-cumplible`
 
@@ -416,6 +419,21 @@ cerrados; el recuento completo está arriba.
 | Defecto | Estado | Título |
 |---|---|---|
 | H-202 | abierto | Una decision de no hacer algo no dejaba rastro, y una precondicion escrita antes que ella bloqueo trabajo real trece dias |
+
+## Las ideas aparcadas y descartadas (ADR-208)
+
+Registro: `docs/ideas/registro_de_ideas.yml`. Una idea que se pensó y no se hace
+ahora vive aquí para que no vuelva como nueva: la aparcada declara qué tendría
+que pasar para volver a mirarla, y la descartada, por qué no se hace.
+
+| Idea | Estado | Título |
+|---|---|---|
+| I-001 | aparcada | Orquestacion grande y tuberias multiagente para construir Sirius |
+| I-002 | descartada | n8n como orquestador de agentes para el motor |
+| I-003 | descartada | Obsidian como capa de conocimiento de Sirius |
+| I-004 | aparcada | Piezas de Memanto para la capa de memoria (motivo y desarchivar, exportacion Markdown, «cambiado desde», valid_from/valid_to persistidos, retencion como sugerencia) |
+| I-005 | aparcada | Un agente que revise el repositorio por modulos, en rondas, cuando nadie esta delante |
+| I-006 | promovida | Un cazador de contradicciones entre los documentos canonicos y el codigo |
 
 ## Las investigaciones: fotos con fecha, que caducan
 

@@ -40,6 +40,7 @@ CARPETA_DECISIONES = Path("docs/decisions")
 CARPETA_INVESTIGACIONES = Path("docs/investigaciones")
 REGISTRO_BLOQUES = Path("docs/implementation/bloques_del_motor.yml")
 REGISTRO_DEFECTOS = Path("docs/audits/registro_defectos.yml")
+REGISTRO_IDEAS = Path("docs/ideas/registro_de_ideas.yml")
 
 LONGITUD_RESUMEN = 240
 LONGITUD_OBJETIVO = 110
@@ -174,6 +175,7 @@ class Arbol:
     decisiones: tuple[Decision, ...]
     bloques: tuple[Entrada, ...]
     defectos: tuple[Entrada, ...]
+    ideas: tuple[Entrada, ...]
     investigaciones: tuple[Documento, ...]
     documentos: tuple[Documento, ...]
     avisos: tuple[str, ...] = field(default_factory=tuple)
@@ -497,6 +499,7 @@ def leer_arbol(raiz: Path) -> Arbol:
         decisiones=leer_decisiones(raiz),
         bloques=leer_registro(raiz / REGISTRO_BLOQUES, "bloques"),
         defectos=leer_registro(raiz / REGISTRO_DEFECTOS, "defectos"),
+        ideas=leer_registro(raiz / REGISTRO_IDEAS, "ideas"),
         investigaciones=investigaciones,
         documentos=documentos,
         avisos=tuple(avisos),
@@ -623,6 +626,7 @@ def generar_memoria(raiz: Path) -> str:
         f"- Decisiones (ADR): **{len(arbol.decisiones)}**.",
         f"- Bloques del motor: {_recuento(arbol.bloques)}.",
         f"- Defectos registrados: {_recuento(arbol.defectos)}.",
+        f"- Ideas aparcadas o descartadas: {_recuento(arbol.ideas)}.",
         f"- Investigaciones: **{len(arbol.investigaciones)}** (fotos con fecha; caducan).",
         f"- Documentos: **{len(arbol.documentos)}**, de los que **{sin_fecha}** no declaran fecha.",
     ]
@@ -692,6 +696,22 @@ def generar_memoria(raiz: Path) -> str:
         )
     else:
         lineas.append("Ningún defecto sin cerrar.")
+    lineas += [
+        "",
+        "## Las ideas aparcadas y descartadas (ADR-208)",
+        "",
+        f"Registro: `{REGISTRO_IDEAS.as_posix()}`. Una idea que se pensó y no se hace",
+        "ahora vive aquí para que no vuelva como nueva: la aparcada declara qué tendría",
+        "que pasar para volver a mirarla, y la descartada, por qué no se hace.",
+        "",
+    ]
+    if arbol.ideas:
+        lineas += _tabla(
+            ("Idea", "Estado", "Título"),
+            ((i.identificador, i.estado, i.titulo) for i in arbol.ideas),
+        )
+    else:
+        lineas.append("Ninguna idea registrada.")
     lineas += [
         "",
         "## Las investigaciones: fotos con fecha, que caducan",

@@ -219,3 +219,45 @@ después la decisión sigue dependiendo de algo que únicamente él sabe.
 
 Y una decisión que toma la sesión **nunca se declara del propietario**: el ADR
 dice quién la tomó.
+
+## Cómo conversa el propietario, y qué espera (ADR-208)
+
+Esto no es cortesía: es método suyo, observado en catorce meses de
+conversaciones y transcripciones, y respetarlo ahorra rondas. Está medido en
+`docs/audits/AUDITORIA_FORMA_DE_TRABAJO_2026-09.md`, fichas C-03 y E-01 a E-04.
+
+1. **Nada de planes mientras se explora.** «Estamos explorando, hablando, deja
+   de hacer planes.» Primero se habla; el plan viene cuando él lo pide.
+2. **Realidad antes que opinión.** No opines sobre cómo está algo sin haberlo
+   mirado. Si hace falta mirar en su máquina, dale el comando exacto.
+3. **Una recomendación, no un menú.** «No me des opciones, dime cuál es el
+   mejor.» Si hay alternativas, van después de la recomendación y en una línea.
+4. **Audita lo que acabas de proponer.** Pedirle que lo haga es suyo: hazlo
+   antes de que lo pida.
+5. **Corrige con datos, y acepta que los suyos no están en el repositorio.**
+   Cuando dice que algo ya está hecho, o que estás perdido, **suele tener
+   razón**: de seis correcciones suyas medidas, acertó las seis, y en cinco el
+   hecho vivía en una rama sin fusionar, en una prueba manual que hizo él o en
+   su cabeza. Compruébalo antes de contradecirle.
+6. **Poco a poco, y cerrando por tamaño.** Un corte que se pueda terminar.
+7. **Cuando dirige la ejecución, un comando cada vez**, y con las tres cosas:
+   dónde se pega, qué hay que hacer y qué va a salir. Sin eso se pierde, y lo
+   ha dicho: «no sé ni dónde ponerla».
+8. **El alcance se da por exclusión tanto como por inclusión.** «Deja Model
+   Studio y los ADR» acota igual que un encargo.
+9. **Sus autorizaciones son acotadas.** «Permiso mientras no toques las otras
+   sesiones», o un merge autorizado para una incidencia concreta, no valen para
+   la siguiente.
+10. **Texto corto.** «Me pones mucho texto y no puedo responderte a todo.»
+    Tablas y frases, no párrafos.
+
+## Dónde va una idea que no se hace ahora (ADR-208)
+
+En `docs/ideas/registro_de_ideas.yml`, nunca solo en la conversación. Una
+**aparcada** declara qué tendría que pasar para volver a mirarla; una
+**descartada**, por qué no se hace; una **promovida**, a qué ADR o incidencia.
+Sin ese campo la entrada no vale, y `tests/automation/test_registro_de_ideas.py`
+la rechaza. Aparecen en `MEMORIA.md`, así que se leen al empezar.
+
+La razón está medida: una idea aparcada el 24-07-2026 volvió el 16-09 como si
+fuera nueva, porque no había dónde anotarla.
