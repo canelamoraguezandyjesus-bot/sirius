@@ -131,6 +131,7 @@ Detrás van **dos encargos preparados, validados y sin lanzar**:
 |---|---|---|
 | `WI-20260920-MODO-Y-CORTE` | alinea `modo` y `corte_de_registro` con B04 §5; se lleva `CA-32`, uno de los cinco ganables | cuando #653 sea terminal |
 | `WI-20260920-PERFIL-AL-ESCRIBIR` | que un cuerpo sin `Perfil: rol@N` se rechace **al escribirlo** en vez de matar el ciclo a los 6 segundos, como pasó con #653 | cuando él diga |
+| `WI-20260920-REINICIO-HONESTO` | que un `continua` sobre una parada pre-PR no anuncie en verde un reinicio que va a rechazarse solo y dejar la incidencia **sin ninguna etiqueta**, inerte y muda | cuando él diga |
 
 Los dos pasan **las dos** comprobaciones —`validate_issue_body.py` y
 `resolver_prompt.py`—, que es la regla que #653 me enseñó por las malas.

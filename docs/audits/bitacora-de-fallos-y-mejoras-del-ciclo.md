@@ -7266,6 +7266,35 @@ Queda como regla propia: **un cuerpo de encargo no está listo hasta que lo
 aprueban las dos**. El encargo preparado de `modo y corte` también la pasa; lo
 comprobé al redactarlo.
 
+### 139. El guardián número 7, redactado y sin lanzar, con el camino entero trazado en el árbol (20-09-2026, 20:45 UTC)
+
+`encargo-preparado-el-reinicio-no-anuncia-en-verde-lo-que-se-va-a-rechazar.md`.
+**No se ha lanzado.** Segundo guardián de la noche, y esta vez el defecto está
+trazado línea por línea en vez de contado de memoria:
+
+1. `sirius_resume_on_command.sh:171` declara el principio —«reanudar es reponer
+   el **evento** que la parada consumió»— y `:182` repone **una sola** etiqueta
+   para el rol `implementer`.
+2. `:325` publica el permiso **en verde**.
+3. La activación exige **las dos**, y `sirius_validate_activation.sh:136`
+   rechaza por `sin-planned`.
+4. `:88` **retira** la etiqueta disparadora después de rechazar.
+
+La incidencia se queda con **cero etiquetas `sirius:`**: nada la despierta y
+nadie avisa, porque el estado no cambia a ningún sitio, **desaparece**.
+
+**Lo que el encargo NO hace, y es lo que más me costó decidir**: no añade
+`sirius:planned` automáticamente. `sirius_validate_activation.sh:12` lo prohíbe
+por escrito —«añadir `sirius:planned` equivaldría a aprobar»— y es la
+salvaguarda de la incidencia #60. Que el camino sea incómodo no es motivo para
+desactivar una salvaguarda deliberada; el arreglo es **comprobar antes de
+anunciar** y no consumir el evento, que resuelve el defecto entero sin tocarla.
+Si algún día se decide que un `continua` del propietario certifica el alcance
+tanto como `planned`, **es decisión suya y otro encargo**.
+
+Los dos encargos preparados hoy pasan **las dos** comprobaciones, que es la
+regla que la entrada 138 dejó escrita.
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
