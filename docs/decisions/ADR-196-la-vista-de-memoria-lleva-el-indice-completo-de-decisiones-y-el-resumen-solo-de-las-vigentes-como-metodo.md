@@ -1,6 +1,6 @@
 # ADR-196 — La vista de memoria lleva el índice completo de decisiones, y el resumen solo de las que siguen vigentes como método
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-14
 - Aprobación: el propietario, fusionando la PR de esta rama.
 

@@ -56,22 +56,50 @@ block() {
   rm -f "$body_file"
 }
 
-# --- 1) La orden debe ser exactamente "fusiona" -------------------------------
-# Se recorta antes la firma de atribución que algunas herramientas AÑADEN SOLAS
-# al final de cada comentario: quien comenta por API no controla lo que el
-# servidor le anexa, y sin esto la orden es inescribible por esa vía. Se recorta
-# ese bloque y solo ese —desde una línea que sea únicamente guiones hasta el
-# final—; cualquier otro texto sigue invalidando la orden, que es lo que esta
-# guarda protege. La autorización sigue siendo del propietario: el workflow ya
-# exigió `author_association == OWNER` y este guion lo reverifica por REST.
-sin_firma="$(printf '%s' "$COMMENT_BODY" | tr -d '\r' \
-  | sed -e '/^[[:space:]]*---[[:space:]]*$/,$d')"
-trimmed="$(printf '%s' "$sin_firma" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
-lowered="$(printf '%s' "$trimmed" | tr '[:upper:]' '[:lower:]')"
-if [ "$lowered" != "fusiona" ]; then
-  echo "El comentario de #${ISSUE} no es la orden exacta 'fusiona'; no se actua."
-  exit 0
-fi
+# --- 1) La autorizacion -------------------------------------------------------
+# Hay DOS formas de autorizar un merge, y el modo llega por entorno. Cualquier
+# valor distinto de los dos conocidos detiene el merge (fail-closed): un modo
+# mal escrito en un workflow no puede convertirse en "fusiona sin comprobar".
+#
+#   comentario    — la orden exacta "fusiona" del propietario (contrato §8).
+#   revision-dual — la aprobacion de los DOS revisores (ADR-205, contrato §14).
+#                   `sirius:ready-for-merge` solo la pone `sirius_apply_verdict.sh`
+#                   con el veredicto REVIEW_APPROVED, que en modo dual es el
+#                   agregado de Claude y Codex: si uno pide cambios o no
+#                   contesta, la incidencia NO llega aqui. Por eso la etiqueta
+#                   ya ES la aprobacion de los dos, y no hace falta pedirsela
+#                   otra vez al propietario.
+#
+# Lo que NO cambia con el modo: las comprobaciones 2 a 7 se ejecutan iguales en
+# los dos casos. El modo decide quien autoriza, no cuanto se verifica.
+AUTORIZACION="${SIRIUS_MERGE_AUTORIZACION:-comentario}"
+case "$AUTORIZACION" in
+  comentario)
+    # Se recorta antes la firma de atribución que algunas herramientas AÑADEN
+    # SOLAS al final de cada comentario: quien comenta por API no controla lo
+    # que el servidor le anexa, y sin esto la orden es inescribible por esa
+    # vía. Se recorta ese bloque y solo ese —desde una línea que sea únicamente
+    # guiones hasta el final—; cualquier otro texto sigue invalidando la orden,
+    # que es lo que esta guarda protege. La autorización sigue siendo del
+    # propietario: el workflow ya exigió `author_association == OWNER` y este
+    # guion lo reverifica por REST.
+    sin_firma="$(printf '%s' "$COMMENT_BODY" | tr -d '\r' \
+      | sed -e '/^[[:space:]]*---[[:space:]]*$/,$d')"
+    trimmed="$(printf '%s' "$sin_firma" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+    lowered="$(printf '%s' "$trimmed" | tr '[:upper:]' '[:lower:]')"
+    if [ "$lowered" != "fusiona" ]; then
+      echo "El comentario de #${ISSUE} no es la orden exacta 'fusiona'; no se actua."
+      exit 0
+    fi
+    ;;
+  revision-dual)
+    echo "Autorizacion por revision dual (ADR-205) en #${ISSUE}: la etiqueta la puso el veredicto agregado de los dos revisores."
+    ;;
+  *)
+    echo "::error::Modo de autorizacion desconocido en #${ISSUE}: '${AUTORIZACION}'. No se fusiona."
+    exit 1
+    ;;
+esac
 
 # --- 2) Reverificacion autoritativa de la etiqueta (evita condiciones de carrera) ---
 labels_now="$(sirius_retry gh api "repos/${REPO}/issues/${ISSUE}" --jq '.labels[].name')" || labels_now=""

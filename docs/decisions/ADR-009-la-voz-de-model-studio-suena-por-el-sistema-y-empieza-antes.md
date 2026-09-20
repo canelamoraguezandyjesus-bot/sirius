@@ -1,6 +1,6 @@
 # ADR-009 — Sacar la voz de Model Studio por el reproductor del sistema y empezar a hablar antes de terminar
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-12
 - Aprobación: la fusión de la PR por el propietario
 

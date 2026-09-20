@@ -1,6 +1,6 @@
 # ADR-190 — La guarda de citas no sale de docs/decisions/: medidas 590 citas y 23 rotas fuera del registro, cero son defectos de este árbol
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-14
 - Aprobación: la fusión de la PR por el propietario
 - Contexto: incidencia #619 (WI-20260914-010842), criterio de medir antes de

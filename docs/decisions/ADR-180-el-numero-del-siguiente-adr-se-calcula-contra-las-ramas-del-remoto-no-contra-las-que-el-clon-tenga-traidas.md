@@ -1,6 +1,6 @@
 # ADR-180 — El numero del siguiente ADR se calcula contra las ramas del remoto, no contra las que el clon tenga traidas
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-12
 - Aprobación: la fusión de la PR por el propietario
 

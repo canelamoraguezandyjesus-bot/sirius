@@ -1,6 +1,6 @@
 # ADR-097 — Un tres no es un fallo sino un veredicto con motivo, y el plazo se reparte por pregunta
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-27
 - Aprobación: la fusión de la PR por el propietario
 - Contexto: S2, incidencia #258. Primera pasada REAL del banco (ejecución 33079519839)

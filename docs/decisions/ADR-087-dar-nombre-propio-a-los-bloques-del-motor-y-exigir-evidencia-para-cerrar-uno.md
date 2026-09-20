@@ -1,6 +1,6 @@
 # ADR-087 — Dar nombre propio a los bloques del motor y exigir evidencia para cerrar uno
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-25
 - Aprobación: la fusión de la PR por el propietario
 - Relacionadas: ADR-080 (el registro de defectos y su guarda), ADR-001

@@ -1,6 +1,6 @@
 # ADR-090 — Darle horario al motor, dentro de la ventana que dejan el reconciliador y el contador
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-25
 - Aprobación: la fusión de la PR por el propietario
 - Relacionadas: ADR-082 (el motor dentro de Actions), ADR-083 (su memoria),

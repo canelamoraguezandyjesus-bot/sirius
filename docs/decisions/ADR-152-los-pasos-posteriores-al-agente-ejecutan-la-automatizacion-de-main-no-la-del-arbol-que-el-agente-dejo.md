@@ -1,6 +1,6 @@
 # ADR-152 — Los pasos posteriores al agente ejecutan la automatización de `main`, no la del árbol que el agente dejó
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-06
 - Aprobación: la fusión de esta PR por el propietario (toca `.github/**`;
   ficha del operador).

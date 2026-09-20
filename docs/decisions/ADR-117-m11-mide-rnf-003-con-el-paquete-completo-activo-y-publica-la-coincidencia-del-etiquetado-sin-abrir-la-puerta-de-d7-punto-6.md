@@ -1,6 +1,6 @@
 # ADR-117 — M11 mide RNF-003 con el paquete completo activo y publica la coincidencia del etiquetado, sin abrir la puerta de D7 punto 6
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-31
 - Aprobación: fusión de la PR por el propietario
 

@@ -1,6 +1,6 @@
 # ADR-174 — La mina en dos pasadas: la lección se declara en el ADR que la produce y las familias se cuentan solas
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-12
 - Aprobación: la fusión de la PR por el propietario
 

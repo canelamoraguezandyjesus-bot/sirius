@@ -1,6 +1,6 @@
 # ADR-051 — El cuerpo de una incidencia pasa por el mismo filtro de confianza que sus comentarios
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-21
 - Aprobación: la fusión de la PR por el propietario.
 

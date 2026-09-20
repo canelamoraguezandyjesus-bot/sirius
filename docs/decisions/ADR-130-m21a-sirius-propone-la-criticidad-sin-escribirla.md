@@ -1,6 +1,6 @@
 # ADR-130 — M21a: Sirius propone la criticidad sin escribirla
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-03
 - Aprobación: [quién y cómo; en este repositorio, la fusión de la PR por el propietario]
 

@@ -1,6 +1,6 @@
 # ADR-151 — La pasada del contador mide y declara su entrega: retraso e higiene de su ventana previa
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-06
 - Aprobación: el propietario, al fusionar la PR de la incidencia #550 (WI-20260906-023326)
 

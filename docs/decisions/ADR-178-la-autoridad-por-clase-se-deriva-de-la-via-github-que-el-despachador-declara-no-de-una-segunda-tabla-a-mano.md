@@ -1,6 +1,6 @@
 # ADR-178 — La autoridad por clase se deriva de la vía GitHub que el despachador declara, no de una segunda tabla a mano
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-12
 - Aprobación: la fusión de la PR por el propietario
 

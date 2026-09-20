@@ -1,17 +1,26 @@
 name: Fusionar bloque Sirius
 
-# Ejecuta el merge de la PR asociada a una incidencia cuando el propietario del
-# repositorio escribe la orden exacta "fusiona" en esa incidencia mientras está
-# en `sirius:ready-for-merge`. El merge sigue bajo control humano (contrato
-# operativo §8): esta automatización solo ejecuta un merge YA autorizado
-# explícitamente por el propietario para ese trabajo concreto; no decide, no
-# reintenta por su cuenta y nunca actúa si la orden, el autor o el estado no
-# son exactamente los esperados. El script vuelve a verificar todo por REST
-# (ver scripts/automation/sirius_merge_on_command.sh) antes de fusionar.
+# Ejecuta el merge de la PR asociada a una incidencia. Hay DOS autorizaciones
+# posibles, y las dos llegan aquí (contrato operativo §8 y §14, ADR-205):
+#
+#   1. La aprobación de los DOS revisores, que es la vía normal desde ADR-205.
+#      `sirius:ready-for-merge` solo la pone `sirius_apply_verdict.sh` con el
+#      veredicto agregado REVIEW_APPROVED: si Claude o Codex piden cambios o no
+#      contestan, la incidencia no llega a esa etiqueta. Por eso la etiqueta ya
+#      ES la aprobación de los dos.
+#   2. La orden exacta "fusiona" del propietario, que sigue existiendo como
+#      mando manual y como forma de reintentar tras resolver un bloqueo.
+#
+# Lo que no cambia: el script vuelve a verificar TODO por REST antes de
+# fusionar —etiqueta, PR única, abierta y sin conflictos, head idéntico al
+# aprobado, Quality verde sobre ese head exacto— y las comprobaciones son las
+# mismas por las dos vías. Ver scripts/automation/sirius_merge_on_command.sh.
 
 on:
   issue_comment:
     types: [created]
+  issues:
+    types: [labeled]
 
 permissions:
   contents: write
@@ -28,8 +37,16 @@ jobs:
     name: Fusionar si la orden es válida
     if: >-
       github.event.issue.pull_request == null &&
-      github.event.comment.author_association == 'OWNER' &&
-      contains(github.event.issue.labels.*.name, 'sirius:ready-for-merge')
+      (
+        (
+          github.event_name == 'issues' &&
+          github.event.label.name == 'sirius:ready-for-merge'
+        ) || (
+          github.event_name == 'issue_comment' &&
+          github.event.comment.author_association == 'OWNER' &&
+          contains(github.event.issue.labels.*.name, 'sirius:ready-for-merge')
+        )
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -52,8 +69,13 @@ jobs:
           SIRIUS_TRIGGER_TOKEN: ${{ secrets.SIRIUS_BOT_TOKEN }}
           GH_REPO: ${{ github.repository }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
-          COMMENT_ID: ${{ github.event.comment.id }}
-          COMMENT_BODY: ${{ github.event.comment.body }}
+          # Por la vía de la etiqueta no hay comentario: el identificador que
+          # usa el marcador de "no he podido fusionar" es el del run, para que
+          # cada intento publique su motivo una sola vez y no se pisen.
+          COMMENT_ID: ${{ github.event.comment.id || format('etiqueta-{0}', github.run_id) }}
+          COMMENT_BODY: ${{ github.event.comment.body || '' }}
+          # Fail-closed: cualquier valor distinto de estos dos detiene el merge.
+          SIRIUS_MERGE_AUTORIZACION: ${{ github.event_name == 'issues' && 'revision-dual' || 'comentario' }}
         run: |
           set -uo pipefail
           bash scripts/automation/sirius_merge_on_command.sh \

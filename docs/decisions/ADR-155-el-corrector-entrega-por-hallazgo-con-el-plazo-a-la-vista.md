@@ -1,6 +1,6 @@
 # ADR-155 — El corrector entrega por hallazgo, con el plazo a la vista
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-06
 - Aprobación: decisión del propietario del 06-09-2026 a las 14:12 UTC
   («Ficha deuda 8 y luego continua»), y la fusión de esta PR (toca

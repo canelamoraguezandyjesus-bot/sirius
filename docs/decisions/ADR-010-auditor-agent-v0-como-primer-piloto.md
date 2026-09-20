@@ -1,6 +1,6 @@
 # ADR-010 — Adoptar Auditor Agent v0 (solo lectura) como primer piloto de agentes
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-12
 - Aprobación: la fusión de la PR #153 por el propietario (2026-08-12)
 - Renumerado: nació como `ADR-008` en la PR #153 y colisionaba con

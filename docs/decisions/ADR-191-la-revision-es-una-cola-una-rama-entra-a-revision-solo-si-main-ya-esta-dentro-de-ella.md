@@ -1,6 +1,6 @@
 # ADR-191 — La revision es una cola: una rama entra a revision solo si main ya esta dentro de ella
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-14
 - Aprobación: el propietario, fusionando la PR de esta rama. La decisión de
   fondo —que la revisión sea una cola— la tomó él el 14-09-2026 de madrugada;

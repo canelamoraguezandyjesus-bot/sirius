@@ -1,6 +1,6 @@
 # ADR-199 — El detector de familia repetida detiene el ciclo, y esa parada vuelve al corrector, no al revisor que la emitió
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-14
 - Aprobación: el propietario, el 14-09-2026, con la cifra de ADR-197 delante
   (14 aciertos y 2 falsos sobre 16). Este ADR ejecuta esa decisión.

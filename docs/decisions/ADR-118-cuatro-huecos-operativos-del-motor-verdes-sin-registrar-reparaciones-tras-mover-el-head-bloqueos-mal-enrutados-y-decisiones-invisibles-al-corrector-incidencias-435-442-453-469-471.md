@@ -1,6 +1,6 @@
 # ADR-118 — Cuatro huecos operativos del motor: verdes sin registrar, reparaciones tras mover el head, bloqueos mal enrutados y decisiones invisibles al corrector (incidencias #435, #442, #453, #469, #471)
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-31
 - Aprobación: fusión de la PR por el propietario. El cambio lo escribe la
   sesión interactiva con autorización explícita del propietario (su orden

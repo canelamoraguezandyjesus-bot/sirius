@@ -1,6 +1,6 @@
 # ADR-119 — Diseñar la ola de paridad en producción: portar la semántica del arnés tras la puerta category_matching_enabled, la petición de contexto real y el plan de optimización de RNF-003 (incidencia #478)
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-31
 - Aprobación: fusión de la PR por el propietario
 

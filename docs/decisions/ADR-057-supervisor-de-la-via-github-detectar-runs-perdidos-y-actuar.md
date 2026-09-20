@@ -1,6 +1,6 @@
 # ADR-057 — Supervisor de la vía GitHub: detectar Runs perdidos y actuar
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-21
 - Aprobación: fusión de la PR de la incidencia #232 por el propietario
 

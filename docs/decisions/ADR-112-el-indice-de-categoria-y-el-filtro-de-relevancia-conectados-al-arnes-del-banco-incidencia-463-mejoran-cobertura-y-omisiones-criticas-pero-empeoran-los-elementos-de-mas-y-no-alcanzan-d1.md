@@ -1,6 +1,6 @@
 # ADR-112 — El índice de categoría y el filtro de relevancia, conectados al arnés del banco (incidencia #463), mejoran cobertura y omisiones críticas pero empeoran los elementos de más y no alcanzan D1
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-30
 - Aprobación: fusión de la PR por el propietario — este ADR documenta el
   diagnóstico que la propia incidencia #463 pide si, tras conectar el índice

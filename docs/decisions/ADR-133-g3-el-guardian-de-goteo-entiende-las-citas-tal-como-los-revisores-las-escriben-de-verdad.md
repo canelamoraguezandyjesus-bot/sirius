@@ -1,6 +1,6 @@
 # ADR-133 — G3: el guardian de goteo entiende las citas tal como los revisores las escriben de verdad
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-04
 - Aprobación: [quién y cómo; en este repositorio, la fusión de la PR por el propietario]
 

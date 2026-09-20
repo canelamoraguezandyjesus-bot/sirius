@@ -1,6 +1,6 @@
 # ADR-128 — M19b: el rescate RF-25/RF-26 y la prioridad de G12 por criticidad
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-03
 - Aprobación: [quién y cómo; en este repositorio, la fusión de la PR por el propietario]
 

@@ -1,6 +1,6 @@
 # ADR-086 — Dar manos al despachador dentro de Actions, para que el encargo llegue al diario del motor
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-25
 - Aprobación: la fusión de la PR por el propietario
 - Relacionadas: ADR-063 (el despachador y su ensayo), ADR-002 (la automatización

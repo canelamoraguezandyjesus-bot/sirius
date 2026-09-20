@@ -1,6 +1,6 @@
 # ADR-014 — Quien escribe una etiqueta notificable usa la identidad real, y el recolector de Codex no aprueba por comentario
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-14
 - Aprobación: la fusión de la PR que introduce este ADR, por el propietario
 - Numeración: 011, 012 y 013 están tomados por ramas abiertas. Se comprueba

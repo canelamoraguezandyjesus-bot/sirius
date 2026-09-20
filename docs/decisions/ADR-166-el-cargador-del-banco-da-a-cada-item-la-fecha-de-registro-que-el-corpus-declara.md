@@ -1,6 +1,6 @@
 # ADR-166 — El cargador del banco da a cada ítem la fecha de registro que el corpus declara
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-08
 - Aprobación: la fusión de esta PR por el propietario.
 

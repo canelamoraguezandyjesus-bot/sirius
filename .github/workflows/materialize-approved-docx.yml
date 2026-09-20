@@ -1,14 +1,16 @@
 name: Materialize approved DOCX artifacts
 
+# RETIRADO el 20-09-2026 (ADR-207), por decisión del propietario: «eso de que
+# cree Word no me convence, yo quiero documentos fáciles de editar, ni uno
+# fijo». Convertía dos documentos a .docx en cada push y los volvía a confirmar;
+# los originales en Markdown ya están en el repositorio y son los editables.
+#
+# No se borra el fichero —aquí no se borra nada (ADR-195)—: se queda sin
+# disparador automático y solo puede lanzarlo una persona a mano desde la
+# pestaña de Actions, el día que alguien necesite un .docx suelto. Si tampoco
+# eso hace falta, se retira el fichero en una decisión aparte.
 on:
-  push:
-    branches:
-      - main
-      - docs/evolution-post-01-head-v11-20260722
-    paths:
-      - "docs/evolution/RECTOR.md"
-      - "docs/robotics/head/RECTOR.md"
-      - ".github/workflows/materialize-approved-docx.yml"
+  workflow_dispatch:
 
 permissions:
   contents: write

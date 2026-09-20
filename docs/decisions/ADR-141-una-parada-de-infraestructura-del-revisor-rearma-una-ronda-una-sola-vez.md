@@ -1,6 +1,6 @@
 # ADR-141 — Una parada de infraestructura del revisor rearma una ronda, una sola vez
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-05
 - Aprobación: la fusión de la PR que introduce este ADR, por el
   propietario — autorizada explícitamente esta noche («o lo haces tú…

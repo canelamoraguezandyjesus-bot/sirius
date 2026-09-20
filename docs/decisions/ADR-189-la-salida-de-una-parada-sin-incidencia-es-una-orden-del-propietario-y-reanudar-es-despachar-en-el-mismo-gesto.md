@@ -1,6 +1,6 @@
 # ADR-189 — La salida de una parada sin incidencia es una orden del propietario, y reanudar es despachar en el mismo gesto
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-13
 - Aprobación: la fusión de la PR por el propietario. No toca `.github/**` ni
   ningún workflow: vive entero en `src/sirius_engine/` y sus pruebas.

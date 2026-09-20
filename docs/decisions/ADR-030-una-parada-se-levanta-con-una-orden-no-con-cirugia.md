@@ -1,6 +1,6 @@
 # ADR-030 — Todo estado de parada declara la orden que lo levanta
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-18
 - Aprobación: la fusión de la PR de esta rama por el propietario.
 

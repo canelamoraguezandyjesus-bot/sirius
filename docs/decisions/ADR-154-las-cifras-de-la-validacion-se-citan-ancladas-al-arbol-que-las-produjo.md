@@ -1,6 +1,6 @@
 # ADR-154 — Las cifras de la validación se citan ancladas al árbol que las produjo
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-06
 - Aprobación: la fusión de esta PR por el propietario (ficha del operador;
   no toca `.github/**`: vive en dos prompts, el manifiesto de prompts, el

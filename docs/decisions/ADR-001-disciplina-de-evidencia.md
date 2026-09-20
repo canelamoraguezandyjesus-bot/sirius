@@ -1,6 +1,6 @@
 # ADR-001 — Instrumentar la disciplina de evidencia con una skill y este registro
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-08
 - Aprobación: la fusión de la PR #139 por el propietario
 

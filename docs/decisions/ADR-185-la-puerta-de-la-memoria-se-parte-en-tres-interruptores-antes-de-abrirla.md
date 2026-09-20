@@ -1,6 +1,6 @@
 # ADR-185 — la puerta de la memoria se parte en tres interruptores antes de abrirla
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-13
 - Aprobación: el propietario, al fusionar la PR de la incidencia #603 (WI-20260913-PUERTA-1)
 

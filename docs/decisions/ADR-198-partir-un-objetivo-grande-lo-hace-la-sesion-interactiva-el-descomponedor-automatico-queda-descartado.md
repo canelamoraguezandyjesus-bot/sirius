@@ -1,6 +1,6 @@
 # ADR-198 — Partir un objetivo grande lo hace la sesión interactiva; el descomponedor automático queda descartado
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-14
 - Aprobación: el propietario. **La decisión es suya y ya la tomó** el 14-09-2026;
   este ADR la escribe y cierra la incidencia #341, que llevaba desde el

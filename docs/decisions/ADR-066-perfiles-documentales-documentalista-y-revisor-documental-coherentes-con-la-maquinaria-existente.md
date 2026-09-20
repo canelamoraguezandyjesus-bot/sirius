@@ -1,6 +1,6 @@
 # ADR-066 — Perfiles documentales: documentalista y revisor documental, coherentes con la maquinaria existente
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-22
 - Aprobación: la fusión de la PR que introduce este ADR, por el propietario
 

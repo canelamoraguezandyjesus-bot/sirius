@@ -1,6 +1,6 @@
 # ADR-095 — La escalera de cuatro preguntas, y el atestado que impide medir un modelo muerto
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-27
 - Aprobación: la fusión de la PR por el propietario
 - Contexto: S2/B1, incidencia #258. Nace de cuatro rondas fallidas en una noche

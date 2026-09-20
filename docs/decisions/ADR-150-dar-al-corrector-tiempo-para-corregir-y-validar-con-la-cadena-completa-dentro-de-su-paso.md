@@ -1,6 +1,6 @@
 # ADR-150 — Dar al corrector tiempo para corregir y validar con la cadena completa dentro de su paso
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-06
 - Aprobación: la fusión de esta PR por el propietario (toca `.github/**`;
   ficha del operador, deuda 8 de la bitácora en su parte de presupuesto).

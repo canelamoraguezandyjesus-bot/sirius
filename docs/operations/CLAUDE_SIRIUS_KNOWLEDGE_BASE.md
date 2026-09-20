@@ -1,5 +1,14 @@
 # Base de conocimiento de Claude sobre el Proyecto Sirius
 
+> **DEROGADO el 20-09-2026 (ADR-207).** Este documento es una foto del
+> 20-07-2026 y ya no describe el repositorio: dice que el contrato operativo va
+> por la versión 1.1 cuando va por la 1.11, y su mapa lo hace hoy `MEMORIA.md`,
+> que se genera del árbol y no puede quedarse atrás. **No se borra** —aquí no se
+> borra nada (ADR-195)— y se conserva por dos piezas que otros ficheros citan:
+> la frontera de confianza de §14, que cita ADR-012, y el retrato de julio, que
+> es la línea base contra la que se lee lo que cambió después. **No lo
+> actualices: lee `MEMORIA.md`.**
+
 **Naturaleza:** mapa operativo derivado, para sesiones futuras de Claude. **No es una fuente canónica** y nunca prevalece sobre `docs/canonical/`, `docs/canonical/STATUS.md`, `docs/implementation/PLAN.md`, `REPOSITORY_STATUS.md` ni `AGENTS.md`. Ante cualquier duda o contradicción, releer las fuentes y corregir este documento.
 
 **Fecha de auditoría:** 20 de julio de 2026.

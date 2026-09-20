@@ -1,6 +1,6 @@
 # ADR-193 — El doble de `gh` rechaza lo que el `gh` real rechaza, y la red de seguridad vuelve a poder fechar
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-14
 - Aprobación: el propietario, fusionando la PR de esta rama.
 

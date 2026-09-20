@@ -1,6 +1,6 @@
 # ADR-148 — Dar la memoria por bien hecha solo con todos los números del banco bien, y llegar por palancas medidas
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-05
 - Aprobación: la fusión de esta PR por el propietario. El criterio de fondo es
   suyo y consta en la sesión de esta noche; lo que la fusión aprueba es su

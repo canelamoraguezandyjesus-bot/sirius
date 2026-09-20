@@ -1,6 +1,6 @@
 # ADR-044 — Abrir el repositorio al público sin que el propio repositorio lo desmienta
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-20
 - Aprobación: decisión del propietario (20-08-2026, «Vale, pues lo hacemos público. Ya está, decidido»); la fusión de la PR lo pasa a APROBADO
 - Relacionadas: ADR-002 (la automatización no edita `.github/**`; una sesión interactiva sí), ADR-042 (un paso sin plazo propio puede costar el trabajo entero)

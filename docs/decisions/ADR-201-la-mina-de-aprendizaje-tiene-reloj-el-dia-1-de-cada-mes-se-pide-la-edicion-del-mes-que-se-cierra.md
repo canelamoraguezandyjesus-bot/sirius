@@ -1,6 +1,6 @@
 # ADR-201 — La mina de aprendizaje tiene reloj: el día 1 de cada mes se pide la edición del mes que se cierra
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-14
 - Aprobación: el propietario, el 14-09-2026: «la poda mensual de la mina lo
   hacemos».

@@ -1,6 +1,6 @@
 # ADR-168 — Listar por vigencia cuando la pregunta declara un intervalo y la busqueda lexica no tiene de donde partir
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-08
 - Aprobación: la fusión de esta PR por el propietario.
 - Esta ficha es además la **nota de arranque** de la rama (ADR-001, skill

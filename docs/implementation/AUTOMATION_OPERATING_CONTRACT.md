@@ -1,10 +1,10 @@
 # SIRIUS - Contrato operativo de automatización
 
 - **Versión:** 1.10 (§13). Anterior: 1.9, del 22 de agosto de 2026
-- **Fecha:** 8 de septiembre de 2026 (v1.10); 22 de agosto de 2026 (v1.9)
-- **Estado:** VIGENTE (§4, §5, §9, §11 y §12 actualizadas; ver §10.3 a §10.9). La v1.10 (§13) entra en vigor con la fusión de la Pull Request que la introduce, por el propietario
+- **Fecha:** 20 de septiembre de 2026 (v1.11); 8 de septiembre de 2026 (v1.10); 22 de agosto de 2026 (v1.9)
+- **Estado:** VIGENTE (§4, §5, §8, §9, §11 y §12 actualizadas; ver §10.3 a §10.9, §13 y §14). La v1.11 (§14) entra en vigor con la fusión de la Pull Request que la introduce
 - **Autoridad:** Operativa para el desarrollo automatizado de Sirius 0.1
-- **Sustituye:** la v1.10 sustituye a la v1.9 del 22 de agosto de 2026, que sustituyó a la 1.8 del 21 de agosto de 2026
+- **Sustituye:** la v1.11 sustituye a la v1.10 del 8 de septiembre de 2026, que sustituyó a la v1.9 del 22 de agosto de 2026
 - **No modifica:** Producto, Arquitectura Técnica, ATD, requisitos ni alcance de Sirius 0.1
 
 ## 0. Propósito
@@ -364,23 +364,27 @@ La notificación es secundaria y nunca debe romper el flujo principal: ante un f
 
 ## 8. Merge
 
-El merge permanece bajo control humano. Lo que cambia en esta versión es
-únicamente el canal de autorización y quién ejecuta el comando técnico; la
-decisión de fusionar sigue siendo exclusivamente del usuario para cada PR
-concreta.
+> **Enmendada por §14 (v1.11, ADR-205).** Desde el 20-09-2026 la autorización
+> de merge es **la aprobación de los dos revisores**, no el comentario del
+> propietario. Lo que sigue describe la vía del comentario, que se conserva
+> como mando manual y como forma de reintentar tras un bloqueo; las
+> comprobaciones de más abajo se aplican igual por las dos vías.
 
-Ningún agente, Routine, workflow o aplicación puede fusionar una PR sin una
-autorización explícita del usuario para ese merge. Esa autorización se
-expresa mediante un comentario del propietario del repositorio, con la
-palabra exacta `fusiona`, escrito directamente sobre la incidencia que está en
-`sirius:ready-for-merge`. Ninguna otra persona, bot o cuenta puede
-autorizarlo: el workflow verifica `author_association == OWNER` antes de
-actuar.
+El merge permanece bajo control humano en el sentido que §14 precisa: lo
+autoriza la revisión, que el propietario gobierna, y no una sesión por su
+cuenta.
+
+La vía manual se expresa mediante un comentario del propietario del
+repositorio, con la palabra exacta `fusiona`, escrito directamente sobre la
+incidencia que está en `sirius:ready-for-merge`. Ninguna otra persona, bot o
+cuenta puede usar esa vía: el workflow verifica `author_association == OWNER`
+antes de actuar.
 
 La ejecución técnica del merge la realiza `.github/workflows/merge-sirius-work.yml`
-(vía `scripts/automation/sirius_merge_on_command.sh`), disparado únicamente por
-ese comentario. Antes de fusionar se verificará por REST, en el momento del
-comentario (no solo cuando se alcanzó `ready-for-merge`):
+(vía `scripts/automation/sirius_merge_on_command.sh`), disparado por ese
+comentario o por la llegada de la etiqueta `sirius:ready-for-merge` (§14).
+Antes de fusionar se verificará por REST, en el momento de actuar (no solo
+cuando se alcanzó `ready-for-merge`):
 
 - que la incidencia sigue en `sirius:ready-for-merge`;
 - que existe una única PR asociada, abierta y fusionable (no borrador, no
@@ -392,8 +396,8 @@ comentario (no solo cuando se alcanzó `ready-for-merge`):
 
 Si cualquier condición falla, el workflow no fusiona: publica en la incidencia
 una explicación concreta del motivo y se detiene. No reintenta por su cuenta;
-una nueva autorización requiere que el usuario vuelva a escribir `fusiona`
-después de resolver lo señalado.
+un nuevo intento requiere que se resuelva lo señalado y que vuelva a llegar una
+autorización, por cualquiera de las dos vías.
 
 Tras un merge exitoso, `complete-sirius-after-merge.yml` sigue siendo quien
 transiciona la incidencia a `sirius:completed` y la cierra, exactamente como
@@ -404,9 +408,11 @@ antes de este cambio.
 Está prohibido:
 
 - push directo a `main`;
-- fusionar una PR sin el comentario explícito de autorización descrito en §8
-  (ese comentario, no la mera llegada a `sirius:ready-for-merge`, es la
-  autorización);
+- fusionar una PR sin una de las dos autorizaciones de §8 y §14: la aprobación
+  de los **dos** revisores —que es lo que significa la llegada a
+  `sirius:ready-for-merge`— o el comentario explícito del propietario. Fusionar
+  sin ninguna de las dos, o saltándose cualquiera de las comprobaciones previas
+  al merge, sigue prohibido;
 - reducir o falsear pruebas para conseguir verde;
 - ocultar fallos;
 - introducir servicios de pago, APIs, claves o suscripciones no aprobadas;
@@ -991,3 +997,49 @@ estado en curso*. Cuatro cosas quedan fijadas:
 | Corre aunque el reflejo falle (`if: always()`) | Un reflejo a medias es justo lo que hay que poder ver. Si no hay diario, el paso sale en verde sin escribir |
 | No escribe en `main` ni en GitHub | Solo en el worktree de la rama de memoria, que confirma el paso siguiente ya existente |
 | La vista de conocimiento va por otro cauce | `MEMORIA.md`, en la raíz de `main`, la regenera quien cambia un ADR, un documento o un registro, en su PR; `tests/engine/test_memoria.py` la rechaza desactualizada |
+
+## 14. Versión 1.11 — la aprobación de los dos revisores es la autorización de merge
+
+**Origen.** ADR-205, decidido por el propietario el 20-09-2026: «quiero que a
+partir de ahora puedas fusionar todo simple y cuando ambos revisores den el
+visto bueno».
+
+### 14.1 Qué se decide
+
+La autorización de merge pasa a ser **la aprobación de los dos revisores**. El
+comentario `fusiona` del propietario deja de ser necesario y se conserva como
+mando manual.
+
+La etiqueta `sirius:ready-for-merge` puede valer como autorización porque ya
+**es** esa aprobación: la pone un único sitio, `sirius_apply_verdict.sh` en su
+rama `REVIEW_APPROVED`, y ese veredicto en modo dual es el agregado de Claude y
+Codex. Si uno pide cambios, la incidencia va a `repairing`; si uno no contesta
+dentro del plazo absoluto, va a `failed-safely`. Por ninguno de esos dos
+caminos se llega a `ready-for-merge`.
+
+### 14.2 Qué NO cambia
+
+**Las comprobaciones previas al merge**, que son las mismas por las dos vías y
+se vuelven a leer por REST en el momento de actuar: etiqueta vigente, una única
+PR asociada, abierta, no borrador y no fusionada, sin conflictos con la base, no
+por detrás de la base, head idéntico al aprobado y Quality verde sobre ese head
+exacto. Si algo falla, no se fusiona: se publica el motivo y se para.
+
+Tampoco cambia el cierre: `complete-sirius-after-merge.yml` sigue siendo quien
+lleva la incidencia a `sirius:completed` y la cierra.
+
+### 14.3 El mecanismo, y su guarda
+
+`merge-sirius-work.yml` gana el disparador `issues: [labeled]`, acotado a
+`sirius:ready-for-merge`, y pasa al guion el modo de autorización
+`revision-dual`. El guion acepta exactamente dos modos —`comentario`, que es el
+de siempre y el que rige si nadie declara nada, y `revision-dual`— y
+**cualquier otro valor detiene el merge**: una errata en un YAML no puede
+convertirse en «fusiona sin comprobar». Lo fija
+`tests/automation/test_sirius_merge.py`, verificado por mutación.
+
+### 14.4 Cómo se revierte
+
+Quitando el disparador `issues: [labeled]` del workflow. El modo por omisión
+del guion sigue siendo el de siempre, así que el comportamiento anterior vuelve
+sin tocar una línea del script.

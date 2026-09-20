@@ -1,6 +1,6 @@
 # ADR-188 — Parar antes de crear la incidencia cuando la orden pide tocar lo que el motor no puede escribir
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-13
 - Aprobación: la fusión de la PR que introduce este ADR, por el propietario
 

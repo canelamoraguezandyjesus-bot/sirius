@@ -1,6 +1,6 @@
 # ADR-006 — Declarar la trazabilidad PA/SP y comprobarla por máquina, en vez de derivarla por búsqueda
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-10
 - Aprobación: la fusión de la PR por el propietario
 

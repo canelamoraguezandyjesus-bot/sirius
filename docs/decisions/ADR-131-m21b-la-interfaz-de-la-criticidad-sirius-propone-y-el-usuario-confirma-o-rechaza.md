@@ -1,6 +1,6 @@
 # ADR-131 — M21b: la interfaz de la criticidad, Sirius propone y el usuario confirma o rechaza
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-03
 - Aprobación: [quién y cómo; en este repositorio, la fusión de la PR por el propietario]
 

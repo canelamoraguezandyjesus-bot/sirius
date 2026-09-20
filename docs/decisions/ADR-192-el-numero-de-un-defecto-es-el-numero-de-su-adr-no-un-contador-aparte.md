@@ -1,6 +1,6 @@
 # ADR-192 — El numero de un defecto es el numero de su ADR, no un contador aparte
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-14
 - Aprobación: el propietario, fusionando la PR de esta rama. La decisión de fondo
   —que el `H-N` deje de escribirse a mano— la tomó él el 14-09-2026 de madrugada.

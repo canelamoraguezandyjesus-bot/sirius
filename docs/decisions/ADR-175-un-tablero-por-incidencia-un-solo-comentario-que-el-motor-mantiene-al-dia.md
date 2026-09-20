@@ -1,6 +1,6 @@
 # ADR-175 — Un tablero por incidencia: un solo comentario que el motor mantiene al día
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-12
 - Aprobación: la fusión de la PR por el propietario
 

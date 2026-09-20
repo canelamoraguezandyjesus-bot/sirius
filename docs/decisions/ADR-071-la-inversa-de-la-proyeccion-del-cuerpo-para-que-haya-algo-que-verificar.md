@@ -1,6 +1,6 @@
 # ADR-071 — La inversa de la proyección del cuerpo, para que haya algo que verificar
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-22
 - Aprobación: la fusión de la PR de esta rama por el propietario
 - Nota de arranque de esta rama: este ADR. Publicado antes del primer commit.

@@ -1,6 +1,6 @@
 # ADR-012 — Un proceso local que corre como el usuario está dentro de la frontera de confianza
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-14
 - Aprobación: la fusión de la PR que introduce este ADR, por el propietario
 

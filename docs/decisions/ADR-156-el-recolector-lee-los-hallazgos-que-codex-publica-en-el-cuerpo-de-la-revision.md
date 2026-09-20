@@ -1,6 +1,6 @@
 # ADR-156 — El recolector lee los hallazgos que Codex publica en el cuerpo de la revisión
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-07
 - Aprobación: mandato nocturno del propietario del 07-09-2026 («Ya está códex
   asi q dale», hacia las 04:19 UTC) y la fusión de esta PR (toca

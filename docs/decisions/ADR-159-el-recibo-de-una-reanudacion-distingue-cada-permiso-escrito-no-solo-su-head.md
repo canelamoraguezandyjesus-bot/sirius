@@ -1,6 +1,6 @@
 # ADR-159 — El recibo de una reanudación distingue cada permiso escrito, no solo su head
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-08
 - Aprobación: mandato del propietario del 07/08-09-2026 («acaba lo que queda
   pendiente», 03:1x UTC+2), que ordena saldar las deudas abiertas antes de

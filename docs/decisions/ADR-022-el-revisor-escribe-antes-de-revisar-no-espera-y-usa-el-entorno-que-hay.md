@@ -1,6 +1,6 @@
 # ADR-022 — Endurecer el prompt del revisor: veredicto provisional, prohibición de esperar nada (subagentes incluidos) y revisión con el entorno acotado que hay
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-16
 - Aprobación: la fusión de la PR #180 por el propietario.
 

@@ -1,6 +1,6 @@
 # ADR-184 — La prohibicion no es una peticion: el detector de sensibilidad exige que el marcador no vaya negado
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-13
 - Aprobación: [quién y cómo; en este repositorio, la fusión de la PR por el propietario]
 

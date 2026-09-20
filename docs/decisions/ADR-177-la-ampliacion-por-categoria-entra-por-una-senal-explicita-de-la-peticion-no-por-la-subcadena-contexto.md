@@ -1,6 +1,6 @@
 # ADR-177 — La ampliación por categoría entra por una señal explícita de la petición, no por la subcadena «contexto»
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-12
 - Aprobación: el propietario, al fusionar la PR de la incidencia #581.
 

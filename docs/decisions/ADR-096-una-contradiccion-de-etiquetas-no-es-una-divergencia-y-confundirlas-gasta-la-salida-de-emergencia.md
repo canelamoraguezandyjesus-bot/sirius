@@ -1,6 +1,6 @@
 # ADR-096 — Una contradicción de etiquetas no es una divergencia, y confundirlas gasta la salida de emergencia
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-27
 - Aprobación: la fusión de la PR por el propietario
 - Contexto: D1a/D1c, contrato §11.2 y §11.4. Nace de leer el registro real de la

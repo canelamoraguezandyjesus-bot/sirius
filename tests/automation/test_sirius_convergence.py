@@ -1074,9 +1074,12 @@ def test_ci_failures_do_not_contaminate_the_progress_measure() -> None:
 # juntos, así que aquí se ata uno al otro.
 WORK_ITEM_TEMPLATE = REPO_ROOT / ".github" / "ISSUE_TEMPLATE" / "sirius-work-item.yml"
 
+# `CLAUDE_SIRIUS_KNOWLEDGE_BASE.md` estaba aquí y salió el 20-09-2026: quedó
+# derogado por ADR-207 y un documento archivado NO debe mantenerse al día —esa
+# es justo la diferencia entre archivar y conservar—. Exigirle la política
+# vigente obligaría a actualizar para siempre una foto de julio.
 DOCUMENTS_STATING_CURRENT_POLICY = (
     WORK_ITEM_TEMPLATE,
-    REPO_ROOT / "docs" / "operations" / "CLAUDE_SIRIUS_KNOWLEDGE_BASE.md",
     REPO_ROOT / "scripts" / "automation" / "prompts" / "corrector.md",
 )
 

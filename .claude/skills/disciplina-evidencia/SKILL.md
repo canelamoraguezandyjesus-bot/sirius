@@ -73,7 +73,7 @@ decisión, dilo explícitamente.
 Consulta y AMPLÍA [patrones.md](patrones.md): entra un patrón cuando ha
 mordido dos veces; se poda lo que lleve un trimestre sin usarse.
 
-## Sobre lo mecánico
+## Qué NO hace este método
 
 Solo hay un hook: el que empuja al cerrar el turno si la rama tiene trabajo sin
 evidencia — **y ni siquiera eso lo garantiza**: si no encuentra base de
@@ -83,3 +83,9 @@ quince defectos: decidir desde el texto de un comando si ejecutará un push
 exige un intérprete de shell entero (ADR-001). **Este método no lo sostiene un
 mecanismo, lo sostienes tú**; lo que ata de verdad es publicar el criterio
 donde el humano lo ve, no una puerta.
+
+Y lo que tampoco hace, dicho para que nadie lo confunda con una garantía: **no
+comprueba el contenido de lo que afirmas**, solo exige que enseñes con qué lo
+sostienes; **no decide por ti el criterio de parada**, que es tuyo y por eso
+ata; y **no sustituye a la revisión adversarial**: un método cumplido a solas
+sigue siendo una sola cabeza mirando.

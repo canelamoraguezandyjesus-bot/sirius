@@ -1,6 +1,6 @@
 # ADR-025 — Ninguna afirmación de un prompt sobre su entorno vale sin una prueba que la ate al workflow que lo ejecuta
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-17
 - Aprobación: la fusión de la PR de esta rama por el propietario.
 

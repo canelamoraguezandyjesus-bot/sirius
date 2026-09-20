@@ -1,6 +1,6 @@
 # ADR-028 — Una avería transitoria de un tercero no justifica una invariante permanente en la suite
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-17
 - Aprobación: la fusión de la PR de esta rama por el propietario.
 - Revisa: [ADR-027](ADR-027-las-etiquetas-se-leen-del-objeto-de-la-incidencia.md), puntos 2 y 3 de su decisión.

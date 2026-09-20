@@ -1,6 +1,6 @@
 # ADR-182 — La guarda del registro de defectos deriva de los ADR que declaran leccion
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-13
 - Aprobación: la fusión de la PR por el propietario
 
