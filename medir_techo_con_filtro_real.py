@@ -119,7 +119,63 @@ def main() -> int:
     print("    peticion fija  + filtro real :  8/47; 218 de mas; 0 criticas; 70/81")
     print("    peticion declarada SIN filtro: 17/47; 162 de mas; 0 criticas; 78/81")
     print("=" * 66)
+
+    _desglose(banco, ejecucion)
     return 0
+
+
+def _desglose(banco, ejecucion) -> None:
+    """Separa el exceso DECIDIDO del que nadie decidio (entrada 136).
+
+    `aciertos_exactos` exige conjunto IDENTICO al esperado, asi que un solo
+    protegido de mas suspende el caso -- y ADR-128 manda meterlo. Las dos
+    reglas no pueden cumplirse a la vez, y hasta ahora solo se imprimia una.
+    Esto imprime las dos al lado, para que la decision D-1 de
+    `docs/audits/decisiones-abiertas-del-propietario.md` se pueda tomar con
+    datos de esta maquina y este modelo, en vez de con los de la grabacion.
+
+    NO es una metrica nueva del banco y no sustituye a nada: el numero que
+    cuenta sigue siendo `aciertos_exactos`, impreso arriba.
+    """
+    protegidas = {i["id"] for i in banco["items"] if i["criticidad"] is not None}
+    falta_algo = solo_protegido = sobra_no_decidido = 0
+    elementos_no_decididos = 0
+    casos_no_decididos: list[tuple[str, int]] = []
+    for caso in banco["casos"]:
+        esperado = set(caso["resultado_esperado"])
+        entregado = set(ejecucion.obtenido_por_caso.get(caso["id"], ()))
+        if esperado - entregado:
+            falta_algo += 1
+            continue
+        sobra_sin_decidir = (entregado - esperado) - protegidas
+        if sobra_sin_decidir:
+            sobra_no_decidido += 1
+            elementos_no_decididos += len(sobra_sin_decidir)
+            casos_no_decididos.append((caso["id"], len(sobra_sin_decidir)))
+        else:
+            solo_protegido += 1
+    print()
+    print("=" * 66)
+    print("DESGLOSE: que clase de fallo es cada suspenso  (NO es otra metrica)")
+    print("=" * 66)
+    print(f"  Le falta algo esperado ............... {falta_algo}/47"
+          "   <- fallo por cualquier regla")
+    print(f"  No le falta nada y solo sobra")
+    print(f"    alguna PROTEGIDA (ADR-128 la manda)  {solo_protegido}/47"
+          "   <- exceso DECIDIDO")
+    print(f"  No le falta nada pero sobra algo que")
+    print(f"    nadie decidio ...................... {sobra_no_decidido}/47"
+          f"   ({elementos_no_decididos} elementos)")
+    if casos_no_decididos:
+        peores = sorted(casos_no_decididos, key=lambda x: -x[1])[:5]
+        print("    los casos con mas exceso sin decidir: "
+              + ", ".join(f"{cid} (+{n})" for cid, n in peores))
+    print()
+    print("  Sobre la grabacion congelada esto daba 9 / 36 / 2 (entrada 136).")
+    print("  El del MEDIO es cuantos casos pasarian si la regla perdonase la")
+    print("  critica de mas -- los del tercero seguirian suspendiendo, porque su")
+    print("  exceso no lo decidio nadie. Es la decision D-1, y es de Andy.")
+    print("=" * 66)
 
 
 if __name__ == "__main__":
