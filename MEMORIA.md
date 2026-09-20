@@ -26,12 +26,12 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **202**.
+- Decisiones (ADR): **203**.
 - Bloques del motor: 17 cerrado, 2 fuera_de_alcance, 1 pendiente.
 - Defectos registrados: 1 abierto, 57 cerrado.
 - Ideas aparcadas o descartadas: 3 aparcada, 2 descartada, 1 promovida.
 - Investigaciones: **9** (fotos con fecha; caducan).
-- Documentos: **148**, de los que **97** no declaran fecha.
+- Documentos: **149**, de los que **97** no declaran fecha.
 
 ## Qué se decidió: los ADR, del más reciente al más antiguo
 
@@ -48,6 +48,7 @@ huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| [210](docs/decisions/ADR-210-archivar-las-incidencias-que-ya-no-describen-nada-y-decir-donde-vive-la-bitacora-del-ciclo.md) | 2026-09-20 | APROBADO | Archivar las incidencias que ya no describen nada, y decir dónde vive la bitácora del ciclo | De las nueve abiertas que la decisión 2 nombraba: |
 | [209](docs/decisions/ADR-209-un-adr-fusionado-esta-aprobado-y-propuesto-deja-de-existir-como-estado.md) | 2026-09-20 | APROBADO | Un ADR fusionado está aprobado, y PROPUESTO deja de existir como estado | Un ADR que está en el árbol está aprobado, porque lo que lo aprueba, según él mismo, es la fusión de su PR. `PROPUESTO` deja de existir como estado. |
 | [208](docs/decisions/ADR-208-las-ideas-aparcadas-tienen-registro-y-el-metodo-de-conversacion-del-propietario-entra-en-agents.md) | 2026-09-20 | APROBADO | Las ideas aparcadas tienen registro, y el método de conversación del propietario entra en AGENTS.md | `docs/ideas/registro_de_ideas.yml`, con tres estados y un campo que cada uno exige: |
 | [207](docs/decisions/ADR-207-archivar-los-dos-mapas-caducados-de-julio-retirar-el-workflow-de-word-y-poner-en-d4-el-estado-que-ya-tenia.md) | 2026-09-20 | APROBADO | Archivar los dos mapas caducados de julio, retirar el workflow de Word y poner en D4 el estado que ya tenía | `docs/operations/CLAUDE_SIRIUS_KNOWLEDGE_BASE.md` y `docs/operations/CLAUDE_PROJECT_ONBOARDING.md` son fotos del 20-07-2026. El primero dice que el contrato operativo va por la v1.1 cuando va por la v1.11, y el trabajo de los dos lo hace… |
@@ -263,7 +264,7 @@ de memoria.
 | Familia | Veces | Hay prueba que la haga cumplir | ADR |
 |---|---|---|---|
 | `regla-que-depende-de-que-alguien-se-acuerde` | 6 | sí | [192](docs/decisions/ADR-192-el-numero-de-un-defecto-es-el-numero-de-su-adr-no-un-contador-aparte.md), [191](docs/decisions/ADR-191-la-revision-es-una-cola-una-rama-entra-a-revision-solo-si-main-ya-esta-dentro-de-ella.md), [188](docs/decisions/ADR-188-el-alcance-que-el-motor-no-puede-escribir-para-la-puerta-antes-de-crear-la-incidencia-y-remite-a-la-sesion-interactiva.md), [182](docs/decisions/ADR-182-la-guarda-del-registro-de-defectos-deriva-de-los-adr-que-declaran-leccion.md), [179](docs/decisions/ADR-179-la-guarda-de-piezas-sin-llamante-deriva-su-inventario-del-codigo-del-motor.md), [174](docs/decisions/ADR-174-la-mina-en-dos-pasadas-la-leccion-se-declara-en-el-adr-que-la-produce-y-las-familias-se-cuentan-solas.md) |
-| `pieza-sin-lector` | 4 | sí | [209](docs/decisions/ADR-209-un-adr-fusionado-esta-aprobado-y-propuesto-deja-de-existir-como-estado.md), [207](docs/decisions/ADR-207-archivar-los-dos-mapas-caducados-de-julio-retirar-el-workflow-de-word-y-poner-en-d4-el-estado-que-ya-tenia.md), [183](docs/decisions/ADR-183-la-ausencia-de-run-de-quality-para-el-head-se-encamina-no-se-espera-en-silencio.md), [175](docs/decisions/ADR-175-un-tablero-por-incidencia-un-solo-comentario-que-el-motor-mantiene-al-dia.md) |
+| `pieza-sin-lector` | 5 | no en todas | [210](docs/decisions/ADR-210-archivar-las-incidencias-que-ya-no-describen-nada-y-decir-donde-vive-la-bitacora-del-ciclo.md), [209](docs/decisions/ADR-209-un-adr-fusionado-esta-aprobado-y-propuesto-deja-de-existir-como-estado.md), [207](docs/decisions/ADR-207-archivar-los-dos-mapas-caducados-de-julio-retirar-el-workflow-de-word-y-poner-en-d4-el-estado-que-ya-tenia.md), [183](docs/decisions/ADR-183-la-ausencia-de-run-de-quality-para-el-head-se-encamina-no-se-espera-en-silencio.md), [175](docs/decisions/ADR-175-un-tablero-por-incidencia-un-solo-comentario-que-el-motor-mantiene-al-dia.md) |
 | `regla-del-propietario-que-solo-vive-en-una-conversacion` | 3 | sí | [208](docs/decisions/ADR-208-las-ideas-aparcadas-tienen-registro-y-el-metodo-de-conversacion-del-propietario-entra-en-agents.md), [204](docs/decisions/ADR-204-el-propietario-decide-producto-dinero-y-salud-y-lo-tecnico-lo-resuelve-la-sesion.md), [195](docs/decisions/ADR-195-podar-significa-archivar-en-este-repositorio-no-se-borra-nada.md) |
 | `lista-a-mano` | 2 | sí | [181](docs/decisions/ADR-181-la-contradiccion-de-etiquetas-se-decide-por-lo-que-proyectan-no-por-cuantas-son.md), [178](docs/decisions/ADR-178-la-autoridad-por-clase-se-deriva-de-la-via-github-que-el-despachador-declara-no-de-una-segunda-tabla-a-mano.md) |
 | `medir-lo-que-se-tiene-en-vez-de-lo-que-hay` | 2 | sí | [184](docs/decisions/ADR-184-la-prohibicion-no-es-una-peticion-el-detector-de-sensibilidad-exige-que-el-marcador-no-vaya-negado.md), [180](docs/decisions/ADR-180-el-numero-del-siguiente-adr-se-calcula-contra-las-ramas-del-remoto-no-contra-las-que-el-clon-tenga-traidas.md) |
@@ -296,6 +297,7 @@ de memoria.
 
 ### `pieza-sin-lector`
 
+- **[ADR-210](docs/decisions/ADR-210-archivar-las-incidencias-que-ya-no-describen-nada-y-decir-donde-vive-la-bitacora-del-ciclo.md)** — el tablero de incidencias seguiría llenándose de cosas (sin prueba que lo haga cumplir: ninguna prueba: cerrar una incidencia ocurre en GitHub, no).
 - **[ADR-209](docs/decisions/ADR-209-un-adr-fusionado-esta-aprobado-y-propuesto-deja-de-existir-como-estado.md)** — el campo de estado seguiría siendo ruido, y cada ADR (lo hace cumplir `tests/automation/test_estado_de_los_adr.py`).
 - **[ADR-207](docs/decisions/ADR-207-archivar-los-dos-mapas-caducados-de-julio-retirar-el-workflow-de-word-y-poner-en-d4-el-estado-que-ya-tenia.md)** — seguirían conviviendo documentos que nadie mantiene y (lo hace cumplir `tests/automation/test_registro_de_bloques.py`).
 - **[ADR-183](docs/decisions/ADR-183-la-ausencia-de-run-de-quality-para-el-head-se-encamina-no-se-espera-en-silencio.md)** — escribir la rama «no hay nada que hacer» de un encaminador como un `return 0` con un `echo`, de modo que la única prueba de que el ciclo se ha parado viva en un log que nadie lee. (lo hace cumplir `tests/automation/test_sirius_apply_verdict.py`).
@@ -466,6 +468,7 @@ nada por su cuenta. «Sin fecha declarada» es un aviso, no un dato.
 | 2026-09-19 | [La auditoría de la forma de trabajar, segunda edición: las 21 fichas de agosto, revalidadas el 19 de septiembre de 2026](docs/audits/AUDITORIA_FORMA_DE_TRABAJO_2026-09.md) |
 | sin fecha declarada | [Auditoría integral de incorporación de Claude — Proyecto Sirius (julio 2026)](docs/audits/AUDITORIA_INTEGRAL_INCORPORACION_CLAUDE_2026-07.md) |
 | sin fecha declarada | [Defectos encontrados en el Work Engine — parte para actuar](docs/audits/DEFECTOS_ENCONTRADOS_2026-08-20.md) |
+| 2026-09-20 | [Dónde vive la bitácora del ciclo, y por qué no está aquí todavía](docs/audits/DONDE_VIVE_LA_BITACORA_DEL_CICLO.md) |
 | sin fecha declarada | [Lo que queda, y por qué no está hecho — 14 de septiembre de 2026](docs/audits/PENDIENTE_Y_POR_QUE_2026-09-14.md) |
 | sin fecha declarada | [SIRIUS — Auditoría de la cadena de activación y estados (20-jul-2026, 2ª pasada)](docs/audits/SIRIUS_AUDITORIA_ACTIVACION_2026-07.md) |
 | sin fecha declarada | [SIRIUS — Auditoría de robustez de la automatización de roles (Claude Code)](docs/audits/SIRIUS_AUDITORIA_AUTOMATIZACION_ROLES_2026-07.md) |
