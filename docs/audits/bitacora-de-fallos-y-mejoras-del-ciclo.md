@@ -6109,6 +6109,70 @@ corrección completa está al final de
 `docs/audits/medicion-d7-punto-6-etiquetado-de-categoria-2026-09-20.md`.
 
 
+### 117. La cardinalidad NO es otro `grep`: sale del canon, y el defecto es que le pedimos un criterio y le puntuamos con otro (20-09-2026, 02:10 UTC)
+
+Investigación con nota de arranque publicada antes de mirar
+(`arranque-de-donde-sale-la-cardinalidad-del-banco.md`). Hallazgo completo en
+`hallazgo-de-donde-sale-la-cardinalidad-del-banco.md`.
+
+**Existe porque D7 punto 6 escaldó.** Aquella medición resultó comparar un
+clasificador semántico contra una regex inventada, y canceló un encargo antes
+de lanzarlo. Antes de gastar otro en la cardinalidad —30/47, el cuello de
+botella entero de la palanca 1—, comprobar de dónde salen sus valores.
+
+**No es el mismo caso, y la diferencia importa.** `peticion_p2` se portó «sin
+modificar» desde el laboratorio (ADR-111), y allí la cardinalidad se derivó de
+**B04 §15.2**, una regla del canon del producto. Solo 1 de 50 casos la trae
+literal; el resto se marcó **como derivado, no como canónico**, y el defecto de
+marcar las inferidas como canónicas (`M-07`) se detectó y se cerró. Es justo la
+disciplina que faltó en D7 punto 6.
+
+**El criterio, por dos fuentes independientes**: `EXHAUSTIVA` es cuando «la
+instanciación cierra el conjunto sobre el universo declarado» y el caso
+«declara dominio y cierre calculable». Es un criterio sobre **la forma del
+conjunto de respuesta**.
+
+**Y ahí está el defecto.** La instrucción del intérprete
+(`ollama_query_intent_classifier.py:170-174`) define la cardinalidad por **la
+gramática de la pregunta**: «EXACTA: busca un dato concreto», «EXHAUSTIVA: pide
+todo lo que haya de un tema». Son criterios distintos. **El modelo aplica el
+nuestro correctamente y se le puntúa con el del canon**, en los dos sentidos:
+«¿Cuál es *el* presupuesto de Beta?» es un dato concreto por nuestra propia
+definición, y el canon dice EXHAUSTIVA; «¿qué *condiciones* de acceso hay?»
+suena a todo lo que haya, y el canon dice EXACTA. No se equivoca: contesta otra
+pregunta.
+
+**Techo duro que recorta el encargo.** Los cinco `ACOTADA` se parten en dos:
+`CA-38` y `CA-44` son `DURO` y traen el número en la consulta («máximo 10»,
+«máximo duro 5»); `CA-26`, `CA-30` y `CA-34` son `OBJETIVO`, una **cuota que el
+caso asigna**. Que «Prepara el contexto de planificación de Alfa» valga 10 es
+**política de producto, no inferencia**: ningún intérprete puede sacarlo de esa
+frase. Un encargo que no excluya CA-26 y CA-34 persigue lo imposible.
+
+**Y §15.2 no está en el repositorio.** Ninguno de los ocho DOCX de
+`docs/canonical/` contiene «B04» ni «cardinalidad» —comprobado extrayendo el
+texto de los ocho—. El documento que define el criterio de aceptación de un
+campo central no vive aquí. No se inventa lo que dice: se registra que no
+consta.
+
+**Corrección de algo que publiqué hoy mismo.** En la entrada 114 escribí que
+«`ACOTADA` no se produce nunca». **Es falso**: `CA-38` no está en la lista de
+fallos de la corrida limpia, así que el modelo sí la produjo. Lo correcto: de
+los cinco, acierta el que trae «máximo N» explícito y falla los otros cuatro.
+Lo generalicé desde cuatro casos sin comprobar el quinto.
+
+**Contraste con la predicción.** Acerté lo principal —es juicio, no regla
+mecánica— y **fallé la excepción**: predije que `ACOTADA` se asignaría donde la
+consulta trae un número explícito, y solo pasa en 2 de 5. Esa predicción
+fallada es la que produjo el hallazgo del techo duro.
+
+**Veredicto: atacable, con el alcance recortado.** Alinear la instrucción con
+el criterio del canon puede atacar los ~13 casos de confusión
+`EXACTA`/`EXHAUSTIVA`. Los tres `OBJETIVO` quedan fuera. Y queda para el
+propietario: qué política fija esas cuotas, y si §15.2 entra en el repositorio
+o se registra que no va a entrar.
+
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
