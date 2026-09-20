@@ -95,3 +95,18 @@ ideas:
       ADR-005 y `tests/unit/test_documentation_single_source.py`, que rompen CI
       si un documento vuelve a afirmar estado fuera del registro unico; y
       ADR-190 con la guarda de citas. La idea se construyo sin llamarse asi.
+  - id: I-007
+    titulo: Traer a local las 28 sesiones de Claude Code de la nube que le faltan a la auditoria
+    estado: aparcada
+    nacida: 2026-09-20
+    origen: paso 4 de docs/audits/AUDITORIA_FORMA_DE_TRABAJO_2026-09.md, que declara esas 28 como fuente que falta
+    volver_si: >-
+      Claude Code ofrezca una forma de exportar una sesion de la nube sin
+      gastar un turno de modelo, o el propietario decida que vale la pena
+      pagarlo. Las cuatro vias probadas el 20-09 estan medidas en la auditoria,
+      seccion «Las cuatro vias probadas»: ninguna escribe la transcripcion en
+      local sin que la sesion tenga un turno.
+    nota: >-
+      No es un pendiente del trabajo: es una fuente que la auditoria ya declara
+      como faltante y cuyo limite esta escrito. Se aparca para no volver a
+      gastar una tarde probando las mismas cuatro cosas.

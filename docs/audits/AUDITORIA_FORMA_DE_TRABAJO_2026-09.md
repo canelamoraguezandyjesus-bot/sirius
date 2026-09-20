@@ -1094,6 +1094,31 @@ aplastado de la rama, no trabajo perdido: se comprobó fichero a fichero antes
 de decirlo, porque el recuento de commits, solo, decía lo contrario. Se pueden
 archivar cuando se quiera (ADR-195: archivar, nunca borrar) y no corre prisa.
 
+### Las cuatro vías probadas para traer las 28 que faltan (20-09-2026)
+
+Se intentó completar la muestra y **no se pudo**. Queda escrito con lo que dio
+cada intento, para que nadie repita la tarde:
+
+| Vía | Qué pasó |
+|---|---|
+| `claude --teleport <id>` en bucle, con la salida capturada para registrarla | Las 34 fallan con código 1. La causa está en el registro que el propio guion escribe: al capturar la salida, Claude Code deja de verse en una consola, se pasa a modo `--print` y exige un prompt. **El registro rompía lo que venía a medir.** |
+| La misma, a mano y en consola de verdad, sobre una sesión archivada | No escribe nada. 23 de las 34 están `ARCHIVED`, y una sesión archivada no se reanuda |
+| La misma, a mano, sobre una sesión `IDLE` (`session_01J2Hucr…`, del 08-09) | Tampoco. El fichero más reciente de `~/.claude/projects` siguió siendo el de las 02:45, del intento original |
+| `claude --teleport` **sin identificador**, que abre un selector con las sesiones traíbles, eligiendo una y saliendo con `/exit` | El selector sí las lista —18 entradas—, pero elegir y salir sin escribir nada tampoco escribe la transcripción en local |
+
+Lo que las cuatro juntas enseñan: **la transcripción local se escribe cuando la
+sesión tiene un turno, no cuando se abre.** Traer las 28 costaría un turno de
+modelo por sesión, y eso es dinero, que decide el propietario (ADR-204). Para
+una mejora opcional de una muestra ya cerrada con su límite declarado, no se le
+pidió. La idea queda aparcada con su disparador en
+`docs/ideas/registro_de_ideas.yml` (I-007).
+
+Dos cosas más que este intento dejó, y que sí valen: el guion
+`scripts/traer_sesiones_de_la_nube.ps1`, que registra por sesión y se reanuda
+donde se cortó —el intento del 20-09 no registraba nada y por eso no se supo
+nunca por qué bajaron 6—; y el dato de que **23 de las 34 sesiones de la nube
+están archivadas**, que no se sabía.
+
 ## Lo que esta auditoría NO dice
 
 - Qué se dijo en ChatGPT: su exportación no ha llegado. En julio, ChatGPT era

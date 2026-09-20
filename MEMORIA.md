@@ -29,7 +29,7 @@
 - Decisiones (ADR): **205**.
 - Bloques del motor: 17 cerrado, 2 fuera_de_alcance, 1 pendiente.
 - Defectos registrados: 2 abierto, 62 cerrado.
-- Ideas aparcadas o descartadas: 3 aparcada, 2 descartada, 1 promovida.
+- Ideas aparcadas o descartadas: 4 aparcada, 2 descartada, 1 promovida.
 - Skills: **7**.
 - Investigaciones: **9** (fotos con fecha; caducan).
 - Documentos: **149**, de los que **97** no declaran fecha.
@@ -466,6 +466,7 @@ que pasar para volver a mirarla, y la descartada, por qué no se hace.
 | I-004 | aparcada | Piezas de Memanto para la capa de memoria (motivo y desarchivar, exportacion Markdown, «cambiado desde», valid_from/valid_to persistidos, retencion como sugerencia) |
 | I-005 | aparcada | Un agente que revise el repositorio por modulos, en rondas, cuando nadie esta delante |
 | I-006 | promovida | Un cazador de contradicciones entre los documentos canonicos y el codigo |
+| I-007 | aparcada | Traer a local las 28 sesiones de Claude Code de la nube que le faltan a la auditoria |
 
 ## Las investigaciones: fotos con fecha, que caducan
 
