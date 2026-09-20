@@ -44,10 +44,20 @@ def test_el_guion_existe_y_no_esta_vacio() -> None:
     assert len(TEXTO.splitlines()) > 50
 
 
+# El índice del 19-09-2026 tiene 35 sesiones en el entorno de la nube. El guion
+# lleva 34: falta a propósito la que lo escribió, que sigue viva. Traer una
+# sesión en marcha no tiene nada que traer y es la única cuyo contenido ya se
+# conoce entero.
+SESIONES_DEL_INDICE = 35
+LA_QUE_ESCRIBE_ESTO = 1
+
+
 def test_trae_las_sesiones_de_la_nube_del_indice_sin_repetir_ninguna() -> None:
-    """El índice del 19-09-2026 tiene 35 sesiones en el entorno de la nube."""
     ids = _SESION.findall(TEXTO)
-    assert len(ids) == 35, f"el guion lleva {len(ids)} identificadores y el índice tiene 35"
+    esperadas = SESIONES_DEL_INDICE - LA_QUE_ESCRIBE_ESTO
+    assert len(ids) == esperadas, (
+        f"el guion lleva {len(ids)} identificadores y tendría que llevar {esperadas}"
+    )
     assert len(set(ids)) == len(ids), "hay identificadores repetidos en la lista"
 
 

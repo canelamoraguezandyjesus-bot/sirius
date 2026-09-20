@@ -76,8 +76,12 @@ $SESIONES = @(
   "session_013MjEyExVzaAsbGf8CSGjwF"
   "session_01RZBq9rCYG9MuJshovSFhNq"
   "session_01J2Hucr7VPpYwZdNN9AdhBx"
-  "session_01T66fRQQnP8ziG1XyQtVba6"
 )
+
+# Falta a proposito una de las 35 del indice: `session_01T66fRQQnP8ziG1XyQtVba6`
+# es la sesion que escribio este guion, y sigue viva. Traer una sesion en marcha
+# no tiene nada que traer -su transcripcion se esta escribiendo ahora- y ademas
+# es la unica cuyo contenido ya se conoce entero.
 
 function Escribir($texto, $color = 'Gray') {
   Write-Host $texto -ForegroundColor $color
