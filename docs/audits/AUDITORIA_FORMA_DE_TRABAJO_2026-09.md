@@ -1113,6 +1113,16 @@ una mejora opcional de una muestra ya cerrada con su límite declarado, no se le
 pidió. La idea queda aparcada con su disparador en
 `docs/ideas/registro_de_ideas.yml` (I-007).
 
+**Lo que sí se pudo traer, y gratis:** la ficha de cada una de las 35 —fechas,
+desde dónde se dirigió, modelo, rama de salida y desenlace—, en
+`docs/audits/las-sesiones-de-la-nube-2026-09.md`. No es la conversación, pero
+convierte «28 sesiones desconocidas» en 35 con nombre, fecha y rama. Y destapa
+un hallazgo que esta auditoría no tenía: **cuatro sesiones terminaron esperando
+una respuesta del propietario que nunca llegó**, la más vieja del 18-07-2026 y
+dos todavía bloqueadas hoy. Ninguna llegó a una incidencia ni a un ADR. Es la
+familia `pregunta-al-propietario-que-nadie-vuelve-a-poner-delante` con cuatro
+casos fechados, y refuerza la ficha C-02.
+
 Dos cosas más que este intento dejó, y que sí valen: el guion
 `scripts/traer_sesiones_de_la_nube.ps1`, que registra por sesión y se reanuda
 donde se cortó —el intento del 20-09 no registraba nada y por eso no se supo

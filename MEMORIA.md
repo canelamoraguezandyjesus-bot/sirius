@@ -32,7 +32,7 @@
 - Ideas aparcadas o descartadas: 4 aparcada, 2 descartada, 1 promovida.
 - Skills: **7**.
 - Investigaciones: **9** (fotos con fecha; caducan).
-- Documentos: **149**, de los que **97** no declaran fecha.
+- Documentos: **150**, de los que **97** no declaran fecha.
 
 ## Las skills: lo que ya costó averiguar dos veces (ADR-211)
 
@@ -585,6 +585,7 @@ nada por su cuenta. «Sin fecha declarada» es un aviso, no un dato.
 | 2026-08-28 | [Evidencia — registro-cierre-h32: el apunte contable final de la fase de corrección](docs/audits/evidencia-registro-cierre-h32.md) |
 | 2026-08-28 | [Evidencia — las tres palancas](docs/audits/evidencia-tres-palancas.md) |
 | sin fecha declarada | [Evidencia — verificar la auditoría externa (puntero)](docs/audits/evidencia-verificar-auditoria-externa.md) |
+| 2026-09-20 | [Las 35 sesiones de Claude Code en la nube, una a una (20-09-2026)](docs/audits/las-sesiones-de-la-nube-2026-09.md) |
 | sin fecha declarada | [Verificación de la auditoría externa del 28-08-2026](docs/audits/verificacion-auditoria-externa-20260828.md) |
 
 ### `docs/canonical`
