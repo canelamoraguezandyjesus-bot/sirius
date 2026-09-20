@@ -6503,6 +6503,61 @@ deliberado o inercia, pero queda anotado: **hay encargos recientes corriendo
 con un prompt que no es el vigente**.
 
 
+### 124. Los encargos corren con un prompt de hace dos semanas, y pagan en rondas las reglas que ese prompt no tiene (20-09-2026, 14:35 UTC)
+
+Hallazgo lateral de la parada de #653 (entrada 123): al buscar qué `rol@N`
+declarar, apareció que el vigente no es el que veníamos usando.
+
+**Los hechos, encadenados y comprobables:**
+
+1. `docs/implementation/work_engine/perfiles/implementer.yml` declara
+   `version: 4`, con `procedimiento_ref: implementer-v4.md`. **El perfil
+   vigente es `implementer@4` desde el 6 de septiembre** (`52344dc0`, ADR-154,
+   última vez que se tocó el manifiesto).
+2. **#650, lanzado el 19 de septiembre, declaraba `implementer@2`.** Lo escribí
+   yo. Y `encargo_puerta_1.md`, el borrador del encargo anterior, también.
+3. El manifiesto mapea `implementer@2` a `implementer.md`, y `@4` a
+   `implementer-v4.md`. **Lo que separa a los dos ficheros es exactamente esto:**
+
+   - **`@2` → `@3`**: la regla de **ADR-145** — la validación obligatoria es
+     **una sola invocación** de `scripts/check.ps1`, y ejecutar los comandos
+     por separado no la sustituye. El propio prompt anota por qué existe: «le
+     costó una ronda a #537 y otra a #541».
+   - **`@3` → `@4`**: la regla de **ADR-154** — la terna de `pytest` y el
+     código de salida se transcriben **anclados al árbol** que los produjo, y
+     no vale una cifra sin árbol presentada como la del head vigente. También
+     anotado: «le costó una ronda de corrector y otra de revisión a #550».
+
+4. **Y #650 pagó esa misma ronda.** Su hallazgo `CLAUDE-REV-650-002`, de la
+   ronda 1, dice: «el anclaje de árbol enumeraba a mano los commits de la rama
+   […] y citaba SHA de rama que no sobreviven al squash». **Es literalmente el
+   defecto que la regla de `@4` existe para impedir**, cometido por un
+   implementador al que no se le dio esa regla.
+
+**La cadena completa**: se escribe una regla porque un encargo pierde una ronda
+→ la regla entra en `implementer-v3`/`v4` → los encargos siguientes se siguen
+lanzando declarando `@2` → el defecto vuelve → se pierde otra ronda. **La
+lección se registró, se convirtió en prompt, y no llegó al trabajo porque nadie
+cambió el número.**
+
+**Es la misma familia que lleva toda la noche apareciendo**, una vuelta más
+arriba: en las entradas 117 y 122, la instrucción del intérprete **parafraseaba**
+el canon y perdía el matiz; aquí, el encargo **apunta a una versión** del
+procedimiento y pierde las reglas. En los dos casos el texto que manda existe y
+está bien, y lo que falla es el puntero.
+
+**Qué se hace.** #653 declara `implementer@4`, comprobado por `sha256` contra el
+manifiesto antes de escribirlo. Y el guardián candidato de la entrada 123 se
+refuerza: `validate_issue_body.py` no solo debería **exigir** el campo `Perfil:`
+y resolverlo contra el manifiesto, sino **avisar cuando la versión declarada no
+es la que el perfil declara vigente**. Lo primero impide un cuerpo inejecutable;
+lo segundo impide esto.
+
+**Lo que NO se afirma**: cuántos encargos desde el 6 de septiembre corrieron con
+`@2`. Se comprueban dos, y uno de ellos pagó la ronda. Contar el resto exige
+leer los cuerpos de todas las incidencias del periodo y no se ha hecho.
+
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
