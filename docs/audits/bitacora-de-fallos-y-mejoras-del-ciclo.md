@@ -5986,6 +5986,67 @@ distancia entre cerrada y abierta es entre dos configuraciones completas, no
 el aporte de un interruptor.
 
 
+### 115. D7 punto 6 deja de estar bloqueado: la cifra que faltaba desde el 29 de agosto existe, y el 62% de su error cabe en una casilla (20-09-2026, 01:20 UTC)
+
+Evidencia completa en
+`docs/audits/medicion-d7-punto-6-etiquetado-de-categoria-2026-09-20.md`.
+
+**Lo que estaba mal diagnosticado, y lo mío.** Le dije al propietario que D7
+punto 6 decidía «cuánto ruido se acepta a cambio de dejar de perder críticos».
+**No es eso.** D7 punto 6 es la coincidencia del **etiquetado automático de
+categoría** contra las etiquetas canónicas del banco, y el umbral lo registra
+el propietario *a la vista de esa medición* (`STATUS.md:265`). Y el umbral no
+estaba esperando a que él decidiera: **estaba esperando a una medición que
+nunca se produjo**. ADR-117 lo dice literalmente. CI no tiene Ollama; nadie la
+corrió en su máquina. Tres semanas bloqueado por una medición de 80 segundos.
+
+**La cifra.** `49/95 (51.6%)` con el test; `48/95 (50.5%)` con un guion aparte
+que reproduce `_medir_coincidencia` línea por línea —consistente con el jitter
+de ±2 de la entrada 114—. El doble determinista del mismo fichero da 96.8%, o
+sea que **el arnés mide bien**. Cero fallos abiertos en las dos corridas.
+
+**El suelo, que es lo que convierte la cifra en juicio.** El canon reparte los
+95 elementos en seis categorías y `trabajo` se lleva 42. **Contestar siempre
+`trabajo`, sin leer nada, acertaría 44.2%.** El modelo acierta 50.5%: aporta
+**+6 elementos** sobre una constante. Con eso solo, el veredicto sería «no
+sirve».
+
+**Y el desglose lo da la vuelta.** Por categoría: `proyecto` **20/21**,
+`salud` 1/1, `personal` 12/16, `finanzas` 3/7, `otros` 2/8, y `trabajo`
+**10/42**. **De los 47 fallos, 29 son una sola confusión: `trabajo` →
+`proyecto`.** El clasificador funciona en cinco de seis categorías y se hunde
+en una. Techo si se resolviera: 77/95 (81%) —techo, no pronóstico: mover la
+frontera puede costar parte del 20/21 de `proyecto`—.
+
+**La causa candidata, con su cita.** `ollama_category_classifier.py:122-128`
+entrega las siete palabras del vocabulario y **ninguna definición**. Nada que
+separe `trabajo` de `proyecto`, que en español se solapan. Se le pide al
+modelo que adivine un criterio que no consta. No está comprobado; es barato de
+falsar y ese es el siguiente paso.
+
+**Mis predicciones, y las dos que fallaron.** Publiqué 55-85%: salió 51.6%,
+**fallada**. Publiqué que `trabajo` estaría sobre-representado —el modelo
+montado en la tasa base—: predice `trabajo` 16 veces frente a 42 del canon,
+**fallada, y hace exactamente lo contrario**. La tercera, `salud` y `finanzas`
+flojas, medio fallada: `salud` es 1/1.
+
+Vale la pena quedarse con esto: **si la segunda predicción hubiera acertado, el
+50.5% no tendría arreglo.** Al fallar, aparece un defecto localizado y barato.
+La predicción que falla es la que enseña; la que acierta solo confirma.
+
+**Dato lateral.** `_CATEGORY_VOCABULARY` tiene 7 palabras y el canon usa 6:
+`aprendizaje` no aparece en ninguna etiqueta canónica y el modelo no la produjo
+ni una vez.
+
+**Dónde queda.** La medición existe, así que el umbral ya se puede registrar, y
+**no se registra aquí**: es del propietario, por diseño de D7. Lo que esta
+evidencia le añade es que fijarlo hoy, sobre un 50.5% cuya causa candidata es
+una instrucción vacía, sería fijarlo **contra un defecto conocido**. Y destraba
+**una** de las dos condiciones de `category_matching_enabled`: la otra —la ola
+de paridad en su suelo— sigue abierta, con M17 registrado en ADR-202 como no
+hecho y sin razón que conste.
+
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
