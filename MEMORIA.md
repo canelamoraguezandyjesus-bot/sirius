@@ -26,9 +26,9 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **197**.
+- Decisiones (ADR): **198**.
 - Bloques del motor: 17 cerrado, 1 fuera_de_alcance, 2 pendiente.
-- Defectos registrados: 2 abierto, 54 cerrado.
+- Defectos registrados: 3 abierto, 54 cerrado.
 - Investigaciones: **9** (fotos con fecha; caducan).
 - Documentos: **145**, de los que **97** no declaran fecha.
 
@@ -47,6 +47,7 @@ huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| [204](docs/decisions/ADR-204-la-cardinalidad-se-instruye-con-el-criterio-del-canon-determinacion-contra-extension-no-con-la-forma-de-la-pregunta.md) | 2026-09-20 | PROPUESTO | La cardinalidad se instruye con el criterio del canon: determinacion contra extension, no la forma de la pregunta | Se toma la opción 1. El bloque `cardinalidad` de `_INSTRUCCION` (`src/sirius/adapters/ollama_query_intent_classifier.py`) enuncia las tres definiciones de §15.2 casi palabra por palabra, sin reducirlas —`EXACTA` conserva «uno o varios… |
 | [203](docs/decisions/ADR-203-el-banco-mide-tambien-el-camino-de-puerta-cerrada-la-linea-base-que-faltaba.md) | 2026-09-19 | PROPUESTO | El banco mide tambien el camino de puerta cerrada: la linea base que faltaba | El instrumento aprende el otro camino; el sistema medido no se toca. |
 | [202](docs/decisions/ADR-202-m17-la-medicion-que-cerraba-la-ola-de-paridad-no-se-hace-y-la-razon-no-consta.md) | 2026-09-14 | PROPUESTO | M17, la medición que cerraba la ola de paridad, no se hace; y la razón no consta | 1. M17 no se hace. Es una decisión del propietario, tomada antes de hoy. Si algún día se hace, es una decisión nueva: nada de lo escrito aquí la prepara. |
 | [201](docs/decisions/ADR-201-la-mina-de-aprendizaje-tiene-reloj-el-dia-1-de-cada-mes-se-pide-la-edicion-del-mes-que-se-cierra.md) | 2026-09-14 | PROPUESTO | La mina de aprendizaje tiene reloj: el día 1 de cada mes se pide la edición del mes que se cierra | (sin sección Decisión) |
@@ -261,6 +262,7 @@ de memoria.
 | `medir-lo-que-se-tiene-en-vez-de-lo-que-hay` | 2 | sí | [184](docs/decisions/ADR-184-la-prohibicion-no-es-una-peticion-el-detector-de-sensibilidad-exige-que-el-marcador-no-vaya-negado.md), [180](docs/decisions/ADR-180-el-numero-del-siguiente-adr-se-calcula-contra-las-ramas-del-remoto-no-contra-las-que-el-clon-tenga-traidas.md) |
 | `pieza-sin-lector` | 2 | sí | [183](docs/decisions/ADR-183-la-ausencia-de-run-de-quality-para-el-head-se-encamina-no-se-espera-en-silencio.md), [175](docs/decisions/ADR-175-un-tablero-por-incidencia-un-solo-comentario-que-el-motor-mantiene-al-dia.md) |
 | `condicion-construida-sin-el-mecanismo-que-la-hace-cumplible` | 1 | sí | [200](docs/decisions/ADR-200-la-cola-deja-de-ser-una-condicion-y-pasa-a-ser-un-mecanismo-el-ciclo-trae-la-base-a-la-rama-que-espera.md) |
+| `criterio-que-se-pide-distinto-del-que-se-puntua` | 1 | sí | [204](docs/decisions/ADR-204-la-cardinalidad-se-instruye-con-el-criterio-del-canon-determinacion-contra-extension-no-con-la-forma-de-la-pregunta.md) |
 | `decision-que-solo-vive-en-una-conversacion` | 1 | no en todas | [202](docs/decisions/ADR-202-m17-la-medicion-que-cerraba-la-ola-de-paridad-no-se-hace-y-la-razon-no-consta.md) |
 | `doble-mas-permisivo-que-la-herramienta-que-dobla` | 1 | sí | [193](docs/decisions/ADR-193-el-doble-de-gh-rechaza-lo-que-el-gh-real-rechaza-y-la-red-de-seguridad-vuelve-a-poder-fechar.md) |
 | `espera-sin-fin-por-un-suceso-que-nadie-va-a-emitir` | 1 | sí | [194](docs/decisions/ADR-194-ci-pending-distingue-quality-todavia-no-ha-contestado-de-quality-no-va-a-contestar-nunca.md) |
@@ -305,6 +307,10 @@ de memoria.
 ### `condicion-construida-sin-el-mecanismo-que-la-hace-cumplible`
 
 - **[ADR-200](docs/decisions/ADR-200-la-cola-deja-de-ser-una-condicion-y-pasa-a-ser-un-mecanismo-el-ciclo-trae-la-base-a-la-rama-que-espera.md)** — una guarda se construye entera y se deja sin llamante (lo hace cumplir `tests/automation/test_cola.py`).
+
+### `criterio-que-se-pide-distinto-del-que-se-puntua`
+
+- **[ADR-204](docs/decisions/ADR-204-la-cardinalidad-se-instruye-con-el-criterio-del-canon-determinacion-contra-extension-no-con-la-forma-de-la-pregunta.md)** — escribir a ojo la instrucción que se le da a un (lo hace cumplir `tests/unit/test_ollama_query_intent_classifier.py`).
 
 ### `decision-que-solo-vive-en-una-conversacion`
 
@@ -407,6 +413,7 @@ cerrados; el recuento completo está arriba.
 |---|---|---|
 | H-202 | abierto | Una decision de no hacer algo no dejaba rastro, y una precondicion escrita antes que ella bloqueo trabajo real trece dias |
 | H-203 | abierto | El banco solo sabia medir el camino con el motor encendido, asi que la linea base contra la que comparar no existia |
+| H-204 | abierto | La instruccion pedia la cardinalidad por la forma de la pregunta y el banco la puntuaba por el criterio del canon |
 
 ## Las investigaciones: fotos con fecha, que caducan
 
