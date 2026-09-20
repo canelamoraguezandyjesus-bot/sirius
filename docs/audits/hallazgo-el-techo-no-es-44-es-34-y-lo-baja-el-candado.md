@@ -164,8 +164,61 @@ candado, un sitio donde la nota de arranque ni miró.
 | intérprete / `modo` y `corte` | encargo preparado | sin cambios: `CA-32`, uno de los cinco ganables, es suyo |
 | ranking del motor, siembra | cerradas | sin cambios |
 
-**Lo que este hallazgo NO dice.** No dice el techo real de la configuración
-«petición declarada», la mejor de las tres: sus conjuntos de candidatas no están
-en la grabación, así que el 44/47 de aquel documento sigue sin corregir con un
-número — solo con la certeza de que el mismo mecanismo lo baja, y de que el
-44 **no es alcanzable**. Calcularlo exige correr la búsqueda, no leer un fixture.
+## Addendum, misma noche: las otras dos configuraciones, medidas
+
+El párrafo que cerraba este documento decía que el techo real de «petición
+declarada» *«exige correr la búsqueda, no leer un fixture»*. Se corrió. Con
+`_medir` del propio `scripts/diagnosticar_busqueda_del_banco.py` —importado tal
+como el guion se importa a sí mismo, y con su propia aserción de que el filtro
+ve las 47 consultas como guardián contra el fallo de identidad de módulo que ya
+me costó una medición esta noche— y aplicando a sus conjuntos de candidatas la
+fórmula de RF-25:
+
+| configuración | exactos sin filtro | techo **ingenuo** (el que publiqué) | **techo real** | si protegiera solo CRÍTICO |
+|---|---|---|---|---|
+| grabación (laboratorio) | — | 42/47 | **34/47** | 37/47 |
+| `--peticion` | 17/47 | **44/47** | **32/47** | 34/47 |
+| `--ejes --peticion` | 22/47 | **45/47** | **33/47** | 35/47 |
+
+El `44/47` que publiqué como techo de la mejor configuración **es 32/47**.
+
+### Y hay algo peor que una corrección
+
+Mírese la tabla en vertical. **La configuración que busca mejor tiene el techo
+real MÁS BAJO.** `--peticion` recupera más de lo esperado que la grabación
+—techo ingenuo 44 contra 42— y sin embargo su techo real es **32 contra 34**.
+
+La razón es mecánica: buscar mejor trae **más** candidatas, y entre las
+candidatas de más hay **más protegidas**, y el rescate las mete todas. En
+`--peticion` el rescate bloquea **12 casos**, contra 8 en la grabación.
+
+> **Con el candado tal como está, mejorar la búsqueda empeora el techo.**
+
+`CA-44` lo enseña en un renglón: el rescate le fuerza ocho identidades
+(`MEM-001`, `MEM-106`…`MEM-112`). Ninguna la eligió el filtro; todas entran
+porque son protegidas y el filtro conservó algo.
+
+### Lo que esto le hace al plan entero
+
+El suelo D1 es **29/47**. Los techos reales de las tres configuraciones son
+**32, 33 y 34**. Es decir:
+
+> **A todo el sistema, tal como está arquitecturado, le quedan entre tres y
+> cinco casos.** No quince. No los 45/47 que ADR-164 predijo.
+
+Y eso no es un defecto del filtro, ni de la búsqueda, ni del intérprete: las
+tres piezas juntas, perfectas, se quedan ahí. El límite lo pone **una decisión
+de seguridad registrada** —ADR-128, no perder nunca una no-ordinaria— que hace
+exactamente lo que se le pidió.
+
+**No se toca nada.** Lo que cambia es lo que se le puede prometer a una
+medición: ninguna palanca sobre filtro, búsqueda o intérprete puede pasar de
+~34/47 mientras el candado proteja CRÍTICO **e** IMPORTANTE. Si el objetivo
+está por encima, la conversación no es sobre prompts: es sobre el candado, y es
+suya.
+
+**Lo que este addendum NO dice.** No mide el camino de producción con la puerta
+cerrada, que además del rescate lleva una cláusula incondicional —toda candidata
+`category is None` pasa, diga lo que diga el filtro
+(`ContextBuilder._apply_relevance_filter`)— que el arnés no replica. Ese techo
+**solo puede ser más bajo**, nunca más alto.

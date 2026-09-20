@@ -7060,6 +7060,45 @@ la tercera, es un cierre, no una palanca». Hay palanca, y está donde la nota d
 arranque no miró.
 
 
+### 134. Buscar mejor BAJA el techo, y a todo el sistema le quedan entre tres y cinco casos (20-09-2026, 18:35 UTC)
+
+La entrada 133 cerró diciendo que el techo real de «petición declarada» «exige
+correr la búsqueda, no leer un fixture». **Se corrió**, con `_medir` del propio
+`diagnosticar_busqueda_del_banco.py` y su aserción de las 47 consultas como
+guardián contra el fallo de identidad de módulo de esta noche.
+
+| configuración | exactos sin filtro | techo **que publiqué** | **techo real** |
+|---|---|---|---|
+| grabación (laboratorio) | — | 42/47 | **34/47** |
+| `--peticion` | 17/47 | **44/47** | **32/47** |
+| `--ejes --peticion` | 22/47 | **45/47** | **33/47** |
+
+**Y en vertical dice algo que no esperaba nadie**: la configuración que busca
+mejor tiene el techo real **más bajo**. `--peticion` recupera más de lo esperado
+que la grabación —44 contra 42 de techo ingenuo— y su techo real es **32 contra
+34**. Mecánica: buscar mejor trae más candidatas, entre ellas más protegidas, y
+el rescate las mete todas. En `--peticion` bloquea **12** casos, contra 8 en la
+grabación. `CA-44` se lleva ocho identidades forzadas de una vez.
+
+> **Con el candado tal como está, mejorar la búsqueda empeora el techo.**
+
+**Lo que esto le hace al plan.** Suelo D1 29/47; techos reales 32, 33 y 34. **A
+todo el sistema, tal como está arquitecturado, le quedan entre tres y cinco
+casos.** No quince, y desde luego no los 45/47 de ADR-164. No es defecto del
+filtro, ni de la búsqueda, ni del intérprete: las tres perfectas se quedan ahí.
+El límite lo pone una **decisión de seguridad registrada** (ADR-128) haciendo
+exactamente lo que se le pidió.
+
+**No se toca nada.** Lo que cambia es lo que se le puede prometer a una
+medición. Si el objetivo está por encima de ~34/47, la conversación no es sobre
+prompts: es sobre el candado, y es del propietario. Deudas 41 (saldada) y 42.
+
+**Tercera corrección mía sobre el mismo número en un día**: 44/47 publicado como
+techo, 42/47 como techo de la grabación, y los dos ignoraban el mismo mecanismo.
+El patrón no es «me equivoqué de cuenta»: es que **calculé un techo sin mirar
+qué hay entre el veredicto y la salida**, y lo publiqué tres veces antes de
+mirarlo.
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
@@ -7769,8 +7808,16 @@ arranque no miró.
    antes de decidir hace falta un banco con más de un ejemplar. No se toca nada
    hasta que él lo diga.
 
-41. **El techo del filtro para la configuración «petición declarada» sigue
-   sin corregir.** El 44/47 publicado ignora el candado igual que el 42/47, así
-   que **no es alcanzable**; cuánto baja exige correr la búsqueda con
-   `--peticion` y aplicarle la fórmula de RF-25, no leer un fixture (entrada
-   133).
+41. **SALDADA la misma noche (entrada 134).** El techo real de «petición
+   declarada» es **32/47**, no el 44/47 que publiqué, y el de
+   `--ejes --peticion` es **33/47**, no 45/47. Medido corriendo la búsqueda, no
+   leyendo un fixture. Lo que queda abierto es lo que ese número destapó: ver
+   la deuda 42.
+
+42. **Decisión del propietario: el techo de TODO el sistema son ~34/47, y lo
+   fija el candado.** Suelo D1 29/47; techos reales 32, 33 y 34 según
+   configuración. **Ninguna palanca sobre filtro, búsqueda o intérprete puede
+   pasar de ahí** mientras el rescate proteja CRÍTICO **e** IMPORTANTE
+   (entrada 134). Y peor: **buscar mejor baja el techo** —más candidatas, más
+   protegidas forzadas—, así que `--peticion` tiene techo 32 y la grabación 34.
+   Si el objetivo está por encima, la conversación no es sobre prompts.
