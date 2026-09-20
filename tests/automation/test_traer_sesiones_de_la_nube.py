@@ -92,6 +92,51 @@ def test_comprueba_el_codigo_de_salida_de_cada_llamada() -> None:
     )
 
 
+def test_un_aviso_en_stderr_no_mata_el_bucle() -> None:
+    """El fallo real del 20-09-2026, en la primera de las 34 sesiones.
+
+    `claude.exe` avisó de que el clon recién hecho no está en la lista de
+    carpetas de confianza. Es inofensivo para traer una sesión, pero con
+    `$ErrorActionPreference = 'Stop'` y `2>&1` PowerShell convierte la salida
+    de error de un comando **nativo** en error terminante, y el bucle murió en
+    la primera. Quien decide si fue bien es el código de salida.
+
+    `executable_text` borra los literales, así que `'Continue'` no sobrevive en
+    él. Se afirma sobre el número de línea: la línea tiene que ser ejecutable
+    -no un comentario, que en el texto ejecutable queda en blanco- Y llevar el
+    literal en el original. Así una frase de la documentación no la cumple.
+    """
+    ejecutables = EJECUTABLE.splitlines()
+    originales = TEXTO.splitlines()
+    assert len(ejecutables) == len(originales), "el ayudante ya no conserva las líneas"
+
+    guardada = next(
+        (i for i, linea in enumerate(ejecutables) if "$previo = $ErrorActionPreference" in linea),
+        None,
+    )
+    llamada = next((i for i, linea in enumerate(ejecutables) if "claude --teleport" in linea), None)
+    restaurada = next(
+        (i for i, linea in enumerate(ejecutables) if "$ErrorActionPreference = $previo" in linea),
+        None,
+    )
+    assert guardada is not None, "el guion no guarda la preferencia anterior"
+    assert llamada is not None, "no encuentro la llamada a `claude --teleport`"
+    assert restaurada is not None, "el guion no restaura la preferencia después"
+    assert guardada < llamada < restaurada, (
+        "la preferencia se guarda, se cambia y se restaura alrededor de la llamada, en ese orden"
+    )
+
+    relajada = [
+        i
+        for i in range(guardada, llamada)
+        if "$ErrorActionPreference" in ejecutables[i] and "Continue" in originales[i]
+    ]
+    assert relajada, (
+        "entre guardar la preferencia y llamar a `claude` nadie la pone en 'Continue': "
+        "un aviso en stderr volverá a matar el bucle en la primera sesión"
+    )
+
+
 def test_se_puede_reanudar_sin_repetir_lo_ya_traido() -> None:
     """Se cortó una vez; se va a cortar otra. Reanudar no puede costar 35."""
     assert "$YaHechas" in EJECUTABLE and "$Pendientes" in EJECUTABLE

@@ -144,8 +144,18 @@ try {
   foreach ($id in $Pendientes) {
     $marca = (Get-Date).ToString('HH:mm:ss')
     Write-Host -NoNewline "[$marca] $id ... "
+    # Un aviso por la salida de error de un comando NATIVO no es un fallo, y
+    # con `$ErrorActionPreference = 'Stop'` mas `2>&1` PowerShell lo convierte
+    # en error terminante y mata el bucle entero. Paso el 20-09-2026 en la
+    # primera sesion: `claude.exe` avisaba de que el clon recien hecho no esta
+    # en la lista de carpetas de confianza -«Ignoring N permissions.allow
+    # entries»-, que es inofensivo para traer una sesion, y el guion murio ahi.
+    # Quien decide si fue bien es el codigo de salida, no si escribio en stderr.
+    $previo = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
     $salida = & claude --teleport $id 2>&1
     $codigo = $LASTEXITCODE
+    $ErrorActionPreference = $previo
     if ($codigo -eq 0) {
       $Bien++
       Write-Host 'OK' -ForegroundColor Green
