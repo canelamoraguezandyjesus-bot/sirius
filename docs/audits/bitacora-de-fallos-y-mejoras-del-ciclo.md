@@ -6401,6 +6401,58 @@ propietario sobre los `limite.n` sigue pendiente pero **ya no bloquea**.
 en una rama de evidencia, no en `main`. Por eso se pudo creer que no existía.
 
 
+### 122. El defecto no era de la cardinalidad: toda la instrucción parafrasea el canon de memoria (20-09-2026, 04:30 UTC)
+
+Hallazgo en `hallazgo-los-otros-campos-tambien-reducen-el-canon.md`, hecho con
+B04 ya localizado (entrada 121).
+
+**La pregunta**: el patrón que motivó #653 —nuestra instrucción **reduce** la
+definición del canon— ¿se repite en los demás campos? **Sí, y explica buena
+parte de los 23 casos que fallan.**
+
+**`modo` (40/47).** B04 §5 contra nuestra redacción:
+
+- **M3** dice «Comprobar origen, **literalidad, matiz** o contradicción»;
+  nosotros decimos «verificar de dónde viene algo, quién lo dijo o en qué se
+  apoya». **Perdimos «literalidad» y «matiz».**
+- **M5** dice «Examinar **afirmaciones incompatibles y soportes**»; nosotros,
+  «contradicción entre **dos cosas recordadas**». **Perdimos el conflicto
+  documento-contra-memoria.**
+- **M1** dice «en el **tiempo objetivo solicitado**», y que «ahora» es solo el
+  valor por defecto; nosotros convertimos el defecto en la definición.
+
+Y encaja caso por caso: `CA-18` «¿Qué **dice** el anexo?» y `CA-28` «¿Qué se
+**dijo**?» son literalidad pura y el canon los pone en `M3`; `CA-27` «¿Qué
+presupuesto aplico **según el documento**?» es documento contra memoria y el
+canon lo pone en `M5`. **Tres de los siete fallos de `modo` tienen su causa en
+una palabra que el canon dice y nosotros no.**
+
+**`corte_de_registro` (42/47).** Aquí la semántica **sí** coincide. Lo que
+falta no es semántica sino **una convención**: `CA-32` «¿Qué sabía Sirius el 1
+de marzo?» espera `T00:00:00` y el modelo da `T23:59:59.999999`. **Nunca le
+hemos dicho si "el día T" empieza o acaba.** Un fallo de una línea.
+
+**`tiempo_objetivo` (41/47).** El colapso del intervalo a su extremo final
+**no es una reducción nuestra**: es la traducción que ADR-111 heredó literal
+del laboratorio. Está registrada y es deliberada. Pero queda **una pregunta
+abierta, no una conclusión**: `CA-22` espera `2026-03-20` para un intervalo
+enero-marzo, que **no es** el extremo final. O la regla no se aplicó a ese
+caso, o el valor sale de otro sitio. No se inventa la explicación.
+
+**La raíz de todo esto, y es una sola frase**: la instrucción se escribió
+**parafraseando el canon de memoria en vez de citarlo**, y cada paráfrasis
+perdió el matiz que el banco puntúa. Es la misma familia que las entradas 112 a
+115: una afirmación que sostiene una fidelidad que el cableado —aquí, el
+texto— no tiene.
+
+**Lo que se hace, y lo que deliberadamente no.** El segundo encargo queda
+**preparado y sin lanzar**: #653 está en el ciclo y dos en paralelo doblan el
+gasto de revisión, que es exactamente lo que dejó al propietario bloqueado
+varios días en septiembre. Se lanza cuando #653 llegue a estado terminal. Y
+**`tiempo_objetivo` no se toca** hasta entender `CA-22`: cambiar una traducción
+registrada en un ADR por una corazonada es lo que esta disciplina prohíbe.
+
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
