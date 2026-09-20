@@ -1,6 +1,6 @@
 # ADR-161 — Retirar los carriles dedicados de investigación y auditoría, conservando los revisores del ciclo: decisión tomada, ejecución pendiente
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-08
 - Aprobación: la fusión de la PR que introduce este ADR, por el propietario
 - Entrada en vigor: la fusión de la Pull Request que introduce este ADR, por el

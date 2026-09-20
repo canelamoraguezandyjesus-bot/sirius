@@ -1,6 +1,6 @@
 # ADR-015 — Toda escritura de etiqueta pasa por una envoltura con el PAT, y la prueba busca lo malo en vez de lo bueno
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-14
 - Aprobación: la fusión de la PR que introduce este ADR, por el propietario
 - Numeración: comprobada contra **todas** las ramas remotas antes de asignar,

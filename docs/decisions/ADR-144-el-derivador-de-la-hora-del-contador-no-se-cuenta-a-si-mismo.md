@@ -1,6 +1,6 @@
 # ADR-144 — El derivador de la hora del contador no se cuenta a sí mismo
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-05
 - Aprobación: [quién y cómo; en este repositorio, la fusión de la PR por el propietario]
 - Encargo: WI-20260905-131022 (incidencia #541)

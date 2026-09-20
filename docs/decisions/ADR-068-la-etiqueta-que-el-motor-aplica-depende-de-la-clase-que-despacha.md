@@ -1,6 +1,6 @@
 # ADR-068 — La etiqueta que el motor aplica depende de la clase que despacha
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-22
 - Aprobación: la fusión de la PR de esta rama por el propietario — que es, además, el acto que pone en vigor la enmienda v1.9
 - Nota de arranque de esta rama: este ADR. Publicado antes del primer commit.

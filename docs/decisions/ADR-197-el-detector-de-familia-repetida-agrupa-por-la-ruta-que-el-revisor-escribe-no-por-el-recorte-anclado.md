@@ -1,6 +1,6 @@
 # ADR-197 — El detector de familia repetida agrupa por la ruta que el revisor escribe, no por el recorte anclado
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-14
 - Aprobación: el propietario, fusionando la PR de esta rama. La decisión de fondo
   —medir el detector antes de darle autoridad— la tomó él el 14-09-2026; este ADR

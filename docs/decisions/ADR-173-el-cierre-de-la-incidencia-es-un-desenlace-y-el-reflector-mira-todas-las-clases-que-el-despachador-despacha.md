@@ -1,6 +1,6 @@
 # ADR-173 — El cierre de la incidencia es un desenlace, y el reflector mira todas las clases que el despachador despacha
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-12
 - Aprobación: la fusión de la PR por el propietario
 

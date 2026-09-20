@@ -1,6 +1,6 @@
 # ADR-162 — La altura de una fila del chat se mide sobre un layout asentado, no en cuanto aparece el texto
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-08
 - Aprobación: la fusión de la PR por el propietario
 - Incidencia: #566 (WI-20260908-0130), deuda 7 de la bitácora del ciclo

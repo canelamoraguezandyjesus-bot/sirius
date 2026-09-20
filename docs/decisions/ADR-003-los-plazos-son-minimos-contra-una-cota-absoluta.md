@@ -1,6 +1,6 @@
 # ADR-003 — Un plazo es un mínimo contra una cota absoluta, nunca una ventana propia
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-10
 - Aprobación: la fusión de la PR que introduce este ADR, por el propietario
 

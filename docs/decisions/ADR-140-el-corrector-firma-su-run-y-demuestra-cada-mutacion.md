@@ -1,6 +1,6 @@
 # ADR-140 — El corrector firma su run y demuestra cada mutación
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-05
 - Aprobación: la fusión de la PR que introduce este ADR, por el
   propietario — con su autorización nocturna del 04-09-2026, la ejecuto

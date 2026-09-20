@@ -1,6 +1,6 @@
 # ADR-181 — La contradicción de etiquetas se decide por lo que proyectan, no por cuántas son
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-12
 - Aprobación: la fusión de la PR por el propietario
 

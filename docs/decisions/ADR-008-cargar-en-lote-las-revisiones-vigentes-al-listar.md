@@ -1,6 +1,6 @@
 # ADR-008 — Cargar en lote las revisiones vigentes al listar recuerdos y decisiones
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-11
 - Aprobación: la fusión de la PR por el propietario
 

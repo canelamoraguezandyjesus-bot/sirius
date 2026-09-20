@@ -1,6 +1,6 @@
 # ADR-164 — La pregunta se convierte en una petición propia interpretada, no en la política uniforme de hoy
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-08
 - Aprobación: la fusión de esta PR por el propietario.
 

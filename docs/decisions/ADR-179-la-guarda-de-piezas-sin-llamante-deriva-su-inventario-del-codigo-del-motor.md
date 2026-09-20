@@ -1,6 +1,6 @@
 # ADR-179 — La guarda de piezas sin llamante deriva su inventario del codigo del motor
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-12
 - Aprobación: la fusión de la PR por el propietario
 

@@ -1,6 +1,6 @@
 # ADR-011 — Correlacionar cada respuesta de OBS con su petición, en vez de desconectar ante un plazo agotado
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-14
 - Aprobación: la fusión de la PR que introduce este ADR, por el propietario
 

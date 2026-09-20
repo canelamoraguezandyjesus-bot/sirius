@@ -1,6 +1,6 @@
 # ADR-024 — Extender al implementador las tres reglas de rol y vigilarlas con una prueba que recorre el directorio de prompts
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-17
 - Aprobación: la fusión de la PR de esta rama por el propietario.
 

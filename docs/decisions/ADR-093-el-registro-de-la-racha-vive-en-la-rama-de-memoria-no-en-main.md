@@ -1,6 +1,6 @@
 # ADR-093 — El registro de la racha vive en la rama de memoria, no en `main`
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-25
 - Aprobación: la fusión de la PR por el propietario
 - Contexto: D1, incidencia #268. Afina **ADR-074**, que llamó al registro «dato

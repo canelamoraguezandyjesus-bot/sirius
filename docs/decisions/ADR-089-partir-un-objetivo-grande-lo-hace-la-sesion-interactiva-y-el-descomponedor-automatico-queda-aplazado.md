@@ -1,6 +1,6 @@
 # ADR-089 — Partir un objetivo grande lo hace la sesión interactiva, y el descomponedor automático queda aplazado
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-25
 - Aprobación: decisión del propietario del 25-08-2026, registrada en la
   incidencia #341; la fusión de esta PR la deja escrita

@@ -1,6 +1,6 @@
 # ADR-195 — «Podar» significa archivar: en este repositorio no se borra nada
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-14
 - Aprobación: el propietario. **La regla es suya y ya la dio**; este ADR solo la
   escribe donde se pueda volver a leer.

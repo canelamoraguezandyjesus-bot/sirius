@@ -1,6 +1,6 @@
 # ADR-091 — La disciplina de evidencia alcanza también a responder, no solo a modificar código
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-25
 - Aprobación: la fusión de la PR por el propietario
 - Relacionadas: ADR-001 (disciplina de evidencia), ADR-080 (el registro de

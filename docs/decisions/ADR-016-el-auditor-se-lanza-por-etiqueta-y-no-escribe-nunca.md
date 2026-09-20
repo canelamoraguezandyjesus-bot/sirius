@@ -1,6 +1,6 @@
 # ADR-016 — El Auditor se lanza con una etiqueta, y el trabajo que puede escribir no ejecuta modelos
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-14
 - Aprobación: la fusión de la PR que introduce este ADR, por el propietario
 - Numeración: comprobada contra **todas** las ramas remotas antes de asignar.

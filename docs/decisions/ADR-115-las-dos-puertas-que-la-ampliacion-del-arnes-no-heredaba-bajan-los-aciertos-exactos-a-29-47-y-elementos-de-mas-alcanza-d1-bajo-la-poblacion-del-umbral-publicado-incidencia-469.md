@@ -1,6 +1,6 @@
 # ADR-115 — Las dos puertas que la ampliación del arnés no heredaba bajan los aciertos exactos a 29/47 y elementos de más alcanza D1 bajo la población del umbral publicado (incidencia #469)
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-31
 - Aprobación: fusión de la PR por el propietario — este ADR documenta el
   diagnóstico elemento a elemento que la propia incidencia #469 pide.

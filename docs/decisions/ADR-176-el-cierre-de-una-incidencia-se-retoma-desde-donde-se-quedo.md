@@ -1,6 +1,6 @@
 # ADR-176 — El cierre de una incidencia se retoma desde donde se quedó
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-12
 - Aprobación: la fusión de la PR por el propietario
 

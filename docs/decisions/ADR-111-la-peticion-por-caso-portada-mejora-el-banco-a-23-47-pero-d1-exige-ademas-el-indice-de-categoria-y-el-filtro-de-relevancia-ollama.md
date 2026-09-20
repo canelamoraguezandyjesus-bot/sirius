@@ -1,6 +1,6 @@
 # ADR-111 — La petición por caso portada mejora el banco a 23/47 pero D1 exige además el índice de categoría y el filtro de relevancia Ollama
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-30
 - Aprobación: fusión de la PR por el propietario — este ADR documenta el
   diagnóstico que la propia incidencia #461 pide si, tras portar la petición

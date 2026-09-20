@@ -1,6 +1,6 @@
 # ADR-138 — Los tres agentes del ciclo corren con el modelo opus
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-04
 - Aprobación: la fusión de la PR que introduce este ADR, por el propietario
 - Cauce: ADR-002, opción 2 — cambio sobre `.github/workflows/**` hecho en

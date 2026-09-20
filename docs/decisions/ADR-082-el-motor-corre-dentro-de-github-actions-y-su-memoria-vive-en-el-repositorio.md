@@ -1,6 +1,6 @@
 # ADR-082 — El motor corre dentro de GitHub Actions y su memoria vive en el repositorio
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-24
 - Aprobación: fusión de la PR por el propietario
 - Contexto: decisión I4, incidencia #270, elegida por el propietario el 23-08-2026

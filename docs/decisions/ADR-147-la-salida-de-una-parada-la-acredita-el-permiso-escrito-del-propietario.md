@@ -1,6 +1,6 @@
 # ADR-147 — La salida de una parada la acredita el permiso escrito del propietario
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-05
 - Aprobación: la fusión de la PR que introduce este ADR, por el propietario o
   por su operador bajo la autorización vigente del 05-09. No toca `.github/**`

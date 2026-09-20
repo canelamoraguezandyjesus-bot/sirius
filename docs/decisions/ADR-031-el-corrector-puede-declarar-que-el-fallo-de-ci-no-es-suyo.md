@@ -1,6 +1,6 @@
 # ADR-031 — Un rol necesita un veredicto para cada desenlace real, incluido «esto no lo he roto yo»
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-18
 - Aprobación: la fusión de la PR de esta rama por el propietario.
 - Completa: [ADR-030](ADR-030-una-parada-se-levanta-con-una-orden-no-con-cirugia.md), que cubrió el

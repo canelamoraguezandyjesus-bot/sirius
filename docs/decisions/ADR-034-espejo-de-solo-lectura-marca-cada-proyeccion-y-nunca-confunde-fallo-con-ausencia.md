@@ -1,6 +1,6 @@
 # ADR-034 — El espejo de solo lectura de la vía GitHub marca cada proyección como no autoritativa y nunca confunde un fallo de lectura con una ausencia
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-18
 - Aprobación: la fusión de la PR de la incidencia #193 por el propietario.
 

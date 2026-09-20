@@ -1,6 +1,6 @@
 # ADR-021 — Prohibir en el prompt que el corrector cierre el turno esperando trabajo en segundo plano
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-16
 - Aprobación: la fusión de la PR #179 por el propietario.
 

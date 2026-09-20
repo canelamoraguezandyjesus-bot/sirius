@@ -1,6 +1,6 @@
 # ADR-183 — La ausencia de run de Quality para el head se encamina, no se espera en silencio
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-13
 - Aprobación: la fusión de la PR por el propietario
 

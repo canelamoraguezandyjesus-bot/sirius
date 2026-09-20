@@ -1,6 +1,6 @@
 # ADR-126 — M18b: la señal de criticidad como dato propio de cada recuerdo y decisión
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-02
 - Aprobación: [quién y cómo; en este repositorio, la fusión de la PR por el propietario]
 

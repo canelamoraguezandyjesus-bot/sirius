@@ -1,6 +1,6 @@
 # ADR-026 — Adoptar diario append-only con `fsync`, checksum por registro e idempotencia por clave como patrón de escritura seguro del spike I3
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-17
 - Aprobación: la fusión de la PR que cierra la incidencia #182, por el propietario.
 

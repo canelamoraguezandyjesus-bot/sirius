@@ -1,6 +1,6 @@
 # ADR-016 — El estado del proyecto se lee de `main`, nunca de la rama de trabajo
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-14
 - Aprobación: la fusión de esta PR por el propietario
 

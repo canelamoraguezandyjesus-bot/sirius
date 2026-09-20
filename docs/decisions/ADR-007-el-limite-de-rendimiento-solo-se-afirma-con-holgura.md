@@ -1,6 +1,6 @@
 # ADR-007 — Afirmar el límite de rendimiento en CI solo si hay un orden de magnitud de holgura
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-10
 - Aprobación: la fusión de la PR por el propietario
 

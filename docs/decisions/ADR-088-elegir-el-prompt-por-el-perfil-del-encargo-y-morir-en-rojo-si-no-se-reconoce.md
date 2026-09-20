@@ -1,6 +1,6 @@
 # ADR-088 — Elegir el prompt por el perfil del encargo, y morir en rojo si no se reconoce
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-25
 - Aprobación: la fusión de la PR por el propietario
 - Relacionadas: ADR-066 (los dos perfiles documentales, que dejó este puente

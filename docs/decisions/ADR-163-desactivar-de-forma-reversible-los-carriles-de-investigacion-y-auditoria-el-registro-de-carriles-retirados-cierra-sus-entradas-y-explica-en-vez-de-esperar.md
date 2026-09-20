@@ -1,6 +1,6 @@
 # ADR-163 — Desactivar de forma reversible los carriles de investigación y auditoría: el registro de carriles retirados cierra sus entradas y explica en vez de esperar
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-08
 - Aprobación: la fusión de la PR que introduce este ADR, por el propietario
 - Ejecuta: la recomendación de **ADR-161**, ordenada por el propietario

@@ -1,6 +1,6 @@
 # ADR-202 — M17, la medición que cerraba la ola de paridad, no se hace; y la razón no consta
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-14
 - Aprobación: el propietario, el 14-09-2026, en conversación: «M17 se decidió que
   no se iba a hacer... si se hace, se hace en otro momento».

@@ -1,6 +1,6 @@
 # ADR-085 — El intérprete de intención comprueba sensibilidad y verbo reconocido antes que marcadores de pasado
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-25
 - Aprobación: [quién y cómo; en este repositorio, la fusión de la PR por el propietario]
 

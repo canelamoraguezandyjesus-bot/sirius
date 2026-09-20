@@ -1,6 +1,6 @@
 # ADR-002 — No conceder a la automatización permiso sobre sus propios workflows
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-09
 - Aprobación: la fusión de la PR que introduce este ADR, por el propietario
 

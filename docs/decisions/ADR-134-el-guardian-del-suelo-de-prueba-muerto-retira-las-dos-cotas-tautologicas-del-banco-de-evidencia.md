@@ -1,6 +1,6 @@
 # ADR-134 — El guardián del suelo de prueba muerto retira las dos cotas tautológicas del banco de evidencia
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-04
 - Aprobación: [quién y cómo; en este repositorio, la fusión de la PR por el propietario]
 

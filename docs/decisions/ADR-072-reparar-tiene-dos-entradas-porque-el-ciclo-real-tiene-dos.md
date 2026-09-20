@@ -1,6 +1,6 @@
 # ADR-072 — REPARAR tiene dos entradas, porque el ciclo real tiene dos
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-22
 - Aprobación: la fusión de la PR de esta rama por el propietario
 - Nota de arranque de esta rama: este ADR. Publicado antes del primer commit.

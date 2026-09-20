@@ -1,6 +1,6 @@
 # ADR-145 — La validación obligatoria es una sola invocación del script de comprobación
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-05
 - Aprobación: la fusión de la PR que introduce este ADR, por el propietario o
   por su operador bajo la autorización vigente del 05-09. No toca `.github/**`:

@@ -1,6 +1,6 @@
 # ADR-075 — El estado de un defecto lo dice el registro versionado y la incidencia se cierra con el
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-22
 - Aprobación: la fusión de la PR #271 por el propietario
 

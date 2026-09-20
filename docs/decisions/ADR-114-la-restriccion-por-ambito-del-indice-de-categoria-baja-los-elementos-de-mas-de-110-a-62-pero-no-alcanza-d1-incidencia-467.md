@@ -1,6 +1,6 @@
 # ADR-114 — La restricción por ámbito del índice de categoría baja los elementos de más de 110 a 62 pero no alcanza D1 (incidencia #467)
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-30
 - Aprobación: fusión de la PR por el propietario — este ADR documenta el
   diagnóstico que la propia incidencia #467 pide si, tras restringir por

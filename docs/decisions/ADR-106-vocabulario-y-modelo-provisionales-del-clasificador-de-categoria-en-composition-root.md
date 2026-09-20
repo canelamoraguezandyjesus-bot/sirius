@@ -1,6 +1,6 @@
 # ADR-106 — Vocabulario y modelo provisionales del clasificador de categoría en composition_root
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-29
 - Aprobación: fusión de la PR por el propietario
 

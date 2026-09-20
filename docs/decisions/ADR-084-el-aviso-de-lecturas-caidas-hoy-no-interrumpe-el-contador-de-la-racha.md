@@ -1,6 +1,6 @@
 # ADR-084 — El aviso de lecturas caidas hoy no interrumpe el contador de la racha
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-25
 - Aprobación: [quién y cómo; en este repositorio, la fusión de la PR por el propietario]
 

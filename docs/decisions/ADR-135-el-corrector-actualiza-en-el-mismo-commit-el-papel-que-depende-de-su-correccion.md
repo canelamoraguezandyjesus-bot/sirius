@@ -1,6 +1,6 @@
 # ADR-135 — El corrector actualiza en el mismo commit el papel que depende de su corrección
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-09-04
 - Aprobación: la fusión de la PR que introduce este ADR, por el propietario
 - Número asignado a mano: `scripts/siguiente_adr.py` propuso 134 tras esquivar

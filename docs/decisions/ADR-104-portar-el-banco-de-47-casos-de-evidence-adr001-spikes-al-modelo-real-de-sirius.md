@@ -1,6 +1,6 @@
 # ADR-104 — Portar el banco de 47 casos de evidence/adr001-spikes al modelo real de Sirius
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-29
 - Aprobación: [quién y cómo; en este repositorio, la fusión de la PR por el propietario]
 

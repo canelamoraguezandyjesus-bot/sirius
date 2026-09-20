@@ -1,6 +1,6 @@
 # ADR-005 — Mantener el estado de V8 en un único registro que la automatización pueda escribir
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-10
 - Aprobación: la fusión de la PR por el propietario
 

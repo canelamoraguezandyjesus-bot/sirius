@@ -1,6 +1,6 @@
 # ADR-033 — Una regla que enumera vehículos siempre tiene un hueco más: enunciar la propiedad
 
-- Estado: PROPUESTO
+- Estado: APROBADO
 - Fecha: 2026-08-18
 - Aprobación: la fusión de la PR de esta rama por el propietario.
 - Revisa la forma —no el fondo— de las reglas de [ADR-021](ADR-021-el-corrector-no-espera-nada-en-segundo-plano.md),
