@@ -6894,6 +6894,84 @@ cuatro rondas de #650 (entradas 112 y 116). Aparece ahora en otra incidencia,
 sobre otro fichero y con otro corrector.
 
 
+### 131. La regla de parada se dispara en #653, y la raíz es un punto fijo que no existe (20-09-2026, 17:03 UTC)
+
+Rondas 2 y 3 de #653, dos consecutivas de la misma familia. La parada se
+anunció **antes** de ver la ronda 3, en la entrada 130: «si la ronda 3 vuelve
+con prosa, son dos consecutivas de la misma familia y se para a buscar la raíz
+en vez de encadenar una cuarta». Se ha dado.
+
+**Los dos hallazgos, literalmente el mismo:**
+
+- **Ronda 2** (`CODEX-001`): el ADR afirma que el head añade a `d8cf2756` «solo
+  este párrafo»; el diff demuestra que añade además la sección «El número de
+  este ADR».
+- **Ronda 3** (`CODEX-001`): «la enumeración que pretende delimitar lo no
+  validado **sigue siendo incompleta**»; el head añade además la tabla
+  «Corridas anteriores de la rama» y el párrafo retrospectivo.
+
+Y la frase que lo remata, de la propia ronda 3: **«Esta es evidencia nueva
+introducida por la corrección actual.»**
+
+## La raíz
+
+El ADR intenta sostener una afirmación de esta forma:
+
+> `check.ps1` corrió sobre el árbol `X`, y el head final añade a `X` **solo Y**.
+
+Cada corrección que edita el ADR para completar `Y` **es contenido nuevo más
+allá de `X`**, así que deja `Y` incompleta otra vez. La ronda siguiente
+encuentra exactamente lo mismo.
+
+**Describir lo que cambió, lo cambia.** No es un corrector torpe: **es un punto
+fijo que no se alcanza editando**, porque editar es añadir. Por ese camino el
+ciclo puede girar indefinidamente, y ya ha girado dos veces.
+
+Es pariente de lo que ADR-177 tardó 14 rondas en descubrir en #581 —que un SHA
+literal que signifique «este commit» no puede existir— y de la guarda
+tautológica de #650: **afirmaciones cuya verdad depende de algo que el propio
+acto de escribirlas modifica.** Tercera vez que esta forma aparece.
+
+## Las dos salidas, y cuál es la buena
+
+Codex las nombró en las dos rondas: «nombrar todos los cambios documentales
+posteriores **o validar el árbol que realmente se entrega**».
+
+| salida | converge |
+|---|---|
+| **A — enumerar** lo que el head añade | **No.** Es lo intentado dos veces; cada intento se invalida solo |
+| **B — validar el árbol final** | **Sí, en un paso.** Y elimina la frase: si `check.ps1` corrió sobre el head que se entrega, no hay nada que enumerar |
+
+**B es el arreglo de raíz.** Cuesta una corrida de `check.ps1` —unos 21 minutos
+en este árbol— y suprime la clase entera de defecto en vez de perseguir su
+instancia.
+
+## Lo que esto le hace a la regla de ADR-154
+
+ADR-154 pide anclar las cifras al árbol que las produjo, y está bien: nació
+porque una cifra sin árbol costó dos rondas en #550. Pero su aplicación
+práctica ha derivado en **«ancla a un árbol anterior y enumera la diferencia»**,
+y esa variante es la que no converge.
+
+**La lectura sana de ADR-154 es anclar al árbol final**, no anclar a uno
+antiguo y describir la distancia. La regla no pide lo segundo; lo segundo es un
+atajo para no repetir la validación, y ese atajo cuesta más rondas de las que
+ahorra: dos ya, en esta incidencia.
+
+## Qué se hace y qué no
+
+**No se encadena.** Esto es la parada, escrita, con la raíz nombrada, tal y
+como se anunció antes de ver el resultado.
+
+Lo que **no** se puede hacer es impedir la ronda 4: el motor despachó
+`repair-requested` por su cuenta. Pero, igual que en #650, **el propio hallazgo
+lleva dentro la salida buena**, así que la ronda 4 la tiene a mano.
+
+**Posición, para que el propietario la anule si quiere**: si la ronda 4 vuelve
+a tomar el camino A y aparece una tercera enumeración incompleta, **se para el
+ciclo** y se le entrega cerrado a mano, en vez de seguir girando.
+
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
