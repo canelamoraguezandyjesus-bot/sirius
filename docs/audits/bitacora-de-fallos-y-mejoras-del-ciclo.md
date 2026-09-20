@@ -5916,6 +5916,76 @@ ADR-185 no hay ninguno abierto. La medición de la palanca 1 con Ollama real
 modelo— sigue pendiente en la máquina del propietario.
 
 
+### 114. La palanca 1 medida con modelo de verdad, por primera vez: tres predicciones de cinco falladas, y el error entero cabe en un campo (20-09-2026, 00:15 UTC)
+
+`scripts/medir_interprete_de_peticion.py` con `qwen3:4b-instruct` sobre `main`
+en `66f11424`, en la máquina del propietario. CI no puede hacer esta medición.
+Evidencia completa, las dos corridas y los 23 casos que fallan, en
+`docs/audits/medicion-palanca-1-interprete-con-ollama-real-2026-09-20.md`.
+
+**El contraste, contra la predicción que ADR-164 publicó antes de medir:**
+
+| criterio | predicho | medido | |
+|---|---|---|---|
+| coincidencia campo a campo | >= 45/47 | **24/47** | **FALLADA** |
+| aciertos exactos | >= 16/47 | **0/47** | **FALLADA** |
+| elementos de más | <= 162 | **386** | **FALLADA** |
+| hallados | >= 73/81 | 74/81 | cumplida |
+| críticas perdidas | 0 | 0 | cumplida |
+
+No se ha retocado ni una cifra de la predicción después de verla.
+
+**La primera corrida salió contaminada, y eso también se registra.** Una
+llamada de 47 agotó los 30 s y el adaptador falló abierto —contrato del
+puerto—, así que ese caso se resolvió con valores por defecto. La causa es
+interesante y no la habría adivinado: se calentó el modelo con `ollama run`,
+que usa el contexto por defecto, y el adaptador pide `num_ctx=8192`; **Ollama
+recarga el modelo cuando el contexto no coincide**, así que la primera llamada
+real volvió a pagar el arranque en frío. Calentando por `/api/chat` con el
+mismo `num_ctx`, cero rendiciones.
+
+**Publiqué la banda antes de repetir**: dije 23/47 ±1 y salió 24/47. Dentro,
+en el borde alto.
+
+**El hallazgo, y es uno solo.** `cardinalidad: 30/47` **en las dos corridas**,
+por dos caminos distintos: 17 fallos, más de la mitad de todo el error.
+`ACOTADA` no se produce **nunca** —sus cuatro casos fallan en las dos—, y
+`EXACTA`/`EXHAUSTIVA` se confunden en ambos sentidos. Lo segundo es `modo:
+40/47`, con `M3_FUENTE` y `M2_HISTORICO` colapsando en `M1_ORDINARIO`. Todos
+los demás campos están entre 41 y 43 de 47. **El modelo no va mal en general:
+va mal en un campo.** Si algún día se ataca esto, ahí está el sitio.
+
+**Hallazgo lateral que vale para todo lo que venga.** Los totales por campo
+son casi idénticos entre las dos corridas, pero el global se movió de 22 a 24:
+lo que cambió fue **dónde** caen los errores —CA-01 y CA-15 se arreglaron,
+CA-18 ganó un fallo que antes no tenía—. A `temperature=0.1` queda ruido.
+**Cualquier comparación futura de esta medida tiene que contar con ±2 de
+jitter**, o leeremos como mejora lo que es azar. Ninguna decisión puede colgar
+de uno o dos casos.
+
+**Y la lectura honesta del resultado, que no es «un desastre».** Con el motor
+abierto, el intérprete mejora sobre la política fija en todos los ejes
+(487→386 de más, 72→74 hallados), pero de los 325 elementos de más que
+separan la política fija del techo recupera 101 —un 31%— y de los 17 aciertos
+exactos recupera **cero**. Es una mejora pequeña donde se esperaba una grande,
+con la causa localizada.
+
+**Lo que esto le hace al mapa.** ADR-164 dice que la palanca 1 no se da por
+cerrada hasta que el propietario la corra. La ha corrido, y no alcanza su
+predicción: queda **medida y NO cerrada**. Qué hacer —atacar la cardinalidad,
+aceptar el 31%, o dejarla— es decisión suya y no se toma aquí.
+
+**Lo que no se puede seguir esquivando.** Junto a la línea base de ADR-203, la
+tabla del mapa ya está completa: lo que corre hoy pierde **10 elementos
+críticos** y encuentra 57 de 81; toda configuración abierta pierde **0** y
+encuentra entre 72 y 78, a cambio de bastante más ruido. Elegir entre esas dos
+cosas es exactamente lo que decide **el umbral de D7 punto 6, que sigue sin
+registrar en `STATUS.md`**. Sin ese número la tabla no se puede leer sin
+arbitrariedad, y por eso no se abre nada. Con la salvedad de ADR-203: la
+distancia entre cerrada y abierta es entre dos configuraciones completas, no
+el aporte de un interruptor.
+
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
