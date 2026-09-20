@@ -154,6 +154,23 @@ _ESQUEMA_RESPUESTA: dict[str, object] = {
     "required": ["modo", "cardinalidad", "limite", "tiempo_objetivo", "corte_de_registro"],
 }
 
+#: Las tres definiciones de ``cardinalidad`` son las de **B04 §15.2**
+#: («Cardinalidad y suficiencia», tabla «Cardinalidad · Definición · Regla de
+#: parada» de ``SIRIUS_0.2_BLOQUE_04_BUSQUEDA_Y_RECUPERACION_v1.0_APROBADO.docx``,
+#: en ``docs/architecture/canonical_sources/`` de la rama
+#: ``evidence/adr001-spikes``), citadas casi palabra por palabra: EXACTA «busca
+#: uno o varios objetivos identificados o una respuesta cerrada», ACOTADA
+#: «busca N resultados, una lista definida o exploración con límite/criterio
+#: explícito», EXHAUSTIVA «busca todos los elementos que cumplen una
+#: condición». §15.3 lo confirma desde el otro lado: la parada por suficiencia
+#: S1 vale para EXACTA y ACOTADA y nunca para EXHAUSTIVA.
+#:
+#: Ese es el criterio con el que el banco de 47 casos PUNTÚA la cardinalidad
+#: (ADR-204), y por eso es el que se le da al modelo. La redacción anterior
+#: —«un dato concreto», «una cantidad concreta», «todo lo que haya de un
+#: tema»— definía por la forma gramatical de la pregunta: el modelo la
+#: aplicaba bien y se le puntuaba con otra, en los dos sentidos, y medía
+#: `cardinalidad 30/47` con los demás campos entre 41 y 43.
 _INSTRUCCION = """\
 Eres el intérprete de preguntas de una memoria personal. Analiza la pregunta \
 del usuario y devuelve, en el formato pedido y sin explicaciones, cómo hay \
@@ -168,10 +185,15 @@ sustituido o archivado.
 - M5: revisar una contradicción entre dos cosas recordadas.
 
 cardinalidad:
-- EXACTA: la pregunta busca un dato concreto («¿qué formato de informe uso?»).
-- ACOTADA: la pregunta pide una cantidad concreta («dame las tres…»).
-- EXHAUSTIVA: la pregunta pide todo lo que haya de un tema («¿qué \
-restricciones tengo?»).
+- EXACTA: busca uno o varios objetivos identificados o una respuesta \
+cerrada.
+- ACOTADA: busca N resultados, una lista definida o exploración con \
+límite/criterio explícito.
+- EXHAUSTIVA: busca todos los elementos que cumplen una condición.
+No lo decide cómo suena la pregunta —si nombra una cosa o varias—, sino la \
+forma del conjunto de respuesta: objetivos determinados o una respuesta que \
+cierra en sí misma, frente a una condición cuya extensión completa hay que \
+agotar.
 
 limite: el número de elementos que la pregunta pide explícitamente; 0 si no \
 pide ninguno en concreto.

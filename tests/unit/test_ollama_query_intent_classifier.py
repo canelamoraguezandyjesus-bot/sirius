@@ -651,3 +651,106 @@ def test_el_corte_emitido_no_es_el_instante_que_el_banco_declara_y_eso_esta_deci
         assert emitido.date() == del_banco.date()
         assert emitido != del_banco
         assert emitido.time() == time(23, 59, 59, 999999)
+
+
+# --------------------------------------------------------------------------
+# El criterio de cardinalidad es el del canon —determinación contra
+# extensión—, no la forma gramatical de la pregunta (incidencia #653).
+# --------------------------------------------------------------------------
+
+#: Las tres definiciones de B04 §15.2, en las palabras del canon. La prueba
+#: exige cada trozo por separado porque el defecto medido no fue inventarse
+#: otra cosa, sino REDUCIR cada definición a su primera mitad: «EXACTA» sin
+#: «o varios objetivos identificados» y sin «o una respuesta cerrada» es ya
+#: un criterio sobre el número gramatical de la pregunta.
+_CRITERIOS_DE_15_2: dict[str, tuple[str, ...]] = {
+    "EXACTA": ("uno o varios objetivos identificados", "una respuesta cerrada"),
+    "ACOTADA": ("N resultados", "una lista definida", "criterio explícito"),
+    "EXHAUSTIVA": ("todos los elementos que cumplen una condición",),
+}
+
+#: La redacción que se retira, y que no puede volver por la puerta de atrás:
+#: define la cardinalidad por cómo suena la pregunta, y el banco la puntúa
+#: por la forma del conjunto de respuesta. «¿Cuál es EL presupuesto de Beta?»
+#: (`B04-CA-08`) es «un dato concreto» para esta redacción y EXHAUSTIVA para
+#: el canon; «¿qué CONDICIONES de acceso hay?» (`B04-CA-50`) es al revés.
+_REDACCION_GRAMATICAL = (
+    "un dato concreto",
+    "una cantidad concreta",
+    "todo lo que haya de un tema",
+)
+
+
+def _instruccion_enviada() -> str:
+    """La instrucción tal y como VIAJA al modelo, no la constante privada:
+    lo que se mide contra el banco es lo que el modelo recibe."""
+    instrucciones: list[str] = []
+
+    def _handle(request: httpx.Request) -> httpx.Response:
+        cuerpo = json.loads(request.content.decode("utf-8"))
+        instrucciones.append(str(cuerpo["messages"][0]["content"]))
+        return _answer()
+
+    _adapter(httpx.MockTransport(_handle)).classify_intent("pregunta")
+    assert instrucciones, "el adaptador no llegó a enviar ninguna instrucción"
+    return instrucciones[0]
+
+
+def _bloque_de_cardinalidad(instruccion: str) -> str:
+    """El bloque ``cardinalidad`` de la instrucción, desde su encabezado
+    hasta el campo siguiente.
+
+    Se afirma sobre el bloque y no sobre la instrucción entera: una frase del
+    canon escrita en cualquier otro campo no enseña nada sobre la
+    cardinalidad, y dejaría pasar un bloque que siguiera hablando de la forma
+    de la pregunta."""
+    _, encabezado, resto = instruccion.partition("cardinalidad:")
+    assert encabezado, "la instrucción ya no declara un bloque «cardinalidad»"
+    bloque, siguiente_campo, _ = resto.partition("limite:")
+    assert siguiente_campo, "el bloque «cardinalidad» ya no termina en el campo «limite»"
+    return bloque
+
+
+@pytest.mark.parametrize(("cardinalidad", "criterios"), sorted(_CRITERIOS_DE_15_2.items()))
+def test_la_instruccion_enuncia_los_tres_criterios_del_canon(
+    cardinalidad: str, criterios: tuple[str, ...]
+) -> None:
+    """B04 §15.2 define la cardinalidad por determinación contra extensión, y
+    es ese criterio el que el banco puntúa: EXACTA «busca uno o varios
+    objetivos identificados o una respuesta cerrada», ACOTADA «busca N
+    resultados, una lista definida o exploración con límite/criterio
+    explícito», EXHAUSTIVA «busca todos los elementos que cumplen una
+    condición».
+
+    Medido con Ollama real el 20-09-2026, en dos corridas independientes, la
+    redacción anterior daba `cardinalidad 30/47` —más de la mitad del error
+    de la palanca 1— mientras los demás campos quedaban entre 41 y 43: el
+    modelo aplicaba bien el criterio que se le daba y se le puntuaba con
+    otro."""
+    definiciones = _bloque_de_cardinalidad(_instruccion_enviada())
+    linea = [
+        renglon
+        for renglon in definiciones.splitlines()
+        if renglon.lstrip("- ").startswith(f"{cardinalidad}:")
+    ]
+    assert len(linea) == 1, f"«{cardinalidad}» no se define exactamente una vez: {definiciones}"
+    for criterio in criterios:
+        assert criterio in linea[0], (
+            f"la definición de «{cardinalidad}» pierde «{criterio}» de B04 §15.2: {linea[0]}"
+        )
+
+
+@pytest.mark.parametrize("gramatical", _REDACCION_GRAMATICAL)
+def test_la_cardinalidad_no_vuelve_a_definirse_por_la_forma_de_la_pregunta(
+    gramatical: str,
+) -> None:
+    """La prueba de arriba se satisface añadiendo el canon y dejando puesto
+    lo viejo al lado; ésta cierra esa puerta. Las tres frases son las de la
+    redacción que se retira, y cada una nombra una propiedad de la PREGUNTA
+    —cuántas cosas pide, si trae un número, de qué tema va— donde el canon
+    habla del CONJUNTO DE RESPUESTA."""
+    definiciones = _bloque_de_cardinalidad(_instruccion_enviada())
+    assert gramatical not in definiciones, (
+        f"el bloque de cardinalidad vuelve a definirse por la forma de la pregunta "
+        f"(«{gramatical}»): {definiciones}"
+    )
