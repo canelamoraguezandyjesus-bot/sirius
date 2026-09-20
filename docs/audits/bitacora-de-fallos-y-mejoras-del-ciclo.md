@@ -7295,6 +7295,119 @@ tanto como `planned`, **es decisión suya y otro encargo**.
 Los dos encargos preparados hoy pasan **las dos** comprobaciones, que es la
 regla que la entrada 138 dejó escrita.
 
+### 140. La PR dejó de poder fusionarse y mis DOS vigías se callaron cuatro horas (21-09-2026, 00:20 hora de Andy)
+
+La sesión estuvo inactiva cuatro horas y se encolaron cuatro disparos de la
+rutina horaria. Al atenderlos, la etiqueta de #653 seguía en
+`ready-for-merge` y el head seguía siendo `ca847501`: **idénticos**. Pero la
+PR #654 había pasado de `mergeable_state: clean` a **`dirty`**, porque
+**#652 se fusionó en `main`** (`d5ed6aeb`) y chocaba con ella.
+
+**Los dos vigías lo dejaron pasar, y los dos por la misma razón.**
+
+- `vigila_653.sh` lee `issues/653/labels` y `issues/653`. **Nunca lee la PR.**
+- La rutina horaria: su paso 1 lee la etiqueta, y su paso 5 sólo actúa
+  «`ready-for-merge` **con un head distinto**». Head igual, etiqueta igual →
+  silencio, cuatro veces seguidas.
+
+**Es la tercera vez esta noche que el silencio se lee como progreso**, y las
+tres en el mismo instrumento. La entrada 126 ya me hizo parchear este vigía
+para «sin etiquetas»; la entrada 133 me hizo desconfiar de un techo que no
+miraba el mecanismo entero. Aquí el patrón es el mismo con otra cara:
+**vigilé el estado del trabajo y no el estado de la entrega**. Una PR puede
+morir sin que su incidencia se entere.
+
+**Arreglado en los dos sitios**: el guion ahora consulta `pulls/654` y avisa de
+`dirty`, `behind` y `MERGED`; la rutina lleva un paso nuevo con lo mismo.
+
+## La resolución, y por qué no la hice a mano
+
+Dos conflictos, los dos en ficheros que se generan o se agregan:
+
+- **`docs/audits/registro_defectos.yml`** — los dos lados añaden al final. Se
+  conservan **los dos**, en orden numérico: `H-204`…`H-211` de #652 y después
+  `H-212`. Verificado: **65 entradas, sin duplicados**, YAML válido.
+- **`MEMORIA.md`** — **regenerada** con `uv run sirius-memoria conocimiento`
+  sobre el árbol ya fusionado, nunca editada a mano; `--comprobar` responde
+  «está al día». Queda en **206 ADR** y **3 abiertos / 62 cerrados**, que
+  cuadra con las 65 filas del YAML.
+
+**Comprobación de que la fusión no se comió nada**, que es lo que de verdad
+preocupa en un merge de 195 ficheros:
+
+```
+ficheros que main tiene y el árbol fusionado no ....... NINGUNO
+ficheros que difieren de main ......................... los 5 de esta PR y solo esos
+```
+
+## Y un falso verde que me fabriqué yo
+
+Lancé la cadena con `pwsh -File scripts/check.ps1` en segundo plano. La
+notificación dijo **«completed (exit code 0)»**. Era mentira: **en este
+contenedor no hay `pwsh`**, la cadena salió con **127** (orden no encontrada),
+y el 0 lo puso mi propio envoltorio, cuyo último comando era un `echo`.
+
+Si llego a fiarme del aviso, empujo un head sin validar diciendo que está
+verde. **Lo pilló leer el log en vez de leer la notificación.** Regla que se
+queda: *un envoltorio que añade comandos después del que importa devuelve el
+código del envoltorio, no el del trabajo*; y el código de salida se lee del
+registro, no del mensajero.
+
+Corrida entonces la cadena por sus cuatro pasos, que es lo que `check.ps1`
+hace. Los tres primeros fallaron primero por **mis** ficheros sueltos en el
+worktree —`techo_de_hoy.py` y compañía, que no son del árbol—; sacados de ahí:
+
+```
+ruff format --check ... 644 ficheros ya formateados
+ruff check .......... All checks passed!
+mypy src tests ...... Success: no issues found in 606 source files
+```
+
+## Y entonces pytest encontró algo de verdad
+
+`2 failed, 7309 passed`. **Los dos fallos eran reales, no un choque de texto:**
+
+```
+FAILED test_estado_de_los_adr.py::test_ningun_adr_sigue_diciendo_propuesto[ADR-212]
+FAILED test_estado_de_los_adr.py::test_el_estado_es_uno_de_los_tres[ADR-212]
+```
+
+**#652 retiró el estado `PROPUESTO`** (ADR-209): 150 de los primeros 203 ADR lo
+declaraban **estando fusionados**, contradiciendo su propia línea de aprobación.
+ADR-212 nació antes de esa regla y la incumplía. Es exactamente lo que una
+fusión tiene que destapar, y **no lo habría visto sin correr la suite entera.**
+
+Arreglado con **una línea** —la plantilla nueva dice que se escribe `APROBADO` y
+que la línea de abajo nombra qué lo aprueba— y `MEMORIA.md` regenerada otra vez,
+porque publica el estado en su índice. Final: **7311 passed, 16 skipped,
+2 xfailed**, código 0.
+
+**La línea `Aprobación` se deja con el hueco de plantilla**: ninguna prueba la
+mira, `ADR-203` —ya en `main`— tiene el mismo hueco, y rellenarla sería ampliar
+por mi cuenta el alcance de un encargo deliberadamente estrecho. Anotado, no
+corregido.
+
+## Lo que costó, y lo que no
+
+Empujado como `178b1bee`. La PR pasa de `dirty` a `blocked` (Quality corriendo)
+y **sigue en 5 ficheros, +492/−6**: idéntica a antes de la fusión, que es la
+prueba de que el trabajo propio de la rama no se tocó.
+
+Y **no cuesta la ronda de revisión**: el motor ya tiene la salvaguarda para
+esto —`sirius_misma_obra.py`, incidencia #608 parte 2—, que compara el diff
+contra la base de mezcla y conserva la aprobación si el trabajo propio no ha
+cambiado. Lo comprobé **antes** de empujar, en vez de empujar y ver qué pasaba.
+
+## Las tres reglas que deja la noche
+
+1. **Vigilar la entrega, no sólo el trabajo.** Una PR puede morirse sin que su
+   incidencia se entere.
+2. **El código de salida se lee del registro, nunca del mensajero.** Dos falsos
+   «exit code 0» en una noche, del mismo mecanismo.
+3. **Un envoltorio que añade comandos después del que importa devuelve el
+   código del envoltorio.** Si el último es un `echo`, siempre es 0.
+
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
