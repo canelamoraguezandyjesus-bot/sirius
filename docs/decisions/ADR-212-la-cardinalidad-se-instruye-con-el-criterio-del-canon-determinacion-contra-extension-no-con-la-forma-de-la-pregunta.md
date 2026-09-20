@@ -203,24 +203,55 @@ passed!»), `mypy src tests` («Success: no issues found in 600 source files») 
 =========== 6726 passed, 17 skipped, 2 xfailed in 758.73s (0:12:38) ============
 ```
 
-Una sola invocación y sin partir `pytest` en tandas (ADR-145). El head final de
-la rama añade a `d8cf2756` solo este párrafo del ADR: la terna es la de su
-árbol y así se lee (ADR-154). La corrida anterior de la rama, sobre el árbol de
-`d9768650` —el mismo cambio con el número 204—, dio la misma terna
-(`6726 passed, 17 skipped, 2 xfailed`) en 1283.68 s.
+Una sola invocación y sin partir `pytest` en tandas (ADR-145). Esa terna es la
+del árbol de `d8cf2756` y así se lee (ADR-154): **no** es la del head, porque
+`f57c1c1` no se validó. Lo que la ronda 2 escribió de aquella corrida —que el
+head final añadía a `d8cf2756` «solo este párrafo»— era falso y se corrige
+aquí: `git diff --stat d8cf2756..f57c1c1` da `27 insertions(+), 8 deletions(-)`
+sobre este fichero, porque `f57c1c1` añadía además la sección «El número de
+este ADR» entera y reescribía el párrafo de la evidencia. Sin código ni
+pruebas de por medio, sí, pero «solo este párrafo» no describía el árbol.
+
+La corrida anterior de la rama, sobre el árbol de `d9768650` —el mismo cambio
+con el número 204—, dio la misma terna (`6726 passed, 17 skipped, 2 xfailed`)
+en 1283.68 s.
 
 **Lo que esta comprobación NO dice:** nada sobre el efecto en la cifra del
 banco. Aquí no hay Ollama, y no se ha simulado ninguna medición.
 
 ## El número de este ADR
 
-Este ADR nació como `ADR-204` y se renumeró a **212** antes de fusionar. El 204
-ya estaba cogido en el remoto: la rama abierta `claude/sirius-collaboration-rir6r6`
-(PR #652) empujó `ADR-204` … `ADR-211` y `H-204` … `H-211` a las 13:32Z del
-20-09-2026, una hora antes de que esta rama creara su 204, y la colisión solo
-aparece al fusionar —que es el límite que `scripts/siguiente_adr.py` documenta y
-que `tests/automation/test_registro_de_decisiones.py::test_no_new_number_is_ever_reused`
-caza—. El número nuevo es el que devuelve `uv run python scripts/siguiente_adr.py
+Este ADR nació como `ADR-204` y se renumeró a **212** antes de fusionar. La
+ronda 2 atribuyó la colisión a que la otra rama «empujó `ADR-204` … `ADR-211` a
+las 13:32Z, una hora antes de que esta rama creara su 204». **Esa cronología es
+falsa**, y además se contradecía a sí misma: ADR-180 §2 dice expresamente que
+las ramas abiertas desde horas antes sí quedan cubiertas por el fetch, así que
+un 204 empujado a las 13:32Z no habría llegado a colisionar. La cronología real,
+reconstruida con los tiempos de empuje —no con los de commit, que es donde se
+torció la explicación anterior—:
+
+- **13:32:55Z.** `claude/sirius-collaboration-rir6r6` (PR #652) empuja
+  `0b15d1c`. Ese árbol llega hasta `ADR-202`:
+  `git ls-tree -r --name-only 0b15d1c docs/decisions/` no contiene ningún 204.
+  Lo que se empujó a las 13:32Z no era el 204.
+- **14:12:59Z – 15:27:00Z.** Esa rama **crea** `ADR-204` … `ADR-211` en commits
+  locales (`e5e5c54` el 204), pero no los empuja: sus ejecuciones de Quality
+  saltan de `0b15d1c` (13:32:55Z) directamente a `3de6e77` (15:29:28Z), sin
+  ninguna en medio
+  (`gh api "…/actions/runs?branch=claude/sirius-collaboration-rir6r6"`).
+- **14:40:31Z.** Esta rama pide su número y crea el ADR (`3c50d7d`). En ese
+  momento el remoto **no tenía** ningún 204 que traer.
+- **15:22:53Z.** Esta rama empuja su 204 (Quality de `b67f389`). La otra lo
+  empuja unos cinco minutos después, con `3de6e77`.
+
+Es decir: el caso no es el que el fetch de ADR-180 cubre, sino **exactamente la
+ventana de carrera que ADR-180 §2 declara abierta** —dos sesiones que piden
+número antes de que ninguna haya empujado, «el remoto no puede decir lo que aún
+no le han contado»—. El fetch no falló ni se saltó: en el instante de pedir el
+número, 204 era el número correcto, y no hace falta invocar creación manual,
+`--sin-traer` ni un fetch roto para explicar la colisión. La colisión solo
+aparece al fusionar, y la caza
+`tests/automation/test_registro_de_decisiones.py::test_no_new_number_is_ever_reused`. El número nuevo es el que devuelve `uv run python scripts/siguiente_adr.py
 --solo-numero` con el fetch de ADR-180 («traidas las cabezas del remoto;
 consultadas 343 ramas con ADR» → `212`), no uno elegido a mano. Se renumeró el
 fichero, su encabezado, `H-212`/`adr: 212` en el registro de defectos con la
