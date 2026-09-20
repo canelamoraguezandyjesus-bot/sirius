@@ -6558,6 +6558,75 @@ lo segundo impide esto.
 leer los cuerpos de todas las incidencias del periodo y no se ha hecho.
 
 
+### 125. El techo está en el filtro, no en la búsqueda: 44/47 contra un suelo de 29/47 (20-09-2026, 14:50 UTC)
+
+Nota de arranque previa; hallazgo en
+`hallazgo-el-techo-esta-en-el-filtro-no-en-la-busqueda.md`. Determinista, sin
+Ollama.
+
+**Corrección primero.** La entrada 120 dijo que medir el filtro «solo se puede
+hacer con Ollama». **Falso.**
+`tests/acceptance/fixtures/relevance_filter_frozen_run.json` es una **grabación
+de una corrida real**: por cada caso, qué entró al filtro y qué conservó el
+modelo. Es el doble del arnés que alcanza 29/47. **Segunda vez esta noche** que
+afirmo «no se puede» sin mirar en todos los sitios; la primera fue §15.2
+(entrada 121).
+
+**Qué hace el filtro real**, según su propia grabación:
+
+```
+entraron 169 -> conservo 94 (55.6%)
+  de 70 esperados que entraron, conservo 59  (84.3%) y TIRO 11
+  de 99 de ruido, descarto 64 (64.6%)
+  precision de lo conservado: 59/94 = 62.8%
+```
+
+**Tira el 15.7% de lo esperado que le llega.** El criterio de parada decía: por
+encima del 10%, **el filtro no es seguro tal cual** y hay que decirlo antes de
+apoyar ningún plan en él. Queda dicho. Con un matiz que lo hace vivible: de los
+11 que tira **ninguno es crítico** —el diagnóstico ya mostró que las pérdidas
+del laboratorio son todas `NO_ENTRO`—, y eso lo garantiza el rescate por
+criticidad de ADR-128.
+
+**Y el número que ordena el proyecto.** Un filtro perfecto conservaría
+exactamente lo esperado que le llega, así que un caso sería exacto **si y solo
+si la búsqueda le trae todo su `resultado_esperado`**:
+
+| búsqueda | hoy sin filtro | **techo con filtro perfecto** | esperados que no trae |
+|---|---|---|---|
+| **petición declarada** | 17/47 | **44/47** | **3**, en 3 casos |
+| petición fija (hoy) | 0/47 | **42/47** | 9, en 5 casos |
+| la del laboratorio | — | 42/47 | 11, en 5 casos |
+
+Suelo de D1: **29/47**. Los tres techos lo superan; el mejor, por **quince
+casos**.
+
+**La búsqueda no es el problema.** Trae el conjunto esperado **completo** en 44
+de 47 casos; lo que falta son tres elementos, uno en cada uno de `CA-22`,
+`CA-29` y `CA-30`. **Todo el hueco entre el `8/47` de hoy y el suelo es
+precisión**, y la precisión solo la puede poner el filtro, porque —entrada
+120— el motor no distingue ruido de señal: le entran por la misma puerta.
+
+**Predicciones**: «conserva >= 95% de lo esperado» **fallada** (84.3%);
+«descarta 50-80% del ruido» **acertada** (64.6%). Y la fallada vuelve a ser la
+que enseña: si el filtro fuera tan seguro como predije, mejorarlo sería subirle
+la agresividad; no lo es, ya paga 11 esperados por 64 de ruido, y cualquier
+plan tiene que mirar ese lado de la balanza.
+
+**El mapa, con un camino por fin:**
+
+| línea | estado |
+|---|---|
+| **filtro de relevancia** | **prioritaria: techo 44/47, la grabación alcanza 32/47** |
+| intérprete (#653) | en el ciclo; sube el techo de 42 a 44 y lo alcanzado de 0 a 17 |
+| ranking del motor | cerrada, no separa (120) |
+| siembra | cerrada, no es el problema (118) |
+
+**Lo que NO dice**: que el filtro pueda llegar a perfecto. El techo es una
+cota, no un pronóstico. Y medir una **mejora** del filtro sigue exigiendo
+Ollama; lo que ya no hace falta es Ollama para saber dónde está el techo.
+
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
