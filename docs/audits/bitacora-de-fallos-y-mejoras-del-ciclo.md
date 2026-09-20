@@ -7142,6 +7142,52 @@ esperado perdido y no conté **críticas** perdidas, cuando «no perder una crí
 es la propiedad entera que este mecanismo existe para sostener. Acertar la
 pregunta que hiciste no sirve si era la pregunta equivocada.
 
+### 136. El hueco entre 29 y 36 es exceso que el diseño decidió meter (20-09-2026, 19:35 UTC)
+
+Nota de arranque previa (`arranque-que-mide-el-banco-y-que-promete-el-diseno.md`),
+que empezó escribiendo su propio riesgo —**mover la portería**— y el compromiso
+de **no proponer cambio de métrica salga lo que salga**. Salió espectacular y el
+compromiso se cumple. Hallazgo en
+`hallazgo-el-hueco-entre-29-y-36-es-exceso-decidido.md`.
+
+Sobre lo que el sistema **entrega** (filtro real de la grabación + RF-25):
+
+| | casos |
+|---|---|
+| aciertos exactos (regla de hoy) | **29/47** |
+| no falta nada de lo esperado | **38/47** |
+| no falta nada **y todo lo que sobra es protegido** | **36/47** |
+| no falta nada pero sobra algo **no** protegido | **2/47** |
+
+**Siete de los dieciocho casos no exactos fallan solo porque el sistema entrega
+la crítica que ADR-128 le manda entregar.** El exceso que nadie decidió son
+**dos casos y 17 elementos, 15 de ellos en `CA-35`**.
+
+Y encaja con la entrada 134 de la única forma coherente: con la regla de hoy el
+candado **es un techo** (~34/47); con una regla que perdonase el exceso
+protegido **no cuesta nada**, y el sistema ya está en 36 —por encima del techo,
+porque el techo era artefacto de medir así—. **El 29/47 y el techo de 34/47
+miden algo que se contradice consigo mismo**: el sistema cumple su contrato de
+seguridad y la regla lo suspende por cumplirlo.
+
+**Lo que NO dice**, y va en el documento en negrita: que el sistema esté bien
+—**nueve casos pierden algo esperado**, y eso es fallo por cualquier regla—; que
+36 sea mejor que 29 —**es el mismo sistema, el mismo filtro, el mismo día**, y
+usar esto para decir que el proyecto «va por 36» sería mentira—; y cuál de las
+dos reglas es la correcta, que depende de **qué le pasa a una persona cuando
+Sirius le entrega una restricción crítica que no pidió**. Decisión de producto
+del propietario. Deuda 43.
+
+**Predicciones**: la (2) acertada clavada (36). La **(3) fallada de plano** —dije
+«10 casos o más» de exceso indecidido y son **2**— y **era la que quería
+acertar**, porque acertarla habría cerrado sola la conversación sobre la
+portería. Hay que llevársela.
+
+**Una cifra buena para el filtro, de paso**: el exceso indecidido pasa de 18
+casos y 104 elementos en la etapa de búsqueda a 2 casos y 17 entregados. **El
+filtro se lleva por delante el 84% del exceso que nadie decidió**, y es lo mejor
+que ha dado en toda esta auditoría.
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
@@ -7865,3 +7911,12 @@ pregunta que hiciste no sirve si era la pregunta equivocada.
    (entrada 134). Y peor: **buscar mejor baja el techo** —más candidatas, más
    protegidas forzadas—, así que `--peticion` tiene techo 32 y la grabación 34.
    Si el objetivo está por encima, la conversación no es sobre prompts.
+
+43. **Decisión del propietario: ¿es un fallo entregar una crítica que no se
+   pidió?** La regla del banco dice que sí (`aciertos_exactos` exige conjunto
+   idéntico) y el contrato de ADR-128 dice que hay que entregarla. Con la regla
+   de hoy: **29/47**. Perdonando **solo** el exceso protegido: **36/47** —el
+   mismo sistema, el mismo filtro, el mismo día (entrada 136)—. Las dos salidas
+   son defendibles y dependen de qué le pasa a una persona real cuando recibe
+   una restricción esencial que no había pedido. **No se toca ninguna métrica
+   hasta que él lo diga.**
