@@ -7188,6 +7188,43 @@ casos y 104 elementos en la etapa de búsqueda a 2 casos y 17 entregados. **El
 filtro se lleva por delante el 84% del exceso que nadie decidió**, y es lo mejor
 que ha dado en toda esta auditoría.
 
+### 137. Los dos que la mejor búsqueda no trae no son defectos de Sirius; la línea de la búsqueda se cierra (20-09-2026, 20:20 UTC)
+
+Nota de arranque previa (`arranque-los-dos-que-la-mejor-busqueda-no-trae.md`).
+Hallazgo en `hallazgo-los-dos-que-faltan-no-son-mios.md`.
+
+**`CA-29` es inalcanzable por construcción.** Espera `MEM-020` y su conjunto de
+candidatas está **vacío**: `MEM-020` declara `confirmacion: "CANDIDATA"`, y el
+cargador del banco (`_vigente`) mete un elemento en Sirius **solo si sus tres
+estados lo dicen a la vez**. Nunca llega a la base de datos —entra en **0 de 47**
+casos en las tres configuraciones—. Ningún filtro ni modelo puede acertar ese
+caso jamás.
+
+Es una **contradicción dentro del banco**: la adjudicación espera un elemento
+que los campos de estado del mismo banco declaran no vigente. Tres salidas
+—`resultado_esperado` mal, `confirmacion` mal, o la regla «una candidata no
+entra» mal— y **las tres son del propietario**. No toco ninguna: mover
+cualquiera cambia la cifra sin que el sistema mejore.
+
+**`CA-30` es la parada por suficiencia.** Pierde `MEM-001`, que no tiene ningún
+problema y entra en otros siete casos. Lo distinto es `limite.n = 3`: con
+`objetivos = 3` la expansión para en cuanto tiene cuatro candidatas y no llega a
+la etapa de lo `GLOBAL`. Los demás `ACOTADA` (n=10, n=5) lo traen sin
+dificultad. **Y la petición declarada lo empeora**: con la fija recupera 8
+candidatas **e incluye `MEM-001`**; con la declarada, 4 y lo pierde — **el único
+sitio de toda la auditoría donde `--peticion` va hacia atrás**. Esa `n` la
+declara el banco: adjudicación, **deuda 38**.
+
+**Predicciones**: la 1 acertada, la 2 a medias, y la 3 —«como mucho uno es
+atacable»— **acertada y de más: no es atacable ninguno**.
+
+**Y con esto se cierra la búsqueda.** Queda dicho lo que la nota de arranque
+anticipó: *«sería la primera vez en esta auditoría que no queda nada que yo
+pueda hacer solo»*. **Es esa vez.** Siembra, ranking, ampliación por criticidad
+y búsqueda: cerradas. Lo que queda es #653 esperando su gesto, el segundo
+encargo bloqueado hasta que #653 sea terminal, el filtro —que exige Ollama, o
+sea su máquina— y cinco deudas suyas (38, 39, 42, 43 y `CA-29`).
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
@@ -7920,3 +7957,13 @@ que ha dado en toda esta auditoría.
    son defendibles y dependen de qué le pasa a una persona real cuando recibe
    una restricción esencial que no había pedido. **No se toca ninguna métrica
    hasta que él lo diga.**
+
+44. **Decisión del propietario: `B04-CA-29` es inalcanzable por construcción.**
+   Espera `MEM-020`, que declara `confirmacion: "CANDIDATA"` y por tanto **no
+   entra nunca en Sirius** (el cargador exige los tres estados a la vez).
+   Ningún modelo ni filtro puede acertarlo (entrada 137). O el
+   `resultado_esperado` está mal, o la `confirmacion` está mal, o la regla de
+   carga está mal y el caso prueba que Sirius debe saber responder con lo no
+   confirmado marcándolo. **Las tres son suyas; no toco el corpus ni las
+   adjudicaciones.** Mientras no se decida, el banco tiene **un caso de 47 que
+   nadie puede ganar**.
