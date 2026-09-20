@@ -6627,6 +6627,53 @@ cota, no un pronóstico. Y medir una **mejora** del filtro sigue exigiendo
 Ollama; lo que ya no hace falta es Ollama para saber dónde está el techo.
 
 
+### 126. `continua` no puede reanudar una parada anterior a la PR: el reinicio repone una etiqueta de las dos (20-09-2026, 14:26 UTC)
+
+Defecto del motor, encontrado al reanudar #653 (entrada 123).
+
+**La secuencia, con sus citas:**
+
+1. `continua` se **acepta**: «🟢 Reinicio autorizado por el propietario. Esta
+   incidencia se detuvo **antes de producir ninguna rama ni PR**, así que no
+   hay ningún head sobre el que continuar: lo que se autoriza es **repetir
+   desde cero** la fase que se paró (`sirius:implement-requested`)».
+2. El reinicio repone **`sirius:implement-requested`**.
+3. La activación se **rechaza** nueve segundos después: «⛔ Activación
+   rechazada (`sin-planned`). Falta `sirius:planned`. Esa etiqueta certifica
+   que el alcance está definido y aprobado; **ninguna automatización puede
+   añadirla por ti**».
+4. Al rechazarla, se consume también `implement-requested`. **La incidencia
+   queda sin ninguna etiqueta**: inerte.
+
+**El defecto.** La activación exige **las dos** etiquetas juntas, y
+`sirius:planned` se consume en la primera activación. El camino de reinicio
+para una parada **anterior a la PR** repone solo una de las dos, así que
+**siempre** termina en `sin-planned`. `continua` no puede, por construcción,
+reanudar una parada pre-PR: deja la incidencia peor que antes, sin etiquetas y
+sin nada que la despierte.
+
+No es que la salvaguarda esté mal —que `planned` sea un gesto humano es
+deliberado y bueno—. Es que **el reinicio no lo sabe**, y anuncia en verde un
+reinicio que va a rechazarse a sí mismo.
+
+**Y hay un agravante de vigilancia**: mi vigilante solo habla cuando el estado
+cambia, así que una incidencia sin etiquetas produce **silencio**, y el
+silencio se lee como progreso. Lo detecté comprobando a mano, no por el aviso.
+Es la misma trampa que ya conocíamos —«el silencio no es éxito»— aplicada al
+propio instrumento de vigilancia: **ningún vigilante debería tratar "sin
+etiquetas" como un estado normal**.
+
+**Remedio aplicado a #653**: reponer **las dos** etiquetas juntas, que es lo
+que el propio mensaje de rechazo indica.
+
+**Candidato a arreglo del motor**, séptimo de la lista: que el camino de
+reinicio de una parada pre-PR o bien reponga las dos etiquetas —si se acepta
+que `continua` del propietario certifica el alcance tanto como `planned`—, o
+bien **no anuncie el reinicio en verde** y diga desde el principio que hacen
+falta las dos. Lo que no puede quedarse es anunciar un reinicio que se rechaza
+solo y dejar la incidencia muerta.
+
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
