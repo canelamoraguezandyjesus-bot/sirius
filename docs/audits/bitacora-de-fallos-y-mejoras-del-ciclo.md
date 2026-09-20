@@ -7393,3 +7393,46 @@ pieza mejor de lo que la entrada 125 dio a entender — lo que hace su techo de
     N» o «la lista completa» cuando no haya un bloque de comando adyacente
     —comprobable a máquina, a diferencia del juicio de la deuda 28—; (c) no
     hacer nada y seguir pagándolo a una ronda por instancia.
+
+33. **B04 v1.0 APROBADO no está en `main`.** El documento que define el
+   criterio de aceptación de la cardinalidad (§15.2), los modos (§5) y las
+   paradas (§15.3) vive en `docs/architecture/canonical_sources/` de la rama
+   `evidence/adr001-spikes`. Por eso se pudo llegar a creer que no existía
+   (entrada 121). Decidir si entra en `main` o se registra por qué no.
+
+34. **`validate_issue_body.py` da luz verde a cuerpos inejecutables.**
+   No comprueba el campo `Perfil: rol@N`, así que un encargo puede validar y
+   reventar al ejecutarse, consumiendo un run y una parada (entrada 123).
+   Guardián propuesto: resolverlo contra `prompts/manifiesto.json`, igual que
+   hace `resolver_prompt.py`.
+
+35. **Los encargos declaran un `rol@N` que no es el vigente.** `#650`
+   corrió con `implementer@2` mientras el perfil declara `version: 4` desde el
+   6 de septiembre, y pagó en una ronda el defecto de anclaje que la regla de
+   `@4` existe para impedir (entrada 124). El guardián anterior debería, además,
+   avisar cuando la versión declarada no es la vigente.
+
+36. **`continua` no puede reanudar una parada anterior a la PR.**
+   Repone `implement-requested` pero no `planned`, que ninguna automatización
+   puede añadir, así que la activación se rechaza sola y la incidencia queda
+   **sin etiquetas**, inerte (entrada 126). O el reinicio repone las dos, o no
+   anuncia el reinicio en verde.
+
+37. **El matiz de B04 §5 «separa tiempo válido de corte de registro»
+   falta en DOS instrucciones de producción.** En la del intérprete
+   (`ollama_query_intent_classifier.py`) y en la del filtro
+   (`ollama_relevance_filter.py`, «si preguntan solo por lo ANTERIOR, lo
+   vigente no responde»). Explica `CA-32` en los dos sitios (entradas 122 y
+   127). Cuerpo de encargo preparado; **no se lanza mientras #653 esté en el
+   ciclo**, para no doblar el gasto de revisión.
+
+38. **Decisión del propietario: la política de los `limite.n` de los
+   casos `ACOTADA` de tipo `OBJETIVO`.** Que «Prepara el contexto de
+   planificación de Alfa» valga 10 no es inferible de la pregunta: es política
+   de producto y no consta (entradas 117 y 127). Sin ella, esos casos son
+   inalcanzables para cualquier intérprete y distorsionan la medida del filtro.
+
+39. **Decisión del propietario: el umbral de D7 punto 6.** La medición
+   que lo bloqueaba **ya existe** (49/95, entrada 115), así que el umbral ya se
+   puede registrar. Con el dato de que mediría coincidencia con la regla de
+   palabras clave de ADR-116, no con un criterio de producto.
