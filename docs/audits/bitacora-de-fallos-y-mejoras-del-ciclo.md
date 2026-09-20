@@ -6847,6 +6847,53 @@ colisiona hoy.
 de la ronda anterior.
 
 
+### 130. Tener la regla de anclaje no basta: el ADR la aplicó y declaró mal lo que su head añade (20-09-2026, 16:30 UTC)
+
+Ronda 2 de #653. Dos hallazgos de Codex, los dos P2, los dos sobre la prosa del
+ADR. Claude aprobó.
+
+**`CODEX-001`.** El ADR afirma que el head final añade a `d8cf2756` «solo este
+párrafo», y `git diff d8cf2756..f57c1c1` demuestra que añade además la sección
+entera «El número de este ADR». **La afirmación de anclaje exagera lo que la
+ejecución de `check.ps1` cubre.**
+
+Esto es interesante por lo que NO es: no es que faltara la regla. El
+implementador **sí** aplicó ADR-154 —ancló la terna a su árbol y escribió la
+frase de rigor— y la regla venía de `implementer@4`, el perfil que la entrada
+124 identificó como el vigente. **La regla estaba, se aplicó, y la afirmación
+salió falsa igual**, porque nadie comprobó la frase contra el diff real.
+
+**Guardián candidato, el octavo.** La frase «el head final añade a `<sha>` solo
+X» es **mecánicamente comprobable**: se resuelve con `git diff <sha>..HEAD
+--stat` y se compara con lo que la frase enumera. Una guarda que lo verifique
+convierte una afirmación de confianza en una comprobada. A diferencia de los
+guardianes anteriores de esta lista, éste no necesita AST: le basta el diff.
+
+**`CODEX-002`.** El ADR atribuye la colisión de número al límite documentado de
+ADR-180. Codex lo desmiente con las citas: `siguiente_adr.py:348-357` trae
+todas las cabezas y luego incluye sus números reservados, y ADR-180:43-48 dice
+que **solo** queda abierta la carrera en la que ninguna sesión ha empujado aún
+—las ramas abiertas horas antes **sí** quedan cubiertas—. Pide registrar la
+causa real (creación a mano, `--sin-traer`, un fetch fallido) **o declarar que
+no se encontró**.
+
+**Coincidencia que vale la pena anotar**: la entrada 129 de esta bitácora llegó
+a la misma conclusión por su cuenta y con las mismas citas —«el número
+entregado es justo el que el guion **no** habría dado, así que no se ejecutó, o
+no se ejecutó como manda»—, sin atribuirlo al límite de ADR-180. Dos lectores
+independientes, misma lectura.
+
+**Sobre la regla de parada.** Ronda 1 fue **numeración**; ronda 2 es **prosa
+que afirma más de lo que sostiene**. **Familias distintas: la regla no se
+dispara.** Queda dicho de antemano: **si la ronda 3 vuelve con prosa, son dos
+consecutivas de la misma familia y se para a buscar la raíz** en vez de
+encadenar una cuarta.
+
+Y esa familia no es nueva en el repositorio: es la que se llevó tres de las
+cuatro rondas de #650 (entradas 112 y 116). Aparece ahora en otra incidencia,
+sobre otro fichero y con otro corrector.
+
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
