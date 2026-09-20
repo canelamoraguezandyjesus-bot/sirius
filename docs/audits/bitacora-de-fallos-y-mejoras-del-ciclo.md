@@ -6805,6 +6805,48 @@ esos campos deberían excluirse de esa métrica concreta? Es decisión del
 propietario y afecta a cómo se lee la palanca 1 entera.
 
 
+### 129. La guarda existe y Quality está verde con razón: la colisión de ADR solo aparece al fusionar (20-09-2026, 15:42 UTC)
+
+Ronda 1 de #653, hallazgo `CLAUDE-REV-653-ADR-NUM-01` (alta). Claude lo
+encontró; Codex aprobó.
+
+**Qué pasó.** El implementador numeró su decisión como **ADR-204**. Pero la PR
+**#652** —**abierta**, rama `claude/sirius-collaboration-rir6r6`, creada a las
+13:32:52 UTC— ya añade `ADR-204` … `ADR-211` y `H-204` … `H-211`. El commit de
+#653 que crea los suyos es de las 14:40:31, **una hora después y con la rama
+ajena ya en el remoto**.
+
+**Hay otra sesión trabajando sobre este repositorio a la vez.** No se toca su
+rama ni su numeración: es anterior y su número es el válido.
+
+**Lo que hace esto instructivo, y es más que la colisión.** Las dos guardas que
+protegen la regla **existen y funcionan**:
+`test_no_new_number_is_ever_reused` y `test_ningun_identificador_repetido`. Y
+**ninguna falla hoy**, porque las dos leen **UN árbol** y la colisión solo
+existe **al fusionar**. Por eso Quality está en verde **con razón**.
+
+Es otra vez el patrón de la noche —el silencio no es éxito— una capa más
+arriba: **una comprobación verde no dice que no haya defecto; dice que no lo
+hay en lo que esa comprobación mira.** Aquí lo que no mira es el resto del
+remoto. El propio `scripts/siguiente_adr.py` lo deja escrito en su cabecera:
+«Esa colisión la caza `test_registro_de_decisiones.py` **al fusionar**».
+
+**Y el encargo lo pedía bien.** El alcance de #653 dice, literal, que el ADR se
+cree «con `scripts/siguiente_adr.py`», que desde **ADR-180** trae las cabezas
+del remoto **antes** de calcular el máximo, precisamente porque «dos ramas
+abiertas a la vez sobre el mismo main obtenían ambas el mismo número». Con ese
+fetch el guion habría propuesto **212**. El número entregado es justo el que el
+guion **no** habría dado, así que no se ejecutó, o no se ejecutó como manda.
+
+**Consecuencia para el trabajo pendiente**: el segundo encargo, preparado en
+`encargo-preparado-modo-y-corte.md`, no fija número —pide el guion—, así que no
+hereda el problema. Pero cualquier número que se elija a ojo por debajo de 212
+colisiona hoy.
+
+**Esto no dispara la regla de parada**: es una familia nueva, no la repetición
+de la ronda anterior.
+
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
