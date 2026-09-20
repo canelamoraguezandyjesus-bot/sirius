@@ -30,8 +30,27 @@
 - Bloques del motor: 17 cerrado, 2 fuera_de_alcance, 1 pendiente.
 - Defectos registrados: 1 abierto, 61 cerrado.
 - Ideas aparcadas o descartadas: 3 aparcada, 2 descartada, 1 promovida.
+- Skills: **7**.
 - Investigaciones: **9** (fotos con fecha; caducan).
 - Documentos: **149**, de los que **97** no declaran fecha.
+
+## Las skills: lo que ya costó averiguar dos veces (ADR-211)
+
+Viven en `.claude/skills/`, una carpeta por skill, y guardan lo que
+esta casa ya averiguó dos veces. No hay que leerlas todas: esta tabla dice
+cuándo carga cada una, y se abre la que toque. Algo se convierte en skill
+cuando se repite, cuesta medido y la decisión no es del propietario; cómo se
+escribe una nueva lo dice `crear-una-skill`.
+
+| Skill | Cuándo se carga |
+|---|---|
+| adr | Úsala SIEMPRE que vayas a registrar una decisión, en vez de elegir el número leyendo el listado: así nacieron los dos ADR-016 que hoy conviven en el registro. |
+| cadena-de-comprobacion | Cárgala siempre que vayas a confirmar, a empujar, a decir que algo está verde, o cuando la batería o el comprobador te hayan rechazado algo y no sepas por qué. |
+| crear-una-skill | Cárgala al cerrar cualquier trabajo en el que hayas tenido que averiguar dos veces lo mismo, cuando una skill existente se te haya quedado corta, o cuando el propietario pida que aprendamos de cómo trabajamos. |
+| disciplina-evidencia | Cárgala siempre que vayas a afirmar algo sobre el comportamiento del sistema, a arreglar un defecto o a producir un documento con conclusiones. |
+| hablar-con-el-propietario | Cárgala antes de escribirle cualquier mensaje, antes de darle una cifra, antes de pedirle algo y antes de decidir si una pregunta merece molestarle. |
+| obra-en-curso | Cárgala al empezar cualquier trabajo sobre este repositorio, antes del primer cambio, y también cuando te encuentres algo que no cuadra con lo que dice `main`: puede que lo esté haciendo otra sesión ahora mismo. |
+| registro-de-defectos | Cárgala cuando encuentres un defecto, cuando arregles uno, y SIEMPRE que escribas un ADR con una `familia:` en su bloque `## La lección`: desde ADR-182 ese ADR no pasa la batería sin su entrada aquí. |
 
 ## Qué se decidió: los ADR, del más reciente al más antiguo
 

@@ -37,6 +37,8 @@ from typing import Any
 import pytest
 import yaml
 
+from sirius_engine.memoria import _CUANDO_CARGARLA
+
 RAIZ = Path(__file__).resolve().parents[2]
 CARPETA = RAIZ / ".claude" / "skills"
 REGISTRO_DE_DECISIONES = RAIZ / "docs" / "decisions"
@@ -173,6 +175,22 @@ def test_la_descripcion_dice_cuando_cargarla(skill: Path) -> None:
 
 
 @pytest.mark.parametrize("skill", carpetas_de_skill(), ids=lambda p: p.name)
+def test_la_descripcion_trae_la_frase_de_cuando_cargarla(skill: Path) -> None:
+    """Y esa frase es la que `MEMORIA.md` enseña, así que no es cosmética.
+
+    La expresión es la de `sirius_engine.memoria`, importada y no copiada: si
+    hubiera dos, la vista se quedaría con un guion el día que se separasen y
+    nadie lo vería.
+    """
+    cabecera = cabecera_de((skill / "SKILL.md").read_text(encoding="utf-8"))
+    descripcion = " ".join(str(cabecera.get("description", "")).split())
+    assert _CUANDO_CARGARLA.search(descripcion), (
+        f"{skill.name}: la descripción no dice cuándo cargarla. Escribe una frase "
+        "que empiece por «Cárgala» o «Úsala»; es la que sale en la tabla de MEMORIA.md."
+    )
+
+
+@pytest.mark.parametrize("skill", carpetas_de_skill(), ids=lambda p: p.name)
 def test_cada_skill_declara_sus_limites(skill: Path) -> None:
     texto = (skill / "SKILL.md").read_text(encoding="utf-8")
     assert LIMITES.search(texto), (
@@ -262,6 +280,12 @@ def test_el_hueco_de_la_plantilla_no_cuenta_como_cita() -> None:
 def test_el_suelo_de_la_descripcion_caza_una_de_una_linea() -> None:
     """La forma exacta del defecto: una descripción que repite el título."""
     assert len("Crea un ADR nuevo.") < SUELO_DE_LA_DESCRIPCION
+
+
+def test_una_descripcion_sin_cuando_cargarla_se_detecta() -> None:
+    """La forma del defecto: una descripción que solo cuenta de qué trata."""
+    assert _CUANDO_CARGARLA.search("Crea un ADR nuevo con el número correcto.") is None
+    assert _CUANDO_CARGARLA.search("Crea un ADR. Úsala al registrar una decisión.")
 
 
 def test_la_seccion_de_limites_se_reconoce_en_sus_variantes() -> None:

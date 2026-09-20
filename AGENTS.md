@@ -42,6 +42,7 @@ cada familia la lleva la máquina: **«Las lecciones, por familia» en
 | La memoria del motor: diario, despachos y racha | la rama **`estado-del-motor`**, nunca `main` (ADR-083, ADR-093) |
 | Las investigaciones que informaron una decisión | `docs/investigaciones/` — **con su fecha y de qué dependen para caducar** |
 | Qué modelo de IA funciona HOY | `scripts/investigacion/modelos_atestiguados.yml`, que escribe una máquina tras llamar (ADR-095) |
+| Cómo se hace una tarea que esta casa ya ha hecho antes | las **skills** de `.claude/skills/`; la tabla de «Las skills» en `MEMORIA.md` dice cuándo carga cada una (ADR-211) |
 
 Cuatro avisos que ya han costado tiempo:
 
@@ -59,6 +60,22 @@ Cuatro avisos que ya han costado tiempo:
   a propósito y siempre lo estará.** El registro de verdad de la racha vive en
   la rama `estado-del-motor` (ADR-093). Mirar el de `main` y concluir «el
   contador no ha corrido nunca» sería exactamente el error del aviso anterior.
+
+## Lo que ya se averiguó dos veces: las skills (ADR-211)
+
+Antes de resolver desde cero algo que parece rutinario —pasar la cadena de
+comprobación, registrar un defecto, escribir un ADR, comprobar que no hay otra
+sesión en tus ficheros, escribirle al propietario— **mira si hay una skill que
+ya lo cuente**. Están en `.claude/skills/`, una carpeta por skill, y la tabla
+«Las skills» de `MEMORIA.md` dice cuándo carga cada una.
+
+Y al revés: cuando termines un trabajo en el que hayas tenido que averiguar
+**dos veces** lo mismo, esa es la señal de que falta una skill o de que una
+existente se quedó corta. Cómo se decide y cómo se escribe está en
+`.claude/skills/crear-una-skill/SKILL.md`. Lo mecánico lo sostiene
+`tests/automation/test_skills.py`: una skill que cite una ruta o un ADR que ya
+no existen rompe la batería. Lo que ninguna prueba puede decirte es si el texto
+sigue siendo verdad; eso se mira al usarla.
 
 ## Antes de modificar código
 

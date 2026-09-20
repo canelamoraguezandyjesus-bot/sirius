@@ -41,6 +41,7 @@ CARPETA_INVESTIGACIONES = Path("docs/investigaciones")
 REGISTRO_BLOQUES = Path("docs/implementation/bloques_del_motor.yml")
 REGISTRO_DEFECTOS = Path("docs/audits/registro_defectos.yml")
 REGISTRO_IDEAS = Path("docs/ideas/registro_de_ideas.yml")
+CARPETA_SKILLS = Path(".claude/skills")
 
 LONGITUD_RESUMEN = 240
 LONGITUD_OBJETIVO = 110
@@ -48,6 +49,11 @@ LINEAS_DE_CABECERA = 20
 SIN_FECHA = "sin fecha declarada"
 
 _NOMBRE_ADR = re.compile(r"^ADR-(\d{3})-.*\.md$")
+# La frase de la descripción de una skill que dice CUÁNDO cargarla. Es lo
+# único que se lee para decidir si se carga, así que es lo único que esta
+# vista enseña de ella; lo exige `tests/automation/test_skills.py`.
+_CUANDO_CARGARLA = re.compile(r"(?:Cárgala|Úsala)\b[^.]*\.")
+_CABECERA_SKILL = re.compile(r"\A---\n(.*?)\n---\n", re.DOTALL)
 _TITULO = re.compile(r"^#\s+(.+?)\s*$")
 # Guion largo, guion corto (por sus códigos: RUF001 los confunde con `-`) o guion.
 _PREFIJO_ADR_EN_TITULO = re.compile("^ADR-\\d+\\s*[\u2014\u2013-]\\s*")
@@ -169,6 +175,14 @@ class Encargo:
 
 
 @dataclass(frozen=True, slots=True)
+class Skill:
+    """Una skill de `.claude/skills/`, reducida a lo que esta vista enseña."""
+
+    nombre: str
+    cuando: str
+
+
+@dataclass(frozen=True, slots=True)
 class Arbol:
     """Todo lo que la vista de conocimiento lee, ya interpretado."""
 
@@ -176,6 +190,7 @@ class Arbol:
     bloques: tuple[Entrada, ...]
     defectos: tuple[Entrada, ...]
     ideas: tuple[Entrada, ...]
+    skills: tuple[Skill, ...]
     investigaciones: tuple[Documento, ...]
     documentos: tuple[Documento, ...]
     avisos: tuple[str, ...] = field(default_factory=tuple)
@@ -485,6 +500,35 @@ def leer_registro(ruta: Path, clave: str) -> tuple[Entrada, ...]:
     return tuple(entradas)
 
 
+def leer_skills(raiz: Path) -> tuple[Skill, ...]:
+    """Las skills versionadas, por nombre de carpeta.
+
+    No interpreta el cuerpo: de cada una saca el nombre declarado y la frase de
+    su descripción que dice cuándo cargarla. Si la cabecera no se puede leer, la
+    skill sale igualmente con el nombre de su carpeta y sin «cuándo»: la vista
+    enseña pobre lo que la fuente tiene pobre, y quien lo arregla es la guarda.
+    """
+    carpeta = raiz / CARPETA_SKILLS
+    if not carpeta.is_dir():
+        return ()
+    skills: list[Skill] = []
+    for hijo in sorted(carpeta.iterdir()):
+        fichero = hijo / "SKILL.md"
+        if not hijo.is_dir() or not fichero.is_file():
+            continue
+        cabecera = _CABECERA_SKILL.match(fichero.read_text(encoding="utf-8"))
+        leida: Any = yaml.safe_load(cabecera.group(1)) if cabecera else None
+        datos = leida if isinstance(leida, Mapping) else {}
+        descripcion = datos.get("description")
+        cuando = ""
+        if isinstance(descripcion, str):
+            encontrada = _CUANDO_CARGARLA.search(" ".join(descripcion.split()))
+            cuando = encontrada.group(0) if encontrada else ""
+        nombre = datos.get("name")
+        skills.append(Skill(nombre if isinstance(nombre, str) else hijo.name, cuando))
+    return tuple(skills)
+
+
 # --- El árbol entero ----------------------------------------------------------
 
 
@@ -500,6 +544,7 @@ def leer_arbol(raiz: Path) -> Arbol:
         bloques=leer_registro(raiz / REGISTRO_BLOQUES, "bloques"),
         defectos=leer_registro(raiz / REGISTRO_DEFECTOS, "defectos"),
         ideas=leer_registro(raiz / REGISTRO_IDEAS, "ideas"),
+        skills=leer_skills(raiz),
         investigaciones=investigaciones,
         documentos=documentos,
         avisos=tuple(avisos),
@@ -627,11 +672,30 @@ def generar_memoria(raiz: Path) -> str:
         f"- Bloques del motor: {_recuento(arbol.bloques)}.",
         f"- Defectos registrados: {_recuento(arbol.defectos)}.",
         f"- Ideas aparcadas o descartadas: {_recuento(arbol.ideas)}.",
+        f"- Skills: **{len(arbol.skills)}**.",
         f"- Investigaciones: **{len(arbol.investigaciones)}** (fotos con fecha; caducan).",
         f"- Documentos: **{len(arbol.documentos)}**, de los que **{sin_fecha}** no declaran fecha.",
     ]
     for aviso in arbol.avisos:
         lineas.append(f"- ⚠ {aviso}.")
+    lineas += [
+        "",
+        "## Las skills: lo que ya costó averiguar dos veces (ADR-211)",
+        "",
+        f"Viven en `{CARPETA_SKILLS.as_posix()}/`, una carpeta por skill, y guardan lo que",
+        "esta casa ya averiguó dos veces. No hay que leerlas todas: esta tabla dice",
+        "cuándo carga cada una, y se abre la que toque. Algo se convierte en skill",
+        "cuando se repite, cuesta medido y la decisión no es del propietario; cómo se",
+        "escribe una nueva lo dice `crear-una-skill`.",
+        "",
+    ]
+    if arbol.skills:
+        lineas += _tabla(
+            ("Skill", "Cuándo se carga"),
+            ((s.nombre, s.cuando or "—") for s in arbol.skills),
+        )
+    else:
+        lineas.append("Ninguna skill versionada.")
     lineas += [
         "",
         "## Qué se decidió: los ADR, del más reciente al más antiguo",
