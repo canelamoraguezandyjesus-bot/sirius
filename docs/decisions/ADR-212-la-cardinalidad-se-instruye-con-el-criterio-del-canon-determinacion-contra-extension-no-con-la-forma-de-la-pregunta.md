@@ -192,22 +192,41 @@ sobre la cardinalidad.
 pasa de 39 a 45 pruebas; las 39 anteriores están intactas.
 
 **Validación obligatoria: una sola invocación** de `pwsh -File scripts/check.ps1`
-sobre el árbol de `d9768650`, que es el que trae el cambio entero —código,
-pruebas, ADR, registro de defectos y la vista regenerada—. Código de salida
-**0**, con los cuatro pasos en verde: `ruff format --check` («637 files already
-formatted»), `ruff check` («All checks passed!»), `mypy src tests` («Success: no
-issues found in 600 source files») y `pytest`:
+sobre el árbol de `d8cf2756`, que es el que trae el cambio entero —código,
+pruebas, ADR con su número definitivo, registro de defectos y la vista
+regenerada—. Código de salida **0**, con los cuatro pasos en verde:
+`ruff format --check` («637 files already formatted»), `ruff check` («All checks
+passed!»), `mypy src tests` («Success: no issues found in 600 source files») y
+`pytest`:
 
 ```
-=========== 6726 passed, 17 skipped, 2 xfailed in 1283.68s (0:21:23) ===========
+=========== 6726 passed, 17 skipped, 2 xfailed in 758.73s (0:12:38) ============
 ```
 
 Una sola invocación y sin partir `pytest` en tandas (ADR-145). El head final de
-la rama añade a `d9768650` solo este párrafo del ADR: la terna es la de su
-árbol y así se lee (ADR-154).
+la rama añade a `d8cf2756` solo este párrafo del ADR: la terna es la de su
+árbol y así se lee (ADR-154). La corrida anterior de la rama, sobre el árbol de
+`d9768650` —el mismo cambio con el número 204—, dio la misma terna
+(`6726 passed, 17 skipped, 2 xfailed`) en 1283.68 s.
 
 **Lo que esta comprobación NO dice:** nada sobre el efecto en la cifra del
 banco. Aquí no hay Ollama, y no se ha simulado ninguna medición.
+
+## El número de este ADR
+
+Este ADR nació como `ADR-204` y se renumeró a **212** antes de fusionar. El 204
+ya estaba cogido en el remoto: la rama abierta `claude/sirius-collaboration-rir6r6`
+(PR #652) empujó `ADR-204` … `ADR-211` y `H-204` … `H-211` a las 13:32Z del
+20-09-2026, una hora antes de que esta rama creara su 204, y la colisión solo
+aparece al fusionar —que es el límite que `scripts/siguiente_adr.py` documenta y
+que `tests/automation/test_registro_de_decisiones.py::test_no_new_number_is_ever_reused`
+caza—. El número nuevo es el que devuelve `uv run python scripts/siguiente_adr.py
+--solo-numero` con el fetch de ADR-180 («traidas las cabezas del remoto;
+consultadas 343 ramas con ADR» → `212`), no uno elegido a mano. Se renumeró el
+fichero, su encabezado, `H-212`/`adr: 212` en el registro de defectos con la
+ruta y el comentario que los precede, la cita del comentario de
+`ollama_query_intent_classifier.py` y `MEMORIA.md` regenerada con
+`uv run sirius-memoria conocimiento`. Ni una línea de contenido técnico cambió.
 
 ## Consecuencias
 
