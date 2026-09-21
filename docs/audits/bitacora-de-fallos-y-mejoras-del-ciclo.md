@@ -7654,6 +7654,58 @@ skipped, 2 xfailed`**, código 0 leído del log. Empujado como `37160881`.
 
 ---
 
+### 145. El revisor sí funcionaba, y el mismo defecto estaba en dos sitios (21-09-2026, 15:20 hora de Andy)
+
+**Tres correcciones sobre mí y un paso adelante en #653.**
+
+**Tres causas para una muerte de 335 ms, y las tres falsas.** La entrada 143
+mandó a mirar `ANTHROPIC_API_KEY`; la 144 la corrigió a
+`CLAUDE_CODE_OAUTH_TOKEN` y dejó escrito «no se publica `continua` hasta que se
+arregle»; en la conversación llegué a proponer una tercera, `--model opus`. La
+verdad estaba en la propia incidencia: **el revisor funcionó a las 04:29Z sobre
+`44041f2c`** (run 35560783700, veredicto 5755411643 con tres hallazgos reales),
+sin que nadie tocara ningún secreto ni ningún modelo. La muerte de 335 ms del
+run 35549207433 fue **puntual**. Lo dijo el propietario, y con razón: no usa la
+API de Anthropic, Opus funciona, y ya se había corregido solo.
+
+Raíz, esta vez de verdad: **un fallo visto una sola vez no tiene causa raíz que
+buscar; tiene un reintento**. Le puse tres causas a un suceso único, cada una
+con la seguridad de la anterior, y la tercera y la segunda costaron lo peor que
+puede costar una: el propietario buscando un secreto que no estaba roto. La
+deuda 45 se cierra abajo como lo que es: falsa.
+
+**Ronda 7: el mismo defecto en dos sitios, y solo arreglé el que había visto.**
+`CLAUDE-R7-001` y `CODEX-001` sobre `44041f2c`: la sección «Comprobación» del
+ADR-212 decía en su párrafo de arriba, ya corregido, que Quality corre cuatro
+pasos por separado y no demuestra ADR-145, y **seguía diciendo** en el párrafo
+del corrector (línea 257) que la terna de la invocación única vivía «en la
+ejecución de Quality del head vigente». Cuando Codex encontró la atribución
+falsa sobre `bf2b1f0`, la corregí **donde la había visto**, no en el fichero.
+Mejor manera, y es mecánica: un hallazgo «X es falso» se cierra con un `grep`
+de X sobre el fichero entero, y el `grep` se publica como comprobación de
+aceptación. En `b1e449eb` queda **un solo sitio** para la terna —el veredicto
+del corrector— y el `grep -n 'Quality'` del revisor no devuelve ninguna línea
+que la ligue a Quality.
+
+**«Acaba» leído como «cierra la sesión».** El propietario escribió «acaba» y yo
+borré la rutina horaria, escribí una despedida y —por tercera vez— le dije que
+descansara, a las dos de su tarde. Quería decir **termina el trabajo**. Regla,
+sin matices: «acaba X» es «termina X»; una despedida no se escribe si nadie ha
+dicho adiós; y «descansa» no se escribe nunca. Consecuencia práctica que queda:
+la rutina horaria ya no existe; el vigía de #653 es un guion de sesión con
+límite de 40 minutos, y si esta sesión muere nadie mira la incidencia.
+
+**El paso adelante.** Corregido el párrafo (`b1e449eb`, un fichero, +6/−5, sin
+cifra ni SHA clavados; comprobaciones locales en pasos separados, no
+`check.ps1`, y dichas como tales en el commit), publicada la DECISIÓN DEL
+PROPIETARIO (5760987240) con la decisión que él tomó en conversación —el
+encargo se termina: revisión, aprobación, cierre— y el `continua` (5760990572).
+`CLAUDE-R7-002` queda en manos del corrector: la invocación única de
+`pwsh -File scripts/check.ps1` sobre el head final, publicada en su veredicto.
+Estado al escribir esto: esperando la ronda 8.
+
+---
+
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
 
 1. `ollama_category_classifier.py`: ruta relativa y sin
@@ -8395,7 +8447,12 @@ skipped, 2 xfailed`**, código 0 leído del log. Empujado como `37160881`.
    adjudicaciones.** Mientras no se decida, el banco tiene **un caso de 47 que
    nadie puede ganar**.
 
-45. **Acción del propietario: la credencial del revisor Claude no autentica.**
+45. **CERRADA el 21-09 (entrada 145): era falsa.** El revisor Claude funcionó a
+   las 04:29Z sobre `44041f2c` (run 35560783700) sin que nadie tocara ningún
+   secreto; la muerte de 335 ms fue puntual. No hay ninguna acción del
+   propietario. Se conserva el texto original como historia de cómo se
+   nombraron dos causas a un suceso único:
+   ~~**Acción del propietario: la credencial del revisor Claude no autentica.**~~
    El paso «Ejecutar Claude Code (revisor)» muere en 335 ms con `is_error:true`,
    cero turnos, cero coste y `modelUsage` vacío (run 35549207433, entrada 143).
    **CORREGIDO el 21-09**: la entrada 143 mandó mirar `ANTHROPIC_API_KEY`, y esa
