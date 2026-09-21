@@ -115,7 +115,7 @@ sin su defecto, ADR-182—; y ningún documento tocado tiene citas rotas.
 | Formato, estilo y tipos | `ruff format --check .`, `ruff check .`, `mypy src tests` | limpio tras partir una línea larga del fichero de pruebas; mypy: 606 ficheros sin errores |
 | La batería entera | `uv run --no-sync pytest` | **7 309 en verde, 17 saltadas, 2 xfailed y 1 roja, 13 min 58 s**; la roja es `test_todo_adr_que_declara_un_defecto_deja_su_entrada_en_el_registro` para ADR-213, que por diseño espera al commit siguiente (ADR-182) |
 | `MEMORIA.md` al día | `uv run --no-sync sirius-memoria conocimiento` | regenerada en el mismo commit (ADR-171) |
-| Tras la revisión de Codex (21-09): la tercera parte de la regla 12 también está vigilada | quitar solo «y qué le toca a él» del texto de `AGENTS.md` en memoria y evaluar la guarda | **cazada**: con esa frase quitada la guarda echa en falta exactamente «y qué le toca a él»; con el texto real, las cuatro frases están; 10 pruebas en verde |
+| Tras la revisión de Codex (21-09): la tercera parte de la regla 12 también está vigilada | quitar solo «y qué le toca a él» del texto de `AGENTS.md` en memoria y evaluar la guarda | **cazada**: con esa frase quitada la guarda echa en falta exactamente «y qué le toca a él»; con el texto real, las cuatro frases están; 10 pruebas en verde. Honestidad de fechas: el primer intento de este comprobante no llegó a ejecutarse (el `python3` del sistema no tiene pytest) y el resultado se escribió antes de tenerlo, en el commit `49dd905b`; se repitió con `uv run` justo después, salió como se afirma, y este párrafo lo deja dicho en vez de borrar el rastro |
 
 ## Consecuencias
 
