@@ -26,11 +26,11 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **206**.
+- Decisiones (ADR): **207**.
 - Bloques del motor: 17 cerrado, 2 fuera_de_alcance, 1 pendiente.
 - Defectos registrados: 2 abierto, 63 cerrado.
 - Ideas aparcadas o descartadas: 4 aparcada, 2 descartada, 2 promovida.
-- Skills: **7**.
+- Skills: **10**.
 - Investigaciones: **9** (fotos con fecha; caducan).
 - Documentos: **150**, de los que **97** no declaran fecha.
 
@@ -46,11 +46,14 @@ escribe una nueva lo dice `crear-una-skill`.
 |---|---|
 | adr | Úsala SIEMPRE que vayas a registrar una decisión, en vez de elegir el número leyendo el listado: así nacieron los dos ADR-016 que hoy conviven en el registro. |
 | cadena-de-comprobacion | Cárgala siempre que vayas a confirmar, a empujar, a decir que algo está verde, o cuando la batería o el comprobador te hayan rechazado algo y no sepas por qué. |
+| coste-antes-de-tocar-una-fuente | Cárgala cuando vayas a lanzar más de tres agentes, a leer más de un megabyte, a gastar turnos de sesiones del propietario o cuota suya, o cuando un trabajo lleve más de una hora sin entregarle nada visible. |
 | crear-una-skill | Cárgala al cerrar cualquier trabajo en el que hayas tenido que averiguar dos veces lo mismo, cuando una skill existente se te haya quedado corta, o cuando el propietario pida que aprendamos de cómo trabajamos. |
 | disciplina-evidencia | Cárgala siempre que vayas a afirmar algo sobre el comportamiento del sistema, a arreglar un defecto o a producir un documento con conclusiones. |
 | hablar-con-el-propietario | Cárgala antes de escribirle cualquier mensaje, antes de darle una cifra, antes de pedirle algo y antes de decidir si una pregunta merece molestarle. |
+| modo-nocturno | Cárgala en cuanto diga «me voy a dormir», «modo nocturno», «trabaja toda la noche» o «déjalo listo para fusionar», y también si una sesión arranca de noche con una orden de esas. |
 | obra-en-curso | Cárgala al empezar cualquier trabajo sobre este repositorio, antes del primer cambio, y también cuando te encuentres algo que no cuadra con lo que dice `main`: puede que lo esté haciendo otra sesión ahora mismo. |
 | registro-de-defectos | Cárgala cuando encuentres un defecto, cuando arregles uno, y SIEMPRE que escribas un ADR con una `familia:` en su bloque `## La lección`: desde ADR-182 ese ADR no pasa la batería sin su entrada aquí. |
+| revision-externa | Cárgala cuando una PR tuya tenga Quality en verde y toque pedir revisión, cuando llegue una revisión de Codex a una PR que llevas, y cuando el propietario diga «pásala por Codex» o «a ver qué opina». |
 
 ## Qué se decidió: los ADR, del más reciente al más antiguo
 
@@ -67,6 +70,7 @@ huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| [214](docs/decisions/ADR-214-tres-skills-de-flujo-de-trabajo-salidas-de-las-transcripciones-la-noche-delegada-la-revision-externa-sin-correo-y-el-coste-antes-de-tocar-una-fuente.md) | 2026-09-21 | APROBADO | Tres skills de flujo de trabajo salidas de las transcripciones: la noche delegada, la revisión externa sin correo y el coste antes de tocar una fuente | La tercera. Tres skills nuevas, en `.claude/skills/`: |
 | [213](docs/decisions/ADR-213-escribir-las-tres-reglas-de-septiembre-del-propietario-dar-proporcion-a-la-cadena-de-comprobacion-y-fechar-en-las-transcripciones-las-reglas-del-20-09.md) | 2026-09-20 | APROBADO | Escribir las tres reglas de septiembre del propietario, dar proporción a la cadena de comprobación y fechar en las transcripciones las reglas del 20-09 | `AGENTS.md`, sección «Cómo conversa el propietario, y qué espera (ADR-208)», gana las reglas 11, 12 y 13, con sus palabras y su fecha: *contesta primero, trabaja después*; *el parte de la mañana tiene tres partes: qué hiciste, qué no y por… |
 | [211](docs/decisions/ADR-211-convertir-en-skills-lo-que-ya-costo-averiguar-dos-veces-con-una-guarda-que-impida-que-se-pudran.md) | 2026-09-20 | APROBADO | Convertir en skills lo que ya costó averiguar dos veces, con una guarda que impida que se pudran | La tercera. Cinco skills nuevas, una guarda, y las dos puertas de entrada de una sesión enterándose de que existen. |
 | [210](docs/decisions/ADR-210-archivar-las-incidencias-que-ya-no-describen-nada-y-decir-donde-vive-la-bitacora-del-ciclo.md) | 2026-09-20 | APROBADO | Archivar las incidencias que ya no describen nada, y decir dónde vive la bitácora del ciclo | De las nueve abiertas que la decisión 2 nombraba: |
@@ -302,6 +306,7 @@ de memoria.
 | `guardian-que-mide-posicion-en-vez-de-estructura` | 1 | sí | [187](docs/decisions/ADR-187-una-revision-sobrevive-a-ponerse-al-dia-con-main-si-el-trabajo-propio-de-la-rama-no-cambia.md) |
 | `instrumento-que-solo-mide-un-lado` | 1 | sí | [203](docs/decisions/ADR-203-el-banco-mide-tambien-el-camino-de-puerta-cerrada-la-linea-base-que-faltaba.md) |
 | `interruptor-que-enciende-mas-de-lo-que-se-puede-medir` | 1 | sí | [185](docs/decisions/ADR-185-la-puerta-de-la-memoria-se-parte-en-tres-interruptores-antes-de-abrirla.md) |
+| `leccion-que-se-queda-en-el-informe` | 1 | sí | [214](docs/decisions/ADR-214-tres-skills-de-flujo-de-trabajo-salidas-de-las-transcripciones-la-noche-delegada-la-revision-externa-sin-correo-y-el-coste-antes-de-tocar-una-fuente.md) |
 | `pieza-correcta-a-la-que-no-llama-quien-la-necesita` | 1 | sí | [197](docs/decisions/ADR-197-el-detector-de-familia-repetida-agrupa-por-la-ruta-que-el-revisor-escribe-no-por-el-recorte-anclado.md) |
 | `plan-que-hay-que-terminar-de-una-sentada` | 1 | sí | [176](docs/decisions/ADR-176-el-cierre-de-una-incidencia-se-retoma-desde-donde-se-quedo.md) |
 | `pregunta-al-propietario-que-nadie-vuelve-a-poner-delante` | 1 | no en todas | [198](docs/decisions/ADR-198-partir-un-objetivo-grande-lo-hace-la-sesion-interactiva-el-descomponedor-automatico-queda-descartado.md) |
@@ -391,6 +396,10 @@ de memoria.
 ### `interruptor-que-enciende-mas-de-lo-que-se-puede-medir`
 
 - **[ADR-185](docs/decisions/ADR-185-la-puerta-de-la-memoria-se-parte-en-tres-interruptores-antes-de-abrirla.md)** — poner una sola puerta delante de varias piezas (lo hace cumplir `tests/unit/test_composition_root_relevance_gate.py`).
+
+### `leccion-que-se-queda-en-el-informe`
+
+- **[ADR-214](docs/decisions/ADR-214-tres-skills-de-flujo-de-trabajo-salidas-de-las-transcripciones-la-noche-delegada-la-revision-externa-sin-correo-y-el-coste-antes-de-tocar-una-fuente.md)** — leer una fuente cara, escribir el informe con lo (lo hace cumplir `tests/automation/test_skills.py`).
 
 ### `pieza-correcta-a-la-que-no-llama-quien-la-necesita`
 

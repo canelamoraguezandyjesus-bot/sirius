@@ -661,3 +661,37 @@ espera por ellas: la parada de la adenda 4 sigue mandando.
 
 **Parada de esta adenda:** las dos leídas y anotadas; o disparada la regla de
 las dos rondas por una familia nueva.
+
+## Adenda 6 — tres skills de flujo de trabajo, con las condiciones escritas antes de elegirlas (2026-09-21 10:26 UTC)
+
+El propietario, al ver el paso 5 fusionado, lo dijo sin rodeos: de las
+transcripciones quedó un informe y tres reglas, no herramientas de flujo de
+trabajo, y «pasado mañana te vas a olvidar». Tiene razón en el fondo: lo que
+no está en el repositorio no sobrevive a la sesión. Las transcripciones ya no
+existen (borradas a las 00:25 UTC a petición suya) y no deben volver; lo que
+sigue sale de lo que esta sesión aún conserva de su lectura y de lo que el paso
+5 dejó escrito con fecha y hora.
+
+Las tres condiciones de ADR-211, por candidata, ANTES de escribir ninguna:
+
+| Candidata | Se repite (ocurrencias fechadas) | Fricción medida | ¿Es decisión del propietario? |
+|---|---|---|---|
+| `modo-nocturno` | 08-08, 10-08, 15-08, 13-09, 14-09 | 3 h 18 min despierto por avisos de permiso (15-08, 01:09 → 04:27) y una herramienta rechazada que la sesión reintentó; diez esperas de fondo perdidas por reinicio del contenedor (09-09 03:01); «que me contestes primero» (14-09 11:04); el parte pedido tres veces (14-09 11:06, 20:53, 22:48); 95 despertares en siete días (08-09) | no: es cómo ejecuta la sesión lo que él ya delegó |
+| `revision-externa` | PR #576 (08-09, cuatro rondas traídas por él); PR #658 (21-09, tres rondas sin él); el diseño de la revisión dual (11-08) | cuatro rondas en un día de la misma familia sin que nadie las contara; cuota de Codex agotada (12-09 16:41) | no: el mecanismo es el que ya aprobó (ADR-156, ADR-205); cambia quién lo pide |
+| `coste-antes-de-tocar-una-fuente` | 28-07 (12 de 23 agentes muertos por límite de sesión); 11-08 (21 subagentes, «nada»); 19-08 (2,8 M tokens, «todavía no»); 20/21-09 (33 sesiones × un turno, un día y medio uso suyo) | las cuatro cifras de la izquierda | no: es la regla de dinero de ADR-204 aplicada antes de gastar, no una decisión de gasto |
+
+Descartadas antes de escribir: «el parte de la mañana» como skill propia (cabe
+en tres párrafos y ya está en `hablar-con-el-propietario` y en la regla 12 de
+`AGENTS.md`); «auditar las transcripciones a fondo con más agentes» (no hay
+transcripciones, y no debe volver a haberlas en el repositorio).
+
+**Criterio de parada, escrito ahora:** las tres pasan la guarda de ADR-211
+(`tests/automation/test_skills.py`) sin tocarla; cada una cita solo ficheros y
+ADR que existen; ninguna repite `AGENTS.md` (remiten a sus reglas); la batería
+entera vuelve verde salvo la roja por diseño del ADR sin su defecto (ADR-182),
+que cierra el commit siguiente con H-214; y si al escribir una candidata no
+llega a dos ocurrencias fechadas, se descarta.
+
+**Qué NO garantiza:** que una sesión las cargue —la descripción es lo único que
+decide eso (ADR-211)—, ni que el propietario deje de ser el correo entre IAs:
+eso es la memoria común, no una skill.
