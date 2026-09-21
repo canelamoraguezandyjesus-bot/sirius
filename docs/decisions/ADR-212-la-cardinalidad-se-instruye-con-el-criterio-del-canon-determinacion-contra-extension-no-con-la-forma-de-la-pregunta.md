@@ -229,13 +229,19 @@ estuvo en verde en cada paso, no para sostener el head actual:
 | `ca847501` | el head aprobado en la ronda 5, antes de traer `main` | `6726 passed, 17 skipped, 2 xfailed` | 616.43 s |
 | `178b1bee` | **con `main` (#652) dentro y `Estado: APROBADO`** | `7311 passed, 16 skipped, 2 xfailed` | 687.37 s |
 
-La última corrida se hizo con los cuatro pasos por separado y no con
-`check.ps1`, porque **en el runner de esta rama no hay `pwsh`**: `ruff format
---check` («644 files already formatted»), `ruff check` («All checks
-passed!»), `mypy src tests` («Success: no issues found in 606 source files») y
-el `pytest` de la tabla, con código de salida 0. Los cuatro son los mismos
-pasos que `check.ps1` encadena, y Quality los corre por su cuenta sobre ese
-head.
+Esa última corrida de la tabla se hizo con los cuatro pasos por separado y no
+con `check.ps1` —`ruff format --check` («644 files already formatted»), `ruff
+check` («All checks passed!»), `mypy src tests` («Success: no issues found in
+606 source files») y el `pytest` de la fila, con código de salida 0—. Cuatro
+pasos separados **no sustituyen** a la invocación única (ADR-145), y la razón
+que se dio para partirlos —que el runner no tenía `pwsh`— era falsa:
+`/usr/bin/pwsh` está instalado (PowerShell 7.6.5). Desde la ronda siguiente la
+cadena se corre como manda el guion, **una sola invocación de `pwsh -File
+scripts/check.ps1`**, y su terna y su código de salida viven donde no caducan:
+en el veredicto de la ronda que la corrió y en la ejecución de Quality del head
+vigente. No se clavan aquí, porque una cifra clavada en este párrafo vuelve a
+describir un árbol que la próxima fusión de `main` mueve, que es el defecto que
+esta sección acaba de dejar de cometer.
 
 **Lo que esta comprobación NO dice:** nada sobre el efecto en la cifra del
 banco. Aquí no hay Ollama, y no se ha simulado ninguna medición.
