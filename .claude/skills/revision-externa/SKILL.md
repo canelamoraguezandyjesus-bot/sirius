@@ -26,8 +26,12 @@ ADR-156). No uses el marcador oculto de la tubería del motor
 (`sirius-codex-review:<head>`): es suyo y comprueba quién lo emitió.
 
 Cada petición gasta cuota del propietario, y esa cuota se agota («Codex se
-quedó sin uso otra vez», 12-09-2026 16:41). Se pide una vez por head, después
-de Quality en verde, nunca por cada commit.
+quedó sin uso otra vez», 12-09-2026 16:41; y el 21-09-2026 a las 14:58, tras
+**doce peticiones en un día** —seis en la PR #659, cuatro en la #660 y dos en
+la #661—, con la #661 a una pasada de fusionarse). Se pide una vez por head,
+después de Quality en verde y con todos los arreglos de una ronda juntos,
+nunca por cada commit ni en paralelo con una batería que puede cambiar el
+head. Si la cuota se agota, la PR espera: no se fusiona sin la pasada.
 
 ## Qué devuelve, y qué cuenta como pasada limpia
 
