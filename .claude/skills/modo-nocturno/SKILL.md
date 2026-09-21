@@ -50,9 +50,11 @@ fallo tuyo, no un avance.**
    20-09-2026 22:40). Si cae, no hay nada que hacer hasta que se reinicie: que
    el trabajo esté empujado antes, no en el árbol de trabajo.
 7. **Cada unidad, su PR, lista para fusionar**: rama, nota de arranque o ADR,
-   cadena de comprobación, Quality en verde y revisión externa pedida (skill
-   `revision-externa`). Lo que no llegue a eso se dice en el parte como «a
-   medias», nunca como hecho.
+   cadena de comprobación, Quality en verde y la pasada de Codex **limpia
+   sobre ese mismo head** (skill `revision-externa`). Pedir la revisión no es
+   tenerla: si Codex no ha contestado, ha devuelto hallazgos o ha fallado
+   cerrado, la unidad está «a medias» aunque Quality esté en verde, y así se
+   dice en el parte, nunca como hecho.
 8. **Lo que exija su ordenador se acumula** para el lote de la mañana
    (`AGENTS.md`, regla 13).
 
