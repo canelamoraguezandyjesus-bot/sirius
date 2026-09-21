@@ -7704,6 +7704,27 @@ encargo se termina: revisión, aprobación, cierre— y el `continua` (576099057
 `pwsh -File scripts/check.ps1` sobre el head final, publicada en su veredicto.
 Estado al escribir esto: esperando la ronda 8.
 
+**Añadido a las 15:15: hicieron falta dos `continua`, y no por un error mío.**
+El primero (5760990572) levantó la parada de `familia-repetida` como parada
+**operativa** —`sirius-resume-stop`, «no perdona ninguna ronda ni mueve el
+listón»: es lo que `sirius_resume_on_command.sh` hace con toda parada cuyo
+marcador no sea `precheck:convergencia-`— y devolvió la incidencia al
+corrector, que a los sesenta segundos midió la convergencia sobre **todo** el
+historial y paró por `sin-progreso` (run 35603703270: «el par (3, 4) no mejora
+la mejor marca histórica (1, 2)»). Esa segunda parada sí es de la política, y
+el segundo `continua` (5761055256) publicó `sirius-convergence-reset:b1e449eb`
+(recibo 5761059405) y arrancó el corrector de verdad.
+
+Lo que se ve desde aquí: una parada por familia repetida **siempre** llega con
+un historial plano —es la misma familia varias rondas seguidas—, así que su
+`continua` está condenado a chocar con el precheck de convergencia acto seguido.
+Cada vez costará una decisión más del propietario y unos minutos de runner.
+**Mejor manera (candidata, no decisión):** que la reanudación de una parada
+`familia-repetida` publique también el reinicio del listón, o que el precheck
+del corrector tome un `resume-stop` como frontera de la medida de
+`sin-progreso`. Es una regla del reanudador y del precheck, no de esta
+incidencia; va a la lista de deudas como la 46.
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
@@ -8462,3 +8483,13 @@ Estado al escribir esto: esperando la ronda 8.
    de revisión puede completarse hasta que se arregle**, y cada intento gasta
    tres minutos de Codex para acabar en `FAILED_SAFELY`. Es un secreto del
    repositorio: sólo él puede tocarlo. Mientras tanto no se publica `continua`.
+
+
+46. **Regla del reanudador: la salida de una parada `familia-repetida` choca
+   con el precheck de convergencia.** `sirius_resume_on_command.sh` trata
+   `familia-repetida` como parada operativa (`resume-stop`, sin reinicio del
+   listón) y la devuelve al corrector, cuyo precheck mide `sin-progreso` sobre
+   todo el historial y vuelve a parar en el acto (#653, 21-09, run
+   35603703270). Hacen falta dos `continua` por diseño. Candidatas: publicar el
+   reinicio también en esa reanudación, o que el precheck tome `resume-stop`
+   como frontera. Necesita ADR; no se toca desde esta rama.
