@@ -7536,6 +7536,83 @@ no se le llama por el nombre de la entera.* Y si se explica por qué se partió,
 la razón tiene que ser verdadera **en el sitio donde vive el texto**, no sólo
 donde se escribió.
 
+### 143. El revisor Claude murió en 14 segundos, y Codex encontró que mi arreglo de raíz era otra afirmación sin comprobar (21-09-2026, 07:10 hora de Andy)
+
+Dos cosas a la vez, y conviene no mezclarlas.
+
+## Lo que no es del trabajo: el revisor no revisó
+
+Del log del run 35549207433:
+
+```
+"subtype": "success",  "is_error": true,
+"duration_ms": 335,    "num_turns": 1,
+"total_cost_usd": 0,   "modelUsage": {}
+```
+
+El paso «Ejecutar Claude Code (revisor)» duró **14 segundos**; Codex tardó tres
+minutos, que es lo normal. **Cero turnos, cero coste, `modelUsage` vacío**: no
+revisó nada, murió al arrancar. En el entorno del paso, `ANTHROPIC_API_KEY`
+aparece **vacía**.
+
+La cadena: revisor muere → `sirius_verdict.json` no se escribe →
+`sirius_aggregate_reviews` no lo encuentra (`[Errno 2] No such file or
+directory`) → veredicto agregado `FAILED_SAFELY`. **El modo dual hizo
+exactamente lo que debe**: sin los dos veredictos para, en vez de decidir con
+uno.
+
+**Y un `continua` no lo arregla**: volvería a morir igual y gastaría otros tres
+minutos de Codex. Es un secreto del repositorio. **Decisión/acción del
+propietario, la única de esta noche que no puedo ni empezar.** Deuda 45.
+
+## Lo que sí es mío, y es la misma familia por tercera vez
+
+Codex revisó `bf2b1f00`, pidió cambios, y **su veredicto se perdió en la
+agregación**. El hallazgo era correcto:
+
+> «Al usar Quality como evidencia de la invocación única, esta frase atribuye
+> allí una terna y un código de salida que ese workflow no produce.»
+
+Comprobado por mí contra el árbol, no aceptado de palabra:
+
+```
+$ git show origin/main:.github/workflows/quality.yml | grep -c 'check.ps1'
+0
+```
+
+`quality.yml` corre los cuatro como **pasos independientes** y **nunca** llama a
+`scripts/check.ps1`.
+
+**Al desanclar el párrafo del SHA escribí que Quality corría «las mismas cuatro
+comprobaciones en una sola invocación» sin abrir `quality.yml`.** Cambié un
+anclaje falso por una atribución falsa. Y lo hice **en el mismo texto** donde
+acababa de aceptar, en la entrada 142, que cuatro pasos separados no equivalen
+a la invocación única.
+
+Tres caras del mismo error en veinticuatro horas:
+
+| qué afirmé | sin haber mirado |
+|---|---|
+| «el head añade una sola línea» | el diff real, que eran 196 ficheros |
+| «no cuesta la ronda de revisión» | el diff real entre los dos heads |
+| «Quality corre la invocación única» | `quality.yml`, a un `grep` de distancia |
+
+No es descuido de un día: es **una forma de escribir** que construye la
+afirmación que convendría y la da por buena porque suena razonable. Las tres
+veces el desmentido estaba en un comando de dos segundos.
+
+**Corregido en `44041f2c`**: el párrafo separa las dos evidencias —la invocación
+única, que corre el corrector en un runner con `pwsh`, y Quality, que valida el
+head pero **no** demuestra ADR-145— y lo dice con esas palabras.
+
+## Y esta vez la comprobación se cuenta por lo que es
+
+En el commit: «Comprobado aquí, y se dice lo que es: **NO es la cadena
+entera**». `ruff format --check` (644), las 525 pruebas de las guardas que miran
+los ADR y los registros, y `sirius-memoria --comprobar`. La cadena completa la
+corre Quality al empujar. Es la regla de la entrada 142 aplicada al primer sitio
+donde tocaba aplicarla.
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
@@ -8278,3 +8355,11 @@ donde se escribió.
    confirmado marcándolo. **Las tres son suyas; no toco el corpus ni las
    adjudicaciones.** Mientras no se decida, el banco tiene **un caso de 47 que
    nadie puede ganar**.
+
+45. **Acción del propietario: la credencial del revisor Claude está vacía.**
+   El paso «Ejecutar Claude Code (revisor)» muere en 335 ms con `is_error:true`,
+   cero turnos, cero coste y `modelUsage` vacío; `ANTHROPIC_API_KEY` aparece
+   vacía en el entorno del paso (run 35549207433, entrada 143). **Ninguna ronda
+   de revisión puede completarse hasta que se arregle**, y cada intento gasta
+   tres minutos de Codex para acabar en `FAILED_SAFELY`. Es un secreto del
+   repositorio: sólo él puede tocarlo. Mientras tanto no se publica `continua`.
