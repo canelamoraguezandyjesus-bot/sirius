@@ -191,12 +191,28 @@ sobre la cardinalidad.
 **Ninguna prueba existente cambió de intención.** El fichero del adaptador
 pasa de 39 a 45 pruebas; las 39 anteriores están intactas.
 
-**Validación obligatoria, redactada para no caducar.** Las cuatro
-comprobaciones de `scripts/check.ps1` —`ruff format --check`, `ruff check`,
-`mypy src tests` y `pytest`, en una sola invocación y sin partir `pytest` en
-tandas (ADR-145)— las corre **Quality sobre el head que esta PR entrega**, y
-las vuelve a correr **en cada empuje**. El veredicto vigente es el de la
-ejecución de Quality que la incidencia #653 publica para el head actual.
+**Validación obligatoria: dos evidencias distintas, y no se confunden.**
+
+1. **La invocación única de `pwsh -File scripts/check.ps1`** que ADR-145 exige
+   —una sola, sin partir `pytest` en tandas— la corre el corrector en el runner
+   del motor, que sí tiene `pwsh`. Su terna y su código de salida viven en el
+   **veredicto de la ronda que la corrió**, publicado en la incidencia #653, no
+   clavados aquí.
+2. **La ejecución de Quality sobre el head que esta PR entrega**, que se repite
+   en cada empuje. Quality valida el head, pero **no demuestra el requisito de
+   ADR-145**: `.github/workflows/quality.yml` corre `ruff format --check`,
+   `ruff check`, `mypy src tests` y `pytest` como **cuatro pasos
+   independientes** y **no llama a `scripts/check.ps1`** en ningún momento.
+
+La distinción no es un tecnicismo: es el defecto que ADR-145 existe para
+impedir. La cabecera del propio guion lo cuenta —«hasta el 06-09-2026 el
+"exit 0" de este guion era el de pytest y sólo el de pytest, con ruff format,
+ruff lint o mypy en rojo pasando desapercibidos»—. Cuatro verdes por separado
+son cuatro verdes por separado; la invocación única es otra cosa, y llamarlas
+igual es exactamente el error que la decisión prohíbe.
+
+Esta redacción tampoco caduca, por la misma razón que la de abajo: ninguna de
+las dos evidencias nombra un árbol que la próxima fusión pueda mover.
 
 **Por qué está escrito así, y no anclado a un SHA.** Las rondas 2, 3 y 4
 escribieron este párrafo clavando un árbol concreto y enumerando a mano qué
