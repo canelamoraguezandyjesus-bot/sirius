@@ -695,3 +695,20 @@ llega a dos ocurrencias fechadas, se descarta.
 **Qué NO garantiza:** que una sesión las cargue —la descripción es lo único que
 decide eso (ADR-211)—, ni que el propietario deje de ser el correo entre IAs:
 eso es la memoria común, no una skill.
+
+**Adenda 6 bis (10:34 UTC).** El propietario, al ver las tres: «así pudimos haber
+sacado por lo menos diez o veinte». Antes de escribir ninguna más, las
+candidatas que aún salen de lo leído, con las mismas tres condiciones:
+
+| Candidata | Se repite (ocurrencias fechadas) | Fricción medida | ¿Decisión del propietario? |
+|---|---|---|---|
+| `comandos-para-su-ordenador` | 08-08, 09-08, 14-08, 11-09, 20-09 | `.venv` «acceso denegado» y el error 396 de OneDrive (08/09-08); `Sirius.lnk` en un escritorio que no existe (14-08 15:18); «¿yo qué sé dónde está la carpeta?» (11-09 21:17); `npx.ps1` bloqueado por la política de ejecución y `winget` con error 1622 (11-09 21:51-21:54); dos comandos tumbados por `$HOME\Desktop` (20-09) | no |
+| `paquete-de-trabajo-pegado` | las seis del 18-07; las doce del 25 al 28-07; 19-08; los diez encargos del 08-09 | ficheros pedidos que la sesión no puede ver (26-07 14:14 → 15:31); «dame todas las respuestas… como un solo documento» (26-07 20:20); el mismo paquete en dos sesiones (28-07 19:52); el paquete equivocado (13-09 06:23) | no: el paquete lo redacta quien él quiera; esto es cómo se ejecuta |
+| `traspaso-a-otra-sesion` | 08-08 («genera un prompt… que me voy a dormir»), 19-08 00:03, 24-08 15:12 (traspaso pegado), 13-09 14:35 (lo de Hermes perdido), 14-09 21:24 (M17 sin razón recordada) | una tarde en balde por reconciliar desde una copia caducada (14-08, #165); «otra vez a investigar, otra vez a mirar, otra vez a hablar» (13-09) | no |
+| `verificar-el-estado-real` | 10-08 22:08, 14-08 14:51, 14-08 15:28, 17-08 15:00-15:47, 19-08 00:44 | documentos que decían «terminada» lo que no lo estaba; seis correcciones suyas, seis acertadas (E-03); la afirmación falsa repetida siete veces en tres documentos (19-08) | no |
+
+Descartadas por no llegar a dos ocurrencias fechadas o por caber en una regla
+que ya existe: «presentar un plan sin códigos» (regla 10 y la skill de hablar),
+«cuándo usar el motor en vez de la sesión» (una ocurrencia, 12-09 15:32),
+«instalar herramientas en su ordenador» (cabe en la de comandos). El criterio
+de parada de la adenda 6 no cambia; ADR-214 pasa a cubrir las siete.
