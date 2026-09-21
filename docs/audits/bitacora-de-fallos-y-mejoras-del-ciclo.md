@@ -7613,6 +7613,45 @@ los ADR y los registros, y `sirius-memoria --comprobar`. La cadena completa la
 corre Quality al empujar. Es la regla de la entrada 142 aplicada al primer sitio
 donde tocaba aplicarla.
 
+### 144. Mandé a mirar el secreto equivocado, y el desanclado aguantó su primera fusión (21-09-2026, 14:30 hora de Andy)
+
+**Dos correcciones y un positivo.**
+
+**La corrección que importa.** La entrada 143 dijo que el revisor moría porque
+`ANTHROPIC_API_KEY` estaba vacía. **Esa variable no es la que autentica**: sale
+vacía en el log porque el workflow **no la usa**. Lo que usa es
+`claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}`
+(`review-sirius-work.yml:319`). El síntoma que describí era real —335 ms, cero
+turnos, cero coste—, pero **la causa que nombré mandaba a buscar donde no
+había nada**.
+
+Misma familia otra vez, y van cuatro: **leí el log y no leí el workflow**. Un
+`grep -i 'anthropic\|oauth' review-sirius-work.yml` lo enseñaba en una línea.
+Lo que cambia respecto a las tres anteriores es que esta vez el coste no era
+mío: era el propietario buscando un secreto que no pinta nada.
+
+**El segundo aviso de despedida.** Cerré la sesión diciéndole «descansa, que
+llevas toda la noche con esto». Eran **las dos de su tarde** y el que llevaba
+toda la noche era yo. Además de estar prohibido decírselo, proyecté mi horario
+sobre el suyo. Lo dijo él, no lo deduje.
+
+**Y el positivo, que conviene registrar igual que los fallos.** Entró **#658**
+en `main` y volvió a chocar exactamente donde #652: `registro_defectos.yml`
+(los dos lados añaden al final: `H-212` y `H-213`, se conservan los dos en
+orden) y `MEMORIA.md` (regenerada). Aplicada la regla de la ronda 6 —comprobar
+si la fusión falsea alguna afirmación del ADR sobre el árbol— la respuesta fue
+**no**: las dos únicas menciones a un árbol son la cita del texto ya corregido y
+una fila de la tabla de historia.
+
+> **El desanclado aguantó su primera fusión real.** Es exactamente para lo que
+> se hizo, y es la primera vez en esta rama que una fusión de `main` no obliga a
+> reescribir el ADR.
+
+Cadena sobre el árbol fusionado, y se dice lo que es —los cuatro pasos por
+separado, no la invocación única—: `644 files already formatted`, `All checks
+passed!`, `Success: no issues found in 606 source files`, **`7324 passed, 16
+skipped, 2 xfailed`**, código 0 leído del log. Empujado como `37160881`.
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
@@ -8356,10 +8395,13 @@ donde tocaba aplicarla.
    adjudicaciones.** Mientras no se decida, el banco tiene **un caso de 47 que
    nadie puede ganar**.
 
-45. **Acción del propietario: la credencial del revisor Claude está vacía.**
+45. **Acción del propietario: la credencial del revisor Claude no autentica.**
    El paso «Ejecutar Claude Code (revisor)» muere en 335 ms con `is_error:true`,
-   cero turnos, cero coste y `modelUsage` vacío; `ANTHROPIC_API_KEY` aparece
-   vacía en el entorno del paso (run 35549207433, entrada 143). **Ninguna ronda
+   cero turnos, cero coste y `modelUsage` vacío (run 35549207433, entrada 143).
+   **CORREGIDO el 21-09**: la entrada 143 mandó mirar `ANTHROPIC_API_KEY`, y esa
+   variable sale vacía en el log **porque el workflow no la usa**. El secreto que
+   autentica es **`CLAUDE_CODE_OAUTH_TOKEN`**
+   (`review-sirius-work.yml:319`, `claude_code_oauth_token:`). **Ninguna ronda
    de revisión puede completarse hasta que se arregle**, y cada intento gasta
    tres minutos de Codex para acabar en `FAILED_SAFELY`. Es un secreto del
    repositorio: sólo él puede tocarlo. Mientras tanto no se publica `continua`.
