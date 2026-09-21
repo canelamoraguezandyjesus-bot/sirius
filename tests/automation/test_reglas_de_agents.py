@@ -87,14 +87,22 @@ def test_lo_irreversible_sigue_pidiendo_decision(agents: str) -> None:
     )
 
 
+def cuerpo_de_la_seccion_de_conversacion(agents: str) -> str:
+    """El texto de la sección de ADR-208 y solo ese: desde su encabezado hasta el
+    siguiente `## `. Sin el corte, una frase que se mudara a otra sección más
+    abajo seguiría dando la guarda por buena (segunda pasada de Codex sobre la
+    PR #658, 21-09-2026)."""
+    partes = agents.split(SECCION_DE_CONVERSACION, 1)
+    assert len(partes) == 2, (
+        "AGENTS.md ha perdido la sección de cómo conversa el propietario (ADR-208)"
+    )
+    return partes[1].split("\n## ", 1)[0]
+
+
 @pytest.mark.parametrize("regla", REGLAS_DE_SEPTIEMBRE)
 def test_las_tres_reglas_de_septiembre_siguen_en_agents(agents: str, regla: str) -> None:
     """ADR-213: cada una se violó después de dicha porque no estaba donde la sesión lee."""
-    seccion = agents.split(SECCION_DE_CONVERSACION, 1)
-    assert len(seccion) == 2, (
-        "AGENTS.md ha perdido la sección de cómo conversa el propietario (ADR-208)"
-    )
-    assert regla in seccion[1], (
+    assert regla in cuerpo_de_la_seccion_de_conversacion(agents), (
         f"AGENTS.md ya no dice «{regla}» en la sección de cómo conversa el "
         "propietario (ADR-213). La regla vuelve a vivir solo en una conversación."
     )
