@@ -76,7 +76,7 @@ repetirlas; `MEMORIA.md` las indexa sola, como a las demás (ADR-211).
 | Ninguna cita rota | `scripts/automation/sirius_check_docs.py` sobre las siete skills, la adenda 6 y su bis, este ADR y `MEMORIA.md` | «Sin defectos documentales en los ficheros comprobados» |
 | Los ADR siguen bien formados | `uv run --no-sync pytest tests/automation/test_estado_de_los_adr.py tests/automation/test_registro_de_decisiones.py tests/automation/test_citas_de_los_adr.py tests/engine/test_memoria.py -q` | 823 en verde (con la guarda de skills en el mismo lote), 2,9 s |
 | Formato y estilo | `ruff format --check .`, `ruff check .`, `git diff --check` | limpios |
-| La batería entera | `uv run --no-sync pytest` | lanzada sobre este árbol a las 10:29 UTC del 21-09; el resultado se escribe en el commit siguiente, el de H-214, y hasta entonces esta fila dice «pendiente» a propósito |
+| La batería entera | `uv run --no-sync pytest` | **7 371 en verde, 17 saltadas, 2 xfailed y 1 roja, 10 min 30 s**, sobre el árbol de las siete (la primera batería, lanzada sobre el árbol de tres a las 10:29 UTC, se detuvo al añadir las otras cuatro); la roja es `test_todo_adr_que_declara_un_defecto_deja_su_entrada_en_el_registro` para ADR-214, que por diseño espera al commit de H-214 (ADR-182) |
 | `MEMORIA.md` al día | `uv run --no-sync sirius-memoria conocimiento` | regenerada en el mismo commit (ADR-171) |
 
 ## Consecuencias
