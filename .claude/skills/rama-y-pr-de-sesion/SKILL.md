@@ -54,13 +54,21 @@ puede reiniciar sin forzar, y forzar está denegado.**
    porque hay conflicto —el 21-09-2026 `main` avanzó con la PR #654 mientras
    la #660 estaba en revisión, y chocaron `MEMORIA.md` y el registro de
    defectos—, la salida es la misma que para la historia fusionada: rama
-   nueva desde `main` recién traído, los ficheros propios restaurados sobre
-   ella (`git checkout <head-anterior> -- <rutas>`), lo generado regenerado,
-   lo que se añade a un registro añadido otra vez detrás de lo que llegó, y
-   PR nueva que cierra la anterior diciendo por qué. Sin `merge`, sin
-   `rebase` y sin `cherry-pick` de los commits de `main`: la rama nueva solo
-   lleva lo tuyo. Reiniciar una rama con historia fusionada solo puede
-   hacerlo el propietario; la salida de la sesión es la rama nueva.
+   nueva desde `main` recién traído y **solo tu diff** reaplicado sobre ella,
+   en este orden. Primero, qué rutas tocaron los dos lados:
+   `comm -12 <(git diff --name-only <base> origin/main | sort) <(git diff
+   --name-only <base> <head-anterior> | sort)`. Las rutas que `main` no tocó
+   se restauran enteras (`git checkout <head-anterior> -- <rutas>`); las que
+   tocaron los dos, **nunca**: restaurar el fichero entero sustituye lo que
+   llegó de `main` por tu instantánea vieja. En esas, lo generado se
+   regenera con su herramienta (`MEMORIA.md`), lo que se añade a un registro
+   se añade otra vez detrás de lo que llegó, y el resto se reaplica hunk a
+   hunk (`git diff <base> <head-anterior> -- <ruta> | git apply`, y a mano lo
+   que no aplique limpio). Después, PR nueva que cierra la anterior diciendo
+   por qué. Sin `merge`, sin `rebase` y sin `cherry-pick` de los commits de
+   `main`: la rama nueva solo lleva lo tuyo. Reiniciar una rama con historia
+   fusionada solo puede hacerlo el propietario; la salida de la sesión es la
+   rama nueva.
 3. **Los commits**: el mensaje dice qué cambia y por qué, con lo comprobado y
    sus cifras; el número del ADR sale de `scripts/siguiente_adr.py`; si el
    cambio toca `docs/` o un registro, `MEMORIA.md` se regenera en el mismo
