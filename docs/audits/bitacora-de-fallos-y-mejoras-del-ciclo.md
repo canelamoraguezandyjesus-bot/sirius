@@ -7424,6 +7424,79 @@ antemano un coste cero que no había comprobado.
    código del envoltorio.** Si el último es un `echo`, siempre es 0.
 
 
+### 141. La ronda 6 encontró el defecto que yo mismo acababa de introducir, y esta vez la raíz se quitó en vez de parchearse (21-09-2026, 02:10 hora de Andy)
+
+Dos hallazgos, **los dos correctos y los dos consecuencia de mi fusión**.
+
+**CLAUDE-R5-001 (P2).** El ADR-212 afirmaba que `git diff --stat 5d79fe6..HEAD`
+era «una sola línea, la de este ADR», y remataba: «el registro de defectos y la
+vista regenerada están **dentro** del árbol que la corrida validó». Mis dos
+commits de la ronda —traer `main` y adoptar la regla de `Estado`— lo
+convirtieron en falso por un margen enorme: **196 ficheros, 5810 inserciones**,
+y dentro van precisamente `MEMORIA.md` y `registro_defectos.yml`, los dos que la
+frase declaraba dentro. Verificado por mí antes de aceptarlo:
+`git diff --stat 5d79fe64..178b1bee | tail -1` lo dice en una línea.
+
+**CLAUDE-R5-002 (P3).** `H-212` estaba `abierto` con `incidencia: 653` mientras
+el árbol traía su arreglo. Al fusionar, `MEMORIA.md` —el índice que Sirius
+publica de sí mismo— habría dicho «3 abierto» y listado como **vivo** un defecto
+cerrado cuya incidencia estaría cerrada: un defecto sin nadie que lo siga, que
+es exactamente lo que el campo `incidencia` existe para evitar.
+
+**Y saltó el freno de familia repetida** (ADR-199): tercera ronda consecutiva
+con hallazgos sobre el mismo fichero.
+
+## Lo que se hizo, que es lo que estaba escrito de antemano
+
+La entrada 131 dejó publicado: *«si vuelve a aparecer una tercera enumeración
+incompleta, **se para el ciclo** y se le entrega cerrado a mano, en vez de
+seguir girando»*. **Eso se hizo.** No hay una cuarta versión de la lista.
+
+**Se quitó el anclaje.** El párrafo de validación ya no nombra ningún árbol:
+nombra **el head vigente** y la ejecución de Quality sobre él, que corre las
+mismas cuatro comprobaciones en cada empuje. La próxima fusión de `main` no
+puede volver a falsearlo **porque ya no hay ninguna afirmación que dependa de
+que el árbol se quede quieto**. Las corridas locales quedan en una tabla
+etiquetada como historia, que es lo que son.
+
+**El revisor y yo llegamos a la misma frase por separado.** Él: «una prosa que
+congela un SHA describe un árbol que deja de existir en cuanto la rama se
+mueve, y esta rama se movió por una fusión de `main` que nadie controlaba». Yo,
+en la entrada 131, dos rondas antes: «describir lo que cambió, lo cambia… es un
+punto fijo que no se alcanza editando». **Nombré la raíz y seguí parcheando
+alrededor de ella dos rondas más.** Saber cuál es la raíz no es lo mismo que
+quitarla, y la diferencia costó tres rondas.
+
+`H-212` cerrado con `cerrado_por: d9768650…` —sha comprobado: existe, 40
+caracteres, y es el commit que reescribió el bloque—, `incidencia` retirada, y
+una línea nueva en su comentario diciendo que **lo que sigue pendiente no es el
+defecto sino la medición del propietario**. Los únicos abiertos vuelven a ser
+`H-202` y `H-203`, que sí describen cosas que no se hicieron.
+
+## Lo que NO se hizo
+
+**No se publicó `continua`.** El freno existe para que lo suelte una persona, y
+ésta sería la cuarta vuelta sobre la misma familia. La corrección queda empujada
+y esperando; cuando el propietario reanude, el trabajo vuelve al corrector con
+ella dentro y sin perder ronda.
+
+## Una nota sobre el revisor, que merece constar
+
+El hallazgo P3 lleva escrito, por el propio revisor: «la segunda parte es contra
+mí… las 22 líneas de `H-212` son idénticas a las de la ronda 4, así que la parte
+del hallazgo que ya se podía ver **llega tarde por goteo del revisor**, no por el
+trabajo». Un revisor que distingue lo que el trabajo empeoró de lo que él mismo
+no vio antes es un revisor del que se puede uno fiar.
+
+## Estado al cerrar la entrada
+
+Empujado como `3c983cbc`. Cadena entera sobre ese árbol: `644 files already
+formatted`, `All checks passed!`, `Success: no issues found in 606 source
+files`, `7311 passed, 16 skipped, 2 xfailed`, código **0** — leído del log, que
+es la regla que esta noche dejó escrita dos veces. Diagnóstico publicado en la
+incidencia. `continua` **no** publicado: es gesto del propietario.
+
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
