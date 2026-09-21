@@ -1342,9 +1342,10 @@ trabaja, con fecha y hora.
 
 La auditoría queda **cerrada sobre las fuentes disponibles**. Las
 transcripciones de Claude Code llegaron el 20-09 en dos tandas y tienen sus
-adendas (2, 4 y 5) y sus pasos 4 y 5; quedan tres sesiones de la nube sin leer,
-paradas esperando una respuesta del propietario dentro de cada una. Cuando
-llegue la exportación de ChatGPT tendrá su adenda de muestra en la
+adendas (2, 4 y 5) y sus pasos 4 y 5; quedan tres sesiones de la nube sin leer:
+dos pruebas de siete minutos del 18-07 que empujaron su transcripción después
+de cerrar la lectura y se borraron con las demás sin leerse, y «No hagas nada»
+(18-08), que no puede empujar. Cuando llegue la exportación de ChatGPT tendrá su adenda de muestra en la
 nota de arranque y una sección propia aquí; las fichas C se revisan entonces
 otra vez, no se dan por definitivas.
 
@@ -1449,11 +1450,12 @@ paso 5; la idea I-007 pasa a promovida.
 
 - Qué se dijo en ChatGPT: su exportación no ha llegado. En julio, ChatGPT era
   el que redactaba; esa mitad del debate no se ha visto.
-- Qué había en 3 de las 33 sesiones de la nube con historia («No hagas nada»,
-  18-08; «Verificar versiones y estado» y «Cloud push smoke test», 18-07),
-  paradas esperando una respuesta del propietario dentro de cada una; ni en las
-  sesiones locales anteriores al 16-08, borradas por la retención de treinta
-  días: la primera quincena de agosto en el ordenador.
+- Qué había en 3 de las 33 sesiones de la nube con historia: «Verificar
+  versiones y estado» y «Cloud push smoke test» (18-07, pruebas de siete
+  minutos), que empujaron su transcripción después de cerrar la lectura y se
+  borraron sin leerse, y «No hagas nada» (18-08), que no puede empujar; ni en
+  las sesiones locales anteriores al 16-08, borradas por la retención de
+  treinta días: la primera quincena de agosto en el ordenador.
 - Qué hicieron las herramientas: los resultados de herramienta no se leyeron,
   salvo denegaciones y respuestas a preguntas de la IA; y tres transcripciones
   de la nube empiezan por un resumen escrito por el modelo, usado solo como

@@ -145,7 +145,8 @@ el árbol rastreado de `main`: cero resultados fuera de
 ## Lo que este trabajo no garantiza
 
 Lo que la nota de arranque dijo que no garantizaría, y se cumplió: no es
-exhaustivo (falta ChatGPT, faltan 3 de las 33 sesiones de la nube con historia
+exhaustivo (falta ChatGPT; faltan 3 de las 33 sesiones de la nube con historia
+—dos del 18-07 que empujaron tarde y se borraron sin leer, y «No hagas nada»—;
 y todo lo local anterior al 16-08), no mide tiempo, no elige skills, no audita la cabeza
 robótica, no repara nada. Las conversaciones crudas, las transcripciones
 convertidas a texto y los índices viven en el espacio temporal de la sesión y

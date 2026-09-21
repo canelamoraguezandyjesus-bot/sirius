@@ -74,7 +74,9 @@ sin su defecto, ADR-182—; y ningún documento tocado tiene citas rotas.
    *contesta primero, trabaja después*; *el parte de la mañana tiene tres
    partes: qué hiciste, qué no y por qué, y qué le toca a él*; *lo del
    ordenador, en lote*. `tests/automation/test_reglas_de_agents.py` las vigila
-   igual que vigila las tres categorías de ADR-204.
+   igual que vigila las tres categorías de ADR-204, y vigila las tres partes de
+   la regla 12 por separado: quitar solo «y qué le toca a él» dejaba la guarda
+   en verde, y lo encontró la revisión de Codex de la PR (21-09).
 2. **La skill `hablar-con-el-propietario`** gana la sección «Tres reglas más,
    de septiembre» con la forma operativa de cada una, y un dato más de su
    máquina: la ruta del repositorio, que él no sabe de memoria y lo dijo el
@@ -82,7 +84,10 @@ sin su defecto, ADR-182—; y ningún documento tocado tiene citas rotas.
 3. **La skill `cadena-de-comprobacion`** gana la sección «Cuándo la cadena
    entera sobra» y su descripción lo anuncia: un cambio que no toca código,
    pruebas, documentos ni registros no necesita la batería; basta
-   `git diff --check` y el comprobador de documentos si tocó algún `.md`.
+   `git diff --check` y el comprobador de documentos si tocó algún `.md`. La
+   regla de `AGENTS.md` que exige `scripts/check.ps1` antes de entregar lleva
+   la misma excepción, para que la skill y la regla de mayor precedencia digan
+   lo mismo (segundo hallazgo de la revisión de Codex, 21-09).
 4. **Las fechas de origen** de ADR-171, 191, 195, 204, 205 y 206 quedan en la
    tabla T-02 del paso 5 y en el contexto de este ADR; los seis ADR no se
    tocan.
@@ -110,6 +115,7 @@ sin su defecto, ADR-182—; y ningún documento tocado tiene citas rotas.
 | Formato, estilo y tipos | `ruff format --check .`, `ruff check .`, `mypy src tests` | limpio tras partir una línea larga del fichero de pruebas; mypy: 606 ficheros sin errores |
 | La batería entera | `uv run --no-sync pytest` | **7 309 en verde, 17 saltadas, 2 xfailed y 1 roja, 13 min 58 s**; la roja es `test_todo_adr_que_declara_un_defecto_deja_su_entrada_en_el_registro` para ADR-213, que por diseño espera al commit siguiente (ADR-182) |
 | `MEMORIA.md` al día | `uv run --no-sync sirius-memoria conocimiento` | regenerada en el mismo commit (ADR-171) |
+| Tras la revisión de Codex (21-09): la tercera parte de la regla 12 también está vigilada | quitar solo «y qué le toca a él» del texto de `AGENTS.md` en memoria y evaluar la guarda | **cazada**: con esa frase quitada la guarda echa en falta exactamente «y qué le toca a él»; con el texto real, las cuatro frases están; 10 pruebas en verde |
 
 ## Consecuencias
 

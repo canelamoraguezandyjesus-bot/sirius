@@ -82,7 +82,9 @@ La cadena existe para cambios de código, pruebas, documentos o registros. Un
 commit que solo añade datos —una transcripción `.jsonl`, un adjunto, un fichero
 que ninguna prueba ni ningún generador lee— no la necesita: basta
 `git diff --check` y, si tocaste algún `.md` de paso, el comprobador de
-documentos sobre ese fichero. El 20-09-2026 dos sesiones recibieron «copia tu
+documentos sobre ese fichero. Es la única excepción que admite la regla de
+`AGENTS.md` que exige `scripts/check.ps1` antes de entregar, y esa regla la
+lleva escrita desde ADR-213: una sola instrucción, no dos. El 20-09-2026 dos sesiones recibieron «copia tu
 transcripción y no modifiques nada más», cargaron esta skill, corrieron los doce
 minutos de batería y regeneraron `MEMORIA.md` para un `.jsonl`: no comprobaron
 nada y tocaron lo que la orden excluía. La proporción también es parte de la

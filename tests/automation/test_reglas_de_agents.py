@@ -34,9 +34,13 @@ CATEGORIAS_PREGUNTABLES = ("Dinero", "Salud y seguridad", "Cambio de producto")
 
 #: Las tres reglas de septiembre de 2026 (ADR-213), con las palabras con que
 #: `AGENTS.md` las titula. Viven en la sección de ADR-208, detrás de las diez.
+#: La regla 12 tiene tres partes y se vigilan por separado: quitar solo «y qué
+#: le toca a él» dejaba la guarda en verde (revisión de Codex de la PR #658,
+#: 21-09-2026).
 REGLAS_DE_SEPTIEMBRE = (
     "Contesta primero, trabaja después",
     "qué hiciste, qué no y por qué",
+    "y qué le toca a él",
     "Lo del ordenador, en lote",
 )
 SECCION_DE_CONVERSACION = "## Cómo conversa el propietario, y qué espera (ADR-208)"
