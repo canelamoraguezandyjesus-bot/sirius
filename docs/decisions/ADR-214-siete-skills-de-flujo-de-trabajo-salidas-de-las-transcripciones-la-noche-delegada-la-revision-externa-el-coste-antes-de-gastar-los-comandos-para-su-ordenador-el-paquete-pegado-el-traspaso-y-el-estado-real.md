@@ -74,7 +74,8 @@ repetirlas; `MEMORIA.md` las indexa sola, como a las demás (ADR-211).
 |---|---|---|
 | Las siete pasan la guarda de ADR-211 sin tocarla | `uv run --no-sync pytest tests/automation/test_skills.py -q` | 127 pruebas en verde (eran 71 con siete skills; con catorce, 127) |
 | Ninguna cita rota | `scripts/automation/sirius_check_docs.py` sobre las siete skills, la adenda 6 y su bis, este ADR y `MEMORIA.md` | «Sin defectos documentales en los ficheros comprobados» |
-| Los ADR siguen bien formados | `uv run --no-sync pytest tests/automation/test_estado_de_los_adr.py tests/automation/test_registro_de_decisiones.py tests/automation/test_citas_de_los_adr.py tests/engine/test_memoria.py -q` | 823 en verde (con la guarda de skills en el mismo lote), 2,9 s |
+| Los ADR siguen bien formados | `uv run --no-sync pytest tests/automation/test_estado_de_los_adr.py tests/automation/test_registro_de_decisiones.py tests/automation/test_citas_de_los_adr.py tests/engine/test_memoria.py tests/automation/test_skills.py -q` | **855 en verde, 6,6 s** sobre el árbol de las siete (eran 823 sobre el de las tres primeras; la cifra vieja siguió escrita aquí hasta la relectura de abajo) |
+| Relectura adversaria del diff antes de la revisión externa (21-09-2026, sobre aa0560ed) | leer el diff entero de la PR #659 como lo leería Codex | tres restos del borrador de tres skills en este ADR —«las tres descripciones», «la tercera skill», la fila de 823— y la primera línea de la lección cortada a media frase en `MEMORIA.md`; los cuatro, corregidos en el commit siguiente |
 | Formato y estilo | `ruff format --check .`, `ruff check .`, `git diff --check` | limpios |
 | La batería entera | `uv run --no-sync pytest` | **7 371 en verde, 17 saltadas, 2 xfailed y 1 roja, 10 min 30 s**, sobre el árbol de las siete (la primera batería, lanzada sobre el árbol de tres a las 10:29 UTC, se detuvo al añadir las otras cuatro); la roja es `test_todo_adr_que_declara_un_defecto_deja_su_entrada_en_el_registro` para ADR-214, que por diseño espera al commit de H-214 (ADR-182) |
 | `MEMORIA.md` al día | `uv run --no-sync sirius-memoria conocimiento` | regenerada en el mismo commit (ADR-171) |
@@ -92,14 +93,14 @@ repetirlas; `MEMORIA.md` las indexa sola, como a las demás (ADR-211).
   este (ADR-182, ADR-192); por eso la batería de este commit tiene una prueba
   roja por diseño.
 - **Lo que sigue sin guarda**: que una sesión cargue la skill cuando toca. La
-  descripción es lo único que decide eso, y por eso las tres descripciones
+  descripción es lo único que decide eso, y por eso las siete descripciones
   dicen «cárgala cuando…» con las palabras que él usa.
 
 ## Alternativas descartadas y por qué
 
 - **Volver a traer las transcripciones para auditarlas con más agentes.** Es la
-  fuente cara que la tercera skill enseña a no tocar sin poner el coste
-  delante, y el propietario pidió que no quedara rastro de ellas.
+  fuente cara que `coste-antes-de-tocar-una-fuente` enseña a no tocar sin
+  poner el coste delante, y el propietario pidió que no quedara rastro de ellas.
 - **Una skill por cada hallazgo o por cada queja.** Skills que nadie lee son el
   problema de ADR-211 con más ficheros; las candidatas sin dos ocurrencias
   fechadas («cuándo usar el motor», «presentar un plan sin códigos»,
@@ -109,9 +110,8 @@ repetirlas; `MEMORIA.md` las indexa sola, como a las demás (ADR-211).
 ## La lección
 
 - familia: `leccion-que-se-queda-en-el-informe`
-- sin esto se repetiría: leer una fuente cara, escribir el informe con lo
-  aprendido y no dejar nada que la sesión siguiente cargue, de modo que
-  «pasado mañana» la sesión nueva vuelva a hacer de noche lo que ya salió mal
-  el 15-08 y el 14-09, y el propietario vuelva a llevar a mano cada ronda de
-  Codex
+- sin esto se repetiría: leer caro y dejar lo aprendido solo en un informe
+  sin nada que la sesión siguiente cargue, de modo que «pasado mañana» la
+  sesión nueva vuelva a hacer de noche lo que ya salió mal el 15-08 y el
+  14-09, y el propietario vuelva a llevar a mano cada ronda de Codex
 - lo hace cumplir: `tests/automation/test_skills.py`

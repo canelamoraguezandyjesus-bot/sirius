@@ -403,7 +403,7 @@ de memoria.
 
 ### `leccion-que-se-queda-en-el-informe`
 
-- **[ADR-214](docs/decisions/ADR-214-siete-skills-de-flujo-de-trabajo-salidas-de-las-transcripciones-la-noche-delegada-la-revision-externa-el-coste-antes-de-gastar-los-comandos-para-su-ordenador-el-paquete-pegado-el-traspaso-y-el-estado-real.md)** — leer una fuente cara, escribir el informe con lo (lo hace cumplir `tests/automation/test_skills.py`).
+- **[ADR-214](docs/decisions/ADR-214-siete-skills-de-flujo-de-trabajo-salidas-de-las-transcripciones-la-noche-delegada-la-revision-externa-el-coste-antes-de-gastar-los-comandos-para-su-ordenador-el-paquete-pegado-el-traspaso-y-el-estado-real.md)** — leer caro y dejar lo aprendido solo en un informe (lo hace cumplir `tests/automation/test_skills.py`).
 
 ### `pieza-correcta-a-la-que-no-llama-quien-la-necesita`
 
