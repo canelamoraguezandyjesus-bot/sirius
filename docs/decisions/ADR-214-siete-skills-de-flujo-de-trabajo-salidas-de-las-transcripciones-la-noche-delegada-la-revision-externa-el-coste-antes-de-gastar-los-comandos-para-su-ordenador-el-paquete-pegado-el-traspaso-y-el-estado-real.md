@@ -79,6 +79,7 @@ repetirlas; `MEMORIA.md` las indexa sola, como a las demás (ADR-211).
 | Formato y estilo | `ruff format --check .`, `ruff check .`, `git diff --check` | limpios |
 | La batería entera | `uv run --no-sync pytest` | **7 371 en verde, 17 saltadas, 2 xfailed y 1 roja, 10 min 30 s**, sobre el árbol de las siete (la primera batería, lanzada sobre el árbol de tres a las 10:29 UTC, se detuvo al añadir las otras cuatro); la roja es `test_todo_adr_que_declara_un_defecto_deja_su_entrada_en_el_registro` para ADR-214, que por diseño espera al commit de H-214 (ADR-182) |
 | `MEMORIA.md` al día | `uv run --no-sync sirius-memoria conocimiento` | regenerada en el mismo commit (ADR-171) |
+| Ronda 1 de Codex (21-09-2026 12:22 UTC, sobre aa0560ed) | `@codex review` en la PR #659 | **1 P1 y 3 P2, los cuatro ciertos**: la pasada «limpia» de Codex se aceptaba sin las cinco comprobaciones del recolector del motor (`revision-externa`); `origin/main` se leía sin traerlo (`verificar-el-estado-real`); los metadatos entraban en una entrega cerrada que no los pedía (`paquete-de-trabajo-pegado`); y la batería registrada aquí era la del árbol de tres skills, no la del head. Los cuatro, corregidos en el commit que sigue a 08718eea. El cuarto es la familia `prosa-que-el-cambio-deja-falsa` por segunda PR seguida (#658, segunda pasada; #659, primera): parada por la regla de las dos rondas, y la raíz —la tabla se escribía antes del árbol final— queda escrita en `cadena-de-comprobacion`, no solo corregida aquí |
 
 ## Consecuencias
 

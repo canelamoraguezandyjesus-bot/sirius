@@ -57,8 +57,11 @@ vuelvas a buscarlos en el ordenador y no me pidas que los aporte otra vez»
   directamente», 26-07-2026 20:20) y la vuelta tarda dos minutos (19-08-2026,
   00:03 → 00:05).
 - El sha del commit, el `git status` final y la lista de ficheros tocados van
-  siempre, aunque el paquete no los pida: son lo que el redactor usa para el
-  siguiente.
+  **si el paquete los pide, y en el punto en que los pide**: son lo que el
+  redactor usa para el siguiente. Si no los pide, no se meten en la entrega —el
+  bloque que él copia es literal, y una salida cerrada no admite campos de
+  más—: se dejan aparte, en el mensaje de la sesión y fuera del bloque, por si
+  los quiere.
 - Lo que no se pudo hacer se dice como no hecho, con la razón, nunca se rellena.
 
 ## Cuando vuelven los hallazgos

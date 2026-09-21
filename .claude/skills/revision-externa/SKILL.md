@@ -29,11 +29,31 @@ Cada petición gasta cuota del propietario, y esa cuota se agota («Codex se
 quedó sin uso otra vez», 12-09-2026 16:41). Se pide una vez por head, después
 de Quality en verde, nunca por cada commit.
 
-## Qué devuelve
+## Qué devuelve, y qué cuenta como pasada limpia
 
-- Una review con «Reviewed commit: <sha>» y comentarios con insignia P1, P2 o
-  P3 en las líneas afectadas; o
-- «Didn't find any major issues», o un 👍: la pasada está limpia para ese head.
+- Una review con «Reviewed commit: <sha>» cuyo cuerpo dice «Here are some
+  automated review suggestions»: **hay hallazgos**, y están en los hilos de las
+  líneas afectadas con insignia P1, P2 o P3, no en el cuerpo. Se leen los hilos
+  (PR #659, 21-09-2026: un cuerpo sin una sola insignia y cuatro hallazgos en
+  los hilos).
+- Un comentario «Codex Review: Didn't find any major issues» o un 👍 sobre tu
+  petición: la pasada está limpia **solo si pasa las mismas comprobaciones que
+  el recolector del motor** (`docs/implementation/AUTOMATION_OPERATING_CONTRACT.md`,
+  «Ambos revisores deben revisar exactamente el mismo SHA»), y las cinco fallan
+  cerrado:
+  1. lo firma el conector oficial, `chatgpt-codex-connector[bot]`; una
+     reacción o una frase de cualquier otra cuenta no es señal;
+  2. es posterior a tu comentario `@codex review`, y el 👍 está sobre ese
+     comentario, no en otro sitio;
+  3. se refiere al head que pediste: el «Reviewed commit:» o el `commit_id`
+     de la review es el head actual de la PR;
+  4. ningún otro comentario ni review del conector sobre ese mismo head trae
+     hallazgos: se miran **todos**, no el último; basta uno con insignia para
+     que la pasada no sea limpia, aunque otro diga que no encontró nada;
+  5. la frase es la fórmula conocida («did(n't) find any [major] issues»);
+     otra redacción no aprueba, se lee entera y, en la duda, no es limpia.
+
+  Si falla cualquiera de las cinco, la pasada no está limpia y no se fusiona.
 
 Un comentario que diga «este hallazgo llega tarde por goteo del revisor» es el
 propio revisor reconociendo que mira líneas ya revisadas: cuenta como ronda
@@ -62,8 +82,9 @@ detector eres tú, y lo escribes en el ADR.
 
 ## Cuándo se fusiona
 
-Cuando la última pasada de Codex es limpia sobre el head actual, Quality está
-en verde sobre ese mismo head y no hay conflicto: se fusiona aplastando, como
+Cuando la pasada de Codex sobre el head actual es limpia según las cinco
+comprobaciones de arriba, Quality está en verde sobre ese mismo head y no hay
+conflicto: se fusiona aplastando, como
 `main`, con la autorización que ya existe (ADR-205 para el ciclo; para las PR
 de sesión, la delegación del propietario del 20-09-2026: «que puedas fusionar
 todo simple cuando ambos revisores den el visto bueno»). Si él ha dicho «a ver
