@@ -26,9 +26,9 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **207**.
+- Decisiones (ADR): **208**.
 - Bloques del motor: 17 cerrado, 2 fuera_de_alcance, 1 pendiente.
-- Defectos registrados: 2 abierto, 64 cerrado.
+- Defectos registrados: 2 abierto, 65 cerrado.
 - Ideas aparcadas o descartadas: 4 aparcada, 2 descartada, 2 promovida.
 - Skills: **14**.
 - Investigaciones: **9** (fotos con fecha; caducan).
@@ -76,6 +76,7 @@ huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 |---|---|---|---|---|
 | [214](docs/decisions/ADR-214-siete-skills-de-flujo-de-trabajo-salidas-de-las-transcripciones-la-noche-delegada-la-revision-externa-el-coste-antes-de-gastar-los-comandos-para-su-ordenador-el-paquete-pegado-el-traspaso-y-el-estado-real.md) | 2026-09-21 | APROBADO | Siete skills de flujo de trabajo salidas de las transcripciones: la noche delegada, la revisión externa, el coste antes de gastar, los comandos para su ordenador, el paquete pegado, el traspaso y el estado real | La tercera. Siete skills nuevas, en `.claude/skills/`: |
 | [213](docs/decisions/ADR-213-escribir-las-tres-reglas-de-septiembre-del-propietario-dar-proporcion-a-la-cadena-de-comprobacion-y-fechar-en-las-transcripciones-las-reglas-del-20-09.md) | 2026-09-20 | APROBADO | Escribir las tres reglas de septiembre del propietario, dar proporción a la cadena de comprobación y fechar en las transcripciones las reglas del 20-09 | `AGENTS.md`, sección «Cómo conversa el propietario, y qué espera (ADR-208)», gana las reglas 11, 12 y 13, con sus palabras y su fecha: *contesta primero, trabaja después*; *el parte de la mañana tiene tres partes: qué hiciste, qué no y por… |
+| [212](docs/decisions/ADR-212-la-cardinalidad-se-instruye-con-el-criterio-del-canon-determinacion-contra-extension-no-con-la-forma-de-la-pregunta.md) | 2026-09-20 | APROBADO | La cardinalidad se instruye con el criterio del canon: determinacion contra extension, no la forma de la pregunta | Se toma la opción 1. El bloque `cardinalidad` de `_INSTRUCCION` (`src/sirius/adapters/ollama_query_intent_classifier.py`) enuncia las tres definiciones de §15.2 casi palabra por palabra, sin reducirlas —`EXACTA` conserva «uno o varios… |
 | [211](docs/decisions/ADR-211-convertir-en-skills-lo-que-ya-costo-averiguar-dos-veces-con-una-guarda-que-impida-que-se-pudran.md) | 2026-09-20 | APROBADO | Convertir en skills lo que ya costó averiguar dos veces, con una guarda que impida que se pudran | La tercera. Cinco skills nuevas, una guarda, y las dos puertas de entrada de una sesión enterándose de que existen. |
 | [210](docs/decisions/ADR-210-archivar-las-incidencias-que-ya-no-describen-nada-y-decir-donde-vive-la-bitacora-del-ciclo.md) | 2026-09-20 | APROBADO | Archivar las incidencias que ya no describen nada, y decir dónde vive la bitácora del ciclo | De las nueve abiertas que la decisión 2 nombraba: |
 | [209](docs/decisions/ADR-209-un-adr-fusionado-esta-aprobado-y-propuesto-deja-de-existir-como-estado.md) | 2026-09-20 | APROBADO | Un ADR fusionado está aprobado, y PROPUESTO deja de existir como estado | Un ADR que está en el árbol está aprobado, porque lo que lo aprueba, según él mismo, es la fusión de su PR. `PROPUESTO` deja de existir como estado. |
@@ -300,6 +301,7 @@ de memoria.
 | `medir-lo-que-se-tiene-en-vez-de-lo-que-hay` | 2 | sí | [184](docs/decisions/ADR-184-la-prohibicion-no-es-una-peticion-el-detector-de-sensibilidad-exige-que-el-marcador-no-vaya-negado.md), [180](docs/decisions/ADR-180-el-numero-del-siguiente-adr-se-calcula-contra-las-ramas-del-remoto-no-contra-las-que-el-clon-tenga-traidas.md) |
 | `prosa-que-el-cambio-deja-falsa` | 2 | no en todas | [211](docs/decisions/ADR-211-convertir-en-skills-lo-que-ya-costo-averiguar-dos-veces-con-una-guarda-que-impida-que-se-pudran.md), [177](docs/decisions/ADR-177-la-ampliacion-por-categoria-entra-por-una-senal-explicita-de-la-peticion-no-por-la-subcadena-contexto.md) |
 | `condicion-construida-sin-el-mecanismo-que-la-hace-cumplible` | 1 | sí | [200](docs/decisions/ADR-200-la-cola-deja-de-ser-una-condicion-y-pasa-a-ser-un-mecanismo-el-ciclo-trae-la-base-a-la-rama-que-espera.md) |
+| `criterio-que-se-pide-distinto-del-que-se-puntua` | 1 | sí | [212](docs/decisions/ADR-212-la-cardinalidad-se-instruye-con-el-criterio-del-canon-determinacion-contra-extension-no-con-la-forma-de-la-pregunta.md) |
 | `decision-que-solo-vive-en-una-conversacion` | 1 | no en todas | [202](docs/decisions/ADR-202-m17-la-medicion-que-cerraba-la-ola-de-paridad-no-se-hace-y-la-razon-no-consta.md) |
 | `doble-mas-permisivo-que-la-herramienta-que-dobla` | 1 | sí | [193](docs/decisions/ADR-193-el-doble-de-gh-rechaza-lo-que-el-gh-real-rechaza-y-la-red-de-seguridad-vuelve-a-poder-fechar.md) |
 | `dos-sesiones-que-no-se-ven` | 1 | sí | [206](docs/decisions/ADR-206-cada-sesion-declara-su-obra-antes-de-empezar-y-la-cola-impide-que-dos-se-pisen.md) |
@@ -360,6 +362,10 @@ de memoria.
 ### `condicion-construida-sin-el-mecanismo-que-la-hace-cumplible`
 
 - **[ADR-200](docs/decisions/ADR-200-la-cola-deja-de-ser-una-condicion-y-pasa-a-ser-un-mecanismo-el-ciclo-trae-la-base-a-la-rama-que-espera.md)** — una guarda se construye entera y se deja sin llamante (lo hace cumplir `tests/automation/test_cola.py`).
+
+### `criterio-que-se-pide-distinto-del-que-se-puntua`
+
+- **[ADR-212](docs/decisions/ADR-212-la-cardinalidad-se-instruye-con-el-criterio-del-canon-determinacion-contra-extension-no-con-la-forma-de-la-pregunta.md)** — escribir a ojo la instrucción que se le da a un (lo hace cumplir `tests/unit/test_ollama_query_intent_classifier.py`).
 
 ### `decision-que-solo-vive-en-una-conversacion`
 

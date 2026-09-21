@@ -1008,6 +1008,33 @@ defectos:
       - tests/automation/test_skills.py
       - .gitignore
 
+  # ADR-212 (#653): al interprete de peticiones se le pedia la cardinalidad con
+  # un criterio GRAMATICAL -«un dato concreto», «una cantidad concreta», «todo
+  # lo que haya de un tema»- y el banco de 47 casos la puntuaba con el del
+  # canon, B04 §15.2: determinacion contra extension. Dos criterios distintos,
+  # asi que el modelo aplicaba bien el que se le daba y fallaba en los DOS
+  # sentidos: `CA-08` («¿cual es el presupuesto de Beta?») es EXHAUSTIVA para el
+  # canon y «un dato concreto» para la instruccion; `CA-50` («¿que condiciones
+  # de acceso hay?») es EXACTA y suena a «todo lo que haya». Medido con Ollama
+  # real el 20-09-2026 en dos corridas: `cardinalidad 30/47` en las dos, mas de
+  # la mitad del error de la palanca 1, con los demas campos entre 41 y 43.
+  # Se cierra con el commit que reescribio el bloque: el defecto era que se
+  # pedia un criterio y se puntuaba con otro, y eso ya no pasa. Lo que sigue
+  # pendiente NO es este defecto sino la MEDICION del efecto, que exige Ollama
+  # real y corre el propietario; la prediccion esta publicada en el ADR-212 y
+  # sin ajustar, y por debajo de 30/47 en cardinalidad es regresion.
+  - id: H-212
+    titulo: La instruccion pedia la cardinalidad por la forma de la pregunta y el banco la puntuaba por el criterio del canon
+    bloque: memoria
+    gravedad: media
+    estado: cerrado
+    cerrado_por: d9768650b228c6c84e8ed8252d1322fa155a0abe
+    adr: 212
+    ficheros:
+      - src/sirius/adapters/ollama_query_intent_classifier.py
+      - tests/unit/test_ollama_query_intent_classifier.py
+      - docs/decisions/ADR-212-la-cardinalidad-se-instruye-con-el-criterio-del-canon-determinacion-contra-extension-no-con-la-forma-de-la-pregunta.md
+
   # ADR-213: tres reglas que el propietario dijo en septiembre (contestar
   # primero, 14-09; el parte de la manana, 14-09; lo del ordenador en lote,
   # 11-09) no estaban escritas y se violaron despues de dichas, la primera el
