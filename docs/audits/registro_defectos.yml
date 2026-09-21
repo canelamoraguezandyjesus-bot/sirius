@@ -1026,4 +1026,3 @@ defectos:
       - tests/automation/test_reglas_de_agents.py
       - .claude/skills/hablar-con-el-propietario/SKILL.md
       - .claude/skills/cadena-de-comprobacion/SKILL.md
-
