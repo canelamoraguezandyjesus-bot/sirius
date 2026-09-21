@@ -1313,15 +1313,19 @@ contador es tocar el motor y una auditoría no construye.
 
 ### El compromiso de las ramas, y las tres que faltan
 
-Las 30 ramas `transcripciones/*` siguen en el remoto al cerrar esta sección
-(23:43 UTC). No las borra esta sesión: `.claude/settings.json` prohíbe a las
-sesiones `git push --delete`, y rodear una prohibición del propietario no es
-una opción. Se le ha dado el comando exacto para que las borre él; la hora del
-borrado se añade aquí cuando lo haga. Mientras existan, lo que contienen no se
-cita fuera de lo que esta auditoría ya permitía. Las tres sesiones que no
-subieron la suya («No hagas nada», 18-08; «Verificar versiones y estado» y
-«Cloud push smoke test», 18-07) esperan una respuesta suya dentro de cada una;
-si llegan, se leen con el mismo protocolo y se anota aquí.
+Las ramas `transcripciones/*` seguían en el remoto al cerrar esta sección
+(23:43 UTC del 20-09): 30 entonces, 32 después, porque dos de las tres sesiones
+paradas empujaron la suya al contestarles el propietario («Cloud push smoke
+test» y «Verificar versiones y estado», ambas del 18-07 y sin sustancia; la
+tercera, «No hagas nada», no puede empujar y no se leerá). No las borró esta
+sesión: `.claude/settings.json` prohíbe a las sesiones `git push --delete`, y
+rodear una prohibición del propietario no es una opción. **Las borró él, con el
+comando que se le dio, el 21-09 entre las 00:23 y las 00:25 UTC: cero ramas
+en el remoto desde esa hora.** Las copias de esta sesión —referencias y objetos
+de git, extractos, notas de lectura y volcados con texto— se borraron a las
+00:12 UTC del 21-09, antes que las ramas. De las conversaciones queda en el
+repositorio solo lo que esta sección cita: frases cortas suyas sobre cómo
+trabaja, con fecha y hora.
 
 ## Criterio de parada — estado a 20-09-2026
 
