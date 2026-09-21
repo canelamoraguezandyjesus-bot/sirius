@@ -79,8 +79,9 @@ sola (ADR-211).
 | Ninguna cita rota | `scripts/automation/sirius_check_docs.py` sobre las cinco skills, la adenda 7, este ADR y `MEMORIA.md` | «Sin defectos documentales en los ficheros comprobados» |
 | Los ADR siguen bien formados | `uv run --no-sync pytest tests/automation/test_estado_de_los_adr.py tests/automation/test_registro_de_decisiones.py tests/automation/test_citas_de_los_adr.py tests/engine/test_memoria.py tests/automation/test_skills.py -q` | **898 en verde**, 2,1 s (eran 855 con catorce skills) |
 | `MEMORIA.md` al día | `uv run --no-sync sirius-memoria conocimiento` | regenerada en el mismo commit (ADR-171) |
+| La batería entera, sobre el árbol final | `uv run --no-sync pytest` (13:49 → 14:01 UTC) | **7 418 en verde, 17 saltadas, 2 xfailed, 0 rojas, 12 min 22 s**, sobre el árbol de 9465b09c: las cinco skills, ADR-215 y H-215 ya en el registro. El commit que añade esta fila solo cambia esta tabla; Quality de GitHub sobre el head empujado es la batería completa de ese head y queda enlazada en la PR. La del primer commit (4a8cff8f) tenía por diseño la roja de ADR-182 hasta H-215 |
 
-La batería entera se escribe aquí sobre el árbol final, con H-215 ya en el
+La fila de la batería se escribió sobre el árbol final, con H-215 ya en el
 registro, y no antes (skill `cadena-de-comprobacion`: la tabla se escribe la
 última y se relee sobre el árbol final).
 
@@ -93,8 +94,8 @@ registro, y no antes (skill `cadena-de-comprobacion`: la tabla se escribe la
 - Diecinueve skills: la tabla de `MEMORIA.md` crece una fila por skill, y la
   descripción sigue siendo lo único que decide si una sesión la carga.
 - El registro de defectos recibe H-215 en el commit siguiente, con el sha de
-  este (ADR-182, ADR-192); por eso la batería del primer commit tiene una
-  prueba roja por diseño.
+  este (ADR-182, ADR-192); por eso la batería del primer commit tuvo una
+  prueba roja por diseño, y la del árbol final no tiene ninguna.
 - **Lo que sigue sin guarda**: que la prosa de las cinco siga al día. Rutas y
   ADR citados sí; el resto, la revisión trimestral que declara ADR-211.
 
