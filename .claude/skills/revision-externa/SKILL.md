@@ -93,14 +93,33 @@ detector eres tú, y lo escribes en el ADR.
 
 ## Cuándo se fusiona
 
-Cuando la pasada de Codex sobre el head actual es limpia según las cinco
-comprobaciones de arriba, Quality está en verde sobre ese mismo head y no hay
-conflicto: se fusiona aplastando, como
-`main`, con la autorización que ya existe (ADR-205 para el ciclo; para las PR
-de sesión, la delegación del propietario del 20-09-2026: «que puedas fusionar
-todo simple cuando ambos revisores den el visto bueno»). Si él ha dicho «a ver
-qué opina», se le cuenta lo que dijo Codex y lo que se corrigió, en cinco
-líneas, y se fusiona.
+Las comprobaciones previas a la fusión son las del contrato operativo
+(`docs/implementation/AUTOMATION_OPERATING_CONTRACT.md`, §14.2, «Qué NO
+cambia»): las mismas que aplica el motor, menos la etiqueta y la incidencia,
+que son del ciclo. Para una PR de sesión son cinco, todas sobre el head
+vigente:
+
+1. la PR está abierta, no es borrador y no está fusionada;
+2. la pasada de Codex es limpia según las cinco comprobaciones de arriba, y el
+   head que revisó es el head actual;
+3. Quality está en verde sobre ese head exacto;
+4. no hay conflicto con `main`;
+5. la rama no va por detrás de `main`: la punta de `main` es ancestro del head
+   (ADR-191: una rama entra a revisión solo si `main` ya está dentro de ella,
+   y omitirlo dejó `main` en rojo). Se comprueba con
+   `git fetch origin +main:refs/remotes/origin/main` y
+   `git rev-list --count origin/main ^HEAD`, que tiene que dar 0. Si no da 0,
+   se trae `main` a la rama (desde la nube, con «Update branch» de GitHub:
+   la sesión no puede hacer `git merge`), se vuelve a pasar la cadena y se
+   pide otra pasada, porque la combinación que aterrizará es otra.
+
+Si el contrato cambia esa lista, manda el contrato y se corrige esta sección,
+no al revés. Cumplidas las cinco, se fusiona aplastando, como `main`, con la
+autorización que ya existe (ADR-205 para el ciclo; para las PR de sesión, la
+delegación del propietario del 20-09-2026: «que puedas fusionar todo simple
+cuando ambos revisores den el visto bueno»). Si él ha dicho «a ver qué
+opina», se le cuenta lo que dijo Codex y lo que se corrigió, en cinco líneas,
+y se fusiona.
 
 ## Qué NO hace esta skill
 
