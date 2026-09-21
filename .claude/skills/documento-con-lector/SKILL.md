@@ -5,9 +5,10 @@ description: >-
   quién lo lee y desde dónde se llega a él, si puede generarse del árbol en vez
   de escribirse a mano, qué fecha declara y con qué caduca, y qué se hace con el
   que ya no describe nada (archivar, nunca borrar). Cárgala antes de crear
-  cualquier `.md` nuevo fuera de `docs/decisions/`, cuando encuentres un
-  documento que contradice el árbol, cuando `MEMORIA.md` lo liste «sin fecha
-  declarada», y al cerrar un trabajo que haya dejado documentos por el camino.
+  cualquier documento Markdown nuevo fuera de la carpeta de decisiones, cuando
+  encuentres un documento que contradice el árbol, cuando la memoria común lo
+  liste «sin fecha declarada», y al cerrar un trabajo que haya dejado
+  documentos por el camino.
 ---
 
 # Un documento tiene lector, o no se escribe
@@ -59,9 +60,11 @@ sin saber quién lo leerá y desde dónde llegará a él.**
 el documento se queda donde está, con una nota al principio que diga que está
 archivado, desde cuándo y qué lo sustituye, y deja de exigírsele la política
 vigente. Nada de lo que un workflow o un ADR necesite se archiva sin resolver
-antes esa dependencia. Qué documento concreto se archiva, si no es de tu
-trabajo, se le pregunta al propietario en una línea: es él quien pidió que
-podar fuera archivar.
+antes esa dependencia. Qué documento concreto se archiva lo decide la sesión:
+mira de qué depende (workflows, ADR, citas), lo archiva con su nota y lo deja
+escrito en el ADR del trabajo. Archivar es reversible por construcción, así
+que no es de lo que se le pregunta (ADR-204); se le pregunta solo si hay
+dinero, salud, cambio de producto o algo irreversible por medio.
 
 ## Qué NO hace esta skill
 
@@ -69,4 +72,5 @@ podar fuera archivar.
   que sí está vigilado son las rutas y los ADR que citan las skills y los ADR.
 - **No cubre `docs/decisions/`**: los ADR tienen sus propias guardas (ADR-182,
   ADR-209 y la de citas) y su skill (`adr`).
-- **No decide por el propietario qué se archiva** de lo que no es tuyo.
+- **No borra nada**: archivar es dejarlo donde está con su nota (ADR-195), y
+  por eso lo puede decidir la sesión.

@@ -33,40 +33,62 @@ conteste.**
 
 ## Los pasos
 
-1. **Dónde mirar.** El diario del motor vive en la rama **`estado-del-motor`**,
-   nunca en `main`: `diario.jsonl` (encargos, ejecuciones y transiciones) y
-   `diario-supervision.jsonl` (`docs/operations/MOTOR_DE_SIRIUS.md`, §3). Desde
-   una sesión con mandos de GitHub se lee de esa rama sin traerla al árbol de
-   trabajo. El estado de un trabajo lo manda su diario (`AGENTS.md`, «El
-   estado de un trabajo del motor»). Si la rama no existe, el motor no ha
-   anotado nada todavía; no es un fallo.
+1. **Dónde mirar, y cuál de los dos diarios es.** Hay dos y no se mezclan
+   (`docs/operations/MOTOR_DE_SIRIUS.md`, §3; `diario_por_defecto` en
+   `src/sirius_engine/cli.py`): el de los workflows vive en la rama
+   **`estado-del-motor`**, nunca en `main` —`diario.jsonl` y
+   `diario-supervision.jsonl`; solo la escribe el workflow, que la trae a un
+   árbol aparte y la devuelve con un push—, y el de su consola vive en su
+   directorio de datos de Windows y es estado suyo. Desde una sesión con
+   mandos de GitHub el primero se lee de esa rama sin traerla al árbol de
+   trabajo; si la rama no existe, el motor no ha anotado nada todavía. El
+   estado de un trabajo lo manda su diario (`AGENTS.md`, «El estado de un
+   trabajo del motor»).
 2. **Qué espera a una persona.** Un trabajo en `NEEDS_DECISION` **sin
-   incidencia detrás** (la puerta de sensibilidad paró antes de crearla) solo
+   incidencia detrás** —la puerta de sensibilidad paró antes de crearla— solo
    sale con `sirius-decidir` (ADR-189). Una incidencia parada con su marcador
    de decisión en el tablero (ADR-175, ADR-157) se resuelve en GitHub y la
-   aplica el reflector. Lo que ya tiene incidencia no se toca con
-   `sirius-decidir`: el comando se niega y lo dice.
-3. **Cómo se le presenta.** Un solo mensaje, una línea por parada: qué trabajo,
-   desde cuándo, qué pasa si continúa y qué pasa si termina; y la orden
-   copiable para su consola, con la skill `comandos-para-su-ordenador`:
-   `sirius-decidir <work_id> --diario <ruta> --ejecutar --continuar`, o
-   `--terminar`. Sin `--ejecutar` solo ensaya, por diseño; sin `--diario` busca
-   en el diario que resuelva por su cuenta, que no tiene por qué ser el suyo.
-   `sirius-motor` imprime esa misma orden cuando lista trabajos con decisión
-   pendiente.
-4. **Cuándo.** Al abrir sesión y en el parte de la mañana (`AGENTS.md`, regla
-   12, bloque «te toca a ti»), y se repite en cada parte mientras siga sin
-   respuesta: la pregunta que no se vuelve a poner delante es la que dura
+   aplica el reflector; con incidencia detrás, `sirius-decidir` se niega y lo
+   dice.
+3. **La orden no se fabrica: se copia la que el motor imprimió.** La parada de
+   `sirius-despachar` y la lista de `sirius-motor` imprimen la orden de salida
+   exacta de ese trabajo, y esa orden lleva lo que una plantilla pierde:
+   `--repo` y `--bloque` cuando la orden original no usó los valores por
+   defecto —nadie los persiste, y sin ellos `--continuar` crearía la
+   incidencia en el repositorio y con el encargo equivocados— y **sin
+   `--continuar`** cuando esa salida está vetada, como en la quinta causa de
+   ADR-188, donde solo caben `--terminar` o la sesión interactiva. Lo fijan
+   `tests/engine/test_dispatch_cli.py` y el propio comando, que ensaya por
+   defecto y solo escribe con `--ejecutar`. Si no tienes la orden impresa, no
+   la inventes: pide primero el ensayo.
+4. **Cómo se le presenta, y por qué canal.** En el parte —también desde el
+   móvil— va la decisión y nada más: qué trabajo, desde cuándo, qué pasa si
+   continúa y qué pasa si termina, para que conteste sí o no. La orden para
+   su consola **no** va en el parte: se acumula con lo demás del ordenador y
+   se le da junta cuando diga que está delante (`AGENTS.md`, regla 13; skill
+   `comandos-para-su-ordenador`). La decisión se repite en cada parte mientras
+   no conteste: la pregunta que no se vuelve a poner delante es la que dura
    veinte días.
-5. **Lo que no se hace**: decidir por él (es cambio de producto, ADR-204);
-   ejecutar `sirius-decidir` desde la nube sobre su diario, que es su consola y
-   su estado; re-despachar la misma orden para «desatascar» sin que él lo
-   haya decidido.
+5. **Dónde aterriza su decisión.** Si la parada está en el diario de su
+   consola, la orden copiada la resuelve ahí. Si está en el diario de
+   `estado-del-motor`, hoy **no hay vía segura** de escribirle la decisión de
+   vuelta: `sirius-decidir` solo escribe en el fichero que recibe, ningún
+   workflow lo invoca (ADR-189) y esa rama solo la escribe el workflow. No se
+   ejecuta sobre una copia ni se empuja a mano a la rama. Su decisión se deja
+   escrita —un ADR, o el registro de ideas si es «más adelante»— y la falta de
+   vía está apuntada como idea aparcada (I-009), para que el día que exista no
+   haya que volver a pedirle la decisión.
+6. **Lo que no se hace**: decidir por él (es cambio de producto, ADR-204);
+   ejecutar `sirius-decidir` desde la nube; re-despachar la misma orden para
+   «desatascar» sin que él lo haya decidido.
 
 ## Qué NO hace esta skill
 
 - **No opera el ciclo**: darle una orden o un turno al motor está en
   `docs/operations/MOTOR_DE_SIRIUS.md`, y las reglas en el contrato operativo.
+- **No escribe en `estado-del-motor`**: esa rama solo la escribe el workflow,
+  y la vía para que una decisión suya llegue al diario de los workflows no
+  existe todavía (I-009).
 - **No sustituye al supervisor ni a la red de seguridad**: esos cierran lo
   perdido y relanzan; esto es solo la parte humana, la que nadie vuelve a poner
   delante.

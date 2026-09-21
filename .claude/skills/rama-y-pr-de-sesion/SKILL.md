@@ -39,9 +39,14 @@ puede reiniciar sin forzar, y forzar está denegado.**
    `git fetch origin +main:refs/remotes/origin/main` —con destino explícito,
    porque un fetch a secas no mueve `origin/main` en un checkout de una sola
    rama (`verificar-el-estado-real`)— y
-   `git checkout -B claude/<lo-que-hace-la-unidad> origin/main`. Si ese nombre
-   ya existe en el remoto con historia fusionada, otro nombre (`-2`), y el
-   cuerpo de la PR dice por qué.
+   `git switch -c claude/<lo-que-hace-la-unidad> origin/main`, que **falla si
+   el nombre ya existe en local**, y eso es lo que se quiere. Nunca
+   `checkout -B`: reinicia en silencio una rama local con commits sin empujar
+   y los deja solo en el reflog (ronda 1 de Codex sobre la PR #660,
+   21-09-2026). Antes de elegir el nombre, `git branch --list 'claude/*'` y
+   `git ls-remote --heads origin 'claude/*'`: si ya existe, en local o en el
+   remoto con historia fusionada, otro nombre (`-2`), y el cuerpo de la PR
+   dice por qué.
 2. **Lo que la sesión no puede hacer, y no intenta**: forzar, borrar ramas,
    `git merge`, `git rebase`, `git reset --hard`, `git clean`. Traer `main` a
    una rama con PR abierta se hace con «Update branch» de GitHub

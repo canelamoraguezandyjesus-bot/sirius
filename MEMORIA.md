@@ -29,7 +29,7 @@
 - Decisiones (ADR): **208**.
 - Bloques del motor: 17 cerrado, 2 fuera_de_alcance, 1 pendiente.
 - Defectos registrados: 2 abierto, 65 cerrado.
-- Ideas aparcadas o descartadas: 4 aparcada, 2 descartada, 2 promovida.
+- Ideas aparcadas o descartadas: 5 aparcada, 2 descartada, 2 promovida.
 - Skills: **19**.
 - Investigaciones: **9** (fotos con fecha; caducan).
 - Documentos: **150**, de los que **97** no declaran fecha.
@@ -50,7 +50,7 @@ escribe una nueva lo dice `crear-una-skill`.
 | coste-antes-de-tocar-una-fuente | Cárgala cuando vayas a lanzar más de tres agentes, a leer más de un megabyte, a gastar turnos de sesiones del propietario o cuota suya, o cuando un trabajo lleve más de una hora sin entregarle nada visible. |
 | crear-una-skill | Cárgala al cerrar cualquier trabajo en el que hayas tenido que averiguar dos veces lo mismo, cuando una skill existente se te haya quedado corta, o cuando el propietario pida que aprendamos de cómo trabajamos. |
 | disciplina-evidencia | Cárgala siempre que vayas a afirmar algo sobre el comportamiento del sistema, a arreglar un defecto o a producir un documento con conclusiones. |
-| documento-con-lector | Cárgala antes de crear cualquier `. |
+| documento-con-lector | Cárgala antes de crear cualquier documento Markdown nuevo fuera de la carpeta de decisiones, cuando encuentres un documento que contradice el árbol, cuando la memoria común lo liste «sin fecha declarada», y al cerrar un trabajo que haya dejado documentos por el camino. |
 | hablar-con-el-propietario | Cárgala antes de escribirle cualquier mensaje, antes de darle una cifra, antes de pedirle algo y antes de decidir si una pregunta merece molestarle. |
 | medir-con-linea-base | Cárgala antes de lanzar cualquier medición del banco de 47 casos o de latencia, antes de escribir una cifra en un ADR o en un mensaje al propietario, y cuando alguien —él incluido— lea una cifra como regresión o como mejora. |
 | modo-nocturno | Cárgala en cuanto diga «me voy a dormir», «modo nocturno», «trabaja toda la noche» o «déjalo listo para fusionar», y también si una sesión arranca de noche con una orden de esas. |
@@ -490,6 +490,7 @@ que pasar para volver a mirarla, y la descartada, por qué no se hace.
 | I-006 | promovida | Un cazador de contradicciones entre los documentos canonicos y el codigo |
 | I-007 | promovida | Traer a local las 28 sesiones de Claude Code de la nube que le faltan a la auditoria |
 | I-008 | aparcada | Un contador de rondas para la revision externa que el propietario trae a mano |
+| I-009 | aparcada | Una via segura para que la decision del propietario llegue al diario de estado-del-motor |
 
 ## Las investigaciones: fotos con fecha, que caducan
 
