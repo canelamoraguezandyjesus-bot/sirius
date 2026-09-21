@@ -1007,3 +1007,23 @@ defectos:
     ficheros:
       - tests/automation/test_skills.py
       - .gitignore
+
+  # ADR-213: tres reglas que el propietario dijo en septiembre (contestar
+  # primero, 14-09; el parte de la manana, 14-09; lo del ordenador en lote,
+  # 11-09) no estaban escritas y se violaron despues de dichas, la primera el
+  # 20-09 en la propia sesion de la auditoria; y la cadena de comprobacion
+  # entera corria -doce minutos y MEMORIA.md regenerada- para un commit que
+  # solo anadia un .jsonl, contra una orden de «no modifiques nada mas».
+  - id: H-213
+    titulo: Tres reglas del propietario dichas en septiembre no estaban escritas y se violaron; la cadena entera corria para un commit de datos
+    bloque: documentacion
+    gravedad: media
+    estado: cerrado
+    cerrado_por: d6f7359a62c79b356d924ac9e78ca73c9a56f383
+    adr: 213
+    ficheros:
+      - AGENTS.md
+      - tests/automation/test_reglas_de_agents.py
+      - .claude/skills/hablar-con-el-propietario/SKILL.md
+      - .claude/skills/cadena-de-comprobacion/SKILL.md
+
