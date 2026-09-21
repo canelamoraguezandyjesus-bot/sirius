@@ -77,9 +77,9 @@ repetirlas; `MEMORIA.md` las indexa sola, como a las demás (ADR-211).
 | Los ADR siguen bien formados | `uv run --no-sync pytest tests/automation/test_estado_de_los_adr.py tests/automation/test_registro_de_decisiones.py tests/automation/test_citas_de_los_adr.py tests/engine/test_memoria.py tests/automation/test_skills.py -q` | **855 en verde, 6,6 s** sobre el árbol de las siete (eran 823 sobre el de las tres primeras; la cifra vieja siguió escrita aquí hasta la relectura de abajo) |
 | Relectura adversaria del diff antes de la revisión externa (21-09-2026, sobre aa0560ed) | leer el diff entero de la PR #659 como lo leería Codex | tres restos del borrador de tres skills en este ADR —«las tres descripciones», «la tercera skill», la fila de 823— y la primera línea de la lección cortada a media frase en `MEMORIA.md`; los cuatro, corregidos en el commit siguiente |
 | Formato y estilo | `ruff format --check .`, `ruff check .`, `git diff --check` | limpios |
-| La batería entera | `uv run --no-sync pytest` | **7 371 en verde, 17 saltadas, 2 xfailed y 1 roja, 10 min 30 s**, sobre el árbol de las siete (la primera batería, lanzada sobre el árbol de tres a las 10:29 UTC, se detuvo al añadir las otras cuatro); la roja es `test_todo_adr_que_declara_un_defecto_deja_su_entrada_en_el_registro` para ADR-214, que por diseño espera al commit de H-214 (ADR-182) |
+| La batería entera, sobre el árbol final | `uv run --no-sync pytest` (12:26 → 12:39 UTC) | **7 373 en verde, 17 saltadas, 2 xfailed, 0 rojas, 12 min 17 s**, sobre el árbol de 6858e41e: las siete skills, H-214 ya en el registro y las correcciones de la ronda 1 de Codex. El commit que añade esta fila solo cambia esta tabla; la batería de Quality sobre ese head es la comprobación independiente y queda enlazada en la PR #659. Para la historia: la pasada sobre el árbol de las siete sin H-214 dio 7 371 en verde y 1 roja por diseño (`test_todo_adr_que_declara_un_defecto_deja_su_entrada_en_el_registro`, ADR-182) en 10 min 30 s, y la del árbol de tres se detuvo a las 10:29 UTC al añadir las otras cuatro |
 | `MEMORIA.md` al día | `uv run --no-sync sirius-memoria conocimiento` | regenerada en el mismo commit (ADR-171) |
-| Ronda 1 de Codex (21-09-2026 12:22 UTC, sobre aa0560ed) | `@codex review` en la PR #659 | **1 P1 y 3 P2, los cuatro ciertos**: la pasada «limpia» de Codex se aceptaba sin las cinco comprobaciones del recolector del motor (`revision-externa`); `origin/main` se leía sin traerlo (`verificar-el-estado-real`); los metadatos entraban en una entrega cerrada que no los pedía (`paquete-de-trabajo-pegado`); y la batería registrada aquí era la del árbol de tres skills, no la del head. Los cuatro, corregidos en el commit que sigue a 08718eea. El cuarto es la familia `prosa-que-el-cambio-deja-falsa` por segunda PR seguida (#658, segunda pasada; #659, primera): parada por la regla de las dos rondas, y la raíz —la tabla se escribía antes del árbol final— queda escrita en `cadena-de-comprobacion`, no solo corregida aquí |
+| Ronda 1 de Codex (21-09-2026 12:22 UTC, sobre aa0560ed) | `@codex review` en la PR #659 | **1 P1 y 3 P2, los cuatro ciertos**: la pasada «limpia» de Codex se aceptaba sin las cinco comprobaciones del recolector del motor (`revision-externa`); `origin/main` se leía sin traerlo (`verificar-el-estado-real`); los metadatos entraban en una entrega cerrada que no los pedía (`paquete-de-trabajo-pegado`); y la batería registrada aquí era la del árbol de tres skills, no la del head. Los cuatro, corregidos en 6858e41e. El cuarto es la familia `prosa-que-el-cambio-deja-falsa` por segunda PR seguida (#658, segunda pasada; #659, primera): parada por la regla de las dos rondas, y la raíz —la tabla se escribía antes del árbol final— queda escrita en `cadena-de-comprobacion`, no solo corregida aquí |
 
 ## Consecuencias
 
@@ -90,9 +90,10 @@ repetirlas; `MEMORIA.md` las indexa sola, como a las demás (ADR-211).
   qué existe.
 - Escribir skills de flujo sigue costando lo que ADR-211 exige: dos ocurrencias
   fechadas y fricción medida. Aquí las siete sobraban.
-- El registro de defectos recibe H-214 en el commit siguiente, con el sha de
-  este (ADR-182, ADR-192); por eso la batería de este commit tiene una prueba
-  roja por diseño.
+- El registro de defectos recibió H-214 en el commit siguiente al de las
+  skills, con el sha de aquel (ADR-182, ADR-192); por eso la batería del primer
+  commit tuvo una prueba roja por diseño, y la del árbol final no tiene
+  ninguna.
 - **Lo que sigue sin guarda**: que una sesión cargue la skill cuando toca. La
   descripción es lo único que decide eso, y por eso las siete descripciones
   dicen «cárgala cuando…» con las palabras que él usa.
