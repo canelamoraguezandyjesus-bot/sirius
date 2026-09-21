@@ -7764,6 +7764,10 @@ defectos solo añade; Quality en verde sobre el head aprobado (run
 35609775235). Quality sobre el propio `71feb670` de `main` estaba en curso al
 escribir esto (run 35611923314); su desenlace se añade debajo.
 
+> **Añadido a las 16:37:** Quality sobre `71feb670` en `main`: run 35611923314,
+> `completed success`, terminado a las 14:35:41Z. `main` está en verde con el
+> ADR-212 dentro.
+
 **Dos cosas que aprendí, y una que no llegó a pasar.**
 
 - **Mi regla «solo se fusiona con `fusiona`» llevaba un día caducada.**
