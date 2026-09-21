@@ -1018,13 +1018,18 @@ defectos:
   # de acceso hay?») es EXACTA y suena a «todo lo que haya». Medido con Ollama
   # real el 20-09-2026 en dos corridas: `cardinalidad 30/47` en las dos, mas de
   # la mitad del error de la palanca 1, con los demas campos entre 41 y 43.
+  # Se cierra con el commit que reescribio el bloque: el defecto era que se
+  # pedia un criterio y se puntuaba con otro, y eso ya no pasa. Lo que sigue
+  # pendiente NO es este defecto sino la MEDICION del efecto, que exige Ollama
+  # real y corre el propietario; la prediccion esta publicada en el ADR-212 y
+  # sin ajustar, y por debajo de 30/47 en cardinalidad es regresion.
   - id: H-212
     titulo: La instruccion pedia la cardinalidad por la forma de la pregunta y el banco la puntuaba por el criterio del canon
     bloque: memoria
     gravedad: media
-    estado: abierto
+    estado: cerrado
+    cerrado_por: d9768650b228c6c84e8ed8252d1322fa155a0abe
     adr: 212
-    incidencia: 653
     ficheros:
       - src/sirius/adapters/ollama_query_intent_classifier.py
       - tests/unit/test_ollama_query_intent_classifier.py

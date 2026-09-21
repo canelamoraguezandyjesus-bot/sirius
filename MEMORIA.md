@@ -28,7 +28,7 @@
 
 - Decisiones (ADR): **206**.
 - Bloques del motor: 17 cerrado, 2 fuera_de_alcance, 1 pendiente.
-- Defectos registrados: 3 abierto, 62 cerrado.
+- Defectos registrados: 2 abierto, 63 cerrado.
 - Ideas aparcadas o descartadas: 4 aparcada, 2 descartada, 1 promovida.
 - Skills: **7**.
 - Investigaciones: **9** (fotos con fecha; caducan).
@@ -457,7 +457,6 @@ cerrados; el recuento completo está arriba.
 |---|---|---|
 | H-202 | abierto | Una decision de no hacer algo no dejaba rastro, y una precondicion escrita antes que ella bloqueo trabajo real trece dias |
 | H-203 | abierto | El banco solo sabia medir el camino con el motor encendido, asi que la linea base contra la que comparar no existia |
-| H-212 | abierto | La instruccion pedia la cardinalidad por la forma de la pregunta y el banco la puntuaba por el criterio del canon |
 
 ## Las ideas aparcadas y descartadas (ADR-208)
 
