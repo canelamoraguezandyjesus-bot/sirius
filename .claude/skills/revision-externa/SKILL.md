@@ -110,8 +110,10 @@ vigente:
    `git fetch origin +main:refs/remotes/origin/main` y
    `git rev-list --count origin/main ^HEAD`, que tiene que dar 0. Si no da 0,
    se trae `main` a la rama (desde la nube, con «Update branch» de GitHub:
-   la sesión no puede hacer `git merge`), se vuelve a pasar la cadena y se
-   pide otra pasada, porque la combinación que aterrizará es otra.
+   la sesión no puede hacer `git merge`; y si GitHub no puede por conflicto,
+   rama nueva desde `main` con lo tuyo reaplicado, skill
+   `rama-y-pr-de-sesion`), se vuelve a pasar la cadena y se pide otra
+   pasada, porque la combinación que aterrizará es otra.
 
 Si el contrato cambia esa lista, manda el contrato y se corrige esta sección,
 no al revés. Cumplidas las cinco, se fusiona aplastando, como `main`, con la
