@@ -8484,7 +8484,6 @@ incidencia; va a la lista de deudas como la 46.
    tres minutos de Codex para acabar en `FAILED_SAFELY`. Es un secreto del
    repositorio: sólo él puede tocarlo. Mientras tanto no se publica `continua`.
 
-
 46. **Regla del reanudador: la salida de una parada `familia-repetida` choca
    con el precheck de convergencia.** `sirius_resume_on_command.sh` trata
    `familia-repetida` como parada operativa (`resume-stop`, sin reinicio del
