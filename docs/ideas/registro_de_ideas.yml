@@ -97,16 +97,29 @@ ideas:
       ADR-190 con la guarda de citas. La idea se construyo sin llamarse asi.
   - id: I-007
     titulo: Traer a local las 28 sesiones de Claude Code de la nube que le faltan a la auditoria
-    estado: aparcada
+    estado: promovida
     nacida: 2026-09-20
     origen: paso 4 de docs/audits/AUDITORIA_FORMA_DE_TRABAJO_2026-09.md, que declara esas 28 como fuente que falta
-    volver_si: >-
-      Claude Code ofrezca una forma de exportar una sesion de la nube sin
-      gastar un turno de modelo, o el propietario decida que vale la pena
-      pagarlo. Las cuatro vias probadas el 20-09 estan medidas en la auditoria,
-      seccion «Las cuatro vias probadas»: ninguna escribe la transcripcion en
-      local sin que la sesion tenga un turno.
+    promovida_a: >-
+      El paso 5 de la misma auditoria y ADR-213. Se aparco a las 21:00 del
+      20-09 porque las cuatro vias probadas costaban un turno de modelo por
+      sesion; a las 23:18 habian llegado 30 de 33 por una quinta via que no
+      estaba en la lista: el propietario abrio cada sesion desde la aplicacion
+      y le pidio que copiara su propia transcripcion a una rama
+      transcripciones/<id>. El turno lo gasto el, por decision suya.
     nota: >-
-      No es un pendiente del trabajo: es una fuente que la auditoria ya declara
-      como faltante y cuyo limite esta escrito. Se aparca para no volver a
-      gastar una tarde probando las mismas cuatro cosas.
+      Queda como aviso: «no se puede» significaba «no se puede desde aqui». La
+      via que funciono la tenia el propietario, no la sesion.
+  - id: I-008
+    titulo: Un contador de rondas para la revision externa que el propietario trae a mano
+    estado: aparcada
+    nacida: 2026-09-20
+    origen: paso 5 de docs/audits/AUDITORIA_FORMA_DE_TRABAJO_2026-09.md, hallazgo T-04
+    volver_si: >-
+      Una PR de sesion vuelva a recibir tres o mas rondas de un revisor externo
+      (Codex o ChatGPT) con hallazgos de la misma familia. El 08-09-2026 la PR
+      #576 recibio cuatro en un dia y nadie conto las rondas, porque el revisor
+      esta fuera del repositorio y el contador seria el propietario. El motor
+      tiene detector de familia y guarda de goteo para su ciclo (ADR-121, 197,
+      199); las PR de sesion no tienen nada. Construirlo es tocar el motor, y
+      una auditoria no construye.

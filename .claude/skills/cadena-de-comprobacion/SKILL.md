@@ -7,7 +7,8 @@ description: >-
   son los que muerden: el comprobador de documentos y la regeneración de
   `MEMORIA.md`. Cárgala siempre que vayas a confirmar, a empujar, a decir que
   algo está verde, o cuando la batería o el comprobador te hayan rechazado algo
-  y no sepas por qué.
+  y no sepas por qué. También dice cuándo la cadena entera sobra: un cambio que
+  no toca código, pruebas, documentos ni registros no necesita la batería.
 ---
 
 # La cadena de comprobación
@@ -74,6 +75,21 @@ que ya salieron caras:
 Di las cifras, no el adjetivo: cuántas pruebas pasaron, cuántas se saltaron,
 cuánto tardó, y qué ficheros le pasaste al comprobador de documentos. «Todo
 verde» sin cifras es exactamente la afirmación que ADR-001 prohíbe.
+
+## Cuándo la cadena entera sobra (ADR-213)
+
+La cadena existe para cambios de código, pruebas, documentos o registros. Un
+commit que solo añade datos —una transcripción `.jsonl`, un adjunto, un fichero
+que ninguna prueba ni ningún generador lee— no la necesita: basta
+`git diff --check` y, si tocaste algún `.md` de paso, el comprobador de
+documentos sobre ese fichero. Es la única excepción que admite la regla de
+`AGENTS.md` que exige `scripts/check.ps1` antes de entregar, y esa regla la
+lleva escrita desde ADR-213: una sola instrucción, no dos. El 20-09-2026 dos sesiones recibieron «copia tu
+transcripción y no modifiques nada más», cargaron esta skill, corrieron los doce
+minutos de batería y regeneraron `MEMORIA.md` para un `.jsonl`: no comprobaron
+nada y tocaron lo que la orden excluía. La proporción también es parte de la
+cadena: **lo que no puede fallar no se comprueba, y lo que la orden excluye no
+se toca.**
 
 ## Qué NO hace esta cadena
 

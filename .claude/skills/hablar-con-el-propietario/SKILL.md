@@ -67,13 +67,36 @@ veces, cinco en una sola noche.
 
 ## Datos de su máquina, para que el comando funcione a la primera
 
-Entran aquí los que ya han hecho fallar un comando. Hoy hay uno:
+Entran aquí los que ya han hecho fallar un comando. Hoy hay dos:
 
 - **Su escritorio está redirigido a OneDrive.** `C:\Users\ASUS\Desktop` **no
   existe**; el real es `C:\Users\ASUS\OneDrive\Desktop`. Así que `$HOME\Desktop`
   falla, y hay que escribir `[Environment]::GetFolderPath('Desktop')`, que lo
   resuelve solo. El 20-09-2026 esto tumbó dos comandos seguidos —el de descarga
   y el de ejecución— y las dos veces el error fue del comando, no suyo.
+- **El repositorio está en `C:\Users\ASUS\OneDrive\Desktop\laboratorio sirius\sirius`**,
+  con un espacio en el nombre de la carpeta: la ruta va entre comillas. Él no
+  la sabe de memoria y lo dijo el 11-09-2026 («¿yo qué sé dónde está la
+  carpeta? Tú lo sabes perfectamente»): si el comando la necesita, va escrita.
+
+## Tres reglas más, de septiembre (ADR-213)
+
+Son las reglas 11, 12 y 13 de `AGENTS.md`; aquí va lo operativo.
+
+- **Contesta primero.** Si llega un mensaje suyo mientras esperas a CI o a la
+  batería, el siguiente paso es contestarle en dos líneas, antes de lanzar
+  nada más. El 14-09 y el 20-09-2026 creyó que la sesión estaba parada o le
+  ignoraba, y las dos veces la sesión encadenaba esperas sin responder.
+- **El parte de la mañana.** Tres bloques cortos y en este orden: *hice* (con
+  enlace); *no hice, y por qué* (una línea por cosa: decidido por ti, bloqueado
+  por qué, o dejado para él); *te toca a ti* (comandos con dónde / qué / qué
+  sale). Nada más. Lo pidió con esas palabras el 14-09-2026, tres veces en un
+  día.
+- **Lo del ordenador, en lote.** Mientras dirige desde el móvil, cada cosa que
+  exija su ordenador se apunta y se le da junta cuando él diga que ya está
+  delante (11-09-2026). Y no se le pide pegar nada que la sesión pueda poner
+  ella misma: «¿qué pegar de qué? Ponlo tú, como ya hacemos en otras sesiones»
+  (12-09-2026).
 
 ## Cuando dice «haz lo que tú creas»
 

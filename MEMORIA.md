@@ -26,10 +26,10 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **205**.
+- Decisiones (ADR): **206**.
 - Bloques del motor: 17 cerrado, 2 fuera_de_alcance, 1 pendiente.
-- Defectos registrados: 2 abierto, 62 cerrado.
-- Ideas aparcadas o descartadas: 4 aparcada, 2 descartada, 1 promovida.
+- Defectos registrados: 2 abierto, 63 cerrado.
+- Ideas aparcadas o descartadas: 4 aparcada, 2 descartada, 2 promovida.
 - Skills: **7**.
 - Investigaciones: **9** (fotos con fecha; caducan).
 - Documentos: **150**, de los que **97** no declaran fecha.
@@ -67,6 +67,7 @@ huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| [213](docs/decisions/ADR-213-escribir-las-tres-reglas-de-septiembre-del-propietario-dar-proporcion-a-la-cadena-de-comprobacion-y-fechar-en-las-transcripciones-las-reglas-del-20-09.md) | 2026-09-20 | APROBADO | Escribir las tres reglas de septiembre del propietario, dar proporción a la cadena de comprobación y fechar en las transcripciones las reglas del 20-09 | `AGENTS.md`, sección «Cómo conversa el propietario, y qué espera (ADR-208)», gana las reglas 11, 12 y 13, con sus palabras y su fecha: *contesta primero, trabaja después*; *el parte de la mañana tiene tres partes: qué hiciste, qué no y por… |
 | [211](docs/decisions/ADR-211-convertir-en-skills-lo-que-ya-costo-averiguar-dos-veces-con-una-guarda-que-impida-que-se-pudran.md) | 2026-09-20 | APROBADO | Convertir en skills lo que ya costó averiguar dos veces, con una guarda que impida que se pudran | La tercera. Cinco skills nuevas, una guarda, y las dos puertas de entrada de una sesión enterándose de que existen. |
 | [210](docs/decisions/ADR-210-archivar-las-incidencias-que-ya-no-describen-nada-y-decir-donde-vive-la-bitacora-del-ciclo.md) | 2026-09-20 | APROBADO | Archivar las incidencias que ya no describen nada, y decir dónde vive la bitácora del ciclo | De las nueve abiertas que la decisión 2 nombraba: |
 | [209](docs/decisions/ADR-209-un-adr-fusionado-esta-aprobado-y-propuesto-deja-de-existir-como-estado.md) | 2026-09-20 | APROBADO | Un ADR fusionado está aprobado, y PROPUESTO deja de existir como estado | Un ADR que está en el árbol está aprobado, porque lo que lo aprueba, según él mismo, es la fusión de su PR. `PROPUESTO` deja de existir como estado. |
@@ -286,7 +287,7 @@ de memoria.
 |---|---|---|---|
 | `regla-que-depende-de-que-alguien-se-acuerde` | 6 | sí | [192](docs/decisions/ADR-192-el-numero-de-un-defecto-es-el-numero-de-su-adr-no-un-contador-aparte.md), [191](docs/decisions/ADR-191-la-revision-es-una-cola-una-rama-entra-a-revision-solo-si-main-ya-esta-dentro-de-ella.md), [188](docs/decisions/ADR-188-el-alcance-que-el-motor-no-puede-escribir-para-la-puerta-antes-de-crear-la-incidencia-y-remite-a-la-sesion-interactiva.md), [182](docs/decisions/ADR-182-la-guarda-del-registro-de-defectos-deriva-de-los-adr-que-declaran-leccion.md), [179](docs/decisions/ADR-179-la-guarda-de-piezas-sin-llamante-deriva-su-inventario-del-codigo-del-motor.md), [174](docs/decisions/ADR-174-la-mina-en-dos-pasadas-la-leccion-se-declara-en-el-adr-que-la-produce-y-las-familias-se-cuentan-solas.md) |
 | `pieza-sin-lector` | 5 | no en todas | [210](docs/decisions/ADR-210-archivar-las-incidencias-que-ya-no-describen-nada-y-decir-donde-vive-la-bitacora-del-ciclo.md), [209](docs/decisions/ADR-209-un-adr-fusionado-esta-aprobado-y-propuesto-deja-de-existir-como-estado.md), [207](docs/decisions/ADR-207-archivar-los-dos-mapas-caducados-de-julio-retirar-el-workflow-de-word-y-poner-en-d4-el-estado-que-ya-tenia.md), [183](docs/decisions/ADR-183-la-ausencia-de-run-de-quality-para-el-head-se-encamina-no-se-espera-en-silencio.md), [175](docs/decisions/ADR-175-un-tablero-por-incidencia-un-solo-comentario-que-el-motor-mantiene-al-dia.md) |
-| `regla-del-propietario-que-solo-vive-en-una-conversacion` | 3 | sí | [208](docs/decisions/ADR-208-las-ideas-aparcadas-tienen-registro-y-el-metodo-de-conversacion-del-propietario-entra-en-agents.md), [204](docs/decisions/ADR-204-el-propietario-decide-producto-dinero-y-salud-y-lo-tecnico-lo-resuelve-la-sesion.md), [195](docs/decisions/ADR-195-podar-significa-archivar-en-este-repositorio-no-se-borra-nada.md) |
+| `regla-del-propietario-que-solo-vive-en-una-conversacion` | 4 | sí | [213](docs/decisions/ADR-213-escribir-las-tres-reglas-de-septiembre-del-propietario-dar-proporcion-a-la-cadena-de-comprobacion-y-fechar-en-las-transcripciones-las-reglas-del-20-09.md), [208](docs/decisions/ADR-208-las-ideas-aparcadas-tienen-registro-y-el-metodo-de-conversacion-del-propietario-entra-en-agents.md), [204](docs/decisions/ADR-204-el-propietario-decide-producto-dinero-y-salud-y-lo-tecnico-lo-resuelve-la-sesion.md), [195](docs/decisions/ADR-195-podar-significa-archivar-en-este-repositorio-no-se-borra-nada.md) |
 | `lista-a-mano` | 2 | sí | [181](docs/decisions/ADR-181-la-contradiccion-de-etiquetas-se-decide-por-lo-que-proyectan-no-por-cuantas-son.md), [178](docs/decisions/ADR-178-la-autoridad-por-clase-se-deriva-de-la-via-github-que-el-despachador-declara-no-de-una-segunda-tabla-a-mano.md) |
 | `medir-lo-que-se-tiene-en-vez-de-lo-que-hay` | 2 | sí | [184](docs/decisions/ADR-184-la-prohibicion-no-es-una-peticion-el-detector-de-sensibilidad-exige-que-el-marcador-no-vaya-negado.md), [180](docs/decisions/ADR-180-el-numero-del-siguiente-adr-se-calcula-contra-las-ramas-del-remoto-no-contra-las-que-el-clon-tenga-traidas.md) |
 | `prosa-que-el-cambio-deja-falsa` | 2 | no en todas | [211](docs/decisions/ADR-211-convertir-en-skills-lo-que-ya-costo-averiguar-dos-veces-con-una-guarda-que-impida-que-se-pudran.md), [177](docs/decisions/ADR-177-la-ampliacion-por-categoria-entra-por-una-senal-explicita-de-la-peticion-no-por-la-subcadena-contexto.md) |
@@ -327,6 +328,7 @@ de memoria.
 
 ### `regla-del-propietario-que-solo-vive-en-una-conversacion`
 
+- **[ADR-213](docs/decisions/ADR-213-escribir-las-tres-reglas-de-septiembre-del-propietario-dar-proporcion-a-la-cadena-de-comprobacion-y-fechar-en-las-transcripciones-las-reglas-del-20-09.md)** — que una regla que él dijo el 14-09 («que me contestes (lo hace cumplir `tests/automation/test_reglas_de_agents.py`).
 - **[ADR-208](docs/decisions/ADR-208-las-ideas-aparcadas-tienen-registro-y-el-metodo-de-conversacion-del-propietario-entra-en-agents.md)** — las ideas aparcadas volverían como nuevas y cada (lo hace cumplir `tests/automation/test_registro_de_ideas.py`).
 - **[ADR-204](docs/decisions/ADR-204-el-propietario-decide-producto-dinero-y-salud-y-lo-tecnico-lo-resuelve-la-sesion.md)** — la sesión seguiría devolviéndole decisiones técnicas (lo hace cumplir `tests/automation/test_reglas_de_agents.py`).
 - **[ADR-195](docs/decisions/ADR-195-podar-significa-archivar-en-este-repositorio-no-se-borra-nada.md)** — una regla dada de viva voz —«no se elimina nada»— que no (lo hace cumplir `tests/automation/test_registro_de_defectos.py`).
@@ -466,7 +468,8 @@ que pasar para volver a mirarla, y la descartada, por qué no se hace.
 | I-004 | aparcada | Piezas de Memanto para la capa de memoria (motivo y desarchivar, exportacion Markdown, «cambiado desde», valid_from/valid_to persistidos, retencion como sugerencia) |
 | I-005 | aparcada | Un agente que revise el repositorio por modulos, en rondas, cuando nadie esta delante |
 | I-006 | promovida | Un cazador de contradicciones entre los documentos canonicos y el codigo |
-| I-007 | aparcada | Traer a local las 28 sesiones de Claude Code de la nube que le faltan a la auditoria |
+| I-007 | promovida | Traer a local las 28 sesiones de Claude Code de la nube que le faltan a la auditoria |
+| I-008 | aparcada | Un contador de rondas para la revision externa que el propietario trae a mano |
 
 ## Las investigaciones: fotos con fecha, que caducan
 
