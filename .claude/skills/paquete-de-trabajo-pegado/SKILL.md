@@ -58,10 +58,9 @@ vuelvas a buscarlos en el ordenador y no me pidas que los aporte otra vez»
   00:03 → 00:05).
 - El sha del commit, el `git status` final y la lista de ficheros tocados van
   **si el paquete los pide, y en el punto en que los pide**: son lo que el
-  redactor usa para el siguiente. Si no los pide, no se meten en la entrega —el
-  bloque que él copia es literal, y una salida cerrada no admite campos de
-  más—: se dejan aparte, en el mensaje de la sesión y fuera del bloque, por si
-  los quiere.
+  redactor usa para el siguiente. Si no los pide, no van, ni dentro ni
+  «aparte»: la entrega es un solo mensaje, literal, y una salida cerrada no
+  admite campos de más.
 - Lo que no se pudo hacer se dice como no hecho, con la razón, nunca se rellena.
 
 ## Cuando vuelven los hallazgos

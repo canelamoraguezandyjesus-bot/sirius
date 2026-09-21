@@ -45,8 +45,13 @@ de Quality en verde, nunca por cada commit.
      reacción o una frase de cualquier otra cuenta no es señal;
   2. es posterior a tu comentario `@codex review`, y el 👍 está sobre ese
      comentario, no en otro sitio;
-  3. se refiere al head que pediste: el «Reviewed commit:» o el `commit_id`
-     de la review es el head actual de la PR;
+  3. se refiere al head que pediste: en una review o un comentario, el
+     «Reviewed commit:» o el `commit_id` es el head actual de la PR; un 👍
+     no lleva sha, así que vale solo si está sobre tu comentario disparador
+     exacto, no hay ninguna review del conector posterior a ese disparador y
+     el head de la PR sigue siendo el que pediste (si empujaste después, no
+     vale): es como lo correlaciona el recolector
+     (`scripts/automation/sirius_codex_review.py`, `_check_reactions`);
   4. ningún otro comentario ni review del conector sobre ese mismo head trae
      hallazgos: se miran **todos**, no el último; basta uno con insignia para
      que la pasada no sea limpia, aunque otro diga que no encontró nada;
@@ -64,9 +69,15 @@ igual.
 1. Se verifica contra el código antes de aceptarlo. En la PR #658 (21-09-2026)
    los cuatro P2 eran ciertos; en la PR #136 dos hallazgos válidos traían el
    mecanismo equivocado y aceptarlos tal cual habría empeorado las cosas.
-2. Se arregla en el mínimo, se prueba la propiedad —si es una guarda, mutación
-   en memoria: quitar lo que vigila y ver que falla—, se pasa la cadena (skill
-   `cadena-de-comprobacion`) y se empuja.
+2. Se arregla en el mínimo **y en el límite que el hallazgo marca**: si dice
+   «elimina solo X», se elimina X, no se sustituye por una versión más suave
+   de X; y si describe un caso que no es el que tienes delante —un checkout
+   de una sola rama, una reacción sin sha—, se reproduce ese caso antes de
+   escribir el arreglo. En la PR #659 (21-09-2026) la ronda 2 devolvió tres
+   de los cuatro arreglos de la ronda 1 por eso: dos a medias y uno que, por
+   endurecer, dejaba un canal imposible. Después se prueba la propiedad —si
+   es una guarda, mutación en memoria: quitar lo que vigila y ver que
+   falla—, se pasa la cadena (skill `cadena-de-comprobacion`) y se empuja.
 3. Se resuelve el hilo y se vuelve a pedir la revisión **sobre el head nuevo**,
    una sola vez.
 4. Se anota en el ADR de la rama qué ronda encontró qué, con el sha.

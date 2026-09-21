@@ -40,12 +40,15 @@ en `main`: estaba en una rama ajena, en una prueba manual suya o en su cabeza
 ## Los cinco pasos
 
 1. **El estado se lee de `main` en el remoto**, no de la rama en la que estás
-   (ADR-016), y `origin/main` solo vale recién traído: primero
-   `git fetch origin main` y `git rev-parse origin/main`. En un checkout de la
-   nube esa referencia puede no existir —la clonación es superficial y trae
-   solo la rama de trabajo— o llevar horas parada; si no se puede traer, se lee
-   en GitHub, y si tampoco, no se afirma el estado. Las otras sesiones se miran
-   antes (skill `obra-en-curso`).
+   (ADR-016), y solo recién traído con destino explícito:
+   `git fetch origin +main:refs/remotes/origin/main` y después
+   `git rev-parse origin/main`. Un `git fetch origin main` a secas no sirve:
+   en un checkout de una sola rama —el de la nube— deja `origin/main` como
+   estaba, inexistente o parado, y solo mueve `FETCH_HEAD` (reproducido el
+   21-09-2026 en un repositorio de prueba: tras el fetch a secas,
+   `origin/main` «no existe» y `FETCH_HEAD` ya estaba en el sha remoto). Si no
+   se puede traer, se lee en GitHub, y si tampoco, no se afirma el estado. Las
+   otras sesiones se miran antes (skill `obra-en-curso`).
 2. **Para cada «hecho»**: ¿hay PR fusionada? ¿Hay prueba que lo demuestre? ¿O
    solo lo dice un documento? Solo las dos primeras cuentan.
 3. **Lo que él afirma probado a mano se toma como probado**, y se escribe así:
