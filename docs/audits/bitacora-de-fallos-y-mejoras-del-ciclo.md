@@ -7497,6 +7497,45 @@ es la regla que esta noche dejó escrita dos veces. Diagnóstico publicado en la
 incidencia. `continua` **no** publicado: es gesto del propietario.
 
 
+### 142. Partí la cadena y lo llamé «cadena entera»; el corrector me lo devolvió en la ronda 7 (21-09-2026, 02:45 hora de Andy)
+
+El `continua` del propietario reanudó el ciclo a las 02:27. El corrector no
+rehízo nada de lo ya corregido —las dos observaciones de la ronda 6 estaban
+dentro de `3c983cbc`— y en su lugar **corrigió algo mío**, en `bf2b1f00`:
+
+> «Cuatro pasos separados **no sustituyen** a la invocación única (ADR-145), y
+> la razón que se dio para partirlos —que el runner no tenía `pwsh`— era falsa.»
+
+**Tiene razón en el fondo, y es mi error.** Corrí `ruff format --check`,
+`ruff check`, `mypy src tests` y `pytest` por separado, y lo escribí como
+«cadena entera sobre este árbol». La cabecera del propio `scripts/check.ps1`
+explica por qué eso no vale: *«hasta el 06-09-2026 el "exit 0" de este guion era
+el de pytest y sólo el de pytest, con ruff format, ruff lint o mypy en rojo
+pasando desapercibidos»*. **ADR-145 existe contra exactamente la afirmación que
+yo escribí.** Que los cuatro pasos salieran verdes por separado no es lo mismo
+que la cadena en verde, y la diferencia es el punto entero de la decisión.
+
+**El matiz del `pwsh`, para que no se pierda.** En el contenedor de esta sesión
+`pwsh` **no existe**: no está en PATH, no está en `/usr/bin/pwsh`, y una
+búsqueda a cuatro niveles no lo encuentra; la invocación devolvía 127. En el
+runner del corrector **sí** está, PowerShell 7.6.5. Los dos describimos bien
+nuestro propio entorno.
+
+Lo que estuvo mal fue **escribir esa frase en un documento del repositorio**,
+donde «el runner» no es uno solo y el texto sobrevive al contenedor que lo
+escribió. Una circunstancia local contada como hecho general es una trampa para
+quien lo lea desde otro sitio — la misma familia que el anclaje a un SHA, sólo
+que en el eje del entorno en vez del eje del tiempo.
+
+**No se abre ronda por esto.** El texto del corrector es verdadero en el entorno
+donde `check.ps1` se corre de verdad, no cambia ninguna acción, y es la familia
+que ya disparó el freno tres veces. Queda aquí, que es donde cuesta cero.
+
+**Regla que se lleva**: *si una comprobación se parte, se dice que se partió y
+no se le llama por el nombre de la entera.* Y si se explica por qué se partió,
+la razón tiene que ser verdadera **en el sitio donde vive el texto**, no sólo
+donde se escribió.
+
 ---
 
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
