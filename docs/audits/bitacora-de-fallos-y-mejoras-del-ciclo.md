@@ -7727,6 +7727,70 @@ incidencia; va a la lista de deudas como la 46.
 
 ---
 
+### 146. #653 cerrada: la PR #654 está en `main`, y la fusionó el motor por la aprobación dual, no una orden (21-09-2026, 16:35 hora de Andy)
+
+**El desenlace, primero.** `sirius:completed` a las 16:24. La PR #654 se
+fusionó en `main` como `71feb670` a las 14:24:13Z, doce segundos después de la
+etiqueta `ready-for-merge`, y **sin que nadie escribiera `fusiona`**: desde
+ADR-205 la aprobación de los dos revisores sobre el mismo head **es** la
+autorización de fusionar (`merge-sirius-work.yml`, cabecera: «la etiqueta ya ES
+la aprobación de los dos»; `SIRIUS_MERGE_AUTORIZACION=revision-dual`), y la
+orden `fusiona` queda como mando manual y como reintento. El guion volvió a
+comprobar por REST antes de fusionar —PR única, abierta, sin conflictos, head
+idéntico al aprobado, Quality verde sobre ese head exacto—.
+
+**La ronda 8, en orden.** Reinicio del listón a las 15:13 (recibo 5761059405).
+El corrector corrió la invocación única sobre `b1e449eb` —`pwsh -File
+scripts/check.ps1`, «7323 passed, 17 skipped, 2 xfailed», código 0— y no
+empujó nada porque las dos observaciones documentales ya estaban corregidas.
+Quality en verde; entonces la cola de ADR-200 trajo `main` a la rama
+(`41561195`, con #659 dentro) y Quality **falló** sobre esa combinación por una
+sola prueba, `test_la_memoria_confirmada_en_este_arbol_esta_al_dia`: la fusión
+textual de `MEMORIA.md` no es lo que produce el generador sobre el árbol
+fusionado. Lo arregló el corrector solo, en una vuelta (`83da5dcb`, MEMORIA
+regenerada, y otra invocación única: «7384 passed, 17 skipped, 2 xfailed»,
+código 0). Quality verde a las 16:17, aprobación dual a las 16:23, fusión a las
+16:24.
+
+**Auditoría posterior a la fusión, de solo lectura y desde la API** (el
+permiso de esta sesión rechazó los `git` de comprobación; la lista de ficheros
+de la PR y las corridas de Quality bastan): cinco ficheros —`MEMORIA.md`
+(+8/−2), `docs/audits/registro_defectos.yml` (+27/−0), el ADR-212 nuevo (343
+líneas), el adaptador (+26/−4) y su prueba (+103/−0)—; ninguna ruta prohibida
+(`application/`, fixtures del banco, `memory_gates.py`, `settings.json`,
+`STATUS.md`, `.github/`, `docs/canonical/`); la línea `limite` de la
+instrucción aparece en el parche solo como contexto, no cambia; el registro de
+defectos solo añade; Quality en verde sobre el head aprobado (run
+35609775235). Quality sobre el propio `71feb670` de `main` estaba en curso al
+escribir esto (run 35611923314); su desenlace se añade debajo.
+
+**Dos cosas que aprendí, y una que no llegó a pasar.**
+
+- **Mi regla «solo se fusiona con `fusiona`» llevaba un día caducada.**
+  ADR-205 entró en `main` el 20-09 con #652 y yo seguí escribiendo, en las dos
+  decisiones registradas de hoy, «el propietario fusiona con su gesto, no yo».
+  No costó nada —la fusión era lo que él quería—, pero es la misma familia de
+  la entrada 143: describir el motor de memoria en vez de leer el workflow. Y
+  el aviso de `ready-for-merge` sigue diciendo «Escribe **fusiona**…» aunque
+  el motor fusione solo: texto y comportamiento se han separado (deuda 47).
+- **Traer `main` puede dejar `MEMORIA.md` caducada sin conflicto textual.** La
+  cola de ADR-200 fusiona y empuja; el generador no corre. Cada vez que la
+  base traiga un ADR o un registro nuevo, la combinación cae en Quality y
+  cuesta una vuelta del corrector (aquí, 25 minutos). Candidata: que la cola
+  regenere la memoria antes de empujar la combinación (deuda 48).
+- **La puerta previa a fusionar no llegó a correr.** Estaba lista, con el head
+  leído por API, y el motor fusionó doce segundos después de la etiqueta. Con
+  ADR-205 una puerta de sesión no puede ir *antes* de la fusión; lo que queda
+  es la auditoría de después, que es la de arriba.
+
+**Lo que queda del encargo, y no es mío:** la medición con Ollama real en la
+máquina del propietario. La predicción publicada antes de medir sigue en el
+ADR-212 tal cual —`cardinalidad >= 38/47`, campo a campo `>= 30/47`, por
+debajo de `30/47` es regresión y se revierte—. El siguiente encargo preparado
+(`WI-20260920-MODO-Y-CORTE`) no se lanza sin su palabra.
+
+---
+
 ## Deudas abiertas (necesitan incidencia o decisión del propietario)
 
 1. `ollama_category_classifier.py`: ruta relativa y sin
@@ -8492,3 +8556,19 @@ incidencia; va a la lista de deudas como la 46.
    35603703270). Hacen falta dos `continua` por diseño. Candidatas: publicar el
    reinicio también en esa reanudación, o que el precheck tome `resume-stop`
    como frontera. Necesita ADR; no se toca desde esta rama.
+
+47. **El aviso de `ready-for-merge` pide `fusiona` y el motor fusiona solo.**
+   Desde ADR-205 la aprobación dual autoriza la fusión (`merge-sirius-work.yml`,
+   vía `issues: labeled`), pero la notificación de `sirius:ready-for-merge`
+   sigue diciendo «Solo falta tu autorización… Escribe **fusiona**». En #653
+   la PR se fusionó doce segundos después del aviso. Texto y comportamiento
+   separados: corregir la plantilla del aviso (o volver a pedir la orden, si
+   es lo que el propietario quiere). Necesita su decisión.
+
+48. **La cola de ADR-200 trae `main` sin regenerar `MEMORIA.md`.** La fusión
+   textual deja la memoria distinta de lo que produce el generador cuando la
+   base trae un ADR o un registro nuevo, Quality cae por
+   `test_la_memoria_confirmada_en_este_arbol_esta_al_dia` y cuesta una vuelta
+   del corrector (#653, `41561195`, 25 minutos). Candidata: que el paso que
+   trae `main` corra `sirius-memoria conocimiento` antes de empujar la
+   combinación. Necesita ADR.
