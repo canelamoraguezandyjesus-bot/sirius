@@ -50,11 +50,13 @@ fallo tuyo, no un avance.**
    20-09-2026 22:40). Si cae, no hay nada que hacer hasta que se reinicie: que
    el trabajo esté empujado antes, no en el árbol de trabajo.
 7. **Cada unidad, su PR, lista para fusionar**: rama, nota de arranque o ADR,
-   cadena de comprobación, Quality en verde y la pasada de Codex **limpia
-   sobre ese mismo head** (skill `revision-externa`). Pedir la revisión no es
-   tenerla: si Codex no ha contestado, ha devuelto hallazgos o ha fallado
-   cerrado, la unidad está «a medias» aunque Quality esté en verde, y así se
-   dice en el parte, nunca como hecho.
+   cadena de comprobación, y «lista» quiere decir exactamente lo que la skill
+   `revision-externa` llama «Cuándo se fusiona». Esa sección es la única que
+   lo define y aquí no se repite: cada copia parcial se desvió (rondas 3 y 4
+   de Codex sobre la PR #659, 21-09-2026: primero faltaba la pasada limpia,
+   después el conflicto con `main`). Pedir la revisión no es tenerla: lo que
+   no cumpla esa definición está «a medias» aunque Quality esté en verde, y
+   así se dice en el parte, nunca como hecho.
 8. **Lo que exija su ordenador se acumula** para el lote de la mañana
    (`AGENTS.md`, regla 13).
 
