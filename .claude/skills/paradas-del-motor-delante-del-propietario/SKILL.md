@@ -66,11 +66,16 @@ conteste.**
    sin `--repo` ni `--bloque` y ofreciendo siempre `--continuar`
    (`_con_decision_pendiente` en `src/sirius_engine/cli.py`; su prueba solo
    fija `--diario` y `--ejecutar`), así que sirve para saber que hay una
-   decisión pendiente y en qué diario, no para copiar de ella. Sin la orden
-   de la parada no se le da `--continuar`: se busca esa orden en el registro
-   del run antes de nada, y mientras tanto solo cabe `--terminar` si procede,
-   o el ensayo de `sirius-decidir` sin `--ejecutar` para que las guardas
-   digan qué salidas existen. Nunca un `--continuar` escrito de memoria.
+   decisión pendiente y en qué diario, y para una sola orden: la de
+   **terminar**, que solo necesita el `work_id` y el diario
+   (`sirius-decidir <work_id> --diario <ruta> --ejecutar --terminar`; el
+   comando entra en `_terminar` antes de mirar `--repo` o `--bloque`, y su
+   prueba en `tests/engine/test_decision_cli.py` cancela así una parada sin
+   incidencia). **Continuar** es lo que exige la orden de la parada: sin ella
+   no se le da `--continuar`; se busca en el registro del run antes de nada,
+   y mientras tanto cabe el ensayo de `sirius-decidir` sin `--ejecutar` para
+   que las guardas digan qué salidas existen. Nunca un `--continuar` escrito
+   de memoria.
 4. **Cómo se le presenta, y por qué canal.** En el parte —también desde el
    móvil— va la decisión y nada más: qué trabajo, desde cuándo, qué pasa si
    continúa y qué pasa si termina, para que conteste sí o no. La orden para
