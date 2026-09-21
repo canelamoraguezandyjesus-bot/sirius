@@ -2,8 +2,9 @@
 
 - Fecha: 2026-09-20
 - Nota de arranque: `docs/audits/arranque-auditoria-forma-de-trabajo.md`
-  (19-09-2026, con la adenda 1 del 19-09 a las 23:55 UTC y la adenda 2 del
-  20-09 a las 00:52 UTC).
+  (19-09-2026, con la adenda 1 del 19-09 a las 23:55 UTC, la adenda 2 del
+  20-09 a las 00:52 UTC, y las adendas 4 y 5 del 20-09 a las 23:05 y las 23:27
+  UTC).
 - Documento: `docs/audits/AUDITORIA_FORMA_DE_TRABAJO_2026-09.md`.
 - Rama: `claude/sirius-collaboration-rir6r6`.
 
@@ -85,6 +86,34 @@ sesiones teletransportadas pegaron el 20-09 lista los dos plugins, 21 skills y
 14 herramientas MCP de claude-mem. No es verificable desde aquí; el
 repositorio no menciona claude-mem.
 
+**Afirmación 9.** Las fichas C-01…C-03 y N-03 y los hallazgos E-01…E-06
+quedan revisados con 28 transcripciones más de la nube (paso 5), y los ocho
+hallazgos T-01…T-08 tienen fecha y hora.
+*Comprobación:* lectura, en el orden de las adendas 4 y 5 (escritas antes de
+abrir ningún fichero), de 28 transcripciones traídas de las ramas
+`transcripciones/<id>` que cada sesión empujó el 20-09 entre las 18:15 y las
+23:18 UTC (`git for-each-ref refs/remotes/origin/transcripciones/`: 30 ramas;
+tres sesiones más no la empujaron). Extractos por el mismo guion del paso 4;
+cifras de la clasificación previa a la lectura: 32 769 registros, 7 532
+entradas con rol de usuario, 12 273 del asistente, 107 MB. La separación
+«entradas de usuario / texto suyo» la hizo un segundo guion, por heurística
+(notificaciones, stop-hook, expansiones de skills, resúmenes de compactación,
+comandos locales, interrupciones, pegados de terminal), y es aproximada: 873
+entradas con texto, 358 suyas o pegadas por él. Cada cita del paso 5 lleva fecha
+y hora y se localiza en el `.jsonl` de la sesión nombrada. Límite: las citas
+tomadas de resúmenes de compactación (14-08; 13-09) se marcan «según el
+resumen» y no sostienen nada por sí solas.
+
+**Afirmación 10.** La cuarta pregunta colgada (27-07) sí se contestó.
+*Comprobación:* la transcripción de «Auditoría Registro de Tolerancias v0.3»
+termina con la respuesta del asistente a las 17:29 UTC del 27-07; la de
+«ADR-001 spike 7 y revisión de cierre» empieza a las 17:41 con 488 líneas
+pegadas por el propietario; la de «TOL-207 caracterización almacenamiento v0.2»
+abre a las 18:01 con el paquete 04, que dice materializar «dos revisiones
+forenses y una auditoría adversarial». `git grep` de las tres categorías sobre
+el árbol rastreado de `main`: cero resultados fuera de
+`docs/audits/las-sesiones-de-la-nube-2026-09.md`.
+
 ## Cifras, ancladas
 
 - Árbol de `main`: `3062a31`. Diario del motor: 667 sucesos, último el 14-09
@@ -105,12 +134,19 @@ repositorio no menciona claude-mem.
   16:24–23:23).
 - Sesiones paralelas: la incidencia #165 (14-08 15:28) encargó B12, cerrado
   por otra sesión el 10-08 (ADR-006, 007); dos ADR-016 fechados el 14-08.
+- Paso 5: 30 ramas `transcripciones/*` (18:15–23:18 UTC del 20-09); 28
+  leídas; 32 769 registros; 7 532 entradas de usuario, 873 con texto, 358
+  suyas; sesión del 08-09: 131 notificaciones de GitHub, 95 despertares, 142
+  entradas con texto suyo, 7 días; PR #576: 4 rondas externas el 08-09 (14:05,
+  15:51, 19:31, 21:38); vuelta del correo: 2 minutos (19-08, 00:03 → 00:05);
+  regla dicha → regla escrita: 41 días (ADR-204), 8 (ADR-205), 0 (ADR-191), 6
+  (ADR-206).
 
 ## Lo que este trabajo no garantiza
 
 Lo que la nota de arranque dijo que no garantizaría, y se cumplió: no es
-exhaustivo (falta ChatGPT, faltan 28 de las 34 sesiones de la nube y todo lo
-local anterior al 16-08), no mide tiempo, no elige skills, no audita la cabeza
+exhaustivo (falta ChatGPT, faltan 3 de las 33 sesiones de la nube con historia
+y todo lo local anterior al 16-08), no mide tiempo, no elige skills, no audita la cabeza
 robótica, no repara nada. Las conversaciones crudas, las transcripciones
 convertidas a texto y los índices viven en el espacio temporal de la sesión y
 mueren con ella; las fuentes reproducibles son la exportación de Anthropic y
@@ -118,5 +154,6 @@ los dos zips de sesiones, que conserva el propietario.
 
 ## Decisiones
 
-Ninguna tomada. Diez puestas delante del propietario, en el documento, y tres
-acciones para la pila del ordenador.
+Las diez que se le pusieron delante las decidió él el 20-09 (ADR-204 a 211).
+El paso 5 toma una, técnica, y la deja en ADR-213: tres reglas de conversación
+más en `AGENTS.md`, con guarda, y la proporción de la cadena de comprobación.

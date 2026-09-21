@@ -610,3 +610,54 @@ las ramas `transcripciones/*` se borran del remoto al cerrar el paso 5, y se
 deja constancia de cuándo. Mientras tanto, nada de lo que contienen se cita
 literalmente fuera de lo que la auditoría ya permitía: frases cortas sobre cómo
 trabajar.
+
+## Adenda 5 — las que llegaron después de fijar la muestra (2026-09-20 23:27 UTC)
+
+La adenda 4 fijó 28 transcripciones antes de leerlas. Mientras se leían, el
+propietario repitió la orden en las cinco sesiones que faltaban («ya están
+todas», 23:20 UTC). Estado a la hora de escribir esto:
+
+| Sesión | Creada | Estado |
+|---|---|---|
+| «Pendientes del ciclo: PRs, issues y automatizaciones» (`02df1df0`) | 10-08 | rama `transcripciones/02df1df0-…` en el remoto a las 23:18 UTC |
+| «Python 3.14 instalación» (`923794ec`) | 18-07 | rama `transcripciones/923794ec-…` en el remoto a las 23:17 UTC |
+| «No hagas nada» | 18-08 | parada: pide permiso para hacer push; espera su respuesta |
+| «Verificar versiones y estado» | 18-07 | parada: pide que confirme la orden antes de subir la transcripción |
+| «Cloud push smoke test» | 18-07 | parada: pregunta si quita el identificador del modelo antes de subir |
+
+Las dos llegadas se clasifican aquí SIN leer ningún mensaje, como manda la
+adenda 2 (`fichas_llegadas_tarde.json` en el cuaderno de la sesión):
+
+| Fichero | Registros | Desde → hasta | Tamaño | Texto del propietario | Texto del asistente | Herramientas más usadas |
+|---|---|---|---|---|---|---|
+| `02df1df0…jsonl` | 1 057 (340 de usuario, 600 del asistente, 80 adjuntos) | 2026-08-10 20:42 → 2026-09-20 23:01 | 4 108 KB | 11 266 caracteres | 59 438 caracteres | Bash 174, lectura de PR 24, lectura de incidencias 24, Edit 20, AskUserQuestion 9 |
+| `923794ec…jsonl` | 181 (44 de usuario, 59 del asistente, 41 adjuntos) | 2026-07-18 14:50 → 2026-09-20 18:31 | 720 KB | 13 321 caracteres | 5 943 caracteres | Bash 22, Grep 4, Skill 3 |
+
+Dos observaciones que salen de la clasificación, no del contenido:
+
+- Las dos sesiones empujaron más que la transcripción: `MEMORIA.md` y un
+  `docs/audits/evidencia-transcripciones-<id>.md` (1 127 y 316 líneas de
+  diferencia frente a `main`). La orden decía «no modifiques nada más»; el
+  stop-hook y la skill de evidencia de esta casa pesaron más que la orden
+  literal. Se lee solo el `.jsonl`; el resto no se fusiona ni se cita. Va al
+  paso 5 como observación sobre cómo las reglas del repositorio se imponen
+  incluso a una orden explícita del propietario, no como defecto.
+- Con 11 266 caracteres del propietario repartidos en 340 entradas de usuario,
+  la del 10-08 confirma antes de leerla lo que la del 08-09 enseñó: «entradas
+  de usuario» no son palabras suyas; la mayoría son resultados de herramienta,
+  notificaciones y expansiones automáticas. El paso 5 lo dice de todas las
+  fichas.
+
+**Hipótesis:** ninguna nueva. Se contrastan las mismas H-A…H-E; de la del 10-08
+se espera, por título y fecha, que hable de H-D (los pendientes del ciclo en la
+semana en que nacieron las ramas `wip/`) y de la aceptación de 0.1; de la del
+18-07, solo el molde de los micro-encargos del primer día.
+
+**Orden y protocolo:** primero la del 10-08, después la del 18-07, con el
+protocolo de la adenda 2 sin cambios. Las tres paradas se leen si llegan antes
+de escribir el paso 5; si no llegan, el paso 5 las nombra como no leídas, con
+la razón (esperan una respuesta del propietario dentro de cada sesión), y no se
+espera por ellas: la parada de la adenda 4 sigue mandando.
+
+**Parada de esta adenda:** las dos leídas y anotadas; o disparada la regla de
+las dos rondas por una familia nueva.

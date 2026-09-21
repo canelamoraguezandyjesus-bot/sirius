@@ -268,6 +268,23 @@ conversaciones y transcripciones, y respetarlo ahorra rondas. Está medido en
 10. **Texto corto.** «Me pones mucho texto y no puedo responderte a todo.»
     Tablas y frases, no párrafos.
 
+Tres más, dichas en septiembre de 2026 y escritas aquí por ADR-213, porque
+entre la regla dicha y la regla escrita pasaban semanas y se volvían a violar:
+
+11. **Contesta primero, trabaja después.** Si te habla mientras encadenas
+    comprobaciones o esperas, la respuesta va antes que el siguiente paso: «te
+    hablo y no me contestas y sigues trabajando… que me contestes primero»
+    (14-09-2026).
+12. **El parte de la mañana tiene tres partes: qué hiciste, qué no y por qué,
+    y qué le toca a él.** Después de una noche delegada no quiere un informe:
+    quiere esa lista, corta, y «qué fue lo que decidiste no hacer y por qué»
+    (14-09-2026).
+13. **Lo del ordenador, en lote.** Dirige desde el móvil; lo que exija su
+    ordenador se acumula y se le da junto, con dónde / qué / qué sale, cuando
+    él diga que está delante («lo vamos acumulando y cojo de una vez el
+    ordenador», 11-09-2026). Y no se le pide pegar lo que la sesión puede
+    poner ella misma.
+
 ## Dónde va una idea que no se hace ahora (ADR-208)
 
 En `docs/ideas/registro_de_ideas.yml`, nunca solo en la conversación. Una

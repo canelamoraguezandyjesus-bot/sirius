@@ -7,9 +7,12 @@
 ## Por qué existe este documento
 
 El paso 4 de la auditoría declaró como límite que **28 de las 34 sesiones de la
-nube no se pudieron traer**. Las cuatro vías probadas para bajarlas están
-medidas en la auditoría y ninguna funciona sin gastar un turno de modelo por
-sesión.
+nube no se pudieron traer**. Este documento se escribió entonces, con lo que se
+podía leer sin gastar nada. Esa misma noche llegaron 30 de las 33 posibles por
+una quinta vía —cada sesión, abierta por el propietario desde la aplicación,
+copió su propia transcripción al repositorio— y el paso 5 de la auditoría las
+lee. La tabla y los estados de abajo son los de la tarde del 20-09, antes de
+eso.
 
 Lo que sí se puede leer sin gastar nada es **la ficha de cada una**: cuándo
 empezó y terminó, desde dónde se dirigió, con qué modelo, en qué rama dejó su
@@ -31,14 +34,15 @@ sesión que preguntó no se enteró jamás.
 | Última actividad | Qué pedía | Qué pasó de verdad |
 |---|---|---|
 | 2026-07-18 | si se suscribía a la PR #33 para vigilarla | **Quedó sin sentido en siete minutos**: la PR #33 se fusionó a las 15:23 del mismo día, y la pregunta es de las 15:16 |
-| 2026-07-27 | aprobar las clasificaciones de la revisión forense ADR002-TOL-207 | **Sin rastro.** `ENVOLVENTE_REPRODUCIBLE` no aparece en ningún documento de `docs/`. Es la única de las cuatro que sigue perdida |
+| 2026-07-27 | aprobar las clasificaciones de la revisión forense ADR002-TOL-207 | **Contestada en la sesión y consumida, pero sin rastro en el árbol** (paso 5): la sesión respondió el mismo día a las 17:29 UTC, el propietario pegó el informe en otra sesión a las 17:41 y el paquete de trabajo 04 de las 18:01 dice materializar «dos revisiones forenses y una auditoría adversarial». Ningún fichero rastreado hoy conserva la categoría elegida (`ENVOLVENTE_REPRODUCIBLE` solo aparece en este documento); la decisión vive en la transcripción |
 | 2026-08-21 | si GAP-1 (el modelo por Run) es del bloque B1 o del C2 | **Contestada, y con ADR propio**: ADR-054 la recoge citando «hallazgo H-6 (GAP-1)» e incidencia #217 |
 | 2026-08-24 | dónde va el diario del motor: rama propia, exento, o una PR por turno | **Contestada**: ADR-083 decide que la memoria del motor vive en su propia rama, que es la opción (1) |
 
 **La lección no es la que parecía.** No es «el propietario no contesta»: es que
 **la respuesta llega por otro camino y la sesión que preguntó se queda con la
-pregunta abierta para siempre**. Tres de cuatro estaban resueltas en el árbol y
-sus sesiones siguen hoy marcadas como bloqueadas o archivadas esperando.
+pregunta abierta para siempre**. Cuatro de cuatro tenían respuesta —tres en el
+árbol, una solo en una transcripción— y sus sesiones siguen hoy marcadas como
+bloqueadas o archivadas esperando.
 
 Es la familia `pregunta-al-propietario-que-nadie-vuelve-a-poner-delante` vista
 desde el otro lado: el problema no está en quien no responde, sino en que nadie
@@ -97,7 +101,9 @@ entre sí— con cuatro casos más, todos fechados.
 ## Lo que NO permite decir
 
 - **Qué se dijo dentro.** No es la transcripción. Las hipótesis de la auditoría
-  sobre cómo conversa el propietario no se pueden contrastar con esto.
+  sobre cómo conversa el propietario no se pueden contrastar con esto. (Desde
+  la noche del 20-09 sí se puede con otra fuente: 30 de las 35 subieron su
+  transcripción y el paso 5 de la auditoría las lee.)
 - **Cuánto tiempo pasó él en cada una.** Las fechas son de la sesión, no suyas.
 - **Si el desenlace declarado es cierto.** El resumen lo escribió la propia
   sesión al terminar su turno; no está contrastado contra el árbol.
