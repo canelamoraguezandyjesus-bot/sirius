@@ -661,3 +661,54 @@ espera por ellas: la parada de la adenda 4 sigue mandando.
 
 **Parada de esta adenda:** las dos leídas y anotadas; o disparada la regla de
 las dos rondas por una familia nueva.
+
+## Adenda 6 — tres skills de flujo de trabajo, con las condiciones escritas antes de elegirlas (2026-09-21 10:26 UTC)
+
+El propietario, al ver el paso 5 fusionado, lo dijo sin rodeos: de las
+transcripciones quedó un informe y tres reglas, no herramientas de flujo de
+trabajo, y «pasado mañana te vas a olvidar». Tiene razón en el fondo: lo que
+no está en el repositorio no sobrevive a la sesión. Las transcripciones ya no
+existen (borradas a las 00:25 UTC a petición suya) y no deben volver; lo que
+sigue sale de lo que esta sesión aún conserva de su lectura y de lo que el paso
+5 dejó escrito con fecha y hora.
+
+Las tres condiciones de ADR-211, por candidata, ANTES de escribir ninguna:
+
+| Candidata | Se repite (ocurrencias fechadas) | Fricción medida | ¿Es decisión del propietario? |
+|---|---|---|---|
+| `modo-nocturno` | 08-08, 10-08, 15-08, 13-09, 14-09 | 3 h 18 min despierto por avisos de permiso (15-08, 01:09 → 04:27) y una herramienta rechazada que la sesión reintentó; diez esperas de fondo perdidas por reinicio del contenedor (09-09 03:01); «que me contestes primero» (14-09 11:04); el parte pedido tres veces (14-09 11:06, 20:53, 22:48); 95 despertares en siete días (08-09) | no: es cómo ejecuta la sesión lo que él ya delegó |
+| `revision-externa` | PR #576 (08-09, cuatro rondas traídas por él); PR #658 (21-09, tres rondas sin él); el diseño de la revisión dual (11-08) | cuatro rondas en un día de la misma familia sin que nadie las contara; cuota de Codex agotada (12-09 16:41) | no: el mecanismo es el que ya aprobó (ADR-156, ADR-205); cambia quién lo pide |
+| `coste-antes-de-tocar-una-fuente` | 28-07 (12 de 23 agentes muertos por límite de sesión); 11-08 (21 subagentes, «nada»); 19-08 (2,8 M tokens, «todavía no»); 20/21-09 (33 sesiones × un turno, un día y medio uso suyo) | las cuatro cifras de la izquierda | no: es la regla de dinero de ADR-204 aplicada antes de gastar, no una decisión de gasto |
+
+Descartadas antes de escribir: «el parte de la mañana» como skill propia (cabe
+en tres párrafos y ya está en `hablar-con-el-propietario` y en la regla 12 de
+`AGENTS.md`); «auditar las transcripciones a fondo con más agentes» (no hay
+transcripciones, y no debe volver a haberlas en el repositorio).
+
+**Criterio de parada, escrito ahora:** las tres pasan la guarda de ADR-211
+(`tests/automation/test_skills.py`) sin tocarla; cada una cita solo ficheros y
+ADR que existen; ninguna repite `AGENTS.md` (remiten a sus reglas); la batería
+entera vuelve verde salvo la roja por diseño del ADR sin su defecto (ADR-182),
+que cierra el commit siguiente con H-214; y si al escribir una candidata no
+llega a dos ocurrencias fechadas, se descarta.
+
+**Qué NO garantiza:** que una sesión las cargue —la descripción es lo único que
+decide eso (ADR-211)—, ni que el propietario deje de ser el correo entre IAs:
+eso es la memoria común, no una skill.
+
+**Adenda 6 bis (10:34 UTC).** El propietario, al ver las tres: «así pudimos haber
+sacado por lo menos diez o veinte». Antes de escribir ninguna más, las
+candidatas que aún salen de lo leído, con las mismas tres condiciones:
+
+| Candidata | Se repite (ocurrencias fechadas) | Fricción medida | ¿Decisión del propietario? |
+|---|---|---|---|
+| `comandos-para-su-ordenador` | 08-08, 09-08, 14-08, 11-09, 20-09 | `.venv` «acceso denegado» y el error 396 de OneDrive (08/09-08); `Sirius.lnk` en un escritorio que no existe (14-08 15:18); «¿yo qué sé dónde está la carpeta?» (11-09 21:17); `npx.ps1` bloqueado por la política de ejecución y `winget` con error 1622 (11-09 21:51-21:54); dos comandos tumbados por `$HOME\Desktop` (20-09) | no |
+| `paquete-de-trabajo-pegado` | las seis del 18-07; las doce del 25 al 28-07; 19-08; los diez encargos del 08-09 | ficheros pedidos que la sesión no puede ver (26-07 14:14 → 15:31); «dame todas las respuestas… como un solo documento» (26-07 20:20); el mismo paquete en dos sesiones (28-07 19:52); el paquete equivocado (13-09 06:23) | no: el paquete lo redacta quien él quiera; esto es cómo se ejecuta |
+| `traspaso-a-otra-sesion` | 08-08 («genera un prompt… que me voy a dormir»), 19-08 00:03, 24-08 15:12 (traspaso pegado), 13-09 14:35 (lo de Hermes perdido), 14-09 21:24 (M17 sin razón recordada) | una tarde en balde por reconciliar desde una copia caducada (14-08, #165); «otra vez a investigar, otra vez a mirar, otra vez a hablar» (13-09) | no |
+| `verificar-el-estado-real` | 10-08 22:08, 14-08 14:51, 14-08 15:28, 17-08 15:00-15:47, 19-08 00:44 | documentos que decían «terminada» lo que no lo estaba; seis correcciones suyas, seis acertadas (E-03); la afirmación falsa repetida siete veces en tres documentos (19-08) | no |
+
+Descartadas por no llegar a dos ocurrencias fechadas o por caber en una regla
+que ya existe: «presentar un plan sin códigos» (regla 10 y la skill de hablar),
+«cuándo usar el motor en vez de la sesión» (una ocurrencia, 12-09 15:32),
+«instalar herramientas en su ordenador» (cabe en la de comandos). El criterio
+de parada de la adenda 6 no cambia; ADR-214 pasa a cubrir las siete.
