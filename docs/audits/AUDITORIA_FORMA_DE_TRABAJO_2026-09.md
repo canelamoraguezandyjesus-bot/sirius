@@ -1028,12 +1028,311 @@ El único patrón nuevo, E-02, pertenece a PROC-020, que agosto ya tenía: se le
 añade evidencia, no letra. **Este paso no encuentra una familia omitida de la
 taxonomía.**
 
+## Paso 5 — las transcripciones que cada sesión de la nube subió por sí misma (20-09-2026)
+
+**Qué se leyó**, según las adendas 4 y 5 de la nota de arranque, escritas antes
+de abrir ningún fichero: **28 transcripciones** de sesiones de Claude Code en la
+nube —las 26 con historia de la adenda 4 y las 2 que llegaron tarde (adenda
+5)—, del 18-07 al 14-09, que el paso 4 no pudo ver. Llegaron por una quinta
+vía que las cuatro medidas más abajo no contemplaban: **el propietario abrió
+cada sesión desde la aplicación y le pidió que copiara su propia transcripción
+al repositorio, en una rama `transcripciones/<id>`**. 30 de las 33 posibles lo
+hicieron entre las 18:15 y las 23:18 UTC; 3 quedaron paradas dentro de su
+sesión esperando una respuesta suya —permiso para el push, confirmar la orden,
+quitar el identificador del modelo— y no se esperó por ellas. Protocolo de la
+adenda 2, sin cambios: mensajes del propietario íntegros, asistente hasta 2 500
+caracteres, herramienta con nombre y primera línea, resultados solo si eran
+denegaciones. Cifras de las 28: 32 769 registros, 7 532 entradas con rol de
+usuario, 12 273 del asistente, 107 MB de `.jsonl`. **De las 7 532 entradas de
+usuario, 873 llevan texto y solo 358 son palabras suyas o encargos que él
+pegó**: el resto son notificaciones de GitHub y de temporizador (294),
+comandos locales, avisos del stop-hook, expansiones de skills, resúmenes de
+compactación e interrupciones. Las «entradas de usuario» de las fichas no son
+mensajes suyos; este paso lo cuenta por primera vez, con una heurística, y por
+eso las cifras son aproximadas. **Qué no se leyó**: las tres paradas; el
+tráfico de subagentes (un fichero, del 11-09); los resultados de herramienta;
+ChatGPT, cuya exportación sigue sin llegar.
+
+**Cómo se cita.** Igual que en los pasos 3 y 4, con dos límites más que salen
+de estas fuentes: una transcripción (08-08) contiene un fragmento de
+conversación ajena a la sesión, captado por el dictado, que no se cita ni se
+describe; y el repositorio es público **por decisión suya y por dinero** —los
+minutos de GitHub Actions, dicho el 11-09—, así que las ramas
+`transcripciones/*` no pueden quedarse: el compromiso de la adenda 4 está al
+final de esta sección.
+
+### Lo que estas 28 enseñan y los pasos 3 y 4 no podían
+
+Ocho hallazgos, cada uno con la fecha y la hora de la transcripción que lo
+sostiene.
+
+**T-01 — El molde de julio: ChatGPT dicta paquetes, Claude Code ejecuta, otra
+sesión audita, y él lleva y trae.** Las doce sesiones del 25 al 28-07 sobre la
+rama `evidence/adr001-spikes` abren todas con el mismo encargo formal: «Trabaja
+exclusivamente en la rama…», «ANTES DE ACTUAR» con los cuatro comandos de git,
+«MISIÓN ÚNICA: ejecuta literalmente el paquete 02B», entre ocho y quince
+prohibiciones, «Crea únicamente…», el mensaje de commit ya redactado y «ENTREGA
+ÚNICAMENTE» con sus puntos numerados; varios traen «HEAD ESPERADO = <sha>; si
+no coincide, detente». Doce paquetes en cuatro días —01B, 02, 02B, 02C, 02D,
+fuentes canónicas, 03A, 03B, 03C, 03D, 04 y la corrección B-1— y, entre
+paquete y paquete, una «auditoría adversarial independiente» en otra sesión,
+«en otro contenedor». Sus palabras propias en ese bloque caben en dos frases:
+«¿le tengo que pasar esto a ChatGPT o ya lo puede ver él en el repositorio?»
+(26-07 16:15) y «dame todas las respuestas… que yo se las pueda enviar a
+ChatGPT… como un solo documento» (26-07 20:20). **El motor de agosto
+—implementador, revisores, auditor, corrector— automatiza exactamente este
+ciclo manual de julio**, y las prohibiciones en negativo de los paquetes son la
+forma previa de los `deny` de `.claude/settings.json`. Y el modo de
+supervisión cambió de forma medible: el 27-07 rechazó seis usos de herramienta
+en treinta minutos, cada uno seguido de «continúa»; el 13-09 dijo «trabaja en
+esto toda la noche como siempre en modo nocturno», y el 14-09 «lo que yo no
+decidiría… no lo hagas; si hay algún problema técnico… lo resuelves y listo».
+De aprobar cada comando a delegar la noche entera, en siete semanas.
+
+**T-02 — Las reglas que el 20-09 se escribieron ya estaban dichas, y con
+fecha.**
+
+| Regla escrita | Cuándo la dijo él en estas transcripciones | Con qué palabras |
+|---|---|---|
+| ADR-204, qué se le pregunta | 10-08 21:06; 14-08 (según el resumen de esa sesión); 13-09; 14-09 00:31 | «¿tú eres el que me tiene que guiar? Y yo, el que responde y decide»; «cosas técnicas… de la mejor manera posible que tú sepas»; «haz lo que tú creas conveniente. No hagas nada que no haría yo»; «lo que tenga que decidir, pónmelo… con varias opciones, y lo que me recomiendas. Respondo todo, y así ya puedes trabajar en todo libremente» |
+| ADR-205, fusionar sin esperarle | 12-09 00:27, 13:47, 14:03; 13-09 06:29, 08:29 | «cuando esté lista, fusiónala. Si no, me dices si la fusiono yo»; «listas para fusión, fusionarlas te autorizo»; «ya podemos fusionar todo» |
+| ADR-191 y 200, la revisión es una cola | 13-09 08:19; 14-09 00:42 | «cada vez que fusiono se mueve main y tengo que actualizar la otra… otra ronda más solo por fusionar una cosa»; «hacer una cola… que solo pase por revisión cuando esté actualizada con main… puedes mandar quince trabajos seguidos, pero que cada uno tenga su cola» |
+| ADR-206, la cola de sesiones | 13-09 08:19 (la misma queja) | la cola de ADR-191 se escribió el 14-09, el mismo día que la especificó; la de sesiones, el 20-09 |
+| ADR-195, podar es archivar | 13-09 14:48 | «supongo que a podar te refieres a archivar, no se elimina nada, ¿eh? Acuérdate de eso» |
+| ADR-171, `MEMORIA.md` | 11-09 10:29 | «cualquier inteligencia artificial que entre a leer, ahí tiene que primero leer la memoria MD… tiene que tener un cerebro, como si fuera un chat» |
+| ADR-208, el registro de ideas | 13-09 08:24 | «lo que tienes que hacer es apuntarlo… ya hay un montón de cosas que tengo que hacer» |
+
+Entre la regla dicha y la regla escrita pasaron 41 días para ADR-204, 8 para
+ADR-205, 0 para ADR-191 y 6 para ADR-206. **Las reglas del motor se escriben el
+día que las dice; las de conversación, semanas después.** Es la familia
+`regla-del-propietario-que-solo-vive-en-una-conversacion` que ya nombraron
+ADR-204 y ADR-208, con cuatro instancias más; por eso ADR-213 escribe hoy las
+tres de septiembre que seguían sin estar (T-06).
+
+**T-03 — El problema, enunciado por él.** El 11-09 a las 12:36, en un solo
+mensaje dictado, está la tesis de esta auditoría con sus palabras: «vamos a
+hacer el motor para que yo no tenga que estar haciendo esto… y al final no hago
+eso, pero hago muchas más cosas… es un ciclo vicioso que nunca acaba… no veo un
+punto de partida de decir, ahora sí, ahora estoy asentado, ahora puedo dar
+órdenes que se trabaje y ya está». Y lo que espera de una IA: que «busque
+hasta en el último rincón» antes de construir —«esto lo hacen miles de
+personas a diario… unas doscientas ya han resuelto esto»—, que le diga «el
+lapicero azul» cuando pide el verde y el azul es más barato, y que le deje
+«dedicar mi tiempo a hacer algún producto, a hacer Sirius, al robot, en vez de
+a cómo hacer una memoria». Reconoce la asimetría —«no tengo cómo revisarte ni
+cómo decirte si está bien o no» (10:51)— y que dicta: «yo me explico fatal…
+todo lo que yo te mando es porque lo grabo en audio». La memoria común nació
+esa mañana del coste (09:55: «siempre estáis leyendo las conversaciones todo el
+rato y me gastáis muchas cosas… tener todo en un solo sitio»), y del rechazo a
+un mapa estático (10:03: «yo hago el mapa ahora, y mañana hay otras diez
+decisiones y el mapa ya no sirve»). C-02 queda revisada con esto: la meta que
+él nombra una y otra vez es la memoria y el producto; el taller es lo que se
+los come. Y la regla de ADR-204 tiene aquí su forma en positivo: lo que quiere
+que le digan es la alternativa más barata, no la técnica.
+
+**T-04 — La revisión externa tiene nombre, latencia y un contador que nadie
+lleva.** Los nombres, en sus palabras: ChatGPT («todo esto me lo ha hecho
+ChatGPT en una auditoría, y creo que tiene bastante razón», 15-08 00:46; «le he
+dicho a ChatGPT que revise la PR. Esto es lo que me ha dicho», 11-09 23:45) y
+Codex («Codex se quedó sin uso otra vez, retomamos más tarde las revisiones»,
+12-09 16:41; «ya Codex está», 13-09 04:26). La latencia: el 19-08 pidió a las
+00:03 «un informe… para pasarlo a la sesión de Claude donde estoy haciendo
+eso» y a las 00:05 llegó pegada una corrección de ocho puntos redactada fuera:
+**dos minutos por vuelta**. El volumen: al menos siete tandas de hallazgos
+pegadas entre el 11-09 a las 23:45 y el 12-09 a las 16:09. Y el contador: la
+PR #576 (08-09) recibió cuatro rondas externas en un día —cinco fallos a las
+14:05, cuatro a las 15:51, tres a las 19:31, uno a las 21:38, y una quinta al
+día siguiente a las 00:03 sobre el texto del aviso—, todas de la
+familia que el propio resumen de la sesión nombra («la puerta afirma cosas que
+no ha comprobado»), y el revisor lo escribió: «quiero terminar esta corrección,
+no seguir acumulando parches» (19:31), «es el mismo hallazgo anterior,
+parcialmente resuelto» (21:38), «es un hallazgo tardío, por goteo del revisor»
+(12-09 10:27). **La regla de las dos rondas de ADR-001 no gobierna este bucle
+porque nadie cuenta las rondas: el revisor está fuera, el corrector dentro, y
+el contador sería él.** El motor tiene detector de familia y guarda de goteo
+para su ciclo (ADR-121, 197, 199); una PR de sesión revisada por Codex a través
+del propietario no tiene nada. En julio pasaba lo mismo con revisor Claude:
+tres auditorías adversariales en 48 horas sobre el mismo corpus (v0.2 → v0.3 →
+v0.4), cada una con bloqueantes. N-03 gana con esto su forma de septiembre y su
+medida.
+
+**T-05 — La memoria que se pierde entre sesiones, vista en directo.** El
+13-09 entre las 14:35 y las 14:41: «lo de Hermes que teníamos que hacer, el
+modo de aprendizaje de Hermes, eso ya no está aquí. ¿Ya no te acuerdas?…
+¿cómo encuentro yo eso? Otra vez a investigar, otra vez a mirar, otra vez a
+hablar». Lo que buscaba se había decidido el 20-08 en otra sesión, en la rama
+de la auditoría de aprendizaje («todavía no», con su ADR). El 14-09 a las
+21:24: «M17 se decidió que no se iba a hacer… no me acuerdo por qué… queda
+vigente lo que ya había dicho, solo que no sabía lo que había dicho» (hoy
+ADR-202). El 10-08 a las 22:08 los documentos decían «implementación
+automatizada terminada» y él corrigió: la memoria útil no estaba, el benchmark
+seguía atascado y Model Studio sí funcionaba; E-03 tenía el caso, y ahora tiene
+la fuente del error: **el árbol afirmaba más que la realidad**. Dos veces el
+correo se equivocó de sesión y abortó con un insulto (28-07 19:52, el mismo
+encargo pegado en dos sesiones con tres minutos de diferencia; 13-09 06:23,
+«olvida el último mensaje»). Y la cuarta pregunta colgada de
+`docs/audits/las-sesiones-de-la-nube-2026-09.md` (27-07, clasificar el entorno
+para TOL-207) queda resuelta por estas fuentes: se contestó en la sesión el
+mismo día a las 17:29, él pegó 488 líneas del informe en otra sesión a las
+17:41, y el paquete de trabajo 04 de las 18:01 dice materializar «dos revisiones
+forenses y una auditoría adversarial». **La decisión existió y se consumió, y
+ningún fichero rastreado hoy conserva la categoría elegida.** Vive solo en una
+transcripción.
+
+**T-06 — Dónde se rompe: tres disparadores más, y dos ya conocidos con fecha
+anterior.** (1) Contestar tarde: «te hablo y no me contestas y sigues
+trabajando, y te estoy diciendo que me contestes primero» (14-09 11:04; la
+sesión encadenaba esperas de CI). Se repitió el 20-09 en esta misma sesión.
+(2) Rendir cuentas sin la forma que pide: tras una noche delegada quiere «de
+todo lo que había que hacer, qué hiciste, qué no hiciste… ¿qué queda por
+hacer?» (14-09 11:06), «¿las hiciste todas, en serio?» (20:53), «qué fue lo que
+decidiste no hacer y por qué» (22:48). (3) Preguntarle con códigos: «no sé ni
+qué es ni M16 ni M17… en la 608 no puedo elegir porque no sé las opciones»
+(14-09 21:03). Los dos conocidos: el comando sin dónde («dime dónde entro… ¿yo
+qué sé dónde está la carpeta? Tú lo sabes perfectamente», 11-09 21:06 y
+21:17), que es la misma fricción que tumbó dos comandos el 20-09, nueve días
+antes de que la skill la escribiera; y pedirle que pegue lo que la sesión puede
+poner («¿qué pegar de qué? Ponlo tú, como ya hacemos en otras sesiones», 12-09
+15:47). Más una regla suya de la misma familia que no estaba escrita: «estoy
+trabajando desde el móvil; cuando necesite algo del ordenador lo vamos
+acumulando y cojo de una vez el ordenador» (11-09 20:19). Las tres reglas que
+salen de aquí están desde hoy en `AGENTS.md` (11, 12 y 13) con su guarda, y su
+forma operativa en la skill `hablar-con-el-propietario` (ADR-213).
+
+**T-07 — El coste, desde dentro.** La sesión del 08-09 vivió siete días, del 08
+al 14-09, como torre de control: 131 notificaciones de GitHub y 95 despertares
+programados frente a 142 entradas con texto suyo; del 09-09 a las 00:03 al
+11-09 a las 03:37 no hay una palabra suya y la sesión despertó sola 22 veces.
+La del 13-09: 14 despertares «sin cambios» en nueve horas frente a tres
+mensajes suyos («¿cómo va eso?», «estate pendiente», «mira a ver»). La del
+19-08: dos workflows de 13 y 6 agentes, 2,8 millones de tokens de subagentes en
+una tarde para un informe que concluyó «todavía no», y a los 78 minutos, sin
+nada visible, «¿pero dónde está el informe?». El 28-07 un workflow de 23
+agentes perdió 12 por «session limit»; el 15-08 la ventana de cinco horas se
+agotó de madrugada mientras él tecleaba «dale». Y el repositorio es público por
+los minutos de Actions (11-09 10:29). E-05 y PROC-021, con números.
+
+**T-08 — Las reglas de la casa pesan más que su orden literal.** Las dos
+sesiones que llegaron tarde recibieron «copia tu transcripción… no modifiques
+nada más», y las dos cargaron tres skills, corrieron la batería entera (7 299
+pruebas, doce minutos) y regeneraron `MEMORIA.md` para un commit que solo
+añadía un `.jsonl`. El 15-08 el stop-hook confirmó y empujó documentos «en su
+estado pre-refutación» mientras el modelo esperaba a sus agentes. Y en julio,
+«No inicies B4a» iba en las seis órdenes del 18-07 porque quien las redactaba
+temía que la sesión arrancara sola. Las guardas cumplen; lo que les faltaba era
+proporción, y ADR-213 se la da a la cadena de comprobación: un cambio que no
+toca código, pruebas, documentos ni registros no la necesita.
+
+### Lo que cambia en las fichas del paso 3 y en los hallazgos del paso 4
+
+- **C-01 (conversación).** El prompt puente tiene medida: dos minutos por
+  vuelta (T-04) y dos errores de sesión en la muestra (T-05). Su primera frase
+  propia en la nube es del 26-07: la pregunta de si ChatGPT puede leer el
+  repositorio, que es la pregunta de la memoria común un mes y medio antes. Y
+  «un solo documento… para pasárselo directamente» (26-07) explica el formato
+  informe-en-un-fichero de julio: la respuesta de Claude era insumo de ChatGPT,
+  no lectura suya. Corrección de método: las «entradas del propietario» de las
+  fichas hay que dividirlas por dos y media para tener sus mensajes.
+- **C-02 (ideas).** La idea «skills como en Hermes» cierra su bucle completo:
+  nace el 15-08 en el memorando de ChatGPT, se convierte el 19-08 en un brief
+  de diseño, el 20-08 se decide «todavía no», el 13-09 él no la encuentra
+  («¿cómo encuentro yo eso?») y el 20-09 la pide como nueva; ADR-211 la
+  ejecuta. La memoria común nace del coste (T-03), y su exigencia de «buscar
+  fuera antes de construir» es explícita y anterior a esta auditoría.
+- **C-03 (debate).** Tres reglas más, las de T-06; y una forma de auditar que
+  es suya: «hay que intentar tumbarlo, cosas que puedan pasar que no funcionen
+  bien» (11-09 12:20), pedida antes de que nadie propusiera una prueba
+  adversarial.
+- **N-03 (revisión externa a mano).** Los dos revisores tienen nombre y
+  reparto —ChatGPT dirige y audita textos; Codex reproduce con GitHub simulado
+  y encuentra defectos de código—, la vuelta dura dos minutos y las rondas no
+  las cuenta nadie (T-04). En julio la forma era la misma con revisor Claude.
+- **E-01.** La cuarta forma —delegación nocturna con aprobación en blanco— ya
+  no es una observación del 15-08: el 13-09 es «como siempre», y el 14-09 tiene
+  fórmula («sin pararte ni una vez ni a informarme… lo que yo no haría, no lo
+  hagas»). Y el desplazamiento de julio (aprobar cada herramienta) a septiembre
+  (delegar la noche) está medido en T-01.
+- **E-02.** Cuatro casos más de sesiones que no se ven (T-05), y el desenlace
+  de la cuarta pregunta colgada.
+- **E-03.** El caso del 10-08 22:08 tiene ahora la fuente del error: el árbol
+  decía «terminada» y no lo estaba.
+- **E-04.** Tres disparadores más (T-06). El de «creer que trabajas cuando
+  esperas» tiene su otra cara: creer que le ignoras cuando encadenas esperas.
+- **E-05.** Los números de T-07.
+- **E-06.** El ritual se cumple incluso cuando la orden dice que no (T-08); y
+  la excepción confesada: ADR-009 empieza admitiendo que su nota de arranque
+  llegó «después de 28 commits» (14-08).
+
+### Las fichas de agosto que este paso toca
+
+- **PROC-008 (validación manual en Windows):** dos ocurrencias observadas, no
+  una: el 10-08 a las 14:49 («77 comprobaciones, 0 fallos, 3 omitidas», con lo
+  no demostrado declarado) y la del 17-08 que el paso 4 ya tenía. La última
+  sigue siendo el 17-08; el veredicto no cambia.
+- **Sirius 0.1, tres fechas en su boca:** «ya está 0.1» (10-08 21:13), «me
+  falta cerrar Sirius 0.1 y probar la automatización» (11-08 04:12) y la
+  aceptación dictada del 17-08 a las 15:15. El cierre tardó una semana en
+  formalizarse.
+- **PROC-002 y PROC-003 (arrancar y vigilar el ciclo):** el primer ciclo
+  completo del motor visto desde una sesión es del 11-08, de las 04:23 a las
+  05:13 —implementador, revisión, corrector, segunda revisión, tercera ronda—,
+  y esa misma tarde hubo reparación y revisión dual. Al día siguiente (11-08
+  13:03) preguntó «¿y cómo activo la automatización?… necesito que me digas
+  realmente qué hace… es para conocer lo que hemos creado»: el sistema se le
+  explicó después de construido.
+- **PROC-013 (reconstruir contexto):** T-05 es su coste visto desde él.
+- **PROC-019 (transporte):** dos minutos por vuelta y dos errores de sesión.
+- **PROC-020 (operar sesiones):** una sesión de siete días como torre de
+  control (T-07); y las transcripciones de los subagentes no sobreviven al
+  cambio de contenedor (15-08, según la propia sesión el 20-09).
+- **PROC-021 (coste):** T-07.
+
+### Las cinco hipótesis de la adenda 4
+
+| | Hipótesis | Resultado |
+|---|---|---|
+| H-A | la sesión del 15-08 es donde se escribieron las 21 fichas | **refutada**: es la línea de agentes (auditor e investigador por etiqueta); la duda del paso 2 sobre cómo se escribió la primera edición sigue abierta |
+| H-B | la del 08-09 es donde más se ven E-04 y E-05 | **confirmada a medias**: E-04 y E-05 están (T-06, T-07), pero lo que más enseña es T-02, T-03 y T-04 |
+| H-C | el bloque de julio enseña C-03 en ejecución | **no confirmada**: en julio él casi no habla; quien corrige y recorta es quien redacta los paquetes, no su voz |
+| H-D | las «denegaciones» del extracto son casi todas menciones | **confirmada**: en la del 24-08, 12 del filtro eran 1 real y 1 interrupción |
+| H-E | las seis del 18-07 no cambian ninguna ficha | **confirmada**: fijan la fecha (18-07) y el molde del encargo, nada más |
+
+### Regla de las dos rondas: se dispara, y la raíz ya tenía nombre
+
+Este paso repite dos familias del paso 4 en vez de encontrar una nueva:
+`regla-del-propietario-que-solo-vive-en-una-conversacion` (cuatro instancias
+más, T-02 y T-06) y las esperas y promesas de E-04 (tres disparadores más). Dos
+pasos seguidos con la misma familia es la señal de parar y buscar la raíz. La
+raíz de la primera ya se atacó el 20-09 —ADR-208 puso el método en
+`AGENTS.md`, ADR-211 las skills— y ADR-213 cierra las tres reglas que faltaban,
+con guarda. La de la segunda es la misma: la regla existía en su boca y no
+donde la sesión lee. Lo único nuevo que aparece —el bucle de revisión externa
+sin contador (T-04)— no es de la taxonomía de fichas sino del método del
+repositorio; queda como idea I-008 con su disparador, porque construir el
+contador es tocar el motor y una auditoría no construye.
+
+### El compromiso de las ramas, y las tres que faltan
+
+Las ramas `transcripciones/*` seguían en el remoto al cerrar esta sección
+(23:43 UTC del 20-09): 30 entonces, 32 después, porque dos de las tres sesiones
+paradas empujaron la suya al contestarles el propietario («Cloud push smoke
+test» y «Verificar versiones y estado», ambas del 18-07 y sin sustancia; la
+tercera, «No hagas nada», no puede empujar y no se leerá). No las borró esta
+sesión: `.claude/settings.json` prohíbe a las sesiones `git push --delete`, y
+rodear una prohibición del propietario no es una opción. **Las borró él, con el
+comando que se le dio, el 21-09 entre las 00:23 y las 00:25 UTC: cero ramas
+en el remoto desde esa hora.** Las copias de esta sesión —referencias y objetos
+de git, extractos, notas de lectura y volcados con texto— se borraron a las
+00:12 UTC del 21-09, antes que las ramas. De las conversaciones queda en el
+repositorio solo lo que esta sección cita: frases cortas suyas sobre cómo
+trabaja, con fecha y hora.
+
 ## Criterio de parada — estado a 20-09-2026
 
 | # | Condición | Estado |
 |---|---|---|
 | 1 | veredicto fechado por ficha, con evidencia | **cumplido**: 21 de 21 (paso 2) |
-| 2 | ficha para conversación, ideas y debate, o «no observable» escrito | **cumplido sobre claude.ai y sobre Claude Code**: C-01, C-02, C-03 (paso 3), revisadas con la ejecución (paso 4); el lado ChatGPT, pendiente de su fuente |
+| 2 | ficha para conversación, ideas y debate, o «no observable» escrito | **cumplido sobre claude.ai y sobre Claude Code**: C-01, C-02, C-03 (paso 3), revisadas con la ejecución (paso 4) y con 28 transcripciones más de la nube (paso 5); el lado ChatGPT, pendiente de su fuente |
 | 3 | ficha para todo proceso repetido nacido después del 11-08 | **cumplido**: N-01, N-02, N-03 |
 | 4 | las ocho categorías mapeadas; taxonomía confirmada o revisada | **cumplido**: revisada por la regla de las dos rondas, con la letra G |
 | 5 | cada afirmación con fuente, o marcada EST/hipótesis | **cumplido** |
@@ -1042,17 +1341,23 @@ taxonomía.**
 | 8 | parada por muestra agotada | no aplicó: las doce se leyeron enteras |
 
 La auditoría queda **cerrada sobre las fuentes disponibles**. Las
-transcripciones de Claude Code llegaron el 20-09 y tienen su adenda y su paso
-4. Cuando llegue la exportación de ChatGPT tendrá su adenda de muestra en la
+transcripciones de Claude Code llegaron el 20-09 en dos tandas y tienen sus
+adendas (2, 4 y 5) y sus pasos 4 y 5; quedan tres sesiones de la nube sin leer:
+dos pruebas de siete minutos del 18-07 que empujaron su transcripción después
+de cerrar la lectura y se borraron con las demás sin leerse, y «No hagas nada»
+(18-08), que no puede empujar. Cuando llegue la exportación de ChatGPT tendrá su adenda de muestra en la
 nota de arranque y una sección propia aquí; las fichas C se revisan entonces
 otra vez, no se dan por definitivas.
 
 ## Decisiones que esta auditoría pone delante del propietario, sin tomarlas
 
-Las seis del paso 2, que siguen abiertas, dos que añade el paso 3 y dos que
-añade el paso 4. Se listan
-porque la lección de ADR-198 es que una pregunta que nadie vuelve a poner
-delante se pudre.
+Las seis del paso 2, dos que añadió el paso 3 y dos que añadió el paso 4. Se
+listaron porque la lección de ADR-198 es que una pregunta que nadie vuelve a
+poner delante se pudre; **el propietario decidió las diez el mismo 20-09** y
+cada una tiene su rastro: 1, 2, 3 y 6 en ADR-207 y ADR-210; 4 en ADR-210 (la
+#137 estaba arreglada desde ADR-162 y se archivó); 5 en ADR-209; 7 y 8 en
+ADR-208; 9 en ADR-210; 10 en ADR-206. La lista se conserva tal como se le puso
+delante.
 
 1. `docs/operations/CLAUDE_SIRIUS_KNOWLEDGE_BASE.md` y
    `docs/operations/CLAUDE_PROJECT_ONBOARDING.md`: archivar o regenerar.
@@ -1132,14 +1437,25 @@ donde se cortó —el intento del 20-09 no registraba nada y por eso no se supo
 nunca por qué bajaron 6—; y el dato de que **23 de las 34 sesiones de la nube
 están archivadas**, que no se sabía.
 
+**La quinta vía, que funcionó (20-09, de 18:15 a 23:18 UTC).** Cada sesión,
+abierta por el propietario desde la aplicación —23 de ellas tras
+des-archivarlas desde esta sesión—, recibió la orden de copiar su propia
+transcripción a una rama `transcripciones/<id>` y empujarla. 30 de 33 lo
+hicieron; la primera redacción de la orden tropezó con un filtro del modelo y
+funcionó reescrita y con la sesión en Sonnet. Costó un turno de modelo por
+sesión, y lo gastó él, que es a quien tocaba decidirlo. Lo leído está en el
+paso 5; la idea I-007 pasa a promovida.
+
 ## Lo que esta auditoría NO dice
 
 - Qué se dijo en ChatGPT: su exportación no ha llegado. En julio, ChatGPT era
   el que redactaba; esa mitad del debate no se ha visto.
-- Qué había en 28 de las 34 sesiones de Claude Code en la nube, que no
-  bajaron, ni en las sesiones locales anteriores al 16-08, borradas por la
-  retención de treinta días: entre ellas, todo julio y la primera quincena de
-  agosto en el ordenador.
+- Qué había en 3 de las 33 sesiones de la nube con historia: «Verificar
+  versiones y estado» y «Cloud push smoke test» (18-07, pruebas de siete
+  minutos), que empujaron su transcripción después de cerrar la lectura y se
+  borraron sin leerse, y «No hagas nada» (18-08), que no puede empujar; ni en
+  las sesiones locales anteriores al 16-08, borradas por la retención de
+  treinta días: la primera quincena de agosto en el ordenador.
 - Qué hicieron las herramientas: los resultados de herramienta no se leyeron,
   salvo denegaciones y respuestas a preguntas de la IA; y tres transcripciones
   de la nube empiezan por un resumen escrito por el modelo, usado solo como
@@ -1157,4 +1473,7 @@ están archivadas**, que no se sabía.
 Esta auditoría produce veredictos, fichas y una lista de decisiones
 pendientes; no toma ninguna. No se registra ADR. Si el propietario decide
 alguna de las diez de arriba —o la que el encargo tenía detrás, qué merece
-mecanizarse y qué no—, esa decisión dejará su ADR con la skill `adr`.
+mecanizarse y qué no—, esa decisión dejará su ADR con la skill `adr`. Así
+ocurrió el 20-09: las diez tienen ADR (204 a 211), y el paso 5 dejó el suyo,
+ADR-213, con las tres reglas de conversación que faltaban y la proporción de la
+cadena de comprobación; ninguna es decisión de producto, dinero o salud.

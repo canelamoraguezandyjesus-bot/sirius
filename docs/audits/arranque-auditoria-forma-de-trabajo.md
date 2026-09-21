@@ -479,3 +479,185 @@ queda lo único que importa de verdad**: que la prosa esté caducada aunque cada
 ruta resuelva. Contra eso no hay prueba posible, solo la revisión trimestral
 que `patrones.md` ya declara; queda escrito aquí para que nadie confunda una
 skill verde con una skill al día.
+
+## Adenda 4 — la tercera muestra: 28 transcripciones que cada sesión de la nube subió por sí misma (2026-09-20 23:05 UTC)
+
+**Cómo llegaron.** Ninguna de las cuatro vías del teleport trae la transcripción
+sin gastar un turno (auditoría, sección «Las cuatro vías probadas»). La quinta
+sí: la transcripción vive en el contenedor de cada sesión, y **cada sesión puede
+copiarla al repositorio ella misma**. El propietario pegó en cada una de las 33
+sesiones de la nube la misma orden —copia tus `.jsonl` a
+`docs/audits/transcripciones/<id>/`, rama `transcripciones/<id>`, commit y
+push— entre las 18:15 y las 22:30 UTC del 20-09. Dos cosas que pasaron por el
+camino y quedan escritas: en algunas sesiones con Opus 5 la primera redacción de
+la orden («copia tu transcripción») disparó un filtro de seguridad
+(`reasoning_extraction`) y el turno cayó; una redacción sin esa palabra, o
+cambiar el modelo de la sesión, lo resolvió. Y hacia las 22:30 el propietario
+agotó su ventana de uso de cinco horas, que es cuando dejaron de llegar.
+
+**Antes de eso, desde esta sesión**, se desarchivaron las 23 que estaban
+archivadas (una archivada no se puede reanudar) y se comprobó que la mensajería
+entre sesiones no alcanza a las de la nube: lo que se hizo lo hizo él, una a
+una.
+
+**Lo visto para clasificar, y nada más** —el mismo límite de la adenda 2—: el
+nombre de la rama, las fechas del primer y último registro, el número de
+registros por tipo, las ramas de git que el fichero declara, las herramientas
+invocadas con su recuento y el tamaño del texto del propietario y del
+asistente. **Ningún mensaje.** El casado sesión↔transcripción se hizo por la
+rama de salida que la sesión declara en su ficha y que el fichero repite.
+
+**Lo recibido: 28 transcripciones de 28 sesiones, más un fichero de subagente.**
+
+| Sesión creada | Título | Registros de | Registros | KB |
+|---|---|---|---|---|
+| 2026-07-18 | Validación final Sirius remoto | 2026-07-18 → 2026-09-20 | 101 | 486 |
+| 2026-07-18 | Validar suite Qt headless en Sirius | 2026-07-18 → 2026-09-20 | 272 | 895 |
+| 2026-07-18 | Validar entorno remoto Sirius Python 3.14 | 2026-07-18 → 2026-09-20 | 175 | 631 |
+| 2026-07-18 | Python 3.14 compatibility validation | 2026-07-18 → 2026-09-20 | 108 | 490 |
+| 2026-07-18 | Validación del repositorio Sirius | 2026-07-18 → 2026-09-20 | 190 | 645 |
+| 2026-07-18 | Sesión iniciada | 2026-07-18 → 2026-09-20 | 80 | 471 |
+| 2026-07-18 | Verificar script de configuración | 2026-09-20 → 2026-09-20 | 118 | 496 |
+| 2026-07-18 | Verificación de script de configuración | 2026-09-20 → 2026-09-20 | 91 | 442 |
+| 2026-07-19 | Sirius workflow transitions repair | 2026-08-08 → 2026-09-20 | 1337 | 5848 |
+| 2026-07-25 | ADR-001 spike 7 y revisión de cierre | 2026-07-27 → 2026-09-20 | 212 | 1181 |
+| 2026-07-26 | ADR002 benchmark corpus hardening | 2026-07-28 → 2026-09-20 | 121 | 721 |
+| 2026-07-26 | Auditoría adversarial corpus v0.2 | 2026-07-28 → 2026-09-20 | 206 | 1081 |
+| 2026-07-26 | Auditoría adversarial benchmark ADR-001 | 2026-07-27 → 2026-09-20 | 180 | 942 |
+| 2026-07-26 | Auditoría Registro de Tolerancias v0.3 | 2026-07-27 → 2026-09-20 | 155 | 1013 |
+| 2026-07-27 | TOL-207 caracterización almacenamiento v0.2 | 2026-07-27 → 2026-09-20 | 477 | 2851 |
+| 2026-07-27 | Auditoría adversarial TOL-207 | 2026-07-26 → 2026-09-20 | 417 | 1470 |
+| 2026-07-27 | Revisión forense ADR002-TOL-207 | 2026-07-28 → 2026-09-20 | 550 | 3752 |
+| 2026-07-27 | ADR002 v0.4 auditoría adversarial final | 2026-07-26 → 2026-09-20 | 440 | 3473 |
+| 2026-07-28 | Auditoría final B-1 ADR-002 | 2026-07-26 → 2026-09-20 | 453 | 3209 |
+| 2026-07-28 | Auditoría final B-1 ADR-002 | 2026-07-25 → 2026-09-20 | 638 | 3773 |
+| 2026-07-28 | ADR002-TOL-207 auditoría adversarial final | 2026-07-27 → 2026-09-20 | 484 | 2438 |
+| 2026-08-02 | Revisión dual Claude + Codex en Sirius | 2026-08-11 → 2026-09-20 | 328 | 1889 |
+| 2026-08-07 | Model estudio review y auditoría | 2026-08-14 → 2026-09-20 | 163 | 891 |
+| 2026-08-11 | Auditoría de procesos de trabajo Sirius | 2026-08-15 → 2026-09-20 | 605 | 3267 |
+| 2026-08-15 | Flujo de trabajo definitivo de Sirius | 2026-09-13 → 2026-09-20 | 856 | 2693 |
+| 2026-08-19 | Sirius learning vertical integration audit | 2026-08-19 → 2026-09-20 | 749 | 2641 |
+| 2026-08-24 | Sirius motor: PR y primer workflow | 2026-08-24 → 2026-09-20 | 565 | 1389 |
+| 2026-09-08 | Propuesta separación Sirius y motor | 2026-09-08 → 2026-09-20 | 21669 | 56910 |
+
+El fichero `agent-a6add8…` (40 registros, 11-09) es un subagente de la sesión
+del 08-09; el protocolo del paso 4 no leyó tráfico de subagentes y este tampoco.
+
+**Las cinco que no llegaron**, con la rama que las identifica:
+
+| Creada | Título | Rama de salida |
+|---|---|---|
+| 2026-08-18 | No hagas nada | `herramienta/skill-adr` |
+| 2026-08-10 | Pendientes del ciclo: PRs, issues y automatiza | `claude/ciclo-pendientes-prs-issues-qm4t8x` |
+| 2026-07-18 | Python 3.14 instalación | `claude/python-3-14-install-check-8pygia` |
+| 2026-07-18 | Verificar versiones y estado | `claude/check-versions-status-iejdep` |
+| 2026-07-18 | Cloud push smoke test | `claude/cloud-push-smoke-test-akcqiv` |
+
+De estas, **«Pendientes del ciclo» ya está leída**: es la sesión de la nube que
+el propietario trajo a mano el 20-09 a las 02:44 y que el paso 4 leyó entera. La
+única pérdida con sustancia es **«No hagas nada» (18-08-2026)**. Las otras tres
+son pruebas de siete minutos del 18-07. Y la sesión de la auditoría forense
+sigue viva y trabajando; se excluyó a propósito, y de ella se leyó en el paso 4
+la copia de las 02:45.
+
+**Qué entra y qué no.** Entran las 26 con historia. Quedan fuera las dos de
+`2026-09-20 → 2026-09-20` («Verificar script de configuración» y su gemela):
+sus contenedores de julio no conservaban nada y el fichero solo contiene el turno
+de hoy. Queda fuera el subagente.
+
+**Orden**, del hueco más ciego al menos: primero **agosto**, que es lo que el
+paso 4 no pudo ver —15-08 «Auditoría de procesos de trabajo» (la sesión donde
+nació la primera edición de esta auditoría), 08-08 «workflow transitions
+repair», 11-08 «revisión dual», 14-08 «Model estudio review», 19-08 «learning
+audit», 24-08 «motor: PR y primer workflow»—; después **septiembre** —13-09
+«flujo de trabajo definitivo» y, la última por tamaño, 08-09 «propuesta
+separación Sirius y motor» (1 491 KB de extracto, 470 mensajes del
+propietario)—; después el **bloque de julio de ADR-002** (25-07 → 28-07, doce
+sesiones), de la más antigua a la más nueva; y al final las **seis pruebas del
+18-07**.
+
+**Cómo se lee:** el protocolo de la adenda 2, sin cambios. Los extractos se
+generan por máquina a partir de los `.jsonl` (mensajes del propietario
+íntegros; asistente hasta 2 500 caracteres; herramienta: nombre y primera
+línea; resultados no leídos salvo denegaciones) y viven **solo en el espacio
+temporal de esta sesión**, no en el repositorio. El filtro de denegaciones es
+grueso a propósito —casa «permiso» y «rechaz» en cualquier contexto— y la
+lectura separa denegación de mención.
+
+**Qué se extrae:** los seis campos de la adenda 2.
+
+**Hipótesis, escritas ahora, antes de abrir ningún extracto:**
+
+- **H-A.** La sesión del 15-08 es donde se escribieron las 21 fichas PROC de
+  agosto. Leerla dirá si esa primera edición se hizo leyendo fuentes o de
+  memoria, que es la duda que el paso 2 dejó abierta.
+- **H-B.** La sesión del 08-09 —doce días, 470 mensajes suyos— es donde más se
+  ven E-04 y E-05: muchos mensajes cortos, esperas largas, cambios de modelo por
+  consumo.
+- **H-C.** El bloque de julio de ADR-002 enseña C-03 en ejecución: corrige con
+  datos y rechaza menús, ya en julio y desde el móvil.
+- **H-D.** La columna de «denegaciones» del extracto no correlaciona con las
+  escaladas: la mayoría serán menciones, no denegaciones.
+- **H-E.** Las seis del 18-07 no cambian ninguna ficha; solo confirman que el
+  modo «pegado desde el ordenador» de E-01 empezó en la web.
+
+**Parada:** revisadas C-01, C-02, C-03, N-03 y E-01 a E-06 con lo que estas
+fuentes añadan o desmientan, y escrita la sección «paso 5»; o agotados los
+extractos; o disparada la regla de las dos rondas por una familia nueva.
+
+**Compromiso con el propietario, que aceptó la exposición «durante ese rato»:**
+las ramas `transcripciones/*` se borran del remoto al cerrar el paso 5, y se
+deja constancia de cuándo. Mientras tanto, nada de lo que contienen se cita
+literalmente fuera de lo que la auditoría ya permitía: frases cortas sobre cómo
+trabajar.
+
+## Adenda 5 — las que llegaron después de fijar la muestra (2026-09-20 23:27 UTC)
+
+La adenda 4 fijó 28 transcripciones antes de leerlas. Mientras se leían, el
+propietario repitió la orden en las cinco sesiones que faltaban («ya están
+todas», 23:20 UTC). Estado a la hora de escribir esto:
+
+| Sesión | Creada | Estado |
+|---|---|---|
+| «Pendientes del ciclo: PRs, issues y automatizaciones» (`02df1df0`) | 10-08 | rama `transcripciones/02df1df0-…` en el remoto a las 23:18 UTC |
+| «Python 3.14 instalación» (`923794ec`) | 18-07 | rama `transcripciones/923794ec-…` en el remoto a las 23:17 UTC |
+| «No hagas nada» | 18-08 | parada: pide permiso para hacer push; espera su respuesta |
+| «Verificar versiones y estado» | 18-07 | parada: pide que confirme la orden antes de subir la transcripción |
+| «Cloud push smoke test» | 18-07 | parada: pregunta si quita el identificador del modelo antes de subir |
+
+Las dos llegadas se clasifican aquí SIN leer ningún mensaje, como manda la
+adenda 2 (`fichas_llegadas_tarde.json` en el cuaderno de la sesión):
+
+| Fichero | Registros | Desde → hasta | Tamaño | Texto del propietario | Texto del asistente | Herramientas más usadas |
+|---|---|---|---|---|---|---|
+| `02df1df0…jsonl` | 1 057 (340 de usuario, 600 del asistente, 80 adjuntos) | 2026-08-10 20:42 → 2026-09-20 23:01 | 4 108 KB | 11 266 caracteres | 59 438 caracteres | Bash 174, lectura de PR 24, lectura de incidencias 24, Edit 20, AskUserQuestion 9 |
+| `923794ec…jsonl` | 181 (44 de usuario, 59 del asistente, 41 adjuntos) | 2026-07-18 14:50 → 2026-09-20 18:31 | 720 KB | 13 321 caracteres | 5 943 caracteres | Bash 22, Grep 4, Skill 3 |
+
+Dos observaciones que salen de la clasificación, no del contenido:
+
+- Las dos sesiones empujaron más que la transcripción: `MEMORIA.md` y un
+  `docs/audits/evidencia-transcripciones-<id>.md` (1 127 y 316 líneas de
+  diferencia frente a `main`). La orden decía «no modifiques nada más»; el
+  stop-hook y la skill de evidencia de esta casa pesaron más que la orden
+  literal. Se lee solo el `.jsonl`; el resto no se fusiona ni se cita. Va al
+  paso 5 como observación sobre cómo las reglas del repositorio se imponen
+  incluso a una orden explícita del propietario, no como defecto.
+- Con 11 266 caracteres del propietario repartidos en 340 entradas de usuario,
+  la del 10-08 confirma antes de leerla lo que la del 08-09 enseñó: «entradas
+  de usuario» no son palabras suyas; la mayoría son resultados de herramienta,
+  notificaciones y expansiones automáticas. El paso 5 lo dice de todas las
+  fichas.
+
+**Hipótesis:** ninguna nueva. Se contrastan las mismas H-A…H-E; de la del 10-08
+se espera, por título y fecha, que hable de H-D (los pendientes del ciclo en la
+semana en que nacieron las ramas `wip/`) y de la aceptación de 0.1; de la del
+18-07, solo el molde de los micro-encargos del primer día.
+
+**Orden y protocolo:** primero la del 10-08, después la del 18-07, con el
+protocolo de la adenda 2 sin cambios. Las tres paradas se leen si llegan antes
+de escribir el paso 5; si no llegan, el paso 5 las nombra como no leídas, con
+la razón (esperan una respuesta del propietario dentro de cada sesión), y no se
+espera por ellas: la parada de la adenda 4 sigue mandando.
+
+**Parada de esta adenda:** las dos leídas y anotadas; o disparada la regla de
+las dos rondas por una familia nueva.
