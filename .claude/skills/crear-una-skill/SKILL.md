@@ -52,7 +52,11 @@ El cuerpo, corto y en este orden:
 1. **La regla única**, en negrita, en una frase.
 2. **Los pasos o comandos exactos**, copiables **y comprobados**: cada
    comando se ha ejecutado o se ha leído en su fuente —la ayuda del guion, su
-   prueba, el mensaje que la herramienta imprime— antes de escribirlo. Un
+   prueba, el mensaje que la herramienta imprime— antes de escribirlo, y de
+   las tres manda la prueba: el código enseña lo que hace hoy y la prueba lo
+   que está garantizado (ronda 2 de la PR #660: una orden leída en el código
+   de `sirius-motor` resultó ser una plantilla, y su prueba solo garantizaba
+   dos de sus campos). Un
    comando escrito de memoria es un defecto antes de nacer: en la ronda 1 de
    Codex sobre la PR #660 (21-09-2026), cuatro de siete hallazgos eran
    órdenes de skills escritas sin leer sus guardas (`checkout -B`, una orden

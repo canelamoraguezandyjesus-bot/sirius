@@ -50,17 +50,27 @@ conteste.**
    de decisión en el tablero (ADR-175, ADR-157) se resuelve en GitHub y la
    aplica el reflector; con incidencia detrás, `sirius-decidir` se niega y lo
    dice.
-3. **La orden no se fabrica: se copia la que el motor imprimió.** La parada de
-   `sirius-despachar` y la lista de `sirius-motor` imprimen la orden de salida
+3. **La orden no se fabrica, y solo una salida la imprime entera.** Cuando
+   `sirius-despachar` para un trabajo en la puerta, imprime la orden de salida
    exacta de ese trabajo, y esa orden lleva lo que una plantilla pierde:
    `--repo` y `--bloque` cuando la orden original no usó los valores por
    defecto —nadie los persiste, y sin ellos `--continuar` crearía la
    incidencia en el repositorio y con el encargo equivocados— y **sin
    `--continuar`** cuando esa salida está vetada, como en la quinta causa de
    ADR-188, donde solo caben `--terminar` o la sesión interactiva. Lo fijan
-   `tests/engine/test_dispatch_cli.py` y el propio comando, que ensaya por
-   defecto y solo escribe con `--ejecutar`. Si no tienes la orden impresa, no
-   la inventes: pide primero el ensayo.
+   las pruebas de `tests/engine/test_dispatch_cli.py`. Esa es la única orden
+   que se copia: la de la parada, en la consola donde se despachó o, si lo
+   despachó el workflow, en el registro de ese run
+   (`.github/workflows/despachar-orden.yml`). La lista de `sirius-motor`
+   (`/trabajos`) **no** la conserva: imprime una plantilla con `<work_id>`,
+   sin `--repo` ni `--bloque` y ofreciendo siempre `--continuar`
+   (`_con_decision_pendiente` en `src/sirius_engine/cli.py`; su prueba solo
+   fija `--diario` y `--ejecutar`), así que sirve para saber que hay una
+   decisión pendiente y en qué diario, no para copiar de ella. Sin la orden
+   de la parada no se le da `--continuar`: se busca esa orden en el registro
+   del run antes de nada, y mientras tanto solo cabe `--terminar` si procede,
+   o el ensayo de `sirius-decidir` sin `--ejecutar` para que las guardas
+   digan qué salidas existen. Nunca un `--continuar` escrito de memoria.
 4. **Cómo se le presenta, y por qué canal.** En el parte —también desde el
    móvil— va la decisión y nada más: qué trabajo, desde cuándo, qué pasa si
    continúa y qué pasa si termina, para que conteste sí o no. La orden para
