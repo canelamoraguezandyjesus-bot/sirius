@@ -253,11 +253,12 @@ pasos separados **no sustituyen** a la invocación única (ADR-145), y la razón
 que se dio para partirlos —que el runner no tenía `pwsh`— era falsa:
 `/usr/bin/pwsh` está instalado (PowerShell 7.6.5). Desde la ronda siguiente la
 cadena se corre como manda el guion, **una sola invocación de `pwsh -File
-scripts/check.ps1`**, y su terna y su código de salida viven donde no caducan:
-en el veredicto de la ronda que la corrió y en la ejecución de Quality del head
-vigente. No se clavan aquí, porque una cifra clavada en este párrafo vuelve a
-describir un árbol que la próxima fusión de `main` mueve, que es el defecto que
-esta sección acaba de dejar de cometer.
+scripts/check.ps1`**, y su terna y su código de salida viven en un único sitio
+que no caduca: **el veredicto del corrector de la ronda que la corrió**,
+publicado en la incidencia #653. Quality no es ese sitio —son cuatro pasos por
+separado, como dice el punto 2 de arriba—. No se clavan aquí, porque una cifra
+clavada en este párrafo vuelve a describir un árbol que la próxima fusión de
+`main` mueve, que es el defecto que esta sección acaba de dejar de cometer.
 
 **Lo que esta comprobación NO dice:** nada sobre el efecto en la cifra del
 banco. Aquí no hay Ollama, y no se ha simulado ninguna medición.
