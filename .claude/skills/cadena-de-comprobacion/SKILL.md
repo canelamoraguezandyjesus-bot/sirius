@@ -76,6 +76,16 @@ Di las cifras, no el adjetivo: cuántas pruebas pasaron, cuántas se saltaron,
 cuánto tardó, y qué ficheros le pasaste al comprobador de documentos. «Todo
 verde» sin cifras es exactamente la afirmación que ADR-001 prohíbe.
 
+Y la tabla de comprobación del ADR se escribe **sobre el árbol final**. Si el
+árbol creció después de escribirla, se relee entera antes de empujar buscando
+las cifras y los cuantificadores que el crecimiento dejó falsos: «las tres
+descripciones» cuando ya eran siete, 823 guardas cuando ya eran 855, la
+batería de un commit anterior presentada como la del head. Salieron en dos PR
+seguidas (#658, segunda pasada de Codex; #659, primera pasada) y son la
+familia `prosa-que-el-cambio-deja-falsa`: el arreglo no es corregir la cifra,
+es escribir la tabla la última y releerla después del último commit de
+contenido.
+
 ## Cuándo la cadena entera sobra (ADR-213)
 
 La cadena existe para cambios de código, pruebas, documentos o registros. Un

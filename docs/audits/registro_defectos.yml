@@ -1053,3 +1053,23 @@ defectos:
       - tests/automation/test_reglas_de_agents.py
       - .claude/skills/hablar-con-el-propietario/SKILL.md
       - .claude/skills/cadena-de-comprobacion/SKILL.md
+
+  # ADR-214: de 28 transcripciones leidas salio un informe y tres reglas, y
+  # ninguna skill de flujo de trabajo hasta que el propietario lo señalo el
+  # 21-09-2026 («pasado mañana te vas a olvidar»): lo aprendido se quedo donde
+  # ninguna sesion nueva lo carga.
+  - id: H-214
+    titulo: Lo aprendido de las transcripciones se quedo en el informe y no en skills que una sesion cargue
+    bloque: documentacion
+    gravedad: media
+    estado: cerrado
+    cerrado_por: 35bbcc4ea94988a255c6516642290886cf17271b
+    adr: 214
+    ficheros:
+      - .claude/skills/modo-nocturno/SKILL.md
+      - .claude/skills/revision-externa/SKILL.md
+      - .claude/skills/coste-antes-de-tocar-una-fuente/SKILL.md
+      - .claude/skills/comandos-para-su-ordenador/SKILL.md
+      - .claude/skills/paquete-de-trabajo-pegado/SKILL.md
+      - .claude/skills/traspaso-a-otra-sesion/SKILL.md
+      - .claude/skills/verificar-el-estado-real/SKILL.md
