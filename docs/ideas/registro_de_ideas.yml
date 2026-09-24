@@ -123,3 +123,17 @@ ideas:
       tiene detector de familia y guarda de goteo para su ciclo (ADR-121, 197,
       199); las PR de sesion no tienen nada. Construirlo es tocar el motor, y
       una auditoria no construye.
+  - id: I-009
+    titulo: Una via segura para que la decision del propietario llegue al diario de estado-del-motor
+    estado: aparcada
+    nacida: 2026-09-21
+    origen: ronda 1 de Codex sobre la PR #660 (ADR-215), skill paradas-del-motor-delante-del-propietario
+    volver_si: >-
+      Una parada en NEEDS_DECISION sin incidencia aparezca en el diario de la
+      rama estado-del-motor y el propietario la decida. Hoy sirius-decidir
+      solo escribe en el fichero que recibe, ningun workflow lo invoca
+      (ADR-189) y esa rama solo la escribe el workflow del motor, asi que la
+      decision no tiene por donde llegar: ejecutar sobre una copia o empujar
+      a mano a la rama chocaria con el grupo de concurrencia del workflow.
+      Construir la via es tocar el motor y pide su ADR; una tanda de skills
+      no lo hace.

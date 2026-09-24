@@ -26,11 +26,11 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **208**.
+- Decisiones (ADR): **209**.
 - Bloques del motor: 17 cerrado, 2 fuera_de_alcance, 1 pendiente.
-- Defectos registrados: 2 abierto, 65 cerrado.
-- Ideas aparcadas o descartadas: 4 aparcada, 2 descartada, 2 promovida.
-- Skills: **14**.
+- Defectos registrados: 2 abierto, 66 cerrado.
+- Ideas aparcadas o descartadas: 5 aparcada, 2 descartada, 2 promovida.
+- Skills: **19**.
 - Investigaciones: **9** (fotos con fecha; caducan).
 - Documentos: **150**, de los que **97** no declaran fecha.
 
@@ -50,13 +50,18 @@ escribe una nueva lo dice `crear-una-skill`.
 | coste-antes-de-tocar-una-fuente | Cárgala cuando vayas a lanzar más de tres agentes, a leer más de un megabyte, a gastar turnos de sesiones del propietario o cuota suya, o cuando un trabajo lleve más de una hora sin entregarle nada visible. |
 | crear-una-skill | Cárgala al cerrar cualquier trabajo en el que hayas tenido que averiguar dos veces lo mismo, cuando una skill existente se te haya quedado corta, o cuando el propietario pida que aprendamos de cómo trabajamos. |
 | disciplina-evidencia | Cárgala siempre que vayas a afirmar algo sobre el comportamiento del sistema, a arreglar un defecto o a producir un documento con conclusiones. |
+| documento-con-lector | Cárgala antes de crear cualquier documento Markdown nuevo fuera de la carpeta de decisiones, cuando encuentres un documento que contradice el árbol, cuando la memoria común lo liste «sin fecha declarada», y al cerrar un trabajo que haya dejado documentos por el camino. |
 | hablar-con-el-propietario | Cárgala antes de escribirle cualquier mensaje, antes de darle una cifra, antes de pedirle algo y antes de decidir si una pregunta merece molestarle. |
+| medir-con-linea-base | Cárgala antes de lanzar cualquier medición del banco de 47 casos o de latencia, antes de escribir una cifra en un ADR o en un mensaje al propietario, y cuando alguien —él incluido— lea una cifra como regresión o como mejora. |
 | modo-nocturno | Cárgala en cuanto diga «me voy a dormir», «modo nocturno», «trabaja toda la noche» o «déjalo listo para fusionar», y también si una sesión arranca de noche con una orden de esas. |
 | obra-en-curso | Cárgala al empezar cualquier trabajo sobre este repositorio, antes del primer cambio, y también cuando te encuentres algo que no cuadra con lo que dice `main`: puede que lo esté haciendo otra sesión ahora mismo. |
 | paquete-de-trabajo-pegado | Cárgala en cuanto un mensaje suyo tenga esa forma, y cuando después del encargo lleguen hallazgos numerados de una revisión externa. |
+| paradas-del-motor-delante-del-propietario | Cárgala al abrir una sesión con mandos de GitHub, al escribir el parte de la mañana, y siempre que el diario o el tablero de una incidencia digan «esperando decisión» o `NEEDS_DECISION`. |
+| rama-y-pr-de-sesion | Cárgala antes de crear una rama, cuando un `git push` te rechace por no ser avance directo, cuando vayas a abrir o a actualizar una PR, y al retomar una rama que ya tuvo una PR fusionada. |
 | registro-de-defectos | Cárgala cuando encuentres un defecto, cuando arregles uno, y SIEMPRE que escribas un ADR con una `familia:` en su bloque `## La lección`: desde ADR-182 ese ADR no pasa la batería sin su entrada aquí. |
 | revision-externa | Cárgala cuando una PR tuya tenga Quality en verde y toque pedir revisión, cuando llegue una revisión de Codex a una PR que llevas, y cuando el propietario diga «pásala por Codex» o «a ver qué opina». |
 | traspaso-a-otra-sesion | Cárgala cuando él diga «dame un prompt para la otra sesión», «genera un informe para pasarlo» o «me voy a dormir, déjalo para la siguiente», cuando el contexto vaya a compactarse, y al abrir una sesión que empieza con un traspaso pegado. |
+| validacion-manual-en-windows | Cárgala cuando un cambio toque la interfaz, el empaquetado, el arranque o las credenciales de Sirius, cuando una prueba de la trazabilidad tenga motivo «windows-real», y antes de declarar superada cualquier prueba que ninguna suite pueda dar. |
 | verificar-el-estado-real | Cárgala antes de tocar un registro de estado o de decir «esto ya está», al abrir una sesión sobre una rama vieja, y siempre que él te corrija con «eso ya lo hicimos» o «¿tú sabes bien lo que se ha hecho?». |
 
 ## Qué se decidió: los ADR, del más reciente al más antiguo
@@ -74,6 +79,7 @@ huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| [215](docs/decisions/ADR-215-cinco-skills-mas-de-flujo-de-trabajo-salidas-de-la-auditoria-y-de-los-adr-la-validacion-manual-en-windows-medir-con-linea-base-el-documento-con-lector-la-rama-y-la-pr-de-sesion-y-las-paradas-del-motor-delante-del-propietario.md) | 2026-09-21 | APROBADO | Cinco skills más de flujo de trabajo, salidas de la auditoría y de los ADR: la validación manual en Windows, medir con línea base, el documento con lector, la rama y la PR de sesión y las paradas del motor delante del propietario | Cinco skills nuevas en `.claude/skills/`: |
 | [214](docs/decisions/ADR-214-siete-skills-de-flujo-de-trabajo-salidas-de-las-transcripciones-la-noche-delegada-la-revision-externa-el-coste-antes-de-gastar-los-comandos-para-su-ordenador-el-paquete-pegado-el-traspaso-y-el-estado-real.md) | 2026-09-21 | APROBADO | Siete skills de flujo de trabajo salidas de las transcripciones: la noche delegada, la revisión externa, el coste antes de gastar, los comandos para su ordenador, el paquete pegado, el traspaso y el estado real | La tercera. Siete skills nuevas, en `.claude/skills/`: |
 | [213](docs/decisions/ADR-213-escribir-las-tres-reglas-de-septiembre-del-propietario-dar-proporcion-a-la-cadena-de-comprobacion-y-fechar-en-las-transcripciones-las-reglas-del-20-09.md) | 2026-09-20 | APROBADO | Escribir las tres reglas de septiembre del propietario, dar proporción a la cadena de comprobación y fechar en las transcripciones las reglas del 20-09 | `AGENTS.md`, sección «Cómo conversa el propietario, y qué espera (ADR-208)», gana las reglas 11, 12 y 13, con sus palabras y su fecha: *contesta primero, trabaja después*; *el parte de la mañana tiene tres partes: qué hiciste, qué no y por… |
 | [212](docs/decisions/ADR-212-la-cardinalidad-se-instruye-con-el-criterio-del-canon-determinacion-contra-extension-no-con-la-forma-de-la-pregunta.md) | 2026-09-20 | APROBADO | La cardinalidad se instruye con el criterio del canon: determinacion contra extension, no la forma de la pregunta | Se toma la opción 1. El bloque `cardinalidad` de `_INSTRUCCION` (`src/sirius/adapters/ollama_query_intent_classifier.py`) enuncia las tres definiciones de §15.2 casi palabra por palabra, sin reducirlas —`EXACTA` conserva «uno o varios… |
@@ -297,6 +303,7 @@ de memoria.
 | `regla-que-depende-de-que-alguien-se-acuerde` | 6 | sí | [192](docs/decisions/ADR-192-el-numero-de-un-defecto-es-el-numero-de-su-adr-no-un-contador-aparte.md), [191](docs/decisions/ADR-191-la-revision-es-una-cola-una-rama-entra-a-revision-solo-si-main-ya-esta-dentro-de-ella.md), [188](docs/decisions/ADR-188-el-alcance-que-el-motor-no-puede-escribir-para-la-puerta-antes-de-crear-la-incidencia-y-remite-a-la-sesion-interactiva.md), [182](docs/decisions/ADR-182-la-guarda-del-registro-de-defectos-deriva-de-los-adr-que-declaran-leccion.md), [179](docs/decisions/ADR-179-la-guarda-de-piezas-sin-llamante-deriva-su-inventario-del-codigo-del-motor.md), [174](docs/decisions/ADR-174-la-mina-en-dos-pasadas-la-leccion-se-declara-en-el-adr-que-la-produce-y-las-familias-se-cuentan-solas.md) |
 | `pieza-sin-lector` | 5 | no en todas | [210](docs/decisions/ADR-210-archivar-las-incidencias-que-ya-no-describen-nada-y-decir-donde-vive-la-bitacora-del-ciclo.md), [209](docs/decisions/ADR-209-un-adr-fusionado-esta-aprobado-y-propuesto-deja-de-existir-como-estado.md), [207](docs/decisions/ADR-207-archivar-los-dos-mapas-caducados-de-julio-retirar-el-workflow-de-word-y-poner-en-d4-el-estado-que-ya-tenia.md), [183](docs/decisions/ADR-183-la-ausencia-de-run-de-quality-para-el-head-se-encamina-no-se-espera-en-silencio.md), [175](docs/decisions/ADR-175-un-tablero-por-incidencia-un-solo-comentario-que-el-motor-mantiene-al-dia.md) |
 | `regla-del-propietario-que-solo-vive-en-una-conversacion` | 4 | sí | [213](docs/decisions/ADR-213-escribir-las-tres-reglas-de-septiembre-del-propietario-dar-proporcion-a-la-cadena-de-comprobacion-y-fechar-en-las-transcripciones-las-reglas-del-20-09.md), [208](docs/decisions/ADR-208-las-ideas-aparcadas-tienen-registro-y-el-metodo-de-conversacion-del-propietario-entra-en-agents.md), [204](docs/decisions/ADR-204-el-propietario-decide-producto-dinero-y-salud-y-lo-tecnico-lo-resuelve-la-sesion.md), [195](docs/decisions/ADR-195-podar-significa-archivar-en-este-repositorio-no-se-borra-nada.md) |
+| `leccion-que-se-queda-en-el-informe` | 2 | sí | [215](docs/decisions/ADR-215-cinco-skills-mas-de-flujo-de-trabajo-salidas-de-la-auditoria-y-de-los-adr-la-validacion-manual-en-windows-medir-con-linea-base-el-documento-con-lector-la-rama-y-la-pr-de-sesion-y-las-paradas-del-motor-delante-del-propietario.md), [214](docs/decisions/ADR-214-siete-skills-de-flujo-de-trabajo-salidas-de-las-transcripciones-la-noche-delegada-la-revision-externa-el-coste-antes-de-gastar-los-comandos-para-su-ordenador-el-paquete-pegado-el-traspaso-y-el-estado-real.md) |
 | `lista-a-mano` | 2 | sí | [181](docs/decisions/ADR-181-la-contradiccion-de-etiquetas-se-decide-por-lo-que-proyectan-no-por-cuantas-son.md), [178](docs/decisions/ADR-178-la-autoridad-por-clase-se-deriva-de-la-via-github-que-el-despachador-declara-no-de-una-segunda-tabla-a-mano.md) |
 | `medir-lo-que-se-tiene-en-vez-de-lo-que-hay` | 2 | sí | [184](docs/decisions/ADR-184-la-prohibicion-no-es-una-peticion-el-detector-de-sensibilidad-exige-que-el-marcador-no-vaya-negado.md), [180](docs/decisions/ADR-180-el-numero-del-siguiente-adr-se-calcula-contra-las-ramas-del-remoto-no-contra-las-que-el-clon-tenga-traidas.md) |
 | `prosa-que-el-cambio-deja-falsa` | 2 | no en todas | [211](docs/decisions/ADR-211-convertir-en-skills-lo-que-ya-costo-averiguar-dos-veces-con-una-guarda-que-impida-que-se-pudran.md), [177](docs/decisions/ADR-177-la-ampliacion-por-categoria-entra-por-una-senal-explicita-de-la-peticion-no-por-la-subcadena-contexto.md) |
@@ -312,7 +319,6 @@ de memoria.
 | `guardian-que-mide-posicion-en-vez-de-estructura` | 1 | sí | [187](docs/decisions/ADR-187-una-revision-sobrevive-a-ponerse-al-dia-con-main-si-el-trabajo-propio-de-la-rama-no-cambia.md) |
 | `instrumento-que-solo-mide-un-lado` | 1 | sí | [203](docs/decisions/ADR-203-el-banco-mide-tambien-el-camino-de-puerta-cerrada-la-linea-base-que-faltaba.md) |
 | `interruptor-que-enciende-mas-de-lo-que-se-puede-medir` | 1 | sí | [185](docs/decisions/ADR-185-la-puerta-de-la-memoria-se-parte-en-tres-interruptores-antes-de-abrirla.md) |
-| `leccion-que-se-queda-en-el-informe` | 1 | sí | [214](docs/decisions/ADR-214-siete-skills-de-flujo-de-trabajo-salidas-de-las-transcripciones-la-noche-delegada-la-revision-externa-el-coste-antes-de-gastar-los-comandos-para-su-ordenador-el-paquete-pegado-el-traspaso-y-el-estado-real.md) |
 | `pieza-correcta-a-la-que-no-llama-quien-la-necesita` | 1 | sí | [197](docs/decisions/ADR-197-el-detector-de-familia-repetida-agrupa-por-la-ruta-que-el-revisor-escribe-no-por-el-recorte-anclado.md) |
 | `plan-que-hay-que-terminar-de-una-sentada` | 1 | sí | [176](docs/decisions/ADR-176-el-cierre-de-una-incidencia-se-retoma-desde-donde-se-quedo.md) |
 | `pregunta-al-propietario-que-nadie-vuelve-a-poner-delante` | 1 | no en todas | [198](docs/decisions/ADR-198-partir-un-objetivo-grande-lo-hace-la-sesion-interactiva-el-descomponedor-automatico-queda-descartado.md) |
@@ -343,6 +349,11 @@ de memoria.
 - **[ADR-208](docs/decisions/ADR-208-las-ideas-aparcadas-tienen-registro-y-el-metodo-de-conversacion-del-propietario-entra-en-agents.md)** — las ideas aparcadas volverían como nuevas y cada (lo hace cumplir `tests/automation/test_registro_de_ideas.py`).
 - **[ADR-204](docs/decisions/ADR-204-el-propietario-decide-producto-dinero-y-salud-y-lo-tecnico-lo-resuelve-la-sesion.md)** — la sesión seguiría devolviéndole decisiones técnicas (lo hace cumplir `tests/automation/test_reglas_de_agents.py`).
 - **[ADR-195](docs/decisions/ADR-195-podar-significa-archivar-en-este-repositorio-no-se-borra-nada.md)** — una regla dada de viva voz —«no se elimina nada»— que no (lo hace cumplir `tests/automation/test_registro_de_defectos.py`).
+
+### `leccion-que-se-queda-en-el-informe`
+
+- **[ADR-215](docs/decisions/ADR-215-cinco-skills-mas-de-flujo-de-trabajo-salidas-de-la-auditoria-y-de-los-adr-la-validacion-manual-en-windows-medir-con-linea-base-el-documento-con-lector-la-rama-y-la-pr-de-sesion-y-las-paradas-del-motor-delante-del-propietario.md)** — creer que sin transcripciones no salen más skills (lo hace cumplir `tests/automation/test_skills.py`).
+- **[ADR-214](docs/decisions/ADR-214-siete-skills-de-flujo-de-trabajo-salidas-de-las-transcripciones-la-noche-delegada-la-revision-externa-el-coste-antes-de-gastar-los-comandos-para-su-ordenador-el-paquete-pegado-el-traspaso-y-el-estado-real.md)** — leer caro y dejar lo aprendido solo en un informe (lo hace cumplir `tests/automation/test_skills.py`).
 
 ### `lista-a-mano`
 
@@ -406,10 +417,6 @@ de memoria.
 ### `interruptor-que-enciende-mas-de-lo-que-se-puede-medir`
 
 - **[ADR-185](docs/decisions/ADR-185-la-puerta-de-la-memoria-se-parte-en-tres-interruptores-antes-de-abrirla.md)** — poner una sola puerta delante de varias piezas (lo hace cumplir `tests/unit/test_composition_root_relevance_gate.py`).
-
-### `leccion-que-se-queda-en-el-informe`
-
-- **[ADR-214](docs/decisions/ADR-214-siete-skills-de-flujo-de-trabajo-salidas-de-las-transcripciones-la-noche-delegada-la-revision-externa-el-coste-antes-de-gastar-los-comandos-para-su-ordenador-el-paquete-pegado-el-traspaso-y-el-estado-real.md)** — leer caro y dejar lo aprendido solo en un informe (lo hace cumplir `tests/automation/test_skills.py`).
 
 ### `pieza-correcta-a-la-que-no-llama-quien-la-necesita`
 
@@ -489,6 +496,7 @@ que pasar para volver a mirarla, y la descartada, por qué no se hace.
 | I-006 | promovida | Un cazador de contradicciones entre los documentos canonicos y el codigo |
 | I-007 | promovida | Traer a local las 28 sesiones de Claude Code de la nube que le faltan a la auditoria |
 | I-008 | aparcada | Un contador de rondas para la revision externa que el propietario trae a mano |
+| I-009 | aparcada | Una via segura para que la decision del propietario llegue al diario de estado-del-motor |
 
 ## Las investigaciones: fotos con fecha, que caducan
 

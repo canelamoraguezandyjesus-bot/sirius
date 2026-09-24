@@ -1073,3 +1073,21 @@ defectos:
       - .claude/skills/paquete-de-trabajo-pegado/SKILL.md
       - .claude/skills/traspaso-a-otra-sesion/SKILL.md
       - .claude/skills/verificar-el-estado-real/SKILL.md
+
+  # ADR-215: la segunda tanda salio de la auditoria y de los ADR, sin
+  # transcripciones. El propietario pregunto el 21-09-2026 si ya era imposible
+  # sacar mas skills; lo era solo mientras el destilado fechado de la auditoria
+  # se quedara en el informe.
+  - id: H-215
+    titulo: Cinco procesos vigentes de la auditoria seguian sin skill que una sesion cargue
+    bloque: documentacion
+    gravedad: media
+    estado: cerrado
+    cerrado_por: a367f4ca57bfa1dd58295918a03dd52c5021edd6
+    adr: 215
+    ficheros:
+      - .claude/skills/validacion-manual-en-windows/SKILL.md
+      - .claude/skills/medir-con-linea-base/SKILL.md
+      - .claude/skills/documento-con-lector/SKILL.md
+      - .claude/skills/rama-y-pr-de-sesion/SKILL.md
+      - .claude/skills/paradas-del-motor-delante-del-propietario/SKILL.md

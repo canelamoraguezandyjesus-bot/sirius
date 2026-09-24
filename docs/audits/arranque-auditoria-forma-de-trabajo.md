@@ -712,3 +712,57 @@ que ya existe: «presentar un plan sin códigos» (regla 10 y la skill de hablar
 «cuándo usar el motor en vez de la sesión» (una ocurrencia, 12-09 15:32),
 «instalar herramientas en su ordenador» (cabe en la de comandos). El criterio
 de parada de la adenda 6 no cambia; ADR-214 pasa a cubrir las siete.
+
+## Adenda 7 — segunda tanda de skills, desde la auditoría y los ADR, con las condiciones escritas antes de elegirlas (2026-09-21 13:55 UTC)
+
+La PR #659 dejó catorce skills en el repositorio. El propietario preguntó
+(21-09) si sin las transcripciones «ya es imposible sacar buenas skills». No lo
+es: las fuentes baratas que quedan son las fichas de esta auditoría (PROC, E, T),
+los ADR con su lección, los guiones de `scripts/` y la historia de git; ninguna
+cuesta nada y ninguna es una transcripción. **Línea de coste, antes de tocar
+nada** (skill `coste-antes-de-tocar-una-fuente`): leer unas cuatrocientas
+líneas de fichas, diez decisiones de ADR y seis cabeceras de guiones; ningún
+agente; rendimiento esperado, entre cuatro y seis skills que pasen las tres
+condiciones de ADR-211; parada, la de abajo.
+
+Las cuatro preguntas de la disciplina, contestadas antes de escribir:
+
+1. **Dónde vive el fallo y dónde va el arreglo.** El fallo vive en los
+   procedimientos de sesión que la auditoría dio por vigentes y nadie convirtió
+   en algo que una sesión cargue; el arreglo va a `.claude/skills/`, que es lo
+   único que una sesión lee por su descripción (ADR-211).
+2. **Qué NO garantiza.** Que una sesión cargue la skill cuando toca —la
+   descripción es lo único que decide eso— ni que la prosa siga al día: la
+   guarda solo vigila rutas, ADR, nombre, descripción y límites.
+3. **Criterio de parada, decidido ahora:** el de la adenda 6 —la guarda de
+   ADR-211 (`tests/automation/test_skills.py`) pasa sin tocarla; cada skill
+   cita solo ficheros y ADR que existen; ninguna repite `AGENTS.md`; la batería
+   entera vuelve verde salvo la roja por diseño del ADR sin su defecto (ADR-182),
+   que cierra el commit siguiente con H-215; una candidata sin dos ocurrencias
+   fechadas se descarta al escribirla— más una regla nueva, salida de las
+   rondas 3, 4 y 5 de Codex sobre la PR #659: **lo que ya tiene una fuente
+   canónica** (el contrato operativo, `docs/operations/MOTOR_DE_SIRIUS.md`,
+   otra skill) **se remite, no se copia**; una copia parcial es un defecto
+   antes de nacer.
+4. **Qué haría el fallo imposible.** Para la podredumbre mecánica, la guarda;
+   para la carga, nada: se dice.
+
+Las tres condiciones, por candidata, ANTES de escribir ninguna:
+
+| Candidata | Se repite (ocurrencias fechadas) | Fricción medida | ¿Decisión del propietario? |
+|---|---|---|---|
+| `validacion-manual-en-windows` | 10-08 14:49 («77 comprobaciones, 0 fallos, 3 omitidas», con lo no demostrado declarado); 17-08 (PR #122, B13 y B14 en Windows real y la aceptación de 0.1) | la PR #122 esperó más de nueve días una ejecución correcta; `.github/workflows/quality-windows.yml` tiene cero ejecuciones en toda su historia; #127 y #134 intactas desde agosto (PROC-008) | no: él ejecuta; la sesión prepara el comando, guía y registra |
+| `medir-con-linea-base` | ADR-154 (cifras ancladas al árbol); ADR-202 (14-09: M17, 7/47 contra un suelo de 29/47, y la razón de no medir sin constar); ADR-203 (19-09: la línea base que faltaba; H-203 sigue abierto); 19-09 (una cifra sin su comparación leída como regresión, disparador 4 de E-04) | una medición que cerraba una ola no se hizo y nadie sabe por qué; el banco no sabía medir el camino de producción; una alarma por una línea base recién medida | no |
+| `documento-con-lector` | PROC-010 (20-09: la base de conocimiento en v1.1 con el contrato en v1.10; el onboarding con «estado a 20 de julio»); ADR-207 (20-09: dos mapas de julio archivados); ADR-210 (20-09: incidencias que ya no describían nada); ADR-196 (la vista que copiaba el corpus del que huía) | nueve versiones de contrato de retraso; 97 de 150 documentos sin fecha declarada (`MEMORIA.md`); la familia `pieza-sin-lector` suma cinco ADR | no. (Esta fila decía al principio que qué documento concreto se archiva sí se le preguntaba; la ronda 1 de Codex de la PR #660 lo corrigió: archivar es reversible por construcción, ADR-195, y por eso lo decide la sesión, ADR-204. Queda dicho aquí para que nadie siga el criterio inicial.) |
+| `rama-y-pr-de-sesion` | 20-09 (#658: rama reiniciada desde `main` porque la anterior tenía la historia de #652 ya fusionada); 21-09 (#659: empujón rechazado por la misma razón; forzar, borrar y `merge` denegados; una pregunta al propietario para abrir rama nueva) | una pregunta evitable y un empujón rechazado el 21-09; los dos ADR-016 nacidos en ramas distintas (ADR-180) | no |
+| `paradas-del-motor-delante-del-propietario` | 03-09 → 13-09 (cuatro paradas en `NEEDS_DECISION`, la más antigua diez días, sin salida hasta ADR-189); ADR-198 (una pregunta veinte días sin que nadie la pusiera delante); 19-09 (las cuatro paradas del diario seguían sin salida, PROC-003) | diez y veinte días de espera; 20 de 91 encargos re-despachados, el 22 % (PROC-005) | no: decidir es suyo; ponérselo delante con la orden copiable es de la sesión |
+
+Descartadas antes de escribir: `prueba-intermitente` (una sola ocurrencia,
+#137, arreglada por ADR-162 y archivada por ADR-210); `investigacion-con-fecha`
+(la regla ya está en la tabla de `AGENTS.md` y en `docs/investigaciones/`, y no
+hay fricción medida); `operar-el-ciclo-entero` (su fuente es
+`docs/operations/MOTOR_DE_SIRIUS.md` y el contrato operativo: una copia sería
+`pieza-sin-lector` al mes); `exportacion-de-chatgpt` (una ocurrencia, 19-09).
+
+**Parada de esta adenda:** las cinco escritas y en verde, o la candidata que al
+escribirla no llegue a dos ocurrencias fechadas, descartada por escrito.
