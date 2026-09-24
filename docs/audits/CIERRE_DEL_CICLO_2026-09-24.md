@@ -146,8 +146,9 @@ registro de defectos, no de un resumen.
   porque un día sin trabajo circulando no cuenta como día verde. **D1 se cierra
   usándolo, no programándolo.**
 
-**Lo que el motor ya ha hecho, medido en su diario**: 91 encargos, **59
-entregados** con su commit de fusión, 31 cancelados y 1 atascado. No es una
+**Lo que el motor ya ha hecho, medido en su diario hoy**: 91 encargos, **59
+entregados** con su commit de fusión, 27 cancelados, 4 esperando decisión y 1
+apartado a propósito. (Tras el lote de ADR-216: 59 / 31 / 0 / 1.) No es una
 maqueta: ha llevado trabajo real de punta a punta.
 
 **Lo que está roto o sin terminar, con su nombre:**
