@@ -26,13 +26,13 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **209**.
+- Decisiones (ADR): **210**.
 - Bloques del motor: 17 cerrado, 2 fuera_de_alcance, 1 pendiente.
-- Defectos registrados: 2 abierto, 66 cerrado.
+- Defectos registrados: 3 abierto, 66 cerrado.
 - Ideas aparcadas o descartadas: 5 aparcada, 2 descartada, 2 promovida.
 - Skills: **19**.
 - Investigaciones: **9** (fotos con fecha; caducan).
-- Documentos: **150**, de los que **97** no declaran fecha.
+- Documentos: **151**, de los que **97** no declaran fecha.
 
 ## Las skills: lo que ya costó averiguar dos veces (ADR-211)
 
@@ -79,6 +79,7 @@ huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| [216](docs/decisions/ADR-216-cerrar-el-ciclo-el-motor-se-queda-sin-trabajo-vivo-los-horarios-se-apagan-desde-actions-y-el-estado-real-queda-escrito.md) | 2026-09-24 | APROBADO | Cerrar el ciclo: el motor se queda sin trabajo vivo, los horarios se apagan desde Actions y el estado real queda escrito | Las PR abiertas, cerradas. La #661 (cinco skills, ADR-215) fusionada aplastada en `6a58c75e`. La #117 —la rama de evidencia de julio, abierta desde el 25-07 y declarada «no debe fusionarse automáticamente»— cerrada sin borrar su rama: su… |
 | [215](docs/decisions/ADR-215-cinco-skills-mas-de-flujo-de-trabajo-salidas-de-la-auditoria-y-de-los-adr-la-validacion-manual-en-windows-medir-con-linea-base-el-documento-con-lector-la-rama-y-la-pr-de-sesion-y-las-paradas-del-motor-delante-del-propietario.md) | 2026-09-21 | APROBADO | Cinco skills más de flujo de trabajo, salidas de la auditoría y de los ADR: la validación manual en Windows, medir con línea base, el documento con lector, la rama y la PR de sesión y las paradas del motor delante del propietario | Cinco skills nuevas en `.claude/skills/`: |
 | [214](docs/decisions/ADR-214-siete-skills-de-flujo-de-trabajo-salidas-de-las-transcripciones-la-noche-delegada-la-revision-externa-el-coste-antes-de-gastar-los-comandos-para-su-ordenador-el-paquete-pegado-el-traspaso-y-el-estado-real.md) | 2026-09-21 | APROBADO | Siete skills de flujo de trabajo salidas de las transcripciones: la noche delegada, la revisión externa, el coste antes de gastar, los comandos para su ordenador, el paquete pegado, el traspaso y el estado real | La tercera. Siete skills nuevas, en `.claude/skills/`: |
 | [213](docs/decisions/ADR-213-escribir-las-tres-reglas-de-septiembre-del-propietario-dar-proporcion-a-la-cadena-de-comprobacion-y-fechar-en-las-transcripciones-las-reglas-del-20-09.md) | 2026-09-20 | APROBADO | Escribir las tres reglas de septiembre del propietario, dar proporción a la cadena de comprobación y fechar en las transcripciones las reglas del 20-09 | `AGENTS.md`, sección «Cómo conversa el propietario, y qué espera (ADR-208)», gana las reglas 11, 12 y 13, con sus palabras y su fecha: *contesta primero, trabaja después*; *el parte de la mañana tiene tres partes: qué hiciste, qué no y por… |
@@ -300,7 +301,7 @@ de memoria.
 
 | Familia | Veces | Hay prueba que la haga cumplir | ADR |
 |---|---|---|---|
-| `regla-que-depende-de-que-alguien-se-acuerde` | 6 | sí | [192](docs/decisions/ADR-192-el-numero-de-un-defecto-es-el-numero-de-su-adr-no-un-contador-aparte.md), [191](docs/decisions/ADR-191-la-revision-es-una-cola-una-rama-entra-a-revision-solo-si-main-ya-esta-dentro-de-ella.md), [188](docs/decisions/ADR-188-el-alcance-que-el-motor-no-puede-escribir-para-la-puerta-antes-de-crear-la-incidencia-y-remite-a-la-sesion-interactiva.md), [182](docs/decisions/ADR-182-la-guarda-del-registro-de-defectos-deriva-de-los-adr-que-declaran-leccion.md), [179](docs/decisions/ADR-179-la-guarda-de-piezas-sin-llamante-deriva-su-inventario-del-codigo-del-motor.md), [174](docs/decisions/ADR-174-la-mina-en-dos-pasadas-la-leccion-se-declara-en-el-adr-que-la-produce-y-las-familias-se-cuentan-solas.md) |
+| `regla-que-depende-de-que-alguien-se-acuerde` | 7 | sí | [216](docs/decisions/ADR-216-cerrar-el-ciclo-el-motor-se-queda-sin-trabajo-vivo-los-horarios-se-apagan-desde-actions-y-el-estado-real-queda-escrito.md), [192](docs/decisions/ADR-192-el-numero-de-un-defecto-es-el-numero-de-su-adr-no-un-contador-aparte.md), [191](docs/decisions/ADR-191-la-revision-es-una-cola-una-rama-entra-a-revision-solo-si-main-ya-esta-dentro-de-ella.md), [188](docs/decisions/ADR-188-el-alcance-que-el-motor-no-puede-escribir-para-la-puerta-antes-de-crear-la-incidencia-y-remite-a-la-sesion-interactiva.md), [182](docs/decisions/ADR-182-la-guarda-del-registro-de-defectos-deriva-de-los-adr-que-declaran-leccion.md), [179](docs/decisions/ADR-179-la-guarda-de-piezas-sin-llamante-deriva-su-inventario-del-codigo-del-motor.md), [174](docs/decisions/ADR-174-la-mina-en-dos-pasadas-la-leccion-se-declara-en-el-adr-que-la-produce-y-las-familias-se-cuentan-solas.md) |
 | `pieza-sin-lector` | 5 | no en todas | [210](docs/decisions/ADR-210-archivar-las-incidencias-que-ya-no-describen-nada-y-decir-donde-vive-la-bitacora-del-ciclo.md), [209](docs/decisions/ADR-209-un-adr-fusionado-esta-aprobado-y-propuesto-deja-de-existir-como-estado.md), [207](docs/decisions/ADR-207-archivar-los-dos-mapas-caducados-de-julio-retirar-el-workflow-de-word-y-poner-en-d4-el-estado-que-ya-tenia.md), [183](docs/decisions/ADR-183-la-ausencia-de-run-de-quality-para-el-head-se-encamina-no-se-espera-en-silencio.md), [175](docs/decisions/ADR-175-un-tablero-por-incidencia-un-solo-comentario-que-el-motor-mantiene-al-dia.md) |
 | `regla-del-propietario-que-solo-vive-en-una-conversacion` | 4 | sí | [213](docs/decisions/ADR-213-escribir-las-tres-reglas-de-septiembre-del-propietario-dar-proporcion-a-la-cadena-de-comprobacion-y-fechar-en-las-transcripciones-las-reglas-del-20-09.md), [208](docs/decisions/ADR-208-las-ideas-aparcadas-tienen-registro-y-el-metodo-de-conversacion-del-propietario-entra-en-agents.md), [204](docs/decisions/ADR-204-el-propietario-decide-producto-dinero-y-salud-y-lo-tecnico-lo-resuelve-la-sesion.md), [195](docs/decisions/ADR-195-podar-significa-archivar-en-este-repositorio-no-se-borra-nada.md) |
 | `leccion-que-se-queda-en-el-informe` | 2 | sí | [215](docs/decisions/ADR-215-cinco-skills-mas-de-flujo-de-trabajo-salidas-de-la-auditoria-y-de-los-adr-la-validacion-manual-en-windows-medir-con-linea-base-el-documento-con-lector-la-rama-y-la-pr-de-sesion-y-las-paradas-del-motor-delante-del-propietario.md), [214](docs/decisions/ADR-214-siete-skills-de-flujo-de-trabajo-salidas-de-las-transcripciones-la-noche-delegada-la-revision-externa-el-coste-antes-de-gastar-los-comandos-para-su-ordenador-el-paquete-pegado-el-traspaso-y-el-estado-real.md) |
@@ -328,6 +329,7 @@ de memoria.
 
 ### `regla-que-depende-de-que-alguien-se-acuerde`
 
+- **[ADR-216](docs/decisions/ADR-216-cerrar-el-ciclo-el-motor-se-queda-sin-trabajo-vivo-los-horarios-se-apagan-desde-actions-y-el-estado-real-queda-escrito.md)** — escribir una salvaguarda en prosa y darla por puesta. (lo hace cumplir `tests/automation/test_cierre_del_ciclo_ps1_no_puede_hacer_dano.py`).
 - **[ADR-192](docs/decisions/ADR-192-el-numero-de-un-defecto-es-el-numero-de-su-adr-no-un-contador-aparte.md)** — elegir a mano un identificador leyendo el máximo del (lo hace cumplir `tests/automation/test_registro_de_defectos.py`).
 - **[ADR-191](docs/decisions/ADR-191-la-revision-es-una-cola-una-rama-entra-a-revision-solo-si-main-ya-esta-dentro-de-ella.md)** — fusionar una rama cuya combinación con `main` no ha (lo hace cumplir `tests/automation/test_cola.py`).
 - **[ADR-188](docs/decisions/ADR-188-el-alcance-que-el-motor-no-puede-escribir-para-la-puerta-antes-de-crear-la-incidencia-y-remite-a-la-sesion-interactiva.md)** — despachar al ciclo automático un encargo cuyo alcance cae donde la credencial del motor no llega, hacer el trabajo entero y perderlo en el push, porque la única regla que lo evitaba vivía en la cabeza de quien despacha. (lo hace cumplir `tests/engine/test_intent_interpreter.py`).
@@ -479,6 +481,7 @@ cerrados; el recuento completo está arriba.
 |---|---|---|
 | H-202 | abierto | Una decision de no hacer algo no dejaba rastro, y una precondicion escrita antes que ella bloqueo trabajo real trece dias |
 | H-203 | abierto | El banco solo sabia medir el camino con el motor encendido, asi que la linea base contra la que comparar no existia |
+| H-216 | abierto | La contradiccion de etiquetas que el reflector aparta a proposito lleva 27 dias sin que nadie la mire |
 
 ## Las ideas aparcadas y descartadas (ADR-208)
 
@@ -526,6 +529,7 @@ nada por su cuenta. «Sin fecha declarada» es un aviso, no un dato.
 |---|---|
 | 2026-09-19 | [La auditoría de la forma de trabajar, segunda edición: las 21 fichas de agosto, revalidadas el 19 de septiembre de 2026](docs/audits/AUDITORIA_FORMA_DE_TRABAJO_2026-09.md) |
 | sin fecha declarada | [Auditoría integral de incorporación de Claude — Proyecto Sirius (julio 2026)](docs/audits/AUDITORIA_INTEGRAL_INCORPORACION_CLAUDE_2026-07.md) |
+| 2026-09-24 | [Cierre del ciclo: qué hay de verdad a 24 de septiembre de 2026](docs/audits/CIERRE_DEL_CICLO_2026-09-24.md) |
 | sin fecha declarada | [Defectos encontrados en el Work Engine — parte para actuar](docs/audits/DEFECTOS_ENCONTRADOS_2026-08-20.md) |
 | 2026-09-20 | [Dónde vive la bitácora del ciclo, y por qué no está aquí todavía](docs/audits/DONDE_VIVE_LA_BITACORA_DEL_CICLO.md) |
 | sin fecha declarada | [Lo que queda, y por qué no está hecho — 14 de septiembre de 2026](docs/audits/PENDIENTE_Y_POR_QUE_2026-09-14.md) |
