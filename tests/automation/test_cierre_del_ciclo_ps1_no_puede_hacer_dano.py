@@ -82,6 +82,20 @@ def test_no_toca_la_rama_del_repositorio_ni_fuerza_nada() -> None:
         )
 
 
+def test_uv_copia_en_vez_de_enlazar_antes_de_la_primera_llamada() -> None:
+    """El repositorio vive bajo OneDrive, donde uv falla al enlazar desde su
+    cache con el error 396 de Windows -pasó en su máquina el 08 y el 09-08-2026,
+    y `build_windows_impl.ps1:417` ya lo resuelve así-. Si `uv run` tuviera que
+    sincronizar el entorno, el guion moriría antes de publicar el cierre
+    (ronda 4 de Codex sobre la PR #663)."""
+    lineas = _lineas_de_codigo()
+    modo = lineas.index('$env:UV_LINK_MODE = "copy"')
+    primera_uv = next(i for i, linea in enumerate(lineas) if linea.startswith("uv "))
+    assert modo < primera_uv, (
+        "`UV_LINK_MODE` se fija después de la primera llamada a uv: no la protege"
+    )
+
+
 def test_los_cuatro_trabajos_son_los_de_adr_216_y_en_su_orden() -> None:
     lineas = _lineas_de_codigo()
     decididos = [linea.split()[3] for linea in lineas if linea.startswith("uv run sirius-decidir ")]

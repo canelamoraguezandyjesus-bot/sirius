@@ -150,6 +150,13 @@ forma que ADR-153 usó para `check.ps1`):
 - **`DESENLACES.md` se regenera antes de confirmar**, como hace el workflow tras
   cada reflejo (ADR-171).
 - **No se cambia de rama en su repositorio**, ni se fuerza nada, nunca.
+- **`uv` copia en vez de enlazar** (`UV_LINK_MODE=copy`), antes de la primera
+  llamada. El repositorio vive bajo OneDrive y ahí uv ya falló en su máquina
+  con el error 396 de Windows (skill `comandos-para-su-ordenador`, 08 y
+  09-08-2026); `build_windows_impl.ps1:417` lo resuelve igual. Sin esto, una
+  sincronización del entorno tumbaría el único comando antes de publicar nada.
+  Lo cazó la ronda 4, sobre el guion recién escrito: **la guarda estructural no
+  cubría lo que el guion hace, solo lo que no debe hacer**.
 
 **El quinto trabajo, `WI-20260828-122242`, NO lo cierra ningún comando de este
 guion, y el guion no lo intenta.** El reflector sí lo alcanza, y entonces se
@@ -176,11 +183,11 @@ Si algo sale distinto de eso, pegar la salida entera y no repetir el comando.
 | El quinto no lo cierra `sirius-decidir`… | `sirius-decidir WI-20260828-122242 … --terminar` | se niega: «no está en needs_decision, sino en active… inventar una transición que el dominio no admite sería peor que no hacer nada» |
 | …y el reflector lo **alcanza** pero se niega a propósito | `sirius-reflejar --diario <copia> --ensayo`, y lectura de `reflect.py:275-283`, ADR-173 §2 y ADR-181 §3 | el ensayo lo nombra —su clase `investigacion` sí está en la tabla que el reflector consulta (ADR-099, ADR-173)— y se detiene en este contenedor por falta de `gh`. Pero el ensayo no prueba que haya salida: la regla 1 devuelve **cero pasos** ante etiquetas contradictorias, y la #392 lleva `sirius:failed-safely` **y** `sirius:completed`. ADR-173 ya lo dejó escrito: se queda `active` a propósito. Este ADR lo afirmó mal **dos veces** —primero «no hay salida», luego «el reflector lo cierra»— y las dos las cazó Codex |
 | `estado-del-motor` es huérfana y no tiene con qué ejecutar nada | `git ls-tree --name-only origin/estado-del-motor` (24-09-2026) | cuatro ficheros: `DESENLACES.md`, `diario.jsonl`, `diario-despacho.jsonl`, `racha_siete_dias.jsonl`. Por eso el guion clona aparte en vez de cambiar de rama: un `git switch` ahí deja el árbol sin `pyproject.toml` |
-| El guion no puede seguir sobre un fallo ni publicar de más | `pytest tests/automation/test_cierre_del_ciclo_ps1_no_puede_hacer_dano.py` | 5 en verde. Verificado **por mutación** el mismo día: quitar una comprobación de `$LASTEXITCODE`, volver a `git add -A` y colar un `git switch` tumban cada uno su prueba, y las demás siguen pasando |
+| El guion no puede seguir sobre un fallo, publicar de más ni morir por OneDrive | `pytest tests/automation/test_cierre_del_ciclo_ps1_no_puede_hacer_dano.py` | 6 en verde. Verificado **por mutación** el mismo día, cinco veces: quitar una comprobación de `$LASTEXITCODE`, volver a `git add -A`, colar un `git switch`, quitar `UV_LINK_MODE` y ponerlo después de la primera llamada a uv tumban cada uno su prueba, y las demás siguen pasando |
 | Esta sesión no puede escribir en `estado-del-motor` | intento de confirmar el diario en un árbol de trabajo de esa rama | denegado por el clasificador de permisos, «Modify Shared Resources». Es I-009 medido |
 | Ninguna rutina programada sigue viva en la sesión | `list_triggers` con `enabled: true` | lista vacía |
 | Las cifras del documento de cierre | `MEMORIA.md` regenerada sobre el head de esta rama | **19 skills, 210 ADR, 3 defectos abiertos y 66 cerrados**. Son las de este head, no las de la base `6a58c75e` —que daba 209 y 2—: este cierre añade ADR-216 y H-216, y publicarlas sin ellos habría sido la misma cifra vieja que el revisor cazó |
-| La batería entera, con el guion y su guarda dentro | `uv run --no-sync pytest` (16:03 → 16:15 UTC) | **7 443 en verde, 17 saltadas, 2 xfailed, 0 rojas, 12 min 20 s**. Son cinco más que la corrida de las 14:36 sobre `3a491cc8` (7 438): las cinco del guardián nuevo. Lo único posterior a esta corrida es el texto del comando en este mismo ADR, y sobre el árbol final vuelven a correr en verde las **3 243** guardas de documentos, registros, memoria y skills, más Quality en GitHub |
+| La batería entera, con el guion y su guarda dentro | `uv run --no-sync pytest` (16:04 → 16:17 UTC) | **7 444 en verde, 17 saltadas, 2 xfailed, 0 rojas, 12 min 36 s**. Son seis más que la corrida de las 14:36 sobre `3a491cc8` (7 438): las seis del guardián nuevo. Lo único posterior a esta corrida es prosa de este mismo ADR, y sobre el árbol final vuelven a correr en verde las guardas de documentos, registros, memoria y skills, más Quality en GitHub |
 
 Una nota de método, porque casi mete una cifra falsa en el documento de cierre:
 el árbol de trabajo de esta sesión estaba **217 ficheros por detrás** de `main`

@@ -26,6 +26,14 @@
 
 $ErrorActionPreference = "Stop"
 
+# El repositorio vive bajo OneDrive y ahí uv no puede enlazar desde su cache:
+# el filtro de nube tumba el enlace con el error 396 de Windows, y ya pasó en
+# su máquina (skill `comandos-para-su-ordenador`, 08 y 09-08-2026;
+# `build_windows_impl.ps1:417` hace exactamente esto por la misma razón).
+# Copiar no cambia lo que se instala. Va ANTES del primer `uv run`, que es el
+# que sincronizaría el entorno si hiciera falta.
+$env:UV_LINK_MODE = "copy"
+
 # El guion se ejecuta desde la raíz del repositorio pase lo que pase: `uv run`
 # necesita el `pyproject.toml`, y él pega el comando desde donde tenga abierta
 # la consola.
