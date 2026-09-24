@@ -43,7 +43,7 @@ workflow. Y no se toca el diseño del motor, porque él lo conserva.
   repositorio no se borra, se archiva.
 - **Dejarlo todo como está y solo escribir un informe.** Rechazada: pidió que se
   cerrara, no que se contara.
-- **Cerrar lo cerrable, decir lo que no y dejarle el lote de su ordenador.**
+- **Cerrar lo cerrable, decir lo que no y dejarle un comando para su ordenador.**
   Esta.
 
 ## Decisión
@@ -71,7 +71,7 @@ workflow. Y no se toca el diseño del motor, porque él lo conserva.
    el diario es append-only (ADR-026). **La escritura en la rama
    `estado-del-motor` no la puede hacer esta sesión** —es estado compartido que
    solo escribe el workflow; la idea aparcada I-009 ya lo había nombrado—, así
-   que los cuatro comandos quedan abajo para el lote de su ordenador.
+   que los cuatro cierres quedan en el guion de abajo, para su ordenador.
 3. **Los horarios se apagan desde la pestaña Actions de GitHub**, no editando el
    repositorio: cada workflow, «···» → «Disable workflow». Son cinco, y **no
    son todos iguales**:
@@ -98,52 +98,61 @@ workflow. Y no se toca el diseño del motor, porque él lo conserva.
    dónde se fue el trabajo, y qué hay que hacer para reencenderlo. Es el
    documento que se lee al volver.
 
-### El lote para su ordenador
+### El comando para su ordenador
 
-Dónde se pega: PowerShell, dentro de la carpeta del repositorio
-(`C:\Users\ASUS\OneDrive\Desktop\laboratorio sirius\sirius`). Qué hace:
-cierra los cuatro trabajos parados y sube el diario. Qué sale: cuatro veces
-«Terminado», y un `push` a `estado-del-motor`.
+**Uno solo, y es un guion del repositorio.** Antes, una vez: abrir PowerShell
+en la carpeta del repositorio y hacer `git pull` en `main`, que es donde entra
+el guion. Después, este comando, que ya lleva la ruta escrita y funciona desde
+donde sea porque el guion se coloca solo. Qué hace: cierra los cuatro trabajos
+parados, regenera la vista y publica el diario. Qué sale: cuatro veces
+«Terminado» y, al final, «Listo. Los cuatro trabajos quedan terminados y el
+diario esta publicado».
 
 ```powershell
-git fetch origin estado-del-motor
-git switch estado-del-motor
-git merge --ff-only origin/estado-del-motor
-git rev-list --left-right --count origin/estado-del-motor...HEAD
-uv run sirius-decidir WI-20260903-030529 --diario .\diario.jsonl --ejecutar --terminar
-uv run sirius-decidir WI-20260903-095428 --diario .\diario.jsonl --ejecutar --terminar
-uv run sirius-decidir WI-20260912-235558 --diario .\diario.jsonl --ejecutar --terminar
-uv run sirius-decidir WI-20260913-142937 --diario .\diario.jsonl --ejecutar --terminar
-uv run sirius-memoria desenlaces --diario .\diario.jsonl
-git add -A
-git commit -m "Cierre del ciclo: los cuatro trabajos parados quedan terminados (ADR-216)"
-git push origin estado-del-motor
-git switch main
+powershell -ExecutionPolicy Bypass -File "C:\Users\ASUS\OneDrive\Desktop\laboratorio sirius\sirius\scripts\cierre_del_ciclo.ps1"
 ```
 
-**El `merge --ff-only` de la tercera línea no es adorno.** `git fetch` mueve
-`origin/estado-del-motor`, pero `git switch` a una rama local que ya exista la
-deja donde estaba: sin esa línea, los cuatro sucesos se añadirían a un diario
-viejo y el `push` acabaría rechazado. Si esa línea falla, **parar ahí** y pegar
-la salida: significa que la rama local tiene algo que el remoto no, y eso se
-mira antes de tocar nada.
+Si sale cualquier otra cosa, pegar la salida entera y no repetir el comando.
 
-**La cuarta línea existe porque `--ff-only` no basta**, y lo cazó la revisión de
-Codex: si la rama local va **por delante** del remoto, `git merge --ff-only`
-imprime «Already up to date», sale con código 0 y el `push` publicaría esos
-commits locales junto al diario. `git rev-list --left-right --count` tiene que
-imprimir exactamente `0` y `0`. **Cualquier otra cosa: parar ahí** y pegar la
-salida. No hay que hacer `reset` ni forzar nada; se mira primero.
+**Por qué un guion y no el lote de once líneas que decía este ADR hasta la
+ronda 3.** Ese lote acumuló **tres defectos de la misma familia en dos rondas**
+de revisión externa: la rama local adelantada que `--ff-only` no rechaza; un
+`git rev-list … 0 1` impreso que no detiene nada porque imprimir no es parar; y
+un `git add -A` que publicaría en `estado-del-motor` cualquier fichero suelto de
+su carpeta. La raíz no era ninguna de las tres: era que **las salvaguardas
+estaban escritas en la prosa de debajo del bloque, no en el código**, y un
+bloque pegado entero se ejecuta entero. Dos rondas con la misma familia obligan
+a parar y arreglar la raíz (ADR-001), no a parchear una línea más. La skill
+`comandos-para-su-ordenador` ya lo decía con otras palabras: «un comando por
+mensaje».
 
-**La línea de `sirius-memoria desenlaces` regenera la vista legible**
-(`DESENLACES.md`) a partir del diario ya modificado, que es exactamente lo que
-hace el workflow tras cada reflejo
-(`.github/workflows/reflejar-desenlace.yml:143-158`, ADR-171). Sin ella el
-diario diría una cosa y la vista publicada otra. Por eso el commit es `git add
--A` y no `-am`: entra el diario y entra la vista.
+Y había un cuarto defecto que ninguna ronda había visto, encontrado al ir a
+escribir el guion: **`git switch estado-del-motor` habría roto el lote entero**.
+Esa rama es huérfana y tiene **cuatro ficheros** —`git ls-tree` del 24-09-2026:
+`DESENLACES.md`, `diario.jsonl`, `diario-despacho.jsonl`,
+`racha_siete_dias.jsonl`—, así que el árbol se quedaba sin `pyproject.toml` y
+sin `src/`, y el primer `uv run` no habría encontrado el proyecto. El workflow
+nunca hizo eso: clona la memoria aparte y ejecuta desde el repositorio
+(`reflejar-desenlace.yml`). El guion hace lo mismo.
+
+Lo que el guion garantiza, y una prueba lo fija porque aquí no hay `pwsh`
+(`tests/automation/test_cierre_del_ciclo_ps1_no_puede_hacer_dano.py`, la misma
+forma que ADR-153 usó para `check.ps1`):
+
+- **Cada llamada nativa comprueba su `$LASTEXITCODE`** y el guion muere en el
+  primer rojo, antes de tocar el diario.
+- **Se clona limpio** en una carpeta nueva fuera de OneDrive. Un clon recién
+  hecho *es* el remoto: no hay rama local atrasada, adelantada ni divergente
+  que comprobar, y el problema que las dos rondas intentaban atrapar deja de
+  existir. El `push` va con refspec explícita (`HEAD:refs/heads/estado-del-motor`),
+  así que se rechaza solo si el remoto se movió mientras tanto.
+- **Se añaden los dos ficheros por su nombre**, nunca `-A`.
+- **`DESENLACES.md` se regenera antes de confirmar**, como hace el workflow tras
+  cada reflejo (ADR-171).
+- **No se cambia de rama en su repositorio**, ni se fuerza nada, nunca.
 
 **El quinto trabajo, `WI-20260828-122242`, NO lo cierra ningún comando de este
-lote, y el lote no lo intenta.** El reflector sí lo alcanza, y entonces se
+guion, y el guion no lo intenta.** El reflector sí lo alcanza, y entonces se
 niega **a propósito**: su regla 1 (`src/sirius_engine/reflect.py:275-283`)
 devuelve cero pasos cuando la incidencia lleva etiquetas de estado que se
 contradicen, y la #392 lleva `sirius:failed-safely` y `sirius:completed` a la
@@ -153,7 +162,7 @@ propósito: es el único de los 21 que un humano tiene que mirar»— y ADR-181
 protege esa contradicción como criterio de parada. La salida de ese trabajo es
 **una decisión sobre la #392**: mirar qué pasó de verdad, dejar una sola
 etiqueta por el procedimiento humano que corresponda y entonces dejar que el
-reflector pase. Ni esta sesión ni este lote retiran etiquetas.
+reflector pase. Ni esta sesión ni este guion retiran etiquetas.
 
 Si algo sale distinto de eso, pegar la salida entera y no repetir el comando.
 
@@ -166,10 +175,12 @@ Si algo sale distinto de eso, pegar la salida entera y no repetir el comando.
 | Los cuatro parados se cierran limpiamente | `sirius-decidir … --terminar` (ensayo) y `--ejecutar` sobre una copia | los cuatro a `cancelled`; 4 sucesos añadidos; recuento final 59 / 31 / 0 / 1 |
 | El quinto no lo cierra `sirius-decidir`… | `sirius-decidir WI-20260828-122242 … --terminar` | se niega: «no está en needs_decision, sino en active… inventar una transición que el dominio no admite sería peor que no hacer nada» |
 | …y el reflector lo **alcanza** pero se niega a propósito | `sirius-reflejar --diario <copia> --ensayo`, y lectura de `reflect.py:275-283`, ADR-173 §2 y ADR-181 §3 | el ensayo lo nombra —su clase `investigacion` sí está en la tabla que el reflector consulta (ADR-099, ADR-173)— y se detiene en este contenedor por falta de `gh`. Pero el ensayo no prueba que haya salida: la regla 1 devuelve **cero pasos** ante etiquetas contradictorias, y la #392 lleva `sirius:failed-safely` **y** `sirius:completed`. ADR-173 ya lo dejó escrito: se queda `active` a propósito. Este ADR lo afirmó mal **dos veces** —primero «no hay salida», luego «el reflector lo cierra»— y las dos las cazó Codex |
+| `estado-del-motor` es huérfana y no tiene con qué ejecutar nada | `git ls-tree --name-only origin/estado-del-motor` (24-09-2026) | cuatro ficheros: `DESENLACES.md`, `diario.jsonl`, `diario-despacho.jsonl`, `racha_siete_dias.jsonl`. Por eso el guion clona aparte en vez de cambiar de rama: un `git switch` ahí deja el árbol sin `pyproject.toml` |
+| El guion no puede seguir sobre un fallo ni publicar de más | `pytest tests/automation/test_cierre_del_ciclo_ps1_no_puede_hacer_dano.py` | 5 en verde. Verificado **por mutación** el mismo día: quitar una comprobación de `$LASTEXITCODE`, volver a `git add -A` y colar un `git switch` tumban cada uno su prueba, y las demás siguen pasando |
 | Esta sesión no puede escribir en `estado-del-motor` | intento de confirmar el diario en un árbol de trabajo de esa rama | denegado por el clasificador de permisos, «Modify Shared Resources». Es I-009 medido |
 | Ninguna rutina programada sigue viva en la sesión | `list_triggers` con `enabled: true` | lista vacía |
 | Las cifras del documento de cierre | `MEMORIA.md` regenerada sobre el head de esta rama | **19 skills, 210 ADR, 3 defectos abiertos y 66 cerrados**. Son las de este head, no las de la base `6a58c75e` —que daba 209 y 2—: este cierre añade ADR-216 y H-216, y publicarlas sin ellos habría sido la misma cifra vieja que el revisor cazó |
-| La batería entera | `uv run --no-sync pytest` (14:36 → 14:48 UTC) | **7 438 en verde, 17 saltadas, 2 xfailed, 0 rojas, 12 min 33 s**, sobre el árbol de `3a491cc8`: el documento de cierre, este ADR y H-215/H-216 en el registro. Lo que vino después —la sección del motor y las correcciones de la ronda 1 de Codex— es prosa: no toca código ni pruebas, y sobre ese árbol final corren las 886 guardas de documentos, registros y memoria, más Quality en GitHub |
+| La batería entera, con el guion y su guarda dentro | `uv run --no-sync pytest` (16:03 → 16:15 UTC) | **7 443 en verde, 17 saltadas, 2 xfailed, 0 rojas, 12 min 20 s**. Son cinco más que la corrida de las 14:36 sobre `3a491cc8` (7 438): las cinco del guardián nuevo. Lo único posterior a esta corrida es el texto del comando en este mismo ADR, y sobre el árbol final vuelven a correr en verde las **3 243** guardas de documentos, registros, memoria y skills, más Quality en GitHub |
 
 Una nota de método, porque casi mete una cifra falsa en el documento de cierre:
 el árbol de trabajo de esta sesión estaba **217 ficheros por detrás** de `main`
@@ -181,7 +192,7 @@ para lo que existe la skill `verificar-el-estado-real`.
 ## Consecuencias
 
 - El repositorio queda sin PR abiertas, sin trabajo del motor esperando
-  decisión salvo lo que el lote cierra, y con el estado real escrito en un
+  decisión salvo lo que el guion cierra, y con el estado real escrito en un
   documento de una página.
 - **Nada se ha borrado.** El diario conserva los 667 sucesos, las incidencias
   siguen abiertas donde describen ideas suyas (#11, #12, #13 de robótica; #267,
@@ -207,20 +218,25 @@ para lo que existe la skill `verificar-el-estado-real`.
 ## La lección
 
 - familia: `regla-que-depende-de-que-alguien-se-acuerde`
-- sin esto se repetiría: describir lo que hace un mecanismo sin leer la regla
-  que lo decide. Este ADR se equivocó **dos veces seguidas sobre el mismo
-  trabajo**: primero dijo que `WI-20260828-122242` no tenía salida ninguna
-  (falso: su incidencia existe, la #392, y su clase sí está en la tabla del
-  reflector); después, ya corregido, dijo que el reflector lo cerraría (también
-  falso: la regla 1 devuelve cero pasos ante etiquetas contradictorias). Dos
-  rondas con defectos de la misma familia obligan a parar y buscar la raíz
-  (ADR-001), y la raíz no es «faltó ejecutar el comando»: el ensayo **sí** se
-  ejecutó y no bastó, porque solo demuestra que el CLI llega, no qué decide.
-  La raíz es afirmar sobre el camino feliz sin leer las reglas de rechazo del
-  módulo —`reflect.py:275-283`— ni el apartado «qué NO va a garantizar» del ADR
-  que lo construyó, que lo decía con nombre y número. Las dos las cazó el
-  revisor externo, no la sesión
-- lo hace cumplir: ninguna prueba: es un fallo de método, no de código. La
-  guarda que lo haría imposible sería leer la regla de rechazo antes de afirmar
-  el desenlace, y eso ninguna prueba lo comprueba. Queda aquí, en H-216 y en la
-  tabla de comprobación de arriba, con las dos afirmaciones falsas escritas
+- sin esto se repetiría: escribir una salvaguarda en prosa y darla por puesta.
+  Este ADR le dio al propietario un lote de once líneas cuyas protecciones
+  vivían en los párrafos de debajo —«si esa línea falla, parar ahí»—, y un
+  bloque pegado entero se ejecuta entero. La revisión externa encontró **tres**
+  formas distintas de hacer daño con él en dos rondas, y una **cuarta** apareció
+  al ir a escribir el guion: `estado-del-motor` es una rama huérfana de cuatro
+  ficheros, así que el `git switch` del propio lote habría dejado el árbol sin
+  `pyproject.toml` y ningún `uv run` habría arrancado. Es la misma forma que el
+  otro error de este ADR, que también costó dos rondas: afirmar lo que hace un
+  mecanismo —el reflector sobre `WI-20260828-122242`, primero «no hay salida»,
+  después «lo cierra»— sin leer sus reglas de rechazo. En los dos casos se
+  razonó sobre el camino feliz y se publicó sin ejecutar ni leer lo que decide
+- lo hace cumplir: tests/automation/test_cierre_del_ciclo_ps1_no_puede_hacer_dano.py
+  fija la forma del guion donde no hay `pwsh`, igual que ADR-153 hizo con
+  `check.ps1`: cada llamada nativa seguida de su comprobación de
+  `$LASTEXITCODE`, los dos ficheros añadidos por su nombre, ninguna orden que
+  cambie de rama ni fuerce nada, y la vista derivada regenerada antes de
+  confirmar. Verificado por mutación el 24-09-2026: quitar una comprobación,
+  volver a `git add -A` y colar un `git switch` matan cada uno su prueba. La
+  otra mitad —leer la regla de rechazo antes de afirmar un desenlace— no la
+  comprueba ninguna prueba porque es método, y queda escrita en H-216 y en la
+  tabla de comprobación de arriba

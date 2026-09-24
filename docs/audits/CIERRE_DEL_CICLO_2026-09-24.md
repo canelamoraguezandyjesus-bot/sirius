@@ -76,7 +76,7 @@ documento lo repite porque es la respuesta honesta a su pregunta.
   91 trabajos, **59 entregados, 27 cancelados, 4 esperando decisión y 1
   activo**. Los cuatro que esperan **siguen esperando**: esta sesión comprobó
   sobre una copia que se cierran limpiamente, pero no puede escribir en esa
-  rama. Cuando él ejecute el lote de ADR-216, el recuento pasará a **59 / 31 /
+  rama. Cuando él ejecute el guion de ADR-216, el recuento pasará a **59 / 31 /
   0 / 1**. Ese último 1 **se queda ahí a propósito**, y abajo está por qué.
 - **Cinco workflows con horario** siguen despertando solos. Cuatro solo miran
   (`motor-sirius`, `reconcile-sirius-states`, `reflejar-desenlace`,
@@ -103,7 +103,8 @@ documento lo repite porque es la respuesta honesta a su pregunta.
   limpiamente —se ejecutó sobre una copia y los cuatro quedaron `cancelled`,
   terminal—, pero esta sesión **no puede escribir en esa rama**: es estado
   compartido que solo escribe el workflow (idea aparcada I-009). Los cuatro
-  comandos que lo cierran desde su ordenador están en ADR-216, para el lote.
+  cierres van en un solo comando de su ordenador, el guion de ADR-216
+  (`scripts/cierre_del_ciclo.ps1`).
 - **`WI-20260828-122242` sigue `active` desde el 28-08, y ningún comando lo
   cierra.** No por un fallo: **el diseño lo aparta a propósito.** Su incidencia
   es la **#392**, cerrada el 28-08 con **dos etiquetas que se contradicen**
@@ -116,7 +117,7 @@ documento lo repite porque es la respuesta honesta a su pregunta.
   como criterio de parada. La salida, entonces, no es un comando: es **mirar la
   #392 y decidir cuál de las dos etiquetas es la verdadera**, dejar solo esa
   por el procedimiento que corresponda, y dejar que el reflector pase. Esta
-  sesión no retira etiquetas y el lote de ADR-216 no lo intenta.
+  sesión no retira etiquetas y el guion de ADR-216 no lo intenta.
   Esta afirmación se equivocó **dos veces** antes de quedar así —primero «no
   hay salida ninguna», después «el reflector lo cierra»—, y las dos las cazó la
   revisión de Codex sobre esta misma PR.
@@ -148,7 +149,7 @@ registro de defectos, no de un resumen.
 
 **Lo que el motor ya ha hecho, medido en su diario hoy**: 91 encargos, **59
 entregados** con su commit de fusión, 27 cancelados, 4 esperando decisión y 1
-apartado a propósito. (Tras el lote de ADR-216: 59 / 31 / 0 / 1.) No es una
+apartado a propósito. (Tras el guion de ADR-216: 59 / 31 / 0 / 1.) No es una
 maqueta: ha llevado trabajo real de punta a punta.
 
 **Lo que está roto o sin terminar, con su nombre:**
