@@ -154,8 +154,9 @@ verificada» contra la rama `evidence/adr001-spikes`, que este documento tampoco
 directamente (`docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md:41-47`).
 
 **D1 — Incorporación completa de la evidencia de búsqueda mejorada y mejor recuperación.**
-La evidencia de la rama `evidence/adr001-spikes` (PR #117, que permanece abierta y sin
-fusionar como archivo de evidencia) se incorpora a `main` **completa** — el índice de
+La evidencia de la rama `evidence/adr001-spikes` (PR #117, **cerrada sin fusionar el
+24-09-2026 por ADR-216**; la rama se conserva como archivo de evidencia y esta decisión
+no cambia por ello) se incorpora a `main` **completa** — el índice de
 categoría determinista **y** el filtro de relevancia con modelo local vía Ollama —, no
 mediante la fusión directa de esa PR sino mediante órdenes nuevas al Work Engine que porten
 ese trabajo como código de producto con sus pruebas. Esas órdenes futuras deben respetar

@@ -23,13 +23,25 @@ PR #122). No es una maqueta. Al abrirla hay cuatro pestañas:
 | Conversación | hablar con el modelo, con la respuesta llegando por partes, historial que persiste al cerrar y abrir |
 | Memoria y decisiones | ver lo guardado, confirmar o rechazar lo que Sirius propone recordar, corregirlo, archivarlo, marcar criticidad y categoría |
 | Configuración | clave de API validada contra el proveedor, ubicación de los datos, copia de seguridad y restauración |
-| Proyectos históricos | los proyectos anteriores y la continuidad entre sesiones |
+| Proyectos históricos | lista los proyectos ya terminados y sus revisiones. Es una vista de solo lectura: la continuidad del proyecto activo vive en otro componente, dentro de la pestaña Conversación |
 
-Y una página aparte, **Model Studio**, con la superficie de grabación
-(interfaz construida; voz y cámaras, no).
+Y una página aparte, **Model Studio**, donde hay más de lo que parece:
 
-Lo que sostiene eso: **7 433 pruebas automáticas en verde**, medidas hoy sobre
-el árbol de esta rama, más las dos validaciones manuales en su Windows del
+- **La voz llega a la aplicación real**, sale por el reproductor del sistema,
+  empieza a hablar antes de terminar de generarse y **se calla en seco al
+  cancelar** (ADR-009).
+- **La captura está probada contra OBS Studio 32.2.1 en Windows 11**: conexión
+  y autenticación por su servidor local, lista de escenas, cambio de plano y
+  vuelta, y una **grabación real de tres segundos con su archivo en disco**;
+  después, las mismas órdenes dichas desde Model Studio —«graba», «cambia a
+  cara», «para»— con confirmación hablada
+  (`docs/implementation/model_studio/SIRIUS_MODEL_STUDIO_CAPTURA_INVESTIGACION.md`).
+- **Lo que sigue sin verificarse**, y así está escrito: varias cámaras a la vez,
+  el móvil como segunda cámara, sesiones largas, y la reconexión si OBS se
+  cierra a mitad de una grabación.
+
+Lo que sostiene eso: **7 438 pruebas automáticas en verde**, medidas hoy (24-09) sobre
+el árbol de `3a491cc8`, en 12 min 33 s, más las dos validaciones manuales en su Windows del
 10-08 y el 17-08. Arranca sin hablar con nadie cuando no hay proveedor: eso se
 midió (B14), no se supone.
 
@@ -51,8 +63,8 @@ claridad.
 
 ## 3. Dónde se fue el trabajo
 
-Cuando la auditoría de septiembre contó los ADR que había —196 entonces, **209**
-hoy—, el reparto salió así: **44 tratan de la aplicación y 152 del motor, del
+Cuando la auditoría de septiembre contó los ADR que había —196 entonces, **210**
+con este cierre dentro—, el reparto salió así: **44 tratan de la aplicación y 152 del motor, del
 método o de la automatización** (ficha PROC-006, estimación declarada como tal).
 Es decir: la mayor parte del esfuerzo de estos meses fue en la máquina que
 construye, no en lo que él abre. La auditoría lo dejó escrito el 19-09; este
@@ -60,8 +72,12 @@ documento lo repite porque es la respuesta honesta a su pregunta.
 
 ## 4. Qué queda parado y cómo se reenciende
 
-- **El motor**: 91 trabajos en su diario, 59 entregados y 31 cancelados.
-  Ninguno espera ya decisión, salvo lo que dice el punto siguiente.
+- **El motor**, tal como está **ahora mismo** en la rama `estado-del-motor`:
+  91 trabajos, **59 entregados, 27 cancelados, 4 esperando decisión y 1
+  activo**. Los cuatro que esperan **siguen esperando**: esta sesión comprobó
+  sobre una copia que se cierran limpiamente, pero no puede escribir en esa
+  rama. Cuando él ejecute el lote de ADR-216, el recuento pasará a **59 / 31 /
+  0 / 1**, y el último lo resuelve el reflector.
 - **Cinco workflows con horario** siguen despertando solos
   (`motor-sirius`, `reconcile-sirius-states`, `reflejar-desenlace`,
   `contador-siete-dias`, `mina-mensual`). Con el diario sin trabajo vivo, un
@@ -84,13 +100,23 @@ documento lo repite porque es la respuesta honesta a su pregunta.
   terminal—, pero esta sesión **no puede escribir en esa rama**: es estado
   compartido que solo escribe el workflow (idea aparcada I-009). Los cuatro
   comandos que lo cierran desde su ordenador están en ADR-216, para el lote.
-- **`WI-20260828-122242` no se puede cerrar con nada.** Está `active` desde el
-  28-08 y es de clase `investigacion`, un carril **retirado** el 08-09
-  (ADR-161/163). Ningún comando admite esa transición: `sirius-decidir` solo
-  resuelve paradas sin incidencia y se niega, con razón, a inventar un cambio
-  de estado que el dominio no admite. Queda registrado como H-216. En la
-  práctica no hace nada: el despachador rechaza su clase y ningún workflow lo
-  toca.
+- **`WI-20260828-122242` sigue `active` desde el 28-08, y sí tiene salida.**
+  El primer diagnóstico de esta sesión decía que no la tenía, y era falso: lo
+  corrigió la revisión de Codex sobre esta misma PR. Los hechos: **su
+  incidencia existe, es la #392**, cerrada el 28-08 **con dos etiquetas
+  contradictorias** (`sirius:failed-safely` y `sirius:completed`); su clase
+  `investigacion` **sí está** en la tabla que el reflector consulta (ADR-099,
+  ADR-173), de modo que el reflector lo alcanza. Comprobado el 24-09 ejecutando
+  `sirius-reflejar --ensayo` sobre una copia del diario: nombra el trabajo y
+  solo se detiene porque en este contenedor **no está instalado `gh`**, que es
+  como el reflector lee la incidencia. **En su ordenador sí está.** El comando
+  va en el lote de ADR-216.
+  Lo que **no** queda demostrado, y por eso H-216 sigue abierto: por qué la
+  red de seguridad diaria no lo ha reflejado en veintisiete días. Las dos
+  sospechas escritas son la contradicción de etiquetas (que ADR-181 gobierna) y
+  que esa red estuvo ciega treinta y cinco días sin que nadie lo notara
+  (ADR-193). Mientras tanto no hace nada: el despachador rechaza su clase
+  desde que el carril se retiró.
 
 ## 6. El motor: en qué estado queda, y qué le falta
 

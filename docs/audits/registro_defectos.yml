@@ -1092,20 +1092,29 @@ defectos:
       - .claude/skills/rama-y-pr-de-sesion/SKILL.md
       - .claude/skills/paradas-del-motor-delante-del-propietario/SKILL.md
 
-  # ADR-216: retirar el carril de investigacion (ADR-161/163, 08-09-2026) no
-  # miro lo que ya estaba en vuelo por el. WI-20260828-122242 lleva «active»
-  # desde el 28-08 y no hay salida: el despachador rechaza su clase, el
-  # reflector necesita una incidencia que no existe y sirius-decidir solo
-  # resuelve paradas en «needs_decision». Es la familia de ADR-189, un escalon
-  # mas arriba. Abierto a proposito: cerrarlo es tocar el dominio del motor.
+  # ADR-216: WI-20260828-122242 lleva «active» desde el 28-08 aunque su
+  # incidencia, la #392, se cerro ese mismo dia. La red de seguridad diaria
+  # (reflejar-desenlace.yml) deberia haberlo reflejado en 27 dias y no lo ha
+  # hecho. Dos sospechas escritas, ninguna demostrada: la #392 se cerro con dos
+  # etiquetas contradictorias -sirius:failed-safely y sirius:completed, lo que
+  # ADR-173 ya registro y ADR-181 gobierna-, y esa red estuvo 35 dias ciega sin
+  # que nadie lo notara (ADR-193).
+  #
+  # El primer diagnostico de este defecto decia que no habia ninguna salida
+  # -que el reflector necesitaba una incidencia inexistente y que el carril
+  # retirado lo impedia- y era FALSO en los dos puntos: lo corrigio la revision
+  # de Codex sobre la PR #663. La clase «investigacion» si esta en la tabla que
+  # el reflector consulta (ADR-099, ADR-173), y el ensayo del 24-09 lo nombra:
+  # solo se detiene porque en el contenedor de la sesion no esta instalado
+  # «gh». La via existe y esta en el lote de ADR-216.
   - id: H-216
-    titulo: Retirar un carril dejo un trabajo activo en el que ningun comando puede terminar
+    titulo: Un trabajo sigue activo 27 dias despues de que su incidencia se cerrara, y la red de seguridad no lo ha reflejado
     bloque: motor
     gravedad: baja
     estado: abierto
     adr: 216
     incidencia: 662
     ficheros:
-      - docs/implementation/work_engine/carriles_retirados.json
-      - src/sirius_engine/decision_cli.py
+      - src/sirius_engine/reflect_cli.py
+      - .github/workflows/reflejar-desenlace.yml
       - docs/audits/CIERRE_DEL_CICLO_2026-09-24.md

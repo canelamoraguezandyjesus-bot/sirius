@@ -52,6 +52,11 @@ workflow. Y no se toca el diseño del motor, porque él lo conserva.
    aplastada en `6a58c75e`. La #117 —la rama de evidencia de julio, abierta
    desde el 25-07 y declarada «no debe fusionarse automáticamente»— cerrada sin
    borrar su rama: su contenido se portó al árbol real en ADR-104.
+   `docs/evolution/STATUS.md` la describía como «abierta y sin fusionar como
+   archivo de evidencia» en su línea D1, y esa frase queda fechada ahí mismo:
+   la decisión D1 —portar la evidencia por encargos nuevos, no fusionando esa
+   rama— **no cambia**; lo único que cambia es que la PR ya no está abierta y
+   la rama `evidence/adr001-spikes` sigue existiendo como archivo.
 2. **Los trabajos del motor que esperaban decisión, resueltos como terminados.**
    Cuatro (`WI-20260903-030529`, `WI-20260903-095428`, `WI-20260912-235558`,
    `WI-20260913-142937`), parados desde el 03, el 12 y el 13-09. Se comprobó
@@ -83,14 +88,31 @@ cierra los cuatro trabajos parados y sube el diario. Qué sale: cuatro veces
 ```powershell
 git fetch origin estado-del-motor
 git switch estado-del-motor
+git merge --ff-only origin/estado-del-motor
 uv run sirius-decidir WI-20260903-030529 --diario .\diario.jsonl --ejecutar --terminar
 uv run sirius-decidir WI-20260903-095428 --diario .\diario.jsonl --ejecutar --terminar
 uv run sirius-decidir WI-20260912-235558 --diario .\diario.jsonl --ejecutar --terminar
 uv run sirius-decidir WI-20260913-142937 --diario .\diario.jsonl --ejecutar --terminar
-git commit -am "Cierre del ciclo: los cuatro trabajos parados quedan terminados (ADR-216)"
+uv run sirius-reflejar --diario .\diario.jsonl --ensayo
+uv run sirius-reflejar --diario .\diario.jsonl
+git commit -am "Cierre del ciclo: los cuatro trabajos parados quedan terminados y el quinto se refleja (ADR-216)"
 git push origin estado-del-motor
 git switch main
 ```
+
+**El `merge --ff-only` de la tercera línea no es adorno.** `git fetch` mueve
+`origin/estado-del-motor`, pero `git switch` a una rama local que ya exista la
+deja donde estaba: sin esa línea, los cuatro sucesos se añadirían a un diario
+viejo y el `push` acabaría rechazado. Si esa línea falla, **parar ahí** y pegar
+la salida: significa que la rama local tiene algo que el remoto no, y eso se
+mira antes de tocar nada.
+
+**Las dos líneas del reflector** son la salida del quinto trabajo,
+`WI-20260828-122242`. El ensayo dice qué haría; la segunda lo aplica. En este
+contenedor no se pudieron ejecutar porque `gh` no está instalado y el reflector
+lee la incidencia por ahí; en su máquina sí está. Si el ensayo dice que no puede
+leer la #392 o que no sabe qué proyectar, **no insistir**: eso es el defecto
+H-216 y se queda como está, apuntado.
 
 Si algo sale distinto de eso, pegar la salida entera y no repetir el comando.
 
@@ -101,11 +123,12 @@ Si algo sale distinto de eso, pegar la salida entera y no repetir el comando.
 | La #661 está fusionada | `merge_pull_request` sobre `b49d0152` | `6a58c75e`, `merged: true` |
 | El diario tenía cinco trabajos sin terminar | lectura de `origin/estado-del-motor:diario.jsonl`, último estado por trabajo | 91 trabajos: 59 `delivered`, 27 `cancelled`, 4 `needs_decision`, 1 `active` |
 | Los cuatro parados se cierran limpiamente | `sirius-decidir … --terminar` (ensayo) y `--ejecutar` sobre una copia | los cuatro a `cancelled`; 4 sucesos añadidos; recuento final 59 / 31 / 0 / 1 |
-| El quinto no se puede cerrar con nada | `sirius-decidir WI-20260828-122242 … --terminar` | se niega: «no está en needs_decision, sino en active… inventar una transición que el dominio no admite sería peor que no hacer nada» |
+| El quinto no lo cierra `sirius-decidir`… | `sirius-decidir WI-20260828-122242 … --terminar` | se niega: «no está en needs_decision, sino en active… inventar una transición que el dominio no admite sería peor que no hacer nada» |
+| …pero **sí lo alcanza el reflector**, que es su vía | `sirius-reflejar --diario <copia> --ensayo` | lo nombra y se detiene solo por el entorno: «no pude leer la incidencia #392 (metadatos: [Errno 2] No such file or directory: 'gh')». Su incidencia existe —la #392, cerrada el 28-08 con `sirius:failed-safely` **y** `sirius:completed`— y su clase está en la tabla que el reflector consulta (ADR-099, ADR-173). El primer diagnóstico de este ADR decía que no había salida: era falso, y lo corrigió la revisión de Codex |
 | Esta sesión no puede escribir en `estado-del-motor` | intento de confirmar el diario en un árbol de trabajo de esa rama | denegado por el clasificador de permisos, «Modify Shared Resources». Es I-009 medido |
 | Ninguna rutina programada sigue viva en la sesión | `list_triggers` con `enabled: true` | lista vacía |
-| Las cifras del documento de cierre | recuento sobre el árbol de `6a58c75e` | 19 skills, 209 ADR, 2 defectos abiertos y 66 cerrados |
-| La batería entera | `uv run --no-sync pytest` | BATERIA_PENDIENTE |
+| Las cifras del documento de cierre | `MEMORIA.md` regenerada sobre el head de esta rama | **19 skills, 210 ADR, 3 defectos abiertos y 66 cerrados**. Son las de este head, no las de la base `6a58c75e` —que daba 209 y 2—: este cierre añade ADR-216 y H-216, y publicarlas sin ellos habría sido la misma cifra vieja que el revisor cazó |
+| La batería entera | `uv run --no-sync pytest` (14:36 → 14:48 UTC) | **7 438 en verde, 17 saltadas, 2 xfailed, 0 rojas, 12 min 33 s**, sobre el árbol de `3a491cc8`: el documento de cierre, este ADR y H-215/H-216 en el registro. Lo que vino después —la sección del motor y las correcciones de la ronda 1 de Codex— es prosa: no toca código ni pruebas, y sobre ese árbol final corren las 886 guardas de documentos, registros y memoria, más Quality en GitHub |
 
 Una nota de método, porque casi mete una cifra falsa en el documento de cierre:
 el árbol de trabajo de esta sesión estaba **217 ficheros por detrás** de `main`
@@ -139,12 +162,15 @@ para lo que existe la skill `verificar-el-estado-real`.
 
 ## La lección
 
-- familia: `estado-en-el-que-se-entra-y-del-que-no-se-sale`
-- sin esto se repetiría: retirar un carril de trabajo y dejar dentro lo que ya
-  estaba en vuelo, que queda vivo para siempre porque el despachador rechaza su
-  clase y ningún comando admite sacarlo; ADR-189 lo arregló para
-  `needs_decision` y el mismo agujero seguía abierto un escalón más arriba,
-  en `active`
-- lo hace cumplir: ninguna prueba: la salida no existe todavía, y construirla es
-  tocar el dominio del motor, que esta decisión deja congelado a propósito.
-  Queda registrado en H-216 para cuando se reabra
+- familia: `regla-que-depende-de-que-alguien-se-acuerde`
+- sin esto se repetiría: dar por perdida una salida que existe. Este ADR
+  afirmó primero que `WI-20260828-122242` no se podía cerrar con nada, y no era
+  verdad: su incidencia existía (#392), su clase sí está en la tabla que el
+  reflector consulta, y el ensayo del reflector lo nombra. La afirmación salió
+  de razonar sobre el carril retirado en vez de **ejecutar la herramienta que
+  ya existía**, que es lo primero que manda la disciplina de evidencia. La
+  cazó el revisor externo, no la sesión
+- lo hace cumplir: ninguna prueba: es un fallo de método, no de código, y la
+  guarda que lo haría imposible sería ejecutar antes de afirmar, que ninguna
+  prueba puede comprobar. Queda en H-216 y en la tabla de comprobación de
+  arriba, con la ejecución que lo desmintió
