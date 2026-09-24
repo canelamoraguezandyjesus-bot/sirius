@@ -1091,3 +1091,21 @@ defectos:
       - .claude/skills/documento-con-lector/SKILL.md
       - .claude/skills/rama-y-pr-de-sesion/SKILL.md
       - .claude/skills/paradas-del-motor-delante-del-propietario/SKILL.md
+
+  # ADR-216: retirar el carril de investigacion (ADR-161/163, 08-09-2026) no
+  # miro lo que ya estaba en vuelo por el. WI-20260828-122242 lleva «active»
+  # desde el 28-08 y no hay salida: el despachador rechaza su clase, el
+  # reflector necesita una incidencia que no existe y sirius-decidir solo
+  # resuelve paradas en «needs_decision». Es la familia de ADR-189, un escalon
+  # mas arriba. Abierto a proposito: cerrarlo es tocar el dominio del motor.
+  - id: H-216
+    titulo: Retirar un carril dejo un trabajo activo en el que ningun comando puede terminar
+    bloque: motor
+    gravedad: baja
+    estado: abierto
+    adr: 216
+    incidencia: 662
+    ficheros:
+      - docs/implementation/work_engine/carriles_retirados.json
+      - src/sirius_engine/decision_cli.py
+      - docs/audits/CIERRE_DEL_CICLO_2026-09-24.md
