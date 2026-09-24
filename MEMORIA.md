@@ -329,7 +329,7 @@ de memoria.
 
 ### `regla-que-depende-de-que-alguien-se-acuerde`
 
-- **[ADR-216](docs/decisions/ADR-216-cerrar-el-ciclo-el-motor-se-queda-sin-trabajo-vivo-los-horarios-se-apagan-desde-actions-y-el-estado-real-queda-escrito.md)** — dar por perdida una salida que existe. Este ADR (sin prueba que lo haga cumplir: ninguna prueba: es un fallo de método, no de código, y la).
+- **[ADR-216](docs/decisions/ADR-216-cerrar-el-ciclo-el-motor-se-queda-sin-trabajo-vivo-los-horarios-se-apagan-desde-actions-y-el-estado-real-queda-escrito.md)** — describir lo que hace un mecanismo sin leer la regla (sin prueba que lo haga cumplir: ninguna prueba: es un fallo de método, no de código. La).
 - **[ADR-192](docs/decisions/ADR-192-el-numero-de-un-defecto-es-el-numero-de-su-adr-no-un-contador-aparte.md)** — elegir a mano un identificador leyendo el máximo del (lo hace cumplir `tests/automation/test_registro_de_defectos.py`).
 - **[ADR-191](docs/decisions/ADR-191-la-revision-es-una-cola-una-rama-entra-a-revision-solo-si-main-ya-esta-dentro-de-ella.md)** — fusionar una rama cuya combinación con `main` no ha (lo hace cumplir `tests/automation/test_cola.py`).
 - **[ADR-188](docs/decisions/ADR-188-el-alcance-que-el-motor-no-puede-escribir-para-la-puerta-antes-de-crear-la-incidencia-y-remite-a-la-sesion-interactiva.md)** — despachar al ciclo automático un encargo cuyo alcance cae donde la credencial del motor no llega, hacer el trabajo entero y perderlo en el push, porque la única regla que lo evitaba vivía en la cabeza de quien despacha. (lo hace cumplir `tests/engine/test_intent_interpreter.py`).
@@ -481,7 +481,7 @@ cerrados; el recuento completo está arriba.
 |---|---|---|
 | H-202 | abierto | Una decision de no hacer algo no dejaba rastro, y una precondicion escrita antes que ella bloqueo trabajo real trece dias |
 | H-203 | abierto | El banco solo sabia medir el camino con el motor encendido, asi que la linea base contra la que comparar no existia |
-| H-216 | abierto | Un trabajo sigue activo 27 dias despues de que su incidencia se cerrara, y la red de seguridad no lo ha reflejado |
+| H-216 | abierto | La contradiccion de etiquetas que el reflector aparta a proposito lleva 27 dias sin que nadie la mire |
 
 ## Las ideas aparcadas y descartadas (ADR-208)
 

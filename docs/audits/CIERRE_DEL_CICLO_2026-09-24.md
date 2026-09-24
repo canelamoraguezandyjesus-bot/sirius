@@ -77,17 +77,21 @@ documento lo repite porque es la respuesta honesta a su pregunta.
   activo**. Los cuatro que esperan **siguen esperando**: esta sesión comprobó
   sobre una copia que se cierran limpiamente, pero no puede escribir en esa
   rama. Cuando él ejecute el lote de ADR-216, el recuento pasará a **59 / 31 /
-  0 / 1**, y el último lo resuelve el reflector.
-- **Cinco workflows con horario** siguen despertando solos
+  0 / 1**. Ese último 1 **se queda ahí a propósito**, y abajo está por qué.
+- **Cinco workflows con horario** siguen despertando solos. Cuatro solo miran
   (`motor-sirius`, `reconcile-sirius-states`, `reflejar-desenlace`,
-  `contador-siete-dias`, `mina-mensual`). Con el diario sin trabajo vivo, un
-  turno mira, no encuentra nada y sale: no rompen nada, pero consumen minutos
-  de Actions. Se apagan desde la pestaña **Actions** de GitHub, cada uno con
-  «···» → «Disable workflow», y se vuelven a encender igual. **No se han
-  tocado los ficheros a propósito**: su horario está derivado y vigilado por
-  guardas cruzadas (`tests/automation/test_contador_de_siete_dias.py`), y
-  desactivarlos desde la interfaz no toca ese diseño ni exige cambiar ninguna
-  prueba.
+  `contador-siete-dias`): con el diario sin trabajo vivo, el turno mira, no
+  encuentra nada y sale; no rompen nada, pero consumen minutos de Actions. **El
+  quinto, `mina-mensual`, es distinto: ese CREA trabajo.** Su reloj es el día 1
+  de cada mes a las 09:24 UTC y para un disparo por horario ejecuta de verdad
+  (`mina-mensual.yml:117` y `:136`), así que **el 1 de octubre despacharía un
+  encargo nuevo** y el motor dejaría de estar vacío. Si el cierre tiene que
+  aguantar, ese es el que tiene fecha. Se apagan desde la pestaña **Actions**
+  de GitHub, cada uno con «···» → «Disable workflow», y se vuelven a encender
+  igual. **No se han tocado los ficheros a propósito**: su horario está
+  derivado y vigilado por guardas cruzadas
+  (`tests/automation/test_contador_de_siete_dias.py`), y desactivarlos desde la
+  interfaz no toca ese diseño ni exige cambiar ninguna prueba.
 - **El repositorio entero es la copia de seguridad**: todo lo decidido está en
   `docs/decisions/`, el método en `.claude/skills/`, el estado del motor en la
   rama `estado-del-motor`. Un `git clone` se lo lleva todo.
@@ -100,23 +104,26 @@ documento lo repite porque es la respuesta honesta a su pregunta.
   terminal—, pero esta sesión **no puede escribir en esa rama**: es estado
   compartido que solo escribe el workflow (idea aparcada I-009). Los cuatro
   comandos que lo cierran desde su ordenador están en ADR-216, para el lote.
-- **`WI-20260828-122242` sigue `active` desde el 28-08, y sí tiene salida.**
-  El primer diagnóstico de esta sesión decía que no la tenía, y era falso: lo
-  corrigió la revisión de Codex sobre esta misma PR. Los hechos: **su
-  incidencia existe, es la #392**, cerrada el 28-08 **con dos etiquetas
-  contradictorias** (`sirius:failed-safely` y `sirius:completed`); su clase
-  `investigacion` **sí está** en la tabla que el reflector consulta (ADR-099,
-  ADR-173), de modo que el reflector lo alcanza. Comprobado el 24-09 ejecutando
-  `sirius-reflejar --ensayo` sobre una copia del diario: nombra el trabajo y
-  solo se detiene porque en este contenedor **no está instalado `gh`**, que es
-  como el reflector lee la incidencia. **En su ordenador sí está.** El comando
-  va en el lote de ADR-216.
-  Lo que **no** queda demostrado, y por eso H-216 sigue abierto: por qué la
-  red de seguridad diaria no lo ha reflejado en veintisiete días. Las dos
-  sospechas escritas son la contradicción de etiquetas (que ADR-181 gobierna) y
-  que esa red estuvo ciega treinta y cinco días sin que nadie lo notara
-  (ADR-193). Mientras tanto no hace nada: el despachador rechaza su clase
-  desde que el carril se retiró.
+- **`WI-20260828-122242` sigue `active` desde el 28-08, y ningún comando lo
+  cierra.** No por un fallo: **el diseño lo aparta a propósito.** Su incidencia
+  es la **#392**, cerrada el 28-08 con **dos etiquetas que se contradicen**
+  (`sirius:failed-safely` y `sirius:completed`). El reflector sí lo alcanza
+  —su clase `investigacion` está en la tabla que consulta (ADR-099, ADR-173)—,
+  y al llegar aplica su primera regla: ante etiquetas contradictorias no toca
+  nada y devuelve la divergencia (`src/sirius_engine/reflect.py:275-283`).
+  ADR-173 lo dejó escrito por adelantado: «se queda `active` a propósito: es el
+  único de los 21 que un humano tiene que mirar», y ADR-181 protege esa regla
+  como criterio de parada. La salida, entonces, no es un comando: es **mirar la
+  #392 y decidir cuál de las dos etiquetas es la verdadera**, dejar solo esa
+  por el procedimiento que corresponda, y dejar que el reflector pase. Esta
+  sesión no retira etiquetas y el lote de ADR-216 no lo intenta.
+  Esta afirmación se equivocó **dos veces** antes de quedar así —primero «no
+  hay salida ninguna», después «el reflector lo cierra»—, y las dos las cazó la
+  revisión de Codex sobre esta misma PR.
+  Lo que sigue abierto como defecto (H-216, incidencia #662) no es el trabajo:
+  es que esa contradicción lleva **veintisiete días sin que nadie la haya
+  mirado**. El diseño dice «esto lo mira un humano» y no hay nada que ponga a
+  ese humano delante. Se encontró auditando, no por un aviso.
 
 ## 6. El motor: en qué estado queda, y qué le falta
 
@@ -147,7 +154,7 @@ maqueta: ha llevado trabajo real de punta a punta.
 
 | Qué | Dónde |
 |---|---|
-| Un trabajo `active` en un carril retirado, sin ninguna salida | H-216, incidencia #662 |
+| Una contradicción de etiquetas que el diseño deriva a un humano lleva 27 días sin que nadie la mire | H-216, incidencia #662 |
 | La vigilancia de la vigilancia es humana: la red de seguridad estuvo **35 días ciega** sin que nadie lo notara | ADR-193, ficha PROC-003 |
 | El ciclo no distingue criticidad: 7 rondas de revisión, todas P2, sobre un aviso que por contrato no puede romper nada | incidencia #503 |
 | El método no está mecanizado: la regla de las dos rondas, la mutación declarada y la detección de listas a mano las aplica una persona leyendo | incidencia #267 |

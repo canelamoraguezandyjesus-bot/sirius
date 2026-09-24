@@ -51,7 +51,13 @@ workflow. Y no se toca el diseño del motor, porque él lo conserva.
 1. **Las PR abiertas, cerradas.** La #661 (cinco skills, ADR-215) fusionada
    aplastada en `6a58c75e`. La #117 —la rama de evidencia de julio, abierta
    desde el 25-07 y declarada «no debe fusionarse automáticamente»— cerrada sin
-   borrar su rama: su contenido se portó al árbol real en ADR-104.
+   borrar su rama: su contenido se portó al árbol real **por encargos
+   sucesivos, no de una vez**. ADR-104 portó solo el banco de 47 casos, y lo
+   dice él mismo: «sin índice de categoría ni filtro de relevancia todavía (eso
+   es M8-M10)». El resto llegó después —el tratamiento léxico en ADR-109, el
+   motor por etapas en ADR-110, la petición por caso en ADR-111, el índice de
+   categoría y el filtro de relevancia conectados en ADR-112— y siguió hasta
+   ADR-117. Atribuirlo todo a ADR-104 lo cazó la revisión de Codex.
    `docs/evolution/STATUS.md` la describía como «abierta y sin fusionar como
    archivo de evidencia» en su línea D1, y esa frase queda fechada ahí mismo:
    la decisión D1 —portar la evidencia por encargos nuevos, no fusionando esa
@@ -67,12 +73,26 @@ workflow. Y no se toca el diseño del motor, porque él lo conserva.
    solo escribe el workflow; la idea aparcada I-009 ya lo había nombrado—, así
    que los cuatro comandos quedan abajo para el lote de su ordenador.
 3. **Los horarios se apagan desde la pestaña Actions de GitHub**, no editando el
-   repositorio: cada workflow, «···» → «Disable workflow». Son cinco:
-   `motor-sirius`, `reconcile-sirius-states`, `reflejar-desenlace`,
-   `contador-siete-dias` y `mina-mensual`. Se reenciende igual. Mientras tanto
-   no rompen nada: un turno sobre un diario sin trabajo vivo mira, no encuentra
-   y sale (`docs/operations/MOTOR_DE_SIRIUS.md`, §2), y `motor-sirius` corre
-   `sirius-supervisar` sin escritor y sin `issues: write`.
+   repositorio: cada workflow, «···» → «Disable workflow». Son cinco, y **no
+   son todos iguales**:
+   - Cuatro solo miran: `motor-sirius`, `reconcile-sirius-states`,
+     `reflejar-desenlace` y `contador-siete-dias`. Un turno sobre un diario sin
+     trabajo vivo mira, no encuentra y sale
+     (`docs/operations/MOTOR_DE_SIRIUS.md`, §2), y `motor-sirius` corre
+     `sirius-supervisar` sin escritor y sin `issues: write`. Gastan minutos de
+     Actions y nada más.
+   - **`mina-mensual` CREA trabajo.** Es la excepción y hay que decirla:
+     `.github/workflows/mina-mensual.yml:117` fija `EJECUTAR: true` para todo
+     evento `schedule`, y la línea 136 llama a `sirius-despachar "$ORDEN"
+     --ejecutar`. Su reloj es `24 9 1 * *`, así que **el 1 de octubre a las
+     09:24 UTC despacha un encargo nuevo** —con su incidencia y su trabajo en
+     el diario— aunque el motor hubiera quedado vacío. Ese es el único de los
+     cinco con fecha límite: si el cierre tiene que aguantar, se desactiva
+     antes de ese día. El fichero no se toca: ADR-201 lo aprobó así a
+     propósito —la orden está escrita palabra por palabra en el workflow y
+     entra por `main`, no la inventa la máquina—, y apagarlo desde Actions no
+     cambia esa decisión.
+   Se reencienden igual, desde el mismo sitio.
 4. **El estado real queda escrito** en `docs/audits/CIERRE_DEL_CICLO_2026-09-24.md`:
    qué hace hoy la aplicación y está demostrado, qué no hace y con qué número,
    dónde se fue el trabajo, y qué hay que hacer para reencenderlo. Es el
@@ -89,13 +109,14 @@ cierra los cuatro trabajos parados y sube el diario. Qué sale: cuatro veces
 git fetch origin estado-del-motor
 git switch estado-del-motor
 git merge --ff-only origin/estado-del-motor
+git rev-list --left-right --count origin/estado-del-motor...HEAD
 uv run sirius-decidir WI-20260903-030529 --diario .\diario.jsonl --ejecutar --terminar
 uv run sirius-decidir WI-20260903-095428 --diario .\diario.jsonl --ejecutar --terminar
 uv run sirius-decidir WI-20260912-235558 --diario .\diario.jsonl --ejecutar --terminar
 uv run sirius-decidir WI-20260913-142937 --diario .\diario.jsonl --ejecutar --terminar
-uv run sirius-reflejar --diario .\diario.jsonl --ensayo
-uv run sirius-reflejar --diario .\diario.jsonl
-git commit -am "Cierre del ciclo: los cuatro trabajos parados quedan terminados y el quinto se refleja (ADR-216)"
+uv run sirius-memoria desenlaces --diario .\diario.jsonl
+git add -A
+git commit -m "Cierre del ciclo: los cuatro trabajos parados quedan terminados (ADR-216)"
 git push origin estado-del-motor
 git switch main
 ```
@@ -107,12 +128,32 @@ viejo y el `push` acabaría rechazado. Si esa línea falla, **parar ahí** y peg
 la salida: significa que la rama local tiene algo que el remoto no, y eso se
 mira antes de tocar nada.
 
-**Las dos líneas del reflector** son la salida del quinto trabajo,
-`WI-20260828-122242`. El ensayo dice qué haría; la segunda lo aplica. En este
-contenedor no se pudieron ejecutar porque `gh` no está instalado y el reflector
-lee la incidencia por ahí; en su máquina sí está. Si el ensayo dice que no puede
-leer la #392 o que no sabe qué proyectar, **no insistir**: eso es el defecto
-H-216 y se queda como está, apuntado.
+**La cuarta línea existe porque `--ff-only` no basta**, y lo cazó la revisión de
+Codex: si la rama local va **por delante** del remoto, `git merge --ff-only`
+imprime «Already up to date», sale con código 0 y el `push` publicaría esos
+commits locales junto al diario. `git rev-list --left-right --count` tiene que
+imprimir exactamente `0` y `0`. **Cualquier otra cosa: parar ahí** y pegar la
+salida. No hay que hacer `reset` ni forzar nada; se mira primero.
+
+**La línea de `sirius-memoria desenlaces` regenera la vista legible**
+(`DESENLACES.md`) a partir del diario ya modificado, que es exactamente lo que
+hace el workflow tras cada reflejo
+(`.github/workflows/reflejar-desenlace.yml:143-158`, ADR-171). Sin ella el
+diario diría una cosa y la vista publicada otra. Por eso el commit es `git add
+-A` y no `-am`: entra el diario y entra la vista.
+
+**El quinto trabajo, `WI-20260828-122242`, NO lo cierra ningún comando de este
+lote, y el lote no lo intenta.** El reflector sí lo alcanza, y entonces se
+niega **a propósito**: su regla 1 (`src/sirius_engine/reflect.py:275-283`)
+devuelve cero pasos cuando la incidencia lleva etiquetas de estado que se
+contradicen, y la #392 lleva `sirius:failed-safely` y `sirius:completed` a la
+vez. No es un fallo ni un entorno que falte: ADR-173 lo escribió por adelantado
+—«la regla 1 gana y seguirá dando divergencia cada pasada… Se queda `active` a
+propósito: es el único de los 21 que un humano tiene que mirar»— y ADR-181
+protege esa contradicción como criterio de parada. La salida de ese trabajo es
+**una decisión sobre la #392**: mirar qué pasó de verdad, dejar una sola
+etiqueta por el procedimiento humano que corresponda y entonces dejar que el
+reflector pase. Ni esta sesión ni este lote retiran etiquetas.
 
 Si algo sale distinto de eso, pegar la salida entera y no repetir el comando.
 
@@ -124,7 +165,7 @@ Si algo sale distinto de eso, pegar la salida entera y no repetir el comando.
 | El diario tenía cinco trabajos sin terminar | lectura de `origin/estado-del-motor:diario.jsonl`, último estado por trabajo | 91 trabajos: 59 `delivered`, 27 `cancelled`, 4 `needs_decision`, 1 `active` |
 | Los cuatro parados se cierran limpiamente | `sirius-decidir … --terminar` (ensayo) y `--ejecutar` sobre una copia | los cuatro a `cancelled`; 4 sucesos añadidos; recuento final 59 / 31 / 0 / 1 |
 | El quinto no lo cierra `sirius-decidir`… | `sirius-decidir WI-20260828-122242 … --terminar` | se niega: «no está en needs_decision, sino en active… inventar una transición que el dominio no admite sería peor que no hacer nada» |
-| …pero **sí lo alcanza el reflector**, que es su vía | `sirius-reflejar --diario <copia> --ensayo` | lo nombra y se detiene solo por el entorno: «no pude leer la incidencia #392 (metadatos: [Errno 2] No such file or directory: 'gh')». Su incidencia existe —la #392, cerrada el 28-08 con `sirius:failed-safely` **y** `sirius:completed`— y su clase está en la tabla que el reflector consulta (ADR-099, ADR-173). El primer diagnóstico de este ADR decía que no había salida: era falso, y lo corrigió la revisión de Codex |
+| …y el reflector lo **alcanza** pero se niega a propósito | `sirius-reflejar --diario <copia> --ensayo`, y lectura de `reflect.py:275-283`, ADR-173 §2 y ADR-181 §3 | el ensayo lo nombra —su clase `investigacion` sí está en la tabla que el reflector consulta (ADR-099, ADR-173)— y se detiene en este contenedor por falta de `gh`. Pero el ensayo no prueba que haya salida: la regla 1 devuelve **cero pasos** ante etiquetas contradictorias, y la #392 lleva `sirius:failed-safely` **y** `sirius:completed`. ADR-173 ya lo dejó escrito: se queda `active` a propósito. Este ADR lo afirmó mal **dos veces** —primero «no hay salida», luego «el reflector lo cierra»— y las dos las cazó Codex |
 | Esta sesión no puede escribir en `estado-del-motor` | intento de confirmar el diario en un árbol de trabajo de esa rama | denegado por el clasificador de permisos, «Modify Shared Resources». Es I-009 medido |
 | Ninguna rutina programada sigue viva en la sesión | `list_triggers` con `enabled: true` | lista vacía |
 | Las cifras del documento de cierre | `MEMORIA.md` regenerada sobre el head de esta rama | **19 skills, 210 ADR, 3 defectos abiertos y 66 cerrados**. Son las de este head, no las de la base `6a58c75e` —que daba 209 y 2—: este cierre añade ADR-216 y H-216, y publicarlas sin ellos habría sido la misma cifra vieja que el revisor cazó |
@@ -147,8 +188,11 @@ para lo que existe la skill `verificar-el-estado-real`.
   #503, #506, #647 como apuntes), y un `git clone` se lleva todo.
 - Los horarios siguen despertando hasta que él los desactive. No rompen nada;
   gastan minutos de Actions.
-- Queda un trabajo (`WI-20260828-122242`) en un estado del que no hay salida.
-  Es H-216, y no se arregla aquí: arreglarlo es tocar el motor.
+- Queda un trabajo (`WI-20260828-122242`) en `active` **a propósito**, porque
+  el diseño aparta las contradicciones de etiquetas en vez de resolverlas solo
+  (ADR-173, ADR-181). Lo que no tiene dueño es el otro lado: nadie ha puesto
+  esa contradicción delante de un humano en 27 días. Eso es H-216, sigue
+  abierto con la incidencia #662, y no se arregla aquí.
 
 ## Alternativas descartadas y por qué
 
@@ -163,14 +207,20 @@ para lo que existe la skill `verificar-el-estado-real`.
 ## La lección
 
 - familia: `regla-que-depende-de-que-alguien-se-acuerde`
-- sin esto se repetiría: dar por perdida una salida que existe. Este ADR
-  afirmó primero que `WI-20260828-122242` no se podía cerrar con nada, y no era
-  verdad: su incidencia existía (#392), su clase sí está en la tabla que el
-  reflector consulta, y el ensayo del reflector lo nombra. La afirmación salió
-  de razonar sobre el carril retirado en vez de **ejecutar la herramienta que
-  ya existía**, que es lo primero que manda la disciplina de evidencia. La
-  cazó el revisor externo, no la sesión
-- lo hace cumplir: ninguna prueba: es un fallo de método, no de código, y la
-  guarda que lo haría imposible sería ejecutar antes de afirmar, que ninguna
-  prueba puede comprobar. Queda en H-216 y en la tabla de comprobación de
-  arriba, con la ejecución que lo desmintió
+- sin esto se repetiría: describir lo que hace un mecanismo sin leer la regla
+  que lo decide. Este ADR se equivocó **dos veces seguidas sobre el mismo
+  trabajo**: primero dijo que `WI-20260828-122242` no tenía salida ninguna
+  (falso: su incidencia existe, la #392, y su clase sí está en la tabla del
+  reflector); después, ya corregido, dijo que el reflector lo cerraría (también
+  falso: la regla 1 devuelve cero pasos ante etiquetas contradictorias). Dos
+  rondas con defectos de la misma familia obligan a parar y buscar la raíz
+  (ADR-001), y la raíz no es «faltó ejecutar el comando»: el ensayo **sí** se
+  ejecutó y no bastó, porque solo demuestra que el CLI llega, no qué decide.
+  La raíz es afirmar sobre el camino feliz sin leer las reglas de rechazo del
+  módulo —`reflect.py:275-283`— ni el apartado «qué NO va a garantizar» del ADR
+  que lo construyó, que lo decía con nombre y número. Las dos las cazó el
+  revisor externo, no la sesión
+- lo hace cumplir: ninguna prueba: es un fallo de método, no de código. La
+  guarda que lo haría imposible sería leer la regla de rechazo antes de afirmar
+  el desenlace, y eso ninguna prueba lo comprueba. Queda aquí, en H-216 y en la
+  tabla de comprobación de arriba, con las dos afirmaciones falsas escritas

@@ -1093,28 +1093,34 @@ defectos:
       - .claude/skills/paradas-del-motor-delante-del-propietario/SKILL.md
 
   # ADR-216: WI-20260828-122242 lleva «active» desde el 28-08 aunque su
-  # incidencia, la #392, se cerro ese mismo dia. La red de seguridad diaria
-  # (reflejar-desenlace.yml) deberia haberlo reflejado en 27 dias y no lo ha
-  # hecho. Dos sospechas escritas, ninguna demostrada: la #392 se cerro con dos
-  # etiquetas contradictorias -sirius:failed-safely y sirius:completed, lo que
-  # ADR-173 ya registro y ADR-181 gobierna-, y esa red estuvo 35 dias ciega sin
-  # que nadie lo notara (ADR-193).
+  # incidencia, la #392, se cerro ese mismo dia. El reflector SI lo alcanza
+  # -su clase «investigacion» esta en la tabla que consulta (ADR-099,
+  # ADR-173)- y al llegar se niega A PROPOSITO: la regla 1 de
+  # src/sirius_engine/reflect.py:275-283 devuelve cero pasos cuando la
+  # incidencia lleva etiquetas de estado contradictorias, y la #392 lleva
+  # sirius:failed-safely y sirius:completed a la vez. ADR-173 lo escribio por
+  # adelantado -«se queda active a proposito: es el unico de los 21 que un
+  # humano tiene que mirar»- y ADR-181 protege esa regla como criterio de
+  # parada.
   #
-  # El primer diagnostico de este defecto decia que no habia ninguna salida
-  # -que el reflector necesitaba una incidencia inexistente y que el carril
-  # retirado lo impedia- y era FALSO en los dos puntos: lo corrigio la revision
-  # de Codex sobre la PR #663. La clase «investigacion» si esta en la tabla que
-  # el reflector consulta (ADR-099, ADR-173), y el ensayo del 24-09 lo nombra:
-  # solo se detiene porque en el contenedor de la sesion no esta instalado
-  # «gh». La via existe y esta en el lote de ADR-216.
+  # EL DEFECTO NO ES EL TRABAJO: es que ese humano no existe. El diseno
+  # deriva la contradiccion a una persona y no hay nada que se la ponga
+  # delante: 27 dias despues sigue ahi, y se encontro auditando, no por un
+  # aviso. La red diaria ademas estuvo 35 dias ciega sin que nadie lo notara
+  # (ADR-193), que es la misma familia.
+  #
+  # Este defecto se diagnostico mal DOS veces antes de quedar asi -«no hay
+  # ninguna salida», y luego «el reflector lo cierra»-, y las dos las cazo la
+  # revision de Codex sobre la PR #663. La raiz, escrita en la leccion de
+  # ADR-216: afirmar lo que hace un mecanismo sin leer sus reglas de rechazo.
   - id: H-216
-    titulo: Un trabajo sigue activo 27 dias despues de que su incidencia se cerrara, y la red de seguridad no lo ha reflejado
+    titulo: La contradiccion de etiquetas que el reflector aparta a proposito lleva 27 dias sin que nadie la mire
     bloque: motor
     gravedad: baja
     estado: abierto
     adr: 216
     incidencia: 662
     ficheros:
-      - src/sirius_engine/reflect_cli.py
+      - src/sirius_engine/reflect.py
       - .github/workflows/reflejar-desenlace.yml
       - docs/audits/CIERRE_DEL_CICLO_2026-09-24.md
