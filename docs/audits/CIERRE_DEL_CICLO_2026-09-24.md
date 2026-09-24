@@ -92,7 +92,49 @@ documento lo repite porque es la respuesta honesta a su pregunta.
   práctica no hace nada: el despachador rechaza su clase y ningún workflow lo
   toca.
 
-## 6. Si mañana se retoma solo el robot
+## 6. El motor: en qué estado queda, y qué le falta
+
+Es lo que el propietario conserva, así que esta sección es la que importa al
+volver. Sale de `docs/implementation/bloques_del_motor.yml`, del diario y del
+registro de defectos, no de un resumen.
+
+**Veinte bloques: 17 cerrados, 2 fuera de alcance y 1 pendiente.**
+
+- **Fuera de alcance**: D3 (hablar por Telegram; su centro de mando es la sesión
+  interactiva) y D4 (partir un objetivo grande en encargos), este último
+  **descartado con razón escrita** en ADR-198, no aplazado: repartir exige un
+  modelo y el motor no ejecuta ninguno, que es la premisa de ADR-082.
+- **Pendiente, uno solo: D1, «pasar el mando de GitHub al motor, clase por
+  clase».** Y lo que le falta **no es código**. Sus tres piezas existen y desde
+  el 27-08-2026 las tres tienen llamante, incluida `authority_reversion.py`, la
+  salida de emergencia del §11.4 que devuelve el mando si el motor se porta mal.
+  Lo que falta es lo que el contrato exige para cerrarlo: **siete días
+  consecutivos en verde por clase** (§11.2). Los siete días no han empezado
+  porque un día sin trabajo circulando no cuenta como día verde. **D1 se cierra
+  usándolo, no programándolo.**
+
+**Lo que el motor ya ha hecho, medido en su diario**: 91 encargos, **59
+entregados** con su commit de fusión, 31 cancelados y 1 atascado. No es una
+maqueta: ha llevado trabajo real de punta a punta.
+
+**Lo que está roto o sin terminar, con su nombre:**
+
+| Qué | Dónde |
+|---|---|
+| Un trabajo `active` en un carril retirado, sin ninguna salida | H-216, incidencia #662 |
+| La vigilancia de la vigilancia es humana: la red de seguridad estuvo **35 días ciega** sin que nadie lo notara | ADR-193, ficha PROC-003 |
+| El ciclo no distingue criticidad: 7 rondas de revisión, todas P2, sobre un aviso que por contrato no puede romper nada | incidencia #503 |
+| El método no está mecanizado: la regla de las dos rondas, la mutación declarada y la detección de listas a mano las aplica una persona leyendo | incidencia #267 |
+| Nadie cuenta las rondas de la revisión externa | idea I-008 |
+| Una decisión del propietario no tiene vía segura hasta el diario de `estado-del-motor` | idea I-009 |
+| Un agente que revise el repositorio por módulos cuando nadie está delante | idea I-005 |
+
+**Lo que NO le falta**, y conviene no reconstruirlo por olvido: despachador con
+su puerta de sensibilidad, supervisor, reflector de desenlaces, tablero por
+incidencia, revisión dual con Claude y Codex, la cola de revisión de ADR-191, el
+contador de siete días con su hora derivada, y la reversión de autoridad.
+
+## 7. Si mañana se retoma solo el robot
 
 Lo que vale para eso y ya está construido: el motor de trabajo con su diario,
 el ciclo de revisión, la disciplina de evidencia y las diecinueve skills de
