@@ -939,7 +939,8 @@ def _declara_fallo_del_conector(body: str) -> str | None:
     error», así que lo que se reconoce es el prefijo, que sí es estable.
 
     **Esto nunca aprueba nada.** Solo convierte una espera de 20 minutos en una
-    parada inmediata y diagnosticable. La asimetría es la de
+    parada inmediata y diagnosticable (y, desde ADR-226, el agregador entrega al
+    corrector los hallazgos que Claude ya tuviera en vez de tirarlos). La asimetría es la de
     ``_declares_no_findings`` pero al revés y más benigna: si el conector cambia
     su texto de error, volvemos al comportamiento de hoy —esperar el plazo—, que
     es exactamente lo que ya hacíamos.
