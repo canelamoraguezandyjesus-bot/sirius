@@ -1125,6 +1125,27 @@ defectos:
       - .github/workflows/reflejar-desenlace.yml
       - docs/audits/CIERRE_DEL_CICLO_2026-09-24.md
 
+  # ADR-221 (rama claude/la-puerta-resuelve-el-perfil; sin incidencia: viene de
+  # la bitacora del ciclo, entradas 123, 124 y 138 / deudas 34 y 35, medidas por
+  # la mina del 30-09). La puerta de activacion no miraba el Perfil: rol@N y
+  # #653 (20-09) arranco el ciclo con implementer@2 para morir a los seis
+  # segundos en la resolucion del prompt, con la razon solo en el log del run;
+  # nadie le dijo tampoco que la version vigente era la 4.
+  # Cierre: la PR de esa rama (el numero se conoce al abrirla). El sha de
+  # cerrado_por es el del commit del arreglo en la rama; la fusion aplastada lo
+  # deja fuera de main, como en H-217 a H-220, hasta que la convencion cambie.
+  - id: H-221
+    titulo: La puerta de activacion no resolvia el Perfil del cuerpo y una activacion con un rol@N irresoluble arrancaba un run que moria a los seis segundos sin aviso en la incidencia
+    bloque: motor
+    gravedad: media
+    estado: cerrado
+    cerrado_por: d8b73d8050421fc6787e0b42cffeb5b9a593411a
+    adr: 221
+    ficheros:
+      - scripts/automation/sirius_validate_activation.sh
+      - scripts/automation/resolver_prompt.py
+      - tests/automation/test_sirius_activation.py
+
   # ADR-218 (PR #664, sin incidencia: lo destapo Quality sobre la propia PR).
   # La vista de memoria volvio a no caber en una sola lectura 17 dias despues
   # de ADR-196: sobre main quedaban 3.146 bytes de margen, menos de lo que
