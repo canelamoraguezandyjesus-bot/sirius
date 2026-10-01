@@ -102,7 +102,11 @@ jobs:
               ;;
             sirius:ready-for-merge)
               titulo="🟢 **El trabajo está listo**"
-              cuerpo=$'La implementación, las comprobaciones y la revisión han terminado correctamente.\n\nSolo falta tu autorización para fusionarlo.\n\nEscribe **fusiona** en un comentario de esta incidencia para fusionarlo automáticamente.'
+              # Desde ADR-205 la aprobación de los dos revisores sobre el mismo
+              # head ES la autorización: el motor fusiona solo y `fusiona` queda
+              # como reintento manual. El texto anterior pedía una autorización
+              # que ya no hacía falta (deuda 47 de la bitácora del ciclo).
+              cuerpo=$'La implementación, las comprobaciones y la revisión han terminado correctamente.\n\nEl motor fusiona la PR por sí solo en cuanto los dos revisores aprueban el mismo head (ADR-205): no necesitas autorizarlo.\n\nSi en una hora sigue sin fusionarse, escribe **fusiona** en un comentario de esta incidencia para reintentarlo.'
               ;;
             sirius:blocked-decision)
               titulo="🟡 **Necesito una decisión**"

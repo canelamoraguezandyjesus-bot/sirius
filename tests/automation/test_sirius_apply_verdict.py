@@ -2339,3 +2339,48 @@ def test_la_lectura_va_con_el_token_de_lectura_y_el_relanzamiento_con_el_pat(
     log = _actions_log(env)
     assert f"QUALITY_RUNS {head} token=token-de-lectura" in log
     assert "RERUN 555 token=pat-de-la-invocacion" in log
+
+
+def test_changes_requested_names_the_pr_on_its_own_line(tmp_path: Path) -> None:
+    """La línea «- PR: …» del bloque CHANGES_REQUESTED no se publicó ni una vez
+    en septiembre de 2026: 0 de 130 comentarios la llevaban (mina del 30-09,
+    §6.4). `printf '- PR: %s\\n'` empieza por un guion y el `printf` de bash lo
+    lee como una opción («printf: - : invalid option»), así que la línea moría
+    en silencio dentro de un bloque que no corre con `set -e`.
+    """
+    env = _setup(tmp_path)
+    _seed_issue(
+        env,
+        ["sirius:reviewing"],
+        comments=(
+            "QUALITY_SUCCESS\n- Head SHA: `c4d482267d9a`\n"
+            "PR abierta: https://github.com/owner/repo/pull/9\n"
+        ),
+    )
+    _seed_pr(env, 9, head="c4d482267d9a")
+    vf = _verdict_file(
+        tmp_path,
+        {
+            "verdict": "CHANGES_REQUESTED",
+            "summary": "hay defectos",
+            "reviewed_head_sha": "c4d482267d9a",
+            "observations": [
+                {
+                    "id": "R1",
+                    "severidad": "alta",
+                    "archivo": "src/x.py",
+                    "problema": "no valida entrada",
+                    "criterio_esperado": "debe validar",
+                    "prueba": "test_x_invalid",
+                    "limites_correccion": "solo src/x.py",
+                }
+            ],
+        },
+    )
+    r = _run(env, "reviewer", vf)
+    assert r.returncode == 0, r.stdout + r.stderr
+    comments = _comments(env)
+    assert re.search(r"^- PR: \S+", comments, re.MULTILINE), (
+        "el bloque CHANGES_REQUESTED no lleva la línea «- PR: …»; en septiembre de "
+        "2026 faltó en 130 de 130 comentarios por un printf que empezaba por guion"
+    )
