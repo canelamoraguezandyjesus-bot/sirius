@@ -261,8 +261,10 @@ bloques:
       CANCELADO por el propietario el 13-09-2026 (#610, ADR-225): la línea del
       contador de los siete días «no es necesaria», y su «hay que acabar esto
       entero» eran las mejoras del motor que quedaban pendientes, no esta
-      línea. Nada de lo construido se toca -el contador corre cada día y dice
-      NO_COMPARABLE con motivo, la salvaguarda sigue conectada- y ninguna clase
+      línea. Nada de lo construido se borra -el comando, su registro y la salvaguarda
+      siguen-, pero el contador deja de correr cada día: su pasada solo podía
+      escribir NO_COMPARABLE (19 pasadas programadas entre el 13-09 y el 01-10,
+      las 19 así) y queda a mano, sin `schedule` (ADR-225, Decisión 4) y ninguna clase
       se conmuta. No se ordena sin otra decisión suya; si llega, la medida de
       #605 (ADR-186) es el punto de partida y hará falta otro ADR. Hasta hoy
       esta entrada seguía diciendo «pendiente» (lo cazó Codex en la PR #672).

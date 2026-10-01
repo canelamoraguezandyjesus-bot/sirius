@@ -13,14 +13,13 @@
 # reutiliza VERBATIM el patrón ya probado de contador-siete-dias.yml (worktree
 # de la rama de memoria, pasada, confirmación con `if: always()`).
 #
-# La pasada de las 00:04 UTC es la red de seguridad diaria. NO puede correr
-# pegada al contador (03:24): su guardián de hora exige 170 minutos de
-# tranquilidad sin disparos programados por delante (tolerancia = max
-# timeout-minutes x 2; test_la_hora_del_contador_deja_pasar_la_ventana_de_
-# tolerancia), porque etiquetas más frescas que la tolerancia harían declarar
-# NO_COMPARABLE cada día, en verde. A las 00:04 quedan 200 min de margen y el
-# almacén del día llega reflejado igualmente (los workflow_run cubren el
-# tiempo real; esta red solo recoge lo que se hubiera perdido).
+# La pasada de las 00:04 UTC es la red de seguridad diaria. La hora se eligió
+# para no correr pegada al contador de los siete días (03:24), cuyo guardián
+# exigía 170 minutos de tranquilidad por delante (tolerancia = max
+# timeout-minutes x 2); desde ADR-225 (01-10-2026) el contador no tiene horario
+# y esa restricción no rige, y la hora se queda donde está. El almacén del día
+# llega reflejado igualmente (los workflow_run cubren el tiempo real; esta red
+# solo recoge lo que se hubiera perdido).
 # `workflow_dispatch` permite la pasada manual del propietario.
 #
 # `sirius-reflejar` devuelve 0 tanto si aplicó transiciones como si no

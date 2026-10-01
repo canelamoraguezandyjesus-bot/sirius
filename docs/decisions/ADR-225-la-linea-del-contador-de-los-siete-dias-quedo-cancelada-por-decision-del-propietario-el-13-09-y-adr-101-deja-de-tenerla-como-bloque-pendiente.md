@@ -60,6 +60,13 @@ solo prosa y registro, ningún comportamiento (si un sitio con comportamiento
 bloqueara por esta línea, se mide aparte); H-225 registrada y la guarda del
 registro vista caer antes y pasar después.
 
+**Desviación declarada.** La ronda 2 de Codex en la PR #672 mostró el sitio con
+comportamiento que la nota preveía: el `schedule` del contador y las guardas
+que, para mantener alcanzable D1, exigían el cron derivado y ataban a 85 el
+tope de todos los jobs. Se midió —las 19 pasadas de abajo— y se cambia aquí, no
+aparte: es la consecuencia mecánica de la misma decisión del propietario, no
+una decisión nueva.
+
 ## Opciones consideradas
 
 1. **Dejarlo como está**, la decisión en #610 y el árbol diciendo lo contrario.
@@ -90,10 +97,27 @@ registro vista caer antes y pasar después.
    pieza como pendiente u ordenada y citan #610 y este ADR. Las notas de
    arranque antiguas y la propuesta de separación del 08-09 (REVISADA, fechada
    y sin autoridad) se quedan como lo que fueron.
-4. **Ningún comportamiento cambia**: `CLASES_CON_ESTADO_PROPIO` sigue vacío con
+4. **El árbol ejecutable deja de servir a la línea cancelada** (ronda 2 de
+   Codex en la PR #672): `contador-siete-dias.yml` pierde su `schedule` y
+   conserva `workflow_dispatch`. Medido en el registro de la rama de memoria
+   antes de retirarlo: 19 pasadas programadas entre el 13-09 y el 01-10, 22
+   líneas, 44 ejes, **los 44 `no_comparable`**, 0,4 minutos de Actions cada
+   una. Con el horario se van las guardas que solo tenían sentido con él —el
+   cron derivado, la ventana de tolerancia y el techo de 85 minutos para todos
+   los jobs: las de `test_contador_de_siete_dias.py`, el tope del ejecutor en
+   `test_investigar_orden_workflow.py`, los dos del tope de la medición en
+   `test_medicion_del_investigador.py` y la cota superior del minuto del motor
+   en `test_turno_programado_actua.py`— y la prosa de los ocho workflows que
+   justificaban su tope o su hora por el contador lo dice con fecha, sin
+   mover ningún tope ni ninguna hora. Queda una guarda nueva: que el contador
+   **no** vuelva a tener horario sin otra decisión. Lo demás no cambia:
+   `CLASES_CON_ESTADO_PROPIO` sigue vacío con
    `test_h25_el_conjunto_declarado_esta_vacio_hoy` intacta, `verificar_dia`
    igual, la racha igual, el §11.2 igual (la enmienda que #610 autorizaba no se
-   hace: el encargo se canceló).
+   hace: el encargo se canceló), y la derivación de la hora sigue probada sola
+   (`test_seven_day_streak.py`) por si la línea vuelve.
+5. **El cierre del ciclo del 24-09 lleva una corrección fechada** (ronda 2 de
+   Codex): presentaba D1 como el único bloque pendiente y «se cierra usándolo».
 
 ## Comprobación que la sostiene
 
@@ -111,8 +135,20 @@ registro vista caer antes y pasar después.
   las notas de arranque históricas se quedan como lo que fueron.
 - Guardas de ADR y registro en verde (`test_estado_de_los_adr.py`,
   `test_mina_de_lecciones.py`, `test_registro_de_decisiones.py`,
-  `test_citas_de_los_adr.py`, `test_memoria.py`); las pruebas del contador y
-  del verificador de proyección en verde sin cambios (solo se tocó prosa).
+  `test_citas_de_los_adr.py`, `test_memoria.py`); las del verificador de
+  proyección y de la derivación de la hora (`test_seven_day_streak.py`,
+  `test_seven_day_streak_cli.py`, `test_projection_verifier.py`) en verde sin
+  cambios.
+- La medida del contador: `racha_siete_dias.jsonl` en `estado-del-motor` (378
+  líneas; desde el 13-09, 22 líneas de 19 pasadas sobre 4 encargos, 44 ejes,
+  los 44 `no_comparable`) y los 19 runs programados de
+  `contador-siete-dias.yml` en Actions (todos `success`, 0,4 min de media).
+- Las guardas reescritas, en verde: `test_contador_de_siete_dias.py` (2),
+  `test_investigar_orden_workflow.py`, `test_medicion_del_investigador.py`,
+  `test_turno_programado_actua.py`, y las baterías que leen los workflows
+  tocados. Mutación: devolver el `schedule` al contador → cae
+  `test_el_contador_existe_y_se_lanza_solo_a_mano` (vista caer, fichero
+  restaurado).
 - `test_todo_adr_que_declara_un_defecto_deja_su_entrada_en_el_registro` cae
   con este ADR sin H-225 y pasa con ella (los dos commits de la convención).
 - `ruff format --check`, `ruff check`, `mypy` sobre los dos módulos tocados; el
@@ -126,7 +162,12 @@ registro vista caer antes y pasar después.
   registrada; la hoja de decisiones abiertas del propietario no cambia (esta ya
   estaba tomada).
 - El contador sigue sin poder contar, y sigue diciéndolo con honestidad; eso
-  no era un defecto y no se toca.
+  no era un defecto y no se toca. Lo que sí deja de hacer es intentarlo cada
+  día: la pasada queda a mano.
+- Los topes de los jobs y las horas de los demás workflows dejan de estar
+  atados a una ventana que no medía nada; cambiar cualquiera sigue siendo una
+  decisión con su medida, pero ya no la bloquea una guarda de una línea
+  cancelada (el implementador de la PR #675 necesita exactamente eso).
 
 ## Alternativas descartadas y por qué
 
