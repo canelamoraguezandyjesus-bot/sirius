@@ -167,8 +167,10 @@ cuerpo="$(<"$body_file")"
 # cambiando solo la version del perfil, el reparto no lo ve (compara el rol) y
 # el implementador moriria con la version vieja mientras esta puerta daba por
 # bueno el cuerpo nuevo (ronda 1 de Codex en la PR #670). Sin ISSUE_BODY (la
-# cadena local, el workflow de validacion a mano) se juzga el cuerpo actual.
-cuerpo_a_ejecutar="${ISSUE_BODY:-$cuerpo}"
+# cadena local) se juzga el cuerpo actual. `-` y no `:-`: una instantanea
+# VACIA (el evento llego sin cuerpo y alguien lo escribio despues) es lo que el
+# implementador ejecutaria, y se juzga vacia (ronda 2 de Codex en la PR #670).
+cuerpo_a_ejecutar="${ISSUE_BODY-$cuerpo}"
 # Solo se exime un rol que pertenezca a OTRO carril del manifiesto: ese tiene
 # su propio ejecutor y su propia puerta de reparto (`investigador`, el
 # investigador medido de investigar-orden.yml), y esta puerta no afirma nada

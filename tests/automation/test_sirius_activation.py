@@ -381,6 +381,10 @@ def test_un_perfil_valido_pero_no_vigente_avisa_y_deja_pasar(tmp_path: Path) -> 
     publicado = _comments(env)
     assert "sirius-activation:aviso:perfil-no-vigente:implementer@2" in publicado
     assert f"es la {_VIGENTE}" in publicado and "rejected" not in publicado
+    assert "vuelve a aplicarla" in publicado, (
+        "el implementador ejecuta la instantánea del evento: editar el cuerpo no basta, hay "
+        "que reaplicar la etiqueta (Codex, PR #670)"
+    )
 
 
 def test_el_perfil_vigente_pasa_sin_ningun_comentario(tmp_path: Path) -> None:
@@ -434,3 +438,16 @@ def test_un_rol_que_no_esta_en_ningun_carril_se_rechaza(tmp_path: Path) -> None:
     assert "sirius:implement-requested" not in _labels(env)
     assert "perfil-sin-resolver" in _comments(env)
     assert "no lo juzga" not in proc.stdout
+
+
+def test_una_instantanea_vacia_del_evento_se_juzga_vacia(tmp_path: Path) -> None:
+    """El evento llegó sin cuerpo y alguien lo escribió después: el implementador
+    ejecutaría la instantánea vacía, así que la puerta la juzga vacía en vez de
+    sustituirla por el cuerpo actual (Codex, PR #670, ronda 2)."""
+    env = _setup(tmp_path)
+    _seed(env, ["sirius:planned", "sirius:implement-requested"])
+    env["ISSUE_BODY"] = ""
+    proc = _run(env)
+    assert proc.returncode == 0, proc.stderr
+    assert "sirius:implement-requested" not in _labels(env)
+    assert "perfil-sin-resolver" in _comments(env)

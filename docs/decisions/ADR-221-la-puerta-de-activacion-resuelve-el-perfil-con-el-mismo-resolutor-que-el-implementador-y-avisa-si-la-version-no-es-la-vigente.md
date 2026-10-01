@@ -74,7 +74,11 @@ mutaciones vistas caer.
    API, porque el reparto solo compara el rol y el implementador resuelve la
    instantánea: una edición posterior que cambiara solo la versión pasaría la
    puerta y mataría al implementador (las dos cosas, ronda 1 de Codex en la PR
-   #670). Si no resuelve,
+   #670). Una instantánea **vacía** (el evento llegó sin cuerpo) se juzga vacía,
+   no se sustituye por el cuerpo actual (`${ISSUE_BODY-…}`, no `:-`); y el
+   aviso de versión no vigente dice que, para ejecutar la vigente, hay que
+   editar el cuerpo **y volver a aplicar la etiqueta**, porque solo un evento
+   nuevo lleva el cuerpo nuevo (ronda 2 de Codex). Si no resuelve,
    rechaza con el motivo
    `perfil-sin-resolver`, el detalle del resolutor en el comentario y la acción
    («pon `Perfil: rol@N` con un rol y una versión registrados en el
@@ -99,7 +103,7 @@ siempre y dejar el diagnóstico en la incidencia.
 `tests/automation/test_sirius_activation.py` ejecuta la puerta de verdad con
 el doble de `gh`; el cuerpo completo de sus pruebas lleva ahora el `Perfil:`
 que todo encargo declara, con la versión vigente leída del perfil (no escrita
-a mano). Siete pruebas nuevas:
+a mano). Ocho pruebas nuevas:
 
 - `test_un_cuerpo_sin_perfil_se_rechaza_antes_de_arrancar`: rechazo
   `perfil-sin-resolver` con el detalle del resolutor; `planned` se conserva.
@@ -119,6 +123,8 @@ a mano). Siete pruebas nuevas:
 - `test_la_puerta_juzga_el_cuerpo_que_el_implementador_ejecutara` (cuerpo
   actual vigente, instantánea del evento con `implementer@99`: rechazo, porque
   lo que se iba a ejecutar no resuelve).
+- `test_una_instantanea_vacia_del_evento_se_juzga_vacia` (`ISSUE_BODY` vacío:
+  rechazo; no se sustituye por el cuerpo actual).
 
 **Mutaciones** (cada una aplicada sobre la puerta, la prueba ejecutada y el
 fichero restaurado):
@@ -130,8 +136,10 @@ fichero restaurado):
 | M3 | el aviso de no vigente se convierte en rechazo | cae la misma: el evento desaparece |
 | M4 | eximir cualquier rol que no sea del carril de ejecución (la primera versión) | cae `un_rol_que_no_esta_en_ningun_carril_se_rechaza` |
 | M5 | juzgar el cuerpo actual en vez de la instantánea del evento | cae `la_puerta_juzga_el_cuerpo_que_el_implementador_ejecutara` |
+| M6 | sustituir una instantánea vacía por el cuerpo actual (`:-`) | cae `una_instantanea_vacia_del_evento_se_juzga_vacia` |
+| M7 | el aviso de no vigente vuelve a decir «edita el cuerpo antes de que arranque» | cae `un_perfil_valido_pero_no_vigente_avisa_y_deja_pasar` |
 
-- Las 18 pruebas del fichero en verde; `ruff`, `mypy`; `bash -n` sobre la
+- Las 19 pruebas del fichero en verde; `ruff`, `mypy`; `bash -n` sobre la
   puerta. Batería entera: en la PR.
 
 ## Consecuencias

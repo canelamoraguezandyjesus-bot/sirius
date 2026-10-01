@@ -118,8 +118,10 @@ def aviso_de_vigencia(cuerpo: str, *, raiz: Path) -> str | None:
         f"el cuerpo declara `Perfil: {perfil.ref}@{perfil.version}` y la version vigente de "
         f"`{perfil.ref}` es la {vigente} "
         f"(docs/implementation/work_engine/perfiles/{perfil.ref}.yml). Se ejecuta con la "
-        "declarada, porque `rol@N` significa un texto (H-28); si querias la vigente, edita "
-        "el cuerpo antes de que arranque."
+        "declarada, porque `rol@N` significa un texto (H-28) y el implementador ejecuta la "
+        "instantanea del evento, no el cuerpo actual. Si querias la vigente, edita el cuerpo "
+        "y despues retira `sirius:implement-requested` y vuelve a aplicarla: solo un evento "
+        "nuevo lleva el cuerpo nuevo; editar sin reaplicar no detiene este."
     )
 
 
