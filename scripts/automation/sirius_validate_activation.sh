@@ -23,8 +23,14 @@
 #
 # Comprobaciones (en orden): incidencia abierta y no PR; `sirius:planned`
 # presente; sin otros estados sirius activos/terminales; cuerpo estructuralmente
-# completo (todas las secciones obligatorias del contrato); `Perfil: rol@N`
-# resoluble con el manifiesto (ADR-221), con aviso si N no es la vigente.
+# completo (todas las secciones obligatorias del contrato); la instantanea del
+# evento declara el mismo `Perfil:` que el cuerpo vigente (si no, el evento es
+# rancio: sale con 2 sin tocar etiquetas, ADR-221); `Perfil: rol@N` resoluble
+# con el manifiesto (ADR-221), con aviso si N no es la vigente.
+#
+# Codigos de salida: 0 (valida, o rechazada con la etiqueta retirada y el
+# motivo publicado), 1 (no se pudo completar; reintentable), 2 (evento rancio:
+# nada validado, nada tocado, el aviso en la incidencia).
 #
 # Idempotencia: el comentario de rechazo lleva un marcador por motivo
 # (`<!-- sirius-activation:rejected:<motivo> -->`); repetir el mismo error no
@@ -171,6 +177,42 @@ cuerpo="$(<"$body_file")"
 # VACIA (el evento llego sin cuerpo y alguien lo escribio despues) es lo que el
 # implementador ejecutaria, y se juzga vacia (ronda 2 de Codex en la PR #670).
 cuerpo_a_ejecutar="${ISSUE_BODY-$cuerpo}"
+# Y ANTES de juzgarla: si la instantanea y el cuerpo vigente declaran perfiles
+# distintos, este evento es RANCIO. Alguien edito el `Perfil:` despues de la
+# etiqueta, y puede haberla retirado y vuelto a aplicar: la
+# `sirius:implement-requested` que hay ahora puede ser la de OTRA activacion,
+# posterior, con su propio evento y su propia puerta. Rechazar aqui retiraria
+# la etiqueta de esa otra -esta puerta corre en su propio workflow, con su
+# propio grupo de concurrencia, y puede llegar tarde- y el trabajo se
+# perderia sin que nadie lo viera (ronda 5 de Codex en la PR #670). Es el
+# mismo razonamiento que el reparto (`sirius_reparto_activacion.sh`, ADR-167)
+# aplica al rol, aqui aplicado al `rol@N` entero: no se valida, no se ejecuta,
+# no se toca ninguna etiqueta, y se dice una vez por pareja de perfiles. Sale
+# con 2, como el reparto, para que quien llama termine en rojo sin consumir.
+if [ -n "${ISSUE_BODY+x}" ]; then
+  perfil_evento="$(printf '%s' "$cuerpo_a_ejecutar" | sed -n 's/^Perfil: *\([A-Za-z_-][A-Za-z_-]*@[0-9][0-9]*\).*/\1/p' | head -1)"
+  perfil_actual="$(printf '%s' "$cuerpo" | sed -n 's/^Perfil: *\([A-Za-z_-][A-Za-z_-]*@[0-9][0-9]*\).*/\1/p' | head -1)"
+  if [ "$perfil_evento" != "$perfil_actual" ]; then
+    rm -f "$body_file"
+    marker_rancio="<!-- sirius-activation:evento-rancio:${perfil_evento:-ninguno}:${perfil_actual:-ninguno} -->"
+    rancio_file="$(mktemp)"
+    printf '%s\n\n%s\n\n%s\n\n%s\n\n%s\n%s\n' \
+      "$marker_rancio" \
+      "⚠️ **Activación no validada: el cuerpo cambió después de la etiqueta**" \
+      "Cuando se aplicó \`sirius:implement-requested\`, el cuerpo declaraba \`Perfil: ${perfil_evento:-ninguno}\`; ahora declara \`Perfil: ${perfil_actual:-ninguno}\`. El implementador ejecutaría la instantánea del evento, no el cuerpo vigente, así que este evento **no se valida ni se ejecuta**." \
+      "**Tampoco se ha tocado ninguna etiqueta.** No hay forma de saber si la \`sirius:implement-requested\` que hay ahora es la de esta activación o la de otra posterior, y retirar la activación de otro sería peor que dejar este evento sin atender." \
+      "- **Si ya volviste a activar** con el cuerpo de ahora, esa activación tiene su propio evento y su propia puerta: déjala correr, aquí no hay nada más que hacer." \
+      "- **Si no**, retira \`sirius:implement-requested\` y vuelve a aplicarla: solo un evento nuevo lleva el cuerpo nuevo." >"$rancio_file"
+    if ! sirius_comment_once "$REPO" "$ISSUE" "$marker_rancio" "$rancio_file"; then
+      rm -f "$rancio_file"
+      echo "::error::El perfil de #${ISSUE} cambio desde que se aplico la etiqueta (evento: ${perfil_evento:-ninguno}; ahora: ${perfil_actual:-ninguno}) y no se pudo publicar el aviso; no se valida ni se toca ninguna etiqueta. Reintentable." >&2
+      exit 2
+    fi
+    rm -f "$rancio_file"
+    echo "::error::El perfil de #${ISSUE} cambio desde que se aplico la etiqueta (evento: ${perfil_evento:-ninguno}; ahora: ${perfil_actual:-ninguno}): este evento es rancio, no se valida ni se ejecuta y no se ha tocado ninguna etiqueta. El aviso esta en la incidencia." >&2
+    exit 2
+  fi
+fi
 # Solo se exime un rol que pertenezca a OTRO carril del manifiesto: ese tiene
 # su propio ejecutor y su propia puerta de reparto (`investigador`, el
 # investigador medido de investigar-orden.yml), y esta puerta no afirma nada

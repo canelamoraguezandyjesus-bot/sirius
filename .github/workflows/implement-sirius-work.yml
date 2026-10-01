@@ -209,6 +209,11 @@ jobs:
           else
             script_rc=$?
           fi
+          if [ "$script_rc" -eq 2 ]; then
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+            echo "::error::El Perfil del cuerpo cambio desde que se aplico la etiqueta (la instantanea del evento y el cuerpo vigente no coinciden): este evento es rancio y no se consume. NO se ha tocado ninguna etiqueta -la activacion presente puede ser de otro evento posterior-. El aviso esta en la incidencia (ADR-221)."
+            exit 1
+          fi
           if [ "$script_rc" -ne 0 ]; then
             echo "::error::La validacion de activacion no se pudo completar; reintentable."
             exit 1

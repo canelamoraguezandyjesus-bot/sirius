@@ -382,11 +382,13 @@ def test_un_perfil_valido_pero_no_vigente_avisa_y_deja_pasar(tmp_path: Path) -> 
     assert "sirius-activation:aviso:perfil-no-vigente:implementer@2" in publicado
     assert f"es la {_VIGENTE}" in publicado and "rejected" not in publicado
     assert (
-        "sirius:implementing" in publicado
-        and "en ultimo lugar, `sirius:implement-requested`" in publicado
+        "cancela este run desde Actions" in publicado
+        and "escribe `continua`" in publicado
+        and "no se ejecutara en esta incidencia" in publicado
     ), (
-        "el implementador ejecuta la instantánea del evento: editar el cuerpo no basta, hay "
-        "que reaplicar la etiqueta (Codex, PR #670)"
+        "el aviso tiene que distinguir cancelar (parada y `continua` con el cuerpo vigente) de "
+        "dejar terminar (el ciclo sigue y la vigente no se ejecuta aqui): Codex, PR #670, "
+        "rondas 2 a 5"
     )
 
 
@@ -413,20 +415,51 @@ def test_un_perfil_ajeno_al_carril_de_ejecucion_no_se_juzga_en_esta_puerta(tmp_p
     assert "no lo juzga" in proc.stdout
 
 
-def test_la_puerta_juzga_el_cuerpo_que_el_implementador_ejecutara(tmp_path: Path) -> None:
-    """El implementador resuelve la instantánea del evento (`ISSUE_BODY`), no el
-    cuerpo actual: si alguien edita solo la versión después de la etiqueta, el
-    reparto no lo ve (compara el rol) y el implementador moriría con la versión
-    vieja mientras la puerta daba por bueno el cuerpo nuevo (Codex, PR #670)."""
+def test_una_instantanea_igual_al_cuerpo_se_juzga_y_se_rechaza_si_no_resuelve(
+    tmp_path: Path,
+) -> None:
+    """El implementador resuelve la instantánea del evento (`ISSUE_BODY`): cuando
+    coincide con el cuerpo vigente, es lo que se juzga, y si no resuelve se
+    rechaza con la etiqueta retirada (Codex, PR #670, ronda 1)."""
+    env = _setup(tmp_path)
+    cuerpo = _COMPLETE_BODY.replace(f"Perfil: implementer@{_VIGENTE}", "Perfil: implementer@99")
+    _seed(env, ["sirius:planned", "sirius:implement-requested"], body=cuerpo)
+    env["ISSUE_BODY"] = cuerpo
+    proc = _run(env)
+    assert proc.returncode == 0, proc.stderr
+    assert "sirius:implement-requested" not in _labels(env), "lo que se iba a ejecutar no resuelve"
+    assert "perfil-sin-resolver" in _comments(env)
+
+
+def test_un_evento_cuyo_perfil_cambio_despues_es_rancio_y_no_toca_ninguna_etiqueta(
+    tmp_path: Path,
+) -> None:
+    """Ronda 5 de Codex en la PR #670: si alguien edita el `Perfil:` después de la
+    etiqueta y la retira y vuelve a aplicar, la `sirius:implement-requested` que
+    hay ahora es la de OTRA activación; esta puerta, que corre en su propio
+    workflow y puede llegar tarde, retiraba esa etiqueta al rechazar la
+    instantánea vieja y el trabajo se perdía. Mismo razonamiento que el reparto
+    (ADR-167) aplicado al `rol@N` entero: no se valida, no se ejecuta, no se
+    toca nada, y se dice."""
     env = _setup(tmp_path)
     _seed(env, ["sirius:planned", "sirius:implement-requested"])
     env["ISSUE_BODY"] = _COMPLETE_BODY.replace(
         f"Perfil: implementer@{_VIGENTE}", "Perfil: implementer@99"
     )
     proc = _run(env)
-    assert proc.returncode == 0, proc.stderr
-    assert "sirius:implement-requested" not in _labels(env), "lo que se iba a ejecutar no resuelve"
-    assert "perfil-sin-resolver" in _comments(env)
+    assert proc.returncode == 2, proc.stderr
+    assert "sirius:implement-requested" in _labels(env), "la etiqueta puede ser de otro evento"
+    publicado = _comments(env)
+    assert f"sirius-activation:evento-rancio:implementer@99:implementer@{_VIGENTE}" in publicado
+    assert "no se valida ni se ejecuta" in publicado and "ninguna etiqueta" in publicado
+    assert "rejected" not in publicado
+    assert "rancio" in proc.stderr
+
+    # Repetir el mismo evento rancio no duplica el aviso ni toca nada.
+    antes = publicado
+    proc = _run(env)
+    assert proc.returncode == 2
+    assert _comments(env) == antes and "sirius:implement-requested" in _labels(env)
 
 
 def test_un_rol_que_no_esta_en_ningun_carril_se_rechaza(tmp_path: Path) -> None:
@@ -443,14 +476,15 @@ def test_un_rol_que_no_esta_en_ningun_carril_se_rechaza(tmp_path: Path) -> None:
     assert "no lo juzga" not in proc.stdout
 
 
-def test_una_instantanea_vacia_del_evento_se_juzga_vacia(tmp_path: Path) -> None:
+def test_una_instantanea_vacia_del_evento_es_un_evento_rancio(tmp_path: Path) -> None:
     """El evento llegó sin cuerpo y alguien lo escribió después: el implementador
-    ejecutaría la instantánea vacía, así que la puerta la juzga vacía en vez de
-    sustituirla por el cuerpo actual (Codex, PR #670, ronda 2)."""
+    ejecutaría la instantánea vacía. La puerta no la sustituye por el cuerpo
+    actual (Codex, PR #670, ronda 2) ni retira la etiqueta, que puede ser de una
+    activación posterior (ronda 5): el evento es rancio y se dice."""
     env = _setup(tmp_path)
     _seed(env, ["sirius:planned", "sirius:implement-requested"])
     env["ISSUE_BODY"] = ""
     proc = _run(env)
-    assert proc.returncode == 0, proc.stderr
-    assert "sirius:implement-requested" not in _labels(env)
-    assert "perfil-sin-resolver" in _comments(env)
+    assert proc.returncode == 2, proc.stderr
+    assert "sirius:implement-requested" in _labels(env)
+    assert f"sirius-activation:evento-rancio:ninguno:implementer@{_VIGENTE}" in _comments(env)

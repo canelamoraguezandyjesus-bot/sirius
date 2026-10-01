@@ -73,22 +73,39 @@ mutaciones vistas caer.
    `validate-sirius-activation.yml` pasa ahora), no el cuerpo actual de la
    API, porque el reparto solo compara el rol y el implementador resuelve la
    instantánea: una edición posterior que cambiara solo la versión pasaría la
-   puerta y mataría al implementador (las dos cosas, ronda 1 de Codex en la PR
-   #670). Una instantánea **vacía** (el evento llegó sin cuerpo) se juzga vacía,
-   no se sustituye por el cuerpo actual (`${ISSUE_BODY-…}`, no `:-`); y el
-   aviso de versión no vigente cuenta con el estado real en que se leerá: el
-   aviso se publica segundos antes de que el implementador consuma la
-   activación, así que quien lo lea encontrará la incidencia en
-   `sirius:implementing`. Dice, por tanto, que para ejecutar la vigente hay
-   que **dejar terminar o cancelar ese run, esperar a que la incidencia quede
-   sin estado activo (cancelada queda en `failed-safely`), editar el cuerpo y
-   reactivarla en el orden que la puerta exige** —retirar el estado que quede,
-   `sirius:planned` y, en último lugar, `sirius:implement-requested`—, y que
-   retirar y reaplicar la etiqueta con el run en marcha no sirve porque esta
-   puerta rechaza una activación sobre una incidencia con estado activo
-   (rondas 2, 3 y 4 de Codex: las dos primeras versiones prometían un
-   «retira y vuelve a aplicar» que, consumida la activación, la puerta
-   rechazaba). Que el reparto compare el `rol@N` entero es otra decisión,
+   puerta y mataría al implementador (ronda 1 de Codex en la PR #670). **Pero
+   antes de juzgarla, la puerta compara el `Perfil: rol@N` de la instantánea
+   con el del cuerpo vigente, y si no coinciden el evento es rancio**: no se
+   valida, no se ejecuta y **no se toca ninguna etiqueta**, porque la
+   `sirius:implement-requested` que hay ahora puede ser la de otra activación
+   posterior, con su propio evento, y esta puerta corre en su propio workflow
+   y puede llegar tarde: rechazar retiraría la etiqueta de esa otra y el
+   trabajo se perdería sin que nadie lo viera (ronda 5 de Codex). Publica una
+   vez por pareja de perfiles un aviso con lo que el cuerpo declaraba al
+   aplicar la etiqueta, lo que declara ahora y qué hacer (si ya se volvió a
+   activar, dejar correr esa; si no, retirar y volver a aplicar la etiqueta),
+   y sale con 2, como el reparto de ADR-167 cuando cambió el rol: el
+   implementador termina en rojo sin consumir el evento. Una instantánea
+   **vacía** (el evento llegó sin cuerpo y alguien lo escribió después) no se
+   sustituye por el cuerpo actual (`${ISSUE_BODY-…}`, no `:-`; ronda 2) y es,
+   por lo mismo, un evento rancio. Las dos primeras versiones de esta regla
+   rechazaban la instantánea retirando la etiqueta; la raíz es la misma que la
+   del reparto: la carga del workflow no trae una identidad del evento que
+   diga de quién es la etiqueta presente, así que lo único seguro es no
+   tocarla. El aviso de versión no vigente, por su parte, cuenta con el estado
+   real en que se leerá —se publica segundos antes de que el implementador
+   consuma la activación, así que la incidencia estará en
+   `sirius:implementing`— y distingue los dos caminos: **cancelar el run** (la
+   incidencia queda parada en `failed-safely` con su diagnóstico; editar el
+   cuerpo y escribir `continua`, que repite la activación con el cuerpo
+   vigente, ADR-223) o **dejarlo terminar** (el ciclo sigue —revisión, fusión,
+   cierre— y la vigente no se ejecutará en esa incidencia: haría falta una
+   nueva). Retirar y reaplicar la etiqueta con el run en marcha no sirve
+   porque esta puerta rechaza una activación sobre una incidencia con estado
+   activo (rondas 2 a 5 de Codex: las tres versiones anteriores prometían un
+   camino que el estado real —activación consumida, o ciclo que sigue hasta
+   `completed`— no permitía). Que el reparto compare el `rol@N` entero es otra
+   decisión,
    sobre ADR-167, y no entra aquí. Si no resuelve,
    rechaza con el motivo
    `perfil-sin-resolver`, el detalle del resolutor en el comentario y la acción
@@ -131,11 +148,15 @@ a mano). Ocho pruebas nuevas:
   `investigador@2` o un rol sintético; la puerta no es dueña de esos roles.
 - `test_un_rol_que_no_esta_en_ningun_carril_se_rechaza` (`implementr@4`:
   rechazo `perfil-sin-resolver`, no exención).
-- `test_la_puerta_juzga_el_cuerpo_que_el_implementador_ejecutara` (cuerpo
-  actual vigente, instantánea del evento con `implementer@99`: rechazo, porque
-  lo que se iba a ejecutar no resuelve).
-- `test_una_instantanea_vacia_del_evento_se_juzga_vacia` (`ISSUE_BODY` vacío:
-  rechazo; no se sustituye por el cuerpo actual).
+- `test_una_instantanea_igual_al_cuerpo_se_juzga_y_se_rechaza_si_no_resuelve`
+  (instantánea igual al cuerpo, con `implementer@99`: rechazo, porque lo que
+  se iba a ejecutar no resuelve).
+- `test_un_evento_cuyo_perfil_cambio_despues_es_rancio_y_no_toca_ninguna_etiqueta`
+  (cuerpo vigente, instantánea con `implementer@99`: código 2, etiqueta
+  intacta, aviso `evento-rancio` con los dos perfiles; repetirlo no duplica
+  el aviso ni toca nada).
+- `test_una_instantanea_vacia_del_evento_es_un_evento_rancio` (`ISSUE_BODY`
+  vacío: código 2, etiqueta intacta, aviso con `ninguno`).
 
 **Mutaciones** (cada una aplicada sobre la puerta, la prueba ejecutada y el
 fichero restaurado):
@@ -146,11 +167,12 @@ fichero restaurado):
 | M2 | el `rol@N` no vigente deja de avisar | cae `un_perfil_valido_pero_no_vigente_avisa` |
 | M3 | el aviso de no vigente se convierte en rechazo | cae la misma: el evento desaparece |
 | M4 | eximir cualquier rol que no sea del carril de ejecución (la primera versión) | cae `un_rol_que_no_esta_en_ningun_carril_se_rechaza` |
-| M5 | juzgar el cuerpo actual en vez de la instantánea del evento | cae `la_puerta_juzga_el_cuerpo_que_el_implementador_ejecutara` |
-| M6 | sustituir una instantánea vacía por el cuerpo actual (`:-`) | cae `una_instantanea_vacia_del_evento_se_juzga_vacia` |
-| M7 | el aviso de no vigente vuelve a decir «edita el cuerpo antes de que arranque» | cae `un_perfil_valido_pero_no_vigente_avisa_y_deja_pasar` |
+| M5 | juzgar el cuerpo actual e ignorar la instantánea del evento | cae `un_evento_cuyo_perfil_cambio_despues_es_rancio_y_no_toca_ninguna_etiqueta` |
+| M6 | sustituir una instantánea vacía por el cuerpo actual (`:-`) | cae `una_instantanea_vacia_del_evento_es_un_evento_rancio` |
+| M7 | el aviso de no vigente vuelve a prometer «retira, espera y vuelve a aplicar» | cae `un_perfil_valido_pero_no_vigente_avisa_y_deja_pasar` |
+| M8 | un evento rancio se rechaza retirando la etiqueta (las versiones 1 y 2 de la regla) | cae `un_evento_cuyo_perfil_cambio_despues_es_rancio_y_no_toca_ninguna_etiqueta` |
 
-- Las 19 pruebas del fichero en verde; `ruff`, `mypy`; `bash -n` sobre la
+- Las 20 pruebas del fichero en verde; `ruff`, `mypy`; `bash -n` sobre la
   puerta. Batería entera: en la PR.
 - El arnés de carriles (`tests/automation/test_carriles_retirados.py`) declaraba
   `programador@2`, un rol que ningún carril del manifiesto conoce, como perfil
