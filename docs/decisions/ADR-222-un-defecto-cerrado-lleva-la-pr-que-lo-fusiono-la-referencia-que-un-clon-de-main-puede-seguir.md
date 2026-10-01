@@ -20,8 +20,8 @@ ese sha vive en la rama de origen —que no se borra, ADR-195— y **no está en
 llega.
 
 Codex lo cazó en la PR #664 sobre H-217. La mina de septiembre (PR #665) lo
-midió con el guion de su rama `claude/mina-de-septiembre-entero`
-`scripts/mina/cerrado_por_inalcanzable.py` (clon entero; `git cat-file -e` y
+midió con su guion de `cerrado_por` inalcanzables, que entra en `main` con esa
+PR (clon entero; `git cat-file -e` y
 `git merge-base --is-ancestor` contra `origin/main`): **29 de 68** defectos
 cerrados citan un commit que `main` no contiene: los 14 cerrados desde el
 20-09, todos; 13 anteriores que viven solo en su rama; y 2 con un sha corto
