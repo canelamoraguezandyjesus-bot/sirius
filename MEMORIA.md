@@ -26,13 +26,13 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **210**.
+- Decisiones (ADR): **211**.
 - Bloques del motor: 17 cerrado, 2 fuera_de_alcance, 1 pendiente.
 - Defectos registrados: 3 abierto, 66 cerrado.
 - Ideas aparcadas o descartadas: 5 aparcada, 2 descartada, 2 promovida.
 - Skills: **19**.
-- Investigaciones: **9** (fotos con fecha; caducan).
-- Documentos: **151**, de los que **97** no declaran fecha.
+- Investigaciones: **10** (fotos con fecha; caducan).
+- Documentos: **193**, de los que **136** no declaran fecha.
 
 ## Las skills: lo que ya costó averiguar dos veces (ADR-211)
 
@@ -79,6 +79,7 @@ huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| [217](docs/decisions/ADR-217-la-bitacora-del-ciclo-entra-en-main-con-su-familia-y-la-evidencia-de-adr-002-se-queda-en-su-rama.md) | 2026-10-01 | APROBADO | La bitácora del ciclo entra en `main` con su familia, y la evidencia de ADR-002 se queda en su rama | Entran en `main`, tal como estaban en `a044fb4a`, los 48 ficheros de `docs/audits/` que la rama añade y `docs/investigaciones/2026-09-13-memanto-contra-la-capa-de-memoria-de-sirius.md`. Entre ellos: la bitácora… |
 | [216](docs/decisions/ADR-216-cerrar-el-ciclo-el-motor-se-queda-sin-trabajo-vivo-los-horarios-se-apagan-desde-actions-y-el-estado-real-queda-escrito.md) | 2026-09-24 | APROBADO | Cerrar el ciclo: el motor se queda sin trabajo vivo, los horarios se apagan desde Actions y el estado real queda escrito | Las PR abiertas, cerradas. La #661 (cinco skills, ADR-215) fusionada aplastada en `6a58c75e`. La #117 —la rama de evidencia de julio, abierta desde el 25-07 y declarada «no debe fusionarse automáticamente»— cerrada sin borrar su rama: su… |
 | [215](docs/decisions/ADR-215-cinco-skills-mas-de-flujo-de-trabajo-salidas-de-la-auditoria-y-de-los-adr-la-validacion-manual-en-windows-medir-con-linea-base-el-documento-con-lector-la-rama-y-la-pr-de-sesion-y-las-paradas-del-motor-delante-del-propietario.md) | 2026-09-21 | APROBADO | Cinco skills más de flujo de trabajo, salidas de la auditoría y de los ADR: la validación manual en Windows, medir con línea base, el documento con lector, la rama y la PR de sesión y las paradas del motor delante del propietario | Cinco skills nuevas en `.claude/skills/`: |
 | [214](docs/decisions/ADR-214-siete-skills-de-flujo-de-trabajo-salidas-de-las-transcripciones-la-noche-delegada-la-revision-externa-el-coste-antes-de-gastar-los-comandos-para-su-ordenador-el-paquete-pegado-el-traspaso-y-el-estado-real.md) | 2026-09-21 | APROBADO | Siete skills de flujo de trabajo salidas de las transcripciones: la noche delegada, la revisión externa, el coste antes de gastar, los comandos para su ordenador, el paquete pegado, el traspaso y el estado real | La tercera. Siete skills nuevas, en `.claude/skills/`: |
@@ -301,7 +302,7 @@ de memoria.
 
 | Familia | Veces | Hay prueba que la haga cumplir | ADR |
 |---|---|---|---|
-| `regla-que-depende-de-que-alguien-se-acuerde` | 7 | sí | [216](docs/decisions/ADR-216-cerrar-el-ciclo-el-motor-se-queda-sin-trabajo-vivo-los-horarios-se-apagan-desde-actions-y-el-estado-real-queda-escrito.md), [192](docs/decisions/ADR-192-el-numero-de-un-defecto-es-el-numero-de-su-adr-no-un-contador-aparte.md), [191](docs/decisions/ADR-191-la-revision-es-una-cola-una-rama-entra-a-revision-solo-si-main-ya-esta-dentro-de-ella.md), [188](docs/decisions/ADR-188-el-alcance-que-el-motor-no-puede-escribir-para-la-puerta-antes-de-crear-la-incidencia-y-remite-a-la-sesion-interactiva.md), [182](docs/decisions/ADR-182-la-guarda-del-registro-de-defectos-deriva-de-los-adr-que-declaran-leccion.md), [179](docs/decisions/ADR-179-la-guarda-de-piezas-sin-llamante-deriva-su-inventario-del-codigo-del-motor.md), [174](docs/decisions/ADR-174-la-mina-en-dos-pasadas-la-leccion-se-declara-en-el-adr-que-la-produce-y-las-familias-se-cuentan-solas.md) |
+| `regla-que-depende-de-que-alguien-se-acuerde` | 8 | no en todas | [217](docs/decisions/ADR-217-la-bitacora-del-ciclo-entra-en-main-con-su-familia-y-la-evidencia-de-adr-002-se-queda-en-su-rama.md), [216](docs/decisions/ADR-216-cerrar-el-ciclo-el-motor-se-queda-sin-trabajo-vivo-los-horarios-se-apagan-desde-actions-y-el-estado-real-queda-escrito.md), [192](docs/decisions/ADR-192-el-numero-de-un-defecto-es-el-numero-de-su-adr-no-un-contador-aparte.md), [191](docs/decisions/ADR-191-la-revision-es-una-cola-una-rama-entra-a-revision-solo-si-main-ya-esta-dentro-de-ella.md), [188](docs/decisions/ADR-188-el-alcance-que-el-motor-no-puede-escribir-para-la-puerta-antes-de-crear-la-incidencia-y-remite-a-la-sesion-interactiva.md), [182](docs/decisions/ADR-182-la-guarda-del-registro-de-defectos-deriva-de-los-adr-que-declaran-leccion.md), [179](docs/decisions/ADR-179-la-guarda-de-piezas-sin-llamante-deriva-su-inventario-del-codigo-del-motor.md), [174](docs/decisions/ADR-174-la-mina-en-dos-pasadas-la-leccion-se-declara-en-el-adr-que-la-produce-y-las-familias-se-cuentan-solas.md) |
 | `pieza-sin-lector` | 5 | no en todas | [210](docs/decisions/ADR-210-archivar-las-incidencias-que-ya-no-describen-nada-y-decir-donde-vive-la-bitacora-del-ciclo.md), [209](docs/decisions/ADR-209-un-adr-fusionado-esta-aprobado-y-propuesto-deja-de-existir-como-estado.md), [207](docs/decisions/ADR-207-archivar-los-dos-mapas-caducados-de-julio-retirar-el-workflow-de-word-y-poner-en-d4-el-estado-que-ya-tenia.md), [183](docs/decisions/ADR-183-la-ausencia-de-run-de-quality-para-el-head-se-encamina-no-se-espera-en-silencio.md), [175](docs/decisions/ADR-175-un-tablero-por-incidencia-un-solo-comentario-que-el-motor-mantiene-al-dia.md) |
 | `regla-del-propietario-que-solo-vive-en-una-conversacion` | 4 | sí | [213](docs/decisions/ADR-213-escribir-las-tres-reglas-de-septiembre-del-propietario-dar-proporcion-a-la-cadena-de-comprobacion-y-fechar-en-las-transcripciones-las-reglas-del-20-09.md), [208](docs/decisions/ADR-208-las-ideas-aparcadas-tienen-registro-y-el-metodo-de-conversacion-del-propietario-entra-en-agents.md), [204](docs/decisions/ADR-204-el-propietario-decide-producto-dinero-y-salud-y-lo-tecnico-lo-resuelve-la-sesion.md), [195](docs/decisions/ADR-195-podar-significa-archivar-en-este-repositorio-no-se-borra-nada.md) |
 | `leccion-que-se-queda-en-el-informe` | 2 | sí | [215](docs/decisions/ADR-215-cinco-skills-mas-de-flujo-de-trabajo-salidas-de-la-auditoria-y-de-los-adr-la-validacion-manual-en-windows-medir-con-linea-base-el-documento-con-lector-la-rama-y-la-pr-de-sesion-y-las-paradas-del-motor-delante-del-propietario.md), [214](docs/decisions/ADR-214-siete-skills-de-flujo-de-trabajo-salidas-de-las-transcripciones-la-noche-delegada-la-revision-externa-el-coste-antes-de-gastar-los-comandos-para-su-ordenador-el-paquete-pegado-el-traspaso-y-el-estado-real.md) |
@@ -329,6 +330,7 @@ de memoria.
 
 ### `regla-que-depende-de-que-alguien-se-acuerde`
 
+- **[ADR-217](docs/decisions/ADR-217-la-bitacora-del-ciclo-entra-en-main-con-su-familia-y-la-evidencia-de-adr-002-se-queda-en-su-rama.md)** — dejar la entrada de un registro en `main` condicionada (sin prueba que lo haga cumplir: ninguna prueba: la condición vivía en prosa de un documento).
 - **[ADR-216](docs/decisions/ADR-216-cerrar-el-ciclo-el-motor-se-queda-sin-trabajo-vivo-los-horarios-se-apagan-desde-actions-y-el-estado-real-queda-escrito.md)** — escribir una salvaguarda en prosa y darla por puesta. (lo hace cumplir `tests/automation/test_cierre_del_ciclo_ps1_no_puede_hacer_dano.py`).
 - **[ADR-192](docs/decisions/ADR-192-el-numero-de-un-defecto-es-el-numero-de-su-adr-no-un-contador-aparte.md)** — elegir a mano un identificador leyendo el máximo del (lo hace cumplir `tests/automation/test_registro_de_defectos.py`).
 - **[ADR-191](docs/decisions/ADR-191-la-revision-es-una-cola-una-rama-entra-a-revision-solo-si-main-ya-esta-dentro-de-ella.md)** — fusionar una rama cuya combinación con `main` no ha (lo hace cumplir `tests/automation/test_cola.py`).
@@ -516,6 +518,7 @@ algo vivo (`AGENTS.md`). Cada una declara de qué depende para caducar.
 | 2026-08-31 | VIGENTE | [Investigación de la orden](docs/investigaciones/2026-08-31-orden-483-investiga-una-sola-pregunta-acotada-el-marco-de-agentes-herm.md) | los datos y las fuentes que cita el informe; la fecha de esta ejecución: es UNA pasada del investigador, no un hecho estable |
 | 2026-09-11 | VIGENTE | [Flujos reales de agentes de código, comparados con el motor de Sirius](docs/investigaciones/2026-09-11-flujos-reales-de-agentes-comparados-con-el-motor.md) | el contenido de los trece repositorios citados, verificado el 11-09-2026 en su último commit; la documentación de Supermemory y Mem0 sobre Claude Code, Codex y ChatGPT, que cambia cada pocas semanas; los artículos, vídeos y fechas de publicación, que esta sesión no pudo abrir |
 | 2026-09-11 | VIGENTE | [Qué memoria compartida para IAs existe ya hecha y probada, y si supera a la generada en el repositorio](docs/investigaciones/2026-09-11-que-memoria-compartida-para-ias-existe-ya-hecha-y-probada.md) | los precios y límites gratuitos de los servicios alojados (Mem0, Supermemory, Basic Memory Cloud, Letta Cloud, Zep); qué clientes admiten MCP y cómo (Claude Code, Codex, ChatGPT), que cambia cada pocos meses; las versiones y la actividad de cada proyecto, medidas el día de la clonación; la lista de herramientas que leen AGENTS.md |
+| 2026-09-13 | — | [Memanto contra la capa de memoria de Sirius: qué está cubierto, qué a medias y qué es nuevo](docs/investigaciones/2026-09-13-memanto-contra-la-capa-de-memoria-de-sirius.md) | — |
 | sin fecha declarada | — | [Investigaciones](docs/investigaciones/README.md) | — |
 
 ## Los documentos, carpeta a carpeta
@@ -537,8 +540,10 @@ nada por su cuenta. «Sin fecha declarada» es un aviso, no un dato.
 | sin fecha declarada | [SIRIUS — Auditoría de robustez de la automatización de roles (Claude Code)](docs/audits/SIRIUS_AUDITORIA_AUTOMATIZACION_ROLES_2026-07.md) |
 | 2026-07-20 | [SIRIUS — Auditoría integral del repositorio (julio de 2026)](docs/audits/SIRIUS_AUDITORIA_INTEGRAL_REPOSITORIO_2026-07.md) |
 | sin fecha declarada | [SIRIUS — Auditoría de Model Studio (7 de agosto de 2026)](docs/audits/SIRIUS_AUDITORIA_MODEL_STUDIO_2026-08.md) |
+| sin fecha declarada | [Dictamen: se puede implementar el aprendizaje en Sirius?](docs/audits/SIRIUS_LEARNING_SEAM_AUDIT_2026-09.md) |
 | 2026-08-31 | [La mina: primer informe de aprendizaje sobre nuestros propios datos operativos](docs/audits/SIRIUS_MINA_APRENDIZAJE_OPERATIVO_2026-08.md) |
 | 2026-09-14 | [La mina, segunda edición: cuánta razón tiene el detector de familia repetida](docs/audits/SIRIUS_MINA_APRENDIZAJE_OPERATIVO_2026-09-14.md) |
+| sin fecha declarada | [La mina v2: informe de aprendizaje sobre la ola de criticidad (M18 → M21b)](docs/audits/SIRIUS_MINA_APRENDIZAJE_OPERATIVO_2026-09.md) |
 | 2026-08-28 | [Nota de arranque — atestar al buscador antes de gastar en medirlo](docs/audits/arranque-atestar-al-buscador.md) |
 | 2026-09-19 | [Nota de arranque — la auditoría de la forma de trabajar, segunda edición: lo que la primera no podía ver](docs/audits/arranque-auditoria-forma-de-trabajo.md) |
 | 2026-08-28 | [Nota de arranque — B1: que una orden de investigación produzca un informe](docs/audits/arranque-b1-investigar-desde-una-orden.md) |
@@ -546,11 +551,16 @@ nada por su cuenta. «Sin fecha declarada» es un aviso, no un dato.
 | sin fecha declarada | [Nota de arranque — `ci-pending` no distingue «todavía no» de «nunca»](docs/audits/arranque-ci-pending-no-espera-un-suceso-que-no-va-a-llegar.md) |
 | 2026-08-28 | [Nota de arranque — el medidor cuenta un registro que Tavily no alimenta](docs/audits/arranque-contar-las-dos-fuentes.md) |
 | 2026-08-27 | [Nota de arranque — una contradicción de etiquetas no es una divergencia](docs/audits/arranque-contradiccion-no-es-divergencia.md) |
+| sin fecha declarada | [Nota de arranque — ¿De dónde sale el ruido del motor?](docs/audits/arranque-de-donde-sale-el-ruido-del-motor.md) |
+| sin fecha declarada | [Nota de arranque — ¿La cardinalidad del banco es un juicio o una regla mecánica?](docs/audits/arranque-de-donde-sale-la-cardinalidad-del-banco.md) |
+| sin fecha declarada | [Nota de arranque — ¿De dónde salen los elementos de más?](docs/audits/arranque-de-donde-salen-los-elementos-de-mas.md) |
 | 2026-08-27 | [Nota de arranque — que el banco diga por qué no midió](docs/audits/arranque-el-banco-dice-por-que.md) |
 | sin fecha declarada | [Nota de arranque — el detector de familia agrupa por la ruta, no por el recorte final](docs/audits/arranque-el-detector-de-familia-agrupa-por-la-ruta.md) |
 | 2026-09-14 | [Nota de arranque — el detector de familia repetida detiene el ciclo](docs/audits/arranque-el-detector-de-familia-detiene-el-ciclo.md) |
 | sin fecha declarada | [Nota de arranque — el doble de `gh` acepta lo que el `gh` real rechaza](docs/audits/arranque-el-doble-de-gh-rechaza-lo-que-el-real-rechaza.md) |
+| sin fecha declarada | [Nota de arranque — El hueco que queda en el filtro: ¿exceso o defecto?](docs/audits/arranque-el-hueco-que-queda-en-el-filtro.md) |
 | sin fecha declarada | [Nota de arranque — el identificador de un defecto deja de escribirse a mano](docs/audits/arranque-el-identificador-de-defecto-no-se-escribe-a-mano.md) |
+| sin fecha declarada | [Nota de arranque — El lazo entre la ampliación por criticidad y el rescate](docs/audits/arranque-el-lazo-entre-la-ampliacion-y-el-rescate.md) |
 | 2026-08-28 | [Nota de arranque — ¿Está el motor preparado para recibir órdenes reales?](docs/audits/arranque-el-motor-esta-preparado.md) |
 | 2026-08-28 | [Nota de arranque — H-25: el contador declara su precondición (§11.2)](docs/audits/arranque-h25-el-contador-declara-su-precondicion.md) |
 | 2026-08-28 | [Nota de arranque — H-26: LOST no libera la cancelación sin confirmar](docs/audits/arranque-h26-lost-no-libera.md) |
@@ -565,8 +575,24 @@ nada por su cuenta. «Sin fecha declarada» es un aviso, no un dato.
 | 2026-09-14 | [Nota de arranque — la cola deja de ser una condición y pasa a ser un mecanismo](docs/audits/arranque-la-cola-trae-main-a-la-rama.md) |
 | sin fecha declarada | [Nota de arranque — la memoria cabe en una sola lectura, y dejó de caber](docs/audits/arranque-la-memoria-cabe-en-una-sola-lectura.md) |
 | sin fecha declarada | [Nota de arranque — la revisión es una cola](docs/audits/arranque-la-revision-es-una-cola.md) |
+| sin fecha declarada | [Nota de arranque — Los dos que la mejor búsqueda no trae](docs/audits/arranque-los-dos-que-la-mejor-busqueda-no-trae.md) |
 | 2026-09-13 | [Nota de arranque — Que una revisión sobreviva a ponerse al día con `main`](docs/audits/arranque-mejora-la-revision-sobrevive-a-ponerse-al-dia.md) |
+| sin fecha declarada | [Nota de arranque — ¿Qué hace el filtro real, según la corrida congelada?](docs/audits/arranque-que-hace-el-filtro-real-segun-la-grabacion.md) |
+| sin fecha declarada | [Nota de arranque — ¿Qué mide el banco y qué promete el diseño?](docs/audits/arranque-que-mide-el-banco-y-que-promete-el-diseno.md) |
+| sin fecha declarada | [Nota de arranque — ¿Qué tira el filtro, y qué le decimos que tire?](docs/audits/arranque-que-tira-el-filtro-y-por-que.md) |
+| sin fecha declarada | [Nota de arranque — ¿Se puede derivar la cardinalidad de la forma del conjunto esperado?](docs/audits/arranque-se-puede-derivar-la-cardinalidad-del-conjunto-esperado.md) |
 | 2026-08-28 | [Nota de arranque — las tres palancas del examen](docs/audits/arranque-tres-palancas.md) |
+| sin fecha declarada | [Bitácora de fallos y mejoras del ciclo (para la fase de aprendizaje)](docs/audits/bitacora-de-fallos-y-mejoras-del-ciclo.md) |
+| sin fecha declarada | [H4 — no es un encargo de implementación: es una decisión de producto](docs/audits/decision-h4-la-subcadena-contexto.md) |
+| sin fecha declarada | [DECISIÓN — El ciclo de H1 continúa: la ronda 2 no midió una regresión del trabajo, midió un ensanchamiento de la revisión.](docs/audits/decision-preparada-freno-de-convergencia-577.md) |
+| sin fecha declarada | [Decisiones abiertas del propietario — al cierre del 20-09-2026](docs/audits/decisiones-abiertas-del-propietario.md) |
+| sin fecha declarada | [Decisiones pendientes de la línea de memoria — registro del 11 al 13-09-2026](docs/audits/decisiones-pendientes-de-la-linea-de-memoria.md) |
+| sin fecha declarada | [Encargo H4 (ADR-148), lanzado el 11-09-2026 como #581: la ampliación por categoría se activa por una señal explícita — copia auditada](docs/audits/encargo-h4-senal-explicita-lanzado-581.md) |
+| sin fecha declarada | [Encargo H5 (ADR-148), lanzado el 11-09-2026 como #582: DEC-001 entra por pertenencia a su lista cerrada — copia auditada](docs/audits/encargo-h5-pertenencia-lista-cerrada-lanzado-582.md) |
+| sin fecha declarada | [Encargo de la palanca 3 (ADR-148), auditado contra el árbol y sin lanzar — copia de trabajo](docs/audits/encargo-palanca-3-auditado-sin-lanzar.md) |
+| sin fecha declarada | [Encargo preparado y SIN LANZAR — el `Perfil:` se valida al escribir](docs/audits/encargo-preparado-el-perfil-se-valida-al-escribir.md) |
+| sin fecha declarada | [Encargo preparado y SIN LANZAR — el reinicio no anuncia en verde lo que se va a rechazar](docs/audits/encargo-preparado-el-reinicio-no-anuncia-en-verde-lo-que-se-va-a-rechazar.md) |
+| sin fecha declarada | [Encargo preparado y sin lanzar: `modo` y `corte_de_registro` alineados con B04 §5 (WI-20260920-MODO-Y-CORTE)](docs/audits/encargo-preparado-modo-y-corte.md) |
 | sin fecha declarada | [Evidencia — H-17](docs/audits/evidencia-H-17.md) |
 | sin fecha declarada | [Evidencia — H-18: el recordatorio de evidencia pedía un sitio imposible](docs/audits/evidencia-H-18.md) |
 | sin fecha declarada | [Evidencia — H-19](docs/audits/evidencia-H-19.md) |
@@ -619,7 +645,26 @@ nada por su cuenta. «Sin fecha declarada» es un aviso, no un dato.
 | 2026-08-28 | [Evidencia — registro-cierre-h32: el apunte contable final de la fase de corrección](docs/audits/evidencia-registro-cierre-h32.md) |
 | 2026-08-28 | [Evidencia — las tres palancas](docs/audits/evidencia-tres-palancas.md) |
 | sin fecha declarada | [Evidencia — verificar la auditoría externa (puntero)](docs/audits/evidencia-verificar-auditoria-externa.md) |
+| sin fecha declarada | [§15.2 encontrado: el encargo del intérprete se desbloquea — 20-09-2026](docs/audits/hallazgo-b04-15-2-encontrado-el-encargo-se-desbloquea.md) |
+| sin fecha declarada | [De dónde sale la cardinalidad del banco — 20-09-2026](docs/audits/hallazgo-de-donde-sale-la-cardinalidad-del-banco.md) |
+| sin fecha declarada | [De dónde salen los elementos de más — 20-09-2026](docs/audits/hallazgo-de-donde-salen-los-elementos-de-mas.md) |
+| sin fecha declarada | [El hueco entre 29 y 36 es exceso que el diseño decidió meter — 20-09-2026](docs/audits/hallazgo-el-hueco-entre-29-y-36-es-exceso-decidido.md) |
+| sin fecha declarada | [El lazo no es la palanca: la ampliación por criticidad es portante — 20-09-2026](docs/audits/hallazgo-el-lazo-no-es-la-palanca-la-ampliacion-es-portante.md) |
+| sin fecha declarada | [El ruido del motor no se puede separar de la señal — 20-09-2026](docs/audits/hallazgo-el-ruido-del-motor-no-se-puede-separar.md) |
+| sin fecha declarada | [El techo está en el filtro, no en la búsqueda — 20-09-2026](docs/audits/hallazgo-el-techo-esta-en-el-filtro-no-en-la-busqueda.md) |
+| sin fecha declarada | [El techo no es 44/47: es 34/47, y quien lo baja es el candado — 20-09-2026](docs/audits/hallazgo-el-techo-no-es-44-es-34-y-lo-baja-el-candado.md) |
+| sin fecha declarada | [La cardinalidad no se deriva del conjunto esperado — 20-09-2026](docs/audits/hallazgo-la-cardinalidad-no-se-deriva-del-conjunto-esperado.md) |
+| sin fecha declarada | [Los dos que la mejor búsqueda no trae: ninguno es arreglable desde aquí — 20-09-2026](docs/audits/hallazgo-los-dos-que-faltan-no-son-mios.md) |
+| sin fecha declarada | [El mismo defecto en los demás campos de la instrucción — 20-09-2026](docs/audits/hallazgo-los-otros-campos-tambien-reducen-el-canon.md) |
 | 2026-09-20 | [Las 35 sesiones de Claude Code en la nube, una a una (20-09-2026)](docs/audits/las-sesiones-de-la-nube-2026-09.md) |
+| sin fecha declarada | [El banco entero con Ollama real, 20-09-2026: dos de los tres suelos de D1, alcanzados](docs/audits/medicion-banco-completo-ollama-real-2026-09-20.md) |
+| sin fecha declarada | [D7 punto 6 medido, y el desglose que lo explica — 20-09-2026](docs/audits/medicion-d7-punto-6-etiquetado-de-categoria-2026-09-20.md) |
+| sin fecha declarada | [Palanca 1 (ADR-164) medida con Ollama real — 20-09-2026](docs/audits/medicion-palanca-1-interprete-con-ollama-real-2026-09-20.md) |
+| sin fecha declarada | [Los dos cambios de `.github/` que salen de la mina v2 (para la mano del propietario)](docs/audits/mina-2026-09-cambios-para-el-propietario.md) |
+| 2026-09-04 | [Medición de los tres guardianes predichos, hecha por el propietario (contraste)](docs/audits/mina-2026-09-medicion-de-guardianes.md) |
+| 2026-09-03 | [Nota de arranque de la mina v2 (escrita ANTES de ver resultados, ADR-001)](docs/audits/mina-2026-09-nota-de-arranque.md) |
+| sin fecha declarada | [Medir sin nadie delante: por qué NO un runner auto-alojado, y qué hacer en su lugar](docs/audits/montaje-medicion-automatica-en-la-maquina-del-propietario.md) |
+| 2026-09-11 | [Persistir los ejes de la memoria — nota preparatoria para el Rector](docs/audits/nota-para-el-rector-persistir-los-ejes.md) |
 | sin fecha declarada | [Verificación de la auditoría externa del 28-08-2026](docs/audits/verificacion-auditoria-externa-20260828.md) |
 
 ### `docs/canonical`
