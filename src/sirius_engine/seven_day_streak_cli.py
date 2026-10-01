@@ -63,13 +63,16 @@ tenía, y ha dado turnos programados reales en verde. Lo que faltaba en el
 párrafo anterior -la cadencia- está cerrado.
 
 **Eso no reabre el contador.** La cadencia es una precondición distinta de la
-que sigue bloqueando D1: :data:`sirius_engine.projection_verifier.CLASES_CON_ESTADO_PROPIO`
-sigue vacío hoy (H-25, ADR-101, #376), porque nada escribe todavía en el
-almacén del motor el desenlace real de cada clase -tenerlo corriendo solo no
-es lo mismo que tenerlo llevando ese estado-. Mientras el conjunto esté
-vacío, cada línea de esta pasada sale ``NO_COMPARABLE`` citando el §11.2: la
-etapa que el contador mide no ha empezado. Eso queda como bloque propio -la
-pieza (C) de #376- y no lo toca este módulo.
+otra, la que el contador declara: :data:`sirius_engine.projection_verifier.CLASES_CON_ESTADO_PROPIO`
+sigue vacío (H-25, ADR-101, #376), porque nada escribe en el almacén del motor
+el desenlace real de cada clase -tenerlo corriendo solo no es lo mismo que
+tenerlo llevando ese estado-. Mientras el conjunto esté vacío, cada línea de
+esta pasada sale ``NO_COMPARABLE`` citando el §11.2: la etapa que el contador
+mide no ha empezado. **Y no va a empezar por decisión del propietario**: el
+13-09-2026 canceló el encargo que iba a cerrar esa cadena (#610, «la línea del
+contador de los siete días no es necesaria»); ADR-225 lo registra y la medida
+previa de #605 queda en ADR-186 y en su rama. Este módulo sigue publicando la
+verdad -no comparable- y no la toca.
 """
 
 from __future__ import annotations
