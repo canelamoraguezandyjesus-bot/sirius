@@ -40,7 +40,13 @@ jobs:
     name: Implementar con Claude Code
     if: github.event.label.name == 'sirius:implement-requested'
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # 85 y no 60 (ADR-228): el job cubre la SUMA de los plazos propios -congelar
+    # 1, Qt 10, sync 19, agente 50- mas el resto (checkout, uv, puerta, prompt, aplicar
+    # el veredicto: menos de 5 min). Con 60 y el agente sin plazo propio, el
+    # tope del job mataba al implementador a los 59:52 sin diagnostico (#581,
+    # 11-09-2026) y el veredicto provisional se publicaba tal cual. 85 es el
+    # maximo que admite el contador de los siete dias (ADR-093).
+    timeout-minutes: 85
     env:
       # PySide6 corre sin pantalla en el runner: sin el plugin offscreen, la
       # suite de GUI no falla, ABORTA (SIGABRT de Qt al no encontrar servidor X).
@@ -156,6 +162,11 @@ jobs:
           python-version: "3.14.6"
 
       - name: Sync environment
+        # Plazo propio, por lo mismo que en Quality (ADR-224): sin cache ha
+        # tardado 16,5 min; que falle ruidosamente, no que se coma el plazo del
+        # agente ni cancele el job. 19 y no 20: congelar 1 + Qt 10 + sync 19 +
+        # agente 50 = 80, y el job (85, el maximo) cubre ademas el resto.
+        timeout-minutes: 19
         run: uv sync --locked --all-groups
       - name: Verificar precondiciones de activación
         id: gate
@@ -297,6 +308,19 @@ jobs:
             exit 1
           fi
           echo "Prompt del encargo segun el manifiesto: ${PROMPT_ROL}"
+          # ADR-228: el plazo, a la vista del implementador, como el del
+          # corrector desde ADR-155. PLAZO_MIN es el `timeout-minutes` del paso
+          # «Ejecutar Claude Code (implementador)» y una guarda exige que
+          # coincidan (tests/automation/test_implementador_con_reloj.py). La
+          # cadena completa tarda entre 9 y 15 min en el runner: la validacion
+          # final tiene que arrancar no mas tarde de PLAZO_MIN - RESERVA_MIN.
+          # Sin esto, el implementador de #581 murio a los 59:52 sin una linea
+          # de diagnostico (bitacora, entrada 92): sin reloj no podia saber
+          # que el encargo no cabia, aunque su prompt le mandara decirlo.
+          PLAZO_MIN=50
+          RESERVA_MIN=16
+          plazo_utc="$(date -u -d "+${PLAZO_MIN} minutes" +%H:%M:%SZ)"
+          limite_validacion_utc="$(date -u -d "+$((PLAZO_MIN - RESERVA_MIN)) minutes" +%H:%M:%SZ)"
           {
             echo "prompt<<SIRIUS_PROMPT_EOF"
             cat "$PROMPT_ROL"
@@ -305,6 +329,7 @@ jobs:
             echo "- Repositorio: ${GH_REPO}"
             echo "- Incidencia de trabajo: #${ISSUE_NUMBER}"
             echo "- Rama base: main"
+            echo "- Plazo de esta ejecución (ADR-228): tu paso muere a las ${plazo_utc} UTC (${PLAZO_MIN} minutos desde ahora; comprueba la hora con \`date -u\`). Arranca la validación final no más tarde de las ${limite_validacion_utc} UTC: la cadena completa tarda entre 9 y 15 minutos. Si a esa hora no has terminado, deja de implementar, valida lo hecho una sola vez, empuja lo que tengas y escribe el veredicto con lo hecho y lo que falta (\`FAILED_SAFELY\` si no está entregable): un diagnóstico a tiempo vale más que morir en el tope sin decir nada."
             echo "- El archivo de veredicto debe escribirse en la ruta exacta de la variable de entorno SIRIUS_VERDICT_FILE."
             echo "SIRIUS_PROMPT_EOF"
           } >> "$GITHUB_OUTPUT"
@@ -313,6 +338,11 @@ jobs:
         if: steps.gate.outputs.valid == 'true'
         id: claude
         continue-on-error: true
+        # ADR-228: plazo PROPIO, el mismo numero que recibe en su prompt
+        # (PLAZO_MIN). Que muera su paso y no el job: asi «Aplicar el
+        # veredicto» corre con normalidad y publica lo que el agente dejo, y
+        # el agente sabe a que hora tiene que haber escrito su diagnostico.
+        timeout-minutes: 50
         uses: anthropics/claude-code-action@v1
         env:
           GH_TOKEN: ${{ secrets.SIRIUS_BOT_TOKEN }}
