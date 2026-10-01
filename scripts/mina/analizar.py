@@ -1,6 +1,6 @@
 """Analisis reproducible de la mina de septiembre de 2026 sobre el volcado de `descargar.py`.
 
-Criterios (escritos en la nota de arranque del 01-10-2026 05:05 UTC, antes de
+Criterios (escritos en la nota de arranque del 01-10-2026 04:45 UTC, antes de
 ejecutar esto):
 - autor de confianza: author_association == OWNER o login == github-actions[bot]
   (el mismo filtro que scripts/automation/sirius_issue.sh usa en produccion);
@@ -18,10 +18,12 @@ import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
+from sirius_engine.drip_guard import parse_archivo_location
 from sirius_engine.round_history import parse_round_records
 
-AQUI = Path(__file__).parent
-RAW = AQUI / "raw"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from datos import DATOS, HISTORIALES, RAW
+
 INICIO = "2026-09-01T00:00:00Z"
 FIN = "2026-09-30T23:59:59Z"
 MITAD = "2026-09-14T23:59:59Z"  # fin de la ventana de la edicion del 14-09
@@ -149,6 +151,23 @@ def main() -> int:
     for k, v in tipo.most_common():
         print(f"  {k}: {v} ({100 * v / len(hallazgos):.1f}%)")
 
+    # --- 3.4 Alcance del guardian de goteo ---------------------------------
+    # El guardian solo juzga una observacion cuyo campo de fichero lleve una
+    # linea que parse_archivo_location reconozca (ADR-123, incidencia #523 G3).
+    # Se mide con la MISMA funcion que usa el guardian en produccion.
+    print("\n## 3.4 Alcance del guardian: hallazgos con fichero:linea reconocible")
+    alcance: Counter[str] = Counter()
+    con_linea: Counter[str] = Counter()
+    for _, h in hallazgos:
+        src = (h.get("source") or "?").upper()
+        alcance[src] += 1
+        _ruta, linea = parse_archivo_location(h.get("file") or h.get("archivo") or "")
+        if linea is not None:
+            con_linea[src] += 1
+    for src in sorted(alcance):
+        pct = 100 * con_linea[src] / alcance[src]
+        print(f"  {src}: {con_linea[src]} de {alcance[src]} ({pct:.1f}%)")
+
     # --- 2. Rondas por incidencia -----------------------------------------
     print("\n## 2 Rondas por incidencia (en la ventana)")
     conteo = {n: len(set(r["ronda"] for r in rs)) for n, rs in por_incidencia.items()}
@@ -199,8 +218,8 @@ def main() -> int:
     print(f"  total={len(avisos_familia)} en incidencias={sorted({a[0] for a in avisos_familia})}")
 
     # --- Historiales para el detector --------------------------------------
-    hdir = AQUI / "historiales"
-    hdir.mkdir(exist_ok=True)
+    hdir = HISTORIALES
+    hdir.mkdir(parents=True, exist_ok=True)
     for n in por_incidencia:
         (hdir / f"historial_{n}.txt").write_text("\n\n".join(historiales[n]), encoding="utf-8")
     print(f"\nHistoriales escritos para {len(por_incidencia)} incidencias en {hdir}")
@@ -215,8 +234,9 @@ def main() -> int:
         "rondas_por_incidencia": conteo,
         "avisos_familia": avisos_familia,
         "marcas_guardian": marcas_guardian,
+        "alcance_guardian": {src: [con_linea[src], alcance[src]] for src in sorted(alcance)},
     }
-    (AQUI / "resumen.json").write_text(
+    (DATOS / "resumen.json").write_text(
         json.dumps(resumen, ensure_ascii=False, indent=1, default=str), encoding="utf-8"
     )
     return 0

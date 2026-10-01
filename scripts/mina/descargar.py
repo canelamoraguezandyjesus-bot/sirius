@@ -18,8 +18,10 @@ from pathlib import Path
 REPO = "canelamoraguezandyjesus-bot/sirius"
 BASE = f"https://api.github.com/repos/{REPO}"
 DESDE = "2026-08-25T00:00:00Z"  # misma ventana de descarga que la edicion del 14-09
-RAW = Path(__file__).parent / "raw"
-RAW.mkdir(exist_ok=True)
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from datos import RAW  # noqa: E402
+
+RAW.mkdir(parents=True, exist_ok=True)
 
 
 def get(url: str) -> tuple[list | dict, dict]:

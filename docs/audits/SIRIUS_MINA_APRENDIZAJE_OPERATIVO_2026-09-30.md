@@ -38,12 +38,14 @@ decidía, y al lado lo que pasó.
 3. *La bitácora contra `main`.* Predicción: un tercio resuelto, un tercio
    abierto, un tercio narración; de las 48 deudas, la mitad abiertas y cinco
    del propietario. **Falló en la narración** (12 %, no 33 %) y en no prever
-   la categoría grande, «parcial» (36 %); acertó en las deudas (25 de 48
-   siguen abiertas o parciales) (§6).
+   la categoría grande, «parcial» (36 %); y se quedó corta en las deudas:
+   **35 de 48 no están cerradas** (18 abiertas, 7 parciales y 10 que esperan
+   una decisión del propietario), no la mitad (§6.3).
 4. *Guardianes.* Predicción: el que más defectos reales habría cazado es el
    detector de familia repetida ya arreglado el 14-09, por delante de cualquier
-   guardián nuevo. **Acertó**: 4 familias reales que el detector antiguo dejó
-   pasar y el de hoy ve, 0 falsos (§4.3, §8).
+   guardián nuevo. **Acertó, con un coste**: 4 familias reales que el detector
+   antiguo dejó pasar y el de hoy ve, y **1 falso positivo nuevo** (#566, por
+   el criterio de la edición anterior): neto +3 (§4.3, §8).
 
 **Criterio de parada, escrito antes de contar nada.** Menos de 10 avisos del
 detector en la ventana → no se publica tasa. Dos agentes en desacuerdo sobre la
@@ -90,7 +92,11 @@ analizadores del propio motor (`sirius_engine.round_history.parse_round_records`
 `history_after_last_resume`, `sirius_engine.drip_guard.parse_archivo_location`)
 y el detector instalado (`uv run sirius-familia-repetida`), sin reimplementar
 nada. Los guiones están en `scripts/mina/` (`descargar.py`, `descargar_pr.py`,
-`analizar.py`, `analizar_pr.py`, `reproducir_avisos.py`, `falsos_negativos.py`).
+`analizar.py`, `analizar_pr.py`, `reproducir_avisos.py`, `falsos_negativos.py`,
+`cerrado_por_inalcanzable.py`). Leen y escriben en el directorio que diga
+`MINA_DATOS` (por defecto `scripts/mina/datos/`, fuera del repositorio), en
+ese orden, y no dependen de dónde viva el clon ni desde dónde se invoquen;
+cada cifra de este informe que no sea una lectura a mano sale de su salida.
 **Comprobación del instrumento**: sobre la subventana 01→14-09 el guion devuelve
 exactamente lo que la edición anterior publicó —30 incidencias, 122 rondas,
 301 hallazgos—, así que las dos ediciones son comparables fila a fila.
@@ -191,8 +197,9 @@ Es el mismo hueco que §3.3 de la edición anterior declaró; no se ha movido.
 
 **Un dato nuevo, el alcance del guardián.** El guardián solo puede juzgar una
 observación cuyo campo `archivo` lleve una línea que
-`parse_archivo_location` reconozca. Medido sobre las 314 observaciones del
-mes:
+`parse_archivo_location` reconozca. Medido sobre los 314 hallazgos del mes
+con esa misma función, la del guardián en producción (`analizar.py`, §3.4 de
+su salida):
 
 | Fuente | Con `fichero:línea` reconocible | % |
 |---|---|---|
@@ -227,8 +234,9 @@ no ha fallado ninguna vez en dos meses.
 Para separar «el detector cambió» de «el historial cambió», se reconstruyó
 para cada aviso el historial que el motor veía en ese instante (comentarios de
 confianza hasta el que llevó el aviso, tras el último marcador de reanudación)
-y se pasó el detector instalado hoy: **14 de 14 avisan**, sobre el mismo
-fichero y el mismo tramo. El detector de hoy es un superconjunto del de
+y se pasó el detector instalado hoy (`reproducir_avisos.py`, que llama al
+mismo código que `sirius-familia-repetida`): **14 de 14 avisan**, sobre el
+mismo fichero y el mismo tramo. El detector de hoy es un superconjunto del de
 entonces, no otro detector.
 
 ### 4.3 Cuántas veces no avisó, y desde cuándo ya no pasa
@@ -237,9 +245,14 @@ La edición del 14-09 encontró 6 falsos negativos por una sola línea
 (`LOCATION_LINE_RE` recortaba solo cuando la cita terminaba en `:N`) y lo
 propuso arreglar; las incidencias #638 y #642 lo cerraron el 14-09. Esta
 edición pasó el detector de hoy por los historiales completos de las 32
-incidencias: marca familia en **9**, y de esas, **4 no recibieron ningún aviso
-en su día**: #566, #570, #599 y #601, las cuatro en la **ronda 3**, las cuatro
-anteriores al 14-09. Después del arreglo solo dos incidencias tuvieron rondas
+incidencias (`falsos_negativos.py`, que recorre las 32 de `resumen.json` y las
+cruza con los avisos publicados): marca familia en **9** (#520, #526, #539,
+#566, #570, #581, #597, #599 y #601), 5 de ellas avisadas en su día, y **4 no
+recibieron ningún aviso**: #566, #570, #599 y #601, las cuatro en la **ronda
+3**, las cuatro anteriores al 14-09. Tres incidencias avisadas (#529, #545 y
+#653) no salen marcadas sobre el historial completo porque un `continua`
+posterior al aviso corta lo que el detector lee (mira solo lo que hay tras el
+último marcador de reanudación); en el instante del aviso sí marcan (§4.2). Después del arreglo solo dos incidencias tuvieron rondas
 (#650, sin familia; #653, avisada en r4 y r5): **0 falsos negativos conocidos
 tras el 14-09**.
 
@@ -342,7 +355,8 @@ bueno.
 
 ### 6.4 Lo que está abierto, agrupado por mecanismo
 
-De las 90 entradas `abierta` o `parcial` y las 25 deudas no cerradas, la mayor
+De las 90 entradas `abierta` o `parcial` y las 35 deudas no cerradas (18
+abiertas, 7 parciales y 10 que esperan una decisión del propietario), la mayor
 parte converge en pocos mecanismos. Se listan con la entrada o deuda que los
 sostiene; §10 los ordena por lo que valen.
 
@@ -420,9 +434,15 @@ determinista del workflow; deuda 8), el vigía barato (deuda 5), persistir el
 rechazo de una propuesta de criticidad (deuda 6) y **la cadena del contador de
 los siete días** (deuda 13, C2 de ADR-101): `CLASES_CON_ESTADO_PROPIO` sigue
 vacío y `seven_day_streak_cli.py:66` dice que eso bloquea D1, pero el
-propietario decidió el 13-09 que esa línea **no es necesaria** y canceló el
-encargo #610 a los dos minutos de despacharse. El agente del triaje la dio por
-`parcial`; es una decisión suya ya tomada, y se corrige aquí.
+propietario decidió el 13-09 que esa línea **no es necesaria**: la fuente es su
+comentario en la incidencia #610 (13-09-2026, 13:25 UTC, «Cancelado por el
+propietario, a los dos minutos de despacharse… la línea del contador de los
+siete días **no es necesaria**»), que cerró el encargo como `not_planned` antes
+de que produjera rama ni PR. Ningún ADR lo recoge y ADR-101 sigue teniendo C2
+como bloque: la decisión está tomada y sin registrar (familia
+`decision-que-solo-vive-en-una-conversacion`). El agente del triaje la dio por
+`parcial`; aquí se corrige a decisión tomada, y la propuesta 11 pide el ADR que
+la deje escrita.
 
 ## 7. Familias de defecto del mes
 
@@ -529,3 +549,7 @@ reales, nada de fusiones a lo tonto».
    entradas 92 y 94 y las rondas tiradas de la 106 dejan de serlo.
 10. **Las decisiones del propietario** D-1…D-5, que mueven el banco de 29/47 a
     36/47 según cómo se resuelva D-1 y que ningún encargo puede tomar por él.
+11. **Un ADR que recoja la cancelación de C2** (#610, 13-09) y supere esa parte
+    de ADR-101, para que `seven_day_streak_cli.py:66` y el bloque dejen de
+    decir que algo bloquea D1 cuando el propietario ya dijo que no hace falta.
+    Medida: hoy la decisión vive en un comentario; después, en el registro.

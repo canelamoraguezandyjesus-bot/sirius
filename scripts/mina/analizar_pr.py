@@ -13,10 +13,13 @@ import glob
 import json
 import re
 import statistics
+import sys
 from collections import Counter
 from pathlib import Path
 
-AQUI = Path(__file__).parent
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from datos import DATOS, PRDIR, RAW
+
 INICIO = "2026-09-01T00:00:00Z"
 FIN = "2026-09-30T23:59:59Z"
 MITAD = "2026-09-14T23:59:59Z"
@@ -39,7 +42,7 @@ def tipo(path: str) -> str:
 
 def main() -> None:
     prs = {}
-    for f in glob.glob(str(AQUI / "raw_pr" / "pr_*.json")):
+    for f in glob.glob(str(PRDIR / "pr_*.json")):
         d = json.loads(Path(f).read_text(encoding="utf-8"))
         prs[d["pr"]["number"]] = d
     filas = []
@@ -63,7 +66,7 @@ def main() -> None:
         # de la conversacion de la PR («Didn't find any major issues»), que vive
         # en raw/issue_<N>.json. Sin esto, una PR aprobada a la primera no cuenta.
         limpias_coment = []
-        ruta_issue = AQUI / "raw" / f"issue_{n}.json"
+        ruta_issue = RAW / f"issue_{n}.json"
         if ruta_issue.exists():
             di = json.loads(Path(ruta_issue).read_text(encoding="utf-8"))
             limpias_coment = [
@@ -125,7 +128,7 @@ def main() -> None:
         tip.update(f["por_tipo"])
     print("\nhallazgos por gravedad:", dict(grav))
     print("hallazgos por tipo de fichero:", dict(tip))
-    (AQUI / "resumen_pr.json").write_text(
+    (DATOS / "resumen_pr.json").write_text(
         json.dumps(filas, ensure_ascii=False, indent=1, default=str), encoding="utf-8"
     )
 

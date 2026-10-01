@@ -14,9 +14,9 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
+from datos import PRDIR
 from descargar import BASE, RAW, get, paginar
 
-PRDIR = Path(__file__).parent / "raw_pr"
 PRDIR.mkdir(exist_ok=True)
 
 
