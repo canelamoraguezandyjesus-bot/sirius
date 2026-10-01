@@ -69,6 +69,17 @@ def declara_goteo(problema: str) -> bool:
     return not any(n in p for n in NEGACIONES)
 
 
+#: La cabecera con la que `sirius_apply_verdict.sh` publica el aviso, al
+#: principio de linea. Mencionarlo en prosa no es avisar: el propietario
+#: escribio «Sobre el `AVISO_FAMILIA_REPETIDA`: es exacto...» en #520 (03-09,
+#: 17:12 UTC) y una busqueda por subcadena lo contaba como un aviso mas.
+_CABECERA_DE_AVISO = re.compile(r"^## AVISO_FAMILIA_REPETIDA\s*$", re.MULTILINE)
+
+
+def es_aviso_de_familia(cuerpo: str) -> bool:
+    return _CABECERA_DE_AVISO.search(cuerpo) is not None
+
+
 def main() -> int:
     incidencias = {}
     for f in sorted(glob.glob(str(RAW / "issue_*.json"))):
@@ -89,7 +100,7 @@ def main() -> int:
             # volcado regenerado en octubre no puede cambiar lo medido en septiembre.
             if c["created_at"] <= FIN:
                 historiales[numero].append(body)
-            if "AVISO_FAMILIA_REPETIDA" in body and en_ventana:
+            if es_aviso_de_familia(body) and en_ventana:
                 avisos_familia.append((numero, c["created_at"]))
             registros = parse_round_records(body)
             if not registros:

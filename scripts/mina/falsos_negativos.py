@@ -10,14 +10,19 @@ Para CADA incidencia con alguna ronda en la ventana (las de `resumen.json`):
    `continua` posterior borra del tramo vigente una familia que SI habria
    avisado antes (Codex, PR #665 ronda 2);
 2. la unidad es el TRAMO -un fichero con hallazgos en tres o mas rondas
-   consecutivas-, no la incidencia: #570 tiene dos tramos reales distintos
-   (1-3 y 2-4) y la edicion del 14-09 ya contaba «6 falsos negativos en 5
-   incidencias» (Codex, PR #665 ronda 3). De cada tramo se guarda la primera
-   ronda en la que el detector lo marca y el instante de ese comentario;
-3. un AVISO_FAMILIA_REPETIDA de la ventana CUBRE los tramos de su incidencia
-   marcados hasta su instante (el aviso lista todas las evidencias que el
-   detector vio); un tramo marcado despues del ultimo aviso -o en una
-   incidencia sin avisos- es un falso negativo de entonces.
+   consecutivas-, no la incidencia (Codex, ronda 3). Y la identidad de un tramo
+   es el fichero MAS la racha: el mismo fichero en las rondas 1-3 y otra vez en
+   las 5-7 son dos tramos (Codex, ronda 4); una evidencia que solapa con un tramo
+   ya visto es ese mismo tramo, que crece (1-3 y luego 1-4). De cada tramo se
+   guarda la primera ronda en la que el detector lo marca y el instante de ese
+   comentario;
+3. un AVISO_FAMILIA_REPETIDA se reconoce por su cabecera (`## AVISO_FAMILIA_REPETIDA`
+   al principio de linea; una mencion en prosa no es un aviso) y se lee lo que
+   publico: sus lineas «fichero» ... (rondas a-b). Un tramo esta CUBIERTO si algun
+   aviso de su incidencia, dentro de la ventana, lista ese fichero con una racha
+   que solapa con la del tramo. Comparar solo instantes no vale: tras un
+   `continua`, un aviso por otra familia no pudo contener la evidencia anterior
+   (Codex, ronda 4).
 
 La clasificacion es una funcion pura (`clasificar`) con sus pruebas en
 `tests/automation/test_mina_falsos_negativos.py`; `main` solo lee el volcado
@@ -27,23 +32,54 @@ de donde diga `MINA_DATOS` (ver `datos.py`) y la imprime.
 from __future__ import annotations
 
 import json
+import re
 import sys
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from analizar import FIN, confianza
+from analizar import FIN, confianza, es_aviso_de_familia
 from datos import DATOS, RAW
 from reproducir_avisos import evidencias_de_hoy
 
 from sirius_engine.round_history import parse_round_records
 
+#: La linea con la que el motor publica cada evidencia del aviso
+#: (`round_family_detector.detectar_familia_repetida`, campo `detalle`).
+_EVIDENCIA_PUBLICADA = re.compile(
+    r"^- «(?P<archivo>.+?)» recibe hallazgos en \d+ rondas consecutivas "
+    r"\(rondas (?P<desde>\d+)-(?P<hasta>\d+)\)",
+    re.MULTILINE,
+)
+
+Evidencia = tuple[str, tuple[int, ...]]
+
+
+def evidencias_publicadas(cuerpo: str) -> tuple[Evidencia, ...] | None:
+    """Lo que un AVISO_FAMILIA_REPETIDA lista: (fichero, rondas) por evidencia.
+
+    `None` si el comentario no es un aviso (no lleva la cabecera al principio de
+    una linea): el propietario que escribe «sobre el AVISO_FAMILIA_REPETIDA...»
+    no esta avisando de nada.
+    """
+    if not es_aviso_de_familia(cuerpo):
+        return None
+    seccion = cuerpo.split("## AVISO_FAMILIA_REPETIDA", 1)[1]
+    return tuple(
+        (m["archivo"], tuple(range(int(m["desde"]), int(m["hasta"]) + 1)))
+        for m in _EVIDENCIA_PUBLICADA.finditer(seccion)
+    )
+
+
+def _solapan(a: tuple[int, ...], b: tuple[int, ...]) -> bool:
+    return bool(set(a) & set(b))
+
 
 @dataclass(frozen=True)
 class Tramo:
-    """Una familia que el detector de hoy marca: el fichero, el tramo mas largo
-    visto y la primera ronda (y su instante) en la que se marco."""
+    """Una familia que el detector de hoy marca: el fichero, la racha completa
+    vista y la primera ronda (y su instante) en la que se marco."""
 
     archivo: str
     rondas: tuple[int, ...]
@@ -74,57 +110,74 @@ class Clasificacion:
         return "falso_negativo" if self.sin_aviso else "avisada"
 
 
+@dataclass
+class _TramoEnCurso:
+    archivo: str
+    rondas: tuple[int, ...]
+    primera_ronda: int | None
+    primer_instante: str
+
+    def es_el_mismo(self, archivo: str, rondas: tuple[int, ...]) -> bool:
+        return archivo == self.archivo and _solapan(rondas, self.rondas)
+
+    def crece_hasta(self, rondas: tuple[int, ...]) -> None:
+        juntas = set(self.rondas) | set(rondas)
+        self.rondas = tuple(range(min(juntas), max(juntas) + 1))
+
+
 def tramos_de(
-    comentarios: Iterable[Mapping[str, str]], avisos: Iterable[str], *, fin: str
-) -> tuple[int, tuple[Tramo, ...]]:
-    """(rondas evaluadas, tramos) de una incidencia, evaluando cada prefijo hasta `fin`."""
-    instantes_de_aviso = sorted(a for a in avisos if a <= fin)
+    comentarios: Iterable[Mapping[str, str]], *, fin: str
+) -> tuple[int, tuple[Tramo, ...], int]:
+    """(rondas evaluadas, tramos, avisos) de una incidencia, evaluando cada prefijo hasta `fin`."""
     acumulado: list[str] = []
     evaluadas = 0
-    primera: dict[str, tuple[int | None, str]] = {}
-    mas_largo: dict[str, tuple[int, ...]] = {}
+    en_curso: list[_TramoEnCurso] = []
+    publicadas: list[Evidencia] = []
+    avisos = 0
     for c in sorted(comentarios, key=lambda c: c["created_at"]):
         if c["created_at"] > fin:
             break
         acumulado.append(c["body"])
+        lo_que_aviso = evidencias_publicadas(c["body"])
+        if lo_que_aviso is not None:
+            avisos += 1
+            publicadas.extend(lo_que_aviso)
         registros = parse_round_records(c["body"])
         if not registros:
             continue
         evaluadas += 1
         for archivo, rondas in evidencias_de_hoy(acumulado):
-            primera.setdefault(archivo, (registros[0].get("round"), c["created_at"]))
-            if len(rondas) > len(mas_largo.get(archivo, ())):
-                mas_largo[archivo] = rondas
+            mismo = next((t for t in en_curso if t.es_el_mismo(archivo, rondas)), None)
+            if mismo is None:
+                en_curso.append(
+                    _TramoEnCurso(archivo, rondas, registros[0].get("round"), c["created_at"])
+                )
+            else:
+                mismo.crece_hasta(rondas)
     tramos = tuple(
         Tramo(
-            archivo=archivo,
-            rondas=mas_largo[archivo],
-            primera_ronda=ronda,
-            primer_instante=instante,
-            cubierto_por_aviso=any(a >= instante for a in instantes_de_aviso),
+            archivo=t.archivo,
+            rondas=t.rondas,
+            primera_ronda=t.primera_ronda,
+            primer_instante=t.primer_instante,
+            cubierto_por_aviso=any(
+                archivo == t.archivo and _solapan(rondas, t.rondas)
+                for archivo, rondas in publicadas
+            ),
         )
-        for archivo, (ronda, instante) in primera.items()
+        for t in en_curso
     )
-    return evaluadas, tramos
+    return evaluadas, tramos, avisos
 
 
 def clasificar(
-    comentarios_por_incidencia: Mapping[int, Iterable[Mapping[str, str]]],
-    avisos: Iterable[tuple[int, str]],
-    *,
-    fin: str,
+    comentarios_por_incidencia: Mapping[int, Iterable[Mapping[str, str]]], *, fin: str
 ) -> dict[int, Clasificacion]:
-    """La clasificacion de cada incidencia; `avisos` son (incidencia, instante)."""
-    por_incidencia: dict[int, list[str]] = {}
-    for n, instante in avisos:
-        por_incidencia.setdefault(int(n), []).append(instante)
+    """La clasificacion de cada incidencia a partir de sus comentarios de confianza."""
     resultado: dict[int, Clasificacion] = {}
     for n, cs in comentarios_por_incidencia.items():
-        avisos_n = por_incidencia.get(int(n), [])
-        evaluadas, tramos = tramos_de(cs, avisos_n, fin=fin)
-        resultado[int(n)] = Clasificacion(
-            int(n), evaluadas, tramos, len([a for a in avisos_n if a <= fin])
-        )
+        evaluadas, tramos, avisos = tramos_de(cs, fin=fin)
+        resultado[int(n)] = Clasificacion(int(n), evaluadas, tramos, avisos)
     return resultado
 
 
@@ -134,8 +187,7 @@ def main() -> int:
     for n in resumen["incidencias"]:
         d = json.loads((RAW / f"issue_{int(n)}.json").read_text(encoding="utf-8"))
         comentarios[int(n)] = [c for c in d["comments"] if confianza(c)]
-    avisos = [(int(n), t) for n, t in resumen["avisos_familia"]]
-    resultado = clasificar(comentarios, avisos, fin=FIN)
+    resultado = clasificar(comentarios, fin=FIN)
     print(
         "| incidencia | tramo (fichero, rondas) | primera ronda en la que marca | "
         "aviso que lo cubre | estado |"
@@ -155,7 +207,12 @@ def main() -> int:
     sin_aviso = [(n, t) for n, t in tramos if not t.cubierto_por_aviso]
     marcadas = sorted({n for n, _ in tramos})
     con_falso_negativo = sorted({n for n, _ in sin_aviso})
+    avisos = sum(c.avisos for c in resultado.values())
     print(f"\nIncidencias examinadas: {len(resultado)} (historiales hasta {FIN})")
+    print(
+        f"Avisos reconocidos por su cabecera: {avisos} "
+        f"(resumen.json lista {len(resumen['avisos_familia'])})"
+    )
     print(
         f"Tramos que el detector de hoy marca en alguna ronda: {len(tramos)}, "
         f"en {len(marcadas)} incidencias: {marcadas}"

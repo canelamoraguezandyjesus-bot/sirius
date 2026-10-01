@@ -43,10 +43,10 @@ decidía, y al lado lo que pasó.
    una decisión del propietario), no la mitad (§6.3).
 4. *Guardianes.* Predicción: el que más defectos reales habría cazado es el
    detector de familia repetida ya arreglado el 14-09, por delante de cualquier
-   guardián nuevo. **Acertó, con un coste**: 6 familias reales (7 tramos sin
-   aviso en 6 incidencias, uno de ellos el falso positivo) que el detector de
+   guardián nuevo. **Acertó, con un coste**: 9 familias reales (10 tramos sin
+   aviso en 8 incidencias, uno de ellos el falso positivo) que el detector de
    entonces dejó pasar y el de hoy ve en alguna ronda, y **1 falso positivo
-   nuevo** (#566, por el criterio de la edición anterior): neto +5 (§4.3, §8).
+   nuevo** (#566, por el criterio de la edición anterior): neto +8 (§4.3, §8).
 
 **Criterio de parada, escrito antes de contar nada.** Menos de 10 avisos del
 detector en la ventana → no se publica tasa. Dos agentes en desacuerdo sobre la
@@ -217,9 +217,13 @@ formato de salida de CODEX, no su disciplina.
 
 ### 4.1 Lo que avisó
 
-**14 comentarios** `AVISO_FAMILIA_REPETIDA` en la ventana, en **8
-incidencias**: #520 (3), #526 (2), #529, #539, #545, #581 (2), #597 (2) y
-#653 (2). Los 12 primeros son los de la edición anterior, que los clasificó
+**13 comentarios** `AVISO_FAMILIA_REPETIDA` en la ventana, en **8
+incidencias**: #520 (2), #526 (2), #529, #539, #545, #581 (2), #597 (2) y
+#653 (2). Un aviso se reconoce por su cabecera (`## AVISO_FAMILIA_REPETIDA` al
+principio de línea), no por la subcadena: la primera versión de este informe
+contaba 14 porque sumaba el comentario del propietario en #520 (03-09, 17:12
+UTC: «Sobre el `AVISO_FAMILIA_REPETIDA`: es exacto…»), que es una mención, no
+un aviso. Los 11 primeros son los de la edición anterior, que los clasificó
 uno a uno: 8 casos, 8 ACERTADO. Los dos de #653 se clasifican aquí con el
 mismo criterio:
 
@@ -227,7 +231,7 @@ mismo criterio:
 |---|---|---|---|---|
 | #653 | `docs/decisions/ADR-212-…` | rondas 2-4 y 2-5 | **ACERTADO** | La misma afirmación cuatro rondas seguidas: lo que la ficha declara validado no coincide con el head. r2 `CODEX-001` («el head final añade a `d8cf2756` solo este párrafo» es falso: añade una sección entera), r3 `CODEX-001` (la enumeración de lo no validado sigue incompleta: falta la tabla y la rectificación), r4 `CLAUDE-R5-001` (la sección «Comprobación» ancla la validación a un árbol y dos commits nuevos la falsean), r5 `CLAUDE-R7-001`/`-002` y `CODEX-001` (regresión incompleta de la corrección anterior; atribución residual a Quality). Es F1, y la propia bitácora lo cuenta en sus entradas 130, 131 y 141. |
 
-**Acumulado: 9 casos en septiembre, 9 ACERTADO; 13 de 13 con ADR-078.** Catorce
+**Acumulado: 9 casos en septiembre, 9 ACERTADO; 13 de 13 con ADR-078.** Trece
 comentarios superan el umbral de 10 que el criterio de parada fijó, así que
 esta vez sí se puede decir con esas palabras: sobre lo que avisa, el detector
 no ha fallado ninguna vez en dos meses.
@@ -238,7 +242,7 @@ Para separar «el detector cambió» de «el historial cambió», se reconstruy�
 para cada aviso el historial que el motor veía en ese instante (comentarios de
 confianza hasta el que llevó el aviso, tras el último marcador de reanudación)
 y se pasó el detector instalado hoy (`reproducir_avisos.py`, que llama al
-mismo código que `sirius-familia-repetida`): **14 de 14 avisan**, sobre el
+mismo código que `sirius-familia-repetida`): **13 de 13 avisan**, sobre el
 mismo fichero y el mismo tramo. El detector de hoy es un superconjunto del de
 entonces, no otro detector.
 
@@ -260,26 +264,41 @@ La unidad es el **tramo** —un fichero con hallazgos en tres o más rondas
 consecutivas—, no la incidencia: #570 tiene dos tramos reales distintos (1-3 y
 2-4), como ya contaba la edición del 14-09 («6 falsos negativos en 5
 incidencias»); contar incidencias los fundía en uno (lo cazó Codex en la ronda
-3 de la revisión de este informe). Un aviso cubre los tramos de su incidencia
-marcados hasta su instante; un tramo marcado después del último aviso, o en
-una incidencia sin avisos, es un falso negativo de entonces.
+3 de la revisión de este informe). La identidad de un tramo es el fichero **y
+la racha**: el mismo fichero en las rondas 1-4 y, tras un `continua`, en las
+5-9, son dos tramos (#581 tiene tres); una evidencia que solapa con un tramo ya
+visto es ese mismo tramo, que crece. Y un aviso cubre exactamente lo que
+publicó —sus líneas «fichero … (rondas a-b)»—: un tramo está cubierto si algún
+aviso de su incidencia, dentro de la ventana, lista ese fichero con una racha
+que solapa con la suya. Comparar solo instantes no valía: tras un `continua`,
+un aviso por otra familia no pudo contener la anterior. Las dos cosas las cazó
+Codex en la ronda 4 de la revisión de este informe, y las dos cambiaban la
+cifra: con la identidad por fichero solo, el segundo tramo de #545 y los dos
+últimos de #581 quedaban fundidos con el primero, que sí tuvo aviso.
 
-Resultado: el detector de hoy marca **16 tramos en 14 incidencias** (#520,
+Resultado: el detector de hoy marca **19 tramos en 14 incidencias** (#520,
 #523, #526, #529, #539, #545, #566, #570, #574, #581, #597, #599, #601 y
-#653); **9** tramos los cubrió un aviso de la ventana, y **7 no recibieron
-ninguno**, en 6 incidencias:
+#653); **9** tramos los cubrió un aviso de la ventana, y **10 no recibieron
+ninguno**, en 8 incidencias:
 
 | Incidencia | Tramo (fichero, rondas) | Primera ronda en la que marca el detector de hoy |
 |---|---|---|
 | #523 | `ADR-133-g3-el-guardian-de-goteo-entiende…` (2-4) | ronda 4, 04-09 15:52 UTC |
+| #545 | `reflect.py` (8-10; el tramo 1-3 sí tuvo aviso) | ronda 10, 07-09 19:11 UTC |
 | #566 | `ADR-162-la-altura-de-una-fila-del-chat…` (1-3) | ronda 3, 08-09 03:43 UTC |
 | #570 | `ollama_query_intent_classifier.py` (1-3) | ronda 3, 08-09 10:39 UTC |
 | #570 | `ADR-164-la-pregunta-se-convierte-en-una…` (2-4) | ronda 4, 08-09 11:12 UTC |
 | #574 | `ADR-166-el-cargador-del-banco…` (1-6; en la 7 el tramo se corta) | ronda 3, 08-09 14:14 UTC |
+| #581 | `ADR-177-la-ampliacion-por-categoria…` (5-9; el tramo 1-4 tuvo dos avisos) | ronda 7, 13-09 00:48 UTC |
+| #581 | `ADR-177-la-ampliacion-por-categoria…` (10-14) | ronda 12, 13-09 05:00 UTC |
 | #599 | `sirius_apply_verdict.sh` (1-4) | ronda 3, 13-09 02:21 UTC |
 | #601 | `intent_interpreter.py` (1-3) | ronda 3, 13-09 12:10 UTC |
 
-Los siete son **anteriores al 14-09**. Después del arreglo solo dos incidencias
+Los diez son **anteriores al 14-09**. #545 y #581 enseñan la forma más cara
+del falso negativo: la incidencia tuvo aviso en su primer tramo, el
+propietario escribió `continua`, y el mismo fichero volvió a recibir hallazgos
+tres, cinco y hasta cinco rondas seguidas (en #581, de la 5 a la 14 sobre el
+mismo ADR) sin que nadie volviera a avisar. Después del arreglo solo dos incidencias
 tuvieron rondas (#650, sin familia; #653, avisada en r4 y r5): **0 falsos
 negativos conocidos tras el 14-09**.
 
@@ -291,10 +310,11 @@ hoy**, el primero conocido. Y #574, que aquella contó a mano con tramo 1-7,
 hoy se marca desde la ronda 3 (no sobre el historial final, porque un
 `continua` lo corta antes de la 7): la primera versión de este informe decía
 que «hoy no se marca», y era verdad solo del historial final. Así que el
-arreglo del 14-09 no es gratis: **+6 familias reales que antes se perdían
-(#523, los dos tramos de #570, #574, #599, #601), 1 falso positivo nuevo
-(#566)**, neto +5, medido sobre el mes entero y por tramos, que es la unidad
-que aquella edición ya usaba.
+arreglo del 14-09 no es gratis: **+9 familias reales que antes se perdían
+(#523, el segundo tramo de #545, los dos tramos de #570, #574, los dos tramos
+tardíos de #581, #599, #601), 1 falso positivo nuevo (#566)**, neto +8, medido
+sobre el mes entero y por tramos, que es la unidad que aquella edición ya
+usaba.
 
 ## 5. La segunda población: Codex sobre las PR
 
@@ -483,8 +503,8 @@ la deje escrita.
   final de mes sigue siendo la dominante en los dos cauces. **Este dato
   responde a la propuesta 5 de la edición anterior: F1 no cedió.**
 - **F2 — La corrección de una ronda abre el siguiente hueco del mismo
-  mecanismo.** Las 9 familias que el detector marca (§4) son F2 por
-  definición; 6 incidencias en la primera quincena, #653 en la segunda.
+  mecanismo.** Las 14 incidencias en las que el detector de hoy marca familia
+  (§4.3) son F2 por definición; 13 en la primera quincena, #653 en la segunda.
 - **F5 — Afirmar lo que hace un mecanismo sin ejecutarlo ni leer su regla de
   rechazo.** Nueva como nombre, no como hecho: la bitácora la cuenta desde el
   08-09 (entradas 54, 59, 80, 83, 98: «premisas falsas escritas de memoria»)
@@ -508,7 +528,7 @@ Mismo criterio de entrada que las ediciones anteriores y que la incidencia
 
 | Guardián | Aciertos reales | Falsos | Evidencia |
 |---|---|---|---|
-| El detector de familia repetida ya arreglado (14-09) | +6 familias reales sin aviso en su día (#523, #570 ×2, #574, #599, #601) y 14/14 avisos reproducidos | 1 (#566, por el criterio de la edición anterior) | §4.2, §4.3. Neto **+5**, medido tramo a tramo sobre el mes |
+| El detector de familia repetida ya arreglado (14-09) | +9 familias reales sin aviso en su día (#523, #545, #570 ×2, #574, #581 ×2, #599, #601) y 13/13 avisos reproducidos | 1 (#566, por el criterio de la edición anterior) | §4.2, §4.3. Neto **+8**, medido tramo a tramo sobre el mes |
 | Comprobar `Perfil: rol@N` en `validate_issue_body.py` | 1 ciclo muerto a los 6 s (#653) y los encargos lanzados con `@2` no vigente | 0 por construcción: solo rechaza lo que el workflow iba a rechazar después | entradas 123, 124, 138; deudas 34, 35 |
 | Regenerar `MEMORIA.md` en la cola antes de empujar la combinación | 1 vuelta del corrector (25 min) en #653 | 0 | entrada 146; deuda 48 |
 | El guardián de goteo tal como está | 37 marcas en 15 incidencias | no medido: haría falta verificar cada marca contra el diff, el método de agosto | §3 |
