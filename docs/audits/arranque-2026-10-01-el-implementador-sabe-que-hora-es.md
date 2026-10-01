@@ -1,8 +1,8 @@
 # Nota de arranque — el implementador sabe qué hora es
 
-Rama `claude/el-implementador-sabe-que-hora-es`, 01-10-2026, 15:20 UTC.
+Rama `claude/el-implementador-sabe-que-hora-es`. Fecha: 01-10-2026, 15:20 UTC.
 Mejora 9 de la lista de la mina de septiembre
-(`SIRIUS_MINA_APRENDIZAJE_OPERATIVO_2026-09-30.md`, §10), en su mitad del
+(`SIRIUS_MINA_APRENDIZAJE_OPERATIVO_2026-09-30.md`, §10, en la PR #665), en su mitad del
 implementador: deuda 30 de la bitácora (entradas 1, 92 y 94). Escrita antes de
 tocar el workflow.
 

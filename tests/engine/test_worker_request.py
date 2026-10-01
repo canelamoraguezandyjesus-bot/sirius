@@ -11,6 +11,7 @@ aquí en rojo, en vez de depender de que alguien se acuerde de mirar.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -23,6 +24,7 @@ import pytest
 import yaml
 
 from sirius_engine.adapters.github_worker_request import (
+    plazo_del_implementador,
     project_github_prompt,
     read_procedure_text,
 )
@@ -141,6 +143,9 @@ _HEREDOC_RE = re.compile(r"prompt<<SIRIUS_PROMPT_EOF\n(.*?\n)SIRIUS_PROMPT_EOF\n
 #: reloj del implementador con `date -u` (ADR-228), y la no-divergencia solo
 #: se puede comparar byte a byte si el guión y la proyección ven la misma hora.
 _AHORA_DEL_RELOJ = datetime(2026, 10, 1, 12, 0, tzinfo=UTC)
+#: Lo que la preparación «consumió» en el arnés antes de preparar el prompt: el
+#: guión real resta ese tiempo del tope del job (ADR-228, plazo calculado).
+_CONSUMIDO_DEL_ARNES_MIN = 8
 
 
 def _date_fijo(destino: Path) -> Path:
@@ -191,35 +196,60 @@ def _cuerpo_con_perfil(perfil: str) -> str:
     return f"## Bloque\n\nENCARGO\n\nPerfil: {perfil}@{version}\n\n## Objetivo\n\nlo que sea\n"
 
 
-def _prompt_real_del_workflow(
-    *, repo: str, issue_number: int, tmp_path: Path, perfil: str = "implementer"
-) -> str:
-    """Ejecutar el guión bash REAL del workflow (leído, no reescrito) y extraer su salida."""
+def _ejecutar_paso_build_prompt(
+    *,
+    repo: str,
+    issue_number: int,
+    tmp_path: Path,
+    perfil: str = "implementer",
+    consumido_min: int = _CONSUMIDO_DEL_ARNES_MIN,
+) -> tuple[subprocess.CompletedProcess[str], Path]:
+    """Ejecutar el guión bash REAL del paso del prompt (leído, no reescrito).
+
+    `JOB_ARRANQUE_EPOCH` es lo que en producción deja el paso «Anotar el arranque
+    del job»: aquí, `consumido_min` minutos antes de la hora fija del arnés.
+    """
     script = _extraer_paso_build_prompt()
     # Un fichero por invocación, y no por pulcritud: el guión ANEXA a
     # `$GITHUB_OUTPUT`, así que dos llamadas sobre el mismo fichero hacen que la
     # segunda lea el heredoc de la primera. Se descubrió porque una prueba que
     # comparaba dos perfiles los vio idénticos: el fallo estaba en el arnés, no
     # en el workflow.
-    output_path = tmp_path / f"github_output-{perfil}.txt"
+    output_path = tmp_path / f"github_output-{perfil}-{consumido_min}.txt"
     entorno = dict(os.environ)
     entorno.update(
         {
             "GH_REPO": repo,
             "ISSUE_NUMBER": str(issue_number),
             "GITHUB_OUTPUT": str(output_path),
+            "RUNNER_TEMP": str(tmp_path),
             "ISSUE_BODY": _cuerpo_con_perfil(perfil),
+            "JOB_ARRANQUE_EPOCH": str(int(_AHORA_DEL_RELOJ.timestamp()) - consumido_min * 60),
             "PATH": f"{_date_fijo(tmp_path)}{os.pathsep}{os.environ.get('PATH', '')}",
         }
     )
-    subprocess.run(
+    proceso = subprocess.run(
         ["bash", "-c", script],
-        check=True,
+        check=False,
         cwd=_REPO_ROOT,
         env=entorno,
         capture_output=True,
         text=True,
     )
+    return proceso, output_path
+
+
+def _prompt_real_del_workflow(
+    *, repo: str, issue_number: int, tmp_path: Path, perfil: str = "implementer"
+) -> str:
+    """El prompt que el guión real deja en `$GITHUB_OUTPUT`; un guión que falla, falla aquí."""
+    proceso, output_path = _ejecutar_paso_build_prompt(
+        repo=repo, issue_number=issue_number, tmp_path=tmp_path, perfil=perfil
+    )
+    if proceso.returncode != 0:
+        raise subprocess.CalledProcessError(
+            proceso.returncode, proceso.args, proceso.stdout, proceso.stderr
+        )
     contenido = output_path.read_text(encoding="utf-8")
     match = _HEREDOC_RE.search(contenido)
     assert match is not None, f"no se pudo extraer el heredoc 'prompt' de:\n{contenido}"
@@ -284,13 +314,83 @@ def test_la_proyeccion_del_perfil_implementer_reproduce_el_prompt_real_del_workf
         issue_number=issue_number,
         base_branch="main",
         ahora=_AHORA_DEL_RELOJ,
+        consumido_min=_CONSUMIDO_DEL_ARNES_MIN,
     )
 
     assert obtenido == esperado
-    assert "tu paso muere a las 12:50:00Z UTC" in esperado, (
-        "el guión real lleva el reloj del implementador (ADR-228) calculado sobre la hora fija"
+    assert "tu paso muere a las 2026-10-01T13:11:00Z UTC (71 minutos desde ahora" in esperado, (
+        "el guión real lleva el reloj del implementador (ADR-228) calculado sobre la hora fija "
+        "y sobre lo que el job le deja: 85 - 6 - 8 = 71"
     )
-    assert "no más tarde de las 12:34:00Z UTC" in esperado
+    assert "no más tarde de las 2026-10-01T12:46:00Z UTC" in esperado
+
+
+def test_el_plazo_del_prompt_se_calcula_desde_el_arranque_del_job(tmp_path: Path) -> None:
+    """Ronda 1 de Codex en la PR #675: un plazo fijo de 50 era mentira cuando la
+    preparación era lenta (el job moría antes que el paso). El guión resta lo
+    consumido desde `JOB_ARRANQUE_EPOCH` y publica el número en `plazo_min`,
+    que es el `timeout-minutes` del paso del agente."""
+    proceso, salida = _ejecutar_paso_build_prompt(
+        repo="o/r", issue_number=1, tmp_path=tmp_path, consumido_min=30
+    )
+    assert proceso.returncode == 0, proceso.stderr
+    contenido = salida.read_text(encoding="utf-8")
+    assert "plazo_min=49\n" in contenido, contenido
+    assert "(49 minutos desde ahora" in contenido
+    assert "tu paso muere a las 2026-10-01T12:49:00Z UTC" in contenido
+    assert "no más tarde de las 2026-10-01T12:24:00Z UTC" in contenido
+
+
+def test_una_preparacion_que_se_come_el_plazo_no_arranca_al_agente_y_deja_el_veredicto(
+    tmp_path: Path,
+) -> None:
+    """Por debajo del mínimo no se arranca al agente con un plazo que no da ni
+    para validar: el guión falla, deja un veredicto FAILED_SAFELY que dice
+    cuánto comió la preparación (lo publica «Aplicar el veredicto») y una
+    salida válida para el `timeout-minutes` del paso que se salta."""
+    proceso, salida = _ejecutar_paso_build_prompt(
+        repo="o/r", issue_number=1, tmp_path=tmp_path, consumido_min=45
+    )
+    assert proceso.returncode != 0
+    assert "No se arranca al agente" in proceso.stdout + proceso.stderr
+    veredicto = json.loads((tmp_path / "sirius_verdict.json").read_text(encoding="utf-8"))
+    assert veredicto["verdict"] == "FAILED_SAFELY"
+    assert "consumió 45 minutos de los 85" in veredicto["summary"]
+    assert "quedaban 34" in veredicto["summary"] and "mínimo de 40" in veredicto["summary"]
+    contenido = salida.read_text(encoding="utf-8")
+    assert "plazo_min=1\n" in contenido and "prompt<<" not in contenido
+
+
+def test_la_proyeccion_exige_el_reloj_entero_o_ninguno() -> None:
+    perfil = load_agent_profile("implementer")
+    procedure_text = read_procedure_text(perfil)
+    with pytest.raises(ValueError, match="van juntos"):
+        project_github_prompt(
+            procedure_text=procedure_text, repo="o/r", issue_number=1, ahora=_AHORA_DEL_RELOJ
+        )
+    with pytest.raises(ValueError, match="van juntos"):
+        project_github_prompt(
+            procedure_text=procedure_text, repo="o/r", issue_number=1, consumido_min=8
+        )
+
+
+def test_la_proyeccion_hace_la_misma_resta_que_el_workflow_y_se_niega_bajo_el_minimo() -> None:
+    """`plazo_del_implementador` es la resta del guión (85 - 6 - consumido) y
+    devuelve `None` por debajo del mínimo (40), que es cuando el workflow no
+    arranca al agente; la proyección entonces no inventa un prompt."""
+    assert plazo_del_implementador(8) == 71
+    assert plazo_del_implementador(39) == 40
+    assert plazo_del_implementador(40) is None
+    perfil = load_agent_profile("implementer")
+    procedure_text = read_procedure_text(perfil)
+    with pytest.raises(ValueError, match="se comió el plazo"):
+        project_github_prompt(
+            procedure_text=procedure_text,
+            repo="o/r",
+            issue_number=1,
+            ahora=_AHORA_DEL_RELOJ,
+            consumido_min=45,
+        )
 
 
 def test_la_no_divergencia_vale_para_otra_incidencia_y_otro_repositorio(tmp_path: Path) -> None:
@@ -307,6 +407,7 @@ def test_la_no_divergencia_vale_para_otra_incidencia_y_otro_repositorio(tmp_path
         issue_number=issue_number,
         base_branch="main",
         ahora=_AHORA_DEL_RELOJ,
+        consumido_min=_CONSUMIDO_DEL_ARNES_MIN,
     )
 
     assert obtenido == esperado
