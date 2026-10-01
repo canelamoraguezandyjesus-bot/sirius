@@ -90,9 +90,13 @@ y la incidencia no lleva `sirius:planned`, el guion:
    (`failed-safely` o `blocked-decision` se quedan): no hay aprobación que
    devolver. Publica **una vez por orden** (marcador
    `sirius-resume-sin-planned:<id del comentario>`) que la incidencia nunca
-   tuvo `planned`, que planificarla es una decisión humana que el guion no
-   toma, y que lo que hace falta es **la activación misma** —aplicar a la vez
-   `sirius:planned` y `sirius:implement-requested` y retirar la parada—, no
+   tuvo `planned`, que planificarla es una decisión que el guion no toma, y
+   que lo que hace falta es **la activación misma**, en el orden que la puerta
+   necesita —retirar la parada, aplicar `sirius:planned` y, en último lugar,
+   `sirius:implement-requested`: cada etiqueta es un evento aparte, la puerta
+   arranca con la última y rechaza una parada que siga puesta (ronda 3 y
+   ronda 4 de Codex: la primera versión decía «a la vez», que una persona no
+   puede hacer, y la ronda 4 cazó que este punto seguía diciéndolo)—, no
    repetir la orden. El aviso no empieza por «continua». Si el aviso no se
    puede publicar, **el run falla** y queda reintentable: un aviso prometido
    que no llega es la parada muda otra vez.
