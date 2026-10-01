@@ -773,3 +773,215 @@ def test_al_menos_un_defecto_acusa_el_adr_que_lo_corrigio() -> None:
         f"inventario entero, el enlace `{CAMPO_ADR}` no vigila nada vivo y el "
         "registro ha vuelto a quedarse dormido."
     )
+
+
+# --- La referencia de cierre se puede seguir desde `main` (ADR-222) -----------
+#
+# `cerrado_por` es el commit del arreglo EN SU RAMA. Desde que las PR entran
+# aplastadas, ese sha no es antepasado de `main`: medido el 01-10-2026, 29 de
+# 68 defectos cerrados citaban un commit que un clon de `main` no contiene. Lo
+# que sí se puede seguir es la PR que lo fusionó —el aplastado lleva «(#N)» en
+# el título de su commit de `main`— o, para un encargo del motor, su incidencia.
+
+#: Desde este ADR, un defecto cerrado lleva `pr:` (o `incidencia:`, si lo cerró
+#: un encargo del motor). Los anteriores se rellenaron solo donde se midió la
+#: correspondencia (los 29 inalcanzables, con la API de GitHub).
+FRONTERA_REFERENCIA_SEGUIBLE = 222
+
+_SUJETO_DE_PR = "(#{numero})"
+
+
+def _referencia_seguible(defecto: dict[str, Any]) -> int | None:
+    for campo in ("pr", "incidencia"):
+        valor = defecto.get(campo)
+        if isinstance(valor, int) and not isinstance(valor, bool) and valor > 0:
+            return valor
+    return None
+
+
+def test_todo_defecto_cerrado_desde_la_frontera_lleva_una_referencia_que_main_contiene() -> None:
+    sin_referencia = [
+        defecto["id"]
+        for defecto in _defectos()
+        if defecto["estado"] == "cerrado"
+        and isinstance(defecto.get("adr"), int)
+        and defecto["adr"] >= FRONTERA_REFERENCIA_SEGUIBLE
+        and _referencia_seguible(defecto) is None
+    ]
+    assert sin_referencia == [], (
+        f"defectos cerrados sin `pr:` ni `incidencia:` {sin_referencia}: el sha de "
+        "`cerrado_por` vive en la rama aplastada y un clon de `main` no llega a él; "
+        "pon el número de la PR que lo fusiona (skill `registro-de-defectos`, ADR-222)"
+    )
+
+
+def test_la_frontera_de_la_referencia_se_ejercita_de_verdad() -> None:
+    """Anti-vacua: sin un cerrado desde la frontera, la regla de arriba pasaría sola."""
+    desde_la_frontera = [
+        defecto
+        for defecto in _defectos()
+        if defecto["estado"] == "cerrado"
+        and isinstance(defecto.get("adr"), int)
+        and defecto["adr"] >= FRONTERA_REFERENCIA_SEGUIBLE
+    ]
+    assert desde_la_frontera, (
+        f"ningún defecto cerrado desde ADR-{FRONTERA_REFERENCIA_SEGUIBLE}: la regla de la "
+        "referencia seguible no se está midiendo contra nada"
+    )
+
+
+def test_toda_referencia_pr_es_un_numero_de_pr() -> None:
+    mal = [
+        (defecto["id"], defecto["pr"])
+        for defecto in _defectos()
+        if (
+            "pr" in defecto
+            and not (isinstance(defecto["pr"], int) and not isinstance(defecto["pr"], bool))
+        )
+        or ("pr" in defecto and isinstance(defecto["pr"], int) and defecto["pr"] <= 0)
+    ]
+    assert mal == [], f"`pr:` tiene que ser el número entero de la PR, sin comillas: {mal}"
+
+
+def _historia_de_main() -> list[str] | None:
+    """Los asuntos de la primera línea de `origin/main`, o None si este clon no la tiene.
+
+    Quality clona con profundidad 1 y sin `origin/main`: ahí la existencia no se
+    puede comprobar y esta guarda lo dice en vez de afirmar. En la cadena de
+    comprobación local, con el clon entero, sí se comprueba.
+    """
+    salida = subprocess.run(
+        ["git", "log", "--first-parent", "--format=%s", "origin/main"],
+        cwd=RAIZ,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if salida.returncode != 0:
+        return None
+    asuntos = salida.stdout.splitlines()
+    return asuntos if len(asuntos) > 1 else None
+
+
+def _adr_en_main() -> set[int] | None:
+    salida = subprocess.run(
+        ["git", "ls-tree", "--name-only", "origin/main", "docs/decisions/"],
+        cwd=RAIZ,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if salida.returncode != 0:
+        return None
+    numeros: set[int] = set()
+    for linea in salida.stdout.splitlines():
+        encontrado = re.search(r"ADR-(\d{3})-", linea)
+        if encontrado:
+            numeros.add(int(encontrado.group(1)))
+    return numeros
+
+
+def _rutas_de_adr_en_main() -> dict[int, str] | None:
+    """Número de ADR → ruta en `origin/main`; None si este clon no tiene `origin/main`."""
+    salida = subprocess.run(
+        ["git", "ls-tree", "--name-only", "origin/main", "docs/decisions/"],
+        cwd=RAIZ,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if salida.returncode != 0:
+        return None
+    rutas: dict[int, str] = {}
+    for linea in salida.stdout.splitlines():
+        encontrado = re.search(r"ADR-(\d{3})-", linea)
+        if encontrado:
+            rutas.setdefault(int(encontrado.group(1)), linea.strip())
+    return rutas
+
+
+_MARCA_FINAL_DE_PR = re.compile(r"\(#(\d+)\)\s*$")
+
+
+def _pr_que_fusiono(asunto: str) -> int | None:
+    """La PR de una fusión aplastada es la marca `(#N)` FINAL del asunto, no cualquiera.
+
+    `main` tiene asuntos con dos marcas, como «… (#579) (#580)» (ADR-169): #580
+    es la PR que produjo el commit y #579 una PR citada en el título (ronda 2 de
+    Codex en la PR #668). Buscar la subcadena habría dado por buena la citada.
+    """
+    encontrado = _MARCA_FINAL_DE_PR.search(asunto)
+    return int(encontrado.group(1)) if encontrado else None
+
+
+def _asunto_que_introdujo(ruta: str) -> str | None:
+    """El asunto del commit de primer padre de `origin/main` que AÑADIÓ `ruta`."""
+    salida = subprocess.run(
+        [
+            "git",
+            "log",
+            "--first-parent",
+            "--diff-filter=A",
+            "--format=%s",
+            "origin/main",
+            "--",
+            ruta,
+        ],
+        cwd=RAIZ,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    asuntos = [asunto for asunto in salida.stdout.splitlines() if asunto.strip()]
+    return asuntos[-1] if salida.returncode == 0 and asuntos else None
+
+
+def test_la_pr_de_un_asunto_es_su_marca_final_y_no_una_citada() -> None:
+    assert _pr_que_fusiono("Una cosa (#579) (#580)") == 580
+    assert _pr_que_fusiono("Una cosa (#580)") == 580
+    assert _pr_que_fusiono("Cita la PR #580 en el texto") is None
+    assert _pr_que_fusiono("Una cosa (#580) y mas texto") is None
+
+
+def test_cada_referencia_pr_es_una_pr_fusionada_en_main_cuando_hay_historia() -> None:
+    """La mitad que Quality no puede medir y la cadena local sí (ADR-222).
+
+    Un defecto cuyo ADR todavía no está en `main` va en vuelo: su PR aún no se
+    ha fusionado y no se le exige; en cuanto el ADR entre, se le exige. Y se le
+    exige lo fuerte (ronda 1 de Codex en la PR #668): no basta con que la PR
+    exista en `main`, el commit de primer padre que AÑADIÓ el ADR del defecto
+    tiene que ser el de esa PR. Los defectos sin `adr:` (los anteriores a la
+    frontera) solo pueden comprobarse por existencia.
+    """
+    asuntos = _historia_de_main()
+    rutas = _rutas_de_adr_en_main()
+    if asuntos is None or rutas is None:
+        pytest.skip("este clon no tiene la historia de origin/main: la forma se comprueba arriba")
+    fusionadas = {_pr_que_fusiono(asunto) for asunto in asuntos} - {None}
+    rotas = []
+    fuertes = 0
+    for defecto in _defectos():
+        pr = defecto.get("pr")
+        if not isinstance(pr, int):
+            continue
+        adr = defecto.get("adr")
+        if isinstance(adr, int):
+            if adr not in rutas:
+                continue  # en vuelo: su PR no se ha fusionado todavía
+            fuertes += 1
+            asunto = _asunto_que_introdujo(rutas[adr])
+            if asunto is None or _pr_que_fusiono(asunto) != pr:
+                rotas.append((defecto["id"], pr, asunto))
+        elif pr not in fusionadas:
+            rotas.append((defecto["id"], pr, None))
+    assert rotas == [], (
+        "referencias `pr:` que no son la PR que metió el ADR del defecto en main "
+        f"(o, sin ADR, ninguna PR fusionada): {rotas}"
+    )
+    con_adr_en_main = [
+        d for d in _defectos() if isinstance(d.get("pr"), int) and d.get("adr") in rutas
+    ]
+    assert fuertes == len(con_adr_en_main), (
+        "la comprobación fuerte tiene que ejercitarse sobre todo defecto con `pr:` cuyo ADR "
+        f"ya está en main: {fuertes} de {len(con_adr_en_main)}"
+    )

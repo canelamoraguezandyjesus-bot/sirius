@@ -24,6 +24,7 @@ defectos:
     gravedad: media-baja
     estado: cerrado
     cerrado_por: e92e535dd064d79761042850686916567082a092
+    pr: 222
     ficheros:
       - src/sirius_engine/mirror_projection.py
       - src/sirius_engine/ports/github_mirror.py
@@ -34,6 +35,7 @@ defectos:
     gravedad: media
     estado: cerrado
     cerrado_por: 3f8967e59ce84fe5df18200115daeda44770c0dd
+    pr: 227
     ficheros:
       - src/sirius_engine/recovery.py
       - src/sirius_engine/ports/world.py
@@ -55,6 +57,7 @@ defectos:
     gravedad: bloqueante
     estado: cerrado
     cerrado_por: 698803014637e2165c62ebac19ef302395ac25d8
+    pr: 207
     ficheros:
       - docs/decisions/ADR-042-un-paso-de-preparacion-sin-plazo-propio-puede-costar-el-trabajo-entero.md
 
@@ -64,6 +67,7 @@ defectos:
     gravedad: baja
     estado: cerrado
     cerrado_por: d7efb15fb8195ac7fb9628f00738522111578ee5
+    pr: 221
     ficheros:
       - src/sirius_engine/context_recall.py
 
@@ -73,6 +77,7 @@ defectos:
     gravedad: baja
     estado: cerrado
     cerrado_por: 2996ae361c4bdd7ce05cc5cd2ff3cc7f379b7049
+    pr: 226
     ficheros:
       - src/sirius_engine/domain/run.py
       - src/sirius_engine/domain/profile.py
@@ -84,6 +89,7 @@ defectos:
     gravedad: alta
     estado: cerrado
     cerrado_por: 7fedb39
+    pr: 220
     ficheros:
       - src/sirius_engine/governance.py
 
@@ -93,6 +99,7 @@ defectos:
     gravedad: media
     estado: cerrado
     cerrado_por: 7b0c4ba036ef209de11d650a95a98c8f64ef4c09
+    pr: 235
     ficheros:
       - src/sirius_engine/domain/work_item.py
       - tests/engine/test_work_item_transitions.py
@@ -103,6 +110,7 @@ defectos:
     gravedad: media
     estado: cerrado
     cerrado_por: 41df5e2
+    pr: 234
     ficheros:
       - src/sirius_engine/session.py
 
@@ -112,6 +120,7 @@ defectos:
     gravedad: media
     estado: cerrado
     cerrado_por: 4fffa937e15c904ee46efe6780082b1165cfb789
+    pr: 239
     incidencia: 236
     ficheros:
       - src/sirius_engine/ports/supervisor_journal.py
@@ -140,6 +149,7 @@ defectos:
       - .github/workflows/repair-sirius-work.yml
       - scripts/automation/prompts/corrector.md
     cerrado_por: c72a73074d08472dc45cf20aa1833923310df814
+    pr: 355
     nota: >-
       Cerrado el 25-08-2026, con el permiso sobre .github/ abierto por el
       propietario. El precheck del corrector distingue ahora el disparador de la
@@ -172,6 +182,7 @@ defectos:
     gravedad: alta
     estado: cerrado
     cerrado_por: 615279d19e2643b9d8556a26e4fb52299750577f
+    pr: 245
     ficheros:
       - src/sirius_engine/work_intake.py
       - src/sirius_engine/ports/store.py
@@ -220,6 +231,7 @@ defectos:
       - .claude/hooks/recordar_parada.py
       - .claude/settings.json
     cerrado_por: 9e1037e6404109e2522df3cd30156402fff62142
+    pr: 357
     nota: >-
       Cerrado el 26-08-2026, con la puerta de .claude/ abierta por el
       propietario (#356) bajo el mismo trato que .github/: se arregla y se
@@ -249,6 +261,7 @@ defectos:
     incidencia: 321
     primera_mitad_cerrada_por: 4f91f99fb75bde506825e41ed1a211e31c176ce3
     cerrado_por: f72fa1654f94db7d9778e5af9a130f59812b120c
+    pr: 354
     nota: >-
       Segunda mitad (ADR-092, incidencia #353): el `continue` de
       `_reconcile_pending_budget_cutoffs` saltaba un WorkItem que ya no estaba
@@ -297,6 +310,7 @@ defectos:
       - .github/workflows/resume-sirius-on-command.yml
       - scripts/automation/sirius_resume_on_command.sh
     cerrado_por: 690c946f009cefe49d4ecb69eff586c0e8b9441a
+    pr: 355
     nota: >-
       Cerrado el 25-08-2026 con ADR-094. Sin PR, la orden continua autoriza un
       REINICIO en vez de morir: repite desde cero la fase que se paro, con
@@ -315,6 +329,7 @@ defectos:
     gravedad: alta
     estado: cerrado
     cerrado_por: 3d1c6367f8611c579a7e6cf89730e856afd5b892
+    pr: 377
     ficheros:
       - src/sirius_engine/projection_verifier.py
       - src/sirius_engine/mirror_projection.py
@@ -887,6 +902,7 @@ defectos:
     gravedad: media
     estado: cerrado
     cerrado_por: e5e5c542a56ea182ad2150faa3bbfd5686343cf5
+    pr: 652
     adr: 204
     ficheros:
       - AGENTS.md
@@ -903,6 +919,7 @@ defectos:
     gravedad: media
     estado: cerrado
     cerrado_por: e5e5c542a56ea182ad2150faa3bbfd5686343cf5
+    pr: 652
     adr: 205
     ficheros:
       - .github/workflows/merge-sirius-work.yml
@@ -920,6 +937,7 @@ defectos:
     gravedad: media
     estado: cerrado
     cerrado_por: e5e5c542a56ea182ad2150faa3bbfd5686343cf5
+    pr: 652
     adr: 206
     ficheros:
       - scripts/automation/sirius_obra_en_curso.py
@@ -937,6 +955,7 @@ defectos:
     gravedad: baja
     estado: cerrado
     cerrado_por: 1e04a39e9611d814db0c18ee607e29ef1cd414a5
+    pr: 652
     adr: 207
     ficheros:
       - docs/operations/CLAUDE_SIRIUS_KNOWLEDGE_BASE.md
@@ -955,6 +974,7 @@ defectos:
     gravedad: media
     estado: cerrado
     cerrado_por: 0b8fa354b34cee1d5f896c688b42bb52cae815a0
+    pr: 652
     adr: 208
     ficheros:
       - docs/ideas/registro_de_ideas.yml
@@ -972,6 +992,7 @@ defectos:
     gravedad: media
     estado: cerrado
     cerrado_por: d74e70d13310941de33fe528e3029c75b9f96e04
+    pr: 652
     adr: 209
     ficheros:
       - docs/decisions/PLANTILLA.md
@@ -987,6 +1008,7 @@ defectos:
     gravedad: baja
     estado: cerrado
     cerrado_por: 79ab7131d415b912ea36cf7f613c69f5a63aacfd
+    pr: 652
     adr: 210
     ficheros:
       - docs/audits/DONDE_VIVE_LA_BITACORA_DEL_CICLO.md
@@ -1003,6 +1025,7 @@ defectos:
     gravedad: media
     estado: cerrado
     cerrado_por: f5741b573b0383a2c44268809021c289743830cd
+    pr: 652
     adr: 211
     ficheros:
       - tests/automation/test_skills.py
@@ -1029,6 +1052,7 @@ defectos:
     gravedad: media
     estado: cerrado
     cerrado_por: d9768650b228c6c84e8ed8252d1322fa155a0abe
+    pr: 654
     adr: 212
     ficheros:
       - src/sirius/adapters/ollama_query_intent_classifier.py
@@ -1047,6 +1071,7 @@ defectos:
     gravedad: media
     estado: cerrado
     cerrado_por: d6f7359a62c79b356d924ac9e78ca73c9a56f383
+    pr: 658
     adr: 213
     ficheros:
       - AGENTS.md
@@ -1064,6 +1089,7 @@ defectos:
     gravedad: media
     estado: cerrado
     cerrado_por: 35bbcc4ea94988a255c6516642290886cf17271b
+    pr: 659
     adr: 214
     ficheros:
       - .claude/skills/modo-nocturno/SKILL.md
@@ -1084,6 +1110,7 @@ defectos:
     gravedad: media
     estado: cerrado
     cerrado_por: a367f4ca57bfa1dd58295918a03dd52c5021edd6
+    pr: 661
     adr: 215
     ficheros:
       - .claude/skills/validacion-manual-en-windows/SKILL.md
@@ -1147,6 +1174,24 @@ defectos:
       - scripts/automation/sirius_resume_on_command.sh
       - .github/workflows/notify-sirius-state.yml
 
+  # ADR-222 (PR #668; sin incidencia: lo cazo Codex en la PR #664 sobre H-217 y
+  # lo midio la mina de septiembre). 29 de 68 defectos cerrados citaban en
+  # cerrado_por un commit que main no contiene, porque las PR entran aplastadas
+  # y el sha del arreglo vive en su rama. Desde este ADR la entrada lleva ademas
+  # la PR que lo fusiona, la referencia que un clon de main puede seguir.
+  - id: H-222
+    titulo: La referencia de cierre de 29 de 68 defectos cerrados era un commit que un clon de main no contiene
+    bloque: documentacion
+    gravedad: media
+    estado: cerrado
+    cerrado_por: 3ca98b2df5ff819cf74c254cab0122ff100f798c
+    pr: 668
+    adr: 222
+    ficheros:
+      - docs/audits/registro_defectos.yml
+      - tests/automation/test_registro_de_defectos.py
+      - .claude/skills/registro-de-defectos/SKILL.md
+
   # ADR-221 (rama claude/la-puerta-resuelve-el-perfil; sin incidencia: viene de
   # la bitacora del ciclo, entradas 123, 124 y 138 / deudas 34 y 35, medidas por
   # la mina del 30-09). La puerta de activacion no miraba el Perfil: rol@N y
@@ -1183,6 +1228,7 @@ defectos:
     gravedad: alta
     estado: cerrado
     cerrado_por: 7d10c83d0fd58a895425af004f89e9eea34299ed
+    pr: 664
     adr: 218
     ficheros:
       - src/sirius_engine/memoria.py
@@ -1207,6 +1253,7 @@ defectos:
     gravedad: baja
     estado: cerrado
     cerrado_por: 9323c27959571d5c1a9df34e77bce3415a14ab5e
+    pr: 664
     adr: 217
     ficheros:
       - docs/audits/DONDE_VIVE_LA_BITACORA_DEL_CICLO.md
