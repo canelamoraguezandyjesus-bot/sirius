@@ -1131,6 +1131,12 @@ defectos:
   # condicion no tenia quien la disparara: un registro que nadie puede leer no
   # es un registro. Misma familia que H-216 y que ADR-174: la regla que depende
   # de que alguien se acuerde.
+  #
+  # Cierre: PR #664. El sha de cerrado_por es el commit de la rama que arreglo
+  # el defecto, como manda la skill; al fusionar aplastado ese sha NO queda en
+  # la historia de main (lo cazo Codex en la PR #664), y lo mismo les pasa a
+  # H-211, H-213, H-214 y H-215. La referencia que si se puede seguir es la PR:
+  # `git log --grep="(#664)" origin/main`. La convencion se corrige aparte.
   - id: H-217
     titulo: La bitacora del ciclo estuvo once dias sin poder leerse desde main porque su entrada dependia de que una sesion concreta volviera
     bloque: documentacion
