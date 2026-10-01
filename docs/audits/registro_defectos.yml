@@ -1152,6 +1152,24 @@ defectos:
       - .github/workflows/reflejar-desenlace.yml
       - docs/audits/CIERRE_DEL_CICLO_2026-09-24.md
 
+  # ADR-222 (PR #668; sin incidencia: lo cazo Codex en la PR #664 sobre H-217 y
+  # lo midio la mina de septiembre). 29 de 68 defectos cerrados citaban en
+  # cerrado_por un commit que main no contiene, porque las PR entran aplastadas
+  # y el sha del arreglo vive en su rama. Desde este ADR la entrada lleva ademas
+  # la PR que lo fusiona, la referencia que un clon de main puede seguir.
+  - id: H-222
+    titulo: La referencia de cierre de 29 de 68 defectos cerrados era un commit que un clon de main no contiene
+    bloque: documentacion
+    gravedad: media
+    estado: cerrado
+    cerrado_por: 3ca98b2df5ff819cf74c254cab0122ff100f798c
+    pr: 668
+    adr: 222
+    ficheros:
+      - docs/audits/registro_defectos.yml
+      - tests/automation/test_registro_de_defectos.py
+      - .claude/skills/registro-de-defectos/SKILL.md
+
   # ADR-218 (PR #664, sin incidencia: lo destapo Quality sobre la propia PR).
   # La vista de memoria volvio a no caber en una sola lectura 17 dias despues
   # de ADR-196: sobre main quedaban 3.146 bytes de margen, menos de lo que
