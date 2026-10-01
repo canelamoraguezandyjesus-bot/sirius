@@ -311,6 +311,28 @@ fi
 # lo hubiera pedido, y un ciclo de verdad estancado podría correr para siempre.
 # Una parada operativa no tiene rondas que perdonar: solo hay que repetir la
 # fase que se cayó.
+# Una parada anterior a la PR se reanuda volviendo a ACTIVAR la incidencia, y la
+# activacion exige `sirius:planned` junto al evento; `planned` se consumio en la
+# primera activacion y ninguna automatizacion puede reponerla (puerta de
+# activacion, #60). Reponer solo el evento anunciaba en verde un reinicio que
+# la puerta rechazaba en segundos y dejaba la incidencia sin ninguna etiqueta:
+# 3 de los 9 reinicios sin PR de septiembre de 2026 (#545, #581, #653). Aqui se
+# mira antes y, si falta, se dice y no se toca nada (ADR-223).
+if [ "$sin_pr" = "true" ] && [ "$etiqueta_destino" = "sirius:implement-requested" ] \
+  && ! printf '%s\n' "$labels_now" | grep -Fxq "sirius:planned"; then
+  marker="<!-- sirius-resume-sin-planned:${COMMENT_ID} -->"
+  aviso_file="$(mktemp)"
+  printf '%s\n\n%s\n\n%s\n\n%s\n' \
+    "$marker" \
+    "🛑 **No he reanudado: falta \`sirius:planned\`**" \
+    "Esta incidencia se detuvo antes de producir rama ni PR, así que reanudarla es volver a activarla, y la activación exige \`sirius:planned\` junto a \`sirius:implement-requested\`. \`planned\` se consumió en la primera activación y ninguna automatización puede añadirla. Si repusiera solo \`implement-requested\`, la puerta lo rechazaría en segundos y la incidencia quedaría sin ninguna etiqueta." \
+    "**Qué hace falta:** aplica \`sirius:planned\` y vuelve a escribir **continua**. La parada (\`${parada}\`) se conserva hasta entonces." >"$aviso_file"
+  sirius_comment_once "$REPO" "$ISSUE" "$marker" "$aviso_file" \
+    || echo "::warning::No se pudo publicar el aviso de falta de planned en #${ISSUE}." >&2
+  rm -f "$aviso_file"
+  echo "Reinicio sin PR de #${ISSUE} no realizado: falta sirius:planned; la parada ${parada} se conserva."
+  exit 0
+fi
 body_file="$(mktemp)"
 if [ "$sin_pr" = "true" ]; then
   # NI `sirius-convergence-reset` NI `sirius-resume-stop`, y la diferencia

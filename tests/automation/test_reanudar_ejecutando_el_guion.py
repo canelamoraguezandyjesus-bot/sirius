@@ -452,7 +452,7 @@ def test_una_parada_sin_pr_reactiva_la_fase_que_se_paro(tmp_path: Path) -> None:
     env = _setup(tmp_path)
     _sembrar(
         env,
-        etiquetas=["sirius:failed-safely"],
+        etiquetas=["sirius:planned", "sirius:failed-safely"],
         historial=_historial_sin_pr("<!-- sirius-verdict:implementer:FAILED_SAFELY:1 -->"),
     )
     resultado = _ejecutar(env)
@@ -476,7 +476,7 @@ def test_una_parada_sin_pr_publica_un_permiso_QUE_NO_MIENTE(tmp_path: Path) -> N
     env = _setup(tmp_path)
     _sembrar(
         env,
-        etiquetas=["sirius:failed-safely"],
+        etiquetas=["sirius:planned", "sirius:failed-safely"],
         historial=_historial_sin_pr("<!-- sirius-verdict:implementer:FAILED_SAFELY:1 -->"),
     )
     _ejecutar(env)
@@ -503,7 +503,7 @@ def test_una_parada_sin_pr_NO_manda_el_trabajo_al_corrector(tmp_path: Path) -> N
     env = _setup(tmp_path)
     _sembrar(
         env,
-        etiquetas=["sirius:blocked-decision"],
+        etiquetas=["sirius:planned", "sirius:blocked-decision"],
         historial=_historial_sin_pr("<!-- sirius-verdict:implementer:FAILED_SAFELY:1 -->"),
     )
     resultado = _ejecutar(env)
@@ -531,7 +531,7 @@ def test_sin_pr_y_sin_saber_que_fase_se_paro_no_se_inventa_ninguna(tmp_path: Pat
     env = _setup(tmp_path)
     _sembrar(
         env,
-        etiquetas=["sirius:failed-safely"],
+        etiquetas=["sirius:planned", "sirius:failed-safely"],
         historial=_historial_sin_pr("no hay ningun marcador de veredicto aqui"),
     )
     resultado = _ejecutar(env)
@@ -625,7 +625,7 @@ def test_un_implementador_bloqueado_sin_pr_repite_su_fase_desde_cero(tmp_path: P
     env = _setup(tmp_path)
     _sembrar(
         env,
-        etiquetas=["sirius:blocked-decision"],
+        etiquetas=["sirius:planned", "sirius:blocked-decision"],
         historial=_historial_sin_pr("<!-- sirius-verdict:implementer:blocked:run-2 -->"),
     )
     resultado = _ejecutar(env)
@@ -721,3 +721,63 @@ def test_una_parada_de_rol_del_revisor_sigue_volviendo_a_revision(tmp_path: Path
     assert resultado.returncode == 0, resultado.stderr
     assert "sirius:review-requested" in _etiquetas(env)
     assert "sirius:repair-requested" not in _etiquetas(env)
+
+
+# --- Una parada anterior a la PR solo se reanuda si `planned` sigue ahi (ADR-223) --
+
+
+def test_una_parada_sin_pr_sin_planned_no_anuncia_en_verde_ni_consume_la_parada(
+    tmp_path: Path,
+) -> None:
+    """Entrada 126 de la bitacora: 3 de los 9 reinicios sin PR de septiembre acabaron
+    con la incidencia sin ninguna etiqueta, porque la puerta rechazo `sin-planned`
+    el reinicio que el guion acababa de anunciar en verde."""
+    env = _setup(tmp_path)
+    _sembrar(
+        env,
+        etiquetas=["sirius:failed-safely"],
+        historial=_historial_sin_pr("<!-- sirius-verdict:implementer:FAILED_SAFELY:1 -->"),
+    )
+    resultado = _ejecutar(env)
+
+    assert resultado.returncode == 0, resultado.stderr
+    etiquetas = _etiquetas(env)
+    assert "sirius:failed-safely" in etiquetas, "la parada se conserva: no hay nada que la releve"
+    assert "sirius:implement-requested" not in etiquetas, (
+        "reponer el evento sin `planned` es anunciar un reinicio que la puerta rechaza"
+    )
+    assert "sirius:planned" not in etiquetas, "el guion no pone `planned`: es un gesto humano"
+    publicado = _comentarios(env)
+    assert "sirius-resume-sin-planned" in publicado and "sirius:planned" in publicado
+    assert "sirius-restart-sin-pr" not in publicado, "no se anuncia en verde lo que no se hace"
+
+
+def test_el_aviso_de_sin_planned_no_empieza_por_continua(tmp_path: Path) -> None:
+    env = _setup(tmp_path)
+    _sembrar(
+        env,
+        etiquetas=["sirius:failed-safely"],
+        historial=_historial_sin_pr("<!-- sirius-verdict:implementer:FAILED_SAFELY:1 -->"),
+    )
+    _ejecutar(env)
+    cuerpo = _comentarios(env)
+    primera = next(
+        (linea for linea in cuerpo.splitlines() if linea.strip() and "<!--" not in linea), ""
+    )
+    assert not primera.strip().lower().startswith("continua"), primera
+
+
+def test_una_parada_sin_pr_con_planned_se_reanuda_y_conserva_planned(tmp_path: Path) -> None:
+    env = _setup(tmp_path)
+    _sembrar(
+        env,
+        etiquetas=["sirius:planned", "sirius:failed-safely"],
+        historial=_historial_sin_pr("<!-- sirius-verdict:implementer:FAILED_SAFELY:1 -->"),
+    )
+    resultado = _ejecutar(env)
+
+    assert resultado.returncode == 0, resultado.stderr
+    etiquetas = _etiquetas(env)
+    assert "sirius:implement-requested" in etiquetas and "sirius:planned" in etiquetas
+    assert "sirius:failed-safely" not in etiquetas
+    assert "sirius-restart-sin-pr" in _comentarios(env)
