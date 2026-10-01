@@ -67,6 +67,20 @@ día):
    `git commit --no-edit`, con el mensaje que ya tenía; se empuja.
 3. **Cualquier otro conflicto**: ni se regenera ni se toca el árbol; se deshace
    y se avisa en la incidencia, exactamente como hasta ahora (ADR-200).
+4. **Frontera de credenciales** (ronda 1 de Codex en la PR #667, P1: «no
+   ejecutes código controlado por la rama con el PAT del bot»). Desde ese
+   checkout se ejecuta código DE LA RAMA (`uv sync` y el generador), que no
+   ha pasado necesariamente la revisión dual; si el PAT estuviera en
+   `.git/config` o en su entorno, ese código podría leerlo y empujar lo que
+   quisiera. Por eso el checkout de la rama no persiste credenciales
+   (`persist-credentials: false`), el paso no exporta `GH_TOKEN`, el generador
+   corre con `env -u SIRIUS_BOT_TOKEN -u GH_TOKEN`, y el PAT aparece solo en
+   las dos operaciones fijas que lo necesitan: el `git push`, por una URL
+   `https://x-access-token:…@github.com/…` construida en el propio paso y que
+   no se guarda en ningún sitio (`SIRIUS_PUSH_URL` es la costura de las
+   pruebas), y el `gh issue comment` del aviso de conflicto, con el token
+   inline. Lo que el código de la rama puede hacer en este paso es lo mismo
+   que ya podía hacer en Quality: nada con el PAT.
 
 Defensa en profundidad: aunque la puerta de «solo vistas» fallara, `git add`
 añade únicamente las vistas y `git commit` se niega a confirmar con rutas sin
@@ -75,7 +89,7 @@ con conflictos ajenos, no como única barrera.
 
 ## Comprobación que la sostiene
 
-`tests/automation/test_cola.py` gana cuatro pruebas. Tres ejecutan el bash del
+`tests/automation/test_cola.py` gana cinco pruebas y endurece una. Tres ejecutan el bash del
 paso **de verdad** —extraído del YAML— sobre un repositorio de prueba con su
 remoto, con dobles de `uv` (escribe las vistas a partir de `git ls-files`, como
 el generador real escribe a partir del árbol) y de `gh` (apunta lo que
@@ -93,6 +107,17 @@ pasa:
   publica el aviso de conflicto y **el generador no llega a ejecutarse**.
 - `test_la_puesta_al_dia_tiene_con_que_regenerar`: los dos pasos de entorno
   existen, van antes del de fusión y llevan la misma condición.
+- `test_el_codigo_de_la_rama_corre_sin_el_pat_al_alcance` (punto 4): el
+  checkout de la rama no persiste el PAT, el generador va con `env -u`, ningún
+  paso exporta el PAT como `GH_TOKEN`, y el push va por la URL del paso y no
+  por `origin`. Y las tres pruebas de comportamiento lo miden de verdad: el
+  doble de `uv` apunta si vio `SIRIUS_BOT_TOKEN` o `GH_TOKEN` en su entorno
+  (la fusión limpia exige que no), y el clon del runner tiene el remoto
+  `origin` sin camino de empuje, como en el runner sin credenciales: solo la
+  URL con el PAT llega al remoto.
+- `test_la_puesta_al_dia_no_empuja_con_el_token_del_workflow` (endurecida):
+  el push lleva el PAT (con `GITHUB_TOKEN` Quality no volvería a correr,
+  ADR-183) y nunca `--force`.
 
 **Mutaciones, cada una aplicada sobre el workflow, la batería de `test_cola.py`
 ejecutada y el fichero restaurado:**
@@ -102,13 +127,17 @@ ejecutada y el fichero restaurado:**
 | M1 | no regenerar tras la fusión limpia | cae `regenera_las_vistas_y_las_confirma` |
 | M2 | quitar la puerta «solo vistas» (tratar cualquier conflicto como de vistas) | cae `un_conflicto_fuera_de_las_vistas…`: el generador se ejecutó sobre un árbol con conflicto ajeno |
 | M3 | empujar sin confirmar la vista regenerada | cae `regenera_las_vistas_y_las_confirma` |
+| M4 | persistir el PAT en el checkout de la rama (`persist-credentials: true`) | cae `el_codigo_de_la_rama_corre_sin_el_pat_al_alcance` |
+| M5 | ejecutar el generador con el PAT en su entorno (sin `env -u`) | cae `el_codigo_de_la_rama_corre_sin_el_pat_al_alcance`, `la_puesta_al_dia_regenera_las_vistas_y_las_confirma_antes_de_empujar` |
+| M6 | exportar el PAT como `GH_TOKEN` a todo el paso | cae `el_codigo_de_la_rama_corre_sin_el_pat_al_alcance` |
+| M7 | empujar por `origin` en vez de por la URL con el PAT | cae `el_codigo_de_la_rama_corre_sin_el_pat_al_alcance`, `la_puesta_al_dia_regenera_las_vistas_y_las_confirma_antes_de_empujar`, `un_conflicto_solo_en_las_vistas_generadas_se_resuelve_regenerando` |
 
 Una mutación anunciada en la nota **no cayó**, y se dice: «resolver añadiendo
 todo» (`git add -A` en vez de solo las vistas) no cambia el resultado del caso
 C porque la puerta impide llegar ahí; es la razón de la prueba y la mutación
 M2 de arriba, que miden la puerta directamente.
 
-- Las 29 pruebas de `test_cola.py` en verde; `ruff`, `mypy` sobre la prueba;
+- Las 30 pruebas de `test_cola.py` en verde; `ruff`, `mypy` sobre la prueba;
   el YAML carga. Batería entera: en la PR.
 
 ## Consecuencias

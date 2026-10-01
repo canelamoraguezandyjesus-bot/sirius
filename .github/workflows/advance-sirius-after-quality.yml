@@ -412,13 +412,19 @@ jobs:
       # NUNCA REESCRIBE HISTORIA. Una fusión, no un rebase: el checkout de quien
       # esté trabajando en esa rama sigue siendo válido. Y si hay conflicto real
       # se aborta y se dice; eso no lo puede decidir una máquina.
+      # SIN CREDENCIALES PERSISTIDAS (ADR-220, ronda 1 de Codex en la PR #667):
+      # desde este checkout se ejecuta codigo DE LA RAMA (`uv sync` y el
+      # generador de la memoria), que no ha pasado necesariamente la revision
+      # dual. Si el PAT quedara en `.git/config`, ese codigo podria leerlo y
+      # empujar lo que quisiera. El PAT solo aparece en el `git push` fijo y en
+      # el comentario de conflicto, y nunca en el entorno del generador.
       - name: Traer la base a la rama que espera
         if: steps.avanzar.outputs.ponerse_al_dia == 'true'
         uses: actions/checkout@v6
         with:
           ref: ${{ steps.avanzar.outputs.rama }}
           token: ${{ secrets.SIRIUS_BOT_TOKEN }}
-          persist-credentials: true
+          persist-credentials: false
           # La fusión necesita la historia entera: con un checkout superficial
           # `git merge` no puede encontrar el antepasado común.
           fetch-depth: 0
@@ -442,7 +448,7 @@ jobs:
         if: steps.avanzar.outputs.ponerse_al_dia == 'true'
         shell: bash --noprofile --norc {0}
         env:
-          GH_TOKEN: ${{ secrets.SIRIUS_BOT_TOKEN }}
+          SIRIUS_BOT_TOKEN: ${{ secrets.SIRIUS_BOT_TOKEN }}
           GH_REPO: ${{ github.repository }}
           RAMA: ${{ steps.avanzar.outputs.rama }}
           BASE: ${{ steps.avanzar.outputs.base }}
@@ -451,6 +457,11 @@ jobs:
           set -uo pipefail
           git config user.name "sirius-motor"
           git config user.email "canelamoraguezandyjesus@gmail.com"
+          # El PAT solo viaja en el push (y en el comentario de conflicto): el
+          # remoto de empuje se construye aqui y no se guarda en ningun sitio.
+          # `SIRIUS_PUSH_URL` es la costura de las pruebas, que empujan a un
+          # repositorio desnudo local.
+          REMOTO_DE_EMPUJE="${SIRIUS_PUSH_URL:-https://x-access-token:${SIRIUS_BOT_TOKEN}@github.com/${GH_REPO}.git}"
 
           if ! git fetch origin "$BASE"; then
             echo "::error::no se pudo traer ${BASE}; la rama ${RAMA} sigue esperando y se reintentara en el proximo run."
@@ -464,7 +475,9 @@ jobs:
           # Quality cayendo por la memoria (#653: una vuelta del corrector).
           VISTAS="MEMORIA.md docs/audits/INDICE.md"
           regenerar_vistas() {
-            if ! uv run sirius-memoria conocimiento; then
+            # Codigo de la rama, SIN el PAT en su entorno: `env -u` lo quita del
+            # proceso del generador y de todo lo que este lance.
+            if ! env -u SIRIUS_BOT_TOKEN -u GH_TOKEN uv run sirius-memoria conocimiento; then
               echo "::error::no se pudieron regenerar las vistas de la memoria tras traer ${BASE}." >&2
               return 1
             fi
@@ -473,7 +486,7 @@ jobs:
             git add -- $VISTAS
           }
           empujar() {
-            if git push origin "HEAD:refs/heads/${RAMA}"; then
+            if git push "$REMOTO_DE_EMPUJE" "HEAD:refs/heads/${RAMA}"; then
               echo "Rama ${RAMA} al dia con ${BASE}; Quality volvera a correr sobre la combinacion."
               exit 0
             fi
@@ -520,7 +533,7 @@ jobs:
             "- Rama: \`${RAMA}\`" \
             "- Base: \`${BASE}\`" \
             "He intentado traer \`${BASE}\` a esta rama para que la revision viera la combinacion real, y hay conflicto: las dos partes tocaron lo mismo. La fusion se ha deshecho y la rama esta como estaba. Esto no lo puede decidir una maquina: hace falta una persona que resuelva el conflicto (ADR-200, incidencia #608)." >"$cuerpo"
-          gh issue comment "$ISSUE" --repo "$GH_REPO" --body-file "$cuerpo" \
+          GH_TOKEN="$SIRIUS_BOT_TOKEN" gh issue comment "$ISSUE" --repo "$GH_REPO" --body-file "$cuerpo" \
             || echo "::warning::no se pudo publicar el aviso de conflicto en #${ISSUE}."
           rm -f "$cuerpo"
           echo "::warning::conflicto entre ${RAMA} y ${BASE}; hace falta una persona."

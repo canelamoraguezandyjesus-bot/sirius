@@ -253,8 +253,8 @@ def test_la_puesta_al_dia_no_empuja_con_el_token_del_workflow() -> None:
     """Un push con `GITHUB_TOKEN` no dispara workflows (ADR-183).
 
     Si la rama se pusiera al día con él, Quality no volvería a correr y la rama
-    quedaría esperando otra vez: el mismo atasco con otra cara. Por eso el
-    checkout que hace la puesta al día lleva el PAT, igual que el del corrector.
+    quedaría esperando otra vez: el mismo atasco con otra cara. El PAT va en el
+    `git push` fijo, construido en el propio paso, y en ningún otro sitio.
     """
     flujo = yaml.safe_load(AVANCE.read_text(encoding="utf-8"))
     pasos = [
@@ -266,19 +266,50 @@ def test_la_puesta_al_dia_no_empuja_con_el_token_del_workflow() -> None:
     con_pat = [
         paso for paso in pasos if "SIRIUS_BOT_TOKEN" in str(paso.get("with", {}).get("token", ""))
     ]
-    assert con_pat, (
-        "ningún checkout de este workflow lleva el PAT: un push hecho con "
-        "`GITHUB_TOKEN` no dispara workflows, así que Quality no volvería a "
-        "correr y la rama se quedaría esperando otra vez (ADR-183)"
+    assert con_pat, "ningún checkout de este workflow trae la rama con el PAT"
+    texto = _avance_sin_comentarios()
+    assert "x-access-token:${SIRIUS_BOT_TOKEN}@github.com" in texto, (
+        "el push de la puesta al día tiene que ir con el PAT: con `GITHUB_TOKEN` "
+        "Quality no volvería a correr (ADR-183)"
     )
-    for paso in con_pat:
-        assert paso.get("with", {}).get("persist-credentials") is True, (
-            "el checkout que trae el PAT tiene que persistir credenciales o el "
-            "push no podrá autenticarse"
-        )
-    assert "--force" not in _avance_sin_comentarios(), (
+    assert "--force" not in texto, (
         "la puesta al día nunca reescribe la historia de una rama que no es suya"
     )
+
+
+def test_el_codigo_de_la_rama_corre_sin_el_pat_al_alcance() -> None:
+    """ADR-220, ronda 1 de Codex en la PR #667: desde ese checkout se ejecuta código
+    de la rama (`uv sync`, el generador), que no ha pasado necesariamente la
+    revisión dual. Ni en `.git/config` ni en su entorno puede estar el PAT."""
+    flujo = yaml.safe_load(AVANCE.read_text(encoding="utf-8"))
+    checkouts_de_rama = [
+        paso
+        for trabajo in flujo["jobs"].values()
+        for paso in trabajo.get("steps", [])
+        if str(paso.get("uses", "")).startswith("actions/checkout")
+        and "SIRIUS_BOT_TOKEN" in str(paso.get("with", {}).get("token", ""))
+    ]
+    for paso in checkouts_de_rama:
+        assert paso.get("with", {}).get("persist-credentials") is False, (
+            "el checkout de la rama no puede persistir el PAT: el código de la rama "
+            "lo leería de `.git/config`"
+        )
+    texto = _avance_sin_comentarios()
+    assert "env -u SIRIUS_BOT_TOKEN -u GH_TOKEN uv run sirius-memoria conocimiento" in texto, (
+        "el generador se ejecuta sin el PAT en su entorno"
+    )
+    for trabajo in flujo["jobs"].values():
+        for paso in trabajo.get("steps", []):
+            entorno = paso.get("env") or {}
+            assert "SIRIUS_BOT_TOKEN" not in str(entorno.get("GH_TOKEN", "")), (
+                f"el paso {paso.get('name')!r} exporta el PAT como GH_TOKEN a todo el paso: "
+                "cualquier `gh` o `uv run` de la rama lo heredaría"
+            )
+    paso_fusion = _bash_del_paso(PASO_DE_FUSION)
+    assert 'git push "$REMOTO_DE_EMPUJE"' in paso_fusion and "git push origin" not in paso_fusion, (
+        "el push va por la URL construida con el PAT en el propio paso, no por `origin`"
+    )
+    assert 'GH_TOKEN="$SIRIUS_BOT_TOKEN" gh issue comment' in paso_fusion
 
 
 # --- La puesta al día regenera las vistas generadas (ADR-220) -----------------
@@ -298,6 +329,9 @@ _DOBLE_UV = """#!/bin/bash
 # el árbol cambió y no cuando no.
 set -u
 printf '%s\n' "$*" >>"$DOBLES_LOG"
+if [ -n "${SIRIUS_BOT_TOKEN:-}" ] || [ -n "${GH_TOKEN:-}" ]; then
+  printf '%s\n' "EL GENERADOR VIO UN TOKEN" >>"$DOBLES_LOG"
+fi
 if [ "$1 $2 $3" != "run sirius-memoria conocimiento" ]; then
   echo "doble de uv: orden inesperada: $*" >&2
   exit 2
@@ -389,13 +423,18 @@ class _Escenario:
         clon = self.tmp_path / "clon"
         _git(self.tmp_path, "clone", "-q", str(self.origen), str(clon))
         _git(clon, "checkout", "-q", "rama")
+        # Como en el runner sin credenciales persistidas: por `origin` se puede
+        # traer, pero NO empujar. El unico camino de vuelta es la URL con el PAT
+        # (`SIRIUS_PUSH_URL` en las pruebas).
+        _git(clon, "remote", "set-url", "--push", "origin", str(self.tmp_path / "no-se-empuja.git"))
         guion = self.tmp_path / "paso.sh"
         guion.write_text(_bash_del_paso(PASO_DE_FUSION), encoding="utf-8")
         entorno = {
             **os.environ,
             "PATH": f"{self.dobles}{os.pathsep}{os.environ['PATH']}",
             "DOBLES_LOG": str(self.registro),
-            "GH_TOKEN": "doble",
+            "SIRIUS_BOT_TOKEN": "pat-de-prueba",
+            "SIRIUS_PUSH_URL": str(self.origen),
             "GH_REPO": "propietario/repo",
             "RAMA": "rama",
             "BASE": "main",
@@ -432,6 +471,9 @@ def test_la_puesta_al_dia_regenera_las_vistas_y_las_confirma_antes_de_empujar(
         "la vista empujada tiene que ser la regenerada del árbol combinado, no la de `main`"
     )
     assert "sirius-cola:rama:conflicto" not in escenario.lo_publicado()
+    assert "EL GENERADOR VIO UN TOKEN" not in escenario.lo_publicado(), (
+        "el código de la rama no puede ver el PAT (ADR-220)"
+    )
 
 
 def test_un_conflicto_solo_en_las_vistas_generadas_se_resuelve_regenerando(
