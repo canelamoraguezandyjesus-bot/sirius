@@ -3,7 +3,19 @@
 - Fecha: 2026-09-20
 - Decisión que lo fija: ADR-210.
 
-## Qué es y dónde está
+## Actualización del 01-10-2026: ya está en `main`
+
+Lo que esta nota pedía ocurrió el 01-10-2026 (ADR-217): la bitácora entró en
+`main` como `docs/audits/bitacora-de-fallos-y-mejoras-del-ciclo.md`, con sus
+146 entradas, sus 48 deudas abiertas y los 48 documentos hermanos de
+`docs/audits/` que cita, más `docs/investigaciones/2026-09-13-memanto-contra-la-capa-de-memoria-de-sirius.md`.
+La rama que la guardaba (`claude/adr002-tol209-forensic-audit-i0ui8k`) llevaba
+diez días sin commits y la sesión que la escribía ya no existe, así que la
+condición de «que la traiga quien la escribe» no iba a cumplirse nunca. Desde
+hoy su sitio es `main` y se actualiza ahí. Lo que sigue es la nota tal como se
+escribió el 20-09-2026, conservada porque explica por qué tardó once días.
+
+## Qué es y dónde está (tal como estaba el 20-09-2026)
 
 La **bitácora de fallos y mejoras del ciclo** es el registro vivo de todo lo que
 falla en el ciclo del motor, lo que se corrige sobre la marcha y toda manera

@@ -1124,3 +1124,46 @@ defectos:
       - src/sirius_engine/reflect.py
       - .github/workflows/reflejar-desenlace.yml
       - docs/audits/CIERRE_DEL_CICLO_2026-09-24.md
+
+  # ADR-218 (PR #664, sin incidencia: lo destapo Quality sobre la propia PR).
+  # La vista de memoria volvio a no caber en una sola lectura 17 dias despues
+  # de ADR-196: sobre main quedaban 3.146 bytes de margen, menos de lo que
+  # anade un ADR, y la PR que traia la bitacora del ciclo la paso de largo con
+  # 138 filas de docs/audits. El indice de docs/audits vive ahora generado
+  # aparte y las lecciones ya no repiten la ruta que la tabla enlaza.
+  # Cierre: PR #664 (el sha de cerrado_por es el del commit del arreglo en la
+  # rama; la fusion aplastada lo deja fuera de main, como en H-217).
+  - id: H-218
+    titulo: La vista de memoria volvio a no caber en una sola lectura porque llevaba el indice de docs/audits fila a fila y cada ruta de ADR dos veces
+    bloque: motor
+    gravedad: alta
+    estado: cerrado
+    cerrado_por: 7d10c83d0fd58a895425af004f89e9eea34299ed
+    adr: 218
+    ficheros:
+      - src/sirius_engine/memoria.py
+      - src/sirius_engine/memoria_cli.py
+      - tests/engine/test_memoria.py
+
+  # ADR-217: la bitacora del ciclo -146 entradas, 48 deudas- vivio once dias
+  # fuera de main (20-09 -> 01-10) porque ADR-210 condiciono su entrada a que
+  # «la sesion que la escribe la traiga». Esa sesion murio el 21-09 y la
+  # condicion no tenia quien la disparara: un registro que nadie puede leer no
+  # es un registro. Misma familia que H-216 y que ADR-174: la regla que depende
+  # de que alguien se acuerde.
+  #
+  # Cierre: PR #664. El sha de cerrado_por es el commit de la rama que arreglo
+  # el defecto, como manda la skill; al fusionar aplastado ese sha NO queda en
+  # la historia de main (lo cazo Codex en la PR #664), y lo mismo les pasa a
+  # H-211, H-213, H-214 y H-215. La referencia que si se puede seguir es la PR:
+  # `git log --grep="(#664)" origin/main`. La convencion se corrige aparte.
+  - id: H-217
+    titulo: La bitacora del ciclo estuvo once dias sin poder leerse desde main porque su entrada dependia de que una sesion concreta volviera
+    bloque: documentacion
+    gravedad: baja
+    estado: cerrado
+    cerrado_por: 9323c27959571d5c1a9df34e77bce3415a14ab5e
+    adr: 217
+    ficheros:
+      - docs/audits/DONDE_VIVE_LA_BITACORA_DEL_CICLO.md
+      - docs/audits/bitacora-de-fallos-y-mejoras-del-ciclo.md

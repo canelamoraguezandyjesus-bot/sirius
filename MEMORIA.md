@@ -26,13 +26,13 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **210**.
+- Decisiones (ADR): **212**.
 - Bloques del motor: 17 cerrado, 2 fuera_de_alcance, 1 pendiente.
-- Defectos registrados: 3 abierto, 66 cerrado.
+- Defectos registrados: 3 abierto, 68 cerrado.
 - Ideas aparcadas o descartadas: 5 aparcada, 2 descartada, 2 promovida.
 - Skills: **19**.
-- Investigaciones: **9** (fotos con fecha; caducan).
-- Documentos: **151**, de los que **97** no declaran fecha.
+- Investigaciones: **10** (fotos con fecha; caducan).
+- Documentos: **194**, de los que **136** no declaran fecha.
 
 ## Las skills: lo que ya costó averiguar dos veces (ADR-211)
 
@@ -79,6 +79,8 @@ huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| [218](docs/decisions/ADR-218-la-vista-de-memoria-deja-fuera-el-indice-de-docs-audits-y-no-repite-las-rutas-que-ya-enlaza.md) | 2026-10-01 | APROBADO | La vista de memoria deja fuera el índice de `docs/audits`, que pasa a una vista generada aparte, y no repite las rutas que ya enlaza | El índice de `docs/audits/` sale de `MEMORIA.md` y vive en `docs/audits/INDICE.md`, generado. Lo escribe el mismo comando (`uv run sirius-memoria conocimiento` escribe los dos ficheros) y lo vigila la misma guardia (`comprobar_memoria` y… |
+| [217](docs/decisions/ADR-217-la-bitacora-del-ciclo-entra-en-main-con-su-familia-y-la-evidencia-de-adr-002-se-queda-en-su-rama.md) | 2026-10-01 | APROBADO | La bitácora del ciclo entra en `main` con su familia, y la evidencia de ADR-002 se queda en su rama | Entran en `main`, tal como estaban en `a044fb4a`, los 48 ficheros de `docs/audits/` que la rama añade y `docs/investigaciones/2026-09-13-memanto-contra-la-capa-de-memoria-de-sirius.md`. Entre ellos: la bitácora… |
 | [216](docs/decisions/ADR-216-cerrar-el-ciclo-el-motor-se-queda-sin-trabajo-vivo-los-horarios-se-apagan-desde-actions-y-el-estado-real-queda-escrito.md) | 2026-09-24 | APROBADO | Cerrar el ciclo: el motor se queda sin trabajo vivo, los horarios se apagan desde Actions y el estado real queda escrito | Las PR abiertas, cerradas. La #661 (cinco skills, ADR-215) fusionada aplastada en `6a58c75e`. La #117 —la rama de evidencia de julio, abierta desde el 25-07 y declarada «no debe fusionarse automáticamente»— cerrada sin borrar su rama: su… |
 | [215](docs/decisions/ADR-215-cinco-skills-mas-de-flujo-de-trabajo-salidas-de-la-auditoria-y-de-los-adr-la-validacion-manual-en-windows-medir-con-linea-base-el-documento-con-lector-la-rama-y-la-pr-de-sesion-y-las-paradas-del-motor-delante-del-propietario.md) | 2026-09-21 | APROBADO | Cinco skills más de flujo de trabajo, salidas de la auditoría y de los ADR: la validación manual en Windows, medir con línea base, el documento con lector, la rama y la PR de sesión y las paradas del motor delante del propietario | Cinco skills nuevas en `.claude/skills/`: |
 | [214](docs/decisions/ADR-214-siete-skills-de-flujo-de-trabajo-salidas-de-las-transcripciones-la-noche-delegada-la-revision-externa-el-coste-antes-de-gastar-los-comandos-para-su-ordenador-el-paquete-pegado-el-traspaso-y-el-estado-real.md) | 2026-09-21 | APROBADO | Siete skills de flujo de trabajo salidas de las transcripciones: la noche delegada, la revisión externa, el coste antes de gastar, los comandos para su ordenador, el paquete pegado, el traspaso y el estado real | La tercera. Siete skills nuevas, en `.claude/skills/`: |
@@ -297,152 +299,155 @@ contado por la máquina. **La cuenta no la lleva nadie**: un número escrito a
 mano caduca en silencio -`AGENTS.md` decía «seis veces» cuando ya iban ocho-.
 Declararla es obligatorio desde ADR-174; los anteriores
 quedan exentos, así que esta vista crece desde cero en vez de nacer rellenada
-de memoria.
+de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
+(ADR-218).
 
 | Familia | Veces | Hay prueba que la haga cumplir | ADR |
 |---|---|---|---|
-| `regla-que-depende-de-que-alguien-se-acuerde` | 7 | sí | [216](docs/decisions/ADR-216-cerrar-el-ciclo-el-motor-se-queda-sin-trabajo-vivo-los-horarios-se-apagan-desde-actions-y-el-estado-real-queda-escrito.md), [192](docs/decisions/ADR-192-el-numero-de-un-defecto-es-el-numero-de-su-adr-no-un-contador-aparte.md), [191](docs/decisions/ADR-191-la-revision-es-una-cola-una-rama-entra-a-revision-solo-si-main-ya-esta-dentro-de-ella.md), [188](docs/decisions/ADR-188-el-alcance-que-el-motor-no-puede-escribir-para-la-puerta-antes-de-crear-la-incidencia-y-remite-a-la-sesion-interactiva.md), [182](docs/decisions/ADR-182-la-guarda-del-registro-de-defectos-deriva-de-los-adr-que-declaran-leccion.md), [179](docs/decisions/ADR-179-la-guarda-de-piezas-sin-llamante-deriva-su-inventario-del-codigo-del-motor.md), [174](docs/decisions/ADR-174-la-mina-en-dos-pasadas-la-leccion-se-declara-en-el-adr-que-la-produce-y-las-familias-se-cuentan-solas.md) |
-| `pieza-sin-lector` | 5 | no en todas | [210](docs/decisions/ADR-210-archivar-las-incidencias-que-ya-no-describen-nada-y-decir-donde-vive-la-bitacora-del-ciclo.md), [209](docs/decisions/ADR-209-un-adr-fusionado-esta-aprobado-y-propuesto-deja-de-existir-como-estado.md), [207](docs/decisions/ADR-207-archivar-los-dos-mapas-caducados-de-julio-retirar-el-workflow-de-word-y-poner-en-d4-el-estado-que-ya-tenia.md), [183](docs/decisions/ADR-183-la-ausencia-de-run-de-quality-para-el-head-se-encamina-no-se-espera-en-silencio.md), [175](docs/decisions/ADR-175-un-tablero-por-incidencia-un-solo-comentario-que-el-motor-mantiene-al-dia.md) |
-| `regla-del-propietario-que-solo-vive-en-una-conversacion` | 4 | sí | [213](docs/decisions/ADR-213-escribir-las-tres-reglas-de-septiembre-del-propietario-dar-proporcion-a-la-cadena-de-comprobacion-y-fechar-en-las-transcripciones-las-reglas-del-20-09.md), [208](docs/decisions/ADR-208-las-ideas-aparcadas-tienen-registro-y-el-metodo-de-conversacion-del-propietario-entra-en-agents.md), [204](docs/decisions/ADR-204-el-propietario-decide-producto-dinero-y-salud-y-lo-tecnico-lo-resuelve-la-sesion.md), [195](docs/decisions/ADR-195-podar-significa-archivar-en-este-repositorio-no-se-borra-nada.md) |
-| `leccion-que-se-queda-en-el-informe` | 2 | sí | [215](docs/decisions/ADR-215-cinco-skills-mas-de-flujo-de-trabajo-salidas-de-la-auditoria-y-de-los-adr-la-validacion-manual-en-windows-medir-con-linea-base-el-documento-con-lector-la-rama-y-la-pr-de-sesion-y-las-paradas-del-motor-delante-del-propietario.md), [214](docs/decisions/ADR-214-siete-skills-de-flujo-de-trabajo-salidas-de-las-transcripciones-la-noche-delegada-la-revision-externa-el-coste-antes-de-gastar-los-comandos-para-su-ordenador-el-paquete-pegado-el-traspaso-y-el-estado-real.md) |
-| `lista-a-mano` | 2 | sí | [181](docs/decisions/ADR-181-la-contradiccion-de-etiquetas-se-decide-por-lo-que-proyectan-no-por-cuantas-son.md), [178](docs/decisions/ADR-178-la-autoridad-por-clase-se-deriva-de-la-via-github-que-el-despachador-declara-no-de-una-segunda-tabla-a-mano.md) |
-| `medir-lo-que-se-tiene-en-vez-de-lo-que-hay` | 2 | sí | [184](docs/decisions/ADR-184-la-prohibicion-no-es-una-peticion-el-detector-de-sensibilidad-exige-que-el-marcador-no-vaya-negado.md), [180](docs/decisions/ADR-180-el-numero-del-siguiente-adr-se-calcula-contra-las-ramas-del-remoto-no-contra-las-que-el-clon-tenga-traidas.md) |
-| `prosa-que-el-cambio-deja-falsa` | 2 | no en todas | [211](docs/decisions/ADR-211-convertir-en-skills-lo-que-ya-costo-averiguar-dos-veces-con-una-guarda-que-impida-que-se-pudran.md), [177](docs/decisions/ADR-177-la-ampliacion-por-categoria-entra-por-una-senal-explicita-de-la-peticion-no-por-la-subcadena-contexto.md) |
-| `condicion-construida-sin-el-mecanismo-que-la-hace-cumplible` | 1 | sí | [200](docs/decisions/ADR-200-la-cola-deja-de-ser-una-condicion-y-pasa-a-ser-un-mecanismo-el-ciclo-trae-la-base-a-la-rama-que-espera.md) |
-| `criterio-que-se-pide-distinto-del-que-se-puntua` | 1 | sí | [212](docs/decisions/ADR-212-la-cardinalidad-se-instruye-con-el-criterio-del-canon-determinacion-contra-extension-no-con-la-forma-de-la-pregunta.md) |
-| `decision-que-solo-vive-en-una-conversacion` | 1 | no en todas | [202](docs/decisions/ADR-202-m17-la-medicion-que-cerraba-la-ola-de-paridad-no-se-hace-y-la-razon-no-consta.md) |
-| `doble-mas-permisivo-que-la-herramienta-que-dobla` | 1 | sí | [193](docs/decisions/ADR-193-el-doble-de-gh-rechaza-lo-que-el-gh-real-rechaza-y-la-red-de-seguridad-vuelve-a-poder-fechar.md) |
-| `dos-sesiones-que-no-se-ven` | 1 | sí | [206](docs/decisions/ADR-206-cada-sesion-declara-su-obra-antes-de-empezar-y-la-cola-impide-que-dos-se-pisen.md) |
-| `espera-sin-fin-por-un-suceso-que-nadie-va-a-emitir` | 1 | sí | [194](docs/decisions/ADR-194-ci-pending-distingue-quality-todavia-no-ha-contestado-de-quality-no-va-a-contestar-nunca.md) |
-| `estado-en-el-que-se-entra-y-del-que-no-se-sale` | 1 | sí | [189](docs/decisions/ADR-189-la-salida-de-una-parada-sin-incidencia-es-una-orden-del-propietario-y-reanudar-es-despachar-en-el-mismo-gesto.md) |
-| `guarda-ampliada-a-un-corpus-que-no-es-el-suyo` | 1 | sí | [190](docs/decisions/ADR-190-la-guarda-de-citas-no-sale-de-docs-decisions-medidos-590-citas-y-23-rotas-fuera-del-registro-cero-son-defectos-de-este-arbol.md) |
-| `guarda-medida-que-se-queda-sin-autoridad-porque-nadie-relee-la-medida` | 1 | sí | [199](docs/decisions/ADR-199-el-detector-de-familia-repetida-detiene-el-ciclo-y-esa-parada-vuelve-al-corrector-no-al-revisor-que-la-emitio.md) |
-| `guardian-que-mide-posicion-en-vez-de-estructura` | 1 | sí | [187](docs/decisions/ADR-187-una-revision-sobrevive-a-ponerse-al-dia-con-main-si-el-trabajo-propio-de-la-rama-no-cambia.md) |
-| `instrumento-que-solo-mide-un-lado` | 1 | sí | [203](docs/decisions/ADR-203-el-banco-mide-tambien-el-camino-de-puerta-cerrada-la-linea-base-que-faltaba.md) |
-| `interruptor-que-enciende-mas-de-lo-que-se-puede-medir` | 1 | sí | [185](docs/decisions/ADR-185-la-puerta-de-la-memoria-se-parte-en-tres-interruptores-antes-de-abrirla.md) |
-| `pieza-correcta-a-la-que-no-llama-quien-la-necesita` | 1 | sí | [197](docs/decisions/ADR-197-el-detector-de-familia-repetida-agrupa-por-la-ruta-que-el-revisor-escribe-no-por-el-recorte-anclado.md) |
-| `plan-que-hay-que-terminar-de-una-sentada` | 1 | sí | [176](docs/decisions/ADR-176-el-cierre-de-una-incidencia-se-retoma-desde-donde-se-quedo.md) |
-| `pregunta-al-propietario-que-nadie-vuelve-a-poner-delante` | 1 | no en todas | [198](docs/decisions/ADR-198-partir-un-objetivo-grande-lo-hace-la-sesion-interactiva-el-descomponedor-automatico-queda-descartado.md) |
-| `tarea-periodica-sin-reloj` | 1 | no en todas | [201](docs/decisions/ADR-201-la-mina-de-aprendizaje-tiene-reloj-el-dia-1-de-cada-mes-se-pide-la-edicion-del-mes-que-se-cierra.md) |
-| `tramite-que-solo-puede-hacer-una-persona-y-no-anade-comprobacion` | 1 | sí | [205](docs/decisions/ADR-205-la-fusion-no-espera-al-propietario-cuando-los-dos-revisores-aprueban.md) |
-| `vista-que-copia-el-corpus-del-que-venia-huyendo` | 1 | sí | [196](docs/decisions/ADR-196-la-vista-de-memoria-lleva-el-indice-completo-de-decisiones-y-el-resumen-solo-de-las-vigentes-como-metodo.md) |
+| `regla-que-depende-de-que-alguien-se-acuerde` | 8 | no en todas | 217, 216, 192, 191, 188, 182, 179, 174 |
+| `pieza-sin-lector` | 5 | no en todas | 210, 209, 207, 183, 175 |
+| `regla-del-propietario-que-solo-vive-en-una-conversacion` | 4 | sí | 213, 208, 204, 195 |
+| `leccion-que-se-queda-en-el-informe` | 2 | sí | 215, 214 |
+| `lista-a-mano` | 2 | sí | 181, 178 |
+| `medir-lo-que-se-tiene-en-vez-de-lo-que-hay` | 2 | sí | 184, 180 |
+| `prosa-que-el-cambio-deja-falsa` | 2 | no en todas | 211, 177 |
+| `vista-que-copia-el-corpus-del-que-venia-huyendo` | 2 | sí | 218, 196 |
+| `condicion-construida-sin-el-mecanismo-que-la-hace-cumplible` | 1 | sí | 200 |
+| `criterio-que-se-pide-distinto-del-que-se-puntua` | 1 | sí | 212 |
+| `decision-que-solo-vive-en-una-conversacion` | 1 | no en todas | 202 |
+| `doble-mas-permisivo-que-la-herramienta-que-dobla` | 1 | sí | 193 |
+| `dos-sesiones-que-no-se-ven` | 1 | sí | 206 |
+| `espera-sin-fin-por-un-suceso-que-nadie-va-a-emitir` | 1 | sí | 194 |
+| `estado-en-el-que-se-entra-y-del-que-no-se-sale` | 1 | sí | 189 |
+| `guarda-ampliada-a-un-corpus-que-no-es-el-suyo` | 1 | sí | 190 |
+| `guarda-medida-que-se-queda-sin-autoridad-porque-nadie-relee-la-medida` | 1 | sí | 199 |
+| `guardian-que-mide-posicion-en-vez-de-estructura` | 1 | sí | 187 |
+| `instrumento-que-solo-mide-un-lado` | 1 | sí | 203 |
+| `interruptor-que-enciende-mas-de-lo-que-se-puede-medir` | 1 | sí | 185 |
+| `pieza-correcta-a-la-que-no-llama-quien-la-necesita` | 1 | sí | 197 |
+| `plan-que-hay-que-terminar-de-una-sentada` | 1 | sí | 176 |
+| `pregunta-al-propietario-que-nadie-vuelve-a-poner-delante` | 1 | no en todas | 198 |
+| `tarea-periodica-sin-reloj` | 1 | no en todas | 201 |
+| `tramite-que-solo-puede-hacer-una-persona-y-no-anade-comprobacion` | 1 | sí | 205 |
 
 ### `regla-que-depende-de-que-alguien-se-acuerde`
 
-- **[ADR-216](docs/decisions/ADR-216-cerrar-el-ciclo-el-motor-se-queda-sin-trabajo-vivo-los-horarios-se-apagan-desde-actions-y-el-estado-real-queda-escrito.md)** — escribir una salvaguarda en prosa y darla por puesta. (lo hace cumplir `tests/automation/test_cierre_del_ciclo_ps1_no_puede_hacer_dano.py`).
-- **[ADR-192](docs/decisions/ADR-192-el-numero-de-un-defecto-es-el-numero-de-su-adr-no-un-contador-aparte.md)** — elegir a mano un identificador leyendo el máximo del (lo hace cumplir `tests/automation/test_registro_de_defectos.py`).
-- **[ADR-191](docs/decisions/ADR-191-la-revision-es-una-cola-una-rama-entra-a-revision-solo-si-main-ya-esta-dentro-de-ella.md)** — fusionar una rama cuya combinación con `main` no ha (lo hace cumplir `tests/automation/test_cola.py`).
-- **[ADR-188](docs/decisions/ADR-188-el-alcance-que-el-motor-no-puede-escribir-para-la-puerta-antes-de-crear-la-incidencia-y-remite-a-la-sesion-interactiva.md)** — despachar al ciclo automático un encargo cuyo alcance cae donde la credencial del motor no llega, hacer el trabajo entero y perderlo en el push, porque la única regla que lo evitaba vivía en la cabeza de quien despacha. (lo hace cumplir `tests/engine/test_intent_interpreter.py`).
-- **[ADR-182](docs/decisions/ADR-182-la-guarda-del-registro-de-defectos-deriva-de-los-adr-que-declaran-leccion.md)** — poner a vigilar un registro con comprobaciones que solo miran la coherencia de lo ya escrito; el registro deja de recibir lo que pasa, ninguna de ellas puede notarlo y el verde lo confirma —aquí fueron doce días sin una sola entrada, con todos los ADR de ese intervalo entrando entretanto. (lo hace cumplir `tests/automation/test_registro_de_defectos.py`).
-- **[ADR-179](docs/decisions/ADR-179-la-guarda-de-piezas-sin-llamante-deriva-su-inventario-del-codigo-del-motor.md)** — escribir un guardián sobre una lista de inclusión (lo hace cumplir `tests/automation/test_piezas_con_llamante.py`).
-- **[ADR-174](docs/decisions/ADR-174-la-mina-en-dos-pasadas-la-leccion-se-declara-en-el-adr-que-la-produce-y-las-familias-se-cuentan-solas.md)** — escribir la regla de captura en un catálogo y dar por hecho que alguien la aplicará; los dos sitios de lecciones de este repositorio llevaban 48 ADR sin una sola entrada, con sus reglas escritas dentro. (lo hace cumplir `tests/automation/test_mina_de_lecciones.py`).
+- **ADR-217** — dejar la entrada de un registro en `main` condicionada (sin prueba que lo haga cumplir: ninguna prueba: la condición vivía en prosa de un documento).
+- **ADR-216** — escribir una salvaguarda en prosa y darla por puesta. (lo hace cumplir `tests/automation/test_cierre_del_ciclo_ps1_no_puede_hacer_dano.py`).
+- **ADR-192** — elegir a mano un identificador leyendo el máximo del (lo hace cumplir `tests/automation/test_registro_de_defectos.py`).
+- **ADR-191** — fusionar una rama cuya combinación con `main` no ha (lo hace cumplir `tests/automation/test_cola.py`).
+- **ADR-188** — despachar al ciclo automático un encargo cuyo alcance cae donde la credencial del motor no llega, hacer el trabajo entero y perderlo en el push, porque la única regla que lo evitaba vivía en la cabeza de quien despacha. (lo hace cumplir `tests/engine/test_intent_interpreter.py`).
+- **ADR-182** — poner a vigilar un registro con comprobaciones que solo miran la coherencia de lo ya escrito; el registro deja de recibir lo que pasa, ninguna de ellas puede notarlo y el verde lo confirma —aquí fueron doce días sin una sola entrada, con todos los ADR de ese intervalo entrando entretanto. (lo hace cumplir `tests/automation/test_registro_de_defectos.py`).
+- **ADR-179** — escribir un guardián sobre una lista de inclusión (lo hace cumplir `tests/automation/test_piezas_con_llamante.py`).
+- **ADR-174** — escribir la regla de captura en un catálogo y dar por hecho que alguien la aplicará; los dos sitios de lecciones de este repositorio llevaban 48 ADR sin una sola entrada, con sus reglas escritas dentro. (lo hace cumplir `tests/automation/test_mina_de_lecciones.py`).
 
 ### `pieza-sin-lector`
 
-- **[ADR-210](docs/decisions/ADR-210-archivar-las-incidencias-que-ya-no-describen-nada-y-decir-donde-vive-la-bitacora-del-ciclo.md)** — el tablero de incidencias seguiría llenándose de cosas (sin prueba que lo haga cumplir: ninguna prueba: cerrar una incidencia ocurre en GitHub, no).
-- **[ADR-209](docs/decisions/ADR-209-un-adr-fusionado-esta-aprobado-y-propuesto-deja-de-existir-como-estado.md)** — el campo de estado seguiría siendo ruido, y cada ADR (lo hace cumplir `tests/automation/test_estado_de_los_adr.py`).
-- **[ADR-207](docs/decisions/ADR-207-archivar-los-dos-mapas-caducados-de-julio-retirar-el-workflow-de-word-y-poner-en-d4-el-estado-que-ya-tenia.md)** — seguirían conviviendo documentos que nadie mantiene y (lo hace cumplir `tests/automation/test_registro_de_bloques.py`).
-- **[ADR-183](docs/decisions/ADR-183-la-ausencia-de-run-de-quality-para-el-head-se-encamina-no-se-espera-en-silencio.md)** — escribir la rama «no hay nada que hacer» de un encaminador como un `return 0` con un `echo`, de modo que la única prueba de que el ciclo se ha parado viva en un log que nadie lee. (lo hace cumplir `tests/automation/test_sirius_apply_verdict.py`).
-- **[ADR-175](docs/decisions/ADR-175-un-tablero-por-incidencia-un-solo-comentario-que-el-motor-mantiene-al-dia.md)** — proyectar en cada pasada el estado entero de una incidencia -fase, rondas, Quality, PR, diagnóstico- y no enseñárselo nunca a quien tiene que decidir; es la novena vez que un dato correcto de esta casa no tiene lector, tres días después de la octava. (lo hace cumplir `tests/engine/test_tablero.py`).
+- **ADR-210** — el tablero de incidencias seguiría llenándose de cosas (sin prueba que lo haga cumplir: ninguna prueba: cerrar una incidencia ocurre en GitHub, no).
+- **ADR-209** — el campo de estado seguiría siendo ruido, y cada ADR (lo hace cumplir `tests/automation/test_estado_de_los_adr.py`).
+- **ADR-207** — seguirían conviviendo documentos que nadie mantiene y (lo hace cumplir `tests/automation/test_registro_de_bloques.py`).
+- **ADR-183** — escribir la rama «no hay nada que hacer» de un encaminador como un `return 0` con un `echo`, de modo que la única prueba de que el ciclo se ha parado viva en un log que nadie lee. (lo hace cumplir `tests/automation/test_sirius_apply_verdict.py`).
+- **ADR-175** — proyectar en cada pasada el estado entero de una incidencia -fase, rondas, Quality, PR, diagnóstico- y no enseñárselo nunca a quien tiene que decidir; es la novena vez que un dato correcto de esta casa no tiene lector, tres días después de la octava. (lo hace cumplir `tests/engine/test_tablero.py`).
 
 ### `regla-del-propietario-que-solo-vive-en-una-conversacion`
 
-- **[ADR-213](docs/decisions/ADR-213-escribir-las-tres-reglas-de-septiembre-del-propietario-dar-proporcion-a-la-cadena-de-comprobacion-y-fechar-en-las-transcripciones-las-reglas-del-20-09.md)** — que una regla que él dijo el 14-09 («que me contestes (lo hace cumplir `tests/automation/test_reglas_de_agents.py`).
-- **[ADR-208](docs/decisions/ADR-208-las-ideas-aparcadas-tienen-registro-y-el-metodo-de-conversacion-del-propietario-entra-en-agents.md)** — las ideas aparcadas volverían como nuevas y cada (lo hace cumplir `tests/automation/test_registro_de_ideas.py`).
-- **[ADR-204](docs/decisions/ADR-204-el-propietario-decide-producto-dinero-y-salud-y-lo-tecnico-lo-resuelve-la-sesion.md)** — la sesión seguiría devolviéndole decisiones técnicas (lo hace cumplir `tests/automation/test_reglas_de_agents.py`).
-- **[ADR-195](docs/decisions/ADR-195-podar-significa-archivar-en-este-repositorio-no-se-borra-nada.md)** — una regla dada de viva voz —«no se elimina nada»— que no (lo hace cumplir `tests/automation/test_registro_de_defectos.py`).
+- **ADR-213** — que una regla que él dijo el 14-09 («que me contestes (lo hace cumplir `tests/automation/test_reglas_de_agents.py`).
+- **ADR-208** — las ideas aparcadas volverían como nuevas y cada (lo hace cumplir `tests/automation/test_registro_de_ideas.py`).
+- **ADR-204** — la sesión seguiría devolviéndole decisiones técnicas (lo hace cumplir `tests/automation/test_reglas_de_agents.py`).
+- **ADR-195** — una regla dada de viva voz —«no se elimina nada»— que no (lo hace cumplir `tests/automation/test_registro_de_defectos.py`).
 
 ### `leccion-que-se-queda-en-el-informe`
 
-- **[ADR-215](docs/decisions/ADR-215-cinco-skills-mas-de-flujo-de-trabajo-salidas-de-la-auditoria-y-de-los-adr-la-validacion-manual-en-windows-medir-con-linea-base-el-documento-con-lector-la-rama-y-la-pr-de-sesion-y-las-paradas-del-motor-delante-del-propietario.md)** — creer que sin transcripciones no salen más skills (lo hace cumplir `tests/automation/test_skills.py`).
-- **[ADR-214](docs/decisions/ADR-214-siete-skills-de-flujo-de-trabajo-salidas-de-las-transcripciones-la-noche-delegada-la-revision-externa-el-coste-antes-de-gastar-los-comandos-para-su-ordenador-el-paquete-pegado-el-traspaso-y-el-estado-real.md)** — leer caro y dejar lo aprendido solo en un informe (lo hace cumplir `tests/automation/test_skills.py`).
+- **ADR-215** — creer que sin transcripciones no salen más skills (lo hace cumplir `tests/automation/test_skills.py`).
+- **ADR-214** — leer caro y dejar lo aprendido solo en un informe (lo hace cumplir `tests/automation/test_skills.py`).
 
 ### `lista-a-mano`
 
-- **[ADR-181](docs/decisions/ADR-181-la-contradiccion-de-etiquetas-se-decide-por-lo-que-proyectan-no-por-cuantas-son.md)** — escribir como lista de excepciones un criterio que el dato de al lado ya define —aquí «qué etiquetas pueden convivir», enumerado a mano habiendo una tabla que dice a dónde apunta cada una—, de modo que la lista solo contiene lo que alguien recordó el día que la escribió y acusa de avería a todo lo demás. (lo hace cumplir `tests/engine/test_mirror_projection.py`).
-- **[ADR-178](docs/decisions/ADR-178-la-autoridad-por-clase-se-deriva-de-la-via-github-que-el-despachador-declara-no-de-una-segunda-tabla-a-mano.md)** — escribir dos veces «qué clases existen en la vía GitHub» -una tabla que decide y una copia que se queda vieja- y comprobar la copia en vez de la relación; es la familia que ADR-033 nombró, y aquí dejó quince encargos sin medir durante dos semanas. (lo hace cumplir `tests/engine/test_authority.py`).
+- **ADR-181** — escribir como lista de excepciones un criterio que el dato de al lado ya define —aquí «qué etiquetas pueden convivir», enumerado a mano habiendo una tabla que dice a dónde apunta cada una—, de modo que la lista solo contiene lo que alguien recordó el día que la escribió y acusa de avería a todo lo demás. (lo hace cumplir `tests/engine/test_mirror_projection.py`).
+- **ADR-178** — escribir dos veces «qué clases existen en la vía GitHub» -una tabla que decide y una copia que se queda vieja- y comprobar la copia en vez de la relación; es la familia que ADR-033 nombró, y aquí dejó quince encargos sin medir durante dos semanas. (lo hace cumplir `tests/engine/test_authority.py`).
 
 ### `medir-lo-que-se-tiene-en-vez-de-lo-que-hay`
 
-- **[ADR-184](docs/decisions/ADR-184-la-prohibicion-no-es-una-peticion-el-detector-de-sensibilidad-exige-que-el-marcador-no-vaya-negado.md)** — poner una guarda a responder la pregunta que sabe contestar barata —«¿aparece la palabra?»— en lugar de la que tiene que contestar —«¿la orden lo pide?»—, y no notarlo porque el sustituto acierta casi siempre: aquí acertó en 1 de 3 paradas reales y paró sobre las salvaguardas que prohibían justo la operación. (lo hace cumplir `tests/engine/test_intent_interpreter.py`).
-- **[ADR-180](docs/decisions/ADR-180-el-numero-del-siguiente-adr-se-calcula-contra-las-ramas-del-remoto-no-contra-las-que-el-clon-tenga-traidas.md)** — preguntarle a la copia local por un hecho que vive fuera -las ramas traídas en vez de las que existen- y creer que la respuesta cubre el caso; aquí el guion veía el 3,4% de las ramas y repartió el mismo número tres veces en un día. (lo hace cumplir `tests/automation/test_registro_de_decisiones.py`).
+- **ADR-184** — poner una guarda a responder la pregunta que sabe contestar barata —«¿aparece la palabra?»— en lugar de la que tiene que contestar —«¿la orden lo pide?»—, y no notarlo porque el sustituto acierta casi siempre: aquí acertó en 1 de 3 paradas reales y paró sobre las salvaguardas que prohibían justo la operación. (lo hace cumplir `tests/engine/test_intent_interpreter.py`).
+- **ADR-180** — preguntarle a la copia local por un hecho que vive fuera -las ramas traídas en vez de las que existen- y creer que la respuesta cubre el caso; aquí el guion veía el 3,4% de las ramas y repartió el mismo número tres veces en un día. (lo hace cumplir `tests/automation/test_registro_de_decisiones.py`).
 
 ### `prosa-que-el-cambio-deja-falsa`
 
-- **[ADR-211](docs/decisions/ADR-211-convertir-en-skills-lo-que-ya-costo-averiguar-dos-veces-con-una-guarda-que-impida-que-se-pudran.md)** — escribir un documento de método que nadie vuelve a (lo hace cumplir `tests/automation/test_skills.py`).
-- **[ADR-177](docs/decisions/ADR-177-la-ampliacion-por-categoria-entra-por-una-senal-explicita-de-la-peticion-no-por-la-subcadena-contexto.md)** — retirar un símbolo de producción y dejar vivas las frases que lo daban por cierto; al quitar `pide_contexto` quedaron falsos los once pasajes de prosa que la sección 6 de esta ficha enumera, 22 referencias del literal en las pruebas más otros cuatro pasajes de pruebas que describían el mecanismo sin nombrarlo, y el criterio de aceptación de M16 de la Arquitectura Técnica; y el barrido que las buscó en `scripts/` y `tests/` no miró en `docs/evolution/` ni podía ver lo que no escribe el literal, así que una lista solo se declara completa sobre el alcance del barrido que la produjo y el resto se dice cubierto por lectura. (sin prueba que lo haga cumplir: ninguna prueba: nada en este repositorio vigila la coherencia de la prosa de `docs/` con el árbol, y la ocurrencia que queda viva está en la Arquitectura Técnica, que la salvaguarda de #581 prohíbe tocar sin decisión del propietario.).
-
-### `condicion-construida-sin-el-mecanismo-que-la-hace-cumplible`
-
-- **[ADR-200](docs/decisions/ADR-200-la-cola-deja-de-ser-una-condicion-y-pasa-a-ser-un-mecanismo-el-ciclo-trae-la-base-a-la-rama-que-espera.md)** — una guarda se construye entera y se deja sin llamante (lo hace cumplir `tests/automation/test_cola.py`).
-
-### `criterio-que-se-pide-distinto-del-que-se-puntua`
-
-- **[ADR-212](docs/decisions/ADR-212-la-cardinalidad-se-instruye-con-el-criterio-del-canon-determinacion-contra-extension-no-con-la-forma-de-la-pregunta.md)** — escribir a ojo la instrucción que se le da a un (lo hace cumplir `tests/unit/test_ollama_query_intent_classifier.py`).
-
-### `decision-que-solo-vive-en-una-conversacion`
-
-- **[ADR-202](docs/decisions/ADR-202-m17-la-medicion-que-cerraba-la-ola-de-paridad-no-se-hace-y-la-razon-no-consta.md)** — una decisión de NO hacer algo no deja rastro —no hay (sin prueba que lo haga cumplir: ninguna prueba: una decisión tomada de viva voz fuera del).
-
-### `doble-mas-permisivo-que-la-herramienta-que-dobla`
-
-- **[ADR-193](docs/decisions/ADR-193-el-doble-de-gh-rechaza-lo-que-el-gh-real-rechaza-y-la-red-de-seguridad-vuelve-a-poder-fechar.md)** — una prueba en verde sobre una invocación que la (lo hace cumplir `tests/automation/test_sirius_reconcile.py`).
-
-### `dos-sesiones-que-no-se-ven`
-
-- **[ADR-206](docs/decisions/ADR-206-cada-sesion-declara-su-obra-antes-de-empezar-y-la-cola-impide-que-dos-se-pisen.md)** — dos sesiones volverían a construir lo mismo o a (lo hace cumplir `tests/automation/test_obra_en_curso.py`).
-
-### `espera-sin-fin-por-un-suceso-que-nadie-va-a-emitir`
-
-- **[ADR-194](docs/decisions/ADR-194-ci-pending-distingue-quality-todavia-no-ha-contestado-de-quality-no-va-a-contestar-nunca.md)** — una incidencia en un estado que solo mueve la máquina, (lo hace cumplir `tests/automation/test_sirius_reconcile.py`).
-
-### `estado-en-el-que-se-entra-y-del-que-no-se-sale`
-
-- **[ADR-189](docs/decisions/ADR-189-la-salida-de-una-parada-sin-incidencia-es-una-orden-del-propietario-y-reanudar-es-despachar-en-el-mismo-gesto.md)** — dar por buena una arista del dominio que en producción no llama nadie, y dejar así un estado en el que el motor entra solo y del que solo puede salir un mecanismo que necesita un dato que ese estado, por definición, no tiene. (lo hace cumplir `tests/engine/test_decision_cli.py`).
-
-### `guarda-ampliada-a-un-corpus-que-no-es-el-suyo`
-
-- **[ADR-190](docs/decisions/ADR-190-la-guarda-de-citas-no-sale-de-docs-decisions-medidos-590-citas-y-23-rotas-fuera-del-registro-cero-son-defectos-de-este-arbol.md)** — llevar una comprobación al sitio donde el hueco está declarado sin medir antes qué cosecharía allí, y pagar la ampliación con excepciones escritas a mano; aquí el criterio calibrado sobre `docs/decisions/` —un corpus homogéneo, donde un ADR cita este árbol— habría gritado 17 veces en falso y cazado cero defectos al salir a `docs/`, donde una investigación cita los árboles de otros repositorios. (lo hace cumplir `tests/automation/test_citas_de_los_adr.py`).
-
-### `guarda-medida-que-se-queda-sin-autoridad-porque-nadie-relee-la-medida`
-
-- **[ADR-199](docs/decisions/ADR-199-el-detector-de-familia-repetida-detiene-el-ciclo-y-esa-parada-vuelve-al-corrector-no-al-revisor-que-la-emitio.md)** — una guarda se fusiona a propósito sin autoridad para (lo hace cumplir `tests/automation/test_reanudar_una_parada.py`).
-
-### `guardian-que-mide-posicion-en-vez-de-estructura`
-
-- **[ADR-187](docs/decisions/ADR-187-una-revision-sobrevive-a-ponerse-al-dia-con-main-si-el-trabajo-propio-de-la-rama-no-cambia.md)** — escribir un guardián que comprueba que algo aparece (lo hace cumplir `tests/automation/test_misma_obra.py`).
-
-### `instrumento-que-solo-mide-un-lado`
-
-- **[ADR-203](docs/decisions/ADR-203-el-banco-mide-tambien-el-camino-de-puerta-cerrada-la-linea-base-que-faltaba.md)** — publicar «la pieza X aporta tanto» citando solo la (lo hace cumplir `tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py`).
-
-### `interruptor-que-enciende-mas-de-lo-que-se-puede-medir`
-
-- **[ADR-185](docs/decisions/ADR-185-la-puerta-de-la-memoria-se-parte-en-tres-interruptores-antes-de-abrirla.md)** — poner una sola puerta delante de varias piezas (lo hace cumplir `tests/unit/test_composition_root_relevance_gate.py`).
-
-### `pieza-correcta-a-la-que-no-llama-quien-la-necesita`
-
-- **[ADR-197](docs/decisions/ADR-197-el-detector-de-familia-repetida-agrupa-por-la-ruta-que-el-revisor-escribe-no-por-el-recorte-anclado.md)** — dos piezas del mismo árbol leen la misma clase de dato (lo hace cumplir `tests/engine/test_round_family_detector.py`).
-
-### `plan-que-hay-que-terminar-de-una-sentada`
-
-- **[ADR-176](docs/decisions/ADR-176-el-cierre-de-una-incidencia-se-retoma-desde-donde-se-quedo.md)** — escribir un plan de varios pasos contra un almacén que los aplica uno a uno, y comprobar la precondición del primero en vez del estado real en que el motor está, de modo que una interrupción a la mitad deja el trabajo atascado para siempre. (lo hace cumplir `tests/engine/test_reflect.py`).
-
-### `pregunta-al-propietario-que-nadie-vuelve-a-poner-delante`
-
-- **[ADR-198](docs/decisions/ADR-198-partir-un-objetivo-grande-lo-hace-la-sesion-interactiva-el-descomponedor-automatico-queda-descartado.md)** — una incidencia formula una pregunta que solo el (sin prueba que lo haga cumplir: ninguna prueba: nada en este repositorio distingue una).
-
-### `tarea-periodica-sin-reloj`
-
-- **[ADR-201](docs/decisions/ADR-201-la-mina-de-aprendizaje-tiene-reloj-el-dia-1-de-cada-mes-se-pide-la-edicion-del-mes-que-se-cierra.md)** — el único trabajo que mide los ciclos de este (sin prueba que lo haga cumplir: ninguna prueba: que el reloj dispare de verdad no lo puede).
-
-### `tramite-que-solo-puede-hacer-una-persona-y-no-anade-comprobacion`
-
-- **[ADR-205](docs/decisions/ADR-205-la-fusion-no-espera-al-propietario-cuando-los-dos-revisores-aprueban.md)** — el ciclo volvería a quedarse horas en verde esperando (lo hace cumplir `tests/automation/test_sirius_merge.py`).
+- **ADR-211** — escribir un documento de método que nadie vuelve a (lo hace cumplir `tests/automation/test_skills.py`).
+- **ADR-177** — retirar un símbolo de producción y dejar vivas las frases que lo daban por cierto; al quitar `pide_contexto` quedaron falsos los once pasajes de prosa que la sección 6 de esta ficha enumera, 22 referencias del literal en las pruebas más otros cuatro pasajes de pruebas que describían el mecanismo sin nombrarlo, y el criterio de aceptación de M16 de la Arquitectura Técnica; y el barrido que las buscó en `scripts/` y `tests/` no miró en `docs/evolution/` ni podía ver lo que no escribe el literal, así que una lista solo se declara completa sobre el alcance del barrido que la produjo y el resto se dice cubierto por lectura. (sin prueba que lo haga cumplir: ninguna prueba: nada en este repositorio vigila la coherencia de la prosa de `docs/` con el árbol, y la ocurrencia que queda viva está en la Arquitectura Técnica, que la salvaguarda de #581 prohíbe tocar sin decisión del propietario.).
 
 ### `vista-que-copia-el-corpus-del-que-venia-huyendo`
 
-- **[ADR-196](docs/decisions/ADR-196-la-vista-de-memoria-lleva-el-indice-completo-de-decisiones-y-el-resumen-solo-de-las-vigentes-como-metodo.md)** — una vista que existe para caber en una sola lectura (lo hace cumplir `tests/engine/test_memoria.py`).
+- **ADR-218** — dejar que la única lectura lleve dos veces la misma ruta y la fila de cada pieza de evidencia, y descubrirlo cuando la guardia bloquea una PR que no tiene la culpa; es la segunda vez que muerde esta familia en 17 días, y el suelo que no se puede cortar está declarado arriba con su cifra. (lo hace cumplir `tests/engine/test_memoria.py`).
+- **ADR-196** — una vista que existe para caber en una sola lectura (lo hace cumplir `tests/engine/test_memoria.py`).
+
+### `condicion-construida-sin-el-mecanismo-que-la-hace-cumplible`
+
+- **ADR-200** — una guarda se construye entera y se deja sin llamante (lo hace cumplir `tests/automation/test_cola.py`).
+
+### `criterio-que-se-pide-distinto-del-que-se-puntua`
+
+- **ADR-212** — escribir a ojo la instrucción que se le da a un (lo hace cumplir `tests/unit/test_ollama_query_intent_classifier.py`).
+
+### `decision-que-solo-vive-en-una-conversacion`
+
+- **ADR-202** — una decisión de NO hacer algo no deja rastro —no hay (sin prueba que lo haga cumplir: ninguna prueba: una decisión tomada de viva voz fuera del).
+
+### `doble-mas-permisivo-que-la-herramienta-que-dobla`
+
+- **ADR-193** — una prueba en verde sobre una invocación que la (lo hace cumplir `tests/automation/test_sirius_reconcile.py`).
+
+### `dos-sesiones-que-no-se-ven`
+
+- **ADR-206** — dos sesiones volverían a construir lo mismo o a (lo hace cumplir `tests/automation/test_obra_en_curso.py`).
+
+### `espera-sin-fin-por-un-suceso-que-nadie-va-a-emitir`
+
+- **ADR-194** — una incidencia en un estado que solo mueve la máquina, (lo hace cumplir `tests/automation/test_sirius_reconcile.py`).
+
+### `estado-en-el-que-se-entra-y-del-que-no-se-sale`
+
+- **ADR-189** — dar por buena una arista del dominio que en producción no llama nadie, y dejar así un estado en el que el motor entra solo y del que solo puede salir un mecanismo que necesita un dato que ese estado, por definición, no tiene. (lo hace cumplir `tests/engine/test_decision_cli.py`).
+
+### `guarda-ampliada-a-un-corpus-que-no-es-el-suyo`
+
+- **ADR-190** — llevar una comprobación al sitio donde el hueco está declarado sin medir antes qué cosecharía allí, y pagar la ampliación con excepciones escritas a mano; aquí el criterio calibrado sobre `docs/decisions/` —un corpus homogéneo, donde un ADR cita este árbol— habría gritado 17 veces en falso y cazado cero defectos al salir a `docs/`, donde una investigación cita los árboles de otros repositorios. (lo hace cumplir `tests/automation/test_citas_de_los_adr.py`).
+
+### `guarda-medida-que-se-queda-sin-autoridad-porque-nadie-relee-la-medida`
+
+- **ADR-199** — una guarda se fusiona a propósito sin autoridad para (lo hace cumplir `tests/automation/test_reanudar_una_parada.py`).
+
+### `guardian-que-mide-posicion-en-vez-de-estructura`
+
+- **ADR-187** — escribir un guardián que comprueba que algo aparece (lo hace cumplir `tests/automation/test_misma_obra.py`).
+
+### `instrumento-que-solo-mide-un-lado`
+
+- **ADR-203** — publicar «la pieza X aporta tanto» citando solo la (lo hace cumplir `tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py`).
+
+### `interruptor-que-enciende-mas-de-lo-que-se-puede-medir`
+
+- **ADR-185** — poner una sola puerta delante de varias piezas (lo hace cumplir `tests/unit/test_composition_root_relevance_gate.py`).
+
+### `pieza-correcta-a-la-que-no-llama-quien-la-necesita`
+
+- **ADR-197** — dos piezas del mismo árbol leen la misma clase de dato (lo hace cumplir `tests/engine/test_round_family_detector.py`).
+
+### `plan-que-hay-que-terminar-de-una-sentada`
+
+- **ADR-176** — escribir un plan de varios pasos contra un almacén que los aplica uno a uno, y comprobar la precondición del primero en vez del estado real en que el motor está, de modo que una interrupción a la mitad deja el trabajo atascado para siempre. (lo hace cumplir `tests/engine/test_reflect.py`).
+
+### `pregunta-al-propietario-que-nadie-vuelve-a-poner-delante`
+
+- **ADR-198** — una incidencia formula una pregunta que solo el (sin prueba que lo haga cumplir: ninguna prueba: nada en este repositorio distingue una).
+
+### `tarea-periodica-sin-reloj`
+
+- **ADR-201** — el único trabajo que mide los ciclos de este (sin prueba que lo haga cumplir: ninguna prueba: que el reloj dispare de verdad no lo puede).
+
+### `tramite-que-solo-puede-hacer-una-persona-y-no-anade-comprobacion`
+
+- **ADR-205** — el ciclo volvería a quedarse horas en verde esperando (lo hace cumplir `tests/automation/test_sirius_merge.py`).
 
 ## Los bloques del motor
 
@@ -516,6 +521,7 @@ algo vivo (`AGENTS.md`). Cada una declara de qué depende para caducar.
 | 2026-08-31 | VIGENTE | [Investigación de la orden](docs/investigaciones/2026-08-31-orden-483-investiga-una-sola-pregunta-acotada-el-marco-de-agentes-herm.md) | los datos y las fuentes que cita el informe; la fecha de esta ejecución: es UNA pasada del investigador, no un hecho estable |
 | 2026-09-11 | VIGENTE | [Flujos reales de agentes de código, comparados con el motor de Sirius](docs/investigaciones/2026-09-11-flujos-reales-de-agentes-comparados-con-el-motor.md) | el contenido de los trece repositorios citados, verificado el 11-09-2026 en su último commit; la documentación de Supermemory y Mem0 sobre Claude Code, Codex y ChatGPT, que cambia cada pocas semanas; los artículos, vídeos y fechas de publicación, que esta sesión no pudo abrir |
 | 2026-09-11 | VIGENTE | [Qué memoria compartida para IAs existe ya hecha y probada, y si supera a la generada en el repositorio](docs/investigaciones/2026-09-11-que-memoria-compartida-para-ias-existe-ya-hecha-y-probada.md) | los precios y límites gratuitos de los servicios alojados (Mem0, Supermemory, Basic Memory Cloud, Letta Cloud, Zep); qué clientes admiten MCP y cómo (Claude Code, Codex, ChatGPT), que cambia cada pocos meses; las versiones y la actividad de cada proyecto, medidas el día de la clonación; la lista de herramientas que leen AGENTS.md |
+| 2026-09-13 | PARCIALMENTE CADUCADA | [Memanto contra la capa de memoria de Sirius: qué está cubierto, qué a medias y qué es nuevo](docs/investigaciones/2026-09-13-memanto-contra-la-capa-de-memoria-de-sirius.md) | los ficheros de la capa de memoria que cita (src/sirius/domain/memory.py, decision.py, event.py, precedence.py, staged_engine_contracts.py, staged_engine_gates.py y src/sirius/adapters/persistence/models.py); si cambian, las líneas citadas dejan de valer; el estado de la línea de memoria (ADR-185 partió la puerta en tres interruptores el 13-09; las piezas A–D quedaron aparcadas con su momento de disparo, bitácora del ciclo, entrada 109); el propio repositorio moorcheh-ai/memanto, que no se leyó desde aquí |
 | sin fecha declarada | — | [Investigaciones](docs/investigaciones/README.md) | — |
 
 ## Los documentos, carpeta a carpeta
@@ -525,102 +531,11 @@ nada por su cuenta. «Sin fecha declarada» es un aviso, no un dato.
 
 ### `docs/audits`
 
-| Fecha | Documento |
-|---|---|
-| 2026-09-19 | [La auditoría de la forma de trabajar, segunda edición: las 21 fichas de agosto, revalidadas el 19 de septiembre de 2026](docs/audits/AUDITORIA_FORMA_DE_TRABAJO_2026-09.md) |
-| sin fecha declarada | [Auditoría integral de incorporación de Claude — Proyecto Sirius (julio 2026)](docs/audits/AUDITORIA_INTEGRAL_INCORPORACION_CLAUDE_2026-07.md) |
-| 2026-09-24 | [Cierre del ciclo: qué hay de verdad a 24 de septiembre de 2026](docs/audits/CIERRE_DEL_CICLO_2026-09-24.md) |
-| sin fecha declarada | [Defectos encontrados en el Work Engine — parte para actuar](docs/audits/DEFECTOS_ENCONTRADOS_2026-08-20.md) |
-| 2026-09-20 | [Dónde vive la bitácora del ciclo, y por qué no está aquí todavía](docs/audits/DONDE_VIVE_LA_BITACORA_DEL_CICLO.md) |
-| sin fecha declarada | [Lo que queda, y por qué no está hecho — 14 de septiembre de 2026](docs/audits/PENDIENTE_Y_POR_QUE_2026-09-14.md) |
-| sin fecha declarada | [SIRIUS — Auditoría de la cadena de activación y estados (20-jul-2026, 2ª pasada)](docs/audits/SIRIUS_AUDITORIA_ACTIVACION_2026-07.md) |
-| sin fecha declarada | [SIRIUS — Auditoría de robustez de la automatización de roles (Claude Code)](docs/audits/SIRIUS_AUDITORIA_AUTOMATIZACION_ROLES_2026-07.md) |
-| 2026-07-20 | [SIRIUS — Auditoría integral del repositorio (julio de 2026)](docs/audits/SIRIUS_AUDITORIA_INTEGRAL_REPOSITORIO_2026-07.md) |
-| sin fecha declarada | [SIRIUS — Auditoría de Model Studio (7 de agosto de 2026)](docs/audits/SIRIUS_AUDITORIA_MODEL_STUDIO_2026-08.md) |
-| 2026-08-31 | [La mina: primer informe de aprendizaje sobre nuestros propios datos operativos](docs/audits/SIRIUS_MINA_APRENDIZAJE_OPERATIVO_2026-08.md) |
-| 2026-09-14 | [La mina, segunda edición: cuánta razón tiene el detector de familia repetida](docs/audits/SIRIUS_MINA_APRENDIZAJE_OPERATIVO_2026-09-14.md) |
-| 2026-08-28 | [Nota de arranque — atestar al buscador antes de gastar en medirlo](docs/audits/arranque-atestar-al-buscador.md) |
-| 2026-09-19 | [Nota de arranque — la auditoría de la forma de trabajar, segunda edición: lo que la primera no podía ver](docs/audits/arranque-auditoria-forma-de-trabajo.md) |
-| 2026-08-28 | [Nota de arranque — B1: que una orden de investigación produzca un informe](docs/audits/arranque-b1-investigar-desde-una-orden.md) |
-| 2026-08-27 | [Nota de arranque — un buscador que devuelva fuentes](docs/audits/arranque-buscador-con-fuentes.md) |
-| sin fecha declarada | [Nota de arranque — `ci-pending` no distingue «todavía no» de «nunca»](docs/audits/arranque-ci-pending-no-espera-un-suceso-que-no-va-a-llegar.md) |
-| 2026-08-28 | [Nota de arranque — el medidor cuenta un registro que Tavily no alimenta](docs/audits/arranque-contar-las-dos-fuentes.md) |
-| 2026-08-27 | [Nota de arranque — una contradicción de etiquetas no es una divergencia](docs/audits/arranque-contradiccion-no-es-divergencia.md) |
-| 2026-08-27 | [Nota de arranque — que el banco diga por qué no midió](docs/audits/arranque-el-banco-dice-por-que.md) |
-| sin fecha declarada | [Nota de arranque — el detector de familia agrupa por la ruta, no por el recorte final](docs/audits/arranque-el-detector-de-familia-agrupa-por-la-ruta.md) |
-| 2026-09-14 | [Nota de arranque — el detector de familia repetida detiene el ciclo](docs/audits/arranque-el-detector-de-familia-detiene-el-ciclo.md) |
-| sin fecha declarada | [Nota de arranque — el doble de `gh` acepta lo que el `gh` real rechaza](docs/audits/arranque-el-doble-de-gh-rechaza-lo-que-el-real-rechaza.md) |
-| sin fecha declarada | [Nota de arranque — el identificador de un defecto deja de escribirse a mano](docs/audits/arranque-el-identificador-de-defecto-no-se-escribe-a-mano.md) |
-| 2026-08-28 | [Nota de arranque — ¿Está el motor preparado para recibir órdenes reales?](docs/audits/arranque-el-motor-esta-preparado.md) |
-| 2026-08-28 | [Nota de arranque — H-25: el contador declara su precondición (§11.2)](docs/audits/arranque-h25-el-contador-declara-su-precondicion.md) |
-| 2026-08-28 | [Nota de arranque — H-26: LOST no libera la cancelación sin confirmar](docs/audits/arranque-h26-lost-no-libera.md) |
-| 2026-08-28 | [Nota de arranque — H-27: la frontera WorkItem–Run](docs/audits/arranque-h27-frontera-workitem-run.md) |
-| 2026-08-28 | [Nota de arranque — H-28: la versión del perfil gobierna el prompt](docs/audits/arranque-h28-el-perfil-versionado-gobierna-el-prompt.md) |
-| 2026-08-28 | [Nota de arranque — H-29: la intención durable antes del efecto externo](docs/audits/arranque-h29-intencion-antes-del-efecto.md) |
-| 2026-08-28 | [Nota de arranque — H-30: comprobar y gastar en una sola operación](docs/audits/arranque-h30-presupuesto-atomico.md) |
-| 2026-08-28 | [Nota de arranque — H-31: behind_by ilegible pasa a bloquear](docs/audits/arranque-h31-fail-closed.md) |
-| 2026-08-28 | [Nota de arranque — H-32: STATUS.md contradice a PLAN.md](docs/audits/arranque-h32-status-contradice-a-plan.md) |
-| 2026-08-28 | [Nota de arranque — implementar el descarte de ADR-098](docs/audits/arranque-implementar-el-descarte.md) |
-| 2026-08-28 | [Nota de arranque — el interruptor de profundidad](docs/audits/arranque-interruptor-de-profundidad.md) |
-| 2026-09-14 | [Nota de arranque — la cola deja de ser una condición y pasa a ser un mecanismo](docs/audits/arranque-la-cola-trae-main-a-la-rama.md) |
-| sin fecha declarada | [Nota de arranque — la memoria cabe en una sola lectura, y dejó de caber](docs/audits/arranque-la-memoria-cabe-en-una-sola-lectura.md) |
-| sin fecha declarada | [Nota de arranque — la revisión es una cola](docs/audits/arranque-la-revision-es-una-cola.md) |
-| 2026-09-13 | [Nota de arranque — Que una revisión sobreviva a ponerse al día con `main`](docs/audits/arranque-mejora-la-revision-sobrevive-a-ponerse-al-dia.md) |
-| 2026-08-28 | [Nota de arranque — las tres palancas del examen](docs/audits/arranque-tres-palancas.md) |
-| sin fecha declarada | [Evidencia — H-17](docs/audits/evidencia-H-17.md) |
-| sin fecha declarada | [Evidencia — H-18: el recordatorio de evidencia pedía un sitio imposible](docs/audits/evidencia-H-18.md) |
-| sin fecha declarada | [Evidencia — H-19](docs/audits/evidencia-H-19.md) |
-| sin fecha declarada | [Evidencia — H-20, H-21 y H-22](docs/audits/evidencia-H-20-H-22.md) |
-| sin fecha declarada | [Evidencia — H-23](docs/audits/evidencia-H-23.md) |
-| sin fecha declarada | [Evidencia — La raíz de las cuatro rondas, y el arreglo que la hace imposible](docs/audits/evidencia-atestado-de-modelos.md) |
-| 2026-08-28 | [Evidencia — atestar al buscador antes de gastar en medirlo](docs/audits/evidencia-atestar-al-buscador.md) |
-| 2026-09-20 | [Evidencia — la auditoría de la forma de trabajar, segunda edición](docs/audits/evidencia-auditoria-forma-de-trabajo.md) |
-| sin fecha declarada | [Evidencia — La quinta pieza sin llamante era la salida de emergencia](docs/audits/evidencia-autoridad-sin-llamante.md) |
-| 2026-08-28 | [Evidencia — B1: investigar desde una orden](docs/audits/evidencia-b1-investigar-desde-una-orden.md) |
-| sin fecha declarada | [Evidencia — El lazo que faltaba entre atestiguar y medir](docs/audits/evidencia-banco-atestigua-en-su-pasada.md) |
-| sin fecha declarada | [Evidencia — El banco vuelve a tener botón, y ya no puede medir un cadáver](docs/audits/evidencia-banco-con-atestado.md) |
-| 2026-08-27 | [Evidencia — un buscador que devuelva fuentes](docs/audits/evidencia-buscador-con-fuentes.md) |
-| 2026-08-28 | [Evidencia — cerrar B1](docs/audits/evidencia-cerrar-b1.md) |
-| 2026-08-28 | [Evidencia — cerrar S2](docs/audits/evidencia-cerrar-s2.md) |
-| sin fecha declarada | [Evidencia — `ci-pending` no espera un suceso que no va a llegar](docs/audits/evidencia-ci-pending-no-espera-un-suceso-que-no-va-a-llegar.md) |
-| sin fecha declarada | [Evidencia — siete defectos decían `abierto` con su arreglo ya fusionado](docs/audits/evidencia-cierra-los-defectos-ya-arreglados.md) |
-| 2026-09-08 | [Evidencia — Propuesta de separación entre Sirius y su motor](docs/audits/evidencia-claude-sirius-motor-separation-proposal-svoy0a.md) |
-| 2026-08-28 | [Evidencia — contar las dos fuentes](docs/audits/evidencia-contar-las-dos-fuentes.md) |
-| sin fecha declarada | [Evidencia — D1, anotado sin exagerar](docs/audits/evidencia-d1-anotado.md) |
-| 2026-08-27 | [Evidencia — que el banco diga por qué no midió](docs/audits/evidencia-el-banco-dice-por-que.md) |
-| sin fecha declarada | [Evidencia — el doble de `gh` rechaza lo que el `gh` real rechaza](docs/audits/evidencia-el-doble-de-gh-rechaza-lo-que-el-real-rechaza.md) |
-| sin fecha declarada | [Evidencia — el identificador de un defecto no puede seguir eligiéndose](docs/audits/evidencia-el-identificador-de-defecto-no-se-escribe-a-mano.md) |
-| 2026-08-28 | [Evidencia — El motor está preparado para recibir órdenes reales](docs/audits/evidencia-el-motor-esta-preparado.md) |
-| 2026-08-28 | [Evidencia — el examen lado a lado](docs/audits/evidencia-examen-lado-a-lado.md) |
-| 2026-09-01 | [Evidencia — Experimento: el filtro de relevancia, fiel a la corrida del laboratorio](docs/audits/evidencia-experimento-filtro-fiel-al-laboratorio.md) |
-| sin fecha declarada | [Evidencia — seis defectos decían `abierto` con su arreglo ya fusionado (14-09-2026)](docs/audits/evidencia-fix-cierra-los-defectos-de-la-noche.md) |
-| 2026-08-28 | [Evidencia — H-25: el contador declara su precondición (§11.2)](docs/audits/evidencia-h25-el-contador-declara-su-precondicion.md) |
-| sin fecha declarada | [Evidencia — H-26: LOST no libera la cancelación sin confirmar](docs/audits/evidencia-h26-lost-no-libera.md) |
-| 2026-08-28 | [Evidencia — H-27: la frontera WorkItem–Run](docs/audits/evidencia-h27-frontera-workitem-run.md) |
-| 2026-08-28 | [Evidencia — H-28: la versión del perfil gobierna el prompt](docs/audits/evidencia-h28-el-perfil-versionado-gobierna-el-prompt.md) |
-| sin fecha declarada | [Evidencia — H-29: la intención durable antes del efecto externo](docs/audits/evidencia-h29-intencion-antes-del-efecto.md) |
-| sin fecha declarada | [Evidencia — H-30: la admisión es una reserva atómica](docs/audits/evidencia-h30-presupuesto-atomico.md) |
-| sin fecha declarada | [Evidencia — H-31: behind_by ilegible bloquea](docs/audits/evidencia-h31-fail-closed.md) |
-| 2026-08-28 | [Evidencia — H-32: STATUS.md contradice a PLAN.md](docs/audits/evidencia-h32-status-contradice-a-plan.md) |
-| 2026-08-28 | [Evidencia — implementar el descarte de ADR-098](docs/audits/evidencia-implementar-el-descarte.md) |
-| 2026-08-28 | [Evidencia — el interruptor de profundidad](docs/audits/evidencia-interruptor-de-profundidad.md) |
-| sin fecha declarada | [Evidencia — Probar seis al azar no es probar](docs/audits/evidencia-mas-candidatos.md) |
-| sin fecha declarada | [Evidencia — cerrar S2: medir de verdad la calidad del investigador](docs/audits/evidencia-medir-investigador.md) |
-| sin fecha declarada | [Evidencia — la revisión es una cola](docs/audits/evidencia-mejora-la-revision-es-una-cola.md) |
-| 2026-09-13 | [Evidencia — Que una revisión sobreviva a ponerse al día con `main`](docs/audits/evidencia-mejora-la-revision-sobrevive-a-ponerse-al-dia.md) |
-| sin fecha declarada | [Evidencia — Los cuatro que responden, encontrados probándolos](docs/audits/evidencia-modelos-que-responden.md) |
-| sin fecha declarada | [Evidencia — Los modelos, sacados del servidor y no de un papel](docs/audits/evidencia-modelos-vivos.md) |
-| sin fecha declarada | [Evidencia — «Ocupado» no es «muerto», y confundirlos cuesta lo mismo](docs/audits/evidencia-ocupado-no-es-muerto.md) |
-| sin fecha declarada | [Evidencia — Preflight: preguntarle al servidor en vez de creerle a un informe](docs/audits/evidencia-preflight-investigador.md) |
-| sin fecha declarada | [Evidencia — El preflight contesta la pregunta directa](docs/audits/evidencia-preflight-veredicto.md) |
-| sin fecha declarada | [Evidencia — El catálogo tampoco basta](docs/audits/evidencia-probar-catalogo.md) |
-| sin fecha declarada | [Evidencia — Existir no es poder usarse](docs/audits/evidencia-prueba-de-vida.md) |
-| 2026-08-28 | [Evidencia — registro-cierre-h25: el apunte contable de H-25](docs/audits/evidencia-registro-cierre-h25.md) |
-| 2026-08-28 | [Evidencia — registro-cierre-h32: el apunte contable final de la fase de corrección](docs/audits/evidencia-registro-cierre-h32.md) |
-| 2026-08-28 | [Evidencia — las tres palancas](docs/audits/evidencia-tres-palancas.md) |
-| sin fecha declarada | [Evidencia — verificar la auditoría externa (puntero)](docs/audits/evidencia-verificar-auditoria-externa.md) |
-| 2026-09-20 | [Las 35 sesiones de Claude Code en la nube, una a una (20-09-2026)](docs/audits/las-sesiones-de-la-nube-2026-09.md) |
-| sin fecha declarada | [Verificación de la auditoría externa del 28-08-2026](docs/audits/verificacion-auditoria-externa-20260828.md) |
+**137 documentos**, 82 sin fecha declarada; el más reciente declara 2026-10-01.
+Es la carpeta de la evidencia y crece a dos filas por ADR, así que la fila
+de cada documento vive en un índice generado aparte,
+[`docs/audits/INDICE.md`](docs/audits/INDICE.md), que escribe el
+mismo comando y vigila la misma prueba que esta vista (ADR-218).
 
 ### `docs/canonical`
 

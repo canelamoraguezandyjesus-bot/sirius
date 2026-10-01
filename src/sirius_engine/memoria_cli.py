@@ -3,9 +3,10 @@
 Cáscara y nada más, como ``sirius-reflejar``: resuelve rutas y llama a las
 funciones puras de :mod:`sirius_engine.memoria`. Dos subcomandos:
 
-- ``conocimiento`` escribe ``MEMORIA.md`` en la raíz del repositorio a partir
-  del árbol; con ``--comprobar`` no escribe nada y sale con 1 si el fichero
-  confirmado no coincide con lo que se generaría, diciendo qué hacer.
+- ``conocimiento`` escribe ``MEMORIA.md`` en la raíz del repositorio y, desde
+  ADR-218, ``docs/audits/INDICE.md``, a partir del árbol; con ``--comprobar`` no
+  escribe nada y sale con 1 si algún fichero confirmado no coincide con lo que
+  se generaría, diciendo cuál y qué hacer.
 - ``desenlaces`` escribe ``DESENLACES.md`` junto al diario del motor, a partir
   de ``diario.jsonl`` y de su hermano ``diario-despacho.jsonl`` si existe. Lo
   ejecuta ``reflejar-desenlace.yml`` en la rama del motor.
@@ -24,6 +25,7 @@ from pathlib import Path
 from sirius_engine.memoria import (
     COMANDO,
     FICHERO_DESENLACES,
+    FICHERO_INDICE_AUDITORIAS,
     FICHERO_MEMORIA,
     comprobar_memoria,
     escribir_desenlaces,
@@ -46,7 +48,8 @@ def _parser() -> argparse.ArgumentParser:
     subcomandos = parser.add_subparsers(dest="vista", required=True)
 
     conocimiento = subcomandos.add_parser(
-        "conocimiento", help=f"escribir {FICHERO_MEMORIA} en la raíz a partir del árbol"
+        "conocimiento",
+        help=f"escribir {FICHERO_MEMORIA} y {FICHERO_INDICE_AUDITORIAS} a partir del árbol",
     )
     conocimiento.add_argument(
         "--raiz",
@@ -83,12 +86,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         if argumentos.comprobar:
             problema = comprobar_memoria(raiz)
             if problema is None:
-                print(f"{FICHERO_MEMORIA} está al día.")
+                print(f"{FICHERO_MEMORIA} y {FICHERO_INDICE_AUDITORIAS} están al día.")
                 return 0
             print(f"{COMANDO}: {problema}", file=sys.stderr)
             return 1
-        fichero = escribir_memoria(raiz)
-        print(f"Escrito {fichero}.")
+        for fichero in escribir_memoria(raiz):
+            print(f"Escrito {fichero}.")
         return 0
 
     diario: Path = argumentos.diario
