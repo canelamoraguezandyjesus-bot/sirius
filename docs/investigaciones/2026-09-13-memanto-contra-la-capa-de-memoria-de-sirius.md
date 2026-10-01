@@ -1,3 +1,39 @@
+---
+titulo: "Memanto contra la capa de memoria de Sirius: qué está cubierto, qué a medias y qué es nuevo"
+fecha: 2026-09-13
+autor: "la sesión de auditoría de la línea de memoria (rama claude/adr002-tol209-forensic-audit-i0ui8k); entró en main el 01-10-2026 por ADR-217"
+pregunta: >-
+  De las cuatro piezas de Memanto (A–D) que trajo el propietario para «Memoria
+  útil», cuál ya está cubierta en Sirius, cuál a medias y cuál es nueva, y para
+  las nuevas qué encaje mínimo tendrían.
+
+nota: >-
+  De qué depende para caducar: es una foto del árbol de main en 7aae33c
+  (13-09-2026) contrastada con lo que el propietario dijo de Memanto; todo lo
+  que afirma de Sirius lleva fichero y línea de ese día.
+caduca_con:
+  - >-
+    los ficheros de la capa de memoria que cita (src/sirius/domain/memory.py,
+    decision.py, event.py, precedence.py, staged_engine_contracts.py,
+    staged_engine_gates.py y src/sirius/adapters/persistence/models.py); si
+    cambian, las líneas citadas dejan de valer
+  - >-
+    el estado de la línea de memoria (ADR-185 partió la puerta en tres
+    interruptores el 13-09; las piezas A–D quedaron aparcadas con su momento de
+    disparo, bitácora del ciclo, entrada 109)
+  - el propio repositorio moorcheh-ai/memanto, que no se leyó desde aquí
+
+estado: PARCIALMENTE CADUCADA
+---
+
+> **AVISO (01-10-2026, al traerla a `main`): PARCIALMENTE CADUCADA.** Léase como foto del árbol en
+> `7aae33c` (13-09-2026). Desde entonces `main` ha avanzado de ADR-178 a
+> ADR-217 y las rutas y líneas de Sirius que cita pueden haberse movido; lo que
+> sigue valiendo es el criterio (cubierta / a medias / nueva) y la lista de
+> piezas, que nadie ha medido ni cableado: las cuatro quedaron aparcadas con su
+> momento de disparo (bitácora del ciclo, entrada 109). Nada de lo que dice de
+> Memanto se verificó desde esta sesión.
+
 # Memanto contra la capa de memoria de Sirius: qué está cubierto, qué a medias y qué es nuevo
 
 Fecha: 13-09-2026. Rama de auditoría. **Solo análisis**: ni código, ni ADR, ni

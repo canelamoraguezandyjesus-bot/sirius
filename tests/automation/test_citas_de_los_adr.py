@@ -177,6 +177,11 @@ _ADR_177 = (
     "no-por-la-subcadena-contexto.md"
 )
 
+_ADR_217 = (
+    "ADR-217-la-bitacora-del-ciclo-entra-en-main-con-su-familia"
+    "-y-la-evidencia-de-adr-002-se-queda-en-su-rama.md"
+)
+
 RAMA_DE_ORIGEN_NO_FUSIONADA: dict[str, list[str]] = {
     "experiments/adr002/round/cases.py": [
         "ADR-104-portar-el-banco-de-47-casos-de-evidence-adr001-spikes-al-modelo-real-de-sirius.md",
@@ -287,21 +292,18 @@ RAMA_DE_ORIGEN_NO_FUSIONADA: dict[str, list[str]] = {
     # líneas — ambas viven en la rama `claude/adr002-tol209-forensic-audit-
     # i0ui8k`, que a propósito nunca se fusiona entera a `main`; el ADR cita
     # su fuente, la fuente sigue sin fusionarse.
-    # ADR-134 (G2, incidencia #526) registra el guardián del suelo de prueba
-    # muerto y la retirada de los dos existentes en el banco de evidencia.
-    # Cita las mismas dos rutas que ADR-132 (la mina que aprobó la propuesta
-    # y la nota de medición del propietario), por el mismo motivo: ambas
-    # viven solo en la rama `claude/adr002-tol209-forensic-audit-i0ui8k`, que
-    # a propósito nunca se fusiona entera a `main`.
-    # ADR-135 (el prompt del corrector) cita el mismo informe como origen de
-    # las dos familias que motivan su cambio (prosa desincronizada y cifras
-    # a mano).
-    "docs/audits/SIRIUS_MINA_APRENDIZAJE_OPERATIVO_2026-09.md": [_ADR_132, _ADR_134, _ADR_135],
-    "docs/audits/mina-2026-09-medicion-de-guardianes.md": [_ADR_132, _ADR_134],
-    # ADR-139 (el cron del reconciliador) cita el papel de cambios para el
-    # propietario que salió de la misma mina: vive en la misma rama de
-    # auditoría que nunca se fusiona entera.
-    "docs/audits/mina-2026-09-cambios-para-el-propietario.md": [_ADR_139, _ADR_140],
+    # Hasta el 01-10-2026 aquí estaban la mina v2 del 03-09, su medición de
+    # guardianes y su papel de cambios para el propietario (citados por
+    # ADR-132, ADR-134, ADR-135, ADR-139 y ADR-140): vivían solo en la rama
+    # `claude/adr002-tol209-forensic-audit-i0ui8k`. ADR-217 los trajo a `main`
+    # con la bitácora del ciclo y la excepción dejó de excepcionar nada.
+    #
+    # ADR-217 cita, para decir qué NO trae de esa misma rama, las dos carpetas
+    # donde viven la familia `SIRIUS_0.2_ADR_002_*` y los `.docx` canónicos:
+    # evidencia que, como la de #117, se porta por encargos y nunca se fusiona
+    # entera (decisión D1 de `docs/evolution/STATUS.md`).
+    "docs/architecture/": [_ADR_217],
+    "docs/architecture/canonical_sources/": [_ADR_217],
     # ADR-170 (hueco H5 de ADR-148, incidencia #582) porta a la fixture del
     # banco la membresía de lista cerrada de `DEC-001` y cita el proyector
     # del laboratorio para documentar DÓNDE se perdió: es el fichero que no

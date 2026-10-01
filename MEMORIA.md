@@ -28,7 +28,7 @@
 
 - Decisiones (ADR): **211**.
 - Bloques del motor: 17 cerrado, 2 fuera_de_alcance, 1 pendiente.
-- Defectos registrados: 3 abierto, 66 cerrado.
+- Defectos registrados: 3 abierto, 67 cerrado.
 - Ideas aparcadas o descartadas: 5 aparcada, 2 descartada, 2 promovida.
 - Skills: **19**.
 - Investigaciones: **10** (fotos con fecha; caducan).
@@ -518,7 +518,7 @@ algo vivo (`AGENTS.md`). Cada una declara de qué depende para caducar.
 | 2026-08-31 | VIGENTE | [Investigación de la orden](docs/investigaciones/2026-08-31-orden-483-investiga-una-sola-pregunta-acotada-el-marco-de-agentes-herm.md) | los datos y las fuentes que cita el informe; la fecha de esta ejecución: es UNA pasada del investigador, no un hecho estable |
 | 2026-09-11 | VIGENTE | [Flujos reales de agentes de código, comparados con el motor de Sirius](docs/investigaciones/2026-09-11-flujos-reales-de-agentes-comparados-con-el-motor.md) | el contenido de los trece repositorios citados, verificado el 11-09-2026 en su último commit; la documentación de Supermemory y Mem0 sobre Claude Code, Codex y ChatGPT, que cambia cada pocas semanas; los artículos, vídeos y fechas de publicación, que esta sesión no pudo abrir |
 | 2026-09-11 | VIGENTE | [Qué memoria compartida para IAs existe ya hecha y probada, y si supera a la generada en el repositorio](docs/investigaciones/2026-09-11-que-memoria-compartida-para-ias-existe-ya-hecha-y-probada.md) | los precios y límites gratuitos de los servicios alojados (Mem0, Supermemory, Basic Memory Cloud, Letta Cloud, Zep); qué clientes admiten MCP y cómo (Claude Code, Codex, ChatGPT), que cambia cada pocos meses; las versiones y la actividad de cada proyecto, medidas el día de la clonación; la lista de herramientas que leen AGENTS.md |
-| 2026-09-13 | — | [Memanto contra la capa de memoria de Sirius: qué está cubierto, qué a medias y qué es nuevo](docs/investigaciones/2026-09-13-memanto-contra-la-capa-de-memoria-de-sirius.md) | — |
+| 2026-09-13 | PARCIALMENTE CADUCADA | [Memanto contra la capa de memoria de Sirius: qué está cubierto, qué a medias y qué es nuevo](docs/investigaciones/2026-09-13-memanto-contra-la-capa-de-memoria-de-sirius.md) | los ficheros de la capa de memoria que cita (src/sirius/domain/memory.py, decision.py, event.py, precedence.py, staged_engine_contracts.py, staged_engine_gates.py y src/sirius/adapters/persistence/models.py); si cambian, las líneas citadas dejan de valer; el estado de la línea de memoria (ADR-185 partió la puerta en tres interruptores el 13-09; las piezas A–D quedaron aparcadas con su momento de disparo, bitácora del ciclo, entrada 109); el propio repositorio moorcheh-ai/memanto, que no se leyó desde aquí |
 | sin fecha declarada | — | [Investigaciones](docs/investigaciones/README.md) | — |
 
 ## Los documentos, carpeta a carpeta

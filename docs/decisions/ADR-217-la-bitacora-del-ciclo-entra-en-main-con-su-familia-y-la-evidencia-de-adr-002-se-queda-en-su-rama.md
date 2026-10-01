@@ -23,10 +23,10 @@ Un registro que nadie puede leer no es un registro.
 La rama no trae solo la bitácora. Medido el 01-10-2026 contra su punto de
 bifurcación con `main` (clon traído entero: `git fetch --deepen`), tiene
 **344 commits propios y 342 ficheros propios**, todos añadidos, ninguno
-modificado: 48 en `docs/audits/`, 1 en `docs/investigaciones/`, 90 en
-`docs/architecture/` (la familia `SIRIUS_0.2_ADR_002_*`), 3 `.docx` en
-`docs/architecture/canonical_sources/`, 182 en `experiments/`, 10 en
-`artifacts/` y 8 guiones sueltos en la raíz.
+modificado: 48 en `docs/audits/`, 1 en `docs/investigaciones/`, 90 que en esa
+rama van en `docs/architecture/` (la familia `SIRIUS_0.2_ADR_002_*`), 3 `.docx`
+que en esa rama viven en `docs/architecture/canonical_sources/`, 182 en
+`experiments/`, 10 en `artifacts/` y 8 guiones sueltos en la raíz.
 
 ## Criterio de parada (escrito ANTES de decidir)
 
