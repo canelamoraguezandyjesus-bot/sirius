@@ -84,8 +84,11 @@ def main() -> int:
             if not confianza(c):
                 continue
             body = c["body"]
-            historiales[numero].append(body)
             en_ventana = INICIO <= c["created_at"] <= FIN
+            # El historial que se guarda termina donde termina la ventana: un
+            # volcado regenerado en octubre no puede cambiar lo medido en septiembre.
+            if c["created_at"] <= FIN:
+                historiales[numero].append(body)
             if "AVISO_FAMILIA_REPETIDA" in body and en_ventana:
                 avisos_familia.append((numero, c["created_at"]))
             registros = parse_round_records(body)

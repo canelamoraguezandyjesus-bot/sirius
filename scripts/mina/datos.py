@@ -19,7 +19,14 @@ from pathlib import Path
 
 AQUI = Path(__file__).resolve().parent
 RAIZ = AQUI.parents[1]
-DATOS = Path(os.environ.get("MINA_DATOS", str(AQUI / "datos")))
+_DECLARADO = os.environ.get("MINA_DATOS")
+# Una ruta relativa en MINA_DATOS se ancla a la raiz del repositorio, no al
+# directorio de invocacion: la misma cadena lee el mismo volcado desde la raiz
+# y desde scripts/mina/ (Codex, PR #665 ronda 2).
+DATOS = Path(_DECLARADO) if _DECLARADO else AQUI / "datos"
+if not DATOS.is_absolute():
+    DATOS = RAIZ / DATOS
+DATOS = DATOS.resolve()
 RAW = DATOS / "raw"
 PRDIR = DATOS / "raw_pr"
 HISTORIALES = DATOS / "historiales"

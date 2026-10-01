@@ -43,9 +43,10 @@ decidía, y al lado lo que pasó.
    una decisión del propietario), no la mitad (§6.3).
 4. *Guardianes.* Predicción: el que más defectos reales habría cazado es el
    detector de familia repetida ya arreglado el 14-09, por delante de cualquier
-   guardián nuevo. **Acertó, con un coste**: 4 familias reales que el detector
-   antiguo dejó pasar y el de hoy ve, y **1 falso positivo nuevo** (#566, por
-   el criterio de la edición anterior): neto +3 (§4.3, §8).
+   guardián nuevo. **Acertó, con un coste**: 5 familias reales que el detector
+   de entonces dejó pasar y el de hoy ve en alguna ronda, y **1 falso
+   positivo nuevo** (#566, por el criterio de la edición anterior): neto +4
+   (§4.3, §8).
 
 **Criterio de parada, escrito antes de contar nada.** Menos de 10 avisos del
 detector en la ventana → no se publica tasa. Dos agentes en desacuerdo sobre la
@@ -96,7 +97,9 @@ nada. Los guiones están en `scripts/mina/` (`descargar.py`, `descargar_pr.py`,
 `cerrado_por_inalcanzable.py`). Leen y escriben en el directorio que diga
 `MINA_DATOS` (por defecto `scripts/mina/datos/`, fuera del repositorio), en
 ese orden, y no dependen de dónde viva el clon ni desde dónde se invoquen;
-cada cifra de este informe que no sea una lectura a mano sale de su salida.
+cada cifra de este informe que no sea una lectura a mano sale de su salida, y la
+clasificación de falsos negativos tiene sus pruebas en
+`tests/automation/test_mina_falsos_negativos.py`.
 **Comprobación del instrumento**: sobre la subventana 01→14-09 el guion devuelve
 exactamente lo que la edición anterior publicó —30 incidencias, 122 rondas,
 301 hallazgos—, así que las dos ediciones son comparables fila a fila.
@@ -244,27 +247,44 @@ entonces, no otro detector.
 La edición del 14-09 encontró 6 falsos negativos por una sola línea
 (`LOCATION_LINE_RE` recortaba solo cuando la cita terminaba en `:N`) y lo
 propuso arreglar; las incidencias #638 y #642 lo cerraron el 14-09. Esta
-edición pasó el detector de hoy por los historiales completos de las 32
-incidencias (`falsos_negativos.py`, que recorre las 32 de `resumen.json` y las
-cruza con los avisos publicados): marca familia en **9** (#520, #526, #539,
-#566, #570, #581, #597, #599 y #601), 5 de ellas avisadas en su día, y **4 no
-recibieron ningún aviso**: #566, #570, #599 y #601, las cuatro en la **ronda
-3**, las cuatro anteriores al 14-09. Tres incidencias avisadas (#529, #545 y
-#653) no salen marcadas sobre el historial completo porque un `continua`
-posterior al aviso corta lo que el detector lee (mira solo lo que hay tras el
-último marcador de reanudación); en el instante del aviso sí marcan (§4.2). Después del arreglo solo dos incidencias tuvieron rondas
-(#650, sin familia; #653, avisada en r4 y r5): **0 falsos negativos conocidos
-tras el 14-09**.
+edición lo mide con `falsos_negativos.py`, que recorre las 32 incidencias de
+`resumen.json` y, para cada una, reconstruye **ronda a ronda** lo que el motor
+veía en ese instante (los comentarios de confianza hasta esa ronda, incluida, y
+nunca más allá del 30-09) y le pasa el detector de hoy, el mismo código que
+`sirius-familia-repetida`. Mirar solo el historial final no vale: un
+`continua` posterior saca del tramo vigente una familia que sí habría avisado
+antes (lo cazó Codex en la revisión de este informe; la clasificación es una
+función pura con sus pruebas en `tests/automation/test_mina_falsos_negativos.py`).
+
+Resultado: el detector de hoy marca en alguna ronda en **14** incidencias
+(#520, #523, #526, #529, #539, #545, #566, #570, #574, #581, #597, #599, #601
+y #653); **8** recibieron aviso en la ventana, y **6 no recibieron ninguno**:
+
+| Incidencia | Primera ronda en la que marca el detector de hoy | Fichero |
+|---|---|---|
+| #523 | ronda 4, 04-09 15:52 UTC (tramo 2-4) | `ADR-133-g3-el-guardian-de-goteo-entiende…` |
+| #566 | ronda 3, 08-09 03:43 UTC (1-3) | `ADR-162-la-altura-de-una-fila-del-chat…` |
+| #570 | ronda 3, 08-09 10:39 UTC (1-3) | `ollama_query_intent_classifier.py` |
+| #574 | ronda 3, 08-09 14:14 UTC (1-3; sigue hasta la 6, y en la 7 el tramo se corta) | `ADR-166-el-cargador-del-banco…` |
+| #599 | ronda 3, 13-09 02:21 UTC (1-3) | `sirius_apply_verdict.sh` |
+| #601 | ronda 3, 13-09 (1-3) | `intent_interpreter.py` |
+
+Las seis son **anteriores al 14-09**. Después del arreglo solo dos incidencias
+tuvieron rondas (#650, sin familia; #653, avisada en r4 y r5): **0 falsos
+negativos conocidos tras el 14-09**.
 
 Una diferencia con la edición anterior, y conviene decirla: aquella clasificó
 #566 como «no familia» (su tramo real eran dos rondas) y el detector de hoy
 sí la marca en 1-3 por el fichero del ADR. Con el criterio de aquella edición
 —que sigue siendo el de esta— #566 es un **falso positivo del detector de
-hoy**, el primero conocido, y #574 (que aquella sí contó, tramo 1-7) hoy no se
-marca porque sus citas se reparten entre dos ficheros. Así que el arreglo del
-14-09 no es gratis: **+4 familias reales que antes se perdían, 1 falso positivo
-nuevo**, neto +3, medido sobre el mes entero. Es menos que el +4 que aquella
-edición predijo y más que cero.
+hoy**, el primero conocido. Y #574, que aquella contó a mano con tramo 1-7,
+hoy se marca desde la ronda 3 (no sobre el historial final, porque un
+`continua` lo corta antes de la 7): la primera versión de este informe decía
+que «hoy no se marca», y era verdad solo del historial final. Así que el
+arreglo del 14-09 no es gratis: **+5 familias reales que antes se perdían
+(#523, #570, #574, #599, #601), 1 falso positivo nuevo (#566)**, neto +4,
+medido sobre el mes entero. Es más que el +4 neto que aquella edición predijo
+descontando el falso, y menos de lo que parecía sin descontarlo.
 
 ## 5. La segunda población: Codex sobre las PR
 
@@ -478,7 +498,7 @@ Mismo criterio de entrada que las ediciones anteriores y que la incidencia
 
 | Guardián | Aciertos reales | Falsos | Evidencia |
 |---|---|---|---|
-| El detector de familia repetida ya arreglado (14-09) | +4 familias que el antiguo no veía (#566*, #570, #599, #601) y 14/14 avisos reproducidos | 1 (#566, por el criterio de la edición anterior) | §4.2, §4.3. Neto **+3**, medido sobre el mes |
+| El detector de familia repetida ya arreglado (14-09) | +5 familias reales sin aviso en su día (#523, #570, #574, #599, #601) y 14/14 avisos reproducidos | 1 (#566, por el criterio de la edición anterior) | §4.2, §4.3. Neto **+4**, medido ronda a ronda sobre el mes |
 | Comprobar `Perfil: rol@N` en `validate_issue_body.py` | 1 ciclo muerto a los 6 s (#653) y los encargos lanzados con `@2` no vigente | 0 por construcción: solo rechaza lo que el workflow iba a rechazar después | entradas 123, 124, 138; deudas 34, 35 |
 | Regenerar `MEMORIA.md` en la cola antes de empujar la combinación | 1 vuelta del corrector (25 min) en #653 | 0 | entrada 146; deuda 48 |
 | El guardián de goteo tal como está | 37 marcas en 15 incidencias | no medido: haría falta verificar cada marca contra el diff, el método de agosto | §3 |
