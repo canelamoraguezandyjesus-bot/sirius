@@ -19,6 +19,7 @@ from sirius_engine import reflect_cli
 from sirius_engine.adapters.fixture_mirror import FixedGitHubMirrorReader
 from sirius_engine.adapters.memory_dispatch_journal import InMemoryDispatchJournal
 from sirius_engine.adapters.memory_store import InMemoryWorkEngineStore
+from sirius_engine.divergencias import leer_divergencias
 from sirius_engine.domain.dispatch import DispatchEpisode
 from sirius_engine.domain.work_item import WorkItemClass, WorkItemPhase, WorkItemState
 from sirius_engine.ports.github_mirror import (
@@ -246,6 +247,149 @@ def test_espejo_sin_etiqueta_de_estado_no_mueve_nada_pero_lo_cuenta(tmp_path: Pa
     assert sin_tocar is not None
     assert sin_tocar.estado is WorkItemState.ACTIVE
     assert sin_tocar.fase is WorkItemPhase.PREPARAR
+
+
+def _mirror_contradictorio(numero: int = _NUMERO) -> FixedGitHubMirrorReader:
+    """La incidencia #392 de H-216: cerrada con dos etiquetas de estado que se contradicen."""
+    return FixedGitHubMirrorReader(
+        metadatos_por_incidencia={
+            (_REPO, numero): LecturaMetadatos(
+                estado=LecturaEstado.OK,
+                metadatos=MetadatosIncidencia(
+                    numero=numero,
+                    titulo="t",
+                    estado_gh="closed",
+                    etiquetas=("sirius:failed-safely", "sirius:completed"),
+                ),
+            )
+        },
+        cuerpos_por_incidencia={
+            (_REPO, numero): LecturaCuerpo(
+                estado=LecturaEstado.OK,
+                cuerpo=CuerpoIncidencia(autor_login="x", autor_asociacion="OWNER", texto=""),
+            )
+        },
+        comentarios_por_incidencia={
+            (_REPO, numero): LecturaComentarios(estado=LecturaEstado.OK, comentarios=())
+        },
+    )
+
+
+def test_una_divergencia_apartada_queda_escrita_junto_al_diario(tmp_path: Path) -> None:
+    """ADR-227 (H-216): la divergencia que el reflector aparta para una persona
+    no se queda en el log del run. `WI-20260828-122242` estuvo 27 días así sin
+    que nadie la viera. Vista fallar contra el comando anterior: ningún fichero."""
+    store = InMemoryWorkEngineStore()
+    journal = InMemoryDispatchJournal()
+    _preparar(store, journal)
+    diario = tmp_path / "diario.jsonl"
+
+    codigo, texto = _correr(
+        ["--diario", str(diario)], store=store, journal=journal, mirror=_mirror_contradictorio()
+    )
+
+    assert codigo == 0
+    assert "etiquetas de estado que se contradicen" in texto
+    assert "Divergencias apartadas para una persona: 1, escritas en divergencias.json." in texto
+    apartadas = leer_divergencias(tmp_path / "divergencias.json")
+    assert len(apartadas) == 1
+    (apartada,) = apartadas
+    assert apartada.work_id == _WORK_ID and apartada.incidencia == _NUMERO
+    assert "se contradicen" in apartada.motivo
+    assert apartada.primera_vez == apartada.ultima_vez == _AHORA.isoformat()
+    assert apartada.pasadas == 1
+    sin_tocar = store.get_work_item(_WORK_ID)
+    assert sin_tocar is not None and sin_tocar.estado is WorkItemState.ACTIVE
+
+    despues = _AHORA.replace(day=5)
+    _correr(
+        ["--diario", str(diario)],
+        store=store,
+        journal=journal,
+        mirror=_mirror_contradictorio(),
+        ahora=despues,
+    )
+    (otra_vez,) = leer_divergencias(tmp_path / "divergencias.json")
+    assert otra_vez.primera_vez == _AHORA.isoformat(), "la primera vez no se mueve"
+    assert otra_vez.ultima_vez == despues.isoformat() and otra_vez.pasadas == 2
+
+
+def test_el_ensayo_no_escribe_las_divergencias(tmp_path: Path) -> None:
+    store = InMemoryWorkEngineStore()
+    journal = InMemoryDispatchJournal()
+    _preparar(store, journal)
+
+    codigo, texto = _correr(
+        ["--ensayo", "--diario", str(tmp_path / "diario.jsonl")],
+        store=store,
+        journal=journal,
+        mirror=_mirror_contradictorio(),
+    )
+
+    assert codigo == 0
+    assert (
+        "Divergencias apartadas para una persona: 1 (en ensayo no se escribe divergencias.json)."
+        in texto
+    )
+    assert not (tmp_path / "divergencias.json").exists()
+
+
+def test_una_divergencia_ilegible_se_conserva_y_una_resuelta_se_retira(tmp_path: Path) -> None:
+    """Tres pasadas: se aparta; la incidencia no se puede leer (se conserva con
+    su fecha); la incidencia deja de contradecirse (se retira)."""
+    store = InMemoryWorkEngineStore()
+    journal = InMemoryDispatchJournal()
+    _preparar(store, journal)
+    diario = tmp_path / "diario.jsonl"
+    _correr(
+        ["--diario", str(diario)], store=store, journal=journal, mirror=_mirror_contradictorio()
+    )
+
+    ilegible = FixedGitHubMirrorReader()  # nada configurado: LecturaEstado.NO_DISPONIBLE
+    codigo, texto = _correr(
+        ["--diario", str(diario)],
+        store=store,
+        journal=journal,
+        mirror=ilegible,
+        ahora=_AHORA.replace(day=5),
+    )
+    assert codigo == 0
+    assert f"{_WORK_ID}: no pude leer la incidencia" in texto
+    (conservada,) = leer_divergencias(tmp_path / "divergencias.json")
+    assert conservada.ultima_vez == _AHORA.isoformat() and conservada.pasadas == 1
+
+    # La incidencia deja de contradecirse: sin etiqueta de estado, el reflector
+    # no tiene nada que decir (idempotencia) y la pasada la evalúa sin divergencia.
+    sin_etiquetas = FixedGitHubMirrorReader(
+        metadatos_por_incidencia={
+            (_REPO, _NUMERO): LecturaMetadatos(
+                estado=LecturaEstado.OK,
+                metadatos=MetadatosIncidencia(
+                    numero=_NUMERO, titulo="t", estado_gh="open", etiquetas=()
+                ),
+            )
+        },
+        cuerpos_por_incidencia={
+            (_REPO, _NUMERO): LecturaCuerpo(
+                estado=LecturaEstado.OK,
+                cuerpo=CuerpoIncidencia(autor_login="x", autor_asociacion="OWNER", texto=""),
+            )
+        },
+        comentarios_por_incidencia={
+            (_REPO, _NUMERO): LecturaComentarios(estado=LecturaEstado.OK, comentarios=())
+        },
+    )
+    codigo, texto = _correr(
+        ["--diario", str(diario)],
+        store=store,
+        journal=journal,
+        mirror=sin_etiquetas,
+        ahora=_AHORA.replace(day=6),
+    )
+    assert codigo == 0
+    assert f"{_WORK_ID}: sin cambios" in texto
+    assert "Divergencias apartadas para una persona: 0, escritas en divergencias.json." in texto
+    assert leer_divergencias(tmp_path / "divergencias.json") == ()
 
 
 def test_completed_con_sha_de_fusion_entrega_el_workitem(tmp_path: Path) -> None:

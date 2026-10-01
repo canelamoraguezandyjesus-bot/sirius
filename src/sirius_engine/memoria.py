@@ -29,6 +29,13 @@ from typing import Any
 
 import yaml
 
+from sirius_engine.divergencias import (
+    DivergenciaApartada,
+    dias_parado,
+    leer_divergencias,
+    ruta_de_divergencias,
+)
+
 COMANDO = "sirius-memoria"
 FICHERO_MEMORIA = "MEMORIA.md"
 FICHERO_DESENLACES = "DESENLACES.md"
@@ -1058,17 +1065,55 @@ def _evidencia(encargo: Encargo) -> str:
     return ", ".join(partes) or "—"
 
 
+def _tabla_de_divergencias(
+    apartadas: Sequence[DivergenciaApartada], ultimo_suceso: Mapping[str, str]
+) -> list[str]:
+    return _tabla(
+        (
+            "Encargo",
+            "Incidencia",
+            "Motivo",
+            "Vista por primera vez",
+            "Última pasada",
+            "Pasadas",
+            "Días parado",
+        ),
+        (
+            (
+                d.work_id,
+                f"[#{d.incidencia}](https://github.com/{REPOSITORIO}/issues/{d.incidencia})"
+                if d.incidencia is not None
+                else "—",
+                d.motivo,
+                _instante(d.primera_vez),
+                _instante(d.ultima_vez),
+                str(d.pasadas),
+                dias_parado(ultimo_suceso.get(d.work_id, ""), d.ultima_vez),
+            )
+            for d in apartadas
+        ),
+    )
+
+
 def generar_desenlaces(diario: Path, despacho: Path | None = None) -> str:
     """El texto de `DESENLACES.md` para este diario. Determinista: solo depende de los ficheros."""
     encargos, total, ultimo = leer_encargos(diario, despacho)
     cuenta: dict[str, int] = {}
     for encargo in encargos:
         cuenta[encargo.estado] = cuenta.get(encargo.estado, 0) + 1
+    # Las divergencias que el reflector aparta para una persona (ADR-227,
+    # H-216): sin esta sección, el encargo apartado se contaba como «1 activo»
+    # y nadie lo volvía a mirar. La edad se cuenta desde su último suceso en el
+    # diario hasta la última pasada que lo apartó: lo que lleva parado.
+    ruta_divergencias = ruta_de_divergencias(diario)
+    apartadas = leer_divergencias(ruta_divergencias)
+    ultimo_suceso = {encargo.work_id: encargo.ultimo_suceso for encargo in encargos}
     lineas = [
         "# Desenlaces del motor de Sirius",
         "",
         f"> **Generado por `uv run {COMANDO} desenlaces`** a partir de `{diario.name}`"
         + (f" y `{despacho.name}`" if despacho is not None and despacho.is_file() else "")
+        + (f" y `{ruta_divergencias.name}`" if ruta_divergencias.is_file() else "")
         + f": {total} sucesos, el último el {_instante(ultimo)}. Lo escribe el motor en la rama",
         f"> `{RAMA_MEMORIA}` tras cada reflejo (ADR-171). **El diario manda**: si un documento",
         "> dice otra cosa sobre un encargo, vale esto.",
@@ -1076,6 +1121,17 @@ def generar_desenlaces(diario: Path, despacho: Path | None = None) -> str:
         "## Recuento por estado",
         "",
         *_tabla(("Estado", "Encargos"), ((estado, str(n)) for estado, n in sorted(cuenta.items()))),
+        "",
+        "## Divergencias que el reflector aparta para una persona",
+        "",
+        *(
+            _tabla_de_divergencias(apartadas, ultimo_suceso)
+            if apartadas
+            else [
+                "Ninguna: la última pasada del reflector no apartó ninguna (si la hubiera, "
+                f"estaría en `{ruta_divergencias.name}`, junto al diario)."
+            ]
+        ),
         "",
         "## Los encargos, del más reciente al más antiguo",
         "",

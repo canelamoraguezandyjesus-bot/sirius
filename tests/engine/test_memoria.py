@@ -29,6 +29,11 @@ import pytest
 import yaml
 
 from sirius_engine import memoria
+from sirius_engine.divergencias import (
+    FICHERO_DIVERGENCIAS,
+    DivergenciaApartada,
+    escribir_divergencias,
+)
 from sirius_engine.memoria import (
     COMANDO,
     FICHERO_DESENLACES,
@@ -480,6 +485,41 @@ def test_la_vista_de_desenlaces_enlaza_la_evidencia(diario: Path) -> None:
         in texto
     )
     assert texto.index("| WI-B |") < texto.index("| WI-A |")
+
+
+def test_la_vista_de_desenlaces_lista_las_divergencias_apartadas_con_su_edad(diario: Path) -> None:
+    """ADR-227 (H-216): lo que el reflector aparta para una persona sale en la
+    vista con los días que lleva parado, contados desde su último suceso en el
+    diario hasta la última pasada que lo apartó. Sin el fichero, lo dice."""
+    sin_fichero = generar_desenlaces(diario, diario.with_name("diario-despacho.jsonl"))
+    assert "## Divergencias que el reflector aparta para una persona" in sin_fichero
+    assert "Ninguna: la última pasada del reflector no apartó ninguna" in sin_fichero
+
+    escribir_divergencias(
+        diario.with_name(FICHERO_DIVERGENCIAS),
+        [
+            DivergenciaApartada(
+                work_id="WI-B",
+                incidencia=13,
+                motivo="la incidencia #13 lleva etiquetas que se contradicen; no se toca nada",
+                primera_vez="2026-09-05T03:24:00+00:00",
+                ultima_vez="2026-10-01T03:24:00+00:00",
+                pasadas=27,
+            )
+        ],
+    )
+    texto = generar_desenlaces(diario, diario.with_name("diario-despacho.jsonl"))
+    assert "y `divergencias.json`" in texto
+    fila = next(
+        linea
+        for linea in texto.splitlines()
+        if linea.startswith("| WI-B |") and "se contradicen" in linea
+    )
+    assert "[#13](https://github.com/canelamoraguezandyjesus-bot/sirius/issues/13)" in fila
+    assert "| 2026-09-05 03:24 UTC | 2026-10-01 03:24 UTC | 27 | 26 |" in fila, (
+        "del último suceso de WI-B (04-09 10:00) a la última pasada (01-10 03:24) van 26 días"
+    )
+    assert "Ninguna: la última pasada" not in texto
 
 
 def test_un_diario_corrupto_se_declara_con_su_linea(tmp_path: Path) -> None:

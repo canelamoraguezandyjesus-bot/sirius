@@ -38,6 +38,13 @@ from sirius_engine.adapters.durable.store import DurableWorkEngineStore
 from sirius_engine.adapters.github_cli_mirror import GitHubCliMirrorReader
 from sirius_engine.cli import resolver_diario
 from sirius_engine.dispatcher import TABLA_ACTIVACION
+from sirius_engine.divergencias import (
+    DivergenciaVista,
+    actualizar,
+    escribir_divergencias,
+    leer_divergencias,
+    ruta_de_divergencias,
+)
 from sirius_engine.domain.events import AggregateType
 from sirius_engine.domain.mirror import EspejoIlegibleError, MirroredWorkItem
 from sirius_engine.domain.work_item import TERMINAL_STATES
@@ -145,6 +152,11 @@ def main(
         linea("")
 
     aplicados_total = 0
+    # Lo que la pasada aparta para una persona, y lo que no pudo mirar: al
+    # terminar se escribe junto al diario (ADR-227, H-216). Antes solo quedaba
+    # en este log, una línea por pasada, y nadie lo volvía a leer.
+    vistas: list[DivergenciaVista] = []
+    ilegibles: set[str] = set()
     for work_id in _work_ids_conocidos(store):
         item = store.get_work_item(work_id)
         if item is None or item.estado in TERMINAL_STATES:
@@ -173,6 +185,7 @@ def main(
                 mirror, repo=episodio.repo, numero=episodio.numero_incidencia, ahora=ahora
             )
         except EspejoIlegibleError as error:
+            ilegibles.add(work_id)
             linea(
                 f"{work_id}: no pude leer la incidencia #{episodio.numero_incidencia} "
                 f"({error}). No se refleja nada esta pasada."
@@ -192,6 +205,9 @@ def main(
             # convierte «no pasa nada» en «esto lleva doce días sin moverse».
             if resultado.divergencia:
                 linea(resultado.divergencia)
+                vistas.append(
+                    DivergenciaVista(work_id, episodio.numero_incidencia, resultado.divergencia)
+                )
             else:
                 estado_incidencia = "cerrada" if espejo.cerrada else "abierta"
                 linea(
@@ -212,9 +228,24 @@ def main(
         pasos_texto = ", ".join(paso.kind for paso in resultado.pasos)
         linea(f"{work_id}: aplicados {len(resultado.pasos)} paso(s): {pasos_texto}")
 
-    if not args.ensayo:
-        linea("")
-        linea(f"Pasos aplicados en total: {aplicados_total}.")
+    ruta_divergencias = ruta_de_divergencias(diario)
+    anteriores = leer_divergencias(ruta_divergencias)
+    apartadas = actualizar(anteriores, vistas, ilegibles=ilegibles, ahora=ahora)
+    if args.ensayo:
+        linea(
+            f"Divergencias apartadas para una persona: {len(apartadas)} "
+            f"(en ensayo no se escribe {ruta_divergencias.name})."
+        )
+        return 0
+
+    if apartadas != anteriores or (apartadas and not ruta_divergencias.is_file()):
+        escribir_divergencias(ruta_divergencias, apartadas)
+    linea("")
+    linea(f"Pasos aplicados en total: {aplicados_total}.")
+    linea(
+        f"Divergencias apartadas para una persona: {len(apartadas)}"
+        + (f", escritas en {ruta_divergencias.name}." if apartadas or anteriores else ".")
+    )
     return 0
 
 

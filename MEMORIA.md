@@ -26,13 +26,13 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **216**.
+- Decisiones (ADR): **217**.
 - Bloques del motor: 17 cerrado, 2 fuera_de_alcance, 1 pendiente.
 - Defectos registrados: 3 abierto, 72 cerrado.
 - Ideas aparcadas o descartadas: 5 aparcada, 2 descartada, 2 promovida.
 - Skills: **19**.
 - Investigaciones: **10** (fotos con fecha; caducan).
-- Documentos: **198**, de los que **136** no declaran fecha.
+- Documentos: **199**, de los que **137** no declaran fecha.
 
 ## Las skills: lo que ya costó averiguar dos veces (ADR-211)
 
@@ -79,6 +79,7 @@ huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| [227](docs/decisions/ADR-227-las-divergencias-que-el-reflector-aparta-para-una-persona-quedan-escritas-junto-al-diario-y-la-vista-de-desenlaces-las-ensena-con-su-edad.md) | 2026-10-01 | APROBADO | Las divergencias que el reflector aparta para una persona quedan escritas junto al diario y la vista de desenlaces las enseña con su edad | Módulo nuevo `src/sirius_engine/divergencias.py`: `DivergenciaVista` (lo que la pasada declara), `DivergenciaApartada` (lo que se conserva: encargo, incidencia, motivo, primera vez, última vez, pasadas), `leer_divergencias` y… |
 | [224](docs/decisions/ADR-224-quality-no-muere-por-un-uv-sync-sin-cache-los-dos-pasos-largos-llevan-plazo-propio-y-el-job-sube-de-20-a-60-minutos.md) | 2026-10-01 | APROBADO | Quality no muere por un `uv sync` sin caché: los dos pasos largos llevan plazo propio y el job sube de 20 a 60 minutos | En `.github/workflows/quality.yml`: el job pasa de `timeout-minutes: 20` a 60; «Sync environment» lleva `timeout-minutes: 20` (peor medido sin caché: |
 | [222](docs/decisions/ADR-222-un-defecto-cerrado-lleva-la-pr-que-lo-fusiono-la-referencia-que-un-clon-de-main-puede-seguir.md) | 2026-10-01 | APROBADO | Un defecto cerrado lleva la PR que lo fusionó: la referencia que un clon de `main` puede seguir | Desde este ADR, un defecto `cerrado` lleva, además de `cerrado_por`, `pr: <número de la PR que lo fusiona>`; si lo cerró un encargo del motor, cuya PR la abre el workflow al terminar el run, basta `incidencia: <número>`, que ya es un campo… |
 | [220](docs/decisions/ADR-220-la-cola-regenera-las-vistas-de-la-memoria-al-traer-la-base-y-resuelve-sola-el-conflicto-que-solo-esta-en-ellas.md) | 2026-10-01 | APROBADO | La cola regenera las vistas de la memoria al traer la base, y resuelve sola el conflicto que solo está en ellas | La puesta al día pasa a dos jobs nuevos, `regenerar` y `empujar`, que arrancan con las salidas del paso «Advance matching Sirius work item» (`ponerse_al_dia`, `rama`, `base`, `incidencia`): `regenerar`, sin ningún secreto y de solo lectura… |
@@ -308,7 +309,7 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 
 | Familia | Veces | Hay prueba que la haga cumplir | ADR |
 |---|---|---|---|
-| `regla-que-depende-de-que-alguien-se-acuerde` | 10 | no en todas | 222, 220, 217, 216, 192, 191, 188, 182, 179, 174 |
+| `regla-que-depende-de-que-alguien-se-acuerde` | 11 | no en todas | 227, 222, 220, 217, 216, 192, 191, 188, 182, 179, 174 |
 | `pieza-sin-lector` | 5 | no en todas | 210, 209, 207, 183, 175 |
 | `regla-del-propietario-que-solo-vive-en-una-conversacion` | 4 | sí | 213, 208, 204, 195 |
 | `prosa-que-el-cambio-deja-falsa` | 3 | no en todas | 219, 211, 177 |
@@ -337,6 +338,7 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 
 ### `regla-que-depende-de-que-alguien-se-acuerde`
 
+- **ADR-227** — derivar una contradicción a «una persona» en el diseño y no dejar ningún sitio donde esa persona la encuentre: el motivo se imprimía en un log que nadie relee, y la memoria común la contaba como un encargo activo más. (lo hace cumplir `tests/engine/test_reflect_cli.py`).
 - **ADR-222** — una convención de registro escrita para un modo de fusión (con commit de mezcla) que sobrevive al cambio de modo (aplastado) sin que nadie la relea, con la batería en verde y 29 referencias que no llevan a ninguna parte. (lo hace cumplir `tests/automation/test_registro_de_defectos.py`).
 - **ADR-220** — automatizar la mitad de un gesto (traer la base) y dejar la otra mitad (regenerar lo generado) a que alguien se acuerde, con Quality como único aviso y 25 minutos después. (lo hace cumplir `tests/automation/test_cola.py`).
 - **ADR-217** — dejar la entrada de un registro en `main` condicionada (sin prueba que lo haga cumplir: ninguna prueba: la condición vivía en prosa de un documento).
@@ -543,7 +545,7 @@ nada por su cuenta. «Sin fecha declarada» es un aviso, no un dato.
 
 ### `docs/audits`
 
-**141 documentos**, 82 sin fecha declarada; el más reciente declara 2026-10-01.
+**142 documentos**, 83 sin fecha declarada; el más reciente declara 2026-10-01.
 Es la carpeta de la evidencia y crece a dos filas por ADR, así que la fila
 de cada documento vive en un índice generado aparte,
 [`docs/audits/INDICE.md`](docs/audits/INDICE.md), que escribe el
