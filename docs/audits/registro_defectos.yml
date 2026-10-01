@@ -1249,7 +1249,7 @@ defectos:
     bloque: documentacion
     gravedad: media
     estado: cerrado
-    cerrado_por: 974298ca256a059d797ea7dd82f1e87358c8f51b
+    cerrado_por: a4d6a2eae817753052957cbc76ab325e237d8fe9
     pr: 672
     adr: 225
     ficheros:
@@ -1257,4 +1257,7 @@ defectos:
       - src/sirius_engine/seven_day_streak_cli.py
       - src/sirius_engine/projection_verifier.py
       - docs/evolution/STATUS.md
+      - docs/implementation/bloques_del_motor.yml
+      - docs/implementation/SIRIUS_WORK_ENGINE_PLAN_IMPLEMENTACION.md
+      - tests/automation/test_reflejar_desenlace_github.py
 
