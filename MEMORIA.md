@@ -79,6 +79,7 @@ huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| [224](docs/decisions/ADR-224-quality-no-muere-por-un-uv-sync-sin-cache-los-dos-pasos-largos-llevan-plazo-propio-y-el-job-sube-de-20-a-60-minutos.md) | 2026-10-01 | APROBADO | Quality no muere por un `uv sync` sin caché: los dos pasos largos llevan plazo propio y el job sube de 20 a 60 minutos | En `.github/workflows/quality.yml`: el job pasa de `timeout-minutes: 20` a 60; «Sync environment» lleva `timeout-minutes: 20` (peor medido sin caché: |
 | [222](docs/decisions/ADR-222-un-defecto-cerrado-lleva-la-pr-que-lo-fusiono-la-referencia-que-un-clon-de-main-puede-seguir.md) | 2026-10-01 | APROBADO | Un defecto cerrado lleva la PR que lo fusionó: la referencia que un clon de `main` puede seguir | Desde este ADR, un defecto `cerrado` lleva, además de `cerrado_por`, `pr: <número de la PR que lo fusiona>`; si lo cerró un encargo del motor, cuya PR la abre el workflow al terminar el run, basta `incidencia: <número>`, que ya es un campo… |
 | [221](docs/decisions/ADR-221-la-puerta-de-activacion-resuelve-el-perfil-con-el-mismo-resolutor-que-el-implementador-y-avisa-si-la-version-no-es-la-vigente.md) | 2026-10-01 | APROBADO | La puerta de activación resuelve el `Perfil: rol@N` con el mismo resolutor que el implementador, y avisa si la versión no es la vigente | La puerta gana el paso 4: con el cuerpo ya leído, y solo para los roles del carril de ejecución del manifiesto (hoy `implementer` y `documentalista`, leídos del propio manifiesto, no escritos aquí), ejecuta `resolver_prompt.py --carril… |
 | [220](docs/decisions/ADR-220-la-cola-regenera-las-vistas-de-la-memoria-al-traer-la-base-y-resuelve-sola-el-conflicto-que-solo-esta-en-ellas.md) | 2026-10-01 | APROBADO | La cola regenera las vistas de la memoria al traer la base, y resuelve sola el conflicto que solo está en ellas | La puesta al día pasa a dos jobs nuevos, `regenerar` y `empujar`, que arrancan con las salidas del paso «Advance matching Sirius work item» (`ponerse_al_dia`, `rama`, `base`, `incidencia`): `regenerar`, sin ningún secreto y de solo lectura… |
@@ -328,6 +329,7 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 | `guarda-medida-que-se-queda-sin-autoridad-porque-nadie-relee-la-medida` | 1 | sí | 199 |
 | `instrumento-que-solo-mide-un-lado` | 1 | sí | 203 |
 | `interruptor-que-enciende-mas-de-lo-que-se-puede-medir` | 1 | sí | 185 |
+| `paso-largo-sin-plazo-propio` | 1 | sí | 224 |
 | `pieza-correcta-a-la-que-no-llama-quien-la-necesita` | 1 | sí | 197 |
 | `plan-que-hay-que-terminar-de-una-sentada` | 1 | sí | 176 |
 | `pregunta-al-propietario-que-nadie-vuelve-a-poner-delante` | 1 | no en todas | 198 |
@@ -436,6 +438,10 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 ### `interruptor-que-enciende-mas-de-lo-que-se-puede-medir`
 
 - **ADR-185** — poner una sola puerta delante de varias piezas (lo hace cumplir `tests/unit/test_composition_root_relevance_gate.py`).
+
+### `paso-largo-sin-plazo-propio`
+
+- **ADR-224** — dejar que el tope del job sea el único plazo de un paso que depende de la red, y descubrirlo en una cancelación muda que no guarda caché y se repite sola; es la misma lección que el paso de `apt` dejó escrita el 19-08, aplicada esta vez a los dos pasos que quedaban. (lo hace cumplir `tests/automation/test_quality_no_muere_por_un_sync_lento.py`).
 
 ### `pieza-correcta-a-la-que-no-llama-quien-la-necesita`
 
