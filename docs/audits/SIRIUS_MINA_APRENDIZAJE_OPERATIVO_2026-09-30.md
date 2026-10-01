@@ -503,8 +503,13 @@ la deje escrita.
   final de mes sigue siendo la dominante en los dos cauces. **Este dato
   responde a la propuesta 5 de la edición anterior: F1 no cedió.**
 - **F2 — La corrección de una ronda abre el siguiente hueco del mismo
-  mecanismo.** Las 14 incidencias en las que el detector de hoy marca familia
-  (§4.3) son F2 por definición; 13 en la primera quincena, #653 en la segunda.
+  mecanismo.** Son F2 las familias que §4 da por reales: los 9 casos avisados
+  (§4.1, 9 ACERTADO) y los 9 tramos sin aviso de §4.3 que no son el falso
+  positivo #566. En incidencias, 13 de las 14 que el detector marca (#566
+  fuera): 12 en la primera quincena, #653 en la segunda. Marcar tres rondas
+  sobre el mismo fichero no demuestra por sí solo que cada corrección abriera
+  el siguiente hueco; lo demuestra la clasificación caso a caso de §4.1 y la
+  edición del 14-09 para los tramos sin aviso.
 - **F5 — Afirmar lo que hace un mecanismo sin ejecutarlo ni leer su regla de
   rechazo.** Nueva como nombre, no como hecho: la bitácora la cuenta desde el
   08-09 (entradas 54, 59, 80, 83, 98: «premisas falsas escritas de memoria»)
