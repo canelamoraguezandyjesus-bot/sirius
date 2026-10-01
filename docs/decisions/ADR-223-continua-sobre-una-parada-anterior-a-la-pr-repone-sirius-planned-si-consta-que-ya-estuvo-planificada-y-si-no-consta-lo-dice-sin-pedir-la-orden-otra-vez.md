@@ -1,4 +1,4 @@
-# ADR-223 — `continua` sobre una parada anterior a la PR repone `sirius:planned` si consta que una persona la aplicó, y si no consta lo dice sin pedir la orden otra vez
+# ADR-223 — `continua` sobre una parada anterior a la PR repone `sirius:planned` si consta que ya estuvo planificada, y si no consta lo dice sin pedir la orden otra vez
 
 - Estado: APROBADO
 - Fecha: 2026-10-01
@@ -40,7 +40,7 @@ al pie de la letra (no añadía `planned`) y Codex mostró en la ronda 1 de la P
 repetir la orden**, contra una regla suya de `AGENTS.md` («No pidas repetir una
 acción ya realizada»). El criterio se cambia aquí y se dice: el reinicio sí
 repone `sirius:planned`, pero **solo cuando consta en la cronología de la
-incidencia que una persona la aplicó antes**; nunca la inventa. Lo demás del
+incidencia que ya estuvo planificada**; nunca la inventa. Lo demás del
 criterio se conserva.
 
 ## Opciones consideradas
@@ -56,14 +56,21 @@ criterio se conserva.
    primera versión de este ADR; Codex la tumbó en la ronda 1 de la PR #671:
    pide dos veces lo mismo (`AGENTS.md`), y una orden que no se atiende sin
    repetirla es la mitad de la parada muda que este ADR venía a quitar.
-4. **Que el reinicio reponga `planned` solo si consta que una persona la
-   aplicó antes** (la cronología de etiquetas de la incidencia: el motor
-   nunca aplica `sirius:planned`, así que cualquier `labeled` con ella es una
-   decisión humana que la activación consumió), **y si no consta, lo diga sin
-   pedir la orden otra vez**. Esta. Con dos gestos humanos escritos —la
-   planificación que hubo y la orden `continua`, que solo acepta del
-   propietario— reponer la etiqueta no inventa ninguna aprobación: devuelve
-   la que la máquina consumió.
+4. **Que el reinicio reponga `planned` solo si consta que la incidencia ya
+   estuvo planificada** (la cronología de etiquetas: un `labeled
+   sirius:planned`, lo haya puesto una persona a mano, el formulario de
+   incidencias al abrirla una persona, o el despachador, que la pone como
+   etiqueta inicial de toda incidencia que crea y solo crea con una orden del
+   propietario enlazada, contrato §12.1), **y si no consta, lo diga sin pedir
+   la orden otra vez**. Esta. Con la planificación que hubo y la orden
+   `continua`, que solo acepta del propietario, reponer la etiqueta no
+   inventa ninguna aprobación: devuelve la que la máquina consumió para
+   repetir la misma activación. La primera versión de este punto decía que el
+   motor nunca aplica `sirius:planned` y que por tanto todo `labeled` era una
+   decisión humana; era falso (`dispatcher.py`, `ETIQUETA_INICIAL`; la
+   plantilla `.github/ISSUE_TEMPLATE/sirius-work-item.yml`) y lo cazó Codex
+   en la ronda 3 de la PR #671. La regla no cambia; lo que cambia es lo que
+   se afirma de ella, en el guion, en la nota del reinicio y aquí.
 
 ## Decisión
 
@@ -101,7 +108,7 @@ publicar un comentario. Los
 casos existentes de reinicio sin PR siembran `sirius:planned`, porque sin él
 nunca pudieron reanudar de verdad; y seis pruebas de este ADR:
 
-- `test_una_parada_sin_pr_sin_planned_repone_planned_si_consta_que_una_persona_la_aplico`:
+- `test_una_parada_sin_pr_sin_planned_repone_planned_si_consta_que_ya_estuvo_planificada`:
   cronología con un `labeled sirius:planned` → `planned` y el evento repuestos
   (en ese orden), la parada retirada, el reinicio en verde dice que la repuso,
   y no hay aviso de falta.
@@ -115,17 +122,25 @@ nunca pudieron reanudar de verdad; y seis pruebas de este ADR:
   API de eventos falla → el run falla, nada se repone, nada se publica.
 - `test_una_parada_sin_pr_con_planned_se_reanuda_y_conserva_planned` (y no
   menciona ninguna reposición).
+- `test_una_incidencia_planificada_por_el_despachador_tambien_repone_planned`
+  (ronda 3 de Codex): con `planned` puesta por el despachador la reposición
+  es la misma, y la nota no afirma quién la puso.
+- El aviso de «nunca planificada» da los pasos **en el orden que la puerta
+  necesita**: retirar la parada, aplicar `planned` y, en último lugar,
+  `implement-requested` (ronda 3 de Codex: cada etiqueta es un evento aparte,
+  la puerta arranca con la última y rechaza una parada que siga puesta; la
+  primera versión decía «a la vez», que una persona no puede hacer).
 
 **Mutaciones** (cada una aplicada sobre el guion, la prueba ejecutada, el
 fichero restaurado):
 
 | | Mutación | Resultado |
 |---|---|---|
-| M1 | el reinicio deja de mirar `planned` | cae `una_parada_sin_pr_sin_planned_repone_planned_si_consta_que_una_persona_la_aplico`, `una_parada_sin_pr_nunca_planificada_no_anuncia_en_verde_ni_pide_la_orden_otra_vez` |
+| M1 | el reinicio deja de mirar `planned` | cae `una_parada_sin_pr_sin_planned_repone_planned_si_consta_que_ya_estuvo_planificada`, `una_parada_sin_pr_nunca_planificada_no_anuncia_en_verde_ni_pide_la_orden_otra_vez` |
 | M2 | el aviso de «nunca planificada» consume la parada | cae `una_parada_sin_pr_nunca_planificada_no_anuncia_en_verde_ni_pide_la_orden_otra_vez` |
 | M3 | con `planned` presente el reinicio deja de reponer la fase | cae `una_parada_sin_pr_reactiva_la_fase_que_se_paro`, `una_parada_sin_pr_NO_manda_el_trabajo_al_corrector`, `un_implementador_bloqueado_sin_pr_repite_su_fase_desde_cero` |
 | M4 | reponer `planned` sin mirar la cronología | cae `una_parada_sin_pr_nunca_planificada_no_anuncia_en_verde_ni_pide_la_orden_otra_vez` |
-| M5 | no reponer `planned` aunque conste que una persona la aplicó | cae `una_parada_sin_pr_sin_planned_repone_planned_si_consta_que_una_persona_la_aplico` |
+| M5 | no reponer `planned` aunque conste que ya estuvo planificada | cae `una_parada_sin_pr_sin_planned_repone_planned_si_consta_que_ya_estuvo_planificada` |
 | M6 | un aviso que no se puede publicar no hace fallar el run | cae `si_el_aviso_de_sin_planned_no_se_puede_publicar_el_run_falla` |
 | M7 | una cronología que no se puede leer cuenta como «nunca planificada» | cae `si_la_cronologia_no_se_puede_leer_el_run_falla_sin_concluir_nada` |
 
@@ -134,8 +149,8 @@ fichero restaurado):
 
 ## Consecuencias
 
-- Un `continua` sobre una parada pre-PR de una incidencia que una persona
-  planificó **reanuda de verdad con una sola orden**; antes la dejaba sin
+- Un `continua` sobre una parada pre-PR de una incidencia que ya estuvo
+  planificada **reanuda de verdad con una sola orden**; antes la dejaba sin
   etiquetas y en silencio, y la primera versión de este ADR la dejaba parada
   con deberes para el propietario.
 - La autorización queda escrita en la incidencia: el reinicio en verde dice que

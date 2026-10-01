@@ -788,16 +788,29 @@ PLANIFICADA_POR_UNA_PERSONA: list[dict[str, Any]] = [
     {"event": "unlabeled", "label": {"name": "sirius:planned"}, "actor": {"login": "sirius-motor"}},
 ]
 
+#: La misma cronologia cuando la incidencia la creo el despachador: `planned` es
+#: su etiqueta inicial (`dispatcher.py`, ETIQUETA_INICIAL) y la pone con la
+#: identidad del motor, bajo una orden del propietario enlazada (§12.1).
+PLANIFICADA_POR_EL_DESPACHADOR: list[dict[str, Any]] = [
+    {"event": "labeled", "label": {"name": "sirius:planned"}, "actor": {"login": "sirius-motor"}},
+    {
+        "event": "labeled",
+        "label": {"name": "sirius:implement-requested"},
+        "actor": {"login": "sirius-motor"},
+    },
+    {"event": "unlabeled", "label": {"name": "sirius:planned"}, "actor": {"login": "sirius-motor"}},
+]
 
-def test_una_parada_sin_pr_sin_planned_repone_planned_si_consta_que_una_persona_la_aplico(
+
+def test_una_parada_sin_pr_sin_planned_repone_planned_si_consta_que_ya_estuvo_planificada(
     tmp_path: Path,
 ) -> None:
     """Entrada 126 de la bitacora: 3 de los 9 reinicios sin PR de septiembre acabaron
     con la incidencia sin ninguna etiqueta, porque la puerta rechazo `sin-planned`
-    el reinicio que el guion acababa de anunciar en verde. Las tres habian sido
-    planificadas por una persona y la activacion consumio la etiqueta: el
-    `continua` del propietario la devuelve (ronda 1 de Codex en la PR #671:
-    pedirle que la aplique y repita la orden era pedir dos veces lo mismo)."""
+    el reinicio que el guion acababa de anunciar en verde. Las tres ya estaban
+    planificadas y la activacion consumio la etiqueta: el `continua` del
+    propietario la devuelve (ronda 1 de Codex en la PR #671: pedirle que la
+    aplique y repita la orden era pedir dos veces lo mismo)."""
     env = _setup(tmp_path)
     _sembrar(
         env,
@@ -813,11 +826,41 @@ def test_una_parada_sin_pr_sin_planned_repone_planned_si_consta_que_una_persona_
     assert "sirius:failed-safely" not in etiquetas
     publicado = _comentarios(env)
     assert "sirius-restart-sin-pr" in publicado and "Repongo también `sirius:planned`" in publicado
+    assert "ya estuvo planificada" in publicado and "una persona la aplicó" not in publicado, (
+        "la nota dice lo que la cronologia demuestra (que estuvo planificada), no quien la puso"
+    )
     assert "sirius-resume-sin-planned" not in publicado
     acciones = (_md(env) / "actions.log").read_text(encoding="utf-8").splitlines()
     assert acciones.index("ADD sirius:planned") < acciones.index(
         "ADD sirius:implement-requested"
     ), "`planned` antes que el evento: la puerta tiene que encontrarla puesta"
+
+
+def test_una_incidencia_planificada_por_el_despachador_tambien_repone_planned(
+    tmp_path: Path,
+) -> None:
+    """Ronda 3 de Codex en la PR #671: `sirius:planned` no la pone solo una
+    persona a mano; la pone el formulario de incidencias y la pone el
+    despachador como etiqueta inicial de toda incidencia que crea, siempre con
+    una orden del propietario enlazada. Lo que justifica reponerla no es quien
+    la puso, sino que la incidencia ESTUVO planificada y la activacion la
+    consumio; con el `continua` del propietario se repite esa activacion."""
+    env = _setup(tmp_path)
+    _sembrar(
+        env,
+        etiquetas=["sirius:failed-safely"],
+        historial=_historial_sin_pr("<!-- sirius-verdict:implementer:FAILED_SAFELY:1 -->"),
+        eventos=PLANIFICADA_POR_EL_DESPACHADOR,
+    )
+    resultado = _ejecutar(env)
+
+    assert resultado.returncode == 0, resultado.stderr
+    etiquetas = _etiquetas(env)
+    assert "sirius:planned" in etiquetas and "sirius:implement-requested" in etiquetas
+    assert "sirius:failed-safely" not in etiquetas
+    publicado = _comentarios(env)
+    assert "Repongo también `sirius:planned`" in publicado
+    assert "despachador" in publicado and "una persona la aplicó" not in publicado
 
 
 def test_una_parada_sin_pr_nunca_planificada_no_anuncia_en_verde_ni_pide_la_orden_otra_vez(
@@ -847,6 +890,13 @@ def test_una_parada_sin_pr_nunca_planificada_no_anuncia_en_verde_ni_pide_la_orde
     assert "sirius-restart-sin-pr" not in publicado, "no se anuncia en verde lo que no se hace"
     assert "vuelve a escribir" not in publicado and "escribe **continua**" not in publicado, (
         "no se pide repetir una orden ya dada (AGENTS.md)"
+    )
+
+    # Ronda 3 de Codex: los pasos van en el orden que la puerta necesita, con
+    # el evento en ultimo lugar; «a la vez» no lo puede hacer una persona.
+    assert publicado.index("retira `sirius:") < publicado.index("aplica `sirius:planned`")
+    assert publicado.index("aplica `sirius:planned`") < publicado.index(
+        "en último lugar, `sirius:implement-requested`"
     )
 
 
@@ -885,7 +935,7 @@ def test_si_el_aviso_de_sin_planned_no_se_puede_publicar_el_run_falla(tmp_path: 
 
 
 def test_si_la_cronologia_no_se_puede_leer_el_run_falla_sin_concluir_nada(tmp_path: Path) -> None:
-    """Sin cronología no se sabe si una persona planificó: ni se repone `planned`
+    """Sin cronología no se sabe si ya estuvo planificada: ni se repone `planned`
     ni se publica «nunca planificada» (sería una conclusión falsa); el run queda
     rojo y reintentable (ronda 2 de Codex en la PR #671)."""
     env = _setup(tmp_path)

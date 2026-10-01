@@ -335,12 +335,18 @@ fi
 # consumio. Reponer solo el evento anunciaba en verde un reinicio que la puerta
 # rechazaba en segundos y dejaba la incidencia sin ninguna etiqueta: 3 de los 9
 # reinicios sin PR de septiembre de 2026 (#545, #581, #653). Aqui se mira antes
-# (ADR-223). La puerta no repone `planned` por su cuenta (#60): planificar es
-# un gesto humano. Pero el motor NUNCA aplica `sirius:planned`, asi que un
-# `labeled` con esa etiqueta en la cronologia de la incidencia es una decision
-# humana ya tomada, y la orden `continua` (solo del propietario) es otra: con
-# las dos, reponer `planned` junto al evento no inventa ninguna aprobacion,
-# devuelve la que la maquina consumio. Pedirle que la aplique y repita la
+# (ADR-223). La puerta no repone `planned` por su cuenta (#60): planificar
+# no es cosa suya. `sirius:planned` la ponen tres manos, y las tres son
+# legitimas: una persona a mano, el formulario de incidencias (lo rellena una
+# persona) y el despachador, que solo crea incidencias con una orden del
+# propietario enlazada (contrato §12.1, `dispatcher.py`). Lo que un `labeled
+# sirius:planned` en la cronologia demuestra no es QUIEN la puso, sino que la
+# incidencia ESTUVO planificada y que la activacion la consumio (la primera
+# version de este texto decia que el motor nunca la aplica; era falso y lo cazo
+# Codex en la ronda 3 de la PR #671). Con eso y la orden `continua` (solo del
+# propietario), reponer `planned` junto al evento no inventa ninguna
+# aprobacion: devuelve la que la maquina consumio para repetir la misma
+# activacion. Pedirle que la aplique y repita la
 # orden seria pedir dos veces lo mismo (AGENTS.md; ronda 1 de Codex en la PR
 # #671). Si NO consta que nadie la planificara, no hay nada que devolver: se
 # dice, y lo que se le pide es la activacion misma, no la orden otra vez.
@@ -352,7 +358,7 @@ if [ "$sin_pr" = "true" ] && [ "$etiqueta_destino" = "sirius:implement-requested
   # incidencia); el run queda rojo y reintentable (ronda 2 de Codex).
   if ! eventos_planned="$(sirius_retry gh api "repos/${REPO}/issues/${ISSUE}/events" --paginate \
       --jq '[.[] | select(.event == "labeled" and .label.name == "sirius:planned")] | length' 2>/dev/null)"; then
-    echo "::error::No se pudo leer la cronologia de #${ISSUE} para saber si una persona la planifico; no se toca nada. Reintentable."
+    echo "::error::No se pudo leer la cronologia de #${ISSUE} para saber si ya estuvo planificada; no se toca nada. Reintentable."
     exit 1
   fi
   veces_planificada="$(printf '%s\n' "$eventos_planned" | awk '{ s += $1 } END { print s + 0 }')"
@@ -364,8 +370,8 @@ if [ "$sin_pr" = "true" ] && [ "$etiqueta_destino" = "sirius:implement-requested
     printf '%s\n\n%s\n\n%s\n\n%s\n' \
       "$marker" \
       "🛑 **No he reanudado: esta incidencia nunca tuvo \`sirius:planned\`**" \
-      "Esta incidencia se detuvo antes de producir rama ni PR, así que reanudarla es volver a activarla, y la activación exige \`sirius:planned\` junto a \`sirius:implement-requested\`. En su cronología no consta que ninguna persona la haya planificado, y planificarla es una decisión humana que no puedo tomar por ti. Si repusiera solo \`implement-requested\`, la puerta lo rechazaría en segundos y la incidencia quedaría sin ninguna etiqueta." \
-      "**Qué hace falta:** cuando la des por planificada, aplícale a la vez \`sirius:planned\` y \`sirius:implement-requested\` y retira \`${parada}\`: eso es la activación, y no hace falta repetir la orden. Hasta entonces la parada (\`${parada}\`) se conserva." >"$aviso_file"
+      "Esta incidencia se detuvo antes de producir rama ni PR, así que reanudarla es volver a activarla, y la activación exige \`sirius:planned\` junto a \`sirius:implement-requested\`. En su cronología no consta que haya estado planificada nunca (ni a mano, ni por el formulario, ni por el despachador con una orden tuya enlazada), y planificarla es una decisión que no puedo tomar por ti. Si repusiera solo \`implement-requested\`, la puerta lo rechazaría en segundos y la incidencia quedaría sin ninguna etiqueta." \
+      "**Qué hace falta:** cuando la des por planificada, en este orden: retira \`${parada}\`, aplica \`sirius:planned\` y, en último lugar, \`sirius:implement-requested\`. Cada etiqueta es un evento aparte y la puerta de activación arranca con la última, así que tiene que encontrar las otras dos ya en su sitio. Eso es la activación, y no hace falta repetir la orden. Hasta entonces la parada (\`${parada}\`) se conserva." >"$aviso_file"
     if ! sirius_comment_once "$REPO" "$ISSUE" "$marker" "$aviso_file"; then
       rm -f "$aviso_file"
       echo "::error::No se pudo publicar el aviso de falta de planned en #${ISSUE}; la parada se conserva y la orden no se ha atendido. Reintentable."
@@ -386,7 +392,7 @@ if [ "$sin_pr" = "true" ]; then
   marker="<!-- sirius-restart-sin-pr:${ISSUE}:${GITHUB_RUN_ID:-manual}-${GITHUB_RUN_ATTEMPT:-1} -->"
   nota_planned=""
   if [ "$reponer_planned" = "true" ]; then
-    nota_planned="Repongo también \`sirius:planned\`: consta en la cronología que una persona la aplicó (${veces_planificada} vez/veces) y la primera activación la consumió; tu **continua** reactiva esa misma planificación, que la puerta de activación exige junto al evento (ADR-223)."
+    nota_planned="Repongo también \`sirius:planned\`: consta en su cronología que ya estuvo planificada (la etiqueta se aplicó ${veces_planificada} vez/veces: a mano, por el formulario o por el despachador con tu orden enlazada) y la primera activación la consumió; tu **continua** repite esa misma activación, que la puerta exige con \`planned\` junto al evento (ADR-223)."
   fi
   printf '%s\n\n%s\n\n%s\n\n%s\n%s' \
     "$marker" \
