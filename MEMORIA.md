@@ -26,13 +26,13 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **216**.
+- Decisiones (ADR): **217**.
 - Bloques del motor: 17 cerrado, 2 fuera_de_alcance, 1 pendiente.
-- Defectos registrados: 3 abierto, 71 cerrado.
+- Defectos registrados: 3 abierto, 72 cerrado.
 - Ideas aparcadas o descartadas: 5 aparcada, 2 descartada, 2 promovida.
 - Skills: **19**.
 - Investigaciones: **10** (fotos con fecha; caducan).
-- Documentos: **198**, de los que **137** no declaran fecha.
+- Documentos: **199**, de los que **137** no declaran fecha.
 
 ## Las skills: lo que ya costó averiguar dos veces (ADR-211)
 
@@ -80,6 +80,7 @@ huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
 | [226](docs/decisions/ADR-226-cuando-codex-declara-que-no-revisa-y-claude-pidio-cambios-la-ronda-entrega-los-hallazgos-de-claude-en-vez-de-tirarlos.md) | 2026-10-01 | APROBADO | Cuando Codex declara que no revisa y Claude pidió cambios, la ronda entrega los hallazgos de Claude en vez de tirarlos | En `scripts/automation/sirius_aggregate_reviews.py`: Las razones con las que el recolector dice que el conector declaró que |
+| [224](docs/decisions/ADR-224-quality-no-muere-por-un-uv-sync-sin-cache-los-dos-pasos-largos-llevan-plazo-propio-y-el-job-sube-de-20-a-60-minutos.md) | 2026-10-01 | APROBADO | Quality no muere por un `uv sync` sin caché: los dos pasos largos llevan plazo propio y el job sube de 20 a 60 minutos | En `.github/workflows/quality.yml`: el job pasa de `timeout-minutes: 20` a 60; «Sync environment» lleva `timeout-minutes: 20` (peor medido sin caché: |
 | [222](docs/decisions/ADR-222-un-defecto-cerrado-lleva-la-pr-que-lo-fusiono-la-referencia-que-un-clon-de-main-puede-seguir.md) | 2026-10-01 | APROBADO | Un defecto cerrado lleva la PR que lo fusionó: la referencia que un clon de `main` puede seguir | Desde este ADR, un defecto `cerrado` lleva, además de `cerrado_por`, `pr: <número de la PR que lo fusiona>`; si lo cerró un encargo del motor, cuya PR la abre el workflow al terminar el run, basta `incidencia: <número>`, que ya es un campo… |
 | [220](docs/decisions/ADR-220-la-cola-regenera-las-vistas-de-la-memoria-al-traer-la-base-y-resuelve-sola-el-conflicto-que-solo-esta-en-ellas.md) | 2026-10-01 | APROBADO | La cola regenera las vistas de la memoria al traer la base, y resuelve sola el conflicto que solo está en ellas | La puesta al día pasa a dos jobs nuevos, `regenerar` y `empujar`, que arrancan con las salidas del paso «Advance matching Sirius work item» (`ponerse_al_dia`, `rama`, `base`, `incidencia`): `regenerar`, sin ningún secreto y de solo lectura… |
 | [219](docs/decisions/ADR-219-el-motor-dice-lo-que-hace-el-veredicto-nombra-su-pr-el-aviso-de-listo-no-pide-una-autorizacion-que-ya-no-necesita-y-una-casi-orden-recibe-respuesta.md) | 2026-10-01 | APROBADO | El motor dice lo que hace: el veredicto nombra su PR, el aviso de «listo» no pide una autorización que ya no necesita y una casi-orden recibe respuesta | `sirius_apply_verdict.sh` publica la línea con `printf '%s\n' "- PR: …"`: el texto va como argumento, nunca como formato. Vale para los dos caminos del veredicto (con y sin familia repetida). El aviso de `ready-for-merge`… |
@@ -329,6 +330,7 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 | `instrumento-que-solo-mide-un-lado` | 1 | sí | 203 |
 | `interruptor-que-enciende-mas-de-lo-que-se-puede-medir` | 1 | sí | 185 |
 | `parada-segura-que-tira-lo-ya-pagado` | 1 | sí | 226 |
+| `paso-largo-sin-plazo-propio` | 1 | sí | 224 |
 | `pieza-correcta-a-la-que-no-llama-quien-la-necesita` | 1 | sí | 197 |
 | `plan-que-hay-que-terminar-de-una-sentada` | 1 | sí | 176 |
 | `pregunta-al-propietario-que-nadie-vuelve-a-poner-delante` | 1 | no en todas | 198 |
@@ -441,6 +443,10 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 
 - **ADR-226** — tratar toda parada de un revisor como pérdida del veredicto del otro, aunque el que para haya declarado que no va a revisar y el otro ya haya entregado hallazgos pagados; la asimetría que protege (no aprobar sin los dos) se conserva sin tirar el trabajo hecho. (lo hace cumplir `tests/automation/test_sirius_aggregate_reviews.py`).
 
+### `paso-largo-sin-plazo-propio`
+
+- **ADR-224** — dejar que el tope del job sea el único plazo de un paso que depende de la red, y descubrirlo en una cancelación muda que no guarda caché y se repite sola; es la misma lección que el paso de `apt` dejó escrita el 19-08, aplicada esta vez a los dos pasos que quedaban. (lo hace cumplir `tests/automation/test_quality_no_muere_por_un_sync_lento.py`).
+
 ### `pieza-correcta-a-la-que-no-llama-quien-la-necesita`
 
 - **ADR-197** — dos piezas del mismo árbol leen la misma clase de dato (lo hace cumplir `tests/engine/test_round_family_detector.py`).
@@ -543,7 +549,7 @@ nada por su cuenta. «Sin fecha declarada» es un aviso, no un dato.
 
 ### `docs/audits`
 
-**141 documentos**, 83 sin fecha declarada; el más reciente declara 2026-10-01.
+**142 documentos**, 83 sin fecha declarada; el más reciente declara 2026-10-01.
 Es la carpeta de la evidencia y crece a dos filas por ADR, así que la fila
 de cada documento vive en un índice generado aparte,
 [`docs/audits/INDICE.md`](docs/audits/INDICE.md), que escribe el
