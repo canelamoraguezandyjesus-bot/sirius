@@ -24,6 +24,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Final
 
+from sirius.domain.instantes import comparable
 from sirius.domain.staged_engine_contracts import (
     AMBITO_GLOBAL,
     AMBITO_MULTIPROYECTO,
@@ -228,16 +229,28 @@ def _g8(candidata: Candidata, peticion: Peticion) -> VeredictoDePuerta:
 
     Sin ``valid_from``/``valid_to`` declarados, la puerta degrada al corte
     de registro únicamente.
+
+    Los instantes llegan como cadenas y en dos formas (el ``str(datetime)``
+    de SQLite y el ISO con ``T`` y ``Z`` del corpus); compararlas por orden
+    léxico ordenaba mal en la frontera. Desde ADR-229 cada lado se lleva a la
+    forma canónica (:func:`sirius.domain.instantes.comparable`) antes de
+    comparar: el orden léxico vuelve a ser el cronológico sea cual sea la
+    escritura, y un texto que no es un instante se compara como antes.
     """
     corte = peticion.ventana.corte_de_registro
-    if corte is not None and candidata.item.created_at > corte:
+    registrado = comparable(candidata.item.created_at)
+    if corte is not None and registrado > comparable(corte):
         return VeredictoDePuerta("G8", False, "posterior al corte de registro")
 
-    objetivo = peticion.ventana.tiempo_objetivo
+    objetivo = comparable(peticion.ventana.tiempo_objetivo)
     ejes = candidata.item.ejes
-    if ejes.valid_from is not None and ejes.valid_from > objetivo:
+    if ejes.valid_from is not None and comparable(ejes.valid_from) > objetivo:
         return VeredictoDePuerta("G8", False, "aun no vigente en el tiempo objetivo")
-    if ejes.valid_to is not None and ejes.valid_to <= objetivo and not peticion.admite_no_vigentes:
+    if (
+        ejes.valid_to is not None
+        and comparable(ejes.valid_to) <= objetivo
+        and not peticion.admite_no_vigentes
+    ):
         return VeredictoDePuerta("G8", False, "vigencia expirada en el tiempo objetivo")
     return VeredictoDePuerta("G8", True, "")
 
