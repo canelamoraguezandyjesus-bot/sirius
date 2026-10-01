@@ -398,6 +398,48 @@ def test_la_orden_tiene_que_ser_exacta(tmp_path: Path) -> None:
     assert _etiquetas(env) == ["sirius:failed-safely"]
 
 
+def test_una_orden_casi_exacta_avisa_en_vez_de_callar(tmp_path: Path) -> None:
+    """Entrada 29 de la bitácora del ciclo (04-09-2026): un `continua` con un
+    párrafo de decisión detrás salía con «no es la orden exacta» solo en el log
+    del run, y el propietario esperó diez minutos a ciegas. Quien escribe la
+    palabra quería reanudar: se le dice qué faltó, una vez por comentario, y no
+    se toca nada.
+    """
+    env = _setup(tmp_path)
+    _sembrar(
+        env,
+        etiquetas=["sirius:failed-safely"],
+        historial=_historial(f"<!-- sirius-verdict:reviewer:FAILED_SAFELY:{HEAD} -->"),
+    )
+    resultado = _ejecutar(env, orden="continua, y la decisión es la opción B porque es la barata")
+    assert resultado.returncode == 0, resultado.stderr
+    assert _etiquetas(env) == ["sirius:failed-safely"]
+    publicado = _comentarios(env)
+    assert "sirius-resume-not-an-order" in publicado, (
+        "la orden casi exacta sigue muriendo en silencio: nadie en la incidencia sabe que "
+        "no se actuó"
+    )
+    assert "**continua**" in publicado, "el aviso tiene que decir cuál es la orden exacta"
+
+
+def test_un_comentario_que_no_es_una_orden_sigue_sin_respuesta(tmp_path: Path) -> None:
+    """El aviso es para quien intentó dar la orden, no para cualquier comentario:
+    una conversación normal en una incidencia parada no recibe respuestas
+    automáticas, y el propio aviso no puede volver a disparar un aviso.
+    """
+    env = _setup(tmp_path)
+    _sembrar(
+        env,
+        etiquetas=["sirius:failed-safely"],
+        historial=_historial(f"<!-- sirius-verdict:reviewer:FAILED_SAFELY:{HEAD} -->"),
+    )
+    antes = _comentarios(env)
+    resultado = _ejecutar(env, orden="He leído el diagnóstico; mañana decido si continuamos.")
+    assert resultado.returncode == 0, resultado.stderr
+    assert _comentarios(env) == antes
+    assert _etiquetas(env) == ["sirius:failed-safely"]
+
+
 def test_la_orden_vale_aunque_lleve_la_firma_que_anade_la_herramienta(tmp_path: Path) -> None:
     """Una firma anexada por el servidor no puede invalidar la orden.
 
