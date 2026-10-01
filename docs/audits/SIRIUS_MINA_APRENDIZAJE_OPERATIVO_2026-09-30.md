@@ -100,6 +100,9 @@ ese orden, y no dependen de dónde viva el clon ni desde dónde se invoquen;
 cada cifra de este informe que no sea una lectura a mano sale de su salida, y la
 clasificación de falsos negativos tiene sus pruebas en
 `tests/automation/test_mina_falsos_negativos.py`.
+Repetir la cadena sobre el mismo `MINA_DATOS` refresca el volcado entero: los
+guiones de descarga sobrescriben los ficheros que ya existan, para no mezclar
+un índice nuevo con historiales viejos.
 **Comprobación del instrumento**: sobre la subventana 01→14-09 el guion devuelve
 exactamente lo que la edición anterior publicó —30 incidencias, 122 rondas,
 301 hallazgos—, así que las dos ediciones son comparables fila a fila.
@@ -301,6 +304,24 @@ tres, cinco y hasta cinco rondas seguidas (en #581, de la 5 a la 14 sobre el
 mismo ADR) sin que nadie volviera a avisar. Después del arreglo solo dos incidencias
 tuvieron rondas (#650, sin familia; #653, avisada en r4 y r5): **0 falsos
 negativos conocidos tras el 14-09**.
+
+Tres rondas sobre el mismo fichero no demuestran por sí solas una familia
+(#566 lo prueba), así que los tramos sin aviso se clasifican **caso a caso**.
+Seis los validó la edición del 14-09 (su §4.4: #523, los dos de #570, #574,
+#599 y #601); #566 es el falso positivo; y los tres que esta edición añade se
+validan aquí, leyendo las observaciones estructuradas de cada ronda en el
+volcado (lo cazó Codex en la ronda 7 de la revisión de este informe: la
+primera versión se los atribuía a la edición del 14-09, que no los vio):
+
+| Tramo | Lo que dicen las rondas (observaciones estructuradas del volcado) | Veredicto |
+|---|---|---|
+| #545 `reflect.py` (8-10) | r8 `CLAUDE-R9-001`: «Código NUEVO de la ronda 8 (commit d8553d7, corrección de CLAUDE-R8-002)», las afirmaciones nuevas sobre `_hay_una_parada_posterior_sin_aviso` no se sostienen; r9 `CLAUDE-R10-001` (P2): `_recorrer_historial_acreditado` pasa mal las paradas al ancla, y el revisor lo declara «LLEGA TARDE POR GOTEO DEL REVISOR… idénticas a las de la ronda 7»; r10 `CLAUDE-R11-001` (P1): «Código NUEVO de la corrección de la ronda 10 (commit 1b7c815…)», `_paradas_que_el_recorrido_debe_recrear` filtra con el predicado equivocado. Tres rondas sobre el mismo mecanismo —qué paradas recrea el recorrido acreditado tras ADR-157—; dos nacen de la corrección anterior y una es goteo declarado. | **familia real (F2)** |
+| #581 `ADR-177` (5-9) | r5 `CLAUDE-H4R6-001` (mayor): la sección «Validación obligatoria» la dejan falsa «dos commits NUEVOS» (traer main y regenerar MEMORIA); r6 `CLAUDE-H4R7-001` (mayor): el texto de la corrección anterior «lo falsificaron los dos commits que vinieron después»; r7 `CLAUDE-H4R8-001`: dos frases de la corrección de la r7, ciertas sobre su árbol, falsas tras «la TERCERA fusión»; r8 `CLAUDE-H4R9-002` y `CODEX-001`: las cifras de la sección 6 y un sha del `compare` que «nace de la evidencia añadida en esta corrección»; r9 `CODEX-001/002`: «Esta corrección vuelve falsa la clasificación…». Cada corrección ancla la prosa a un árbol que la fusión o la corrección siguiente cambian. | **familia real (F2)** |
+| #581 `ADR-177` (10-14) | r10 `CLAUDE-H4R10-003`: «en la misma familia que las rondas 6, 7 y 8 —`prosa-que-el-cambio-deja-falsa` sobre anclas caducadas»; `CLAUDE-H4R10-004`: «la familia de defecto de las rondas 9 y 10»; r11 `CODEX-001`: «nace de las líneas nuevas de esta corrección»; r12 `CLAUDE-H4R12-001`: «código NUEVO de la corrección de la ronda 12»; r13 `CLAUDE-H4R13-001` y `CODEX-001/002`: «nace de la prosa añadida en esta corrección», y el `compare` termina en el padre del commit revisado; r14 `CODEX-001/002`: «el compare vuelve a excluir el commit actual». El propio revisor nombra la familia y cada corrección repite el mecanismo: un ancla que se excluye a sí misma. | **familia real (F2)** |
+
+Nueve tramos reales y uno falso: las cifras de §8 (+9 familias reales, 1 falso
+positivo, neto +8) salen de esta clasificación y de la del 14-09, no de la
+señal estructural sola.
 
 Una diferencia con la edición anterior, y conviene decirla: aquella clasificó
 #566 como «no familia» (su tramo real eran dos rondas) y el detector de hoy
@@ -505,11 +526,11 @@ la deje escrita.
 - **F2 — La corrección de una ronda abre el siguiente hueco del mismo
   mecanismo.** Son F2 las familias que §4 da por reales: los 9 casos avisados
   (§4.1, 9 ACERTADO) y los 9 tramos sin aviso de §4.3 que no son el falso
-  positivo #566. En incidencias, 13 de las 14 que el detector marca (#566
-  fuera): 12 en la primera quincena, #653 en la segunda. Marcar tres rondas
-  sobre el mismo fichero no demuestra por sí solo que cada corrección abriera
-  el siguiente hueco; lo demuestra la clasificación caso a caso de §4.1 y la
-  edición del 14-09 para los tramos sin aviso.
+  positivo #566 (seis validados por la edición del 14-09 y tres en la tabla
+  de §4.3). En incidencias, 13 de las 14 que el detector marca (#566 fuera):
+  12 en la primera quincena, #653 en la segunda. Marcar tres rondas sobre el
+  mismo fichero no demuestra por sí solo que cada corrección abriera el
+  siguiente hueco; lo demuestra la clasificación caso a caso.
 - **F5 — Afirmar lo que hace un mecanismo sin ejecutarlo ni leer su regla de
   rechazo.** Nueva como nombre, no como hecho: la bitácora la cuenta desde el
   08-09 (entradas 54, 59, 80, 83, 98: «premisas falsas escritas de memoria»)
@@ -533,7 +554,7 @@ Mismo criterio de entrada que las ediciones anteriores y que la incidencia
 
 | Guardián | Aciertos reales | Falsos | Evidencia |
 |---|---|---|---|
-| El detector de familia repetida ya arreglado (14-09) | +9 familias reales sin aviso en su día (#523, #545, #570 ×2, #574, #581 ×2, #599, #601) y 13/13 avisos reproducidos | 1 (#566, por el criterio de la edición anterior) | §4.2, §4.3. Neto **+8**, medido tramo a tramo sobre el mes |
+| El detector de familia repetida ya arreglado (14-09) | +9 familias reales sin aviso en su día (#523, #545, #570 ×2, #574, #581 ×2, #599, #601; seis validadas el 14-09 y tres en la tabla de §4.3) y 13/13 avisos reproducidos | 1 (#566, por el criterio de la edición anterior) | §4.2, §4.3. Neto **+8**, medido tramo a tramo sobre el mes |
 | Comprobar `Perfil: rol@N` en `validate_issue_body.py` | 1 ciclo muerto a los 6 s (#653) y los encargos lanzados con `@2` no vigente | 0 por construcción: solo rechaza lo que el workflow iba a rechazar después | entradas 123, 124, 138; deudas 34, 35 |
 | Regenerar `MEMORIA.md` en la cola antes de empujar la combinación | 1 vuelta del corrector (25 min) en #653 | 0 | entrada 146; deuda 48 |
 | El guardián de goteo tal como está | 37 marcas en 15 incidencias | no medido: haría falta verificar cada marca contra el diff, el método de agosto | §3 |
