@@ -290,10 +290,11 @@ def _ahora_como_lo_declara_el_corpus(momento: datetime) -> str:
 
     Misma forma que la del tiempo objetivo interpretado
     (``ollama_query_intent_classifier._tiempo_objetivo``) y que la del corpus
-    que puebla ``valid_from``/``valid_to``, porque ``G8`` los compara como
-    CADENAS: con ``+00:00`` el veredicto se invertiría en la frontera exacta
-    (el ``+`` ordena antes que la ``Z``). No es cosmética, y por eso el
-    respaldo se alinea también y no solo la rama interpretada.
+    que puebla ``valid_from``/``valid_to``. Hasta ADR-229 era imprescindible:
+    ``G8`` comparaba cadenas y con ``+00:00`` el veredicto se invertía en la
+    frontera exacta (el ``+`` ordena antes que la ``Z``). Desde ADR-229 ``G8``
+    compara en una forma canónica y la ``Z`` es coherencia con lo que el
+    corpus escribe, no una condición del veredicto.
     """
     return momento.isoformat().replace("+00:00", "Z")
 

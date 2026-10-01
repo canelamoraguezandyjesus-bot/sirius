@@ -9,7 +9,7 @@
 > La fecha es la que cada documento **declara** en su cabecera; la vista no data
 > nada por su cuenta. «Sin fecha declarada» es un aviso, no un dato.
 
-**142 documentos**, 82 sin fecha declarada.
+**144 documentos**, 84 sin fecha declarada.
 
 ## `docs/audits`
 
@@ -33,7 +33,9 @@
 | 2026-10-01 | [Nota de arranque — la cola trae `main` a la rama que espera y deja las vistas generadas rotas](arranque-2026-10-01-la-cola-regenera-las-vistas-al-traer-la-base.md) |
 | 2026-10-01 | [Nota de arranque — la línea del contador de los siete días quedó cancelada el 13-09 y el árbol todavía dice que bloquea](arranque-2026-10-01-la-linea-del-contador-queda-cancelada-y-el-arbol-lo-dice.md) |
 | 2026-10-01 | [Nota de arranque — la referencia de cierre de un defecto se puede seguir desde `main`](arranque-2026-10-01-la-referencia-de-cierre-de-un-defecto-se-sigue-desde-main.md) |
+| sin fecha declarada | [Nota de arranque — la ronda no tira la revisión de Claude cuando Codex declara que no revisa](arranque-2026-10-01-la-ronda-no-tira-la-revision-de-claude-cuando-codex-declara-que-no-revisa.md) |
 | 2026-10-01 | [Nota de arranque — la vista de memoria vuelve a caber en una sola lectura (segunda vez)](arranque-2026-10-01-la-vista-vuelve-a-caber-en-una-sola-lectura.md) |
+| sin fecha declarada | [Nota de arranque — los instantes de G8 se comparan en una sola forma](arranque-2026-10-01-los-instantes-de-g8-se-comparan-en-una-sola-forma.md) |
 | 2026-10-01 | [Nota de arranque — Quality no muere por un `uv sync` sin caché](arranque-2026-10-01-quality-no-muere-por-un-sync-lento.md) |
 | 2026-08-28 | [Nota de arranque — atestar al buscador antes de gastar en medirlo](arranque-atestar-al-buscador.md) |
 | 2026-09-19 | [Nota de arranque — la auditoría de la forma de trabajar, segunda edición: lo que la primera no podía ver](arranque-auditoria-forma-de-trabajo.md) |
