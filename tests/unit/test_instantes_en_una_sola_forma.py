@@ -77,10 +77,34 @@ def test_un_desfase_se_convierte_a_utc_en_vez_de_ignorarse() -> None:
 
 
 def test_lo_que_no_es_un_instante_se_compara_tal_cual() -> None:
+    """Tal cual: contra la forma canónica del otro lado. El veredicto de un texto
+    ilegible sigue sin estar definido, como antes; lo que no hay es excepción."""
     assert en_forma_canonica("ayer por la tarde") is None
     assert en_forma_canonica("") is None
     assert comparable("ayer por la tarde") == "ayer por la tarde"
     assert comparable(LAS_NUEVE_EN_SQLITE) == "2026-03-20T09:00:00.000000Z"
+
+
+def test_una_fecha_pegada_a_un_desfase_o_con_otro_separador_no_es_un_instante() -> None:
+    """`fromisoformat` admite cualquier carácter como separador: sin el filtro,
+    `2026-03-20+02:00` serían las dos de la madrugada en UTC."""
+    assert en_forma_canonica("2026-03-20+02:00") is None
+    assert en_forma_canonica("2026-03-20Z09:00:00") is None
+    assert en_forma_canonica("2026-03-20T09:00:00+0200") == "2026-03-20T07:00:00.000000Z"
+
+
+def test_un_instante_en_el_borde_del_rango_no_tumba_la_puerta() -> None:
+    """`astimezone` desborda con `0001-01-01` más un desfase positivo o
+    `9999-12-31` más uno negativo: `fromisoformat` lo lee y la conversión
+    lanza `OverflowError`. Es `None`, como cualquier texto ilegible, y G8 no
+    revienta (ronda 1 de Codex y revisión independiente de la PR #676)."""
+    assert en_forma_canonica("9999-12-31T23:30:00-01:00") is None
+    assert en_forma_canonica("0001-01-01T00:00:00+01:00") is None
+    item = _item(ejes=EjesDeclarados(valid_to="9999-12-31T23:30:00-01:00"))
+    peticion = _peticion(VentanaTemporal(tiempo_objetivo="2026-06-15T00:00:00Z"))
+    assert _veredicto_de_g8(item, peticion) is None
+    extremo = _item(created_at="0001-01-01T00:00:00+01:00")
+    assert _veredicto_de_g8(extremo, peticion) is None
 
 
 # --- G8 en la frontera, con las formas mezcladas ----------------------------------
@@ -169,14 +193,39 @@ def test_el_corte_sigue_siendo_inclusivo_en_su_instante_exacto_sea_cual_sea_la_e
     assert _veredicto_de_g8(item, peticion) is None
 
 
-def test_un_valid_from_con_mas_cero_cero_y_un_objetivo_con_z_son_el_mismo_instante() -> None:
-    """Con las cadenas crudas, `+` ordena antes que `Z` y el veredicto dependía
-    de la escritura; en la frontera exacta el elemento está vigente."""
-    item = _item(ejes=EjesDeclarados(valid_from="2026-06-15T00:00:00+00:00"))
-    peticion = _peticion(VentanaTemporal(tiempo_objetivo="2026-06-15T00:00:00Z"))
+def test_un_valid_from_con_z_y_un_objetivo_con_mas_cero_cero_son_el_mismo_instante() -> None:
+    """Con las cadenas crudas, `+` ordena antes que `Z`: un `valid_from` escrito
+    con `Z` «era posterior» a un objetivo escrito con `+00:00` en el instante
+    exacto, y el elemento salía como «aún no vigente». Es la dirección que
+    cae con M1 (la contraria pasaba también con las cadenas crudas: la
+    revisión independiente de la PR #676 lo midió)."""
+    item = _item(ejes=EjesDeclarados(valid_from="2026-06-15T00:00:00Z"))
+    peticion = _peticion(VentanaTemporal(tiempo_objetivo="2026-06-15T00:00:00+00:00"))
     assert _veredicto_de_g8(item, peticion) is None
-    todavia_no = _item(ejes=EjesDeclarados(valid_from="2026-06-15T00:00:01+00:00"))
+    todavia_no = _item(ejes=EjesDeclarados(valid_from="2026-06-15T00:00:01Z"))
     assert _veredicto_de_g8(todavia_no, peticion) == "aun no vigente en el tiempo objetivo"
+    registrado_en_el_corte = _item(created_at="2026-03-20T00:00:00Z")
+    con_corte = _peticion(
+        VentanaTemporal(
+            tiempo_objetivo="2026-06-15T00:00:00+00:00",
+            corte_de_registro="2026-03-20T00:00:00+00:00",
+        )
+    )
+    assert _veredicto_de_g8(registrado_en_el_corte, con_corte) is None
+
+
+def test_el_intervalo_de_vigencia_compara_sus_extremos_como_instantes() -> None:
+    """`VentanaTemporal.intervalo_de_vigencia` daba por invertido —y descartaba—
+    un intervalo cuyo inicio iba con `T` y cuyo final con espacio, solo por el
+    orden de los dos separadores (revisión independiente de la PR #676)."""
+    ventana = VentanaTemporal(
+        tiempo_objetivo="2026-03-01 12:00:00", tiempo_objetivo_desde="2026-03-01T00:00:00Z"
+    )
+    assert ventana.intervalo_de_vigencia == ("2026-03-01T00:00:00Z", "2026-03-01 12:00:00")
+    invertido = VentanaTemporal(
+        tiempo_objetivo="2026-03-01T00:00:00Z", tiempo_objetivo_desde="2026-03-01 12:00:00"
+    )
+    assert invertido.intervalo_de_vigencia is None
 
 
 def test_un_valid_to_escrito_con_desfase_expira_cuando_su_instante_en_utc_llega() -> None:

@@ -31,52 +31,49 @@ permiso gobierna qué se puede mirar.
 
 Las fechas se le piden en ISO-8601 y se validan aquí con un patrón: una
 fecha que no case se descarta como si el modelo no la hubiera declarado
-—``None``, «la pregunta no lo dice»—, en vez de viajar a ``G8``, donde una
-cadena arbitraria se compara con ``created_at`` por orden lexicográfico y
-podría excluir el canon entero en silencio.
+—``None``, «la pregunta no lo dice»—, en vez de viajar a ``G8`` como un
+texto que no es un instante.
 
-Validar no basta: hay que NORMALIZAR
-====================================
+Validar no basta: hay que decir QUÉ instante es
+================================================
 
-El patrón admite tres escrituras del mismo instante —``2026-03-01``,
-``2026-03-01T00:00:00Z`` y ``2026-03-01 00:00:00``— y ``G8`` compara el
-corte con ``created_at`` por orden lexicográfico, donde el separador manda:
-``created_at`` llega de SQLite como ``str(datetime)``, es decir
-``"AAAA-MM-DD HH:MM:SS.ffffff"`` con **espacio**, y el espacio (0x20)
-siempre ordena antes que la ``T`` (0x54). Devolver la cadena verbatim
-dejaría que el formato que el modelo eligió esa vez decidiera, por
-accidente, si el día del corte entra o no. Por eso los dos instantes se
-reemiten aquí en una forma canónica única:
+El patrón admite tres escrituras del mismo día —``2026-03-01``,
+``2026-03-01T00:00:00Z`` y ``2026-03-01 00:00:00``—, y lo que este módulo
+decide no es el formato sino el SIGNIFICADO de lo escrito:
 
 - **corte de registro**: la pregunta que lo produce («¿qué sabía yo el 1 de
   marzo?») es de grano DÍA, y la respuesta es lo que estaba registrado **al
   final** de ese día. El corte se canoniza, por tanto, al final del día
-  **civil que el modelo nombra** —``"AAAA-MM-DD 23:59:59.999999"``, misma
-  forma que ``created_at`` y por tanto comparable con ella—, de modo que
-  las tres escrituras del mismo día admiten exactamente el mismo conjunto.
-  El día se toma de lo escrito, ANTES de convertir a UTC: convertir
-  primero movería ``2026-03-01T00:30:00+02:00`` al 28 de febrero y
-  excluiría el 1 de marzo entero, que es justo el día por el que se
-  pregunta. El desfase declarado tampoco se descarta, porque descartarlo
-  falla en el sentido contrario: el día civil de ``2026-03-01T23:30:00-05:00``
-  no termina hasta las ``2026-03-02 04:59:59`` UTC, y cortar a las
-  ``2026-03-01 23:59:59`` escondería lo registrado en sus últimas cinco
-  horas. Se emite el MÁS TARDÍO de los dos finales —el del día civil en el
-  desfase declarado, llevado a UTC, y el del día en UTC—, porque el criterio
-  que manda aquí es asimétrico: errar hacia incluir el día D nunca esconde
-  canon, errar hacia excluirlo sí.
-- **tiempo objetivo**: es un instante, no un día, y ``G8`` lo compara con
-  ``valid_from``/``valid_to`` **por orden lexicográfico**. El único corpus
-  que puebla esos ejes los escribe con sufijo ``Z``, y ``"…Z"`` no es
-  lexicográficamente comparable con ``"…+00:00"``: el ``+`` (0x2B) ordena
-  antes que la ``Z`` (0x5A), de modo que ante una coincidencia EXACTA de
-  instante el veredicto se invertiría —un ítem cuyo ``valid_from`` es
-  justo el tiempo objetivo pasaría de admitido a «aún no vigente»—. Por eso
-  se canoniza a UTC y se emite con el mismo sufijo con que el corpus lo
-  declara, ``"AAAA-MM-DDTHH:MM:SS(.ffffff)Z"``, y no con ``+00:00``: así el
-  orden lexicográfico de ``G8`` coincide con el orden por instante en la
-  frontera exacta. Una fecha desnuda es su medianoche, que es como el banco
-  adjudica los casos con tiempo objetivo declarado.
+  **civil que el modelo nombra** —``"AAAA-MM-DD 23:59:59.999999"``—, de modo
+  que las tres escrituras del mismo día admiten exactamente el mismo conjunto.
+  El día se toma de lo escrito, ANTES de convertir a UTC: convertir primero
+  movería ``2026-03-01T00:30:00+02:00`` al 28 de febrero y excluiría el 1 de
+  marzo entero, que es justo el día por el que se pregunta. El desfase
+  declarado tampoco se descarta, porque descartarlo falla en el sentido
+  contrario: el día civil de ``2026-03-01T23:30:00-05:00`` no termina hasta
+  las ``2026-03-02 04:59:59`` UTC, y cortar a las ``2026-03-01 23:59:59``
+  escondería lo registrado en sus últimas cinco horas. Se emite el MÁS TARDÍO
+  de los dos finales —el del día civil en el desfase declarado, llevado a UTC,
+  y el del día en UTC—, porque el criterio que manda aquí es asimétrico: errar
+  hacia incluir el día D nunca esconde canon, errar hacia excluirlo sí.
+- **tiempo objetivo**: es un instante, no un día. Se canoniza a UTC y se
+  emite con sufijo ``Z`` (``"AAAA-MM-DDTHH:MM:SS(.ffffff)Z"``), la misma forma
+  con que el corpus declara ``valid_from``/``valid_to``. Una fecha desnuda es
+  su medianoche, que es como el banco adjudica los casos con tiempo objetivo
+  declarado.
+
+Hasta ADR-229 la FORMA también decidía, y mucho: ``G8`` comparaba estas
+cadenas con ``created_at`` y con los ejes por orden lexicográfico, donde el
+espacio de ``str(datetime)`` ordena antes que la ``T`` y el ``+`` de
+``+00:00`` antes que la ``Z``, así que la escritura elegida decidía el
+veredicto en la frontera exacta, y este módulo tenía que emitir el corte en
+la forma de ``created_at`` y el objetivo con ``Z`` para que no lo hiciera.
+Desde ADR-229 ``G8`` lleva los dos lados a una forma canónica antes de
+comparar (``sirius.domain.instantes``) y la escritura ya no decide nada en la
+puerta. Este módulo conserva las formas que emitía porque la ventana de
+vigencia sí viaja al puerto SQL, que compara cadenas en SQLite y reescribe
+sus extremos a la forma de la columna, y porque cambiar lo que se escribe no
+ganaría nada.
 
 El «hoy» que el modelo necesita para resolver una fecha relativa se le da en
 la instrucción, resuelto **en cada consulta** —una aplicación de escritorio

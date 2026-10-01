@@ -15,8 +15,8 @@ decide la aplicabilidad temporal de una candidata comparando **cadenas**:
 `created_at > corte_de_registro`, `valid_from > tiempo_objetivo`,
 `valid_to <= tiempo_objetivo`. El repositorio escribe los instantes de dos
 maneras: `created_at` llega de SQLite como `str(datetime)`
-—`2026-03-20 09:00:00.000000`, separador espacio, y sin fracción cuando los
-microsegundos son cero— y el corpus, el intérprete (`_ahora_como_lo_declara_el_corpus`)
+—`2026-03-20 09:00:00.000000`, separador espacio y seis dígitos de fracción—
+y el corpus, el intérprete (`_ahora_como_lo_declara_el_corpus`)
 y el clasificador escriben `2026-03-20T00:00:00Z`. El espacio (0x20) ordena
 antes que la `T` (0x54), y el `+` de `+00:00` antes que la `Z`: dos escrituras
 del mismo instante admitían conjuntos distintos.
@@ -75,37 +75,56 @@ banco no se movió en ninguna cifra.
 
 1. `src/sirius/domain/instantes.py` (nuevo): `FORMA_CANONICA`
    (`%Y-%m-%dT%H:%M:%S.%fZ`), `en_forma_canonica(texto) -> str | None`
-   (reconoce lo que `datetime.fromisoformat` reconoce más el sufijo `Z`: el
-   `str(datetime)` de SQLite con y sin microsegundos, ISO con `T`, `Z` o
-   desfase, y una fecha sola como su medianoche; sin zona se asume UTC, con
-   zona se convierte a UTC) y `comparable(texto) -> str` (la forma canónica,
-   o el texto si no es un instante).
+   (una fecha ISO con hora opcional tras `T` o espacio, fracción opcional de
+   cualquier longitud y zona opcional, `Z` o desfase: el `str(datetime)` de
+   SQLite, el ISO del corpus y una fecha sola como su medianoche; sin zona se
+   asume UTC, con zona se convierte a UTC; lo que `fromisoformat` leería con
+   otro separador —`2026-03-20+02:00` como las dos de la madrugada— se
+   rechaza, y un instante que al convertirse se sale del rango representable
+   es `None`, como cualquier texto ilegible) y `comparable(texto) -> str` (la
+   forma canónica, o el texto si no es un instante).
 2. `G8` lleva los dos lados de cada una de sus tres comparaciones por
-   `comparable` antes de comparar. Nada más cambia: ni el contrato, ni el
-   puerto SQL (`created_at <= :hasta` sigue con el extremo reescrito en la
-   forma de la columna, que es cosa del almacenamiento), ni lo que escriben
-   el clasificador y el intérprete.
-3. Lo que no es un instante se compara como antes, a propósito: una
-   excepción en la puerta tumbaría la consulta entera por un dato ilegible, y
-   degradar a la comparación de hoy es lo peor que ya pasaba.
+   `comparable` antes de comparar, y `VentanaTemporal.intervalo_de_vigencia`
+   —que daba por invertido un intervalo correcto si su inicio iba con `T` y su
+   final con espacio— compara igual. Nada más cambia: ni el contrato, ni el
+   puerto SQL (`created_at <= :hasta` es una comparación de SQLite, no de
+   Python, y sigue con el extremo reescrito en la forma de la columna), ni lo
+   que escriben el clasificador y el intérprete; su prosa deja de decir que la
+   forma decide el veredicto de `G8`.
+3. Lo que no es un instante se compara tal cual, contra la forma canónica del
+   otro lado: su veredicto sigue sin estar definido, como antes, y ningún
+   emisor lo produce (el clasificador filtra con su patrón ISO). Lo que no
+   pasa es que una excepción tumbe la consulta entera por un dato ilegible.
 
 ## Comprobación que la sostiene
 
-- `tests/unit/test_instantes_en_una_sola_forma.py`, quince casos: seis
+- `tests/unit/test_instantes_en_una_sola_forma.py`, diecinueve casos: seis
   escrituras del mismo instante dan la misma forma canónica; la forma es UTC,
   de 27 caracteres y ordena como el reloj; una fecha sola es su medianoche; un
-  desfase se convierte; lo que no es un instante se compara tal cual; y `G8`
-  en la frontera con las formas mezcladas (lo registrado a las nueve no pasa
-  un corte de medianoche del mismo día; el corte sigue siendo inclusivo en su
-  instante exacto; `+00:00` frente a `Z` son el mismo instante; un `valid_to`
-  con desfase expira cuando llega su instante en UTC; con una sola forma el
-  veredicto es el de siempre).
+  desfase se convierte; lo que no es un instante se compara tal cual; una
+  fecha pegada a un desfase o con otro separador no es un instante; un
+  instante en el borde del rango no tumba la puerta; y `G8` en la frontera con
+  las formas mezcladas (lo registrado a las nueve no pasa un corte de
+  medianoche del mismo día; el corte sigue siendo inclusivo en su instante
+  exacto; un `valid_from` con `Z` frente a un objetivo con `+00:00` son el
+  mismo instante —la dirección que cae con M1; la contraria pasaba también
+  con las cadenas crudas—; un `valid_to` con desfase expira cuando llega su
+  instante en UTC; el intervalo de la ventana compara sus extremos como
+  instantes; con una sola forma el veredicto es el de siempre).
+- Dos revisiones sobre la primera versión: Codex (ronda 1) y una revisión
+  independiente encargada por la sesión. Entre las dos: el `OverflowError`
+  de `astimezone` en el borde del rango, la prueba del `+00:00` que pasaba
+  también con la `G8` anterior, el intervalo de la ventana comparado como
+  texto, la prosa de los emisores que seguía diciendo que `G8` compara
+  cadenas, y tres afirmaciones de este ADR que iban más lejos que el dato (la
+  fracción «ausente», el «como antes» de lo ilegible y la «puerta detrás» del
+  puerto SQL). Todo corregido aquí.
 - Mutaciones, con los ficheros restaurados (`diff -q` limpio):
 
 | | Mutación | Resultado |
 |---|---|---|
 | M1 | `G8` de `main` (cadenas crudas) | caen `lo_registrado_a_las_nueve_no_pasa_un_corte_de_medianoche_del_mismo_dia` y `un_valid_to_escrito_con_desfase_expira_cuando_su_instante_en_utc_llega` |
-| M2 | la forma canónica sin microsegundos | caen 10 (las seis escrituras, el ancho fijo, la fecha sola, el desfase y lo ilegible) |
+| M2 | la forma canónica sin microsegundos (`%Y-%m-%dT%H:%M:%SZ`), y también una forma de ancho variable (`isoformat()` con `Z`) | caen 10 en las dos (las seis escrituras, el ancho fijo, la fecha sola, el desfase y lo ilegible) |
 | M3 | el desfase se ignora | caen 3 (la escritura `+02:00`, la conversión y el `valid_to` con desfase) |
 
 - Baterías del motor por etapas (`test_staged_engine.py`,
@@ -125,9 +144,12 @@ banco no se movió en ninguna cifra.
 - `G8` deja de depender de cómo escriba el instante cada emisor; un emisor
   nuevo que escriba `+00:00`, omita los microsegundos o traiga un desfase no
   mueve la frontera.
-- La deuda 20 queda pagada en el comparador. La reescritura del corte en el
-  clasificador y la del extremo de la ventana en el puerto SQL siguen siendo
-  correctas y no se tocan; quien las retire tendrá esta puerta detrás.
+- La deuda 20 queda pagada donde Python compara instantes del motor por
+  etapas: `G8` y el intervalo de la ventana. La reescritura del extremo de la
+  ventana en el puerto SQL sigue siendo **necesaria** (SQLite compara cadenas
+  y `G8` nunca compara `created_at` con el tiempo objetivo: esta puerta no la
+  sustituye), y la del corte en el clasificador sigue siendo correcta, aunque
+  ya no decide nada en la puerta.
 - La opción (a), tipar los instantes, sigue abierta como mejora de forma, no
   de corrección.
 - H-229 en el registro de defectos.

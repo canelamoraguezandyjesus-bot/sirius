@@ -93,9 +93,10 @@ WHERE d.id IN ({marcas})
 #: así que comparar la forma del corpus (``...T00:00:00Z``) contra ella
 #: incluiría todo lo registrado más tarde del mismo día civil: el final de la
 #: ventana dejaría de ser un instante para ser un día. Por eso el extremo se
-#: reemite en ESTA forma antes de la consulta, igual que
-#: ``ollama_query_intent_classifier`` reemite el corte de registro para
-#: ``G8`` y por la misma razón.
+#: reemite en ESTA forma antes de la consulta. Es una comparación de SQLite,
+#: no de Python: la forma canónica con la que ``G8`` compara desde ADR-229
+#: (``sirius.domain.instantes``) no llega hasta aquí, y esta reescritura sigue
+#: siendo necesaria mientras la columna guarde texto.
 _FORMATO_DE_CREATED_AT: Final = "%Y-%m-%d %H:%M:%S.%f"
 
 #: Sentencia literal, sin interpolar el nombre de la tabla ni el del estado:
