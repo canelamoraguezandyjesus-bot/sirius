@@ -28,6 +28,12 @@ jobs:
       github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # Lo que la puesta al dia (los dos jobs de abajo) necesita saber.
+    outputs:
+      ponerse_al_dia: ${{ steps.avanzar.outputs.ponerse_al_dia }}
+      rama: ${{ steps.avanzar.outputs.rama }}
+      base: ${{ steps.avanzar.outputs.base }}
+      incidencia: ${{ steps.avanzar.outputs.incidencia }}
     steps:
       - name: Checkout automation library
         uses: actions/checkout@v6
@@ -392,140 +398,266 @@ jobs:
             exit 1
           fi
 
-      # --- La otra mitad de ADR-200: quien pone al día la rama que espera -----
+      # --- La otra mitad de ADR-200: quien pone al dia la rama que espera -----
       #
-      # Sin esto, cablear la cola solo cambiaría un atasco por otro: la rama
-      # esperaría para siempre porque nadie la actualiza. Por eso ADR-191 dejó la
-      # condición sin llamante, a propósito, hasta que hubiera decisión sobre
-      # esto (opción A de la incidencia #608, elegida por el propietario el
-      # 14-09-2026).
-      #
-      # EL TOKEN NO ES UN DETALLE. Un push hecho con `GITHUB_TOKEN` NO dispara
-      # workflows, así que Quality no volvería a correr sobre la combinación y la
-      # rama quedaría esperando otra vez -el mismo atasco con otra cara-. Va con
-      # `SIRIUS_BOT_TOKEN`, que es la misma credencial con la que
-      # `repair-sirius-work.yml` ya empuja los commits del corrector a la rama de
-      # una PR. NO se amplía `permissions:`: ese bloque gobierna el
-      # `GITHUB_TOKEN`, no el PAT, así que esto no abre ninguna clase de permiso
-      # nueva -que es justo lo que ADR-002 protege-.
-      #
-      # NUNCA REESCRIBE HISTORIA. Una fusión, no un rebase: el checkout de quien
-      # esté trabajando en esa rama sigue siendo válido. Y si hay conflicto real
-      # se aborta y se dice; eso no lo puede decidir una máquina.
-      # SIN CREDENCIALES PERSISTIDAS (ADR-220, ronda 1 de Codex en la PR #667):
-      # desde este checkout se ejecuta codigo DE LA RAMA (`uv sync` y el
-      # generador de la memoria), que no ha pasado necesariamente la revision
-      # dual. Si el PAT quedara en `.git/config`, ese codigo podria leerlo y
-      # empujar lo que quisiera. El PAT solo aparece en el `git push` fijo y en
-      # el comentario de conflicto, y nunca en el entorno del generador.
-      - name: Traer la base a la rama que espera
-        if: steps.avanzar.outputs.ponerse_al_dia == 'true'
+      # Sin esto, cablear la cola solo cambiaria un atasco por otro: la rama
+      # esperaria para siempre porque nadie la actualiza. Por eso ADR-191 dejo la
+      # condicion sin llamante, a proposito, hasta que hubiera decision sobre
+      # esto (opcion A de la incidencia #608, elegida por el propietario el
+      # 14-09-2026). La puesta al dia vive en los dos jobs de abajo, `regenerar`
+      # y `empujar`, que arrancan con lo que este paso deja en sus salidas.
+
+  # --- La puesta al dia, en dos jobs con una frontera de credenciales entre
+  # ellos (ADR-220; rondas 1 y 2 de Codex en la PR #667) -----------------------
+  #
+  # Para regenerar las vistas de la memoria del arbol combinado hay que ejecutar
+  # codigo DE LA RAMA (`uv sync`, `sirius-memoria`), que no ha pasado
+  # necesariamente la revision dual. Ese codigo no puede tener el PAT a su
+  # alcance: ni en `.git/config`, ni en su entorno, ni en el de ningun proceso
+  # de la misma maquina (un hijo lee /proc/<padre>/environ, y un proceso que la
+  # rama dejara en segundo plano leeria el de cualquier paso posterior). Por eso
+  # el job `regenerar` NO recibe ningun secreto y solo puede leer; produce las
+  # dos vistas como un artefacto -datos- y dice sobre que puntas las calculo.
+  # El job `empujar`, en OTRA maquina y con codigo fijo (git y gh, nada de la
+  # rama), repite la misma fusion, comprueba que las puntas no han cambiado,
+  # aplica las vistas y empuja con el PAT.
+  #
+  # EL TOKEN DEL PUSH NO ES UN DETALLE. Un push hecho con `GITHUB_TOKEN` NO
+  # dispara workflows, asi que Quality no volveria a correr sobre la
+  # combinacion y la rama quedaria esperando otra vez -el mismo atasco con otra
+  # cara-. Va con `SIRIUS_BOT_TOKEN`, la misma credencial con la que
+  # `repair-sirius-work.yml` ya empuja los commits del corrector a la rama de
+  # una PR. NO se amplia `permissions:`: ese bloque gobierna el `GITHUB_TOKEN`,
+  # no el PAT, asi que esto no abre ninguna clase de permiso nueva (ADR-002).
+  #
+  # NUNCA REESCRIBE HISTORIA. Una fusion, no un rebase: el checkout de quien
+  # este trabajando en esa rama sigue siendo valido. Y si hay conflicto real se
+  # deshace y se dice; eso no lo puede decidir una maquina.
+  regenerar:
+    needs: advance
+    if: needs.advance.outputs.ponerse_al_dia == 'true'
+    runs-on: ubuntu-latest
+    # Sin cache, `uv sync` ha tardado hasta 16,5 min (ADR-224); con ella, 3 s.
+    timeout-minutes: 30
+    # Solo lectura, y ningun `secrets.` en todo el job: esta es la frontera.
+    permissions:
+      contents: read
+    outputs:
+      resultado: ${{ steps.fusionar.outputs.resultado }}
+      cabeza_rama: ${{ steps.fusionar.outputs.cabeza_rama }}
+      cabeza_base: ${{ steps.fusionar.outputs.cabeza_base }}
+    steps:
+      - name: Traer la rama que espera
         uses: actions/checkout@v6
         with:
-          ref: ${{ steps.avanzar.outputs.rama }}
-          token: ${{ secrets.SIRIUS_BOT_TOKEN }}
+          ref: ${{ needs.advance.outputs.rama }}
           persist-credentials: false
-          # La fusión necesita la historia entera: con un checkout superficial
-          # `git merge` no puede encontrar el antepasado común.
+          # La fusion necesita la historia entera: con un checkout superficial
+          # `git merge` no puede encontrar el antepasado comun.
           fetch-depth: 0
 
-      # Las vistas generadas (`MEMORIA.md`, `docs/audits/INDICE.md`) se regeneran
-      # del arbol combinado despues de traer la base (ADR-220): hace falta el
-      # entorno para ejecutar `sirius-memoria`. Mismo patron y misma version
-      # que `reflejar-desenlace.yml`; solo corre cuando hay puesta al dia.
+      - name: Fusionar la base sin empujar
+        id: fusionar
+        shell: bash --noprofile --norc {0}
+        env:
+          RAMA: ${{ needs.advance.outputs.rama }}
+          BASE: ${{ needs.advance.outputs.base }}
+        run: |
+          set -uo pipefail
+          salida="${GITHUB_OUTPUT:-/dev/null}"
+          git config user.name "sirius-motor"
+          git config user.email "canelamoraguezandyjesus@gmail.com"
+          if ! git fetch origin "$BASE"; then
+            echo "::error::no se pudo traer ${BASE}; la rama ${RAMA} sigue esperando y se reintentara en el proximo run."
+            echo "resultado=error" >>"$salida"
+            exit 1
+          fi
+          # Las puntas sobre las que se calcula todo: el job que empuja las
+          # vuelve a leer y, si han cambiado, no aplica estas vistas.
+          echo "cabeza_rama=$(git rev-parse HEAD)" >>"$salida"
+          echo "cabeza_base=$(git rev-parse FETCH_HEAD)" >>"$salida"
+          if git merge --no-edit --no-ff FETCH_HEAD -m "Trae ${BASE} a ${RAMA} para que la revision vea la combinacion real (ADR-200)"; then
+            echo "resultado=fusionada" >>"$salida"
+            exit 0
+          fi
+          # Conflicto. Si esta SOLO en las vistas generadas no hay nada que
+          # decidir: el paso siguiente las regenera del arbol combinado y el job
+          # que empuja termina la fusion con ellas. Cualquier otro fichero en
+          # conflicto sigue siendo cosa de una persona, exactamente como antes.
+          en_conflicto="$(git diff --name-only --diff-filter=U)"
+          solo_vistas=1
+          for fichero in $en_conflicto; do
+            case " MEMORIA.md docs/audits/INDICE.md " in
+              *" $fichero "*) ;;
+              *) solo_vistas=0 ;;
+            esac
+          done
+          if [ -n "$en_conflicto" ] && [ "$solo_vistas" -eq 1 ]; then
+            echo "El conflicto esta solo en las vistas generadas; se regeneran del arbol combinado."
+            echo "resultado=fusionada" >>"$salida"
+            exit 0
+          fi
+          git merge --abort || true
+          echo "::warning::conflicto entre ${RAMA} y ${BASE} fuera de las vistas; hace falta una persona."
+          echo "resultado=conflicto" >>"$salida"
+          exit 0
+
+      # El entorno solo se prepara cuando hay algo que regenerar: con un
+      # conflicto real no se gasta un `uv sync`. Mismo patron y misma version
+      # que `reflejar-desenlace.yml`.
       - name: Preparar el entorno para regenerar las vistas
-        if: steps.avanzar.outputs.ponerse_al_dia == 'true'
+        if: steps.fusionar.outputs.resultado == 'fusionada'
         uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           enable-cache: true
           python-version: "3.14.6"
 
       - name: Sincronizar el entorno
-        if: steps.avanzar.outputs.ponerse_al_dia == 'true'
+        if: steps.fusionar.outputs.resultado == 'fusionada'
+        # Plazo propio, por lo mismo que en Quality (ADR-224): que falle
+        # ruidosamente, no que se cancele el job.
+        timeout-minutes: 20
         run: uv sync --locked --all-groups
 
-      - name: Fusionar la base y empujar
-        if: steps.avanzar.outputs.ponerse_al_dia == 'true'
+      - name: Regenerar las vistas del arbol combinado
+        if: steps.fusionar.outputs.resultado == 'fusionada'
+        shell: bash --noprofile --norc {0}
+        env:
+          VISTAS_REGENERADAS: ${{ runner.temp }}/vistas-regeneradas
+        run: |
+          set -uo pipefail
+          if ! uv run sirius-memoria conocimiento; then
+            echo "::error::no se pudieron regenerar las vistas de la memoria del arbol combinado."
+            exit 1
+          fi
+          # Solo las dos vistas salen de aqui, como datos; nada mas cruza al
+          # job que empuja.
+          mkdir -p "${VISTAS_REGENERADAS}/docs/audits"
+          cp MEMORIA.md "${VISTAS_REGENERADAS}/MEMORIA.md"
+          cp docs/audits/INDICE.md "${VISTAS_REGENERADAS}/docs/audits/INDICE.md"
+
+      - name: Entregar las vistas al job que empuja
+        if: steps.fusionar.outputs.resultado == 'fusionada'
+        uses: actions/upload-artifact@v4
+        with:
+          name: vistas-regeneradas-${{ github.run_id }}
+          path: ${{ runner.temp }}/vistas-regeneradas
+          if-no-files-found: error
+          retention-days: 1
+
+  empujar:
+    needs: [advance, regenerar]
+    # Solo si `regenerar` termino bien: si fallo (un `uv sync` que no acaba, un
+    # generador roto), la rama no se mueve y el proximo run lo reintenta. Un
+    # push sin las vistas regeneradas dejaria la rama con la vista vieja y
+    # Quality cayendo por la memoria: justo lo que ADR-220 quita.
+    if: needs.advance.outputs.ponerse_al_dia == 'true' && needs.regenerar.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # Codigo FIJO con el PAT: git y gh. Aqui no se ejecuta nada de la rama
+      # (ni `uv`, ni `python`); lo vigila `tests/automation/test_cola.py`.
+      - name: Traer la rama que espera
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.advance.outputs.rama }}
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Recoger las vistas regeneradas
+        if: needs.regenerar.outputs.resultado == 'fusionada'
+        uses: actions/download-artifact@v4
+        with:
+          name: vistas-regeneradas-${{ github.run_id }}
+          path: ${{ runner.temp }}/vistas-regeneradas
+
+      - name: Fusionar la base otra vez, aplicar las vistas y empujar
+        if: needs.regenerar.outputs.resultado == 'fusionada'
         shell: bash --noprofile --norc {0}
         env:
           SIRIUS_BOT_TOKEN: ${{ secrets.SIRIUS_BOT_TOKEN }}
           GH_REPO: ${{ github.repository }}
-          RAMA: ${{ steps.avanzar.outputs.rama }}
-          BASE: ${{ steps.avanzar.outputs.base }}
-          ISSUE: ${{ steps.avanzar.outputs.incidencia }}
+          RAMA: ${{ needs.advance.outputs.rama }}
+          BASE: ${{ needs.advance.outputs.base }}
+          CABEZA_RAMA: ${{ needs.regenerar.outputs.cabeza_rama }}
+          CABEZA_BASE: ${{ needs.regenerar.outputs.cabeza_base }}
+          VISTAS_REGENERADAS: ${{ runner.temp }}/vistas-regeneradas
         run: |
           set -uo pipefail
           git config user.name "sirius-motor"
           git config user.email "canelamoraguezandyjesus@gmail.com"
-          # El PAT solo viaja en el push (y en el comentario de conflicto): el
-          # remoto de empuje se construye aqui y no se guarda en ningun sitio.
-          # `SIRIUS_PUSH_URL` es la costura de las pruebas, que empujan a un
-          # repositorio desnudo local.
+          # El PAT solo viaja en el push: el remoto se construye aqui y no se
+          # guarda en ningun sitio. `SIRIUS_PUSH_URL` es la costura de las
+          # pruebas, que empujan a un repositorio desnudo local.
           REMOTO_DE_EMPUJE="${SIRIUS_PUSH_URL:-https://x-access-token:${SIRIUS_BOT_TOKEN}@github.com/${GH_REPO}.git}"
+          VISTAS="MEMORIA.md docs/audits/INDICE.md"
 
           if ! git fetch origin "$BASE"; then
             echo "::error::no se pudo traer ${BASE}; la rama ${RAMA} sigue esperando y se reintentara en el proximo run."
             exit 1
           fi
-
-          # Las vistas generadas no se resuelven a mano ni se dejan viejas
-          # (ADR-220): tras traer la base se regeneran del arbol combinado y, si
-          # cambiaron, se confirman antes de empujar. Sin esto, 43 de las 44
-          # fusiones de septiembre habrian dejado la rama con la vista vieja y
-          # Quality cayendo por la memoria (#653: una vuelta del corrector).
-          VISTAS="MEMORIA.md docs/audits/INDICE.md"
-          regenerar_vistas() {
-            # Codigo de la rama, SIN el PAT en su entorno: `env -u` lo quita del
-            # proceso del generador y de todo lo que este lance.
-            if ! env -u SIRIUS_BOT_TOKEN -u GH_TOKEN uv run sirius-memoria conocimiento; then
-              echo "::error::no se pudieron regenerar las vistas de la memoria tras traer ${BASE}." >&2
-              return 1
+          # La misma fusion que el job anterior regenero: si alguna punta ha
+          # cambiado entre medias, esas vistas ya no son las de este arbol y no
+          # se aplican; el proximo run vuelve a empezar.
+          if [ "$(git rev-parse HEAD)" != "$CABEZA_RAMA" ] || [ "$(git rev-parse FETCH_HEAD)" != "$CABEZA_BASE" ]; then
+            echo "::warning::${RAMA} o ${BASE} han cambiado mientras se regeneraban las vistas; se reintentara en el proximo run."
+            exit 0
+          fi
+          for vista in $VISTAS; do
+            if [ ! -f "${VISTAS_REGENERADAS}/${vista}" ]; then
+              echo "::error::falta la vista regenerada ${vista}; no se empuja nada."
+              exit 1
             fi
-            # Solo las vistas: nada mas se resuelve ni se confirma desde aqui.
-            # shellcheck disable=SC2086
-            git add -- $VISTAS
-          }
-          empujar() {
-            if git push "$REMOTO_DE_EMPUJE" "HEAD:refs/heads/${RAMA}"; then
-              echo "Rama ${RAMA} al dia con ${BASE}; Quality volvera a correr sobre la combinacion."
-              exit 0
-            fi
-            echo "::error::la fusion salio bien pero el push a ${RAMA} fallo; se reintentara en el proximo run."
-            exit 1
-          }
+          done
 
           if git merge --no-edit --no-ff FETCH_HEAD -m "Trae ${BASE} a ${RAMA} para que la revision vea la combinacion real (ADR-200)"; then
-            regenerar_vistas || exit 1
+            for vista in $VISTAS; do cp "${VISTAS_REGENERADAS}/${vista}" "$vista"; done
+            # shellcheck disable=SC2086
+            git add -- $VISTAS
             if ! git diff --cached --quiet; then
               git commit -q -m "Regenera las vistas de la memoria tras traer ${BASE} (ADR-220)" || exit 1
             fi
-            empujar
+          else
+            # El job anterior vio este mismo conflicto y dijo que estaba solo
+            # en las vistas; se comprueba otra vez aqui antes de tocar nada.
+            en_conflicto="$(git diff --name-only --diff-filter=U)"
+            for fichero in $en_conflicto; do
+              case " $VISTAS " in
+                *" $fichero "*) ;;
+                *)
+                  git merge --abort || true
+                  echo "::error::conflicto en ${fichero}, fuera de las vistas; no se toca la rama."
+                  exit 1
+                  ;;
+              esac
+            done
+            for vista in $VISTAS; do cp "${VISTAS_REGENERADAS}/${vista}" "$vista"; done
+            # shellcheck disable=SC2086
+            git add -- $VISTAS
+            git commit -q --no-edit || exit 1
+            echo "El conflicto estaba solo en las vistas generadas; regeneradas del arbol combinado."
           fi
 
-          # Conflicto. Si esta SOLO en las vistas generadas no hay nada que
-          # decidir: se regeneran del arbol combinado y la fusion termina con el
-          # mensaje que ya tenia. Cualquier otro fichero en conflicto sigue siendo
-          # cosa de una persona, exactamente como antes.
-          en_conflicto="$(git diff --name-only --diff-filter=U)"
-          solo_vistas=1
-          for fichero in $en_conflicto; do
-            case " $VISTAS " in
-              *" $fichero "*) ;;
-              *) solo_vistas=0 ;;
-            esac
-          done
-          if [ -n "$en_conflicto" ] && [ "$solo_vistas" -eq 1 ]; then
-            if regenerar_vistas && git commit -q --no-edit; then
-              echo "El conflicto estaba solo en las vistas generadas; regeneradas del arbol combinado."
-              empujar
-            fi
-            echo "::warning::no se pudo terminar la fusion regenerando las vistas; se deshace y se avisa."
+          if git push "$REMOTO_DE_EMPUJE" "HEAD:refs/heads/${RAMA}"; then
+            echo "Rama ${RAMA} al dia con ${BASE}; Quality volvera a correr sobre la combinacion."
+            exit 0
           fi
+          echo "::error::la fusion salio bien pero el push a ${RAMA} fallo; se reintentara en el proximo run."
+          exit 1
 
-          # Conflicto real: las dos partes tocaron lo mismo. Se deshace la
-          # fusion -la rama queda EXACTAMENTE como estaba- y se dice, porque una
-          # espera que no se cuenta no se distingue de un atasco (ADR-183).
-          git merge --abort || true
+      # Conflicto real: la rama queda EXACTAMENTE como estaba y se dice, porque
+      # una espera que no se cuenta no se distingue de un atasco (ADR-183).
+      - name: Avisar del conflicto en la incidencia
+        if: needs.regenerar.outputs.resultado == 'conflicto'
+        shell: bash --noprofile --norc {0}
+        env:
+          GH_TOKEN: ${{ secrets.SIRIUS_BOT_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RAMA: ${{ needs.advance.outputs.rama }}
+          BASE: ${{ needs.advance.outputs.base }}
+          ISSUE: ${{ needs.advance.outputs.incidencia }}
+        run: |
+          set -uo pipefail
           cuerpo="$(mktemp)"
           printf '%s\n\n%s\n\n%s\n%s\n\n%s\n' \
             "<!-- sirius-cola:${RAMA}:conflicto -->" \
@@ -533,8 +665,7 @@ jobs:
             "- Rama: \`${RAMA}\`" \
             "- Base: \`${BASE}\`" \
             "He intentado traer \`${BASE}\` a esta rama para que la revision viera la combinacion real, y hay conflicto: las dos partes tocaron lo mismo. La fusion se ha deshecho y la rama esta como estaba. Esto no lo puede decidir una maquina: hace falta una persona que resuelva el conflicto (ADR-200, incidencia #608)." >"$cuerpo"
-          GH_TOKEN="$SIRIUS_BOT_TOKEN" gh issue comment "$ISSUE" --repo "$GH_REPO" --body-file "$cuerpo" \
+          gh issue comment "$ISSUE" --repo "$GH_REPO" --body-file "$cuerpo" \
             || echo "::warning::no se pudo publicar el aviso de conflicto en #${ISSUE}."
           rm -f "$cuerpo"
           echo "::warning::conflicto entre ${RAMA} y ${BASE}; hace falta una persona."
-          exit 0

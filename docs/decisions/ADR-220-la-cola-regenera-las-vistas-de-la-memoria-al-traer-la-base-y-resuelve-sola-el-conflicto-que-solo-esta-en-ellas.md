@@ -52,35 +52,47 @@ mutaciones vistas caer.
 
 ## Decisión
 
-En el paso «Fusionar la base y empujar», con el entorno preparado por dos pasos
-nuevos (`astral-sh/setup-uv` y `uv sync --locked --all-groups`, la misma
-versión fijada que `reflejar-desenlace.yml`, condicionados a la misma puesta al
-día):
+La puesta al día pasa a **dos jobs** nuevos, `regenerar` y `empujar`, que arrancan
+con las salidas del paso «Advance matching Sirius work item» (`ponerse_al_dia`,
+`rama`, `base`, `incidencia`):
 
-1. **Fusión limpia**: `uv run sirius-memoria conocimiento` regenera las dos
-   vistas del árbol combinado; si cambiaron, se confirman en un commit propio
-   («Regenera las vistas de la memoria tras traer `main` (ADR-220)») y se
-   empuja. Nunca se reescribe la historia: es un commit más.
-2. **Conflicto solo en las vistas** (`git diff --name-only --diff-filter=U` no
-   lista nada fuera de `MEMORIA.md` y `docs/audits/INDICE.md`): se regeneran
-   del árbol combinado, se añaden **solo ellas** y la fusión termina con
-   `git commit --no-edit`, con el mensaje que ya tenía; se empuja.
-3. **Cualquier otro conflicto**: ni se regenera ni se toca el árbol; se deshace
-   y se avisa en la incidencia, exactamente como hasta ahora (ADR-200).
-4. **Frontera de credenciales** (ronda 1 de Codex en la PR #667, P1: «no
-   ejecutes código controlado por la rama con el PAT del bot»). Desde ese
-   checkout se ejecuta código DE LA RAMA (`uv sync` y el generador), que no
-   ha pasado necesariamente la revisión dual; si el PAT estuviera en
-   `.git/config` o en su entorno, ese código podría leerlo y empujar lo que
-   quisiera. Por eso el checkout de la rama no persiste credenciales
-   (`persist-credentials: false`), el paso no exporta `GH_TOKEN`, el generador
-   corre con `env -u SIRIUS_BOT_TOKEN -u GH_TOKEN`, y el PAT aparece solo en
-   las dos operaciones fijas que lo necesitan: el `git push`, por una URL
-   `https://x-access-token:…@github.com/…` construida en el propio paso y que
-   no se guarda en ningún sitio (`SIRIUS_PUSH_URL` es la costura de las
-   pruebas), y el `gh issue comment` del aviso de conflicto, con el token
-   inline. Lo que el código de la rama puede hacer en este paso es lo mismo
-   que ya podía hacer en Quality: nada con el PAT.
+1. **`regenerar`, sin ningún secreto y de solo lectura** (`permissions:
+   contents: read`). Trae la rama (sin persistir credenciales, historia entera),
+   trae la base y la fusiona **sin empujar**; publica como salidas el resultado
+   y las dos puntas exactas (`cabeza_rama`, `cabeza_base`). Si la fusión es
+   limpia o el conflicto está **solo en las vistas** (`git diff --name-only
+   --diff-filter=U` no lista nada fuera de `MEMORIA.md` y
+   `docs/audits/INDICE.md`), prepara el entorno (`astral-sh/setup-uv` y `uv
+   sync --locked --all-groups`, la misma versión fijada que
+   `reflejar-desenlace.yml`, con plazo propio de 20 min por ADR-224), ejecuta
+   `uv run sirius-memoria conocimiento` sobre el árbol combinado y entrega las
+   dos vistas como artefacto (`vistas-regeneradas-<run>`, un día de retención).
+   Con cualquier otro conflicto deshace la fusión y dice `conflicto`, sin
+   gastar un `uv sync`.
+2. **`empujar`, código fijo con el PAT** (git y gh; ningún `uv`, ningún
+   `python`), en otra máquina y solo si `regenerar` terminó bien. Trae la rama
+   (sin persistir credenciales), trae la base y comprueba que las puntas son
+   **las mismas** sobre las que se regeneraron las vistas; si alguien empujó
+   entre medias, no aplica datos de otro árbol y lo deja para el próximo run.
+   Repite la misma fusión: si es limpia, copia las dos vistas del artefacto y,
+   si cambiaron, las confirma en un commit propio («Regenera las vistas de la
+   memoria tras traer `main` (ADR-220)»); si el conflicto está solo en las
+   vistas, las copia, añade **solo ellas** y termina la fusión con `git commit
+   --no-edit`, con el mensaje que ya tenía. Empuja por una URL
+   `https://x-access-token:…@github.com/…` construida en el propio paso
+   (`SIRIUS_PUSH_URL` es la costura de las pruebas). Nunca reescribe la
+   historia: es un commit más.
+3. **Cualquier otro conflicto**: la rama no se toca y `empujar` publica el aviso
+   en la incidencia con el PAT, exactamente como hasta ahora (ADR-200).
+4. **La frontera de credenciales** (rondas 1 y 2 de Codex en la PR #667, las
+   dos P1). El código de la rama corre en un job que no recibe ningún secreto,
+   ni en su entorno ni en el de ningún proceso de su máquina: un `env -u` no
+   bastaba, porque el hijo lee `/proc/<padre>/environ`, y un proceso que la
+   rama dejara en segundo plano leería el de cualquier paso posterior del
+   mismo runner. Las vistas cruzan al job de confianza como datos, atadas a
+   las dos puntas sobre las que se calcularon. Lo que el código de la rama
+   puede hacer en esta cola es lo mismo que ya podía hacer en Quality: nada
+   con el PAT.
 
 Defensa en profundidad: aunque la puerta de «solo vistas» fallara, `git add`
 añade únicamente las vistas y `git commit` se niega a confirmar con rutas sin
@@ -89,12 +101,17 @@ con conflictos ajenos, no como única barrera.
 
 ## Comprobación que la sostiene
 
-`tests/automation/test_cola.py` gana cinco pruebas y endurece una. Tres ejecutan el bash del
-paso **de verdad** —extraído del YAML— sobre un repositorio de prueba con su
-remoto, con dobles de `uv` (escribe las vistas a partir de `git ls-files`, como
-el generador real escribe a partir del árbol) y de `gh` (apunta lo que
-publicaría), con el `PATH`, el `ISSUE`, la `RAMA` y la `BASE` que el workflow
-pasa:
+`tests/automation/test_cola.py` gana seis pruebas y endurece una. Cuatro
+ejecutan el bash de los pasos **de verdad** —extraído del YAML—, cada job en su
+propio clon (como en dos máquinas), con **exactamente el entorno que el YAML
+declara para cada paso** (las expresiones `${{ }}` se sustituyen y no se añade
+ni una variable: un secreto que el YAML diera al job que regenera lo vería el
+doble), sobre un repositorio de prueba con su remoto y con dobles de `uv`
+(escribe las vistas a partir de `git ls-files`, como el generador real escribe
+a partir del árbol, y apunta si tuvo un token en su entorno o en el del proceso
+que lo lanzó, leyendo `/proc/$PPID/environ`) y de `gh` (apunta lo que
+publicaría); el clon de cada runner tiene `origin` sin camino de empuje, como el
+runner sin credenciales:
 
 - `test_la_puesta_al_dia_regenera_las_vistas_y_las_confirma_antes_de_empujar`:
   fusión limpia con la vista vieja → la punta de la rama en el remoto es el
@@ -105,19 +122,21 @@ pasa:
 - `test_un_conflicto_fuera_de_las_vistas_sigue_siendo_cosa_de_una_persona`:
   conflicto en `otro.txt` → la rama no se mueve, la fusión queda deshecha, se
   publica el aviso de conflicto y **el generador no llega a ejecutarse**.
-- `test_la_puesta_al_dia_tiene_con_que_regenerar`: los dos pasos de entorno
-  existen, van antes del de fusión y llevan la misma condición.
-- `test_el_codigo_de_la_rama_corre_sin_el_pat_al_alcance` (punto 4): el
-  checkout de la rama no persiste el PAT, el generador va con `env -u`, ningún
-  paso exporta el PAT como `GH_TOKEN`, y el push va por la URL del paso y no
-  por `origin`. Y las tres pruebas de comportamiento lo miden de verdad: el
-  doble de `uv` apunta si vio `SIRIUS_BOT_TOKEN` o `GH_TOKEN` en su entorno
-  (la fusión limpia exige que no), y el clon del runner tiene el remoto
-  `origin` sin camino de empuje, como en el runner sin credenciales: solo la
-  URL con el PAT llega al remoto.
-- `test_la_puesta_al_dia_no_empuja_con_el_token_del_workflow` (endurecida):
-  el push lleva el PAT (con `GITHUB_TOKEN` Quality no volvería a correr,
-  ADR-183) y nunca `--force`.
+- `test_si_las_puntas_cambian_entre_los_dos_jobs_no_se_aplican_vistas_de_otro_arbol`:
+  alguien empuja a la rama entre `regenerar` y `empujar` → el job que empuja lo
+  ve, no aplica las vistas y la rama queda como la dejó quien empujó.
+- `test_la_puesta_al_dia_tiene_con_que_regenerar`: `setup-uv`, `uv sync` y la
+  entrega del artefacto existen en `regenerar`, condicionados a la fusión y en
+  ese orden; `empujar` recoge el mismo artefacto antes de aplicarlo.
+- `test_el_codigo_de_la_rama_corre_en_un_job_sin_ningun_secreto` (punto 4): de
+  los jobs que traen la rama, solo `regenerar` ejecuta código; ese job no
+  contiene un solo `secrets.` y solo puede leer; ningún checkout persiste
+  credenciales; `empujar` depende de que `regenerar` haya terminado bien y
+  comprueba las dos puntas.
+- `test_la_puesta_al_dia_no_empuja_con_el_token_del_workflow` (endurecida): el
+  paso que empuja recibe el PAT (con `GITHUB_TOKEN` Quality no volvería a
+  correr, ADR-183), lo usa por la URL del paso y no por `origin`, y nunca
+  `--force`.
 
 **Mutaciones, cada una aplicada sobre el workflow, la batería de `test_cola.py`
 ejecutada y el fichero restaurado:**
@@ -127,17 +146,19 @@ ejecutada y el fichero restaurado:**
 | M1 | no regenerar tras la fusión limpia | cae `regenera_las_vistas_y_las_confirma` |
 | M2 | quitar la puerta «solo vistas» (tratar cualquier conflicto como de vistas) | cae `un_conflicto_fuera_de_las_vistas…`: el generador se ejecutó sobre un árbol con conflicto ajeno |
 | M3 | empujar sin confirmar la vista regenerada | cae `regenera_las_vistas_y_las_confirma` |
-| M4 | persistir el PAT en el checkout de la rama (`persist-credentials: true`) | cae `el_codigo_de_la_rama_corre_sin_el_pat_al_alcance` |
-| M5 | ejecutar el generador con el PAT en su entorno (sin `env -u`) | cae `el_codigo_de_la_rama_corre_sin_el_pat_al_alcance`, `la_puesta_al_dia_regenera_las_vistas_y_las_confirma_antes_de_empujar` |
-| M6 | exportar el PAT como `GH_TOKEN` a todo el paso | cae `el_codigo_de_la_rama_corre_sin_el_pat_al_alcance` |
-| M7 | empujar por `origin` en vez de por la URL con el PAT | cae `el_codigo_de_la_rama_corre_sin_el_pat_al_alcance`, `la_puesta_al_dia_regenera_las_vistas_y_las_confirma_antes_de_empujar`, `un_conflicto_solo_en_las_vistas_generadas_se_resuelve_regenerando` |
+| M4 | el checkout del job que regenera persiste credenciales | cae `el_codigo_de_la_rama_corre_en_un_job_sin_ningun_secreto` |
+| M5 | el paso que regenera recibe el PAT en su entorno | cae `el_codigo_de_la_rama_corre_en_un_job_sin_ningun_secreto`, `la_puesta_al_dia_regenera_las_vistas_y_las_confirma_antes_de_empujar` (el doble lo vio) |
+| M6 | el job que empuja ejecuta el generador (código de la rama con el PAT) | cae `el_codigo_de_la_rama_corre_en_un_job_sin_ningun_secreto`, `la_puesta_al_dia_regenera_las_vistas_y_las_confirma_antes_de_empujar`, `un_conflicto_solo_en_las_vistas_generadas_se_resuelve_regenerando` |
+| M7 | empujar por `origin` en vez de por la URL con el PAT | cae `la_puesta_al_dia_no_empuja_con_el_token_del_workflow`, `la_puesta_al_dia_regenera_las_vistas_y_las_confirma_antes_de_empujar`, `un_conflicto_solo_en_las_vistas_generadas_se_resuelve_regenerando` |
+| M8 | no comprobar que las puntas son las mismas | cae `el_codigo_de_la_rama_corre_en_un_job_sin_ningun_secreto`, `si_las_puntas_cambian_entre_los_dos_jobs_no_se_aplican_vistas_de_otro_arbol` |
+| M9 | empujar aunque la regeneración haya fallado | cae `el_codigo_de_la_rama_corre_en_un_job_sin_ningun_secreto` |
 
 Una mutación anunciada en la nota **no cayó**, y se dice: «resolver añadiendo
 todo» (`git add -A` en vez de solo las vistas) no cambia el resultado del caso
 C porque la puerta impide llegar ahí; es la razón de la prueba y la mutación
 M2 de arriba, que miden la puerta directamente.
 
-- Las 30 pruebas de `test_cola.py` en verde; `ruff`, `mypy` sobre la prueba;
+- Las 31 pruebas de `test_cola.py` en verde; `ruff`, `mypy` sobre la prueba;
   el YAML carga. Batería entera: en la PR.
 
 ## Consecuencias
