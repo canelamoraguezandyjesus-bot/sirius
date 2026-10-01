@@ -161,6 +161,25 @@ fi
 # con la incidencia en failed-safely y la razon solo en el log del run
 # (#653, 20-09-2026). Dos resolutores serian dos verdades; es uno.
 cuerpo="$(<"$body_file")"
+# Solo se juzgan los roles que el carril de ejecucion del manifiesto conoce: el
+# implementador es quien resolveria el prompt y moriria si no resuelve. Un rol
+# ajeno a ese carril -`investigador`, cuyo ejecutor es el investigador medido
+# (investigar-orden.yml) y tiene su propia puerta de reparto- no pasa por el
+# manifiesto, asi que esta puerta no afirma nada sobre el. Un cuerpo SIN
+# `Perfil:` si se juzga: ninguna puerta de reparto lo atiende y el
+# implementador pararia en rojo.
+rol_declarado="$(printf '%s' "$cuerpo" | sed -n 's/^Perfil: *\([A-Za-z_-][A-Za-z_-]*\)@.*/\1/p' | head -1)"
+roles_del_carril="$(python3 - "${SIRIUS_GATE_DIR}/prompts/manifiesto.json" <<'PY'
+import json, sys
+manifiesto = json.load(open(sys.argv[1], encoding="utf-8"))
+print(" ".join(sorted({clave.split("@")[0] for clave in manifiesto["carriles"]["ejecucion"]})))
+PY
+)"
+if [ -n "$rol_declarado" ] && ! printf ' %s ' "$roles_del_carril" | grep -Fq " ${rol_declarado} "; then
+  rm -f "$body_file"
+  echo "Activacion valida de #${ISSUE}: abierta, sirius:planned presente, sin estados incompatibles y cuerpo completo; el perfil \`${rol_declarado}\` no es del carril de ejecucion (${roles_del_carril}) y esta puerta no lo juzga."
+  exit 0
+fi
 if ! detalle="$(ISSUE_BODY="$cuerpo" python3 "${SIRIUS_GATE_DIR}/resolver_prompt.py" --carril ejecucion 2>&1 >/dev/null)"; then
   rm -f "$body_file"
   detalle="${detalle#::error::prompt sin resolver (ejecucion): }"

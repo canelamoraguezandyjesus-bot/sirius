@@ -390,3 +390,17 @@ def test_el_perfil_vigente_pasa_sin_ningun_comentario(tmp_path: Path) -> None:
     assert proc.returncode == 0, proc.stderr
     assert "sirius:implement-requested" in _labels(env)
     assert _comments(env).strip() == "", "con el perfil vigente la puerta no dice nada"
+
+
+def test_un_perfil_ajeno_al_carril_de_ejecucion_no_se_juzga_en_esta_puerta(tmp_path: Path) -> None:
+    """`investigador` no resuelve en el carril de ejecucion y no tiene por que: su
+    ejecutor es el investigador medido (`investigar-orden.yml`), con su propia
+    puerta de reparto. Esta puerta no afirma nada sobre un rol que no es suyo."""
+    env = _setup(tmp_path)
+    cuerpo = _COMPLETE_BODY.replace(f"Perfil: implementer@{_VIGENTE}", "Perfil: investigador@2")
+    _seed(env, ["sirius:planned", "sirius:implement-requested"], body=cuerpo)
+    proc = _run(env)
+    assert proc.returncode == 0, proc.stderr
+    assert "sirius:implement-requested" in _labels(env)
+    assert _comments(env).strip() == "", "ni rechazo ni aviso: no es su carril"
+    assert "no lo juzga" in proc.stdout

@@ -57,9 +57,16 @@ mutaciones vistas caer.
 
 ## Decisión
 
-1. La puerta gana el paso 4: con el cuerpo ya leído, ejecuta
+1. La puerta gana el paso 4: con el cuerpo ya leído, y **solo para los roles
+   del carril de ejecución del manifiesto** (hoy `implementer` y
+   `documentalista`, leídos del propio manifiesto, no escritos aquí), ejecuta
    `resolver_prompt.py --carril ejecucion` (el mismo fichero y la misma llamada
-   que el implementador, solo stdlib). Si no resuelve, rechaza con el motivo
+   que el implementador, solo stdlib). Un rol ajeno a ese carril
+   —`investigador`, cuyo ejecutor es el investigador medido de
+   `investigar-orden.yml` y tiene su propia puerta de reparto— no pasa por el
+   manifiesto y esta puerta no afirma nada sobre él; un cuerpo sin `Perfil:`
+   sí se juzga, porque ninguna puerta de reparto lo atiende. Si no resuelve,
+   rechaza con el motivo
    `perfil-sin-resolver`, el detalle del resolutor en el comentario y la acción
    («pon `Perfil: rol@N` con un rol y una versión registrados en el
    manifiesto»), retirando `sirius:implement-requested` como en los demás
@@ -93,6 +100,11 @@ a mano). Cuatro pruebas nuevas:
   (`implementer@2`: el evento se conserva, el aviso lleva su marcador y la
   versión vigente, y no hay rechazo).
 - `test_el_perfil_vigente_pasa_sin_ningun_comentario`.
+- `test_un_perfil_ajeno_al_carril_de_ejecucion_no_se_juzga_en_esta_puerta`
+  (`investigador@2` pasa sin rechazo ni aviso). Lo trajo la batería entera: la
+  primera versión juzgaba todo rol y rompía 22 pruebas del reparto entre
+  carriles y del workflow de investigación, cuyos cuerpos llevan
+  `investigador@2` o un rol sintético; la puerta no es dueña de esos roles.
 
 **Mutaciones** (cada una aplicada sobre la puerta, la prueba ejecutada y el
 fichero restaurado):
