@@ -1,6 +1,6 @@
 # Desenlaces del motor de Sirius
 
-> **Generado por `uv run sirius-memoria desenlaces`** a partir de `diario.jsonl` y `diario-despacho.jsonl`: 667 sucesos, el último el 2026-09-14 09:24 UTC. Lo escribe el motor en la rama
+> **Generado por `uv run sirius-memoria desenlaces`** a partir de `diario.jsonl` y `diario-despacho.jsonl`: 672 sucesos, el último el 2026-10-01 15:57 UTC. Lo escribe el motor en la rama
 > `estado-del-motor` tras cada reflejo (ADR-171). **El diario manda**: si un documento
 > dice otra cosa sobre un encargo, vale esto.
 
@@ -8,15 +8,15 @@
 
 | Estado | Encargos |
 |---|---|
-| active | 1 |
 | cancelled | 27 |
-| delivered | 59 |
+| delivered | 60 |
 | needs_decision | 4 |
 
 ## Los encargos, del más reciente al más antiguo
 
 | Encargo | Clase | Estado / fase | Creado | Último suceso | Objetivo | Evidencia |
 |---|---|---|---|---|---|---|
+| WI-20260828-122242 | investigacion | delivered / entregar | 2026-08-28 12:22 UTC | 2026-10-01 15:57 UTC | Investiga y compara los proveedores de API de modelos NVIDIA (build.nvidia.com, NIM) y Google AI (Gemini)… | [#392](https://github.com/canelamoraguezandyjesus-bot/sirius/issues/392), fusión `7742608` |
 | WI-20260914-073945 | documentacion | delivered / entregar | 2026-09-14 07:39 UTC | 2026-09-14 09:24 UTC | Documenta en docs/audits/SIRIUS_MINA_APRENDIZAJE_OPERATIVO_2026-09.md la segunda edicion de la mina de… | [#627](https://github.com/canelamoraguezandyjesus-bot/sirius/issues/627), fusión `aea308c` |
 | WI-20260914-010842 | programacion | delivered / entregar | 2026-09-14 01:08 UTC | 2026-09-14 07:18 UTC | Implementa la ampliacion de la guarda de citas de fichero, que hoy solo mira docs/decisions/, a toda la… | [#619](https://github.com/canelamoraguezandyjesus-bot/sirius/issues/619), fusión `2fd882d` |
 | WI-20260914-003058 | programacion | cancelled / preparar | 2026-09-14 00:30 UTC | 2026-09-14 07:04 UTC | Implementa la ampliacion de la guarda de citas de fichero, que hoy solo mira docs/decisions/, a toda la… | — |
@@ -107,4 +107,3 @@
 | WI-20260829-012228 | programacion | delivered / entregar | 2026-08-29 01:22 UTC | 2026-09-04 22:57 UTC | Corrige el docstring de seven_day_streak_cli.py (Work Engine) que afirma que motor-sirius.yml «arranca solo a… | [#416](https://github.com/canelamoraguezandyjesus-bot/sirius/issues/416), fusión `3721283` |
 | WI-20260903-095428 | programacion | needs_decision / preparar | 2026-09-03 09:54 UTC | 2026-09-03 09:54 UTC | Implementa M20: la siembra en contexto por criticidad. Es la Decisión 2 del propietario del 02-09-2026… | — |
 | WI-20260903-030529 | programacion | needs_decision / preparar | 2026-09-03 03:05 UTC | 2026-09-03 03:05 UTC | Implementa M20: la siembra en contexto por criticidad. Es la Decisión 2 del propietario del 02-09-2026… | — |
-| WI-20260828-122242 | investigacion | active / preparar | 2026-08-28 12:22 UTC | 2026-08-28 12:22 UTC | Investiga y compara los proveedores de API de modelos NVIDIA (build.nvidia.com, NIM) y Google AI (Gemini)… | [#392](https://github.com/canelamoraguezandyjesus-bot/sirius/issues/392) |
