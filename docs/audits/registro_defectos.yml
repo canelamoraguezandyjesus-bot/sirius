@@ -1192,6 +1192,27 @@ defectos:
       - tests/automation/test_registro_de_defectos.py
       - .claude/skills/registro-de-defectos/SKILL.md
 
+  # ADR-220 (rama claude/la-cola-regenera-la-memoria; sin incidencia: viene de
+  # la bitacora del ciclo, entrada 146 / deuda 48, medida por la mina del
+  # 30-09). La cola de ADR-200 traia main a la rama que esperaba sin regenerar
+  # MEMORIA.md ni docs/audits/INDICE.md: la combinacion salia con la vista
+  # vieja (Quality roja; #653, 25 minutos del corrector) o con un conflicto en
+  # un fichero generado que el paso deshacia pidiendo una persona. 43 de las 44
+  # fusiones de septiembre tocaban la vista.
+  # Cierre: la PR de esa rama (el numero se conoce al abrirla). El sha de
+  # cerrado_por es el del commit del arreglo en la rama; la fusion aplastada lo
+  # deja fuera de main, como en H-217, H-218 y H-219, hasta que la convencion cambie.
+  - id: H-220
+    titulo: La cola traia main a la rama que esperaba sin regenerar las vistas de la memoria y la combinacion salia con la vista vieja o con un conflicto en un fichero generado
+    bloque: motor
+    gravedad: media
+    estado: cerrado
+    cerrado_por: b77a41d69c50168cc6b0521f60af62ef5844f7c7
+    adr: 220
+    ficheros:
+      - .github/workflows/advance-sirius-after-quality.yml
+      - tests/automation/test_cola.py
+
   # ADR-221 (rama claude/la-puerta-resuelve-el-perfil; sin incidencia: viene de
   # la bitacora del ciclo, entradas 123, 124 y 138 / deudas 34 y 35, medidas por
   # la mina del 30-09). La puerta de activacion no miraba el Perfil: rol@N y
