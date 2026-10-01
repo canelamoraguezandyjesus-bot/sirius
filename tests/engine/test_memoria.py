@@ -38,8 +38,7 @@ from sirius_engine.memoria import (
     comprobar_memoria,
     escribir_memoria,
     generar_desenlaces,
-    generar_indice_de_auditorias,
-    generar_memoria,
+    generar_vistas,
     leer_arbol,
     leer_decisiones,
     leer_encargos,
@@ -48,6 +47,15 @@ from sirius_engine.memoria_cli import main
 
 RAIZ_REPO = Path(__file__).resolve().parents[2]
 LIMITE_DE_LECTURA = 120_000
+
+
+def generar_memoria(raiz: Path) -> str:
+    """La vista de `MEMORIA.md`, por la misma puerta que usa la producción (ADR-179)."""
+    return generar_vistas(raiz)[FICHERO_MEMORIA]
+
+
+def generar_indice_de_auditorias(raiz: Path) -> str:
+    return generar_vistas(raiz)[FICHERO_INDICE_AUDITORIAS]
 
 
 # --- Un árbol mínimo ----------------------------------------------------------

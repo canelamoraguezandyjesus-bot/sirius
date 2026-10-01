@@ -734,23 +734,14 @@ def generar_vistas(raiz: Path) -> dict[str, str]:
     """Las vistas de conocimiento de este árbol, por ruta relativa. Deterministas.
 
     `MEMORIA.md` y, desde ADR-218, `docs/audits/INDICE.md`: se escriben juntas y
-    se comprueban juntas, para que la segunda no sea una pieza sin lector.
+    se comprueban juntas, para que la segunda no sea una pieza sin lector. Es la
+    única puerta: el árbol se lee una vez y las dos vistas salen de esa lectura.
     """
     arbol = leer_arbol(raiz)
     return {
         FICHERO_MEMORIA: _texto_de_memoria(arbol),
         FICHERO_INDICE_AUDITORIAS: _texto_del_indice_de_auditorias(arbol),
     }
-
-
-def generar_memoria(raiz: Path) -> str:
-    """El texto de `MEMORIA.md` para este árbol. Determinista: solo depende del árbol."""
-    return generar_vistas(raiz)[FICHERO_MEMORIA]
-
-
-def generar_indice_de_auditorias(raiz: Path) -> str:
-    """El texto de `docs/audits/INDICE.md` para este árbol (ADR-218)."""
-    return generar_vistas(raiz)[FICHERO_INDICE_AUDITORIAS]
 
 
 def _texto_de_memoria(arbol: Arbol) -> str:
