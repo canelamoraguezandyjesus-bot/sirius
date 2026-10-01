@@ -21,15 +21,22 @@ from sirius_engine.round_family_detector import detectar_familia_repetida
 from sirius_engine.round_history import history_after_last_resume, parse_round_records
 
 
-def detector_de_hoy(cuerpos: list[str]) -> str:
-    """«SI: fichero rondas; ...» o «no», con el detector instalado en este arbol."""
+def evidencias_de_hoy(cuerpos: list[str]) -> list[tuple[str, tuple[int, ...]]]:
+    """(archivo, rondas) por familia que el detector instalado en este arbol marca
+    sobre lo publicado, tras el ultimo marcador de reanudacion; vacio si no marca."""
     registros = parse_round_records(history_after_last_resume("\n\n".join(cuerpos)))
     deteccion = detectar_familia_repetida(registros)
     if not deteccion.hay_familia_repetida:
+        return []
+    return [(e.archivo, tuple(int(n) for n in e.rondas)) for e in deteccion.evidencias]
+
+
+def detector_de_hoy(cuerpos: list[str]) -> str:
+    """«SI: fichero rondas; ...» o «no»: la misma deteccion, para imprimir."""
+    evidencias = evidencias_de_hoy(cuerpos)
+    if not evidencias:
         return "no"
-    return "SI: " + "; ".join(
-        f"{e.archivo.split('/')[-1][:40]} {e.rondas}" for e in deteccion.evidencias
-    )
+    return "SI: " + "; ".join(f"{a.split('/')[-1][:40]} {r}" for a, r in evidencias)
 
 
 def main() -> int:

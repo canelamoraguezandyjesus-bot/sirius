@@ -1,4 +1,4 @@
-"""Falsos negativos del detector de familia repetida en la ventana, derivados.
+"""Falsos negativos del detector de familia repetida en la ventana, derivados por TRAMO.
 
 Para CADA incidencia con alguna ronda en la ventana (las de `resumen.json`):
 
@@ -9,9 +9,15 @@ Para CADA incidencia con alguna ronda en la ventana (las de `resumen.json`):
    marcador de reanudacion-. Evaluar solo el historial final no vale: un
    `continua` posterior borra del tramo vigente una familia que SI habria
    avisado antes (Codex, PR #665 ronda 2);
-2. una incidencia «marca» si el detector de hoy marca en algun prefijo;
-3. las marcadas que no recibieron ningun AVISO_FAMILIA_REPETIDA en la ventana
-   son los falsos negativos de entonces.
+2. la unidad es el TRAMO -un fichero con hallazgos en tres o mas rondas
+   consecutivas-, no la incidencia: #570 tiene dos tramos reales distintos
+   (1-3 y 2-4) y la edicion del 14-09 ya contaba «6 falsos negativos en 5
+   incidencias» (Codex, PR #665 ronda 3). De cada tramo se guarda la primera
+   ronda en la que el detector lo marca y el instante de ese comentario;
+3. un AVISO_FAMILIA_REPETIDA de la ventana CUBRE los tramos de su incidencia
+   marcados hasta su instante (el aviso lista todas las evidencias que el
+   detector vio); un tramo marcado despues del ultimo aviso -o en una
+   incidencia sin avisos- es un falso negativo de entonces.
 
 La clasificacion es una funcion pura (`clasificar`) con sus pruebas en
 `tests/automation/test_mina_falsos_negativos.py`; `main` solo lee el volcado
@@ -23,56 +29,60 @@ from __future__ import annotations
 import json
 import sys
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from analizar import FIN, confianza
 from datos import DATOS, RAW
-from reproducir_avisos import detector_de_hoy
+from reproducir_avisos import evidencias_de_hoy
 
 from sirius_engine.round_history import parse_round_records
 
 
 @dataclass(frozen=True)
-class Prefijo:
-    """El veredicto del detector de hoy sobre lo publicado hasta una ronda."""
+class Tramo:
+    """Una familia que el detector de hoy marca: el fichero, el tramo mas largo
+    visto y la primera ronda (y su instante) en la que se marco."""
 
-    ronda: int | None
-    instante: str
-    veredicto: str  # «no» o «SI: ...»
+    archivo: str
+    rondas: tuple[int, ...]
+    primera_ronda: int | None
+    primer_instante: str
+    cubierto_por_aviso: bool
 
     @property
-    def marca(self) -> bool:
-        return self.veredicto != "no"
+    def nombre(self) -> str:
+        return self.archivo.split("/")[-1][:40]
 
 
 @dataclass(frozen=True)
 class Clasificacion:
     incidencia: int
-    prefijos: tuple[Prefijo, ...]
+    rondas_evaluadas: int
+    tramos: tuple[Tramo, ...]
     avisos: int
-    estado: str = field(init=False)  # sin_familia | avisada | falso_negativo
-
-    def __post_init__(self) -> None:
-        marcados = [p for p in self.prefijos if p.marca]
-        if not marcados:
-            estado = "sin_familia"
-        elif self.avisos:
-            estado = "avisada"
-        else:
-            estado = "falso_negativo"
-        object.__setattr__(self, "estado", estado)
 
     @property
-    def primera_marca(self) -> Prefijo | None:
-        return next((p for p in self.prefijos if p.marca), None)
+    def sin_aviso(self) -> tuple[Tramo, ...]:
+        return tuple(t for t in self.tramos if not t.cubierto_por_aviso)
+
+    @property
+    def estado(self) -> str:
+        if not self.tramos:
+            return "sin_familia"
+        return "falso_negativo" if self.sin_aviso else "avisada"
 
 
-def prefijos(comentarios: Iterable[Mapping[str, str]], *, fin: str) -> tuple[Prefijo, ...]:
-    """Un `Prefijo` por comentario que publica una ronda, en orden, hasta `fin`."""
+def tramos_de(
+    comentarios: Iterable[Mapping[str, str]], avisos: Iterable[str], *, fin: str
+) -> tuple[int, tuple[Tramo, ...]]:
+    """(rondas evaluadas, tramos) de una incidencia, evaluando cada prefijo hasta `fin`."""
+    instantes_de_aviso = sorted(a for a in avisos if a <= fin)
     acumulado: list[str] = []
-    salida: list[Prefijo] = []
+    evaluadas = 0
+    primera: dict[str, tuple[int | None, str]] = {}
+    mas_largo: dict[str, tuple[int, ...]] = {}
     for c in sorted(comentarios, key=lambda c: c["created_at"]):
         if c["created_at"] > fin:
             break
@@ -80,10 +90,22 @@ def prefijos(comentarios: Iterable[Mapping[str, str]], *, fin: str) -> tuple[Pre
         registros = parse_round_records(c["body"])
         if not registros:
             continue
-        salida.append(
-            Prefijo(registros[0].get("round"), c["created_at"], detector_de_hoy(acumulado))
+        evaluadas += 1
+        for archivo, rondas in evidencias_de_hoy(acumulado):
+            primera.setdefault(archivo, (registros[0].get("round"), c["created_at"]))
+            if len(rondas) > len(mas_largo.get(archivo, ())):
+                mas_largo[archivo] = rondas
+    tramos = tuple(
+        Tramo(
+            archivo=archivo,
+            rondas=mas_largo[archivo],
+            primera_ronda=ronda,
+            primer_instante=instante,
+            cubierto_por_aviso=any(a >= instante for a in instantes_de_aviso),
         )
-    return tuple(salida)
+        for archivo, (ronda, instante) in primera.items()
+    )
+    return evaluadas, tramos
 
 
 def clasificar(
@@ -93,14 +115,17 @@ def clasificar(
     fin: str,
 ) -> dict[int, Clasificacion]:
     """La clasificacion de cada incidencia; `avisos` son (incidencia, instante)."""
-    avisos_en_ventana: dict[int, int] = {}
+    por_incidencia: dict[int, list[str]] = {}
     for n, instante in avisos:
-        if instante <= fin:
-            avisos_en_ventana[int(n)] = avisos_en_ventana.get(int(n), 0) + 1
-    return {
-        int(n): Clasificacion(int(n), prefijos(cs, fin=fin), avisos_en_ventana.get(int(n), 0))
-        for n, cs in comentarios_por_incidencia.items()
-    }
+        por_incidencia.setdefault(int(n), []).append(instante)
+    resultado: dict[int, Clasificacion] = {}
+    for n, cs in comentarios_por_incidencia.items():
+        avisos_n = por_incidencia.get(int(n), [])
+        evaluadas, tramos = tramos_de(cs, avisos_n, fin=fin)
+        resultado[int(n)] = Clasificacion(
+            int(n), evaluadas, tramos, len([a for a in avisos_n if a <= fin])
+        )
+    return resultado
 
 
 def main() -> int:
@@ -109,30 +134,42 @@ def main() -> int:
     for n in resumen["incidencias"]:
         d = json.loads((RAW / f"issue_{int(n)}.json").read_text(encoding="utf-8"))
         comentarios[int(n)] = [c for c in d["comments"] if confianza(c)]
-    resultado = clasificar(
-        comentarios, [(int(n), t) for n, t in resumen["avisos_familia"]], fin=FIN
-    )
+    avisos = [(int(n), t) for n, t in resumen["avisos_familia"]]
+    resultado = clasificar(comentarios, avisos, fin=FIN)
     print(
-        "| incidencia | primera ronda en la que marca el detector de hoy | "
-        "avisos en la ventana | estado |"
+        "| incidencia | tramo (fichero, rondas) | primera ronda en la que marca | "
+        "aviso que lo cubre | estado |"
     )
-    print("|---|---|---|---|")
+    print("|---|---|---|---|---|")
     for n in sorted(resultado):
         c = resultado[n]
-        primera = c.primera_marca
-        marca = f"ronda {primera.ronda}: {primera.veredicto}" if primera else "no marca"
-        print(f"| #{n} | {marca} | {c.avisos} | {c.estado} |")
-    marcadas = sorted(n for n, c in resultado.items() if c.estado != "sin_familia")
-    avisadas = sorted(n for n, c in resultado.items() if c.estado == "avisada")
-    falsos = sorted(n for n, c in resultado.items() if c.estado == "falso_negativo")
+        if not c.tramos:
+            print(f"| #{n} | — | no marca | — | sin_familia |")
+        for t in c.tramos:
+            cubierto = "si" if t.cubierto_por_aviso else "NO"
+            print(
+                f"| #{n} | `{t.nombre}` {t.rondas} | ronda {t.primera_ronda} @ "
+                f"{t.primer_instante} | {cubierto} | {c.estado} |"
+            )
+    tramos = [(n, t) for n, c in sorted(resultado.items()) for t in c.tramos]
+    sin_aviso = [(n, t) for n, t in tramos if not t.cubierto_por_aviso]
+    marcadas = sorted({n for n, _ in tramos})
+    con_falso_negativo = sorted({n for n, _ in sin_aviso})
     print(f"\nIncidencias examinadas: {len(resultado)} (historiales hasta {FIN})")
-    print(f"El detector de hoy marca en algun prefijo en {len(marcadas)}: {marcadas}")
-    print(f"De esas, con aviso publicado en la ventana: {len(avisadas)}: {avisadas}")
-    print(f"Sin ningun aviso (falsos negativos de entonces): {len(falsos)}: {falsos}")
-    for n in falsos:
-        print(f"\n#{n}: ronda a ronda")
-        for p in resultado[n].prefijos:
-            print(f"  ronda {p.ronda} @ {p.instante}: {p.veredicto}")
+    print(
+        f"Tramos que el detector de hoy marca en alguna ronda: {len(tramos)}, "
+        f"en {len(marcadas)} incidencias: {marcadas}"
+    )
+    print(f"Tramos cubiertos por un aviso de la ventana: {len(tramos) - len(sin_aviso)}")
+    print(
+        f"Tramos sin aviso (falsos negativos de entonces): {len(sin_aviso)}, "
+        f"en {len(con_falso_negativo)} incidencias: {con_falso_negativo}"
+    )
+    for n, t in sin_aviso:
+        print(
+            f"  #{n} `{t.nombre}` {t.rondas}: marcado desde la ronda {t.primera_ronda} "
+            f"({t.primer_instante})"
+        )
     return 0
 
 

@@ -43,10 +43,10 @@ decidía, y al lado lo que pasó.
    una decisión del propietario), no la mitad (§6.3).
 4. *Guardianes.* Predicción: el que más defectos reales habría cazado es el
    detector de familia repetida ya arreglado el 14-09, por delante de cualquier
-   guardián nuevo. **Acertó, con un coste**: 5 familias reales que el detector
-   de entonces dejó pasar y el de hoy ve en alguna ronda, y **1 falso
-   positivo nuevo** (#566, por el criterio de la edición anterior): neto +4
-   (§4.3, §8).
+   guardián nuevo. **Acertó, con un coste**: 6 familias reales (7 tramos sin
+   aviso en 6 incidencias, uno de ellos el falso positivo) que el detector de
+   entonces dejó pasar y el de hoy ve en alguna ronda, y **1 falso positivo
+   nuevo** (#566, por el criterio de la edición anterior): neto +5 (§4.3, §8).
 
 **Criterio de parada, escrito antes de contar nada.** Menos de 10 avisos del
 detector en la ventana → no se publica tasa. Dos agentes en desacuerdo sobre la
@@ -256,20 +256,30 @@ nunca más allá del 30-09) y le pasa el detector de hoy, el mismo código que
 antes (lo cazó Codex en la revisión de este informe; la clasificación es una
 función pura con sus pruebas en `tests/automation/test_mina_falsos_negativos.py`).
 
-Resultado: el detector de hoy marca en alguna ronda en **14** incidencias
-(#520, #523, #526, #529, #539, #545, #566, #570, #574, #581, #597, #599, #601
-y #653); **8** recibieron aviso en la ventana, y **6 no recibieron ninguno**:
+La unidad es el **tramo** —un fichero con hallazgos en tres o más rondas
+consecutivas—, no la incidencia: #570 tiene dos tramos reales distintos (1-3 y
+2-4), como ya contaba la edición del 14-09 («6 falsos negativos en 5
+incidencias»); contar incidencias los fundía en uno (lo cazó Codex en la ronda
+3 de la revisión de este informe). Un aviso cubre los tramos de su incidencia
+marcados hasta su instante; un tramo marcado después del último aviso, o en
+una incidencia sin avisos, es un falso negativo de entonces.
 
-| Incidencia | Primera ronda en la que marca el detector de hoy | Fichero |
+Resultado: el detector de hoy marca **16 tramos en 14 incidencias** (#520,
+#523, #526, #529, #539, #545, #566, #570, #574, #581, #597, #599, #601 y
+#653); **9** tramos los cubrió un aviso de la ventana, y **7 no recibieron
+ninguno**, en 6 incidencias:
+
+| Incidencia | Tramo (fichero, rondas) | Primera ronda en la que marca el detector de hoy |
 |---|---|---|
-| #523 | ronda 4, 04-09 15:52 UTC (tramo 2-4) | `ADR-133-g3-el-guardian-de-goteo-entiende…` |
-| #566 | ronda 3, 08-09 03:43 UTC (1-3) | `ADR-162-la-altura-de-una-fila-del-chat…` |
-| #570 | ronda 3, 08-09 10:39 UTC (1-3) | `ollama_query_intent_classifier.py` |
-| #574 | ronda 3, 08-09 14:14 UTC (1-3; sigue hasta la 6, y en la 7 el tramo se corta) | `ADR-166-el-cargador-del-banco…` |
-| #599 | ronda 3, 13-09 02:21 UTC (1-3) | `sirius_apply_verdict.sh` |
-| #601 | ronda 3, 13-09 (1-3) | `intent_interpreter.py` |
+| #523 | `ADR-133-g3-el-guardian-de-goteo-entiende…` (2-4) | ronda 4, 04-09 15:52 UTC |
+| #566 | `ADR-162-la-altura-de-una-fila-del-chat…` (1-3) | ronda 3, 08-09 03:43 UTC |
+| #570 | `ollama_query_intent_classifier.py` (1-3) | ronda 3, 08-09 10:39 UTC |
+| #570 | `ADR-164-la-pregunta-se-convierte-en-una…` (2-4) | ronda 4, 08-09 11:12 UTC |
+| #574 | `ADR-166-el-cargador-del-banco…` (1-6; en la 7 el tramo se corta) | ronda 3, 08-09 14:14 UTC |
+| #599 | `sirius_apply_verdict.sh` (1-4) | ronda 3, 13-09 02:21 UTC |
+| #601 | `intent_interpreter.py` (1-3) | ronda 3, 13-09 12:10 UTC |
 
-Las seis son **anteriores al 14-09**. Después del arreglo solo dos incidencias
+Los siete son **anteriores al 14-09**. Después del arreglo solo dos incidencias
 tuvieron rondas (#650, sin familia; #653, avisada en r4 y r5): **0 falsos
 negativos conocidos tras el 14-09**.
 
@@ -281,10 +291,10 @@ hoy**, el primero conocido. Y #574, que aquella contó a mano con tramo 1-7,
 hoy se marca desde la ronda 3 (no sobre el historial final, porque un
 `continua` lo corta antes de la 7): la primera versión de este informe decía
 que «hoy no se marca», y era verdad solo del historial final. Así que el
-arreglo del 14-09 no es gratis: **+5 familias reales que antes se perdían
-(#523, #570, #574, #599, #601), 1 falso positivo nuevo (#566)**, neto +4,
-medido sobre el mes entero. Es más que el +4 neto que aquella edición predijo
-descontando el falso, y menos de lo que parecía sin descontarlo.
+arreglo del 14-09 no es gratis: **+6 familias reales que antes se perdían
+(#523, los dos tramos de #570, #574, #599, #601), 1 falso positivo nuevo
+(#566)**, neto +5, medido sobre el mes entero y por tramos, que es la unidad
+que aquella edición ya usaba.
 
 ## 5. La segunda población: Codex sobre las PR
 
@@ -498,7 +508,7 @@ Mismo criterio de entrada que las ediciones anteriores y que la incidencia
 
 | Guardián | Aciertos reales | Falsos | Evidencia |
 |---|---|---|---|
-| El detector de familia repetida ya arreglado (14-09) | +5 familias reales sin aviso en su día (#523, #570, #574, #599, #601) y 14/14 avisos reproducidos | 1 (#566, por el criterio de la edición anterior) | §4.2, §4.3. Neto **+4**, medido ronda a ronda sobre el mes |
+| El detector de familia repetida ya arreglado (14-09) | +6 familias reales sin aviso en su día (#523, #570 ×2, #574, #599, #601) y 14/14 avisos reproducidos | 1 (#566, por el criterio de la edición anterior) | §4.2, §4.3. Neto **+5**, medido tramo a tramo sobre el mes |
 | Comprobar `Perfil: rol@N` en `validate_issue_body.py` | 1 ciclo muerto a los 6 s (#653) y los encargos lanzados con `@2` no vigente | 0 por construcción: solo rechaza lo que el workflow iba a rechazar después | entradas 123, 124, 138; deudas 34, 35 |
 | Regenerar `MEMORIA.md` en la cola antes de empujar la combinación | 1 vuelta del corrector (25 min) en #653 | 0 | entrada 146; deuda 48 |
 | El guardián de goteo tal como está | 37 marcas en 15 incidencias | no medido: haría falta verificar cada marca contra el diff, el método de agosto | §3 |
