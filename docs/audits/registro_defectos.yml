@@ -1125,6 +1125,28 @@ defectos:
       - .github/workflows/reflejar-desenlace.yml
       - docs/audits/CIERRE_DEL_CICLO_2026-09-24.md
 
+  # ADR-219 (rama claude/el-motor-dice-lo-que-hace; sin incidencia: viene de
+  # la bitacora del ciclo, entradas 29, 100 y 146, medidas por la mina del
+  # 30-09). Tres textos del motor que no decian lo que pasaba: la linea
+  # '- PR:' del veredicto CHANGES_REQUESTED no se publico ni una vez (0 de 128
+  # en septiembre; printf leia el guion como opcion), el aviso de listo pedia
+  # una autorizacion que ADR-205 habia dejado de necesitar, y una orden
+  # 'continua' casi exacta moria en silencio con exit 0.
+  # Cierre: la PR de esa rama (el numero se conoce al abrirla). El sha de
+  # cerrado_por es el del commit del arreglo en la rama; la fusion aplastada lo
+  # deja fuera de main, como en H-217 y H-218, hasta que la convencion cambie.
+  - id: H-219
+    titulo: Tres textos del motor no decian lo que pasaba, la linea de la PR del veredicto nunca se publico, el aviso de listo pedia una autorizacion innecesaria y una casi-orden moria en silencio
+    bloque: motor
+    gravedad: media
+    estado: cerrado
+    cerrado_por: ea080c6b77401ea099536240d53298f908f932f0
+    adr: 219
+    ficheros:
+      - scripts/automation/sirius_apply_verdict.sh
+      - scripts/automation/sirius_resume_on_command.sh
+      - .github/workflows/notify-sirius-state.yml
+
   # ADR-218 (PR #664, sin incidencia: lo destapo Quality sobre la propia PR).
   # La vista de memoria volvio a no caber en una sola lectura 17 dias despues
   # de ADR-196: sobre main quedaban 3.146 bytes de margen, menos de lo que
