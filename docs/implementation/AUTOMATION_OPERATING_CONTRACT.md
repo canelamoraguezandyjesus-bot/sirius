@@ -231,14 +231,22 @@ Reglas del modo dual:
   combina ambos resultados sin votos ni arbitraje de otro modelo, con esta
   precedencia: JSON inválido de un revisor obligatorio → `FAILED_SAFELY`; SHA
   distinto o no demostrable → `FAILED_SAFELY`; `FAILED_SAFELY` de cualquiera →
-  `FAILED_SAFELY`; `BLOCKED_BY_DECISION` de Claude → `BLOCKED_BY_DECISION`;
+  `FAILED_SAFELY`, con una excepción acotada (ADR-226): si Codex **declaró**
+  que no revisa —cuota agotada, configuración, «Something went wrong»; razones
+  `codex-fallo-declarado` y su subtipo transitorio— y Claude pidió cambios con
+  observaciones válidas sobre el head esperado, la ronda termina en
+  `CHANGES_REQUESTED` con las observaciones de Claude y deja escrito que Codex
+  no revisó (un timeout no es una declaración y sigue parando);
+  `BLOCKED_BY_DECISION` de Claude → `BLOCKED_BY_DECISION`;
   `CHANGES_REQUESTED` de cualquiera → `CHANGES_REQUESTED`; solo si ambos
   aprueban el mismo SHA → `REVIEW_APPROVED`.
 - Con la revisión dual activada Codex es obligatorio: timeout
   (`SIRIUS_CODEX_REVIEW_TIMEOUT_SECONDS`, 1200 s por defecto), respuesta sobre
   otro SHA, autor no autorizado o resultado ambiguo terminan la ronda en
   `FAILED_SAFELY`, nunca en aprobación silenciosa ni en degradación automática
-  a revisión solo Claude.
+  a revisión solo Claude. Que Codex declare que no revisa tampoco aprueba
+  nada: solo deja pasar al corrector los hallazgos que Claude ya entregó
+  (ADR-226), y la aprobación sigue exigiendo a los dos sobre el mismo SHA.
 - Las observaciones combinadas conservan su procedencia (prefijos `CLAUDE-` y
   `CODEX-`), se deduplican solo cuando son duplicados exactos y llegan al
   corrector en la misma lista estructurada única (`OBSERVACIONES_ESTRUCTURADAS`)

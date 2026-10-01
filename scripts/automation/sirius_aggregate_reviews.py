@@ -8,7 +8,13 @@ este orden de precedencia (contrato operativo §4.1):
 
 1. JSON ausente o inválido de cualquier revisor obligatorio → ``FAILED_SAFELY``.
 2. SHA revisado distinto del esperado o no demostrable → ``FAILED_SAFELY``.
-3. ``FAILED_SAFELY`` de cualquiera → ``FAILED_SAFELY``.
+3. ``FAILED_SAFELY`` de cualquiera → ``FAILED_SAFELY``, con una excepción acotada
+   (ADR-226): si Codex **declaró** que no revisa —``codex-fallo-declarado`` o
+   su subtipo transitorio: cuota agotada, configuración, «Something went
+   wrong»— y Claude pidió cambios con observaciones válidas sobre el head
+   esperado, la ronda sigue a la regla 5 con las observaciones de Claude y deja
+   escrito que Codex no revisó. Un timeout no es una declaración (Codex puede
+   estar revisando todavía) y sigue parando.
 4. ``BLOCKED_BY_DECISION`` de Claude → ``BLOCKED_BY_DECISION``.
 5. ``CHANGES_REQUESTED`` de cualquiera → ``CHANGES_REQUESTED``.
 6. Solo si ambos aprueban el mismo SHA → ``REVIEW_APPROVED``.
@@ -38,6 +44,18 @@ CLAUDE_STATUSES = {
     "FAILED_SAFELY",
 }
 CODEX_STATUSES = {"APPROVED", "CHANGES_REQUESTED", "FAILED_SAFELY"}
+
+#: Razones con las que el recolector dice que el CONECTOR de Codex declaró que no
+#: revisa este head (cuota agotada, configuración, «Something went wrong»): Codex
+#: contestó, y contestó que no. ADR-226: con hallazgos de Claude a la vista, esa
+#: declaración no tira la ronda. El ``timeout`` no está aquí a propósito: no es
+#: una declaración, Codex puede estar revisando todavía (ADR-141).
+RAZONES_CON_LAS_QUE_CODEX_DECLARA_QUE_NO_REVISA = frozenset(
+    {"codex-fallo-declarado", "codex-fallo-declarado-transitorio"}
+)
+
+#: Lo que el recolector cita del conector entre comillas angulares.
+CITA_RE = re.compile(r"«([^»]*)»")
 
 # Cualquier URL dentro de un campo de contenido. Se neutraliza al construir la
 # clave de deduplicación: identifica al comentario que reportó el hallazgo, no
@@ -256,7 +274,21 @@ def aggregate(
         )
 
     # --- Regla 3: fallo seguro de cualquiera -----------------------------------
-    if claude_status == "FAILED_SAFELY" or (dual and codex_status == "FAILED_SAFELY"):
+    # ADR-226 (bitácora, entrada 106): si Codex DECLARÓ que no revisa y Claude ya
+    # entregó un CHANGES_REQUESTED válido sobre el head esperado (reglas 1 y 2
+    # pasadas), la ronda no se tira: las observaciones de Claude van al
+    # corrector y Codex se vuelve a pedir sobre el head corregido. Con Claude
+    # aprobando no hay excepción: aprobar sigue exigiendo a los dos.
+    codex_reason = str(codex.get("reason") or "").strip() if dual and codex is not None else ""
+    codex_declaro_que_no_revisa = (
+        dual
+        and codex_status == "FAILED_SAFELY"
+        and codex_reason in RAZONES_CON_LAS_QUE_CODEX_DECLARA_QUE_NO_REVISA
+    )
+    claude_lleva_la_ronda = codex_declaro_que_no_revisa and claude_status == "CHANGES_REQUESTED"
+    if claude_status == "FAILED_SAFELY" or (
+        dual and codex_status == "FAILED_SAFELY" and not claude_lleva_la_ronda
+    ):
         details = []
         if claude_status == "FAILED_SAFELY":
             details.append(f"Claude: {str(claude.get('summary') or '').strip() or 'sin detalle'}")
@@ -303,14 +335,26 @@ def aggregate(
         )
         parts = [f"Claude: {claude_status}"]
         if dual:
-            parts.append(f"Codex: {codex_status}")
+            parts.append(
+                f"Codex: {codex_status}" + (f" ({codex_reason})" if claude_lleva_la_ronda else "")
+            )
+        summary = (
+            "Resultado conjunto de la revisión ("
+            + "; ".join(parts)
+            + f"): {len(observations)} observación(es) estructurada(s) para el corrector."
+        )
+        if claude_lleva_la_ronda and codex is not None:
+            sources["codex"] = {"status": codex_status, "reason": codex_reason}
+            cita = CITA_RE.search(str(codex.get("summary") or ""))
+            dicho = f" «{cita.group(1).strip()}»" if cita else ""
+            summary += (
+                f" Codex no revisó este head: declaró que no lo haría ({codex_reason}{dicho}). "
+                "Las observaciones son solo de Claude; Codex se volverá a pedir sobre el head "
+                "corregido y nada se aprueba sin él (ADR-226)."
+            )
         return {
             "verdict": "CHANGES_REQUESTED",
-            "summary": (
-                "Resultado conjunto de la revisión ("
-                + "; ".join(parts)
-                + f"): {len(observations)} observación(es) estructurada(s) para el corrector."
-            ),
+            "summary": summary,
             "reviewed_head_sha": expected_head,
             "sources": sources,
             "observations": observations,

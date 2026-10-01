@@ -19,7 +19,10 @@ name: Revisar bloque Sirius
 #     resultado de Codex y un agregador determinista combina ambos en un único
 #     veredicto. Si Codex no responde, responde sobre otro SHA o su resultado
 #     no es identificable, la ronda termina en FAILED_SAFELY: nunca se degrada
-#     en silencio a revisión solo Claude ni se aprueba sin ambos revisores.
+#     en silencio a revisión solo Claude ni se aprueba sin ambos revisores. Si
+#     Codex DECLARA que no revisa (cuota agotada, configuración) y Claude pidió
+#     cambios, el corrector recibe los hallazgos de Claude con la constancia de
+#     que Codex no revisó (ADR-226); aprobar sigue exigiendo a los dos.
 #
 # La bandera permite volver al flujo previo sin revertir commits. La revisión
 # automática del panel de Codex permanece apagada: el disparo ocurre únicamente

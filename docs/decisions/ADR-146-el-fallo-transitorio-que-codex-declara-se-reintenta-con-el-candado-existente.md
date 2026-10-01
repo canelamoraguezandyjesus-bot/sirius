@@ -68,6 +68,10 @@ no arregla.
   (variable renombrada a `solo_infra_transitoria_de_codex`). El subtipo
   persistente sigue parando para diagnóstico humano.
 
+> **01-10-2026, ADR-226.** El subtipo persistente sigue sin re-armar la ronda,
+> pero cuando Claude pidió cambios la ronda ya no se tira: pasa al corrector
+> con los hallazgos de Claude y Codex se vuelve a pedir sobre el head corregido.
+
 Por qué no la 2: reintentaría límites de uso y errores de configuración —
 persistentes — quemando la ronda del candado sin arreglar nada, y taparía una
 señal que conviene mirar (la exclusión original de ADR-141, que sigue vigente
