@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
@@ -136,6 +137,39 @@ def _extraer_paso_build_prompt() -> str:
 
 _HEREDOC_RE = re.compile(r"prompt<<SIRIUS_PROMPT_EOF\n(.*?\n)SIRIUS_PROMPT_EOF\n", re.DOTALL)
 
+#: El instante en que el arnés «prepara el prompt»: el guión real calcula el
+#: reloj del implementador con `date -u` (ADR-228), y la no-divergencia solo
+#: se puede comparar byte a byte si el guión y la proyección ven la misma hora.
+_AHORA_DEL_RELOJ = datetime(2026, 10, 1, 12, 0, tzinfo=UTC)
+
+
+def _date_fijo(destino: Path) -> Path:
+    """Un `date` de arnés: la hora base es `_AHORA_DEL_RELOJ` y el `-d "+N minutes"`
+    del guión se aplica sobre ella. Todo lo demás se delega al `date` real."""
+    real = shutil.which("date")
+    assert real is not None, "no hay `date` en el PATH"
+    binarios = destino / "bin-date-fijo"
+    binarios.mkdir(exist_ok=True)
+    guion = binarios / "date"
+    guion.write_text(
+        "#!/bin/sh\n"
+        f'base="{_AHORA_DEL_RELOJ.strftime("%Y-%m-%dT%H:%M:%SZ")}"\n'
+        'desplazamiento=""\n'
+        'formato=""\n'
+        "while [ $# -gt 0 ]; do\n"
+        '  case "$1" in\n'
+        "    -u) ;;\n"
+        '    -d) desplazamiento="$2"; shift ;;\n'
+        '    +*) formato="$1" ;;\n'
+        "  esac\n"
+        "  shift\n"
+        "done\n"
+        f'exec "{real}" -u -d "${{base}} ${{desplazamiento}}" ${{formato:+"$formato"}}\n',
+        encoding="utf-8",
+    )
+    guion.chmod(0o755)
+    return binarios
+
 
 def _cuerpo_con_perfil(perfil: str) -> str:
     """Un cuerpo de incidencia mínimo con su campo ``Perfil:``, como lo escribe el despachador.
@@ -175,6 +209,7 @@ def _prompt_real_del_workflow(
             "ISSUE_NUMBER": str(issue_number),
             "GITHUB_OUTPUT": str(output_path),
             "ISSUE_BODY": _cuerpo_con_perfil(perfil),
+            "PATH": f"{_date_fijo(tmp_path)}{os.pathsep}{os.environ.get('PATH', '')}",
         }
     )
     subprocess.run(
@@ -244,10 +279,18 @@ def test_la_proyeccion_del_perfil_implementer_reproduce_el_prompt_real_del_workf
 
     esperado = _prompt_real_del_workflow(repo=repo, issue_number=issue_number, tmp_path=tmp_path)
     obtenido = project_github_prompt(
-        procedure_text=procedure_text, repo=repo, issue_number=issue_number, base_branch="main"
+        procedure_text=procedure_text,
+        repo=repo,
+        issue_number=issue_number,
+        base_branch="main",
+        ahora=_AHORA_DEL_RELOJ,
     )
 
     assert obtenido == esperado
+    assert "tu paso muere a las 12:50:00Z UTC" in esperado, (
+        "el guión real lleva el reloj del implementador (ADR-228) calculado sobre la hora fija"
+    )
+    assert "no más tarde de las 12:34:00Z UTC" in esperado
 
 
 def test_la_no_divergencia_vale_para_otra_incidencia_y_otro_repositorio(tmp_path: Path) -> None:
@@ -259,10 +302,25 @@ def test_la_no_divergencia_vale_para_otra_incidencia_y_otro_repositorio(tmp_path
 
     esperado = _prompt_real_del_workflow(repo=repo, issue_number=issue_number, tmp_path=tmp_path)
     obtenido = project_github_prompt(
-        procedure_text=procedure_text, repo=repo, issue_number=issue_number, base_branch="main"
+        procedure_text=procedure_text,
+        repo=repo,
+        issue_number=issue_number,
+        base_branch="main",
+        ahora=_AHORA_DEL_RELOJ,
     )
 
     assert obtenido == esperado
+
+
+def test_sin_reloj_la_proyeccion_no_lleva_la_linea_del_plazo() -> None:
+    """Sin `ahora` la proyección es el prompt de antes de ADR-228, y lo declara:
+    una línea de plazo con una hora inventada sería peor que ninguna."""
+    perfil = load_agent_profile("implementer")
+    texto = project_github_prompt(
+        procedure_text=read_procedure_text(perfil), repo="o/r", issue_number=1
+    )
+    assert "Plazo de esta ejecución" not in texto
+    assert texto.endswith("SIRIUS_VERDICT_FILE.\n")
 
 
 def test_read_procedure_text_lee_exactamente_el_fichero_del_perfil(tmp_path: Path) -> None:

@@ -80,6 +80,14 @@ En `.github/workflows/implement-sirius-work.yml`:
    contador de los siete días: congelar 1 + Qt 10 + sync 19 + agente 50 = 80,
    más el resto (checkout, uv, puerta, prompt, aplicar: menos de 5 min).
 4. El prompt versionado del rol (`implementer@4`) no se toca.
+5. La proyección Python del prompt
+   (`src/sirius_engine/adapters/github_worker_request.py`, A4-P2) reproduce la
+   línea del reloj a partir de un `ahora` que se le pasa, con sus propias
+   constantes (`PLAZO_DEL_IMPLEMENTADOR_MIN`, `RESERVA_PARA_LA_VALIDACION_MIN`)
+   atadas a los números del YAML por una guarda; sin `ahora` no lleva la línea
+   y lo declara. La prueba de no-divergencia fija la hora del guión real con
+   un `date` de arnés: la primera versión de este cambio la puso en rojo en
+   Quality porque el guión imprimía una hora viva y la proyección ninguna.
 
 ## Comprobación que la sostiene
 
@@ -108,7 +116,12 @@ En `.github/workflows/implement-sirius-work.yml`:
   `test_auditor_workflow.py`, `test_corrector_entrega_por_hallazgo.py`: 187
   passed, 11 skipped). La tolerancia del contador (`max(timeout-minutes) × 2`)
   no cambia: el máximo ya era 85.
-- El YAML carga; `ruff` y `mypy` sobre la prueba, sin avisos.
+- `tests/engine/test_worker_request.py`: la no-divergencia entre el guión real
+  y la proyección vuelve a ser byte a byte con el reloj dentro (12:50:00Z y
+  12:34:00Z sobre una hora fija), y una prueba nueva fija que sin `ahora` no
+  hay línea de plazo. `test_implementador_con_reloj.py` ata además los dos
+  números de Python a los del YAML (cinco guardas en total).
+- El YAML carga; `ruff` y `mypy src tests`, sin avisos.
 - La medida que no se puede tomar aquí: el primer implementador que no quepa
   escribirá su diagnóstico antes de la hora límite en vez de morir a los
   59:52. Queda para la mina de octubre.

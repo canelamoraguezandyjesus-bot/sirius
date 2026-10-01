@@ -20,6 +20,11 @@ from typing import Any
 
 import yaml
 
+from sirius_engine.adapters.github_worker_request import (
+    PLAZO_DEL_IMPLEMENTADOR_MIN,
+    RESERVA_PARA_LA_VALIDACION_MIN,
+)
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = REPO_ROOT / ".github" / "workflows" / "implement-sirius-work.yml"
 
@@ -94,6 +99,15 @@ def test_la_reserva_para_la_validacion_final_cubre_la_cadena_medida() -> None:
     reserva = _valor(run, "RESERVA_MIN")
     assert RESERVA_MINIMA_MIN <= reserva <= RESERVA_MAXIMA_MIN, reserva
     assert reserva < _valor(run, "PLAZO_MIN")
+
+
+def test_la_proyeccion_del_motor_usa_los_mismos_numeros_que_el_workflow() -> None:
+    """La proyección Python del prompt (A4-P2) reproduce la línea del reloj con
+    sus propias constantes; si el YAML cambia un número y Python no, la
+    no-divergencia cae byte a byte, pero esta guarda lo dice con nombre."""
+    run = str(_paso_del_prompt().get("run") or "")
+    assert _valor(run, "PLAZO_MIN") == PLAZO_DEL_IMPLEMENTADOR_MIN
+    assert _valor(run, "RESERVA_MIN") == RESERVA_PARA_LA_VALIDACION_MIN
 
 
 def test_el_contexto_del_prompt_lleva_las_dos_horas() -> None:
