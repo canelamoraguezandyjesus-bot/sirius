@@ -381,7 +381,7 @@ def test_un_perfil_valido_pero_no_vigente_avisa_y_deja_pasar(tmp_path: Path) -> 
     publicado = _comments(env)
     assert "sirius-activation:aviso:perfil-no-vigente:implementer@2" in publicado
     assert f"es la {_VIGENTE}" in publicado and "rejected" not in publicado
-    assert "vuelve a aplicarla" in publicado, (
+    assert "vuelve a aplicarla" in publicado and "espera a que termine" in publicado, (
         "el implementador ejecuta la instantánea del evento: editar el cuerpo no basta, hay "
         "que reaplicar la etiqueta (Codex, PR #670)"
     )

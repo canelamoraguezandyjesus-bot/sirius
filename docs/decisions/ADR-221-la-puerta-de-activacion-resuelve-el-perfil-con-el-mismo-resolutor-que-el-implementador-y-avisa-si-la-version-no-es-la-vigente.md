@@ -77,8 +77,12 @@ mutaciones vistas caer.
    #670). Una instantánea **vacía** (el evento llegó sin cuerpo) se juzga vacía,
    no se sustituye por el cuerpo actual (`${ISSUE_BODY-…}`, no `:-`); y el
    aviso de versión no vigente dice que, para ejecutar la vigente, hay que
-   editar el cuerpo **y volver a aplicar la etiqueta**, porque solo un evento
-   nuevo lleva el cuerpo nuevo (ronda 2 de Codex). Si no resuelve,
+   editar el cuerpo, **esperar a que termine (o cancelar) el run que ya arrancó
+   con la versión declarada y volver a aplicar la etiqueta**, porque solo un
+   evento nuevo lleva el cuerpo nuevo y un run en cola consumiría la etiqueta
+   nueva con su cuerpo viejo (el reparto compara el rol, ADR-167; rondas 2 y 3
+   de Codex). Que el reparto compare el `rol@N` entero es otra decisión, sobre
+   ADR-167, y no entra aquí. Si no resuelve,
    rechaza con el motivo
    `perfil-sin-resolver`, el detalle del resolutor en el comentario y la acción
    («pon `Perfil: rol@N` con un rol y una versión registrados en el
