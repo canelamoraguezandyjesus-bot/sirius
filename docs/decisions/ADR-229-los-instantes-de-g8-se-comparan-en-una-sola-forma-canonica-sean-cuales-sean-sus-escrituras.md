@@ -2,7 +2,7 @@
 
 - Estado: APROBADO
 - Fecha: 2026-10-01
-- Aprobación: la fusión de su PR por el motor con aprobación dual (ADR-205).
+- Aprobación: la fusión de la PR #676 por el motor con aprobación dual (ADR-205).
 - Nota de arranque:
   `docs/audits/arranque-2026-10-01-los-instantes-de-g8-se-comparan-en-una-sola-forma.md`,
   confirmada en `285b0c77` antes del primer commit de arreglo, con las cuatro

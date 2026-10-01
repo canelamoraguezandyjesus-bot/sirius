@@ -1276,3 +1276,16 @@ defectos:
     ficheros:
       - docs/audits/DONDE_VIVE_LA_BITACORA_DEL_CICLO.md
       - docs/audits/bitacora-de-fallos-y-mejoras-del-ciclo.md
+
+  - id: H-229
+    titulo: La puerta G8 comparaba los instantes como cadenas y el repositorio los escribe de dos formas (str(datetime) de SQLite con espacio, ISO con T y Z); lo registrado despues de un corte de registro del mismo dia pasaba la puerta segun la escritura
+    bloque: producto
+    gravedad: media
+    estado: cerrado
+    cerrado_por: 059ca924420624454c0bd88bd3bcda29460abcac
+    pr: 676
+    adr: 229
+    ficheros:
+      - src/sirius/domain/instantes.py
+      - src/sirius/domain/staged_engine_gates.py
+      - tests/unit/test_instantes_en_una_sola_forma.py
