@@ -119,6 +119,33 @@ cualquiera de las tres cambia la cifra sin que el sistema mejore.
 
 ---
 
+## D-6 · Qué lleva la única lectura cuando el índice completo ya no quepa *(añadida el 01-10-2026, ADR-218)*
+
+**El choque.** ADR-171 promete que `MEMORIA.md` se lee entera de una vez
+(120.000 bytes) y ADR-196 promete que lleva el índice **completo** de
+decisiones, sin podar. Las dos promesas chocan con el ritmo: septiembre produjo
+**91 ADR**, y la fila del índice completo pesa unos **240 bytes** por ADR aunque
+no lleve resumen. El índice completo él solo crece **unos 22.000 bytes al mes**.
+
+**Lo que ya se ha hecho.** Dos cortes de los que ADR-171 permite: ADR-196
+(14-09) quitó la copia del resumen de los ADR viejos; ADR-218 (01-10) sacó el
+índice de `docs/audits/` a una vista generada aparte y dejó de repetir rutas.
+Cada uno compró unas semanas. No queda otro corte de ese tipo que no sea podar.
+
+**Lo que sólo puede pesar él.** Qué encuentra quien entra. Tres salidas, y las
+tres cambian el producto, no la técnica:
+
+| salida | qué cambia para quien entra |
+|---|---|
+| **A.** Subir el límite | lee más de una pantalla antes de empezar; ADR-196 lo prohibió por eso |
+| **B.** Recuentos y punteros en la vista; el índice completo de decisiones en una vista generada aparte, como ya se hizo con `docs/audits/` | encuentra qué hay y cuánto, y abre el índice de decisiones a un clic |
+| **C.** Menos ADR: una decisión por línea de trabajo y no por noche | la vista cabe más tiempo sin tocarla; cambia cómo se trabaja, no el fichero |
+
+**Lo que NO se hace sin su decisión:** ninguna de las tres. Con el margen de
+ADR-218 (unos 38 ADR) hay tiempo para decidirlo sin prisa.
+
+---
+
 ## Y una que no es decisión, es un gesto
 
 **#653 está en `ready-for-merge`** desde las 19:38, aprobada por los dos

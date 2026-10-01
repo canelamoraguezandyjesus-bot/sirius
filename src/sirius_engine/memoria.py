@@ -42,6 +42,11 @@ REGISTRO_BLOQUES = Path("docs/implementation/bloques_del_motor.yml")
 REGISTRO_DEFECTOS = Path("docs/audits/registro_defectos.yml")
 REGISTRO_IDEAS = Path("docs/ideas/registro_de_ideas.yml")
 CARPETA_SKILLS = Path(".claude/skills")
+#: El índice de `docs/audits/` vive generado aparte (ADR-218): es la carpeta de
+#: la evidencia, crece a dos filas por ADR y era el siguiente corte que ADR-196
+#: dejó declarado. En `MEMORIA.md` quedan su recuento y el puntero hasta él.
+CARPETA_AUDITORIAS = Path("docs/audits")
+FICHERO_INDICE_AUDITORIAS = (CARPETA_AUDITORIAS / "INDICE.md").as_posix()
 
 LONGITUD_RESUMEN = 240
 LONGITUD_OBJETIVO = 110
@@ -462,6 +467,7 @@ def leer_documentos(raiz: Path) -> tuple[tuple[Documento, ...], tuple[Documento,
         r
         for r in (raiz / "docs").rglob("*.md")
         if CARPETA_DECISIONES not in r.relative_to(raiz).parents
+        and r.relative_to(raiz).as_posix() != FICHERO_INDICE_AUDITORIAS
     )
     rutas += sorted(r for r in raiz.glob("*.md") if r.name != FICHERO_MEMORIA)
     investigaciones: list[Documento] = []
@@ -583,6 +589,9 @@ def _lineas_de_lecciones(decisiones: Sequence[Decision]) -> list[str]:
 
     Determinista y sin más fuente que los propios ADR: una familia existe
     porque un ADR la declara, y muerde tantas veces como ADR la declaren.
+    Cada ADR va por su número y no por su enlace: la tabla de decisiones de
+    arriba ya lo enlaza, y repetir aquí 86 rutas costaba 11.000 bytes de la
+    única lectura (ADR-218).
     """
     con_leccion = [
         (d, d.leccion) for d in decisiones if d.leccion is not None and d.leccion.familia
@@ -604,7 +613,7 @@ def _lineas_de_lecciones(decisiones: Sequence[Decision]) -> list[str]:
                     f"`{familia}`",
                     str(len(entradas)),
                     ("sí" if all(le.tiene_guardian for _, le in entradas) else "no en todas"),
-                    ", ".join(f"[{d.numero:03d}]({d.ruta})" for d, _ in entradas),
+                    ", ".join(f"{d.numero:03d}" for d, _ in entradas),
                 )
                 for familia, entradas in orden
             ),
@@ -618,25 +627,133 @@ def _lineas_de_lecciones(decisiones: Sequence[Decision]) -> list[str]:
                 if leccion.tiene_guardian
                 else f"sin prueba que lo haga cumplir: {leccion.guardian}"
             )
-            lineas.append(
-                f"- **[ADR-{decision.numero:03d}]({decision.ruta})** — "
-                f"{leccion.repetiria} ({guardian})."
-            )
+            lineas.append(f"- **ADR-{decision.numero:03d}** — {leccion.repetiria} ({guardian}).")
     sin_leccion = [d for d in decisiones if d.leccion is not None and d.leccion.sin_leccion]
     if sin_leccion:
         lineas += [
             "",
             f"Y **{len(sin_leccion)}** ADR declaran expresamente que no dejaron lección: "
-            + ", ".join(f"[{d.numero:03d}]({d.ruta})" for d in sin_leccion[:12])
+            + ", ".join(f"{d.numero:03d}" for d in sin_leccion[:12])
             + ("…" if len(sin_leccion) > 12 else "")
             + ".",
         ]
     return lineas
 
 
+def _es_auditoria(ruta: str) -> bool:
+    return CARPETA_AUDITORIAS in Path(ruta).parents
+
+
+def _fila_de_documento(documento: Documento) -> str:
+    return f"| {documento.fecha or SIN_FECHA} | [{_celda(documento.titulo)}]({documento.ruta}) |"
+
+
+def _lineas_de_documentos(documentos: Iterable[Documento], *, nivel: str) -> list[str]:
+    """Una tabla por carpeta, en el orden de las rutas; `nivel` es el encabezado."""
+    lineas: list[str] = []
+    carpeta_actual = None
+    for documento in documentos:
+        carpeta = _carpeta_de(documento.ruta)
+        if carpeta != carpeta_actual:
+            carpeta_actual = carpeta
+            lineas += ["", f"{nivel} `{carpeta}`", ""]
+            lineas += _tabla(("Fecha", "Documento"), ())
+        lineas.append(_fila_de_documento(documento))
+    return lineas
+
+
+def _recuento_de_auditorias(auditorias: Sequence[Documento]) -> str:
+    sin_fecha = sum(1 for d in auditorias if d.fecha is None)
+    return f"**{len(auditorias)} documentos**, {sin_fecha} sin fecha declarada"
+
+
+def _lineas_de_documentos_de_la_vista(documentos: Sequence[Documento]) -> list[str]:
+    """Como `_lineas_de_documentos`, pero `docs/audits/` se resume (ADR-218).
+
+    Es la carpeta de la evidencia: nota de arranque y medición de casi cada ADR,
+    dos filas por decisión. ADR-196 la dejó declarada como el siguiente corte
+    cuando la vista volviera a no caber, y volvió a no caber el 01-10-2026. Aquí
+    quedan el recuento y el puntero; la fila de cada documento está en el índice
+    generado, que escribe el mismo comando y vigila la misma prueba.
+    """
+    auditorias = [d for d in documentos if _es_auditoria(d.ruta)]
+    fechas = sorted(d.fecha for d in auditorias if d.fecha is not None)
+    lineas: list[str] = []
+    carpeta_actual = None
+    for documento in documentos:
+        if _es_auditoria(documento.ruta):
+            if carpeta_actual != CARPETA_AUDITORIAS.as_posix():
+                carpeta_actual = CARPETA_AUDITORIAS.as_posix()
+                lineas += [
+                    "",
+                    f"### `{carpeta_actual}`",
+                    "",
+                    _recuento_de_auditorias(auditorias)
+                    + (f"; el más reciente declara {fechas[-1]}." if fechas else "."),
+                    "Es la carpeta de la evidencia y crece a dos filas por ADR, así que la fila",
+                    "de cada documento vive en un índice generado aparte,",
+                    f"[`{FICHERO_INDICE_AUDITORIAS}`]({FICHERO_INDICE_AUDITORIAS}), que escribe el",
+                    "mismo comando y vigila la misma prueba que esta vista (ADR-218).",
+                ]
+            continue
+        carpeta = _carpeta_de(documento.ruta)
+        if carpeta != carpeta_actual:
+            carpeta_actual = carpeta
+            lineas += ["", f"### `{carpeta}`", ""]
+            lineas += _tabla(("Fecha", "Documento"), ())
+        lineas.append(_fila_de_documento(documento))
+    return lineas
+
+
+def _texto_del_indice_de_auditorias(arbol: Arbol) -> str:
+    """El texto de `docs/audits/INDICE.md`: la fila de cada auditoría (ADR-218)."""
+    auditorias = [d for d in arbol.documentos if _es_auditoria(d.ruta)]
+    lineas = [
+        f"# Índice de `{CARPETA_AUDITORIAS.as_posix()}/`",
+        "",
+        f"> **Generado por `uv run {COMANDO} conocimiento` a partir del árbol del",
+        f"> repositorio**, junto con `{FICHERO_MEMORIA}`, y vigilado por la misma prueba",
+        f"> (ADR-218). No se edita a mano. `{FICHERO_MEMORIA}` lleva el recuento y el",
+        "> puntero hasta aquí; aquí está la fila de cada documento de la carpeta, en el",
+        "> orden de su ruta y con la misma forma que las demás carpetas tienen allí.",
+        ">",
+        "> La fecha es la que cada documento **declara** en su cabecera; la vista no data",
+        "> nada por su cuenta. «Sin fecha declarada» es un aviso, no un dato.",
+        "",
+    ]
+    if auditorias:
+        lineas.append(_recuento_de_auditorias(auditorias) + ".")
+        lineas += _lineas_de_documentos(auditorias, nivel="##")
+    else:
+        lineas.append(f"Ningún documento en `{CARPETA_AUDITORIAS.as_posix()}/`.")
+    lineas.append("")
+    return "\n".join(lineas)
+
+
+def generar_vistas(raiz: Path) -> dict[str, str]:
+    """Las vistas de conocimiento de este árbol, por ruta relativa. Deterministas.
+
+    `MEMORIA.md` y, desde ADR-218, `docs/audits/INDICE.md`: se escriben juntas y
+    se comprueban juntas, para que la segunda no sea una pieza sin lector.
+    """
+    arbol = leer_arbol(raiz)
+    return {
+        FICHERO_MEMORIA: _texto_de_memoria(arbol),
+        FICHERO_INDICE_AUDITORIAS: _texto_del_indice_de_auditorias(arbol),
+    }
+
+
 def generar_memoria(raiz: Path) -> str:
     """El texto de `MEMORIA.md` para este árbol. Determinista: solo depende del árbol."""
-    arbol = leer_arbol(raiz)
+    return generar_vistas(raiz)[FICHERO_MEMORIA]
+
+
+def generar_indice_de_auditorias(raiz: Path) -> str:
+    """El texto de `docs/audits/INDICE.md` para este árbol (ADR-218)."""
+    return generar_vistas(raiz)[FICHERO_INDICE_AUDITORIAS]
+
+
+def _texto_de_memoria(arbol: Arbol) -> str:
     sin_fecha = sum(1 for d in arbol.documentos if d.fecha is None)
     lineas: list[str] = [
         "# Memoria común del proyecto Sirius",
@@ -732,7 +849,8 @@ def generar_memoria(raiz: Path) -> str:
         "mano caduca en silencio -`AGENTS.md` decía «seis veces» cuando ya iban ocho-.",
         f"Declararla es obligatorio desde ADR-{PRIMER_ADR_CON_LECCION}; los anteriores",
         "quedan exentos, así que esta vista crece desde cero en vez de nacer rellenada",
-        "de memoria.",
+        "de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba",
+        "(ADR-218).",
         "",
         *_lineas_de_lecciones(arbol.decisiones),
         "",
@@ -801,39 +919,36 @@ def generar_memoria(raiz: Path) -> str:
         "La fecha es la que cada documento **declara** en su cabecera; la vista no data",
         "nada por su cuenta. «Sin fecha declarada» es un aviso, no un dato.",
     ]
-    carpeta_actual = None
-    for documento in arbol.documentos:
-        carpeta = _carpeta_de(documento.ruta)
-        if carpeta != carpeta_actual:
-            carpeta_actual = carpeta
-            lineas += ["", f"### `{carpeta}`", ""]
-            lineas += _tabla(("Fecha", "Documento"), ())
-        lineas.append(
-            f"| {documento.fecha or SIN_FECHA} | [{_celda(documento.titulo)}]({documento.ruta}) |"
-        )
+    lineas += _lineas_de_documentos_de_la_vista(arbol.documentos)
     lineas.append("")
     return "\n".join(lineas)
 
 
 def comprobar_memoria(raiz: Path) -> str | None:
-    """`None` si `MEMORIA.md` coincide con lo generado; si no, qué hacer."""
-    fichero = raiz / FICHERO_MEMORIA
-    if not fichero.is_file():
-        return f"no existe `{FICHERO_MEMORIA}`; genéralo con `uv run {COMANDO} conocimiento`."
-    if fichero.read_text(encoding="utf-8") == generar_memoria(raiz):
-        return None
-    return (
-        f"`{FICHERO_MEMORIA}` no coincide con lo que produce el generador a partir del "
-        f"árbol: hay un ADR, un documento o un registro que cambió sin regenerarla, o "
-        f"alguien la editó a mano. Ejecuta `uv run {COMANDO} conocimiento` y confirma el "
-        f"resultado."
-    )
+    """`None` si las vistas coinciden con lo generado; si no, qué hacer y en cuál."""
+    for nombre, texto in generar_vistas(raiz).items():
+        fichero = raiz / nombre
+        if not fichero.is_file():
+            return f"no existe `{nombre}`; genéralo con `uv run {COMANDO} conocimiento`."
+        if fichero.read_text(encoding="utf-8") != texto:
+            return (
+                f"`{nombre}` no coincide con lo que produce el generador a partir del "
+                f"árbol: hay un ADR, un documento o un registro que cambió sin regenerarla, "
+                f"o alguien la editó a mano. Ejecuta `uv run {COMANDO} conocimiento` y "
+                f"confirma el resultado."
+            )
+    return None
 
 
-def escribir_memoria(raiz: Path) -> Path:
-    fichero = raiz / FICHERO_MEMORIA
-    fichero.write_text(generar_memoria(raiz), encoding="utf-8", newline="\n")
-    return fichero
+def escribir_memoria(raiz: Path) -> tuple[Path, ...]:
+    """Escribe las vistas de conocimiento y devuelve sus rutas, en el orden escrito."""
+    escritos: list[Path] = []
+    for nombre, texto in generar_vistas(raiz).items():
+        fichero = raiz / nombre
+        fichero.parent.mkdir(parents=True, exist_ok=True)
+        fichero.write_text(texto, encoding="utf-8", newline="\n")
+        escritos.append(fichero)
+    return tuple(escritos)
 
 
 # --- La vista de desenlaces ---------------------------------------------------

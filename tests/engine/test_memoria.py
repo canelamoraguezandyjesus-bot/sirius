@@ -32,12 +32,15 @@ from sirius_engine import memoria
 from sirius_engine.memoria import (
     COMANDO,
     FICHERO_DESENLACES,
+    FICHERO_INDICE_AUDITORIAS,
     FICHERO_MEMORIA,
     SIN_FECHA,
     comprobar_memoria,
     escribir_memoria,
     generar_desenlaces,
+    generar_indice_de_auditorias,
     generar_memoria,
+    leer_arbol,
     leer_decisiones,
     leer_encargos,
 )
@@ -97,7 +100,12 @@ def _arbol_minimo(raiz: Path) -> Path:
             "La moderna",
             "Esta sí conserva su resumen en la vista.",
             estado="APROBADO",
-        ),
+        )
+        # Y declara una lección: sin ella, la vista de lecciones de ADR-174 se
+        # mediría solo por el lado de «todavía no hay ninguna».
+        + "\n## La lección\n\n- familia: `familia-de-prueba`\n"
+        "- sin esto se repetiría: contar a mano lo que la máquina puede contar\n"
+        "- lo hace cumplir: `tests/engine/test_memoria.py`\n",
     )
     _escribir(decisiones / "PLANTILLA.md", "# ADR-NNN — plantilla\n\n## Decisión\n\nNo cuenta.\n")
     _escribir(
@@ -117,6 +125,13 @@ def _arbol_minimo(raiz: Path) -> Path:
         "estado: VIGENTE\n---\n\n# Otro título\n",
     )
     _escribir(raiz / "docs" / "implementation" / "PLAN.md", "# El plan\n\nSin fecha.\n")
+    # Dos auditorías, una con fecha y otra sin ella: la regla de ADR-218 -su
+    # índice vive generado aparte- se mide por los dos lados con ellas.
+    _escribir(
+        raiz / "docs" / "audits" / "arranque-una-auditoria.md",
+        "# Una auditoría\n\nFecha: 2026-01-05.\n",
+    )
+    _escribir(raiz / "docs" / "audits" / "otra-sin-fecha.md", "# Otra sin fecha\n\nNada.\n")
     _escribir(
         raiz / "docs" / "evolution" / "STATUS.md",
         "# Estado\n\nÚltima actualización: 03-01-2026.\n",
@@ -208,6 +223,67 @@ def test_la_fecha_es_la_declarada_y_la_vista_no_data_nada(arbol: Path) -> None:
     assert "| 2026-01-03 | [Estado](docs/evolution/STATUS.md) |" in texto
     assert f"| {SIN_FECHA} | [El plan](docs/implementation/PLAN.md) |" in texto
     assert f"| {SIN_FECHA} | [Léeme](README.md) |" in texto
+
+
+def test_el_indice_de_auditorias_vive_generado_aparte_y_la_vista_lleva_recuento_y_puntero(
+    arbol: Path,
+) -> None:
+    """La regla de ADR-218, por sus dos lados: la fila sale de la vista y entra en el índice.
+
+    No es podar (ADR-195): la fila existe, con la misma forma, en un fichero
+    que escribe el mismo comando y vigila la misma prueba. Lo que la vista
+    conserva es el recuento, la fecha más reciente y el puntero.
+    """
+    texto = generar_memoria(arbol)
+    indice = generar_indice_de_auditorias(arbol)
+    con_fecha = "| 2026-01-05 | [Una auditoría](docs/audits/arranque-una-auditoria.md) |"
+    sin_fecha = f"| {SIN_FECHA} | [Otra sin fecha](docs/audits/otra-sin-fecha.md) |"
+    for fila in (con_fecha, sin_fecha):
+        assert fila not in texto, "la fila de una auditoría ya no va en la vista (ADR-218)"
+        assert fila in indice, "...pero tiene que estar, tal cual, en el índice generado"
+    resumen = texto[texto.index("### `docs/audits`") :].split("\n### ", 1)[0]
+    assert "**2 documentos**, 1 sin fecha declarada; el más reciente declara 2026-01-05." in (
+        resumen
+    )
+    assert f"]({FICHERO_INDICE_AUDITORIAS})" in resumen, "la vista tiene que apuntar al índice"
+    assert "**2 documentos**, 1 sin fecha declarada." in indice
+    assert "### `docs/evolution`" in texto, "las demás carpetas siguen fila a fila en la vista"
+    # El índice es una vista, como MEMORIA.md: no cuenta como documento ni se indexa a sí mismo.
+    escribir_memoria(arbol)
+    rutas = {d.ruta for d in leer_arbol(arbol).documentos}
+    assert FICHERO_INDICE_AUDITORIAS not in rutas
+    assert f"({FICHERO_INDICE_AUDITORIAS})" not in generar_indice_de_auditorias(arbol)
+
+
+def test_la_guardia_vigila_el_indice_de_auditorias_igual_que_la_vista(arbol: Path) -> None:
+    """Una vista aparte que nadie regenerara sería `pieza-sin-lector` otra vez."""
+    escribir_memoria(arbol)
+    assert comprobar_memoria(arbol) is None
+    indice = arbol / FICHERO_INDICE_AUDITORIAS
+    indice.write_text(indice.read_text(encoding="utf-8") + "\n- a mano\n", "utf-8")
+    problema = comprobar_memoria(arbol)
+    assert problema is not None and FICHERO_INDICE_AUDITORIAS in problema
+    assert f"uv run {COMANDO} conocimiento" in problema
+    indice.unlink()
+    problema = comprobar_memoria(arbol)
+    assert problema is not None and FICHERO_INDICE_AUDITORIAS in problema
+    assert escribir_memoria(arbol) == (arbol / FICHERO_MEMORIA, indice)
+    assert comprobar_memoria(arbol) is None
+
+
+def test_las_lecciones_nombran_el_adr_por_numero_y_no_repiten_la_ruta_que_la_tabla_enlaza(
+    arbol: Path,
+) -> None:
+    """ADR-218: 86 enlaces repetidos costaban 11.000 bytes de la única lectura."""
+    texto = generar_memoria(arbol)
+    decisiones = texto[texto.index("## Qué se decidió") : texto.index("## Las lecciones")]
+    lecciones = texto[texto.index("## Las lecciones") : texto.index("## Los bloques")]
+    numero = memoria.PRIMER_ADR_CON_LECCION
+    ruta = f"docs/decisions/ADR-{numero}-la-moderna.md"
+    assert f"[{numero}]({ruta})" in decisiones, "la tabla de decisiones es quien enlaza"
+    assert f"| `familia-de-prueba` | 1 | sí | {numero} |" in lecciones
+    assert f"- **ADR-{numero}** — contar a mano lo que la máquina puede contar" in lecciones
+    assert "](docs/decisions/" not in lecciones, "la sección de lecciones no repite la ruta"
     assert "no cuenta como documento" not in texto
     assert f"({FICHERO_MEMORIA})" not in texto
 
@@ -419,7 +495,13 @@ def test_conocimiento_escribe_y_comprobar_distingue(
     assert main(["conocimiento", "--raiz", str(arbol), "--comprobar"]) == 1
     assert main(["conocimiento", "--raiz", str(arbol)]) == 0
     assert (arbol / FICHERO_MEMORIA).read_text(encoding="utf-8") == generar_memoria(arbol)
+    indice = arbol / FICHERO_INDICE_AUDITORIAS
+    assert indice.read_text(encoding="utf-8") == generar_indice_de_auditorias(arbol)
     assert main(["conocimiento", "--raiz", str(arbol), "--comprobar"]) == 0
+    indice.write_text(indice.read_text(encoding="utf-8") + "\n- a mano\n", "utf-8")
+    assert main(["conocimiento", "--raiz", str(arbol), "--comprobar"]) == 1
+    assert FICHERO_INDICE_AUDITORIAS in capsys.readouterr().err
+    assert main(["conocimiento", "--raiz", str(arbol)]) == 0
     assert main(["conocimiento", "--raiz", str(arbol / "docs")]) == 2
     assert "no parece la raíz" in capsys.readouterr().err
 
