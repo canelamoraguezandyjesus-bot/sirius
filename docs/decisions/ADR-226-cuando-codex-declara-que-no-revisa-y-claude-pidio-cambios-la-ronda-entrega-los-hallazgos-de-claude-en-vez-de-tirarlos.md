@@ -2,7 +2,7 @@
 
 - Estado: APROBADO
 - Fecha: 2026-10-01
-- Aprobación: la fusión de su PR por el motor con aprobación dual (ADR-205).
+- Aprobación: la fusión de la PR #673 por el motor con aprobación dual (ADR-205).
 - Nota de arranque:
   `docs/audits/arranque-2026-10-01-la-ronda-no-tira-la-revision-de-claude-cuando-codex-declara-que-no-revisa.md`,
   confirmada en `ae46aa09` antes del primer commit de arreglo, con las cuatro
