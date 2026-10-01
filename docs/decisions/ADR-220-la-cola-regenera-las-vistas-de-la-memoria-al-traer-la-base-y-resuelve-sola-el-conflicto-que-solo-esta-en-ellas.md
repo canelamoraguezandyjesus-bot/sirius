@@ -81,7 +81,13 @@ con las salidas del paso «Advance matching Sirius work item» (`ponerse_al_dia`
    --no-edit`, con el mensaje que ya tenía. Empuja por una URL
    `https://x-access-token:…@github.com/…` construida en el propio paso
    (`SIRIUS_PUSH_URL` es la costura de las pruebas). Nunca reescribe la
-   historia: es un commit más.
+   historia: es un commit más. Y escribe las vistas **solo sobre ficheros
+   regulares, por rutas sin ningún enlace simbólico**, comprobado después de
+   fusionar y sobre el artefacto también: si la rama hubiera convertido
+   `MEMORIA.md` (o `docs/audits`) en un enlace a `.git/config`, el `cp` lo
+   seguiría y el `git add` siguiente ejecutaría lo que ese config dijera
+   (`core.fsmonitor`) con el PAT en el entorno (ronda 3 de Codex en la PR
+   #667). Con un enlace, no se toca nada y el run falla.
 3. **Cualquier otro conflicto**: la rama no se toca y `empujar` publica el aviso
    en la incidencia con el PAT, exactamente como hasta ahora (ADR-200).
 4. **La frontera de credenciales** (rondas 1 y 2 de Codex en la PR #667, las
@@ -101,7 +107,7 @@ con conflictos ajenos, no como única barrera.
 
 ## Comprobación que la sostiene
 
-`tests/automation/test_cola.py` gana seis pruebas y endurece una. Cuatro
+`tests/automation/test_cola.py` gana siete pruebas y endurece una. Cinco
 ejecutan el bash de los pasos **de verdad** —extraído del YAML—, cada job en su
 propio clon (como en dos máquinas), con **exactamente el entorno que el YAML
 declara para cada paso** (las expresiones `${{ }}` se sustituyen y no se añade
@@ -133,6 +139,9 @@ runner sin credenciales:
   contiene un solo `secrets.` y solo puede leer; ningún checkout persiste
   credenciales; `empujar` depende de que `regenerar` haya terminado bien y
   comprueba las dos puntas.
+- `test_una_vista_que_la_rama_convirtio_en_enlace_simbolico_no_se_pisa_con_el_pat`:
+  la rama hace de `MEMORIA.md` un enlace a `.git/config` → el job que empuja
+  falla, el `.git/config` de su runner queda intacto y la rama no se mueve.
 - `test_la_puesta_al_dia_no_empuja_con_el_token_del_workflow` (endurecida): el
   paso que empuja recibe el PAT (con `GITHUB_TOKEN` Quality no volvería a
   correr, ADR-183), lo usa por la URL del paso y no por `origin`, y nunca
@@ -152,13 +161,14 @@ ejecutada y el fichero restaurado:**
 | M7 | empujar por `origin` en vez de por la URL con el PAT | cae `la_puesta_al_dia_no_empuja_con_el_token_del_workflow`, `la_puesta_al_dia_regenera_las_vistas_y_las_confirma_antes_de_empujar`, `un_conflicto_solo_en_las_vistas_generadas_se_resuelve_regenerando` |
 | M8 | no comprobar que las puntas son las mismas | cae `el_codigo_de_la_rama_corre_en_un_job_sin_ningun_secreto`, `si_las_puntas_cambian_entre_los_dos_jobs_no_se_aplican_vistas_de_otro_arbol` |
 | M9 | empujar aunque la regeneración haya fallado | cae `el_codigo_de_la_rama_corre_en_un_job_sin_ningun_secreto` |
+| M10 | escribir las vistas sin comprobar enlaces ni ficheros regulares | cae `una_vista_que_la_rama_convirtio_en_enlace_simbolico_no_se_pisa_con_el_pat` |
 
 Una mutación anunciada en la nota **no cayó**, y se dice: «resolver añadiendo
 todo» (`git add -A` en vez de solo las vistas) no cambia el resultado del caso
 C porque la puerta impide llegar ahí; es la razón de la prueba y la mutación
 M2 de arriba, que miden la puerta directamente.
 
-- Las 31 pruebas de `test_cola.py` en verde; `ruff`, `mypy` sobre la prueba;
+- Las 32 pruebas de `test_cola.py` en verde; `ruff`, `mypy` sobre la prueba;
   el YAML carga. Batería entera: en la PR.
 
 ## Consecuencias

@@ -665,3 +665,27 @@ def test_si_las_puntas_cambian_entre_los_dos_jobs_no_se_aplican_vistas_de_otro_a
     assert _git(escenario.origen, "log", "--format=%s", "-1", "rama") == (
         "otro commit mientras se regeneraba"
     ), "la rama tiene que quedarse como la dejó quien empujó: ni fusión ni vistas ajenas"
+
+
+def test_una_vista_que_la_rama_convirtio_en_enlace_simbolico_no_se_pisa_con_el_pat(
+    tmp_path: Path,
+) -> None:
+    """Ronda 3 de Codex en la PR #667: si la rama hace de `MEMORIA.md` un enlace a
+    `.git/config`, el `cp` del job con el PAT lo seguiría y el `git add` siguiente
+    ejecutaría lo que ese config dijera. El job que empuja no escribe por enlaces."""
+    escenario = _Escenario(tmp_path)
+    _git(escenario.taller, "checkout", "-q", "rama")
+    (escenario.taller / "MEMORIA.md").unlink()
+    os.symlink(".git/config", escenario.taller / "MEMORIA.md")
+    _git(escenario.taller, "add", "MEMORIA.md")
+    _git(escenario.taller, "commit", "-q", "-m", "la vista es un enlace a .git/config")
+    _git(escenario.taller, "push", "-q", "origin", "rama")
+    escenario.en_main("main avanza", **{"docs/nuevo.md": "# Nuevo\n"})
+    antes = escenario.punta("rama")
+    resultado = escenario.ejecutar_la_puesta_al_dia()
+    assert resultado.returncode != 0, "con una vista que es un enlace no se empuja nada"
+    config = (escenario.clon / ".git" / "config").read_text(encoding="utf-8")
+    assert "vista de:" not in config, (
+        "el .git/config del runner con el PAT se escribió a través del enlace"
+    )
+    assert escenario.punta("rama") == antes
