@@ -26,13 +26,13 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **215**.
+- Decisiones (ADR): **216**.
 - Bloques del motor: 17 cerrado, 3 fuera_de_alcance.
-- Defectos registrados: 3 abierto, 71 cerrado.
+- Defectos registrados: 3 abierto, 72 cerrado.
 - Ideas aparcadas o descartadas: 5 aparcada, 2 descartada, 2 promovida.
 - Skills: **19**.
 - Investigaciones: **10** (fotos con fecha; caducan).
-- Documentos: **197**, de los que **136** no declaran fecha.
+- Documentos: **198**, de los que **136** no declaran fecha.
 
 ## Las skills: lo que ya costó averiguar dos veces (ADR-211)
 
@@ -81,6 +81,7 @@ huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 |---|---|---|---|---|
 | [225](docs/decisions/ADR-225-la-linea-del-contador-de-los-siete-dias-quedo-cancelada-por-decision-del-propietario-el-13-09-y-adr-101-deja-de-tenerla-como-bloque-pendiente.md) | 2026-10-01 | APROBADO | La línea del contador de los siete días quedó cancelada por decisión del propietario el 13-09 y ADR-101 deja de tenerla como bloque pendiente | La pieza (C) de #376 queda cancelada por decisión del propietario del 13-09-2026 (#610). No se ordenará salvo decisión nueva suya; si algún día la quiere, la medida de #605 (ADR-186) es el punto de partida y hará falta otro ADR. ADR-101… |
 | [222](docs/decisions/ADR-222-un-defecto-cerrado-lleva-la-pr-que-lo-fusiono-la-referencia-que-un-clon-de-main-puede-seguir.md) | 2026-10-01 | APROBADO | Un defecto cerrado lleva la PR que lo fusionó: la referencia que un clon de `main` puede seguir | Desde este ADR, un defecto `cerrado` lleva, además de `cerrado_por`, `pr: <número de la PR que lo fusiona>`; si lo cerró un encargo del motor, cuya PR la abre el workflow al terminar el run, basta `incidencia: <número>`, que ya es un campo… |
+| [220](docs/decisions/ADR-220-la-cola-regenera-las-vistas-de-la-memoria-al-traer-la-base-y-resuelve-sola-el-conflicto-que-solo-esta-en-ellas.md) | 2026-10-01 | APROBADO | La cola regenera las vistas de la memoria al traer la base, y resuelve sola el conflicto que solo está en ellas | La puesta al día pasa a dos jobs nuevos, `regenerar` y `empujar`, que arrancan con las salidas del paso «Advance matching Sirius work item» (`ponerse_al_dia`, `rama`, `base`, `incidencia`): `regenerar`, sin ningún secreto y de solo lectura… |
 | [219](docs/decisions/ADR-219-el-motor-dice-lo-que-hace-el-veredicto-nombra-su-pr-el-aviso-de-listo-no-pide-una-autorizacion-que-ya-no-necesita-y-una-casi-orden-recibe-respuesta.md) | 2026-10-01 | APROBADO | El motor dice lo que hace: el veredicto nombra su PR, el aviso de «listo» no pide una autorización que ya no necesita y una casi-orden recibe respuesta | `sirius_apply_verdict.sh` publica la línea con `printf '%s\n' "- PR: …"`: el texto va como argumento, nunca como formato. Vale para los dos caminos del veredicto (con y sin familia repetida). El aviso de `ready-for-merge`… |
 | [218](docs/decisions/ADR-218-la-vista-de-memoria-deja-fuera-el-indice-de-docs-audits-y-no-repite-las-rutas-que-ya-enlaza.md) | 2026-10-01 | APROBADO | La vista de memoria deja fuera el índice de `docs/audits`, que pasa a una vista generada aparte, y no repite las rutas que ya enlaza | El índice de `docs/audits/` sale de `MEMORIA.md` y vive en `docs/audits/INDICE.md`, generado. Lo escribe el mismo comando (`uv run sirius-memoria conocimiento` escribe los dos ficheros) y lo vigila la misma guardia (`comprobar_memoria` y… |
 | [217](docs/decisions/ADR-217-la-bitacora-del-ciclo-entra-en-main-con-su-familia-y-la-evidencia-de-adr-002-se-queda-en-su-rama.md) | 2026-10-01 | APROBADO | La bitácora del ciclo entra en `main` con su familia, y la evidencia de ADR-002 se queda en su rama | Entran en `main`, tal como estaban en `a044fb4a`, los 48 ficheros de `docs/audits/` que la rama añade y `docs/investigaciones/2026-09-13-memanto-contra-la-capa-de-memoria-de-sirius.md`. Entre ellos: la bitácora… |
@@ -307,7 +308,7 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 
 | Familia | Veces | Hay prueba que la haga cumplir | ADR |
 |---|---|---|---|
-| `regla-que-depende-de-que-alguien-se-acuerde` | 9 | no en todas | 222, 217, 216, 192, 191, 188, 182, 179, 174 |
+| `regla-que-depende-de-que-alguien-se-acuerde` | 10 | no en todas | 222, 220, 217, 216, 192, 191, 188, 182, 179, 174 |
 | `pieza-sin-lector` | 5 | no en todas | 210, 209, 207, 183, 175 |
 | `regla-del-propietario-que-solo-vive-en-una-conversacion` | 4 | sí | 213, 208, 204, 195 |
 | `prosa-que-el-cambio-deja-falsa` | 3 | no en todas | 219, 211, 177 |
@@ -336,6 +337,7 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 ### `regla-que-depende-de-que-alguien-se-acuerde`
 
 - **ADR-222** — una convención de registro escrita para un modo de fusión (con commit de mezcla) que sobrevive al cambio de modo (aplastado) sin que nadie la relea, con la batería en verde y 29 referencias que no llevan a ninguna parte. (lo hace cumplir `tests/automation/test_registro_de_defectos.py`).
+- **ADR-220** — automatizar la mitad de un gesto (traer la base) y dejar la otra mitad (regenerar lo generado) a que alguien se acuerde, con Quality como único aviso y 25 minutos después. (lo hace cumplir `tests/automation/test_cola.py`).
 - **ADR-217** — dejar la entrada de un registro en `main` condicionada (sin prueba que lo haga cumplir: ninguna prueba: la condición vivía en prosa de un documento).
 - **ADR-216** — escribir una salvaguarda en prosa y darla por puesta. (lo hace cumplir `tests/automation/test_cierre_del_ciclo_ps1_no_puede_hacer_dano.py`).
 - **ADR-192** — elegir a mano un identificador leyendo el máximo del (lo hace cumplir `tests/automation/test_registro_de_defectos.py`).
@@ -537,7 +539,7 @@ nada por su cuenta. «Sin fecha declarada» es un aviso, no un dato.
 
 ### `docs/audits`
 
-**140 documentos**, 82 sin fecha declarada; el más reciente declara 2026-10-01.
+**141 documentos**, 82 sin fecha declarada; el más reciente declara 2026-10-01.
 Es la carpeta de la evidencia y crece a dos filas por ADR, así que la fila
 de cada documento vive en un índice generado aparte,
 [`docs/audits/INDICE.md`](docs/audits/INDICE.md), que escribe el
