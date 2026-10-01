@@ -1,7 +1,9 @@
 # Nota de arranque — la vista de memoria vuelve a caber en una sola lectura (segunda vez)
 
-Rama `claude/bitacora-y-mina-septiembre`, fecha 01-10-2026, 06:50 UTC. Publicada
-**antes del primer commit de arreglo**, como exige ADR-001; las cifras «con el arreglo»
+Rama `claude/bitacora-y-mina-septiembre`, fecha 01-10-2026, 06:34 UTC (la hora del
+commit `84084e1f` que la publica; la primera versión decía «06:50» estimando, y se
+corrige aquí porque la hora de una nota de arranque es un dato, no una impresión).
+Publicada **antes del primer commit de arreglo**, como exige ADR-001; las cifras «con el arreglo»
 de abajo son predicciones, y el ADR que salga dirá cuánto se desviaron.
 
 ## El suceso
