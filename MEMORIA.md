@@ -26,13 +26,13 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **212**.
+- Decisiones (ADR): **213**.
 - Bloques del motor: 17 cerrado, 2 fuera_de_alcance, 1 pendiente.
 - Defectos registrados: 3 abierto, 68 cerrado.
 - Ideas aparcadas o descartadas: 5 aparcada, 2 descartada, 2 promovida.
 - Skills: **19**.
 - Investigaciones: **10** (fotos con fecha; caducan).
-- Documentos: **194**, de los que **136** no declaran fecha.
+- Documentos: **195**, de los que **136** no declaran fecha.
 
 ## Las skills: lo que ya costó averiguar dos veces (ADR-211)
 
@@ -79,6 +79,7 @@ huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| [220](docs/decisions/ADR-220-la-cola-regenera-las-vistas-de-la-memoria-al-traer-la-base-y-resuelve-sola-el-conflicto-que-solo-esta-en-ellas.md) | 2026-10-01 | APROBADO | La cola regenera las vistas de la memoria al traer la base, y resuelve sola el conflicto que solo está en ellas | En el paso «Fusionar la base y empujar», con el entorno preparado por dos pasos nuevos (`astral-sh/setup-uv` y `uv sync --locked --all-groups`, la misma versión fijada que `reflejar-desenlace.yml`, condicionados a la misma puesta al día)… |
 | [218](docs/decisions/ADR-218-la-vista-de-memoria-deja-fuera-el-indice-de-docs-audits-y-no-repite-las-rutas-que-ya-enlaza.md) | 2026-10-01 | APROBADO | La vista de memoria deja fuera el índice de `docs/audits`, que pasa a una vista generada aparte, y no repite las rutas que ya enlaza | El índice de `docs/audits/` sale de `MEMORIA.md` y vive en `docs/audits/INDICE.md`, generado. Lo escribe el mismo comando (`uv run sirius-memoria conocimiento` escribe los dos ficheros) y lo vigila la misma guardia (`comprobar_memoria` y… |
 | [217](docs/decisions/ADR-217-la-bitacora-del-ciclo-entra-en-main-con-su-familia-y-la-evidencia-de-adr-002-se-queda-en-su-rama.md) | 2026-10-01 | APROBADO | La bitácora del ciclo entra en `main` con su familia, y la evidencia de ADR-002 se queda en su rama | Entran en `main`, tal como estaban en `a044fb4a`, los 48 ficheros de `docs/audits/` que la rama añade y `docs/investigaciones/2026-09-13-memanto-contra-la-capa-de-memoria-de-sirius.md`. Entre ellos: la bitácora… |
 | [216](docs/decisions/ADR-216-cerrar-el-ciclo-el-motor-se-queda-sin-trabajo-vivo-los-horarios-se-apagan-desde-actions-y-el-estado-real-queda-escrito.md) | 2026-09-24 | APROBADO | Cerrar el ciclo: el motor se queda sin trabajo vivo, los horarios se apagan desde Actions y el estado real queda escrito | Las PR abiertas, cerradas. La #661 (cinco skills, ADR-215) fusionada aplastada en `6a58c75e`. La #117 —la rama de evidencia de julio, abierta desde el 25-07 y declarada «no debe fusionarse automáticamente»— cerrada sin borrar su rama: su… |
@@ -304,7 +305,7 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 
 | Familia | Veces | Hay prueba que la haga cumplir | ADR |
 |---|---|---|---|
-| `regla-que-depende-de-que-alguien-se-acuerde` | 8 | no en todas | 217, 216, 192, 191, 188, 182, 179, 174 |
+| `regla-que-depende-de-que-alguien-se-acuerde` | 9 | no en todas | 220, 217, 216, 192, 191, 188, 182, 179, 174 |
 | `pieza-sin-lector` | 5 | no en todas | 210, 209, 207, 183, 175 |
 | `regla-del-propietario-que-solo-vive-en-una-conversacion` | 4 | sí | 213, 208, 204, 195 |
 | `leccion-que-se-queda-en-el-informe` | 2 | sí | 215, 214 |
@@ -332,6 +333,7 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 
 ### `regla-que-depende-de-que-alguien-se-acuerde`
 
+- **ADR-220** — automatizar la mitad de un gesto (traer la base) y dejar la otra mitad (regenerar lo generado) a que alguien se acuerde, con Quality como único aviso y 25 minutos después. (lo hace cumplir `tests/automation/test_cola.py`).
 - **ADR-217** — dejar la entrada de un registro en `main` condicionada (sin prueba que lo haga cumplir: ninguna prueba: la condición vivía en prosa de un documento).
 - **ADR-216** — escribir una salvaguarda en prosa y darla por puesta. (lo hace cumplir `tests/automation/test_cierre_del_ciclo_ps1_no_puede_hacer_dano.py`).
 - **ADR-192** — elegir a mano un identificador leyendo el máximo del (lo hace cumplir `tests/automation/test_registro_de_defectos.py`).
@@ -531,7 +533,7 @@ nada por su cuenta. «Sin fecha declarada» es un aviso, no un dato.
 
 ### `docs/audits`
 
-**137 documentos**, 82 sin fecha declarada; el más reciente declara 2026-10-01.
+**138 documentos**, 82 sin fecha declarada; el más reciente declara 2026-10-01.
 Es la carpeta de la evidencia y crece a dos filas por ADR, así que la fila
 de cada documento vive en un índice generado aparte,
 [`docs/audits/INDICE.md`](docs/audits/INDICE.md), que escribe el

@@ -423,6 +423,21 @@ jobs:
           # `git merge` no puede encontrar el antepasado común.
           fetch-depth: 0
 
+      # Las vistas generadas (`MEMORIA.md`, `docs/audits/INDICE.md`) se regeneran
+      # del arbol combinado despues de traer la base (ADR-220): hace falta el
+      # entorno para ejecutar `sirius-memoria`. Mismo patron y misma version
+      # que `reflejar-desenlace.yml`; solo corre cuando hay puesta al dia.
+      - name: Preparar el entorno para regenerar las vistas
+        if: steps.avanzar.outputs.ponerse_al_dia == 'true'
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          enable-cache: true
+          python-version: "3.14.6"
+
+      - name: Sincronizar el entorno
+        if: steps.avanzar.outputs.ponerse_al_dia == 'true'
+        run: uv sync --locked --all-groups
+
       - name: Fusionar la base y empujar
         if: steps.avanzar.outputs.ponerse_al_dia == 'true'
         shell: bash --noprofile --norc {0}
@@ -442,13 +457,56 @@ jobs:
             exit 1
           fi
 
-          if git merge --no-edit --no-ff FETCH_HEAD -m "Trae ${BASE} a ${RAMA} para que la revision vea la combinacion real (ADR-200)"; then
+          # Las vistas generadas no se resuelven a mano ni se dejan viejas
+          # (ADR-220): tras traer la base se regeneran del arbol combinado y, si
+          # cambiaron, se confirman antes de empujar. Sin esto, 43 de las 44
+          # fusiones de septiembre habrian dejado la rama con la vista vieja y
+          # Quality cayendo por la memoria (#653: una vuelta del corrector).
+          VISTAS="MEMORIA.md docs/audits/INDICE.md"
+          regenerar_vistas() {
+            if ! uv run sirius-memoria conocimiento; then
+              echo "::error::no se pudieron regenerar las vistas de la memoria tras traer ${BASE}." >&2
+              return 1
+            fi
+            # Solo las vistas: nada mas se resuelve ni se confirma desde aqui.
+            # shellcheck disable=SC2086
+            git add -- $VISTAS
+          }
+          empujar() {
             if git push origin "HEAD:refs/heads/${RAMA}"; then
               echo "Rama ${RAMA} al dia con ${BASE}; Quality volvera a correr sobre la combinacion."
               exit 0
             fi
             echo "::error::la fusion salio bien pero el push a ${RAMA} fallo; se reintentara en el proximo run."
             exit 1
+          }
+
+          if git merge --no-edit --no-ff FETCH_HEAD -m "Trae ${BASE} a ${RAMA} para que la revision vea la combinacion real (ADR-200)"; then
+            regenerar_vistas || exit 1
+            if ! git diff --cached --quiet; then
+              git commit -q -m "Regenera las vistas de la memoria tras traer ${BASE} (ADR-220)" || exit 1
+            fi
+            empujar
+          fi
+
+          # Conflicto. Si esta SOLO en las vistas generadas no hay nada que
+          # decidir: se regeneran del arbol combinado y la fusion termina con el
+          # mensaje que ya tenia. Cualquier otro fichero en conflicto sigue siendo
+          # cosa de una persona, exactamente como antes.
+          en_conflicto="$(git diff --name-only --diff-filter=U)"
+          solo_vistas=1
+          for fichero in $en_conflicto; do
+            case " $VISTAS " in
+              *" $fichero "*) ;;
+              *) solo_vistas=0 ;;
+            esac
+          done
+          if [ -n "$en_conflicto" ] && [ "$solo_vistas" -eq 1 ]; then
+            if regenerar_vistas && git commit -q --no-edit; then
+              echo "El conflicto estaba solo en las vistas generadas; regeneradas del arbol combinado."
+              empujar
+            fi
+            echo "::warning::no se pudo terminar la fusion regenerando las vistas; se deshace y se avisa."
           fi
 
           # Conflicto real: las dos partes tocaron lo mismo. Se deshace la

@@ -13,11 +13,15 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
+import stat
+import subprocess
 import sys
 from pathlib import Path
 from types import ModuleType
 
 import pytest
+import yaml
 
 RAIZ = Path(__file__).resolve().parents[2]
 MODULO = RAIZ / "scripts" / "automation" / "sirius_cola.py"
@@ -252,8 +256,6 @@ def test_la_puesta_al_dia_no_empuja_con_el_token_del_workflow() -> None:
     quedaría esperando otra vez: el mismo atasco con otra cara. Por eso el
     checkout que hace la puesta al día lleva el PAT, igual que el del corrector.
     """
-    import yaml
-
     flujo = yaml.safe_load(AVANCE.read_text(encoding="utf-8"))
     pasos = [
         paso
@@ -277,3 +279,212 @@ def test_la_puesta_al_dia_no_empuja_con_el_token_del_workflow() -> None:
     assert "--force" not in _avance_sin_comentarios(), (
         "la puesta al día nunca reescribe la historia de una rama que no es suya"
     )
+
+
+# --- La puesta al día regenera las vistas generadas (ADR-220) -----------------
+#
+# Estas pruebas ejecutan el bash del paso «Fusionar la base y empujar» DE VERDAD,
+# sobre un repositorio de prueba con su remoto y con dobles de `uv` y `gh` en el
+# PATH. Una prueba que solo mirara que el texto del workflow «menciona»
+# `sirius-memoria` certificaría documentación (la lección de `_avance_sin_comentarios`).
+
+PASO_DE_FUSION = "Fusionar la base y empujar"
+VISTAS = ("MEMORIA.md", "docs/audits/INDICE.md")
+CONDICION_DE_PUESTA_AL_DIA = "steps.avanzar.outputs.ponerse_al_dia == 'true'"
+
+_DOBLE_UV = """#!/bin/bash
+# Doble de `uv run sirius-memoria conocimiento`: escribe las vistas A PARTIR DEL
+# ÁRBOL, como el generador real, para que «regenerar» cambie el contenido cuando
+# el árbol cambió y no cuando no.
+set -u
+printf '%s\n' "$*" >>"$DOBLES_LOG"
+if [ "$1 $2 $3" != "run sirius-memoria conocimiento" ]; then
+  echo "doble de uv: orden inesperada: $*" >&2
+  exit 2
+fi
+ficheros="$(git ls-files | grep -v -e '^MEMORIA.md$' -e '^docs/audits/INDICE.md$' \
+  | sort -u | tr '\n' ' ')"
+printf 'vista de: %s\n' "$ficheros" >MEMORIA.md
+mkdir -p docs/audits
+printf 'indice de: %s\n' "$ficheros" >docs/audits/INDICE.md
+"""
+
+_DOBLE_GH = """#!/bin/bash
+# Doble de `gh`: apunta la orden y el cuerpo que se publicaría.
+set -u
+printf 'gh %s\n' "$*" >>"$DOBLES_LOG"
+while [ $# -gt 0 ]; do
+  if [ "$1" = "--body-file" ]; then cat "$2" >>"$DOBLES_LOG"; shift; fi
+  shift
+done
+"""
+
+
+def _bash_del_paso(nombre: str) -> str:
+    flujo = yaml.safe_load(AVANCE.read_text(encoding="utf-8"))
+    for trabajo in flujo["jobs"].values():
+        for paso in trabajo.get("steps", []):
+            if paso.get("name") == nombre:
+                return str(paso["run"])
+    raise AssertionError(f"no hay un paso llamado {nombre!r} en {AVANCE.name}")
+
+
+def _git(cwd: Path, *args: str) -> str:
+    return subprocess.run(
+        ["git", *args], cwd=cwd, check=True, capture_output=True, text=True
+    ).stdout.strip()
+
+
+def _confirmar(cwd: Path, mensaje: str, **ficheros: str) -> None:
+    for ruta, texto in ficheros.items():
+        destino = cwd / ruta
+        destino.parent.mkdir(parents=True, exist_ok=True)
+        destino.write_text(texto, encoding="utf-8")
+        _git(cwd, "add", ruta)
+    _git(cwd, "commit", "-q", "-m", mensaje)
+
+
+class _Escenario:
+    """Un remoto, `main` y una rama `rama` que espera, y el clon del runner."""
+
+    def __init__(self, tmp_path: Path) -> None:
+        self.origen = tmp_path / "origen.git"
+        _git(tmp_path, "init", "-q", "--bare", "-b", "main", str(self.origen))
+        self.taller = tmp_path / "taller"
+        _git(tmp_path, "clone", "-q", str(self.origen), str(self.taller))
+        _git(self.taller, "config", "user.name", "prueba")
+        _git(self.taller, "config", "user.email", "prueba@example.invalid")
+        _git(self.taller, "checkout", "-q", "-b", "main")
+        _confirmar(
+            self.taller,
+            "base",
+            **{"otro.txt": "base\n", "MEMORIA.md": "vista base\n", "docs/audits/INDICE.md": "x\n"},
+        )
+        _git(self.taller, "push", "-q", "origin", "main")
+        _git(self.taller, "checkout", "-q", "-b", "rama")
+        dobles = tmp_path / "dobles"
+        dobles.mkdir()
+        for nombre, texto in (("uv", _DOBLE_UV), ("gh", _DOBLE_GH)):
+            doble = dobles / nombre
+            doble.write_text(texto, encoding="utf-8")
+            doble.chmod(doble.stat().st_mode | stat.S_IXUSR)
+        self.dobles = dobles
+        self.registro = tmp_path / "dobles.log"
+        self.tmp_path = tmp_path
+
+    def en_la_rama(self, mensaje: str, **ficheros: str) -> None:
+        _git(self.taller, "checkout", "-q", "rama")
+        _confirmar(self.taller, mensaje, **ficheros)
+        _git(self.taller, "push", "-q", "origin", "rama")
+
+    def en_main(self, mensaje: str, **ficheros: str) -> None:
+        _git(self.taller, "checkout", "-q", "main")
+        _confirmar(self.taller, mensaje, **ficheros)
+        _git(self.taller, "push", "-q", "origin", "main")
+
+    def punta(self, rama: str) -> str:
+        return _git(self.origen, "rev-parse", rama)
+
+    def ejecutar_el_paso(self) -> subprocess.CompletedProcess[str]:
+        clon = self.tmp_path / "clon"
+        _git(self.tmp_path, "clone", "-q", str(self.origen), str(clon))
+        _git(clon, "checkout", "-q", "rama")
+        guion = self.tmp_path / "paso.sh"
+        guion.write_text(_bash_del_paso(PASO_DE_FUSION), encoding="utf-8")
+        entorno = {
+            **os.environ,
+            "PATH": f"{self.dobles}{os.pathsep}{os.environ['PATH']}",
+            "DOBLES_LOG": str(self.registro),
+            "GH_TOKEN": "doble",
+            "GH_REPO": "propietario/repo",
+            "RAMA": "rama",
+            "BASE": "main",
+            "ISSUE": "7",
+        }
+        self.clon = clon
+        return subprocess.run(
+            ["bash", "--noprofile", "--norc", str(guion)],
+            cwd=clon,
+            env=entorno,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    def lo_publicado(self) -> str:
+        return self.registro.read_text(encoding="utf-8") if self.registro.exists() else ""
+
+
+def test_la_puesta_al_dia_regenera_las_vistas_y_las_confirma_antes_de_empujar(
+    tmp_path: Path,
+) -> None:
+    """Fusión limpia, vista vieja: sin esto Quality caía por la memoria (#653, 25 min)."""
+    escenario = _Escenario(tmp_path)
+    escenario.en_la_rama("trabajo propio", **{"otro.txt": "rama\n"})
+    escenario.en_main("main avanza", **{"docs/nuevo.md": "# Nuevo\n", "MEMORIA.md": "vista main\n"})
+    resultado = escenario.ejecutar_el_paso()
+    assert resultado.returncode == 0, resultado.stdout + resultado.stderr
+    asuntos = _git(escenario.origen, "log", "--format=%s", "-2", "rama").splitlines()
+    assert asuntos[0] == "Regenera las vistas de la memoria tras traer main (ADR-220)", asuntos
+    assert asuntos[1].startswith("Trae main a rama"), asuntos
+    vista = _git(escenario.origen, "show", "rama:MEMORIA.md")
+    assert vista.startswith("vista de:") and "docs/nuevo.md" in vista, (
+        "la vista empujada tiene que ser la regenerada del árbol combinado, no la de `main`"
+    )
+    assert "sirius-cola:rama:conflicto" not in escenario.lo_publicado()
+
+
+def test_un_conflicto_solo_en_las_vistas_generadas_se_resuelve_regenerando(
+    tmp_path: Path,
+) -> None:
+    """Las dos partes regeneraron la vista: no hay nada que una persona deba decidir."""
+    escenario = _Escenario(tmp_path)
+    escenario.en_la_rama("trabajo propio", **{"MEMORIA.md": "vista rama\n"})
+    escenario.en_main("main avanza", **{"docs/nuevo.md": "# Nuevo\n", "MEMORIA.md": "vista main\n"})
+    antes = escenario.punta("rama")
+    resultado = escenario.ejecutar_el_paso()
+    assert resultado.returncode == 0, resultado.stdout + resultado.stderr
+    assert escenario.punta("rama") != antes, "la rama tenía que avanzar con la fusión"
+    padres = _git(escenario.origen, "log", "--format=%P", "-1", "rama").split()
+    assert len(padres) == 2, "la punta tiene que ser la fusión de la rama con main"
+    assert _git(escenario.origen, "log", "--format=%s", "-1", "rama").startswith("Trae main a rama")
+    vista = _git(escenario.origen, "show", "rama:MEMORIA.md")
+    assert vista.startswith("vista de:") and "<<<<<<<" not in vista
+    assert "sirius-cola:rama:conflicto" not in escenario.lo_publicado(), (
+        "un conflicto solo en vistas generadas no es cosa de una persona"
+    )
+
+
+def test_un_conflicto_fuera_de_las_vistas_sigue_siendo_cosa_de_una_persona(
+    tmp_path: Path,
+) -> None:
+    """Exactamente como antes: se deshace, la rama queda como estaba y se avisa (ADR-200)."""
+    escenario = _Escenario(tmp_path)
+    escenario.en_la_rama("trabajo propio", **{"otro.txt": "rama\n", "MEMORIA.md": "vista rama\n"})
+    escenario.en_main("main avanza", **{"otro.txt": "main\n", "MEMORIA.md": "vista main\n"})
+    antes = escenario.punta("rama")
+    resultado = escenario.ejecutar_el_paso()
+    assert resultado.returncode == 0, resultado.stdout + resultado.stderr
+    assert escenario.punta("rama") == antes, "la rama no puede moverse cuando el conflicto es real"
+    assert not (escenario.clon / ".git" / "MERGE_HEAD").exists(), "la fusión tiene que deshacerse"
+    publicado = escenario.lo_publicado()
+    assert "sirius-cola:rama:conflicto" in publicado and "gh issue comment 7" in publicado
+    assert "run sirius-memoria conocimiento" not in publicado, (
+        "con un conflicto fuera de las vistas el paso no toca el árbol: ni regenera"
+    )
+    assert "<<<<<<<" not in _git(escenario.clon, "show", "HEAD:otro.txt")
+
+
+def test_la_puesta_al_dia_tiene_con_que_regenerar() -> None:
+    """Sin `uv` en el job, `sirius-memoria` no existe y el paso fallaría siempre."""
+    flujo = yaml.safe_load(AVANCE.read_text(encoding="utf-8"))
+    pasos = [paso for trabajo in flujo["jobs"].values() for paso in trabajo.get("steps", [])]
+    nombres = [str(p.get("name", "")) for p in pasos]
+    instala = [p for p in pasos if str(p.get("uses", "")).startswith("astral-sh/setup-uv@")]
+    sincroniza = [p for p in pasos if "uv sync" in str(p.get("run", ""))]
+    assert instala and sincroniza, "el job tiene que instalar uv y sincronizar el entorno"
+    for paso in (*instala, *sincroniza):
+        assert str(paso.get("if", "")).strip() == CONDICION_DE_PUESTA_AL_DIA, (
+            "la preparación solo corre cuando hay puesta al día, como el paso que la usa"
+        )
+        assert nombres.index(str(paso["name"])) < nombres.index(PASO_DE_FUSION)
