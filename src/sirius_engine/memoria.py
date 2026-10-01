@@ -644,11 +644,23 @@ def _es_auditoria(ruta: str) -> bool:
     return CARPETA_AUDITORIAS in Path(ruta).parents
 
 
-def _fila_de_documento(documento: Documento) -> str:
-    return f"| {documento.fecha or SIN_FECHA} | [{_celda(documento.titulo)}]({documento.ruta}) |"
+def _fila_de_documento(documento: Documento, *, desde: Path | None = None) -> str:
+    """La fila de un documento; el enlace, relativo a `desde` si la vista no vive en la raíz.
+
+    Un enlace Markdown resuelve desde el fichero que lo contiene: en `MEMORIA.md`
+    (raíz) la ruta del repositorio vale tal cual; en `docs/audits/INDICE.md` esa
+    misma ruta apuntaría a `docs/audits/docs/audits/…` (lo cazó Codex en la PR
+    #664, ronda 2: los 137 enlaces del índice rotos).
+    """
+    ruta = documento.ruta
+    if desde is not None:
+        ruta = Path(documento.ruta).relative_to(desde).as_posix()
+    return f"| {documento.fecha or SIN_FECHA} | [{_celda(documento.titulo)}]({ruta}) |"
 
 
-def _lineas_de_documentos(documentos: Iterable[Documento], *, nivel: str) -> list[str]:
+def _lineas_de_documentos(
+    documentos: Iterable[Documento], *, nivel: str, desde: Path | None = None
+) -> list[str]:
     """Una tabla por carpeta, en el orden de las rutas; `nivel` es el encabezado."""
     lineas: list[str] = []
     carpeta_actual = None
@@ -658,7 +670,7 @@ def _lineas_de_documentos(documentos: Iterable[Documento], *, nivel: str) -> lis
             carpeta_actual = carpeta
             lineas += ["", f"{nivel} `{carpeta}`", ""]
             lineas += _tabla(("Fecha", "Documento"), ())
-        lineas.append(_fila_de_documento(documento))
+        lineas.append(_fila_de_documento(documento, desde=desde))
     return lineas
 
 
@@ -715,7 +727,7 @@ def _texto_del_indice_de_auditorias(arbol: Arbol) -> str:
         f"> repositorio**, junto con `{FICHERO_MEMORIA}`, y vigilado por la misma prueba",
         f"> (ADR-218). No se edita a mano. `{FICHERO_MEMORIA}` lleva el recuento y el",
         "> puntero hasta aquí; aquí está la fila de cada documento de la carpeta, en el",
-        "> orden de su ruta y con la misma forma que las demás carpetas tienen allí.",
+        "> orden de su ruta, con el enlace relativo a este índice.",
         ">",
         "> La fecha es la que cada documento **declara** en su cabecera; la vista no data",
         "> nada por su cuenta. «Sin fecha declarada» es un aviso, no un dato.",
@@ -723,7 +735,7 @@ def _texto_del_indice_de_auditorias(arbol: Arbol) -> str:
     ]
     if auditorias:
         lineas.append(_recuento_de_auditorias(auditorias) + ".")
-        lineas += _lineas_de_documentos(auditorias, nivel="##")
+        lineas += _lineas_de_documentos(auditorias, nivel="##", desde=CARPETA_AUDITORIAS)
     else:
         lineas.append(f"Ningún documento en `{CARPETA_AUDITORIAS.as_posix()}/`.")
     lineas.append("")

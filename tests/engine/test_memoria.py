@@ -244,11 +244,20 @@ def test_el_indice_de_auditorias_vive_generado_aparte_y_la_vista_lleva_recuento_
     """
     texto = generar_memoria(arbol)
     indice = generar_indice_de_auditorias(arbol)
-    con_fecha = "| 2026-01-05 | [Una auditoría](docs/audits/arranque-una-auditoria.md) |"
-    sin_fecha = f"| {SIN_FECHA} | [Otra sin fecha](docs/audits/otra-sin-fecha.md) |"
-    for fila in (con_fecha, sin_fecha):
-        assert fila not in texto, "la fila de una auditoría ya no va en la vista (ADR-218)"
-        assert fila in indice, "...pero tiene que estar, tal cual, en el índice generado"
+    filas = {
+        "| 2026-01-05 | [Una auditoría](docs/audits/arranque-una-auditoria.md) |": (
+            "| 2026-01-05 | [Una auditoría](arranque-una-auditoria.md) |"
+        ),
+        f"| {SIN_FECHA} | [Otra sin fecha](docs/audits/otra-sin-fecha.md) |": (
+            f"| {SIN_FECHA} | [Otra sin fecha](otra-sin-fecha.md) |"
+        ),
+    }
+    for en_la_vista, en_el_indice in filas.items():
+        assert en_la_vista not in texto, "la fila de una auditoría ya no va en la vista (ADR-218)"
+        assert en_el_indice in indice, "...pero tiene que estar en el índice generado"
+    # El enlace resuelve desde el fichero que lo contiene: en el índice, que vive
+    # en docs/audits/, la ruta desde la raíz apuntaría a docs/audits/docs/audits/….
+    assert "](docs/audits/" not in indice, "el índice enlaza relativo a sí mismo, no a la raíz"
     resumen = texto[texto.index("### `docs/audits`") :].split("\n### ", 1)[0]
     assert "**2 documentos**, 1 sin fecha declarada; el más reciente declara 2026-01-05." in (
         resumen

@@ -77,8 +77,9 @@ tienen que caer antes de confirmar.
    decisiones ya lleva para todos (`test_el_indice_de_decisiones_esta_completo`).
 
 **Esto no es podar** (ADR-195): cada fila que sale de la vista está en el
-índice, con la misma forma, y una prueba lo comprueba fila a fila por los dos
-lados. Lo que se quita es la duplicación, no el contenido.
+índice —misma fecha, mismo título, y el enlace relativo al índice, que es desde
+donde se abre—, y una prueba lo comprueba fila a fila por los dos lados. Lo que
+se quita es la duplicación, no el contenido.
 
 ## Lo que se gana, con números
 
@@ -119,8 +120,10 @@ propietario como **D-6**, no se toma aquí.
 - `uv run --no-sync pytest tests/engine/test_memoria.py`: 37 pasan, con tres
   pruebas nuevas:
   - `test_el_indice_de_auditorias_vive_generado_aparte_y_la_vista_lleva_recuento_y_puntero`:
-    la misma fila ausente en la vista y presente en el índice, el recuento y
-    el puntero en la vista, y el índice fuera de la lista de documentos.
+    la misma fila ausente en la vista y presente en el índice, con el enlace
+    relativo al índice (la segunda ronda de Codex cazó que la ruta desde la
+    raíz dejaba los 137 enlaces rotos al abrirlo en GitHub), el recuento y el
+    puntero en la vista, y el índice fuera de la lista de documentos.
   - `test_la_guardia_vigila_el_indice_de_auditorias_igual_que_la_vista`: el
     índice editado a mano o borrado hace hablar a la guardia nombrándolo.
   - `test_las_lecciones_nombran_el_adr_por_numero_y_no_repiten_la_ruta_que_la_tabla_enlaza`.
