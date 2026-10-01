@@ -118,7 +118,9 @@ banco no se movió en ninguna cifra.
   texto, la prosa de los emisores que seguía diciendo que `G8` compara
   cadenas, y tres afirmaciones de este ADR que iban más lejos que el dato (la
   fracción «ausente», el «como antes» de lo ilegible y la «puerta detrás» del
-  puerto SQL). Todo corregido aquí.
+  puerto SQL). Todo corregido aquí. La ronda 2 de Codex cazó tres comentarios
+  más del clasificador que seguían en presente (`_FORMATO_DE_CREATED_AT`,
+  `_SUFIJO_UTC_DEL_CORPUS`, `_tiempo_objetivo`): corregidos igual.
 - Mutaciones, con los ficheros restaurados (`diff -q` limpio):
 
 | | Mutación | Resultado |

@@ -122,7 +122,10 @@ _PATRON_ISO = re.compile(
 #: Forma con la que ``created_at`` llega del canon: ``str(datetime)`` sobre
 #: una columna ``Mapped[datetime]`` de SQLite
 #: (``sirius.adapters.persistence.staged_engine_port``). El corte de registro
-#: se reemite en ESTA forma porque ``G8`` los compara por orden lexicográfico.
+#: se emite en ESTA forma: hasta ADR-229 porque ``G8`` comparaba cadenas y la
+#: forma decidía el veredicto; desde entonces por coherencia con lo que el
+#: canon escribe, porque ``G8`` compara en forma canónica y la escritura ya no
+#: decide nada en la puerta.
 _FORMATO_DE_CREATED_AT = "%Y-%m-%d %H:%M:%S.%f"
 
 #: Último instante representable de un día en la forma de ``created_at``: el
@@ -130,9 +133,10 @@ _FORMATO_DE_CREATED_AT = "%Y-%m-%d %H:%M:%S.%f"
 _FINAL_DEL_DIA = time(23, 59, 59, 999999)
 
 #: Sufijo con el que el corpus declara ``valid_from``/``valid_to``
-#: (``tests/acceptance/fixtures/evidence_bank_47_casos.json``). ``G8`` los
-#: compara como CADENAS, así que el tiempo objetivo se emite con este mismo
-#: sufijo y no con el ``+00:00`` de ``datetime.isoformat``.
+#: (``tests/acceptance/fixtures/evidence_bank_47_casos.json``). El tiempo
+#: objetivo se emite con este mismo sufijo y no con el ``+00:00`` de
+#: ``datetime.isoformat``: hasta ADR-229 porque ``G8`` comparaba cadenas y el
+#: ``+`` ordena antes que la ``Z``; desde entonces, por coherencia con el corpus.
 _DESFASE_EXPLICITO = "+00:00"
 _SUFIJO_UTC_DEL_CORPUS = "Z"
 
@@ -368,12 +372,12 @@ def _tiempo_objetivo(declarado: object) -> str | None:
     """El instante al que se refiere la pregunta, canonizado a UTC y escrito
     con el sufijo ``Z``.
 
-    ``G8`` compara el tiempo objetivo con ``valid_from``/``valid_to`` como
-    CADENAS, y el corpus que puebla esos ejes los escribe con ``Z``. Emitir
-    ``+00:00`` invertiría el veredicto en la frontera exacta —el ``+``
-    (0x2B) ordena antes que la ``Z`` (0x5A)—, así que el mismo instante se
-    escribe aquí en la misma forma que el operando con el que se compara.
-    Una fecha desnuda es su medianoche: es un instante, no un día.
+    Es la forma con la que el corpus escribe ``valid_from``/``valid_to``.
+    Hasta ADR-229 era una condición del veredicto: ``G8`` comparaba cadenas y
+    emitir ``+00:00`` lo invertía en la frontera exacta —el ``+`` (0x2B)
+    ordena antes que la ``Z`` (0x5A)—. Desde ADR-229 ``G8`` compara en forma
+    canónica y la ``Z`` es coherencia con el corpus, no una condición. Una
+    fecha desnuda es su medianoche: es un instante, no un día.
     """
     texto = _iso_declarado(declarado)
     momento = instante_utc(texto)
