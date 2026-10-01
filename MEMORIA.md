@@ -26,13 +26,13 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **215**.
+- Decisiones (ADR): **216**.
 - Bloques del motor: 17 cerrado, 2 fuera_de_alcance, 1 pendiente.
-- Defectos registrados: 3 abierto, 71 cerrado.
+- Defectos registrados: 3 abierto, 72 cerrado.
 - Ideas aparcadas o descartadas: 5 aparcada, 2 descartada, 2 promovida.
 - Skills: **19**.
 - Investigaciones: **10** (fotos con fecha; caducan).
-- Documentos: **197**, de los que **136** no declaran fecha.
+- Documentos: **198**, de los que **136** no declaran fecha.
 
 ## Las skills: lo que ya costó averiguar dos veces (ADR-211)
 
@@ -543,7 +543,7 @@ nada por su cuenta. «Sin fecha declarada» es un aviso, no un dato.
 
 ### `docs/audits`
 
-**140 documentos**, 82 sin fecha declarada; el más reciente declara 2026-10-01.
+**141 documentos**, 82 sin fecha declarada; el más reciente declara 2026-10-01.
 Es la carpeta de la evidencia y crece a dos filas por ADR, así que la fila
 de cada documento vive en un índice generado aparte,
 [`docs/audits/INDICE.md`](docs/audits/INDICE.md), que escribe el
