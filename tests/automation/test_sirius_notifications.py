@@ -284,3 +284,22 @@ def test_el_notificador_no_cancela_lo_que_ya_esta_publicando() -> None:
     assert (doc.get("concurrency") or {}).get("cancel-in-progress") is False, (
         "El notificador nunca debe cancelar una ejecución en curso."
     )
+
+
+def test_el_aviso_de_listo_no_pide_una_autorizacion_que_el_motor_ya_no_necesita() -> None:
+    """Desde ADR-205 el motor fusiona solo con la aprobación de los dos revisores
+    sobre el mismo head (`merge-sirius-work.yml`), y el aviso de
+    `sirius:ready-for-merge` seguía diciendo «Solo falta tu autorización…
+    Escribe **fusiona**» (deuda 47 de la bitácora del ciclo, entrada 146). Un
+    texto que pide lo que no hace falta es la familia F3 de la mina: el motor
+    describe mal lo que hace. La orden manual sigue existiendo como reintento,
+    así que el aviso la nombra, pero como lo que es.
+    """
+    texto = NOTIFICADOR.read_text(encoding="utf-8")
+    inicio = texto.index("sirius:ready-for-merge)")
+    bloque = texto[inicio : texto.index(";;", inicio)]
+    assert "Solo falta tu autorización" not in bloque, (
+        "el aviso pide una autorización que ADR-205 hizo innecesaria"
+    )
+    assert "ADR-205" in bloque, "el aviso tiene que decir quién fusiona y por qué regla"
+    assert "**fusiona**" in bloque, "la orden manual sigue siendo el reintento y hay que nombrarla"

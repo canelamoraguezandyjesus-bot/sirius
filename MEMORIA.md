@@ -26,13 +26,13 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **213**.
+- Decisiones (ADR): **214**.
 - Bloques del motor: 17 cerrado, 2 fuera_de_alcance, 1 pendiente.
-- Defectos registrados: 3 abierto, 69 cerrado.
+- Defectos registrados: 3 abierto, 70 cerrado.
 - Ideas aparcadas o descartadas: 5 aparcada, 2 descartada, 2 promovida.
 - Skills: **19**.
 - Investigaciones: **10** (fotos con fecha; caducan).
-- Documentos: **195**, de los que **136** no declaran fecha.
+- Documentos: **196**, de los que **136** no declaran fecha.
 
 ## Las skills: lo que ya costó averiguar dos veces (ADR-211)
 
@@ -80,6 +80,7 @@ huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
 | [222](docs/decisions/ADR-222-un-defecto-cerrado-lleva-la-pr-que-lo-fusiono-la-referencia-que-un-clon-de-main-puede-seguir.md) | 2026-10-01 | APROBADO | Un defecto cerrado lleva la PR que lo fusionó: la referencia que un clon de `main` puede seguir | Desde este ADR, un defecto `cerrado` lleva, además de `cerrado_por`, `pr: <número de la PR que lo fusiona>`; si lo cerró un encargo del motor, cuya PR la abre el workflow al terminar el run, basta `incidencia: <número>`, que ya es un campo… |
+| [219](docs/decisions/ADR-219-el-motor-dice-lo-que-hace-el-veredicto-nombra-su-pr-el-aviso-de-listo-no-pide-una-autorizacion-que-ya-no-necesita-y-una-casi-orden-recibe-respuesta.md) | 2026-10-01 | APROBADO | El motor dice lo que hace: el veredicto nombra su PR, el aviso de «listo» no pide una autorización que ya no necesita y una casi-orden recibe respuesta | `sirius_apply_verdict.sh` publica la línea con `printf '%s\n' "- PR: …"`: el texto va como argumento, nunca como formato. Vale para los dos caminos del veredicto (con y sin familia repetida). El aviso de `ready-for-merge`… |
 | [218](docs/decisions/ADR-218-la-vista-de-memoria-deja-fuera-el-indice-de-docs-audits-y-no-repite-las-rutas-que-ya-enlaza.md) | 2026-10-01 | APROBADO | La vista de memoria deja fuera el índice de `docs/audits`, que pasa a una vista generada aparte, y no repite las rutas que ya enlaza | El índice de `docs/audits/` sale de `MEMORIA.md` y vive en `docs/audits/INDICE.md`, generado. Lo escribe el mismo comando (`uv run sirius-memoria conocimiento` escribe los dos ficheros) y lo vigila la misma guardia (`comprobar_memoria` y… |
 | [217](docs/decisions/ADR-217-la-bitacora-del-ciclo-entra-en-main-con-su-familia-y-la-evidencia-de-adr-002-se-queda-en-su-rama.md) | 2026-10-01 | APROBADO | La bitácora del ciclo entra en `main` con su familia, y la evidencia de ADR-002 se queda en su rama | Entran en `main`, tal como estaban en `a044fb4a`, los 48 ficheros de `docs/audits/` que la rama añade y `docs/investigaciones/2026-09-13-memanto-contra-la-capa-de-memoria-de-sirius.md`. Entre ellos: la bitácora… |
 | [216](docs/decisions/ADR-216-cerrar-el-ciclo-el-motor-se-queda-sin-trabajo-vivo-los-horarios-se-apagan-desde-actions-y-el-estado-real-queda-escrito.md) | 2026-09-24 | APROBADO | Cerrar el ciclo: el motor se queda sin trabajo vivo, los horarios se apagan desde Actions y el estado real queda escrito | Las PR abiertas, cerradas. La #661 (cinco skills, ADR-215) fusionada aplastada en `6a58c75e`. La #117 —la rama de evidencia de julio, abierta desde el 25-07 y declarada «no debe fusionarse automáticamente»— cerrada sin borrar su rama: su… |
@@ -308,10 +309,10 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 | `regla-que-depende-de-que-alguien-se-acuerde` | 9 | no en todas | 222, 217, 216, 192, 191, 188, 182, 179, 174 |
 | `pieza-sin-lector` | 5 | no en todas | 210, 209, 207, 183, 175 |
 | `regla-del-propietario-que-solo-vive-en-una-conversacion` | 4 | sí | 213, 208, 204, 195 |
+| `prosa-que-el-cambio-deja-falsa` | 3 | no en todas | 219, 211, 177 |
 | `leccion-que-se-queda-en-el-informe` | 2 | sí | 215, 214 |
 | `lista-a-mano` | 2 | sí | 181, 178 |
 | `medir-lo-que-se-tiene-en-vez-de-lo-que-hay` | 2 | sí | 184, 180 |
-| `prosa-que-el-cambio-deja-falsa` | 2 | no en todas | 211, 177 |
 | `vista-que-copia-el-corpus-del-que-venia-huyendo` | 2 | sí | 218, 196 |
 | `condicion-construida-sin-el-mecanismo-que-la-hace-cumplible` | 1 | sí | 200 |
 | `criterio-que-se-pide-distinto-del-que-se-puntua` | 1 | sí | 212 |
@@ -358,6 +359,12 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 - **ADR-204** — la sesión seguiría devolviéndole decisiones técnicas (lo hace cumplir `tests/automation/test_reglas_de_agents.py`).
 - **ADR-195** — una regla dada de viva voz —«no se elimina nada»— que no (lo hace cumplir `tests/automation/test_registro_de_defectos.py`).
 
+### `prosa-que-el-cambio-deja-falsa`
+
+- **ADR-219** — cambiar la regla (ADR-205) y dejar el aviso que la contaba al propietario diciendo la regla vieja; y dar por publicada una línea de un comentario sin haber leído nunca un comentario publicado. (lo hace cumplir `tests/automation/test_sirius_notifications.py`).
+- **ADR-211** — escribir un documento de método que nadie vuelve a (lo hace cumplir `tests/automation/test_skills.py`).
+- **ADR-177** — retirar un símbolo de producción y dejar vivas las frases que lo daban por cierto; al quitar `pide_contexto` quedaron falsos los once pasajes de prosa que la sección 6 de esta ficha enumera, 22 referencias del literal en las pruebas más otros cuatro pasajes de pruebas que describían el mecanismo sin nombrarlo, y el criterio de aceptación de M16 de la Arquitectura Técnica; y el barrido que las buscó en `scripts/` y `tests/` no miró en `docs/evolution/` ni podía ver lo que no escribe el literal, así que una lista solo se declara completa sobre el alcance del barrido que la produjo y el resto se dice cubierto por lectura. (sin prueba que lo haga cumplir: ninguna prueba: nada en este repositorio vigila la coherencia de la prosa de `docs/` con el árbol, y la ocurrencia que queda viva está en la Arquitectura Técnica, que la salvaguarda de #581 prohíbe tocar sin decisión del propietario.).
+
 ### `leccion-que-se-queda-en-el-informe`
 
 - **ADR-215** — creer que sin transcripciones no salen más skills (lo hace cumplir `tests/automation/test_skills.py`).
@@ -372,11 +379,6 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 
 - **ADR-184** — poner una guarda a responder la pregunta que sabe contestar barata —«¿aparece la palabra?»— en lugar de la que tiene que contestar —«¿la orden lo pide?»—, y no notarlo porque el sustituto acierta casi siempre: aquí acertó en 1 de 3 paradas reales y paró sobre las salvaguardas que prohibían justo la operación. (lo hace cumplir `tests/engine/test_intent_interpreter.py`).
 - **ADR-180** — preguntarle a la copia local por un hecho que vive fuera -las ramas traídas en vez de las que existen- y creer que la respuesta cubre el caso; aquí el guion veía el 3,4% de las ramas y repartió el mismo número tres veces en un día. (lo hace cumplir `tests/automation/test_registro_de_decisiones.py`).
-
-### `prosa-que-el-cambio-deja-falsa`
-
-- **ADR-211** — escribir un documento de método que nadie vuelve a (lo hace cumplir `tests/automation/test_skills.py`).
-- **ADR-177** — retirar un símbolo de producción y dejar vivas las frases que lo daban por cierto; al quitar `pide_contexto` quedaron falsos los once pasajes de prosa que la sección 6 de esta ficha enumera, 22 referencias del literal en las pruebas más otros cuatro pasajes de pruebas que describían el mecanismo sin nombrarlo, y el criterio de aceptación de M16 de la Arquitectura Técnica; y el barrido que las buscó en `scripts/` y `tests/` no miró en `docs/evolution/` ni podía ver lo que no escribe el literal, así que una lista solo se declara completa sobre el alcance del barrido que la produjo y el resto se dice cubierto por lectura. (sin prueba que lo haga cumplir: ninguna prueba: nada en este repositorio vigila la coherencia de la prosa de `docs/` con el árbol, y la ocurrencia que queda viva está en la Arquitectura Técnica, que la salvaguarda de #581 prohíbe tocar sin decisión del propietario.).
 
 ### `vista-que-copia-el-corpus-del-que-venia-huyendo`
 
@@ -533,7 +535,7 @@ nada por su cuenta. «Sin fecha declarada» es un aviso, no un dato.
 
 ### `docs/audits`
 
-**138 documentos**, 82 sin fecha declarada; el más reciente declara 2026-10-01.
+**139 documentos**, 82 sin fecha declarada; el más reciente declara 2026-10-01.
 Es la carpeta de la evidencia y crece a dos filas por ADR, así que la fila
 de cada documento vive en un índice generado aparte,
 [`docs/audits/INDICE.md`](docs/audits/INDICE.md), que escribe el
