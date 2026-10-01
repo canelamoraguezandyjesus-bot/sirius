@@ -1179,7 +1179,7 @@ defectos:
     bloque: motor
     gravedad: alta
     estado: cerrado
-    cerrado_por: 14ba4b121fdf2354136fa635df9eaf4d80c6e3d7
+    cerrado_por: ec044cac9813625da3502e648b3336b61fd80aea
     pr: 669
     adr: 224
     ficheros:
