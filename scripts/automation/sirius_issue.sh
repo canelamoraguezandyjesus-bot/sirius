@@ -541,6 +541,38 @@ sirius_set_issue_labels() {
   return 0
 }
 
+# sirius_remove_issue_labels <repo> <issue> <remove_label...> — retira cada
+# etiqueta sin anadir ninguna, de forma idempotente y VERIFICADA por REST.
+# Existe porque `sirius_set_issue_labels` pone ANTES de quitar, y hay una
+# transicion en la que ese orden es el defecto: la reanudacion por orden del
+# propietario tiene que retirar la parada ANTES de reponer el evento, porque el
+# evento despierta a la puerta de activacion y la puerta rechaza una parada que
+# siga puesta (ronda 5 de Codex en la PR #671). Devuelve 0 solo si, tras la
+# operacion, ninguna de las etiquetas sigue presente.
+sirius_remove_issue_labels() {
+  local repo="$1" num="$2"
+  shift 2
+  local removes=("$@")
+  local r
+  for r in "${removes[@]}"; do
+    [ -z "${r:-}" ] && continue
+    sirius_retry _sirius_gh issue edit "$num" --repo "$repo" --remove-label "$r" >/dev/null 2>&1 || true
+  done
+  local labels=""
+  if ! labels="$(sirius_retry _sirius_gh api "repos/${repo}/issues/${num}" --jq '.labels[].name')"; then
+    echo "sirius_remove_issue_labels: no se pudo verificar las etiquetas de #${num}" >&2
+    return 1
+  fi
+  for r in "${removes[@]}"; do
+    [ -z "${r:-}" ] && continue
+    if printf '%s\n' "$labels" | grep -Fxq "$r"; then
+      echo "sirius_remove_issue_labels: la etiqueta ${r} no se retiro de #${num}" >&2
+      return 1
+    fi
+  done
+  return 0
+}
+
 # sirius_close_issue <repo> <issue> — cierre idempotente: 0 si cierra o si ya
 # estaba cerrada; !=0 si no se pudo dejar cerrada.
 sirius_close_issue() {

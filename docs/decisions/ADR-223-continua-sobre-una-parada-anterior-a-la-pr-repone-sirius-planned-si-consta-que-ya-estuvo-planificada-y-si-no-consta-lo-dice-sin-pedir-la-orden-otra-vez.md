@@ -81,11 +81,12 @@ y la incidencia no lleva `sirius:planned`, el guion:
    cuenta los `labeled` de `sirius:planned`. Si la cronología no se puede leer,
    **el run falla** sin concluir nada: ni repone `planned` ni publica «nunca
    planificada», que sería una conclusión falsa (ronda 2 de Codex).
-2. **Si consta al menos uno, repone `sirius:planned` antes que el evento** (la
-   puerta de activación, que despierta con el evento, tiene que encontrarla ya
-   puesta), repone el evento, retira la parada y el reinicio en verde dice que
-   la repuso, cuántas veces constaba y por qué. Una sola orden, ninguna
-   repetición.
+2. **Si consta al menos uno, repone `sirius:planned` y retira la parada en una
+   misma transición, que no despierta a nadie, y pone el evento en último
+   lugar**: la puerta de activación, que despierta con el evento, tiene que
+   encontrar `planned` puesta y la parada ya retirada. El reinicio en verde
+   dice que la repuso, cuántas veces constaba y por qué. Una sola orden,
+   ninguna repetición.
 3. **Si no consta ninguno, no repone nada ni consume la parada**
    (`failed-safely` o `blocked-decision` se quedan): no hay aprobación que
    devolver. Publica **una vez por orden** (marcador
@@ -100,8 +101,21 @@ y la incidencia no lleva `sirius:planned`, el guion:
    repetir la orden. El aviso no empieza por «continua». Si el aviso no se
    puede publicar, **el run falla** y queda reintentable: un aviso prometido
    que no llega es la parada muda otra vez.
-4. Con `planned` presente, todo sigue igual: se repone el evento, se conserva
-   `planned` y se publica el reinicio, sin mencionar ninguna reposición.
+4. Con `planned` presente, se conserva, se publica el reinicio sin mencionar
+   ninguna reposición, **se retira la parada y después se repone el evento**.
+5. **El orden es el mismo para el guion y para la persona** —la parada fuera,
+   `planned` puesta, el evento en último lugar—, y por la misma razón: cada
+   etiqueta es un evento aparte, el evento despierta a la puerta y la puerta
+   rechaza, y retira el evento, si la parada sigue puesta
+   (`INCOMPATIBLE_STATES` en `sirius_validate_activation.sh`). Hasta la ronda 5
+   de Codex el guion ponía el evento y retiraba la parada después, el orden
+   natural de `sirius_set_issue_labels`, y en esa ventana la puerta podía leer
+   las dos etiquetas y dejar la incidencia solo con `planned`: mudo otra vez,
+   después de anunciar el reinicio. `sirius_remove_issue_labels` (nuevo en
+   `sirius_issue.sh`, verificado por REST como su hermano) retira sin añadir.
+   El coste se asume y se dice: si la última llamada falla, la incidencia queda
+   sin parada y sin evento, un `continua` nuevo no tendría parada que levantar,
+   y el error del run nombra la etiqueta que falta y que se aplica a mano.
 
 ## Comprobación que la sostiene
 
@@ -134,6 +148,16 @@ nunca pudieron reanudar de verdad; y seis pruebas de este ADR:
   `implement-requested` (ronda 3 de Codex: cada etiqueta es un evento aparte,
   la puerta arranca con la última y rechaza una parada que siga puesta; la
   primera versión decía «a la vez», que una persona no puede hacer).
+- El guion sigue ese mismo orden (ronda 5 de Codex: tres rondas seguidas de la
+  misma familia —el orden de las etiquetas frente a una puerta que despierta
+  con la última—, y la raíz era que el guion usaba el orden «poner y luego
+  quitar» del ayudante). `test_una_parada_sin_pr_sin_planned_repone_planned_si_consta_que_ya_estuvo_planificada`
+  exige `ADD planned` → `REMOVE parada` → `ADD evento`;
+  `test_la_parada_se_retira_antes_de_reponer_el_evento` lo exige con `planned`
+  ya puesta y con PR (`REMOVE parada` → `ADD evento`); y
+  `test_si_el_evento_no_se_puede_reponer_el_run_dice_que_etiqueta_falta`
+  comprueba el coste asumido: parada ya retirada, evento sin aplicar, run rojo
+  y el error nombra la etiqueta que hay que aplicar a mano.
 
 **Mutaciones** (cada una aplicada sobre el guion, la prueba ejecutada, el
 fichero restaurado):
@@ -147,6 +171,8 @@ fichero restaurado):
 | M5 | no reponer `planned` aunque conste que ya estuvo planificada | cae `una_parada_sin_pr_sin_planned_repone_planned_si_consta_que_ya_estuvo_planificada` |
 | M6 | un aviso que no se puede publicar no hace fallar el run | cae `si_el_aviso_de_sin_planned_no_se_puede_publicar_el_run_falla` |
 | M7 | una cronología que no se puede leer cuenta como «nunca planificada» | cae `si_la_cronologia_no_se_puede_leer_el_run_falla_sin_concluir_nada` |
+| M8 | el guion vuelve a poner el evento antes de retirar la parada (ronda 5) | cae `una_parada_sin_pr_sin_planned_repone_planned_si_consta_que_ya_estuvo_planificada`, `la_parada_se_retira_antes_de_reponer_el_evento` |
+| M9 | un evento que no se puede aplicar no hace fallar el run | cae `si_el_evento_no_se_puede_reponer_el_run_dice_que_etiqueta_falta` |
 
 - El fichero entero en verde (30 pruebas); `bash -n`; `ruff`, `mypy` sobre la
   prueba. Batería entera: en la PR.

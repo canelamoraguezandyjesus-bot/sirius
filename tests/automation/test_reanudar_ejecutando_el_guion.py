@@ -122,6 +122,7 @@ case "$sub" in
           prev="$a"
         done
         if [ -n "$add" ]; then
+          [ "${GH_MOCK_FAIL_ADD:-}" = "$add" ] && { echo "503" >&2; exit 1; }
           grep -Fxq "$add" "$D/labels_${num}.txt" 2>/dev/null \
             || echo "$add" >> "$D/labels_${num}.txt"
           echo "ADD ${add}" >> "$D/actions.log"
@@ -831,9 +832,75 @@ def test_una_parada_sin_pr_sin_planned_repone_planned_si_consta_que_ya_estuvo_pl
     )
     assert "sirius-resume-sin-planned" not in publicado
     acciones = (_md(env) / "actions.log").read_text(encoding="utf-8").splitlines()
-    assert acciones.index("ADD sirius:planned") < acciones.index(
+    assert (
+        acciones.index("ADD sirius:planned")
+        < acciones.index("REMOVE sirius:failed-safely")
+        < acciones.index("ADD sirius:implement-requested")
+    ), (
+        "`planned` puesta y la parada retirada ANTES del evento: la puerta despierta "
+        f"con el evento y rechaza una parada que siga puesta. Acciones: {acciones}"
+    )
+
+
+def test_la_parada_se_retira_antes_de_reponer_el_evento(tmp_path: Path) -> None:
+    """Ronda 5 de Codex en la PR #671: el evento despierta a la puerta de
+    activacion, y la puerta rechaza -y retira el evento- si la parada sigue
+    puesta. `sirius_set_issue_labels` pone antes de quitar, asi que el orden
+    del guion abria esa ventana: la incidencia podia quedar solo con `planned`
+    despues de anunciar el reinicio en verde. La parada se retira ANTES del
+    evento, con PR y sin ella."""
+    con_pr = tmp_path / "con_pr"
+    con_pr.mkdir()
+    env = _setup(con_pr)
+    _sembrar(
+        env,
+        etiquetas=["sirius:failed-safely"],
+        historial=_historial(f"<!-- sirius-verdict:reviewer:FAILED_SAFELY:{HEAD} -->"),
+    )
+    resultado = _ejecutar(env)
+    assert resultado.returncode == 0, resultado.stderr
+    acciones = (_md(env) / "actions.log").read_text(encoding="utf-8").splitlines()
+    assert acciones.index("REMOVE sirius:failed-safely") < acciones.index(
+        "ADD sirius:review-requested"
+    ), f"con PR, la parada se retira antes del evento. Acciones: {acciones}"
+
+    sin_pr = tmp_path / "sin_pr"
+    sin_pr.mkdir()
+    env = _setup(sin_pr)
+    _sembrar(
+        env,
+        etiquetas=["sirius:planned", "sirius:failed-safely"],
+        historial=_historial_sin_pr("<!-- sirius-verdict:implementer:FAILED_SAFELY:1 -->"),
+    )
+    resultado = _ejecutar(env)
+    assert resultado.returncode == 0, resultado.stderr
+    acciones = (_md(env) / "actions.log").read_text(encoding="utf-8").splitlines()
+    assert "ADD sirius:planned" not in acciones, "con `planned` puesta no hay nada que reponer"
+    assert acciones.index("REMOVE sirius:failed-safely") < acciones.index(
         "ADD sirius:implement-requested"
-    ), "`planned` antes que el evento: la puerta tiene que encontrarla puesta"
+    ), f"sin PR y con `planned`, la parada se retira antes del evento. Acciones: {acciones}"
+
+
+def test_si_el_evento_no_se_puede_reponer_el_run_dice_que_etiqueta_falta(tmp_path: Path) -> None:
+    """El coste del orden nuevo, asumido y dicho: si la parada ya se retiro y el
+    evento no se puede aplicar, la incidencia queda sin las dos, un `continua`
+    nuevo no encontraria parada que levantar, y el run tiene que decir en rojo
+    que etiqueta se aplica a mano."""
+    env = _setup(tmp_path)
+    env["GH_MOCK_FAIL_ADD"] = "sirius:review-requested"
+    _sembrar(
+        env,
+        etiquetas=["sirius:failed-safely"],
+        historial=_historial(f"<!-- sirius-verdict:reviewer:FAILED_SAFELY:{HEAD} -->"),
+    )
+    resultado = _ejecutar(env)
+    assert resultado.returncode != 0
+    etiquetas = _etiquetas(env)
+    assert "sirius:failed-safely" not in etiquetas and "sirius:review-requested" not in etiquetas
+    salida = resultado.stdout + resultado.stderr
+    assert "::error::" in salida and "sirius:review-requested" in salida and "a mano" in salida, (
+        salida
+    )
 
 
 def test_una_incidencia_planificada_por_el_despachador_tambien_repone_planned(
