@@ -27,7 +27,7 @@ _VISTA = DivergenciaVista("WI-20260828-122242", 392, "etiquetas que se contradic
 
 
 def test_una_divergencia_nueva_nace_con_su_primera_vez_y_al_repetirse_la_conserva() -> None:
-    primera = actualizar((), [_VISTA], ilegibles=(), ahora=_T1)
+    primera = actualizar((), [_VISTA], sin_evaluar=(), ahora=_T1)
     assert primera == (
         DivergenciaApartada(
             "WI-20260828-122242",
@@ -38,22 +38,22 @@ def test_una_divergencia_nueva_nace_con_su_primera_vez_y_al_repetirse_la_conserv
             1,
         ),
     )
-    segunda = actualizar(primera, [_VISTA], ilegibles=(), ahora=_T2)
+    segunda = actualizar(primera, [_VISTA], sin_evaluar=(), ahora=_T2)
     assert segunda[0].primera_vez == _T1.isoformat()
     assert segunda[0].ultima_vez == _T2.isoformat()
     assert segunda[0].pasadas == 2
 
 
 def test_una_entrada_que_la_pasada_evaluo_sin_divergencia_se_retira() -> None:
-    anteriores = actualizar((), [_VISTA], ilegibles=(), ahora=_T1)
-    assert actualizar(anteriores, [], ilegibles=(), ahora=_T2) == ()
+    anteriores = actualizar((), [_VISTA], sin_evaluar=(), ahora=_T1)
+    assert actualizar(anteriores, [], sin_evaluar=(), ahora=_T2) == ()
 
 
 def test_una_entrada_cuyo_encargo_no_se_pudo_leer_se_conserva_tal_cual() -> None:
     """No saber no es saber que se resolvió: una incidencia ilegible esta pasada
     deja la entrada con su última fecha, no la borra."""
-    anteriores = actualizar((), [_VISTA], ilegibles=(), ahora=_T1)
-    conservadas = actualizar(anteriores, [], ilegibles={"WI-20260828-122242"}, ahora=_T2)
+    anteriores = actualizar((), [_VISTA], sin_evaluar=(), ahora=_T1)
+    conservadas = actualizar(anteriores, [], sin_evaluar={"WI-20260828-122242"}, ahora=_T2)
     assert conservadas == anteriores
 
 
@@ -62,14 +62,19 @@ def test_leer_y_escribir_van_y_vuelven_y_sin_fichero_no_hay_nada(tmp_path: Path)
     assert ruta.name == FICHERO_DIVERGENCIAS
     assert leer_divergencias(ruta) == ()
     apartadas = actualizar(
-        (), [_VISTA, DivergenciaVista("WI-0", None, "hacia atrás")], ilegibles=(), ahora=_T1
+        (), [_VISTA, DivergenciaVista("WI-0", None, "hacia atrás")], sin_evaluar=(), ahora=_T1
     )
     escribir_divergencias(ruta, apartadas)
     assert leer_divergencias(ruta) == apartadas
     assert [d.work_id for d in apartadas] == ["WI-0", "WI-20260828-122242"], "ordenadas por encargo"
+    assert not ruta.with_name(ruta.name + ".tmp").exists(), (
+        "se escribe en un temporal y se sustituye entero: ninguna pasada deja un JSON a medias"
+    )
 
 
-@pytest.mark.parametrize("texto", ["[]", "{}", '{"divergencias": [{"work_id": "WI-1"}]}'])
+@pytest.mark.parametrize(
+    "texto", ["[]", "{}", '{"divergencias": [{"work_id": "WI-1"}]}', '{"divergencias": [']
+)
 def test_un_fichero_que_no_tiene_la_forma_se_declara_en_vez_de_leerse_como_vacio(
     tmp_path: Path, texto: str
 ) -> None:

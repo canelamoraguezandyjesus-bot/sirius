@@ -39,6 +39,7 @@ from sirius_engine.adapters.github_cli_mirror import GitHubCliMirrorReader
 from sirius_engine.cli import resolver_diario
 from sirius_engine.dispatcher import TABLA_ACTIVACION
 from sirius_engine.divergencias import (
+    DivergenciaApartada,
     DivergenciaVista,
     actualizar,
     escribir_divergencias,
@@ -154,83 +155,123 @@ def main(
     aplicados_total = 0
     # Lo que la pasada aparta para una persona, y lo que no pudo mirar: al
     # terminar se escribe junto al diario (ADR-227, H-216). Antes solo quedaba
-    # en este log, una línea por pasada, y nadie lo volvía a leer.
-    vistas: list[DivergenciaVista] = []
-    ilegibles: set[str] = set()
-    for work_id in _work_ids_conocidos(store):
-        item = store.get_work_item(work_id)
-        if item is None or item.estado in TERMINAL_STATES:
-            continue
-        # La puerta de clase se deriva de la tabla que decide QUÉ SE DESPACHA
-        # (`dispatcher.TABLA_ACTIVACION`), no de la de autoridad de ADR-041.
-        # Leía la de autoridad, y esa tabla es de agosto: `DOCUMENTACION` entró
-        # en el ciclo de GitHub con ADR-088 e `INVESTIGACION` con ADR-099, las
-        # dos «con el mismo ciclo y las mismas etiquetas que programacion», y
-        # las dos siguen con autoridad MOTOR en la tabla de ADR-041. Resultado
-        # medido el 12-09-2026: los 15 encargos de esas dos clases que se
-        # despacharon a GitHub -10 de `documentacion`, 5 de `investigacion`-
-        # seguían los 15 en `active`, ninguno había alcanzado jamás un estado
-        # terminal, y ninguno podía. Derivarla de `TABLA_ACTIVACION` no es una
-        # segunda lista que mantener: es la misma tabla que abre la puerta de
-        # ida, leída también a la vuelta (ADR-173).
-        if item.clase not in TABLA_ACTIVACION:
-            linea(f"{work_id}: la clase {item.clase.value} no se despacha a GitHub; no se refleja.")
-            continue
-        episodio = dispatch_journal.episode_for(work_id)
-        if episodio is None:
-            linea(f"{work_id}: no consta despachado a ninguna incidencia; no se refleja.")
-            continue
-        try:
-            espejo = leer_y_proyectar_work_item(
-                mirror, repo=episodio.repo, numero=episodio.numero_incidencia, ahora=ahora
-            )
-        except EspejoIlegibleError as error:
-            ilegibles.add(work_id)
-            linea(
-                f"{work_id}: no pude leer la incidencia #{episodio.numero_incidencia} "
-                f"({error}). No se refleja nada esta pasada."
-            )
-            continue
-
-        resultado: ResultadoReflejo = reflejar_desenlace(item, espejo, episodio)
-
-        if not resultado.pasos:
-            # Ninguna rama se va en silencio (ADR-173). Las cuatro salidas sin
-            # plan -idempotencia, etiqueta no reconocida, sin etiqueta,
-            # divergencia- dejaban al encargo exactamente igual y no imprimían
-            # nada, así que un encargo varado era indistinguible de uno sano:
-            # la pasada del 12-09-2026 03:50 UTC, con 21 encargos varados,
-            # imprimió una sola línea. Ahora cada pasada dice de cada encargo
-            # dónde está y qué proyecta su incidencia, que es lo único que
-            # convierte «no pasa nada» en «esto lleva doce días sin moverse».
-            if resultado.divergencia:
-                linea(resultado.divergencia)
-                vistas.append(
-                    DivergenciaVista(work_id, episodio.numero_incidencia, resultado.divergencia)
-                )
-            else:
-                estado_incidencia = "cerrada" if espejo.cerrada else "abierta"
-                linea(
-                    f"{work_id}: sin cambios; el motor está en "
-                    f"{item.estado.value}/{item.fase.value} y la incidencia "
-                    f"#{episodio.numero_incidencia} ({estado_incidencia}) "
-                    f"proyecta {_proyeccion(espejo)}."
-                )
-            continue
-
-        if args.ensayo:
-            pasos_texto = ", ".join(paso.kind for paso in resultado.pasos)
-            linea(f"{work_id}: aplicaría {len(resultado.pasos)} paso(s): {pasos_texto}")
-            continue
-
-        aplicar_pasos(store, work_id, resultado.pasos, now=ahora)
-        aplicados_total += len(resultado.pasos)
-        pasos_texto = ", ".join(paso.kind for paso in resultado.pasos)
-        linea(f"{work_id}: aplicados {len(resultado.pasos)} paso(s): {pasos_texto}")
-
+    # en este log, una línea por pasada, y nadie lo volvía a leer. El fichero
+    # anterior se lee ANTES de tocar el almacén: si está roto, se dice aquí y
+    # la pasada sigue -el reflejo es lo primero-, reescribiéndolo con lo que
+    # observe; un fichero secundario ilegible no puede parar las transiciones.
     ruta_divergencias = ruta_de_divergencias(diario)
-    anteriores = leer_divergencias(ruta_divergencias)
-    apartadas = actualizar(anteriores, vistas, ilegibles=ilegibles, ahora=ahora)
+    fichero_roto = False
+    try:
+        anteriores = leer_divergencias(ruta_divergencias)
+    except ValueError as error:
+        linea(f"AVISO: {error}; esta pasada lo vuelve a escribir con lo que observe.")
+        anteriores = ()
+        fichero_roto = True
+    vistas: list[DivergenciaVista] = []
+    sin_evaluar: set[str] = set()
+    evaluados: set[str] = set()
+
+    def cerrar_divergencias() -> tuple[DivergenciaApartada, ...]:
+        # Lo que la pasada no llegó a mirar se conserva: si murió a medias, el
+        # paso de confirmar del workflow (`if: always()`) confirma igual el
+        # diario, y sin esto la vista se regeneraría de un fichero viejo o
+        # inexistente (ronda 1 de Codex en la PR #674).
+        no_alcanzados = {d.work_id for d in anteriores} - evaluados
+        apartadas = actualizar(
+            anteriores, vistas, sin_evaluar=sin_evaluar | no_alcanzados, ahora=ahora
+        )
+        if not args.ensayo and (
+            fichero_roto
+            or apartadas != anteriores
+            or (apartadas and not ruta_divergencias.is_file())
+        ):
+            escribir_divergencias(ruta_divergencias, apartadas)
+        return apartadas
+
+    try:
+        for work_id in _work_ids_conocidos(store):
+            item = store.get_work_item(work_id)
+            if item is None or item.estado in TERMINAL_STATES:
+                evaluados.add(work_id)
+                continue
+            # La puerta de clase se deriva de la tabla que decide QUÉ SE DESPACHA
+            # (`dispatcher.TABLA_ACTIVACION`), no de la de autoridad de ADR-041.
+            # Leía la de autoridad, y esa tabla es de agosto: `DOCUMENTACION` entró
+            # en el ciclo de GitHub con ADR-088 e `INVESTIGACION` con ADR-099, las
+            # dos «con el mismo ciclo y las mismas etiquetas que programacion», y
+            # las dos siguen con autoridad MOTOR en la tabla de ADR-041. Resultado
+            # medido el 12-09-2026: los 15 encargos de esas dos clases que se
+            # despacharon a GitHub -10 de `documentacion`, 5 de `investigacion`-
+            # seguían los 15 en `active`, ninguno había alcanzado jamás un estado
+            # terminal, y ninguno podía. Derivarla de `TABLA_ACTIVACION` no es una
+            # segunda lista que mantener: es la misma tabla que abre la puerta de
+            # ida, leída también a la vuelta (ADR-173).
+            if item.clase not in TABLA_ACTIVACION:
+                linea(
+                    f"{work_id}: la clase {item.clase.value} no se despacha a GitHub; "
+                    "no se refleja."
+                )
+                evaluados.add(work_id)
+                continue
+            episodio = dispatch_journal.episode_for(work_id)
+            if episodio is None:
+                linea(f"{work_id}: no consta despachado a ninguna incidencia; no se refleja.")
+                evaluados.add(work_id)
+                continue
+            try:
+                espejo = leer_y_proyectar_work_item(
+                    mirror, repo=episodio.repo, numero=episodio.numero_incidencia, ahora=ahora
+                )
+            except EspejoIlegibleError as error:
+                sin_evaluar.add(work_id)
+                linea(
+                    f"{work_id}: no pude leer la incidencia #{episodio.numero_incidencia} "
+                    f"({error}). No se refleja nada esta pasada."
+                )
+                continue
+
+            resultado: ResultadoReflejo = reflejar_desenlace(item, espejo, episodio)
+            evaluados.add(work_id)
+
+            if not resultado.pasos:
+                # Ninguna rama se va en silencio (ADR-173). Las cuatro salidas sin
+                # plan -idempotencia, etiqueta no reconocida, sin etiqueta,
+                # divergencia- dejaban al encargo exactamente igual y no imprimían
+                # nada, así que un encargo varado era indistinguible de uno sano:
+                # la pasada del 12-09-2026 03:50 UTC, con 21 encargos varados,
+                # imprimió una sola línea. Ahora cada pasada dice de cada encargo
+                # dónde está y qué proyecta su incidencia, que es lo único que
+                # convierte «no pasa nada» en «esto lleva doce días sin moverse».
+                if resultado.divergencia:
+                    linea(resultado.divergencia)
+                    vistas.append(
+                        DivergenciaVista(work_id, episodio.numero_incidencia, resultado.divergencia)
+                    )
+                else:
+                    estado_incidencia = "cerrada" if espejo.cerrada else "abierta"
+                    linea(
+                        f"{work_id}: sin cambios; el motor está en "
+                        f"{item.estado.value}/{item.fase.value} y la incidencia "
+                        f"#{episodio.numero_incidencia} ({estado_incidencia}) "
+                        f"proyecta {_proyeccion(espejo)}."
+                    )
+                continue
+
+            if args.ensayo:
+                pasos_texto = ", ".join(paso.kind for paso in resultado.pasos)
+                linea(f"{work_id}: aplicaría {len(resultado.pasos)} paso(s): {pasos_texto}")
+                continue
+
+            aplicar_pasos(store, work_id, resultado.pasos, now=ahora)
+            aplicados_total += len(resultado.pasos)
+            pasos_texto = ", ".join(paso.kind for paso in resultado.pasos)
+            linea(f"{work_id}: aplicados {len(resultado.pasos)} paso(s): {pasos_texto}")
+
+    except BaseException:
+        cerrar_divergencias()
+        raise
+
+    apartadas = cerrar_divergencias()
     if args.ensayo:
         linea(
             f"Divergencias apartadas para una persona: {len(apartadas)} "
@@ -238,8 +279,6 @@ def main(
         )
         return 0
 
-    if apartadas != anteriores or (apartadas and not ruta_divergencias.is_file()):
-        escribir_divergencias(ruta_divergencias, apartadas)
     linea("")
     linea(f"Pasos aplicados en total: {aplicados_total}.")
     linea(

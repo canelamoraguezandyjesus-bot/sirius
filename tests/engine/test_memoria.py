@@ -522,6 +522,21 @@ def test_la_vista_de_desenlaces_lista_las_divergencias_apartadas_con_su_edad(dia
     assert "Ninguna: la última pasada" not in texto
 
 
+def test_la_vista_declara_un_fichero_de_divergencias_ilegible_sin_caerse(
+    diario: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """La vista se deriva del diario; un `divergencias.json` roto se dice en
+    ella, no la impide (el paso del workflow que la publica corre con
+    `if: always()` para enseñar un reflejo a medias). Revisión independiente
+    de la PR #674."""
+    diario.with_name(FICHERO_DIVERGENCIAS).write_text('{"divergencias": [', encoding="utf-8")
+    texto = generar_desenlaces(diario, diario.with_name("diario-despacho.jsonl"))
+    assert "**No se pudo leer `divergencias.json`**" in texto and "no es JSON" in texto
+    assert "| WI-B |" in texto, "los encargos siguen en la vista"
+    assert main(["desenlaces", "--diario", str(diario)]) == 0
+    assert "no es JSON" not in capsys.readouterr().err
+
+
 def test_un_diario_corrupto_se_declara_con_su_linea(tmp_path: Path) -> None:
     ruta = tmp_path / "diario.jsonl"
     _escribir(ruta, '{"aggregate_type": "work_item"}\nesto no es json\n')

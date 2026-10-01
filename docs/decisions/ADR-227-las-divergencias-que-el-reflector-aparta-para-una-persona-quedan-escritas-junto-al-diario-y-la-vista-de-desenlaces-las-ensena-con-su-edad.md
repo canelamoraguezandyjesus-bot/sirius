@@ -44,6 +44,14 @@ Copiado de la nota de arranque:
 Ninguna de las dos primeras paró: `reflect.py` no se toca y la vista solo lee
 un fichero más junto al diario.
 
+**Desviación, a la vista.** La predicción 3 de la nota decía que una entrada
+se retira «solo cuando la pasada evaluó ese encargo y no vio divergencia (o el
+encargo ya es terminal)». Lo implementado la retira también cuando el encargo
+ya no está entre los que se reflejan por otra razón —clase que no se
+despacha, sin episodio de despacho—: son encargos sobre los que el reflector
+no va a volver, y una entrada suya sería un apartado para siempre. La
+revisión independiente de la PR #674 lo señaló; queda dicho aquí.
+
 ## Opciones consideradas
 
 1. Dejarlo: la persona a la que el diseño deriva la contradicción no existe, y
@@ -67,33 +75,61 @@ un fichero más junto al diario.
    regla de retención `actualizar`, pura: una divergencia vista se escribe
    (primera vez conservada, última vez y pasadas al día); una entrada anterior
    se retira si la pasada evaluó el encargo sin divergencia o el encargo ya no
-   se refleja; una entrada cuyo encargo no se pudo leer esta pasada se
-   conserva tal cual. Un fichero que no tiene la forma se declara, no se lee
-   como vacío.
-2. `reflect_cli.py` recoge las divergencias de la pasada y los encargos
-   ilegibles y, al terminar, escribe el fichero si cambió; en `--ensayo` dice
-   cuántas hay y no escribe. Nada de la pasada cambia antes de eso:
-   `reflect.py` no se toca.
+   se refleja; una entrada de un encargo del que la pasada no pudo concluir
+   nada (`sin_evaluar`: incidencia ilegible, o pasada que murió antes de llegar
+   a él) se conserva tal cual. El fichero se escribe entero o no se toca
+   (temporal al lado y `os.replace`): una pasada que muera escribiendo no deja
+   un JSON a medias que el paso de confirmar del workflow confirmaría. Un
+   fichero que no tiene la forma, o que no es JSON, se declara con su ruta, no
+   se lee como vacío.
+2. `reflect_cli.py` lee el fichero anterior **antes** de tocar el almacén (si
+   está roto, lo dice nombrándolo, sigue —el reflejo es lo primero— y lo
+   reescribe con lo que observe), recoge las divergencias de la pasada y los
+   encargos que no pudo evaluar y, al terminar, escribe el fichero si cambió.
+   Si la pasada muere a medias por cualquier excepción, escribe igualmente lo
+   observado hasta ahí, conserva las entradas de los encargos a los que no
+   llegó y vuelve a lanzar la excepción: el paso de confirmar del workflow
+   corre con `if: always()` y confirmaría el diario con un fichero viejo. En
+   `--ensayo` dice cuántas hay y no escribe. `reflect.py` no se toca.
 3. `memoria.py` añade a `DESENLACES.md` la sección «Divergencias que el
    reflector aparta para una persona»: encargo, incidencia, motivo, primera y
    última vez, pasadas y **días parado** (del último suceso del encargo en el
    diario a la última pasada que lo apartó). Sin fichero, lo dice. La resta de
    fechas vive en `divergencias.py` porque la vista no puede ni nombrar el
    reloj (la guarda `test_el_generador_no_mira_el_reloj_ni_la_red_ni_git` lo
-   impidió al primer intento, y bien).
-4. El workflow `reflejar-desenlace.yml` no cambia: su paso «Confirmar el
-   diario» hace `git add -A` en la rama de memoria, así que el fichero entra
-   con el diario, y «Publicar la vista» ya corre después del reflejo.
+   impidió al primer intento, y bien). Si el fichero no se puede leer, la
+   vista lo declara en esa misma sección —con la ruta y el motivo— en vez de
+   fallar: la vista se deriva del diario, y un fichero secundario roto no
+   puede impedirla.
+4. El workflow `reflejar-desenlace.yml` no cambia de comportamiento: su paso
+   «Confirmar el diario» hace `git add -A` en la rama de memoria, así que el
+   fichero entra con el diario, y «Publicar la vista» ya corre después del
+   reflejo. Sus comentarios sí cambian: decían que sin sucesos nuevos en el
+   diario la vista no cambia y no se confirma nada, y desde este ADR una
+   divergencia que sigue apartada actualiza su última pasada en cada pasada,
+   así que el fichero y la vista pueden cambiar sin sucesos nuevos.
 
 ## Comprobación que la sostiene
 
 - `tests/engine/test_divergencias.py` (5 pruebas: nacimiento y repetición,
-  retirada, conservación de la ilegible, ida y vuelta del fichero, fichero
-  sin forma), `tests/engine/test_reflect_cli.py` (3: queda escrita junto al
-  diario con el almacén intacto, el ensayo no escribe, la ilegible se conserva
-  y la resuelta se retira) y `tests/engine/test_memoria.py` (1: la vista lista
-  la divergencia con 26 días parado y, sin fichero, lo dice). Las de la escritura
-  y la vista, vistas fallar contra el árbol anterior.
+  retirada, conservación de la que no se evaluó, ida y vuelta del fichero sin
+  temporal que sobreviva, fichero sin forma o que no es JSON),
+  `tests/engine/test_reflect_cli.py` (6: queda escrita junto al diario con el
+  almacén intacto, el ensayo no escribe, la ilegible se conserva y la resuelta
+  se retira, una pasada que muere a medias conserva lo observado y lo no
+  alcanzado, un fichero roto no para el reflejo y se reescribe, la entrada de
+  un encargo resuelto o terminal se retira) y `tests/engine/test_memoria.py`
+  (2: la vista lista la divergencia con 26 días parado y, sin fichero, lo
+  dice; con un fichero ilegible lo declara sin caerse). Las de la escritura y
+  la vista, vistas fallar contra el árbol anterior.
+- Dos revisiones sobre la primera versión: Codex (ronda 1) y una revisión
+  independiente encargada por la sesión. Entre las dos: la pasada que muere a
+  medias y pierde lo observado, el fichero corrupto que mataba la pasada
+  después de aplicar pasos y dejaba la vista sin regenerar en cada pasada
+  siguiente, la escritura no atómica, dos mutaciones que sobrevivían (la
+  entrada de un encargo terminal o resuelto conservada), la prosa del workflow
+  y de la memoria que el cambio dejaba falsa, y la medida pendiente de abajo,
+  que ya no se podía tomar. Todo corregido aquí.
 - Mutaciones, con los ficheros restaurados (`diff -q` limpio) y la batería en
   verde después:
 
@@ -103,31 +139,44 @@ un fichero más junto al diario.
 | M2 | la vista ignora el fichero | cae `test_la_vista_de_desenlaces_lista_las_divergencias_apartadas_con_su_edad` |
 | M3 | una incidencia ilegible borra la entrada | caen `test_una_entrada_cuyo_encargo_no_se_pudo_leer_se_conserva_tal_cual` y la de la ilegible en `test_reflect_cli.py` |
 | M4 | el ensayo escribe el fichero | cae `test_el_ensayo_no_escribe_las_divergencias` |
+| M5 | una pasada que muere a medias no escribe nada | cae `test_una_pasada_que_muere_a_medias_conserva_lo_observado_y_lo_no_alcanzado` |
+| M6 | la entrada de un encargo terminal se conserva | cae `test_una_entrada_de_un_encargo_resuelto_o_terminal_se_retira` |
+| M7 | la entrada de un encargo evaluado sin divergencia se conserva | caen esa y `test_una_divergencia_ilegible_se_conserva_y_una_resuelta_se_retira` |
+| M8 | un fichero roto para la pasada | cae `test_un_fichero_de_divergencias_roto_no_para_el_reflejo_y_se_reescribe` |
+| M9 | un fichero roto tumba la vista | cae `test_la_vista_declara_un_fichero_de_divergencias_ilegible_sin_caerse` |
 
 - Baterías `test_divergencias.py`, `test_reflect_cli.py`, `test_memoria.py` y
   `test_reflect.py`: 137 en verde. `ruff format`, `ruff check` y `mypy` sobre
   los tres módulos y las pruebas, sin avisos.
-- La medida del criterio de parada que no se puede tomar aquí: la primera
-  pasada real de `reflejar-desenlace` tras la fusión escribirá
-  `divergencias.json` con `WI-20260828-122242` y la vista mostrará sus días
-  parado. Este entorno no tiene `gh` ni la rama de memoria; queda como
-  observación pendiente, con la cifra prevista (34 el 01-10).
+- La medida prevista en la nota —que la primera pasada real escribiera el
+  fichero con `WI-20260828-122242` y la vista mostrara sus 34 días— **ya no se
+  puede tomar**, y es buena noticia: el 01-10-2026, por delegación del
+  propietario, se retiró de #392 la etiqueta falsa (`sirius:failed-safely`,
+  aplicada a las 13:14Z del 28-08 por un run del corrector que ya estaba en
+  cola, cinco minutos después de que el motor la cerrara como completada) y la
+  pasada del reflector de las 15:57:31Z entregó el encargo (commit `0acc958a`
+  de `estado-del-motor`). El diario real no tiene hoy ningún encargo apartado.
+  Lo que sí se puede medir tras la fusión: `DESENLACES.md` muestra la sección
+  nueva con «Ninguna», y la próxima divergencia que el reflector aparte
+  aparecerá allí en su primera pasada, con sus días, en vez de 27 después.
 
 ## Consecuencias
 
 - Quien abra `DESENLACES.md` ve lo que el reflector aparta para una persona y
-  desde cuándo, sin auditar. Lo que se cierra es el mecanismo (H-227: el motivo
-  solo vivía en el log). **H-216 sigue abierto**: su hecho —`WI-20260828-122242`
-  apartada sin que nadie decida— solo lo cierra una persona mirando #392 y
-  dejando una sola etiqueta de estado, y el registro ata cada `pr:` a la PR que
-  metió el ADR del defecto en `main` (ADR-222), así que cerrarlo desde esta PR
-  tampoco cabría sin cambiar el esquema. Queda en la lista de decisiones del
-  propietario, con dónde verlo.
+  desde cuándo, sin auditar. Lo que se cierra aquí es el mecanismo (H-227: el
+  motivo solo vivía en el log). El hecho de H-216 quedó resuelto el 01-10-2026
+  (#392 con una sola etiqueta y el encargo entregado por el reflector), pero
+  **H-216 sigue abierto en el registro**: la guarda de ADR-222 ata cada `pr:` a
+  la PR que metió en `main` el ADR que declaró el defecto, y la de H-216 fue la
+  #663, así que un cierre desde otra PR no cabe sin ampliar esa guarda. Es una
+  limitación de ADR-222 —un defecto declarado abierto en una PR y arreglado en
+  otra posterior no se puede cerrar— y va en su propio ADR; H-216 se cierra
+  allí.
 - Un fichero más en la rama de memoria, que cambia solo cuando cambia lo que
   el reflector aparta (y en cada pasada que lo vuelve a ver, por la última
   fecha y las pasadas).
-- H-227 en el registro de defectos; H-216 queda abierto hasta que una persona
-  decida #392.
+- H-227 en el registro de defectos; H-216 queda abierto hasta el ADR que
+  amplíe la guarda de ADR-222.
 
 ## Alternativas descartadas y por qué
 

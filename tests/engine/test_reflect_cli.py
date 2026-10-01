@@ -12,6 +12,7 @@ from __future__ import annotations
 import io
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -19,7 +20,11 @@ from sirius_engine import reflect_cli
 from sirius_engine.adapters.fixture_mirror import FixedGitHubMirrorReader
 from sirius_engine.adapters.memory_dispatch_journal import InMemoryDispatchJournal
 from sirius_engine.adapters.memory_store import InMemoryWorkEngineStore
-from sirius_engine.divergencias import leer_divergencias
+from sirius_engine.divergencias import (
+    DivergenciaApartada,
+    escribir_divergencias,
+    leer_divergencias,
+)
 from sirius_engine.domain.dispatch import DispatchEpisode
 from sirius_engine.domain.work_item import WorkItemClass, WorkItemPhase, WorkItemState
 from sirius_engine.ports.github_mirror import (
@@ -249,9 +254,9 @@ def test_espejo_sin_etiqueta_de_estado_no_mueve_nada_pero_lo_cuenta(tmp_path: Pa
     assert sin_tocar.fase is WorkItemPhase.PREPARAR
 
 
-def _mirror_contradictorio(numero: int = _NUMERO) -> FixedGitHubMirrorReader:
+def _datos_contradictorios(numero: int = _NUMERO) -> dict[str, Any]:
     """La incidencia #392 de H-216: cerrada con dos etiquetas de estado que se contradicen."""
-    return FixedGitHubMirrorReader(
+    return dict(
         metadatos_por_incidencia={
             (_REPO, numero): LecturaMetadatos(
                 estado=LecturaEstado.OK,
@@ -273,6 +278,164 @@ def _mirror_contradictorio(numero: int = _NUMERO) -> FixedGitHubMirrorReader:
             (_REPO, numero): LecturaComentarios(estado=LecturaEstado.OK, comentarios=())
         },
     )
+
+
+def _mirror_contradictorio(numero: int = _NUMERO) -> FixedGitHubMirrorReader:
+    return FixedGitHubMirrorReader(**_datos_contradictorios(numero))
+
+
+def _mirror_completado(numero: int = _NUMERO) -> FixedGitHubMirrorReader:
+    """Una incidencia cerrada como completada con su sha de fusión: el reflector la entrega."""
+    return FixedGitHubMirrorReader(
+        metadatos_por_incidencia={
+            (_REPO, numero): LecturaMetadatos(
+                estado=LecturaEstado.OK,
+                metadatos=MetadatosIncidencia(
+                    numero=numero, titulo="t", estado_gh="closed", etiquetas=("sirius:completed",)
+                ),
+            )
+        },
+        cuerpos_por_incidencia={
+            (_REPO, numero): LecturaCuerpo(
+                estado=LecturaEstado.OK,
+                cuerpo=CuerpoIncidencia(autor_login="x", autor_asociacion="OWNER", texto=""),
+            )
+        },
+        comentarios_por_incidencia={
+            (_REPO, numero): LecturaComentarios(
+                estado=LecturaEstado.OK,
+                comentarios=(
+                    Comentario(
+                        autor_login="github-actions[bot]",
+                        autor_asociacion="NONE",
+                        cuerpo=(
+                            "<!-- sirius-completed:deadbeef1234 -->\n\n- Merge SHA: `deadbeef1234`"
+                        ),
+                        creado_en=_AHORA,
+                    ),
+                ),
+            )
+        },
+    )
+
+
+class _EspejoQueSeCae(FixedGitHubMirrorReader):
+    """Un espejo que REVIENTA al leer una incidencia concreta: la API que se cae
+    a mitad de la pasada, no una lectura que el reflector sabe tratar como
+    ilegible (`EspejoIlegibleError`)."""
+
+    def __init__(self, *, numero_que_se_cae: int, **datos: Any) -> None:
+        super().__init__(**datos)
+        self._numero_que_se_cae = numero_que_se_cae
+
+    def leer_metadatos(self, *, repo: str, numero: int) -> LecturaMetadatos:
+        if numero == self._numero_que_se_cae:
+            raise RuntimeError("la API se cayó a mitad de la pasada")
+        return super().leer_metadatos(repo=repo, numero=numero)
+
+
+_ENTRADA_VIEJA = DivergenciaApartada(
+    work_id=_WORK_ID,
+    incidencia=_NUMERO,
+    motivo="motivo de una pasada anterior",
+    primera_vez="2026-09-01T03:24:00+00:00",
+    ultima_vez="2026-09-03T03:24:00+00:00",
+    pasadas=3,
+)
+
+
+def test_una_pasada_que_muere_a_medias_conserva_lo_observado_y_lo_no_alcanzado(
+    tmp_path: Path,
+) -> None:
+    """Ronda 1 de Codex en la PR #674: si la pasada revienta tras ver una
+    divergencia, el workflow confirma igual el diario (`if: always()`) y la
+    vista se regeneraría de un fichero viejo. Lo observado se escribe y lo que
+    la pasada no llegó a mirar se conserva tal cual."""
+    store = InMemoryWorkEngineStore()
+    journal = InMemoryDispatchJournal()
+    _preparar(store, journal, work_id="WI-1", numero=_NUMERO)
+    _preparar(store, journal, work_id="WI-2", numero=999)
+    ruta = tmp_path / "divergencias.json"
+    vieja = DivergenciaApartada(
+        "WI-2", 999, "motivo viejo", "2026-09-01T03:24:00+00:00", "2026-09-03T03:24:00+00:00", 3
+    )
+    escribir_divergencias(ruta, [vieja])
+    espejo = _EspejoQueSeCae(numero_que_se_cae=999, **_datos_contradictorios(_NUMERO))
+
+    with pytest.raises(RuntimeError, match="se cayó"):
+        _correr(
+            ["--diario", str(tmp_path / "diario.jsonl")],
+            store=store,
+            journal=journal,
+            mirror=espejo,
+        )
+
+    por_encargo = {d.work_id: d for d in leer_divergencias(ruta)}
+    assert set(por_encargo) == {"WI-1", "WI-2"}
+    assert "se contradicen" in por_encargo["WI-1"].motivo and por_encargo["WI-1"].pasadas == 1
+    assert por_encargo["WI-2"] == vieja, "lo que la pasada no llegó a mirar se conserva tal cual"
+
+
+def test_un_fichero_de_divergencias_roto_no_para_el_reflejo_y_se_reescribe(tmp_path: Path) -> None:
+    """Revisión independiente de la PR #674: un `divergencias.json` corrupto
+    mataba la pasada DESPUÉS de aplicar los pasos, y en cada pasada siguiente,
+    hasta que alguien lo arreglara a mano. El reflejo es lo primero: el fichero
+    se lee antes de tocar el almacén, se avisa nombrándolo y se reescribe."""
+    store = InMemoryWorkEngineStore()
+    journal = InMemoryDispatchJournal()
+    _preparar(store, journal)
+    ruta = tmp_path / "divergencias.json"
+    ruta.write_text('{"divergencias": [', encoding="utf-8")
+
+    codigo, texto = _correr(
+        ["--diario", str(tmp_path / "diario.jsonl")],
+        store=store,
+        journal=journal,
+        mirror=_mirror(etiqueta="sirius:implementing"),
+    )
+
+    assert codigo == 0
+    assert "AVISO: " in texto and "divergencias.json: no es JSON" in texto
+    assert f"{_WORK_ID}: aplicados 1 paso(s)" in texto
+    assert leer_divergencias(ruta) == (), "reescrito y legible"
+    assert not (tmp_path / "divergencias.json.tmp").exists()
+
+
+def test_una_entrada_de_un_encargo_resuelto_o_terminal_se_retira(tmp_path: Path) -> None:
+    """Las dos mutaciones que sobrevivían (revisión independiente de la PR #674):
+    conservar la entrada de un encargo que la pasada resolvió con pasos, y la
+    de uno ya terminal. Es el camino real de #392 el 01-10: la etiqueta falsa
+    se retiró, el reflector entregó el encargo, y su entrada tiene que irse."""
+    store = InMemoryWorkEngineStore()
+    journal = InMemoryDispatchJournal()
+    _preparar(store, journal)
+    diario = tmp_path / "diario.jsonl"
+    ruta = tmp_path / "divergencias.json"
+
+    escribir_divergencias(ruta, [_ENTRADA_VIEJA])
+    codigo, _ = _correr(
+        ["--diario", str(diario)],
+        store=store,
+        journal=journal,
+        mirror=_mirror(etiqueta="sirius:implementing"),
+    )
+    assert codigo == 0
+    assert leer_divergencias(ruta) == (), "resuelta con pasos: la entrada se retira"
+
+    codigo, texto = _correr(
+        ["--diario", str(diario)], store=store, journal=journal, mirror=_mirror_completado()
+    )
+    assert codigo == 0 and "work_item_delivered" in texto
+    escribir_divergencias(ruta, [_ENTRADA_VIEJA])
+    codigo, _ = _correr(
+        ["--diario", str(diario)],
+        store=store,
+        journal=journal,
+        mirror=_mirror_completado(),
+        ahora=_AHORA.replace(day=5),
+    )
+    assert codigo == 0
+    assert leer_divergencias(ruta) == (), "terminal: la entrada se retira"
 
 
 def test_una_divergencia_apartada_queda_escrita_junto_al_diario(tmp_path: Path) -> None:

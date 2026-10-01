@@ -1,7 +1,7 @@
 # Nota de arranque — las divergencias que el reflector aparta se ven en la vista de desenlaces, con su edad
 
-Rama `claude/las-divergencias-apartadas-se-ven-con-su-edad`, 01-10-2026,
-15:10 UTC. Mejora 4 de la lista de la mina de septiembre
+Rama `claude/las-divergencias-apartadas-se-ven-con-su-edad`, fecha 01-10-2026
+(la hora es la del commit que la publica, 14:46 UTC). Mejora 4 de la lista de la mina de septiembre
 (`SIRIUS_MINA_APRENDIZAJE_OPERATIVO_2026-09-30.md`, §10); defecto H-216
 (incidencia #662, entrada 38 de la bitácora). Escrita antes de tocar el
 reflector ni la vista.

@@ -8,9 +8,11 @@ Dos vistas, dos funciones puras:
   ni git**: dos llamadas sobre el mismo árbol devuelven el mismo texto, y eso
   es lo que permite que una prueba falle cuando el fichero confirmado se queda
   viejo (criterio de parada (a) de ADR-171).
-- :func:`generar_desenlaces` lee el diario del motor y el de despacho y
-  devuelve el texto de ``DESENLACES.md``: qué se encargó, qué salió y dónde
-  está la evidencia (propuesta §6.2). Lo escribe el motor en su rama.
+- :func:`generar_desenlaces` lee el diario del motor, el de despacho y las
+  divergencias que el reflector aparta (``divergencias.json``, ADR-227) y
+  devuelve el texto de ``DESENLACES.md``: qué se encargó, qué salió, dónde
+  está la evidencia (propuesta §6.2) y qué espera a una persona. Lo escribe
+  el motor en su rama.
 
 Ninguna de las dos resume con criterio ni data nada por su cuenta: el resumen
 de un ADR es el primer párrafo de su ``## Decisión`` tal cual está escrito, y un
@@ -1106,7 +1108,15 @@ def generar_desenlaces(diario: Path, despacho: Path | None = None) -> str:
     # y nadie lo volvía a mirar. La edad se cuenta desde su último suceso en el
     # diario hasta la última pasada que lo apartó: lo que lleva parado.
     ruta_divergencias = ruta_de_divergencias(diario)
-    apartadas = leer_divergencias(ruta_divergencias)
+    try:
+        apartadas = leer_divergencias(ruta_divergencias)
+        problema_divergencias: str | None = None
+    except ValueError as error:
+        # La vista se deriva del diario; un fichero secundario roto se declara
+        # en ella, no la impide (el paso del workflow que la publica corre con
+        # `if: always()` justamente para enseñar un reflejo a medias).
+        apartadas = ()
+        problema_divergencias = str(error)
     ultimo_suceso = {encargo.work_id: encargo.ultimo_suceso for encargo in encargos}
     lineas = [
         "# Desenlaces del motor de Sirius",
@@ -1125,7 +1135,9 @@ def generar_desenlaces(diario: Path, despacho: Path | None = None) -> str:
         "## Divergencias que el reflector aparta para una persona",
         "",
         *(
-            _tabla_de_divergencias(apartadas, ultimo_suceso)
+            [f"**No se pudo leer `{ruta_divergencias.name}`**: {problema_divergencias}"]
+            if problema_divergencias is not None
+            else _tabla_de_divergencias(apartadas, ultimo_suceso)
             if apartadas
             else [
                 "Ninguna: la última pasada del reflector no apartó ninguna (si la hubiera, "

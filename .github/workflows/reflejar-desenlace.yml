@@ -144,8 +144,10 @@ jobs:
         # La memoria común (ADR-171): DESENLACES.md, generado del diario tal y
         # como esté, en la misma rama. Corre aunque el reflejo haya fallado: un
         # reflejo a medias es justo lo que hay que poder ver, y la vista se
-        # deriva del diario, no del resultado de la pasada. Si el diario no
-        # cambió, la vista tampoco, y el paso siguiente no confirma nada.
+        # deriva del diario, no del resultado de la pasada. La vista cambia
+        # cuando cambia el diario o `divergencias.json` (ADR-227: una
+        # divergencia que sigue apartada actualiza su última pasada); si no
+        # cambió ninguno, el paso siguiente no confirma nada.
         if: always()
         env:
           MEMORIA: ${{ runner.temp }}/memoria
@@ -160,7 +162,8 @@ jobs:
       - name: Confirmar el diario
         # Se ejecuta aunque el reflejo falle: si llegó a aplicar transiciones
         # y luego murió, esos sucesos ya están escritos y perderlos sería
-        # peor que el propio fallo. Una pasada sin sucesos no confirma nada.
+        # peor que el propio fallo. Una pasada que no cambió ni el diario ni
+        # las divergencias apartadas no confirma nada.
         if: always()
         env:
           MEMORIA: ${{ runner.temp }}/memoria
@@ -180,9 +183,9 @@ jobs:
             exit 1
           fi
           if [ -z "$estado" ]; then
-            echo "El reflejo no aplicó ninguna transición nueva."
-            echo "No es un fallo: espejos sin cambios, divergencias ya observadas o"
-            echo "WorkItems terminales no producen sucesos, a propósito (idempotencia, C1)."
+            echo "El reflejo no aplicó ninguna transición nueva ni cambió las divergencias apartadas."
+            echo "No es un fallo: espejos sin cambios o WorkItems terminales no producen"
+            echo "sucesos, a propósito (idempotencia, C1)."
             exit 0
           fi
           git add -A

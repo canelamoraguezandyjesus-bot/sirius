@@ -9,7 +9,7 @@
 > La fecha es la que cada documento **declara** en su cabecera; la vista no data
 > nada por su cuenta. «Sin fecha declarada» es un aviso, no un dato.
 
-**142 documentos**, 83 sin fecha declarada.
+**142 documentos**, 82 sin fecha declarada.
 
 ## `docs/audits`
 
@@ -33,7 +33,7 @@
 | 2026-10-01 | [Nota de arranque — la cola trae `main` a la rama que espera y deja las vistas generadas rotas](arranque-2026-10-01-la-cola-regenera-las-vistas-al-traer-la-base.md) |
 | 2026-10-01 | [Nota de arranque — la referencia de cierre de un defecto se puede seguir desde `main`](arranque-2026-10-01-la-referencia-de-cierre-de-un-defecto-se-sigue-desde-main.md) |
 | 2026-10-01 | [Nota de arranque — la vista de memoria vuelve a caber en una sola lectura (segunda vez)](arranque-2026-10-01-la-vista-vuelve-a-caber-en-una-sola-lectura.md) |
-| sin fecha declarada | [Nota de arranque — las divergencias que el reflector aparta se ven en la vista de desenlaces, con su edad](arranque-2026-10-01-las-divergencias-que-el-reflector-aparta-se-ven-con-su-edad.md) |
+| 2026-10-01 | [Nota de arranque — las divergencias que el reflector aparta se ven en la vista de desenlaces, con su edad](arranque-2026-10-01-las-divergencias-que-el-reflector-aparta-se-ven-con-su-edad.md) |
 | 2026-10-01 | [Nota de arranque — Quality no muere por un `uv sync` sin caché](arranque-2026-10-01-quality-no-muere-por-un-sync-lento.md) |
 | 2026-08-28 | [Nota de arranque — atestar al buscador antes de gastar en medirlo](arranque-atestar-al-buscador.md) |
 | 2026-09-19 | [Nota de arranque — la auditoría de la forma de trabajar, segunda edición: lo que la primera no podía ver](arranque-auditoria-forma-de-trabajo.md) |

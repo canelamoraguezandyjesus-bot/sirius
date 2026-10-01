@@ -17,13 +17,14 @@ La regla de retención es toda su lógica:
   divergencia, o si el encargo ya no está entre los que se reflejan
   (terminal, clase que no se despacha, sin episodio);
 - una entrada cuyo encargo no se pudo evaluar —incidencia ilegible esta
-  pasada— se conserva con su última fecha: no saber no es saber que se
-  resolvió.
+  pasada, o pasada que murió antes de llegar a él— se conserva con su última
+  fecha: no saber no es saber que se resolvió.
 """
 
 from __future__ import annotations
 
 import json
+import os
 from collections.abc import Iterable, Mapping
 from dataclasses import asdict, dataclass
 from datetime import datetime
@@ -68,7 +69,10 @@ def leer_divergencias(ruta: Path) -> tuple[DivergenciaApartada, ...]:
     """
     if not ruta.is_file():
         return ()
-    datos = json.loads(ruta.read_text(encoding="utf-8"))
+    try:
+        datos = json.loads(ruta.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as error:
+        raise ValueError(f"{ruta}: no es JSON ({error})") from error
     entradas = datos.get("divergencias") if isinstance(datos, Mapping) else None
     if not isinstance(entradas, list):
         raise ValueError(f'{ruta}: no tiene la forma {{"divergencias": [...]}}')
@@ -93,32 +97,41 @@ def _desde_json(ruta: Path, entrada: object) -> DivergenciaApartada:
 
 
 def escribir_divergencias(ruta: Path, divergencias: Iterable[DivergenciaApartada]) -> None:
+    """Escribe el fichero entero o no lo toca: primero un temporal al lado y
+    después un `os.replace`, para que una pasada que muera escribiendo no deje
+    un JSON a medias que el paso de confirmar del workflow (`git add -A`,
+    `if: always()`) confirmaría tal cual."""
     carga: dict[str, Any] = {
         "divergencias": [asdict(d) for d in sorted(divergencias, key=lambda d: d.work_id)]
     }
-    ruta.write_text(
+    temporal = ruta.with_name(ruta.name + ".tmp")
+    temporal.write_text(
         json.dumps(carga, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
         newline="\n",
     )
+    os.replace(temporal, ruta)
 
 
 def actualizar(
     anteriores: Iterable[DivergenciaApartada],
     vistas: Iterable[DivergenciaVista],
     *,
-    ilegibles: Iterable[str],
+    sin_evaluar: Iterable[str],
     ahora: datetime,
 ) -> tuple[DivergenciaApartada, ...]:
     """La regla de retención, pura: qué queda escrito tras esta pasada.
 
-    ``ilegibles`` son los encargos cuya incidencia no se pudo leer esta pasada:
-    sus entradas anteriores se conservan tal cual. Cualquier otra entrada que la
-    pasada no haya vuelto a ver se retira.
+    ``sin_evaluar`` son los encargos de los que esta pasada no pudo concluir
+    nada: su incidencia no se pudo leer, o la pasada murió antes de llegar a
+    ellos. Sus entradas anteriores se conservan tal cual. Cualquier otra
+    entrada que la pasada no haya vuelto a ver se retira: el encargo se
+    evaluó sin divergencia, o ya no está entre los que se reflejan (terminal,
+    clase que no se despacha, sin episodio).
     """
     instante = ahora.isoformat()
     previas = {d.work_id: d for d in anteriores}
-    conservar = set(ilegibles)
+    conservar = set(sin_evaluar)
     resultado: dict[str, DivergenciaApartada] = {}
     for vista in vistas:
         previa = previas.get(vista.work_id)
