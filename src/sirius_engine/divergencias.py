@@ -19,6 +19,13 @@ La regla de retención es toda su lógica:
 - una entrada cuyo encargo no se pudo evaluar —incidencia ilegible esta
   pasada, o pasada que murió antes de llegar a él— se conserva con su última
   fecha: no saber no es saber que se resolvió.
+
+Y el fichero dice **cuánto se puede fiar uno de él** (ronda 2 de Codex en la
+PR #674): una pasada que no evaluó todos los encargos, o que se interrumpió,
+deja escrito que su conocimiento es incompleto y de quién; y si el fichero
+anterior era ilegible, lo que hubiera en él puede haberse perdido hasta que una
+pasada completa lo rehaga entera. Sin eso, la vista leía «ninguna» donde lo
+cierto era «no se sabe».
 """
 
 from __future__ import annotations
@@ -56,27 +63,62 @@ class DivergenciaApartada:
     pasadas: int
 
 
+@dataclass(frozen=True, slots=True)
+class Instantanea:
+    """Lo que la última pasada dejó escrito, y cuánto se puede fiar uno de ello.
+
+    ``interrumpida``: la pasada murió antes de llegar a todos los encargos.
+    ``sin_evaluar``: los encargos de los que no pudo concluir nada (incidencia
+    ilegible, o entrada anterior a la que no llegó). ``perdida_posible``: el
+    fichero anterior era ilegible y ninguna pasada completa ha rehecho el
+    conjunto desde entonces, así que lo que hubiera en él puede faltar aquí.
+    """
+
+    divergencias: tuple[DivergenciaApartada, ...]
+    interrumpida: bool
+    sin_evaluar: tuple[str, ...]
+    perdida_posible: bool
+
+    @property
+    def completa(self) -> bool:
+        """La pasada evaluó todos los encargos que se reflejan: el conjunto es entero."""
+        return not self.interrumpida and not self.sin_evaluar
+
+
 def ruta_de_divergencias(diario: Path) -> Path:
     return diario.with_name(FICHERO_DIVERGENCIAS)
 
 
-def leer_divergencias(ruta: Path) -> tuple[DivergenciaApartada, ...]:
-    """Las divergencias conservadas; ninguna si el fichero no existe.
+def leer_instantanea(ruta: Path) -> Instantanea | None:
+    """La instantánea conservada; ``None`` si el fichero no existe.
 
-    Un fichero que no tiene la forma esperada es un error, no «ninguna»: lo
-    escribe solo :func:`escribir_divergencias`, y leerlo como vacío borraría en
-    silencio lo que una pasada anterior dejó.
+    ``None`` no es «ninguna divergencia»: es que ninguna pasada ha escrito
+    todavía, y la vista lo dice así. Un fichero que no tiene la forma esperada
+    es un error, no «ninguna»: lo escribe solo :func:`escribir_instantanea`, y
+    leerlo como vacío borraría en silencio lo que una pasada anterior dejó.
     """
     if not ruta.is_file():
-        return ()
+        return None
     try:
         datos = json.loads(ruta.read_text(encoding="utf-8"))
     except json.JSONDecodeError as error:
         raise ValueError(f"{ruta}: no es JSON ({error})") from error
     entradas = datos.get("divergencias") if isinstance(datos, Mapping) else None
-    if not isinstance(entradas, list):
-        raise ValueError(f'{ruta}: no tiene la forma {{"divergencias": [...]}}')
-    return tuple(_desde_json(ruta, entrada) for entrada in entradas)
+    pasada = datos.get("pasada") if isinstance(datos, Mapping) else None
+    if not isinstance(entradas, list) or not isinstance(pasada, Mapping):
+        raise ValueError(f'{ruta}: no tiene la forma {{"pasada": {{...}}, "divergencias": [...]}}')
+    try:
+        interrumpida = bool(pasada["interrumpida"])
+        sin_evaluar = tuple(str(w) for w in pasada["sin_evaluar"])
+        perdida_posible = bool(pasada["perdida_posible"])
+    except (KeyError, TypeError) as error:
+        raise ValueError(f"{ruta}: la pasada está incompleta o mal formada ({error})") from error
+    return Instantanea(
+        divergencias=tuple(_desde_json(ruta, entrada) for entrada in entradas),
+        interrumpida=interrumpida,
+        sin_evaluar=sin_evaluar,
+        perdida_posible=perdida_posible,
+    )
 
 
 def _desde_json(ruta: Path, entrada: object) -> DivergenciaApartada:
@@ -96,13 +138,20 @@ def _desde_json(ruta: Path, entrada: object) -> DivergenciaApartada:
         raise ValueError(f"{ruta}: entrada incompleta o mal formada ({error})") from error
 
 
-def escribir_divergencias(ruta: Path, divergencias: Iterable[DivergenciaApartada]) -> None:
+def escribir_instantanea(ruta: Path, instantanea: Instantanea) -> None:
     """Escribe el fichero entero o no lo toca: primero un temporal al lado y
     después un `os.replace`, para que una pasada que muera escribiendo no deje
     un JSON a medias que el paso de confirmar del workflow (`git add -A`,
     `if: always()`) confirmaría tal cual."""
     carga: dict[str, Any] = {
-        "divergencias": [asdict(d) for d in sorted(divergencias, key=lambda d: d.work_id)]
+        "pasada": {
+            "interrumpida": instantanea.interrumpida,
+            "sin_evaluar": sorted(instantanea.sin_evaluar),
+            "perdida_posible": instantanea.perdida_posible,
+        },
+        "divergencias": [
+            asdict(d) for d in sorted(instantanea.divergencias, key=lambda d: d.work_id)
+        ],
     }
     temporal = ruta.with_name(ruta.name + ".tmp")
     temporal.write_text(
@@ -147,6 +196,34 @@ def actualizar(
         if work_id not in resultado and work_id in conservar:
             resultado[work_id] = previa
     return tuple(resultado[k] for k in sorted(resultado))
+
+
+def cerrar_pasada(
+    anterior: Instantanea | None,
+    vistas: Iterable[DivergenciaVista],
+    *,
+    anterior_ilegible: bool,
+    sin_evaluar: Iterable[str],
+    interrumpida: bool,
+    ahora: datetime,
+) -> Instantanea:
+    """La instantánea que deja esta pasada, pura: la retención de
+    :func:`actualizar` más lo que se puede fiar uno de ella.
+
+    ``perdida_posible`` nace cuando el fichero anterior era ilegible y se
+    hereda mientras las pasadas sigan incompletas: solo una pasada completa
+    rehace el conjunto entero y lo apaga.
+    """
+    anteriores = anterior.divergencias if anterior is not None else ()
+    sin_evaluar = tuple(sorted(set(sin_evaluar)))
+    completa = not interrumpida and not sin_evaluar
+    heredada = anterior is not None and anterior.perdida_posible
+    return Instantanea(
+        divergencias=actualizar(anteriores, vistas, sin_evaluar=sin_evaluar, ahora=ahora),
+        interrumpida=interrumpida,
+        sin_evaluar=sin_evaluar,
+        perdida_posible=(anterior_ilegible or heredada) and not completa,
+    )
 
 
 def dias_parado(ultimo_suceso: str, ultima_pasada: str) -> str:

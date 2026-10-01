@@ -32,7 +32,8 @@ from sirius_engine import memoria
 from sirius_engine.divergencias import (
     FICHERO_DIVERGENCIAS,
     DivergenciaApartada,
-    escribir_divergencias,
+    Instantanea,
+    escribir_instantanea,
 )
 from sirius_engine.memoria import (
     COMANDO,
@@ -487,17 +488,29 @@ def test_la_vista_de_desenlaces_enlaza_la_evidencia(diario: Path) -> None:
     assert texto.index("| WI-B |") < texto.index("| WI-A |")
 
 
+def _completa(*divergencias: DivergenciaApartada) -> Instantanea:
+    return Instantanea(
+        tuple(divergencias), interrumpida=False, sin_evaluar=(), perdida_posible=False
+    )
+
+
 def test_la_vista_de_desenlaces_lista_las_divergencias_apartadas_con_su_edad(diario: Path) -> None:
     """ADR-227 (H-216): lo que el reflector aparta para una persona sale en la
     vista con los días que lleva parado, contados desde su último suceso en el
     diario hasta la última pasada que lo apartó. Sin el fichero, lo dice."""
     sin_fichero = generar_desenlaces(diario, diario.with_name("diario-despacho.jsonl"))
     assert "## Divergencias que el reflector aparta para una persona" in sin_fichero
-    assert "Ninguna: la última pasada del reflector no apartó ninguna" in sin_fichero
+    assert (
+        "**Sin dato**: ninguna pasada del reflector ha escrito `divergencias.json`" in sin_fichero
+    )
+    seccion = sin_fichero.split("## Divergencias")[1].split("## Los encargos")[0]
+    assert "Ninguna" not in seccion, (
+        "sin fichero no se afirma «ninguna»: nadie ha mirado todavía (ronda 2 de Codex, PR #674)"
+    )
 
-    escribir_divergencias(
+    escribir_instantanea(
         diario.with_name(FICHERO_DIVERGENCIAS),
-        [
+        _completa(
             DivergenciaApartada(
                 work_id="WI-B",
                 incidencia=13,
@@ -506,7 +519,7 @@ def test_la_vista_de_desenlaces_lista_las_divergencias_apartadas_con_su_edad(dia
                 ultima_vez="2026-10-01T03:24:00+00:00",
                 pasadas=27,
             )
-        ],
+        ),
     )
     texto = generar_desenlaces(diario, diario.with_name("diario-despacho.jsonl"))
     assert "y `divergencias.json`" in texto
@@ -520,6 +533,33 @@ def test_la_vista_de_desenlaces_lista_las_divergencias_apartadas_con_su_edad(dia
         "del último suceso de WI-B (04-09 10:00) a la última pasada (01-10 03:24) van 26 días"
     )
     assert "Ninguna: la última pasada" not in texto
+
+
+def test_la_vista_distingue_ninguna_de_no_se_sabe(diario: Path) -> None:
+    """Ronda 2 de Codex en la PR #674: «Ninguna» solo lo afirma una pasada
+    completa; una incompleta dice qué no evaluó, y si un fichero anterior fue
+    ilegible, que puede faltar algo hasta que una pasada completa lo rehaga."""
+    ruta = diario.with_name(FICHERO_DIVERGENCIAS)
+    escribir_instantanea(ruta, _completa())
+    texto = generar_desenlaces(diario, diario.with_name("diario-despacho.jsonl"))
+    assert "Ninguna: la última pasada completa del reflector no apartó ninguna" in texto
+    assert "Conocimiento incompleto" not in texto
+
+    escribir_instantanea(
+        ruta, Instantanea((), interrumpida=False, sin_evaluar=("WI-A",), perdida_posible=False)
+    )
+    texto = generar_desenlaces(diario, diario.with_name("diario-despacho.jsonl"))
+    assert "**Conocimiento incompleto**" in texto and "(sin evaluar: `WI-A`)" in texto
+    assert "Ninguna observada en lo que la pasada llegó a evaluar." in texto
+    assert "Ninguna: la última pasada completa" not in texto
+    assert "puede faltar" not in texto
+
+    escribir_instantanea(
+        ruta, Instantanea((), interrumpida=True, sin_evaluar=(), perdida_posible=True)
+    )
+    texto = generar_desenlaces(diario, diario.with_name("diario-despacho.jsonl"))
+    assert "se interrumpió antes de llegar a todos" in texto
+    assert "un fichero anterior fue ilegible" in texto and "puede faltar aquí" in texto
 
 
 def test_la_vista_declara_un_fichero_de_divergencias_ilegible_sin_caerse(

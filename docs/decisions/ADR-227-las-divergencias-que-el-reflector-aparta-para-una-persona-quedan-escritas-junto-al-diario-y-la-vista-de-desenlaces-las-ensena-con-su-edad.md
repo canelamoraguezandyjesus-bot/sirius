@@ -70,9 +70,12 @@ revisión independiente de la PR #674 lo señaló; queda dicho aquí.
 
 1. Módulo nuevo `src/sirius_engine/divergencias.py`: `DivergenciaVista` (lo que
    la pasada declara), `DivergenciaApartada` (lo que se conserva: encargo,
-   incidencia, motivo, primera vez, última vez, pasadas), `leer_divergencias`
-   y `escribir_divergencias` sobre `divergencias.json` junto al diario, y la
-   regla de retención `actualizar`, pura: una divergencia vista se escribe
+   incidencia, motivo, primera vez, última vez, pasadas), `Instantanea` (lo
+   que la última pasada dejó escrito **y cuánto se puede fiar uno de ello**:
+   `interrumpida`, `sin_evaluar`, `perdida_posible`; `completa` cuando no hay
+   nada de eso), `leer_instantanea` y `escribir_instantanea` sobre
+   `divergencias.json` junto al diario, `cerrar_pasada` (la instantánea que
+   deja una pasada, pura) y la regla de retención `actualizar`, pura: una divergencia vista se escribe
    (primera vez conservada, última vez y pasadas al día); una entrada anterior
    se retira si la pasada evaluó el encargo sin divergencia o el encargo ya no
    se refleja; una entrada de un encargo del que la pasada no pudo concluir
@@ -81,20 +84,29 @@ revisión independiente de la PR #674 lo señaló; queda dicho aquí.
    (temporal al lado y `os.replace`): una pasada que muera escribiendo no deja
    un JSON a medias que el paso de confirmar del workflow confirmaría. Un
    fichero que no tiene la forma, o que no es JSON, se declara con su ruta, no
-   se lee como vacío.
+   se lee como vacío; y un fichero ausente es `None` —nadie ha escrito
+   todavía—, no «ninguna». `perdida_posible` nace cuando el fichero anterior
+   era ilegible, se hereda mientras las pasadas sigan incompletas y solo la
+   apaga una pasada completa, que rehace el conjunto entero.
 2. `reflect_cli.py` lee el fichero anterior **antes** de tocar el almacén (si
    está roto, lo dice nombrándolo, sigue —el reflejo es lo primero— y lo
    reescribe con lo que observe), recoge las divergencias de la pasada y los
-   encargos que no pudo evaluar y, al terminar, escribe el fichero si cambió.
-   Si la pasada muere a medias por cualquier excepción, escribe igualmente lo
-   observado hasta ahí, conserva las entradas de los encargos a los que no
-   llegó y vuelve a lanzar la excepción: el paso de confirmar del workflow
+   encargos que no pudo evaluar y, al terminar, cierra la instantánea con
+   `cerrar_pasada` y la escribe si cambió —también la primera pasada completa
+   sin divergencias, para que «ninguna» tenga quien la afirme—. Si la pasada
+   muere a medias por cualquier excepción, escribe igualmente lo observado
+   hasta ahí, conserva las entradas de los encargos a los que no llegó, deja
+   escrito que se interrumpió y vuelve a lanzar la excepción: el paso de confirmar del workflow
    corre con `if: always()` y confirmaría el diario con un fichero viejo. En
    `--ensayo` dice cuántas hay y no escribe. `reflect.py` no se toca.
 3. `memoria.py` añade a `DESENLACES.md` la sección «Divergencias que el
    reflector aparta para una persona»: encargo, incidencia, motivo, primera y
    última vez, pasadas y **días parado** (del último suceso del encargo en el
-   diario a la última pasada que lo apartó). Sin fichero, lo dice. La resta de
+   diario a la última pasada que lo apartó). Sin fichero dice **sin dato**:
+   ninguna pasada ha escrito todavía. **«Ninguna» solo lo afirma una pasada
+   completa**; una incompleta dice antes de la tabla qué encargos no evaluó,
+   si se interrumpió y, si un fichero anterior fue ilegible, que puede faltar
+   algo hasta que una pasada completa rehaga el conjunto. La resta de
    fechas vive en `divergencias.py` porque la vista no puede ni nombrar el
    reloj (la guarda `test_el_generador_no_mira_el_reloj_ni_la_red_ni_git` lo
    impidió al primer intento, y bien). Si el fichero no se puede leer, la
@@ -111,17 +123,24 @@ revisión independiente de la PR #674 lo señaló; queda dicho aquí.
 
 ## Comprobación que la sostiene
 
-- `tests/engine/test_divergencias.py` (5 pruebas: nacimiento y repetición,
+- `tests/engine/test_divergencias.py` (8 pruebas: nacimiento y repetición,
   retirada, conservación de la que no se evaluó, ida y vuelta del fichero sin
-  temporal que sobreviva, fichero sin forma o que no es JSON),
-  `tests/engine/test_reflect_cli.py` (6: queda escrita junto al diario con el
-  almacén intacto, el ensayo no escribe, la ilegible se conserva y la resuelta
-  se retira, una pasada que muere a medias conserva lo observado y lo no
-  alcanzado, un fichero roto no para el reflejo y se reescribe, la entrada de
-  un encargo resuelto o terminal se retira) y `tests/engine/test_memoria.py`
-  (2: la vista lista la divergencia con 26 días parado y, sin fichero, lo
-  dice; con un fichero ilegible lo declara sin caerse). Las de la escritura y
-  la vista, vistas fallar contra el árbol anterior.
+  temporal que sobreviva y sin fichero `None`, fichero sin forma o que no es
+  JSON, y las tres de `cerrar_pasada`: una pasada completa es entera aunque el
+  fichero anterior fuera ilegible, una incompleta sobre un fichero ilegible
+  deja dicho que pudo perderse, la duda se hereda hasta la primera pasada
+  completa), `tests/engine/test_reflect_cli.py` (8: queda escrita junto al
+  diario con el almacén intacto, el ensayo no escribe, la ilegible se conserva
+  y la resuelta se retira, una pasada que muere a medias conserva lo
+  observado y lo no alcanzado y lo deja escrito como interrumpida, un fichero
+  roto no para el reflejo y se reescribe entero, fichero roto más pasada
+  incompleta deja dicho que lo anterior pudo perderse y una completa lo
+  apaga, la primera pasada completa sin divergencias deja el fichero escrito
+  y una igual después no reescribe, la entrada de un encargo resuelto o
+  terminal se retira) y `tests/engine/test_memoria.py` (3: la vista lista la
+  divergencia con 26 días parado y, sin fichero, dice «sin dato»; distingue
+  «ninguna» de «no se sabe»; con un fichero ilegible lo declara sin caerse).
+  Las de la escritura y la vista, vistas fallar contra el árbol anterior.
 - Dos revisiones sobre la primera versión: Codex (ronda 1) y una revisión
   independiente encargada por la sesión. Entre las dos: la pasada que muere a
   medias y pierde lo observado, el fichero corrupto que mataba la pasada
@@ -130,6 +149,18 @@ revisión independiente de la PR #674 lo señaló; queda dicho aquí.
   entrada de un encargo terminal o resuelto conservada), la prosa del workflow
   y de la memoria que el cambio dejaba falsa, y la medida pendiente de abajo,
   que ya no se podía tomar. Todo corregido aquí.
+- Ronda 2 de Codex sobre `fcd0f822`: dos hallazgos **de la misma familia que
+  la ronda 1** —conocimiento incompleto enseñado como limpio—: con el fichero
+  roto, una pasada que no podía leer una incidencia o moría a medias lo
+  sustituía por un fichero válido y vacío, y la vista leía «ninguna»; y con el
+  fichero ausente, una pasada que abortaba antes de evaluar todo no escribía
+  nada, y la vista también leía «ninguna». Dos rondas de la misma familia es
+  la señal de parar y buscar la raíz (ADR-001), y la raíz era que el fichero
+  no sabía cuánto de entero era y la vista deducía «ninguna» de la ausencia o
+  del vacío. Lo que cambia es eso, no un parche por hallazgo: la instantánea
+  lleva `interrumpida`, `sin_evaluar` y `perdida_posible`; la pasada lo dice
+  en su resumen; la vista distingue «sin dato», «conocimiento incompleto» y
+  «ninguna», y «ninguna» solo lo afirma una pasada completa.
 - Mutaciones, con los ficheros restaurados (`diff -q` limpio) y la batería en
   verde después:
 
@@ -144,9 +175,13 @@ revisión independiente de la PR #674 lo señaló; queda dicho aquí.
 | M7 | la entrada de un encargo evaluado sin divergencia se conserva | caen esa y `test_una_divergencia_ilegible_se_conserva_y_una_resuelta_se_retira` |
 | M8 | un fichero roto para la pasada | cae `test_un_fichero_de_divergencias_roto_no_para_el_reflejo_y_se_reescribe` |
 | M9 | un fichero roto tumba la vista | cae `test_la_vista_declara_un_fichero_de_divergencias_ilegible_sin_caerse` |
+| M10 | la vista enseña «Ninguna» con el fichero ausente | cae `test_la_vista_de_desenlaces_lista_las_divergencias_apartadas_con_su_edad` |
+| M11 | `cerrar_pasada` da por entera toda pasada | caen `test_una_pasada_incompleta_sobre_un_fichero_ilegible_deja_dicho_que_pudo_perderse`, `test_la_perdida_posible_se_hereda_hasta_la_primera_pasada_completa`, `test_una_pasada_que_muere_a_medias_conserva_lo_observado_y_lo_no_alcanzado`, `test_fichero_roto_mas_pasada_incompleta_deja_dicho_que_lo_anterior_pudo_perderse` |
+| M12 | la duda no se hereda entre pasadas incompletas | cae `test_la_perdida_posible_se_hereda_hasta_la_primera_pasada_completa` |
+| M13 | la primera pasada completa sin divergencias no escribe | cae `test_la_primera_pasada_completa_sin_divergencias_deja_el_fichero_escrito` |
 
 - Baterías `test_divergencias.py`, `test_reflect_cli.py`, `test_memoria.py` y
-  `test_reflect.py`: 137 en verde. `ruff format`, `ruff check` y `mypy` sobre
+  `test_reflect.py`: 150 en verde. `ruff format`, `ruff check` y `mypy` sobre
   los tres módulos y las pruebas, sin avisos.
 - La medida prevista en la nota —que la primera pasada real escribiera el
   fichero con `WI-20260828-122242` y la vista mostrara sus 34 días— **ya no se
@@ -156,9 +191,11 @@ revisión independiente de la PR #674 lo señaló; queda dicho aquí.
   cola, cinco minutos después de que el motor la cerrara como completada) y la
   pasada del reflector de las 15:57:31Z entregó el encargo (commit `0acc958a`
   de `estado-del-motor`). El diario real no tiene hoy ningún encargo apartado.
-  Lo que sí se puede medir tras la fusión: `DESENLACES.md` muestra la sección
-  nueva con «Ninguna», y la próxima divergencia que el reflector aparte
-  aparecerá allí en su primera pasada, con sus días, en vez de 27 después.
+  Lo que sí se puede medir tras la fusión: la primera pasada completa escribe
+  `divergencias.json` vacío y `DESENLACES.md` pasa de «sin dato» a «Ninguna:
+  la última pasada completa…», y la próxima divergencia que el reflector
+  aparte aparecerá allí en su primera pasada, con sus días, en vez de 27
+  después.
 
 ## Consecuencias
 

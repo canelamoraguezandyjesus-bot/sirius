@@ -33,8 +33,9 @@ import yaml
 
 from sirius_engine.divergencias import (
     DivergenciaApartada,
+    Instantanea,
     dias_parado,
-    leer_divergencias,
+    leer_instantanea,
     ruta_de_divergencias,
 )
 
@@ -1097,6 +1098,52 @@ def _tabla_de_divergencias(
     )
 
 
+def _seccion_de_divergencias(
+    instantanea: Instantanea | None,
+    problema: str | None,
+    nombre: str,
+    ultimo_suceso: Mapping[str, str],
+) -> list[str]:
+    """Lo que se sabe y lo que no (ronda 2 de Codex en la PR #674): un fichero
+    ausente es «ninguna pasada ha escrito todavía», no «ninguna»; una pasada
+    incompleta lo dice antes de la tabla; «Ninguna» solo lo afirma una pasada
+    completa."""
+    if problema is not None:
+        return [f"**No se pudo leer `{nombre}`**: {problema}"]
+    if instantanea is None:
+        return [
+            f"**Sin dato**: ninguna pasada del reflector ha escrito `{nombre}` todavía (lo "
+            "escribe al terminar, entera o a medias); hasta que lo haga no se sabe si hay "
+            "divergencias apartadas."
+        ]
+    lineas: list[str] = []
+    if not instantanea.completa:
+        aviso = (
+            "**Conocimiento incompleto**: la última pasada del reflector no evaluó todos los "
+            "encargos"
+        )
+        if instantanea.sin_evaluar:
+            aviso += " (sin evaluar: " + ", ".join(f"`{w}`" for w in instantanea.sin_evaluar) + ")"
+        if instantanea.interrumpida:
+            aviso += "; se interrumpió antes de llegar a todos"
+        if instantanea.perdida_posible:
+            aviso += (
+                "; además, un fichero anterior fue ilegible y, hasta una pasada completa, "
+                "puede faltar aquí alguna divergencia apartada antes"
+            )
+        lineas += [aviso + ". Las entradas de abajo son las observadas o conservadas.", ""]
+    if instantanea.divergencias:
+        lineas += _tabla_de_divergencias(instantanea.divergencias, ultimo_suceso)
+    elif instantanea.completa:
+        lineas.append(
+            "Ninguna: la última pasada completa del reflector no apartó ninguna (si la "
+            f"hubiera, estaría en `{nombre}`, junto al diario)."
+        )
+    else:
+        lineas.append("Ninguna observada en lo que la pasada llegó a evaluar.")
+    return lineas
+
+
 def generar_desenlaces(diario: Path, despacho: Path | None = None) -> str:
     """El texto de `DESENLACES.md` para este diario. Determinista: solo depende de los ficheros."""
     encargos, total, ultimo = leer_encargos(diario, despacho)
@@ -1109,13 +1156,13 @@ def generar_desenlaces(diario: Path, despacho: Path | None = None) -> str:
     # diario hasta la última pasada que lo apartó: lo que lleva parado.
     ruta_divergencias = ruta_de_divergencias(diario)
     try:
-        apartadas = leer_divergencias(ruta_divergencias)
+        instantanea = leer_instantanea(ruta_divergencias)
         problema_divergencias: str | None = None
     except ValueError as error:
         # La vista se deriva del diario; un fichero secundario roto se declara
         # en ella, no la impide (el paso del workflow que la publica corre con
         # `if: always()` justamente para enseñar un reflejo a medias).
-        apartadas = ()
+        instantanea = None
         problema_divergencias = str(error)
     ultimo_suceso = {encargo.work_id: encargo.ultimo_suceso for encargo in encargos}
     lineas = [
@@ -1134,15 +1181,8 @@ def generar_desenlaces(diario: Path, despacho: Path | None = None) -> str:
         "",
         "## Divergencias que el reflector aparta para una persona",
         "",
-        *(
-            [f"**No se pudo leer `{ruta_divergencias.name}`**: {problema_divergencias}"]
-            if problema_divergencias is not None
-            else _tabla_de_divergencias(apartadas, ultimo_suceso)
-            if apartadas
-            else [
-                "Ninguna: la última pasada del reflector no apartó ninguna (si la hubiera, "
-                f"estaría en `{ruta_divergencias.name}`, junto al diario)."
-            ]
+        *_seccion_de_divergencias(
+            instantanea, problema_divergencias, ruta_divergencias.name, ultimo_suceso
         ),
         "",
         "## Los encargos, del más reciente al más antiguo",

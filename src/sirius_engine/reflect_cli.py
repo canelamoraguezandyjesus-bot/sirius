@@ -39,11 +39,11 @@ from sirius_engine.adapters.github_cli_mirror import GitHubCliMirrorReader
 from sirius_engine.cli import resolver_diario
 from sirius_engine.dispatcher import TABLA_ACTIVACION
 from sirius_engine.divergencias import (
-    DivergenciaApartada,
     DivergenciaVista,
-    actualizar,
-    escribir_divergencias,
-    leer_divergencias,
+    Instantanea,
+    cerrar_pasada,
+    escribir_instantanea,
+    leer_instantanea,
     ruta_de_divergencias,
 )
 from sirius_engine.domain.events import AggregateType
@@ -160,33 +160,43 @@ def main(
     # la pasada sigue -el reflejo es lo primero-, reescribiéndolo con lo que
     # observe; un fichero secundario ilegible no puede parar las transiciones.
     ruta_divergencias = ruta_de_divergencias(diario)
-    fichero_roto = False
+    anterior_ilegible = False
     try:
-        anteriores = leer_divergencias(ruta_divergencias)
+        anterior = leer_instantanea(ruta_divergencias)
     except ValueError as error:
-        linea(f"AVISO: {error}; esta pasada lo vuelve a escribir con lo que observe.")
-        anteriores = ()
-        fichero_roto = True
+        linea(
+            f"AVISO: {error}; esta pasada lo vuelve a escribir con lo que observe y deja "
+            "dicho que lo anterior pudo perderse, hasta que una pasada completa lo rehaga."
+        )
+        anterior = None
+        anterior_ilegible = True
+    anteriores = anterior.divergencias if anterior is not None else ()
     vistas: list[DivergenciaVista] = []
     sin_evaluar: set[str] = set()
     evaluados: set[str] = set()
 
-    def cerrar_divergencias() -> tuple[DivergenciaApartada, ...]:
+    def cerrar_divergencias(*, interrumpida: bool) -> Instantanea:
         # Lo que la pasada no llegó a mirar se conserva: si murió a medias, el
         # paso de confirmar del workflow (`if: always()`) confirma igual el
         # diario, y sin esto la vista se regeneraría de un fichero viejo o
-        # inexistente (ronda 1 de Codex en la PR #674).
+        # inexistente (ronda 1 de Codex en la PR #674). Y la instantánea dice
+        # si es entera o no (ronda 2): una pasada incompleta sobre un fichero
+        # roto o ausente escribía un conjunto vacío o parcial que la vista
+        # leía como «ninguna». Se escribe siempre que cambie algo, también la
+        # primera pasada completa sin divergencias: un fichero ausente no es
+        # «ninguna», es «ninguna pasada ha escrito todavía».
         no_alcanzados = {d.work_id for d in anteriores} - evaluados
-        apartadas = actualizar(
-            anteriores, vistas, sin_evaluar=sin_evaluar | no_alcanzados, ahora=ahora
+        instantanea = cerrar_pasada(
+            anterior,
+            vistas,
+            anterior_ilegible=anterior_ilegible,
+            sin_evaluar=sin_evaluar | no_alcanzados,
+            interrumpida=interrumpida,
+            ahora=ahora,
         )
-        if not args.ensayo and (
-            fichero_roto
-            or apartadas != anteriores
-            or (apartadas and not ruta_divergencias.is_file())
-        ):
-            escribir_divergencias(ruta_divergencias, apartadas)
-        return apartadas
+        if not args.ensayo and (anterior_ilegible or instantanea != anterior):
+            escribir_instantanea(ruta_divergencias, instantanea)
+        return instantanea
 
     try:
         for work_id in _work_ids_conocidos(store):
@@ -268,10 +278,11 @@ def main(
             linea(f"{work_id}: aplicados {len(resultado.pasos)} paso(s): {pasos_texto}")
 
     except BaseException:
-        cerrar_divergencias()
+        cerrar_divergencias(interrumpida=True)
         raise
 
-    apartadas = cerrar_divergencias()
+    instantanea = cerrar_divergencias(interrumpida=False)
+    apartadas = instantanea.divergencias
     if args.ensayo:
         linea(
             f"Divergencias apartadas para una persona: {len(apartadas)} "
@@ -281,10 +292,21 @@ def main(
 
     linea("")
     linea(f"Pasos aplicados en total: {aplicados_total}.")
-    linea(
-        f"Divergencias apartadas para una persona: {len(apartadas)}"
-        + (f", escritas en {ruta_divergencias.name}." if apartadas or anteriores else ".")
-    )
+    resumen = f"Divergencias apartadas para una persona: {len(apartadas)}"
+    if anterior_ilegible or instantanea != anterior:
+        resumen += f", escritas en {ruta_divergencias.name}."
+    else:
+        resumen += f" (sin cambios en {ruta_divergencias.name})."
+    if not instantanea.completa:
+        # La pasada lo dice aquí y el fichero lo lleva escrito: la vista no
+        # puede leer «ninguna» donde lo cierto es «no se sabe».
+        resumen += (
+            f" Pasada incompleta: {len(instantanea.sin_evaluar)} encargo(s) sin evaluar"
+            + (", interrumpida antes de llegar a todos" if instantanea.interrumpida else "")
+            + ("; lo anterior pudo perderse" if instantanea.perdida_posible else "")
+            + "."
+        )
+    linea(resumen)
     return 0
 
 
