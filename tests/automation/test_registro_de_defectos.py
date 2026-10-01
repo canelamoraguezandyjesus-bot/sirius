@@ -900,6 +900,20 @@ def _rutas_de_adr_en_main() -> dict[int, str] | None:
     return rutas
 
 
+_MARCA_FINAL_DE_PR = re.compile(r"\(#(\d+)\)\s*$")
+
+
+def _pr_que_fusiono(asunto: str) -> int | None:
+    """La PR de una fusión aplastada es la marca `(#N)` FINAL del asunto, no cualquiera.
+
+    `main` tiene asuntos con dos marcas, como «… (#579) (#580)» (ADR-169): #580
+    es la PR que produjo el commit y #579 una PR citada en el título (ronda 2 de
+    Codex en la PR #668). Buscar la subcadena habría dado por buena la citada.
+    """
+    encontrado = _MARCA_FINAL_DE_PR.search(asunto)
+    return int(encontrado.group(1)) if encontrado else None
+
+
 def _asunto_que_introdujo(ruta: str) -> str | None:
     """El asunto del commit de primer padre de `origin/main` que AÑADIÓ `ruta`."""
     salida = subprocess.run(
@@ -922,6 +936,13 @@ def _asunto_que_introdujo(ruta: str) -> str | None:
     return asuntos[-1] if salida.returncode == 0 and asuntos else None
 
 
+def test_la_pr_de_un_asunto_es_su_marca_final_y_no_una_citada() -> None:
+    assert _pr_que_fusiono("Una cosa (#579) (#580)") == 580
+    assert _pr_que_fusiono("Una cosa (#580)") == 580
+    assert _pr_que_fusiono("Cita la PR #580 en el texto") is None
+    assert _pr_que_fusiono("Una cosa (#580) y mas texto") is None
+
+
 def test_cada_referencia_pr_es_una_pr_fusionada_en_main_cuando_hay_historia() -> None:
     """La mitad que Quality no puede medir y la cadena local sí (ADR-222).
 
@@ -936,23 +957,22 @@ def test_cada_referencia_pr_es_una_pr_fusionada_en_main_cuando_hay_historia() ->
     rutas = _rutas_de_adr_en_main()
     if asuntos is None or rutas is None:
         pytest.skip("este clon no tiene la historia de origin/main: la forma se comprueba arriba")
-    texto = "\n".join(asuntos)
+    fusionadas = {_pr_que_fusiono(asunto) for asunto in asuntos} - {None}
     rotas = []
     fuertes = 0
     for defecto in _defectos():
         pr = defecto.get("pr")
         if not isinstance(pr, int):
             continue
-        sujeto = _SUJETO_DE_PR.format(numero=pr)
         adr = defecto.get("adr")
         if isinstance(adr, int):
             if adr not in rutas:
                 continue  # en vuelo: su PR no se ha fusionado todavía
             fuertes += 1
             asunto = _asunto_que_introdujo(rutas[adr])
-            if asunto is None or sujeto not in asunto:
+            if asunto is None or _pr_que_fusiono(asunto) != pr:
                 rotas.append((defecto["id"], pr, asunto))
-        elif sujeto not in texto:
+        elif pr not in fusionadas:
             rotas.append((defecto["id"], pr, None))
     assert rotas == [], (
         "referencias `pr:` que no son la PR que metió el ADR del defecto en main "

@@ -1,4 +1,5 @@
 # ADR-222 — Un defecto cerrado lleva la PR que lo fusionó: la referencia que un clon de `main` puede seguir
+| M5 | el analizador de la marca vuelve a la subcadena (`(#N)` en cualquier sitio del asunto) | cae `la_pr_de_un_asunto_es_su_marca_final_y_no_una_citada` |
 | M4 | H-218 con `pr: 652` (una PR fusionada, pero no la que añadió ADR-218) | cae `…es_una_pr_fusionada_en_main_cuando_hay_historia`: el commit que añadió ADR-218 es «… (#664)» |
 
 - Estado: APROBADO
@@ -82,9 +83,12 @@ solo donde se midió; la guarda no sale a la red; tres mutaciones vistas caer.
 - Sobre este árbol, con historia: las 29 referencias rellenadas corresponden a
   una PR fusionada en `main`, y las 14 que tienen su ADR en `main` (H-204 a
   H-215, H-217 y H-218) apuntan **exactamente** al commit de primer padre que
-  añadió ese ADR (`git log --first-parent --diff-filter=A -- <ADR>`): buscar
-  el número en cualquier asunto de la historia dejaba pasar una PR equivocada
-  (ronda 1 de Codex en la PR #668). Las 15 anteriores a la frontera no tienen
+  añadió ese ADR (`git log --first-parent --diff-filter=A -- <ADR>`), y la PR
+  de un asunto es su marca `(#N)` **final**, no cualquiera: `main` tiene
+  asuntos con dos marcas, como «… (#579) (#580)» (ADR-169), donde #580 es la
+  PR que produjo el commit y #579 una citada. Buscar el número en cualquier
+  asunto, o como subcadena, dejaba pasar una PR equivocada (rondas 1 y 2 de
+  Codex en la PR #668). Las 15 anteriores a la frontera no tienen
   `adr:` y solo pueden comprobarse por existencia; la prueba exige además que
   la comprobación fuerte se haya ejercitado sobre todos los que la admiten.
 - **Mutaciones** (cada una aplicada sobre el registro o la prueba, la batería
