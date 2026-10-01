@@ -37,6 +37,8 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Final, Protocol, runtime_checkable
 
+from sirius.domain.instantes import comparable
+
 # --------------------------------------------------------------------------
 # Vocabulario normativo
 # --------------------------------------------------------------------------
@@ -185,7 +187,11 @@ class VentanaTemporal:
         """
         if self.tiempo_objetivo_desde is None:
             return None
-        if self.tiempo_objetivo_desde > self.tiempo_objetivo:
+        # Los dos extremos se comparan como instantes, no como cadenas
+        # (ADR-229): «2026-03-01T00:00:00Z» ordena por detrás de
+        # «2026-03-01 12:00:00» solo porque la T va después del espacio, y eso
+        # daba por invertido un intervalo correcto.
+        if comparable(self.tiempo_objetivo_desde) > comparable(self.tiempo_objetivo):
             return None
         return (self.tiempo_objetivo_desde, self.tiempo_objetivo)
 
