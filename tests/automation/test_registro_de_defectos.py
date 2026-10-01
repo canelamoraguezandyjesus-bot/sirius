@@ -834,8 +834,10 @@ def test_toda_referencia_pr_es_un_numero_de_pr() -> None:
     mal = [
         (defecto["id"], defecto["pr"])
         for defecto in _defectos()
-        if ("pr" in defecto
-        and not (isinstance(defecto["pr"], int) and not isinstance(defecto["pr"], bool)))
+        if (
+            "pr" in defecto
+            and not (isinstance(defecto["pr"], int) and not isinstance(defecto["pr"], bool))
+        )
         or ("pr" in defecto and isinstance(defecto["pr"], int) and defecto["pr"] <= 0)
     ]
     assert mal == [], f"`pr:` tiene que ser el número entero de la PR, sin comillas: {mal}"
