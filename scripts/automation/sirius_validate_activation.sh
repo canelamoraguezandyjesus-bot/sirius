@@ -23,7 +23,8 @@
 #
 # Comprobaciones (en orden): incidencia abierta y no PR; `sirius:planned`
 # presente; sin otros estados sirius activos/terminales; cuerpo estructuralmente
-# completo (todas las secciones obligatorias del contrato).
+# completo (todas las secciones obligatorias del contrato); `Perfil: rol@N`
+# resoluble con el manifiesto (ADR-221), con aviso si N no es la vigente.
 #
 # Idempotencia: el comentario de rechazo lleva un marcador por motivo
 # (`<!-- sirius-activation:rejected:<motivo> -->`); repetir el mismo error no
@@ -153,7 +154,39 @@ if ! missing="$(python3 "${SIRIUS_GATE_DIR}/validate_issue_body.py" "$body_file"
     "Edita el cuerpo hasta que contenga todas las secciones obligatorias del contrato (compara con una incidencia completa como #55)." || exit 1
   exit 0
 fi
-rm -f "$body_file"
 
-echo "Activacion valida de #${ISSUE}: abierta, sirius:planned presente, sin estados incompatibles y cuerpo completo."
+# --- 4) El `Perfil: rol@N` se puede resolver (ADR-221) -------------------------
+# Con el MISMO resolutor que usa el implementador (resolver_prompt.py, H-28):
+# si aqui no resuelve, alli tampoco, y el ciclo moriria a los seis segundos
+# con la incidencia en failed-safely y la razon solo en el log del run
+# (#653, 20-09-2026). Dos resolutores serian dos verdades; es uno.
+cuerpo="$(<"$body_file")"
+if ! detalle="$(ISSUE_BODY="$cuerpo" python3 "${SIRIUS_GATE_DIR}/resolver_prompt.py" --carril ejecucion 2>&1 >/dev/null)"; then
+  rm -f "$body_file"
+  detalle="${detalle#::error::prompt sin resolver (ejecucion): }"
+  reject "perfil-sin-resolver" \
+    "El cuerpo declara un \`Perfil: rol@N\` que el manifiesto no puede resolver, así que el implementador pararía en rojo antes de empezar. Detalle del resolutor: ${detalle}" \
+    "Pon en el cuerpo \`Perfil: rol@N\` con un rol y una versión registrados en \`scripts/automation/prompts/manifiesto.json\` (la versión vigente de cada rol está en \`docs/implementation/work_engine/perfiles/<rol>.yml\`)." || exit 1
+  exit 0
+fi
+
+# --- 5) Un rol@N valido pero no vigente se avisa, no se rechaza ----------------
+# `rol@N` significa UN texto (H-28) y una version antigua sigue siendo
+# ejecutable a proposito; lo que faltaba era decirlo (deuda 35 de la bitacora).
+aviso="$(ISSUE_BODY="$cuerpo" python3 "${SIRIUS_GATE_DIR}/resolver_prompt.py" --carril ejecucion --vigencia 2>/dev/null)" || aviso=""
+rm -f "$body_file"
+if [ -n "$aviso" ]; then
+  declarado="$(printf '%s' "$cuerpo" | sed -n 's/^Perfil: *\([A-Za-z_-][A-Za-z_-]*@[0-9][0-9]*\).*/\1/p' | head -1)"
+  marker_aviso="<!-- sirius-activation:aviso:perfil-no-vigente:${declarado} -->"
+  aviso_file="$(mktemp)"
+  printf '%s\n\n%s\n\n%s\n' \
+    "$marker_aviso" \
+    "ℹ️ **Perfil no vigente** (\`${declarado}\`)" \
+    "$aviso" >"$aviso_file"
+  sirius_comment_once "$REPO" "$ISSUE" "$marker_aviso" "$aviso_file" \
+    || echo "::warning::No se pudo publicar el aviso de perfil no vigente en #${ISSUE}; la activacion sigue."
+  rm -f "$aviso_file"
+fi
+
+echo "Activacion valida de #${ISSUE}: abierta, sirius:planned presente, sin estados incompatibles, cuerpo completo y perfil resoluble."
 exit 0

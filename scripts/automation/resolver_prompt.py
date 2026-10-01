@@ -23,6 +23,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -30,6 +31,10 @@ from types import ModuleType
 _RAIZ_POR_DEFECTO = Path(__file__).resolve().parents[2]
 _MANIFIESTO_RELATIVO = Path("scripts/automation/prompts/manifiesto.json")
 _PROFILE_FIELD = _RAIZ_POR_DEFECTO / "src" / "sirius_engine" / "profile_field.py"
+_PERFILES_RELATIVO = Path("docs/implementation/work_engine/perfiles")
+# La linea `version: N` del perfil, leida con la biblioteca estandar: este
+# modulo corre con el python3 a secas del runner, sin PyYAML (ADR-221).
+_VERSION_DEL_PERFIL = re.compile(r"^version:\s*(\d+)\s*$", re.MULTILINE)
 
 
 def _cargar_profile_field() -> ModuleType:
@@ -85,9 +90,50 @@ def resolver_prompt(cuerpo: str, *, carril: str, raiz: Path) -> Path:
     return Path(fila["fichero"])
 
 
+def version_vigente(rol: str, *, raiz: Path) -> int | None:
+    """La `version:` que declara `docs/implementation/work_engine/perfiles/<rol>.yml`,
+    o ``None`` si el perfil no existe o no la declara. No decide nada: informa."""
+    fichero = raiz / _PERFILES_RELATIVO / f"{rol}.yml"
+    if not fichero.is_file():
+        return None
+    encontrada = _VERSION_DEL_PERFIL.search(fichero.read_text(encoding="utf-8"))
+    return int(encontrada.group(1)) if encontrada else None
+
+
+def aviso_de_vigencia(cuerpo: str, *, raiz: Path) -> str | None:
+    """Una frase si el `Perfil: rol@N` del cuerpo resuelve pero N no es la version
+    vigente del rol; ``None`` si es la vigente o no se puede saber.
+
+    No es un rechazo: `rol@N` significa UN texto (H-28) y una version antigua
+    sigue siendo ejecutable a proposito. Es el aviso que a #653 le falto: llevaba
+    `implementer@2` con la 4 vigente y nadie se lo dijo (ADR-221).
+    """
+    perfil = parse_perfil_field(cuerpo)
+    if perfil is None:
+        return None
+    vigente = version_vigente(perfil.ref, raiz=raiz)
+    if vigente is None or int(perfil.version) == vigente:
+        return None
+    return (
+        f"el cuerpo declara `Perfil: {perfil.ref}@{perfil.version}` y la version vigente de "
+        f"`{perfil.ref}` es la {vigente} "
+        f"(docs/implementation/work_engine/perfiles/{perfil.ref}.yml). Se ejecuta con la "
+        "declarada, porque `rol@N` significa un texto (H-28); si querias la vigente, edita "
+        "el cuerpo antes de que arranque."
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--carril", required=True, choices=("ejecucion", "revision"))
+    parser.add_argument(
+        "--vigencia",
+        action="store_true",
+        help=(
+            "ademas de resolver, imprimir en la salida estandar el aviso de version no "
+            "vigente (o nada) en vez de la ruta del prompt; el codigo de salida no cambia"
+        ),
+    )
     args = parser.parse_args(argv)
     cuerpo = os.environ.get("ISSUE_BODY")
     if cuerpo is None:
@@ -98,6 +144,11 @@ def main(argv: list[str] | None = None) -> int:
     except ResolucionImposible as exc:
         print(f"::error::prompt sin resolver ({args.carril}): {exc}", file=sys.stderr)
         return 1
+    if args.vigencia:
+        aviso = aviso_de_vigencia(cuerpo, raiz=_RAIZ_POR_DEFECTO)
+        if aviso:
+            print(aviso)
+        return 0
     print(ruta)
     return 0
 

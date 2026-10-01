@@ -8,6 +8,7 @@ mismas razones documentadas en ``test_sirius_issue.py``.
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -102,8 +103,25 @@ esac
 exit 0
 """
 
+_PERFILES = REPO_ROOT / "docs" / "implementation" / "work_engine" / "perfiles"
+
+
+def _version_vigente(rol: str) -> int:
+    """La `version:` del perfil, leida como la lee la puerta (ADR-221): con la stdlib."""
+    texto = (_PERFILES / f"{rol}.yml").read_text(encoding="utf-8")
+    encontrada = re.search(r"^version:\s*(\d+)\s*$", texto, re.MULTILINE)
+    assert encontrada is not None, f"{rol}.yml no declara version"
+    return int(encontrada.group(1))
+
+
+_VIGENTE = _version_vigente("implementer")
+
+# El cuerpo completo lleva el `Perfil: rol@N` que todo encargo declara desde C3
+# (#333) y que la puerta resuelve desde ADR-221; sin el, el implementador
+# pararia en rojo a los seis segundos (#653).
 _COMPLETE_BODY = (
-    "## Work ID\nSIRIUS-B5-001\n\n## Bloque\nB5\n\n## Objetivo\n"
+    "## Work ID\nSIRIUS-B5-001\n\n## Bloque\nB5\n\n"
+    f"Perfil: implementer@{_VIGENTE}\n\n## Objetivo\n"
     + ("Panel de contexto completo. " * 10)
     + "\n\n## Base y dependencias\nB4a-B4f fusionados.\n\n## Alcance permitido\nPanel.\n\n"
     "## Fuera de alcance\nB6, RAG.\n\n"
@@ -318,3 +336,57 @@ def test_a_rejection_without_diagnosis_keeps_the_label(tmp_path: Path) -> None:
     assert "sirius-activation:rejected" not in (_md(env) / "comments.txt").read_text(
         encoding="utf-8"
     ), "la prueba no está ejercitando el fallo de publicación"
+
+
+# --- El Perfil se resuelve en la puerta (ADR-221) ------------------------------
+
+
+def _sin_perfil(cuerpo: str) -> str:
+    return "\n".join(linea for linea in cuerpo.splitlines() if not linea.startswith("Perfil:"))
+
+
+def test_un_cuerpo_sin_perfil_se_rechaza_antes_de_arrancar(tmp_path: Path) -> None:
+    """#653 murio a los seis segundos en el implementador; la puerta lo dice antes y gratis."""
+    env = _setup(tmp_path)
+    _seed(env, ["sirius:planned", "sirius:implement-requested"], body=_sin_perfil(_COMPLETE_BODY))
+    proc = _run(env)
+    assert proc.returncode == 0, proc.stderr
+    assert "sirius:implement-requested" not in _labels(env)
+    assert "sirius:planned" in _labels(env)
+    publicado = _comments(env)
+    assert "sirius-activation:rejected:perfil-sin-resolver" in publicado
+    assert "no declara 'Perfil: rol@N'" in publicado, "el rechazo lleva el detalle del resolutor"
+
+
+def test_un_perfil_desconocido_se_rechaza_con_el_detalle_del_resolutor(tmp_path: Path) -> None:
+    env = _setup(tmp_path)
+    cuerpo = _COMPLETE_BODY.replace(f"Perfil: implementer@{_VIGENTE}", "Perfil: implementer@99")
+    _seed(env, ["sirius:planned", "sirius:implement-requested"], body=cuerpo)
+    proc = _run(env)
+    assert proc.returncode == 0, proc.stderr
+    assert "sirius:implement-requested" not in _labels(env)
+    publicado = _comments(env)
+    assert "rejected:perfil-sin-resolver" in publicado
+    assert "implementer@99" in publicado and "no está en el manifiesto" in publicado
+
+
+def test_un_perfil_valido_pero_no_vigente_avisa_y_deja_pasar(tmp_path: Path) -> None:
+    """`rol@N` significa un texto (H-28): una version antigua se ejecuta, pero se dice."""
+    env = _setup(tmp_path)
+    cuerpo = _COMPLETE_BODY.replace(f"Perfil: implementer@{_VIGENTE}", "Perfil: implementer@2")
+    _seed(env, ["sirius:planned", "sirius:implement-requested"], body=cuerpo)
+    proc = _run(env)
+    assert proc.returncode == 0, proc.stderr
+    assert "sirius:implement-requested" in _labels(env), "no vigente no es motivo de rechazo"
+    publicado = _comments(env)
+    assert "sirius-activation:aviso:perfil-no-vigente:implementer@2" in publicado
+    assert f"es la {_VIGENTE}" in publicado and "rejected" not in publicado
+
+
+def test_el_perfil_vigente_pasa_sin_ningun_comentario(tmp_path: Path) -> None:
+    env = _setup(tmp_path)
+    _seed(env, ["sirius:planned", "sirius:implement-requested"])
+    proc = _run(env)
+    assert proc.returncode == 0, proc.stderr
+    assert "sirius:implement-requested" in _labels(env)
+    assert _comments(env).strip() == "", "con el perfil vigente la puerta no dice nada"
