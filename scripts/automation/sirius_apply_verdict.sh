@@ -687,7 +687,7 @@ case "$verdict" in
       "- PR: ${pr_url}" \
       "- Head SHA: \`${head_sha}\`" \
       "${summary}" >"$body_file"
-    if ! transition "$marker" "$body_file" "sirius:ready-for-merge" "0E8A16" "Estado: listo para fusionar (requiere tu autorización)"; then
+    if ! transition "$marker" "$body_file" "sirius:ready-for-merge" "0E8A16" "Estado: listo para fusionar; lo fusiona el motor por aprobación dual (ADR-205)"; then
       rm -f "$body_file"
       exit 1
     fi
@@ -847,7 +847,12 @@ case "$verdict" in
     body_file="$(mktemp)"
     {
       printf '%s\n\n%s\n' "$marker" "## CHANGES_REQUESTED"
-      printf '- PR: %s\n' "$pr_hint"
+      # `printf '- PR: …'` empezaba por guion y el printf de bash lo leía como
+      # opción («printf: - : invalid option»): la línea no se publicó ni una vez
+      # (0 de 128 veredictos CHANGES_REQUESTED en septiembre de 2026, 0 de 240
+      # desde que existe; mina del 30-09 §6.4). El texto va como argumento,
+      # nunca como formato.
+      printf '%s\n' "- PR: ${pr_hint}"
       printf '%s\n\n%s\n\n## OBSERVACIONES_ESTRUCTURADAS\n```json\n%s\n```\n' "${summary}" "${readable}" "${observations}"
       if [ -n "$family_notice" ]; then
         printf '\n## AVISO_FAMILIA_REPETIDA\n%s\n\n%s\n%s\n%s\n' \

@@ -85,6 +85,25 @@ sin_firma="$(printf '%s' "$COMMENT_BODY" | tr -d '\r' \
 trimmed="$(printf '%s' "$sin_firma" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
 lowered="$(printf '%s' "$trimmed" | tr '[:upper:]' '[:lower:]')"
 if [ "$lowered" != "continua" ] && [ "$lowered" != "continúa" ]; then
+  # Si el comentario EMPIEZA por la orden y lleva más texto, quien lo escribió
+  # quería reanudar: un `continua` con el párrafo de decisión detrás costó diez
+  # minutos de espera a ciegas el 04-09-2026 (bitácora del ciclo, entrada 29),
+  # porque el guion salía con «no es la orden exacta» solo en el log del run. Se
+  # le dice qué faltó, una vez por comentario, y no se toca nada. Cualquier otro
+  # comentario sigue sin respuesta: no era una orden, y el propio aviso —que no
+  # empieza por la palabra— tampoco puede volver a disparar un aviso.
+  primera_palabra="$(printf '%s' "$lowered" | tr -s '[:space:],.;:!¡' ' ' | cut -d' ' -f1)"
+  if [ "$primera_palabra" = "continua" ] || [ "$primera_palabra" = "continúa" ]; then
+    marker="<!-- sirius-resume-not-an-order:${COMMENT_ID} -->"
+    body_file="$(mktemp)"
+    printf '%s\n\n%s\n\n%s\n' \
+      "$marker" \
+      "ℹ️ **No he reanudado: la orden no es exacta**" \
+      "He leído un comentario que empieza por la orden pero lleva más texto. La única orden que vale es la palabra **continua**, sola, en un comentario propio; la decisión razonada va en otro comentario, que el corrector lee aparte («Decisiones del propietario registradas en esta incidencia»). No se ha tocado nada." >"$body_file"
+    sirius_comment_once "$REPO" "$ISSUE" "$marker" "$body_file" \
+      || echo "::warning::No se pudo publicar el aviso de orden inexacta en #${ISSUE}." >&2
+    rm -f "$body_file"
+  fi
   echo "El comentario de #${ISSUE} no es la orden exacta 'continua'; no se actua."
   exit 0
 fi
