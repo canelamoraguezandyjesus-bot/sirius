@@ -9,7 +9,7 @@
 > La fecha es la que cada documento **declara** en su cabecera; la vista no data
 > nada por su cuenta. «Sin fecha declarada» es un aviso, no un dato.
 
-**137 documentos**, 82 sin fecha declarada.
+**138 documentos**, 82 sin fecha declarada.
 
 ## `docs/audits`
 
@@ -30,6 +30,7 @@
 | 2026-09-14 | [La mina, segunda edición: cuánta razón tiene el detector de familia repetida](SIRIUS_MINA_APRENDIZAJE_OPERATIVO_2026-09-14.md) |
 | sin fecha declarada | [La mina v2: informe de aprendizaje sobre la ola de criticidad (M18 → M21b)](SIRIUS_MINA_APRENDIZAJE_OPERATIVO_2026-09.md) |
 | 2026-10-01 | [Nota de arranque — la vista de memoria vuelve a caber en una sola lectura (segunda vez)](arranque-2026-10-01-la-vista-vuelve-a-caber-en-una-sola-lectura.md) |
+| 2026-10-01 | [Nota de arranque — Quality no muere por un `uv sync` sin caché](arranque-2026-10-01-quality-no-muere-por-un-sync-lento.md) |
 | 2026-08-28 | [Nota de arranque — atestar al buscador antes de gastar en medirlo](arranque-atestar-al-buscador.md) |
 | 2026-09-19 | [Nota de arranque — la auditoría de la forma de trabajar, segunda edición: lo que la primera no podía ver](arranque-auditoria-forma-de-trabajo.md) |
 | 2026-08-28 | [Nota de arranque — B1: que una orden de investigación produzca un informe](arranque-b1-investigar-desde-una-orden.md) |
