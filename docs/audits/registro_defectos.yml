@@ -1298,3 +1298,17 @@ defectos:
     ficheros:
       - docs/audits/DONDE_VIVE_LA_BITACORA_DEL_CICLO.md
       - docs/audits/bitacora-de-fallos-y-mejoras-del-ciclo.md
+
+  - id: H-226
+    titulo: Cuando Codex declaraba que no revisaba (cuota agotada, configuracion, fallo propio) el agregador de la revision dual tiraba el veredicto de Claude ya entregado y pagado en vez de pasarselo al corrector
+    bloque: motor
+    gravedad: media
+    estado: cerrado
+    cerrado_por: adc8c2f4c174c10a76300039299521c31854522f
+    pr: 673
+    adr: 226
+    ficheros:
+      - scripts/automation/sirius_aggregate_reviews.py
+      - docs/implementation/AUTOMATION_OPERATING_CONTRACT.md
+      - .github/workflows/review-sirius-work.yml
+      - scripts/automation/sirius_codex_review.py
