@@ -21,7 +21,8 @@ QUALITY = RAIZ / ".github" / "workflows" / "quality.yml"
 PEOR_SYNC_MEDIDO_MIN = 17
 #: Lo medido en Pytest los días malos (08-09, 20-09, 21-09): 19 m 20 s a 19 m 37 s.
 PEOR_PYTEST_MEDIDO_MIN = 20
-#: Checkout, Qt, uv, ruff y mypy, juntos, hoy: menos de 3 min.
+#: Checkout, uv, ruff y mypy, juntos, hoy: menos de 3 min (los pasos CON plazo
+#: propio, apt incluido, se suman aparte).
 RESTO_DEL_JOB_MIN = 5
 
 
@@ -47,15 +48,24 @@ def test_los_dos_pasos_largos_de_quality_tienen_plazo_propio_por_encima_de_lo_me
     )
 
 
-def test_el_tope_del_job_de_quality_cubre_los_dos_pasos_largos_y_el_resto() -> None:
+def test_el_tope_del_job_de_quality_cubre_todos_los_plazos_propios_y_el_resto() -> None:
     """Si el tope del job fuera menor que la suma, los plazos de los pasos serían
-    decorativos: el job moriría cancelado antes de que ninguno fallara solo."""
+    decorativos: el job moriría cancelado antes de que ninguno fallara solo.
+
+    TODOS los pasos con plazo propio cuentan, no solo los dos largos: el de apt
+    tiene 10 min desde #202/#206 y la primera versión de este tope (50) no los
+    cubría (ronda 1 de Codex en la PR #669).
+    """
     tope, pasos = _pasos()
-    sync = pasos["Sync environment"]["timeout-minutes"]
-    pytest_ = pasos["Pytest"]["timeout-minutes"]
-    assert isinstance(sync, int) and isinstance(pytest_, int)
-    assert tope >= sync + pytest_ + RESTO_DEL_JOB_MIN, (
-        f"el job de Quality tiene {tope} min y sus pasos largos suman {sync} + {pytest_} "
-        f"(más {RESTO_DEL_JOB_MIN} del resto): con menos, el tope del job corta antes que "
-        "los plazos propios y la ejecución vuelve a ser `cancelled`"
+    con_plazo = {
+        nombre: paso["timeout-minutes"]
+        for nombre, paso in pasos.items()
+        if isinstance(paso.get("timeout-minutes"), int)
+    }
+    assert {"Sync environment", "Pytest"} <= set(con_plazo)
+    suma = sum(int(minutos) for minutos in con_plazo.values())
+    assert tope >= suma + RESTO_DEL_JOB_MIN, (
+        f"el job de Quality tiene {tope} min y sus pasos con plazo propio suman {suma} "
+        f"({con_plazo}; más {RESTO_DEL_JOB_MIN} del resto): con menos, el tope del job "
+        "corta antes que los plazos propios y la ejecución vuelve a ser `cancelled`"
     )

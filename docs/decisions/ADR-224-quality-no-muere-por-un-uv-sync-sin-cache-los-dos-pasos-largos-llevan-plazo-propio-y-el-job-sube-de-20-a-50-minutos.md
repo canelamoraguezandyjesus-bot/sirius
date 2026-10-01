@@ -1,4 +1,4 @@
-# ADR-224 — Quality no muere por un `uv sync` sin caché: los dos pasos largos llevan plazo propio y el job sube de 20 a 50 minutos
+# ADR-224 — Quality no muere por un `uv sync` sin caché: los dos pasos largos llevan plazo propio y el job sube de 20 a 60 minutos
 
 - Estado: APROBADO
 - Fecha: 2026-10-01
@@ -84,13 +84,18 @@ Copiado de la nota de arranque:
 
 En `.github/workflows/quality.yml`:
 
-- el job pasa de `timeout-minutes: 20` a **50**;
+- el job pasa de `timeout-minutes: 20` a **60**;
 - «Sync environment» lleva `timeout-minutes: 20` (peor medido sin caché:
   16 m 30 s);
 - «Pytest» lleva `timeout-minutes: 25` (peor medido: 19 m 37 s; hoy tarda
   9-10,5 min);
-- el resto del job (checkout, Qt, uv, ruff, mypy) tarda menos de 3 min:
-  20 + 25 + 5 cabe en 50.
+- el paso de apt conserva sus 10 min propios (#202, #206); los tres plazos
+  propios suman 55 y el resto del job (checkout, uv, ruff, mypy) tarda menos
+  de 3 min: 55 + 5 cabe en 60. La nota de arranque predijo 50 y la primera
+  versión lo escribió así; Codex (ronda 1, PR #669) señaló que 50 no cubría
+  10 + 20 + 25 más el resto, y que `sirius_reconcile.sh` no repara un
+  `cancelled`: el tope pasa a 60 y la prueba suma **todos** los plazos
+  propios, no solo los dos largos.
 
 Los tres números llevan al lado, en el YAML, la razón y la fecha, como el paso
 de `apt`. Nada más cambia.
@@ -99,14 +104,16 @@ de `apt`. Nada más cambia.
 
 - `tests/automation/test_quality_no_muere_por_un_sync_lento.py`, dos pruebas
   que leen el YAML real: los dos pasos largos tienen plazo propio por encima de
-  lo medido (17 y 20 min), y el tope del job cubre la suma de los dos más 5 min
-  del resto. Las dos en verde.
+  lo medido (17 y 20 min), y el tope del job cubre la suma de **todos** los
+  plazos propios (apt 10, sync 20, pytest 25) más 5 min del resto. Las dos en
+  verde.
 - Mutaciones sobre el YAML, con la prueba ejecutada y el fichero restaurado:
 
 | | Mutación | Resultado |
 |---|---|---|
-| M1 | el job vuelve a 20 min | cae `el_tope_del_job_de_quality_cubre_los_dos_pasos_largos_y_el_resto` |
+| M1 | el job vuelve a 20 min | cae `el_tope_del_job_de_quality_cubre_todos_los_plazos_propios_y_el_resto` |
 | M2 | «Sync environment» pierde su plazo propio | caen las dos |
+| M4 | el job a 50, como la primera versión (no cubre apt 10 + sync 20 + pytest 25 + resto) | cae `el_tope_del_job_de_quality_cubre_todos_los_plazos_propios_y_el_resto` |
 | M3 | el plazo de «Pytest» baja a 15 min, por debajo de lo medido | cae `los_dos_pasos_largos_de_quality_tienen_plazo_propio_por_encima_de_lo_medido` |
 
 - Las pruebas que leen los `timeout-minutes` reales de todos los workflows

@@ -22,7 +22,7 @@ permissions:
 jobs:
   quality:
     runs-on: ubuntu-latest
-    # 50 y no 20 (ADR-224). El 01-10 tres ejecuciones murieron canceladas a los
+    # 60 y no 20 (ADR-224). El 01-10 tres ejecuciones murieron canceladas a los
     # 20 min con «Sync environment» entre 11 y 16,5 min: sin la caché de
     # setup-uv el paso descarga 243 MiB de PySide6 de PyPI, y ese dia PyPI
     # servia a menos de 1 MB/s. Un job cancelado no guarda la cache (setup-uv
@@ -30,9 +30,11 @@ jobs:
     # la cache en la siguiente ejecucion y a cancelarse: un bucle que costo 60
     # min de runner y dos PR paradas. Los dos pasos largos llevan ahora plazo
     # propio y fallan RUIDOSAMENTE; este tope es la red de ultimo recurso, no
-    # el que corta. Solo pagan mas las ejecuciones lentas, y una de 30 min que
-    # termina vale mas que una de 20 que no.
-    timeout-minutes: 50
+    # el que corta: los tres plazos propios suman 55 (apt 10, sync 20, pytest
+    # 25) y el resto del job cabe en los 5 que quedan. Solo pagan mas las
+    # ejecuciones lentas, y una de 30 min que termina vale mas que una de 20
+    # que no.
+    timeout-minutes: 60
     env:
       # PySide6 corre sin pantalla en el runner Linux: el plugin offscreen evita
       # depender de un servidor X para las pruebas de GUI.
