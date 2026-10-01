@@ -89,8 +89,9 @@ def main() -> int:
     total_comentarios = 0
     for n, inc in enumerate(indice, 1):
         destino = RAW / f"issue_{inc['number']}.json"
-        if destino.exists():
-            continue
+        # Se sobrescribe siempre: un volcado es una foto, y repetir la cadena en
+        # el mismo MINA_DATOS tiene que refrescarla entera, no mezclar un indice
+        # nuevo con historiales viejos (Codex, PR #665).
         comentarios = paginar(f"{BASE}/issues/{inc['number']}/comments") if inc["comments"] else []
         limpio = [
             {

@@ -27,8 +27,9 @@ def main() -> int:
     for k, pr in enumerate(prs, 1):
         n = pr["number"]
         destino = PRDIR / f"pr_{n}.json"
-        if destino.exists():
-            continue
+        # Se sobrescribe siempre: un volcado es una foto, y repetir la cadena en
+        # el mismo MINA_DATOS tiene que refrescarla entera, no mezclar un indice
+        # nuevo con historiales viejos (Codex, PR #665).
         reviews = paginar(f"{BASE}/pulls/{n}/reviews")
         comentarios = paginar(f"{BASE}/pulls/{n}/comments")
         detalle, _ = get(f"{BASE}/pulls/{n}")
