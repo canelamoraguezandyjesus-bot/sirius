@@ -161,26 +161,37 @@ fi
 # con la incidencia en failed-safely y la razon solo en el log del run
 # (#653, 20-09-2026). Dos resolutores serian dos verdades; es uno.
 cuerpo="$(<"$body_file")"
-# Solo se juzgan los roles que el carril de ejecucion del manifiesto conoce: el
-# implementador es quien resolveria el prompt y moriria si no resuelve. Un rol
-# ajeno a ese carril -`investigador`, cuyo ejecutor es el investigador medido
-# (investigar-orden.yml) y tiene su propia puerta de reparto- no pasa por el
-# manifiesto, asi que esta puerta no afirma nada sobre el. Un cuerpo SIN
-# `Perfil:` si se juzga: ninguna puerta de reparto lo atiende y el
+# Se juzga el cuerpo que el implementador VA A EJECUTAR: la instantanea del
+# evento (`github.event.issue.body`, que el workflow pasa en ISSUE_BODY), no el
+# cuerpo actual de la API. Si alguien edita el cuerpo despues de la etiqueta
+# cambiando solo la version del perfil, el reparto no lo ve (compara el rol) y
+# el implementador moriria con la version vieja mientras esta puerta daba por
+# bueno el cuerpo nuevo (ronda 1 de Codex en la PR #670). Sin ISSUE_BODY (la
+# cadena local, el workflow de validacion a mano) se juzga el cuerpo actual.
+cuerpo_a_ejecutar="${ISSUE_BODY:-$cuerpo}"
+# Solo se exime un rol que pertenezca a OTRO carril del manifiesto: ese tiene
+# su propio ejecutor y su propia puerta de reparto (`investigador`, el
+# investigador medido de investigar-orden.yml), y esta puerta no afirma nada
+# sobre el. Un rol que no esta en ningun carril -una errata como
+# `implementr`- NO se exime: el reparto lo mandaria al implementador y
+# moriria alli, asi que aqui se rechaza por el resolutor. Un cuerpo SIN
+# `Perfil:` tambien se juzga: ninguna puerta de reparto lo atiende y el
 # implementador pararia en rojo.
-rol_declarado="$(printf '%s' "$cuerpo" | sed -n 's/^Perfil: *\([A-Za-z_-][A-Za-z_-]*\)@.*/\1/p' | head -1)"
-roles_del_carril="$(python3 - "${SIRIUS_GATE_DIR}/prompts/manifiesto.json" <<'PY'
+rol_declarado="$(printf '%s' "$cuerpo_a_ejecutar" | sed -n 's/^Perfil: *\([A-Za-z_-][A-Za-z_-]*\)@.*/\1/p' | head -1)"
+roles_de_otros_carriles="$(python3 - "${SIRIUS_GATE_DIR}/prompts/manifiesto.json" <<'PY'
 import json, sys
-manifiesto = json.load(open(sys.argv[1], encoding="utf-8"))
-print(" ".join(sorted({clave.split("@")[0] for clave in manifiesto["carriles"]["ejecucion"]})))
+carriles = json.load(open(sys.argv[1], encoding="utf-8"))["carriles"]
+propios = {clave.split("@")[0] for clave in carriles["ejecucion"]}
+ajenos = {clave.split("@")[0] for carril, claves in carriles.items() if carril != "ejecucion" for clave in claves}
+print(" ".join(sorted(ajenos - propios)))
 PY
 )"
-if [ -n "$rol_declarado" ] && ! printf ' %s ' "$roles_del_carril" | grep -Fq " ${rol_declarado} "; then
+if [ -n "$rol_declarado" ] && printf ' %s ' "$roles_de_otros_carriles" | grep -Fq " ${rol_declarado} "; then
   rm -f "$body_file"
-  echo "Activacion valida de #${ISSUE}: abierta, sirius:planned presente, sin estados incompatibles y cuerpo completo; el perfil \`${rol_declarado}\` no es del carril de ejecucion (${roles_del_carril}) y esta puerta no lo juzga."
+  echo "Activacion valida de #${ISSUE}: abierta, sirius:planned presente, sin estados incompatibles y cuerpo completo; el perfil \`${rol_declarado}\` es de otro carril del manifiesto (${roles_de_otros_carriles}) y esta puerta no lo juzga."
   exit 0
 fi
-if ! detalle="$(ISSUE_BODY="$cuerpo" python3 "${SIRIUS_GATE_DIR}/resolver_prompt.py" --carril ejecucion 2>&1 >/dev/null)"; then
+if ! detalle="$(ISSUE_BODY="$cuerpo_a_ejecutar" python3 "${SIRIUS_GATE_DIR}/resolver_prompt.py" --carril ejecucion 2>&1 >/dev/null)"; then
   rm -f "$body_file"
   detalle="${detalle#::error::prompt sin resolver (ejecucion): }"
   reject "perfil-sin-resolver" \
@@ -192,10 +203,10 @@ fi
 # --- 5) Un rol@N valido pero no vigente se avisa, no se rechaza ----------------
 # `rol@N` significa UN texto (H-28) y una version antigua sigue siendo
 # ejecutable a proposito; lo que faltaba era decirlo (deuda 35 de la bitacora).
-aviso="$(ISSUE_BODY="$cuerpo" python3 "${SIRIUS_GATE_DIR}/resolver_prompt.py" --carril ejecucion --vigencia 2>/dev/null)" || aviso=""
+aviso="$(ISSUE_BODY="$cuerpo_a_ejecutar" python3 "${SIRIUS_GATE_DIR}/resolver_prompt.py" --carril ejecucion --vigencia 2>/dev/null)" || aviso=""
 rm -f "$body_file"
 if [ -n "$aviso" ]; then
-  declarado="$(printf '%s' "$cuerpo" | sed -n 's/^Perfil: *\([A-Za-z_-][A-Za-z_-]*@[0-9][0-9]*\).*/\1/p' | head -1)"
+  declarado="$(printf '%s' "$cuerpo_a_ejecutar" | sed -n 's/^Perfil: *\([A-Za-z_-][A-Za-z_-]*@[0-9][0-9]*\).*/\1/p' | head -1)"
   marker_aviso="<!-- sirius-activation:aviso:perfil-no-vigente:${declarado} -->"
   aviso_file="$(mktemp)"
   printf '%s\n\n%s\n\n%s\n' \

@@ -404,3 +404,33 @@ def test_un_perfil_ajeno_al_carril_de_ejecucion_no_se_juzga_en_esta_puerta(tmp_p
     assert "sirius:implement-requested" in _labels(env)
     assert _comments(env).strip() == "", "ni rechazo ni aviso: no es su carril"
     assert "no lo juzga" in proc.stdout
+
+
+def test_la_puerta_juzga_el_cuerpo_que_el_implementador_ejecutara(tmp_path: Path) -> None:
+    """El implementador resuelve la instantánea del evento (`ISSUE_BODY`), no el
+    cuerpo actual: si alguien edita solo la versión después de la etiqueta, el
+    reparto no lo ve (compara el rol) y el implementador moriría con la versión
+    vieja mientras la puerta daba por bueno el cuerpo nuevo (Codex, PR #670)."""
+    env = _setup(tmp_path)
+    _seed(env, ["sirius:planned", "sirius:implement-requested"])
+    env["ISSUE_BODY"] = _COMPLETE_BODY.replace(
+        f"Perfil: implementer@{_VIGENTE}", "Perfil: implementer@99"
+    )
+    proc = _run(env)
+    assert proc.returncode == 0, proc.stderr
+    assert "sirius:implement-requested" not in _labels(env), "lo que se iba a ejecutar no resuelve"
+    assert "perfil-sin-resolver" in _comments(env)
+
+
+def test_un_rol_que_no_esta_en_ningun_carril_se_rechaza(tmp_path: Path) -> None:
+    """Una errata (`implementr`) no es un carril ajeno: el reparto la mandaría al
+    implementador y moriría allí. Solo se exime lo que otro carril del manifiesto
+    reclama como suyo (Codex, PR #670)."""
+    env = _setup(tmp_path)
+    cuerpo = _COMPLETE_BODY.replace(f"Perfil: implementer@{_VIGENTE}", "Perfil: implementr@4")
+    _seed(env, ["sirius:planned", "sirius:implement-requested"], body=cuerpo)
+    proc = _run(env)
+    assert proc.returncode == 0, proc.stderr
+    assert "sirius:implement-requested" not in _labels(env)
+    assert "perfil-sin-resolver" in _comments(env)
+    assert "no lo juzga" not in proc.stdout

@@ -40,6 +40,9 @@ jobs:
           GH_REPO: ${{ github.repository }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           REPOSITORY_OWNER: ${{ github.repository_owner }}
+          # La instantanea del evento, que es lo que el implementador ejecutara
+          # (ADR-221): la puerta juzga ese cuerpo, no el actual.
+          ISSUE_BODY: ${{ github.event.issue.body }}
         run: |
           set -uo pipefail
           bash scripts/automation/sirius_validate_activation.sh "$GH_REPO" "$ISSUE_NUMBER"

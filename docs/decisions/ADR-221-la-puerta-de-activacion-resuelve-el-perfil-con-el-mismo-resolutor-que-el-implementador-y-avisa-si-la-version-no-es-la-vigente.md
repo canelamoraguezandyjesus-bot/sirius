@@ -61,11 +61,20 @@ mutaciones vistas caer.
    del carril de ejecución del manifiesto** (hoy `implementer` y
    `documentalista`, leídos del propio manifiesto, no escritos aquí), ejecuta
    `resolver_prompt.py --carril ejecucion` (el mismo fichero y la misma llamada
-   que el implementador, solo stdlib). Un rol ajeno a ese carril
-   —`investigador`, cuyo ejecutor es el investigador medido de
-   `investigar-orden.yml` y tiene su propia puerta de reparto— no pasa por el
-   manifiesto y esta puerta no afirma nada sobre él; un cuerpo sin `Perfil:`
-   sí se juzga, porque ninguna puerta de reparto lo atiende. Si no resuelve,
+   que el implementador, solo stdlib). Solo se exime un rol que **otro
+   carril del manifiesto reclame como suyo** —hoy `investigador`, cuyo
+   ejecutor es el investigador medido de `investigar-orden.yml` y tiene su
+   propia puerta de reparto—; un rol que no está en ningún carril (una errata
+   como `implementr`) se juzga y se rechaza, porque el reparto lo mandaría al
+   implementador y moriría allí; un cuerpo sin `Perfil:` sí se juzga, porque
+   ninguna puerta de reparto lo atiende. Y el cuerpo que se juzga es el que el
+   implementador **va a ejecutar**: la instantánea del evento (`ISSUE_BODY`,
+   `github.event.issue.body`, que `implement-sirius-work.yml` ya pasaba y
+   `validate-sirius-activation.yml` pasa ahora), no el cuerpo actual de la
+   API, porque el reparto solo compara el rol y el implementador resuelve la
+   instantánea: una edición posterior que cambiara solo la versión pasaría la
+   puerta y mataría al implementador (las dos cosas, ronda 1 de Codex en la PR
+   #670). Si no resuelve,
    rechaza con el motivo
    `perfil-sin-resolver`, el detalle del resolutor en el comentario y la acción
    («pon `Perfil: rol@N` con un rol y una versión registrados en el
@@ -90,7 +99,7 @@ siempre y dejar el diagnóstico en la incidencia.
 `tests/automation/test_sirius_activation.py` ejecuta la puerta de verdad con
 el doble de `gh`; el cuerpo completo de sus pruebas lleva ahora el `Perfil:`
 que todo encargo declara, con la versión vigente leída del perfil (no escrita
-a mano). Cuatro pruebas nuevas:
+a mano). Siete pruebas nuevas:
 
 - `test_un_cuerpo_sin_perfil_se_rechaza_antes_de_arrancar`: rechazo
   `perfil-sin-resolver` con el detalle del resolutor; `planned` se conserva.
@@ -105,6 +114,11 @@ a mano). Cuatro pruebas nuevas:
   primera versión juzgaba todo rol y rompía 22 pruebas del reparto entre
   carriles y del workflow de investigación, cuyos cuerpos llevan
   `investigador@2` o un rol sintético; la puerta no es dueña de esos roles.
+- `test_un_rol_que_no_esta_en_ningun_carril_se_rechaza` (`implementr@4`:
+  rechazo `perfil-sin-resolver`, no exención).
+- `test_la_puerta_juzga_el_cuerpo_que_el_implementador_ejecutara` (cuerpo
+  actual vigente, instantánea del evento con `implementer@99`: rechazo, porque
+  lo que se iba a ejecutar no resuelve).
 
 **Mutaciones** (cada una aplicada sobre la puerta, la prueba ejecutada y el
 fichero restaurado):
@@ -114,8 +128,10 @@ fichero restaurado):
 | M1 | la puerta deja de resolver el perfil | cae `un_cuerpo_sin_perfil_se_rechaza` |
 | M2 | el `rol@N` no vigente deja de avisar | cae `un_perfil_valido_pero_no_vigente_avisa` |
 | M3 | el aviso de no vigente se convierte en rechazo | cae la misma: el evento desaparece |
+| M4 | eximir cualquier rol que no sea del carril de ejecución (la primera versión) | cae `un_rol_que_no_esta_en_ningun_carril_se_rechaza` |
+| M5 | juzgar el cuerpo actual en vez de la instantánea del evento | cae `la_puerta_juzga_el_cuerpo_que_el_implementador_ejecutara` |
 
-- Las 15 pruebas del fichero en verde; `ruff`, `mypy`; `bash -n` sobre la
+- Las 18 pruebas del fichero en verde; `ruff`, `mypy`; `bash -n` sobre la
   puerta. Batería entera: en la PR.
 
 ## Consecuencias
