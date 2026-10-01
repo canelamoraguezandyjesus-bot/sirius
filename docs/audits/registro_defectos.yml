@@ -1282,9 +1282,11 @@ defectos:
     bloque: motor
     gravedad: media
     estado: cerrado
-    cerrado_por: a29c283f779ec7182fcd1e7aa7a752a84eb8925d
+    cerrado_por: 1bfdbe5b6c7e13d1afe63adca5e4d3741988621e
     pr: 675
     adr: 228
     ficheros:
       - .github/workflows/implement-sirius-work.yml
       - tests/automation/test_implementador_con_reloj.py
+      - src/sirius_engine/adapters/github_worker_request.py
+      - tests/engine/test_worker_request.py
