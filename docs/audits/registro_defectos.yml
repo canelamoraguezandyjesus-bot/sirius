@@ -1144,11 +1144,15 @@ defectos:
     titulo: La contradiccion de etiquetas que el reflector aparta a proposito lleva 27 dias sin que nadie la mire
     bloque: motor
     gravedad: baja
-    estado: abierto
+    estado: cerrado
+    cerrado_por: 27a1196b44e32b9453a5e7028306cb1e0ec244db
+    pr: 674
     adr: 216
     incidencia: 662
     ficheros:
-      - src/sirius_engine/reflect.py
+      - src/sirius_engine/reflect_cli.py
+      - src/sirius_engine/divergencias.py
+      - src/sirius_engine/memoria.py
       - .github/workflows/reflejar-desenlace.yml
       - docs/audits/CIERRE_DEL_CICLO_2026-09-24.md
 
@@ -1276,3 +1280,16 @@ defectos:
     ficheros:
       - docs/audits/DONDE_VIVE_LA_BITACORA_DEL_CICLO.md
       - docs/audits/bitacora-de-fallos-y-mejoras-del-ciclo.md
+
+  - id: H-227
+    titulo: El motivo por el que el reflector apartaba un encargo para una persona solo quedaba en el log del run; ningun fichero lo conservaba y la vista de desenlaces lo contaba como un activo mas
+    bloque: motor
+    gravedad: baja
+    estado: cerrado
+    cerrado_por: 27a1196b44e32b9453a5e7028306cb1e0ec244db
+    pr: 674
+    adr: 227
+    ficheros:
+      - src/sirius_engine/divergencias.py
+      - src/sirius_engine/reflect_cli.py
+      - src/sirius_engine/memoria.py

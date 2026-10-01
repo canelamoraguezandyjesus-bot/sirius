@@ -2,7 +2,7 @@
 
 - Estado: APROBADO
 - Fecha: 2026-10-01
-- Aprobación: la fusión de su PR por el motor con aprobación dual (ADR-205).
+- Aprobación: la fusión de la PR #674 por el motor con aprobación dual (ADR-205).
 - Nota de arranque:
   `docs/audits/arranque-2026-10-01-las-divergencias-que-el-reflector-aparta-se-ven-con-su-edad.md`,
   confirmada en `17b2d416` antes del primer commit de arreglo, con las cuatro
