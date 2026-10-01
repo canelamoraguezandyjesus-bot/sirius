@@ -26,13 +26,13 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **218**.
+- Decisiones (ADR): **219**.
 - Bloques del motor: 17 cerrado, 2 fuera_de_alcance, 1 pendiente.
-- Defectos registrados: 3 abierto, 74 cerrado.
+- Defectos registrados: 3 abierto, 75 cerrado.
 - Ideas aparcadas o descartadas: 5 aparcada, 2 descartada, 2 promovida.
 - Skills: **19**.
 - Investigaciones: **10** (fotos con fecha; caducan).
-- Documentos: **200**, de los que **137** no declaran fecha.
+- Documentos: **201**, de los que **138** no declaran fecha.
 
 ## Las skills: lo que ya costó averiguar dos veces (ADR-211)
 
@@ -79,6 +79,7 @@ huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| [229](docs/decisions/ADR-229-los-instantes-de-g8-se-comparan-en-una-sola-forma-canonica-sean-cuales-sean-sus-escrituras.md) | 2026-10-01 | APROBADO | Los instantes de G8 se comparan en una sola forma canónica, sean cuales sean sus escrituras | `src/sirius/domain/instantes.py` (nuevo): `FORMA_CANONICA` (`%Y-%m-%dT%H:%M:%S.%fZ`), `en_forma_canonica(texto) -> str \| None` (una fecha ISO con hora opcional tras `T` o espacio, fracción opcional de cualquier longitud y zona opcional… |
 | [226](docs/decisions/ADR-226-cuando-codex-declara-que-no-revisa-y-claude-pidio-cambios-la-ronda-entrega-los-hallazgos-de-claude-en-vez-de-tirarlos.md) | 2026-10-01 | APROBADO | Cuando Codex declara que no revisa y Claude pidió cambios, la ronda entrega los hallazgos de Claude en vez de tirarlos | En `scripts/automation/sirius_aggregate_reviews.py`: Las razones con las que el recolector dice que el conector declaró que |
 | [224](docs/decisions/ADR-224-quality-no-muere-por-un-uv-sync-sin-cache-los-dos-pasos-largos-llevan-plazo-propio-y-el-job-sube-de-20-a-60-minutos.md) | 2026-10-01 | APROBADO | Quality no muere por un `uv sync` sin caché: los dos pasos largos llevan plazo propio y el job sube de 20 a 60 minutos | En `.github/workflows/quality.yml`: el job pasa de `timeout-minutes: 20` a 60; «Sync environment» lleva `timeout-minutes: 20` (peor medido sin caché: |
 | [223](docs/decisions/ADR-223-continua-sobre-una-parada-anterior-a-la-pr-repone-sirius-planned-si-consta-que-ya-estuvo-planificada-y-si-no-consta-lo-dice-sin-pedir-la-orden-otra-vez.md) | 2026-10-01 | APROBADO | `continua` sobre una parada anterior a la PR repone `sirius:planned` si consta que ya estuvo planificada, y si no consta lo dice sin pedir la orden otra vez | En el camino `sin_pr`, cuando la fase de destino es `sirius:implement-requested` y la incidencia no lleva `sirius:planned`, el guion: Lee la cronología de la incidencia (`GET /issues/N/events`, paginada) y |
@@ -318,6 +319,7 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 | `lista-a-mano` | 2 | sí | 181, 178 |
 | `medir-lo-que-se-tiene-en-vez-de-lo-que-hay` | 2 | sí | 184, 180 |
 | `vista-que-copia-el-corpus-del-que-venia-huyendo` | 2 | sí | 218, 196 |
+| `comparar-instantes-como-texto` | 1 | sí | 229 |
 | `condicion-construida-sin-el-mecanismo-que-la-hace-cumplible` | 1 | sí | 200 |
 | `criterio-que-se-pide-distinto-del-que-se-puntua` | 1 | sí | 212 |
 | `decision-que-solo-vive-en-una-conversacion` | 1 | no en todas | 202 |
@@ -392,6 +394,10 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 
 - **ADR-218** — dejar que la única lectura lleve dos veces la misma ruta y la fila de cada pieza de evidencia, y descubrirlo cuando la guardia bloquea una PR que no tiene la culpa; es la segunda vez que muerde esta familia en 17 días, y el suelo que no se puede cortar está declarado arriba con su cifra. (lo hace cumplir `tests/engine/test_memoria.py`).
 - **ADR-196** — una vista que existe para caber en una sola lectura (lo hace cumplir `tests/engine/test_memoria.py`).
+
+### `comparar-instantes-como-texto`
+
+- **ADR-229** — comparar instantes por orden léxico de cadenas que distintos emisores escriben de distinta forma, y descubrirlo caso a caso en la frontera: tres veces en septiembre (entradas 52, 60 y 69), siempre parcheando al emisor porque el comparador estaba fuera del alcance. (lo hace cumplir `tests/unit/test_instantes_en_una_sola_forma.py`).
 
 ### `condicion-construida-sin-el-mecanismo-que-la-hace-cumplible`
 
@@ -551,7 +557,7 @@ nada por su cuenta. «Sin fecha declarada» es un aviso, no un dato.
 
 ### `docs/audits`
 
-**143 documentos**, 83 sin fecha declarada; el más reciente declara 2026-10-01.
+**144 documentos**, 84 sin fecha declarada; el más reciente declara 2026-10-01.
 Es la carpeta de la evidencia y crece a dos filas por ADR, así que la fila
 de cada documento vive en un índice generado aparte,
 [`docs/audits/INDICE.md`](docs/audits/INDICE.md), que escribe el
