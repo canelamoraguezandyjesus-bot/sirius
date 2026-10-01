@@ -57,13 +57,13 @@ def test_el_tope_del_job_de_quality_cubre_todos_los_plazos_propios_y_el_resto() 
     cubría (ronda 1 de Codex en la PR #669).
     """
     tope, pasos = _pasos()
-    con_plazo = {
-        nombre: paso["timeout-minutes"]
-        for nombre, paso in pasos.items()
-        if isinstance(paso.get("timeout-minutes"), int)
-    }
+    con_plazo: dict[str, int] = {}
+    for nombre, paso in pasos.items():
+        minutos = paso.get("timeout-minutes")
+        if isinstance(minutos, int):
+            con_plazo[nombre] = minutos
     assert {"Sync environment", "Pytest"} <= set(con_plazo)
-    suma = sum(int(minutos) for minutos in con_plazo.values())
+    suma = sum(con_plazo.values())
     assert tope >= suma + RESTO_DEL_JOB_MIN, (
         f"el job de Quality tiene {tope} min y sus pasos con plazo propio suman {suma} "
         f"({con_plazo}; más {RESTO_DEL_JOB_MIN} del resto): con menos, el tope del job "
