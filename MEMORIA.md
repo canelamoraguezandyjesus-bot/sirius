@@ -28,7 +28,7 @@
 
 - Decisiones (ADR): **213**.
 - Bloques del motor: 17 cerrado, 2 fuera_de_alcance, 1 pendiente.
-- Defectos registrados: 3 abierto, 68 cerrado.
+- Defectos registrados: 3 abierto, 69 cerrado.
 - Ideas aparcadas o descartadas: 5 aparcada, 2 descartada, 2 promovida.
 - Skills: **19**.
 - Investigaciones: **10** (fotos con fecha; caducan).
@@ -79,7 +79,7 @@ huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
-| [223](docs/decisions/ADR-223-continua-sobre-una-parada-anterior-a-la-pr-no-repone-el-evento-si-falta-planned-lo-dice-y-conserva-la-parada.md) | 2026-10-01 | APROBADO | `continua` sobre una parada anterior a la PR no repone el evento si falta `sirius:planned`: lo dice y conserva la parada | En el camino `sin_pr`, cuando la fase de destino es `sirius:implement-requested` y la incidencia no lleva `sirius:planned`, el guion: No repone el evento ni consume la parada (`failed-safely` o |
+| [223](docs/decisions/ADR-223-continua-sobre-una-parada-anterior-a-la-pr-repone-sirius-planned-si-consta-que-una-persona-la-aplico-y-si-no-consta-lo-dice-sin-pedir-la-orden-otra-vez.md) | 2026-10-01 | APROBADO | `continua` sobre una parada anterior a la PR repone `sirius:planned` si consta que una persona la aplicó, y si no consta lo dice sin pedir la orden otra vez | En el camino `sin_pr`, cuando la fase de destino es `sirius:implement-requested` y la incidencia no lleva `sirius:planned`, el guion: Lee la cronología de la incidencia (`GET /issues/N/events`, paginada) y |
 | [218](docs/decisions/ADR-218-la-vista-de-memoria-deja-fuera-el-indice-de-docs-audits-y-no-repite-las-rutas-que-ya-enlaza.md) | 2026-10-01 | APROBADO | La vista de memoria deja fuera el índice de `docs/audits`, que pasa a una vista generada aparte, y no repite las rutas que ya enlaza | El índice de `docs/audits/` sale de `MEMORIA.md` y vive en `docs/audits/INDICE.md`, generado. Lo escribe el mismo comando (`uv run sirius-memoria conocimiento` escribe los dos ficheros) y lo vigila la misma guardia (`comprobar_memoria` y… |
 | [217](docs/decisions/ADR-217-la-bitacora-del-ciclo-entra-en-main-con-su-familia-y-la-evidencia-de-adr-002-se-queda-en-su-rama.md) | 2026-10-01 | APROBADO | La bitácora del ciclo entra en `main` con su familia, y la evidencia de ADR-002 se queda en su rama | Entran en `main`, tal como estaban en `a044fb4a`, los 48 ficheros de `docs/audits/` que la rama añade y `docs/investigaciones/2026-09-13-memanto-contra-la-capa-de-memoria-de-sirius.md`. Entre ellos: la bitácora… |
 | [216](docs/decisions/ADR-216-cerrar-el-ciclo-el-motor-se-queda-sin-trabajo-vivo-los-horarios-se-apagan-desde-actions-y-el-estado-real-queda-escrito.md) | 2026-09-24 | APROBADO | Cerrar el ciclo: el motor se queda sin trabajo vivo, los horarios se apagan desde Actions y el estado real queda escrito | Las PR abiertas, cerradas. La #661 (cinco skills, ADR-215) fusionada aplastada en `6a58c75e`. La #117 —la rama de evidencia de julio, abierta desde el 25-07 y declarada «no debe fusionarse automáticamente»— cerrada sin borrar su rama: su… |

@@ -312,26 +312,44 @@ fi
 # Una parada operativa no tiene rondas que perdonar: solo hay que repetir la
 # fase que se cayó.
 # Una parada anterior a la PR se reanuda volviendo a ACTIVAR la incidencia, y la
-# activacion exige `sirius:planned` junto al evento; `planned` se consumio en la
-# primera activacion y ninguna automatizacion puede reponerla (puerta de
-# activacion, #60). Reponer solo el evento anunciaba en verde un reinicio que
-# la puerta rechazaba en segundos y dejaba la incidencia sin ninguna etiqueta:
-# 3 de los 9 reinicios sin PR de septiembre de 2026 (#545, #581, #653). Aqui se
-# mira antes y, si falta, se dice y no se toca nada (ADR-223).
+# activacion exige `sirius:planned` junto al evento; la primera activacion la
+# consumio. Reponer solo el evento anunciaba en verde un reinicio que la puerta
+# rechazaba en segundos y dejaba la incidencia sin ninguna etiqueta: 3 de los 9
+# reinicios sin PR de septiembre de 2026 (#545, #581, #653). Aqui se mira antes
+# (ADR-223). La puerta no repone `planned` por su cuenta (#60): planificar es
+# un gesto humano. Pero el motor NUNCA aplica `sirius:planned`, asi que un
+# `labeled` con esa etiqueta en la cronologia de la incidencia es una decision
+# humana ya tomada, y la orden `continua` (solo del propietario) es otra: con
+# las dos, reponer `planned` junto al evento no inventa ninguna aprobacion,
+# devuelve la que la maquina consumio. Pedirle que la aplique y repita la
+# orden seria pedir dos veces lo mismo (AGENTS.md; ronda 1 de Codex en la PR
+# #671). Si NO consta que nadie la planificara, no hay nada que devolver: se
+# dice, y lo que se le pide es la activacion misma, no la orden otra vez.
+reponer_planned=false
 if [ "$sin_pr" = "true" ] && [ "$etiqueta_destino" = "sirius:implement-requested" ] \
   && ! printf '%s\n' "$labels_now" | grep -Fxq "sirius:planned"; then
-  marker="<!-- sirius-resume-sin-planned:${COMMENT_ID} -->"
-  aviso_file="$(mktemp)"
-  printf '%s\n\n%s\n\n%s\n\n%s\n' \
-    "$marker" \
-    "🛑 **No he reanudado: falta \`sirius:planned\`**" \
-    "Esta incidencia se detuvo antes de producir rama ni PR, así que reanudarla es volver a activarla, y la activación exige \`sirius:planned\` junto a \`sirius:implement-requested\`. \`planned\` se consumió en la primera activación y ninguna automatización puede añadirla. Si repusiera solo \`implement-requested\`, la puerta lo rechazaría en segundos y la incidencia quedaría sin ninguna etiqueta." \
-    "**Qué hace falta:** aplica \`sirius:planned\` y vuelve a escribir **continua**. La parada (\`${parada}\`) se conserva hasta entonces." >"$aviso_file"
-  sirius_comment_once "$REPO" "$ISSUE" "$marker" "$aviso_file" \
-    || echo "::warning::No se pudo publicar el aviso de falta de planned en #${ISSUE}." >&2
-  rm -f "$aviso_file"
-  echo "Reinicio sin PR de #${ISSUE} no realizado: falta sirius:planned; la parada ${parada} se conserva."
-  exit 0
+  veces_planificada="$(sirius_retry gh api "repos/${REPO}/issues/${ISSUE}/events" --paginate \
+      --jq '[.[] | select(.event == "labeled" and .label.name == "sirius:planned")] | length' 2>/dev/null \
+    | awk '{ s += $1 } END { print s + 0 }')"
+  if [ "${veces_planificada:-0}" -gt 0 ]; then
+    reponer_planned=true
+  else
+    marker="<!-- sirius-resume-sin-planned:${COMMENT_ID} -->"
+    aviso_file="$(mktemp)"
+    printf '%s\n\n%s\n\n%s\n\n%s\n' \
+      "$marker" \
+      "🛑 **No he reanudado: esta incidencia nunca tuvo \`sirius:planned\`**" \
+      "Esta incidencia se detuvo antes de producir rama ni PR, así que reanudarla es volver a activarla, y la activación exige \`sirius:planned\` junto a \`sirius:implement-requested\`. En su cronología no consta que ninguna persona la haya planificado, y planificarla es una decisión humana que no puedo tomar por ti. Si repusiera solo \`implement-requested\`, la puerta lo rechazaría en segundos y la incidencia quedaría sin ninguna etiqueta." \
+      "**Qué hace falta:** cuando la des por planificada, aplícale a la vez \`sirius:planned\` y \`sirius:implement-requested\` y retira \`${parada}\`: eso es la activación, y no hace falta repetir la orden. Hasta entonces la parada (\`${parada}\`) se conserva." >"$aviso_file"
+    if ! sirius_comment_once "$REPO" "$ISSUE" "$marker" "$aviso_file"; then
+      rm -f "$aviso_file"
+      echo "::error::No se pudo publicar el aviso de falta de planned en #${ISSUE}; la parada se conserva y la orden no se ha atendido. Reintentable."
+      exit 1
+    fi
+    rm -f "$aviso_file"
+    echo "Reinicio sin PR de #${ISSUE} no realizado: nunca tuvo sirius:planned; la parada ${parada} se conserva."
+    exit 0
+  fi
 fi
 body_file="$(mktemp)"
 if [ "$sin_pr" = "true" ]; then
@@ -341,11 +359,18 @@ if [ "$sin_pr" = "true" ]; then
   # head inventado o vacío escribiría en el historial una autorización sobre algo
   # que no existe, y ese historial es lo único que después dice qué se permitió.
   marker="<!-- sirius-restart-sin-pr:${ISSUE}:${GITHUB_RUN_ID:-manual}-${GITHUB_RUN_ATTEMPT:-1} -->"
-  printf '%s\n\n%s\n\n%s\n\n%s\n' \
+  nota_planned=""
+  if [ "$reponer_planned" = "true" ]; then
+    nota_planned="Repongo también \`sirius:planned\`: consta en la cronología que una persona la aplicó (${veces_planificada} vez/veces) y la primera activación la consumió; tu **continua** reactiva esa misma planificación, que la puerta de activación exige junto al evento (ADR-223)."
+  fi
+  printf '%s\n\n%s\n\n%s\n\n%s\n%s' \
     "$marker" \
     "🟢 **Reinicio autorizado por el propietario**" \
     "Esta incidencia se detuvo **antes de producir ninguna rama ni PR**, así que no hay ningún head sobre el que continuar: lo que se autoriza es **repetir desde cero** la fase que se paró (\`${etiqueta_destino}\`)." \
-    "El historial queda intacto y no se perdona ninguna ronda: sin PR no hubo rondas que contar. Si la fase se vuelve a caer, se detendrá otra vez con su diagnóstico." >"$body_file"
+    "El historial queda intacto y no se perdona ninguna ronda: sin PR no hubo rondas que contar. Si la fase se vuelve a caer, se detendrá otra vez con su diagnóstico." \
+    "${nota_planned:+
+${nota_planned}
+}" >"$body_file"
 elif [ "$parada" = "sirius:blocked-decision" ] && [ "${bloqueo_de_convergencia:-true}" = "true" ]; then
   marker="<!-- sirius-convergence-reset:${head_sha}:${GITHUB_RUN_ID:-manual}-${GITHUB_RUN_ATTEMPT:-1} -->"
   printf '%s\n\n%s\n\n%s\n\n%s\n' \
@@ -378,6 +403,15 @@ if ! sirius_ensure_label "$REPO" "$etiqueta_destino" "1D76DB" \
   "Evento consumible: repuesto por orden del propietario"; then
   echo "::error::No se pudo asegurar la etiqueta ${etiqueta_destino} para #${ISSUE}; reintentable."
   exit 1
+fi
+# `planned` ANTES que el evento: la puerta de activacion, que despierta el
+# evento, tiene que encontrarla ya puesta.
+if [ "$reponer_planned" = "true" ]; then
+  if ! ( export GH_TOKEN="${SIRIUS_TRIGGER_TOKEN:-${GH_TOKEN:-}}"
+         sirius_set_issue_labels "$REPO" "$ISSUE" "sirius:planned" ); then
+    echo "::error::No se pudo reponer sirius:planned en #${ISSUE}; no repongo el evento sin ella. Reintentable."
+    exit 1
+  fi
 fi
 if ! ( export GH_TOKEN="${SIRIUS_TRIGGER_TOKEN:-${GH_TOKEN:-}}"
        sirius_set_issue_labels "$REPO" "$ISSUE" "$etiqueta_destino" "$parada" ); then

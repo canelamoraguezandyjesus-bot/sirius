@@ -22,6 +22,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -75,6 +76,11 @@ case "$sub" in
       if [ -n "$filtro" ]; then jq -c "$filtro" "$D/pr_${pr}.json"; else cat "$D/pr_${pr}.json"; fi
       exit 0
     fi
+    if printf '%s' "$args" | grep -q '/events'; then
+      f="$D/events_${n}.json"; [ -f "$f" ] || printf '[]' > "$f"
+      if [ -n "$filtro" ]; then jq -r "$filtro" "$f"; else cat "$f"; fi
+      exit 0
+    fi
     if printf '%s' "$args" | grep -q '/comments'; then
       [ "${GH_MOCK_FAIL_COMMENTS:-0}" = "1" ] && { echo "503" >&2; exit 1; }
       cat "$D/comments_${n}.txt" 2>/dev/null
@@ -100,6 +106,7 @@ case "$sub" in
         else cat "$D/body_${num}.txt" 2>/dev/null; fi
         exit 0;;
       comment)
+        [ "${GH_MOCK_FAIL_COMMENT_POST:-0}" = "1" ] && { echo "503" >&2; exit 1; }
         bf=""; prev=""
         for a in "$@"; do [ "$prev" = "--body-file" ] && bf="$a"; prev="$a"; done
         if [ -n "$bf" ]; then
@@ -150,9 +157,16 @@ def _md(env: dict[str, str]) -> Path:
     return Path(env["GH_MOCK_DIR"])
 
 
-def _sembrar(env: dict[str, str], *, etiquetas: list[str], historial: str) -> None:
+def _sembrar(
+    env: dict[str, str],
+    *,
+    etiquetas: list[str],
+    historial: str,
+    eventos: list[dict[str, Any]] | None = None,
+) -> None:
     md = _md(env)
     (md / f"labels_{ISSUE}.txt").write_text("".join(f"{x}\n" for x in etiquetas), encoding="utf-8")
+    (md / f"events_{ISSUE}.json").write_text(json.dumps(eventos or []), encoding="utf-8")
     (md / f"comments_{ISSUE}.txt").write_text(historial, encoding="utf-8")
     (md / f"body_{ISSUE}.txt").write_text("cuerpo de la incidencia", encoding="utf-8")
     (md / f"pr_{PR}.json").write_text(
@@ -726,17 +740,55 @@ def test_una_parada_de_rol_del_revisor_sigue_volviendo_a_revision(tmp_path: Path
 # --- Una parada anterior a la PR solo se reanuda si `planned` sigue ahi (ADR-223) --
 
 
-def test_una_parada_sin_pr_sin_planned_no_anuncia_en_verde_ni_consume_la_parada(
+PLANIFICADA_POR_UNA_PERSONA: list[dict[str, Any]] = [
+    {"event": "labeled", "label": {"name": "sirius:planned"}, "actor": {"login": "propietario"}},
+    {"event": "unlabeled", "label": {"name": "sirius:planned"}, "actor": {"login": "sirius-motor"}},
+]
+
+
+def test_una_parada_sin_pr_sin_planned_repone_planned_si_consta_que_una_persona_la_aplico(
     tmp_path: Path,
 ) -> None:
     """Entrada 126 de la bitacora: 3 de los 9 reinicios sin PR de septiembre acabaron
     con la incidencia sin ninguna etiqueta, porque la puerta rechazo `sin-planned`
-    el reinicio que el guion acababa de anunciar en verde."""
+    el reinicio que el guion acababa de anunciar en verde. Las tres habian sido
+    planificadas por una persona y la activacion consumio la etiqueta: el
+    `continua` del propietario la devuelve (ronda 1 de Codex en la PR #671:
+    pedirle que la aplique y repita la orden era pedir dos veces lo mismo)."""
     env = _setup(tmp_path)
     _sembrar(
         env,
         etiquetas=["sirius:failed-safely"],
         historial=_historial_sin_pr("<!-- sirius-verdict:implementer:FAILED_SAFELY:1 -->"),
+        eventos=PLANIFICADA_POR_UNA_PERSONA,
+    )
+    resultado = _ejecutar(env)
+
+    assert resultado.returncode == 0, resultado.stderr
+    etiquetas = _etiquetas(env)
+    assert "sirius:planned" in etiquetas and "sirius:implement-requested" in etiquetas
+    assert "sirius:failed-safely" not in etiquetas
+    publicado = _comentarios(env)
+    assert "sirius-restart-sin-pr" in publicado and "Repongo también `sirius:planned`" in publicado
+    assert "sirius-resume-sin-planned" not in publicado
+    acciones = (_md(env) / "actions.log").read_text(encoding="utf-8").splitlines()
+    assert acciones.index("ADD sirius:planned") < acciones.index(
+        "ADD sirius:implement-requested"
+    ), "`planned` antes que el evento: la puerta tiene que encontrarla puesta"
+
+
+def test_una_parada_sin_pr_nunca_planificada_no_anuncia_en_verde_ni_pide_la_orden_otra_vez(
+    tmp_path: Path,
+) -> None:
+    """Sin ningun `labeled sirius:planned` en la cronologia no hay aprobacion que
+    devolver: la parada se conserva, se dice, y lo que se pide es la activacion
+    (las etiquetas), no volver a escribir la orden."""
+    env = _setup(tmp_path)
+    _sembrar(
+        env,
+        etiquetas=["sirius:failed-safely"],
+        historial=_historial_sin_pr("<!-- sirius-verdict:implementer:FAILED_SAFELY:1 -->"),
+        eventos=[],
     )
     resultado = _ejecutar(env)
 
@@ -746,10 +798,13 @@ def test_una_parada_sin_pr_sin_planned_no_anuncia_en_verde_ni_consume_la_parada(
     assert "sirius:implement-requested" not in etiquetas, (
         "reponer el evento sin `planned` es anunciar un reinicio que la puerta rechaza"
     )
-    assert "sirius:planned" not in etiquetas, "el guion no pone `planned`: es un gesto humano"
+    assert "sirius:planned" not in etiquetas, "sin aprobacion humana previa, el guion no la inventa"
     publicado = _comentarios(env)
     assert "sirius-resume-sin-planned" in publicado and "sirius:planned" in publicado
     assert "sirius-restart-sin-pr" not in publicado, "no se anuncia en verde lo que no se hace"
+    assert "vuelve a escribir" not in publicado and "escribe **continua**" not in publicado, (
+        "no se pide repetir una orden ya dada (AGENTS.md)"
+    )
 
 
 def test_el_aviso_de_sin_planned_no_empieza_por_continua(tmp_path: Path) -> None:
@@ -758,6 +813,7 @@ def test_el_aviso_de_sin_planned_no_empieza_por_continua(tmp_path: Path) -> None
         env,
         etiquetas=["sirius:failed-safely"],
         historial=_historial_sin_pr("<!-- sirius-verdict:implementer:FAILED_SAFELY:1 -->"),
+        eventos=[],
     )
     _ejecutar(env)
     cuerpo = _comentarios(env)
@@ -765,6 +821,24 @@ def test_el_aviso_de_sin_planned_no_empieza_por_continua(tmp_path: Path) -> None
         (linea for linea in cuerpo.splitlines() if linea.strip() and "<!--" not in linea), ""
     )
     assert not primera.strip().lower().startswith("continua"), primera
+
+
+def test_si_el_aviso_de_sin_planned_no_se_puede_publicar_el_run_falla(tmp_path: Path) -> None:
+    """Un aviso prometido que no llega es la parada muda otra vez; el run tiene que
+    quedar rojo y reintentable, no verde (ronda 1 de Codex en la PR #671)."""
+    env = _setup(tmp_path)
+    env["GH_MOCK_FAIL_COMMENT_POST"] = "1"
+    _sembrar(
+        env,
+        etiquetas=["sirius:failed-safely"],
+        historial=_historial_sin_pr("<!-- sirius-verdict:implementer:FAILED_SAFELY:1 -->"),
+        eventos=[],
+    )
+    resultado = _ejecutar(env)
+    assert resultado.returncode != 0
+    assert "sirius:failed-safely" in _etiquetas(
+        env
+    ) and "sirius:implement-requested" not in _etiquetas(env)
 
 
 def test_una_parada_sin_pr_con_planned_se_reanuda_y_conserva_planned(tmp_path: Path) -> None:
@@ -781,3 +855,6 @@ def test_una_parada_sin_pr_con_planned_se_reanuda_y_conserva_planned(tmp_path: P
     assert "sirius:implement-requested" in etiquetas and "sirius:planned" in etiquetas
     assert "sirius:failed-safely" not in etiquetas
     assert "sirius-restart-sin-pr" in _comentarios(env)
+    assert "Repongo también" not in _comentarios(env), (
+        "con `planned` puesta no hay nada que devolver"
+    )

@@ -1,0 +1,150 @@
+# ADR-223 — `continua` sobre una parada anterior a la PR repone `sirius:planned` si consta que una persona la aplicó, y si no consta lo dice sin pedir la orden otra vez
+
+- Estado: APROBADO
+- Fecha: 2026-10-01
+- Aprobación: la fusión de la PR por el motor con aprobación dual (ADR-205).
+- Nota de arranque:
+  `docs/audits/arranque-2026-10-01-continua-sobre-una-parada-anterior-a-la-pr.md`,
+  publicada en el commit `104ae3dd` (01-10-2026, 08:13 UTC), antes del primer
+  commit de arreglo.
+
+## Contexto y problema
+
+Cuando una incidencia se para **antes de producir rama ni PR**, el guion de
+reanudación (`sirius_resume_on_command.sh`, camino `sin_pr`, H-23) repone la
+etiqueta de la fase que se paró —`sirius:implement-requested`— y publica
+«🟢 Reinicio autorizado por el propietario». Pero reponer esa etiqueta es
+volver a **activar** la incidencia, y la puerta de activación (#60) exige
+`sirius:planned` junto al evento: `planned` se consumió en la primera
+activación y la puerta no la repone por su cuenta (#60). La puerta rechazaba el
+reinicio en segundos (`sin-planned`), retiraba el evento, y la incidencia
+quedaba **sin ninguna etiqueta**: inerte, muda, y además invisible para el
+reconciliador, porque «sin etiquetas» no es un estado que nadie vigile
+(bitácora del ciclo, entrada 126; deuda 36).
+
+Medido en el volcado de septiembre (mina del 30-09): **9 reinicios sin PR**, y
+**3 de ellos** seguidos de un rechazo `sin-planned` en el acto: #545 (05-09),
+#581 (11-09) y #653 (20-09). Uno de cada tres reinicios anunció en verde una
+reanudación que se rechazó sola.
+
+## Criterio de parada (escrito ANTES de decidir)
+
+El de la nota de arranque: el reinicio no añade `sirius:planned` ni ninguna
+etiqueta reservada a una persona; con `planned` presente, el reinicio sin PR se
+comporta exactamente como hoy; el aviso no empieza por «continua»; tres
+mutaciones vistas caer.
+
+**Desviación, a la vista.** La primera versión de este ADR cumplió ese criterio
+al pie de la letra (no añadía `planned`) y Codex mostró en la ronda 1 de la PR
+#671 que, para cumplirlo, le pedía al propietario aplicar la etiqueta **y
+repetir la orden**, contra una regla suya de `AGENTS.md` («No pidas repetir una
+acción ya realizada»). El criterio se cambia aquí y se dice: el reinicio sí
+repone `sirius:planned`, pero **solo cuando consta en la cronología de la
+incidencia que una persona la aplicó antes**; nunca la inventa. Lo demás del
+criterio se conserva.
+
+## Opciones consideradas
+
+1. **Que el reinicio reponga las dos etiquetas siempre**, leyendo el
+   `continua` del propietario como certificación del alcance. Rechazada:
+   inventaría una planificación donde nunca la hubo, y planificar es el gesto
+   humano que la puerta de activación protege a propósito (#60).
+2. **Que la puerta deje pasar un reinicio sin `planned`.** Rechazada por lo
+   mismo: la puerta rechaza por diseño.
+3. **Que el reinicio mire `planned` antes de anunciar y, si falta, lo diga y no
+   toque nada**, pidiendo aplicar `planned` y repetir **continua**. Fue la
+   primera versión de este ADR; Codex la tumbó en la ronda 1 de la PR #671:
+   pide dos veces lo mismo (`AGENTS.md`), y una orden que no se atiende sin
+   repetirla es la mitad de la parada muda que este ADR venía a quitar.
+4. **Que el reinicio reponga `planned` solo si consta que una persona la
+   aplicó antes** (la cronología de etiquetas de la incidencia: el motor
+   nunca aplica `sirius:planned`, así que cualquier `labeled` con ella es una
+   decisión humana que la activación consumió), **y si no consta, lo diga sin
+   pedir la orden otra vez**. Esta. Con dos gestos humanos escritos —la
+   planificación que hubo y la orden `continua`, que solo acepta del
+   propietario— reponer la etiqueta no inventa ninguna aprobación: devuelve
+   la que la máquina consumió.
+
+## Decisión
+
+En el camino `sin_pr`, cuando la fase de destino es `sirius:implement-requested`
+y la incidencia no lleva `sirius:planned`, el guion:
+
+1. **Lee la cronología** de la incidencia (`GET /issues/N/events`, paginada) y
+   cuenta los `labeled` de `sirius:planned`.
+2. **Si consta al menos uno, repone `sirius:planned` antes que el evento** (la
+   puerta de activación, que despierta con el evento, tiene que encontrarla ya
+   puesta), repone el evento, retira la parada y el reinicio en verde dice que
+   la repuso, cuántas veces constaba y por qué. Una sola orden, ninguna
+   repetición.
+3. **Si no consta ninguno, no repone nada ni consume la parada**
+   (`failed-safely` o `blocked-decision` se quedan): no hay aprobación que
+   devolver. Publica **una vez por orden** (marcador
+   `sirius-resume-sin-planned:<id del comentario>`) que la incidencia nunca
+   tuvo `planned`, que planificarla es una decisión humana que el guion no
+   toma, y que lo que hace falta es **la activación misma** —aplicar a la vez
+   `sirius:planned` y `sirius:implement-requested` y retirar la parada—, no
+   repetir la orden. El aviso no empieza por «continua». Si el aviso no se
+   puede publicar, **el run falla** y queda reintentable: un aviso prometido
+   que no llega es la parada muda otra vez.
+4. Con `planned` presente, todo sigue igual: se repone el evento, se conserva
+   `planned` y se publica el reinicio, sin mencionar ninguna reposición.
+
+## Comprobación que la sostiene
+
+`tests/automation/test_reanudar_ejecutando_el_guion.py` ejecuta el guion de
+verdad con el doble de `gh`, que sirve ahora también la cronología de la
+incidencia (`events_<n>.json`) y puede negarse a publicar un comentario. Los
+casos existentes de reinicio sin PR siembran `sirius:planned`, porque sin él
+nunca pudieron reanudar de verdad; y cinco pruebas de este ADR:
+
+- `test_una_parada_sin_pr_sin_planned_repone_planned_si_consta_que_una_persona_la_aplico`:
+  cronología con un `labeled sirius:planned` → `planned` y el evento repuestos
+  (en ese orden), la parada retirada, el reinicio en verde dice que la repuso,
+  y no hay aviso de falta.
+- `test_una_parada_sin_pr_nunca_planificada_no_anuncia_en_verde_ni_pide_la_orden_otra_vez`:
+  cronología vacía → la parada se conserva, nada se repone, el aviso lleva su
+  marcador, no se publica el reinicio en verde y el texto no pide volver a
+  escribir la orden.
+- `test_el_aviso_de_sin_planned_no_empieza_por_continua`.
+- `test_si_el_aviso_de_sin_planned_no_se_puede_publicar_el_run_falla`.
+- `test_una_parada_sin_pr_con_planned_se_reanuda_y_conserva_planned` (y no
+  menciona ninguna reposición).
+
+**Mutaciones** (cada una aplicada sobre el guion, la prueba ejecutada, el
+fichero restaurado):
+
+| | Mutación | Resultado |
+|---|---|---|
+| M1 | el reinicio deja de mirar `planned` | cae `una_parada_sin_pr_sin_planned_repone_planned_si_consta_que_una_persona_la_aplico`, `una_parada_sin_pr_nunca_planificada_no_anuncia_en_verde_ni_pide_la_orden_otra_vez` |
+| M2 | el aviso de «nunca planificada» consume la parada | cae `una_parada_sin_pr_nunca_planificada_no_anuncia_en_verde_ni_pide_la_orden_otra_vez` |
+| M3 | con `planned` presente el reinicio deja de reponer la fase | cae `una_parada_sin_pr_reactiva_la_fase_que_se_paro`, `una_parada_sin_pr_NO_manda_el_trabajo_al_corrector`, `un_implementador_bloqueado_sin_pr_repite_su_fase_desde_cero` |
+| M4 | reponer `planned` sin mirar la cronología | cae `una_parada_sin_pr_nunca_planificada_no_anuncia_en_verde_ni_pide_la_orden_otra_vez` |
+| M5 | no reponer `planned` aunque conste que una persona la aplicó | cae `una_parada_sin_pr_sin_planned_repone_planned_si_consta_que_una_persona_la_aplico` |
+| M6 | un aviso que no se puede publicar no hace fallar el run | cae `si_el_aviso_de_sin_planned_no_se_puede_publicar_el_run_falla` |
+
+- El fichero entero en verde (29 pruebas); `bash -n`; `ruff`, `mypy` sobre la
+  prueba. Batería entera: en la PR.
+
+## Consecuencias
+
+- Un `continua` sobre una parada pre-PR de una incidencia que una persona
+  planificó **reanuda de verdad con una sola orden**; antes la dejaba sin
+  etiquetas y en silencio, y la primera versión de este ADR la dejaba parada
+  con deberes para el propietario.
+- La autorización queda escrita en la incidencia: el reinicio en verde dice que
+  repuso `planned`, cuántas veces constaba y por qué. Si el propietario decide
+  que su `continua` no debe valer para eso, la hoja de decisiones lo recoge y
+  este camino vuelve a pedir la activación a mano.
+- La única incidencia que no se reanuda sola es la que nunca tuvo `planned`:
+  ahí sí falta una decisión humana, y se le pide la activación, no la orden.
+
+## Alternativas descartadas y por qué
+
+Las de «Opciones consideradas».
+
+## La lección
+
+- familia: `prosa-que-el-cambio-deja-falsa`
+- sin esto se repetiría: un camino de reinicio escrito cuando activar era una etiqueta, que anuncia «autorizado» sin releer la puerta que ahora exige dos; el aviso en verde era verdad el día que se escribió y dejó de serlo sin que nadie lo tocara.
+- lo hace cumplir: `tests/automation/test_reanudar_ejecutando_el_guion.py`
