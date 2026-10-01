@@ -2,7 +2,7 @@
 
 - Estado: APROBADO
 - Fecha: 2026-10-01
-- Aprobación: la fusión de su PR por el motor con aprobación dual (ADR-205).
+- Aprobación: la fusión de la PR #675 por el motor con aprobación dual (ADR-205).
 - Nota de arranque:
   `docs/audits/arranque-2026-10-01-el-implementador-sabe-que-hora-es.md`,
   confirmada en `3c09d107` antes del primer commit de arreglo, con las cuatro

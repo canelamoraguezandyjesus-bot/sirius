@@ -1276,3 +1276,15 @@ defectos:
     ficheros:
       - docs/audits/DONDE_VIVE_LA_BITACORA_DEL_CICLO.md
       - docs/audits/bitacora-de-fallos-y-mejoras-del-ciclo.md
+
+  - id: H-228
+    titulo: El implementador no sabia que hora era ni tenia plazo propio; su prompt le mandaba parar si algo no cabia y el tope del job lo mataba a los 59:52 sin diagnostico, publicando el veredicto provisional
+    bloque: motor
+    gravedad: media
+    estado: cerrado
+    cerrado_por: a29c283f779ec7182fcd1e7aa7a752a84eb8925d
+    pr: 675
+    adr: 228
+    ficheros:
+      - .github/workflows/implement-sirius-work.yml
+      - tests/automation/test_implementador_con_reloj.py
