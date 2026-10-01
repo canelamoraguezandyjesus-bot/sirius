@@ -39,8 +39,8 @@ septiembre (§6.4) sobre el volcado de la API del mes:
 ## Criterio de parada (escrito ANTES de decidir)
 
 El de la nota de arranque: no tocar la máquina de estados, solo los textos y la
-respuesta; que el aviso de casi-orden no pueda dispararse con un comentario del
-propio bot (publica como `OWNER`); tres mutaciones vistas caer.
+respuesta; que el aviso de casi-orden no pueda dispararse a sí mismo; tres
+mutaciones vistas caer.
 
 ## Opciones consideradas
 
@@ -68,10 +68,16 @@ propio bot (publica como `OWNER`); tres mutaciones vistas caer.
 3. `sirius_resume_on_command.sh`: si el comentario no es la orden exacta pero
    su primera palabra es `continua`/`continúa`, publica una vez por comentario
    (marcador `sirius-resume-not-an-order:<id>`) un aviso que dice que no ha
-   reanudado y cuál es la orden exacta. El aviso **no empieza por «continua»**:
-   el bot publica como `OWNER` y el workflow de reanudación lo volvería a leer.
-   Un comentario que no empieza por esa palabra sigue sin respuesta, como
-   antes.
+   reanudado y cuál es la orden exacta. El aviso lo publica
+   `github-actions[bot]`: `resume-sirius-on-command.yml` da al guion
+   `GH_TOKEN: github.token` y solo cambia a `SIRIUS_TRIGGER_TOKEN` para mover
+   etiquetas, y el workflow de reanudación solo escucha comentarios con
+   `author_association == OWNER`, así que el aviso no puede dispararse a sí
+   mismo por identidad (lo precisó Codex en la ronda 1 de la PR #666: la nota
+   de arranque decía «publica como `OWNER`», y no es así). Que además **no
+   empiece por «continua»** es defensa en profundidad para el día en que el
+   token cambie. Un comentario que no empieza por esa palabra sigue sin
+   respuesta, como antes.
 
 ## Comprobación que la sostiene
 
@@ -88,7 +94,15 @@ propio bot (publica como `OWNER`); tres mutaciones vistas caer.
   `names_the_pr_on_its_own_line`; M2 «Solo falta tu autorización» de vuelta →
   cae `no_pide_una_autorizacion`; M3 la casi-orden sin aviso → cae
   `avisa_en_vez_de_callar`.
-- [RELLENAR: batería entera, ruff, mypy, doc checker, cifras tras el cambio.]
+- Batería entera sobre `727bda1f`: **7 471 en verde**, 16 saltadas, 2 xfail
+  (15 min 17 s). `ruff format --check`, `ruff check`, `mypy src tests`:
+  limpios. Comprobador de documentos sobre este ADR y la nota: sin defectos.
+  `MEMORIA.md` e `INDICE.md` regenerados y comprobados.
+- Tras el cambio, medido sobre el propio guion con el doble de `gh`: el
+  veredicto generado lleva `- PR: <pista>` en su propia línea (antes, 0 de 128
+  en septiembre); el bloque de «listo» no contiene «Solo falta tu
+  autorización»; la casi-orden recibe su aviso y el comentario que no es orden
+  no recibe nada.
 
 ## Consecuencias
 
