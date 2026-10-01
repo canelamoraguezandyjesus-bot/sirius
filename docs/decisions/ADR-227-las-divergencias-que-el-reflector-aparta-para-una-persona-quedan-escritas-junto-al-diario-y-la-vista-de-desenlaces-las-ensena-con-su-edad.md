@@ -116,13 +116,18 @@ un fichero más junto al diario.
 ## Consecuencias
 
 - Quien abra `DESENLACES.md` ve lo que el reflector aparta para una persona y
-  desde cuándo, sin auditar. H-216 se cierra en su parte de mecanismo; el
-  trabajo concreto de #392 —decidir cuál de las dos etiquetas es la verdadera—
-  sigue siendo de una persona, y ahora tiene dónde verlo.
+  desde cuándo, sin auditar. Lo que se cierra es el mecanismo (H-227: el motivo
+  solo vivía en el log). **H-216 sigue abierto**: su hecho —`WI-20260828-122242`
+  apartada sin que nadie decida— solo lo cierra una persona mirando #392 y
+  dejando una sola etiqueta de estado, y el registro ata cada `pr:` a la PR que
+  metió el ADR del defecto en `main` (ADR-222), así que cerrarlo desde esta PR
+  tampoco cabría sin cambiar el esquema. Queda en la lista de decisiones del
+  propietario, con dónde verlo.
 - Un fichero más en la rama de memoria, que cambia solo cuando cambia lo que
   el reflector aparta (y en cada pasada que lo vuelve a ver, por la última
   fecha y las pasadas).
-- H-227 en el registro de defectos; H-216 cerrado por el mismo commit.
+- H-227 en el registro de defectos; H-216 queda abierto hasta que una persona
+  decida #392.
 
 ## Alternativas descartadas y por qué
 

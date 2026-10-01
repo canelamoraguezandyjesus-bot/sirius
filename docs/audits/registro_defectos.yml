@@ -1144,15 +1144,11 @@ defectos:
     titulo: La contradiccion de etiquetas que el reflector aparta a proposito lleva 27 dias sin que nadie la mire
     bloque: motor
     gravedad: baja
-    estado: cerrado
-    cerrado_por: 27a1196b44e32b9453a5e7028306cb1e0ec244db
-    pr: 674
+    estado: abierto
     adr: 216
     incidencia: 662
     ficheros:
-      - src/sirius_engine/reflect_cli.py
-      - src/sirius_engine/divergencias.py
-      - src/sirius_engine/memoria.py
+      - src/sirius_engine/reflect.py
       - .github/workflows/reflejar-desenlace.yml
       - docs/audits/CIERRE_DEL_CICLO_2026-09-24.md
 
