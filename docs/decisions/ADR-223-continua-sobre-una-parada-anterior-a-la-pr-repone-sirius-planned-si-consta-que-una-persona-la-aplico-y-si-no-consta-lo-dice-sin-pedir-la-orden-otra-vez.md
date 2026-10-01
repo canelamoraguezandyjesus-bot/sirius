@@ -71,7 +71,9 @@ En el camino `sin_pr`, cuando la fase de destino es `sirius:implement-requested`
 y la incidencia no lleva `sirius:planned`, el guion:
 
 1. **Lee la cronología** de la incidencia (`GET /issues/N/events`, paginada) y
-   cuenta los `labeled` de `sirius:planned`.
+   cuenta los `labeled` de `sirius:planned`. Si la cronología no se puede leer,
+   **el run falla** sin concluir nada: ni repone `planned` ni publica «nunca
+   planificada», que sería una conclusión falsa (ronda 2 de Codex).
 2. **Si consta al menos uno, repone `sirius:planned` antes que el evento** (la
    puerta de activación, que despierta con el evento, tiene que encontrarla ya
    puesta), repone el evento, retira la parada y el reinicio en verde dice que
@@ -94,9 +96,10 @@ y la incidencia no lleva `sirius:planned`, el guion:
 
 `tests/automation/test_reanudar_ejecutando_el_guion.py` ejecuta el guion de
 verdad con el doble de `gh`, que sirve ahora también la cronología de la
-incidencia (`events_<n>.json`) y puede negarse a publicar un comentario. Los
+incidencia (`events_<n>.json`), puede negarse a servirla y puede negarse a
+publicar un comentario. Los
 casos existentes de reinicio sin PR siembran `sirius:planned`, porque sin él
-nunca pudieron reanudar de verdad; y cinco pruebas de este ADR:
+nunca pudieron reanudar de verdad; y seis pruebas de este ADR:
 
 - `test_una_parada_sin_pr_sin_planned_repone_planned_si_consta_que_una_persona_la_aplico`:
   cronología con un `labeled sirius:planned` → `planned` y el evento repuestos
@@ -108,6 +111,8 @@ nunca pudieron reanudar de verdad; y cinco pruebas de este ADR:
   escribir la orden.
 - `test_el_aviso_de_sin_planned_no_empieza_por_continua`.
 - `test_si_el_aviso_de_sin_planned_no_se_puede_publicar_el_run_falla`.
+- `test_si_la_cronologia_no_se_puede_leer_el_run_falla_sin_concluir_nada`: la
+  API de eventos falla → el run falla, nada se repone, nada se publica.
 - `test_una_parada_sin_pr_con_planned_se_reanuda_y_conserva_planned` (y no
   menciona ninguna reposición).
 
@@ -122,8 +127,9 @@ fichero restaurado):
 | M4 | reponer `planned` sin mirar la cronología | cae `una_parada_sin_pr_nunca_planificada_no_anuncia_en_verde_ni_pide_la_orden_otra_vez` |
 | M5 | no reponer `planned` aunque conste que una persona la aplicó | cae `una_parada_sin_pr_sin_planned_repone_planned_si_consta_que_una_persona_la_aplico` |
 | M6 | un aviso que no se puede publicar no hace fallar el run | cae `si_el_aviso_de_sin_planned_no_se_puede_publicar_el_run_falla` |
+| M7 | una cronología que no se puede leer cuenta como «nunca planificada» | cae `si_la_cronologia_no_se_puede_leer_el_run_falla_sin_concluir_nada` |
 
-- El fichero entero en verde (29 pruebas); `bash -n`; `ruff`, `mypy` sobre la
+- El fichero entero en verde (30 pruebas); `bash -n`; `ruff`, `mypy` sobre la
   prueba. Batería entera: en la PR.
 
 ## Consecuencias

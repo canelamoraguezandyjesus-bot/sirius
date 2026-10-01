@@ -77,6 +77,7 @@ case "$sub" in
       exit 0
     fi
     if printf '%s' "$args" | grep -q '/events'; then
+      [ "${GH_MOCK_FAIL_EVENTS:-0}" = "1" ] && { echo "403" >&2; exit 1; }
       f="$D/events_${n}.json"; [ -f "$f" ] || printf '[]' > "$f"
       if [ -n "$filtro" ]; then jq -r "$filtro" "$f"; else cat "$f"; fi
       exit 0
@@ -881,6 +882,25 @@ def test_si_el_aviso_de_sin_planned_no_se_puede_publicar_el_run_falla(tmp_path: 
     assert "sirius:failed-safely" in _etiquetas(
         env
     ) and "sirius:implement-requested" not in _etiquetas(env)
+
+
+def test_si_la_cronologia_no_se_puede_leer_el_run_falla_sin_concluir_nada(tmp_path: Path) -> None:
+    """Sin cronología no se sabe si una persona planificó: ni se repone `planned`
+    ni se publica «nunca planificada» (sería una conclusión falsa); el run queda
+    rojo y reintentable (ronda 2 de Codex en la PR #671)."""
+    env = _setup(tmp_path)
+    env["GH_MOCK_FAIL_EVENTS"] = "1"
+    _sembrar(
+        env,
+        etiquetas=["sirius:failed-safely"],
+        historial=_historial_sin_pr("<!-- sirius-verdict:implementer:FAILED_SAFELY:1 -->"),
+        eventos=PLANIFICADA_POR_UNA_PERSONA,
+    )
+    resultado = _ejecutar(env)
+    assert resultado.returncode != 0
+    assert "sirius:failed-safely" in _etiquetas(env) and "sirius:planned" not in _etiquetas(env)
+    publicado = _comentarios(env)
+    assert "sirius-resume-sin-planned" not in publicado and "sirius-restart-sin-pr" not in publicado
 
 
 def test_una_parada_sin_pr_con_planned_se_reanuda_y_conserva_planned(tmp_path: Path) -> None:

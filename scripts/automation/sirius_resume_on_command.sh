@@ -347,9 +347,15 @@ fi
 reponer_planned=false
 if [ "$sin_pr" = "true" ] && [ "$etiqueta_destino" = "sirius:implement-requested" ] \
   && ! printf '%s\n' "$labels_now" | grep -Fxq "sirius:planned"; then
-  veces_planificada="$(sirius_retry gh api "repos/${REPO}/issues/${ISSUE}/events" --paginate \
-      --jq '[.[] | select(.event == "labeled" and .label.name == "sirius:planned")] | length' 2>/dev/null \
-    | awk '{ s += $1 } END { print s + 0 }')"
+  # La cronologia es un dato que se LEE o no se lee: si la API falla, no se
+  # concluye «nunca planificada» (seria una conclusion falsa publicada en la
+  # incidencia); el run queda rojo y reintentable (ronda 2 de Codex).
+  if ! eventos_planned="$(sirius_retry gh api "repos/${REPO}/issues/${ISSUE}/events" --paginate \
+      --jq '[.[] | select(.event == "labeled" and .label.name == "sirius:planned")] | length' 2>/dev/null)"; then
+    echo "::error::No se pudo leer la cronologia de #${ISSUE} para saber si una persona la planifico; no se toca nada. Reintentable."
+    exit 1
+  fi
+  veces_planificada="$(printf '%s\n' "$eventos_planned" | awk '{ s += $1 } END { print s + 0 }')"
   if [ "${veces_planificada:-0}" -gt 0 ]; then
     reponer_planned=true
   else
