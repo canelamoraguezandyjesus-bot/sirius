@@ -20,12 +20,15 @@ from pathlib import Path
 
 import yaml
 
-REGISTRO = Path("docs/audits/registro_defectos.yml")
+# Anclado a la raiz del repositorio, no al directorio de invocacion: la misma
+# orden mide lo mismo desde la raiz y desde scripts/mina/ (Codex, PR #665).
+RAIZ = Path(__file__).resolve().parents[2]
+REGISTRO = RAIZ / "docs" / "audits" / "registro_defectos.yml"
 _PR = re.compile(r"\(#(\d+)\)")
 
 
 def _git(*args: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(["git", *args], capture_output=True, text=True, check=False)
+    return subprocess.run(["git", *args], cwd=RAIZ, capture_output=True, text=True, check=False)
 
 
 def _pr_del_adr(adr: int, rama: str) -> str:
