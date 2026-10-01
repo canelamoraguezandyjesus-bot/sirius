@@ -1125,6 +1125,27 @@ defectos:
       - .github/workflows/reflejar-desenlace.yml
       - docs/audits/CIERRE_DEL_CICLO_2026-09-24.md
 
+  # ADR-220 (rama claude/la-cola-regenera-la-memoria; sin incidencia: viene de
+  # la bitacora del ciclo, entrada 146 / deuda 48, medida por la mina del
+  # 30-09). La cola de ADR-200 traia main a la rama que esperaba sin regenerar
+  # MEMORIA.md ni docs/audits/INDICE.md: la combinacion salia con la vista
+  # vieja (Quality roja; #653, 25 minutos del corrector) o con un conflicto en
+  # un fichero generado que el paso deshacia pidiendo una persona. 43 de las 44
+  # fusiones de septiembre tocaban la vista.
+  # Cierre: la PR de esa rama (el numero se conoce al abrirla). El sha de
+  # cerrado_por es el del commit del arreglo en la rama; la fusion aplastada lo
+  # deja fuera de main, como en H-217, H-218 y H-219, hasta que la convencion cambie.
+  - id: H-220
+    titulo: La cola traia main a la rama que esperaba sin regenerar las vistas de la memoria y la combinacion salia con la vista vieja o con un conflicto en un fichero generado
+    bloque: motor
+    gravedad: media
+    estado: cerrado
+    cerrado_por: b77a41d69c50168cc6b0521f60af62ef5844f7c7
+    adr: 220
+    ficheros:
+      - .github/workflows/advance-sirius-after-quality.yml
+      - tests/automation/test_cola.py
+
   # ADR-218 (PR #664, sin incidencia: lo destapo Quality sobre la propia PR).
   # La vista de memoria volvio a no caber en una sola lectura 17 dias despues
   # de ADR-196: sobre main quedaban 3.146 bytes de margen, menos de lo que
