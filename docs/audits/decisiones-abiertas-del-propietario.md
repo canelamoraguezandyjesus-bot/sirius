@@ -142,7 +142,7 @@ tres cambian el producto, no la técnica:
 | **C.** Menos ADR: una decisión por línea de trabajo y no por noche | la vista cabe más tiempo sin tocarla; cambia cómo se trabaja, no el fichero |
 
 **Lo que NO se hace sin su decisión:** ninguna de las tres. Con el margen de
-ADR-218 (unos 38 ADR) hay tiempo para decidirlo sin prisa.
+ADR-218 (unos 37 ADR) hay tiempo para decidirlo sin prisa.
 
 ---
 

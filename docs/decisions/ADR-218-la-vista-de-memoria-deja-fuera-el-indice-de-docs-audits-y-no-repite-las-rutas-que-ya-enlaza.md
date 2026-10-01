@@ -87,22 +87,22 @@ Medido sobre **este mismo árbol**, con el arreglo y sin él:
 | | |
 |---|---|
 | `main` (`a60c059a`), antes de tocar nada | 116.854 bytes, **3.146** de margen |
-| Este árbol **sin** el arreglo | **125.932** bytes: 5.932 por encima del límite |
-| Este árbol **con** el arreglo | **94.931** bytes, **25.069** de margen |
-| Ahorro | **31.001** bytes (predicho en la nota: «unos 31.000») |
-| Índice generado aparte | `docs/audits/INDICE.md`, 21.251 bytes, 139 filas |
+| Este árbol **sin** el arreglo (el generador de `main` sobre este mismo árbol) | **126.916** bytes: 6.916 por encima del límite |
+| Este árbol **con** el arreglo | **95.829** bytes, **24.171** de margen |
+| Ahorro | **31.087** bytes (predicho en la nota: «unos 31.000») |
+| Índice generado aparte | `docs/audits/INDICE.md`, 20.897 bytes, 137 filas |
 
 Lo que cada ADR añade ahora a la vista, medido sobre las 43 decisiones que
 declaran lección: su fila en la tabla de decisiones (**436** bytes de media
 con resumen) y su lección (**214** de media, antes 342 con el enlace); su nota
 de arranque y su evidencia en `docs/audits/` ya no añaden nada. Son **unos 650
-bytes por ADR: unos 38 ADR de margen**, menos si el ADR trae skills,
+bytes por ADR: unos 37 ADR de margen**, menos si el ADR trae skills,
 investigaciones o documentos fuera de `docs/audits/`. Está por encima de los
 20 ADR que el criterio de parada exigía, así que este ADR no inventa un tercer
 corte.
 
 **Y la fecha de caducidad, que el criterio de parada exige declarar.** Esto
-compra ADR, no un techo. Septiembre produjo 91 ADR; a ese ritmo, 38 ADR son
+compra ADR, no un techo. Septiembre produjo 91 ADR; a ese ritmo, 37 ADR son
 unas dos semanas. Y hay un suelo que ningún corte de los que ADR-171 permite
 toca: la fila del índice completo de decisiones, que ADR-196 protege, pesa
 unos 240 bytes por ADR aunque no lleve resumen; a 91 ADR al mes, el índice
@@ -114,8 +114,8 @@ propietario como **D-6**, no se toma aquí.
 
 ## Comprobación que la sostiene
 
-- `uv run --no-sync sirius-memoria conocimiento` escribe `MEMORIA.md` (94.931
-  bytes) y `docs/audits/INDICE.md` (21.251 bytes); `--comprobar` recorre los dos.
+- `uv run --no-sync sirius-memoria conocimiento` escribe `MEMORIA.md` (95.829
+  bytes) y `docs/audits/INDICE.md` (20.897 bytes); `--comprobar` recorre los dos.
 - `uv run --no-sync pytest tests/engine/test_memoria.py`: 37 pasan, con tres
   pruebas nuevas:
   - `test_el_indice_de_auditorias_vive_generado_aparte_y_la_vista_lleva_recuento_y_puntero`:
