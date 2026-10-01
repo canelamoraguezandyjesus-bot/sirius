@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -191,10 +192,27 @@ _SECCIONES = (
 )
 
 
+def version_declarable(perfil: str) -> int:
+    """La versión que una orden de prueba declara para `perfil`.
+
+    Desde ADR-221 la puerta resuelve `rol@N` contra el manifiesto, así que el
+    cuerpo de prueba tiene que declarar un rol y una versión REALES: la vigente
+    de la ficha del perfil si la tiene (`implementer`, `documentalista`), y 2
+    para los que no la tienen (`investigador@2` consta en el manifiesto). Con
+    un rol inventado la puerta rechaza la orden, y con razón.
+    """
+    ficha = RAIZ / "docs" / "implementation" / "work_engine" / "perfiles" / f"{perfil}.yml"
+    if ficha.exists():
+        encontrada = re.search(r"^version:\s*(\d+)\s*$", ficha.read_text(encoding="utf-8"), re.M)
+        if encontrada:
+            return int(encontrada.group(1))
+    return 2
+
+
 def cuerpo_de_orden(perfil: str = "investigador") -> str:
     """El cuerpo de una orden estructuralmente completa, con el perfil pedido."""
     secciones = "\n".join(f"## {s}\n\nContenido de prueba para {s.lower()}.\n" for s in _SECCIONES)
-    return f"Perfil: {perfil}@2\n\n{secciones}"
+    return f"Perfil: {perfil}@{version_declarable(perfil)}\n\n{secciones}"
 
 
 def incidencia_activa(**cambios: Any) -> dict[str, Any]:

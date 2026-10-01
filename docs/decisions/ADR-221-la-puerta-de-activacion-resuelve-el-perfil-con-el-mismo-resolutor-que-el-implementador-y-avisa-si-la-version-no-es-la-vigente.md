@@ -145,6 +145,14 @@ fichero restaurado):
 
 - Las 19 pruebas del fichero en verde; `ruff`, `mypy`; `bash -n` sobre la
   puerta. Batería entera: en la PR.
+- El arnés de carriles (`tests/automation/test_carriles_retirados.py`) declaraba
+  `programador@2`, un rol que ningún carril del manifiesto conoce, como perfil
+  de la implementación. Con la puerta resolviendo el perfil, cuatro pruebas de
+  reparto se pusieron en rojo en Quality (dos empujones, `f36d4bd2` y
+  `2ba8c231`) porque la puerta rechazaba ese rol, y con razón: el arnés declara
+  ahora `implementer@<vigente>`, leído de la ficha del perfil. Lección propia de
+  esta PR: la batería de la puerta se corrió, la de los carriles no, y son las
+  dos las que ejecutan el guion.
 
 ## Consecuencias
 

@@ -597,13 +597,13 @@ def test_si_el_perfil_cambia_entre_la_pasada_y_el_reintento_no_se_recupera(
         incidencia=incidencia_activa(),
         fallar="--add-label sirius:failed-safely",
     )
-    despues = estado_tras(primera, cuerpo_de_orden("programador"))
+    despues = estado_tras(primera, cuerpo_de_orden("implementer"))
 
     segunda = _puerta(
         "investigacion",
         tmp_path / "2",
         incidencia=despues,
-        cuerpo_del_evento=cuerpo_de_orden("programador"),
+        cuerpo_del_evento=cuerpo_de_orden("implementer"),
     )
 
     assert segunda.codigo == 0
@@ -711,7 +711,7 @@ ORDENES = [
     ("perfil", "duena"),
     [
         pytest.param("investigador", "investigacion", id="investigador"),
-        pytest.param("programador", "implementacion", id="programador"),
+        pytest.param("implementer", "implementacion", id="implementer"),
     ],
 )
 def test_sin_cambio_de_perfil_hay_exactamente_una_duena(
@@ -739,8 +739,8 @@ def test_sin_cambio_de_perfil_hay_exactamente_una_duena(
 @pytest.mark.parametrize(
     ("evento", "actual"),
     [
-        pytest.param("investigador", "programador", id="de-investigador-a-programador"),
-        pytest.param("programador", "investigador", id="de-programador-a-investigador"),
+        pytest.param("investigador", "implementer", id="de-investigador-a-implementer"),
+        pytest.param("implementer", "investigador", id="de-implementer-a-investigador"),
     ],
 )
 def test_un_perfil_cambiado_no_lo_ejecuta_nadie_y_no_retira_nada(
@@ -748,9 +748,9 @@ def test_un_perfil_cambiado_no_lo_ejecuta_nadie_y_no_retira_nada(
 ) -> None:
     """Los dos desenlaces peores, reproducidos sobre `398017a`:
 
-    - evento `investigador` y cuerpo `programador`: las dos puertas declinaban y
+    - evento `investigador` y cuerpo `implementer`: las dos puertas declinaban y
       la incidencia se quedaba **sin que nadie la atendiera**;
-    - evento `programador` y cuerpo `investigador`: **las dos** la atendían.
+    - evento `implementer` y cuerpo `investigador`: **las dos** la atendían.
 
     Ninguna ejecuta ya. Y desde la cuarta ronda **tampoco se retira la etiqueta**:
     esa escritura solo sería legítima si la etiqueta fuese la que trajo este
@@ -798,8 +798,8 @@ def test_un_perfil_cambiado_no_lo_ejecuta_nadie_y_no_retira_nada(
 @pytest.mark.parametrize(
     ("perfil_a", "perfil_b"),
     [
-        pytest.param("investigador", "programador", id="A-investigador-B-programador"),
-        pytest.param("programador", "investigador", id="A-programador-B-investigador"),
+        pytest.param("investigador", "implementer", id="A-investigador-B-implementer"),
+        pytest.param("implementer", "investigador", id="A-implementer-B-investigador"),
     ],
 )
 @pytest.mark.parametrize(
@@ -881,16 +881,16 @@ def test_el_reparto_no_deja_que_las_dos_puertas_ejecuten_el_mismo_encargo(
 ) -> None:
     """La propiedad, dicha entera y comprobada sobre las cuatro combinaciones."""
     # LOS DOS ÓRDENES, y no es cosmético: con investigación siempre primero, el
-    # caso «evento programador, cuerpo investigador» salía como una sola dueña
+    # caso «evento implementer, cuerpo investigador» salía como una sola dueña
     # incluso en el código defectuoso, porque la retirada dejaba `failed-safely`
     # y el validador frenaba después al implementador. Encadenando al revés se ve
     # lo que de verdad pasaba: las dos se hacían cargo del mismo encargo.
     for orden in (("investigacion", "implementacion"), ("implementacion", "investigacion")):
         for evento, actual in (
             ("investigador", "investigador"),
-            ("programador", "programador"),
-            ("investigador", "programador"),
-            ("programador", "investigador"),
+            ("implementer", "implementer"),
+            ("investigador", "implementer"),
+            ("implementer", "investigador"),
         ):
             pasos, _ = _encadenar(
                 tmp_path / f"{orden[0]}-{evento}-{actual}",
