@@ -1140,6 +1140,7 @@ defectos:
     gravedad: media
     estado: cerrado
     cerrado_por: d8b73d8050421fc6787e0b42cffeb5b9a593411a
+    pr: 670
     adr: 221
     ficheros:
       - scripts/automation/sirius_validate_activation.sh
