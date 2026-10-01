@@ -76,13 +76,20 @@ mutaciones vistas caer.
    puerta y mataría al implementador (las dos cosas, ronda 1 de Codex en la PR
    #670). Una instantánea **vacía** (el evento llegó sin cuerpo) se juzga vacía,
    no se sustituye por el cuerpo actual (`${ISSUE_BODY-…}`, no `:-`); y el
-   aviso de versión no vigente dice que, para ejecutar la vigente, hay que
-   editar el cuerpo, **esperar a que termine (o cancelar) el run que ya arrancó
-   con la versión declarada y volver a aplicar la etiqueta**, porque solo un
-   evento nuevo lleva el cuerpo nuevo y un run en cola consumiría la etiqueta
-   nueva con su cuerpo viejo (el reparto compara el rol, ADR-167; rondas 2 y 3
-   de Codex). Que el reparto compare el `rol@N` entero es otra decisión, sobre
-   ADR-167, y no entra aquí. Si no resuelve,
+   aviso de versión no vigente cuenta con el estado real en que se leerá: el
+   aviso se publica segundos antes de que el implementador consuma la
+   activación, así que quien lo lea encontrará la incidencia en
+   `sirius:implementing`. Dice, por tanto, que para ejecutar la vigente hay
+   que **dejar terminar o cancelar ese run, esperar a que la incidencia quede
+   sin estado activo (cancelada queda en `failed-safely`), editar el cuerpo y
+   reactivarla en el orden que la puerta exige** —retirar el estado que quede,
+   `sirius:planned` y, en último lugar, `sirius:implement-requested`—, y que
+   retirar y reaplicar la etiqueta con el run en marcha no sirve porque esta
+   puerta rechaza una activación sobre una incidencia con estado activo
+   (rondas 2, 3 y 4 de Codex: las dos primeras versiones prometían un
+   «retira y vuelve a aplicar» que, consumida la activación, la puerta
+   rechazaba). Que el reparto compare el `rol@N` entero es otra decisión,
+   sobre ADR-167, y no entra aquí. Si no resuelve,
    rechaza con el motivo
    `perfil-sin-resolver`, el detalle del resolutor en el comentario y la acción
    («pon `Perfil: rol@N` con un rol y una versión registrados en el

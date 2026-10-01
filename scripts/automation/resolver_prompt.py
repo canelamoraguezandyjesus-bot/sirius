@@ -119,11 +119,15 @@ def aviso_de_vigencia(cuerpo: str, *, raiz: Path) -> str | None:
         f"`{perfil.ref}` es la {vigente} "
         f"(docs/implementation/work_engine/perfiles/{perfil.ref}.yml). Se ejecuta con la "
         "declarada, porque `rol@N` significa un texto (H-28) y el implementador ejecuta la "
-        "instantanea del evento, no el cuerpo actual. Si querias la vigente: edita el cuerpo, "
-        "retira `sirius:implement-requested`, espera a que termine (o cancela) el run que ya "
-        "arranco con la version declarada -si sigue en cola o corriendo consumiria la etiqueta "
-        "nueva con su cuerpo viejo- y vuelve a aplicarla: solo un evento nuevo lleva el cuerpo "
-        "nuevo; editar sin reaplicar no detiene este."
+        "instantanea del evento, no el cuerpo actual. Si querias la vigente, cuenta con que al "
+        "leer esto el run ya habra consumido la activacion (la incidencia estara en "
+        "`sirius:implementing`): deja que termine o cancelalo desde Actions, espera a que la "
+        "incidencia quede sin estado activo (si lo cancelas quedara en `sirius:failed-safely`), "
+        "edita el cuerpo y activala de nuevo en este orden: retira el estado que haya quedado, "
+        "aplica `sirius:planned` y, en ultimo lugar, `sirius:implement-requested`. Retirar y "
+        "volver a aplicar la etiqueta mientras el run sigue en marcha no sirve: esta puerta "
+        "rechaza una activacion sobre una incidencia con estado activo, y editar el cuerpo sin "
+        "reactivar no detiene este run."
     )
 
 
