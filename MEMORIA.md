@@ -27,7 +27,7 @@
 ## Qué hay, en números
 
 - Decisiones (ADR): **215**.
-- Bloques del motor: 17 cerrado, 2 fuera_de_alcance, 1 pendiente.
+- Bloques del motor: 17 cerrado, 3 fuera_de_alcance.
 - Defectos registrados: 3 abierto, 71 cerrado.
 - Ideas aparcadas o descartadas: 5 aparcada, 2 descartada, 2 promovida.
 - Skills: **19**.
@@ -478,7 +478,7 @@ producto Sirius 0.1, cerrados el 10-08-2026.
 | C2 | cerrado | Una orden tuya y no tocas GitHub hasta «fusiona» |
 | C3 | cerrado | El mismo ciclo para documentos |
 | C4 | cerrado | La auditoría dentro del motor |
-| D1 | pendiente | Pasar el mando de GitHub al motor, clase por clase |
+| D1 | fuera_de_alcance | Pasar el mando de GitHub al motor, clase por clase |
 | D2 | cerrado | Que el motor corra solo, siempre |
 | D3 | fuera_de_alcance | Hablar con Sirius por Telegram |
 | D4 | fuera_de_alcance | Partir un objetivo grande en bloques |

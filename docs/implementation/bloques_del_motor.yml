@@ -214,8 +214,11 @@ bloques:
 
   - id: D1
     titulo: Pasar el mando de GitHub al motor, clase por clase
-    estado: pendiente
-    que_lo_cerraria: siete días consecutivos en verde por clase (contrato §11.2)
+    estado: fuera_de_alcance
+    que_lo_cerraria: >-
+      una decisión nueva del propietario que vuelva a ordenar la línea del
+      contador (ADR-225) y, después, siete días consecutivos en verde por clase
+      (contrato §11.2)
     medido_hoy: >-
       sus tres mitades existen -projection_verifier.py (D1a), seven_day_streak.py (D1b)
       y authority_reversion.py (D1c)- pero authority_reversion NO LO LLAMA NADIE fuera
@@ -253,6 +256,16 @@ bloques:
       ninguna clase conmutada, así que la pasada dirá «ninguna clase
       requiere reversión», y eso es lo correcto. Se ejercitará el único día
       en que importa que estuviera puesta.
+
+    actualizado_01_10_2026: >-
+      CANCELADO por el propietario el 13-09-2026 (#610, ADR-225): la línea del
+      contador de los siete días «no es necesaria», y su «hay que acabar esto
+      entero» eran las mejoras del motor que quedaban pendientes, no esta
+      línea. Nada de lo construido se toca -el contador corre cada día y dice
+      NO_COMPARABLE con motivo, la salvaguarda sigue conectada- y ninguna clase
+      se conmuta. No se ordena sin otra decisión suya; si llega, la medida de
+      #605 (ADR-186) es el punto de partida y hará falta otro ADR. Hasta hoy
+      esta entrada seguía diciendo «pendiente» (lo cazó Codex en la PR #672).
 
   - id: D2
     titulo: Que el motor corra solo, siempre

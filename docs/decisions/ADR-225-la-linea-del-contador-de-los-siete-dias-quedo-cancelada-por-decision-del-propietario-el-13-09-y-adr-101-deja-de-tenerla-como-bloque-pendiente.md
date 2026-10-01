@@ -81,10 +81,15 @@ registro vista caer antes y pasar después.
    conjunto vacío con su prueba, `NO_COMPARABLE` con motivo— sigue vigente y
    es lo que hace honesto al contador: no hay nada que medir, y lo dice.
 3. **La prosa viva lo dice**: la cabecera de `seven_day_streak_cli.py`, el
-   comentario de `CLASES_CON_ESTADO_PROPIO` y la línea D5 de
-   `docs/evolution/STATUS.md` dejan de presentar la pieza como pendiente u
-   ordenada y citan #610 y este ADR. Las notas de arranque antiguas se quedan
-   como lo que fueron.
+   comentario de `CLASES_CON_ESTADO_PROPIO`, la línea D5 de
+   `docs/evolution/STATUS.md`, la entrada D1 de
+   `docs/implementation/bloques_del_motor.yml` (de `pendiente` a
+   `fuera_de_alcance`, con fecha y motivo), la sección D1 del plan de
+   implementación y la cabecera de
+   `tests/automation/test_reflejar_desenlace_github.py` dejan de presentar la
+   pieza como pendiente u ordenada y citan #610 y este ADR. Las notas de
+   arranque antiguas y la propuesta de separación del 08-09 (REVISADA, fechada
+   y sin autoridad) se quedan como lo que fueron.
 4. **Ningún comportamiento cambia**: `CLASES_CON_ESTADO_PROPIO` sigue vacío con
    `test_h25_el_conjunto_declarado_esta_vacio_hoy` intacta, `verificar_dia`
    igual, la racha igual, el §11.2 igual (la enmienda que #610 autorizaba no se
@@ -95,12 +100,15 @@ registro vista caer antes y pasar después.
 - La cita de #610, leída por la API antes de escribir la nota de arranque:
   comentario del `OWNER` a las 13:25:57 UTC, incidencia cerrada `not_planned`
   a las 13:26:04.
-- Sitios vivos que daban la pieza por pendiente u ordenada: **4 antes; después,
-  ninguno la da por pendiente**. El mismo `grep` sigue encontrando las palabras
-  en dos líneas (la descripción histórica de D5 en STATUS.md y el comentario
-  del conjunto), y las dos van seguidas, en la frase siguiente, de la
-  cancelación y de este ADR; la mina y las notas de arranque históricas se
-  quedan como lo que fueron.
+- Sitios vivos que daban la pieza por pendiente u ordenada: **4 en la nota de
+  arranque y 3 más que su `grep` no alcanzaba** —la entrada D1 del registro de
+  bloques y la cabecera de la prueba de C1, que cazó Codex en la ronda 1 de la
+  PR #672, y la sección D1 del plan de implementación, que salió de buscar lo
+  mismo en el resto del árbol—. **Después, ninguno la da por pendiente.** El
+  mismo `grep` sigue encontrando las palabras en dos líneas (la descripción
+  histórica de D5 en STATUS.md y el comentario del conjunto), y las dos van
+  seguidas, en la frase siguiente, de la cancelación y de este ADR; la mina y
+  las notas de arranque históricas se quedan como lo que fueron.
 - Guardas de ADR y registro en verde (`test_estado_de_los_adr.py`,
   `test_mina_de_lecciones.py`, `test_registro_de_decisiones.py`,
   `test_citas_de_los_adr.py`, `test_memoria.py`); las pruebas del contador y
