@@ -1145,6 +1145,25 @@ defectos:
       - src/sirius_engine/memoria_cli.py
       - tests/engine/test_memoria.py
 
+  # ADR-224 (PR #669). El 01-10 tres ejecuciones de Quality murieron canceladas
+  # a los 20 min del job con «Sync environment» entre 11 y 16,5 min: sin la
+  # cache de setup-uv el paso descarga 243 MiB de PySide6 y PyPI servia a menos
+  # de 1 MB/s. Un job cancelado no guarda la cache y la rama volvia a fallarla y
+  # a cancelarse: 60 min de runner tirados y dos PR paradas. Cierre: PR #669
+  # (el sha de cerrado_por es el del commit del arreglo en la rama; la fusion
+  # aplastada lo deja fuera de main, como en H-217).
+  - id: H-224
+    titulo: Quality se cancelaba a los 20 min cuando el entorno no venia de la cache (uv sync de 8 a 16 min) y un job cancelado no guardaba la cache, asi que la rama volvia a cancelarse en la siguiente ejecucion
+    bloque: motor
+    gravedad: alta
+    estado: cerrado
+    cerrado_por: 14ba4b121fdf2354136fa635df9eaf4d80c6e3d7
+    pr: 669
+    adr: 224
+    ficheros:
+      - .github/workflows/quality.yml
+      - tests/automation/test_quality_no_muere_por_un_sync_lento.py
+
   # ADR-217: la bitacora del ciclo -146 entradas, 48 deudas- vivio once dias
   # fuera de main (20-09 -> 01-10) porque ADR-210 condiciono su entrada a que
   # «la sesion que la escribe la traiga». Esa sesion murio el 21-09 y la
