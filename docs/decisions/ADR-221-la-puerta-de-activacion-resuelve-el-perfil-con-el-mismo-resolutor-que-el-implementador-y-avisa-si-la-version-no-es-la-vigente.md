@@ -98,7 +98,7 @@ mutaciones vistas caer.
    `sirius:implementing`— y distingue los dos caminos: **cancelar el run** (la
    incidencia queda parada en `failed-safely` con su diagnóstico; editar el
    cuerpo y escribir `continua`, que repite la activación con el cuerpo
-   vigente, ADR-223) o **dejarlo terminar** (el ciclo sigue —revisión, fusión,
+   vigente: ADR-094, y ADR-223 —PR #671, que entra en `main` antes que esta— para reponer `sirius:planned` si consta) o **dejarlo terminar** (el ciclo sigue —revisión, fusión,
    cierre— y la vigente no se ejecutará en esa incidencia: haría falta una
    nueva). Retirar y reaplicar la etiqueta con el run en marcha no sirve
    porque esta puerta rechaza una activación sobre una incidencia con estado
@@ -194,6 +194,17 @@ que expone `profile_field`): una verdad, no dos. Prueba:
 (`implementer@Njunk` en el evento frente al vigente en el cuerpo: rancio,
 código 2, etiqueta intacta, `ninguno` en el aviso). Mutación M9 (el `sed`
 de antes): cae esa prueba.
+
+Ronda 7 de Codex sobre `970bf918`, dos remates del aviso. Lo publica la
+primera puerta que lo ve, y como `validate-sirius-activation.yml` suele
+llegar antes que el implementador, quien lo lea puede encontrar la incidencia
+todavía en `sirius:planned`, donde «cancela este run» no significaba nada: el
+aviso prescribe ahora según el estado real (en `planned`: editar el cuerpo,
+que vuelve rancio el evento sin tocar etiquetas, y reactivar; en
+`implementing`: cancelar el run del implementador y `continua`). Y citaba solo
+ADR-223, que vive en la PR #671 y entra en `main` antes que esta: cita ahora
+ADR-094 para la reanudación sin PR y ADR-223 (PR #671) para la reposición de
+`planned`. Prueba: la del aviso exige las dos ramas y la cita.
 
 ## Consecuencias
 

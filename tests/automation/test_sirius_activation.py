@@ -382,13 +382,17 @@ def test_un_perfil_valido_pero_no_vigente_avisa_y_deja_pasar(tmp_path: Path) -> 
     assert "sirius-activation:aviso:perfil-no-vigente:implementer@2" in publicado
     assert f"es la {_VIGENTE}" in publicado and "rejected" not in publicado
     assert (
-        "cancela este run desde Actions" in publicado
+        "Si sigue en `sirius:planned`" in publicado
+        and "declara el evento rancio" in publicado
+        and "Si ya esta en `sirius:implementing`" in publicado
+        and "cancela desde Actions el run" in publicado
         and "escribe `continua`" in publicado
         and "no se ejecutara en esta incidencia" in publicado
+        and "ADR-094" in publicado
     ), (
-        "el aviso tiene que distinguir cancelar (parada y `continua` con el cuerpo vigente) de "
-        "dejar terminar (el ciclo sigue y la vigente no se ejecuta aqui): Codex, PR #670, "
-        "rondas 2 a 5"
+        "el aviso prescribe segun el estado real al leerlo (en `planned`: editar, que vuelve "
+        "rancio el evento, y reactivar; en `implementing`: cancelar y `continua`; dejar "
+        "terminar: la vigente no se ejecuta aqui) y cita ADR-094: Codex, PR #670, rondas 2 a 7"
     )
 
 
