@@ -22,7 +22,7 @@ from sirius_engine.drip_guard import parse_archivo_location
 from sirius_engine.round_history import parse_round_records
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from datos import DATOS, HISTORIALES, RAW, RAW_LOGICO, avisos_de_volcado
+from datos import DATOS, HISTORIALES, RAW, avisos_de_los_volcados
 
 INICIO = "2026-09-01T00:00:00Z"
 FIN = "2026-09-30T23:59:59Z"
@@ -110,7 +110,7 @@ def evidencias_publicadas(cuerpo: str) -> tuple[Evidencia, ...] | None:
 
 
 def main() -> int:
-    for aviso in avisos_de_volcado(RAW_LOGICO, "descargar.py"):
+    for aviso in avisos_de_los_volcados():
         print(aviso, file=sys.stderr)
     incidencias = {}
     for f in sorted(glob.glob(str(RAW / "issue_*.json"))):

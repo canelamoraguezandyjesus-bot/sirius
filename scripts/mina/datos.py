@@ -134,15 +134,34 @@ def avisos_de_volcado(logico: Path, descargador: str) -> list[str]:
     parcial = parcial_de(logico)
     if parcial.exists():
         avisos.append(
-            f"AVISO: hay una descarga interrumpida en {parcial}; se analiza el volcado "
-            f"completo anterior de {seleccionada}. Repite {descargador} para refrescarlo."
+            f"AVISO: hay una descarga interrumpida en {parcial}; los analizadores usan el "
+            f"volcado completo anterior, {seleccionada}. Repite {descargador} para refrescarlo."
         )
     huerfanas = fotos_huerfanas(logico)
     if huerfanas:
         nombres = ", ".join(p.name for p in huerfanas)
         avisos.append(
             f"AVISO: hay fotos descargadas sin seleccionar ({nombres}): una publicacion murio "
-            f"entre el renombrado y el selector. Se analiza la seleccionada, {seleccionada}. "
-            f"Repite {descargador} para refrescarla."
+            f"entre el renombrado y el selector. Los analizadores usan la seleccionada, "
+            f"{seleccionada}. Repite {descargador} para refrescarla."
         )
     return avisos
+
+
+#: Todos los volcados que publica un descargador, con el guion que los refresca.
+#: Los analizadores avisan de TODOS antes de leer nada, lean el que lean, para
+#: que ninguno pueda olvidar uno de los que lee (Codex, PR #665, ronda 11:
+#: `analizar_pr.py` avisaba de `raw_pr` y leia tambien `raw` sin aviso).
+VOLCADOS: tuple[tuple[Path, str], ...] = (
+    (RAW_LOGICO, "descargar.py"),
+    (PRDIR_LOGICO, "descargar_pr.py"),
+)
+
+
+def avisos_de_los_volcados() -> list[str]:
+    """Los avisos de todos los volcados conocidos (:data:`VOLCADOS`), en su orden."""
+    return [
+        aviso
+        for logico, descargador in VOLCADOS
+        for aviso in avisos_de_volcado(logico, descargador)
+    ]

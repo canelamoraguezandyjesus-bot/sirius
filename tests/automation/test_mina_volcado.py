@@ -210,7 +210,9 @@ def test_una_foto_que_quedo_sin_seleccionar_se_detecta(tmp_path: Path) -> None:
     assert datos.fotos_huerfanas(raw) == [huerfana]
 
 
-def test_los_avisos_del_volcado_valen_para_cualquier_nombre_logico(tmp_path: Path) -> None:
+def test_los_avisos_del_volcado_valen_para_cualquier_nombre_logico(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Ronda 10 de Codex en la PR #665: las comprobaciones de descarga interrumpida
     y de foto sin seleccionar valian solo para `raw`; `analizar_pr.py` leia
     `raw_pr` sin ellas. Son una funcion del nombre logico, y los dos analizadores
@@ -226,5 +228,13 @@ def test_los_avisos_del_volcado_valen_para_cualquier_nombre_logico(tmp_path: Pat
     assert "descarga interrumpida" in avisos[0] and "descargar_pr.py" in avisos[0]
     assert "sin seleccionar" in avisos[1] and "raw_pr.20260102T120000.000000Z" in avisos[1]
 
-    assert "avisos_de_volcado(RAW_LOGICO" in (MINA / "analizar.py").read_text(encoding="utf-8")
-    assert "avisos_de_volcado(PRDIR_LOGICO" in (MINA / "analizar_pr.py").read_text(encoding="utf-8")
+    # Los dos analizadores avisan de TODOS los volcados, lean el que lean (ronda
+    # 11: `analizar_pr.py` avisaba de `raw_pr` y leia tambien `raw` sin aviso), y
+    # la lista cubre cada nombre logico que `datos` define.
+    assert {logico for logico, _ in datos.VOLCADOS} == {datos.RAW_LOGICO, datos.PRDIR_LOGICO}
+    for guion in ("analizar.py", "analizar_pr.py"):
+        assert "avisos_de_los_volcados()" in (MINA / guion).read_text(encoding="utf-8")
+    raw = tmp_path / "raw"
+    _foto_anterior(raw)
+    monkeypatch.setattr(datos, "VOLCADOS", ((raw, "descargar.py"), (raw_pr, "descargar_pr.py")))
+    assert datos.avisos_de_los_volcados() == avisos, "los dos de raw_pr; raw esta limpio"
