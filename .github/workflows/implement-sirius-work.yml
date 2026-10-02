@@ -62,6 +62,8 @@ jobs:
       QT_QPA_PLATFORM: offscreen
     steps:
       - name: Anotar el arranque del job
+        # ADR-228 (ronda 2 de Codex): todo paso anterior al agente lleva plazo, para que el calculo del plazo llegue siempre antes de que la reserva final empiece a gastarse.
+        timeout-minutes: 1
         # ADR-228: el plazo del implementador se calcula desde AQUI. Es el
         # primer paso a proposito: lo que consuman checkout, Qt, uv, sync y
         # las puertas se resta de lo que el agente recibe, y el tope del job
@@ -70,6 +72,8 @@ jobs:
         run: echo "JOB_ARRANQUE_EPOCH=$(date -u +%s)" >> "$GITHUB_ENV"
 
       - name: Checkout
+        # ADR-228 (ronda 2 de Codex): plazo propio; la suma de los pasos previos al agente mas la reserva final cabe en el job (lo exige test_implementador_con_reloj.py).
+        timeout-minutes: 5
         uses: actions/checkout@v6
         with:
           ref: main
@@ -169,6 +173,8 @@ jobs:
           exit 1
 
       - name: Install uv
+        # ADR-228 (ronda 2 de Codex): plazo propio, misma razon que el checkout.
+        timeout-minutes: 3
         uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           enable-cache: true
@@ -182,6 +188,8 @@ jobs:
         timeout-minutes: 19
         run: uv sync --locked --all-groups
       - name: Verificar precondiciones de activación
+        # ADR-228 (ronda 2 de Codex): plazo propio (varias lecturas de la API con reintentos), misma razon que el checkout.
+        timeout-minutes: 5
         id: gate
         shell: bash --noprofile --norc {0}
         env:
@@ -268,6 +276,8 @@ jobs:
           fi
 
       - name: Consumir el evento y marcar en curso
+        # ADR-228 (ronda 2 de Codex): plazo propio, misma razon que el checkout.
+        timeout-minutes: 3
         if: steps.gate.outputs.valid == 'true'
         shell: bash --noprofile --norc {0}
         env:
@@ -291,6 +301,8 @@ jobs:
             "sirius:implementing" "sirius:implement-requested" "sirius:planned"
 
       - name: Preparar instrucciones para Claude Code
+        # ADR-228 (ronda 2 de Codex): plazo propio; es el paso que reparte el plazo y tiene que llegar con la reserva final intacta.
+        timeout-minutes: 2
         if: steps.gate.outputs.valid == 'true'
         id: build_prompt
         shell: bash --noprofile --norc {0}
@@ -332,7 +344,12 @@ jobs:
           # (ronda 1 de Codex en la PR #675: con un plazo fijo de 50 y una
           # preparacion de mas de 35 min, el job moria antes que el paso y
           # «Aplicar el veredicto» con el). RESERVA_FINAL_MIN cubre «Aplicar el
-          # veredicto» y el margen del job; RESERVA_VALIDACION_MIN es la cadena
+          # veredicto» (plazo propio de 5) y el margen del job, y todos los
+          # pasos anteriores a este llevan plazo propio: su suma (49) mas la
+          # reserva final cabe en el job, asi que este calculo llega siempre
+          # con la reserva intacta (ronda 2 de Codex: sin esos plazos, una
+          # preparacion de 83 minutos dejaba dos para el veredicto).
+          # RESERVA_VALIDACION_MIN es la cadena
           # completa en el runner, medida hasta 21,4 min (#653, run
           # 35516764738: pytest 1283 s); y por debajo de PLAZO_MINIMO_MIN no se
           # arranca al agente: se escribe un veredicto FAILED_SAFELY que dice
@@ -415,6 +432,8 @@ jobs:
           show_full_output: false
 
       - name: Aplicar el veredicto
+        # ADR-228 (ronda 2 de Codex): plazo propio por debajo de RESERVA_FINAL_MIN (6): la reserva que el paso del prompt descuenta es exactamente la que este paso puede consumir.
+        timeout-minutes: 5
         if: always() && steps.gate.outputs.valid == 'true'
         shell: bash --noprofile --norc {0}
         env:

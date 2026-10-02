@@ -90,7 +90,14 @@ En `.github/workflows/implement-sirius-work.yml`:
    arranca al agente: escribe un veredicto `FAILED_SAFELY` en
    `SIRIUS_VERDICT_FILE` que dice cuánto consumió la preparación y falla;
    «Aplicar el veredicto» lo publica y la incidencia para en seguro con su
-   causa, reintentable con `continua`.
+   causa, reintentable con `continua`. Y para que ese cálculo llegue siempre
+   antes de que la reserva final empiece a gastarse, **todos los pasos
+   anteriores al agente llevan plazo propio** (anotar 1, checkout 5, congelar
+   1, Qt 10, uv 3, sync 19, puerta 5, consumir 3, prompt 2: 49 minutos como
+   máximo) y «Aplicar el veredicto» lleva 5, dentro de la reserva final de 6
+   (ronda 2 de Codex en la PR #675: con la preparación sin plazos, la rama
+   «por debajo del mínimo» aceptaba una preparación de 83 minutos y dejaba
+   dos para el veredicto).
 3. El paso «Ejecutar Claude Code (implementador)» lleva `timeout-minutes:
    ${{ fromJSON(steps.build_prompt.outputs.plazo_min || '1') }}`: muere su
    paso y no el job, y el número es el que recibió en el prompt (el `|| '1'`
@@ -114,8 +121,9 @@ En `.github/workflows/implement-sirius-work.yml`:
 
 ## Comprobación que la sostiene
 
-- `tests/automation/test_implementador_con_reloj.py`, siete guardas que leen
-  el YAML real: el arranque del job se anota en el primer paso; el paso del
+- `tests/automation/test_implementador_con_reloj.py`, ocho guardas que leen
+  el YAML real: todos los pasos anteriores al agente tienen plazo, su suma más
+  la reserva final cabe en el job y «Aplicar el veredicto» cabe en la reserva; el arranque del job se anota en el primer paso; el paso del
   agente tiene por plazo la salida `plazo_min` del paso del prompt, que la
   calcula restando lo consumido; `TOPE_JOB_MIN` es el `timeout-minutes` del
   job y el agente no tiene número fijo; las reservas cubren lo medido (la de
@@ -151,6 +159,8 @@ En `.github/workflows/implement-sirius-work.yml`:
 | M5 | el plazo sin restar lo consumido (`consumido_min=0`) | caen `el_plazo_del_prompt_se_calcula_desde_el_arranque_del_job`, la del mínimo, las dos de no-divergencia y `el_implementador_tiene_plazo_propio…` (cinco) |
 | M6 | sin el mínimo: se arranca al agente con cualquier plazo | caen `una_preparacion_que_se_come_el_plazo_no_arranca_al_agente_y_deja_el_veredicto` y `una_preparacion_lenta_deja_un_veredicto_en_vez_de_un_agente_sin_plazo` |
 | M7 | las horas sin fecha (`%H:%M:%SZ`) | caen `el_contexto_del_prompt_lleva_las_dos_horas_con_fecha` y la no-divergencia |
+| M8 | el checkout sin plazo propio | cae `todos_los_pasos_antes_del_agente_tienen_plazo_y_dejan_la_reserva_final` |
+| M9 | «Aplicar el veredicto» sin plazo, o con uno mayor que la reserva final | cae la misma |
 
 - Las pruebas que leen `implement-sirius-work.yml` y los `timeout-minutes` de
   todos los workflows siguen en verde (`test_contador_de_siete_dias.py`,
@@ -174,9 +184,10 @@ En `.github/workflows/implement-sirius-work.yml`:
   no con el provisional.
 - Con la preparación habitual (unos 8 minutos) el agente recibe unos 71
   minutos: más que los 59:52 que daba el job de 60 y que los 50 fijos de la
-  primera versión. Con una preparación lenta recibe menos, pero cierto; y por
-  debajo de 40 no arranca: un `FAILED_SAFELY` que dice por qué, en vez de una
-  hora de agente tirada.
+  primera versión. Con una preparación lenta recibe menos, pero cierto; en el
+  peor caso que los plazos permiten (49 minutos de preparación) quedan 30, por
+  debajo de 40, y no arranca: un `FAILED_SAFELY` que dice por qué, publicado
+  con la reserva final intacta, en vez de una hora de agente tirada.
 - El job se queda en 85, el presupuesto que se reparte; subirlo es una
   decisión con su medida (ADR-225 retiró el techo del contador).
 - H-228 en el registro de defectos.

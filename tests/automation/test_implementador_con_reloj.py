@@ -201,3 +201,33 @@ def test_una_preparacion_lenta_deja_un_veredicto_en_vez_de_un_agente_sin_plazo()
     assert "${RUNNER_TEMP}/sirius_verdict.json" in str(veredicto.get("run") or ""), (
         "el veredicto que deja el paso del prompt tiene que ser el que «Aplicar el veredicto» lee"
     )
+
+
+def test_todos_los_pasos_antes_del_agente_tienen_plazo_y_dejan_la_reserva_final() -> None:
+    """Ronda 2 de Codex en la PR #675: el cálculo del plazo solo sirve si llega
+    antes de que la reserva final empiece a gastarse. Con checkout, uv, la
+    puerta o el consumo del evento sin plazo propio, una preparación de 83
+    minutos llegaba al paso del prompt con dos minutos para el veredicto. Todos
+    los pasos anteriores al agente llevan plazo, su suma más la reserva final
+    cabe en el job, y «Aplicar el veredicto» cabe en la reserva final."""
+    pasos = _pasos()
+    indice_agente = next(i for i, p in enumerate(pasos) if p.get("name") == IMPLEMENTADOR)
+    previos = pasos[:indice_agente]
+    sin_plazo = [
+        str(p.get("name")) for p in previos if not isinstance(p.get("timeout-minutes"), int)
+    ]
+    assert sin_plazo == [], f"pasos anteriores al agente sin `timeout-minutes`: {sin_plazo}"
+    suma_previos = sum(int(p["timeout-minutes"]) for p in previos)
+    run = str(_paso_del_prompt().get("run") or "")
+    tope = _valor(run, "TOPE_JOB_MIN")
+    reserva_final = _valor(run, "RESERVA_FINAL_MIN")
+    assert suma_previos + reserva_final <= tope, (
+        f"los pasos anteriores al agente pueden consumir {suma_previos} min y la reserva final "
+        f"es {reserva_final}: no caben en el job ({tope}); el paso del prompt podría llegar con "
+        "la reserva ya gastada"
+    )
+    veredicto = _paso_por_nombre("Aplicar el veredicto")
+    assert isinstance(veredicto.get("timeout-minutes"), int), "«Aplicar el veredicto» sin plazo"
+    assert veredicto["timeout-minutes"] < reserva_final, (
+        "la reserva final tiene que cubrir entero el plazo de «Aplicar el veredicto»"
+    )
