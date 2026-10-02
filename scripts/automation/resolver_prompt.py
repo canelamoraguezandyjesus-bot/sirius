@@ -133,7 +133,17 @@ def aviso_de_vigencia(cuerpo: str, *, raiz: Path) -> str | None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--carril", required=True, choices=("ejecucion", "revision"))
+    parser.add_argument("--carril", choices=("ejecucion", "revision"))
+    parser.add_argument(
+        "--perfil",
+        action="store_true",
+        help=(
+            "imprimir solo el `rol@N` que el parser canonico (profile_field) lee en ISSUE_BODY, "
+            "o una linea vacia si no declara ninguno; no resuelve nada y sale cero. Es lo que la "
+            "puerta de activacion usa para comparar la instantanea del evento con el cuerpo "
+            "vigente con el mismo parser que resuelve (ADR-221)"
+        ),
+    )
     parser.add_argument(
         "--vigencia",
         action="store_true",
@@ -147,6 +157,12 @@ def main(argv: list[str] | None = None) -> int:
     if cuerpo is None:
         print("::error::falta la variable de entorno ISSUE_BODY", file=sys.stderr)
         return 1
+    if args.perfil:
+        perfil = parse_perfil_field(cuerpo)
+        print("" if perfil is None else f"{perfil.ref}@{perfil.version}")
+        return 0
+    if args.carril is None:
+        parser.error("--carril es obligatorio salvo con --perfil")
     try:
         ruta = resolver_prompt(cuerpo, carril=args.carril, raiz=_RAIZ_POR_DEFECTO)
     except ResolucionImposible as exc:

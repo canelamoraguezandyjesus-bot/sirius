@@ -190,8 +190,20 @@ cuerpo_a_ejecutar="${ISSUE_BODY-$cuerpo}"
 # no se toca ninguna etiqueta, y se dice una vez por pareja de perfiles. Sale
 # con 2, como el reparto, para que quien llama termine en rojo sin consumir.
 if [ -n "${ISSUE_BODY+x}" ]; then
-  perfil_evento="$(printf '%s' "$cuerpo_a_ejecutar" | sed -n 's/^Perfil: *\([A-Za-z_-][A-Za-z_-]*@[0-9][0-9]*\).*/\1/p' | head -1)"
-  perfil_actual="$(printf '%s' "$cuerpo" | sed -n 's/^Perfil: *\([A-Za-z_-][A-Za-z_-]*@[0-9][0-9]*\).*/\1/p' | head -1)"
+  # Las dos instantaneas se leen con el MISMO parser que el resolutor
+  # (`profile_field`, via `resolver_prompt.py --perfil`): un `sed` propio leia
+  # `implementer@4junk` como `implementer@4` y `Implementer@4` como valido, y
+  # daba por iguales dos cuerpos que el resolutor juzga distintos; la puerta
+  # seguia, rechazaba la instantanea y retiraba una etiqueta que puede ser de
+  # otra activacion (ronda 6 de Codex en la PR #670). Sin parser no se juzga.
+  if ! perfil_evento="$(ISSUE_BODY="$cuerpo_a_ejecutar" python3 "${SIRIUS_GATE_DIR}/resolver_prompt.py" --perfil)"; then
+    echo "::error::No se pudo leer el Perfil de la instantanea del evento de #${ISSUE} con el parser canonico; no se valida ni se toca ninguna etiqueta. Reintentable." >&2
+    exit 1
+  fi
+  if ! perfil_actual="$(ISSUE_BODY="$cuerpo" python3 "${SIRIUS_GATE_DIR}/resolver_prompt.py" --perfil)"; then
+    echo "::error::No se pudo leer el Perfil del cuerpo vigente de #${ISSUE} con el parser canonico; no se valida ni se toca ninguna etiqueta. Reintentable." >&2
+    exit 1
+  fi
   if [ "$perfil_evento" != "$perfil_actual" ]; then
     rm -f "$body_file"
     marker_rancio="<!-- sirius-activation:evento-rancio:${perfil_evento:-ninguno}:${perfil_actual:-ninguno} -->"

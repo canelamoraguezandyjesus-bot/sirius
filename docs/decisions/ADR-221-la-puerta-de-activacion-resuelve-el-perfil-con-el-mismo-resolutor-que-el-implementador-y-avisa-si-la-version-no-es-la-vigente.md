@@ -183,6 +183,18 @@ fichero restaurado):
   esta PR: la batería de la puerta se corrió, la de los carriles no, y son las
   dos las que ejecutan el guion.
 
+Ronda 6 de Codex sobre `ac3f4870`: la comparación de las dos instantáneas
+(evento y cuerpo vigente) usaba un `sed` propio que leía `implementer@4junk`
+como `implementer@4` y `Implementer@4` como válido, y daba por iguales dos
+cuerpos que el resolutor juzga distintos: la puerta seguía, rechazaba la
+instantánea y retiraba una etiqueta que puede ser de otra activación. Las dos
+se leen ahora con el parser del resolutor (`resolver_prompt.py --perfil`,
+que expone `profile_field`): una verdad, no dos. Prueba:
+`test_la_comparacion_del_evento_usa_el_parser_canonico_del_perfil`
+(`implementer@Njunk` en el evento frente al vigente en el cuerpo: rancio,
+código 2, etiqueta intacta, `ninguno` en el aviso). Mutación M9 (el `sed`
+de antes): cae esa prueba.
+
 ## Consecuencias
 
 - Un cuerpo con `Perfil:` ausente o no registrado ya no arranca un run: se

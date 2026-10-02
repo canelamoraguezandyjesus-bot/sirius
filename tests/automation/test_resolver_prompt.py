@@ -218,3 +218,25 @@ def test_los_dos_workflows_invocan_al_resolver_y_el_case_viejo_no_existe() -> No
         # un sed sobre `Perfil:` para ENRUTAR -qué workflow atiende, ADR-099-;
         # eso no elige texto y queda fuera de la ley de H-28.)
         assert "PROMPT_ROL=scripts/automation/prompts/" not in codigo, workflow.name
+
+
+def test_el_cli_imprime_el_perfil_canonico_o_una_linea_vacia() -> None:
+    """``--perfil`` es lo que la puerta de activación usa para comparar la instantánea
+    del evento con el cuerpo vigente (ronda 6 de Codex en la PR #670): el mismo
+    parser que resuelve, no un ``sed`` que leía ``implementer@4junk`` como ``@4``."""
+
+    def perfil(cuerpo: str) -> str:
+        proceso = subprocess.run(
+            [sys.executable, str(SCRIPT), "--perfil"],
+            env={**os.environ, "ISSUE_BODY": cuerpo},
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert proceso.returncode == 0, proceso.stderr
+        return proceso.stdout
+
+    assert perfil("Perfil: implementer@4\nOtra línea") == "implementer@4\n"
+    assert perfil("Perfil: implementer@4junk") == "\n"
+    assert perfil("Perfil: Implementer@4") == "\n"
+    assert perfil("sin campo") == "\n"

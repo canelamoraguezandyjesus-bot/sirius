@@ -488,3 +488,21 @@ def test_una_instantanea_vacia_del_evento_es_un_evento_rancio(tmp_path: Path) ->
     assert proc.returncode == 2, proc.stderr
     assert "sirius:implement-requested" in _labels(env)
     assert f"sirius-activation:evento-rancio:ninguno:implementer@{_VIGENTE}" in _comments(env)
+
+
+def test_la_comparacion_del_evento_usa_el_parser_canonico_del_perfil(tmp_path: Path) -> None:
+    """Ronda 6 de Codex en la PR #670: un `sed` propio leía `implementer@4junk` como
+    `implementer@4` y daba por iguales una instantánea que el resolutor no puede
+    leer y un cuerpo vigente válido; la puerta seguía, rechazaba la instantánea y
+    retiraba una etiqueta que puede ser de otra activación. Las dos se leen ahora
+    con `profile_field`, el parser del resolutor: `implementer@Njunk` no es un
+    perfil, así que el evento es rancio (`ninguno` frente al vigente)."""
+    env = _setup(tmp_path)
+    _seed(env, ["sirius:planned", "sirius:implement-requested"])
+    env["ISSUE_BODY"] = _COMPLETE_BODY.replace(
+        f"Perfil: implementer@{_VIGENTE}", f"Perfil: implementer@{_VIGENTE}junk"
+    )
+    proc = _run(env)
+    assert proc.returncode == 2, proc.stderr
+    assert "sirius:implement-requested" in _labels(env), "la etiqueta puede ser de otro evento"
+    assert f"sirius-activation:evento-rancio:ninguno:implementer@{_VIGENTE}" in _comments(env)
