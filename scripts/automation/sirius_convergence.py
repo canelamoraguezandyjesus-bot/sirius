@@ -455,7 +455,11 @@ def decide(records: list[dict[str, Any]], ci_failures: int = 0) -> dict[str, Any
 
     # ADR-230: una ronda se compara solo con rondas que tuvieran al menos sus
     # mismos revisores, proyectadas a ellos. Sin el campo (historial anterior)
-    # no cambia nada.
+    # no cambia nada. La ronda CRONOLÓGICAMENTE anterior se guarda antes de
+    # proyectar: la guarda del head la necesita entera (ronda 4 de Codex en la
+    # PR #678: entera A → parcial B → entera B sobre el head de B dejaba fuera a
+    # la parcial y comparaba A con B como si hubiera habido corrección).
+    cronologica_anterior = records[-2] if len(records) >= 2 else None
     records = _proyectar_sobre_la_ultima_ronda(records)
     current = records[-1]
     rounds = len(records)
@@ -501,6 +505,25 @@ def decide(records: list[dict[str, Any]], ci_failures: int = 0) -> dict[str, Any
                     "rounds": rounds,
                 }
 
+    # --- Head sin avanzar: el corrector no publicó cambios --------------------
+    # Contra la ronda cronológicamente anterior, proyectada o no: el head es un
+    # hecho del repositorio, no una medida entre revisores comparables.
+    if (
+        cronologica_anterior is not None
+        and cronologica_anterior.get("head")
+        and cronologica_anterior.get("head") == current.get("head")
+    ):
+        return {
+            "decision": "BLOCK",
+            "reason": "head-sin-avance",
+            "detail": (
+                f"Las rondas {cronologica_anterior.get('round')} y {current.get('round')} se "
+                f"registraron sobre el mismo head `{current.get('head')}`: no hubo ninguna "
+                "corrección efectiva que revisar."
+            ),
+            "rounds": rounds,
+        }
+
     if rounds == 1:
         return {
             "decision": "CONTINUE",
@@ -509,19 +532,7 @@ def decide(records: list[dict[str, Any]], ci_failures: int = 0) -> dict[str, Any
             "rounds": rounds,
         }
 
-    # --- Head sin avanzar: el corrector no publicó cambios --------------------
     previous = records[-2]
-    if previous.get("head") and previous.get("head") == current.get("head"):
-        return {
-            "decision": "BLOCK",
-            "reason": "head-sin-avance",
-            "detail": (
-                f"Las rondas {previous.get('round')} y {current.get('round')} se registraron "
-                f"sobre el mismo head `{current.get('head')}`: no hubo ninguna corrección "
-                "efectiva que revisar."
-            ),
-            "rounds": rounds,
-        }
 
     # Cada ronda se mide contra la MEJOR MARCA HISTÓRICA de las anteriores, no
     # contra la ronda inmediata: si se comparase solo con la inmediata, una

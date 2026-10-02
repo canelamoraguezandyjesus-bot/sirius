@@ -1325,3 +1325,30 @@ def test_la_primera_ronda_parcial_tras_un_historial_antiguo_sabe_a_quien_le_falt
     # Y la ronda entera que sigue no ve reaparecer lo de Codex.
     rondas.append(_ronda_con_revisores(3, HEAD_C, [_de_claude(), _de_codex()], _AMBOS, _AMBOS))
     assert _decide(rondas)["reason"] == "sin-progreso-aislado"
+
+
+def test_una_ronda_entera_sobre_el_mismo_head_que_la_parcial_anterior_no_avanza() -> None:
+    """Ronda 4 de Codex en la PR #678: entera A → parcial B → entera B sobre el
+    head de B. La proyección dejaba fuera la parcial y la guarda del head
+    comparaba A con B como si hubiera habido corrección: `CONTINUE`. El head es
+    un hecho del repositorio, no una medida entre revisores comparables: la
+    guarda mira la ronda cronológicamente anterior, proyectada o no."""
+    otro_head = "b" * len(HEAD_A)
+    result = _decide(
+        [
+            _ronda_con_revisores(1, HEAD_A, [_de_claude(), _de_codex()], _AMBOS, _AMBOS),
+            _ronda_con_revisores(2, otro_head, [_de_claude()], _SOLO_CLAUDE, _AMBOS),
+            _ronda_con_revisores(3, otro_head, [_de_claude(), _de_codex()], _AMBOS, _AMBOS),
+        ]
+    )
+    assert result["decision"] == "BLOCK" and result["reason"] == "head-sin-avance"
+    assert "rondas 2 y 3" in result["detail"]
+    # Y parcial A → entera A: la proyección deja una sola ronda comparable, pero
+    # el head tampoco avanzó.
+    result = _decide(
+        [
+            _ronda_con_revisores(1, HEAD_A, [_de_claude()], _SOLO_CLAUDE, _AMBOS),
+            _ronda_con_revisores(2, HEAD_A, [_de_claude(), _de_codex()], _AMBOS, _AMBOS),
+        ]
+    )
+    assert result["reason"] == "head-sin-avance"

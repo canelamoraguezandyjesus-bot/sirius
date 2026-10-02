@@ -813,12 +813,24 @@ case "$verdict" in
     # tenía que venir del agregador y la ronda se detiene de forma segura.
     reviewers_json="$(jq -c '.reviewers // null' "$VERDICT_FILE" 2>/dev/null || echo null)"
     expected_json="$(jq -c '.expected_reviewers // null' "$VERDICT_FILE" 2>/dev/null || echo null)"
-    if [ "$reviewers_json" = "null" ] || [ "$reviewers_json" = "[]" ]; then
-      if [ "${DUAL_MODE:-false}" = "true" ]; then
+    # Ronda 4 de Codex en la PR #678: en modo solo el workflow SABE que la ronda la
+    # tuvo Claude y esperaba solo a Claude, diga lo que diga el veredicto (`[null]`,
+    # `[" "]`, un escalar o `reviewers` sin `expected_reviewers` acababan, tras la
+    # normalización de `cmd_record`, en un registro sin campos o con una ronda a la
+    # que «le faltó Codex»); en modo dual el veredicto viene del agregador y tiene
+    # que traer los dos campos en forma canónica: listas no vacías de nombres.
+    if [ "${DUAL_MODE:-false}" = "true" ]; then
+      if ! jq -e '
+          def canonica: (type == "array") and (length > 0)
+            and all(.[]; type == "string" and ((gsub("^\\s+|\\s+$"; "") | length) > 0));
+          (.reviewers | canonica) and (.expected_reviewers | canonica)' "$VERDICT_FILE" >/dev/null 2>&1; then
         rm -f "$round_verdict" "$round_record" "$history_dump"
         stop_safely "veredicto-sin-revisores" \
-          "El veredicto de una ronda de revisión dual no declara qué revisores tuvo (reviewers); sin eso el registro de la ronda se leería como una ronda entera y me detengo de forma segura."
+          "El veredicto de una ronda de revisión dual no declara en forma canónica qué revisores tuvo y a quién esperaba (reviewers y expected_reviewers: listas no vacías de nombres); sin eso el registro de la ronda se leería mal y me detengo de forma segura."
       fi
+      reviewers_json="$(jq -c '.reviewers' "$VERDICT_FILE")"
+      expected_json="$(jq -c '.expected_reviewers' "$VERDICT_FILE")"
+    else
       reviewers_json='["CLAUDE"]'
       expected_json='["CLAUDE"]'
     fi

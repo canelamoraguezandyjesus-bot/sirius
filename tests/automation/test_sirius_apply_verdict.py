@@ -553,6 +553,7 @@ def test_reviewer_changes_requested_publishes_the_round_record(tmp_path: Path) -
     # El registro de ronda sustituye al contador ciego de ciclos: es lo que
     # permite a la puerta del corrector medir progreso real entre rondas.
     env = _setup(tmp_path)
+    env["DUAL_MODE"] = "true"  # el veredicto modela una ronda dual agregada (ADR-230)
     _seed_issue(
         env,
         ["sirius:reviewing"],
@@ -2431,6 +2432,13 @@ _VEREDICTO_SOLO_DE_CLAUDE: dict[str, object] = {
 _VEREDICTOS_SIN_REVISORES: dict[str, dict[str, object]] = {
     "sin_campo": _VEREDICTO_SOLO_DE_CLAUDE,
     "lista_vacia": {**_VEREDICTO_SOLO_DE_CLAUDE, "reviewers": [], "expected_reviewers": []},
+    # Ronda 4 de Codex en la PR #678: declaraciones sin revisores válidos que
+    # `cmd_record` normalizaba hasta omitir el campo, y una que dejaba a la ronda
+    # «sin Codex» al activar la revisión dual después.
+    "nulos": {**_VEREDICTO_SOLO_DE_CLAUDE, "reviewers": [None], "expected_reviewers": [None]},
+    "blancos": {**_VEREDICTO_SOLO_DE_CLAUDE, "reviewers": [" "], "expected_reviewers": [" "]},
+    "escalar": {**_VEREDICTO_SOLO_DE_CLAUDE, "reviewers": "CLAUDE", "expected_reviewers": "CLAUDE"},
+    "sin_esperados": {**_VEREDICTO_SOLO_DE_CLAUDE, "reviewers": ["CLAUDE"]},
 }
 
 
@@ -2470,9 +2478,10 @@ def test_en_modo_solo_el_registro_declara_que_la_ronda_fue_de_claude(tmp_path: P
 
 
 def test_en_modo_dual_un_veredicto_sin_revisores_detiene_la_ronda(tmp_path: Path) -> None:
-    """En modo dual el veredicto viene del agregador y declara los revisores; uno
-    sin ellos (campo ausente o lista vacía) no se registra como una ronda
-    entera: parada segura."""
+    """En modo dual el veredicto viene del agregador y declara los revisores en
+    forma canónica; uno que no la trae (campo ausente, lista vacía, nulos,
+    blancos, un escalar, sin `expected_reviewers`) no se registra: parada
+    segura."""
     for nombre, veredicto in _VEREDICTOS_SIN_REVISORES.items():
         raiz = tmp_path / nombre
         raiz.mkdir()
