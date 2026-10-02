@@ -46,7 +46,8 @@ Obligatorios siempre: `id`, `titulo`, `bloque`, `gravedad`, `estado`,
   Si el defecto quedó **abierto** en la PR que lo declaró y lo arregló **otra
   PR posterior**, `pr` es la del arreglo, y el ADR de ese arreglo tiene que
   nombrar el `H-NNN` (palabra entera): es lo que la guarda busca desde ADR-231
-  (H-216: declarado por ADR-216 en la #663, cerrado por ADR-227 en la #674).
+  (H-216: declarado por ADR-216 en la #663 y arreglado en la #674, cuyo ADR lo
+  nombra).
 
 **El identificador no se elige**: desde ADR-192, si el defecto viene de un ADR
 igual o posterior al 174, `id` es `H-` más el número de ese ADR. `adr: 211` →
