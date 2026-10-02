@@ -172,6 +172,10 @@ decisión cancela:
   el árbol tal como se midió el 05-09-2026 (cuatro `cron` ajenos, el `cron`
   de las 03:24 que el contador llevaba y el tope mayor) y las dos pruebas
   corren sobre él; volver a atarlas al árbol real es parte de D1.
+- Ronda 8 sobre `39707544`: el comentario junto al `schedule:` de
+  `reflejar-desenlace.yml` seguía exigiendo los 170 minutos de tranquilidad
+  del contador y mandaba rederivar al mover cualquier hora o tope; dice ahora
+  que la restricción no rige desde esta decisión.
 
 ## Consecuencias
 

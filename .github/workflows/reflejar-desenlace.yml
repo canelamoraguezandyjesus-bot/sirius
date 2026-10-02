@@ -38,9 +38,10 @@ on:
       - "Complete Sirius after merge"
     types: [completed]
   schedule:
-    # Red de seguridad diaria. 200 min antes del contador (03:24 UTC): su
-    # guardián exige >=170 de tranquilidad. Si se cambia la hora del
-    # contador o algún timeout-minutes, rederivar (ver cabecera).
+    # Red de seguridad diaria. La hora (00:04 UTC) se eligió en su día 200 min
+    # antes del contador de los siete días; desde ADR-225 (01-10-2026) el
+    # contador no tiene horario y esa restricción no rige: la hora se queda
+    # donde está y mover otros horarios o topes no obliga a rederivar nada.
     - cron: '4 0 * * *'
   workflow_dispatch:
 
