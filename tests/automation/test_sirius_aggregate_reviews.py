@@ -303,6 +303,115 @@ def test_codex_failed_con_otra_razon_no_es_reintentable(tmp_path: Path) -> None:
     assert not result.get("infra_retryable")
 
 
+# --------------------------------------------------------------------------- #
+# ADR-226: Codex declara que no revisa; los hallazgos de Claude no se tiran
+# --------------------------------------------------------------------------- #
+
+
+def _codex_sin_cuota(reason: str = "codex-fallo-declarado") -> dict[str, Any]:
+    """Lo que escribe el recolector cuando el conector contesta que no revisa."""
+    codex = _codex("FAILED_SAFELY", sha=None, reason=reason)
+    codex["summary"] = (
+        "Codex no revisó `1234567`: declaró un fallo suyo (https://github.com/o/r/pull/9#c1) "
+        "— «You have reached your Codex usage limits for code reviews». La ronda termina "
+        "en fallo seguro sin agotar el plazo."
+    )
+    return codex
+
+
+def test_codex_que_declara_que_no_revisa_no_tira_los_hallazgos_de_claude(tmp_path: Path) -> None:
+    """ADR-226, bitácora entrada 106 (13-09, #581 ronda 11): Claude revisó entero
+    —44 turnos, 3,31 $— y Codex contestó «usage limits»; la regla 3 tiró el
+    veredicto de Claude sin publicarlo. Trece paradas así en septiembre. Vista
+    fallar contra el agregador anterior: FAILED_SAFELY con observations []."""
+    result = _run(
+        tmp_path,
+        _claude("CHANGES_REQUESTED", observations=[_claude_observation()]),
+        _codex_sin_cuota(),
+    )
+    assert result["verdict"] == "CHANGES_REQUESTED"
+    assert [o["id"] for o in result["observations"]] == ["CLAUDE-R1"]
+    assert result["reviewed_head_sha"] == HEAD
+    assert "Codex no revisó este head" in result["summary"]
+    assert "codex-fallo-declarado" in result["summary"]
+    assert "usage limits" in result["summary"], "la constancia cita lo que dijo el conector"
+    assert result["sources"]["codex"] == {
+        "status": "FAILED_SAFELY",
+        "reason": "codex-fallo-declarado",
+    }
+    assert not result.get("infra_retryable"), "hay trabajo para el corrector: no se re-arma nada"
+
+
+def test_con_claude_aprobando_el_fallo_declarado_de_codex_sigue_parando(tmp_path: Path) -> None:
+    """La asimetría que ADR-226 no toca: sin Codex no se aprueba. La mutación
+    que abriera la excepción a REVIEW_APPROVED aprobaría un head que Codex no
+    vio; esta prueba la caza."""
+    result = _run(tmp_path, _claude("REVIEW_APPROVED"), _codex_sin_cuota())
+    assert result["verdict"] == "FAILED_SAFELY"
+    assert result["observations"] == []
+    assert not result.get("infra_retryable")
+
+
+def test_el_timeout_de_codex_no_entrega_los_hallazgos_de_claude(tmp_path: Path) -> None:
+    """Adversaria: un timeout no es una declaración —Codex puede estar revisando
+    todavía—, así que conserva la parada reintentable de ADR-141 y no publica
+    los hallazgos de Claude sobre un head que Codex aún podría comentar."""
+    result = _run(
+        tmp_path,
+        _claude("CHANGES_REQUESTED", observations=[_claude_observation()]),
+        _codex("FAILED_SAFELY", sha=None, reason="timeout"),
+    )
+    assert result["verdict"] == "FAILED_SAFELY"
+    assert result.get("infra_retryable") is True
+    assert result["observations"] == []
+
+
+def test_el_fallo_transitorio_con_hallazgos_de_claude_tambien_los_entrega(tmp_path: Path) -> None:
+    """«Something went wrong. Try again later» (ADR-146) re-armaba la ronda y
+    volvía a pagar la revisión de Claude. Con hallazgos a la vista, el
+    corrector los recibe y Codex se pide sobre el head corregido."""
+    result = _run(
+        tmp_path,
+        _claude("CHANGES_REQUESTED", observations=[_claude_observation()]),
+        _codex_sin_cuota("codex-fallo-declarado-transitorio"),
+    )
+    assert result["verdict"] == "CHANGES_REQUESTED"
+    assert [o["id"] for o in result["observations"]] == ["CLAUDE-R1"]
+    assert not result.get("infra_retryable")
+
+
+def test_los_hallazgos_de_claude_sobre_otro_head_no_llevan_la_ronda(tmp_path: Path) -> None:
+    """La excepción llega después de la regla 2: un CHANGES_REQUESTED de Claude
+    que no demuestra el head esperado sigue siendo una parada del arnés."""
+    result = _run(
+        tmp_path,
+        _claude("CHANGES_REQUESTED", sha=OTHER_HEAD, observations=[_claude_observation()]),
+        _codex_sin_cuota(),
+    )
+    assert result["verdict"] == "FAILED_SAFELY"
+    assert result.get("infra_retryable") is True
+
+
+def test_un_bloqueo_por_decision_con_codex_sin_revisar_no_cambia(tmp_path: Path) -> None:
+    """Fuera de la excepción: BLOCKED_BY_DECISION de Claude con Codex declarando
+    que no revisa sigue siendo la parada de siempre, no un bloqueo publicado."""
+    result = _run(tmp_path, _claude("BLOCKED_BY_DECISION", sha=None), _codex_sin_cuota())
+    assert result["verdict"] == "FAILED_SAFELY"
+
+
+def test_una_razon_desconocida_de_codex_no_entrega_nada(tmp_path: Path) -> None:
+    """Adversaria: solo las dos razones con las que el conector DECLARA que no
+    revisa abren la excepción; cualquier otra parada del recolector se queda
+    para diagnóstico humano."""
+    result = _run(
+        tmp_path,
+        _claude("CHANGES_REQUESTED", observations=[_claude_observation()]),
+        _codex("FAILED_SAFELY", sha=None, reason="colector-invalido"),
+    )
+    assert result["verdict"] == "FAILED_SAFELY"
+    assert result["observations"] == []
+
+
 def test_un_veredicto_normal_no_lleva_la_bandera(tmp_path: Path) -> None:
     """Adversaria: la bandera es exclusiva de las paradas; un APPROVED o un
     CHANGES_REQUESTED jamás la llevan."""

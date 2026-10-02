@@ -156,7 +156,7 @@ def test_la_cadena_vacia_es_no_declarado_y_no_una_fecha_rota() -> None:
 
 
 def test_una_fecha_que_no_es_iso_se_descarta_en_vez_de_llegar_a_g8() -> None:
-    """``G8`` compara la fecha con ``created_at`` por orden lexicográfico
+    """Hasta ADR-229 ``G8`` comparaba la fecha con ``created_at`` por orden lexicográfico
     (``src/sirius/domain/staged_engine_gates.py``): una cadena arbitraria
     podría excluir el canon entero en silencio. Se trata como no declarada."""
 
@@ -423,8 +423,8 @@ def test_nunca_sigue_una_redireccion_a_un_host_remoto() -> None:
     ["2026-03-01", "2026-03-01T00:00:00Z", "2026-03-01 00:00:00"],
 )
 def test_las_tres_escrituras_del_mismo_dia_dan_el_mismo_corte(escritura: str) -> None:
-    """``_PATRON_ISO`` admite tres formas del mismo día y ``G8`` compara el
-    corte con ``created_at`` por orden lexicográfico, donde el separador
+    """``_PATRON_ISO`` admite tres formas del mismo día y, hasta ADR-229, ``G8``
+    comparaba el corte con ``created_at`` por orden lexicográfico, donde el separador
     manda (``" "`` < ``"T"``). Sin canonizar, la forma que el modelo eligiera
     esa vez decidiría por accidente si el día del corte entra o no."""
 
@@ -443,7 +443,7 @@ def test_el_corte_canonizado_admite_lo_registrado_durante_el_dia_del_corte() -> 
     """La semántica declarada: «¿qué sabía yo el D?» es lo registrado AL
     FINAL de D. Un ``created_at`` del propio día D —la forma con que el
     canon lo persiste, ``str(datetime)`` con separador espacio— tiene que
-    quedar por debajo del corte en el orden lexicográfico que ``G8`` usa."""
+    quedar por debajo del corte en el orden lexicográfico que ``G8`` usaba hasta ADR-229."""
 
     def _handle(request: httpx.Request) -> httpx.Response:
         return _answer(corte_de_registro="2026-03-01")
@@ -464,7 +464,7 @@ def test_el_corte_canonizado_admite_lo_registrado_durante_el_dia_del_corte() -> 
     ["2026-03-20", "2026-03-20T00:00:00Z", "2026-03-20 00:00:00", "2026-03-20T02:00:00+02:00"],
 )
 def test_el_tiempo_objetivo_sale_en_utc_con_el_sufijo_del_corpus(escritura: str) -> None:
-    """``G8`` compara el objetivo con ``valid_from``/``valid_to`` como
+    """Hasta ADR-229 ``G8`` comparaba el objetivo con ``valid_from``/``valid_to`` como
     CADENAS, y el corpus los escribe con ``Z``. Una fecha desnuda es su
     medianoche: es un instante, no un día."""
 
@@ -545,7 +545,7 @@ def test_un_ahora_fijado_por_el_llamador_se_respeta_en_cada_consulta() -> None:
 
 # --------------------------------------------------------------------------
 # Lo que la canonización tiene que respetar del otro lado de la comparación:
-# el día civil que la pregunta nombra, y la forma con la que ``G8`` compara
+# el día civil que la pregunta nombra, y la forma con la que ``G8`` comparaba hasta ADR-229
 # (incidencia #570, ronda 3).
 # --------------------------------------------------------------------------
 
