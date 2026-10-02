@@ -330,6 +330,58 @@ fi
 # lo hubiera pedido, y un ciclo de verdad estancado podría correr para siempre.
 # Una parada operativa no tiene rondas que perdonar: solo hay que repetir la
 # fase que se cayó.
+# Una parada anterior a la PR se reanuda volviendo a ACTIVAR la incidencia, y la
+# activacion exige `sirius:planned` junto al evento; la primera activacion la
+# consumio. Reponer solo el evento anunciaba en verde un reinicio que la puerta
+# rechazaba en segundos y dejaba la incidencia sin ninguna etiqueta: 3 de los 9
+# reinicios sin PR de septiembre de 2026 (#545, #581, #653). Aqui se mira antes
+# (ADR-223). La puerta no repone `planned` por su cuenta (#60): planificar
+# no es cosa suya. `sirius:planned` la ponen tres manos, y las tres son
+# legitimas: una persona a mano, el formulario de incidencias (lo rellena una
+# persona) y el despachador, que solo crea incidencias con una orden del
+# propietario enlazada (contrato §12.1, `dispatcher.py`). Lo que un `labeled
+# sirius:planned` en la cronologia demuestra no es QUIEN la puso, sino que la
+# incidencia ESTUVO planificada y que la activacion la consumio (la primera
+# version de este texto decia que el motor nunca la aplica; era falso y lo cazo
+# Codex en la ronda 3 de la PR #671). Con eso y la orden `continua` (solo del
+# propietario), reponer `planned` junto al evento no inventa ninguna
+# aprobacion: devuelve la que la maquina consumio para repetir la misma
+# activacion. Pedirle que la aplique y repita la
+# orden seria pedir dos veces lo mismo (AGENTS.md; ronda 1 de Codex en la PR
+# #671). Si NO consta que nadie la planificara, no hay nada que devolver: se
+# dice, y lo que se le pide es la activacion misma, no la orden otra vez.
+reponer_planned=false
+if [ "$sin_pr" = "true" ] && [ "$etiqueta_destino" = "sirius:implement-requested" ] \
+  && ! printf '%s\n' "$labels_now" | grep -Fxq "sirius:planned"; then
+  # La cronologia es un dato que se LEE o no se lee: si la API falla, no se
+  # concluye «nunca planificada» (seria una conclusion falsa publicada en la
+  # incidencia); el run queda rojo y reintentable (ronda 2 de Codex).
+  if ! eventos_planned="$(sirius_retry gh api "repos/${REPO}/issues/${ISSUE}/events" --paginate \
+      --jq '[.[] | select(.event == "labeled" and .label.name == "sirius:planned")] | length' 2>/dev/null)"; then
+    echo "::error::No se pudo leer la cronologia de #${ISSUE} para saber si ya estuvo planificada; no se toca nada. Reintentable."
+    exit 1
+  fi
+  veces_planificada="$(printf '%s\n' "$eventos_planned" | awk '{ s += $1 } END { print s + 0 }')"
+  if [ "${veces_planificada:-0}" -gt 0 ]; then
+    reponer_planned=true
+  else
+    marker="<!-- sirius-resume-sin-planned:${COMMENT_ID} -->"
+    aviso_file="$(mktemp)"
+    printf '%s\n\n%s\n\n%s\n\n%s\n' \
+      "$marker" \
+      "🛑 **No he reanudado: esta incidencia nunca tuvo \`sirius:planned\`**" \
+      "Esta incidencia se detuvo antes de producir rama ni PR, así que reanudarla es volver a activarla, y la activación exige \`sirius:planned\` junto a \`sirius:implement-requested\`. En su cronología no consta que haya estado planificada nunca (ni a mano, ni por el formulario, ni por el despachador con una orden tuya enlazada), y planificarla es una decisión que no puedo tomar por ti. Si repusiera solo \`implement-requested\`, la puerta lo rechazaría en segundos y la incidencia quedaría sin ninguna etiqueta." \
+      "**Qué hace falta:** cuando la des por planificada, en este orden: retira \`${parada}\`, aplica \`sirius:planned\` y, en último lugar, \`sirius:implement-requested\`. Cada etiqueta es un evento aparte y la puerta de activación arranca con la última, así que tiene que encontrar las otras dos ya en su sitio. Eso es la activación, y no hace falta repetir la orden. Hasta entonces la parada (\`${parada}\`) se conserva." >"$aviso_file"
+    if ! sirius_comment_once "$REPO" "$ISSUE" "$marker" "$aviso_file"; then
+      rm -f "$aviso_file"
+      echo "::error::No se pudo publicar el aviso de falta de planned en #${ISSUE}; la parada se conserva y la orden no se ha atendido. Reintentable."
+      exit 1
+    fi
+    rm -f "$aviso_file"
+    echo "Reinicio sin PR de #${ISSUE} no realizado: nunca tuvo sirius:planned; la parada ${parada} se conserva."
+    exit 0
+  fi
+fi
 body_file="$(mktemp)"
 if [ "$sin_pr" = "true" ]; then
   # NI `sirius-convergence-reset` NI `sirius-resume-stop`, y la diferencia
@@ -338,11 +390,18 @@ if [ "$sin_pr" = "true" ]; then
   # head inventado o vacío escribiría en el historial una autorización sobre algo
   # que no existe, y ese historial es lo único que después dice qué se permitió.
   marker="<!-- sirius-restart-sin-pr:${ISSUE}:${GITHUB_RUN_ID:-manual}-${GITHUB_RUN_ATTEMPT:-1} -->"
-  printf '%s\n\n%s\n\n%s\n\n%s\n' \
+  nota_planned=""
+  if [ "$reponer_planned" = "true" ]; then
+    nota_planned="Repongo también \`sirius:planned\`: consta en su cronología que ya estuvo planificada (la etiqueta se aplicó ${veces_planificada} vez/veces: a mano, por el formulario o por el despachador con tu orden enlazada) y la primera activación la consumió; tu **continua** repite esa misma activación, que la puerta exige con \`planned\` junto al evento (ADR-223)."
+  fi
+  printf '%s\n\n%s\n\n%s\n\n%s\n%s' \
     "$marker" \
     "🟢 **Reinicio autorizado por el propietario**" \
     "Esta incidencia se detuvo **antes de producir ninguna rama ni PR**, así que no hay ningún head sobre el que continuar: lo que se autoriza es **repetir desde cero** la fase que se paró (\`${etiqueta_destino}\`)." \
-    "El historial queda intacto y no se perdona ninguna ronda: sin PR no hubo rondas que contar. Si la fase se vuelve a caer, se detendrá otra vez con su diagnóstico." >"$body_file"
+    "El historial queda intacto y no se perdona ninguna ronda: sin PR no hubo rondas que contar. Si la fase se vuelve a caer, se detendrá otra vez con su diagnóstico." \
+    "${nota_planned:+
+${nota_planned}
+}" >"$body_file"
 elif [ "$parada" = "sirius:blocked-decision" ] && [ "${bloqueo_de_convergencia:-true}" = "true" ]; then
   marker="<!-- sirius-convergence-reset:${head_sha}:${GITHUB_RUN_ID:-manual}-${GITHUB_RUN_ATTEMPT:-1} -->"
   printf '%s\n\n%s\n\n%s\n\n%s\n' \
@@ -376,9 +435,57 @@ if ! sirius_ensure_label "$REPO" "$etiqueta_destino" "1D76DB" \
   echo "::error::No se pudo asegurar la etiqueta ${etiqueta_destino} para #${ISSUE}; reintentable."
   exit 1
 fi
+# EL ORDEN ES LA MITAD DE LA TRANSICION. Cada etiqueta es un evento aparte: el
+# evento despierta a la puerta de activacion, y la puerta rechaza -y retira el
+# evento- si la incidencia lleva todavia `failed-safely` o `blocked-decision`
+# (`INCOMPATIBLE_STATES` en `sirius_validate_activation.sh`). Poner el evento y
+# retirar la parada despues -el orden natural de `sirius_set_issue_labels`-
+# abria esa ventana: la puerta podia leer la incidencia con las dos etiquetas y
+# dejarla solo con `planned`, mudo otra vez (ronda 5 de Codex en la PR #671).
+# Asi que: primero `planned`, si hay que reponerla, SOLA y verificada; despues
+# la parada fuera; y el evento en ultimo lugar, el mismo orden que el aviso de
+# «nunca planificada» le pide a una persona. `planned` y la parada van en dos
+# llamadas y no en una porque `sirius_set_issue_labels planned parada` quitaba
+# la parada aunque poner `planned` hubiera fallado, y la incidencia quedaba sin
+# `planned`, sin parada y sin evento: un estado del que un `continua` nuevo no
+# sabe salir («no esta en ninguna parada reanudable»), asi que el
+# «Reintentable» mentia (ronda 7 de Codex en la PR #671, reproducido con
+# GH_MOCK_FAIL_ADD=sirius:planned). Con la parada todavia puesta, reintentar es
+# relanzar este run desde Actions: la orden `continua` que lo disparo sigue
+# valiendo y no hace falta escribirla otra vez (ronda 8). Y si la retirada de
+# la parada falla, se mira el estado real antes de hablar: la retirada puede
+# haber ocurrido y haber fallado solo su verificacion, y decir entonces que la
+# parada sigue puesta mandaba a un reintento que no encontraria nada que
+# levantar y dejaba la incidencia con `planned` y sin evento (ronda 8).
+# El coste, dicho: si la ultima llamada falla, la incidencia queda sin parada y
+# sin evento, y un `continua` nuevo no encontraria parada que levantar; el
+# error de abajo dice que etiqueta falta y que se aplica a mano.
+if [ "$reponer_planned" = "true" ]; then
+  if ! ( export GH_TOKEN="${SIRIUS_TRIGGER_TOKEN:-${GH_TOKEN:-}}"
+         sirius_set_issue_labels "$REPO" "$ISSUE" "sirius:planned" ); then
+    echo "::error::No se pudo reponer sirius:planned en #${ISSUE}; la parada ${parada} sigue puesta y no repongo el evento sin ella. Reintentable: relanza este run desde Actions; la orden \`continua\` que lo disparo sigue valiendo y no hace falta escribirla otra vez."
+    exit 1
+  fi
+fi
 if ! ( export GH_TOKEN="${SIRIUS_TRIGGER_TOKEN:-${GH_TOKEN:-}}"
-       sirius_set_issue_labels "$REPO" "$ISSUE" "$etiqueta_destino" "$parada" ); then
-  echo "::error::No se pudo reponer ${etiqueta_destino} en #${ISSUE}; reintentable."
+       sirius_remove_issue_labels "$REPO" "$ISSUE" "$parada" ); then
+  # Fallo la retirada o solo su verificacion: se mira el estado real antes de
+  # decir nada, porque «la parada sigue puesta» puede ser falso.
+  lectura_ok=1
+  etiquetas_ahora="$(sirius_retry gh api "repos/${REPO}/issues/${ISSUE}" --jq '.labels[].name')" || lectura_ok=0
+  if [ "$lectura_ok" = 1 ] && ! printf '%s\n' "$etiquetas_ahora" | grep -Fxq "$parada"; then
+    echo "::warning::La parada ${parada} de #${ISSUE} ya no esta aunque su verificacion fallo; sigo con el evento."
+  elif [ "$lectura_ok" = 1 ]; then
+    echo "::error::No se pudo retirar ${parada} de #${ISSUE}; no repongo el evento con la parada puesta (la puerta lo rechazaria). Reintentable: relanza este run desde Actions; la orden \`continua\` que lo disparo sigue valiendo."
+    exit 1
+  else
+    echo "::error::No se pudo retirar ${parada} de #${ISSUE} ni comprobar si sigue puesta. Mira la incidencia: si la parada sigue, relanza este run desde Actions (la orden \`continua\` sigue valiendo); si ya no esta, aplica ${etiqueta_destino} a mano, que es lo unico que falta."
+    exit 1
+  fi
+fi
+if ! ( export GH_TOKEN="${SIRIUS_TRIGGER_TOKEN:-${GH_TOKEN:-}}"
+       sirius_set_issue_labels "$REPO" "$ISSUE" "$etiqueta_destino" ); then
+  echo "::error::La parada ${parada} de #${ISSUE} ya esta retirada pero no se pudo aplicar ${etiqueta_destino}. Aplicala a mano: sin parada, un nuevo \`continua\` no tendria nada que levantar."
   exit 1
 fi
 
