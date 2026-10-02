@@ -177,6 +177,19 @@ En `.github/workflows/implement-sirius-work.yml`:
   escribirá su diagnóstico antes de la hora límite en vez de morir a los
   59:52. Queda para la mina de octubre.
 
+Ronda 3 de Codex sobre `ac9fc431` (P1): con plazo propio en «Consumir el
+evento y marcar en curso» —tres ediciones separadas: poner `implementing`,
+quitar `implement-requested`, quitar `planned`—, un atasco de GitHub a medias
+deja el paso muerto y «Aplicar el veredicto» corre igual sin veredicto; como
+solo retiraba `implementing`, la incidencia quedaba con `failed-safely` junto
+a una petición o un `planned` a medio consumir, que el reconciliador lee como
+contradicción y no reanuda. `sirius_apply_verdict.sh` retira ahora, en toda
+transición del implementador y en su respaldo sin transición, las tres
+etiquetas que aquel paso debía consumir: el estado final es el de una parada
+normal, y sobre una consumición completa es un no-op verificado. Prueba
+`test_una_consumicion_a_medias_termina_en_failed_safely_sola`; mutación M10
+(retirar solo `implementing`, el guion anterior): cae.
+
 ## Consecuencias
 
 - El implementador sabe cuándo muere y cuándo tiene que estar validando; un

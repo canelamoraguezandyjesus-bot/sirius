@@ -85,10 +85,25 @@ SIRIUS_ROUND_TAG="${GITHUB_RUN_ID:-manual}"
 # confianza, y sin este saneado gobernaria rondas y observaciones.
 
 # transition <marker> <body_file> <add_label> <color> <desc>
+# ADR-228 (ronda 3 de Codex en la PR #675): lo que el implementador retira al
+# cambiar de estado no es solo su etiqueta de curso. «Consumir el evento y
+# marcar en curso» hace tres ediciones separadas (pone `implementing`, quita
+# `implement-requested`, quita `planned`) y tiene plazo propio: si GitHub se
+# atasca a medias, este guion corre igual (`if: always()`), sin veredicto, y
+# dejaba `failed-safely` junto a una peticion o un `planned` a medio consumir,
+# que el reconciliador lee como contradiccion y no reanuda. Retirar aqui todo
+# lo que aquel paso debia consumir deja el mismo estado final que una parada
+# normal; sobre una consumicion completa es un no-op, verificado como el resto.
+LABELS_A_RETIRAR="$IN_PROGRESS_LABEL"
+if [ "$ROLE" = "implementer" ]; then
+  LABELS_A_RETIRAR="sirius:implementing,sirius:implement-requested,sirius:planned"
+fi
+IFS=',' read -r -a LABELS_A_RETIRAR_LISTA <<<"$LABELS_A_RETIRAR"
+
 transition() {
   local marker="$1" body_file="$2" add="$3" color="$4" desc="$5"
   sirius_transition "$REPO" "$ISSUE" "$marker" "$body_file" \
-    "$add" "$color" "$desc" "noclose" "$IN_PROGRESS_LABEL"
+    "$add" "$color" "$desc" "noclose" "$LABELS_A_RETIRAR"
 }
 
 stop_safely() {
@@ -168,7 +183,7 @@ stop_safely() {
     echo "::warning::No se pudo registrar la parada segura (${reason}) mediante la transición verificada; aplicando el estado y el aviso de diagnóstico." >&2
     if ! sirius_ensure_label "$REPO" "sirius:failed-safely" "D93F0B" \
       "Estado temporal: fallo operativo detenido de forma segura" \
-      || ! sirius_set_issue_labels "$REPO" "$ISSUE" "sirius:failed-safely" "$IN_PROGRESS_LABEL"; then
+      || ! sirius_set_issue_labels "$REPO" "$ISSUE" "sirius:failed-safely" "${LABELS_A_RETIRAR_LISTA[@]}"; then
       echo "::error::No se pudo aplicar la etiqueta de parada segura (${reason}) para #${ISSUE}; reintentable." >&2
     fi
     if ! sirius_retry gh issue comment "$ISSUE" --repo "$REPO" --body-file "$body_file"; then
