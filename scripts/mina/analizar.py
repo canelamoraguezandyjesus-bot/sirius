@@ -187,9 +187,21 @@ def main() -> int:
                     }
                 )
 
-    for aviso in avisos_de_editados("las incidencias", "descargar.py", FIN, juzgados):
+    for aviso in avisos_de_editados("las incidencias", FIN, juzgados):
         print(aviso, file=sys.stderr)
-    print(f"Comentarios de confianza hasta FIN editados despues (fuera): {len(editados)}")
+    # El denominador sale de aqui, no de una cuenta a mano (Codex, PR #665, ronda
+    # 14): los de la ventana, los anteriores a ella (contexto de los historiales)
+    # y los editados despues de FIN, que quedan fuera.
+    comentarios_de_confianza = {
+        "en_ventana": sum(1 for c in juzgados if c["created_at"] >= INICIO),
+        "anteriores_a_la_ventana": sum(1 for c in juzgados if c["created_at"] < INICIO),
+        "editados_tras_fin": len(editados),
+    }
+    print(
+        f"Comentarios de confianza: en la ventana {comentarios_de_confianza['en_ventana']}, "
+        f"anteriores a ella {comentarios_de_confianza['anteriores_a_la_ventana']}, "
+        f"editados despues de FIN (fuera) {len(editados)}"
+    )
 
     # --- Poblacion -------------------------------------------------------
     por_incidencia = defaultdict(list)
@@ -308,6 +320,7 @@ def main() -> int:
         "tipo_fichero": dict(tipo),
         "rondas_por_incidencia": conteo,
         "avisos_familia": avisos_familia,
+        "comentarios_de_confianza": comentarios_de_confianza,
         "editados_tras_la_ventana": editados,
         "marcas_guardian": marcas_guardian,
         "alcance_guardian": {src: [con_linea[src], alcance[src]] for src in sorted(alcance)},

@@ -15,7 +15,14 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from datos import PRDIR_LOGICO, RAW, copiar_marca_de_captura, parcial_de, publicar_volcado
+from datos import (
+    PRDIR_LOGICO,
+    RAW,
+    copiar_marca_de_captura,
+    emparejar_captura,
+    parcial_de,
+    publicar_volcado,
+)
 from descargar import BASE, get, paginar
 
 
@@ -85,6 +92,9 @@ def main(prdir: Path = PRDIR_LOGICO, raw: Path = RAW) -> int:
     # Misma captura que el `raw` junto al que se descarga, o nada (ronda 12).
     copiar_marca_de_captura(raw, parcial)
     publicar_volcado(parcial, prdir)
+    # Publicado el de PR, la captura de raw queda emparejada: otro descargar_pr.py
+    # solo ya no hereda su marca (Codex, PR #665, ronda 14).
+    emparejar_captura(raw)
     print(f"hecho; volcado de PR publicado entero en {prdir}")
     return 0
 

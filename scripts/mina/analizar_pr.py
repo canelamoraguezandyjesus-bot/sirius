@@ -127,7 +127,7 @@ def main() -> None:
                 <= MITAD,
             }
         )
-    for aviso in avisos_de_editados("Codex en las PR", "descargar_pr.py", FIN, juzgados):
+    for aviso in avisos_de_editados("Codex en las PR", FIN, juzgados):
         print(aviso, file=sys.stderr)
     print(f"PR con alguna ronda de Codex en la ventana: {len(filas)}")
     for mitad, nombre in ((True, "01->14"), (False, "15->30")):

@@ -115,6 +115,7 @@ def test_una_descarga_completa_publica_la_foto_nueva(
 
     foto = datos.volcado_actual(raw)
     assert sorted(p.name for p in foto.iterdir()) == [
+        "captura.sin-pr",
         "captura.txt",
         "indice.json",
         "issue_1.json",
@@ -266,6 +267,15 @@ def test_los_dos_volcados_tienen_que_ser_de_la_misma_captura(
     assert datos.copiar_marca_de_captura(raw, raw_pr) == marca
     assert datos.avisos_de_los_volcados() == []
 
+    # Ronda 14: una captura de raw empareja UN solo volcado de PR. Publicado el de
+    # PR, `descargar_pr.py` solo ya no hereda la marca: heredaria la de una captura
+    # anterior y los dos volcados pasarian por la misma sin serlo.
+    datos.emparejar_captura(raw)
+    with pytest.raises(SystemExit, match=r"un solo volcado de PR"):
+        datos.copiar_marca_de_captura(raw, raw_pr)
+    assert datos.captura_de(raw_pr) == marca, "la marca publicada no se toca"
+    assert not (raw_pr / datos.MARCA_SIN_PR).exists(), "la senal es de raw, no del volcado de PR"
+
     datos.marcar_captura(raw, "otra")
     [distintas] = datos.avisos_de_los_volcados()
     assert "capturas distintas" in distintas and "otra" in distintas and marca in distintas
@@ -275,6 +285,7 @@ def test_los_dos_volcados_tienen_que_ser_de_la_misma_captura(
     for guion, llamada in (
         ("descargar.py", "marcar_captura(parcial)"),
         ("descargar_pr.py", "copiar_marca_de_captura(raw, parcial)"),
+        ("descargar_pr.py", "emparejar_captura(raw)"),
     ):
         assert llamada in (MINA / guion).read_text(encoding="utf-8")
 
@@ -331,18 +342,16 @@ def test_un_comentario_editado_despues_de_la_ventana_no_es_evidencia_de_ella() -
     assert datos.editado_tras(retocado, fin) is False, "editado dentro de la ventana: vale"
     assert datos.editado_tras(sin_fecha, fin) is None, "sin updated_at no se puede saber"
 
-    assert (
-        datos.avisos_de_editados("las incidencias", "descargar.py", fin, [intacto, retocado]) == []
-    )
-    fuera, sin = datos.avisos_de_editados(
-        "las incidencias", "descargar.py", fin, [editado, intacto, sin_fecha]
-    )
+    assert datos.avisos_de_editados("las incidencias", fin, [intacto, retocado]) == []
+    fuera, sin = datos.avisos_de_editados("las incidencias", fin, [editado, intacto, sin_fecha])
     assert (
         "1 comentarios de las incidencias" in fuera
         and "(1)" in fuera
         and "no se puede reconstruir" in fuera
     )
-    assert "1 comentarios de las incidencias no guardan updated_at" in sin and "descargar.py" in sin
+    assert (
+        "1 comentarios de las incidencias no guardan updated_at" in sin and "cadena entera" in sin
+    )
 
     # Todos los lectores del volcado lo aplican y el descargador de PR guarda la fecha.
     for guion in ("analizar.py", "analizar_pr.py", "falsos_negativos.py", "reproducir_avisos.py"):

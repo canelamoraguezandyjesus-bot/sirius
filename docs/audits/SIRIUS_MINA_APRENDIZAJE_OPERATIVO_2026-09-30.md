@@ -116,10 +116,12 @@ detienen si el volcado que leen no existe o está vacío (un `MINA_DATOS` nuevo
 no es «cero PR y cero hallazgos»); un comentario creado en la ventana y editado
 después del 30-09 queda fuera de la evidencia, porque la API devuelve el cuerpo
 vigente con la fecha de creación original y el de septiembre no se puede
-reconstruir (en esta captura, 0 de los 1 685 comentarios de confianza de la
-ventana; los comentarios de Codex en las PR de esta captura no guardan la fecha
-de edición, así que para ellos no se puede saber y el analizador lo avisa; las
-descargas posteriores la guardan); y cada `sirius-round:N` cuenta una vez por incidencia aunque GitHub
+reconstruir (en esta captura, 0 de los 1 545 comentarios de confianza de la
+ventana, cifra que `analizar.py` imprime y guarda en `resumen.json`; los
+comentarios de Codex en las PR de esta captura no guardan la fecha de edición,
+así que para ellos no se puede saber y el analizador lo avisa; las descargas
+posteriores la guardan, y una captura de `raw` empareja un solo volcado de PR,
+así que renovarla es repetir la cadena entera); y cada `sirius-round:N` cuenta una vez por incidencia aunque GitHub
 lo hubiera publicado dos veces. Y la reconstrucción ronda a ronda solo cuenta rondas y avisos
 publicados dentro de la ventana 01→30-09: lo anterior al 01-09 es contexto del
 detector, no medición; y un tramo que el detector ya marcaba entero con lo

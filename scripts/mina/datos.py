@@ -187,12 +187,23 @@ def avisos_de_los_volcados() -> list[str]:
 #: cifras que los cruzan (las rondas limpias de §5) saldrian mezcladas sin
 #: aviso (Codex, PR #665, ronda 12).
 MARCA_DE_CAPTURA = "captura.txt"
+#: La senal de que la captura de `raw` aun no tiene su volcado de PR: una captura
+#: empareja UN solo volcado de PR. Sin esto, `descargar_pr.py` ejecutado solo
+#: heredaba la marca de una captura anterior y los dos volcados pasaban por la
+#: misma captura sin serlo (Codex, PR #665, ronda 14).
+MARCA_SIN_PR = "captura.sin-pr"
+
+
+def _escribir_marca(volcado: Path, marca: str) -> None:
+    (volcado / MARCA_DE_CAPTURA).write_text(marca + "\n", encoding="utf-8")
 
 
 def marcar_captura(volcado: Path, marca: str | None = None) -> str:
-    """Escribe la marca de captura en un volcado (el parcial, antes de publicarlo)."""
+    """Escribe la marca de captura en un volcado de `raw` (el parcial, antes de
+    publicarlo) y la senal de que aun no tiene volcado de PR."""
     marca = marca or datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    (volcado / MARCA_DE_CAPTURA).write_text(marca + "\n", encoding="utf-8")
+    _escribir_marca(volcado, marca)
+    (volcado / MARCA_SIN_PR).touch()
     return marca
 
 
@@ -211,7 +222,19 @@ def copiar_marca_de_captura(desde: Path, volcado: Path) -> str:
         raise SystemExit(
             f"{desde} no lleva {MARCA_DE_CAPTURA}: repite descargar.py antes de descargar las PR"
         )
-    return marcar_captura(volcado, marca)
+    if not (desde / MARCA_SIN_PR).exists():
+        raise SystemExit(
+            f"la captura {marca} de {desde} ya tiene su volcado de PR, y una captura empareja "
+            "un solo volcado de PR: repite descargar.py y despues descargar_pr.py"
+        )
+    _escribir_marca(volcado, marca)
+    return marca
+
+
+def emparejar_captura(desde: Path) -> None:
+    """El volcado de PR ya esta publicado: la captura de `desde` queda emparejada y
+    otro `descargar_pr.py` solo ya no hereda su marca."""
+    (desde / MARCA_SIN_PR).unlink(missing_ok=True)
 
 
 def avisos_de_captura(raw: Path, pr: Path) -> list[str]:
@@ -270,9 +293,7 @@ def editado_tras(comentario: Mapping[str, Any], fin: str) -> bool | None:
     return str(editado) > fin
 
 
-def avisos_de_editados(
-    que: str, descargador: str, fin: str, comentarios: Sequence[Mapping[str, Any]]
-) -> list[str]:
+def avisos_de_editados(que: str, fin: str, comentarios: Sequence[Mapping[str, Any]]) -> list[str]:
     """Lo que un analizador tiene que decir de los comentarios que juzga (creados
     hasta `fin`): cuantos se editaron despues y quedan fuera, con sus ids, y
     cuantos no se pueden juzgar porque el volcado no guarda `updated_at`."""
@@ -289,7 +310,8 @@ def avisos_de_editados(
     if sin_fecha:
         avisos.append(
             f"AVISO: {len(sin_fecha)} comentarios de {que} no guardan updated_at: no se puede "
-            f"saber si se editaron despues de {fin}; se usan tal cual. Repite {descargador} "
-            f"para guardarlo."
+            f"saber si se editaron despues de {fin}; se usan tal cual. Para guardarlo repite "
+            "la cadena entera, descargar.py y despues descargar_pr.py: un volcado de PR "
+            "descargado solo no se empareja con una captura anterior."
         )
     return avisos
