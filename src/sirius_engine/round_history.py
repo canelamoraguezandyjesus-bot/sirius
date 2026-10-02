@@ -193,16 +193,27 @@ def revisores_conocidos(records: Sequence[Mapping[str, Any]]) -> set[str]:
     return conocidos
 
 
+#: Los revisores de esta casa: Claude y Codex. Una procedencia de un registro
+#: antiguo solo nombra a alguien si es uno de ellos: en modo solo el veredicto no
+#: pasa por el agregador y el prefijo del identificador es el que el modelo
+#: escribiera (``BUG-1`` → ``BUG``), que no es ningún revisor; leído como tal, una
+#: ronda moderna solo de Claude lo tenía por ajeno y proyectaba fuera esos
+#: hallazgos, también los suyos (ronda 6 de Codex en la PR #678).
+REVISORES_DE_LA_CASA: frozenset[str] = frozenset({"CLAUDE", "CODEX"})
+
+
 def _procedencias_de(record: Mapping[str, Any]) -> set[str]:
     """Los revisores que un registro sin declaración tuvo, a la vista de sus
-    hallazgos: la procedencia de cada uno (``CLAUDE``, ``CODEX``). Un hallazgo
-    sin fuente reconocible (``SIN-FUENTE``) no nombra a nadie."""
+    hallazgos: la procedencia de cada uno, si nombra a un revisor de la casa
+    (:data:`REVISORES_DE_LA_CASA`). Un hallazgo sin fuente reconocible
+    (``SIN-FUENTE``) o con el prefijo que el modelo escribiera en modo solo
+    no nombra a nadie."""
     fuentes = {
         str(item.get("source") or "").strip().upper()
         for item in record.get("findings") or []
         if isinstance(item, Mapping)
     }
-    return {f for f in fuentes if f and f != "SIN-FUENTE"}
+    return fuentes & REVISORES_DE_LA_CASA
 
 
 def _conjunto_de_revisores(valor: object) -> set[str]:

@@ -158,7 +158,13 @@ def test_el_conjunto_conocido_incluye_las_procedencias_de_los_registros_antiguos
 
     antiguo = {
         "round": 1,
-        "findings": [{"source": "CLAUDE"}, {"source": "codex "}, {"source": "SIN-FUENTE"}, {}],
+        "findings": [
+            {"source": "CLAUDE"},
+            {"source": "codex "},
+            {"source": "SIN-FUENTE"},
+            {"source": "BUG"},
+            {},
+        ],
     }
     solo_claude = {
         "round": 2,
@@ -169,6 +175,9 @@ def test_el_conjunto_conocido_incluye_las_procedencias_de_los_registros_antiguos
     assert revisores_conocidos([antiguo, solo_claude]) == {"CLAUDE", "CODEX"}
     assert revisores_conocidos([antiguo]) == {"CLAUDE", "CODEX"}
     assert revisores_conocidos([{"round": 1, "findings": [{"source": "SIN-FUENTE"}]}]) == set()
+    # Ronda 6: en modo solo el prefijo del identificador es el que el modelo
+    # escribiera (`BUG-1`); no es ningun revisor y no proyecta nada.
+    assert revisores_conocidos([{"round": 1, "findings": [{"source": "BUG"}]}]) == set()
     # Un registro que SI declara revisores se cree a si mismo, no a sus hallazgos.
     declarado = {"round": 3, "findings": [{"source": "COPILOT"}], "reviewers": ["CLAUDE"]}
     assert revisores_conocidos([declarado]) == {"CLAUDE"}

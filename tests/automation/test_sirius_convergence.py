@@ -1345,6 +1345,24 @@ def test_un_historial_antiguo_de_los_dos_y_una_ronda_solo_de_claude_no_es_progre
     assert _decide(rondas)["reason"] == "progreso"
 
 
+def test_un_prefijo_de_identificador_que_no_es_un_revisor_no_proyecta_nada() -> None:
+    """Ronda 6 de Codex en la PR #678: en modo solo el veredicto no pasa por el
+    agregador y el prefijo del identificador es el que el modelo escribiera
+    (`BUG-1` → `source: BUG`). Leído como revisor conocido, una ronda moderna
+    solo de Claude lo tenía por ajeno y proyectaba fuera esos hallazgos, también
+    los suyos: pendientes a cero y una reaparición invisible. Solo `CLAUDE` y
+    `CODEX` son procedencias que nombran a alguien."""
+    bug = _observation("BUG-1", archivo="src/a.py:1", problema="Falta la guarda.")
+    rondas = [
+        _round_comment(1, HEAD_A, [bug]),
+        _ronda_con_revisores(2, HEAD_B, [], _SOLO_CLAUDE, esperados=_SOLO_CLAUDE),
+    ]
+    assert _decide(rondas)["reason"] == "progreso"
+    rondas.append(_ronda_con_revisores(3, HEAD_C, [bug], _SOLO_CLAUDE, esperados=_SOLO_CLAUDE))
+    result = _decide(rondas)
+    assert result["decision"] == "BLOCK" and result["reason"] == "reaparicion", result
+
+
 def test_una_ronda_entera_sobre_el_mismo_head_que_la_parcial_anterior_no_avanza() -> None:
     """Ronda 4 de Codex en la PR #678: entera A → parcial B → entera B sobre el
     head de B. La proyección dejaba fuera la parcial y la guarda del head
