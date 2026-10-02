@@ -546,3 +546,39 @@ def test_un_aviso_de_no_vigente_que_no_se_puede_publicar_no_valida_la_activacion
     assert _comments(env).strip() == ""
     assert "Activacion valida" not in proc.stdout
     assert "Reintentable" in proc.stderr
+
+
+REPARTO = GATE.with_name("sirius_reparto_activacion.sh")
+
+
+def test_el_reparto_lee_el_perfil_con_el_parser_canonico(tmp_path: Path) -> None:
+    """Ronda 10 de Codex en la PR #670: con `Perfil: implementer@4junk` delante y
+    `Perfil: investigador@2` detrás, el `sed` del reparto decía `implementer` y la
+    puerta (parser canónico) eximía `investigador@2`: el implementador consumía
+    una orden del otro carril. El reparto lee ahora con el mismo parser."""
+    env = _setup(tmp_path)
+    cuerpo = _COMPLETE_BODY.replace(
+        f"Perfil: implementer@{_VIGENTE}", "Perfil: implementer@4junk\nPerfil: investigador@2"
+    )
+    _seed(env, ["sirius:planned", "sirius:implement-requested"], body=cuerpo)
+
+    def reparto(evento: str, puerta: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            ["bash", str(REPARTO), "owner/repo", "60", evento, puerta],
+            capture_output=True,
+            text=True,
+            env=env,
+            check=False,
+        )
+
+    propia = reparto("investigador", "investigador")
+    assert propia.returncode == 0 and propia.stdout.strip() == "investigador", propia.stderr
+    ajena = reparto("investigador", "otros")
+    assert ajena.returncode == 1, "el implementador no es dueño de una orden de investigación"
+    # Y los dos workflows pasan el rol del evento leído con el mismo parser.
+    for workflow in ("implement-sirius-work.yml", "investigar-orden.yml"):
+        texto = (REPO_ROOT / ".github" / "workflows" / workflow).read_text(encoding="utf-8")
+        assert "resolver_prompt.py --perfil | sed 's/@.*//'" in texto, workflow
+        assert "sed -n 's/^Perfil" not in texto, workflow
+    assert "sed -n 's/^Perfil" not in REPARTO.read_text(encoding="utf-8")
+    assert "sed -n 's/^Perfil" not in GATE.read_text(encoding="utf-8")

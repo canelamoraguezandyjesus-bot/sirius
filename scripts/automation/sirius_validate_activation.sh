@@ -271,7 +271,7 @@ fi
 aviso="$(ISSUE_BODY="$cuerpo_a_ejecutar" python3 "${SIRIUS_GATE_DIR}/resolver_prompt.py" --carril ejecucion --vigencia 2>/dev/null)" || aviso=""
 rm -f "$body_file"
 if [ -n "$aviso" ]; then
-  declarado="$(printf '%s' "$cuerpo_a_ejecutar" | sed -n 's/^Perfil: *\([A-Za-z_-][A-Za-z_-]*@[0-9][0-9]*\).*/\1/p' | head -1)"
+  declarado="$perfil_a_ejecutar"
   marker_aviso="<!-- sirius-activation:aviso:perfil-no-vigente:${declarado} -->"
   aviso_file="$(mktemp)"
   printf '%s\n\n%s\n\n%s\n' \

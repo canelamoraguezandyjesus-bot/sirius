@@ -67,8 +67,14 @@ PERFIL_EVENTO="${3-}"
 ESTA_PUERTA="${4:?uso: la puerta que llama: «investigador» u «otros»}"
 OWNER_LOGIN="${REPOSITORY_OWNER:-${REPO%%/*}}"
 
+# El rol del `Perfil:` con el MISMO parser que el resolutor y la puerta de
+# activacion (`resolver_prompt.py --perfil`, `profile_field`), no con un `sed`
+# propio: con dos lineas `Perfil:` -una malformada delante y una valida detras-
+# el `sed` repartia por la primera y la puerta eximia por la segunda, y el
+# implementador consumia una orden del otro carril (ronda 10 de Codex en la PR
+# #670). Las dos puertas pasan el rol del evento leido con este mismo parser.
 perfil_de() {
-  printf '%s' "$1" | sed -n 's/^Perfil: *\([A-Za-z_-][A-Za-z_-]*\)@.*/\1/p' | head -1
+  ISSUE_BODY="$1" python3 "${_REPARTO_DIR}/resolver_prompt.py" --perfil | sed 's/@.*//'
 }
 
 cuerpo_actual=""

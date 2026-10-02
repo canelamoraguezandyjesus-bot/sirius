@@ -125,7 +125,7 @@ jobs:
           # llaman las dos puertas.
           reparto_rc=0
           bash scripts/automation/sirius_reparto_activacion.sh \
-            "$GH_REPO" "$ISSUE_NUMBER" "$(printf '%s' "$ISSUE_BODY" | sed -n 's/^Perfil: *\([A-Za-z_-][A-Za-z_-]*\)@.*/\1/p' | head -1)" \
+            "$GH_REPO" "$ISSUE_NUMBER" "$(python3 scripts/automation/resolver_prompt.py --perfil | sed 's/@.*//')" \
             "investigador" || reparto_rc=$?
           case "$reparto_rc" in
             0) : ;;

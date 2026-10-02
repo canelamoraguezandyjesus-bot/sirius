@@ -173,6 +173,7 @@ fichero restaurado):
 | M8 | un evento rancio se rechaza retirando la etiqueta (las versiones 1 y 2 de la regla) | cae `un_evento_cuyo_perfil_cambio_despues_es_rancio_y_no_toca_ninguna_etiqueta` |
 | M9 | la exención del carril ajeno vuelve a leer el rol con `sed` (ronda 9 de Codex) | cae `la_exencion_de_carril_usa_el_parser_canonico` |
 | M10 | el aviso que no se puede publicar vuelve a ser un `::warning` y la activación sigue | cae `un_aviso_de_no_vigente_que_no_se_puede_publicar_no_valida_la_activacion` |
+| M11 | el reparto vuelve a leer el rol con `sed` (ronda 10 de Codex) | cae `el_reparto_lee_el_perfil_con_el_parser_canonico` |
 
 - Las 20 pruebas del fichero en verde; `ruff`, `mypy`; `bash -n` sobre la
   puerta. Batería entera: en la PR.
@@ -234,6 +235,18 @@ aviso perdido en el log; ahora conserva la activación sin tocar etiquetas y sal
 con 3, que el implementador trata como «no se pudo completar; reintentable» y el
 validador independiente como run en rojo
 (`test_un_aviso_de_no_vigente_que_no_se_puede_publicar_no_valida_la_activacion`).
+
+Ronda 10 de Codex sobre `edf6b206`: quedaba un parser más. El reparto
+(`sirius_reparto_activacion.sh` y la llamada de los dos workflows) leía el rol
+con el `sed` permisivo: con `Perfil: implementer@4junk` delante y
+`Perfil: investigador@2` detrás, repartía por la primera línea (`implementer`)
+mientras la puerta, con el parser canónico, eximía por la segunda, y el
+implementador consumía una orden del otro carril hasta morir en
+`resolver_prompt.py --carril ejecucion`. El rol del `Perfil:` se lee en todas
+partes con el mismo parser (`resolver_prompt.py --perfil`): el reparto, las dos
+puertas y el marcador del aviso
+(`test_el_reparto_lee_el_perfil_con_el_parser_canonico`, que además exige que
+no quede ningún `sed -n 's/^Perfil` en los workflows ni en los guiones).
 
 ## Consecuencias
 
