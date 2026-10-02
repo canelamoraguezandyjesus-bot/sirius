@@ -329,10 +329,18 @@ def aggregate(
 
     # --- Regla 5: cambios solicitados por cualquiera ----------------------------
     if claude_status == "CHANGES_REQUESTED" or (dual and codex_status == "CHANGES_REQUESTED"):
-        observations = _dedupe(
-            (claude_observations if claude_status == "CHANGES_REQUESTED" else [])
-            + codex_observations
-        )
+        # ADR-230: el veredicto dice qué revisores tuvo la ronda, y una ronda
+        # que Codex no revisó lleva SOLO lo de Claude: nada de Codex entra, ni
+        # como observación ni como revisor, porque nadie lo buscó en este head.
+        if claude_lleva_la_ronda:
+            observations = _dedupe(claude_observations)
+            reviewers = ["CLAUDE"]
+        else:
+            observations = _dedupe(
+                (claude_observations if claude_status == "CHANGES_REQUESTED" else [])
+                + codex_observations
+            )
+            reviewers = ["CLAUDE", "CODEX"] if dual else ["CLAUDE"]
         parts = [f"Claude: {claude_status}"]
         if dual:
             parts.append(
@@ -357,6 +365,7 @@ def aggregate(
             "summary": summary,
             "reviewed_head_sha": expected_head,
             "sources": sources,
+            "reviewers": reviewers,
             "observations": observations,
         }
 

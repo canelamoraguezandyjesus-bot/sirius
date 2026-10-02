@@ -305,3 +305,53 @@ def test_sin_registros_no_hay_familia_repetida() -> None:
 
 def test_el_umbral_exige_al_menos_tres() -> None:
     assert RONDAS_CONSECUTIVAS_MINIMAS == 3
+
+
+# --------------------------------------------------------------------------- #
+# ADR-230: una ronda en la que Codex no revisó no rompe el tramo de un fichero
+# --------------------------------------------------------------------------- #
+
+
+def test_una_ronda_en_la_que_codex_no_reviso_no_rompe_el_tramo_de_un_fichero_que_codex_senala() -> (
+    None
+):
+    """ADR-230, predicción 2 de su nota de arranque: Codex señala `x.py` en las
+    rondas 3, 5 y 6; en la 4 solo revisó Claude (ADR-226) y no lo señaló. Contra
+    el detector anterior el hueco rompía el tramo y la familia real se quedaba
+    sin aviso. Los registros sin `reviewers` (anteriores a ADR-230) son enteros:
+    la mezcla es a propósito."""
+    archivo = "src/x.py"
+    registros: list[dict[str, object]] = [
+        _registro(3, [_hallazgo(archivo, "f3")]),
+        {
+            **_registro(4, [_hallazgo("src/otro.py", "f4", fuente="CLAUDE")]),
+            "reviewers": ["CLAUDE"],
+        },
+        {**_registro(5, [_hallazgo(archivo, "f5")]), "reviewers": ["CLAUDE", "CODEX"]},
+        _registro(6, [_hallazgo(archivo, "f6")]),
+    ]
+    deteccion = detectar_familia_repetida(registros)
+    assert [(e.archivo, e.rondas) for e in deteccion.evidencias] == [(archivo, (3, 5, 6))]
+    detalle = deteccion.evidencias[0].detalle
+    assert "3 rondas consecutivas (rondas 3-6)" in detalle, (
+        "la cabecera que leen quienes lo reproducen"
+    )
+    assert "la ronda 4 no la revisaron todos los revisores" in detalle
+
+    # La transparencia es solo para los ficheros ausentes de la ronda parcial: si
+    # Claude sí señaló `x.py` en la 4, cuenta como una aparición más, como siempre.
+    con_claude = list(registros)
+    con_claude[1] = {
+        **_registro(4, [_hallazgo(archivo, "f4c", fuente="CLAUDE")]),
+        "reviewers": ["CLAUDE"],
+    }
+    assert detectar_familia_repetida(con_claude).evidencias[0].rondas == (3, 4, 5, 6)
+
+    # Y sin declaración de revisores, un hueco sigue siendo un hueco.
+    sin_declarar = [
+        _registro(3, [_hallazgo(archivo, "f3")]),
+        _registro(4, []),
+        _registro(5, [_hallazgo(archivo, "f5")]),
+        _registro(6, [_hallazgo(archivo, "f6")]),
+    ]
+    assert not detectar_familia_repetida(sin_declarar).hay_familia_repetida

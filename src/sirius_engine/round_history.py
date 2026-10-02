@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 # --- Registro de ronda -------------------------------------------------------
@@ -145,10 +146,45 @@ def parse_round_records(text: str) -> list[dict[str, Any]]:
             str(item.get("fingerprint") or "") for item in normalized if item.get("fingerprint")
         }
         record["pending"] = len(normalized)
+        record["reviewers"] = revisores_declarados(record.get("reviewers"))
         records.append(record)
     records.sort(key=lambda item: int(item["round"]))
     _apply_sticky_severity(records)
     return records
+
+
+def revisores_declarados(valor: object) -> tuple[str, ...] | None:
+    """Los revisores que una ronda declara haber tenido (ADR-230), o ``None`` si es entera.
+
+    ``None`` es «ronda entera»: los registros anteriores a ADR-230 no llevan el
+    campo y se leen como enteros, así que nada cambia para el historial que ya
+    existe. Una lista vacía o sin forma también se lee como entera: no se
+    inventa una ronda parcial donde nadie la declaró.
+    """
+    if not isinstance(valor, list):
+        return None
+    nombres = sorted({str(v).strip().upper() for v in valor if isinstance(v, str) and v.strip()})
+    return tuple(nombres) or None
+
+
+def rondas_parciales(records: Sequence[Mapping[str, Any]]) -> set[int]:
+    """Los números de las rondas que declararon menos revisores que el conjunto conocido.
+
+    El conjunto conocido es la unión de los revisores declarados en el
+    historial; una ronda en la que Codex no revisó (ADR-226) declara solo a
+    Claude y es parcial frente a las rondas enteras que la rodean (ADR-230).
+    Si ninguna ronda declara revisores, o todas declaran los mismos, no hay
+    parciales: un historial de un solo revisor no tiene rondas a medias.
+    """
+    declarados = [set(record["reviewers"]) for record in records if record.get("reviewers")]
+    if not declarados:
+        return set()
+    conocidos: set[object] = set().union(*declarados)
+    return {
+        int(record["round"])
+        for record in records
+        if record.get("reviewers") and set(record["reviewers"]) < conocidos
+    }
 
 
 def _apply_sticky_severity(records: list[dict[str, Any]]) -> None:

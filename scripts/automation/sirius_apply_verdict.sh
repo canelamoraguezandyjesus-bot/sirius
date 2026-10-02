@@ -785,7 +785,13 @@ case "$verdict" in
 
     round_verdict="$(mktemp)"
     round_record="$(mktemp)"
-    jq -n --argjson obs "$observations" '{observations: $obs}' >"$round_verdict"
+    # ADR-230: el registro lleva qué revisores tuvo la ronda, para que la
+    # convergencia y el detector de familias no lean una ronda sin Codex como
+    # una ronda entera con menos hallazgos. Un veredicto sin el campo (los
+    # anteriores a ADR-230) deja el registro sin él y se lee como entera.
+    reviewers_json="$(jq -c '.reviewers // null' "$VERDICT_FILE" 2>/dev/null || echo null)"
+    jq -n --argjson obs "$observations" --argjson rev "$reviewers_json" \
+      '{observations: $obs} + (if $rev == null then {} else {reviewers: $rev} end)' >"$round_verdict"
     if ! python3 "${SIRIUS_VERDICT_DIR}/sirius_convergence.py" record \
       --verdict-file "$round_verdict" --round "$round_number" \
       --head "$head_sha" --output "$round_record"; then

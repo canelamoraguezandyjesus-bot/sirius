@@ -68,3 +68,22 @@ el 01-10 (14:07 y 19:44 UTC), así que el camino se va a usar.
 - De paso, y sin medición propia: los defectos de prosa de ADR-226 que la
   misma revisión listó (ADR-146 citado donde tocaba ADR-060, un «presupuesto
   de rondas» que no existe, su nota de arranque sin la palabra «fecha»).
+
+## Resultado (escrito DESPUÉS, 02-10-2026)
+
+- Predicción 1: confirmada. Con el código de `main` para la decisión (sin
+  omitir las parciales, mutación M3) la secuencia entera → solo Claude →
+  entera da `BLOCK` `reaparicion`; con el cambio, `CONTINUE`
+  `sin-progreso-aislado` sobre dos rondas comparables.
+- Predicción 2: confirmada. Sin transparencia (mutación M4, el código de
+  `main`) el fichero de las rondas 3, 5 y 6 con la 4 solo de Claude no es
+  familia; con el cambio es un tramo `(3, 5, 6)`.
+- Mutaciones: M1 caen 5 pruebas, M2 cae 1, M3 caen 2, M4 cae 1, M5 cae 1; los
+  ficheros restaurados y comparados con su copia después de cada una.
+- Criterio de parada: no hizo falta tocar la definición de progreso entre
+  rondas enteras. Las baterías existentes siguen en verde sin tocar ninguna
+  prueba salvo para añadir `reviewers`.
+- Desviación respecto a lo previsto: ninguna de fondo. El número del ADR es el
+  230 (el siguiente libre), no el que esta nota daba por supuesto en su
+  nombre de rama.
+- ADR-230 y H-230 (en el segundo commit, con el número de la PR).

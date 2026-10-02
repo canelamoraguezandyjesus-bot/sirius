@@ -74,3 +74,33 @@ def test_las_tres_funciones_compartidas_tienen_una_unica_definicion() -> None:
             assert f"def {nombre}(" not in texto, (
                 f"{path} redefine {nombre}(): debería importarla de round_history, no duplicarla."
             )
+
+
+def test_los_revisores_declarados_se_leen_y_sin_ellos_la_ronda_es_entera() -> None:
+    """ADR-230: el registro dice qué revisores tuvo la ronda; sin el campo (todo el
+    historial anterior) la ronda es entera, y una lista vacía o sin forma también."""
+    from sirius_engine.round_history import (
+        parse_round_records,
+        revisores_declarados,
+        rondas_parciales,
+    )
+
+    assert revisores_declarados(None) is None and revisores_declarados([]) is None
+    assert revisores_declarados(["codex", " Claude "]) == ("CLAUDE", "CODEX")
+    assert revisores_declarados("CLAUDE") is None and revisores_declarados([1, ""]) is None
+
+    def ronda(n: int, extra: str = "") -> str:
+        return (
+            f"<!-- sirius-round:{n} -->\n\n## RONDA_HALLAZGOS\n```json\n"
+            f'{{"round": {n}, "head": "h{n}", "findings": []{extra}}}\n```\n'
+        )
+
+    registros = parse_round_records(
+        ronda(1)
+        + ronda(2, ', "reviewers": ["CLAUDE"]')
+        + ronda(3, ', "reviewers": ["CLAUDE", "CODEX"]')
+    )
+    assert [r["reviewers"] for r in registros] == [None, ("CLAUDE",), ("CLAUDE", "CODEX")]
+    assert rondas_parciales(registros) == {2}
+    assert rondas_parciales(registros[:2]) == set(), "sin una ronda mayor conocida nadie es parcial"
+    assert rondas_parciales([registros[0]]) == set()

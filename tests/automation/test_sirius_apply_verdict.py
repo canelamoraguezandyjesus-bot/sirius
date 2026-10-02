@@ -552,6 +552,7 @@ def test_reviewer_changes_requested_publishes_the_round_record(tmp_path: Path) -
             "verdict": "CHANGES_REQUESTED",
             "summary": "hay defectos",
             "reviewed_head_sha": "c4d482267d9a",
+            "reviewers": ["CLAUDE", "CODEX"],
             "observations": [
                 {
                     "id": "CODEX-001",
@@ -577,6 +578,9 @@ def test_reviewer_changes_requested_publishes_the_round_record(tmp_path: Path) -
     assert record["pending"] == 1
     assert record["findings"][0]["source"] == "CODEX"
     assert len(record["findings"][0]["fingerprint"]) == 16
+    assert record["reviewers"] == ["CLAUDE", "CODEX"], (
+        "ADR-230: el registro publicado lleva los revisores del veredicto"
+    )
 
 
 def test_identical_findings_in_a_new_round_still_publish_their_record(tmp_path: Path) -> None:

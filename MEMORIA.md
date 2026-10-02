@@ -26,13 +26,13 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **218**.
+- Decisiones (ADR): **219**.
 - Bloques del motor: 17 cerrado, 2 fuera_de_alcance, 1 pendiente.
 - Defectos registrados: 3 abierto, 74 cerrado.
 - Ideas aparcadas o descartadas: 5 aparcada, 2 descartada, 2 promovida.
 - Skills: **19**.
 - Investigaciones: **10** (fotos con fecha; caducan).
-- Documentos: **200**, de los que **138** no declaran fecha.
+- Documentos: **201**, de los que **137** no declaran fecha.
 
 ## Las skills: lo que ya costó averiguar dos veces (ADR-211)
 
@@ -79,6 +79,7 @@ huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| [230](docs/decisions/ADR-230-registrar-que-revisores-tuvo-cada-ronda-y-medir-la-convergencia-y-las-familias-solo-entre-rondas-comparables.md) | 2026-10-02 | APROBADO | Registrar qué revisores tuvo cada ronda y medir la convergencia y las familias solo entre rondas comparables | El veredicto agregado dice qué revisores tuvo la ronda. La regla 5 de `sirius_aggregate_reviews.py` añade `reviewers`: `["CLAUDE", "CODEX"]` en la revisión dual con los dos revisando, `["CLAUDE"]` sin revisión dual o cuando Codex declaró… |
 | [229](docs/decisions/ADR-229-los-instantes-de-g8-se-comparan-en-una-sola-forma-canonica-sean-cuales-sean-sus-escrituras.md) | 2026-10-01 | APROBADO | Los instantes de G8 se comparan en una sola forma canónica, sean cuales sean sus escrituras | `src/sirius/domain/instantes.py` (nuevo): `FORMA_CANONICA` (`%Y-%m-%dT%H:%M:%S.%fZ`), `en_forma_canonica(texto) -> str \| None` (una fecha ISO con hora opcional tras `T` o espacio, fracción opcional de cualquier longitud y zona opcional… |
 | [226](docs/decisions/ADR-226-cuando-codex-declara-que-no-revisa-y-claude-pidio-cambios-la-ronda-entrega-los-hallazgos-de-claude-en-vez-de-tirarlos.md) | 2026-10-01 | APROBADO | Cuando Codex declara que no revisa y Claude pidió cambios, la ronda entrega los hallazgos de Claude en vez de tirarlos | En `scripts/automation/sirius_aggregate_reviews.py`: Las razones con las que el recolector dice que el conector declaró que |
 | [224](docs/decisions/ADR-224-quality-no-muere-por-un-uv-sync-sin-cache-los-dos-pasos-largos-llevan-plazo-propio-y-el-job-sube-de-20-a-60-minutos.md) | 2026-10-01 | APROBADO | Quality no muere por un `uv sync` sin caché: los dos pasos largos llevan plazo propio y el job sube de 20 a 60 minutos | En `.github/workflows/quality.yml`: el job pasa de `timeout-minutes: 20` a 60; «Sync environment» lleva `timeout-minutes: 20` (peor medido sin caché: |
@@ -336,6 +337,7 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 | `pieza-correcta-a-la-que-no-llama-quien-la-necesita` | 1 | sí | 197 |
 | `plan-que-hay-que-terminar-de-una-sentada` | 1 | sí | 176 |
 | `pregunta-al-propietario-que-nadie-vuelve-a-poner-delante` | 1 | no en todas | 198 |
+| `registro-sin-decir-quien-lo-hizo` | 1 | sí | 230 |
 | `tarea-periodica-sin-reloj` | 1 | no en todas | 201 |
 | `tramite-que-solo-puede-hacer-una-persona-y-no-anade-comprobacion` | 1 | sí | 205 |
 
@@ -465,6 +467,10 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 
 - **ADR-198** — una incidencia formula una pregunta que solo el (sin prueba que lo haga cumplir: ninguna prueba: nada en este repositorio distingue una).
 
+### `registro-sin-decir-quien-lo-hizo`
+
+- **ADR-230** — comparar una ronda a la que le falta un revisor con rondas enteras y leer la ausencia de sus hallazgos como progreso, y su vuelta como reaparición (lo hace cumplir `tests/automation/test_sirius_convergence.py`).
+
 ### `tarea-periodica-sin-reloj`
 
 - **ADR-201** — el único trabajo que mide los ciclos de este (sin prueba que lo haga cumplir: ninguna prueba: que el reloj dispare de verdad no lo puede).
@@ -555,7 +561,7 @@ nada por su cuenta. «Sin fecha declarada» es un aviso, no un dato.
 
 ### `docs/audits`
 
-**143 documentos**, 84 sin fecha declarada; el más reciente declara 2026-10-01.
+**144 documentos**, 83 sin fecha declarada; el más reciente declara 2026-10-02.
 Es la carpeta de la evidencia y crece a dos filas por ADR, así que la fila
 de cada documento vive en un índice generado aparte,
 [`docs/audits/INDICE.md`](docs/audits/INDICE.md), que escribe el
