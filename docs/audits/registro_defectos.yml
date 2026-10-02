@@ -1361,6 +1361,19 @@ defectos:
       - src/sirius_engine/adapters/github_worker_request.py
       - tests/engine/test_worker_request.py
 
+  - id: H-227
+    titulo: El motivo por el que el reflector apartaba un encargo para una persona solo quedaba en el log del run; ningun fichero lo conservaba y la vista de desenlaces lo contaba como un activo mas
+    bloque: motor
+    gravedad: baja
+    estado: cerrado
+    cerrado_por: 27a1196b44e32b9453a5e7028306cb1e0ec244db
+    pr: 674
+    adr: 227
+    ficheros:
+      - src/sirius_engine/divergencias.py
+      - src/sirius_engine/reflect_cli.py
+      - src/sirius_engine/memoria.py
+
   - id: H-230
     titulo: Una ronda en la que Codex declaro que no revisaba publicaba un RONDA_HALLAZGOS igual que una ronda entera; la convergencia leia la ausencia de las huellas de Codex como progreso y su vuelta como reaparicion, y el detector de familias dejaba que esa ronda rompiera el tramo de un fichero que Codex senala
     bloque: motor
