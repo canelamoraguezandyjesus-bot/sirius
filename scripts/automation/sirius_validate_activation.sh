@@ -233,7 +233,16 @@ fi
 # moriria alli, asi que aqui se rechaza por el resolutor. Un cuerpo SIN
 # `Perfil:` tambien se juzga: ninguna puerta de reparto lo atiende y el
 # implementador pararia en rojo.
-rol_declarado="$(printf '%s' "$cuerpo_a_ejecutar" | sed -n 's/^Perfil: *\([A-Za-z_-][A-Za-z_-]*\)@.*/\1/p' | head -1)"
+# Con el parser canonico (`resolver_prompt.py --perfil`), no con un `sed`: el
+# `sed` leia `investigador@2junk` como `investigador` y lo eximia, y el carril
+# ajeno ejecutaria una orden cuyo `Perfil:` canonico no existe (ronda 9 de
+# Codex en la PR #670). Lo que no es un perfil cae al resolutor y se rechaza.
+if ! perfil_a_ejecutar="$(ISSUE_BODY="$cuerpo_a_ejecutar" python3 "${SIRIUS_GATE_DIR}/resolver_prompt.py" --perfil)"; then
+  rm -f "$body_file"
+  echo "::error::No se pudo leer el Perfil del cuerpo a ejecutar de #${ISSUE} con el parser canonico; no se valida ni se toca ninguna etiqueta. Reintentable." >&2
+  exit 1
+fi
+rol_declarado="${perfil_a_ejecutar%@*}"
 roles_de_otros_carriles="$(python3 - "${SIRIUS_GATE_DIR}/prompts/manifiesto.json" <<'PY'
 import json, sys
 carriles = json.load(open(sys.argv[1], encoding="utf-8"))["carriles"]
@@ -269,8 +278,17 @@ if [ -n "$aviso" ]; then
     "$marker_aviso" \
     "ℹ️ **Perfil no vigente** (\`${declarado}\`)" \
     "$aviso" >"$aviso_file"
-  sirius_comment_once "$REPO" "$ISSUE" "$marker_aviso" "$aviso_file" \
-    || echo "::warning::No se pudo publicar el aviso de perfil no vigente en #${ISSUE}; la activacion sigue."
+  # Si el aviso no se puede publicar, la activacion NO se da por valida: el
+  # aviso es lo unico que deja en la incidencia la version que se va a ejecutar
+  # y como recuperarla, y sin el se consumiria el perfil antiguo en silencio.
+  # Se conserva la activacion (ninguna etiqueta tocada) y se sale con 3, que
+  # quien llama trata como «no se pudo completar; reintentable» (ronda 9 de
+  # Codex en la PR #670).
+  if ! sirius_comment_once "$REPO" "$ISSUE" "$marker_aviso" "$aviso_file"; then
+    rm -f "$aviso_file"
+    echo "::error::No se pudo publicar el aviso de perfil no vigente en #${ISSUE}; la activacion se conserva (ninguna etiqueta tocada) y este run termina sin validarla: relanzalo desde Actions. Reintentable." >&2
+    exit 3
+  fi
   rm -f "$aviso_file"
 fi
 

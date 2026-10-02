@@ -171,6 +171,8 @@ fichero restaurado):
 | M6 | sustituir una instantánea vacía por el cuerpo actual (`:-`) | cae `una_instantanea_vacia_del_evento_es_un_evento_rancio` |
 | M7 | el aviso de no vigente vuelve a prometer «retira, espera y vuelve a aplicar» | cae `un_perfil_valido_pero_no_vigente_avisa_y_deja_pasar` |
 | M8 | un evento rancio se rechaza retirando la etiqueta (las versiones 1 y 2 de la regla) | cae `un_evento_cuyo_perfil_cambio_despues_es_rancio_y_no_toca_ninguna_etiqueta` |
+| M9 | la exención del carril ajeno vuelve a leer el rol con `sed` (ronda 9 de Codex) | cae `la_exencion_de_carril_usa_el_parser_canonico` |
+| M10 | el aviso que no se puede publicar vuelve a ser un `::warning` y la activación sigue | cae `un_aviso_de_no_vigente_que_no_se_puede_publicar_no_valida_la_activacion` |
 
 - Las 20 pruebas del fichero en verde; `ruff`, `mypy`; `bash -n` sobre la
   puerta. Batería entera: en la PR.
@@ -219,6 +221,19 @@ dice. Guarda: `test_el_implementador_vuelve_a_comparar_el_perfil_justo_antes_de_
 La otra mitad de la ronda —que la reanudación con `continua` reponga
 `sirius:planned`— es ADR-223 (PR #671), que entra en `main` antes que esta y
 que esta rama trae al ponerse al día.
+
+Ronda 9 de Codex sobre `a689802e`, dos remates: (1) la exención del carril ajeno
+leía el rol con un `sed` propio, así que `investigador@2junk` pasaba como
+`investigador` y el carril de investigación habría ejecutado una orden cuyo
+`Perfil:` canónico no existe; ahora decide con `resolver_prompt.py --perfil` y lo
+que no es un perfil cae al resolutor y se rechaza
+(`test_la_exencion_de_carril_usa_el_parser_canonico`); (2) si el aviso de perfil
+no vigente no se podía publicar, la puerta lo convertía en `::warning` y daba la
+activación por válida, con lo que el perfil antiguo se consumía con el único
+aviso perdido en el log; ahora conserva la activación sin tocar etiquetas y sale
+con 3, que el implementador trata como «no se pudo completar; reintentable» y el
+validador independiente como run en rojo
+(`test_un_aviso_de_no_vigente_que_no_se_puede_publicar_no_valida_la_activacion`).
 
 ## Consecuencias
 

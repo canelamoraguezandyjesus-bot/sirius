@@ -511,3 +511,38 @@ def test_la_comparacion_del_evento_usa_el_parser_canonico_del_perfil(tmp_path: P
     assert proc.returncode == 2, proc.stderr
     assert "sirius:implement-requested" in _labels(env), "la etiqueta puede ser de otro evento"
     assert f"sirius-activation:evento-rancio:ninguno:implementer@{_VIGENTE}" in _comments(env)
+
+
+def test_la_exencion_de_carril_usa_el_parser_canonico(tmp_path: Path) -> None:
+    """Ronda 9 de Codex en la PR #670: `investigador@2junk` no es un perfil. El
+    `sed` de la exención lo leía como `investigador` y lo eximía, y el carril
+    ajeno ejecutaría una orden sin perfil canónico. Con el parser del resolutor
+    cae al resolutor y se rechaza."""
+    env = _setup(tmp_path)
+    cuerpo = _COMPLETE_BODY.replace(f"Perfil: implementer@{_VIGENTE}", "Perfil: investigador@2junk")
+    _seed(env, ["sirius:planned", "sirius:implement-requested"], body=cuerpo)
+    env["ISSUE_BODY"] = cuerpo
+    proc = _run(env)
+    assert proc.returncode == 0, proc.stderr
+    assert "no lo juzga" not in proc.stdout, "no se exime lo que no es un perfil"
+    assert "sirius:implement-requested" not in _labels(env)
+    assert "perfil-sin-resolver" in _comments(env)
+
+
+def test_un_aviso_de_no_vigente_que_no_se_puede_publicar_no_valida_la_activacion(
+    tmp_path: Path,
+) -> None:
+    """Ronda 9 de Codex en la PR #670: si el aviso de perfil no vigente no se
+    puede publicar, la puerta daba la activación por válida y el perfil antiguo
+    se consumía con el único aviso perdido en el log. Ahora conserva la
+    activación (ninguna etiqueta tocada) y termina reintentable (3)."""
+    env = _setup(tmp_path)
+    env["MOCK_FAIL_COMMENT"] = "1"
+    cuerpo = _COMPLETE_BODY.replace(f"Perfil: implementer@{_VIGENTE}", "Perfil: implementer@2")
+    _seed(env, ["sirius:planned", "sirius:implement-requested"], body=cuerpo)
+    proc = _run(env)
+    assert proc.returncode == 3, proc.stdout + proc.stderr
+    assert "sirius:implement-requested" in _labels(env) and "sirius:planned" in _labels(env)
+    assert _comments(env).strip() == ""
+    assert "Activacion valida" not in proc.stdout
+    assert "Reintentable" in proc.stderr
