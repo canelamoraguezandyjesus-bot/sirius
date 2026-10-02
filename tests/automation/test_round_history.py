@@ -122,3 +122,30 @@ def test_los_revisores_declarados_se_leen_y_sin_ellos_la_ronda_es_entera() -> No
         + ronda(3, ', "reviewers": ["CLAUDE"], "expected_reviewers": ["CLAUDE", "CODEX"]')
     )
     assert rondas_parciales(solo_y_luego_dual) == {3}, "la 1 esperaba solo a Claude: entera"
+
+
+def test_revisores_ausentes_dice_quien_falto_en_cada_ronda() -> None:
+    """Ronda 3 de Codex en la PR #678: el detector necesita saber DE QUIÉN es
+    transparente una ronda parcial, no solo que lo es."""
+    from sirius_engine.round_history import revisores_ausentes, rondas_parciales
+
+    registros: list[dict[str, object]] = [
+        {"round": 1, "findings": [], "reviewers": ["CLAUDE", "CODEX"]},
+        {
+            "round": 2,
+            "findings": [],
+            "reviewers": ["CLAUDE"],
+            "expected_reviewers": ["CLAUDE", "CODEX"],
+        },
+        {"round": 3, "findings": [], "reviewers": ["CLAUDE"], "expected_reviewers": ["CLAUDE"]},
+        {"round": 4, "findings": []},
+        {"round": 5, "findings": [], "reviewers": ["CODEX"]},
+    ]
+    assert revisores_ausentes(registros) == {
+        1: frozenset(),
+        2: frozenset({"CODEX"}),
+        3: frozenset(),
+        4: frozenset(),
+        5: frozenset({"CLAUDE"}),
+    }
+    assert rondas_parciales(registros) == {2, 5}

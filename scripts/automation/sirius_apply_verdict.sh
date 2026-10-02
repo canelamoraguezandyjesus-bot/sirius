@@ -800,12 +800,27 @@ case "$verdict" in
 
     round_verdict="$(mktemp)"
     round_record="$(mktemp)"
-    # ADR-230: el registro lleva qué revisores tuvo la ronda, para que la
-    # convergencia y el detector de familias no lean una ronda sin Codex como
-    # una ronda entera con menos hallazgos. Un veredicto sin el campo (los
-    # anteriores a ADR-230) deja el registro sin él y se lee como entera.
+    # ADR-230: el registro lleva qué revisores tuvo la ronda y a quién esperaba,
+    # para que la convergencia y el detector de familias no lean una ronda sin
+    # Codex como una ronda entera con menos hallazgos. Los declara el agregador;
+    # en modo solo (revisión dual apagada) el workflow aplica el veredicto de
+    # Claude sin pasar por él, y un registro sin los campos se leería como una
+    # ronda antigua entera -con los dos- si la revisión dual se activara después
+    # en la misma incidencia (ronda 3 de Codex en la PR #678). Así que sin
+    # declaración: en modo solo la ronda fue de Claude y esperaba solo a Claude;
+    # en modo dual (DUAL_MODE=true, lo pone review-sirius-work.yml) el veredicto
+    # tenía que venir del agregador y la ronda se detiene de forma segura.
     reviewers_json="$(jq -c '.reviewers // null' "$VERDICT_FILE" 2>/dev/null || echo null)"
     expected_json="$(jq -c '.expected_reviewers // null' "$VERDICT_FILE" 2>/dev/null || echo null)"
+    if [ "$reviewers_json" = "null" ]; then
+      if [ "${DUAL_MODE:-false}" = "true" ]; then
+        rm -f "$round_verdict" "$round_record" "$history_dump"
+        stop_safely "veredicto-sin-revisores" \
+          "El veredicto de una ronda de revisión dual no declara qué revisores tuvo (reviewers); sin eso el registro de la ronda se leería como una ronda entera y me detengo de forma segura."
+      fi
+      reviewers_json='["CLAUDE"]'
+      expected_json='["CLAUDE"]'
+    fi
     jq -n --argjson obs "$observations" --argjson rev "$reviewers_json" --argjson exp "$expected_json" \
       '{observations: $obs}
        + (if $rev == null then {} else {reviewers: $rev} end)

@@ -336,7 +336,7 @@ def test_una_ronda_en_la_que_codex_no_reviso_no_rompe_el_tramo_de_un_fichero_que
     assert "3 rondas consecutivas (rondas 3-6)" in detalle, (
         "la cabecera que leen quienes lo reproducen"
     )
-    assert "la ronda 4 no la revisaron todos los revisores" in detalle
+    assert "en la ronda 4 faltó CODEX, que es quien lo señala, y no corta el tramo" in detalle
 
     # La transparencia es solo para los ficheros ausentes de la ronda parcial: si
     # Claude sí señaló `x.py` en la 4, cuenta como una aparición más, como siempre.
@@ -385,3 +385,38 @@ def test_una_ronda_en_la_que_codex_no_reviso_no_rompe_el_tramo_de_un_fichero_que
         _registro(6, [_hallazgo(archivo, "f6")]),
     ]
     assert not detectar_familia_repetida(sin_declarar).hay_familia_repetida
+
+
+def test_una_ronda_parcial_solo_es_transparente_para_quien_no_la_reviso() -> None:
+    """Ronda 3 de Codex en la PR #678: Claude señala `x.py` en las rondas 1 y 2,
+    en la 3 solo revisó Claude y NO lo señaló, y en la 4 lo vuelve a señalar. La
+    3 no es transparente para lo que señala Claude -Claude sí la revisó y no lo
+    vio-, así que el hueco corta el tramo y no hay familia (1, 2, 4); el
+    aplicador habría convertido ese falso positivo en `sirius:blocked-decision`.
+    Para lo que señala Codex sí es transparente: nadie que lo buscara la revisó."""
+    archivo = "src/x.py"
+    parcial = {"reviewers": ["CLAUDE"], "expected_reviewers": ["CLAUDE", "CODEX"]}
+    ambos = {"reviewers": ["CLAUDE", "CODEX"], "expected_reviewers": ["CLAUDE", "CODEX"]}
+
+    def historial(fuente: str) -> list[dict[str, object]]:
+        return [
+            {**_registro(1, [_hallazgo(archivo, "f1", fuente=fuente)]), **ambos},
+            {**_registro(2, [_hallazgo(archivo, "f2", fuente=fuente)]), **ambos},
+            {**_registro(3, [_hallazgo("src/otro.py", "f3", fuente="CLAUDE")]), **parcial},
+            {**_registro(4, [_hallazgo(archivo, "f4", fuente=fuente)]), **ambos},
+        ]
+
+    assert not detectar_familia_repetida(historial("CLAUDE")).hay_familia_repetida, (
+        "Claude revisó la 3 y no lo señaló: el hueco es real"
+    )
+    de_codex = detectar_familia_repetida(historial("CODEX"))
+    assert [(e.archivo, e.rondas) for e in de_codex.evidencias] == [(archivo, (1, 2, 4))]
+    assert "en la ronda 3 faltó CODEX, que es quien lo señala" in de_codex.evidencias[0].detalle
+
+    # Lo señalaron los dos antes de la parcial: Claude la revisó sin verlo, corta.
+    mezcla = historial("CODEX")
+    mezcla[0] = {**_registro(1, [_hallazgo(archivo, "f1", fuente="CLAUDE")]), **ambos}
+    assert not detectar_familia_repetida(mezcla).hay_familia_repetida
+
+    # Un hallazgo sin fuente reconocible no se puede atribuir a un ausente: no salta.
+    assert not detectar_familia_repetida(historial("SIN-FUENTE")).hay_familia_repetida

@@ -64,7 +64,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from sirius_engine.drip_guard import parse_archivo_location
-from sirius_engine.round_history import _normalize_text, rondas_parciales
+from sirius_engine.round_history import _normalize_text, revisores_ausentes
 
 #: Medido sobre las 14 incidencias reales del repositorio con más de una
 #: ronda (ver el docstring del módulo): 3 rondas consecutivas sobre el mismo
@@ -144,57 +144,57 @@ def detectar_familia_repetida(
     comparte ``sirius_convergence.fingerprint``, que es el mecanismo de
     *sin-progreso*, otro distinto y no medido aquí.
 
-    Una ronda PARCIAL -en la que no revisaron todos los revisores conocidos,
-    como las rondas solo de Claude de ADR-226- es transparente para los
-    ficheros que no aparecen en ella (ADR-230): si Codex señala un fichero en
-    las rondas 3, 5 y 6 y en la 4 solo revisó Claude, nadie buscó ese fichero
-    en la 4, así que la 4 no corta el tramo. Si el fichero sí aparece en la
-    parcial, cuenta como una aparición más, como siempre. Qué rondas son
-    parciales lo dice :func:`sirius_engine.round_history.rondas_parciales`
-    a partir del campo ``reviewers`` de cada registro; los registros sin él
-    son enteros.
+    Una ronda PARCIAL -en la que faltó algún revisor, como las rondas solo de
+    Claude de ADR-226- es transparente para un fichero que no aparece en ella
+    SOLO si todos los que lo venían señalando faltaron en ella (ADR-230; ronda
+    3 de Codex en la PR #678): si Codex señala un fichero en las rondas 3, 5 y
+    6 y en la 4 solo revisó Claude, nadie que lo buscara lo buscó en la 4, así
+    que la 4 no corta el tramo. Pero si es Claude quien lo señala en la 1 y la
+    2, lo deja de señalar en una 3 solo de Claude y lo vuelve a señalar en la
+    4, la 3 sí cuenta: Claude la revisó y no lo vio, y unir (1, 2, 4) sería una
+    familia falsa que el aplicador convertiría en `sirius:blocked-decision`.
+    Si el fichero sí aparece en la parcial, cuenta como una aparición más,
+    como siempre. Quién faltó en cada ronda lo dice
+    :func:`sirius_engine.round_history.revisores_ausentes` a partir de los
+    campos ``reviewers`` y ``expected_reviewers`` de cada registro; los
+    registros sin ellos son enteros.
     """
-    transparentes = rondas_parciales(registros)
-    archivo_a_rondas: dict[str, list[int]] = {}
+    ausentes = revisores_ausentes(registros)
+    apariciones: dict[str, dict[int, set[str]]] = {}
     for registro in sorted(registros, key=lambda registro: int(registro["round"])):
         numero = int(registro["round"])
-        archivos_en_ronda = {
-            _ruta_del_hallazgo(hallazgo["file"])
-            for hallazgo in registro["findings"]
-            if hallazgo.get("file")
-        }
-        for archivo in archivos_en_ronda:
-            archivo_a_rondas.setdefault(archivo, []).append(numero)
+        for hallazgo in registro["findings"]:
+            if not hallazgo.get("file"):
+                continue
+            archivo = _ruta_del_hallazgo(hallazgo["file"])
+            fuente = str(hallazgo.get("source") or "").strip().upper()
+            apariciones.setdefault(archivo, {}).setdefault(numero, set()).add(fuente)
 
     evidencias = [
         EvidenciaFamiliaRepetida(
-            archivo=archivo, rondas=tuple(tramo), detalle=_detalle(archivo, tramo)
+            archivo=archivo, rondas=tuple(tramo), detalle=_detalle(archivo, tramo, ausentes)
         )
-        for archivo, rondas in archivo_a_rondas.items()
-        for tramo in _tramos_consecutivos(rondas, transparentes)
+        for archivo, rondas in apariciones.items()
+        for tramo in _tramos_consecutivos(rondas, ausentes)
         if len(tramo) >= RONDAS_CONSECUTIVAS_MINIMAS
     ]
     evidencias.sort(key=lambda evidencia: (evidencia.rondas[0], evidencia.archivo))
     return DeteccionFamiliaRepetida(evidencias=tuple(evidencias))
 
 
-def _detalle(archivo: str, tramo: list[int]) -> str:
+def _detalle(archivo: str, tramo: list[int], ausentes: Mapping[int, frozenset[str]]) -> str:
     """El texto de la evidencia. Empieza siempre por «recibe hallazgos en N rondas
     consecutivas (rondas a-b)», que es lo que leen quienes lo reproducen; si el
-    tramo salta rondas parciales (ADR-230) lo dice a continuación."""
+    tramo salta rondas parciales (ADR-230) dice cuáles y quién faltó en ellas."""
     saltadas = [n for n in range(tramo[0], tramo[-1] + 1) if n not in tramo]
     nota = ""
-    if len(saltadas) == 1:
-        nota = (
-            f" —la ronda {saltadas[0]} no la revisaron todos los revisores y no corta el "
-            "tramo (ADR-230)—"
+    if saltadas:
+        faltas = "; ".join(
+            f"en la ronda {n} faltó {', '.join(sorted(ausentes.get(n, ()))) or '?'}"
+            for n in saltadas
         )
-    elif saltadas:
-        lista = ", ".join(str(n) for n in saltadas)
-        nota = (
-            f" —las rondas {lista} no las revisaron todos los revisores y no cortan el "
-            "tramo (ADR-230)—"
-        )
+        cortan = "corta" if len(saltadas) == 1 else "cortan"
+        nota = f" —{faltas}, que es quien lo señala, y no {cortan} el tramo (ADR-230)—"
     return (
         f"«{archivo}» recibe hallazgos en {len(tramo)} rondas consecutivas "
         f"(rondas {tramo[0]}-{tramo[-1]}){nota}: la corrección de una ronda no está "
@@ -203,25 +203,39 @@ def _detalle(archivo: str, tramo: list[int]) -> str:
 
 
 def _tramos_consecutivos(
-    rondas: list[int], transparentes: set[int] | frozenset[int] = frozenset()
+    apariciones: Mapping[int, set[str]], ausentes: Mapping[int, frozenset[str]] | None = None
 ) -> list[list[int]]:
-    """Tramos maximales de números consecutivos (sin huecos) en ``rondas``.
+    """Tramos maximales de rondas consecutivas en las que el archivo apareció.
 
-    ``[1, 2, 5]`` da ``[[1, 2], [5]]``: el hueco entre 2 y 5 corta el tramo,
+    ``apariciones`` dice en qué rondas apareció y quién lo señaló en cada una.
+    ``{1, 2, 5}`` da ``[[1, 2], [5]]``: el hueco entre 2 y 5 corta el tramo,
     porque una recurrencia con hueco -el archivo se corrigió, se dejó en paz
     una ronda, y algo distinto volvió a tocarlo después- no es la misma
     evidencia que tres rondas seguidas sin que la corrección surta efecto.
 
-    Un hueco formado SOLO por rondas ``transparentes`` -las parciales de
-    ADR-230, en las que nadie buscó este archivo- no corta: ``[3, 5, 6]`` con
-    la 4 transparente da ``[[3, 5, 6]]``. El tramo lista las rondas en las que
-    el archivo apareció, no las saltadas.
+    Un hueco formado SOLO por rondas transparentes para el tramo no corta
+    (ADR-230): una ronda es transparente si TODOS los que han señalado el
+    archivo en el tramo abierto faltaron en ella (``ausentes``), es decir, si
+    nadie que lo buscara lo buscó. Codex en la 3, la 5 y la 6 con la 4 sin
+    Codex da ``[[3, 5, 6]]``; con la 4 sin Claude, ``[[3], [5, 6]]``. Un
+    hallazgo sin fuente reconocible no se puede atribuir a ningún ausente, así
+    que el tramo que lo contiene no salta ninguna ronda. El tramo lista las
+    rondas en las que el archivo apareció, no las saltadas.
     """
-    ordenadas = sorted(set(rondas))
+    faltaron = ausentes or {}
     tramos: list[list[int]] = []
-    for numero in ordenadas:
-        if tramos and all(n in transparentes for n in range(tramos[-1][-1] + 1, numero)):
+    fuentes: set[str] = set()
+    for numero in sorted(apariciones):
+        hueco = range(tramos[-1][-1] + 1, numero) if tramos else range(0)
+        if tramos and all(_transparente(n, fuentes, faltaron) for n in hueco):
             tramos[-1].append(numero)
         else:
             tramos.append([numero])
+            fuentes = set()
+        fuentes |= apariciones[numero]
     return tramos
+
+
+def _transparente(numero: int, fuentes: set[str], ausentes: Mapping[int, frozenset[str]]) -> bool:
+    sin_revisar = ausentes.get(numero, frozenset())
+    return bool(fuentes) and all(fuente and fuente in sin_revisar for fuente in fuentes)

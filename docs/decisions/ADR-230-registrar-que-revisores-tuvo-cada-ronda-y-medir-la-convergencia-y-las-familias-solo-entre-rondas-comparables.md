@@ -95,7 +95,14 @@ El de la nota de arranque, publicado antes de tocar código:
    solo de Claude de cuando la revisión dual estaba apagada es entera aunque
    el historial conozca a Codex después (ronda 2 de Codex en la PR #678: la
    unión global la marcaba parcial y el detector unía a través de ella rondas
-   de un lado y de otro en una familia falsa).
+   de un lado y de otro en una familia falsa). En modo solo (revisión dual
+   apagada) el workflow aplica el veredicto de Claude sin pasar por el
+   agregador, así que es `sirius_apply_verdict.sh` quien declara `["CLAUDE"]`
+   en los dos campos; y en modo dual un veredicto sin `reviewers` detiene la
+   ronda de forma segura, porque tenía que venir del agregador (ronda 3 de
+   Codex en la PR #678: sin eso la ronda solo de Claude se registraba como una
+   entera antigua de los dos y, al activar la revisión dual después en la
+   misma incidencia, la convergencia la comparaba con rondas no comparables).
 3. **La convergencia compara solo entre rondas comparables.** Antes de medir,
    `decide` proyecta el historial sobre los revisores de la ronda actual
    (`_proyectar_sobre_la_ultima_ronda`): con la actual entera, las parciales
@@ -106,14 +113,21 @@ El de la nota de arranque, publicado antes de tocar código:
    historial en el que nadie declara nada se mide tal cual. La definición de
    progreso entre rondas enteras no cambia. El campo `rounds` de la decisión
    es el número de rondas comparables.
-4. **El detector de familias trata la ronda parcial como transparente** para
-   los ficheros que no aparecen en ella (`rondas_parciales`,
-   `_tramos_consecutivos(..., transparentes)`): un fichero señalado en las
-   rondas 3, 5 y 6 con la 4 solo de Claude es un tramo de tres. Si el fichero
-   sí aparece en la parcial, cuenta como una aparición más. El `detalle`
-   publicado conserva la cabecera «recibe hallazgos en N rondas consecutivas
-   (rondas a-b)» que leen quienes lo reproducen (la mina) y nombra la ronda
-   saltada.
+4. **El detector de familias trata la ronda parcial como transparente solo
+   para quien faltó en ella** (`revisores_ausentes`,
+   `_tramos_consecutivos(apariciones, ausentes)`): un hueco no corta el tramo
+   si todos los que venían señalando el fichero faltaron en esa ronda —nadie
+   que lo buscara lo buscó— y sí lo corta si alguno de ellos la revisó y dejó
+   de señalarlo. Codex en las rondas 3, 5 y 6 con la 4 solo de Claude es un
+   tramo de tres; Claude en la 1 y la 2, una 3 solo de Claude sin el fichero y
+   Claude otra vez en la 4 son dos tramos (ronda 3 de Codex en la PR #678: con
+   la transparencia por número de ronda, (1, 2, 4) salía como familia y el
+   aplicador la habría convertido en `sirius:blocked-decision`). Un hallazgo
+   sin fuente reconocible no se atribuye a ningún ausente: su tramo no salta
+   nada. Si el fichero sí aparece en la parcial, cuenta como una aparición
+   más. El `detalle` publicado conserva la cabecera «recibe hallazgos en N
+   rondas consecutivas (rondas a-b)» que leen quienes lo reproducen (la mina)
+   y nombra la ronda saltada y quién faltó en ella.
 5. **Lo que no cambia**: la regla de ADR-226 (Claude lleva la ronda; nada se
    aprueba sin Codex), la medida de progreso contra la mejor marca histórica,
    el umbral de tres del detector, los marcadores y los avisos.
@@ -145,6 +159,18 @@ El de la nota de arranque, publicado antes de tocar código:
   `test_el_veredicto_de_cambios_dice_que_revisores_tuvo_la_ronda`,
   `test_una_ronda_que_codex_no_reviso_no_lleva_nada_de_codex`, el `record` del
   CLI y el registro publicado por `sirius_apply_verdict.sh` con `reviewers`.
+- Ronda 3 de Codex sobre `0cf13f11`: (1) en modo solo el workflow aplica el
+  veredicto de Claude sin agregador y el registro salía sin `reviewers`,
+  indistinguible de una ronda antigua entera; `sirius_apply_verdict.sh`
+  declara `["CLAUDE"]` en los dos campos cuando no hay declaración en modo
+  solo y se detiene de forma segura en modo dual
+  (`test_en_modo_solo_el_registro_declara_que_la_ronda_fue_de_claude`,
+  `test_en_modo_dual_un_veredicto_sin_revisores_detiene_la_ronda`); (2) la
+  transparencia era por número de ronda y borraba también la evidencia del
+  revisor presente (Claude en la 1 y la 2, sin el fichero en una 3 solo de
+  Claude, otra vez en la 4: familia falsa); ahora es por revisor ausente
+  (`test_una_ronda_parcial_solo_es_transparente_para_quien_no_la_reviso`,
+  `test_revisores_ausentes_dice_quien_falto_en_cada_ronda`).
 - Mutaciones, cada una aplicada y vista caer con los ficheros restaurados
   después (`cmp` contra la copia):
 
@@ -157,6 +183,9 @@ El de la nota de arranque, publicado antes de tocar código:
 | M5 | el agregador manda también lo de Codex en una ronda que Codex no revisó | cae `una_ronda_que_codex_no_reviso_no_lleva_nada_de_codex` |
 | M6 | el conjunto conocido ignora `expected_reviewers` (ronda 1 de Codex en la PR #678) | cae `la_primera_ronda_parcial_tras_un_historial_antiguo_sabe_a_quien_le_falta` |
 | M7 | la parcialidad se infiere siempre del conjunto conocido, ignorando lo que la ronda esperaba (ronda 2 de Codex en la PR #678) | caen el caso `de_solo_a_dual` del detector y el de `rondas_parciales` con una ronda solo de Claude de antes de la revisión dual |
+| M8 | la transparencia vuelve a ser por número de ronda, sin mirar quién faltó (ronda 3 de Codex en la PR #678) | cae `test_una_ronda_parcial_solo_es_transparente_para_quien_no_la_reviso` |
+| M9 | el aplicador no declara los revisores en modo solo | cae `test_en_modo_solo_el_registro_declara_que_la_ronda_fue_de_claude` |
+| M10 | el aplicador registra en modo dual un veredicto sin revisores | cae `test_en_modo_dual_un_veredicto_sin_revisores_detiene_la_ronda` |
 
 - Baterías: `test_round_history.py`, `test_round_family_detector.py`,
   `test_round_family_detector_cli.py`, `test_sirius_convergence.py`,
