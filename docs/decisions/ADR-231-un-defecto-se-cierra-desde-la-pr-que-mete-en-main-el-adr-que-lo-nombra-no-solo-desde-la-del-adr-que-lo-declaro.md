@@ -67,15 +67,18 @@ es el camino normal de un defecto que se declara al verlo y se arregla después.
    que lo declaró** (ADR-222) **o la que metió un ADR posterior que lo nombra
    por su id**, palabra entera. `_pr_que_puede_citar`
    (`tests/automation/test_registro_de_defectos.py`) lo decide, pura, con dos
-   funciones inyectadas —qué PR introdujo cada ADR y el texto de cada ADR en
-   `origin/main`— y dice por cuál de las dos vías vale.
+   funciones inyectadas —qué PR y qué commit introdujeron cada ADR, y el
+   texto de un ADR en un commit dado— y dice por cuál de las dos vías vale. El
+   texto se lee **en el commit que introdujo el ADR**, no en la punta de
+   `main`: una enmienda posterior que añadiera el `H-NNN` haría pasar a la PR
+   original sin haberlo nombrado ni arreglado (ronda 1 de Codex).
 2. La guarda de ADR-222 usa esa función donde antes comparaba solo con el ADR
    declarante. La comprobación fuerte sigue ejercitándose sobre todo defecto
    con `pr:` cuyo ADR está en `main` (su anti-vacua no cambia) y Quality sigue
    sin medir la existencia (clona con profundidad 1): lo hace la cadena local.
-3. El texto de un ADR se lee de `origin/main` (`git show`) y solo cuando la vía
-   de ADR-222 no vale: el coste es el de los defectos cerrados desde otra PR,
-   hoy uno.
+3. El texto de un ADR se lee con `git show <commit>:<ruta>` en el commit que lo
+   introdujo, y solo cuando la vía de ADR-222 no vale: el coste es el de los
+   defectos cerrados desde otra PR, hoy uno.
 4. La skill `registro-de-defectos` lo dice en la línea de `pr:`: la PR que lo
    fusiona o, si el defecto quedó abierto y lo arregló otra PR, la PR del
    arreglo, cuyo ADR tiene que nombrar el `H-NNN`.
@@ -88,10 +91,12 @@ es el camino normal de un defecto que se declara al verlo y se arregla después.
 - `test_la_pr_que_puede_citar_es_la_de_su_adr_o_la_de_un_adr_posterior_que_lo_nombra`
   (pura, con dobles): la vía de ADR-222 sigue valiendo; la del arreglo vale; una
   PR que metió un ADR que no lo nombra, una que no metió ninguno, `H-2160` por
-  `H-216` y un ADR anterior al declarante no valen.
+  `H-216`, un ADR anterior al declarante y una enmienda posterior del ADR (el
+  texto que metió esa PR no lo nombraba) no valen.
 - `test_cada_referencia_pr_es_una_pr_fusionada_en_main_cuando_hay_historia`
-  con la función nueva y la historia real de `main` (`68d81c5f`): verde sobre
-  el registro actual.
+  con la función nueva y la historia real de `main`: verde sobre el registro
+  actual, con H-216 cerrado con `pr: 674` (ADR-227 lo nombra en el commit que
+  lo introdujo, el aplastado de la #674).
 - Mutaciones, cada una aplicada sobre la guarda y vista caer, con el fichero
   restaurado después (`diff -q` limpio):
 
@@ -101,6 +106,7 @@ es el camino normal de un defecto que se declara al verlo y se arregla después.
 | M2 | la vía nueva admite un ADR anterior al declarante | cae la prueba pura (el caso del ADR-200) |
 | M3 | el nombre se reconoce por subcadena | cae la prueba pura (`H-2160`) |
 | M4 | la vía de ADR-222 deja de valer | cae la prueba pura (el caso de la PR 663) |
+| M5 | el texto del ADR se lee en la punta de `main` y no en el commit que lo introdujo (ronda 1 de Codex en la PR #679) | cae la prueba pura (el caso de la enmienda posterior) |
 
 - `ruff format`, `ruff check`, `mypy`, `sirius_check_docs.py` sobre el ADR y la
   nota, `sirius-memoria conocimiento` y las baterías del registro, de la memoria
