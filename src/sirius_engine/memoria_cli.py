@@ -8,8 +8,9 @@ funciones puras de :mod:`sirius_engine.memoria`. Dos subcomandos:
   escribe nada y sale con 1 si algún fichero confirmado no coincide con lo que
   se generaría, diciendo cuál y qué hacer.
 - ``desenlaces`` escribe ``DESENLACES.md`` junto al diario del motor, a partir
-  de ``diario.jsonl`` y de su hermano ``diario-despacho.jsonl`` si existe. Lo
-  ejecuta ``reflejar-desenlace.yml`` en la rama del motor.
+  de ``diario.jsonl``, de su hermano ``diario-despacho.jsonl`` si existe y de
+  ``divergencias.json`` si el reflector lo dejó (ADR-227). Lo ejecuta
+  ``reflejar-desenlace.yml`` en la rama del motor.
 
 Códigos de salida: 0 hecho; 1 la comprobación encontró la vista desactualizada;
 2 argumentos o ficheros que no valen.
