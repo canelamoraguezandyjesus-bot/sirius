@@ -362,6 +362,21 @@ def test_una_ronda_en_la_que_codex_no_reviso_no_rompe_el_tramo_de_un_fichero_que
     ]
     assert detectar_familia_repetida(primera_parcial).evidencias[0].rondas == (3, 5, 6)
 
+    # Ronda 2 de Codex en la PR #678: una ronda entera de cuando la revisión dual
+    # estaba apagada (esperaba solo a Claude) NO es transparente aunque después
+    # el historial conozca a Codex: el hueco que deja sigue cortando el tramo.
+    solo_claude = {"reviewers": ["CLAUDE"], "expected_reviewers": ["CLAUDE"]}
+    ambos = {"reviewers": ["CLAUDE", "CODEX"], "expected_reviewers": ["CLAUDE", "CODEX"]}
+    de_solo_a_dual = [
+        {**_registro(1, [_hallazgo(archivo, "f1", fuente="CLAUDE")]), **solo_claude},
+        {**_registro(2, [_hallazgo("src/otro.py", "f2", fuente="CLAUDE")]), **solo_claude},
+        {**_registro(3, [_hallazgo(archivo, "f3")]), **ambos},
+        {**_registro(4, [_hallazgo(archivo, "f4")]), **ambos},
+    ]
+    assert not detectar_familia_repetida(de_solo_a_dual).hay_familia_repetida, (
+        "la ronda 2 fue entera para lo que esperaba: no se puede saltar"
+    )
+
     # Y sin declaración de revisores, un hueco sigue siendo un hueco.
     sin_declarar = [
         _registro(3, [_hallazgo(archivo, "f3")]),

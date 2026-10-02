@@ -112,3 +112,13 @@ def test_los_revisores_declarados_se_leen_y_sin_ellos_la_ronda_es_entera() -> No
     )
     assert con_esperados[1]["expected_reviewers"] == ("CLAUDE", "CODEX")
     assert rondas_parciales(con_esperados) == {2}
+
+    # Ronda 2 de Codex en la PR #678: manda lo que cada ronda declara. Una ronda
+    # solo de Claude de cuando la revisión dual estaba apagada (esperaba solo a
+    # Claude) es entera aunque después el historial conozca a Codex.
+    solo_y_luego_dual = parse_round_records(
+        ronda(1, ', "reviewers": ["CLAUDE"], "expected_reviewers": ["CLAUDE"]')
+        + ronda(2, ', "reviewers": ["CLAUDE", "CODEX"], "expected_reviewers": ["CLAUDE", "CODEX"]')
+        + ronda(3, ', "reviewers": ["CLAUDE"], "expected_reviewers": ["CLAUDE", "CODEX"]')
+    )
+    assert rondas_parciales(solo_y_luego_dual) == {3}, "la 1 esperaba solo a Claude: entera"

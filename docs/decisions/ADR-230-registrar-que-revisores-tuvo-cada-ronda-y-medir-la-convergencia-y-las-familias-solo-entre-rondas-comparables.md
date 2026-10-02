@@ -89,7 +89,13 @@ El de la nota de arranque, publicado antes de tocar código:
    ya sabe que le falta Codex (ronda 1 de Codex en la PR #678: sin
    `expected_reviewers`, ese historial conocía solo a Claude, leía las
    enteras antiguas como suyas y la desaparición de lo de Codex contaba como
-   progreso).
+   progreso). Y qué ronda es parcial lo dice **cada ronda por sí misma**
+   (`ronda_parcial`: tuvo menos de los que esperaba); el conjunto conocido
+   solo decide por los registros que no declaran a quién esperaban. Una ronda
+   solo de Claude de cuando la revisión dual estaba apagada es entera aunque
+   el historial conozca a Codex después (ronda 2 de Codex en la PR #678: la
+   unión global la marcaba parcial y el detector unía a través de ella rondas
+   de un lado y de otro en una familia falsa).
 3. **La convergencia compara solo entre rondas comparables.** Antes de medir,
    `decide` proyecta el historial sobre los revisores de la ronda actual
    (`_proyectar_sobre_la_ultima_ronda`): con la actual entera, las parciales
@@ -150,6 +156,7 @@ El de la nota de arranque, publicado antes de tocar código:
 | M4 | el detector sin transparencia (el código de `main`) | cae la predicción 2 |
 | M5 | el agregador manda también lo de Codex en una ronda que Codex no revisó | cae `una_ronda_que_codex_no_reviso_no_lleva_nada_de_codex` |
 | M6 | el conjunto conocido ignora `expected_reviewers` (ronda 1 de Codex en la PR #678) | cae `la_primera_ronda_parcial_tras_un_historial_antiguo_sabe_a_quien_le_falta` |
+| M7 | la parcialidad se infiere siempre del conjunto conocido, ignorando lo que la ronda esperaba (ronda 2 de Codex en la PR #678) | caen el caso `de_solo_a_dual` del detector y el de `rondas_parciales` con una ronda solo de Claude de antes de la revisión dual |
 
 - Baterías: `test_round_history.py`, `test_round_family_detector.py`,
   `test_round_family_detector_cli.py`, `test_sirius_convergence.py`,

@@ -185,24 +185,45 @@ def revisores_conocidos(records: Sequence[Mapping[str, Any]]) -> set[str]:
     return conocidos
 
 
+def _conjunto_de_revisores(valor: object) -> set[str]:
+    if not isinstance(valor, (list, tuple, set, frozenset)):
+        return set()
+    return {str(r).strip().upper() for r in valor if str(r).strip()}
+
+
+def ronda_parcial(record: Mapping[str, Any], conocidos: set[str]) -> bool:
+    """Si a la ronda le faltó algún revisor (ADR-230).
+
+    Manda lo que la propia ronda declara: con ``expected_reviewers``, es parcial
+    si tuvo menos de los que esperaba, y una ronda solo de Claude de cuando la
+    revisión dual estaba apagada (esperaba solo a Claude) es entera aunque el
+    historial conozca a Codex por rondas posteriores (ronda 2 de Codex en la PR
+    #678: la unión global la marcaba parcial y el detector unía a través de ella
+    rondas de un lado y de otro en una familia falsa). Un registro con
+    ``reviewers`` pero sin ``expected_reviewers`` -los de la primera versión de
+    esta decisión- se mide contra el conjunto conocido; uno sin ``reviewers``
+    es entero.
+    """
+    tuvo = _conjunto_de_revisores(record.get("reviewers"))
+    if not tuvo:
+        return False
+    esperaba = _conjunto_de_revisores(record.get("expected_reviewers"))
+    if esperaba:
+        return tuvo < esperaba
+    return tuvo < conocidos
+
+
 def rondas_parciales(records: Sequence[Mapping[str, Any]]) -> set[int]:
-    """Los números de las rondas que declararon menos revisores que el conjunto conocido.
+    """Los números de las rondas a las que les faltó algún revisor (ADR-230).
 
     Una ronda en la que Codex no revisó (ADR-226) declara solo a Claude y es
-    parcial frente a las rondas enteras que la rodean (ADR-230). El conjunto
-    conocido es :func:`revisores_conocidos`. Si ninguna ronda declara nada, o
-    todas declaran los mismos, no hay parciales: un historial de un solo
-    revisor no tiene rondas a medias.
+    parcial frente a las que esperaba (:func:`ronda_parcial`); el conjunto
+    conocido (:func:`revisores_conocidos`) solo sirve para los registros que no
+    declaran a quién esperaban. Si ninguna ronda declara nada no hay parciales:
+    un historial de un solo revisor no tiene rondas a medias.
     """
     conocidos = revisores_conocidos(records)
-    if not conocidos:
-        return set()
-    return {
-        int(record["round"])
-        for record in records
-        if record.get("reviewers")
-        and {str(r).strip().upper() for r in record["reviewers"]} < conocidos
-    }
+    return {int(record["round"]) for record in records if ronda_parcial(record, conocidos)}
 
 
 def _apply_sticky_severity(records: list[dict[str, Any]]) -> None:
