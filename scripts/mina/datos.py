@@ -54,5 +54,13 @@ def publicar_volcado(parcial: Path, definitivo: Path) -> None:
     shutil.rmtree(anterior, ignore_errors=True)
     if definitivo.exists():
         definitivo.rename(anterior)
-    parcial.rename(definitivo)
+    try:
+        parcial.rename(definitivo)
+    except OSError:
+        # El segundo renombrado fallo: el anterior vuelve a su sitio para que el
+        # definitivo no quede AUSENTE y el parcial siga a la vista (Codex, PR
+        # #665, ronda 7). Si el anterior no existia, no hay nada que devolver.
+        if anterior.exists():
+            anterior.rename(definitivo)
+        raise
     shutil.rmtree(anterior, ignore_errors=True)

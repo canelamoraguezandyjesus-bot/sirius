@@ -239,3 +239,31 @@ def test_lo_publicado_antes_de_la_ventana_es_contexto_y_no_cuenta() -> None:
     aviso_de_agosto = [*en_agosto, _aviso("2026-08-28T10:00:00Z", ("src/x.py", 1, 3))]
     [d] = fn.clasificar({702: aviso_de_agosto}, inicio=INICIO, fin=FIN).values()
     assert d.avisos == 0, "un aviso de agosto no es un aviso de la ventana"
+
+
+def test_un_tramo_entero_de_antes_de_la_ventana_no_se_atribuye_a_septiembre() -> None:
+    """Ronda 7 de Codex en la PR #665: tres rondas de agosto sobre `x.py` y una de
+    septiembre sobre OTRO fichero. El detector, con todo el historial delante,
+    marca `x.py` 1-3 en septiembre; pero ese tramo ya estaba entero el 01-09 y no
+    ha crecido: es un hecho de agosto. Solo cuenta si crece dentro de la ventana,
+    y entonces el aviso de agosto que lo cubria lo sigue cubriendo: la familia ya
+    estaba avisada."""
+    en_agosto = [_ronda(n, "src/x.py", f"2026-08-2{n + 4}T10:00:00Z") for n in (1, 2, 3)]
+
+    otro_fichero = [*en_agosto, _ronda(4, "src/y.py", "2026-09-02T10:00:00Z")]
+    [c] = fn.clasificar({700: otro_fichero}, inicio=INICIO, fin=FIN).values()
+    assert c.rondas_evaluadas == 1 and c.tramos == (), "x.py 1-3 nacio en agosto y no crecio"
+
+    crece = [*en_agosto, _ronda(4, "src/x.py", "2026-09-02T10:00:00Z")]
+    [d] = fn.clasificar({701: crece}, inicio=INICIO, fin=FIN).values()
+    assert [t.rondas for t in d.tramos] == [(1, 2, 3, 4)] and d.tramos[0].primera_ronda == 4
+    assert d.estado == "falso_negativo", "crecio en septiembre sin que nadie avisara nunca"
+
+    avisada_en_agosto = [
+        *en_agosto,
+        _aviso("2026-08-28T10:00:00Z", ("src/x.py", 1, 3)),
+        _ronda(4, "src/x.py", "2026-09-02T10:00:00Z"),
+    ]
+    [e] = fn.clasificar({702: avisada_en_agosto}, inicio=INICIO, fin=FIN).values()
+    assert e.avisos == 0, "el aviso de agosto no es un aviso de la ventana"
+    assert e.estado == "avisada", "pero la familia que crece ya estaba avisada"

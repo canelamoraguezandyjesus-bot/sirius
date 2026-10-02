@@ -116,6 +116,9 @@ class _TramoEnCurso:
     rondas: tuple[int, ...]
     primera_ronda: int | None
     primer_instante: str
+    #: Crecio dentro de la ventana desde una evidencia que ya existia al corte:
+    #: el aviso anterior que cubria aquella lo sigue cubriendo.
+    heredado: bool = False
 
     def es_el_mismo(self, archivo: str, rondas: tuple[int, ...]) -> bool:
         return archivo == self.archivo and _solapan(rondas, self.rondas)
@@ -133,21 +136,36 @@ def tramos_de(
 
     Lo anterior a `inicio` es CONTEXTO: entra en el historial que ve el detector
     (una familia puede empezar en agosto y marcarse en septiembre), pero no
-    cuenta como ronda evaluada, no abre tramos y sus avisos no exculpan nada
-    (Codex, PR #665, ronda 6: evaluar tambien los prefijos de agosto atribuia
-    a la medicion 01->30-09 tramos y avisos de fuera de ella).
+    cuenta como ronda evaluada, no abre tramos y sus avisos no cuentan como
+    avisos de la ventana (Codex, PR #665, ronda 6: evaluar tambien los prefijos
+    de agosto atribuia a la medicion 01->30-09 tramos y avisos de fuera de ella).
+
+    Y lo que el detector de hoy ya marcaba AL CORTE -con solo lo publicado antes
+    de `inicio`- es un hecho de antes de la ventana: no abre tramo salvo que
+    crezca dentro de ella, y si crece lo cubre tambien el aviso anterior que ya
+    lo cubria, porque la familia ya estaba avisada (Codex, PR #665, ronda 7: tres
+    rondas de agosto sobre un fichero y una de septiembre sobre otro atribuian a
+    septiembre el tramo entero de agosto).
     """
     acumulado: list[str] = []
     evaluadas = 0
     en_curso: list[_TramoEnCurso] = []
     publicadas: list[Evidencia] = []
+    heredados: list[Evidencia] = []
+    al_corte: tuple[Evidencia, ...] | None = None
     avisos = 0
     for c in sorted(comentarios, key=lambda c: c["created_at"]):
         if c["created_at"] > fin:
             break
-        acumulado.append(c["body"])
         if c["created_at"] < inicio:
+            acumulado.append(c["body"])
+            lo_que_aviso = evidencias_publicadas(c["body"])
+            if lo_que_aviso is not None:
+                heredados.extend(lo_que_aviso)
             continue
+        if al_corte is None:
+            al_corte = tuple(evidencias_de_hoy(acumulado))
+        acumulado.append(c["body"])
         lo_que_aviso = evidencias_publicadas(c["body"])
         if lo_que_aviso is not None:
             avisos += 1
@@ -157,10 +175,19 @@ def tramos_de(
             continue
         evaluadas += 1
         for archivo, rondas in evidencias_de_hoy(acumulado):
+            de_antes = [r for a, r in al_corte if a == archivo and _solapan(rondas, r)]
+            if any(set(rondas) <= set(r) for r in de_antes):
+                continue  # ya estaba entero antes de la ventana y no ha crecido
             mismo = next((t for t in en_curso if t.es_el_mismo(archivo, rondas)), None)
             if mismo is None:
                 en_curso.append(
-                    _TramoEnCurso(archivo, rondas, registros[0].get("round"), c["created_at"])
+                    _TramoEnCurso(
+                        archivo,
+                        rondas,
+                        registros[0].get("round"),
+                        c["created_at"],
+                        heredado=bool(de_antes),
+                    )
                 )
             else:
                 mismo.crece_hasta(rondas)
@@ -172,7 +199,7 @@ def tramos_de(
             primer_instante=t.primer_instante,
             cubierto_por_aviso=any(
                 archivo == t.archivo and _solapan(rondas, t.rondas)
-                for archivo, rondas in publicadas
+                for archivo, rondas in (publicadas + heredados if t.heredado else publicadas)
             ),
         )
         for t in en_curso

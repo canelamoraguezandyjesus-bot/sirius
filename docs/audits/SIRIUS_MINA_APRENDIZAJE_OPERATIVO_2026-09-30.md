@@ -107,7 +107,10 @@ se interrumpa no mezcla un índice nuevo con historiales viejos (el volcado
 anterior sigue siendo la última foto completa y `analizar.py` avisa del
 parcial). Y la reconstrucción ronda a ronda solo cuenta rondas y avisos
 publicados dentro de la ventana 01→30-09: lo anterior al 01-09 es contexto del
-detector, no medición.
+detector, no medición; y un tramo que el detector ya marcaba entero con lo
+publicado antes del 01-09 no se atribuye a septiembre salvo que crezca dentro
+de la ventana (y entonces lo cubre también el aviso anterior que ya lo cubría:
+la familia estaba avisada).
 **Comprobación del instrumento**: sobre la subventana 01→14-09 el guion devuelve
 exactamente lo que la edición anterior publicó —30 incidencias, 122 rondas,
 301 hallazgos—, así que las dos ediciones son comparables fila a fila.

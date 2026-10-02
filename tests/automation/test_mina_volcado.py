@@ -131,3 +131,33 @@ def test_una_descarga_interrumpida_no_toca_la_foto_anterior(
     parcial = datos.parcial_de(raw)
     assert parcial.exists() and (parcial / "issue_1.json").exists()
     assert not (parcial / "issue_2.json").exists()
+
+
+def test_si_el_segundo_renombrado_falla_el_anterior_vuelve_a_su_sitio(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ronda 7 de Codex en la PR #665: dos renombrados sin vuelta atras dejaban el
+    definitivo AUSENTE si el segundo fallaba. El anterior vuelve, el parcial sigue
+    a la vista y el error se propaga."""
+    raw = tmp_path / "raw"
+    _foto_anterior(raw)
+    antes = {p.name: p.read_text(encoding="utf-8") for p in raw.iterdir()}
+    parcial = datos.parcial_de(raw)
+    parcial.mkdir()
+    (parcial / "indice.json").write_text("[1]", encoding="utf-8")
+
+    renombrar = Path.rename
+
+    def renombrar_salvo_el_parcial(self: Path, destino: Path) -> Path:
+        if self == parcial:
+            raise OSError("sin espacio al publicar")
+        return renombrar(self, destino)
+
+    monkeypatch.setattr(Path, "rename", renombrar_salvo_el_parcial)
+    with pytest.raises(OSError, match="sin espacio"):
+        datos.publicar_volcado(parcial, raw)
+
+    assert {p.name: p.read_text(encoding="utf-8") for p in raw.iterdir()} == antes, (
+        "la foto anterior tiene que volver a ser el definitivo"
+    )
+    assert parcial.exists() and not raw.with_name("raw.anterior").exists()
