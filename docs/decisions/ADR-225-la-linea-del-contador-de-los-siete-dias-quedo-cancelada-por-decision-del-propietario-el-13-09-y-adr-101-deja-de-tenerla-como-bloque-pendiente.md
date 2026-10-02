@@ -154,6 +154,25 @@ una decisión nueva.
 - `ruff format --check`, `ruff check`, `mypy` sobre los dos módulos tocados; el
   comprobador de documentos sobre este ADR, ADR-101, STATUS.md y la nota.
 
+Ronda 7 de Codex sobre `d0391ca5`, dos restos de la misma línea que esta
+decisión cancela:
+
+- La pasada del contador seguía midiendo su «retraso de entrega» (ADR-151)
+  contra la hora derivada aunque llegara por `workflow_dispatch`, que desde
+  esta decisión es la única forma de llegar: registraba un `retraso_min`
+  contra una cita que nadie tiene. `sirius-racha` lee ahora el disparador
+  (`GITHUB_EVENT_NAME`) y, si no es `schedule`, declara el retraso no
+  aplicable y escribe la línea sin `entrega`; sin disparador (cadena local,
+  pruebas) mide como siempre. Prueba:
+  `test_una_pasada_lanzada_a_mano_no_mide_un_retraso_contra_una_hora_hipotetica`
+  (a mano: sin `entrega`; con `schedule`: 280 min, como antes).
+- Dos pruebas de `tests/engine/test_seven_day_streak.py` fijaban la
+  derivación del árbol REAL en 03:24 UTC y comparaban un oráculo contra el
+  `schedule` real: guardaban una hora que el árbol ya no cablea. Se congela
+  el árbol tal como se midió el 05-09-2026 (cuatro `cron` ajenos, el `cron`
+  de las 03:24 que el contador llevaba y el tope mayor) y las dos pruebas
+  corren sobre él; volver a atarlas al árbol real es parte de D1.
+
 ## Consecuencias
 
 - Quien lea el contador, el verificador o el estado del proyecto ve la decisión
