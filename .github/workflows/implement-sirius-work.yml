@@ -40,7 +40,18 @@ jobs:
     name: Implementar con Claude Code
     if: github.event.label.name == 'sirius:implement-requested'
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # 85 (ADR-228): el tope que se REPARTE. El plazo del paso del agente no es
+    # un numero fijo: lo calcula «Preparar instrucciones» desde el arranque del
+    # job (TOPE_JOB_MIN - RESERVA_FINAL_MIN - lo que consumio la preparacion),
+    # asi que el job nunca puede morir antes que el paso y «Aplicar el
+    # veredicto» siempre corre. Con 60 y el agente sin plazo propio, el tope
+    # del job mataba al implementador a los 59:52 sin diagnostico (#581,
+    # 11-09-2026) y el veredicto provisional se publicaba tal cual; con un
+    # plazo fijo de 50 (primera version de ADR-228) una preparacion de mas de
+    # 35 min volvia a adelantar el tope del job al plazo del paso (ronda 1 de
+    # Codex en la PR #675). TOPE_JOB_MIN del paso del prompt tiene que ser este
+    # numero (lo exige tests/automation/test_implementador_con_reloj.py).
+    timeout-minutes: 85
     env:
       # PySide6 corre sin pantalla en el runner: sin el plugin offscreen, la
       # suite de GUI no falla, ABORTA (SIGABRT de Qt al no encontrar servidor X).
@@ -50,7 +61,19 @@ jobs:
       # en `quality.yml`; aqui faltaba.
       QT_QPA_PLATFORM: offscreen
     steps:
+      - name: Anotar el arranque del job
+        # ADR-228 (ronda 2 de Codex): todo paso anterior al agente lleva plazo, para que el calculo del plazo llegue siempre antes de que la reserva final empiece a gastarse.
+        timeout-minutes: 1
+        # ADR-228: el plazo del implementador se calcula desde AQUI. Es el
+        # primer paso a proposito: lo que consuman checkout, Qt, uv, sync y
+        # las puertas se resta de lo que el agente recibe, y el tope del job
+        # no puede llegar antes que el plazo del paso.
+        shell: bash --noprofile --norc {0}
+        run: echo "JOB_ARRANQUE_EPOCH=$(date -u +%s)" >> "$GITHUB_ENV"
+
       - name: Checkout
+        # ADR-228 (ronda 2 de Codex): plazo propio; la suma de los pasos previos al agente mas la reserva final cabe en el job (lo exige test_implementador_con_reloj.py).
+        timeout-minutes: 5
         uses: actions/checkout@v6
         with:
           ref: main
@@ -150,14 +173,23 @@ jobs:
           exit 1
 
       - name: Install uv
+        # ADR-228 (ronda 2 de Codex): plazo propio, misma razon que el checkout.
+        timeout-minutes: 3
         uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           enable-cache: true
           python-version: "3.14.6"
 
       - name: Sync environment
+        # Plazo propio, por lo mismo que en Quality (ADR-224): sin cache ha
+        # tardado 16,5 min; que falle ruidosamente, no que se coma el plazo del
+        # agente ni cancele el job. 19 y no 20: congelar 1 + Qt 10 + sync 19 +
+        # agente 50 = 80, y el job (85, el maximo) cubre ademas el resto.
+        timeout-minutes: 19
         run: uv sync --locked --all-groups
       - name: Verificar precondiciones de activación
+        # ADR-228 (ronda 2 de Codex): plazo propio (varias lecturas de la API con reintentos), misma razon que el checkout.
+        timeout-minutes: 5
         id: gate
         shell: bash --noprofile --norc {0}
         env:
@@ -244,6 +276,8 @@ jobs:
           fi
 
       - name: Consumir el evento y marcar en curso
+        # ADR-228 (ronda 2 de Codex): plazo propio, misma razon que el checkout.
+        timeout-minutes: 3
         if: steps.gate.outputs.valid == 'true'
         shell: bash --noprofile --norc {0}
         env:
@@ -267,6 +301,8 @@ jobs:
             "sirius:implementing" "sirius:implement-requested" "sirius:planned"
 
       - name: Preparar instrucciones para Claude Code
+        # ADR-228 (ronda 2 de Codex): plazo propio; es el paso que reparte el plazo y tiene que llegar con la reserva final intacta.
+        timeout-minutes: 2
         if: steps.gate.outputs.valid == 'true'
         id: build_prompt
         shell: bash --noprofile --norc {0}
@@ -297,6 +333,52 @@ jobs:
             exit 1
           fi
           echo "Prompt del encargo segun el manifiesto: ${PROMPT_ROL}"
+          # ADR-228: el plazo, a la vista del implementador, como el del
+          # corrector desde ADR-155, pero CALCULADO desde el arranque del job y
+          # no clavado. El job tiene TOPE_JOB_MIN (la guarda exige que sea su
+          # `timeout-minutes`), «Anotar el arranque del job» dejo
+          # JOB_ARRANQUE_EPOCH en el entorno, y lo que la preparacion haya
+          # consumido (checkout, Qt, uv, sync, puerta, evento, este paso) se
+          # resta: plazo = TOPE_JOB - RESERVA_FINAL - consumido. Asi el plazo
+          # que recibe el agente es cierto aunque la preparacion sea lenta
+          # (ronda 1 de Codex en la PR #675: con un plazo fijo de 50 y una
+          # preparacion de mas de 35 min, el job moria antes que el paso y
+          # «Aplicar el veredicto» con el). RESERVA_FINAL_MIN cubre «Aplicar el
+          # veredicto» (plazo propio de 5) y el margen del job, y todos los
+          # pasos anteriores a este llevan plazo propio: su suma (49) mas la
+          # reserva final cabe en el job, asi que este calculo llega siempre
+          # con la reserva intacta (ronda 2 de Codex: sin esos plazos, una
+          # preparacion de 83 minutos dejaba dos para el veredicto).
+          # RESERVA_VALIDACION_MIN es la cadena
+          # completa en el runner, medida hasta 21,4 min (#653, run
+          # 35516764738: pytest 1283 s); y por debajo de PLAZO_MINIMO_MIN no se
+          # arranca al agente: se escribe un veredicto FAILED_SAFELY que dice
+          # cuanto comio la preparacion y «Aplicar el veredicto» lo publica.
+          # Las horas van con fecha (ISO) para que un run que cruce la
+          # medianoche no sea ambiguo frente a `date -u`. Sin esto, el
+          # implementador de #581 murio a los 59:52 sin una linea de
+          # diagnostico (bitacora, entrada 92): sin reloj no podia saber que
+          # el encargo no cabia, aunque su prompt le mandara decirlo.
+          TOPE_JOB_MIN=85
+          RESERVA_FINAL_MIN=6
+          RESERVA_VALIDACION_MIN=25
+          PLAZO_MINIMO_MIN=40
+          : "${JOB_ARRANQUE_EPOCH:?falta JOB_ARRANQUE_EPOCH: el paso «Anotar el arranque del job» no corrio}"
+          ahora_epoch="$(date -u +%s)"
+          consumido_min=$(( (ahora_epoch - JOB_ARRANQUE_EPOCH + 59) / 60 ))
+          plazo_min=$(( TOPE_JOB_MIN - RESERVA_FINAL_MIN - consumido_min ))
+          if [ "$plazo_min" -lt "$PLAZO_MINIMO_MIN" ]; then
+            # El paso del agente se salta, pero su `timeout-minutes` lee esta
+            # salida y tiene que ser un numero valido.
+            echo "plazo_min=1" >> "$GITHUB_OUTPUT"
+            printf '{"verdict":"FAILED_SAFELY","summary":"La preparación del runner consumió %s minutos de los %s del job y al implementador le quedaban %s, por debajo del mínimo de %s: no se arranca al agente. La causa es la preparación (checkout, Qt, uv sync), no el encargo; reintentable con `continua`."}\n' \
+              "$consumido_min" "$TOPE_JOB_MIN" "$plazo_min" "$PLAZO_MINIMO_MIN" > "${RUNNER_TEMP}/sirius_verdict.json"
+            echo "::error::La preparacion consumio ${consumido_min} min de los ${TOPE_JOB_MIN} del job; quedaban ${plazo_min} para el implementador (minimo ${PLAZO_MINIMO_MIN}). No se arranca al agente; el veredicto FAILED_SAFELY lo dice."
+            exit 1
+          fi
+          echo "plazo_min=${plazo_min}" >> "$GITHUB_OUTPUT"
+          plazo_utc="$(date -u -d "+${plazo_min} minutes" +%Y-%m-%dT%H:%M:%SZ)"
+          limite_validacion_utc="$(date -u -d "+$((plazo_min - RESERVA_VALIDACION_MIN)) minutes" +%Y-%m-%dT%H:%M:%SZ)"
           {
             echo "prompt<<SIRIUS_PROMPT_EOF"
             cat "$PROMPT_ROL"
@@ -305,6 +387,7 @@ jobs:
             echo "- Repositorio: ${GH_REPO}"
             echo "- Incidencia de trabajo: #${ISSUE_NUMBER}"
             echo "- Rama base: main"
+            echo "- Plazo de esta ejecución (ADR-228): tu paso muere a las ${plazo_utc} UTC (${plazo_min} minutos desde ahora; comprueba la hora con \`date -u\`). Arranca la validación final no más tarde de las ${limite_validacion_utc} UTC: la cadena completa ha tardado hasta 21 minutos en el runner. Si a esa hora no has terminado, deja de implementar, valida lo hecho una sola vez, empuja lo que tengas y escribe el veredicto con lo hecho y lo que falta (\`FAILED_SAFELY\` si no está entregable): un diagnóstico a tiempo vale más que morir en el tope sin decir nada."
             echo "- El archivo de veredicto debe escribirse en la ruta exacta de la variable de entorno SIRIUS_VERDICT_FILE."
             echo "SIRIUS_PROMPT_EOF"
           } >> "$GITHUB_OUTPUT"
@@ -313,6 +396,13 @@ jobs:
         if: steps.gate.outputs.valid == 'true'
         id: claude
         continue-on-error: true
+        # ADR-228: plazo PROPIO y calculado, el mismo numero que recibe en su
+        # prompt (`plazo_min`, salida del paso anterior). Que muera su paso y
+        # no el job: asi «Aplicar el veredicto» corre con normalidad y publica
+        # lo que el agente dejo, y el agente sabe a que hora tiene que haber
+        # escrito su diagnostico. El `|| '1'` solo cubre el caso en que el
+        # paso anterior no corrio (puerta invalida): este paso se salta igual.
+        timeout-minutes: ${{ fromJSON(steps.build_prompt.outputs.plazo_min || '1') }}
         uses: anthropics/claude-code-action@v1
         env:
           GH_TOKEN: ${{ secrets.SIRIUS_BOT_TOKEN }}
@@ -342,6 +432,8 @@ jobs:
           show_full_output: false
 
       - name: Aplicar el veredicto
+        # ADR-228 (ronda 2 de Codex): plazo propio por debajo de RESERVA_FINAL_MIN (6): la reserva que el paso del prompt descuenta es exactamente la que este paso puede consumir.
+        timeout-minutes: 5
         if: always() && steps.gate.outputs.valid == 'true'
         shell: bash --noprofile --norc {0}
         env:
