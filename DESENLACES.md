@@ -1,6 +1,6 @@
 # Desenlaces del motor de Sirius
 
-> **Generado por `uv run sirius-memoria desenlaces`** a partir de `diario.jsonl` y `diario-despacho.jsonl`: 676 sucesos, el último el 2026-10-01 16:34 UTC. Lo escribe el motor en la rama
+> **Generado por `uv run sirius-memoria desenlaces`** a partir de `diario.jsonl` y `diario-despacho.jsonl` y `divergencias.json`: 676 sucesos, el último el 2026-10-01 16:34 UTC. Lo escribe el motor en la rama
 > `estado-del-motor` tras cada reflejo (ADR-171). **El diario manda**: si un documento
 > dice otra cosa sobre un encargo, vale esto.
 
@@ -12,6 +12,10 @@
 | delivered | 60 |
 | failed_safely | 1 |
 | needs_decision | 4 |
+
+## Divergencias que el reflector aparta para una persona
+
+Ninguna: la última pasada completa del reflector no apartó ninguna (si la hubiera, estaría en `divergencias.json`, junto al diario).
 
 ## Los encargos, del más reciente al más antiguo
 
