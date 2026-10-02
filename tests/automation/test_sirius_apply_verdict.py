@@ -2425,6 +2425,14 @@ _VEREDICTO_SOLO_DE_CLAUDE: dict[str, object] = {
     ],
 }
 
+#: Sin declaración de revisores: el campo ausente (el veredicto de Claude en modo
+#: solo) y la lista vacía, que `jq` no convierte en `null` y que `round_record`
+#: dejaría sin campo, es decir, como una ronda antigua entera.
+_VEREDICTOS_SIN_REVISORES: dict[str, dict[str, object]] = {
+    "sin_campo": _VEREDICTO_SOLO_DE_CLAUDE,
+    "lista_vacia": {**_VEREDICTO_SOLO_DE_CLAUDE, "reviewers": [], "expected_reviewers": []},
+}
+
 
 def _incidencia_en_revision(env: dict[str, str]) -> None:
     _seed_issue(
@@ -2444,26 +2452,35 @@ def test_en_modo_solo_el_registro_declara_que_la_ronda_fue_de_claude(tmp_path: P
     declara los revisores. Sin declararlos aquí la ronda se registraba como una
     entera antigua y, al activar la revisión dual después en la misma
     incidencia, la convergencia la comparaba con rondas de los dos."""
-    env = _setup(tmp_path)
-    env.pop("DUAL_MODE", None)
-    _incidencia_en_revision(env)
-    r = _run(env, "reviewer", _verdict_file(tmp_path, _VEREDICTO_SOLO_DE_CLAUDE))
-    assert r.returncode == 0, r.stdout + r.stderr
-    blocks = re.findall(r"## RONDA_HALLAZGOS\s*```json\s*(.*?)\s*```", _comments(env), re.DOTALL)
-    assert len(blocks) == 1
-    record = json.loads(blocks[0])
-    assert record["reviewers"] == ["CLAUDE"], "en modo solo la ronda fue de Claude"
-    assert record["expected_reviewers"] == ["CLAUDE"], "y esperaba solo a Claude: entera"
+    for nombre, veredicto in _VEREDICTOS_SIN_REVISORES.items():
+        raiz = tmp_path / nombre
+        raiz.mkdir()
+        env = _setup(raiz)
+        env.pop("DUAL_MODE", None)
+        _incidencia_en_revision(env)
+        r = _run(env, "reviewer", _verdict_file(raiz, veredicto))
+        assert r.returncode == 0, nombre + "\n" + r.stdout + r.stderr
+        blocks = re.findall(
+            r"## RONDA_HALLAZGOS\s*```json\s*(.*?)\s*```", _comments(env), re.DOTALL
+        )
+        assert len(blocks) == 1, nombre
+        record = json.loads(blocks[0])
+        assert record["reviewers"] == ["CLAUDE"], f"{nombre}: en modo solo la ronda fue de Claude"
+        assert record["expected_reviewers"] == ["CLAUDE"], f"{nombre}: esperaba solo a Claude"
 
 
 def test_en_modo_dual_un_veredicto_sin_revisores_detiene_la_ronda(tmp_path: Path) -> None:
     """En modo dual el veredicto viene del agregador y declara los revisores; uno
-    sin ellos no se registra como una ronda entera: parada segura."""
-    env = _setup(tmp_path)
-    env["DUAL_MODE"] = "true"
-    _incidencia_en_revision(env)
-    r = _run(env, "reviewer", _verdict_file(tmp_path, _VEREDICTO_SOLO_DE_CLAUDE))
-    assert r.returncode != 0
-    comments = _comments(env)
-    assert "veredicto-sin-revisores" in comments
-    assert "sirius-round:1" not in comments, "la ronda no se registra"
+    sin ellos (campo ausente o lista vacía) no se registra como una ronda
+    entera: parada segura."""
+    for nombre, veredicto in _VEREDICTOS_SIN_REVISORES.items():
+        raiz = tmp_path / nombre
+        raiz.mkdir()
+        env = _setup(raiz)
+        env["DUAL_MODE"] = "true"
+        _incidencia_en_revision(env)
+        r = _run(env, "reviewer", _verdict_file(raiz, veredicto))
+        assert r.returncode != 0, nombre
+        comments = _comments(env)
+        assert "veredicto-sin-revisores" in comments, nombre
+        assert "sirius-round:1" not in comments, f"{nombre}: la ronda no se registra"

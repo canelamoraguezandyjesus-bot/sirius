@@ -189,6 +189,7 @@ El de la nota de arranque, publicado antes de tocar código:
 | M8 | la transparencia vuelve a ser por número de ronda, sin mirar quién faltó (ronda 3 de Codex en la PR #678) | cae `test_una_ronda_parcial_solo_es_transparente_para_quien_no_la_reviso` |
 | M9 | el aplicador no declara los revisores en modo solo | cae `test_en_modo_solo_el_registro_declara_que_la_ronda_fue_de_claude` |
 | M10 | el aplicador registra en modo dual un veredicto sin revisores | cae `test_en_modo_dual_un_veredicto_sin_revisores_detiene_la_ronda` |
+| M11 | una lista vacía de `reviewers` no cuenta como «sin declaración» (revisión propia antes de la ronda 4) | caen los casos `lista_vacia` de las dos pruebas del aplicador |
 
 - Baterías: `test_round_history.py`, `test_round_family_detector.py`,
   `test_round_family_detector_cli.py`, `test_sirius_convergence.py`,

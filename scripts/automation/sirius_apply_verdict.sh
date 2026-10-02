@@ -807,12 +807,13 @@ case "$verdict" in
     # Claude sin pasar por él, y un registro sin los campos se leería como una
     # ronda antigua entera -con los dos- si la revisión dual se activara después
     # en la misma incidencia (ronda 3 de Codex en la PR #678). Así que sin
-    # declaración: en modo solo la ronda fue de Claude y esperaba solo a Claude;
+    # declaración (campo ausente o lista vacía): en modo solo la ronda fue de
+    # Claude y esperaba solo a Claude;
     # en modo dual (DUAL_MODE=true, lo pone review-sirius-work.yml) el veredicto
     # tenía que venir del agregador y la ronda se detiene de forma segura.
     reviewers_json="$(jq -c '.reviewers // null' "$VERDICT_FILE" 2>/dev/null || echo null)"
     expected_json="$(jq -c '.expected_reviewers // null' "$VERDICT_FILE" 2>/dev/null || echo null)"
-    if [ "$reviewers_json" = "null" ]; then
+    if [ "$reviewers_json" = "null" ] || [ "$reviewers_json" = "[]" ]; then
       if [ "${DUAL_MODE:-false}" = "true" ]; then
         rm -f "$round_verdict" "$round_record" "$history_dump"
         stop_safely "veredicto-sin-revisores" \
