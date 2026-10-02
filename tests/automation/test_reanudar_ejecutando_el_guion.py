@@ -1037,3 +1037,34 @@ def test_una_parada_sin_pr_con_planned_se_reanuda_y_conserva_planned(tmp_path: P
     assert "Repongo también" not in _comentarios(env), (
         "con `planned` puesta no hay nada que devolver"
     )
+
+
+def test_si_reponer_planned_falla_la_parada_se_queda_para_el_siguiente_continua(
+    tmp_path: Path,
+) -> None:
+    """Ronda 7 de Codex en la PR #671, reproducido con `GH_MOCK_FAIL_ADD=sirius:planned`:
+    `sirius_set_issue_labels planned parada` quitaba la parada aunque poner
+    `planned` hubiera fallado, y la incidencia quedaba sin `planned`, sin parada y
+    sin evento, un estado del que un `continua` nuevo no sabe salir («no esta en
+    ninguna parada reanudable»). Ahora `planned` va sola y verificada ANTES de
+    tocar la parada: si falla, la parada sigue puesta, no se repone nada y el run
+    sale rojo y reintentable con la misma orden."""
+    env = _setup(tmp_path)
+    _sembrar(
+        env,
+        etiquetas=["sirius:failed-safely"],
+        historial=_historial_sin_pr("<!-- sirius-verdict:implementer:FAILED_SAFELY:1 -->"),
+        eventos=PLANIFICADA_POR_UNA_PERSONA,
+    )
+    env["GH_MOCK_FAIL_ADD"] = "sirius:planned"
+    resultado = _ejecutar(env)
+
+    assert resultado.returncode != 0
+    etiquetas = _etiquetas(env)
+    assert "sirius:failed-safely" in etiquetas, "la parada se queda: un continua nuevo la encuentra"
+    assert "sirius:planned" not in etiquetas and "sirius:implement-requested" not in etiquetas
+    assert "Reintentable" in resultado.stdout + resultado.stderr
+    acciones = (_md(env) / "actions.log").read_text(encoding="utf-8").splitlines()
+    assert "REMOVE sirius:failed-safely" not in acciones, (
+        f"la parada no se toca si `planned` no quedo puesta. Acciones: {acciones}"
+    )

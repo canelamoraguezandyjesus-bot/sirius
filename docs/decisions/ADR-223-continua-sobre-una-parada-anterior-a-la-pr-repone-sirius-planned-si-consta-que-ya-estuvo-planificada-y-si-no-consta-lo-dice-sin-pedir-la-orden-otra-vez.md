@@ -177,6 +177,16 @@ fichero restaurado):
 - El fichero entero en verde (30 pruebas); `bash -n`; `ruff`, `mypy` sobre la
   prueba. Batería entera: en la PR.
 
+Ronda 7 de Codex sobre `9752634d` (reproducido con `GH_MOCK_FAIL_ADD=sirius:planned`):
+reponer `planned` y retirar la parada en una sola llamada del ayudante dejaba,
+si poner `planned` fallaba, una incidencia sin `planned`, sin parada y sin
+evento, de la que un `continua` nuevo no sabe salir; el «Reintentable» mentía.
+`planned` va ahora sola y verificada antes de tocar la parada; si falla, la
+parada sigue puesta y la misma orden vuelve a servir. Prueba:
+`test_si_reponer_planned_falla_la_parada_se_queda_para_el_siguiente_continua`
+(mutación M10, la llamada conjunta de antes: cae). El orden `planned` → parada
+fuera → evento se conserva.
+
 ## Consecuencias
 
 - Un `continua` sobre una parada pre-PR de una incidencia que ya estuvo

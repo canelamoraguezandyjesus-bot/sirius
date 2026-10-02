@@ -442,24 +442,30 @@ fi
 # retirar la parada despues -el orden natural de `sirius_set_issue_labels`-
 # abria esa ventana: la puerta podia leer la incidencia con las dos etiquetas y
 # dejarla solo con `planned`, mudo otra vez (ronda 5 de Codex en la PR #671).
-# Asi que: primero la parada fuera -con `planned`, que no despierta a nadie, en
-# esa misma transicion cuando hay que reponerla- y el evento en ultimo lugar,
-# el mismo orden que el aviso de «nunca planificada» le pide a una persona.
+# Asi que: primero `planned`, si hay que reponerla, SOLA y verificada; despues
+# la parada fuera; y el evento en ultimo lugar, el mismo orden que el aviso de
+# «nunca planificada» le pide a una persona. `planned` y la parada van en dos
+# llamadas y no en una porque `sirius_set_issue_labels planned parada` quitaba
+# la parada aunque poner `planned` hubiera fallado, y la incidencia quedaba sin
+# `planned`, sin parada y sin evento: un estado del que un `continua` nuevo no
+# sabe salir («no esta en ninguna parada reanudable»), asi que el
+# «Reintentable» mentia (ronda 7 de Codex en la PR #671, reproducido con
+# GH_MOCK_FAIL_ADD=sirius:planned). Con la parada todavia puesta, reintentar
+# es volver a escribir `continua`.
 # El coste, dicho: si la ultima llamada falla, la incidencia queda sin parada y
 # sin evento, y un `continua` nuevo no encontraria parada que levantar; el
 # error de abajo dice que etiqueta falta y que se aplica a mano.
 if [ "$reponer_planned" = "true" ]; then
   if ! ( export GH_TOKEN="${SIRIUS_TRIGGER_TOKEN:-${GH_TOKEN:-}}"
-         sirius_set_issue_labels "$REPO" "$ISSUE" "sirius:planned" "$parada" ); then
-    echo "::error::No se pudo reponer sirius:planned y retirar ${parada} en #${ISSUE}; no repongo el evento sin ella. Reintentable."
+         sirius_set_issue_labels "$REPO" "$ISSUE" "sirius:planned" ); then
+    echo "::error::No se pudo reponer sirius:planned en #${ISSUE}; la parada ${parada} sigue puesta y no repongo el evento sin ella. Reintentable: vuelve a escribir \`continua\`."
     exit 1
   fi
-else
-  if ! ( export GH_TOKEN="${SIRIUS_TRIGGER_TOKEN:-${GH_TOKEN:-}}"
-         sirius_remove_issue_labels "$REPO" "$ISSUE" "$parada" ); then
-    echo "::error::No se pudo retirar ${parada} de #${ISSUE}; no repongo el evento con la parada puesta (la puerta lo rechazaria). Reintentable."
-    exit 1
-  fi
+fi
+if ! ( export GH_TOKEN="${SIRIUS_TRIGGER_TOKEN:-${GH_TOKEN:-}}"
+       sirius_remove_issue_labels "$REPO" "$ISSUE" "$parada" ); then
+  echo "::error::No se pudo retirar ${parada} de #${ISSUE}; no repongo el evento con la parada puesta (la puerta lo rechazaria). Reintentable: vuelve a escribir \`continua\`."
+  exit 1
 fi
 if ! ( export GH_TOKEN="${SIRIUS_TRIGGER_TOKEN:-${GH_TOKEN:-}}"
        sirius_set_issue_labels "$REPO" "$ISSUE" "$etiqueta_destino" ); then
