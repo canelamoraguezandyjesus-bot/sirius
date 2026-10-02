@@ -2,7 +2,7 @@
 
 - Estado: APROBADO
 - Fecha: 2026-10-02
-- Aprobación: la fusión de la PR que lo trae, por el motor con aprobación dual (ADR-205); el número queda en H-230.
+- Aprobación: la fusión de la PR #678 por el motor con aprobación dual (ADR-205).
 - Nota de arranque:
   `docs/audits/arranque-2026-10-02-una-ronda-en-la-que-codex-no-reviso-no-es-una-ronda-entera.md`,
   confirmada en `3fd6776a` antes del primer commit de arreglo, con las cuatro
@@ -159,10 +159,9 @@ El de la nota de arranque, publicado antes de tocar código:
 - El registro de ronda gana un campo opcional; lo que ya está publicado no
   cambia de lectura. El contrato de operación lo documenta (§ del registro de
   ronda).
-- Los guiones de la mina de septiembre (`scripts/mina` en la rama
-  `claude/mina-de-septiembre-entero`, PR #665) leen la cabecera «(rondas a-b)»
-  del detalle, que se conserva; la ronda saltada va después, fuera del
-  paréntesis.
+- Los guiones de la mina de septiembre (PR #665) leen la cabecera «(rondas
+  a-b)» del detalle, que se conserva; la ronda saltada va después, fuera del
+  paréntesis. Viven en la PR #665, rama `claude/mina-de-septiembre-entero`.
 
 ## Alternativas descartadas y por qué
 
