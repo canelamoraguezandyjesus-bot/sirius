@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import json
 import os
+from collections import Counter
 from collections.abc import Iterable, Mapping
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
@@ -147,6 +148,12 @@ def leer_instantanea(ruta: Path) -> Instantanea | None:
             "ser booleanos y sin_evaluar una lista de encargos)"
         )
     divergencias = tuple(_desde_json(ruta, entrada) for entrada in entradas)
+    # El escritor nunca repite un encargo (`actualizar` indexa por `work_id`);
+    # dos entradas para el mismo serían un fichero escrito por otra mano, y
+    # publicarlas las dos sería inventar (revisión propia antes de la ronda 7).
+    repetidos = sorted(w for w, n in Counter(d.work_id for d in divergencias).items() if n > 1)
+    if repetidos:
+        raise ValueError(f"{ruta}: hay más de una entrada para {', '.join(repetidos)}")
     try:
         return Instantanea(
             divergencias=divergencias,

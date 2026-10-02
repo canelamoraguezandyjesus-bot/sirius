@@ -198,7 +198,9 @@ revisión independiente de la PR #674 lo señaló; queda dicho aquí.
   `test_una_instantanea_completa_no_puede_decir_que_lo_anterior_pudo_perderse`,
   `test_un_fichero_que_no_se_puede_leer_se_declara_como_uno_sin_forma`, y las
   del reflector y la vista con el fichero roto parametrizadas con bytes
-  ilegibles.
+  ilegibles. Y de una revisión propia antes de la ronda 7: dos entradas con el
+  mismo encargo —que `actualizar` nunca produce— se declaran como fichero sin
+  forma en vez de publicarse las dos (caso nuevo en la misma parametrizada).
 - Mutaciones, con los ficheros restaurados (`diff -q` limpio) y la batería en
   verde después:
 
@@ -225,6 +227,7 @@ revisión independiente de la PR #674 lo señaló; queda dicho aquí.
 | M19 | el aviso del fichero roto promete reescribirlo también en `--ensayo` | cae `test_en_ensayo_el_aviso_del_fichero_roto_no_promete_reescribirlo` |
 | M20 | `Instantanea` admite `perdida_posible` en una pasada completa | caen el caso contradictorio de `test_un_fichero_que_no_tiene_la_forma_se_declara_en_vez_de_leerse_como_vacio` y `test_una_instantanea_completa_no_puede_decir_que_lo_anterior_pudo_perderse` |
 | M21 | solo `JSONDecodeError` toma el camino del fichero roto | caen `test_un_fichero_que_no_se_puede_leer_se_declara_como_uno_sin_forma` y los casos de bytes ilegibles del reflector y de la vista |
+| M22 | las entradas repetidas se aceptan | cae el caso de las entradas repetidas de `test_un_fichero_que_no_tiene_la_forma_se_declara_en_vez_de_leerse_como_vacio` |
 
 - Baterías `test_divergencias.py`, `test_reflect_cli.py`, `test_memoria.py` y
   `test_reflect.py`: 179 en verde. `ruff format`, `ruff check` y `mypy` sobre

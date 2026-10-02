@@ -116,6 +116,15 @@ def test_leer_y_escribir_van_y_vuelven_y_sin_fichero_no_hay_instantanea(tmp_path
         # «Ninguna» (ronda 6 de Codex en la PR #674).
         '{"pasada": {"interrumpida": false, "sin_evaluar": [], "perdida_posible": true}, '
         '"divergencias": []}',
+        # Dos entradas para el mismo encargo: el escritor nunca las produce y
+        # publicarlas las dos sería inventar (revisión propia antes de la ronda 7).
+        '{"pasada": {"interrumpida": false, "sin_evaluar": [], "perdida_posible": false}, '
+        '"divergencias": ['
+        '{"work_id": "WI-1", "incidencia": 1, "motivo": "m", "pasadas": 1, '
+        '"primera_vez": "2026-10-01T00:00:00+00:00", "ultima_vez": "2026-10-01T00:00:00+00:00"}, '
+        '{"work_id": "WI-1", "incidencia": 1, "motivo": "m", "pasadas": 2, '
+        '"primera_vez": "2026-10-01T00:00:00+00:00", "ultima_vez": "2026-10-02T00:00:00+00:00"}'
+        "]}",
     ],
 )
 def test_un_fichero_que_no_tiene_la_forma_se_declara_en_vez_de_leerse_como_vacio(
