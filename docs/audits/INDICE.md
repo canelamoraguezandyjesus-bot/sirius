@@ -9,7 +9,7 @@
 > La fecha es la que cada documento **declara** en su cabecera; la vista no data
 > nada por su cuenta. «Sin fecha declarada» es un aviso, no un dato.
 
-**147 documentos**, 84 sin fecha declarada.
+**148 documentos**, 84 sin fecha declarada.
 
 ## `docs/audits`
 
@@ -30,6 +30,7 @@
 | 2026-09-14 | [La mina, segunda edición: cuánta razón tiene el detector de familia repetida](SIRIUS_MINA_APRENDIZAJE_OPERATIVO_2026-09-14.md) |
 | 2026-10-01 | [La mina, tercera edición: septiembre entero, y la bitácora puesta contra `main` entrada a entrada](SIRIUS_MINA_APRENDIZAJE_OPERATIVO_2026-09-30.md) |
 | sin fecha declarada | [La mina v2: informe de aprendizaje sobre la ola de criticidad (M18 → M21b)](SIRIUS_MINA_APRENDIZAJE_OPERATIVO_2026-09.md) |
+| 2026-10-01 | [Nota de arranque — `continua` sobre una parada anterior a la PR no anuncia en verde lo que la puerta va a rechazar](arranque-2026-10-01-continua-sobre-una-parada-anterior-a-la-pr.md) |
 | 2026-10-01 | [Nota de arranque — el implementador sabe qué hora es](arranque-2026-10-01-el-implementador-sabe-que-hora-es.md) |
 | 2026-10-01 | [Nota de arranque — el motor dice lo que hace: tres textos que mentían o callaban](arranque-2026-10-01-el-motor-dice-lo-que-hace.md) |
 | 2026-10-01 | [Nota de arranque — la cola trae `main` a la rama que espera y deja las vistas generadas rotas](arranque-2026-10-01-la-cola-regenera-las-vistas-al-traer-la-base.md) |
