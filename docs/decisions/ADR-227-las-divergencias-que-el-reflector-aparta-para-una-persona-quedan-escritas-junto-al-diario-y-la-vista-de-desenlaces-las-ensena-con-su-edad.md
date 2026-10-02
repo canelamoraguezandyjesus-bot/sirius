@@ -176,6 +176,12 @@ revisión independiente de la PR #674 lo señaló; queda dicho aquí.
   `_desde_json` exige ahora el tipo exacto de cada campo (textos no vacíos,
   incidencia entero o `null`, pasadas entero mayor que cero, instantes ISO con
   la primera no posterior a la última) y lo demás es un fichero sin forma.
+- Ronda 5 de Codex sobre `c9349caf`: (1) los instantes exigen zona y se
+  conservan convertidos a UTC, que es lo que la vista rotula (dos instantes
+  sin zona pasaban, la vista los rotulaba «UTC» y `dias_parado` devolvía «?»;
+  un desfase distinto se rotulaba UTC sin convertir); (2) el aviso de un
+  `divergencias.json` sin forma en `--ensayo` ya no promete una reescritura
+  que el ensayo nunca hace.
 - Mutaciones, con los ficheros restaurados (`diff -q` limpio) y la batería en
   verde después:
 
@@ -197,6 +203,9 @@ revisión independiente de la PR #674 lo señaló; queda dicho aquí.
 | M14 | lo no alcanzado se deriva solo de las entradas anteriores | cae `test_una_pasada_que_muere_a_medias_conserva_lo_observado_y_lo_no_alcanzado` |
 | M15 | los metadatos se coercionan (`bool(...)`, `tuple(str(...))`) | caen cinco casos de `test_un_fichero_que_no_tiene_la_forma_se_declara_en_vez_de_leerse_como_vacio` |
 | M16 | las entradas se coercionan (`int(...)`, `str(...)`) | caen los dieciséis casos de `test_una_entrada_con_un_campo_mal_tipado_se_declara_en_vez_de_inventarse` |
+| M17 | `_instante` acepta instantes sin zona | cae el caso de los dos instantes sin zona de la misma parametrizada |
+| M18 | los instantes se conservan sin convertir a UTC | cae `test_un_instante_con_otro_desfase_se_conserva_convertido_a_utc` |
+| M19 | el aviso del fichero roto promete reescribirlo también en `--ensayo` | cae `test_en_ensayo_el_aviso_del_fichero_roto_no_promete_reescribirlo` |
 
 - Baterías `test_divergencias.py`, `test_reflect_cli.py`, `test_memoria.py` y
   `test_reflect.py`: 150 en verde. `ruff format`, `ruff check` y `mypy` sobre

@@ -34,7 +34,7 @@ import json
 import os
 from collections.abc import Iterable, Mapping
 from dataclasses import asdict, dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -133,13 +133,20 @@ def leer_instantanea(ruta: Path) -> Instantanea | None:
 
 
 def _instante(valor: object) -> datetime | None:
-    """El instante ISO que el texto declara, o ``None`` si no es un instante."""
+    """El instante ISO CON ZONA que el texto declara, o ``None`` si no lo es.
+
+    Sin zona no vale (ronda 5 de Codex en la PR #674): el escritor de producción
+    siempre escribe instantes con zona, la vista los rotula «UTC» y `dias_parado`
+    los resta de sucesos del diario que sí la llevan; aceptar uno sin zona daba
+    un rótulo falso y un «?» en la columna de días.
+    """
     if not isinstance(valor, str) or not valor.strip():
         return None
     try:
-        return datetime.fromisoformat(valor)
+        instante = datetime.fromisoformat(valor)
     except ValueError:
         return None
+    return instante if instante.tzinfo is not None else None
 
 
 def _desde_json(ruta: Path, entrada: object) -> DivergenciaApartada:
@@ -161,7 +168,7 @@ def _desde_json(ruta: Path, entrada: object) -> DivergenciaApartada:
     forma = (
         f"{ruta}: entrada incompleta o mal formada (work_id y motivo son textos no vacíos, "
         "incidencia un entero o null, pasadas un entero mayor que cero y primera_vez/"
-        "ultima_vez instantes ISO, la primera no posterior a la última)"
+        "ultima_vez instantes ISO con zona, la primera no posterior a la última)"
     )
     if not isinstance(work_id, str) or not work_id.strip():
         raise ValueError(forma)
@@ -173,22 +180,16 @@ def _desde_json(ruta: Path, entrada: object) -> DivergenciaApartada:
         raise ValueError(forma)
     primera = _instante(primera_vez)
     ultima = _instante(ultima_vez)
-    if primera is None or ultima is None or not isinstance(primera_vez, str):
+    if primera is None or ultima is None or primera > ultima:
         raise ValueError(forma)
-    if not isinstance(ultima_vez, str):  # pragma: no cover - _instante ya lo exige
-        raise ValueError(forma)
-    try:
-        desordenada = primera > ultima
-    except TypeError:  # un instante con zona y otro sin ella no son comparables
-        raise ValueError(forma) from None
-    if desordenada:
-        raise ValueError(forma)
+    # Se conservan en UTC, que es lo que la vista rotula: un desfase distinto se
+    # convierte, no se rotula como UTC sin convertir (ronda 5 de Codex).
     return DivergenciaApartada(
         work_id=work_id,
         incidencia=incidencia,
         motivo=motivo,
-        primera_vez=primera_vez,
-        ultima_vez=ultima_vez,
+        primera_vez=primera.astimezone(UTC).isoformat(),
+        ultima_vez=ultima.astimezone(UTC).isoformat(),
         pasadas=pasadas,
     )
 

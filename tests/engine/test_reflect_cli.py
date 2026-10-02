@@ -430,6 +430,30 @@ def test_un_fichero_de_divergencias_roto_no_para_el_reflejo_y_se_reescribe(tmp_p
     assert f"{_WORK_ID}: aplicados 1 paso(s)" in texto
     instantanea = _instantanea(ruta)
     assert instantanea == _completa(), "reescrito, legible y entero: la pasada evaluó todo"
+
+
+def test_en_ensayo_el_aviso_del_fichero_roto_no_promete_reescribirlo(tmp_path: Path) -> None:
+    """Ronda 5 de Codex en la PR #674: con `--ensayo` el aviso decía que esta pasada
+    reescribiría el fichero, pero el ensayo no escribe nada. Dice lo que haría una
+    pasada real, y el fichero roto queda tal cual."""
+    store = InMemoryWorkEngineStore()
+    journal = InMemoryDispatchJournal()
+    _preparar(store, journal)
+    ruta = tmp_path / "divergencias.json"
+    ruta.write_text('{"divergencias": [', encoding="utf-8")
+
+    codigo, texto = _correr(
+        ["--ensayo", "--diario", str(tmp_path / "diario.jsonl")],
+        store=store,
+        journal=journal,
+        mirror=_mirror(etiqueta="sirius:implementing"),
+    )
+
+    assert codigo == 0
+    assert "divergencias.json: no es JSON" in texto
+    assert "en --ensayo no se toca" in texto and "Una pasada real lo volvería a escribir" in texto
+    assert "esta pasada lo vuelve a escribir" not in texto
+    assert ruta.read_text(encoding="utf-8") == '{"divergencias": [', "el ensayo no toca el fichero"
     assert not (tmp_path / "divergencias.json.tmp").exists()
 
 

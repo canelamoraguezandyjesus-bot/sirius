@@ -151,6 +151,9 @@ _ENTRADA_BIEN_FORMADA: dict[str, object] = {
         {"ultima_vez": 5},
         {"primera_vez": "2026-09-05T00:00:00+00:00"},
         {"primera_vez": "2026-09-01T03:24:00"},
+        # Sin zona en los dos (ronda 5 de Codex): se comparaban bien entre sí, la
+        # vista los rotulaba UTC y `dias_parado` devolvía «?».
+        {"primera_vez": "2026-09-01T03:24:00", "ultima_vez": "2026-09-03T03:24:00"},
     ],
 )
 def test_una_entrada_con_un_campo_mal_tipado_se_declara_en_vez_de_inventarse(
@@ -217,3 +220,27 @@ def test_la_perdida_posible_se_hereda_hasta_la_primera_pasada_completa() -> None
     )
     assert tercera.completa and not tercera.perdida_posible
     assert tercera == _completa(*actualizar((), [_VISTA], sin_evaluar=(), ahora=_T2))
+
+
+def test_un_instante_con_otro_desfase_se_conserva_convertido_a_utc(tmp_path: Path) -> None:
+    """Ronda 5 de Codex en la PR #674: la vista rotula «UTC» lo que lee, así que un
+    desfase distinto se convierte al leer en vez de rotularse mal."""
+    ruta = tmp_path / FICHERO_DIVERGENCIAS
+    entrada = {
+        **_ENTRADA_BIEN_FORMADA,
+        "primera_vez": "2026-09-01T05:24:00+02:00",
+        "ultima_vez": "2026-09-03T03:24:00Z",
+    }
+    ruta.write_text(
+        json.dumps(
+            {
+                "pasada": {"interrumpida": False, "sin_evaluar": [], "perdida_posible": False},
+                "divergencias": [entrada],
+            }
+        ),
+        encoding="utf-8",
+    )
+    leida = leer_instantanea(ruta)
+    assert leida is not None
+    assert leida.divergencias[0].primera_vez == "2026-09-01T03:24:00+00:00"
+    assert leida.divergencias[0].ultima_vez == "2026-09-03T03:24:00+00:00"

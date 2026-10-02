@@ -164,10 +164,18 @@ def main(
     try:
         anterior = leer_instantanea(ruta_divergencias)
     except ValueError as error:
-        linea(
-            f"AVISO: {error}; esta pasada lo vuelve a escribir con lo que observe y deja "
-            "dicho que lo anterior pudo perderse, hasta que una pasada completa lo rehaga."
-        )
+        # En --ensayo no se escribe nada (ronda 5 de Codex en la PR #674: el
+        # aviso prometía una reescritura que el ensayo nunca hace).
+        if args.ensayo:
+            linea(
+                f"AVISO: {error}; en --ensayo no se toca. Una pasada real lo volvería a "
+                "escribir con lo que observe y dejaría dicho que lo anterior pudo perderse."
+            )
+        else:
+            linea(
+                f"AVISO: {error}; esta pasada lo vuelve a escribir con lo que observe y deja "
+                "dicho que lo anterior pudo perderse, hasta que una pasada completa lo rehaga."
+            )
         anterior = None
         anterior_ilegible = True
     vistas: list[DivergenciaVista] = []
