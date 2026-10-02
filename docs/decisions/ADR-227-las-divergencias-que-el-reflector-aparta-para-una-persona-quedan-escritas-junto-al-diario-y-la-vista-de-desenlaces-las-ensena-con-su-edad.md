@@ -161,6 +161,16 @@ revisión independiente de la PR #674 lo señaló; queda dicho aquí.
   lleva `interrumpida`, `sin_evaluar` y `perdida_posible`; la pasada lo dice
   en su resumen; la vista distingue «sin dato», «conocimiento incompleto» y
   «ninguna», y «ninguna» solo lo afirma una pasada completa.
+- Ronda 3 de Codex sobre `5f59c614`, dos remates de lo mismo: lo no alcanzado
+  por una pasada interrumpida se deriva ahora de **todos los encargos
+  conocidos** (antes solo de los que ya tenían entrada, así que una pasada que
+  moría en el primero no podía decir qué no miró; la vista nombra los ocho
+  primeros y cuenta el resto), y `leer_instantanea` exige el tipo exacto de
+  los metadatos (`bool`, `bool`, lista de encargos) en vez de coercionarlos:
+  `""` se leía como `False` y como `()` y una pasada corrupta pasaba por
+  completa. Pruebas: la de la pasada que muere a medias exige `WI-3` (sin
+  entrada previa) en `sin_evaluar`; cinco formas mal tipadas en la
+  parametrizada de los ficheros sin forma; la vista con doce sin evaluar.
 - Mutaciones, con los ficheros restaurados (`diff -q` limpio) y la batería en
   verde después:
 
@@ -179,6 +189,8 @@ revisión independiente de la PR #674 lo señaló; queda dicho aquí.
 | M11 | `cerrar_pasada` da por entera toda pasada | caen `test_una_pasada_incompleta_sobre_un_fichero_ilegible_deja_dicho_que_pudo_perderse`, `test_la_perdida_posible_se_hereda_hasta_la_primera_pasada_completa`, `test_una_pasada_que_muere_a_medias_conserva_lo_observado_y_lo_no_alcanzado`, `test_fichero_roto_mas_pasada_incompleta_deja_dicho_que_lo_anterior_pudo_perderse` |
 | M12 | la duda no se hereda entre pasadas incompletas | cae `test_la_perdida_posible_se_hereda_hasta_la_primera_pasada_completa` |
 | M13 | la primera pasada completa sin divergencias no escribe | cae `test_la_primera_pasada_completa_sin_divergencias_deja_el_fichero_escrito` |
+| M14 | lo no alcanzado se deriva solo de las entradas anteriores | cae `test_una_pasada_que_muere_a_medias_conserva_lo_observado_y_lo_no_alcanzado` |
+| M15 | los metadatos se coercionan (`bool(...)`, `tuple(str(...))`) | caen cinco casos de `test_un_fichero_que_no_tiene_la_forma_se_declara_en_vez_de_leerse_como_vacio` |
 
 - Baterías `test_divergencias.py`, `test_reflect_cli.py`, `test_memoria.py` y
   `test_reflect.py`: 150 en verde. `ruff format`, `ruff check` y `mypy` sobre

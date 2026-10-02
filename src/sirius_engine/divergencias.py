@@ -107,16 +107,27 @@ def leer_instantanea(ruta: Path) -> Instantanea | None:
     pasada = datos.get("pasada") if isinstance(datos, Mapping) else None
     if not isinstance(entradas, list) or not isinstance(pasada, Mapping):
         raise ValueError(f'{ruta}: no tiene la forma {{"pasada": {{...}}, "divergencias": [...]}}')
-    try:
-        interrumpida = bool(pasada["interrumpida"])
-        sin_evaluar = tuple(str(w) for w in pasada["sin_evaluar"])
-        perdida_posible = bool(pasada["perdida_posible"])
-    except (KeyError, TypeError) as error:
-        raise ValueError(f"{ruta}: la pasada está incompleta o mal formada ({error})") from error
+    # Tipos exactos, sin coerción: `bool("")` es `False` y `tuple("")` es `()`,
+    # así que un fichero con metadatos rotos pasaría por una pasada completa y la
+    # vista diría «ninguna» donde debía declarar corrupción (ronda 3 de Codex en
+    # la PR #674).
+    interrumpida = pasada.get("interrumpida")
+    sin_evaluar = pasada.get("sin_evaluar")
+    perdida_posible = pasada.get("perdida_posible")
+    if (
+        not isinstance(interrumpida, bool)
+        or not isinstance(perdida_posible, bool)
+        or not isinstance(sin_evaluar, list)
+        or not all(isinstance(w, str) and w for w in sin_evaluar)
+    ):
+        raise ValueError(
+            f"{ruta}: la pasada está mal formada (interrumpida y perdida_posible tienen que "
+            "ser booleanos y sin_evaluar una lista de encargos)"
+        )
     return Instantanea(
         divergencias=tuple(_desde_json(ruta, entrada) for entrada in entradas),
         interrumpida=interrumpida,
-        sin_evaluar=sin_evaluar,
+        sin_evaluar=tuple(sin_evaluar),
         perdida_posible=perdida_posible,
     )
 

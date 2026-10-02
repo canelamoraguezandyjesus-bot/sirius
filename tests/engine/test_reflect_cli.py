@@ -375,6 +375,7 @@ def test_una_pasada_que_muere_a_medias_conserva_lo_observado_y_lo_no_alcanzado(
     journal = InMemoryDispatchJournal()
     _preparar(store, journal, work_id="WI-1", numero=_NUMERO)
     _preparar(store, journal, work_id="WI-2", numero=999)
+    _preparar(store, journal, work_id="WI-3", numero=1000)
     ruta = tmp_path / "divergencias.json"
     vieja = DivergenciaApartada(
         "WI-2", 999, "motivo viejo", "2026-09-01T03:24:00+00:00", "2026-09-03T03:24:00+00:00", 3
@@ -399,6 +400,11 @@ def test_una_pasada_que_muere_a_medias_conserva_lo_observado_y_lo_no_alcanzado(
         "ronda 2 de Codex: el fichero dice que la pasada no fue entera"
     )
     assert "WI-2" in instantanea.sin_evaluar and not instantanea.perdida_posible
+    assert "WI-3" in instantanea.sin_evaluar, (
+        "ronda 3 de Codex: lo no alcanzado se deriva de todos los encargos conocidos, no solo "
+        "de los que ya tenían entrada; sin esto la vista no podía decir qué no se miró"
+    )
+    assert "WI-1" not in instantanea.sin_evaluar
 
 
 def test_un_fichero_de_divergencias_roto_no_para_el_reflejo_y_se_reescribe(tmp_path: Path) -> None:

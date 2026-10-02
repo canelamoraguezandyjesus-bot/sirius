@@ -549,7 +549,7 @@ def test_la_vista_distingue_ninguna_de_no_se_sabe(diario: Path) -> None:
         ruta, Instantanea((), interrumpida=False, sin_evaluar=("WI-A",), perdida_posible=False)
     )
     texto = generar_desenlaces(diario, diario.with_name("diario-despacho.jsonl"))
-    assert "**Conocimiento incompleto**" in texto and "(sin evaluar: `WI-A`)" in texto
+    assert "**Conocimiento incompleto**" in texto and "(1 sin evaluar: `WI-A`)" in texto
     assert "Ninguna observada en lo que la pasada llegó a evaluar." in texto
     assert "Ninguna: la última pasada completa" not in texto
     assert "puede faltar" not in texto
@@ -560,6 +560,14 @@ def test_la_vista_distingue_ninguna_de_no_se_sabe(diario: Path) -> None:
     texto = generar_desenlaces(diario, diario.with_name("diario-despacho.jsonl"))
     assert "se interrumpió antes de llegar a todos" in texto
     assert "un fichero anterior fue ilegible" in texto and "puede faltar aquí" in texto
+
+    muchos = tuple(f"WI-{n:02d}" for n in range(12))
+    escribir_instantanea(
+        ruta, Instantanea((), interrumpida=True, sin_evaluar=muchos, perdida_posible=False)
+    )
+    texto = generar_desenlaces(diario, diario.with_name("diario-despacho.jsonl"))
+    assert "(12 sin evaluar: `WI-00`, `WI-01`" in texto and "`WI-07` y 4 más)" in texto
+    assert "`WI-08`" not in texto, "se nombran los primeros ocho y se cuenta el resto"
 
 
 def test_la_vista_declara_un_fichero_de_divergencias_ilegible_sin_caerse(

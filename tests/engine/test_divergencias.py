@@ -98,6 +98,18 @@ def test_leer_y_escribir_van_y_vuelven_y_sin_fichero_no_hay_instantanea(tmp_path
         '{"pasada": {"interrumpida": false, "sin_evaluar": [], "perdida_posible": false}, '
         '"divergencias": [{"work_id": "WI-1"}]}',
         '{"divergencias": [',
+        # Metadatos con el tipo equivocado: coercionarlos haría pasar por
+        # completa una pasada corrupta (ronda 3 de Codex en la PR #674).
+        '{"pasada": {"interrumpida": "", "sin_evaluar": [], "perdida_posible": false}, '
+        '"divergencias": []}',
+        '{"pasada": {"interrumpida": false, "sin_evaluar": "", "perdida_posible": false}, '
+        '"divergencias": []}',
+        '{"pasada": {"interrumpida": false, "sin_evaluar": [1], "perdida_posible": false}, '
+        '"divergencias": []}',
+        '{"pasada": {"interrumpida": false, "sin_evaluar": [], "perdida_posible": "no"}, '
+        '"divergencias": []}',
+        '{"pasada": {"interrumpida": 0, "sin_evaluar": [], "perdida_posible": false}, '
+        '"divergencias": []}',
     ],
 )
 def test_un_fichero_que_no_tiene_la_forma_se_declara_en_vez_de_leerse_como_vacio(

@@ -170,10 +170,15 @@ def main(
         )
         anterior = None
         anterior_ilegible = True
-    anteriores = anterior.divergencias if anterior is not None else ()
     vistas: list[DivergenciaVista] = []
     sin_evaluar: set[str] = set()
     evaluados: set[str] = set()
+    # Se lee UNA vez, antes del bucle: es también la lista contra la que se
+    # mide qué quedó sin evaluar si la pasada muere a medias (ronda 3 de Codex
+    # en la PR #674: derivarlo solo de las entradas anteriores dejaba fuera a
+    # todo encargo sin divergencia previa, y la vista no podía decir cuáles
+    # no se habían mirado).
+    conocidos = _work_ids_conocidos(store)
 
     def cerrar_divergencias(*, interrumpida: bool) -> Instantanea:
         # Lo que la pasada no llegó a mirar se conserva: si murió a medias, el
@@ -185,7 +190,7 @@ def main(
         # leía como «ninguna». Se escribe siempre que cambie algo, también la
         # primera pasada completa sin divergencias: un fichero ausente no es
         # «ninguna», es «ninguna pasada ha escrito todavía».
-        no_alcanzados = {d.work_id for d in anteriores} - evaluados
+        no_alcanzados = set(conocidos) - evaluados - sin_evaluar
         instantanea = cerrar_pasada(
             anterior,
             vistas,
@@ -199,7 +204,7 @@ def main(
         return instantanea
 
     try:
-        for work_id in _work_ids_conocidos(store):
+        for work_id in conocidos:
             item = store.get_work_item(work_id)
             if item is None or item.estado in TERMINAL_STATES:
                 evaluados.add(work_id)

@@ -1123,7 +1123,12 @@ def _seccion_de_divergencias(
             "encargos"
         )
         if instantanea.sin_evaluar:
-            aviso += " (sin evaluar: " + ", ".join(f"`{w}`" for w in instantanea.sin_evaluar) + ")"
+            # Una pasada que muere en el primer encargo deja casi todo el diario
+            # sin evaluar: se nombran los primeros y se cuenta el resto.
+            nombrados = ", ".join(f"`{w}`" for w in instantanea.sin_evaluar[:8])
+            resto = len(instantanea.sin_evaluar) - 8
+            aviso += f" ({len(instantanea.sin_evaluar)} sin evaluar: {nombrados}"
+            aviso += f" y {resto} más)" if resto > 0 else ")"
         if instantanea.interrumpida:
             aviso += "; se interrumpió antes de llegar a todos"
         if instantanea.perdida_posible:
