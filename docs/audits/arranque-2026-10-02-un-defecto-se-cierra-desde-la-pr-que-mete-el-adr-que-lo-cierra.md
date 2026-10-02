@@ -1,7 +1,7 @@
 # Nota de arranque — un defecto se cierra desde la PR que mete el ADR que lo cierra
 
 Rama `claude/un-defecto-se-cierra-desde-la-pr-que-mete-el-adr-que-lo-cierra`.
-Fecha: 02-10-2026, 13:30 UTC. Viene de las consecuencias de ADR-227 (PR #674):
+Fecha: 02-10-2026, 13:15 UTC. Viene de las consecuencias de ADR-227 (PR #674):
 H-216 está arreglado y el registro no lo puede decir. Escrita antes de tocar la
 guarda.
 

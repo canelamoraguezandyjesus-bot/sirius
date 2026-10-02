@@ -25,7 +25,7 @@ seguían vivos en `main` semanas después, con la batería en verde.
     gravedad: baja | media | media-baja | alta
     estado: cerrado
     cerrado_por: <sha de 40 caracteres del commit que lo arregló, en su rama>
-    pr: <número de la PR que lo fusiona en main>   # desde ADR-222
+    pr: <número de la PR que lo fusiona en main>   # desde ADR-222; la del arreglo si fue otra (ADR-231)
     adr: NNN
     ficheros:
       - la/ruta/que/toca.py
@@ -43,6 +43,10 @@ Obligatorios siempre: `id`, `titulo`, `bloque`, `gravedad`, `estado`,
   solo no basta: las PR entran aplastadas y ese commit no es antepasado de
   `main` (29 de 68 cerrados, medido el 01-10-2026). El commit de `main` se
   deriva de la PR: `git log --first-parent --grep="(#<número>)" origin/main`.
+  Si el defecto quedó **abierto** en la PR que lo declaró y lo arregló **otra
+  PR posterior**, `pr` es la del arreglo, y el ADR de ese arreglo tiene que
+  nombrar el `H-NNN` (palabra entera): es lo que la guarda busca desde ADR-231
+  (H-216: declarado por ADR-216 en la #663, cerrado por ADR-227 en la #674).
 
 **El identificador no se elige**: desde ADR-192, si el defecto viene de un ADR
 igual o posterior al 174, `id` es `H-` más el número de ese ADR. `adr: 211` →

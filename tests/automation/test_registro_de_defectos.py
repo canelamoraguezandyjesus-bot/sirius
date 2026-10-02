@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import re
 import subprocess
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -936,6 +936,82 @@ def _asunto_que_introdujo(ruta: str) -> str | None:
     return asuntos[-1] if salida.returncode == 0 and asuntos else None
 
 
+def _texto_en_main(ruta: str) -> str:
+    """El contenido de `ruta` en `origin/main`; vacío si no se puede leer."""
+    salida = subprocess.run(
+        ["git", "show", f"origin/main:{ruta}"],
+        cwd=RAIZ,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return salida.stdout if salida.returncode == 0 else ""
+
+
+def _pr_que_puede_citar(
+    defecto: Mapping[str, Any],
+    rutas: Mapping[int, str],
+    pr_que_introdujo: Callable[[str], int | None],
+    texto_de: Callable[[str], str],
+) -> tuple[bool, str]:
+    """Si el `pr:` del defecto es una PR que puede citarlo, y por qué (ADR-231).
+
+    Dos PR pueden: la que metió en `main` el ADR que lo declaró (ADR-222) y la
+    que metió un ADR POSTERIOR que lo nombra por su id, palabra entera. Lo
+    segundo es el defecto declarado abierto en una PR y arreglado en otra: su
+    cierre cita la PR del arreglo, que es la que un clon de `main` puede seguir
+    hasta el ADR que cuenta cómo se arregló (H-216: declarado por ADR-216 en la
+    #663, arreglado por ADR-227 en la #674). Un ADR anterior al declarante no
+    puede cerrarlo, y nombrarlo no es `H-2160` ni una mención dentro de otra
+    palabra. El texto de los ADR solo se pide cuando la vía de ADR-222 no vale.
+    """
+    pr, adr, hid = int(defecto["pr"]), int(defecto["adr"]), str(defecto["id"]).upper()
+    if pr_que_introdujo(rutas[adr]) == pr:
+        return True, "la PR que metió el ADR que lo declaró"
+    nombre = re.compile(rf"\b{re.escape(hid)}\b")
+    for numero in sorted(n for n in rutas if n > adr):
+        if pr_que_introdujo(rutas[numero]) == pr and nombre.search(texto_de(rutas[numero])):
+            return True, f"la PR que metió ADR-{numero}, que lo nombra"
+    return (
+        False,
+        f"ni la PR que metió ADR-{adr} ni una que metiera un ADR posterior que nombre {hid}",
+    )
+
+
+def test_la_pr_que_puede_citar_es_la_de_su_adr_o_la_de_un_adr_posterior_que_lo_nombra() -> None:
+    """Anti-vacua que no depende del entorno (ADR-231): la vía nueva reconoce el
+    cierre desde la PR del arreglo y no se traga una PR cualquiera."""
+    rutas = {
+        216: "docs/decisions/ADR-216-a.md",
+        227: "docs/decisions/ADR-227-b.md",
+        229: "docs/decisions/ADR-229-c.md",
+    }
+    introdujo = {rutas[216]: 663, rutas[227]: 674, rutas[229]: 690}
+    textos = {
+        rutas[216]: "declara H-216",
+        rutas[227]: "...(H-216, incidencia #662) y H-227...",
+        rutas[229]: "no nombra ningun defecto",
+    }
+    h216: dict[str, Any] = {"id": "H-216", "adr": 216, "pr": 674}
+
+    def citar(defecto: Mapping[str, Any], textos_: Mapping[str, str] = textos) -> tuple[bool, str]:
+        return _pr_que_puede_citar(defecto, rutas, introdujo.get, textos_.__getitem__)
+
+    assert citar({**h216, "pr": 663}) == (True, "la PR que metió el ADR que lo declaró")
+    assert citar(h216) == (True, "la PR que metió ADR-227, que lo nombra")
+    assert not citar({**h216, "pr": 690})[0], "ADR-229 entró por la 690 y no lo nombra"
+    assert not citar({**h216, "pr": 999})[0], "una PR que no metió ningún ADR"
+    assert not citar(h216, {**textos, rutas[227]: "H-2160 y H-21"})[0], "palabra entera"
+    # Un ADR ANTERIOR al declarante no lo puede cerrar aunque lo nombre.
+    con_anterior = {**rutas, 200: "docs/decisions/ADR-200-z.md"}
+    assert not _pr_que_puede_citar(
+        h216,
+        con_anterior,
+        {**introdujo, con_anterior[200]: 674, rutas[227]: 675}.get,
+        {**textos, con_anterior[200]: "H-216"}.__getitem__,
+    )[0]
+
+
 def test_la_pr_de_un_asunto_es_su_marca_final_y_no_una_citada() -> None:
     assert _pr_que_fusiono("Una cosa (#579) (#580)") == 580
     assert _pr_que_fusiono("Una cosa (#580)") == 580
@@ -950,15 +1026,25 @@ def test_cada_referencia_pr_es_una_pr_fusionada_en_main_cuando_hay_historia() ->
     ha fusionado y no se le exige; en cuanto el ADR entre, se le exige. Y se le
     exige lo fuerte (ronda 1 de Codex en la PR #668): no basta con que la PR
     exista en `main`, el commit de primer padre que AÑADIÓ el ADR del defecto
-    tiene que ser el de esa PR. Los defectos sin `adr:` (los anteriores a la
-    frontera) solo pueden comprobarse por existencia.
+    tiene que ser el de esa PR —o, desde ADR-231, el que añadió un ADR posterior
+    que nombra el defecto: el del arreglo (:func:`_pr_que_puede_citar`)—. Los
+    defectos sin `adr:` (los anteriores a la frontera) solo pueden comprobarse
+    por existencia.
     """
     asuntos = _historia_de_main()
     rutas = _rutas_de_adr_en_main()
     if asuntos is None or rutas is None:
         pytest.skip("este clon no tiene la historia de origin/main: la forma se comprueba arriba")
     fusionadas = {_pr_que_fusiono(asunto) for asunto in asuntos} - {None}
-    rotas = []
+    introducidas: dict[str, int | None] = {}
+
+    def pr_que_introdujo(ruta: str) -> int | None:
+        if ruta not in introducidas:
+            asunto = _asunto_que_introdujo(ruta)
+            introducidas[ruta] = _pr_que_fusiono(asunto) if asunto is not None else None
+        return introducidas[ruta]
+
+    rotas: list[tuple[Any, int, str | None]] = []
     fuertes = 0
     for defecto in _defectos():
         pr = defecto.get("pr")
@@ -969,14 +1055,14 @@ def test_cada_referencia_pr_es_una_pr_fusionada_en_main_cuando_hay_historia() ->
             if adr not in rutas:
                 continue  # en vuelo: su PR no se ha fusionado todavía
             fuertes += 1
-            asunto = _asunto_que_introdujo(rutas[adr])
-            if asunto is None or _pr_que_fusiono(asunto) != pr:
-                rotas.append((defecto["id"], pr, asunto))
+            vale, por_que = _pr_que_puede_citar(defecto, rutas, pr_que_introdujo, _texto_en_main)
+            if not vale:
+                rotas.append((defecto["id"], pr, por_que))
         elif pr not in fusionadas:
             rotas.append((defecto["id"], pr, None))
     assert rotas == [], (
-        "referencias `pr:` que no son la PR que metió el ADR del defecto en main "
-        f"(o, sin ADR, ninguna PR fusionada): {rotas}"
+        "referencias `pr:` que no son la PR que metió en main el ADR del defecto ni la que "
+        f"metió un ADR posterior que lo nombra (o, sin ADR, ninguna PR fusionada): {rotas}"
     )
     con_adr_en_main = [
         d for d in _defectos() if isinstance(d.get("pr"), int) and d.get("adr") in rutas
