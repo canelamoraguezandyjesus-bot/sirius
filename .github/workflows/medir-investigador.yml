@@ -49,24 +49,20 @@ name: Medir al investigador
 # POR QUÉ ES A MANO Y NUNCA POR RELOJ. Cada pasada gasta cuota de dos APIs cuyas
 # claves son del propietario. Un cron que gasta su dinero mientras duerme no es
 # automatización: es una fuga. Se lanza cuando él quiere medir. De paso, al no
-# declarar `schedule`, este fichero **no añade ningún disparo al día** y no puede
-# estrechar el hueco tranquilo que necesita el contador de los siete días
-# (D1b, contrato §11.2).
+# declarar `schedule`, este fichero **no añade ningún disparo al día** (hasta
+# ADR-225 eso importaba al hueco tranquilo del contador de los siete días; esa
+# línea quedó cancelada el 13-09-2026).
 #
-# POR QUÉ EL `timeout-minutes` NO PUEDE SUBIR DE 85, y es lo más fácil de romper
-# de todo el fichero. La ventana de tolerancia del contador se DERIVA -no se
-# escribe a mano- del mayor `timeout-minutes` **de trabajo** de
-# `.github/workflows/*.yml`, por dos: hoy 85 x 2 = 170 minutos
-# (`ventana_tolerancia_etiqueta_maquina`, en `src/sirius_engine/projection_verifier.py`;
-# comprobado que solo mira los topes de TRABAJO, no los de paso). La tranquilidad
-# previa a la pasada del contador son 172 minutos. **El margen es de DOS.**
-#
-# No es teoría: se probó subiendo este trabajo a 87 y
-# `tests/automation/test_contador_de_siete_dias.py` se puso rojo con «solo deja
-# 172 min tranquilos, cuando la tolerancia vigente es de 174». Sin esa prueba, el
-# efecto habría sido silencioso: el contador seguiría corriendo en verde y la
-# racha no avanzaría NUNCA. Bajar el tope es inofensivo -una tolerancia menor le
-# pone las cosas más fáciles a D1-; subirlo es lo que lo rompe.
+# EL TECHO DE 85 YA NO RIGE (ADR-225, 01-10-2026). Hasta entonces el
+# `timeout-minutes` no podía subir de 85: la ventana de tolerancia del contador
+# de los siete días se derivaba del mayor `timeout-minutes` de trabajo de
+# `.github/workflows/*.yml` por dos (85 x 2 = 170 minutos) y la hora del
+# contador dejaba 172 minutos tranquilos —margen de DOS—, vigilado por
+# `tests/automation/test_contador_de_siete_dias.py` (se probó subiendo este
+# trabajo a 87 y se puso rojo). La línea del contador quedó cancelada por el
+# propietario el 13-09-2026 (#610) y el contador no tiene horario, así que el
+# tope de este trabajo lo decide lo que la medición necesita; sigue en 80
+# porque es lo medido.
 #
 # LA TRAMPA QUE OBLIGA A TODO ESTO, medida sobre `gpt-researcher` 0.15.1: tanto el
 # proveedor de modelo (`llm_provider/generic/base.py`) como el de vectorización
@@ -159,7 +155,8 @@ jobs:
     # no se paga con un rojo tardío: se paga perdiendo el informe y el artefacto
     # de una medición que ya gastó la cuota entera.
     #
-    # Por arriba manda la cabecera: 85 es el techo y no se toca.
+    # Por arriba, lo que la medición necesita (el techo de 85 del contador de
+    # los siete días dejó de regir con ADR-225; ver la cabecera).
     timeout-minutes: 80
     env:
       # AQUÍ NO VA NINGUNA VARIABLE DE CONFIGURACIÓN DEL INVESTIGADOR. Una

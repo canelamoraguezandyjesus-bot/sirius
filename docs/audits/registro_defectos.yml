@@ -1322,3 +1322,28 @@ defectos:
       - src/sirius/domain/instantes.py
       - src/sirius/domain/staged_engine_gates.py
       - tests/unit/test_instantes_en_una_sola_forma.py
+
+  # ADR-225 (PR #672; propuesta 11 de la mina de septiembre, deuda 13). El
+  # propietario cancelo la linea del contador de los siete dias el 13-09-2026
+  # (#610) y la decision vivio 18 dias solo en ese comentario: ADR-101, la
+  # cabecera del contador, el comentario del conjunto declarado y la linea D5
+  # de STATUS.md seguian presentando la pieza como bloque pendiente. Cierre:
+  # PR #672 (el sha de cerrado_por es el del commit del arreglo en la rama; la
+  # fusion aplastada lo deja fuera de main, como en H-217).
+  - id: H-225
+    titulo: Una decision del propietario que cancelaba la linea del contador de los siete dias vivio 18 dias solo en un comentario de incidencia mientras el ADR, el codigo y el estado del proyecto seguian diciendo que la pieza estaba pendiente y bloqueaba
+    bloque: documentacion
+    gravedad: media
+    estado: cerrado
+    cerrado_por: a4d6a2eae817753052957cbc76ab325e237d8fe9
+    pr: 672
+    adr: 225
+    ficheros:
+      - docs/decisions/ADR-101-declarar-la-precondicion-del-contador-de-siete-dias-en-vez-de-inferirla-por-caso.md
+      - src/sirius_engine/seven_day_streak_cli.py
+      - src/sirius_engine/projection_verifier.py
+      - docs/evolution/STATUS.md
+      - docs/implementation/bloques_del_motor.yml
+      - docs/implementation/SIRIUS_WORK_ENGINE_PLAN_IMPLEMENTACION.md
+      - tests/automation/test_reflejar_desenlace_github.py
+

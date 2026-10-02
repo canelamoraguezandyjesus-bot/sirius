@@ -99,8 +99,8 @@ def test_el_motor_tiene_horario() -> None:
     assert crones, "el horario existe pero no declara ningún cron"
 
 
-def test_el_horario_cae_dentro_de_la_ventana_que_dejan_las_dos_restricciones() -> None:
-    """El minuto del motor no se elige a ojo: sale de dos cotas independientes.
+def test_el_horario_arranca_despues_del_reconciliador() -> None:
+    """El minuto del motor no se elige a ojo: sale de una cota medida.
 
     **Cota inferior.** `reconcile-sirius-states` arranca a `17 */6` con
     `timeout-minutes: 10`. El motor no puede empezar antes de que aquel termine
@@ -108,13 +108,14 @@ def test_el_horario_cae_dentro_de_la_ventana_que_dejan_las_dos_restricciones() -
     motor razone sobre un estado a punto de cambiar es decidir sobre información
     caduca.
 
-    **Cota superior, y ésta casi se salta.** El contador de los siete días
-    necesita un hueco tranquilo para medir. Con el motor en el minuto 47, los
-    huecos de 360 minutos se partían en 30 y 330, y `hora_recomendada_pasada`
-    dejaba de encontrar hora: **ninguna habría producido días verdes**. Cerrar
-    D2 así habría roto D1.
-
-    Medido antes de elegir: 22, 27, 32 y 37 valen; 42 y 47 no.
+    **La cota superior que hubo, y ya no rige.** Hasta ADR-225 (01-10-2026) el
+    minuto no podía pasar del 37: el contador de los siete días necesitaba un
+    hueco tranquilo para medir, y con el motor en el 47 los huecos de 360 minutos
+    se partían en 30 y 330 y `hora_recomendada_pasada` dejaba de encontrar hora
+    (medido antes de elegir: 22, 27, 32 y 37 valían; 42 y 47 no). La línea del
+    contador quedó cancelada por el propietario el 13-09-2026 (#610) y el
+    contador no tiene horario, así que esa cota deja de regir; el minuto se
+    queda en el 32 porque nada pide moverlo.
     """
     reconciliador = dict(
         yaml.safe_load(
@@ -128,16 +129,11 @@ def test_el_horario_cae_dentro_de_la_ventana_que_dejan_las_dos_restricciones() -
 
     timeout_reconciliador = int(reconciliador["jobs"]["reconcile"]["timeout-minutes"])
     minimo = minuto_reconciliador + timeout_reconciliador
-    maximo = 37
 
-    assert minimo <= minuto_motor <= maximo, (
-        f"el motor arranca en el minuto {minuto_motor}, fuera de la ventana "
-        f"[{minimo}, {maximo}].\n"
-        f"  Antes del {minimo}: pisa al reconciliador, que arranca en el "
-        f"{minuto_reconciliador} y puede tardar {timeout_reconciliador} minutos.\n"
-        f"  Después del {maximo}: parte el hueco tranquilo que el contador de los "
-        "siete días necesita, y `hora_recomendada_pasada` deja de encontrar hora "
-        "-medido: 42 y 47 lo rompen-. Cerrar D2 así rompería D1."
+    assert minimo <= minuto_motor, (
+        f"el motor arranca en el minuto {minuto_motor}, antes del {minimo}: pisa al "
+        f"reconciliador, que arranca en el {minuto_reconciliador} y puede tardar "
+        f"{timeout_reconciliador} minutos."
     )
 
 

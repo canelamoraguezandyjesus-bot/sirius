@@ -26,13 +26,13 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **219**.
-- Bloques del motor: 17 cerrado, 2 fuera_de_alcance, 1 pendiente.
-- Defectos registrados: 3 abierto, 75 cerrado.
+- Decisiones (ADR): **220**.
+- Bloques del motor: 17 cerrado, 3 fuera_de_alcance.
+- Defectos registrados: 3 abierto, 76 cerrado.
 - Ideas aparcadas o descartadas: 5 aparcada, 2 descartada, 2 promovida.
 - Skills: **19**.
 - Investigaciones: **10** (fotos con fecha; caducan).
-- Documentos: **201**, de los que **138** no declaran fecha.
+- Documentos: **202**, de los que **138** no declaran fecha.
 
 ## Las skills: lo que ya costó averiguar dos veces (ADR-211)
 
@@ -81,6 +81,7 @@ huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 |---|---|---|---|---|
 | [229](docs/decisions/ADR-229-los-instantes-de-g8-se-comparan-en-una-sola-forma-canonica-sean-cuales-sean-sus-escrituras.md) | 2026-10-01 | APROBADO | Los instantes de G8 se comparan en una sola forma canónica, sean cuales sean sus escrituras | `src/sirius/domain/instantes.py` (nuevo): `FORMA_CANONICA` (`%Y-%m-%dT%H:%M:%S.%fZ`), `en_forma_canonica(texto) -> str \| None` (una fecha ISO con hora opcional tras `T` o espacio, fracción opcional de cualquier longitud y zona opcional… |
 | [226](docs/decisions/ADR-226-cuando-codex-declara-que-no-revisa-y-claude-pidio-cambios-la-ronda-entrega-los-hallazgos-de-claude-en-vez-de-tirarlos.md) | 2026-10-01 | APROBADO | Cuando Codex declara que no revisa y Claude pidió cambios, la ronda entrega los hallazgos de Claude en vez de tirarlos | En `scripts/automation/sirius_aggregate_reviews.py`: Las razones con las que el recolector dice que el conector declaró que |
+| [225](docs/decisions/ADR-225-la-linea-del-contador-de-los-siete-dias-quedo-cancelada-por-decision-del-propietario-el-13-09-y-adr-101-deja-de-tenerla-como-bloque-pendiente.md) | 2026-10-01 | APROBADO | La línea del contador de los siete días quedó cancelada por decisión del propietario el 13-09 y ADR-101 deja de tenerla como bloque pendiente | La pieza (C) de #376 queda cancelada por decisión del propietario del 13-09-2026 (#610). No se ordenará salvo decisión nueva suya; si algún día la quiere, la medida de #605 (ADR-186) es el punto de partida y hará falta otro ADR. ADR-101… |
 | [224](docs/decisions/ADR-224-quality-no-muere-por-un-uv-sync-sin-cache-los-dos-pasos-largos-llevan-plazo-propio-y-el-job-sube-de-20-a-60-minutos.md) | 2026-10-01 | APROBADO | Quality no muere por un `uv sync` sin caché: los dos pasos largos llevan plazo propio y el job sube de 20 a 60 minutos | En `.github/workflows/quality.yml`: el job pasa de `timeout-minutes: 20` a 60; «Sync environment» lleva `timeout-minutes: 20` (peor medido sin caché: |
 | [223](docs/decisions/ADR-223-continua-sobre-una-parada-anterior-a-la-pr-repone-sirius-planned-si-consta-que-ya-estuvo-planificada-y-si-no-consta-lo-dice-sin-pedir-la-orden-otra-vez.md) | 2026-10-01 | APROBADO | `continua` sobre una parada anterior a la PR repone `sirius:planned` si consta que ya estuvo planificada, y si no consta lo dice sin pedir la orden otra vez | En el camino `sin_pr`, cuando la fase de destino es `sirius:implement-requested` y la incidencia no lleva `sirius:planned`, el guion: Lee la cronología de la incidencia (`GET /issues/N/events`, paginada) y |
 | [222](docs/decisions/ADR-222-un-defecto-cerrado-lleva-la-pr-que-lo-fusiono-la-referencia-que-un-clon-de-main-puede-seguir.md) | 2026-10-01 | APROBADO | Un defecto cerrado lleva la PR que lo fusionó: la referencia que un clon de `main` puede seguir | Desde este ADR, un defecto `cerrado` lleva, además de `cerrado_por`, `pr: <número de la PR que lo fusiona>`; si lo cerró un encargo del motor, cuya PR la abre el workflow al terminar el run, basta `incidencia: <número>`, que ya es un campo… |
@@ -315,6 +316,7 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 | `pieza-sin-lector` | 5 | no en todas | 210, 209, 207, 183, 175 |
 | `prosa-que-el-cambio-deja-falsa` | 4 | no en todas | 223, 219, 211, 177 |
 | `regla-del-propietario-que-solo-vive-en-una-conversacion` | 4 | sí | 213, 208, 204, 195 |
+| `decision-que-solo-vive-en-una-conversacion` | 2 | no en todas | 225, 202 |
 | `leccion-que-se-queda-en-el-informe` | 2 | sí | 215, 214 |
 | `lista-a-mano` | 2 | sí | 181, 178 |
 | `medir-lo-que-se-tiene-en-vez-de-lo-que-hay` | 2 | sí | 184, 180 |
@@ -322,7 +324,6 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 | `comparar-instantes-como-texto` | 1 | sí | 229 |
 | `condicion-construida-sin-el-mecanismo-que-la-hace-cumplible` | 1 | sí | 200 |
 | `criterio-que-se-pide-distinto-del-que-se-puntua` | 1 | sí | 212 |
-| `decision-que-solo-vive-en-una-conversacion` | 1 | no en todas | 202 |
 | `doble-mas-permisivo-que-la-herramienta-que-dobla` | 1 | sí | 193 |
 | `dos-sesiones-que-no-se-ven` | 1 | sí | 206 |
 | `espera-sin-fin-por-un-suceso-que-nadie-va-a-emitir` | 1 | sí | 194 |
@@ -375,6 +376,11 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 - **ADR-204** — la sesión seguiría devolviéndole decisiones técnicas (lo hace cumplir `tests/automation/test_reglas_de_agents.py`).
 - **ADR-195** — una regla dada de viva voz —«no se elimina nada»— que no (lo hace cumplir `tests/automation/test_registro_de_defectos.py`).
 
+### `decision-que-solo-vive-en-una-conversacion`
+
+- **ADR-225** — una orden del propietario que cancela una línea entera queda en el comentario de una incidencia cerrada, y dieciocho días después el ADR, el código y el estado del proyecto siguen diciendo que esa línea está pendiente y bloquea algo; la siguiente sesión la retomaría o la pondría delante de él otra vez. (sin prueba que lo haga cumplir: ninguna prueba: una decisión del propietario no tiene hoy una forma mecánica que una guarda pueda leer; la caza la mina mensual (deuda 13) y la hoja de decisiones abiertas, a posteriori).
+- **ADR-202** — una decisión de NO hacer algo no deja rastro —no hay (sin prueba que lo haga cumplir: ninguna prueba: una decisión tomada de viva voz fuera del).
+
 ### `leccion-que-se-queda-en-el-informe`
 
 - **ADR-215** — creer que sin transcripciones no salen más skills (lo hace cumplir `tests/automation/test_skills.py`).
@@ -406,10 +412,6 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 ### `criterio-que-se-pide-distinto-del-que-se-puntua`
 
 - **ADR-212** — escribir a ojo la instrucción que se le da a un (lo hace cumplir `tests/unit/test_ollama_query_intent_classifier.py`).
-
-### `decision-que-solo-vive-en-una-conversacion`
-
-- **ADR-202** — una decisión de NO hacer algo no deja rastro —no hay (sin prueba que lo haga cumplir: ninguna prueba: una decisión tomada de viva voz fuera del).
 
 ### `doble-mas-permisivo-que-la-herramienta-que-dobla`
 
@@ -498,7 +500,7 @@ producto Sirius 0.1, cerrados el 10-08-2026.
 | C2 | cerrado | Una orden tuya y no tocas GitHub hasta «fusiona» |
 | C3 | cerrado | El mismo ciclo para documentos |
 | C4 | cerrado | La auditoría dentro del motor |
-| D1 | pendiente | Pasar el mando de GitHub al motor, clase por clase |
+| D1 | fuera_de_alcance | Pasar el mando de GitHub al motor, clase por clase |
 | D2 | cerrado | Que el motor corra solo, siempre |
 | D3 | fuera_de_alcance | Hablar con Sirius por Telegram |
 | D4 | fuera_de_alcance | Partir un objetivo grande en bloques |
@@ -557,7 +559,7 @@ nada por su cuenta. «Sin fecha declarada» es un aviso, no un dato.
 
 ### `docs/audits`
 
-**144 documentos**, 84 sin fecha declarada; el más reciente declara 2026-10-01.
+**145 documentos**, 84 sin fecha declarada; el más reciente declara 2026-10-01.
 Es la carpeta de la evidencia y crece a dos filas por ADR, así que la fila
 de cada documento vive en un índice generado aparte,
 [`docs/audits/INDICE.md`](docs/audits/INDICE.md), que escribe el
