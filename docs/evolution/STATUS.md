@@ -238,10 +238,12 @@ Arquitectura la marca como «ya resuelta, no pendiente»
 deja la pieza (C) —cablear el retorno del desenlace de GitHub al almacén del motor y
 declarar la clase correspondiente— como «bloque propio, a la orden del propietario»
 (`docs/decisions/ADR-101-declarar-la-precondicion-del-contador-de-siete-dias-en-vez-de-inferirla-por-caso.md:83-85`).
-El propietario decide ahora el orden: la pieza (C) **se ordenará después de las oleadas de
-construcción de Sirius 0.2** descritas en la Arquitectura Técnica 0.2
-(`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md`, §8), no antes ni en
-paralelo con ellas.
+El propietario decidió primero el orden —después de las oleadas de construcción de Sirius 0.2
+(`docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md`, §8)— y el 13-09-2026
+**canceló la línea** (#610: «la línea del contador de los siete días no es necesaria»).
+ADR-225 lo registra y supera esa consecuencia de ADR-101: la pieza (C) no se ordenará salvo
+decisión nueva suya; la medida de #605 (ADR-186) queda como punto de partida si algún día se
+retoma. El contador sigue escribiendo `NO_COMPARABLE` con honestidad.
 
 **D6 — Separación de la memoria del producto y la memoria del motor.** Resuelve la
 DECISIÓN 3 de `docs/implementation/DONDE_ESTAMOS_2026-08-21.md:704-707` («¿la memoria del
