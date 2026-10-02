@@ -116,6 +116,10 @@ def test_leer_y_escribir_van_y_vuelven_y_sin_fichero_no_hay_instantanea(tmp_path
         # «Ninguna» (ronda 6 de Codex en la PR #674).
         '{"pasada": {"interrumpida": false, "sin_evaluar": [], "perdida_posible": true}, '
         '"divergencias": []}',
+        # El mismo encargo dos veces en `sin_evaluar`: el escritor guarda un
+        # conjunto y la vista contaría dos (ronda 7 de Codex en la PR #674).
+        '{"pasada": {"interrumpida": false, "sin_evaluar": ["WI-1", "WI-1"], '
+        '"perdida_posible": false}, "divergencias": []}',
         # Dos entradas para el mismo encargo: el escritor nunca las produce y
         # publicarlas las dos sería inventar (revisión propia antes de la ronda 7).
         '{"pasada": {"interrumpida": false, "sin_evaluar": [], "perdida_posible": false}, '

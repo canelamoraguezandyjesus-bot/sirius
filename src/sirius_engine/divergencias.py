@@ -142,10 +142,13 @@ def leer_instantanea(ruta: Path) -> Instantanea | None:
         or not isinstance(perdida_posible, bool)
         or not isinstance(sin_evaluar, list)
         or not all(isinstance(w, str) and w for w in sin_evaluar)
+        # Sin repetidos: el escritor guarda un conjunto, y dos veces el mismo
+        # encargo haría contar dos a la vista (ronda 7 de Codex en la PR #674).
+        or len(set(sin_evaluar)) != len(sin_evaluar)
     ):
         raise ValueError(
             f"{ruta}: la pasada está mal formada (interrumpida y perdida_posible tienen que "
-            "ser booleanos y sin_evaluar una lista de encargos)"
+            "ser booleanos y sin_evaluar una lista de encargos sin repetidos)"
         )
     divergencias = tuple(_desde_json(ruta, entrada) for entrada in entradas)
     # El escritor nunca repite un encargo (`actualizar` indexa por `work_id`);

@@ -201,6 +201,9 @@ revisión independiente de la PR #674 lo señaló; queda dicho aquí.
   ilegibles. Y de una revisión propia antes de la ronda 7: dos entradas con el
   mismo encargo —que `actualizar` nunca produce— se declaran como fichero sin
   forma en vez de publicarse las dos (caso nuevo en la misma parametrizada).
+- Ronda 7 de Codex sobre `6ee2a8ef`: la misma unicidad para `sin_evaluar`
+  (`["WI-1", "WI-1"]` pasaba y la vista contaba dos encargos sin evaluar
+  listando el mismo); es un fichero sin forma, como las entradas repetidas.
 - Mutaciones, con los ficheros restaurados (`diff -q` limpio) y la batería en
   verde después:
 
@@ -228,6 +231,7 @@ revisión independiente de la PR #674 lo señaló; queda dicho aquí.
 | M20 | `Instantanea` admite `perdida_posible` en una pasada completa | caen el caso contradictorio de `test_un_fichero_que_no_tiene_la_forma_se_declara_en_vez_de_leerse_como_vacio` y `test_una_instantanea_completa_no_puede_decir_que_lo_anterior_pudo_perderse` |
 | M21 | solo `JSONDecodeError` toma el camino del fichero roto | caen `test_un_fichero_que_no_se_puede_leer_se_declara_como_uno_sin_forma` y los casos de bytes ilegibles del reflector y de la vista |
 | M22 | las entradas repetidas se aceptan | cae el caso de las entradas repetidas de `test_un_fichero_que_no_tiene_la_forma_se_declara_en_vez_de_leerse_como_vacio` |
+| M23 | `sin_evaluar` admite repetidos | cae el caso de `sin_evaluar` repetido de la misma parametrizada |
 
 - Baterías `test_divergencias.py`, `test_reflect_cli.py`, `test_memoria.py` y
   `test_reflect.py`: 179 en verde. `ruff format`, `ruff check` y `mypy` sobre
