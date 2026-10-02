@@ -660,21 +660,70 @@ def test_un_contador_renombrado_vuelve_a_contarse_sin_reventar(tmp_path: Path) -
     assert hora == time(6, 0)
 
 
-def test_hora_recomendada_del_arbol_real_no_cuenta_el_cron_del_propio_contador() -> None:
-    """El pin MEDIDO del árbol real: 03:24 UTC, 345 min tras las 00:32 (ADR-143/ADR-144).
+# --- El árbol MEDIDO, congelado (ADR-225) ------------------------------------
+#
+# Hasta ADR-225 las dos pruebas siguientes leían el árbol real de
+# `.github/workflows` y fijaban su derivación en 03:24 UTC, porque esa hora
+# estaba cableada en el `cron` del contador y su cabecera la afirmaba. Desde el
+# 01-10-2026 el contador no tiene horario (línea cancelada por el propietario
+# el 13-09; D1 queda fuera de alcance), así que el árbol real ya no cablea
+# ninguna hora que un pin pudiera guardar: un `schedule:` nuevo movería la
+# derivación sin que nada en el repositorio dejara de ser verdad. Lo que sí
+# merece guarda es la DERIVACIÓN: se congela aquí el árbol tal como se midió
+# el 05-09-2026 (los cuatro `schedule: cron:` ajenos al contador, el `cron`
+# que el contador llevaba entonces y el tope de job mayor) y se le exigen los
+# dos resultados medidos: 03:24 y el hueco de 345 min tras las 00:32. Si D1
+# vuelve a cablear una hora, volver a atar estas pruebas al árbol real es
+# parte de ese encargo (ronda 7 de Codex en la PR #672).
+
+_CRONS_MEDIDOS_EL_2026_09_05 = {
+    "reconcile-sirius-states.yml": "17 */6 * * *",
+    "reflejar-desenlace.yml": "4 0 * * *",
+    "motor-sirius.yml": "32 */6 * * *",
+    "mina-mensual.yml": "24 9 1 * *",
+}
+_CRON_QUE_LLEVABA_EL_CONTADOR = "24 3 * * *"
+_TOPE_MAYOR_MEDIDO = 85
+
+
+def _arbol_medido(tmp_path: Path) -> Path:
+    workflows = tmp_path / "workflows-medidos"
+    workflows.mkdir()
+    for nombre, cron in _CRONS_MEDIDOS_EL_2026_09_05.items():
+        (workflows / nombre).write_text(
+            yaml.safe_dump(
+                {
+                    "on": {"schedule": [{"cron": cron}]},
+                    "jobs": {"j": {"timeout-minutes": _TOPE_MAYOR_MEDIDO}},
+                }
+            ),
+            encoding="utf-8",
+        )
+    (workflows / _CONTADOR_PARA_LAS_PRUEBAS).write_text(
+        yaml.safe_dump({"on": {"schedule": [{"cron": _CRON_QUE_LLEVABA_EL_CONTADOR}]}}),
+        encoding="utf-8",
+    )
+    return workflows
+
+
+def test_hora_recomendada_del_arbol_medido_no_cuenta_el_cron_del_propio_contador(
+    tmp_path: Path,
+) -> None:
+    """El pin MEDIDO: 03:24 UTC, 345 min tras las 00:32 (ADR-143/ADR-144).
 
     No es un número elegido: es el que la derivación daba el 25-08-2026, cuando
     `contador-siete-dias.yml` todavía no existía, y el que ADR-143 volvió a
     medir el 05-09-2026 sobre el mismo árbol sin ese fichero. Contra el
     derivador autoincluyente esta prueba falla con 09:24, que es la medida que
-    ADR-143 registró y que este encargo desmiente como derivación correcta.
+    ADR-143 registró y que ese encargo desmintió como derivación correcta: por
+    eso el árbol congelado lleva el `cron` de las 03:24 que el contador tenía.
     """
-    hora, motivo = hora_recomendada_pasada()
+    workflows = _arbol_medido(tmp_path)
+
+    hora, motivo = hora_recomendada_pasada(workflows)
 
     assert hora == time(3, 24), (
-        "la derivación del árbol real dejó de dar 03:24 UTC. Si acabas de mover "
-        "un `schedule:`, la cabecera de `contador-siete-dias.yml` ya no dice la "
-        "verdad y hay que volver a derivar la hora; si acabas de tocar el "
+        "la derivación del árbol medido dejó de dar 03:24 UTC: si acabas de tocar el "
         "derivador, comprueba que sigue sin contarse a sí mismo (ADR-144)"
     )
     assert "345 min, tras las 00:32" in motivo
@@ -741,10 +790,16 @@ def expandir_campo_del_oraculo(campo: str, tope: int, nombre: str) -> list[int]:
     return sorted(valores)
 
 
-def test_hora_recomendada_atada_al_schedule_real_del_repositorio() -> None:
-    """Misma disciplina que ``test_ventana_tolerancia_atada_al_yaml_real...``: YAML aparte."""
+def test_hora_recomendada_atada_al_schedule_del_arbol_medido(tmp_path: Path) -> None:
+    """Misma disciplina que ``test_ventana_tolerancia_atada_al_yaml_real...``: YAML aparte.
+
+    Sobre el árbol congelado de ADR-225, no sobre el real: el oráculo sigue
+    siendo una segunda implementación independiente, y lo que compara es la
+    derivación, que es lo único que el árbol real ya no cablea.
+    """
+    workflows = _arbol_medido(tmp_path)
     minutos_disparo = set()
-    for wf in sorted((_REPO_ROOT / ".github" / "workflows").glob("*.yml")):
+    for wf in sorted(workflows.glob("*.yml")):
         if wf.name == _CONTADOR_PARA_LAS_PRUEBAS:
             # ADR-144: la hora que se compara es la de la PASADA del contador,
             # y la propia pasada no se estorba a sí misma. La exclusión se
@@ -764,7 +819,9 @@ def test_hora_recomendada_atada_al_schedule_real_del_repositorio() -> None:
             for hora_campo in expandir_campo_del_oraculo(campos[1], 24, "hora"):
                 for minuto in expandir_campo_del_oraculo(campos[0], 60, "minuto"):
                     minutos_disparo.add(hora_campo * 60 + minuto)
-    assert minutos_disparo, "no encontré ningún schedule real: la comparación no mediría nada"
+    assert minutos_disparo, (
+        "el árbol medido no trae ningún schedule: la comparación no mediría nada"
+    )
 
     ordenados = sorted(minutos_disparo)
     huecos = []
@@ -777,7 +834,7 @@ def test_hora_recomendada_atada_al_schedule_real_del_repositorio() -> None:
     punto_medio = (inicio_max + duracion_max // 2) % (24 * 60)
     esperado = time(hour=punto_medio // 60, minute=punto_medio % 60)
 
-    hora, _motivo = hora_recomendada_pasada()
+    hora, _motivo = hora_recomendada_pasada(workflows)
     assert hora == esperado
 
 

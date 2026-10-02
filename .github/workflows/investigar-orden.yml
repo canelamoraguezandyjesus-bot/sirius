@@ -22,9 +22,11 @@
 # `sirius_apply_verdict.sh` con el rol `implementer`, que es el rol que ese
 # guion entiende para "quien produce el entregable".
 #
-# EL TOPE DEL TRABAJO ES 30 MINUTOS y no puede pasar de 85: la ventana de
-# tolerancia del contador de los siete dias se deriva del mayor tope de trabajo
-# de esta carpeta por dos (§11.2, medido en su dia con el tope de 85 del banco).
+# EL TOPE DEL TRABAJO ES 30 MINUTOS. Hasta ADR-225 (01-10-2026) no podia pasar
+# de 85: la ventana de tolerancia del contador de los siete dias se derivaba del
+# mayor tope de trabajo de esta carpeta por dos (§11.2). Esa linea quedo
+# cancelada por el propietario el 13-09-2026 (#610) y el contador no tiene
+# horario, asi que el tope lo decide lo que este trabajo necesita.
 name: Investigar una orden
 
 on:

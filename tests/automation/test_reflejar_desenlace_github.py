@@ -14,7 +14,9 @@ incidencias reales están cerradas y fusionadas (objetivo de esta incidencia,
 -``sirius:completed`` con su SHA de fusión-, no una segunda captura de red:
 este entorno no tiene ni token ni acceso a GitHub, y H-25/ADR-101 prohíben
 tocar ``CLASES_CON_ESTADO_PROPIO`` desde este bloque (C1 es solo el reflejo;
-declarar la clase es C2, otro encargo).
+declarar la clase era C2, otro encargo, y esa línea quedó CANCELADA por el
+propietario el 13-09-2026: #610, ADR-225; no se ordena sin otra decisión
+suya).
 
 Lo que esta prueba fija, en dos tiempos sobre el MISMO almacén real:
 
@@ -26,7 +28,8 @@ Lo que esta prueba fija, en dos tiempos sobre el MISMO almacén real:
 2. **Después de reflejar**: la misma comparación, sobre el mismo almacén,
    sale ``COINCIDE`` en los dos ejes para las siete: el motor ya lleva el
    estado real, que es exactamente lo que el §11.2 exige para que el
-   contador pueda EMPEZAR a contar (lo declarará C2, no aquí).
+   contador pudiera EMPEZAR a contar (lo habría declarado C2, no aquí; esa
+   línea quedó cancelada el 13-09-2026, ADR-225).
 """
 
 from __future__ import annotations

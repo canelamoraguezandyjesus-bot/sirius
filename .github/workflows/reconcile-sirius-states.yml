@@ -32,10 +32,13 @@ name: Reconciliar estados de Sirius
 on:
   workflow_dispatch:
   schedule:
-    # Cada 6 horas, y NO puede ser más denso: el derivador de la hora del
-    # contador exige que el mayor hueco libre de disparos doble su ventana
-    # de tolerancia (340 min hoy). La propuesta de pasar a cada hora se
-    # intentó y quedó refutada por cuatro rojos distintos: ADR-139.
+    # Cada 6 horas. Hasta ADR-225 (01-10-2026) no podía ser más denso: el
+    # derivador de la hora del contador exigía que el mayor hueco libre de
+    # disparos doblara su ventana de tolerancia (340 min), y la propuesta de
+    # pasar a cada hora quedó refutada por cuatro rojos distintos (ADR-139).
+    # La línea del contador quedó cancelada el 13-09 (#610) y el contador no
+    # tiene horario; la cadencia se queda tal cual, porque cambiarla sería
+    # otra decisión con su medida.
     - cron: '17 */6 * * *'
 
 permissions:
