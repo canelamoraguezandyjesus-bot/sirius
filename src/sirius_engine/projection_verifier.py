@@ -81,8 +81,11 @@ _ESTADOS_SIN_ETIQUETA = frozenset(
 #: GitHub. Una clase entra aquí SOLO desde el bloque que cablee ese retorno
 #: (la opción (C) de #376), con su evidencia y editando a la vez
 #: `test_h25_el_conjunto_declarado_esta_vacio_hoy` — jamás a mano para «poner
-#: el día verde». No es la ventana 5: las ventanas son tolerancias de la
-#: comparación; esto dice si la etapa que se compara ha empezado siquiera.
+#: el día verde». Ese bloque quedó CANCELADO por el propietario el 13-09-2026
+#: (#610, ADR-225): el conjunto seguirá vacío salvo decisión nueva suya, y eso
+#: es lo que el contador dice. No es la ventana 5: las ventanas son
+#: tolerancias de la comparación; esto dice si la etapa que se compara ha
+#: empezado siquiera.
 CLASES_CON_ESTADO_PROPIO: frozenset[WorkItemClass] = frozenset()
 
 _WORKFLOWS_DIR = Path(__file__).resolve().parents[2] / ".github" / "workflows"

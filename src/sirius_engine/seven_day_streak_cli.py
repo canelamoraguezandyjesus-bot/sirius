@@ -63,13 +63,16 @@ tenía, y ha dado turnos programados reales en verde. Lo que faltaba en el
 párrafo anterior -la cadencia- está cerrado.
 
 **Eso no reabre el contador.** La cadencia es una precondición distinta de la
-que sigue bloqueando D1: :data:`sirius_engine.projection_verifier.CLASES_CON_ESTADO_PROPIO`
-sigue vacío hoy (H-25, ADR-101, #376), porque nada escribe todavía en el
-almacén del motor el desenlace real de cada clase -tenerlo corriendo solo no
-es lo mismo que tenerlo llevando ese estado-. Mientras el conjunto esté
-vacío, cada línea de esta pasada sale ``NO_COMPARABLE`` citando el §11.2: la
-etapa que el contador mide no ha empezado. Eso queda como bloque propio -la
-pieza (C) de #376- y no lo toca este módulo.
+otra, la que el contador declara: :data:`sirius_engine.projection_verifier.CLASES_CON_ESTADO_PROPIO`
+sigue vacío (H-25, ADR-101, #376), porque nada escribe en el almacén del motor
+el desenlace real de cada clase -tenerlo corriendo solo no es lo mismo que
+tenerlo llevando ese estado-. Mientras el conjunto esté vacío, cada línea de
+esta pasada sale ``NO_COMPARABLE`` citando el §11.2: la etapa que el contador
+mide no ha empezado. **Y no va a empezar por decisión del propietario**: el
+13-09-2026 canceló el encargo que iba a cerrar esa cadena (#610, «la línea del
+contador de los siete días no es necesaria»); ADR-225 lo registra y la medida
+previa de #605 queda en ADR-186 y en su rama. Este módulo sigue publicando la
+verdad -no comparable- y no la toca.
 """
 
 from __future__ import annotations
@@ -130,6 +133,11 @@ _REGISTRO_RELATIVO = Path("docs") / "operations" / "racha_siete_dias.jsonl"
 #: hacia delante y el otro guarda las salidas de emergencia hacia atras.
 _CONMUTACIONES_RELATIVO = Path("docs") / "operations" / "conmutaciones_autoridad.jsonl"
 _WORKFLOWS_RELATIVO = Path(".github") / "workflows"
+
+#: El disparador del run, tal como lo expone GitHub Actions. Lo lee la medida
+#: de la entrega (ADR-151) para no medir un retraso a una pasada que no vino
+#: de ningún horario (ADR-225).
+VARIABLE_EVENTO = "GITHUB_EVENT_NAME"
 
 #: Variable de entorno con la que se puede fijar la raíz sin tocar código,
 #: mismo patrón que ``SIRIUS_MOTOR_RAIZ`` en :mod:`sirius_engine.cli`
@@ -273,6 +281,7 @@ def main(
         ventana_tolerancia=ventana_tolerancia,
         mirror=mirror,
         repo=args.repo,
+        evento=entorno.get(VARIABLE_EVENTO),
     )
 
     lineas_nuevas = []
@@ -400,8 +409,17 @@ def _medir_entrega(
     ventana_tolerancia: timedelta,
     mirror: GitHubMirrorPort,
     repo: str,
+    evento: str | None = None,
 ) -> tuple[EntregaDeLaPasada | None, str]:
     """Mide cómo llegó esta pasada, o dice por qué no se pudo medir. Nunca revienta.
+
+    ``evento`` es el disparador del run (``GITHUB_EVENT_NAME``), si se conoce.
+    Un retraso solo existe respecto a una cita, y una pasada lanzada a mano
+    (``workflow_dispatch``) no tiene ninguna: desde ADR-225 el contador no
+    lleva horario, así que medirle el retraso contra la hora derivada
+    registraría un ``retraso_min`` contra una cita que nadie tiene (ronda 7 de
+    Codex en la PR #672). Se declara no aplicable y la línea va sin ``entrega``;
+    sin ``evento`` (la cadena local, las pruebas) se mide como siempre.
 
     Devuelve la medida para la línea del registro -``None`` si no se pudo
     medir, que el registro lee como "no medido"- y el texto para el ``motivo``,
@@ -415,6 +433,12 @@ def _medir_entrega(
     la medición del día entero por no poder medir el retraso sería cambiar un
     aviso por una avería.
     """
+    if evento is not None and evento != "schedule":
+        return None, (
+            f"pasada lanzada por `{evento}`, no por un horario: el retraso de entrega no "
+            "aplica y no se mide (ADR-225: el contador no tiene horario, y la hora derivada "
+            "es una hipótesis, no una cita)"
+        )
     try:
         hora_programada, _motivo = hora_recomendada_pasada(workflows_dir)
     except ValueError as error:

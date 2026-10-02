@@ -779,3 +779,43 @@ def test_si_la_hora_programada_no_se_puede_derivar_la_pasada_sigue_y_lo_declara(
     lineas = leer_registro(registro)
     assert len(lineas) == 1
     assert lineas[0].entrega is None, "sin medida no se inventa una: ausente = no medido"
+
+
+def test_una_pasada_lanzada_a_mano_no_mide_un_retraso_contra_una_hora_hipotetica(
+    tmp_path: Path,
+) -> None:
+    """Ronda 7 de Codex en la PR #672: desde ADR-225 el contador no tiene horario
+    y toda pasada llega por ``workflow_dispatch``. Medirle un retraso contra la
+    hora derivada registraría una ficción (``retraso_min`` contra una cita que
+    nadie tiene). La pasada lo declara y escribe la línea sin ``entrega``; la
+    misma pasada con ``schedule`` como disparador sigue midiendo."""
+
+    def pasada(evento: str) -> tuple[str, tuple[LineaRegistro, ...]]:
+        store = InMemoryWorkEngineStore()
+        journal = InMemoryDispatchJournal()
+        _preparar_trabajo_activo(store, journal, work_id="WI-1", clase=WorkItemClass.PROGRAMACION)
+        registro = tmp_path / f"registro-{evento}.jsonl"
+        salida = io.StringIO()
+        codigo = seven_day_streak_cli.main(
+            ["--diario", str(tmp_path / f"diario-{evento}.jsonl"), "--registro", str(registro)],
+            entorno={"GITHUB_EVENT_NAME": evento},
+            salida=salida,
+            ahora=_TARDE,
+            store=store,
+            dispatch_journal=journal,
+            mirror=_con_runs(_mirror_verde()),
+        )
+        assert codigo == 0
+        return salida.getvalue(), leer_registro(registro)
+
+    texto, lineas = pasada("workflow_dispatch")
+    assert "lanzada por `workflow_dispatch`, no por un horario" in texto
+    assert "min de retraso" not in texto
+    assert len(lineas) == 1 and lineas[0].entrega is None, (
+        "una pasada a mano no tiene cita: sin cita no hay retraso que registrar"
+    )
+
+    texto_programada, lineas_programadas = pasada("schedule")
+    assert "280 min de retraso" in texto_programada
+    assert lineas_programadas[0].entrega is not None
+    assert lineas_programadas[0].entrega.retraso_min == 280

@@ -19,9 +19,9 @@ name: Preflight del investigador
 #
 # COSTE: listar modelos. Céntimos, y solo cuando alguien pulsa el botón.
 #
-# `timeout-minutes` NO PUEDE SUBIR DE 85: el mayor tope del repositorio fija la
-# tolerancia del contador de los siete días (170 min = 85 x 2) y D1 cuelga de un
-# margen de dos minutos. Lo vigila `tests/automation/test_contador_de_siete_dias.py`.
+# `timeout-minutes` corto a propósito: listar modelos son segundos. (Hasta
+# ADR-225 ningún tope del repositorio podía subir de 85 por la tolerancia del
+# contador de los siete días; esa línea quedó cancelada el 13-09-2026.)
 
 on:
   workflow_dispatch:
