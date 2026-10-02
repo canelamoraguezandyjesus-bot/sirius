@@ -214,20 +214,26 @@ def _tramos_consecutivos(
     evidencia que tres rondas seguidas sin que la corrección surta efecto.
 
     Un hueco formado SOLO por rondas transparentes para el tramo no corta
-    (ADR-230): una ronda es transparente si TODOS los que han señalado el
-    archivo en el tramo abierto faltaron en ella (``ausentes``), es decir, si
-    nadie que lo buscara lo buscó. Codex en la 3, la 5 y la 6 con la 4 sin
-    Codex da ``[[3, 5, 6]]``; con la 4 sin Claude, ``[[3], [5, 6]]``. Un
-    hallazgo sin fuente reconocible no se puede atribuir a ningún ausente, así
-    que el tramo que lo contiene no salta ninguna ronda. El tramo lista las
-    rondas en las que el archivo apareció, no las saltadas.
+    (ADR-230): una ronda es transparente si TODOS los que señalan el archivo a
+    los dos lados del hueco -en el tramo abierto y en la aparición que lo
+    cerraría- faltaron en ella (``ausentes``), es decir, si nadie que lo
+    buscara lo buscó. Codex en la 3, la 5 y la 6 con la 4 sin Codex da
+    ``[[3, 5, 6]]``; con la 4 sin Claude, ``[[3], [5, 6]]``; y Codex en la 1 y
+    la 2, la 3 solo de Claude y Claude en la 4 da ``[[1, 2], [4]]``: Claude
+    revisó la 3 sin verlo, aunque hasta entonces solo lo señalara Codex (ronda
+    7 de Codex en la PR #678; validar el hueco solo con las fuentes del tramo
+    abierto unía (1, 2, 4)). Un hallazgo sin fuente reconocible no se puede
+    atribuir a ningún ausente, así que el tramo que lo contiene no salta
+    ninguna ronda. El tramo lista las rondas en las que el archivo apareció,
+    no las saltadas.
     """
     faltaron = ausentes or {}
     tramos: list[list[int]] = []
     fuentes: set[str] = set()
     for numero in sorted(apariciones):
         hueco = range(tramos[-1][-1] + 1, numero) if tramos else range(0)
-        if tramos and all(_transparente(n, fuentes, faltaron) for n in hueco):
+        a_los_dos_lados = fuentes | apariciones[numero]
+        if tramos and all(_transparente(n, a_los_dos_lados, faltaron) for n in hueco):
             tramos[-1].append(numero)
         else:
             tramos.append([numero])

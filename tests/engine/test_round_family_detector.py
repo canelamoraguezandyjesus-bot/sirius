@@ -420,3 +420,18 @@ def test_una_ronda_parcial_solo_es_transparente_para_quien_no_la_reviso() -> Non
 
     # Un hallazgo sin fuente reconocible no se puede atribuir a un ausente: no salta.
     assert not detectar_familia_repetida(historial("SIN-FUENTE")).hay_familia_repetida
+
+    # Ronda 7 de Codex en la PR #678: Codex en la 1 y la 2, Claude en la 4. El
+    # hueco se valida con las fuentes de los dos lados: Claude revisó la 3 sin
+    # verlo, así que corta aunque hasta entonces solo lo señalara Codex.
+    cruzado = historial("CODEX")
+    cruzado[3] = {**_registro(4, [_hallazgo(archivo, "f4", fuente="CLAUDE")]), **ambos}
+    assert not detectar_familia_repetida(cruzado).hay_familia_repetida
+    # Y si en la 4 lo señalan los dos, también: Claude la revisó y no lo vio.
+    cruzado[3] = {
+        **_registro(
+            4, [_hallazgo(archivo, "f4", fuente="CLAUDE"), _hallazgo(archivo, "f5", fuente="CODEX")]
+        ),
+        **ambos,
+    }
+    assert not detectar_familia_repetida(cruzado).hay_familia_repetida

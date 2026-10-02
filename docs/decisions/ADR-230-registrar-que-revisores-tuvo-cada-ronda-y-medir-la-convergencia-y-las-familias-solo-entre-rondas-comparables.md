@@ -65,7 +65,11 @@ El de la nota de arranque, publicado antes de tocar código:
 4. **Decir en el registro qué revisores tuvo la ronda y que cada lector haga
    con eso lo suyo**: la convergencia compara solo entre rondas comparables y
    el detector trata la ronda parcial como transparente para lo que nadie
-   buscó en ella. Elegida.
+   buscó en ella. Elegida. El hueco se valida con quien señala el fichero a los dos lados, también en
+   la aparición que lo cerraría: Codex en la 1 y la 2, la 3 solo de Claude y
+   Claude en la 4 no es familia, porque Claude revisó la 3 sin verlo (ronda 7
+   de Codex en la PR #678: validar el hueco solo con las fuentes del tramo
+   abierto unía (1, 2, 4)).
 
 ## Decisión
 
@@ -219,6 +223,7 @@ El de la nota de arranque, publicado antes de tocar código:
 | M14 | la guarda del head mira la ronda anterior proyectada | cae `test_una_ronda_entera_sobre_el_mismo_head_que_la_parcial_anterior_no_avanza` |
 | M15 | el conjunto conocido ignora las procedencias de los registros antiguos (ronda 5 de Codex en la PR #678) | caen `test_un_historial_antiguo_de_los_dos_y_una_ronda_solo_de_claude_no_es_progreso` y `test_el_conjunto_conocido_incluye_las_procedencias_de_los_registros_antiguos` |
 | M16 | las procedencias de los registros antiguos aceptan cualquier prefijo de identificador (ronda 6 de Codex en la PR #678) | caen `test_un_prefijo_de_identificador_que_no_es_un_revisor_no_proyecta_nada` y el caso `BUG` de `test_el_conjunto_conocido_incluye_las_procedencias_de_los_registros_antiguos` |
+| M17 | el hueco se valida solo con las fuentes del tramo abierto, sin la aparición que lo cierra (ronda 7 de Codex en la PR #678) | cae el caso `cruzado` de `test_una_ronda_parcial_solo_es_transparente_para_quien_no_la_reviso` |
 
 - Baterías: `test_round_history.py`, `test_round_family_detector.py`,
   `test_round_family_detector_cli.py`, `test_sirius_convergence.py`,
