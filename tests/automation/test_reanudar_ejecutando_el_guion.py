@@ -89,6 +89,17 @@ case "$sub" in
     fi
     if printf '%s' "$filtro" | grep -q '[.]labels'; then
       [ "${GH_MOCK_FAIL_LABELS:-0}" = "1" ] && { echo "503" >&2; exit 1; }
+      # GH_MOCK_FAIL_LABELS_AFTER_REMOVE=N: tras un --remove-label, las N
+      # lecturas siguientes de etiquetas fallan (la retirada ocurrio; su
+      # verificacion no). Ronda 8 de Codex en la PR #671.
+      if [ -s "$D/labels_rotas" ]; then
+        quedan=$(cat "$D/labels_rotas")
+        if [ "$quedan" -gt 0 ]; then
+          echo $((quedan - 1)) > "$D/labels_rotas"
+          echo "503" >&2
+          exit 1
+        fi
+      fi
       cat "$D/labels_${n}.txt" 2>/dev/null \
         | jq -R . | jq -sc '{labels: map(select(length>0) | {name: .})}' | jq -r "$filtro"
       exit 0
@@ -131,6 +142,9 @@ case "$sub" in
           grep -Fxv "$rem" "$D/labels_${num}.txt" > "$D/labels_${num}.tmp" 2>/dev/null || :
           mv "$D/labels_${num}.tmp" "$D/labels_${num}.txt"
           echo "REMOVE ${rem}" >> "$D/actions.log"
+          if [ -n "${GH_MOCK_FAIL_LABELS_AFTER_REMOVE:-}" ]; then
+            echo "${GH_MOCK_FAIL_LABELS_AFTER_REMOVE}" > "$D/labels_rotas"
+          fi
         fi
         exit 0;;
     esac;;
@@ -1063,8 +1077,70 @@ def test_si_reponer_planned_falla_la_parada_se_queda_para_el_siguiente_continua(
     etiquetas = _etiquetas(env)
     assert "sirius:failed-safely" in etiquetas, "la parada se queda: un continua nuevo la encuentra"
     assert "sirius:planned" not in etiquetas and "sirius:implement-requested" not in etiquetas
-    assert "Reintentable" in resultado.stdout + resultado.stderr
+    salida = resultado.stdout + resultado.stderr
+    assert "Reintentable" in salida and "relanza este run" in salida
+    assert "vuelve a escribir" not in salida, (
+        "ronda 8 de Codex: la orden que disparo el run sigue valiendo; se relanza el run, no se "
+        "le pide a la persona que la repita"
+    )
     acciones = (_md(env) / "actions.log").read_text(encoding="utf-8").splitlines()
     assert "REMOVE sirius:failed-safely" not in acciones, (
         f"la parada no se toca si `planned` no quedo puesta. Acciones: {acciones}"
     )
+
+
+def _reintentos(env: dict[str, str]) -> int:
+    return int(env.get("SIRIUS_RETRY_ATTEMPTS", "4"))
+
+
+def test_si_la_retirada_de_la_parada_no_se_puede_verificar_el_guion_mira_antes_de_hablar(
+    tmp_path: Path,
+) -> None:
+    """Ronda 8 de Codex en la PR #671: la retirada de la parada puede haber
+    ocurrido y haber fallado solo su verificacion (REST agotado). Decir entonces
+    «la parada sigue puesta» mandaba a un reintento que no encontraria parada
+    que levantar y dejaba la incidencia con `planned` y sin evento. El guion
+    relee las etiquetas: si la parada ya no esta, sigue con el evento y el
+    reinicio se completa."""
+    env = _setup(tmp_path)
+    _sembrar(
+        env,
+        etiquetas=["sirius:failed-safely"],
+        historial=_historial_sin_pr("<!-- sirius-verdict:implementer:FAILED_SAFELY:1 -->"),
+        eventos=PLANIFICADA_POR_UNA_PERSONA,
+    )
+    # Fallan exactamente los intentos de verificacion del ayudante; la relectura
+    # del guion es la siguiente lectura y ve la parada fuera.
+    env["GH_MOCK_FAIL_LABELS_AFTER_REMOVE"] = str(_reintentos(env))
+    resultado = _ejecutar(env)
+
+    assert resultado.returncode == 0, resultado.stderr
+    etiquetas = _etiquetas(env)
+    assert "sirius:implement-requested" in etiquetas and "sirius:planned" in etiquetas
+    assert "sirius:failed-safely" not in etiquetas
+    assert "ya no esta aunque su verificacion fallo" in resultado.stdout + resultado.stderr
+
+
+def test_si_tampoco_se_puede_releer_el_run_falla_sin_afirmar_que_la_parada_sigue(
+    tmp_path: Path,
+) -> None:
+    """La otra mitad de la ronda 8: si las etiquetas no se pueden leer, el run
+    falla sin afirmar lo que no sabe y da las dos salidas (relanzar el run si la
+    parada sigue; aplicar el evento a mano si ya no esta)."""
+    env = _setup(tmp_path)
+    _sembrar(
+        env,
+        etiquetas=["sirius:failed-safely"],
+        historial=_historial_sin_pr("<!-- sirius-verdict:implementer:FAILED_SAFELY:1 -->"),
+        eventos=PLANIFICADA_POR_UNA_PERSONA,
+    )
+    env["GH_MOCK_FAIL_LABELS_AFTER_REMOVE"] = "99"
+    resultado = _ejecutar(env)
+
+    assert resultado.returncode != 0
+    salida = resultado.stdout + resultado.stderr
+    assert "ni comprobar si sigue puesta" in salida
+    assert "aplica sirius:implement-requested a mano" in salida and "relanza este run" in salida
+    assert "vuelve a escribir" not in salida
+    etiquetas = _etiquetas(env)
+    assert "sirius:planned" in etiquetas and "sirius:implement-requested" not in etiquetas

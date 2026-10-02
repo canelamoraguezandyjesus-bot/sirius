@@ -81,9 +81,10 @@ y la incidencia no lleva `sirius:planned`, el guion:
    cuenta los `labeled` de `sirius:planned`. Si la cronología no se puede leer,
    **el run falla** sin concluir nada: ni repone `planned` ni publica «nunca
    planificada», que sería una conclusión falsa (ronda 2 de Codex).
-2. **Si consta al menos uno, repone `sirius:planned` y retira la parada en una
-   misma transición, que no despierta a nadie, y pone el evento en último
-   lugar**: la puerta de activación, que despierta con el evento, tiene que
+2. **Si consta al menos uno, repone `sirius:planned` sola y verificada,
+   después retira la parada y pone el evento en último lugar, en tres
+   transiciones separadas** (ronda 7: en una sola, la parada se iba aunque
+   `planned` hubiera fallado): la puerta de activación, que despierta con el evento, tiene que
    encontrar `planned` puesta y la parada ya retirada. El reinicio en verde
    dice que la repuso, cuántas veces constaba y por qué. Una sola orden,
    ninguna repetición.
@@ -103,8 +104,12 @@ y la incidencia no lleva `sirius:planned`, el guion:
    que no llega es la parada muda otra vez.
 4. Con `planned` presente, se conserva, se publica el reinicio sin mencionar
    ninguna reposición, **se retira la parada y después se repone el evento**.
-5. **El orden es el mismo para el guion y para la persona** —la parada fuera,
-   `planned` puesta, el evento en último lugar—, y por la misma razón: cada
+5. **El evento va siempre en último lugar, para el guion y para la persona.**
+   La persona: la parada fuera, `planned` puesta, el evento. El guion:
+   `planned` (si la repone) sola y verificada, después la parada fuera,
+   después el evento; `planned` antes que la parada porque, si `planned`
+   falla, la parada tiene que seguir puesta (ronda 7). La razón del último
+   lugar es la misma: cada
    etiqueta es un evento aparte, el evento despierta a la puerta y la puerta
    rechaza, y retira el evento, si la parada sigue puesta
    (`INCOMPATIBLE_STATES` en `sirius_validate_activation.sh`). Hasta la ronda 5
@@ -182,10 +187,30 @@ reponer `planned` y retirar la parada en una sola llamada del ayudante dejaba,
 si poner `planned` fallaba, una incidencia sin `planned`, sin parada y sin
 evento, de la que un `continua` nuevo no sabe salir; el «Reintentable» mentía.
 `planned` va ahora sola y verificada antes de tocar la parada; si falla, la
-parada sigue puesta y la misma orden vuelve a servir. Prueba:
+parada sigue puesta y basta relanzar el run desde Actions: la orden
+`continua` que lo disparó sigue valiendo (ronda 8: no se le pide escribirla
+otra vez). Prueba:
 `test_si_reponer_planned_falla_la_parada_se_queda_para_el_siguiente_continua`
 (mutación M10, la llamada conjunta de antes: cae). El orden `planned` → parada
 fuera → evento se conserva.
+
+Ronda 8 de Codex sobre `c93648d2`, tres remates: (1) los dos errores
+reintentables pedían «vuelve a escribir `continua`» cuando la orden que
+disparó el run sigue valiendo y basta relanzarlo desde Actions; lo dicen así.
+(2) Si la retirada de la parada falla, puede haber ocurrido y haber fallado
+solo su verificación: decir «la parada sigue puesta» mandaba a un reintento
+que no encontraría nada que levantar y dejaba la incidencia con `planned` y
+sin evento. El guion relee las etiquetas antes de hablar: parada fuera →
+sigue con el evento; parada puesta → relanzar el run; sin lectura → las dos
+salidas (relanzar si sigue; aplicar el evento a mano si no está). Pruebas:
+`test_si_la_retirada_de_la_parada_no_se_puede_verificar_el_guion_mira_antes_de_hablar`
+(la verificación falla tantas veces como reintenta el ayudante y la relectura
+ve la parada fuera: el reinicio se completa) y
+`test_si_tampoco_se_puede_releer_el_run_falla_sin_afirmar_que_la_parada_sigue`;
+mutación M11 (el guion anterior, sin relectura): cae la primera. (3) El punto
+2 y el punto 5 de esta Decisión decían todavía «misma transición» y «el mismo
+orden para el guion y para la persona»; dicen ahora las tres transiciones del
+guion y por qué `planned` va antes que la parada.
 
 ## Consecuencias
 

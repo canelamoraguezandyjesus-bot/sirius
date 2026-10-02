@@ -450,22 +450,38 @@ fi
 # `planned`, sin parada y sin evento: un estado del que un `continua` nuevo no
 # sabe salir («no esta en ninguna parada reanudable»), asi que el
 # «Reintentable» mentia (ronda 7 de Codex en la PR #671, reproducido con
-# GH_MOCK_FAIL_ADD=sirius:planned). Con la parada todavia puesta, reintentar
-# es volver a escribir `continua`.
+# GH_MOCK_FAIL_ADD=sirius:planned). Con la parada todavia puesta, reintentar es
+# relanzar este run desde Actions: la orden `continua` que lo disparo sigue
+# valiendo y no hace falta escribirla otra vez (ronda 8). Y si la retirada de
+# la parada falla, se mira el estado real antes de hablar: la retirada puede
+# haber ocurrido y haber fallado solo su verificacion, y decir entonces que la
+# parada sigue puesta mandaba a un reintento que no encontraria nada que
+# levantar y dejaba la incidencia con `planned` y sin evento (ronda 8).
 # El coste, dicho: si la ultima llamada falla, la incidencia queda sin parada y
 # sin evento, y un `continua` nuevo no encontraria parada que levantar; el
 # error de abajo dice que etiqueta falta y que se aplica a mano.
 if [ "$reponer_planned" = "true" ]; then
   if ! ( export GH_TOKEN="${SIRIUS_TRIGGER_TOKEN:-${GH_TOKEN:-}}"
          sirius_set_issue_labels "$REPO" "$ISSUE" "sirius:planned" ); then
-    echo "::error::No se pudo reponer sirius:planned en #${ISSUE}; la parada ${parada} sigue puesta y no repongo el evento sin ella. Reintentable: vuelve a escribir \`continua\`."
+    echo "::error::No se pudo reponer sirius:planned en #${ISSUE}; la parada ${parada} sigue puesta y no repongo el evento sin ella. Reintentable: relanza este run desde Actions; la orden \`continua\` que lo disparo sigue valiendo y no hace falta escribirla otra vez."
     exit 1
   fi
 fi
 if ! ( export GH_TOKEN="${SIRIUS_TRIGGER_TOKEN:-${GH_TOKEN:-}}"
        sirius_remove_issue_labels "$REPO" "$ISSUE" "$parada" ); then
-  echo "::error::No se pudo retirar ${parada} de #${ISSUE}; no repongo el evento con la parada puesta (la puerta lo rechazaria). Reintentable: vuelve a escribir \`continua\`."
-  exit 1
+  # Fallo la retirada o solo su verificacion: se mira el estado real antes de
+  # decir nada, porque «la parada sigue puesta» puede ser falso.
+  lectura_ok=1
+  etiquetas_ahora="$(sirius_retry gh api "repos/${REPO}/issues/${ISSUE}" --jq '.labels[].name')" || lectura_ok=0
+  if [ "$lectura_ok" = 1 ] && ! printf '%s\n' "$etiquetas_ahora" | grep -Fxq "$parada"; then
+    echo "::warning::La parada ${parada} de #${ISSUE} ya no esta aunque su verificacion fallo; sigo con el evento."
+  elif [ "$lectura_ok" = 1 ]; then
+    echo "::error::No se pudo retirar ${parada} de #${ISSUE}; no repongo el evento con la parada puesta (la puerta lo rechazaria). Reintentable: relanza este run desde Actions; la orden \`continua\` que lo disparo sigue valiendo."
+    exit 1
+  else
+    echo "::error::No se pudo retirar ${parada} de #${ISSUE} ni comprobar si sigue puesta. Mira la incidencia: si la parada sigue, relanza este run desde Actions (la orden \`continua\` sigue valiendo); si ya no esta, aplica ${etiqueta_destino} a mano, que es lo unico que falta."
+    exit 1
+  fi
 fi
 if ! ( export GH_TOKEN="${SIRIUS_TRIGGER_TOKEN:-${GH_TOKEN:-}}"
        sirius_set_issue_labels "$REPO" "$ISSUE" "$etiqueta_destino" ); then
