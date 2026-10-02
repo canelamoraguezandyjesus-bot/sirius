@@ -528,6 +528,12 @@ propietario decide no ejercitarla, esa carencia se escribe en el registro del hi
 
 ### D1 — Conmutación de canonicidad de las clases con proyección GitHub
 
+> **01-10-2026 — cancelado (ADR-225).** El propietario canceló el 13-09-2026 (#610)
+> la línea del contador de los siete días: este bloque **no se ordena** sin otra
+> decisión suya. Lo construido —verificador, contador, salvaguarda— se queda como
+> está y ninguna clase se conmuta. El texto que sigue es el plan tal como se aprobó
+> el 15-08-2026.
+
 - **Objetivo**: ejecutar la parte de la regla de E1a que queda pendiente: conmutar
   programación, documental publicada y auditoría desde «incidencia canónica» a «motor
   canónico + proyección obligatoria», con verificador de proyección motor↔incidencia.

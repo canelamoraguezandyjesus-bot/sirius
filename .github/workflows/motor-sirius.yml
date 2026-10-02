@@ -69,6 +69,12 @@ name: Motor de Sirius
 #       22 */6 -> OK    32 */6 -> OK    42 */6 -> NO (335 min)
 #       27 */6 -> OK    37 */6 -> OK    47 */6 -> NO (330 min)
 #
+#   DESDE ADR-225 (01-10-2026) ESTA COTA YA NO RIGE: la línea del contador quedó
+#   cancelada por el propietario el 13-09 (#610) y el contador no tiene horario.
+#   La guarda (`test_turno_programado_actua.py`) exige solo la cota inferior, y
+#   el minuto se queda en el 32 porque nada pide moverlo. Lo de abajo es la
+#   medida de entonces, y se conserva como lo que fue.
+#
 #   Es decir: cerrar D2 con el minuto 47 habría ROTO D1. Lo cazó
 #   `test_hora_recomendada_atada_al_schedule_real_del_repositorio`, que ata esa
 #   hora a los horarios REALES del repositorio en vez de a un YAML de juguete.

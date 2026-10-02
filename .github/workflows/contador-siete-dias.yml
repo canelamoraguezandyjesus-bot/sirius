@@ -1,49 +1,40 @@
 name: Contador de los siete días
 
-# EL CUARTO CABLE QUE FALTABA. `sirius-racha` (D1a+D1b, incidencia #268) ejecuta
-# la pasada diaria del verificador de proyección, añade sus líneas al registro y
-# evalúa la racha que el contrato §11.2 exige para conmutar una clase. Está
-# construido, probado y con tres ADR escritos sobre él (074, 077, 084) — y
-# **no lo llamaba nadie**. Comprobado el 25-08-2026 buscando en todo el árbol:
-# ni un `schedule`, ni un `workflow_dispatch`, ni un script.
-#
-# ADR-074 lo dejó dicho a propósito, no por olvido: «engancharlo a un reloj es un
-# acto aparte», prohibido dentro de aquel bloque por ADR-002. Este fichero ES ese
-# acto, y solo puede escribirlo una sesión interactiva con la puerta de
-# `.github/**` abierta por el propietario.
-#
-# Es la CUARTA pieza correcta a la que no llamaba nadie en este repositorio:
-# antes fueron el despachador (C2), H-13 y el propio supervisor (D2).
+# `sirius-racha` (D1a+D1b, incidencia #268) ejecuta la pasada del verificador de
+# proyección, añade sus líneas al registro y evalúa la racha que el contrato
+# §11.2 exigía para conmutar una clase. Este fichero es el acto aparte que
+# ADR-074 dejó dicho —«engancharlo a un reloj es un acto aparte»— y que ADR-002
+# prohibía dentro de aquel bloque: lo escribió el 25-08-2026 una sesión
+# interactiva con la puerta de `.github/**` abierta por el propietario. Fue la
+# CUARTA pieza correcta a la que no llamaba nadie en este repositorio (antes, el
+# despachador, H-13 y el supervisor).
 #
 # ---------------------------------------------------------------------------
-# POR QUÉ 03:24 UTC, Y POR QUÉ NO SE ELIGE A OJO
+# POR QUÉ YA NO TIENE HORARIO (ADR-225, 01-10-2026)
 #
-# La hora la DERIVA el propio comando: `sirius-racha --hora-recomendada` lee los
-# `schedule: cron:` reales de este directorio, busca el mayor hueco libre de
-# disparos periódicos y devuelve su punto medio. Medido el 25-08-2026:
+# La línea del contador quedó CANCELADA por decisión del propietario el
+# 13-09-2026 (incidencia #610): la pieza (C) que cablearía el retorno del
+# desenlace al almacén y declararía la primera clase no se ordenará salvo
+# decisión nueva suya. Sin esa pieza `CLASES_CON_ESTADO_PROPIO` sigue vacío
+# (ADR-101) y cada pasada solo puede escribir `no_comparable`. Medido en el
+# registro de la rama de memoria antes de retirar el reloj: 19 pasadas
+# programadas entre el 13-09 y el 01-10, 22 líneas, 44 ejes, los 44
+# `no_comparable`. Una pasada diaria que no puede medir nada es trabajo inútil
+# con horario, así que el `schedule` se retira y queda `workflow_dispatch`: la
+# pasada se puede lanzar a mano, y el comando y su registro siguen enteros.
 #
-#     03:24 UTC — punto medio del mayor hueco libre (345 min, tras las 00:32)
-#
-# No es una preferencia estética. El cierre de #265 midió que un día solo puede
-# salir VERDE si nada se movió durante la ventana de tolerancia previa a la
-# pasada; con etiquetas más frescas que esa ventana, el verificador no puede
-# distinguir una divergencia real de una etiqueta que aún no ha aterrizado.
-#
-# EL MARGEN ES DE DOS MINUTOS, y conviene que se lea en voz alta:
-#
-#     tolerancia   = max(timeout-minutes de TODOS los jobs) x 2 = 85 x 2 = 170 min
-#     tranquilidad = 00:32 -> 03:24                              = 172 min
-#
-# Dos minutos. **Si alguien sube cualquier `timeout-minutes` de 85 a 87, la
-# tolerancia pasa a 174 y NINGUNA hora del día produce días verdes**: D1 deja de
-# ser alcanzable y, sin guardián, lo haría en silencio — la racha simplemente no
-# se completaría nunca y nadie sabría por qué.
-# `tests/automation/test_contador_de_siete_dias.py` existe para que eso salga en
-# ROJO en vez de en silencio, y para que este comentario no pueda mentir.
-#
-# Por eso el `timeout-minutes` de abajo es 15 y NO puede subir de 85: el tope de
-# este mismo job entra en el cálculo de la tolerancia que decide si su propia
-# hora sirve. Subirlo sería el trabajo mordiéndose la cola.
+# SI ALGÚN DÍA LA LÍNEA VUELVE (otro ADR, por decisión del propietario), el
+# horario NO se elige a ojo: `uv run sirius-racha --hora-recomendada` lee los
+# `schedule: cron:` de este directorio, busca el mayor hueco libre y devuelve
+# su punto medio, porque un día solo puede salir VERDE si nada se movió durante
+# la ventana de tolerancia previa a la pasada (`max(timeout-minutes) x 2`,
+# medido en el cierre de #265). El 25-08-2026 esa hora fue 03:24 UTC, con 172
+# minutos tranquilos frente a 170 de tolerancia: un margen de DOS minutos que
+# obligaba a que ningún job del repositorio pasara de 85. Las guardas que lo
+# vigilaban (`tests/automation/test_contador_de_siete_dias.py` y las de los
+# topes en otros workflows) se retiraron con el horario; al volver a cablearlo
+# hay que volver a derivarlas con él. La derivación sigue probada sola en
+# `tests/engine/test_seven_day_streak.py`.
 #
 # ---------------------------------------------------------------------------
 # POR QUÉ COMPARTE GRUPO DE CONCURRENCIA CON EL MOTOR, y no es cautela de más:
@@ -63,10 +54,7 @@ name: Contador de los siete días
 # se hizo», nunca «los siete días están».
 
 on:
-  schedule:
-    # 03:24 UTC, derivado — ver la cabecera. No tocar sin volver a derivarlo con
-    # `uv run sirius-racha --hora-recomendada`.
-    - cron: '24 3 * * *'
+  # Sin `schedule` desde ADR-225 (ver la cabecera): la pasada se lanza a mano.
   workflow_dispatch:
 
 concurrency:
@@ -84,8 +72,9 @@ jobs:
   pasada:
     name: Dar la pasada diaria
     runs-on: ubuntu-latest
-    # NO SUBIR DE 85. Ver la cabecera: este número entra en la tolerancia que
-    # decide si la hora de este mismo workflow puede producir días verdes.
+    # Quince minutos sobran: las 19 pasadas de septiembre duraron 0,4 min de
+    # media (Actions). Hasta ADR-225 este tope además no podía pasar de 85,
+    # porque entraba en la tolerancia que juzgaba su propia hora.
     timeout-minutes: 15
     env:
       RAMA_MEMORIA: estado-del-motor
