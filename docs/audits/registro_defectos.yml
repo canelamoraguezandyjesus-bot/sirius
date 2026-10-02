@@ -1144,7 +1144,12 @@ defectos:
     titulo: La contradiccion de etiquetas que el reflector aparta a proposito lleva 27 dias sin que nadie la mire
     bloque: motor
     gravedad: baja
-    estado: abierto
+    estado: cerrado
+    # Arreglado por ADR-227 (PR #674): las divergencias apartadas se escriben
+    # junto al diario y DESENLACES.md las ensena con su edad. El hecho (#392)
+    # quedo resuelto el 01-10-2026. Cierre desde la PR del arreglo: ADR-231.
+    cerrado_por: 27a1196b44e32b9453a5e7028306cb1e0ec244db
+    pr: 674
     adr: 216
     incidencia: 662
     ficheros:
@@ -1395,3 +1400,20 @@ defectos:
       - src/sirius_engine/divergencias.py
       - src/sirius_engine/reflect_cli.py
       - src/sirius_engine/memoria.py
+
+  # ADR-231: la guarda de ADR-222 ataba el pr: de un defecto cerrado a la PR que
+  # metio el ADR que lo declaro; un defecto declarado abierto en una PR y
+  # arreglado en otra (H-216, arreglado por ADR-227 en la #674) no se podia
+  # cerrar sin mentir. Desde este ADR vale tambien la PR que metio un ADR
+  # posterior que lo nombra por su id.
+  - id: H-231
+    titulo: La guarda de ADR-222 no dejaba cerrar un defecto arreglado en una PR distinta de la que lo declaro
+    bloque: documentacion
+    gravedad: baja
+    estado: cerrado
+    cerrado_por: b303b720abbf082c1cc87f637c2c02e69441ced9
+    pr: 679
+    adr: 231
+    ficheros:
+      - tests/automation/test_registro_de_defectos.py
+      - .claude/skills/registro-de-defectos/SKILL.md
