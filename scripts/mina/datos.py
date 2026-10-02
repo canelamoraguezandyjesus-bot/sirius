@@ -159,9 +159,65 @@ VOLCADOS: tuple[tuple[Path, str], ...] = (
 
 
 def avisos_de_los_volcados() -> list[str]:
-    """Los avisos de todos los volcados conocidos (:data:`VOLCADOS`), en su orden."""
-    return [
+    """Los avisos de todos los volcados conocidos (:data:`VOLCADOS`), en su orden, y
+    el de la captura compartida entre los dos primeros (raw y raw_pr)."""
+    avisos = [
         aviso
         for logico, descargador in VOLCADOS
         for aviso in avisos_de_volcado(logico, descargador)
     ]
+    (raw_logico, _), (pr_logico, _) = VOLCADOS[0], VOLCADOS[1]
+    return avisos + avisos_de_captura(volcado_actual(raw_logico), volcado_actual(pr_logico))
+
+
+#: Los dos volcados de una edicion tienen que ser de la MISMA captura:
+#: `descargar.py` escribe esta marca en `raw` y `descargar_pr.py` la copia a
+#: `raw_pr`. Si la cadena muere entre los dos, los selectores estan sanos y las
+#: cifras que los cruzan (las rondas limpias de §5) saldrian mezcladas sin
+#: aviso (Codex, PR #665, ronda 12).
+MARCA_DE_CAPTURA = "captura.txt"
+
+
+def marcar_captura(volcado: Path, marca: str | None = None) -> str:
+    """Escribe la marca de captura en un volcado (el parcial, antes de publicarlo)."""
+    marca = marca or datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    (volcado / MARCA_DE_CAPTURA).write_text(marca + "\n", encoding="utf-8")
+    return marca
+
+
+def captura_de(volcado: Path) -> str | None:
+    fichero = volcado / MARCA_DE_CAPTURA
+    if not fichero.is_file():
+        return None
+    return fichero.read_text(encoding="utf-8").strip() or None
+
+
+def copiar_marca_de_captura(desde: Path, volcado: Path) -> str:
+    """La marca de `desde` (el `raw` seleccionado) pasa al volcado de PR; sin ella
+    no hay captura que compartir y no se descarga nada."""
+    marca = captura_de(desde)
+    if marca is None:
+        raise SystemExit(
+            f"{desde} no lleva {MARCA_DE_CAPTURA}: repite descargar.py antes de descargar las PR"
+        )
+    return marcar_captura(volcado, marca)
+
+
+def avisos_de_captura(raw: Path, pr: Path) -> list[str]:
+    """Si `raw` y `raw_pr` no son de la misma captura, o no se puede saber."""
+    if not pr.exists():
+        return []
+    de_raw, de_pr = captura_de(raw), captura_de(pr)
+    if de_raw is None or de_pr is None:
+        sin = ", ".join(str(v) for v, m in ((raw, de_raw), (pr, de_pr)) if m is None)
+        return [
+            f"AVISO: sin marca de captura en {sin}: no se puede saber si {raw.name} y {pr.name} "
+            "son de la misma captura y las cifras que los cruzan (§5) podrian salir mezcladas. "
+            "Repite descargar.py y descargar_pr.py."
+        ]
+    if de_raw != de_pr:
+        return [
+            f"AVISO: {pr.name} es de la captura {de_pr} y {raw.name} de la {de_raw}: capturas "
+            "distintas, y las cifras que los cruzan (§5) saldrian mezcladas. Repite descargar_pr.py."
+        ]
+    return []

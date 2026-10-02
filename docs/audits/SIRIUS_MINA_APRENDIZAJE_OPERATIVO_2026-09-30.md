@@ -108,7 +108,10 @@ que una descarga que se interrumpa no mezcla un índice nuevo con historiales
 viejos ni retira la foto visible (el volcado anterior sigue siendo la última
 foto completa hasta que la nueva está seleccionada, y los dos analizadores
 avisan de un parcial o de una foto sin seleccionar en cualquiera de los dos
-volcados, lean el que lean); y cada `sirius-round:N` cuenta una vez por incidencia aunque GitHub
+volcados, lean el que lean, y de que `raw` y `raw_pr` no sean de la misma
+captura: `descargar.py` escribe una marca de captura y `descargar_pr.py` la
+copia; los dos volcados de esta edición son una sola captura, la del 01-10 de
+04:45 a 04:58 UTC, y la marca se les escribió a posteriori); y cada `sirius-round:N` cuenta una vez por incidencia aunque GitHub
 lo hubiera publicado dos veces. Y la reconstrucción ronda a ronda solo cuenta rondas y avisos
 publicados dentro de la ventana 01→30-09: lo anterior al 01-09 es contexto del
 detector, no medición; y un tramo que el detector ya marcaba entero con lo

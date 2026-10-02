@@ -237,4 +237,37 @@ def test_los_avisos_del_volcado_valen_para_cualquier_nombre_logico(
     raw = tmp_path / "raw"
     _foto_anterior(raw)
     monkeypatch.setattr(datos, "VOLCADOS", ((raw, "descargar.py"), (raw_pr, "descargar_pr.py")))
+    datos.marcar_captura(raw, "una")
+    datos.marcar_captura(raw_pr, "una")
     assert datos.avisos_de_los_volcados() == avisos, "los dos de raw_pr; raw esta limpio"
+
+
+def test_los_dos_volcados_tienen_que_ser_de_la_misma_captura(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ronda 12 de Codex en la PR #665: dos volcados sanos pueden ser de capturas
+    distintas (la cadena murio entre `descargar.py` y `descargar_pr.py`) y las
+    cifras que los cruzan saldrian mezcladas sin aviso. `descargar.py` marca la
+    captura, `descargar_pr.py` la copia y los analizadores las comparan."""
+    raw, raw_pr = tmp_path / "raw", tmp_path / "raw_pr"
+    _foto_anterior(raw)
+    _foto_anterior(raw_pr)
+    monkeypatch.setattr(datos, "VOLCADOS", ((raw, "descargar.py"), (raw_pr, "descargar_pr.py")))
+    [sin_marca] = datos.avisos_de_los_volcados()
+    assert "sin marca de captura" in sin_marca and str(raw) in sin_marca
+
+    marca = datos.marcar_captura(raw)
+    assert datos.copiar_marca_de_captura(raw, raw_pr) == marca
+    assert datos.avisos_de_los_volcados() == []
+
+    datos.marcar_captura(raw, "otra")
+    [distintas] = datos.avisos_de_los_volcados()
+    assert "capturas distintas" in distintas and "otra" in distintas and marca in distintas
+
+    with pytest.raises(SystemExit, match="repite descargar.py"):
+        datos.copiar_marca_de_captura(tmp_path / "sin-marca", raw_pr)
+    for guion, llamada in (
+        ("descargar.py", "marcar_captura(parcial)"),
+        ("descargar_pr.py", "copiar_marca_de_captura(raw, parcial)"),
+    ):
+        assert llamada in (MINA / guion).read_text(encoding="utf-8")

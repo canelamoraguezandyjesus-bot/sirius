@@ -20,7 +20,7 @@ REPO = "canelamoraguezandyjesus-bot/sirius"
 BASE = f"https://api.github.com/repos/{REPO}"
 DESDE = "2026-08-25T00:00:00Z"  # misma ventana de descarga que la edicion del 14-09
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from datos import RAW_LOGICO, parcial_de, publicar_volcado  # noqa: E402
+from datos import RAW_LOGICO, marcar_captura, parcial_de, publicar_volcado  # noqa: E402
 
 
 def get(url: str) -> tuple[list | dict, dict]:
@@ -117,6 +117,9 @@ def main(raw: Path = RAW_LOGICO) -> int:
                 f"{time.time() - t0:.0f}s",
                 flush=True,
             )
+    # La marca de captura que `descargar_pr.py` copiara: los dos volcados de
+    # una edicion son una sola captura o se avisa (Codex, PR #665, ronda 12).
+    marcar_captura(parcial)
     publicar_volcado(parcial, raw)
     print(
         f"hecho: {len(indice)} incidencias, {total_comentarios} comentarios, "
