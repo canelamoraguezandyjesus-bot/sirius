@@ -58,15 +58,12 @@ import asyncio
 import importlib.util
 import json
 import re
-import shutil
 import sys
 from pathlib import Path
 from typing import Any
 
 import pytest
 import yaml
-
-from sirius_engine.projection_verifier import ventana_tolerancia_etiqueta_maquina
 
 RAIZ = Path(__file__).resolve().parents[2]
 WORKFLOWS = RAIZ / ".github" / "workflows"
@@ -723,71 +720,23 @@ def test_dos_mediciones_del_mismo_servidor_no_son_una_comparacion(
 # --- 5. El tope de tiempo no ensancha la ventana de D1 --------------------
 
 
-def _tolerancia_en_minutos(directorio: Path) -> int:
-    return int(ventana_tolerancia_etiqueta_maquina(directorio).total_seconds() // 60)
-
-
-def test_el_tope_del_workflow_no_supera_el_mayor_del_resto() -> None:
-    """El margen del contador de los siete días es de DOS minutos. Literalmente dos.
-
-    `ventana_tolerancia_etiqueta_maquina` deriva la tolerancia del MAYOR
-    `timeout-minutes` de trabajo del repositorio, por dos: hoy 85 x 2 = 170. La
-    tranquilidad previa a la pasada del contador son 172. Un workflow nuevo con
-    un tope de 87 dejaría a D1 sin ninguna hora posible, y no lo diría ningún
-    rojo: `sirius-racha` devuelve 0 tanto si CUMPLE como si no, así que la racha
-    simplemente no avanzaría nunca.
-    """
+def test_el_trabajo_de_la_medicion_declara_un_tope() -> None:
+    """Sin tope, GitHub le da seis horas: una medición colgada gastaría la cuota de
+    las dos APIs del propietario. Hasta ADR-225 (01-10-2026) aquí vivían además
+    dos guardas que exigían que este tope no superara el mayor del resto del
+    repositorio, porque la ventana de tolerancia del contador de los siete días
+    se derivaba de ese máximo y el contador tenía un margen de dos minutos; esa
+    línea quedó cancelada el 13-09 (#610), el contador no tiene horario y las dos
+    guardas se fueron con él."""
     del_workflow = [
         trabajo["timeout-minutes"]
         for trabajo in _trabajos(WORKFLOW).values()
         if isinstance(trabajo, dict) and isinstance(trabajo.get("timeout-minutes"), int)
     ]
-    assert del_workflow, (
+    assert del_workflow and all(tope > 0 for tope in del_workflow), (
         "el trabajo de la medición no declara `timeout-minutes`. Sin tope, GitHub le da "
         "seis horas: una medición colgada gastaría la cuota de las dos APIs del propietario"
     )
-
-    del_resto: list[int] = []
-    for wf in sorted(WORKFLOWS.glob("*.yml")):
-        if wf == WORKFLOW:
-            continue
-        for trabajo in (_doc(wf).get("jobs") or {}).values():
-            if isinstance(trabajo, dict) and isinstance(trabajo.get("timeout-minutes"), int):
-                del_resto.append(int(trabajo["timeout-minutes"]))
-    assert del_resto, "no se encontró ningún otro tope: la comparación no mediría nada"
-
-    assert max(del_workflow) <= max(del_resto), (
-        f"el workflow de la medición declara un tope de {max(del_workflow)} min, por encima "
-        f"del mayor del resto del repositorio ({max(del_resto)} min). La tolerancia de D1 se "
-        "deriva de ese máximo por dos, y el contador solo tiene 172 minutos tranquilos por "
-        "delante: el margen es de DOS. Subirlo no rompe nada ruidosamente, deja la racha sin "
-        "avanzar NUNCA y en verde. Baja el tope o parte el trabajo en dos."
-    )
-
-
-def test_este_workflow_no_mueve_la_ventana_que_juzga_al_contador(tmp_path: Path) -> None:
-    """La misma propiedad, derivada con la función real en vez de con un `max` copiado.
-
-    Comparar máximos a mano es reimplementar el criterio: si mañana la derivación
-    cambia -por ejemplo, para mirar también los topes de paso-, la prueba de
-    arriba seguiría verde midiendo otra cosa. Aquí se llama a la función que de
-    verdad decide, con y sin este fichero, y se exige que dé lo mismo.
-    """
-    sin_este = tmp_path / "workflows"
-    sin_este.mkdir()
-    for wf in WORKFLOWS.glob("*.yml"):
-        if wf != WORKFLOW:
-            shutil.copy(wf, sin_este / wf.name)
-
-    con, sin = _tolerancia_en_minutos(WORKFLOWS), _tolerancia_en_minutos(sin_este)
-    assert con == sin, (
-        f"con el workflow de la medición la tolerancia de D1 vale {con} min y sin él {sin}. "
-        "Este fichero está ensanchando la ventana con la que se juzga la hora del contador "
-        "de los siete días, y esa hora está calculada con dos minutos de margen."
-    )
-
-
-# --- 6. Las claves entran por `env:`, nunca interpoladas en un `run:` -----
 
 
 _SECRETO_INTERPOLADO = re.compile(r"\$\{\{\s*secrets\.", re.IGNORECASE)

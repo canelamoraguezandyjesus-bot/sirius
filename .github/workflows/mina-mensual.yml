@@ -38,6 +38,11 @@ name: Mina mensual de aprendizaje
 # va al punto medio del siguiente**. Con 09:24, el mayor hueco sigue siendo
 # 00:32 -> 06:17 (345 min) y la derivación sigue devolviendo 03:24.
 #
+# DESDE ADR-225 (01-10-2026) el contador no tiene horario ni guarda de cron: la
+# línea quedó cancelada por el propietario el 13-09 (#610). La restricción de
+# arriba ya no rige; las 09:24 se quedan porque siguen fuera de las horas en
+# punto y nada pide moverlas. Lo anterior se conserva como lo que fue.
+#
 # MISMO GRUPO DE CONCURRENCIA QUE `motor-sirius.yml`, por la misma razón que
 # `despachar-orden.yml`: los dos escriben el MISMO diario en la misma rama, y dos
 # invocaciones a la vez crean el mismo trabajo dos veces.

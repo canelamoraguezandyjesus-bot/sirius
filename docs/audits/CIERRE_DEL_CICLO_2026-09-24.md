@@ -6,6 +6,16 @@
   `MEMORIA.md` y desde ADR-216.
 - Caduca con: la primera decisión suya sobre el rumbo. Hasta entonces, vale.
 
+> **Corrección fechada (01-10-2026, ADR-225).** Este documento se escribió el
+> 24-09 con D1 como «el único bloque pendiente» (§4 y §6) y con el contador de
+> los siete días entre los workflows que «solo miran» (§4). La mina de
+> septiembre encontró después que el propietario había cancelado esa línea el
+> 13-09-2026 (incidencia #610): D1 pasa a **fuera de alcance** en
+> `docs/implementation/bloques_del_motor.yml`, no se ordenará salvo decisión
+> nueva suya, y el contador deja de tener horario, porque su pasada solo podía
+> escribir `no_comparable` (19 pasadas entre el 13-09 y el 01-10, las 19 así).
+> El resto del documento se conserva como lo que fue: la foto del 24-09.
+
 Este documento existe porque el propietario dijo el 24-09-2026 que en cuatro
 meses no ve nada que la aplicación haga, y que lo que se le ha contado —
 fusiones, revisiones, correcciones — no es lo que él mide. Tiene razón en el

@@ -146,11 +146,15 @@ def test_las_claves_del_ejecutor_son_las_de_la_configuracion_elegida() -> None:
     )
 
 
-def test_el_tope_del_ejecutor_respeta_la_ventana_del_contador() -> None:
-    """Criterio de parada (b): por encima de 85 se rompe la tolerancia del
-    contador de los siete días (§11.2, medido)."""
+def test_el_ejecutor_declara_un_tope() -> None:
+    """Sin tope, GitHub le daría seis horas a una investigación colgada, gastando la
+    cuota de dos APIs del propietario. Hasta ADR-225 (01-10-2026) además no podía
+    pasar de 85: la ventana de tolerancia del contador de los siete días se
+    derivaba del mayor tope del repositorio; esa línea quedó cancelada el 13-09 y
+    el contador no tiene horario, así que el tope lo decide lo que este trabajo
+    necesita."""
     tope = _trabajo_unico(INVESTIGADOR).get("timeout-minutes")
-    assert isinstance(tope, int) and tope <= 85, f"timeout-minutes={tope}"
+    assert isinstance(tope, int) and tope > 0, f"timeout-minutes={tope}"
 
 
 def test_el_ejecutor_deja_que_el_texto_decida_la_profundidad() -> None:
