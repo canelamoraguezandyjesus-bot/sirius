@@ -1327,6 +1327,24 @@ def test_la_primera_ronda_parcial_tras_un_historial_antiguo_sabe_a_quien_le_falt
     assert _decide(rondas)["reason"] == "sin-progreso-aislado"
 
 
+def test_un_historial_antiguo_de_los_dos_y_una_ronda_solo_de_claude_no_es_progreso() -> None:
+    """Ronda 5 de Codex en la PR #678: rondas duales anteriores a ADR-230 (sin
+    `reviewers`, pero con hallazgos de Codex) y después la revisión dual apagada.
+    La ronda nueva declara `["CLAUDE"]` en los dos campos y es entera; el
+    conjunto conocido se construía solo con las declaraciones, conocía solo a
+    Claude, nada se proyectaba y la desaparición de lo de Codex contaba como
+    progreso. Las procedencias de los hallazgos antiguos también cuentan."""
+    rondas = [
+        _round_comment(1, HEAD_A, [_de_claude(), _de_codex()]),
+        _ronda_con_revisores(2, HEAD_B, [_de_claude()], _SOLO_CLAUDE, esperados=_SOLO_CLAUDE),
+    ]
+    decision = _decide(rondas)
+    assert decision["reason"] == "sin-progreso-aislado", decision
+    # Y si Claude corrige lo suyo, eso sí es progreso: la medida es Claude contra Claude.
+    rondas.append(_ronda_con_revisores(3, HEAD_C, [], _SOLO_CLAUDE, esperados=_SOLO_CLAUDE))
+    assert _decide(rondas)["reason"] == "progreso"
+
+
 def test_una_ronda_entera_sobre_el_mismo_head_que_la_parcial_anterior_no_avanza() -> None:
     """Ronda 4 de Codex en la PR #678: entera A → parcial B → entera B sobre el
     head de B. La proyección dejaba fuera la parcial y la guarda del head

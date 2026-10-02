@@ -149,6 +149,31 @@ def test_revisores_ausentes_dice_quien_falto_en_cada_ronda() -> None:
     assert _parciales(registros) == {2, 5}
 
 
+def test_el_conjunto_conocido_incluye_las_procedencias_de_los_registros_antiguos() -> None:
+    """Ronda 5 de Codex en la PR #678: un registro anterior a ADR-230 no declara
+    revisores, pero lo que publicó dice quién lo revisó. Sin esto, tras un
+    historial dual antiguo una ronda solo de Claude con la revisión dual apagada
+    conocía solo a Claude y nada de Codex se proyectaba."""
+    from sirius_engine.round_history import revisores_conocidos
+
+    antiguo = {
+        "round": 1,
+        "findings": [{"source": "CLAUDE"}, {"source": "codex "}, {"source": "SIN-FUENTE"}, {}],
+    }
+    solo_claude = {
+        "round": 2,
+        "findings": [],
+        "reviewers": ["CLAUDE"],
+        "expected_reviewers": ["CLAUDE"],
+    }
+    assert revisores_conocidos([antiguo, solo_claude]) == {"CLAUDE", "CODEX"}
+    assert revisores_conocidos([antiguo]) == {"CLAUDE", "CODEX"}
+    assert revisores_conocidos([{"round": 1, "findings": [{"source": "SIN-FUENTE"}]}]) == set()
+    # Un registro que SI declara revisores se cree a si mismo, no a sus hallazgos.
+    declarado = {"round": 3, "findings": [{"source": "COPILOT"}], "reviewers": ["CLAUDE"]}
+    assert revisores_conocidos([declarado]) == {"CLAUDE"}
+
+
 def _parciales(registros: Sequence[Mapping[str, Any]]) -> set[int]:
     """Las rondas a las que les faltó alguien: lo que estas pruebas afirman sobre
     `revisores_ausentes`, la pieza que usa el detector (ADR-230). Las funciones

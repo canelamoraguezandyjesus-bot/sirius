@@ -89,7 +89,13 @@ El de la nota de arranque, publicado antes de tocar código:
    ya sabe que le falta Codex (ronda 1 de Codex en la PR #678: sin
    `expected_reviewers`, ese historial conocía solo a Claude, leía las
    enteras antiguas como suyas y la desaparición de lo de Codex contaba como
-   progreso). Y qué ronda es parcial lo dice **cada ronda por sí misma**
+   progreso), y también las procedencias (`source`) de los hallazgos de los
+   registros que no declaran revisores: lo que un registro antiguo tuvo se ve
+   en lo que publicó (ronda 5 de Codex en la PR #678: un historial dual
+   anterior a esta decisión seguido de una ronda solo de Claude con la
+   revisión dual apagada —que declara `["CLAUDE"]` en los dos campos y es
+   entera— conocía solo a Claude, nada se proyectaba y la desaparición de lo
+   de Codex contaba como progreso). Y qué ronda es parcial lo dice **cada ronda por sí misma**
    (`revisores_ausentes`: le faltan los que esperaba y no tuvo); el conjunto conocido
    solo decide por los registros que no declaran a quién esperaban. Una ronda
    solo de Claude de cuando la revisión dual estaba apagada es entera aunque
@@ -206,6 +212,7 @@ El de la nota de arranque, publicado antes de tocar código:
 | M12 | en modo solo el aplicador respeta los revisores que el veredicto declara (ronda 4 de Codex en la PR #678) | cae el caso `sin_esperados` de `test_en_modo_solo_el_registro_declara_que_la_ronda_fue_de_claude` |
 | M13 | en modo dual se acepta cualquier declaración | caen `nulos`, `blancos`, `escalar` y `sin_esperados` de `test_en_modo_dual_un_veredicto_sin_revisores_detiene_la_ronda` |
 | M14 | la guarda del head mira la ronda anterior proyectada | cae `test_una_ronda_entera_sobre_el_mismo_head_que_la_parcial_anterior_no_avanza` |
+| M15 | el conjunto conocido ignora las procedencias de los registros antiguos (ronda 5 de Codex en la PR #678) | caen `test_un_historial_antiguo_de_los_dos_y_una_ronda_solo_de_claude_no_es_progreso` y `test_el_conjunto_conocido_incluye_las_procedencias_de_los_registros_antiguos` |
 
 - Baterías: `test_round_history.py`, `test_round_family_detector.py`,
   `test_round_family_detector_cli.py`, `test_sirius_convergence.py`,

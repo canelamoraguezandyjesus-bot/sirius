@@ -175,14 +175,34 @@ def revisores_conocidos(records: Sequence[Mapping[str, Any]]) -> set[str]:
     ronda parcial tras un historial anterior a ADR-230 ya sepa que le falta
     alguien: sin ello, un historial sin declaraciones más una ronda solo de
     Claude conocía solo a Claude y leía las enteras antiguas como suyas (ronda 1
-    de Codex en la PR #678)."""
+    de Codex en la PR #678). Y, de los registros que no declaran ``reviewers``
+    -los anteriores a ADR-230-, las procedencias (``source``) de sus hallazgos:
+    un historial dual antiguo seguido de una ronda solo de Claude con la revisión
+    dual apagada (que declara ``["CLAUDE"]`` en los dos campos y es entera)
+    conocía solo a Claude, nada se proyectaba y la desaparición de lo de Codex
+    contaba como progreso (ronda 5 de Codex en la PR #678). Lo que un registro
+    antiguo tuvo se ve en lo que publicó."""
     conocidos: set[str] = set()
     for record in records:
         for clave in ("reviewers", "expected_reviewers"):
             declarados = record.get(clave)
             if declarados:
                 conocidos.update(str(r).strip().upper() for r in declarados if str(r).strip())
+        if not record.get("reviewers"):
+            conocidos.update(_procedencias_de(record))
     return conocidos
+
+
+def _procedencias_de(record: Mapping[str, Any]) -> set[str]:
+    """Los revisores que un registro sin declaración tuvo, a la vista de sus
+    hallazgos: la procedencia de cada uno (``CLAUDE``, ``CODEX``). Un hallazgo
+    sin fuente reconocible (``SIN-FUENTE``) no nombra a nadie."""
+    fuentes = {
+        str(item.get("source") or "").strip().upper()
+        for item in record.get("findings") or []
+        if isinstance(item, Mapping)
+    }
+    return {f for f in fuentes if f and f != "SIN-FUENTE"}
 
 
 def _conjunto_de_revisores(valor: object) -> set[str]:
