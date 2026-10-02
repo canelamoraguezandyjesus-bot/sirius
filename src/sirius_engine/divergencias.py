@@ -132,21 +132,65 @@ def leer_instantanea(ruta: Path) -> Instantanea | None:
     )
 
 
+def _instante(valor: object) -> datetime | None:
+    """El instante ISO que el texto declara, o ``None`` si no es un instante."""
+    if not isinstance(valor, str) or not valor.strip():
+        return None
+    try:
+        return datetime.fromisoformat(valor)
+    except ValueError:
+        return None
+
+
 def _desde_json(ruta: Path, entrada: object) -> DivergenciaApartada:
+    """Una entrada con los tipos EXACTOS, sin coerción.
+
+    `int(True)` es 1, `int(1.5)` es 1 y `str(None)` es «None»: coercionando, un
+    fichero corrupto pero con JSON válido se leía como una divergencia con la
+    incidencia 1, una pasada y el motivo «None», y la vista la publicaba como
+    dato en vez de declarar la corrupción (ronda 4 de Codex en la PR #674).
+    """
     if not isinstance(entrada, Mapping):
         raise ValueError(f"{ruta}: una entrada no es un objeto")
+    work_id = entrada.get("work_id")
+    incidencia = entrada.get("incidencia")
+    motivo = entrada.get("motivo")
+    pasadas = entrada.get("pasadas")
+    primera_vez = entrada.get("primera_vez")
+    ultima_vez = entrada.get("ultima_vez")
+    forma = (
+        f"{ruta}: entrada incompleta o mal formada (work_id y motivo son textos no vacíos, "
+        "incidencia un entero o null, pasadas un entero mayor que cero y primera_vez/"
+        "ultima_vez instantes ISO, la primera no posterior a la última)"
+    )
+    if not isinstance(work_id, str) or not work_id.strip():
+        raise ValueError(forma)
+    if not isinstance(motivo, str) or not motivo.strip():
+        raise ValueError(forma)
+    if incidencia is not None and (isinstance(incidencia, bool) or not isinstance(incidencia, int)):
+        raise ValueError(forma)
+    if isinstance(pasadas, bool) or not isinstance(pasadas, int) or pasadas < 1:
+        raise ValueError(forma)
+    primera = _instante(primera_vez)
+    ultima = _instante(ultima_vez)
+    if primera is None or ultima is None or not isinstance(primera_vez, str):
+        raise ValueError(forma)
+    if not isinstance(ultima_vez, str):  # pragma: no cover - _instante ya lo exige
+        raise ValueError(forma)
     try:
-        incidencia = entrada["incidencia"]
-        return DivergenciaApartada(
-            work_id=str(entrada["work_id"]),
-            incidencia=int(incidencia) if incidencia is not None else None,
-            motivo=str(entrada["motivo"]),
-            primera_vez=str(entrada["primera_vez"]),
-            ultima_vez=str(entrada["ultima_vez"]),
-            pasadas=int(entrada["pasadas"]),
-        )
-    except (KeyError, TypeError, ValueError) as error:
-        raise ValueError(f"{ruta}: entrada incompleta o mal formada ({error})") from error
+        desordenada = primera > ultima
+    except TypeError:  # un instante con zona y otro sin ella no son comparables
+        raise ValueError(forma) from None
+    if desordenada:
+        raise ValueError(forma)
+    return DivergenciaApartada(
+        work_id=work_id,
+        incidencia=incidencia,
+        motivo=motivo,
+        primera_vez=primera_vez,
+        ultima_vez=ultima_vez,
+        pasadas=pasadas,
+    )
 
 
 def escribir_instantanea(ruta: Path, instantanea: Instantanea) -> None:

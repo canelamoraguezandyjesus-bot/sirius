@@ -7,6 +7,7 @@ sabe además cuánto se puede fiar uno de ella (ronda 2 de Codex en la PR #674).
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -119,6 +120,60 @@ def test_un_fichero_que_no_tiene_la_forma_se_declara_en_vez_de_leerse_como_vacio
     ruta.write_text(texto, encoding="utf-8")
     with pytest.raises(ValueError, match=FICHERO_DIVERGENCIAS):
         leer_instantanea(ruta)
+
+
+_ENTRADA_BIEN_FORMADA: dict[str, object] = {
+    "work_id": "WI-20260828-122242",
+    "incidencia": 392,
+    "motivo": "la incidencia lleva dos etiquetas de estado",
+    "primera_vez": "2026-09-01T03:24:00+00:00",
+    "ultima_vez": "2026-09-03T03:24:00+00:00",
+    "pasadas": 3,
+}
+
+
+@pytest.mark.parametrize(
+    "cambio",
+    [
+        {"incidencia": True},
+        {"incidencia": "392"},
+        {"incidencia": 1.0},
+        {"pasadas": 1.5},
+        {"pasadas": 0},
+        {"pasadas": True},
+        {"pasadas": "3"},
+        {"motivo": None},
+        {"motivo": "  "},
+        {"work_id": ""},
+        {"work_id": 7},
+        {"primera_vez": None},
+        {"primera_vez": "ayer"},
+        {"ultima_vez": 5},
+        {"primera_vez": "2026-09-05T00:00:00+00:00"},
+        {"primera_vez": "2026-09-01T03:24:00"},
+    ],
+)
+def test_una_entrada_con_un_campo_mal_tipado_se_declara_en_vez_de_inventarse(
+    tmp_path: Path, cambio: dict[str, object]
+) -> None:
+    """Ronda 4 de Codex en la PR #674: coercionando, `true` era la incidencia 1,
+    `1.5` una pasada y `null` el motivo «None», y la vista publicaba valores
+    inventados. Cada campo exige su tipo exacto; la última variante (primera vez
+    sin zona frente a última con zona) no es comparable y también se declara."""
+    ruta = tmp_path / FICHERO_DIVERGENCIAS
+    contenido = {
+        "pasada": {"interrumpida": False, "sin_evaluar": [], "perdida_posible": False},
+        "divergencias": [{**_ENTRADA_BIEN_FORMADA, **cambio}],
+    }
+    ruta.write_text(json.dumps(contenido), encoding="utf-8")
+    with pytest.raises(ValueError, match="mal formada"):
+        leer_instantanea(ruta)
+
+    ruta.write_text(
+        json.dumps({**contenido, "divergencias": [_ENTRADA_BIEN_FORMADA]}), encoding="utf-8"
+    )
+    leida = leer_instantanea(ruta)
+    assert leida is not None and leida.divergencias[0].incidencia == 392
 
 
 # --- Cuánto se puede fiar uno de la instantánea (ronda 2 de Codex en la PR #674) --

@@ -171,6 +171,11 @@ revisión independiente de la PR #674 lo señaló; queda dicho aquí.
   completa. Pruebas: la de la pasada que muere a medias exige `WI-3` (sin
   entrada previa) en `sin_evaluar`; cinco formas mal tipadas en la
   parametrizada de los ficheros sin forma; la vista con doce sin evaluar.
+- Ronda 4 de Codex sobre `cdaa5ce8`, el mismo defecto en las entradas: `int(True)`
+  era la incidencia 1, `int(1.5)` una pasada y `str(None)` el motivo «None».
+  `_desde_json` exige ahora el tipo exacto de cada campo (textos no vacíos,
+  incidencia entero o `null`, pasadas entero mayor que cero, instantes ISO con
+  la primera no posterior a la última) y lo demás es un fichero sin forma.
 - Mutaciones, con los ficheros restaurados (`diff -q` limpio) y la batería en
   verde después:
 
@@ -191,6 +196,7 @@ revisión independiente de la PR #674 lo señaló; queda dicho aquí.
 | M13 | la primera pasada completa sin divergencias no escribe | cae `test_la_primera_pasada_completa_sin_divergencias_deja_el_fichero_escrito` |
 | M14 | lo no alcanzado se deriva solo de las entradas anteriores | cae `test_una_pasada_que_muere_a_medias_conserva_lo_observado_y_lo_no_alcanzado` |
 | M15 | los metadatos se coercionan (`bool(...)`, `tuple(str(...))`) | caen cinco casos de `test_un_fichero_que_no_tiene_la_forma_se_declara_en_vez_de_leerse_como_vacio` |
+| M16 | las entradas se coercionan (`int(...)`, `str(...)`) | caen los dieciséis casos de `test_una_entrada_con_un_campo_mal_tipado_se_declara_en_vez_de_inventarse` |
 
 - Baterías `test_divergencias.py`, `test_reflect_cli.py`, `test_memoria.py` y
   `test_reflect.py`: 150 en verde. `ruff format`, `ruff check` y `mypy` sobre
