@@ -9,7 +9,7 @@
 > La fecha es la que cada documento **declara** en su cabecera; la vista no data
 > nada por su cuenta. «Sin fecha declarada» es un aviso, no un dato.
 
-**147 documentos**, 84 sin fecha declarada.
+**148 documentos**, 84 sin fecha declarada.
 
 ## `docs/audits`
 
