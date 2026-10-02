@@ -211,11 +211,6 @@ def _ausentes_de(record: Mapping[str, Any], conocidos: set[str]) -> frozenset[st
     return frozenset(esperaba - tuvo) if tuvo < esperaba else frozenset()
 
 
-def ronda_parcial(record: Mapping[str, Any], conocidos: set[str]) -> bool:
-    """Si a la ronda le faltó algún revisor (ADR-230): ver :func:`_ausentes_de`."""
-    return bool(_ausentes_de(record, conocidos))
-
-
 def revisores_ausentes(records: Sequence[Mapping[str, Any]]) -> dict[int, frozenset[str]]:
     """Por número de ronda, quién le faltó (ADR-230); vacío para las enteras.
 
@@ -228,16 +223,6 @@ def revisores_ausentes(records: Sequence[Mapping[str, Any]]) -> dict[int, frozen
     """
     conocidos = revisores_conocidos(records)
     return {int(record["round"]): _ausentes_de(record, conocidos) for record in records}
-
-
-def rondas_parciales(records: Sequence[Mapping[str, Any]]) -> set[int]:
-    """Los números de las rondas a las que les faltó algún revisor (ADR-230).
-
-    Una ronda en la que Codex no revisó (ADR-226) declara solo a Claude y es
-    parcial frente a las que esperaba; si ninguna ronda declara nada no hay
-    parciales: un historial de un solo revisor no tiene rondas a medias.
-    """
-    return {numero for numero, faltaron in revisores_ausentes(records).items() if faltaron}
 
 
 def _apply_sticky_severity(records: list[dict[str, Any]]) -> None:

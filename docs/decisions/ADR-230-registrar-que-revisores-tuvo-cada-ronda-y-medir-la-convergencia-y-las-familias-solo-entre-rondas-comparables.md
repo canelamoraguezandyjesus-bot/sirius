@@ -90,7 +90,7 @@ El de la nota de arranque, publicado antes de tocar código:
    `expected_reviewers`, ese historial conocía solo a Claude, leía las
    enteras antiguas como suyas y la desaparición de lo de Codex contaba como
    progreso). Y qué ronda es parcial lo dice **cada ronda por sí misma**
-   (`ronda_parcial`: tuvo menos de los que esperaba); el conjunto conocido
+   (`revisores_ausentes`: le faltan los que esperaba y no tuvo); el conjunto conocido
    solo decide por los registros que no declaran a quién esperaban. Una ronda
    solo de Claude de cuando la revisión dual estaba apagada es entera aunque
    el historial conozca a Codex después (ronda 2 de Codex en la PR #678: la
@@ -170,7 +170,10 @@ El de la nota de arranque, publicado antes de tocar código:
   revisor presente (Claude en la 1 y la 2, sin el fichero en una 3 solo de
   Claude, otra vez en la 4: familia falsa); ahora es por revisor ausente
   (`test_una_ronda_parcial_solo_es_transparente_para_quien_no_la_reviso`,
-  `test_revisores_ausentes_dice_quien_falto_en_cada_ronda`).
+  `test_revisores_ausentes_dice_quien_falto_en_cada_ronda`). Con ello
+  `ronda_parcial` y `rondas_parciales` se quedaron sin llamante en producción
+  y la guarda de piezas sin llamante puso Quality en rojo sobre `a04e93d9`:
+  se retiran, y las pruebas derivan «parciales» de `revisores_ausentes`.
 - Mutaciones, cada una aplicada y vista caer con los ficheros restaurados
   después (`cmp` contra la copia):
 
@@ -182,7 +185,7 @@ El de la nota de arranque, publicado antes de tocar código:
 | M4 | el detector sin transparencia (el código de `main`) | cae la predicción 2 |
 | M5 | el agregador manda también lo de Codex en una ronda que Codex no revisó | cae `una_ronda_que_codex_no_reviso_no_lleva_nada_de_codex` |
 | M6 | el conjunto conocido ignora `expected_reviewers` (ronda 1 de Codex en la PR #678) | cae `la_primera_ronda_parcial_tras_un_historial_antiguo_sabe_a_quien_le_falta` |
-| M7 | la parcialidad se infiere siempre del conjunto conocido, ignorando lo que la ronda esperaba (ronda 2 de Codex en la PR #678) | caen el caso `de_solo_a_dual` del detector y el de `rondas_parciales` con una ronda solo de Claude de antes de la revisión dual |
+| M7 | la parcialidad se infiere siempre del conjunto conocido, ignorando lo que la ronda esperaba (ronda 2 de Codex en la PR #678) | caen el caso `de_solo_a_dual` del detector y el de `revisores_ausentes` con una ronda solo de Claude de antes de la revisión dual |
 | M8 | la transparencia vuelve a ser por número de ronda, sin mirar quién faltó (ronda 3 de Codex en la PR #678) | cae `test_una_ronda_parcial_solo_es_transparente_para_quien_no_la_reviso` |
 | M9 | el aplicador no declara los revisores en modo solo | cae `test_en_modo_solo_el_registro_declara_que_la_ronda_fue_de_claude` |
 | M10 | el aplicador registra en modo dual un veredicto sin revisores | cae `test_en_modo_dual_un_veredicto_sin_revisores_detiene_la_ronda` |
