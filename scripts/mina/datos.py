@@ -218,6 +218,7 @@ def avisos_de_captura(raw: Path, pr: Path) -> list[str]:
     if de_raw != de_pr:
         return [
             f"AVISO: {pr.name} es de la captura {de_pr} y {raw.name} de la {de_raw}: capturas "
-            "distintas, y las cifras que los cruzan (§5) saldrian mezcladas. Repite descargar_pr.py."
+            "distintas, y las cifras que los cruzan (§5) saldrian mezcladas. "
+            "Repite descargar_pr.py."
         ]
     return []

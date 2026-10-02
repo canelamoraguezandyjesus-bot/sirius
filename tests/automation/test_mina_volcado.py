@@ -114,7 +114,13 @@ def test_una_descarga_completa_publica_la_foto_nueva(
     assert descargar.main(raw=raw) == 0
 
     foto = datos.volcado_actual(raw)
-    assert sorted(p.name for p in foto.iterdir()) == ["indice.json", "issue_1.json", "issue_2.json"]
+    assert sorted(p.name for p in foto.iterdir()) == [
+        "captura.txt",
+        "indice.json",
+        "issue_1.json",
+        "issue_2.json",
+    ]
+    assert datos.captura_de(foto), "la foto publicada lleva su marca de captura (ronda 12)"
     assert not datos.parcial_de(raw).exists()
     publicado = json.loads((foto / "issue_2.json").read_text(encoding="utf-8"))
     assert publicado["comments"][0]["body"] == "comentario de #2"
@@ -264,7 +270,7 @@ def test_los_dos_volcados_tienen_que_ser_de_la_misma_captura(
     [distintas] = datos.avisos_de_los_volcados()
     assert "capturas distintas" in distintas and "otra" in distintas and marca in distintas
 
-    with pytest.raises(SystemExit, match="repite descargar.py"):
+    with pytest.raises(SystemExit, match=r"repite descargar\.py"):
         datos.copiar_marca_de_captura(tmp_path / "sin-marca", raw_pr)
     for guion, llamada in (
         ("descargar.py", "marcar_captura(parcial)"),
