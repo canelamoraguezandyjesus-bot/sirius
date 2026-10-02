@@ -83,6 +83,9 @@ Detalle en `docs/audits/evidencia-h25-el-contador-declara-su-precondicion.md`.
 - (C) tiene ahora un contrato de llegada claro: cablear el retorno del
   desenlace Y declarar la clase en el conjunto, con la prueba del conjunto
   editada a la vez. Queda como bloque propio, a la orden del propietario.
+  **Nota del 01-10-2026:** esta consecuencia está superada por ADR-225: el
+  propietario canceló la línea el 13-09-2026 (#610, «no es necesaria»); el
+  resto de este ADR sigue vigente.
 - `authority_reversion` no cambia: NO_COMPARABLE no es divergencia y no
   dispara reversión (ya probado en su suite, re-ejecutada aquí).
 
