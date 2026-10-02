@@ -26,13 +26,13 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **222**.
+- Decisiones (ADR): **223**.
 - Bloques del motor: 17 cerrado, 3 fuera_de_alcance.
-- Defectos registrados: 2 abierto, 79 cerrado.
+- Defectos registrados: 2 abierto, 80 cerrado.
 - Ideas aparcadas o descartadas: 5 aparcada, 2 descartada, 2 promovida.
 - Skills: **19**.
 - Investigaciones: **10** (fotos con fecha; caducan).
-- Documentos: **204**, de los que **138** no declaran fecha.
+- Documentos: **205**, de los que **138** no declaran fecha.
 
 ## Las skills: lo que ya costó averiguar dos veces (ADR-211)
 
@@ -82,6 +82,7 @@ huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 | [231](docs/decisions/ADR-231-un-defecto-se-cierra-desde-la-pr-que-mete-en-main-el-adr-que-lo-nombra-no-solo-desde-la-del-adr-que-lo-declaro.md) | 2026-10-02 | APROBADO | Un defecto se cierra desde la PR que mete en `main` el ADR que lo nombra, no solo desde la del ADR que lo declaró | Un defecto cerrado puede citar en `pr:` la PR que metió en `main` el ADR que lo declaró (ADR-222) o la que metió un ADR posterior que lo nombra por su id, palabra entera. `_pr_que_puede_citar`… |
 | [229](docs/decisions/ADR-229-los-instantes-de-g8-se-comparan-en-una-sola-forma-canonica-sean-cuales-sean-sus-escrituras.md) | 2026-10-01 | APROBADO | Los instantes de G8 se comparan en una sola forma canónica, sean cuales sean sus escrituras | `src/sirius/domain/instantes.py` (nuevo): `FORMA_CANONICA` (`%Y-%m-%dT%H:%M:%S.%fZ`), `en_forma_canonica(texto) -> str \| None` (una fecha ISO con hora opcional tras `T` o espacio, fracción opcional de cualquier longitud y zona opcional… |
 | [228](docs/decisions/ADR-228-el-implementador-sabe-que-hora-es-su-paso-tiene-plazo-propio-y-el-prompt-lleva-la-hora-a-la-que-muere-y-la-hora-limite-de-la-validacion-final.md) | 2026-10-01 | APROBADO | El implementador sabe qué hora es: su paso tiene plazo propio y el prompt lleva la hora a la que muere y la hora límite de la validación final | En `.github/workflows/implement-sirius-work.yml`: El primer paso del job, «Anotar el arranque del job», deja |
+| [227](docs/decisions/ADR-227-las-divergencias-que-el-reflector-aparta-para-una-persona-quedan-escritas-junto-al-diario-y-la-vista-de-desenlaces-las-ensena-con-su-edad.md) | 2026-10-01 | APROBADO | Las divergencias que el reflector aparta para una persona quedan escritas junto al diario y la vista de desenlaces las enseña con su edad | Módulo nuevo `src/sirius_engine/divergencias.py`: `DivergenciaVista` (lo que la pasada declara), `DivergenciaApartada` (lo que se conserva: encargo, incidencia, motivo, primera vez, última vez, pasadas), `Instantanea` (lo que la última… |
 | [226](docs/decisions/ADR-226-cuando-codex-declara-que-no-revisa-y-claude-pidio-cambios-la-ronda-entrega-los-hallazgos-de-claude-en-vez-de-tirarlos.md) | 2026-10-01 | APROBADO | Cuando Codex declara que no revisa y Claude pidió cambios, la ronda entrega los hallazgos de Claude en vez de tirarlos | En `scripts/automation/sirius_aggregate_reviews.py`: Las razones con las que el recolector dice que el conector declaró que |
 | [225](docs/decisions/ADR-225-la-linea-del-contador-de-los-siete-dias-quedo-cancelada-por-decision-del-propietario-el-13-09-y-adr-101-deja-de-tenerla-como-bloque-pendiente.md) | 2026-10-01 | APROBADO | La línea del contador de los siete días quedó cancelada por decisión del propietario el 13-09 y ADR-101 deja de tenerla como bloque pendiente | La pieza (C) de #376 queda cancelada por decisión del propietario del 13-09-2026 (#610). No se ordenará salvo decisión nueva suya; si algún día la quiere, la medida de #605 (ADR-186) es el punto de partida y hará falta otro ADR. ADR-101… |
 | [224](docs/decisions/ADR-224-quality-no-muere-por-un-uv-sync-sin-cache-los-dos-pasos-largos-llevan-plazo-propio-y-el-job-sube-de-20-a-60-minutos.md) | 2026-10-01 | APROBADO | Quality no muere por un `uv sync` sin caché: los dos pasos largos llevan plazo propio y el job sube de 20 a 60 minutos | En `.github/workflows/quality.yml`: el job pasa de `timeout-minutes: 20` a 60; «Sync environment» lleva `timeout-minutes: 20` (peor medido sin caché: |
@@ -314,7 +315,7 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 
 | Familia | Veces | Hay prueba que la haga cumplir | ADR |
 |---|---|---|---|
-| `regla-que-depende-de-que-alguien-se-acuerde` | 10 | no en todas | 222, 220, 217, 216, 192, 191, 188, 182, 179, 174 |
+| `regla-que-depende-de-que-alguien-se-acuerde` | 11 | no en todas | 227, 222, 220, 217, 216, 192, 191, 188, 182, 179, 174 |
 | `pieza-sin-lector` | 5 | no en todas | 210, 209, 207, 183, 175 |
 | `prosa-que-el-cambio-deja-falsa` | 4 | no en todas | 223, 219, 211, 177 |
 | `regla-del-propietario-que-solo-vive-en-una-conversacion` | 4 | sí | 213, 208, 204, 195 |
@@ -346,6 +347,7 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 
 ### `regla-que-depende-de-que-alguien-se-acuerde`
 
+- **ADR-227** — derivar una contradicción a «una persona» en el diseño y no dejar ningún sitio donde esa persona la encuentre: el motivo se imprimía en un log que nadie relee, y la memoria común la contaba como un encargo activo más. (lo hace cumplir `tests/engine/test_reflect_cli.py`).
 - **ADR-222** — una convención de registro escrita para un modo de fusión (con commit de mezcla) que sobrevive al cambio de modo (aplastado) sin que nadie la relea, con la batería en verde y 29 referencias que no llevan a ninguna parte. (lo hace cumplir `tests/automation/test_registro_de_defectos.py`).
 - **ADR-220** — automatizar la mitad de un gesto (traer la base) y dejar la otra mitad (regenerar lo generado) a que alguien se acuerde, con Quality como único aviso y 25 minutos después. (lo hace cumplir `tests/automation/test_cola.py`).
 - **ADR-217** — dejar la entrada de un registro en `main` condicionada (sin prueba que lo haga cumplir: ninguna prueba: la condición vivía en prosa de un documento).
@@ -566,7 +568,7 @@ nada por su cuenta. «Sin fecha declarada» es un aviso, no un dato.
 
 ### `docs/audits`
 
-**147 documentos**, 84 sin fecha declarada; el más reciente declara 2026-10-02.
+**148 documentos**, 84 sin fecha declarada; el más reciente declara 2026-10-02.
 Es la carpeta de la evidencia y crece a dos filas por ADR, así que la fila
 de cada documento vive en un índice generado aparte,
 [`docs/audits/INDICE.md`](docs/audits/INDICE.md), que escribe el

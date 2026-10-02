@@ -12,6 +12,7 @@ from __future__ import annotations
 import io
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -19,6 +20,12 @@ from sirius_engine import reflect_cli
 from sirius_engine.adapters.fixture_mirror import FixedGitHubMirrorReader
 from sirius_engine.adapters.memory_dispatch_journal import InMemoryDispatchJournal
 from sirius_engine.adapters.memory_store import InMemoryWorkEngineStore
+from sirius_engine.divergencias import (
+    DivergenciaApartada,
+    Instantanea,
+    escribir_instantanea,
+    leer_instantanea,
+)
 from sirius_engine.domain.dispatch import DispatchEpisode
 from sirius_engine.domain.work_item import WorkItemClass, WorkItemPhase, WorkItemState
 from sirius_engine.ports.github_mirror import (
@@ -32,6 +39,25 @@ from sirius_engine.ports.github_mirror import (
 )
 
 _AHORA = datetime(2026, 9, 4, 12, 0, tzinfo=UTC)
+
+
+def _completa(*divergencias: DivergenciaApartada) -> Instantanea:
+    return Instantanea(
+        tuple(divergencias), interrumpida=False, sin_evaluar=(), perdida_posible=False
+    )
+
+
+def _apartadas(ruta: Path) -> tuple[DivergenciaApartada, ...]:
+    instantanea = leer_instantanea(ruta)
+    return () if instantanea is None else instantanea.divergencias
+
+
+def _instantanea(ruta: Path) -> Instantanea:
+    instantanea = leer_instantanea(ruta)
+    assert instantanea is not None, f"{ruta.name} no existe"
+    return instantanea
+
+
 _REPO = "canelamoraguezandyjesus-bot/sirius"
 _NUMERO = 508
 _WORK_ID = "WI-1"
@@ -246,6 +272,428 @@ def test_espejo_sin_etiqueta_de_estado_no_mueve_nada_pero_lo_cuenta(tmp_path: Pa
     assert sin_tocar is not None
     assert sin_tocar.estado is WorkItemState.ACTIVE
     assert sin_tocar.fase is WorkItemPhase.PREPARAR
+
+
+def _datos_contradictorios(numero: int = _NUMERO) -> dict[str, Any]:
+    """La incidencia #392 de H-216: cerrada con dos etiquetas de estado que se contradicen."""
+    return dict(
+        metadatos_por_incidencia={
+            (_REPO, numero): LecturaMetadatos(
+                estado=LecturaEstado.OK,
+                metadatos=MetadatosIncidencia(
+                    numero=numero,
+                    titulo="t",
+                    estado_gh="closed",
+                    etiquetas=("sirius:failed-safely", "sirius:completed"),
+                ),
+            )
+        },
+        cuerpos_por_incidencia={
+            (_REPO, numero): LecturaCuerpo(
+                estado=LecturaEstado.OK,
+                cuerpo=CuerpoIncidencia(autor_login="x", autor_asociacion="OWNER", texto=""),
+            )
+        },
+        comentarios_por_incidencia={
+            (_REPO, numero): LecturaComentarios(estado=LecturaEstado.OK, comentarios=())
+        },
+    )
+
+
+def _mirror_contradictorio(numero: int = _NUMERO) -> FixedGitHubMirrorReader:
+    return FixedGitHubMirrorReader(**_datos_contradictorios(numero))
+
+
+def _mirror_completado(numero: int = _NUMERO) -> FixedGitHubMirrorReader:
+    """Una incidencia cerrada como completada con su sha de fusión: el reflector la entrega."""
+    return FixedGitHubMirrorReader(
+        metadatos_por_incidencia={
+            (_REPO, numero): LecturaMetadatos(
+                estado=LecturaEstado.OK,
+                metadatos=MetadatosIncidencia(
+                    numero=numero, titulo="t", estado_gh="closed", etiquetas=("sirius:completed",)
+                ),
+            )
+        },
+        cuerpos_por_incidencia={
+            (_REPO, numero): LecturaCuerpo(
+                estado=LecturaEstado.OK,
+                cuerpo=CuerpoIncidencia(autor_login="x", autor_asociacion="OWNER", texto=""),
+            )
+        },
+        comentarios_por_incidencia={
+            (_REPO, numero): LecturaComentarios(
+                estado=LecturaEstado.OK,
+                comentarios=(
+                    Comentario(
+                        autor_login="github-actions[bot]",
+                        autor_asociacion="NONE",
+                        cuerpo=(
+                            "<!-- sirius-completed:deadbeef1234 -->\n\n- Merge SHA: `deadbeef1234`"
+                        ),
+                        creado_en=_AHORA,
+                    ),
+                ),
+            )
+        },
+    )
+
+
+class _EspejoQueSeCae(FixedGitHubMirrorReader):
+    """Un espejo que REVIENTA al leer una incidencia concreta: la API que se cae
+    a mitad de la pasada, no una lectura que el reflector sabe tratar como
+    ilegible (`EspejoIlegibleError`)."""
+
+    def __init__(self, *, numero_que_se_cae: int, **datos: Any) -> None:
+        super().__init__(**datos)
+        self._numero_que_se_cae = numero_que_se_cae
+
+    def leer_metadatos(self, *, repo: str, numero: int) -> LecturaMetadatos:
+        if numero == self._numero_que_se_cae:
+            raise RuntimeError("la API se cayó a mitad de la pasada")
+        return super().leer_metadatos(repo=repo, numero=numero)
+
+
+_ENTRADA_VIEJA = DivergenciaApartada(
+    work_id=_WORK_ID,
+    incidencia=_NUMERO,
+    motivo="motivo de una pasada anterior",
+    primera_vez="2026-09-01T03:24:00+00:00",
+    ultima_vez="2026-09-03T03:24:00+00:00",
+    pasadas=3,
+)
+
+
+def test_una_pasada_que_muere_a_medias_conserva_lo_observado_y_lo_no_alcanzado(
+    tmp_path: Path,
+) -> None:
+    """Ronda 1 de Codex en la PR #674: si la pasada revienta tras ver una
+    divergencia, el workflow confirma igual el diario (`if: always()`) y la
+    vista se regeneraría de un fichero viejo. Lo observado se escribe y lo que
+    la pasada no llegó a mirar se conserva tal cual."""
+    store = InMemoryWorkEngineStore()
+    journal = InMemoryDispatchJournal()
+    _preparar(store, journal, work_id="WI-1", numero=_NUMERO)
+    _preparar(store, journal, work_id="WI-2", numero=999)
+    _preparar(store, journal, work_id="WI-3", numero=1000)
+    ruta = tmp_path / "divergencias.json"
+    vieja = DivergenciaApartada(
+        "WI-2", 999, "motivo viejo", "2026-09-01T03:24:00+00:00", "2026-09-03T03:24:00+00:00", 3
+    )
+    escribir_instantanea(ruta, _completa(vieja))
+    espejo = _EspejoQueSeCae(numero_que_se_cae=999, **_datos_contradictorios(_NUMERO))
+
+    with pytest.raises(RuntimeError, match="se cayó"):
+        _correr(
+            ["--diario", str(tmp_path / "diario.jsonl")],
+            store=store,
+            journal=journal,
+            mirror=espejo,
+        )
+
+    instantanea = _instantanea(ruta)
+    por_encargo = {d.work_id: d for d in instantanea.divergencias}
+    assert set(por_encargo) == {"WI-1", "WI-2"}
+    assert "se contradicen" in por_encargo["WI-1"].motivo and por_encargo["WI-1"].pasadas == 1
+    assert por_encargo["WI-2"] == vieja, "lo que la pasada no llegó a mirar se conserva tal cual"
+    assert instantanea.interrumpida and not instantanea.completa, (
+        "ronda 2 de Codex: el fichero dice que la pasada no fue entera"
+    )
+    assert "WI-2" in instantanea.sin_evaluar and not instantanea.perdida_posible
+    assert "WI-3" in instantanea.sin_evaluar, (
+        "ronda 3 de Codex: lo no alcanzado se deriva de todos los encargos conocidos, no solo "
+        "de los que ya tenían entrada; sin esto la vista no podía decir qué no se miró"
+    )
+    assert "WI-1" not in instantanea.sin_evaluar
+
+
+@pytest.mark.parametrize(
+    ("contenido", "aviso"),
+    [
+        ('{"divergencias": [', "no es JSON"),
+        # Ronda 6 de Codex en la PR #674: lo que no se puede leer (bytes que no
+        # son UTF-8) toma el mismo camino que lo que no es JSON.
+        (b"\xff\xfe\x00{", "no se puede leer"),
+    ],
+)
+def test_un_fichero_de_divergencias_roto_no_para_el_reflejo_y_se_reescribe(
+    tmp_path: Path, contenido: str | bytes, aviso: str
+) -> None:
+    """Revisión independiente de la PR #674: un `divergencias.json` corrupto
+    mataba la pasada DESPUÉS de aplicar los pasos, y en cada pasada siguiente,
+    hasta que alguien lo arreglara a mano. El reflejo es lo primero: el fichero
+    se lee antes de tocar el almacén, se avisa nombrándolo y se reescribe."""
+    store = InMemoryWorkEngineStore()
+    journal = InMemoryDispatchJournal()
+    _preparar(store, journal)
+    ruta = tmp_path / "divergencias.json"
+    if isinstance(contenido, bytes):
+        ruta.write_bytes(contenido)
+    else:
+        ruta.write_text(contenido, encoding="utf-8")
+
+    codigo, texto = _correr(
+        ["--diario", str(tmp_path / "diario.jsonl")],
+        store=store,
+        journal=journal,
+        mirror=_mirror(etiqueta="sirius:implementing"),
+    )
+
+    assert codigo == 0
+    assert "AVISO: " in texto and f"divergencias.json: {aviso}" in texto
+    assert f"{_WORK_ID}: aplicados 1 paso(s)" in texto
+    instantanea = _instantanea(ruta)
+    assert instantanea == _completa(), "reescrito, legible y entero: la pasada evaluó todo"
+
+
+def test_en_ensayo_el_aviso_del_fichero_roto_no_promete_reescribirlo(tmp_path: Path) -> None:
+    """Ronda 5 de Codex en la PR #674: con `--ensayo` el aviso decía que esta pasada
+    reescribiría el fichero, pero el ensayo no escribe nada. Dice lo que haría una
+    pasada real, y el fichero roto queda tal cual."""
+    store = InMemoryWorkEngineStore()
+    journal = InMemoryDispatchJournal()
+    _preparar(store, journal)
+    ruta = tmp_path / "divergencias.json"
+    ruta.write_text('{"divergencias": [', encoding="utf-8")
+
+    codigo, texto = _correr(
+        ["--ensayo", "--diario", str(tmp_path / "diario.jsonl")],
+        store=store,
+        journal=journal,
+        mirror=_mirror(etiqueta="sirius:implementing"),
+    )
+
+    assert codigo == 0
+    assert "divergencias.json: no es JSON" in texto
+    assert "en --ensayo no se toca" in texto and "Una pasada real lo volvería a escribir" in texto
+    assert "esta pasada lo vuelve a escribir" not in texto
+    assert ruta.read_text(encoding="utf-8") == '{"divergencias": [', "el ensayo no toca el fichero"
+    assert not (tmp_path / "divergencias.json.tmp").exists()
+
+
+def test_fichero_roto_mas_pasada_incompleta_deja_dicho_que_lo_anterior_pudo_perderse(
+    tmp_path: Path,
+) -> None:
+    """Ronda 2 de Codex en la PR #674: con el fichero roto, el conjunto anterior
+    ya era `()`, y una pasada que no podía leer una incidencia (o moría a
+    medias) lo sustituía por un fichero válido y vacío que la vista leía como
+    «ninguna». El fichero lleva ahora la duda escrita hasta que una pasada
+    completa rehaga el conjunto."""
+    store = InMemoryWorkEngineStore()
+    journal = InMemoryDispatchJournal()
+    _preparar(store, journal)
+    diario = tmp_path / "diario.jsonl"
+    ruta = tmp_path / "divergencias.json"
+    ruta.write_text('{"divergencias": [', encoding="utf-8")
+
+    codigo, texto = _correr(
+        ["--diario", str(diario)], store=store, journal=journal, mirror=FixedGitHubMirrorReader()
+    )
+    assert codigo == 0
+    assert "Pasada incompleta: 1 encargo(s) sin evaluar; lo anterior pudo perderse." in texto
+    incompleta = _instantanea(ruta)
+    assert not incompleta.completa and incompleta.perdida_posible
+    assert incompleta.sin_evaluar == (_WORK_ID,) and incompleta.divergencias == ()
+
+    codigo, texto = _correr(
+        ["--diario", str(diario)],
+        store=store,
+        journal=journal,
+        mirror=_mirror(etiqueta="sirius:implementing"),
+        ahora=_AHORA.replace(day=5),
+    )
+    assert codigo == 0 and "Pasada incompleta" not in texto
+    assert _instantanea(ruta) == _completa(), "una pasada completa apaga la duda"
+
+
+def test_la_primera_pasada_completa_sin_divergencias_deja_el_fichero_escrito(
+    tmp_path: Path,
+) -> None:
+    """Ronda 2 de Codex en la PR #674: un fichero ausente no es «ninguna», es
+    «nadie ha escrito todavía», y la vista lo dice así. Para que «ninguna» se
+    pueda afirmar, la primera pasada completa escribe el conjunto vacío; una
+    pasada igual después no reescribe nada."""
+    store = InMemoryWorkEngineStore()
+    journal = InMemoryDispatchJournal()
+    _preparar(store, journal)
+    diario = tmp_path / "diario.jsonl"
+    ruta = tmp_path / "divergencias.json"
+
+    codigo, texto = _correr(
+        ["--diario", str(diario)],
+        store=store,
+        journal=journal,
+        mirror=_mirror(etiqueta="sirius:implementing"),
+    )
+    assert codigo == 0
+    assert "Divergencias apartadas para una persona: 0, escritas en divergencias.json." in texto
+    assert _instantanea(ruta) == _completa()
+    escrito = ruta.read_text(encoding="utf-8")
+
+    codigo, texto = _correr(
+        ["--diario", str(diario)],
+        store=store,
+        journal=journal,
+        mirror=_mirror(etiqueta="sirius:implementing"),
+        ahora=_AHORA.replace(day=5),
+    )
+    assert codigo == 0
+    assert "Divergencias apartadas para una persona: 0 (sin cambios en divergencias.json)." in texto
+    assert ruta.read_text(encoding="utf-8") == escrito
+
+
+def test_una_entrada_de_un_encargo_resuelto_o_terminal_se_retira(tmp_path: Path) -> None:
+    """Las dos mutaciones que sobrevivían (revisión independiente de la PR #674):
+    conservar la entrada de un encargo que la pasada resolvió con pasos, y la
+    de uno ya terminal. Es el camino real de #392 el 01-10: la etiqueta falsa
+    se retiró, el reflector entregó el encargo, y su entrada tiene que irse."""
+    store = InMemoryWorkEngineStore()
+    journal = InMemoryDispatchJournal()
+    _preparar(store, journal)
+    diario = tmp_path / "diario.jsonl"
+    ruta = tmp_path / "divergencias.json"
+
+    escribir_instantanea(ruta, _completa(_ENTRADA_VIEJA))
+    codigo, _ = _correr(
+        ["--diario", str(diario)],
+        store=store,
+        journal=journal,
+        mirror=_mirror(etiqueta="sirius:implementing"),
+    )
+    assert codigo == 0
+    assert _apartadas(ruta) == (), "resuelta con pasos: la entrada se retira"
+
+    codigo, texto = _correr(
+        ["--diario", str(diario)], store=store, journal=journal, mirror=_mirror_completado()
+    )
+    assert codigo == 0 and "work_item_delivered" in texto
+    escribir_instantanea(ruta, _completa(_ENTRADA_VIEJA))
+    codigo, _ = _correr(
+        ["--diario", str(diario)],
+        store=store,
+        journal=journal,
+        mirror=_mirror_completado(),
+        ahora=_AHORA.replace(day=5),
+    )
+    assert codigo == 0
+    assert _apartadas(ruta) == (), "terminal: la entrada se retira"
+
+
+def test_una_divergencia_apartada_queda_escrita_junto_al_diario(tmp_path: Path) -> None:
+    """ADR-227 (H-216): la divergencia que el reflector aparta para una persona
+    no se queda en el log del run. `WI-20260828-122242` estuvo 27 días así sin
+    que nadie la viera. Vista fallar contra el comando anterior: ningún fichero."""
+    store = InMemoryWorkEngineStore()
+    journal = InMemoryDispatchJournal()
+    _preparar(store, journal)
+    diario = tmp_path / "diario.jsonl"
+
+    codigo, texto = _correr(
+        ["--diario", str(diario)], store=store, journal=journal, mirror=_mirror_contradictorio()
+    )
+
+    assert codigo == 0
+    assert "etiquetas de estado que se contradicen" in texto
+    assert "Divergencias apartadas para una persona: 1, escritas en divergencias.json." in texto
+    apartadas = _apartadas(tmp_path / "divergencias.json")
+    assert len(apartadas) == 1
+    (apartada,) = apartadas
+    assert apartada.work_id == _WORK_ID and apartada.incidencia == _NUMERO
+    assert "se contradicen" in apartada.motivo
+    assert apartada.primera_vez == apartada.ultima_vez == _AHORA.isoformat()
+    assert apartada.pasadas == 1
+    sin_tocar = store.get_work_item(_WORK_ID)
+    assert sin_tocar is not None and sin_tocar.estado is WorkItemState.ACTIVE
+
+    despues = _AHORA.replace(day=5)
+    _correr(
+        ["--diario", str(diario)],
+        store=store,
+        journal=journal,
+        mirror=_mirror_contradictorio(),
+        ahora=despues,
+    )
+    (otra_vez,) = _apartadas(tmp_path / "divergencias.json")
+    assert otra_vez.primera_vez == _AHORA.isoformat(), "la primera vez no se mueve"
+    assert otra_vez.ultima_vez == despues.isoformat() and otra_vez.pasadas == 2
+
+
+def test_el_ensayo_no_escribe_las_divergencias(tmp_path: Path) -> None:
+    store = InMemoryWorkEngineStore()
+    journal = InMemoryDispatchJournal()
+    _preparar(store, journal)
+
+    codigo, texto = _correr(
+        ["--ensayo", "--diario", str(tmp_path / "diario.jsonl")],
+        store=store,
+        journal=journal,
+        mirror=_mirror_contradictorio(),
+    )
+
+    assert codigo == 0
+    assert (
+        "Divergencias apartadas para una persona: 1 (en ensayo no se escribe divergencias.json)."
+        in texto
+    )
+    assert not (tmp_path / "divergencias.json").exists()
+
+
+def test_una_divergencia_ilegible_se_conserva_y_una_resuelta_se_retira(tmp_path: Path) -> None:
+    """Tres pasadas: se aparta; la incidencia no se puede leer (se conserva con
+    su fecha); la incidencia deja de contradecirse (se retira)."""
+    store = InMemoryWorkEngineStore()
+    journal = InMemoryDispatchJournal()
+    _preparar(store, journal)
+    diario = tmp_path / "diario.jsonl"
+    _correr(
+        ["--diario", str(diario)], store=store, journal=journal, mirror=_mirror_contradictorio()
+    )
+
+    ilegible = FixedGitHubMirrorReader()  # nada configurado: LecturaEstado.NO_DISPONIBLE
+    codigo, texto = _correr(
+        ["--diario", str(diario)],
+        store=store,
+        journal=journal,
+        mirror=ilegible,
+        ahora=_AHORA.replace(day=5),
+    )
+    assert codigo == 0
+    assert f"{_WORK_ID}: no pude leer la incidencia" in texto
+    (conservada,) = _apartadas(tmp_path / "divergencias.json")
+    assert conservada.ultima_vez == _AHORA.isoformat() and conservada.pasadas == 1
+
+    # La incidencia deja de contradecirse: sin etiqueta de estado, el reflector
+    # no tiene nada que decir (idempotencia) y la pasada la evalúa sin divergencia.
+    sin_etiquetas = FixedGitHubMirrorReader(
+        metadatos_por_incidencia={
+            (_REPO, _NUMERO): LecturaMetadatos(
+                estado=LecturaEstado.OK,
+                metadatos=MetadatosIncidencia(
+                    numero=_NUMERO, titulo="t", estado_gh="open", etiquetas=()
+                ),
+            )
+        },
+        cuerpos_por_incidencia={
+            (_REPO, _NUMERO): LecturaCuerpo(
+                estado=LecturaEstado.OK,
+                cuerpo=CuerpoIncidencia(autor_login="x", autor_asociacion="OWNER", texto=""),
+            )
+        },
+        comentarios_por_incidencia={
+            (_REPO, _NUMERO): LecturaComentarios(estado=LecturaEstado.OK, comentarios=())
+        },
+    )
+    codigo, texto = _correr(
+        ["--diario", str(diario)],
+        store=store,
+        journal=journal,
+        mirror=sin_etiquetas,
+        ahora=_AHORA.replace(day=6),
+    )
+    assert codigo == 0
+    assert f"{_WORK_ID}: sin cambios" in texto
+    assert "Divergencias apartadas para una persona: 0, escritas en divergencias.json." in texto
+    assert _apartadas(tmp_path / "divergencias.json") == ()
 
 
 def test_completed_con_sha_de_fusion_entrega_el_workitem(tmp_path: Path) -> None:

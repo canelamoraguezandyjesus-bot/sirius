@@ -1366,6 +1366,19 @@ defectos:
       - src/sirius_engine/adapters/github_worker_request.py
       - tests/engine/test_worker_request.py
 
+  - id: H-227
+    titulo: El motivo por el que el reflector apartaba un encargo para una persona solo quedaba en el log del run; ningun fichero lo conservaba y la vista de desenlaces lo contaba como un activo mas
+    bloque: motor
+    gravedad: baja
+    estado: cerrado
+    cerrado_por: 27a1196b44e32b9453a5e7028306cb1e0ec244db
+    pr: 674
+    adr: 227
+    ficheros:
+      - src/sirius_engine/divergencias.py
+      - src/sirius_engine/reflect_cli.py
+      - src/sirius_engine/memoria.py
+
   # ADR-231: la guarda de ADR-222 ataba el pr: de un defecto cerrado a la PR que
   # metio el ADR que lo declaro; un defecto declarado abierto en una PR y
   # arreglado en otra (H-216, arreglado por ADR-227 en la #674) no se podia
