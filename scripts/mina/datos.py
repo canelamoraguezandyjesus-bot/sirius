@@ -30,3 +30,29 @@ DATOS = DATOS.resolve()
 RAW = DATOS / "raw"
 PRDIR = DATOS / "raw_pr"
 HISTORIALES = DATOS / "historiales"
+
+
+def parcial_de(definitivo: Path) -> Path:
+    """Donde se descarga ANTES de publicar: al lado del definitivo, con `.parcial`."""
+    return definitivo.with_name(definitivo.name + ".parcial")
+
+
+def publicar_volcado(parcial: Path, definitivo: Path) -> None:
+    """Sustituye el volcado definitivo por el parcial, entero, o no lo toca.
+
+    Sobrescribir cada fichero no daba atomicidad: una descarga que fallara a
+    medias dejaba un indice nuevo con historiales viejos y `analizar.py`
+    mezclaba las dos fotos sin aviso (Codex, PR #665, ronda 6). La descarga
+    escribe en `parcial` y solo al terminar entera se publica aqui: el
+    definitivo anterior se aparta, el parcial pasa a definitivo y el anterior
+    se borra. Si la descarga muere antes, `parcial` queda a la vista y el
+    definitivo sigue siendo la ultima foto completa.
+    """
+    import shutil
+
+    anterior = definitivo.with_name(definitivo.name + ".anterior")
+    shutil.rmtree(anterior, ignore_errors=True)
+    if definitivo.exists():
+        definitivo.rename(anterior)
+    parcial.rename(definitivo)
+    shutil.rmtree(anterior, ignore_errors=True)

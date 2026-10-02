@@ -9,6 +9,7 @@ volcado sea el dato crudo y el criterio quede escrito aparte.
 from __future__ import annotations
 
 import json
+import shutil
 import sys
 import time
 import urllib.error
@@ -19,9 +20,7 @@ REPO = "canelamoraguezandyjesus-bot/sirius"
 BASE = f"https://api.github.com/repos/{REPO}"
 DESDE = "2026-08-25T00:00:00Z"  # misma ventana de descarga que la edicion del 14-09
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from datos import RAW  # noqa: E402
-
-RAW.mkdir(parents=True, exist_ok=True)
+from datos import RAW, parcial_de, publicar_volcado  # noqa: E402
 
 
 def get(url: str) -> tuple[list | dict, dict]:
@@ -60,8 +59,14 @@ def paginar(url: str) -> list:
         pagina += 1
 
 
-def main() -> int:
+def main(raw: Path = RAW) -> int:
     t0 = time.time()
+    # Se descarga en `raw.parcial` y se publica entero al terminar: una
+    # descarga que muera a medias no deja un indice nuevo con historiales
+    # viejos (Codex, PR #665, ronda 6). Ver `publicar_volcado`.
+    parcial = parcial_de(raw)
+    shutil.rmtree(parcial, ignore_errors=True)
+    parcial.mkdir(parents=True)
     incidencias = paginar(f"{BASE}/issues?state=all&since={DESDE}&sort=updated&direction=desc")
     indice = []
     for inc in incidencias:
@@ -78,7 +83,7 @@ def main() -> int:
                 "labels": [etiqueta["name"] for etiqueta in inc.get("labels", [])],
             }
         )
-    (RAW / "indice.json").write_text(
+    (parcial / "indice.json").write_text(
         json.dumps(indice, ensure_ascii=False, indent=1), encoding="utf-8"
     )
     print(
@@ -88,10 +93,7 @@ def main() -> int:
 
     total_comentarios = 0
     for n, inc in enumerate(indice, 1):
-        destino = RAW / f"issue_{inc['number']}.json"
-        # Se sobrescribe siempre: un volcado es una foto, y repetir la cadena en
-        # el mismo MINA_DATOS tiene que refrescarla entera, no mezclar un indice
-        # nuevo con historiales viejos (Codex, PR #665).
+        destino = parcial / f"issue_{inc['number']}.json"
         comentarios = paginar(f"{BASE}/issues/{inc['number']}/comments") if inc["comments"] else []
         limpio = [
             {
@@ -115,9 +117,10 @@ def main() -> int:
                 f"{time.time() - t0:.0f}s",
                 flush=True,
             )
+    publicar_volcado(parcial, raw)
     print(
-        f"hecho: {len(indice)} incidencias, {total_comentarios} comentarios nuevos, "
-        f"{time.time() - t0:.0f}s"
+        f"hecho: {len(indice)} incidencias, {total_comentarios} comentarios, "
+        f"{time.time() - t0:.0f}s; volcado publicado entero en {raw}"
     )
     return 0
 

@@ -39,7 +39,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from analizar import FIN, confianza, es_aviso_de_familia
+from analizar import FIN, INICIO, confianza, es_aviso_de_familia
 from datos import DATOS, RAW
 from reproducir_avisos import evidencias_de_hoy
 
@@ -126,9 +126,17 @@ class _TramoEnCurso:
 
 
 def tramos_de(
-    comentarios: Iterable[Mapping[str, str]], *, fin: str
+    comentarios: Iterable[Mapping[str, str]], *, inicio: str, fin: str
 ) -> tuple[int, tuple[Tramo, ...], int]:
-    """(rondas evaluadas, tramos, avisos) de una incidencia, evaluando cada prefijo hasta `fin`."""
+    """(rondas evaluadas, tramos, avisos) de una incidencia, evaluando cada prefijo
+    publicado dentro de la ventana [`inicio`, `fin`].
+
+    Lo anterior a `inicio` es CONTEXTO: entra en el historial que ve el detector
+    (una familia puede empezar en agosto y marcarse en septiembre), pero no
+    cuenta como ronda evaluada, no abre tramos y sus avisos no exculpan nada
+    (Codex, PR #665, ronda 6: evaluar tambien los prefijos de agosto atribuia
+    a la medicion 01->30-09 tramos y avisos de fuera de ella).
+    """
     acumulado: list[str] = []
     evaluadas = 0
     en_curso: list[_TramoEnCurso] = []
@@ -138,6 +146,8 @@ def tramos_de(
         if c["created_at"] > fin:
             break
         acumulado.append(c["body"])
+        if c["created_at"] < inicio:
+            continue
         lo_que_aviso = evidencias_publicadas(c["body"])
         if lo_que_aviso is not None:
             avisos += 1
@@ -171,12 +181,15 @@ def tramos_de(
 
 
 def clasificar(
-    comentarios_por_incidencia: Mapping[int, Iterable[Mapping[str, str]]], *, fin: str
+    comentarios_por_incidencia: Mapping[int, Iterable[Mapping[str, str]]],
+    *,
+    inicio: str,
+    fin: str,
 ) -> dict[int, Clasificacion]:
     """La clasificacion de cada incidencia a partir de sus comentarios de confianza."""
     resultado: dict[int, Clasificacion] = {}
     for n, cs in comentarios_por_incidencia.items():
-        evaluadas, tramos, avisos = tramos_de(cs, fin=fin)
+        evaluadas, tramos, avisos = tramos_de(cs, inicio=inicio, fin=fin)
         resultado[int(n)] = Clasificacion(int(n), evaluadas, tramos, avisos)
     return resultado
 
@@ -187,7 +200,7 @@ def main() -> int:
     for n in resumen["incidencias"]:
         d = json.loads((RAW / f"issue_{int(n)}.json").read_text(encoding="utf-8"))
         comentarios[int(n)] = [c for c in d["comments"] if confianza(c)]
-    resultado = clasificar(comentarios, fin=FIN)
+    resultado = clasificar(comentarios, inicio=INICIO, fin=FIN)
     print(
         "| incidencia | tramo (fichero, rondas) | primera ronda en la que marca | "
         "aviso que lo cubre | estado |"
@@ -208,7 +221,7 @@ def main() -> int:
     marcadas = sorted({n for n, _ in tramos})
     con_falso_negativo = sorted({n for n, _ in sin_aviso})
     avisos = sum(c.avisos for c in resultado.values())
-    print(f"\nIncidencias examinadas: {len(resultado)} (historiales hasta {FIN})")
+    print(f"\nIncidencias examinadas: {len(resultado)} (rondas y avisos entre {INICIO} y {FIN})")
     print(
         f"Avisos reconocidos por su cabecera: {avisos} "
         f"(resumen.json lista {len(resumen['avisos_familia'])})"

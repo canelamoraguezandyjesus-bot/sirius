@@ -29,6 +29,7 @@ def _cargar() -> ModuleType:
 
 fn = _cargar()
 
+INICIO = "2026-09-01T00:00:00Z"
 FIN = "2026-09-30T23:59:59Z"
 
 
@@ -78,7 +79,7 @@ def test_una_familia_borrada_por_un_continua_posterior_sigue_contando() -> None:
         _continua("2026-09-10T13:00:00Z"),
         _ronda(4, "src/y.py", "2026-09-10T14:00:00Z"),
     ]
-    [c] = fn.clasificar({700: historial}, fin=FIN).values()
+    [c] = fn.clasificar({700: historial}, inicio=INICIO, fin=FIN).values()
     assert fn.evidencias_de_hoy([h["body"] for h in historial]) == [], (
         "sobre el historial final el detector no marca..."
     )
@@ -91,16 +92,16 @@ def test_una_familia_borrada_por_un_continua_posterior_sigue_contando() -> None:
 
 def test_un_aviso_publicado_en_la_ventana_la_saca_de_los_falsos_negativos() -> None:
     historial = [*_TRES_SOBRE_X, _aviso("2026-09-10T12:30:00Z", ("src/x.py", 1, 3))]
-    [c] = fn.clasificar({700: historial}, fin=FIN).values()
+    [c] = fn.clasificar({700: historial}, inicio=INICIO, fin=FIN).values()
     assert c.estado == "avisada" and c.avisos == 1
 
 
 def test_lo_publicado_despues_de_la_ventana_no_entra() -> None:
     historial = [*_TRES_SOBRE_X[:2], _ronda(3, "src/x.py", "2026-10-02T09:00:00Z")]
-    [c] = fn.clasificar({700: historial}, fin=FIN).values()
+    [c] = fn.clasificar({700: historial}, inicio=INICIO, fin=FIN).values()
     assert c.estado == "sin_familia" and c.rondas_evaluadas == 2
     tardio = [*_TRES_SOBRE_X, _aviso("2026-10-02T09:00:00Z", ("src/x.py", 1, 3))]
-    [d] = fn.clasificar({701: tardio}, fin=FIN).values()
+    [d] = fn.clasificar({701: tardio}, inicio=INICIO, fin=FIN).values()
     assert d.estado == "falso_negativo" and d.avisos == 0, (
         "un aviso de octubre no exculpa a septiembre"
     )
@@ -112,7 +113,7 @@ def test_sin_tres_rondas_sobre_el_mismo_fichero_no_hay_familia() -> None:
         _ronda(2, "src/b.py", "2026-09-10T11:00:00Z"),
         _ronda(3, "src/c.py", "2026-09-10T12:00:00Z"),
     ]
-    [c] = fn.clasificar({700: historial}, fin=FIN).values()
+    [c] = fn.clasificar({700: historial}, inicio=INICIO, fin=FIN).values()
     assert c.estado == "sin_familia" and c.tramos == ()
 
 
@@ -130,7 +131,7 @@ def test_cada_tramo_cuenta_por_separado_y_un_aviso_solo_cubre_lo_que_publico() -
         _ronda(5, "docs/adr.md", "2026-09-10T14:00:00Z"),
         _ronda(6, "docs/adr.md", "2026-09-10T15:00:00Z"),
     ]
-    [c] = fn.clasificar({570: historial}, fin=FIN).values()
+    [c] = fn.clasificar({570: historial}, inicio=INICIO, fin=FIN).values()
     por_archivo = {t.archivo: t for t in c.tramos}
     assert set(por_archivo) == {"src/x.py", "docs/adr.md"}, "dos tramos, no un booleano"
     assert por_archivo["src/x.py"].cubierto_por_aviso and por_archivo["src/x.py"].primera_ronda == 3
@@ -153,7 +154,7 @@ def test_el_mismo_fichero_en_dos_rachas_separadas_son_dos_tramos() -> None:
         _ronda(6, "src/x.py", "2026-09-10T15:00:00Z"),
         _ronda(7, "src/x.py", "2026-09-10T16:00:00Z"),
     ]
-    [c] = fn.clasificar({700: historial}, fin=FIN).values()
+    [c] = fn.clasificar({700: historial}, inicio=INICIO, fin=FIN).values()
     assert [(t.archivo, t.rondas) for t in c.tramos] == [
         ("src/x.py", (1, 2, 3)),
         ("src/x.py", (5, 6, 7)),
@@ -170,7 +171,7 @@ def test_una_racha_que_crece_sigue_siendo_el_mismo_tramo() -> None:
         _aviso("2026-09-10T12:30:00Z", ("src/x.py", 1, 3)),
         _ronda(4, "src/x.py", "2026-09-10T13:00:00Z"),
     ]
-    [c] = fn.clasificar({700: historial}, fin=FIN).values()
+    [c] = fn.clasificar({700: historial}, inicio=INICIO, fin=FIN).values()
     [tramo] = c.tramos
     assert tramo.rondas == (1, 2, 3, 4) and tramo.primera_ronda == 3
     assert tramo.cubierto_por_aviso and c.estado == "avisada"
@@ -188,7 +189,7 @@ def test_un_aviso_por_otra_familia_tras_un_continua_no_cubre_el_tramo_anterior()
         _ronda(6, "src/y.py", "2026-09-10T16:00:00Z"),
         _aviso("2026-09-10T16:30:00Z", ("src/y.py", 4, 6)),
     ]
-    [c] = fn.clasificar({700: historial}, fin=FIN).values()
+    [c] = fn.clasificar({700: historial}, inicio=INICIO, fin=FIN).values()
     por_archivo = {t.archivo: t for t in c.tramos}
     assert not por_archivo["src/x.py"].cubierto_por_aviso
     assert por_archivo["src/y.py"].cubierto_por_aviso
@@ -209,5 +210,32 @@ def test_una_mencion_en_prosa_no_es_un_aviso_y_un_aviso_se_lee_entero() -> None:
         "created_at": "2026-09-10T12:30:00Z",
         "author_association": "OWNER",
     }
-    [c] = fn.clasificar({520: [*_TRES_SOBRE_X, mencion]}, fin=FIN).values()
+    [c] = fn.clasificar({520: [*_TRES_SOBRE_X, mencion]}, inicio=INICIO, fin=FIN).values()
     assert c.avisos == 0 and c.estado == "falso_negativo"
+
+
+def test_lo_publicado_antes_de_la_ventana_es_contexto_y_no_cuenta() -> None:
+    """Ronda 6 de Codex en la PR #665: una incidencia con rondas del 25 al 31 de
+    agosto y otra en septiembre. Los prefijos de agosto no abren tramos ni cuentan
+    como rondas evaluadas -serian medicion de fuera de la ventana-, pero SI son
+    contexto: la familia que empieza en agosto y recibe su tercera ronda en
+    septiembre se marca en septiembre, con las dos de agosto detras."""
+    en_agosto = [
+        _ronda(1, "src/x.py", "2026-08-25T10:00:00Z"),
+        _ronda(2, "src/x.py", "2026-08-26T10:00:00Z"),
+        _ronda(3, "src/x.py", "2026-08-27T10:00:00Z"),
+    ]
+    [solo_agosto] = fn.clasificar({700: en_agosto}, inicio=INICIO, fin=FIN).values()
+    assert solo_agosto.rondas_evaluadas == 0 and solo_agosto.tramos == (), (
+        "tres rondas de agosto son una familia de agosto: no entra en la medicion de septiembre"
+    )
+
+    tercera_en_septiembre = [*en_agosto[:2], _ronda(3, "src/x.py", "2026-09-02T10:00:00Z")]
+    [c] = fn.clasificar({701: tercera_en_septiembre}, inicio=INICIO, fin=FIN).values()
+    assert c.rondas_evaluadas == 1, "solo la ronda de septiembre se evalua"
+    assert [t.rondas for t in c.tramos] == [(1, 2, 3)], "las de agosto son contexto del tramo"
+    assert c.tramos[0].primera_ronda == 3 and c.tramos[0].primer_instante.startswith("2026-09-02")
+
+    aviso_de_agosto = [*en_agosto, _aviso("2026-08-28T10:00:00Z", ("src/x.py", 1, 3))]
+    [d] = fn.clasificar({702: aviso_de_agosto}, inicio=INICIO, fin=FIN).values()
+    assert d.avisos == 0, "un aviso de agosto no es un aviso de la ventana"

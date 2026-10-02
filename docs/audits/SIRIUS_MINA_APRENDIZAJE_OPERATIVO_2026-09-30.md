@@ -101,8 +101,13 @@ cada cifra de este informe que no sea una lectura a mano sale de su salida, y la
 clasificación de falsos negativos tiene sus pruebas en
 `tests/automation/test_mina_falsos_negativos.py`.
 Repetir la cadena sobre el mismo `MINA_DATOS` refresca el volcado entero: los
-guiones de descarga sobrescriben los ficheros que ya existan, para no mezclar
-un índice nuevo con historiales viejos.
+guiones de descarga escriben en un directorio aparte (`raw.parcial`,
+`raw_pr.parcial`) y lo publican entero al terminar, así que una descarga que
+se interrumpa no mezcla un índice nuevo con historiales viejos (el volcado
+anterior sigue siendo la última foto completa y `analizar.py` avisa del
+parcial). Y la reconstrucción ronda a ronda solo cuenta rondas y avisos
+publicados dentro de la ventana 01→30-09: lo anterior al 01-09 es contexto del
+detector, no medición.
 **Comprobación del instrumento**: sobre la subventana 01→14-09 el guion devuelve
 exactamente lo que la edición anterior publicó —30 incidencias, 122 rondas,
 301 hallazgos—, así que las dos ediciones son comparables fila a fila.

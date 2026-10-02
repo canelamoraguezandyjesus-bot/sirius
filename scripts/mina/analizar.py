@@ -22,7 +22,7 @@ from sirius_engine.drip_guard import parse_archivo_location
 from sirius_engine.round_history import parse_round_records
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from datos import DATOS, HISTORIALES, RAW
+from datos import DATOS, HISTORIALES, RAW, parcial_de
 
 INICIO = "2026-09-01T00:00:00Z"
 FIN = "2026-09-30T23:59:59Z"
@@ -81,6 +81,12 @@ def es_aviso_de_familia(cuerpo: str) -> bool:
 
 
 def main() -> int:
+    if parcial_de(RAW).exists():
+        print(
+            f"AVISO: hay una descarga interrumpida en {parcial_de(RAW)}; se analiza el "
+            f"volcado completo anterior de {RAW}. Repite descargar.py para refrescarlo.",
+            file=sys.stderr,
+        )
     incidencias = {}
     for f in sorted(glob.glob(str(RAW / "issue_*.json"))):
         d = json.loads(Path(f).read_text(encoding="utf-8"))

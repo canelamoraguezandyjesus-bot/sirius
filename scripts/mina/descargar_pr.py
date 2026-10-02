@@ -10,26 +10,27 @@ insignia P1/P2/P3). Se descargan para todas las PR del indice.
 from __future__ import annotations
 
 import json
+import shutil
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from datos import PRDIR
+from datos import PRDIR, parcial_de, publicar_volcado
 from descargar import BASE, RAW, get, paginar
 
-PRDIR.mkdir(exist_ok=True)
 
-
-def main() -> int:
-    indice = json.loads((RAW / "indice.json").read_text(encoding="utf-8"))
+def main(prdir: Path = PRDIR, raw: Path = RAW) -> int:
+    indice = json.loads((raw / "indice.json").read_text(encoding="utf-8"))
     prs = [i for i in indice if i["es_pr"]]
     print(f"PR en el indice: {len(prs)}")
+    # Misma garantia que `descargar.py`: se descarga en `raw_pr.parcial` y se
+    # publica entero al terminar (Codex, PR #665, ronda 6).
+    parcial = parcial_de(prdir)
+    shutil.rmtree(parcial, ignore_errors=True)
+    parcial.mkdir(parents=True)
     for k, pr in enumerate(prs, 1):
         n = pr["number"]
-        destino = PRDIR / f"pr_{n}.json"
-        # Se sobrescribe siempre: un volcado es una foto, y repetir la cadena en
-        # el mismo MINA_DATOS tiene que refrescarla entera, no mezclar un indice
-        # nuevo con historiales viejos (Codex, PR #665).
+        destino = parcial / f"pr_{n}.json"
         reviews = paginar(f"{BASE}/pulls/{n}/reviews")
         comentarios = paginar(f"{BASE}/pulls/{n}/comments")
         detalle, _ = get(f"{BASE}/pulls/{n}")
@@ -78,7 +79,8 @@ def main() -> int:
         )
         if k % 10 == 0:
             print(f"  {k}/{len(prs)}", flush=True)
-    print("hecho")
+    publicar_volcado(parcial, prdir)
+    print(f"hecho; volcado de PR publicado entero en {prdir}")
     return 0
 
 
