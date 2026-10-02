@@ -79,6 +79,18 @@ class Instantanea:
     sin_evaluar: tuple[str, ...]
     perdida_posible: bool
 
+    def __post_init__(self) -> None:
+        # Una pasada completa rehace el conjunto entero y apaga la duda, así que
+        # «completa» y «lo anterior pudo perderse» a la vez es una contradicción;
+        # leída con `completa` por delante, la vista decía «Ninguna» donde el
+        # propio fichero avisaba (ronda 6 de Codex en la PR #674). La invariante
+        # vive en el tipo para que ni el lector ni el escritor la puedan saltar.
+        if self.perdida_posible and not self.interrumpida and not self.sin_evaluar:
+            raise ValueError(
+                "una pasada completa no puede dejar perdida_posible: la completa rehace el "
+                "conjunto entero"
+            )
+
     @property
     def completa(self) -> bool:
         """La pasada evaluó todos los encargos que se reflejan: el conjunto es entero."""
@@ -97,10 +109,20 @@ def leer_instantanea(ruta: Path) -> Instantanea | None:
     es un error, no «ninguna»: lo escribe solo :func:`escribir_instantanea`, y
     leerlo como vacío borraría en silencio lo que una pasada anterior dejó.
     """
-    if not ruta.is_file():
-        return None
     try:
-        datos = json.loads(ruta.read_text(encoding="utf-8"))
+        texto = ruta.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return None
+    except (OSError, UnicodeDecodeError) as error:
+        # Lo que no se puede leer -bytes que no son UTF-8, un directorio en su
+        # sitio, un fallo del sistema de ficheros- es tan ilegible como lo que
+        # no es JSON y se declara igual, con su ruta. Antes solo
+        # `JSONDecodeError` tomaba este camino: lo demás salía sin la ruta o
+        # mataba la pasada antes del primer encargo, y la vista con ella
+        # (ronda 6 de Codex en la PR #674).
+        raise ValueError(f"{ruta}: no se puede leer ({error})") from error
+    try:
+        datos = json.loads(texto)
     except json.JSONDecodeError as error:
         raise ValueError(f"{ruta}: no es JSON ({error})") from error
     entradas = datos.get("divergencias") if isinstance(datos, Mapping) else None
@@ -124,12 +146,16 @@ def leer_instantanea(ruta: Path) -> Instantanea | None:
             f"{ruta}: la pasada está mal formada (interrumpida y perdida_posible tienen que "
             "ser booleanos y sin_evaluar una lista de encargos)"
         )
-    return Instantanea(
-        divergencias=tuple(_desde_json(ruta, entrada) for entrada in entradas),
-        interrumpida=interrumpida,
-        sin_evaluar=tuple(sin_evaluar),
-        perdida_posible=perdida_posible,
-    )
+    divergencias = tuple(_desde_json(ruta, entrada) for entrada in entradas)
+    try:
+        return Instantanea(
+            divergencias=divergencias,
+            interrumpida=interrumpida,
+            sin_evaluar=tuple(sin_evaluar),
+            perdida_posible=perdida_posible,
+        )
+    except ValueError as error:
+        raise ValueError(f"{ruta}: la pasada está mal formada ({error})") from error
 
 
 def _instante(valor: object) -> datetime | None:

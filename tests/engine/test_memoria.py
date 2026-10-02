@@ -570,19 +570,28 @@ def test_la_vista_distingue_ninguna_de_no_se_sabe(diario: Path) -> None:
     assert "`WI-08`" not in texto, "se nombran los primeros ocho y se cuenta el resto"
 
 
+@pytest.mark.parametrize(
+    ("contenido", "aviso"),
+    [('{"divergencias": [', "no es JSON"), (b"\xff\xfe\x00{", "no se puede leer")],
+)
 def test_la_vista_declara_un_fichero_de_divergencias_ilegible_sin_caerse(
-    diario: Path, capsys: pytest.CaptureFixture[str]
+    diario: Path, capsys: pytest.CaptureFixture[str], contenido: str | bytes, aviso: str
 ) -> None:
     """La vista se deriva del diario; un `divergencias.json` roto se dice en
     ella, no la impide (el paso del workflow que la publica corre con
     `if: always()` para enseñar un reflejo a medias). Revisión independiente
-    de la PR #674."""
-    diario.with_name(FICHERO_DIVERGENCIAS).write_text('{"divergencias": [', encoding="utf-8")
+    de la PR #674; la ronda 6 de Codex añade lo que no se puede leer (bytes que
+    no son UTF-8), que antes salía por otro camino."""
+    ruta = diario.with_name(FICHERO_DIVERGENCIAS)
+    if isinstance(contenido, bytes):
+        ruta.write_bytes(contenido)
+    else:
+        ruta.write_text(contenido, encoding="utf-8")
     texto = generar_desenlaces(diario, diario.with_name("diario-despacho.jsonl"))
-    assert "**No se pudo leer `divergencias.json`**" in texto and "no es JSON" in texto
+    assert "**No se pudo leer `divergencias.json`**" in texto and aviso in texto
     assert "| WI-B |" in texto, "los encargos siguen en la vista"
     assert main(["desenlaces", "--diario", str(diario)]) == 0
-    assert "no es JSON" not in capsys.readouterr().err
+    assert aviso not in capsys.readouterr().err
 
 
 def test_un_diario_corrupto_se_declara_con_su_linea(tmp_path: Path) -> None:

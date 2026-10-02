@@ -407,7 +407,18 @@ def test_una_pasada_que_muere_a_medias_conserva_lo_observado_y_lo_no_alcanzado(
     assert "WI-1" not in instantanea.sin_evaluar
 
 
-def test_un_fichero_de_divergencias_roto_no_para_el_reflejo_y_se_reescribe(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("contenido", "aviso"),
+    [
+        ('{"divergencias": [', "no es JSON"),
+        # Ronda 6 de Codex en la PR #674: lo que no se puede leer (bytes que no
+        # son UTF-8) toma el mismo camino que lo que no es JSON.
+        (b"\xff\xfe\x00{", "no se puede leer"),
+    ],
+)
+def test_un_fichero_de_divergencias_roto_no_para_el_reflejo_y_se_reescribe(
+    tmp_path: Path, contenido: str | bytes, aviso: str
+) -> None:
     """Revisión independiente de la PR #674: un `divergencias.json` corrupto
     mataba la pasada DESPUÉS de aplicar los pasos, y en cada pasada siguiente,
     hasta que alguien lo arreglara a mano. El reflejo es lo primero: el fichero
@@ -416,7 +427,10 @@ def test_un_fichero_de_divergencias_roto_no_para_el_reflejo_y_se_reescribe(tmp_p
     journal = InMemoryDispatchJournal()
     _preparar(store, journal)
     ruta = tmp_path / "divergencias.json"
-    ruta.write_text('{"divergencias": [', encoding="utf-8")
+    if isinstance(contenido, bytes):
+        ruta.write_bytes(contenido)
+    else:
+        ruta.write_text(contenido, encoding="utf-8")
 
     codigo, texto = _correr(
         ["--diario", str(tmp_path / "diario.jsonl")],
@@ -426,7 +440,7 @@ def test_un_fichero_de_divergencias_roto_no_para_el_reflejo_y_se_reescribe(tmp_p
     )
 
     assert codigo == 0
-    assert "AVISO: " in texto and "divergencias.json: no es JSON" in texto
+    assert "AVISO: " in texto and f"divergencias.json: {aviso}" in texto
     assert f"{_WORK_ID}: aplicados 1 paso(s)" in texto
     instantanea = _instantanea(ruta)
     assert instantanea == _completa(), "reescrito, legible y entero: la pasada evaluó todo"

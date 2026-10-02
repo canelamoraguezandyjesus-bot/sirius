@@ -111,6 +111,11 @@ def test_leer_y_escribir_van_y_vuelven_y_sin_fichero_no_hay_instantanea(tmp_path
         '"divergencias": []}',
         '{"pasada": {"interrumpida": 0, "sin_evaluar": [], "perdida_posible": false}, '
         '"divergencias": []}',
+        # Metadatos contradictorios: una pasada completa no puede dejar
+        # `perdida_posible`; leído con `completa` por delante, la vista decía
+        # «Ninguna» (ronda 6 de Codex en la PR #674).
+        '{"pasada": {"interrumpida": false, "sin_evaluar": [], "perdida_posible": true}, '
+        '"divergencias": []}',
     ],
 )
 def test_un_fichero_que_no_tiene_la_forma_se_declara_en_vez_de_leerse_como_vacio(
@@ -244,3 +249,35 @@ def test_un_instante_con_otro_desfase_se_conserva_convertido_a_utc(tmp_path: Pat
     assert leida is not None
     assert leida.divergencias[0].primera_vez == "2026-09-01T03:24:00+00:00"
     assert leida.divergencias[0].ultima_vez == "2026-09-03T03:24:00+00:00"
+
+
+def test_una_instantanea_completa_no_puede_decir_que_lo_anterior_pudo_perderse() -> None:
+    """Ronda 6 de Codex en la PR #674: un fichero con `interrumpida: false`,
+    `sin_evaluar: []` y `perdida_posible: true` pasaba la validación y, como
+    `completa` no mira `perdida_posible`, la vista decía «Ninguna» donde el
+    propio fichero avisaba de que lo anterior pudo perderse. La invariante vive
+    en el tipo: ni el lector ni el escritor pueden construir esa contradicción."""
+    with pytest.raises(ValueError, match="completa"):
+        Instantanea((), interrumpida=False, sin_evaluar=(), perdida_posible=True)
+    # Las dos formas de pasada incompleta sí pueden llevar la duda.
+    interrumpida = Instantanea((), interrumpida=True, sin_evaluar=(), perdida_posible=True)
+    a_medias = Instantanea((), interrumpida=False, sin_evaluar=("WI-1",), perdida_posible=True)
+    assert interrumpida.perdida_posible and a_medias.perdida_posible
+    assert not interrumpida.completa and not a_medias.completa
+
+
+def test_un_fichero_que_no_se_puede_leer_se_declara_como_uno_sin_forma(tmp_path: Path) -> None:
+    """Ronda 6 de Codex en la PR #674: solo `JSONDecodeError` tomaba el camino
+    del fichero roto; unos bytes que no son UTF-8 salían sin la ruta y un fallo
+    de lectura (un directorio en su sitio) mataba la pasada antes del primer
+    encargo, y la vista con ella. Todo lo que no se puede leer se declara igual,
+    con su ruta; y «no existe» sigue siendo «no hay instantánea»."""
+    ruta = tmp_path / "divergencias.json"
+    ruta.write_bytes(b"\xff\xfe\x00{")
+    with pytest.raises(ValueError, match=r"divergencias\.json: no se puede leer"):
+        leer_instantanea(ruta)
+    ruta.unlink()
+    ruta.mkdir()
+    with pytest.raises(ValueError, match=r"divergencias\.json: no se puede leer"):
+        leer_instantanea(ruta)
+    assert leer_instantanea(tmp_path / "no-existe" / "divergencias.json") is None

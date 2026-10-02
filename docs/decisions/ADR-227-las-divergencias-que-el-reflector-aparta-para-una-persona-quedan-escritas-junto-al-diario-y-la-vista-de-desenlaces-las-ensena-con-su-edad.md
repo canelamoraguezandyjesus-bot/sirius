@@ -182,6 +182,23 @@ revisión independiente de la PR #674 lo señaló; queda dicho aquí.
   un desfase distinto se rotulaba UTC sin convertir); (2) el aviso de un
   `divergencias.json` sin forma en `--ensayo` ya no promete una reescritura
   que el ensayo nunca hace.
+- Ronda 6 de Codex sobre `026c373a`: (1) un fichero con `interrumpida: false`,
+  `sin_evaluar: []` y `perdida_posible: true` pasaba la validación y, como
+  `completa` no mira `perdida_posible`, la vista decía «Ninguna» donde el propio
+  fichero avisaba; la invariante «una pasada completa no deja `perdida_posible`»
+  vive ahora en el tipo (`Instantanea.__post_init__`), así que ni el lector ni
+  el escritor pueden construir la contradicción y el lector la declara como
+  fichero mal formado; (2) solo `JSONDecodeError` tomaba el camino del fichero
+  roto: unos bytes que no son UTF-8 salían sin la ruta y un fallo de lectura
+  (un directorio en su sitio, que además `is_file()` leía como «no hay
+  fichero») mataba la pasada antes del primer encargo y la vista con ella.
+  `leer_instantanea` declara igual todo lo que no se puede leer, con su ruta, y
+  solo «no existe» sigue siendo «no hay instantánea». Pruebas: el caso
+  contradictorio en la parametrizada de los ficheros sin forma,
+  `test_una_instantanea_completa_no_puede_decir_que_lo_anterior_pudo_perderse`,
+  `test_un_fichero_que_no_se_puede_leer_se_declara_como_uno_sin_forma`, y las
+  del reflector y la vista con el fichero roto parametrizadas con bytes
+  ilegibles.
 - Mutaciones, con los ficheros restaurados (`diff -q` limpio) y la batería en
   verde después:
 
@@ -206,9 +223,11 @@ revisión independiente de la PR #674 lo señaló; queda dicho aquí.
 | M17 | `_instante` acepta instantes sin zona | cae el caso de los dos instantes sin zona de la misma parametrizada |
 | M18 | los instantes se conservan sin convertir a UTC | cae `test_un_instante_con_otro_desfase_se_conserva_convertido_a_utc` |
 | M19 | el aviso del fichero roto promete reescribirlo también en `--ensayo` | cae `test_en_ensayo_el_aviso_del_fichero_roto_no_promete_reescribirlo` |
+| M20 | `Instantanea` admite `perdida_posible` en una pasada completa | caen el caso contradictorio de `test_un_fichero_que_no_tiene_la_forma_se_declara_en_vez_de_leerse_como_vacio` y `test_una_instantanea_completa_no_puede_decir_que_lo_anterior_pudo_perderse` |
+| M21 | solo `JSONDecodeError` toma el camino del fichero roto | caen `test_un_fichero_que_no_se_puede_leer_se_declara_como_uno_sin_forma` y los casos de bytes ilegibles del reflector y de la vista |
 
 - Baterías `test_divergencias.py`, `test_reflect_cli.py`, `test_memoria.py` y
-  `test_reflect.py`: 150 en verde. `ruff format`, `ruff check` y `mypy` sobre
+  `test_reflect.py`: 179 en verde. `ruff format`, `ruff check` y `mypy` sobre
   los tres módulos y las pruebas, sin avisos.
 - La medida prevista en la nota —que la primera pasada real escribiera el
   fichero con `WI-20260828-122242` y la vista mostrara sus 34 días— **ya no se
