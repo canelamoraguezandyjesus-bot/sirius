@@ -26,13 +26,13 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **222**.
+- Decisiones (ADR): **223**.
 - Bloques del motor: 17 cerrado, 3 fuera_de_alcance.
-- Defectos registrados: 3 abierto, 78 cerrado.
+- Defectos registrados: 2 abierto, 80 cerrado.
 - Ideas aparcadas o descartadas: 5 aparcada, 2 descartada, 2 promovida.
 - Skills: **19**.
 - Investigaciones: **10** (fotos con fecha; caducan).
-- Documentos: **206**, de los que **138** no declaran fecha.
+- Documentos: **207**, de los que **138** no declaran fecha.
 
 ## Las skills: lo que ya costó averiguar dos veces (ADR-211)
 
@@ -79,6 +79,7 @@ huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| [231](docs/decisions/ADR-231-un-defecto-se-cierra-desde-la-pr-que-mete-en-main-el-adr-que-lo-nombra-no-solo-desde-la-del-adr-que-lo-declaro.md) | 2026-10-02 | APROBADO | Un defecto se cierra desde la PR que mete en `main` el ADR que lo nombra, no solo desde la del ADR que lo declaró | Un defecto cerrado puede citar en `pr:` la PR que metió en `main` el ADR que lo declaró (ADR-222) o la que metió un ADR posterior que lo nombra por su id, palabra entera. `_pr_que_puede_citar`… |
 | [229](docs/decisions/ADR-229-los-instantes-de-g8-se-comparan-en-una-sola-forma-canonica-sean-cuales-sean-sus-escrituras.md) | 2026-10-01 | APROBADO | Los instantes de G8 se comparan en una sola forma canónica, sean cuales sean sus escrituras | `src/sirius/domain/instantes.py` (nuevo): `FORMA_CANONICA` (`%Y-%m-%dT%H:%M:%S.%fZ`), `en_forma_canonica(texto) -> str \| None` (una fecha ISO con hora opcional tras `T` o espacio, fracción opcional de cualquier longitud y zona opcional… |
 | [228](docs/decisions/ADR-228-el-implementador-sabe-que-hora-es-su-paso-tiene-plazo-propio-y-el-prompt-lleva-la-hora-a-la-que-muere-y-la-hora-limite-de-la-validacion-final.md) | 2026-10-01 | APROBADO | El implementador sabe qué hora es: su paso tiene plazo propio y el prompt lleva la hora a la que muere y la hora límite de la validación final | En `.github/workflows/implement-sirius-work.yml`: El primer paso del job, «Anotar el arranque del job», deja |
 | [227](docs/decisions/ADR-227-las-divergencias-que-el-reflector-aparta-para-una-persona-quedan-escritas-junto-al-diario-y-la-vista-de-desenlaces-las-ensena-con-su-edad.md) | 2026-10-01 | APROBADO | Las divergencias que el reflector aparta para una persona quedan escritas junto al diario y la vista de desenlaces las enseña con su edad | Módulo nuevo `src/sirius_engine/divergencias.py`: `DivergenciaVista` (lo que la pasada declara), `DivergenciaApartada` (lo que se conserva: encargo, incidencia, motivo, primera vez, última vez, pasadas), `Instantanea` (lo que la última… |
@@ -340,6 +341,7 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 | `pieza-correcta-a-la-que-no-llama-quien-la-necesita` | 1 | sí | 197 |
 | `plan-que-hay-que-terminar-de-una-sentada` | 1 | sí | 176 |
 | `pregunta-al-propietario-que-nadie-vuelve-a-poner-delante` | 1 | no en todas | 198 |
+| `regla-nueva-sin-pasarla-por-los-casos-vivos` | 1 | sí | 231 |
 | `tarea-periodica-sin-reloj` | 1 | no en todas | 201 |
 | `tramite-que-solo-puede-hacer-una-persona-y-no-anade-comprobacion` | 1 | sí | 205 |
 
@@ -473,6 +475,10 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 
 - **ADR-198** — una incidencia formula una pregunta que solo el (sin prueba que lo haga cumplir: ninguna prueba: nada en este repositorio distingue una).
 
+### `regla-nueva-sin-pasarla-por-los-casos-vivos`
+
+- **ADR-231** — una guarda nueva que modela el camino común y prohíbe sin querer un caso legítimo que ya existía al escribirla (H-216 abierto con su arreglo en otra PR el mismo día que ADR-222), con la batería en verde y un defecto arreglado que el registro no puede cerrar. (lo hace cumplir `tests/automation/test_registro_de_defectos.py`).
+
 ### `tarea-periodica-sin-reloj`
 
 - **ADR-201** — el único trabajo que mide los ciclos de este (sin prueba que lo haga cumplir: ninguna prueba: que el reloj dispare de verdad no lo puede).
@@ -518,7 +524,6 @@ cerrados; el recuento completo está arriba.
 |---|---|---|
 | H-202 | abierto | Una decision de no hacer algo no dejaba rastro, y una precondicion escrita antes que ella bloqueo trabajo real trece dias |
 | H-203 | abierto | El banco solo sabia medir el camino con el motor encendido, asi que la linea base contra la que comparar no existia |
-| H-216 | abierto | La contradiccion de etiquetas que el reflector aparta a proposito lleva 27 dias sin que nadie la mire |
 
 ## Las ideas aparcadas y descartadas (ADR-208)
 
@@ -563,7 +568,7 @@ nada por su cuenta. «Sin fecha declarada» es un aviso, no un dato.
 
 ### `docs/audits`
 
-**149 documentos**, 84 sin fecha declarada; el más reciente declara 2026-10-01.
+**150 documentos**, 84 sin fecha declarada; el más reciente declara 2026-10-02.
 Es la carpeta de la evidencia y crece a dos filas por ADR, así que la fila
 de cada documento vive en un índice generado aparte,
 [`docs/audits/INDICE.md`](docs/audits/INDICE.md), que escribe el
