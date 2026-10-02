@@ -22,7 +22,7 @@ from sirius_engine.drip_guard import parse_archivo_location
 from sirius_engine.round_history import parse_round_records
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from datos import DATOS, HISTORIALES, RAW, RAW_LOGICO, fotos_huerfanas, parcial_de
+from datos import DATOS, HISTORIALES, RAW, RAW_LOGICO, avisos_de_volcado
 
 INICIO = "2026-09-01T00:00:00Z"
 FIN = "2026-09-30T23:59:59Z"
@@ -110,21 +110,8 @@ def evidencias_publicadas(cuerpo: str) -> tuple[Evidencia, ...] | None:
 
 
 def main() -> int:
-    if parcial_de(RAW_LOGICO).exists():
-        print(
-            f"AVISO: hay una descarga interrumpida en {parcial_de(RAW_LOGICO)}; se analiza el "
-            f"volcado completo anterior de {RAW}. Repite descargar.py para refrescarlo.",
-            file=sys.stderr,
-        )
-    huerfanas = fotos_huerfanas(RAW_LOGICO)
-    if huerfanas:
-        nombres = ", ".join(p.name for p in huerfanas)
-        print(
-            f"AVISO: hay fotos descargadas sin seleccionar ({nombres}): una publicacion murio "
-            f"entre el renombrado y el selector. Se analiza la seleccionada, {RAW}. Repite "
-            "descargar.py para refrescarla.",
-            file=sys.stderr,
-        )
+    for aviso in avisos_de_volcado(RAW_LOGICO, "descargar.py"):
+        print(aviso, file=sys.stderr)
     incidencias = {}
     for f in sorted(glob.glob(str(RAW / "issue_*.json"))):
         d = json.loads(Path(f).read_text(encoding="utf-8"))

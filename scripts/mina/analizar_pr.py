@@ -18,7 +18,7 @@ from collections import Counter
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from datos import DATOS, PRDIR, RAW
+from datos import DATOS, PRDIR, PRDIR_LOGICO, RAW, avisos_de_volcado
 
 INICIO = "2026-09-01T00:00:00Z"
 FIN = "2026-09-30T23:59:59Z"
@@ -41,6 +41,11 @@ def tipo(path: str) -> str:
 
 
 def main() -> None:
+    # Las mismas comprobaciones que `analizar.py` hace sobre `raw`, sobre `raw_pr`:
+    # sin ellas las cifras de §5 podian salir de una foto vieja sin aviso
+    # (Codex, PR #665, ronda 10).
+    for aviso in avisos_de_volcado(PRDIR_LOGICO, "descargar_pr.py"):
+        print(aviso, file=sys.stderr)
     prs = {}
     for f in glob.glob(str(PRDIR / "pr_*.json")):
         d = json.loads(Path(f).read_text(encoding="utf-8"))

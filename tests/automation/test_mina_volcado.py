@@ -208,3 +208,23 @@ def test_una_foto_que_quedo_sin_seleccionar_se_detecta(tmp_path: Path) -> None:
     # y ni el parcial ni la seleccionada cuentan como huerfanas
     datos.parcial_de(raw).mkdir()
     assert datos.fotos_huerfanas(raw) == [huerfana]
+
+
+def test_los_avisos_del_volcado_valen_para_cualquier_nombre_logico(tmp_path: Path) -> None:
+    """Ronda 10 de Codex en la PR #665: las comprobaciones de descarga interrumpida
+    y de foto sin seleccionar valian solo para `raw`; `analizar_pr.py` leia
+    `raw_pr` sin ellas. Son una funcion del nombre logico, y los dos analizadores
+    la llaman."""
+    raw_pr = tmp_path / "raw_pr"
+    _foto_anterior(raw_pr)
+    assert datos.avisos_de_volcado(raw_pr, "descargar_pr.py") == []
+
+    datos.parcial_de(raw_pr).mkdir()
+    (tmp_path / "raw_pr.20260102T120000.000000Z").mkdir()
+    avisos = datos.avisos_de_volcado(raw_pr, "descargar_pr.py")
+    assert len(avisos) == 2
+    assert "descarga interrumpida" in avisos[0] and "descargar_pr.py" in avisos[0]
+    assert "sin seleccionar" in avisos[1] and "raw_pr.20260102T120000.000000Z" in avisos[1]
+
+    assert "avisos_de_volcado(RAW_LOGICO" in (MINA / "analizar.py").read_text(encoding="utf-8")
+    assert "avisos_de_volcado(PRDIR_LOGICO" in (MINA / "analizar_pr.py").read_text(encoding="utf-8")

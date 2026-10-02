@@ -120,3 +120,29 @@ def fotos_huerfanas(definitivo: Path) -> list[Path]:
         and p.name != parcial_de(definitivo).name
         and p.name[len(prefijo) : len(prefijo) + 1].isdigit()
     )
+
+
+def avisos_de_volcado(logico: Path, descargador: str) -> list[str]:
+    """Lo que un analizador tiene que decir ANTES de leer un volcado: si hay una
+    descarga interrumpida (`<nombre>.parcial`) y si hay fotos publicadas a medias
+    (`fotos_huerfanas`). Es una funcion del nombre logico para que valga igual
+    para `raw` (`descargar.py`) y para `raw_pr` (`descargar_pr.py`): las
+    comprobaciones vivian solo en `analizar.py` y `analizar_pr.py` leia `raw_pr`
+    sin ellas (Codex, PR #665, rondas 6, 9 y 10)."""
+    seleccionada = volcado_actual(logico)
+    avisos: list[str] = []
+    parcial = parcial_de(logico)
+    if parcial.exists():
+        avisos.append(
+            f"AVISO: hay una descarga interrumpida en {parcial}; se analiza el volcado "
+            f"completo anterior de {seleccionada}. Repite {descargador} para refrescarlo."
+        )
+    huerfanas = fotos_huerfanas(logico)
+    if huerfanas:
+        nombres = ", ".join(p.name for p in huerfanas)
+        avisos.append(
+            f"AVISO: hay fotos descargadas sin seleccionar ({nombres}): una publicacion murio "
+            f"entre el renombrado y el selector. Se analiza la seleccionada, {seleccionada}. "
+            f"Repite {descargador} para refrescarla."
+        )
+    return avisos
