@@ -63,6 +63,9 @@ def main(prdir: Path = PRDIR_LOGICO, raw: Path = RAW) -> int:
                             "id": c["id"],
                             "login": (c.get("user") or {}).get("login"),
                             "created_at": c["created_at"],
+                            # La fecha de edicion: sin ella no se puede saber si
+                            # el cuerpo es el de la ventana (Codex, PR #665, ronda 13).
+                            "updated_at": c.get("updated_at"),
                             "path": c.get("path"),
                             "line": c.get("line") or c.get("original_line"),
                             "commit_id": c.get("commit_id"),

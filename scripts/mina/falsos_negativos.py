@@ -39,7 +39,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from analizar import FIN, INICIO, Evidencia, confianza, evidencias_publicadas
-from datos import DATOS, RAW
+from datos import DATOS, RAW, editado_tras
 from reproducir_avisos import evidencias_de_hoy
 
 from sirius_engine.round_history import parse_round_records
@@ -130,6 +130,10 @@ def tramos_de(
     for c in sorted(comentarios, key=lambda c: c["created_at"]):
         if c["created_at"] > fin:
             break
+        if editado_tras(c, fin):
+            # Su cuerpo ya no es el de la ventana (Codex, PR #665, ronda 13):
+            # `analizar.py` lo cuenta y avisa; aqui tampoco es evidencia.
+            continue
         if c["created_at"] < inicio:
             acumulado.append(c["body"])
             lo_que_aviso = evidencias_publicadas(c["body"])

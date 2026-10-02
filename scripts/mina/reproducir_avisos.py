@@ -14,8 +14,8 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from analizar import Evidencia, confianza, evidencias_publicadas
-from datos import DATOS, RAW
+from analizar import FIN, Evidencia, confianza, evidencias_publicadas
+from datos import DATOS, RAW, editado_tras
 
 from sirius_engine.round_family_detector import detectar_familia_repetida
 from sirius_engine.round_history import history_after_last_resume, parse_round_records
@@ -66,8 +66,12 @@ def main() -> int:
     print("|---|---|---|---|---|")
     for n, t in avisos:
         d = json.loads((RAW / f"issue_{n}.json").read_text(encoding="utf-8"))
+        # Fuera los editados despues de la ventana, como en `analizar.py`
+        # (Codex, PR #665, ronda 13): su cuerpo no es el de aquel instante.
         de_confianza = [
-            c for c in sorted(d["comments"], key=lambda c: c["created_at"]) if confianza(c)
+            c
+            for c in sorted(d["comments"], key=lambda c: c["created_at"])
+            if confianza(c) and not editado_tras(c, FIN)
         ]
         previos = [c["body"] for c in de_confianza if c["created_at"] <= t]
         publicadas: tuple[Evidencia, ...] = ()

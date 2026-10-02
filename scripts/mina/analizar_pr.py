@@ -9,16 +9,24 @@ comentario en linea de ese bot con insignia P0..P4, que no sea respuesta
 
 from __future__ import annotations
 
-import glob
 import json
 import re
 import statistics
 import sys
 from collections import Counter
 from pathlib import Path
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from datos import DATOS, PRDIR, RAW, avisos_de_los_volcados
+from datos import (
+    DATOS,
+    PRDIR,
+    RAW,
+    avisos_de_editados,
+    avisos_de_los_volcados,
+    editado_tras,
+    exigir_volcado,
+)
 
 INICIO = "2026-09-01T00:00:00Z"
 FIN = "2026-09-30T23:59:59Z"
@@ -48,10 +56,15 @@ def main() -> None:
     for aviso in avisos_de_los_volcados():
         print(aviso, file=sys.stderr)
     prs = {}
-    for f in glob.glob(str(PRDIR / "pr_*.json")):
-        d = json.loads(Path(f).read_text(encoding="utf-8"))
+    # Este analizador lee los dos volcados: sin cualquiera de ellos no hay
+    # medicion, no «cero PR» (Codex, PR #665, ronda 13).
+    exigir_volcado(RAW, "descargar.py", "issue_*.json")
+    for f in exigir_volcado(PRDIR, "descargar_pr.py", "pr_*.json"):
+        d = json.loads(f.read_text(encoding="utf-8"))
         prs[d["pr"]["number"]] = d
     filas = []
+    # Los comentarios de Codex creados hasta FIN, de las PR y de raw.
+    juzgados: list[dict[str, Any]] = []
     for n, d in sorted(prs.items()):
         reviews = [
             r
@@ -60,6 +73,7 @@ def main() -> None:
             and r["state"] in ("COMMENTED", "APPROVED", "CHANGES_REQUESTED")
             and INICIO <= (r["submitted_at"] or "") <= FIN
         ]
+        juzgados.extend(c for c in d["comments"] if c["login"] == CODEX and c["created_at"] <= FIN)
         hallazgos = [
             c
             for c in d["comments"]
@@ -67,6 +81,7 @@ def main() -> None:
             and not c["in_reply_to_id"]
             and BADGE.search(c["body"])
             and INICIO <= c["created_at"] <= FIN
+            and not editado_tras(c, FIN)
         ]
         # Las rondas LIMPIAS no son reviews: Codex las publica como comentario
         # de la conversacion de la PR («Didn't find any major issues»), que vive
@@ -75,12 +90,16 @@ def main() -> None:
         ruta_issue = RAW / f"issue_{n}.json"
         if ruta_issue.exists():
             di = json.loads(Path(ruta_issue).read_text(encoding="utf-8"))
+            juzgados.extend(
+                c for c in di["comments"] if c["login"] == CODEX and c["created_at"] <= FIN
+            )
             limpias_coment = [
                 c
                 for c in di["comments"]
                 if c["login"] == CODEX
                 and "find any major issues" in c["body"]
                 and INICIO <= c["created_at"] <= FIN
+                and not editado_tras(c, FIN)
             ]
         if not reviews and not hallazgos and not limpias_coment:
             continue
@@ -108,6 +127,8 @@ def main() -> None:
                 <= MITAD,
             }
         )
+    for aviso in avisos_de_editados("Codex en las PR", "descargar_pr.py", FIN, juzgados):
+        print(aviso, file=sys.stderr)
     print(f"PR con alguna ronda de Codex en la ventana: {len(filas)}")
     for mitad, nombre in ((True, "01->14"), (False, "15->30")):
         fs = [f for f in filas if f["primera_mitad"] == mitad]

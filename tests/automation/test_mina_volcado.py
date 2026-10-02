@@ -277,3 +277,78 @@ def test_los_dos_volcados_tienen_que_ser_de_la_misma_captura(
         ("descargar_pr.py", "copiar_marca_de_captura(raw, parcial)"),
     ):
         assert llamada in (MINA / guion).read_text(encoding="utf-8")
+
+
+def test_un_analizador_sin_su_volcado_se_detiene(tmp_path: Path) -> None:
+    """Ronda 13 de Codex en la PR #665: en un `MINA_DATOS` nuevo, o con un selector
+    que nombra una foto que ya no existe, la ausencia entera del volcado era «sin
+    avisos» y `analizar_pr.py` publicaba cero PR y cero hallazgos como una
+    medicion. La ausencia de lo que se va a medir detiene al analizador."""
+    raw_pr = tmp_path / "raw_pr"
+    [ausente] = datos.avisos_de_volcado(raw_pr, "descargar_pr.py")
+    assert "no hay volcado publicado" in ausente and "descargar_pr.py" in ausente
+    with pytest.raises(SystemExit, match=r"ejecuta descargar_pr\.py"):
+        datos.exigir_volcado(raw_pr, "descargar_pr.py", "pr_*.json")
+
+    raw_pr.mkdir()
+    with pytest.raises(SystemExit, match=r"ningun pr_\*\.json"):
+        datos.exigir_volcado(raw_pr, "descargar_pr.py", "pr_*.json"), "vacio tampoco vale"
+    (raw_pr / "pr_2.json").write_text("{}", encoding="utf-8")
+    (raw_pr / "pr_1.json").write_text("{}", encoding="utf-8")
+    assert datos.exigir_volcado(raw_pr, "descargar_pr.py", "pr_*.json") == [
+        raw_pr / "pr_1.json",
+        raw_pr / "pr_2.json",
+    ]
+    assert datos.avisos_de_volcado(raw_pr, "descargar_pr.py") == []
+
+    datos.selector_de(raw_pr).write_text("raw_pr.20260102T120000.000000Z\n", encoding="utf-8")
+    [ausente] = datos.avisos_de_volcado(raw_pr, "descargar_pr.py")
+    assert "raw_pr.20260102T120000.000000Z" in ausente
+    with pytest.raises(SystemExit, match=r"raw_pr\.20260102T120000\.000000Z"):
+        datos.exigir_volcado(raw_pr, "descargar_pr.py", "pr_*.json")
+
+    # Los dos analizadores exigen lo que leen: `analizar_pr.py` lee los dos volcados.
+    analizar = (MINA / "analizar.py").read_text(encoding="utf-8")
+    analizar_pr = (MINA / "analizar_pr.py").read_text(encoding="utf-8")
+    assert 'exigir_volcado(RAW, "descargar.py", "issue_*.json")' in analizar
+    assert 'exigir_volcado(RAW, "descargar.py", "issue_*.json")' in analizar_pr
+    assert 'exigir_volcado(PRDIR, "descargar_pr.py", "pr_*.json")' in analizar_pr
+    assert "glob.glob(" not in analizar and "glob.glob(" not in analizar_pr
+
+
+def test_un_comentario_editado_despues_de_la_ventana_no_es_evidencia_de_ella() -> None:
+    """Ronda 13 de Codex en la PR #665: la API devuelve el cuerpo vigente con el
+    `created_at` original. Un comentario de septiembre editado en octubre entraba
+    como evidencia de septiembre y podia cambiar rondas, hallazgos o avisos al
+    regenerar el volcado; su cuerpo historico no se puede reconstruir."""
+    fin = "2026-09-30T23:59:59Z"
+    editado = {"id": 1, "created_at": "2026-09-10T10:00:00Z", "updated_at": "2026-10-02T09:00:00Z"}
+    intacto = {"id": 2, "created_at": "2026-09-10T10:00:00Z", "updated_at": "2026-09-10T10:00:00Z"}
+    retocado = {"id": 3, "created_at": "2026-09-10T10:00:00Z", "updated_at": "2026-09-30T23:59:59Z"}
+    sin_fecha = {"id": 4, "created_at": "2026-09-10T10:00:00Z"}
+    assert datos.editado_tras(editado, fin) is True
+    assert datos.editado_tras(intacto, fin) is False
+    assert datos.editado_tras(retocado, fin) is False, "editado dentro de la ventana: vale"
+    assert datos.editado_tras(sin_fecha, fin) is None, "sin updated_at no se puede saber"
+
+    assert (
+        datos.avisos_de_editados("las incidencias", "descargar.py", fin, [intacto, retocado]) == []
+    )
+    fuera, sin = datos.avisos_de_editados(
+        "las incidencias", "descargar.py", fin, [editado, intacto, sin_fecha]
+    )
+    assert (
+        "1 comentarios de las incidencias" in fuera
+        and "(1)" in fuera
+        and "no se puede reconstruir" in fuera
+    )
+    assert "1 comentarios de las incidencias no guardan updated_at" in sin and "descargar.py" in sin
+
+    # Todos los lectores del volcado lo aplican y el descargador de PR guarda la fecha.
+    for guion in ("analizar.py", "analizar_pr.py", "falsos_negativos.py", "reproducir_avisos.py"):
+        assert "editado_tras(c, " in (MINA / guion).read_text(encoding="utf-8"), guion
+    for guion in ("analizar.py", "analizar_pr.py"):
+        assert "avisos_de_editados(" in (MINA / guion).read_text(encoding="utf-8"), guion
+    assert '"updated_at": c.get("updated_at")' in (MINA / "descargar_pr.py").read_text(
+        encoding="utf-8"
+    )

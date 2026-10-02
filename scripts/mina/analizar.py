@@ -10,7 +10,6 @@ ejecutar esto):
 
 from __future__ import annotations
 
-import glob
 import json
 import re
 import statistics
@@ -22,7 +21,15 @@ from sirius_engine.drip_guard import parse_archivo_location
 from sirius_engine.round_history import parse_round_records
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from datos import DATOS, HISTORIALES, RAW, avisos_de_los_volcados
+from datos import (
+    DATOS,
+    HISTORIALES,
+    RAW,
+    avisos_de_editados,
+    avisos_de_los_volcados,
+    editado_tras,
+    exigir_volcado,
+)
 
 INICIO = "2026-09-01T00:00:00Z"
 FIN = "2026-09-30T23:59:59Z"
@@ -113,14 +120,16 @@ def main() -> int:
     for aviso in avisos_de_los_volcados():
         print(aviso, file=sys.stderr)
     incidencias = {}
-    for f in sorted(glob.glob(str(RAW / "issue_*.json"))):
-        d = json.loads(Path(f).read_text(encoding="utf-8"))
+    for f in exigir_volcado(RAW, "descargar.py", "issue_*.json"):
+        d = json.loads(f.read_text(encoding="utf-8"))
         incidencias[d["issue"]["number"]] = d
 
     rondas = []  # una fila por ronda publicada en la ventana
     avisos_familia = []
     marcas_guardian = []
     historiales = defaultdict(list)
+    juzgados = []  # los comentarios de confianza creados hasta FIN
+    editados = []  # (incidencia, id, creado, editado): editados tras FIN, fuera
     for numero, d in incidencias.items():
         # Una ronda cuenta UNA vez por numero, como en `parse_round_records`:
         # GitHub puede publicar dos veces el mismo `sirius-round:N` tras una
@@ -131,6 +140,14 @@ def main() -> int:
         for c in sorted(d["comments"], key=lambda c: c["created_at"]):
             if not confianza(c):
                 continue
+            if c["created_at"] <= FIN:
+                juzgados.append(c)
+                # Editado despues de la ventana: el cuerpo que tenemos no es el
+                # de septiembre y no se puede reconstruir (Codex, PR #665, ronda
+                # 13). Fuera de la evidencia, de los historiales y de los totales.
+                if editado_tras(c, FIN):
+                    editados.append((numero, c["id"], c["created_at"], c["updated_at"]))
+                    continue
             body = c["body"]
             en_ventana = INICIO <= c["created_at"] <= FIN
             # El historial que se guarda termina donde termina la ventana: un
@@ -169,6 +186,10 @@ def main() -> int:
                         "observaciones": obs,
                     }
                 )
+
+    for aviso in avisos_de_editados("las incidencias", "descargar.py", FIN, juzgados):
+        print(aviso, file=sys.stderr)
+    print(f"Comentarios de confianza hasta FIN editados despues (fuera): {len(editados)}")
 
     # --- Poblacion -------------------------------------------------------
     por_incidencia = defaultdict(list)
@@ -287,6 +308,7 @@ def main() -> int:
         "tipo_fichero": dict(tipo),
         "rondas_por_incidencia": conteo,
         "avisos_familia": avisos_familia,
+        "editados_tras_la_ventana": editados,
         "marcas_guardian": marcas_guardian,
         "alcance_guardian": {src: [con_linea[src], alcance[src]] for src in sorted(alcance)},
     }

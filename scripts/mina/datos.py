@@ -16,8 +16,10 @@ from __future__ import annotations
 
 import os
 import shutil
+from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 AQUI = Path(__file__).resolve().parent
 RAIZ = AQUI.parents[1]
@@ -131,6 +133,15 @@ def avisos_de_volcado(logico: Path, descargador: str) -> list[str]:
     sin ellas (Codex, PR #665, rondas 6, 9 y 10)."""
     seleccionada = volcado_actual(logico)
     avisos: list[str] = []
+    if not seleccionada.is_dir():
+        # Un MINA_DATOS nuevo, o un selector que nombra una foto que ya no esta:
+        # sin esto la ausencia entera del volcado era «sin avisos» y el analizador
+        # que lo lee publicaba cero filas como una medicion (Codex, PR #665,
+        # ronda 13). `exigir_volcado` detiene a ese analizador.
+        avisos.append(
+            f"AVISO: no hay volcado publicado en {seleccionada}; el analizador que lo lee se "
+            f"detiene. Ejecuta {descargador}."
+        )
     parcial = parcial_de(logico)
     if parcial.exists():
         avisos.append(
@@ -222,3 +233,63 @@ def avisos_de_captura(raw: Path, pr: Path) -> list[str]:
             "Repite descargar_pr.py."
         ]
     return []
+
+
+def exigir_volcado(logico: Path, descargador: str, patron: str) -> list[Path]:
+    """Los ficheros `patron` de la foto publicada bajo `logico`, o parar.
+
+    Un analizador que recorre un volcado con `glob` sobre un directorio que no
+    existe (MINA_DATOS nuevo, selector que nombra una foto borrada) o que esta
+    vacio no falla: publica cero filas y cero hallazgos como si fueran una
+    medicion (Codex, PR #665, ronda 13). La ausencia de lo que se va a medir
+    detiene al analizador que lo necesita; nunca es una captura sana.
+    """
+    seleccionada = volcado_actual(logico)
+    ficheros = sorted(seleccionada.glob(patron)) if seleccionada.is_dir() else []
+    if not ficheros:
+        raise SystemExit(
+            f"no hay volcado que analizar en {seleccionada} (ningun {patron}): "
+            f"ejecuta {descargador} antes"
+        )
+    return ficheros
+
+
+def editado_tras(comentario: Mapping[str, Any], fin: str) -> bool | None:
+    """Si un comentario se edito despues de `fin`; `None` si no se puede saber.
+
+    La API devuelve el cuerpo VIGENTE con el `created_at` original: un
+    comentario creado en la ventana y editado despues tiene un cuerpo que no es
+    de la ventana y que no se puede reconstruir, asi que no vale como evidencia
+    de ella (Codex, PR #665, ronda 13). Sin `updated_at` (los volcados de PR
+    anteriores a esta edicion no lo guardaban) no se puede juzgar, y
+    `avisos_de_editados` lo dice.
+    """
+    editado = comentario.get("updated_at")
+    if not editado:
+        return None
+    return str(editado) > fin
+
+
+def avisos_de_editados(
+    que: str, descargador: str, fin: str, comentarios: Sequence[Mapping[str, Any]]
+) -> list[str]:
+    """Lo que un analizador tiene que decir de los comentarios que juzga (creados
+    hasta `fin`): cuantos se editaron despues y quedan fuera, con sus ids, y
+    cuantos no se pueden juzgar porque el volcado no guarda `updated_at`."""
+    fuera = [c for c in comentarios if editado_tras(c, fin)]
+    sin_fecha = [c for c in comentarios if editado_tras(c, fin) is None]
+    avisos: list[str] = []
+    if fuera:
+        ids = ", ".join(str(c.get("id")) for c in fuera[:20]) + (" ..." if len(fuera) > 20 else "")
+        avisos.append(
+            f"AVISO: {len(fuera)} comentarios de {que} creados hasta {fin} se editaron despues y "
+            f"quedan fuera de la evidencia: su cuerpo ya no es el de la ventana y no se puede "
+            f"reconstruir ({ids})."
+        )
+    if sin_fecha:
+        avisos.append(
+            f"AVISO: {len(sin_fecha)} comentarios de {que} no guardan updated_at: no se puede "
+            f"saber si se editaron despues de {fin}; se usan tal cual. Repite {descargador} "
+            f"para guardarlo."
+        )
+    return avisos
