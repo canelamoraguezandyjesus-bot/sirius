@@ -668,8 +668,12 @@ def test_el_veredicto_de_cambios_dice_que_revisores_tuvo_la_ronda(tmp_path: Path
         _codex("CHANGES_REQUESTED", observations=[_codex_observation()]),
         mode="solo",
     )
-    assert solo["reviewers"] == ["CLAUDE"]
-    assert _run(tmp_path, claude, _codex_sin_cuota())["reviewers"] == ["CLAUDE"]
+    assert solo["reviewers"] == ["CLAUDE"] and solo["expected_reviewers"] == ["CLAUDE"]
+    sin_codex = _run(tmp_path, claude, _codex_sin_cuota())
+    assert sin_codex["reviewers"] == ["CLAUDE"]
+    assert dual["expected_reviewers"] == sin_codex["expected_reviewers"] == ["CLAUDE", "CODEX"], (
+        "la ronda dice a quién esperaba, para que la primera parcial sepa a quién le falta"
+    )
 
 
 def test_una_ronda_que_codex_no_reviso_no_lleva_nada_de_codex(tmp_path: Path) -> None:

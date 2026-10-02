@@ -74,13 +74,22 @@ El de la nota de arranque, publicado antes de tocar código:
    la revisión dual con los dos revisando, `["CLAUDE"]` sin revisión dual o
    cuando Codex declaró que no revisaba (ADR-226). En ese último caso la ronda
    lleva **solo** las observaciones de Claude: nada de Codex entra, ni como
-   observación ni como revisor, porque nadie lo buscó en ese head.
-2. **El registro de ronda lo lleva.** `round_record(..., reviewers=)` escribe
-   `reviewers` en el `RONDA_HALLAZGOS`; `sirius_apply_verdict.sh` lo copia del
-   veredicto al construir el registro, y `cmd_record` lo lee.
-   `parse_round_records` lo normaliza (`revisores_declarados`: lista de
-   nombres en mayúsculas, o `None`). **Un registro sin el campo es una ronda
-   entera**: los anteriores a esta decisión no cambian de significado.
+   observación ni como revisor, porque nadie lo buscó en ese head. Lleva
+   también `expected_reviewers`, a quién esperaba la ronda (los dos en la
+   revisión dual; solo Claude sin ella).
+2. **El registro de ronda lo lleva.** `round_record(..., reviewers=,
+   expected_reviewers=)` escribe los dos campos en el `RONDA_HALLAZGOS`;
+   `sirius_apply_verdict.sh` los copia del veredicto al construir el
+   registro, y `cmd_record` los lee. `parse_round_records` los normaliza
+   (`revisores_declarados`: lista de nombres en mayúsculas, o `None`). **Un
+   registro sin los campos es una ronda entera**: los anteriores a esta
+   decisión no cambian de significado. El conjunto conocido de revisores
+   (`revisores_conocidos`) junta lo que cada ronda tuvo y lo que esperaba:
+   así la primera ronda parcial tras un historial anterior a esta decisión
+   ya sabe que le falta Codex (ronda 1 de Codex en la PR #678: sin
+   `expected_reviewers`, ese historial conocía solo a Claude, leía las
+   enteras antiguas como suyas y la desaparición de lo de Codex contaba como
+   progreso).
 3. **La convergencia compara solo entre rondas comparables.** Antes de medir,
    `decide` proyecta el historial sobre los revisores de la ronda actual
    (`_proyectar_sobre_la_ultima_ronda`): con la actual entera, las parciales
@@ -140,6 +149,7 @@ El de la nota de arranque, publicado antes de tocar código:
 | M3 | `decide` no omite las parciales cuando la actual es entera (el código de `main`) | caen 2 (predicción 1 y el historial mixto) |
 | M4 | el detector sin transparencia (el código de `main`) | cae la predicción 2 |
 | M5 | el agregador manda también lo de Codex en una ronda que Codex no revisó | cae `una_ronda_que_codex_no_reviso_no_lleva_nada_de_codex` |
+| M6 | el conjunto conocido ignora `expected_reviewers` (ronda 1 de Codex en la PR #678) | cae `la_primera_ronda_parcial_tras_un_historial_antiguo_sabe_a_quien_le_falta` |
 
 - Baterías: `test_round_history.py`, `test_round_family_detector.py`,
   `test_round_family_detector_cli.py`, `test_sirius_convergence.py`,

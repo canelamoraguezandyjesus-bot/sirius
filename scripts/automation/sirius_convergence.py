@@ -262,14 +262,18 @@ def round_record(
     head: str,
     observations: list[dict[str, Any]],
     reviewers: list[str] | None = None,
+    expected_reviewers: list[str] | None = None,
 ) -> dict[str, Any]:
     """Registro estructurado de una ronda, listo para publicarse en la incidencia.
 
     ``reviewers`` dice qué revisores tuvo la ronda (ADR-230): una ronda en la
     que Codex declaró que no revisaba (ADR-226) lleva solo ``["CLAUDE"]``, y
     así la política de convergencia y el detector de familias no la leen como
-    una ronda entera con menos hallazgos. Sin el dato el registro no lleva el
-    campo y se lee como entera, igual que todo el historial anterior.
+    una ronda entera con menos hallazgos. ``expected_reviewers`` dice a quién
+    esperaba la ronda (los dos en la revisión dual), para que la primera ronda
+    parcial sepa que le falta alguien aunque todo el historial anterior sea de
+    antes de ADR-230. Sin los datos el registro no lleva los campos y se lee
+    como entera, igual que todo el historial anterior.
     """
     findings = [
         {
@@ -293,6 +297,9 @@ def round_record(
     declarados = sorted({str(r).strip().upper() for r in reviewers or [] if str(r).strip()})
     if declarados:
         record["reviewers"] = declarados
+    esperados = sorted({str(r).strip().upper() for r in expected_reviewers or [] if str(r).strip()})
+    if esperados:
+        record["expected_reviewers"] = esperados
     return record
 
 
@@ -322,8 +329,11 @@ def _proyectar_sobre_la_ultima_ronda(records: list[dict[str, Any]]) -> list[dict
     cuentan como si declararan el conjunto conocido. Un historial en el que
     nadie declara nada se devuelve tal cual: nada cambia para lo que ya existe.
     """
-    conjuntos = [s for r in records if (s := _revisores_de(r)) is not None]
-    conocidos: set[str] = set().union(*conjuntos) if conjuntos else set()
+    # El conjunto conocido junta a los que cada ronda tuvo y a los que esperaba:
+    # así la primera ronda parcial tras un historial anterior a ADR-230 ya sabe
+    # que le falta Codex, y las enteras antiguas se proyectan en vez de leerse
+    # como solo de Claude (ronda 1 de Codex en la PR #678).
+    conocidos: set[str] = _round_history.revisores_conocidos(records)
     actuales = _revisores_de(records[-1]) or conocidos
     if not actuales:
         return records
@@ -568,12 +578,16 @@ def cmd_record(args: argparse.Namespace) -> int:
     if not isinstance(observations, list):
         observations = []
     reviewers = verdict.get("reviewers") if isinstance(verdict, dict) else None
+    expected = verdict.get("expected_reviewers") if isinstance(verdict, dict) else None
     record = round_record(
         args.round,
         args.head,
         [item for item in observations if isinstance(item, dict)],
         reviewers=[r for r in reviewers if isinstance(r, str)]
         if isinstance(reviewers, list)
+        else None,
+        expected_reviewers=[r for r in expected if isinstance(r, str)]
+        if isinstance(expected, list)
         else None,
     )
     with open(args.output, "w", encoding="utf-8") as handle:

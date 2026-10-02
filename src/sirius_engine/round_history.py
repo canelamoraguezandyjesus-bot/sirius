@@ -147,6 +147,7 @@ def parse_round_records(text: str) -> list[dict[str, Any]]:
         }
         record["pending"] = len(normalized)
         record["reviewers"] = revisores_declarados(record.get("reviewers"))
+        record["expected_reviewers"] = revisores_declarados(record.get("expected_reviewers"))
         records.append(record)
     records.sort(key=lambda item: int(item["round"]))
     _apply_sticky_severity(records)
@@ -167,23 +168,40 @@ def revisores_declarados(valor: object) -> tuple[str, ...] | None:
     return tuple(nombres) or None
 
 
+def revisores_conocidos(records: Sequence[Mapping[str, Any]]) -> set[str]:
+    """El conjunto de revisores que el historial conoce (ADR-230): la unión de los
+    que cada ronda declara haber tenido (``reviewers``) y de los que declara haber
+    esperado (``expected_reviewers``). Lo segundo es lo que hace que la primera
+    ronda parcial tras un historial anterior a ADR-230 ya sepa que le falta
+    alguien: sin ello, un historial sin declaraciones más una ronda solo de
+    Claude conocía solo a Claude y leía las enteras antiguas como suyas (ronda 1
+    de Codex en la PR #678)."""
+    conocidos: set[str] = set()
+    for record in records:
+        for clave in ("reviewers", "expected_reviewers"):
+            declarados = record.get(clave)
+            if declarados:
+                conocidos.update(str(r).strip().upper() for r in declarados if str(r).strip())
+    return conocidos
+
+
 def rondas_parciales(records: Sequence[Mapping[str, Any]]) -> set[int]:
     """Los números de las rondas que declararon menos revisores que el conjunto conocido.
 
-    El conjunto conocido es la unión de los revisores declarados en el
-    historial; una ronda en la que Codex no revisó (ADR-226) declara solo a
-    Claude y es parcial frente a las rondas enteras que la rodean (ADR-230).
-    Si ninguna ronda declara revisores, o todas declaran los mismos, no hay
-    parciales: un historial de un solo revisor no tiene rondas a medias.
+    Una ronda en la que Codex no revisó (ADR-226) declara solo a Claude y es
+    parcial frente a las rondas enteras que la rodean (ADR-230). El conjunto
+    conocido es :func:`revisores_conocidos`. Si ninguna ronda declara nada, o
+    todas declaran los mismos, no hay parciales: un historial de un solo
+    revisor no tiene rondas a medias.
     """
-    declarados = [set(record["reviewers"]) for record in records if record.get("reviewers")]
-    if not declarados:
+    conocidos = revisores_conocidos(records)
+    if not conocidos:
         return set()
-    conocidos: set[object] = set().union(*declarados)
     return {
         int(record["round"])
         for record in records
-        if record.get("reviewers") and set(record["reviewers"]) < conocidos
+        if record.get("reviewers")
+        and {str(r).strip().upper() for r in record["reviewers"]} < conocidos
     }
 
 

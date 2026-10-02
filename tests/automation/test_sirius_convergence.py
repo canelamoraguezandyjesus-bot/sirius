@@ -1217,10 +1217,16 @@ _SOLO_CLAUDE = ["CLAUDE"]
 
 
 def _ronda_con_revisores(
-    round_number: int, head: str, observations: list[dict[str, str]], reviewers: list[str]
+    round_number: int,
+    head: str,
+    observations: list[dict[str, str]],
+    reviewers: list[str],
+    esperados: list[str] | None = None,
 ) -> str:
     module = _module()
-    record = module.round_record(round_number, head, observations, reviewers=reviewers)
+    record = module.round_record(
+        round_number, head, observations, reviewers=reviewers, expected_reviewers=esperados
+    )
     return (
         f"<!-- sirius-round:{round_number} -->\n\n"
         "## RONDA_HALLAZGOS\n```json\n" + json.dumps(record, ensure_ascii=False) + "\n```\n"
@@ -1241,6 +1247,11 @@ def test_el_registro_lleva_los_revisores_de_la_ronda_y_sin_ellos_no_inventa_nada
     assert con["reviewers"] == ["CLAUDE", "CODEX"]
     assert "reviewers" not in module.round_record(1, HEAD_A, [_de_claude()])
     assert "reviewers" not in module.round_record(1, HEAD_A, [_de_claude()], reviewers=[])
+    esperando = module.round_record(
+        1, HEAD_A, [_de_claude()], reviewers=["CLAUDE"], expected_reviewers=["codex", "CLAUDE"]
+    )
+    assert esperando["expected_reviewers"] == ["CLAUDE", "CODEX"]
+    assert "expected_reviewers" not in module.round_record(1, HEAD_A, [_de_claude()])
 
 
 def test_una_ronda_solo_de_claude_no_hace_reaparecer_los_hallazgos_de_codex() -> None:
@@ -1295,3 +1306,22 @@ def test_un_historial_anterior_a_adr_230_se_lee_como_rondas_enteras() -> None:
         _round_comment(3, HEAD_C, [_de_claude(), _de_codex()]),
     ]
     assert _decide(sin_declarar)["reason"] == "reaparicion", "el historial que ya existe no cambia"
+
+
+def test_la_primera_ronda_parcial_tras_un_historial_antiguo_sabe_a_quien_le_falta() -> None:
+    """Ronda 1 de Codex en la PR #678: con solo registros anteriores a ADR-230
+    (sin `reviewers`) y una primera ronda solo de Claude, el conjunto conocido
+    era {CLAUDE}: las enteras antiguas se leían como solo de Claude, nada se
+    proyectaba y la desaparición de lo de Codex contaba como progreso. El
+    registro declara también a quién esperaba (`expected_reviewers`), así que
+    el conjunto entero se conoce desde la primera ronda parcial."""
+    rondas = [
+        _round_comment(1, HEAD_A, [_de_claude(), _de_codex()]),
+        _ronda_con_revisores(2, HEAD_B, [_de_claude()], _SOLO_CLAUDE, esperados=_AMBOS),
+    ]
+    decision = _decide(rondas)
+    assert decision["reason"] == "sin-progreso-aislado", decision
+
+    # Y la ronda entera que sigue no ve reaparecer lo de Codex.
+    rondas.append(_ronda_con_revisores(3, HEAD_C, [_de_claude(), _de_codex()], _AMBOS, _AMBOS))
+    assert _decide(rondas)["reason"] == "sin-progreso-aislado"

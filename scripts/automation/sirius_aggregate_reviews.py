@@ -366,6 +366,7 @@ def aggregate(
             "reviewed_head_sha": expected_head,
             "sources": sources,
             "reviewers": reviewers,
+            "expected_reviewers": ["CLAUDE", "CODEX"] if dual else ["CLAUDE"],
             "observations": observations,
         }
 

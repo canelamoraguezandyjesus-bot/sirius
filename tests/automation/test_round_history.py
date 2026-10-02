@@ -104,3 +104,11 @@ def test_los_revisores_declarados_se_leen_y_sin_ellos_la_ronda_es_entera() -> No
     assert rondas_parciales(registros) == {2}
     assert rondas_parciales(registros[:2]) == set(), "sin una ronda mayor conocida nadie es parcial"
     assert rondas_parciales([registros[0]]) == set()
+
+    # `expected_reviewers` (ronda 1 de Codex en la PR #678): la primera ronda
+    # parcial tras un historial antiguo declara a quién esperaba y ya es parcial.
+    con_esperados = parse_round_records(
+        ronda(1) + ronda(2, ', "reviewers": ["CLAUDE"], "expected_reviewers": ["CLAUDE", "CODEX"]')
+    )
+    assert con_esperados[1]["expected_reviewers"] == ("CLAUDE", "CODEX")
+    assert rondas_parciales(con_esperados) == {2}

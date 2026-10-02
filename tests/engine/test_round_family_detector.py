@@ -347,6 +347,21 @@ def test_una_ronda_en_la_que_codex_no_reviso_no_rompe_el_tramo_de_un_fichero_que
     }
     assert detectar_familia_repetida(con_claude).evidencias[0].rondas == (3, 4, 5, 6)
 
+    # Tras un historial anterior a ADR-230 (sin declaraciones), la primera ronda
+    # parcial declara a quién esperaba y basta para no romper el tramo (ronda 1
+    # de Codex en la PR #678).
+    primera_parcial = [
+        _registro(3, [_hallazgo(archivo, "f3")]),
+        {
+            **_registro(4, [_hallazgo("src/otro.py", "f4", fuente="CLAUDE")]),
+            "reviewers": ["CLAUDE"],
+            "expected_reviewers": ["CLAUDE", "CODEX"],
+        },
+        _registro(5, [_hallazgo(archivo, "f5")]),
+        _registro(6, [_hallazgo(archivo, "f6")]),
+    ]
+    assert detectar_familia_repetida(primera_parcial).evidencias[0].rondas == (3, 5, 6)
+
     # Y sin declaración de revisores, un hueco sigue siendo un hueco.
     sin_declarar = [
         _registro(3, [_hallazgo(archivo, "f3")]),

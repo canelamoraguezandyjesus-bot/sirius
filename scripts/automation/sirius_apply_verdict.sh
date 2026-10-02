@@ -790,8 +790,11 @@ case "$verdict" in
     # una ronda entera con menos hallazgos. Un veredicto sin el campo (los
     # anteriores a ADR-230) deja el registro sin él y se lee como entera.
     reviewers_json="$(jq -c '.reviewers // null' "$VERDICT_FILE" 2>/dev/null || echo null)"
-    jq -n --argjson obs "$observations" --argjson rev "$reviewers_json" \
-      '{observations: $obs} + (if $rev == null then {} else {reviewers: $rev} end)' >"$round_verdict"
+    expected_json="$(jq -c '.expected_reviewers // null' "$VERDICT_FILE" 2>/dev/null || echo null)"
+    jq -n --argjson obs "$observations" --argjson rev "$reviewers_json" --argjson exp "$expected_json" \
+      '{observations: $obs}
+       + (if $rev == null then {} else {reviewers: $rev} end)
+       + (if $exp == null then {} else {expected_reviewers: $exp} end)' >"$round_verdict"
     if ! python3 "${SIRIUS_VERDICT_DIR}/sirius_convergence.py" record \
       --verdict-file "$round_verdict" --round "$round_number" \
       --head "$head_sha" --output "$round_record"; then
