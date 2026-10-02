@@ -1360,3 +1360,20 @@ defectos:
       - tests/automation/test_implementador_con_reloj.py
       - src/sirius_engine/adapters/github_worker_request.py
       - tests/engine/test_worker_request.py
+
+  # ADR-231: la guarda de ADR-222 ataba el pr: de un defecto cerrado a la PR que
+  # metio el ADR que lo declaro; un defecto declarado abierto en una PR y
+  # arreglado en otra (H-216, arreglado por ADR-227 en la #674) no se podia
+  # cerrar sin mentir. Desde este ADR vale tambien la PR que metio un ADR
+  # posterior que lo nombra por su id.
+  - id: H-231
+    titulo: La guarda de ADR-222 no dejaba cerrar un defecto arreglado en una PR distinta de la que lo declaro
+    bloque: documentacion
+    gravedad: baja
+    estado: cerrado
+    cerrado_por: b303b720abbf082c1cc87f637c2c02e69441ced9
+    pr: 679
+    adr: 231
+    ficheros:
+      - tests/automation/test_registro_de_defectos.py
+      - .claude/skills/registro-de-defectos/SKILL.md
