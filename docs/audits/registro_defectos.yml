@@ -1144,7 +1144,12 @@ defectos:
     titulo: La contradiccion de etiquetas que el reflector aparta a proposito lleva 27 dias sin que nadie la mire
     bloque: motor
     gravedad: baja
-    estado: abierto
+    estado: cerrado
+    # Arreglado por ADR-227 (PR #674): las divergencias apartadas se escriben
+    # junto al diario y DESENLACES.md las ensena con su edad. El hecho (#392)
+    # quedo resuelto el 01-10-2026. Cierre desde la PR del arreglo: ADR-231.
+    cerrado_por: 27a1196b44e32b9453a5e7028306cb1e0ec244db
+    pr: 674
     adr: 216
     incidencia: 662
     ficheros:
