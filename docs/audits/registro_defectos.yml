@@ -1253,6 +1253,25 @@ defectos:
       - .github/workflows/quality.yml
       - tests/automation/test_quality_no_muere_por_un_sync_lento.py
 
+  # ADR-223 (PR #671; medido en la mina de septiembre). `continua` sobre una
+  # parada anterior a la PR reponia `sirius:implement-requested` y anunciaba la
+  # reanudacion en verde aunque la incidencia no llevara `sirius:planned`: la
+  # puerta de activacion la rechazaba despues, en silencio, y el propietario se
+  # enteraba horas mas tarde. Ahora no repone el evento, lo dice y conserva la
+  # parada. Cierre: PR #671 (el sha de cerrado_por es el del commit del arreglo
+  # en la rama; la fusion aplastada lo deja fuera de main, como en H-217).
+  - id: H-223
+    titulo: continua sobre una parada anterior a la PR reponia sirius:implement-requested sin sirius:planned y anunciaba la reanudacion en verde aunque la puerta de activacion la fuera a rechazar; desde el arreglo, si la cronologia de la incidencia demuestra que ya estuvo planificada repone planned, retira la parada y pone el evento en ultimo lugar, y si no consta conserva la parada y pide la activacion (parada fuera, planned, evento) sin repetir la orden
+    bloque: motor
+    gravedad: media
+    estado: cerrado
+    cerrado_por: 9c2965a9500fd561640385c879e5310d007a0cf5
+    pr: 671
+    adr: 223
+    ficheros:
+      - scripts/automation/sirius_resume_on_command.sh
+      - tests/automation/test_reanudar_ejecutando_el_guion.py
+
   # ADR-217: la bitacora del ciclo -146 entradas, 48 deudas- vivio once dias
   # fuera de main (20-09 -> 01-10) porque ADR-210 condiciono su entrada a que
   # «la sesion que la escribe la traiga». Esa sesion murio el 21-09 y la
