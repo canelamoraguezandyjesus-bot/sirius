@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import re
 import subprocess
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -936,6 +936,130 @@ def _asunto_que_introdujo(ruta: str) -> str | None:
     return asuntos[-1] if salida.returncode == 0 and asuntos else None
 
 
+def _introduccion(ruta: str) -> tuple[str, str] | None:
+    """El commit de primer padre de `origin/main` que AÑADIÓ `ruta`: (sha, asunto)."""
+    salida = subprocess.run(
+        [
+            "git",
+            "log",
+            "--first-parent",
+            "--diff-filter=A",
+            "--format=%H%x09%s",
+            "origin/main",
+            "--",
+            ruta,
+        ],
+        cwd=RAIZ,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    lineas = [linea for linea in salida.stdout.splitlines() if linea.strip()]
+    if salida.returncode != 0 or not lineas:
+        return None
+    sha, _, asunto = lineas[-1].partition("\t")
+    return sha, asunto
+
+
+def _texto_en(sha: str, ruta: str) -> str:
+    """El contenido de `ruta` EN EL COMMIT `sha`; vacío si no se puede leer.
+
+    En el commit que introdujo el ADR, no en la punta de `main`: un ADR se
+    enmienda después, y una enmienda que añadiera el `H-NNN` haría pasar la PR
+    que lo introdujo sin haberlo nombrado ni arreglado (ronda 1 de Codex en la
+    PR #679).
+    """
+    salida = subprocess.run(
+        ["git", "show", f"{sha}:{ruta}"],
+        cwd=RAIZ,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return salida.stdout if salida.returncode == 0 else ""
+
+
+def _pr_que_puede_citar(
+    defecto: Mapping[str, Any],
+    rutas: Mapping[int, str],
+    introduccion: Callable[[str], tuple[int, str] | None],
+    texto_en: Callable[[str, str], str],
+) -> tuple[bool, str]:
+    """Si el `pr:` del defecto es una PR que puede citarlo, y por qué (ADR-231).
+
+    Dos PR pueden: la que metió en `main` el ADR que lo declaró (ADR-222) y la
+    que metió un ADR POSTERIOR que lo nombra por su id, palabra entera, EN EL
+    TEXTO QUE ESA PR METIÓ (`texto_en(sha, ruta)`, el commit que lo introdujo:
+    una enmienda posterior del ADR no puede hacer pasar a la PR original, ronda
+    1 de Codex en la PR #679). Lo segundo es el defecto declarado abierto en una
+    PR y arreglado en otra: su cierre cita la PR del arreglo, que es la que un
+    clon de `main` puede seguir hasta el ADR que cuenta cómo se arregló (H-216:
+    declarado por ADR-216 en la #663, arreglado por ADR-227 en la #674). Un ADR
+    anterior al declarante no puede cerrarlo, y nombrarlo no es `H-2160` ni una
+    mención dentro de otra palabra. `introduccion(ruta)` da la PR y el commit
+    que introdujeron cada ADR; el texto solo se pide cuando la vía de ADR-222
+    no vale.
+    """
+    pr, adr, hid = int(defecto["pr"]), int(defecto["adr"]), str(defecto["id"]).upper()
+    declarante = introduccion(rutas[adr])
+    if declarante is not None and declarante[0] == pr:
+        return True, "la PR que metió el ADR que lo declaró"
+    nombre = re.compile(rf"\b{re.escape(hid)}\b")
+    for numero in sorted(n for n in rutas if n > adr):
+        intro = introduccion(rutas[numero])
+        if intro is None or intro[0] != pr:
+            continue
+        if nombre.search(texto_en(intro[1], rutas[numero])):
+            return True, f"la PR que metió ADR-{numero}, que lo nombra"
+    return False, (
+        f"ni la PR que metió ADR-{adr} ni una que metiera un ADR posterior que nombre {hid} "
+        "en el texto que metió"
+    )
+
+
+def test_la_pr_que_puede_citar_es_la_de_su_adr_o_la_de_un_adr_posterior_que_lo_nombra() -> None:
+    """Anti-vacua que no depende del entorno (ADR-231): la vía nueva reconoce el
+    cierre desde la PR del arreglo y no se traga una PR cualquiera; y lee el
+    ADR en el commit que lo introdujo, no en la punta (ronda 1 de Codex)."""
+    rutas = {
+        216: "docs/decisions/ADR-216-a.md",
+        227: "docs/decisions/ADR-227-b.md",
+        229: "docs/decisions/ADR-229-c.md",
+    }
+    introdujo = {rutas[216]: (663, "s216"), rutas[227]: (674, "s227"), rutas[229]: (690, "s229")}
+    textos = {
+        ("s216", rutas[216]): "declara H-216",
+        ("s227", rutas[227]): "...(H-216, incidencia #662) y H-227...",
+        ("s229", rutas[229]): "no nombra ningun defecto",
+    }
+    h216: dict[str, Any] = {"id": "H-216", "adr": 216, "pr": 674}
+
+    def citar(
+        defecto: Mapping[str, Any], textos_: Mapping[tuple[str, str], str] = textos
+    ) -> tuple[bool, str]:
+        return _pr_que_puede_citar(
+            defecto, rutas, introdujo.get, lambda sha, ruta: textos_[(sha, ruta)]
+        )
+
+    assert citar({**h216, "pr": 663}) == (True, "la PR que metió el ADR que lo declaró")
+    assert citar(h216) == (True, "la PR que metió ADR-227, que lo nombra")
+    assert not citar({**h216, "pr": 690})[0], "ADR-229 entró por la 690 y no lo nombra"
+    assert not citar({**h216, "pr": 999})[0], "una PR que no metió ningún ADR"
+    assert not citar(h216, {**textos, ("s227", rutas[227]): "H-2160 y H-21"})[0], "palabra entera"
+    # Una enmienda POSTERIOR del ADR no vale: lo que cuenta es el texto que metió
+    # esa PR (su commit), no el actual (ronda 1 de Codex en la PR #679).
+    enmendado_despues = {**textos, ("s227", rutas[227]): "sin el defecto cuando entró"}
+    assert not citar(h216, enmendado_despues)[0]
+    # Un ADR ANTERIOR al declarante no lo puede cerrar aunque lo nombre.
+    con_anterior = {**rutas, 200: "docs/decisions/ADR-200-z.md"}
+    assert not _pr_que_puede_citar(
+        h216,
+        con_anterior,
+        {**introdujo, con_anterior[200]: (674, "s200"), rutas[227]: (675, "s227")}.get,
+        lambda sha, ruta: {**textos, ("s200", con_anterior[200]): "H-216"}[(sha, ruta)],
+    )[0]
+
+
 def test_la_pr_de_un_asunto_es_su_marca_final_y_no_una_citada() -> None:
     assert _pr_que_fusiono("Una cosa (#579) (#580)") == 580
     assert _pr_que_fusiono("Una cosa (#580)") == 580
@@ -950,15 +1074,26 @@ def test_cada_referencia_pr_es_una_pr_fusionada_en_main_cuando_hay_historia() ->
     ha fusionado y no se le exige; en cuanto el ADR entre, se le exige. Y se le
     exige lo fuerte (ronda 1 de Codex en la PR #668): no basta con que la PR
     exista en `main`, el commit de primer padre que AÑADIÓ el ADR del defecto
-    tiene que ser el de esa PR. Los defectos sin `adr:` (los anteriores a la
-    frontera) solo pueden comprobarse por existencia.
+    tiene que ser el de esa PR —o, desde ADR-231, el que añadió un ADR posterior
+    que nombra el defecto: el del arreglo (:func:`_pr_que_puede_citar`)—. Los
+    defectos sin `adr:` (los anteriores a la frontera) solo pueden comprobarse
+    por existencia.
     """
     asuntos = _historia_de_main()
     rutas = _rutas_de_adr_en_main()
     if asuntos is None or rutas is None:
         pytest.skip("este clon no tiene la historia de origin/main: la forma se comprueba arriba")
     fusionadas = {_pr_que_fusiono(asunto) for asunto in asuntos} - {None}
-    rotas = []
+    introducciones: dict[str, tuple[int, str] | None] = {}
+
+    def introduccion(ruta: str) -> tuple[int, str] | None:
+        if ruta not in introducciones:
+            intro = _introduccion(ruta)
+            pr_intro = _pr_que_fusiono(intro[1]) if intro is not None else None
+            introducciones[ruta] = (pr_intro, intro[0]) if intro is not None and pr_intro else None
+        return introducciones[ruta]
+
+    rotas: list[tuple[Any, int, str | None]] = []
     fuertes = 0
     for defecto in _defectos():
         pr = defecto.get("pr")
@@ -969,14 +1104,14 @@ def test_cada_referencia_pr_es_una_pr_fusionada_en_main_cuando_hay_historia() ->
             if adr not in rutas:
                 continue  # en vuelo: su PR no se ha fusionado todavía
             fuertes += 1
-            asunto = _asunto_que_introdujo(rutas[adr])
-            if asunto is None or _pr_que_fusiono(asunto) != pr:
-                rotas.append((defecto["id"], pr, asunto))
+            vale, por_que = _pr_que_puede_citar(defecto, rutas, introduccion, _texto_en)
+            if not vale:
+                rotas.append((defecto["id"], pr, por_que))
         elif pr not in fusionadas:
             rotas.append((defecto["id"], pr, None))
     assert rotas == [], (
-        "referencias `pr:` que no son la PR que metió el ADR del defecto en main "
-        f"(o, sin ADR, ninguna PR fusionada): {rotas}"
+        "referencias `pr:` que no son la PR que metió en main el ADR del defecto ni la que "
+        f"metió un ADR posterior que lo nombra (o, sin ADR, ninguna PR fusionada): {rotas}"
     )
     con_adr_en_main = [
         d for d in _defectos() if isinstance(d.get("pr"), int) and d.get("adr") in rutas
