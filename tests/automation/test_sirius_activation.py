@@ -383,6 +383,7 @@ def test_un_perfil_valido_pero_no_vigente_avisa_y_deja_pasar(tmp_path: Path) -> 
     assert f"es la {_VIGENTE}" in publicado and "rejected" not in publicado
     assert (
         "Si sigue en `sirius:planned`" in publicado
+        and "otra vez justo antes de consumir" in publicado
         and "declara el evento rancio" in publicado
         and "Si ya esta en `sirius:implementing`" in publicado
         and "cancela desde Actions el run" in publicado

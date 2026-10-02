@@ -206,6 +206,20 @@ ADR-223, que vive en la PR #671 y entra en `main` antes que esta: cita ahora
 ADR-094 para la reanudación sin PR y ADR-223 (PR #671) para la reposición de
 `planned`. Prueba: la del aviso exige las dos ramas y la cita.
 
+Ronda 8 de Codex sobre `0b8c2a78`: entre la puerta del implementador y
+«Consumir el evento y marcar en curso» hay unos segundos en los que el
+propietario puede editar el `Perfil:` —el aviso de versión no vigente se lo
+pide—, y un run que ya hubiera pasado la puerta consumía la etiqueta nueva
+con su instantánea vieja. El paso de consumo compara otra vez la instantánea
+con el cuerpo vigente, con el mismo parser, justo antes de tocar nada: si
+cambió, declara el evento rancio, no consume, no toca ninguna etiqueta y deja
+a «Aplicar el veredicto» fuera (`consumed=false`; una consumición que muere sin
+escribir su salida sí llega al veredicto, que es lo que la limpia). El aviso lo
+dice. Guarda: `test_el_implementador_vuelve_a_comparar_el_perfil_justo_antes_de_consumir`.
+La otra mitad de la ronda —que la reanudación con `continua` reponga
+`sirius:planned`— es ADR-223 (PR #671), que entra en `main` antes que esta y
+que esta rama trae al ponerse al día.
+
 ## Consecuencias
 
 - Un cuerpo con `Perfil:` ausente o no registrado ya no arranca un run: se
