@@ -8,9 +8,11 @@ Dos vistas, dos funciones puras:
   ni git**: dos llamadas sobre el mismo árbol devuelven el mismo texto, y eso
   es lo que permite que una prueba falle cuando el fichero confirmado se queda
   viejo (criterio de parada (a) de ADR-171).
-- :func:`generar_desenlaces` lee el diario del motor y el de despacho y
-  devuelve el texto de ``DESENLACES.md``: qué se encargó, qué salió y dónde
-  está la evidencia (propuesta §6.2). Lo escribe el motor en su rama.
+- :func:`generar_desenlaces` lee el diario del motor, el de despacho y las
+  divergencias que el reflector aparta (``divergencias.json``, ADR-227) y
+  devuelve el texto de ``DESENLACES.md``: qué se encargó, qué salió, dónde
+  está la evidencia (propuesta §6.2) y qué espera a una persona. Lo escribe
+  el motor en su rama.
 
 Ninguna de las dos resume con criterio ni data nada por su cuenta: el resumen
 de un ADR es el primer párrafo de su ``## Decisión`` tal cual está escrito, y un
@@ -28,6 +30,14 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+
+from sirius_engine.divergencias import (
+    DivergenciaApartada,
+    Instantanea,
+    dias_parado,
+    leer_instantanea,
+    ruta_de_divergencias,
+)
 
 COMANDO = "sirius-memoria"
 FICHERO_MEMORIA = "MEMORIA.md"
@@ -1058,17 +1068,114 @@ def _evidencia(encargo: Encargo) -> str:
     return ", ".join(partes) or "—"
 
 
+def _tabla_de_divergencias(
+    apartadas: Sequence[DivergenciaApartada], ultimo_suceso: Mapping[str, str]
+) -> list[str]:
+    return _tabla(
+        (
+            "Encargo",
+            "Incidencia",
+            "Motivo",
+            "Vista por primera vez",
+            "Última pasada",
+            "Pasadas",
+            "Días parado",
+        ),
+        (
+            (
+                d.work_id,
+                f"[#{d.incidencia}](https://github.com/{REPOSITORIO}/issues/{d.incidencia})"
+                if d.incidencia is not None
+                else "—",
+                d.motivo,
+                _instante(d.primera_vez),
+                _instante(d.ultima_vez),
+                str(d.pasadas),
+                dias_parado(ultimo_suceso.get(d.work_id, ""), d.ultima_vez),
+            )
+            for d in apartadas
+        ),
+    )
+
+
+def _seccion_de_divergencias(
+    instantanea: Instantanea | None,
+    problema: str | None,
+    nombre: str,
+    ultimo_suceso: Mapping[str, str],
+) -> list[str]:
+    """Lo que se sabe y lo que no (ronda 2 de Codex en la PR #674): un fichero
+    ausente es «ninguna pasada ha escrito todavía», no «ninguna»; una pasada
+    incompleta lo dice antes de la tabla; «Ninguna» solo lo afirma una pasada
+    completa."""
+    if problema is not None:
+        return [f"**No se pudo leer `{nombre}`**: {problema}"]
+    if instantanea is None:
+        return [
+            f"**Sin dato**: ninguna pasada del reflector ha escrito `{nombre}` todavía (lo "
+            "escribe al terminar, entera o a medias); hasta que lo haga no se sabe si hay "
+            "divergencias apartadas."
+        ]
+    lineas: list[str] = []
+    if not instantanea.completa:
+        aviso = (
+            "**Conocimiento incompleto**: la última pasada del reflector no evaluó todos los "
+            "encargos"
+        )
+        if instantanea.sin_evaluar:
+            # Una pasada que muere en el primer encargo deja casi todo el diario
+            # sin evaluar: se nombran los primeros y se cuenta el resto.
+            nombrados = ", ".join(f"`{w}`" for w in instantanea.sin_evaluar[:8])
+            resto = len(instantanea.sin_evaluar) - 8
+            aviso += f" ({len(instantanea.sin_evaluar)} sin evaluar: {nombrados}"
+            aviso += f" y {resto} más)" if resto > 0 else ")"
+        if instantanea.interrumpida:
+            aviso += "; se interrumpió antes de llegar a todos"
+        if instantanea.perdida_posible:
+            aviso += (
+                "; además, un fichero anterior fue ilegible y, hasta una pasada completa, "
+                "puede faltar aquí alguna divergencia apartada antes"
+            )
+        lineas += [aviso + ". Las entradas de abajo son las observadas o conservadas.", ""]
+    if instantanea.divergencias:
+        lineas += _tabla_de_divergencias(instantanea.divergencias, ultimo_suceso)
+    elif instantanea.completa:
+        lineas.append(
+            "Ninguna: la última pasada completa del reflector no apartó ninguna (si la "
+            f"hubiera, estaría en `{nombre}`, junto al diario)."
+        )
+    else:
+        lineas.append("Ninguna observada en lo que la pasada llegó a evaluar.")
+    return lineas
+
+
 def generar_desenlaces(diario: Path, despacho: Path | None = None) -> str:
     """El texto de `DESENLACES.md` para este diario. Determinista: solo depende de los ficheros."""
     encargos, total, ultimo = leer_encargos(diario, despacho)
     cuenta: dict[str, int] = {}
     for encargo in encargos:
         cuenta[encargo.estado] = cuenta.get(encargo.estado, 0) + 1
+    # Las divergencias que el reflector aparta para una persona (ADR-227,
+    # H-216): sin esta sección, el encargo apartado se contaba como «1 activo»
+    # y nadie lo volvía a mirar. La edad se cuenta desde su último suceso en el
+    # diario hasta la última pasada que lo apartó: lo que lleva parado.
+    ruta_divergencias = ruta_de_divergencias(diario)
+    try:
+        instantanea = leer_instantanea(ruta_divergencias)
+        problema_divergencias: str | None = None
+    except ValueError as error:
+        # La vista se deriva del diario; un fichero secundario roto se declara
+        # en ella, no la impide (el paso del workflow que la publica corre con
+        # `if: always()` justamente para enseñar un reflejo a medias).
+        instantanea = None
+        problema_divergencias = str(error)
+    ultimo_suceso = {encargo.work_id: encargo.ultimo_suceso for encargo in encargos}
     lineas = [
         "# Desenlaces del motor de Sirius",
         "",
         f"> **Generado por `uv run {COMANDO} desenlaces`** a partir de `{diario.name}`"
         + (f" y `{despacho.name}`" if despacho is not None and despacho.is_file() else "")
+        + (f" y `{ruta_divergencias.name}`" if ruta_divergencias.is_file() else "")
         + f": {total} sucesos, el último el {_instante(ultimo)}. Lo escribe el motor en la rama",
         f"> `{RAMA_MEMORIA}` tras cada reflejo (ADR-171). **El diario manda**: si un documento",
         "> dice otra cosa sobre un encargo, vale esto.",
@@ -1076,6 +1183,12 @@ def generar_desenlaces(diario: Path, despacho: Path | None = None) -> str:
         "## Recuento por estado",
         "",
         *_tabla(("Estado", "Encargos"), ((estado, str(n)) for estado, n in sorted(cuenta.items()))),
+        "",
+        "## Divergencias que el reflector aparta para una persona",
+        "",
+        *_seccion_de_divergencias(
+            instantanea, problema_divergencias, ruta_divergencias.name, ultimo_suceso
+        ),
         "",
         "## Los encargos, del más reciente al más antiguo",
         "",
