@@ -33,11 +33,15 @@ ra = _cargar("reproducir_avisos")
 
 def test_un_aviso_se_reproduce_solo_si_cada_evidencia_tiene_hoy_su_fichero_y_su_tramo() -> None:
     publicadas = (("src/x.py", (1, 2, 3)),)
-    assert ra.coinciden(publicadas, [("src/x.py", (2, 3, 4))]), "mismo fichero, tramo que solapa"
+    assert ra.coinciden(publicadas, [("src/x.py", (1, 2, 3))]), "mismo fichero, mismo tramo"
+    assert ra.coinciden(publicadas, [("src/x.py", (1, 2, 3, 4))]), "el de hoy contiene el publicado"
+    assert not ra.coinciden(publicadas, [("src/x.py", (2, 3, 4))]), (
+        "ronda 9 de Codex: solapar no basta; hoy ya no se ve la ronda 1 que el aviso publico"
+    )
     assert not ra.coinciden(publicadas, [("src/y.py", (1, 2, 3))]), "otra familia no reproduce esta"
     assert not ra.coinciden(publicadas, [("src/x.py", (5, 6, 7))]), "otro tramo del mismo fichero"
     assert not ra.coinciden((), [("src/x.py", (1, 2, 3))]), "un aviso sin evidencias no afirma nada"
 
     dos = (("src/x.py", (1, 2, 3)), ("src/y.py", (4, 5, 6)))
-    assert ra.coinciden(dos, [("src/x.py", (1, 2, 3)), ("src/y.py", (6, 7, 8))])
+    assert ra.coinciden(dos, [("src/x.py", (1, 2, 3)), ("src/y.py", (4, 5, 6, 7))])
     assert not ra.coinciden(dos, [("src/x.py", (1, 2, 3))]), "cada evidencia publicada, no alguna"

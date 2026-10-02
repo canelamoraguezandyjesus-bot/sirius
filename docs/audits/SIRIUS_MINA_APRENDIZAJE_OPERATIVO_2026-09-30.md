@@ -258,9 +258,10 @@ confianza hasta el que llevó el aviso, tras el último marcador de reanudación
 y se pasó el detector instalado hoy (`reproducir_avisos.py`, que llama al
 mismo código que `sirius-familia-repetida`) y se compararon las evidencias del
 aviso con las de hoy, fichero a fichero: **13 de 13 avisan** sobre el mismo
-fichero y un tramo que solapa el publicado (no basta con que el detector vea
-alguna familia en la incidencia). El detector de hoy es un superconjunto del de
-entonces, no otro detector.
+fichero y con un tramo que contiene entero el publicado (no basta con que el
+detector vea alguna familia en la incidencia, ni con que los tramos se
+solapen). El detector de hoy es un superconjunto del de entonces, no otro
+detector.
 
 ### 4.3 Cuántas veces no avisó, y desde cuándo ya no pasa
 

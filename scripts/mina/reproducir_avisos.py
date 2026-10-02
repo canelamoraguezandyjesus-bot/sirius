@@ -33,14 +33,17 @@ def evidencias_de_hoy(cuerpos: list[str]) -> list[tuple[str, tuple[int, ...]]]:
 
 def coinciden(publicadas: tuple[Evidencia, ...], hoy: list[Evidencia]) -> bool:
     """Un aviso se reproduce solo si CADA evidencia que publico (fichero y tramo)
-    tiene hoy una evidencia del mismo fichero cuyo tramo la solapa. Que el
-    detector encuentre cualquier familia en el historial no basta: con varias
-    familias en una incidencia contaria como reproducido un aviso cuyo fichero
-    y tramo el detector de hoy ya no ve (Codex, PR #665, ronda 8)."""
+    tiene hoy una evidencia del mismo fichero cuyo tramo CONTIENE el publicado.
+    Que el detector encuentre cualquier familia en el historial no basta: con
+    varias familias en una incidencia contaria como reproducido un aviso cuyo
+    fichero y tramo el detector de hoy ya no ve (Codex, PR #665, ronda 8); y
+    que solape no basta: un aviso de las rondas 1-3 con el detector de hoy en
+    3-5 compartiria una ronda y habria perdido dos (ronda 9)."""
     if not publicadas:
         return False
     return all(
-        any(archivo == a and set(rondas) & set(r) for a, r in hoy) for archivo, rondas in publicadas
+        any(archivo == a and set(rondas) <= set(r) for a, r in hoy)
+        for archivo, rondas in publicadas
     )
 
 
@@ -80,8 +83,8 @@ def main() -> int:
         casa = "si" if coincide else "NO"
         print(f"| #{n} | {t} | {lo_publicado} | {detector_de_hoy(previos)} | {casa} |")
     print(
-        f"\nAvisos reproducidos por el detector de hoy (mismo fichero y tramo solapado): "
-        f"{reproducidos} de {len(avisos)}"
+        f"\nAvisos reproducidos por el detector de hoy (mismo fichero y tramo publicado "
+        f"contenido en el de hoy): {reproducidos} de {len(avisos)}"
     )
     return 0
 

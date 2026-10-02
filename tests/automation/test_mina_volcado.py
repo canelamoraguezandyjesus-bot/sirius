@@ -180,6 +180,31 @@ def test_la_foto_visible_no_se_retira_antes_de_seleccionar_la_nueva(
     assert {p.name: p.read_text(encoding="utf-8") for p in raw.iterdir()} == antes, (
         "la foto visible no se toca hasta que la nueva esta seleccionada"
     )
-    assert not parcial.exists(), "el parcial ya es un directorio propio, sin seleccionar"
-    nuevas = [p for p in tmp_path.iterdir() if p.name.startswith("raw.2")]
-    assert len(nuevas) == 1 and (nuevas[0] / "indice.json").read_text(encoding="utf-8") == "[1]"
+    # Ronda 9 de Codex: la foto nueva vuelve a ser el parcial, para que siga
+    # siendo una descarga interrumpida a la vista y no una foto huerfana.
+    assert parcial.exists() and (parcial / "indice.json").read_text(encoding="utf-8") == "[1]"
+    assert datos.fotos_huerfanas(raw) == []
+
+
+def test_una_foto_que_quedo_sin_seleccionar_se_detecta(tmp_path: Path) -> None:
+    """Si el proceso muere entre el renombrado y el selector no hay `except` que
+    devuelva nada: queda un directorio `raw.<marca>` que no es la foto
+    seleccionada. `fotos_huerfanas` lo encuentra y `analizar.py` avisa en vez de
+    usar datos viejos en silencio (Codex, PR #665, ronda 9)."""
+    raw = tmp_path / "raw"
+    _foto_anterior(raw)
+    huerfana = tmp_path / "raw.20260102T120000.000000Z"
+    huerfana.mkdir()
+    (huerfana / "indice.json").write_text("[1]", encoding="utf-8")
+    assert datos.fotos_huerfanas(raw) == [huerfana]
+
+    # Una publicacion completa despues la deja como huerfana y la nueva seleccionada
+    parcial = datos.parcial_de(raw)
+    parcial.mkdir()
+    (parcial / "indice.json").write_text("[2]", encoding="utf-8")
+    datos.publicar_volcado(parcial, raw)
+    assert datos.fotos_huerfanas(raw) == [huerfana]
+    assert (datos.volcado_actual(raw) / "indice.json").read_text(encoding="utf-8") == "[2]"
+    # y ni el parcial ni la seleccionada cuentan como huerfanas
+    datos.parcial_de(raw).mkdir()
+    assert datos.fotos_huerfanas(raw) == [huerfana]

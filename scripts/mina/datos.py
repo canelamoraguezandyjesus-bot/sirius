@@ -89,7 +89,34 @@ def publicar_volcado(parcial: Path, definitivo: Path) -> None:
     parcial.rename(nueva)
     selector = selector_de(definitivo)
     temporal = selector.with_name(selector.name + ".tmp")
-    temporal.write_text(nueva.name + "\n", encoding="utf-8")
-    os.replace(temporal, selector)
+    try:
+        temporal.write_text(nueva.name + "\n", encoding="utf-8")
+        os.replace(temporal, selector)
+    except OSError:
+        # La seleccion no se completo: la foto nueva vuelve a llamarse parcial
+        # para que siga siendo una descarga interrumpida a la vista y no una
+        # foto huerfana (Codex, PR #665, ronda 9). Si el proceso muere en medio
+        # sin pasar por aqui, `fotos_huerfanas` la encuentra.
+        if nueva.exists() and not parcial.exists():
+            nueva.rename(parcial)
+        raise
     if anterior != nueva and anterior.exists():
         shutil.rmtree(anterior, ignore_errors=True)
+
+
+def fotos_huerfanas(definitivo: Path) -> list[Path]:
+    """Las fotos publicadas a medias: directorios `<nombre>.<marca>` que no son la
+    foto seleccionada. Quedan cuando el proceso muere entre el renombrado del
+    parcial y la sustitucion del selector (Codex, PR #665, ronda 9): el selector
+    sigue apuntando a la anterior y, sin esta busqueda, el analisis usaria datos
+    viejos sin avisar."""
+    seleccionada = volcado_actual(definitivo)
+    prefijo = definitivo.name + "."
+    return sorted(
+        p
+        for p in definitivo.parent.glob(prefijo + "*")
+        if p.is_dir()
+        and p != seleccionada
+        and p.name != parcial_de(definitivo).name
+        and p.name[len(prefijo) : len(prefijo) + 1].isdigit()
+    )
