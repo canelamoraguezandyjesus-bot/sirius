@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from analizar import confianza
+from analizar import Evidencia, confianza, evidencias_publicadas
 from datos import DATOS, RAW
 
 from sirius_engine.round_family_detector import detectar_familia_repetida
@@ -31,6 +31,19 @@ def evidencias_de_hoy(cuerpos: list[str]) -> list[tuple[str, tuple[int, ...]]]:
     return [(e.archivo, tuple(int(n) for n in e.rondas)) for e in deteccion.evidencias]
 
 
+def coinciden(publicadas: tuple[Evidencia, ...], hoy: list[Evidencia]) -> bool:
+    """Un aviso se reproduce solo si CADA evidencia que publico (fichero y tramo)
+    tiene hoy una evidencia del mismo fichero cuyo tramo la solapa. Que el
+    detector encuentre cualquier familia en el historial no basta: con varias
+    familias en una incidencia contaria como reproducido un aviso cuyo fichero
+    y tramo el detector de hoy ya no ve (Codex, PR #665, ronda 8)."""
+    if not publicadas:
+        return False
+    return all(
+        any(archivo == a and set(rondas) & set(r) for a, r in hoy) for archivo, rondas in publicadas
+    )
+
+
 def detector_de_hoy(cuerpos: list[str]) -> str:
     """«SI: fichero rondas; ...» o «no»: la misma deteccion, para imprimir."""
     evidencias = evidencias_de_hoy(cuerpos)
@@ -43,19 +56,33 @@ def main() -> int:
     resumen = json.loads((DATOS / "resumen.json").read_text(encoding="utf-8"))
     avisos = resumen["avisos_familia"]
     reproducidos = 0
-    print("| incidencia | aviso publicado | detector de hoy sobre el historial de ese instante |")
-    print("|---|---|---|")
+    print(
+        "| incidencia | aviso publicado | lo que el aviso publico | "
+        "detector de hoy sobre el historial de ese instante | coincide fichero y tramo |"
+    )
+    print("|---|---|---|---|---|")
     for n, t in avisos:
         d = json.loads((RAW / f"issue_{n}.json").read_text(encoding="utf-8"))
-        previos = [
-            c["body"]
-            for c in sorted(d["comments"], key=lambda c: c["created_at"])
-            if confianza(c) and c["created_at"] <= t
+        de_confianza = [
+            c for c in sorted(d["comments"], key=lambda c: c["created_at"]) if confianza(c)
         ]
-        veredicto = detector_de_hoy(previos)
-        reproducidos += veredicto != "no"
-        print(f"| #{n} | {t} | {veredicto} |")
-    print(f"\nAvisos reproducidos por el detector de hoy: {reproducidos} de {len(avisos)}")
+        previos = [c["body"] for c in de_confianza if c["created_at"] <= t]
+        publicadas: tuple[Evidencia, ...] = ()
+        for c in de_confianza:
+            if c["created_at"] == t and (lo := evidencias_publicadas(c["body"])) is not None:
+                publicadas = lo
+        hoy = evidencias_de_hoy(previos)
+        coincide = coinciden(publicadas, hoy)
+        reproducidos += coincide
+        lo_publicado = (
+            "; ".join(f"{a.split('/')[-1][:40]} {r}" for a, r in publicadas) or "(sin evidencias)"
+        )
+        casa = "si" if coincide else "NO"
+        print(f"| #{n} | {t} | {lo_publicado} | {detector_de_hoy(previos)} | {casa} |")
+    print(
+        f"\nAvisos reproducidos por el detector de hoy (mismo fichero y tramo solapado): "
+        f"{reproducidos} de {len(avisos)}"
+    )
     return 0
 
 

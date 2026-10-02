@@ -102,10 +102,13 @@ clasificación de falsos negativos tiene sus pruebas en
 `tests/automation/test_mina_falsos_negativos.py`.
 Repetir la cadena sobre el mismo `MINA_DATOS` refresca el volcado entero: los
 guiones de descarga escriben en un directorio aparte (`raw.parcial`,
-`raw_pr.parcial`) y lo publican entero al terminar, así que una descarga que
-se interrumpa no mezcla un índice nuevo con historiales viejos (el volcado
-anterior sigue siendo la última foto completa y `analizar.py` avisa del
-parcial). Y la reconstrucción ronda a ronda solo cuenta rondas y avisos
+`raw_pr.parcial`) y lo publican entero al terminar con un selector
+(`raw.actual`, el nombre de la foto publicada) sustituido de forma atómica, así
+que una descarga que se interrumpa no mezcla un índice nuevo con historiales
+viejos ni retira la foto visible (el volcado anterior sigue siendo la última
+foto completa hasta que la nueva está seleccionada, y `analizar.py` avisa del
+parcial); y cada `sirius-round:N` cuenta una vez por incidencia aunque GitHub
+lo hubiera publicado dos veces. Y la reconstrucción ronda a ronda solo cuenta rondas y avisos
 publicados dentro de la ventana 01→30-09: lo anterior al 01-09 es contexto del
 detector, no medición; y un tramo que el detector ya marcaba entero con lo
 publicado antes del 01-09 no se atribuye a septiembre salvo que crezca dentro
@@ -253,8 +256,10 @@ Para separar «el detector cambió» de «el historial cambió», se reconstruy�
 para cada aviso el historial que el motor veía en ese instante (comentarios de
 confianza hasta el que llevó el aviso, tras el último marcador de reanudación)
 y se pasó el detector instalado hoy (`reproducir_avisos.py`, que llama al
-mismo código que `sirius-familia-repetida`): **13 de 13 avisan**, sobre el
-mismo fichero y el mismo tramo. El detector de hoy es un superconjunto del de
+mismo código que `sirius-familia-repetida`) y se compararon las evidencias del
+aviso con las de hoy, fichero a fichero: **13 de 13 avisan** sobre el mismo
+fichero y un tramo que solapa el publicado (no basta con que el detector vea
+alguna familia en la incidencia). El detector de hoy es un superconjunto del de
 entonces, no otro detector.
 
 ### 4.3 Cuántas veces no avisó, y desde cuándo ya no pasa

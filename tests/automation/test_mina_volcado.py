@@ -1,16 +1,20 @@
-"""El volcado de la mina se publica entero o no se publica (Codex, PR #665, ronda 6).
+"""El volcado de la mina se publica entero o no se publica (Codex, PR #665, rondas 6 a 8).
 
 Sobrescribir cada fichero no daba atomicidad: una descarga que fallara a medias
 dejaba un indice nuevo con historiales viejos y el analisis mezclaba dos fotos
 sin aviso. `descargar.py` escribe en `raw.parcial` y `publicar_volcado` lo
-sustituye entero al terminar; si muere antes, el definitivo sigue siendo la
-ultima foto completa y el parcial queda a la vista.
+publica entero al terminar con UN cambio atomico: el parcial pasa a un
+directorio propio y el selector `raw.actual` se sustituye con `os.replace`; la
+foto visible no se retira nunca antes de que la nueva este seleccionada. Si la
+descarga muere antes, la foto publicada sigue siendo la ultima completa y el
+parcial queda a la vista.
 """
 
 from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -52,11 +56,22 @@ def test_publicar_volcado_sustituye_entero_el_anterior(tmp_path: Path) -> None:
 
     datos.publicar_volcado(parcial, raw)
 
-    assert sorted(p.name for p in raw.iterdir()) == ["indice.json", "issue_1.json"], (
+    foto = datos.volcado_actual(raw)
+    assert foto != raw and foto.parent == raw.parent and foto.name.startswith("raw.")
+    assert sorted(p.name for p in foto.iterdir()) == ["indice.json", "issue_1.json"], (
         "el fichero viejo `issue_9.json` no puede sobrevivir a una foto nueva"
     )
-    assert (raw / "indice.json").read_text(encoding="utf-8") == "[1]"
-    assert not parcial.exists() and not raw.with_name("raw.anterior").exists()
+    assert (foto / "indice.json").read_text(encoding="utf-8") == "[1]"
+    assert not parcial.exists()
+    assert not raw.exists(), "la foto heredada se borra DESPUES de seleccionar la nueva"
+
+    # Una segunda publicacion sustituye el selector y borra la foto anterior.
+    parcial.mkdir()
+    (parcial / "indice.json").write_text("[2]", encoding="utf-8")
+    datos.publicar_volcado(parcial, raw)
+    segunda = datos.volcado_actual(raw)
+    assert segunda != foto and not foto.exists()
+    assert (segunda / "indice.json").read_text(encoding="utf-8") == "[2]"
 
 
 def _incidencia(numero: int) -> dict[str, object]:
@@ -98,9 +113,10 @@ def test_una_descarga_completa_publica_la_foto_nueva(
     monkeypatch.setattr(descargar, "paginar", paginar)
     assert descargar.main(raw=raw) == 0
 
-    assert sorted(p.name for p in raw.iterdir()) == ["indice.json", "issue_1.json", "issue_2.json"]
+    foto = datos.volcado_actual(raw)
+    assert sorted(p.name for p in foto.iterdir()) == ["indice.json", "issue_1.json", "issue_2.json"]
     assert not datos.parcial_de(raw).exists()
-    publicado = json.loads((raw / "issue_2.json").read_text(encoding="utf-8"))
+    publicado = json.loads((foto / "issue_2.json").read_text(encoding="utf-8"))
     assert publicado["comments"][0]["body"] == "comentario de #2"
 
 
@@ -131,14 +147,17 @@ def test_una_descarga_interrumpida_no_toca_la_foto_anterior(
     parcial = datos.parcial_de(raw)
     assert parcial.exists() and (parcial / "issue_1.json").exists()
     assert not (parcial / "issue_2.json").exists()
+    assert datos.volcado_actual(raw) == raw and not datos.selector_de(raw).exists()
 
 
-def test_si_el_segundo_renombrado_falla_el_anterior_vuelve_a_su_sitio(
+def test_la_foto_visible_no_se_retira_antes_de_seleccionar_la_nueva(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Ronda 7 de Codex en la PR #665: dos renombrados sin vuelta atras dejaban el
-    definitivo AUSENTE si el segundo fallaba. El anterior vuelve, el parcial sigue
-    a la vista y el error se propaga."""
+    """Ronda 8 de Codex en la PR #665: apartar el definitivo y renombrar el parcial
+    encima dejaba la foto visible AUSENTE entre los dos pasos, y un `SIGKILL` ahi
+    no tiene `except` que lo arregle. Ahora el unico instante de cambio es el
+    `os.replace` del selector: si falla (o el proceso muere antes), la foto
+    anterior sigue publicada intacta y la nueva queda a la vista sin seleccionar."""
     raw = tmp_path / "raw"
     _foto_anterior(raw)
     antes = {p.name: p.read_text(encoding="utf-8") for p in raw.iterdir()}
@@ -146,18 +165,21 @@ def test_si_el_segundo_renombrado_falla_el_anterior_vuelve_a_su_sitio(
     parcial.mkdir()
     (parcial / "indice.json").write_text("[1]", encoding="utf-8")
 
-    renombrar = Path.rename
+    reemplazar = os.replace
 
-    def renombrar_salvo_el_parcial(self: Path, destino: Path) -> Path:
-        if self == parcial:
-            raise OSError("sin espacio al publicar")
-        return renombrar(self, destino)
+    def reemplazar_salvo_el_selector(origen: object, destino: object) -> None:
+        if str(destino).endswith(".actual"):
+            raise OSError("sin espacio al seleccionar")
+        reemplazar(origen, destino)  # type: ignore[arg-type]
 
-    monkeypatch.setattr(Path, "rename", renombrar_salvo_el_parcial)
-    with pytest.raises(OSError, match="sin espacio"):
+    monkeypatch.setattr(datos.os, "replace", reemplazar_salvo_el_selector)
+    with pytest.raises(OSError, match="al seleccionar"):
         datos.publicar_volcado(parcial, raw)
 
+    assert datos.volcado_actual(raw) == raw
     assert {p.name: p.read_text(encoding="utf-8") for p in raw.iterdir()} == antes, (
-        "la foto anterior tiene que volver a ser el definitivo"
+        "la foto visible no se toca hasta que la nueva esta seleccionada"
     )
-    assert parcial.exists() and not raw.with_name("raw.anterior").exists()
+    assert not parcial.exists(), "el parcial ya es un directorio propio, sin seleccionar"
+    nuevas = [p for p in tmp_path.iterdir() if p.name.startswith("raw.2")]
+    assert len(nuevas) == 1 and (nuevas[0] / "indice.json").read_text(encoding="utf-8") == "[1]"

@@ -22,7 +22,7 @@ from sirius_engine.drip_guard import parse_archivo_location
 from sirius_engine.round_history import parse_round_records
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from datos import DATOS, HISTORIALES, RAW, parcial_de
+from datos import DATOS, HISTORIALES, RAW, RAW_LOGICO, parcial_de
 
 INICIO = "2026-09-01T00:00:00Z"
 FIN = "2026-09-30T23:59:59Z"
@@ -80,10 +80,39 @@ def es_aviso_de_familia(cuerpo: str) -> bool:
     return _CABECERA_DE_AVISO.search(cuerpo) is not None
 
 
+#: Una evidencia de un aviso: (fichero, rondas). Compartida por
+#: `falsos_negativos.py` y `reproducir_avisos.py`.
+Evidencia = tuple[str, tuple[int, ...]]
+
+#: La linea con la que el motor publica cada evidencia del aviso
+#: (`round_family_detector.detectar_familia_repetida`, campo `detalle`).
+_EVIDENCIA_PUBLICADA = re.compile(
+    r"^- «(?P<archivo>.+?)» recibe hallazgos en \d+ rondas consecutivas "
+    r"\(rondas (?P<desde>\d+)-(?P<hasta>\d+)\)",
+    re.MULTILINE,
+)
+
+
+def evidencias_publicadas(cuerpo: str) -> tuple[Evidencia, ...] | None:
+    """Lo que un AVISO_FAMILIA_REPETIDA lista: (fichero, rondas) por evidencia.
+
+    `None` si el comentario no es un aviso (no lleva la cabecera al principio de
+    una linea): el propietario que escribe «sobre el AVISO_FAMILIA_REPETIDA...»
+    no esta avisando de nada.
+    """
+    if not es_aviso_de_familia(cuerpo):
+        return None
+    seccion = cuerpo.split("## AVISO_FAMILIA_REPETIDA", 1)[1]
+    return tuple(
+        (m["archivo"], tuple(range(int(m["desde"]), int(m["hasta"]) + 1)))
+        for m in _EVIDENCIA_PUBLICADA.finditer(seccion)
+    )
+
+
 def main() -> int:
-    if parcial_de(RAW).exists():
+    if parcial_de(RAW_LOGICO).exists():
         print(
-            f"AVISO: hay una descarga interrumpida en {parcial_de(RAW)}; se analiza el "
+            f"AVISO: hay una descarga interrumpida en {parcial_de(RAW_LOGICO)}; se analiza el "
             f"volcado completo anterior de {RAW}. Repite descargar.py para refrescarlo.",
             file=sys.stderr,
         )
@@ -97,6 +126,12 @@ def main() -> int:
     marcas_guardian = []
     historiales = defaultdict(list)
     for numero, d in incidencias.items():
+        # Una ronda cuenta UNA vez por numero, como en `parse_round_records`:
+        # GitHub puede publicar dos veces el mismo `sirius-round:N` tras una
+        # respuesta ambigua, y analizando cada comentario por separado el
+        # parser reiniciaba su conjunto de rondas vistas en cada cuerpo y las
+        # dos copias entraban en los totales (Codex, PR #665, ronda 8).
+        rondas_vistas: set[int] = set()
         for c in sorted(d["comments"], key=lambda c: c["created_at"]):
             if not confianza(c):
                 continue
@@ -108,7 +143,10 @@ def main() -> int:
                 historiales[numero].append(body)
             if es_aviso_de_familia(body) and en_ventana:
                 avisos_familia.append((numero, c["created_at"]))
-            registros = parse_round_records(body)
+            registros = [
+                r for r in parse_round_records(body) if int(r["round"]) not in rondas_vistas
+            ]
+            rondas_vistas.update(int(r["round"]) for r in registros)
             if not registros:
                 continue
             obs = []

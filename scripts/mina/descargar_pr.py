@@ -15,11 +15,11 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from datos import PRDIR, parcial_de, publicar_volcado
-from descargar import BASE, RAW, get, paginar
+from datos import PRDIR_LOGICO, RAW, parcial_de, publicar_volcado
+from descargar import BASE, get, paginar
 
 
-def main(prdir: Path = PRDIR, raw: Path = RAW) -> int:
+def main(prdir: Path = PRDIR_LOGICO, raw: Path = RAW) -> int:
     indice = json.loads((raw / "indice.json").read_text(encoding="utf-8"))
     prs = [i for i in indice if i["es_pr"]]
     print(f"PR en el indice: {len(prs)}")

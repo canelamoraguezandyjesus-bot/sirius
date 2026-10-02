@@ -15,6 +15,8 @@ lee el registro de defectos del arbol, no el volcado.
 from __future__ import annotations
 
 import os
+import shutil
+from datetime import UTC, datetime
 from pathlib import Path
 
 AQUI = Path(__file__).resolve().parent
@@ -27,8 +29,9 @@ DATOS = Path(_DECLARADO) if _DECLARADO else AQUI / "datos"
 if not DATOS.is_absolute():
     DATOS = RAIZ / DATOS
 DATOS = DATOS.resolve()
-RAW = DATOS / "raw"
-PRDIR = DATOS / "raw_pr"
+#: Los nombres LOGICOS de los volcados: lo que los descargadores publican.
+RAW_LOGICO = DATOS / "raw"
+PRDIR_LOGICO = DATOS / "raw_pr"
 HISTORIALES = DATOS / "historiales"
 
 
@@ -37,30 +40,56 @@ def parcial_de(definitivo: Path) -> Path:
     return definitivo.with_name(definitivo.name + ".parcial")
 
 
+def selector_de(definitivo: Path) -> Path:
+    """El fichero que nombra la foto publicada bajo el nombre logico `definitivo`."""
+    return definitivo.with_name(definitivo.name + ".actual")
+
+
+def volcado_actual(definitivo: Path) -> Path:
+    """La foto publicada bajo el nombre logico `definitivo`: el directorio que
+    nombra su selector o, si no hay selector, el propio `definitivo` (la foto
+    heredada de antes del selector). Es lo que leen los analizadores."""
+    try:
+        nombre = selector_de(definitivo).read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
+        return definitivo
+    return definitivo.with_name(nombre) if nombre else definitivo
+
+
+#: Lo que leen los analizadores: la foto publicada en el momento de importar.
+RAW = volcado_actual(RAW_LOGICO)
+PRDIR = volcado_actual(PRDIR_LOGICO)
+
+
 def publicar_volcado(parcial: Path, definitivo: Path) -> None:
-    """Sustituye el volcado definitivo por el parcial, entero, o no lo toca.
+    """Publica `parcial` como la foto de `definitivo` con UN cambio atomico.
 
     Sobrescribir cada fichero no daba atomicidad: una descarga que fallara a
     medias dejaba un indice nuevo con historiales viejos y `analizar.py`
-    mezclaba las dos fotos sin aviso (Codex, PR #665, ronda 6). La descarga
-    escribe en `parcial` y solo al terminar entera se publica aqui: el
-    definitivo anterior se aparta, el parcial pasa a definitivo y el anterior
-    se borra. Si la descarga muere antes, `parcial` queda a la vista y el
-    definitivo sigue siendo la ultima foto completa.
+    mezclaba las dos fotos sin aviso (Codex, PR #665, ronda 6). Apartar el
+    definitivo y renombrar el parcial encima tampoco: entre los dos renombrados
+    la foto visible no existia, y un `SIGKILL` o un corte en ese instante la
+    dejaba ausente, con o sin vuelta atras en `except` (rondas 7 y 8). Asi que
+    la foto visible no se retira nunca: el parcial se renombra a un directorio
+    propio (`<nombre>.<marca>`; si el proceso muere antes, nada cambio; si
+    muere despues, la nueva existe pero no esta seleccionada) y el selector
+    (`<nombre>.actual`, el nombre de la foto publicada) se sustituye con
+    `os.replace`, que es atomico en POSIX: el unico instante de cambio. Solo
+    despues se borra la foto anterior. `volcado_actual` lee el selector; una
+    foto heredada de antes del selector sigue leyendose mientras no se publique
+    otra.
     """
-    import shutil
-
-    anterior = definitivo.with_name(definitivo.name + ".anterior")
-    shutil.rmtree(anterior, ignore_errors=True)
-    if definitivo.exists():
-        definitivo.rename(anterior)
-    try:
-        parcial.rename(definitivo)
-    except OSError:
-        # El segundo renombrado fallo: el anterior vuelve a su sitio para que el
-        # definitivo no quede AUSENTE y el parcial siga a la vista (Codex, PR
-        # #665, ronda 7). Si el anterior no existia, no hay nada que devolver.
-        if anterior.exists():
-            anterior.rename(definitivo)
-        raise
-    shutil.rmtree(anterior, ignore_errors=True)
+    anterior = volcado_actual(definitivo)
+    marca = datetime.now(UTC).strftime("%Y%m%dT%H%M%S.%fZ")
+    nueva = definitivo.with_name(f"{definitivo.name}.{marca}")
+    copia = 1
+    while nueva.exists():
+        nueva = definitivo.with_name(f"{definitivo.name}.{marca}-{copia}")
+        copia += 1
+    parcial.rename(nueva)
+    selector = selector_de(definitivo)
+    temporal = selector.with_name(selector.name + ".tmp")
+    temporal.write_text(nueva.name + "\n", encoding="utf-8")
+    os.replace(temporal, selector)
+    if anterior != nueva and anterior.exists():
+        shutil.rmtree(anterior, ignore_errors=True)

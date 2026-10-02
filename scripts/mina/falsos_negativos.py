@@ -32,44 +32,17 @@ de donde diga `MINA_DATOS` (ver `datos.py`) y la imprime.
 from __future__ import annotations
 
 import json
-import re
 import sys
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from analizar import FIN, INICIO, confianza, es_aviso_de_familia
+from analizar import FIN, INICIO, Evidencia, confianza, evidencias_publicadas
 from datos import DATOS, RAW
 from reproducir_avisos import evidencias_de_hoy
 
 from sirius_engine.round_history import parse_round_records
-
-#: La linea con la que el motor publica cada evidencia del aviso
-#: (`round_family_detector.detectar_familia_repetida`, campo `detalle`).
-_EVIDENCIA_PUBLICADA = re.compile(
-    r"^- «(?P<archivo>.+?)» recibe hallazgos en \d+ rondas consecutivas "
-    r"\(rondas (?P<desde>\d+)-(?P<hasta>\d+)\)",
-    re.MULTILINE,
-)
-
-Evidencia = tuple[str, tuple[int, ...]]
-
-
-def evidencias_publicadas(cuerpo: str) -> tuple[Evidencia, ...] | None:
-    """Lo que un AVISO_FAMILIA_REPETIDA lista: (fichero, rondas) por evidencia.
-
-    `None` si el comentario no es un aviso (no lleva la cabecera al principio de
-    una linea): el propietario que escribe «sobre el AVISO_FAMILIA_REPETIDA...»
-    no esta avisando de nada.
-    """
-    if not es_aviso_de_familia(cuerpo):
-        return None
-    seccion = cuerpo.split("## AVISO_FAMILIA_REPETIDA", 1)[1]
-    return tuple(
-        (m["archivo"], tuple(range(int(m["desde"]), int(m["hasta"]) + 1)))
-        for m in _EVIDENCIA_PUBLICADA.finditer(seccion)
-    )
 
 
 def _solapan(a: tuple[int, ...], b: tuple[int, ...]) -> bool:

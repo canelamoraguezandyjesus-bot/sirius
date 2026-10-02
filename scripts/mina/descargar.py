@@ -20,7 +20,7 @@ REPO = "canelamoraguezandyjesus-bot/sirius"
 BASE = f"https://api.github.com/repos/{REPO}"
 DESDE = "2026-08-25T00:00:00Z"  # misma ventana de descarga que la edicion del 14-09
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from datos import RAW, parcial_de, publicar_volcado  # noqa: E402
+from datos import RAW_LOGICO, parcial_de, publicar_volcado  # noqa: E402
 
 
 def get(url: str) -> tuple[list | dict, dict]:
@@ -59,7 +59,7 @@ def paginar(url: str) -> list:
         pagina += 1
 
 
-def main(raw: Path = RAW) -> int:
+def main(raw: Path = RAW_LOGICO) -> int:
     t0 = time.time()
     # Se descarga en `raw.parcial` y se publica entero al terminar: una
     # descarga que muera a medias no deja un indice nuevo con historiales
