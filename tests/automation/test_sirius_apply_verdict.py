@@ -280,6 +280,22 @@ def test_missing_verdict_file_stops_safely(tmp_path: Path) -> None:
     assert "sirius-verdict:implementer:precheck:sin-veredicto" in _comments(env)
 
 
+def test_una_consumicion_a_medias_termina_en_failed_safely_sola(tmp_path: Path) -> None:
+    """ADR-228, ronda 3 de Codex en la PR #675: «Consumir el evento y marcar en
+    curso» hace tres ediciones separadas y tiene plazo propio; si GitHub se
+    atasca a medias, «Aplicar el veredicto» corre igual (`if: always()`) sin
+    veredicto. Retirar solo `implementing` dejaba `failed-safely` junto a
+    `implement-requested` o `planned` a medio consumir, que el reconciliador lee
+    como contradiccion y no reanuda. La parada retira todo lo que aquel paso
+    debia consumir: el estado final es el de una parada normal."""
+    env = _setup(tmp_path)
+    _seed_issue(env, ["sirius:implementing", "sirius:implement-requested", "sirius:planned"])
+    r = _run(env, "implementer", tmp_path / "no-existe.json")
+    assert r.returncode != 0
+    assert sorted(_labels(env)) == ["sirius:failed-safely"], _labels(env)
+    assert "sirius-verdict:implementer:precheck:sin-veredicto" in _comments(env)
+
+
 def test_invalid_json_stops_safely(tmp_path: Path) -> None:
     env = _setup(tmp_path)
     _seed_issue(env, ["sirius:implementing"])
