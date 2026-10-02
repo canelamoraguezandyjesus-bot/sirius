@@ -29,6 +29,12 @@ import pytest
 import yaml
 
 from sirius_engine import memoria
+from sirius_engine.divergencias import (
+    FICHERO_DIVERGENCIAS,
+    DivergenciaApartada,
+    Instantanea,
+    escribir_instantanea,
+)
 from sirius_engine.memoria import (
     COMANDO,
     FICHERO_DESENLACES,
@@ -480,6 +486,112 @@ def test_la_vista_de_desenlaces_enlaza_la_evidencia(diario: Path) -> None:
         in texto
     )
     assert texto.index("| WI-B |") < texto.index("| WI-A |")
+
+
+def _completa(*divergencias: DivergenciaApartada) -> Instantanea:
+    return Instantanea(
+        tuple(divergencias), interrumpida=False, sin_evaluar=(), perdida_posible=False
+    )
+
+
+def test_la_vista_de_desenlaces_lista_las_divergencias_apartadas_con_su_edad(diario: Path) -> None:
+    """ADR-227 (H-216): lo que el reflector aparta para una persona sale en la
+    vista con los días que lleva parado, contados desde su último suceso en el
+    diario hasta la última pasada que lo apartó. Sin el fichero, lo dice."""
+    sin_fichero = generar_desenlaces(diario, diario.with_name("diario-despacho.jsonl"))
+    assert "## Divergencias que el reflector aparta para una persona" in sin_fichero
+    assert (
+        "**Sin dato**: ninguna pasada del reflector ha escrito `divergencias.json`" in sin_fichero
+    )
+    seccion = sin_fichero.split("## Divergencias")[1].split("## Los encargos")[0]
+    assert "Ninguna" not in seccion, (
+        "sin fichero no se afirma «ninguna»: nadie ha mirado todavía (ronda 2 de Codex, PR #674)"
+    )
+
+    escribir_instantanea(
+        diario.with_name(FICHERO_DIVERGENCIAS),
+        _completa(
+            DivergenciaApartada(
+                work_id="WI-B",
+                incidencia=13,
+                motivo="la incidencia #13 lleva etiquetas que se contradicen; no se toca nada",
+                primera_vez="2026-09-05T03:24:00+00:00",
+                ultima_vez="2026-10-01T03:24:00+00:00",
+                pasadas=27,
+            )
+        ),
+    )
+    texto = generar_desenlaces(diario, diario.with_name("diario-despacho.jsonl"))
+    assert "y `divergencias.json`" in texto
+    fila = next(
+        linea
+        for linea in texto.splitlines()
+        if linea.startswith("| WI-B |") and "se contradicen" in linea
+    )
+    assert "[#13](https://github.com/canelamoraguezandyjesus-bot/sirius/issues/13)" in fila
+    assert "| 2026-09-05 03:24 UTC | 2026-10-01 03:24 UTC | 27 | 26 |" in fila, (
+        "del último suceso de WI-B (04-09 10:00) a la última pasada (01-10 03:24) van 26 días"
+    )
+    assert "Ninguna: la última pasada" not in texto
+
+
+def test_la_vista_distingue_ninguna_de_no_se_sabe(diario: Path) -> None:
+    """Ronda 2 de Codex en la PR #674: «Ninguna» solo lo afirma una pasada
+    completa; una incompleta dice qué no evaluó, y si un fichero anterior fue
+    ilegible, que puede faltar algo hasta que una pasada completa lo rehaga."""
+    ruta = diario.with_name(FICHERO_DIVERGENCIAS)
+    escribir_instantanea(ruta, _completa())
+    texto = generar_desenlaces(diario, diario.with_name("diario-despacho.jsonl"))
+    assert "Ninguna: la última pasada completa del reflector no apartó ninguna" in texto
+    assert "Conocimiento incompleto" not in texto
+
+    escribir_instantanea(
+        ruta, Instantanea((), interrumpida=False, sin_evaluar=("WI-A",), perdida_posible=False)
+    )
+    texto = generar_desenlaces(diario, diario.with_name("diario-despacho.jsonl"))
+    assert "**Conocimiento incompleto**" in texto and "(1 sin evaluar: `WI-A`)" in texto
+    assert "Ninguna observada en lo que la pasada llegó a evaluar." in texto
+    assert "Ninguna: la última pasada completa" not in texto
+    assert "puede faltar" not in texto
+
+    escribir_instantanea(
+        ruta, Instantanea((), interrumpida=True, sin_evaluar=(), perdida_posible=True)
+    )
+    texto = generar_desenlaces(diario, diario.with_name("diario-despacho.jsonl"))
+    assert "se interrumpió antes de llegar a todos" in texto
+    assert "un fichero anterior fue ilegible" in texto and "puede faltar aquí" in texto
+
+    muchos = tuple(f"WI-{n:02d}" for n in range(12))
+    escribir_instantanea(
+        ruta, Instantanea((), interrumpida=True, sin_evaluar=muchos, perdida_posible=False)
+    )
+    texto = generar_desenlaces(diario, diario.with_name("diario-despacho.jsonl"))
+    assert "(12 sin evaluar: `WI-00`, `WI-01`" in texto and "`WI-07` y 4 más)" in texto
+    assert "`WI-08`" not in texto, "se nombran los primeros ocho y se cuenta el resto"
+
+
+@pytest.mark.parametrize(
+    ("contenido", "aviso"),
+    [('{"divergencias": [', "no es JSON"), (b"\xff\xfe\x00{", "no se puede leer")],
+)
+def test_la_vista_declara_un_fichero_de_divergencias_ilegible_sin_caerse(
+    diario: Path, capsys: pytest.CaptureFixture[str], contenido: str | bytes, aviso: str
+) -> None:
+    """La vista se deriva del diario; un `divergencias.json` roto se dice en
+    ella, no la impide (el paso del workflow que la publica corre con
+    `if: always()` para enseñar un reflejo a medias). Revisión independiente
+    de la PR #674; la ronda 6 de Codex añade lo que no se puede leer (bytes que
+    no son UTF-8), que antes salía por otro camino."""
+    ruta = diario.with_name(FICHERO_DIVERGENCIAS)
+    if isinstance(contenido, bytes):
+        ruta.write_bytes(contenido)
+    else:
+        ruta.write_text(contenido, encoding="utf-8")
+    texto = generar_desenlaces(diario, diario.with_name("diario-despacho.jsonl"))
+    assert "**No se pudo leer `divergencias.json`**" in texto and aviso in texto
+    assert "| WI-B |" in texto, "los encargos siguen en la vista"
+    assert main(["desenlaces", "--diario", str(diario)]) == 0
+    assert aviso not in capsys.readouterr().err
 
 
 def test_un_diario_corrupto_se_declara_con_su_linea(tmp_path: Path) -> None:
