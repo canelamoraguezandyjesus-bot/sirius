@@ -115,7 +115,6 @@ def test_una_descarga_completa_publica_la_foto_nueva(
 
     foto = datos.volcado_actual(raw)
     assert sorted(p.name for p in foto.iterdir()) == [
-        "captura.sin-pr",
         "captura.txt",
         "indice.json",
         "issue_1.json",
@@ -264,28 +263,30 @@ def test_los_dos_volcados_tienen_que_ser_de_la_misma_captura(
     assert "sin marca de captura" in sin_marca and str(raw) in sin_marca
 
     marca = datos.marcar_captura(raw)
-    assert datos.copiar_marca_de_captura(raw, raw_pr) == marca
+    assert datos.copiar_marca_de_captura(raw, raw_pr, raw_pr) == marca
     assert datos.avisos_de_los_volcados() == []
 
-    # Ronda 14: una captura de raw empareja UN solo volcado de PR. Publicado el de
-    # PR, `descargar_pr.py` solo ya no hereda la marca: heredaria la de una captura
-    # anterior y los dos volcados pasarian por la misma sin serlo.
-    datos.emparejar_captura(raw)
+    # Rondas 14 y 15: una captura de raw empareja UN solo volcado de PR, y la
+    # prueba es el propio volcado publicado con su marca, no una senal aparte que
+    # pudiera quedarse sin consumir si el proceso muriera despues de publicar.
+    # Con raw_pr publicado con la marca de raw, otro descargar_pr.py solo no la
+    # hereda y no escribe nada en su parcial.
+    parcial = datos.parcial_de(raw_pr)
+    parcial.mkdir()
     with pytest.raises(SystemExit, match=r"un solo volcado de PR"):
-        datos.copiar_marca_de_captura(raw, raw_pr)
-    assert datos.captura_de(raw_pr) == marca, "la marca publicada no se toca"
-    assert not (raw_pr / datos.MARCA_SIN_PR).exists(), "la senal es de raw, no del volcado de PR"
+        datos.copiar_marca_de_captura(raw, parcial, raw_pr)
+    assert datos.captura_de(parcial) is None and datos.captura_de(raw_pr) == marca
+    parcial.rmdir()
 
     datos.marcar_captura(raw, "otra")
     [distintas] = datos.avisos_de_los_volcados()
     assert "capturas distintas" in distintas and "otra" in distintas and marca in distintas
 
     with pytest.raises(SystemExit, match=r"repite descargar\.py"):
-        datos.copiar_marca_de_captura(tmp_path / "sin-marca", raw_pr)
+        datos.copiar_marca_de_captura(tmp_path / "sin-marca", raw_pr, raw_pr)
     for guion, llamada in (
         ("descargar.py", "marcar_captura(parcial)"),
-        ("descargar_pr.py", "copiar_marca_de_captura(raw, parcial)"),
-        ("descargar_pr.py", "emparejar_captura(raw)"),
+        ("descargar_pr.py", "copiar_marca_de_captura(raw, parcial, prdir)"),
     ):
         assert llamada in (MINA / guion).read_text(encoding="utf-8")
 

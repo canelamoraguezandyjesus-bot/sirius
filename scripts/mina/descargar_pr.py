@@ -19,7 +19,6 @@ from datos import (
     PRDIR_LOGICO,
     RAW,
     copiar_marca_de_captura,
-    emparejar_captura,
     parcial_de,
     publicar_volcado,
 )
@@ -90,11 +89,10 @@ def main(prdir: Path = PRDIR_LOGICO, raw: Path = RAW) -> int:
         if k % 10 == 0:
             print(f"  {k}/{len(prs)}", flush=True)
     # Misma captura que el `raw` junto al que se descarga, o nada (ronda 12).
-    copiar_marca_de_captura(raw, parcial)
+    # Y una captura empareja un solo volcado de PR: si el publicado ya lleva la
+    # marca de este raw, no se copia (rondas 14 y 15).
+    copiar_marca_de_captura(raw, parcial, prdir)
     publicar_volcado(parcial, prdir)
-    # Publicado el de PR, la captura de raw queda emparejada: otro descargar_pr.py
-    # solo ya no hereda su marca (Codex, PR #665, ronda 14).
-    emparejar_captura(raw)
     print(f"hecho; volcado de PR publicado entero en {prdir}")
     return 0
 

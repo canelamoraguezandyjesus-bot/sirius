@@ -187,23 +187,12 @@ def avisos_de_los_volcados() -> list[str]:
 #: cifras que los cruzan (las rondas limpias de §5) saldrian mezcladas sin
 #: aviso (Codex, PR #665, ronda 12).
 MARCA_DE_CAPTURA = "captura.txt"
-#: La senal de que la captura de `raw` aun no tiene su volcado de PR: una captura
-#: empareja UN solo volcado de PR. Sin esto, `descargar_pr.py` ejecutado solo
-#: heredaba la marca de una captura anterior y los dos volcados pasaban por la
-#: misma captura sin serlo (Codex, PR #665, ronda 14).
-MARCA_SIN_PR = "captura.sin-pr"
-
-
-def _escribir_marca(volcado: Path, marca: str) -> None:
-    (volcado / MARCA_DE_CAPTURA).write_text(marca + "\n", encoding="utf-8")
 
 
 def marcar_captura(volcado: Path, marca: str | None = None) -> str:
-    """Escribe la marca de captura en un volcado de `raw` (el parcial, antes de
-    publicarlo) y la senal de que aun no tiene volcado de PR."""
+    """Escribe la marca de captura en un volcado (el parcial, antes de publicarlo)."""
     marca = marca or datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    _escribir_marca(volcado, marca)
-    (volcado / MARCA_SIN_PR).touch()
+    (volcado / MARCA_DE_CAPTURA).write_text(marca + "\n", encoding="utf-8")
     return marca
 
 
@@ -214,27 +203,32 @@ def captura_de(volcado: Path) -> str | None:
     return fichero.read_text(encoding="utf-8").strip() or None
 
 
-def copiar_marca_de_captura(desde: Path, volcado: Path) -> str:
-    """La marca de `desde` (el `raw` seleccionado) pasa al volcado de PR; sin ella
-    no hay captura que compartir y no se descarga nada."""
+def copiar_marca_de_captura(desde: Path, volcado: Path, publicado: Path) -> str:
+    """La marca de `desde` (el `raw` seleccionado) pasa al volcado de PR que se esta
+    descargando (`volcado`, el parcial); sin ella no hay captura que compartir y
+    no se descarga nada.
+
+    Y una captura empareja UN solo volcado de PR: si la foto publicada bajo el
+    nombre logico `publicado` ya lleva esa marca, no se copia, porque un
+    `descargar_pr.py` ejecutado solo heredaria la marca de una captura anterior y
+    los dos volcados pasarian por la misma sin serlo (Codex, PR #665, ronda 14).
+    La prueba del emparejamiento es el propio volcado publicado, que se publica
+    en un solo paso atomico: una senal aparte, consumida despues de publicar,
+    podia quedarse sin consumir si el proceso moria entre los dos pasos (ronda
+    15). Un volcado de PR interrumpido antes de publicar se puede repetir.
+    """
     marca = captura_de(desde)
     if marca is None:
         raise SystemExit(
             f"{desde} no lleva {MARCA_DE_CAPTURA}: repite descargar.py antes de descargar las PR"
         )
-    if not (desde / MARCA_SIN_PR).exists():
+    emparejado = volcado_actual(publicado)
+    if captura_de(emparejado) == marca:
         raise SystemExit(
-            f"la captura {marca} de {desde} ya tiene su volcado de PR, y una captura empareja "
-            "un solo volcado de PR: repite descargar.py y despues descargar_pr.py"
+            f"la captura {marca} de {desde} ya tiene su volcado de PR en {emparejado}, y una "
+            "captura empareja un solo volcado de PR: repite descargar.py y despues descargar_pr.py"
         )
-    _escribir_marca(volcado, marca)
-    return marca
-
-
-def emparejar_captura(desde: Path) -> None:
-    """El volcado de PR ya esta publicado: la captura de `desde` queda emparejada y
-    otro `descargar_pr.py` solo ya no hereda su marca."""
-    (desde / MARCA_SIN_PR).unlink(missing_ok=True)
+    return marcar_captura(volcado, marca)
 
 
 def avisos_de_captura(raw: Path, pr: Path) -> list[str]:
