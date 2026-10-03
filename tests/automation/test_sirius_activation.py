@@ -8,6 +8,7 @@ mismas razones documentadas en ``test_sirius_issue.py``.
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -96,14 +97,35 @@ case "$sub" in
           cat "$bf" >> "$D/comments.txt"
           printf '\n' >> "$D/comments.txt"
         fi
+        # Mientras se publicaba el comentario alguien corrigio el cuerpo (ronda 11).
+        if [ -n "${MOCK_BODY_TRAS_COMENTAR:-}" ]; then
+          cp "$MOCK_BODY_TRAS_COMENTAR" "$D/body.txt"
+        fi
         echo "COMMENT" >> "$D/actions.log"; exit 0;;
     esac;;
 esac
 exit 0
 """
 
+_PERFILES = REPO_ROOT / "docs" / "implementation" / "work_engine" / "perfiles"
+
+
+def _version_vigente(rol: str) -> int:
+    """La `version:` del perfil, leida como la lee la puerta (ADR-221): con la stdlib."""
+    texto = (_PERFILES / f"{rol}.yml").read_text(encoding="utf-8")
+    encontrada = re.search(r"^version:\s*(\d+)\s*$", texto, re.MULTILINE)
+    assert encontrada is not None, f"{rol}.yml no declara version"
+    return int(encontrada.group(1))
+
+
+_VIGENTE = _version_vigente("implementer")
+
+# El cuerpo completo lleva el `Perfil: rol@N` que todo encargo declara desde C3
+# (#333) y que la puerta resuelve desde ADR-221; sin el, el implementador
+# pararia en rojo a los seis segundos (#653).
 _COMPLETE_BODY = (
-    "## Work ID\nSIRIUS-B5-001\n\n## Bloque\nB5\n\n## Objetivo\n"
+    "## Work ID\nSIRIUS-B5-001\n\n## Bloque\nB5\n\n"
+    f"Perfil: implementer@{_VIGENTE}\n\n## Objetivo\n"
     + ("Panel de contexto completo. " * 10)
     + "\n\n## Base y dependencias\nB4a-B4f fusionados.\n\n## Alcance permitido\nPanel.\n\n"
     "## Fuera de alcance\nB6, RAG.\n\n"
@@ -187,14 +209,14 @@ def test_valid_activation_passes_without_changes(tmp_path: Path) -> None:
 
 
 def test_missing_planned_rejects_without_adding_planned(tmp_path: Path) -> None:
-    # Caso real 1 de #60: activación directa sin planned. Se retira el evento,
-    # se explica el motivo y NUNCA se añade planned automáticamente.
+    # Caso real 1 de #60: activación directa sin planned. Se explica el motivo
+    # sin tocar etiquetas y NUNCA se añade planned automáticamente.
     env = _setup(tmp_path)
     _seed(env, ["sirius:implement-requested"])
     r = _run(env)
-    assert r.returncode == 0, r.stdout + r.stderr
+    assert r.returncode == 4, r.stdout + r.stderr
     labels = _labels(env)
-    assert "sirius:implement-requested" not in labels
+    assert "sirius:implement-requested" in labels  # la puerta no toca etiquetas (ronda 13)
     assert "sirius:planned" not in labels  # prohibido auto-aprobar planificación
     assert "sirius:failed-safely" not in labels  # rechazo temprano, no parada
     comments = _comments(env)
@@ -207,8 +229,8 @@ def test_truncated_body_rejects_activation(tmp_path: Path) -> None:
     env = _setup(tmp_path)
     _seed(env, ["sirius:planned", "sirius:implement-requested"], body=_TRUNCATED_BODY)
     r = _run(env)
-    assert r.returncode == 0, r.stdout + r.stderr
-    assert "sirius:implement-requested" not in _labels(env)
+    assert r.returncode == 4, r.stdout + r.stderr
+    assert "sirius:implement-requested" in _labels(env)
     assert "sirius-activation:rejected:cuerpo-incompleto" in _comments(env)
     assert "sirius:planned" in _labels(env)  # planned se conserva
 
@@ -218,8 +240,8 @@ def test_failed_safely_state_blocks_reactivation(tmp_path: Path) -> None:
     env = _setup(tmp_path)
     _seed(env, ["sirius:planned", "sirius:failed-safely", "sirius:implement-requested"])
     r = _run(env)
-    assert r.returncode == 0, r.stdout + r.stderr
-    assert "sirius:implement-requested" not in _labels(env)
+    assert r.returncode == 4, r.stdout + r.stderr
+    assert "sirius:implement-requested" in _labels(env)
     assert "sirius-activation:rejected:estado-incompatible" in _comments(env)
 
 
@@ -227,8 +249,8 @@ def test_duplicate_activation_while_implementing_rejects(tmp_path: Path) -> None
     env = _setup(tmp_path)
     _seed(env, ["sirius:implementing", "sirius:implement-requested"])
     r = _run(env)
-    assert r.returncode == 0, r.stdout + r.stderr
-    assert "sirius:implement-requested" not in _labels(env)
+    assert r.returncode == 4, r.stdout + r.stderr
+    assert "sirius:implement-requested" in _labels(env)
     assert "estado-incompatible" in _comments(env)
     assert "sirius:implementing" in _labels(env)  # el estado en curso no se toca
 
@@ -237,42 +259,34 @@ def test_closed_issue_rejects_activation(tmp_path: Path) -> None:
     env = _setup(tmp_path)
     _seed(env, ["sirius:planned", "sirius:implement-requested"], state="closed")
     r = _run(env)
-    assert r.returncode == 0, r.stdout + r.stderr
+    assert r.returncode == 4, r.stdout + r.stderr
     assert "sirius-activation:rejected:incidencia-cerrada" in _comments(env)
 
 
 def test_repeated_rejection_does_not_duplicate_comment(tmp_path: Path) -> None:
     env = _setup(tmp_path)
     _seed(env, ["sirius:implement-requested"])
-    assert _run(env).returncode == 0
+    assert _run(env).returncode == 4
     # El usuario repite el mismo error: re-aplica el evento sin arreglar nada.
     md = _md(env)
     with open(md / "labels.txt", "a", encoding="utf-8") as fh:
         fh.write("sirius:implement-requested\n")
-    assert _run(env).returncode == 0
+    assert _run(env).returncode == 4
     assert _comments(env).count("sirius-activation:rejected:sin-planned") == 1
-    assert "sirius:implement-requested" not in _labels(env)
+    assert "sirius:implement-requested" in _labels(env)
 
 
 def test_different_reason_gets_its_own_comment(tmp_path: Path) -> None:
     env = _setup(tmp_path)
     _seed(env, ["sirius:implement-requested"])
-    assert _run(env).returncode == 0  # rechazo: sin-planned
+    assert _run(env).returncode == 4  # rechazo: sin-planned
     md = _md(env)
     (md / "labels.txt").write_text("sirius:planned\nsirius:implement-requested\n", encoding="utf-8")
     (md / "body.txt").write_text(_TRUNCATED_BODY, encoding="utf-8")
-    assert _run(env).returncode == 0  # rechazo: cuerpo-incompleto
+    assert _run(env).returncode == 4  # rechazo: cuerpo-incompleto
     comments = _comments(env)
     assert "rejected:sin-planned" in comments
     assert "rejected:cuerpo-incompleto" in comments
-
-
-def test_removal_failure_is_retryable(tmp_path: Path) -> None:
-    env = _setup(tmp_path)
-    env["MOCK_FAIL_REMOVE"] = "1"
-    _seed(env, ["sirius:implement-requested"])
-    r = _run(env)
-    assert r.returncode != 0  # visible y reintentable: el evento no se retiró
 
 
 def test_pull_request_is_ignored(tmp_path: Path) -> None:
@@ -318,3 +332,284 @@ def test_a_rejection_without_diagnosis_keeps_the_label(tmp_path: Path) -> None:
     assert "sirius-activation:rejected" not in (_md(env) / "comments.txt").read_text(
         encoding="utf-8"
     ), "la prueba no está ejercitando el fallo de publicación"
+
+
+# --- El Perfil se resuelve en la puerta (ADR-221) ------------------------------
+
+
+def _sin_perfil(cuerpo: str) -> str:
+    return "\n".join(linea for linea in cuerpo.splitlines() if not linea.startswith("Perfil:"))
+
+
+def test_un_cuerpo_sin_perfil_se_rechaza_antes_de_arrancar(tmp_path: Path) -> None:
+    """#653 murio a los seis segundos en el implementador; la puerta lo dice antes y gratis."""
+    env = _setup(tmp_path)
+    _seed(env, ["sirius:planned", "sirius:implement-requested"], body=_sin_perfil(_COMPLETE_BODY))
+    proc = _run(env)
+    assert proc.returncode == 4, proc.stderr
+    assert "sirius:implement-requested" in _labels(env)
+    assert "sirius:planned" in _labels(env)
+    publicado = _comments(env)
+    assert "sirius-activation:rejected:perfil-sin-resolver" in publicado
+    assert "no declara 'Perfil: rol@N'" in publicado, "el rechazo lleva el detalle del resolutor"
+
+
+def test_un_perfil_desconocido_se_rechaza_con_el_detalle_del_resolutor(tmp_path: Path) -> None:
+    env = _setup(tmp_path)
+    cuerpo = _COMPLETE_BODY.replace(f"Perfil: implementer@{_VIGENTE}", "Perfil: implementer@99")
+    _seed(env, ["sirius:planned", "sirius:implement-requested"], body=cuerpo)
+    proc = _run(env)
+    assert proc.returncode == 4, proc.stderr
+    assert "sirius:implement-requested" in _labels(env)
+    publicado = _comments(env)
+    assert "rejected:perfil-sin-resolver" in publicado
+    assert "implementer@99" in publicado and "no está en el manifiesto" in publicado
+
+
+def test_un_perfil_valido_pero_no_vigente_avisa_y_deja_pasar(tmp_path: Path) -> None:
+    """`rol@N` significa un texto (H-28): una version antigua se ejecuta, pero se dice."""
+    env = _setup(tmp_path)
+    cuerpo = _COMPLETE_BODY.replace(f"Perfil: implementer@{_VIGENTE}", "Perfil: implementer@2")
+    _seed(env, ["sirius:planned", "sirius:implement-requested"], body=cuerpo)
+    proc = _run(env)
+    assert proc.returncode == 0, proc.stderr
+    assert "sirius:implement-requested" in _labels(env), "no vigente no es motivo de rechazo"
+    publicado = _comments(env)
+    assert "sirius-activation:aviso:perfil-no-vigente:implementer@2" in publicado
+    assert f"es la {_VIGENTE}" in publicado and "rejected" not in publicado
+    assert (
+        "Si sigue en `sirius:planned`" in publicado
+        and "otra vez justo antes de consumir" in publicado
+        and "declara el evento rancio" in publicado
+        and "Si ya esta en `sirius:implementing`" in publicado
+        and "cancela desde Actions el run" in publicado
+        and "escribe `continua`" in publicado
+        and "no se ejecutara en esta incidencia" in publicado
+        and "ADR-094" in publicado
+    ), (
+        "el aviso prescribe segun el estado real al leerlo (en `planned`: editar, que vuelve "
+        "rancio el evento, y reactivar; en `implementing`: cancelar y `continua`; dejar "
+        "terminar: la vigente no se ejecuta aqui) y cita ADR-094: Codex, PR #670, rondas 2 a 7"
+    )
+
+
+def test_el_perfil_vigente_pasa_sin_ningun_comentario(tmp_path: Path) -> None:
+    env = _setup(tmp_path)
+    _seed(env, ["sirius:planned", "sirius:implement-requested"])
+    proc = _run(env)
+    assert proc.returncode == 0, proc.stderr
+    assert "sirius:implement-requested" in _labels(env)
+    assert _comments(env).strip() == "", "con el perfil vigente la puerta no dice nada"
+
+
+def test_un_perfil_ajeno_al_carril_de_ejecucion_no_se_juzga_en_esta_puerta(tmp_path: Path) -> None:
+    """`investigador` no resuelve en el carril de ejecucion y no tiene por que: su
+    ejecutor es el investigador medido (`investigar-orden.yml`), con su propia
+    puerta de reparto. Esta puerta no afirma nada sobre un rol que no es suyo."""
+    env = _setup(tmp_path)
+    cuerpo = _COMPLETE_BODY.replace(f"Perfil: implementer@{_VIGENTE}", "Perfil: investigador@2")
+    _seed(env, ["sirius:planned", "sirius:implement-requested"], body=cuerpo)
+    proc = _run(env)
+    assert proc.returncode == 0, proc.stderr
+    assert "sirius:implement-requested" in _labels(env)
+    assert _comments(env).strip() == "", "ni rechazo ni aviso: no es su carril"
+    assert "no lo juzga" in proc.stdout
+
+
+def test_una_instantanea_igual_al_cuerpo_se_juzga_y_se_rechaza_si_no_resuelve(
+    tmp_path: Path,
+) -> None:
+    """El implementador resuelve la instantánea del evento (`ISSUE_BODY`): cuando
+    coincide con el cuerpo vigente, es lo que se juzga, y si no resuelve se
+    rechaza sin tocar la etiqueta (Codex, PR #670, rondas 1 y 13)."""
+    env = _setup(tmp_path)
+    cuerpo = _COMPLETE_BODY.replace(f"Perfil: implementer@{_VIGENTE}", "Perfil: implementer@99")
+    _seed(env, ["sirius:planned", "sirius:implement-requested"], body=cuerpo)
+    env["ISSUE_BODY"] = cuerpo
+    proc = _run(env)
+    assert proc.returncode == 4, proc.stderr
+    assert "sirius:implement-requested" in _labels(env), "lo que se iba a ejecutar no resuelve"
+    assert "perfil-sin-resolver" in _comments(env)
+
+
+def test_un_evento_cuyo_perfil_cambio_despues_es_rancio_y_no_toca_ninguna_etiqueta(
+    tmp_path: Path,
+) -> None:
+    """Ronda 5 de Codex en la PR #670: si alguien edita el `Perfil:` después de la
+    etiqueta y la retira y vuelve a aplicar, la `sirius:implement-requested` que
+    hay ahora es la de OTRA activación; esta puerta, que corre en su propio
+    workflow y puede llegar tarde, retiraba esa etiqueta al rechazar la
+    instantánea vieja y el trabajo se perdía. Mismo razonamiento que el reparto
+    (ADR-167) aplicado al `rol@N` entero: no se valida, no se ejecuta, no se
+    toca nada, y se dice."""
+    env = _setup(tmp_path)
+    _seed(env, ["sirius:planned", "sirius:implement-requested"])
+    env["ISSUE_BODY"] = _COMPLETE_BODY.replace(
+        f"Perfil: implementer@{_VIGENTE}", "Perfil: implementer@99"
+    )
+    proc = _run(env)
+    assert proc.returncode == 2, proc.stderr
+    assert "sirius:implement-requested" in _labels(env), "la etiqueta puede ser de otro evento"
+    publicado = _comments(env)
+    assert f"sirius-activation:evento-rancio:implementer@99:implementer@{_VIGENTE}" in publicado
+    assert "no se valida ni se ejecuta" in publicado and "ninguna etiqueta" in publicado
+    assert "rejected" not in publicado
+    assert "rancio" in proc.stderr
+
+    # Repetir el mismo evento rancio no duplica el aviso ni toca nada.
+    antes = publicado
+    proc = _run(env)
+    assert proc.returncode == 2
+    assert _comments(env) == antes and "sirius:implement-requested" in _labels(env)
+
+
+def test_el_rechazo_no_toca_ninguna_etiqueta(tmp_path: Path) -> None:
+    """Rondas 11 a 13 de Codex en la PR #670: publicar el rechazo puede llevar hasta
+    90 s de reintentos; si en ese rato alguien corrige la causa y vuelve a
+    aplicar la etiqueta, la puerta retiraba la activación nueva, y ni releer el
+    perfil (ronda 11) ni el cuerpo entero (ronda 12) atribuye una etiqueta a su
+    evento: una reactivación puede corregir la causa sin tocar el cuerpo (ronda
+    13). La regla final es la del evento rancio: la puerta no toca etiquetas;
+    rechazar es publicar el diagnóstico, y decirlo con el código 4, que es lo
+    que leen los dos carriles (antes deducían el rechazo de la etiqueta)."""
+    env = _setup(tmp_path)
+    malo = _COMPLETE_BODY.replace(f"Perfil: implementer@{_VIGENTE}", "Perfil: implementer@99")
+    _seed(env, ["sirius:planned", "sirius:implement-requested"], body=malo)
+    corregido = tmp_path / "corregido.md"
+    corregido.write_text(_COMPLETE_BODY, encoding="utf-8")
+    env["MOCK_BODY_TRAS_COMENTAR"] = str(corregido)
+    proc = _run(env)
+    assert proc.returncode == 4, proc.stdout + proc.stderr
+    assert "sirius:implement-requested" in _labels(env), "la etiqueta puede ser de otra activación"
+    assert "sirius-activation:rejected:perfil-sin-resolver" in _comments(env)
+    assert "retira `sirius:implement-requested` y vuelve a aplicarla" in _comments(env)
+    assert "se conserva sirius:implement-requested" in proc.stdout
+
+    # En ningún rechazo, por ningún motivo, se llama a retirar una etiqueta.
+    env.pop("MOCK_BODY_TRAS_COMENTAR")
+    for etiquetas, cuerpo in (
+        (["sirius:implement-requested"], _COMPLETE_BODY),
+        (["sirius:planned", "sirius:implement-requested"], _TRUNCATED_BODY),
+        (["sirius:planned", "sirius:failed-safely", "sirius:implement-requested"], _COMPLETE_BODY),
+    ):
+        _seed(env, etiquetas, body=cuerpo)
+        assert _run(env).returncode == 4
+        assert _labels(env).split() == etiquetas
+    assert "remove-label" not in (_md(env) / "calls.log").read_text(encoding="utf-8")
+
+
+def test_un_rol_que_no_esta_en_ningun_carril_se_rechaza(tmp_path: Path) -> None:
+    """Una errata (`implementr`) no es un carril ajeno: el reparto la mandaría al
+    implementador y moriría allí. Solo se exime lo que otro carril del manifiesto
+    reclama como suyo (Codex, PR #670)."""
+    env = _setup(tmp_path)
+    cuerpo = _COMPLETE_BODY.replace(f"Perfil: implementer@{_VIGENTE}", "Perfil: implementr@4")
+    _seed(env, ["sirius:planned", "sirius:implement-requested"], body=cuerpo)
+    proc = _run(env)
+    assert proc.returncode == 4, proc.stderr
+    assert "sirius:implement-requested" in _labels(env)
+    assert "perfil-sin-resolver" in _comments(env)
+    assert "no lo juzga" not in proc.stdout
+
+
+def test_una_instantanea_vacia_del_evento_es_un_evento_rancio(tmp_path: Path) -> None:
+    """El evento llegó sin cuerpo y alguien lo escribió después: el implementador
+    ejecutaría la instantánea vacía. La puerta no la sustituye por el cuerpo
+    actual (Codex, PR #670, ronda 2) ni retira la etiqueta, que puede ser de una
+    activación posterior (ronda 5): el evento es rancio y se dice."""
+    env = _setup(tmp_path)
+    _seed(env, ["sirius:planned", "sirius:implement-requested"])
+    env["ISSUE_BODY"] = ""
+    proc = _run(env)
+    assert proc.returncode == 2, proc.stderr
+    assert "sirius:implement-requested" in _labels(env)
+    assert f"sirius-activation:evento-rancio:ninguno:implementer@{_VIGENTE}" in _comments(env)
+
+
+def test_la_comparacion_del_evento_usa_el_parser_canonico_del_perfil(tmp_path: Path) -> None:
+    """Ronda 6 de Codex en la PR #670: un `sed` propio leía `implementer@4junk` como
+    `implementer@4` y daba por iguales una instantánea que el resolutor no puede
+    leer y un cuerpo vigente válido; la puerta seguía, rechazaba la instantánea y
+    retiraba una etiqueta que puede ser de otra activación. Las dos se leen ahora
+    con `profile_field`, el parser del resolutor: `implementer@Njunk` no es un
+    perfil, así que el evento es rancio (`ninguno` frente al vigente)."""
+    env = _setup(tmp_path)
+    _seed(env, ["sirius:planned", "sirius:implement-requested"])
+    env["ISSUE_BODY"] = _COMPLETE_BODY.replace(
+        f"Perfil: implementer@{_VIGENTE}", f"Perfil: implementer@{_VIGENTE}junk"
+    )
+    proc = _run(env)
+    assert proc.returncode == 2, proc.stderr
+    assert "sirius:implement-requested" in _labels(env), "la etiqueta puede ser de otro evento"
+    assert f"sirius-activation:evento-rancio:ninguno:implementer@{_VIGENTE}" in _comments(env)
+
+
+def test_la_exencion_de_carril_usa_el_parser_canonico(tmp_path: Path) -> None:
+    """Ronda 9 de Codex en la PR #670: `investigador@2junk` no es un perfil. El
+    `sed` de la exención lo leía como `investigador` y lo eximía, y el carril
+    ajeno ejecutaría una orden sin perfil canónico. Con el parser del resolutor
+    cae al resolutor y se rechaza."""
+    env = _setup(tmp_path)
+    cuerpo = _COMPLETE_BODY.replace(f"Perfil: implementer@{_VIGENTE}", "Perfil: investigador@2junk")
+    _seed(env, ["sirius:planned", "sirius:implement-requested"], body=cuerpo)
+    env["ISSUE_BODY"] = cuerpo
+    proc = _run(env)
+    assert proc.returncode == 4, proc.stderr
+    assert "no lo juzga" not in proc.stdout, "no se exime lo que no es un perfil"
+    assert "sirius:implement-requested" in _labels(env)
+    assert "perfil-sin-resolver" in _comments(env)
+
+
+def test_un_aviso_de_no_vigente_que_no_se_puede_publicar_no_valida_la_activacion(
+    tmp_path: Path,
+) -> None:
+    """Ronda 9 de Codex en la PR #670: si el aviso de perfil no vigente no se
+    puede publicar, la puerta daba la activación por válida y el perfil antiguo
+    se consumía con el único aviso perdido en el log. Ahora conserva la
+    activación (ninguna etiqueta tocada) y termina reintentable (3)."""
+    env = _setup(tmp_path)
+    env["MOCK_FAIL_COMMENT"] = "1"
+    cuerpo = _COMPLETE_BODY.replace(f"Perfil: implementer@{_VIGENTE}", "Perfil: implementer@2")
+    _seed(env, ["sirius:planned", "sirius:implement-requested"], body=cuerpo)
+    proc = _run(env)
+    assert proc.returncode == 3, proc.stdout + proc.stderr
+    assert "sirius:implement-requested" in _labels(env) and "sirius:planned" in _labels(env)
+    assert _comments(env).strip() == ""
+    assert "Activacion valida" not in proc.stdout
+    assert "Reintentable" in proc.stderr
+
+
+REPARTO = GATE.with_name("sirius_reparto_activacion.sh")
+
+
+def test_el_reparto_lee_el_perfil_con_el_parser_canonico(tmp_path: Path) -> None:
+    """Ronda 10 de Codex en la PR #670: con `Perfil: implementer@4junk` delante y
+    `Perfil: investigador@2` detrás, el `sed` del reparto decía `implementer` y la
+    puerta (parser canónico) eximía `investigador@2`: el implementador consumía
+    una orden del otro carril. El reparto lee ahora con el mismo parser."""
+    env = _setup(tmp_path)
+    cuerpo = _COMPLETE_BODY.replace(
+        f"Perfil: implementer@{_VIGENTE}", "Perfil: implementer@4junk\nPerfil: investigador@2"
+    )
+    _seed(env, ["sirius:planned", "sirius:implement-requested"], body=cuerpo)
+
+    def reparto(evento: str, puerta: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            ["bash", str(REPARTO), "owner/repo", "60", evento, puerta],
+            capture_output=True,
+            text=True,
+            env=env,
+            check=False,
+        )
+
+    propia = reparto("investigador", "investigador")
+    assert propia.returncode == 0 and propia.stdout.strip() == "investigador", propia.stderr
+    ajena = reparto("investigador", "otros")
+    assert ajena.returncode == 1, "el implementador no es dueño de una orden de investigación"
+    # Y los dos workflows pasan el rol del evento leído con el mismo parser.
+    for workflow in ("implement-sirius-work.yml", "investigar-orden.yml"):
+        texto = (REPO_ROOT / ".github" / "workflows" / workflow).read_text(encoding="utf-8")
+        assert "resolver_prompt.py --perfil | sed 's/@.*//'" in texto, workflow
+        assert "sed -n 's/^Perfil" not in texto, workflow
+    assert "sed -n 's/^Perfil" not in REPARTO.read_text(encoding="utf-8")
+    assert "sed -n 's/^Perfil" not in GATE.read_text(encoding="utf-8")

@@ -223,7 +223,7 @@ jobs:
           # cambiar el tipo de trabajo en silencio.
           reparto_rc=0
           bash scripts/automation/sirius_reparto_activacion.sh \
-            "$GH_REPO" "$ISSUE_NUMBER" "$(printf '%s' "$ISSUE_BODY" | sed -n 's/^Perfil: *\([A-Za-z_-][A-Za-z_-]*\)@.*/\1/p' | head -1)" \
+            "$GH_REPO" "$ISSUE_NUMBER" "$(python3 scripts/automation/resolver_prompt.py --perfil | sed 's/@.*//')" \
             "otros" || reparto_rc=$?
           case "$reparto_rc" in
             0) : ;;
@@ -240,6 +240,20 @@ jobs:
             script_rc=0
           else
             script_rc=$?
+          fi
+          if [ "$script_rc" -eq 4 ]; then
+            # Rechazada: la puerta publico el motivo y NO toco ninguna etiqueta
+            # (ADR-221): la sirius:implement-requested que hay puede ser ya de
+            # otra activacion. Antes el rechazo se deducia de que la etiqueta
+            # hubiera desaparecido; ahora lo dice el codigo.
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+            echo "La activacion no era valida; la puerta la rechazo y explico el motivo en la incidencia, sin tocar etiquetas."
+            exit 0
+          fi
+          if [ "$script_rc" -eq 2 ]; then
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+            echo "::error::El Perfil del cuerpo cambio desde que se aplico la etiqueta (la instantanea del evento y el cuerpo vigente no coinciden): este evento es rancio y no se consume. NO se ha tocado ninguna etiqueta -la activacion presente puede ser de otro evento posterior-. El aviso esta en la incidencia (ADR-221)."
+            exit 1
           fi
           if [ "$script_rc" -ne 0 ]; then
             echo "::error::La validacion de activacion no se pudo completar; reintentable."
@@ -272,22 +286,49 @@ jobs:
             echo "valid=true" >> "$GITHUB_OUTPUT"
           else
             echo "valid=false" >> "$GITHUB_OUTPUT"
-            echo "La activacion no era valida; la puerta ya la rechazo y explico el motivo en la incidencia."
+            echo "#${ISSUE_NUMBER} ya no lleva sirius:implement-requested: la activacion no esta viva (alguien la retiro); no se toca."
           fi
 
       - name: Consumir el evento y marcar en curso
         # ADR-228 (ronda 2 de Codex): plazo propio, misma razon que el checkout.
         timeout-minutes: 3
         if: steps.gate.outputs.valid == 'true'
+        id: consume
         shell: bash --noprofile --norc {0}
         env:
           GH_TOKEN: ${{ github.token }}
           SIRIUS_TRIGGER_TOKEN: ${{ secrets.SIRIUS_BOT_TOKEN }}
           GH_REPO: ${{ github.repository }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
+          # La instantanea del evento, por `env:` y nunca interpolada en el
+          # `run:` (misma razon que en «Preparar instrucciones»).
+          ISSUE_BODY: ${{ github.event.issue.body }}
         run: |
           set -uo pipefail
           source scripts/automation/sirius_issue.sh
+          # ADR-221 (ronda 8 de Codex en la PR #670): la puerta comparo la
+          # instantanea del evento con el cuerpo vigente hace unos segundos, y
+          # en ese hueco el propietario puede haber editado el `Perfil:` (el
+          # aviso de version no vigente se lo pide). Se vuelve a comparar JUSTO
+          # antes de consumir, con el mismo parser (`resolver_prompt.py
+          # --perfil`): si cambio, este evento es rancio, no se consume nada y
+          # no se toca ninguna etiqueta -la activacion presente es de otro
+          # evento-. `consumed=false` deja a «Aplicar el veredicto» fuera: no
+          # hay nada que aplicar sobre una activacion que no es de este run.
+          sin_consumir() {
+            echo "consumed=false" >> "$GITHUB_OUTPUT"
+            echo "::error::$1"
+            exit 1
+          }
+          perfil_evento="$(ISSUE_BODY="${ISSUE_BODY-}" python3 scripts/automation/resolver_prompt.py --perfil)" \
+            || sin_consumir "No se pudo leer el Perfil de la instantanea del evento de #${ISSUE_NUMBER}; no se consume nada."
+          cuerpo_ahora="$(sirius_read_issue_body "$GH_REPO" "$ISSUE_NUMBER")" \
+            || sin_consumir "No se pudo leer el cuerpo vigente de #${ISSUE_NUMBER}; no se consume nada. Reintentable."
+          perfil_ahora="$(ISSUE_BODY="$cuerpo_ahora" python3 scripts/automation/resolver_prompt.py --perfil)" \
+            || sin_consumir "No se pudo leer el Perfil del cuerpo vigente de #${ISSUE_NUMBER}; no se consume nada."
+          if [ "$perfil_evento" != "$perfil_ahora" ]; then
+            sin_consumir "El Perfil de #${ISSUE_NUMBER} cambio entre la puerta y la consumicion (evento: ${perfil_evento:-ninguno}; ahora: ${perfil_ahora:-ninguno}): este evento es rancio y no se consume. NO se ha tocado ninguna etiqueta -la activacion presente es de otro evento- (ADR-221)."
+          fi
           # La etiqueta NOTIFICABLE se escribe con el PAT: un `issues: labeled`
           # emitido con el GITHUB_TOKEN no dispara otros workflows (regla
           # anti-recursion de GitHub), asi que `notify-sirius-state.yml` no se
@@ -299,6 +340,7 @@ jobs:
           }
           trigger_set_labels "$GH_REPO" "$ISSUE_NUMBER" \
             "sirius:implementing" "sirius:implement-requested" "sirius:planned"
+          echo "consumed=true" >> "$GITHUB_OUTPUT"
 
       - name: Preparar instrucciones para Claude Code
         # ADR-228 (ronda 2 de Codex): plazo propio; es el paso que reparte el plazo y tiene que llegar con la reserva final intacta.
@@ -434,7 +476,10 @@ jobs:
       - name: Aplicar el veredicto
         # ADR-228 (ronda 2 de Codex): plazo propio por debajo de RESERVA_FINAL_MIN (6): la reserva que el paso del prompt descuenta es exactamente la que este paso puede consumir.
         timeout-minutes: 5
-        if: always() && steps.gate.outputs.valid == 'true'
+        # `consumed != 'false'` y no `== 'true'`: si «Consumir el evento» muere sin
+        # escribir su salida, el veredicto corre igual (es lo que limpia una
+        # consumicion a medias); solo un evento declarado rancio lo deja fuera.
+        if: always() && steps.gate.outputs.valid == 'true' && steps.consume.outputs.consumed != 'false'
         shell: bash --noprofile --norc {0}
         env:
           # El veredicto escribe el estado resultante, que puede ser notificable

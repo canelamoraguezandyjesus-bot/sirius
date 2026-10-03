@@ -21,6 +21,7 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
+import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = REPO_ROOT / "scripts" / "automation" / "resolver_prompt.py"
@@ -218,3 +219,51 @@ def test_los_dos_workflows_invocan_al_resolver_y_el_case_viejo_no_existe() -> No
         # un sed sobre `Perfil:` para ENRUTAR -qué workflow atiende, ADR-099-;
         # eso no elige texto y queda fuera de la ley de H-28.)
         assert "PROMPT_ROL=scripts/automation/prompts/" not in codigo, workflow.name
+
+
+def test_el_implementador_vuelve_a_comparar_el_perfil_justo_antes_de_consumir() -> None:
+    """Ronda 8 de Codex en la PR #670: entre la puerta y «Consumir el evento» el
+    propietario puede editar el `Perfil:` (el aviso de versión no vigente se lo
+    pide). El paso de consumo compara otra vez la instantánea del evento con el
+    cuerpo vigente, con el mismo parser, y si cambió no consume nada ni deja que
+    «Aplicar el veredicto» toque etiquetas que son de otra activación."""
+    doc = yaml.safe_load(WORKFLOW_IMPLEMENT.read_text(encoding="utf-8"))
+    pasos = next(iter(doc["jobs"].values()))["steps"]
+    consumo = next(p for p in pasos if p.get("name") == "Consumir el evento y marcar en curso")
+    assert consumo.get("id") == "consume"
+    assert consumo["env"]["ISSUE_BODY"] == "${{ github.event.issue.body }}"
+    guion = consumo["run"]
+    assert guion.count("python3 scripts/automation/resolver_prompt.py --perfil") == 2, (
+        "la instantánea del evento y el cuerpo vigente, los dos con el parser canónico"
+    )
+    assert guion.index("resolver_prompt.py --perfil") < guion.index("trigger_set_labels "), (
+        "la comparación va ANTES de tocar ninguna etiqueta"
+    )
+    assert 'echo "consumed=false"' in guion and 'echo "consumed=true"' in guion
+    veredicto = next(p for p in pasos if p.get("name") == "Aplicar el veredicto")
+    assert "steps.consume.outputs.consumed != 'false'" in veredicto["if"], (
+        "un evento declarado rancio en la consumición no puede terminar en failed-safely "
+        "sobre la activación de otro"
+    )
+
+
+def test_el_cli_imprime_el_perfil_canonico_o_una_linea_vacia() -> None:
+    """``--perfil`` es lo que la puerta de activación usa para comparar la instantánea
+    del evento con el cuerpo vigente (ronda 6 de Codex en la PR #670): el mismo
+    parser que resuelve, no un ``sed`` que leía ``implementer@4junk`` como ``@4``."""
+
+    def perfil(cuerpo: str) -> str:
+        proceso = subprocess.run(
+            [sys.executable, str(SCRIPT), "--perfil"],
+            env={**os.environ, "ISSUE_BODY": cuerpo},
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert proceso.returncode == 0, proceso.stderr
+        return proceso.stdout
+
+    assert perfil("Perfil: implementer@4\nOtra línea") == "implementer@4\n"
+    assert perfil("Perfil: implementer@4junk") == "\n"
+    assert perfil("Perfil: Implementer@4") == "\n"
+    assert perfil("sin campo") == "\n"

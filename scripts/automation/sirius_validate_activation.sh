@@ -19,16 +19,42 @@
 #
 # La Routine implementadora conserva sus propias comprobaciones (defensa en
 # profundidad): esta puerta no puede garantizar ejecutarse antes que ella, solo
-# reducir la ventana y dejar el estado limpio y reintentable.
+# reducir la ventana y dejar el diagnostico publicado.
+#
+# La puerta NO toca etiquetas (ADR-221; rondas 5 a 13 de Codex en la PR #670):
+# rechazar es publicar el diagnostico. Retirar `sirius:implement-requested` al
+# rechazar retiraba, en una ventana que la API no deja cerrar, la etiqueta de
+# OTRA activacion posterior (cuerpo corregido y etiqueta reaplicada mientras se
+# publicaba el rechazo), y ninguna relectura -del perfil, del cuerpo entero-
+# puede atribuir una etiqueta a su evento: la carga del workflow no trae esa
+# identidad, y una reactivacion puede corregir la causa sin tocar el cuerpo.
+# Quien lea el rechazo (lleva la mencion al propietario) retira la etiqueta y
+# la vuelve a aplicar cuando haya corregido la causa. Nadie mas la mueve: el
+# reconciliador no repara ni retira la pareja `planned` + `implement-requested`
+# (la excluye a proposito, ADR-167) y solo la senala como atasco, con un aviso
+# en la incidencia, cuando `implement-requested` lleva mas de STUCK_MINUTES
+# puesta; junto a un estado incompatible la presenta como contradiccion que
+# pide revision humana (ronda 14 de Codex en la PR #670: la primera redaccion
+# de este parrafo atribuia al reconciliador una recuperacion que no hace).
 #
 # Comprobaciones (en orden): incidencia abierta y no PR; `sirius:planned`
 # presente; sin otros estados sirius activos/terminales; cuerpo estructuralmente
-# completo (todas las secciones obligatorias del contrato).
+# completo (todas las secciones obligatorias del contrato); la instantanea del
+# evento declara el mismo `Perfil:` que el cuerpo vigente (si no, el evento es
+# rancio: sale con 2 sin tocar etiquetas, ADR-221); `Perfil: rol@N` resoluble
+# con el manifiesto (ADR-221), con aviso si N no es la vigente.
+#
+# Codigos de salida: 0 (valida), 4 (rechazada: el motivo publicado y las
+# etiquetas intactas; los workflows leen ESTE codigo, no si la etiqueta sigue
+# ahi, que antes era como deducian el rechazo), 1 (no se pudo completar;
+# reintentable), 2 (evento rancio: nada validado, nada tocado, el aviso en la
+# incidencia), 3 (el aviso de perfil no vigente no se pudo publicar;
+# reintentable).
 #
 # Idempotencia: el comentario de rechazo lleva un marcador por motivo
 # (`<!-- sirius-activation:rejected:<motivo> -->`); repetir el mismo error no
-# duplica el comentario (solo se retira la etiqueta de nuevo). Un motivo
-# distinto sí genera un comentario nuevo.
+# duplica el comentario ni toca nada. Un motivo distinto sí genera un
+# comentario nuevo.
 #
 # Uso: sirius_validate_activation.sh <owner/repo> <numero-incidencia>
 
@@ -51,16 +77,15 @@ reject() {
   # reject <motivo-slug> <explicacion> <accion>
   local reason="$1" why="$2" action="$3"
   local marker="<!-- sirius-activation:rejected:${reason} -->"
-  echo "::warning::Activacion invalida de #${ISSUE} (${reason}); se retira sirius:implement-requested."
+  echo "::warning::Activacion invalida de #${ISSUE} (${reason}); se conserva sirius:implement-requested: retirala y vuelve a aplicarla cuando corrijas la causa."
   local body_file
   body_file="$(mktemp)"
   printf '%s\n\n%s\n\n%s\n\n%s\n\n%s\n' \
     "$marker" \
     "⛔ **Activación rechazada** (\`${reason}\`)" \
     "$why" \
-    "**Siguiente acción:** ${action} Después, vuelve a aplicar \`sirius:implement-requested\`." \
+    "**Siguiente acción:** ${action} Después, retira \`sirius:implement-requested\` y vuelve a aplicarla: esta puerta no toca etiquetas, porque la que hay puede ser ya de otra activación." \
     "@${OWNER_LOGIN}" >"$body_file"
-  local rc=0
   if ! sirius_comment_once "$REPO" "$ISSUE" "$marker" "$body_file"; then
     # Sin diagnostico NO se retira la etiqueta. Retirarla igualmente dejaba la
     # incidencia solo en `sirius:planned`, sin comentario y sin ningun evento
@@ -84,18 +109,12 @@ reject() {
     return 1
   fi
   rm -f "$body_file"
-  # Retirar el evento y verificar que quedo retirado (estado limpio, reintentable).
-  sirius_retry gh issue edit "$ISSUE" --repo "$REPO" --remove-label "sirius:implement-requested" >/dev/null 2>&1 || true
-  local labels_now=""
-  if ! labels_now="$(sirius_retry gh api "repos/${REPO}/issues/${ISSUE}" --jq '.labels[].name')"; then
-    echo "::error::No se pudo verificar la retirada del evento en #${ISSUE}; reintentable." >&2
-    return 1
-  fi
-  if printf '%s\n' "$labels_now" | grep -Fxq "sirius:implement-requested"; then
-    echo "::error::sirius:implement-requested sigue presente en #${ISSUE}; reintentable." >&2
-    return 1
-  fi
-  return "$rc"
+  # Y nada mas: ninguna etiqueta se toca (ver la cabecera). Las versiones
+  # anteriores retiraban aqui `sirius:implement-requested` y verificaban la
+  # retirada; releer el perfil (ronda 11 de Codex en la PR #670) o el cuerpo
+  # entero (ronda 12) justo antes no bastaba para saber de quien era la
+  # etiqueta presente (ronda 13).
+  return 0
 }
 
 # --- 1) Incidencia abierta y no PR --------------------------------------------
@@ -112,7 +131,7 @@ if [ "$(printf '%s' "$issue_json" | jq -r '.state')" != "open" ]; then
   reject "incidencia-cerrada" \
     "La incidencia no está abierta: no puede activarse una implementación sobre un trabajo cerrado." \
     "Reabre la incidencia solo si el trabajo sigue vigente." || exit 1
-  exit 0
+  exit 4
 fi
 
 # --- 2) Etiquetas: planned presente y sin estados incompatibles ----------------
@@ -129,14 +148,14 @@ if [ -n "$conflict" ]; then
   reject "estado-incompatible" \
     "La incidencia ya está en \`${conflict}\`: activarla de nuevo duplicaría trabajo o pisaría un estado que requiere otra acción (revisar un diagnóstico, esperar una decisión o cerrar un ciclo)." \
     "Resuelve primero el estado \`${conflict}\` (retíralo conscientemente si ya no aplica)." || exit 1
-  exit 0
+  exit 4
 fi
 
 if ! printf '%s\n' "$labels" | grep -Fxq "sirius:planned"; then
   reject "sin-planned" \
     "Falta \`sirius:planned\`. Esa etiqueta certifica que el alcance está definido y aprobado; ninguna automatización puede añadirla por ti." \
     "Confirma que el alcance está realmente aprobado y aplica \`sirius:planned\`." || exit 1
-  exit 0
+  exit 4
 fi
 
 # --- 3) Cuerpo estructuralmente completo ---------------------------------------
@@ -151,9 +170,139 @@ if ! missing="$(python3 "${SIRIUS_GATE_DIR}/validate_issue_body.py" "$body_file"
   reject "cuerpo-incompleto" \
     "El cuerpo de la incidencia está truncado o incompleto. Detalle del validador: ${missing}" \
     "Edita el cuerpo hasta que contenga todas las secciones obligatorias del contrato (compara con una incidencia completa como #55)." || exit 1
+  exit 4
+fi
+
+# --- 4) El `Perfil: rol@N` se puede resolver (ADR-221) -------------------------
+# Con el MISMO resolutor que usa el implementador (resolver_prompt.py, H-28):
+# si aqui no resuelve, alli tampoco, y el ciclo moriria a los seis segundos
+# con la incidencia en failed-safely y la razon solo en el log del run
+# (#653, 20-09-2026). Dos resolutores serian dos verdades; es uno.
+cuerpo="$(<"$body_file")"
+# Se juzga el cuerpo que el implementador VA A EJECUTAR: la instantanea del
+# evento (`github.event.issue.body`, que el workflow pasa en ISSUE_BODY), no el
+# cuerpo actual de la API. Si alguien edita el cuerpo despues de la etiqueta
+# cambiando solo la version del perfil, el reparto no lo ve (compara el rol) y
+# el implementador moriria con la version vieja mientras esta puerta daba por
+# bueno el cuerpo nuevo (ronda 1 de Codex en la PR #670). Sin ISSUE_BODY (la
+# cadena local) se juzga el cuerpo actual. `-` y no `:-`: una instantanea
+# VACIA (el evento llego sin cuerpo y alguien lo escribio despues) es lo que el
+# implementador ejecutaria, y se juzga vacia (ronda 2 de Codex en la PR #670).
+cuerpo_a_ejecutar="${ISSUE_BODY-$cuerpo}"
+# Y ANTES de juzgarla: si la instantanea y el cuerpo vigente declaran perfiles
+# distintos, este evento es RANCIO. Alguien edito el `Perfil:` despues de la
+# etiqueta, y puede haberla retirado y vuelto a aplicar: la
+# `sirius:implement-requested` que hay ahora puede ser la de OTRA activacion,
+# posterior, con su propio evento y su propia puerta. Rechazar aqui retiraria
+# la etiqueta de esa otra -esta puerta corre en su propio workflow, con su
+# propio grupo de concurrencia, y puede llegar tarde- y el trabajo se
+# perderia sin que nadie lo viera (ronda 5 de Codex en la PR #670). Es el
+# mismo razonamiento que el reparto (`sirius_reparto_activacion.sh`, ADR-167)
+# aplica al rol, aqui aplicado al `rol@N` entero: no se valida, no se ejecuta,
+# no se toca ninguna etiqueta, y se dice una vez por pareja de perfiles. Sale
+# con 2, como el reparto, para que quien llama termine en rojo sin consumir.
+if [ -n "${ISSUE_BODY+x}" ]; then
+  # Las dos instantaneas se leen con el MISMO parser que el resolutor
+  # (`profile_field`, via `resolver_prompt.py --perfil`): un `sed` propio leia
+  # `implementer@4junk` como `implementer@4` y `Implementer@4` como valido, y
+  # daba por iguales dos cuerpos que el resolutor juzga distintos; la puerta
+  # seguia, rechazaba la instantanea y retiraba una etiqueta que puede ser de
+  # otra activacion (ronda 6 de Codex en la PR #670). Sin parser no se juzga.
+  if ! perfil_evento="$(ISSUE_BODY="$cuerpo_a_ejecutar" python3 "${SIRIUS_GATE_DIR}/resolver_prompt.py" --perfil)"; then
+    echo "::error::No se pudo leer el Perfil de la instantanea del evento de #${ISSUE} con el parser canonico; no se valida ni se toca ninguna etiqueta. Reintentable." >&2
+    exit 1
+  fi
+  if ! perfil_actual="$(ISSUE_BODY="$cuerpo" python3 "${SIRIUS_GATE_DIR}/resolver_prompt.py" --perfil)"; then
+    echo "::error::No se pudo leer el Perfil del cuerpo vigente de #${ISSUE} con el parser canonico; no se valida ni se toca ninguna etiqueta. Reintentable." >&2
+    exit 1
+  fi
+  if [ "$perfil_evento" != "$perfil_actual" ]; then
+    rm -f "$body_file"
+    marker_rancio="<!-- sirius-activation:evento-rancio:${perfil_evento:-ninguno}:${perfil_actual:-ninguno} -->"
+    rancio_file="$(mktemp)"
+    printf '%s\n\n%s\n\n%s\n\n%s\n\n%s\n%s\n' \
+      "$marker_rancio" \
+      "⚠️ **Activación no validada: el cuerpo cambió después de la etiqueta**" \
+      "Cuando se aplicó \`sirius:implement-requested\`, el cuerpo declaraba \`Perfil: ${perfil_evento:-ninguno}\`; ahora declara \`Perfil: ${perfil_actual:-ninguno}\`. El implementador ejecutaría la instantánea del evento, no el cuerpo vigente, así que este evento **no se valida ni se ejecuta**." \
+      "**Tampoco se ha tocado ninguna etiqueta.** No hay forma de saber si la \`sirius:implement-requested\` que hay ahora es la de esta activación o la de otra posterior, y retirar la activación de otro sería peor que dejar este evento sin atender." \
+      "- **Si ya volviste a activar** con el cuerpo de ahora, esa activación tiene su propio evento y su propia puerta: déjala correr, aquí no hay nada más que hacer." \
+      "- **Si no**, retira \`sirius:implement-requested\` y vuelve a aplicarla: solo un evento nuevo lleva el cuerpo nuevo." >"$rancio_file"
+    if ! sirius_comment_once "$REPO" "$ISSUE" "$marker_rancio" "$rancio_file"; then
+      rm -f "$rancio_file"
+      echo "::error::El perfil de #${ISSUE} cambio desde que se aplico la etiqueta (evento: ${perfil_evento:-ninguno}; ahora: ${perfil_actual:-ninguno}) y no se pudo publicar el aviso; no se valida ni se toca ninguna etiqueta. Reintentable." >&2
+      exit 2
+    fi
+    rm -f "$rancio_file"
+    echo "::error::El perfil de #${ISSUE} cambio desde que se aplico la etiqueta (evento: ${perfil_evento:-ninguno}; ahora: ${perfil_actual:-ninguno}): este evento es rancio, no se valida ni se ejecuta y no se ha tocado ninguna etiqueta. El aviso esta en la incidencia." >&2
+    exit 2
+  fi
+fi
+# Solo se exime un rol que pertenezca a OTRO carril del manifiesto: ese tiene
+# su propio ejecutor y su propia puerta de reparto (`investigador`, el
+# investigador medido de investigar-orden.yml), y esta puerta no afirma nada
+# sobre el. Un rol que no esta en ningun carril -una errata como
+# `implementr`- NO se exime: el reparto lo mandaria al implementador y
+# moriria alli, asi que aqui se rechaza por el resolutor. Un cuerpo SIN
+# `Perfil:` tambien se juzga: ninguna puerta de reparto lo atiende y el
+# implementador pararia en rojo.
+# Con el parser canonico (`resolver_prompt.py --perfil`), no con un `sed`: el
+# `sed` leia `investigador@2junk` como `investigador` y lo eximia, y el carril
+# ajeno ejecutaria una orden cuyo `Perfil:` canonico no existe (ronda 9 de
+# Codex en la PR #670). Lo que no es un perfil cae al resolutor y se rechaza.
+if ! perfil_a_ejecutar="$(ISSUE_BODY="$cuerpo_a_ejecutar" python3 "${SIRIUS_GATE_DIR}/resolver_prompt.py" --perfil)"; then
+  rm -f "$body_file"
+  echo "::error::No se pudo leer el Perfil del cuerpo a ejecutar de #${ISSUE} con el parser canonico; no se valida ni se toca ninguna etiqueta. Reintentable." >&2
+  exit 1
+fi
+rol_declarado="${perfil_a_ejecutar%@*}"
+roles_de_otros_carriles="$(python3 - "${SIRIUS_GATE_DIR}/prompts/manifiesto.json" <<'PY'
+import json, sys
+carriles = json.load(open(sys.argv[1], encoding="utf-8"))["carriles"]
+propios = {clave.split("@")[0] for clave in carriles["ejecucion"]}
+ajenos = {clave.split("@")[0] for carril, claves in carriles.items() if carril != "ejecucion" for clave in claves}
+print(" ".join(sorted(ajenos - propios)))
+PY
+)"
+if [ -n "$rol_declarado" ] && printf ' %s ' "$roles_de_otros_carriles" | grep -Fq " ${rol_declarado} "; then
+  rm -f "$body_file"
+  echo "Activacion valida de #${ISSUE}: abierta, sirius:planned presente, sin estados incompatibles y cuerpo completo; el perfil \`${rol_declarado}\` es de otro carril del manifiesto (${roles_de_otros_carriles}) y esta puerta no lo juzga."
   exit 0
 fi
-rm -f "$body_file"
+if ! detalle="$(ISSUE_BODY="$cuerpo_a_ejecutar" python3 "${SIRIUS_GATE_DIR}/resolver_prompt.py" --carril ejecucion 2>&1 >/dev/null)"; then
+  rm -f "$body_file"
+  detalle="${detalle#::error::prompt sin resolver (ejecucion): }"
+  reject "perfil-sin-resolver" \
+    "El cuerpo declara un \`Perfil: rol@N\` que el manifiesto no puede resolver, así que el implementador pararía en rojo antes de empezar. Detalle del resolutor: ${detalle}" \
+    "Pon en el cuerpo \`Perfil: rol@N\` con un rol y una versión registrados en \`scripts/automation/prompts/manifiesto.json\` (la versión vigente de cada rol está en \`docs/implementation/work_engine/perfiles/<rol>.yml\`)." || exit 1
+  exit 4
+fi
 
-echo "Activacion valida de #${ISSUE}: abierta, sirius:planned presente, sin estados incompatibles y cuerpo completo."
+# --- 5) Un rol@N valido pero no vigente se avisa, no se rechaza ----------------
+# `rol@N` significa UN texto (H-28) y una version antigua sigue siendo
+# ejecutable a proposito; lo que faltaba era decirlo (deuda 35 de la bitacora).
+aviso="$(ISSUE_BODY="$cuerpo_a_ejecutar" python3 "${SIRIUS_GATE_DIR}/resolver_prompt.py" --carril ejecucion --vigencia 2>/dev/null)" || aviso=""
+rm -f "$body_file"
+if [ -n "$aviso" ]; then
+  declarado="$perfil_a_ejecutar"
+  marker_aviso="<!-- sirius-activation:aviso:perfil-no-vigente:${declarado} -->"
+  aviso_file="$(mktemp)"
+  printf '%s\n\n%s\n\n%s\n' \
+    "$marker_aviso" \
+    "ℹ️ **Perfil no vigente** (\`${declarado}\`)" \
+    "$aviso" >"$aviso_file"
+  # Si el aviso no se puede publicar, la activacion NO se da por valida: el
+  # aviso es lo unico que deja en la incidencia la version que se va a ejecutar
+  # y como recuperarla, y sin el se consumiria el perfil antiguo en silencio.
+  # Se conserva la activacion (ninguna etiqueta tocada) y se sale con 3, que
+  # quien llama trata como «no se pudo completar; reintentable» (ronda 9 de
+  # Codex en la PR #670).
+  if ! sirius_comment_once "$REPO" "$ISSUE" "$marker_aviso" "$aviso_file"; then
+    rm -f "$aviso_file"
+    echo "::error::No se pudo publicar el aviso de perfil no vigente en #${ISSUE}; la activacion se conserva (ninguna etiqueta tocada) y este run termina sin validarla: relanzalo desde Actions. Reintentable." >&2
+    exit 3
+  fi
+  rm -f "$aviso_file"
+fi
+
+echo "Activacion valida de #${ISSUE}: abierta, sirius:planned presente, sin estados incompatibles, cuerpo completo y perfil resoluble."
 exit 0
