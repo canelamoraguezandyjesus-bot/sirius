@@ -54,3 +54,6 @@ Desktop.ini
 # nada lo dijera. Lo impide `tests/automation/test_skills.py`.
 !.claude/skills/
 !.claude/skills/**
+
+# El volcado de la API que leen los guiones de la mina (MINA_DATOS por defecto).
+scripts/mina/datos/
