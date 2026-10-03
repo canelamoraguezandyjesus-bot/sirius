@@ -204,16 +204,43 @@ def test_una_foto_que_quedo_sin_seleccionar_se_detecta(tmp_path: Path) -> None:
     (huerfana / "indice.json").write_text("[1]", encoding="utf-8")
     assert datos.fotos_huerfanas(raw) == [huerfana]
 
-    # Una publicacion completa despues la deja como huerfana y la nueva seleccionada
+    # Una publicacion completa despues la limpia (ronda 18) y deja la nueva seleccionada
     parcial = datos.parcial_de(raw)
     parcial.mkdir()
     (parcial / "indice.json").write_text("[2]", encoding="utf-8")
     datos.publicar_volcado(parcial, raw)
-    assert datos.fotos_huerfanas(raw) == [huerfana]
+    assert datos.fotos_huerfanas(raw) == []
     assert (datos.volcado_actual(raw) / "indice.json").read_text(encoding="utf-8") == "[2]"
-    # y ni el parcial ni la seleccionada cuentan como huerfanas
+    # Una muerte posterior entre el renombrado y el selector deja otra huerfana,
+    # que se detecta; y ni el parcial ni la seleccionada cuentan como huerfanas.
+    otra = tmp_path / "raw.20260103T000000.000000Z"
+    otra.mkdir()
     datos.parcial_de(raw).mkdir()
+    assert datos.fotos_huerfanas(raw) == [otra]
+
+
+def test_publicar_limpia_tambien_las_fotos_viejas_sin_seleccionar(tmp_path: Path) -> None:
+    """Ronda 18 de Codex en la PR #665: si el proceso muere entre el selector y el
+    borrado de la foto anterior, esa foto queda huerfana; la repeticion borraba
+    solo SU anterior y la huerfana vieja seguia ahi, con `fotos_huerfanas`
+    avisando para siempre aunque se repitiera la descarga. Publicar limpia todas
+    las fotos viejas sin seleccionar."""
+    raw = tmp_path / "raw"
+    _foto_anterior(raw)
+    huerfana = tmp_path / "raw.20260101T000000.000000Z"
+    huerfana.mkdir()
+    (huerfana / "indice.json").write_text("[]", encoding="utf-8")
     assert datos.fotos_huerfanas(raw) == [huerfana]
+
+    parcial = datos.parcial_de(raw)
+    parcial.mkdir()
+    (parcial / "indice.json").write_text("[1]", encoding="utf-8")
+    datos.publicar_volcado(parcial, raw)
+    foto = datos.volcado_actual(raw)
+    assert (foto / "indice.json").read_text(encoding="utf-8") == "[1]"
+    assert not huerfana.exists(), "la huerfana vieja se limpia al publicar"
+    assert not raw.exists(), "y la anterior tambien"
+    assert datos.fotos_huerfanas(raw) == [] and datos.avisos_de_volcado(raw, "descargar.py") == []
 
 
 def test_los_avisos_del_volcado_valen_para_cualquier_nombre_logico(

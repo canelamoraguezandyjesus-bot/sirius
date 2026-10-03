@@ -77,7 +77,8 @@ def publicar_volcado(parcial: Path, definitivo: Path) -> None:
     muere despues, la nueva existe pero no esta seleccionada) y el selector
     (`<nombre>.actual`, el nombre de la foto publicada) se sustituye con
     `os.replace`, que es atomico en POSIX: el unico instante de cambio. Solo
-    despues se borra la foto anterior. `volcado_actual` lee el selector; una
+    despues se borran la foto anterior y cualquier foto vieja que quedara sin
+    seleccionar (ronda 18). `volcado_actual` lee el selector; una
     foto heredada de antes del selector sigue leyendose mientras no se publique
     otra.
     """
@@ -102,8 +103,15 @@ def publicar_volcado(parcial: Path, definitivo: Path) -> None:
         if nueva.exists() and not parcial.exists():
             nueva.rename(parcial)
         raise
-    if anterior != nueva and anterior.exists():
-        shutil.rmtree(anterior, ignore_errors=True)
+    # Despues de seleccionar: fuera la anterior y TODAS las fotos viejas sin
+    # seleccionar, no solo la anterior. Si el proceso moria entre el selector y
+    # este borrado, la anterior quedaba huerfana para siempre: la repeticion
+    # borraba su propia anterior, la huerfana vieja seguia, `fotos_huerfanas`
+    # avisaba indefinidamente y cada interrupcion acumulaba otra copia entera
+    # (Codex, PR #665, ronda 18).
+    for vieja in [anterior, *fotos_huerfanas(definitivo)]:
+        if vieja != nueva and vieja.exists():
+            shutil.rmtree(vieja, ignore_errors=True)
 
 
 def fotos_huerfanas(definitivo: Path) -> list[Path]:
