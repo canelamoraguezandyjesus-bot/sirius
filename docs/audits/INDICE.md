@@ -9,7 +9,7 @@
 > La fecha es la que cada documento **declara** en su cabecera; la vista no data
 > nada por su cuenta. «Sin fecha declarada» es un aviso, no un dato.
 
-**149 documentos**, 83 sin fecha declarada.
+**151 documentos**, 83 sin fecha declarada.
 
 ## `docs/audits`
 
@@ -28,6 +28,7 @@
 | sin fecha declarada | [Dictamen: se puede implementar el aprendizaje en Sirius?](SIRIUS_LEARNING_SEAM_AUDIT_2026-09.md) |
 | 2026-08-31 | [La mina: primer informe de aprendizaje sobre nuestros propios datos operativos](SIRIUS_MINA_APRENDIZAJE_OPERATIVO_2026-08.md) |
 | 2026-09-14 | [La mina, segunda edición: cuánta razón tiene el detector de familia repetida](SIRIUS_MINA_APRENDIZAJE_OPERATIVO_2026-09-14.md) |
+| 2026-10-01 | [La mina, tercera edición: septiembre entero, y la bitácora puesta contra `main` entrada a entrada](SIRIUS_MINA_APRENDIZAJE_OPERATIVO_2026-09-30.md) |
 | sin fecha declarada | [La mina v2: informe de aprendizaje sobre la ola de criticidad (M18 → M21b)](SIRIUS_MINA_APRENDIZAJE_OPERATIVO_2026-09.md) |
 | 2026-10-01 | [Nota de arranque — `continua` sobre una parada anterior a la PR no anuncia en verde lo que la puerta va a rechazar](arranque-2026-10-01-continua-sobre-una-parada-anterior-a-la-pr.md) |
 | 2026-10-01 | [Nota de arranque — el implementador sabe qué hora es](arranque-2026-10-01-el-implementador-sabe-que-hora-es.md) |
@@ -158,6 +159,7 @@
 | sin fecha declarada | [El banco entero con Ollama real, 20-09-2026: dos de los tres suelos de D1, alcanzados](medicion-banco-completo-ollama-real-2026-09-20.md) |
 | sin fecha declarada | [D7 punto 6 medido, y el desglose que lo explica — 20-09-2026](medicion-d7-punto-6-etiquetado-de-categoria-2026-09-20.md) |
 | sin fecha declarada | [Palanca 1 (ADR-164) medida con Ollama real — 20-09-2026](medicion-palanca-1-interprete-con-ollama-real-2026-09-20.md) |
+| 2026-10-01 | [La bitácora del ciclo contra `main`, entrada a entrada (edición de la mina del 30-09-2026)](mina-2026-09-30-bitacora-contra-main.md) |
 | sin fecha declarada | [Los dos cambios de `.github/` que salen de la mina v2 (para la mano del propietario)](mina-2026-09-cambios-para-el-propietario.md) |
 | 2026-09-04 | [Medición de los tres guardianes predichos, hecha por el propietario (contraste)](mina-2026-09-medicion-de-guardianes.md) |
 | 2026-09-03 | [Nota de arranque de la mina v2 (escrita ANTES de ver resultados, ADR-001)](mina-2026-09-nota-de-arranque.md) |

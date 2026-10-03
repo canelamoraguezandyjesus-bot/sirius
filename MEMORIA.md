@@ -32,7 +32,7 @@
 - Ideas aparcadas o descartadas: 5 aparcada, 2 descartada, 2 promovida.
 - Skills: **19**.
 - Investigaciones: **10** (fotos con fecha; caducan).
-- Documentos: **206**, de los que **137** no declaran fecha.
+- Documentos: **208**, de los que **137** no declaran fecha.
 
 ## Las skills: lo que ya costó averiguar dos veces (ADR-211)
 
@@ -574,7 +574,7 @@ nada por su cuenta. «Sin fecha declarada» es un aviso, no un dato.
 
 ### `docs/audits`
 
-**149 documentos**, 83 sin fecha declarada; el más reciente declara 2026-10-02.
+**151 documentos**, 83 sin fecha declarada; el más reciente declara 2026-10-02.
 Es la carpeta de la evidencia y crece a dos filas por ADR, así que la fila
 de cada documento vive en un índice generado aparte,
 [`docs/audits/INDICE.md`](docs/audits/INDICE.md), que escribe el
