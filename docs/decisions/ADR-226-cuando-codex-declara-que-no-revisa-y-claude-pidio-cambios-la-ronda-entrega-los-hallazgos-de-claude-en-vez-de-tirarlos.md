@@ -16,7 +16,8 @@ cuya regla 3 dice «`FAILED_SAFELY` de cualquiera → `FAILED_SAFELY`» y va ant
 que la 5 («`CHANGES_REQUESTED` de cualquiera → `CHANGES_REQUESTED`»). Cuando el
 conector de Codex contesta que **no va a revisar** —«You have reached your
 Codex usage limits for code reviews», «To use Codex here,», «Codex Review:
-Something went wrong»—, el recolector lo reconoce desde ADR-146 y termina su
+Something went wrong»—, el recolector lo reconoce desde ADR-060 (un error del
+conector no es silencio; el subtipo transitorio, desde ADR-146) y termina su
 parte en `FAILED_SAFELY` (`codex-fallo-declarado`, o el subtipo transitorio) sin
 agotar el plazo. Bien. Pero el agregador corre **después** del revisor de Claude,
 y la regla 3 tira lo que Claude ya entregó.
@@ -138,7 +139,8 @@ obligatorio», la cabecera de `review-sirius-work.yml`, el docstring de
   hallazgos de Claude; la aprobación final espera a Codex, como siempre. Una
   parada por cuota deja de costar una revisión pagada y un `continua`.
 - Puede haber varias rondas seguidas solo con hallazgos de Claude; las acotan
-  el presupuesto de rondas y el detector de familia repetida, y cada una deja
+  la medida de progreso entre rondas (`sirius_convergence`) y el detector de
+  familia repetida, y cada una deja
   escrito que Codex no revisó. Cuando Claude apruebe, la ronda para como hoy.
 - La mitad de la mejora 9 de la mina que es el reloj del implementador
   (entradas 92 y 94) sigue pendiente: es otro mecanismo y lleva su propia nota.

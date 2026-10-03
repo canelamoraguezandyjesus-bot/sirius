@@ -9,7 +9,7 @@
 > La fecha es la que cada documento **declara** en su cabecera; la vista no data
 > nada por su cuenta. «Sin fecha declarada» es un aviso, no un dato.
 
-**150 documentos**, 84 sin fecha declarada.
+**151 documentos**, 83 sin fecha declarada.
 
 ## `docs/audits`
 
@@ -36,12 +36,13 @@
 | 2026-10-01 | [Nota de arranque — la cola trae `main` a la rama que espera y deja las vistas generadas rotas](arranque-2026-10-01-la-cola-regenera-las-vistas-al-traer-la-base.md) |
 | 2026-10-01 | [Nota de arranque — la línea del contador de los siete días quedó cancelada el 13-09 y el árbol todavía dice que bloquea](arranque-2026-10-01-la-linea-del-contador-queda-cancelada-y-el-arbol-lo-dice.md) |
 | 2026-10-01 | [Nota de arranque — la referencia de cierre de un defecto se puede seguir desde `main`](arranque-2026-10-01-la-referencia-de-cierre-de-un-defecto-se-sigue-desde-main.md) |
-| sin fecha declarada | [Nota de arranque — la ronda no tira la revisión de Claude cuando Codex declara que no revisa](arranque-2026-10-01-la-ronda-no-tira-la-revision-de-claude-cuando-codex-declara-que-no-revisa.md) |
+| 2026-10-01 | [Nota de arranque — la ronda no tira la revisión de Claude cuando Codex declara que no revisa](arranque-2026-10-01-la-ronda-no-tira-la-revision-de-claude-cuando-codex-declara-que-no-revisa.md) |
 | 2026-10-01 | [Nota de arranque — la vista de memoria vuelve a caber en una sola lectura (segunda vez)](arranque-2026-10-01-la-vista-vuelve-a-caber-en-una-sola-lectura.md) |
 | 2026-10-01 | [Nota de arranque — las divergencias que el reflector aparta se ven en la vista de desenlaces, con su edad](arranque-2026-10-01-las-divergencias-que-el-reflector-aparta-se-ven-con-su-edad.md) |
 | sin fecha declarada | [Nota de arranque — los instantes de G8 se comparan en una sola forma](arranque-2026-10-01-los-instantes-de-g8-se-comparan-en-una-sola-forma.md) |
 | 2026-10-01 | [Nota de arranque — Quality no muere por un `uv sync` sin caché](arranque-2026-10-01-quality-no-muere-por-un-sync-lento.md) |
 | 2026-10-02 | [Nota de arranque — un defecto se cierra desde la PR que mete el ADR que lo cierra](arranque-2026-10-02-un-defecto-se-cierra-desde-la-pr-que-mete-el-adr-que-lo-cierra.md) |
+| 2026-10-02 | [Nota de arranque — una ronda en la que Codex no revisó no es una ronda entera](arranque-2026-10-02-una-ronda-en-la-que-codex-no-reviso-no-es-una-ronda-entera.md) |
 | 2026-08-28 | [Nota de arranque — atestar al buscador antes de gastar en medirlo](arranque-atestar-al-buscador.md) |
 | 2026-09-19 | [Nota de arranque — la auditoría de la forma de trabajar, segunda edición: lo que la primera no podía ver](arranque-auditoria-forma-de-trabajo.md) |
 | 2026-08-28 | [Nota de arranque — B1: que una orden de investigación produzca un informe](arranque-b1-investigar-desde-una-orden.md) |

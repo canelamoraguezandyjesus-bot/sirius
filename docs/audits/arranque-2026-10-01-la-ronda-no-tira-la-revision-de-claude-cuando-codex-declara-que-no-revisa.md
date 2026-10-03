@@ -1,7 +1,7 @@
 # Nota de arranque — la ronda no tira la revisión de Claude cuando Codex declara que no revisa
 
-Rama `claude/el-veredicto-de-claude-no-se-tira-cuando-codex-declara-cuota`,
-01-10-2026, 14:50 UTC. Mejora 9 de la lista de la mina de septiembre
+Rama `claude/el-veredicto-de-claude-no-se-tira-cuando-codex-declara-cuota`.
+Fecha: 01-10-2026, 14:50 UTC. Mejora 9 de la lista de la mina de septiembre
 (`SIRIUS_MINA_APRENDIZAJE_OPERATIVO_2026-09-30.md`, §10), en su mitad de
 Codex. Escrita antes de tocar el agregador.
 
