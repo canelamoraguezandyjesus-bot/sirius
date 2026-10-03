@@ -40,9 +40,12 @@
 # rancio: sale con 2 sin tocar etiquetas, ADR-221); `Perfil: rol@N` resoluble
 # con el manifiesto (ADR-221), con aviso si N no es la vigente.
 #
-# Codigos de salida: 0 (valida, o rechazada con el motivo publicado y las
-# etiquetas intactas), 1 (no se pudo completar; reintentable), 2 (evento
-# rancio: nada validado, nada tocado, el aviso en la incidencia).
+# Codigos de salida: 0 (valida), 4 (rechazada: el motivo publicado y las
+# etiquetas intactas; los workflows leen ESTE codigo, no si la etiqueta sigue
+# ahi, que antes era como deducian el rechazo), 1 (no se pudo completar;
+# reintentable), 2 (evento rancio: nada validado, nada tocado, el aviso en la
+# incidencia), 3 (el aviso de perfil no vigente no se pudo publicar;
+# reintentable).
 #
 # Idempotencia: el comentario de rechazo lleva un marcador por motivo
 # (`<!-- sirius-activation:rejected:<motivo> -->`); repetir el mismo error no
@@ -124,7 +127,7 @@ if [ "$(printf '%s' "$issue_json" | jq -r '.state')" != "open" ]; then
   reject "incidencia-cerrada" \
     "La incidencia no está abierta: no puede activarse una implementación sobre un trabajo cerrado." \
     "Reabre la incidencia solo si el trabajo sigue vigente." || exit 1
-  exit 0
+  exit 4
 fi
 
 # --- 2) Etiquetas: planned presente y sin estados incompatibles ----------------
@@ -141,14 +144,14 @@ if [ -n "$conflict" ]; then
   reject "estado-incompatible" \
     "La incidencia ya está en \`${conflict}\`: activarla de nuevo duplicaría trabajo o pisaría un estado que requiere otra acción (revisar un diagnóstico, esperar una decisión o cerrar un ciclo)." \
     "Resuelve primero el estado \`${conflict}\` (retíralo conscientemente si ya no aplica)." || exit 1
-  exit 0
+  exit 4
 fi
 
 if ! printf '%s\n' "$labels" | grep -Fxq "sirius:planned"; then
   reject "sin-planned" \
     "Falta \`sirius:planned\`. Esa etiqueta certifica que el alcance está definido y aprobado; ninguna automatización puede añadirla por ti." \
     "Confirma que el alcance está realmente aprobado y aplica \`sirius:planned\`." || exit 1
-  exit 0
+  exit 4
 fi
 
 # --- 3) Cuerpo estructuralmente completo ---------------------------------------
@@ -163,7 +166,7 @@ if ! missing="$(python3 "${SIRIUS_GATE_DIR}/validate_issue_body.py" "$body_file"
   reject "cuerpo-incompleto" \
     "El cuerpo de la incidencia está truncado o incompleto. Detalle del validador: ${missing}" \
     "Edita el cuerpo hasta que contenga todas las secciones obligatorias del contrato (compara con una incidencia completa como #55)." || exit 1
-  exit 0
+  exit 4
 fi
 
 # --- 4) El `Perfil: rol@N` se puede resolver (ADR-221) -------------------------
@@ -267,7 +270,7 @@ if ! detalle="$(ISSUE_BODY="$cuerpo_a_ejecutar" python3 "${SIRIUS_GATE_DIR}/reso
   reject "perfil-sin-resolver" \
     "El cuerpo declara un \`Perfil: rol@N\` que el manifiesto no puede resolver, así que el implementador pararía en rojo antes de empezar. Detalle del resolutor: ${detalle}" \
     "Pon en el cuerpo \`Perfil: rol@N\` con un rol y una versión registrados en \`scripts/automation/prompts/manifiesto.json\` (la versión vigente de cada rol está en \`docs/implementation/work_engine/perfiles/<rol>.yml\`)." || exit 1
-  exit 0
+  exit 4
 fi
 
 # --- 5) Un rol@N valido pero no vigente se avisa, no se rechaza ----------------

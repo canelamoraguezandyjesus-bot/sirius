@@ -241,6 +241,15 @@ jobs:
           else
             script_rc=$?
           fi
+          if [ "$script_rc" -eq 4 ]; then
+            # Rechazada: la puerta publico el motivo y NO toco ninguna etiqueta
+            # (ADR-221): la sirius:implement-requested que hay puede ser ya de
+            # otra activacion. Antes el rechazo se deducia de que la etiqueta
+            # hubiera desaparecido; ahora lo dice el codigo.
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+            echo "La activacion no era valida; la puerta la rechazo y explico el motivo en la incidencia, sin tocar etiquetas."
+            exit 0
+          fi
           if [ "$script_rc" -eq 2 ]; then
             echo "valid=false" >> "$GITHUB_OUTPUT"
             echo "::error::El Perfil del cuerpo cambio desde que se aplico la etiqueta (la instantanea del evento y el cuerpo vigente no coinciden): este evento es rancio y no se consume. NO se ha tocado ninguna etiqueta -la activacion presente puede ser de otro evento posterior-. El aviso esta en la incidencia (ADR-221)."
@@ -277,7 +286,7 @@ jobs:
             echo "valid=true" >> "$GITHUB_OUTPUT"
           else
             echo "valid=false" >> "$GITHUB_OUTPUT"
-            echo "La activacion no era valida; la puerta ya la rechazo y explico el motivo en la incidencia."
+            echo "#${ISSUE_NUMBER} ya no lleva sirius:implement-requested: la activacion no esta viva (alguien la retiro); no se toca."
           fi
 
       - name: Consumir el evento y marcar en curso

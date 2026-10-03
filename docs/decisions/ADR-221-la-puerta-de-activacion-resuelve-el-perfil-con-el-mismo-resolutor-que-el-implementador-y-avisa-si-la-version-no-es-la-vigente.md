@@ -150,7 +150,14 @@ ninguna etiqueta se toca**. Quien lea el rechazo retira
 causa. Lo que se pierde: el estado «limpio» tras un rechazo (la pareja
 `planned` + `implement-requested` se queda, y el reconciliador la tratará como
 una activación sin consumir cuando envejezca, que es lo que es). Lo que se
-gana: ninguna ventana en la que la máquina retire la activación de otro.
+gana: ninguna ventana en la que la máquina retire la activación de otro. Y como los dos carriles y el validador independiente deducían el
+rechazo de que la etiqueta hubiera desaparecido, la puerta lo dice ahora con
+un código propio: 4 es «rechazada, motivo publicado, etiquetas intactas» (0
+válida, 1 reintentable, 2 evento rancio, 3 aviso no publicable), y los
+workflows leen el código, no la etiqueta; el carril retirado ya no impone su
+desenlace a una activación rechazada (prueba
+`test_una_activacion_improcedente_no_impone_failed_safely`, que Quality puso
+en rojo sobre `3fccb2a8` con la primera versión de esta regla).
 
 ## Comprobación que la sostiene
 

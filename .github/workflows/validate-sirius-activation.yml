@@ -45,4 +45,9 @@ jobs:
           ISSUE_BODY: ${{ github.event.issue.body }}
         run: |
           set -uo pipefail
-          bash scripts/automation/sirius_validate_activation.sh "$GH_REPO" "$ISSUE_NUMBER"
+          rc=0
+          bash scripts/automation/sirius_validate_activation.sh "$GH_REPO" "$ISSUE_NUMBER" || rc=$?
+          # 4 = rechazada con el motivo publicado y las etiquetas intactas
+          # (ADR-221): el run queda en verde, como antes, porque el diagnostico
+          # esta en la incidencia; los demas codigos se conservan.
+          case "$rc" in 0|4) exit 0 ;; *) exit "$rc" ;; esac

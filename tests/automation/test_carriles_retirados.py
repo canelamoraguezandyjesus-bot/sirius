@@ -652,7 +652,8 @@ def test_una_activacion_improcedente_no_impone_failed_safely(tmp_path: Path, est
     los `*-requested`, una activación nueva acababa poniendo `failed-safely`
     ENCIMA del trabajo en curso. Ahora quien decide si la activación es legítima
     es su dueño —`sirius_validate_activation.sh`, que tiene los diez estados—, y
-    su política es explicar y retirar el evento **sin** imponer un desenlace.
+    su política es explicar el rechazo (código 4) **sin** imponer un desenlace ni
+    tocar etiquetas (ADR-221).
 
     Los estados se leen del propio validador: si mañana añade uno, esta prueba lo
     cubre sola.
@@ -668,7 +669,9 @@ def test_una_activacion_improcedente_no_impone_failed_safely(tmp_path: Path, est
     assert r.codigo == 0, r.stderr
     assert r.valid != "true"
     assert estado in r.etiquetas, f"{estado} es trabajo de otro: no se toca"
-    assert "sirius:implement-requested" not in r.etiquetas, "el evento improcedente se retira"
+    assert "sirius:implement-requested" in r.etiquetas, (
+        "el evento improcedente se explica, pero no se toca: la puerta no retira etiquetas"
+    )
     assert len(r.comentarios) == 1, "y se explica por qué"
     if estado != "sirius:failed-safely":
         assert "sirius:failed-safely" not in r.etiquetas, (
