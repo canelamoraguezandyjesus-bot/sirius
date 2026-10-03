@@ -121,7 +121,9 @@ ventana, cifra que `analizar.py` imprime y guarda en `resumen.json`; los
 comentarios de Codex en las PR de esta captura no guardan la fecha de edición,
 así que para ellos no se puede saber y el analizador lo avisa; las descargas
 posteriores la guardan, y una captura de `raw` empareja un solo volcado de PR,
-así que renovarla es repetir la cadena entera); y cada `sirius-round:N` cuenta una vez por incidencia aunque GitHub
+así que renovarla es repetir la cadena entera; y `resumen.json` lleva la marca de
+la captura de la que salió, que `falsos_negativos.py` y `reproducir_avisos.py`
+exigen antes de leer la foto); y cada `sirius-round:N` cuenta una vez por incidencia aunque GitHub
 lo hubiera publicado dos veces. Y la reconstrucción ronda a ronda solo cuenta rondas y avisos
 publicados dentro de la ventana 01→30-09: lo anterior al 01-09 es contexto del
 detector, no medición; y un tramo que el detector ya marcaba entero con lo

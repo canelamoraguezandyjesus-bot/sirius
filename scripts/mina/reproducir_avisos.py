@@ -15,7 +15,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from analizar import FIN, Evidencia, confianza, evidencias_publicadas
-from datos import DATOS, RAW, editado_tras
+from datos import DATOS, RAW, editado_tras, exigir_misma_captura
 
 from sirius_engine.round_family_detector import detectar_familia_repetida
 from sirius_engine.round_history import history_after_last_resume, parse_round_records
@@ -57,6 +57,8 @@ def detector_de_hoy(cuerpos: list[str]) -> str:
 
 def main() -> int:
     resumen = json.loads((DATOS / "resumen.json").read_text(encoding="utf-8"))
+    for aviso in exigir_misma_captura("resumen.json", resumen.get("captura"), RAW):
+        print(aviso, file=sys.stderr)
     avisos = resumen["avisos_familia"]
     reproducidos = 0
     print(

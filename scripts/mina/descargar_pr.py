@@ -18,7 +18,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 from datos import (
     PRDIR_LOGICO,
     RAW,
-    copiar_marca_de_captura,
+    marca_de_captura_para_pr,
+    marcar_captura,
     parcial_de,
     publicar_volcado,
 )
@@ -29,6 +30,9 @@ def main(prdir: Path = PRDIR_LOGICO, raw: Path = RAW) -> int:
     indice = json.loads((raw / "indice.json").read_text(encoding="utf-8"))
     prs = [i for i in indice if i["es_pr"]]
     print(f"PR en el indice: {len(prs)}")
+    # Antes de crear el parcial: la captura de raw y que no tenga ya su volcado de
+    # PR (rondas 12 y 14 a 16). Si se rechaza, no queda ningun parcial a medias.
+    marca = marca_de_captura_para_pr(raw, prdir)
     # Misma garantia que `descargar.py`: se descarga en `raw_pr.parcial` y se
     # publica entero al terminar (Codex, PR #665, ronda 6).
     parcial = parcial_de(prdir)
@@ -88,10 +92,8 @@ def main(prdir: Path = PRDIR_LOGICO, raw: Path = RAW) -> int:
         )
         if k % 10 == 0:
             print(f"  {k}/{len(prs)}", flush=True)
-    # Misma captura que el `raw` junto al que se descarga, o nada (ronda 12).
-    # Y una captura empareja un solo volcado de PR: si el publicado ya lleva la
-    # marca de este raw, no se copia (rondas 14 y 15).
-    copiar_marca_de_captura(raw, parcial, prdir)
+    # Misma captura que el `raw` junto al que se descarga (ronda 12).
+    marcar_captura(parcial, marca)
     publicar_volcado(parcial, prdir)
     print(f"hecho; volcado de PR publicado entero en {prdir}")
     return 0

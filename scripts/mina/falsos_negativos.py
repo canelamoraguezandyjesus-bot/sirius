@@ -39,7 +39,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from analizar import FIN, INICIO, Evidencia, confianza, evidencias_publicadas
-from datos import DATOS, RAW, editado_tras
+from datos import DATOS, RAW, editado_tras, exigir_misma_captura
 from reproducir_avisos import evidencias_de_hoy
 
 from sirius_engine.round_history import parse_round_records
@@ -200,6 +200,8 @@ def clasificar(
 
 def main() -> int:
     resumen = json.loads((DATOS / "resumen.json").read_text(encoding="utf-8"))
+    for aviso in exigir_misma_captura("resumen.json", resumen.get("captura"), RAW):
+        print(aviso, file=sys.stderr)
     comentarios: dict[int, list[dict[str, str]]] = {}
     for n in resumen["incidencias"]:
         d = json.loads((RAW / f"issue_{int(n)}.json").read_text(encoding="utf-8"))

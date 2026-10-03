@@ -27,6 +27,7 @@ from datos import (
     RAW,
     avisos_de_editados,
     avisos_de_los_volcados,
+    captura_de,
     editado_tras,
     exigir_volcado,
 )
@@ -312,6 +313,9 @@ def main() -> int:
     print(f"\nHistoriales escritos para {len(por_incidencia)} incidencias en {hdir}")
 
     resumen = {
+        # La captura de la que sale: `falsos_negativos.py` y `reproducir_avisos.py`
+        # la exigen antes de leer la foto (Codex, PR #665, ronda 16).
+        "captura": captura_de(RAW),
         "ventana": [INICIO, FIN],
         "incidencias": sorted(por_incidencia),
         "rondas": len(rondas),

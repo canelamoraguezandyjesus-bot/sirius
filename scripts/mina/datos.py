@@ -203,19 +203,20 @@ def captura_de(volcado: Path) -> str | None:
     return fichero.read_text(encoding="utf-8").strip() or None
 
 
-def copiar_marca_de_captura(desde: Path, volcado: Path, publicado: Path) -> str:
-    """La marca de `desde` (el `raw` seleccionado) pasa al volcado de PR que se esta
-    descargando (`volcado`, el parcial); sin ella no hay captura que compartir y
-    no se descarga nada.
+def marca_de_captura_para_pr(desde: Path, publicado: Path) -> str:
+    """La marca que llevara el volcado de PR: la de `desde` (el `raw` seleccionado).
 
-    Y una captura empareja UN solo volcado de PR: si la foto publicada bajo el
-    nombre logico `publicado` ya lleva esa marca, no se copia, porque un
-    `descargar_pr.py` ejecutado solo heredaria la marca de una captura anterior y
-    los dos volcados pasarian por la misma sin serlo (Codex, PR #665, ronda 14).
-    La prueba del emparejamiento es el propio volcado publicado, que se publica
-    en un solo paso atomico: una senal aparte, consumida despues de publicar,
-    podia quedarse sin consumir si el proceso moria entre los dos pasos (ronda
-    15). Un volcado de PR interrumpido antes de publicar se puede repetir.
+    Se comprueba ANTES de crear el parcial y de descargar nada (Codex, PR #665,
+    ronda 16: comprobarlo despues dejaba un `raw_pr.parcial` lleno al rechazar,
+    los analizadores avisaban de una descarga interrumpida y cada repeticion
+    volvia a dejar el mismo parcial). Sin marca en `desde` no hay captura que
+    compartir. Y una captura empareja UN solo volcado de PR: si la foto
+    publicada bajo el nombre logico `publicado` ya lleva esa marca, no se
+    descarga otro, porque un `descargar_pr.py` ejecutado solo heredaria la marca
+    de una captura anterior y los dos volcados pasarian por la misma sin serlo
+    (ronda 14). La prueba del emparejamiento es el propio volcado publicado, que
+    se publica en un solo paso atomico (ronda 15). Un volcado de PR interrumpido
+    antes de publicar se puede repetir.
     """
     marca = captura_de(desde)
     if marca is None:
@@ -228,7 +229,28 @@ def copiar_marca_de_captura(desde: Path, volcado: Path, publicado: Path) -> str:
             f"la captura {marca} de {desde} ya tiene su volcado de PR en {emparejado}, y una "
             "captura empareja un solo volcado de PR: repite descargar.py y despues descargar_pr.py"
         )
-    return marcar_captura(volcado, marca)
+    return marca
+
+
+def exigir_misma_captura(producto: str, marca_producto: str | None, raw: Path) -> list[str]:
+    """Un producto de la cadena (`resumen.json`) solo vale con la foto de `raw` de
+    la que salio: si `descargar.py` publica otra captura y la cadena se corta
+    antes de repetir `analizar.py`, `falsos_negativos.py` y `reproducir_avisos.py`
+    leian las incidencias y las horas de una foto y los cuerpos de otra (Codex,
+    PR #665, ronda 16). Marcas distintas: parar. Sin marca en alguno: avisar."""
+    de_raw = captura_de(raw)
+    if marca_producto and de_raw and marca_producto != de_raw:
+        raise SystemExit(
+            f"{producto} es de la captura {marca_producto} y {raw} de la {de_raw}: "
+            "repite analizar.py antes"
+        )
+    if not marca_producto or not de_raw:
+        sin = ", ".join(n for n, m in ((producto, marca_producto), (str(raw), de_raw)) if not m)
+        return [
+            f"AVISO: sin marca de captura en {sin}: no se puede saber si {producto} salio de la "
+            f"foto {raw}. Repite la cadena entera."
+        ]
+    return []
 
 
 def avisos_de_captura(raw: Path, pr: Path) -> list[str]:

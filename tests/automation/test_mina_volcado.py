@@ -263,30 +263,33 @@ def test_los_dos_volcados_tienen_que_ser_de_la_misma_captura(
     assert "sin marca de captura" in sin_marca and str(raw) in sin_marca
 
     marca = datos.marcar_captura(raw)
-    assert datos.copiar_marca_de_captura(raw, raw_pr, raw_pr) == marca
+    assert datos.marca_de_captura_para_pr(raw, raw_pr) == marca
+    datos.marcar_captura(raw_pr, marca)
     assert datos.avisos_de_los_volcados() == []
 
-    # Rondas 14 y 15: una captura de raw empareja UN solo volcado de PR, y la
+    # Rondas 14 a 16: una captura de raw empareja UN solo volcado de PR, y la
     # prueba es el propio volcado publicado con su marca, no una senal aparte que
     # pudiera quedarse sin consumir si el proceso muriera despues de publicar.
-    # Con raw_pr publicado con la marca de raw, otro descargar_pr.py solo no la
-    # hereda y no escribe nada en su parcial.
-    parcial = datos.parcial_de(raw_pr)
-    parcial.mkdir()
+    # Con raw_pr publicado con la marca de raw, otro descargar_pr.py solo se
+    # rechaza ANTES de crear el parcial: no queda ninguna descarga a medias.
     with pytest.raises(SystemExit, match=r"un solo volcado de PR"):
-        datos.copiar_marca_de_captura(raw, parcial, raw_pr)
-    assert datos.captura_de(parcial) is None and datos.captura_de(raw_pr) == marca
-    parcial.rmdir()
+        datos.marca_de_captura_para_pr(raw, raw_pr)
+    descargar_pr = _cargar("descargar_pr")
+    with pytest.raises(SystemExit, match=r"un solo volcado de PR"):
+        descargar_pr.main(prdir=raw_pr, raw=raw)
+    assert not datos.parcial_de(raw_pr).exists(), "rechazado antes de crear el parcial"
+    assert datos.avisos_de_los_volcados() == []
 
     datos.marcar_captura(raw, "otra")
     [distintas] = datos.avisos_de_los_volcados()
     assert "capturas distintas" in distintas and "otra" in distintas and marca in distintas
 
     with pytest.raises(SystemExit, match=r"repite descargar\.py"):
-        datos.copiar_marca_de_captura(tmp_path / "sin-marca", raw_pr, raw_pr)
+        datos.marca_de_captura_para_pr(tmp_path / "sin-marca", raw_pr)
     for guion, llamada in (
         ("descargar.py", "marcar_captura(parcial)"),
-        ("descargar_pr.py", "copiar_marca_de_captura(raw, parcial, prdir)"),
+        ("descargar_pr.py", "marca_de_captura_para_pr(raw, prdir)"),
+        ("descargar_pr.py", "marcar_captura(parcial, marca)"),
     ):
         assert llamada in (MINA / guion).read_text(encoding="utf-8")
 
@@ -362,3 +365,25 @@ def test_un_comentario_editado_despues_de_la_ventana_no_es_evidencia_de_ella() -
     assert '"updated_at": c.get("updated_at")' in (MINA / "descargar_pr.py").read_text(
         encoding="utf-8"
     )
+
+
+def test_el_resumen_solo_vale_con_la_foto_de_la_que_salio(tmp_path: Path) -> None:
+    """Ronda 16 de Codex en la PR #665: si `descargar.py` publica otra captura y la
+    cadena se corta antes de repetir `analizar.py`, los consumidores de
+    `resumen.json` leian las incidencias y las horas de una foto y los cuerpos
+    de otra. El resumen lleva la marca de su captura y los dos la exigen."""
+    raw = tmp_path / "raw"
+    _foto_anterior(raw)
+    [sin] = datos.exigir_misma_captura("resumen.json", None, raw)
+    assert "sin marca de captura" in sin and "resumen.json" in sin
+    marca = datos.marcar_captura(raw)
+    assert datos.exigir_misma_captura("resumen.json", marca, raw) == []
+    [sin] = datos.exigir_misma_captura("resumen.json", None, raw)
+    assert "sin marca de captura en resumen.json:" in sin
+    with pytest.raises(SystemExit, match=r"repite analizar\.py"):
+        datos.exigir_misma_captura("resumen.json", "otra", raw)
+
+    assert '"captura": captura_de(RAW)' in (MINA / "analizar.py").read_text(encoding="utf-8")
+    for guion in ("falsos_negativos.py", "reproducir_avisos.py"):
+        texto = (MINA / guion).read_text(encoding="utf-8")
+        assert 'exigir_misma_captura("resumen.json", resumen.get("captura"), RAW)' in texto, guion
