@@ -1395,3 +1395,18 @@ defectos:
     ficheros:
       - tests/automation/test_registro_de_defectos.py
       - .claude/skills/registro-de-defectos/SKILL.md
+
+  - id: H-230
+    titulo: Una ronda en la que Codex declaro que no revisaba publicaba un RONDA_HALLAZGOS igual que una ronda entera; la convergencia leia la ausencia de las huellas de Codex como progreso y su vuelta como reaparicion, y el detector de familias dejaba que esa ronda rompiera el tramo de un fichero que Codex senala
+    bloque: motor
+    gravedad: media
+    estado: cerrado
+    cerrado_por: 84458677a88b137699b241b1dc9ee175b072b7ac
+    pr: 678
+    adr: 230
+    ficheros:
+      - scripts/automation/sirius_aggregate_reviews.py
+      - scripts/automation/sirius_convergence.py
+      - scripts/automation/sirius_apply_verdict.sh
+      - src/sirius_engine/round_history.py
+      - src/sirius_engine/round_family_detector.py

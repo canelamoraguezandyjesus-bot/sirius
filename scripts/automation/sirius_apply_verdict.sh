@@ -800,7 +800,44 @@ case "$verdict" in
 
     round_verdict="$(mktemp)"
     round_record="$(mktemp)"
-    jq -n --argjson obs "$observations" '{observations: $obs}' >"$round_verdict"
+    # ADR-230: el registro lleva qué revisores tuvo la ronda y a quién esperaba,
+    # para que la convergencia y el detector de familias no lean una ronda sin
+    # Codex como una ronda entera con menos hallazgos. Los declara el agregador;
+    # en modo solo (revisión dual apagada) el workflow aplica el veredicto de
+    # Claude sin pasar por él, y un registro sin los campos se leería como una
+    # ronda antigua entera -con los dos- si la revisión dual se activara después
+    # en la misma incidencia (ronda 3 de Codex en la PR #678). Así que sin
+    # declaración (campo ausente o lista vacía): en modo solo la ronda fue de
+    # Claude y esperaba solo a Claude;
+    # en modo dual (DUAL_MODE=true, lo pone review-sirius-work.yml) el veredicto
+    # tenía que venir del agregador y la ronda se detiene de forma segura.
+    reviewers_json="$(jq -c '.reviewers // null' "$VERDICT_FILE" 2>/dev/null || echo null)"
+    expected_json="$(jq -c '.expected_reviewers // null' "$VERDICT_FILE" 2>/dev/null || echo null)"
+    # Ronda 4 de Codex en la PR #678: en modo solo el workflow SABE que la ronda la
+    # tuvo Claude y esperaba solo a Claude, diga lo que diga el veredicto (`[null]`,
+    # `[" "]`, un escalar o `reviewers` sin `expected_reviewers` acababan, tras la
+    # normalización de `cmd_record`, en un registro sin campos o con una ronda a la
+    # que «le faltó Codex»); en modo dual el veredicto viene del agregador y tiene
+    # que traer los dos campos en forma canónica: listas no vacías de nombres.
+    if [ "${DUAL_MODE:-false}" = "true" ]; then
+      if ! jq -e '
+          def canonica: (type == "array") and (length > 0)
+            and all(.[]; type == "string" and ((gsub("^\\s+|\\s+$"; "") | length) > 0));
+          (.reviewers | canonica) and (.expected_reviewers | canonica)' "$VERDICT_FILE" >/dev/null 2>&1; then
+        rm -f "$round_verdict" "$round_record" "$history_dump"
+        stop_safely "veredicto-sin-revisores" \
+          "El veredicto de una ronda de revisión dual no declara en forma canónica qué revisores tuvo y a quién esperaba (reviewers y expected_reviewers: listas no vacías de nombres); sin eso el registro de la ronda se leería mal y me detengo de forma segura."
+      fi
+      reviewers_json="$(jq -c '.reviewers' "$VERDICT_FILE")"
+      expected_json="$(jq -c '.expected_reviewers' "$VERDICT_FILE")"
+    else
+      reviewers_json='["CLAUDE"]'
+      expected_json='["CLAUDE"]'
+    fi
+    jq -n --argjson obs "$observations" --argjson rev "$reviewers_json" --argjson exp "$expected_json" \
+      '{observations: $obs}
+       + (if $rev == null then {} else {reviewers: $rev} end)
+       + (if $exp == null then {} else {expected_reviewers: $exp} end)' >"$round_verdict"
     if ! python3 "${SIRIUS_VERDICT_DIR}/sirius_convergence.py" record \
       --verdict-file "$round_verdict" --round "$round_number" \
       --head "$head_sha" --output "$round_record"; then

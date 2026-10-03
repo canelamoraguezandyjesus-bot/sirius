@@ -258,9 +258,23 @@ def fingerprint(observation: dict[str, Any]) -> str:
 
 
 def round_record(
-    round_number: int, head: str, observations: list[dict[str, Any]]
+    round_number: int,
+    head: str,
+    observations: list[dict[str, Any]],
+    reviewers: list[str] | None = None,
+    expected_reviewers: list[str] | None = None,
 ) -> dict[str, Any]:
-    """Registro estructurado de una ronda, listo para publicarse en la incidencia."""
+    """Registro estructurado de una ronda, listo para publicarse en la incidencia.
+
+    ``reviewers`` dice qué revisores tuvo la ronda (ADR-230): una ronda en la
+    que Codex declaró que no revisaba (ADR-226) lleva solo ``["CLAUDE"]``, y
+    así la política de convergencia y el detector de familias no la leen como
+    una ronda entera con menos hallazgos. ``expected_reviewers`` dice a quién
+    esperaba la ronda (los dos en la revisión dual), para que la primera ronda
+    parcial sepa que le falta alguien aunque todo el historial anterior sea de
+    antes de ADR-230. Sin los datos el registro no lleva los campos y se lee
+    como entera, igual que todo el historial anterior.
+    """
     findings = [
         {
             "fingerprint": fingerprint(observation),
@@ -273,13 +287,76 @@ def round_record(
     # Orden determinista: dos rondas con los mismos hallazgos producen el mismo
     # registro, sin depender del orden en que llegaron.
     findings.sort(key=lambda item: (item["fingerprint"], item["file"]))
-    return {
+    record: dict[str, Any] = {
         "round": round_number,
         "head": head,
         "findings": findings,
         "pending": len(findings),
         "severity_total": sum(severity_weight(item["severity"]) for item in findings),
     }
+    declarados = sorted({str(r).strip().upper() for r in reviewers or [] if str(r).strip()})
+    if declarados:
+        record["reviewers"] = declarados
+    esperados = sorted({str(r).strip().upper() for r in expected_reviewers or [] if str(r).strip()})
+    if esperados:
+        record["expected_reviewers"] = esperados
+    return record
+
+
+def _revisores_de(record: dict[str, Any]) -> set[str] | None:
+    declarados = record.get("reviewers")
+    if not declarados:
+        return None
+    return {str(r).strip().upper() for r in declarados if str(r).strip()} or None
+
+
+def _proyectar_sobre_la_ultima_ronda(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """El historial con el que la ronda actual puede compararse (ADR-230).
+
+    Una ronda en la que un revisor no revisó -Codex sin cuota, ADR-226-
+    publica menos huellas que una entera, no porque algo se corrigiera sino
+    porque nadie lo buscó. Comparada tal cual, cuenta como progreso falso, y
+    cuando el revisor vuelve sus huellas «reaparecen» y la puerta bloquea sin
+    que nada haya regresado. Así que cada ronda se mide solo contra rondas que
+    tuvieran al menos sus mismos revisores, proyectadas a esos revisores:
+
+    - con la ronda actual ENTERA, las parciales no cuentan;
+    - con la actual PARCIAL, de las enteras solo cuentan los hallazgos de los
+      revisores que sí revisaron ahora, y la gravedad pegajosa se recalcula
+      sobre lo que queda.
+
+    Los registros sin ``reviewers`` -los anteriores a ADR-230- son enteros:
+    cuentan como si declararan el conjunto conocido. Un historial en el que
+    nadie declara nada se devuelve tal cual: nada cambia para lo que ya existe.
+    """
+    # El conjunto conocido junta a los que cada ronda tuvo y a los que esperaba:
+    # así la primera ronda parcial tras un historial anterior a ADR-230 ya sabe
+    # que le falta Codex, y las enteras antiguas se proyectan en vez de leerse
+    # como solo de Claude (ronda 1 de Codex en la PR #678).
+    conocidos: set[str] = _round_history.revisores_conocidos(records)
+    actuales = _revisores_de(records[-1]) or conocidos
+    if not actuales:
+        return records
+    comparables = [r for r in records if (_revisores_de(r) or conocidos) >= actuales]
+    ajenos = conocidos - actuales
+    if not ajenos:
+        return comparables
+    proyectados: list[dict[str, Any]] = []
+    for record in comparables:
+        findings = [
+            item
+            for item in record["findings"]
+            if str(item.get("source") or "").strip().upper() not in ajenos
+        ]
+        copia = dict(record)
+        copia["findings"] = findings
+        copia["fingerprints"] = {
+            str(item.get("fingerprint") or "") for item in findings if item.get("fingerprint")
+        }
+        copia["pending"] = len(findings)
+        proyectados.append(copia)
+    _round_history._apply_sticky_severity(proyectados)
+    return proyectados
 
 
 def _best_so_far(history: list[dict[str, Any]]) -> tuple[int, int]:
@@ -376,6 +453,14 @@ def decide(records: list[dict[str, Any]], ci_failures: int = 0) -> dict[str, Any
             "rounds": 0,
         }
 
+    # ADR-230: una ronda se compara solo con rondas que tuvieran al menos sus
+    # mismos revisores, proyectadas a ellos. Sin el campo (historial anterior)
+    # no cambia nada. La ronda CRONOLÓGICAMENTE anterior se guarda antes de
+    # proyectar: la guarda del head la necesita entera (ronda 4 de Codex en la
+    # PR #678: entera A → parcial B → entera B sobre el head de B dejaba fuera a
+    # la parcial y comparaba A con B como si hubiera habido corrección).
+    cronologica_anterior = records[-2] if len(records) >= 2 else None
+    records = _proyectar_sobre_la_ultima_ronda(records)
     current = records[-1]
     rounds = len(records)
 
@@ -420,6 +505,25 @@ def decide(records: list[dict[str, Any]], ci_failures: int = 0) -> dict[str, Any
                     "rounds": rounds,
                 }
 
+    # --- Head sin avanzar: el corrector no publicó cambios --------------------
+    # Contra la ronda cronológicamente anterior, proyectada o no: el head es un
+    # hecho del repositorio, no una medida entre revisores comparables.
+    if (
+        cronologica_anterior is not None
+        and cronologica_anterior.get("head")
+        and cronologica_anterior.get("head") == current.get("head")
+    ):
+        return {
+            "decision": "BLOCK",
+            "reason": "head-sin-avance",
+            "detail": (
+                f"Las rondas {cronologica_anterior.get('round')} y {current.get('round')} se "
+                f"registraron sobre el mismo head `{current.get('head')}`: no hubo ninguna "
+                "corrección efectiva que revisar."
+            ),
+            "rounds": rounds,
+        }
+
     if rounds == 1:
         return {
             "decision": "CONTINUE",
@@ -428,19 +532,7 @@ def decide(records: list[dict[str, Any]], ci_failures: int = 0) -> dict[str, Any
             "rounds": rounds,
         }
 
-    # --- Head sin avanzar: el corrector no publicó cambios --------------------
     previous = records[-2]
-    if previous.get("head") and previous.get("head") == current.get("head"):
-        return {
-            "decision": "BLOCK",
-            "reason": "head-sin-avance",
-            "detail": (
-                f"Las rondas {previous.get('round')} y {current.get('round')} se registraron "
-                f"sobre el mismo head `{current.get('head')}`: no hubo ninguna corrección "
-                "efectiva que revisar."
-            ),
-            "rounds": rounds,
-        }
 
     # Cada ronda se mide contra la MEJOR MARCA HISTÓRICA de las anteriores, no
     # contra la ronda inmediata: si se comparase solo con la inmediata, una
@@ -496,10 +588,18 @@ def cmd_record(args: argparse.Namespace) -> int:
     observations = verdict.get("observations") if isinstance(verdict, dict) else None
     if not isinstance(observations, list):
         observations = []
+    reviewers = verdict.get("reviewers") if isinstance(verdict, dict) else None
+    expected = verdict.get("expected_reviewers") if isinstance(verdict, dict) else None
     record = round_record(
         args.round,
         args.head,
         [item for item in observations if isinstance(item, dict)],
+        reviewers=[r for r in reviewers if isinstance(r, str)]
+        if isinstance(reviewers, list)
+        else None,
+        expected_reviewers=[r for r in expected if isinstance(r, str)]
+        if isinstance(expected, list)
+        else None,
     )
     with open(args.output, "w", encoding="utf-8") as handle:
         json.dump(record, handle, ensure_ascii=False, indent=2)

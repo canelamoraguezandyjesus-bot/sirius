@@ -532,7 +532,10 @@ def _run(args: list[str]) -> subprocess.CompletedProcess[str]:
 
 def test_cli_record_emits_the_round_record(tmp_path: Path) -> None:
     verdict = tmp_path / "verdict.json"
-    verdict.write_text(json.dumps({"observations": [_observation()]}), encoding="utf-8")
+    verdict.write_text(
+        json.dumps({"observations": [_observation()], "reviewers": ["CODEX", "CLAUDE"]}),
+        encoding="utf-8",
+    )
     output = tmp_path / "record.json"
     result = _run(
         [
@@ -553,6 +556,7 @@ def test_cli_record_emits_the_round_record(tmp_path: Path) -> None:
     assert record["head"] == HEAD_D
     assert record["pending"] == 1
     assert len(record["findings"][0]["fingerprint"]) == 16
+    assert record["reviewers"] == ["CLAUDE", "CODEX"], "ADR-230: el registro lleva los revisores"
 
 
 def test_cli_decide_writes_the_decision(tmp_path: Path) -> None:
@@ -1202,3 +1206,185 @@ def test_a_legible_copy_wins_over_a_corrupt_one() -> None:
     records = module.parse_round_records("\n".join([corrupta, buena]))
     assert [record["round"] for record in records] == [1]
     assert records[0]["pending"] == 1
+
+
+# --------------------------------------------------------------------------- #
+# ADR-230: una ronda en la que Codex no revisó no es una ronda entera
+# --------------------------------------------------------------------------- #
+
+_AMBOS = ["CLAUDE", "CODEX"]
+_SOLO_CLAUDE = ["CLAUDE"]
+
+
+def _ronda_con_revisores(
+    round_number: int,
+    head: str,
+    observations: list[dict[str, str]],
+    reviewers: list[str],
+    esperados: list[str] | None = None,
+) -> str:
+    module = _module()
+    record = module.round_record(
+        round_number, head, observations, reviewers=reviewers, expected_reviewers=esperados
+    )
+    return (
+        f"<!-- sirius-round:{round_number} -->\n\n"
+        "## RONDA_HALLAZGOS\n```json\n" + json.dumps(record, ensure_ascii=False) + "\n```\n"
+    )
+
+
+def _de_claude() -> dict[str, str]:
+    return _observation("CLAUDE-001", archivo="src/a.py:1", problema="Falta la guarda.")
+
+
+def _de_codex() -> dict[str, str]:
+    return _observation("CODEX-001", archivo="src/b.py:2", problema="No valida la entrada.")
+
+
+def test_el_registro_lleva_los_revisores_de_la_ronda_y_sin_ellos_no_inventa_nada() -> None:
+    module = _module()
+    con = module.round_record(1, HEAD_A, [_de_claude()], reviewers=["codex", " claude "])
+    assert con["reviewers"] == ["CLAUDE", "CODEX"]
+    assert "reviewers" not in module.round_record(1, HEAD_A, [_de_claude()])
+    assert "reviewers" not in module.round_record(1, HEAD_A, [_de_claude()], reviewers=[])
+    esperando = module.round_record(
+        1, HEAD_A, [_de_claude()], reviewers=["CLAUDE"], expected_reviewers=["codex", "CLAUDE"]
+    )
+    assert esperando["expected_reviewers"] == ["CLAUDE", "CODEX"]
+    assert "expected_reviewers" not in module.round_record(1, HEAD_A, [_de_claude()])
+
+
+def test_una_ronda_solo_de_claude_no_hace_reaparecer_los_hallazgos_de_codex() -> None:
+    """ADR-230, predicción 1 de su nota de arranque: entera → solo Claude (los
+    mismos hallazgos de Claude) → entera (los mismos de Codex). Contra `main`:
+    BLOCK `reaparicion`, porque la huella de Codex «desapareció» en la ronda en
+    la que nadie la buscó. Con el cambio la ronda entera se compara solo con
+    rondas enteras."""
+    rondas = [
+        _ronda_con_revisores(1, HEAD_A, [_de_claude(), _de_codex()], _AMBOS),
+        _ronda_con_revisores(2, HEAD_B, [_de_claude()], _SOLO_CLAUDE),
+        _ronda_con_revisores(3, HEAD_C, [_de_claude(), _de_codex()], _AMBOS),
+    ]
+    decision = _decide(rondas)
+    assert decision["decision"] == "CONTINUE", decision
+    assert decision["reason"] == "sin-progreso-aislado"
+    assert decision["rounds"] == 2, "la ronda parcial no cuenta para medir una ronda entera"
+
+
+def test_una_ronda_solo_de_claude_se_mide_contra_lo_que_claude_veia_en_las_enteras() -> None:
+    """M2 de la nota: sin proyectar, la ronda 2 «progresaba» (perdía la huella de
+    Codex que nadie buscó) y la 3 era un sin-progreso aislado; proyectadas a
+    Claude, las tres rondas tienen la misma huella y la puerta bloquea por
+    sin-progreso, que es lo que pasó."""
+    rondas = [
+        _ronda_con_revisores(1, HEAD_A, [_de_claude(), _de_codex()], _AMBOS),
+        _ronda_con_revisores(2, HEAD_B, [_de_claude()], _SOLO_CLAUDE),
+        _ronda_con_revisores(3, HEAD_C, [_de_claude()], _SOLO_CLAUDE),
+    ]
+    assert _decide(rondas[:2])["reason"] == "sin-progreso-aislado", (
+        "perder lo que nadie buscó no es progreso"
+    )
+    decision = _decide(rondas)
+    assert (decision["decision"], decision["reason"]) == ("BLOCK", "sin-progreso"), decision
+
+
+def test_un_historial_anterior_a_adr_230_se_lee_como_rondas_enteras() -> None:
+    """Un historial que empezó antes de ADR-230 (sin `reviewers`), siguió con una
+    ronda sin Codex y volvió a ser entero: la antigua cuenta como entera y la
+    parcial no se le compara. Y sin ninguna declaración nada cambia."""
+    rondas = [
+        _round_comment(1, HEAD_A, [_de_claude(), _de_codex()]),
+        _ronda_con_revisores(2, HEAD_B, [_de_claude()], _SOLO_CLAUDE),
+        _ronda_con_revisores(3, HEAD_C, [_de_claude(), _de_codex()], _AMBOS),
+    ]
+    decision = _decide(rondas)
+    assert (decision["decision"], decision["reason"]) == ("CONTINUE", "sin-progreso-aislado")
+
+    sin_declarar = [
+        _round_comment(1, HEAD_A, [_de_claude(), _de_codex()]),
+        _round_comment(2, HEAD_B, [_de_claude()]),
+        _round_comment(3, HEAD_C, [_de_claude(), _de_codex()]),
+    ]
+    assert _decide(sin_declarar)["reason"] == "reaparicion", "el historial que ya existe no cambia"
+
+
+def test_la_primera_ronda_parcial_tras_un_historial_antiguo_sabe_a_quien_le_falta() -> None:
+    """Ronda 1 de Codex en la PR #678: con solo registros anteriores a ADR-230
+    (sin `reviewers`) y una primera ronda solo de Claude, el conjunto conocido
+    era {CLAUDE}: las enteras antiguas se leían como solo de Claude, nada se
+    proyectaba y la desaparición de lo de Codex contaba como progreso. El
+    registro declara también a quién esperaba (`expected_reviewers`), así que
+    el conjunto entero se conoce desde la primera ronda parcial."""
+    rondas = [
+        _round_comment(1, HEAD_A, [_de_claude(), _de_codex()]),
+        _ronda_con_revisores(2, HEAD_B, [_de_claude()], _SOLO_CLAUDE, esperados=_AMBOS),
+    ]
+    decision = _decide(rondas)
+    assert decision["reason"] == "sin-progreso-aislado", decision
+
+    # Y la ronda entera que sigue no ve reaparecer lo de Codex.
+    rondas.append(_ronda_con_revisores(3, HEAD_C, [_de_claude(), _de_codex()], _AMBOS, _AMBOS))
+    assert _decide(rondas)["reason"] == "sin-progreso-aislado"
+
+
+def test_un_historial_antiguo_de_los_dos_y_una_ronda_solo_de_claude_no_es_progreso() -> None:
+    """Ronda 5 de Codex en la PR #678: rondas duales anteriores a ADR-230 (sin
+    `reviewers`, pero con hallazgos de Codex) y después la revisión dual apagada.
+    La ronda nueva declara `["CLAUDE"]` en los dos campos y es entera; el
+    conjunto conocido se construía solo con las declaraciones, conocía solo a
+    Claude, nada se proyectaba y la desaparición de lo de Codex contaba como
+    progreso. Las procedencias de los hallazgos antiguos también cuentan."""
+    rondas = [
+        _round_comment(1, HEAD_A, [_de_claude(), _de_codex()]),
+        _ronda_con_revisores(2, HEAD_B, [_de_claude()], _SOLO_CLAUDE, esperados=_SOLO_CLAUDE),
+    ]
+    decision = _decide(rondas)
+    assert decision["reason"] == "sin-progreso-aislado", decision
+    # Y si Claude corrige lo suyo, eso sí es progreso: la medida es Claude contra Claude.
+    rondas.append(_ronda_con_revisores(3, HEAD_C, [], _SOLO_CLAUDE, esperados=_SOLO_CLAUDE))
+    assert _decide(rondas)["reason"] == "progreso"
+
+
+def test_un_prefijo_de_identificador_que_no_es_un_revisor_no_proyecta_nada() -> None:
+    """Ronda 6 de Codex en la PR #678: en modo solo el veredicto no pasa por el
+    agregador y el prefijo del identificador es el que el modelo escribiera
+    (`BUG-1` → `source: BUG`). Leído como revisor conocido, una ronda moderna
+    solo de Claude lo tenía por ajeno y proyectaba fuera esos hallazgos, también
+    los suyos: pendientes a cero y una reaparición invisible. Solo `CLAUDE` y
+    `CODEX` son procedencias que nombran a alguien."""
+    bug = _observation("BUG-1", archivo="src/a.py:1", problema="Falta la guarda.")
+    rondas = [
+        _round_comment(1, HEAD_A, [bug]),
+        _ronda_con_revisores(2, HEAD_B, [], _SOLO_CLAUDE, esperados=_SOLO_CLAUDE),
+    ]
+    assert _decide(rondas)["reason"] == "progreso"
+    rondas.append(_ronda_con_revisores(3, HEAD_C, [bug], _SOLO_CLAUDE, esperados=_SOLO_CLAUDE))
+    result = _decide(rondas)
+    assert result["decision"] == "BLOCK" and result["reason"] == "reaparicion", result
+
+
+def test_una_ronda_entera_sobre_el_mismo_head_que_la_parcial_anterior_no_avanza() -> None:
+    """Ronda 4 de Codex en la PR #678: entera A → parcial B → entera B sobre el
+    head de B. La proyección dejaba fuera la parcial y la guarda del head
+    comparaba A con B como si hubiera habido corrección: `CONTINUE`. El head es
+    un hecho del repositorio, no una medida entre revisores comparables: la
+    guarda mira la ronda cronológicamente anterior, proyectada o no."""
+    otro_head = "b" * len(HEAD_A)
+    result = _decide(
+        [
+            _ronda_con_revisores(1, HEAD_A, [_de_claude(), _de_codex()], _AMBOS, _AMBOS),
+            _ronda_con_revisores(2, otro_head, [_de_claude()], _SOLO_CLAUDE, _AMBOS),
+            _ronda_con_revisores(3, otro_head, [_de_claude(), _de_codex()], _AMBOS, _AMBOS),
+        ]
+    )
+    assert result["decision"] == "BLOCK" and result["reason"] == "head-sin-avance"
+    assert "rondas 2 y 3" in result["detail"]
+    # Y parcial A → entera A: la proyección deja una sola ronda comparable, pero
+    # el head tampoco avanzó.
+    result = _decide(
+        [
+            _ronda_con_revisores(1, HEAD_A, [_de_claude()], _SOLO_CLAUDE, _AMBOS),
+            _ronda_con_revisores(2, HEAD_A, [_de_claude(), _de_codex()], _AMBOS, _AMBOS),
+        ]
+    )
+    assert result["reason"] == "head-sin-avance"
