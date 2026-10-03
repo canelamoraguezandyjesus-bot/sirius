@@ -147,10 +147,16 @@ diga de quién es la etiqueta presente, y la API no ofrece «retirar solo si».
 Así que la regla final es la misma: **rechazar es publicar el diagnóstico, y
 ninguna etiqueta se toca**. Quien lea el rechazo retira
 `sirius:implement-requested` y la vuelve a aplicar cuando haya corregido la
-causa. Lo que se pierde: el estado «limpio» tras un rechazo (la pareja
-`planned` + `implement-requested` se queda, y el reconciliador la tratará como
-una activación sin consumir cuando envejezca, que es lo que es). Lo que se
-gana: ninguna ventana en la que la máquina retire la activación de otro. Y como los dos carriles y el validador independiente deducían el
+causa. Lo que se pierde: el estado «limpio» tras un rechazo. La pareja
+`planned` + `implement-requested` se queda y nadie la mueve sola: el
+reconciliador no la repara ni la retira (la excluye a propósito, ADR-167 y
+§9.1 del contrato) y solo la señala como atasco, con un aviso en la
+incidencia, cuando `implement-requested` lleva más de `STUCK_MINUTES` puesta
+(bucle de `MACHINE_LABELS` de `sirius_reconcile.sh`), o como contradicción si
+queda junto a un estado incompatible; el aviso real es el comentario de
+rechazo, que menciona al propietario (ronda 14 de Codex: la primera redacción
+atribuía al reconciliador una recuperación que no hace). Lo que se gana:
+ninguna ventana en la que la máquina retire la activación de otro. Y como los dos carriles y el validador independiente deducían el
 rechazo de que la etiqueta hubiera desaparecido, la puerta lo dice ahora con
 un código propio: 4 es «rechazada, motivo publicado, etiquetas intactas» (0
 válida, 1 reintentable, 2 evento rancio, 3 aviso no publicable), y los

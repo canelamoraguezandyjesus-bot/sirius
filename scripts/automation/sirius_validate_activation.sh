@@ -28,10 +28,14 @@
 # publicaba el rechazo), y ninguna relectura -del perfil, del cuerpo entero-
 # puede atribuir una etiqueta a su evento: la carga del workflow no trae esa
 # identidad, y una reactivacion puede corregir la causa sin tocar el cuerpo.
-# Quien lea el rechazo retira la etiqueta y la vuelve a aplicar cuando haya
-# corregido la causa; mientras, la pareja `planned` + `implement-requested` se
-# queda, y el reconciliador la tratara como lo que es, una activacion sin
-# consumir, cuando envejezca.
+# Quien lea el rechazo (lleva la mencion al propietario) retira la etiqueta y
+# la vuelve a aplicar cuando haya corregido la causa. Nadie mas la mueve: el
+# reconciliador no repara ni retira la pareja `planned` + `implement-requested`
+# (la excluye a proposito, ADR-167) y solo la senala como atasco, con un aviso
+# en la incidencia, cuando `implement-requested` lleva mas de STUCK_MINUTES
+# puesta; junto a un estado incompatible la presenta como contradiccion que
+# pide revision humana (ronda 14 de Codex en la PR #670: la primera redaccion
+# de este parrafo atribuia al reconciliador una recuperacion que no hace).
 #
 # Comprobaciones (en orden): incidencia abierta y no PR; `sirius:planned`
 # presente; sin otros estados sirius activos/terminales; cuerpo estructuralmente
