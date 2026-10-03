@@ -109,7 +109,7 @@ viejos ni retira la foto visible (el volcado anterior sigue siendo la última
 foto completa hasta que la nueva está seleccionada, y los dos analizadores
 avisan de un parcial o de una foto sin seleccionar en cualquiera de los dos
 volcados, lean el que lean, y de que `raw` y `raw_pr` no sean de la misma
-captura: `descargar.py` escribe una marca de captura y `descargar_pr.py` la
+captura (y `analizar_pr.py`, que lee los dos, se detiene en ese caso): `descargar.py` escribe una marca de captura y `descargar_pr.py` la
 copia; los dos volcados de esta edición son una sola captura, la del 01-10 de
 04:45 a 04:58 UTC, y la marca se les escribió a posteriori); los analizadores se
 detienen si el volcado que leen no existe o está vacío (un `MINA_DATOS` nuevo
@@ -123,7 +123,7 @@ así que para ellos no se puede saber y el analizador lo avisa; las descargas
 posteriores la guardan, y una captura de `raw` empareja un solo volcado de PR,
 así que renovarla es repetir la cadena entera; y `resumen.json` lleva la marca de
 la captura de la que salió, que `falsos_negativos.py` y `reproducir_avisos.py`
-exigen antes de leer la foto); y cada `sirius-round:N` cuenta una vez por incidencia aunque GitHub
+exigen antes de leer la foto, y se detienen si falta o difiere); y cada `sirius-round:N` cuenta una vez por incidencia aunque GitHub
 lo hubiera publicado dos veces. Y la reconstrucción ronda a ronda solo cuenta rondas y avisos
 publicados dentro de la ventana 01→30-09: lo anterior al 01-09 es contexto del
 detector, no medición; y un tramo que el detector ya marcaba entero con lo

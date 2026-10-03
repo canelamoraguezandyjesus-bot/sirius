@@ -368,22 +368,27 @@ def test_un_comentario_editado_despues_de_la_ventana_no_es_evidencia_de_ella() -
 
 
 def test_el_resumen_solo_vale_con_la_foto_de_la_que_salio(tmp_path: Path) -> None:
-    """Ronda 16 de Codex en la PR #665: si `descargar.py` publica otra captura y la
-    cadena se corta antes de repetir `analizar.py`, los consumidores de
+    """Rondas 16 y 17 de Codex en la PR #665: si `descargar.py` publica otra captura
+    y la cadena se corta antes de repetir `analizar.py`, los consumidores de
     `resumen.json` leian las incidencias y las horas de una foto y los cuerpos
-    de otra. El resumen lleva la marca de su captura y los dos la exigen."""
+    de otra. El resumen lleva la marca de su captura y los dos la exigen; sin
+    marca en alguno de los dos tampoco se mide (avisar y seguir era aceptar la
+    mezcla). Y `analizar_pr.py`, que lee los dos volcados, exige lo mismo entre
+    `raw_pr` y `raw` en vez de solo avisar."""
     raw = tmp_path / "raw"
     _foto_anterior(raw)
-    [sin] = datos.exigir_misma_captura("resumen.json", None, raw)
-    assert "sin marca de captura" in sin and "resumen.json" in sin
+    with pytest.raises(SystemExit, match=r"sin marca de captura en resumen\.json, .*raw"):
+        datos.exigir_misma_captura("resumen.json", None, raw)
     marca = datos.marcar_captura(raw)
-    assert datos.exigir_misma_captura("resumen.json", marca, raw) == []
-    [sin] = datos.exigir_misma_captura("resumen.json", None, raw)
-    assert "sin marca de captura en resumen.json:" in sin
-    with pytest.raises(SystemExit, match=r"repite analizar\.py"):
+    assert datos.exigir_misma_captura("resumen.json", marca, raw) is None
+    with pytest.raises(SystemExit, match=r"sin marca de captura en resumen\.json:"):
+        datos.exigir_misma_captura("resumen.json", None, raw)
+    with pytest.raises(SystemExit, match=r"repite la cadena desde el paso que falta"):
         datos.exigir_misma_captura("resumen.json", "otra", raw)
 
     assert '"captura": captura_de(RAW)' in (MINA / "analizar.py").read_text(encoding="utf-8")
     for guion in ("falsos_negativos.py", "reproducir_avisos.py"):
         texto = (MINA / guion).read_text(encoding="utf-8")
         assert 'exigir_misma_captura("resumen.json", resumen.get("captura"), RAW)' in texto, guion
+    analizar_pr = (MINA / "analizar_pr.py").read_text(encoding="utf-8")
+    assert "exigir_misma_captura(str(PRDIR), captura_de(PRDIR), RAW)" in analizar_pr

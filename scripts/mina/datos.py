@@ -232,25 +232,26 @@ def marca_de_captura_para_pr(desde: Path, publicado: Path) -> str:
     return marca
 
 
-def exigir_misma_captura(producto: str, marca_producto: str | None, raw: Path) -> list[str]:
-    """Un producto de la cadena (`resumen.json`) solo vale con la foto de `raw` de
-    la que salio: si `descargar.py` publica otra captura y la cadena se corta
-    antes de repetir `analizar.py`, `falsos_negativos.py` y `reproducir_avisos.py`
-    leian las incidencias y las horas de una foto y los cuerpos de otra (Codex,
-    PR #665, ronda 16). Marcas distintas: parar. Sin marca en alguno: avisar."""
+def exigir_misma_captura(producto: str, marca_producto: str | None, raw: Path) -> None:
+    """Un producto de la cadena (`resumen.json`, o el volcado de PR) solo vale con
+    la foto de `raw` de la que salio: si `descargar.py` publica otra captura y la
+    cadena se corta antes de repetir el paso siguiente, los lectores mezclaban las
+    incidencias y las horas de una foto con los cuerpos de otra (Codex, PR #665,
+    ronda 16). Marcas distintas: parar. Sin marca en alguno de los dos tampoco se
+    puede medir: tambien se para (ronda 17; avisar y seguir era aceptar la mezcla
+    que no se puede descartar)."""
     de_raw = captura_de(raw)
-    if marca_producto and de_raw and marca_producto != de_raw:
+    if marca_producto is None or de_raw is None:
+        sin = ", ".join(n for n, m in ((producto, marca_producto), (str(raw), de_raw)) if m is None)
         raise SystemExit(
-            f"{producto} es de la captura {marca_producto} y {raw} de la {de_raw}: "
-            "repite analizar.py antes"
+            f"sin marca de captura en {sin}: no se puede saber si {producto} salio de la foto "
+            f"{raw}; repite la cadena entera (descargar.py, descargar_pr.py y analizar.py)"
         )
-    if not marca_producto or not de_raw:
-        sin = ", ".join(n for n, m in ((producto, marca_producto), (str(raw), de_raw)) if not m)
-        return [
-            f"AVISO: sin marca de captura en {sin}: no se puede saber si {producto} salio de la "
-            f"foto {raw}. Repite la cadena entera."
-        ]
-    return []
+    if marca_producto != de_raw:
+        raise SystemExit(
+            f"{producto} es de la captura {marca_producto} y {raw} de la {de_raw}: repite la "
+            "cadena desde el paso que falta (descargar_pr.py o analizar.py) antes de medir"
+        )
 
 
 def avisos_de_captura(raw: Path, pr: Path) -> list[str]:

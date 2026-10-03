@@ -24,7 +24,9 @@ from datos import (
     RAW,
     avisos_de_editados,
     avisos_de_los_volcados,
+    captura_de,
     editado_tras,
+    exigir_misma_captura,
     exigir_volcado,
 )
 
@@ -59,6 +61,9 @@ def main() -> None:
     # Este analizador lee los dos volcados: sin cualquiera de ellos no hay
     # medicion, no «cero PR» (Codex, PR #665, ronda 13).
     exigir_volcado(RAW, "descargar.py", "issue_*.json")
+    # Y de la MISMA captura: el aviso de arriba lo decia y el analisis seguia,
+    # sobrescribiendo resumen_pr.json con la mezcla (Codex, PR #665, ronda 17).
+    exigir_misma_captura(str(PRDIR), captura_de(PRDIR), RAW)
     for f in exigir_volcado(PRDIR, "descargar_pr.py", "pr_*.json"):
         d = json.loads(f.read_text(encoding="utf-8"))
         prs[d["pr"]["number"]] = d

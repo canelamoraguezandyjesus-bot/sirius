@@ -200,8 +200,8 @@ def clasificar(
 
 def main() -> int:
     resumen = json.loads((DATOS / "resumen.json").read_text(encoding="utf-8"))
-    for aviso in exigir_misma_captura("resumen.json", resumen.get("captura"), RAW):
-        print(aviso, file=sys.stderr)
+    # El resumen solo vale con la foto de la que salio (rondas 16 y 17): parar si no.
+    exigir_misma_captura("resumen.json", resumen.get("captura"), RAW)
     comentarios: dict[int, list[dict[str, str]]] = {}
     for n in resumen["incidencias"]:
         d = json.loads((RAW / f"issue_{int(n)}.json").read_text(encoding="utf-8"))
