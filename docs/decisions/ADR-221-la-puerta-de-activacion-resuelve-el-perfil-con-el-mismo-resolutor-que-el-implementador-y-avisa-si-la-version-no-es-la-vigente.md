@@ -126,15 +126,16 @@ El implementador conserva su propia resolución (defensa en profundidad): la
 puerta no puede garantizar ejecutarse antes que él, solo adelantarse casi
 siempre y dejar el diagnóstico en la incidencia.
 
-**Ronda 11 de Codex (03-10): la relectura justo antes de la única mutación
-destructiva.** La comparación de instantáneas va antes de resolver y de
+**Rondas 11 y 12 de Codex (03-10): la relectura justo antes de la única
+mutación destructiva.** La comparación de instantáneas va antes de resolver y de
 publicar, no justo antes de retirar la etiqueta. Publicar el rechazo
 (`sirius_comment_once`) puede llevar hasta 90 s de reintentos; si en ese rato
 alguien corrige el cuerpo y vuelve a aplicar `sirius:implement-requested`, la
 puerta seguía hasta `--remove-label` y retiraba la activación nueva. `reject()`
-relee el perfil canónico del cuerpo vigente justo antes de retirar la etiqueta
-y, si no es el que juzgó (leído una vez, nada más leer el cuerpo), la conserva y
-sale con 2, como el evento rancio. Queda la ventana entre esa relectura y el
+relee el cuerpo vigente **entero** justo antes de retirar la etiqueta y, si no
+es byte a byte el que juzgó (leído una vez, nada más leer el cuerpo), la conserva
+y sale con 2, como el evento rancio. Entero y no solo su `Perfil:` (ronda 12):
+completar un cuerpo truncado sin tocar el perfil también es otra activación. Queda la ventana entre esa relectura y el
 `--remove-label`, que la API no permite cerrar (no hay «retirar la etiqueta
 solo si el cuerpo no cambió»): es la misma raíz, la carga del workflow no trae
 una identidad del evento que diga de quién es la etiqueta presente.
@@ -187,7 +188,8 @@ fichero restaurado):
 | M9 | la exención del carril ajeno vuelve a leer el rol con `sed` (ronda 9 de Codex) | cae `la_exencion_de_carril_usa_el_parser_canonico` |
 | M10 | el aviso que no se puede publicar vuelve a ser un `::warning` y la activación sigue | cae `un_aviso_de_no_vigente_que_no_se_puede_publicar_no_valida_la_activacion` |
 | M11 | el reparto vuelve a leer el rol con `sed` (ronda 10 de Codex) | cae `el_reparto_lee_el_perfil_con_el_parser_canonico` |
-| M12 | el rechazo no relee el perfil antes de retirar la etiqueta (ronda 11 de Codex) | cae `test_el_rechazo_relee_el_perfil_antes_de_retirar_la_etiqueta` |
+| M12 | el rechazo no relee el cuerpo antes de retirar la etiqueta (ronda 11 de Codex) | cae `test_el_rechazo_relee_el_cuerpo_antes_de_retirar_la_etiqueta` |
+| M13 | el rechazo relee solo el `Perfil:`, no el cuerpo entero (ronda 12 de Codex) | cae el caso `cuerpo-incompleto` de `test_el_rechazo_relee_el_cuerpo_antes_de_retirar_la_etiqueta` |
 
 - Las 20 pruebas del fichero en verde; `ruff`, `mypy`; `bash -n` sobre la
   puerta. Batería entera: en la PR.

@@ -91,27 +91,25 @@ reject() {
     return 1
   fi
   rm -f "$body_file"
-  # Justo antes de la UNICA mutacion destructiva, otra vez el perfil vigente:
+  # Justo antes de la UNICA mutacion destructiva, otra vez el cuerpo vigente:
   # publicar el rechazo puede llevar hasta 90 s de reintentos, y en ese rato
   # alguien puede haber corregido el cuerpo y vuelto a aplicar la etiqueta; la
   # que hay ahora seria la de OTRA activacion y retirarla la mataria (ronda 11
-  # de Codex en la PR #670). Si el perfil canonico ya no es el juzgado, este
-  # evento es rancio: la etiqueta se conserva y se sale con 2, como arriba. La
-  # ventana entre esta relectura y el `--remove-label` no la cierra la API (no
-  # hay «retirar solo si el cuerpo no cambio»): es la misma raiz que el evento
+  # de Codex en la PR #670). Se compara el cuerpo ENTERO, no solo su perfil:
+  # completar un cuerpo truncado sin tocar el `Perfil:` tambien es otra
+  # activacion (ronda 12). Si el cuerpo ya no es el juzgado, este evento es
+  # rancio: la etiqueta se conserva y se sale con 2, como arriba. La ventana
+  # entre esta relectura y el `--remove-label` no la cierra la API (no hay
+  # «retirar solo si el cuerpo no cambio»): es la misma raiz que el evento
   # rancio, la carga del workflow no dice de quien es la etiqueta presente.
-  if [ -n "${perfil_juzgado_definido:-}" ]; then
-    local cuerpo_ahora="" perfil_ahora=""
+  if [ -n "${cuerpo_juzgado_definido:-}" ]; then
+    local cuerpo_ahora=""
     if ! cuerpo_ahora="$(sirius_read_issue_body "$REPO" "$ISSUE")"; then
       echo "::error::No se pudo releer el cuerpo de #${ISSUE} antes de retirar la etiqueta; se CONSERVA sirius:implement-requested. Reintentable." >&2
       return 1
     fi
-    if ! perfil_ahora="$(ISSUE_BODY="$cuerpo_ahora" python3 "${SIRIUS_GATE_DIR}/resolver_prompt.py" --perfil)"; then
-      echo "::error::No se pudo releer el Perfil de #${ISSUE} antes de retirar la etiqueta; se CONSERVA sirius:implement-requested. Reintentable." >&2
-      return 1
-    fi
-    if [ "$perfil_ahora" != "$perfil_juzgado" ]; then
-      echo "::error::El perfil de #${ISSUE} cambio mientras se publicaba el rechazo (juzgado: ${perfil_juzgado:-ninguno}; ahora: ${perfil_ahora:-ninguno}): la sirius:implement-requested que hay puede ser de otra activacion y se CONSERVA; este evento es rancio." >&2
+    if [ "$cuerpo_ahora" != "$cuerpo_juzgado" ]; then
+      echo "::error::El cuerpo de #${ISSUE} cambio mientras se publicaba el rechazo (${reason}): la sirius:implement-requested que hay puede ser de otra activacion y se CONSERVA; este evento es rancio." >&2
       exit 2
     fi
   fi
@@ -177,15 +175,13 @@ if ! sirius_read_issue_body "$REPO" "$ISSUE" >"$body_file"; then
   echo "::warning::No se pudo leer el cuerpo de #${ISSUE}; no se valida."
   exit 0
 fi
-# El perfil canonico del cuerpo que se va a juzgar, leido UNA vez: `reject()`
-# vuelve a leerlo justo antes de retirar la etiqueta y, si cambio mientras se
-# publicaba el rechazo, no la toca (ronda 11 de Codex en la PR #670).
-if ! perfil_juzgado="$(ISSUE_BODY="$(<"$body_file")" python3 "${SIRIUS_GATE_DIR}/resolver_prompt.py" --perfil)"; then
-  rm -f "$body_file"
-  echo "::error::No se pudo leer el Perfil del cuerpo de #${ISSUE} con el parser canonico; no se valida ni se toca ninguna etiqueta. Reintentable." >&2
-  exit 1
-fi
-perfil_juzgado_definido=1
+# El cuerpo que se va a juzgar, leido UNA vez y entero: `reject()` vuelve a
+# leerlo justo antes de retirar la etiqueta y, si cambio mientras se publicaba
+# el rechazo, no la toca (rondas 11 y 12 de Codex en la PR #670). Entero y no
+# solo su `Perfil:`: completar un cuerpo truncado sin tocar el perfil tambien es
+# otra activacion, y la etiqueta que hay entonces es la suya.
+cuerpo_juzgado="$(<"$body_file")"
+cuerpo_juzgado_definido=1
 if ! missing="$(python3 "${SIRIUS_GATE_DIR}/validate_issue_body.py" "$body_file" 2>&1)"; then
   rm -f "$body_file"
   reject "cuerpo-incompleto" \

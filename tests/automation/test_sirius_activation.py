@@ -471,13 +471,13 @@ def test_un_evento_cuyo_perfil_cambio_despues_es_rancio_y_no_toca_ninguna_etique
     assert _comments(env) == antes and "sirius:implement-requested" in _labels(env)
 
 
-def test_el_rechazo_relee_el_perfil_antes_de_retirar_la_etiqueta(tmp_path: Path) -> None:
-    """Ronda 11 de Codex en la PR #670: publicar el rechazo puede llevar hasta 90 s
-    de reintentos; si en ese rato alguien corrige el cuerpo y vuelve a aplicar la
-    etiqueta, la puerta seguía hasta `--remove-label` sin releer el perfil y
-    retiraba la activación nueva. Justo antes de la única mutación destructiva
-    se vuelve a leer el perfil canónico: si ya no es el juzgado, la etiqueta se
-    conserva y el evento es rancio (código 2)."""
+def test_el_rechazo_relee_el_cuerpo_antes_de_retirar_la_etiqueta(tmp_path: Path) -> None:
+    """Rondas 11 y 12 de Codex en la PR #670: publicar el rechazo puede llevar hasta
+    90 s de reintentos; si en ese rato alguien corrige el cuerpo y vuelve a
+    aplicar la etiqueta, la puerta seguía hasta `--remove-label` sin releer nada
+    y retiraba la activación nueva. Justo antes de la única mutación destructiva
+    se vuelve a leer el cuerpo vigente entero: si ya no es el juzgado, la
+    etiqueta se conserva y el evento es rancio (código 2)."""
     env = _setup(tmp_path)
     malo = _COMPLETE_BODY.replace(f"Perfil: implementer@{_VIGENTE}", "Perfil: implementer@99")
     _seed(env, ["sirius:planned", "sirius:implement-requested"], body=malo)
@@ -489,6 +489,17 @@ def test_el_rechazo_relee_el_perfil_antes_de_retirar_la_etiqueta(tmp_path: Path)
     assert "sirius:implement-requested" in _labels(env), "la etiqueta es ya de la otra activación"
     assert "cambio mientras se publicaba el rechazo" in proc.stderr
     assert "sirius-activation:rejected:perfil-sin-resolver" in _comments(env)
+
+    # Ronda 12: completar un cuerpo truncado SIN tocar el `Perfil:` también es otra
+    # activación; releer solo el perfil la dejaba sin etiqueta. Se compara el
+    # cuerpo entero.
+    truncado = _COMPLETE_BODY.split("## Objetivo")[0]
+    assert f"Perfil: implementer@{_VIGENTE}" in truncado
+    _seed(env, ["sirius:planned", "sirius:implement-requested"], body=truncado)
+    proc = _run(env)
+    assert proc.returncode == 2, proc.stdout + proc.stderr
+    assert "sirius:implement-requested" in _labels(env)
+    assert "sirius-activation:rejected:cuerpo-incompleto" in _comments(env)
 
     # Sin cambio entre medias, el rechazo retira la etiqueta como siempre.
     env.pop("MOCK_BODY_TRAS_COMENTAR")
