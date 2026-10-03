@@ -553,6 +553,7 @@ def test_reviewer_changes_requested_publishes_the_round_record(tmp_path: Path) -
     # El registro de ronda sustituye al contador ciego de ciclos: es lo que
     # permite a la puerta del corrector medir progreso real entre rondas.
     env = _setup(tmp_path)
+    env["DUAL_MODE"] = "true"  # el veredicto modela una ronda dual agregada (ADR-230)
     _seed_issue(
         env,
         ["sirius:reviewing"],
@@ -568,6 +569,8 @@ def test_reviewer_changes_requested_publishes_the_round_record(tmp_path: Path) -
             "verdict": "CHANGES_REQUESTED",
             "summary": "hay defectos",
             "reviewed_head_sha": "c4d482267d9a",
+            "reviewers": ["CLAUDE"],
+            "expected_reviewers": ["CLAUDE", "CODEX"],
             "observations": [
                 {
                     "id": "CODEX-001",
@@ -593,6 +596,10 @@ def test_reviewer_changes_requested_publishes_the_round_record(tmp_path: Path) -
     assert record["pending"] == 1
     assert record["findings"][0]["source"] == "CODEX"
     assert len(record["findings"][0]["fingerprint"]) == 16
+    assert record["reviewers"] == ["CLAUDE"], (
+        "ADR-230: el registro publicado lleva los revisores del veredicto"
+    )
+    assert record["expected_reviewers"] == ["CLAUDE", "CODEX"]
 
 
 def test_identical_findings_in_a_new_round_still_publish_their_record(tmp_path: Path) -> None:
@@ -2400,3 +2407,89 @@ def test_changes_requested_names_the_pr_on_its_own_line(tmp_path: Path) -> None:
         "el bloque CHANGES_REQUESTED no lleva la línea «- PR: …»; en septiembre de "
         "2026 faltó en 130 de 130 comentarios por un printf que empezaba por guion"
     )
+
+
+_VEREDICTO_SOLO_DE_CLAUDE: dict[str, object] = {
+    "verdict": "CHANGES_REQUESTED",
+    "summary": "hay defectos",
+    "reviewed_head_sha": "c4d482267d9a",
+    "observations": [
+        {
+            "id": "CLAUDE-001",
+            "severidad": "P2",
+            "archivo": "src/x.py:10",
+            "problema": "no valida entrada",
+            "criterio_esperado": "debe validar",
+            "prueba": "test_x_invalid",
+            "limites_correccion": "solo src/x.py",
+        }
+    ],
+}
+
+#: Sin declaración de revisores: el campo ausente (el veredicto de Claude en modo
+#: solo) y la lista vacía, que `jq` no convierte en `null` y que `round_record`
+#: dejaría sin campo, es decir, como una ronda antigua entera.
+_VEREDICTOS_SIN_REVISORES: dict[str, dict[str, object]] = {
+    "sin_campo": _VEREDICTO_SOLO_DE_CLAUDE,
+    "lista_vacia": {**_VEREDICTO_SOLO_DE_CLAUDE, "reviewers": [], "expected_reviewers": []},
+    # Ronda 4 de Codex en la PR #678: declaraciones sin revisores válidos que
+    # `cmd_record` normalizaba hasta omitir el campo, y una que dejaba a la ronda
+    # «sin Codex» al activar la revisión dual después.
+    "nulos": {**_VEREDICTO_SOLO_DE_CLAUDE, "reviewers": [None], "expected_reviewers": [None]},
+    "blancos": {**_VEREDICTO_SOLO_DE_CLAUDE, "reviewers": [" "], "expected_reviewers": [" "]},
+    "escalar": {**_VEREDICTO_SOLO_DE_CLAUDE, "reviewers": "CLAUDE", "expected_reviewers": "CLAUDE"},
+    "sin_esperados": {**_VEREDICTO_SOLO_DE_CLAUDE, "reviewers": ["CLAUDE"]},
+}
+
+
+def _incidencia_en_revision(env: dict[str, str]) -> None:
+    _seed_issue(
+        env,
+        ["sirius:reviewing"],
+        comments=(
+            "QUALITY_SUCCESS\n- Head SHA: `c4d482267d9a`\n"
+            "PR abierta: https://github.com/owner/repo/pull/9\n"
+        ),
+    )
+    _seed_pr(env, 9, head="c4d482267d9a")
+
+
+def test_en_modo_solo_el_registro_declara_que_la_ronda_fue_de_claude(tmp_path: Path) -> None:
+    """Ronda 3 de Codex en la PR #678: con la revisión dual apagada el workflow
+    aplica el veredicto de Claude sin pasar por el agregador, que es quien
+    declara los revisores. Sin declararlos aquí la ronda se registraba como una
+    entera antigua y, al activar la revisión dual después en la misma
+    incidencia, la convergencia la comparaba con rondas de los dos."""
+    for nombre, veredicto in _VEREDICTOS_SIN_REVISORES.items():
+        raiz = tmp_path / nombre
+        raiz.mkdir()
+        env = _setup(raiz)
+        env.pop("DUAL_MODE", None)
+        _incidencia_en_revision(env)
+        r = _run(env, "reviewer", _verdict_file(raiz, veredicto))
+        assert r.returncode == 0, nombre + "\n" + r.stdout + r.stderr
+        blocks = re.findall(
+            r"## RONDA_HALLAZGOS\s*```json\s*(.*?)\s*```", _comments(env), re.DOTALL
+        )
+        assert len(blocks) == 1, nombre
+        record = json.loads(blocks[0])
+        assert record["reviewers"] == ["CLAUDE"], f"{nombre}: en modo solo la ronda fue de Claude"
+        assert record["expected_reviewers"] == ["CLAUDE"], f"{nombre}: esperaba solo a Claude"
+
+
+def test_en_modo_dual_un_veredicto_sin_revisores_detiene_la_ronda(tmp_path: Path) -> None:
+    """En modo dual el veredicto viene del agregador y declara los revisores en
+    forma canónica; uno que no la trae (campo ausente, lista vacía, nulos,
+    blancos, un escalar, sin `expected_reviewers`) no se registra: parada
+    segura."""
+    for nombre, veredicto in _VEREDICTOS_SIN_REVISORES.items():
+        raiz = tmp_path / nombre
+        raiz.mkdir()
+        env = _setup(raiz)
+        env["DUAL_MODE"] = "true"
+        _incidencia_en_revision(env)
+        r = _run(env, "reviewer", _verdict_file(raiz, veredicto))
+        assert r.returncode != 0, nombre
+        comments = _comments(env)
+        assert "veredicto-sin-revisores" in comments, nombre
+        assert "sirius-round:1" not in comments, f"{nombre}: la ronda no se registra"

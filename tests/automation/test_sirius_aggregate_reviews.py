@@ -309,8 +309,13 @@ def test_codex_failed_con_otra_razon_no_es_reintentable(tmp_path: Path) -> None:
 
 
 def _codex_sin_cuota(reason: str = "codex-fallo-declarado") -> dict[str, Any]:
-    """Lo que escribe el recolector cuando el conector contesta que no revisa."""
-    codex = _codex("FAILED_SAFELY", sha=None, reason=reason)
+    """Lo que escribe el recolector cuando el conector contesta que no revisa.
+
+    Con el head: `sirius_codex_review.py` escribe `reviewed_head_sha=head` también
+    en el fallo declarado (la revisión independiente de la PR #673 señaló que la
+    primera versión de esta ficha lo dejaba a `None`, que no es lo que llega).
+    """
+    codex = _codex("FAILED_SAFELY", sha=HEAD, reason=reason)
     codex["summary"] = (
         "Codex no revisó `1234567`: declaró un fallo suyo (https://github.com/o/r/pull/9#c1) "
         "— «You have reached your Codex usage limits for code reviews». La ronda termina "
@@ -340,6 +345,7 @@ def test_codex_que_declara_que_no_revisa_no_tira_los_hallazgos_de_claude(tmp_pat
         "reason": "codex-fallo-declarado",
     }
     assert not result.get("infra_retryable"), "hay trabajo para el corrector: no se re-arma nada"
+    assert result["reviewers"] == ["CLAUDE"], "ADR-230: la ronda dice que a Codex le faltó"
 
 
 def test_con_claude_aprobando_el_fallo_declarado_de_codex_sigue_parando(tmp_path: Path) -> None:
@@ -642,3 +648,43 @@ def test_claude_findings_keep_their_url_evidence_in_the_key(tmp_path: Path) -> N
         _codex("APPROVED"),
     )
     assert len(result["observations"]) == 2
+
+
+# --------------------------------------------------------------------------- #
+# ADR-230: el veredicto dice qué revisores tuvo la ronda
+# --------------------------------------------------------------------------- #
+
+
+def test_el_veredicto_de_cambios_dice_que_revisores_tuvo_la_ronda(tmp_path: Path) -> None:
+    """ADR-230: el registro de ronda necesita saber a quién le falta, para que la
+    convergencia y el detector de familias no lean una ronda sin Codex como una
+    ronda entera con menos hallazgos."""
+    claude = _claude("CHANGES_REQUESTED", observations=[_claude_observation()])
+    dual = _run(tmp_path, claude, _codex("CHANGES_REQUESTED", observations=[_codex_observation()]))
+    assert dual["verdict"] == "CHANGES_REQUESTED" and dual["reviewers"] == ["CLAUDE", "CODEX"]
+    solo = _run(
+        tmp_path,
+        claude,
+        _codex("CHANGES_REQUESTED", observations=[_codex_observation()]),
+        mode="solo",
+    )
+    assert solo["reviewers"] == ["CLAUDE"] and solo["expected_reviewers"] == ["CLAUDE"]
+    sin_codex = _run(tmp_path, claude, _codex_sin_cuota())
+    assert sin_codex["reviewers"] == ["CLAUDE"]
+    assert dual["expected_reviewers"] == sin_codex["expected_reviewers"] == ["CLAUDE", "CODEX"], (
+        "la ronda dice a quién esperaba, para que la primera parcial sepa a quién le falta"
+    )
+
+
+def test_una_ronda_que_codex_no_reviso_no_lleva_nada_de_codex(tmp_path: Path) -> None:
+    """M5 de la nota de ADR-230: aunque el recolector trajera observaciones junto al
+    fallo declarado, en una ronda que Codex no revisó no entra ninguna, porque
+    nadie las buscó en este head."""
+    codex = _codex_sin_cuota()
+    codex["observations"] = [_codex_observation()]
+    result = _run(
+        tmp_path, _claude("CHANGES_REQUESTED", observations=[_claude_observation()]), codex
+    )
+    assert result["verdict"] == "CHANGES_REQUESTED"
+    assert [o["id"] for o in result["observations"]] == ["CLAUDE-R1"]
+    assert result["reviewers"] == ["CLAUDE"]

@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 # --- Registro de ronda -------------------------------------------------------
@@ -145,10 +146,114 @@ def parse_round_records(text: str) -> list[dict[str, Any]]:
             str(item.get("fingerprint") or "") for item in normalized if item.get("fingerprint")
         }
         record["pending"] = len(normalized)
+        record["reviewers"] = revisores_declarados(record.get("reviewers"))
+        record["expected_reviewers"] = revisores_declarados(record.get("expected_reviewers"))
         records.append(record)
     records.sort(key=lambda item: int(item["round"]))
     _apply_sticky_severity(records)
     return records
+
+
+def revisores_declarados(valor: object) -> tuple[str, ...] | None:
+    """Los revisores que una ronda declara haber tenido (ADR-230), o ``None`` si es entera.
+
+    ``None`` es «ronda entera»: los registros anteriores a ADR-230 no llevan el
+    campo y se leen como enteros, así que nada cambia para el historial que ya
+    existe. Una lista vacía o sin forma también se lee como entera: no se
+    inventa una ronda parcial donde nadie la declaró.
+    """
+    if not isinstance(valor, list):
+        return None
+    nombres = sorted({str(v).strip().upper() for v in valor if isinstance(v, str) and v.strip()})
+    return tuple(nombres) or None
+
+
+def revisores_conocidos(records: Sequence[Mapping[str, Any]]) -> set[str]:
+    """El conjunto de revisores que el historial conoce (ADR-230): la unión de los
+    que cada ronda declara haber tenido (``reviewers``) y de los que declara haber
+    esperado (``expected_reviewers``). Lo segundo es lo que hace que la primera
+    ronda parcial tras un historial anterior a ADR-230 ya sepa que le falta
+    alguien: sin ello, un historial sin declaraciones más una ronda solo de
+    Claude conocía solo a Claude y leía las enteras antiguas como suyas (ronda 1
+    de Codex en la PR #678). Y, de los registros que no declaran ``reviewers``
+    -los anteriores a ADR-230-, las procedencias (``source``) de sus hallazgos:
+    un historial dual antiguo seguido de una ronda solo de Claude con la revisión
+    dual apagada (que declara ``["CLAUDE"]`` en los dos campos y es entera)
+    conocía solo a Claude, nada se proyectaba y la desaparición de lo de Codex
+    contaba como progreso (ronda 5 de Codex en la PR #678). Lo que un registro
+    antiguo tuvo se ve en lo que publicó."""
+    conocidos: set[str] = set()
+    for record in records:
+        for clave in ("reviewers", "expected_reviewers"):
+            declarados = record.get(clave)
+            if declarados:
+                conocidos.update(str(r).strip().upper() for r in declarados if str(r).strip())
+        if not record.get("reviewers"):
+            conocidos.update(_procedencias_de(record))
+    return conocidos
+
+
+#: Los revisores de esta casa: Claude y Codex. Una procedencia de un registro
+#: antiguo solo nombra a alguien si es uno de ellos: en modo solo el veredicto no
+#: pasa por el agregador y el prefijo del identificador es el que el modelo
+#: escribiera (``BUG-1`` → ``BUG``), que no es ningún revisor; leído como tal, una
+#: ronda moderna solo de Claude lo tenía por ajeno y proyectaba fuera esos
+#: hallazgos, también los suyos (ronda 6 de Codex en la PR #678).
+REVISORES_DE_LA_CASA: frozenset[str] = frozenset({"CLAUDE", "CODEX"})
+
+
+def _procedencias_de(record: Mapping[str, Any]) -> set[str]:
+    """Los revisores que un registro sin declaración tuvo, a la vista de sus
+    hallazgos: la procedencia de cada uno, si nombra a un revisor de la casa
+    (:data:`REVISORES_DE_LA_CASA`). Un hallazgo sin fuente reconocible
+    (``SIN-FUENTE``) o con el prefijo que el modelo escribiera en modo solo
+    no nombra a nadie."""
+    fuentes = {
+        str(item.get("source") or "").strip().upper()
+        for item in record.get("findings") or []
+        if isinstance(item, Mapping)
+    }
+    return fuentes & REVISORES_DE_LA_CASA
+
+
+def _conjunto_de_revisores(valor: object) -> set[str]:
+    if not isinstance(valor, (list, tuple, set, frozenset)):
+        return set()
+    return {str(r).strip().upper() for r in valor if str(r).strip()}
+
+
+def _ausentes_de(record: Mapping[str, Any], conocidos: set[str]) -> frozenset[str]:
+    """Los revisores que le faltaron a una ronda (ADR-230); vacío si fue entera.
+
+    Manda lo que la propia ronda declara: con ``expected_reviewers``, le faltan
+    los que esperaba y no tuvo, y una ronda solo de Claude de cuando la
+    revisión dual estaba apagada (esperaba solo a Claude) es entera aunque el
+    historial conozca a Codex por rondas posteriores (ronda 2 de Codex en la PR
+    #678: la unión global la marcaba parcial y el detector unía a través de ella
+    rondas de un lado y de otro en una familia falsa). Un registro con
+    ``reviewers`` pero sin ``expected_reviewers`` -los de la primera versión de
+    esta decisión- se mide contra el conjunto conocido; uno sin ``reviewers``
+    es entero.
+    """
+    tuvo = _conjunto_de_revisores(record.get("reviewers"))
+    if not tuvo:
+        return frozenset()
+    esperaba = _conjunto_de_revisores(record.get("expected_reviewers")) or conocidos
+    return frozenset(esperaba - tuvo) if tuvo < esperaba else frozenset()
+
+
+def revisores_ausentes(records: Sequence[Mapping[str, Any]]) -> dict[int, frozenset[str]]:
+    """Por número de ronda, quién le faltó (ADR-230); vacío para las enteras.
+
+    Es lo que el detector de familias necesita para saber DE QUIÉN es
+    transparente una ronda parcial: una ronda en la que Codex no revisó no dice
+    nada de lo que Codex señala, pero sí de lo que Claude señala, porque Claude
+    la revisó y no lo vio (ronda 3 de Codex en la PR #678). El conjunto conocido
+    (:func:`revisores_conocidos`) solo sirve para los registros que no declaran
+    a quién esperaban.
+    """
+    conocidos = revisores_conocidos(records)
+    return {int(record["round"]): _ausentes_de(record, conocidos) for record in records}
 
 
 def _apply_sticky_severity(records: list[dict[str, Any]]) -> None:
