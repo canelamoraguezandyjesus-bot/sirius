@@ -19,7 +19,19 @@
 #
 # La Routine implementadora conserva sus propias comprobaciones (defensa en
 # profundidad): esta puerta no puede garantizar ejecutarse antes que ella, solo
-# reducir la ventana y dejar el estado limpio y reintentable.
+# reducir la ventana y dejar el diagnostico publicado.
+#
+# La puerta NO toca etiquetas (ADR-221; rondas 5 a 13 de Codex en la PR #670):
+# rechazar es publicar el diagnostico. Retirar `sirius:implement-requested` al
+# rechazar retiraba, en una ventana que la API no deja cerrar, la etiqueta de
+# OTRA activacion posterior (cuerpo corregido y etiqueta reaplicada mientras se
+# publicaba el rechazo), y ninguna relectura -del perfil, del cuerpo entero-
+# puede atribuir una etiqueta a su evento: la carga del workflow no trae esa
+# identidad, y una reactivacion puede corregir la causa sin tocar el cuerpo.
+# Quien lea el rechazo retira la etiqueta y la vuelve a aplicar cuando haya
+# corregido la causa; mientras, la pareja `planned` + `implement-requested` se
+# queda, y el reconciliador la tratara como lo que es, una activacion sin
+# consumir, cuando envejezca.
 #
 # Comprobaciones (en orden): incidencia abierta y no PR; `sirius:planned`
 # presente; sin otros estados sirius activos/terminales; cuerpo estructuralmente
@@ -28,14 +40,14 @@
 # rancio: sale con 2 sin tocar etiquetas, ADR-221); `Perfil: rol@N` resoluble
 # con el manifiesto (ADR-221), con aviso si N no es la vigente.
 #
-# Codigos de salida: 0 (valida, o rechazada con la etiqueta retirada y el
-# motivo publicado), 1 (no se pudo completar; reintentable), 2 (evento rancio:
-# nada validado, nada tocado, el aviso en la incidencia).
+# Codigos de salida: 0 (valida, o rechazada con el motivo publicado y las
+# etiquetas intactas), 1 (no se pudo completar; reintentable), 2 (evento
+# rancio: nada validado, nada tocado, el aviso en la incidencia).
 #
 # Idempotencia: el comentario de rechazo lleva un marcador por motivo
 # (`<!-- sirius-activation:rejected:<motivo> -->`); repetir el mismo error no
-# duplica el comentario (solo se retira la etiqueta de nuevo). Un motivo
-# distinto sí genera un comentario nuevo.
+# duplica el comentario ni toca nada. Un motivo distinto sí genera un
+# comentario nuevo.
 #
 # Uso: sirius_validate_activation.sh <owner/repo> <numero-incidencia>
 
@@ -58,16 +70,15 @@ reject() {
   # reject <motivo-slug> <explicacion> <accion>
   local reason="$1" why="$2" action="$3"
   local marker="<!-- sirius-activation:rejected:${reason} -->"
-  echo "::warning::Activacion invalida de #${ISSUE} (${reason}); se retira sirius:implement-requested."
+  echo "::warning::Activacion invalida de #${ISSUE} (${reason}); se conserva sirius:implement-requested: retirala y vuelve a aplicarla cuando corrijas la causa."
   local body_file
   body_file="$(mktemp)"
   printf '%s\n\n%s\n\n%s\n\n%s\n\n%s\n' \
     "$marker" \
     "⛔ **Activación rechazada** (\`${reason}\`)" \
     "$why" \
-    "**Siguiente acción:** ${action} Después, vuelve a aplicar \`sirius:implement-requested\`." \
+    "**Siguiente acción:** ${action} Después, retira \`sirius:implement-requested\` y vuelve a aplicarla: esta puerta no toca etiquetas, porque la que hay puede ser ya de otra activación." \
     "@${OWNER_LOGIN}" >"$body_file"
-  local rc=0
   if ! sirius_comment_once "$REPO" "$ISSUE" "$marker" "$body_file"; then
     # Sin diagnostico NO se retira la etiqueta. Retirarla igualmente dejaba la
     # incidencia solo en `sirius:planned`, sin comentario y sin ningun evento
@@ -91,40 +102,12 @@ reject() {
     return 1
   fi
   rm -f "$body_file"
-  # Justo antes de la UNICA mutacion destructiva, otra vez el cuerpo vigente:
-  # publicar el rechazo puede llevar hasta 90 s de reintentos, y en ese rato
-  # alguien puede haber corregido el cuerpo y vuelto a aplicar la etiqueta; la
-  # que hay ahora seria la de OTRA activacion y retirarla la mataria (ronda 11
-  # de Codex en la PR #670). Se compara el cuerpo ENTERO, no solo su perfil:
-  # completar un cuerpo truncado sin tocar el `Perfil:` tambien es otra
-  # activacion (ronda 12). Si el cuerpo ya no es el juzgado, este evento es
-  # rancio: la etiqueta se conserva y se sale con 2, como arriba. La ventana
-  # entre esta relectura y el `--remove-label` no la cierra la API (no hay
-  # «retirar solo si el cuerpo no cambio»): es la misma raiz que el evento
-  # rancio, la carga del workflow no dice de quien es la etiqueta presente.
-  if [ -n "${cuerpo_juzgado_definido:-}" ]; then
-    local cuerpo_ahora=""
-    if ! cuerpo_ahora="$(sirius_read_issue_body "$REPO" "$ISSUE")"; then
-      echo "::error::No se pudo releer el cuerpo de #${ISSUE} antes de retirar la etiqueta; se CONSERVA sirius:implement-requested. Reintentable." >&2
-      return 1
-    fi
-    if [ "$cuerpo_ahora" != "$cuerpo_juzgado" ]; then
-      echo "::error::El cuerpo de #${ISSUE} cambio mientras se publicaba el rechazo (${reason}): la sirius:implement-requested que hay puede ser de otra activacion y se CONSERVA; este evento es rancio." >&2
-      exit 2
-    fi
-  fi
-  # Retirar el evento y verificar que quedo retirado (estado limpio, reintentable).
-  sirius_retry gh issue edit "$ISSUE" --repo "$REPO" --remove-label "sirius:implement-requested" >/dev/null 2>&1 || true
-  local labels_now=""
-  if ! labels_now="$(sirius_retry gh api "repos/${REPO}/issues/${ISSUE}" --jq '.labels[].name')"; then
-    echo "::error::No se pudo verificar la retirada del evento en #${ISSUE}; reintentable." >&2
-    return 1
-  fi
-  if printf '%s\n' "$labels_now" | grep -Fxq "sirius:implement-requested"; then
-    echo "::error::sirius:implement-requested sigue presente en #${ISSUE}; reintentable." >&2
-    return 1
-  fi
-  return "$rc"
+  # Y nada mas: ninguna etiqueta se toca (ver la cabecera). Las versiones
+  # anteriores retiraban aqui `sirius:implement-requested` y verificaban la
+  # retirada; releer el perfil (ronda 11 de Codex en la PR #670) o el cuerpo
+  # entero (ronda 12) justo antes no bastaba para saber de quien era la
+  # etiqueta presente (ronda 13).
+  return 0
 }
 
 # --- 1) Incidencia abierta y no PR --------------------------------------------
@@ -175,13 +158,6 @@ if ! sirius_read_issue_body "$REPO" "$ISSUE" >"$body_file"; then
   echo "::warning::No se pudo leer el cuerpo de #${ISSUE}; no se valida."
   exit 0
 fi
-# El cuerpo que se va a juzgar, leido UNA vez y entero: `reject()` vuelve a
-# leerlo justo antes de retirar la etiqueta y, si cambio mientras se publicaba
-# el rechazo, no la toca (rondas 11 y 12 de Codex en la PR #670). Entero y no
-# solo su `Perfil:`: completar un cuerpo truncado sin tocar el perfil tambien es
-# otra activacion, y la etiqueta que hay entonces es la suya.
-cuerpo_juzgado="$(<"$body_file")"
-cuerpo_juzgado_definido=1
 if ! missing="$(python3 "${SIRIUS_GATE_DIR}/validate_issue_body.py" "$body_file" 2>&1)"; then
   rm -f "$body_file"
   reject "cuerpo-incompleto" \

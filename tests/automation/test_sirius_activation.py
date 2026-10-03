@@ -209,14 +209,14 @@ def test_valid_activation_passes_without_changes(tmp_path: Path) -> None:
 
 
 def test_missing_planned_rejects_without_adding_planned(tmp_path: Path) -> None:
-    # Caso real 1 de #60: activación directa sin planned. Se retira el evento,
-    # se explica el motivo y NUNCA se añade planned automáticamente.
+    # Caso real 1 de #60: activación directa sin planned. Se explica el motivo
+    # sin tocar etiquetas y NUNCA se añade planned automáticamente.
     env = _setup(tmp_path)
     _seed(env, ["sirius:implement-requested"])
     r = _run(env)
     assert r.returncode == 0, r.stdout + r.stderr
     labels = _labels(env)
-    assert "sirius:implement-requested" not in labels
+    assert "sirius:implement-requested" in labels  # la puerta no toca etiquetas (ronda 13)
     assert "sirius:planned" not in labels  # prohibido auto-aprobar planificación
     assert "sirius:failed-safely" not in labels  # rechazo temprano, no parada
     comments = _comments(env)
@@ -230,7 +230,7 @@ def test_truncated_body_rejects_activation(tmp_path: Path) -> None:
     _seed(env, ["sirius:planned", "sirius:implement-requested"], body=_TRUNCATED_BODY)
     r = _run(env)
     assert r.returncode == 0, r.stdout + r.stderr
-    assert "sirius:implement-requested" not in _labels(env)
+    assert "sirius:implement-requested" in _labels(env)
     assert "sirius-activation:rejected:cuerpo-incompleto" in _comments(env)
     assert "sirius:planned" in _labels(env)  # planned se conserva
 
@@ -241,7 +241,7 @@ def test_failed_safely_state_blocks_reactivation(tmp_path: Path) -> None:
     _seed(env, ["sirius:planned", "sirius:failed-safely", "sirius:implement-requested"])
     r = _run(env)
     assert r.returncode == 0, r.stdout + r.stderr
-    assert "sirius:implement-requested" not in _labels(env)
+    assert "sirius:implement-requested" in _labels(env)
     assert "sirius-activation:rejected:estado-incompatible" in _comments(env)
 
 
@@ -250,7 +250,7 @@ def test_duplicate_activation_while_implementing_rejects(tmp_path: Path) -> None
     _seed(env, ["sirius:implementing", "sirius:implement-requested"])
     r = _run(env)
     assert r.returncode == 0, r.stdout + r.stderr
-    assert "sirius:implement-requested" not in _labels(env)
+    assert "sirius:implement-requested" in _labels(env)
     assert "estado-incompatible" in _comments(env)
     assert "sirius:implementing" in _labels(env)  # el estado en curso no se toca
 
@@ -273,7 +273,7 @@ def test_repeated_rejection_does_not_duplicate_comment(tmp_path: Path) -> None:
         fh.write("sirius:implement-requested\n")
     assert _run(env).returncode == 0
     assert _comments(env).count("sirius-activation:rejected:sin-planned") == 1
-    assert "sirius:implement-requested" not in _labels(env)
+    assert "sirius:implement-requested" in _labels(env)
 
 
 def test_different_reason_gets_its_own_comment(tmp_path: Path) -> None:
@@ -287,14 +287,6 @@ def test_different_reason_gets_its_own_comment(tmp_path: Path) -> None:
     comments = _comments(env)
     assert "rejected:sin-planned" in comments
     assert "rejected:cuerpo-incompleto" in comments
-
-
-def test_removal_failure_is_retryable(tmp_path: Path) -> None:
-    env = _setup(tmp_path)
-    env["MOCK_FAIL_REMOVE"] = "1"
-    _seed(env, ["sirius:implement-requested"])
-    r = _run(env)
-    assert r.returncode != 0  # visible y reintentable: el evento no se retiró
 
 
 def test_pull_request_is_ignored(tmp_path: Path) -> None:
@@ -355,7 +347,7 @@ def test_un_cuerpo_sin_perfil_se_rechaza_antes_de_arrancar(tmp_path: Path) -> No
     _seed(env, ["sirius:planned", "sirius:implement-requested"], body=_sin_perfil(_COMPLETE_BODY))
     proc = _run(env)
     assert proc.returncode == 0, proc.stderr
-    assert "sirius:implement-requested" not in _labels(env)
+    assert "sirius:implement-requested" in _labels(env)
     assert "sirius:planned" in _labels(env)
     publicado = _comments(env)
     assert "sirius-activation:rejected:perfil-sin-resolver" in publicado
@@ -368,7 +360,7 @@ def test_un_perfil_desconocido_se_rechaza_con_el_detalle_del_resolutor(tmp_path:
     _seed(env, ["sirius:planned", "sirius:implement-requested"], body=cuerpo)
     proc = _run(env)
     assert proc.returncode == 0, proc.stderr
-    assert "sirius:implement-requested" not in _labels(env)
+    assert "sirius:implement-requested" in _labels(env)
     publicado = _comments(env)
     assert "rejected:perfil-sin-resolver" in publicado
     assert "implementer@99" in publicado and "no está en el manifiesto" in publicado
@@ -429,14 +421,14 @@ def test_una_instantanea_igual_al_cuerpo_se_juzga_y_se_rechaza_si_no_resuelve(
 ) -> None:
     """El implementador resuelve la instantánea del evento (`ISSUE_BODY`): cuando
     coincide con el cuerpo vigente, es lo que se juzga, y si no resuelve se
-    rechaza con la etiqueta retirada (Codex, PR #670, ronda 1)."""
+    rechaza sin tocar la etiqueta (Codex, PR #670, rondas 1 y 13)."""
     env = _setup(tmp_path)
     cuerpo = _COMPLETE_BODY.replace(f"Perfil: implementer@{_VIGENTE}", "Perfil: implementer@99")
     _seed(env, ["sirius:planned", "sirius:implement-requested"], body=cuerpo)
     env["ISSUE_BODY"] = cuerpo
     proc = _run(env)
     assert proc.returncode == 0, proc.stderr
-    assert "sirius:implement-requested" not in _labels(env), "lo que se iba a ejecutar no resuelve"
+    assert "sirius:implement-requested" in _labels(env), "lo que se iba a ejecutar no resuelve"
     assert "perfil-sin-resolver" in _comments(env)
 
 
@@ -471,13 +463,14 @@ def test_un_evento_cuyo_perfil_cambio_despues_es_rancio_y_no_toca_ninguna_etique
     assert _comments(env) == antes and "sirius:implement-requested" in _labels(env)
 
 
-def test_el_rechazo_relee_el_cuerpo_antes_de_retirar_la_etiqueta(tmp_path: Path) -> None:
-    """Rondas 11 y 12 de Codex en la PR #670: publicar el rechazo puede llevar hasta
-    90 s de reintentos; si en ese rato alguien corrige el cuerpo y vuelve a
-    aplicar la etiqueta, la puerta seguía hasta `--remove-label` sin releer nada
-    y retiraba la activación nueva. Justo antes de la única mutación destructiva
-    se vuelve a leer el cuerpo vigente entero: si ya no es el juzgado, la
-    etiqueta se conserva y el evento es rancio (código 2)."""
+def test_el_rechazo_no_toca_ninguna_etiqueta(tmp_path: Path) -> None:
+    """Rondas 11 a 13 de Codex en la PR #670: publicar el rechazo puede llevar hasta
+    90 s de reintentos; si en ese rato alguien corrige la causa y vuelve a
+    aplicar la etiqueta, la puerta retiraba la activación nueva, y ni releer el
+    perfil (ronda 11) ni el cuerpo entero (ronda 12) atribuye una etiqueta a su
+    evento: una reactivación puede corregir la causa sin tocar el cuerpo (ronda
+    13). La regla final es la del evento rancio: la puerta no toca etiquetas;
+    rechazar es publicar el diagnóstico."""
     env = _setup(tmp_path)
     malo = _COMPLETE_BODY.replace(f"Perfil: implementer@{_VIGENTE}", "Perfil: implementer@99")
     _seed(env, ["sirius:planned", "sirius:implement-requested"], body=malo)
@@ -485,28 +478,23 @@ def test_el_rechazo_relee_el_cuerpo_antes_de_retirar_la_etiqueta(tmp_path: Path)
     corregido.write_text(_COMPLETE_BODY, encoding="utf-8")
     env["MOCK_BODY_TRAS_COMENTAR"] = str(corregido)
     proc = _run(env)
-    assert proc.returncode == 2, proc.stdout + proc.stderr
-    assert "sirius:implement-requested" in _labels(env), "la etiqueta es ya de la otra activación"
-    assert "cambio mientras se publicaba el rechazo" in proc.stderr
-    assert "sirius-activation:rejected:perfil-sin-resolver" in _comments(env)
-
-    # Ronda 12: completar un cuerpo truncado SIN tocar el `Perfil:` también es otra
-    # activación; releer solo el perfil la dejaba sin etiqueta. Se compara el
-    # cuerpo entero.
-    truncado = _COMPLETE_BODY.split("## Objetivo")[0]
-    assert f"Perfil: implementer@{_VIGENTE}" in truncado
-    _seed(env, ["sirius:planned", "sirius:implement-requested"], body=truncado)
-    proc = _run(env)
-    assert proc.returncode == 2, proc.stdout + proc.stderr
-    assert "sirius:implement-requested" in _labels(env)
-    assert "sirius-activation:rejected:cuerpo-incompleto" in _comments(env)
-
-    # Sin cambio entre medias, el rechazo retira la etiqueta como siempre.
-    env.pop("MOCK_BODY_TRAS_COMENTAR")
-    _seed(env, ["sirius:planned", "sirius:implement-requested"], body=malo)
-    proc = _run(env)
     assert proc.returncode == 0, proc.stdout + proc.stderr
-    assert "sirius:implement-requested" not in _labels(env)
+    assert "sirius:implement-requested" in _labels(env), "la etiqueta puede ser de otra activación"
+    assert "sirius-activation:rejected:perfil-sin-resolver" in _comments(env)
+    assert "retira `sirius:implement-requested` y vuelve a aplicarla" in _comments(env)
+    assert "se conserva sirius:implement-requested" in proc.stdout
+
+    # En ningún rechazo, por ningún motivo, se llama a retirar una etiqueta.
+    env.pop("MOCK_BODY_TRAS_COMENTAR")
+    for etiquetas, cuerpo in (
+        (["sirius:implement-requested"], _COMPLETE_BODY),
+        (["sirius:planned", "sirius:implement-requested"], _TRUNCATED_BODY),
+        (["sirius:planned", "sirius:failed-safely", "sirius:implement-requested"], _COMPLETE_BODY),
+    ):
+        _seed(env, etiquetas, body=cuerpo)
+        assert _run(env).returncode == 0
+        assert _labels(env).split() == etiquetas
+    assert "remove-label" not in (_md(env) / "calls.log").read_text(encoding="utf-8")
 
 
 def test_un_rol_que_no_esta_en_ningun_carril_se_rechaza(tmp_path: Path) -> None:
@@ -518,7 +506,7 @@ def test_un_rol_que_no_esta_en_ningun_carril_se_rechaza(tmp_path: Path) -> None:
     _seed(env, ["sirius:planned", "sirius:implement-requested"], body=cuerpo)
     proc = _run(env)
     assert proc.returncode == 0, proc.stderr
-    assert "sirius:implement-requested" not in _labels(env)
+    assert "sirius:implement-requested" in _labels(env)
     assert "perfil-sin-resolver" in _comments(env)
     assert "no lo juzga" not in proc.stdout
 
@@ -567,7 +555,7 @@ def test_la_exencion_de_carril_usa_el_parser_canonico(tmp_path: Path) -> None:
     proc = _run(env)
     assert proc.returncode == 0, proc.stderr
     assert "no lo juzga" not in proc.stdout, "no se exime lo que no es un perfil"
-    assert "sirius:implement-requested" not in _labels(env)
+    assert "sirius:implement-requested" in _labels(env)
     assert "perfil-sin-resolver" in _comments(env)
 
 

@@ -93,9 +93,15 @@ mutaciones vistas caer.
    del reparto: la carga del workflow no trae una identidad del evento que
    diga de quién es la etiqueta presente, así que lo único seguro es no
    tocarla. El aviso de versión no vigente, por su parte, cuenta con el estado
-   real en que se leerá —se publica segundos antes de que el implementador
-   consuma la activación, así que la incidencia estará en
-   `sirius:implementing`— y distingue los dos caminos: **cancelar el run** (la
+   real en que se leerá, que tiene dos fases: lo publica la primera puerta
+   que lo ve, y como `validate-sirius-activation.yml` suele llegar antes que
+   el implementador, quien lo lea puede encontrar la incidencia todavía en
+   `sirius:planned` (entonces: editar el cuerpo, que vuelve rancio el evento
+   sin tocar etiquetas, y reactivar); el implementador lo publica segundos
+   antes de consumir la activación, y solo al consumirla la incidencia pasa a
+   `sirius:implementing` (ronda 13 de Codex: una versión anterior de este
+   párrafo decía que «estará en `sirius:implementing`», y no era verdad en la
+   primera fase). Ya en `implementing` distingue los dos caminos: **cancelar el run** (la
    incidencia queda parada en `failed-safely` con su diagnóstico; editar el
    cuerpo y escribir `continua`, que repite la activación con el cuerpo
    vigente: ADR-094, y ADR-223 —PR #671, que entra en `main` antes que esta— para reponer `sirius:planned` si consta) o **dejarlo terminar** (el ciclo sigue —revisión, fusión,
@@ -126,19 +132,25 @@ El implementador conserva su propia resolución (defensa en profundidad): la
 puerta no puede garantizar ejecutarse antes que él, solo adelantarse casi
 siempre y dejar el diagnóstico en la incidencia.
 
-**Rondas 11 y 12 de Codex (03-10): la relectura justo antes de la única
-mutación destructiva.** La comparación de instantáneas va antes de resolver y de
-publicar, no justo antes de retirar la etiqueta. Publicar el rechazo
-(`sirius_comment_once`) puede llevar hasta 90 s de reintentos; si en ese rato
-alguien corrige el cuerpo y vuelve a aplicar `sirius:implement-requested`, la
-puerta seguía hasta `--remove-label` y retiraba la activación nueva. `reject()`
-relee el cuerpo vigente **entero** justo antes de retirar la etiqueta y, si no
-es byte a byte el que juzgó (leído una vez, nada más leer el cuerpo), la conserva
-y sale con 2, como el evento rancio. Entero y no solo su `Perfil:` (ronda 12):
-completar un cuerpo truncado sin tocar el perfil también es otra activación. Queda la ventana entre esa relectura y el
-`--remove-label`, que la API no permite cerrar (no hay «retirar la etiqueta
-solo si el cuerpo no cambió»): es la misma raíz, la carga del workflow no trae
-una identidad del evento que diga de quién es la etiqueta presente.
+**Rondas 11 a 13 de Codex (03-10): la puerta no toca etiquetas.** Publicar
+el rechazo (`sirius_comment_once`) puede llevar hasta 90 s de reintentos; si en
+ese rato alguien corrige la causa y vuelve a aplicar
+`sirius:implement-requested`, la puerta seguía hasta `--remove-label` y
+retiraba la activación nueva. Releer el perfil justo antes (ronda 11) y después
+el cuerpo entero (ronda 12) no bastaba: una reactivación puede corregir la
+causa sin tocar el cuerpo (añadir `sirius:planned`, limpiar un estado
+incompatible, el perfil que faltaba fusionado en `main`), y en los rechazos
+anteriores a leer el cuerpo no había nada que releer (ronda 13). Tres rondas de
+la misma familia: la raíz es la que ya tenían escritas el reparto (ADR-167) y
+el evento rancio, la carga del workflow no trae una identidad del evento que
+diga de quién es la etiqueta presente, y la API no ofrece «retirar solo si».
+Así que la regla final es la misma: **rechazar es publicar el diagnóstico, y
+ninguna etiqueta se toca**. Quien lea el rechazo retira
+`sirius:implement-requested` y la vuelve a aplicar cuando haya corregido la
+causa. Lo que se pierde: el estado «limpio» tras un rechazo (la pareja
+`planned` + `implement-requested` se queda, y el reconciliador la tratará como
+una activación sin consumir cuando envejezca, que es lo que es). Lo que se
+gana: ninguna ventana en la que la máquina retire la activación de otro.
 
 ## Comprobación que la sostiene
 
@@ -188,8 +200,7 @@ fichero restaurado):
 | M9 | la exención del carril ajeno vuelve a leer el rol con `sed` (ronda 9 de Codex) | cae `la_exencion_de_carril_usa_el_parser_canonico` |
 | M10 | el aviso que no se puede publicar vuelve a ser un `::warning` y la activación sigue | cae `un_aviso_de_no_vigente_que_no_se_puede_publicar_no_valida_la_activacion` |
 | M11 | el reparto vuelve a leer el rol con `sed` (ronda 10 de Codex) | cae `el_reparto_lee_el_perfil_con_el_parser_canonico` |
-| M12 | el rechazo no relee el cuerpo antes de retirar la etiqueta (ronda 11 de Codex) | cae `test_el_rechazo_relee_el_cuerpo_antes_de_retirar_la_etiqueta` |
-| M13 | el rechazo relee solo el `Perfil:`, no el cuerpo entero (ronda 12 de Codex) | cae el caso `cuerpo-incompleto` de `test_el_rechazo_relee_el_cuerpo_antes_de_retirar_la_etiqueta` |
+| M12 | el rechazo retira `sirius:implement-requested` (todas las versiones anteriores a la ronda 13 de Codex) | caen `test_el_rechazo_no_toca_ninguna_etiqueta` y las ocho pruebas de rechazo que exigen la etiqueta intacta |
 
 - Las 20 pruebas del fichero en verde; `ruff`, `mypy`; `bash -n` sobre la
   puerta. Batería entera: en la PR.
