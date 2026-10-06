@@ -26,7 +26,7 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **225**.
+- Decisiones (ADR): **226**.
 - Bloques del motor: 17 cerrado, 3 fuera_de_alcance.
 - Defectos registrados: 2 abierto, 82 cerrado.
 - Ideas aparcadas o descartadas: 5 aparcada, 2 descartada, 2 promovida.
@@ -79,6 +79,7 @@ huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| [232](docs/decisions/ADR-232-hacer-de-sirius-solo-el-software-del-robot-y-revisar-el-roadmap-primero-el-cerebro-despues-la-cabeza.md) | 2026-10-06 | APROBADO | Hacer de Sirius solo el software del robot y revisar el roadmap: primero el cerebro, después la cabeza | La opción 3. Se completa, con el detalle de cada documento, en el commit siguiente de esta misma rama. |
 | [231](docs/decisions/ADR-231-un-defecto-se-cierra-desde-la-pr-que-mete-en-main-el-adr-que-lo-nombra-no-solo-desde-la-del-adr-que-lo-declaro.md) | 2026-10-02 | APROBADO | Un defecto se cierra desde la PR que mete en `main` el ADR que lo nombra, no solo desde la del ADR que lo declaró | Un defecto cerrado puede citar en `pr:` la PR que metió en `main` el ADR que lo declaró (ADR-222) o la que metió un ADR posterior que lo nombra por su id, palabra entera. `_pr_que_puede_citar`… |
 | [230](docs/decisions/ADR-230-registrar-que-revisores-tuvo-cada-ronda-y-medir-la-convergencia-y-las-familias-solo-entre-rondas-comparables.md) | 2026-10-02 | APROBADO | Registrar qué revisores tuvo cada ronda y medir la convergencia y las familias solo entre rondas comparables | El veredicto agregado dice qué revisores tuvo la ronda. La regla 5 de `sirius_aggregate_reviews.py` añade `reviewers`: `["CLAUDE", "CODEX"]` en la revisión dual con los dos revisando, `["CLAUDE"]` sin revisión dual o cuando Codex declaró… |
 | [229](docs/decisions/ADR-229-los-instantes-de-g8-se-comparan-en-una-sola-forma-canonica-sean-cuales-sean-sus-escrituras.md) | 2026-10-01 | APROBADO | Los instantes de G8 se comparan en una sola forma canónica, sean cuales sean sus escrituras | `src/sirius/domain/instantes.py` (nuevo): `FORMA_CANONICA` (`%Y-%m-%dT%H:%M:%S.%fZ`), `en_forma_canonica(texto) -> str \| None` (una fecha ISO con hora opcional tras `T` o espacio, fracción opcional de cualquier longitud y zona opcional… |
@@ -494,6 +495,8 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 ### `tramite-que-solo-puede-hacer-una-persona-y-no-anade-comprobacion`
 
 - **ADR-205** — el ciclo volvería a quedarse horas en verde esperando (lo hace cumplir `tests/automation/test_sirius_merge.py`).
+
+Y **1** ADR declaran expresamente que no dejaron lección: 232.
 
 ## Los bloques del motor
 
