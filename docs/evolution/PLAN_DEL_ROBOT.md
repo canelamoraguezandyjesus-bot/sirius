@@ -5,8 +5,8 @@
   totalmente razonable». Lo registra ADR-232 y lo hace vigente la §20 del Rector de
   evolución.
 - Quién lo lee: la sesión que vaya a empezar o a continuar una versión del robot. Llega
-  aquí desde ADR-232 en `MEMORIA.md`, desde la tercera línea de
-  `README.md`, desde la §20 de `docs/evolution/RECTOR.md` y desde `docs/evolution/STATUS.md`.
+  aquí desde la tercera línea de `AGENTS.md` y de `README.md`, desde ADR-232 en
+  `MEMORIA.md`, desde la §20 de `docs/evolution/RECTOR.md` y desde `docs/evolution/STATUS.md`.
 - Caduca con: las decisiones del propietario y lo que mida cada versión al terminar. Las
   herramientas que nombra son las que recomendaron las investigaciones del 05-10-2026:
   antes de instalar una, se comprueba que sigue existiendo y cuál es su licencia.

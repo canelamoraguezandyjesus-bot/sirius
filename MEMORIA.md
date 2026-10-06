@@ -601,7 +601,7 @@ mismo comando y vigila la misma prueba que esta vista (ADR-218).
 
 | Fecha | Documento |
 |---|---|
-| sin fecha declarada | [Estado canónico](docs/canonical/STATUS.md) |
+| sin fecha declarada | [Estado canónico (desde el 06-10-2026 manda también la última sección: Sirius, el software del robot)](docs/canonical/STATUS.md) |
 
 ### `docs/evolution`
 

@@ -50,7 +50,10 @@ están protegidos contra ediciones de las sesiones en `.claude/settings.json` de
 13-07-2026, y una enmienda no justifica rodear esa protección por la consola. Así que:
 `AGENTS.md` no se toca, la enmienda del manual vive en `docs/evolution/` y el puntero va
 en `README.md` y en `MEMORIA.md`, que lista este ADR con los demás. `AGENTS.md` manda
-leer `MEMORIA.md` entera antes de responder, así que el camino existe.
+leer `MEMORIA.md` entera antes de responder, así que el camino existe. Después de la ronda 2
+de Codex, el mismo 06-10, el propietario autorizó tocarlos: «Si si puedes actualízalos pero
+nada de 20 rondas por documentación». La línea 3 de `AGENTS.md` se sustituyó en su sitio, y
+el estado canónico lleva un puntero en su primera línea y una sección al final.
 
 ## Contexto y problema
 
@@ -115,7 +118,7 @@ La opción 3, en estos documentos:
 | El estado | `docs/evolution/STATUS.md`, `docs/evolution/README.md` y `docs/robotics/head/STATUS.md` | Lo vigente, lo autorizado y lo que no. HEAD-R1 pasa a ser el cuerpo de Sirius y sigue inactiva |
 | Lo aparcado | `docs/ideas/registro_de_ideas.yml` y `docs/audits/decisiones-abiertas-del-propietario.md` | I-010 a I-017 con su disparador; D-1 a D-5 aparcadas con el banco de 47 casos. D-6 no es del banco y sigue abierta |
 | Las investigaciones | las cuatro de `docs/investigaciones/` del 2026-10-05 | Enteras, con cabecera y caducidad, sin el nombre ni la región del propietario porque el repositorio es público |
-| El puntero | `README.md`, líneas 3, 16 y 18, sustituidas en su sitio | Qué es Sirius ahora y dónde está el plan |
+| El puntero | `README.md`, líneas 3, 16 y 18, y `AGENTS.md`, línea 3, sustituidas en su sitio; `docs/canonical/STATUS.md`, con puntero en la primera línea y sección al final | Qué es Sirius ahora, dónde está el plan y qué está autorizado |
 
 La regla de activación de la §17 sigue, con una forma más ligera para el robot: la
 sección de cada versión en el plan hace de definición y de arquitectura, y sus pruebas de
@@ -182,6 +185,12 @@ se buscó la raíz.
   - Al pasar el comprobador de documentos por la Arquitectura 0.2, saltó una cita antigua
     de su línea 1598 a la rama `evidence/adr001-spikes`, con «rama» detrás de la ruta y no
     delante. Se corrigió en su sitio, sin mover líneas.
+- **Lo protegido.** El propietario lo autorizó: `AGENTS.md`, línea 3, en su sitio, y
+  `docs/canonical/STATUS.md`, con puntero en la primera línea y sección al final.
+
+**La ronda 3 es la última.** Lo dijo el propietario: «nada de 20 rondas por
+documentación». Si trae hallazgos, se corrigen los ciertos en un solo commit, se pasan las
+guardas y se fusiona sin ronda 4. Lo que quede se anota en este ADR.
 
 ## Consecuencias
 
@@ -191,17 +200,16 @@ se buscó la raíz.
   la semilla con el propietario, el conector local, la prueba a ciegas y los botones.
 - Lo construido de 0.2 Memoria útil se queda. Se para el camino de M8 a M11 y la ola de M13
   en adelante.
-- `AGENTS.md:3` sigue diciendo «Este repositorio implementa Sirius 0.1», y
-  `docs/canonical/STATUS.md` no nombra la §20: los dos están protegidos. Lo vigente lo
-  dicen la §20, el plan y `MEMORIA.md`.
+- `AGENTS.md` y `docs/canonical/STATUS.md` dicen ya qué es Sirius y qué está autorizado,
+  con el permiso expreso del propietario para tocarlos.
 - La semilla del código sigue siendo la del manual v1.2 hasta el paso 1 de 0.2.
 
 ## Alternativas descartadas y por qué
 
 - **Borrar el repositorio y dejar solo el motor**: el propietario la retiró el 05-10.
 - **Reescribir en su sitio**: rompería citas por número que no son de este trabajo.
-- **Escribir en `AGENTS.md` y en `docs/canonical/` por la consola**: la protección es del
-  propietario y una enmienda no justifica rodearla.
+- **Escribir en `AGENTS.md` y en `docs/canonical/` sin su permiso**: la protección es del
+  propietario y una enmienda no justifica rodearla. Se hizo cuando lo dio.
 - **Tres documentos por versión**, como en 0.2 Memoria útil: el propietario pidió un plan
   sencillo, y la sección de cada versión con sus pruebas antes del código cumple lo mismo.
 
