@@ -162,3 +162,22 @@ Detrás van **dos encargos preparados, validados y sin lanzar**:
 
 Los dos pasan **las dos** comprobaciones —`validate_issue_body.py` y
 `resolver_prompt.py`—, que es la regla que #653 me enseñó por las malas.
+
+---
+
+## Aparcadas por el giro al robot — 6 de octubre de 2026
+
+Añadido al final, sin tocar lo anterior.
+
+D-1 a D-5 eran del banco de 47 casos, la memoria del asistente de ingeniería. El
+05-10-2026 el propietario decidió que Sirius pasa a ser solo el software del robot
+(ADR-232, EV-020), y la nueva versión 0.2 sustituye ese banco por uno propio de
+compañero, en español (`docs/evolution/PLAN_DEL_ROBOT.md`, versión 0.2, memoria, paso 1).
+
+Por eso **D-1 a D-5 quedan aparcadas y no se le preguntan.** Solo volverían si alguien
+retomara el banco de 47 casos, y el plan no lo hace.
+
+**D-6 sigue abierta.** No es del banco: es cuánto cabe en `MEMORIA.md`, y el giro no la
+cambia.
+
+El gesto sobre #653 de arriba es de septiembre y no forma parte de esto.

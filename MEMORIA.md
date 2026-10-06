@@ -26,13 +26,13 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **225**.
+- Decisiones (ADR): **226**.
 - Bloques del motor: 17 cerrado, 3 fuera_de_alcance.
 - Defectos registrados: 2 abierto, 82 cerrado.
-- Ideas aparcadas o descartadas: 5 aparcada, 2 descartada, 2 promovida.
+- Ideas aparcadas o descartadas: 12 aparcada, 3 descartada, 2 promovida.
 - Skills: **19**.
-- Investigaciones: **10** (fotos con fecha; caducan).
-- Documentos: **209**, de los que **137** no declaran fecha.
+- Investigaciones: **14** (fotos con fecha; caducan).
+- Documentos: **211**, de los que **136** no declaran fecha.
 
 ## Las skills: lo que ya costó averiguar dos veces (ADR-211)
 
@@ -79,6 +79,7 @@ huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| [232](docs/decisions/ADR-232-hacer-de-sirius-solo-el-software-del-robot-y-revisar-el-roadmap-primero-el-cerebro-despues-la-cabeza.md) | 2026-10-06 | APROBADO | Hacer de Sirius solo el software del robot y revisar el roadmap: primero el cerebro, después la cabeza | La opción 3, en estos documentos: |
 | [231](docs/decisions/ADR-231-un-defecto-se-cierra-desde-la-pr-que-mete-en-main-el-adr-que-lo-nombra-no-solo-desde-la-del-adr-que-lo-declaro.md) | 2026-10-02 | APROBADO | Un defecto se cierra desde la PR que mete en `main` el ADR que lo nombra, no solo desde la del ADR que lo declaró | Un defecto cerrado puede citar en `pr:` la PR que metió en `main` el ADR que lo declaró (ADR-222) o la que metió un ADR posterior que lo nombra por su id, palabra entera. `_pr_que_puede_citar`… |
 | [230](docs/decisions/ADR-230-registrar-que-revisores-tuvo-cada-ronda-y-medir-la-convergencia-y-las-familias-solo-entre-rondas-comparables.md) | 2026-10-02 | APROBADO | Registrar qué revisores tuvo cada ronda y medir la convergencia y las familias solo entre rondas comparables | El veredicto agregado dice qué revisores tuvo la ronda. La regla 5 de `sirius_aggregate_reviews.py` añade `reviewers`: `["CLAUDE", "CODEX"]` en la revisión dual con los dos revisando, `["CLAUDE"]` sin revisión dual o cuando Codex declaró… |
 | [229](docs/decisions/ADR-229-los-instantes-de-g8-se-comparan-en-una-sola-forma-canonica-sean-cuales-sean-sus-escrituras.md) | 2026-10-01 | APROBADO | Los instantes de G8 se comparan en una sola forma canónica, sean cuales sean sus escrituras | `src/sirius/domain/instantes.py` (nuevo): `FORMA_CANONICA` (`%Y-%m-%dT%H:%M:%S.%fZ`), `en_forma_canonica(texto) -> str \| None` (una fecha ISO con hora opcional tras `T` o espacio, fracción opcional de cualquier longitud y zona opcional… |
@@ -495,6 +496,8 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 
 - **ADR-205** — el ciclo volvería a quedarse horas en verde esperando (lo hace cumplir `tests/automation/test_sirius_merge.py`).
 
+Y **1** ADR declaran expresamente que no dejaron lección: 232.
+
 ## Los bloques del motor
 
 Registro: `docs/implementation/bloques_del_motor.yml`. No confundir con los 16 bloques del
@@ -550,6 +553,14 @@ que pasar para volver a mirarla, y la descartada, por qué no se hace.
 | I-007 | promovida | Traer a local las 28 sesiones de Claude Code de la nube que le faltan a la auditoria |
 | I-008 | aparcada | Un contador de rondas para la revision externa que el propietario trae a mano |
 | I-009 | aparcada | Una via segura para que la decision del propietario llegue al diario de estado-del-motor |
+| I-010 | aparcada | Habilidades y permisos sobre el ordenador del propietario (la antigua version 0.3, con el control visual del ordenador de EV-010) |
+| I-011 | aparcada | Sirius como ayudante de ingenieria (delegacion supervisada, multiagente, consultas de ingenieria y participar en su propio desarrollo) |
+| I-012 | aparcada | Automatizacion digital (captura de pantalla, flujos entre aplicaciones y control de programas; la mitad digital de la antigua 0.6) |
+| I-013 | aparcada | Laboratorio (la mitad de laboratorio de la antigua 0.7) y un brazo SO-101 para aprender por imitacion |
+| I-014 | aparcada | ROS 2 para organizar el software del robot |
+| I-015 | aparcada | Voz a voz en la nube (un solo modelo que oye y habla, como OpenAI Realtime o Gemini Live) |
+| I-016 | descartada | Librerias de memoria hechas (Mem0, Letta, Graphiti, LangMem) en vez de la memoria propia de Sirius |
+| I-017 | aparcada | Mapas del espacio, SLAM y grafos de escena 3D |
 
 ## Las investigaciones: fotos con fecha, que caducan
 
@@ -567,6 +578,10 @@ algo vivo (`AGENTS.md`). Cada una declara de qué depende para caducar.
 | 2026-09-11 | VIGENTE | [Flujos reales de agentes de código, comparados con el motor de Sirius](docs/investigaciones/2026-09-11-flujos-reales-de-agentes-comparados-con-el-motor.md) | el contenido de los trece repositorios citados, verificado el 11-09-2026 en su último commit; la documentación de Supermemory y Mem0 sobre Claude Code, Codex y ChatGPT, que cambia cada pocas semanas; los artículos, vídeos y fechas de publicación, que esta sesión no pudo abrir |
 | 2026-09-11 | VIGENTE | [Qué memoria compartida para IAs existe ya hecha y probada, y si supera a la generada en el repositorio](docs/investigaciones/2026-09-11-que-memoria-compartida-para-ias-existe-ya-hecha-y-probada.md) | los precios y límites gratuitos de los servicios alojados (Mem0, Supermemory, Basic Memory Cloud, Letta Cloud, Zep); qué clientes admiten MCP y cómo (Claude Code, Codex, ChatGPT), que cambia cada pocos meses; las versiones y la actividad de cada proyecto, medidas el día de la clonación; la lista de herramientas que leen AGENTS.md |
 | 2026-09-13 | PARCIALMENTE CADUCADA | [Memanto contra la capa de memoria de Sirius: qué está cubierto, qué a medias y qué es nuevo](docs/investigaciones/2026-09-13-memanto-contra-la-capa-de-memoria-de-sirius.md) | los ficheros de la capa de memoria que cita (src/sirius/domain/memory.py, decision.py, event.py, precedence.py, staged_engine_contracts.py, staged_engine_gates.py y src/sirius/adapters/persistence/models.py); si cambian, las líneas citadas dejan de valer; el estado de la línea de memoria (ADR-185 partió la puerta en tres interruptores el 13-09; las piezas A–D quedaron aparcadas con su momento de disparo, bitácora del ciclo, entrada 109); el propio repositorio moorcheh-ai/memanto, que no se leyó desde aquí |
+| 2026-10-05 | VIGENTE | [Cómo aprenden hoy los robots y qué camino realista tiene Sirius](docs/investigaciones/2026-10-05-como-aprenden-los-robots-y-que-camino-tiene-sirius.md) | los precios de hardware y de GPU que cita (servos, micrófonos, brazos SO-101, alquiler en la nube); las versiones de LeRobot, de los modelos de visión, lenguaje y acción, y su soporte en Windows; la lectura de la ley de protección de datos que hace, si cambia su interpretación |
+| 2026-10-05 | VIGENTE | [Sirius por dentro: cómo se organiza el software de un robot social y qué arquitectura le conviene](docs/investigaciones/2026-10-05-como-se-organiza-el-cerebro-de-un-robot-social.md) | los precios de nube que cita (OpenAI, Gemini, Deepgram, ElevenLabs, Azure), revisados entre julio y octubre de 2026; el soporte de ROS 2 en Windows y las versiones que nombra; las cifras de latencia y de detectores de turno, que son de sus fabricantes |
+| 2026-10-05 | VIGENTE | [Memoria para Sirius: cómo hacer que un robot compañero recuerde bien, rápido y durante años](docs/investigaciones/2026-10-05-memoria-de-un-robot-companero-que-recuerde-bien-y-rapido.md) | las cifras de bancos públicos y de vendedores que cita (LoCoMo, LongMemEval, HaluMem, Mem0, Zep, Letta); los modelos de embeddings y sqlite-vec, y sus versiones; la capa de memoria de Sirius tal como estaba en main el 05-10-2026 (4ea76f35), que el informe no leyó: la describió el encargo |
+| 2026-10-05 | VIGENTE | [Cómo darle a Sirius una personalidad propia, estable y reconocible](docs/investigaciones/2026-10-05-personalidad-propia-estable-y-reconocible-para-sirius.md) | los modelos y precios que cita, de pago y abiertos, que cambian cada pocos meses; las herramientas de voz y de turnos que nombra y sus licencias (Smart Turn, LiveKit, Chatterbox, Piper, Kokoro); el estado de los productos que repasa (Vector y wire-pod, aibo, EMO, Furhat, Moxie, Reachy Mini); la personalidad que pedía el encargo, ya cambiada por el propietario el 05-10-2026 (ADR-232) |
 | sin fecha declarada | — | [Investigaciones](docs/investigaciones/README.md) | — |
 
 ## Los documentos, carpeta a carpeta
@@ -586,23 +601,25 @@ mismo comando y vigila la misma prueba que esta vista (ADR-218).
 
 | Fecha | Documento |
 |---|---|
-| sin fecha declarada | [Estado canónico](docs/canonical/STATUS.md) |
+| sin fecha declarada | [Estado canónico (desde el 06-10-2026 manda también la última sección: Sirius, el software del robot)](docs/canonical/STATUS.md) |
 
 ### `docs/evolution`
 
 | Fecha | Documento |
 |---|---|
-| sin fecha declarada | [Artefactos aprobados - Evolución post-0.1 de Sirius](docs/evolution/ARTIFACTS.md) |
-| sin fecha declarada | [Auditoría cerrada - Plan de evolución de Sirius después de 0.1](docs/evolution/AUDIT.md) |
-| sin fecha declarada | [Decisiones canónicas - Evolución post-0.1 de Sirius](docs/evolution/DECISIONS.md) |
+| sin fecha declarada | [Artefactos aprobados - Evolución post-0.1 de Sirius (el DOCX es la foto del 22-07-2026; ver la nota al final)](docs/evolution/ARTIFACTS.md) |
+| sin fecha declarada | [Auditoría cerrada - Plan de evolución de Sirius después de 0.1 (foto del 22-07-2026; ver la nota del 06-10-2026 al final)](docs/evolution/AUDIT.md) |
+| sin fecha declarada | [Decisiones canónicas - Evolución post-0.1 de Sirius (desde el 06-10-2026 mandan EV-020 a EV-023, al final)](docs/evolution/DECISIONS.md) |
+| 2026-10-06 | [Enmienda al Manual de Visión e Identidad v1.2: Sirius, el robot](docs/evolution/ENMIENDA_MANUAL_IDENTIDAD_2026-10.md) |
+| 2026-10-06 | [Plan de Sirius, el robot](docs/evolution/PLAN_DEL_ROBOT.md) |
 | sin fecha declarada | [Propuesta de separación entre Sirius y su motor de trabajo](docs/evolution/PROPUESTA_SEPARACION_SIRIUS_MOTOR.md) |
 | sin fecha declarada | [Evolución de Sirius después de 0.1](docs/evolution/README.md) |
-| sin fecha declarada | [Documento Rector - Evolución de Sirius después de 0.1](docs/evolution/RECTOR.md) |
+| sin fecha declarada | [Documento Rector - Evolución de Sirius después de 0.1 (enmendado por su §20 el 06-10-2026: Sirius es el software del robot)](docs/evolution/RECTOR.md) |
 | sin fecha declarada | [Sirius AI Core y estrategia de modelos — recolección de ideas](docs/evolution/SIRIUS_AI_CORE_AND_MODEL_STRATEGY.md) |
-| sin fecha declarada | [Arquitectura Técnica — Sirius 0.2 «Memoria útil»](docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md) |
-| sin fecha declarada | [Plan de Pruebas de Aceptación — Sirius 0.2 «Memoria útil»](docs/evolution/SIRIUS_PLAN_PRUEBAS_0.2_v0.1_PROPUESTO.md) |
-| sin fecha declarada | [Definición de Producto — Sirius 0.2 «Memoria útil»](docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md) |
-| sin fecha declarada | [Estado - Evolución post-0.1 de Sirius](docs/evolution/STATUS.md) |
+| sin fecha declarada | [Arquitectura Técnica — Sirius 0.2 «Memoria útil» (sustituida el 06-10-2026 por la 0.2 del robot, ADR-232)](docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md) |
+| sin fecha declarada | [Plan de Pruebas de Aceptación — Sirius 0.2 «Memoria útil» (sustituido el 06-10-2026 por la 0.2 del robot, ADR-232)](docs/evolution/SIRIUS_PLAN_PRUEBAS_0.2_v0.1_PROPUESTO.md) |
+| sin fecha declarada | [Definición de Producto — Sirius 0.2 «Memoria útil» (sustituida el 06-10-2026 por la 0.2 del robot, ADR-232)](docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md) |
+| sin fecha declarada | [Estado - Evolución post-0.1 de Sirius (desde el 06-10-2026 manda la última sección: Sirius, el software del robot)](docs/evolution/STATUS.md) |
 
 ### `docs/evolution/history`
 
@@ -661,12 +678,12 @@ mismo comando y vigila la misma prueba que esta vista (ADR-218).
 
 | Fecha | Documento |
 |---|---|
-| sin fecha declarada | [Artefactos aprobados - Sirius HEAD-R1](docs/robotics/head/ARTIFACTS.md) |
-| sin fecha declarada | [Auditoría y cierre documental - Sirius HEAD-R1](docs/robotics/head/AUDIT.md) |
-| sin fecha declarada | [Decisiones canónicas - Sirius HEAD-R1](docs/robotics/head/DECISIONS.md) |
+| sin fecha declarada | [Artefactos aprobados - Sirius HEAD-R1 (el DOCX es la foto del 22-07-2026; ver la nota al final)](docs/robotics/head/ARTIFACTS.md) |
+| sin fecha declarada | [Auditoría y cierre documental - Sirius HEAD-R1 (foto del 22-07-2026; ver la nota del 06-10-2026 al final)](docs/robotics/head/AUDIT.md) |
+| sin fecha declarada | [Decisiones canónicas - Sirius HEAD-R1 (desde el 06-10-2026 manda D-HEAD-14, al final)](docs/robotics/head/DECISIONS.md) |
 | sin fecha declarada | [Sirius HEAD-R1](docs/robotics/head/README.md) |
-| sin fecha declarada | [Documento Rector — Cabeza Robótica Sirius HEAD-R1](docs/robotics/head/RECTOR.md) |
-| sin fecha declarada | [Estado - Sirius HEAD-R1](docs/robotics/head/STATUS.md) |
+| sin fecha declarada | [Documento Rector — Cabeza Robótica Sirius HEAD-R1 (enmendado al final el 06-10-2026: HEAD-R1 es el cuerpo de Sirius)](docs/robotics/head/RECTOR.md) |
+| sin fecha declarada | [Estado - Sirius HEAD-R1 (desde el 06-10-2026 manda la última sección)](docs/robotics/head/STATUS.md) |
 
 ### `(raíz)`
 
@@ -676,5 +693,5 @@ mismo comando y vigila la misma prueba que esta vista (ADR-218).
 | sin fecha declarada | [Registro de cambios](CHANGELOG.md) |
 | sin fecha declarada | [Claude Code](CLAUDE.md) |
 | sin fecha declarada | [Forma de trabajo](CONTRIBUTING.md) |
-| sin fecha declarada | [Sirius 0.1](README.md) |
+| 2026-08-10 | [Sirius 0.1](README.md) |
 | sin fecha declarada | [Estado actual del repositorio](REPOSITORY_STATUS.md) |

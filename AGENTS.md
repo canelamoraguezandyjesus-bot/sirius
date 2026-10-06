@@ -1,6 +1,6 @@
 # Instrucciones para agentes de programación
 
-Este repositorio implementa Sirius 0.1. El producto y la arquitectura están aprobados.
+Este repositorio implementa Sirius, el software de un robot compañero (ADR-232); el plan aprobado está en `docs/evolution/PLAN_DEL_ROBOT.md`.
 
 ## Antes de RESPONDER
 

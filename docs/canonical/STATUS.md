@@ -1,4 +1,4 @@
-# Estado canónico
+# Estado canónico (desde el 06-10-2026 manda también la última sección: Sirius, el software del robot)
 
 El usuario aprobó explícitamente el 11 de julio de 2026:
 
@@ -51,3 +51,28 @@ Arquitectura Técnica 0.2 y desde
   la ejecuta ADR-163, en su propia Pull Request.
 - Nada de esto autoriza implementación ni cambia prioridades, alcance o
   numeración de versiones.
+
+## Sirius, el software del robot (6 de octubre de 2026)
+
+Añadido al final, sin tocar las líneas anteriores, que están citadas por número. Lo
+escribe una sesión con el permiso expreso del propietario para esta carpeta, dado el
+06-10-2026 en la sesión de la PR #680.
+
+- **Decisiones EV-020 a EV-023** (`docs/evolution/DECISIONS.md`) y **enmienda §20 del
+  Documento Rector de Evolución**, aprobadas por el propietario el 06-10-2026 y registradas
+  en ADR-232. Sirius pasa a ser solo el software del robot.
+- **Enmienda del Manual de Visión e Identidad v1.2**:
+  `docs/evolution/ENMIENDA_MANUAL_IDENTIDAD_2026-10.md`, con la personalidad en palabras
+  del propietario.
+- **Roadmap**: el del robot (EV-021), con el detalle en `docs/evolution/PLAN_DEL_ROBOT.md`.
+  Sustituye al roadmap post-0.1 aprobado el 22-07-2026.
+- **Autorizaciones vigentes**: implementar las versiones del robot en su orden, cada una
+  cuando cumpla la regla de activación tal como la enmienda la §20, y el Sirius Work
+  Engine, como estaba. **La excepción de Sirius 0.2 — Memoria útil del 28-08-2026 queda
+  sustituida por la nueva 0.2**: lo construido se aprovecha, y se paran el camino de M8 a
+  M11 y la ola de M13 en adelante. Las líneas de arriba que nombran como únicas
+  autorizaciones el motor y la 0.2 vieja se leen así desde hoy.
+- **HEAD-R1** es el cuerpo de Sirius (D-HEAD-14). Sigue físicamente inactivo, sin compras
+  ni fases autorizadas.
+- **El multiagente** queda aparcado con la idea I-011 de `docs/ideas/registro_de_ideas.yml`.
+- **Sigue vigente**: ningún modelo controla directamente actuadores ni firmware activo.

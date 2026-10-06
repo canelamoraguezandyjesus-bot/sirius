@@ -1,6 +1,6 @@
 # Sirius 0.1
 
-Compañero personal de creación e ingeniería Sirius.
+El software de Sirius, un robot compañero: personalidad, memoria, voz y ojos en el ordenador, y después una cabeza robótica. Desde el 06-10-2026 ya no ayuda en ingeniería; el plan aprobado está en `docs/evolution/PLAN_DEL_ROBOT.md` (ADR-232).
 
 Repositorio de lectura pública y uso reservado: el código está a la vista para
 poder leerse y auditarse, y no se licencia para su reutilización. Ver `LICENSE`.
@@ -13,9 +13,9 @@ poder leerse y auditarse, y no se licencia para su reutilización. Ver `LICENSE`
 - La única validación pendiente de V7 es la comprobación manual de Windows Credential Manager en Windows real.
 - V8 está iniciada únicamente en su subetapa correctiva y automatizada (V8.1), sin clave API y sin aceptación manual formal. Dentro de V8.1 están fusionados los bloques B2a/B2b (primera configuración y ruta de datos), B3a/B3b/B3c (proyecto: creación, continuidad y ciclo de vida) y B4a a B4f (memoria, decisiones, origen, corrección, sustitución, archivo, eliminación, conflictos y panel observable), siempre con proveedor simulado.
 - La ventana de aceptación con proveedor real permanece bloqueada hasta superar las puertas documentadas en `docs/implementation/PLAN.md`.
-- Sirius 0.1 todavía no está aceptado ni terminado.
+- Sirius 0.1 está aceptado y terminado desde el 10-08-2026 (`docs/implementation/V8_EXECUTION.md`); las líneas anteriores de esta lista son de antes de esa fecha.
 - El alcance no debe ampliarse sin una decisión registrada y aprobada.
-- La evolución post-0.1 dispone de Documento Rector v1.0 y decisiones EV-001 a EV-014 aprobadas; permanece inactiva hasta aceptar 0.1. Su estado está en `docs/evolution/STATUS.md`.
+- La evolución post-0.1 se rige por el Documento Rector v1.0 con sus enmiendas §19 y §20 y por las decisiones EV-001 a EV-023; su estado está en `docs/evolution/STATUS.md`.
 - La línea futura de cabeza robótica HEAD-R1 dispone de Documento Rector v1.1 aprobado, pero permanece físicamente inactiva y sin compras autorizadas; su estado está en `docs/robotics/head/STATUS.md`.
 
 La arquitectura modular ya existe y está parcialmente implementada. No debe rediseñarse desde cero salvo que aparezca una contradicción material o un riesgo concreto.

@@ -1,4 +1,4 @@
-# Auditoría cerrada - Plan de evolución de Sirius después de 0.1
+# Auditoría cerrada - Plan de evolución de Sirius después de 0.1 (foto del 22-07-2026; ver la nota del 06-10-2026 al final)
 
 **Fecha de cierre:** 22 de julio de 2026  
 **Veredicto:** APTO CON CORRECCIONES - CORRECCIONES APROBADAS E INCORPORADAS
@@ -31,3 +31,10 @@ La auditoría detectó y corrigió estas ambigüedades:
 ## Restricción
 
 La auditoría y su aprobación no autorizan implementación post-0.1. La prioridad sigue siendo aceptar Sirius 0.1.
+
+## Nota del 6 de octubre de 2026
+
+Añadida al final, sin tocar la auditoría, que es la foto del 22-07-2026. Lo que dice del
+modelo híbrido, de la delegación antes del multiagente, de HEAD-R1 separado y de la
+prioridad de aceptar 0.1 ya no es vigente: lo sustituyen la §20 del Rector y EV-020 a
+EV-023 (ADR-232). Sirius 0.1 se aceptó el 10-08-2026.

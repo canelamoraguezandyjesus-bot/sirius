@@ -75,6 +75,9 @@ ideas:
     nota: >-
       El propietario fue explicito el 19-09: «no las quiero hacer ahora, a menos
       que me mejoren algo ya». Aparcadas con su disparador, no olvidadas.
+      El 06-10-2026 la version 0.2 del robot (ADR-232) mete hechos con fecha de
+      inicio y de fin, que cubren valid_from/valid_to por otro camino, el de la
+      investigacion de memoria del 05-10; el resto de piezas sigue aparcado.
 
   - id: I-005
     titulo: Un agente que revise el repositorio por modulos, en rondas, cuando nadie esta delante
@@ -137,3 +140,83 @@ ideas:
       a mano a la rama chocaria con el grupo de concurrencia del workflow.
       Construir la via es tocar el motor y pide su ADR; una tanda de skills
       no lo hace.
+
+  - id: I-010
+    titulo: Habilidades y permisos sobre el ordenador del propietario (la antigua version 0.3, con el control visual del ordenador de EV-010)
+    estado: aparcada
+    nacida: 2026-07-22
+    origen: roadmap aprobado el 22-07-2026, Rector de evolucion §6 y §9.2; lo saco del roadmap el giro al robot (ADR-232)
+    volver_si: >-
+      el propietario quiera que Sirius haga algo en su ordenador mas alla de
+      buscar en internet. Hoy Sirius es solo el software del robot (EV-020) y lo
+      unico que sale a internet son busquedas sueltas (EV-023).
+
+  - id: I-011
+    titulo: Sirius como ayudante de ingenieria (delegacion supervisada, multiagente, consultas de ingenieria y participar en su propio desarrollo)
+    estado: aparcada
+    nacida: 2026-07-22
+    origen: roadmap aprobado el 22-07-2026 (la antigua 0.4), Rector §4, §7, §8 y §13, EV-003, EV-011 y EV-019; lo saco el giro al robot (ADR-232)
+    volver_si: >-
+      el propietario pida que Sirius vuelva a ayudarle en ingenieria. El
+      05-10-2026 lo dijo claro: «nada de ayudarme en ingenieria». Si vuelve,
+      EV-006 y EV-007 siguen siendo sus condiciones: un especialista antes que
+      varios, y multiagente solo con evidencia.
+
+  - id: I-012
+    titulo: Automatizacion digital (captura de pantalla, flujos entre aplicaciones y control de programas; la mitad digital de la antigua 0.6)
+    estado: aparcada
+    nacida: 2026-07-22
+    origen: roadmap aprobado el 22-07-2026, Rector §9.5 y §10; lo saco el giro al robot (ADR-232)
+    volver_si: >-
+      el propietario quiera que Sirius mire o maneje su ordenador. La mitad de la
+      camara se queda: es la version 0.4 Ojos del plan del robot.
+
+  - id: I-013
+    titulo: Laboratorio (la mitad de laboratorio de la antigua 0.7) y un brazo SO-101 para aprender por imitacion
+    estado: aparcada
+    nacida: 2026-07-22
+    origen: roadmap aprobado el 22-07-2026, Rector §9.6 y §12; el brazo sale de la investigacion de aprendizaje del 05-10-2026, etapa 7
+    volver_si: >-
+      la cabeza este terminada, que es la version 1.0 del plan del robot, y el
+      propietario quiera un laboratorio. Segun esa investigacion, aprender por
+      imitacion o viendo videos es cosa de brazos con manos, no de una cabeza.
+
+  - id: I-014
+    titulo: ROS 2 para organizar el software del robot
+    estado: aparcada
+    nacida: 2026-10-05
+    origen: investigacion docs/investigaciones/2026-10-05-como-se-organiza-el-cerebro-de-un-robot-social.md, §2
+    volver_si: >-
+      Sirius tenga ruedas, brazos o varios ordenadores. Para una cabeza en
+      Windows es excesivo: basta un programa Python con asyncio y una maquina de
+      estados.
+
+  - id: I-015
+    titulo: Voz a voz en la nube (un solo modelo que oye y habla, como OpenAI Realtime o Gemini Live)
+    estado: aparcada
+    nacida: 2026-10-05
+    origen: investigaciones de personalidad (§4.1) y de arquitectura (§3) del 05-10-2026
+    volver_si: >-
+      la voz en cascada de la version 0.3 funcione y se quiera comparar la
+      latencia. Va contra el modelo local (EV-023) y ata a un proveedor, asi que
+      solo como experimento.
+
+  - id: I-016
+    titulo: Librerias de memoria hechas (Mem0, Letta, Graphiti, LangMem) en vez de la memoria propia de Sirius
+    estado: descartada
+    nacida: 2026-10-05
+    origen: investigacion docs/investigaciones/2026-10-05-memoria-de-un-robot-companero-que-recuerde-bien-y-rapido.md, §1 y §7
+    porque: >-
+      sus cifras las publican quienes las venden y se contradicen entre si; el
+      banco con el que se comparan tiene un 6,4 % de respuestas oficiales
+      erroneas; y guardar el texto literal y buscarlo bien rinde igual o mejor
+      que extraer recuerdos con un modelo. Se copian sus ideas, no las librerias.
+
+  - id: I-017
+    titulo: Mapas del espacio, SLAM y grafos de escena 3D
+    estado: aparcada
+    nacida: 2026-10-05
+    origen: investigacion docs/investigaciones/2026-10-05-memoria-de-un-robot-companero-que-recuerde-bien-y-rapido.md, §4.1
+    volver_si: >-
+      Sirius se mueva. Una cabeza fija solo necesita recordar lo que ve desde su
+      sitio: quien vino, a que hora y que cambio.
