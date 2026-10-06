@@ -192,6 +192,17 @@ se buscó la raíz.
 documentación». Si trae hallazgos, se corrigen los ciertos en un solo commit, se pasan las
 guardas y se fusiona sin ronda 4. Lo que quede se anota en este ADR.
 
+**Revisión de Codex, ronda 3 y última, sobre `67b2e6aa`:** dos hallazgos P2, los dos ciertos.
+
+- Los `ARTIFACTS.md` de evolución y de la cabeza presentaban los DOCX del 22-07 como el
+  Rector vigente. Quedan marcados como fotos históricas, sin las enmiendas. No se regeneran:
+  el flujo de Word se retiró con ADR-207.
+- 0.6 y 1.0 solo tenían un esbozo en el plan, y la §20 decía que cada versión tenía su
+  definición. El plan, la §20 y EV-021 dicen ya que su sección se completa y la aprueba el
+  propietario antes de activarlas.
+
+Se corrigieron en un solo commit y se fusiona sin ronda 4, como dijo el propietario.
+
 ## Consecuencias
 
 - Una sesión que abra el repositorio encuentra este ADR en `MEMORIA.md` y el puntero en

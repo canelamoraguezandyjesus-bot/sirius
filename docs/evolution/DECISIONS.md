@@ -262,7 +262,8 @@ El cerebro se hace entero en el ordenador del propietario antes de conectar la c
 Cada versión acaba con una prueba del propietario, y sin ella no se pasa a la siguiente.
 Su contenido está en `docs/evolution/PLAN_DEL_ROBOT.md`. Para estas versiones, la sección
 de cada una hace de definición de producto y de arquitectura, y sus pruebas de
-aceptación se escriben antes de la primera línea de código.
+aceptación se escriben antes de la primera línea de código. De 0.6 y 1.0 hay solo un
+esbozo: su sección se completa y la aprueba el propietario antes de activarlas.
 
 Sustituye la secuencia de EV-008.
 

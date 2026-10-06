@@ -607,7 +607,7 @@ mismo comando y vigila la misma prueba que esta vista (ADR-218).
 
 | Fecha | Documento |
 |---|---|
-| sin fecha declarada | [Artefactos aprobados - Evolución post-0.1 de Sirius](docs/evolution/ARTIFACTS.md) |
+| sin fecha declarada | [Artefactos aprobados - Evolución post-0.1 de Sirius (el DOCX es la foto del 22-07-2026; ver la nota al final)](docs/evolution/ARTIFACTS.md) |
 | sin fecha declarada | [Auditoría cerrada - Plan de evolución de Sirius después de 0.1 (foto del 22-07-2026; ver la nota del 06-10-2026 al final)](docs/evolution/AUDIT.md) |
 | sin fecha declarada | [Decisiones canónicas - Evolución post-0.1 de Sirius (desde el 06-10-2026 mandan EV-020 a EV-023, al final)](docs/evolution/DECISIONS.md) |
 | 2026-10-06 | [Enmienda al Manual de Visión e Identidad v1.2: Sirius, el robot](docs/evolution/ENMIENDA_MANUAL_IDENTIDAD_2026-10.md) |
@@ -678,7 +678,7 @@ mismo comando y vigila la misma prueba que esta vista (ADR-218).
 
 | Fecha | Documento |
 |---|---|
-| sin fecha declarada | [Artefactos aprobados - Sirius HEAD-R1](docs/robotics/head/ARTIFACTS.md) |
+| sin fecha declarada | [Artefactos aprobados - Sirius HEAD-R1 (el DOCX es la foto del 22-07-2026; ver la nota al final)](docs/robotics/head/ARTIFACTS.md) |
 | sin fecha declarada | [Auditoría y cierre documental - Sirius HEAD-R1 (foto del 22-07-2026; ver la nota del 06-10-2026 al final)](docs/robotics/head/AUDIT.md) |
 | sin fecha declarada | [Decisiones canónicas - Sirius HEAD-R1 (desde el 06-10-2026 manda D-HEAD-14, al final)](docs/robotics/head/DECISIONS.md) |
 | sin fecha declarada | [Sirius HEAD-R1](docs/robotics/head/README.md) |

@@ -71,6 +71,9 @@ robot, la §20 lo cumple así:
   comprobar, y paso a paso, como evaluación humana, lo que solo puede juzgar el
   propietario.
 - **La versión termina** cuando pasan las dos.
+- **0.6 y 1.0 solo tienen un esbozo.** Antes de activarlas hay que completar su sección
+  como las demás, con qué se hace, con qué, qué no se usa y cuándo termina, y que el
+  propietario la apruebe.
 
 ## 4. Versión 0.2 · Sirius en texto: personalidad y memoria
 
@@ -278,7 +281,8 @@ contra EV-023, así que solo con una decisión nueva suya sobre sus datos y su d
 
 ## 8. Versión 0.6 · Puente con la cabeza, y la 1.0
 
-Aparcadas hasta terminar 0.5. Ya se sabe cómo serán:
+Aparcadas hasta terminar 0.5. Esto es un esbozo, no su definición: antes de activarlas se
+completa su sección como las demás y la aprueba el propietario. Ya se sabe cómo serán:
 
 - Un controlador con límites y perro guardián: si el ordenador deja de hablarle, la
   cabeza va a una postura segura. Una seta corta los servos.

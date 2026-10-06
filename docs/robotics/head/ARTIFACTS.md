@@ -1,6 +1,6 @@
-# Artefactos aprobados - Sirius HEAD-R1
+# Artefactos aprobados - Sirius HEAD-R1 (el DOCX es la foto del 22-07-2026; ver la nota al final)
 
-## Documento rector formateado vigente
+## Documento rector formateado, foto del 22-07-2026 sin la enmienda del 06-10-2026
 
 - Archivo: `artifacts/SIRIUS_DOCUMENTO_RECTOR_HEAD-R1_v1.1_APROBADO.docx`
 - Estado: APROBADO
@@ -23,3 +23,10 @@ El contenido normativo completo está reflejado fielmente en `RECTOR.md`, repres
 - Archivo original: `cabeza_robótica_futurista_con_luces_azules.png`
 - SHA-256: `1451965ccff8bee787818d09ab008f2730ce50988216b3ca977f26a1507b5ebc`
 - Función: referencia estética, no plano de fabricación.
+
+## Nota del 6 de octubre de 2026
+
+Añadida al final. El DOCX v1.1 de arriba es la foto del 22-07-2026: no lleva la enmienda del
+06-10-2026, que hace de HEAD-R1 el cuerpo de Sirius (D-HEAD-14, ADR-232). Es histórico. El
+texto normativo vigente es `docs/robotics/head/RECTOR.md` con su enmienda al final. No se
+regenera: el flujo que producía los DOCX se retiró con ADR-207.

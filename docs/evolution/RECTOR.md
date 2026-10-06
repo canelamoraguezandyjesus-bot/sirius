@@ -390,7 +390,9 @@ al procedimiento establecido en este repositorio (ADR-205).
 6. **1.0 Compañero en la habitación.**
 
 Qué se hace en cada una, con qué, qué no se usa y cuándo está terminada está solo en
-`docs/evolution/PLAN_DEL_ROBOT.md`, para que no haya dos copias que se separen.
+`docs/evolution/PLAN_DEL_ROBOT.md`, para que no haya dos copias que se separen. De 0.6 y
+1.0 hay solo un esbozo: su sección se completa y la aprueba el propietario antes de
+activarlas.
 
 ### 20.3 Qué NO queda enmendado
 
