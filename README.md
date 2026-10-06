@@ -13,7 +13,7 @@ poder leerse y auditarse, y no se licencia para su reutilización. Ver `LICENSE`
 - La única validación pendiente de V7 es la comprobación manual de Windows Credential Manager en Windows real.
 - V8 está iniciada únicamente en su subetapa correctiva y automatizada (V8.1), sin clave API y sin aceptación manual formal. Dentro de V8.1 están fusionados los bloques B2a/B2b (primera configuración y ruta de datos), B3a/B3b/B3c (proyecto: creación, continuidad y ciclo de vida) y B4a a B4f (memoria, decisiones, origen, corrección, sustitución, archivo, eliminación, conflictos y panel observable), siempre con proveedor simulado.
 - La ventana de aceptación con proveedor real permanece bloqueada hasta superar las puertas documentadas en `docs/implementation/PLAN.md`.
-- Sirius 0.1 está aceptado y terminado desde el 10-08-2026 (`docs/implementation/V8_EXECUTION.md`); las líneas anteriores de esta lista son de antes.
+- Sirius 0.1 está aceptado y terminado desde el 10-08-2026 (`docs/implementation/V8_EXECUTION.md`); las líneas anteriores de esta lista son de antes de esa fecha.
 - El alcance no debe ampliarse sin una decisión registrada y aprobada.
 - La evolución post-0.1 se rige por el Documento Rector v1.0 con sus enmiendas §19 y §20 y por las decisiones EV-001 a EV-023; su estado está en `docs/evolution/STATUS.md`.
 - La línea futura de cabeza robótica HEAD-R1 dispone de Documento Rector v1.1 aprobado, pero permanece físicamente inactiva y sin compras autorizadas; su estado está en `docs/robotics/head/STATUS.md`.

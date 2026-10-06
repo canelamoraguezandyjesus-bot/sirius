@@ -444,10 +444,11 @@ versión: `docs/evolution/PLAN_DEL_ROBOT.md`.
 - **La excepción de Sirius 0.2 — Memoria útil del 28-08-2026 queda sustituida por la nueva
   0.2.** Lo construido de sus cinco bloques se queda y se aprovecha. Se paran el
   etiquetado por categorías y el filtro con Ollama dentro del turno (M8 a M11) y la ola de
-  paridad (M13 en adelante): la nueva 0.2 los sustituye por búsqueda por significado. La
-  prueba `xfail(strict=True)` del suelo de M11, 29 de 47
-  (`tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py:3550`), sigue en el árbol
-  hasta que la nueva 0.2 traiga su banco propio.
+  paridad (M13 en adelante): la nueva 0.2 los sustituye por búsqueda por significado. Las
+  dos pruebas `xfail(strict=True)` de M11 siguen en el árbol hasta que la nueva 0.2 traiga
+  su banco propio y su medida de latencia: el suelo de 29 de 47
+  (`tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py:3550`) y el de RNF-003, P95 de
+  300 ms (`tests/integration/test_local_performance.py:701`).
 - **La excepción del Sirius Work Engine** sigue como estaba.
 
 ### No autorizado todavía

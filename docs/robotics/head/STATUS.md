@@ -54,10 +54,11 @@ Añadido al final, sin tocar lo anterior, que es la foto aprobada del 22 de juli
 - **Cuándo se reactiva.** Cuando termine la versión 0.5 del plan del robot
   (`docs/evolution/PLAN_DEL_ROBOT.md`): primero el cerebro, en el ordenador, y después la
   cabeza. Es la decisión 1 del propietario del 05-10-2026.
-- **Qué se revisa al reactivarla.** R1 no llevaba cámara ni micrófonos, solo su sitio
-  reservado. Con la decisión del propietario de que Sirius escuche y mire siempre
-  (EV-022), las investigaciones del 05-10 proponen una cámara gran angular fija en la
-  frente y un array de micrófonos con cancelación de eco, con el altavoz abajo. Se decide
-  con la fase que lo toque, no ahora.
+- **Qué se revisa al reactivarla.** R1 no llevaba cámara ni micrófonos: solo dejaba hueco
+  para una cámara en un ojo y para micrófonos separados del altavoz. Con la decisión del
+  propietario de que Sirius escuche y mire siempre (EV-022), las investigaciones del
+  05-10 proponen una cámara gran angular fija en la frente, más fácil de procesar, y un
+  array de micrófonos con cancelación de eco. Se decide con la fase que lo toque, no
+  ahora.
 - **La prioridad de arriba ya no vale.** Sirius 0.1 se aceptó el 10-08-2026; la prioridad
   vigente está en `docs/evolution/STATUS.md`.

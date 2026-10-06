@@ -346,8 +346,9 @@ Se dice explícitamente para que no se deduzca de más:
 > **Por qué esta enmienda está al final y no en su sitio.** Por lo mismo que la §19:
 > los apartados que modifica están citados por número de línea desde la Arquitectura
 > Técnica 0.2, el Plan de Pruebas 0.2, la Definición de Producto 0.2,
-> `docs/evolution/STATUS.md` y varios ADR. Este apartado **continúa** el documento; no
-> lo sustituye.
+> `docs/evolution/STATUS.md`, `docs/evolution/PROPUESTA_SEPARACION_SIRIUS_MOTOR.md`,
+> `docs/implementation/AGENTES_SUPERFICIE_DE_INVOCACION.md` y ADR-160. Este apartado
+> **continúa** el documento; no lo sustituye.
 
 **Origen:** las decisiones del propietario del 05-10-2026 y el plan que aprobó el
 06-10-2026, después de leerlo entero: «Me parece totalmente razonable».
@@ -367,9 +368,10 @@ al procedimiento establecido en este repositorio (ADR-205).
 | Apartado de este documento | Qué decía | Qué dice desde esta enmienda |
 |---|---|---|
 | §1, propósito | Sirius será el punto personal de contacto entre el usuario, sus proyectos, especialistas, aplicaciones, automatizaciones y dispositivos | Sirius es el software de un robot compañero: personalidad, memoria, voz, ojos y, después, su cabeza (EV-020) |
-| §2, qué es Sirius | La interfaz con el ecosistema digital y físico, e integrador de resultados de modelos, agentes y herramientas | El software del robot y nada más. Nada de ayudar en ingeniería (EV-020). Sigue sin ser un modelo concreto ni un controlador de motores |
+| §2, qué es Sirius | La interfaz con el ecosistema digital y físico, e integrador de resultados; la §19 lo precisó a la interfaz «personal, de ingeniería y del robot» | El software del robot y nada más. Nada de ayudar en ingeniería (EV-020). Sigue sin ser un modelo concreto ni un controlador de motores |
 | §4, modelo de interacción híbrido | Sirius puede abrir sesiones especializadas | Aparcado: Sirius conversa y no abre sesiones especializadas (EV-020; idea I-011) |
-| §6, §7, §8 y §13 | Habilidades sobre el ordenador, delegación supervisada, multiagente y Sirius participando en su desarrollo | Aparcados con su disparador en `docs/ideas/registro_de_ideas.yml`, de I-010 a I-013. No se borran |
+| §6, habilidades, permisos y autonomía | Niveles de permiso y lo que declara cada capacidad | Sigue para lo poco que hace Sirius: buscar en internet y pedir gestos de su lista cerrada. Las habilidades sobre el ordenador quedan aparcadas en la idea I-010 de `docs/ideas/registro_de_ideas.yml` |
+| §7, §8 y §13 | Delegación supervisada, multiagente y Sirius participando en su desarrollo | Aparcados en la idea I-011, con su disparador. No se borran |
 | §9, roadmap | De 0.2 Memoria útil a 1.0 Compañero en la habitación, pasando por habilidades, delegación, automatización digital y laboratorio | El roadmap del robot de EV-021, con el detalle de cada versión en `docs/evolution/PLAN_DEL_ROBOT.md` |
 | §10, voz, percepción y ordenador | Percepción explícita, temporal y cancelable; sin escucha ni captura continua por defecto | Escucha y mira siempre, en local, con indicador visible, botón para callarlo y sin guardar grabaciones (EV-022). Operar el ordenador queda aparcado con 0.3 |
 | §11, automatización y proactividad | Rutinas y avisos con límites | Sigue, y gobierna la iniciativa del robot: hablar por su cuenta y estar pendiente de cosas, con origen visible, poca frecuencia y forma de pararlo |

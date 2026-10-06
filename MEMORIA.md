@@ -32,7 +32,7 @@
 - Ideas aparcadas o descartadas: 12 aparcada, 3 descartada, 2 promovida.
 - Skills: **19**.
 - Investigaciones: **14** (fotos con fecha; caducan).
-- Documentos: **211**, de los que **137** no declaran fecha.
+- Documentos: **211**, de los que **136** no declaran fecha.
 
 ## Las skills: lo que ya costó averiguar dos veces (ADR-211)
 
@@ -693,5 +693,5 @@ mismo comando y vigila la misma prueba que esta vista (ADR-218).
 | sin fecha declarada | [Registro de cambios](CHANGELOG.md) |
 | sin fecha declarada | [Claude Code](CLAUDE.md) |
 | sin fecha declarada | [Forma de trabajo](CONTRIBUTING.md) |
-| sin fecha declarada | [Sirius 0.1](README.md) |
+| 2026-08-10 | [Sirius 0.1](README.md) |
 | sin fecha declarada | [Estado actual del repositorio](REPOSITORY_STATUS.md) |

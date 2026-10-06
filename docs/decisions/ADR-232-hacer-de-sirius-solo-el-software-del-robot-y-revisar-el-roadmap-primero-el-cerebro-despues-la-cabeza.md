@@ -49,8 +49,8 @@ antes del primer cambio de documentos y antes de cualquier revisión.
 están protegidos contra ediciones de las sesiones en `.claude/settings.json` desde el
 13-07-2026, y una enmienda no justifica rodear esa protección por la consola. Así que:
 `AGENTS.md` no se toca, la enmienda del manual vive en `docs/evolution/` y el puntero va
-en `README.md` y en `MEMORIA.md`, donde este ADR sale el primero de la lista. `AGENTS.md`
-manda leer `MEMORIA.md` entera antes de responder, así que el camino existe.
+en `README.md` y en `MEMORIA.md`, que lista este ADR con los demás. `AGENTS.md` manda
+leer `MEMORIA.md` entera antes de responder, así que el camino existe.
 
 ## Contexto y problema
 
@@ -134,7 +134,7 @@ sencillo, y tres documentos por versión, como los de 0.2 Memoria útil, no lo s
 | El banco de 47 casos falla en el camino real: 4 de 47 y P95 438-780 ms | `docs/evolution/STATUS.md:306-307` |
 | En otra variante, 7 de 47 | `docs/audits/decisiones-pendientes-de-la-linea-de-memoria.md:202` |
 | El propietario no acepta ni 29 de 47 | `docs/evolution/STATUS.md:310-311` |
-| Queda una sola prueba `xfail(strict=True)` de M11 | `tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py:3550` |
+| Quedan dos pruebas `xfail(strict=True)` de M11: el suelo de 29 de 47 y el de RNF-003 | `tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py:3550` y `tests/integration/test_local_performance.py:701` |
 | Las líneas del Rector y de los STATUS están citadas por número | `docs/evolution/RECTOR.md:298-304` y `docs/canonical/STATUS.md:34-36` |
 | `AGENTS.md` y `docs/canonical/` están protegidos contra ediciones de sesión | `.claude/settings.json`, reglas `Edit(./AGENTS.md)` y `Edit(./docs/canonical/**)` en `deny` |
 | El nombre del propietario ya aparecía en 7 ficheros del repositorio; su región, en ninguno | `git grep` sobre `main` en `4ea76f35`, antes de copiar las investigaciones |
@@ -144,8 +144,8 @@ La cadena de comprobación sobre el árbol final está en el cuerpo de la PR.
 
 ## Consecuencias
 
-- Una sesión que abra el repositorio ve este ADR el primero en `MEMORIA.md`, y el puntero
-  en `README.md`.
+- Una sesión que abra el repositorio encuentra este ADR en `MEMORIA.md` y el puntero en
+  `README.md`.
 - La siguiente obra es la versión 0.2 del plan: primero sus pruebas de aceptación; después
   la semilla con el propietario, el conector local, la prueba a ciegas y los botones.
 - Lo construido de 0.2 Memoria útil se queda. Se para el camino de M8 a M11 y la ola de M13
