@@ -25,6 +25,9 @@ El usuario se relacionará principalmente con Sirius. Sirius conservará criteri
 > especializada sigue siendo una capacidad de Sirius, pero deja de ser el camino
 > por el que llega el trabajo del propietario.
 
+> **APARCADA por EV-020** (6 de octubre de 2026, ADR-232): Sirius ya no abre
+> sesiones especializadas. Vuelve solo si se cumple el disparador de la idea I-011.
+
 Sirius podrá abrir sesiones especializadas visibles y acotadas en las que el usuario dialogue temporalmente con un especialista. Sirius preparará el contexto, conservará permisos y trazabilidad, y recuperará e integrará el resultado.
 
 ## EV-004 - Memoria canónica exclusiva de Sirius
@@ -50,6 +53,9 @@ El multiagente permanece pospuesto. Solo se activará cuando una tarea real demu
 
 ## EV-008 - Roadmap post-0.1 sustituido
 
+> **SUSTITUIDA por EV-021** (6 de octubre de 2026, ADR-232). El texto original
+> se conserva íntegro.
+
 El roadmap orientativo aprobado queda:
 
 1. Sirius 0.2 - Memoria útil.
@@ -64,6 +70,9 @@ Esta decisión sustituye la secuencia anterior que agrupaba voz en 0.4 y laborat
 
 ## EV-009 - Percepción explícita y temporal
 
+> **SUSTITUIDA por EV-022** (6 de octubre de 2026, ADR-232): Sirius escucha y
+> mira siempre, en local, con indicador visible y sin grabaciones.
+
 La percepción visual o ambiental será bajo demanda, temporal, visible y cancelable. No habrá observación silenciosa ni grabación continua como comportamiento ordinario.
 
 ## EV-010 - Control visual del ordenador como último recurso
@@ -71,6 +80,9 @@ La percepción visual o ambiental será bajo demanda, temporal, visible y cancel
 Sirius preferirá integraciones estructuradas y contratos de herramienta. El control visual de interfaces se utilizará únicamente cuando no exista una vía más segura y deberá operar con límites, confirmación y trazabilidad.
 
 ## EV-011 - Participación supervisada en su propio desarrollo
+
+> **APARCADA por EV-020** (6 de octubre de 2026, ADR-232): Sirius ya no ayuda en
+> ingeniería, tampoco en la suya. Vuelve solo con el disparador de la idea I-011.
 
 Sirius podrá preparar cambios, coordinar agentes de programación, ejecutar verificaciones autorizadas y colaborar con firmware o hardware. No podrá aprobar por sí mismo sus cambios ni concentrar simultáneamente autoría, revisión, aprobación y ejecución final.
 
@@ -116,6 +128,9 @@ y `docs/decisions/ADR-161-retirar-los-carriles-dedicados-de-investigacion-y-audi
 > el número de la que las sustituye. Un registro de decisiones no se reescribe.
 
 ### EV-015 - Sirius es el compañero personal, de ingeniería y del robot
+
+> **SUSTITUIDA por EV-020** (6 de octubre de 2026, ADR-232): Sirius es solo el
+> software del robot.
 
 Sirius conserva identidad, memoria propia, conversación, voz, cámaras y
 percepción, ayuda de ingeniería y electrónica, y manejo del ordenador y de los
@@ -167,6 +182,9 @@ roadmap y no fija ninguna relación con Sirius 0.2.
 
 ### EV-019 - Sirius conserva la delegación especializada de ingeniería
 
+> **APARCADA por EV-020** (6 de octubre de 2026, ADR-232): vuelve solo si se
+> cumple el disparador de la idea I-011.
+
 Sirius puede delegar en un especialista una **consulta de ingeniería del
 propietario** y devolver el resultado a la conversación. Es distinto de un
 encargo del motor en tres rasgos: nace de una conversación y no de un WorkItem,
@@ -183,3 +201,81 @@ No autorizan implementación de nada, no cambian prioridades, alcance ni
 numeración de ninguna versión, y no relajan la regla de activación del Rector
 (`docs/evolution/RECTOR.md` §17). Gobiernan las futuras definiciones de producto,
 igual que EV-001 a EV-014.
+
+---
+
+## Sirius, el software del robot — decisiones EV-020 a EV-023
+
+**Estado:** decisiones canónicas de la serie EV
+**Fecha:** 6 de octubre de 2026
+**Aprobación:** el propietario aprobó el plan el 06-10-2026, después de leerlo entero; la
+fusión de la Pull Request que las introduce lo deja escrito (ADR-205).
+**Relación con las decisiones anteriores:** **EV-020 sustituye EV-015 y deja aparcadas
+EV-003, EV-011 y EV-019; EV-021 sustituye EV-008; EV-022 sustituye EV-009; y EV-012
+sigue vigente sin enmienda.**
+**Autoridad final:** usuario responsable del Proyecto Sirius
+**Registro de la decisión:** `docs/decisions/ADR-232-hacer-de-sirius-solo-el-software-del-robot-y-revisar-el-roadmap-primero-el-cerebro-despues-la-cabeza.md`
+
+> Se añaden al final, como EV-015 a EV-019. Las que quedan sustituidas o aparcadas lo
+> llevan escrito en su propio apartado, con el número de la que las sustituye.
+
+### EV-020 - Sirius es solo el software del robot
+
+Sirius es el software de un robot compañero: su personalidad, su memoria, su voz, sus
+ojos y, cuando llegue, su cabeza. Nada de ayudar en ingeniería: ni consultas de
+ingeniería, ni manejo del ordenador, ni participar en su propio desarrollo. Se conserva
+la base construida: la app, la memoria y la identidad por versiones.
+
+Sigue siendo lo que dice EV-001: el sistema personal responsable ante el propietario,
+que no es un modelo concreto, ni una secretaria, ni un lanzador de aplicaciones.
+
+Lo que deja fuera queda aparcado con su disparador en `docs/ideas/registro_de_ideas.yml`,
+de I-010 a I-013.
+
+### EV-021 - El roadmap del robot: primero el cerebro, después la cabeza
+
+El roadmap queda:
+
+1. Sirius 0.2 - Sirius en texto: personalidad y memoria.
+2. Sirius 0.3 - Voz.
+3. Sirius 0.4 - Ojos.
+4. Sirius 0.5 - Entrenarle.
+5. Sirius 0.6 - Puente con la cabeza.
+6. Sirius 1.0 - Compañero en la habitación.
+
+El cerebro se hace entero en el ordenador del propietario antes de conectar la cabeza.
+Cada versión acaba con una prueba del propietario, y sin ella no se pasa a la siguiente.
+Su contenido está en `docs/evolution/PLAN_DEL_ROBOT.md`. Para estas versiones, la sección
+de cada una hace de definición de producto y de arquitectura, y sus pruebas de
+aceptación se escriben antes de la primera línea de código.
+
+Sustituye la secuencia de EV-008.
+
+### EV-022 - Escucha y mira siempre, en local
+
+Sirius escucha y mira siempre, no solo cuando se le habla. Todo se procesa en el
+ordenador del propietario. Un indicador visible dice que escucha, un botón lo calla, y no
+se guardan grabaciones de audio ni de vídeo: solo texto y etiquetas.
+
+Oír siempre no es contestar siempre: tiene que distinguir cuándo le hablan a él, y la
+tele o el teléfono no son órdenes. La cámara no da a la calle ni a una ventana, y a quien
+no dé permiso no se le guarda la huella de la cara ni de la voz.
+
+Sustituye EV-009.
+
+### EV-023 - El modelo es local y la identidad vive en datos
+
+La conversación corre con un modelo local, que el propietario elige a ciegas por la
+gracia entre dos o tres. Lo único que sale a internet son búsquedas sueltas.
+
+La identidad de Sirius no vive dentro de un modelo: vive en sus datos, que son su
+semilla, lo que se le enseña con «eso es Sirius» y «eso no», su memoria y su voz. El
+modelo es un motor sustituible, y lo entrenado se reentrena en otro con los mismos datos.
+Sirius tiene que ser el mismo «esté en un ordenador, en la nube o donde sea», en palabras
+del propietario.
+
+### Efecto de aprobación de EV-020 a EV-023
+
+Autorizan implementar las versiones del robot en el orden de EV-021, cada una cuando
+cumpla la regla de activación del Rector tal como la enmienda su §20. No autorizan
+compras ni ninguna fase física de HEAD-R1, y no cambian el motor de trabajo.

@@ -45,6 +45,13 @@ antes del primer cambio de documentos y antes de cualquier revisión.
    hace. Lo que se hace: la primera línea de `AGENTS.md` y la de `README.md`, que lee
    todo el mundo, dicen qué es Sirius ahora y dónde está el plan.
 
+**Corrección antes de la revisión, al escribir el resto.** `AGENTS.md` y `docs/canonical/`
+están protegidos contra ediciones de las sesiones en `.claude/settings.json` desde el
+13-07-2026, y una enmienda no justifica rodear esa protección por la consola. Así que:
+`AGENTS.md` no se toca, la enmienda del manual vive en `docs/evolution/` y el puntero va
+en `README.md` y en `MEMORIA.md`, donde este ADR sale el primero de la lista. `AGENTS.md`
+manda leer `MEMORIA.md` entera antes de responder, así que el camino existe.
+
 ## Contexto y problema
 
 El 05-10-2026 el propietario giró el proyecto. Sus palabras: «esa aplicación de Sirius
@@ -97,8 +104,23 @@ está tomada; lo que este criterio para es la forma de escribirla en el reposito
 
 ## Decisión
 
-La opción 3. Se completa, con el detalle de cada documento, en el commit siguiente de
-esta misma rama.
+La opción 3, en estos documentos:
+
+| Pieza | Dónde | Qué hace |
+|---|---|---|
+| Enmienda §20 | `docs/evolution/RECTOR.md` | Dice qué cambia en §1, §2, §4, §6 a §8, §9, §10, §11, §12, §13, §17 y el manual, y qué no |
+| EV-020 a EV-023 | `docs/evolution/DECISIONS.md` | Solo el robot; el roadmap del robot; escucha y mira siempre; modelo local e identidad en datos. EV-003, EV-008, EV-009, EV-011, EV-015 y EV-019 llevan escrito quién las sustituye o las aparca |
+| El plan | `docs/evolution/PLAN_DEL_ROBOT.md` | Versión a versión: qué hay hecho, qué se hace, con qué, qué no se usa, cuándo termina y cuánto cuesta. Hace de definición de producto y de arquitectura de cada versión |
+| La personalidad | `docs/evolution/ENMIENDA_MANUAL_IDENTIDAD_2026-10.md` | Las palabras del propietario y qué apartados del manual v1.2 cambian |
+| El estado | `docs/evolution/STATUS.md`, `docs/evolution/README.md` y `docs/robotics/head/STATUS.md` | Lo vigente, lo autorizado y lo que no. HEAD-R1 pasa a ser el cuerpo de Sirius y sigue inactiva |
+| Lo aparcado | `docs/ideas/registro_de_ideas.yml` y `docs/audits/decisiones-abiertas-del-propietario.md` | I-010 a I-017 con su disparador; D-1 a D-6 aparcadas con el banco de 47 casos |
+| Las investigaciones | las cuatro de `docs/investigaciones/` del 2026-10-05 | Enteras, con cabecera y caducidad, sin el nombre ni la región del propietario porque el repositorio es público |
+| El puntero | `README.md`, líneas 3, 16 y 18, sustituidas en su sitio | Qué es Sirius ahora y dónde está el plan |
+
+La regla de activación de la §17 sigue, con una forma más ligera para el robot: la
+sección de cada versión en el plan hace de definición y de arquitectura, y sus pruebas de
+aceptación se escriben antes de la primera línea de código. El propietario pidió un plan
+sencillo, y tres documentos por versión, como los de 0.2 Memoria útil, no lo son.
 
 ## Comprobación que la sostiene
 
@@ -112,17 +134,35 @@ esta misma rama.
 | El banco de 47 casos falla en el camino real: 4 de 47 y P95 438-780 ms | `docs/evolution/STATUS.md:306-307` |
 | En otra variante, 7 de 47 | `docs/audits/decisiones-pendientes-de-la-linea-de-memoria.md:202` |
 | El propietario no acepta ni 29 de 47 | `docs/evolution/STATUS.md:310-311` |
+| Queda una sola prueba `xfail(strict=True)` de M11 | `tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py:3550` |
 | Las líneas del Rector y de los STATUS están citadas por número | `docs/evolution/RECTOR.md:298-304` y `docs/canonical/STATUS.md:34-36` |
+| `AGENTS.md` y `docs/canonical/` están protegidos contra ediciones de sesión | `.claude/settings.json`, reglas `Edit(./AGENTS.md)` y `Edit(./docs/canonical/**)` en `deny` |
+| El nombre del propietario ya aparecía en 7 ficheros del repositorio; su región, en ninguno | `git grep` sobre `main` en `4ea76f35`, antes de copiar las investigaciones |
 | Sirius usa Python 3.14 | `pyproject.toml:6` |
+
+La cadena de comprobación sobre el árbol final está en el cuerpo de la PR.
 
 ## Consecuencias
 
-Las detalla el commit siguiente.
+- Una sesión que abra el repositorio ve este ADR el primero en `MEMORIA.md`, y el puntero
+  en `README.md`.
+- La siguiente obra es la versión 0.2 del plan: primero sus pruebas de aceptación; después
+  la semilla con el propietario, el conector local, la prueba a ciegas y los botones.
+- Lo construido de 0.2 Memoria útil se queda. Se para el camino de M8 a M11 y la ola de M13
+  en adelante.
+- `AGENTS.md:3` sigue diciendo «Este repositorio implementa Sirius 0.1», y
+  `docs/canonical/STATUS.md` no nombra la §20: los dos están protegidos. Lo vigente lo
+  dicen la §20, el plan y `MEMORIA.md`.
+- La semilla del código sigue siendo la del manual v1.2 hasta el paso 1 de 0.2.
 
 ## Alternativas descartadas y por qué
 
 - **Borrar el repositorio y dejar solo el motor**: el propietario la retiró el 05-10.
 - **Reescribir en su sitio**: rompería citas por número que no son de este trabajo.
+- **Escribir en `AGENTS.md` y en `docs/canonical/` por la consola**: la protección es del
+  propietario y una enmienda no justifica rodearla.
+- **Tres documentos por versión**, como en 0.2 Memoria útil: el propietario pidió un plan
+  sencillo, y la sección de cada versión con sus pruebas antes del código cumple lo mismo.
 
 ## La lección
 

@@ -410,3 +410,62 @@ resultados— está en ADR-161 y **no está ordenada**.
 - **No toca la ola de paridad en producción**, que sigue su curso donde la dejó
   la sección anterior.
 
+
+## Sirius, el software del robot — 6 de octubre de 2026
+
+> Añadido al final, sin tocar ninguna línea anterior, por la misma razón que las dos
+> secciones precedentes: las líneas de arriba están citadas por número desde ADR, desde
+> la Definición de Producto 0.2 y desde la Arquitectura Técnica 0.2.
+
+El propietario decidió el 05-10-2026 que Sirius pasa a ser solo el software del robot, y
+aprobó el plan el 06-10-2026 después de leerlo entero. Lo formalizan **EV-020 a EV-023**
+(`docs/evolution/DECISIONS.md`), la **§20** del Rector y **ADR-232**. El plan, versión a
+versión: `docs/evolution/PLAN_DEL_ROBOT.md`.
+
+### Vigente desde esta sección
+
+- Sirius es el software de un robot compañero. Nada de ayudar en ingeniería (EV-020).
+- El roadmap es el del robot (EV-021): 0.2 Sirius en texto, personalidad y memoria; 0.3
+  Voz; 0.4 Ojos; 0.5 Entrenarle; 0.6 Puente con la cabeza; 1.0 Compañero en la
+  habitación. Sustituye la línea de «Vigente» que enumeraba el roadmap anterior.
+- Sirius escucha y mira siempre, en local, con indicador visible, botón para callarlo y
+  sin grabaciones (EV-022). Deja sin efecto la línea de «No autorizado todavía» que decía
+  «activar percepción continua».
+- El modelo de conversación es local y la identidad vive en datos (EV-023).
+- La personalidad es la de `docs/evolution/ENMIENDA_MANUAL_IDENTIDAD_2026-10.md`.
+- Siguen enteras: los agentes no escriben la memoria canónica (EV-004) y ningún modelo
+  controla directamente actuadores ni firmware (EV-012).
+
+### Autorizado
+
+- **Implementar las versiones del robot** en el orden de EV-021, cada una cuando cumpla la
+  regla de activación tal como la enmienda la §20 del Rector: su sección del plan y sus
+  pruebas de aceptación escritas antes del código.
+- **La excepción de Sirius 0.2 — Memoria útil del 28-08-2026 queda sustituida por la nueva
+  0.2.** Lo construido de sus cinco bloques se queda y se aprovecha. Se paran el
+  etiquetado por categorías y el filtro con Ollama dentro del turno (M8 a M11) y la ola de
+  paridad (M13 en adelante): la nueva 0.2 los sustituye por búsqueda por significado. La
+  prueba `xfail(strict=True)` del suelo de M11, 29 de 47
+  (`tests/acceptance/test_pa_0_2_rec_01_banco_evidencia.py:3550`), sigue en el árbol
+  hasta que la nueva 0.2 traiga su banco propio.
+- **La excepción del Sirius Work Engine** sigue como estaba.
+
+### No autorizado todavía
+
+- comprar nada, ni activar ninguna fase de HEAD-R1;
+- integrar Sirius con HEAD-R1 antes de terminar la versión 0.5;
+- que un modelo controle directamente hardware o firmware;
+- lo aparcado de I-010 a I-013 en `docs/ideas/registro_de_ideas.yml`: habilidades sobre el
+  ordenador, Sirius como ayudante de ingeniería, automatización digital y laboratorio.
+
+### Prioridad actual
+
+La versión 0.2 del plan. Primero la semilla con las palabras del propietario, la prueba a
+ciegas de modelos locales y los botones «eso es Sirius» y «eso no». Después, la memoria.
+
+### Lo que esta sección NO cambia
+
+- **El motor de trabajo**, su excepción y su diario.
+- **Model Studio**, que se queda como está; su voz se aprovecha en 0.3.
+- **Las decisiones D-1 a D-6**, que eran del banco de 47 casos: quedan aparcadas en
+  `docs/audits/decisiones-abiertas-del-propietario.md`.

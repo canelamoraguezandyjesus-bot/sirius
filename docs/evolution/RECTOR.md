@@ -341,3 +341,61 @@ Se dice explícitamente para que no se deduzca de más:
 - **EV-004**: sigue vigente sin enmienda, porque el conocimiento común no es la
   memoria canónica de Sirius.
 
+## 20. Enmienda del 6 de octubre de 2026 — Sirius es el software del robot
+
+> **Por qué esta enmienda está al final y no en su sitio.** Por lo mismo que la §19:
+> los apartados que modifica están citados por número de línea desde la Arquitectura
+> Técnica 0.2, el Plan de Pruebas 0.2, la Definición de Producto 0.2,
+> `docs/evolution/STATUS.md` y varios ADR. Este apartado **continúa** el documento; no
+> lo sustituye.
+
+**Origen:** las decisiones del propietario del 05-10-2026 y el plan que aprobó el
+06-10-2026, después de leerlo entero: «Me parece totalmente razonable».
+**Registro:** ADR-232 en `docs/decisions/`.
+**Decisiones canónicas:** EV-020 a EV-023 en `docs/evolution/DECISIONS.md`.
+**El plan:** `docs/evolution/PLAN_DEL_ROBOT.md`, versión por versión.
+**La personalidad:** `docs/evolution/ENMIENDA_MANUAL_IDENTIDAD_2026-10.md`, que enmienda el
+Manual de Visión e Identidad v1.2 con las palabras del propietario.
+**Relación con las decisiones canónicas anteriores:** **EV-020 sustituye EV-015 y deja
+aparcadas EV-003, EV-011 y EV-019; EV-021 sustituye EV-008; EV-022 sustituye EV-009; y
+EV-012 sigue vigente sin enmienda.**
+**Entrada en vigor:** la fusión de la Pull Request que introduce esta enmienda, conforme
+al procedimiento establecido en este repositorio (ADR-205).
+
+### 20.1 Qué queda enmendado
+
+| Apartado de este documento | Qué decía | Qué dice desde esta enmienda |
+|---|---|---|
+| §1, propósito | Sirius será el punto personal de contacto entre el usuario, sus proyectos, especialistas, aplicaciones, automatizaciones y dispositivos | Sirius es el software de un robot compañero: personalidad, memoria, voz, ojos y, después, su cabeza (EV-020) |
+| §2, qué es Sirius | La interfaz con el ecosistema digital y físico, e integrador de resultados de modelos, agentes y herramientas | El software del robot y nada más. Nada de ayudar en ingeniería (EV-020). Sigue sin ser un modelo concreto ni un controlador de motores |
+| §4, modelo de interacción híbrido | Sirius puede abrir sesiones especializadas | Aparcado: Sirius conversa y no abre sesiones especializadas (EV-020; idea I-011) |
+| §6, §7, §8 y §13 | Habilidades sobre el ordenador, delegación supervisada, multiagente y Sirius participando en su desarrollo | Aparcados con su disparador en `docs/ideas/registro_de_ideas.yml`, de I-010 a I-013. No se borran |
+| §9, roadmap | De 0.2 Memoria útil a 1.0 Compañero en la habitación, pasando por habilidades, delegación, automatización digital y laboratorio | El roadmap del robot de EV-021, con el detalle de cada versión en `docs/evolution/PLAN_DEL_ROBOT.md` |
+| §10, voz, percepción y ordenador | Percepción explícita, temporal y cancelable; sin escucha ni captura continua por defecto | Escucha y mira siempre, en local, con indicador visible, botón para callarlo y sin guardar grabaciones (EV-022). Operar el ordenador queda aparcado con 0.3 |
+| §11, automatización y proactividad | Rutinas y avisos con límites | Sigue, y gobierna la iniciativa del robot: hablar por su cuenta y estar pendiente de cosas, con origen visible, poca frecuencia y forma de pararlo |
+| §12, HEAD-R1 | Producto físico hermano, no un módulo de Sirius; su integración espera a habilidades, permisos y trazabilidad maduros | HEAD-R1 es el cuerpo de Sirius. Su Rector físico sigue mandando en mecánica, electrónica, firmware, límites y seguridad, y sigue inactiva. Su integración espera a que termine la versión 0.5 del plan |
+| §17, regla de activación | Definición de producto, pruebas de aceptación reproducibles y arquitectura técnica aprobadas antes de empezar una etapa | Para las versiones del robot, la definición y la arquitectura son la sección de la versión en el plan aprobado, y las pruebas de aceptación se escriben antes de la primera línea de código de la versión (EV-021). Lo demás de §17 sigue entero |
+| Manual de Visión e Identidad v1.2 | Compañero de creación e ingeniería; provocador sin humillar | Lo que dice `docs/evolution/ENMIENDA_MANUAL_IDENTIDAD_2026-10.md` |
+
+### 20.2 El roadmap del robot
+
+1. **0.2 Sirius en texto: personalidad y memoria.** Sustituye a 0.2 Memoria útil y
+   aprovecha lo construido.
+2. **0.3 Voz.**
+3. **0.4 Ojos.**
+4. **0.5 Entrenarle.**
+5. **0.6 Puente con la cabeza.**
+6. **1.0 Compañero en la habitación.**
+
+Qué se hace en cada una, con qué, qué no se usa y cuándo está terminada está solo en
+`docs/evolution/PLAN_DEL_ROBOT.md`, para que no haya dos copias que se separen.
+
+### 20.3 Qué NO queda enmendado
+
+- **§12, la prohibición de que un modelo envíe ángulos, pulsos o secuencias libres a los
+  actuadores, y EV-012.** El modelo solo pide gestos de una lista cerrada.
+- **§15**, las señales de parada, y **§16**, la jerarquía documental.
+- **EV-004, EV-016, EV-017 y EV-018**: la memoria canónica, el trabajo con las IAs
+  externas, el motor y las tres memorias. El motor de trabajo no cambia con esta enmienda.
+- **No se borra nada.** Lo que sale del roadmap queda aparcado con su disparador.
+- **No se autorizan compras** ni ninguna fase física de HEAD-R1.
