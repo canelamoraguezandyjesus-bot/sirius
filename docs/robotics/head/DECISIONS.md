@@ -1,4 +1,4 @@
-# Decisiones canónicas - Sirius HEAD-R1
+# Decisiones canónicas - Sirius HEAD-R1 (desde el 06-10-2026 manda D-HEAD-14, al final)
 
 **Estado:** APROBADO  
 **Fecha de aprobación vigente:** 22 de julio de 2026  
@@ -108,3 +108,19 @@ La burocracia operativa se limita a:
 ## Aprobación vigente
 
 El usuario aprobó expresamente el Documento Rector HEAD-R1 v1.1 el 22 de julio de 2026. La aprobación sustituye v1.0, pero no activa ejecución física.
+
+## D-HEAD-14 - HEAD-R1 es el cuerpo de Sirius (6 de octubre de 2026)
+
+**Sustituye a D-HEAD-04.** El 05-10-2026 el propietario decidió que Sirius pasa a ser solo
+el software del robot y que primero se hace el cerebro, sin cuerpo (ADR-232; EV-020 y §20
+del Rector de evolución). HEAD-R1 deja de construirse aparte de Sirius: es su cuerpo, y su
+integración espera a que termine la versión 0.5 del plan del robot.
+
+**Sigue igual:** este conjunto de documentos manda en mecánica, electrónica, firmware,
+calibración, límites y seguridad física; el control es determinista; ningún modelo envía
+ángulos, pulsos ni secuencias libres; y cada fase necesita autorización expresa, como dice
+D-HEAD-05.
+
+**A revisar al reactivarla:** D-HEAD-01 deja fuera cámaras, micrófonos y escucha. Con la
+decisión del propietario de que Sirius escuche y mire siempre (EV-022), eso se decide con
+la fase que lo toque, no ahora.

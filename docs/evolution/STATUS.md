@@ -1,4 +1,4 @@
-# Estado - Evolución post-0.1 de Sirius
+# Estado - Evolución post-0.1 de Sirius (desde el 06-10-2026 manda la última sección: Sirius, el software del robot)
 
 **Estado documental:** APROBADO  
 **Documento rector vigente:** v1.0  

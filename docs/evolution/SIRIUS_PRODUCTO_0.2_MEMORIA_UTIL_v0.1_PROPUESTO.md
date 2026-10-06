@@ -1,4 +1,4 @@
-# Definición de Producto — Sirius 0.2 «Memoria útil»
+# Definición de Producto — Sirius 0.2 «Memoria útil» (sustituida el 06-10-2026 por la 0.2 del robot, ADR-232)
 
 **Identificador:** `SIRIUS-PRODUCTO-0.2-MEMORIA-UTIL`
 **Versión:** v0.1

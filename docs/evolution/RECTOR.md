@@ -1,4 +1,4 @@
-# Documento Rector - Evolución de Sirius después de 0.1
+# Documento Rector - Evolución de Sirius después de 0.1 (enmendado por su §20 el 06-10-2026: Sirius es el software del robot)
 
 **Identificador:** `SIRIUS-RECTOR-EVOLUCION-POST-0.1`  
 **Versión:** 1.0  

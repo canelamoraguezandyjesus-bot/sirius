@@ -1,4 +1,4 @@
-# Auditoría y cierre documental - Sirius HEAD-R1
+# Auditoría y cierre documental - Sirius HEAD-R1 (foto del 22-07-2026; ver la nota del 06-10-2026 al final)
 
 ## Estado vigente
 
@@ -34,3 +34,11 @@ La versión 1.1 es apta como base canónica práctica de HEAD-R1. Reduce complej
 ## Restricción operativa
 
 La aprobación no activa compras, fabricación, firmware ni integración. El estado sigue INACTIVO.
+
+## Nota del 6 de octubre de 2026
+
+Añadida al final, sin tocar la auditoría, que es la foto del 22-07-2026. «Sirius 0.1
+permanece intacto y prioritario», «HEAD-R1 puede desarrollarse independientemente» y «la
+integración conversacional se pospone» ya no son vigentes: HEAD-R1 es el cuerpo de Sirius
+y su integración espera a que termine la versión 0.5 del plan del robot (D-HEAD-14,
+ADR-232). Sigue inactiva y sin compras.

@@ -1,4 +1,4 @@
-# Estado - Sirius HEAD-R1
+# Estado - Sirius HEAD-R1 (desde el 06-10-2026 manda la última sección)
 
 **Estado documental:** APROBADO  
 **Documento rector vigente:** v1.1  

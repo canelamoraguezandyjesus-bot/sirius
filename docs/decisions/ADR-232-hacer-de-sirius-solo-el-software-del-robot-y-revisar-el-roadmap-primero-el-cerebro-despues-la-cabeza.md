@@ -155,6 +155,34 @@ comprobarlos contra el árbol.
   conversaciones, así que pide una decisión nueva del propietario (EV-023).
 - Uno de citas que señalaban la declaración y no el uso. Se revisó la tabla entera.
 
+**Revisión de Codex, ronda 2, sobre `7a0998e0`:** dos hallazgos, los dos ciertos y los dos
+de la misma familia que la ronda 1. El propio revisor los marca como goteo: el estado
+canónico sigue nombrando como única excepción la 0.2 vieja, y el conjunto de HEAD-R1 sigue
+llamándola línea separada.
+
+**Regla de las dos rondas.** Dos rondas seguidas con la misma familia: se dejó de parchear y
+se buscó la raíz.
+
+- **El patrón.** Cada conjunto de documentos con autoridad tiene varias frases vigentes, y
+  enmendar unas deja otras contradiciendo el giro sin decirlo.
+- **La raíz.** El barrido se hizo leyendo a trozos, no recorriendo entero cada conjunto de
+  «Fuentes de verdad». Y dos de esas fuentes, `docs/canonical/STATUS.md` y `AGENTS.md`,
+  están protegidas contra la sesión.
+- **La decisión.** Seguir, con un barrido sistemático, y escalar al propietario lo que la
+  sesión no puede tocar. El barrido recorrió cada conjunto entero:
+  - `docs/evolution/`: el índice, al día; el Rector, los dos registros y la auditoría,
+    con un puntero en su primera línea a la enmienda y la nota al final; las tres piezas
+    de la 0.2 vieja, marcadas como sustituidas en su primera línea.
+  - `docs/robotics/head/`: el índice, al día; el Rector y la auditoría, con nota al final;
+    D-HEAD-14 sustituye a D-HEAD-04; las cuatro con puntero en su primera línea.
+  - La raíz: `README.md`, al día; `REPOSITORY_STATUS.md` y
+    `docs/implementation/PLAN.md` no dicen nada del giro, y los `ARTIFACTS.md` solo llevan
+    huellas.
+  - Ninguna primera línea tocada está citada por número. Se comprobó con `grep`.
+  - Al pasar el comprobador de documentos por la Arquitectura 0.2, saltó una cita antigua
+    de su línea 1598 a la rama `evidence/adr001-spikes`, con «rama» detrás de la ruta y no
+    delante. Se corrigió en su sitio, sin mover líneas.
+
 ## Consecuencias
 
 - Una sesión que abra el repositorio encuentra este ADR en `MEMORIA.md` y el puntero en

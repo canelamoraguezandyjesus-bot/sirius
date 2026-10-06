@@ -1,4 +1,4 @@
-# Documento Rector — Cabeza Robótica Sirius HEAD-R1
+# Documento Rector — Cabeza Robótica Sirius HEAD-R1 (enmendado al final el 06-10-2026: HEAD-R1 es el cuerpo de Sirius)
 
 **Identificador:** `SIRIUS-HEAD-RECTOR-R1`  
 **Versión:** 1.1  
@@ -355,3 +355,17 @@ Además existe un documento aparte, HEAD_STATUS, de UNA página, que dice en tod
 ---
 
 > FIN DEL DOCUMENTO · SIRIUS HEAD-R1 · Documento Rector v1.1 · APROBADO
+
+## Enmienda del 6 de octubre de 2026 — HEAD-R1 es el cuerpo de Sirius
+
+Añadida después del fin del documento aprobado, sin tocarlo.
+
+- **Qué cambia.** La frase de §1 «HEAD-R1 es una línea de producto físico separada» ya no
+  es vigente: HEAD-R1 es el cuerpo de Sirius, y su integración espera a que termine la
+  versión 0.5 del plan del robot (`docs/evolution/PLAN_DEL_ROBOT.md`). Lo registran
+  D-HEAD-14, la §20 del Rector de evolución y ADR-232.
+- **Qué no cambia.** Este Rector sigue mandando en mecánica, electrónica, firmware,
+  calibración, límites y seguridad física. Ningún modelo envía ángulos, pulsos ni
+  secuencias libres. HEAD-R1 sigue inactiva y sin compras.
+- **A revisar al reactivarla.** R1 no lleva cámara ni micrófonos. Con la decisión de que
+  Sirius escuche y mire siempre (EV-022), eso se decide con la fase que lo toque.

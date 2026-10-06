@@ -1,4 +1,4 @@
-# Decisiones canónicas - Evolución post-0.1 de Sirius
+# Decisiones canónicas - Evolución post-0.1 de Sirius (desde el 06-10-2026 mandan EV-020 a EV-023, al final)
 
 **Estado:** APROBADO  
 **Fecha de aprobación:** 22 de julio de 2026  

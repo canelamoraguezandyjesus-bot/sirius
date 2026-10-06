@@ -1,4 +1,4 @@
-# Plan de Pruebas de Aceptación — Sirius 0.2 «Memoria útil»
+# Plan de Pruebas de Aceptación — Sirius 0.2 «Memoria útil» (sustituido el 06-10-2026 por la 0.2 del robot, ADR-232)
 
 **Identificador:** `SIRIUS-PRUEBAS-0.2-MEMORIA-UTIL`
 **Versión:** v0.1

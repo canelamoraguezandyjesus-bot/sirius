@@ -1,4 +1,4 @@
-# Arquitectura Técnica — Sirius 0.2 «Memoria útil»
+# Arquitectura Técnica — Sirius 0.2 «Memoria útil» (sustituida el 06-10-2026 por la 0.2 del robot, ADR-232)
 
 **Identificador:** `SIRIUS-ARQ-0.2`
 **Versión:** v0.1
@@ -1595,7 +1595,7 @@ necesarias en el arnés. Para cada una: dónde vive hoy (solo en el arnés), su 
    (`tests/acceptance/staged_engine_category_and_relevance.py:317-336`) activa la
    categoría si la consulta contiene **cualquiera** de las palabras del vocabulario del
    banco, sin exigir unicidad — réplica de que el índice lateral del laboratorio
-   (`experiments/adr002/lateral/categoria.py`, rama `evidence/adr001-spikes`) indexa las
+   (en la rama `evidence/adr001-spikes`, `experiments/adr002/lateral/categoria.py`) indexa las
    palabras del vocabulario juntas como el mismo contenido para toda identidad no
    ordinaria. El equivalente de producto, `category_matches_query`
    (`src/sirius/domain/relevance.py:142-171`), exige activación única: `activated =

@@ -608,18 +608,18 @@ mismo comando y vigila la misma prueba que esta vista (ADR-218).
 | Fecha | Documento |
 |---|---|
 | sin fecha declarada | [Artefactos aprobados - Evolución post-0.1 de Sirius](docs/evolution/ARTIFACTS.md) |
-| sin fecha declarada | [Auditoría cerrada - Plan de evolución de Sirius después de 0.1](docs/evolution/AUDIT.md) |
-| sin fecha declarada | [Decisiones canónicas - Evolución post-0.1 de Sirius](docs/evolution/DECISIONS.md) |
+| sin fecha declarada | [Auditoría cerrada - Plan de evolución de Sirius después de 0.1 (foto del 22-07-2026; ver la nota del 06-10-2026 al final)](docs/evolution/AUDIT.md) |
+| sin fecha declarada | [Decisiones canónicas - Evolución post-0.1 de Sirius (desde el 06-10-2026 mandan EV-020 a EV-023, al final)](docs/evolution/DECISIONS.md) |
 | 2026-10-06 | [Enmienda al Manual de Visión e Identidad v1.2: Sirius, el robot](docs/evolution/ENMIENDA_MANUAL_IDENTIDAD_2026-10.md) |
 | 2026-10-06 | [Plan de Sirius, el robot](docs/evolution/PLAN_DEL_ROBOT.md) |
 | sin fecha declarada | [Propuesta de separación entre Sirius y su motor de trabajo](docs/evolution/PROPUESTA_SEPARACION_SIRIUS_MOTOR.md) |
 | sin fecha declarada | [Evolución de Sirius después de 0.1](docs/evolution/README.md) |
-| sin fecha declarada | [Documento Rector - Evolución de Sirius después de 0.1](docs/evolution/RECTOR.md) |
+| sin fecha declarada | [Documento Rector - Evolución de Sirius después de 0.1 (enmendado por su §20 el 06-10-2026: Sirius es el software del robot)](docs/evolution/RECTOR.md) |
 | sin fecha declarada | [Sirius AI Core y estrategia de modelos — recolección de ideas](docs/evolution/SIRIUS_AI_CORE_AND_MODEL_STRATEGY.md) |
-| sin fecha declarada | [Arquitectura Técnica — Sirius 0.2 «Memoria útil»](docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md) |
-| sin fecha declarada | [Plan de Pruebas de Aceptación — Sirius 0.2 «Memoria útil»](docs/evolution/SIRIUS_PLAN_PRUEBAS_0.2_v0.1_PROPUESTO.md) |
-| sin fecha declarada | [Definición de Producto — Sirius 0.2 «Memoria útil»](docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md) |
-| sin fecha declarada | [Estado - Evolución post-0.1 de Sirius](docs/evolution/STATUS.md) |
+| sin fecha declarada | [Arquitectura Técnica — Sirius 0.2 «Memoria útil» (sustituida el 06-10-2026 por la 0.2 del robot, ADR-232)](docs/evolution/SIRIUS_ARQUITECTURA_TECNICA_0.2_v0.1_PROPUESTO.md) |
+| sin fecha declarada | [Plan de Pruebas de Aceptación — Sirius 0.2 «Memoria útil» (sustituido el 06-10-2026 por la 0.2 del robot, ADR-232)](docs/evolution/SIRIUS_PLAN_PRUEBAS_0.2_v0.1_PROPUESTO.md) |
+| sin fecha declarada | [Definición de Producto — Sirius 0.2 «Memoria útil» (sustituida el 06-10-2026 por la 0.2 del robot, ADR-232)](docs/evolution/SIRIUS_PRODUCTO_0.2_MEMORIA_UTIL_v0.1_PROPUESTO.md) |
+| sin fecha declarada | [Estado - Evolución post-0.1 de Sirius (desde el 06-10-2026 manda la última sección: Sirius, el software del robot)](docs/evolution/STATUS.md) |
 
 ### `docs/evolution/history`
 
@@ -679,11 +679,11 @@ mismo comando y vigila la misma prueba que esta vista (ADR-218).
 | Fecha | Documento |
 |---|---|
 | sin fecha declarada | [Artefactos aprobados - Sirius HEAD-R1](docs/robotics/head/ARTIFACTS.md) |
-| sin fecha declarada | [Auditoría y cierre documental - Sirius HEAD-R1](docs/robotics/head/AUDIT.md) |
-| sin fecha declarada | [Decisiones canónicas - Sirius HEAD-R1](docs/robotics/head/DECISIONS.md) |
+| sin fecha declarada | [Auditoría y cierre documental - Sirius HEAD-R1 (foto del 22-07-2026; ver la nota del 06-10-2026 al final)](docs/robotics/head/AUDIT.md) |
+| sin fecha declarada | [Decisiones canónicas - Sirius HEAD-R1 (desde el 06-10-2026 manda D-HEAD-14, al final)](docs/robotics/head/DECISIONS.md) |
 | sin fecha declarada | [Sirius HEAD-R1](docs/robotics/head/README.md) |
-| sin fecha declarada | [Documento Rector — Cabeza Robótica Sirius HEAD-R1](docs/robotics/head/RECTOR.md) |
-| sin fecha declarada | [Estado - Sirius HEAD-R1](docs/robotics/head/STATUS.md) |
+| sin fecha declarada | [Documento Rector — Cabeza Robótica Sirius HEAD-R1 (enmendado al final el 06-10-2026: HEAD-R1 es el cuerpo de Sirius)](docs/robotics/head/RECTOR.md) |
+| sin fecha declarada | [Estado - Sirius HEAD-R1 (desde el 06-10-2026 manda la última sección)](docs/robotics/head/STATUS.md) |
 
 ### `(raíz)`
 
