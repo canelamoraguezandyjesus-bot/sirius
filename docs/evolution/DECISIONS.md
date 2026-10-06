@@ -45,9 +45,16 @@ Se distinguirán siempre estas categorías: Sirius, subsistemas internos, roles 
 
 ## EV-006 - Delegación individual antes de multiagente
 
+> **APARCADA por EV-020** (6 de octubre de 2026, ADR-232): sin delegación no hay
+> nada que validar. Si la delegación vuelve con la idea I-011, esta sigue siendo su
+> condición.
+
 Antes de coordinar varios agentes, Sirius deberá demostrar que puede formular, limitar, supervisar y cerrar una tarea delegada a un solo especialista sin perder identidad, contexto, permisos ni trazabilidad.
 
 ## EV-007 - Multiagente condicionado a evidencia
+
+> **APARCADA por EV-020** (6 de octubre de 2026, ADR-232): si el multiagente vuelve
+> con la idea I-011, esta sigue siendo su condición.
 
 El multiagente permanece pospuesto. Solo se activará cuando una tarea real demuestre necesidad de competencias separadas, revisión independiente, paralelismo útil o fallos recurrentes del especialista único.
 
@@ -76,6 +83,9 @@ Esta decisión sustituye la secuencia anterior que agrupaba voz en 0.4 y laborat
 La percepción visual o ambiental será bajo demanda, temporal, visible y cancelable. No habrá observación silenciosa ni grabación continua como comportamiento ordinario.
 
 ## EV-010 - Control visual del ordenador como último recurso
+
+> **APARCADA por EV-020** (6 de octubre de 2026, ADR-232): Sirius ya no maneja el
+> ordenador. Si vuelve con las ideas I-010 o I-012, esta sigue siendo su condición.
 
 Sirius preferirá integraciones estructuradas y contratos de herramienta. El control visual de interfaces se utilizará únicamente cuando no exista una vía más segura y deberá operar con límites, confirmación y trazabilidad.
 
@@ -144,6 +154,11 @@ secretaria pasiva ni un lanzador de aplicaciones.
 
 ### EV-016 - El trabajo habitual se realiza directamente con las IAs externas
 
+> **ACOTADA por EV-020** (6 de octubre de 2026, ADR-232): sigue vigente en que el
+> propietario trabaja directamente con las IAs externas. Lo que dice de Sirius como
+> «compañero personal y de ingeniería» que «puede integrar o sintetizar cuando se le
+> pide» queda sustituido: Sirius es solo el software del robot.
+
 El propietario conversa, encarga y decide desde ChatGPT, Claude o Codex sin que
 Sirius intermedie. Sirius deja de ser el interlocutor obligatorio y la síntesis
 final deja de ser obligatoria; sigue siendo el compañero personal y de
@@ -210,9 +225,9 @@ igual que EV-001 a EV-014.
 **Fecha:** 6 de octubre de 2026
 **Aprobación:** el propietario aprobó el plan el 06-10-2026, después de leerlo entero; la
 fusión de la Pull Request que las introduce lo deja escrito (ADR-205).
-**Relación con las decisiones anteriores:** **EV-020 sustituye EV-015 y deja aparcadas
-EV-003, EV-011 y EV-019; EV-021 sustituye EV-008; EV-022 sustituye EV-009; y EV-012
-sigue vigente sin enmienda.**
+**Relación con las decisiones anteriores:** **EV-020 sustituye EV-015, acota EV-016 y
+deja aparcadas EV-003, EV-006, EV-007, EV-010, EV-011 y EV-019; EV-021 sustituye
+EV-008; EV-022 sustituye EV-009; y EV-012 sigue vigente sin enmienda.**
 **Autoridad final:** usuario responsable del Proyecto Sirius
 **Registro de la decisión:** `docs/decisions/ADR-232-hacer-de-sirius-solo-el-software-del-robot-y-revisar-el-roadmap-primero-el-cerebro-despues-la-cabeza.md`
 
@@ -273,6 +288,9 @@ semilla, lo que se le enseña con «eso es Sirius» y «eso no», su memoria y s
 modelo es un motor sustituible, y lo entrenado se reentrena en otro con los mismos datos.
 Sirius tiene que ser el mismo «esté en un ordenador, en la nube o donde sea», en palabras
 del propietario.
+
+Cualquier excepción a que solo salgan búsquedas, como entrenarle en una GPU alquilada
+con sus conversaciones, necesita una decisión nueva del propietario.
 
 ### Efecto de aprobación de EV-020 a EV-023
 

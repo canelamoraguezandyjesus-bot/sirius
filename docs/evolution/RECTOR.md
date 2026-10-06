@@ -357,9 +357,9 @@ Se dice explícitamente para que no se deduzca de más:
 **El plan:** `docs/evolution/PLAN_DEL_ROBOT.md`, versión por versión.
 **La personalidad:** `docs/evolution/ENMIENDA_MANUAL_IDENTIDAD_2026-10.md`, que enmienda el
 Manual de Visión e Identidad v1.2 con las palabras del propietario.
-**Relación con las decisiones canónicas anteriores:** **EV-020 sustituye EV-015 y deja
-aparcadas EV-003, EV-011 y EV-019; EV-021 sustituye EV-008; EV-022 sustituye EV-009; y
-EV-012 sigue vigente sin enmienda.**
+**Relación con las decisiones canónicas anteriores:** **EV-020 sustituye EV-015, acota
+EV-016 y deja aparcadas EV-003, EV-006, EV-007, EV-010, EV-011 y EV-019; EV-021 sustituye
+EV-008; EV-022 sustituye EV-009; y EV-012 sigue vigente sin enmienda.**
 **Entrada en vigor:** la fusión de la Pull Request que introduce esta enmienda, conforme
 al procedimiento establecido en este repositorio (ADR-205).
 
@@ -397,7 +397,8 @@ Qué se hace en cada una, con qué, qué no se usa y cuándo está terminada est
 - **§12, la prohibición de que un modelo envíe ángulos, pulsos o secuencias libres a los
   actuadores, y EV-012.** El modelo solo pide gestos de una lista cerrada.
 - **§15**, las señales de parada, y **§16**, la jerarquía documental.
-- **EV-004, EV-016, EV-017 y EV-018**: la memoria canónica, el trabajo con las IAs
-  externas, el motor y las tres memorias. El motor de trabajo no cambia con esta enmienda.
+- **EV-004, EV-017 y EV-018**, y **EV-016 en lo que dice del trabajo con las IAs
+  externas**: la memoria canónica, el motor, las tres memorias y que el propietario trabaje
+  directamente con las IAs. El motor de trabajo no cambia con esta enmienda.
 - **No se borra nada.** Lo que sale del roadmap queda aparcado con su disparador.
 - **No se autorizan compras** ni ninguna fase física de HEAD-R1.

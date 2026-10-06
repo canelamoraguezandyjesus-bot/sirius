@@ -270,8 +270,10 @@ Model Studio, que no sirve para esto.
 ChatGPT en abril de 2025.
 
 **Terminado cuando:** el entrenado gana a ciegas.
-**Dinero:** 0 € si cabe en el ordenador. Si no, alquilar una GPU unas horas, decenas de
-euros, que se le pregunta al propietario cuando haga falta.
+**Dinero:** 0 € si cabe en el ordenador. Si no cabe, la primera salida es un modelo más
+pequeño en el mismo ordenador. Alquilar una GPU unas horas costaría decenas de euros y
+sacaría del ordenador las respuestas marcadas, que son conversaciones del propietario: va
+contra EV-023, así que solo con una decisión nueva suya sobre sus datos y su dinero.
 **Sale de:** inf. 1 §2.4, §2.8 y §4.3.
 
 ## 8. Versión 0.6 · Puente con la cabeza, y la 1.0
@@ -318,8 +320,8 @@ para los labios.
 
 ## 11. Lo que queda aparcado
 
-- Las decisiones D-1 a D-6 de `docs/audits/decisiones-abiertas-del-propietario.md`, que
-  eran del banco de 47 casos.
+- Las decisiones D-1 a D-5 de `docs/audits/decisiones-abiertas-del-propietario.md`, que
+  eran del banco de 47 casos. La D-6 no es del banco y sigue abierta.
 - La propuesta 8 de la mina de septiembre, la skill de encargos, que es del motor.
 - Model Studio se queda como está. Su voz se aprovecha.
 - La cabeza física HEAD-R1 sigue inactiva.

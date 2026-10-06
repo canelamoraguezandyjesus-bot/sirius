@@ -433,6 +433,10 @@ versión: `docs/evolution/PLAN_DEL_ROBOT.md`.
   «activar percepción continua».
 - El modelo de conversación es local y la identidad vive en datos (EV-023).
 - La personalidad es la de `docs/evolution/ENMIENDA_MANUAL_IDENTIDAD_2026-10.md`.
+- Quedan aparcadas con la idea I-011 las líneas de «Vigente» de arriba sobre el modelo
+  híbrido, la delegación antes del multiagente y el multiagente condicionado, y la de la
+  sección del 8 de septiembre que dice que abrir una sesión especializada sigue siendo
+  capacidad de Sirius (EV-006, EV-007 y EV-019, aparcadas por EV-020).
 - Siguen enteras: los agentes no escriben la memoria canónica (EV-004) y ningún modelo
   controla directamente actuadores ni firmware (EV-012).
 
@@ -468,5 +472,6 @@ ciegas de modelos locales y los botones «eso es Sirius» y «eso no». Después
 
 - **El motor de trabajo**, su excepción y su diario.
 - **Model Studio**, que se queda como está; su voz se aprovecha en 0.3.
-- **Las decisiones D-1 a D-6**, que eran del banco de 47 casos: quedan aparcadas en
-  `docs/audits/decisiones-abiertas-del-propietario.md`.
+- **La decisión D-6** de `docs/audits/decisiones-abiertas-del-propietario.md`, sobre lo
+  que cabe en `MEMORIA.md`, que sigue abierta. D-1 a D-5, que eran del banco de 47 casos,
+  sí quedan aparcadas.

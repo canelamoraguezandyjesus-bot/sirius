@@ -109,11 +109,11 @@ La opción 3, en estos documentos:
 | Pieza | Dónde | Qué hace |
 |---|---|---|
 | Enmienda §20 | `docs/evolution/RECTOR.md` | Dice qué cambia en §1, §2, §4, §6 a §8, §9, §10, §11, §12, §13, §17 y el manual, y qué no |
-| EV-020 a EV-023 | `docs/evolution/DECISIONS.md` | Solo el robot; el roadmap del robot; escucha y mira siempre; modelo local e identidad en datos. EV-003, EV-008, EV-009, EV-011, EV-015 y EV-019 llevan escrito quién las sustituye o las aparca |
+| EV-020 a EV-023 | `docs/evolution/DECISIONS.md` | Solo el robot; el roadmap del robot; escucha y mira siempre; modelo local e identidad en datos. EV-003, EV-006, EV-007, EV-008, EV-009, EV-010, EV-011, EV-015, EV-016 y EV-019 llevan escrito quién las sustituye, las acota o las aparca |
 | El plan | `docs/evolution/PLAN_DEL_ROBOT.md` | Versión a versión: qué hay hecho, qué se hace, con qué, qué no se usa, cuándo termina y cuánto cuesta. Hace de definición de producto y de arquitectura de cada versión |
 | La personalidad | `docs/evolution/ENMIENDA_MANUAL_IDENTIDAD_2026-10.md` | Las palabras del propietario y qué apartados del manual v1.2 cambian |
 | El estado | `docs/evolution/STATUS.md`, `docs/evolution/README.md` y `docs/robotics/head/STATUS.md` | Lo vigente, lo autorizado y lo que no. HEAD-R1 pasa a ser el cuerpo de Sirius y sigue inactiva |
-| Lo aparcado | `docs/ideas/registro_de_ideas.yml` y `docs/audits/decisiones-abiertas-del-propietario.md` | I-010 a I-017 con su disparador; D-1 a D-6 aparcadas con el banco de 47 casos |
+| Lo aparcado | `docs/ideas/registro_de_ideas.yml` y `docs/audits/decisiones-abiertas-del-propietario.md` | I-010 a I-017 con su disparador; D-1 a D-5 aparcadas con el banco de 47 casos. D-6 no es del banco y sigue abierta |
 | Las investigaciones | las cuatro de `docs/investigaciones/` del 2026-10-05 | Enteras, con cabecera y caducidad, sin el nombre ni la región del propietario porque el repositorio es público |
 | El puntero | `README.md`, líneas 3, 16 y 18, sustituidas en su sitio | Qué es Sirius ahora y dónde está el plan |
 
@@ -126,11 +126,11 @@ sencillo, y tres documentos por versión, como los de 0.2 Memoria útil, no lo s
 
 | Afirmación | Dónde se comprobó |
 |---|---|
-| La charla de Sirius va hoy por OpenAI | `src/sirius/composition_root.py:40` importa `OpenAIResponsesProvider` |
-| Ollama ya está conectado, solo para clasificar | `src/sirius/composition_root.py:160`, modelo `qwen3:4b-instruct` |
-| La búsqueda es por palabras, sin vectores | `src/sirius/adapters/persistence/sqlite_knowledge_search_repository.py:1`, FTS5 |
-| La identidad está guardada por versiones | `src/sirius/domain/identity.py`, `IdentityVersion` con `personality_instructions` |
-| La voz existe, con OpenAI y por turnos | `src/sirius/application/studio_voice.py` y `src/sirius/adapters/audio/` |
+| La charla de Sirius va hoy por OpenAI | `src/sirius/composition_root.py:337-348` construye `OpenAIResponsesProvider` con el cliente de OpenAI |
+| Ollama ya está conectado, solo para clasificar | `src/sirius/composition_root.py:526,554,570,623,633`: resuelve el modelo, `qwen3:4b-instruct` por defecto, y construye los cuatro clasificadores |
+| La búsqueda es por palabras, sin vectores | `src/sirius/adapters/persistence/sqlite_knowledge_search_repository.py:99`, la consulta FTS5 `MATCH`; `src/sirius/domain/relevance.py:6`, «never embeddings» |
+| La identidad está guardada por versiones | `src/sirius/domain/identity.py`, `IdentityVersion` con `personality_instructions`, y `src/sirius/adapters/persistence/sqlite_identity_repository.py:125`, `create_new_version` |
+| La voz existe, con OpenAI y por turnos | `src/sirius/composition_root.py:386,434,435` construye la captura de Qt y los adaptadores de OpenAI; `src/sirius/application/studio_voice.py:9`, «síncrono a propósito» |
 | El banco de 47 casos falla en el camino real: 4 de 47 y P95 438-780 ms | `docs/evolution/STATUS.md:306-307` |
 | En otra variante, 7 de 47 | `docs/audits/decisiones-pendientes-de-la-linea-de-memoria.md:202` |
 | El propietario no acepta ni 29 de 47 | `docs/evolution/STATUS.md:310-311` |
@@ -141,6 +141,19 @@ sencillo, y tres documentos por versión, como los de 0.2 Memoria útil, no lo s
 | Sirius usa Python 3.14 | `pyproject.toml:6` |
 
 La cadena de comprobación sobre el árbol final está en el cuerpo de la PR.
+
+**Revisión de Codex, ronda 1, sobre `53a4145c`:** cinco hallazgos, los cinco ciertos al
+comprobarlos contra el árbol.
+
+- Dos de la familia «decisión vigente que contradice el giro sin decirlo»: EV-016 seguía
+  llamando a Sirius compañero de ingeniería, y EV-010 conservaba el control del ordenador.
+  Se cerró la familia entera, no solo los dos: también EV-006 y EV-007, y las líneas viejas
+  de «Vigente» de `docs/evolution/STATUS.md`.
+- Uno de «afirmación que el árbol no sostiene»: D-6 no era del banco de 47 casos, es lo que
+  cabe en `MEMORIA.md`. Sigue abierta; se aparcan D-1 a D-5.
+- Uno de datos que salen del ordenador: entrenar en una GPU alquilada sacaría sus
+  conversaciones, así que pide una decisión nueva del propietario (EV-023).
+- Uno de citas que señalaban la declaración y no el uso. Se revisó la tabla entera.
 
 ## Consecuencias
 
