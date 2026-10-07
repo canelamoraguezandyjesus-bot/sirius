@@ -970,6 +970,38 @@ def test_a_restore_that_fails_resumes_the_judge_and_the_embeddings_it_stopped(
 
 
 @pytest.mark.gui
+def test_completing_the_project_waits_for_the_background_before_handing_over(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """Ronda 3 de Codex: la ventana siguiente arranca su juez y sus huellas con las
+    mismas dependencias y el mismo Ollama. Esta no le deja paso hasta que los suyos
+    acaban lo que tienen entre manos, y no vuelven a arrancar mientras."""
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    judge = _BlockingJudge()
+    embeddings = _BlockingEmbeddings()
+    window = _build_window(
+        database_path, reply_judge_service=judge, memory_embedding_service=embeddings
+    )
+    qtbot.addWidget(window)
+    window.show()
+    assert judge.started.wait(timeout=5)
+    assert embeddings.started.wait(timeout=5)
+    handed_over: list[bool] = []
+    window.project_completed.connect(lambda: handed_over.append(True))
+
+    window.project_continuity_widget.project_completed.emit()
+
+    assert handed_over == []
+    assert "juez" in window.status_label.text()
+    judge.release()
+    embeddings.release()
+    qtbot.waitUntil(lambda: handed_over == [True], timeout=5000)
+    qtbot.wait(50)
+    assert judge.asked_to_stop == [True]
+    assert embeddings.asked_to_stop == [True]
+
+
+@pytest.mark.gui
 def test_restore_backup_waits_for_pending_criticality_proposal_before_closing_connections(
     qtbot: QtBot, tmp_path: Path
 ) -> None:

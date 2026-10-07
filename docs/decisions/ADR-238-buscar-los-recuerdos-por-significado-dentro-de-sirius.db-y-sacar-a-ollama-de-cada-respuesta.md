@@ -146,6 +146,8 @@ Se adopta la opción 2.
     cancelación durante la espera que se pierde;
   - el puesto por palabras perdido en la búsqueda, en el paso a la ordenación o en la
     ordenación misma, y un puesto sin coincidencia por palabras.
+- **Ronda 3**, dos más vistas fallar: el cambio de proyecto sin esperar a lo de fondo, y
+  lo de fondo arrancando otra vez mientras espera.
 
 ## Revisión externa
 
@@ -195,6 +197,20 @@ Se adopta la opción 2.
     Hasta un minuto si se está cargando el modelo de huellas, y hasta tres si el juez está
     cargando el de la charla. Ese modelo es el mismo que necesita el turno: Ollama le
     haría esperar igual.
+- **Ronda 3 de Codex**, la última, sobre `8eb7eac5`: un hallazgo, cierto. Se corrige en un
+  solo commit y la PR se fusiona sin cuarta ronda, como manda ADR-233.
+  - P2: al completar un proyecto, la ventana siguiente arrancaba su juez y sus huellas
+    con las mismas dependencias mientras los de esta seguían con su petición a Ollama.
+    Podían juzgar dos veces la misma respuesta, y la segunda nota choca con la primera.
+    Ahora el cambio de proyecto pasa por la misma puerta que el turno y la restauración,
+    y nada de fondo vuelve a arrancar mientras espera.
+  - Familia: la misma de las dos rondas anteriores. La raíz de la ronda 2 juntó en un
+    sitio lo que corre de fondo, pero la lista de momentos que debían pasar por la
+    puerta se hizo a mano, y faltó el único que cruza de una ventana a otra. Antes de
+    esta pieza, ese momento esperaba al etiquetador de categorías (CODEX-002). Al quitar
+    el etiquetador se quitó su espera, sin dársela al juez ni a las huellas.
+  - La lección: al retirar una pieza, las esperas que la protegían pasan a quien hace
+    ahora su trabajo de fondo.
 
 ## Consecuencias
 
@@ -207,6 +223,8 @@ Se adopta la opción 2.
 - Si él escribe mientras el juez o las huellas usan Ollama, el turno espera a que acaben
   lo que tienen entre manos: una nota o un grupo de cuatro huellas. Con los modelos ya
   cargados son décimas o pocos segundos.
+- Al completar un proyecto, la ventana del siguiente se abre cuando el juez y las huellas
+  han acabado lo que tenían entre manos; mientras, la barra de estado dice qué espera.
 - `TagCategoryUseCase` y `SetCategoryUseCase` siguen en el árbol sin nadie que los monte.
   Se retiran con el banco de 47 casos, que es quien aún los mide.
 - Las pruebas que montan Sirius sin el conductor usan el modelo de huellas de verdad: si

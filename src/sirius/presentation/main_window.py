@@ -410,8 +410,8 @@ class MainWindow(QMainWindow):
         self._is_backup_busy = False
         self._is_export_busy = False
         # CODEX-001 (ronda 5): el proyecto ya se completó (RF-018) y esta
-        # ventana está de camino a cerrarse en cuanto termine de esperar al
-        # etiquetador de categorías pendiente (ver _handle_project_completed).
+        # ventana está de camino a cerrarse en cuanto lo de segundo plano acabe
+        # lo que tiene entre manos (ver _handle_project_completed).
         # Mientras tanto no puede iniciarse ningún envío, exportación o
         # copia/restauración: la ventana siguiente comparte los mismos
         # repositorios y arrancaría una operación sobre un proyecto que ya no
@@ -1787,6 +1787,12 @@ class MainWindow(QMainWindow):
         que ya dejó de ser el activo (CODEX-001, ronda 5). Deliberadamente no
         se revierte: esta ventana está de camino a cerrarse y no vuelve a
         aceptar estas operaciones.
+
+        La siguiente arranca su propio juez y sus huellas, con los mismos
+        repositorios y el mismo Ollama: no se abre hasta que los de esta acaban
+        lo que tienen entre manos, por la misma puerta que el turno (ronda 3 de
+        Codex). Antes de la pieza F se esperaba así al etiquetador de
+        categorías (CODEX-002), y la espera se fue con él.
         """
         self._is_completing_project = True
         self.send_button.setEnabled(False)
@@ -1794,7 +1800,7 @@ class MainWindow(QMainWindow):
         self.export_button.setEnabled(False)
         self._set_backup_controls_enabled(False)
         self._update_retry_button()
-        self.project_completed.emit()
+        self._when_background_idle(self.project_completed.emit, show_wait=self.status_label.setText)
 
     def closeEvent(self, event: QCloseEvent) -> None:
         """Cierra micrófono y voz, y luego aplica el cierre diferido de siempre.
@@ -2787,8 +2793,9 @@ class MainWindow(QMainWindow):
     # --- El segundo plano frente al turno y la restauración (ADR-238) ------
 
     def _foreground_busy(self) -> bool:
-        """Si hay un turno o una copia en marcha: mientras, nada arranca en segundo plano."""
-        return self._is_sending or self._is_backup_busy
+        """Si hay un turno, una copia o un cambio de proyecto en marcha: mientras, nada
+        arranca en segundo plano."""
+        return self._is_sending or self._is_backup_busy or self._is_completing_project
 
     def _stop_background(self) -> list[tuple[SignalInstance, str]]:
         """Pide parar a lo que corre en segundo plano: el juez y las huellas.
@@ -2823,13 +2830,13 @@ class MainWindow(QMainWindow):
     ) -> None:
         """Llama a ``then`` cuando ya no corre nada en segundo plano, tras pedirles parar.
 
-        Es la puerta por la que pasan el turno y la restauración, que necesitan
-        Ollama o sirius.db para sí. Lo que corre acaba lo que tiene entre manos,
-        porque una petición a Ollama no se corta a medias, y hasta entonces no
-        empieza lo de delante: la exclusión no se deduce de lo poco que tarde,
-        se espera (ronda 2 de Codex). Solo se llama con lo de delante ya en
-        marcha (``_foreground_busy``): así nada de fondo vuelve a arrancar
-        mientras se espera.
+        Es la puerta por la que pasan el turno, la restauración y el cambio de
+        proyecto, que necesitan Ollama o sirius.db para sí. Lo que corre acaba
+        lo que tiene entre manos, porque una petición a Ollama no se corta a
+        medias, y hasta entonces no empieza lo de delante: la exclusión no se
+        deduce de lo poco que tarde, se espera (ronda 2 de Codex). Solo se llama
+        con lo de delante ya en marcha (``_foreground_busy``): así nada de fondo
+        vuelve a arrancar mientras se espera.
         """
         still_running = self._stop_background()
         if not still_running:
