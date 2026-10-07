@@ -24,6 +24,7 @@ from sirius.ports.knowledge_search_repository import MemoryKeywordSearch
 from sirius.ports.memory_repository import MemoryLoader
 
 __all__ = [
+    "EMBED_BATCH",
     "MIN_SIMILARITY",
     "SEARCH_LIMIT",
     "FoundMemory",
@@ -40,8 +41,11 @@ MIN_SIMILARITY = 0.5
 #: Cuántos recuerdos trae cada manera de buscar, como mucho.
 SEARCH_LIMIT = 12
 
-#: Cuántas huellas se piden a la vez al modelo.
-_EMBED_BATCH = 16
+#: Cuántas huellas se piden a la vez al modelo. Pocas: cuando el propietario
+#: escribe, las huellas paran antes del grupo siguiente, y el que va por la mitad
+#: lo termina. Con cuatro frases cortas eso son décimas, no segundos en los que
+#: Ollama tendría que repartirse con el turno (ronda 1 de Codex).
+EMBED_BATCH = 4
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,7 +87,7 @@ class MemoryEmbeddingService:
         done = 0
         seen: set[tuple[int, int]] = set()
         while not should_stop():
-            pending = self._store.pending(model, _EMBED_BATCH)
+            pending = self._store.pending(model, EMBED_BATCH)
             batch = {(memory.memory_id, memory.revision_id) for memory in pending}
             # Si vuelve lo mismo que ya se guardó, guardar no está sirviendo: se
             # para en vez de pedir huellas sin fin.
@@ -99,8 +103,9 @@ class MemoryEmbeddingService:
                 _logger.warning("El modelo de huellas no dio una por recuerdo")
                 break
             for memory, embedding in zip(pending, embeddings, strict=True):
-                self._store.save(memory.memory_id, memory.revision_id, model, embedding)
-                done += 1
+                # Si mientras tanto se archivó, se borró o se corrigió, no se guarda.
+                if self._store.save(memory.memory_id, memory.revision_id, model, embedding):
+                    done += 1
         return done
 
     def warm_up(self) -> None:

@@ -142,3 +142,39 @@ def test_al_abrirse_sin_huellas_pendientes_carga_el_modelo_para_el_primer_turno(
     _ventana(qtbot, dependencias)
 
     assert huellas.pedidas == ["hola"]
+
+
+def test_cerrar_la_ventana_no_deja_que_las_huellas_vuelvan_a_arrancar(
+    qtbot: QtBot, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Con otra vuelta pendiente al cerrar, nada vuelve a arrancar: la ventana puede
+    seguir viva tras un cambio de proyecto, con los mismos repositorios que la nueva
+    (ronda 1 de Codex)."""
+    from sirius.presentation import main_window
+    from sirius.presentation.memory_embedding_worker import MemoryEmbeddingWorker
+
+    huellas = _Huellas()
+    dependencias = _sirius(tmp_path, huellas)
+    dependencias.save_manual_memory_use_case.save("Le pirra el cocido.")
+    huellas.espera = threading.Event()
+    ventana = _build_main_window(dependencias, [])
+    qtbot.addWidget(ventana)
+    assert huellas.parada.wait(timeout=5)
+    ventana._start_embedding()  # se guardó otro recuerdo mientras tanto: toca otra vuelta
+    assert ventana._embed_again
+    arrancados: list[MemoryEmbeddingWorker] = []
+
+    class _Contado(MemoryEmbeddingWorker):
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            super().__init__(*args, **kwargs)
+            arrancados.append(self)
+
+    monkeypatch.setattr(main_window, "MemoryEmbeddingWorker", _Contado)
+
+    ventana.close()
+    huellas.espera.set()
+
+    qtbot.waitUntil(lambda: not ventana.embedding_in_progress, timeout=5000)
+    qtbot.wait(50)
+    assert arrancados == []
+    assert not ventana.embedding_in_progress

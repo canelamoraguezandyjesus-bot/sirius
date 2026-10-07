@@ -42,6 +42,15 @@ def test_pide_las_huellas_al_ollama_de_este_ordenador_todas_de_una_vez() -> None
     assert cuerpo["input"] == ["uno", "dos"]
 
 
+def test_tras_cerrar_la_conexion_sigue_dando_huellas() -> None:
+    """Una restauración que falla cierra las conexiones y la ventana sigue: el modelo
+    de huellas tiene que seguir sirviendo (ronda 1 de Codex)."""
+    embedder = _huellas(lambda request: httpx.Response(200, json={"embeddings": [[0.5]]}))
+    embedder.close()
+
+    assert embedder.embed(["otra vez"]) == [[0.5]]
+
+
 def test_sin_frases_no_pregunta_a_nadie() -> None:
     def contestar(request: httpx.Request) -> httpx.Response:  # pragma: no cover
         raise AssertionError("no debía llamar")

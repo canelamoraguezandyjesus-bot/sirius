@@ -133,6 +133,26 @@ Se adopta la opción 2.
   sirve, sin cargar el modelo al abrir, con la pregunta usando el modelo paciente y con la
   orden de E-R02-05 midiendo aunque sqlite-vec no cargue.
 
+## Revisión externa
+
+- **Ronda 1 de Codex**, sobre `5e3937b7`: cuatro hallazgos, los cuatro ciertos, cada uno con
+  su prueba vista fallar con el arreglo quitado.
+  - P1: una huella calculada mientras se archivaba o se borraba su recuerdo se guardaba
+    después de que los disparadores la quitaran, y se quedaba para siempre. Ahora guardar
+    es una sola sentencia que solo escribe si el recuerdo sigue vigente y esa revisión es
+    la actual.
+  - P1: al escribir él, el grupo de huellas que iba por la mitad seguía usando Ollama
+    durante el turno. El grupo baja de 16 frases a 4: lo que queda por terminar son
+    décimas. Esperar a que acabe retrasaría el turno, y cortar la petición no para a
+    Ollama.
+  - P2: si una restauración fallaba, la ventana seguía con los clientes de huellas
+    cerrados y la búsqueda se quedaba en palabras hasta reiniciar. El modelo de huellas
+    abre otro cliente si el suyo está cerrado.
+  - P2: tras cerrar la ventana, una vuelta pendiente de huellas podía volver a arrancar.
+    El cierre la anula, y lo mismo con el juez.
+  - Familias: dos hallazgos son de ciclo de vida del segundo plano (el grupo durante el
+    turno y la vuelta tras cerrar); no se repiten de ninguna ronda anterior.
+
 ## Consecuencias
 
 - Cada turno pide a Ollama la huella de su pregunta, también con la charla en OpenAI. Si

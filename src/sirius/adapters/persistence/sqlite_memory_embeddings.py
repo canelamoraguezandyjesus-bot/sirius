@@ -27,7 +27,6 @@ from sirius.adapters.persistence.database import (
     build_session_factory,
     session_scope,
 )
-from sirius.adapters.persistence.models import MemoryEmbeddingModel
 from sirius.domain.memory import MemoryStatus
 from sirius.infrastructure.logging import get_logger
 from sirius.ports.embeddings import PendingMemory
@@ -91,6 +90,25 @@ _NEAREST = text(
 )
 
 
+_SAVE = text(
+    """
+    INSERT INTO memory_embeddings (memory_id, revision_id, model, embedding, created_at)
+    SELECT :memory_id, :revision_id, :model, :embedding, :created_at
+    WHERE EXISTS (
+        SELECT 1 FROM memories AS m
+        JOIN memory_revisions AS r ON r.memory_id = m.id
+        WHERE m.id = :memory_id AND m.status = :current
+          AND r.id = :revision_id AND r.is_current = 1 AND r.content IS NOT NULL
+    )
+    ON CONFLICT (memory_id) DO UPDATE SET
+        revision_id = excluded.revision_id,
+        model = excluded.model,
+        embedding = excluded.embedding,
+        created_at = excluded.created_at
+    """
+)
+
+
 class SqliteMemoryEmbeddingStore:
     """``MemoryEmbeddingStore`` sobre la misma base que los recuerdos."""
 
@@ -118,17 +136,29 @@ class SqliteMemoryEmbeddingStore:
 
     def save(
         self, memory_id: int, revision_id: int, model: str, embedding: Sequence[float]
-    ) -> None:
+    ) -> bool:
+        """Guarda la huella solo si el recuerdo sigue vigente y esa es su revisión actual.
+
+        En una sola sentencia: si se archiva, se borra o se corrige mientras se
+        calculaba, no se guarda (ronda 1 de Codex). Si no, un recuerdo borrado
+        recuperaría una huella que los disparadores ya habían quitado, y nadie la
+        volvería a quitar.
+        """
         with session_scope(self._session_factory) as session:
-            session.merge(
-                MemoryEmbeddingModel(
-                    memory_id=memory_id,
-                    revision_id=revision_id,
-                    model=model,
-                    embedding=to_blob(embedding),
-                    created_at=datetime.now(UTC).replace(tzinfo=None),
-                )
+            result = session.execute(
+                _SAVE,
+                {
+                    "memory_id": memory_id,
+                    "revision_id": revision_id,
+                    "model": model,
+                    "embedding": to_blob(embedding),
+                    # Como guarda SQLAlchemy las fechas en SQLite, y sin el adaptador
+                    # de fechas de sqlite3, que está en desuso.
+                    "created_at": datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S.%f"),
+                    "current": MemoryStatus.CURRENT.value,
+                },
             )
+            return bool(getattr(result, "rowcount", 0))
 
     def nearest(
         self, embedding: Sequence[float], model: str, *, min_similarity: float, limit: int

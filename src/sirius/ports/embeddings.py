@@ -47,8 +47,12 @@ class MemoryEmbeddingStore(Protocol):
 
     def save(
         self, memory_id: int, revision_id: int, model: str, embedding: Sequence[float]
-    ) -> None:
-        """Guarda la huella de un recuerdo y sustituye la que tuviera."""
+    ) -> bool:
+        """Guarda la huella de un recuerdo y sustituye la que tuviera.
+
+        Solo si sigue vigente y ``revision_id`` es su revisión actual; si no,
+        devuelve falso y no guarda nada.
+        """
         ...
 
     def nearest(

@@ -409,6 +409,8 @@ class MainWindow(QMainWindow):
         # es el activo.
         self._is_completing_project = False
         self._close_requested = False
+        #: El cierre ya ocurrió: nada de segundo plano vuelve a arrancar.
+        self._closed = False
         # Ruta de la última copia creada en esta sesión. Es lo que permite
         # abrir su carpeta, reutilizarla sin volver a buscarla a mano y
         # arrancar el selector de archivos donde de verdad está la copia.
@@ -1812,6 +1814,12 @@ class MainWindow(QMainWindow):
         # mostrar nada más, aunque un worker en vuelo termine después
         # (#520, ronda 4).
         self.knowledge_widget.prepare_to_close()
+        # Y nada de segundo plano vuelve a arrancar, aunque quedara pendiente
+        # repetir: la ventana puede seguir viva tras un cambio de proyecto, con
+        # los mismos repositorios que la nueva (ronda 1 de Codex).
+        self._closed = True
+        self._judge_again = False
+        self._embed_again = False
         if self._active_judge_worker is not None:
             self._active_judge_worker.stop()
         if self._active_embedding_worker is not None:
@@ -2734,7 +2742,12 @@ class MainWindow(QMainWindow):
 
     def _start_judge(self) -> None:
         """PA-R02-08: el juez puntúa en segundo plano las respuestas que aún no tienen nota."""
-        if self._reply_judge_service is None or self._close_requested or self._is_backup_busy:
+        if (
+            self._reply_judge_service is None
+            or self._close_requested
+            or self._closed
+            or self._is_backup_busy
+        ):
             return
         if self._active_judge_worker is not None:
             self._judge_again = True
@@ -2764,7 +2777,12 @@ class MainWindow(QMainWindow):
         Al abrirse la ventana, si no falta ninguna, carga el modelo de huellas
         igualmente (``warm_up``): así el primer turno no lo espera.
         """
-        if self._memory_embedding_service is None or self._close_requested or self._is_backup_busy:
+        if (
+            self._memory_embedding_service is None
+            or self._close_requested
+            or self._closed
+            or self._is_backup_busy
+        ):
             return
         if self._active_embedding_worker is not None:
             self._embed_again = True

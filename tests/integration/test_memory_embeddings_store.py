@@ -158,6 +158,29 @@ def test_lo_archivado_o_borrado_se_lleva_su_huella_y_ya_no_se_encuentra_ni_falta
     assert huellas.pending(_MODELO, 10) == []
 
 
+def test_no_guarda_la_huella_de_lo_que_se_archivo_borro_o_corrigio_mientras_tanto(
+    recuerdos: SqliteMemoryRepository, huellas: SqliteMemoryEmbeddingStore
+) -> None:
+    """La huella se calcula en segundo plano: si mientras tanto el recuerdo dejó de
+    estar vigente o cambió, guardarla devolvería lo que los disparadores ya quitaron
+    (ronda 1 de Codex)."""
+    archivado = _guarda(recuerdos, "archivado")
+    borrado = _guarda(recuerdos, "borrado")
+    corregido = _guarda(recuerdos, "corregido")
+    vigente = _guarda(recuerdos, "vigente")
+    recuerdos.archive_memory(archivado[0])
+    recuerdos.delete_memory(borrado[0])
+    recuerdos.correct_memory(corregido[0], "corregido otra vez", "manual")
+
+    assert not huellas.save(*archivado, _MODELO, [1.0, 0.0])
+    assert not huellas.save(*borrado, _MODELO, [1.0, 0.0])
+    assert not huellas.save(*corregido, _MODELO, [1.0, 0.0])
+    assert huellas.save(*vigente, _MODELO, [1.0, 0.0])
+    assert huellas.save(*vigente, _MODELO, [0.0, 1.0]), "guardarla otra vez la sustituye"
+
+    assert huellas.count() == 1
+
+
 def test_sin_sqlite_vec_guarda_pero_no_busca_por_significado(
     base: Path, recuerdos: SqliteMemoryRepository, monkeypatch: pytest.MonkeyPatch
 ) -> None:

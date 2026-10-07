@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 import pytest
 
 from sirius.application.memory_search import (
+    EMBED_BATCH,
     MIN_SIMILARITY,
     SEARCH_LIMIT,
     MemoryEmbeddingService,
@@ -67,6 +68,8 @@ class _Almacen:
     pendientes: list[PendingMemory] = field(default_factory=list)
     guardadas: list[tuple[int, int, str, list[float]]] = field(default_factory=list)
     busquedas: list[tuple[list[float], str, float, int]] = field(default_factory=list)
+    #: Recuerdos que se archivaron o borraron mientras se calculaba su huella.
+    rechaza: set[int] = field(default_factory=set)
 
     def pending(self, model: str, limit: int) -> list[PendingMemory]:
         hechas = {memoria for memoria, _, modelo, _ in self.guardadas if modelo == model}
@@ -74,8 +77,11 @@ class _Almacen:
 
     def save(
         self, memory_id: int, revision_id: int, model: str, embedding: Sequence[float]
-    ) -> None:
+    ) -> bool:
+        if memory_id in self.rechaza:
+            return False
         self.guardadas.append((memory_id, revision_id, model, list(embedding)))
+        return True
 
     def nearest(
         self, embedding: Sequence[float], model: str, *, min_similarity: float, limit: int
@@ -190,8 +196,28 @@ def test_las_huellas_paran_cuando_se_les_pide_entre_un_grupo_y_el_siguiente() ->
 
     hechas = servicio.embed_pending(should_stop=para_tras_el_primero)
 
-    assert hechas == 16
-    assert grupos == [0, 16]
+    assert hechas == EMBED_BATCH
+    assert grupos == [0, EMBED_BATCH]
+
+
+def test_cada_grupo_es_pequeno_para_que_el_turno_no_espere_a_ollama() -> None:
+    """Al escribir él, el grupo que va por la mitad se termina: tiene que durar poco
+    (ronda 1 de Codex)."""
+    almacen = _Almacen(pendientes=[PendingMemory(i, i * 10, f"recuerdo {i}") for i in range(1, 41)])
+    huellas = _Huellas()
+
+    MemoryEmbeddingService(huellas, almacen).embed_pending()
+
+    assert EMBED_BATCH <= 4
+    assert max(len(grupo) for grupo in huellas.pedidas) == EMBED_BATCH
+
+
+def test_lo_que_se_archivo_o_borro_mientras_tanto_no_cuenta_como_hecho() -> None:
+    almacen = _Almacen(
+        pendientes=[PendingMemory(i, i * 10, f"recuerdo {i}") for i in (1, 2)], rechaza={2}
+    )
+
+    assert MemoryEmbeddingService(_Huellas(), almacen).embed_pending() == 1
 
 
 def test_si_el_modelo_de_huellas_falla_no_guarda_nada_y_lo_deja_para_otra_vez() -> None:

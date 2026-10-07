@@ -57,13 +57,24 @@ class OllamaEmbedder:
         timeout: httpx.Timeout = BACKGROUND_TIMEOUT,
     ) -> None:
         self._model = model
-        self._client = httpx.Client(timeout=timeout, transport=transport, trust_env=False)
+        self._timeout = timeout
+        self._transport = transport
+        self._client = self._new_client()
+
+    def _new_client(self) -> httpx.Client:
+        return httpx.Client(timeout=self._timeout, transport=self._transport, trust_env=False)
 
     @property
     def model_name(self) -> str:
         return self._model
 
     def close(self) -> None:
+        """Suelta la conexión. Si después se le piden huellas, abre otra.
+
+        Una restauración de copia cierra todas las conexiones antes de empezar, y si
+        falla, la ventana sigue: el modelo de huellas tiene que seguir sirviendo
+        (ronda 1 de Codex).
+        """
         self._client.close()
 
     def embed(self, texts: Sequence[str]) -> list[list[float]]:
@@ -74,6 +85,8 @@ class OllamaEmbedder:
             "input": list(texts),
             "keep_alive": _KEEP_ALIVE,
         }
+        if self._client.is_closed:
+            self._client = self._new_client()
         try:
             response = self._client.post(OLLAMA_EMBED_URL, json=body)
         except httpx.HTTPError as exc:
