@@ -917,6 +917,59 @@ def test_restore_backup_stops_the_embeddings_and_waits_for_them_before_closing_c
 
 
 @pytest.mark.gui
+@pytest.mark.parametrize("falla", ["al restaurar", "al cerrar las conexiones"])
+def test_a_restore_that_fails_resumes_the_judge_and_the_embeddings_it_stopped(
+    qtbot: QtBot, tmp_path: Path, falla: str
+) -> None:
+    """Ronda 2 de Codex: la restauración para el juez y las huellas a medias. Si
+    falla, la base sigue siendo la de antes y lo que quedó pendiente sigue; si
+    no, los recuerdos de después del grupo en curso se quedarían sin huella hasta
+    reiniciar Sirius."""
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    backup_path = tmp_path / "b.siriusbackup"
+    validate_use_case = _FakeValidateBackupUseCase(result=_fake_validation_result(backup_path))
+    restore_use_case = _FakeRestoreBackupUseCase(error=RuntimeError("no se pudo"))
+    judge = _BlockingJudge()
+    embeddings = _BlockingEmbeddings()
+
+    def close_connections() -> None:
+        if falla == "al cerrar las conexiones":
+            raise RuntimeError("bloqueada")
+
+    window = _build_window(
+        database_path,
+        validate_backup_use_case=validate_use_case,
+        restore_backup_use_case=restore_use_case,
+        confirm_restore=lambda title, text: True,
+        close_database_connections=close_connections,
+        reply_judge_service=judge,
+        memory_embedding_service=embeddings,
+    )
+    qtbot.addWidget(window)
+    window.show()
+    assert judge.started.wait(timeout=5)
+    assert embeddings.started.wait(timeout=5)
+
+    window.restore_backup_path_input.setText(str(backup_path))
+    window.restore_backup_password_input.setText(_PASSWORD)
+    window.restore_backup_button.click()
+    qtbot.waitUntil(lambda: "juez" in window.restore_backup_status_label.text(), timeout=5000)
+
+    judge.release()
+    embeddings.release()
+
+    qtbot.waitUntil(
+        lambda: "rechazada" in window.restore_backup_feedback_label.text(), timeout=5000
+    )
+    qtbot.waitUntil(
+        lambda: len(judge.asked_to_stop) == 2 and len(embeddings.asked_to_stop) == 2,
+        timeout=5000,
+    )
+    assert judge.asked_to_stop == [True, False]
+    assert embeddings.asked_to_stop == [True, False]
+
+
+@pytest.mark.gui
 def test_restore_backup_waits_for_pending_criticality_proposal_before_closing_connections(
     qtbot: QtBot, tmp_path: Path
 ) -> None:

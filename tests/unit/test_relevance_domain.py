@@ -263,6 +263,37 @@ def test_among_related_memories_the_closest_in_meaning_comes_first() -> None:
     assert rank_relevant_knowledge([words_only, far, close]) == (close, far, words_only)
 
 
+def test_with_the_same_similarity_the_best_word_match_comes_before_the_most_recent() -> None:
+    """Ronda 2 de Codex: el puesto por bm25 viaja hasta aquí y decide antes que la fecha."""
+
+    def by_words(memory_id: int, rank: int, updated_at: datetime) -> RankedKnowledge:
+        return RankedKnowledge(
+            kind=KnowledgeKind.MEMORY,
+            item=_memory(memory_id, updated_at=updated_at),
+            subject_matches_query=False,
+            project_matches_active=False,
+            fts_match=True,
+            fts_rank=rank,
+        )
+
+    best = by_words(1, 0, _NOW)
+    recent = by_words(2, 1, _NOW + timedelta(days=1))
+
+    assert rank_relevant_knowledge([recent, best]) == (best, recent)
+
+
+def test_a_word_rank_needs_a_word_match() -> None:
+    with pytest.raises(ValueError, match="fts_match"):
+        RankedKnowledge(
+            kind=KnowledgeKind.MEMORY,
+            item=_memory(1),
+            subject_matches_query=False,
+            project_matches_active=False,
+            fts_match=False,
+            fts_rank=0,
+        )
+
+
 # --- Criterio 4: más reciente por encima de más antiguo (resto empatado). ---
 
 

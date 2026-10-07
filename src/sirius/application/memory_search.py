@@ -42,9 +42,10 @@ MIN_SIMILARITY = 0.5
 SEARCH_LIMIT = 12
 
 #: Cuántas huellas se piden a la vez al modelo. Pocas: cuando el propietario
-#: escribe, las huellas paran antes del grupo siguiente, y el que va por la mitad
-#: lo termina. Con cuatro frases cortas eso son décimas, no segundos en los que
-#: Ollama tendría que repartirse con el turno (ronda 1 de Codex).
+#: escribe, las huellas paran antes del grupo siguiente, y el turno espera a que
+#: acabe el que va por la mitad (ronda 2 de Codex). Con el modelo ya cargado,
+#: cuatro frases cortas son décimas; el primer grupo tarda además lo que tarde
+#: Ollama en cargarlo, y eso el turno lo esperaría igual.
 EMBED_BATCH = 4
 
 
@@ -53,8 +54,13 @@ class FoundMemory:
     """Un recuerdo que trae la búsqueda, y cómo: por palabras, por significado o por las dos."""
 
     memory: Memory
-    by_words: bool
+    word_rank: int | None
+    """Su puesto en la búsqueda por palabras, 0 el que mejor casa; ``None`` si no lo trajo."""
     similarity: float | None
+
+    @property
+    def by_words(self) -> bool:
+        return self.word_rank is not None
 
 
 class MemoryEmbeddingService:
@@ -164,15 +170,23 @@ class MemorySearch:
         self._embeddings = embeddings
 
     def find(self, query_text: str) -> list[FoundMemory]:
-        """Los recuerdos vigentes que casan con ``query_text``, cargados de una vez."""
-        by_words = set(self._keywords.search_memory_ids(query_text, SEARCH_LIMIT))
+        """Los recuerdos vigentes que casan con ``query_text``, cargados de una vez.
+
+        Las palabras llegan ordenadas por lo bien que casan (bm25), y ese puesto
+        viaja con cada recuerdo hasta la ordenación final (ronda 2 de Codex).
+        """
+        word_ranks: dict[int, int] = {}
+        for memory_id in self._keywords.search_memory_ids(query_text, SEARCH_LIMIT):
+            word_ranks.setdefault(memory_id, len(word_ranks))
         similarities: dict[int, float] = {}
         if self._embeddings is not None:
             embedding = self._embeddings.embed_query(query_text)
             if embedding is not None:
                 similarities = dict(self._embeddings.nearest(embedding))
-        found = self._memories.get_memories([*by_words, *(set(similarities) - by_words)])
+        found = self._memories.get_memories(
+            [*word_ranks, *(similarities.keys() - word_ranks.keys())]
+        )
         return [
-            FoundMemory(memory, memory.id in by_words, similarities.get(memory.id))
+            FoundMemory(memory, word_ranks.get(memory.id), similarities.get(memory.id))
             for memory in found
         ]

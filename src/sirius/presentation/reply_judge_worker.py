@@ -2,7 +2,8 @@
 
 La ventana lo lanza al abrirse y al acabar cada turno, con la respuesta ya en
 pantalla, y le pide que pare cuando el propietario escribe, para que el modelo
-local quede libre para la charla.
+local quede libre para la charla: el turno espera a que acabe la respuesta que
+está puntuando.
 """
 
 from __future__ import annotations

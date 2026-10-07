@@ -758,6 +758,7 @@ class RankRelevantKnowledgeUseCase:
                 fts_match=found.by_words,
                 semantic_match=found.similarity is not None,
                 semantic_similarity=found.similarity or 0.0,
+                fts_rank=found.word_rank,
             )
             for found in self._memory_search.find(query_text)
         ]

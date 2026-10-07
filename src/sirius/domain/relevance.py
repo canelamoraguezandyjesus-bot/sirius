@@ -131,6 +131,7 @@ section "Decisión del propietario y plan").
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
@@ -220,12 +221,21 @@ class RankedKnowledge:
     """El parecido de 0 a 1 que dio la búsqueda por significado; 0 si no lo trajo.
     Entre los relacionados, va antes lo que más se parece."""
 
+    fts_rank: int | None = None
+    """Pieza F (ADR-238, ronda 2 de Codex): el puesto del recuerdo en la búsqueda
+    por palabras, ordenada por bm25; 0 el que mejor casa. Con el mismo parecido,
+    va antes el que mejor casa por palabras, no el más reciente. ``None`` si las
+    palabras no lo trajeron o no hay puesto, como en las decisiones."""
+
     def __post_init__(self) -> None:
         if self.kind is KnowledgeKind.MEMORY and self.subject_matches_query:
             msg = (
                 "subject_matches_query only ever applies to a decision "
                 "(S7.5: 'tipo DECISIÓN cuando el asunto coincide')."
             )
+            raise ValueError(msg)
+        if self.fts_rank is not None and not self.fts_match:
+            msg = "fts_rank solo tiene sentido si las palabras lo trajeron (fts_match)."
             raise ValueError(msg)
 
     @property
@@ -576,16 +586,17 @@ def _synthetic_id(candidate: RankedKnowledge) -> int:
 
 def _sort_key(
     candidate: RankedKnowledge,
-) -> tuple[bool, bool, bool, float, bool, bool, bool, float, int]:
+) -> tuple[bool, bool, bool, float, float, bool, bool, bool, float, int]:
     # Pieza F (ADR-238): palabras y significado valen lo mismo para estar
-    # relacionado; entre los relacionados, primero lo que más se parece. Sin
-    # búsqueda por significado, ``semantic_match`` es falso y el parecido 0 para
-    # todos, y el orden es el de siempre.
+    # relacionado; entre los relacionados, primero lo que más se parece y, con el
+    # mismo parecido, lo que mejor casa por palabras (ronda 2 de Codex). Sin
+    # búsqueda por significado ni puesto por palabras, el orden es el de siempre.
     return (
         not candidate.subject_matches_query,
         not candidate.project_matches_active,
         not (candidate.fts_match or candidate.semantic_match),
         -candidate.semantic_similarity,
+        math.inf if candidate.fts_rank is None else candidate.fts_rank,
         not candidate.category_match,
         not candidate.criticality_match,
         not candidate.seeded,

@@ -7,7 +7,16 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import QPoint, QRunnable, Qt, QThreadPool, QTimer, QUrl, Signal
+from PySide6.QtCore import (
+    QPoint,
+    QRunnable,
+    Qt,
+    QThreadPool,
+    QTimer,
+    QUrl,
+    Signal,
+    SignalInstance,
+)
 from PySide6.QtGui import QCloseEvent, QDesktopServices
 from PySide6.QtWidgets import (
     QComboBox,
@@ -1511,14 +1520,6 @@ class MainWindow(QMainWindow):
         self._start_send(self._last_failed_text)
 
     def _start_send(self, text: str, *, extra_instructions: str = "") -> None:
-        if self._active_judge_worker is not None:
-            # Que el modelo local quede libre para la charla; sigue después.
-            self._active_judge_worker.stop()
-            self._judge_again = True
-        if self._active_embedding_worker is not None:
-            # Lo mismo con las huellas: el turno va antes y siguen después.
-            self._active_embedding_worker.stop()
-            self._embed_again = True
         self._is_sending = True
         self._active_operation_id = str(uuid.uuid4())
         self._active_send_text = text
@@ -1542,10 +1543,19 @@ class MainWindow(QMainWindow):
 
         self._append_message_item(MessageRole.USER, text)
 
+        # Lo que se ve ya está: «pensando» y su mensaje. El turno empieza cuando
+        # el juez y las huellas han soltado Ollama, no antes (ronda 2 de Codex).
+        # Si cancela o cierra mientras tanto, el modelo ya lo sabe al empezar.
+        operation_id = self._active_operation_id
+        self._when_background_idle(
+            lambda: self._launch_send(text, operation_id, extra_instructions)
+        )
+
+    def _launch_send(self, text: str, operation_id: str, extra_instructions: str) -> None:
         worker = SendMessageWorker(
             self._send_message_use_case,
             text,
-            self._active_operation_id,
+            operation_id,
             extra_instructions=extra_instructions,
         )
         worker.signals.delta.connect(self._on_delta)
@@ -1681,10 +1691,10 @@ class MainWindow(QMainWindow):
             self._last_failed_text = self._active_send_text
         self._refresh_budget_warning()
         self._refresh_mode_indicator()
+        # La respuesta nueva queda para el juez: sigue, con lo demás que quedó
+        # pendiente, en cuanto acaba el turno (_finish_sending).
+        self._judge_again = True
         self._finish_sending()
-        self._start_judge()
-        if self._embed_again:
-            self._start_embedding()
         # Después de _finish_sending, que es quien devuelve el estado a
         # PREPARADO: si se hablara antes, ese reajuste borraría SINTETIZANDO.
         self._speak_if_studio_is_open(result.sirius_message.content, result.sirius_message.status)
@@ -1764,6 +1774,8 @@ class MainWindow(QMainWindow):
         if self._close_requested:
             self._close_requested = False
             self.close()
+            return
+        self._resume_background()
 
     def _handle_project_completed(self) -> None:
         """RF-018: el proyecto activo acaba de completarse.
@@ -1818,12 +1830,7 @@ class MainWindow(QMainWindow):
         # repetir: la ventana puede seguir viva tras un cambio de proyecto, con
         # los mismos repositorios que la nueva (ronda 1 de Codex).
         self._closed = True
-        self._judge_again = False
-        self._embed_again = False
-        if self._active_judge_worker is not None:
-            self._active_judge_worker.stop()
-        if self._active_embedding_worker is not None:
-            self._active_embedding_worker.stop()
+        self._stop_background()
         super().closeEvent(event)
 
     # --- Configuración ---------------------------------------------------
@@ -2168,6 +2175,10 @@ class MainWindow(QMainWindow):
         if self._close_requested:
             self._close_requested = False
             self.close()
+            return
+        # Una copia, una validación o una restauración que falla: lo que paró o
+        # quedó pendiente en segundo plano sigue (ronda 2 de Codex).
+        self._resume_background()
 
     @staticmethod
     def _format_backup_summary(manifest: BackupManifest, size_bytes: int) -> str:
@@ -2422,37 +2433,18 @@ class MainWindow(QMainWindow):
         ningún worker nuevo mientras se espera.
 
         El juez (pieza E de ADR-233) y las huellas de los recuerdos (pieza F)
-        también escriben en sirius.db: se les pide que paren, acaban lo que
-        tienen entre manos y la restauración sigue después. Mientras dure, no
-        vuelven a empezar."""
-        if self._active_judge_worker is not None:
-            self._active_judge_worker.stop()
-            self._judge_again = False
-            self._set_backup_feedback(
-                self.restore_backup_status_label,
-                BACKUP_STATE_IN_PROGRESS,
-                "Esperando a que el juez acabe la respuesta que está puntuando...",
-            )
-            self.judge_idle.connect(
-                lambda: self._restore_when_knowledge_widget_idle(backup_path, password),
-                Qt.ConnectionType.SingleShotConnection,
-            )
-            return
+        también escriben en sirius.db: la restauración pasa por la misma puerta
+        que el turno (``_when_background_idle``). Acaban lo que tienen entre
+        manos, no vuelven a empezar mientras dure y, si falla, siguen
+        (``_finish_backup_operation``)."""
+        self._when_background_idle(
+            lambda: self._restore_when_criticality_proposal_idle(backup_path, password),
+            show_wait=lambda waiting_for: self._set_backup_feedback(
+                self.restore_backup_status_label, BACKUP_STATE_IN_PROGRESS, waiting_for
+            ),
+        )
 
-        if self._active_embedding_worker is not None:
-            self._active_embedding_worker.stop()
-            self._embed_again = False
-            self._set_backup_feedback(
-                self.restore_backup_status_label,
-                BACKUP_STATE_IN_PROGRESS,
-                "Esperando a que acaben las huellas de los recuerdos...",
-            )
-            self.embedding_idle.connect(
-                lambda: self._restore_when_knowledge_widget_idle(backup_path, password),
-                Qt.ConnectionType.SingleShotConnection,
-            )
-            return
-
+    def _restore_when_criticality_proposal_idle(self, backup_path: Path, password: str) -> None:
         if self.knowledge_widget.has_pending_criticality_proposal:
             self._set_backup_feedback(
                 self.restore_backup_status_label,
@@ -2742,14 +2734,10 @@ class MainWindow(QMainWindow):
 
     def _start_judge(self) -> None:
         """PA-R02-08: el juez puntúa en segundo plano las respuestas que aún no tienen nota."""
-        if (
-            self._reply_judge_service is None
-            or self._close_requested
-            or self._closed
-            or self._is_backup_busy
-        ):
+        if self._reply_judge_service is None or self._close_requested or self._closed:
             return
-        if self._active_judge_worker is not None:
+        if self._active_judge_worker is not None or self._foreground_busy():
+            # Sigue cuando acabe el que corre o lo de delante (_resume_background).
             self._judge_again = True
             return
         worker = ReplyJudgeWorker(self._reply_judge_service)
@@ -2761,7 +2749,7 @@ class MainWindow(QMainWindow):
     def _on_judge_finished(self) -> None:
         self._active_judge_worker = None
         self._refresh_judge_indicator()
-        if self._judge_again and not self._is_sending and not self._is_backup_busy:
+        if self._judge_again:
             self._start_judge()
         if self._active_judge_worker is None:
             self.judge_idle.emit()
@@ -2777,14 +2765,10 @@ class MainWindow(QMainWindow):
         Al abrirse la ventana, si no falta ninguna, carga el modelo de huellas
         igualmente (``warm_up``): así el primer turno no lo espera.
         """
-        if (
-            self._memory_embedding_service is None
-            or self._close_requested
-            or self._closed
-            or self._is_backup_busy
-        ):
+        if self._memory_embedding_service is None or self._close_requested or self._closed:
             return
-        if self._active_embedding_worker is not None:
+        if self._active_embedding_worker is not None or self._foreground_busy():
+            # Sigue cuando acabe el que corre o lo de delante (_resume_background).
             self._embed_again = True
             return
         worker = MemoryEmbeddingWorker(self._memory_embedding_service, warm_up=warm_up)
@@ -2795,10 +2779,76 @@ class MainWindow(QMainWindow):
 
     def _on_embedding_finished(self) -> None:
         self._active_embedding_worker = None
-        if self._embed_again and not self._is_sending and not self._is_backup_busy:
+        if self._embed_again:
             self._start_embedding()
         if self._active_embedding_worker is None:
             self.embedding_idle.emit()
+
+    # --- El segundo plano frente al turno y la restauración (ADR-238) ------
+
+    def _foreground_busy(self) -> bool:
+        """Si hay un turno o una copia en marcha: mientras, nada arranca en segundo plano."""
+        return self._is_sending or self._is_backup_busy
+
+    def _stop_background(self) -> list[tuple[SignalInstance, str]]:
+        """Pide parar a lo que corre en segundo plano: el juez y las huellas.
+
+        Devuelve, de cada uno que sigue en marcha, la señal que dará al parar y
+        qué está acabando. Lo que para a medias queda pendiente y sigue en
+        ``_resume_background``. Es el único sitio que sabe qué corre en segundo
+        plano: un trabajo nuevo de fondo se añade aquí y en
+        ``_resume_background``, y el turno, la restauración y el cierre lo
+        respetan sin tocarlos (ronda 2 de Codex).
+        """
+        still_running: list[tuple[SignalInstance, str]] = []
+        if self._active_judge_worker is not None:
+            self._active_judge_worker.stop()
+            self._judge_again = True
+            still_running.append(
+                (
+                    self.judge_idle,
+                    "Esperando a que el juez acabe la respuesta que está puntuando...",
+                )
+            )
+        if self._active_embedding_worker is not None:
+            self._active_embedding_worker.stop()
+            self._embed_again = True
+            still_running.append(
+                (self.embedding_idle, "Esperando a que acaben las huellas de los recuerdos...")
+            )
+        return still_running
+
+    def _when_background_idle(
+        self, then: Callable[[], None], *, show_wait: Callable[[str], None] | None = None
+    ) -> None:
+        """Llama a ``then`` cuando ya no corre nada en segundo plano, tras pedirles parar.
+
+        Es la puerta por la que pasan el turno y la restauración, que necesitan
+        Ollama o sirius.db para sí. Lo que corre acaba lo que tiene entre manos,
+        porque una petición a Ollama no se corta a medias, y hasta entonces no
+        empieza lo de delante: la exclusión no se deduce de lo poco que tarde,
+        se espera (ronda 2 de Codex). Solo se llama con lo de delante ya en
+        marcha (``_foreground_busy``): así nada de fondo vuelve a arrancar
+        mientras se espera.
+        """
+        still_running = self._stop_background()
+        if not still_running:
+            then()
+            return
+        idle, waiting_for = still_running[0]
+        if show_wait is not None:
+            show_wait(waiting_for)
+        idle.connect(
+            lambda: self._when_background_idle(then, show_wait=show_wait),
+            Qt.ConnectionType.SingleShotConnection,
+        )
+
+    def _resume_background(self) -> None:
+        """Sigue con lo que quedó pendiente en segundo plano al acabar lo de delante."""
+        if self._judge_again:
+            self._start_judge()
+        if self._embed_again:
+            self._start_embedding()
 
     def _refresh_judge_indicator(self) -> None:
         """PA-R02-08: enseña el aviso del juez mientras la media siga por debajo de 3,5."""

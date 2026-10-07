@@ -3,8 +3,8 @@
 La ventana lo lanza al abrirse y cada vez que se guarda, se corrige o se
 confirma un recuerdo. Calcula las huellas que faltan con el modelo de huellas
 de Ollama, para que la búsqueda por significado encuentre también lo nuevo.
-Para cuando el propietario escribe, para que el turno vaya antes, y sigue
-después.
+Cuando el propietario escribe, se le pide parar: acaba lo que tiene entre
+manos, el turno empieza después y las huellas siguen al acabar el turno.
 """
 
 from __future__ import annotations
@@ -39,7 +39,10 @@ class MemoryEmbeddingWorker(QRunnable):
 
     def run(self) -> None:
         try:
-            if self._service.embed_pending(should_stop=self._stop.is_set) == 0 and self._warm_up:
+            done = self._service.embed_pending(should_stop=self._stop.is_set)
+            # Si ya le pidieron parar, tampoco carga el modelo: el turno espera
+            # a que este trabajo acabe, y cargarlo lo haría esperar más.
+            if done == 0 and self._warm_up and not self._stop.is_set():
                 self._service.warm_up()
         except Exception as exc:  # las huellas nunca pueden romper la ventana
             _logger.error("Las huellas se interrumpieron (%s)", type(exc).__name__)

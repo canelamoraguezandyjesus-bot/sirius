@@ -86,10 +86,12 @@ Se adopta la opción 2.
 - **La búsqueda**: lo que encuentran las palabras, los 12 mejores, más lo que se parece
   por significado con un parecido de 0,5 o más, otros 12. Lo que solo trae el significado
   tiene que parecerse de verdad. Solo esos recuerdos se cargan, de una vez. Entre los que
-  trae, va antes lo que más se parece.
+  trae, va antes lo que más se parece y, con el mismo parecido, lo que mejor casa por
+  palabras.
 - **Las huellas, en segundo plano**: la ventana calcula las que faltan al abrirse y al
-  guardar, corregir o confirmar un recuerdo. Para mientras dura un turno y sigue después.
-  Una restauración de copia la espera, como al juez.
+  guardar, corregir o confirmar un recuerdo. Cuando él escribe, el turno espera a que
+  acaben lo que tienen entre manos, y siguen al acabar el turno. Una restauración las
+  espera igual, como al juez, y si falla, siguen.
 - **Fuera de cada respuesta**: el filtro de relevancia, el intérprete de la pregunta y el
   motor por etapas ya no se montan. Las puertas viejas ya no se leen.
 - **Fuera el etiquetado por categorías**: la ventana ya no etiqueta al abrirse ni al
@@ -132,6 +134,18 @@ Se adopta la opción 2.
 - También vistas fallar: sin la guarda que impide pedir huellas sin fin si guardar no
   sirve, sin cargar el modelo al abrir, con la pregunta usando el modelo paciente y con la
   orden de E-R02-05 midiendo aunque sqlite-vec no cargue.
+- **Ronda 2**, cada arreglo con su prueba vista fallar al quitarlo, doce en total:
+  - el turno empezando sin esperar: Ollama veía dos peticiones a la vez, con el grupo en
+    curso y con la carga del modelo al abrirse;
+  - lo de fondo arrancando mientras espera un turno o una restauración, del juez y de las
+    huellas: el turno esperaba a todas las huellas, no solo al grupo en curso, y el juez
+    puntuaba durante la restauración;
+  - sin seguir con lo pendiente al acabar el turno, o al fallar la restauración, por los
+    dos caminos por los que falla;
+  - parar sin dejarlo pendiente, cargar el modelo después de que le pidan parar, y una
+    cancelación durante la espera que se pierde;
+  - el puesto por palabras perdido en la búsqueda, en el paso a la ordenación o en la
+    ordenación misma, y un puesto sin coincidencia por palabras.
 
 ## Revisión externa
 
@@ -152,6 +166,35 @@ Se adopta la opción 2.
     El cierre la anula, y lo mismo con el juez.
   - Familias: dos hallazgos son de ciclo de vida del segundo plano (el grupo durante el
     turno y la vuelta tras cerrar); no se repiten de ninguna ronda anterior.
+- **Ronda 2 de Codex**, sobre `5abfef76`: tres hallazgos, los tres ciertos.
+  - P1: el arreglo de la ronda 1 deducía que el turno tenía Ollama libre de lo poco que
+    tarda un grupo, y no lo garantiza. El primer grupo, o la carga del modelo al abrirse,
+    puede tardar hasta un minuto, y mientras el turno ya pedía a Ollama. Ahora el turno no
+    empieza hasta que lo de fondo acaba lo que tiene entre manos. Él ve su mensaje y
+    «pensando» al momento. Si cancela o cierra mientras espera, el turno empieza ya
+    cancelado.
+  - P2: una restauración que fallaba dejaba parado lo que había parado, y los recuerdos
+    de después del grupo en curso se quedaban sin huella hasta reiniciar. Ahora, al
+    acabar una copia o una restauración que no cierra la ventana, lo pendiente sigue.
+  - P2: la búsqueda por palabras perdía su orden bm25 al pasar a un conjunto, y con el
+    mismo parecido mandaba la fecha. Ahora el puesto llega hasta la ordenación final. Con
+    parecidos distintos sigue mandando el parecido, como se decidió; las decisiones no
+    tienen puesto y van detrás de los recuerdos que sí lo tienen.
+  - **Regla de las dos rondas.** El P1 y el primer P2 son de la misma familia que dos de
+    la ronda 1: el segundo plano frente al turno y la vida de la ventana. Se dejó de
+    parchear y se buscó la raíz. Cada momento de la ventana paraba y relanzaba por su
+    cuenta a cada trabajo de fondo, con su bandera, en seis sitios: empezar un turno,
+    acabarlo, que falle, restaurar, que falle la restauración y cerrar. Cada ronda
+    encontraba una combinación olvidada. Ahora hay un solo sitio que sabe qué corre de
+    fondo, una sola puerta para lo que necesita Ollama o la base para sí, el turno y la
+    restauración, y una sola regla para arrancar: nada de fondo arranca con un turno o una
+    copia en marcha; lo que se pide entonces queda pendiente y sigue al acabar. El juez
+    entra por la misma puerta: lo paraba el turno para dejar libre el modelo local, y con
+    el turno empezando enseguida no lo dejaba libre.
+  - Lo que esto no garantiza: si una petición de fondo tarda, el turno la espera entera.
+    Hasta un minuto si se está cargando el modelo de huellas, y hasta tres si el juez está
+    cargando el de la charla. Ese modelo es el mismo que necesita el turno: Ollama le
+    haría esperar igual.
 
 ## Consecuencias
 
@@ -160,7 +203,10 @@ Se adopta la opción 2.
 - La huella de la pregunta espera a Ollama como mucho 5 segundos; si tarda más, ese turno
   sigue por palabras. Las de los recuerdos, en segundo plano, esperan hasta un minuto.
 - Al abrirse, la ventana pide una huella aunque no falte ninguna, para que Ollama cargue
-  el modelo antes del primer turno.
+  el modelo antes del primer turno. Si él escribe antes de que acabe, el turno la espera.
+- Si él escribe mientras el juez o las huellas usan Ollama, el turno espera a que acaben
+  lo que tienen entre manos: una nota o un grupo de cuatro huellas. Con los modelos ya
+  cargados son décimas o pocos segundos.
 - `TagCategoryUseCase` y `SetCategoryUseCase` siguen en el árbol sin nadie que los monte.
   Se retiran con el banco de 47 casos, que es quien aún los mide.
 - Las pruebas que montan Sirius sin el conductor usan el modelo de huellas de verdad: si

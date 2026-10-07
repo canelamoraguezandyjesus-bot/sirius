@@ -120,6 +120,15 @@ def test_junta_lo_que_traen_las_palabras_y_el_significado_y_dice_como_llego_cada
     assert sorted(recuerdos.cargas[0]) == [1, 2, 3]
 
 
+def test_cada_recuerdo_lleva_su_puesto_por_palabras_tal_como_llegan_por_bm25() -> None:
+    """El orden de las palabras no se pierde por el camino (ronda 2 de Codex)."""
+    busqueda, _ = _busqueda(_Palabras(encontrados=[3, 1, 2]), _Almacen(parecidos=[(4, 0.7)]))
+
+    puestos = {f.memory.id: f.word_rank for f in busqueda.find("¿y eso?")}
+
+    assert puestos == {3: 0, 1: 1, 2: 2, 4: None}
+
+
 def test_el_significado_pide_el_umbral_y_el_limite_y_la_huella_de_la_pregunta() -> None:
     almacen = _Almacen()
     huellas = _Huellas()
@@ -200,9 +209,9 @@ def test_las_huellas_paran_cuando_se_les_pide_entre_un_grupo_y_el_siguiente() ->
     assert grupos == [0, EMBED_BATCH]
 
 
-def test_cada_grupo_es_pequeno_para_que_el_turno_no_espere_a_ollama() -> None:
-    """Al escribir él, el grupo que va por la mitad se termina: tiene que durar poco
-    (ronda 1 de Codex)."""
+def test_cada_grupo_es_pequeno_para_que_el_turno_espere_poco() -> None:
+    """Al escribir él, el turno espera a que acabe el grupo que va por la mitad:
+    cuanto más pequeño, menos espera (rondas 1 y 2 de Codex)."""
     almacen = _Almacen(pendientes=[PendingMemory(i, i * 10, f"recuerdo {i}") for i in range(1, 41)])
     huellas = _Huellas()
 
