@@ -12,7 +12,9 @@
   personalidad y la memoria. Si cambian, cambian estas pruebas antes que el código.
 - Lo comprueba por máquina: `tests/acceptance/test_robot_0_2_trazabilidad.py`. Si la
   tabla nombra una prueba que no existe, se deja una sin nombrar o dice «en verde» de una
-  pieza que no ha entrado, la batería falla.
+  pieza que no ha entrado, la batería falla. También si quita una PA, una prueba o una
+  evaluación del inventario aprobado en ADR-233, aunque quite a la vez la fila y sus
+  pruebas: ese inventario vive en la propia comprobación.
 
 ## Cómo se lee
 

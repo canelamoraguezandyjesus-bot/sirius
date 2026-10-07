@@ -32,6 +32,43 @@ _VACIO = "—"
 
 
 @dataclass(frozen=True, slots=True)
+class Inventario:
+    """Lo aprobado: cuántas pruebas de máquina tiene, como poco, cada PA, y qué evaluaciones hay."""
+
+    pruebas_por_pa: Mapping[str, int]
+    evaluaciones: frozenset[str]
+
+
+#: El inventario aprobado en ADR-233: 18 PA, 32 pruebas de máquina y cinco
+#: evaluaciones del propietario. Una prueba se puede renombrar o mejorar, pero
+#: quitar una PA, una prueba o una evaluación es retirar una prueba, y eso no lo
+#: hace una sesión sola (AGENTS.md): se cambia aquí, a la vista de la revisión.
+INVENTARIO_APROBADO = Inventario(
+    pruebas_por_pa={
+        "PA-R02-01": 2,
+        "PA-R02-02": 2,
+        "PA-R02-03": 2,
+        "PA-R02-04": 3,
+        "PA-R02-05": 2,
+        "PA-R02-06": 4,
+        "PA-R02-07": 2,
+        "PA-R02-08": 1,
+        "PA-R02-09": 2,
+        "PA-R02-10": 2,
+        "PA-R02-11": 1,
+        "PA-R02-12": 1,
+        "PA-R02-13": 1,
+        "PA-R02-14": 1,
+        "PA-R02-15": 1,
+        "PA-R02-16": 1,
+        "PA-R02-17": 2,
+        "PA-R02-18": 2,
+    },
+    evaluaciones=frozenset(f"E-R02-{n:02d}" for n in range(1, 6)),
+)
+
+
+@dataclass(frozen=True, slots=True)
 class Fila:
     id: str
     piezas: frozenset[str]
@@ -100,16 +137,33 @@ def defectos(
     pruebas: Mapping[str, str | None],
     evaluaciones: frozenset[str],
     entregadas: frozenset[str],
+    inventario: Inventario = INVENTARIO_APROBADO,
 ) -> list[str]:
-    """Todo lo que la tabla afirma y no es verdad. Vacía si no hay nada."""
+    """Todo lo que la tabla afirma y no es verdad. Vacía si no hay nada.
+
+    La tabla se compara con ``inventario``, que es independiente de ella y de
+    las pruebas: quitar a la vez una fila y sus pruebas también se ve.
+    """
     filas = list(filas)
     encontrados: list[str] = []
 
-    esperados = [f"PA-R02-{n:02d}" for n in range(1, len(filas) + 1)]
+    esperados = list(inventario.pruebas_por_pa)
     if [fila.id for fila in filas] != esperados:
         encontrados.append(
-            "los identificadores no van de PA-R02-01 en adelante sin huecos: "
-            f"{[f.id for f in filas]}"
+            f"la tabla no tiene, en orden, las PA del inventario aprobado: {[f.id for f in filas]}"
+        )
+    for fila in filas:
+        minimo = inventario.pruebas_por_pa.get(fila.id, 0)
+        if len(fila.pruebas) < minimo:
+            encontrados.append(
+                f"{fila.id}: tiene {len(fila.pruebas)} pruebas y el inventario aprobado "
+                f"pide {minimo}"
+            )
+    if evaluaciones != inventario.evaluaciones:
+        encontrados.append(
+            "las evaluaciones del documento no son las del inventario aprobado: faltan "
+            f"{sorted(inventario.evaluaciones - evaluaciones)} y sobran "
+            f"{sorted(evaluaciones - inventario.evaluaciones)}"
         )
 
     for prueba, letra in pruebas.items():
@@ -195,6 +249,18 @@ _BUENA = (
 _PRUEBAS: dict[str, str | None] = {_P1: "B", _P2: "C"}
 _EVALUACIONES = frozenset({"E-R02-01"})
 _ENTREGADAS = frozenset({"A", "B"})
+_INVENTARIO = Inventario(
+    pruebas_por_pa={"PA-R02-01": 1, "PA-R02-02": 1}, evaluaciones=_EVALUACIONES
+)
+
+
+def _defectos(
+    filas: Iterable[Fila],
+    pruebas: Mapping[str, str | None] = _PRUEBAS,
+    evaluaciones: frozenset[str] = _EVALUACIONES,
+    inventario: Inventario = _INVENTARIO,
+) -> list[str]:
+    return defectos(filas, pruebas, evaluaciones, _ENTREGADAS, inventario)
 
 
 def _con(fila: int, **cambios: object) -> list[Fila]:
@@ -204,68 +270,77 @@ def _con(fila: int, **cambios: object) -> list[Fila]:
 
 
 def test_una_tabla_que_dice_la_verdad_no_tiene_defectos() -> None:
-    assert defectos(_BUENA, _PRUEBAS, _EVALUACIONES, _ENTREGADAS) == []
+    assert _defectos(_BUENA) == []
 
 
 def test_caza_una_prueba_que_no_sale_en_la_tabla() -> None:
     pruebas = {**_PRUEBAS, "tests/acceptance/test_robot_0_2_x.py::test_tres": "B"}
-    assert any(
-        "test_tres: no sale en la tabla" in d
-        for d in defectos(_BUENA, pruebas, _EVALUACIONES, _ENTREGADAS)
-    )
+    assert any("test_tres: no sale en la tabla" in d for d in _defectos(_BUENA, pruebas))
 
 
 def test_caza_una_prueba_nombrada_que_no_existe() -> None:
     filas = _con(0, pruebas=(_P1, "tests/acceptance/test_robot_0_2_x.py::test_fantasma"))
-    assert any(
-        "test_fantasma, que no existe" in d
-        for d in defectos(filas, _PRUEBAS, _EVALUACIONES, _ENTREGADAS)
-    )
+    assert any("test_fantasma, que no existe" in d for d in _defectos(filas))
 
 
 def test_caza_en_verde_sin_la_pieza_y_pendiente_con_ella() -> None:
     adelantada = _con(1, estado="en verde")
-    assert any(
-        "PA-R02-02: dice «en verde»" in d
-        for d in defectos(adelantada, _PRUEBAS, _EVALUACIONES, _ENTREGADAS)
-    )
+    assert any("PA-R02-02: dice «en verde»" in d for d in _defectos(adelantada))
     atrasada = _con(0, estado="pendiente")
-    assert any(
-        "PA-R02-01: dice «pendiente»" in d
-        for d in defectos(atrasada, _PRUEBAS, _EVALUACIONES, _ENTREGADAS)
-    )
+    assert any("PA-R02-01: dice «pendiente»" in d for d in _defectos(atrasada))
 
 
 def test_caza_piezas_que_no_cuadran_con_las_de_sus_pruebas() -> None:
     filas = _con(0, piezas=frozenset({"B", "G"}), estado="pendiente")
-    assert any(
-        "PA-R02-01: dice piezas" in d for d in defectos(filas, _PRUEBAS, _EVALUACIONES, _ENTREGADAS)
-    )
+    assert any("PA-R02-01: dice piezas" in d for d in _defectos(filas))
 
 
 def test_caza_una_cobertura_parcial_sin_motivo_o_sin_evaluacion() -> None:
     sin_motivo = _con(1, motivo=_VACIO)
-    assert any("su motivo" in d for d in defectos(sin_motivo, _PRUEBAS, _EVALUACIONES, _ENTREGADAS))
+    assert any("su motivo" in d for d in _defectos(sin_motivo))
     sin_evaluacion = _con(1, evaluacion="E-R02-09")
-    assert any(
-        "no está en el documento" in d
-        for d in defectos(sin_evaluacion, _PRUEBAS, _EVALUACIONES, _ENTREGADAS)
-    )
+    assert any("no está en el documento" in d for d in _defectos(sin_evaluacion))
 
 
 def test_caza_un_hueco_en_la_numeracion() -> None:
     filas = _con(1, id="PA-R02-03")
-    assert any("sin huecos" in d for d in defectos(filas, _PRUEBAS, _EVALUACIONES, _ENTREGADAS))
+    assert any("las PA del inventario aprobado" in d for d in _defectos(filas))
 
 
 def test_caza_una_prueba_sin_pieza_y_una_evaluacion_huerfana() -> None:
     sin_pieza = {**_PRUEBAS, _P1: None}
-    assert any(
-        "no dice de qué pieza depende" in d
-        for d in defectos(_BUENA, sin_pieza, _EVALUACIONES, _ENTREGADAS)
-    )
+    assert any("no dice de qué pieza depende" in d for d in _defectos(_BUENA, sin_pieza))
     huerfana = _EVALUACIONES | {"E-R02-02"}
+    con_huerfana = Inventario(pruebas_por_pa=_INVENTARIO.pruebas_por_pa, evaluaciones=huerfana)
     assert any(
         "E-R02-02: ninguna fila la usa" in d
-        for d in defectos(_BUENA, _PRUEBAS, huerfana, _ENTREGADAS)
+        for d in _defectos(_BUENA, evaluaciones=huerfana, inventario=con_huerfana)
     )
+
+
+# --- Lo aprobado no se reduce, aunque tabla y pruebas se reduzcan a la vez ---
+
+
+def test_caza_que_se_quite_la_ultima_pa_junto_con_sus_pruebas() -> None:
+    """Hallazgo P2 de Codex en la ronda 1 sobre la PR #681."""
+    defectos_vistos = _defectos([_BUENA[0]], {_P1: "B"}, frozenset())
+
+    assert any("las PA del inventario aprobado" in d for d in defectos_vistos)
+    assert any("faltan ['E-R02-01']" in d for d in defectos_vistos)
+
+
+def test_caza_que_una_pa_pierda_una_de_sus_pruebas() -> None:
+    inventario = Inventario(
+        pruebas_por_pa={"PA-R02-01": 2, "PA-R02-02": 1}, evaluaciones=_EVALUACIONES
+    )
+
+    assert any(
+        "PA-R02-01: tiene 1 pruebas y el inventario aprobado pide 2" in d
+        for d in _defectos(_BUENA, inventario=inventario)
+    )
+
+
+def test_el_inventario_aprobado_suma_las_32_pruebas_y_las_cinco_evaluaciones() -> None:
+    assert len(INVENTARIO_APROBADO.pruebas_por_pa) == 18
+    assert sum(INVENTARIO_APROBADO.pruebas_por_pa.values()) == 32
+    assert len(INVENTARIO_APROBADO.evaluaciones) == 5

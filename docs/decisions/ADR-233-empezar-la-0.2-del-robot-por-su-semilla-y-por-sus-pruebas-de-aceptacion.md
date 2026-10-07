@@ -145,6 +145,10 @@ medir.
   `tests/acceptance/test_robot_0_2_trazabilidad.py` falla si nombra una prueba que no
   existe, si deja una sin fila, si las piezas de una fila no cuadran con las de sus
   pruebas o si dice «en verde» de una pieza que no ha entrado.
+- **El inventario aprobado no se reduce.** La comprobación guarda, aparte de la tabla y
+  de las pruebas, cuántas pruebas de máquina tiene como poco cada PA y qué evaluaciones
+  hay. Quitar una es retirar una prueba, que según `AGENTS.md` no hace una sesión sola:
+  se cambia ese inventario, a la vista de la revisión.
 
 ## Comprobación que la sostiene
 
@@ -187,3 +191,12 @@ medir.
 - ninguna: lo único que mordió, la prueba que fallaba por otra razón, se cortó antes del
   primer commit de las pruebas, y el arreglo vive en `pieza(...)`, que explica por qué en
   su propio texto. La versión siguiente copiará el conductor, con el arreglo dentro.
+
+## Revisión externa
+
+- **Ronda 1 de Codex, sobre `def8e06e`**: un P2, cierto. La comprobación de la tabla
+  deducía las PA esperadas del número de filas, así que quitar a la vez la PA-R02-18 y
+  sus dos pruebas pasaba sin ruido. Ahora compara con un inventario aprobado que vive en
+  la comprobación: 18 PA, cuántas pruebas pide cada una, 32 en total, y las cinco
+  evaluaciones. Visto en los dos sentidos sobre los ficheros de verdad: con la fila 18 y
+  sus pruebas quitadas, la comprobación vieja pasa y la nueva falla.
