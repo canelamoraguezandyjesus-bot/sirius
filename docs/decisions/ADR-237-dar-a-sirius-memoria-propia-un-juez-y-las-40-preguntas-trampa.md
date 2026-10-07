@@ -177,6 +177,15 @@ como el primer turno de una charla nueva.
     después del anterior, de la pieza D (ADR-236).
   - El conductor deja la charla en el Ollama de mentira tras elegir a ciegas, como
     producción: al reabrir, el modelo vivo es el ganador.
+- **Ronda 3, la última**, sobre `5cdafcdc`: un hallazgo cierto, que el revisor dice que
+  llega tarde sobre líneas de rondas anteriores, arreglado en un solo commit. Con eso
+  la PR se fusiona sin una cuarta, como fija ADR-233.
+  - **P2, cambiar de modelo a mitad de una respuesta mezclaba los dos.** Elegir a
+    ciegas mientras OpenAI contestaba dejaba cancelar, atribuir y resumir mirando el
+    modelo nuevo, mientras la respuesta seguía saliendo del de antes. Es la misma raíz
+    que las rondas 1 y 2 en el tiempo: una autoridad leída en un momento distinto del
+    que de verdad recibe la petición. Ahora cada respuesta guarda su modelo de
+    principio a fin, y cancelar llega a él (`src/sirius/application/send_message.py`).
 
 ## Consecuencias
 

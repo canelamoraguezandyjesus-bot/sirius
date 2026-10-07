@@ -187,6 +187,10 @@ class SendMessageUseCase:
         self._context_builder = context_builder
         self._conversation_repository = conversation_repository
         self._llm_provider = llm_provider
+        #: El modelo de cada respuesta en curso. Si la charla cambia de modelo a
+        #: mitad de una, esa respuesta sigue con el suyo de principio a fin: se
+        #: cancela, se atribuye y se resume con él (ronda 3 de Codex).
+        self._in_flight: dict[str, LLMProvider] = {}
 
     def set_llm_provider(self, llm_provider: LLMProvider) -> None:
         """Swap the active provider (e.g. after B2a onboarding validates a key).
@@ -223,6 +227,21 @@ class SendMessageUseCase:
         para pedir respuestas breves mientras se graba (#126).
         """
         operation_id = operation_id or str(uuid.uuid4())
+        provider = self._llm_provider
+        self._in_flight[operation_id] = provider
+        try:
+            return self._send(provider, user_text, operation_id, on_delta, extra_instructions)
+        finally:
+            self._in_flight.pop(operation_id, None)
+
+    def _send(
+        self,
+        provider: LLMProvider,
+        user_text: str,
+        operation_id: str,
+        on_delta: Callable[[str], None] | None,
+        extra_instructions: str,
+    ) -> SendMessageResult:
         context = self._context_builder.build(user_text)
 
         conversation = self._conversation_repository.get_or_create_main_conversation()
@@ -256,7 +275,7 @@ class SendMessageUseCase:
         final_text = ""
         memory_suggestion: str | None = None
 
-        for event in self._llm_provider.stream_response(request):
+        for event in provider.stream_response(request):
             if isinstance(event, LLMCompleted):
                 status = MessageStatus.COMPLETED
                 final_text = event.text
@@ -286,12 +305,12 @@ class SendMessageUseCase:
         )
         if status is MessageStatus.COMPLETED:
             if self._reply_marks is not None:
-                model = getattr(self._llm_provider, "model_name", None)
+                model = getattr(provider, "model_name", None)
                 self._reply_marks.record_model(
                     sirius_message.id, model if isinstance(model, str) else None
                 )
             if self._summary_service is not None:
-                self._summary_service.maybe_summarize(conversation.id, self._llm_provider)
+                self._summary_service.maybe_summarize(conversation.id, provider)
 
         return SendMessageResult(
             outcome=status,
@@ -303,8 +322,12 @@ class SendMessageUseCase:
         )
 
     def cancel(self, operation_id: str) -> None:
-        """Request cooperative cancellation of an in-flight operation. Idempotent."""
-        self._llm_provider.cancel(operation_id)
+        """Request cooperative cancellation of an in-flight operation. Idempotent.
+
+        Va al modelo que está dando esa respuesta, aunque la charla ya haya cambiado
+        de modelo; si no hay respuesta en curso con ese id, al modelo de ahora.
+        """
+        self._in_flight.get(operation_id, self._llm_provider).cancel(operation_id)
 
     def _mode_block(self, conversation_id: int, user_text: str) -> str:
         """Aplica la orden de modo del mensaje, si la hay, y devuelve lo que toca añadir.
