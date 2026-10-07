@@ -19,6 +19,7 @@ dependencies = [
   "cryptography>=45",
   "argon2-cffi>=25",
   "pyyaml>=6.0",
+  "sqlite-vec>=0.1.6",
 ]
 
 [project.scripts]
@@ -132,6 +133,11 @@ exclude = ["migrations/versions"]
 # para que el guardian de `tests/` pueda importarlo condicionalmente sin que
 # mypy exija unos stubs de algo que a proposito no esta instalado.
 module = ["PySide6.*", "pytestqt.*", "gpt_researcher.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# sqlite-vec (ADR-238) no publica tipos: solo se usa su `load`, en un sitio.
+module = ["sqlite_vec"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

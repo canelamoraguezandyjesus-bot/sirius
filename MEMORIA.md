@@ -26,7 +26,7 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **231**.
+- Decisiones (ADR): **232**.
 - Bloques del motor: 17 cerrado, 3 fuera_de_alcance.
 - Defectos registrados: 2 abierto, 83 cerrado.
 - Ideas aparcadas o descartadas: 12 aparcada, 3 descartada, 2 promovida.
@@ -79,6 +79,7 @@ huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| [238](docs/decisions/ADR-238-buscar-los-recuerdos-por-significado-dentro-de-sirius.db-y-sacar-a-ollama-de-cada-respuesta.md) | 2026-10-07 | APROBADO | Buscar los recuerdos por significado dentro de sirius.db y sacar a Ollama de cada respuesta | Se adopta la opción 2. |
 | [237](docs/decisions/ADR-237-dar-a-sirius-memoria-propia-un-juez-y-las-40-preguntas-trampa.md) | 2026-10-07 | APROBADO | Dar a Sirius memoria propia, un juez y las 40 preguntas trampa | Se adopta la opción 2 para la memoria propia, y las preguntas trampa se contestan aparte, como el primer turno de una charla nueva. |
 | [236](docs/decisions/ADR-236-dar-a-la-charla-de-sirius-sus-modos-su-recordatorio-su-resumen-y-los-dos-botones.md) | 2026-10-07 | APROBADO | Dar a la charla de Sirius sus modos, su recordatorio, su resumen y los dos botones | Se adopta la opción 2, y el resumen se hace al acabar el turno que lo dispara. |
 | [235](docs/decisions/ADR-235-dar-a-sirius-la-semilla-del-robot-hecha-con-las-marcas-y-las-palabras-del-propietario.md) | 2026-10-07 | APROBADO | Dar a Sirius la semilla del robot hecha con las marcas y las palabras del propietario | Se adopta la opción 2. |
@@ -350,6 +351,7 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 | `pieza-correcta-a-la-que-no-llama-quien-la-necesita` | 1 | sí | 197 |
 | `plan-que-hay-que-terminar-de-una-sentada` | 1 | sí | 176 |
 | `pregunta-al-propietario-que-nadie-vuelve-a-poner-delante` | 1 | no en todas | 198 |
+| `prueba-que-no-puede-ver-lo-que-vigila` | 1 | sí | 238 |
 | `registro-sin-decir-quien-lo-hizo` | 1 | sí | 230 |
 | `regla-nueva-sin-pasarla-por-los-casos-vivos` | 1 | sí | 231 |
 | `tarea-periodica-sin-reloj` | 1 | no en todas | 201 |
@@ -489,6 +491,10 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 ### `pregunta-al-propietario-que-nadie-vuelve-a-poner-delante`
 
 - **ADR-198** — una incidencia formula una pregunta que solo el (sin prueba que lo haga cumplir: ninguna prueba: nada en este repositorio distingue una).
+
+### `prueba-que-no-puede-ver-lo-que-vigila`
+
+- **ADR-238** — una prueba de «no se hace X» que pasa con X puesto, porque su (lo hace cumplir `tests/acceptance/test_robot_0_2_memoria.py`).
 
 ### `registro-sin-decir-quien-lo-hizo`
 

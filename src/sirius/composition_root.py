@@ -43,14 +43,16 @@ from sirius.adapters.llm.ollama_chat import (
     OllamaNotAvailableError,
     list_installed_models,
 )
+from sirius.adapters.llm.ollama_embeddings import (
+    DEFAULT_EMBEDDING_MODEL,
+    QUERY_TIMEOUT,
+    OllamaEmbedder,
+)
 from sirius.adapters.llm.openai_credential_validator import OpenAICredentialValidator
 from sirius.adapters.llm.openai_responses import OpenAIResponsesProvider
 from sirius.adapters.llm.token_counter import CharacterHeuristicTokenCounter
 from sirius.adapters.llm.unconfigured import UnconfiguredLLMProvider
-from sirius.adapters.ollama_category_classifier import OllamaCategoryClassifierAdapter
 from sirius.adapters.ollama_criticality_classifier import OllamaCriticalityClassifierAdapter
-from sirius.adapters.ollama_query_intent_classifier import OllamaQueryIntentClassifierAdapter
-from sirius.adapters.ollama_relevance_filter import OllamaRelevanceFilterAdapter
 from sirius.adapters.persistence.sqlite_conversation_repository import (
     build_sqlite_conversation_repository,
 )
@@ -68,6 +70,9 @@ from sirius.adapters.persistence.sqlite_llm_usage_repository import (
     SqliteLLMUsageRepository,
     build_sqlite_llm_usage_repository,
 )
+from sirius.adapters.persistence.sqlite_memory_embeddings import (
+    build_sqlite_memory_embedding_store,
+)
 from sirius.adapters.persistence.sqlite_memory_repository import build_sqlite_memory_repository
 from sirius.adapters.persistence.sqlite_memory_suggestion_repository import (
     build_sqlite_memory_suggestion_repository,
@@ -77,8 +82,6 @@ from sirius.adapters.persistence.sqlite_robot_conversation import (
     build_sqlite_robot_conversation_repository,
 )
 from sirius.adapters.persistence.sqlite_unit_of_work import build_sqlite_unit_of_work
-from sirius.adapters.persistence.staged_engine_candidate import candidato as staged_engine_candidato
-from sirius.adapters.persistence.staged_engine_port import build_staged_engine_port
 from sirius.adapters.secrets.keyring_store import build_keyring_secret_store
 from sirius.application.api_key_settings import ApiKeySettingsUseCase
 from sirius.application.approve_decision import ApproveDecisionUseCase
@@ -97,9 +100,9 @@ from sirius.application.export_structured import ExportStructuredUseCase
 from sirius.application.get_conversation_history import GetConversationHistoryUseCase
 from sirius.application.historical_projects import HistoricalProjectsUseCase
 from sirius.application.initial_project import InitialProjectUseCase
-from sirius.application.interpret_query_request import InterpreteDePeticion
 from sirius.application.knowledge_overview import GetKnowledgeOverviewUseCase
 from sirius.application.memory_origin import GetMemoryOriginUseCase
+from sirius.application.memory_search import MemoryEmbeddingService, MemorySearch
 from sirius.application.project_continuity import ProjectContinuityUseCase
 from sirius.application.project_lifecycle import ProjectLifecycleUseCase
 from sirius.application.propose_criticality import ProposeCriticalityUseCase
@@ -118,12 +121,10 @@ from sirius.application.robot_conversation import (
 )
 from sirius.application.save_manual_memory import SaveManualMemoryUseCase
 from sirius.application.send_message import SendMessageUseCase
-from sirius.application.set_category import SetCategoryUseCase
 from sirius.application.set_criticality import SetCriticalityUseCase
 from sirius.application.studio_capture import StudioCaptureUseCase
 from sirius.application.studio_voice import StudioVoiceUseCase, VoiceSettings
 from sirius.application.supersede_decision import SupersedeDecisionUseCase
-from sirius.application.tag_category import TagCategoryUseCase
 from sirius.application.trick_questions import TrickQuestionsUseCase
 from sirius.application.validate_and_save_api_key import ValidateAndSaveApiKeyUseCase
 from sirius.application.validate_backup import ValidateBackupUseCase
@@ -137,13 +138,13 @@ from sirius.config.llm_provider_settings import (
     resolve_openai_provider_settings,
     resolve_provider_kind,
 )
-from sirius.config.memory_gates import puertas_de_memoria
 from sirius.config.settings import load_settings, save_settings
 from sirius.domain.blind_test import BlindTestError
 from sirius.domain.capture import build_scene_registry
 from sirius.domain.robot_seed import ROBOT_SEED_REMINDER
 from sirius.infrastructure.logging import get_logger
 from sirius.ports.audio_playback import AudioPlayback
+from sirius.ports.embeddings import TextEmbedder
 from sirius.ports.llm import LLMProvider
 from sirius.ports.robot_conversation import ConversationSummarizer, ReplyJudge
 from sirius.ports.secrets import SecretStore
@@ -162,6 +163,10 @@ STUDIO_VOICE_SETTING = "model_studio_voice"
 # puerto/adaptador, que reciben el vocabulario y el modelo como parámetros
 # explícitos): en cuanto exista un vocabulario real de categoría, sustituir
 # esta constante es el único cambio que M8/M9/M10 necesitan.
+#
+# Desde ADR-238 (pieza F de ADR-233) la charla no usa ni este vocabulario ni los
+# de abajo, ni el filtro de relevancia, ni las puertas viejas: los leen solo las
+# mediciones del banco de 47 casos, que se retira aparte.
 _CATEGORY_VOCABULARY: frozenset[str] = frozenset(
     {"trabajo", "personal", "salud", "finanzas", "proyecto", "aprendizaje", "otros"}
 )
@@ -234,6 +239,18 @@ def _ollama_model(settings: Mapping[str, Any]) -> str:
     return _DEFAULT_OLLAMA_MODEL
 
 
+EMBEDDING_MODEL_SETTING = "ollama_embedding_model"
+"""Dónde dicen los ajustes qué modelo de huellas usar (ADR-238)."""
+
+
+def embedding_model(settings: Mapping[str, Any]) -> str:
+    """El modelo de huellas de Ollama: el de los ajustes, o ``qwen3-embedding:0.6b``."""
+    value = settings.get(EMBEDDING_MODEL_SETTING)
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return DEFAULT_EMBEDDING_MODEL
+
+
 def save_studio_voice(voice: str) -> None:
     """Guarda la voz sin tocar el resto de la configuración."""
     settings = dict(load_settings())
@@ -277,6 +294,11 @@ class ConversationDependencies:
     juez de cada respuesta, que la ventana enseña cuando baja, y las 40
     preguntas trampa que el propietario lee y marca.
 
+    ``memory_embedding_service`` es de la pieza F (ADR-238): calcula en segundo
+    plano las huellas de los recuerdos que no la tienen; la ventana lo lanza al
+    abrirse y al guardar uno. ``rank_relevant_knowledge_use_case`` es la
+    búsqueda de recuerdos que usa cada turno.
+
     ``propose_criticality_use_case`` (M21a, ADR-130) is likewise wired but not
     yet called from anywhere: the interface that shows a proposal and lets
     the user confirm or correct it is M21b, a later, separate cut. Wiring it
@@ -308,9 +330,6 @@ class ConversationDependencies:
     propose_memory_suggestion_use_case: ProposeMemorySuggestionUseCase
     confirm_memory_suggestion_use_case: ConfirmMemorySuggestionUseCase
     reject_memory_suggestion_use_case: RejectMemorySuggestionUseCase
-    tag_category_use_case: TagCategoryUseCase
-    set_category_use_case: SetCategoryUseCase
-    category_vocabulary: frozenset[str]
     propose_criticality_use_case: ProposeCriticalityUseCase
     set_criticality_use_case: SetCriticalityUseCase
     create_backup_use_case: CreateBackupUseCase
@@ -327,6 +346,8 @@ class ConversationDependencies:
     conversation_mode_use_case: ConversationModeUseCase
     reply_judge_service: ReplyJudgeService
     trick_questions_use_case: TrickQuestionsUseCase
+    memory_embedding_service: MemoryEmbeddingService
+    rank_relevant_knowledge_use_case: RankRelevantKnowledgeUseCase
 
 
 def chat_goes_through_ollama() -> bool:
@@ -587,12 +608,16 @@ def build_conversation_dependencies(
     ollama_transport: httpx.BaseTransport | None = None,
     conversation_summarizer: ConversationSummarizer | None = None,
     reply_judge: ReplyJudge | None = None,
+    text_embedder: TextEmbedder | None = None,
 ) -> ConversationDependencies:
     """Build repositories, the secret store, and use cases wired to SQLite.
 
     ``secret_store`` defaults to the real ``KeyringSecretStore`` (production);
     tests inject a ``FakeSecretStore`` instead so nothing ever touches the
     real Windows Credential Manager.
+
+    ``text_embedder`` da las huellas de la búsqueda por significado; sin él, el
+    modelo de huellas del Ollama de este ordenador (ADR-238).
     """
     secret_store = secret_store or build_keyring_secret_store()
     conversation_repository = build_sqlite_conversation_repository(database_path)
@@ -614,60 +639,35 @@ def build_conversation_dependencies(
     # ConfirmMemorySuggestionUseCase and RejectMemorySuggestionUseCase (M5).
     unit_of_work = build_sqlite_unit_of_work(database_path)
 
-    # Incidencia #457/ADR-109: el motor por etapas queda cableado detrás de
-    # la misma puerta cerrada por defecto (category_matching_enabled, M9/
-    # M11) que ya gobierna la categoría — construirlo aquí no cambia nada
-    # del comportamiento de hoy, porque la puerta sigue cerrada hasta que
-    # M11 (incidencia #453, bloqueada) la abra desde ajustes persistidos.
-    staged_engine_port = build_staged_engine_port(database_path)
-    # D7 punto 6 / §6.3: puerta de activación contra datos reales, cerrada
-    # por defecto. Con las claves ausentes o en False, RankRelevantKnowledgeUseCase
-    # y ContextBuilder se construyen con exactamente los mismos parámetros
-    # que sus valores por defecto ya producen — ningún camino de código
-    # nuevo para el estado cerrado. M11 cablea el parámetro; abrirlo en
-    # settings.json no es trabajo suyo (§6.3, docs/evolution/STATUS.md, D7).
-    #
-    # Incidencia #603 (ADR-185): la puerta única se lee ahora como TRES
-    # interruptores —motor por etapas, petición propia, filtro de relevancia—
-    # para poder abrirla por pasos observables y atribuir a una pieza lo que
-    # hoy solo se puede atribuir al paquete entero (RNF-003: 438-780 ms P95
-    # con las siete cosas abiertas a la vez). `category_matching_enabled`
-    # conserva intacto su significado de §6.3: enciende las tres. Aquí no se
-    # abre ninguna; la lectura vive en una función pura y probada en tabla.
+    # Pieza F de ADR-233 (ADR-238): cada turno busca los recuerdos por palabras y
+    # por significado, dentro de sirius.db, y carga solo lo que encuentra. Las
+    # puertas viejas (motor por etapas, petición propia, filtro de relevancia) ya
+    # no se leen: abra quien las abra, ningún turno pide a Ollama filtrar ni
+    # clasificar. A Ollama solo va la huella de la pregunta, por /api/embed.
     persisted_settings = load_settings()
-    puertas = puertas_de_memoria(persisted_settings)
     ollama_model = _ollama_model(persisted_settings)
+    memory_embedding_store = build_sqlite_memory_embedding_store(database_path)
+    owned_embedders: list[OllamaEmbedder] = []
+    query_embedder: TextEmbedder | None = None
+    if text_embedder is None:
+        # El mismo modelo dos veces: con paciencia para los recuerdos, en segundo
+        # plano, y con poca para la pregunta, que no puede dejar el turno esperando.
+        modelo_de_huellas = embedding_model(persisted_settings)
+        owned_embedders = [
+            OllamaEmbedder(modelo_de_huellas, transport=ollama_transport),
+            OllamaEmbedder(modelo_de_huellas, transport=ollama_transport, timeout=QUERY_TIMEOUT),
+        ]
+        text_embedder, query_embedder = owned_embedders
+    memory_embedding_service = MemoryEmbeddingService(
+        text_embedder, memory_embedding_store, query_embedder=query_embedder
+    )
     rank_relevant_knowledge_use_case = RankRelevantKnowledgeUseCase(
         memory_repository=memory_repository,
         decision_repository=decision_repository,
         project_repository=project_repository,
         knowledge_search_repository=knowledge_search_repository,
-        category_vocabulary=_CATEGORY_VOCABULARY if puertas.motor_por_etapas else frozenset(),
-        criticality_vocabulary=(
-            _CRITICALITY_VOCABULARY if puertas.motor_por_etapas else frozenset()
-        ),
-        category_matching_enabled=puertas.motor_por_etapas,
-        staged_engine_port=staged_engine_port,
-        staged_engine_candidate=staged_engine_candidato(),
-        # ADR-164 (palanca 1 de ADR-148): la pregunta se convierte en una
-        # `Peticion` propia en vez de en la política uniforme de antes. Tiene
-        # ya su propio interruptor (`query_intent_enabled`), pero sigue
-        # exigiendo el motor por etapas, porque sin él `_rank_via_staged_engine`
-        # no se ejecuta siquiera y `_peticion` no llega a llamarse: un
-        # interruptor encendido pero inerte prometería una observación que no
-        # existe, y por eso `puertas_de_memoria` no lo enciende a solas. Con la
-        # petición propia apagada, el intérprete se construye sin clasificador
-        # —es decir, emitiendo la política uniforme— para que la puerta cerrada
-        # no dependa de que este parámetro sea `None`. El adaptador es el
-        # TERCER cliente del mismo servicio Ollama local (D7 punto 5), nunca un
-        # segundo componente de red ni el proveedor de pago: la pregunta del
-        # usuario no sale de la máquina para decidir cómo buscar en su memoria.
-        query_request_interpreter=InterpreteDePeticion(
-            intent_classifier=(
-                OllamaQueryIntentClassifierAdapter(ollama_model)
-                if puertas.peticion_propia
-                else None
-            )
+        memory_search=MemorySearch(
+            knowledge_search_repository, memory_repository, memory_embedding_service
         ),
     )
     context_builder = ContextBuilder(
@@ -679,17 +679,6 @@ def build_conversation_dependencies(
         rank_relevant_knowledge_use_case=rank_relevant_knowledge_use_case,
         event_repository=event_repository,
         token_counter=CharacterHeuristicTokenCounter(),
-        relevance_filter_port=(
-            OllamaRelevanceFilterAdapter(
-                ollama_model, timeout_seconds=_RELEVANCE_FILTER_TIMEOUT_SECONDS
-            )
-            if puertas.filtro_de_relevancia
-            else None
-        ),
-        max_criticality_category=(
-            _MAX_CRITICALITY_CATEGORY if puertas.filtro_de_relevancia else None
-        ),
-        category_matching_enabled=puertas.filtro_de_relevancia,
         summary_repository=robot_conversation_repository,
         reply_marks=robot_conversation_repository,
     )
@@ -748,18 +737,6 @@ def build_conversation_dependencies(
     backup_service = build_sqlite_backup_service(database_path, backups_dir)
     export_service = build_filesystem_export_service(build_system_clock())
 
-    # D7 (SIRIUS-ARQ-0.2 §6.1): the only two use cases allowed to touch
-    # category/category_locked. Built on the plain repositories, never
-    # unit_of_work — writing a classification is neither "event + memory"
-    # nor "event + decision" (§0.1 point 4), and TagCategoryUseCase's
-    # classifier call must never run inside an open database transaction.
-    tag_category_use_case = TagCategoryUseCase(
-        memory_repository,
-        decision_repository,
-        OllamaCategoryClassifierAdapter(ollama_model, _CATEGORY_VOCABULARY),
-    )
-    set_category_use_case = SetCategoryUseCase(memory_repository, decision_repository)
-
     # M21a (ADR-130): proposes criticality, never writes it. The only use
     # case allowed to write criticality remains set_criticality_use_case
     # below (M18b, ADR-126), always manual and unconditional.
@@ -781,13 +758,15 @@ def build_conversation_dependencies(
         knowledge_search_repository,
         llm_usage_repository,
         unit_of_work,
-        staged_engine_port,
         robot_conversation_repository,
+        memory_embedding_store,
     )
 
     def close_database_connections() -> None:
         for repository in repositories:
             repository.close()
+        for embedder in owned_embedders:
+            embedder.close()
 
     def activate_configured_llm_provider() -> None:
         """Select "openai" and rebuild the provider from the now-saved key.
@@ -877,9 +856,6 @@ def build_conversation_dependencies(
         propose_memory_suggestion_use_case=ProposeMemorySuggestionUseCase(unit_of_work),
         confirm_memory_suggestion_use_case=ConfirmMemorySuggestionUseCase(unit_of_work),
         reject_memory_suggestion_use_case=RejectMemorySuggestionUseCase(unit_of_work),
-        tag_category_use_case=tag_category_use_case,
-        set_category_use_case=set_category_use_case,
-        category_vocabulary=_CATEGORY_VOCABULARY,
         propose_criticality_use_case=propose_criticality_use_case,
         set_criticality_use_case=set_criticality_use_case,
         create_backup_use_case=CreateBackupUseCase(backup_service),
@@ -904,4 +880,6 @@ def build_conversation_dependencies(
         ),
         reply_judge_service=reply_judge_service,
         trick_questions_use_case=trick_questions_use_case,
+        memory_embedding_service=memory_embedding_service,
+        rank_relevant_knowledge_use_case=rank_relevant_knowledge_use_case,
     )

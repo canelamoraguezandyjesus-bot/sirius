@@ -32,3 +32,16 @@ class KnowledgeSearchRepository(Protocol):
         repository's.
         """
         ...
+
+
+class MemoryKeywordSearch(Protocol):
+    """La búsqueda por palabras de los recuerdos vigentes, la mejor antes (pieza F, ADR-238).
+
+    A diferencia de ``search_knowledge``, ordena por lo bien que casan las palabras
+    y se queda con las ``limit`` primeras: así cada turno carga solo esos recuerdos
+    y no todos los que hay.
+    """
+
+    def search_memory_ids(self, query_text: str, limit: int) -> list[int]:
+        """Los ids de los recuerdos vigentes que casan con ``query_text``, el mejor antes."""
+        ...

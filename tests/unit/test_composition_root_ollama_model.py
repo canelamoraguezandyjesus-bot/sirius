@@ -1,23 +1,26 @@
-"""La clave ``ollama_model`` de ``settings.json``: un solo modelo local, leído
-una sola vez, para el filtro de relevancia y para el clasificador de categoría.
+"""La clave ``ollama_model`` de ``settings.json``: el modelo local de lo que aún
+clasifica con Ollama fuera de la charla.
 
 Por qué existe: el adaptador de producción llamaba a Ollama con ``llama3.2``
 mientras el laboratorio que midió 29/47 usaba ``qwen3:4b-instruct``
 (``docs/audits/evidencia-experimento-filtro-fiel-al-laboratorio.md``, seis
-diferencias). El modelo deja de ser una constante y pasa a ser configurable,
-con el del laboratorio por defecto. El comentario de ``_RELEVANCE_FILTER_MODEL``
-exige que filtro y clasificador usen el mismo modelo; por eso las pruebas
-comprueban que los dos reciben exactamente el mismo valor, no cada uno el suyo.
+diferencias). El modelo dejó de ser una constante y pasó a ser configurable,
+con el del laboratorio por defecto.
 
-Misma técnica que ``test_composition_root_relevance_gate.py``: se sustituyen
-solo los dos adaptadores de Ollama por registradores que nunca tocan la red y
-se deja que ``build_conversation_dependencies`` recorra su construcción real.
+Desde ADR-238 (pieza F de ADR-233) el filtro de relevancia y el clasificador de
+categoría ya no se montan: el único que lee la clave es el que propone la
+criticidad de un recuerdo cuando el propietario lo selecciona.
+
+Se sustituye solo ese adaptador por un registrador que nunca toca la red y se
+deja que ``build_conversation_dependencies`` recorra su construcción real.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Any, ClassVar
+
+import pytest
 
 import sirius.composition_root as composition_root
 from sirius.adapters.secrets.fake import FakeSecretStore
@@ -29,83 +32,41 @@ from sirius.composition_root import (
 from sirius.config.settings import save_settings
 
 
-class _RecordingRelevanceFilterAdapter:
+class _RecordingCriticalityClassifierAdapter:
     captured: ClassVar[list[str]] = []
 
-    def __init__(self, model: str, *, timeout_seconds: float) -> None:
+    def __init__(self, model: str) -> None:
         type(self).captured.append(model)
 
-    def filter_candidates(
-        self, query_text: str, candidates: Any, *, cupo: int | None = None
-    ) -> Any:  # pragma: no cover
-        return candidates
-
-
-class _RecordingCategoryClassifierAdapter:
-    captured: ClassVar[list[str]] = []
-
-    def __init__(self, model: str, vocabulary: Any) -> None:
-        type(self).captured.append(model)
-
-    def classify(self, *args: Any, **kwargs: Any) -> Any:  # pragma: no cover
+    def propose(self, *args: Any, **kwargs: Any) -> Any:  # pragma: no cover
         return None
 
 
-def _patch_recorders(monkeypatch: Any) -> None:
-    _RecordingRelevanceFilterAdapter.captured = []
-    _RecordingCategoryClassifierAdapter.captured = []
+@pytest.mark.parametrize(
+    ("ajustes", "esperado"),
+    [
+        ({}, _DEFAULT_OLLAMA_MODEL),
+        ({"category_matching_enabled": True}, _DEFAULT_OLLAMA_MODEL),
+        ({"ollama_model": "llama3.2"}, "llama3.2"),
+    ],
+)
+def test_el_clasificador_de_criticidad_recibe_el_modelo_de_la_clave(
+    ajustes: dict[str, Any], esperado: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _RecordingCriticalityClassifierAdapter.captured = []
     monkeypatch.setattr(
-        composition_root, "OllamaRelevanceFilterAdapter", _RecordingRelevanceFilterAdapter
+        composition_root,
+        "OllamaCriticalityClassifierAdapter",
+        _RecordingCriticalityClassifierAdapter,
     )
-    monkeypatch.setattr(
-        composition_root, "OllamaCategoryClassifierAdapter", _RecordingCategoryClassifierAdapter
-    )
+    save_settings(ajustes)
 
-
-def _build(tmp_path: Path) -> None:
     build_conversation_dependencies(
         tmp_path / "sirius.db", tmp_path / "backups", secret_store=FakeSecretStore()
     )
 
-
-def test_sin_clave_los_dos_consumidores_usan_el_modelo_del_laboratorio(
-    tmp_path: Path, monkeypatch: Any
-) -> None:
-    _patch_recorders(monkeypatch)
-    save_settings({"category_matching_enabled": True})
-
-    _build(tmp_path)
-
     assert _DEFAULT_OLLAMA_MODEL == "qwen3:4b-instruct"
-    assert _RecordingRelevanceFilterAdapter.captured == [_DEFAULT_OLLAMA_MODEL]
-    assert _RecordingCategoryClassifierAdapter.captured == [_DEFAULT_OLLAMA_MODEL]
-
-
-def test_con_clave_los_dos_consumidores_reciben_el_mismo_modelo_configurado(
-    tmp_path: Path, monkeypatch: Any
-) -> None:
-    _patch_recorders(monkeypatch)
-    save_settings({"category_matching_enabled": True, "ollama_model": "llama3.2"})
-
-    _build(tmp_path)
-
-    assert _RecordingRelevanceFilterAdapter.captured == ["llama3.2"]
-    assert _RecordingCategoryClassifierAdapter.captured == ["llama3.2"]
-
-
-def test_con_la_puerta_cerrada_el_clasificador_sigue_leyendo_la_clave(
-    tmp_path: Path, monkeypatch: Any
-) -> None:
-    """La puerta cerrada no construye el filtro (ver el test de la puerta),
-    pero el clasificador de categoría existe siempre (D7) y debe leer la
-    misma clave: no hay un segundo camino con el modelo antiguo."""
-    _patch_recorders(monkeypatch)
-    save_settings({"ollama_model": "otro-modelo"})
-
-    _build(tmp_path)
-
-    assert _RecordingRelevanceFilterAdapter.captured == []
-    assert _RecordingCategoryClassifierAdapter.captured == ["otro-modelo"]
+    assert _RecordingCriticalityClassifierAdapter.captured == [esperado]
 
 
 def test_valores_vacios_o_de_otro_tipo_caen_al_modelo_por_defecto() -> None:

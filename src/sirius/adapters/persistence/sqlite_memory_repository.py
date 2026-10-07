@@ -213,6 +213,17 @@ class SqliteMemoryRepository:
                 raise ValueError(msg)
             return _load_memory(session, model)
 
+    def get_memories(self, memory_ids: Sequence[int]) -> list[Memory]:
+        """Pieza F (ADR-238): los que trae la búsqueda, en dos consultas y no en una cada uno."""
+        if not memory_ids:
+            return []
+        with self._scope() as session:
+            models: list[MemoryModel] = []
+            for batch in chunked(list(memory_ids), sqlite_variable_limit(session)):
+                models.extend(session.scalars(select(MemoryModel).where(MemoryModel.id.in_(batch))))
+            by_id = {memory.id: memory for memory in _load_memories(session, models)}
+            return [by_id[memory_id] for memory_id in memory_ids if memory_id in by_id]
+
     def list_current_memories(self) -> list[Memory]:
         with self._scope() as session:
             models = session.scalars(

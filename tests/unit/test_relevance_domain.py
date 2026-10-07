@@ -226,6 +226,43 @@ def test_an_fts_match_outranks_a_non_match() -> None:
     assert result == (matching, non_matching)
 
 
+# --- Pieza F (ADR-238): el significado también trae un recuerdo. ---
+
+
+def test_a_memory_found_only_by_meaning_is_related() -> None:
+    by_meaning = RankedKnowledge(
+        kind=KnowledgeKind.MEMORY,
+        item=_memory(1),
+        subject_matches_query=False,
+        project_matches_active=False,
+        fts_match=False,
+        semantic_match=True,
+        semantic_similarity=0.6,
+    )
+    unrelated = _ranked_memory(_memory(2))
+
+    assert rank_relevant_knowledge([unrelated, by_meaning]) == (by_meaning,)
+
+
+def test_among_related_memories_the_closest_in_meaning_comes_first() -> None:
+    def found(memory_id: int, similarity: float, *, by_words: bool = False) -> RankedKnowledge:
+        return RankedKnowledge(
+            kind=KnowledgeKind.MEMORY,
+            item=_memory(memory_id),
+            subject_matches_query=False,
+            project_matches_active=False,
+            fts_match=by_words,
+            semantic_match=similarity > 0,
+            semantic_similarity=similarity,
+        )
+
+    close = found(1, 0.9)
+    words_only = found(2, 0.0, by_words=True)
+    far = found(3, 0.55)
+
+    assert rank_relevant_knowledge([words_only, far, close]) == (close, far, words_only)
+
+
 # --- Criterio 4: más reciente por encima de más antiguo (resto empatado). ---
 
 

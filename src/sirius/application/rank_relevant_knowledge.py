@@ -58,6 +58,7 @@ from sirius.application.interpret_query_request import (
     InterpreteDePeticion,
     PermisoDeRecuperacion,
 )
+from sirius.application.memory_search import MemorySearch
 from sirius.domain.criticality import Criticality
 from sirius.domain.relevance import (
     KnowledgeKind,
@@ -203,6 +204,7 @@ class RankRelevantKnowledgeUseCase:
         staged_engine_port: PuertoDeRecuperacion | None = None,
         staged_engine_candidate: SenalesDeCandidato | None = None,
         query_request_interpreter: InterpreteDePeticion | None = None,
+        memory_search: MemorySearch | None = None,
     ) -> None:
         self._memory_repository = memory_repository
         self._decision_repository = decision_repository
@@ -223,6 +225,10 @@ class RankRelevantKnowledgeUseCase:
         #: de siempre (``_peticion_ordinaria``), así que cablearlo es lo
         #: único que cambia el comportamiento, y solo donde se cablea.
         self._query_request_interpreter = query_request_interpreter
+        #: Pieza F de ADR-233 (ADR-238): con ella, los recuerdos los trae la
+        #: búsqueda por palabras y por significado, y se cargan solo los que
+        #: encuentra. Sin ella, el filtro-y-orden de siempre.
+        self._memory_search = memory_search
 
     def rank(self, query_text: str) -> tuple[RankedKnowledge, ...]:
         """Return the memories/decisions related to ``query_text``, ordered
@@ -700,19 +706,23 @@ class RankRelevantKnowledgeUseCase:
                 category, query_text, self._category_vocabulary
             )
 
-        candidates: list[RankedKnowledge] = [
-            RankedKnowledge(
-                kind=KnowledgeKind.MEMORY,
-                item=memory,
-                subject_matches_query=False,
-                project_matches_active=(
-                    active_project_id is not None and memory.project_id == active_project_id
-                ),
-                fts_match=(KnowledgeKind.MEMORY, memory.id) in fts_hits,
-                category_match=category_match(memory.category),
-            )
-            for memory in self._memory_repository.list_current_memories()
-        ]
+        candidates: list[RankedKnowledge] = (
+            self._found_memories(query_text, active_project_id)
+            if self._memory_search is not None
+            else [
+                RankedKnowledge(
+                    kind=KnowledgeKind.MEMORY,
+                    item=memory,
+                    subject_matches_query=False,
+                    project_matches_active=(
+                        active_project_id is not None and memory.project_id == active_project_id
+                    ),
+                    fts_match=(KnowledgeKind.MEMORY, memory.id) in fts_hits,
+                    category_match=category_match(memory.category),
+                )
+                for memory in self._memory_repository.list_current_memories()
+            ]
+        )
         candidates.extend(
             RankedKnowledge(
                 kind=KnowledgeKind.DECISION,
@@ -728,6 +738,29 @@ class RankRelevantKnowledgeUseCase:
         )
 
         return rank_relevant_knowledge(candidates)
+
+    def _found_memories(
+        self, query_text: str, active_project_id: int | None
+    ) -> list[RankedKnowledge]:
+        """Pieza F (ADR-238): solo los recuerdos que encuentra la búsqueda.
+
+        Son pocos, como mucho dos veces ``SEARCH_LIMIT``, en vez de todos los vigentes.
+        """
+        assert self._memory_search is not None
+        return [
+            RankedKnowledge(
+                kind=KnowledgeKind.MEMORY,
+                item=found.memory,
+                subject_matches_query=False,
+                project_matches_active=(
+                    active_project_id is not None and found.memory.project_id == active_project_id
+                ),
+                fts_match=found.by_words,
+                semantic_match=found.similarity is not None,
+                semantic_similarity=found.similarity or 0.0,
+            )
+            for found in self._memory_search.find(query_text)
+        ]
 
 
 def _intercalar_por_categoria(

@@ -53,6 +53,7 @@ from sirius.application.get_conversation_history import (
 from sirius.application.historical_projects import HistoricalProjectsUseCase
 from sirius.application.knowledge_overview import GetKnowledgeOverviewUseCase
 from sirius.application.memory_origin import GetMemoryOriginUseCase
+from sirius.application.memory_search import MemoryEmbeddingService
 from sirius.application.project_continuity import ProjectContinuityUseCase
 from sirius.application.project_errors import ProjectContinuityError
 from sirius.application.project_lifecycle import ProjectLifecycleUseCase
@@ -71,7 +72,6 @@ from sirius.application.robot_conversation import (
 )
 from sirius.application.save_manual_memory import SaveManualMemoryUseCase
 from sirius.application.send_message import SendMessageResult, SendMessageUseCase
-from sirius.application.set_category import SetCategoryUseCase
 from sirius.application.set_criticality import SetCriticalityUseCase
 from sirius.application.studio_brief import MODEL_STUDIO_BRIEF
 from sirius.application.studio_capture import CaptureFeedback, StudioCaptureUseCase
@@ -84,7 +84,6 @@ from sirius.application.studio_voice import (
     VoiceFailure,
 )
 from sirius.application.supersede_decision import SupersedeDecisionUseCase
-from sirius.application.tag_category import TagCategoryUseCase
 from sirius.application.trick_questions import TrickQuestionsUseCase
 from sirius.application.validate_backup import ValidateBackupUseCase
 from sirius.config.llm_provider_settings import (
@@ -118,6 +117,7 @@ from sirius.presentation.error_messages import failed_send_message
 from sirius.presentation.export_worker import ExportWorker
 from sirius.presentation.historical_projects_widget import HistoricalProjectsWidget
 from sirius.presentation.knowledge_widget import KnowledgeWidget
+from sirius.presentation.memory_embedding_worker import MemoryEmbeddingWorker
 from sirius.presentation.memory_suggestion_trigger import propose_suggestion_if_completed_with_one
 from sirius.presentation.message_view import MessageItemDelegate, MessageItemWidget
 from sirius.presentation.model_studio.settings_dialog import StudioSettingsDialog
@@ -245,6 +245,10 @@ class MainWindow(QMainWindow):
     #: juez escribe sus notas en sirius.db.
     judge_idle = Signal()
 
+    #: Las huellas de los recuerdos han acabado (pieza F de ADR-233): una
+    #: restauración espera a esta señal, porque se guardan en sirius.db.
+    embedding_idle = Signal()
+
     def __init__(
         self,
         send_message_use_case: SendMessageUseCase,
@@ -275,9 +279,6 @@ class MainWindow(QMainWindow):
         historical_projects_use_case: HistoricalProjectsUseCase,
         close_database_connections: Callable[[], None],
         *,
-        tag_category_use_case: TagCategoryUseCase | None = None,
-        set_category_use_case: SetCategoryUseCase | None = None,
-        category_vocabulary: frozenset[str] | None = None,
         propose_criticality_use_case: ProposeCriticalityUseCase | None = None,
         set_criticality_use_case: SetCriticalityUseCase | None = None,
         studio_voice_use_case: StudioVoiceUseCase | None = None,
@@ -288,6 +289,7 @@ class MainWindow(QMainWindow):
         conversation_mode_use_case: ConversationModeUseCase | None = None,
         reply_judge_service: ReplyJudgeService | None = None,
         trick_questions_use_case: TrickQuestionsUseCase | None = None,
+        memory_embedding_service: MemoryEmbeddingService | None = None,
         show_warning: Callable[[str, str], None] | None = None,
         show_information: Callable[[str, str], None] | None = None,
         prompt_multiline_with_default: Callable[[str, str, str], str | None] | None = None,
@@ -310,6 +312,11 @@ class MainWindow(QMainWindow):
         self._trick_questions_use_case = trick_questions_use_case
         self._active_judge_worker: ReplyJudgeWorker | None = None
         self._judge_again = False
+        # Pieza F de ADR-233: las huellas de los recuerdos para buscar por
+        # significado. Sin el servicio, la ventana es la de antes.
+        self._memory_embedding_service = memory_embedding_service
+        self._active_embedding_worker: MemoryEmbeddingWorker | None = None
+        self._embed_again = False
         self._send_message_use_case = send_message_use_case
         self._get_history_use_case = get_history_use_case
         self._get_budget_status_use_case = get_budget_status_use_case
@@ -336,9 +343,6 @@ class MainWindow(QMainWindow):
         self._restore_backup_use_case = restore_backup_use_case
         self._export_structured_use_case = export_structured_use_case
         self._historical_projects_use_case = historical_projects_use_case
-        self._tag_category_use_case = tag_category_use_case
-        self._set_category_use_case = set_category_use_case
-        self._category_vocabulary = category_vocabulary
         self._propose_criticality_use_case = propose_criticality_use_case
         self._set_criticality_use_case = set_criticality_use_case
         # Not a use case: the minimal SQLAlchemy-lifecycle mechanism a safe
@@ -1266,15 +1270,13 @@ class MainWindow(QMainWindow):
             self._project_continuity_use_case,
             self._confirm_memory_suggestion_use_case,
             self._reject_memory_suggestion_use_case,
-            tag_category_use_case=self._tag_category_use_case,
-            set_category_use_case=self._set_category_use_case,
-            category_vocabulary=self._category_vocabulary,
             propose_criticality_use_case=self._propose_criticality_use_case,
             set_criticality_use_case=self._set_criticality_use_case,
             thread_pool=self._thread_pool,
             show_warning=self._show_warning,
             show_information=self._show_information,
         )
+        self.knowledge_widget.memories_changed.connect(self._start_embedding)
 
         container = QWidget()
         layout = QVBoxLayout(container)
@@ -1342,6 +1344,7 @@ class MainWindow(QMainWindow):
         self._refresh_mode_indicator()
         self._refresh_judge_indicator()
         self._start_judge()
+        self._start_embedding(warm_up=True)
 
         for message in messages:
             self._append_message_item(
@@ -1510,6 +1513,10 @@ class MainWindow(QMainWindow):
             # Que el modelo local quede libre para la charla; sigue después.
             self._active_judge_worker.stop()
             self._judge_again = True
+        if self._active_embedding_worker is not None:
+            # Lo mismo con las huellas: el turno va antes y siguen después.
+            self._active_embedding_worker.stop()
+            self._embed_again = True
         self._is_sending = True
         self._active_operation_id = str(uuid.uuid4())
         self._active_send_text = text
@@ -1674,6 +1681,8 @@ class MainWindow(QMainWindow):
         self._refresh_mode_indicator()
         self._finish_sending()
         self._start_judge()
+        if self._embed_again:
+            self._start_embedding()
         # Después de _finish_sending, que es quien devuelve el estado a
         # PREPARADO: si se hablara antes, ese reajuste borraría SINTETIZANDO.
         self._speak_if_studio_is_open(result.sirius_message.content, result.sirius_message.status)
@@ -1757,10 +1766,7 @@ class MainWindow(QMainWindow):
     def _handle_project_completed(self) -> None:
         """RF-018: el proyecto activo acaba de completarse.
 
-        ``sirius.main`` puede tardar en sustituir esta ventana si un
-        ``CategoryTaggingWorker`` sigue en vuelo (ver el comentario CODEX-002
-        en su ``_on_project_completed``): espera a que termine antes de
-        mostrar la ventana siguiente y cerrar esta. Durante esa espera no
+        ``sirius.main`` sustituye esta ventana por la siguiente. Desde aquí no
         puede arrancar ningún envío, exportación ni copia/restauración —la
         ventana siguiente ya comparte los mismos repositorios que esta, así
         que una operación iniciada aquí seguiría corriendo sobre un proyecto
@@ -1808,6 +1814,8 @@ class MainWindow(QMainWindow):
         self.knowledge_widget.prepare_to_close()
         if self._active_judge_worker is not None:
             self._active_judge_worker.stop()
+        if self._active_embedding_worker is not None:
+            self._active_embedding_worker.stop()
         super().closeEvent(event)
 
     # --- Configuración ---------------------------------------------------
@@ -2396,20 +2404,19 @@ class MainWindow(QMainWindow):
         self._restore_when_knowledge_widget_idle(backup_path, password)
 
     def _restore_when_knowledge_widget_idle(self, backup_path: Path, password: str) -> None:
-        """CODEX-001: tanto un ``CategoryTaggingWorker`` como un
-        ``CriticalityProposalWorker`` en vuelo siguen usando los repositorios
-        (``TagCategoryUseCase.tag()``/``ProposeCriticalityUseCase.propose()``)
-        y podrían reabrir una conexión a sirius.db mientras se cierra o se
-        reemplaza el fichero. Espera a que ambos terminen, uno detrás del
-        otro, antes de cerrar las conexiones; no se toca el guardado ni la
-        propuesta, que siguen siendo asíncronos. ``set_external_busy(True)``
-        ya está activo desde ``_start_backup_operation()``, así que
-        ``KnowledgeWidget`` no arranca ningún worker nuevo mientras se
-        espera.
+        """CODEX-001: un ``CriticalityProposalWorker`` en vuelo sigue usando
+        los repositorios (``ProposeCriticalityUseCase.propose()``) y podría
+        reabrir una conexión a sirius.db mientras se cierra o se reemplaza el
+        fichero. Espera a que termine antes de cerrar las conexiones; no se
+        toca la propuesta, que sigue siendo asíncrona.
+        ``set_external_busy(True)`` ya está activo desde
+        ``_start_backup_operation()``, así que ``KnowledgeWidget`` no arranca
+        ningún worker nuevo mientras se espera.
 
-        El juez (pieza E de ADR-233) también escribe en sirius.db: se le pide
-        que pare, acaba la respuesta que está puntuando y la restauración sigue
-        después. Mientras dure, no vuelve a empezar."""
+        El juez (pieza E de ADR-233) y las huellas de los recuerdos (pieza F)
+        también escriben en sirius.db: se les pide que paren, acaban lo que
+        tienen entre manos y la restauración sigue después. Mientras dure, no
+        vuelven a empezar."""
         if self._active_judge_worker is not None:
             self._active_judge_worker.stop()
             self._judge_again = False
@@ -2424,13 +2431,15 @@ class MainWindow(QMainWindow):
             )
             return
 
-        if self.knowledge_widget.has_pending_category_tagging:
+        if self._active_embedding_worker is not None:
+            self._active_embedding_worker.stop()
+            self._embed_again = False
             self._set_backup_feedback(
                 self.restore_backup_status_label,
                 BACKUP_STATE_IN_PROGRESS,
-                "Esperando a que termine el etiquetado automático de categorías...",
+                "Esperando a que acaben las huellas de los recuerdos...",
             )
-            self.knowledge_widget.category_tagging_idle.connect(
+            self.embedding_idle.connect(
                 lambda: self._restore_when_knowledge_widget_idle(backup_path, password),
                 Qt.ConnectionType.SingleShotConnection,
             )
@@ -2743,6 +2752,35 @@ class MainWindow(QMainWindow):
             self._start_judge()
         if self._active_judge_worker is None:
             self.judge_idle.emit()
+
+    @property
+    def embedding_in_progress(self) -> bool:
+        """Si se están calculando huellas de recuerdos en segundo plano."""
+        return self._active_embedding_worker is not None
+
+    def _start_embedding(self, *, warm_up: bool = False) -> None:
+        """Pieza F (ADR-238): calcula en segundo plano las huellas que faltan.
+
+        Al abrirse la ventana, si no falta ninguna, carga el modelo de huellas
+        igualmente (``warm_up``): así el primer turno no lo espera.
+        """
+        if self._memory_embedding_service is None or self._close_requested or self._is_backup_busy:
+            return
+        if self._active_embedding_worker is not None:
+            self._embed_again = True
+            return
+        worker = MemoryEmbeddingWorker(self._memory_embedding_service, warm_up=warm_up)
+        worker.signals.finished.connect(self._on_embedding_finished)
+        self._active_embedding_worker = worker
+        self._embed_again = False
+        self._thread_pool.start(worker)
+
+    def _on_embedding_finished(self) -> None:
+        self._active_embedding_worker = None
+        if self._embed_again and not self._is_sending and not self._is_backup_busy:
+            self._start_embedding()
+        if self._active_embedding_worker is None:
+            self.embedding_idle.emit()
 
     def _refresh_judge_indicator(self) -> None:
         """PA-R02-08: enseña el aviso del juez mientras la media siga por debajo de 3,5."""

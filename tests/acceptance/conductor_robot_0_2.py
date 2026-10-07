@@ -29,15 +29,21 @@ from __future__ import annotations
 import functools
 import itertools
 import json
+import random
 import sqlite3
+import struct
+import time
+import zlib
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+from contextlib import closing
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any, TypeVar, cast
 
 import httpx
 import pytest
+import sqlite_vec
 
 from sirius.adapters.persistence.bootstrap import initialize_persistence
 from sirius.adapters.persistence.migrations import upgrade_to_head
@@ -54,7 +60,9 @@ from sirius.domain.conversation_mode import (
     MODE_INSTRUCTIONS,
     ConversationMode,
 )
+from sirius.domain.memory_bank import MEMORY_BANK
 from sirius.domain.own_memory import IS_YOU_HEADING, NOT_YOU_HEADING
+from sirius.domain.relevance import KnowledgeKind
 from sirius.domain.reply_judge import TrickVerdict
 from sirius.domain.reply_mark import ReplyMark
 from sirius.domain.robot_seed import (
@@ -63,11 +71,12 @@ from sirius.domain.robot_seed import (
     ROBOT_SEED_REMINDER,
 )
 from sirius.infrastructure.paths import ensure_paths, resolve_paths
+from sirius.ports.embeddings import EmbeddingError, TextEmbedder
 from sirius.ports.llm import LLMCompleted, LLMRequest, LLMStreamEvent, LLMTextDelta
 
 #: Las letras de la tabla de piezas de ADR-233 que ya han entrado en ``main``.
 #: La A es esta: la nota de arranque y estas pruebas.
-PIEZAS_ENTREGADAS: frozenset[str] = frozenset({"A", "B", "C", "D", "E"})
+PIEZAS_ENTREGADAS: frozenset[str] = frozenset({"A", "B", "C", "D", "E", "F"})
 
 #: Qué trae cada pieza, con las palabras de la tabla de ADR-233.
 PIEZAS: Mapping[str, str] = {
@@ -330,6 +339,84 @@ class HuellasDeMentira:
         return huella
 
 
+class _HuellasEnchufadas:
+    """Enchufa ``HuellasDeMentira`` donde Sirius pide las huellas."""
+
+    model_name = "huellas-de-mentira"
+
+    def __init__(self, huellas: HuellasDeMentira) -> None:
+        self._huellas = huellas
+
+    def embed(self, texts: Sequence[str]) -> list[list[float]]:
+        return [self._huellas.huella(texto) for texto in texts]
+
+
+class _SinHuellas:
+    """Sin modelo de huellas, como un Sirius con Ollama cerrado: busca solo por palabras.
+
+    Es lo que usa el conductor si la prueba no enchufa otra cosa. Así ninguna prueba
+    acaba hablando con el Ollama de verdad de quien las ejecuta.
+    """
+
+    model_name = "sin-huellas"
+
+    def embed(self, texts: Sequence[str]) -> list[list[float]]:
+        del texts
+        msg = "sin modelo de huellas en esta prueba"
+        raise EmbeddingError(msg)
+
+
+class _HuellasFijas:
+    """Huellas de 1.024 números, como las del modelo de verdad, sin modelo: para medir.
+
+    Cada frase da siempre la misma, una rotación de una base fija. No buscan nada con
+    sentido; sirven para que sqlite-vec trabaje lo mismo que con huellas de verdad.
+    """
+
+    model_name = "huellas-fijas-1024"
+    _BASE = tuple(random.Random(1024).uniform(-1.0, 1.0) for _ in range(1024))
+
+    def huella(self, texto: str) -> list[float]:
+        giro = zlib.crc32(texto.encode("utf-8")) % len(self._BASE)
+        return list(self._BASE[giro:] + self._BASE[:giro])
+
+    def embed(self, texts: Sequence[str]) -> list[list[float]]:
+        return [self.huella(texto) for texto in texts]
+
+
+#: Lo que hay que deshacer al acabar cada prueba: lo hace ``tests/conftest.py``.
+_DESHACER: list[Callable[[], None]] = []
+
+#: Por dónde escucha el Ollama de este ordenador.
+_OLLAMA_LOCAL = ({"localhost", "127.0.0.1", "::1"}, 11434)
+
+
+def deshaz_los_espias() -> None:
+    """Quita lo que haya puesto ``Conductor.con_ollama_espia``. Lo llama ``tests/conftest.py``."""
+    while _DESHACER:
+        _DESHACER.pop()()
+
+
+def _espia_todo_ollama(ollama: OllamaDeMentira) -> None:
+    """Todo lo que se pida al Ollama de este ordenador, lo contesta ``ollama``.
+
+    También lo que pida un cliente que se monte su propia conexión, sin el
+    transporte que reparte la raíz de composición: así una prueba ve cualquier
+    petición a Ollama, la haga quien la haga.
+    """
+    original = httpx.HTTPTransport.handle_request
+    hosts, puerto = _OLLAMA_LOCAL
+    transporte = ollama.transporte()
+
+    def a_este_ordenador(self: httpx.HTTPTransport, request: httpx.Request) -> httpx.Response:
+        if request.url.host in hosts and request.url.port == puerto:
+            return transporte.handle_request(request)
+        return original(self, request)
+
+    setattr(httpx.HTTPTransport, "handle_request", a_este_ordenador)  # noqa: B010
+    _DESHACER.append(lambda: setattr(httpx.HTTPTransport, "handle_request", original))
+
+
 def seccion(instrucciones: str, encabezado: str) -> str:
     """El trozo de ``instrucciones`` desde ``encabezado`` hasta el siguiente «# ».
 
@@ -417,6 +504,28 @@ FAMILIAS_DEL_BANCO_DE_MEMORIA: frozenset[str] = frozenset(
 )
 
 
+#: Palabras de los recuerdos de prueba de ``llena_la_memoria`` y de sus preguntas.
+_PALABRAS = """
+    abuela agosto alarma amigo anillo arroz autobús avión balcón barco batería bici boda
+    bosque cafetera calle cama camión canción carné casa cena cerveza chaqueta chocolate
+    cine ciudad coche cocina cocido colegio concierto consulta correo cuadro cumpleaños
+    dentista deporte dinero domingo ducha edificio enero escalera escuela examen
+    farmacia febrero fiesta flores frigorífico fútbol garaje gato gimnasio guitarra
+    hermana hospital huerto iglesia invierno jardín juego julio lámpara lavadora libro
+    llaves lluvia madre maleta martes médico mercado mesa montaña moto museo música
+    navidad nevera noche oficina ordenador padre panadería pantalón parque perro piscina
+    playa plaza primo pueblo puerta radio regalo reloj restaurante revista río ropa
+    sábado salón semana sierra silla sofá sopa taller teatro teléfono televisión tienda
+    tío trabajo tren universidad vacaciones vecino ventana verano viaje vino zapatos
+"""
+_VOCABULARIO: tuple[str, ...] = tuple(_PALABRAS.split())
+
+
+def _blob(huella: Sequence[float]) -> bytes:
+    """Una huella como la guarda Sirius: float32 seguidos."""
+    return struct.pack(f"<{len(huella)}f", *huella)
+
+
 class VentanaDePrueba:
     """La ventana de conversación de Sirius, vista desde una prueba (pieza D).
 
@@ -479,11 +588,24 @@ class VentanaDePrueba:
 
     def espera_al_trabajo_de_fondo(self) -> None:
         """Espera a que acabe lo que la ventana haya lanzado en segundo plano."""
-        raise _pendiente("F")
+        ventana = self._ventana
+        self._qtbot.waitUntil(
+            lambda: (
+                not ventana.judge_in_progress
+                and not ventana.embedding_in_progress
+                and not ventana.knowledge_widget.has_pending_criticality_proposal
+            ),
+            timeout=10_000,
+        )
 
     def ofrece_etiquetar_por_categorias(self) -> bool:
         """Si la ventana deja poner o pedir la categoría de un recuerdo."""
-        raise _pendiente("F")
+        from PySide6.QtGui import QAction
+        from PySide6.QtWidgets import QAbstractButton
+
+        textos = [boton.text() for boton in self._ventana.findChildren(QAbstractButton)]
+        textos += [accion.text() for accion in self._ventana.findChildren(QAction)]
+        return any("categor" in texto.lower() for texto in textos)
 
 
 # --- El conductor ------------------------------------------------------------
@@ -519,6 +641,9 @@ class Conductor:
         self._resumidor: ResumidorDeMentira | None = None
         self._juez: JuezDeMentira | None = None
         self._hoja: BlindTestSheet | None = None
+        self._huellas: HuellasDeMentira | None = None
+        self._huellas_fijas: _HuellasFijas | None = None
+        self._huellas_de_ollama = False
         rutas = resolve_paths()
         initialize_persistence(rutas)
         self.base = rutas.data_dir / "sirius.db"
@@ -543,10 +668,25 @@ class Conductor:
                 _ResumidorEnchufado(self._resumidor) if self._resumidor is not None else None
             ),
             reply_judge=_JuezEnchufado(self._juez) if self._juez is not None else None,
+            text_embedder=self._modelo_de_huellas(),
         )
         if not self._charla_por_ollama:
             dependencias.send_message_use_case.set_llm_provider(self._grabador)
         return dependencias
+
+    def _modelo_de_huellas(self) -> TextEmbedder | None:
+        """Quién da las huellas: el doble que haya enchufado la prueba, o ninguno.
+
+        ``None`` es el modelo de huellas de verdad, el de producción; solo se usa con
+        ``con_ollama_espia``, que se queda con todo lo que va a Ollama.
+        """
+        if self._huellas is not None:
+            return _HuellasEnchufadas(self._huellas)
+        if self._huellas_fijas is not None:
+            return self._huellas_fijas
+        if self._huellas_de_ollama:
+            return None
+        return _SinHuellas()
 
     # --- Lo que ya existe en Sirius ---
 
@@ -862,42 +1002,127 @@ class Conductor:
     # --- Pieza F: banco de memoria y búsqueda por significado ---
 
     def banco_de_memoria(self) -> tuple[CasoDeMemoria, ...]:
-        raise _pendiente("F")
+        return tuple(
+            CasoDeMemoria(id=caso.id, familia=caso.family, pregunta=caso.question)
+            for caso in MEMORY_BANK
+        )
 
     def pasa_el_banco_de_memoria(self) -> Mapping[str, tuple[int, int]]:
         """Aciertos y casos por familia, con el camino real y un buscador determinista."""
-        raise _pendiente("F")
+        raise _pendiente("G")
 
     def llena_la_memoria(self, recuerdos: int) -> None:
-        raise _pendiente("F")
+        """Guarda ``recuerdos`` recuerdos de prueba, cada uno con su huella de 1.024 números.
+
+        Van directos a la base, en una transacción: por los casos de uso tardaría
+        minutos y lo que se mide es buscar, no guardar. Las tablas son las de
+        verdad, con sus disparadores, así que la búsqueda por palabras también los
+        ve.
+        """
+        self._huellas_fijas = _HuellasFijas()
+        self.reabre()
+        ahora = datetime.now(UTC).replace(tzinfo=None).strftime("%Y-%m-%d %H:%M:%S.%f")
+        modelo = self._huellas_fijas.model_name
+        with closing(sqlite3.connect(self.base)) as conexion, conexion:
+            primero = conexion.execute("SELECT COALESCE(MAX(id), 0) FROM memories").fetchone()[0]
+            revision = conexion.execute(
+                "SELECT COALESCE(MAX(id), 0) FROM memory_revisions"
+            ).fetchone()[0]
+            filas = []
+            for n in range(1, recuerdos + 1):
+                palabras = " ".join(_VOCABULARIO[(n * k) % len(_VOCABULARIO)] for k in (1, 7, 13))
+                filas.append((primero + n, revision + n, f"Recuerdo de prueba {n}: {palabras}."))
+            conexion.executemany(
+                "INSERT INTO memories (id, status, created_at, updated_at, category_locked)"
+                " VALUES (?, 'current', ?, ?, 0)",
+                [(memoria, ahora, ahora) for memoria, _, _ in filas],
+            )
+            conexion.executemany(
+                "INSERT INTO memory_revisions"
+                " (id, memory_id, version, content, origin, is_current, created_at)"
+                " VALUES (?, ?, 1, ?, 'prueba', 1, ?)",
+                [(rev, memoria, texto, ahora) for memoria, rev, texto in filas],
+            )
+            conexion.executemany(
+                "INSERT INTO memory_embeddings"
+                " (memory_id, revision_id, model, embedding, created_at)"
+                " VALUES (?, ?, ?, ?, ?)",
+                [
+                    (memoria, rev, modelo, _blob(self._huellas_fijas.huella(texto)), ahora)
+                    for memoria, rev, texto in filas
+                ],
+            )
 
     def mide_la_busqueda(self, consultas: int) -> list[float]:
-        """Milisegundos de cada búsqueda en la memoria, sin contar la huella de la pregunta."""
-        raise _pendiente("F")
+        """Milisegundos de cada búsqueda en la memoria, sin contar la huella de la pregunta.
+
+        Mide la búsqueda entera de cada turno, la que hace el contexto: por
+        palabras, por significado y cargar lo encontrado. La huella de la pregunta
+        sale de ``_HuellasFijas``, que no tarda nada.
+        """
+        busqueda = self._dependencias.rank_relevant_knowledge_use_case
+        tiempos: list[float] = []
+        for n in range(consultas):
+            pregunta = f"¿Qué sabes de {_VOCABULARIO[(n * 11) % len(_VOCABULARIO)]}?"
+            inicio = time.perf_counter()
+            busqueda.rank(pregunta)
+            tiempos.append((time.perf_counter() - inicio) * 1000)
+        return tiempos
 
     def con_ollama_espia(self, ollama: OllamaDeMentira) -> None:
-        """Enchufa ``ollama`` a lo que Sirius pida a Ollama, sin tocar el modelo de la charla."""
-        raise _pendiente("F")
+        """Enchufa ``ollama`` a lo que Sirius pida a Ollama, sin tocar el modelo de la charla.
+
+        Se queda con todo lo que vaya al Ollama de este ordenador, también lo que
+        pida un adaptador con su propia conexión, y Sirius se monta con su modelo
+        de huellas de verdad.
+        """
+        _espia_todo_ollama(ollama)
+        self._ollama = ollama
+        self._huellas_de_ollama = True
+        self.reabre()
 
     def con_huellas(self, huellas: HuellasDeMentira) -> None:
         """Las huellas para buscar por significado las da ``huellas`` en vez del modelo."""
-        raise _pendiente("F")
+        self._huellas = huellas
+        self.reabre()
 
     def guarda_recuerdo(self, texto: str) -> None:
-        """El propietario guarda un recuerdo, como desde la ventana."""
-        raise _pendiente("F")
+        """El propietario guarda un recuerdo, como desde la ventana.
+
+        Con lo que la ventana lanza después en segundo plano: calcular su huella.
+        """
+        self._dependencias.save_manual_memory_use_case.save(texto)
+        self._dependencias.memory_embedding_service.embed_pending()
 
     def busca_en_la_memoria(self, texto: str) -> list[str]:
         """Los recuerdos que encuentra la búsqueda de Sirius para ``texto``, del mejor al peor."""
-        raise _pendiente("F")
+        return [
+            candidato.item.current_revision.content or ""
+            for candidato in self._dependencias.rank_relevant_knowledge_use_case.rank(texto)
+            if candidato.kind is KnowledgeKind.MEMORY
+        ]
 
     def huellas_en_la_base(self) -> int:
         """Cuántas huellas de recuerdos hay guardadas en ``sirius.db``, con sqlite-vec."""
-        raise _pendiente("F")
+        with closing(sqlite3.connect(self.base)) as conexion:
+            conexion.enable_load_extension(True)
+            sqlite_vec.load(conexion)
+            conexion.enable_load_extension(False)
+            fila = conexion.execute(
+                "SELECT COUNT(*) FROM memory_embeddings WHERE vec_length(embedding) > 0"
+            ).fetchone()
+        return int(fila[0])
 
     def categoria_del_recuerdo(self, texto: str) -> str | None:
         """La categoría que tiene guardada el recuerdo ``texto``, o ``None``."""
-        raise _pendiente("F")
+        with closing(sqlite3.connect(self.base)) as conexion:
+            fila = conexion.execute(
+                "SELECT m.category FROM memories AS m JOIN memory_revisions AS r"
+                " ON r.memory_id = m.id AND r.is_current = 1 WHERE r.content = ?",
+                (texto,),
+            ).fetchone()
+        assert fila is not None, f"no hay ningún recuerdo «{texto}»"
+        return cast("str | None", fila[0])
 
     # --- Pieza G: hechos, fichas, órdenes de memoria y el sueño ---
 

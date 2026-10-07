@@ -214,7 +214,9 @@ def test_el_juez_pregunta_al_ollama_de_este_ordenador_aunque_la_charla_vaya_por_
 
     sirius.reply_judge_service.judge_pending()
 
-    [(url, cuerpo)] = ollama.peticiones
+    # El turno también pide a Ollama la huella de su pregunta (pieza F, ADR-238);
+    # aquí solo cuenta lo que pide el juez.
+    [(url, cuerpo)] = ollama.al_chat()
     assert url.host in {"localhost", "127.0.0.1"}
     assert url.path == "/api/chat"
     assert cuerpo["model"] == "modelo-local"
@@ -234,7 +236,7 @@ def test_sin_modelo_local_elegido_el_juez_no_pregunta_a_nadie(tmp_path: Path) ->
 
     sirius.reply_judge_service.judge_pending()
 
-    assert ollama.peticiones == []
+    assert ollama.al_chat() == []
     assert sirius.reply_judge_service.scores() == []
 
 

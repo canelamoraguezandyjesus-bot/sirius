@@ -82,21 +82,18 @@ from sirius.application.save_manual_memory import (
     InvalidManualMemoryDataError,
     SaveManualMemoryUseCase,
 )
-from sirius.application.set_category import SetCategoryUseCase
 from sirius.application.set_criticality import CriticalityTargetKind, SetCriticalityUseCase
 from sirius.application.supersede_decision import (
     DecisionSupersessionNotConfirmedError,
     InvalidDecisionSupersessionError,
     SupersedeDecisionUseCase,
 )
-from sirius.application.tag_category import CategoryTargetKind, TagCategoryUseCase
 from sirius.domain.criticality import Criticality
 from sirius.domain.decision import Decision, is_same_subject_and_project
 from sirius.domain.memory import Memory
 from sirius.domain.memory_suggestion import MemorySuggestion
 from sirius.domain.precedence import PrecedenceOutcome
 from sirius.infrastructure.logging import get_logger
-from sirius.presentation.category_tagging_worker import CategoryTaggingWorker
 from sirius.presentation.criticality_proposal_worker import CriticalityProposalWorker
 
 _logger = get_logger(__name__)
@@ -228,18 +225,15 @@ class _ChooseSupersedingDecisionDialog(QDialog):
 class KnowledgeWidget(QGroupBox):
     """Panel observable de recuerdos, decisiones y conflictos de precedencia."""
 
-    #: Emitida cuando el último ``CategoryTaggingWorker`` en vuelo termina
-    #: (CODEX-001): una restauración de copia de seguridad debe esperar a
-    #: esta señal antes de cerrar las conexiones a sirius.db, porque
-    #: ``TagCategoryUseCase.tag()`` sigue usando los repositorios mientras
-    #: haya etiquetadores pendientes.
-    category_tagging_idle = Signal()
+    #: Emitida al guardar, corregir o confirmar un recuerdo (pieza F de ADR-233,
+    #: ADR-238): la ventana calcula su huella en segundo plano. Ya no se le pide a
+    #: Ollama que lo etiquete por categorías.
+    memories_changed = Signal()
 
-    #: Igual que ``category_tagging_idle`` pero para ``CriticalityProposalWorker``
-    #: (CODEX-001): ``ProposeCriticalityUseCase.propose()`` también abre los
+    #: Emitida cuando el último ``CriticalityProposalWorker`` en vuelo termina
+    #: (CODEX-001): ``ProposeCriticalityUseCase.propose()`` abre los
     #: repositorios, así que una restauración de copia de seguridad debe
-    #: esperar a que no quede ninguna propuesta en vuelo, no solo al
-    #: etiquetado de categorías.
+    #: esperar a que no quede ninguna propuesta en vuelo.
     criticality_proposal_idle = Signal()
 
     def __init__(
@@ -260,9 +254,6 @@ class KnowledgeWidget(QGroupBox):
         confirm_memory_suggestion_use_case: ConfirmMemorySuggestionUseCase,
         reject_memory_suggestion_use_case: RejectMemorySuggestionUseCase,
         *,
-        tag_category_use_case: TagCategoryUseCase | None = None,
-        set_category_use_case: SetCategoryUseCase | None = None,
-        category_vocabulary: frozenset[str] | None = None,
         propose_criticality_use_case: ProposeCriticalityUseCase | None = None,
         set_criticality_use_case: SetCriticalityUseCase | None = None,
         thread_pool: QThreadPool | None = None,
@@ -290,9 +281,6 @@ class KnowledgeWidget(QGroupBox):
         self._project_continuity_use_case = project_continuity_use_case
         self._confirm_memory_suggestion_use_case = confirm_memory_suggestion_use_case
         self._reject_memory_suggestion_use_case = reject_memory_suggestion_use_case
-        self._tag_category_use_case = tag_category_use_case
-        self._set_category_use_case = set_category_use_case
-        self._category_vocabulary = category_vocabulary
         self._propose_criticality_use_case = propose_criticality_use_case
         self._set_criticality_use_case = set_criticality_use_case
         self._thread_pool = thread_pool
@@ -309,16 +297,6 @@ class KnowledgeWidget(QGroupBox):
 
         self._is_busy = False
         self._is_externally_busy = False
-        self._pending_tagging_workers = 0
-        # QThreadPool.start() no conserva la referencia Python a un
-        # QRunnable (CODEX-001, ver el comentario equivalente en
-        # main_window.py sobre _active_send_worker): sin esta lista, un
-        # CategoryTaggingWorker cuyo run() termine muy rápido puede
-        # recolectarse antes de que su señal finished, encolada entre
-        # hilos, llegue a procesarse — y _handle_tagging_worker_finished()
-        # nunca se ejecuta. Cada worker se retira de aquí exactamente
-        # cuando esa señal se procesa.
-        self._active_tagging_workers: list[CategoryTaggingWorker] = []
         self._overview: KnowledgeOverview | None = None
         self._last_touched_list: QListWidget | None = None
 
@@ -348,8 +326,8 @@ class KnowledgeWidget(QGroupBox):
         # con el valor vigente cuando termina, su resultado corresponde a una
         # revisión ya obsoleta y se descarta sin cachearse ni mostrarse.
         self._criticality_proposal_epoch: dict[tuple[CriticalityTargetKind, int], int] = {}
-        # Igual que _active_tagging_workers: QThreadPool.start() no conserva
-        # la referencia Python a un QRunnable (CODEX-001), así que cada
+        # QThreadPool.start() no conserva la referencia Python a un QRunnable
+        # (CODEX-001, ver _active_send_worker en main_window.py), así que cada
         # CriticalityProposalWorker en vuelo necesita una referencia fuerte
         # propia hasta que su señal finished se procese.
         self._active_criticality_workers: list[CriticalityProposalWorker] = []
@@ -378,7 +356,6 @@ class KnowledgeWidget(QGroupBox):
         layout.addWidget(self._build_conflicts_section())
 
         self.refresh()
-        self._enqueue_retroactive_category_tagging()
 
     # --- Diálogos por defecto (sustituidos en pruebas) --------------------
 
@@ -448,8 +425,6 @@ class KnowledgeWidget(QGroupBox):
         self.delete_memory_button.clicked.connect(self._handle_delete_memory_clicked)
         self.memory_origin_button = QPushButton("Ver origen")
         self.memory_origin_button.clicked.connect(self._handle_memory_origin_clicked)
-        self.edit_memory_category_button = QPushButton("Editar categoría…")
-        self.edit_memory_category_button.clicked.connect(self._handle_edit_memory_category_clicked)
         self.edit_memory_criticality_button = QPushButton("Editar criticidad…")
         self.edit_memory_criticality_button.clicked.connect(
             self._handle_edit_memory_criticality_clicked
@@ -461,7 +436,6 @@ class KnowledgeWidget(QGroupBox):
         buttons_row.addWidget(self.archive_memory_button)
         buttons_row.addWidget(self.delete_memory_button)
         buttons_row.addWidget(self.memory_origin_button)
-        buttons_row.addWidget(self.edit_memory_category_button)
         buttons_row.addWidget(self.edit_memory_criticality_button)
 
         self.memory_criticality_proposal_label = QLabel("")
@@ -515,7 +489,7 @@ class KnowledgeWidget(QGroupBox):
         if content is None:
             return
         try:
-            memory = self._save_manual_memory_use_case.save(content)
+            self._save_manual_memory_use_case.save(content)
         except InvalidManualMemoryDataError as exc:
             self._show_warning("No se pudo guardar el recuerdo", str(exc))
             return
@@ -523,7 +497,7 @@ class KnowledgeWidget(QGroupBox):
             _logger.error("No se pudo guardar el recuerdo (%s)", type(exc).__name__)
             self._show_warning("No se pudo guardar el recuerdo", _GENERIC_ERROR_TEXT)
             return
-        self._enqueue_category_tagging_if_needed(memory, CategoryTargetKind.MEMORY)
+        self.memories_changed.emit()
         self.refresh()
 
     def _handle_correct_memory_clicked(self) -> None:
@@ -548,7 +522,7 @@ class KnowledgeWidget(QGroupBox):
         self._invalidate_criticality_proposal_for_new_revision(
             CriticalityTargetKind.MEMORY, corrected.id
         )
-        self._enqueue_category_tagging_if_needed(corrected, CategoryTargetKind.MEMORY)
+        self.memories_changed.emit()
         self.refresh()
 
     def _invalidate_criticality_proposal_for_new_revision(
@@ -567,109 +541,6 @@ class KnowledgeWidget(QGroupBox):
         self._criticality_proposal_cache.pop(key, None)
         self._criticality_proposal_epoch[key] = self._criticality_proposal_epoch.get(key, 0) + 1
 
-    def _enqueue_category_tagging_if_needed(
-        self, item: Memory | Decision, kind: CategoryTargetKind
-    ) -> None:
-        """Encola el etiquetado automático tras un guardado/confirmación/
-        propuesta/corrección (D7, §6.1 puntos 2 y "Corrección de contenido y
-        reetiquetado"). Nunca confía solo en ``category is None``: también
-        comprueba ``category_locked``, para no encolar si algún camino
-        llegara a devolver esa combinación con ``category_locked`` en
-        ``True`` — aunque ningún caso de uso actual lo produzca hoy."""
-        if item.category is not None or item.category_locked:
-            return
-        self._start_tagging_worker(kind, item.id)
-
-    def _start_tagging_worker(self, kind: CategoryTargetKind, item_id: int) -> None:
-        """Arranca un ``CategoryTaggingWorker`` sobre ``self._thread_pool`` y
-        conecta su señal ``finished`` a un refresco (D7 §6.1: la señal Qt es
-        lo único que debe hacer aparecer una clasificación automática en el
-        panel, sin esperar a otra acción del usuario). Sin dependencias
-        (pruebas que no las inyectan, o un arranque sin Ollama configurado)
-        no hace nada."""
-        if self._tag_category_use_case is None or self._thread_pool is None:
-            return
-        worker = CategoryTaggingWorker(self._tag_category_use_case, kind, item_id)
-        self._pending_tagging_workers += 1
-        self._active_tagging_workers.append(worker)
-        worker.signals.finished.connect(
-            lambda tagged, worker=worker: self._handle_tagging_worker_finished(worker, tagged)
-        )
-        self._thread_pool.start(worker)
-
-    @property
-    def has_pending_category_tagging(self) -> bool:
-        """``True`` mientras quede al menos un ``CategoryTaggingWorker`` en
-        vuelo (CODEX-001): una restauración de copia de seguridad debe
-        comprobarlo antes de cerrar las conexiones a sirius.db."""
-        return self._pending_tagging_workers > 0
-
-    def _handle_tagging_worker_finished(self, worker: CategoryTaggingWorker, tagged: bool) -> None:
-        self._active_tagging_workers.remove(worker)
-        self._pending_tagging_workers -= 1
-        if tagged:
-            self.refresh()
-        if self._pending_tagging_workers == 0:
-            self.category_tagging_idle.emit()
-
-    def _enqueue_retroactive_category_tagging(self) -> None:
-        """Pase de arranque sobre lo ya guardado antes de esta migración (D7,
-        §6.1 punto 4 / §8-M8): sin esto, ``list_uncategorized()`` de recuerdos
-        y decisiones nunca tendría llamador y esos elementos se quedarían sin
-        categoría para siempre. Se ejecuta una única vez, al construir el
-        panel — nunca en cada ``refresh()``, porque un elemento ya etiquetado
-        deja de aparecer en ``list_uncategorized()`` y volver a encolarlo en
-        cada refresco solo repetiría llamadas al clasificador sin ningún
-        elemento nuevo que clasificar."""
-        if self._tag_category_use_case is None or self._thread_pool is None:
-            return
-        for memory in self._tag_category_use_case.list_uncategorized_memories():
-            self._start_tagging_worker(CategoryTargetKind.MEMORY, memory.id)
-        for decision in self._tag_category_use_case.list_uncategorized_decisions():
-            self._start_tagging_worker(CategoryTargetKind.DECISION, decision.id)
-
-    def _edit_category(self, kind: CategoryTargetKind, item_id: int, noun: str) -> None:
-        """Edición manual de categoría (D7 punto 3, §6.1): a través de
-        ``SetCategoryUseCase``, cuya escritura es siempre incondicional y deja
-        ``category_locked`` en ``True`` — ninguna clasificación automática
-        posterior puede sobrescribirla ya.
-
-        CODEX-002: restringida al mismo vocabulario cerrado que usa el
-        clasificador automático (D7 exige un vocabulario cerrado para que las
-        categorías sigan siendo comparables); un valor fuera de él nunca llega
-        a ``SetCategoryUseCase.set()``."""
-        if self._set_category_use_case is None:
-            return
-        label = "Categoría:"
-        if self._category_vocabulary:
-            label = f"Categoría (una de: {', '.join(sorted(self._category_vocabulary))}):"
-        category = self._prompt_line("Editar categoría", label)
-        if category is None:
-            return
-        clean_category = category.strip()
-        if not clean_category:
-            self._show_warning(
-                "No se pudo editar la categoría", "La categoría no puede estar vacía."
-            )
-            return
-        if (
-            self._category_vocabulary is not None
-            and clean_category not in self._category_vocabulary
-        ):
-            options = ", ".join(sorted(self._category_vocabulary))
-            self._show_warning(
-                "No se pudo editar la categoría",
-                f"La categoría debe ser una de: {options}.",
-            )
-            return
-        try:
-            self._set_category_use_case.set(kind, item_id, clean_category)
-        except Exception as exc:
-            _logger.error("No se pudo editar la categoría de %s (%s)", noun, type(exc).__name__)
-            self._show_warning("No se pudo editar la categoría", _GENERIC_ERROR_TEXT)
-            return
-        self.refresh()
-
     def _edit_criticality(self, kind: CriticalityTargetKind, item_id: int, noun: str) -> None:
         """Edición manual de criticidad (M18b/M21b, ADR-126/ADR-131): a
         través de ``SetCriticalityUseCase``, siempre incondicional — a
@@ -677,9 +548,7 @@ class KnowledgeWidget(QGroupBox):
         la escritura (ADR-130: nada automático escribe criticidad).
 
         Restringida al vocabulario cerrado de dos niveles más ORDINARIO
-        (M18b: ordinario es la ausencia de marca, no un tercer nivel), igual
-        que ``_edit_category`` restringe la categoría a su propio
-        vocabulario cerrado."""
+        (M18b: ordinario es la ausencia de marca, no un tercer nivel)."""
         if self._set_criticality_use_case is None:
             return
         options = ", ".join(sorted(_CRITICALITY_EDIT_VOCABULARY))
@@ -755,7 +624,7 @@ class KnowledgeWidget(QGroupBox):
         """Arranca UN ``CriticalityProposalWorker`` para ``(kind, item_id)``
         — nunca un barrido de todos los elementos (ADR-131). Sin
         dependencias (pruebas que no las inyectan, o un arranque sin Ollama
-        configurado) no hace nada, igual que ``_start_tagging_worker``.
+        configurado) no hace nada.
 
         CODEX-001: tampoco arranca ninguno mientras el panel está ocupado
         (interna o externamente, por ejemplo una restauración de copia de
@@ -812,8 +681,7 @@ class KnowledgeWidget(QGroupBox):
     def has_pending_criticality_proposal(self) -> bool:
         """``True`` mientras quede al menos un ``CriticalityProposalWorker``
         en vuelo (CODEX-001): una restauración de copia de seguridad debe
-        comprobarlo antes de cerrar las conexiones a sirius.db, igual que
-        ``has_pending_category_tagging``."""
+        comprobarlo antes de cerrar las conexiones a sirius.db."""
         return len(self._active_criticality_workers) > 0
 
     def _show_criticality_proposal(
@@ -939,15 +807,6 @@ class KnowledgeWidget(QGroupBox):
             f"Mensaje: {origin.message_content or '(sin mensaje asociado)'}",
         )
 
-    def _handle_edit_memory_category_clicked(self) -> None:
-        if self._is_busy or self._is_externally_busy:
-            return
-        memory = self._selected_memory()
-        if memory is None:
-            self._show_warning(_NO_SELECTION_TITLE, "Selecciona primero un recuerdo.")
-            return
-        self._edit_category(CategoryTargetKind.MEMORY, memory.id, "el recuerdo")
-
     def _handle_edit_memory_criticality_clicked(self) -> None:
         if self._is_busy or self._is_externally_busy:
             return
@@ -980,10 +839,6 @@ class KnowledgeWidget(QGroupBox):
         self.archive_decision_button.clicked.connect(self._handle_archive_decision_clicked)
         self.decision_origin_button = QPushButton("Ver origen")
         self.decision_origin_button.clicked.connect(self._handle_decision_origin_clicked)
-        self.edit_decision_category_button = QPushButton("Editar categoría…")
-        self.edit_decision_category_button.clicked.connect(
-            self._handle_edit_decision_category_clicked
-        )
         self.edit_decision_criticality_button = QPushButton("Editar criticidad…")
         self.edit_decision_criticality_button.clicked.connect(
             self._handle_edit_decision_criticality_clicked
@@ -995,7 +850,6 @@ class KnowledgeWidget(QGroupBox):
         buttons_row.addWidget(self.supersede_decision_button)
         buttons_row.addWidget(self.archive_decision_button)
         buttons_row.addWidget(self.decision_origin_button)
-        buttons_row.addWidget(self.edit_decision_category_button)
         buttons_row.addWidget(self.edit_decision_criticality_button)
 
         self.decision_criticality_proposal_label = QLabel("")
@@ -1062,7 +916,7 @@ class KnowledgeWidget(QGroupBox):
         if content is None:
             return
         try:
-            decision = self._propose_decision_use_case.propose(subject, project_id, content)
+            self._propose_decision_use_case.propose(subject, project_id, content)
         except InvalidDecisionProposalDataError as exc:
             self._show_warning("No se pudo proponer la decisión", str(exc))
             return
@@ -1070,7 +924,6 @@ class KnowledgeWidget(QGroupBox):
             _logger.error("No se pudo proponer la decisión (%s)", type(exc).__name__)
             self._show_warning("No se pudo proponer la decisión", _GENERIC_ERROR_TEXT)
             return
-        self._enqueue_category_tagging_if_needed(decision, CategoryTargetKind.DECISION)
         self.refresh()
 
     def _handle_approve_decision_clicked(self) -> None:
@@ -1196,15 +1049,6 @@ class KnowledgeWidget(QGroupBox):
             f"Mensaje: {origin.message_content or '(sin mensaje asociado)'}",
         )
 
-    def _handle_edit_decision_category_clicked(self) -> None:
-        if self._is_busy or self._is_externally_busy:
-            return
-        decision = self._selected_decision()
-        if decision is None:
-            self._show_warning(_NO_SELECTION_TITLE, "Selecciona primero una decisión.")
-            return
-        self._edit_category(CategoryTargetKind.DECISION, decision.id, "la decisión")
-
     def _handle_edit_decision_criticality_clicked(self) -> None:
         if self._is_busy or self._is_externally_busy:
             return
@@ -1264,7 +1108,7 @@ class KnowledgeWidget(QGroupBox):
             self._show_warning(_NO_SELECTION_TITLE, "Selecciona primero una sugerencia.")
             return
         try:
-            memory = self._confirm_memory_suggestion_use_case.confirm(suggestion.id)
+            self._confirm_memory_suggestion_use_case.confirm(suggestion.id)
         except ValueError as exc:
             self._show_warning("No se pudo confirmar la sugerencia", str(exc))
             return
@@ -1272,7 +1116,7 @@ class KnowledgeWidget(QGroupBox):
             _logger.error("No se pudo confirmar la sugerencia (%s)", type(exc).__name__)
             self._show_warning("No se pudo confirmar la sugerencia", _GENERIC_ERROR_TEXT)
             return
-        self._enqueue_category_tagging_if_needed(memory, CategoryTargetKind.MEMORY)
+        self.memories_changed.emit()
         self.refresh()
 
     def _handle_reject_suggestion_clicked(self) -> None:
@@ -1529,11 +1373,9 @@ class KnowledgeWidget(QGroupBox):
             self.save_memory_button,
             self.delete_memory_button,
             self.memory_origin_button,
-            self.edit_memory_category_button,
             self.edit_memory_criticality_button,
             self.propose_decision_button,
             self.decision_origin_button,
-            self.edit_decision_category_button,
             self.edit_decision_criticality_button,
             self.detect_conflicts_button,
             self.confirm_suggestion_button,

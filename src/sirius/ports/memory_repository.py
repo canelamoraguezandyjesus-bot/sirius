@@ -9,6 +9,18 @@ from sirius.domain.criticality import Criticality
 from sirius.domain.memory import Memory, MemoryRevision
 
 
+class MemoryLoader(Protocol):
+    """Cargar de una vez los recuerdos que trae la búsqueda (pieza F, ADR-238).
+
+    Va aparte de ``MemoryRepository`` para que solo lo tenga que cumplir quien
+    sirve a la búsqueda de cada turno.
+    """
+
+    def get_memories(self, memory_ids: Sequence[int]) -> list[Memory]:
+        """Los recuerdos con esos ids que existan, en el mismo orden."""
+        ...
+
+
 class MemoryRepository(Protocol):
     """Contract implemented by real and simulated memory stores.
 
