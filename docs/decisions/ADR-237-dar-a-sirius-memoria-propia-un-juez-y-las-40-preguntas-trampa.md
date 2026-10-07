@@ -145,6 +145,21 @@ como el primer turno de una charla nueva.
   empezar (`tests/gui/test_backup_recovery_ui.py`). La prueba falla sin la espera y
   también si solo falta la petición de parar.
 
+## Revisión externa
+
+- **Ronda 1**, sobre `b9b02d44`, tres hallazgos ciertos, comprobados contra el código y
+  arreglados en `2672e9f5`. Cada prueba nueva se vio fallar sin su arreglo.
+  - **P1, las preguntas trampa podían costar dinero.** La puerta leía los ajustes y las
+    preguntas iban al modelo vivo de la charla. Guardar Ollama en la configuración sin
+    reiniciar dejaba la puerta abierta con la charla aún en OpenAI. Ahora las dos miran
+    el modelo vivo, y las preguntas no salen si no es el Ollama de este ordenador.
+  - **P2, el juez puntuaba respuestas de la 0.1** marcadas desde el historial. Ahora
+    exige modelo apuntado, como dice la decisión.
+  - **P2, un botón de marca mentía si guardar fallaba.** Ahora vuelve a la marca que
+    había, de la pieza D (ADR-236).
+  - El conductor pasa las 40 preguntas con la charla en el Ollama de mentira, que es
+    lo único con lo que la ventana las hace.
+
 ## Consecuencias
 
 - Cada petición puede llevar hasta nueve respuestas suyas, recortadas a 300 caracteres. Se

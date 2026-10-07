@@ -189,6 +189,8 @@ class OllamaDeMentira:
     modelos_instalados: tuple[str, ...] = ()
     urls: list[httpx.URL] = field(default_factory=list)
     modelos: list[str] = field(default_factory=list)
+    #: Lo que le llegó a ``/api/chat``, como lo apunta el grabador.
+    peticiones: list[Peticion] = field(default_factory=list)
 
     def transporte(self) -> httpx.MockTransport:
         return httpx.MockTransport(self._contestar)
@@ -209,6 +211,8 @@ class OllamaDeMentira:
         if request.url.path == "/api/chat":
             mensajes = cuerpo.get("messages", [])
             dicho = next((m["content"] for m in reversed(mensajes) if m.get("role") == "user"), "")
+            sistema = next((m["content"] for m in mensajes if m.get("role") == "system"), "")
+            self.peticiones.append(Peticion(sistema, dicho))
             respuesta = (
                 self.responder(str(modelo), dicho) if self.responder is not None else self.respuesta
             )
@@ -556,7 +560,12 @@ class Conductor:
 
     @property
     def peticiones(self) -> list[Peticion]:
-        """Todo lo que ha recibido el modelo de la charla, en orden."""
+        """Todo lo que ha recibido el modelo de la charla, en orden.
+
+        Con la charla en Ollama, el modelo de la charla es el Ollama de mentira.
+        """
+        if self._charla_por_ollama and self._ollama is not None:
+            return list(self._ollama.peticiones)
         return list(self._grabador.peticiones)
 
     def hubo_peticion_al_modelo_en_el_ultimo_turno(self) -> bool:
@@ -832,7 +841,12 @@ class Conductor:
         )
 
     def pasa_el_banco_de_preguntas_trampa(self, juez: JuezDeMentira) -> Mapping[str, str]:
-        """Cada pregunta trampa, con el veredicto del juez sobre la respuesta."""
+        """Cada pregunta trampa, con el veredicto del juez sobre la respuesta.
+
+        Con la charla en el Ollama de este ordenador, que es lo único con lo que
+        se hacen: con otro modelo, las 40 preguntas podrían costar dinero.
+        """
+        self.charla_por_ollama("modelo-local", OllamaDeMentira(respuesta="Ni de broma."))
         self.con_juez(juez)
         respuestas = self._dependencias.trick_questions_use_case.run()
         return {
