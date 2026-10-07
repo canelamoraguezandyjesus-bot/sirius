@@ -160,6 +160,8 @@ no ganan a un buen sistema sencillo. Se copian sus ideas.
 respuestas.
 **Dinero:** 0 €.
 **Sale de:** inf. 1 §2 y su etapa 0. Inf. 3 §1.8, §2, §3, §5 y §7.
+**Pruebas de aceptación:** `docs/evolution/PRUEBAS_0.2_DEL_ROBOT.md`, escritas antes del
+código (ADR-233).
 
 ## 5. Versión 0.3 · Voz
 

@@ -124,12 +124,27 @@ esperadas a verdes:
 | F | El banco de memoria de 100 casos y la búsqueda por significado. Sale el filtro de Ollama de cada respuesta |
 | G | Hechos con fecha y con quién lo dijo, la ficha por persona, «eso no es así», «olvida eso», «¿qué sabes de mí?» y el «sueño» |
 
-**Las pruebas de aceptación** se llaman `PA-R02-NN`. Lo que comprueba una máquina va con
-pytest en `tests/acceptance/`, marcado `xfail(strict=True)` mientras falte su pieza: el
-día que la pieza entra, la prueba pasa, la marca estricta hace fallar la batería y obliga
-a quitarla, así que ninguna marca se queda puesta de más. Lo que solo juzga el propietario
-va como evaluación humana paso a paso. Una tabla de trazabilidad une cada `PA-R02-NN` con
-sus pruebas y se comprueba por máquina, como la de ADR-006.
+**Las pruebas de aceptación** se llaman `PA-R02-NN` y viven en
+`docs/evolution/PRUEBAS_0.2_DEL_ROBOT.md`: 18, con 32 pruebas de máquina y cinco
+evaluaciones del propietario, E-R02-01 a E-R02-05, con sus umbrales fijados antes de
+medir.
+
+- **Hablan como el plan.** Las pruebas de máquina, en `tests/acceptance/test_robot_0_2_*.py`,
+  dicen «el propietario dice», «ponte serio», «eso es Sirius» u «olvida eso». Solo un
+  conductor, `tests/acceptance/conductor_robot_0_2.py`, sabe cómo se hace cada cosa en el
+  código. El conductor no implementa nada de Sirius: monta la aplicación con
+  `build_conversation_dependencies`, como la ventana, y pone un modelo que graba lo que
+  recibe. Cuando entra una pieza, cambia su parte del conductor y no las pruebas.
+- **Una prueba de una pieza que no ha entrado no corre.** El decorador `pieza(...)` la
+  para al empezar con `PiezaPendiente`, bajo un `xfail` estricto que solo acepta esa
+  excepción. Al entrar la pieza, su letra pasa a `PIEZAS_ENTREGADAS` y la prueba corre
+  entera. La primera versión dejaba correr los pasos que ya existen hasta llegar a lo
+  pendiente, y una prueba de la pieza G falló por una aserción y no por la pieza. Ese
+  fallo habría vuelto cada vez que entrara una pieza anterior, así que se cortó de raíz.
+- **La tabla se comprueba por máquina**, como la de ADR-006:
+  `tests/acceptance/test_robot_0_2_trazabilidad.py` falla si nombra una prueba que no
+  existe, si deja una sin fila, si las piezas de una fila no cuadran con las de sus
+  pruebas o si dice «en verde» de una pieza que no ha entrado.
 
 ## Comprobación que la sostiene
 
@@ -140,13 +155,25 @@ sus pruebas y se comprueba por máquina, como la de ADR-006.
 - Nadie más trabaja en estos ficheros: el 07-10-2026 la API de GitHub devolvió 0 PR
   abiertas, con respuesta 200, y `scripts/automation/sirius_obra_en_curso.py` respondió
   libre.
+- Las 32 pruebas de máquina se ven fallar por la razón esperada:
+  `uv run --no-sync pytest -q tests/acceptance/test_robot_0_2_personalidad.py
+  tests/acceptance/test_robot_0_2_memoria.py tests/acceptance/test_robot_0_2_ventana.py`
+  da 32 xfailed en 2,2 s, cada una con su pieza.
+- La comprobación de la tabla, vista fallar dos veces: con la fila PA-R02-01 en «en verde»
+  y una prueba quitada de PA-R02-17, falla con los dos defectos; con el documento como
+  está, sus 9 pruebas pasan. Siete de ellas le dan tablas rotas a propósito.
+- Una pieza declarada sin código se ve fallar: con «B» en `PIEZAS_ENTREGADAS` y sin la
+  semilla, las dos pruebas de PA-R02-01 fallan en rojo, no como `xfail`.
 
 ## Consecuencias
 
 - El propietario recibe primero la semilla para marcar, y mientras marca la sesión escribe
   las pruebas de aceptación.
-- La batería tendrá pruebas `xfail` estrictas de la 0.2 hasta que entre cada pieza. Se
+- La batería tendrá 32 pruebas `xfail` estrictas de la 0.2 hasta que entre cada pieza. Se
   suman a las dos de M11, que siguen como estaban.
+- Las pruebas fijan nombres que todavía no existen en el código, como los del conductor y
+  los de la ventana: «Eso es Sirius», «Eso no» y «Modo serio». Si una pieza necesita
+  cambiar una prueba, el cambio se dice en su PR, y nunca para aflojarla.
 
 ## Alternativas descartadas y por qué
 
@@ -157,5 +184,6 @@ sus pruebas y se comprueba por máquina, como la de ADR-006.
 
 ## La lección
 
-- ninguna: es el arranque de una versión con un método ya escrito. Si algo muerde al
-  ejecutarla, se escribe aquí.
+- ninguna: lo único que mordió, la prueba que fallaba por otra razón, se cortó antes del
+  primer commit de las pruebas, y el arreglo vive en `pieza(...)`, que explica por qué en
+  su propio texto. La versión siguiente copiará el conductor, con el arreglo dentro.

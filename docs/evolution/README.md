@@ -18,5 +18,6 @@ Esta carpeta contiene la base canónica aprobada para evolucionar Sirius desde e
 5. `ARTIFACTS.md`
 6. `PLAN_DEL_ROBOT.md`, el plan aprobado versión a versión
 7. `ENMIENDA_MANUAL_IDENTIDAD_2026-10.md`, la personalidad con las palabras del propietario
+8. `PRUEBAS_0.2_DEL_ROBOT.md`, las pruebas de aceptación de la 0.2, escritas antes del código
 
 El documento rector define dirección, fronteras y puertas de producto. No sustituye las futuras definiciones de producto, planes de pruebas ni arquitecturas técnicas de cada versión. Para las versiones del robot, esas piezas son la sección de cada versión en `PLAN_DEL_ROBOT.md` y sus pruebas de aceptación, escritas antes del código (§20 del Rector).
