@@ -145,6 +145,31 @@ class _ResumidorQueFalla:
         raise RuntimeError(msg)
 
 
+class _ResumidorQueCuenta:
+    def summarize(self, text: str, provider: LLMProvider) -> str:
+        del text, provider
+        return "resumen"
+
+
+def test_cada_resumen_llega_18_turnos_despues_del_anterior(tmp_path: Path) -> None:
+    """Ronda 2 de Codex: los cuatro turnos que un resumen deja literales ya contaron
+    para él. Con el servicio de verdad sobre SQLite, los resúmenes caen en los turnos
+    18, 36 y 54, no en el 32."""
+    base = _base(tmp_path)
+    conversaciones = build_sqlite_conversation_repository(base)
+    conversacion = conversaciones.get_or_create_main_conversation()
+    repositorio = build_sqlite_robot_conversation_repository(base)
+    servicio = ConversationSummaryService(conversaciones, repositorio, _ResumidorQueCuenta())
+    turnos_con_resumen = []
+    for turno in range(1, 61):
+        conversaciones.append_message(conversacion.id, MessageRole.USER, f"pregunta {turno}")
+        conversaciones.append_message(conversacion.id, MessageRole.SIRIUS, f"respuesta {turno}")
+        if servicio.maybe_summarize(conversacion.id, _Modelo()):
+            turnos_con_resumen.append(turno)
+
+    assert turnos_con_resumen == [18, 36, 54]
+
+
 def test_si_resumir_falla_la_charla_sigue_y_no_se_guarda_nada(tmp_path: Path) -> None:
     base = _base(tmp_path)
     conversaciones = build_sqlite_conversation_repository(base)

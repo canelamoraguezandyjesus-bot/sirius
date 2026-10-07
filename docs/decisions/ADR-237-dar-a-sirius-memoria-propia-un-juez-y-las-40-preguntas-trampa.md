@@ -159,6 +159,24 @@ como el primer turno de una charla nueva.
     había, de la pieza D (ADR-236).
   - El conductor pasa las 40 preguntas con la charla en el Ollama de mentira, que es
     lo único con lo que la ventana las hace.
+- **Ronda 2**, sobre `c43a9a73`, dos hallazgos ciertos, que el revisor dice que llegan
+  tarde sobre líneas ya revisadas, arreglados en `377a8de1`:
+  - **P1, de la misma familia que el P1 de la ronda 1.** La ventana decía «Sirius
+    conversa con …, en este ordenador» con el modelo de Ollama guardado en los ajustes,
+    aunque la charla hablara con OpenAI. Dos rondas seguidas con la misma familia
+    obligan a parar y buscar la raíz (ADR-001): los ajustes hacían de autoridad sobre
+    si la charla es local, y pueden decir otra cosa que el modelo vivo hasta reiniciar,
+    o guardar un modelo que ya no se usa. Se decide seguir con el arreglo de la raíz:
+    una sola autoridad, el modelo vivo (`_local_chat` en
+    `src/sirius/composition_root.py`), de la que salen la puerta de las preguntas
+    trampa y lo que dice la ventana. Lo que aún lee los ajustes no dice nada de si la
+    charla es local: el arranque, que monta el modelo con esos mismos ajustes, y el
+    juez, que solo puede preguntar a este ordenador.
+  - **P2, el segundo resumen llegaba a los 14 turnos.** Los cuatro turnos que el
+    primero deja literales contaban otra vez. Ahora cada resumen llega 18 turnos
+    después del anterior, de la pieza D (ADR-236).
+  - El conductor deja la charla en el Ollama de mentira tras elegir a ciegas, como
+    producción: al reabrir, el modelo vivo es el ganador.
 
 ## Consecuencias
 
