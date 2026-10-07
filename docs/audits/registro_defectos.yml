@@ -1449,3 +1449,19 @@ defectos:
       - src/sirius/application/robot_conversation.py
       - src/sirius/presentation/main_window.py
       - src/sirius/presentation/reply_judge_worker.py
+
+  # ADR-238: la prueba aprobada de que ningun turno pregunta a Ollama para filtrar
+  # (PA-R02-12) pasaba con el filtro de antes montado. No guardaba ningun recuerdo, asi
+  # que el filtro no tenia nada que filtrar, y su espia no veia un adaptador con su
+  # propia conexion. Lo cazo la mutacion de la pieza F.
+  - id: H-238
+    titulo: La prueba de que ningun turno pregunta a Ollama para filtrar pasaba con el filtro montado
+    bloque: producto
+    gravedad: media
+    estado: cerrado
+    cerrado_por: 30b58fc221e45caadae56fd99be48968c4885802
+    pr: 683
+    adr: 238
+    ficheros:
+      - tests/acceptance/test_robot_0_2_memoria.py
+      - tests/acceptance/conductor_robot_0_2.py
