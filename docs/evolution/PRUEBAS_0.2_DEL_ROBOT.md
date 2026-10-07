@@ -62,11 +62,11 @@ han pasado.
 | PA-R02-08 | El juez puntúa cada respuesta, avisa cuando la media de las 10 últimas baja de 3,5, y la ventana lo enseña mientras siga por debajo | Personalidad, paso 7 | E | automática | — | — | pendiente | `tests/acceptance/test_robot_0_2_personalidad.py::test_el_juez_puntua_cada_respuesta_y_avisa_cuando_baja`<br>`tests/acceptance/test_robot_0_2_ventana.py::test_mientras_el_juez_dice_que_sirius_baja_la_ventana_lo_ensena` |
 | PA-R02-09 | Contra el pelota: 40 ideas malas con su porqué, pasadas enteras por la charla y juzgadas | Personalidad, paso 8, y terminado cuando, 3 | E | parcial | evaluación-humana | E-R02-03 | pendiente | `tests/acceptance/test_robot_0_2_personalidad.py::test_el_banco_de_preguntas_trampa_tiene_40_ideas_malas_con_su_porque`<br>`tests/acceptance/test_robot_0_2_personalidad.py::test_el_banco_se_pasa_entero_por_la_charla_y_cada_respuesta_queda_juzgada` |
 | PA-R02-10 | El banco de memoria: 100 casos de las siete familias, y por el camino real «olvida eso» y «quién dijo qué» aciertan todos sus casos | Memoria, paso 1, y terminado cuando, 4 | F, G | parcial | proveedor-real | E-R02-04 | pendiente | `tests/acceptance/test_robot_0_2_memoria.py::test_el_banco_de_memoria_tiene_100_casos_de_las_siete_familias`<br>`tests/acceptance/test_robot_0_2_memoria.py::test_el_banco_pasa_por_el_camino_real_y_olvidar_y_quien_lo_dijo_aciertan_todo` |
-| PA-R02-11 | Buscar por significado encuentra un recuerdo dicho con otras palabras, y buscar en 10.000 recuerdos tarda menos de 150 ms en el P95 | Memoria, paso 2, y terminado cuando, 5 | F | parcial | windows-real | E-R02-05 | pendiente | `tests/acceptance/test_robot_0_2_memoria.py::test_buscar_en_10000_recuerdos_tarda_menos_de_150_ms_en_el_p95`<br>`tests/acceptance/test_robot_0_2_memoria.py::test_un_recuerdo_dicho_con_otras_palabras_se_encuentra_por_significado` |
-| PA-R02-12 | Ninguna respuesta pide a Ollama filtrar ni clasificar recuerdos, ni con las puertas viejas abiertas, y con la ventana abierta tampoco se le pide etiquetarlos por categorías | Se deja de hacer | F | automática | — | — | pendiente | `tests/acceptance/test_robot_0_2_memoria.py::test_ninguna_respuesta_pide_a_ollama_filtrar_ni_clasificar_recuerdos`<br>`tests/acceptance/test_robot_0_2_ventana.py::test_con_la_ventana_abierta_no_se_pide_a_ollama_etiquetar_recuerdos` |
+| PA-R02-11 | Buscar por significado encuentra un recuerdo dicho con otras palabras, por palabras sigue encontrando lo suyo, las huellas viven en la misma base, y buscar en 10.000 recuerdos tarda menos de 150 ms en el P95 | Memoria, paso 2, y terminado cuando, 5 | F | parcial | windows-real | E-R02-05 | pendiente | `tests/acceptance/test_robot_0_2_memoria.py::test_buscar_en_10000_recuerdos_tarda_menos_de_150_ms_en_el_p95`<br>`tests/acceptance/test_robot_0_2_memoria.py::test_un_recuerdo_dicho_con_otras_palabras_se_encuentra_por_significado` |
+| PA-R02-12 | Ninguna respuesta pide a Ollama filtrar ni clasificar recuerdos, ni con las puertas viejas abiertas, y con la ventana abierta nada etiqueta los recuerdos por categorías ni se ofrece hacerlo | Se deja de hacer | F | automática | — | — | pendiente | `tests/acceptance/test_robot_0_2_memoria.py::test_ninguna_respuesta_pide_a_ollama_filtrar_ni_clasificar_recuerdos`<br>`tests/acceptance/test_robot_0_2_ventana.py::test_con_la_ventana_abierta_no_se_pide_a_ollama_etiquetar_recuerdos` |
 | PA-R02-13 | Un hecho que cambia cierra el anterior con su fecha, y la charla trae el vigente. Cada hecho guarda quién lo dijo y con qué seguridad | Memoria, paso 3 | G | automática | — | — | pendiente | `tests/acceptance/test_robot_0_2_memoria.py::test_un_hecho_que_cambia_cierra_el_anterior_y_la_charla_trae_el_vigente`<br>`tests/acceptance/test_robot_0_2_memoria.py::test_cada_hecho_guarda_quien_lo_dijo_y_con_que_seguridad` |
 | PA-R02-14 | Lo que dice Sirius nunca entra como hecho del propietario: el sueño ni siquiera lo lee | Memoria, paso 3 | G | automática | — | — | pendiente | `tests/acceptance/test_robot_0_2_memoria.py::test_lo_que_dice_sirius_nunca_entra_como_hecho_del_propietario` |
-| PA-R02-15 | El sueño resume el día sin leer a Sirius y propone hechos, y ninguno entra sin el sí del propietario | Memoria, paso 4 | G | automática | — | — | pendiente | `tests/acceptance/test_robot_0_2_memoria.py::test_el_sueno_propone_y_ningun_hecho_entra_sin_el_si_del_propietario`<br>`tests/acceptance/test_robot_0_2_memoria.py::test_el_sueno_resume_el_dia_sin_leer_a_sirius_y_guarda_el_resumen` |
+| PA-R02-15 | El sueño resume el día sin leer a Sirius y lo guarda, y propone hechos que no entran sin el sí del propietario | Memoria, paso 4 | G | automática | — | — | pendiente | `tests/acceptance/test_robot_0_2_memoria.py::test_el_sueno_propone_y_ningun_hecho_entra_sin_el_si_del_propietario`<br>`tests/acceptance/test_robot_0_2_memoria.py::test_el_sueno_resume_el_dia_sin_leer_a_sirius_y_guarda_el_resumen` |
 | PA-R02-16 | Cada persona tiene su ficha, con sus hechos y lo que el propietario ha dicho de ella, y la charla trae lo que se sabe de ella | Memoria, paso 5 | G | automática | — | — | pendiente | `tests/acceptance/test_robot_0_2_memoria.py::test_cada_persona_tiene_su_ficha_y_la_charla_trae_lo_que_se_sabe_de_ella` |
 | PA-R02-17 | «Olvida eso» y «olvida lo de...» borran de toda la base, también de los resúmenes, sin pasar por el modelo | Memoria, paso 6 | G | automática | — | — | pendiente | `tests/acceptance/test_robot_0_2_memoria.py::test_olvida_lo_de_algo_lo_borra_de_toda_la_base_tambien_de_los_resumenes`<br>`tests/acceptance/test_robot_0_2_memoria.py::test_olvida_eso_borra_lo_ultimo_que_dijo_el_propietario` |
 | PA-R02-18 | «Eso no es así» corrige con el sí del propietario y guarda el hecho de antes, con quién lo dijo, y «¿qué sabes de mí?» lista sus hechos vigentes sin pasar por el modelo | Memoria, paso 6 | G | automática | — | — | pendiente | `tests/acceptance/test_robot_0_2_memoria.py::test_eso_no_es_asi_corrige_con_el_si_del_propietario_y_guarda_el_hecho_de_antes`<br>`tests/acceptance/test_robot_0_2_memoria.py::test_que_sabes_de_mi_lista_los_hechos_vigentes_sin_pasar_por_el_modelo` |
@@ -121,7 +121,7 @@ Los umbrales están fijados el 07-10-2026, antes de medir nada.
 **El banco de memoria en su ordenador**, al entrar las piezas F y G.
 
 - **Qué hace él.** Ejecuta una orden que pasa los 100 casos con el modelo de huellas de
-  verdad, y pega lo que sale.
+  verdad, Qwen3-Embedding 0.6B o EmbeddingGemma, y pega lo que sale.
 - **Pasa si** acierta 90 o más de los 100, y todos los de «olvida eso» y los de «quién
   dijo qué».
 - **Resultado:** pendiente.
@@ -150,3 +150,27 @@ Los umbrales están fijados el 07-10-2026, antes de medir nada.
   memoria. Retirar el viejo es de la pieza F y lo dirá su ADR; ninguna prueba de esta tabla
   lo mira.
 - **Las órdenes de memoria por voz.** Se prueban por texto. La voz llega en 0.3.
+- **Cómo está escrita la semilla.** Que diga lo que él quiere, con sus palabras y como
+  valores y razones, no como prohibiciones, lo juzgó él al marcarla (pieza B). Ninguna
+  máquina lo mira.
+- **Que el modelo haga caso.** Las pruebas miran que se le pide: el modo, el
+  recordatorio, lo que ya dijo, y no repetir frases de los ejemplos ni chistes. Que lo
+  haga, que no se contradiga sin motivo y que vaya al grano en serio lo juzga el
+  propietario con sus marcas (E-R02-02) y con las ideas malas (E-R02-03).
+- **Entrenarle con las marcas.** Es de 0.5. En 0.2 las marcas se guardan con el modelo y
+  la identidad de cada respuesta.
+- **La cara y la voz de cada ficha.** Llegan en 0.4.
+- **El dinero.** Con la charla en su Ollama, la 0.2 no paga nada. Si él vuelve a poner
+  OpenAI, la charla y sus resúmenes se pagan como en 0.1. El juez y las preguntas trampa
+  de la pieza E solo podrán ir por su modelo local.
+- **Lo que ya estaba hecho y se reutiliza**: la app, la identidad por versiones, los
+  recuerdos con su origen, las sugerencias, corregir, borrar y archivar, los avisos de
+  contradicción, las decisiones con versiones, la búsqueda por palabras, el presupuesto y
+  Ollama conectado. Lo vigilan sus pruebas de 0.1, no estas.
+
+## Lo que vigila una guarda aparte
+
+- **Que la memoria no use Mem0, Letta, Graphiti ni LangMem** (§4, «No se usa»). Es una
+  decisión, no un comportamiento: la vigila
+  `tests/automation/test_memoria_sin_bibliotecas_excluidas.py`, que mira las
+  dependencias y lo que importa `src/`.

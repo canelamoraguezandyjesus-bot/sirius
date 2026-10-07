@@ -56,18 +56,24 @@ def test_mientras_el_juez_dice_que_sirius_baja_la_ventana_lo_ensena(
     qtbot: QtBot, tmp_path: Path
 ) -> None:
     conductor = Conductor(tmp_path)
-    conductor.con_juez(JuezDeMentira(notas=[5] * 10 + [2] * 6))
+    conductor.con_juez(JuezDeMentira(notas=[5] * 10 + [2] * 6 + [5] * 5))
     for n in range(1, 11):
         conductor.di(f"Mensaje {n}.")
     assert conductor.ventana(qtbot).aviso_del_juez() == ""
 
     for n in range(11, 17):
         conductor.di(f"Mensaje {n}.")
+    ventana = conductor.ventana(qtbot)
     # Las 10 últimas notas dan 3,2.
-    assert "3,2" in conductor.ventana(qtbot).aviso_del_juez()
+    assert "3,2" in ventana.aviso_del_juez()
+
+    for n in range(17, 22):
+        ventana.escribe(f"Mensaje {n}.")
+    # Con cinco notas altas más, las 10 últimas dan 3,5: la misma ventana deja de enseñarlo.
+    assert ventana.aviso_del_juez() == ""
 
 
-@pieza("F", "con la ventana abierta, Sirius no pide a Ollama etiquetar recuerdos por categorías")
+@pieza("F", "con la ventana abierta, nada etiqueta los recuerdos por categorías ni se ofrece")
 def test_con_la_ventana_abierta_no_se_pide_a_ollama_etiquetar_recuerdos(
     qtbot: QtBot, tmp_path: Path
 ) -> None:
@@ -81,3 +87,5 @@ def test_con_la_ventana_abierta_no_se_pide_a_ollama_etiquetar_recuerdos(
 
     assert ollama.llamadas_a("/api/chat") == 0
     assert ollama.llamadas_a("/api/generate") == 0
+    assert conductor.categoria_del_recuerdo("Su hermana Lucía es enfermera.") is None
+    assert not ventana.ofrece_etiquetar_por_categorias()

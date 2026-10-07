@@ -220,3 +220,20 @@ medir.
   pruebas no garantizan»: cuándo arranca el sueño, la retirada del banco de 47 casos y las
   órdenes por voz. La comprobación de la tabla se ve fallar quitando de su fila la prueba
   nueva del vacile: pide 4 pruebas a PA-R02-04 y ve 3.
+- **Ronda 3 de Codex, sobre `c6128c6e`**: ocho P2, ciertos los ocho. Se corrigen en un
+  solo commit y la PR se fusiona sin cuarta ronda, como fija el criterio de parada.
+  - Cuatro repiten la familia de la ronda 2, cláusulas del §4 sin prueba ni mención: la
+    semilla escrita como valores, que no repita ejemplos ni chistes, las huellas en la
+    misma base y las bibliotecas que no se usan. Dos rondas seguidas con la misma familia:
+    se paró a buscar la raíz. El repaso de la ronda 2 dio por invisibles algunas frases sin
+    declararlas, y no miró «Con qué», «No se usa» ni «Dinero». Esta vez se repasó el §4
+    frase a frase, y cada frase tiene su prueba o su línea en «Lo que estas pruebas no
+    garantizan». Salieron además el dinero, el entrenamiento de 0.5, la cara y la voz de
+    0.4 y lo que se reutiliza de 0.1. Las bibliotecas excluidas las vigila una guarda
+    nueva, `tests/automation/test_memoria_sin_bibliotecas_excluidas.py`, vista fallar con
+    `mem0ai` en las dependencias.
+  - Los otros cuatro son de otra familia, pruebas que pasarían sin su pieza: la búsqueda
+    por significado ganaba por orden de guardado, el resumen del día no se miraba tras
+    reabrir, el aviso del juez no tenía que desaparecer al recuperarse y el etiquetado por
+    categorías podía seguir por otra vía. Las cuatro pruebas se endurecen. El inventario
+    sigue en 39.

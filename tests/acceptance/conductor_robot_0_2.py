@@ -369,12 +369,20 @@ class VentanaDePrueba:
     def quita_el_modo(self) -> None:
         raise _pendiente("D")
 
+    def escribe(self, texto: str) -> None:
+        """El propietario escribe ``texto`` en la ventana y espera a que acabe todo el turno."""
+        raise _pendiente("D")
+
     def aviso_del_juez(self) -> str:
         """El aviso del juez tal como se ve; vacío si no se ve."""
         raise _pendiente("E")
 
     def espera_al_trabajo_de_fondo(self) -> None:
         """Espera a que acabe lo que la ventana haya lanzado en segundo plano."""
+        raise _pendiente("F")
+
+    def ofrece_etiquetar_por_categorias(self) -> bool:
+        """Si la ventana deja poner o pedir la categoría de un recuerdo."""
         raise _pendiente("F")
 
 
@@ -613,6 +621,14 @@ class Conductor:
 
     def busca_en_la_memoria(self, texto: str) -> list[str]:
         """Los recuerdos que encuentra la búsqueda de Sirius para ``texto``, del mejor al peor."""
+        raise _pendiente("F")
+
+    def huellas_en_la_base(self) -> int:
+        """Cuántas huellas de recuerdos hay guardadas en ``sirius.db``, con sqlite-vec."""
+        raise _pendiente("F")
+
+    def categoria_del_recuerdo(self, texto: str) -> str | None:
+        """La categoría que tiene guardada el recuerdo ``texto``, o ``None``."""
         raise _pendiente("F")
 
     # --- Pieza G: hechos, fichas, órdenes de memoria y el sueño ---

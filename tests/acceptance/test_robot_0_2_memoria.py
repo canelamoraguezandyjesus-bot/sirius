@@ -71,19 +71,27 @@ def test_buscar_en_10000_recuerdos_tarda_menos_de_150_ms_en_el_p95(tmp_path: Pat
     assert tiempos[94] < 150, f"P95 de {tiempos[94]:.1f} ms"
 
 
-@pieza("F", "un recuerdo dicho con otras palabras se encuentra por significado")
+@pieza("F", "un recuerdo se encuentra por significado y por palabras, desde la misma base")
 def test_un_recuerdo_dicho_con_otras_palabras_se_encuentra_por_significado(
     tmp_path: Path,
 ) -> None:
     pregunta = "¿Qué comida me gusta más?"
     recuerdo = "Le pirra el cocido madrileño."
+    moto = "Tiene una moto vieja en el garaje."
+    huellas = HuellasDeMentira(parecidas=[(recuerdo, pregunta)])
     conductor = Conductor(tmp_path)
-    conductor.con_huellas(HuellasDeMentira(parecidas=[(recuerdo, pregunta)]))
+    conductor.con_huellas(huellas)
+    # El que no tiene que salir se guarda antes: el orden de guardado no ayuda a nadie.
+    conductor.guarda_recuerdo(moto)
     conductor.guarda_recuerdo(recuerdo)
-    conductor.guarda_recuerdo("Tiene una moto vieja en el garaje.")
 
     # La pregunta y el recuerdo no comparten ni una palabra: solo los une el significado.
     assert conductor.busca_en_la_memoria(pregunta)[:1] == [recuerdo]
+    assert pregunta in huellas.pedidas
+    # «Moto» no se parece por significado a nada: solo la encuentran las palabras.
+    assert conductor.busca_en_la_memoria("¿Dónde tengo la moto?") == [moto]
+    # Las huellas de los dos recuerdos viven en la misma base de la charla.
+    assert conductor.huellas_en_la_base() == 2
 
 
 # --- PA-R02-12 · Sale el filtro de Ollama de cada respuesta ------------------
@@ -208,6 +216,7 @@ def test_el_sueno_resume_el_dia_sin_leer_a_sirius_y_guarda_el_resumen(tmp_path: 
     conductor.di("Vengo reventado de la obra: hoy tocaba cablear un edificio entero.")
 
     conductor.sueno()
+    conductor.reabre()
 
     assert any("cablear un edificio entero" in pedido for pedido in resumidor.pedidos)
     assert not any(dicho_por_sirius in pedido for pedido in resumidor.pedidos)
