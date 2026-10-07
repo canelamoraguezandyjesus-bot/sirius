@@ -15,7 +15,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import httpx
 import pytest
 from conductor_robot_0_2 import (
     Conductor,
@@ -88,10 +87,14 @@ def test_con_ollama_elegido_la_charla_va_al_modelo_local_elegido(tmp_path: Path)
 
 @pieza("C", "la charla con Ollama solo puede ir a este ordenador, ni con un ajuste a mano")
 def test_la_charla_con_ollama_solo_puede_ir_a_este_ordenador(tmp_path: Path) -> None:
+    ollama = OllamaDeMentira()
     conductor = Conductor(tmp_path, ajustes={"ollama_base_url": "http://ejemplo.com:11434"})
-    conductor.charla_por_ollama("modelo-elegido", OllamaDeMentira())
+    conductor.charla_por_ollama("modelo-elegido", ollama)
 
-    assert httpx.URL(conductor.destino_de_la_charla()).host in _LOCAL
+    conductor.di("¿Dónde estás?")
+
+    assert ollama.urls, "la charla no llegó a Ollama"
+    assert {url.host for url in ollama.urls} <= _LOCAL
 
 
 # --- PA-R02-03 · La prueba a ciegas ------------------------------------------

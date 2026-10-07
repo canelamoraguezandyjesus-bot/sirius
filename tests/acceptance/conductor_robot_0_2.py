@@ -461,10 +461,6 @@ class Conductor:
         """Elige Ollama para la charla con ``modelo``, servido por ``ollama``."""
         raise _pendiente("C")
 
-    def destino_de_la_charla(self) -> str:
-        """La dirección a la que va la charla con Ollama elegido."""
-        raise _pendiente("C")
-
     def preguntas_de_la_prueba_a_ciegas(self) -> tuple[str, ...]:
         raise _pendiente("C")
 
