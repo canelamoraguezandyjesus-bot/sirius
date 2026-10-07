@@ -22,7 +22,8 @@ from sirius.adapters.persistence.sqlite_identity_repository import (
     build_sqlite_identity_repository,
 )
 from sirius.adapters.persistence.sqlite_project_repository import SqliteProjectRepository
-from sirius.domain.identity import INITIAL_IDENTITY_NAME
+from sirius.domain.identity import INITIAL_IDENTITY_NAME, INITIAL_PERSONALITY_INSTRUCTIONS
+from sirius.domain.robot_seed import ROBOT_SEED_INSTRUCTIONS
 from sirius.infrastructure.paths import resolve_paths
 
 
@@ -102,18 +103,22 @@ def test_initialize_persistence_creates_memory_tables_without_seeding_any_memory
 
 @pytest.mark.integration
 def test_initialize_persistence_creates_the_canonical_identity() -> None:
+    """La versión 1 es la semilla de 0.1 y la 2, vigente, la del robot (ADR-235)."""
     paths = resolve_paths()
 
     initialize_persistence(paths)
 
     database_path = paths.data_dir / "sirius.db"
     identity_rows = _identity_rows(database_path)
-    version_rows = _identity_version_rows(database_path)
+    version_rows = sorted(_identity_version_rows(database_path), key=lambda row: row.version)
 
     assert len(identity_rows) == 1
-    assert len(version_rows) == 1
+    assert [row.version for row in version_rows] == [1, 2]
     assert version_rows[0].name == INITIAL_IDENTITY_NAME
-    assert version_rows[0].is_current is True
+    assert version_rows[0].personality_instructions == INITIAL_PERSONALITY_INSTRUCTIONS
+    assert version_rows[0].is_current is False
+    assert version_rows[1].personality_instructions == ROBOT_SEED_INSTRUCTIONS
+    assert version_rows[1].is_current is True
 
 
 def _tracking_close(repository_class: Any, closed: list[str], label: str) -> Any:
@@ -224,4 +229,5 @@ def test_starting_sirius_twice_is_idempotent_and_does_not_duplicate_anything() -
     assert len(_project_rows(database_path)) == 1
     assert _memory_rows(database_path) == []
     assert len(_identity_rows(database_path)) == 1
-    assert len(_identity_version_rows(database_path)) == 1
+    # La 0.1 y la del robot: arrancar otra vez no adopta la semilla dos veces.
+    assert len(_identity_version_rows(database_path)) == 2

@@ -35,6 +35,7 @@ from sirius.application.api_key_settings import ApiKeySettingsError, ApiKeySetti
 from sirius.application.approve_decision import ApproveDecisionUseCase
 from sirius.application.archive_decision import ArchiveDecisionUseCase
 from sirius.application.archive_memory import ArchiveMemoryUseCase
+from sirius.application.blind_test import BlindTestUseCase
 from sirius.application.budget_status import GetBudgetStatusUseCase
 from sirius.application.capture_commands import CaptureCommand, CaptureIntent, interpret
 from sirius.application.capture_replies import spoken_confirmation
@@ -63,6 +64,11 @@ from sirius.application.propose_memory_suggestion import (
 )
 from sirius.application.reject_memory_suggestion import RejectMemorySuggestionUseCase
 from sirius.application.restore_backup import RestoreBackupUseCase
+from sirius.application.robot_conversation import (
+    ConversationModeUseCase,
+    MarkReplyUseCase,
+    ReplyJudgeService,
+)
 from sirius.application.save_manual_memory import SaveManualMemoryUseCase
 from sirius.application.send_message import SendMessageResult, SendMessageUseCase
 from sirius.application.set_category import SetCategoryUseCase
@@ -79,6 +85,7 @@ from sirius.application.studio_voice import (
 )
 from sirius.application.supersede_decision import SupersedeDecisionUseCase
 from sirius.application.tag_category import TagCategoryUseCase
+from sirius.application.trick_questions import TrickQuestionsUseCase
 from sirius.application.validate_backup import ValidateBackupUseCase
 from sirius.config.llm_provider_settings import (
     LLMProviderConfigurationError,
@@ -89,7 +96,9 @@ from sirius.config.llm_provider_settings import (
 from sirius.config.settings import load_settings, save_settings
 from sirius.domain.capture import SceneRegistry
 from sirius.domain.conversation import MessageRole, MessageStatus
+from sirius.domain.conversation_mode import ConversationMode
 from sirius.domain.model_studio import StudioCaptureState, StudioInteractionState
+from sirius.domain.reply_mark import ReplyMark
 from sirius.infrastructure.logging import get_logger
 from sirius.ports.backup import (
     BackupManifest,
@@ -102,6 +111,7 @@ from sirius.presentation.backup_worker import (
     RestoreBackupWorker,
     ValidateBackupWorker,
 )
+from sirius.presentation.blind_test_dialog import BlindTestDialog
 from sirius.presentation.context_panel_widget import ContextPanelWidget
 from sirius.presentation.conversation_worker import SendMessageWorker
 from sirius.presentation.error_messages import failed_send_message
@@ -113,7 +123,9 @@ from sirius.presentation.message_view import MessageItemDelegate, MessageItemWid
 from sirius.presentation.model_studio.settings_dialog import StudioSettingsDialog
 from sirius.presentation.model_studio.studio_page import StudioPage
 from sirius.presentation.project_continuity_widget import ProjectContinuityWidget
+from sirius.presentation.reply_judge_worker import ReplyJudgeWorker
 from sirius.presentation.studio_workers import CaptureWorker, SpeakWorker, TranscribeWorker
+from sirius.presentation.trick_questions_dialog import TrickQuestionsDialog
 
 _logger = get_logger(__name__)
 
@@ -266,6 +278,11 @@ class MainWindow(QMainWindow):
         studio_voice_use_case: StudioVoiceUseCase | None = None,
         studio_capture_use_case: StudioCaptureUseCase | None = None,
         save_studio_voice: Callable[[str], None] | None = None,
+        blind_test_use_case: BlindTestUseCase | None = None,
+        mark_reply_use_case: MarkReplyUseCase | None = None,
+        conversation_mode_use_case: ConversationModeUseCase | None = None,
+        reply_judge_service: ReplyJudgeService | None = None,
+        trick_questions_use_case: TrickQuestionsUseCase | None = None,
         show_warning: Callable[[str, str], None] | None = None,
         show_information: Callable[[str, str], None] | None = None,
         prompt_multiline_with_default: Callable[[str, str, str], str | None] | None = None,
@@ -276,6 +293,18 @@ class MainWindow(QMainWindow):
         choose_export_directory: Callable[[str], str] | None = None,
     ) -> None:
         super().__init__()
+        self._blind_test_use_case = blind_test_use_case
+        # Pieza D de ADR-233: los dos botones de cada respuesta (PA-R02-06) y el
+        # modo de la charla (PA-R02-04). Sin ellos, la ventana es la de antes.
+        self._mark_reply_use_case = mark_reply_use_case
+        self._conversation_mode_use_case = conversation_mode_use_case
+        self._marks_by_message: dict[int, ReplyMark] = {}
+        # Pieza E de ADR-233: el aviso del juez (PA-R02-08) y las preguntas
+        # trampa (E-R02-03). Sin ellos, la ventana es la de antes.
+        self._reply_judge_service = reply_judge_service
+        self._trick_questions_use_case = trick_questions_use_case
+        self._active_judge_worker: ReplyJudgeWorker | None = None
+        self._judge_again = False
         self._send_message_use_case = send_message_use_case
         self._get_history_use_case = get_history_use_case
         self._get_budget_status_use_case = get_budget_status_use_case
@@ -1135,6 +1164,21 @@ class MainWindow(QMainWindow):
         self.retry_button.clicked.connect(self._handle_retry_clicked)
         self.retry_button.setVisible(False)
 
+        # PA-R02-04: el modo de la charla se ve y se quita con un botón.
+        self.mode_label = QLabel("")
+        self.mode_label.setVisible(False)
+        self.release_mode_button = QPushButton("Quitar el modo")
+        self.release_mode_button.setVisible(False)
+        self.release_mode_button.clicked.connect(self._handle_release_mode_clicked)
+        # PA-R02-08: mientras el juez dice que suena menos a Sirius, se ve.
+        self.judge_label = QLabel("")
+        self.judge_label.setVisible(False)
+        mode_row = QHBoxLayout()
+        mode_row.addWidget(self.mode_label)
+        mode_row.addWidget(self.release_mode_button)
+        mode_row.addWidget(self.judge_label)
+        mode_row.addStretch(1)
+
         input_row = QHBoxLayout()
         input_row.addWidget(self.message_input)
         input_row.addWidget(self.send_button)
@@ -1161,6 +1205,7 @@ class MainWindow(QMainWindow):
         conversation_layout = QVBoxLayout(conversation_column)
         conversation_layout.setContentsMargins(0, 0, 0, 0)
         conversation_layout.addWidget(self.message_list, 1)
+        conversation_layout.addLayout(mode_row)
         conversation_layout.addLayout(input_row)
         conversation_layout.addWidget(self.status_label)
         conversation_layout.addWidget(self.error_label)
@@ -1285,6 +1330,13 @@ class MainWindow(QMainWindow):
         except ConversationNotInitializedError:
             self.error_label.setText("No se pudo cargar el historial de la conversación.")
             return
+        if self._mark_reply_use_case is not None:
+            self._marks_by_message = {
+                reply.message_id: reply.mark for reply in self._mark_reply_use_case.marked_replies()
+            }
+        self._refresh_mode_indicator()
+        self._refresh_judge_indicator()
+        self._start_judge()
 
         for message in messages:
             self._append_message_item(
@@ -1365,14 +1417,17 @@ class MainWindow(QMainWindow):
         # M6, §3.6: solo un turno de Sirius ya completado puede proponerse
         # como recuerdo — nunca uno del usuario ni uno todavía en streaming.
         widget.propose_suggestion_requested.connect(self._handle_propose_suggestion_clicked)
+        widget.mark_requested.connect(self._handle_mark_requested)
         self.message_list.setItemWidget(item, widget)
+        completed_reply = role is MessageRole.SIRIUS and status is MessageStatus.COMPLETED
         widget.set_message(
             prefix,
             self._compose_markdown_body(content, status),
             bold=role is MessageRole.SIRIUS,
             message_id=message_id,
-            show_propose_suggestion=role is MessageRole.SIRIUS
-            and status is MessageStatus.COMPLETED,
+            show_propose_suggestion=completed_reply,
+            show_marks=completed_reply and self._mark_reply_use_case is not None,
+            current_mark=self._marks_by_message.get(message_id) if message_id else None,
         )
         item.setSizeHint(widget.sizeHint())
 
@@ -1442,6 +1497,10 @@ class MainWindow(QMainWindow):
         self._start_send(self._last_failed_text)
 
     def _start_send(self, text: str, *, extra_instructions: str = "") -> None:
+        if self._active_judge_worker is not None:
+            # Que el modelo local quede libre para la charla; sigue después.
+            self._active_judge_worker.stop()
+            self._judge_again = True
         self._is_sending = True
         self._active_operation_id = str(uuid.uuid4())
         self._active_send_text = text
@@ -1567,6 +1626,8 @@ class MainWindow(QMainWindow):
                     bold=True,
                     message_id=result.sirius_message.id,
                     show_propose_suggestion=result.outcome is MessageStatus.COMPLETED,
+                    show_marks=result.outcome is MessageStatus.COMPLETED
+                    and self._mark_reply_use_case is not None,
                 )
                 self._sync_item_height(self._streaming_item, widget)
             self.studio_page.update_last_message(
@@ -1601,7 +1662,9 @@ class MainWindow(QMainWindow):
             # CANCELLED outcome is a deliberate stop and never sets this.
             self._last_failed_text = self._active_send_text
         self._refresh_budget_warning()
+        self._refresh_mode_indicator()
         self._finish_sending()
+        self._start_judge()
         # Después de _finish_sending, que es quien devuelve el estado a
         # PREPARADO: si se hablara antes, ese reajuste borraría SINTETIZANDO.
         self._speak_if_studio_is_open(result.sirius_message.content, result.sirius_message.status)
@@ -1734,6 +1797,8 @@ class MainWindow(QMainWindow):
         # mostrar nada más, aunque un worker en vuelo termine después
         # (#520, ronda 4).
         self.knowledge_widget.prepare_to_close()
+        if self._active_judge_worker is not None:
+            self._active_judge_worker.stop()
         super().closeEvent(event)
 
     # --- Configuración ---------------------------------------------------
@@ -1815,6 +1880,8 @@ class MainWindow(QMainWindow):
         layout.addLayout(key_buttons_row)
         layout.addWidget(self.key_status_label)
         layout.addWidget(self.key_feedback_label)
+        if self._blind_test_use_case is not None:
+            layout.addWidget(self._build_chat_model_group(self._blind_test_use_case))
         layout.addWidget(self._build_backup_group())
         layout.addWidget(self._build_export_group())
         layout.addStretch()
@@ -2589,6 +2656,125 @@ class MainWindow(QMainWindow):
         if self._refresh_key_status_label():
             self.key_feedback_label.setText("")
         self._show_information("Clave eliminada", "La clave de API se ha eliminado.")
+
+    def _handle_mark_requested(self, message_id: int, mark: str) -> None:
+        """PA-R02-06: guarda «eso es Sirius» o «eso no» de una respuesta."""
+        if self._mark_reply_use_case is None:
+            return
+        chosen = ReplyMark(mark)
+        try:
+            self._mark_reply_use_case.mark(message_id, chosen)
+        except Exception as exc:
+            _logger.error("No se pudo guardar la marca (%s)", type(exc).__name__)
+            self._show_warning("No se pudo guardar la marca", "Inténtalo otra vez.")
+            return
+        self._marks_by_message[message_id] = chosen
+
+    def _refresh_mode_indicator(self) -> None:
+        """PA-R02-04: enseña el modo de la charla si no es el normal."""
+        mode = (
+            self._conversation_mode_use_case.current()
+            if self._conversation_mode_use_case is not None
+            else ConversationMode.NORMAL
+        )
+        texts = {ConversationMode.SERIO: "Modo serio", ConversationMode.PARA: "Sin pique"}
+        text = texts.get(mode, "")
+        self.mode_label.setText(text)
+        self.mode_label.setVisible(bool(text))
+        self.release_mode_button.setVisible(bool(text))
+
+    @property
+    def judge_in_progress(self) -> bool:
+        """Si el juez está puntuando en segundo plano."""
+        return self._active_judge_worker is not None
+
+    def _start_judge(self) -> None:
+        """PA-R02-08: el juez puntúa en segundo plano las respuestas que aún no tienen nota."""
+        if self._reply_judge_service is None or self._close_requested:
+            return
+        if self._active_judge_worker is not None:
+            self._judge_again = True
+            return
+        worker = ReplyJudgeWorker(self._reply_judge_service)
+        worker.signals.finished.connect(self._on_judge_finished)
+        self._active_judge_worker = worker
+        self._judge_again = False
+        self._thread_pool.start(worker)
+
+    def _on_judge_finished(self) -> None:
+        self._active_judge_worker = None
+        self._refresh_judge_indicator()
+        if self._judge_again and not self._is_sending:
+            self._start_judge()
+
+    def _refresh_judge_indicator(self) -> None:
+        """PA-R02-08: enseña el aviso del juez mientras la media siga por debajo de 3,5."""
+        service = self._reply_judge_service
+        mean = service.recent_mean() if service is not None else None
+        low = service is not None and service.is_low()
+        text = (
+            f"El juez: las 10 últimas suenan menos a Sirius (media {mean:.1f} de 5)".replace(
+                ".", ","
+            )
+            if low and mean is not None
+            else ""
+        )
+        self.judge_label.setText(text)
+        self.judge_label.setVisible(bool(text))
+
+    def _handle_release_mode_clicked(self) -> None:
+        if self._conversation_mode_use_case is not None:
+            self._conversation_mode_use_case.release()
+        self._refresh_mode_indicator()
+
+    def _build_chat_model_group(self, use_case: BlindTestUseCase) -> QGroupBox:
+        """El modelo de la charla y la prueba a ciegas para elegirlo (PA-R02-03)."""
+        group = QGroupBox("Modelo de la charla")
+        layout = QVBoxLayout(group)
+        self.chat_model_label = QLabel("")
+        self.chat_model_label.setWordWrap(True)
+        self._refresh_chat_model_label(use_case)
+        self.blind_test_button = QPushButton("Elegir el modelo a ciegas…")
+        self.blind_test_button.clicked.connect(lambda: self._open_blind_test(use_case))
+        layout.addWidget(self.chat_model_label)
+        layout.addWidget(self.blind_test_button)
+        if self._trick_questions_use_case is not None:
+            trick_use_case = self._trick_questions_use_case
+            self.trick_questions_button = QPushButton("Preguntas trampa…")
+            self.trick_questions_button.clicked.connect(
+                lambda: self._open_trick_questions(trick_use_case)
+            )
+            layout.addWidget(self.trick_questions_button)
+        return group
+
+    def _refresh_chat_model_label(self, use_case: BlindTestUseCase) -> None:
+        model = use_case.chat_model()
+        self.chat_model_label.setText(
+            f"Sirius conversa con {model}, en este ordenador."
+            if model
+            else "Todavía no has elegido el modelo con el que conversa Sirius."
+        )
+
+    def _open_blind_test(self, use_case: BlindTestUseCase) -> None:
+        dialog = BlindTestDialog(
+            use_case,
+            show_warning=self._show_warning,
+            show_information=self._show_information,
+            parent=self,
+        )
+        dialog.exec()
+        self._refresh_chat_model_label(use_case)
+
+    def _open_trick_questions(self, use_case: TrickQuestionsUseCase) -> None:
+        """E-R02-03: solo con la charla en un modelo de este ordenador, que no cuesta dinero."""
+        if not use_case.chat_is_local():
+            self._show_warning(
+                "Preguntas trampa",
+                "Las preguntas trampa se le hacen al modelo de la charla de este ordenador. "
+                "Elige uno antes con la prueba a ciegas.",
+            )
+            return
+        TrickQuestionsDialog(use_case, show_warning=self._show_warning, parent=self).exec()
 
     def _save_configuration(self) -> None:
         name = self.name_input.text().strip()

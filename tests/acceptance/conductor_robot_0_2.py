@@ -40,16 +40,34 @@ import httpx
 import pytest
 
 from sirius.adapters.persistence.bootstrap import initialize_persistence
+from sirius.adapters.persistence.migrations import upgrade_to_head
+from sirius.adapters.persistence.sqlite_identity_repository import (
+    build_sqlite_identity_repository,
+)
 from sirius.adapters.secrets.fake import FakeSecretStore
 from sirius.application.send_message import SendMessageResult
 from sirius.composition_root import ConversationDependencies, build_conversation_dependencies
-from sirius.config.settings import save_settings
-from sirius.infrastructure.paths import resolve_paths
+from sirius.config.settings import load_settings, save_settings
+from sirius.domain.blind_test import BlindTestSheet
+from sirius.domain.conversation_mode import (
+    ENTERING_SERIOUS_MODE,
+    MODE_INSTRUCTIONS,
+    ConversationMode,
+)
+from sirius.domain.own_memory import IS_YOU_HEADING, NOT_YOU_HEADING
+from sirius.domain.reply_judge import TrickVerdict
+from sirius.domain.reply_mark import ReplyMark
+from sirius.domain.robot_seed import (
+    ROBOT_SEED_EXAMPLES,
+    ROBOT_SEED_INSTRUCTIONS,
+    ROBOT_SEED_REMINDER,
+)
+from sirius.infrastructure.paths import ensure_paths, resolve_paths
 from sirius.ports.llm import LLMCompleted, LLMRequest, LLMStreamEvent, LLMTextDelta
 
 #: Las letras de la tabla de piezas de ADR-233 que ya han entrado en ``main``.
 #: La A es esta: la nota de arranque y estas pruebas.
-PIEZAS_ENTREGADAS: frozenset[str] = frozenset({"A"})
+PIEZAS_ENTREGADAS: frozenset[str] = frozenset({"A", "B", "C", "D", "E"})
 
 #: Qué trae cada pieza, con las palabras de la tabla de ADR-233.
 PIEZAS: Mapping[str, str] = {
@@ -139,6 +157,10 @@ class _ProveedorGrabador:
         self.peticiones: list[Peticion] = []
         self._respuestas = respuestas
 
+    def contesta_despues(self, texto: str) -> None:
+        """La próxima respuesta será ``texto``; después sigue con las que tocaban."""
+        self._respuestas = itertools.chain([texto], self._respuestas)
+
     def health_check(self) -> bool:
         return True
 
@@ -162,6 +184,9 @@ class OllamaDeMentira:
     """
 
     respuesta: str = "Respuesta de Ollama."
+    #: Si está, contesta según el modelo y lo que dijo el propietario.
+    responder: Callable[[str, str], str] | None = None
+    modelos_instalados: tuple[str, ...] = ()
     urls: list[httpx.URL] = field(default_factory=list)
     modelos: list[str] = field(default_factory=list)
 
@@ -177,9 +202,18 @@ class OllamaDeMentira:
         modelo = cuerpo.get("model")
         if isinstance(modelo, str):
             self.modelos.append(modelo)
+        if request.url.path == "/api/tags":
+            return httpx.Response(
+                200, json={"models": [{"name": nombre} for nombre in self.modelos_instalados]}
+            )
         if request.url.path == "/api/chat":
+            mensajes = cuerpo.get("messages", [])
+            dicho = next((m["content"] for m in reversed(mensajes) if m.get("role") == "user"), "")
+            respuesta = (
+                self.responder(str(modelo), dicho) if self.responder is not None else self.respuesta
+            )
             lineas = [
-                {"message": {"role": "assistant", "content": self.respuesta}, "done": False},
+                {"message": {"role": "assistant", "content": respuesta}, "done": False},
                 {"message": {"role": "assistant", "content": ""}, "done": True},
             ]
             texto = "\n".join(json.dumps(linea) for linea in lineas) + "\n"
@@ -203,6 +237,31 @@ class ResumidorDeMentira:
     def resume(self, charla: str) -> str:
         self.pedidos.append(charla)
         return charla if self.copiar else self.texto
+
+
+class _JuezEnchufado:
+    """Enchufa un ``JuezDeMentira`` donde Sirius espera su juez."""
+
+    def __init__(self, juez: JuezDeMentira) -> None:
+        self._juez = juez
+
+    def score(self, reply: str) -> int:
+        return self._juez.puntua(reply)
+
+    def verdict(self, bad_idea: str, reply: str) -> TrickVerdict:
+        del bad_idea
+        return TrickVerdict(self._juez.discrepa(reply))
+
+
+class _ResumidorEnchufado:
+    """Enchufa un ``ResumidorDeMentira`` donde Sirius espera su resumidor."""
+
+    def __init__(self, resumidor: ResumidorDeMentira) -> None:
+        self._resumidor = resumidor
+
+    def summarize(self, text: str, provider: object) -> str:
+        del provider
+        return self._resumidor.resume(text)
 
 
 @dataclass
@@ -355,27 +414,64 @@ FAMILIAS_DEL_BANCO_DE_MEMORIA: frozenset[str] = frozenset(
 
 
 class VentanaDePrueba:
-    """La ventana de conversación de Sirius, vista desde una prueba (pieza D)."""
+    """La ventana de conversación de Sirius, vista desde una prueba (pieza D).
+
+    Es la ventana de verdad, la que monta ``_build_main_window`` al arrancar;
+    aquí solo se buscan sus botones y su indicador y se pulsan.
+    """
+
+    def __init__(self, ventana: Any, qtbot: Any) -> None:
+        self._ventana = ventana
+        self._qtbot = qtbot
+
+    def _respuestas(self) -> list[Any]:
+        from sirius.presentation.message_view import MessageItemWidget
+
+        lista = self._ventana.message_list
+        widgets = [lista.itemWidget(lista.item(i)) for i in range(lista.count())]
+        return [
+            w
+            for w in widgets
+            if isinstance(w, MessageItemWidget)
+            and any(not boton.isHidden() for boton in w.mark_buttons)
+        ]
 
     def botones_de_la_respuesta(self, numero: int) -> tuple[str, ...]:
-        raise _pendiente("D")
+        widget = self._respuestas()[numero - 1]
+        return tuple(boton.text() for boton in widget.mark_buttons if not boton.isHidden())
 
     def pulsa(self, numero: int, boton: str) -> None:
-        raise _pendiente("D")
+        widget = self._respuestas()[numero - 1]
+        next(b for b in widget.mark_buttons if b.text() == boton).click()
 
     def indicador_de_modo(self) -> str:
-        raise _pendiente("D")
+        etiqueta = self._ventana.mode_label
+        return "" if etiqueta.isHidden() else str(etiqueta.text())
 
     def quita_el_modo(self) -> None:
-        raise _pendiente("D")
+        self._ventana.release_mode_button.click()
 
     def escribe(self, texto: str) -> None:
-        """El propietario escribe ``texto`` en la ventana y espera a que acabe todo el turno."""
-        raise _pendiente("D")
+        """El propietario escribe ``texto`` en la ventana y espera a que acabe todo el turno.
+
+        Todo el turno es la respuesta y lo que la ventana lanza después en segundo
+        plano, como el juez.
+        """
+        self._ventana.message_input.setText(texto)
+        self._ventana.send_button.click()
+        self._qtbot.waitUntil(
+            lambda: self._ventana.send_button.isEnabled() and not self._ventana.judge_in_progress,
+            timeout=10_000,
+        )
 
     def aviso_del_juez(self) -> str:
-        """El aviso del juez tal como se ve; vacío si no se ve."""
-        raise _pendiente("E")
+        """El aviso del juez tal como se ve cuando ha terminado de puntuar; vacío si no se ve.
+
+        La ventana lanza el juez en segundo plano al abrirse: se espera a que acabe.
+        """
+        self._qtbot.waitUntil(lambda: not self._ventana.judge_in_progress, timeout=10_000)
+        etiqueta = self._ventana.judge_label
+        return "" if etiqueta.isHidden() else str(etiqueta.text())
 
     def espera_al_trabajo_de_fondo(self) -> None:
         """Espera a que acabe lo que la ventana haya lanzado en segundo plano."""
@@ -414,6 +510,11 @@ class Conductor:
         if ajustes:
             save_settings(dict(ajustes))
         self.carpeta = carpeta
+        self._ollama: OllamaDeMentira | None = None
+        self._charla_por_ollama = False
+        self._resumidor: ResumidorDeMentira | None = None
+        self._juez: JuezDeMentira | None = None
+        self._hoja: BlindTestSheet | None = None
         rutas = resolve_paths()
         initialize_persistence(rutas)
         self.base = rutas.data_dir / "sirius.db"
@@ -430,9 +531,17 @@ class Conductor:
 
     def _montar(self) -> ConversationDependencies:
         dependencias = build_conversation_dependencies(
-            self.base, self.carpeta / "copias", secret_store=FakeSecretStore()
+            self.base,
+            self.carpeta / "copias",
+            secret_store=FakeSecretStore(),
+            ollama_transport=self._ollama.transporte() if self._ollama is not None else None,
+            conversation_summarizer=(
+                _ResumidorEnchufado(self._resumidor) if self._resumidor is not None else None
+            ),
+            reply_judge=_JuezEnchufado(self._juez) if self._juez is not None else None,
         )
-        dependencias.send_message_use_case.set_llm_provider(self._grabador)
+        if not self._charla_por_ollama:
+            dependencias.send_message_use_case.set_llm_provider(self._grabador)
         return dependencias
 
     # --- Lo que ya existe en Sirius ---
@@ -454,8 +563,9 @@ class Conductor:
         return len(self._grabador.peticiones) > self._peticiones_antes_del_ultimo_turno
 
     def reabre(self) -> None:
-        """Cierra Sirius y lo vuelve a abrir sobre la misma base."""
+        """Cierra Sirius y lo vuelve a abrir sobre la misma base, arranque incluido."""
         self._dependencias.close_database_connections()
+        initialize_persistence(resolve_paths())
         self._dependencias = self._montar()
 
     def cierra(self) -> None:
@@ -492,104 +602,243 @@ class Conductor:
 
     @classmethod
     def desde_una_base_de_0_1(cls, carpeta: Path) -> Conductor:
-        """Una base de 0.1, con la identidad v1 y la semilla vieja, que se abre ya con la 0.2."""
-        raise _pendiente("B")
+        """Una base de 0.1, con la identidad v1 y la semilla vieja, que se abre ya con la 0.2.
+
+        La base se crea como la dejó 0.1: esquema al día y la identidad con su
+        primera versión, sin pasar por el arranque de ahora. Después se abre
+        Sirius sobre ella como en producción.
+        """
+        rutas = resolve_paths()
+        ensure_paths(rutas)
+        base = rutas.data_dir / "sirius.db"
+        upgrade_to_head(base)
+        identidades = build_sqlite_identity_repository(base)
+        try:
+            identidades.get_or_create_current_identity()
+            assert len(identidades.get_history()) == 1
+        finally:
+            identidades.close()
+        return cls(carpeta)
 
     def semilla_del_robot(self) -> Semilla:
-        raise _pendiente("B")
+        return Semilla(
+            instrucciones=ROBOT_SEED_INSTRUCTIONS,
+            ejemplos=tuple((dicho, sirius) for _, dicho, sirius in ROBOT_SEED_EXAMPLES),
+        )
 
     def identidad_vigente(self) -> tuple[int, str]:
         """La versión vigente de la identidad y su texto de personalidad."""
-        raise _pendiente("B")
+        identidades = build_sqlite_identity_repository(self.base)
+        try:
+            identidad = identidades.get_current_identity()
+        finally:
+            identidades.close()
+        assert identidad is not None
+        vigente = identidad.current_version
+        return vigente.version, vigente.personality_instructions
 
     def identidad_en_la_version(self, version: int) -> str:
-        raise _pendiente("B")
+        identidades = build_sqlite_identity_repository(self.base)
+        try:
+            historia = identidades.get_history()
+        finally:
+            identidades.close()
+        return next(v.personality_instructions for v in historia if v.version == version)
 
     # --- Pieza C: Ollama para la charla y la prueba a ciegas ---
 
     def charla_por_ollama(self, modelo: str, ollama: OllamaDeMentira) -> None:
-        """Elige Ollama para la charla con ``modelo``, servido por ``ollama``."""
-        raise _pendiente("C")
+        """Elige Ollama para la charla con ``modelo``, servido por ``ollama``.
+
+        Guarda los ajustes como lo haría el propietario y vuelve a montar
+        Sirius: desde aquí la charla va por el conector de verdad, y el
+        grabador deja de hacer de modelo.
+        """
+        ajustes = dict(load_settings())
+        ajustes["llm_provider"] = "ollama"
+        ajustes["ollama_chat_model"] = modelo
+        save_settings(ajustes)
+        self._ollama = ollama
+        self._charla_por_ollama = True
+        self.reabre()
 
     def preguntas_de_la_prueba_a_ciegas(self) -> tuple[str, ...]:
-        raise _pendiente("C")
+        return self._dependencias.blind_test_use_case.questions()
 
     def prueba_a_ciegas(self, respuestas_por_modelo: Mapping[str, Sequence[str]]) -> HojaACiegas:
-        """Prepara la hoja: cada modelo contesta las preguntas con sus respuestas."""
-        raise _pendiente("C")
+        """Prepara la hoja: cada modelo contesta las preguntas con sus respuestas.
+
+        Los modelos los sirve un Ollama de mentira que contesta, a cada modelo
+        y a cada pregunta, lo de ``respuestas_por_modelo``. La hoja la prepara
+        el caso de uso de verdad, preguntando por el conector de verdad.
+        """
+        preguntas = self.preguntas_de_la_prueba_a_ciegas()
+        self._ollama = OllamaDeMentira(
+            responder=lambda modelo, dicho: respuestas_por_modelo[modelo][preguntas.index(dicho)],
+            modelos_instalados=tuple(respuestas_por_modelo),
+        )
+        self.reabre()
+        caso = self._dependencias.blind_test_use_case
+        assert caso.installed_models() == tuple(sorted(respuestas_por_modelo))
+        self._hoja = caso.prepare(list(respuestas_por_modelo))
+        # Lo que enseña la ventana en cada pregunta: el texto y «letra) respuesta».
+        vista = [
+            linea
+            for item in self._hoja.items
+            for linea in (item.question, *(f"{letra}) {texto}" for letra, texto in item.options))
+        ]
+        return HojaACiegas(
+            preguntas=tuple(
+                PreguntaACiegas(texto=item.question, respuestas=dict(item.options))
+                for item in self._hoja.items
+            ),
+            lo_que_ve_el_propietario="\n".join(vista),
+        )
 
     def elige_a_ciegas(self, hoja: HojaACiegas, elecciones: Mapping[int, str]) -> str:
         """El propietario elige una letra por pregunta; devuelve el modelo ganador."""
-        raise _pendiente("C")
+        assert self._hoja is not None, "primero hay que preparar la prueba a ciegas"
+        caso = self._dependencias.blind_test_use_case
+        resultado = caso.result(self._hoja, elecciones)
+        assert resultado.winner is not None, f"empate entre {resultado.tied}"
+        caso.choose(resultado.winner)
+        return resultado.winner
 
     def modelo_de_la_charla(self) -> str | None:
-        raise _pendiente("C")
+        return self._dependencias.blind_test_use_case.chat_model()
 
     # --- Pieza D: modos, deriva y botones ---
 
     def texto_del_modo(self, modo: str) -> str:
         """Lo que Sirius añade a las instrucciones en el modo ``serio`` o ``para``."""
-        raise _pendiente("D")
+        return MODE_INSTRUCTIONS[ConversationMode(modo)]
 
     def texto_al_entrar_en_modo_serio(self) -> str:
         """Lo que Sirius añade solo en el turno en que entra en el modo serio: el vacile."""
-        raise _pendiente("D")
+        return ENTERING_SERIOUS_MODE
 
     def recordatorio_de_la_semilla(self) -> str:
-        raise _pendiente("D")
+        return ROBOT_SEED_REMINDER
 
     def con_resumidor(self, resumidor: ResumidorDeMentira) -> None:
-        raise _pendiente("D")
+        """Los resúmenes de la charla los hace ``resumidor`` en vez del modelo."""
+        self._resumidor = resumidor
+        self.reabre()
+
+    def _id_de_la_respuesta(self, respuesta: int) -> int:
+        return self._resultados[respuesta - 1].sirius_message.id
 
     def marca(self, respuesta: int, marca: str) -> None:
         """Pulsa «eso es Sirius» o «eso no» en la respuesta ``respuesta`` (desde 1)."""
-        raise _pendiente("D")
+        self._dependencias.mark_reply_use_case.mark(
+            self._id_de_la_respuesta(respuesta), ReplyMark(marca)
+        )
 
     def marcas(self) -> list[tuple[int, str]]:
-        raise _pendiente("D")
+        numeros = {r.sirius_message.id: n for n, r in enumerate(self._resultados, start=1)}
+        return [
+            (numeros[marcada.message_id], marcada.mark.value)
+            for marcada in self._dependencias.mark_reply_use_case.marked_replies()
+        ]
 
     def detalle_de_la_marca(self, respuesta: int) -> Mapping[str, object]:
         """Con qué versión de la identidad y con qué modelo se dio la respuesta marcada."""
-        raise _pendiente("D")
+        identificador = self._id_de_la_respuesta(respuesta)
+        marcada = next(
+            m
+            for m in self._dependencias.mark_reply_use_case.marked_replies()
+            if m.message_id == identificador
+        )
+        return {"modelo": marcada.model, "version_de_identidad": marcada.identity_version}
 
     def cuenta_de_marcas(self, ultimas: int) -> tuple[int, int]:
         """Cuántas «eso es Sirius» hay entre las ``ultimas`` marcadas, y cuántas marcadas."""
-        raise _pendiente("D")
+        return self._dependencias.mark_reply_use_case.count(ultimas)
 
     def marcas_posibles(self) -> frozenset[str]:
-        raise _pendiente("D")
+        return frozenset(
+            marca.value for marca in self._dependencias.mark_reply_use_case.possible_marks()
+        )
 
     def ventana(self, qtbot: Any) -> VentanaDePrueba:
-        raise _pendiente("D")
+        """La ventana principal, montada como al arrancar, con la charla ya cargada."""
+        from sirius.main import _build_main_window
+
+        ventanas: list[Any] = []
+        ventana = _build_main_window(self._dependencias, ventanas)
+        qtbot.addWidget(ventana)
+        return VentanaDePrueba(ventana, qtbot)
 
     # --- Pieza E: memoria propia, juez y preguntas trampa ---
 
     def sirius_opino(self, texto: str) -> None:
-        """Guarda una opinión que Sirius ya dio."""
-        raise _pendiente("E")
+        """Guarda una opinión que Sirius ya dio.
+
+        Se la hace decir al modelo en un turno de verdad, y la charla sigue con
+        otra cosa hasta que esa respuesta ya no va entre los mensajes recientes:
+        si después vuelve a una petición, solo puede ser por su memoria propia.
+        """
+        self._grabador.contesta_despues(texto)
+        self.di("¿Y tú qué opinas?")
+        dicha = self._resultados[-1].sirius_message.id
+        for n in range(1, 100):
+            self.di(f"Cambiando de tema, la número {n}.")
+            recientes = self._resultados[-1].context.recent_messages
+            if all(mensaje.id != dicha for mensaje in recientes):
+                return
+        msg = "la opinión no sale nunca de los mensajes recientes"
+        raise AssertionError(msg)
 
     def encabezado_de_lo_que_no_es(self) -> str:
-        raise _pendiente("E")
+        return NOT_YOU_HEADING
 
     def encabezado_de_lo_que_si_es(self) -> str:
-        raise _pendiente("E")
+        return IS_YOU_HEADING
 
     def con_juez(self, juez: JuezDeMentira) -> None:
-        raise _pendiente("E")
+        """Las notas y los veredictos del juez los da ``juez`` en vez del modelo local."""
+        self._juez = juez
+        self.reabre()
+
+    def _deja_puntuar_al_juez(self) -> None:
+        """Lo que la ventana lanza en segundo plano al acabar cada turno: el juez.
+
+        ``di`` es el turno y no lo incluye, igual que el turno de la ventana.
+        """
+        self._dependencias.reply_judge_service.judge_pending()
 
     def notas_del_juez(self) -> list[int]:
-        raise _pendiente("E")
+        self._deja_puntuar_al_juez()
+        return [nota.score for nota in self._dependencias.reply_judge_service.scores()]
 
     def avisos_del_juez(self) -> list[int]:
         """Las respuestas (desde 1) tras las que el juez avisó de que Sirius baja."""
-        raise _pendiente("E")
+        self._deja_puntuar_al_juez()
+        avisadas = {
+            nota.message_id
+            for nota in self._dependencias.reply_judge_service.scores()
+            if nota.warned
+        }
+        return [
+            n
+            for n, resultado in enumerate(self._resultados, start=1)
+            if resultado.sirius_message.id in avisadas
+        ]
 
     def banco_de_preguntas_trampa(self) -> tuple[PreguntaTrampa, ...]:
-        raise _pendiente("E")
+        return tuple(
+            PreguntaTrampa(id=p.id, idea_mala=p.bad_idea, por_que_es_mala=p.why_bad)
+            for p in self._dependencias.trick_questions_use_case.questions()
+        )
 
     def pasa_el_banco_de_preguntas_trampa(self, juez: JuezDeMentira) -> Mapping[str, str]:
         """Cada pregunta trampa, con el veredicto del juez sobre la respuesta."""
-        raise _pendiente("E")
+        self.con_juez(juez)
+        respuestas = self._dependencias.trick_questions_use_case.run()
+        return {
+            r.question.id: r.judge_verdict.value if r.judge_verdict is not None else ""
+            for r in respuestas
+        }
 
     # --- Pieza F: banco de memoria y búsqueda por significado ---
 

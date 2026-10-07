@@ -13,9 +13,13 @@ from sirius.application.data_location import DataLocationUseCase, LocationFileCo
 from sirius.composition_root import (
     ConversationDependencies,
     build_conversation_dependencies,
+    chat_goes_through_ollama,
     save_studio_voice,
 )
-from sirius.config.llm_provider_settings import LLMProviderKind, resolve_openai_provider_settings
+from sirius.config.llm_provider_settings import (
+    LLMProviderKind,
+    resolve_openai_provider_settings,
+)
 from sirius.infrastructure.bootstrap_location_store import build_bootstrap_location_store
 from sirius.infrastructure.crash_handler import install_crash_handler
 from sirius.infrastructure.data_path_validator import build_data_path_validator
@@ -90,6 +94,11 @@ def _build_main_window(
         studio_voice_use_case=dependencies.studio_voice_use_case,
         studio_capture_use_case=dependencies.studio_capture_use_case,
         save_studio_voice=save_studio_voice,
+        blind_test_use_case=dependencies.blind_test_use_case,
+        mark_reply_use_case=dependencies.mark_reply_use_case,
+        conversation_mode_use_case=dependencies.conversation_mode_use_case,
+        reply_judge_service=dependencies.reply_judge_service,
+        trick_questions_use_case=dependencies.trick_questions_use_case,
     )
     main_window.project_completed.connect(_on_project_completed)
     return main_window
@@ -169,8 +178,12 @@ def _build_initial_window(
 
     Determined exclusively through ``ApiKeySettingsUseCase.has_key()`` — never
     by touching the secret store, keyring, or any provider SDK directly.
+
+    Con la charla en Ollama no hace falta ninguna clave: el robot conversa con
+    un modelo de este ordenador, y pedir la de OpenAI sería pedir algo que no
+    se usa (pieza C de ADR-233).
     """
-    if not dependencies.api_key_settings_use_case.has_key():
+    if not chat_goes_through_ollama() and not dependencies.api_key_settings_use_case.has_key():
         return _build_onboarding_window(dependencies, windows)
     return _build_post_key_window(dependencies, windows)
 

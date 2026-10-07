@@ -13,11 +13,13 @@ la interfaz").
 
 from __future__ import annotations
 
+import threading
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import httpx
 import openai
 
 from sirius.adapters.audio.openai_speech import DEFAULT_VOICE, OpenAISpeech
@@ -36,6 +38,11 @@ from sirius.adapters.clock.system_clock import build_system_clock
 from sirius.adapters.export.filesystem_export_service import build_filesystem_export_service
 from sirius.adapters.llm.budget import BudgetPolicy, BudgetTracker
 from sirius.adapters.llm.fake import FakeLLMProvider
+from sirius.adapters.llm.ollama_chat import (
+    OllamaChatProvider,
+    OllamaNotAvailableError,
+    list_installed_models,
+)
 from sirius.adapters.llm.openai_credential_validator import OpenAICredentialValidator
 from sirius.adapters.llm.openai_responses import OpenAIResponsesProvider
 from sirius.adapters.llm.token_counter import CharacterHeuristicTokenCounter
@@ -66,6 +73,9 @@ from sirius.adapters.persistence.sqlite_memory_suggestion_repository import (
     build_sqlite_memory_suggestion_repository,
 )
 from sirius.adapters.persistence.sqlite_project_repository import build_sqlite_project_repository
+from sirius.adapters.persistence.sqlite_robot_conversation import (
+    build_sqlite_robot_conversation_repository,
+)
 from sirius.adapters.persistence.sqlite_unit_of_work import build_sqlite_unit_of_work
 from sirius.adapters.persistence.staged_engine_candidate import candidato as staged_engine_candidato
 from sirius.adapters.persistence.staged_engine_port import build_staged_engine_port
@@ -74,6 +84,7 @@ from sirius.application.api_key_settings import ApiKeySettingsUseCase
 from sirius.application.approve_decision import ApproveDecisionUseCase
 from sirius.application.archive_decision import ArchiveDecisionUseCase
 from sirius.application.archive_memory import ArchiveMemoryUseCase
+from sirius.application.blind_test import BlindTestUseCase
 from sirius.application.budget_status import GetBudgetStatusUseCase
 from sirius.application.confirm_memory_suggestion import ConfirmMemorySuggestionUseCase
 from sirius.application.context import ContextBuilder
@@ -96,7 +107,15 @@ from sirius.application.propose_decision import ProposeDecisionUseCase
 from sirius.application.propose_memory_suggestion import ProposeMemorySuggestionUseCase
 from sirius.application.rank_relevant_knowledge import RankRelevantKnowledgeUseCase
 from sirius.application.reject_memory_suggestion import RejectMemorySuggestionUseCase
+from sirius.application.reply_judge import LLMReplyJudge
 from sirius.application.restore_backup import RestoreBackupUseCase
+from sirius.application.robot_conversation import (
+    ConversationModeUseCase,
+    ConversationSummaryService,
+    LLMConversationSummarizer,
+    MarkReplyUseCase,
+    ReplyJudgeService,
+)
 from sirius.application.save_manual_memory import SaveManualMemoryUseCase
 from sirius.application.send_message import SendMessageUseCase
 from sirius.application.set_category import SetCategoryUseCase
@@ -105,22 +124,28 @@ from sirius.application.studio_capture import StudioCaptureUseCase
 from sirius.application.studio_voice import StudioVoiceUseCase, VoiceSettings
 from sirius.application.supersede_decision import SupersedeDecisionUseCase
 from sirius.application.tag_category import TagCategoryUseCase
+from sirius.application.trick_questions import TrickQuestionsUseCase
 from sirius.application.validate_and_save_api_key import ValidateAndSaveApiKeyUseCase
 from sirius.application.validate_backup import ValidateBackupUseCase
 from sirius.capture_setup import leer_contrasena_guardada
 from sirius.config.llm_provider_settings import (
+    OLLAMA_CHAT_MODEL_SETTING,
     LLMProviderConfigurationError,
     LLMProviderKind,
+    resolve_ollama_chat_settings,
     resolve_openai_api_key,
     resolve_openai_provider_settings,
     resolve_provider_kind,
 )
 from sirius.config.memory_gates import puertas_de_memoria
 from sirius.config.settings import load_settings, save_settings
+from sirius.domain.blind_test import BlindTestError
 from sirius.domain.capture import build_scene_registry
+from sirius.domain.robot_seed import ROBOT_SEED_REMINDER
 from sirius.infrastructure.logging import get_logger
 from sirius.ports.audio_playback import AudioPlayback
 from sirius.ports.llm import LLMProvider
+from sirius.ports.robot_conversation import ConversationSummarizer, ReplyJudge
 from sirius.ports.secrets import SecretStore
 
 _logger = get_logger(__name__)
@@ -244,6 +269,14 @@ class ConversationDependencies:
     any presentation code: the personal-data warning, background thread and
     "show the resulting path" UI belong to B9b, a later, separate cut.
 
+    ``blind_test_use_case`` (pieza C de ADR-233) prepara y cuenta la prueba a
+    ciegas, y al elegir deja el modelo ganador como el de la charla, en el
+    mismo arranque, igual que ``activate_configured_llm_provider`` con OpenAI.
+
+    ``reply_judge_service`` y ``trick_questions_use_case`` son de la pieza E: el
+    juez de cada respuesta, que la ventana enseña cuando baja, y las 40
+    preguntas trampa que el propietario lee y marca.
+
     ``propose_criticality_use_case`` (M21a, ADR-130) is likewise wired but not
     yet called from anywhere: the interface that shows a proposal and lets
     the user confirm or correct it is M21b, a later, separate cut. Wiring it
@@ -289,6 +322,53 @@ class ConversationDependencies:
     studio_capture_use_case: StudioCaptureUseCase
     close_database_connections: Callable[[], None]
     activate_configured_llm_provider: Callable[[], None]
+    blind_test_use_case: BlindTestUseCase
+    mark_reply_use_case: MarkReplyUseCase
+    conversation_mode_use_case: ConversationModeUseCase
+    reply_judge_service: ReplyJudgeService
+    trick_questions_use_case: TrickQuestionsUseCase
+
+
+def chat_goes_through_ollama() -> bool:
+    """Si la charla está puesta con el Ollama de este ordenador (pieza C de ADR-233)."""
+    try:
+        return resolve_provider_kind(load_settings()) is LLMProviderKind.OLLAMA
+    except LLMProviderConfigurationError:
+        return False
+
+
+class _LocalChatModel:
+    """El modelo de Ollama elegido para la charla, para el juez (pieza E de ADR-233).
+
+    Lee los ajustes en cada llamada, así que la elección de la prueba a ciegas
+    vale sin reiniciar. Solo construye proveedores de Ollama de este ordenador:
+    el juez nunca pregunta a OpenAI, y por eso no cuesta dinero. Sin modelo
+    elegido devuelve ``None``. Guarda el último proveedor para no abrir un
+    cliente nuevo en cada nota.
+    """
+
+    def __init__(self, transport: httpx.BaseTransport | None) -> None:
+        self._transport = transport
+        self._key: tuple[str, int] | None = None
+        self._provider: OllamaChatProvider | None = None
+        # El juez de cada turno y el de las preguntas trampa corren en hilos distintos.
+        self._lock = threading.Lock()
+
+    def __call__(self) -> LLMProvider | None:
+        try:
+            settings = resolve_ollama_chat_settings(dict(load_settings()))
+        except LLMProviderConfigurationError:
+            return None
+        key = (settings.model, settings.num_ctx)
+        with self._lock:
+            if self._provider is None or self._key != key:
+                if self._provider is not None:
+                    self._provider.close()
+                self._provider = OllamaChatProvider(
+                    settings.model, num_ctx=settings.num_ctx, transport=self._transport
+                )
+                self._key = key
+            return self._provider
 
 
 def _build_llm_provider(
@@ -296,6 +376,7 @@ def _build_llm_provider(
     secret_store: SecretStore,
     *,
     llm_usage_repository: SqliteLLMUsageRepository | None = None,
+    ollama_transport: httpx.BaseTransport | None = None,
 ) -> LLMProvider:
     """Build the LLM provider selected by persisted settings (default: fake).
 
@@ -313,6 +394,12 @@ def _build_llm_provider(
     The SDK's own retry loop is disabled (``max_retries=0``): the adapter
     already has its own tested retry policy (S9 "Reintentos"), and letting
     both retry independently would multiply attempts unpredictably.
+
+    Con "ollama" (pieza C de ADR-233) la charla va al Ollama de este
+    ordenador con el modelo que eligió el propietario. Sin modelo elegido
+    tampoco revienta: devuelve el mismo proveedor sin configurar, con la
+    explicación. ``ollama_transport`` solo lo pasan las pruebas, para que la
+    charla vaya a un Ollama de mentira sin cambiar la dirección.
     """
     settings = load_settings()
     try:
@@ -320,6 +407,14 @@ def _build_llm_provider(
         if provider_kind is LLMProviderKind.FAKE:
             _logger.info("Proveedor LLM seleccionado: fake")
             return FakeLLMProvider()
+        if provider_kind is LLMProviderKind.OLLAMA:
+            ollama_settings = resolve_ollama_chat_settings(settings)
+            _logger.info("Proveedor LLM seleccionado: ollama (modelo=%s)", ollama_settings.model)
+            return OllamaChatProvider(
+                ollama_settings.model,
+                num_ctx=ollama_settings.num_ctx,
+                transport=ollama_transport,
+            )
 
         api_key = resolve_openai_api_key(secret_store)
         if not api_key:
@@ -476,6 +571,10 @@ def build_conversation_dependencies(
     database_path: Path,
     backups_dir: Path,
     secret_store: SecretStore | None = None,
+    *,
+    ollama_transport: httpx.BaseTransport | None = None,
+    conversation_summarizer: ConversationSummarizer | None = None,
+    reply_judge: ReplyJudge | None = None,
 ) -> ConversationDependencies:
     """Build repositories, the secret store, and use cases wired to SQLite.
 
@@ -493,6 +592,8 @@ def build_conversation_dependencies(
     memory_suggestion_repository = build_sqlite_memory_suggestion_repository(database_path)
     knowledge_search_repository = build_sqlite_knowledge_search_repository(database_path)
     llm_usage_repository = build_sqlite_llm_usage_repository(database_path)
+    # Pieza D de ADR-233: modo, marcas y resúmenes de la charla del robot.
+    robot_conversation_repository = build_sqlite_robot_conversation_repository(database_path)
     # Shared by every use case that must write more than one repository
     # atomically: SaveManualMemoryUseCase (B4a); ProposeDecisionUseCase and
     # ApproveDecisionUseCase (B4b); CorrectMemoryUseCase and
@@ -577,13 +678,37 @@ def build_conversation_dependencies(
             _MAX_CRITICALITY_CATEGORY if puertas.filtro_de_relevancia else None
         ),
         category_matching_enabled=puertas.filtro_de_relevancia,
+        summary_repository=robot_conversation_repository,
+        reply_marks=robot_conversation_repository,
     )
+    # Pieza E de ADR-233: el juez puntúa con el modelo local elegido. Las pruebas
+    # le ponen uno de mentira con ``reply_judge``.
+    judge = reply_judge or LLMReplyJudge(identity_repository, _LocalChatModel(ollama_transport))
+    reply_judge_service = ReplyJudgeService(judge, robot_conversation_repository)
     send_message_use_case = SendMessageUseCase(
         context_builder=context_builder,
         conversation_repository=conversation_repository,
         llm_provider=_build_llm_provider(
-            database_path, secret_store, llm_usage_repository=llm_usage_repository
+            database_path,
+            secret_store,
+            llm_usage_repository=llm_usage_repository,
+            ollama_transport=ollama_transport,
         ),
+        mode_repository=robot_conversation_repository,
+        reply_marks=robot_conversation_repository,
+        summary_service=ConversationSummaryService(
+            conversation_repository,
+            robot_conversation_repository,
+            conversation_summarizer or LLMConversationSummarizer(),
+        ),
+        reminder=ROBOT_SEED_REMINDER,
+    )
+    trick_questions_use_case = TrickQuestionsUseCase(
+        identity_repository,
+        chat_provider=lambda: send_message_use_case.llm_provider,
+        judge=judge,
+        chat_is_local=chat_goes_through_ollama,
+        reminder=ROBOT_SEED_REMINDER,
     )
     get_history_use_case = GetConversationHistoryUseCase(conversation_repository)
 
@@ -646,6 +771,7 @@ def build_conversation_dependencies(
         llm_usage_repository,
         unit_of_work,
         staged_engine_port,
+        robot_conversation_repository,
     )
 
     def close_database_connections() -> None:
@@ -666,9 +792,45 @@ def build_conversation_dependencies(
         save_settings(settings)
         send_message_use_case.set_llm_provider(
             _build_llm_provider(
-                database_path, secret_store, llm_usage_repository=llm_usage_repository
+                database_path,
+                secret_store,
+                llm_usage_repository=llm_usage_repository,
+                ollama_transport=ollama_transport,
             )
         )
+
+    def choose_chat_model(model: str) -> None:
+        """Deja ``model`` de Ollama para la charla, guardado y ya activo (PA-R02-03)."""
+        settings = dict(load_settings())
+        settings["llm_provider"] = LLMProviderKind.OLLAMA.value
+        settings[OLLAMA_CHAT_MODEL_SETTING] = model
+        save_settings(settings)
+        send_message_use_case.set_llm_provider(
+            _build_llm_provider(
+                database_path,
+                secret_store,
+                llm_usage_repository=llm_usage_repository,
+                ollama_transport=ollama_transport,
+            )
+        )
+
+    def current_chat_model() -> str | None:
+        value = load_settings().get(OLLAMA_CHAT_MODEL_SETTING)
+        return value.strip() if isinstance(value, str) and value.strip() else None
+
+    def installed_chat_models() -> tuple[str, ...]:
+        try:
+            return list_installed_models(ollama_transport)
+        except OllamaNotAvailableError as exc:
+            raise BlindTestError(str(exc)) from exc
+
+    blind_test_use_case = BlindTestUseCase(
+        identity_repository=identity_repository,
+        provider_for=lambda model: OllamaChatProvider(model, transport=ollama_transport),
+        list_models=installed_chat_models,
+        choose_model=choose_chat_model,
+        current_model=current_chat_model,
+    )
 
     return ConversationDependencies(
         send_message_use_case=send_message_use_case,
@@ -724,4 +886,11 @@ def build_conversation_dependencies(
         studio_voice_use_case=studio_voice_use_case,
         studio_capture_use_case=studio_capture_use_case,
         activate_configured_llm_provider=activate_configured_llm_provider,
+        blind_test_use_case=blind_test_use_case,
+        mark_reply_use_case=MarkReplyUseCase(robot_conversation_repository),
+        conversation_mode_use_case=ConversationModeUseCase(
+            conversation_repository, robot_conversation_repository
+        ),
+        reply_judge_service=reply_judge_service,
+        trick_questions_use_case=trick_questions_use_case,
     )

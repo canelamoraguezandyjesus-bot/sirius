@@ -39,6 +39,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from sirius.domain.reply_mark import ReplyMark
+
 _MARKDOWN_FEATURES = (
     QTextDocument.MarkdownFeature.MarkdownDialectGitHub
     | QTextDocument.MarkdownFeature.MarkdownNoHTML
@@ -263,6 +265,11 @@ class MessageItemWidget(QWidget):
     # de este widget.
     propose_suggestion_requested = Signal(int, str)
 
+    # PA-R02-06 (pieza D de ADR-233): emitida al pulsar «Eso es Sirius» o «Eso
+    # no» en una respuesta de Sirius ya completada. Lleva el id del mensaje y
+    # el valor de la marca (``ReplyMark``); quien la escucha la guarda.
+    mark_requested = Signal(int, str)
+
     def __init__(self) -> None:
         super().__init__()
         layout = QVBoxLayout(self)
@@ -281,6 +288,17 @@ class MessageItemWidget(QWidget):
         self._propose_suggestion_button.setVisible(False)
         self._propose_suggestion_button.clicked.connect(self._emit_propose_suggestion_requested)
         header.addWidget(self._propose_suggestion_button)
+        self._mark_buttons: dict[ReplyMark, QPushButton] = {}
+        for mark, text in (
+            (ReplyMark.ES_SIRIUS, "Eso es Sirius"),
+            (ReplyMark.NO_ES_SIRIUS, "Eso no"),
+        ):
+            button = QPushButton(text)
+            button.setCheckable(True)
+            button.setVisible(False)
+            button.clicked.connect(lambda _=False, chosen=mark: self._emit_mark_requested(chosen))
+            header.addWidget(button)
+            self._mark_buttons[mark] = button
         layout.addLayout(header)
 
         self._content_container = QWidget()
@@ -298,6 +316,21 @@ class MessageItemWidget(QWidget):
         self._message_id: int | None = None
         self._raw_content = ""
 
+    def _emit_mark_requested(self, mark: ReplyMark) -> None:
+        self.show_mark(mark)
+        if self._message_id is not None:
+            self.mark_requested.emit(self._message_id, mark.value)
+
+    def show_mark(self, mark: ReplyMark | None) -> None:
+        """Deja pulsado el botón de ``mark`` y suelto el otro."""
+        for button_mark, button in self._mark_buttons.items():
+            button.setChecked(button_mark is mark)
+
+    @property
+    def mark_buttons(self) -> tuple[QPushButton, ...]:
+        """«Eso es Sirius» y «Eso no», en ese orden."""
+        return tuple(self._mark_buttons.values())
+
     def _emit_propose_suggestion_requested(self) -> None:
         if self._message_id is not None:
             self.propose_suggestion_requested.emit(self._message_id, self._raw_content)
@@ -310,6 +343,8 @@ class MessageItemWidget(QWidget):
         bold: bool,
         message_id: int | None = None,
         show_propose_suggestion: bool = False,
+        show_marks: bool = False,
+        current_mark: ReplyMark | None = None,
     ) -> None:
         """Renderiza el contenido final consolidado, segmentado en prosa Markdown
         segura (B8a) y bloques de código copiables (B8b), en el orden original.
@@ -325,6 +360,9 @@ class MessageItemWidget(QWidget):
         self._message_id = message_id
         self._raw_content = body_text
         self._propose_suggestion_button.setVisible(show_propose_suggestion)
+        for button in self._mark_buttons.values():
+            button.setVisible(show_marks)
+        self.show_mark(current_mark if show_marks else None)
         for segment in _segment_message(body_text):
             if segment.is_code:
                 block = _CodeBlockWidget(segment.text)
