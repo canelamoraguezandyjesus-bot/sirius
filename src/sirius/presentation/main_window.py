@@ -1422,7 +1422,11 @@ class MainWindow(QMainWindow):
         # M6, §3.6: solo un turno de Sirius ya completado puede proponerse
         # como recuerdo — nunca uno del usuario ni uno todavía en streaming.
         widget.propose_suggestion_requested.connect(self._handle_propose_suggestion_clicked)
-        widget.mark_requested.connect(self._handle_mark_requested)
+        widget.mark_requested.connect(
+            lambda message_id, mark, widget=widget: self._handle_mark_requested(
+                message_id, mark, widget
+            )
+        )
         self.message_list.setItemWidget(item, widget)
         completed_reply = role is MessageRole.SIRIUS and status is MessageStatus.COMPLETED
         widget.set_message(
@@ -2680,8 +2684,14 @@ class MainWindow(QMainWindow):
             self.key_feedback_label.setText("")
         self._show_information("Clave eliminada", "La clave de API se ha eliminado.")
 
-    def _handle_mark_requested(self, message_id: int, mark: str) -> None:
-        """PA-R02-06: guarda «eso es Sirius» o «eso no» de una respuesta."""
+    def _handle_mark_requested(
+        self, message_id: int, mark: str, widget: MessageItemWidget | None = None
+    ) -> None:
+        """PA-R02-06: guarda «eso es Sirius» o «eso no» de una respuesta.
+
+        Si no se puede guardar, los botones vuelven a la marca que había: la
+        ventana nunca enseña una marca que la base no tiene.
+        """
         if self._mark_reply_use_case is None:
             return
         chosen = ReplyMark(mark)
@@ -2689,6 +2699,8 @@ class MainWindow(QMainWindow):
             self._mark_reply_use_case.mark(message_id, chosen)
         except Exception as exc:
             _logger.error("No se pudo guardar la marca (%s)", type(exc).__name__)
+            if widget is not None:
+                widget.show_mark(self._marks_by_message.get(message_id))
             self._show_warning("No se pudo guardar la marca", "Inténtalo otra vez.")
             return
         self._marks_by_message[message_id] = chosen

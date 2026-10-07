@@ -156,6 +156,9 @@ class SqliteRobotConversationRepository:
                 .outerjoin(JudgeScoreModel, JudgeScoreModel.message_id == MessageModel.id)
                 .where(
                     JudgeScoreModel.message_id.is_(None),
+                    # Solo las de la 0.2: una respuesta vieja marcada desde el
+                    # historial tiene fila de marca, pero sin modelo (ADR-237).
+                    ReplyMarkModel.model.is_not(None),
                     MessageModel.role == MessageRole.SIRIUS,
                     MessageModel.status == MessageStatus.COMPLETED,
                     MessageModel.content.is_not(None),

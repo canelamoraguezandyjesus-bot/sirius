@@ -77,9 +77,8 @@ def _caso(*, falla: bool = False, local: bool = True) -> TrickQuestionsUseCase:
     modelo = _Modelo(falla=falla)
     return TrickQuestionsUseCase(
         _Identidades(),  # type: ignore[arg-type]
-        chat_provider=lambda: modelo,
+        local_chat_provider=lambda: modelo if local else None,
         judge=_Juez(),
-        chat_is_local=lambda: local,
     )
 
 
@@ -154,9 +153,8 @@ def test_cerrar_la_ventana_a_medias_para_las_preguntas_pendientes(qtbot: QtBot) 
     modelo.stream_response = contar  # type: ignore[method-assign]
     caso = TrickQuestionsUseCase(
         _Identidades(),  # type: ignore[arg-type]
-        chat_provider=lambda: modelo,
+        local_chat_provider=lambda: modelo,
         judge=_Juez(),
-        chat_is_local=lambda: True,
     )
     pendientes: list[QRunnable] = []
     ventana = TrickQuestionsDialog(caso, run_worker=pendientes.append)

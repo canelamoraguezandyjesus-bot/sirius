@@ -10,6 +10,7 @@ from pathlib import Path
 import httpx
 import pytest
 
+from sirius.adapters.llm.ollama_chat import OllamaChatProvider
 from sirius.adapters.persistence.bootstrap import initialize_persistence
 from sirius.adapters.persistence.sqlite_conversation_repository import (
     build_sqlite_conversation_repository,
@@ -20,6 +21,7 @@ from sirius.composition_root import ConversationDependencies, build_conversation
 from sirius.config.settings import save_settings
 from sirius.domain.conversation import MessageRole
 from sirius.domain.reply_judge import SCORE_TASK, TrickVerdict
+from sirius.domain.reply_mark import ReplyMark
 from sirius.domain.robot_seed import ROBOT_SEED_INSTRUCTIONS, ROBOT_SEED_REMINDER
 from sirius.domain.trick_questions import TRICK_QUESTIONS
 from sirius.infrastructure.paths import resolve_paths
@@ -114,8 +116,12 @@ def test_el_juez_puntua_en_orden_solo_las_respuestas_de_la_0_2(tmp_path: Path) -
     base, sirius = _sirius(tmp_path, juez=juez)
     conversaciones = build_sqlite_conversation_repository(base)
     conversacion = conversaciones.get_or_create_main_conversation()
-    # Una respuesta de 0.1: sin modelo apuntado, se dio con otra semilla.
-    conversaciones.append_message(conversacion.id, MessageRole.SIRIUS, "Respuesta de la 0.1.")
+    # Una respuesta de 0.1: sin modelo apuntado, se dio con otra semilla. Marcarla
+    # desde el historial no la convierte en una de la 0.2 (ronda 1 de Codex).
+    vieja = conversaciones.append_message(
+        conversacion.id, MessageRole.SIRIUS, "Respuesta de la 0.1."
+    )
+    sirius.mark_reply_use_case.mark(vieja.id, ReplyMark.ES_SIRIUS)
     for n in range(1, 4):
         sirius.send_message_use_case.send_message(f"Mensaje {n}.")
 
@@ -185,6 +191,9 @@ class _OllamaQueApunta:
     def transporte(self) -> httpx.MockTransport:
         return httpx.MockTransport(self._contestar)
 
+    def al_chat(self) -> list[tuple[httpx.URL, dict[str, object]]]:
+        return [(url, cuerpo) for url, cuerpo in self.peticiones if url.path == "/api/chat"]
+
     def _contestar(self, request: httpx.Request) -> httpx.Response:
         cuerpo = json.loads(request.content or b"{}")
         self.peticiones.append((request.url, cuerpo))
@@ -232,20 +241,34 @@ def test_sin_modelo_local_elegido_el_juez_no_pregunta_a_nadie(tmp_path: Path) ->
 # --- Las preguntas trampa ----------------------------------------------------
 
 
+def _charla_local(sirius: ConversationDependencies, transporte: httpx.BaseTransport) -> None:
+    """La charla en el Ollama de este ordenador, como la deja la prueba a ciegas."""
+    sirius.send_message_use_case.set_llm_provider(
+        OllamaChatProvider("modelo-local", transport=transporte)
+    )
+
+
 def test_las_preguntas_trampa_pasan_por_el_modelo_de_la_charla_sin_guardar_nada(
     tmp_path: Path,
 ) -> None:
-    modelo = _Modelo()
+    ollama = _OllamaQueApunta("Ni de broma.")
     juez = _Juez()
-    base, sirius = _sirius(tmp_path, juez=juez, modelo=modelo)
+    base, sirius = _sirius(tmp_path, juez=juez)
+    _charla_local(sirius, ollama.transporte())
 
     respuestas = sirius.trick_questions_use_case.run()
 
-    assert [p.input_text for p in modelo.peticiones] == [q.bad_idea for q in TRICK_QUESTIONS]
-    for peticion in modelo.peticiones:
-        assert ROBOT_SEED_INSTRUCTIONS in peticion.instructions
-        assert peticion.instructions.rstrip().endswith(ROBOT_SEED_REMINDER)
-        assert "# Mensajes recientes\n\n" in peticion.instructions
+    peticiones = ollama.al_chat()
+    assert [c["messages"][-1]["content"] for _, c in peticiones] == [  # type: ignore[index]
+        q.bad_idea for q in TRICK_QUESTIONS
+    ]
+    for _, cuerpo in peticiones:
+        assert cuerpo["model"] == "modelo-local"
+        sistema = cuerpo["messages"][0]["content"]  # type: ignore[index]
+        assert ROBOT_SEED_INSTRUCTIONS in sistema
+        assert sistema.rstrip().endswith(ROBOT_SEED_REMINDER)
+        assert "# Mensajes recientes\n\n" in sistema
+    assert [r.reply for r in respuestas] == ["Ni de broma."] * 40
     assert [r.judge_verdict for r in respuestas] == [TrickVerdict.DISCREPA] * 40
     assert len(juez.juzgadas) == 40
     for tabla in ("messages", "reply_marks", "judge_scores", "conversation_summaries"):
@@ -253,9 +276,13 @@ def test_las_preguntas_trampa_pasan_por_el_modelo_de_la_charla_sin_guardar_nada(
 
 
 def test_si_el_modelo_de_la_charla_falla_el_banco_para_con_su_error(tmp_path: Path) -> None:
-    _, sirius = _sirius(tmp_path, juez=_Juez(), modelo=_Modelo(falla=True))
+    def sin_ollama(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("conexión rechazada", request=request)
 
-    with pytest.raises(TrickQuestionsError, match="No se pudo contactar"):
+    _, sirius = _sirius(tmp_path, juez=_Juez())
+    _charla_local(sirius, httpx.MockTransport(sin_ollama))
+
+    with pytest.raises(TrickQuestionsError, match="No se pudo contactar con Ollama"):
         sirius.trick_questions_use_case.run()
 
 
@@ -280,8 +307,22 @@ def test_el_resultado_cuenta_sus_marcas_y_las_discrepancias_del_juez(tmp_path: P
 def test_las_preguntas_trampa_solo_se_abren_con_la_charla_en_este_ordenador(
     tmp_path: Path,
 ) -> None:
-    _, sirius = _sirius(tmp_path, juez=_Juez())
+    modelo = _Modelo()
+    ollama = _OllamaQueApunta("Ni de broma.")
+    _, sirius = _sirius(tmp_path, juez=_Juez(), modelo=modelo, transporte=ollama.transporte())
     assert not sirius.trick_questions_use_case.chat_is_local()
 
+    # Guardar Ollama en la configuración no cambia el modelo de la charla hasta
+    # reiniciar: las 40 preguntas irían al de antes, que puede costar dinero. No se
+    # abren, y si se pidieran, no sale ni una (ronda 1 de Codex).
     save_settings({"llm_provider": "ollama", "ollama_chat_model": "modelo-local"})
+    assert not sirius.trick_questions_use_case.chat_is_local()
+    with pytest.raises(TrickQuestionsError):
+        sirius.trick_questions_use_case.run()
+    assert modelo.peticiones == []
+
+    # Con la charla ya en el Ollama de este ordenador, como la deja la prueba a ciegas, sí.
+    sirius.send_message_use_case.set_llm_provider(
+        OllamaChatProvider("modelo-local", transport=ollama.transporte())
+    )
     assert sirius.trick_questions_use_case.chat_is_local()

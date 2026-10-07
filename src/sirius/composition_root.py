@@ -337,6 +337,15 @@ def chat_goes_through_ollama() -> bool:
         return False
 
 
+def _only_if_local(provider: LLMProvider) -> LLMProvider | None:
+    """El proveedor de la charla si es el de Ollama de este ordenador; si no, ninguno.
+
+    Mira el proveedor con el que habla la charla ahora, no los ajustes: son la
+    misma autoridad que recibirá las preguntas (pieza E de ADR-233).
+    """
+    return provider if isinstance(provider, OllamaChatProvider) else None
+
+
 class _LocalChatModel:
     """El modelo de Ollama elegido para la charla, para el juez (pieza E de ADR-233).
 
@@ -705,9 +714,8 @@ def build_conversation_dependencies(
     )
     trick_questions_use_case = TrickQuestionsUseCase(
         identity_repository,
-        chat_provider=lambda: send_message_use_case.llm_provider,
+        local_chat_provider=lambda: _only_if_local(send_message_use_case.llm_provider),
         judge=judge,
-        chat_is_local=chat_goes_through_ollama,
         reminder=ROBOT_SEED_REMINDER,
     )
     get_history_use_case = GetConversationHistoryUseCase(conversation_repository)

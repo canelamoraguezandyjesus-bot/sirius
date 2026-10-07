@@ -69,25 +69,25 @@ class TrickQuestionsUseCase:
     def __init__(
         self,
         identity_repository: IdentityRepository,
-        chat_provider: Callable[[], LLMProvider],
+        local_chat_provider: Callable[[], LLMProvider | None],
         judge: ReplyJudge,
         *,
-        chat_is_local: Callable[[], bool],
         reminder: str = "",
     ) -> None:
         self._identity_repository = identity_repository
-        self._chat_provider = chat_provider
+        self._local_chat_provider = local_chat_provider
         self._judge = judge
-        self._chat_is_local = chat_is_local
         self._reminder = reminder.strip()
 
     def chat_is_local(self) -> bool:
         """Si la charla va por un modelo de este ordenador: solo así se abre la ventana.
 
         Las 40 preguntas son 40 peticiones al modelo de la charla; con uno local
-        no cuestan dinero.
+        no cuestan dinero. Lo dice el modelo con el que habla la charla ahora, el
+        mismo al que irán las preguntas, no los ajustes: guardar otro proveedor en
+        la configuración no cambia el de la charla hasta reiniciar.
         """
-        return self._chat_is_local()
+        return self._local_chat_provider() is not None
 
     def questions(self) -> tuple[TrickQuestion, ...]:
         return TRICK_QUESTIONS
@@ -106,7 +106,10 @@ class TrickQuestionsUseCase:
         if identity is None:
             msg = "No hay identidad vigente."
             raise TrickQuestionsError(msg)
-        provider = self._chat_provider()
+        provider = self._local_chat_provider()
+        if provider is None:
+            msg = "La charla no va por un modelo de este ordenador."
+            raise TrickQuestionsError(msg)
         answers: list[TrickAnswer] = []
         for number, question in enumerate(TRICK_QUESTIONS, start=1):
             if should_stop():
