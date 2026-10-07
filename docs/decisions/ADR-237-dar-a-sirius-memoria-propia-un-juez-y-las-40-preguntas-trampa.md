@@ -139,6 +139,11 @@ como el primer turno de una charla nueva.
   `messages`, `reply_marks`, `judge_scores` y `conversation_summaries` siguen vacías.
 - Unitarias: 10 de la memoria propia, 18 del juez y 2 del banco. 11 de integración sobre
   SQLite y 4 de la ventana de las preguntas trampa.
+- Revisión propia antes de la primera ronda externa: restaurar una copia con el juez
+  puntuando cerraba las conexiones con el juez aún por escribir su nota en `sirius.db`.
+  Ahora la restauración le pide parar, espera a que acabe y mientras tanto no vuelve a
+  empezar (`tests/gui/test_backup_recovery_ui.py`). La prueba falla sin la espera y
+  también si solo falta la petición de parar.
 
 ## Consecuencias
 

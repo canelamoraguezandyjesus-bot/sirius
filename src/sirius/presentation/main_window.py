@@ -240,6 +240,11 @@ class MainWindow(QMainWindow):
 
     project_completed = Signal()
 
+    #: El juez ha acabado y no vuelve a empezar solo (pieza E de ADR-233): una
+    #: restauración espera a esta señal antes de cerrar las conexiones, porque el
+    #: juez escribe sus notas en sirius.db.
+    judge_idle = Signal()
+
     def __init__(
         self,
         send_message_use_case: SendMessageUseCase,
@@ -2396,7 +2401,25 @@ class MainWindow(QMainWindow):
         propuesta, que siguen siendo asíncronos. ``set_external_busy(True)``
         ya está activo desde ``_start_backup_operation()``, así que
         ``KnowledgeWidget`` no arranca ningún worker nuevo mientras se
-        espera."""
+        espera.
+
+        El juez (pieza E de ADR-233) también escribe en sirius.db: se le pide
+        que pare, acaba la respuesta que está puntuando y la restauración sigue
+        después. Mientras dure, no vuelve a empezar."""
+        if self._active_judge_worker is not None:
+            self._active_judge_worker.stop()
+            self._judge_again = False
+            self._set_backup_feedback(
+                self.restore_backup_status_label,
+                BACKUP_STATE_IN_PROGRESS,
+                "Esperando a que el juez acabe la respuesta que está puntuando...",
+            )
+            self.judge_idle.connect(
+                lambda: self._restore_when_knowledge_widget_idle(backup_path, password),
+                Qt.ConnectionType.SingleShotConnection,
+            )
+            return
+
         if self.knowledge_widget.has_pending_category_tagging:
             self._set_backup_feedback(
                 self.restore_backup_status_label,
@@ -2690,7 +2713,7 @@ class MainWindow(QMainWindow):
 
     def _start_judge(self) -> None:
         """PA-R02-08: el juez puntúa en segundo plano las respuestas que aún no tienen nota."""
-        if self._reply_judge_service is None or self._close_requested:
+        if self._reply_judge_service is None or self._close_requested or self._is_backup_busy:
             return
         if self._active_judge_worker is not None:
             self._judge_again = True
@@ -2704,8 +2727,10 @@ class MainWindow(QMainWindow):
     def _on_judge_finished(self) -> None:
         self._active_judge_worker = None
         self._refresh_judge_indicator()
-        if self._judge_again and not self._is_sending:
+        if self._judge_again and not self._is_sending and not self._is_backup_busy:
             self._start_judge()
+        if self._active_judge_worker is None:
+            self.judge_idle.emit()
 
     def _refresh_judge_indicator(self) -> None:
         """PA-R02-08: enseña el aviso del juez mientras la media siga por debajo de 3,5."""
