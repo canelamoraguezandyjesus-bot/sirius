@@ -203,6 +203,21 @@ def test_para_corta_el_pique_desde_ese_turno_hasta_que_se_le_suelta(tmp_path: Pa
     ]
 
 
+@pieza("D", "a «ponte serio» vacila solo en el turno en que entra, y después va al grano")
+def test_ponte_serio_vacila_solo_en_el_turno_en_que_entra(tmp_path: Path) -> None:
+    conductor = Conductor(tmp_path)
+    vacile = conductor.texto_al_entrar_en_modo_serio()
+
+    for frase in (
+        "Oye, ¿qué tal?",
+        "Ponte serio, que tengo que decidir si cambio de coche.",
+        "Hago veinte mil kilómetros al año.",
+    ):
+        conductor.di(frase)
+
+    assert [vacile in p.instrucciones for p in conductor.peticiones] == [False, True, False]
+
+
 # --- PA-R02-05 · Contra la deriva --------------------------------------------
 
 
@@ -306,6 +321,21 @@ def test_una_respuesta_marcada_eso_no_se_le_ensena_como_lo_que_no_es(tmp_path: P
     conductor.di("¿Qué haces?")
 
     assert rechazada in seccion(conductor.peticiones[-1].instrucciones, encabezado)
+
+
+@pieza("E", "una respuesta marcada «eso es Sirius» se le enseña como lo que sí es")
+def test_una_respuesta_marcada_eso_es_sirius_se_le_ensena_como_lo_que_si_es(
+    tmp_path: Path,
+) -> None:
+    buena = "Buenos días, cabezón. ¿Ya has desayunado o vienes a que te lo haga yo?"
+    conductor = Conductor(tmp_path, respuestas=[buena])
+    encabezado = conductor.encabezado_de_lo_que_si_es()
+
+    conductor.di("Buenos días.")
+    conductor.marca(1, "eso es Sirius")
+    conductor.di("¿Qué haces?")
+
+    assert buena in seccion(conductor.peticiones[-1].instrucciones, encabezado)
 
 
 # --- PA-R02-08 · El juez -----------------------------------------------------

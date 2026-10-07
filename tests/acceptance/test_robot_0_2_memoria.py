@@ -21,6 +21,7 @@ from conductor_robot_0_2 import (
     Conductor,
     ExtractorDeMentira,
     HechoPropuesto,
+    HuellasDeMentira,
     OllamaDeMentira,
     ResumidorDeMentira,
     TramoDeUnHecho,
@@ -70,6 +71,21 @@ def test_buscar_en_10000_recuerdos_tarda_menos_de_150_ms_en_el_p95(tmp_path: Pat
     assert tiempos[94] < 150, f"P95 de {tiempos[94]:.1f} ms"
 
 
+@pieza("F", "un recuerdo dicho con otras palabras se encuentra por significado")
+def test_un_recuerdo_dicho_con_otras_palabras_se_encuentra_por_significado(
+    tmp_path: Path,
+) -> None:
+    pregunta = "¿Qué comida me gusta más?"
+    recuerdo = "Le pirra el cocido madrileño."
+    conductor = Conductor(tmp_path)
+    conductor.con_huellas(HuellasDeMentira(parecidas=[(recuerdo, pregunta)]))
+    conductor.guarda_recuerdo(recuerdo)
+    conductor.guarda_recuerdo("Tiene una moto vieja en el garaje.")
+
+    # La pregunta y el recuerdo no comparten ni una palabra: solo los une el significado.
+    assert conductor.busca_en_la_memoria(pregunta)[:1] == [recuerdo]
+
+
 # --- PA-R02-12 · Sale el filtro de Ollama de cada respuesta ------------------
 
 
@@ -111,6 +127,40 @@ def test_un_hecho_que_cambia_cierra_el_anterior_y_la_charla_trae_el_vigente(
     assert "Vive en Madrid" not in instrucciones
 
 
+@pieza("G", "cada hecho guarda quién lo dijo y con qué seguridad, también cuando cambia")
+def test_cada_hecho_guarda_quien_lo_dijo_y_con_que_seguridad(tmp_path: Path) -> None:
+    conductor = Conductor(tmp_path)
+    conductor.anota_hecho(
+        "Lucía", "trabajo", "Lucía es enfermera", desde=date(2025, 3, 1), seguridad="segura"
+    )
+    conductor.anota_hecho(
+        "Lucía",
+        "trabajo",
+        "Lucía se va a trabajar a una farmacia",
+        desde=date(2026, 9, 1),
+        dicho_por="Lucía",
+        seguridad="dudosa",
+    )
+    conductor.reabre()
+
+    assert conductor.historia("Lucía", "trabajo") == [
+        TramoDeUnHecho(
+            "Lucía es enfermera",
+            date(2025, 3, 1),
+            date(2026, 9, 1),
+            dicho_por="propietario",
+            seguridad="segura",
+        ),
+        TramoDeUnHecho(
+            "Lucía se va a trabajar a una farmacia",
+            date(2026, 9, 1),
+            None,
+            dicho_por="Lucía",
+            seguridad="dudosa",
+        ),
+    ]
+
+
 # --- PA-R02-14 · Lo que dice Sirius no es un hecho del propietario -----------
 
 
@@ -147,6 +197,23 @@ def test_el_sueno_propone_y_ningun_hecho_entra_sin_el_si_del_propietario(tmp_pat
     assert "Trabaja de electricista" in conductor.hechos_vigentes()
 
 
+@pieza("G", "el sueño resume el día con el modelo, sin leer a Sirius, y guarda el resumen")
+def test_el_sueno_resume_el_dia_sin_leer_a_sirius_y_guarda_el_resumen(tmp_path: Path) -> None:
+    """Depende también de la pieza D, la del resumidor, que entra antes que la G."""
+    dicho_por_sirius = "Pues yo me he pasado el día pensando en mis brazos."
+    conductor = Conductor(tmp_path, respuestas=[dicho_por_sirius])
+    resumidor = ResumidorDeMentira(texto="Cableó un edificio entero y acabó reventado.")
+    conductor.con_resumidor(resumidor)
+    conductor.con_extractor(ExtractorDeMentira())
+    conductor.di("Vengo reventado de la obra: hoy tocaba cablear un edificio entero.")
+
+    conductor.sueno()
+
+    assert any("cablear un edificio entero" in pedido for pedido in resumidor.pedidos)
+    assert not any(dicho_por_sirius in pedido for pedido in resumidor.pedidos)
+    assert conductor.resumen_del_dia() == "Cableó un edificio entero y acabó reventado."
+
+
 # --- PA-R02-16 · Una ficha por persona ---------------------------------------
 
 
@@ -163,6 +230,8 @@ def test_cada_persona_tiene_su_ficha_y_la_charla_trae_lo_que_se_sabe_de_ella(
 
     conductor.di("¿Qué tal estará Lucía?")
     assert "Lucía es enfermera" in conductor.peticiones[-1].instrucciones
+    assert "¿Qué tal estará Lucía?" in conductor.ficha("Lucía").charlas
+    assert "¿Qué tal estará Lucía?" not in conductor.ficha("propietario").charlas
 
 
 # --- PA-R02-17 · «Olvida eso» borra de verdad --------------------------------
@@ -205,7 +274,9 @@ def test_eso_no_es_asi_corrige_con_el_si_del_propietario_y_guarda_el_hecho_de_an
     tmp_path: Path,
 ) -> None:
     conductor = Conductor(tmp_path)
-    conductor.anota_hecho("propietario", "equipo", "Es del Atleti")
+    conductor.anota_hecho(
+        "propietario", "equipo", "Es del Atleti", dicho_por="Lucía", seguridad="dudosa"
+    )
     conductor.di("¿De qué equipo soy?")
 
     conductor.di("Eso no es así: soy del Betis.")
@@ -219,7 +290,10 @@ def test_eso_no_es_asi_corrige_con_el_si_del_propietario_y_guarda_el_hecho_de_an
     vigentes = conductor.hechos_vigentes()
     assert any("Betis" in hecho for hecho in vigentes)
     assert "Es del Atleti" not in vigentes
-    assert conductor.historia("propietario", "equipo")[0].texto == "Es del Atleti"
+    viejo, vigente = conductor.historia("propietario", "equipo")
+    assert (viejo.texto, viejo.dicho_por, viejo.seguridad) == ("Es del Atleti", "Lucía", "dudosa")
+    assert "Betis" in vigente.texto
+    assert (vigente.dicho_por, vigente.seguridad) == ("propietario", "segura")
 
 
 @pieza("G", "«¿qué sabes de mí?» lista los hechos vigentes del propietario sin pasar por el modelo")

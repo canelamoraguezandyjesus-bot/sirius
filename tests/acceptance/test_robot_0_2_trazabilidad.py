@@ -39,7 +39,7 @@ class Inventario:
     evaluaciones: frozenset[str]
 
 
-#: El inventario aprobado en ADR-233: 18 PA, 32 pruebas de máquina y cinco
+#: El inventario aprobado en ADR-233: 18 PA, 39 pruebas de máquina y cinco
 #: evaluaciones del propietario. Una prueba se puede renombrar o mejorar, pero
 #: quitar una PA, una prueba o una evaluación es retirar una prueba, y eso no lo
 #: hace una sesión sola (AGENTS.md): se cambia aquí, a la vista de la revisión.
@@ -48,18 +48,18 @@ INVENTARIO_APROBADO = Inventario(
         "PA-R02-01": 2,
         "PA-R02-02": 2,
         "PA-R02-03": 2,
-        "PA-R02-04": 3,
+        "PA-R02-04": 4,
         "PA-R02-05": 2,
         "PA-R02-06": 4,
-        "PA-R02-07": 2,
-        "PA-R02-08": 1,
+        "PA-R02-07": 3,
+        "PA-R02-08": 2,
         "PA-R02-09": 2,
         "PA-R02-10": 2,
-        "PA-R02-11": 1,
-        "PA-R02-12": 1,
-        "PA-R02-13": 1,
+        "PA-R02-11": 2,
+        "PA-R02-12": 2,
+        "PA-R02-13": 2,
         "PA-R02-14": 1,
-        "PA-R02-15": 1,
+        "PA-R02-15": 2,
         "PA-R02-16": 1,
         "PA-R02-17": 2,
         "PA-R02-18": 2,
@@ -340,7 +340,7 @@ def test_caza_que_una_pa_pierda_una_de_sus_pruebas() -> None:
     )
 
 
-def test_el_inventario_aprobado_suma_las_32_pruebas_y_las_cinco_evaluaciones() -> None:
+def test_el_inventario_aprobado_suma_las_39_pruebas_y_las_cinco_evaluaciones() -> None:
     assert len(INVENTARIO_APROBADO.pruebas_por_pa) == 18
-    assert sum(INVENTARIO_APROBADO.pruebas_por_pa.values()) == 32
+    assert sum(INVENTARIO_APROBADO.pruebas_por_pa.values()) == 39
     assert len(INVENTARIO_APROBADO.evaluaciones) == 5

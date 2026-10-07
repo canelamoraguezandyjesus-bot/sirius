@@ -125,7 +125,7 @@ esperadas a verdes:
 | G | Hechos con fecha y con quién lo dijo, la ficha por persona, «eso no es así», «olvida eso», «¿qué sabes de mí?» y el «sueño» |
 
 **Las pruebas de aceptación** se llaman `PA-R02-NN` y viven en
-`docs/evolution/PRUEBAS_0.2_DEL_ROBOT.md`: 18, con 32 pruebas de máquina y cinco
+`docs/evolution/PRUEBAS_0.2_DEL_ROBOT.md`: 18, con 39 pruebas de máquina y cinco
 evaluaciones del propietario, E-R02-01 a E-R02-05, con sus umbrales fijados antes de
 medir.
 
@@ -159,13 +159,13 @@ medir.
 - Nadie más trabaja en estos ficheros: el 07-10-2026 la API de GitHub devolvió 0 PR
   abiertas, con respuesta 200, y `scripts/automation/sirius_obra_en_curso.py` respondió
   libre.
-- Las 32 pruebas de máquina se ven fallar por la razón esperada:
+- Las 39 pruebas de máquina se ven fallar por la razón esperada:
   `uv run --no-sync pytest -q tests/acceptance/test_robot_0_2_personalidad.py
   tests/acceptance/test_robot_0_2_memoria.py tests/acceptance/test_robot_0_2_ventana.py`
-  da 32 xfailed en 2,2 s, cada una con su pieza.
+  da 39 xfailed en 2,0 s, cada una con su pieza. Eran 32 hasta la ronda 2 de Codex.
 - La comprobación de la tabla, vista fallar dos veces: con la fila PA-R02-01 en «en verde»
   y una prueba quitada de PA-R02-17, falla con los dos defectos; con el documento como
-  está, sus 9 pruebas pasan. Siete de ellas le dan tablas rotas a propósito.
+  está, sus 12 pruebas pasan. Nueve de ellas le dan tablas rotas a propósito.
 - Una pieza declarada sin código se ve fallar: con «B» en `PIEZAS_ENTREGADAS` y sin la
   semilla, las dos pruebas de PA-R02-01 fallan en rojo, no como `xfail`.
 
@@ -173,7 +173,7 @@ medir.
 
 - El propietario recibe primero la semilla para marcar, y mientras marca la sesión escribe
   las pruebas de aceptación.
-- La batería tendrá 32 pruebas `xfail` estrictas de la 0.2 hasta que entre cada pieza. Se
+- La batería tendrá 39 pruebas `xfail` estrictas de la 0.2 hasta que entre cada pieza. Se
   suman a las dos de M11, que siguen como estaban.
 - Las pruebas fijan nombres que todavía no existen en el código, como los del conductor y
   los de la ventana: «Eso es Sirius», «Eso no» y «Modo serio». Si una pieza necesita
@@ -200,3 +200,23 @@ medir.
   la comprobación: 18 PA, cuántas pruebas pide cada una, 32 en total, y las cinco
   evaluaciones. Visto en los dos sentidos sobre los ficheros de verdad: con la fila 18 y
   sus pruebas quitadas, la comprobación vieja pasa y la nueva falla.
+- **Ronda 2 de Codex, sobre `f638e633`**: dos P2, ciertos, y de una familia nueva: una
+  cláusula del §4 sin prueba que la vigile. Faltaba que las marcas «eso es Sirius» se le
+  enseñen como lo que sí es (pasos 3 y 5), y que cada hecho guarde quién lo dijo y con qué
+  seguridad (memoria, paso 3). La raíz es que las pruebas salieron de cada paso del plan,
+  no de cada cláusula. Así que, antes de arreglar, se repasó el §4 cláusula a cláusula, y
+  salieron seis más sin prueba:
+  - el vacile al entrar en el modo serio (paso 4);
+  - que el aviso del juez se vea en la ventana (paso 7);
+  - la búsqueda por significado (memoria, paso 2), con un doble de huellas en el que la
+    pregunta y el recuerdo no comparten ni una palabra;
+  - dejar de etiquetar recuerdos por categorías con la ventana abierta (se deja de hacer);
+  - el resumen del día en el sueño, sin leer a Sirius (memoria, paso 4);
+  - que la ficha junte lo que el propietario dijo de esa persona (memoria, paso 5).
+
+  Entran siete pruebas nuevas y se endurecen dos: la de la ficha y la de «eso no es así»,
+  que ahora mira que la corrección conserva quién dijo el hecho de antes. El inventario
+  aprobado pasa de 32 a 39 pruebas. Lo que una prueba no puede ver se añade a «Lo que estas
+  pruebas no garantizan»: cuándo arranca el sueño, la retirada del banco de 47 casos y las
+  órdenes por voz. La comprobación de la tabla se ve fallar quitando de su fila la prueba
+  nueva del vacile: pide 4 pruebas a PA-R02-04 y ve 3.

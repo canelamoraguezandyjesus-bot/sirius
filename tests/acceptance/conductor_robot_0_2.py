@@ -243,6 +243,30 @@ class ExtractorDeMentira:
         return self.propuestas
 
 
+@dataclass
+class HuellasDeMentira:
+    """Hace de modelo de huellas para buscar por significado.
+
+    Las frases de un mismo grupo de ``parecidas`` dan la misma huella, y
+    cualquier otra frase da una huella que no se parece a ninguna: así una
+    pregunta y un recuerdo sin una sola palabra en común solo pueden
+    encontrarse por significado. Apunta cada frase que se le pide.
+    """
+
+    parecidas: Sequence[Sequence[str]] = ()
+    pedidas: list[str] = field(default_factory=list)
+    _sueltas: dict[str, int] = field(default_factory=dict)
+
+    def huella(self, texto: str) -> list[float]:
+        self.pedidas.append(texto)
+        grupo = next((n for n, frases in enumerate(self.parecidas) if texto in frases), None)
+        if grupo is None:
+            grupo = len(self.parecidas) + self._sueltas.setdefault(texto, len(self._sueltas))
+        huella = [0.0] * (grupo + 1)
+        huella[grupo] = 1.0
+        return huella
+
+
 def seccion(instrucciones: str, encabezado: str) -> str:
     """El trozo de ``instrucciones`` desde ``encabezado`` hasta el siguiente «# ».
 
@@ -295,15 +319,25 @@ class CasoDeMemoria:
 
 @dataclass(frozen=True, slots=True)
 class Ficha:
+    """Lo que Sirius junta de una persona: sus hechos y lo que el propietario dijo de ella."""
+
     nombre: str
     hechos: tuple[str, ...]
+    charlas: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
 class TramoDeUnHecho:
+    """Un hecho mientras estuvo vigente, con quién lo dijo y con qué seguridad.
+
+    ``seguridad`` es «segura» o «dudosa».
+    """
+
     texto: str
     desde: date
     hasta: date | None
+    dicho_por: str = "propietario"
+    seguridad: str = "segura"
 
 
 #: Las siete familias del banco de memoria de §4 del plan.
@@ -334,6 +368,14 @@ class VentanaDePrueba:
 
     def quita_el_modo(self) -> None:
         raise _pendiente("D")
+
+    def aviso_del_juez(self) -> str:
+        """El aviso del juez tal como se ve; vacío si no se ve."""
+        raise _pendiente("E")
+
+    def espera_al_trabajo_de_fondo(self) -> None:
+        """Espera a que acabe lo que la ventana haya lanzado en segundo plano."""
+        raise _pendiente("F")
 
 
 # --- El conductor ------------------------------------------------------------
@@ -481,6 +523,10 @@ class Conductor:
         """Lo que Sirius añade a las instrucciones en el modo ``serio`` o ``para``."""
         raise _pendiente("D")
 
+    def texto_al_entrar_en_modo_serio(self) -> str:
+        """Lo que Sirius añade solo en el turno en que entra en el modo serio: el vacile."""
+        raise _pendiente("D")
+
     def recordatorio_de_la_semilla(self) -> str:
         raise _pendiente("D")
 
@@ -515,6 +561,9 @@ class Conductor:
         raise _pendiente("E")
 
     def encabezado_de_lo_que_no_es(self) -> str:
+        raise _pendiente("E")
+
+    def encabezado_de_lo_que_si_es(self) -> str:
         raise _pendiente("E")
 
     def con_juez(self, juez: JuezDeMentira) -> None:
@@ -554,6 +603,18 @@ class Conductor:
         """Enchufa ``ollama`` a lo que Sirius pida a Ollama, sin tocar el modelo de la charla."""
         raise _pendiente("F")
 
+    def con_huellas(self, huellas: HuellasDeMentira) -> None:
+        """Las huellas para buscar por significado las da ``huellas`` en vez del modelo."""
+        raise _pendiente("F")
+
+    def guarda_recuerdo(self, texto: str) -> None:
+        """El propietario guarda un recuerdo, como desde la ventana."""
+        raise _pendiente("F")
+
+    def busca_en_la_memoria(self, texto: str) -> list[str]:
+        """Los recuerdos que encuentra la búsqueda de Sirius para ``texto``, del mejor al peor."""
+        raise _pendiente("F")
+
     # --- Pieza G: hechos, fichas, órdenes de memoria y el sueño ---
 
     def anota_hecho(
@@ -563,8 +624,10 @@ class Conductor:
         texto: str,
         *,
         desde: date | None = None,
+        dicho_por: str = "propietario",
+        seguridad: str = "segura",
     ) -> None:
-        """El propietario confirma un hecho sobre ``persona``."""
+        """El propietario confirma un hecho sobre ``persona``, que dijo ``dicho_por``."""
         raise _pendiente("G")
 
     def hechos_vigentes(self, persona: str = "propietario") -> list[str]:
@@ -585,6 +648,10 @@ class Conductor:
         raise _pendiente("G")
 
     def acepta(self, propuesta: HechoPropuesto) -> None:
+        raise _pendiente("G")
+
+    def resumen_del_dia(self) -> str:
+        """El resumen del día que dejó el último «sueño»."""
         raise _pendiente("G")
 
     def ficha(self, nombre: str) -> Ficha:

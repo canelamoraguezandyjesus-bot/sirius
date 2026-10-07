@@ -1,8 +1,9 @@
 """Pruebas de aceptación de la versión 0.2 del robot: lo que se ve en la ventana.
 
-Los dos botones de cada respuesta y el indicador de modo son lo que el
-propietario toca. Salen de la sección 0.2 de ``docs/evolution/PLAN_DEL_ROBOT.md``
-(§4, pasos 4 y 5 de la personalidad) y llevan su ``PA-R02-NN`` de
+Los dos botones de cada respuesta, el indicador de modo y el aviso del juez son lo
+que el propietario ve y toca. Salen de la sección 0.2 de
+``docs/evolution/PLAN_DEL_ROBOT.md`` (§4: los pasos 4, 5 y 7 de la personalidad y lo
+que se deja de hacer) y llevan su ``PA-R02-NN`` de
 ``docs/evolution/PRUEBAS_0.2_DEL_ROBOT.md``.
 """
 
@@ -11,7 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from conductor_robot_0_2 import Conductor, pieza
+from conductor_robot_0_2 import Conductor, JuezDeMentira, OllamaDeMentira, pieza
 from pytestqt.qtbot import QtBot
 
 pytestmark = [pytest.mark.acceptance, pytest.mark.gui]
@@ -48,3 +49,35 @@ def test_el_modo_serio_se_ve_en_la_ventana_y_se_quita_con_un_boton(
     assert ventana.indicador_de_modo() == ""
     conductor.di("¿Y ahora qué?")
     assert serio not in conductor.peticiones[-1].instrucciones
+
+
+@pieza("E", "mientras la media del juez sigue por debajo de 3,5, la ventana lo enseña")
+def test_mientras_el_juez_dice_que_sirius_baja_la_ventana_lo_ensena(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    conductor = Conductor(tmp_path)
+    conductor.con_juez(JuezDeMentira(notas=[5] * 10 + [2] * 6))
+    for n in range(1, 11):
+        conductor.di(f"Mensaje {n}.")
+    assert conductor.ventana(qtbot).aviso_del_juez() == ""
+
+    for n in range(11, 17):
+        conductor.di(f"Mensaje {n}.")
+    # Las 10 últimas notas dan 3,2.
+    assert "3,2" in conductor.ventana(qtbot).aviso_del_juez()
+
+
+@pieza("F", "con la ventana abierta, Sirius no pide a Ollama etiquetar recuerdos por categorías")
+def test_con_la_ventana_abierta_no_se_pide_a_ollama_etiquetar_recuerdos(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    ollama = OllamaDeMentira()
+    conductor = Conductor(tmp_path, ajustes={"category_matching_enabled": True})
+    conductor.con_ollama_espia(ollama)
+    conductor.guarda_recuerdo("Su hermana Lucía es enfermera.")
+
+    ventana = conductor.ventana(qtbot)
+    ventana.espera_al_trabajo_de_fondo()
+
+    assert ollama.llamadas_a("/api/chat") == 0
+    assert ollama.llamadas_a("/api/generate") == 0
