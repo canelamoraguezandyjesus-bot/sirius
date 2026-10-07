@@ -12,6 +12,7 @@ from sirius.application.api_key_settings import ApiKeySettingsUseCase
 from sirius.application.approve_decision import ApproveDecisionUseCase
 from sirius.application.archive_decision import ArchiveDecisionUseCase
 from sirius.application.archive_memory import ArchiveMemoryUseCase
+from sirius.application.blind_test import BlindTestUseCase
 from sirius.application.budget_status import GetBudgetStatusUseCase
 from sirius.application.confirm_memory_suggestion import ConfirmMemorySuggestionUseCase
 from sirius.application.correct_memory import CorrectMemoryUseCase
@@ -31,6 +32,11 @@ from sirius.application.propose_decision import ProposeDecisionUseCase
 from sirius.application.propose_memory_suggestion import ProposeMemorySuggestionUseCase
 from sirius.application.reject_memory_suggestion import RejectMemorySuggestionUseCase
 from sirius.application.restore_backup import RestoreBackupUseCase
+from sirius.application.robot_conversation import (
+    ConversationModeUseCase,
+    MarkReplyUseCase,
+    ReplyJudgeService,
+)
 from sirius.application.save_manual_memory import SaveManualMemoryUseCase
 from sirius.application.send_message import SendMessageUseCase
 from sirius.application.set_category import SetCategoryUseCase
@@ -39,6 +45,7 @@ from sirius.application.studio_capture import StudioCaptureUseCase
 from sirius.application.studio_voice import StudioVoiceUseCase
 from sirius.application.supersede_decision import SupersedeDecisionUseCase
 from sirius.application.tag_category import TagCategoryUseCase
+from sirius.application.trick_questions import TrickQuestionsUseCase
 from sirius.application.validate_and_save_api_key import ValidateAndSaveApiKeyUseCase
 from sirius.application.validate_backup import ValidateBackupUseCase
 from sirius.presentation.credential_validation_worker import CredentialValidationWorker
@@ -87,6 +94,11 @@ class ValidatedMainWindow(MainWindow):
         studio_voice_use_case: StudioVoiceUseCase | None = None,
         studio_capture_use_case: StudioCaptureUseCase | None = None,
         save_studio_voice: Callable[[str], None] | None = None,
+        blind_test_use_case: BlindTestUseCase | None = None,
+        mark_reply_use_case: MarkReplyUseCase | None = None,
+        conversation_mode_use_case: ConversationModeUseCase | None = None,
+        reply_judge_service: ReplyJudgeService | None = None,
+        trick_questions_use_case: TrickQuestionsUseCase | None = None,
         show_warning: Callable[[str, str], None] | None = None,
         show_information: Callable[[str, str], None] | None = None,
         confirm_restore: Callable[[str, str], bool] | None = None,
@@ -135,6 +147,11 @@ class ValidatedMainWindow(MainWindow):
             studio_voice_use_case=studio_voice_use_case,
             studio_capture_use_case=studio_capture_use_case,
             save_studio_voice=save_studio_voice,
+            blind_test_use_case=blind_test_use_case,
+            mark_reply_use_case=mark_reply_use_case,
+            conversation_mode_use_case=conversation_mode_use_case,
+            reply_judge_service=reply_judge_service,
+            trick_questions_use_case=trick_questions_use_case,
             show_warning=show_warning,
             show_information=show_information,
             confirm_restore=confirm_restore,

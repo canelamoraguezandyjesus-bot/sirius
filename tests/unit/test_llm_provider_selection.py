@@ -17,6 +17,7 @@ import openai
 import pytest
 
 from sirius.adapters.llm.fake import FakeLLMProvider
+from sirius.adapters.llm.ollama_chat import OllamaChatProvider
 from sirius.adapters.llm.openai_responses import OpenAIResponsesProvider
 from sirius.adapters.llm.unconfigured import UnconfiguredLLMProvider
 from sirius.adapters.secrets.fake import FakeSecretStore
@@ -24,6 +25,7 @@ from sirius.composition_root import _build_llm_provider
 from sirius.config.llm_provider_settings import (
     LLMProviderConfigurationError,
     LLMProviderKind,
+    resolve_ollama_chat_settings,
     resolve_openai_api_key,
     resolve_provider_kind,
 )
@@ -158,3 +160,60 @@ def test_resolve_openai_api_key_falls_back_to_the_environment_variable(
 
 def test_resolve_openai_api_key_is_none_when_nothing_is_configured() -> None:
     assert resolve_openai_api_key(FakeSecretStore()) is None
+
+
+# --- Pieza C de ADR-233: la charla con el Ollama de este ordenador ----------
+
+
+def test_ollama_is_its_own_provider_kind() -> None:
+    assert resolve_provider_kind({"llm_provider": "Ollama "}) is LLMProviderKind.OLLAMA
+
+
+def test_ollama_without_a_chosen_model_never_raises_and_reports_at_send_time(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _patch_settings(monkeypatch, {"llm_provider": "ollama"})
+
+    provider = _build_llm_provider(tmp_path / "sirius.db", FakeSecretStore())
+
+    assert isinstance(provider, UnconfiguredLLMProvider)
+    assert "prueba a ciegas" in _drain_configuration_error(provider)
+
+
+def test_ollama_with_a_chosen_model_builds_the_local_chat_provider(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _patch_settings(
+        monkeypatch,
+        {"llm_provider": "ollama", "ollama_chat_model": " qwen-x ", "ollama_chat_num_ctx": 16384},
+    )
+
+    provider = _build_llm_provider(tmp_path / "sirius.db", FakeSecretStore())
+
+    assert isinstance(provider, OllamaChatProvider)
+    assert provider.model_name == "qwen-x"
+    assert provider._num_ctx == 16384
+
+
+def test_ollama_needs_no_openai_key(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    _patch_settings(monkeypatch, {"llm_provider": "ollama", "ollama_chat_model": "qwen-x"})
+    store = FakeSecretStore()
+
+    assert isinstance(_build_llm_provider(tmp_path / "sirius.db", store), OllamaChatProvider)
+    assert resolve_openai_api_key(store) is None
+
+
+def test_a_chat_context_below_2048_tokens_is_a_configuration_error() -> None:
+    with pytest.raises(LLMProviderConfigurationError, match="2048"):
+        resolve_ollama_chat_settings({"ollama_chat_model": "qwen-x", "ollama_chat_num_ctx": 1024})
+
+
+def test_the_chat_context_defaults_to_8192_tokens() -> None:
+    assert resolve_ollama_chat_settings({"ollama_chat_model": "qwen-x"}).num_ctx == 8192
+
+
+def test_the_openai_provider_says_which_model_answers() -> None:
+    """Pieza D de ADR-233: cada respuesta apunta con qué modelo se dio."""
+    provider = OpenAIResponsesProvider(client=openai.OpenAI(api_key="sk-prueba"), model="gpt-x")
+
+    assert provider.model_name == "gpt-x"

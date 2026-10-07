@@ -36,6 +36,7 @@ from sirius.application.tag_category import CategoryTargetKind
 from sirius.application.validate_and_save_api_key import ValidateAndSaveApiKeyUseCase
 from sirius.composition_root import build_conversation_dependencies
 from sirius.config.secrets_config import OPENAI_API_KEY_SECRET_NAME
+from sirius.config.settings import save_settings
 from sirius.infrastructure.bootstrap_location_store import BootstrapLocationStore
 from sirius.infrastructure.data_path_validator import WindowsDataPathValidator
 from sirius.infrastructure.paths import resolve_paths
@@ -124,6 +125,40 @@ def test_existing_key_opens_the_normal_experience_directly_without_onboarding(
     qtbot.addWidget(window)
 
     assert isinstance(window, ValidatedMainWindow)
+
+
+@pytest.mark.gui
+def test_chat_through_ollama_needs_no_key_and_skips_onboarding(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """Pieza C de ADR-233: con la charla en el Ollama de este ordenador no se pide
+    la clave de OpenAI, porque no se usa."""
+    save_settings({"llm_provider": "ollama", "ollama_chat_model": "qwen-x"})
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    dependencies = build_conversation_dependencies(
+        database_path, database_path.parent / "backups", secret_store=FakeSecretStore()
+    )
+    windows: list[QMainWindow] = []
+
+    window = _build_initial_window(dependencies, windows)
+    qtbot.addWidget(window)
+
+    assert isinstance(window, ValidatedMainWindow)
+
+
+@pytest.mark.gui
+def test_an_invalid_provider_setting_still_asks_for_the_key(qtbot: QtBot, tmp_path: Path) -> None:
+    save_settings({"llm_provider": "no-existe"})
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    dependencies = build_conversation_dependencies(
+        database_path, database_path.parent / "backups", secret_store=FakeSecretStore()
+    )
+    windows: list[QMainWindow] = []
+
+    window = _build_initial_window(dependencies, windows)
+    qtbot.addWidget(window)
+
+    assert isinstance(window, OnboardingWindow)
 
 
 @pytest.mark.gui

@@ -12,13 +12,15 @@ from sirius.adapters.persistence.sqlite_identity_repository import (
 from sirius.adapters.persistence.sqlite_project_repository import (
     build_sqlite_project_repository,
 )
+from sirius.application.adopt_robot_seed import adopt_robot_seed
 from sirius.infrastructure.paths import SiriusPaths, ensure_paths
 
 
 def initialize_persistence(paths: SiriusPaths) -> None:
     """Prepare local directories, apply pending migrations, and ensure the main
     conversation, the current identity, and (only the very first time) a
-    bootstrap project placeholder exist.
+    bootstrap project placeholder exist. The identity carries the robot's seed
+    from the first start on (ADR-235).
 
     Safe to call on every startup: directory creation, migrations, and every
     get-or-create/ensure lookup are idempotent. After a project has been
@@ -50,5 +52,8 @@ def initialize_persistence(paths: SiriusPaths) -> None:
     identity_repository = build_sqlite_identity_repository(database_path)
     try:
         identity_repository.get_or_create_current_identity()
+        # Pieza B de ADR-233: la identidad del robot entra como versión nueva, una
+        # sola vez, sin borrar la de 0.1 (decisión 5: la identidad vive en datos).
+        adopt_robot_seed(identity_repository)
     finally:
         identity_repository.close()

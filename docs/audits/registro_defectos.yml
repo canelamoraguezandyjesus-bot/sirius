@@ -1432,3 +1432,20 @@ defectos:
       - scripts/automation/sirius_apply_verdict.sh
       - src/sirius_engine/round_history.py
       - src/sirius_engine/round_family_detector.py
+
+  # ADR-237: el juez de cada respuesta se puso dentro del turno, como decia la nota de
+  # arranque, y cada mensaje pedia dos veces al modelo local. Lo cazo PA-R02-02, una
+  # prueba de otra pieza y no las del juez: el juez paso a segundo plano.
+  - id: H-237
+    titulo: El juez de cada respuesta iba dentro del turno y cada mensaje pedia dos veces al modelo local
+    bloque: producto
+    gravedad: media
+    estado: cerrado
+    cerrado_por: 3f6cd90504d18b455e012e259bcd92019510bd35
+    pr: 682
+    adr: 237
+    ficheros:
+      - src/sirius/application/send_message.py
+      - src/sirius/application/robot_conversation.py
+      - src/sirius/presentation/main_window.py
+      - src/sirius/presentation/reply_judge_worker.py

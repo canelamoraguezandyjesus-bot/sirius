@@ -30,6 +30,8 @@ class LLMProviderKind(StrEnum):
 
     FAKE = "fake"
     OPENAI = "openai"
+    # Pieza C de ADR-233: la charla del robot con un modelo local.
+    OLLAMA = "ollama"
 
 
 class LLMProviderConfigurationError(RuntimeError):
@@ -38,6 +40,14 @@ class LLMProviderConfigurationError(RuntimeError):
     The message is always safe: it never includes the key's value or any
     part of it.
     """
+
+
+@dataclass(frozen=True, slots=True)
+class OllamaChatSettings:
+    """Lo que hace falta para construir la charla con Ollama: qué modelo y qué contexto."""
+
+    model: str
+    num_ctx: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,10 +77,12 @@ def resolve_provider_kind(settings: dict[str, Any]) -> LLMProviderKind:
         return LLMProviderKind.FAKE
     if normalized == LLMProviderKind.OPENAI.value:
         return LLMProviderKind.OPENAI
+    if normalized == LLMProviderKind.OLLAMA.value:
+        return LLMProviderKind.OLLAMA
 
     msg = (
         f"El proveedor configurado ({raw_value!r}) no es válido. "
-        "Los únicos valores admitidos son 'fake' y 'openai'."
+        "Los únicos valores admitidos son 'fake', 'openai' y 'ollama'."
     )
     raise LLMProviderConfigurationError(msg)
 
@@ -133,3 +145,41 @@ def resolve_openai_provider_settings(settings: dict[str, Any]) -> OpenAIProvider
     return OpenAIProviderSettings(
         model=model, max_output_tokens=max_output_tokens, monthly_budget_usd=monthly_budget_usd
     )
+
+
+#: Clave de los ajustes con el modelo de la charla. La escribe la prueba a ciegas
+#: cuando el propietario elige (PA-R02-03).
+OLLAMA_CHAT_MODEL_SETTING = "ollama_chat_model"
+_OLLAMA_CHAT_NUM_CTX_SETTING = "ollama_chat_num_ctx"
+_DEFAULT_OLLAMA_CHAT_NUM_CTX = 8192
+_MIN_OLLAMA_CHAT_NUM_CTX = 2048
+
+
+def resolve_ollama_chat_settings(settings: dict[str, Any]) -> OllamaChatSettings:
+    """Lee qué modelo de Ollama conversa y con cuánto contexto.
+
+    Sin modelo elegido no hay charla con Ollama: es un error de configuración
+    con su explicación, nunca un modelo puesto por defecto que el propietario
+    no ha elegido (decisión 4: el modelo se elige a ciegas). El contexto no
+    baja de 2.048 tokens: por debajo no caben la semilla y sus ejemplos.
+    """
+    model = str(settings.get(OLLAMA_CHAT_MODEL_SETTING) or "").strip()
+    if not model:
+        msg = (
+            "La charla está puesta con Ollama, pero todavía no hay modelo elegido. "
+            "Haz la prueba a ciegas para elegirlo."
+        )
+        raise LLMProviderConfigurationError(msg)
+    raw_num_ctx = settings.get(_OLLAMA_CHAT_NUM_CTX_SETTING)
+    num_ctx = (
+        _positive_int(raw_num_ctx, "El contexto del modelo de la charla")
+        if raw_num_ctx is not None
+        else _DEFAULT_OLLAMA_CHAT_NUM_CTX
+    )
+    if num_ctx < _MIN_OLLAMA_CHAT_NUM_CTX:
+        msg = (
+            f"El contexto del modelo de la charla ({num_ctx}) es demasiado corto: "
+            f"el mínimo es {_MIN_OLLAMA_CHAT_NUM_CTX} tokens."
+        )
+        raise LLMProviderConfigurationError(msg)
+    return OllamaChatSettings(model=model, num_ctx=num_ctx)

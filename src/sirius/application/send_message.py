@@ -34,7 +34,16 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from sirius.application.context import Context, ContextBuilder
+from sirius.application.robot_conversation import ConversationSummaryService
 from sirius.domain.conversation import Message, MessageRole, MessageStatus
+from sirius.domain.conversation_mode import (
+    ENTERING_SERIOUS_MODE,
+    MODE_INSTRUCTIONS,
+    ConversationMode,
+    detect_mode_command,
+)
+from sirius.domain.identity import IdentityVersion
+from sirius.domain.own_memory import render_own_memory
 from sirius.domain.project import blockers_to_text
 from sirius.ports.conversation_repository import ConversationRepository
 from sirius.ports.llm import (
@@ -46,6 +55,7 @@ from sirius.ports.llm import (
     LLMProvider,
     LLMRequest,
 )
+from sirius.ports.robot_conversation import ConversationModeRepository, ReplyMarkRepository
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,6 +84,21 @@ class SendMessageResult:
 _NO_BLOCKERS_CONTEXT_TEXT = "Ninguno registrado."
 
 
+def render_identity(version: IdentityVersion) -> str:
+    """La parte de las instrucciones que es la identidad de Sirius.
+
+    La misma en la charla y en la prueba a ciegas (pieza C de ADR-233): los
+    modelos se comparan con la semilla con la que van a conversar.
+    """
+    return "\n".join(
+        [
+            f"# Identidad (v{version.version}): {version.name}",
+            version.description,
+            version.personality_instructions,
+        ]
+    )
+
+
 def render_instructions(context: Context) -> str:
     """Render an already-built Context into the instructions text for the provider.
 
@@ -86,13 +111,7 @@ def render_instructions(context: Context) -> str:
     the safe state when none are relevant or none exist, never a fabricated
     decision.
     """
-    lines = [
-        f"# Identidad (v{context.identity.current_version.version}): "
-        f"{context.identity.current_version.name}",
-        context.identity.current_version.description,
-        context.identity.current_version.personality_instructions,
-        "",
-    ]
+    lines = [render_identity(context.identity.current_version), ""]
     if context.project is not None:
         revision = context.project.current_revision
         assert revision is not None  # ContextBuilder only resolves a configured project
@@ -115,6 +134,14 @@ def render_instructions(context: Context) -> str:
         "# Memorias vigentes",
         *(f"- ({memory.id}) {memory.current_revision.content}" for memory in context.memories),
         "",
+    ]
+    if context.own_memory:
+        # PA-R02-07: lo que ya dijo de esto, y lo que sí es y no es según sus marcas.
+        lines += render_own_memory(context.own_memory)
+    if context.summary is not None:
+        # PA-R02-05: lo anterior a los mensajes recientes, ya resumido.
+        lines += ["# Resumen de la charla", context.summary, ""]
+    lines += [
         "# Mensajes recientes",
         *(f"[{message.role.value}] {message.content}" for message in context.recent_messages),
         "",
@@ -136,10 +163,34 @@ class SendMessageUseCase:
         context_builder: ContextBuilder,
         conversation_repository: ConversationRepository,
         llm_provider: LLMProvider,
+        *,
+        mode_repository: ConversationModeRepository | None = None,
+        reply_marks: ReplyMarkRepository | None = None,
+        summary_service: ConversationSummaryService | None = None,
+        reminder: str = "",
     ) -> None:
+        """Lo de la charla del robot (pieza D de ADR-233) es opcional: sin ello,
+        este caso de uso hace exactamente lo de antes.
+
+        - ``mode_repository``: «ponte serio» y «para» (PA-R02-04).
+        - ``reply_marks``: apunta con qué modelo se dio cada respuesta, para sus
+          marcas (PA-R02-06).
+        - ``summary_service``: resume la charla larga al acabar el turno
+          (PA-R02-05).
+        - ``reminder``: el recordatorio de la semilla, lo último de cada
+          petición (PA-R02-05).
+        """
+        self._mode_repository = mode_repository
+        self._reply_marks = reply_marks
+        self._summary_service = summary_service
+        self._reminder = reminder.strip()
         self._context_builder = context_builder
         self._conversation_repository = conversation_repository
         self._llm_provider = llm_provider
+        #: El modelo de cada respuesta en curso. Si la charla cambia de modelo a
+        #: mitad de una, esa respuesta sigue con el suyo de principio a fin: se
+        #: cancela, se atribuye y se resume con él (ronda 3 de Codex).
+        self._in_flight: dict[str, LLMProvider] = {}
 
     def set_llm_provider(self, llm_provider: LLMProvider) -> None:
         """Swap the active provider (e.g. after B2a onboarding validates a key).
@@ -149,6 +200,11 @@ class SendMessageUseCase:
         the user to restart Sirius.
         """
         self._llm_provider = llm_provider
+
+    @property
+    def llm_provider(self) -> LLMProvider:
+        """El modelo con el que conversa ahora: las preguntas trampa se le hacen a él."""
+        return self._llm_provider
 
     def send_message(
         self,
@@ -171,9 +227,25 @@ class SendMessageUseCase:
         para pedir respuestas breves mientras se graba (#126).
         """
         operation_id = operation_id or str(uuid.uuid4())
+        provider = self._llm_provider
+        self._in_flight[operation_id] = provider
+        try:
+            return self._send(provider, user_text, operation_id, on_delta, extra_instructions)
+        finally:
+            self._in_flight.pop(operation_id, None)
+
+    def _send(
+        self,
+        provider: LLMProvider,
+        user_text: str,
+        operation_id: str,
+        on_delta: Callable[[str], None] | None,
+        extra_instructions: str,
+    ) -> SendMessageResult:
         context = self._context_builder.build(user_text)
 
         conversation = self._conversation_repository.get_or_create_main_conversation()
+        mode_block = self._mode_block(conversation.id, user_text)
         user_message = self._conversation_repository.append_message(
             conversation.id,
             MessageRole.USER,
@@ -183,8 +255,14 @@ class SendMessageUseCase:
         )
 
         instructions = render_instructions(context)
+        if mode_block:
+            instructions = f"{instructions}\n\n{mode_block}"
         if extra_instructions.strip():
             instructions = f"{instructions}\n\n{extra_instructions.strip()}"
+        if self._reminder:
+            # Lo último que lee el modelo en cada turno: contra la deriva, la
+            # semilla se le recuerda cerca del final (PA-R02-05).
+            instructions = f"{instructions}\n\n{self._reminder}"
         request = LLMRequest(
             operation_id=operation_id,
             instructions=instructions,
@@ -197,7 +275,7 @@ class SendMessageUseCase:
         final_text = ""
         memory_suggestion: str | None = None
 
-        for event in self._llm_provider.stream_response(request):
+        for event in provider.stream_response(request):
             if isinstance(event, LLMCompleted):
                 status = MessageStatus.COMPLETED
                 final_text = event.text
@@ -225,6 +303,14 @@ class SendMessageUseCase:
             identity_version=context.identity.current_version.version,
             status=status,
         )
+        if status is MessageStatus.COMPLETED:
+            if self._reply_marks is not None:
+                model = getattr(provider, "model_name", None)
+                self._reply_marks.record_model(
+                    sirius_message.id, model if isinstance(model, str) else None
+                )
+            if self._summary_service is not None:
+                self._summary_service.maybe_summarize(conversation.id, provider)
 
         return SendMessageResult(
             outcome=status,
@@ -236,5 +322,26 @@ class SendMessageUseCase:
         )
 
     def cancel(self, operation_id: str) -> None:
-        """Request cooperative cancellation of an in-flight operation. Idempotent."""
-        self._llm_provider.cancel(operation_id)
+        """Request cooperative cancellation of an in-flight operation. Idempotent.
+
+        Va al modelo que está dando esa respuesta, aunque la charla ya haya cambiado
+        de modelo; si no hay respuesta en curso con ese id, al modelo de ahora.
+        """
+        self._in_flight.get(operation_id, self._llm_provider).cancel(operation_id)
+
+    def _mode_block(self, conversation_id: int, user_text: str) -> str:
+        """Aplica la orden de modo del mensaje, si la hay, y devuelve lo que toca añadir.
+
+        La orden vale desde este mismo turno: a «ponte serio» ya contesta serio,
+        después de vacilarle, y a «ya puedes volver a ser tú» ya contesta como él.
+        """
+        if self._mode_repository is None:
+            return ""
+        command = detect_mode_command(user_text)
+        if command is not None:
+            self._mode_repository.set_mode(conversation_id, command)
+        mode = self._mode_repository.get_mode(conversation_id)
+        block = MODE_INSTRUCTIONS[mode]
+        if mode is ConversationMode.SERIO and command is ConversationMode.SERIO:
+            block = f"{block}\n{ENTERING_SERIOUS_MODE}"
+        return block

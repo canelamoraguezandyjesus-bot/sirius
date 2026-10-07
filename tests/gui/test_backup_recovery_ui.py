@@ -281,6 +281,34 @@ class _BlockingTagCategoryUseCase:
         return False
 
 
+class _BlockingJudge:
+    """Hace de ``ReplyJudgeService`` con una respuesta a medio puntuar (pieza E
+    de ADR-233): ``judge_pending`` bloquea hasta ``release()`` y apunta si le
+    pidieron parar, como el juez de verdad entre una respuesta y la siguiente."""
+
+    def __init__(self) -> None:
+        import threading
+
+        self._continue_event = threading.Event()
+        self.started = threading.Event()
+        self.asked_to_stop: list[bool] = []
+
+    def release(self) -> None:
+        self._continue_event.set()
+
+    def judge_pending(self, should_stop: Any) -> bool:
+        self.started.set()
+        self._continue_event.wait(timeout=5)
+        self.asked_to_stop.append(bool(should_stop()))
+        return False
+
+    def recent_mean(self) -> None:
+        return None
+
+    def is_low(self) -> bool:
+        return False
+
+
 class _BlockingProposeCriticalityUseCase:
     """Simula un ``CriticalityProposalWorker`` en vuelo (CODEX-001): mismo
     patrón que ``_BlockingTagCategoryUseCase``, pero para
@@ -336,6 +364,7 @@ def _build_window(
     open_containing_folder: Any = None,
     tag_category_use_case: Any = None,
     propose_criticality_use_case: Any = None,
+    reply_judge_service: Any = None,
 ) -> MainWindow:
     dependencies = build_conversation_dependencies(
         database_path, database_path.parent / "backups", secret_store=FakeSecretStore()
@@ -378,6 +407,7 @@ def _build_window(
         open_containing_folder=open_containing_folder or (lambda path: None),
         tag_category_use_case=tag_category_use_case,
         propose_criticality_use_case=propose_criticality_use_case,
+        reply_judge_service=reply_judge_service,
     )
 
 
@@ -848,6 +878,51 @@ def test_restore_backup_waits_for_pending_category_tagging_before_closing_connec
     qtbot.waitUntil(lambda: restore_use_case.calls != [], timeout=5000)
     assert close_calls == [True]
     assert restore_use_case.calls == [(backup_path, _PASSWORD, True)]
+
+
+@pytest.mark.gui
+def test_restore_backup_stops_the_judge_and_waits_for_it_before_closing_connections(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """Pieza E de ADR-233: el juez puntúa en segundo plano y escribe la nota en
+    sirius.db. Si la restauración cerrara las conexiones con él a medias, la
+    nota acabaría en la base restaurada, junto a otra respuesta, o el
+    reemplazo del fichero fallaría en Windows. Se le pide parar y se le espera."""
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    backup_path = tmp_path / "b.siriusbackup"
+    validate_use_case = _FakeValidateBackupUseCase(result=_fake_validation_result(backup_path))
+    restore_use_case = _FakeRestoreBackupUseCase(result=_fake_restore_result(backup_path, None))
+    judge = _BlockingJudge()
+    close_calls: list[bool] = []
+    window = _build_window(
+        database_path,
+        validate_backup_use_case=validate_use_case,
+        restore_backup_use_case=restore_use_case,
+        confirm_restore=lambda title, text: True,
+        close_database_connections=lambda: close_calls.append(True),
+        reply_judge_service=judge,
+    )
+    qtbot.addWidget(window)
+    window.show()
+    assert judge.started.wait(timeout=5)
+    assert window.judge_in_progress
+
+    window.restore_backup_path_input.setText(str(backup_path))
+    window.restore_backup_password_input.setText(_PASSWORD)
+    window.restore_backup_button.click()
+
+    # La validación va en segundo plano: se espera a que la restauración llegue al juez.
+    qtbot.waitUntil(lambda: "juez" in window.restore_backup_status_label.text(), timeout=5000)
+    assert close_calls == []
+    assert restore_use_case.calls == []
+
+    judge.release()
+
+    qtbot.waitUntil(lambda: restore_use_case.calls != [], timeout=5000)
+    assert judge.asked_to_stop == [True]
+    assert close_calls == [True]
+    assert restore_use_case.calls == [(backup_path, _PASSWORD, True)]
+    assert not window.judge_in_progress
 
 
 @pytest.mark.gui

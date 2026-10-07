@@ -26,9 +26,9 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **227**.
+- Decisiones (ADR): **231**.
 - Bloques del motor: 17 cerrado, 3 fuera_de_alcance.
-- Defectos registrados: 2 abierto, 82 cerrado.
+- Defectos registrados: 2 abierto, 83 cerrado.
 - Ideas aparcadas o descartadas: 12 aparcada, 3 descartada, 2 promovida.
 - Skills: **19**.
 - Investigaciones: **14** (fotos con fecha; caducan).
@@ -79,6 +79,10 @@ huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| [237](docs/decisions/ADR-237-dar-a-sirius-memoria-propia-un-juez-y-las-40-preguntas-trampa.md) | 2026-10-07 | APROBADO | Dar a Sirius memoria propia, un juez y las 40 preguntas trampa | Se adopta la opción 2 para la memoria propia, y las preguntas trampa se contestan aparte, como el primer turno de una charla nueva. |
+| [236](docs/decisions/ADR-236-dar-a-la-charla-de-sirius-sus-modos-su-recordatorio-su-resumen-y-los-dos-botones.md) | 2026-10-07 | APROBADO | Dar a la charla de Sirius sus modos, su recordatorio, su resumen y los dos botones | Se adopta la opción 2, y el resumen se hace al acabar el turno que lo dispara. |
+| [235](docs/decisions/ADR-235-dar-a-sirius-la-semilla-del-robot-hecha-con-las-marcas-y-las-palabras-del-propietario.md) | 2026-10-07 | APROBADO | Dar a Sirius la semilla del robot hecha con las marcas y las palabras del propietario | Se adopta la opción 2. |
+| [234](docs/decisions/ADR-234-llevar-la-charla-de-sirius-al-ollama-de-este-ordenador-y-elegir-su-modelo-a-ciegas.md) | 2026-10-07 | APROBADO | Llevar la charla de Sirius al Ollama de este ordenador y elegir su modelo a ciegas | Se adoptan la opción 1 y, para la prueba, una ventana dentro de Sirius. |
 | [233](docs/decisions/ADR-233-empezar-la-0.2-del-robot-por-su-semilla-y-por-sus-pruebas-de-aceptacion.md) | 2026-10-07 | APROBADO | Empezar la 0.2 del robot por su semilla y por sus pruebas de aceptación | Se adopta la opción 2. |
 | [232](docs/decisions/ADR-232-hacer-de-sirius-solo-el-software-del-robot-y-revisar-el-roadmap-primero-el-cerebro-despues-la-cabeza.md) | 2026-10-06 | APROBADO | Hacer de Sirius solo el software del robot y revisar el roadmap: primero el cerebro, después la cabeza | La opción 3, en estos documentos: |
 | [231](docs/decisions/ADR-231-un-defecto-se-cierra-desde-la-pr-que-mete-en-main-el-adr-que-lo-nombra-no-solo-desde-la-del-adr-que-lo-declaro.md) | 2026-10-02 | APROBADO | Un defecto se cierra desde la PR que mete en `main` el ADR que lo nombra, no solo desde la del ADR que lo declaró | Un defecto cerrado puede citar en `pr:` la PR que metió en `main` el ADR que lo declaró (ADR-222) o la que metió un ADR posterior que lo nombra por su id, palabra entera. `_pr_que_puede_citar`… |
@@ -341,6 +345,7 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 | `guarda-medida-que-se-queda-sin-autoridad-porque-nadie-relee-la-medida` | 1 | sí | 199 |
 | `instrumento-que-solo-mide-un-lado` | 1 | sí | 203 |
 | `interruptor-que-enciende-mas-de-lo-que-se-puede-medir` | 1 | sí | 185 |
+| `modelo-dentro-del-turno` | 1 | sí | 237 |
 | `parada-segura-que-tira-lo-ya-pagado` | 1 | sí | 226 |
 | `pieza-correcta-a-la-que-no-llama-quien-la-necesita` | 1 | sí | 197 |
 | `plan-que-hay-que-terminar-de-una-sentada` | 1 | sí | 176 |
@@ -465,6 +470,10 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 
 - **ADR-185** — poner una sola puerta delante de varias piezas (lo hace cumplir `tests/unit/test_composition_root_relevance_gate.py`).
 
+### `modelo-dentro-del-turno`
+
+- **ADR-237** — poner otra petición al modelo de la charla dentro de cada turno, (lo hace cumplir `tests/acceptance/test_robot_0_2_personalidad.py`).
+
 ### `parada-segura-que-tira-lo-ya-pagado`
 
 - **ADR-226** — tratar toda parada de un revisor como pérdida del veredicto del otro, aunque el que para haya declarado que no va a revisar y el otro ya haya entregado hallazgos pagados; la asimetría que protege (no aprobar sin los dos) se conserva sin tirar el trabajo hecho. (lo hace cumplir `tests/automation/test_sirius_aggregate_reviews.py`).
@@ -497,7 +506,7 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 
 - **ADR-205** — el ciclo volvería a quedarse horas en verde esperando (lo hace cumplir `tests/automation/test_sirius_merge.py`).
 
-Y **2** ADR declaran expresamente que no dejaron lección: 233, 232.
+Y **5** ADR declaran expresamente que no dejaron lección: 236, 235, 234, 233, 232.
 
 ## Los bloques del motor
 

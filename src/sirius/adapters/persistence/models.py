@@ -448,3 +448,71 @@ class LLMUsageModel(Base):
     year_month: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     spent_usd: Mapped[float] = mapped_column(nullable=False)
     updated_at: Mapped[datetime] = mapped_column(nullable=False)
+
+
+class ConversationModeModel(Base):
+    """El modo de una conversación: normal, serio o sin pique (pieza D de ADR-233).
+
+    Una fila por conversación, y solo desde que alguna vez cambió de modo: sin
+    fila, la conversación está en modo normal.
+    """
+
+    __tablename__ = "conversation_modes"
+
+    conversation_id: Mapped[int] = mapped_column(
+        ForeignKey("conversations.id", ondelete="CASCADE"), primary_key=True
+    )
+    mode: Mapped[str] = mapped_column(Text, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(nullable=False)
+
+
+class ReplyMarkModel(Base):
+    """Con qué modelo se dio cada respuesta de Sirius y su marca, si la tiene.
+
+    La fila nace con la respuesta, con ``mark`` vacío. El propietario la marca
+    después con «eso es Sirius» o «eso no» (PA-R02-06); no existe otra marca.
+    """
+
+    __tablename__ = "reply_marks"
+
+    message_id: Mapped[int] = mapped_column(
+        ForeignKey("messages.id", ondelete="CASCADE"), primary_key=True
+    )
+    model: Mapped[str | None] = mapped_column(Text, nullable=True)
+    mark: Mapped[str | None] = mapped_column(Text, nullable=True)
+    marked_at: Mapped[datetime | None] = mapped_column(nullable=True)
+
+
+class JudgeScoreModel(Base):
+    """La nota que el juez dio a una respuesta de Sirius (PA-R02-08).
+
+    Del 1 al 5, si suena a Sirius, y si con ella el juez avisó de que la media
+    de las 10 últimas bajó de 3,5. Solo números: el texto sigue en ``messages``.
+    """
+
+    __tablename__ = "judge_scores"
+
+    message_id: Mapped[int] = mapped_column(
+        ForeignKey("messages.id", ondelete="CASCADE"), primary_key=True
+    )
+    score: Mapped[int] = mapped_column(nullable=False)
+    warned: Mapped[bool] = mapped_column(nullable=False)
+    judged_at: Mapped[datetime] = mapped_column(nullable=False)
+
+
+class ConversationSummaryModel(Base):
+    """El resumen de una charla larga hasta un mensaje (PA-R02-05).
+
+    El vigente es el de mayor ``up_to_sequence``: sustituye en las peticiones a
+    los mensajes hasta ese, que siguen guardados.
+    """
+
+    __tablename__ = "conversation_summaries"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    conversation_id: Mapped[int] = mapped_column(
+        ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False
+    )
+    up_to_sequence: Mapped[int] = mapped_column(nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(nullable=False)

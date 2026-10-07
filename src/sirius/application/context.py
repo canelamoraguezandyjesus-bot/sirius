@@ -71,6 +71,7 @@ from sirius.domain.decision import Decision
 from sirius.domain.event import Event
 from sirius.domain.identity import Identity
 from sirius.domain.memory import Memory
+from sirius.domain.own_memory import OwnMemory, build_own_memory, render_own_memory
 from sirius.domain.precedence import find_prevailing_decision
 from sirius.domain.project import Project, blockers_to_text, is_configured
 from sirius.domain.relevance import (
@@ -87,6 +88,7 @@ from sirius.ports.identity_repository import IdentityRepository
 from sirius.ports.memory_repository import MemoryRepository
 from sirius.ports.project_repository import ProjectRepository
 from sirius.ports.relevance_filter import RelevanceFilterPort
+from sirius.ports.robot_conversation import ConversationSummaryRepository, ReplyMarkRepository
 from sirius.ports.token_counter import TokenCounter
 
 _DEFAULT_RECENT_MESSAGES_LIMIT = 20
@@ -154,8 +156,11 @@ class ContextAssemblyError(RuntimeError):
 class Context:
     """Deterministic, ordered context assembled before calling any LLM provider.
 
-    Field order mirrors the section order given above; callers must not
-    reorder or flatten these into a single opaque string before this point.
+    Field order mirrors the section order given above, except ``summary`` and
+    ``own_memory``: they render before ``recent_messages`` but come last so they
+    can stay optional.
+    Callers must not reorder or flatten these into a single opaque string
+    before this point.
     ``project`` is ``None`` whenever there is no configured ``ACTIVE``
     project — absent entirely, still the bootstrap placeholder, or every
     existing project is ``COMPLETED`` — never a ``COMPLETED`` project and
@@ -171,6 +176,12 @@ class Context:
     memories: tuple[Memory, ...]
     recent_messages: tuple[Message, ...]
     current_user_message: str
+    # PA-R02-05 (pieza D de ADR-233): el resumen de lo anterior a
+    # ``recent_messages`` cuando la charla ya se resumió; ``None`` si no.
+    summary: str | None = None
+    # PA-R02-07 (pieza E de ADR-233): lo que ya dijo de esto y lo que sí es y
+    # no es, según sus marcas; ``None`` sin repositorio de marcas.
+    own_memory: OwnMemory | None = None
 
 
 class ContextBuilder:
@@ -218,6 +229,8 @@ class ContextBuilder:
         relevance_filter_port: RelevanceFilterPort | None = None,
         max_criticality_category: str | None = None,
         category_matching_enabled: bool = False,
+        summary_repository: ConversationSummaryRepository | None = None,
+        reply_marks: ReplyMarkRepository | None = None,
     ) -> None:
         self._identity_repository = identity_repository
         self._project_repository = project_repository
@@ -245,6 +258,10 @@ class ContextBuilder:
         # union of before this incidence. Only composition_root, wiring the
         # real category_matching_enabled setting, ever passes True.
         self._category_matching_enabled = category_matching_enabled
+        # PA-R02-05: sin repositorio de resúmenes, el contexto es el de siempre.
+        self._summary_repository = summary_repository
+        # PA-R02-07: sin marcas no hay memoria propia, y el contexto es el de siempre.
+        self._reply_marks = reply_marks
 
     def build(self, current_user_message: str) -> Context:
         """Assemble a Context; deterministic for the same underlying data.
@@ -278,9 +295,40 @@ class ContextBuilder:
         # FAILED SIRIUS message stays in the conversation history (for
         # traceability) but must never feed a future context.
         completed_messages = [m for m in all_messages if m.status is MessageStatus.COMPLETED]
+        # PA-R02-07: lo ya resumido sale de los mensajes recientes, pero sigue
+        # siendo suyo: lo que dijo hace días también puede volver con el tema.
+        all_completed = completed_messages
+        # PA-R02-05: lo que ya está resumido va en el resumen, no mensaje a
+        # mensaje. Los mensajes siguen guardados; solo dejan de ir en la petición.
+        summary = (
+            self._summary_repository.latest(conversation.id)
+            if self._summary_repository is not None
+            else None
+        )
+        if summary is not None:
+            completed_messages = [
+                m for m in completed_messages if m.sequence > summary.up_to_sequence
+            ]
         recent_candidates = tuple(completed_messages[-self._recent_messages_limit :])
 
+        own_memory = (
+            build_own_memory(
+                current_user_message,
+                all_completed,
+                self._reply_marks.marked_replies(),
+                in_request={message.id for message in recent_candidates},
+            )
+            if self._reply_marks is not None
+            else None
+        )
+
         protected_tokens = self._protected_tokens(identity, project, current_user_message)
+        if summary is not None:
+            protected_tokens += self._token_counter.count_tokens(summary.content)
+        if own_memory:
+            protected_tokens += self._token_counter.count_tokens(
+                "\n".join(render_own_memory(own_memory))
+            )
         source_events = self._resolve_source_events(ranked_knowledge)
 
         selection = apply_context_budget(
@@ -311,6 +359,8 @@ class ContextBuilder:
             memories=memories,
             recent_messages=selection.recent_messages,
             current_user_message=current_user_message,
+            summary=summary.content if summary is not None else None,
+            own_memory=own_memory,
         )
 
     def _rank_related_knowledge(self, current_user_message: str) -> tuple[RankedKnowledge, ...]:

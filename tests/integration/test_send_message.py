@@ -823,3 +823,93 @@ def test_send_message_mirror_is_none_for_a_failed_turn_even_if_a_completed_doubl
 
     assert result.outcome is MessageStatus.FAILED
     assert result.memory_suggestion is None
+
+
+class _ModeloConNombre(FakeLLMProvider):
+    """Un modelo de mentira con nombre, que apunta a quién le piden cancelar."""
+
+    def __init__(self, nombre: str, chunks: Iterable[str] = ("uno ", "dos ", "tres")) -> None:
+        super().__init__(chunks=chunks)
+        self.model_name = nombre
+        self.cancelados: list[str] = []
+
+    def cancel(self, operation_id: str) -> None:
+        self.cancelados.append(operation_id)
+        super().cancel(operation_id)
+
+
+class _Apuntador:
+    """Hace de marcas y de resumen: apunta el modelo con que se atribuye y se resume."""
+
+    def __init__(self) -> None:
+        self.atribuidas: list[str | None] = []
+        self.resumidas_con: list[object] = []
+
+    def record_model(self, message_id: int, model: str | None) -> None:
+        self.atribuidas.append(model)
+
+    def maybe_summarize(self, conversation_id: int, provider: object) -> bool:
+        self.resumidas_con.append(provider)
+        return False
+
+
+def _con_modelo_que_cambia(
+    tmp_path: Path, antes: _ModeloConNombre
+) -> tuple[SendMessageUseCase, _Apuntador]:
+    database_path = tmp_path / "sirius.db"
+    upgrade_to_head(database_path)
+    _seed_bootstrap_singletons(database_path)
+    repository = build_sqlite_conversation_repository(database_path)
+    apuntador = _Apuntador()
+    use_case = SendMessageUseCase(
+        context_builder=_build_context_builder(database_path, repository),
+        conversation_repository=repository,
+        llm_provider=antes,
+        reply_marks=apuntador,  # type: ignore[arg-type]
+        summary_service=apuntador,  # type: ignore[arg-type]
+    )
+    return use_case, apuntador
+
+
+@pytest.mark.integration
+def test_si_la_charla_cambia_de_modelo_a_mitad_esa_respuesta_sigue_con_el_suyo(
+    tmp_path: Path,
+) -> None:
+    """Ronda 3 de Codex: elegir otro modelo con una respuesta en curso no puede hacer
+    que esa respuesta se atribuya o se resuma con el nuevo."""
+    antes = _ModeloConNombre("modelo-de-antes")
+    despues = _ModeloConNombre("modelo-de-despues")
+    use_case, apuntador = _con_modelo_que_cambia(tmp_path, antes)
+
+    def cambia_a_mitad(texto: str) -> None:
+        if texto == "uno ":
+            use_case.set_llm_provider(despues)
+
+    result = use_case.send_message("hola", on_delta=cambia_a_mitad)
+
+    assert result.outcome is MessageStatus.COMPLETED
+    assert apuntador.atribuidas == ["modelo-de-antes"]
+    assert apuntador.resumidas_con == [antes]
+    assert use_case.llm_provider is despues
+
+
+@pytest.mark.integration
+def test_cancelar_tras_cambiar_de_modelo_para_la_respuesta_que_va_en_curso(
+    tmp_path: Path,
+) -> None:
+    """Ronda 3 de Codex: cancelar tiene que llegar al modelo que está contestando,
+    no al nuevo, o la petición de antes seguiría saliendo y costando."""
+    antes = _ModeloConNombre("modelo-de-antes")
+    despues = _ModeloConNombre("modelo-de-despues")
+    use_case, _ = _con_modelo_que_cambia(tmp_path, antes)
+
+    def cambia_y_cancela(texto: str) -> None:
+        if texto == "uno ":
+            use_case.set_llm_provider(despues)
+            use_case.cancel("op-a-mitad")
+
+    result = use_case.send_message("hola", operation_id="op-a-mitad", on_delta=cambia_y_cancela)
+
+    assert result.outcome is MessageStatus.CANCELLED
+    assert antes.cancelados == ["op-a-mitad"]
+    assert despues.cancelados == []

@@ -218,6 +218,11 @@ def test_context_field_order_matches_the_defined_sections() -> None:
         "memories",
         "recent_messages",
         "current_user_message",
+        # PA-R02-05 y PA-R02-07: se pintan antes de los mensajes recientes, pero
+        # van los últimos para ser opcionales y no romper a quien construye un
+        # Context sin ellos.
+        "summary",
+        "own_memory",
     ]
 
 
