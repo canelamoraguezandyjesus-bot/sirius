@@ -26,13 +26,13 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **226**.
+- Decisiones (ADR): **227**.
 - Bloques del motor: 17 cerrado, 3 fuera_de_alcance.
 - Defectos registrados: 2 abierto, 82 cerrado.
 - Ideas aparcadas o descartadas: 12 aparcada, 3 descartada, 2 promovida.
 - Skills: **19**.
 - Investigaciones: **14** (fotos con fecha; caducan).
-- Documentos: **211**, de los que **136** no declaran fecha.
+- Documentos: **212**, de los que **136** no declaran fecha.
 
 ## Las skills: lo que ya costó averiguar dos veces (ADR-211)
 
@@ -79,6 +79,7 @@ huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| [233](docs/decisions/ADR-233-empezar-la-0.2-del-robot-por-su-semilla-y-por-sus-pruebas-de-aceptacion.md) | 2026-10-07 | APROBADO | Empezar la 0.2 del robot por su semilla y por sus pruebas de aceptación | Se adopta la opción 2. |
 | [232](docs/decisions/ADR-232-hacer-de-sirius-solo-el-software-del-robot-y-revisar-el-roadmap-primero-el-cerebro-despues-la-cabeza.md) | 2026-10-06 | APROBADO | Hacer de Sirius solo el software del robot y revisar el roadmap: primero el cerebro, después la cabeza | La opción 3, en estos documentos: |
 | [231](docs/decisions/ADR-231-un-defecto-se-cierra-desde-la-pr-que-mete-en-main-el-adr-que-lo-nombra-no-solo-desde-la-del-adr-que-lo-declaro.md) | 2026-10-02 | APROBADO | Un defecto se cierra desde la PR que mete en `main` el ADR que lo nombra, no solo desde la del ADR que lo declaró | Un defecto cerrado puede citar en `pr:` la PR que metió en `main` el ADR que lo declaró (ADR-222) o la que metió un ADR posterior que lo nombra por su id, palabra entera. `_pr_que_puede_citar`… |
 | [230](docs/decisions/ADR-230-registrar-que-revisores-tuvo-cada-ronda-y-medir-la-convergencia-y-las-familias-solo-entre-rondas-comparables.md) | 2026-10-02 | APROBADO | Registrar qué revisores tuvo cada ronda y medir la convergencia y las familias solo entre rondas comparables | El veredicto agregado dice qué revisores tuvo la ronda. La regla 5 de `sirius_aggregate_reviews.py` añade `reviewers`: `["CLAUDE", "CODEX"]` en la revisión dual con los dos revisando, `["CLAUDE"]` sin revisión dual o cuando Codex declaró… |
@@ -496,7 +497,7 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 
 - **ADR-205** — el ciclo volvería a quedarse horas en verde esperando (lo hace cumplir `tests/automation/test_sirius_merge.py`).
 
-Y **1** ADR declaran expresamente que no dejaron lección: 232.
+Y **2** ADR declaran expresamente que no dejaron lección: 233, 232.
 
 ## Los bloques del motor
 
@@ -613,6 +614,7 @@ mismo comando y vigila la misma prueba que esta vista (ADR-218).
 | 2026-10-06 | [Enmienda al Manual de Visión e Identidad v1.2: Sirius, el robot](docs/evolution/ENMIENDA_MANUAL_IDENTIDAD_2026-10.md) |
 | 2026-10-06 | [Plan de Sirius, el robot](docs/evolution/PLAN_DEL_ROBOT.md) |
 | sin fecha declarada | [Propuesta de separación entre Sirius y su motor de trabajo](docs/evolution/PROPUESTA_SEPARACION_SIRIUS_MOTOR.md) |
+| 2026-10-07 | [Pruebas de aceptación de la 0.2 del robot](docs/evolution/PRUEBAS_0.2_DEL_ROBOT.md) |
 | sin fecha declarada | [Evolución de Sirius después de 0.1](docs/evolution/README.md) |
 | sin fecha declarada | [Documento Rector - Evolución de Sirius después de 0.1 (enmendado por su §20 el 06-10-2026: Sirius es el software del robot)](docs/evolution/RECTOR.md) |
 | sin fecha declarada | [Sirius AI Core y estrategia de modelos — recolección de ideas](docs/evolution/SIRIUS_AI_CORE_AND_MODEL_STRATEGY.md) |
