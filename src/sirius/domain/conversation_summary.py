@@ -28,14 +28,21 @@ class ConversationSummary:
     content: str
 
 
-def messages_to_summarize(unsummarized: Sequence[Message]) -> tuple[Message, ...]:
+def messages_to_summarize(
+    unsummarized: Sequence[Message], *, after_a_summary: bool = False
+) -> tuple[Message, ...]:
     """Los mensajes que toca resumir ya, o ninguno si todavía no toca.
 
     ``unsummarized`` son los mensajes completos posteriores al último resumen, en
     orden. Un turno es una respuesta de Sirius.
+
+    ``after_a_summary``: si ya hubo un resumen, sus cuatro últimos turnos siguen
+    sin resumir pero ya contaron para él. El siguiente llega 18 turnos después del
+    anterior, y no 14 (ronda 2 de Codex).
     """
     replies = [i for i, message in enumerate(unsummarized) if message.role is MessageRole.SIRIUS]
-    if len(replies) < TURNS_BETWEEN_SUMMARIES:
+    needed = TURNS_BETWEEN_SUMMARIES + (TURNS_KEPT_VERBATIM if after_a_summary else 0)
+    if len(replies) < needed:
         return ()
     last_summarized_reply = replies[-TURNS_KEPT_VERBATIM - 1]
     return tuple(unsummarized[: last_summarized_reply + 1])

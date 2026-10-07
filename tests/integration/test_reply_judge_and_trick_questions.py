@@ -304,6 +304,23 @@ def test_el_resultado_cuenta_sus_marcas_y_las_discrepancias_del_juez(tmp_path: P
     assert not resultado.judge_is_reliable
 
 
+def test_la_ventana_solo_dice_que_la_charla_es_local_si_de_verdad_lo_es(tmp_path: Path) -> None:
+    """Ronda 2 de Codex: un modelo de Ollama que se quedó en los ajustes no hace local la
+    charla. Lo que la ventana dice y lo que deja hacer sale del modelo con el que habla."""
+    save_settings({"llm_provider": "openai", "ollama_chat_model": "modelo-local"})
+    ollama = _OllamaQueApunta()
+    _, sirius = _sirius(tmp_path, juez=_Juez(), transporte=ollama.transporte())
+
+    assert sirius.blind_test_use_case.chat_model() is None
+    assert not sirius.trick_questions_use_case.chat_is_local()
+
+    sirius.send_message_use_case.set_llm_provider(
+        OllamaChatProvider("modelo-local", transport=ollama.transporte())
+    )
+    assert sirius.blind_test_use_case.chat_model() == "modelo-local"
+    assert sirius.trick_questions_use_case.chat_is_local()
+
+
 def test_las_preguntas_trampa_solo_se_abren_con_la_charla_en_este_ordenador(
     tmp_path: Path,
 ) -> None:

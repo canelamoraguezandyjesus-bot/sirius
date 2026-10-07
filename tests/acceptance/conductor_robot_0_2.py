@@ -705,12 +705,17 @@ class Conductor:
         )
 
     def elige_a_ciegas(self, hoja: HojaACiegas, elecciones: Mapping[int, str]) -> str:
-        """El propietario elige una letra por pregunta; devuelve el modelo ganador."""
+        """El propietario elige una letra por pregunta; devuelve el modelo ganador.
+
+        Desde aquí la charla va por el Ollama de mentira con el ganador, como en
+        producción: al reabrir, Sirius la monta otra vez con él.
+        """
         assert self._hoja is not None, "primero hay que preparar la prueba a ciegas"
         caso = self._dependencias.blind_test_use_case
         resultado = caso.result(self._hoja, elecciones)
         assert resultado.winner is not None, f"empate entre {resultado.tied}"
         caso.choose(resultado.winner)
+        self._charla_por_ollama = True
         return resultado.winner
 
     def modelo_de_la_charla(self) -> str | None:

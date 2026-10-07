@@ -52,6 +52,24 @@ def test_al_llegar_se_resume_todo_menos_los_ultimos_turnos() -> None:
     assert resumidos[-1].content == f"respuesta {turnos_resumidos}"
 
 
+def test_entre_un_resumen_y_el_siguiente_tambien_pasan_18_turnos() -> None:
+    """Ronda 2 de Codex: los cuatro turnos que el primer resumen deja sin resumir ya
+    contaron para él; si contaran otra vez, el segundo llegaría 14 turnos después."""
+    charla = _charla(60)
+    respuestas = [m for m in charla if m.role is MessageRole.SIRIUS]
+    hasta = messages_to_summarize(charla[: 2 * TURNS_BETWEEN_SUMMARIES])[-1].sequence
+    turnos_al_resumir = []
+    for turno in range(TURNS_BETWEEN_SUMMARIES + 1, 61):
+        sin_resumir = [m for m in charla[: 2 * turno] if m.sequence > hasta]
+        resumidos = messages_to_summarize(sin_resumir, after_a_summary=True)
+        if resumidos:
+            turnos_al_resumir.append(turno)
+            hasta = resumidos[-1].sequence
+
+    assert respuestas[TURNS_BETWEEN_SUMMARIES - 1].content == "respuesta 18"
+    assert turnos_al_resumir == [36, 54]
+
+
 def test_lo_que_se_da_a_resumir_lleva_el_resumen_anterior_y_quien_dijo_que() -> None:
     texto = summary_input("Hablaron de coches.", _charla(1))
 

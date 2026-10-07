@@ -337,11 +337,14 @@ def chat_goes_through_ollama() -> bool:
         return False
 
 
-def _only_if_local(provider: LLMProvider) -> LLMProvider | None:
-    """El proveedor de la charla si es el de Ollama de este ordenador; si no, ninguno.
+def _local_chat(provider: LLMProvider) -> OllamaChatProvider | None:
+    """La charla, si va por el Ollama de este ordenador; si no, ninguna.
 
-    Mira el proveedor con el que habla la charla ahora, no los ajustes: son la
-    misma autoridad que recibirá las preguntas (pieza E de ADR-233).
+    Es la única autoridad sobre si la charla es local y con qué modelo: el
+    proveedor con el que habla la charla ahora, nunca los ajustes. Los ajustes
+    pueden decir otra cosa hasta reiniciar, o guardar un modelo de Ollama que ya
+    no se usa, y por eso no deciden ni lo que sale del ordenador ni lo que la
+    ventana dice (rondas 1 y 2 de Codex, ADR-237).
     """
     return provider if isinstance(provider, OllamaChatProvider) else None
 
@@ -714,7 +717,7 @@ def build_conversation_dependencies(
     )
     trick_questions_use_case = TrickQuestionsUseCase(
         identity_repository,
-        local_chat_provider=lambda: _only_if_local(send_message_use_case.llm_provider),
+        local_chat_provider=lambda: _local_chat(send_message_use_case.llm_provider),
         judge=judge,
         reminder=ROBOT_SEED_REMINDER,
     )
@@ -823,8 +826,8 @@ def build_conversation_dependencies(
         )
 
     def current_chat_model() -> str | None:
-        value = load_settings().get(OLLAMA_CHAT_MODEL_SETTING)
-        return value.strip() if isinstance(value, str) and value.strip() else None
+        local = _local_chat(send_message_use_case.llm_provider)
+        return local.model_name if local is not None else None
 
     def installed_chat_models() -> tuple[str, ...]:
         try:

@@ -108,7 +108,7 @@ class ConversationSummaryService:
             for message in self._conversation_repository.list_messages(conversation_id)
             if message.status is MessageStatus.COMPLETED and message.sequence > since
         ]
-        to_summarize = messages_to_summarize(unsummarized)
+        to_summarize = messages_to_summarize(unsummarized, after_a_summary=previous is not None)
         if not to_summarize:
             return False
         text = summary_input(previous.content if previous is not None else None, to_summarize)
