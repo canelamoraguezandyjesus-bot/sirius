@@ -294,7 +294,8 @@ def test_olvidar_un_mensaje_de_un_dia_sonado_se_lleva_lo_que_el_sueno_propuso_y_
         assert _en_el_fichero(base, SECRETO) == []
         assert pendiente.id not in {s.id for s in sugerencias.list_pending_suggestions()}
         assert memoria.get_memory(recuerdo.id).status is MemoryStatus.CURRENT
-        assert [s.id for s in sugerencias.list_rejected_suggestions()] == [rechazado.id]
+        contestadas = sugerencias.list_answered_suggestions()
+        assert [s.id for s in contestadas] == [confirmado.id, rechazado.id]
         assert charla.day_summary(dia) is None
     finally:
         for repositorio in (conversacion, memoria, sugerencias, charla):

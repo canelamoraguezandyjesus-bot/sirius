@@ -82,6 +82,6 @@ class FactSuggestionRepository(MemorySuggestionRepository, Protocol):
         """
         ...
 
-    def list_rejected_suggestions(self) -> list[MemorySuggestion]:
-        """Las sugerencias a las que él dijo que no, de la más vieja a la más nueva."""
+    def list_answered_suggestions(self) -> list[MemorySuggestion]:
+        """Las sugerencias que él ya contestó, que sí o que no, de la más vieja a la más nueva."""
         ...

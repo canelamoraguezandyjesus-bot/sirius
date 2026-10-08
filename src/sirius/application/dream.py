@@ -160,10 +160,11 @@ class DreamService:
         ]
 
     def _already_known(self, fact: ProposedFact) -> bool:
-        """Si ya está apuntado como hecho vigente, o propuesto, o él ya dijo que no.
+        """Si ya está apuntado como hecho vigente, propuesto o contestado.
 
-        Lo que él rechazó cuenta: volver a soñar un día que quedó a medias no puede
-        proponerle otra vez lo que ya contestó (ronda 2 de Codex).
+        Todo lo que él contestó cuenta, que sí o que no: volver a soñar un día que
+        quedó a medias no puede proponerle otra vez lo que ya contestó, aunque lo que
+        confirmó haya cambiado después (rondas 2 y 3 de Codex).
         """
         key = _fact_key(fact.person, fact.text)
         for memory in self._facts.list_current_facts(fact.person):
@@ -171,7 +172,7 @@ class DreamService:
                 return True
         answered = [
             *self._suggestions.list_pending_suggestions(),
-            *self._suggestions.list_rejected_suggestions(),
+            *self._suggestions.list_answered_suggestions(),
         ]
         return any(
             _fact_key(suggestion.person or "", suggestion.content) == key for suggestion in answered

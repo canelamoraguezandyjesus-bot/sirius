@@ -201,6 +201,25 @@ Se adopta la opción 2.
       la base, y sus respuestas cambian lo que queda: confirmar lo pasa a hechos,
       rechazar lo saca de pendientes. Ahora cuenta todo lo que él contestó, también lo
       rechazado, y lo que el propio modelo repite.
+- **Ronda 3 de Codex**, la última, sobre `f0e3087b`: cuatro hallazgos, los cuatro ciertos.
+  Se corrigen en un solo commit y la PR se fusiona sin cuarta ronda, como manda ADR-233.
+  - P1: «olvida eso» olvidaba antes de guardar la orden. Si guardarla fallaba, repetirla
+    ya no veía lo olvidado y se llevaba lo de antes, que no tenía nada que ver.
+  - P1: el «sí» confirmaba la corrección sin ligarla a su mensaje: «olvida eso» justo
+    después no la encontraba.
+  - P2: repetir «eso no es así» tras un fallo dejaba dos correcciones iguales esperando.
+  - P2: lo que él confirmó del sueño y después cambió se le volvía a proponer al volver a
+    soñar el día.
+  - Familias: las mismas dos, por tercera vez. La raíz de la ronda 2 ligó lo propuesto a
+    su mensaje o a su día, pero no el orden: las órdenes cambiaban cosas antes de guardar
+    su mensaje, y el «sí» no ligaba lo que confirma. Ahora toda orden hace lo que manda
+    con su mensaje ya guardado y ligado a él, y una orden que se quedó sin respuesta no
+    cuenta cuando él la repite. Y el sueño cuenta todo lo contestado, también lo
+    confirmado.
+  - Lo que esto no garantiza: la orden y la respuesta de Sirius no van en una sola
+    transacción, porque usan conexiones distintas. Si guardar la respuesta falla después
+    de que la orden haya hecho lo suyo, la orden queda hecha; al repetirla, Sirius dice
+    que ya lo había olvidado, o vuelve a preguntar por la misma corrección.
 
 ## Consecuencias
 
@@ -214,7 +233,9 @@ Se adopta la opción 2.
   día se vuelve a soñar con lo que queda, y lo que siga en pie se le propone otra vez.
 - Lo que él ya contestó del sueño, que sí o que no, se queda al olvidar un mensaje de ese
   día salvo que lleve las palabras olvidadas: es suyo, y se borra desde Conocimiento.
-- El sueño no vuelve a proponer lo que él rechazó.
+- El sueño no vuelve a proponer lo que él ya contestó, que sí o que no.
+- «Olvida eso» justo después de un «sí» que confirmó una corrección borra el hecho entero,
+  también lo que tenía antes: lo cambiado queda ligado a ese «sí».
 - Tras «olvida eso», los resúmenes que cubrían el mensaje se borran enteros y la charla
   rehace el suyo cuando le toca. Tras «olvida lo de…» solo se quitan sus frases: lo que un
   resumen diga con otras palabras se queda.

@@ -16,8 +16,7 @@ import re
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
-from sirius.application.confirm_memory_suggestion import ConfirmMemorySuggestionUseCase
-from sirius.application.facts import FactProposals, FactsUseCase
+from sirius.application.facts import ConfirmFactSuggestionUseCase, FactProposals, FactsUseCase
 from sirius.application.reject_memory_suggestion import RejectMemorySuggestionUseCase
 from sirius.domain.conversation import Message, MessageRole, MessageStatus
 from sirius.domain.facts import OWNER, fact_note, mentioned_people, same_person
@@ -45,16 +44,21 @@ _BACKUPS_NOTE = "Las copias de seguridad que hiciste antes lo siguen guardando."
 
 @dataclass(frozen=True, slots=True)
 class CommandAnswer:
-    """Lo que se guarda del mensaje del propietario y lo que contesta Sirius.
+    """Lo que se guarda del mensaje del propietario y cómo contesta Sirius.
 
-    ``after_store`` es lo que la orden deja propuesto: se hace con el mensaje ya
-    guardado, para que lo propuesto quede ligado a él y olvidarlo se lo lleve
-    (ronda 2 de Codex). Recibe el id de ese mensaje.
+    ``respond`` hace lo que la orden manda y devuelve lo que contesta Sirius. Se
+    llama con el mensaje de la orden ya guardado y recibe su id: así lo que la orden
+    cambia queda ligado a él, y si guardarlo falla no ha cambiado nada (rondas 2 y 3
+    de Codex). Decidir si es una orden, en cambio, no cambia nada.
     """
 
     stored_user_text: str
-    reply: str
-    after_store: Callable[[int], object] | None = None
+    respond: Callable[[int], str]
+
+
+def _says(reply: str) -> Callable[[int], str]:
+    """Una respuesta que no cambia nada."""
+    return lambda _message_id: reply
 
 
 class MemoryCommandService:
@@ -66,7 +70,7 @@ class MemoryCommandService:
         forgetter: Forgetter,
         facts: FactsUseCase,
         proposals: FactProposals,
-        confirm: ConfirmMemorySuggestionUseCase,
+        confirm: ConfirmFactSuggestionUseCase,
         reject: RejectMemorySuggestionUseCase,
         *,
         backups_exist: Callable[[], bool] = lambda: False,
@@ -84,41 +88,46 @@ class MemoryCommandService:
         if command is None:
             return None
         if command.kind is MemoryCommandKind.FORGET_LAST:
-            return self._forget_last(text)
+            return CommandAnswer(text, self._forget_last)
         if command.kind is MemoryCommandKind.FORGET_ABOUT:
-            return self._forget_about(command.argument)
+            topic = command.argument
+            return CommandAnswer(FORGET_ABOUT_STORED, lambda _command_id: self._forget_about(topic))
         if command.kind is MemoryCommandKind.CORRECT:
             return self._correct(text, command.argument)
         if command.kind is MemoryCommandKind.ABOUT_ME:
-            return CommandAnswer(text, self._what_i_know(OWNER, "ti"))
+            return CommandAnswer(text, _says(self._what_i_know(OWNER, "ti")))
         if command.kind is MemoryCommandKind.ABOUT_PERSON:
             return self._about_person(text, command.argument)
         return self._answer_pending(text, yes=command.kind is MemoryCommandKind.YES)
 
     # --- Olvidar ---
 
-    def _forget_last(self, text: str) -> CommandAnswer:
-        said = [
-            message
-            for message in self._messages()
-            if message.role is MessageRole.USER
-            and message.status is MessageStatus.COMPLETED
-            and message.content
-        ]
-        if not said:
-            return CommandAnswer(text, "No me has dicho nada que olvidar.")
-        self._forgetter.forget_message(said[-1].id)
-        return CommandAnswer(text, self._with_backups_note("Hecho: ya no lo recuerdo."))
+    def _forget_last(self, command_id: int) -> str:
+        """Olvida lo último que dijo antes de la orden ``command_id``, ya guardada.
 
-    def _forget_about(self, topic: str) -> CommandAnswer:
+        Una orden que se quedó sin respuesta no cuenta: falló, y él la está
+        repitiendo ahora. Y lo último que dijo, si ya está olvidado, no se busca más
+        atrás: repetir «olvida eso» nunca se lleva otra cosa (ronda 3 de Codex).
+        """
+        messages = self._messages()
+        failed = _failed_commands(messages)
+        for message in reversed(messages):
+            if message.id >= command_id or message.role is not MessageRole.USER:
+                continue
+            if message.id in failed:
+                continue
+            if message.status is MessageStatus.REDACTED or not message.content:
+                return "Eso ya lo había olvidado."
+            self._forgetter.forget_message(message.id)
+            return self._with_backups_note("Hecho: ya no lo recuerdo.")
+        return "No me has dicho nada que olvidar."
+
+    def _forget_about(self, topic: str) -> str:
         phrase = _without_leading_words(topic)
         report = self._forgetter.forget_phrase(phrase) if phrase else ForgetReport()
         if not report.anything:
-            reply = "No encuentro nada dicho con esas palabras. Prueba con las palabras exactas."
-            return CommandAnswer(FORGET_ABOUT_STORED, reply)
-        return CommandAnswer(
-            FORGET_ABOUT_STORED, self._with_backups_note(f"Hecho. He borrado {_count(report)}.")
-        )
+            return "No encuentro nada dicho con esas palabras. Prueba con las palabras exactas."
+        return self._with_backups_note(f"Hecho. He borrado {_count(report)}.")
 
     def _with_backups_note(self, reply: str) -> str:
         return f"{reply} {_BACKUPS_NOTE}" if self._backups_exist() else reply
@@ -130,7 +139,7 @@ class MemoryCommandService:
         if target is None:
             return None
         if not new_text:
-            return CommandAnswer(text, "Dime cómo es, así: «eso no es así: …».")
+            return CommandAnswer(text, _says("Dime cómo es, así: «eso no es así: …»."))
         after = new_text[:1].upper() + new_text[1:]
         revision = target.current_revision
         note = fact_note(revision.said_by, revision.certainty)
@@ -139,10 +148,17 @@ class MemoryCommandService:
             f"{ASK_TO_CONFIRM}"
         )
 
-        def propose(message_id: int) -> object:
-            return self._proposals.propose_correction(target.id, after, message_id=message_id)
+        def respond(command_id: int) -> str:
+            # Si la orden se repite porque antes falló, no deja dos iguales esperando.
+            waiting = any(
+                pending.memory_id == target.id and pending.after == after
+                for pending in self._facts.pending_corrections()
+            )
+            if not waiting:
+                self._proposals.propose_correction(target.id, after, message_id=command_id)
+            return reply
 
-        return CommandAnswer(text, reply, after_store=propose)
+        return CommandAnswer(text, respond)
 
     def _fact_to_correct(self, new_text: str) -> Memory | None:
         """El hecho que más casa con lo último que se habló y con la corrección.
@@ -152,8 +168,14 @@ class MemoryCommandService:
         sabe qué corregir y no se adivina.
         """
         messages = [m for m in self._messages() if m.status is MessageStatus.COMPLETED]
+        # Una orden que falló no es de lo que se hablaba: él la está repitiendo ahora.
+        failed = _failed_commands(messages)
         last_said = next(
-            (m.content for m in reversed(messages) if m.role is MessageRole.USER and m.content),
+            (
+                m.content
+                for m in reversed(messages)
+                if m.role is MessageRole.USER and m.content and m.id not in failed
+            ),
             "",
         )
         last_reply = next(
@@ -187,11 +209,17 @@ class MemoryCommandService:
         if not pending:
             return None
         correction = pending[-1]
-        if yes:
-            self._confirm.confirm(correction.suggestion_id)
-            return CommandAnswer(text, f"Hecho. Ahora tengo «{correction.after}».")
-        self._reject.reject(correction.suggestion_id)
-        return CommandAnswer(text, f"Vale, lo dejo como estaba: «{correction.before}».")
+
+        def confirm(command_id: int) -> str:
+            # Ligado a su «sí»: «olvida eso» justo después se lleva lo cambiado.
+            self._confirm.confirm(correction.suggestion_id, message_id=command_id)
+            return f"Hecho. Ahora tengo «{correction.after}»."
+
+        def reject(_command_id: int) -> str:
+            self._reject.reject(correction.suggestion_id)
+            return f"Vale, lo dejo como estaba: «{correction.before}»."
+
+        return CommandAnswer(text, confirm if yes else reject)
 
     # --- ¿Qué sabes de…? ---
 
@@ -205,7 +233,7 @@ class MemoryCommandService:
         mentions = len(self._facts.card(person).mentions)
         if mentions:
             reply += f"\nMe has hablado de {person} en {_plural(mentions, 'mensaje')}."
-        return CommandAnswer(text, reply)
+        return CommandAnswer(text, _says(reply))
 
     def _what_i_know(self, person: str, called: str) -> str:
         facts = self._facts.current(person)
@@ -224,6 +252,20 @@ class MemoryCommandService:
         if conversation is None:
             return []
         return self._conversations.list_messages(conversation.id)
+
+
+def _failed_commands(messages: Sequence[Message]) -> set[int]:
+    """Las órdenes suyas que se quedaron sin respuesta de Sirius: fallaron al guardarse,
+    y cuando él las repite no cuentan como lo último que dijo (ronda 3 de Codex)."""
+    answered = {m.operation_id for m in messages if m.role is MessageRole.SIRIUS and m.operation_id}
+    return {
+        m.id
+        for m in messages
+        if m.role is MessageRole.USER
+        and m.content
+        and detect_memory_command(m.content) is not None
+        and m.operation_id not in answered
+    }
 
 
 def _without_leading_words(topic: str) -> str:

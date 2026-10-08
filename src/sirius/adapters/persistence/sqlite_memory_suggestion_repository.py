@@ -144,11 +144,15 @@ class SqliteMemorySuggestionRepository:
             ).all()
             return [_to_domain(model) for model in models]
 
-    def list_rejected_suggestions(self) -> list[MemorySuggestion]:
+    def list_answered_suggestions(self) -> list[MemorySuggestion]:
         with self._scope() as session:
             models = session.scalars(
                 select(MemorySuggestionModel)
-                .where(MemorySuggestionModel.status == MemorySuggestionStatus.REJECTED)
+                .where(
+                    MemorySuggestionModel.status.in_(
+                        (MemorySuggestionStatus.CONFIRMED, MemorySuggestionStatus.REJECTED)
+                    )
+                )
                 .order_by(MemorySuggestionModel.id)
             ).all()
             return [_to_domain(model) for model in models]

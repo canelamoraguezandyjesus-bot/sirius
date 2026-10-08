@@ -216,6 +216,33 @@ def test_lo_que_el_rechazo_no_se_vuelve_a_proponer_al_volver_a_sonar_el_dia(
         sugerencias.close()
 
 
+def test_lo_que_el_ya_confirmo_no_vuelve_aunque_luego_cambiara(tmp_path: Path) -> None:
+    """Ronda 3 de Codex: lo confirmado que después cambió ya no era un hecho vigente,
+    y volver a soñar el día lo proponía otra vez."""
+    from sirius.application.facts import ConfirmFactSuggestionUseCase
+
+    hecho = ProposedFact("propietario", "dónde vive", "Vive en la sierra")
+    mundo = _mundo(tmp_path, propone=[hecho])
+    mundo.resumidor.falla = True
+    mundo.di("Me mudé a la sierra.", hace_dias=1)
+    assert mundo.sueno.dream_pending(date.today()) == 1
+    sugerencias = build_sqlite_memory_suggestion_repository(mundo.base)
+    memoria = build_sqlite_memory_repository(mundo.base)
+    try:
+        [propuesta] = sugerencias.list_pending_suggestions()
+        ConfirmFactSuggestionUseCase(build_sqlite_unit_of_work(mundo.base)).confirm(propuesta.id)
+        memoria.record_fact(
+            "propietario", "dónde vive", "Vive en la costa", "prueba", since=date.today()
+        )
+
+        mundo.resumidor.falla = False
+        assert mundo.sueno.dream(date.today() - timedelta(days=1)) == []
+        assert sugerencias.list_pending_suggestions() == []
+    finally:
+        sugerencias.close()
+        memoria.close()
+
+
 def test_al_abrirse_suena_los_dias_de_antes_que_faltan_y_no_el_de_hoy(tmp_path: Path) -> None:
     mundo = _mundo(tmp_path)
     mundo.di("Hace un mes.", hace_dias=30)

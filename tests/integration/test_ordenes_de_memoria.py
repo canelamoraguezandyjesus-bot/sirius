@@ -8,6 +8,7 @@ from contextlib import closing
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -15,6 +16,7 @@ from sirius.adapters.persistence.bootstrap import initialize_persistence
 from sirius.adapters.secrets.fake import FakeSecretStore
 from sirius.application.memory_commands import ASK_TO_CONFIRM, FORGET_ABOUT_STORED
 from sirius.composition_root import ConversationDependencies, build_conversation_dependencies
+from sirius.domain.conversation import MessageRole
 from sirius.domain.facts import Certainty, ProposedFact
 from sirius.infrastructure.paths import resolve_paths
 from sirius.ports.embeddings import EmbeddingError
@@ -197,6 +199,107 @@ def test_olvida_eso_tras_eso_no_es_asi_se_lleva_la_correccion(sirius: _Sirius) -
             "SELECT COUNT(*) FROM memory_suggestions WHERE content LIKE '%Betis%'"
         ).fetchone()
     assert quedan == (0,)
+
+
+def _falla_una_vez(monkeypatch: pytest.MonkeyPatch, objeto: object, metodo: str) -> None:
+    """La primera llamada a ``objeto.metodo`` falla, como un fallo pasajero de la base."""
+    original = getattr(objeto, metodo)
+    veces = [0]
+
+    def falla_la_primera(*args: object, **kwargs: object) -> object:
+        veces[0] += 1
+        if veces[0] == 1:
+            raise sqlite3.OperationalError("database is locked")
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(objeto, metodo, falla_la_primera)
+
+
+def _falla_la_respuesta_una_vez(monkeypatch: pytest.MonkeyPatch, sirius: _Sirius) -> None:
+    """Guardar la próxima respuesta de Sirius falla una vez; lo demás se guarda."""
+    conversaciones = sirius.deps.send_message_use_case._conversation_repository
+    original = conversaciones.append_message
+    veces = [0]
+
+    def falla_la_respuesta(conversation_id: int, role: MessageRole, *args: Any, **kw: Any) -> Any:
+        if role is MessageRole.SIRIUS:
+            veces[0] += 1
+            if veces[0] == 1:
+                raise sqlite3.OperationalError("database is locked")
+        return original(conversation_id, role, *args, **kw)
+
+    monkeypatch.setattr(conversaciones, "append_message", falla_la_respuesta)
+
+
+def test_si_guardar_la_respuesta_falla_repetir_olvida_eso_no_se_lleva_otra_cosa(
+    sirius: _Sirius, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ronda 3 de Codex: olvidar se guardaba antes que la orden. Si guardar la
+    respuesta fallaba, repetir «olvida eso» ya no veía lo olvidado y se llevaba lo
+    anterior, que no tenía nada que ver."""
+    sirius.di("Mañana voy al dentista.")
+    sirius.di("La clave es Zarzamora.")
+    _falla_la_respuesta_una_vez(monkeypatch, sirius)
+    with pytest.raises(sqlite3.OperationalError):
+        sirius.di("Olvida eso.")
+
+    assert sirius.di("Olvida eso.") == "Eso ya lo había olvidado."
+
+    textos = [m.content for m in sirius.deps.get_history_use_case.get_history()]
+    assert "Mañana voy al dentista." in textos
+    assert not any("Zarzamora" in (texto or "") for texto in textos)
+
+
+def test_si_olvidar_falla_repetir_olvida_eso_lo_olvida(
+    sirius: _Sirius, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """La orden que se quedó sin respuesta no cuenta: repetirla olvida lo de antes."""
+    sirius.di("La clave es Zarzamora.")
+    ordenes = sirius.deps.send_message_use_case._memory_commands
+    assert ordenes is not None
+    _falla_una_vez(monkeypatch, ordenes._forgetter, "forget_message")
+    with pytest.raises(sqlite3.OperationalError):
+        sirius.di("Olvida eso.")
+
+    assert sirius.di("Olvida eso.").startswith("Hecho: ya no lo recuerdo.")
+    textos = [m.content for m in sirius.deps.get_history_use_case.get_history()]
+    assert not any("Zarzamora" in (texto or "") for texto in textos)
+
+
+def test_olvida_eso_tras_confirmar_una_correccion_se_lleva_lo_corregido(
+    sirius: _Sirius,
+) -> None:
+    """Ronda 3 de Codex: el «sí» confirmaba la corrección sin ligarla a su mensaje, y
+    «olvida eso» justo después no la encontraba."""
+    sirius.anota("propietario", "equipo", "Es del Atleti")
+    sirius.di("¿De qué equipo soy?")
+    sirius.di("Eso no es así: soy del Betis.")
+    sirius.di("Sí.")
+
+    sirius.di("Olvida eso.")
+
+    with closing(sqlite3.connect(sirius.base)) as conexion:
+        quedan = conexion.execute(
+            "SELECT COUNT(*) FROM memory_revisions WHERE content LIKE '%Betis%'"
+        ).fetchone()
+    assert quedan == (0,)
+
+
+def test_repetir_eso_no_es_asi_tras_un_fallo_no_deja_dos_correcciones(
+    sirius: _Sirius, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ronda 3 de Codex: si guardar la respuesta fallaba, repetir la orden dejaba dos
+    correcciones iguales esperando su sí."""
+    sirius.anota("propietario", "equipo", "Es del Atleti")
+    sirius.di("¿De qué equipo soy?")
+    _falla_la_respuesta_una_vez(monkeypatch, sirius)
+    with pytest.raises(sqlite3.OperationalError):
+        sirius.di("Eso no es así: soy del Betis.")
+
+    # Repetida, sigue siendo la misma orden, y pregunta otra vez.
+    assert sirius.di("Eso no es así: soy del Betis.").endswith(ASK_TO_CONFIRM)
+
+    assert [c.after for c in sirius.deps.facts_use_case.pending_corrections()] == ["Soy del Betis"]
 
 
 def test_eso_no_es_asi_sin_hecho_que_case_va_a_la_charla(sirius: _Sirius) -> None:

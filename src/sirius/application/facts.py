@@ -182,7 +182,9 @@ class ConfirmFactSuggestionUseCase(ConfirmMemorySuggestionUseCase):
         super().__init__(unit_of_work)
         self._fact_unit_of_work = unit_of_work
 
-    def confirm(self, suggestion_id: int) -> Memory:
+    def confirm(self, suggestion_id: int, *, message_id: int | None = None) -> Memory:
+        """Confirma la sugerencia. ``message_id`` es el mensaje con el que dijo que sí,
+        si lo dijo hablando: lo que cambia queda ligado a él, y olvidarlo se lo lleva."""
         with self._fact_unit_of_work as uow:
             suggestion = uow.memory_suggestion_repository.get_suggestion(suggestion_id)
         if suggestion.person is None and suggestion.corrects_memory_id is None:
@@ -193,7 +195,7 @@ class ConfirmFactSuggestionUseCase(ConfirmMemorySuggestionUseCase):
             event = uow.event_repository.append(
                 event_type=MEMORY_SUGGESTION_CONFIRMED_EVENT_TYPE,
                 actor=USER_ACTOR,
-                message_id=None,
+                message_id=message_id,
             )
             certainty = Certainty(suggestion.certainty or Certainty.SURE)
             if suggestion.corrects_memory_id is not None:
