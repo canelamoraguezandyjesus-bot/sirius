@@ -101,19 +101,97 @@ El de la nota de arranque, punto 3.
 
 ## Decisión
 
-La opción 2, con lo que describe la nota de arranque.
+La opción 2, con lo que describe la nota de arranque. En concreto:
+
+- **Los ejemplos, como datos.** `identity_versions.examples` guarda, en JSON, quién habla,
+  qué dice y qué contesta Sirius en cada ejemplo (migración `96dcb8c3d40e`). Las versiones
+  de antes quedan con `[]`; las de la semilla del robot de ayer los llevan dentro del
+  texto. `adopt_robot_seed` compara texto y ejemplos: una base con la semilla de ayer
+  recibe esta como versión nueva, y la de ayer se queda en la historia.
+- **Los tres de cada petición.** `SeedExamplePicker`
+  (`src/sirius/application/seed_examples.py`) da los 3 de más parecido entre la huella
+  del mensaje y la de lo que se le dice a Sirius en cada ejemplo, con el modelo de huellas
+  de la búsqueda de recuerdos. Las de los ejemplos se piden de cuatro en cuatro, con la
+  misma paciencia que la del mensaje, y se guardan mientras Sirius está abierto. Sin
+  huellas, cuentan las palabras de cuatro letras o más en común, y los empates los decide
+  el azar. Los tres van siempre barajados.
+- **Una huella por turno.** La del mensaje la piden la búsqueda y los ejemplos;
+  `MemoryEmbeddingService` recuerda la última y Ollama la calcula una vez.
+- **Quién ve cuántos.** La charla, las 40 preguntas trampa y la prueba a ciegas, 3. En
+  la prueba a ciegas se eligen una vez por pregunta y valen para todos los modelos. El
+  juez ve los 20, con el aviso de antes, «Así suenas. No son frases para repetir: te
+  enseñan el tono.»: juzga cómo suena Sirius y no conversa.
+- **La voz de las órdenes.** `CommandReply` separa lo que Sirius puede decir con su voz
+  (`said`), lo exacto (`exact`) y la frase de siempre (`fixed`). `CommandVoice` monta la
+  petición con la identidad y 3 ejemplos elegidos por la frase, el modo de la charla, la
+  tarea y el recordatorio. Lo que contesta es su voz y, en la línea siguiente, lo exacto.
+  Si el modelo falla, se cancela, no dice nada o la petición no se puede preparar, va la
+  frase de siempre. La voz no se apunta con su modelo y el juez no la puntúa: lleva datos
+  tal cual, como la lista de hechos, que no son charla.
 
 ## Comprobación que la sostiene
 
-Se completa al terminar, con las pruebas, la mutación y la batería.
+- **Pruebas de aceptación de la 0.2**: las 9 de la pieza H, escritas antes del código
+  (`da77f87b`) y en `xfail` estricto hasta él, pasan. Las de la pieza G que pedían que no
+  hubiera petición ahora piden que lo olvidado y los hechos no lleguen al modelo, y pasan
+  antes y después del código.
+- **Roturas a propósito**, sobre una copia aparte, cada una con las pruebas que la vigilan.
+  Las 18 fallan como deben:
+  1. llevar todos los ejemplos en vez de 3;
+  2. no barajarlos;
+  3. elegirlos sin mirar el parecido;
+  4. romper el parecido por palabras;
+  5. dar a la voz la frase de siempre entera, con lo exacto dentro;
+  6. que un fallo del modelo no vuelva a la frase de siempre;
+  7. quitar lo exacto de detrás de la voz;
+  8. quitar el modo de la petición de la voz;
+  9. adoptar la semilla sin sus ejemplos;
+  10. no guardarlos en la base;
+  11. no recordar la huella del mensaje;
+  12. que el juez vea 3 en vez de 20;
+  13. que la prueba a ciegas elija los ejemplos por modelo;
+  14. dejar sin ejemplos las preguntas trampa;
+  15. aceptar unos ejemplos dañados en la base;
+  16. pedir las 20 huellas de una vez;
+  17. no contar los ejemplos en el presupuesto de la petición;
+  18. que un fallo al preparar la voz deje la orden sin respuesta.
+
+  La 17 pasó con las pruebas que había. Se añadió la que la caza
+  (`test_los_ejemplos_de_la_semilla_de_la_peticion_cuentan_en_el_presupuesto`).
+- **La batería entera** sobre el código de este commit: 8 176 pasan, 16 saltadas y los 2
+  `xfail` que ya estaban, en 20 min 37 s. En `main`, antes del cambio, eran 8 126. La
+  primera vuelta dio 8 174 bien y 1 mal: una prueba de la ventana contaba las huellas que
+  se piden y no esperaba las de los ejemplos. Se ajustó, y ahora comprueba además que se
+  piden dentro del turno, antes de que sigan las de los recuerdos.
+- **ruff**, **mypy** sobre `src` y `tests` (682 ficheros) y el **comprobador de
+  documentos**, limpios.
 
 ## Consecuencias
 
-Se completan al terminar.
+- Una orden de memoria tarda lo que tarde el modelo en decir una frase: con el modelo de
+  su ordenador cargado, segundos. Con la charla en OpenAI, cada orden es una petición más,
+  con la identidad y la frase fija.
+- El primer turno de cada vez que se abre Sirius pide también las huellas de los 20
+  ejemplos, en 5 tandas de 4. Los siguientes, ninguna.
+- Montar el contexto ya no da siempre lo mismo: cuáles de los ejemplos empatan y en qué
+  orden van cambian a propósito.
+- Dos búsquedas seguidas con la misma frase piden su huella una sola vez. La orden de
+  E-R02-05 usa las 100 preguntas del banco, que son distintas: mide la huella de todas.
+- Un `ContextBuilder`, una prueba a ciegas o unas preguntas trampa montados sin selector
+  eligen los ejemplos por palabras.
+- Como con cada migración, una copia de seguridad de antes de esta versión no se restaura
+  con ella: la restauración solo acepta copias del esquema vigente.
+- La orden de E-R02-04 pide en cada caso las huellas de los 20 ejemplos para su Sirius
+  nuevo: el banco tarda algo más en su ordenador.
 
 ## Alternativas descartadas y por qué
 
-Las opciones 1 y 3, por lo que dice cada una.
+- **Las opciones 1 y 3**, por lo que dice cada una.
+- **Que la voz vea los hechos o la corrección.** Podría decirlos mal; lo exacto va tal
+  cual, detrás.
+- **Pedir las huellas de los ejemplos en segundo plano, al abrir.** Tocaría la
+  coordinación de ADR-238 por un trabajo de décimas, y esa coordinación costó tres rondas.
+- **Que el juez vea solo 3.** Juzgaría el tono con menos de lo que tiene.
 
 ## La lección
 

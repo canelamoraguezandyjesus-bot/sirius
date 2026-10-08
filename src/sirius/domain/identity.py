@@ -7,8 +7,27 @@ from datetime import datetime
 
 
 @dataclass(frozen=True, slots=True)
+class SeedExample:
+    """Un ejemplo de charla de la semilla: quién habla, qué dice y qué contesta Sirius.
+
+    Le enseñan la actitud, no frases que repetir. Los guarda cada versión de la
+    identidad, y la charla le enseña en cada turno los que más se parecen a lo que
+    se habla (ADR-240).
+    """
+
+    who: str
+    said: str
+    reply: str
+
+
+@dataclass(frozen=True, slots=True)
 class IdentityVersion:
-    """One immutable, versioned snapshot of Sirius's identity."""
+    """One immutable, versioned snapshot of Sirius's identity.
+
+    ``examples`` son los ejemplos de charla de esa versión, guardados aparte del
+    texto (ADR-240). Las versiones de antes los llevaban dentro del texto, o no
+    tenían: entonces la tupla está vacía.
+    """
 
     id: int
     identity_id: int
@@ -17,6 +36,7 @@ class IdentityVersion:
     description: str
     personality_instructions: str
     created_at: datetime
+    examples: tuple[SeedExample, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

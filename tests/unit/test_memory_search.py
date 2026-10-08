@@ -291,3 +291,54 @@ def test_cargar_el_modelo_pide_una_huella_y_nunca_rompe_nada() -> None:
     assert sin_vec.pedidas == []
 
     MemoryEmbeddingService(_Huellas(falla=True), _Almacen()).warm_up()
+
+
+# --- ADR-240: la misma pregunta una sola vez, y las huellas de los ejemplos ------------
+
+
+def test_la_misma_pregunta_pide_su_huella_una_sola_vez_y_otra_pregunta_la_suya() -> None:
+    """Dentro de un turno la piden la búsqueda y los ejemplos de la semilla."""
+    huellas = _Huellas()
+    servicio = MemoryEmbeddingService(huellas, _Almacen())
+
+    primera = servicio.embed_query("cocido")
+    segunda = servicio.embed_query("cocido")
+    otra = servicio.embed_query("paella")
+
+    assert primera == segunda == [6.0]
+    assert otra == [6.0]
+    assert huellas.pedidas == [["cocido"], ["paella"]]
+
+
+def test_una_huella_que_falla_no_se_guarda_y_se_vuelve_a_pedir() -> None:
+    huellas = _Huellas(falla=True)
+    servicio = MemoryEmbeddingService(huellas, _Almacen())
+
+    assert servicio.embed_query("cocido") is None
+    huellas.falla = False
+    assert servicio.embed_query("cocido") == [6.0]
+    assert huellas.pedidas == [["cocido"], ["cocido"]]
+
+
+def test_las_huellas_de_varios_textos_las_da_el_modelo_con_poca_paciencia() -> None:
+    lento, rapido = _Huellas(model_name="lento"), _Huellas(model_name="rapido")
+    servicio = MemoryEmbeddingService(lento, _Almacen(), query_embedder=rapido)
+
+    assert servicio.embed_texts(["uno", "cuatro"]) == [[3.0], [6.0]]
+    assert servicio.query_model_name == "rapido"
+    assert rapido.pedidas == [["uno", "cuatro"]]
+    assert lento.pedidas == []
+
+
+def test_sin_huellas_para_varios_textos_devuelve_nada_y_nunca_rompe() -> None:
+    assert MemoryEmbeddingService(_Huellas(falla=True), _Almacen()).embed_texts(["a"]) is None
+    assert MemoryEmbeddingService(_Huellas(), _Almacen(available=False)).embed_texts(["a"]) is None
+    assert MemoryEmbeddingService(_Huellas(), _Almacen()).embed_texts([]) is None
+
+
+def test_si_el_modelo_no_da_una_huella_por_texto_no_devuelve_ninguna() -> None:
+    class _Corto(_Huellas):
+        def embed(self, texts: Sequence[str]) -> list[list[float]]:
+            return super().embed(texts)[:-1]
+
+    assert MemoryEmbeddingService(_Corto(), _Almacen()).embed_texts(["a", "b"]) is None

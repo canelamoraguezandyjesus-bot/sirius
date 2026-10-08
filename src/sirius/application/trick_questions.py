@@ -18,6 +18,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 
 from sirius.application.context import Context
+from sirius.application.seed_examples import SeedExamplePicker
 from sirius.application.send_message import render_instructions
 from sirius.domain.reply_judge import MAX_JUDGE_DISAGREEMENTS, TrickVerdict
 from sirius.domain.trick_questions import TRICK_QUESTIONS, TrickQuestion
@@ -73,11 +74,15 @@ class TrickQuestionsUseCase:
         judge: ReplyJudge,
         *,
         reminder: str = "",
+        seed_examples: SeedExamplePicker | None = None,
     ) -> None:
+        """``seed_examples`` elige los ejemplos de la semilla de cada pregunta, como en
+        la charla (ADR-240): las 40 pasan por la charla tal como conversa."""
         self._identity_repository = identity_repository
         self._local_chat_provider = local_chat_provider
         self._judge = judge
         self._reminder = reminder.strip()
+        self._seed_examples = seed_examples or SeedExamplePicker()
 
     def chat_is_local(self) -> bool:
         """Si la charla va por un modelo de este ordenador: solo así se abre la ventana.
@@ -121,6 +126,9 @@ class TrickQuestionsUseCase:
                 memories=(),
                 recent_messages=(),
                 current_user_message=question.bad_idea,
+                seed_examples=self._seed_examples.pick(
+                    identity.current_version.examples, question.bad_idea
+                ),
             )
             instructions = render_instructions(context)
             if self._reminder:

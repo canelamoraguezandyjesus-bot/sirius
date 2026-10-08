@@ -90,6 +90,7 @@ FORGET_COVERAGE: dict[str, str] = {
     "identity_versions.name": "la identidad de Sirius: la escribe él al marcar la semilla",
     "identity_versions.description": "la identidad de Sirius",
     "identity_versions.personality_instructions": "la identidad de Sirius",
+    "identity_versions.examples": "la identidad de Sirius: sus ejemplos de charla",
     "projects.name": "el proyecto de 0.1; el robot solo tiene «Charla con Sirius»",
     "projects.objective": "el proyecto de 0.1",
     "projects.current_state": "el proyecto de 0.1",

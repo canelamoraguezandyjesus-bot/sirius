@@ -19,6 +19,7 @@ from sirius.adapters.persistence.bootstrap import initialize_persistence
 from sirius.adapters.secrets.fake import FakeSecretStore
 from sirius.application.memory_search import EMBED_BATCH
 from sirius.composition_root import ConversationDependencies, build_conversation_dependencies
+from sirius.domain.robot_seed import ROBOT_SEED_EXAMPLES
 from sirius.infrastructure.paths import resolve_paths
 from sirius.main import _build_main_window
 from sirius.ports.llm import LLMCancelled, LLMCompleted, LLMRequest, LLMStreamEvent
@@ -151,8 +152,17 @@ def test_el_turno_espera_a_que_las_huellas_suelten_ollama_y_siguen_despues(
     # El primer grupo lo acabó y el turno empezó justo después, sin esperar al resto,
     # que lo calculó al acabar el turno.
     assert huellas.pedidas.index("Hola") == EMBED_BATCH
-    recuerdos = sorted(texto for texto in huellas.pedidas if texto != "Hola")
+    # ADR-240: dentro del turno pidió también las de los ejemplos de la semilla, antes de
+    # que las huellas de los recuerdos siguieran.
+    ejemplos = {ejemplo.said for ejemplo in ROBOT_SEED_EXAMPLES}
+    recuerdos = sorted(t for t in huellas.pedidas if t != "Hola" and t not in ejemplos)
     assert recuerdos == sorted(f"Recuerdo número {n}." for n in range(20))
+    despues = huellas.pedidas[huellas.pedidas.index("Hola") + 1 :]
+    pedidos_de_ejemplos = [i for i, texto in enumerate(despues) if texto in ejemplos]
+    assert {despues[i] for i in pedidos_de_ejemplos} == ejemplos
+    assert max(pedidos_de_ejemplos) < min(
+        i for i, texto in enumerate(despues) if texto.startswith("Recuerdo número")
+    )
 
 
 def test_si_el_modelo_de_huellas_se_esta_cargando_el_turno_espera_a_que_acabe(

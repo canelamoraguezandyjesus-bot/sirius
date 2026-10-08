@@ -46,10 +46,12 @@ from sirius.domain.identity import (
     INITIAL_IDENTITY_DESCRIPTION,
     INITIAL_IDENTITY_NAME,
     INITIAL_PERSONALITY_INSTRUCTIONS,
+    SeedExample,
 )
 from sirius.domain.project import blockers_to_text
 from sirius.domain.query_intent import IntencionDeConsulta
 from sirius.domain.relevance import RankedKnowledge, recortar_al_cupo
+from sirius.domain.robot_seed import render_examples
 from sirius.domain.staged_engine_contracts import (
     Cardinalidad,
     Modo,
@@ -228,6 +230,8 @@ def test_context_field_order_matches_the_defined_sections() -> None:
         "owner_facts",
         "people_facts",
         "recent_days",
+        # ADR-240: los ejemplos de la semilla de esta petición; opcional por lo mismo.
+        "seed_examples",
     ]
 
 
@@ -650,6 +654,75 @@ def test_build_fills_remaining_budget_with_recent_messages_dropping_oldest_first
 
     context = builder.build(query)
 
+    assert [m.content for m in context.recent_messages] == ["reciente"]
+
+
+@pytest.mark.integration
+def test_los_ejemplos_de_la_semilla_de_la_peticion_cuentan_en_el_presupuesto(
+    tmp_path: Path,
+) -> None:
+    """ADR-240: los tres ejemplos que lleva la petición van en ella, así que se pagan como
+    lo protegido. Con lo justo para ellos y el mensaje más nuevo, el viejo no cabe."""
+    database_path = tmp_path / "sirius.db"
+    _prepare_schema(database_path)
+    _seed_bootstrap_singletons(database_path)
+    ejemplos = tuple(
+        SeedExample(
+            "Él",
+            f"Ejemplo número {n}, con texto de sobra para que pese en el presupuesto.",
+            f"Respuesta número {n}, también con texto de sobra para que pese.",
+        )
+        for n in range(1, 4)
+    )
+    build_sqlite_identity_repository(database_path).create_new_version(
+        INITIAL_IDENTITY_NAME,
+        INITIAL_IDENTITY_DESCRIPTION,
+        INITIAL_PERSONALITY_INSTRUCTIONS,
+        ejemplos,
+    )
+    conversation_repository = build_sqlite_conversation_repository(database_path)
+    conversation = conversation_repository.get_or_create_main_conversation()
+    conversation_repository.append_message(conversation.id, MessageRole.USER, "antiguo")
+    conversation_repository.append_message(conversation.id, MessageRole.USER, "reciente")
+
+    query = "sin conocimiento pertinente"
+    token_counter = CharacterHeuristicTokenCounter()
+    active_project = build_sqlite_project_repository(database_path).get_active_project()
+    assert active_project is not None
+    revision = active_project.current_revision
+    assert revision is not None
+    protected_tokens = sum(
+        token_counter.count_tokens(texto)
+        for texto in (
+            "\n".join(
+                [
+                    INITIAL_IDENTITY_NAME,
+                    INITIAL_IDENTITY_DESCRIPTION,
+                    INITIAL_PERSONALITY_INSTRUCTIONS,
+                ]
+            ),
+            query,
+            "\n".join(
+                [
+                    active_project.name,
+                    revision.objective,
+                    revision.state_summary,
+                    blockers_to_text(revision.blockers),
+                    revision.next_step,
+                ]
+            ),
+            render_examples(ejemplos),
+        )
+    )
+    builder = _build_context_builder(
+        database_path,
+        token_budget=protected_tokens + token_counter.count_tokens("reciente"),
+        max_knowledge_items=0,
+    )
+
+    context = builder.build(query)
+
+    assert set(context.seed_examples) == set(ejemplos)
     assert [m.content for m in context.recent_messages] == ["reciente"]
 
 

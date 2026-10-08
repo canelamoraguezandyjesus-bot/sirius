@@ -190,6 +190,8 @@ def test_upgrade_head_columns_match_the_domain_schema(tmp_path: Path) -> None:
         "name",
         "description",
         "personality_instructions",
+        # ADR-240: los ejemplos de charla de la versión, aparte del texto.
+        "examples",
         "is_current",
         "created_at",
     }
@@ -1818,3 +1820,46 @@ def test_upgrading_from_previous_head_preserves_rows_and_backfills_criticality(
     assert decision_rows[0].id == 1
     assert decision_rows[0].subject == "asunto previo a M18b"
     assert decision_rows[0].criticality is None
+
+
+@pytest.mark.integration
+def test_upgrading_from_the_robot_facts_head_keeps_identity_versions_without_examples(
+    tmp_path: Path,
+) -> None:
+    """ADR-240: una versión de la identidad de antes de la columna ``examples`` se queda
+    con su texto entero y sin ejemplos aparte, «[]»; y volver atrás quita solo la columna."""
+    database_path = tmp_path / "sirius.db"
+    config = _alembic_config(database_path)
+    command.upgrade(config, "2c3461a7e6a7")
+
+    now = datetime.now(UTC).replace(tzinfo=None).isoformat(sep=" ")
+    engine = build_engine(database_path)
+    with engine.begin() as connection:
+        connection.execute(text("INSERT INTO identities (created_at) VALUES (:now)"), {"now": now})
+        connection.execute(
+            text(
+                "INSERT INTO identity_versions (identity_id, version, name, description, "
+                "personality_instructions, is_current, created_at) "
+                "VALUES (1, 1, 'Sirius', 'la de antes', 'texto con sus ejemplos dentro', 1, :now)"
+            ),
+            {"now": now},
+        )
+
+    command.upgrade(config, "head")
+
+    with engine.begin() as connection:
+        rows = connection.execute(
+            text("SELECT personality_instructions, examples FROM identity_versions")
+        ).fetchall()
+    assert [tuple(row) for row in rows] == [("texto con sus ejemplos dentro", "[]")]
+
+    command.downgrade(config, "2c3461a7e6a7")
+
+    columns = {column["name"] for column in inspect(engine).get_columns("identity_versions")}
+    assert "examples" not in columns
+    with engine.begin() as connection:
+        texts = connection.execute(
+            text("SELECT personality_instructions FROM identity_versions")
+        ).fetchall()
+    assert [tuple(row) for row in texts] == [("texto con sus ejemplos dentro",)]
+    engine.dispose()

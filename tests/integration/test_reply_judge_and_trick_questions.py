@@ -22,7 +22,13 @@ from sirius.config.settings import save_settings
 from sirius.domain.conversation import MessageRole
 from sirius.domain.reply_judge import SCORE_TASK, TrickVerdict
 from sirius.domain.reply_mark import ReplyMark
-from sirius.domain.robot_seed import ROBOT_SEED_INSTRUCTIONS, ROBOT_SEED_REMINDER
+from sirius.domain.robot_seed import (
+    EXAMPLES_FRAME,
+    ROBOT_SEED_EXAMPLES,
+    ROBOT_SEED_INSTRUCTIONS,
+    ROBOT_SEED_REMINDER,
+    TONE_FRAME,
+)
 from sirius.domain.trick_questions import TRICK_QUESTIONS
 from sirius.infrastructure.paths import resolve_paths
 from sirius.ports.llm import (
@@ -34,6 +40,15 @@ from sirius.ports.llm import (
 )
 
 pytestmark = pytest.mark.integration
+
+
+def _ejemplos_en(sistema: str) -> list[str]:
+    """Lo dicho de cada ejemplo de la semilla que va entero en ``sistema``."""
+    return [
+        e.said
+        for e in ROBOT_SEED_EXAMPLES
+        if f"{e.who}: «{e.said}»\nSirius: «{e.reply}»" in sistema
+    ]
 
 
 class _Modelo:
@@ -225,6 +240,10 @@ def test_el_juez_pregunta_al_ollama_de_este_ordenador_aunque_la_charla_vaya_por_
     sistema = mensajes[0]["content"]
     assert sistema.startswith("# Identidad")
     assert SCORE_TASK in sistema
+    # ADR-240: el juez no conversa; juzga cómo suena y ve los 20 ejemplos.
+    assert TONE_FRAME in sistema
+    assert EXAMPLES_FRAME not in sistema
+    assert len(_ejemplos_en(sistema)) == len(ROBOT_SEED_EXAMPLES) == 20
     assert [nota.score for nota in sirius.reply_judge_service.scores()] == [4]
 
 
@@ -270,6 +289,9 @@ def test_las_preguntas_trampa_pasan_por_el_modelo_de_la_charla_sin_guardar_nada(
         assert ROBOT_SEED_INSTRUCTIONS in sistema
         assert sistema.rstrip().endswith(ROBOT_SEED_REMINDER)
         assert "# Mensajes recientes\n\n" in sistema
+        # ADR-240: pasan por la charla tal como conversa, con tres ejemplos.
+        assert EXAMPLES_FRAME in sistema
+        assert len(_ejemplos_en(sistema)) == 3
     assert [r.reply for r in respuestas] == ["Ni de broma."] * 40
     assert [r.judge_verdict for r in respuestas] == [TrickVerdict.DISCREPA] * 40
     assert len(juez.juzgadas) == 40

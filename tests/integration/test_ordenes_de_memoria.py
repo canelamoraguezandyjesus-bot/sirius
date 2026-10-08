@@ -15,25 +15,55 @@ import pytest
 from sirius.adapters.persistence.bootstrap import initialize_persistence
 from sirius.adapters.secrets.fake import FakeSecretStore
 from sirius.application.memory_commands import ASK_TO_CONFIRM, FORGET_ABOUT_STORED
+from sirius.application.send_message import COMMAND_VOICE_TASK, CommandVoice
 from sirius.composition_root import ConversationDependencies, build_conversation_dependencies
 from sirius.domain.conversation import MessageRole
+from sirius.domain.conversation_mode import MODE_INSTRUCTIONS, ConversationMode
 from sirius.domain.facts import Certainty, ProposedFact
 from sirius.infrastructure.paths import resolve_paths
 from sirius.ports.embeddings import EmbeddingError
-from sirius.ports.llm import LLMCompleted, LLMRequest, LLMStreamEvent, LLMTextDelta
+from sirius.ports.llm import (
+    LLMCancelled,
+    LLMCompleted,
+    LLMError,
+    LLMErrorKind,
+    LLMRequest,
+    LLMStreamEvent,
+    LLMTextDelta,
+)
 
 pytestmark = pytest.mark.integration
 
 
 @dataclass
 class _Modelo:
+    """El modelo de la charla. Lo que se le pide para la voz de una orden (ADR-240) lo
+    apunta aparte, en ``voces``: ``peticiones`` son solo las de la charla.
+
+    Sin ``voz``, no se la pone, como un modelo que no contesta: así estas pruebas miran
+    lo que hace cada orden con la frase de siempre, y la voz la miran las suyas.
+    """
+
     model_name: str = "grabador"
     peticiones: list[LLMRequest] = field(default_factory=list)
+    voces: list[LLMRequest] = field(default_factory=list)
+    voz: str | None = None
+    cancela_la_voz: bool = False
 
     def health_check(self) -> bool:
         return True
 
     def stream_response(self, request: LLMRequest) -> Iterator[LLMStreamEvent]:
+        if COMMAND_VOICE_TASK in request.instructions:
+            self.voces.append(request)
+            if self.cancela_la_voz:
+                yield LLMCancelled(partial_text="Bor")
+            elif self.voz is None:
+                yield LLMError(kind=LLMErrorKind.CONNECTION, message="sin voz en esta prueba")
+            else:
+                yield LLMTextDelta(self.voz)
+                yield LLMCompleted(text=self.voz, input_tokens=1, output_tokens=1)
+            return
         self.peticiones.append(request)
         yield LLMTextDelta("Vale.")
         yield LLMCompleted(text="Vale.", input_tokens=1, output_tokens=1)
@@ -351,3 +381,102 @@ def test_cada_hilo_tiene_su_unidad_de_trabajo(sirius: _Sirius) -> None:
     assert len({id(de_la_ventana), id(del_sueno), id(del_envio)}) == 3
     assert ordenes._confirm._unit_of_work is del_envio
     assert deps.confirm_memory_suggestion_use_case._unit_of_work is de_la_ventana
+
+
+# --- La voz de Sirius en las órdenes (ADR-240) ---------------------------------
+
+
+def _lo_ve_la_voz(sirius: _Sirius, texto: str) -> bool:
+    """Si ``texto`` llegó al modelo en alguna petición de voz."""
+    return any(
+        texto.casefold() in f"{voz.instructions}\n{voz.input_text}".casefold()
+        for voz in sirius.modelo.voces
+    )
+
+
+def test_con_voz_la_respuesta_es_la_voz_y_detras_lo_exacto_tal_cual(sirius: _Sirius) -> None:
+    sirius.anota("Lucía", "trabajo", "Es enfermera")
+    sirius.di("Ayer vi a Lucía en el mercado.")
+    sirius.modelo.voz = "Pues de Lucía sé esto, jefe:"
+    antes = len(sirius.modelo.peticiones)
+
+    respuesta = sirius.di("¿Qué sabes de Lucía?")
+
+    assert respuesta == (
+        "Pues de Lucía sé esto, jefe:\n- Es enfermera\nMe has hablado de Lucía en 1 mensaje."
+    )
+    assert len(sirius.modelo.peticiones) == antes, "la orden no va a la charla"
+    assert len(sirius.modelo.voces) == 1
+    assert not _lo_ve_la_voz(sirius, "enfermera"), "lo exacto no pasa por el modelo"
+    assert not _lo_ve_la_voz(sirius, "mercado"), "la voz no lleva la charla"
+
+
+def test_la_voz_no_ve_lo_que_se_olvida_ni_la_orden(sirius: _Sirius) -> None:
+    sirius.di("Mi vecino Ramiro me tiene frito con la obra.")
+    sirius.modelo.voz = "Borrado, jefe."
+
+    respuesta = sirius.di("Olvida lo de mi vecino Ramiro.")
+
+    assert respuesta == "Borrado, jefe."
+    assert len(sirius.modelo.voces) == 1
+    for palabra in ("Ramiro", "vecino", "frito", "obra"):
+        assert not _lo_ve_la_voz(sirius, palabra), palabra
+
+
+def test_la_correccion_con_voz_sigue_acabando_en_la_pregunta_y_el_si_la_contesta(
+    sirius: _Sirius,
+) -> None:
+    sirius.anota("propietario", "equipo", "Es del Atleti", said_by="Lucía")
+    sirius.di("¿De qué equipo soy?")
+    sirius.modelo.voz = "A ver, a ver."
+
+    pregunta = sirius.di("Eso no es así: soy del Betis.")
+
+    assert pregunta.startswith("A ver, a ver.\nAhora tengo «Es del Atleti»")
+    assert pregunta.endswith(ASK_TO_CONFIRM)
+    assert sirius.di("Sí.") == "A ver, a ver.\nAhora tengo «Soy del Betis»."
+    assert not _lo_ve_la_voz(sirius, "Betis")
+    assert not _lo_ve_la_voz(sirius, "Atleti")
+
+
+def test_la_voz_habla_en_el_modo_de_la_charla(sirius: _Sirius) -> None:
+    sirius.di("Ponte serio, que esto es importante.")
+    sirius.di("La clave de la alarma es Zarzamora.")
+    sirius.modelo.voz = "Hecho."
+
+    sirius.di("Olvida eso.")
+
+    [voz] = sirius.modelo.voces
+    assert MODE_INSTRUCTIONS[ConversationMode.SERIO] in voz.instructions
+    assert not _lo_ve_la_voz(sirius, "Zarzamora")
+
+
+def test_si_la_voz_se_cancela_la_orden_queda_cumplida_con_la_frase_de_siempre(
+    sirius: _Sirius,
+) -> None:
+    sirius.di("La clave de la alarma es Zarzamora.")
+    sirius.modelo.cancela_la_voz = True
+
+    respuesta = sirius.di("Olvida eso.")
+
+    assert respuesta == "Hecho: ya no lo recuerdo."
+    assert len(sirius.modelo.voces) == 1
+    with closing(sqlite3.connect(sirius.base)) as conexion:
+        contenidos = [fila[0] or "" for fila in conexion.execute("SELECT content FROM messages")]
+    assert not any("Zarzamora" in contenido for contenido in contenidos)
+
+
+def test_si_preparar_la_voz_falla_la_orden_contesta_con_la_frase_de_siempre(
+    sirius: _Sirius, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sirius.di("La clave de la alarma es Zarzamora.")
+    sirius.modelo.voz = "Borrado."
+
+    def rompe(*args: object, **kwargs: object) -> None:
+        msg = "la base no contesta"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr(CommandVoice, "request", rompe)
+
+    assert sirius.di("Olvida eso.") == "Hecho: ya no lo recuerdo."
+    assert sirius.modelo.voces == []

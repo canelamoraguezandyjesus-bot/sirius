@@ -472,6 +472,9 @@ class IdentityVersionModel(Base):
     name: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     personality_instructions: Mapped[str] = mapped_column(Text, nullable=False)
+    # ADR-240: los ejemplos de charla de la versión, en JSON: una lista de objetos
+    # con «who», «said» y «reply». Las versiones de antes no tienen: «[]».
+    examples: Mapped[str] = mapped_column(Text, nullable=False, default="[]", server_default="[]")
     is_current: Mapped[bool] = mapped_column(nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(nullable=False)
 

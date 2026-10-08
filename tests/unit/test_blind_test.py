@@ -4,18 +4,21 @@ from __future__ import annotations
 
 import random
 from collections.abc import Iterable
+from dataclasses import replace
 from datetime import UTC, datetime
 
 import pytest
 
 from sirius.application.blind_test import BlindTestUseCase
+from sirius.application.seed_examples import SeedExamplePicker
 from sirius.domain.blind_test import (
     BLIND_TEST_QUESTIONS,
     BlindTestError,
     prepare_blind_test,
     tally,
 )
-from sirius.domain.identity import Identity, IdentityVersion
+from sirius.domain.identity import Identity, IdentityVersion, SeedExample
+from sirius.domain.robot_seed import EXAMPLES_FRAME
 from sirius.ports.llm import LLMCompleted, LLMError, LLMErrorKind, LLMRequest, LLMStreamEvent
 
 _PREGUNTAS = ("¿Qué tal?", "Cuéntame un chiste.", "Ponte serio.")
@@ -205,3 +208,39 @@ def test_elegir_lo_deja_como_modelo_de_la_charla() -> None:
     assert elegidos == ["dos"]
     assert caso.chat_model() == "dos"
     assert caso.installed_models() == ("dos", "uno")
+
+
+# --- ADR-240: los ejemplos de la semilla, pregunta a pregunta ---------------------------
+
+
+class _IdentidadesConEjemplos(_Identidades):
+    def get_or_create_current_identity(self) -> Identity:
+        version = replace(
+            super().get_or_create_current_identity().current_version,
+            examples=tuple(
+                SeedExample("Él", f"Frase número {n}.", f"Respuesta número {n}.")
+                for n in range(1, 8)
+            ),
+        )
+        return Identity(id=1, current_version=version, created_at=version.created_at)
+
+
+def test_cada_pregunta_lleva_tres_ejemplos_y_todos_los_modelos_las_mismas_instrucciones() -> None:
+    modelos = {"uno": _Modelo("uno"), "dos": _Modelo("dos")}
+    caso = BlindTestUseCase(
+        identity_repository=_IdentidadesConEjemplos(),  # type: ignore[arg-type]
+        provider_for=lambda nombre: modelos[nombre],
+        list_models=lambda: tuple(sorted(modelos)),
+        choose_model=lambda _nombre: None,
+        current_model=lambda: None,
+        rng=random.Random(11),
+        seed_examples=SeedExamplePicker(rng=random.Random(5)),
+    )
+
+    caso.prepare(["uno", "dos"])
+
+    for de_uno, de_dos in zip(modelos["uno"].peticiones, modelos["dos"].peticiones, strict=True):
+        assert de_uno.input_text == de_dos.input_text
+        assert de_uno.instructions == de_dos.instructions
+        assert EXAMPLES_FRAME in de_uno.instructions
+        assert de_uno.instructions.count("\nSirius: «Respuesta número") == 3

@@ -15,11 +15,14 @@ from sirius.adapters.persistence.sqlite_identity_repository import (
     SqliteIdentityRepository,
     build_sqlite_identity_repository,
 )
+from sirius.application.adopt_robot_seed import adopt_robot_seed
 from sirius.domain.identity import (
     INITIAL_IDENTITY_DESCRIPTION,
     INITIAL_IDENTITY_NAME,
     INITIAL_PERSONALITY_INSTRUCTIONS,
+    SeedExample,
 )
+from sirius.domain.robot_seed import ROBOT_SEED_EXAMPLES, ROBOT_SEED_INSTRUCTIONS
 
 
 def _build_repository(database_path: Path) -> SqliteIdentityRepository:
@@ -230,3 +233,65 @@ def test_failed_new_version_rolls_back_both_the_flip_and_the_new_row(tmp_path: P
     assert fetched.current_version.version == 1
     assert fetched.current_version.description == INITIAL_IDENTITY_DESCRIPTION
     assert len(repository.get_history()) == 1
+
+
+# --- ADR-240: los ejemplos de cada versión, guardados aparte del texto -----------------
+
+
+_EJEMPLOS = (
+    SeedExample("Él", "Buenos días, cabezón.", "Buenos días, soquete."),
+    SeedExample("Una amiga suya", "Hola, soy Marta.", "¿Y dónde conociste a este energúmeno?"),
+)
+
+
+@pytest.mark.integration
+def test_una_version_nueva_guarda_sus_ejemplos_y_la_anterior_sigue_sin_ellos(
+    tmp_path: Path,
+) -> None:
+    repository = _build_repository(tmp_path / "sirius.db")
+    repository.get_or_create_current_identity()
+
+    nueva = repository.create_new_version("Sirius", "v2", "valores", _EJEMPLOS)
+
+    assert nueva.current_version.examples == _EJEMPLOS
+    primera, segunda = repository.get_history()
+    assert primera.examples == ()
+    assert segunda.examples == _EJEMPLOS
+    assert repository.get_current_identity() == nueva
+
+
+@pytest.mark.integration
+def test_unos_ejemplos_danados_en_la_base_se_dicen_en_vez_de_perderse(tmp_path: Path) -> None:
+    database_path = tmp_path / "sirius.db"
+    repository = _build_repository(database_path)
+    repository.get_or_create_current_identity()
+    session_factory = build_session_factory(build_engine(database_path))
+    with session_scope(session_factory) as session:
+        version = session.scalars(select(IdentityVersionModel)).one()
+        version.examples = '[{"who": "Él", "said": "Hola."}]'
+
+    with pytest.raises(ValueError, match="malformed examples"):
+        repository.get_current_identity()
+
+
+@pytest.mark.integration
+def test_la_semilla_de_ayer_deja_paso_a_la_nueva_con_sus_ejemplos_y_se_queda_en_la_historia(
+    tmp_path: Path,
+) -> None:
+    """Su base tendrá la semilla de la #682, con los ejemplos dentro del texto. Al abrir,
+    entra la nueva como otra versión, y abrir otra vez no la repite."""
+    repository = _build_repository(tmp_path / "sirius.db")
+    repository.get_or_create_current_identity()
+    repository.create_new_version("Sirius", "la de ayer", "valores y los 20 ejemplos en fila")
+
+    assert adopt_robot_seed(repository) is True
+    assert adopt_robot_seed(repository) is False
+
+    historia = repository.get_history()
+    assert [v.version for v in historia] == [1, 2, 3]
+    assert historia[1].personality_instructions == "valores y los 20 ejemplos en fila"
+    vigente = historia[2]
+    assert (vigente.personality_instructions, vigente.examples) == (
+        ROBOT_SEED_INSTRUCTIONS,
+        ROBOT_SEED_EXAMPLES,
+    )

@@ -78,6 +78,10 @@ class MemoryEmbeddingService:
         self._embedder = embedder
         self._store = store
         self._query_embedder = query_embedder or embedder
+        #: La última pregunta, con su modelo y su huella. Dentro de un turno la piden
+        #: la búsqueda de recuerdos y los ejemplos de la semilla (ADR-240), y Ollama
+        #: solo tiene que darla una vez.
+        self._last_query: tuple[str, str, list[float]] | None = None
 
     @property
     def model_name(self) -> str:
@@ -131,12 +135,41 @@ class MemoryEmbeddingService:
         """La huella de la pregunta, o ``None`` si no se puede buscar por significado."""
         if not self._store.available or not query_text.strip():
             return None
+        model = self._query_embedder.model_name
+        last = self._last_query
+        if last is not None and last[0] == query_text and last[1] == model:
+            return list(last[2])
         try:
             [embedding] = self._query_embedder.embed([query_text])
         except Exception as exc:  # sin modelo de huellas, la búsqueda sigue por palabras
             _logger.warning("No se pudo calcular la huella de la pregunta (%s)", type(exc).__name__)
             return None
+        self._last_query = (query_text, model, list(embedding))
         return embedding
+
+    def embed_texts(self, texts: Sequence[str]) -> list[list[float]] | None:
+        """Las huellas de ``texts`` dentro del turno, una por texto, o ``None`` si no hay.
+
+        Con la misma poca paciencia que la pregunta: las piden los ejemplos de la
+        semilla para elegir los que más se parecen (ADR-240), y sin ellas se eligen
+        por palabras.
+        """
+        if not self._store.available or not texts:
+            return None
+        try:
+            embeddings = self._query_embedder.embed(list(texts))
+        except Exception as exc:  # sin modelo de huellas, los ejemplos van por palabras
+            _logger.warning("No se pudieron calcular huellas (%s)", type(exc).__name__)
+            return None
+        if len(embeddings) != len(texts):
+            _logger.warning("El modelo de huellas no dio una por texto")
+            return None
+        return embeddings
+
+    @property
+    def query_model_name(self) -> str:
+        """El modelo que da las huellas dentro del turno."""
+        return self._query_embedder.model_name
 
     def nearest(self, embedding: Sequence[float]) -> list[tuple[int, float]]:
         """Los recuerdos que se parecen a ``embedding`` por encima del umbral, del más al menos.

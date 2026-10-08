@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from typing import Any
 
@@ -23,7 +24,7 @@ from sirius.adapters.persistence.sqlite_identity_repository import (
 )
 from sirius.adapters.persistence.sqlite_project_repository import SqliteProjectRepository
 from sirius.domain.identity import INITIAL_IDENTITY_NAME, INITIAL_PERSONALITY_INSTRUCTIONS
-from sirius.domain.robot_seed import ROBOT_SEED_INSTRUCTIONS
+from sirius.domain.robot_seed import ROBOT_SEED_EXAMPLES, ROBOT_SEED_INSTRUCTIONS
 from sirius.infrastructure.paths import resolve_paths
 
 
@@ -119,6 +120,9 @@ def test_initialize_persistence_creates_the_canonical_identity() -> None:
     assert version_rows[0].is_current is False
     assert version_rows[1].personality_instructions == ROBOT_SEED_INSTRUCTIONS
     assert version_rows[1].is_current is True
+    # ADR-240: sus ejemplos van aparte, en la misma versión; la de 0.1 no tiene.
+    assert len(json.loads(version_rows[1].examples)) == len(ROBOT_SEED_EXAMPLES) == 20
+    assert json.loads(version_rows[0].examples) == []
 
 
 def _tracking_close(repository_class: Any, closed: list[str], label: str) -> Any:

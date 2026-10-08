@@ -2,8 +2,13 @@
 
 «Olvida eso», «olvida lo de…», «eso no es así», «¿qué sabes de mí?» y «¿qué
 sabes de Lucía?». ``SendMessageUseCase`` pregunta aquí antes de montar el
-contexto: si es una orden, la contesta Sirius con estas frases y ni el modelo de
-la charla ni el de huellas ven el mensaje. Si no lo es, la charla sigue igual.
+contexto: si es una orden, se cumple aquí y ni el modelo de la charla ni el de
+huellas ven el mensaje. Si no lo es, la charla sigue igual.
+
+Lo que contesta Sirius sale de aquí en dos partes (ADR-240): una frase fija, que
+el modelo puede decir con la voz de Sirius porque no lleva nada de lo olvidado ni
+del mensaje de la orden, y lo exacto, que va detrás tal cual y nunca pasa por el
+modelo. Si el modelo no le pone la voz, va la frase de siempre.
 
 Lo que no se sabe atender sin el modelo no se atiende aquí: un «eso no es así»
 que no casa con ningún hecho apuntado, o un «¿qué sabes de…?» de alguien sin
@@ -26,7 +31,7 @@ from sirius.domain.plain_text import plain
 from sirius.ports.conversation_repository import ConversationRepository
 from sirius.ports.forget import ForgetReport, Forgetter
 
-__all__ = ["ASK_TO_CONFIRM", "CommandAnswer", "MemoryCommandService"]
+__all__ = ["ASK_TO_CONFIRM", "FORGOT", "CommandAnswer", "CommandReply", "MemoryCommandService"]
 
 #: Cómo acaba la pregunta de Sirius tras «eso no es así». Un «sí» o un «no» justo
 #: después la contestan; en cualquier otro momento son charla.
@@ -41,6 +46,29 @@ _LEADING_WORDS = frozenset(_LEADING.split())
 _TOPIC_WORD = re.compile(r"[^\W_]{4,}")
 _BACKUPS_NOTE = "Las copias de seguridad que hiciste antes lo siguen guardando."
 
+#: Lo que dice Sirius al olvidar lo último, cuando no lo dice con su voz.
+FORGOT = "Hecho: ya no lo recuerdo."
+
+
+@dataclass(frozen=True, slots=True)
+class CommandReply:
+    """Lo que contesta Sirius a una orden de memoria (ADR-240).
+
+    ``said`` es lo que puede decir con su voz: una frase fija, con números como
+    mucho y, en «¿qué sabes de…?», el nombre de la persona. Nunca lleva nada de lo
+    que se olvida ni del mensaje de la orden. ``exact`` va detrás tal cual y no pasa
+    por el modelo: la lista de hechos, la corrección que pregunta o el aviso de las
+    copias. ``fixed`` es la frase de siempre, la que va si no hay voz.
+    """
+
+    said: str
+    exact: str = ""
+    fixed: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.fixed:
+            object.__setattr__(self, "fixed", " ".join(p for p in (self.said, self.exact) if p))
+
 
 @dataclass(frozen=True, slots=True)
 class CommandAnswer:
@@ -53,10 +81,10 @@ class CommandAnswer:
     """
 
     stored_user_text: str
-    respond: Callable[[int], str]
+    respond: Callable[[int], CommandReply]
 
 
-def _says(reply: str) -> Callable[[int], str]:
+def _says(reply: CommandReply) -> Callable[[int], CommandReply]:
     """Una respuesta que no cambia nada."""
     return lambda _message_id: reply
 
@@ -95,14 +123,14 @@ class MemoryCommandService:
         if command.kind is MemoryCommandKind.CORRECT:
             return self._correct(text, command.argument)
         if command.kind is MemoryCommandKind.ABOUT_ME:
-            return CommandAnswer(text, _says(self._what_i_know(OWNER, "ti")))
+            return CommandAnswer(text, _says(self._what_i_know(OWNER, "ti", "")))
         if command.kind is MemoryCommandKind.ABOUT_PERSON:
             return self._about_person(text, command.argument)
         return self._answer_pending(text, yes=command.kind is MemoryCommandKind.YES)
 
     # --- Olvidar ---
 
-    def _forget_last(self, command_id: int) -> str:
+    def _forget_last(self, command_id: int) -> CommandReply:
         """Olvida lo último que dijo antes de la orden ``command_id``, ya guardada.
 
         Una orden que se quedó sin respuesta no cuenta: falló, y él la está
@@ -117,20 +145,22 @@ class MemoryCommandService:
             if message.id in failed:
                 continue
             if message.status is MessageStatus.REDACTED or not message.content:
-                return "Eso ya lo había olvidado."
+                return CommandReply("Eso ya lo había olvidado.")
             self._forgetter.forget_message(message.id)
-            return self._with_backups_note("Hecho: ya no lo recuerdo.")
-        return "No me has dicho nada que olvidar."
+            return self._with_backups_note(FORGOT)
+        return CommandReply("No me has dicho nada que olvidar.")
 
-    def _forget_about(self, topic: str) -> str:
+    def _forget_about(self, topic: str) -> CommandReply:
         phrase = _without_leading_words(topic)
         report = self._forgetter.forget_phrase(phrase) if phrase else ForgetReport()
         if not report.anything:
-            return "No encuentro nada dicho con esas palabras. Prueba con las palabras exactas."
+            return CommandReply(
+                "No encuentro nada dicho con esas palabras. Prueba con las palabras exactas."
+            )
         return self._with_backups_note(f"Hecho. He borrado {_count(report)}.")
 
-    def _with_backups_note(self, reply: str) -> str:
-        return f"{reply} {_BACKUPS_NOTE}" if self._backups_exist() else reply
+    def _with_backups_note(self, said: str) -> CommandReply:
+        return CommandReply(said, _BACKUPS_NOTE if self._backups_exist() else "")
 
     # --- Eso no es así ---
 
@@ -139,16 +169,25 @@ class MemoryCommandService:
         if target is None:
             return None
         if not new_text:
-            return CommandAnswer(text, _says("Dime cómo es, así: «eso no es así: …»."))
+            return CommandAnswer(
+                text,
+                _says(
+                    CommandReply(
+                        "Dime cómo es.",
+                        "Así: «eso no es así: …».",
+                        fixed="Dime cómo es, así: «eso no es así: …».",
+                    )
+                ),
+            )
         after = new_text[:1].upper() + new_text[1:]
         revision = target.current_revision
         note = fact_note(revision.said_by, revision.certainty)
-        reply = (
-            f"¿Lo cambio? Ahora tengo «{revision.content}»{note}. Lo nuevo: «{after}». "
-            f"{ASK_TO_CONFIRM}"
+        reply = CommandReply(
+            "¿Lo cambio?",
+            f"Ahora tengo «{revision.content}»{note}. Lo nuevo: «{after}». {ASK_TO_CONFIRM}",
         )
 
-        def respond(command_id: int) -> str:
+        def respond(command_id: int) -> CommandReply:
             # Si la orden se repite porque antes falló, no deja dos iguales esperando.
             waiting = any(
                 pending.memory_id == target.id and pending.after == after
@@ -210,14 +249,18 @@ class MemoryCommandService:
             return None
         correction = pending[-1]
 
-        def confirm(command_id: int) -> str:
+        def confirm(command_id: int) -> CommandReply:
             # Ligado a su «sí»: «olvida eso» justo después se lleva lo cambiado.
             self._confirm.confirm(correction.suggestion_id, message_id=command_id)
-            return f"Hecho. Ahora tengo «{correction.after}»."
+            return CommandReply("Hecho.", f"Ahora tengo «{correction.after}».")
 
-        def reject(_command_id: int) -> str:
+        def reject(_command_id: int) -> CommandReply:
             self._reject.reject(correction.suggestion_id)
-            return f"Vale, lo dejo como estaba: «{correction.before}»."
+            return CommandReply(
+                "Vale, lo dejo como estaba.",
+                f"Sigo con «{correction.before}».",
+                fixed=f"Vale, lo dejo como estaba: «{correction.before}».",
+            )
 
         return CommandAnswer(text, confirm if yes else reject)
 
@@ -229,23 +272,27 @@ class MemoryCommandService:
         )
         if person is None:
             return None
-        reply = self._what_i_know(person, person)
         mentions = len(self._facts.card(person).mentions)
-        if mentions:
-            reply += f"\nMe has hablado de {person} en {_plural(mentions, 'mensaje')}."
-        return CommandAnswer(text, _says(reply))
+        talked = (
+            f"Me has hablado de {person} en {_plural(mentions, 'mensaje')}." if mentions else ""
+        )
+        return CommandAnswer(text, _says(self._what_i_know(person, person, talked)))
 
-    def _what_i_know(self, person: str, called: str) -> str:
+    def _what_i_know(self, person: str, called: str, talked: str) -> CommandReply:
+        """Lo que sabe de ``person``: la lista va tal cual, y ``talked`` detrás."""
         facts = self._facts.current(person)
         if not facts:
-            return f"Todavía no tengo ningún hecho de {called} apuntado."
+            said = f"Todavía no tengo ningún hecho de {called} apuntado."
+            return CommandReply(said, talked, fixed="\n".join(p for p in (said, talked) if p))
         lines = [
             f"- {memory.current_revision.content}"
             f"{fact_note(memory.current_revision.said_by, memory.current_revision.certainty)}"
             for memory in facts
             if memory.current_revision.content
         ]
-        return "\n".join([f"Esto es lo que sé de {called}:", *lines])
+        said = f"Esto es lo que sé de {called}:"
+        exact = "\n".join([*lines, *([talked] if talked else [])])
+        return CommandReply(said, exact, fixed="\n".join([said, exact]))
 
     def _messages(self) -> list[Message]:
         conversation = self._conversations.get_main_conversation()

@@ -65,12 +65,13 @@ from sirius.application.context_budget import (
     apply_context_budget,
 )
 from sirius.application.rank_relevant_knowledge import RankRelevantKnowledgeUseCase
+from sirius.application.seed_examples import SeedExamplePicker
 from sirius.domain.conversation import Message, MessageStatus
 from sirius.domain.criticality import Criticality
 from sirius.domain.decision import Decision
 from sirius.domain.event import Event
 from sirius.domain.facts import OWNER, mentioned_people
-from sirius.domain.identity import Identity
+from sirius.domain.identity import Identity, SeedExample
 from sirius.domain.memory import Memory
 from sirius.domain.own_memory import OwnMemory, build_own_memory, render_own_memory
 from sirius.domain.precedence import find_prevailing_decision
@@ -82,6 +83,7 @@ from sirius.domain.relevance import (
     rescue_max_criticality_candidates,
     truncate_to_hard_limit,
 )
+from sirius.domain.robot_seed import render_examples
 from sirius.ports.conversation_repository import ConversationRepository
 from sirius.ports.decision_repository import DecisionRepository
 from sirius.ports.event_repository import EventRepository
@@ -201,6 +203,9 @@ class Context:
     owner_facts: tuple[Memory, ...] = ()
     people_facts: tuple[tuple[str, tuple[Memory, ...]], ...] = ()
     recent_days: tuple[tuple[date, str], ...] = ()
+    # ADR-240: los ejemplos de la semilla que lleva esta petición, los que más se
+    # parecen al mensaje y ya barajados. Los guarda la identidad; aquí van pocos.
+    seed_examples: tuple[SeedExample, ...] = ()
 
 
 class ContextBuilder:
@@ -252,6 +257,7 @@ class ContextBuilder:
         reply_marks: ReplyMarkRepository | None = None,
         facts: FactRepository | None = None,
         day_summaries: DaySummaryRepository | None = None,
+        seed_examples: SeedExamplePicker | None = None,
     ) -> None:
         self._identity_repository = identity_repository
         self._project_repository = project_repository
@@ -286,9 +292,13 @@ class ContextBuilder:
         # Pieza G (ADR-239): sin hechos ni resúmenes del día, el de siempre.
         self._facts = facts
         self._day_summaries = day_summaries
+        # ADR-240: sin él, los ejemplos se eligen por palabras en común.
+        self._seed_examples = seed_examples or SeedExamplePicker()
 
     def build(self, current_user_message: str) -> Context:
-        """Assemble a Context; deterministic for the same underlying data.
+        """Assemble a Context; deterministic for the same underlying data,
+        except the seed examples: which of them tie and their order are random
+        on purpose, so Sirius never reads them in the same row (ADR-240).
 
         Raises ``ContextAssemblyError`` if bootstrap has not seeded the
         identity or the main conversation yet. Never raises for the active
@@ -361,7 +371,12 @@ class ContextBuilder:
             else None
         )
 
+        seed_examples = self._seed_examples.pick(
+            identity.current_version.examples, current_user_message
+        )
         protected_tokens = self._protected_tokens(identity, project, current_user_message)
+        if seed_examples:
+            protected_tokens += self._token_counter.count_tokens(render_examples(seed_examples))
         for memory in (*owner_facts, *(m for _, facts in people_facts for m in facts)):
             protected_tokens += self._token_counter.count_tokens(
                 memory.current_revision.content or ""
@@ -409,6 +424,7 @@ class ContextBuilder:
             owner_facts=owner_facts,
             people_facts=people_facts,
             recent_days=recent_days,
+            seed_examples=seed_examples,
         )
 
     def _facts_for(

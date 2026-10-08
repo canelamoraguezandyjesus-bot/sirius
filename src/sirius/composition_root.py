@@ -124,7 +124,8 @@ from sirius.application.robot_conversation import (
     ReplyJudgeService,
 )
 from sirius.application.save_manual_memory import SaveManualMemoryUseCase
-from sirius.application.send_message import SendMessageUseCase
+from sirius.application.seed_examples import SeedExamplePicker
+from sirius.application.send_message import CommandVoice, SendMessageUseCase
 from sirius.application.set_criticality import SetCriticalityUseCase
 from sirius.application.studio_capture import StudioCaptureUseCase
 from sirius.application.studio_voice import StudioVoiceUseCase, VoiceSettings
@@ -672,6 +673,9 @@ def build_conversation_dependencies(
     memory_embedding_service = MemoryEmbeddingService(
         text_embedder, memory_embedding_store, query_embedder=query_embedder
     )
+    # ADR-240: los ejemplos de la semilla de cada petición, por parecido con el mismo
+    # modelo de huellas; sin él, por palabras. Uno para todo: guarda sus huellas.
+    seed_examples = SeedExamplePicker(memory_embedding_service)
     rank_relevant_knowledge_use_case = RankRelevantKnowledgeUseCase(
         memory_repository=memory_repository,
         decision_repository=decision_repository,
@@ -694,6 +698,7 @@ def build_conversation_dependencies(
         reply_marks=robot_conversation_repository,
         facts=memory_repository,
         day_summaries=robot_conversation_repository,
+        seed_examples=seed_examples,
     )
     # Pieza E de ADR-233: el juez puntúa con el modelo local elegido. Las pruebas
     # le ponen uno de mentira con ``reply_judge``. El sueño (pieza G) usa el mismo:
@@ -750,12 +755,14 @@ def build_conversation_dependencies(
         ),
         reminder=ROBOT_SEED_REMINDER,
         memory_commands=memory_commands,
+        command_voice=CommandVoice(identity_repository, seed_examples),
     )
     trick_questions_use_case = TrickQuestionsUseCase(
         identity_repository,
         local_chat_provider=lambda: _local_chat(send_message_use_case.llm_provider),
         judge=judge,
         reminder=ROBOT_SEED_REMINDER,
+        seed_examples=seed_examples,
     )
     get_history_use_case = GetConversationHistoryUseCase(conversation_repository)
 
@@ -870,6 +877,7 @@ def build_conversation_dependencies(
         list_models=installed_chat_models,
         choose_model=choose_chat_model,
         current_model=current_chat_model,
+        seed_examples=seed_examples,
     )
 
     return ConversationDependencies(

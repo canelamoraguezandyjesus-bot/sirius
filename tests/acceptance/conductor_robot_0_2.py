@@ -51,7 +51,7 @@ from sirius.adapters.persistence.sqlite_identity_repository import (
     build_sqlite_identity_repository,
 )
 from sirius.adapters.secrets.fake import FakeSecretStore
-from sirius.application.memory_commands import ASK_TO_CONFIRM
+from sirius.application.memory_commands import ASK_TO_CONFIRM, FORGOT
 from sirius.application.send_message import SendMessageResult
 from sirius.composition_root import ConversationDependencies, build_conversation_dependencies
 from sirius.config.settings import load_settings, save_settings
@@ -69,6 +69,7 @@ from sirius.domain.relevance import KnowledgeKind
 from sirius.domain.reply_judge import TrickVerdict
 from sirius.domain.reply_mark import ReplyMark
 from sirius.domain.robot_seed import (
+    EXAMPLES_FRAME,
     ROBOT_SEED_EXAMPLES,
     ROBOT_SEED_INSTRUCTIONS,
     ROBOT_SEED_REMINDER,
@@ -86,7 +87,7 @@ from sirius.ports.llm import (
 
 #: Las letras de la tabla de piezas de ADR-233 que ya han entrado en ``main``.
 #: La A es esta: la nota de arranque y estas pruebas.
-PIEZAS_ENTREGADAS: frozenset[str] = frozenset({"A", "B", "C", "D", "E", "F", "G"})
+PIEZAS_ENTREGADAS: frozenset[str] = frozenset({"A", "B", "C", "D", "E", "F", "G", "H"})
 
 #: Qué trae cada pieza, con las palabras de la tabla de ADR-233. La H no es de esa
 #: tabla: la decidió el propietario el 08-10-2026, sobre la B y la G (ADR-240).
@@ -838,7 +839,7 @@ class Conductor:
     def semilla_del_robot(self) -> Semilla:
         return Semilla(
             instrucciones=ROBOT_SEED_INSTRUCTIONS,
-            ejemplos=tuple((dicho, sirius) for _, dicho, sirius in ROBOT_SEED_EXAMPLES),
+            ejemplos=tuple((ejemplo.said, ejemplo.reply) for ejemplo in ROBOT_SEED_EXAMPLES),
         )
 
     def identidad_vigente(self) -> tuple[int, str]:
@@ -859,11 +860,12 @@ class Conductor:
         Sirius, como los escribe la semilla.
         """
         encontrados: list[tuple[int, tuple[str, str]]] = []
-        for quien, dicho, sirius in ROBOT_SEED_EXAMPLES:
-            sitio = peticion.instrucciones.find(f"{quien}: «{dicho}»\nSirius: «{sirius}»")
+        for ejemplo in ROBOT_SEED_EXAMPLES:
+            bloque = f"{ejemplo.who}: «{ejemplo.said}»\nSirius: «{ejemplo.reply}»"
+            sitio = peticion.instrucciones.find(bloque)
             if sitio >= 0:
-                encontrados.append((sitio, (dicho, sirius)))
-        return [ejemplo for _, ejemplo in sorted(encontrados)]
+                encontrados.append((sitio, (ejemplo.said, ejemplo.reply)))
+        return [encontrado for _, encontrado in sorted(encontrados)]
 
     @staticmethod
     def huellas_que_acercan(mensaje: str, ejemplos: Sequence[tuple[str, str]]) -> HuellasDeMentira:
@@ -875,15 +877,21 @@ class Conductor:
 
     def ejemplos_guardados_en_la_identidad(self) -> tuple[tuple[str, str], ...]:
         """Los ejemplos que guarda la versión vigente de la identidad: lo dicho y lo contestado."""
-        raise _pendiente("H")
+        identidades = build_sqlite_identity_repository(self.base)
+        try:
+            identidad = identidades.get_current_identity()
+        finally:
+            identidades.close()
+        assert identidad is not None
+        return tuple((e.said, e.reply) for e in identidad.current_version.examples)
 
     def marco_de_los_ejemplos(self) -> str:
         """Lo que va delante de los ejemplos en cada petición."""
-        raise _pendiente("H")
+        return EXAMPLES_FRAME
 
     def frase_de_siempre_al_olvidar(self) -> str:
         """Lo que contesta Sirius a «olvida eso» cuando el modelo no le pone la voz."""
-        raise _pendiente("H")
+        return FORGOT
 
     def pregunta_para_confirmar(self) -> str:
         """Cómo acaba la pregunta de Sirius tras «eso no es así»: un «sí» la contesta."""
