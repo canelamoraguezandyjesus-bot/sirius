@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from contextlib import closing
 from dataclasses import dataclass, field
 from datetime import date
@@ -49,6 +49,8 @@ class _Modelo:
     voces: list[LLMRequest] = field(default_factory=list)
     voz: str | None = None
     cancela_la_voz: bool = False
+    #: Se llama al pedir la voz, antes de contestar: para mirar la base en ese momento.
+    al_pedir_la_voz: Callable[[], None] | None = None
 
     def health_check(self) -> bool:
         return True
@@ -56,6 +58,8 @@ class _Modelo:
     def stream_response(self, request: LLMRequest) -> Iterator[LLMStreamEvent]:
         if COMMAND_VOICE_TASK in request.instructions:
             self.voces.append(request)
+            if self.al_pedir_la_voz is not None:
+                self.al_pedir_la_voz()
             if self.cancela_la_voz:
                 yield LLMCancelled(partial_text="Bor")
             elif self.voz is None:
@@ -480,3 +484,53 @@ def test_si_preparar_la_voz_falla_la_orden_contesta_con_la_frase_de_siempre(
 
     assert sirius.di("Olvida eso.") == "Hecho: ya no lo recuerdo."
     assert sirius.modelo.voces == []
+
+
+def _ultima_respuesta(sirius: _Sirius) -> tuple[str | None, str | None]:
+    """El texto y la operación de la última respuesta de Sirius guardada en la base."""
+    with closing(sqlite3.connect(sirius.base)) as conexion:
+        fila = conexion.execute(
+            "SELECT content, operation_id FROM messages WHERE role = 'sirius' ORDER BY id DESC"
+        ).fetchone()
+    return (fila[0], fila[1]) if fila else (None, None)
+
+
+def test_la_respuesta_de_siempre_ya_esta_guardada_cuando_se_pide_la_voz(sirius: _Sirius) -> None:
+    """Ronda 1 de Codex: la orden se cumple y su respuesta se guarda antes de esperar al
+    modelo; la voz la cambia después."""
+    sirius.di("La clave de la alarma es Zarzamora.")
+    vistas: list[tuple[str | None, str | None]] = []
+    sirius.modelo.voz = "Borrado, jefe."
+    sirius.modelo.al_pedir_la_voz = lambda: vistas.append(_ultima_respuesta(sirius))
+
+    resultado = sirius.deps.send_message_use_case.send_message("Olvida eso.")
+
+    [(texto, operacion)] = vistas
+    assert texto == "Hecho: ya no lo recuerdo."
+    assert operacion == resultado.sirius_message.operation_id
+    assert resultado.sirius_message.content == "Borrado, jefe."
+    assert _ultima_respuesta(sirius) == ("Borrado, jefe.", operacion)
+
+
+def test_si_sirius_se_cierra_mientras_pone_la_voz_la_orden_ya_tiene_su_respuesta(
+    sirius: _Sirius,
+) -> None:
+    sirius.di("La clave de la alarma es Zarzamora.")
+
+    def se_cierra() -> None:
+        raise SystemExit
+
+    sirius.modelo.voz = "Borrado, jefe."
+    sirius.modelo.al_pedir_la_voz = se_cierra
+
+    with pytest.raises(SystemExit):
+        sirius.di("Olvida eso.")
+
+    texto, operacion = _ultima_respuesta(sirius)
+    assert texto == "Hecho: ya no lo recuerdo."
+    # Es la respuesta de esa orden: no queda como una orden sin respuesta.
+    with closing(sqlite3.connect(sirius.base)) as conexion:
+        [orden] = conexion.execute(
+            "SELECT operation_id FROM messages WHERE role = 'user' ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+    assert operacion == orden

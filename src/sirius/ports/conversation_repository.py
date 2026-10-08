@@ -61,3 +61,18 @@ class ConversationRepository(Protocol):
         refer to an existing message.
         """
         ...
+
+
+class ReplyRewriter(Protocol):
+    """Cambiar el texto de una respuesta de Sirius ya guardada (ADR-240).
+
+    Solo lo usa la respuesta a una orden de memoria: se guarda primero con la frase
+    de siempre, en cuanto la orden se cumple, y después se cambia por lo que dice
+    Sirius con su voz. Así una orden cumplida nunca se queda sin su respuesta.
+    """
+
+    def replace_reply(self, message_id: int, content: str) -> Message:
+        """Pone ``content`` en la respuesta ``message_id`` si es de Sirius y está
+        completada, y la devuelve; si no, la deja como está y la devuelve igual.
+        ``ValueError`` si no existe."""
+        ...

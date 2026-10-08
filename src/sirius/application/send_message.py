@@ -50,7 +50,7 @@ from sirius.domain.own_memory import render_own_memory
 from sirius.domain.project import blockers_to_text
 from sirius.domain.robot_seed import EXAMPLES_FRAME, render_examples
 from sirius.infrastructure.logging import get_logger
-from sirius.ports.conversation_repository import ConversationRepository
+from sirius.ports.conversation_repository import ConversationRepository, ReplyRewriter
 from sirius.ports.identity_repository import IdentityRepository
 from sirius.ports.llm import (
     MEMORY_SUGGESTION_DELIMITER,
@@ -202,12 +202,19 @@ class CommandVoice:
 
     Lleva la identidad, con los ejemplos que más se parecen a la frase, el modo de la
     charla, la tarea y el recordatorio. La frase es fija y no sale de la base ni del
-    mensaje de la orden: el modelo nunca ve lo olvidado (ADR-240).
+    mensaje de la orden: el modelo nunca ve lo olvidado (ADR-240). ``replies`` cambia
+    la respuesta ya guardada con la frase de siempre por la que dice con su voz.
     """
 
-    def __init__(self, identities: IdentityRepository, examples: SeedExamplePicker) -> None:
+    def __init__(
+        self,
+        identities: IdentityRepository,
+        examples: SeedExamplePicker,
+        replies: ReplyRewriter,
+    ) -> None:
         self._identities = identities
         self._examples = examples
+        self.replies = replies
 
     def request(
         self, said: str, *, mode_block: str, reminder: str, operation_id: str
@@ -420,7 +427,10 @@ class SendMessageUseCase:
     ) -> SendMessageResult:
         """Cumple la orden sin el modelo y guarda la orden y lo que contesta Sirius.
 
-        Sin contexto: lo único que puede ir al modelo es la frase fija de la voz.
+        Sin contexto: lo único que puede ir al modelo es la frase fija de la voz. La
+        respuesta se guarda en cuanto la orden se cumple, con la frase de siempre, y
+        solo después se pide la voz: si la voz tarda, falla o Sirius se cierra
+        mientras, la orden ya tiene su respuesta (ronda 1 de Codex, ADR-240).
         """
         conversation = self._conversation_repository.get_or_create_main_conversation()
         user_message = self._conversation_repository.append_message(
@@ -432,18 +442,17 @@ class SendMessageUseCase:
         )
         # Lo que la orden cambia se hace con su mensaje ya guardado y queda ligado a
         # él: si guardarlo falla, la orden no ha cambiado nada.
-        reply = self._voiced(
-            provider, answer.respond(user_message.id), conversation.id, operation_id
-        )
-        if on_delta is not None:
-            on_delta(reply)
+        reply = answer.respond(user_message.id)
         sirius_message = self._conversation_repository.append_message(
             conversation.id,
             MessageRole.SIRIUS,
-            reply,
+            reply.fixed,
             operation_id=operation_id,
             status=MessageStatus.COMPLETED,
         )
+        sirius_message = self._with_voice(provider, reply, sirius_message, conversation.id)
+        if on_delta is not None:
+            on_delta(sirius_message.content or reply.fixed)
         return SendMessageResult(
             outcome=MessageStatus.COMPLETED,
             user_message=user_message,
@@ -451,30 +460,37 @@ class SendMessageUseCase:
             context=None,
         )
 
-    def _voiced(
-        self, provider: LLMProvider, reply: CommandReply, conversation_id: int, operation_id: str
-    ) -> str:
-        """Lo que contesta Sirius a una orden: su voz y, detrás, lo exacto, tal cual.
+    def _with_voice(
+        self, provider: LLMProvider, reply: CommandReply, stored: Message, conversation_id: int
+    ) -> Message:
+        """La respuesta ya guardada, con la voz de Sirius y, detrás, lo exacto, tal cual.
 
-        Si no hay voz, o el modelo falla, se cancela o no dice nada, la frase de
-        siempre: la orden ya está cumplida y no puede quedarse sin respuesta.
+        Si no hay voz, o el modelo falla, se cancela o no dice nada, se queda la frase
+        de siempre, que ya está guardada.
         """
-        if self._command_voice is None:
-            return reply.fixed
+        voice = self._command_voice
+        if voice is None:
+            return stored
         try:
-            request = self._command_voice.request(
+            request = voice.request(
                 reply.said,
                 mode_block=self._current_mode_block(conversation_id),
                 reminder=self._reminder,
-                operation_id=operation_id,
+                operation_id=stored.operation_id or str(uuid.uuid4()),
             )
         except Exception as exc:  # la orden ya está cumplida: sin voz, la frase de siempre
             _logger.warning("No se pudo preparar la voz de la orden (%s)", type(exc).__name__)
-            request = None
-        voice = _completed_text(provider, request) if request is not None else None
-        if voice is None:
-            return reply.fixed
-        return f"{voice}\n{reply.exact}" if reply.exact else voice
+            return stored
+        said = _completed_text(provider, request) if request is not None else None
+        if said is None:
+            return stored
+        try:
+            return voice.replies.replace_reply(
+                stored.id, f"{said}\n{reply.exact}" if reply.exact else said
+            )
+        except Exception as exc:  # se queda la frase de siempre, que ya está guardada
+            _logger.warning("No se pudo guardar la voz de la orden (%s)", type(exc).__name__)
+            return stored
 
     def _current_mode_block(self, conversation_id: int) -> str:
         """Lo que añade el modo en que está la charla, sin cambiarlo."""

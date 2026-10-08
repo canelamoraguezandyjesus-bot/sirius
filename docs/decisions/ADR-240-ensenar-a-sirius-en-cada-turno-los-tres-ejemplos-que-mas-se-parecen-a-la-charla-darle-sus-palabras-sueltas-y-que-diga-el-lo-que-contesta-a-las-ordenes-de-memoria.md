@@ -126,8 +126,9 @@ La opción 2, con lo que describe la nota de arranque. En concreto:
   petición con la identidad y 3 ejemplos elegidos por la frase, el modo de la charla, la
   tarea y el recordatorio. Lo que contesta es su voz y, en la línea siguiente, lo exacto.
   Si el modelo falla, se cancela, no dice nada o la petición no se puede preparar, va la
-  frase de siempre. La voz no se apunta con su modelo y el juez no la puntúa: lleva datos
-  tal cual, como la lista de hechos, que no son charla.
+  frase de siempre. La respuesta se guarda con la frase de siempre en cuanto la orden se
+  cumple, y la voz la cambia después (ronda 1 de Codex). La voz no se apunta con su modelo
+  y el juez no la puntúa: lleva datos tal cual, como la lista de hechos, que no son charla.
 
 ## Comprobación que la sostiene
 
@@ -136,7 +137,7 @@ La opción 2, con lo que describe la nota de arranque. En concreto:
   hubiera petición ahora piden que lo olvidado y los hechos no lleguen al modelo, y pasan
   antes y después del código.
 - **Roturas a propósito**, sobre una copia aparte, cada una con las pruebas que la vigilan.
-  Las 18 fallan como deben:
+  Las 19 fallan como deben:
   1. llevar todos los ejemplos en vez de 3;
   2. no barajarlos;
   3. elegirlos sin mirar el parecido;
@@ -154,23 +155,40 @@ La opción 2, con lo que describe la nota de arranque. En concreto:
   15. aceptar unos ejemplos dañados en la base;
   16. pedir las 20 huellas de una vez;
   17. no contar los ejemplos en el presupuesto de la petición;
-  18. que un fallo al preparar la voz deje la orden sin respuesta.
+  18. que un fallo al preparar la voz deje la orden sin respuesta;
+  19. pedir la voz antes de guardar la respuesta, como antes de la ronda 1 de Codex.
 
   La 17 pasó con las pruebas que había. Se añadió la que la caza
   (`test_los_ejemplos_de_la_semilla_de_la_peticion_cuentan_en_el_presupuesto`).
-- **La batería entera** sobre el código de este commit: 8 176 pasan, 16 saltadas y los 2
-  `xfail` que ya estaban, en 20 min 37 s. En `main`, antes del cambio, eran 8 126. La
+- **La batería entera** sobre el código de la ronda 1: 8 179 pasan, 16 saltadas y los 2
+  `xfail` que ya estaban, en 20 min 31 s. Sobre `a9207bbd` eran 8 176, y en `main`, antes
+  del cambio, 8 126. La
   primera vuelta dio 8 174 bien y 1 mal: una prueba de la ventana contaba las huellas que
   se piden y no esperaba las de los ejemplos. Se ajustó, y ahora comprueba además que se
   piden dentro del turno, antes de que sigan las de los recuerdos.
 - **ruff**, **mypy** sobre `src` y `tests` (682 ficheros) y el **comprobador de
   documentos**, limpios.
 
+## Revisión externa
+
+- **Ronda 1 de Codex**, sobre `a9207bbd`: un hallazgo, cierto, con sus dos pruebas vistas
+  fallar sin el arreglo.
+  - P1: la orden se cumplía y su respuesta no se guardaba hasta que el modelo acabara la
+    voz. Si Sirius se cerraba o el modelo se quedaba colgado esos segundos, la orden
+    quedaba cumplida y sin respuesta, y la frase de siempre no llegaba a guardarse. Ahora
+    la respuesta se guarda con la frase de siempre en cuanto la orden se cumple, y la voz
+    la cambia después, con un puerto aparte, `ReplyRewriter`, para no tocar los dobles del
+    repositorio de la conversación.
+  - Familia: una orden cumplida sin su respuesta guardada. Es lo que ADR-239 ya no
+    garantizaba, y la voz lo había ensanchado de milésimas a segundos.
+
 ## Consecuencias
 
 - Una orden de memoria tarda lo que tarde el modelo en decir una frase: con el modelo de
   su ordenador cargado, segundos. Con la charla en OpenAI, cada orden es una petición más,
   con la identidad y la frase fija.
+- La respuesta de una orden se escribe dos veces: primero la frase de siempre y después la
+  voz. Si Sirius se cierra entre medias, se queda la frase de siempre.
 - El primer turno de cada vez que se abre Sirius pide también las huellas de los 20
   ejemplos, en 5 tandas de 4. Los siguientes, ninguna.
 - Montar el contexto ya no da siempre lo mismo: cuáles de los ejemplos empatan y en qué

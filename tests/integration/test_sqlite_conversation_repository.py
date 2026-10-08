@@ -334,3 +334,30 @@ def test_redaction_persists_after_closing_and_reopening_sqlite(tmp_path: Path) -
     assert reloaded.content is None
     assert reloaded.status is MessageStatus.REDACTED
     reopened.close()
+
+
+@pytest.mark.integration
+def test_replace_reply_cambia_solo_una_respuesta_de_sirius_completada(tmp_path: Path) -> None:
+    """ADR-240: la respuesta a una orden de memoria pasa de la frase de siempre a la voz."""
+    repository = build_sqlite_conversation_repository(tmp_path / "sirius.db")
+    Base.metadata.create_all(build_engine(tmp_path / "sirius.db"))
+    conversation = repository.get_or_create_main_conversation()
+    suya = repository.append_message(conversation.id, MessageRole.USER, "Olvida eso.")
+    respuesta = repository.append_message(
+        conversation.id, MessageRole.SIRIUS, "Hecho: ya no lo recuerdo."
+    )
+    olvidada = repository.append_message(conversation.id, MessageRole.SIRIUS, "Algo.")
+    repository.redact_message(olvidada.id)
+
+    cambiada = repository.replace_reply(respuesta.id, "Borrado, jefe.")
+
+    assert cambiada.content == "Borrado, jefe."
+    assert repository.replace_reply(suya.id, "otra cosa").content == "Olvida eso."
+    assert repository.replace_reply(olvidada.id, "otra cosa").content is None
+    assert [m.content for m in repository.list_messages(conversation.id)] == [
+        "Olvida eso.",
+        "Borrado, jefe.",
+        None,
+    ]
+    with pytest.raises(ValueError, match="Unknown message id"):
+        repository.replace_reply(9999, "otra cosa")

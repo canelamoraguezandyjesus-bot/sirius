@@ -177,6 +177,20 @@ class SqliteConversationRepository:
                 return None
             return _to_domain_message(model)
 
+    def replace_reply(self, message_id: int, content: str) -> Message:
+        """ADR-240: la respuesta a una orden de memoria pasa de la frase de siempre a la
+        voz de Sirius. Solo una respuesta de Sirius completada; el índice de palabras lo
+        sigue su disparador de actualización."""
+        with self._scope() as session:
+            model = session.get(MessageModel, message_id)
+            if model is None:
+                msg = f"Unknown message id: {message_id}"
+                raise ValueError(msg)
+            if model.role is MessageRole.SIRIUS and model.status is MessageStatus.COMPLETED:
+                model.content = content
+                session.flush()
+            return _to_domain_message(model)
+
     def redact_message(self, message_id: int) -> Message:
         with self._scope() as session:
             model = session.get(MessageModel, message_id)

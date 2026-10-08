@@ -755,7 +755,7 @@ def build_conversation_dependencies(
         ),
         reminder=ROBOT_SEED_REMINDER,
         memory_commands=memory_commands,
-        command_voice=CommandVoice(identity_repository, seed_examples),
+        command_voice=CommandVoice(identity_repository, seed_examples, conversation_repository),
     )
     trick_questions_use_case = TrickQuestionsUseCase(
         identity_repository,
