@@ -1,6 +1,11 @@
 """Deterministic, checkable relevance ordering for read-only knowledge
 retrieval (B6b; SIRIUS-ARQ-0.1 S7.5; D-11).
 
+Pieza F de ADR-233 (ADR-238) supera, para los recuerdos, el «never embeddings»
+de S7.5 que se cita abajo: desde la 0.2 del robot un recuerdo también lo puede
+traer la búsqueda por significado (``RankedKnowledge.semantic_match``). El orden
+sigue siendo una tupla comprobable, no una fórmula opaca.
+
 S7.5 "Búsqueda y relevancia" is explicit that the retrieval score "no será
 una fórmula opaca permanente: se implementará como ordenación simple y
 comprobable", combining "filtros estructurados y FTS5" and never embeddings.
@@ -126,6 +131,7 @@ section "Decisión del propietario y plan").
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
@@ -206,12 +212,30 @@ class RankedKnowledge:
     the request explicitly *asks for* instead of by the query's vocabulary.
     ``False`` by default for the same reason the other two are."""
 
+    semantic_match: bool = False
+    """Pieza F de ADR-233 (ADR-238): si la búsqueda por significado trajo el
+    recuerdo, con un parecido por encima del umbral. Como ``fts_match``, basta
+    para que esté relacionado. ``False`` por defecto, como las demás señales."""
+
+    semantic_similarity: float = 0.0
+    """El parecido de 0 a 1 que dio la búsqueda por significado; 0 si no lo trajo.
+    Entre los relacionados, va antes lo que más se parece."""
+
+    fts_rank: int | None = None
+    """Pieza F (ADR-238, ronda 2 de Codex): el puesto del recuerdo en la búsqueda
+    por palabras, ordenada por bm25; 0 el que mejor casa. Con el mismo parecido,
+    va antes el que mejor casa por palabras, no el más reciente. ``None`` si las
+    palabras no lo trajeron o no hay puesto, como en las decisiones."""
+
     def __post_init__(self) -> None:
         if self.kind is KnowledgeKind.MEMORY and self.subject_matches_query:
             msg = (
                 "subject_matches_query only ever applies to a decision "
                 "(S7.5: 'tipo DECISIÓN cuando el asunto coincide')."
             )
+            raise ValueError(msg)
+        if self.fts_rank is not None and not self.fts_match:
+            msg = "fts_rank solo tiene sentido si las palabras lo trajeron (fts_match)."
             raise ValueError(msg)
 
     @property
@@ -243,6 +267,7 @@ class RankedKnowledge:
         return (
             self.subject_matches_query
             or self.fts_match
+            or self.semantic_match
             or self.category_match
             or self.criticality_match
             or self.seeded
@@ -561,11 +586,17 @@ def _synthetic_id(candidate: RankedKnowledge) -> int:
 
 def _sort_key(
     candidate: RankedKnowledge,
-) -> tuple[bool, bool, bool, bool, bool, bool, float, int]:
+) -> tuple[bool, bool, bool, float, float, bool, bool, bool, float, int]:
+    # Pieza F (ADR-238): palabras y significado valen lo mismo para estar
+    # relacionado; entre los relacionados, primero lo que más se parece y, con el
+    # mismo parecido, lo que mejor casa por palabras (ronda 2 de Codex). Sin
+    # búsqueda por significado ni puesto por palabras, el orden es el de siempre.
     return (
         not candidate.subject_matches_query,
         not candidate.project_matches_active,
-        not candidate.fts_match,
+        not (candidate.fts_match or candidate.semantic_match),
+        -candidate.semantic_similarity,
+        math.inf if candidate.fts_rank is None else candidate.fts_rank,
         not candidate.category_match,
         not candidate.criticality_match,
         not candidate.seeded,

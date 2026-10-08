@@ -1,5 +1,11 @@
 """Las puertas de la memoria: una clave maestra y tres interruptores finos.
 
+**Desde ADR-238 (pieza F de ADR-233) Sirius ya no lee estas claves.** La charla
+busca los recuerdos por palabras y por significado, y ningún turno pide a Ollama
+filtrar ni clasificar, diga lo que diga ``settings.json``. La función se queda
+porque la citan ADR-185 y las mediciones del banco de 47 casos, que se retira
+aparte.
+
 Hasta la incidencia #603 la memoria tenía **una sola** puerta,
 ``category_matching_enabled`` (SIRIUS-ARQ-0.2 §6.3, D7 punto 6), y esa clave
 encendía de golpe siete cosas: el vocabulario de categoría, el de criticidad,

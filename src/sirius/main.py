@@ -5,7 +5,6 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QMainWindow
 
 from sirius.adapters.persistence.bootstrap import initialize_persistence
@@ -41,17 +40,6 @@ def _build_main_window(
     """
 
     def _on_project_completed() -> None:
-        # CODEX-002: si un CategoryTaggingWorker de esta ventana sigue en
-        # vuelo, esperar a que termine antes de cerrarla y abrir la
-        # siguiente. Las dos ventanas comparten las mismas dependencias
-        # (mismos repositorios), así que sin esta espera ese worker podría
-        # seguir llamando a set_category() después de que la ventana nueva
-        # ya considere el etiquetado inactivo.
-        if main_window.knowledge_widget.has_pending_category_tagging:
-            main_window.knowledge_widget.category_tagging_idle.connect(
-                _on_project_completed, Qt.ConnectionType.SingleShotConnection
-            )
-            return
         next_window = _build_initial_project_window(dependencies, windows)
         windows.append(next_window)
         next_window.show()
@@ -86,9 +74,6 @@ def _build_main_window(
         export_structured_use_case=dependencies.export_structured_use_case,
         historical_projects_use_case=dependencies.historical_projects_use_case,
         close_database_connections=dependencies.close_database_connections,
-        tag_category_use_case=dependencies.tag_category_use_case,
-        set_category_use_case=dependencies.set_category_use_case,
-        category_vocabulary=dependencies.category_vocabulary,
         propose_criticality_use_case=dependencies.propose_criticality_use_case,
         set_criticality_use_case=dependencies.set_criticality_use_case,
         studio_voice_use_case=dependencies.studio_voice_use_case,
@@ -99,6 +84,7 @@ def _build_main_window(
         conversation_mode_use_case=dependencies.conversation_mode_use_case,
         reply_judge_service=dependencies.reply_judge_service,
         trick_questions_use_case=dependencies.trick_questions_use_case,
+        memory_embedding_service=dependencies.memory_embedding_service,
     )
     main_window.project_completed.connect(_on_project_completed)
     return main_window

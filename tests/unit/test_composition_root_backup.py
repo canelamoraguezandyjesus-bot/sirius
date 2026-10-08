@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from sirius.adapters.persistence import staged_engine_port as staged_engine_port_module
+from sirius.adapters.persistence import sqlite_memory_embeddings
 from sirius.adapters.secrets.fake import FakeSecretStore
 from sirius.application.create_backup import CreateBackupUseCase
 from sirius.application.restore_backup import RestoreBackupUseCase
@@ -51,34 +51,33 @@ def test_close_database_connections_is_safe_to_call_more_than_once(tmp_path: Pat
     dependencies.close_database_connections()  # Engine.dispose() is idempotent
 
 
-def test_close_database_connections_also_disposes_the_staged_engine_port_pool(
+def test_close_database_connections_also_disposes_the_memory_embedding_store_pool(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """CLAUDE-REVISOR-001: build_conversation_dependencies wires a private
-    Engine for staged_engine_port (RankRelevantKnowledgeUseCase) that isn't
-    part of ``repositories``. On Windows an undisposed pool here would block
-    RestoreBackupUseCase's atomic file replace exactly like an undisposed
-    repository pool would, so it must be disposed too.
+    """Pieza F (ADR-238): las huellas de los recuerdos tienen su propio motor, el
+    que carga sqlite-vec. En Windows, un pool sin cerrar ahí bloquearía el
+    reemplazo del fichero de RestoreBackupUseCase igual que el de un repositorio,
+    así que también se cierra. Es la misma guarda que tenía el puerto del motor
+    por etapas (CLAUDE-REVISOR-001) cuando la raíz de composición lo montaba.
     """
-    built_ports = []
-    original_build_staged_engine_port = staged_engine_port_module.build_staged_engine_port
+    built_stores = []
+    original_build = sqlite_memory_embeddings.build_sqlite_memory_embedding_store
 
-    def capturing_build_staged_engine_port(*args: object, **kwargs: object):  # type: ignore[no-untyped-def]
-        port = original_build_staged_engine_port(*args, **kwargs)  # type: ignore[arg-type]
-        built_ports.append(port)
-        return port
+    def capturing_build(database_path: Path) -> sqlite_memory_embeddings.SqliteMemoryEmbeddingStore:
+        store = original_build(database_path)
+        built_stores.append(store)
+        return store
 
     monkeypatch.setattr(
-        "sirius.composition_root.build_staged_engine_port", capturing_build_staged_engine_port
+        "sirius.composition_root.build_sqlite_memory_embedding_store", capturing_build
     )
 
     dependencies = build_conversation_dependencies(
         tmp_path / "sirius.db", tmp_path / "backups", secret_store=FakeSecretStore()
     )
 
-    assert len(built_ports) == 1
-    engine = built_ports[0]._engine
-    assert engine is not None
+    assert len(built_stores) == 1
+    engine = built_stores[0]._engine
     pool_before_close = engine.pool
 
     dependencies.close_database_connections()

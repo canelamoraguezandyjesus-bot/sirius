@@ -1,5 +1,7 @@
 """Shared test configuration."""
 
+import sys
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -39,3 +41,14 @@ def _hermetic_actions_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     """
     for name in ACTIONS_VARIABLES_THAT_GOVERN_MARKERS:
         monkeypatch.delenv(name, raising=False)
+
+
+@pytest.fixture(autouse=True)
+def _sin_espias_de_ollama_al_acabar() -> Iterator[None]:
+    """El conductor de la 0.2 del robot puede espiar todo lo que va a Ollama
+    (``con_ollama_espia``, ADR-238): al acabar cada prueba se quita, para que no
+    llegue a la siguiente."""
+    yield
+    conductor = sys.modules.get("conductor_robot_0_2")
+    if conductor is not None:
+        conductor.deshaz_los_espias()

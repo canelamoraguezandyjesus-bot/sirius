@@ -7,7 +7,16 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import QPoint, QRunnable, Qt, QThreadPool, QTimer, QUrl, Signal
+from PySide6.QtCore import (
+    QPoint,
+    QRunnable,
+    Qt,
+    QThreadPool,
+    QTimer,
+    QUrl,
+    Signal,
+    SignalInstance,
+)
 from PySide6.QtGui import QCloseEvent, QDesktopServices
 from PySide6.QtWidgets import (
     QComboBox,
@@ -53,6 +62,7 @@ from sirius.application.get_conversation_history import (
 from sirius.application.historical_projects import HistoricalProjectsUseCase
 from sirius.application.knowledge_overview import GetKnowledgeOverviewUseCase
 from sirius.application.memory_origin import GetMemoryOriginUseCase
+from sirius.application.memory_search import MemoryEmbeddingService
 from sirius.application.project_continuity import ProjectContinuityUseCase
 from sirius.application.project_errors import ProjectContinuityError
 from sirius.application.project_lifecycle import ProjectLifecycleUseCase
@@ -71,7 +81,6 @@ from sirius.application.robot_conversation import (
 )
 from sirius.application.save_manual_memory import SaveManualMemoryUseCase
 from sirius.application.send_message import SendMessageResult, SendMessageUseCase
-from sirius.application.set_category import SetCategoryUseCase
 from sirius.application.set_criticality import SetCriticalityUseCase
 from sirius.application.studio_brief import MODEL_STUDIO_BRIEF
 from sirius.application.studio_capture import CaptureFeedback, StudioCaptureUseCase
@@ -84,7 +93,6 @@ from sirius.application.studio_voice import (
     VoiceFailure,
 )
 from sirius.application.supersede_decision import SupersedeDecisionUseCase
-from sirius.application.tag_category import TagCategoryUseCase
 from sirius.application.trick_questions import TrickQuestionsUseCase
 from sirius.application.validate_backup import ValidateBackupUseCase
 from sirius.config.llm_provider_settings import (
@@ -118,6 +126,7 @@ from sirius.presentation.error_messages import failed_send_message
 from sirius.presentation.export_worker import ExportWorker
 from sirius.presentation.historical_projects_widget import HistoricalProjectsWidget
 from sirius.presentation.knowledge_widget import KnowledgeWidget
+from sirius.presentation.memory_embedding_worker import MemoryEmbeddingWorker
 from sirius.presentation.memory_suggestion_trigger import propose_suggestion_if_completed_with_one
 from sirius.presentation.message_view import MessageItemDelegate, MessageItemWidget
 from sirius.presentation.model_studio.settings_dialog import StudioSettingsDialog
@@ -245,6 +254,10 @@ class MainWindow(QMainWindow):
     #: juez escribe sus notas en sirius.db.
     judge_idle = Signal()
 
+    #: Las huellas de los recuerdos han acabado (pieza F de ADR-233): una
+    #: restauración espera a esta señal, porque se guardan en sirius.db.
+    embedding_idle = Signal()
+
     def __init__(
         self,
         send_message_use_case: SendMessageUseCase,
@@ -275,9 +288,6 @@ class MainWindow(QMainWindow):
         historical_projects_use_case: HistoricalProjectsUseCase,
         close_database_connections: Callable[[], None],
         *,
-        tag_category_use_case: TagCategoryUseCase | None = None,
-        set_category_use_case: SetCategoryUseCase | None = None,
-        category_vocabulary: frozenset[str] | None = None,
         propose_criticality_use_case: ProposeCriticalityUseCase | None = None,
         set_criticality_use_case: SetCriticalityUseCase | None = None,
         studio_voice_use_case: StudioVoiceUseCase | None = None,
@@ -288,6 +298,7 @@ class MainWindow(QMainWindow):
         conversation_mode_use_case: ConversationModeUseCase | None = None,
         reply_judge_service: ReplyJudgeService | None = None,
         trick_questions_use_case: TrickQuestionsUseCase | None = None,
+        memory_embedding_service: MemoryEmbeddingService | None = None,
         show_warning: Callable[[str, str], None] | None = None,
         show_information: Callable[[str, str], None] | None = None,
         prompt_multiline_with_default: Callable[[str, str, str], str | None] | None = None,
@@ -310,6 +321,11 @@ class MainWindow(QMainWindow):
         self._trick_questions_use_case = trick_questions_use_case
         self._active_judge_worker: ReplyJudgeWorker | None = None
         self._judge_again = False
+        # Pieza F de ADR-233: las huellas de los recuerdos para buscar por
+        # significado. Sin el servicio, la ventana es la de antes.
+        self._memory_embedding_service = memory_embedding_service
+        self._active_embedding_worker: MemoryEmbeddingWorker | None = None
+        self._embed_again = False
         self._send_message_use_case = send_message_use_case
         self._get_history_use_case = get_history_use_case
         self._get_budget_status_use_case = get_budget_status_use_case
@@ -336,9 +352,6 @@ class MainWindow(QMainWindow):
         self._restore_backup_use_case = restore_backup_use_case
         self._export_structured_use_case = export_structured_use_case
         self._historical_projects_use_case = historical_projects_use_case
-        self._tag_category_use_case = tag_category_use_case
-        self._set_category_use_case = set_category_use_case
-        self._category_vocabulary = category_vocabulary
         self._propose_criticality_use_case = propose_criticality_use_case
         self._set_criticality_use_case = set_criticality_use_case
         # Not a use case: the minimal SQLAlchemy-lifecycle mechanism a safe
@@ -397,14 +410,16 @@ class MainWindow(QMainWindow):
         self._is_backup_busy = False
         self._is_export_busy = False
         # CODEX-001 (ronda 5): el proyecto ya se completó (RF-018) y esta
-        # ventana está de camino a cerrarse en cuanto termine de esperar al
-        # etiquetador de categorías pendiente (ver _handle_project_completed).
+        # ventana está de camino a cerrarse en cuanto lo de segundo plano acabe
+        # lo que tiene entre manos (ver _handle_project_completed).
         # Mientras tanto no puede iniciarse ningún envío, exportación o
         # copia/restauración: la ventana siguiente comparte los mismos
         # repositorios y arrancaría una operación sobre un proyecto que ya no
         # es el activo.
         self._is_completing_project = False
         self._close_requested = False
+        #: El cierre ya ocurrió: nada de segundo plano vuelve a arrancar.
+        self._closed = False
         # Ruta de la última copia creada en esta sesión. Es lo que permite
         # abrir su carpeta, reutilizarla sin volver a buscarla a mano y
         # arrancar el selector de archivos donde de verdad está la copia.
@@ -1266,15 +1281,13 @@ class MainWindow(QMainWindow):
             self._project_continuity_use_case,
             self._confirm_memory_suggestion_use_case,
             self._reject_memory_suggestion_use_case,
-            tag_category_use_case=self._tag_category_use_case,
-            set_category_use_case=self._set_category_use_case,
-            category_vocabulary=self._category_vocabulary,
             propose_criticality_use_case=self._propose_criticality_use_case,
             set_criticality_use_case=self._set_criticality_use_case,
             thread_pool=self._thread_pool,
             show_warning=self._show_warning,
             show_information=self._show_information,
         )
+        self.knowledge_widget.memories_changed.connect(self._start_embedding)
 
         container = QWidget()
         layout = QVBoxLayout(container)
@@ -1342,6 +1355,7 @@ class MainWindow(QMainWindow):
         self._refresh_mode_indicator()
         self._refresh_judge_indicator()
         self._start_judge()
+        self._start_embedding(warm_up=True)
 
         for message in messages:
             self._append_message_item(
@@ -1506,10 +1520,6 @@ class MainWindow(QMainWindow):
         self._start_send(self._last_failed_text)
 
     def _start_send(self, text: str, *, extra_instructions: str = "") -> None:
-        if self._active_judge_worker is not None:
-            # Que el modelo local quede libre para la charla; sigue después.
-            self._active_judge_worker.stop()
-            self._judge_again = True
         self._is_sending = True
         self._active_operation_id = str(uuid.uuid4())
         self._active_send_text = text
@@ -1533,10 +1543,19 @@ class MainWindow(QMainWindow):
 
         self._append_message_item(MessageRole.USER, text)
 
+        # Lo que se ve ya está: «pensando» y su mensaje. El turno empieza cuando
+        # el juez y las huellas han soltado Ollama, no antes (ronda 2 de Codex).
+        # Si cancela o cierra mientras tanto, el modelo ya lo sabe al empezar.
+        operation_id = self._active_operation_id
+        self._when_background_idle(
+            lambda: self._launch_send(text, operation_id, extra_instructions)
+        )
+
+    def _launch_send(self, text: str, operation_id: str, extra_instructions: str) -> None:
         worker = SendMessageWorker(
             self._send_message_use_case,
             text,
-            self._active_operation_id,
+            operation_id,
             extra_instructions=extra_instructions,
         )
         worker.signals.delta.connect(self._on_delta)
@@ -1672,8 +1691,10 @@ class MainWindow(QMainWindow):
             self._last_failed_text = self._active_send_text
         self._refresh_budget_warning()
         self._refresh_mode_indicator()
+        # La respuesta nueva queda para el juez: sigue, con lo demás que quedó
+        # pendiente, en cuanto acaba el turno (_finish_sending).
+        self._judge_again = True
         self._finish_sending()
-        self._start_judge()
         # Después de _finish_sending, que es quien devuelve el estado a
         # PREPARADO: si se hablara antes, ese reajuste borraría SINTETIZANDO.
         self._speak_if_studio_is_open(result.sirius_message.content, result.sirius_message.status)
@@ -1753,20 +1774,25 @@ class MainWindow(QMainWindow):
         if self._close_requested:
             self._close_requested = False
             self.close()
+            return
+        self._resume_background()
 
     def _handle_project_completed(self) -> None:
         """RF-018: el proyecto activo acaba de completarse.
 
-        ``sirius.main`` puede tardar en sustituir esta ventana si un
-        ``CategoryTaggingWorker`` sigue en vuelo (ver el comentario CODEX-002
-        en su ``_on_project_completed``): espera a que termine antes de
-        mostrar la ventana siguiente y cerrar esta. Durante esa espera no
+        ``sirius.main`` sustituye esta ventana por la siguiente. Desde aquí no
         puede arrancar ningún envío, exportación ni copia/restauración —la
         ventana siguiente ya comparte los mismos repositorios que esta, así
         que una operación iniciada aquí seguiría corriendo sobre un proyecto
         que ya dejó de ser el activo (CODEX-001, ronda 5). Deliberadamente no
         se revierte: esta ventana está de camino a cerrarse y no vuelve a
         aceptar estas operaciones.
+
+        La siguiente arranca su propio juez y sus huellas, con los mismos
+        repositorios y el mismo Ollama: no se abre hasta que los de esta acaban
+        lo que tienen entre manos, por la misma puerta que el turno (ronda 3 de
+        Codex). Antes de la pieza F se esperaba así al etiquetador de
+        categorías (CODEX-002), y la espera se fue con él.
         """
         self._is_completing_project = True
         self.send_button.setEnabled(False)
@@ -1774,7 +1800,7 @@ class MainWindow(QMainWindow):
         self.export_button.setEnabled(False)
         self._set_backup_controls_enabled(False)
         self._update_retry_button()
-        self.project_completed.emit()
+        self._when_background_idle(self.project_completed.emit, show_wait=self.status_label.setText)
 
     def closeEvent(self, event: QCloseEvent) -> None:
         """Cierra micrófono y voz, y luego aplica el cierre diferido de siempre.
@@ -1806,8 +1832,11 @@ class MainWindow(QMainWindow):
         # mostrar nada más, aunque un worker en vuelo termine después
         # (#520, ronda 4).
         self.knowledge_widget.prepare_to_close()
-        if self._active_judge_worker is not None:
-            self._active_judge_worker.stop()
+        # Y nada de segundo plano vuelve a arrancar, aunque quedara pendiente
+        # repetir: la ventana puede seguir viva tras un cambio de proyecto, con
+        # los mismos repositorios que la nueva (ronda 1 de Codex).
+        self._closed = True
+        self._stop_background()
         super().closeEvent(event)
 
     # --- Configuración ---------------------------------------------------
@@ -2152,6 +2181,10 @@ class MainWindow(QMainWindow):
         if self._close_requested:
             self._close_requested = False
             self.close()
+            return
+        # Una copia, una validación o una restauración que falla: lo que paró o
+        # quedó pendiente en segundo plano sigue (ronda 2 de Codex).
+        self._resume_background()
 
     @staticmethod
     def _format_backup_summary(manifest: BackupManifest, size_bytes: int) -> str:
@@ -2396,46 +2429,28 @@ class MainWindow(QMainWindow):
         self._restore_when_knowledge_widget_idle(backup_path, password)
 
     def _restore_when_knowledge_widget_idle(self, backup_path: Path, password: str) -> None:
-        """CODEX-001: tanto un ``CategoryTaggingWorker`` como un
-        ``CriticalityProposalWorker`` en vuelo siguen usando los repositorios
-        (``TagCategoryUseCase.tag()``/``ProposeCriticalityUseCase.propose()``)
-        y podrían reabrir una conexión a sirius.db mientras se cierra o se
-        reemplaza el fichero. Espera a que ambos terminen, uno detrás del
-        otro, antes de cerrar las conexiones; no se toca el guardado ni la
-        propuesta, que siguen siendo asíncronos. ``set_external_busy(True)``
-        ya está activo desde ``_start_backup_operation()``, así que
-        ``KnowledgeWidget`` no arranca ningún worker nuevo mientras se
-        espera.
+        """CODEX-001: un ``CriticalityProposalWorker`` en vuelo sigue usando
+        los repositorios (``ProposeCriticalityUseCase.propose()``) y podría
+        reabrir una conexión a sirius.db mientras se cierra o se reemplaza el
+        fichero. Espera a que termine antes de cerrar las conexiones; no se
+        toca la propuesta, que sigue siendo asíncrona.
+        ``set_external_busy(True)`` ya está activo desde
+        ``_start_backup_operation()``, así que ``KnowledgeWidget`` no arranca
+        ningún worker nuevo mientras se espera.
 
-        El juez (pieza E de ADR-233) también escribe en sirius.db: se le pide
-        que pare, acaba la respuesta que está puntuando y la restauración sigue
-        después. Mientras dure, no vuelve a empezar."""
-        if self._active_judge_worker is not None:
-            self._active_judge_worker.stop()
-            self._judge_again = False
-            self._set_backup_feedback(
-                self.restore_backup_status_label,
-                BACKUP_STATE_IN_PROGRESS,
-                "Esperando a que el juez acabe la respuesta que está puntuando...",
-            )
-            self.judge_idle.connect(
-                lambda: self._restore_when_knowledge_widget_idle(backup_path, password),
-                Qt.ConnectionType.SingleShotConnection,
-            )
-            return
+        El juez (pieza E de ADR-233) y las huellas de los recuerdos (pieza F)
+        también escriben en sirius.db: la restauración pasa por la misma puerta
+        que el turno (``_when_background_idle``). Acaban lo que tienen entre
+        manos, no vuelven a empezar mientras dure y, si falla, siguen
+        (``_finish_backup_operation``)."""
+        self._when_background_idle(
+            lambda: self._restore_when_criticality_proposal_idle(backup_path, password),
+            show_wait=lambda waiting_for: self._set_backup_feedback(
+                self.restore_backup_status_label, BACKUP_STATE_IN_PROGRESS, waiting_for
+            ),
+        )
 
-        if self.knowledge_widget.has_pending_category_tagging:
-            self._set_backup_feedback(
-                self.restore_backup_status_label,
-                BACKUP_STATE_IN_PROGRESS,
-                "Esperando a que termine el etiquetado automático de categorías...",
-            )
-            self.knowledge_widget.category_tagging_idle.connect(
-                lambda: self._restore_when_knowledge_widget_idle(backup_path, password),
-                Qt.ConnectionType.SingleShotConnection,
-            )
-            return
-
+    def _restore_when_criticality_proposal_idle(self, backup_path: Path, password: str) -> None:
         if self.knowledge_widget.has_pending_criticality_proposal:
             self._set_backup_feedback(
                 self.restore_backup_status_label,
@@ -2725,9 +2740,10 @@ class MainWindow(QMainWindow):
 
     def _start_judge(self) -> None:
         """PA-R02-08: el juez puntúa en segundo plano las respuestas que aún no tienen nota."""
-        if self._reply_judge_service is None or self._close_requested or self._is_backup_busy:
+        if self._reply_judge_service is None or self._close_requested or self._closed:
             return
-        if self._active_judge_worker is not None:
+        if self._active_judge_worker is not None or self._foreground_busy():
+            # Sigue cuando acabe el que corre o lo de delante (_resume_background).
             self._judge_again = True
             return
         worker = ReplyJudgeWorker(self._reply_judge_service)
@@ -2739,10 +2755,107 @@ class MainWindow(QMainWindow):
     def _on_judge_finished(self) -> None:
         self._active_judge_worker = None
         self._refresh_judge_indicator()
-        if self._judge_again and not self._is_sending and not self._is_backup_busy:
+        if self._judge_again:
             self._start_judge()
         if self._active_judge_worker is None:
             self.judge_idle.emit()
+
+    @property
+    def embedding_in_progress(self) -> bool:
+        """Si se están calculando huellas de recuerdos en segundo plano."""
+        return self._active_embedding_worker is not None
+
+    def _start_embedding(self, *, warm_up: bool = False) -> None:
+        """Pieza F (ADR-238): calcula en segundo plano las huellas que faltan.
+
+        Al abrirse la ventana, si no falta ninguna, carga el modelo de huellas
+        igualmente (``warm_up``): así el primer turno no lo espera.
+        """
+        if self._memory_embedding_service is None or self._close_requested or self._closed:
+            return
+        if self._active_embedding_worker is not None or self._foreground_busy():
+            # Sigue cuando acabe el que corre o lo de delante (_resume_background).
+            self._embed_again = True
+            return
+        worker = MemoryEmbeddingWorker(self._memory_embedding_service, warm_up=warm_up)
+        worker.signals.finished.connect(self._on_embedding_finished)
+        self._active_embedding_worker = worker
+        self._embed_again = False
+        self._thread_pool.start(worker)
+
+    def _on_embedding_finished(self) -> None:
+        self._active_embedding_worker = None
+        if self._embed_again:
+            self._start_embedding()
+        if self._active_embedding_worker is None:
+            self.embedding_idle.emit()
+
+    # --- El segundo plano frente al turno y la restauración (ADR-238) ------
+
+    def _foreground_busy(self) -> bool:
+        """Si hay un turno, una copia o un cambio de proyecto en marcha: mientras, nada
+        arranca en segundo plano."""
+        return self._is_sending or self._is_backup_busy or self._is_completing_project
+
+    def _stop_background(self) -> list[tuple[SignalInstance, str]]:
+        """Pide parar a lo que corre en segundo plano: el juez y las huellas.
+
+        Devuelve, de cada uno que sigue en marcha, la señal que dará al parar y
+        qué está acabando. Lo que para a medias queda pendiente y sigue en
+        ``_resume_background``. Es el único sitio que sabe qué corre en segundo
+        plano: un trabajo nuevo de fondo se añade aquí y en
+        ``_resume_background``, y el turno, la restauración y el cierre lo
+        respetan sin tocarlos (ronda 2 de Codex).
+        """
+        still_running: list[tuple[SignalInstance, str]] = []
+        if self._active_judge_worker is not None:
+            self._active_judge_worker.stop()
+            self._judge_again = True
+            still_running.append(
+                (
+                    self.judge_idle,
+                    "Esperando a que el juez acabe la respuesta que está puntuando...",
+                )
+            )
+        if self._active_embedding_worker is not None:
+            self._active_embedding_worker.stop()
+            self._embed_again = True
+            still_running.append(
+                (self.embedding_idle, "Esperando a que acaben las huellas de los recuerdos...")
+            )
+        return still_running
+
+    def _when_background_idle(
+        self, then: Callable[[], None], *, show_wait: Callable[[str], None] | None = None
+    ) -> None:
+        """Llama a ``then`` cuando ya no corre nada en segundo plano, tras pedirles parar.
+
+        Es la puerta por la que pasan el turno, la restauración y el cambio de
+        proyecto, que necesitan Ollama o sirius.db para sí. Lo que corre acaba
+        lo que tiene entre manos, porque una petición a Ollama no se corta a
+        medias, y hasta entonces no empieza lo de delante: la exclusión no se
+        deduce de lo poco que tarde, se espera (ronda 2 de Codex). Solo se llama
+        con lo de delante ya en marcha (``_foreground_busy``): así nada de fondo
+        vuelve a arrancar mientras se espera.
+        """
+        still_running = self._stop_background()
+        if not still_running:
+            then()
+            return
+        idle, waiting_for = still_running[0]
+        if show_wait is not None:
+            show_wait(waiting_for)
+        idle.connect(
+            lambda: self._when_background_idle(then, show_wait=show_wait),
+            Qt.ConnectionType.SingleShotConnection,
+        )
+
+    def _resume_background(self) -> None:
+        """Sigue con lo que quedó pendiente en segundo plano al acabar lo de delante."""
+        if self._judge_again:
+            self._start_judge()
+        if self._embed_again:
+            self._start_embedding()
 
     def _refresh_judge_indicator(self) -> None:
         """PA-R02-08: enseña el aviso del juez mientras la media siga por debajo de 3,5."""

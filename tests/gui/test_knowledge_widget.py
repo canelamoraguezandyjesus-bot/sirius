@@ -14,13 +14,13 @@ from __future__ import annotations
 
 import threading
 from collections.abc import Callable, Sequence
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import pytest
 from PySide6.QtCore import Qt, QThreadPool
 from PySide6.QtTest import QTest
+from PySide6.QtWidgets import QPushButton
 from pytestqt.qtbot import QtBot
 
 from sirius.adapters.persistence.database import build_engine
@@ -38,12 +38,13 @@ from sirius.adapters.persistence.sqlite_memory_repository import build_sqlite_me
 from sirius.adapters.persistence.sqlite_project_repository import build_sqlite_project_repository
 from sirius.adapters.secrets.fake import FakeSecretStore
 from sirius.application.delete_memory import OLD_BACKUP_WARNING, SourceMessageChoice
+from sirius.application.set_category import SetCategoryUseCase
 from sirius.application.set_criticality import CriticalityTargetKind
-from sirius.application.tag_category import CategoryTargetKind, TagCategoryUseCase
+from sirius.application.tag_category import CategoryTargetKind
 from sirius.composition_root import ConversationDependencies, build_conversation_dependencies
 from sirius.domain.criticality import Criticality
 from sirius.domain.decision import Decision
-from sirius.domain.memory import Memory, MemoryRevision, MemoryStatus
+from sirius.domain.memory import Memory
 from sirius.presentation.knowledge_widget import KnowledgeWidget, _DeleteMemoryDialog
 
 
@@ -98,9 +99,6 @@ def _build_widget(
     confirm_delete_memory_value: SourceMessageChoice | None = None,
     choose_superseding_decision: Callable[[Sequence[Decision]], Decision | None] | None = None,
     correct_memory_use_case: Any = None,
-    tag_category_use_case: Any = None,
-    set_category_use_case: Any = None,
-    category_vocabulary: frozenset[str] | None = None,
     propose_criticality_use_case: Any = None,
     set_criticality_use_case: Any = None,
     thread_pool: QThreadPool | None = None,
@@ -126,9 +124,6 @@ def _build_widget(
         dependencies.project_continuity_use_case,
         dependencies.confirm_memory_suggestion_use_case,
         dependencies.reject_memory_suggestion_use_case,
-        tag_category_use_case=tag_category_use_case,
-        set_category_use_case=set_category_use_case,
-        category_vocabulary=category_vocabulary,
         propose_criticality_use_case=propose_criticality_use_case,
         set_criticality_use_case=set_criticality_use_case,
         thread_pool=thread_pool,
@@ -194,9 +189,7 @@ def test_correct_memory_creates_a_new_revision(qtbot: QtBot, tmp_path: Path) -> 
 
 
 class _DoubleCorrectMemoryUseCase:
-    """A double of ``CorrectMemoryUseCase`` that returns a canned ``Memory``,
-    for the retagging-orchestration tests below (§8-M8's acceptance
-    criterion for ``_handle_correct_memory_clicked``)."""
+    """A double of ``CorrectMemoryUseCase`` that returns a canned ``Memory``."""
 
     def __init__(self, result: Memory) -> None:
         self._result = result
@@ -205,118 +198,6 @@ class _DoubleCorrectMemoryUseCase:
     def correct(self, memory_id: int, content: str, *, message_id: int | None = None) -> Memory:
         self.calls.append((memory_id, content))
         return self._result
-
-
-class _RecordingTagCategoryUseCase:
-    """A double of ``TagCategoryUseCase`` that records every call, for
-    asserting whether ``CategoryTaggingWorker`` actually ran. Reports nothing
-    uncategorized by default so the retroactive pass at construction
-    (CODEX-002/CLAUDE-M8-001) never enqueues extra, unrelated calls in tests
-    that only care about a single triggered action; pass the two sequences to
-    exercise that retroactive pass itself."""
-
-    def __init__(
-        self,
-        uncategorized_memories: Sequence[Memory] = (),
-        uncategorized_decisions: Sequence[Decision] = (),
-    ) -> None:
-        self.calls: list[tuple[CategoryTargetKind, int]] = []
-        self._uncategorized_memories = list(uncategorized_memories)
-        self._uncategorized_decisions = list(uncategorized_decisions)
-
-    def tag(self, kind: CategoryTargetKind, item_id: int) -> bool:
-        self.calls.append((kind, item_id))
-        return True
-
-    def list_uncategorized_memories(self) -> list[Memory]:
-        return self._uncategorized_memories
-
-    def list_uncategorized_decisions(self) -> list[Decision]:
-        return self._uncategorized_decisions
-
-
-def _corrected_memory(*, category: str | None, category_locked: bool) -> Memory:
-    now = datetime.now(UTC)
-    revision = MemoryRevision(
-        id=2,
-        memory_id=1,
-        version=2,
-        content="contenido corregido",
-        origin="Corrección manual del usuario",
-        source_event_id=None,
-        created_at=now,
-    )
-    return Memory(
-        id=1,
-        status=MemoryStatus.CURRENT,
-        current_revision=revision,
-        created_at=now,
-        updated_at=now,
-        category=category,
-        category_locked=category_locked,
-    )
-
-
-@pytest.mark.gui
-def test_correcting_a_memory_enqueues_retagging_when_category_is_unset(
-    qtbot: QtBot, tmp_path: Path
-) -> None:
-    """§8-M8: confirma que la interfaz encola un ``CategoryTaggingWorker``
-    nuevo sobre el elemento corregido cuando el resultado devuelto trae
-    ``category is None``."""
-    dependencies = _bootstrapped_dependencies(tmp_path)
-    dependencies.save_manual_memory_use_case.save("contenido original")
-    corrected = _corrected_memory(category=None, category_locked=False)
-    correct_memory_use_case = _DoubleCorrectMemoryUseCase(corrected)
-    tag_category_use_case = _RecordingTagCategoryUseCase()
-    thread_pool = QThreadPool()
-    widget = _build_widget(
-        dependencies,
-        _Recorder(),
-        prompt_multiline_value="contenido corregido",
-        correct_memory_use_case=correct_memory_use_case,
-        tag_category_use_case=tag_category_use_case,
-        thread_pool=thread_pool,
-    )
-    qtbot.addWidget(widget)
-    widget.memories_list.setCurrentRow(0)
-
-    widget.correct_memory_button.click()
-
-    assert correct_memory_use_case.calls == [(1, "contenido corregido")]
-    assert thread_pool.waitForDone(5000)
-    assert tag_category_use_case.calls == [(CategoryTargetKind.MEMORY, corrected.id)]
-
-
-@pytest.mark.gui
-def test_correcting_a_memory_does_not_enqueue_retagging_when_category_is_locked(
-    qtbot: QtBot, tmp_path: Path
-) -> None:
-    """§8-M8: no encola nada cuando el resultado devuelto conserva
-    ``category_locked = True`` — corregir el contenido nunca reabre una
-    categoría que el usuario ya cerró."""
-    dependencies = _bootstrapped_dependencies(tmp_path)
-    dependencies.save_manual_memory_use_case.save("contenido original")
-    corrected = _corrected_memory(category=None, category_locked=True)
-    correct_memory_use_case = _DoubleCorrectMemoryUseCase(corrected)
-    tag_category_use_case = _RecordingTagCategoryUseCase()
-    thread_pool = QThreadPool()
-    widget = _build_widget(
-        dependencies,
-        _Recorder(),
-        prompt_multiline_value="contenido corregido",
-        correct_memory_use_case=correct_memory_use_case,
-        tag_category_use_case=tag_category_use_case,
-        thread_pool=thread_pool,
-    )
-    qtbot.addWidget(widget)
-    widget.memories_list.setCurrentRow(0)
-
-    widget.correct_memory_button.click()
-
-    assert correct_memory_use_case.calls == [(1, "contenido corregido")]
-    assert thread_pool.waitForDone(5000)
-    assert tag_category_use_case.calls == []
 
 
 @pytest.mark.gui
@@ -1553,258 +1434,109 @@ def test_set_external_busy_disables_suggestion_buttons_too(qtbot: QtBot, tmp_pat
     assert widget.reject_suggestion_button.isEnabled()
 
 
-# --- Etiquetado automático tras cada guardado/confirmación/propuesta -------
+# --- El panel avisa cuando cambia un recuerdo (pieza F de ADR-233) ----------
 #
-# CODEX-003: en producción solo se encolaba un CategoryTaggingWorker tras
-# corregir un recuerdo; guardar uno nuevo, confirmar una sugerencia o
-# proponer una decisión no encolaban nada, así que esos tres caminos nunca
-# recibían categoría automática.
+# La ventana calcula en segundo plano la huella de lo que se guarda, se corrige
+# o se confirma (ADR-238). Ya no se pide a Ollama que lo etiquete por categorías.
+
+
+def _cambios(widget: KnowledgeWidget) -> list[None]:
+    avisos: list[None] = []
+    widget.memories_changed.connect(lambda: avisos.append(None))
+    return avisos
 
 
 @pytest.mark.gui
-def test_saving_a_memory_enqueues_automatic_tagging(qtbot: QtBot, tmp_path: Path) -> None:
+def test_saving_a_memory_announces_it(qtbot: QtBot, tmp_path: Path) -> None:
     dependencies = _bootstrapped_dependencies(tmp_path)
-    tag_category_use_case = _RecordingTagCategoryUseCase()
-    thread_pool = QThreadPool()
-    widget = _build_widget(
-        dependencies,
-        _Recorder(),
-        prompt_multiline_value="recuerda esto por favor",
-        tag_category_use_case=tag_category_use_case,
-        thread_pool=thread_pool,
-    )
+    widget = _build_widget(dependencies, _Recorder(), prompt_multiline_value="recuerda esto")
     qtbot.addWidget(widget)
+    avisos = _cambios(widget)
 
     widget.save_memory_button.click()
 
-    assert thread_pool.waitForDone(5000)
-    assert len(tag_category_use_case.calls) == 1
-    kind, item_id = tag_category_use_case.calls[0]
-    assert kind is CategoryTargetKind.MEMORY
-    assert item_id == widget.memories_list.item(0).data(Qt.ItemDataRole.UserRole).id
+    assert avisos == [None]
 
 
 @pytest.mark.gui
-def test_confirming_a_suggestion_enqueues_automatic_tagging(qtbot: QtBot, tmp_path: Path) -> None:
+def test_correcting_a_memory_announces_it(qtbot: QtBot, tmp_path: Path) -> None:
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    dependencies.save_manual_memory_use_case.save("contenido original")
+    widget = _build_widget(dependencies, _Recorder(), prompt_multiline_value="corregido")
+    qtbot.addWidget(widget)
+    widget.memories_list.setCurrentRow(0)
+    avisos = _cambios(widget)
+
+    widget.correct_memory_button.click()
+
+    assert avisos == [None]
+
+
+@pytest.mark.gui
+def test_confirming_a_suggestion_announces_the_new_memory(qtbot: QtBot, tmp_path: Path) -> None:
     dependencies = _bootstrapped_dependencies(tmp_path)
     dependencies.propose_memory_suggestion_use_case.propose("sugerencia a confirmar")
-    tag_category_use_case = _RecordingTagCategoryUseCase()
-    thread_pool = QThreadPool()
-    widget = _build_widget(
-        dependencies,
-        _Recorder(),
-        tag_category_use_case=tag_category_use_case,
-        thread_pool=thread_pool,
-    )
+    widget = _build_widget(dependencies, _Recorder())
     qtbot.addWidget(widget)
     widget.suggestions_list.setCurrentRow(0)
+    avisos = _cambios(widget)
 
     widget.confirm_suggestion_button.click()
 
-    assert thread_pool.waitForDone(5000)
-    assert len(tag_category_use_case.calls) == 1
-    assert tag_category_use_case.calls[0][0] is CategoryTargetKind.MEMORY
+    assert avisos == [None]
 
 
 @pytest.mark.gui
-def test_proposing_a_decision_enqueues_automatic_tagging(qtbot: QtBot, tmp_path: Path) -> None:
+def test_a_cancelled_save_or_a_decision_announces_no_memory(qtbot: QtBot, tmp_path: Path) -> None:
     dependencies = _bootstrapped_dependencies(tmp_path)
-    tag_category_use_case = _RecordingTagCategoryUseCase()
-    thread_pool = QThreadPool()
     widget = _build_widget(
         dependencies,
         _Recorder(),
         prompt_line_value="Motor de persistencia",
-        prompt_multiline_value="Usar SQLite local",
-        tag_category_use_case=tag_category_use_case,
-        thread_pool=thread_pool,
+        prompt_multiline_value=None,
     )
     qtbot.addWidget(widget)
+    avisos = _cambios(widget)
 
+    widget.save_memory_button.click()
+    widget._prompt_multiline = lambda title, label: "Usar SQLite local"
     widget.propose_decision_button.click()
 
-    assert thread_pool.waitForDone(5000)
-    assert len(tag_category_use_case.calls) == 1
-    assert tag_category_use_case.calls[0][0] is CategoryTargetKind.DECISION
-
-
-class _FixedCategoryClassifier:
-    """A ``CategoryClassifierPort`` double with one canned answer, mirroring
-    ``tests/integration/test_category_tagging.py``'s ``_FakeClassifier``:
-    never real Ollama."""
-
-    def __init__(self, category: str | None) -> None:
-        self._category = category
-
-    def classify(self, content: str) -> str | None:
-        return self._category
+    assert widget.decisions_list.count() == 1
+    assert avisos == []
 
 
 @pytest.mark.gui
-def test_tagging_worker_finished_signal_refreshes_the_panel(qtbot: QtBot, tmp_path: Path) -> None:
-    """CODEX-004: la señal ``finished`` del worker es lo único que hace
-    aparecer una clasificación automática en el panel — sin conectarla, la
-    categoría no aparecería hasta que otra acción disparase un refresco."""
-    dependencies = _bootstrapped_dependencies(tmp_path)
+def test_the_panel_offers_no_category_editing(qtbot: QtBot, tmp_path: Path) -> None:
+    widget = _build_widget(_bootstrapped_dependencies(tmp_path), _Recorder())
+    qtbot.addWidget(widget)
+
+    assert not [
+        boton.text()
+        for boton in widget.findChildren(QPushButton)
+        if "categor" in boton.text().lower()
+    ]
+
+
+# --- Categoría observable (CODEX-001) -----------------------------------------
+#
+# Desde ADR-238 nada pone ni cambia categorías, pero las que ya estaban guardadas
+# se siguen viendo junto al recuerdo o la decisión.
+
+
+def _set_category(tmp_path: Path, kind: CategoryTargetKind, item_id: int, category: str) -> None:
     database_path = tmp_path / "sirius.db"
-    tag_category_use_case = TagCategoryUseCase(
+    SetCategoryUseCase(
         build_sqlite_memory_repository(database_path),
         build_sqlite_decision_repository(database_path),
-        _FixedCategoryClassifier("trabajo"),
-    )
-    thread_pool = QThreadPool()
-    widget = _build_widget(
-        dependencies,
-        _Recorder(),
-        prompt_multiline_value="recuerda esto por favor",
-        tag_category_use_case=tag_category_use_case,
-        thread_pool=thread_pool,
-    )
-    qtbot.addWidget(widget)
-
-    widget.save_memory_button.click()
-    assert thread_pool.waitForDone(5000)
-
-    qtbot.waitUntil(lambda: "trabajo" in widget.memories_list.item(0).text(), timeout=5000)
-
-
-# --- Referencia fuerte a los workers en vuelo (CODEX-001) -------------------
-#
-# QThreadPool.start() no conserva la referencia Python a un QRunnable (el
-# mismo problema ya documentado para _active_send_worker en main_window.py):
-# un CategoryTaggingWorker cuyo run() termine muy rápido puede recolectarse
-# antes de que su señal finished, encolada entre hilos, llegue a procesarse,
-# y _handle_tagging_worker_finished() nunca se ejecuta.
-
-
-class _BlockingTagCategoryUseCase:
-    """Bloquea ``tag()`` hasta que el test llame a ``release()``, para poder
-    observar el worker mientras sigue en vuelo — mismo patrón que
-    ``tests/gui/test_backup_recovery_ui.py``."""
-
-    def __init__(self) -> None:
-        self._continue_event = threading.Event()
-        self.calls: list[tuple[CategoryTargetKind, int]] = []
-
-    def tag(self, kind: CategoryTargetKind, item_id: int) -> bool:
-        self.calls.append((kind, item_id))
-        self._continue_event.wait(timeout=5)
-        return False
-
-    def list_uncategorized_memories(self) -> list[Memory]:
-        return []
-
-    def list_uncategorized_decisions(self) -> list[Decision]:
-        return []
-
-    def release(self) -> None:
-        self._continue_event.set()
-
-
-@pytest.mark.gui
-def test_tagging_worker_reference_is_retained_while_in_flight_and_released_on_completion(
-    qtbot: QtBot, tmp_path: Path
-) -> None:
-    """Mirrors tests/gui/test_conversation_ui.py's
-    test_send_worker_reference_is_retained_while_blocked_and_released_on_completion
-    for CategoryTaggingWorker: without a strong Python-level reference to
-    every in-flight worker, a fast-finishing one can be garbage-collected
-    before its queued cross-thread signal is delivered, and
-    category_tagging_idle would never fire."""
-    dependencies = _bootstrapped_dependencies(tmp_path)
-    tag_category_use_case = _BlockingTagCategoryUseCase()
-    thread_pool = QThreadPool()
-    widget = _build_widget(
-        dependencies,
-        _Recorder(),
-        prompt_multiline_value="recuerda esto por favor",
-        tag_category_use_case=tag_category_use_case,
-        thread_pool=thread_pool,
-    )
-    qtbot.addWidget(widget)
-
-    assert widget._active_tagging_workers == []
-
-    widget.save_memory_button.click()
-    qtbot.waitUntil(lambda: tag_category_use_case.calls != [], timeout=5000)
-
-    # The worker is genuinely blocked mid-run: the reference must still be held.
-    assert len(widget._active_tagging_workers) == 1
-    assert widget.has_pending_category_tagging
-
-    idle_signals: list[None] = []
-    widget.category_tagging_idle.connect(lambda: idle_signals.append(None))
-
-    tag_category_use_case.release()
-
-    qtbot.waitUntil(lambda: len(idle_signals) == 1, timeout=5000)
-    assert widget._active_tagging_workers == []
-    assert not widget.has_pending_category_tagging
-
-
-# --- Pase retroactivo de arranque -------------------------------------------
-#
-# CLAUDE-M8-001/CODEX-002: list_uncategorized() estaba implementado en ambos
-# repositorios pero no lo invocaba ningún llamador, así que un recuerdo o
-# decisión guardado antes de esta migración se quedaba sin categoría para
-# siempre.
-
-
-@pytest.mark.gui
-def test_opening_the_panel_retags_memories_and_decisions_left_uncategorized(
-    qtbot: QtBot, tmp_path: Path
-) -> None:
-    dependencies = _bootstrapped_dependencies(tmp_path)
-    memory = dependencies.save_manual_memory_use_case.save("recuerdo antiguo sin categoría")
-    project_id = dependencies.project_continuity_use_case.get_summary().project_id
-    decision = dependencies.propose_decision_use_case.propose(
-        "Asunto antiguo", project_id, "contenido antiguo"
-    )
-    tag_category_use_case = _RecordingTagCategoryUseCase(
-        uncategorized_memories=[memory], uncategorized_decisions=[decision]
-    )
-    thread_pool = QThreadPool()
-
-    widget = _build_widget(
-        dependencies,
-        _Recorder(),
-        tag_category_use_case=tag_category_use_case,
-        thread_pool=thread_pool,
-    )
-    qtbot.addWidget(widget)
-
-    assert thread_pool.waitForDone(5000)
-    assert (CategoryTargetKind.MEMORY, memory.id) in tag_category_use_case.calls
-    assert (CategoryTargetKind.DECISION, decision.id) in tag_category_use_case.calls
-
-
-@pytest.mark.gui
-def test_opening_the_panel_does_not_retag_anything_without_dependencies(
-    qtbot: QtBot, tmp_path: Path
-) -> None:
-    """Sin ``tag_category_use_case``/``thread_pool`` inyectados (el valor por
-    defecto de casi todas las pruebas de este fichero), el pase retroactivo
-    no debe fallar ni intentar nada."""
-    dependencies = _bootstrapped_dependencies(tmp_path)
-    dependencies.save_manual_memory_use_case.save("recuerdo sin categoría")
-    widget = _build_widget(dependencies, _Recorder())
-    qtbot.addWidget(widget)
-
-    assert widget.memories_list.count() == 1
-
-
-# --- Categoría observable y editable (CODEX-001) ----------------------------
-#
-# SetCategoryUseCase ya se construía en la raíz de composición, pero ningún
-# consumidor de producción lo usaba, y el panel no mostraba category en
-# absoluto: el usuario no podía ver ni corregir una clasificación.
+    ).set(kind, item_id, category)
 
 
 @pytest.mark.gui
 def test_memory_label_shows_its_category(qtbot: QtBot, tmp_path: Path) -> None:
     dependencies = _bootstrapped_dependencies(tmp_path)
     memory = dependencies.save_manual_memory_use_case.save("preferencia categorizada")
-    dependencies.set_category_use_case.set(CategoryTargetKind.MEMORY, memory.id, "trabajo")
+    _set_category(tmp_path, CategoryTargetKind.MEMORY, memory.id, "trabajo")
     widget = _build_widget(dependencies, _Recorder())
     qtbot.addWidget(widget)
 
@@ -1818,136 +1550,11 @@ def test_decision_label_shows_its_category(qtbot: QtBot, tmp_path: Path) -> None
     decision = dependencies.propose_decision_use_case.propose(
         "Motor de persistencia", project_id, "Usar SQLite local"
     )
-    dependencies.set_category_use_case.set(CategoryTargetKind.DECISION, decision.id, "proyecto")
+    _set_category(tmp_path, CategoryTargetKind.DECISION, decision.id, "proyecto")
     widget = _build_widget(dependencies, _Recorder())
     qtbot.addWidget(widget)
 
     assert "proyecto" in widget.decisions_list.item(0).text()
-
-
-@pytest.mark.gui
-def test_edit_memory_category_button_sets_and_locks_a_manual_category(
-    qtbot: QtBot, tmp_path: Path
-) -> None:
-    dependencies = _bootstrapped_dependencies(tmp_path)
-    dependencies.save_manual_memory_use_case.save("preferencia a categorizar")
-    widget = _build_widget(
-        dependencies,
-        _Recorder(),
-        prompt_line_value="personal",
-        set_category_use_case=dependencies.set_category_use_case,
-    )
-    qtbot.addWidget(widget)
-    widget.memories_list.setCurrentRow(0)
-
-    widget.edit_memory_category_button.click()
-
-    assert "personal" in widget.memories_list.item(0).text()
-
-
-@pytest.mark.gui
-def test_edit_memory_category_rejects_a_value_outside_the_closed_vocabulary(
-    qtbot: QtBot, tmp_path: Path
-) -> None:
-    """CODEX-002: D7 exige un vocabulario cerrado (mismo que usa el
-    clasificador automático) para que las categorías sigan siendo
-    comparables; un valor ajeno como "inventada" nunca debe llegar a
-    ``SetCategoryUseCase.set()``."""
-    dependencies = _bootstrapped_dependencies(tmp_path)
-    dependencies.save_manual_memory_use_case.save("preferencia a categorizar")
-    recorder = _Recorder()
-    widget = _build_widget(
-        dependencies,
-        recorder,
-        prompt_line_value="inventada",
-        set_category_use_case=dependencies.set_category_use_case,
-        category_vocabulary=dependencies.category_vocabulary,
-    )
-    qtbot.addWidget(widget)
-    widget.memories_list.setCurrentRow(0)
-
-    widget.edit_memory_category_button.click()
-
-    assert " · " not in widget.memories_list.item(0).text()
-    assert len(recorder.warnings) == 1
-
-
-@pytest.mark.gui
-def test_edit_memory_category_accepts_a_value_from_the_closed_vocabulary(
-    qtbot: QtBot, tmp_path: Path
-) -> None:
-    dependencies = _bootstrapped_dependencies(tmp_path)
-    dependencies.save_manual_memory_use_case.save("preferencia a categorizar")
-    widget = _build_widget(
-        dependencies,
-        _Recorder(),
-        prompt_line_value="personal",
-        set_category_use_case=dependencies.set_category_use_case,
-        category_vocabulary=dependencies.category_vocabulary,
-    )
-    qtbot.addWidget(widget)
-    widget.memories_list.setCurrentRow(0)
-
-    widget.edit_memory_category_button.click()
-
-    assert "personal" in widget.memories_list.item(0).text()
-
-
-@pytest.mark.gui
-def test_edit_decision_category_button_sets_and_locks_a_manual_category(
-    qtbot: QtBot, tmp_path: Path
-) -> None:
-    dependencies = _bootstrapped_dependencies(tmp_path)
-    project_id = dependencies.project_continuity_use_case.get_summary().project_id
-    dependencies.propose_decision_use_case.propose(
-        "Motor de persistencia", project_id, "Usar SQLite local"
-    )
-    widget = _build_widget(
-        dependencies,
-        _Recorder(),
-        prompt_line_value="proyecto",
-        set_category_use_case=dependencies.set_category_use_case,
-    )
-    qtbot.addWidget(widget)
-    widget.decisions_list.setCurrentRow(0)
-
-    widget.edit_decision_category_button.click()
-
-    assert "proyecto" in widget.decisions_list.item(0).text()
-
-
-@pytest.mark.gui
-def test_edit_memory_category_without_selection_warns(qtbot: QtBot, tmp_path: Path) -> None:
-    dependencies = _bootstrapped_dependencies(tmp_path)
-    recorder = _Recorder()
-    widget = _build_widget(
-        dependencies, recorder, set_category_use_case=dependencies.set_category_use_case
-    )
-    qtbot.addWidget(widget)
-
-    widget.edit_memory_category_button.click()
-
-    assert len(recorder.warnings) == 1
-
-
-@pytest.mark.gui
-def test_edit_memory_category_cancelled_prompt_changes_nothing(
-    qtbot: QtBot, tmp_path: Path
-) -> None:
-    dependencies = _bootstrapped_dependencies(tmp_path)
-    dependencies.save_manual_memory_use_case.save("preferencia intacta")
-    widget = _build_widget(
-        dependencies,
-        _Recorder(),
-        prompt_line_value=None,
-        set_category_use_case=dependencies.set_category_use_case,
-    )
-    qtbot.addWidget(widget)
-    widget.memories_list.setCurrentRow(0)
-
-    widget.edit_memory_category_button.click()
-
-    assert " · " not in widget.memories_list.item(0).text()
 
 
 # --- Criticidad: propuesta y edición manual (M21b, ADR-131) -----------------

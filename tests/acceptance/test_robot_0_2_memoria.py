@@ -104,6 +104,9 @@ def test_ninguna_respuesta_pide_a_ollama_filtrar_ni_clasificar_recuerdos(tmp_pat
     ollama = OllamaDeMentira()
     conductor = Conductor(tmp_path, ajustes={"category_matching_enabled": True})
     conductor.con_ollama_espia(ollama)
+    # Con un recuerdo que casa: sin él, un filtro de relevancia no tendría nada que
+    # filtrar y no llamaría a Ollama aunque estuviera montado.
+    conductor.guarda_recuerdo("Su hermana Lucía es enfermera.")
 
     conductor.di("¿Qué sabes de mi hermana?")
 

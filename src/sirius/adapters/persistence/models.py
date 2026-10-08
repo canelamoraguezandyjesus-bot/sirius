@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from sqlalchemy import Enum as SAEnum
-from sqlalchemy import ForeignKey, Index, Text, UniqueConstraint, text
+from sqlalchemy import ForeignKey, Index, LargeBinary, Text, UniqueConstraint, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from sirius.domain.conversation import MessageRole, MessageStatus
@@ -276,6 +276,27 @@ class MemoryRevisionModel(Base):
     origin: Mapped[str] = mapped_column(Text, nullable=False)
     source_event_id: Mapped[int | None] = mapped_column(ForeignKey("events.id"), nullable=True)
     is_current: Mapped[bool] = mapped_column(nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(nullable=False)
+
+
+class MemoryEmbeddingModel(Base):
+    """La huella de un recuerdo para buscarlo por significado (pieza F, ADR-238).
+
+    Una por recuerdo, de su revisión actual y con el modelo que la dio. Una huella
+    de una revisión vieja o de otro modelo no vale y se calcula otra. Los números
+    van en un BLOB de float32, como los lee sqlite-vec.
+    """
+
+    __tablename__ = "memory_embeddings"
+
+    memory_id: Mapped[int] = mapped_column(
+        ForeignKey("memories.id", ondelete="CASCADE"), primary_key=True
+    )
+    revision_id: Mapped[int] = mapped_column(
+        ForeignKey("memory_revisions.id", ondelete="CASCADE"), nullable=False
+    )
+    model: Mapped[str] = mapped_column(Text, nullable=False)
+    embedding: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
     created_at: Mapped[datetime] = mapped_column(nullable=False)
 
 

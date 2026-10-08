@@ -101,6 +101,25 @@ class SqliteKnowledgeSearchRepository:
             ).all()
             return frozenset((KnowledgeKind(row.kind), row.item_id) for row in rows)
 
+    def search_memory_ids(self, query_text: str, limit: int) -> list[int]:
+        """Pieza F (ADR-238): los recuerdos vigentes que casan, ordenados por bm25."""
+        sanitized = sanitize_fts5_query(query_text)
+        if not sanitized or limit <= 0:
+            return []
+        with self._scope() as session:
+            rows = session.execute(
+                text(
+                    "SELECT knowledge_fts.item_id AS item_id FROM knowledge_fts"
+                    " JOIN memories ON memories.id = knowledge_fts.item_id"
+                    " WHERE knowledge_fts MATCH :query AND knowledge_fts.kind = 'memory'"
+                    " AND memories.status = 'current'"
+                    " ORDER BY bm25(knowledge_fts), knowledge_fts.item_id DESC"
+                    " LIMIT :limit"
+                ),
+                {"query": sanitized, "limit": limit},
+            ).all()
+            return [int(row.item_id) for row in rows]
+
 
 def build_sqlite_knowledge_search_repository(
     database_path: Path,

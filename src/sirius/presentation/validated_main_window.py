@@ -25,6 +25,7 @@ from sirius.application.get_conversation_history import GetConversationHistoryUs
 from sirius.application.historical_projects import HistoricalProjectsUseCase
 from sirius.application.knowledge_overview import GetKnowledgeOverviewUseCase
 from sirius.application.memory_origin import GetMemoryOriginUseCase
+from sirius.application.memory_search import MemoryEmbeddingService
 from sirius.application.project_continuity import ProjectContinuityUseCase
 from sirius.application.project_lifecycle import ProjectLifecycleUseCase
 from sirius.application.propose_criticality import ProposeCriticalityUseCase
@@ -39,12 +40,10 @@ from sirius.application.robot_conversation import (
 )
 from sirius.application.save_manual_memory import SaveManualMemoryUseCase
 from sirius.application.send_message import SendMessageUseCase
-from sirius.application.set_category import SetCategoryUseCase
 from sirius.application.set_criticality import SetCriticalityUseCase
 from sirius.application.studio_capture import StudioCaptureUseCase
 from sirius.application.studio_voice import StudioVoiceUseCase
 from sirius.application.supersede_decision import SupersedeDecisionUseCase
-from sirius.application.tag_category import TagCategoryUseCase
 from sirius.application.trick_questions import TrickQuestionsUseCase
 from sirius.application.validate_and_save_api_key import ValidateAndSaveApiKeyUseCase
 from sirius.application.validate_backup import ValidateBackupUseCase
@@ -86,9 +85,6 @@ class ValidatedMainWindow(MainWindow):
         historical_projects_use_case: HistoricalProjectsUseCase,
         close_database_connections: Callable[[], None],
         *,
-        tag_category_use_case: TagCategoryUseCase | None = None,
-        set_category_use_case: SetCategoryUseCase | None = None,
-        category_vocabulary: frozenset[str] | None = None,
         propose_criticality_use_case: ProposeCriticalityUseCase | None = None,
         set_criticality_use_case: SetCriticalityUseCase | None = None,
         studio_voice_use_case: StudioVoiceUseCase | None = None,
@@ -99,6 +95,7 @@ class ValidatedMainWindow(MainWindow):
         conversation_mode_use_case: ConversationModeUseCase | None = None,
         reply_judge_service: ReplyJudgeService | None = None,
         trick_questions_use_case: TrickQuestionsUseCase | None = None,
+        memory_embedding_service: MemoryEmbeddingService | None = None,
         show_warning: Callable[[str, str], None] | None = None,
         show_information: Callable[[str, str], None] | None = None,
         confirm_restore: Callable[[str, str], bool] | None = None,
@@ -139,9 +136,6 @@ class ValidatedMainWindow(MainWindow):
             export_structured_use_case=export_structured_use_case,
             historical_projects_use_case=historical_projects_use_case,
             close_database_connections=close_database_connections,
-            tag_category_use_case=tag_category_use_case,
-            set_category_use_case=set_category_use_case,
-            category_vocabulary=category_vocabulary,
             propose_criticality_use_case=propose_criticality_use_case,
             set_criticality_use_case=set_criticality_use_case,
             studio_voice_use_case=studio_voice_use_case,
@@ -152,6 +146,7 @@ class ValidatedMainWindow(MainWindow):
             conversation_mode_use_case=conversation_mode_use_case,
             reply_judge_service=reply_judge_service,
             trick_questions_use_case=trick_questions_use_case,
+            memory_embedding_service=memory_embedding_service,
             show_warning=show_warning,
             show_information=show_information,
             confirm_restore=confirm_restore,
