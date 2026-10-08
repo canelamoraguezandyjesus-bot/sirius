@@ -92,11 +92,9 @@ class DreamService:
         except Exception as exc:  # soñar nunca puede romper nada: se intenta otro día
             _logger.warning("El sueño no pudo resumir el día (%s)", type(exc).__name__)
             summary = ""
-        if summary:
-            self._days.save_day(day, summary)
         try:
             proposed = list(self._extractor.extract(text, provider))
-        except Exception as exc:  # sin hechos propuestos, el resumen ya quedó
+        except Exception as exc:  # sin hechos propuestos, el día queda por soñar
             _logger.warning("El sueño no pudo proponer hechos (%s)", type(exc).__name__)
             return []
         new = [fact for fact in proposed if fact.text.strip() and not self._already_known(fact)]
@@ -105,6 +103,11 @@ class DreamService:
                 self._proposals.propose(fact, by_sirius=True)
             except ValueError as exc:  # p. ej., un hecho con «quién lo dijo» Sirius
                 _logger.warning("El sueño propuso un hecho que no vale (%s)", exc)
+        # El resumen es lo que marca el día como soñado: se guarda el último, cuando
+        # ya está propuesto lo que tocaba. Si algo falla antes, el día queda por soñar
+        # y lo ya propuesto no se repite la vez siguiente (ronda 1 de Codex).
+        if summary:
+            self._days.save_day(day, summary)
         return new
 
     def dream_pending(self, today: date, should_stop: Callable[[], bool] = lambda: False) -> int:

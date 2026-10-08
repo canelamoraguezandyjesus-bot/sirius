@@ -124,7 +124,7 @@ Se adopta la opción 2.
 - **El sueño.** Al abrirse la ventana, en segundo plano, sueña los días anteriores, hasta
   7, que aún no tienen resumen. Lee solo sus mensajes y usa el modelo de Ollama elegido
   para la charla, como el juez: nunca OpenAI. Si no puede resumir, propone igual y el día
-  queda por soñar. No vuelve a proponer lo que ya está apuntado o pendiente. Avisa en la
+  queda por soñar; si no puede proponer, tampoco lo da por soñado. No vuelve a proponer lo que ya está apuntado o pendiente. Avisa en la
   barra de estado de cuántos hechos esperan su sí. Pasa por la misma puerta que el juez y
   las huellas (ronda 2 de Codex en ADR-238): si él escribe mientras, el turno espera a que
   acabe el día que está soñando, y los que quedan los sueña la próxima vez que se abra,
@@ -162,6 +162,18 @@ Se adopta la opción 2.
 - Unitarias: 26 de las órdenes y de los nombres. Integración: 11 de olvidar, 10 de los
   hechos, 7 del sueño y 10 de las órdenes con Sirius montado. Ventana: 5, y 1 de la
   restauración.
+
+## Revisión externa
+
+- **Ronda 1 de Codex**, sobre `9a44cf11`: dos hallazgos, los dos ciertos, cada uno con su
+  prueba vista fallar sin el arreglo.
+  - P1: «olvida eso» seguía lo que salió del mensaje suyo, pero no la sugerencia
+    automática de la respuesta, que va ligada a la respuesta de Sirius. Si la sugerencia
+    lo decía con otras palabras, ella y el recuerdo confirmado desde ella se quedaban en
+    la base. Ahora se sigue lo que salió de todo el turno.
+  - P2: el resumen marcaba el día como soñado antes de proponer sus hechos. Si proponer
+    fallaba, ese día no se volvía a intentar. Ahora el resumen se guarda el último.
+  - Familias: ninguna se repite de otra ronda.
 
 ## Consecuencias
 

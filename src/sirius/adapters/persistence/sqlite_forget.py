@@ -174,8 +174,14 @@ class SqliteForgetter:
                         MessageModel.id != message.id,
                     )
                 ).all()
+            # Lo que salió del turno entero: lo que él guardó desde su mensaje y lo que
+            # se sugirió desde la respuesta de Sirius, aunque lo diga con otras palabras.
             events = set(
-                session.scalars(select(EventModel.id).where(EventModel.message_id == message_id))
+                session.scalars(
+                    select(EventModel.id).where(
+                        EventModel.message_id.in_([said.id for said in turn])
+                    )
+                )
             )
             suggestions, linked_memories = self._forget_suggestions(
                 session, lambda texts: _any(texts, mentions), events

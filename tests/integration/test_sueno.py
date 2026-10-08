@@ -53,10 +53,13 @@ class _Resumidor:
 class _Extractor:
     propone: Sequence[ProposedFact] = ()
     leido: list[str] = field(default_factory=list)
+    falla: bool = False
 
     def extract(self, text: str, provider: LLMProvider) -> Sequence[ProposedFact]:
         del provider
         self.leido.append(text)
+        if self.falla:
+            raise RuntimeError("el modelo se cortó")
         return self.propone
 
 
@@ -152,6 +155,25 @@ def test_si_no_puede_resumir_propone_igual_y_el_dia_queda_por_sonar(tmp_path: Pa
 
     assert mundo.sueno.dream(date.today() - timedelta(days=1)) == [hecho]
     assert mundo.sueno.dream_pending(date.today()) == 1, "sin resumen, ese día sigue sin soñar"
+
+
+def test_si_no_puede_proponer_el_dia_queda_por_sonar_aunque_ya_lo_resumiera(
+    tmp_path: Path,
+) -> None:
+    """Ronda 1 de Codex: el resumen marcaba el día como soñado antes de proponer, y si
+    proponer fallaba, sus hechos no se volvían a intentar nunca."""
+    hecho = ProposedFact("propietario", "trabajo", "Trabaja de electricista")
+    mundo = _mundo(tmp_path, propone=[hecho])
+    mundo.extractor.falla = True
+    mundo.di("Hoy tocaba cablear un edificio entero.", hace_dias=1)
+
+    assert mundo.sueno.dream_pending(date.today()) == 1
+    assert mundo.sueno.latest_summary() is None, "el día no puede quedar como soñado"
+
+    mundo.extractor.falla = False
+    assert mundo.sueno.dream_pending(date.today()) == 1
+    assert mundo.sueno.latest_summary() == "Cableó un edificio."
+    assert mundo.sueno.dream_pending(date.today()) == 0
 
 
 def test_al_abrirse_suena_los_dias_de_antes_que_faltan_y_no_el_de_hoy(tmp_path: Path) -> None:

@@ -179,6 +179,42 @@ def test_olvida_eso_borra_el_mensaje_su_respuesta_lo_que_salio_de_el_y_su_resume
             repositorio.close()
 
 
+def test_olvida_eso_borra_lo_que_sugirio_la_respuesta_aunque_lo_diga_con_otras_palabras(
+    tmp_path: Path,
+) -> None:
+    """Ronda 1 de Codex: la sugerencia automática de una respuesta va ligada a la
+    respuesta de Sirius, no a su mensaje, y olvidar solo seguía las del mensaje."""
+    from sirius.application.facts import ConfirmFactSuggestionUseCase
+    from sirius.application.propose_memory_suggestion import ProposeMemorySuggestionUseCase
+
+    base = _base(tmp_path)
+    conversacion = build_sqlite_conversation_repository(base)
+    memoria = build_sqlite_memory_repository(base)
+    sugerencias = build_sqlite_memory_suggestion_repository(base)
+    unidad = build_sqlite_unit_of_work(base)
+    try:
+        principal = conversacion.get_or_create_main_conversation()
+        dicho = conversacion.append_message(
+            principal.id, MessageRole.USER, "Te cuento lo del banco.", operation_id="1"
+        )
+        respuesta = conversacion.append_message(
+            principal.id, MessageRole.SIRIUS, "Apuntado.", operation_id="1"
+        )
+        proponer = ProposeMemorySuggestionUseCase(unidad)
+        confirmada = proponer.propose(f"Su clave es {SECRETO}", message_id=respuesta.id)
+        recuerdo = ConfirmFactSuggestionUseCase(unidad).confirm(confirmada.id)
+        pendiente = proponer.propose(f"Guarda la clave {SECRETO} en casa", message_id=respuesta.id)
+
+        build_sqlite_forgetter(base).forget_message(dicho.id)
+
+        assert _en_el_fichero(base, SECRETO) == []
+        assert memoria.get_memory(recuerdo.id).status is MemoryStatus.DELETED
+        assert pendiente.id not in {s.id for s in sugerencias.list_pending_suggestions()}
+    finally:
+        for repositorio in (conversacion, memoria, sugerencias):
+            repositorio.close()
+
+
 def test_olvidar_borra_el_recuerdo_que_salio_del_mensaje_aunque_lo_confirmara(
     tmp_path: Path,
 ) -> None:
