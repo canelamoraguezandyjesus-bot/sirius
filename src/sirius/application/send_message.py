@@ -30,12 +30,13 @@ FALLIDO y no se usa como respuesta completa." So:
 from __future__ import annotations
 
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 from sirius.application.context import Context, ContextBuilder
-from sirius.application.memory_commands import CommandAnswer, MemoryCommandService
+from sirius.application.memory_commands import CommandAnswer, CommandReply, MemoryCommandService
 from sirius.application.robot_conversation import ConversationSummaryService
+from sirius.application.seed_examples import SeedExamplePicker
 from sirius.domain.conversation import Message, MessageRole, MessageStatus
 from sirius.domain.conversation_mode import (
     ENTERING_SERIOUS_MODE,
@@ -44,10 +45,13 @@ from sirius.domain.conversation_mode import (
     detect_mode_command,
 )
 from sirius.domain.facts import fact_lines, memory_note
-from sirius.domain.identity import IdentityVersion
+from sirius.domain.identity import IdentityVersion, SeedExample
 from sirius.domain.own_memory import render_own_memory
 from sirius.domain.project import blockers_to_text
-from sirius.ports.conversation_repository import ConversationRepository
+from sirius.domain.robot_seed import EXAMPLES_FRAME, render_examples
+from sirius.infrastructure.logging import get_logger
+from sirius.ports.conversation_repository import ConversationRepository, ReplyRewriter
+from sirius.ports.identity_repository import IdentityRepository
 from sirius.ports.llm import (
     MEMORY_SUGGESTION_DELIMITER,
     LLMCancelled,
@@ -87,20 +91,40 @@ class SendMessageResult:
 
 _NO_BLOCKERS_CONTEXT_TEXT = "Ninguno registrado."
 
+_logger = get_logger(__name__)
 
-def render_identity(version: IdentityVersion) -> str:
+#: Lo que se le pide al modelo para que Sirius diga a su manera lo que hizo una orden
+#: de memoria (ADR-240). Solo ve una frase fija: nada de lo olvidado ni de la orden.
+COMMAND_VOICE_TASK = (
+    "# Una orden sobre tu memoria\n"
+    "Tu dueño te ha pedido algo sobre tu memoria y ya está hecho. Díselo a tu manera, en "
+    "una o dos frases cortas. Solo sabes lo que te pone abajo: no añadas datos ni adivines "
+    "de qué iba."
+)
+
+
+def render_identity(
+    version: IdentityVersion,
+    examples: Sequence[SeedExample] = (),
+    *,
+    frame: str = EXAMPLES_FRAME,
+) -> str:
     """La parte de las instrucciones que es la identidad de Sirius.
 
     La misma en la charla y en la prueba a ciegas (pieza C de ADR-233): los
-    modelos se comparan con la semilla con la que van a conversar.
+    modelos se comparan con la semilla con la que van a conversar. ``examples``
+    son los ejemplos de la semilla que lleva esta petición, con ``frame`` delante
+    (ADR-240): en la charla, los tres que más se parecen a lo que se habla.
     """
-    return "\n".join(
-        [
-            f"# Identidad (v{version.version}): {version.name}",
-            version.description,
-            version.personality_instructions,
-        ]
-    )
+    lines = [
+        f"# Identidad (v{version.version}): {version.name}",
+        version.description,
+        version.personality_instructions,
+    ]
+    block = render_examples(examples, frame)
+    if block:
+        lines += ["", block]
+    return "\n".join(lines)
 
 
 def render_instructions(context: Context) -> str:
@@ -115,7 +139,7 @@ def render_instructions(context: Context) -> str:
     the safe state when none are relevant or none exist, never a fabricated
     decision.
     """
-    lines = [render_identity(context.identity.current_version), ""]
+    lines = [render_identity(context.identity.current_version, context.seed_examples), ""]
     if context.project is not None:
         revision = context.project.current_revision
         assert revision is not None  # ContextBuilder only resolves a configured project
@@ -173,6 +197,45 @@ def render_instructions(context: Context) -> str:
     return "\n".join(lines)
 
 
+class CommandVoice:
+    """La petición con la que Sirius dice a su manera lo que hizo una orden de memoria.
+
+    Lleva la identidad, con los ejemplos que más se parecen a la frase, el modo de la
+    charla, la tarea y el recordatorio. La frase es fija y no sale de la base ni del
+    mensaje de la orden: el modelo nunca ve lo olvidado (ADR-240). ``replies`` cambia
+    la respuesta ya guardada con la frase de siempre por la que dice con su voz.
+    """
+
+    def __init__(
+        self,
+        identities: IdentityRepository,
+        examples: SeedExamplePicker,
+        replies: ReplyRewriter,
+    ) -> None:
+        self._identities = identities
+        self._examples = examples
+        self.replies = replies
+
+    def request(
+        self, said: str, *, mode_block: str, reminder: str, operation_id: str
+    ) -> LLMRequest | None:
+        identity = self._identities.get_current_identity()
+        if identity is None:
+            return None
+        version = identity.current_version
+        parts = [render_identity(version, self._examples.pick(version.examples, said))]
+        if mode_block:
+            parts.append(mode_block)
+        parts.append(COMMAND_VOICE_TASK)
+        if reminder:
+            parts.append(reminder)
+        return LLMRequest(
+            operation_id=operation_id,
+            instructions="\n\n".join(parts),
+            input_text=f"Lo que le tienes que decir: «{said}»",
+        )
+
+
 class SendMessageUseCase:
     """Wires context building, the streaming LLM provider, and persistence."""
 
@@ -187,6 +250,7 @@ class SendMessageUseCase:
         summary_service: ConversationSummaryService | None = None,
         reminder: str = "",
         memory_commands: MemoryCommandService | None = None,
+        command_voice: CommandVoice | None = None,
     ) -> None:
         """Lo de la charla del robot (pieza D de ADR-233) es opcional: sin ello,
         este caso de uso hace exactamente lo de antes.
@@ -199,10 +263,14 @@ class SendMessageUseCase:
         - ``reminder``: el recordatorio de la semilla, lo último de cada
           petición (PA-R02-05).
         - ``memory_commands`` (pieza G, ADR-239): «olvida eso», «eso no es así» y
-          «¿qué sabes de mí?» se contestan antes de montar el contexto, sin el
+          «¿qué sabes de mí?» se cumplen antes de montar el contexto, sin el
           modelo.
+        - ``command_voice`` (ADR-240): con él, Sirius dice con su voz lo que hizo la
+          orden, sin que el modelo vea lo olvidado; sin él, o si el modelo no
+          contesta, la frase de siempre.
         """
         self._memory_commands = memory_commands
+        self._command_voice = command_voice
         self._mode_repository = mode_repository
         self._reply_marks = reply_marks
         self._summary_service = summary_service
@@ -270,7 +338,7 @@ class SendMessageUseCase:
             # la búsqueda, que pediría la huella de la frase a olvidar.
             answer = self._memory_commands.handle(user_text)
             if answer is not None:
-                return self._answer_without_model(answer, operation_id, on_delta)
+                return self._answer_command(provider, answer, operation_id, on_delta)
         context = self._context_builder.build(user_text)
 
         conversation = self._conversation_repository.get_or_create_main_conversation()
@@ -350,13 +418,20 @@ class SendMessageUseCase:
             memory_suggestion=memory_suggestion,
         )
 
-    def _answer_without_model(
+    def _answer_command(
         self,
+        provider: LLMProvider,
         answer: CommandAnswer,
         operation_id: str,
         on_delta: Callable[[str], None] | None,
     ) -> SendMessageResult:
-        """Guarda la orden y lo que contesta Sirius, sin modelo y sin contexto."""
+        """Cumple la orden sin el modelo y guarda la orden y lo que contesta Sirius.
+
+        Sin contexto: lo único que puede ir al modelo es la frase fija de la voz. La
+        respuesta se guarda en cuanto la orden se cumple, con la frase de siempre, y
+        solo después se pide la voz: si la voz tarda, falla o Sirius se cierra
+        mientras, la orden ya tiene su respuesta (ronda 1 de Codex, ADR-240).
+        """
         conversation = self._conversation_repository.get_or_create_main_conversation()
         user_message = self._conversation_repository.append_message(
             conversation.id,
@@ -368,21 +443,60 @@ class SendMessageUseCase:
         # Lo que la orden cambia se hace con su mensaje ya guardado y queda ligado a
         # él: si guardarlo falla, la orden no ha cambiado nada.
         reply = answer.respond(user_message.id)
-        if on_delta is not None:
-            on_delta(reply)
         sirius_message = self._conversation_repository.append_message(
             conversation.id,
             MessageRole.SIRIUS,
-            reply,
+            reply.fixed,
             operation_id=operation_id,
             status=MessageStatus.COMPLETED,
         )
+        sirius_message = self._with_voice(provider, reply, sirius_message, conversation.id)
+        if on_delta is not None:
+            on_delta(sirius_message.content or reply.fixed)
         return SendMessageResult(
             outcome=MessageStatus.COMPLETED,
             user_message=user_message,
             sirius_message=sirius_message,
             context=None,
         )
+
+    def _with_voice(
+        self, provider: LLMProvider, reply: CommandReply, stored: Message, conversation_id: int
+    ) -> Message:
+        """La respuesta ya guardada, con la voz de Sirius y, detrás, lo exacto, tal cual.
+
+        Si no hay voz, o el modelo falla, se cancela o no dice nada, se queda la frase
+        de siempre, que ya está guardada.
+        """
+        voice = self._command_voice
+        if voice is None:
+            return stored
+        try:
+            request = voice.request(
+                reply.said,
+                mode_block=self._current_mode_block(conversation_id),
+                reminder=self._reminder,
+                operation_id=stored.operation_id or str(uuid.uuid4()),
+            )
+        except Exception as exc:  # la orden ya está cumplida: sin voz, la frase de siempre
+            _logger.warning("No se pudo preparar la voz de la orden (%s)", type(exc).__name__)
+            return stored
+        said = _completed_text(provider, request) if request is not None else None
+        if said is None:
+            return stored
+        try:
+            return voice.replies.replace_reply(
+                stored.id, f"{said}\n{reply.exact}" if reply.exact else said
+            )
+        except Exception as exc:  # se queda la frase de siempre, que ya está guardada
+            _logger.warning("No se pudo guardar la voz de la orden (%s)", type(exc).__name__)
+            return stored
+
+    def _current_mode_block(self, conversation_id: int) -> str:
+        """Lo que añade el modo en que está la charla, sin cambiarlo."""
+        if self._mode_repository is None:
+            return ""
+        return MODE_INSTRUCTIONS[self._mode_repository.get_mode(conversation_id)]
 
     def cancel(self, operation_id: str) -> None:
         """Request cooperative cancellation of an in-flight operation. Idempotent.
@@ -408,3 +522,16 @@ class SendMessageUseCase:
         if mode is ConversationMode.SERIO and command is ConversationMode.SERIO:
             block = f"{block}\n{ENTERING_SERIOUS_MODE}"
         return block
+
+
+def _completed_text(provider: LLMProvider, request: LLMRequest) -> str | None:
+    """El texto que da el modelo, o ``None`` si falla, se cancela o no dice nada."""
+    try:
+        for event in provider.stream_response(request):
+            if isinstance(event, LLMCompleted):
+                return event.text.strip() or None
+            if isinstance(event, (LLMCancelled, LLMError)):
+                return None
+    except Exception as exc:  # una voz que falla no deja la orden sin respuesta
+        _logger.warning("Sirius no pudo decir la orden con su voz (%s)", type(exc).__name__)
+    return None

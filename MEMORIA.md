@@ -26,7 +26,7 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **233**.
+- Decisiones (ADR): **234**.
 - Bloques del motor: 17 cerrado, 3 fuera_de_alcance.
 - Defectos registrados: 2 abierto, 85 cerrado.
 - Ideas aparcadas o descartadas: 12 aparcada, 3 descartada, 2 promovida.
@@ -79,6 +79,7 @@ huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| [240](docs/decisions/ADR-240-ensenar-a-sirius-en-cada-turno-los-tres-ejemplos-que-mas-se-parecen-a-la-charla-darle-sus-palabras-sueltas-y-que-diga-el-lo-que-contesta-a-las-ordenes-de-memoria.md) | 2026-10-08 | APROBADO | Enseñar a Sirius en cada turno los tres ejemplos que más se parecen a la charla, darle sus palabras sueltas y que diga él lo que contesta a las órdenes de memoria | La opción 2, con lo que describe la nota de arranque. En concreto: Los ejemplos, como datos. `identity_versions.examples` guarda, en JSON, quién habla, |
 | [239](docs/decisions/ADR-239-guardar-los-hechos-con-su-fecha-y-quien-lo-dijo-como-recuerdos-sonar-sin-leer-a-sirius-y-obedecer-las-ordenes-de-memoria-sin-pasar-por-el-modelo.md) | 2026-10-07 | APROBADO | Guardar los hechos con su fecha y quién lo dijo como recuerdos, soñar sin leer a Sirius y obedecer las órdenes de memoria sin pasar por el modelo | Se adopta la opción 2. |
 | [238](docs/decisions/ADR-238-buscar-los-recuerdos-por-significado-dentro-de-sirius.db-y-sacar-a-ollama-de-cada-respuesta.md) | 2026-10-07 | APROBADO | Buscar los recuerdos por significado dentro de sirius.db y sacar a Ollama de cada respuesta | Se adopta la opción 2. |
 | [237](docs/decisions/ADR-237-dar-a-sirius-memoria-propia-un-juez-y-las-40-preguntas-trampa.md) | 2026-10-07 | APROBADO | Dar a Sirius memoria propia, un juez y las 40 preguntas trampa | Se adopta la opción 2 para la memoria propia, y las preguntas trampa se contestan aparte, como el primer turno de una charla nueva. |
@@ -518,7 +519,7 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 
 - **ADR-205** — el ciclo volvería a quedarse horas en verde esperando (lo hace cumplir `tests/automation/test_sirius_merge.py`).
 
-Y **5** ADR declaran expresamente que no dejaron lección: 236, 235, 234, 233, 232.
+Y **6** ADR declaran expresamente que no dejaron lección: 240, 236, 235, 234, 233, 232.
 
 ## Los bloques del motor
 
@@ -635,7 +636,7 @@ mismo comando y vigila la misma prueba que esta vista (ADR-218).
 | 2026-10-06 | [Enmienda al Manual de Visión e Identidad v1.2: Sirius, el robot](docs/evolution/ENMIENDA_MANUAL_IDENTIDAD_2026-10.md) |
 | 2026-10-06 | [Plan de Sirius, el robot](docs/evolution/PLAN_DEL_ROBOT.md) |
 | sin fecha declarada | [Propuesta de separación entre Sirius y su motor de trabajo](docs/evolution/PROPUESTA_SEPARACION_SIRIUS_MOTOR.md) |
-| 2026-10-07 | [Pruebas de aceptación de la 0.2 del robot](docs/evolution/PRUEBAS_0.2_DEL_ROBOT.md) |
+| 2026-10-08 | [Pruebas de aceptación de la 0.2 del robot](docs/evolution/PRUEBAS_0.2_DEL_ROBOT.md) |
 | sin fecha declarada | [Evolución de Sirius después de 0.1](docs/evolution/README.md) |
 | sin fecha declarada | [Documento Rector - Evolución de Sirius después de 0.1 (enmendado por su §20 el 06-10-2026: Sirius es el software del robot)](docs/evolution/RECTOR.md) |
 | sin fecha declarada | [Sirius AI Core y estrategia de modelos — recolección de ideas](docs/evolution/SIRIUS_AI_CORE_AND_MODEL_STRATEGY.md) |

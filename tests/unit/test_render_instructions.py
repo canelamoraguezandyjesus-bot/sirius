@@ -10,10 +10,21 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from sirius.application.context import Context
-from sirius.application.send_message import render_instructions
+from sirius.application.send_message import render_identity, render_instructions
 from sirius.domain.decision import Decision, DecisionRevision, DecisionStatus
-from sirius.domain.identity import INITIAL_PERSONALITY_INSTRUCTIONS, Identity, IdentityVersion
+from sirius.domain.identity import (
+    INITIAL_PERSONALITY_INSTRUCTIONS,
+    Identity,
+    IdentityVersion,
+    SeedExample,
+)
 from sirius.domain.project import Project, ProjectRevision, ProjectStatus, normalize_blockers
+from sirius.domain.robot_seed import (
+    EXAMPLES_FRAME,
+    ROBOT_SEED_EXAMPLES,
+    ROBOT_SEED_INSTRUCTIONS,
+    TONE_FRAME,
+)
 from sirius.ports.llm import MEMORY_SUGGESTION_DELIMITER
 
 _NOW = datetime.now(UTC)
@@ -305,3 +316,62 @@ def test_render_instructions_places_the_memory_suggestion_ask_after_recent_messa
     delimiter_index = text.index(MEMORY_SUGGESTION_DELIMITER)
 
     assert messages_index < delimiter_index
+
+
+# --- ADR-240: los ejemplos de la semilla de cada petición ------------------------------
+
+
+def test_los_ejemplos_de_la_peticion_van_tras_la_identidad_con_su_aviso_y_en_su_orden() -> None:
+    ejemplos = (
+        SeedExample("Él", "Dime algo bonito.", "Algo bonito."),
+        SeedExample("Él", "Buenos días, cabezón.", "Buenos días, soquete."),
+    )
+    context = Context(
+        identity=_identity(),
+        project=None,
+        decisions=(),
+        memories=(),
+        recent_messages=(),
+        current_user_message="hola",
+        seed_examples=ejemplos,
+    )
+
+    instructions = render_instructions(context)
+
+    aviso = instructions.index(EXAMPLES_FRAME)
+    bonito = instructions.index("Él: «Dime algo bonito.»\nSirius: «Algo bonito.»")
+    soquete = instructions.index("Él: «Buenos días, cabezón.»\nSirius: «Buenos días, soquete.»")
+    assert instructions.index("instrucciones de personalidad") < aviso < bonito < soquete
+    assert soquete < instructions.index("# Decisiones vigentes relacionadas")
+
+
+def test_sin_ejemplos_no_va_el_aviso() -> None:
+    context = Context(
+        identity=_identity(),
+        project=None,
+        decisions=(),
+        memories=(),
+        recent_messages=(),
+        current_user_message="hola",
+    )
+
+    assert EXAMPLES_FRAME not in render_instructions(context)
+
+
+def test_la_identidad_puede_llevar_los_ejemplos_con_otro_aviso() -> None:
+    version = _identity().current_version
+    ejemplos = (SeedExample("Él", "Dime algo bonito.", "Algo bonito."),)
+
+    texto = render_identity(version, ejemplos, frame=TONE_FRAME)
+
+    assert TONE_FRAME in texto
+    assert EXAMPLES_FRAME not in texto
+    assert render_identity(version) == render_identity(version, ())
+    assert "Dime algo bonito." not in render_identity(version)
+
+
+def test_el_texto_de_la_semilla_no_lleva_ningun_ejemplo() -> None:
+    assert len(ROBOT_SEED_EXAMPLES) == 20
+    for ejemplo in ROBOT_SEED_EXAMPLES:
+        assert ejemplo.said not in ROBOT_SEED_INSTRUCTIONS
+        assert ejemplo.reply not in ROBOT_SEED_INSTRUCTIONS

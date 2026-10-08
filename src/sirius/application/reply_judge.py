@@ -8,6 +8,7 @@ from collections.abc import Callable
 from sirius.application.send_message import render_identity
 from sirius.domain.reply_judge import SCORE_TASK, VERDICT_TASK, TrickVerdict, parse_score
 from sirius.domain.reply_judge import parse_verdict as parse_trick_verdict
+from sirius.domain.robot_seed import TONE_FRAME
 from sirius.ports.identity_repository import IdentityRepository
 from sirius.ports.llm import LLMCompleted, LLMError, LLMProvider, LLMRequest
 
@@ -64,9 +65,14 @@ class LLMReplyJudge:
         if identity is None:
             msg = "No hay identidad vigente."
             raise JudgeError(msg)
+        # El juez no conversa: juzga cómo suena Sirius, y para eso ve los ejemplos
+        # enteros, no los tres de cada turno (ADR-240).
+        version = identity.current_version
         request = LLMRequest(
             operation_id=f"juez-{uuid.uuid4()}",
-            instructions=f"{render_identity(identity.current_version)}\n\n{task}",
+            instructions=(
+                f"{render_identity(version, version.examples, frame=TONE_FRAME)}\n\n{task}"
+            ),
             input_text=input_text,
         )
         for event in provider.stream_response(request):

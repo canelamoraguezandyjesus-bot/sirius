@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -20,12 +22,36 @@ from sirius.domain.identity import (
     INITIAL_PERSONALITY_INSTRUCTIONS,
     Identity,
     IdentityVersion,
+    SeedExample,
     next_identity_version,
 )
+
+_EXAMPLE_FIELDS = ("who", "said", "reply")
 
 
 def _utc_now_naive() -> datetime:
     return datetime.now(UTC).replace(tzinfo=None)
+
+
+def _examples_to_json(examples: Sequence[SeedExample]) -> str:
+    return json.dumps(
+        [{"who": e.who, "said": e.said, "reply": e.reply} for e in examples], ensure_ascii=False
+    )
+
+
+def _examples_from_json(raw: str, version: int) -> tuple[SeedExample, ...]:
+    """Los ejemplos guardados de una versión (ADR-240). Solo los escribe este repositorio:
+    si no tienen su forma, la base está dañada y se dice, como con la versión vigente."""
+    data = json.loads(raw)
+    if not isinstance(data, list) or not all(
+        isinstance(item, dict)
+        and set(item) == set(_EXAMPLE_FIELDS)
+        and all(isinstance(item[field], str) for field in _EXAMPLE_FIELDS)
+        for item in data
+    ):
+        msg = f"Identity version {version} has malformed examples; data is corrupt."
+        raise ValueError(msg)
+    return tuple(SeedExample(item["who"], item["said"], item["reply"]) for item in data)
 
 
 def _to_domain_version(model: IdentityVersionModel) -> IdentityVersion:
@@ -37,6 +63,7 @@ def _to_domain_version(model: IdentityVersionModel) -> IdentityVersion:
         description=model.description,
         personality_instructions=model.personality_instructions,
         created_at=model.created_at.replace(tzinfo=UTC),
+        examples=_examples_from_json(model.examples, model.version),
     )
 
 
@@ -123,7 +150,11 @@ class SqliteIdentityRepository:
             return [_to_domain_version(model) for model in version_models]
 
     def create_new_version(
-        self, name: str, description: str, personality_instructions: str
+        self,
+        name: str,
+        description: str,
+        personality_instructions: str,
+        examples: Sequence[SeedExample] = (),
     ) -> Identity:
         with session_scope(self._session_factory) as session:
             identity_model = _find_identity_model(session)
@@ -142,6 +173,7 @@ class SqliteIdentityRepository:
                 name=name,
                 description=description,
                 personality_instructions=personality_instructions,
+                examples=_examples_to_json(examples),
                 is_current=True,
                 created_at=_utc_now_naive(),
             )

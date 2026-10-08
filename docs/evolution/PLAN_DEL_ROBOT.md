@@ -95,6 +95,8 @@ robot, la §20 lo cumple así:
    (`docs/evolution/ENMIENDA_MANUAL_IDENTIDAD_2026-10.md`). Se escribe como valores y
    razones, no como prohibiciones. Lleva de 15 a 20 ejemplos de charla. Los ejemplos no
    son frases que repita: le enseñan el tono.
+   En cada turno ve los 3 que más se parecen a la charla, cada vez en distinto orden, y
+   todos quedan guardados para entrenarle (ADR-240).
 2. La charla pasa a un modelo local. Hoy va por OpenAI. Se añade el conector de Ollama
    para conversar, sobre la pieza que ya existe para cambiar de modelo.
 3. Su propia memoria: quién es, qué opiniones ha dado y qué bromas funcionaron y cuáles

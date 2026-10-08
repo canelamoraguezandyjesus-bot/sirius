@@ -12,6 +12,7 @@ from __future__ import annotations
 import random
 from collections.abc import Callable, Mapping, Sequence
 
+from sirius.application.seed_examples import SeedExamplePicker
 from sirius.application.send_message import render_identity
 from sirius.domain.blind_test import (
     BLIND_TEST_QUESTIONS,
@@ -39,13 +40,17 @@ class BlindTestUseCase:
         choose_model: Callable[[str], None],
         current_model: Callable[[], str | None],
         rng: random.Random | None = None,
+        seed_examples: SeedExamplePicker | None = None,
     ) -> None:
+        """``seed_examples`` elige los ejemplos de la semilla de cada pregunta, como en
+        la charla (ADR-240)."""
         self._identity_repository = identity_repository
         self._provider_for = provider_for
         self._list_models = list_models
         self._choose_model = choose_model
         self._current_model = current_model
         self._rng = rng or random.Random()
+        self._seed_examples = seed_examples or SeedExamplePicker()
 
     def questions(self) -> tuple[str, ...]:
         return BLIND_TEST_QUESTIONS
@@ -77,8 +82,12 @@ class BlindTestUseCase:
         si el propietario cierra la ventana a medias, no se hacen más peticiones.
         """
         identity = self._identity_repository.get_or_create_current_identity()
-        instructions = render_identity(identity.current_version)
+        version = identity.current_version
         questions = self.questions()
+        # Los ejemplos de cada pregunta se eligen al llegar a ella, después de mirar si
+        # se cerró la ventana, y una sola vez: todos los modelos la contestan con las
+        # mismas instrucciones, como en la charla (ADR-240, ronda 2 de Codex).
+        instructions: dict[str, str] = {}
         total = len(models) * len(questions)
         done = 0
         answers: dict[str, list[str]] = {}
@@ -89,8 +98,18 @@ class BlindTestUseCase:
                 if should_stop():
                     msg = "La prueba a ciegas se canceló."
                     raise BlindTestError(msg)
+                if question not in instructions:
+                    instructions[question] = render_identity(
+                        version, self._seed_examples.pick(version.examples, question)
+                    )
                 answers[model].append(
-                    _answer(provider, model, instructions, question, f"prueba-a-ciegas-{number}")
+                    _answer(
+                        provider,
+                        model,
+                        instructions[question],
+                        question,
+                        f"prueba-a-ciegas-{number}",
+                    )
                 )
                 done += 1
                 if on_progress is not None:

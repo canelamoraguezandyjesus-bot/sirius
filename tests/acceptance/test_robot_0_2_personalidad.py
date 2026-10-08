@@ -34,10 +34,8 @@ _LOCAL = {"localhost", "127.0.0.1"}
 # --- PA-R02-01 · La semilla del robot ----------------------------------------
 
 
-@pieza("B", "toda petición al modelo lleva la semilla del robot con sus ejemplos")
-def test_toda_peticion_al_modelo_lleva_la_semilla_del_robot_con_sus_ejemplos(
-    tmp_path: Path,
-) -> None:
+@pieza("H", "cada petición lleva la semilla y solo tres de sus ejemplos, con su aviso delante")
+def test_cada_peticion_lleva_la_semilla_y_solo_tres_de_sus_ejemplos(tmp_path: Path) -> None:
     conductor = Conductor(tmp_path)
     semilla = conductor.semilla_del_robot()
 
@@ -48,9 +46,65 @@ def test_toda_peticion_al_modelo_lleva_la_semilla_del_robot_con_sus_ejemplos(
     assert len(conductor.peticiones) == 3
     for peticion in conductor.peticiones:
         assert semilla.instrucciones in peticion.instrucciones
-        for propietario, sirius in semilla.ejemplos:
-            assert propietario in peticion.instrucciones
-            assert sirius in peticion.instrucciones
+        assert conductor.marco_de_los_ejemplos() in peticion.instrucciones
+        assert len(conductor.ejemplos_en(peticion)) == 3
+
+
+@pieza("H", "los 20 ejemplos quedan guardados en la identidad aunque cada petición lleve tres")
+def test_los_ejemplos_quedan_guardados_en_la_identidad(tmp_path: Path) -> None:
+    conductor = Conductor(tmp_path)
+
+    assert conductor.ejemplos_guardados_en_la_identidad() == conductor.semilla_del_robot().ejemplos
+
+
+@pieza("H", "los tres ejemplos de cada petición son los que más se parecen al mensaje")
+def test_los_tres_ejemplos_son_los_que_mas_se_parecen_al_mensaje(tmp_path: Path) -> None:
+    conductor = Conductor(tmp_path)
+    ejemplos = conductor.semilla_del_robot().ejemplos
+    parecidos = [ejemplos[2], ejemplos[9], ejemplos[17]]
+    mensaje = "Hoy estoy hecho polvo, macho."
+    conductor.con_huellas(conductor.huellas_que_acercan(mensaje, parecidos))
+
+    conductor.di(mensaje)
+
+    assert sorted(conductor.ejemplos_en(conductor.peticiones[-1])) == sorted(parecidos)
+
+
+@pieza("H", "con el mismo mensaje van los mismos tres ejemplos, cada vez en distinto orden")
+def test_los_mismos_tres_ejemplos_cambian_de_orden(tmp_path: Path) -> None:
+    conductor = Conductor(tmp_path)
+    ejemplos = conductor.semilla_del_robot().ejemplos
+    parecidos = [ejemplos[0], ejemplos[5], ejemplos[11]]
+    mensaje = "¿Qué te cuentas hoy?"
+    conductor.con_huellas(conductor.huellas_que_acercan(mensaje, parecidos))
+
+    for _ in range(12):
+        conductor.di(mensaje)
+
+    ordenes = {tuple(conductor.ejemplos_en(peticion)) for peticion in conductor.peticiones}
+    assert {frozenset(orden) for orden in ordenes} == {frozenset(parecidos)}
+    assert len(ordenes) > 1
+
+
+@pieza("H", "sin modelo de huellas, los ejemplos salen por las palabras en común con el mensaje")
+def test_sin_modelo_de_huellas_los_ejemplos_salen_por_palabras_en_comun(tmp_path: Path) -> None:
+    conductor = Conductor(tmp_path)
+    pizza = next(
+        ejemplo for ejemplo in conductor.semilla_del_robot().ejemplos if "pizza" in ejemplo[0]
+    )
+
+    conductor.di("Me voy a pedir otra pizza familiar, que hoy hay partido.")
+
+    assert pizza in conductor.ejemplos_en(conductor.peticiones[-1])
+
+
+@pieza("H", "la semilla le da sus palabras sueltas en vez de decirle que no tiene muletillas")
+def test_la_semilla_le_da_sus_palabras_sueltas(tmp_path: Path) -> None:
+    semilla = Conductor(tmp_path).semilla_del_robot()
+
+    for palabra in ("listo", "jefe", "tío", "macho", "joder", "soquete", "energúmeno", "cabezón"):
+        assert palabra in semilla.instrucciones
+    assert "muletillas fijas" not in semilla.instrucciones
 
 
 @pieza("B", "una base de 0.1 abre con la semilla del robot como versión nueva y conserva la vieja")

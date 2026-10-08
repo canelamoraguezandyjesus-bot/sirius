@@ -264,7 +264,7 @@ def test_olvida_lo_de_algo_lo_borra_de_toda_la_base_tambien_de_los_resumenes(
     conductor.di("Olvida lo de mi vecino Ramiro.")
 
     assert conductor.busca_en_toda_la_base("Ramiro") == []
-    assert not conductor.hubo_peticion_al_modelo_en_el_ultimo_turno()
+    assert not conductor.lo_vio_el_modelo_en_el_ultimo_turno("Ramiro")
 
 
 @pieza("G", "«olvida eso», sin más, borra lo último que dijo el propietario")
@@ -275,7 +275,34 @@ def test_olvida_eso_borra_lo_ultimo_que_dijo_el_propietario(tmp_path: Path) -> N
     conductor.di("Olvida eso.")
 
     assert conductor.busca_en_toda_la_base("Zarzamora") == []
-    assert not conductor.hubo_peticion_al_modelo_en_el_ultimo_turno()
+    assert not conductor.lo_vio_el_modelo_en_el_ultimo_turno("Zarzamora")
+
+
+@pieza("H", "a «olvida eso» contesta Sirius con su voz, y el modelo no ve lo olvidado")
+def test_a_olvida_eso_contesta_sirius_con_su_voz_sin_ver_lo_olvidado(tmp_path: Path) -> None:
+    conductor = Conductor(tmp_path, respuestas=["Pues vale.", "Borrado de la sesera, jefe."])
+    conductor.di("La clave de la alarma es Zarzamora.")
+
+    respuesta = conductor.di("Olvida eso.")
+
+    assert respuesta.startswith("Borrado de la sesera, jefe.")
+    assert conductor.hubo_peticion_al_modelo_en_el_ultimo_turno()
+    assert not conductor.lo_vio_el_modelo_en_el_ultimo_turno("Zarzamora")
+    assert conductor.busca_en_toda_la_base("Zarzamora") == []
+
+
+@pieza("H", "si el modelo no contesta, la orden se cumple igual y Sirius dice la frase de siempre")
+def test_si_el_modelo_no_contesta_la_orden_se_cumple_con_la_frase_de_siempre(
+    tmp_path: Path,
+) -> None:
+    conductor = Conductor(tmp_path)
+    conductor.di("La clave de la alarma es Zarzamora.")
+    conductor.el_modelo_falla_en_la_proxima_peticion()
+
+    respuesta = conductor.di("Olvida eso.")
+
+    assert respuesta == conductor.frase_de_siempre_al_olvidar()
+    assert conductor.busca_en_toda_la_base("Zarzamora") == []
 
 
 # --- PA-R02-18 · «Eso no es así» y «¿qué sabes de mí?» -----------------------
@@ -308,8 +335,8 @@ def test_eso_no_es_asi_corrige_con_el_si_del_propietario_y_guarda_el_hecho_de_an
     assert (vigente.dicho_por, vigente.seguridad) == ("propietario", "segura")
 
 
-@pieza("G", "«¿qué sabes de mí?» lista los hechos vigentes del propietario sin pasar por el modelo")
-def test_que_sabes_de_mi_lista_los_hechos_vigentes_sin_pasar_por_el_modelo(
+@pieza("G", "«¿qué sabes de mí?» lista los hechos vigentes del propietario, que no van al modelo")
+def test_que_sabes_de_mi_lista_los_hechos_vigentes_y_no_pasan_por_el_modelo(
     tmp_path: Path,
 ) -> None:
     conductor = Conductor(tmp_path)
@@ -322,4 +349,28 @@ def test_que_sabes_de_mi_lista_los_hechos_vigentes_sin_pasar_por_el_modelo(
     assert "Trabaja de electricista" in respuesta
     assert "Es del Betis" in respuesta
     assert "Lucía es enfermera" not in respuesta
-    assert not conductor.hubo_peticion_al_modelo_en_el_ultimo_turno()
+    assert not conductor.lo_vio_el_modelo_en_el_ultimo_turno("electricista")
+    assert not conductor.lo_vio_el_modelo_en_el_ultimo_turno("Betis")
+
+
+@pieza("H", "Sirius pregunta la corrección con su voz, y la corrección va tal cual, sin el modelo")
+def test_la_correccion_la_pregunta_sirius_con_su_voz_y_va_tal_cual(tmp_path: Path) -> None:
+    conductor = Conductor(
+        tmp_path, respuestas=["Ni idea.", "Uy, a ver si me aclaro, jefe.", "Apuntado, macho."]
+    )
+    conductor.anota_hecho("propietario", "equipo", "Es del Atleti", dicho_por="Lucía")
+    conductor.di("¿De qué equipo soy?")
+
+    pregunta = conductor.di("Eso no es así: soy del Betis.")
+
+    assert pregunta.startswith("Uy, a ver si me aclaro, jefe.")
+    assert "«Es del Atleti»" in pregunta
+    assert pregunta.endswith(conductor.pregunta_para_confirmar())
+    assert not conductor.lo_vio_el_modelo_en_el_ultimo_turno("Atleti")
+    assert not conductor.lo_vio_el_modelo_en_el_ultimo_turno("Betis")
+
+    respuesta = conductor.di("Sí.")
+
+    assert respuesta.startswith("Apuntado, macho.")
+    assert any("Betis" in hecho for hecho in conductor.hechos_vigentes())
+    assert not conductor.lo_vio_el_modelo_en_el_ultimo_turno("Betis")

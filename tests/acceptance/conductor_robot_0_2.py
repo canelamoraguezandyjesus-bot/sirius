@@ -51,6 +51,7 @@ from sirius.adapters.persistence.sqlite_identity_repository import (
     build_sqlite_identity_repository,
 )
 from sirius.adapters.secrets.fake import FakeSecretStore
+from sirius.application.memory_commands import ASK_TO_CONFIRM, FORGOT
 from sirius.application.send_message import SendMessageResult
 from sirius.composition_root import ConversationDependencies, build_conversation_dependencies
 from sirius.config.settings import load_settings, save_settings
@@ -68,19 +69,28 @@ from sirius.domain.relevance import KnowledgeKind
 from sirius.domain.reply_judge import TrickVerdict
 from sirius.domain.reply_mark import ReplyMark
 from sirius.domain.robot_seed import (
+    EXAMPLES_FRAME,
     ROBOT_SEED_EXAMPLES,
     ROBOT_SEED_INSTRUCTIONS,
     ROBOT_SEED_REMINDER,
 )
 from sirius.infrastructure.paths import ensure_paths, resolve_paths
 from sirius.ports.embeddings import EmbeddingError, TextEmbedder
-from sirius.ports.llm import LLMCompleted, LLMRequest, LLMStreamEvent, LLMTextDelta
+from sirius.ports.llm import (
+    LLMCompleted,
+    LLMError,
+    LLMErrorKind,
+    LLMRequest,
+    LLMStreamEvent,
+    LLMTextDelta,
+)
 
 #: Las letras de la tabla de piezas de ADR-233 que ya han entrado en ``main``.
 #: La A es esta: la nota de arranque y estas pruebas.
-PIEZAS_ENTREGADAS: frozenset[str] = frozenset({"A", "B", "C", "D", "E", "F", "G"})
+PIEZAS_ENTREGADAS: frozenset[str] = frozenset({"A", "B", "C", "D", "E", "F", "G", "H"})
 
-#: Qué trae cada pieza, con las palabras de la tabla de ADR-233.
+#: Qué trae cada pieza, con las palabras de la tabla de ADR-233. La H no es de esa
+#: tabla: la decidió el propietario el 08-10-2026, sobre la B y la G (ADR-240).
 PIEZAS: Mapping[str, str] = {
     "A": "la nota de arranque y las pruebas de aceptación",
     "B": "la semilla",
@@ -89,7 +99,16 @@ PIEZAS: Mapping[str, str] = {
     "E": "la memoria propia de Sirius, el juez y las 40 preguntas trampa",
     "F": "el banco de memoria de 100 casos y la búsqueda por significado",
     "G": "hechos con fecha y con quién lo dijo, fichas, órdenes de memoria y el sueño",
+    "H": (
+        "los tres ejemplos que más se parecen a la charla, sus palabras sueltas y su voz "
+        "en las órdenes de memoria"
+    ),
 }
+
+
+def _adr_de_la_pieza(letra: str) -> str:
+    return "ADR-240" if letra == "H" else "ADR-233"
+
 
 _Prueba = TypeVar("_Prueba", bound=Callable[..., object])
 
@@ -98,7 +117,7 @@ class PiezaPendiente(NotImplementedError):
     """La pieza de ADR-233 que haría esto todavía no ha entrado."""
 
     def __init__(self, letra: str) -> None:
-        super().__init__(f"pieza {letra} de ADR-233 pendiente: {PIEZAS[letra]}")
+        super().__init__(f"pieza {letra} de {_adr_de_la_pieza(letra)} pendiente: {PIEZAS[letra]}")
         self.letra = letra
 
 
@@ -121,8 +140,8 @@ def pieza(letra: str, que: str) -> Callable[[_Prueba], _Prueba]:
         strict=True,
         raises=PiezaPendiente,
         reason=(
-            f"Pieza {letra} de ADR-233 ({PIEZAS[letra]}): {que}. Cuando entre, se "
-            "añade su letra a PIEZAS_ENTREGADAS y esta marca desaparece."
+            f"Pieza {letra} de {_adr_de_la_pieza(letra)} ({PIEZAS[letra]}): {que}. Cuando "
+            "entre, se añade su letra a PIEZAS_ENTREGADAS y esta marca desaparece."
         ),
     )
 
@@ -167,16 +186,25 @@ class _ProveedorGrabador:
     def __init__(self, respuestas: Iterator[str]) -> None:
         self.peticiones: list[Peticion] = []
         self._respuestas = respuestas
+        self._falla_la_proxima = False
 
     def contesta_despues(self, texto: str) -> None:
         """La próxima respuesta será ``texto``; después sigue con las que tocaban."""
         self._respuestas = itertools.chain([texto], self._respuestas)
+
+    def falla_despues(self) -> None:
+        """La próxima petición falla como un modelo que no contesta; las demás, no."""
+        self._falla_la_proxima = True
 
     def health_check(self) -> bool:
         return True
 
     def stream_response(self, request: LLMRequest) -> Iterable[LLMStreamEvent]:
         self.peticiones.append(Peticion(request.instructions, request.input_text))
+        if self._falla_la_proxima:
+            self._falla_la_proxima = False
+            yield LLMError(kind=LLMErrorKind.CONNECTION, message="el modelo no contesta")
+            return
         texto = next(self._respuestas)
         yield LLMTextDelta(text=texto)
         yield LLMCompleted(text=texto, input_tokens=1, output_tokens=len(texto))
@@ -674,6 +702,7 @@ class Conductor:
             )
         self._resultados: list[SendMessageResult] = []
         self._peticiones_antes_del_ultimo_turno = 0
+        self._vistas_antes_del_ultimo_turno = 0
 
     def _montar(self) -> ConversationDependencies:
         dependencias = build_conversation_dependencies(
@@ -713,6 +742,7 @@ class Conductor:
     def di(self, texto: str) -> str:
         """El propietario escribe ``texto``; devuelve lo que contesta Sirius."""
         self._peticiones_antes_del_ultimo_turno = len(self._grabador.peticiones)
+        self._vistas_antes_del_ultimo_turno = len(self.peticiones)
         resultado = self._dependencias.send_message_use_case.send_message(texto)
         self._resultados.append(resultado)
         # Un mensaje borrado guarda su contenido como None (PA-016).
@@ -730,6 +760,23 @@ class Conductor:
 
     def hubo_peticion_al_modelo_en_el_ultimo_turno(self) -> bool:
         return len(self._grabador.peticiones) > self._peticiones_antes_del_ultimo_turno
+
+    def peticiones_del_ultimo_turno(self) -> list[Peticion]:
+        """Lo que recibió el modelo de la charla en el último ``di``."""
+        return self.peticiones[self._vistas_antes_del_ultimo_turno :]
+
+    def lo_vio_el_modelo_en_el_ultimo_turno(self, texto: str) -> bool:
+        """Si ``texto`` llegó al modelo de la charla en el último ``di``, sin
+        distinguir mayúsculas, en sus instrucciones o en lo que se le dijo."""
+        buscado = texto.casefold()
+        return any(
+            buscado in peticion.instrucciones.casefold() or buscado in peticion.texto.casefold()
+            for peticion in self.peticiones_del_ultimo_turno()
+        )
+
+    def el_modelo_falla_en_la_proxima_peticion(self) -> None:
+        """La próxima petición al modelo de la charla falla, como si no contestara."""
+        self._grabador.falla_despues()
 
     def reabre(self) -> None:
         """Cierra Sirius y lo vuelve a abrir sobre la misma base, arranque incluido."""
@@ -792,7 +839,7 @@ class Conductor:
     def semilla_del_robot(self) -> Semilla:
         return Semilla(
             instrucciones=ROBOT_SEED_INSTRUCTIONS,
-            ejemplos=tuple((dicho, sirius) for _, dicho, sirius in ROBOT_SEED_EXAMPLES),
+            ejemplos=tuple((ejemplo.said, ejemplo.reply) for ejemplo in ROBOT_SEED_EXAMPLES),
         )
 
     def identidad_vigente(self) -> tuple[int, str]:
@@ -805,6 +852,50 @@ class Conductor:
         assert identidad is not None
         vigente = identidad.current_version
         return vigente.version, vigente.personality_instructions
+
+    def ejemplos_en(self, peticion: Peticion) -> list[tuple[str, str]]:
+        """Los ejemplos de la semilla que lleva ``peticion``, en el orden en que van.
+
+        Un ejemplo cuenta si va entero: quién habla, lo que dice y lo que contesta
+        Sirius, como los escribe la semilla.
+        """
+        encontrados: list[tuple[int, tuple[str, str]]] = []
+        for ejemplo in ROBOT_SEED_EXAMPLES:
+            bloque = f"{ejemplo.who}: «{ejemplo.said}»\nSirius: «{ejemplo.reply}»"
+            sitio = peticion.instrucciones.find(bloque)
+            if sitio >= 0:
+                encontrados.append((sitio, (ejemplo.said, ejemplo.reply)))
+        return [encontrado for _, encontrado in sorted(encontrados)]
+
+    @staticmethod
+    def huellas_que_acercan(mensaje: str, ejemplos: Sequence[tuple[str, str]]) -> HuellasDeMentira:
+        """Un modelo de huellas para el que ``mensaje`` se parece a ``ejemplos`` y a nada más.
+
+        Sirius mide el parecido de un ejemplo por lo que se le dice en él.
+        """
+        return HuellasDeMentira(parecidas=[[mensaje, *(dicho for dicho, _ in ejemplos)]])
+
+    def ejemplos_guardados_en_la_identidad(self) -> tuple[tuple[str, str], ...]:
+        """Los ejemplos que guarda la versión vigente de la identidad: lo dicho y lo contestado."""
+        identidades = build_sqlite_identity_repository(self.base)
+        try:
+            identidad = identidades.get_current_identity()
+        finally:
+            identidades.close()
+        assert identidad is not None
+        return tuple((e.said, e.reply) for e in identidad.current_version.examples)
+
+    def marco_de_los_ejemplos(self) -> str:
+        """Lo que va delante de los ejemplos en cada petición."""
+        return EXAMPLES_FRAME
+
+    def frase_de_siempre_al_olvidar(self) -> str:
+        """Lo que contesta Sirius a «olvida eso» cuando el modelo no le pone la voz."""
+        return FORGOT
+
+    def pregunta_para_confirmar(self) -> str:
+        """Cómo acaba la pregunta de Sirius tras «eso no es así»: un «sí» la contesta."""
+        return ASK_TO_CONFIRM
 
     def identidad_en_la_version(self, version: int) -> str:
         identidades = build_sqlite_identity_repository(self.base)

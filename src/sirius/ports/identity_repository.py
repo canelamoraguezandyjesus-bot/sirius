@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Protocol
 
-from sirius.domain.identity import Identity, IdentityVersion
+from sirius.domain.identity import Identity, IdentityVersion, SeedExample
 
 
 class IdentityRepository(Protocol):
@@ -23,7 +24,14 @@ class IdentityRepository(Protocol):
         ...
 
     def create_new_version(
-        self, name: str, description: str, personality_instructions: str
+        self,
+        name: str,
+        description: str,
+        personality_instructions: str,
+        examples: Sequence[SeedExample] = (),
     ) -> Identity:
-        """Create a new current version without overwriting the previous one."""
+        """Create a new current version without overwriting the previous one.
+
+        ``examples`` son sus ejemplos de charla, guardados con ella (ADR-240).
+        """
         ...
