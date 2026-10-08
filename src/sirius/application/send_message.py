@@ -365,6 +365,9 @@ class SendMessageUseCase:
             operation_id=operation_id,
             status=MessageStatus.COMPLETED,
         )
+        if answer.after_store is not None:
+            # Lo que la orden propone queda ligado a su mensaje, ya guardado.
+            answer.after_store(user_message.id)
         if on_delta is not None:
             on_delta(answer.reply)
         sirius_message = self._conversation_repository.append_message(

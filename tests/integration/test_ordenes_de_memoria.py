@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import sqlite3
 from collections.abc import Iterator, Sequence
+from contextlib import closing
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
@@ -57,6 +59,7 @@ class _Sirius:
     modelo: _Modelo
     backups: Path
     huellas: _SinHuellas
+    base: Path
 
     def di(self, texto: str) -> str:
         resultado = self.deps.send_message_use_case.send_message(texto)
@@ -85,7 +88,7 @@ def sirius(tmp_path: Path) -> Iterator[_Sirius]:
     deps.send_message_use_case.set_llm_provider(modelo)
     if not deps.initial_project_use_case.is_configured():
         deps.initial_project_use_case.create_initial_project("Charla", "Charlar")
-    yield _Sirius(deps, modelo, rutas.backups_dir, huellas)
+    yield _Sirius(deps, modelo, rutas.backups_dir, huellas, rutas.data_dir / "sirius.db")
     deps.close_database_connections()
 
 
@@ -177,6 +180,23 @@ def test_un_no_deja_el_hecho_como_estaba(sirius: _Sirius) -> None:
 
     assert sirius.di("No") == "Vale, lo dejo como estaba: «Es del Atleti»."
     assert sirius.deps.facts_use_case.pending_corrections() == []
+
+
+def test_olvida_eso_tras_eso_no_es_asi_se_lleva_la_correccion(sirius: _Sirius) -> None:
+    """Ronda 2 de Codex: la corrección se proponía antes de guardar su mensaje y no
+    quedaba ligada a él; olvidarlo la dejaba esperando su sí."""
+    sirius.anota("propietario", "equipo", "Es del Atleti")
+    sirius.di("¿De qué equipo soy?")
+    sirius.di("Eso no es así: soy del Betis.")
+
+    sirius.di("Olvida eso.")
+
+    assert sirius.deps.facts_use_case.pending_corrections() == []
+    with closing(sqlite3.connect(sirius.base)) as conexion:
+        quedan = conexion.execute(
+            "SELECT COUNT(*) FROM memory_suggestions WHERE content LIKE '%Betis%'"
+        ).fetchone()
+    assert quedan == (0,)
 
 
 def test_eso_no_es_asi_sin_hecho_que_case_va_a_la_charla(sirius: _Sirius) -> None:

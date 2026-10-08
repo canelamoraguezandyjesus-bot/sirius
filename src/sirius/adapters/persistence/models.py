@@ -431,6 +431,9 @@ class MemorySuggestionModel(Base):
     said_by: Mapped[str | None] = mapped_column(Text, nullable=True)
     certainty: Mapped[str | None] = mapped_column(Text, nullable=True)
     corrects_memory_id: Mapped[int | None] = mapped_column(ForeignKey("memories.id"), nullable=True)
+    #: El día del que salió lo que propone el sueño: olvidar un mensaje de ese día
+    #: se lleva también lo que el sueño sacó de él (ronda 2 de Codex).
+    dreamed_day: Mapped[date | None] = mapped_column(Date, nullable=True)
 
 
 class IdentityModel(Base):

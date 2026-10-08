@@ -215,6 +215,124 @@ def test_olvida_eso_borra_lo_que_sugirio_la_respuesta_aunque_lo_diga_con_otras_p
             repositorio.close()
 
 
+def test_si_compactar_falla_no_se_olvida_nada_y_se_puede_repetir(tmp_path: Path) -> None:
+    """Ronda 2 de Codex: compactar iba después de guardar lo olvidado. Si fallaba, el
+    mensaje quedaba borrado pero sus términos seguían en el índice, y repetir la orden
+    ya no lo encontraba."""
+    from sirius.adapters.persistence.sqlite_forget import SqliteForgetter
+
+    class _QueFallaAlCompactar(SqliteForgetter):
+        @staticmethod
+        def _compact(session: object) -> None:
+            raise sqlite3.OperationalError("disk I/O error")
+
+    base = _base(tmp_path)
+    conversacion = build_sqlite_conversation_repository(base)
+    try:
+        principal = conversacion.get_or_create_main_conversation()
+        dicho = conversacion.append_message(
+            principal.id, MessageRole.USER, f"La clave es {SECRETO}.", operation_id="1"
+        )
+        de_verdad = build_sqlite_forgetter(base)
+        falla = _QueFallaAlCompactar(de_verdad._session_factory, de_verdad._engine)
+
+        with pytest.raises(sqlite3.OperationalError):
+            falla.forget_message(dicho.id)
+
+        [mensaje] = conversacion.list_messages(principal.id)
+        assert mensaje.content == f"La clave es {SECRETO}."
+        de_verdad.forget_message(dicho.id)
+        assert _en_el_fichero(base, SECRETO) == []
+    finally:
+        conversacion.close()
+
+
+def test_olvidar_un_mensaje_de_un_dia_sonado_se_lleva_lo_que_el_sueno_propuso_y_espera(
+    tmp_path: Path,
+) -> None:
+    """Ronda 2 de Codex: lo que propone el sueño sale de todos los mensajes del día.
+    Olvidar uno se lleva lo que aún espera su sí y el resumen del día, que así se
+    vuelve a soñar con lo que queda. Lo que él ya contestó se queda: es suyo."""
+    from sirius.application.facts import ConfirmFactSuggestionUseCase
+    from sirius.application.reject_memory_suggestion import RejectMemorySuggestionUseCase
+    from sirius.domain.facts import ProposedFact
+
+    base = _base(tmp_path)
+    conversacion = build_sqlite_conversation_repository(base)
+    memoria = build_sqlite_memory_repository(base)
+    sugerencias = build_sqlite_memory_suggestion_repository(base)
+    charla = build_sqlite_robot_conversation_repository(base)
+    unidad = build_sqlite_unit_of_work(base)
+    try:
+        principal = conversacion.get_or_create_main_conversation()
+        dicho = conversacion.append_message(
+            principal.id, MessageRole.USER, "Hoy me han dado la clave.", operation_id="1"
+        )
+        dia = dicho.created_at.astimezone().date()
+        propuestas = FactProposals(unidad)
+        pendiente = propuestas.propose(
+            ProposedFact("propietario", "banco", f"Su clave es {SECRETO}"),
+            by_sirius=True,
+            dreamed_day=dia,
+        )
+        confirmado = propuestas.propose(
+            ProposedFact("propietario", "trabajo", "Trabaja de electricista"),
+            by_sirius=True,
+            dreamed_day=dia,
+        )
+        recuerdo = ConfirmFactSuggestionUseCase(unidad).confirm(confirmado.id)
+        rechazado = propuestas.propose(
+            ProposedFact("propietario", "coche", "Tiene un coche rojo"),
+            by_sirius=True,
+            dreamed_day=dia,
+        )
+        RejectMemorySuggestionUseCase(unidad).reject(rechazado.id)
+        charla.save_day(dia, "Le dieron una clave.")
+
+        build_sqlite_forgetter(base).forget_message(dicho.id)
+
+        assert _en_el_fichero(base, SECRETO) == []
+        assert pendiente.id not in {s.id for s in sugerencias.list_pending_suggestions()}
+        assert memoria.get_memory(recuerdo.id).status is MemoryStatus.CURRENT
+        assert [s.id for s in sugerencias.list_rejected_suggestions()] == [rechazado.id]
+        assert charla.day_summary(dia) is None
+    finally:
+        for repositorio in (conversacion, memoria, sugerencias, charla):
+            repositorio.close()
+
+
+def test_olvida_lo_de_se_lleva_el_turno_y_lo_que_salio_de_el_aunque_no_lo_nombre(
+    tmp_path: Path,
+) -> None:
+    """Ronda 2 de Codex, la misma raíz: lo que salió de un mensaje olvidado se olvida con
+    él, también con «olvida lo de…»: su respuesta y lo guardado desde él."""
+    base = _base(tmp_path)
+    conversacion = build_sqlite_conversation_repository(base)
+    sugerencias = build_sqlite_memory_suggestion_repository(base)
+    try:
+        principal = conversacion.get_or_create_main_conversation()
+        dicho = conversacion.append_message(
+            principal.id, MessageRole.USER, "Mi vecino Ramiro me tiene frito.", operation_id="1"
+        )
+        conversacion.append_message(
+            principal.id, MessageRole.SIRIUS, "¿Qué te ha hecho ahora el pesado?", operation_id="1"
+        )
+        guardada = FactProposals(build_sqlite_unit_of_work(base)).propose_from_message(
+            dicho.id, f"El de al lado le canta {SECRETO} de madrugada"
+        )
+        assert guardada is not None
+
+        informe = build_sqlite_forgetter(base).forget_phrase("Ramiro")
+
+        assert informe.messages == 2
+        assert [m.content for m in conversacion.list_messages(principal.id)] == [None, None]
+        assert sugerencias.list_pending_suggestions() == []
+        assert _en_el_fichero(base, SECRETO) == []
+    finally:
+        for repositorio in (conversacion, sugerencias):
+            repositorio.close()
+
+
 def test_olvidar_borra_el_recuerdo_que_salio_del_mensaje_aunque_lo_confirmara(
     tmp_path: Path,
 ) -> None:

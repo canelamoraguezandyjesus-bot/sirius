@@ -118,9 +118,15 @@ Se adopta la opción 2.
     charla;
   - «¿qué sabes de mí?», y «¿qué sabes de …?» de alguien con ficha.
 - **Olvidar de verdad.** La conexión de olvidar pone a ceros lo borrado (`secure_delete`)
-  y al acabar compacta el índice de palabras, que hasta entonces guarda los términos
-  borrados. `FORGET_COVERAGE` dice qué hace olvidar con cada columna de texto. Las copias
-  de seguridad no se tocan: van cifradas y son su red; Sirius le avisa.
+  y compacta el índice de palabras, que hasta entonces guarda los términos borrados, en la
+  misma transacción: si algo falla, no se olvida nada y la orden se puede repetir.
+  `FORGET_COVERAGE` dice qué hace olvidar con cada columna de texto. Las copias de
+  seguridad no se tocan: van cifradas y son su red; Sirius le avisa.
+- **Todo lo que se propone dice de dónde sale**, y olvidar sigue ese lazo: del mensaje
+  suyo o de la respuesta de Sirius, que forman un turno; de la orden «eso no es así», que
+  se guarda antes de proponer la corrección; o del día que soñaba el sueño. Olvidar un
+  mensaje se lleva su turno y lo que salió de él. Lo que el sueño propuso de ese día y aún
+  espera su sí también se va, y el día se vuelve a soñar con lo que queda.
 - **El sueño.** Al abrirse la ventana, en segundo plano, sueña los días anteriores, hasta
   7, que aún no tienen resumen. Lee solo sus mensajes y usa el modelo de Ollama elegido
   para la charla, como el juez: nunca OpenAI. Si no puede resumir, propone igual y el día
@@ -174,13 +180,41 @@ Se adopta la opción 2.
   - P2: el resumen marcaba el día como soñado antes de proponer sus hechos. Si proponer
     fallaba, ese día no se volvía a intentar. Ahora el resumen se guarda el último.
   - Familias: ninguna se repite de otra ronda.
+- **Ronda 2 de Codex**, sobre `0ddb1a5d`: cuatro hallazgos, los cuatro ciertos.
+  - P1: compactar el índice iba después de guardar lo olvidado. Si fallaba, el mensaje
+    quedaba borrado pero sus términos seguían en el índice, y repetir la orden ya no lo
+    encontraba. Ahora va en la misma transacción.
+  - P1: la corrección de «eso no es así» se proponía antes de guardar su mensaje y no
+    quedaba ligada a él: «olvida eso» la dejaba esperando su sí.
+  - P2: si el modelo repetía un hecho en la misma respuesta, el sueño proponía dos iguales.
+  - P2: al volver a soñar un día que quedó a medias, el sueño proponía otra vez lo que él
+    ya había rechazado.
+  - **Regla de las dos rondas.** Dos familias se repiten de la ronda 1, y se dejó de
+    parchear para buscar la raíz de cada una.
+    - Lo que sale de un mensaje olvidado sobrevive porque no quedó ligado a él. Cada
+      camino que propone algo decidía por su cuenta si lo ligaba, y olvidar solo seguía
+      lo ligado o lo que repetía la frase entera. Dos caminos no ligaban nada: la
+      corrección y el sueño. Y «olvida lo de…» ni siquiera seguía los lazos de los
+      mensajes que borraba. Ahora todo lo que se propone dice de dónde sale, y las dos
+      órdenes de olvidar siguen esos lazos y el turno entero.
+    - El sueño reintenta mal un día. Deducía qué había propuesto ya de lo que quedaba en
+      la base, y sus respuestas cambian lo que queda: confirmar lo pasa a hechos,
+      rechazar lo saca de pendientes. Ahora cuenta todo lo que él contestó, también lo
+      rechazado, y lo que el propio modelo repite.
 
 ## Consecuencias
 
 - «Proponer guardar…» ya no sale en las respuestas de Sirius, sino en sus mensajes.
 - Cada turno lleva sus hechos y los de quien nombra: más texto en la petición, fuera del
   presupuesto de los recuerdos.
-- Olvidar borra también los mensajes de Sirius que nombran lo olvidado.
+- Olvidar borra también los mensajes de Sirius que nombran lo olvidado, y la respuesta de
+  Sirius a cada mensaje suyo que se olvida, aunque no lo nombre.
+- Olvidar un mensaje de un día ya soñado se lleva lo que el sueño propuso de ese día y
+  aún espera su sí, aunque saliera de otro mensaje del mismo día: no se sabe de cuál. El
+  día se vuelve a soñar con lo que queda, y lo que siga en pie se le propone otra vez.
+- Lo que él ya contestó del sueño, que sí o que no, se queda al olvidar un mensaje de ese
+  día salvo que lleve las palabras olvidadas: es suyo, y se borra desde Conocimiento.
+- El sueño no vuelve a proponer lo que él rechazó.
 - Tras «olvida eso», los resúmenes que cubrían el mensaje se borran enteros y la charla
   rehace el suyo cuando le toca. Tras «olvida lo de…» solo se quitan sus frases: lo que un
   resumen diga con otras palabras se queda.

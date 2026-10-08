@@ -74,6 +74,14 @@ class FactSuggestionRepository(MemorySuggestionRepository, Protocol):
         valid_from: date | None = None,
         said_by: str | None = None,
         certainty: str | None = None,
+        dreamed_day: date | None = None,
     ) -> MemorySuggestion:
-        """Una sugerencia pendiente: un recuerdo, un hecho de ``person`` o la corrección de uno."""
+        """Una sugerencia pendiente: un recuerdo, un hecho de ``person`` o la corrección de uno.
+
+        ``dreamed_day`` es el día del que la sacó el sueño, si la propuso él.
+        """
+        ...
+
+    def list_rejected_suggestions(self) -> list[MemorySuggestion]:
+        """Las sugerencias a las que él dijo que no, de la más vieja a la más nueva."""
         ...

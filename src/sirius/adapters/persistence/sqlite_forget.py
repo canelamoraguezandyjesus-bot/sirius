@@ -18,7 +18,7 @@ from __future__ import annotations
 import re
 import sqlite3
 from collections.abc import Callable, Iterable
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -41,6 +41,7 @@ from sirius.adapters.persistence.models import (
 )
 from sirius.domain.conversation import MessageStatus
 from sirius.domain.memory import MemoryStatus
+from sirius.domain.memory_suggestion import MemorySuggestionStatus
 from sirius.domain.plain_text import plain
 from sirius.ports.forget import ForgetReport
 
@@ -165,26 +166,14 @@ class SqliteForgetter:
             if message is None or message.content is None:
                 return ForgetReport()
             mentions = phrase_matcher(message.content)
-            turn = [message]
-            if message.operation_id is not None:
-                turn += session.scalars(
-                    select(MessageModel).where(
-                        MessageModel.conversation_id == message.conversation_id,
-                        MessageModel.operation_id == message.operation_id,
-                        MessageModel.id != message.id,
-                    )
-                ).all()
-            # Lo que salió del turno entero: lo que él guardó desde su mensaje y lo que
-            # se sugirió desde la respuesta de Sirius, aunque lo diga con otras palabras.
-            events = set(
-                session.scalars(
-                    select(EventModel.id).where(
-                        EventModel.message_id.in_([said.id for said in turn])
-                    )
-                )
-            )
+            turn = _turn_of(session, message)
+            said_on = message.created_at.replace(tzinfo=UTC).astimezone().date()
+            # Lo que salió de él: lo ligado a cualquier mensaje del turno, y lo que
+            # el sueño propuso de ese día y aún espera su sí. El resumen de ese día
+            # se borra abajo, así que el día se vuelve a soñar con lo que queda.
+            events = _events_of(session, turn)
             suggestions, linked_memories = self._forget_suggestions(
-                session, lambda texts: _any(texts, mentions), events
+                session, lambda texts: _any(texts, mentions), events, frozenset({said_on})
             )
             memories = self._forget_memories(
                 session, lambda texts: _any(texts, mentions), events, linked_memories
@@ -198,15 +187,14 @@ class SqliteForgetter:
                     ConversationSummaryModel.up_to_sequence >= message.sequence,
                 ),
             )
-            said_on = message.created_at.replace(tzinfo=UTC).astimezone().date()
             summaries += self._delete(
                 session, delete(DaySummaryModel).where(DaySummaryModel.day == said_on)
             )
             for redacted in turn:
                 _redact(redacted)
             session.flush()
+            self._compact(session)
             report = ForgetReport(len(turn), memories, suggestions, summaries)
-        self._compact()
         return report
 
     def forget_phrase(self, phrase: str) -> ForgetReport:
@@ -214,25 +202,29 @@ class SqliteForgetter:
             return ForgetReport()
         mentions = phrase_matcher(phrase)
         with session_scope(self._session_factory) as session:
-            messages = [
-                message
-                for message in session.scalars(
-                    select(MessageModel).where(MessageModel.content.is_not(None))
-                )
-                if mentions(message.content or "")
-            ]
-            for message in messages:
-                _redact(message)
-            suggestions, _ = self._forget_suggestions(
-                session, lambda texts: _any(texts, mentions), set()
+            # Cada mensaje que lo nombra, con su turno: la respuesta a lo que dijo
+            # habla de lo mismo aunque no lo nombre.
+            said: dict[int, MessageModel] = {}
+            for message in session.scalars(
+                select(MessageModel).where(MessageModel.content.is_not(None))
+            ):
+                if mentions(message.content or ""):
+                    for in_turn in _turn_of(session, message):
+                        said[in_turn.id] = in_turn
+            messages = list(said.values())
+            events = _events_of(session, messages)
+            suggestions, linked_memories = self._forget_suggestions(
+                session, lambda texts: _any(texts, mentions), events
             )
             memories = self._forget_memories(
-                session, lambda texts: _any(texts, mentions), set(), set()
+                session, lambda texts: _any(texts, mentions), events, linked_memories
             )
+            for message in messages:
+                _redact(message)
             summaries = self._trim_summaries(session, mentions)
             session.flush()
+            self._compact(session)
             report = ForgetReport(len(messages), memories, suggestions, summaries)
-        self._compact()
         return report
 
     def _forget_memories(
@@ -274,13 +266,23 @@ class SqliteForgetter:
         session: Session,
         matches: Callable[[Iterable[str | None]], bool],
         events: set[int],
+        dreamed_days: frozenset[date] = frozenset(),
     ) -> tuple[int, set[int]]:
-        """Borra las sugerencias que casan; devuelve cuántas y los recuerdos que dieron."""
+        """Borra las sugerencias que casan; devuelve cuántas y los recuerdos que dieron.
+
+        De lo que soñó el sueño en ``dreamed_days`` se borra lo que espera su sí: sale
+        de todos los mensajes del día y no se sabe de cuál. Lo que él ya contestó se
+        queda, salvo que case: es suyo.
+        """
         forgotten = 0
         memories: set[int] = set()
         for suggestion in session.scalars(select(MemorySuggestionModel)):
             texts = [suggestion.content, suggestion.person, suggestion.topic, suggestion.said_by]
-            if suggestion.source_event_id in events or matches(texts):
+            dreamed_then = (
+                suggestion.dreamed_day in dreamed_days
+                and suggestion.status is MemorySuggestionStatus.PENDING
+            )
+            if suggestion.source_event_id in events or dreamed_then or matches(texts):
                 if suggestion.resulting_memory_id is not None:
                     memories.add(suggestion.resulting_memory_id)
                 session.delete(suggestion)
@@ -310,11 +312,37 @@ class SqliteForgetter:
         result = session.execute(statement)
         return int(getattr(result, "rowcount", 0) or 0)
 
-    def _compact(self) -> None:
-        """Compacta el índice de palabras: hasta entonces guarda los términos borrados."""
-        with self._engine.begin() as connection:
-            connection.execute(text("INSERT INTO message_fts(message_fts) VALUES('optimize')"))
-            connection.execute(text("INSERT INTO knowledge_fts(knowledge_fts) VALUES('optimize')"))
+    @staticmethod
+    def _compact(session: Session) -> None:
+        """Compacta el índice de palabras, que hasta entonces guarda los términos borrados.
+
+        En la misma transacción que lo demás: si compactar falla, no se olvida nada y
+        la orden se puede repetir sobre el mismo mensaje (ronda 2 de Codex).
+        """
+        session.execute(text("INSERT INTO message_fts(message_fts) VALUES('optimize')"))
+        session.execute(text("INSERT INTO knowledge_fts(knowledge_fts) VALUES('optimize')"))
+
+
+def _turn_of(session: Session, message: MessageModel) -> list[MessageModel]:
+    """``message`` y los de su mismo turno: lo que dijo y lo que le contestó Sirius."""
+    turn = [message]
+    if message.operation_id is not None:
+        turn += session.scalars(
+            select(MessageModel).where(
+                MessageModel.conversation_id == message.conversation_id,
+                MessageModel.operation_id == message.operation_id,
+                MessageModel.id != message.id,
+            )
+        ).all()
+    return turn
+
+
+def _events_of(session: Session, messages: Iterable[MessageModel]) -> set[int]:
+    """Los eventos ligados a ``messages``: de ahí cuelga lo que salió de ellos."""
+    ids = [message.id for message in messages]
+    if not ids:
+        return set()
+    return set(session.scalars(select(EventModel.id).where(EventModel.message_id.in_(ids))))
 
 
 def _any(texts: Iterable[str | None], mentions: Callable[[str], bool]) -> bool:

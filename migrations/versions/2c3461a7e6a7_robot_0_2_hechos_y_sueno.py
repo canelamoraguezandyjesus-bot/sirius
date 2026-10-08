@@ -38,6 +38,9 @@ def upgrade() -> None:
     op.add_column('memory_suggestions', sa.Column('valid_from', sa.Date(), nullable=True))
     op.add_column('memory_suggestions', sa.Column('said_by', sa.Text(), nullable=True))
     op.add_column('memory_suggestions', sa.Column('certainty', sa.Text(), nullable=True))
+    # El día del que salió lo que propone el sueño: olvidar un mensaje de ese día
+    # se lleva también lo que el sueño sacó de él.
+    op.add_column('memory_suggestions', sa.Column('dreamed_day', sa.Date(), nullable=True))
     # Como DDL a mano, igual que current_revision_id en 6f710ea6c2d2: Alembic no
     # sabe añadir en SQLite una columna con su clave ajena sin rehacer la tabla.
     op.execute(
@@ -62,6 +65,7 @@ def downgrade() -> None:
     # para quitar una columna con clave ajena.
     with op.batch_alter_table('memory_suggestions') as batch_op:
         batch_op.drop_column('corrects_memory_id')
+        batch_op.drop_column('dreamed_day')
         batch_op.drop_column('certainty')
         batch_op.drop_column('said_by')
         batch_op.drop_column('valid_from')

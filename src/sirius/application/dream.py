@@ -31,7 +31,7 @@ from sirius.infrastructure.logging import get_logger
 from sirius.ports.conversation_repository import ConversationRepository
 from sirius.ports.llm import LLMCompleted, LLMError, LLMProvider, LLMRequest
 from sirius.ports.memory_repository import FactRepository
-from sirius.ports.memory_suggestion_repository import MemorySuggestionRepository
+from sirius.ports.memory_suggestion_repository import FactSuggestionRepository
 from sirius.ports.robot_conversation import (
     ConversationSummarizer,
     DaySummaryRepository,
@@ -65,7 +65,7 @@ class DreamService:
         extractor: FactExtractor,
         proposals: FactProposals,
         facts: FactRepository,
-        suggestions: MemorySuggestionRepository,
+        suggestions: FactSuggestionRepository,
         local_model: Callable[[], LLMProvider | None],
     ) -> None:
         self._conversations = conversations
@@ -97,10 +97,17 @@ class DreamService:
         except Exception as exc:  # sin hechos propuestos, el día queda por soñar
             _logger.warning("El sueño no pudo proponer hechos (%s)", type(exc).__name__)
             return []
-        new = [fact for fact in proposed if fact.text.strip() and not self._already_known(fact)]
+        # Una vez cada hecho, aunque el modelo lo repita en la misma respuesta.
+        new: list[ProposedFact] = []
+        seen: set[tuple[str, str]] = set()
+        for fact in proposed:
+            key = _fact_key(fact.person, fact.text)
+            if fact.text.strip() and key not in seen and not self._already_known(fact):
+                seen.add(key)
+                new.append(fact)
         for fact in new:
             try:
-                self._proposals.propose(fact, by_sirius=True)
+                self._proposals.propose(fact, by_sirius=True, dreamed_day=day)
             except ValueError as exc:  # p. ej., un hecho con «quién lo dijo» Sirius
                 _logger.warning("El sueño propuso un hecho que no vale (%s)", exc)
         # El resumen es lo que marca el día como soñado: se guarda el último, cuando
@@ -153,16 +160,27 @@ class DreamService:
         ]
 
     def _already_known(self, fact: ProposedFact) -> bool:
-        """Si ya está apuntado como hecho vigente, o propuesto, o él ya dijo que no."""
-        text = plain(fact.text).strip()
+        """Si ya está apuntado como hecho vigente, o propuesto, o él ya dijo que no.
+
+        Lo que él rechazó cuenta: volver a soñar un día que quedó a medias no puede
+        proponerle otra vez lo que ya contestó (ronda 2 de Codex).
+        """
+        key = _fact_key(fact.person, fact.text)
         for memory in self._facts.list_current_facts(fact.person):
-            if plain(memory.current_revision.content or "").strip() == text:
+            if _fact_key(fact.person, memory.current_revision.content or "") == key:
                 return True
-        for suggestion in self._suggestions.list_pending_suggestions():
-            same_person = person_key(suggestion.person or "") == person_key(fact.person)
-            if same_person and plain(suggestion.content).strip() == text:
-                return True
-        return False
+        answered = [
+            *self._suggestions.list_pending_suggestions(),
+            *self._suggestions.list_rejected_suggestions(),
+        ]
+        return any(
+            _fact_key(suggestion.person or "", suggestion.content) == key for suggestion in answered
+        )
+
+
+def _fact_key(person: str, text: str) -> tuple[str, str]:
+    """Cómo se reconoce un hecho ya visto: de quién es y qué dice, sin tildes ni mayúsculas."""
+    return person_key(person), plain(text).strip()
 
 
 _EXTRACT_INSTRUCTIONS = (

@@ -82,9 +82,14 @@ class FactProposals:
         fact: ProposedFact,
         *,
         message_id: int | None = None,
+        dreamed_day: date | None = None,
         by_sirius: bool = False,
     ) -> MemorySuggestion:
-        """Deja ``fact`` como sugerencia. ``by_sirius`` si lo propone el sueño."""
+        """Deja ``fact`` como sugerencia. ``by_sirius`` si lo propone el sueño.
+
+        De dónde sale queda dicho, para que olvidarlo se lo lleve: ``message_id``
+        el mensaje, o ``dreamed_day`` el día que soñaba el sueño.
+        """
         if not fact.person.strip() or not fact.text.strip():
             msg = "Un hecho necesita persona y texto."
             raise ValueError(msg)
@@ -105,6 +110,7 @@ class FactProposals:
                 valid_from=fact.since,
                 said_by=fact.said_by.strip(),
                 certainty=Certainty(fact.certainty).value,
+                dreamed_day=dreamed_day,
             )
             uow.commit()
         return suggestion

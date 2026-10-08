@@ -176,6 +176,46 @@ def test_si_no_puede_proponer_el_dia_queda_por_sonar_aunque_ya_lo_resumiera(
     assert mundo.sueno.dream_pending(date.today()) == 0
 
 
+def test_un_hecho_repetido_en_la_misma_respuesta_se_propone_una_vez(tmp_path: Path) -> None:
+    """Ronda 2 de Codex: si el modelo repetía un hecho, salían dos sugerencias iguales."""
+    hecho = ProposedFact("propietario", "trabajo", "Trabaja de electricista")
+    otra_vez = ProposedFact("Propietario", "trabajo", "trabaja de ELECTRICISTA")
+    mundo = _mundo(tmp_path, propone=[hecho, otra_vez])
+    mundo.di("Hoy tocaba cablear un edificio entero.")
+
+    assert mundo.sueno.dream(date.today()) == [hecho]
+    sugerencias = build_sqlite_memory_suggestion_repository(mundo.base)
+    try:
+        assert len(sugerencias.list_pending_suggestions()) == 1
+    finally:
+        sugerencias.close()
+
+
+def test_lo_que_el_rechazo_no_se_vuelve_a_proponer_al_volver_a_sonar_el_dia(
+    tmp_path: Path,
+) -> None:
+    """Ronda 2 de Codex: un día que quedó a medias se vuelve a soñar, y no puede
+    proponerle otra vez lo que ya contestó que no."""
+    from sirius.application.reject_memory_suggestion import RejectMemorySuggestionUseCase
+
+    hecho = ProposedFact("propietario", "trabajo", "Trabaja de electricista")
+    mundo = _mundo(tmp_path, propone=[hecho])
+    mundo.resumidor.falla = True
+    mundo.di("Hoy tocaba cablear un edificio entero.", hace_dias=1)
+    assert mundo.sueno.dream_pending(date.today()) == 1
+    sugerencias = build_sqlite_memory_suggestion_repository(mundo.base)
+    try:
+        [propuesta] = sugerencias.list_pending_suggestions()
+        assert propuesta.dreamed_day == date.today() - timedelta(days=1)
+        RejectMemorySuggestionUseCase(build_sqlite_unit_of_work(mundo.base)).reject(propuesta.id)
+
+        mundo.resumidor.falla = False
+        assert mundo.sueno.dream(date.today() - timedelta(days=1)) == []
+        assert sugerencias.list_pending_suggestions() == []
+    finally:
+        sugerencias.close()
+
+
 def test_al_abrirse_suena_los_dias_de_antes_que_faltan_y_no_el_de_hoy(tmp_path: Path) -> None:
     mundo = _mundo(tmp_path)
     mundo.di("Hace un mes.", hace_dias=30)

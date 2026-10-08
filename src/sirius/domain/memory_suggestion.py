@@ -55,6 +55,8 @@ class MemorySuggestion:
     valid_from: date | None = None
     said_by: str | None = None
     certainty: str | None = None
+    #: El día que soñaba el sueño cuando lo propuso; ``None`` si no lo propuso él.
+    dreamed_day: date | None = None
 
 
 def ensure_can_confirm(suggestion: MemorySuggestion) -> None:

@@ -45,10 +45,16 @@ _BACKUPS_NOTE = "Las copias de seguridad que hiciste antes lo siguen guardando."
 
 @dataclass(frozen=True, slots=True)
 class CommandAnswer:
-    """Lo que se guarda del mensaje del propietario y lo que contesta Sirius."""
+    """Lo que se guarda del mensaje del propietario y lo que contesta Sirius.
+
+    ``after_store`` es lo que la orden deja propuesto: se hace con el mensaje ya
+    guardado, para que lo propuesto quede ligado a él y olvidarlo se lo lleve
+    (ronda 2 de Codex). Recibe el id de ese mensaje.
+    """
 
     stored_user_text: str
     reply: str
+    after_store: Callable[[int], object] | None = None
 
 
 class MemoryCommandService:
@@ -126,14 +132,17 @@ class MemoryCommandService:
         if not new_text:
             return CommandAnswer(text, "Dime cómo es, así: «eso no es así: …».")
         after = new_text[:1].upper() + new_text[1:]
-        self._proposals.propose_correction(target.id, after)
         revision = target.current_revision
         note = fact_note(revision.said_by, revision.certainty)
         reply = (
             f"¿Lo cambio? Ahora tengo «{revision.content}»{note}. Lo nuevo: «{after}». "
             f"{ASK_TO_CONFIRM}"
         )
-        return CommandAnswer(text, reply)
+
+        def propose(message_id: int) -> object:
+            return self._proposals.propose_correction(target.id, after, message_id=message_id)
+
+        return CommandAnswer(text, reply, after_store=propose)
 
     def _fact_to_correct(self, new_text: str) -> Memory | None:
         """El hecho que más casa con lo último que se habló y con la corrección.

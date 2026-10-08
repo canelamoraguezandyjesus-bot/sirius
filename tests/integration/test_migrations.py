@@ -179,6 +179,8 @@ def test_upgrade_head_columns_match_the_domain_schema(tmp_path: Path) -> None:
         "said_by",
         "certainty",
         "corrects_memory_id",
+        # Y el día del que salió lo que propone el sueño (ronda 2 de Codex).
+        "dreamed_day",
     }
     assert identity_columns == {"id", "created_at"}
     assert identity_version_columns == {
