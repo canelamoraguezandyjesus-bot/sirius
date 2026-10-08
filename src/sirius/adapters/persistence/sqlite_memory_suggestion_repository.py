@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from contextlib import contextmanager
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 from sqlalchemy import Engine, select
@@ -42,6 +42,13 @@ def _to_domain(model: MemorySuggestionModel) -> MemorySuggestion:
         resulting_memory_id=model.resulting_memory_id,
         subject_key=model.subject_key,
         project_id=model.project_id,
+        person=model.person,
+        topic=model.topic,
+        corrects_memory_id=model.corrects_memory_id,
+        valid_from=model.valid_from,
+        said_by=model.said_by,
+        certainty=model.certainty,
+        dreamed_day=model.dreamed_day,
     )
 
 
@@ -94,6 +101,13 @@ class SqliteMemorySuggestionRepository:
         source_event_id: int | None = None,
         subject_key: str | None = None,
         project_id: int | None = None,
+        person: str | None = None,
+        topic: str | None = None,
+        corrects_memory_id: int | None = None,
+        valid_from: date | None = None,
+        said_by: str | None = None,
+        certainty: str | None = None,
+        dreamed_day: date | None = None,
     ) -> MemorySuggestion:
         ensure_valid_subject_key(subject_key)
         ensure_subject_key_has_a_project(subject_key, project_id)
@@ -105,6 +119,13 @@ class SqliteMemorySuggestionRepository:
                 project_id=project_id,
                 source_event_id=source_event_id,
                 created_at=_utc_now_naive(),
+                person=person,
+                topic=topic,
+                corrects_memory_id=corrects_memory_id,
+                valid_from=valid_from,
+                said_by=said_by,
+                certainty=certainty,
+                dreamed_day=dreamed_day,
             )
             session.add(model)
             session.flush()
@@ -119,6 +140,19 @@ class SqliteMemorySuggestionRepository:
             models = session.scalars(
                 select(MemorySuggestionModel)
                 .where(MemorySuggestionModel.status == MemorySuggestionStatus.PENDING)
+                .order_by(MemorySuggestionModel.id)
+            ).all()
+            return [_to_domain(model) for model in models]
+
+    def list_answered_suggestions(self) -> list[MemorySuggestion]:
+        with self._scope() as session:
+            models = session.scalars(
+                select(MemorySuggestionModel)
+                .where(
+                    MemorySuggestionModel.status.in_(
+                        (MemorySuggestionStatus.CONFIRMED, MemorySuggestionStatus.REJECTED)
+                    )
+                )
                 .order_by(MemorySuggestionModel.id)
             ).all()
             return [_to_domain(model) for model in models]

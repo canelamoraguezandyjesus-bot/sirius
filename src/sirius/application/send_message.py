@@ -34,6 +34,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from sirius.application.context import Context, ContextBuilder
+from sirius.application.memory_commands import CommandAnswer, MemoryCommandService
 from sirius.application.robot_conversation import ConversationSummaryService
 from sirius.domain.conversation import Message, MessageRole, MessageStatus
 from sirius.domain.conversation_mode import (
@@ -42,6 +43,7 @@ from sirius.domain.conversation_mode import (
     ConversationMode,
     detect_mode_command,
 )
+from sirius.domain.facts import fact_lines, memory_note
 from sirius.domain.identity import IdentityVersion
 from sirius.domain.own_memory import render_own_memory
 from sirius.domain.project import blockers_to_text
@@ -76,7 +78,9 @@ class SendMessageResult:
     outcome: MessageStatus
     user_message: Message
     sirius_message: Message
-    context: Context
+    #: ``None`` cuando el mensaje era una orden de memoria (pieza G, ADR-239): se
+    #: contesta sin montar contexto ni llamar al modelo.
+    context: Context | None
     error_kind: LLMErrorKind | None = None
     memory_suggestion: str | None = None
 
@@ -132,9 +136,23 @@ def render_instructions(context: Context) -> str:
         ),
         "",
         "# Memorias vigentes",
-        *(f"- ({memory.id}) {memory.current_revision.content}" for memory in context.memories),
+        *(
+            f"- ({memory.id}) {memory.current_revision.content}{memory_note(memory)}"
+            for memory in context.memories
+        ),
         "",
     ]
+    if context.owner_facts:
+        # Pieza G (ADR-239): lo que se sabe de él va siempre, con su fecha y de dónde sale.
+        lines += ["# Lo que sabes de tu dueño", *fact_lines(context.owner_facts), ""]
+    for person, facts in context.people_facts:
+        lines += [f"# Lo que sabes de {person}", *fact_lines(facts), ""]
+    if context.recent_days:
+        lines += [
+            "# Los últimos días, como los resumiste al soñar",
+            *(f"- {day:%d-%m-%Y}: {content}" for day, content in context.recent_days),
+            "",
+        ]
     if context.own_memory:
         # PA-R02-07: lo que ya dijo de esto, y lo que sí es y no es según sus marcas.
         lines += render_own_memory(context.own_memory)
@@ -168,6 +186,7 @@ class SendMessageUseCase:
         reply_marks: ReplyMarkRepository | None = None,
         summary_service: ConversationSummaryService | None = None,
         reminder: str = "",
+        memory_commands: MemoryCommandService | None = None,
     ) -> None:
         """Lo de la charla del robot (pieza D de ADR-233) es opcional: sin ello,
         este caso de uso hace exactamente lo de antes.
@@ -179,7 +198,11 @@ class SendMessageUseCase:
           (PA-R02-05).
         - ``reminder``: el recordatorio de la semilla, lo último de cada
           petición (PA-R02-05).
+        - ``memory_commands`` (pieza G, ADR-239): «olvida eso», «eso no es así» y
+          «¿qué sabes de mí?» se contestan antes de montar el contexto, sin el
+          modelo.
         """
+        self._memory_commands = memory_commands
         self._mode_repository = mode_repository
         self._reply_marks = reply_marks
         self._summary_service = summary_service
@@ -242,6 +265,12 @@ class SendMessageUseCase:
         on_delta: Callable[[str], None] | None,
         extra_instructions: str,
     ) -> SendMessageResult:
+        if self._memory_commands is not None:
+            # Antes que nada: una orden de memoria no puede llegar al modelo ni a
+            # la búsqueda, que pediría la huella de la frase a olvidar.
+            answer = self._memory_commands.handle(user_text)
+            if answer is not None:
+                return self._answer_without_model(answer, operation_id, on_delta)
         context = self._context_builder.build(user_text)
 
         conversation = self._conversation_repository.get_or_create_main_conversation()
@@ -319,6 +348,40 @@ class SendMessageUseCase:
             context=context,
             error_kind=error_kind,
             memory_suggestion=memory_suggestion,
+        )
+
+    def _answer_without_model(
+        self,
+        answer: CommandAnswer,
+        operation_id: str,
+        on_delta: Callable[[str], None] | None,
+    ) -> SendMessageResult:
+        """Guarda la orden y lo que contesta Sirius, sin modelo y sin contexto."""
+        conversation = self._conversation_repository.get_or_create_main_conversation()
+        user_message = self._conversation_repository.append_message(
+            conversation.id,
+            MessageRole.USER,
+            answer.stored_user_text,
+            operation_id=operation_id,
+            status=MessageStatus.COMPLETED,
+        )
+        # Lo que la orden cambia se hace con su mensaje ya guardado y queda ligado a
+        # él: si guardarlo falla, la orden no ha cambiado nada.
+        reply = answer.respond(user_message.id)
+        if on_delta is not None:
+            on_delta(reply)
+        sirius_message = self._conversation_repository.append_message(
+            conversation.id,
+            MessageRole.SIRIUS,
+            reply,
+            operation_id=operation_id,
+            status=MessageStatus.COMPLETED,
+        )
+        return SendMessageResult(
+            outcome=MessageStatus.COMPLETED,
+            user_message=user_message,
+            sirius_message=sirius_message,
+            context=None,
         )
 
     def cancel(self, operation_id: str) -> None:

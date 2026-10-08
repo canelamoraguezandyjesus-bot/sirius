@@ -113,6 +113,9 @@ def test_upgrade_head_columns_match_the_domain_schema(tmp_path: Path) -> None:
         "category",
         "category_locked",
         "criticality",
+        # Pieza G de ADR-233 (ADR-239): un recuerdo con persona es un hecho.
+        "person",
+        "topic",
     }
     assert memory_revision_columns == {
         "id",
@@ -123,6 +126,11 @@ def test_upgrade_head_columns_match_the_domain_schema(tmp_path: Path) -> None:
         "source_event_id",
         "is_current",
         "created_at",
+        # Pieza G (ADR-239): el tramo de un hecho.
+        "valid_from",
+        "valid_to",
+        "said_by",
+        "certainty",
     }
     assert event_columns == {
         "id",
@@ -164,6 +172,15 @@ def test_upgrade_head_columns_match_the_domain_schema(tmp_path: Path) -> None:
         "resulting_memory_id",
         "created_at",
         "resolved_at",
+        # Pieza G (ADR-239): un hecho propuesto, o la corrección de uno.
+        "person",
+        "topic",
+        "valid_from",
+        "said_by",
+        "certainty",
+        "corrects_memory_id",
+        # Y el día del que salió lo que propone el sueño (ronda 2 de Codex).
+        "dreamed_day",
     }
     assert identity_columns == {"id", "created_at"}
     assert identity_version_columns == {
@@ -1387,11 +1404,22 @@ def test_upgrade_head_creates_memory_suggestions_resulting_memory_id_as_a_physic
 
     inspector = inspect(build_engine(database_path))
     foreign_keys = inspector.get_foreign_keys("memory_suggestions")
-    resulting_memory_fks = [fk for fk in foreign_keys if fk["referred_table"] == "memories"]
+    resulting_memory_fks = [
+        fk
+        for fk in foreign_keys
+        if fk["referred_table"] == "memories"
+        and fk["constrained_columns"] == ["resulting_memory_id"]
+    ]
 
     assert len(resulting_memory_fks) == 1
-    assert resulting_memory_fks[0]["constrained_columns"] == ["resulting_memory_id"]
     assert resulting_memory_fks[0]["referred_columns"] == ["id"]
+    # Pieza G (ADR-239): la corrección de un hecho apunta también a su recuerdo.
+    corrects_fks = [
+        fk for fk in foreign_keys if fk["constrained_columns"] == ["corrects_memory_id"]
+    ]
+    assert [(fk["referred_table"], fk["referred_columns"]) for fk in corrects_fks] == [
+        ("memories", ["id"])
+    ]
 
 
 @pytest.mark.integration

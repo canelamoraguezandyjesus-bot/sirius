@@ -12,7 +12,7 @@ reject — a different content is reached by rejecting and using
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from enum import StrEnum
 
 
@@ -45,6 +45,18 @@ class MemorySuggestion:
     resulting_memory_id: int | None = None
     subject_key: str | None = None
     project_id: int | None = None
+    #: Pieza G de ADR-233 (ADR-239): lo que propone el sueño es un hecho de
+    #: ``person`` sobre ``topic``; confirmarlo cierra el que hubiera del mismo
+    #: tema. ``corrects_memory_id`` es el hecho que corrige «eso no es así».
+    person: str | None = None
+    topic: str | None = None
+    corrects_memory_id: int | None = None
+    #: Del hecho propuesto: desde cuándo vale, quién lo dijo y con qué seguridad.
+    valid_from: date | None = None
+    said_by: str | None = None
+    certainty: str | None = None
+    #: El día que soñaba el sueño cuando lo propuso; ``None`` si no lo propuso él.
+    dreamed_day: date | None = None
 
 
 def ensure_can_confirm(suggestion: MemorySuggestion) -> None:

@@ -1,0 +1,263 @@
+# ADR-239 — Guardar los hechos con su fecha y quién lo dijo como recuerdos, soñar sin leer a Sirius y obedecer las órdenes de memoria sin pasar por el modelo
+
+- Estado: APROBADO
+- Fecha: 2026-10-07
+- Aprobación: la fusión de la PR que lo introduce, con una ronda limpia de Codex sobre el
+  head de contenido y Quality en verde (ADR-205). Es la pieza G de ADR-233; lo que hace
+  sale de los pasos 3 a 6 de la memoria en la 0.2 del plan del robot, aprobados por el
+  propietario el 06-10-2026.
+
+## Nota de arranque
+
+Escrita antes del primer commit de código de la pieza G. El criterio de parada de las
+rondas es el de ADR-233.
+
+1. **Dónde vive el fallo y dónde va el arreglo.**
+   - Un recuerdo no tiene fecha ni dice quién lo dijo. «Vivía en Madrid» y «vive en
+     Valencia» serían dos recuerdos vigentes a la vez, y la charla traería los dos.
+   - Lo que dice Sirius puede acabar como recuerdo suyo: «Proponer guardar…» solo sale en
+     las respuestas de Sirius (`src/sirius/presentation/message_view.py:259-266`).
+   - Borrar un recuerdo lo borra del recuerdo, pero el mensaje donde lo dijo, los
+     resúmenes de la pieza D y el índice de palabras lo siguen guardando.
+   - Nadie resume el día ni propone hechos, y no hay ninguna orden de memoria.
+   - **El arreglo**:
+     - Un hecho es un recuerdo con persona y tema, y cada revisión guarda desde cuándo
+       vale, hasta cuándo, quién lo dijo y con qué seguridad. Un hecho que cambia es una
+       revisión nueva que cierra la anterior con su fecha. Así lo que ya hace la memoria
+       vale para los hechos sin construir otra al lado: corregir, borrar, buscar por
+       palabras y por significado, y las sugerencias que él confirma. Es lo que el plan
+       pide reutilizar.
+     - Cada turno lleva los hechos vigentes de su dueño y los de las personas que nombra
+       el mensaje.
+     - Las órdenes de memoria se atienden en `send_message`, antes de montar el
+       contexto: ni el modelo de la charla ni el de huellas las ven.
+     - El sueño pide a la base solo los mensajes de su dueño de un día. Los resume con el
+       modelo de este ordenador, guarda el resumen y deja cada hecho que propone como
+       sugerencia, pendiente de su sí.
+     - «Proponer guardar…» pasa a los mensajes de su dueño, y proponer desde una
+       respuesta de Sirius se rechaza en el caso de uso, no solo en la ventana.
+   - **¿Puede el sitio del arreglo observar el fallo?** Olvidar, sí: la prueba recorre la
+     base entera, tabla por tabla, también las del índice de palabras (PA-R02-17). Que una
+     orden no llegue al modelo, también: el grabador cuenta cada petición. Lo que el modelo
+     de verdad proponga al soñar no lo ve ninguna máquina de aquí: lo verá él, y nada entra
+     sin su sí.
+2. **Qué NO garantiza.**
+   - Que el sueño proponga bien. Lo hace el modelo de su ordenador.
+   - Olvidar en las copias de seguridad ya hechas: van cifradas con su contraseña y son su
+     red. No se tocan, y Sirius le dice que las anteriores lo siguen guardando.
+   - Olvidar lo que ya salió del ordenador: si la charla iba por OpenAI, lo enviado allí
+     no se puede borrar desde aquí.
+   - «Olvida lo de…» borra lo que contiene esas palabras. Si él lo dijo con otras, no lo
+     encuentra; Sirius le dice cuánto borró.
+   - Cuándo sueña: al abrirse la ventana, por los días anteriores que aún no ha soñado. Si
+     no abre Sirius, no sueña.
+   - Que «eso no es así» acierte el hecho cuando hay varios: elige el que más se parece a
+     la pregunta de antes, y él lo ve antes de decir que sí.
+3. **Criterio de parada.** El de ADR-233. Además, si el banco de memoria con el buscador
+   determinista no acierta 14 de 14 en «olvida eso» y 14 de 14 en «quién dijo qué», la
+   pieza no se entrega.
+4. **Qué lo haría imposible.**
+   - **Lo dicho por Sirius como hecho suyo.** El sueño pide a la base solo los mensajes de
+     su dueño, filtrados por quién los escribió, y el caso de uso rechaza proponer desde
+     una respuesta de Sirius.
+   - **Olvidar y dejar el dato donde nadie mira.** Una guarda recorre todas las columnas de
+     texto del esquema: cada una tiene que estar entre lo que olvidar limpia o declarada
+     como sin texto suyo. Una tabla nueva con texto la rompe hasta que se decida.
+   - **Una orden de memoria en el modelo.** Se atiende antes de montar el contexto, y las
+     pruebas cuentan las peticiones al modelo y las frases pedidas al de huellas.
+
+## Contexto y problema
+
+Los pasos 3 a 6 de la memoria en la 0.2 del plan (`docs/evolution/PLAN_DEL_ROBOT.md`):
+
+- «Hechos con fecha de inicio y de fin, quién lo dijo y con qué seguridad. Lo que dice
+  Sirius nunca cuenta como hecho del propietario.»
+- «"Sueño" nocturno: con el ordenador libre, el modelo resume el día y propone hechos
+  nuevos. Quedan pendientes del sí del propietario.»
+- «Una ficha por persona. Ahí se juntan las charlas y, desde 0.4, su cara y su voz.»
+- «Por voz o por texto: "eso no es así", "olvida eso" y "¿qué sabes de mí?". Olvidar
+  borra de verdad, también de los resúmenes.»
+
+Y lo que ya está hecho y el plan manda reutilizar: «Recuerdos con su origen, sugerencias
+que el propietario confirma o rechaza, corregir, borrar y archivar».
+
+## Opciones consideradas
+
+1. **Una tabla de hechos aparte**, con su búsqueda y su olvido.
+2. **Los hechos como recuerdos con persona y tema**, y cada revisión un tramo con su fecha,
+   quién lo dijo y con qué seguridad.
+3. **Los hechos solo en el texto del recuerdo** («Lucía dijo que…»), sin columnas.
+
+## Decisión
+
+Se adopta la opción 2.
+
+- **Los hechos.** `memories` gana persona y tema; `memory_revisions`, desde, hasta, quién
+  lo dijo y seguridad. Un hecho nuevo de la misma persona y el mismo tema cierra el de
+  antes con su fecha y pasa a ser la revisión vigente: la búsqueda y la charla solo ven
+  esa, y la historia las guarda todas. Corregir un hecho lo cierra hoy y el nuevo lo dice
+  él, seguro. Borrarlo borra también de quién era, de qué trataba y quién lo dijo. Nadie
+  puede apuntar un hecho que dijo Sirius.
+- **Cómo entra un hecho.** Siempre igual: alguien lo propone y él dice que sí. Lo
+  proponen el sueño, «eso no es así» y «Proponer guardar…». Las sugerencias llevan la
+  persona, el tema, la fecha, quién lo dijo y la seguridad, o el hecho que corrigen.
+- **En cada turno.** «# Lo que sabes de tu dueño», hasta 40 hechos suyos; «# Lo que sabes
+  de …» de cada persona que nombra el mensaje, hasta 3 personas y 15 hechos de cada una;
+  y «# Los últimos días», los 3 últimos resúmenes del sueño. Un hecho que ya va en su
+  sección no gasta sitio entre los recuerdos.
+- **La ficha** de una persona junta sus hechos vigentes y los mensajes suyos que la
+  nombran, por palabras enteras y sin mirar tildes.
+- **Las órdenes**, en `send_message` antes de montar el contexto, sin modelo y sin huellas:
+  - «olvida eso»: su último mensaje, la respuesta de Sirius a ese turno, lo que se guardó
+    desde él o lo repite, y los resúmenes que ya lo cubrían;
+  - «olvida lo de …»: todo lo que nombra esas palabras, enteras: mensajes de los dos,
+    recuerdos y hechos, sugerencias, y las frases de los resúmenes que las nombran. La
+    orden se guarda como «Olvida lo de…», sin el tema, y la pantalla deja de decirlo;
+  - «eso no es así: …»: propone corregir el hecho que más casa con lo último que se
+    habló, y un «sí» o un «no» justo después lo contesta. Sin hecho que case, va a la
+    charla;
+  - «¿qué sabes de mí?», y «¿qué sabes de …?» de alguien con ficha.
+- **Olvidar de verdad.** La conexión de olvidar pone a ceros lo borrado (`secure_delete`)
+  y compacta el índice de palabras, que hasta entonces guarda los términos borrados, en la
+  misma transacción: si algo falla, no se olvida nada y la orden se puede repetir.
+  `FORGET_COVERAGE` dice qué hace olvidar con cada columna de texto. Las copias de
+  seguridad no se tocan: van cifradas y son su red; Sirius le avisa.
+- **Todo lo que se propone dice de dónde sale**, y olvidar sigue ese lazo: del mensaje
+  suyo o de la respuesta de Sirius, que forman un turno; de la orden «eso no es así», que
+  se guarda antes de proponer la corrección; o del día que soñaba el sueño. Olvidar un
+  mensaje se lleva su turno y lo que salió de él. Lo que el sueño propuso de ese día y aún
+  espera su sí también se va, y el día se vuelve a soñar con lo que queda.
+- **El sueño.** Al abrirse la ventana, en segundo plano, sueña los días anteriores, hasta
+  7, que aún no tienen resumen. Lee solo sus mensajes y usa el modelo de Ollama elegido
+  para la charla, como el juez: nunca OpenAI. Si no puede resumir, propone igual y el día
+  queda por soñar; si no puede proponer, tampoco lo da por soñado. No vuelve a proponer lo que ya está apuntado o pendiente. Avisa en la
+  barra de estado de cuántos hechos esperan su sí. Pasa por la misma puerta que el juez y
+  las huellas (ronda 2 de Codex en ADR-238): si él escribe mientras, el turno espera a que
+  acabe el día que está soñando, y los que quedan los sueña la próxima vez que se abra,
+  no entre turno y turno, donde cada día haría esperar al turno siguiente.
+- **«Proponer guardar…»** pasa a sus mensajes y desaparece de las respuestas de Sirius.
+- **Cada hilo, su unidad de trabajo.** Las órdenes corren en el hilo del envío y el sueño
+  en el suyo; ninguno comparte la de la ventana.
+- **La orden de E-R02-04**: `scripts/pasar_el_banco_de_memoria.py`. Pasa los 100 casos por
+  el camino real, con un Sirius nuevo por caso en una carpeta temporal, y nunca toca su
+  `sirius.db` ni sus ajustes.
+
+## Comprobación que la sostiene
+
+- **Las pruebas de aceptación de la 0.2, todas en verde**: PA-R02-10 a PA-R02-18 pasan y no
+  queda ningún `xfail` de la pieza G.
+- **El banco con el buscador determinista**: 99 de 100. «Olvida eso», 14 de 14; «quién
+  dijo qué», 14 de 14. En las demás familias el buscador de prueba acierta por cómo está
+  hecho: su cifra de verdad es la de E-R02-04, en su ordenador.
+- **Olvidar, comprobado byte a byte** en el fichero entero, también en los bloques del
+  índice de palabras: un `LIKE` de SQL se para en el primer cero de un bloque.
+- **Vistas fallar**, cada una en su prueba, con el código estropeado a propósito:
+  - olvidar sin compactar el índice de palabras;
+  - «olvida eso» sin la respuesta de Sirius, sin los resúmenes que lo cubrían, sin lo
+    guardado desde el mensaje, o sin mirar quién dijo un hecho;
+  - «olvida lo de…» sin recortar los resúmenes, o por trozos de palabra;
+  - el sueño leyendo también a Sirius;
+  - proponer guardar desde una respuesta de Sirius;
+  - la charla sin los hechos suyos, o sin la ficha de quien nombra;
+  - la orden atendida después de buscar, que pediría la huella de la frase a olvidar;
+  - el sueño o las órdenes con la unidad de trabajo de la ventana;
+  - el turno empezando sin esperar al día que está soñando, o el sueño volviendo entre
+    turnos.
+- **Encontrados en la revisión propia, antes de ningún commit**: la unidad de trabajo
+  compartida entre hilos, y «olvida lo de casa» llevándose «casado».
+- Unitarias: 26 de las órdenes y de los nombres. Integración: 11 de olvidar, 10 de los
+  hechos, 7 del sueño y 10 de las órdenes con Sirius montado. Ventana: 5, y 1 de la
+  restauración.
+
+## Revisión externa
+
+- **Ronda 1 de Codex**, sobre `9a44cf11`: dos hallazgos, los dos ciertos, cada uno con su
+  prueba vista fallar sin el arreglo.
+  - P1: «olvida eso» seguía lo que salió del mensaje suyo, pero no la sugerencia
+    automática de la respuesta, que va ligada a la respuesta de Sirius. Si la sugerencia
+    lo decía con otras palabras, ella y el recuerdo confirmado desde ella se quedaban en
+    la base. Ahora se sigue lo que salió de todo el turno.
+  - P2: el resumen marcaba el día como soñado antes de proponer sus hechos. Si proponer
+    fallaba, ese día no se volvía a intentar. Ahora el resumen se guarda el último.
+  - Familias: ninguna se repite de otra ronda.
+- **Ronda 2 de Codex**, sobre `0ddb1a5d`: cuatro hallazgos, los cuatro ciertos.
+  - P1: compactar el índice iba después de guardar lo olvidado. Si fallaba, el mensaje
+    quedaba borrado pero sus términos seguían en el índice, y repetir la orden ya no lo
+    encontraba. Ahora va en la misma transacción.
+  - P1: la corrección de «eso no es así» se proponía antes de guardar su mensaje y no
+    quedaba ligada a él: «olvida eso» la dejaba esperando su sí.
+  - P2: si el modelo repetía un hecho en la misma respuesta, el sueño proponía dos iguales.
+  - P2: al volver a soñar un día que quedó a medias, el sueño proponía otra vez lo que él
+    ya había rechazado.
+  - **Regla de las dos rondas.** Dos familias se repiten de la ronda 1, y se dejó de
+    parchear para buscar la raíz de cada una.
+    - Lo que sale de un mensaje olvidado sobrevive porque no quedó ligado a él. Cada
+      camino que propone algo decidía por su cuenta si lo ligaba, y olvidar solo seguía
+      lo ligado o lo que repetía la frase entera. Dos caminos no ligaban nada: la
+      corrección y el sueño. Y «olvida lo de…» ni siquiera seguía los lazos de los
+      mensajes que borraba. Ahora todo lo que se propone dice de dónde sale, y las dos
+      órdenes de olvidar siguen esos lazos y el turno entero.
+    - El sueño reintenta mal un día. Deducía qué había propuesto ya de lo que quedaba en
+      la base, y sus respuestas cambian lo que queda: confirmar lo pasa a hechos,
+      rechazar lo saca de pendientes. Ahora cuenta todo lo que él contestó, también lo
+      rechazado, y lo que el propio modelo repite.
+- **Ronda 3 de Codex**, la última, sobre `f0e3087b`: cuatro hallazgos, los cuatro ciertos.
+  Se corrigen en un solo commit y la PR se fusiona sin cuarta ronda, como manda ADR-233.
+  - P1: «olvida eso» olvidaba antes de guardar la orden. Si guardarla fallaba, repetirla
+    ya no veía lo olvidado y se llevaba lo de antes, que no tenía nada que ver.
+  - P1: el «sí» confirmaba la corrección sin ligarla a su mensaje: «olvida eso» justo
+    después no la encontraba.
+  - P2: repetir «eso no es así» tras un fallo dejaba dos correcciones iguales esperando.
+  - P2: lo que él confirmó del sueño y después cambió se le volvía a proponer al volver a
+    soñar el día.
+  - Familias: las mismas dos, por tercera vez. La raíz de la ronda 2 ligó lo propuesto a
+    su mensaje o a su día, pero no el orden: las órdenes cambiaban cosas antes de guardar
+    su mensaje, y el «sí» no ligaba lo que confirma. Ahora toda orden hace lo que manda
+    con su mensaje ya guardado y ligado a él, y una orden que se quedó sin respuesta no
+    cuenta cuando él la repite. Y el sueño cuenta todo lo contestado, también lo
+    confirmado.
+  - Lo que esto no garantiza: la orden y la respuesta de Sirius no van en una sola
+    transacción, porque usan conexiones distintas. Si guardar la respuesta falla después
+    de que la orden haya hecho lo suyo, la orden queda hecha; al repetirla, Sirius dice
+    que ya lo había olvidado, o vuelve a preguntar por la misma corrección.
+
+## Consecuencias
+
+- «Proponer guardar…» ya no sale en las respuestas de Sirius, sino en sus mensajes.
+- Cada turno lleva sus hechos y los de quien nombra: más texto en la petición, fuera del
+  presupuesto de los recuerdos.
+- Olvidar borra también los mensajes de Sirius que nombran lo olvidado, y la respuesta de
+  Sirius a cada mensaje suyo que se olvida, aunque no lo nombre.
+- Olvidar un mensaje de un día ya soñado se lleva lo que el sueño propuso de ese día y
+  aún espera su sí, aunque saliera de otro mensaje del mismo día: no se sabe de cuál. El
+  día se vuelve a soñar con lo que queda, y lo que siga en pie se le propone otra vez.
+- Lo que él ya contestó del sueño, que sí o que no, se queda al olvidar un mensaje de ese
+  día salvo que lleve las palabras olvidadas: es suyo, y se borra desde Conocimiento.
+- El sueño no vuelve a proponer lo que él ya contestó, que sí o que no.
+- «Olvida eso» justo después de un «sí» que confirmó una corrección borra el hecho entero,
+  también lo que tenía antes: lo cambiado queda ligado a ese «sí».
+- Tras «olvida eso», los resúmenes que cubrían el mensaje se borran enteros y la charla
+  rehace el suyo cuando le toca. Tras «olvida lo de…» solo se quitan sus frases: lo que un
+  resumen diga con otras palabras se queda.
+- Las sugerencias que el modelo propone en cada respuesta siguen; cada una espera su sí.
+- Sin un modelo de Ollama elegido, no sueña.
+- Si él escribe mientras sueña, el turno espera a que acabe ese día: un resumen y una
+  propuesta del modelo de su ordenador.
+
+## Alternativas descartadas y por qué
+
+- **La tabla aparte**: obligaba a repetir para los hechos la búsqueda por palabras y por
+  significado, el olvido y las sugerencias, que ya tienen los recuerdos.
+- **Los hechos solo en el texto**: sin fecha ni quién lo dijo comparables, «vive en
+  Valencia» no puede cerrar «vive en Madrid».
+- **Cambiar el hecho al oír «eso no es así»**, sin preguntar: cambiaría un hecho con una
+  adivinanza cuando hay varios candidatos.
+- **Borrar las copias de seguridad al olvidar**: es irreversible y le quitaría su red.
+
+## La lección
+
+- familia: `estado-compartido-entre-hilos`
+- sin esto se repetiría: un caso de uso nuevo que corre en segundo plano reutiliza la
+  unidad de trabajo de la ventana, que guarda su sesión mientras dura, y mezcla las
+  transacciones de dos hilos
+- lo hace cumplir: tests/integration/test_ordenes_de_memoria.py

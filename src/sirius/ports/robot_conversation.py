@@ -1,11 +1,15 @@
-"""Puertos de la charla del robot: modo, marcas y resúmenes (pieza D de ADR-233) y el juez (E)."""
+"""Puertos de la charla del robot: modo, marcas y resúmenes (pieza D de ADR-233), el juez (E)
+y el sueño (G)."""
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+from datetime import date
 from typing import Protocol
 
 from sirius.domain.conversation_mode import ConversationMode
 from sirius.domain.conversation_summary import ConversationSummary
+from sirius.domain.facts import ProposedFact
 from sirius.domain.reply_judge import JudgeScore, TrickVerdict
 from sirius.domain.reply_mark import MarkedReply, ReplyMark
 from sirius.ports.llm import LLMProvider
@@ -72,4 +76,26 @@ class ReplyJudge(Protocol):
 
     def verdict(self, bad_idea: str, reply: str) -> TrickVerdict:
         """Si ``reply`` le lleva la contraria a ``bad_idea`` o le da la razón."""
+        ...
+
+
+class DaySummaryRepository(Protocol):
+    """Los resúmenes del día que deja el sueño (pieza G de ADR-233, ADR-239)."""
+
+    def save_day(self, day: date, content: str) -> None: ...
+
+    def day_summary(self, day: date) -> str | None: ...
+
+    def latest_days(self, limit: int) -> list[tuple[date, str]]:
+        """Los últimos ``limit`` días resumidos, del más viejo al más nuevo."""
+        ...
+
+    def dreamed_days(self) -> set[date]: ...
+
+
+class FactExtractor(Protocol):
+    """El sueño: saca hechos de lo que dijo el propietario un día (pieza G, ADR-239)."""
+
+    def extract(self, text: str, provider: LLMProvider) -> Sequence[ProposedFact]:
+        """Los hechos que propone ``text``, con el modelo ``provider``. Puede fallar."""
         ...

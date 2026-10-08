@@ -26,10 +26,13 @@ from typing import Protocol, Self
 from sirius.ports.conversation_repository import ConversationRepository
 from sirius.ports.decision_repository import DecisionRepository
 from sirius.ports.event_repository import EventRepository
-from sirius.ports.memory_repository import MemoryRepository
-from sirius.ports.memory_suggestion_repository import MemorySuggestionRepository
+from sirius.ports.memory_repository import FactMemoryRepository, MemoryRepository
+from sirius.ports.memory_suggestion_repository import (
+    FactSuggestionRepository,
+    MemorySuggestionRepository,
+)
 
-__all__ = ["UnitOfWork"]
+__all__ = ["FactUnitOfWork", "UnitOfWork"]
 
 
 class UnitOfWork(Protocol):
@@ -89,4 +92,22 @@ class UnitOfWork(Protocol):
 
     def rollback(self) -> None:
         """Discard every write made through this unit of work's repositories."""
+        ...
+
+
+class FactUnitOfWork(UnitOfWork, Protocol):
+    """La de verdad, con una memoria que también guarda hechos (pieza G, ADR-239).
+
+    Confirmar un hecho o una corrección escribe el evento, el hecho y la
+    sugerencia en la misma transacción, como confirmar un recuerdo.
+    """
+
+    @property
+    def memory_repository(self) -> FactMemoryRepository:
+        """La memoria de esta transacción, con sus hechos."""
+        ...
+
+    @property
+    def memory_suggestion_repository(self) -> FactSuggestionRepository:
+        """Las sugerencias de esta transacción, que también pueden ser hechos."""
         ...

@@ -60,7 +60,9 @@ from sirius.domain.conversation_mode import (
     MODE_INSTRUCTIONS,
     ConversationMode,
 )
+from sirius.domain.facts import Certainty, ProposedFact
 from sirius.domain.memory_bank import MEMORY_BANK
+from sirius.domain.memory_bank import MemoryCase as MemoryCaseDelBanco
 from sirius.domain.own_memory import IS_YOU_HEADING, NOT_YOU_HEADING
 from sirius.domain.relevance import KnowledgeKind
 from sirius.domain.reply_judge import TrickVerdict
@@ -76,7 +78,7 @@ from sirius.ports.llm import LLMCompleted, LLMRequest, LLMStreamEvent, LLMTextDe
 
 #: Las letras de la tabla de piezas de ADR-233 que ya han entrado en ``main``.
 #: La A es esta: la nota de arranque y estas pruebas.
-PIEZAS_ENTREGADAS: frozenset[str] = frozenset({"A", "B", "C", "D", "E", "F"})
+PIEZAS_ENTREGADAS: frozenset[str] = frozenset({"A", "B", "C", "D", "E", "F", "G"})
 
 #: Qué trae cada pieza, con las palabras de la tabla de ADR-233.
 PIEZAS: Mapping[str, str] = {
@@ -264,6 +266,20 @@ class _JuezEnchufado:
     def verdict(self, bad_idea: str, reply: str) -> TrickVerdict:
         del bad_idea
         return TrickVerdict(self._juez.discrepa(reply))
+
+
+class _ExtractorEnchufado:
+    """Enchufa un ``ExtractorDeMentira`` donde Sirius saca hechos al soñar."""
+
+    def __init__(self, extractor: ExtractorDeMentira) -> None:
+        self._extractor = extractor
+
+    def extract(self, text: str, provider: object) -> list[ProposedFact]:
+        del provider
+        return [
+            ProposedFact(propuesta.persona, propuesta.tema, propuesta.texto)
+            for propuesta in self._extractor.extrae(text)
+        ]
 
 
 class _ResumidorEnchufado:
@@ -644,6 +660,7 @@ class Conductor:
         self._huellas: HuellasDeMentira | None = None
         self._huellas_fijas: _HuellasFijas | None = None
         self._huellas_de_ollama = False
+        self._extractor: ExtractorDeMentira | None = None
         rutas = resolve_paths()
         initialize_persistence(rutas)
         self.base = rutas.data_dir / "sirius.db"
@@ -669,6 +686,9 @@ class Conductor:
             ),
             reply_judge=_JuezEnchufado(self._juez) if self._juez is not None else None,
             text_embedder=self._modelo_de_huellas(),
+            # Sin extractor enchufado, uno que no propone nada: ninguna prueba
+            # acaba soñando con el Ollama de verdad de quien las ejecuta.
+            fact_extractor=_ExtractorEnchufado(self._extractor or ExtractorDeMentira()),
         )
         if not self._charla_por_ollama:
             dependencias.send_message_use_case.set_llm_provider(self._grabador)
@@ -937,8 +957,9 @@ class Conductor:
         dicha = self._resultados[-1].sirius_message.id
         for n in range(1, 100):
             self.di(f"Cambiando de tema, la número {n}.")
-            recientes = self._resultados[-1].context.recent_messages
-            if all(mensaje.id != dicha for mensaje in recientes):
+            contexto = self._resultados[-1].context
+            assert contexto is not None, "un turno de charla siempre monta su contexto"
+            if all(mensaje.id != dicha for mensaje in contexto.recent_messages):
                 return
         msg = "la opinión no sale nunca de los mensajes recientes"
         raise AssertionError(msg)
@@ -1008,8 +1029,24 @@ class Conductor:
         )
 
     def pasa_el_banco_de_memoria(self) -> Mapping[str, tuple[int, int]]:
-        """Aciertos y casos por familia, con el camino real y un buscador determinista."""
-        raise _pendiente("G")
+        """Aciertos y casos por familia, con el camino real y un buscador determinista.
+
+        Es la orden de E-R02-04 (``scripts/pasar_el_banco_de_memoria.py``) con unas
+        huellas de mentira hechas para cada caso: la pregunta se parece a lo que
+        tiene que encontrar, a lo que hay que olvidar y a lo que dijo Sirius. Así
+        «olvida eso» solo acierta si lo olvidado ya no está, y «quién dijo qué»
+        solo si lo que dijo Sirius nunca entró como suyo: si entrara, se parecería
+        a la pregunta tanto como lo esperado, y por más nuevo saldría antes.
+        """
+        import pasar_el_banco_de_memoria as orden
+
+        def huellas_de(caso: MemoryCaseDelBanco) -> TextEmbedder:
+            parecidas = [caso.question, caso.expected, caso.forget]
+            parecidas += [m for m in caso.memories if orden.es_de_sirius(m)]
+            grupo = [frase for frase in parecidas if frase is not None]
+            return _HuellasEnchufadas(HuellasDeMentira(parecidas=[grupo]))
+
+        return orden.pasa_el_banco(huellas_de, self.carpeta / "banco")
 
     def llena_la_memoria(self, recuerdos: int) -> None:
         """Guarda ``recuerdos`` recuerdos de prueba, cada uno con su huella de 1.024 números.
@@ -1136,39 +1173,93 @@ class Conductor:
         dicho_por: str = "propietario",
         seguridad: str = "segura",
     ) -> None:
-        """El propietario confirma un hecho sobre ``persona``, que dijo ``dicho_por``."""
-        raise _pendiente("G")
+        """El propietario confirma un hecho sobre ``persona``, que dijo ``dicho_por``.
+
+        Por donde entra cualquier hecho: se propone y él dice que sí, como al
+        aceptar lo que propone el sueño.
+        """
+        sugerencia = self._dependencias.fact_proposals.propose(
+            ProposedFact(persona, tema, texto, desde, dicho_por, Certainty(seguridad))
+        )
+        self._dependencias.confirm_memory_suggestion_use_case.confirm(sugerencia.id)
 
     def hechos_vigentes(self, persona: str = "propietario") -> list[str]:
-        raise _pendiente("G")
+        return [
+            memoria.current_revision.content or ""
+            for memoria in self._dependencias.facts_use_case.current(persona)
+        ]
 
     def historia(self, persona: str, tema: str) -> list[TramoDeUnHecho]:
-        raise _pendiente("G")
+        return [
+            TramoDeUnHecho(
+                tramo.text,
+                tramo.since,
+                tramo.until,
+                dicho_por=tramo.said_by,
+                seguridad=tramo.certainty.value,
+            )
+            for tramo in self._dependencias.facts_use_case.history(persona, tema)
+        ]
 
     def anota_hecho_desde_la_respuesta(self, respuesta: int) -> str:
-        """Intenta guardar como hecho del propietario lo que dijo Sirius; devuelve qué pasó."""
-        raise _pendiente("G")
+        """Intenta guardar como hecho del propietario lo que dijo Sirius; devuelve qué pasó.
+
+        Es «Proponer guardar…» sobre la respuesta número ``respuesta`` de Sirius.
+        """
+        mensaje = self._resultados[respuesta - 1].sirius_message
+        sugerencia = self._dependencias.fact_proposals.propose_from_message(
+            mensaje.id, mensaje.content or ""
+        )
+        return "rechazado" if sugerencia is None else "pendiente"
 
     def con_extractor(self, extractor: ExtractorDeMentira) -> None:
-        raise _pendiente("G")
+        self._extractor = extractor
+        self.reabre()
 
     def sueno(self) -> list[HechoPropuesto]:
-        """El «sueño» de la noche: lo que propone y queda pendiente."""
-        raise _pendiente("G")
+        """El «sueño» de la noche: lo que propone y queda pendiente.
+
+        Como en su ordenador: con un modelo de Ollama elegido para la charla, que es
+        con el que sueña. Sin resumidor enchufado, uno de mentira, para que ninguna
+        prueba resuma con el Ollama de verdad.
+        """
+        ajustes = dict(load_settings())
+        ajustes.setdefault("ollama_chat_model", "modelo-local")
+        save_settings(ajustes)
+        if self._resumidor is None:
+            self.con_resumidor(ResumidorDeMentira())
+        return [
+            HechoPropuesto(propuesto.person, propuesto.topic or "", propuesto.text)
+            for propuesto in self._dependencias.dream_service.dream(date.today())
+        ]
 
     def acepta(self, propuesta: HechoPropuesto) -> None:
-        raise _pendiente("G")
+        """Dice que sí a lo que propuso el sueño, como desde la lista de sugerencias."""
+        facts = self._dependencias.facts_use_case
+        [sugerencia] = [
+            pendiente
+            for pendiente in facts.pending_facts()
+            if (pendiente.person, pendiente.topic or "", pendiente.content)
+            == (propuesta.persona, propuesta.tema, propuesta.texto)
+        ]
+        self._dependencias.confirm_memory_suggestion_use_case.confirm(sugerencia.id)
 
     def resumen_del_dia(self) -> str:
         """El resumen del día que dejó el último «sueño»."""
-        raise _pendiente("G")
+        return self._dependencias.dream_service.latest_summary() or ""
 
     def ficha(self, nombre: str) -> Ficha:
-        raise _pendiente("G")
+        ficha = self._dependencias.facts_use_case.card(nombre)
+        return Ficha(nombre=ficha.name, hechos=ficha.facts, charlas=ficha.mentions)
 
     def correcciones_pendientes(self) -> list[tuple[str, str]]:
         """Cada corrección pendiente: el hecho de antes y el texto nuevo."""
-        raise _pendiente("G")
+        return [
+            (correccion.before, correccion.after)
+            for correccion in self._dependencias.facts_use_case.pending_corrections()
+        ]
 
     def confirma_las_correcciones(self) -> None:
-        raise _pendiente("G")
+        """Dice que sí a cada corrección pendiente, como desde la lista de sugerencias."""
+        for correccion in self._dependencias.facts_use_case.pending_corrections():
+            self._dependencias.confirm_memory_suggestion_use_case.confirm(correccion.suggestion_id)

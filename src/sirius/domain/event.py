@@ -32,6 +32,9 @@ MEMORY_SUGGESTION_PROPOSED_EVENT_TYPE = "memory_suggestion.proposed"
 MEMORY_SUGGESTION_CONFIRMED_EVENT_TYPE = "memory_suggestion.confirmed"
 MEMORY_SUGGESTION_REJECTED_EVENT_TYPE = "memory_suggestion.rejected"
 USER_ACTOR = "user"
+#: Pieza G (ADR-239): quien propone lo que sale del sueño. Proponer no es apuntar:
+#: nada de lo que propone entra sin el sí del propietario.
+SIRIUS_ACTOR = "sirius"
 
 
 @dataclass(frozen=True, slots=True)

@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import date
 from typing import Protocol
 
 from sirius.domain.criticality import Criticality
+from sirius.domain.facts import OWNER, Certainty
 from sirius.domain.memory import Memory, MemoryRevision
 
 
@@ -158,3 +160,55 @@ class MemoryRepository(Protocol):
         two-value enum instead of an open vocabulary of strings.
         """
         ...
+
+
+class FactRepository(Protocol):
+    """Los hechos: recuerdos con persona y tema (pieza G de ADR-233, ADR-239).
+
+    Va aparte de ``MemoryRepository`` para que solo lo tenga que cumplir quien
+    guarda hechos de verdad, no cada doble de las pruebas de 0.1.
+    """
+
+    def record_fact(
+        self,
+        person: str,
+        topic: str | None,
+        content: str,
+        origin: str,
+        *,
+        since: date,
+        said_by: str = OWNER,
+        certainty: Certainty = Certainty.SURE,
+        source_event_id: int | None = None,
+    ) -> Memory:
+        """Apunta un hecho; si ya hay uno vigente de esa persona y ese tema, lo cierra."""
+        ...
+
+    def correct_fact(
+        self,
+        memory_id: int,
+        content: str,
+        origin: str,
+        *,
+        source_event_id: int | None = None,
+        said_by: str = OWNER,
+        certainty: Certainty = Certainty.SURE,
+    ) -> Memory:
+        """Corrige un hecho: cierra hoy la revisión de antes y la nueva vale desde hoy."""
+        ...
+
+    def list_current_facts(self, person: str | None = None) -> list[Memory]:
+        """Los hechos vigentes, de todos o de una persona, del más nuevo al más viejo."""
+        ...
+
+    def known_people(self) -> list[str]:
+        """Las personas con algún hecho vigente."""
+        ...
+
+    def find_fact_history(self, person: str, topic: str) -> list[MemoryRevision]:
+        """Los tramos del hecho vigente de esa persona y ese tema, del más viejo al vigente."""
+        ...
+
+
+class FactMemoryRepository(MemoryRepository, FactRepository, Protocol):
+    """La memoria de verdad: recuerdos y hechos en el mismo sitio."""

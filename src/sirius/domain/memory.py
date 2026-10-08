@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from enum import StrEnum
 
 from sirius.domain.criticality import Criticality
@@ -42,6 +42,13 @@ class MemoryRevision:
     origin: str
     source_event_id: int | None
     created_at: datetime
+    #: Pieza G de ADR-233 (ADR-239): en un hecho, desde cuándo vale esta
+    #: revisión, hasta cuándo (``None`` si sigue valiendo), quién lo dijo y con
+    #: qué seguridad («segura» o «dudosa»). En un recuerdo sin persona, ``None``.
+    valid_from: date | None = None
+    valid_to: date | None = None
+    said_by: str | None = None
+    certainty: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -87,6 +94,15 @@ class Memory:
     category: str | None = None
     category_locked: bool = False
     criticality: Criticality | None = None
+    #: Pieza G de ADR-233 (ADR-239): un recuerdo con ``person`` es un hecho sobre
+    #: esa persona («propietario» si es sobre él), y ``topic`` dice de qué. Un
+    #: hecho nuevo con la misma persona y el mismo tema cierra el anterior.
+    person: str | None = None
+    topic: str | None = None
+
+    @property
+    def is_fact(self) -> bool:
+        return self.person is not None
 
 
 def ensure_valid_origin(origin: str) -> None:

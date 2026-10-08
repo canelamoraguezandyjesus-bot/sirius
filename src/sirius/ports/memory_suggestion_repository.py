@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Protocol
 
 from sirius.domain.memory_suggestion import MemorySuggestion
@@ -51,4 +51,37 @@ class MemorySuggestionRepository(Protocol):
 
     def reject_suggestion(self, suggestion_id: int, *, resolved_at: datetime) -> MemorySuggestion:
         """Mark a PENDING suggestion REJECTED. Never creates a memory."""
+        ...
+
+
+class FactSuggestionRepository(MemorySuggestionRepository, Protocol):
+    """Las sugerencias que pueden ser hechos o correcciones (pieza G de ADR-233, ADR-239).
+
+    Va aparte para que solo lo tenga que cumplir quien guarda hechos de verdad, no
+    cada doble de las pruebas de 0.1.
+    """
+
+    def create_suggestion(
+        self,
+        content: str,
+        *,
+        source_event_id: int | None = None,
+        subject_key: str | None = None,
+        project_id: int | None = None,
+        person: str | None = None,
+        topic: str | None = None,
+        corrects_memory_id: int | None = None,
+        valid_from: date | None = None,
+        said_by: str | None = None,
+        certainty: str | None = None,
+        dreamed_day: date | None = None,
+    ) -> MemorySuggestion:
+        """Una sugerencia pendiente: un recuerdo, un hecho de ``person`` o la corrección de uno.
+
+        ``dreamed_day`` es el día del que la sacó el sueño, si la propuso él.
+        """
+        ...
+
+    def list_answered_suggestions(self) -> list[MemorySuggestion]:
+        """Las sugerencias que él ya contestó, que sí o que no, de la más vieja a la más nueva."""
         ...

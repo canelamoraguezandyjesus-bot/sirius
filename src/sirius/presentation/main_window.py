@@ -54,7 +54,9 @@ from sirius.application.create_backup import CreateBackupUseCase
 from sirius.application.decision_origin import GetDecisionOriginUseCase
 from sirius.application.delete_memory import DeleteMemoryUseCase
 from sirius.application.detect_precedence_conflicts import DetectPrecedenceConflictsUseCase
+from sirius.application.dream import DreamService
 from sirius.application.export_structured import ExportStructuredUseCase
+from sirius.application.facts import FactProposals
 from sirius.application.get_conversation_history import (
     ConversationNotInitializedError,
     GetConversationHistoryUseCase,
@@ -122,6 +124,7 @@ from sirius.presentation.backup_worker import (
 from sirius.presentation.blind_test_dialog import BlindTestDialog
 from sirius.presentation.context_panel_widget import ContextPanelWidget
 from sirius.presentation.conversation_worker import SendMessageWorker
+from sirius.presentation.dream_worker import DreamWorker
 from sirius.presentation.error_messages import failed_send_message
 from sirius.presentation.export_worker import ExportWorker
 from sirius.presentation.historical_projects_widget import HistoricalProjectsWidget
@@ -258,6 +261,10 @@ class MainWindow(QMainWindow):
     #: restauración espera a esta señal, porque se guardan en sirius.db.
     embedding_idle = Signal()
 
+    #: El sueño ha acabado (pieza G de ADR-233): una restauración espera a esta
+    #: señal, porque guarda el resumen del día y lo que propone en sirius.db.
+    dream_idle = Signal()
+
     def __init__(
         self,
         send_message_use_case: SendMessageUseCase,
@@ -299,6 +306,8 @@ class MainWindow(QMainWindow):
         reply_judge_service: ReplyJudgeService | None = None,
         trick_questions_use_case: TrickQuestionsUseCase | None = None,
         memory_embedding_service: MemoryEmbeddingService | None = None,
+        fact_proposals: FactProposals | None = None,
+        dream_service: DreamService | None = None,
         show_warning: Callable[[str, str], None] | None = None,
         show_information: Callable[[str, str], None] | None = None,
         prompt_multiline_with_default: Callable[[str, str, str], str | None] | None = None,
@@ -326,6 +335,12 @@ class MainWindow(QMainWindow):
         self._memory_embedding_service = memory_embedding_service
         self._active_embedding_worker: MemoryEmbeddingWorker | None = None
         self._embed_again = False
+        # Pieza G de ADR-233: «Proponer guardar…» solo desde lo que dice él, y el
+        # sueño al abrirse. Sin ellos, la ventana es la de antes.
+        self._fact_proposals = fact_proposals
+        self._dream_service = dream_service
+        self._active_dream_worker: DreamWorker | None = None
+        self._pending_user_item: QListWidgetItem | None = None
         self._send_message_use_case = send_message_use_case
         self._get_history_use_case = get_history_use_case
         self._get_budget_status_use_case = get_budget_status_use_case
@@ -1340,6 +1355,8 @@ class MainWindow(QMainWindow):
         one that did persist before the failure (e.g. the provider failed
         afterwards) stays, because it is really there.
         """
+        # La lista se rehace: el mensaje suyo del turno en curso ya no es ese item.
+        self._pending_user_item = None
         self.message_list.clear()
         self.studio_page.clear_history()
         self._streaming_item = None
@@ -1356,6 +1373,7 @@ class MainWindow(QMainWindow):
         self._refresh_judge_indicator()
         self._start_judge()
         self._start_embedding(warm_up=True)
+        self._start_dream()
 
         for message in messages:
             self._append_message_item(
@@ -1433,8 +1451,9 @@ class MainWindow(QMainWindow):
         # reflow tardío (ancho real, streaming, o un resize posterior) y
         # mantener el sizeHint del item siempre al día con la altura real.
         widget.size_changed.connect(lambda: self._sync_item_height(item, widget))
-        # M6, §3.6: solo un turno de Sirius ya completado puede proponerse
-        # como recuerdo — nunca uno del usuario ni uno todavía en streaming.
+        # Pieza G de ADR-233 (PA-R02-14): solo lo que dijo él puede proponerse como
+        # recuerdo suyo; lo que dice Sirius nunca entra como suyo. Con la ventana de
+        # 0.1 (sin ``fact_proposals``), al revés: solo un turno de Sirius completado.
         widget.propose_suggestion_requested.connect(self._handle_propose_suggestion_clicked)
         widget.mark_requested.connect(
             lambda message_id, mark, widget=widget: self._handle_mark_requested(
@@ -1448,7 +1467,7 @@ class MainWindow(QMainWindow):
             self._compose_markdown_body(content, status),
             bold=role is MessageRole.SIRIUS,
             message_id=message_id,
-            show_propose_suggestion=completed_reply,
+            show_propose_suggestion=self._can_propose(role, status, message_id, content),
             show_marks=completed_reply and self._mark_reply_use_case is not None,
             current_mark=self._marks_by_message.get(message_id) if message_id else None,
         )
@@ -1541,7 +1560,7 @@ class MainWindow(QMainWindow):
         self._mirror_studio_state(StudioInteractionState.PENSANDO)
         self._update_retry_button()
 
-        self._append_message_item(MessageRole.USER, text)
+        self._pending_user_item = self._append_message_item(MessageRole.USER, text)
 
         # Lo que se ve ya está: «pensando» y su mensaje. El turno empieza cuando
         # el juez y las huellas han soltado Ollama, no antes (ronda 2 de Codex).
@@ -1630,6 +1649,7 @@ class MainWindow(QMainWindow):
         # ``result.sirius_message`` is the row SendMessageUseCase actually
         # persisted (COMPLETED with the full reply, or CANCELLED/FAILED with
         # whatever partial text streamed) — authoritative, no need to reload.
+        self._settle_user_item(result)
         if self._streaming_item is None:
             self._streaming_item = self._append_message_item(
                 MessageRole.SIRIUS,
@@ -1653,7 +1673,12 @@ class MainWindow(QMainWindow):
                     ),
                     bold=True,
                     message_id=result.sirius_message.id,
-                    show_propose_suggestion=result.outcome is MessageStatus.COMPLETED,
+                    show_propose_suggestion=self._can_propose(
+                        MessageRole.SIRIUS,
+                        result.outcome,
+                        result.sirius_message.id,
+                        result.sirius_message.content,
+                    ),
                     show_marks=result.outcome is MessageStatus.COMPLETED
                     and self._mark_reply_use_case is not None,
                 )
@@ -1699,6 +1724,48 @@ class MainWindow(QMainWindow):
         # PREPARADO: si se hablara antes, ese reajuste borraría SINTETIZANDO.
         self._speak_if_studio_is_open(result.sirius_message.content, result.sirius_message.status)
 
+    def _can_propose(
+        self,
+        role: MessageRole,
+        status: MessageStatus,
+        message_id: int | None,
+        content: str | None,
+    ) -> bool:
+        """Si un mensaje lleva «Proponer guardar…».
+
+        Pieza G (ADR-239): solo los suyos, completos y ya guardados. Lo que dice
+        Sirius nunca entra como recuerdo suyo (PA-R02-14).
+        """
+        if status is not MessageStatus.COMPLETED or not content:
+            return False
+        if self._fact_proposals is None:
+            return role is MessageRole.SIRIUS
+        return role is MessageRole.USER and message_id is not None
+
+    def _settle_user_item(self, result: SendMessageResult) -> None:
+        """El mensaje suyo de este turno, como quedó guardado, con su «Proponer guardar…».
+
+        Tras «olvida lo de…» lo guardado ya no dice qué había que olvidar, y la
+        pantalla tampoco debe seguir diciéndolo.
+        """
+        item, self._pending_user_item = self._pending_user_item, None
+        if item is None:
+            return
+        message = result.user_message
+        self._set_item_text(item, MessageRole.USER, message.content, message.status)
+        widget = self.message_list.itemWidget(item)
+        if isinstance(widget, MessageItemWidget):
+            widget.set_message(
+                "Tú",
+                self._compose_markdown_body(message.content, message.status),
+                bold=False,
+                message_id=message.id,
+                show_propose_suggestion=self._can_propose(
+                    MessageRole.USER, message.status, message.id, message.content
+                ),
+            )
+            self._sync_item_height(item, widget)
+
     def _handle_propose_suggestion_clicked(self, message_id: int, content: str) -> None:
         """«Proponer guardar…» (M6, §3.6): vía manual, complementaria a la
         automática de ``_on_finished`` y nunca su sustituta. Precarga el mismo
@@ -1713,7 +1780,17 @@ class MainWindow(QMainWindow):
         if edited_content is None:
             return
         try:
-            self._propose_memory_suggestion_use_case.propose(edited_content, message_id=message_id)
+            if self._fact_proposals is not None:
+                if self._fact_proposals.propose_from_message(message_id, edited_content) is None:
+                    self._show_warning(
+                        "No se pudo proponer la sugerencia",
+                        "Solo se guarda lo que dices tú: lo que dice Sirius no entra como tuyo.",
+                    )
+                    return
+            else:
+                self._propose_memory_suggestion_use_case.propose(
+                    edited_content, message_id=message_id
+                )
         except InvalidMemorySuggestionProposalDataError as exc:
             self._show_warning("No se pudo proponer la sugerencia", str(exc))
             return
@@ -2790,6 +2867,55 @@ class MainWindow(QMainWindow):
         if self._active_embedding_worker is None:
             self.embedding_idle.emit()
 
+    @property
+    def dream_in_progress(self) -> bool:
+        """Si está soñando en segundo plano."""
+        return self._active_dream_worker is not None
+
+    def _start_dream(self) -> None:
+        """Pieza G (ADR-239): sueña al abrirse los días anteriores que aún no soñó.
+
+        Una vez por apertura: si lo para un turno o una restauración, lo que no
+        soñó lo sueña la próxima vez que se abra, y no entre turno y turno, donde
+        cada día soñado haría esperar al turno siguiente.
+        """
+        if (
+            self._dream_service is None
+            or self._close_requested
+            or self._closed
+            or self._foreground_busy()
+        ):
+            return
+        if self._active_dream_worker is not None:
+            return
+        worker = DreamWorker(self._dream_service)
+        worker.signals.finished.connect(self._on_dream_finished)
+        self._active_dream_worker = worker
+        self._thread_pool.start(worker)
+
+    def _on_dream_finished(self, dreamed: int) -> None:
+        self._active_dream_worker = None
+        if dreamed and not self._close_requested and not self._closed:
+            # Lo que propuso espera su sí en las sugerencias del panel.
+            self.knowledge_widget.refresh()
+            pending = self._dream_pending_count()
+            if pending:
+                hechos = "1 hecho" if pending == 1 else f"{pending} hechos"
+                self.status_label.setText(
+                    f"He soñado con lo que me contaste: tienes {hechos} para confirmar "
+                    "en Conocimiento."
+                )
+        self.dream_idle.emit()
+
+    def _dream_pending_count(self) -> int:
+        try:
+            overview = self._get_knowledge_overview_use_case.get_overview()
+        except Exception:  # el aviso es un detalle: nunca rompe la ventana
+            return 0
+        return sum(
+            1 for suggestion in overview.pending_suggestions if suggestion.person is not None
+        )
+
     # --- El segundo plano frente al turno y la restauración (ADR-238) ------
 
     def _foreground_busy(self) -> bool:
@@ -2798,7 +2924,7 @@ class MainWindow(QMainWindow):
         return self._is_sending or self._is_backup_busy or self._is_completing_project
 
     def _stop_background(self) -> list[tuple[SignalInstance, str]]:
-        """Pide parar a lo que corre en segundo plano: el juez y las huellas.
+        """Pide parar a lo que corre en segundo plano: el juez, las huellas y el sueño.
 
         Devuelve, de cada uno que sigue en marcha, la señal que dará al parar y
         qué está acabando. Lo que para a medias queda pendiente y sigue en
@@ -2823,6 +2949,10 @@ class MainWindow(QMainWindow):
             still_running.append(
                 (self.embedding_idle, "Esperando a que acaben las huellas de los recuerdos...")
             )
+        if self._active_dream_worker is not None:
+            # Sin pendiente: el sueño es una vez por apertura (_start_dream).
+            self._active_dream_worker.stop()
+            still_running.append((self.dream_idle, "Esperando a que acabe el sueño..."))
         return still_running
 
     def _when_background_idle(

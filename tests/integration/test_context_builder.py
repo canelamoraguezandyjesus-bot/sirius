@@ -223,6 +223,11 @@ def test_context_field_order_matches_the_defined_sections() -> None:
         # Context sin ellos.
         "summary",
         "own_memory",
+        # Pieza G (ADR-239): lo que se sabe de él, de quien nombra el mensaje y de
+        # los últimos días; opcionales por lo mismo.
+        "owner_facts",
+        "people_facts",
+        "recent_days",
     ]
 
 
