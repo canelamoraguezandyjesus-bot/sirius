@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import random
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import replace
 from datetime import UTC, datetime
 
@@ -244,3 +244,58 @@ def test_cada_pregunta_lleva_tres_ejemplos_y_todos_los_modelos_las_mismas_instru
         assert de_uno.instructions == de_dos.instructions
         assert EXAMPLES_FRAME in de_uno.instructions
         assert de_uno.instructions.count("\nSirius: «Respuesta número") == 3
+
+
+class _SelectorQueApunta(SeedExamplePicker):
+    """Elige como el de verdad y apunta para qué texto se le pide."""
+
+    def __init__(self) -> None:
+        super().__init__(rng=random.Random(5))
+        self.textos: list[str] = []
+
+    def pick(self, examples: Sequence[SeedExample], text: str) -> tuple[SeedExample, ...]:
+        self.textos.append(text)
+        return super().pick(examples, text)
+
+
+def _caso_con(modelos: dict[str, _Modelo], selector: SeedExamplePicker) -> BlindTestUseCase:
+    return BlindTestUseCase(
+        identity_repository=_IdentidadesConEjemplos(),  # type: ignore[arg-type]
+        provider_for=lambda nombre: modelos[nombre],
+        list_models=lambda: tuple(sorted(modelos)),
+        choose_model=lambda _nombre: None,
+        current_model=lambda: None,
+        rng=random.Random(11),
+        seed_examples=selector,
+    )
+
+
+def test_cerrada_antes_de_empezar_no_elige_ejemplos_ni_pide_nada() -> None:
+    """Ronda 2 de Codex: elegir los ejemplos pide huellas a Ollama; cerrar la ventana
+    antes de empezar no puede dejar nada pidiéndose."""
+    modelos = {"uno": _Modelo("uno")}
+    selector = _SelectorQueApunta()
+
+    with pytest.raises(BlindTestError, match="canceló"):
+        _caso_con(modelos, selector).prepare(["uno"], should_stop=lambda: True)
+
+    assert selector.textos == []
+    assert modelos["uno"].peticiones == []
+
+
+def test_cerrada_a_medias_solo_eligio_los_ejemplos_de_lo_preguntado_y_una_vez() -> None:
+    modelos = {"uno": _Modelo("uno"), "dos": _Modelo("dos")}
+    selector = _SelectorQueApunta()
+    caso = _caso_con(modelos, selector)
+    preguntas = caso.questions()
+    hechas: list[int] = []
+
+    def para_en_la_tercera_del_segundo() -> bool:
+        hechas.append(1)
+        return len(hechas) > len(preguntas) + 2
+
+    with pytest.raises(BlindTestError, match="canceló"):
+        caso.prepare(["uno", "dos"], should_stop=para_en_la_tercera_del_segundo)
+
+    assert selector.textos == list(preguntas)
+    assert len(modelos["dos"].peticiones) == 2

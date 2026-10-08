@@ -84,12 +84,10 @@ class BlindTestUseCase:
         identity = self._identity_repository.get_or_create_current_identity()
         version = identity.current_version
         questions = self.questions()
-        # Los ejemplos de cada pregunta se eligen una vez: todos los modelos la
-        # contestan con las mismas instrucciones, como en la charla (ADR-240).
-        instructions = {
-            question: render_identity(version, self._seed_examples.pick(version.examples, question))
-            for question in questions
-        }
+        # Los ejemplos de cada pregunta se eligen al llegar a ella, después de mirar si
+        # se cerró la ventana, y una sola vez: todos los modelos la contestan con las
+        # mismas instrucciones, como en la charla (ADR-240, ronda 2 de Codex).
+        instructions: dict[str, str] = {}
         total = len(models) * len(questions)
         done = 0
         answers: dict[str, list[str]] = {}
@@ -100,6 +98,10 @@ class BlindTestUseCase:
                 if should_stop():
                     msg = "La prueba a ciegas se canceló."
                     raise BlindTestError(msg)
+                if question not in instructions:
+                    instructions[question] = render_identity(
+                        version, self._seed_examples.pick(version.examples, question)
+                    )
                 answers[model].append(
                     _answer(
                         provider,

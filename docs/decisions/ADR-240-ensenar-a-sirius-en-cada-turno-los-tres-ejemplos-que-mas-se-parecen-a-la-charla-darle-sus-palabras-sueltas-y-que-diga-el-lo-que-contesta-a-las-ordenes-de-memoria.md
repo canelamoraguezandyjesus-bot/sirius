@@ -137,7 +137,7 @@ La opción 2, con lo que describe la nota de arranque. En concreto:
   hubiera petición ahora piden que lo olvidado y los hechos no lleguen al modelo, y pasan
   antes y después del código.
 - **Roturas a propósito**, sobre una copia aparte, cada una con las pruebas que la vigilan.
-  Las 19 fallan como deben:
+  Las 21 fallan como deben:
   1. llevar todos los ejemplos en vez de 3;
   2. no barajarlos;
   3. elegirlos sin mirar el parecido;
@@ -156,13 +156,16 @@ La opción 2, con lo que describe la nota de arranque. En concreto:
   16. pedir las 20 huellas de una vez;
   17. no contar los ejemplos en el presupuesto de la petición;
   18. que un fallo al preparar la voz deje la orden sin respuesta;
-  19. pedir la voz antes de guardar la respuesta, como antes de la ronda 1 de Codex.
+  19. pedir la voz antes de guardar la respuesta, como antes de la ronda 1 de Codex;
+  20. elegir los ejemplos de todas las preguntas de la prueba a ciegas antes de mirar si se
+      cerró, como antes de la ronda 2;
+  21. elegirlos otra vez para cada modelo.
 
   La 17 pasó con las pruebas que había. Se añadió la que la caza
   (`test_los_ejemplos_de_la_semilla_de_la_peticion_cuentan_en_el_presupuesto`).
-- **La batería entera** sobre el código de la ronda 1: 8 179 pasan, 16 saltadas y los 2
-  `xfail` que ya estaban, en 20 min 31 s. Sobre `a9207bbd` eran 8 176, y en `main`, antes
-  del cambio, 8 126. La
+- **La batería entera** sobre el código de la ronda 2: 8 181 pasan, 16 saltadas y los 2
+  `xfail` que ya estaban, en 20 min 24 s. En la ronda 1 eran 8 179; sobre `a9207bbd`,
+  8 176; y en `main`, antes del cambio, 8 126. La
   primera vuelta dio 8 174 bien y 1 mal: una prueba de la ventana contaba las huellas que
   se piden y no esperaba las de los ejemplos. Se ajustó, y ahora comprueba además que se
   piden dentro del turno, antes de que sigan las de los recuerdos.
@@ -181,6 +184,24 @@ La opción 2, con lo que describe la nota de arranque. En concreto:
     repositorio de la conversación.
   - Familia: una orden cumplida sin su respuesta guardada. Es lo que ADR-239 ya no
     garantizaba, y la voz lo había ensanchado de milésimas a segundos.
+- **Ronda 2 de Codex**, sobre `14d77d89`: dos hallazgos, los dos ciertos. El propio revisor
+  dice que llegan tarde: estaban ya en el código de la ronda 1.
+  - P2: al cerrar la prueba a ciegas antes de empezar, se elegían igual los ejemplos de las
+    20 preguntas, y eso pide huellas a Ollama. Ahora se eligen al llegar a cada pregunta,
+    después de mirar si se cerró, y una sola vez por pregunta, para que todos los modelos
+    tengan las mismas instrucciones. Lo comprueban dos pruebas que fallan sin el arreglo.
+  - P2: si guardar la respuesta falla justo después de cumplir la orden, por la base
+    bloqueada o el disco lleno, la orden queda cumplida y sin respuesta. No se arregla en
+    esta PR. El hueco es el que ADR-239 dejó escrito en «Lo que esto no garantiza», con la
+    prueba que comprueba que repetir la orden no se lleva otra cosa. Esta PR lo había
+    ensanchado con la voz, y la ronda 1 lo devolvió a lo que era.
+  - **Regla de las dos rondas.** Este segundo P2 es de la familia del de la ronda 1, y se
+    dejó de parchear para buscar la raíz: la orden y su respuesta se escriben en dos
+    transacciones y por dos conexiones, la del olvido, con sqlite3 a pelo, y la de la
+    conversación. Cerrarlo del todo pide que la misma transacción que cumple la orden deje
+    su respuesta; por ejemplo, guardar antes la respuesta como pendiente y que la orden la
+    complete. Es rehacer cómo cumple las órdenes la pieza G, y queda fuera de esta PR, que
+    solo había ensanchado el hueco y ya lo ha dejado donde estaba.
 
 ## Consecuencias
 
@@ -189,6 +210,8 @@ La opción 2, con lo que describe la nota de arranque. En concreto:
   con la identidad y la frase fija.
 - La respuesta de una orden se escribe dos veces: primero la frase de siempre y después la
   voz. Si Sirius se cierra entre medias, se queda la frase de siempre.
+- Si guardar la frase de siempre falla justo después de cumplirse la orden, todo sigue como
+  en ADR-239: la orden queda cumplida y sin respuesta, y repetirla no se lleva otra cosa.
 - El primer turno de cada vez que se abre Sirius pide también las huellas de los 20
   ejemplos, en 5 tandas de 4. Los siguientes, ninguna.
 - Montar el contexto ya no da siempre lo mismo: cuáles de los ejemplos empatan y en qué
