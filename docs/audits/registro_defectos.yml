@@ -1465,3 +1465,18 @@ defectos:
     ficheros:
       - tests/acceptance/test_robot_0_2_memoria.py
       - tests/acceptance/conductor_robot_0_2.py
+  # ADR-239: la revision propia, antes de ningun commit, encontro que las ordenes de
+  # memoria y el sueno usaban la unidad de trabajo de la ventana desde otros hilos. Esa
+  # unidad guarda su sesion mientras dura, y habria mezclado las transacciones del hilo
+  # del envio, el del sueno y la ventana.
+  - id: H-239
+    titulo: Las ordenes de memoria y el sueno compartian con la ventana una unidad de trabajo que no se puede compartir entre hilos
+    bloque: producto
+    gravedad: media
+    estado: cerrado
+    cerrado_por: b698af42b7833faa11c8cc43bfe954bec1b5ec54
+    pr: 684
+    adr: 239
+    ficheros:
+      - src/sirius/composition_root.py
+      - tests/integration/test_ordenes_de_memoria.py
