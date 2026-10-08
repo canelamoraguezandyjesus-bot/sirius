@@ -1,8 +1,9 @@
-"""SQLite del modo, las marcas y los resúmenes de la charla (pieza D de ADR-233) y del juez (E)."""
+"""SQLite del modo, las marcas y los resúmenes de la charla (pieza D de ADR-233), del juez (E)
+y de los resúmenes del día del sueño (G)."""
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 from sqlalchemy import Engine, select
@@ -16,6 +17,7 @@ from sirius.adapters.persistence.database import (
 from sirius.adapters.persistence.models import (
     ConversationModeModel,
     ConversationSummaryModel,
+    DaySummaryModel,
     JudgeScoreModel,
     MessageModel,
     ReplyMarkModel,
@@ -176,6 +178,30 @@ class SqliteRobotConversationRepository:
                 JudgeScore(message_id=row.message_id, score=row.score, warned=row.warned)
                 for row in rows
             ]
+
+    # --- Resúmenes del día (pieza G, ADR-239) ---
+
+    def save_day(self, day: date, content: str) -> None:
+        """Guarda el resumen de ``day``; si ya había uno, lo sustituye."""
+        with session_scope(self._session_factory) as session:
+            session.merge(DaySummaryModel(day=day, content=content, created_at=_utc_now_naive()))
+
+    def day_summary(self, day: date) -> str | None:
+        with session_scope(self._session_factory) as session:
+            row = session.get(DaySummaryModel, day)
+            return row.content if row is not None else None
+
+    def latest_days(self, limit: int) -> list[tuple[date, str]]:
+        """Los últimos ``limit`` días resumidos, del más viejo al más nuevo."""
+        with session_scope(self._session_factory) as session:
+            rows = session.scalars(
+                select(DaySummaryModel).order_by(DaySummaryModel.day.desc()).limit(limit)
+            ).all()
+            return [(row.day, row.content) for row in reversed(rows)]
+
+    def dreamed_days(self) -> set[date]:
+        with session_scope(self._session_factory) as session:
+            return set(session.scalars(select(DaySummaryModel.day)))
 
 
 def build_sqlite_robot_conversation_repository(

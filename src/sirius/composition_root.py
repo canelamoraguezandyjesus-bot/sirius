@@ -60,6 +60,7 @@ from sirius.adapters.persistence.sqlite_decision_repository import (
     build_sqlite_decision_repository,
 )
 from sirius.adapters.persistence.sqlite_event_repository import build_sqlite_event_repository
+from sirius.adapters.persistence.sqlite_forget import build_sqlite_forgetter
 from sirius.adapters.persistence.sqlite_identity_repository import (
     build_sqlite_identity_repository,
 )
@@ -96,11 +97,14 @@ from sirius.application.create_backup import CreateBackupUseCase
 from sirius.application.decision_origin import GetDecisionOriginUseCase
 from sirius.application.delete_memory import DeleteMemoryUseCase
 from sirius.application.detect_precedence_conflicts import DetectPrecedenceConflictsUseCase
+from sirius.application.dream import DreamService, LLMFactExtractor
 from sirius.application.export_structured import ExportStructuredUseCase
+from sirius.application.facts import ConfirmFactSuggestionUseCase, FactProposals, FactsUseCase
 from sirius.application.get_conversation_history import GetConversationHistoryUseCase
 from sirius.application.historical_projects import HistoricalProjectsUseCase
 from sirius.application.initial_project import InitialProjectUseCase
 from sirius.application.knowledge_overview import GetKnowledgeOverviewUseCase
+from sirius.application.memory_commands import MemoryCommandService
 from sirius.application.memory_origin import GetMemoryOriginUseCase
 from sirius.application.memory_search import MemoryEmbeddingService, MemorySearch
 from sirius.application.project_continuity import ProjectContinuityUseCase
@@ -146,7 +150,7 @@ from sirius.infrastructure.logging import get_logger
 from sirius.ports.audio_playback import AudioPlayback
 from sirius.ports.embeddings import TextEmbedder
 from sirius.ports.llm import LLMProvider
-from sirius.ports.robot_conversation import ConversationSummarizer, ReplyJudge
+from sirius.ports.robot_conversation import ConversationSummarizer, FactExtractor, ReplyJudge
 from sirius.ports.secrets import SecretStore
 
 _logger = get_logger(__name__)
@@ -348,6 +352,9 @@ class ConversationDependencies:
     trick_questions_use_case: TrickQuestionsUseCase
     memory_embedding_service: MemoryEmbeddingService
     rank_relevant_knowledge_use_case: RankRelevantKnowledgeUseCase
+    facts_use_case: FactsUseCase
+    fact_proposals: FactProposals
+    dream_service: DreamService
 
 
 def chat_goes_through_ollama() -> bool:
@@ -609,6 +616,7 @@ def build_conversation_dependencies(
     conversation_summarizer: ConversationSummarizer | None = None,
     reply_judge: ReplyJudge | None = None,
     text_embedder: TextEmbedder | None = None,
+    fact_extractor: FactExtractor | None = None,
 ) -> ConversationDependencies:
     """Build repositories, the secret store, and use cases wired to SQLite.
 
@@ -618,6 +626,9 @@ def build_conversation_dependencies(
 
     ``text_embedder`` da las huellas de la búsqueda por significado; sin él, el
     modelo de huellas del Ollama de este ordenador (ADR-238).
+
+    ``fact_extractor`` saca los hechos al soñar; sin él, el modelo de la charla de
+    este ordenador (ADR-239).
     """
     secret_store = secret_store or build_keyring_secret_store()
     conversation_repository = build_sqlite_conversation_repository(database_path)
@@ -681,10 +692,47 @@ def build_conversation_dependencies(
         token_counter=CharacterHeuristicTokenCounter(),
         summary_repository=robot_conversation_repository,
         reply_marks=robot_conversation_repository,
+        facts=memory_repository,
+        day_summaries=robot_conversation_repository,
     )
     # Pieza E de ADR-233: el juez puntúa con el modelo local elegido. Las pruebas
-    # le ponen uno de mentira con ``reply_judge``.
-    judge = reply_judge or LLMReplyJudge(identity_repository, _LocalChatModel(ollama_transport))
+    # le ponen uno de mentira con ``reply_judge``. El sueño (pieza G) usa el mismo:
+    # lo que hace el modelo en segundo plano nunca va a OpenAI.
+    local_chat_model = _LocalChatModel(ollama_transport)
+    judge = reply_judge or LLMReplyJudge(identity_repository, local_chat_model)
+    # Pieza G de ADR-233 (ADR-239): hechos, órdenes de memoria y sueño.
+    forgetter = build_sqlite_forgetter(database_path)
+    fact_proposals = FactProposals(unit_of_work)
+    confirm_suggestion_use_case = ConfirmFactSuggestionUseCase(unit_of_work)
+    reject_suggestion_use_case = RejectMemorySuggestionUseCase(unit_of_work)
+    # Una unidad de trabajo guarda su sesión mientras dura: no se comparte entre
+    # hilos. Las órdenes de memoria corren en el hilo del envío y el sueño en el
+    # suyo, así que cada uno tiene la suya; la de arriba es la de la ventana.
+    command_unit_of_work = build_sqlite_unit_of_work(database_path)
+    dream_unit_of_work = build_sqlite_unit_of_work(database_path)
+    facts_use_case = FactsUseCase(
+        memory_repository, memory_suggestion_repository, conversation_repository
+    )
+    summarizer = conversation_summarizer or LLMConversationSummarizer()
+    memory_commands = MemoryCommandService(
+        conversation_repository,
+        forgetter,
+        facts_use_case,
+        FactProposals(command_unit_of_work),
+        ConfirmFactSuggestionUseCase(command_unit_of_work),
+        RejectMemorySuggestionUseCase(command_unit_of_work),
+        backups_exist=lambda: backups_dir.is_dir() and any(backups_dir.iterdir()),
+    )
+    dream_service = DreamService(
+        conversation_repository,
+        robot_conversation_repository,
+        summarizer,
+        fact_extractor or LLMFactExtractor(),
+        FactProposals(dream_unit_of_work),
+        memory_repository,
+        memory_suggestion_repository,
+        local_chat_model,
+    )
     reply_judge_service = ReplyJudgeService(judge, robot_conversation_repository)
     send_message_use_case = SendMessageUseCase(
         context_builder=context_builder,
@@ -698,11 +746,10 @@ def build_conversation_dependencies(
         mode_repository=robot_conversation_repository,
         reply_marks=robot_conversation_repository,
         summary_service=ConversationSummaryService(
-            conversation_repository,
-            robot_conversation_repository,
-            conversation_summarizer or LLMConversationSummarizer(),
+            conversation_repository, robot_conversation_repository, summarizer
         ),
         reminder=ROBOT_SEED_REMINDER,
+        memory_commands=memory_commands,
     )
     trick_questions_use_case = TrickQuestionsUseCase(
         identity_repository,
@@ -760,6 +807,9 @@ def build_conversation_dependencies(
         unit_of_work,
         robot_conversation_repository,
         memory_embedding_store,
+        forgetter,
+        command_unit_of_work,
+        dream_unit_of_work,
     )
 
     def close_database_connections() -> None:
@@ -854,8 +904,8 @@ def build_conversation_dependencies(
             memory_repository, decision_repository, memory_suggestion_repository
         ),
         propose_memory_suggestion_use_case=ProposeMemorySuggestionUseCase(unit_of_work),
-        confirm_memory_suggestion_use_case=ConfirmMemorySuggestionUseCase(unit_of_work),
-        reject_memory_suggestion_use_case=RejectMemorySuggestionUseCase(unit_of_work),
+        confirm_memory_suggestion_use_case=confirm_suggestion_use_case,
+        reject_memory_suggestion_use_case=reject_suggestion_use_case,
         propose_criticality_use_case=propose_criticality_use_case,
         set_criticality_use_case=set_criticality_use_case,
         create_backup_use_case=CreateBackupUseCase(backup_service),
@@ -882,4 +932,7 @@ def build_conversation_dependencies(
         trick_questions_use_case=trick_questions_use_case,
         memory_embedding_service=memory_embedding_service,
         rank_relevant_knowledge_use_case=rank_relevant_knowledge_use_case,
+        facts_use_case=facts_use_case,
+        fact_proposals=fact_proposals,
+        dream_service=dream_service,
     )

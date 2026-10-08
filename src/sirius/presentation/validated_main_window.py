@@ -20,7 +20,9 @@ from sirius.application.create_backup import CreateBackupUseCase
 from sirius.application.decision_origin import GetDecisionOriginUseCase
 from sirius.application.delete_memory import DeleteMemoryUseCase
 from sirius.application.detect_precedence_conflicts import DetectPrecedenceConflictsUseCase
+from sirius.application.dream import DreamService
 from sirius.application.export_structured import ExportStructuredUseCase
+from sirius.application.facts import FactProposals
 from sirius.application.get_conversation_history import GetConversationHistoryUseCase
 from sirius.application.historical_projects import HistoricalProjectsUseCase
 from sirius.application.knowledge_overview import GetKnowledgeOverviewUseCase
@@ -96,6 +98,8 @@ class ValidatedMainWindow(MainWindow):
         reply_judge_service: ReplyJudgeService | None = None,
         trick_questions_use_case: TrickQuestionsUseCase | None = None,
         memory_embedding_service: MemoryEmbeddingService | None = None,
+        fact_proposals: FactProposals | None = None,
+        dream_service: DreamService | None = None,
         show_warning: Callable[[str, str], None] | None = None,
         show_information: Callable[[str, str], None] | None = None,
         confirm_restore: Callable[[str, str], bool] | None = None,
@@ -147,6 +151,8 @@ class ValidatedMainWindow(MainWindow):
             reply_judge_service=reply_judge_service,
             trick_questions_use_case=trick_questions_use_case,
             memory_embedding_service=memory_embedding_service,
+            fact_proposals=fact_proposals,
+            dream_service=dream_service,
             show_warning=show_warning,
             show_information=show_information,
             confirm_restore=confirm_restore,

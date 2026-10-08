@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
+from sqlalchemy import Date, ForeignKey, Index, LargeBinary, Text, UniqueConstraint, text
 from sqlalchemy import Enum as SAEnum
-from sqlalchemy import ForeignKey, Index, LargeBinary, Text, UniqueConstraint, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from sirius.domain.conversation import MessageRole, MessageStatus
@@ -241,6 +241,10 @@ class MemoryModel(Base):
     #: `Criticality` al cargarlo y falla claro si no es uno de los dos
     #: miembros válidos, en vez de dejar que un `SAEnum` lo intente adivinar.
     criticality: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: Pieza G de ADR-233 (ADR-239): con persona, el recuerdo es un hecho sobre
+    #: ella; el tema dice de qué, y un hecho nuevo del mismo tema cierra el de antes.
+    person: Mapped[str | None] = mapped_column(Text, nullable=True)
+    topic: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class MemoryRevisionModel(Base):
@@ -277,6 +281,12 @@ class MemoryRevisionModel(Base):
     source_event_id: Mapped[int | None] = mapped_column(ForeignKey("events.id"), nullable=True)
     is_current: Mapped[bool] = mapped_column(nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(nullable=False)
+    #: Pieza G (ADR-239): el tramo de un hecho. Desde cuándo valió, hasta cuándo
+    #: (NULL si sigue), quién lo dijo y con qué seguridad.
+    valid_from: Mapped[date | None] = mapped_column(Date, nullable=True)
+    valid_to: Mapped[date | None] = mapped_column(Date, nullable=True)
+    said_by: Mapped[str | None] = mapped_column(Text, nullable=True)
+    certainty: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class MemoryEmbeddingModel(Base):
@@ -413,6 +423,14 @@ class MemorySuggestionModel(Base):
     )
     created_at: Mapped[datetime] = mapped_column(nullable=False)
     resolved_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    #: Pieza G (ADR-239): un hecho que propone el sueño es de una persona y un
+    #: tema; «eso no es así» propone corregir el hecho ``corrects_memory_id``.
+    person: Mapped[str | None] = mapped_column(Text, nullable=True)
+    topic: Mapped[str | None] = mapped_column(Text, nullable=True)
+    valid_from: Mapped[date | None] = mapped_column(Date, nullable=True)
+    said_by: Mapped[str | None] = mapped_column(Text, nullable=True)
+    certainty: Mapped[str | None] = mapped_column(Text, nullable=True)
+    corrects_memory_id: Mapped[int | None] = mapped_column(ForeignKey("memories.id"), nullable=True)
 
 
 class IdentityModel(Base):
@@ -519,6 +537,19 @@ class JudgeScoreModel(Base):
     score: Mapped[int] = mapped_column(nullable=False)
     warned: Mapped[bool] = mapped_column(nullable=False)
     judged_at: Mapped[datetime] = mapped_column(nullable=False)
+
+
+class DaySummaryModel(Base):
+    """El resumen de un día que hace el sueño (pieza G de ADR-233, ADR-239).
+
+    Solo con lo que dijo el propietario ese día: el sueño no lee a Sirius.
+    """
+
+    __tablename__ = "day_summaries"
+
+    day: Mapped[date] = mapped_column(Date, primary_key=True)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(nullable=False)
 
 
 class ConversationSummaryModel(Base):

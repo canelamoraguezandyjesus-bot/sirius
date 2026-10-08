@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import cast
 
@@ -20,6 +20,7 @@ from sirius.adapters.persistence.database import (
 )
 from sirius.adapters.persistence.models import MemoryModel, MemoryRevisionModel
 from sirius.domain.criticality import Criticality
+from sirius.domain.facts import OWNER, Certainty, is_sirius, person_key
 from sirius.domain.memory import (
     Memory,
     MemoryRevision,
@@ -47,6 +48,10 @@ def _to_domain_revision(model: MemoryRevisionModel) -> MemoryRevision:
         origin=model.origin,
         source_event_id=model.source_event_id,
         created_at=model.created_at.replace(tzinfo=UTC),
+        valid_from=model.valid_from,
+        valid_to=model.valid_to,
+        said_by=model.said_by,
+        certainty=model.certainty,
     )
 
 
@@ -77,6 +82,8 @@ def _to_domain_memory(model: MemoryModel, revision_model: MemoryRevisionModel) -
         category=model.category,
         category_locked=model.category_locked,
         criticality=_to_domain_criticality(model.criticality),
+        person=model.person,
+        topic=model.topic,
     )
 
 
@@ -131,6 +138,76 @@ def _load_memories(session: Session, models: Sequence[MemoryModel]) -> list[Memo
     return memories
 
 
+def _add_memory(
+    session: Session, content: str, origin: str, *, source_event_id: int | None
+) -> tuple[MemoryModel, MemoryRevisionModel]:
+    now = _utc_now_naive()
+    memory_model = MemoryModel(status=MemoryStatus.CURRENT, created_at=now, updated_at=now)
+    session.add(memory_model)
+    session.flush()
+    revision_model = MemoryRevisionModel(
+        memory_id=memory_model.id,
+        version=1,
+        content=content,
+        origin=origin,
+        source_event_id=source_event_id,
+        is_current=True,
+        created_at=now,
+    )
+    session.add(revision_model)
+    session.flush()
+    return memory_model, revision_model
+
+
+def _current_fact_model(session: Session, person: str, topic: str) -> MemoryModel | None:
+    """El hecho vigente de ``person`` sobre ``topic``, sin mirar tildes ni mayúsculas."""
+    models = session.scalars(
+        select(MemoryModel).where(
+            MemoryModel.status == MemoryStatus.CURRENT,
+            MemoryModel.person.is_not(None),
+            MemoryModel.topic.is_not(None),
+        )
+    ).all()
+    keys = (person_key(person), person_key(topic))
+    return next(
+        (
+            model
+            for model in models
+            if (person_key(model.person or ""), person_key(model.topic or "")) == keys
+        ),
+        None,
+    )
+
+
+def _close_and_revise(
+    session: Session,
+    memory_model: MemoryModel,
+    content: str,
+    origin: str,
+    since: date,
+    source_event_id: int | None,
+) -> MemoryRevisionModel:
+    """Cierra la revisión vigente de un hecho en ``since`` y pone otra en su lugar."""
+    current = _get_current_revision_model(session, memory_model.id)
+    current.is_current = False
+    current.valid_to = since
+    session.flush()
+    now = _utc_now_naive()
+    revision_model = MemoryRevisionModel(
+        memory_id=memory_model.id,
+        version=current.version + 1,
+        content=content,
+        origin=origin,
+        source_event_id=source_event_id,
+        is_current=True,
+        created_at=now,
+    )
+    session.add(revision_model)
+    memory_model.updated_at = now
+    session.flush()
+    return revision_model
+
+
 class SqliteMemoryRepository:
     """Memory repository backed by a local SQLite database.
 
@@ -180,30 +257,95 @@ class SqliteMemoryRepository:
         ensure_valid_subject_key(subject_key)
         ensure_subject_key_has_a_project(subject_key, project_id)
         with self._scope() as session:
-            now = _utc_now_naive()
-            memory_model = MemoryModel(
-                status=MemoryStatus.CURRENT,
-                subject_key=subject_key,
-                project_id=project_id,
-                created_at=now,
-                updated_at=now,
+            memory_model, revision_model = _add_memory(
+                session, content, origin, source_event_id=source_event_id
             )
-            session.add(memory_model)
+            memory_model.subject_key = subject_key
+            memory_model.project_id = project_id
             session.flush()
-
-            revision_model = MemoryRevisionModel(
-                memory_id=memory_model.id,
-                version=1,
-                content=content,
-                origin=origin,
-                source_event_id=source_event_id,
-                is_current=True,
-                created_at=now,
-            )
-            session.add(revision_model)
-            session.flush()
-
             return _to_domain_memory(memory_model, revision_model)
+
+    def record_fact(
+        self,
+        person: str,
+        topic: str | None,
+        content: str,
+        origin: str,
+        *,
+        since: date,
+        said_by: str = OWNER,
+        certainty: Certainty = Certainty.SURE,
+        source_event_id: int | None = None,
+    ) -> Memory:
+        """Apunta un hecho de ``person``. Si ya hay uno vigente del mismo tema, lo cierra.
+
+        Pieza G de ADR-233 (ADR-239): el de antes no se borra ni se corrige, se
+        cierra con la fecha del nuevo, que pasa a ser su revisión vigente. Así la
+        charla solo ve el vigente y la historia guarda los dos, cada uno con quién
+        lo dijo y con qué seguridad. Lo que dice Sirius nunca es un hecho.
+        """
+        ensure_valid_origin(origin)
+        if not person.strip() or not content.strip():
+            msg = "Un hecho necesita persona y texto."
+            raise ValueError(msg)
+        if is_sirius(said_by):
+            msg = "Lo que dice Sirius nunca es un hecho."
+            raise ValueError(msg)
+        with self._scope() as session:
+            current = _current_fact_model(session, person, topic) if topic is not None else None
+            if current is None:
+                memory_model, revision_model = _add_memory(
+                    session, content, origin, source_event_id=source_event_id
+                )
+                memory_model.person = person.strip()
+                memory_model.topic = topic.strip() if topic is not None else None
+            else:
+                memory_model = current
+                revision_model = _close_and_revise(
+                    session, memory_model, content, origin, since, source_event_id
+                )
+            revision_model.valid_from = since
+            revision_model.said_by = said_by.strip()
+            revision_model.certainty = Certainty(certainty).value
+            session.flush()
+            return _to_domain_memory(memory_model, revision_model)
+
+    def list_current_facts(self, person: str | None = None) -> list[Memory]:
+        """Los hechos vigentes, de todos o de ``person``, del más nuevo al más viejo."""
+        with self._scope() as session:
+            models = session.scalars(
+                select(MemoryModel)
+                .where(
+                    MemoryModel.status == MemoryStatus.CURRENT,
+                    MemoryModel.person.is_not(None),
+                )
+                .order_by(MemoryModel.updated_at.desc(), MemoryModel.id.desc())
+            ).all()
+            if person is not None:
+                key = person_key(person)
+                models = [model for model in models if person_key(model.person or "") == key]
+            return _load_memories(session, models)
+
+    def known_people(self) -> list[str]:
+        """Las personas con algún hecho vigente, sin repetir, como se apuntaron la primera vez."""
+        people: dict[str, str] = {}
+        for memory in reversed(self.list_current_facts()):
+            if memory.person is not None:
+                people.setdefault(person_key(memory.person), memory.person)
+        return list(people.values())
+
+    def find_fact_history(self, person: str, topic: str) -> list[MemoryRevision]:
+        """La historia del hecho de ``person`` sobre ``topic``, de lo más viejo a lo vigente."""
+        with self._scope() as session:
+            model = _current_fact_model(session, person, topic)
+            if model is None:
+                return []
+            revision_models = session.scalars(
+                select(MemoryRevisionModel)
+                .where(MemoryRevisionModel.memory_id == model.id)
+                .order_by(MemoryRevisionModel.version)
+            ).all()
+            return [_to_domain_revision(revision) for revision in revision_models]
 
     def get_memory(self, memory_id: int) -> Memory:
         with self._scope() as session:
@@ -270,9 +412,25 @@ class SqliteMemoryRepository:
             return [_to_domain_revision(model) for model in revision_models]
 
     def correct_memory(
-        self, memory_id: int, content: str, origin: str, *, source_event_id: int | None = None
+        self,
+        memory_id: int,
+        content: str,
+        origin: str,
+        *,
+        source_event_id: int | None = None,
+        said_by: str | None = None,
+        certainty: Certainty | None = None,
     ) -> Memory:
+        """Una revisión nueva de un recuerdo.
+
+        Si es un hecho (pieza G, ADR-239), la de antes se cierra hoy y la nueva vale
+        desde hoy, dicha por ``said_by`` —el propietario si no se dice otro— y con
+        ``certainty`` —segura si no—: corregir un hecho es decir cómo es ahora.
+        """
         ensure_valid_origin(origin)
+        if is_sirius(said_by):
+            msg = "Lo que dice Sirius nunca es un hecho."
+            raise ValueError(msg)
         with self._scope() as session:
             memory_model = session.get(MemoryModel, memory_id)
             if memory_model is None:
@@ -281,8 +439,11 @@ class SqliteMemoryRepository:
             memory = _load_memory(session, memory_model)
             ensure_can_correct(memory)
 
+            today = date.today()
             current_revision_model = _get_current_revision_model(session, memory_id)
             current_revision_model.is_current = False
+            if memory.is_fact:
+                current_revision_model.valid_to = today
             session.flush()
 
             new_revision_model = MemoryRevisionModel(
@@ -294,6 +455,10 @@ class SqliteMemoryRepository:
                 is_current=True,
                 created_at=_utc_now_naive(),
             )
+            if memory.is_fact:
+                new_revision_model.valid_from = today
+                new_revision_model.said_by = (said_by or OWNER).strip()
+                new_revision_model.certainty = Certainty(certainty or Certainty.SURE).value
             session.add(new_revision_model)
             memory_model.updated_at = _utc_now_naive()
             # D7, "Corrección de contenido y reetiquetado" (SIRIUS-ARQ-0.2
@@ -307,6 +472,26 @@ class SqliteMemoryRepository:
             session.flush()
 
             return _to_domain_memory(memory_model, new_revision_model)
+
+    def correct_fact(
+        self,
+        memory_id: int,
+        content: str,
+        origin: str,
+        *,
+        source_event_id: int | None = None,
+        said_by: str = OWNER,
+        certainty: Certainty = Certainty.SURE,
+    ) -> Memory:
+        """«Eso no es así» confirmado (pieza G, ADR-239): ``correct_memory`` de un hecho."""
+        return self.correct_memory(
+            memory_id,
+            content,
+            origin,
+            source_event_id=source_event_id,
+            said_by=said_by,
+            certainty=certainty,
+        )
 
     def archive_memory(self, memory_id: int) -> Memory:
         with self._scope() as session:
@@ -339,8 +524,13 @@ class SqliteMemoryRepository:
             ).all()
             for revision_model in revision_models:
                 revision_model.content = None
+                # Pieza G (ADR-239): quién lo dijo también cuenta lo que decía.
+                revision_model.said_by = None
 
             memory_model.status = MemoryStatus.DELETED
+            # Y de quién era y de qué trataba.
+            memory_model.person = None
+            memory_model.topic = None
             memory_model.updated_at = _utc_now_naive()
             session.flush()
 

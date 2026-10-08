@@ -26,7 +26,7 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **232**.
+- Decisiones (ADR): **233**.
 - Bloques del motor: 17 cerrado, 3 fuera_de_alcance.
 - Defectos registrados: 2 abierto, 84 cerrado.
 - Ideas aparcadas o descartadas: 12 aparcada, 3 descartada, 2 promovida.
@@ -79,6 +79,7 @@ huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| [239](docs/decisions/ADR-239-guardar-los-hechos-con-su-fecha-y-quien-lo-dijo-como-recuerdos-sonar-sin-leer-a-sirius-y-obedecer-las-ordenes-de-memoria-sin-pasar-por-el-modelo.md) | 2026-10-07 | APROBADO | Guardar los hechos con su fecha y quién lo dijo como recuerdos, soñar sin leer a Sirius y obedecer las órdenes de memoria sin pasar por el modelo | Se adopta la opción 2. |
 | [238](docs/decisions/ADR-238-buscar-los-recuerdos-por-significado-dentro-de-sirius.db-y-sacar-a-ollama-de-cada-respuesta.md) | 2026-10-07 | APROBADO | Buscar los recuerdos por significado dentro de sirius.db y sacar a Ollama de cada respuesta | Se adopta la opción 2. |
 | [237](docs/decisions/ADR-237-dar-a-sirius-memoria-propia-un-juez-y-las-40-preguntas-trampa.md) | 2026-10-07 | APROBADO | Dar a Sirius memoria propia, un juez y las 40 preguntas trampa | Se adopta la opción 2 para la memoria propia, y las preguntas trampa se contestan aparte, como el primer turno de una charla nueva. |
 | [236](docs/decisions/ADR-236-dar-a-la-charla-de-sirius-sus-modos-su-recordatorio-su-resumen-y-los-dos-botones.md) | 2026-10-07 | APROBADO | Dar a la charla de Sirius sus modos, su recordatorio, su resumen y los dos botones | Se adopta la opción 2, y el resumen se hace al acabar el turno que lo dispara. |
@@ -341,6 +342,7 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 | `doble-mas-permisivo-que-la-herramienta-que-dobla` | 1 | sí | 193 |
 | `dos-sesiones-que-no-se-ven` | 1 | sí | 206 |
 | `espera-sin-fin-por-un-suceso-que-nadie-va-a-emitir` | 1 | sí | 194 |
+| `estado-compartido-entre-hilos` | 1 | sí | 239 |
 | `estado-en-el-que-se-entra-y-del-que-no-se-sale` | 1 | sí | 189 |
 | `guarda-ampliada-a-un-corpus-que-no-es-el-suyo` | 1 | sí | 190 |
 | `guarda-medida-que-se-queda-sin-autoridad-porque-nadie-relee-la-medida` | 1 | sí | 199 |
@@ -451,6 +453,10 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 ### `espera-sin-fin-por-un-suceso-que-nadie-va-a-emitir`
 
 - **ADR-194** — una incidencia en un estado que solo mueve la máquina, (lo hace cumplir `tests/automation/test_sirius_reconcile.py`).
+
+### `estado-compartido-entre-hilos`
+
+- **ADR-239** — un caso de uso nuevo que corre en segundo plano reutiliza la (lo hace cumplir `tests/integration/test_ordenes_de_memoria.py`).
 
 ### `estado-en-el-que-se-entra-y-del-que-no-se-sale`
 

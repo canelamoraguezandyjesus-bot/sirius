@@ -57,7 +57,7 @@ and the B6c budget is still exactly what M20 left there.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 from sirius.application.context_budget import (
     DEFAULT_MAX_KNOWLEDGE_ITEMS,
@@ -69,6 +69,7 @@ from sirius.domain.conversation import Message, MessageStatus
 from sirius.domain.criticality import Criticality
 from sirius.domain.decision import Decision
 from sirius.domain.event import Event
+from sirius.domain.facts import OWNER, mentioned_people
 from sirius.domain.identity import Identity
 from sirius.domain.memory import Memory
 from sirius.domain.own_memory import OwnMemory, build_own_memory, render_own_memory
@@ -85,10 +86,14 @@ from sirius.ports.conversation_repository import ConversationRepository
 from sirius.ports.decision_repository import DecisionRepository
 from sirius.ports.event_repository import EventRepository
 from sirius.ports.identity_repository import IdentityRepository
-from sirius.ports.memory_repository import MemoryRepository
+from sirius.ports.memory_repository import FactRepository, MemoryRepository
 from sirius.ports.project_repository import ProjectRepository
 from sirius.ports.relevance_filter import RelevanceFilterPort
-from sirius.ports.robot_conversation import ConversationSummaryRepository, ReplyMarkRepository
+from sirius.ports.robot_conversation import (
+    ConversationSummaryRepository,
+    DaySummaryRepository,
+    ReplyMarkRepository,
+)
 from sirius.ports.token_counter import TokenCounter
 
 _DEFAULT_RECENT_MESSAGES_LIMIT = 20
@@ -152,6 +157,15 @@ class ContextAssemblyError(RuntimeError):
     """
 
 
+#: Pieza G (ADR-239): cuántos hechos suyos van en cada petición, como mucho.
+MAX_OWNER_FACTS = 40
+#: Cuántas personas nombradas, y cuántos hechos de cada una.
+MAX_PEOPLE = 3
+MAX_PERSON_FACTS = 15
+#: Cuántos días soñados van en cada petición.
+RECENT_DAYS = 3
+
+
 @dataclass(frozen=True, slots=True)
 class Context:
     """Deterministic, ordered context assembled before calling any LLM provider.
@@ -182,6 +196,11 @@ class Context:
     # PA-R02-07 (pieza E de ADR-233): lo que ya dijo de esto y lo que sí es y
     # no es, según sus marcas; ``None`` sin repositorio de marcas.
     own_memory: OwnMemory | None = None
+    # Pieza G de ADR-233 (ADR-239): los hechos vigentes de su dueño, los de las
+    # personas que nombra el mensaje, y lo que soñó de los últimos días.
+    owner_facts: tuple[Memory, ...] = ()
+    people_facts: tuple[tuple[str, tuple[Memory, ...]], ...] = ()
+    recent_days: tuple[tuple[date, str], ...] = ()
 
 
 class ContextBuilder:
@@ -231,6 +250,8 @@ class ContextBuilder:
         category_matching_enabled: bool = False,
         summary_repository: ConversationSummaryRepository | None = None,
         reply_marks: ReplyMarkRepository | None = None,
+        facts: FactRepository | None = None,
+        day_summaries: DaySummaryRepository | None = None,
     ) -> None:
         self._identity_repository = identity_repository
         self._project_repository = project_repository
@@ -262,6 +283,9 @@ class ContextBuilder:
         self._summary_repository = summary_repository
         # PA-R02-07: sin marcas no hay memoria propia, y el contexto es el de siempre.
         self._reply_marks = reply_marks
+        # Pieza G (ADR-239): sin hechos ni resúmenes del día, el de siempre.
+        self._facts = facts
+        self._day_summaries = day_summaries
 
     def build(self, current_user_message: str) -> Context:
         """Assemble a Context; deterministic for the same underlying data.
@@ -288,6 +312,21 @@ class ContextBuilder:
             raise ContextAssemblyError(msg)
 
         ranked_knowledge = self._rank_related_knowledge(current_user_message)
+        owner_facts, people_facts = self._facts_for(current_user_message)
+        shown_facts = {memory.id for memory in owner_facts}
+        shown_facts |= {memory.id for _, facts in people_facts for memory in facts}
+        if shown_facts:
+            # Lo que ya va en su sección no gasta sitio entre los recuerdos.
+            ranked_knowledge = tuple(
+                candidate
+                for candidate in ranked_knowledge
+                if not (isinstance(candidate.item, Memory) and candidate.item.id in shown_facts)
+            )
+        recent_days = (
+            tuple(self._day_summaries.latest_days(RECENT_DAYS))
+            if self._day_summaries is not None
+            else ()
+        )
 
         all_messages = self._conversation_repository.list_messages(conversation.id)
         # SIRIUS-ARQ-0.1 S5.1/S5.2: "Mensajes parciales conservan su
@@ -323,6 +362,12 @@ class ContextBuilder:
         )
 
         protected_tokens = self._protected_tokens(identity, project, current_user_message)
+        for memory in (*owner_facts, *(m for _, facts in people_facts for m in facts)):
+            protected_tokens += self._token_counter.count_tokens(
+                memory.current_revision.content or ""
+            )
+        for _, content in recent_days:
+            protected_tokens += self._token_counter.count_tokens(content)
         if summary is not None:
             protected_tokens += self._token_counter.count_tokens(summary.content)
         if own_memory:
@@ -361,7 +406,29 @@ class ContextBuilder:
             current_user_message=current_user_message,
             summary=summary.content if summary is not None else None,
             own_memory=own_memory,
+            owner_facts=owner_facts,
+            people_facts=people_facts,
+            recent_days=recent_days,
         )
+
+    def _facts_for(
+        self, current_user_message: str
+    ) -> tuple[tuple[Memory, ...], tuple[tuple[str, tuple[Memory, ...]], ...]]:
+        """Pieza G (ADR-239): los hechos de su dueño y los de quien nombra el mensaje.
+
+        Los de su dueño van siempre, hasta ``MAX_OWNER_FACTS``: «¿dónde vivo yo?»
+        no comparte palabras con «vive en Valencia». Los de los demás, cuando el
+        mensaje los nombra.
+        """
+        if self._facts is None:
+            return (), ()
+        owner_facts = tuple(self._facts.list_current_facts(OWNER)[:MAX_OWNER_FACTS])
+        people = mentioned_people(current_user_message, self._facts.known_people())
+        people_facts = tuple(
+            (person, tuple(self._facts.list_current_facts(person)[:MAX_PERSON_FACTS]))
+            for person in people[:MAX_PEOPLE]
+        )
+        return owner_facts, tuple((person, facts) for person, facts in people_facts if facts)
 
     def _rank_related_knowledge(self, current_user_message: str) -> tuple[RankedKnowledge, ...]:
         """B6b-ranked vigente knowledge related to ``current_user_message``,

@@ -434,6 +434,7 @@ def test_send_message_uses_context_built_from_current_identity_and_project(
 
     result = use_case.send_message("hola")
 
+    assert result.context is not None
     assert result.context.identity.current_version.name == "Sirius"
     assert result.context.current_user_message == "hola"
 
@@ -469,6 +470,7 @@ def test_send_message_context_reflects_a_project_continuity_update(tmp_path: Pat
     )
     result = use_case.send_message("hola")
 
+    assert result.context is not None
     instructions = render_instructions(result.context)
     assert "Nombre: Sirius 0.1" in instructions
     assert "Estado: estado actualizado" in instructions
@@ -486,6 +488,7 @@ def test_send_message_records_operation_id_and_identity_version(tmp_path: Path) 
     assert result.user_message.operation_id == "op-123"
     assert result.sirius_message.operation_id == "op-123"
     assert result.user_message.identity_version is None
+    assert result.context is not None
     assert result.sirius_message.identity_version == result.context.identity.current_version.version
 
 
@@ -633,6 +636,7 @@ def test_cancelled_and_failed_messages_are_excluded_from_a_future_context(
     completed_use_case = _build_use_case(database_path, FakeLLMProvider())
     result = completed_use_case.send_message("segundo")
 
+    assert result.context is not None
     recent_contents = [m.content for m in result.context.recent_messages]
     assert "empezando..." not in recent_contents  # the FAILED Sirius reply is excluded
     assert "primero" in recent_contents  # the user's own message is COMPLETED and stays

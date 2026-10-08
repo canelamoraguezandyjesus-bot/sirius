@@ -85,6 +85,8 @@ def _build_main_window(
         reply_judge_service=dependencies.reply_judge_service,
         trick_questions_use_case=dependencies.trick_questions_use_case,
         memory_embedding_service=dependencies.memory_embedding_service,
+        fact_proposals=dependencies.fact_proposals,
+        dream_service=dependencies.dream_service,
     )
     main_window.project_completed.connect(_on_project_completed)
     return main_window
