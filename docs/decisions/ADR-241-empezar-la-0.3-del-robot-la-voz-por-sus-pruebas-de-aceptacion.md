@@ -75,8 +75,10 @@ voz y antes de cualquier revisión.
      única opción es este ordenador. Una prueba lo mira, y otra vigila que ningún turno
      de voz abra una conexión (PA-R03-08).
    - **Que guarde audio.** Los sonidos viven en memoria mientras se procesan y la base
-     no tiene columna para ellos. Una prueba busca ficheros de audio nuevos y audio en la
-     base después de varios turnos (PA-R03-05).
+     no tiene columna para ellos. Durante un turno de voz, un vigilante apunta cualquier
+     fichero que algo abra para escribir que no sea la base, los ajustes o el diario, y
+     cualquier conexión; al acabar se buscan además ficheros de audio nuevos y audio en
+     la base (PA-R03-05 y PA-R03-08).
    - **Que lo que no es para él entre en su memoria.** Se descarta antes de llegar al
      modelo y antes de guardarse (PA-R03-05 y PA-R03-06).
    - **Que se oiga a sí mismo.** Lo que suena por el altavoz y vuelve por el micro no
@@ -227,7 +229,7 @@ la misma PR que anote sus cifras.
 - La comprobación de la tabla: `tests/acceptance/test_robot_0_3_trazabilidad.py` pasa
   con el documento como está, y las 13 pruebas de `test_robot_0_2_trazabilidad.py`, diez
   de ellas con tablas rotas a propósito, siguen pasando sobre el módulo compartido.
-- La batería entera. Sobre `7209d783`, el primer head: 8 194 pasan, 16 saltadas y 28 `xfail`, los 26 de la 0.3 de entonces y los 2 que ya estaban, en 24 min 29 s. Sobre `main` (`d545ff17`) eran 8 181 pasan y 2 `xfail`: entran las esperadas y 13 que pasan, las dos de la trazabilidad de la 0.3, la tabla rota nueva de la 0.2 y las que los guardas de documentos añaden por cada ADR y documento nuevo. Sobre el head de la ronda 1: 8 194 pasan, 16 saltadas y 29 `xfail`, los 27 de la 0.3 y los 2 que ya estaban, en 25 min 40 s.
+- La batería entera. Sobre `7209d783`, el primer head: 8 194 pasan, 16 saltadas y 28 `xfail`, los 26 de la 0.3 de entonces y los 2 que ya estaban, en 24 min 29 s. Sobre `main` (`d545ff17`) eran 8 181 pasan y 2 `xfail`: entran las esperadas y 13 que pasan, las dos de la trazabilidad de la 0.3, la tabla rota nueva de la 0.2 y las que los guardas de documentos añaden por cada ADR y documento nuevo. Sobre el head de la ronda 1: 8 194 pasan, 16 saltadas y 29 `xfail`, los 27 de la 0.3 y los 2 que ya estaban, en 25 min 40 s. Sobre el head de la ronda 2: 8 198 pasan, 16 saltadas y 29 `xfail`, en 23 min 44 s; las 4 que entran son las 3 del vigilante y la que los guardas añaden por el fichero nuevo.
 
 ## Consecuencias
 
@@ -285,3 +287,32 @@ la misma PR que anote sus cifras.
     en «Lo que estas pruebas no garantizan».
   - Familia: nueva en esta PR. Si la ronda 2 la repite, se para y se repasan las 27
     pruebas una a una contra «¿pasaría sin su pieza?», no solo las que señale.
+- **Ronda 2 de Codex**, sobre `894cb616`: seis hallazgos P2, los seis ciertos y los seis de
+  la familia de la ronda 1; tres de ellos sobre líneas que la ronda 1 ya tenía delante, y
+  el propio revisor lo dice.
+  - **Regla de las dos rondas.** Se dejó de parchear hallazgo a hallazgo y se buscó la
+    raíz: las pruebas miraban el resultado final (lo guardado, lo contestado) y no el
+    camino por los dobles, así que una pieza que atajara, metiendo el texto en la charla
+    sin oírlo, contestando sin hablar, o contando botones sin que suenen, las pasaba.
+    Se repasaron las 27 una a una con la pregunta «¿pasaría sin su pieza, o con una pieza
+    que hiciera trampa?», y se endurecieron 21, no solo las seis señaladas: cada una
+    comprueba ahora que el sonido pasó por el micro, el texto por el transcriptor, la
+    petición por el modelo y la frase por el altavoz, en lo que le toque.
+  - Los seis señalados: el vigilante de escrituras excluía todo el directorio de la base,
+    y un temporal junto a `sirius.db` se le escapaba; ahora solo deja pasar la base y lo
+    que SQLite pone a su lado, los ajustes y el diario, se llame como se llame y esté
+    donde esté lo demás. La hoja de voces contaba botones con un entero del propio
+    objeto; ahora la prueba pulsa cada botón y comprueba que por el altavoz suena esa
+    frase con esa voz. La prueba de la cancelación de eco no demostraba que el micro
+    siguiera abierto ni que el eco entrara; ahora exige el micro abierto mientras habla,
+    el eco leído por el micro y solo la voz del propietario transcrita, con las dos a la
+    vez. «Olvida eso» por voz comprueba antes que lo dicho se guardó. La charla por voz y
+    la escrita tienen que llevar los mismos tres ejemplos, como conjunto. Y la locución
+    entera se compara con `prepare_speech_text` de lo escrito, no tres trozos.
+  - El vigilante ve también cada `socket.connect` durante un turno, así que
+    `conexiones_de_red` ya no depende de la pieza B. Que el vigilante ve lo que dice ver
+    lo comprueban tres pruebas nuevas fuera de la tabla,
+    `tests/acceptance/test_vigilante_del_conductor.py`, con un wav temporal borrado, un
+    `os.open`, una lectura que no cuenta, una conexión y una escritura fuera del turno.
+  - El inventario sigue en 27. Si la ronda 3 trae la misma familia, se corrige en un
+    commit y se fusiona sin cuarta, como fija el criterio de parada.

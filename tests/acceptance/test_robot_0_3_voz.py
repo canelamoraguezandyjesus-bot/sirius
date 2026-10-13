@@ -9,6 +9,11 @@ Los dobles del conductor llevan escrito lo que suena, en vez de ondas: estas
 pruebas demuestran que lo oído llega donde debe, que lo que dice es lo que
 escribió y que nada sale ni se guarda, no que el oído o la voz de verdad
 acierten. Eso lo miden las evaluaciones del propietario en su ordenador.
+
+Cada prueba mira el camino, no solo el final: que el sonido pasó por el micro,
+el texto por el transcriptor, la petición por el modelo y la frase por el
+altavoz. Una pieza que atajara, metiendo el texto en la charla sin oírlo o
+contestando sin hablar, no las pasa (rondas 1 y 2 de Codex sobre la PR #686).
 """
 
 from __future__ import annotations
@@ -18,7 +23,7 @@ from pathlib import Path
 import pytest
 from conductor_robot_0_3 import ConductorDeVoz, percentil, pieza
 
-from sirius.application.prepare_speech_text import CODE_BLOCK_SPOKEN_AS
+from sirius.application.prepare_speech_text import prepare_speech_text
 
 pytestmark = pytest.mark.acceptance
 
@@ -30,6 +35,11 @@ _HERRAMIENTAS_DEL_PLAN = {
 }
 
 
+def _sin_blancos(texto: str) -> str:
+    """El texto con los blancos y saltos de línea reducidos a un espacio."""
+    return " ".join(texto.split())
+
+
 # --- PA-R03-01 · Lo que dice por voz entra en la charla -----------------------
 
 
@@ -39,6 +49,12 @@ def test_lo_que_dice_por_voz_llega_a_la_charla_como_un_mensaje_mas(tmp_path: Pat
 
     turno = conductor.oye("Buenos días, Sirius.")
 
+    # El camino entero: micro, transcriptor, modelo y base.
+    assert [(s.texto, s.de_quien) for s in conductor.micro.leidos if not s.es_silencio] == [
+        ("Buenos días, Sirius.", "propietario")
+    ]
+    assert conductor.transcriptor.transcritos == ["Buenos días, Sirius."]
+    assert conductor.peticiones[-1].texto == "Buenos días, Sirius."
     assert turno.oido == "Buenos días, Sirius."
     assert turno.para_el
     assert turno.contestado == "Respuesta 1 de Sirius."
@@ -65,6 +81,8 @@ def test_la_respuesta_a_lo_dicho_por_voz_pasa_por_la_misma_charla_que_lo_escrito
         assert semilla.instrucciones in peticion.instrucciones
         assert peticion.instrucciones.rstrip().endswith(recordatorio.strip())
         assert len(conductor.ejemplos_en(peticion)) == 3
+    # Los mismos tres ejemplos, que salen del mensaje; solo cambia el orden (ADR-240).
+    assert set(conductor.ejemplos_en(por_voz)) == set(conductor.ejemplos_en(escrita))
 
 
 @pieza("B", "el turno acaba cuando el detector dice que ha terminado, no en el primer silencio")
@@ -82,6 +100,8 @@ def test_el_turno_acaba_cuando_el_detector_dice_que_ha_terminado_y_no_en_el_prim
 
     turno = conductor.calla(2)
 
+    assert sum(1 for sonido in conductor.oido.vistos if sonido.es_silencio) >= 3
+    assert conductor.transcriptor.transcritos == ["Sirius, estaba pensando que"]
     assert turno.oido == "Sirius, estaba pensando que"
     assert turno.contestado == "Respuesta 1 de Sirius."
 
@@ -90,10 +110,14 @@ def test_el_turno_acaba_cuando_el_detector_dice_que_ha_terminado_y_no_en_el_prim
 def test_olvida_eso_dicho_por_voz_olvida(tmp_path: Path) -> None:
     conductor = ConductorDeVoz(tmp_path)
     conductor.oye("Sirius, la clave de la alarma es Zarzamora.")
+    assert conductor.busca_en_toda_la_base("Zarzamora") != [], (
+        "lo dicho por voz tiene que guardarse"
+    )
 
     turno = conductor.oye("Olvida eso.")
 
     assert turno.para_el
+    assert conductor.transcriptor.transcritos[-1] == "Olvida eso."
     assert conductor.busca_en_toda_la_base("Zarzamora") == []
     assert not conductor.lo_vio_el_modelo_en_el_ultimo_turno("Zarzamora")
 
@@ -116,10 +140,12 @@ def test_empieza_a_hablar_con_la_primera_frase_antes_de_que_el_modelo_acabe(
         "Primera frase, jefe.",
         "Y la segunda, que es más larga y tarda más.",
     )
+    assert [frase.texto for frase in conductor.voz.frases] == list(turno.hablado)
     assert conductor.voz.frases[0].momento < conductor.momento_en_que_el_modelo_acabo()
+    assert [sonido.texto for sonido, _ in conductor.altavoz.sonados] == list(turno.hablado)
 
 
-@pieza("C", "lo que dice es lo que escribió, sin marcas ni código")
+@pieza("C", "dice todo lo que escribió y nada más, sin marcas ni código")
 def test_lo_que_dice_es_lo_que_escribio_sin_marcas_ni_codigo(tmp_path: Path) -> None:
     escrito = "Mira **esto**:\n\n```python\nprint(1)\n```\n\nY ya está, listo."
     conductor = ConductorDeVoz(tmp_path, respuestas=[escrito])
@@ -127,13 +153,10 @@ def test_lo_que_dice_es_lo_que_escribio_sin_marcas_ni_codigo(tmp_path: Path) -> 
     turno = conductor.oye("Sirius, enséñame el código.")
 
     assert turno.contestado == escrito
-    dicho = " ".join(turno.hablado)
-    assert "Mira esto" in dicho
-    assert CODE_BLOCK_SPOKEN_AS in dicho
-    assert "Y ya está, listo." in dicho
-    assert "**" not in dicho
-    assert "```" not in dicho
-    assert "print(1)" not in dicho
+    # La locución entera es lo escrito preparado para leerse, sin quitar ni añadir
+    # nada; solo cambia el corte en frases.
+    assert _sin_blancos(" ".join(turno.hablado)) == _sin_blancos(prepare_speech_text(escrito))
+    assert "print(1)" not in " ".join(turno.hablado)
 
 
 @pieza("C", "habla con una voz de Piper en español de España")
@@ -144,6 +167,9 @@ def test_habla_con_una_voz_de_piper_en_espanol_de_espana(tmp_path: Path) -> None
 
     assert conductor.herramientas()["habla"] == "piper"
     assert conductor.voz_con_la_que_habla().startswith("es_ES-")
+    assert [(s.texto, s.de_quien) for s, _ in conductor.altavoz.sonados] == [
+        ("Respuesta 1 de Sirius.", "sirius")
+    ]
 
 
 # --- PA-R03-03 · Su propia voz no se toma por la del propietario --------------
@@ -157,6 +183,10 @@ def test_su_propia_voz_no_empieza_un_turno(tmp_path: Path) -> None:
     turno = conductor.oye("Buenos días, Sirius.")
 
     assert turno.hablado == ("Respuesta 1 de Sirius.",)
+    # El eco existió: el altavoz lo devolvió al micro.
+    assert any(
+        s.de_quien == "sirius" for s in (*conductor.micro.leidos, *conductor.micro.pendientes)
+    )
     assert conductor.transcriptor.transcritos == ["Buenos días, Sirius."]
     assert len(conductor.peticiones) == 1
     assert conductor.charla_guardada()[-2:] == (
@@ -178,12 +208,22 @@ def test_con_la_cancelacion_de_eco_su_propia_voz_sigue_sin_empezar_un_turno(
     turno = conductor.oye("Sirius, cuéntame tu vida.")
 
     assert turno.hablado == ("Una respuesta larguísima que no acaba nunca.",)
+    # Con cancelación de eco el micro sigue abierto mientras habla, el eco entra
+    # por él y no sale del cancelador: ni transcripción, ni turno, ni corte.
+    assert conductor.micro.abierto
+    assert any(s.de_quien == "sirius" for s in conductor.micro.leidos)
     assert conductor.altavoz.parado_en is None
     assert conductor.transcriptor.transcritos == ["Sirius, cuéntame tu vida."]
     assert len(conductor.peticiones) == 1
 
     corte = conductor.oye_mientras_habla("Espera, espera, que tengo prisa.")
 
+    # La voz del propietario, con el eco sonando a la vez, sí atraviesa.
+    assert conductor.transcriptor.transcritos == [
+        "Sirius, cuéntame tu vida.",
+        "Espera, espera, que tengo prisa.",
+    ]
+    assert conductor.altavoz.parado_en is not None
     assert corte.se_callo_tras_ms is not None
     assert corte.oido == "Espera, espera, que tengo prisa."
     assert corte.contestado == "Vale, vale."
@@ -200,7 +240,7 @@ def test_tras_varios_turnos_de_voz_no_queda_ningun_audio_guardado(tmp_path: Path
         conductor.oye(frase)
     conductor.cierra()
 
-    assert conductor.escrituras_de_audio() == []
+    assert conductor.escrituras_en_disco() == []
     assert conductor.ficheros_de_audio_nuevos() == []
     assert conductor.audio_en_la_base() == []
     assert conductor.busca_en_toda_la_base("Pues yo fatal.") != []
@@ -213,9 +253,12 @@ def test_lo_que_no_era_para_el_no_se_guarda_ni_como_texto(tmp_path: Path) -> Non
     turno = conductor.oye("Y mañana, cielos despejados en toda la península.")
     conductor.cierra()
 
+    assert conductor.transcriptor.transcritos == [
+        "Y mañana, cielos despejados en toda la península."
+    ]
     assert not turno.para_el
     assert conductor.busca_en_toda_la_base("cielos despejados") == []
-    assert conductor.escrituras_de_audio() == []
+    assert conductor.escrituras_en_disco() == []
     assert conductor.ficheros_de_audio_nuevos() == []
 
 
@@ -237,6 +280,10 @@ def test_con_su_nombre_siempre_es_para_el(tmp_path: Path) -> None:
 
     assert turno.para_el
     assert turno.contestado == "Respuesta 2 de Sirius."
+    assert [p.texto for p in conductor.peticiones] == [
+        "Oye, Sirius, ¿qué hora es?",
+        "¿Y tú qué opinas, sirius?",
+    ]
 
 
 @pieza("D", "sin su nombre, es para él solo mientras dura la charla")
@@ -252,8 +299,10 @@ def test_sin_su_nombre_es_para_el_solo_mientras_dura_la_charla(tmp_path: Path) -
     conductor.reloj.avanza(conductor.segundos_de_charla() + 1)
     tarde = conductor.oye("¿Has dormido bien?")
 
+    assert conductor.transcriptor.transcritos[-1] == "¿Has dormido bien?"
     assert not tarde.para_el
     assert tarde.contestado is None
+    assert len(conductor.peticiones) == 2
 
 
 @pieza("D", "lo que no es para él no llega al modelo")
@@ -262,9 +311,13 @@ def test_lo_que_no_es_para_el_no_llega_al_modelo(tmp_path: Path) -> None:
 
     turno = conductor.oye("Vamos con el tiempo: mañana lloverá en el norte.")
 
+    assert conductor.transcriptor.transcritos == [
+        "Vamos con el tiempo: mañana lloverá en el norte."
+    ]
     assert not turno.para_el
     assert not conductor.hubo_peticion_al_modelo_en_el_ultimo_turno_de_voz()
     assert turno.hablado == ()
+    assert conductor.altavoz.sonados == []
     assert conductor.peticiones == []
 
 
@@ -278,9 +331,11 @@ def test_si_el_propietario_habla_sirius_se_calla_y_atiende_lo_nuevo(tmp_path: Pa
     )
     conductor.altavoz.sigue_sonando = True
     conductor.oye("Sirius, cuéntame tu vida.")
+    assert conductor.altavoz.parado_en is None
 
     corte = conductor.oye_mientras_habla("Espera, espera, que tengo prisa.")
 
+    assert conductor.altavoz.parado_en is not None
     assert corte.se_callo_tras_ms is not None
     assert corte.se_callo_tras_ms < 500
     assert corte.oido == "Espera, espera, que tengo prisa."
@@ -297,6 +352,7 @@ def test_lo_que_iba_a_decir_queda_escrito_entero_aunque_le_corten(tmp_path: Path
 
     conductor.oye_mientras_habla("Espera, espera, que tengo prisa.")
 
+    assert conductor.altavoz.parado_en is not None
     assert ("Sirius", larga) in conductor.charla_guardada()
 
 
@@ -308,7 +364,8 @@ def test_ninguna_peticion_sale_durante_un_turno_de_voz(tmp_path: Path) -> None:
     conductor = ConductorDeVoz(tmp_path)
 
     for frase in ("Buenos días, Sirius.", "¿Qué tal has dormido?"):
-        conductor.oye(frase)
+        turno = conductor.oye(frase)
+        assert turno.contestado is not None
 
     assert conductor.conexiones_de_red() == []
 
@@ -352,6 +409,7 @@ def test_del_final_de_su_voz_al_primer_sonido_la_tuberia_anade_menos_de_200_ms(
 
     for n in range(1, 21):
         turno = conductor.oye(f"Sirius, pregunta número {n}.")
+        assert turno.hablado == (f"Respuesta {n} de Sirius.",)
         assert turno.primer_sonido_tras_ms is not None
         tiempos.append(turno.primer_sonido_tras_ms)
 
@@ -372,15 +430,21 @@ def test_la_prueba_de_voces_da_cinco_frases_con_cuatro_a_seis_voces_barajadas_y_
     assert len(hoja.frases) == 5
     assert 4 <= len(hoja.candidatas) <= 6
     nombres = {conductor.voz_tras(candidata.etiqueta) for candidata in hoja.candidatas}
+    assert len(nombres) == len(hoja.candidatas)
     assert any(nombre.startswith("es_ES-") for nombre in nombres)
     assert any("chatterbox" in nombre.casefold() for nombre in nombres)
     for candidata in hoja.candidatas:
         assert set(candidata.muestras) == set(hoja.frases)
         assert candidata.etiqueta not in nombres
         assert candidata.etiqueta in hoja.lo_que_ve_el_propietario
+        # Cada botón de escuchar suena de verdad, con la voz y la frase que dice.
+        for frase in hoja.frases:
+            sonido = conductor.escucha_en_la_hoja(candidata.etiqueta, frase)
+            assert sonido.texto == frase
+            assert sonido.de_quien == conductor.voz_tras(candidata.etiqueta)
+            assert conductor.altavoz.sonados[-1][0] == sonido
     for frase in hoja.frases:
         assert frase in hoja.lo_que_ve_el_propietario
-    assert hoja.botones_de_escucha == len(hoja.frases) * len(hoja.candidatas)
     visible = hoja.lo_que_ve_el_propietario.casefold()
     for escondido in (*nombres, "piper", "chatterbox", "es_es"):
         assert escondido.casefold() not in visible
@@ -403,6 +467,8 @@ def test_la_voz_que_elige_el_propietario_queda_para_hablar(tmp_path: Path) -> No
     conductor.reabre()
 
     assert conductor.voz_con_la_que_habla() == nombre
+    conductor.oye("Buenos días, Sirius.")
+    assert conductor.altavoz.sonados[-1][0].de_quien == nombre
 
 
 @pieza("F", "no hay forma de clonar una voz")

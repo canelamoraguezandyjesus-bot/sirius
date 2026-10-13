@@ -40,13 +40,18 @@ def test_el_boton_de_silencio_cierra_el_microfono_y_lo_dice(qtbot: QtBot, tmp_pa
     assert not conductor.micro.abierto
     assert ventana.indicador_de_escucha() == "En silencio"
     callado = conductor.oye("Sirius, ¿me oyes?")
+    # Con el micro cerrado no se lee nada: ni llega al transcriptor ni al modelo.
     assert callado.oido is None
+    assert conductor.micro.leidos == []
+    assert conductor.transcriptor.transcritos == []
     assert conductor.peticiones == []
 
     ventana.pulsa_silencio()
 
     assert conductor.micro.abierto
     assert ventana.indicador_de_escucha() == "Escuchando"
+    de_nuevo = conductor.oye("Sirius, ¿me oyes ahora?")
+    assert de_nuevo.contestado == "Respuesta 1 de Sirius."
 
 
 @pieza("D", "lo oído y lo contestado se ven en la ventana como la charla escrita, con sus botones")
