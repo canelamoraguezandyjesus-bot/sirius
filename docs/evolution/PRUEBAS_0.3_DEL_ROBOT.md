@@ -28,6 +28,17 @@ Igual que `docs/evolution/PRUEBAS_0.2_DEL_ROBOT.md`. Hay dos clases de prueba:
   verdad acierten. Hablan como el plan, y solo `tests/acceptance/conductor_robot_0_3.py`
   sabe cómo se hace cada cosa en el código. Es el conductor de la 0.2 con el oído y la
   voz encima: la charla, la semilla, la memoria y la ventana son las de siempre.
+  Los dobles hacen algo y apuntan lo que hacen: el micro lee, el oído dice cuándo acaba
+  el turno, el transcriptor transcribe, la voz dice, el altavoz suena y el modelo
+  contesta, y cada uno apunta lo que hizo, con su momento, en el acto de hacerlo. Las
+  pruebas miran esos registros, que solo se leen, nunca una cifra o un recuento que dé
+  el conductor, porque quien implementa una pieza escribe también su parte del
+  conductor. Lo que la tubería recibe del micro no dice quién habló ni con qué voz: eso
+  solo lo ve la prueba, así que el eco de Sirius solo se puede apartar cerrando el micro
+  mientras habla (pieza C) o cancelándolo contra lo que suena (pieza E), nunca por una
+  etiqueta. Que los dobles hacen lo que dicen, y que el conductor se construye y lee la
+  base y la ventana de verdad, lo comprueba `tests/acceptance/test_dobles_del_conductor.py`,
+  que corre hoy, sin esperar a ninguna pieza.
 - **Las evaluaciones del propietario**, E-R03-NN, más abajo. Son lo que solo puede juzgar
   él o lo que solo se puede medir en su ordenador, con su micro y su altavoz.
 
@@ -46,16 +57,22 @@ propietario han pasado.
 
 | ID | Qué demuestra | Sale de (§5 del plan) | Piezas | Cobertura | Motivo | Evaluación | Estado | Pruebas |
 |---|---|---|---|---|---|---|---|---|
-| PA-R03-01 | Lo que el propietario dice por voz pasa por el micro y el transcriptor y entra en la charla como un mensaje más: la misma semilla, los mismos tres ejemplos y el mismo recordatorio que escrito, y Sirius contesta. El turno acaba cuando el detector de turno dice que ha terminado, no en el primer silencio. Lo dicho por voz se guarda, y «olvida eso» dicho por voz lo olvida | Lo que se hace, 1 y 2; memoria de la 0.2, paso 6 | B | parcial | evaluación-humana | E-R03-04 | pendiente | `tests/acceptance/test_robot_0_3_voz.py::test_lo_que_dice_por_voz_llega_a_la_charla_como_un_mensaje_mas`<br>`tests/acceptance/test_robot_0_3_voz.py::test_la_respuesta_a_lo_dicho_por_voz_pasa_por_la_misma_charla_que_lo_escrito`<br>`tests/acceptance/test_robot_0_3_voz.py::test_el_turno_acaba_cuando_el_detector_dice_que_ha_terminado_y_no_en_el_primer_silencio`<br>`tests/acceptance/test_robot_0_3_voz.py::test_olvida_eso_dicho_por_voz_olvida` |
+| PA-R03-01 | Lo que el propietario dice por voz pasa por el micro y el transcriptor y entra en la charla como un mensaje más: la misma semilla, los mismos tres ejemplos y el mismo recordatorio que escrito, y Sirius contesta. El turno acaba cuando el detector de turno dice que ha terminado, no en el primer silencio ni en el segundo. Lo dicho por voz se guarda, y «olvida eso» dicho por voz lo olvida, también del diario | Lo que se hace, 1 y 2; memoria de la 0.2, paso 6 | B | parcial | evaluación-humana | E-R03-04 | pendiente | `tests/acceptance/test_robot_0_3_voz.py::test_lo_que_dice_por_voz_llega_a_la_charla_como_un_mensaje_mas`<br>`tests/acceptance/test_robot_0_3_voz.py::test_la_respuesta_a_lo_dicho_por_voz_pasa_por_la_misma_charla_que_lo_escrito`<br>`tests/acceptance/test_robot_0_3_voz.py::test_el_turno_acaba_cuando_el_detector_dice_que_ha_terminado_y_no_en_el_primer_silencio`<br>`tests/acceptance/test_robot_0_3_voz.py::test_olvida_eso_dicho_por_voz_olvida` |
 | PA-R03-02 | Sirius habla con una voz de Piper en español de España y suena por el altavoz; empieza con la primera frase antes de que el modelo acabe; y dice todo lo que escribió y nada más, preparado para leerse, sin marcas ni código | Lo que se hace, 1 y 3; ya está hecho, preparar el texto | C | automática | — | — | pendiente | `tests/acceptance/test_robot_0_3_voz.py::test_empieza_a_hablar_con_la_primera_frase_antes_de_que_el_modelo_acabe`<br>`tests/acceptance/test_robot_0_3_voz.py::test_lo_que_dice_es_lo_que_escribio_sin_marcas_ni_codigo`<br>`tests/acceptance/test_robot_0_3_voz.py::test_habla_con_una_voz_de_piper_en_espanol_de_espana` |
-| PA-R03-03 | Su propia voz no se toma por la del propietario: lo que suena por el altavoz y vuelve por el micro no empieza un turno. Antes de la cancelación de eco, porque no escucha mientras habla; con ella, el micro sigue abierto, el eco entra, no le corta ni se transcribe, y la voz del propietario que suena a la vez sí atraviesa | Lo que se hace, 6 | C, E | automática | — | — | pendiente | `tests/acceptance/test_robot_0_3_voz.py::test_su_propia_voz_no_empieza_un_turno`<br>`tests/acceptance/test_robot_0_3_voz.py::test_con_la_cancelacion_de_eco_su_propia_voz_sigue_sin_empezar_un_turno` |
-| PA-R03-04 | Escucha siempre: al abrir la ventana escucha sin pulsar nada y lo dice; el botón de silencio cierra el micrófono y lo dice; lo oído y lo contestado se ven en la ventana como la charla escrita, con sus dos botones | Lo que se hace, 4; EV-022; personalidad de la 0.2, paso 5 | D | parcial | windows-real | E-R03-01 | pendiente | `tests/acceptance/test_robot_0_3_ventana.py::test_al_abrir_la_ventana_escucha_sin_pulsar_nada_y_lo_dice`<br>`tests/acceptance/test_robot_0_3_ventana.py::test_el_boton_de_silencio_cierra_el_microfono_y_lo_dice`<br>`tests/acceptance/test_robot_0_3_ventana.py::test_lo_oido_y_lo_contestado_se_ven_en_la_ventana_con_sus_dos_botones` |
-| PA-R03-05 | No guarda audio: durante los turnos de voz nada abre para escribir ningún fichero que no sea su base, sus ajustes o su diario, comparados por su ruta de verdad, esté donde esté lo demás y aunque lo borre después; tras varios turnos no hay ningún fichero de audio nuevo y la base solo guarda texto; lo que no era para él no se guarda ni como texto | Lo que se hace, 4 y 5; §2, el audio no sale nunca; EV-022 | D | automática | — | — | pendiente | `tests/acceptance/test_robot_0_3_voz.py::test_tras_varios_turnos_de_voz_no_queda_ningun_audio_guardado`<br>`tests/acceptance/test_robot_0_3_voz.py::test_lo_que_no_era_para_el_no_se_guarda_ni_como_texto` |
-| PA-R03-06 | Sabe cuándo le hablan a él: con su nombre, siempre; sin su nombre, solo mientras dura la charla; lo demás no llega al modelo ni se contesta | Lo que se hace, 5 | D | parcial | evaluación-humana | E-R03-05 | pendiente | `tests/acceptance/test_robot_0_3_voz.py::test_con_su_nombre_siempre_es_para_el`<br>`tests/acceptance/test_robot_0_3_voz.py::test_sin_su_nombre_es_para_el_solo_mientras_dura_la_charla`<br>`tests/acceptance/test_robot_0_3_voz.py::test_lo_que_no_es_para_el_no_llega_al_modelo` |
-| PA-R03-07 | Se le puede cortar: si el propietario habla mientras Sirius habla, Sirius se calla en menos de medio segundo, medido con los relojes de los dobles, y atiende lo nuevo, y lo que iba a decir queda escrito entero | Lo que se hace, 1 y 6; terminado cuando, 2 | E | parcial | windows-real | E-R03-03 | pendiente | `tests/acceptance/test_robot_0_3_voz.py::test_si_el_propietario_habla_sirius_se_calla_y_atiende_lo_nuevo`<br>`tests/acceptance/test_robot_0_3_voz.py::test_lo_que_iba_a_decir_queda_escrito_entero_aunque_le_corten` |
-| PA-R03-08 | Nada sale del ordenador: oye y habla con Silero, Smart Turn, faster-whisper y Piper, ninguna petición sale durante un turno de voz, el oído y la voz del robot solo pueden ir a este ordenador y, si falta un modelo, Sirius dice qué orden ejecutar y no lo baja él | Lo que se hace, 2 y 3; no se usa; §2 | B, C | automática | — | — | pendiente | `tests/acceptance/test_robot_0_3_voz.py::test_ninguna_peticion_sale_durante_un_turno_de_voz`<br>`tests/acceptance/test_robot_0_3_voz.py::test_el_oido_y_la_voz_del_robot_solo_pueden_ir_a_este_ordenador`<br>`tests/acceptance/test_robot_0_3_voz.py::test_si_falta_un_modelo_dice_que_orden_ejecutar_y_no_lo_baja_el`<br>`tests/acceptance/test_robot_0_3_voz.py::test_oye_y_habla_con_las_herramientas_locales_del_plan` |
-| PA-R03-09 | La tubería de Sirius añade poco: con oído, modelo y voz instantáneos, del último sonido con su voz que lee el micro al primero que suena por el altavoz pasan menos de 200 ms en el P95 de 20 turnos, medido con los relojes de los dobles | Terminado cuando, 1 | C | parcial | windows-real | E-R03-02 | pendiente | `tests/acceptance/test_robot_0_3_voz.py::test_del_final_de_su_voz_al_primer_sonido_la_tuberia_anade_menos_de_200_ms` |
-| PA-R03-10 | Elegir su voz a ciegas: 5 frases típicas con 4 a 6 voces, entre ellas las de Piper y una de personaje con Chatterbox, barajadas y sin nombre; la hoja enseña cada etiqueta y cada frase, y cada botón de escuchar suena por el altavoz con la voz y la frase que dice; la elegida queda para hablar, también al reabrir y en el turno siguiente; no hay forma de clonar una voz | Lo que se hace, 7; enmienda del manual, §9.2 | F | parcial | evaluación-humana | E-R03-06 | pendiente | `tests/acceptance/test_robot_0_3_voz.py::test_la_prueba_de_voces_da_cinco_frases_con_cuatro_a_seis_voces_barajadas_y_sin_nombre`<br>`tests/acceptance/test_robot_0_3_voz.py::test_la_voz_que_elige_el_propietario_queda_para_hablar`<br>`tests/acceptance/test_robot_0_3_voz.py::test_no_hay_forma_de_clonar_una_voz` |
+| PA-R03-03 | Su propia voz no se toma por la del propietario: lo que suena por el altavoz y vuelve por el micro, perdido con el micro cerrado o leído y cancelado, no se transcribe ni empieza un turno, ni entonces ni en los silencios de después. Antes de la cancelación de eco (pieza C) porque mientras habla no escucha; con ella (pieza E), el micro sigue abierto, el eco entra, no le corta ni se transcribe, y la voz del propietario que suena a la vez sí atraviesa y le calla sin esperar al fin del turno | Lo que se hace, 6 | C, E | automática | — | — | pendiente | `tests/acceptance/test_robot_0_3_voz.py::test_su_propia_voz_no_empieza_un_turno`<br>`tests/acceptance/test_robot_0_3_voz.py::test_con_la_cancelacion_de_eco_su_propia_voz_sigue_sin_empezar_un_turno` |
+| PA-R03-04 | Escucha siempre: al abrir la ventana escucha sin pulsar nada y lo dice; el botón de silencio cierra el micrófono y lo dice, y lo que sonó en silencio se pierde y no se atiende después; lo oído y lo contestado se ven en la ventana como la charla escrita, con sus dos botones; todo leído de la ventana de verdad | Lo que se hace, 4; EV-022; personalidad de la 0.2, paso 5 | D | parcial | windows-real | E-R03-01 | pendiente | `tests/acceptance/test_robot_0_3_ventana.py::test_al_abrir_la_ventana_escucha_sin_pulsar_nada_y_lo_dice`<br>`tests/acceptance/test_robot_0_3_ventana.py::test_el_boton_de_silencio_cierra_el_microfono_y_lo_dice`<br>`tests/acceptance/test_robot_0_3_ventana.py::test_lo_oido_y_lo_contestado_se_ven_en_la_ventana_con_sus_dos_botones` |
+| PA-R03-05 | No guarda audio: desde que arranca hasta que cierra, nada abre para escribir ningún fichero que no sea su base, sus ajustes o su diario, comparados por su ruta de verdad, esté donde esté lo demás y aunque lo borre después; tras varios turnos no hay ningún fichero de audio nuevo y la base solo guarda texto; lo que no era para él no se guarda ni como texto, tampoco en el diario | Lo que se hace, 4 y 5; §2, el audio no sale nunca; EV-022 | D | automática | — | — | pendiente | `tests/acceptance/test_robot_0_3_voz.py::test_tras_varios_turnos_de_voz_no_queda_ningun_audio_guardado`<br>`tests/acceptance/test_robot_0_3_voz.py::test_lo_que_no_era_para_el_no_se_guarda_ni_como_texto` |
+| PA-R03-06 | Sabe cuándo le hablan a él: con su nombre, siempre; sin su nombre, solo mientras dura la charla, que dura entre 5 s y 2 min después de que Sirius calle; lo demás no llega al modelo ni se contesta | Lo que se hace, 5 | D | parcial | evaluación-humana | E-R03-05 | pendiente | `tests/acceptance/test_robot_0_3_voz.py::test_con_su_nombre_siempre_es_para_el`<br>`tests/acceptance/test_robot_0_3_voz.py::test_sin_su_nombre_es_para_el_solo_mientras_dura_la_charla`<br>`tests/acceptance/test_robot_0_3_voz.py::test_lo_que_no_es_para_el_no_llega_al_modelo` |
+| PA-R03-07 | Se le puede cortar: si el propietario habla mientras Sirius habla, Sirius se calla en menos de medio segundo desde que el micro lee su voz, medido con los relojes de los dobles, sin esperar al fin del turno ni a tener la respuesta nueva, y atiende lo nuevo; y lo que iba a decir queda escrito entero aunque le corte con el modelo aún escribiendo | Lo que se hace, 1 y 6; terminado cuando, 2 | E | parcial | windows-real | E-R03-03 | pendiente | `tests/acceptance/test_robot_0_3_voz.py::test_si_el_propietario_habla_sirius_se_calla_y_atiende_lo_nuevo`<br>`tests/acceptance/test_robot_0_3_voz.py::test_lo_que_iba_a_decir_queda_escrito_entero_aunque_le_corten` |
+| PA-R03-08 | Nada sale del ordenador: oye y habla con Silero, Smart Turn, faster-whisper y Piper, ninguna petición sale durante un turno de voz, el oído y la voz del robot solo pueden ir a este ordenador y, si falta un modelo, Sirius dice qué orden ejecutar, no contesta, no lanza ningún proceso y no lo baja él | Lo que se hace, 2 y 3; no se usa; §2 | B, C | automática | — | — | pendiente | `tests/acceptance/test_robot_0_3_voz.py::test_ninguna_peticion_sale_durante_un_turno_de_voz`<br>`tests/acceptance/test_robot_0_3_voz.py::test_el_oido_y_la_voz_del_robot_solo_pueden_ir_a_este_ordenador`<br>`tests/acceptance/test_robot_0_3_voz.py::test_si_falta_un_modelo_dice_que_orden_ejecutar_y_no_lo_baja_el`<br>`tests/acceptance/test_robot_0_3_voz.py::test_oye_y_habla_con_las_herramientas_locales_del_plan` |
+| PA-R03-09 | La tubería de Sirius añade poco: con micro, oído, modelo y voz instantáneos, del último sonido con su voz que lee el micro al primero que suena por el altavoz pasan menos de 200 ms en el P95 de 20 turnos, medido con los relojes de los dobles; la charla escrita sola, que va dentro, tardó 34 ms en el P95 en la nube el 13-10-2026 (línea base) | Terminado cuando, 1 | C | parcial | windows-real | E-R03-02 | pendiente | `tests/acceptance/test_robot_0_3_voz.py::test_del_final_de_su_voz_al_primer_sonido_la_tuberia_anade_menos_de_200_ms` |
+| PA-R03-10 | Elegir su voz a ciegas: 5 frases típicas, distintas, con 4 a 6 voces, entre ellas las de Piper y una de personaje con Chatterbox, barajadas y sin nombre; la hoja enseña cada etiqueta y cada frase, cada muestra salió de la voz, y escuchar cada muestra suena por el altavoz con la voz y la frase que dice; la elegida, sea cual sea, queda para hablar al volver a abrir Sirius y en el turno siguiente; no hay forma de clonar una voz | Lo que se hace, 7; enmienda del manual, §9.2 | F | parcial | evaluación-humana | E-R03-06 | pendiente | `tests/acceptance/test_robot_0_3_voz.py::test_la_prueba_de_voces_da_cinco_frases_con_cuatro_a_seis_voces_barajadas_y_sin_nombre`<br>`tests/acceptance/test_robot_0_3_voz.py::test_la_voz_que_elige_el_propietario_queda_para_hablar`<br>`tests/acceptance/test_robot_0_3_voz.py::test_no_hay_forma_de_clonar_una_voz` |
+
+**Pendiente del propietario (13-10-2026).** PA-R03-07 fija que, si le cortan, lo que
+Sirius iba a decir queda escrito entero en la charla, aunque solo haya sonado la primera
+frase. El plan no lo dice: es una decisión de producto que las pruebas tomaron por él, y
+hay otra lectura, guardar solo lo que llegó a decir, que es lo que hace Pipecat por
+defecto. Se le pregunta; hasta que conteste, la prueba fija «entero».
 
 ## Las evaluaciones del propietario
 
@@ -71,10 +88,10 @@ en su gráfica.
 
 - **Antes.** La sesión le da la orden que instala la tubería y baja los modelos de oír y
   de hablar, una sola vez y con internet. Después de eso no hace falta internet.
-- **Qué hace él.** Abre Sirius, dice cinco cosas y pega lo que sale de la orden que mide
-  qué ocupan, cargados a la vez, el modelo de la charla, el oído y la voz.
+- **Qué hace él.** Apaga el wifi, abre Sirius, dice cinco cosas y pega lo que sale de la
+  orden que mide qué ocupan, cargados a la vez, el modelo de la charla, el oído y la voz.
 - **Pasa si** la orden de instalar acaba sin error, Sirius le oye y le contesta las 5 de 5
-  veces, y lo cargado cabe en los 6 GB de su gráfica. Si no cabe, no se para: el oído y
+  veces sin internet, y lo cargado cabe en los 6 GB de su gráfica. Si no cabe, no se para: el oído y
   la voz van al procesador, como dice el plan, y se anota.
 - **Resultado:** pendiente.
 
@@ -164,11 +181,41 @@ en su gráfica.
   no cabe, el oído y la voz van al procesador.
 - **Que todo se instale en su ordenador.** ADR-241 resolvió las dependencias para Windows
   con Python 3.14 desde la nube; que se instalen y arranquen de verdad lo ve E-R03-01.
-- **Que Qt no escriba audio por su cuenta.** El vigilante de PA-R03-05 ve cada fichero que
-  abre Python para escribir durante un turno, también los que se borran después, y cada
-  conexión de red (PA-R03-08); lo que escribiera Qt sin pasar por Python no lo ve, y por
-  eso se mira además el disco al acabar. Que el vigilante ve lo que dice ver lo comprueba
-  `tests/acceptance/test_vigilante_del_conductor.py` con escrituras y conexiones de verdad.
+- **Que lo que no pase por Python se vea.** El vigilante de PA-R03-05 y PA-R03-08 ve cada
+  fichero que abre Python para escribir mientras el conductor vive, también los que se
+  borran después, cada conexión y cada envío de red, y cada proceso lanzado; lo que
+  escriba o envíe por su cuenta una biblioteca en C (Qt, PortAudio, libsndfile, SQLite)
+  no lo ve, y por eso se miran además el disco y la base al acabar. La pareja de tomas
+  que Python se fabrica en Windows conectándose a sí mismo, y que asyncio usa en cada
+  bucle, no sale del ordenador y no cuenta. Que el vigilante ve lo que dice ver lo
+  comprueba `tests/acceptance/test_vigilante_del_conductor.py` con escrituras,
+  conexiones, envíos y procesos de verdad.
+- **Que la base no guarde audio sin cabecera.** `audio_en_la_base` mira los BLOB que
+  empiezan como un fichero de audio; una onda cruda metida en un BLOB, o audio escrito
+  como texto en base64, no los ve, y por eso el vigilante mira además cada fichero que
+  se abre y cada conexión.
+- **Que la tubería no escriba en el diario lo que oye.** El diario sí puede escribirse;
+  solo se mira que lo que no era para él y lo olvidado no estén en él al acabar. El
+  conductor lo configura como `sirius.main` y vuelve a encender los registradores
+  `sirius.*` que la migración de Alembic apaga; lo que una pieza escriba por el suyo llega.
+- **Que un proceso lanzado sin pasar por Python se vea.** El vigilante ve `subprocess` y
+  los `system`, `spawn`, `exec` y `fork` de `os`; `multiprocessing` en Windows y lo que
+  lance una biblioteca en C no pasan por ahí.
+- **Que las herramientas, los destinos, la voz y el aviso sean los que dice el conductor.**
+  `herramientas()` y `destinos_posibles_de_la_voz()` los escribe la pieza que los trae,
+  leyendo los módulos de lo que monta y los ajustes de la voz; el nombre de la voz con la
+  que se pide cada frase es lo que la pieza le pasa a la voz; y la orden de instalar y el
+  aviso de que falta un modelo los escribe la misma pieza. Una pieza que devolviera
+  literales pasaría. Lo ve la revisión de esa PR, y E-R03-01, que oye y habla con el wifi
+  apagado.
+- **Que mientras habla no escuche, al principio.** Es el comportamiento de la pieza C
+  hasta que entre la E, que lo sustituye por la cancelación de eco (§5, 6). La prueba de
+  PA-R03-03 vale en los dos regímenes: el eco, perdido o leído, no se transcribe ni
+  empieza un turno. Que la C cierre el micro mientras habla lo enseña su PR en su
+  comprobación.
+- **Que la hoja de voces se vea como dice.** `lo_que_ve_el_propietario` es el texto de la
+  hoja que da el caso de uso, sin ventana; la hoja de verdad, con sus botones, la juzga
+  E-R03-06.
 - **Que no haya forma de clonar una voz, más allá de lo que mire la pieza F.** La prueba
   pregunta al conductor; la pieza F tiene que sostenerlo en su PR mirando los puertos de
   síntesis y la ventana: ningún parámetro ni botón que acepte un audio de referencia.

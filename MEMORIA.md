@@ -429,7 +429,7 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 
 ### `prueba-que-no-puede-ver-lo-que-vigila`
 
-- **ADR-241** — escribir las pruebas de aceptación de una versión antes del (sin prueba que lo haga cumplir: ninguna prueba: ninguna máquina mide la fuerza de una prueba; lo que).
+- **ADR-241** — escribir las pruebas de aceptación de una versión antes del (sin prueba que lo haga cumplir: ninguna prueba mide la fuerza de una prueba; lo que hay es).
 - **ADR-238** — una prueba de «no se hace X» que pasa con X puesto, porque su (lo hace cumplir `tests/acceptance/test_robot_0_2_memoria.py`).
 
 ### `vista-que-copia-el-corpus-del-que-venia-huyendo`

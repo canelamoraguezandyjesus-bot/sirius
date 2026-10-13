@@ -52,3 +52,14 @@ def _sin_espias_de_ollama_al_acabar() -> Iterator[None]:
     conductor = sys.modules.get("conductor_robot_0_2")
     if conductor is not None:
         conductor.deshaz_los_espias()
+
+
+@pytest.fixture(autouse=True)
+def _sin_vigilantes_de_voz_al_acabar() -> Iterator[None]:
+    """El conductor de la 0.3 del robot vigila escrituras, conexiones y procesos mientras
+    vive (ADR-241): al acabar cada prueba ningún conductor sigue vigilando, y Python
+    vuelve a escribir bytecode."""
+    yield
+    conductor = sys.modules.get("conductor_robot_0_3")
+    if conductor is not None:
+        conductor.deja_de_vigilar_a_todos()

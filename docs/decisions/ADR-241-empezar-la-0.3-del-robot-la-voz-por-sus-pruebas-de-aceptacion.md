@@ -57,11 +57,13 @@ voz y antes de cualquier revisión.
      falla con la cancelación por software (E-R03-03), se para y se le pregunta por el
      micro, porque es dinero. Si la voz que elige no puede hablar en vivo (E-R03-06), se
      le dice la cifra y se le pregunta, porque es producto.
-   - **Las PR de la 0.3**, como las de la 0.2 (ADR-233): cadena de comprobación verde,
-     una ronda limpia de Codex sobre el head de contenido y Quality en verde; como mucho
-     tres rondas por PR, y lo cierto de la tercera se corrige en un solo commit y se
-     fusiona sin cuarta. Dos rondas seguidas con la misma familia: se deja de parchear y
-     se busca la raíz.
+   - **Las PR de la 0.3**: cadena de comprobación verde, una ronda limpia de Codex sobre
+     el head de contenido y Quality en verde. Dos rondas seguidas con la misma familia: se
+     deja de parchear y se busca la raíz. Al escribirse esto decía además, copiado de
+     ADR-233, «como mucho tres rondas por PR, y lo cierto de la tercera se corrige en un
+     solo commit y se fusiona sin cuarta»; el propietario retiró ese tope el 13-10-2026,
+     tras la ronda 3 de esta PR, y lo que rige desde entonces está en «Revisión externa»,
+     en «El criterio cambia el 13-10-2026».
    - **El orden del plan.** La §2 dice que cada versión acaba con una prueba del
      propietario «y sin ella no se pasa a la siguiente»
      (`docs/evolution/PLAN_DEL_ROBOT.md:56`). La 0.3 empieza hoy por su palabra del
@@ -177,8 +179,21 @@ prueba puede ver está en «Lo que estas pruebas no garantizan».
   `tests/acceptance/conductor_robot_0_3.py`, sabe cómo se hace cada cosa en el código.
   Es el conductor de la 0.2 con el oído y la voz encima: hereda la charla, la semilla, la
   memoria y la ventana, montadas como en producción, y pone dobles solo donde iría el
-  micro, el oído, el transcriptor, la voz y el altavoz. Los dobles llevan escrito lo que
-  suena, en vez de ondas, y un reloj de mentira mide cuánto hace que acabó la charla.
+  micro, el oído, el transcriptor, la voz y el altavoz; el modelo de la charla es el
+  grabador de la 0.2 con reloj. Los dobles llevan escrito lo que suena, en vez de ondas,
+  y un reloj de mentira mide cuánto hace que acabó la charla.
+- **Los dobles hacen algo, y apuntan lo que hacen.** El micro lee, el oído dice cuándo
+  acaba el turno, el transcriptor transcribe, la voz dice, el altavoz suena y el modelo
+  contesta; cada uno apunta lo que hizo, con su momento, en el acto de hacerlo, y esos
+  registros solo se leen. Quien implementa una pieza escribe también su parte del
+  conductor, así que un registro que rellenara el conductor no probaría nada. Lo que la
+  tubería recibe del micro no dice quién habló ni con qué voz, como en un micro de verdad:
+  el eco de Sirius solo se aparta cerrando el micro mientras habla o cancelándolo contra
+  lo que suena, nunca por una etiqueta. Lo que el conductor ya sabe hacer, leer la charla
+  y el audio de la base y la charla de la ventana, se lee de la base y de la ventana de
+  verdad, no se le pide a la pieza. `tests/acceptance/test_dobles_del_conductor.py` lo
+  comprueba hoy, con el conductor construido de verdad, porque una prueba en `xfail`
+  estricto no ejecuta ni una línea de él.
 - **El mecanismo de las piezas se comparte.** ADR-233 decía que la versión siguiente
   copiaría el conductor con el arreglo dentro. En vez de copiarlo, el mecanismo sale a
   `tests/acceptance/piezas_del_robot.py` y la comprobación de la tabla a
@@ -229,7 +244,7 @@ la misma PR que anote sus cifras.
 - La comprobación de la tabla: `tests/acceptance/test_robot_0_3_trazabilidad.py` pasa
   con el documento como está, y las 13 pruebas de `test_robot_0_2_trazabilidad.py`, diez
   de ellas con tablas rotas a propósito, siguen pasando sobre el módulo compartido.
-- La batería entera. Sobre `7209d783`, el primer head: 8 194 pasan, 16 saltadas y 28 `xfail`, los 26 de la 0.3 de entonces y los 2 que ya estaban, en 24 min 29 s. Sobre `main` (`d545ff17`) eran 8 181 pasan y 2 `xfail`: entran las esperadas y 13 que pasan, las dos de la trazabilidad de la 0.3, la tabla rota nueva de la 0.2 y las que los guardas de documentos añaden por cada ADR y documento nuevo. Sobre el head de la ronda 1: 8 194 pasan, 16 saltadas y 29 `xfail`, los 27 de la 0.3 y los 2 que ya estaban, en 25 min 40 s. Sobre el head de la ronda 2: 8 198 pasan, 16 saltadas y 29 `xfail`, en 23 min 44 s; las 4 que entran son las 3 del vigilante y la que los guardas añaden por el fichero nuevo. Sobre el árbol final, con la ronda 3 y H-241: 8 199 pasan, 16 saltadas y 29 `xfail`, en 23 min 10 s.
+- La batería entera. Sobre `7209d783`, el primer head: 8 194 pasan, 16 saltadas y 28 `xfail`, los 26 de la 0.3 de entonces y los 2 que ya estaban, en 24 min 29 s. Sobre `main` (`d545ff17`) eran 8 181 pasan y 2 `xfail`: entran las esperadas y 13 que pasan, las dos de la trazabilidad de la 0.3, la tabla rota nueva de la 0.2 y las que los guardas de documentos añaden por cada ADR y documento nuevo. Sobre el head de la ronda 1: 8 194 pasan, 16 saltadas y 29 `xfail`, los 27 de la 0.3 y los 2 que ya estaban, en 25 min 40 s. Sobre el head de la ronda 2: 8 198 pasan, 16 saltadas y 29 `xfail`, en 23 min 44 s; las 4 que entran son las 3 del vigilante y la que los guardas añaden por el fichero nuevo. Sobre el árbol de la ronda 3 y H-241, `56017da1`: 8 199 pasan, 16 saltadas y 29 `xfail`, en 23 min 10 s. Sobre el árbol de la revisión propia, con sus cinco pasadas: 8 211 pasan, 16 saltadas y 29 `xfail`, en 22 min 49 s; las 12 que entran son las 10 de los dobles, la cuarta del vigilante y la que los guardas añaden por el fichero nuevo. Y la línea base de la charla escrita, `di()` solo, en la nube el 13-10-2026: 34 ms en el P95 de 20 turnos, 25,7 ms la mediana y 57,7 ms el máximo.
 
 ## Consecuencias
 
@@ -272,11 +287,17 @@ la misma PR que anote sus cifras.
   dos reglas que salen de ella: cada prueba mira el camino por los dobles, el sonido por
   el micro, el texto por el transcriptor, la petición por el modelo y la frase por el
   altavoz; y toda cifra la dan los relojes y los recuentos de los dobles, nunca un campo
-  que rellene el conductor.
-- lo hace cumplir: ninguna prueba: ninguna máquina mide la fuerza de una prueba; lo que
-  hay es `tests/acceptance/test_vigilante_del_conductor.py`, que impide que el vigilante
-  de escrituras y conexiones pase en vacío, y esta lección para quien escriba las de la
-  0.4.
+  que rellene el conductor. Y la raíz que la revisión propia encontró debajo: un doble
+  que no hace nada es un cuaderno que rellena el conductor, y el conductor lo escribe la
+  pieza; un doble tiene que hacer lo que la tubería le pide y apuntarlo él. Y lo que el
+  conductor ya hace necesita una prueba que corra hoy: una en `xfail` estricto no
+  ejecuta ni una línea de él, y el conductor de esta PR no se podía ni construir
+  durante tres rondas.
+- lo hace cumplir: ninguna prueba mide la fuerza de una prueba; lo que hay es
+  `tests/acceptance/test_vigilante_del_conductor.py`, que impide que el vigilante pase
+  en vacío, `tests/acceptance/test_dobles_del_conductor.py`, que construye el conductor
+  y comprueba que cada doble apunta en el acto de hacer, y esta lección para quien
+  escriba las de la 0.4.
 
 ## Revisión externa
 
@@ -327,10 +348,11 @@ la misma PR que anote sus cifras.
     `tests/acceptance/test_vigilante_del_conductor.py`, con un wav temporal borrado, un
     `os.open`, una lectura que no cuenta, una conexión y una escritura fuera del turno.
   - El inventario sigue en 27. Si la ronda 3 trae la misma familia, se corrige en un
-    commit y se fusiona sin cuarta, como fija el criterio de parada.
-- **Ronda 3 de Codex**, la última, sobre `1b792492`: cuatro hallazgos P2, los cuatro
-  ciertos y los cuatro de la misma familia. Se corrigen en un solo commit y la PR se
-  fusiona sin cuarta ronda, como fija el criterio de parada.
+    commit y se fusiona sin cuarta, como fijaba entonces el criterio de parada.
+- **Ronda 3 de Codex**, sobre `1b792492`: cuatro hallazgos P2, los cuatro ciertos y los
+  cuatro de la misma familia. Se corrigieron en un solo commit, `e5f2a1b5`, y la PR iba
+  a fusionarse sin cuarta ronda, como fijaba entonces el criterio de parada. No se
+  fusionó, por lo que sigue.
   - La lista de escrituras permitidas comparaba solo el nombre: un `settings.json` o un
     `sirius.db` en otra carpeta pasaba por permitido. Ahora `Permitidas` guarda las
     rutas de verdad de la base, los ajustes y el diario, las compara resueltas, y el
@@ -346,4 +368,112 @@ la misma PR que anote sus cifras.
   - PA-R03-02 comparaba la locución entera solo con el resumen del turno; ahora también
     con lo que se le pidió a la voz y con lo que sonó por el altavoz.
   - Trece hallazgos ciertos en tres rondas, los trece de la misma familia. De ahí la
-    lección de abajo.
+    lección de arriba.
+- **Revisión propia**, sobre el árbol de `56017da1`, antes de pedir la cuarta ronda y por
+  la regla nueva del propietario. Dos pasadas: la mía, prueba a prueba, y la de otro par
+  de ojos que no había escrito nada, con la misma pregunta y sin permiso para ejecutar.
+  Veintitrés hallazgos del segundo, uno P1, catorce P2 y ocho P3, todos verificados
+  contra el código antes de aceptarlos; la mía había llegado antes a la raíz de los P2.
+  - **El P1.** El conductor no se podía construir: tomaba la foto del disco antes de que
+    el conductor de la 0.2 pusiera la carpeta, y `ConductorDeVoz(tmp_path)` levantaba
+    `AttributeError`. Nada en la PR lo ejecutaba: las 27 pruebas sustituyen su cuerpo por
+    la pieza pendiente, y las del vigilante usan un testigo. «27 `xfail` por la razón
+    esperada», repetido en tres rondas, no decía nada del conductor. Comprobado
+    ejecutándolo. Desde ahora `test_dobles_del_conductor.py` lo construye, escribe, reabre
+    y cierra de verdad, y comprueba que `oye` levanta la pieza B.
+  - **La raíz de los P2, debajo de los trece hallazgos de las tres rondas.** Los dobles
+    eran cuadernos sin comportamiento: ni el micro leía, ni el oído decidía, ni la voz
+    decía; quién pasaba un sonido de pendiente a leído, qué significaban los silencios
+    del detector y con qué reloj se sellaba cada momento lo decidía quien implementara la
+    pieza, que escribe también el conductor. «Los relojes de los dobles» de la ronda 3
+    los escribía la pieza. Ahora cada doble tiene el método que la tubería llama, apunta
+    en él con un solo reloj, y los registros son de solo lectura; la tubería recibe del
+    micro un `Audio` sin quién lo dijo, así que el eco no se puede descartar por su
+    etiqueta; la voz y el sonido llevan `voz` aparte de `de_quien`, que las dos
+    convenciones de PA-R03-02 y PA-R03-10 no cabían juntas; el modelo de mentira apunta
+    cuándo acabó y contesta a trozos; `charla_guardada`, `audio_en_la_base` y
+    `mensajes()` se leen hoy de la base y de la ventana de verdad; la orden de instalar
+    no puede ser vacía; el medio segundo se mide con la respuesta nueva lenta, para que
+    callarse no espere a tenerla; la charla sin nombre dura entre 5 s y 2 min; el eco no
+    empieza un turno tampoco en los silencios de después; cinco frases distintas y cada
+    muestra es la de la hoja; cada candidata, también la de personaje, queda para hablar.
+  - **El vigilante** vigila desde que el conductor se construye hasta que cierra, no solo
+    dentro de `oye`; ve también los envíos sin conexión y los procesos lanzados; no
+    cuenta la pareja de tomas que Python se fabrica en Windows ni escribe bytecode
+    mientras existe, porque un `.pyc` de una importación tardía sería una escritura más y
+    la regla es no excluir nada por su nombre; y mira el diario, que sí puede escribirse,
+    para que lo que no era para él y lo olvidado no acaben ahí.
+  - **Lo que se dejó escrito y no se endureció**, porque antes del código no se puede:
+    `herramientas()` y `destinos_posibles_de_la_voz()` son lo que declare la pieza, y van
+    en «Lo que estas pruebas no garantizan» con E-R03-01 con el wifi apagado; la línea
+    base de la charla escrita, `di()` solo, es 34 ms en el P95 de 20 turnos en la nube el
+    13-10-2026, así que los 200 ms de PA-R03-09 tienen sitio.
+  - **Segunda pasada**, de otro par de ojos frescos sobre el árbol ya corregido, con
+    permiso para ejecutar: veintidós hallazgos, uno P1, ocho P2 y trece P3, todos
+    verificados. El P1: las dos pruebas de PA-R03-03 no las pasaba a la vez una pieza
+    honesta, porque la de la C exigía el eco perdido con el micro cerrado y la de la E el
+    eco leído con el micro abierto, y las dos corren cuando entra la E; ahora la de la C
+    vale en los dos regímenes, el eco perdido o leído no se transcribe ni empieza un
+    turno, y «mientras habla no escucha» queda como lo que la C hace hasta que la E lo
+    sustituye, escrito en «Lo que estas pruebas no garantizan». Los demás: el corte se
+    mide con el detector tardío y la respuesta nueva lenta, para que callarse no espere
+    ni al fin del turno ni a tener la respuesta; «lo que iba a decir queda escrito
+    entero» se prueba cortándole con el modelo aún escribiendo, con un gancho del modelo
+    de mentira, y exigiendo que el corte llegue antes de que el modelo acabe; «olvida
+    eso» mira las peticiones del turno sin el contador privado de `di`; el diario se
+    configura como en producción, y se vio de paso que la configuración de Alembic
+    (`migrations/env.py`, `fileConfig`) apaga el registrador `sirius` que ya existía, así
+    que `sirius.main`, que configura el diario antes de iniciar la persistencia, puede
+    tener el diario apagado; queda para una PR aparte con su prueba. Cada muestra de la
+    hoja sale de la voz; la voz elegida se comprueba en otro conductor sobre la misma
+    base; el indicador y el botón de silencio leen `listening_label` y `mute_button`; el
+    vigilante empieza antes de montar Sirius y ve también los procesos de `os`; las
+    extensiones genéricas no se buscan en la temporal del sistema; y el `conftest`
+    suelta a los vigilantes al acabar cada prueba.
+  - **Tercera pasada**, de otro par de ojos sobre el árbol con lo anterior corregido:
+    once hallazgos, uno P1, dos P2 y ocho P3, todos verificados. El P1 era mío y de la
+    segunda pasada: la prueba de la voz elegida recorría las etiquetas de la primera
+    hoja sobre conductores nuevos que nunca la habían preparado, así que la pieza
+    perfecta no la pasaba; ahora cada vuelta abre su hoja en el Sirius vivo y busca la
+    voz por su nombre. Los P2: del diario solo se reencendía el registrador padre, y la
+    migración apaga también cada `sirius.*` de módulo, que es por donde escribe el
+    código de producción, así que ahora se encienden todos, también al reabrir, y la
+    prueba de los dobles lo mira por un hijo antes y después de reabrir; y el gancho
+    del corte disparaba con el primer trozo entregado, no sonado, y una tubería
+    concurrente honesta podía fallar según quién llegara antes, así que la prueba
+    espera en un hilo aparte, sin retener al modelo, a que la primera frase suene, y
+    lo comprueba. Los P3: `acaba()` queda como mando de la prueba, no de Sirius; `Audio` y
+    `Sonido` ya no llevan duración, porque el micro de mentira es instantáneo y una
+    tubería que le diera ritmo no bajaría de los 200 ms; el bytecode se guarda una
+    sola vez; el gancho calla también si el conjunto de vigilados cambia desde otro
+    hilo; la hoja exige al menos dos voces de Piper, como dice la fila; y «lo que iba
+    a decir queda escrito entero aunque le corten» no está en el plan y es producto:
+    se le pregunta al propietario y, hasta que conteste, la prueba fija «entero»,
+    escrito en `docs/evolution/PRUEBAS_0.3_DEL_ROBOT.md`.
+  - **Cuarta pasada**, solo sobre esas correcciones: dos P2 y dos P3, ciertos. La
+    espera del gancho retenía al modelo, así que un cortador de frases que confirma
+    con el trozo siguiente no podía sonar hasta que la espera se agotara; y reabrir
+    Sirius vuelve a migrar y apagaba el diario otra vez. Corregidos: la espera va en un
+    hilo y se comprueba que la frase sonó antes del corte; `reabre` vuelve a encender
+    los registradores; las dos voces de Piper se cuentan sin las de Chatterbox.
+  - **Mutación**: once mutaciones del conductor, y las once las caza
+    `test_dobles_del_conductor.py`: el micro que no apunta lo leído, el oído que acaba en
+    el primer silencio, el transcriptor y la voz que no apuntan, el altavoz que no apunta
+    el corte y el que no devuelve el eco, el modelo que no apunta cuándo acabó, y la
+    charla, el audio y el diario que no se leen de la base y del disco, y la ventana que
+    no lee su lista; y una más, el diario que solo enciende al padre.
+  - El inventario sigue en 27. Los arreglos van en el commit que trae esta sección; su
+    sha queda en H-241 del registro de defectos, que se amplía con esta raíz en el
+    commit siguiente: desde ADR-192 cada ADR tiene un solo defecto, el de su número.
+- **El criterio cambia el 13-10-2026, tras la ronda 3.** El propietario, al ver la
+  tercera ronda seguida con la misma familia, retiró el tope de rondas que ADR-233 había
+  sacado de su «nada de cinco rondas» del 07-10-2026: «No nos podemos limitar a solo tres
+  rondas. Yo en ningún momento te he dicho que me pongas tres rondas. Yo necesito trabajo
+  bien y bien hecho. El mismo que implementa, al acabar, revisa su trabajo. Si hay algún
+  error, corrige, vuelve a revisar. Y así hasta que no haya ninguno y pasa a revisión de
+  pruebas». Desde entonces, en esta PR y en las que vengan: quien implementa revisa su
+  propio trabajo al acabar, con la pregunta de la lección y con otro par de ojos que no
+  haya escrito el código, corrige, vuelve a revisar, y solo cuando no encuentra nada pide
+  la revisión externa; la externa se repite sobre cada head nuevo hasta que una ronda
+  vuelva limpia, sea la que sea. La regla de las dos rondas sigue: misma familia dos
+  veces, raíz antes que parche. El tope de tres de ADR-233 queda sin efecto.
