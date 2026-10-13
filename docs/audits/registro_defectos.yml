@@ -1480,3 +1480,21 @@ defectos:
     ficheros:
       - src/sirius/composition_root.py
       - tests/integration/test_ordenes_de_memoria.py
+
+  # ADR-241: las 27 pruebas de aceptacion de la 0.3, escritas antes del codigo, miraban
+  # el resultado final y aceptaban las cifras que daba el propio conductor. Una pieza
+  # que atajara las pasaba. Trece hallazgos ciertos de Codex en tres rondas sobre la
+  # PR #686, los trece de la misma familia; ADR-233 ya tuvo cuatro iguales.
+  - id: H-241
+    titulo: Las pruebas de aceptacion de la 0.3 miraban el final y no el camino por los dobles, y una pieza tramposa las pasaba
+    bloque: producto
+    gravedad: media
+    estado: cerrado
+    cerrado_por: e5f2a1b5fc6f86dd73b41e632eefe55d93d627e7
+    pr: 686
+    adr: 241
+    ficheros:
+      - tests/acceptance/test_robot_0_3_voz.py
+      - tests/acceptance/test_robot_0_3_ventana.py
+      - tests/acceptance/conductor_robot_0_3.py
+      - tests/acceptance/test_vigilante_del_conductor.py
