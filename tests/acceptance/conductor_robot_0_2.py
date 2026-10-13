@@ -15,18 +15,17 @@ porque Sirius lo hace, no porque lo haga el conductor. Los dobles de abajo
 ``ExtractorDeMentira``) hacen de modelo, nunca de Sirius.
 
 Las piezas de ADR-233 que aún no han entrado levantan ``PiezaPendiente``. Cada
-prueba que depende de una va decorada con ``pieza(...)``: mientras la pieza no
-está en ``PIEZAS_ENTREGADAS``, es un ``xfail`` estricto que solo acepta esa
-excepción, así que la prueba falla por la razón esperada o falla de verdad.
-Cuando una pieza entra, se implementan sus métodos aquí y se añade su letra a
-``PIEZAS_ENTREGADAS``; la marca desaparece sola y la tabla de
-``docs/evolution/PRUEBAS_0.2_DEL_ROBOT.md`` tiene que decirlo, porque
-``test_robot_0_2_trazabilidad.py`` lo compara.
+prueba que depende de una va decorada con ``pieza(...)`` (el mecanismo vive en
+``piezas_del_robot``): mientras la pieza no está en ``PIEZAS_ENTREGADAS``, es
+un ``xfail`` estricto que solo acepta esa excepción, así que la prueba falla por
+la razón esperada o falla de verdad. Cuando una pieza entra, se implementan sus
+métodos aquí y se añade su letra a ``PIEZAS_ENTREGADAS``; la marca desaparece
+sola y la tabla de ``docs/evolution/PRUEBAS_0.2_DEL_ROBOT.md`` tiene que
+decirlo, porque ``test_robot_0_2_trazabilidad.py`` lo compara.
 """
 
 from __future__ import annotations
 
-import functools
 import itertools
 import json
 import random
@@ -39,11 +38,11 @@ from contextlib import closing
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from pathlib import Path
-from typing import Any, TypeVar, cast
+from typing import Any, cast
 
 import httpx
-import pytest
 import sqlite_vec
+from piezas_del_robot import PiezaPendiente, Piezas
 
 from sirius.adapters.persistence.bootstrap import initialize_persistence
 from sirius.adapters.persistence.migrations import upgrade_to_head
@@ -106,58 +105,15 @@ PIEZAS: Mapping[str, str] = {
 }
 
 
-def _adr_de_la_pieza(letra: str) -> str:
-    return "ADR-240" if letra == "H" else "ADR-233"
+#: El mecanismo de las piezas, compartido con las versiones siguientes.
+_PIEZAS = Piezas("ADR-233", PIEZAS, PIEZAS_ENTREGADAS, adr_de={"H": "ADR-240"})
 
-
-_Prueba = TypeVar("_Prueba", bound=Callable[..., object])
-
-
-class PiezaPendiente(NotImplementedError):
-    """La pieza de ADR-233 que haría esto todavía no ha entrado."""
-
-    def __init__(self, letra: str) -> None:
-        super().__init__(f"pieza {letra} de {_adr_de_la_pieza(letra)} pendiente: {PIEZAS[letra]}")
-        self.letra = letra
-
-
-def pieza(letra: str, que: str) -> Callable[[_Prueba], _Prueba]:
-    """Marca una prueba como dependiente de la pieza ``letra`` de ADR-233.
-
-    Entregada la pieza, no hace nada y la prueba corre entera. Mientras no lo
-    está, la prueba no corre: levanta ``PiezaPendiente`` al empezar, bajo un
-    ``xfail`` estricto que solo acepta esa excepción. Que no corra a medias es
-    a propósito: una prueba de la pieza G que diera sus primeros pasos con lo que
-    ya trajo la D fallaría por una aserción, no por la pieza, el día que entrase
-    la D. El cuerpo lo siguen comprobando ruff y mypy desde hoy.
-    """
-    if letra not in PIEZAS:
-        msg = f"ADR-233 no tiene pieza {letra!r}"
-        raise ValueError(msg)
-    if letra in PIEZAS_ENTREGADAS:
-        return lambda prueba: prueba
-    marca = pytest.mark.xfail(
-        strict=True,
-        raises=PiezaPendiente,
-        reason=(
-            f"Pieza {letra} de {_adr_de_la_pieza(letra)} ({PIEZAS[letra]}): {que}. Cuando "
-            "entre, se añade su letra a PIEZAS_ENTREGADAS y esta marca desaparece."
-        ),
-    )
-
-    def aplicar(prueba: _Prueba) -> _Prueba:
-        @functools.wraps(prueba)
-        def pendiente(*args: object, **kwargs: object) -> None:
-            del args, kwargs
-            raise PiezaPendiente(letra)
-
-        return cast("_Prueba", marca(pendiente))
-
-    return aplicar
+#: Marca una prueba como dependiente de una pieza; ver ``piezas_del_robot``.
+pieza = _PIEZAS.pieza
 
 
 def _pendiente(letra: str) -> PiezaPendiente:
-    return PiezaPendiente(letra)
+    return _PIEZAS.pendiente(letra)
 
 
 # --- Dobles: hacen de modelo o de Ollama, nunca de Sirius ---------------------
@@ -1027,12 +983,16 @@ class Conductor:
 
     def ventana(self, qtbot: Any) -> VentanaDePrueba:
         """La ventana principal, montada como al arrancar, con la charla ya cargada."""
+        return VentanaDePrueba(self.abre_la_ventana(qtbot), qtbot)
+
+    def abre_la_ventana(self, qtbot: Any) -> Any:
+        """La ventana de verdad, la que monta ``_build_main_window``, ya a cargo de ``qtbot``."""
         from sirius.main import _build_main_window
 
         ventanas: list[Any] = []
         ventana = _build_main_window(self._dependencias, ventanas)
         qtbot.addWidget(ventana)
-        return VentanaDePrueba(ventana, qtbot)
+        return ventana
 
     # --- Pieza E: memoria propia, juez y preguntas trampa ---
 
