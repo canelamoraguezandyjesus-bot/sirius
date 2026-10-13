@@ -37,6 +37,10 @@ from typing import Any, Protocol
 from conductor_robot_0_2 import Conductor, VentanaDePrueba
 from piezas_del_robot import PiezaPendiente, Piezas
 
+from sirius.config.settings import _CONFIG_FILE_NAME  # el nombre que usa `_config_file()`
+from sirius.infrastructure.logging import LOG_FILE_NAME
+from sirius.infrastructure.paths import resolve_paths
+
 #: Las letras de la tabla de piezas de ADR-241 que ya han entrado en ``main``.
 #: La A es esta: la nota de arranque y estas pruebas.
 PIEZAS_ENTREGADAS: frozenset[str] = frozenset({"A"})
@@ -83,13 +87,34 @@ class Vigilado(Protocol):
 _EN_UN_TURNO: weakref.WeakSet[Vigilado] = weakref.WeakSet()
 _GANCHO_PUESTO = False
 
-#: Lo único que Sirius abre para escribir durante un turno de voz: su base y lo
-#: que SQLite pone a su lado, sus ajustes y su diario. Cualquier otra escritura
-#: durante un turno, sea audio o no y esté donde esté, queda apuntada (ronda 2 de
-#: Codex sobre la PR #686: un temporal junto a la base no se podía descartar).
-_ESCRITURAS_PERMITIDAS = re.compile(
-    r"^(sirius\.db(-journal|-wal|-shm)?|settings\.json|application\.log(\.\d+)?)$"
-)
+#: Lo que SQLite pone al lado de la base, con su mismo nombre delante.
+_SIDECARS_DE_SQLITE = ("-journal", "-wal", "-shm")
+
+
+@dataclass(frozen=True, slots=True)
+class Permitidas:
+    """Lo único que Sirius abre para escribir durante un turno de voz, por su ruta de verdad.
+
+    Su base y lo que SQLite pone a su lado, su fichero de ajustes y su diario, con
+    sus rotaciones. Se comparan rutas enteras, no nombres: un ``settings.json`` o un
+    ``sirius.db`` en otra carpeta es una escritura como otra cualquiera (rondas 2 y
+    3 de Codex sobre la PR #686).
+    """
+
+    base: Path
+    ajustes: Path
+    diario: Path
+
+    def permite(self, ruta: Path) -> bool:
+        ruta = ruta.resolve()
+        if ruta == self.base.resolve() or ruta == self.ajustes.resolve():
+            return True
+        base = self.base.resolve()
+        if ruta.parent == base.parent and ruta.name in {base.name + s for s in _SIDECARS_DE_SQLITE}:
+            return True
+        diario = self.diario.resolve()
+        rotado = re.fullmatch(rf"{re.escape(diario.name)}(\.\d+)?", ruta.name)
+        return ruta.parent == diario.parent and rotado is not None
 
 
 def _abre_para_escribir(modo: object, flags: object) -> bool:
@@ -100,9 +125,9 @@ def _abre_para_escribir(modo: object, flags: object) -> bool:
     return False
 
 
-def es_escritura_sospechosa(ruta: Path) -> bool:
+def es_escritura_sospechosa(ruta: Path, permitidas: Permitidas) -> bool:
     """Si abrir ``ruta`` para escribir durante un turno de voz es algo que Sirius no hace."""
-    return _ESCRITURAS_PERMITIDAS.match(ruta.name) is None
+    return not permitidas.permite(ruta)
 
 
 def _vigilar() -> None:
@@ -175,6 +200,10 @@ class MicroDeMentira:
     abierto: bool = False
     pendientes: list[Sonido] = field(default_factory=list)
     leidos: list[Sonido] = field(default_factory=list)
+    #: Cuándo (``time.perf_counter``) leyó la tubería cada sonido de ``leidos``, en el
+    #: mismo orden. Con ``altavoz.sonados`` y ``altavoz.parado_en`` son los relojes
+    #: de las pruebas: las cifras salen de los dobles, no del conductor.
+    leido_en: list[float] = field(default_factory=list)
 
     def suena(self, sonido: Sonido) -> None:
         self.pendientes.append(sonido)
@@ -254,19 +283,17 @@ class TurnoDeVoz:
     ``oido`` es lo que Sirius dio por dicho, o ``None`` si el turno no se cerró
     o el micro estaba cerrado. ``para_el`` dice si Sirius lo tomó como dicho a
     él. ``contestado`` es lo que escribió, y ``hablado`` lo que fue diciendo
-    por el altavoz, frase a frase. ``primer_sonido_tras_ms`` va del último
-    sonido con voz del propietario al primer sonido suyo por el altavoz.
-    ``se_callo_tras_ms`` va del principio de la voz nueva del propietario a que
-    el altavoz paró, si estaba sonando. ``aviso`` es lo que Sirius enseña si no
-    puede oír o hablar, por ejemplo porque falta un modelo.
+    por el altavoz, frase a frase. ``aviso`` es lo que Sirius enseña si no
+    puede oír o hablar, por ejemplo porque falta un modelo. Los tiempos no van
+    aquí: se calculan con los relojes de los dobles (``micro.leido_en``,
+    ``altavoz.sonados``, ``altavoz.parado_en``), para que no los ponga quien
+    implementa la pieza.
     """
 
     oido: str | None
     para_el: bool
     contestado: str | None
     hablado: tuple[str, ...]
-    primer_sonido_tras_ms: float | None = None
-    se_callo_tras_ms: float | None = None
     aviso: str = ""
 
 
@@ -336,6 +363,12 @@ class ConductorDeVoz(Conductor):
         self._conexiones: list[str] = []
         _vigilar()
         super().__init__(carpeta, respuestas=respuestas, ajustes=ajustes)
+        rutas = resolve_paths()
+        self._permitidas = Permitidas(
+            base=self.base,
+            ajustes=rutas.config_dir / _CONFIG_FILE_NAME,
+            diario=rutas.logs_dir / LOG_FILE_NAME,
+        )
 
     # --- Pieza B: oír en local ---
 
@@ -434,7 +467,7 @@ class ConductorDeVoz(Conductor):
 
     def anota_escritura(self, ruta: Path) -> None:
         """Lo llama el vigilante por cada fichero abierto para escribir durante un turno."""
-        if es_escritura_sospechosa(ruta):
+        if es_escritura_sospechosa(ruta, self._permitidas):
             self._escrituras.append(ruta)
 
     def audio_en_la_base(self) -> list[str]:

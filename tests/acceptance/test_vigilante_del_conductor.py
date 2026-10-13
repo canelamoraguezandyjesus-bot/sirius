@@ -16,7 +16,7 @@ import tempfile
 from pathlib import Path
 
 import conductor_robot_0_3 as conductor
-from conductor_robot_0_3 import es_escritura_sospechosa
+from conductor_robot_0_3 import Permitidas, es_escritura_sospechosa
 
 
 class _Testigo:
@@ -70,16 +70,32 @@ def test_ve_una_conexion_y_nada_fuera_del_turno(tmp_path: Path) -> None:
     assert testigo.escrituras == []
 
 
-def test_solo_la_base_los_ajustes_y_el_diario_se_pueden_escribir_en_un_turno() -> None:
+def test_solo_la_base_los_ajustes_y_el_diario_de_verdad_se_pueden_escribir(tmp_path: Path) -> None:
+    datos, ajustes, diario = tmp_path / "datos", tmp_path / "config", tmp_path / "datos" / "logs"
+    permitidas = Permitidas(
+        base=datos / "sirius.db",
+        ajustes=ajustes / "settings.json",
+        diario=diario / "application.log",
+    )
     for permitido in (
-        "sirius.db",
-        "sirius.db-wal",
-        "sirius.db-shm",
-        "sirius.db-journal",
-        "settings.json",
-        "application.log",
-        "application.log.3",
+        datos / "sirius.db",
+        datos / "sirius.db-wal",
+        datos / "sirius.db-shm",
+        datos / "sirius.db-journal",
+        ajustes / "settings.json",
+        diario / "application.log",
+        diario / "application.log.3",
     ):
-        assert not es_escritura_sospechosa(Path("/datos") / permitido), permitido
-    for sospechoso in ("captura.tmp", "sirius.db.wav", "grabacion.ogg", "notas.txt", "tmpabc123"):
-        assert es_escritura_sospechosa(Path("/datos") / sospechoso), sospechoso
+        assert not es_escritura_sospechosa(permitido, permitidas), permitido
+    # El mismo nombre en otra carpeta es una escritura como otra cualquiera.
+    for sospechoso in (
+        datos / "captura.tmp",
+        datos / "sirius.db.wav",
+        datos / "grabacion.ogg",
+        tmp_path / "sirius.db",
+        tmp_path / "settings.json",
+        tmp_path / "application.log",
+        diario / "sirius.db-wal",
+        Path(tempfile.gettempdir()) / "sirius.db",
+    ):
+        assert es_escritura_sospechosa(sospechoso, permitidas), sospechoso

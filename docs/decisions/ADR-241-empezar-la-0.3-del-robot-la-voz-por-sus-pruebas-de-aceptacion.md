@@ -262,9 +262,21 @@ la misma PR que anote sus cifras.
 
 ## La lección
 
-- ninguna: el repaso cláusula a cláusula del §5 antes de la primera ronda es la lección
-  de ADR-233, aplicada; comprobar las herramientas antes de instalarlas es lo que pide el
-  plan. Nada mordió que alguien pudiera repetir a partir de este ADR.
+- familia: `prueba-que-no-puede-ver-lo-que-vigila`
+- sin esto se repetiría: escribir las pruebas de aceptación de una versión antes del
+  código mirando el resultado final, lo guardado y lo contestado, y aceptando las cifras
+  y los recuentos que da el propio conductor; una pieza que atajara las pasaba. Trece
+  hallazgos ciertos en tres rondas sobre la PR #686, todos de esa familia, y ADR-233 ya
+  había tenido cuatro iguales en su ronda 3. La pregunta que las caza, antes de la
+  primera ronda y prueba a prueba: «¿pasaría con una pieza que hiciera trampa?». Y las
+  dos reglas que salen de ella: cada prueba mira el camino por los dobles, el sonido por
+  el micro, el texto por el transcriptor, la petición por el modelo y la frase por el
+  altavoz; y toda cifra la dan los relojes y los recuentos de los dobles, nunca un campo
+  que rellene el conductor.
+- lo hace cumplir: ninguna prueba: ninguna máquina mide la fuerza de una prueba; lo que
+  hay es `tests/acceptance/test_vigilante_del_conductor.py`, que impide que el vigilante
+  de escrituras y conexiones pase en vacío, y esta lección para quien escriba las de la
+  0.4.
 
 ## Revisión externa
 
@@ -316,3 +328,22 @@ la misma PR que anote sus cifras.
     `os.open`, una lectura que no cuenta, una conexión y una escritura fuera del turno.
   - El inventario sigue en 27. Si la ronda 3 trae la misma familia, se corrige en un
     commit y se fusiona sin cuarta, como fija el criterio de parada.
+- **Ronda 3 de Codex**, la última, sobre `1b792492`: cuatro hallazgos P2, los cuatro
+  ciertos y los cuatro de la misma familia. Se corrigen en un solo commit y la PR se
+  fusiona sin cuarta ronda, como fija el criterio de parada.
+  - La lista de escrituras permitidas comparaba solo el nombre: un `settings.json` o un
+    `sirius.db` en otra carpeta pasaba por permitido. Ahora `Permitidas` guarda las
+    rutas de verdad de la base, los ajustes y el diario, las compara resueltas, y el
+    mismo nombre en otra carpeta cuenta como escritura. Es un defecto que nació del
+    arreglo de la ronda 2.
+  - E-R03-05 dejaba la llamada de teléfono como opcional, y el plan dice que la tele y el
+    teléfono no son órdenes. Ahora la llamada es obligatoria, de al menos 2 minutos y con
+    manos libres, dentro de los 10 minutos.
+  - Los 200 ms de PA-R03-09 y el medio segundo de PA-R03-07 los daba el conductor, y
+    quien implementa la pieza escribe también el conductor. Ahora el micro apunta cuándo
+    leyó cada sonido y el altavoz cuándo sonó y cuándo paró, y las pruebas calculan las
+    dos cifras con esos relojes; `TurnoDeVoz` ya no lleva tiempos.
+  - PA-R03-02 comparaba la locución entera solo con el resumen del turno; ahora también
+    con lo que se le pidió a la voz y con lo que sonó por el altavoz.
+  - Trece hallazgos ciertos en tres rondas, los trece de la misma familia. De ahí la
+    lección de abajo.

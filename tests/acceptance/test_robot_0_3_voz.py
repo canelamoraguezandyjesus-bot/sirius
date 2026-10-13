@@ -40,6 +40,21 @@ def _sin_blancos(texto: str) -> str:
     return " ".join(texto.split())
 
 
+def _momentos_de_su_voz(conductor: ConductorDeVoz, desde: int) -> list[float]:
+    """Cuándo leyó el micro cada sonido con voz del propietario, desde el índice ``desde``.
+
+    Son los relojes de los dobles, no cifras del conductor: una pieza que tardara
+    de más no podría devolver un cero (ronda 3 de Codex sobre la PR #686).
+    """
+    leidos = conductor.micro.leidos[desde:]
+    momentos = conductor.micro.leido_en[desde:]
+    return [
+        momento
+        for sonido, momento in zip(leidos, momentos, strict=True)
+        if not sonido.es_silencio and sonido.de_quien == "propietario"
+    ]
+
+
 # --- PA-R03-01 · Lo que dice por voz entra en la charla -----------------------
 
 
@@ -154,8 +169,11 @@ def test_lo_que_dice_es_lo_que_escribio_sin_marcas_ni_codigo(tmp_path: Path) -> 
 
     assert turno.contestado == escrito
     # La locución entera es lo escrito preparado para leerse, sin quitar ni añadir
-    # nada; solo cambia el corte en frases.
+    # nada; solo cambia el corte en frases. Y es la misma en lo que se le pidió a
+    # la voz y en lo que sonó por el altavoz, no solo en el resumen del turno.
     assert _sin_blancos(" ".join(turno.hablado)) == _sin_blancos(prepare_speech_text(escrito))
+    assert [frase.texto for frase in conductor.voz.frases] == list(turno.hablado)
+    assert [sonido.texto for sonido, _ in conductor.altavoz.sonados] == list(turno.hablado)
     assert "print(1)" not in " ".join(turno.hablado)
 
 
@@ -216,6 +234,7 @@ def test_con_la_cancelacion_de_eco_su_propia_voz_sigue_sin_empezar_un_turno(
     assert conductor.transcriptor.transcritos == ["Sirius, cuéntame tu vida."]
     assert len(conductor.peticiones) == 1
 
+    leidos_antes = len(conductor.micro.leidos)
     corte = conductor.oye_mientras_habla("Espera, espera, que tengo prisa.")
 
     # La voz del propietario, con el eco sonando a la vez, sí atraviesa.
@@ -224,7 +243,7 @@ def test_con_la_cancelacion_de_eco_su_propia_voz_sigue_sin_empezar_un_turno(
         "Espera, espera, que tengo prisa.",
     ]
     assert conductor.altavoz.parado_en is not None
-    assert corte.se_callo_tras_ms is not None
+    assert conductor.altavoz.parado_en > min(_momentos_de_su_voz(conductor, leidos_antes))
     assert corte.oido == "Espera, espera, que tengo prisa."
     assert corte.contestado == "Vale, vale."
 
@@ -333,11 +352,14 @@ def test_si_el_propietario_habla_sirius_se_calla_y_atiende_lo_nuevo(tmp_path: Pa
     conductor.oye("Sirius, cuéntame tu vida.")
     assert conductor.altavoz.parado_en is None
 
+    leidos_antes = len(conductor.micro.leidos)
     corte = conductor.oye_mientras_habla("Espera, espera, que tengo prisa.")
 
+    # Medio segundo desde que el micro leyó su voz hasta que el altavoz paró, con
+    # los relojes de los dobles.
     assert conductor.altavoz.parado_en is not None
-    assert corte.se_callo_tras_ms is not None
-    assert corte.se_callo_tras_ms < 500
+    empezo_a_hablar = min(_momentos_de_su_voz(conductor, leidos_antes))
+    assert (conductor.altavoz.parado_en - empezo_a_hablar) * 1000 < 500
     assert corte.oido == "Espera, espera, que tengo prisa."
     assert corte.contestado == "Vale, vale."
     assert corte.hablado == ("Vale, vale.",)
@@ -408,10 +430,15 @@ def test_del_final_de_su_voz_al_primer_sonido_la_tuberia_anade_menos_de_200_ms(
     tiempos: list[float] = []
 
     for n in range(1, 21):
+        leidos_antes = len(conductor.micro.leidos)
+        sonados_antes = len(conductor.altavoz.sonados)
         turno = conductor.oye(f"Sirius, pregunta número {n}.")
         assert turno.hablado == (f"Respuesta {n} de Sirius.",)
-        assert turno.primer_sonido_tras_ms is not None
-        tiempos.append(turno.primer_sonido_tras_ms)
+        # Del último sonido con su voz que leyó el micro al primero que sonó por el
+        # altavoz, con los relojes de los dobles.
+        fin_de_su_voz = max(_momentos_de_su_voz(conductor, leidos_antes))
+        _sonido, primer_sonido = conductor.altavoz.sonados[sonados_antes]
+        tiempos.append((primer_sonido - fin_de_su_voz) * 1000)
 
     assert percentil(tiempos, 95) < 200
 
