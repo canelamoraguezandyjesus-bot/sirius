@@ -165,6 +165,30 @@ def test_su_propia_voz_no_empieza_un_turno(tmp_path: Path) -> None:
     )
 
 
+@pieza("E", "con la cancelación de eco, su propia voz sigue sin empezar un turno ni le corta")
+def test_con_la_cancelacion_de_eco_su_propia_voz_sigue_sin_empezar_un_turno(
+    tmp_path: Path,
+) -> None:
+    conductor = ConductorDeVoz(
+        tmp_path, respuestas=["Una respuesta larguísima que no acaba nunca.", "Vale, vale."]
+    )
+    conductor.altavoz.con_eco = True
+    conductor.altavoz.sigue_sonando = True
+
+    turno = conductor.oye("Sirius, cuéntame tu vida.")
+
+    assert turno.hablado == ("Una respuesta larguísima que no acaba nunca.",)
+    assert conductor.altavoz.parado_en is None
+    assert conductor.transcriptor.transcritos == ["Sirius, cuéntame tu vida."]
+    assert len(conductor.peticiones) == 1
+
+    corte = conductor.oye_mientras_habla("Espera, espera, que tengo prisa.")
+
+    assert corte.se_callo_tras_ms is not None
+    assert corte.oido == "Espera, espera, que tengo prisa."
+    assert corte.contestado == "Vale, vale."
+
+
 # --- PA-R03-05 · No guarda audio ----------------------------------------------
 
 
@@ -176,6 +200,7 @@ def test_tras_varios_turnos_de_voz_no_queda_ningun_audio_guardado(tmp_path: Path
         conductor.oye(frase)
     conductor.cierra()
 
+    assert conductor.escrituras_de_audio() == []
     assert conductor.ficheros_de_audio_nuevos() == []
     assert conductor.audio_en_la_base() == []
     assert conductor.busca_en_toda_la_base("Pues yo fatal.") != []
@@ -190,6 +215,7 @@ def test_lo_que_no_era_para_el_no_se_guarda_ni_como_texto(tmp_path: Path) -> Non
 
     assert not turno.para_el
     assert conductor.busca_en_toda_la_base("cielos despejados") == []
+    assert conductor.escrituras_de_audio() == []
     assert conductor.ficheros_de_audio_nuevos() == []
 
 
@@ -351,6 +377,10 @@ def test_la_prueba_de_voces_da_cinco_frases_con_cuatro_a_seis_voces_barajadas_y_
     for candidata in hoja.candidatas:
         assert set(candidata.muestras) == set(hoja.frases)
         assert candidata.etiqueta not in nombres
+        assert candidata.etiqueta in hoja.lo_que_ve_el_propietario
+    for frase in hoja.frases:
+        assert frase in hoja.lo_que_ve_el_propietario
+    assert hoja.botones_de_escucha == len(hoja.frases) * len(hoja.candidatas)
     visible = hoja.lo_que_ve_el_propietario.casefold()
     for escondido in (*nombres, "piper", "chatterbox", "es_es"):
         assert escondido.casefold() not in visible

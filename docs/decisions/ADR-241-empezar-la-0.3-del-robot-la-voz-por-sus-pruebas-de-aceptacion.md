@@ -164,7 +164,7 @@ de esperadas a verdes:
 | F | Elegir su voz a ciegas, con las de Piper y una de personaje con Chatterbox |
 
 **Las pruebas de aceptación** se llaman `PA-R03-NN` y viven en
-`docs/evolution/PRUEBAS_0.3_DEL_ROBOT.md`: 10, con 26 pruebas de máquina y seis
+`docs/evolution/PRUEBAS_0.3_DEL_ROBOT.md`: 10, con 27 pruebas de máquina y seis
 evaluaciones del propietario, E-R03-01 a E-R03-06, con sus umbrales fijados antes de
 medir. Salieron del §5 cláusula a cláusula, también de «Con qué», «No se usa», «Dinero»
 y los riesgos del §10, que es la lección de las rondas 2 y 3 de ADR-233; lo que ninguna
@@ -184,7 +184,7 @@ prueba puede ver está en «Lo que estas pruebas no garantizan».
   los usan sin cambiar de comportamiento, y las tablas rotas a propósito de la 0.2 siguen
   alimentando la misma comprobación, con una más: una prueba de una pieza que no es de la
   versión.
-- **El inventario aprobado no se reduce**: 10 PA, 26 pruebas y seis evaluaciones viven en
+- **El inventario aprobado no se reduce**: 10 PA, 27 pruebas y seis evaluaciones viven en
   `tests/acceptance/test_robot_0_3_trazabilidad.py`, como en la 0.2.
 - **Lo que las pruebas fijan y el código tendrá que cumplir**: lo que se ve en la ventana
   («Escuchando», «En silencio», el botón de silencio y la charla por voz con sus dos
@@ -221,17 +221,17 @@ la misma PR que anote sus cifras.
   `audio/vad/silero.py` (`silero_vad.onnx` dentro del paquete).
 - Nadie más trabaja en estos ficheros: el 13-10-2026 la API de GitHub devolvió 0 PR
   abiertas, y `main` no se había movido desde la PR #685 del 08-10-2026.
-- Las 26 pruebas de máquina se ven fallar por la razón esperada:
+- Las 27 pruebas de máquina se ven fallar por la razón esperada:
   `uv run --no-sync pytest -q tests/acceptance/test_robot_0_3_voz.py tests/acceptance/test_robot_0_3_ventana.py`
-  da 26 xfailed, cada una con su pieza; ruff y mypy pasan sobre sus cuerpos.
+  da 27 xfailed, cada una con su pieza; ruff y mypy pasan sobre sus cuerpos.
 - La comprobación de la tabla: `tests/acceptance/test_robot_0_3_trazabilidad.py` pasa
   con el documento como está, y las 13 pruebas de `test_robot_0_2_trazabilidad.py`, diez
   de ellas con tablas rotas a propósito, siguen pasando sobre el módulo compartido.
-- La batería entera sobre el head de contenido: 8 194 pasan, 16 saltadas y 28 `xfail`, los 26 de la 0.3 y los 2 que ya estaban, en 24 min 29 s. Sobre `main` (`d545ff17`) eran 8 181 pasan y 2 `xfail`: entran las 26 esperadas y 13 que pasan, las dos de la trazabilidad de la 0.3, la tabla rota nueva de la 0.2 y las que los guardas de documentos añaden por cada ADR y documento nuevo.
+- La batería entera. Sobre `7209d783`, el primer head: 8 194 pasan, 16 saltadas y 28 `xfail`, los 26 de la 0.3 de entonces y los 2 que ya estaban, en 24 min 29 s. Sobre `main` (`d545ff17`) eran 8 181 pasan y 2 `xfail`: entran las esperadas y 13 que pasan, las dos de la trazabilidad de la 0.3, la tabla rota nueva de la 0.2 y las que los guardas de documentos añaden por cada ADR y documento nuevo. Sobre el head de la ronda 1: 8 194 pasan, 16 saltadas y 29 `xfail`, los 27 de la 0.3 y los 2 que ya estaban, en 25 min 40 s.
 
 ## Consecuencias
 
-- La batería lleva 26 pruebas `xfail` estrictas de la 0.3 hasta que entre cada pieza. Se
+- La batería lleva 27 pruebas `xfail` estrictas de la 0.3 hasta que entre cada pieza. Se
   suman a las dos de M11, que siguen como estaban.
 - Las pruebas fijan nombres que todavía no existen en el código: los del conductor, los
   de la ventana y los de las herramientas. Si una pieza necesita cambiar una prueba, el
@@ -266,4 +266,22 @@ la misma PR que anote sus cifras.
 
 ## Revisión externa
 
-- Pendiente de la primera ronda.
+- **Ronda 1 de Codex**, sobre `7209d783`: tres hallazgos P2, los tres ciertos y los tres de
+  una misma familia: una prueba que no mira lo que dice mirar, y que una pieza podría
+  pasar sin cumplirlo.
+  - PA-R03-03 decía «ni antes ni después de la cancelación de eco» con una sola prueba de
+    la pieza C: al entrar la C, la fila quedaría en verde sin que nadie mirase la E. Ahora
+    la fila es de C y E, con una segunda prueba que, con la cancelación de eco y la
+    interrupción activas, comprueba que su propio eco no empieza un turno ni le corta, y
+    que el propietario sí. El inventario pasa de 26 a 27.
+  - PA-R03-10 aceptaba una hoja con `lo_que_ve_el_propietario` vacío: solo miraba que no
+    aparecieran los nombres de las voces. Ahora exige cada etiqueta y cada frase en lo que
+    se ve, y un botón de escuchar por voz y frase.
+  - PA-R03-05 comparaba dos fotos del disco: una captura escrita en un temporal y borrada
+    antes de acabar el turno no se veía. Ahora el conductor pone un gancho de auditoría
+    de Python que apunta cada fichero de audio, o temporal fuera de la base, que algo abra
+    para escribir durante un turno de voz, aunque lo borre después, y la foto del disco se
+    mira además al final. Lo que escriba Qt sin pasar por Python no lo ve, y queda escrito
+    en «Lo que estas pruebas no garantizan».
+  - Familia: nueva en esta PR. Si la ronda 2 la repite, se para y se repasan las 27
+    pruebas una a una contra «¿pasaría sin su pieza?», no solo las que señale.

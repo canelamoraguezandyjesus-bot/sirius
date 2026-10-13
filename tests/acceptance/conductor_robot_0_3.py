@@ -23,8 +23,12 @@ añade su letra a ``PIEZAS_ENTREGADAS``; la tabla de
 
 from __future__ import annotations
 
+import os
+import sys
 import tempfile
-from collections.abc import Mapping, Sequence
+import weakref
+from collections.abc import Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -59,6 +63,55 @@ EXTENSIONES_DE_AUDIO: frozenset[str] = frozenset(
 
 def _pendiente(letra: str) -> PiezaPendiente:
     return _PIEZAS.pendiente(letra)
+
+
+# --- El vigilante de escrituras: ve cada fichero que se abre para escribir ---
+
+#: Los conductores que están dentro de un turno de voz: a ellos les llega cada
+#: apertura de fichero para escribir. Débil, para que un conductor olvidado no se
+#: quede vigilando.
+_EN_UN_TURNO: weakref.WeakSet[ConductorDeVoz] = weakref.WeakSet()
+_GANCHO_PUESTO = False
+
+
+def _abre_para_escribir(modo: object, flags: object) -> bool:
+    if isinstance(modo, str):
+        return any(letra in modo for letra in "wax+")
+    if isinstance(flags, int):
+        return bool(flags & (os.O_WRONLY | os.O_RDWR | os.O_APPEND | os.O_CREAT))
+    return False
+
+
+def _vigilar_aperturas() -> None:
+    """Pone, una vez por proceso, el gancho que ve cada fichero que se abre para escribir.
+
+    Un gancho de auditoría de Python no se puede quitar, así que se pone una vez y
+    solo trabaja mientras algún conductor está dentro de un turno de voz. Ve todo
+    lo que abre Python, también ``tempfile`` y lo que se borra antes de acabar el
+    turno (ronda 1 de Codex sobre la PR #686). Lo que escriba Qt por su cuenta no
+    pasa por aquí, y por eso el disco se mira además al final
+    (``ficheros_de_audio_nuevos``).
+    """
+    global _GANCHO_PUESTO
+    if _GANCHO_PUESTO:
+        return
+
+    def gancho(evento: str, args: tuple[Any, ...]) -> None:
+        if evento != "open" or not _EN_UN_TURNO:
+            return
+        try:
+            ruta, modo, flags = args
+            if not _abre_para_escribir(modo, flags) or isinstance(ruta, int):
+                return
+            texto = os.fsdecode(ruta)
+        except TypeError, ValueError, UnicodeError:
+            # Un gancho que lanza aborta la apertura ajena: aquí se calla.
+            return
+        for conductor in list(_EN_UN_TURNO):
+            conductor.anota_escritura(Path(texto))
+
+    sys.addaudithook(gancho)
+    _GANCHO_PUESTO = True
 
 
 # --- Dobles: hacen de micro, de oído, de voz y de altavoz, nunca de Sirius ----
@@ -201,7 +254,11 @@ class HojaDeVoces:
 
     frases: tuple[str, ...]
     candidatas: tuple[VozCandidata, ...]
+    #: El texto de la hoja tal como se ve, botones incluidos: ahí tienen que estar
+    #: cada etiqueta y cada frase, y ninguna voz por su nombre.
     lo_que_ve_el_propietario: str
+    #: Cuántos botones de escuchar hay en la hoja: uno por voz y frase.
+    botones_de_escucha: int
 
 
 class VentanaDeVoz(VentanaDePrueba):
@@ -247,6 +304,8 @@ class ConductorDeVoz(Conductor):
         self.reloj = RelojDeMentira()
         self._temporal = Path(tempfile.gettempdir())
         self._ficheros_de_antes = self._ficheros_de_audio()
+        self._escrituras: list[Path] = []
+        _vigilar_aperturas()
         super().__init__(carpeta, respuestas=respuestas, ajustes=ajustes)
 
     # --- Pieza B: oír en local ---
@@ -256,13 +315,22 @@ class ConductorDeVoz(Conductor):
 
         Devuelve cuando Sirius ha terminado con ello: ha contestado, ha decidido
         que no era para él, o se ha quedado esperando a que el detector dé el
-        turno por acabado (entonces ``oido`` es ``None``).
+        turno por acabado (entonces ``oido`` es ``None``). Mientras dura, cada
+        fichero que algo abra para escribir queda apuntado (``escrituras_de_audio``).
         """
+        with self._vigilando_escrituras():
+            return self._oye(texto, y_calla=y_calla)
+
+    def _oye(self, texto: str, *, y_calla: int) -> TurnoDeVoz:
         del texto, y_calla
         raise _pendiente("B")
 
     def calla(self, silencios: int) -> TurnoDeVoz:
         """Suenan ``silencios`` silencios más por el micro; qué pasa con el turno que esperaba."""
+        with self._vigilando_escrituras():
+            return self._calla(silencios)
+
+    def _calla(self, silencios: int) -> TurnoDeVoz:
         del silencios
         raise _pendiente("B")
 
@@ -322,6 +390,26 @@ class ConductorDeVoz(Conductor):
         """Audio aparecido desde que arrancó el conductor, en sus carpetas o en la temporal."""
         return sorted(self._ficheros_de_audio() - self._ficheros_de_antes)
 
+    def escrituras_de_audio(self) -> list[Path]:
+        """Lo que algo abrió para escribir durante un turno de voz, aunque lo borrara después.
+
+        Cuenta todo fichero de audio, esté donde esté, y todo temporal que no sea de
+        la base ni de la carpeta de la prueba.
+        """
+        return list(self._escrituras)
+
+    def anota_escritura(self, ruta: Path) -> None:
+        """Lo llama el vigilante por cada fichero abierto para escribir durante un turno."""
+        es_audio = ruta.suffix.lower() in EXTENSIONES_DE_AUDIO
+        es_temporal_ajeno = (
+            ruta.is_absolute()
+            and ruta.is_relative_to(self._temporal)
+            and not ruta.is_relative_to(self.carpeta)
+            and not ruta.is_relative_to(self.base.parent)
+        )
+        if es_audio or es_temporal_ajeno:
+            self._escrituras.append(ruta)
+
     def audio_en_la_base(self) -> list[str]:
         """Las ``tabla.columna`` de la base que guardan audio: ninguna, si no guarda."""
         raise _pendiente("D")
@@ -333,6 +421,10 @@ class ConductorDeVoz(Conductor):
 
     def oye_mientras_habla(self, texto: str) -> TurnoDeVoz:
         """El propietario habla mientras el altavoz sigue sonando con la respuesta anterior."""
+        with self._vigilando_escrituras():
+            return self._oye_mientras_habla(texto)
+
+    def _oye_mientras_habla(self, texto: str) -> TurnoDeVoz:
         del texto
         raise _pendiente("E")
 
@@ -355,6 +447,15 @@ class ConductorDeVoz(Conductor):
         raise _pendiente("F")
 
     # --- Lo que es solo de las pruebas ---
+
+    @contextmanager
+    def _vigilando_escrituras(self) -> Iterator[None]:
+        """Mientras dura un turno de voz, cada fichero abierto para escribir pasa por aquí."""
+        _EN_UN_TURNO.add(self)
+        try:
+            yield
+        finally:
+            _EN_UN_TURNO.discard(self)
 
     def _ficheros_de_audio(self) -> frozenset[Path]:
         carpetas = (self.carpeta, self._temporal)
