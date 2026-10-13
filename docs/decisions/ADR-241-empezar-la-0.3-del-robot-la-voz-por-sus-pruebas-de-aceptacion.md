@@ -244,7 +244,7 @@ la misma PR que anote sus cifras.
 - La comprobación de la tabla: `tests/acceptance/test_robot_0_3_trazabilidad.py` pasa
   con el documento como está, y las 13 pruebas de `test_robot_0_2_trazabilidad.py`, diez
   de ellas con tablas rotas a propósito, siguen pasando sobre el módulo compartido.
-- La batería entera. Sobre `7209d783`, el primer head: 8 194 pasan, 16 saltadas y 28 `xfail`, los 26 de la 0.3 de entonces y los 2 que ya estaban, en 24 min 29 s. Sobre `main` (`d545ff17`) eran 8 181 pasan y 2 `xfail`: entran las esperadas y 13 que pasan, las dos de la trazabilidad de la 0.3, la tabla rota nueva de la 0.2 y las que los guardas de documentos añaden por cada ADR y documento nuevo. Sobre el head de la ronda 1: 8 194 pasan, 16 saltadas y 29 `xfail`, los 27 de la 0.3 y los 2 que ya estaban, en 25 min 40 s. Sobre el head de la ronda 2: 8 198 pasan, 16 saltadas y 29 `xfail`, en 23 min 44 s; las 4 que entran son las 3 del vigilante y la que los guardas añaden por el fichero nuevo. Sobre el árbol de la ronda 3 y H-241, `56017da1`: 8 199 pasan, 16 saltadas y 29 `xfail`, en 23 min 10 s. Sobre el árbol de la revisión propia, con sus cinco pasadas: 8 211 pasan, 16 saltadas y 29 `xfail`, en 22 min 49 s; las 12 que entran son las 10 de los dobles, la cuarta del vigilante y la que los guardas añaden por el fichero nuevo. Sobre el árbol de la ronda 4 y su mirada propia: 8 212 pasan, 16 saltadas y 29 `xfail`, en 21 min 34 s; la que entra es la del eco mezclado con la voz. Y la línea base de la charla escrita, `di()` solo, en la nube el 13-10-2026: 34 ms en el P95 de 20 turnos, 25,7 ms la mediana y 57,7 ms el máximo.
+- La batería entera. Sobre `7209d783`, el primer head: 8 194 pasan, 16 saltadas y 28 `xfail`, los 26 de la 0.3 de entonces y los 2 que ya estaban, en 24 min 29 s. Sobre `main` (`d545ff17`) eran 8 181 pasan y 2 `xfail`: entran las esperadas y 13 que pasan, las dos de la trazabilidad de la 0.3, la tabla rota nueva de la 0.2 y las que los guardas de documentos añaden por cada ADR y documento nuevo. Sobre el head de la ronda 1: 8 194 pasan, 16 saltadas y 29 `xfail`, los 27 de la 0.3 y los 2 que ya estaban, en 25 min 40 s. Sobre el head de la ronda 2: 8 198 pasan, 16 saltadas y 29 `xfail`, en 23 min 44 s; las 4 que entran son las 3 del vigilante y la que los guardas añaden por el fichero nuevo. Sobre el árbol de la ronda 3 y H-241, `56017da1`: 8 199 pasan, 16 saltadas y 29 `xfail`, en 23 min 10 s. Sobre el árbol de la revisión propia, con sus cinco pasadas: 8 211 pasan, 16 saltadas y 29 `xfail`, en 22 min 49 s; las 12 que entran son las 10 de los dobles, la cuarta del vigilante y la que los guardas añaden por el fichero nuevo. Sobre el árbol de la ronda 4 y su mirada propia: 8 212 pasan, 16 saltadas y 29 `xfail`, en 21 min 34 s; la que entra es la del eco mezclado con la voz. Sobre el árbol de la ronda 5 y su mirada propia: 8 212 pasan, 16 saltadas y 29 `xfail`, en 21 min 23 s. Y la línea base de la charla escrita, `di()` solo, en la nube el 13-10-2026: 34 ms en el P95 de 20 turnos, 25,7 ms la mediana y 57,7 ms el máximo.
 
 ## Consecuencias
 
@@ -487,7 +487,7 @@ la misma PR que anote sus cifras.
     dice vigilar, y ninguno de las cinco pasadas propias lo vio: la revisión externa
     sigue haciendo falta, y se repite sobre el head nuevo hasta que vuelva limpia.
   - **Mirada propia a estos arreglos**, antes de empujarlos: un P2 y cinco P3, ciertos
-    y medidos. La foto de la base eximía toda columna declarada BLOB, también la que
+    y medidos; quedaron en `dd0b2ab9`, y la ronda 5 enseñó que seguían siendo parches. La foto de la base eximía toda columna declarada BLOB, también la que
     trajera la migración de la propia pieza, y en las pruebas la columna de las
     huellas está vacía al arrancar: ahora solo se exime la columna que ya guardaba
     BLOB. Una tabla virtual nueva era un escondite en sus sombras: ahora cuenta. La
@@ -495,6 +495,43 @@ la misma PR que anote sus cifras.
     que va detrás de la voz puede leerse con el altavoz ya parado, y queda dicho. Y
     una pieza que descartara todo lo que Sirius dijo alguna vez pasaba: ahora el
     propietario repite «Vale, vale.» con el altavoz callado y tiene que oírse.
+- **Ronda 5 de Codex**, sobre `dd0b2ab9`: tres hallazgos P2, los tres ciertos, los tres
+  sobre los arreglos de la ronda 4. Segunda ronda seguida con la misma familia, así que
+  rige la regla de las dos rondas: se dejó de parchear y se buscó la raíz.
+  - **La raíz.** `audio_en_la_base` adivinaba qué era audio por su forma, cabeceras,
+    BLOB donde no los había, textos largos, tablas virtuales nuevas, y cada regla
+    dejaba un hueco que la siguiente ronda encontraba: la foto tomada después de montar
+    Sirius daba por buenas las escrituras del arranque de la propia pieza; una tabla
+    `audio(sample INTEGER)` con las muestras como filas no tenía cabecera ni BLOB ni
+    texto largo; y una columna que ya guardaba algún BLOB admitía PCM crudo. La
+    propiedad que hay que afirmar no es «esto no parece audio», es «la base solo cambia
+    como cambia charlando con la 0.2». Ahora el conductor lo comprueba contra el estado
+    permitido conocido: las tablas son las de la 0.2, un inventario escrito en el
+    conductor (`TABLAS_DE_LA_0_2`), y sus columnas las del modelo de producción; un
+    BLOB solo en la columna de las huellas, no mayor que una huella y sin cabecera de
+    audio; ningún texto de más de 16 KiB; y ninguna tabla, sombras de los índices
+    incluidas, crece más de mil filas desde antes de arrancar Sirius, que es menos que
+    un segundo de muestras. Si una pieza necesita una tabla, la añade al inventario y su
+    revisión lo ve; el inventario se compara con la base en los dos sentidos cada vez
+    que corre `test_dobles_del_conductor.py`, así que una migración que añada o quite
+    una tabla lo rompe a la vista. Lo que queda fuera, audio troceado en huellas
+    pequeñas o en textos cortos y lo sobrescrito en filas que ya existían, está en «Lo
+    que estas pruebas no garantizan».
+  - **Mirada propia a estos arreglos**, antes de empujarlos: un P2 y cuatro P3, medidos
+    sobre una base real. Las sombras de los dos índices quedaban fuera de todas las
+    reglas y cabía audio sin límite: ahora se cuentan y se miran, binarias pero ni
+    grandes ni con cabecera; el inventario traía una sombra fantasma y se comparaba en
+    un solo sentido; una tabla virtual de un módulo no cargado reventaba la
+    comprobación en vez de señalarse; y la convención del eco, por sucesos y no por
+    tiempo, quedó escrita en vez de un «un rato» que no la pasaba.
+  - **El eco.** El micro recibía el eco y la voz del propietario como dos audios
+    seguidos, y una pieza podía descartar el bloque igual a la última locución y
+    aceptar el siguiente sin cancelar nada. Ahora, con el altavoz sonando y devolviendo
+    eco, lo que el propietario dice llega en un mismo audio con el eco encima, como en
+    un micrófono de verdad, y cada silencio llega como eco solo: la cancelación tiene
+    que apartar el eco de dentro del audio y dejar pasar solo la voz. Un `Sonido`
+    mezclado es de los dos (`de("propietario")` y `de("sirius")`), y la prueba de la
+    cancelación exige verlo leído.
 - **El criterio cambia el 13-10-2026, tras la ronda 3.** El propietario, al ver la
   tercera ronda seguida con la misma familia, retiró el tope de rondas que ADR-233 había
   sacado de su «nada de cinco rondas» del 07-10-2026: «No nos podemos limitar a solo tres

@@ -21,6 +21,7 @@ from contextlib import closing
 from pathlib import Path
 
 import pytest
+import sqlite_vec
 from conductor_robot_0_2 import _respuestas
 from conductor_robot_0_3 import (
     AltavozDeMentira,
@@ -124,15 +125,16 @@ def test_el_micro_capta_el_eco_a_la_vez_que_la_voz_mientras_el_altavoz_sigue_son
     conductor.altavoz.suena(respuesta)
     conductor.habla_encima("Espera, espera.")
 
-    # El eco entra al sonar, y vuelve a entrar delante de la voz del propietario y
-    # delante del silencio: las dos señales circulan a la vez.
-    assert [s.texto for s in conductor.micro.pendientes] == [
-        "Una respuesta larga.",
-        "Una respuesta larga.",
-        "Espera, espera.",
-        "Una respuesta larga.",
-        "",
+    # El eco entra al sonar; después la voz del propietario llega mezclada con el eco
+    # en un solo audio, y el silencio llega como eco solo: las dos señales van juntas.
+    assert [(s.texto, s.de_quien) for s in conductor.micro.pendientes] == [
+        ("Una respuesta larga.", "sirius"),
+        ("Una respuesta larga. Espera, espera.", "propietario y sirius"),
+        ("Una respuesta larga.", "sirius"),
     ]
+    mezclado = conductor.micro.pendientes[1]
+    assert mezclado.de("propietario") and mezclado.de("sirius")
+    assert mezclado.audio == Audio("Una respuesta larga. Espera, espera.")
     conductor.altavoz.para()
     conductor.habla_encima("Ya has parado.")
     assert [s.texto for s in conductor.micro.pendientes][-2:] == ["Ya has parado.", ""]
@@ -259,64 +261,91 @@ def test_el_diario_es_el_de_produccion_y_se_lee_entero(tmp_path: Path) -> None:
     assert conductor.escrituras_en_disco() == [], "el diario es una ruta permitida"
 
 
-def test_el_audio_en_la_base_ve_lo_que_aparece_tras_arrancar_y_no_las_huellas(
+def test_el_audio_en_la_base_ve_lo_que_no_cambia_como_la_charla_y_no_una_huella(
     tmp_path: Path,
 ) -> None:
-    # Una tabla declarada BLOB que ya existe al arrancar, con una huella dentro:
-    # es lo que la base guarda en binario, y no cuenta.
-    rutas_base = ConductorDeVoz(tmp_path)
-    rutas_base.cierra()
-    with closing(sqlite3.connect(rutas_base.base)) as conexion:
-        conexion.execute("CREATE TABLE huellas_de_prueba (id INTEGER PRIMARY KEY, huella BLOB)")
-        conexion.execute(
-            "INSERT INTO huellas_de_prueba (huella) VALUES (?)",
-            (struct.pack("<4f", 0.1, 0.2, 0.3, 0.4),),
-        )
-        # Y una columna declarada BLOB pero vacía al arrancar, como la traería la
-        # migración de una pieza tramposa: declararla no la exime.
-        conexion.execute("CREATE TABLE declarada (id INTEGER PRIMARY KEY, onda BLOB)")
-        conexion.commit()
     conductor = ConductorDeVoz(tmp_path)
-    assert conductor.audio_en_la_base() == []
     conductor.di("Buenos días, Sirius.")
-    assert conductor.audio_en_la_base() == [], "la charla escrita es texto corto"
+    assert conductor.audio_en_la_base() == [], "la charla escrita cambia la base como la 0.2"
     conductor.cierra()
 
-    with closing(sqlite3.connect(conductor.base)) as conexion:
-        # Otra huella donde ya había huellas: sigue sin contar.
-        conexion.execute(
-            "INSERT INTO huellas_de_prueba (huella) VALUES (?)",
-            (struct.pack("<4f", 0.5, 0.6, 0.7, 0.8),),
-        )
-        # Lo que sí cuenta: un WAV con cabecera, una onda cruda sin cabecera en una
-        # tabla nueva, y audio en base64 en una columna de texto.
-        conexion.execute(
-            "CREATE TABLE capturas (id INTEGER PRIMARY KEY, onda BLOB, cruda BLOB, nota TEXT,"
-            " base64 TEXT)"
-        )
-        conexion.execute(
-            "INSERT INTO capturas (onda, cruda, nota, base64) VALUES (?, ?, ?, ?)",
-            (
-                b"RIFF\x24\x08\x00\x00WAVEfmt ",
-                bytes(range(256)) * 4,
-                "RIFF escrito como texto no es audio",
-                "QUJD" * (5 * 1024),
-            ),
-        )
-        # Y un escondite: una tabla virtual nueva, cuyas sombras no se miran.
-        conexion.execute("CREATE VIRTUAL TABLE escondite USING fts5(c)")
-        conexion.execute("INSERT INTO escondite (c) VALUES (?)", ("QUJD" * (5 * 1024),))
-        # Y la onda cruda en la columna declarada BLOB que estaba vacía.
-        conexion.execute("INSERT INTO declarada (onda) VALUES (?)", (bytes(range(256)) * 4,))
-        conexion.commit()
+    def sospechosas() -> list[str]:
+        return sorted(conductor.audio_en_la_base())
 
-    assert sorted(conductor.audio_en_la_base()) == [
-        "capturas.base64",
-        "capturas.cruda",
-        "capturas.onda",
-        "declarada.onda",
-        "escondite (tabla virtual nueva)",
-    ]
+    huella = struct.pack("<4f", 0.1, 0.2, 0.3, 0.4)
+    fila_de_huella = (
+        "INSERT INTO memory_embeddings (memory_id, revision_id, model, embedding, created_at)"
+        " VALUES (?, ?, 'prueba', ?, '2026-10-13 00:00:00')"
+    )
+    fila_de_mensaje = (
+        "INSERT INTO messages (conversation_id, sequence, role, content, created_at, status)"
+        " VALUES (1, ?, 'user', ?, '2026-10-13 00:00:00', 'completed')"
+    )
+    with closing(sqlite3.connect(conductor.base)) as conexion:
+        # Una huella donde van las huellas: la base cambia como cambia charlando.
+        conexion.execute(fila_de_huella, (1, 1, huella))
+        conexion.commit()
+        assert sospechosas() == []
+
+        # Lo que sí cuenta, regla a regla: una tabla nueva, aunque guarde las muestras
+        # como filas enteras; una columna nueva; un BLOB fuera de las huellas; una
+        # huella con cabecera de audio; un texto largo; y una tabla que crece como una
+        # captura.
+        conexion.execute("CREATE TABLE audio (id INTEGER PRIMARY KEY, sample INTEGER)")
+        conexion.commit()
+        assert sospechosas() == ["audio (tabla nueva)"]
+        conexion.execute("DROP TABLE audio")
+        conexion.execute("ALTER TABLE conversations ADD COLUMN onda BLOB")
+        conexion.commit()
+        assert sospechosas() == ["conversations.onda (columna nueva)"]
+        conexion.execute(fila_de_mensaje, (900, b"\x00\x01" * 100))
+        conexion.execute(fila_de_mensaje, (901, "QUJD " * (5 * 1024)))
+        conexion.execute(fila_de_huella, (2, 2, b"RIFF\x24\x08\x00\x00WAVEfmt "))
+        conexion.commit()
+        assert sospechosas() == [
+            "conversations.onda (columna nueva)",
+            "memory_embeddings.embedding (cabecera de audio)",
+            "messages.content (BLOB fuera de las huellas)",
+            "messages.content (texto largo)",
+        ]
+        conexion.execute("DELETE FROM memory_embeddings WHERE memory_id = 2")
+        conexion.execute(fila_de_huella, (3, 3, bytes(range(256)) * 80))
+        conexion.commit()
+        assert "memory_embeddings.embedding (BLOB mayor que una huella)" in sospechosas()
+        conexion.executemany(
+            "INSERT INTO conversations (created_at, is_main) VALUES ('2026-10-13 00:00:00', 0)",
+            [()] * 1_200,
+        )
+        conexion.commit()
+        filas = conexion.execute("SELECT count(*) FROM conversations").fetchone()[0]
+        assert f"conversations (+{filas} filas)" in sospechosas()
+
+        # Las sombras de los índices son binarias por construcción, pero ni con cabecera
+        # de audio ni mayores que una huella: ahí tampoco cabe un escondite.
+        conexion.execute(
+            "INSERT INTO message_fts_data (id, block) VALUES (999999, ?)", (b"RIFF\x24\x08WAVE",)
+        )
+        conexion.execute(
+            "INSERT INTO knowledge_fts_data (id, block) VALUES (999999, ?)",
+            (bytes(range(256)) * 80,),
+        )
+        conexion.commit()
+    encontrado = sospechosas()
+    assert "message_fts_data.block (cabecera de audio)" in encontrado
+    assert "knowledge_fts_data.block (BLOB mayor que una huella)" in encontrado
+
+    # Una tabla de la 0.2 que desaparece se dice, y una tabla virtual de un módulo que
+    # esta conexión no carga se señala en vez de reventar la comprobación.
+    with closing(sqlite3.connect(conductor.base)) as conexion:
+        conexion.execute("DROP TABLE reply_marks")
+        conexion.enable_load_extension(True)
+        sqlite_vec.load(conexion)
+        conexion.execute("CREATE VIRTUAL TABLE escondite USING vec0(huella float[4])")
+        conexion.commit()
+    encontrado = sospechosas()
+    assert "reply_marks (tabla que falta)" in encontrado
+    assert "escondite (tabla nueva)" in encontrado
+    assert "escondite (tabla que no se puede leer)" in encontrado
 
 
 @pytest.mark.gui

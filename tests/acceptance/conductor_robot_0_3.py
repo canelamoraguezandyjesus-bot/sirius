@@ -58,7 +58,9 @@ from conductor_robot_0_2 import (
     _respuestas,
 )
 from piezas_del_robot import PiezaPendiente, Piezas
+from sqlalchemy import LargeBinary
 
+from sirius.adapters.persistence.models import Base
 from sirius.config.settings import _CONFIG_FILE_NAME  # el nombre que usa `_config_file()`
 from sirius.infrastructure.logging import LOG_FILE_NAME, configure_logging
 from sirius.infrastructure.paths import resolve_paths
@@ -366,6 +368,19 @@ class Sonido:
     @property
     def audio(self) -> Audio:
         return Audio(self.texto)
+
+    def de(self, quien: str) -> bool:
+        """Si ``quien`` está entre quienes produjeron este sonido: un audio mezclado tiene dos."""
+        return quien in self.de_quien.split(" y ")
+
+
+def _mezcla(eco: Sonido, sonido: Sonido) -> Sonido:
+    """Lo que capta un micro delante de un altavoz encendido: el eco y lo que suena delante,
+    en un solo audio. Si delante no hay más que silencio, solo el eco."""
+    if sonido.es_silencio:
+        return Sonido(eco.texto, de_quien="sirius", voz=eco.voz)
+    mezclado = f"{eco.texto} {sonido.texto}"
+    return Sonido(mezclado, de_quien=f"{sonido.de_quien} y sirius", voz=eco.voz)
 
 
 class MicroCerrado(RuntimeError):
@@ -740,70 +755,108 @@ class VentanaDeVoz(VentanaDePrueba):
         return tuple(charla)
 
 
-#: Un texto más largo que esto en una columna que no los tenía es audio en base64, no charla.
+#: Las tablas de la base de la 0.2 el 13-10-2026, tal como las deja `initialize_persistence`,
+#: medidas con `PRAGMA table_list`: las de verdad, las virtuales de la búsqueda por palabras
+#: con sus sombras (la de los mensajes lee de `messages` y no tiene sombra de contenido) y la
+#: de Alembic. La 0.3 no añade ninguna: si una pieza necesitara una, la añade aquí y su
+#: revisión lo ve; y `test_dobles_del_conductor.py` compara el inventario con la base de
+#: verdad en los dos sentidos cada vez que corre.
+TABLAS_DE_LA_0_2: frozenset[str] = frozenset(
+    {
+        "alembic_version",
+        "conversation_modes",
+        "conversation_summaries",
+        "conversations",
+        "day_summaries",
+        "decision_revisions",
+        "decisions",
+        "events",
+        "identities",
+        "identity_versions",
+        "judge_scores",
+        "knowledge_fts",
+        "knowledge_fts_config",
+        "knowledge_fts_content",
+        "knowledge_fts_data",
+        "knowledge_fts_docsize",
+        "knowledge_fts_idx",
+        "llm_usage",
+        "memories",
+        "memory_embeddings",
+        "memory_revisions",
+        "memory_suggestions",
+        "message_fts",
+        "message_fts_config",
+        "message_fts_data",
+        "message_fts_docsize",
+        "message_fts_idx",
+        "messages",
+        "project_revisions",
+        "projects",
+        "reply_marks",
+    }
+)
+
+#: Las columnas de cada tabla del modelo de producción, y las que guardan binario (las huellas).
+_COLUMNAS_DEL_MODELO: Mapping[str, frozenset[str]] = {
+    tabla.name: frozenset(columna.name for columna in tabla.columns)
+    for tabla in Base.metadata.tables.values()
+}
+_COLUMNAS_BINARIAS: frozenset[tuple[str, str]] = frozenset(
+    (tabla.name, columna.name)
+    for tabla in Base.metadata.tables.values()
+    for columna in tabla.columns
+    if isinstance(columna.type, LargeBinary)
+)
+
+#: Una huella son unos pocos KiB; un texto de la charla, menos de 16 KiB; una captura de
+#: audio son miles de muestras, así que mil filas de más en una tabla no son charla.
+_HUELLA_MAS_GRANDE = 16 * 1024
 _TEXTO_LARGO = 16 * 1024
+_FILAS_DE_MAS = 1_000
 
 
-@dataclass(frozen=True, slots=True)
-class _ColumnaDeLaBase:
-    """Lo que guarda una columna, para comparar la base de ahora con la del arranque."""
-
-    declarada_blob: bool
-    con_blob: bool
-    cabecera_de_audio: bool
-    texto_mas_largo: int
+def _sql(identificador: str) -> str:
+    return identificador.replace('"', '""')
 
 
-_FotoDeLaBase = dict[tuple[str, str], _ColumnaDeLaBase]
+#: Lo único de SQLite que no es una tabla de la base: su propio esquema. ``sqlite_stat1`` o
+#: ``sqlite_sequence`` sí lo son, y la aplicación puede escribir en ellas.
+_ESQUEMA_DE_SQLITE = frozenset({"sqlite_schema", "sqlite_master", "sqlite_temp_schema"})
 
 
-def _foto_de_la_base(conexion: sqlite3.Connection) -> _FotoDeLaBase:
-    """Cada ``tabla.columna`` de la base, como ``busca_en_toda_la_base`` las recorre."""
-    foto: _FotoDeLaBase = {}
-    # Solo las tablas de verdad: las virtuales y sus tablas sombra son los índices
-    # de SQLite sobre el texto y las huellas, binarios por construcción, y lo que
-    # guarde Sirius está en la tabla real que indexan. Una tabla virtual nueva se
-    # apunta aparte (``_tablas_virtuales``): sería un escondite.
-    tablas = [
-        fila[1]
+def _tablas(conexion: sqlite3.Connection) -> dict[str, str]:
+    """Cada tabla de la base con su tipo: ``table``, ``virtual`` o ``shadow``."""
+    return {
+        fila[1]: fila[2]
         for fila in conexion.execute("PRAGMA table_list")
-        if fila[0] == "main" and fila[2] == "table" and not fila[1].startswith("sqlite_")
-    ]
-    for tabla in tablas:
-        tabla_sql = tabla.replace('"', '""')
-        for fila in conexion.execute(f'PRAGMA table_info("{tabla_sql}")'):
-            columna, declarado = fila[1], str(fila[2] or "")
-            columna_sql = columna.replace('"', '""')
-            resumen = conexion.execute(
-                f"SELECT max(typeof(\"{columna_sql}\") = 'blob'),"
-                f" max(CASE WHEN typeof(\"{columna_sql}\") = 'text'"
-                f' THEN length("{columna_sql}") ELSE 0 END)'
-                f' FROM "{tabla_sql}"'
-            ).fetchone()
-            cabeceras = (
-                bytes(valor)
-                for (valor,) in conexion.execute(
-                    f'SELECT substr("{columna_sql}", 1, 4) FROM "{tabla_sql}"'
-                    f" WHERE typeof(\"{columna_sql}\") = 'blob'"
-                )
-                if valor is not None
-            )
-            foto[(tabla, columna)] = _ColumnaDeLaBase(
-                declarada_blob="BLOB" in declarado.upper(),
-                con_blob=bool(resumen[0]),
-                cabecera_de_audio=any(c.startswith(_CABECERAS_DE_AUDIO) for c in cabeceras),
-                texto_mas_largo=int(resumen[1] or 0),
-            )
-    return foto
+        if fila[0] == "main" and fila[1] not in _ESQUEMA_DE_SQLITE
+    }
 
 
-def _tablas_virtuales(conexion: sqlite3.Connection) -> frozenset[str]:
-    """Las tablas virtuales de la base, por nombre: una nueva sería un escondite."""
-    return frozenset(
-        fila[1]
-        for fila in conexion.execute("PRAGMA table_list")
-        if fila[0] == "main" and fila[2] == "virtual"
-    )
+def _lee_de_otra_tabla(conexion: sqlite3.Connection, tabla: str) -> bool:
+    """Si la tabla virtual es un índice de contenido externo (``content='otra'``)."""
+    fila = conexion.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?", (tabla,)
+    ).fetchone()
+    return bool(fila and fila[0] and "content='" in str(fila[0]).replace('"', "'"))
+
+
+def _filas_por_tabla(conexion: sqlite3.Connection) -> dict[str, int | None]:
+    """Cuántas filas tiene cada tabla, sombras incluidas; ``None`` si no se puede leer.
+
+    Una tabla virtual de un módulo que esta conexión no carga no se puede contar:
+    se devuelve ``None`` y ``audio_en_la_base`` la señala, en vez de reventar.
+    """
+    filas: dict[str, int | None] = {}
+    for tabla in _tablas(conexion):
+        try:
+            filas[tabla] = int(
+                conexion.execute(f'SELECT count(*) FROM "{_sql(tabla)}"').fetchone()[0]
+            )
+        except sqlite3.OperationalError:
+            filas[tabla] = None
+    return filas
 
 
 def _enciende_los_registradores_de_sirius() -> None:
@@ -868,6 +921,7 @@ class ConductorDeVoz(Conductor):
             rutas.logs_dir,
         )
         self._ficheros_de_antes = self._ficheros_de_audio()
+        self._filas_de_antes = self._filas_de_la_base()
         _vigilar()
         _vigila(self)
         try:
@@ -876,9 +930,6 @@ class ConductorDeVoz(Conductor):
             _deja_de_vigilar(self)
             raise
         assert self.base == self._permitidas.base, "la base del conductor de la 0.2 cambió de sitio"
-        with closing(sqlite3.connect(self.base)) as conexion:
-            self._base_de_antes = _foto_de_la_base(conexion)
-            self._virtuales_de_antes = _tablas_virtuales(conexion)
         # El diario, como en producción (`sirius.main`): es ruta permitida, y las
         # pruebas miran que lo oído que no era para él no acabe ahí. La configuración
         # de Alembic (`migrations/env.py`, `fileConfig`) apaga al migrar todos los
@@ -922,19 +973,24 @@ class ConductorDeVoz(Conductor):
     def _suena(self, sonido: Sonido | None, *, silencios: int) -> None:
         """Suena por el micro ``sonido`` y después ``silencios`` silencios.
 
-        Si el altavoz sigue sonando y devuelve eco, el micro capta ese eco a la vez
-        que cada cosa que suena, como un micrófono delante de un altavoz encendido:
-        delante de la voz del propietario y delante de cada silencio va una copia de
-        lo que está sonando (ronda 4 de Codex sobre la PR #686). La copia que va
-        detrás de la voz puede leerse cuando Sirius ya ha parado el altavoz: el
-        cancelador tiene que acordarse un rato de lo que estaba sonando, no solo de
-        lo que suena ahora.
+        Si el altavoz sigue sonando y devuelve eco, el micro capta ese eco mezclado
+        con cada cosa que suena, en un solo audio, como un micrófono delante de un
+        altavoz encendido: la voz del propietario llega con el eco encima, y cada
+        silencio llega como eco solo (rondas 4 y 5 de Codex sobre la PR #686). Es la
+        física de los dobles, por sucesos y no por tiempo. La copia del eco de cada
+        locución llega una vez, justo detrás de ``altavoz.suena``, se encienda o no
+        ``sonando``, y se cancela siempre; mientras ``sonando`` la mantenga, llega
+        dentro de cada audio y se cancela en cada uno; cuando Sirius la para, llega
+        una vez más con lo ya captado; y se olvida cuando su copia ya se vio y no sigue
+        sonando, porque lo que Sirius dijo alguna vez, dicho por el propietario, tiene
+        que oírse. El audio que queda limpio llega al oído como silencio, y cuenta
+        para cerrar el turno.
         """
         sonidos = ([sonido] if sonido is not None else []) + [Sonido("")] * silencios
         for cada in sonidos:
             eco = self.altavoz.sonando
             if self.altavoz.con_eco and eco is not None:
-                self.micro.suena(eco)
+                cada = _mezcla(eco, cada)
             self.micro.suena(cada)
 
     def _escuchando(self) -> None:
@@ -1043,38 +1099,91 @@ class ConductorDeVoz(Conductor):
             self._escrituras.append(ruta)
 
     def audio_en_la_base(self) -> list[str]:
-        """Las ``tabla.columna`` de la base donde ha aparecido algo que parece audio.
+        """Dónde la base ha cambiado como no cambia la charla de la 0.2: ahí habría audio.
 
-        Se compara la base de ahora con la foto que se tomó al arrancar Sirius
-        (``_FotoDeLaBase``), columna a columna. Cuenta: un BLOB que empieza como un
-        fichero de audio, esté donde esté; un BLOB en una columna que al arrancar no
-        guardaba ningún BLOB, aunque estuviera declarada así, también en una tabla o
-        columna nueva, que es donde iría una onda cruda o una matriz; un texto de más
-        de 16 KiB en una columna cuyo texto más largo al arrancar no llegaba a eso,
-        que es donde iría audio en base64; y una tabla virtual que no existía, que
-        sería un escondite en sus tablas sombra (ronda 4 de Codex sobre la PR #686 y
-        la mirada a sus arreglos). Lo único que no cuenta es un BLOB más donde ya
-        había BLOB al arrancar, como una huella más entre las huellas. Ninguna, si la
-        base solo ha ganado texto.
+        No se infiere qué es audio por su forma: se comprueba que la base solo cambia
+        donde la 0.2 ya escribía (ronda 5 de Codex sobre la PR #686). Las tablas son
+        las de la 0.2 (``TABLAS_DE_LA_0_2``) y sus columnas las del modelo; un BLOB
+        solo en la columna de las huellas, no mayor que una huella y sin cabecera de
+        audio; ningún texto de más de 16 KiB; y ninguna tabla, sombras de los índices
+        incluidas, crece más de mil filas desde antes de arrancar Sirius, que es menos
+        que un segundo de muestras. Una tabla que falte o que no se pueda leer también
+        se dice. Vacío si la base solo ha cambiado como cambia charlando.
         """
         encontrados: list[str] = []
         with closing(sqlite3.connect(self.base)) as conexion:
-            ahora = _foto_de_la_base(conexion)
-            virtuales = _tablas_virtuales(conexion) - self._virtuales_de_antes
-            for sitio, columna in ahora.items():
-                antes = self._base_de_antes.get(sitio)
-                nombre = f"{sitio[0]}.{sitio[1]}"
-                if (
-                    columna.cabecera_de_audio
-                    or (columna.con_blob and not (antes is not None and antes.con_blob))
-                    or (
-                        columna.texto_mas_largo > _TEXTO_LARGO
-                        and (antes is None or antes.texto_mas_largo <= _TEXTO_LARGO)
+            tablas = _tablas(conexion)
+            encontrados.extend(f"{t} (tabla nueva)" for t in sorted(set(tablas) - TABLAS_DE_LA_0_2))
+            encontrados.extend(
+                f"{t} (tabla que falta)" for t in sorted(TABLAS_DE_LA_0_2 - set(tablas))
+            )
+            filas = _filas_por_tabla(conexion)
+            for tabla, tipo in sorted(tablas.items()):
+                ahora = filas.get(tabla)
+                if ahora is None:
+                    encontrados.append(f"{tabla} (tabla que no se puede leer)")
+                    continue
+                if tabla not in TABLAS_DE_LA_0_2:
+                    continue
+                # Un índice de contenido externo no guarda nada suyo: lee de la tabla
+                # real, que ya se mira. Lo demás, sombras incluidas, se mira columna a
+                # columna: las sombras son binarias por construcción, pero ni grandes ni
+                # con cabecera de audio.
+                if not (tipo == "virtual" and _lee_de_otra_tabla(conexion, tabla)):
+                    encontrados.extend(
+                        self._columnas_sospechosas(conexion, tabla, binaria=tipo == "shadow")
                     )
-                ):
-                    encontrados.append(nombre)
-        encontrados.extend(f"{virtual} (tabla virtual nueva)" for virtual in sorted(virtuales))
+                crecimiento = ahora - (self._filas_de_antes.get(tabla) or 0)
+                if crecimiento > _FILAS_DE_MAS:
+                    encontrados.append(f"{tabla} (+{crecimiento} filas)")
         return encontrados
+
+    @staticmethod
+    def _columnas_sospechosas(
+        conexion: sqlite3.Connection, tabla: str, *, binaria: bool
+    ) -> list[str]:
+        sospechosas: list[str] = []
+        del_modelo = _COLUMNAS_DEL_MODELO.get(tabla)
+        tabla_sql = _sql(tabla)
+        for fila in conexion.execute(f'PRAGMA table_info("{tabla_sql}")'):
+            columna = str(fila[1])
+            sitio = f"{tabla}.{columna}"
+            if del_modelo is not None and columna not in del_modelo:
+                sospechosas.append(f"{sitio} (columna nueva)")
+                continue
+            c = _sql(columna)
+            blobs, blob_mas_grande, texto_mas_largo = conexion.execute(
+                f"SELECT count(CASE WHEN typeof(\"{c}\") = 'blob' THEN 1 END),"
+                f' max(CASE WHEN typeof("{c}") = \'blob\' THEN length("{c}") ELSE 0 END),'
+                f' max(CASE WHEN typeof("{c}") = \'text\' THEN length("{c}") ELSE 0 END)'
+                f' FROM "{tabla_sql}"'
+            ).fetchone()
+            if blobs and not binaria and (tabla, columna) not in _COLUMNAS_BINARIAS:
+                sospechosas.append(f"{sitio} (BLOB fuera de las huellas)")
+            elif blobs and int(blob_mas_grande or 0) > _HUELLA_MAS_GRANDE:
+                sospechosas.append(f"{sitio} (BLOB mayor que una huella)")
+            elif blobs:
+                cabeceras = (
+                    bytes(valor)
+                    for (valor,) in conexion.execute(
+                        f'SELECT substr("{c}", 1, 4) FROM "{tabla_sql}"'
+                        f" WHERE typeof(\"{c}\") = 'blob'"
+                    )
+                    if valor is not None
+                )
+                if any(cabecera.startswith(_CABECERAS_DE_AUDIO) for cabecera in cabeceras):
+                    sospechosas.append(f"{sitio} (cabecera de audio)")
+            if int(texto_mas_largo or 0) > _TEXTO_LARGO:
+                sospechosas.append(f"{sitio} (texto largo)")
+        return sospechosas
+
+    def _filas_de_la_base(self) -> dict[str, int | None]:
+        """Cuántas filas tiene cada tabla antes de arrancar Sirius; ninguna si la base no existe."""
+        base = self._permitidas.base
+        if not base.exists():
+            return {}
+        with closing(sqlite3.connect(base)) as conexion:
+            return _filas_por_tabla(conexion)
 
     def el_diario_contiene(self, texto: str) -> bool:
         """Si el diario de Sirius, que sí puede escribir, guarda ``texto``, rotaciones incluidas."""

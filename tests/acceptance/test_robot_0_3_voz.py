@@ -55,7 +55,7 @@ def _momentos_de_su_voz(conductor: ConductorDeVoz, desde: int) -> list[float]:
     return [
         momento
         for sonido, momento in zip(leidos, momentos, strict=True)
-        if not sonido.es_silencio and sonido.de_quien == "propietario"
+        if not sonido.es_silencio and sonido.de("propietario")
     ]
 
 
@@ -239,7 +239,7 @@ def test_su_propia_voz_no_empieza_un_turno(tmp_path: Path) -> None:
     # ella (pieza E), se lee y se cancela. En los dos casos: ni se transcribe, ni
     # hay petición, ni turno.
     eco = (*conductor.micro.perdidos, *conductor.micro.leidos)
-    assert [s.texto for s in eco if s.de_quien == "sirius"] == ["Respuesta 1 de Sirius."]
+    assert [s.texto for s in eco if s.de("sirius")] == ["Respuesta 1 de Sirius."]
     assert conductor.transcriptor.transcritos == ("Buenos días, Sirius.",)
     assert len(conductor.peticiones) == 1
     assert conductor.charla_guardada()[-2:] == (
@@ -270,7 +270,7 @@ def test_con_la_cancelacion_de_eco_su_propia_voz_sigue_sin_empezar_un_turno(
     # Con cancelación de eco el micro sigue abierto mientras habla, el eco entra
     # por él y no sale del cancelador: ni transcripción, ni turno, ni corte.
     assert conductor.micro.abierto
-    assert any(s.de_quien == "sirius" for s in conductor.micro.leidos)
+    assert any(s.de("sirius") for s in conductor.micro.leidos)
     assert conductor.altavoz.parado_en is None
     assert list(conductor.transcriptor.transcritos) == ["Sirius, cuéntame tu vida."]
     assert len(conductor.peticiones) == 1
@@ -280,8 +280,9 @@ def test_con_la_cancelacion_de_eco_su_propia_voz_sigue_sin_empezar_un_turno(
     leidos_antes = len(conductor.micro.leidos)
     a_medias = conductor.oye_mientras_habla("Espera, espera, que tengo prisa.")
 
-    # La voz del propietario, con el eco sonando a la vez, sí atraviesa: Sirius se
-    # calla al oírla, con el turno aún abierto.
+    # La voz del propietario llega en un mismo audio con el eco encima, y aun así
+    # atraviesa: Sirius se calla al oírla, con el turno aún abierto.
+    assert any(s.de("propietario") and s.de("sirius") for s in conductor.micro.leidos)
     assert a_medias.oido is None
     assert conductor.altavoz.parado_en is not None
     assert conductor.altavoz.parado_en > min(_momentos_de_su_voz(conductor, leidos_antes))

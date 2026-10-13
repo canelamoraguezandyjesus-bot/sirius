@@ -30,7 +30,15 @@ Igual que `docs/evolution/PRUEBAS_0.2_DEL_ROBOT.md`. Hay dos clases de prueba:
   voz encima: la charla, la semilla, la memoria y la ventana son las de siempre.
   Los dobles hacen algo y apuntan lo que hacen: el micro lee, el oído dice cuándo acaba
   el turno, el transcriptor transcribe, la voz dice, el altavoz suena y el modelo
-  contesta, y cada uno apunta lo que hizo, con su momento, en el acto de hacerlo. Las
+  contesta, y cada uno apunta lo que hizo, con su momento, en el acto de hacerlo. Con el
+  altavoz sonando y devolviendo eco, lo que el propietario dice llega al micro en un
+  mismo audio con el eco encima, como en un micrófono de verdad: la cancelación de eco
+  tiene que apartar el eco de dentro del audio, no descartar audios enteros. El eco va
+  por sucesos, no por tiempo: la copia de cada locución llega una vez justo detrás de
+  sonar, siga sonando o no, y se cancela siempre; mientras siga sonando, va dentro de
+  cada audio; al pararlo, llega una vez más con lo ya captado; y cuando su copia ya se
+  vio y nada suena, lo que Sirius dijo alguna vez, dicho por el propietario, tiene que
+  oírse. Las
   pruebas miran esos registros, que solo se leen, nunca una cifra o un recuento que dé
   el conductor, porque quien implementa una pieza escribe también su parte del
   conductor. Lo que la tubería recibe del micro no dice quién habló ni con qué voz: eso
@@ -59,7 +67,7 @@ propietario han pasado.
 |---|---|---|---|---|---|---|---|---|
 | PA-R03-01 | Lo que el propietario dice por voz pasa por el micro y el transcriptor y entra en la charla como un mensaje más: la misma semilla, los mismos tres ejemplos y el mismo recordatorio que escrito, y Sirius contesta. El turno acaba cuando el detector de turno dice que ha terminado, no en el primer silencio ni en el segundo. Lo dicho por voz se guarda, y «olvida eso» dicho por voz lo olvida, también del diario | Lo que se hace, 1 y 2; memoria de la 0.2, paso 6 | B | parcial | evaluación-humana | E-R03-04 | pendiente | `tests/acceptance/test_robot_0_3_voz.py::test_lo_que_dice_por_voz_llega_a_la_charla_como_un_mensaje_mas`<br>`tests/acceptance/test_robot_0_3_voz.py::test_la_respuesta_a_lo_dicho_por_voz_pasa_por_la_misma_charla_que_lo_escrito`<br>`tests/acceptance/test_robot_0_3_voz.py::test_el_turno_acaba_cuando_el_detector_dice_que_ha_terminado_y_no_en_el_primer_silencio`<br>`tests/acceptance/test_robot_0_3_voz.py::test_olvida_eso_dicho_por_voz_olvida` |
 | PA-R03-02 | Sirius habla con una voz de Piper en español de España y suena por el altavoz; empieza con la primera frase antes de que el modelo acabe; y dice todo lo que escribió y nada más, preparado para leerse, sin marcas ni código | Lo que se hace, 1 y 3; ya está hecho, preparar el texto | C | automática | — | — | pendiente | `tests/acceptance/test_robot_0_3_voz.py::test_empieza_a_hablar_con_la_primera_frase_antes_de_que_el_modelo_acabe`<br>`tests/acceptance/test_robot_0_3_voz.py::test_lo_que_dice_es_lo_que_escribio_sin_marcas_ni_codigo`<br>`tests/acceptance/test_robot_0_3_voz.py::test_habla_con_una_voz_de_piper_en_espanol_de_espana` |
-| PA-R03-03 | Su propia voz no se toma por la del propietario: lo que suena por el altavoz y vuelve por el micro, perdido con el micro cerrado o leído y cancelado, no se transcribe ni empieza un turno, ni entonces ni en los silencios de después. Antes de la cancelación de eco (pieza C) porque mientras habla no escucha; con ella (pieza E), el micro sigue abierto, el eco entra, no le corta ni se transcribe, y la voz del propietario, que entra mezclada con el eco mientras el altavoz sigue sonando, sí atraviesa y le calla sin esperar al fin del turno; el eco que ya estaba en el micro cuando paró sigue sin ser suyo, y lo que Sirius dijo alguna vez, dicho por el propietario con el altavoz callado, sí se oye | Lo que se hace, 6 | C, E | automática | — | — | pendiente | `tests/acceptance/test_robot_0_3_voz.py::test_su_propia_voz_no_empieza_un_turno`<br>`tests/acceptance/test_robot_0_3_voz.py::test_con_la_cancelacion_de_eco_su_propia_voz_sigue_sin_empezar_un_turno` |
+| PA-R03-03 | Su propia voz no se toma por la del propietario: lo que suena por el altavoz y vuelve por el micro, perdido con el micro cerrado o leído y cancelado, no se transcribe ni empieza un turno, ni entonces ni en los silencios de después. Antes de la cancelación de eco (pieza C) porque mientras habla no escucha; con ella (pieza E), el micro sigue abierto, el eco entra, no le corta ni se transcribe, y la voz del propietario, que llega en un mismo audio con el eco encima mientras el altavoz sigue sonando, sí atraviesa y le calla sin esperar al fin del turno; el eco que ya estaba en el micro cuando paró sigue sin ser suyo, y lo que Sirius dijo alguna vez, dicho por el propietario con el altavoz callado, sí se oye | Lo que se hace, 6 | C, E | automática | — | — | pendiente | `tests/acceptance/test_robot_0_3_voz.py::test_su_propia_voz_no_empieza_un_turno`<br>`tests/acceptance/test_robot_0_3_voz.py::test_con_la_cancelacion_de_eco_su_propia_voz_sigue_sin_empezar_un_turno` |
 | PA-R03-04 | Escucha siempre: al abrir la ventana escucha sin pulsar nada y lo dice; el botón de silencio cierra el micrófono y lo dice, y lo que sonó en silencio se pierde y no se atiende después; lo oído y lo contestado se ven en la ventana como la charla escrita, con sus dos botones; todo leído de la ventana de verdad | Lo que se hace, 4; EV-022; personalidad de la 0.2, paso 5 | D | parcial | windows-real | E-R03-01 | pendiente | `tests/acceptance/test_robot_0_3_ventana.py::test_al_abrir_la_ventana_escucha_sin_pulsar_nada_y_lo_dice`<br>`tests/acceptance/test_robot_0_3_ventana.py::test_el_boton_de_silencio_cierra_el_microfono_y_lo_dice`<br>`tests/acceptance/test_robot_0_3_ventana.py::test_lo_oido_y_lo_contestado_se_ven_en_la_ventana_con_sus_dos_botones` |
 | PA-R03-05 | No guarda audio: desde que arranca hasta que cierra, nada abre para escribir ningún fichero que no sea su base, sus ajustes o su diario, comparados por su ruta de verdad, esté donde esté lo demás y aunque lo borre después; tras varios turnos no hay ningún fichero de audio nuevo y la base solo guarda texto; lo que no era para él no se guarda ni como texto, tampoco en el diario | Lo que se hace, 4 y 5; §2, el audio no sale nunca; EV-022 | D | automática | — | — | pendiente | `tests/acceptance/test_robot_0_3_voz.py::test_tras_varios_turnos_de_voz_no_queda_ningun_audio_guardado`<br>`tests/acceptance/test_robot_0_3_voz.py::test_lo_que_no_era_para_el_no_se_guarda_ni_como_texto` |
 | PA-R03-06 | Sabe cuándo le hablan a él: con su nombre, siempre; sin su nombre, solo mientras dura la charla, que dura entre 5 s y 2 min después de que Sirius calle; lo demás no llega al modelo ni se contesta | Lo que se hace, 5 | D | parcial | evaluación-humana | E-R03-05 | pendiente | `tests/acceptance/test_robot_0_3_voz.py::test_con_su_nombre_siempre_es_para_el`<br>`tests/acceptance/test_robot_0_3_voz.py::test_sin_su_nombre_es_para_el_solo_mientras_dura_la_charla`<br>`tests/acceptance/test_robot_0_3_voz.py::test_lo_que_no_es_para_el_no_llega_al_modelo` |
@@ -192,13 +200,16 @@ en su gráfica.
   bucle, no sale del ordenador y no cuenta. Que el vigilante ve lo que dice ver lo
   comprueba `tests/acceptance/test_vigilante_del_conductor.py` con escrituras,
   conexiones, envíos, resoluciones de nombre y procesos de verdad.
-- **Que la base no guarde audio escondido donde ya había binario.** `audio_en_la_base`
-  compara la base con la foto del arranque: ve un BLOB con cabecera de audio donde sea,
-  un BLOB donde al arrancar no había ninguno, también en tablas o columnas nuevas, un
-  texto de más de 16 KiB donde no los había, que es audio en base64, y una tabla
-  virtual nueva, que sería un escondite. No ve audio metido en una columna que ya
-  guardaba huellas al arrancar, ni troceado en textos cortos; por eso el vigilante
-  mira además cada fichero que se abre y cada conexión.
+- **Que la base no guarde audio disfrazado de charla.** `audio_en_la_base` no adivina qué
+  es audio por su forma: comprueba que la base solo cambia como cambia charlando con la
+  0.2. Las tablas son las de la 0.2, con sus columnas; un BLOB solo en la columna de las
+  huellas, no mayor que una huella y sin cabecera de audio; en las sombras de los índices,
+  binarias por construcción, tampoco nada mayor que una huella ni con cabecera; ningún
+  texto de más de 16 KiB; y ninguna tabla, sombras incluidas, crece más de mil filas por
+  tabla desde antes de arrancar Sirius, que es menos que un segundo de muestras. No ve
+  audio troceado en huellas de menos de 16 KiB, hasta mil por tabla, ni en textos cortos,
+  ni lo que se sobrescriba en filas que ya existían; por eso el vigilante mira además
+  cada fichero que se abre y cada conexión.
 - **Que la tubería no escriba en el diario lo que oye.** El diario sí puede escribirse;
   solo se mira que lo que no era para él y lo olvidado no estén en él al acabar. El
   conductor lo configura como `sirius.main` y vuelve a encender los registradores
