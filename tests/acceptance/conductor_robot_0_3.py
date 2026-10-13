@@ -34,6 +34,7 @@ añade su letra a ``PIEZAS_ENTREGADAS``; la tabla de
 
 from __future__ import annotations
 
+import ipaddress
 import logging
 import os
 import re
@@ -203,6 +204,23 @@ def es_escritura_sospechosa(ruta: Path, permitidas: Permitidas) -> bool:
     return not permitidas.permite(ruta)
 
 
+def _resolucion(anfitrion: object) -> tuple[str, str] | None:
+    """La resolución de ``anfitrion`` como conexión, o ``None`` si es numérico o no hay."""
+    if isinstance(anfitrion, bytes):
+        anfitrion = anfitrion.decode(errors="replace")
+    if not anfitrion or _es_direccion_numerica(str(anfitrion)):
+        return None
+    return "conexion", f"resolver {anfitrion!r}"
+
+
+def _es_direccion_numerica(anfitrion: str) -> bool:
+    try:
+        ipaddress.ip_address(anfitrion.strip("[]"))
+    except ValueError:
+        return False
+    return True
+
+
 def _dentro_de_socketpair() -> bool:
     """Si la conexión la está haciendo ``socket.socketpair`` consigo mismo.
 
@@ -282,6 +300,18 @@ def _lo_que_ve(evento: str, args: tuple[Any, ...]) -> tuple[str, str] | None:
     if evento in ("socket.sendto", "socket.sendmsg"):
         _toma, direccion = args
         return "conexion", repr(direccion)
+    if evento in ("socket.getaddrinfo", "socket.gethostbyname"):
+        # Resolver un nombre ya es una consulta que sale del ordenador, aunque la
+        # conexión de después no llegue; una dirección numérica no se resuelve.
+        return _resolucion(args[0])
+    if evento in ("socket.gethostbyaddr", "socket.getnameinfo"):
+        # La resolución inversa de una dirección también sale: aquí cuenta siempre.
+        return "conexion", f"resolver {args[0]!r}"
+    if evento == "socket.bind":
+        # Enlazar a un nombre lo resuelve en C sin pasar por getaddrinfo.
+        _toma, direccion = args
+        anfitrion = direccion[0] if isinstance(direccion, tuple) and direccion else None
+        return _resolucion(anfitrion) if isinstance(anfitrion, str | bytes) else None
     if evento == "subprocess.Popen":
         _ejecutable, orden, _cwd, _env = args
         return "proceso", repr(orden)
@@ -710,6 +740,72 @@ class VentanaDeVoz(VentanaDePrueba):
         return tuple(charla)
 
 
+#: Un texto más largo que esto en una columna que no los tenía es audio en base64, no charla.
+_TEXTO_LARGO = 16 * 1024
+
+
+@dataclass(frozen=True, slots=True)
+class _ColumnaDeLaBase:
+    """Lo que guarda una columna, para comparar la base de ahora con la del arranque."""
+
+    declarada_blob: bool
+    con_blob: bool
+    cabecera_de_audio: bool
+    texto_mas_largo: int
+
+
+_FotoDeLaBase = dict[tuple[str, str], _ColumnaDeLaBase]
+
+
+def _foto_de_la_base(conexion: sqlite3.Connection) -> _FotoDeLaBase:
+    """Cada ``tabla.columna`` de la base, como ``busca_en_toda_la_base`` las recorre."""
+    foto: _FotoDeLaBase = {}
+    # Solo las tablas de verdad: las virtuales y sus tablas sombra son los índices
+    # de SQLite sobre el texto y las huellas, binarios por construcción, y lo que
+    # guarde Sirius está en la tabla real que indexan. Una tabla virtual nueva se
+    # apunta aparte (``_tablas_virtuales``): sería un escondite.
+    tablas = [
+        fila[1]
+        for fila in conexion.execute("PRAGMA table_list")
+        if fila[0] == "main" and fila[2] == "table" and not fila[1].startswith("sqlite_")
+    ]
+    for tabla in tablas:
+        tabla_sql = tabla.replace('"', '""')
+        for fila in conexion.execute(f'PRAGMA table_info("{tabla_sql}")'):
+            columna, declarado = fila[1], str(fila[2] or "")
+            columna_sql = columna.replace('"', '""')
+            resumen = conexion.execute(
+                f"SELECT max(typeof(\"{columna_sql}\") = 'blob'),"
+                f" max(CASE WHEN typeof(\"{columna_sql}\") = 'text'"
+                f' THEN length("{columna_sql}") ELSE 0 END)'
+                f' FROM "{tabla_sql}"'
+            ).fetchone()
+            cabeceras = (
+                bytes(valor)
+                for (valor,) in conexion.execute(
+                    f'SELECT substr("{columna_sql}", 1, 4) FROM "{tabla_sql}"'
+                    f" WHERE typeof(\"{columna_sql}\") = 'blob'"
+                )
+                if valor is not None
+            )
+            foto[(tabla, columna)] = _ColumnaDeLaBase(
+                declarada_blob="BLOB" in declarado.upper(),
+                con_blob=bool(resumen[0]),
+                cabecera_de_audio=any(c.startswith(_CABECERAS_DE_AUDIO) for c in cabeceras),
+                texto_mas_largo=int(resumen[1] or 0),
+            )
+    return foto
+
+
+def _tablas_virtuales(conexion: sqlite3.Connection) -> frozenset[str]:
+    """Las tablas virtuales de la base, por nombre: una nueva sería un escondite."""
+    return frozenset(
+        fila[1]
+        for fila in conexion.execute("PRAGMA table_list")
+        if fila[0] == "main" and fila[2] == "virtual"
+    )
+
+
 def _enciende_los_registradores_de_sirius() -> None:
     """Vuelve a encender ``sirius`` y cada ``sirius.*`` que la migración apagó."""
     registradores = logging.root.manager.loggerDict
@@ -780,6 +876,9 @@ class ConductorDeVoz(Conductor):
             _deja_de_vigilar(self)
             raise
         assert self.base == self._permitidas.base, "la base del conductor de la 0.2 cambió de sitio"
+        with closing(sqlite3.connect(self.base)) as conexion:
+            self._base_de_antes = _foto_de_la_base(conexion)
+            self._virtuales_de_antes = _tablas_virtuales(conexion)
         # El diario, como en producción (`sirius.main`): es ruta permitida, y las
         # pruebas miran que lo oído que no era para él no acabe ahí. La configuración
         # de Alembic (`migrations/env.py`, `fileConfig`) apaga al migrar todos los
@@ -821,10 +920,22 @@ class ConductorDeVoz(Conductor):
         self._suena(Sonido(texto), silencios=1)
 
     def _suena(self, sonido: Sonido | None, *, silencios: int) -> None:
-        if sonido is not None:
-            self.micro.suena(sonido)
-        for _ in range(silencios):
-            self.micro.suena(Sonido(""))
+        """Suena por el micro ``sonido`` y después ``silencios`` silencios.
+
+        Si el altavoz sigue sonando y devuelve eco, el micro capta ese eco a la vez
+        que cada cosa que suena, como un micrófono delante de un altavoz encendido:
+        delante de la voz del propietario y delante de cada silencio va una copia de
+        lo que está sonando (ronda 4 de Codex sobre la PR #686). La copia que va
+        detrás de la voz puede leerse cuando Sirius ya ha parado el altavoz: el
+        cancelador tiene que acordarse un rato de lo que estaba sonando, no solo de
+        lo que suena ahora.
+        """
+        sonidos = ([sonido] if sonido is not None else []) + [Sonido("")] * silencios
+        for cada in sonidos:
+            eco = self.altavoz.sonando
+            if self.altavoz.con_eco and eco is not None:
+                self.micro.suena(eco)
+            self.micro.suena(cada)
 
     def _escuchando(self) -> None:
         """Arranca la escucha de Sirius si no está arrancada, y abre con ella el micro.
@@ -932,32 +1043,37 @@ class ConductorDeVoz(Conductor):
             self._escrituras.append(ruta)
 
     def audio_en_la_base(self) -> list[str]:
-        """Las ``tabla.columna`` de la base con un BLOB que empieza como un fichero de audio.
+        """Las ``tabla.columna`` de la base donde ha aparecido algo que parece audio.
 
-        Se recorre cada tabla y cada columna, como ``busca_en_toda_la_base``; las
-        huellas son BLOB y no empiezan así. Ninguna, si solo guarda texto y huellas.
+        Se compara la base de ahora con la foto que se tomó al arrancar Sirius
+        (``_FotoDeLaBase``), columna a columna. Cuenta: un BLOB que empieza como un
+        fichero de audio, esté donde esté; un BLOB en una columna que al arrancar no
+        guardaba ningún BLOB, aunque estuviera declarada así, también en una tabla o
+        columna nueva, que es donde iría una onda cruda o una matriz; un texto de más
+        de 16 KiB en una columna cuyo texto más largo al arrancar no llegaba a eso,
+        que es donde iría audio en base64; y una tabla virtual que no existía, que
+        sería un escondite en sus tablas sombra (ronda 4 de Codex sobre la PR #686 y
+        la mirada a sus arreglos). Lo único que no cuenta es un BLOB más donde ya
+        había BLOB al arrancar, como una huella más entre las huellas. Ninguna, si la
+        base solo ha ganado texto.
         """
         encontrados: list[str] = []
         with closing(sqlite3.connect(self.base)) as conexion:
-            tablas = [
-                fila[0]
-                for fila in conexion.execute(
-                    "SELECT name FROM sqlite_master WHERE type = 'table'"
-                    " AND name NOT LIKE 'sqlite_%'"
-                )
-            ]
-            for tabla in tablas:
-                columnas = [fila[1] for fila in conexion.execute(f'PRAGMA table_info("{tabla}")')]
-                for columna in columnas:
-                    consulta = (
-                        f'SELECT substr("{columna}", 1, 4) FROM "{tabla}"'
-                        f" WHERE typeof(\"{columna}\") = 'blob'"
+            ahora = _foto_de_la_base(conexion)
+            virtuales = _tablas_virtuales(conexion) - self._virtuales_de_antes
+            for sitio, columna in ahora.items():
+                antes = self._base_de_antes.get(sitio)
+                nombre = f"{sitio[0]}.{sitio[1]}"
+                if (
+                    columna.cabecera_de_audio
+                    or (columna.con_blob and not (antes is not None and antes.con_blob))
+                    or (
+                        columna.texto_mas_largo > _TEXTO_LARGO
+                        and (antes is None or antes.texto_mas_largo <= _TEXTO_LARGO)
                     )
-                    cabeceras = (
-                        bytes(valor) for (valor,) in conexion.execute(consulta) if valor is not None
-                    )
-                    if any(cabecera.startswith(_CABECERAS_DE_AUDIO) for cabecera in cabeceras):
-                        encontrados.append(f"{tabla}.{columna}")
+                ):
+                    encontrados.append(nombre)
+        encontrados.extend(f"{virtual} (tabla virtual nueva)" for virtual in sorted(virtuales))
         return encontrados
 
     def el_diario_contiene(self, texto: str) -> bool:

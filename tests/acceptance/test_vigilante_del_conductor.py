@@ -87,6 +87,17 @@ def test_ve_un_envio_sin_conexion_y_un_proceso_y_no_la_pareja_de_tomas_de_python
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as toma:
             toma.sendto(b"x", ("127.0.0.1", 9))
+        # Resolver un nombre ya sale del ordenador; una dirección numérica, no. La
+        # resolución inversa y enlazar a un nombre, también.
+        with contextlib.suppress(OSError):
+            socket.getaddrinfo("localhost", 9)
+        socket.getaddrinfo("127.0.0.1", 9)
+        with contextlib.suppress(OSError):
+            socket.gethostbyaddr("127.0.0.1")
+        with socket.socket() as enlazada:
+            enlazada.bind(("127.0.0.1", 0))
+            with contextlib.suppress(OSError):
+                enlazada.bind(("localhost", 0))
         # La pareja que Python se fabrica en Windows conectándose a sí mismo (y
         # que asyncio usa en cada bucle) no sale del ordenador: no cuenta.
         monkeypatch.setattr(socket, "socketpair", socket._fallback_socketpair)  # type: ignore[attr-defined]
@@ -98,7 +109,12 @@ def test_ve_un_envio_sin_conexion_y_un_proceso_y_no_la_pareja_de_tomas_de_python
     finally:
         conductor._EN_UN_TURNO.discard(testigo)
 
-    assert testigo.conexiones == ["('127.0.0.1', 9)"]
+    assert testigo.conexiones == [
+        "('127.0.0.1', 9)",
+        "resolver 'localhost'",
+        "resolver '127.0.0.1'",
+        "resolver 'localhost'",
+    ]
     # Un mismo proceso puede llegar por dos eventos (`subprocess.Popen` y `os.posix_spawn`):
     # lo que importa es que ninguno de los dos se escapa.
     assert any(sys.executable in proceso for proceso in testigo.procesos)

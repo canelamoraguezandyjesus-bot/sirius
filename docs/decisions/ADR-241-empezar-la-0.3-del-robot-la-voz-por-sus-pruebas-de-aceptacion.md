@@ -244,7 +244,7 @@ la misma PR que anote sus cifras.
 - La comprobación de la tabla: `tests/acceptance/test_robot_0_3_trazabilidad.py` pasa
   con el documento como está, y las 13 pruebas de `test_robot_0_2_trazabilidad.py`, diez
   de ellas con tablas rotas a propósito, siguen pasando sobre el módulo compartido.
-- La batería entera. Sobre `7209d783`, el primer head: 8 194 pasan, 16 saltadas y 28 `xfail`, los 26 de la 0.3 de entonces y los 2 que ya estaban, en 24 min 29 s. Sobre `main` (`d545ff17`) eran 8 181 pasan y 2 `xfail`: entran las esperadas y 13 que pasan, las dos de la trazabilidad de la 0.3, la tabla rota nueva de la 0.2 y las que los guardas de documentos añaden por cada ADR y documento nuevo. Sobre el head de la ronda 1: 8 194 pasan, 16 saltadas y 29 `xfail`, los 27 de la 0.3 y los 2 que ya estaban, en 25 min 40 s. Sobre el head de la ronda 2: 8 198 pasan, 16 saltadas y 29 `xfail`, en 23 min 44 s; las 4 que entran son las 3 del vigilante y la que los guardas añaden por el fichero nuevo. Sobre el árbol de la ronda 3 y H-241, `56017da1`: 8 199 pasan, 16 saltadas y 29 `xfail`, en 23 min 10 s. Sobre el árbol de la revisión propia, con sus cinco pasadas: 8 211 pasan, 16 saltadas y 29 `xfail`, en 22 min 49 s; las 12 que entran son las 10 de los dobles, la cuarta del vigilante y la que los guardas añaden por el fichero nuevo. Y la línea base de la charla escrita, `di()` solo, en la nube el 13-10-2026: 34 ms en el P95 de 20 turnos, 25,7 ms la mediana y 57,7 ms el máximo.
+- La batería entera. Sobre `7209d783`, el primer head: 8 194 pasan, 16 saltadas y 28 `xfail`, los 26 de la 0.3 de entonces y los 2 que ya estaban, en 24 min 29 s. Sobre `main` (`d545ff17`) eran 8 181 pasan y 2 `xfail`: entran las esperadas y 13 que pasan, las dos de la trazabilidad de la 0.3, la tabla rota nueva de la 0.2 y las que los guardas de documentos añaden por cada ADR y documento nuevo. Sobre el head de la ronda 1: 8 194 pasan, 16 saltadas y 29 `xfail`, los 27 de la 0.3 y los 2 que ya estaban, en 25 min 40 s. Sobre el head de la ronda 2: 8 198 pasan, 16 saltadas y 29 `xfail`, en 23 min 44 s; las 4 que entran son las 3 del vigilante y la que los guardas añaden por el fichero nuevo. Sobre el árbol de la ronda 3 y H-241, `56017da1`: 8 199 pasan, 16 saltadas y 29 `xfail`, en 23 min 10 s. Sobre el árbol de la revisión propia, con sus cinco pasadas: 8 211 pasan, 16 saltadas y 29 `xfail`, en 22 min 49 s; las 12 que entran son las 10 de los dobles, la cuarta del vigilante y la que los guardas añaden por el fichero nuevo. Sobre el árbol de la ronda 4 y su mirada propia: 8 212 pasan, 16 saltadas y 29 `xfail`, en 21 min 34 s; la que entra es la del eco mezclado con la voz. Y la línea base de la charla escrita, `di()` solo, en la nube el 13-10-2026: 34 ms en el P95 de 20 turnos, 25,7 ms la mediana y 57,7 ms el máximo.
 
 ## Consecuencias
 
@@ -465,6 +465,36 @@ la misma PR que anote sus cifras.
   - El inventario sigue en 27. Los arreglos van en el commit que trae esta sección; su
     sha queda en H-241 del registro de defectos, que se amplía con esta raíz en el
     commit siguiente: desde ADR-192 cada ADR tiene un solo defecto, el de su número.
+- **Ronda 4 de Codex**, sobre `0cc12cdb`, la primera después de la revisión propia: tres
+  hallazgos P2, los tres ciertos, dos del vigilante y uno del eco.
+  - `audio_en_la_base` solo veía BLOB con cabecera de fichero: una onda cruda, una
+    matriz o audio en base64 pasaban, y la base es justo una ruta que el vigilante
+    permite. Ahora el conductor toma una foto de la base al arrancar Sirius y compara:
+    cuenta un BLOB con cabecera donde sea, un BLOB donde al arrancar no había ninguno,
+    también en tablas o columnas nuevas, un texto de más de 16 KiB donde no los había, y
+    una tabla virtual nueva; las tablas virtuales del arranque y sus sombras, los
+    índices de SQLite, no se miran, porque lo que guarda Sirius está en la tabla real.
+    Lo que no ve queda en «Lo que estas pruebas no garantizan».
+  - Resolver un nombre ya es una consulta que sale del ordenador, aunque la conexión de
+    después no llegue: el vigilante apunta ahora `socket.getaddrinfo`, `gethostbyname` y
+    `gethostbyaddr`, salvo las direcciones numéricas, que no se resuelven.
+  - En la prueba del corte con cancelación de eco, el eco de la respuesta anterior ya se
+    había leído antes de que el propietario hablara: las dos señales no circulaban a la
+    vez. Ahora, mientras el altavoz sigue sonando y devuelve eco, el micro capta una
+    copia de lo que suena delante de cada cosa que entra, la voz del propietario y cada
+    silencio, y la cancelación tiene que apartarlo con la voz mezclada.
+  - Los tres son de la familia de siempre, el vigilante o la prueba que no ve lo que
+    dice vigilar, y ninguno de las cinco pasadas propias lo vio: la revisión externa
+    sigue haciendo falta, y se repite sobre el head nuevo hasta que vuelva limpia.
+  - **Mirada propia a estos arreglos**, antes de empujarlos: un P2 y cinco P3, ciertos
+    y medidos. La foto de la base eximía toda columna declarada BLOB, también la que
+    trajera la migración de la propia pieza, y en las pruebas la columna de las
+    huellas está vacía al arrancar: ahora solo se exime la columna que ya guardaba
+    BLOB. Una tabla virtual nueva era un escondite en sus sombras: ahora cuenta. La
+    resolución inversa y enlazar a un nombre no se veían: ahora sí. La copia del eco
+    que va detrás de la voz puede leerse con el altavoz ya parado, y queda dicho. Y
+    una pieza que descartara todo lo que Sirius dijo alguna vez pasaba: ahora el
+    propietario repite «Vale, vale.» con el altavoz callado y tiene que oírse.
 - **El criterio cambia el 13-10-2026, tras la ronda 3.** El propietario, al ver la
   tercera ronda seguida con la misma familia, retiró el tope de rondas que ADR-233 había
   sacado de su «nada de cinco rondas» del 07-10-2026: «No nos podemos limitar a solo tres

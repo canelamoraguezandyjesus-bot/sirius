@@ -301,6 +301,15 @@ def test_con_la_cancelacion_de_eco_su_propia_voz_sigue_sin_empezar_un_turno(
     assert len(conductor.transcriptor.transcritos) == 2
     assert len(conductor.peticiones) == 2
 
+    conductor.altavoz.acaba()
+    repetida = conductor.oye("Vale, vale.")
+
+    # Lo que Sirius dijo alguna vez no es eco para siempre: dicho por el propietario
+    # con el altavoz callado, se oye y se contesta.
+    assert repetida.oido == "Vale, vale."
+    assert repetida.contestado == "Respuesta 3 de Sirius."
+    assert len(conductor.peticiones) == 3
+
 
 # --- PA-R03-05 · No guarda audio ----------------------------------------------
 
