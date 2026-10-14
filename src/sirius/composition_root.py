@@ -22,6 +22,7 @@ from typing import Any
 import httpx
 import openai
 
+from sirius.adapters.audio.local_listening import load_listening_engines
 from sirius.adapters.audio.openai_speech import DEFAULT_VOICE, OpenAISpeech
 from sirius.adapters.audio.openai_transcription import OpenAITranscription
 from sirius.adapters.audio.qt_capture import QtAudioCapture
@@ -104,6 +105,7 @@ from sirius.application.get_conversation_history import GetConversationHistoryUs
 from sirius.application.historical_projects import HistoricalProjectsUseCase
 from sirius.application.initial_project import InitialProjectUseCase
 from sirius.application.knowledge_overview import GetKnowledgeOverviewUseCase
+from sirius.application.local_listening import Chat, LocalListening
 from sirius.application.memory_commands import MemoryCommandService
 from sirius.application.memory_origin import GetMemoryOriginUseCase
 from sirius.application.memory_search import MemoryEmbeddingService, MemorySearch
@@ -143,14 +145,17 @@ from sirius.config.llm_provider_settings import (
     resolve_openai_provider_settings,
     resolve_provider_kind,
 )
+from sirius.config.local_voice import LocalVoiceSettings
 from sirius.config.settings import load_settings, save_settings
 from sirius.domain.blind_test import BlindTestError
 from sirius.domain.capture import build_scene_registry
 from sirius.domain.robot_seed import ROBOT_SEED_REMINDER
+from sirius.infrastructure.local_voice_installation import LocalVoiceInstallation
 from sirius.infrastructure.logging import get_logger
 from sirius.ports.audio_playback import AudioPlayback
 from sirius.ports.embeddings import TextEmbedder
 from sirius.ports.llm import LLMProvider
+from sirius.ports.local_voice import ListeningEngines
 from sirius.ports.robot_conversation import ConversationSummarizer, FactExtractor, ReplyJudge
 from sirius.ports.secrets import SecretStore
 
@@ -304,6 +309,10 @@ class ConversationDependencies:
     abrirse y al guardar uno. ``rank_relevant_knowledge_use_case`` es la
     búsqueda de recuerdos que usa cada turno.
 
+    ``local_listening`` es el oído del robot (pieza B de ADR-241, ADR-242): del micro
+    a esta misma charla, todo en local. La ventana aún no lo usa (pieza D); lo usa la
+    orden ``sirius-oye``.
+
     ``propose_criticality_use_case`` (M21a, ADR-130) is likewise wired but not
     yet called from anywhere: the interface that shows a proposal and lets
     the user confirm or correct it is M21b, a later, separate cut. Wiring it
@@ -356,6 +365,7 @@ class ConversationDependencies:
     facts_use_case: FactsUseCase
     fact_proposals: FactProposals
     dream_service: DreamService
+    local_listening: LocalListening[Any]
 
 
 def chat_goes_through_ollama() -> bool:
@@ -608,6 +618,27 @@ def _build_studio_capture_use_case(
     return StudioCaptureUseCase(backend=backend, scenes=scenes, enabled=False, journal=journal)
 
 
+def build_local_listening(
+    chat: Chat,
+    load_engines: Callable[[], ListeningEngines[Any]] | None = None,
+    *,
+    settings: LocalVoiceSettings | None = None,
+) -> LocalListening[Any]:
+    """El oído del robot (ADR-242), entregando lo oído a ``chat``.
+
+    No carga nada al construirse: el micro, el detector y el transcriptor se cargan al
+    empezar a escuchar, y solo si el modelo de oír está en este ordenador. Sin
+    ``load_engines``, los de verdad, con el modelo de la carpeta que dicen los ajustes.
+    """
+    installation = LocalVoiceInstallation(settings or LocalVoiceSettings())
+    model_dir = installation.listening_model_dir
+    return LocalListening(
+        chat=chat,
+        installation=installation,
+        load_engines=load_engines or (lambda: load_listening_engines(model_dir)),
+    )
+
+
 def build_conversation_dependencies(
     database_path: Path,
     backups_dir: Path,
@@ -618,6 +649,7 @@ def build_conversation_dependencies(
     reply_judge: ReplyJudge | None = None,
     text_embedder: TextEmbedder | None = None,
     fact_extractor: FactExtractor | None = None,
+    listening_engines: Callable[[], ListeningEngines[Any]] | None = None,
 ) -> ConversationDependencies:
     """Build repositories, the secret store, and use cases wired to SQLite.
 
@@ -630,6 +662,9 @@ def build_conversation_dependencies(
 
     ``fact_extractor`` saca los hechos al soñar; sin él, el modelo de la charla de
     este ordenador (ADR-239).
+
+    ``listening_engines`` carga el micro, el detector de turno y el transcriptor del
+    oído del robot; sin él, los de verdad del extra ``voz`` (ADR-242).
     """
     secret_store = secret_store or build_keyring_secret_store()
     conversation_repository = build_sqlite_conversation_repository(database_path)
@@ -943,4 +978,5 @@ def build_conversation_dependencies(
         facts_use_case=facts_use_case,
         fact_proposals=fact_proposals,
         dream_service=dream_service,
+        local_listening=build_local_listening(send_message_use_case, listening_engines),
     )

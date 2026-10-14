@@ -161,7 +161,44 @@ lo que el propietario ve u oye).
 
 ## Comprobación que la sostiene
 
-Pendiente: se rellena con los comandos y sus cifras antes de pedir la revisión.
+Medido el 14-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
+
+- **Las siete pruebas de la pieza B**, en verde con el conductor de verdad
+  (`tests/acceptance/test_robot_0_3_voz.py`), y el conductor dice ya que la pendiente es
+  la C (`tests/acceptance/test_dobles_del_conductor.py`). La tabla de
+  `docs/evolution/PRUEBAS_0.3_DEL_ROBOT.md` pone PA-R03-01 en verde; PA-R03-08 sigue
+  pendiente de la C.
+- **50 pruebas unitarias nuevas**: el servicio (`tests/unit/test_local_listening.py`), los
+  adaptadores de verdad con módulos de mentira (`tests/unit/test_local_listening_adapters.py`),
+  la instalación y la orden de instalar (`tests/unit/test_local_voice_installation.py`), la
+  orden de consola (`tests/unit/test_listen_console.py`) y la guarda de las descargas
+  (`tests/unit/test_solo_la_orden_de_instalar_baja_modelos.py`).
+- **Mutación: 15 de 15 caen.** Quitar lo que suena antes de la voz, no mirar la
+  instalación, escribir lo oído en el diario, mandar un turno vacío, no vaciar el turno,
+  leer el micro parado, decir que no es para él, dar por local cualquier ajuste, no pedir
+  `tokenizer.json`, cargar sin `local_files_only`, dejar que Smart Turn guarde audio,
+  nombrar una descarga en el oído, que Smart Turn no decida, que el silencio largo no
+  acabe el turno y poner en su sitio un modelo a medias: cada una la tumba al menos una
+  prueba. La de `tokenizer.json` solo cayó cuando la prueba dejó de copiar la lista de
+  ficheros de Sirius y escribió la suya.
+- **Las bibliotecas de verdad**, en un entorno aparte con el extra (`uv sync --frozen
+  --extra voz`, Linux y Python 3.14.6, sin micro): Silero y Smart Turn cargan en 0,26 s y
+  tardan 0,91 ms por trozo de 32 ms. Con la voz grabada que trae Pipecat
+  (`pipecat/services/aws/nova_sonic/ready.wav`, 0,73 s, con medio segundo de silencio
+  delante y cuatro detrás), el detector da voz a los 0,90 s y el turno por acabado a los
+  1,09 s; con un tono de 220 Hz no da voz. Sin modelo, el oído no carga y lo dice, sin
+  intentar ninguna conexión: con la carpeta que no existe, faster-whisper rechaza el
+  nombre (`HFValidationError`); con ficheros que no son un modelo, CTranslate2 no los lee
+  (`RuntimeError`).
+- **Lo que no se ha podido probar aquí:** que faster-whisper transcriba. La política de
+  red del contenedor no deja llegar a huggingface.co (403), así que no hay modelo que
+  cargar. Lo hace E-R03-01 en su ordenador.
+- **La prueba con las bibliotecas de verdad encontró un fallo** que las de los módulos de
+  mentira no veían: sin PortAudio, `import sounddevice` falla con `OSError`, no con
+  `ImportError`, y el cargador del oído se caía en vez de decir qué falta. Arreglado, con
+  su prueba (H-242).
+- **El candado**: `uv lock` añade 967 líneas y no cambia ninguna versión que ya estuviera;
+  `uv sync --locked --all-groups`, lo que hace Quality, no instala nada de la voz.
 
 ## Consecuencias
 
@@ -182,7 +219,12 @@ Pendiente: se rellena con los comandos y sus cifras antes de pedir la revisión.
 
 ## La lección
 
-- ninguna: todavía no hay revisión ni resultado; si los hay, se escriben aquí.
+- familia: `doble-mas-permisivo-que-la-herramienta-que-dobla`
+- sin esto se repetiría: un adaptador que carga una biblioteca con código nativo solo
+  atrapa `ImportError`, porque así fallan los módulos de mentira de sus pruebas, y se cae
+  cuando la biblioteca de verdad no encuentra lo suyo y falla con `OSError`; a Piper, en la
+  pieza C, le puede pasar lo mismo.
+- lo hace cumplir: `tests/unit/test_local_listening_adapters.py`
 
 ## Revisión externa
 

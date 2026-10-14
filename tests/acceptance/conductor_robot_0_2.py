@@ -83,6 +83,7 @@ from sirius.ports.llm import (
     LLMStreamEvent,
     LLMTextDelta,
 )
+from sirius.ports.local_voice import ListeningEngines
 
 #: Las letras de la tabla de piezas de ADR-233 que ya han entrado en ``main``.
 #: La A es esta: la nota de arranque y estas pruebas.
@@ -674,10 +675,19 @@ class Conductor:
             # Sin extractor enchufado, uno que no propone nada: ninguna prueba
             # acaba soñando con el Ollama de verdad de quien las ejecuta.
             fact_extractor=_ExtractorEnchufado(self._extractor or ExtractorDeMentira()),
+            listening_engines=self._motores_de_voz(),
         )
         if not self._charla_por_ollama:
             dependencias.send_message_use_case.set_llm_provider(self._grabador)
         return dependencias
+
+    def _motores_de_voz(self) -> Callable[[], ListeningEngines[Any]] | None:
+        """Con qué oye el robot: en la 0.2, con nada, porque no se le habla por voz.
+
+        ``None`` es el oído de verdad, que no se carga hasta que algo empieza a
+        escuchar; el conductor de la 0.3 enchufa aquí sus dobles.
+        """
+        return None
 
     def _modelo_de_huellas(self) -> TextEmbedder | None:
         """Quién da las huellas: el doble que haya enchufado la prueba, o ninguno.

@@ -35,12 +35,14 @@ añade su letra a ``PIEZAS_ENTREGADAS``; la tabla de
 from __future__ import annotations
 
 import base64
+import enum
 import functools
 import ipaddress
 import logging
 import os
 import random
 import re
+import shutil
 import sqlite3
 import sys
 import tempfile
@@ -52,7 +54,7 @@ from contextlib import closing
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import FrameType
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol, get_origin, get_type_hints
 
 from conductor_robot_0_2 import (
     Conductor,
@@ -64,14 +66,21 @@ from conductor_robot_0_2 import (
 from piezas_del_robot import PiezaPendiente, Piezas
 
 from sirius.adapters.persistence.models import Base
+from sirius.config.local_voice import LocalVoiceSettings
 from sirius.config.settings import _CONFIG_FILE_NAME  # el nombre que usa `_config_file()`
+from sirius.infrastructure.local_voice_installation import (
+    INSTALL_COMMAND,
+    LISTENING_MODEL_FILES,
+    LocalVoiceInstallation,
+)
 from sirius.infrastructure.logging import LOG_FILE_NAME, configure_logging
 from sirius.infrastructure.paths import resolve_paths
 from sirius.ports.llm import LLMCompleted, LLMRequest, LLMStreamEvent, LLMTextDelta
+from sirius.ports.local_voice import ListeningEngines, TurnSignal
 
 #: Las letras de la tabla de piezas de ADR-241 que ya han entrado en ``main``.
-#: La A es esta: la nota de arranque y estas pruebas.
-PIEZAS_ENTREGADAS: frozenset[str] = frozenset({"A"})
+#: La A es la nota de arranque y estas pruebas; la B, oír en local (ADR-242).
+PIEZAS_ENTREGADAS: frozenset[str] = frozenset({"A", "B"})
 
 #: Qué trae cada pieza, con las palabras de la tabla de ADR-241.
 PIEZAS: Mapping[str, str] = {
@@ -660,6 +669,72 @@ class TranscriptorDeMentira:
         return texto
 
 
+# --- Los dobles, enchufados al oído de Sirius ---------------------------------
+#
+# Los puertos del oído (``sirius.ports.local_voice``) hablan en inglés y los dobles en
+# castellano: esto los traduce y nada más. No deciden ni apuntan nada; lo apuntan los
+# dobles en el acto de leer, escuchar y transcribir.
+
+
+class _MicroEnchufado:
+    def __init__(self, micro: MicroDeMentira) -> None:
+        self._micro = micro
+
+    def open(self) -> None:
+        self._micro.abre()
+
+    def close(self) -> None:
+        self._micro.cierra()
+
+    def read(self) -> Audio | None:
+        return self._micro.lee()
+
+
+class _OidoEnchufado:
+    def __init__(self, oido: OidoDeMentira) -> None:
+        self._oido = oido
+
+    def listen(self, chunk: Audio) -> TurnSignal:
+        if self._oido.escucha(chunk):
+            return TurnSignal.ENDED
+        return TurnSignal.VOICE if self._oido.hay_voz(chunk) else TurnSignal.QUIET
+
+
+class _TranscriptorEnchufado:
+    def __init__(self, transcriptor: TranscriptorDeMentira) -> None:
+        self._transcriptor = transcriptor
+
+    def transcribe(self, chunks: Sequence[Audio]) -> str:
+        return self._transcriptor.transcribe(chunks)
+
+
+#: El único destino de lo que no admite más que opciones cerradas.
+ESTE_ORDENADOR = "este ordenador"
+
+
+def destinos_de(ajustes: type) -> frozenset[str]:
+    """Adónde puede ir la voz según un modelo de ajustes: todo lo que se pueda elegir.
+
+    Un campo de elección cerrada (sí o no, un número, una enumeración o un ``Literal``)
+    solo elige entre lo instalado aquí: su destino es este ordenador. Cualquier otro,
+    un texto sobre todo, puede llevar un servidor, una dirección o una clave, y su
+    destino es lo que alguien escriba en él.
+    """
+    destinos = {ESTE_ORDENADOR}
+    for campo, tipo in get_type_hints(ajustes).items():
+        if not _eleccion_cerrada(tipo):
+            destinos.add(f"lo que se escriba en «{campo}»")
+    return frozenset(destinos)
+
+
+def _eleccion_cerrada(tipo: object) -> bool:
+    if tipo in (bool, int, float):
+        return True
+    if isinstance(tipo, type) and issubclass(tipo, enum.Enum):
+        return True
+    return get_origin(tipo) is Literal
+
+
 @dataclass(frozen=True, slots=True)
 class Frase:
     """Una frase que se le pidió a la voz: el texto, el momento en que llegó y con qué voz."""
@@ -1246,6 +1321,14 @@ class ConductorDeVoz(Conductor):
             diario=rutas.logs_dir / LOG_FILE_NAME,
         )
         self._temporal = Path(tempfile.gettempdir())
+        # Un ordenador con la voz instalada: el modelo de oír, en la carpeta donde lo deja la
+        # orden de instalar, antes de la foto del disco y del vigilante. Sus ficheros no son
+        # un modelo, porque oye el doble; lo que es de verdad es que Sirius mire que estén
+        # (``quita_los_modelos_de_voz`` los quita).
+        self._modelo_de_oir = LocalVoiceInstallation(LocalVoiceSettings()).listening_model_dir
+        self._modelo_de_oir.mkdir(parents=True, exist_ok=True)
+        for nombre in (*LISTENING_MODEL_FILES, "vocabulary.txt"):
+            (self._modelo_de_oir / nombre).write_bytes(b"un modelo de mentira")
         self._carpetas_vigiladas = (
             carpeta,
             self._temporal,
@@ -1330,6 +1413,19 @@ class ConductorDeVoz(Conductor):
                 cada = _mezcla(eco, cada)
             self.micro.suena(cada)
 
+    def _motores_de_voz(self) -> Callable[[], ListeningEngines[Any]]:
+        """El oído de Sirius, con los dobles donde irían el micro, Silero con Smart Turn y
+        faster-whisper; los monta la raíz de composición de producción."""
+
+        def motores() -> ListeningEngines[Any]:
+            return ListeningEngines(
+                microphone=_MicroEnchufado(self.micro),
+                detector=_OidoEnchufado(self.oido),
+                transcriber=_TranscriptorEnchufado(self.transcriptor),
+            )
+
+        return motores
+
     def _escuchando(self) -> None:
         """Arranca la escucha de Sirius si no está arrancada, y abre con ella el micro.
 
@@ -1337,11 +1433,21 @@ class ConductorDeVoz(Conductor):
         hace el primer ``oye``. No quita un silencio pulsado: con el micro
         cerrado por el botón, lo que suena se pierde.
         """
-        raise _pendiente("B")
+        self._dependencias.local_listening.start()
 
     def _turno_de_voz(self) -> TurnoDeVoz:
-        """Deja a Sirius hacer con lo que ha sonado hasta que termine, y lo resume."""
-        raise _pendiente("B")
+        """Deja a Sirius hacer con lo que ha sonado hasta que termine, y lo resume.
+
+        Lo oído, si era para él, lo contestado y el aviso son lo que dice Sirius de los
+        turnos que cerró; lo hablado es lo que apuntó el altavoz mientras tanto.
+        """
+        sonados_antes = len(self.altavoz.sonados)
+        atendido = self._dependencias.local_listening.attend()
+        hablado = tuple(sonido.texto for sonido, _ in self.altavoz.sonados[sonados_antes:])
+        if not atendido.turns:
+            return TurnoDeVoz(None, False, None, hablado, aviso=atendido.notice)
+        turno = atendido.turns[-1]
+        return TurnoDeVoz(turno.heard, turno.addressed, turno.reply, hablado, aviso=atendido.notice)
 
     def charla_guardada(self) -> tuple[tuple[str, str], ...]:
         """La charla tal como queda en la base: (quién, texto), en orden.
@@ -1403,17 +1509,17 @@ class ConductorDeVoz(Conductor):
         """Adónde pueden ir el oído y la voz del robot según sus ajustes: todo lo elegible.
 
         Se lee del modelo de ajustes de la voz: si tuviera un campo de servidor,
-        de dirección o de clave, su destino aparecería aquí.
+        de dirección o de clave, su destino aparecería aquí (``destinos_de``).
         """
-        raise _pendiente("B")
+        return destinos_de(LocalVoiceSettings)
 
     def quita_los_modelos_de_voz(self) -> None:
         """Deja a Sirius sin los modelos de oír y hablar, como un ordenador sin instalarlos."""
-        raise _pendiente("B")
+        shutil.rmtree(self._modelo_de_oir)
 
     def orden_para_instalar_la_voz(self) -> str:
         """La orden que el propietario tiene que ejecutar para instalar los modelos de la voz."""
-        raise _pendiente("B")
+        return INSTALL_COMMAND
 
     # --- Pieza C: hablar en local ---
 
@@ -1757,8 +1863,9 @@ class ConductorDeVoz(Conductor):
         _enciende_los_registradores_de_sirius()
 
     def cierra(self) -> None:
-        """Cierra Sirius; lo que escriba al cerrar también lo ve el vigilante."""
+        """Cierra Sirius, y con él el micro; lo que escriba al cerrar también lo ve el vigilante."""
         try:
+            self._dependencias.local_listening.stop()
             super().cierra()
         finally:
             _deja_de_vigilar(self)

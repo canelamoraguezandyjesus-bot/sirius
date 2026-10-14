@@ -22,7 +22,9 @@ import struct
 import time
 from collections.abc import Callable
 from contextlib import closing
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 import pytest
 import sqlite_vec
@@ -41,10 +43,12 @@ from conductor_robot_0_3 import (
     VentanaDeVoz,
     VozDeMentira,
     _formas_del_audio_en,
+    destinos_de,
 )
 from piezas_del_robot import PiezaPendiente
 from pytestqt.qtbot import QtBot
 
+from sirius.config.local_voice import ListeningModel, LocalVoiceSettings
 from sirius.infrastructure.logging import LOGGER_NAME
 from sirius.ports.llm import LLMCompleted, LLMRequest, LLMTextDelta
 
@@ -114,6 +118,26 @@ def test_el_transcriptor_devuelve_lo_escrito_en_la_voz_y_lo_apunta() -> None:
 
     assert texto == "Buenos días, Sirius."
     assert transcriptor.transcritos == ("Buenos días, Sirius.",)
+
+
+@dataclass(frozen=True)
+class _AjustesConServidor:
+    modelo: ListeningModel
+    activa: bool
+    volumen: float
+    modo: Literal["corto", "largo"]
+    servidor: str
+    clave: str | None = None
+
+
+def test_los_destinos_de_la_voz_ven_un_campo_de_texto_y_no_las_elecciones_cerradas() -> None:
+    # Lo que lee `destinos_posibles_de_la_voz`: un campo de texto es otro destino.
+    assert destinos_de(_AjustesConServidor) == {
+        "este ordenador",
+        "lo que se escriba en «servidor»",
+        "lo que se escriba en «clave»",
+    }
+    assert destinos_de(LocalVoiceSettings) == {"este ordenador"}
 
 
 def test_la_voz_apunta_cada_frase_con_su_voz_y_la_devuelve_como_sonido_de_sirius() -> None:
@@ -244,9 +268,11 @@ def test_el_conductor_se_construye_lee_la_base_de_verdad_y_sus_piezas_pendientes
     assert [p.texto for p in conductor.peticiones] == ["Buenos días, Sirius."]
     assert conductor.audio_en_la_base() == []
     conductor.reabre()
+    # La pieza B ya oye, también tras reabrir; la C todavía no ha entrado.
+    assert conductor.oye("Sirius, ¿me oyes?").oido == "Sirius, ¿me oyes?"
     with pytest.raises(PiezaPendiente) as pendiente:
-        conductor.oye("Sirius, ¿me oyes?")
-    assert pendiente.value.letra == "B"
+        conductor.herramientas()
+    assert pendiente.value.letra == "C"
     conductor.cierra()
     assert conductor.escrituras_en_disco() == []
     assert conductor.ficheros_nuevos() == []
