@@ -940,6 +940,12 @@ _SOMBRAS_DE_LA_0_2: frozenset[str] = frozenset(
 #: fuera del arranque (medido el 14-10-2026 con los disparadores y el modelo de mentira),
 #: más de noventa veces menos que el tope.
 _BLOQUE_MAS_GRANDE = 16 * 1024
+#: Un mensaje del registro es una línea corta: veinte turnos de charla escriben 5 080
+#: bytes en el diario, con la línea más larga de 126 caracteres y el tramo sin espacios
+#: más largo de 32 (medido el 14-10-2026). Un segundo de audio a 16 kHz y 16 bits son 32 000 bytes.
+_LINEA_LARGA = 4 * 1024
+_TRAMO_LARGO = 512
+_DIARIO_DE_MAS = 256 * 1024
 _TEXTO_LARGO = 16 * 1024
 _FILAS_DE_MAS = 1_000
 _TEXTO_TOTAL = 512 * 1024
@@ -1160,6 +1166,7 @@ class ConductorDeVoz(Conductor):
         )
         self._ficheros_de_antes = self._ficheros_que_no_son_suyos()
         self._filas_de_antes = self._filas_de_la_base()
+        self._diario_de_antes = self._tamano_del_diario()
         _vigilar()
         _vigila(self)
         self._arrancando = True
@@ -1581,15 +1588,46 @@ class ConductorDeVoz(Conductor):
 
     def el_diario_contiene(self, texto: str) -> bool:
         """Si el diario de Sirius, que sí puede escribir, guarda ``texto``, rotaciones incluidas."""
-        diario = self._permitidas.diario
-        if not diario.parent.exists():
-            return False
         buscado = texto.casefold()
         return any(
             buscado in fichero.read_text(encoding="utf-8", errors="replace").casefold()
-            for fichero in diario.parent.glob(f"{diario.name}*")
-            if fichero.is_file()
+            for fichero in self._ficheros_del_diario()
         )
+
+    def audio_en_el_diario(self) -> list[str]:
+        """Si el diario, que sí puede escribir, guarda algo que no es un mensaje del registro.
+
+        Un mensaje del registro es una línea corta de texto. Un audio volcado por error,
+        sus bytes, sus muestras o su base64, es una línea larga, un tramo largo sin
+        espacios o un diario que crece de golpe (ronda 7 de Codex sobre la PR #686).
+        Cuentan una línea de más de 4 KiB, un tramo de más de 512 caracteres sin
+        espacios, y que el diario, rotaciones incluidas, crezca más de 256 KiB desde
+        antes de arrancar Sirius. Vacío si solo guarda mensajes del registro.
+        """
+        encontrados: list[str] = []
+        crecido = self._tamano_del_diario() - self._diario_de_antes
+        if crecido > _DIARIO_DE_MAS:
+            encontrados.append(f"el diario (creció {crecido} bytes)")
+        linea_mas_larga = 0
+        tramo_mas_largo = 0
+        for fichero in self._ficheros_del_diario():
+            for linea in fichero.read_text(encoding="utf-8", errors="replace").splitlines():
+                linea_mas_larga = max(linea_mas_larga, len(linea))
+                tramo_mas_largo = max(tramo_mas_largo, max(map(len, linea.split()), default=0))
+        if linea_mas_larga > _LINEA_LARGA:
+            encontrados.append(f"el diario (una línea de {linea_mas_larga} caracteres)")
+        if tramo_mas_largo > _TRAMO_LARGO:
+            encontrados.append(f"el diario (un tramo de {tramo_mas_largo} caracteres sin espacios)")
+        return encontrados
+
+    def _ficheros_del_diario(self) -> list[Path]:
+        diario = self._permitidas.diario
+        if not diario.parent.exists():
+            return []
+        return sorted(f for f in diario.parent.glob(f"{diario.name}*") if f.is_file())
+
+    def _tamano_del_diario(self) -> int:
+        return sum(fichero.stat().st_size for fichero in self._ficheros_del_diario())
 
     def ventana(self, qtbot: Any) -> VentanaDeVoz:
         return VentanaDeVoz(self.abre_la_ventana(qtbot), qtbot)

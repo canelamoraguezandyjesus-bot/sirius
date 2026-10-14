@@ -326,6 +326,7 @@ def test_tras_varios_turnos_de_voz_no_queda_ningun_audio_guardado(tmp_path: Path
     assert conductor.escrituras_en_disco() == []
     assert conductor.ficheros_nuevos() == []
     assert conductor.audio_en_la_base() == []
+    assert conductor.audio_en_el_diario() == []
     assert conductor.busca_en_toda_la_base("Pues yo fatal.") != []
 
 

@@ -244,7 +244,7 @@ la misma PR que anote sus cifras.
 - La comprobación de la tabla: `tests/acceptance/test_robot_0_3_trazabilidad.py` pasa
   con el documento como está, y las 13 pruebas de `test_robot_0_2_trazabilidad.py`, diez
   de ellas con tablas rotas a propósito, siguen pasando sobre el módulo compartido.
-- La batería entera. Sobre `7209d783`, el primer head: 8 194 pasan, 16 saltadas y 28 `xfail`, los 26 de la 0.3 de entonces y los 2 que ya estaban, en 24 min 29 s. Sobre `main` (`d545ff17`) eran 8 181 pasan y 2 `xfail`: entran las esperadas y 13 que pasan, las dos de la trazabilidad de la 0.3, la tabla rota nueva de la 0.2 y las que los guardas de documentos añaden por cada ADR y documento nuevo. Sobre el head de la ronda 1: 8 194 pasan, 16 saltadas y 29 `xfail`, los 27 de la 0.3 y los 2 que ya estaban, en 25 min 40 s. Sobre el head de la ronda 2: 8 198 pasan, 16 saltadas y 29 `xfail`, en 23 min 44 s; las 4 que entran son las 3 del vigilante y la que los guardas añaden por el fichero nuevo. Sobre el árbol de la ronda 3 y H-241, `56017da1`: 8 199 pasan, 16 saltadas y 29 `xfail`, en 23 min 10 s. Sobre el árbol de la revisión propia, con sus cinco pasadas: 8 211 pasan, 16 saltadas y 29 `xfail`, en 22 min 49 s; las 12 que entran son las 10 de los dobles, la cuarta del vigilante y la que los guardas añaden por el fichero nuevo. Sobre el árbol de la ronda 4 y su mirada propia: 8 212 pasan, 16 saltadas y 29 `xfail`, en 21 min 34 s; la que entra es la del eco mezclado con la voz. Sobre el árbol de la ronda 5 y su mirada propia: 8 212 pasan, 16 saltadas y 29 `xfail`, en 21 min 23 s. Sobre el árbol de la ronda 6, sus ojos frescos y su mirada propia: 8 214 pasan, 16 saltadas y 29 `xfail`, en 20 min 4 s; las 2 que entran son la del vigilante sobre las sentencias y la de las filas de los dobles. Y la línea base de la charla escrita, `di()` solo, en la nube el 13-10-2026: 34 ms en el P95 de 20 turnos, 25,7 ms la mediana y 57,7 ms el máximo.
+- La batería entera. Sobre `7209d783`, el primer head: 8 194 pasan, 16 saltadas y 28 `xfail`, los 26 de la 0.3 de entonces y los 2 que ya estaban, en 24 min 29 s. Sobre `main` (`d545ff17`) eran 8 181 pasan y 2 `xfail`: entran las esperadas y 13 que pasan, las dos de la trazabilidad de la 0.3, la tabla rota nueva de la 0.2 y las que los guardas de documentos añaden por cada ADR y documento nuevo. Sobre el head de la ronda 1: 8 194 pasan, 16 saltadas y 29 `xfail`, los 27 de la 0.3 y los 2 que ya estaban, en 25 min 40 s. Sobre el head de la ronda 2: 8 198 pasan, 16 saltadas y 29 `xfail`, en 23 min 44 s; las 4 que entran son las 3 del vigilante y la que los guardas añaden por el fichero nuevo. Sobre el árbol de la ronda 3 y H-241, `56017da1`: 8 199 pasan, 16 saltadas y 29 `xfail`, en 23 min 10 s. Sobre el árbol de la revisión propia, con sus cinco pasadas: 8 211 pasan, 16 saltadas y 29 `xfail`, en 22 min 49 s; las 12 que entran son las 10 de los dobles, la cuarta del vigilante y la que los guardas añaden por el fichero nuevo. Sobre el árbol de la ronda 4 y su mirada propia: 8 212 pasan, 16 saltadas y 29 `xfail`, en 21 min 34 s; la que entra es la del eco mezclado con la voz. Sobre el árbol de la ronda 5 y su mirada propia: 8 212 pasan, 16 saltadas y 29 `xfail`, en 21 min 23 s. Sobre el árbol de la ronda 6, sus ojos frescos y su mirada propia: 8 214 pasan, 16 saltadas y 29 `xfail`, en 20 min 4 s; las 2 que entran son la del vigilante sobre las sentencias y la de las filas de los dobles. Sobre el árbol de la ronda 7: 8 215 pasan, 16 saltadas y 29 `xfail`, en 20 min 44 s; la que entra es la del diario de los dobles. Y la línea base de la charla escrita, `di()` solo, en la nube el 13-10-2026: 34 ms en el P95 de 20 turnos, 25,7 ms la mediana y 57,7 ms el máximo.
 
 ## Consecuencias
 
@@ -295,7 +295,11 @@ la misma PR que anote sus cifras.
   durante tres rondas. Y la ronda 6 lo repitió sobre la base, dos veces: una foto del
   final no ve lo que pasó por el camino, y el texto de las sentencias no es lo que se
   escribió; lo que se vigila se vigila mientras pasa, y en las filas, no en lo que se
-  dice de ellas.
+  dice de ellas. Y la ronda 7 enseñó lo que había debajo de las rondas 4 a 7: la
+  pregunta «¿pasaría con una pieza que hiciera trampa?» caza pruebas que miran el
+  resultado y no el camino, pero aplicada a una negación sin borde, que nada esconda
+  audio en ninguna parte, no tiene final; ahí se escribe el alcance, error y no engaño,
+  y el engaño va a la revisión del código de cada pieza.
 - lo hace cumplir: ninguna prueba mide la fuerza de una prueba; lo que hay es
   `tests/acceptance/test_vigilante_del_conductor.py`, que impide que el vigilante pase
   en vacío, `tests/acceptance/test_dobles_del_conductor.py`, que construye el conductor
@@ -612,6 +616,40 @@ la misma PR que anote sus cifras.
     menos de 16 KiB por valor y 512 KiB en total; hasta mil filas por tabla; lo que una
     extensión en C escriba por una conexión suya, sin pasar por Python; y una pieza que
     llame a los métodos de `sqlite3.Connection` sin ligar para saltarse su propia clase.
+- **Ronda 7 de Codex**, sobre `6e74b7b1`: cuatro hallazgos P2, los cuatro ciertos y de la
+  familia de las rondas 4, 5 y 6: un sitio donde una pieza podría guardar audio sin que la
+  comprobación lo viera. Tres piden una pieza escrita para burlar al arnés: muestras PCM
+  en una columna numérica que se reescribe una y otra vez, escrituras directas en una
+  sombra del índice de texto, y escribir y borrar durante el arranque, antes de que
+  existan los disparadores. El cuarto, el diario, es un error que una pieza honesta sí
+  puede cometer: volcar el audio en un mensaje del registro.
+  - **La raíz, la de verdad.** Cuatro rondas seguidas de la misma familia, y la regla de
+    las dos rondas tenía que haberlo parado en la quinta. No lo paró porque en cada ronda
+    se buscó la raíz dentro del mismo enfoque, un detector mejor, y no se preguntó si la
+    propiedad pedida se puede afirmar. «Una pieza hecha para engañar a la prueba no puede
+    esconder audio» es una negación sin borde: dentro del mismo proceso, quien quiera
+    esconder datos siempre tiene otro escondite, y cada petición a Codex le pedía
+    buscarlo («¿pasaría con una pieza que hiciera trampa?»). Esa pregunta sirvió en las
+    rondas 1 a 3, cuando las pruebas miraban el resultado y no el camino; aplicada al
+    almacenamiento, no tiene final. Es la segunda familia de la PR #136: una garantía
+    puesta donde no puede cumplirse.
+  - **La decisión.** Las pruebas de PA-R03-05 vigilan que una pieza no guarde audio por
+    error: ficheros en las carpetas de Sirius, audio en la temporal, cualquier binario o
+    texto largo en la base aunque se borre, filas y texto de más, el esquema y, desde
+    esta ronda, el diario. Una pieza escrita para burlar al arnés queda fuera de las
+    pruebas y dentro de la revisión de su código, la propia y la de Codex, y está escrito
+    en «Lo que estas pruebas no garantizan». Los tres hallazgos de esa clase se contestan
+    con esto y no se parchean. La decisión es de la sesión, por la regla de las dos
+    rondas (ADR-001, §2), aplicada tarde, y la petición de la ronda 8 lleva el alcance
+    escrito en vez de la pregunta de la trampa.
+  - **El diario.** `audio_en_el_diario` mira el diario de producción, rotaciones
+    incluidas: una línea de más de 4 KiB, un tramo de más de 512 caracteres sin espacios
+    o más de 256 KiB nuevos desde antes de arrancar Sirius cuentan. Veinte turnos de
+    charla escriben 5 080 bytes, con la línea más larga de 126 caracteres y el tramo sin
+    espacios más largo de 32, medido el 14-10-2026; un segundo de audio a 16 kHz y 16 bits son 32 000 bytes. La
+    prueba de PA-R03-05 lo exige y la de los dobles lo ve con cada regla por separado.
+  - **Mutación**: tres mutaciones, una por regla del diario, las tres cazadas por
+    `test_dobles_del_conductor.py`.
 - **El criterio cambia el 13-10-2026, tras la ronda 3.** El propietario, al ver la
   tercera ronda seguida con la misma familia, retiró el tope de rondas que ADR-233 había
   sacado de su «nada de cinco rondas» del 07-10-2026: «No nos podemos limitar a solo tres
