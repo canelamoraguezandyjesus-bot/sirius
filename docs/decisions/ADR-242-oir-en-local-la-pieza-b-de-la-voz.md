@@ -168,19 +168,21 @@ Medido el 14-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   la C (`tests/acceptance/test_dobles_del_conductor.py`). La tabla de
   `docs/evolution/PRUEBAS_0.3_DEL_ROBOT.md` pone PA-R03-01 en verde; PA-R03-08 sigue
   pendiente de la C.
-- **50 pruebas unitarias nuevas**: el servicio (`tests/unit/test_local_listening.py`), los
+- **51 pruebas unitarias nuevas**: el servicio (`tests/unit/test_local_listening.py`), los
   adaptadores de verdad con módulos de mentira (`tests/unit/test_local_listening_adapters.py`),
   la instalación y la orden de instalar (`tests/unit/test_local_voice_installation.py`), la
   orden de consola (`tests/unit/test_listen_console.py`) y la guarda de las descargas
   (`tests/unit/test_solo_la_orden_de_instalar_baja_modelos.py`).
-- **Mutación: 16 de 16 caen.** Quitar lo que suena antes de la voz, no mirar la
+- **Mutación: 18 de 18 caen.** Quitar lo que suena antes de la voz, no mirar la
   instalación, escribir lo oído en el diario, mandar un turno vacío, no vaciar el turno,
-  leer el micro parado, decir que no es para él, dar por local cualquier ajuste, no pedir
+  leer el micro parado, empezar un turno o transcribir con un fin de turno sin voz
+  delante, decir que no es para él, dar por local cualquier ajuste, no pedir
   `tokenizer.json`, cargar sin `local_files_only`, dejar que Smart Turn guarde audio,
   nombrar una descarga en el oído, que Smart Turn no decida, que el silencio largo no
   acabe el turno, poner en su sitio un modelo a medias y dejar en el disco una descarga
-  cortada: cada una la tumba al menos una prueba. La de `tokenizer.json` solo cayó cuando la prueba dejó de copiar la lista de
-  ficheros de Sirius y escribió la suya.
+  cortada: cada una la tumba al menos una prueba. La de `tokenizer.json` solo cayó
+  cuando la prueba dejó de copiar la lista de ficheros de Sirius y escribió la suya, y la
+  del fin de turno suelto, cuando la prueba miró también con qué empieza el turno.
 - **Las bibliotecas de verdad**, en un entorno aparte con el extra (`uv sync --frozen
   --extra voz`, Linux y Python 3.14.6, sin micro): Silero y Smart Turn cargan en 0,26 s y
   tardan 0,91 ms por trozo de 32 ms. Con la voz grabada que trae Pipecat

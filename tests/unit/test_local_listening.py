@@ -166,6 +166,22 @@ def test_sin_fin_de_turno_espera_y_lo_cierra_cuando_el_detector_lo_dice() -> Non
     assert oido.transcriptor.turnos == [[voz("Estaba pensando"), "", "", "", FIN]]
 
 
+def test_un_fin_de_turno_sin_voz_delante_ni_empieza_turno_ni_transcribe() -> None:
+    # Whisper se inventa frases sobre el silencio: sin voz no hay turno que transcribir.
+    oido = _Oido(antes=1)
+    oido.servicio.start()
+
+    assert oido.suena("", FIN, "") == Attended()
+    assert oido.transcriptor.turnos == []
+    assert oido.charla.mensajes == []
+
+    atendido = oido.suena(voz("Hola"), FIN)
+
+    assert [t.heard for t in atendido.turns] == ["Hola"]
+    # El turno empezó con la voz y lo de justo antes, no con aquel fin suelto.
+    assert oido.transcriptor.turnos == [["", voz("Hola"), FIN]]
+
+
 def test_dos_turnos_en_una_sola_atencion_se_devuelven_en_orden() -> None:
     oido = _Oido()
     oido.servicio.start()
