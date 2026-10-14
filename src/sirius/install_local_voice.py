@@ -25,6 +25,7 @@ from sirius.adapters.audio.local_listening import (
 )
 from sirius.config.local_voice import LocalVoiceSettings
 from sirius.infrastructure.local_voice_installation import (
+    INSTALL_COMMAND,
     listening_model_complete,
     listening_model_dir,
 )
@@ -92,9 +93,12 @@ def main() -> int:
 
 
 def _fail(problem: str, error: VoiceUnavailable) -> int:
-    """Dice qué falla y, si esta orden no lo arregla, que repetirla no servirá."""
+    """Dice qué falla y si esta orden lo arregla."""
     print(f"[FALLA] {problem}: {error.reason}")
-    if not error.fixed_by_install:
+    if error.fixed_by_install:
+        # Solo pasa si se ejecutó sin el extra: así escrita, uv instala lo que falta.
+        print(f"        Lo instala esta orden escrita así: {INSTALL_COMMAND}")
+    else:
         # Que no se repita en balde: esta orden no arregla lo que ya está.
         print("        Volver a ejecutar esta orden no lo arreglará.")
     return 1

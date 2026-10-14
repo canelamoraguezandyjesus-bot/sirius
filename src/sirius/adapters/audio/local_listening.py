@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib
+import importlib.metadata
 import os
 import queue
 import sys
@@ -50,21 +51,36 @@ _SPEAKING = frozenset({"SPEAKING", "STOPPING"})
 def _import(module: str) -> Any:
     """Una biblioteca del extra ``voz``; si no está o no carga, ``VoiceUnavailable``.
 
-    La orden de instalar solo arregla que falte un módulo, porque instala el extra, y eso
-    lo dice siempre un ``ModuleNotFoundError``, suelto o como causa de otro error (Pipecat
-    lo envuelve en un ``ImportError``). Todo lo demás es que está pero no carga: en
-    Windows una DLL que no carga da ``ImportError`` u ``OSError``, y la orden no
-    reinstala lo que ya está. Entonces se dice qué pasa y no se aconseja la orden (ronda 4
-    de Codex sobre la PR #687).
+    La orden de instalar solo arregla que falte una distribución: ``uv run --extra voz``
+    añade las del extra que no están instaladas, y no repara una instalada a la que le
+    falte un módulo, que sería ``--reinstall``. Así que se promete solo si falta un módulo
+    (``ModuleNotFoundError``, suelto o como causa: Pipecat lo envuelve en un
+    ``ImportError``) y ninguna distribución instalada trae su paquete, mirado en los mismos
+    metadatos que mira uv. Todo lo demás es que está pero no carga: en Windows, una DLL
+    que no carga da ``ImportError`` u ``OSError``. Entonces se dice qué pasa y no se
+    aconseja la orden (rondas 4, 5 y 6 de Codex sobre la PR #687).
     """
     try:
         return importlib.import_module(module)
     except Exception as error:
         missing = _missing_module(error)
-        if missing is not None:
-            reason = f"falta {missing.name or module}"
-            raise VoiceUnavailable(reason, fixed_by_install=True) from error
+        name = module if missing is None else missing.name or module
+        if missing is not None and not _installed(name):
+            raise VoiceUnavailable(f"falta {name}", fixed_by_install=True) from error
         raise VoiceUnavailable(f"{module} no carga ({error})", fixed_by_install=False) from error
+
+
+def _installed(module: str) -> bool:
+    """Si alguna distribución instalada trae el paquete de ``module``, según sus metadatos.
+
+    Si no se pueden leer, cuenta como instalada: es no prometer nada.
+    """
+    try:
+        distributions = importlib.metadata.packages_distributions()
+    except Exception as error:
+        _logger.warning("No se han podido leer las distribuciones instaladas: %s", error)
+        return True
+    return bool(distributions.get(module.partition(".")[0]))
 
 
 def _missing_module(error: BaseException) -> ModuleNotFoundError | None:

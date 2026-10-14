@@ -13,6 +13,7 @@ import ast
 import asyncio
 import importlib.abc
 import importlib.machinery
+import importlib.metadata
 import os
 import sys
 import types
@@ -238,9 +239,15 @@ def bibliotecas(monkeypatch: pytest.MonkeyPatch) -> _Bibliotecas:
 # --- Cargar el oído -----------------------------------------------------------------
 
 
+def _distribuciones(monkeypatch: pytest.MonkeyPatch, instaladas: dict[str, list[str]]) -> None:
+    """Las distribuciones instaladas que ve Sirius, como las ve uv: por sus metadatos."""
+    monkeypatch.setattr(importlib.metadata, "packages_distributions", lambda: instaladas)
+
+
 def test_sin_el_extra_instalado_no_carga_y_lo_arregla_la_orden_de_instalar(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    _distribuciones(monkeypatch, {})
     monkeypatch.setitem(sys.modules, "numpy", None)
 
     with pytest.raises(VoiceUnavailable) as fallo:
@@ -333,24 +340,65 @@ def test_falle_como_falle_una_biblioteca_al_importarse_avisa_y_no_tumba_a_sirius
     assert "sanity check" in fallo.value.reason
 
 
-def test_si_pipecat_envuelve_el_modulo_que_falta_tambien_se_promete_la_orden(
-    bibliotecas: _Bibliotecas, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+def _silero_sin(
+    monkeypatch: pytest.MonkeyPatch, modulo: str, instaladas: dict[str, list[str]]
 ) -> None:
-    # Silero de Pipecat 1.12 hace `raise ImportError("Missing module(s): ...") from e` si
-    # falta onnxruntime: falta un módulo, y eso sí lo arregla la orden de instalar.
-    falta = ModuleNotFoundError("No module named 'onnxruntime'", name="onnxruntime")
+    """Silero de Pipecat 1.12 falla al importarse porque le falta ``modulo``: lo envuelve en
+    `raise ImportError("Missing module(s): ...") from e`."""
+    falta = ModuleNotFoundError(f"No module named {modulo!r}", name=modulo)
     envuelto = ImportError(f"Missing module(s): {falta}")
     envuelto.__cause__ = falta
     silero = "pipecat.audio.vad.silero"
+    _distribuciones(monkeypatch, instaladas)
     monkeypatch.delitem(sys.modules, silero)
     monkeypatch.setattr(sys.modules["pipecat.audio.vad"], "__path__", [], raising=False)
     monkeypatch.setattr(sys, "meta_path", [_NoCarga(silero, envuelto), *sys.meta_path])
+
+
+def test_si_pipecat_envuelve_el_modulo_que_falta_tambien_se_promete_la_orden(
+    bibliotecas: _Bibliotecas, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # Falta onnxruntime y ninguna distribución instalada lo trae: la orden de instalar sí
+    # lo pone.
+    _silero_sin(monkeypatch, "onnxruntime", {"pipecat": ["pipecat-ai"]})
 
     with pytest.raises(VoiceUnavailable) as fallo:
         load_listening_engines(tmp_path)
 
     assert fallo.value.fixed_by_install
     assert fallo.value.reason == "falta onnxruntime"
+
+
+def test_un_modulo_que_falta_en_una_distribucion_instalada_no_promete_la_orden(
+    bibliotecas: _Bibliotecas, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # Ronda 6 de Codex sobre la PR #687: onnxruntime instalado, con sus metadatos, pero sin
+    # su módulo compilado. `uv run --extra voz` no reinstala lo que ya está (eso sería
+    # `--reinstall`), así que la orden no lo arreglaría.
+    instaladas = {"onnxruntime": ["onnxruntime"], "pipecat": ["pipecat-ai"]}
+    _silero_sin(monkeypatch, "onnxruntime.capi._pybind_state", instaladas)
+
+    with pytest.raises(VoiceUnavailable) as fallo:
+        load_listening_engines(tmp_path)
+
+    assert not fallo.value.fixed_by_install
+    assert "onnxruntime.capi._pybind_state" in fallo.value.reason
+
+
+def test_si_no_se_pueden_leer_las_distribuciones_no_se_promete_la_orden(
+    bibliotecas: _Bibliotecas, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _silero_sin(monkeypatch, "onnxruntime", {})
+
+    def ilegibles() -> dict[str, list[str]]:
+        raise OSError("METADATA ilegible")
+
+    monkeypatch.setattr(importlib.metadata, "packages_distributions", ilegibles)
+
+    with pytest.raises(VoiceUnavailable) as fallo:
+        load_listening_engines(tmp_path)
+
+    assert not fallo.value.fixed_by_install
 
 
 def test_comprobar_las_bibliotecas_mira_las_del_micro_y_el_detector(

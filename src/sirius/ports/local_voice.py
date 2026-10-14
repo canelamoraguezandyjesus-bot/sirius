@@ -30,10 +30,11 @@ class VoiceUnavailable(RuntimeError):
     """El oído no puede arrancar en este ordenador.
 
     ``fixed_by_install`` dice si lo arregla la orden de instalar la voz, y solo lo
-    arregla seguro lo que falta: un módulo del extra o un fichero del modelo, que es lo
-    que la orden pone. Lo que está pero no carga (una biblioteca, el modelo de oír,
-    Silero o Smart Turn) y el micrófono que no se abre no lo arregla, y no se promete
-    (rondas 2, 4 y 5 de Codex sobre la PR #687).
+    arregla seguro lo que no está: una distribución del extra sin instalar o un fichero
+    del modelo que falta, que es lo que la orden pone. Lo que está pero no carga (una
+    biblioteca, aunque le falte un módulo; el modelo de oír; Silero o Smart Turn) y el
+    micrófono que no se abre no lo arregla, y no se promete (rondas 2, 4, 5 y 6 de Codex
+    sobre la PR #687).
     """
 
     def __init__(self, reason: str, *, fixed_by_install: bool) -> None:

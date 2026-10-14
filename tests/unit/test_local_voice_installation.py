@@ -205,8 +205,9 @@ def test_si_el_oido_no_carga_la_orden_acaba_en_error(
     salida = capsys.readouterr().out
     assert "INVALID_PROTOBUF" in salida
     # Si esta orden no lo arregla, se dice, para que no se repita en balde; si lo
-    # arregla, no se dice lo contrario.
+    # arregla, dice cómo escribirla, y no lo contrario.
     assert ("Volver a ejecutar esta orden no lo arreglará" in salida) is not lo_arregla
+    assert (INSTALL_COMMAND in salida) is lo_arregla
 
 
 @pytest.mark.usefixtures("bibliotecas_bien")

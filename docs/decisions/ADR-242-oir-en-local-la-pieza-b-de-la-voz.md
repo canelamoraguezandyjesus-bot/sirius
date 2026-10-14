@@ -169,12 +169,12 @@ Medido el 14-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   la C (`tests/acceptance/test_dobles_del_conductor.py`). La tabla de
   `docs/evolution/PRUEBAS_0.3_DEL_ROBOT.md` pone PA-R03-01 en verde; PA-R03-08 sigue
   pendiente de la C.
-- **78 pruebas unitarias nuevas**: el servicio (`tests/unit/test_local_listening.py`), los
+- **80 pruebas unitarias nuevas**: el servicio (`tests/unit/test_local_listening.py`), los
   adaptadores de verdad con módulos de mentira (`tests/unit/test_local_listening_adapters.py`),
   la instalación y la orden de instalar (`tests/unit/test_local_voice_installation.py`), la
   orden de consola (`tests/unit/test_listen_console.py`) y la guarda de las descargas
   (`tests/unit/test_solo_la_orden_de_instalar_baja_modelos.py`).
-- **Mutación: 59 de 59 caen.** Quitar lo que suena antes de la voz, no mirar la
+- **Mutación: 64 de 64 caen.** Quitar lo que suena antes de la voz, no mirar la
   instalación, escribir lo oído en el diario, mandar un turno vacío, no vaciar el turno,
   leer el micro parado, empezar un turno o transcribir con un fin de turno sin voz
   delante, decir que no es para él, dar por local cualquier ajuste, no pedir
@@ -207,7 +207,10 @@ Medido el 14-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   bucle de eventos de un detector que no arranca. Y las cuatro de la ronda 5: prometer la
   orden con un modelo que está y no carga, volver a bajar un modelo que ya está, no bajar
   el que falta, y que la orden no diga, con una biblioteca rota, que repetirla no lo
-  arregla. La de etiquetar con la generación del
+  arregla. Y las cinco de la ronda 6: prometer la orden aunque una distribución
+  instalada traiga el módulo que falta, buscar la distribución por el módulo entero y no
+  por su paquete, dar todo por instalado, prometerla con los metadatos ilegibles, y que
+  la orden no diga cómo escribirla cuando falta algo. La de etiquetar con la generación del
   momento sobrevivió a la prueba que reproduce el caso de Codex, que para el hilo dentro
   de `bytes(data)`, donde las dos coinciden; cayó con otra que lo para justo después de
   comprobar.
@@ -404,3 +407,27 @@ después de instalarlo. Sirius dice que no carga y por qué, y no promete nada; 
 borrando su carpeta y volviendo a ejecutar la orden, guiado en su ordenador. Es raro: la
 orden solo pone el modelo en su sitio cuando la descarga está entera, y el antivirus que
 borra un fichero lo deja como «falta», que sí promete la orden.
+
+**Ronda 6** (`bc2902a9`, 14-10-2026): un hallazgo P2, cierto. El revisor dice que llega
+tarde por goteo, y cuenta como ronda igual. Una distribución instalada a la que le falta
+un módulo (onnxruntime, con sus metadatos pero sin su módulo compilado) también da un
+`ModuleNotFoundError`, y Sirius prometía la orden. Pero `uv run --extra voz` solo añade
+lo que no está instalado; reinstalar lo que está es `--reinstall` (`uv run --help`, uv
+0.8.17). Reproducido con las bibliotecas de verdad: «falta
+onnxruntime.capi._pybind_state», con la orden prometida.
+
+**La regla de las dos rondas salta otra vez**: cuarta vez de la misma familia (rondas 2,
+4, 5 y 6), segunda seguida. El patrón: cada arreglo comparaba con algo que se parece a lo
+que hace la orden (primero el tipo de error, después que falte un módulo), y no con lo
+que hace. La orden añade las distribuciones del extra que no están instaladas y baja los
+ficheros del modelo que faltan, y uv decide lo primero por los metadatos de lo instalado.
+La raíz es mirar lo mismo que mira uv: la orden se promete solo si falta un módulo y
+ninguna distribución instalada trae su paquete (`importlib.metadata.packages_distributions`),
+y si los metadatos no se pueden leer, no se promete. Cuando la orden falla por algo que
+falta, dice cómo escribirla; si no lo arregla ella, que repetirla no servirá. Se sigue
+con lo construido: el criterio ya es el mismo que usa la herramienta que lo cumple.
+
+Lo que queda, a propósito: si la cadena de imports pidiera un módulo que no trae ninguna
+distribución del candado, uv no lo pondría y la promesa fallaría. Con el candado de hoy no
+pasa (la cadena entera carga en el entorno con el extra), pero en Windows no se ha podido
+mirar desde aquí.
