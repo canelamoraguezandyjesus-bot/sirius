@@ -1,8 +1,12 @@
 """El oído de verdad: el micro con sounddevice, Silero y Smart Turn de Pipecat y faster-whisper.
 
 ADR-242. Las bibliotecas son del extra ``voz`` y se importan al cargar el oído, no al
-importar este módulo: sin el extra instalado, el módulo se importa igual y
-``load_listening_engines`` levanta ``VoiceUnavailable`` diciendo qué falta.
+importar este módulo, y todas por ``_import``: sin el extra, o si una biblioteca nativa no
+carga, el módulo se importa igual y lo que se cargue levanta ``VoiceUnavailable`` diciendo
+qué falta. Ninguna función de aquí importa por su cuenta, y una prueba lo mira: una
+biblioteca nativa falla también con ``OSError``, no solo con ``ImportError``, y un import
+suelto que solo atrapara la segunda tumbaría a Sirius en vez de avisar (H-242, y ronda 3
+de Codex sobre la PR #687).
 
 Todo carga de este ordenador. El modelo de faster-whisper, solo de su carpeta y con
 ``local_files_only``; los de Silero y Smart Turn, de dentro del paquete de Pipecat. Aquí
@@ -12,14 +16,19 @@ no se nombra ninguna función que baje modelos: eso vive solo en la orden de ins
 from __future__ import annotations
 
 import asyncio
+import importlib
 import os
 import queue
 import sys
 from collections.abc import Callable, Coroutine, Sequence
+from functools import partial
 from pathlib import Path
 from typing import Any
 
+from sirius.infrastructure.logging import get_logger
 from sirius.ports.local_voice import ListeningEngines, TurnSignal, VoiceUnavailable
+
+_logger = get_logger(__name__)
 
 #: A lo que oyen Silero, Smart Turn y faster-whisper: 16 kHz, mono, 16 bits.
 SAMPLE_RATE = 16_000
@@ -33,25 +42,33 @@ _SMART_TURN_AUDIO_LOG = "PIPECAT_SMART_TURN_LOG_DATA"
 _SPEAKING = frozenset({"SPEAKING", "STOPPING"})
 
 
+def _import(module: str) -> Any:
+    """Una biblioteca del extra ``voz``; si no está o no carga, ``VoiceUnavailable``.
+
+    Las nativas fallan con ``ImportError`` si no están y con ``OSError`` si están pero no
+    cargan lo suyo: sounddevice sin PortAudio, o CTranslate2 si una de sus DLL no carga.
+    Las dos cosas las arregla la orden de instalar.
+    """
+    try:
+        return importlib.import_module(module)
+    except ImportError as error:
+        raise VoiceUnavailable(f"falta {error.name or module}", fixed_by_install=True) from error
+    except OSError as error:
+        raise VoiceUnavailable(f"{module} no carga ({error})", fixed_by_install=True) from error
+
+
 def load_listening_engines(model_dir: Path) -> ListeningEngines[bytes]:
     """Carga el micro, el detector y el transcriptor de verdad, sin abrir el micro.
 
-    Falla con ``VoiceUnavailable`` si falta una biblioteca del extra ``voz`` o si el
-    modelo de ``model_dir`` no carga; las dos cosas las arregla la orden de instalar.
+    Falla con ``VoiceUnavailable`` si falta una biblioteca del extra ``voz``, si una no
+    carga o si el modelo de ``model_dir`` no carga; todo eso lo arregla la orden de
+    instalar.
     """
-    try:
-        import numpy
-        import sounddevice
-        from loguru import logger
-        from pipecat.audio.turn.smart_turn.local_smart_turn_v3 import LocalSmartTurnAnalyzerV3
-        from pipecat.audio.vad.silero import SileroVADAnalyzer
-    except ImportError as error:
-        name = error.name or "una biblioteca de la voz"
-        raise VoiceUnavailable(f"falta {name}", fixed_by_install=True) from error
-    except OSError as error:
-        # sounddevice levanta OSError, no ImportError, si no encuentra PortAudio.
-        msg = f"una biblioteca de la voz no carga ({error})"
-        raise VoiceUnavailable(msg, fixed_by_install=True) from error
+    numpy = _import("numpy")
+    sounddevice = _import("sounddevice")
+    logger = _import("loguru").logger
+    silero = _import("pipecat.audio.vad.silero")
+    smart_turn = _import("pipecat.audio.turn.smart_turn.local_smart_turn_v3")
     # Pipecat escribe con loguru, que por defecto lo saca todo por la consola.
     logger.remove()
     logger.add(sys.stderr, level="WARNING")
@@ -59,8 +76,8 @@ def load_listening_engines(model_dir: Path) -> ListeningEngines[bytes]:
     model = load_listening_model(model_dir)
     try:
         detector = PipecatTurnDetector(
-            lambda: SileroVADAnalyzer(sample_rate=SAMPLE_RATE),
-            lambda: LocalSmartTurnAnalyzerV3(sample_rate=SAMPLE_RATE),
+            lambda: silero.SileroVADAnalyzer(sample_rate=SAMPLE_RATE),
+            lambda: smart_turn.LocalSmartTurnAnalyzerV3(sample_rate=SAMPLE_RATE),
         )
     except (OSError, RuntimeError, ValueError) as error:
         raise VoiceUnavailable(f"el oído no carga ({error})", fixed_by_install=True) from error
@@ -74,16 +91,12 @@ def load_listening_engines(model_dir: Path) -> ListeningEngines[bytes]:
 def load_listening_model(model_dir: Path) -> Any:
     """El modelo de faster-whisper de ``model_dir``: solo de ahí y sin bajar nada.
 
-    Falla con ``VoiceUnavailable`` si falta faster-whisper o si el modelo no carga; la
-    orden de instalar lo usa para saber si tiene que bajarlo otra vez.
+    Falla con ``VoiceUnavailable`` si faster-whisper falta o no carga, o si el modelo no
+    carga; la orden de instalar lo usa para saber si tiene que bajarlo otra vez.
     """
+    whisper = _import("faster_whisper")
     try:
-        from faster_whisper import WhisperModel
-    except ImportError as error:
-        name = error.name or "faster_whisper"
-        raise VoiceUnavailable(f"falta {name}", fixed_by_install=True) from error
-    try:
-        return WhisperModel(
+        return whisper.WhisperModel(
             str(model_dir), device="cpu", compute_type="int8", local_files_only=True
         )
     except (OSError, RuntimeError, ValueError) as error:
@@ -91,21 +104,36 @@ def load_listening_model(model_dir: Path) -> Any:
         raise VoiceUnavailable(msg, fixed_by_install=True) from error
 
 
+def _quietly(what: str, step: Callable[[], object]) -> None:
+    """Hace ``step`` y, si falla, lo apunta en el diario sin propagarlo."""
+    try:
+        step()
+    except Exception as error:
+        _logger.warning("No se ha podido %s: %s", what, error)
+
+
 class SoundDeviceMicrophone:
     """El micrófono por defecto del sistema, a 16 kHz y en trozos de 512 muestras.
 
-    PortAudio llama a ``_arrived`` desde su hilo con cada trozo; se guardan en una cola
-    hasta que Sirius los lee, y al cerrar se tiran los que nadie ha leído.
+    PortAudio entrega cada trozo desde su hilo, y se guardan en una cola hasta que Sirius
+    los lee. Cada apertura es una generación: al cerrar se pasa a la siguiente, y ningún
+    trozo de una generación pasada entra ya en la cola, pare bien o mal PortAudio. Así,
+    cerrado el micro, a Sirius no le llega audio aunque el hardware siga encendido, y
+    cerrar no falla nunca: lo que PortAudio no puede hacer se apunta en el diario (ronda 3
+    de Codex sobre la PR #687).
     """
 
     def __init__(self, sounddevice: Any) -> None:
         self._sounddevice = sounddevice
         self._stream: Any = None
         self._chunks: queue.SimpleQueue[bytes] = queue.SimpleQueue()
+        self._generation = 0
 
     def open(self) -> None:
         if self._stream is not None:
             return
+        self._drain()
+        self._generation += 1
         error_type = self._sounddevice.PortAudioError
         try:
             stream = self._sounddevice.RawInputStream(
@@ -113,28 +141,25 @@ class SoundDeviceMicrophone:
                 blocksize=BLOCK_SAMPLES,
                 channels=1,
                 dtype="int16",
-                callback=self._arrived,
+                callback=self._receiver(self._generation),
             )
         except error_type as error:
             raise _no_microphone(error) from error
         try:
             stream.start()
         except error_type as error:
-            stream.close()
+            self._generation += 1
+            _quietly("cerrar el micrófono que no arrancó", stream.close)
             raise _no_microphone(error) from error
         self._stream = stream
 
     def close(self) -> None:
+        self._generation += 1
         stream, self._stream = self._stream, None
-        try:
-            if stream is not None:
-                try:
-                    stream.stop()
-                finally:
-                    stream.close()
-        finally:
-            while self.read() is not None:
-                pass
+        if stream is not None:
+            _quietly("parar el micrófono", stream.stop)
+            _quietly("cerrar el micrófono", stream.close)
+        self._drain()
 
     def read(self) -> bytes | None:
         try:
@@ -142,9 +167,17 @@ class SoundDeviceMicrophone:
         except queue.Empty:
             return None
 
-    def _arrived(self, data: Any, frames: int, time: Any, status: Any) -> None:
-        del frames, time, status
-        self._chunks.put(bytes(data))
+    def _receiver(self, generation: int) -> Callable[[Any, int, Any, Any], None]:
+        def arrived(data: Any, frames: int, time: Any, status: Any) -> None:
+            del frames, time, status
+            if generation == self._generation:
+                self._chunks.put(bytes(data))
+
+        return arrived
+
+    def _drain(self) -> None:
+        while self.read() is not None:
+            pass
 
 
 def _no_microphone(error: Exception) -> VoiceUnavailable:
@@ -176,7 +209,7 @@ class PipecatTurnDetector:
         self.reset()
 
     def reset(self) -> None:
-        """Silero y Smart Turn nuevos; si no se pueden cargar, se queda con los que tenía."""
+        """Silero y Smart Turn nuevos; si no se pueden cargar, falla y deja los que tenía."""
         new: list[Any] = []
         try:
             new.append(self._make_vad())
@@ -194,7 +227,10 @@ class PipecatTurnDetector:
     def _release(self, analyzers: list[Any]) -> None:
         for analyzer in analyzers:
             if analyzer is not None:
-                self._wait(analyzer.cleanup())
+                _quietly("soltar un analizador de Pipecat", partial(self._cleanup, analyzer))
+
+    def _cleanup(self, analyzer: Any) -> None:
+        self._wait(analyzer.cleanup())
 
     def listen(self, chunk: bytes) -> TurnSignal:
         state = self._wait(self._vad.analyze_audio(chunk))

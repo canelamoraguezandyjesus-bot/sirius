@@ -47,7 +47,11 @@ class Microphone[Chunk](Protocol):
         ...
 
     def close(self) -> None:
-        """Deja de captar y tira lo captado que nadie ha leído."""
+        """Deja de dar audio a Sirius y tira lo captado que nadie ha leído.
+
+        No falla: pase lo que pase con el hardware, después de cerrar no llega ningún
+        trozo más, y lo que no se haya podido cerrar se apunta en el diario.
+        """
         ...
 
     def read(self) -> Chunk | None:
@@ -65,7 +69,10 @@ class TurnDetector[Chunk](Protocol):
     def listen(self, chunk: Chunk) -> TurnSignal: ...
 
     def reset(self) -> None:
-        """Olvida el turno que llevaba: lo siguiente que oiga empieza de cero."""
+        """Olvida el turno que llevaba: lo siguiente que oiga empieza de cero.
+
+        Si no puede, falla y se queda como estaba.
+        """
         ...
 
 

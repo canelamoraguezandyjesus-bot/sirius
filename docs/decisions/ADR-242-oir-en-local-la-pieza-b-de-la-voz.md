@@ -168,12 +168,12 @@ Medido el 14-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   la C (`tests/acceptance/test_dobles_del_conductor.py`). La tabla de
   `docs/evolution/PRUEBAS_0.3_DEL_ROBOT.md` pone PA-R03-01 en verde; PA-R03-08 sigue
   pendiente de la C.
-- **58 pruebas unitarias nuevas**: el servicio (`tests/unit/test_local_listening.py`), los
+- **62 pruebas unitarias nuevas**: el servicio (`tests/unit/test_local_listening.py`), los
   adaptadores de verdad con módulos de mentira (`tests/unit/test_local_listening_adapters.py`),
   la instalación y la orden de instalar (`tests/unit/test_local_voice_installation.py`), la
   orden de consola (`tests/unit/test_listen_console.py`) y la guarda de las descargas
   (`tests/unit/test_solo_la_orden_de_instalar_baja_modelos.py`).
-- **Mutación: 29 de 29 caen.** Quitar lo que suena antes de la voz, no mirar la
+- **Mutación: 38 de 38 caen.** Quitar lo que suena antes de la voz, no mirar la
   instalación, escribir lo oído en el diario, mandar un turno vacío, no vaciar el turno,
   leer el micro parado, empezar un turno o transcribir con un fin de turno sin voz
   delante, decir que no es para él, dar por local cualquier ajuste, no pedir
@@ -188,7 +188,11 @@ Medido el 14-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   que no olvida al reiniciarse. Y las siete de la ronda 2: parar sin limpiar el estado
   antes, no soltar las piezas cuando parar falla, sustituir el par del detector antes de
   tenerlo entero, no soltar el nuevo a medias, no cerrar el micro que no arranca ni el que
-  no para, y no volver a bajar un modelo que está pero no carga.
+  no para, y no volver a bajar un modelo que está pero no carga. Y las nueve de la raíz
+  de la ronda 3: un import que no traduce `OSError`, un import suelto en el oído, un micro
+  que acepta trozos de cualquier apertura o que no cambia de apertura al cerrar, cerrar el
+  micro o soltar un analizador propagando el fallo, parar sin apuntar el detector sin
+  reiniciar, volver sin reintentarlo, y soltar las piezas si el micro falla al cerrar.
 - **Las bibliotecas de verdad**, en un entorno aparte con el extra (`uv sync --frozen
   --extra voz`, Linux y Python 3.14.6, sin micro): Silero y Smart Turn cargan en 0,26 s y
   tardan 0,91 ms por trozo de 32 ms. Con la voz grabada que trae Pipecat
@@ -231,10 +235,14 @@ Medido el 14-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
 - sin esto se repetiría: un adaptador que carga una biblioteca con código nativo solo
   atrapa `ImportError`, porque así fallan los módulos de mentira de sus pruebas, y se cae
   cuando la biblioteca de verdad no encuentra lo suyo y falla con `OSError`; a Piper, en la
-  pieza C, le puede pasar lo mismo. En esta misma PR mordió dos veces: la segunda, el
-  detector de mentira de las pruebas no guardaba el turno entre trozos, Silero y Smart
-  Turn sí, y nadie vio que parar a media frase dejaba el turno viejo vivo (ronda 1 de
-  Codex). La raíz es la misma: un doble que no tiene el estado de la herramienta.
+  pieza C, le puede pasar lo mismo. En esta misma PR mordió tres veces: el detector de
+  mentira de las pruebas no guardaba el turno entre trozos, Silero y Smart Turn sí
+  (ronda 1 de Codex); y el import con `OSError` volvió en la ronda 3, porque el arreglo
+  de la ronda 2 movió el import de faster-whisper a una función nueva que solo atrapaba
+  `ImportError`. La raíz es la misma: un doble que no tiene el estado ni los fallos de la
+  herramienta. Lo cierra que todos los imports del oído pasen por `_import`, que traduce
+  los dos errores, y una prueba que falla si una función del módulo importa por su
+  cuenta.
 - lo hace cumplir: `tests/unit/test_local_listening_adapters.py`
 
 ## Revisión externa
@@ -276,3 +284,33 @@ uno, y salieron dos más del mismo código, arreglados en el mismo commit: el mi
 arranca dejaba su flujo sin cerrar, y si pararlo fallaba no se cerraba. Con las bibliotecas
 de verdad, el reinicio sigue dando solo silencio tras parar a media frase, y un hilo vivo
 tras cinco reinicios.
+
+**Ronda 3** (`a2cd39db`, 14-10-2026): dos hallazgos P2, ciertos los dos.
+
+- **El import de faster-whisper solo atrapaba `ImportError`.** CTranslate2 carga sus DLL
+  con `ctypes` y puede fallar con `OSError`; el arreglo de la ronda 2 había movido ese
+  import a `load_listening_model` sin el `OSError` que ya tenía el cargador. Es la familia
+  de H-242, la tercera vez en esta PR.
+- **Si el micro fallaba al cerrar, el servicio soltaba la única referencia al flujo.** El
+  flujo podía seguir captando mientras Sirius decía que estaba parado, y el siguiente
+  `start` abría otro. Este hallazgo nace del arreglo de la ronda 2.
+
+**La regla de las dos rondas salta aquí.** Las rondas 2 y 3 traen la misma familia: un
+fallo a medias que deja a Sirius diciendo una cosa y al hardware haciendo otra. Cada
+parche añadía otro camino de fallo que el revisor encontraba en la ronda siguiente, así
+que se dejó de parchear y se cerró por construcción:
+
+- **El micro numera cada apertura.** Al cerrar pasa a la siguiente, y ningún trozo de una
+  apertura pasada entra ya en la cola, pare bien o mal PortAudio: cerrado el micro, a
+  Sirius no le llega audio aunque el hardware siga encendido. Cerrar no falla nunca; lo
+  que PortAudio no puede hacer se apunta en el diario.
+- **Parar no suelta ninguna pieza.** Si el detector no se puede reiniciar, se apunta; el
+  siguiente `start` lo vuelve a intentar y, si sigue sin poder, lo dice como aviso y no
+  abre el micro. Soltar un analizador viejo que no se libera tampoco rompe el reinicio.
+- **Todos los imports del oído pasan por `_import`**, que traduce `ImportError` y
+  `OSError` en el mismo aviso, con una prueba que mira el árbol del módulo y falla si una
+  función importa por su cuenta.
+
+Las nueve mutaciones de la raíz caen. Con las bibliotecas de verdad, el reinicio sigue
+dando solo silencio y un hilo vivo, y sin PortAudio o sin modelo el oído lo dice sin
+caerse.

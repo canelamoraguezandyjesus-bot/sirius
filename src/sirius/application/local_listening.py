@@ -84,6 +84,7 @@ class LocalListening[Chunk]:
         self._installation = installation
         self._load_engines = load_engines
         self._engines: ListeningEngines[Chunk] | None = None
+        self._detector_stale = False
         self._listening = False
         self._notice = ""
         self._before_turn: deque[Chunk] = deque(maxlen=pre_roll)
@@ -109,6 +110,19 @@ class LocalListening[Chunk]:
         try:
             if self._engines is None:
                 self._engines = self._load_engines()
+                self._detector_stale = False
+        except VoiceUnavailable as error:
+            _logger.info("El oído no arranca: %s", error.reason)
+            return self._fail(f"No puedo oírte: {error.reason}.", error.fixed_by_install)
+        if self._detector_stale:
+            try:
+                self._engines.detector.reset()
+            except Exception as error:
+                _logger.warning("El detector de voz sigue sin reiniciarse: %s", error)
+                problem = f"No puedo oírte: el detector de voz no se ha podido reiniciar ({error})."
+                return self._fail(problem, False)
+            self._detector_stale = False
+        try:
             self._engines.microphone.open()
         except VoiceUnavailable as error:
             _logger.info("El oído no arranca: %s", error.reason)
@@ -122,9 +136,12 @@ class LocalListening[Chunk]:
 
         Si no, al volver a escuchar el detector seguiría en el turno viejo: Silero
         creería que aún hay voz y el silencio siguiente abriría un turno sin palabras
-        (ronda 1 de Codex sobre la PR #687). El estado del servicio se limpia antes, y si
-        cerrar el micro o reiniciar el detector falla, se sueltan las piezas: el siguiente
-        ``start`` las carga de nuevo, y el fallo sigue su camino (ronda 2).
+        (ronda 1 de Codex sobre la PR #687).
+
+        Nada de lo que falle aquí deja a Sirius oyendo ni suelta una pieza: el estado se
+        limpia antes, el micro garantiza que al cerrarse no da más audio, y si el detector
+        no se puede reiniciar se apunta, y el siguiente ``start`` lo vuelve a intentar y,
+        si sigue sin poder, lo dice como aviso en vez de abrir el micro (rondas 2 y 3).
         """
         engines, listening = self._engines, self._listening
         self._listening = False
@@ -135,10 +152,12 @@ class LocalListening[Chunk]:
         try:
             if listening:
                 engines.microphone.close()
-            engines.detector.reset()
-        except BaseException:
-            self._engines = None
-            raise
+        finally:
+            try:
+                engines.detector.reset()
+            except Exception as error:
+                _logger.warning("El detector de voz no se ha podido reiniciar al parar: %s", error)
+                self._detector_stale = True
 
     def attend(self) -> Attended:
         """Atiende todo lo que ha llegado al micro y devuelve los turnos que cerró.

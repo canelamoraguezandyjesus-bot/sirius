@@ -9,6 +9,7 @@ con ``local_files_only``, y Smart Turn no puede escribir el audio de cada turno.
 
 from __future__ import annotations
 
+import ast
 import importlib.abc
 import importlib.machinery
 import os
@@ -21,6 +22,7 @@ from typing import Any
 
 import pytest
 
+import sirius.adapters.audio.local_listening as local_listening_module
 from sirius.adapters.audio.local_listening import (
     BLOCK_SAMPLES,
     SAMPLE_RATE,
@@ -28,6 +30,7 @@ from sirius.adapters.audio.local_listening import (
     PipecatTurnDetector,
     SoundDeviceMicrophone,
     load_listening_engines,
+    load_listening_model,
 )
 from sirius.ports.local_voice import TurnSignal, VoiceUnavailable
 
@@ -51,6 +54,7 @@ class _Flujo:
         self.cerrado = False
         self.falla_al_arrancar = False
         self.falla_al_parar = False
+        self.falla_al_cerrar = False
 
     def start(self) -> None:
         if self.falla_al_arrancar:
@@ -63,6 +67,8 @@ class _Flujo:
         self.parado = True
 
     def close(self) -> None:
+        if self.falla_al_cerrar:
+            raise _PortAudioError("Unanticipated host error")
         self.cerrado = True
 
 
@@ -242,11 +248,15 @@ def test_sin_el_extra_instalado_no_carga_y_lo_arregla_la_orden_de_instalar(
     assert "numpy" in fallo.value.reason
 
 
-class _SinPortAudio(importlib.abc.MetaPathFinder, importlib.abc.Loader):
-    """Hace lo que sounddevice en un sistema sin PortAudio: falla al importarse con OSError."""
+class _NoCarga(importlib.abc.MetaPathFinder, importlib.abc.Loader):
+    """Una biblioteca nativa que está pero no carga lo suyo: falla al importarse con OSError,
+    como sounddevice sin PortAudio o CTranslate2 si una de sus DLL no carga."""
+
+    def __init__(self, nombre: str) -> None:
+        self._nombre = nombre
 
     def find_spec(self, nombre: str, *args: object) -> importlib.machinery.ModuleSpec | None:
-        if nombre != "sounddevice":
+        if nombre != self._nombre:
             return None
         return importlib.machinery.ModuleSpec(nombre, self)
 
@@ -254,20 +264,50 @@ class _SinPortAudio(importlib.abc.MetaPathFinder, importlib.abc.Loader):
         return None
 
     def exec_module(self, module: types.ModuleType) -> None:
-        raise OSError("PortAudio library not found")
+        raise OSError("PortAudio library not found" if self._nombre == "sounddevice" else "DLL")
 
 
 def test_si_una_biblioteca_nativa_no_carga_tampoco_se_cae(
     bibliotecas: _Bibliotecas, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.delitem(sys.modules, "sounddevice")
-    monkeypatch.setattr(sys, "meta_path", [_SinPortAudio(), *sys.meta_path])
+    monkeypatch.setattr(sys, "meta_path", [_NoCarga("sounddevice"), *sys.meta_path])
 
     with pytest.raises(VoiceUnavailable) as fallo:
         load_listening_engines(tmp_path)
 
     assert fallo.value.fixed_by_install
     assert "PortAudio" in fallo.value.reason
+
+
+def test_si_faster_whisper_no_carga_con_oserror_tambien_lo_dice(
+    bibliotecas: _Bibliotecas, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # Ronda 3 de Codex sobre la PR #687: CTranslate2 carga sus DLL con ctypes y puede
+    # fallar con OSError; el import que se movió en la ronda 2 solo atrapaba ImportError.
+    monkeypatch.delitem(sys.modules, "faster_whisper")
+    monkeypatch.setattr(sys, "meta_path", [_NoCarga("faster_whisper"), *sys.meta_path])
+
+    with pytest.raises(VoiceUnavailable) as fallo:
+        load_listening_model(tmp_path)
+
+    assert fallo.value.fixed_by_install
+    assert "faster_whisper no carga" in fallo.value.reason
+
+
+def test_ninguna_funcion_del_oido_importa_por_su_cuenta() -> None:
+    # Todas las bibliotecas del oído entran por `_import`, que traduce ImportError y
+    # OSError: un import suelto dentro de una función es como volvió el fallo de H-242.
+    fuente = Path(local_listening_module.__file__).read_text(encoding="utf-8")
+    sueltos = [
+        f"{funcion.name}:{nodo.lineno}"
+        for funcion in ast.walk(ast.parse(fuente))
+        if isinstance(funcion, ast.FunctionDef | ast.AsyncFunctionDef)
+        for nodo in ast.walk(funcion)
+        if isinstance(nodo, ast.Import | ast.ImportFrom)
+    ]
+
+    assert sueltos == []
 
 
 def test_el_modelo_se_carga_solo_de_su_carpeta_y_sin_bajar_nada(
@@ -369,7 +409,7 @@ def test_sin_micro_no_lo_arregla_la_orden_de_instalar_y_no_deja_nada_abierto() -
     assert sounddevice.flujos[0].cerrado, "el flujo que no arrancó se cierra"
 
 
-def test_si_pararlo_falla_el_micro_se_cierra_igual_y_tira_lo_captado() -> None:
+def test_si_pararlo_falla_el_micro_se_cierra_igual_tira_lo_captado_y_no_falla() -> None:
     sounddevice = _SoundDevice()
     micro = SoundDeviceMicrophone(sounddevice)
     micro.open()
@@ -377,10 +417,32 @@ def test_si_pararlo_falla_el_micro_se_cierra_igual_y_tira_lo_captado() -> None:
     flujo.opciones["callback"](memoryview(b"\x01\x02"), 1, None, None)
     flujo.falla_al_parar = True
 
-    with pytest.raises(_PortAudioError):
-        micro.close()
+    micro.close()
 
     assert flujo.cerrado
+    assert micro.read() is None
+
+
+def test_cerrado_el_micro_no_llega_audio_aunque_portaudio_lo_siga_mandando() -> None:
+    # Ronda 3 de Codex sobre la PR #687: si PortAudio no paraba ni cerraba, el flujo seguía
+    # captando. Ahora lo que mande una apertura pasada ya no entra, y al volver a abrir
+    # solo entra lo del flujo nuevo.
+    sounddevice = _SoundDevice()
+    micro = SoundDeviceMicrophone(sounddevice)
+    micro.open()
+    viejo = sounddevice.flujos[0]
+    viejo.falla_al_parar = True
+    viejo.falla_al_cerrar = True
+
+    micro.close()
+    viejo.opciones["callback"](memoryview(b"\x01\x02"), 1, None, None)
+
+    assert micro.read() is None
+    micro.open()
+    nuevo = sounddevice.flujos[1]
+    viejo.opciones["callback"](memoryview(b"\x03\x04"), 1, None, None)
+    nuevo.opciones["callback"](memoryview(b"\x05\x06"), 1, None, None)
+    assert micro.read() == b"\x05\x06"
     assert micro.read() is None
 
 
@@ -488,6 +550,26 @@ def test_si_no_se_pueden_cargar_los_nuevos_se_queda_con_los_que_tenia() -> None:
     assert not viejo.soltado and not turno_creados[0].soltado
     assert detector.listen(b"a") is TurnSignal.VOICE
     assert viejo.trozos == [b"a"], "sigue oyendo con el par que tenía"
+
+
+def test_si_soltar_un_analizador_viejo_falla_el_reinicio_sigue_valiendo() -> None:
+    creados: list[_Silero] = []
+
+    def silero() -> _Silero:
+        creados.append(_Silero(["SPEAKING"]))
+        return creados[-1]
+
+    detector = PipecatTurnDetector(silero, _SmartTurn)
+
+    async def no_se_suelta() -> None:
+        raise RuntimeError("la sesión ONNX no se libera")
+
+    creados[0].cleanup = no_se_suelta  # type: ignore[method-assign]
+
+    detector.reset()
+
+    assert detector.listen(b"a") is TurnSignal.VOICE
+    assert creados[1].trozos == [b"a"], "oye con el par nuevo"
 
 
 # --- faster-whisper -----------------------------------------------------------------

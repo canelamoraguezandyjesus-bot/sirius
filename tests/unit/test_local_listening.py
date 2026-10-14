@@ -333,28 +333,49 @@ def test_parar_a_media_frase_tambien_reinicia_el_detector() -> None:
     assert oido.transcriptor.turnos == []
 
 
-@pytest.mark.parametrize("falla_en", ["el micro", "el detector"])
-def test_si_parar_falla_el_servicio_queda_parado_y_vuelve_a_cargar_el_oido(falla_en: str) -> None:
-    # Ronda 2 de Codex sobre la PR #687: un fallo al parar dejaba el servicio diciendo
-    # que escuchaba, con el micro ya cerrado.
+def test_si_el_detector_no_se_reinicia_al_parar_se_reintenta_al_volver() -> None:
+    # Rondas 2 y 3 de Codex sobre la PR #687: un fallo al parar no puede dejar el servicio
+    # diciendo una cosa y el hardware otra, ni soltar el micro que quizá sigue abierto.
     oido = _Oido()
     oido.servicio.start()
     oido.suena(voz("A medias"), "")
-    if falla_en == "el micro":
-        oido.micro.falla_al_cerrar = OSError("PortAudio no responde")
-    else:
-        oido.detector.falla_al_reiniciar = RuntimeError("sin memoria para Silero")
+    oido.detector.falla_al_reiniciar = RuntimeError("sin memoria para Silero")
 
-    with pytest.raises((OSError, RuntimeError)):
+    oido.servicio.stop()
+
+    assert not oido.servicio.listening
+    assert not oido.micro.abierto
+    assert oido.servicio.attend() == Attended(), "parado no lee el micro"
+    # Al volver lo intenta otra vez; si sigue sin poder, lo dice y no abre el micro.
+    aviso = oido.servicio.start()
+    assert "el detector de voz no se ha podido reiniciar (sin memoria para Silero)" in aviso
+    assert "la orden de instalar" not in aviso, "reinstalar no lo arregla"
+    assert not oido.micro.abierto
+    assert oido.servicio.attend() == Attended(notice=aviso)
+    # Cuando puede, oye con las mismas piezas, sin volver a cargarlas.
+    oido.detector.falla_al_reiniciar = None
+    assert oido.servicio.start() == ""
+    assert oido.detector.reinicios == 1
+    assert oido.cargas == 1
+    assert oido.micro.aperturas == 2
+    assert [t.heard for t in oido.suena(voz("Hola"), FIN).turns] == ["Hola"]
+
+
+def test_si_el_micro_falla_al_cerrar_el_servicio_queda_parado_y_conserva_sus_piezas() -> None:
+    # Un micro que no cumple su contrato y falla al cerrar: el servicio ya está parado,
+    # el detector se reinicia igual y no se suelta nada.
+    oido = _Oido()
+    oido.servicio.start()
+    oido.micro.falla_al_cerrar = OSError("PortAudio no responde")
+
+    with pytest.raises(OSError, match="PortAudio"):
         oido.servicio.stop()
 
     assert not oido.servicio.listening
-    assert oido.servicio.attend() == Attended(), "parado no lee el micro"
+    assert oido.detector.reinicios == 1
     oido.micro.falla_al_cerrar = None
-    oido.detector.falla_al_reiniciar = None
     assert oido.servicio.start() == ""
-    assert oido.cargas == 2, "las piezas se cargan de nuevo al volver"
-    assert [t.heard for t in oido.suena(voz("Hola"), FIN).turns] == ["Hola"]
+    assert oido.cargas == 1, "las mismas piezas: el micro que quizá sigue abierto no se suelta"
 
 
 def test_si_la_charla_falla_el_turno_no_se_queda_a_medias() -> None:
