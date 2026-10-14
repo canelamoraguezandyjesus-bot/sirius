@@ -23,6 +23,13 @@ from sirius.infrastructure.paths import resolve_paths
 from sirius.install_local_voice import download_listening_model
 from sirius.ports.local_voice import VoiceUnavailable
 
+
+@pytest.fixture
+def bibliotecas_bien(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Las bibliotecas de la voz están y cargan, como tras `uv run --extra voz`."""
+    monkeypatch.setattr(install_local_voice, "check_listening_libraries", lambda: None)
+
+
 #: Lo que lee faster-whisper 1.2.1 de la carpeta de un modelo (``WhisperModel`` y
 #: ``ctranslate2``), escrito aquí y no copiado de Sirius: si Sirius dejara de pedir uno,
 #: estas pruebas lo verían. Sin ``tokenizer.json``, faster-whisper lo pide a internet.
@@ -115,6 +122,7 @@ def test_una_descarga_cortada_deja_el_modelo_que_ya_habia(tmp_path: Path) -> Non
     assert sorted(p.name for p in tmp_path.iterdir()) == ["faster-whisper-small"]
 
 
+@pytest.mark.usefixtures("bibliotecas_bien")
 def test_con_el_modelo_ya_instalado_no_baja_nada_y_comprueba_que_carga(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -134,6 +142,7 @@ def test_con_el_modelo_ya_instalado_no_baja_nada_y_comprueba_que_carga(
     assert "sirius-oye" in capsys.readouterr().out
 
 
+@pytest.mark.usefixtures("bibliotecas_bien")
 def test_un_modelo_que_esta_pero_no_carga_se_baja_otra_vez(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -161,21 +170,28 @@ def test_un_modelo_que_esta_pero_no_carga_se_baja_otra_vez(
     assert "model.bin corrupto" in capsys.readouterr().out
 
 
+@pytest.mark.usefixtures("bibliotecas_bien")
+@pytest.mark.parametrize("lo_arregla", [False, True])
 def test_si_el_oido_no_carga_la_orden_acaba_en_error(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], lo_arregla: bool
 ) -> None:
     _pon_modelo(LocalVoiceInstallation(LocalVoiceSettings()).listening_model_dir)
 
     def no_carga(carpeta: Path) -> None:
-        raise VoiceUnavailable("falta pipecat", fixed_by_install=True)
+        raise VoiceUnavailable("INVALID_PROTOBUF", fixed_by_install=lo_arregla)
 
     monkeypatch.setattr(install_local_voice, "load_listening_model", lambda carpeta: None)
     monkeypatch.setattr(install_local_voice, "load_listening_engines", no_carga)
 
     assert install_local_voice.main() == 1
-    assert "falta pipecat" in capsys.readouterr().out
+    salida = capsys.readouterr().out
+    assert "INVALID_PROTOBUF" in salida
+    # Si esta orden no lo arregla, se dice, para que no se repita en balde; si lo
+    # arregla, no se dice lo contrario.
+    assert ("Volver a ejecutar esta orden no lo arreglará" in salida) is not lo_arregla
 
 
+@pytest.mark.usefixtures("bibliotecas_bien")
 def test_si_no_se_puede_bajar_la_orden_acaba_en_error(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -188,3 +204,21 @@ def test_si_no_se_puede_bajar_la_orden_acaba_en_error(
     salida = capsys.readouterr().out
     assert "sin internet" in salida
     assert "ciérralo" in salida
+
+
+def test_si_una_biblioteca_no_carga_la_orden_lo_dice_y_no_baja_nada(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Ronda 4 de Codex sobre la PR #687: con una biblioteca rota, la orden bajaba el modelo
+    # otra vez, que no lo arregla.
+    def rota() -> None:
+        raise VoiceUnavailable("faster_whisper no carga ([WinError 126])", fixed_by_install=False)
+
+    def no_baja(*args: object) -> None:
+        raise AssertionError("ha bajado el modelo por una biblioteca rota")
+
+    monkeypatch.setattr(install_local_voice, "check_listening_libraries", rota)
+    monkeypatch.setattr(install_local_voice, "download_listening_model", no_baja)
+
+    assert install_local_voice.main() == 1
+    assert "WinError 126" in capsys.readouterr().out

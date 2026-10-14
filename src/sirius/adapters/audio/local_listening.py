@@ -3,10 +3,15 @@
 ADR-242. Las bibliotecas son del extra ``voz`` y se importan al cargar el oído, no al
 importar este módulo, y todas por ``_import``: sin el extra, o si una biblioteca nativa no
 carga, el módulo se importa igual y lo que se cargue levanta ``VoiceUnavailable`` diciendo
-qué falta. Ninguna función de aquí importa por su cuenta, y una prueba lo mira: una
-biblioteca nativa falla también con ``OSError``, no solo con ``ImportError``, y un import
-suelto que solo atrapara la segunda tumbaría a Sirius en vez de avisar (H-242, y ronda 3
-de Codex sobre la PR #687).
+qué falta. Ninguna función de aquí importa por su cuenta, y una prueba lo mira.
+
+Cargar el oído no tumba a Sirius, falle como falle lo de fuera. Una biblioteca nativa no
+falla solo con ``ImportError``: con ``OSError`` si carga su DLL con ctypes, y con lo que
+quiera su ``__init__``; los modelos de Silero y Smart Turn, con las excepciones de
+onnxruntime, y el de oír, con las de tokenizers, que heredan directamente de
+``Exception``. Por eso los tres sitios donde se carga algo de fuera (importar, cargar el
+modelo de oír y arrancar Silero y Smart Turn) atrapan cualquier ``Exception`` (H-242, y
+rondas 3 y 4 de Codex sobre la PR #687).
 
 Todo carga de este ordenador. El modelo de faster-whisper, solo de su carpeta y con
 ``local_files_only``; los de Silero y Smart Turn, de dentro del paquete de Pipecat. Aquí
@@ -45,30 +50,64 @@ _SPEAKING = frozenset({"SPEAKING", "STOPPING"})
 def _import(module: str) -> Any:
     """Una biblioteca del extra ``voz``; si no está o no carga, ``VoiceUnavailable``.
 
-    Las nativas fallan con ``ImportError`` si no están y con ``OSError`` si están pero no
-    cargan lo suyo: sounddevice sin PortAudio, o CTranslate2 si una de sus DLL no carga.
-    Las dos cosas las arregla la orden de instalar.
+    La orden de instalar solo arregla que falte un módulo, porque instala el extra, y eso
+    lo dice siempre un ``ModuleNotFoundError``, suelto o como causa de otro error (Pipecat
+    lo envuelve en un ``ImportError``). Todo lo demás es que está pero no carga: en
+    Windows una DLL que no carga da ``ImportError`` u ``OSError``, y la orden no
+    reinstala lo que ya está. Entonces se dice qué pasa y no se aconseja la orden (ronda 4
+    de Codex sobre la PR #687).
     """
     try:
         return importlib.import_module(module)
-    except ImportError as error:
-        raise VoiceUnavailable(f"falta {error.name or module}", fixed_by_install=True) from error
-    except OSError as error:
-        raise VoiceUnavailable(f"{module} no carga ({error})", fixed_by_install=True) from error
+    except Exception as error:
+        missing = _missing_module(error)
+        if missing is not None:
+            reason = f"falta {missing.name or module}"
+            raise VoiceUnavailable(reason, fixed_by_install=True) from error
+        raise VoiceUnavailable(f"{module} no carga ({error})", fixed_by_install=False) from error
+
+
+def _missing_module(error: BaseException) -> ModuleNotFoundError | None:
+    """El ``ModuleNotFoundError`` que es ``error`` o del que viene (``raise ... from``)."""
+    seen: set[int] = set()
+    cause: BaseException | None = error
+    while cause is not None and id(cause) not in seen:
+        if isinstance(cause, ModuleNotFoundError):
+            return cause
+        seen.add(id(cause))
+        cause = cause.__cause__
+    return None
+
+
+def check_listening_libraries() -> None:
+    """Que las bibliotecas del oído están y cargan; si no, ``VoiceUnavailable``.
+
+    La orden de instalar lo mira antes que el modelo: si falla una biblioteca, bajar el
+    modelo otra vez no lo arregla.
+    """
+    _libraries()
+    _import("faster_whisper")
+
+
+def _libraries() -> tuple[Any, Any, Any, Any, Any]:
+    """numpy, sounddevice, el registrador de loguru y los módulos de Silero y Smart Turn."""
+    return (
+        _import("numpy"),
+        _import("sounddevice"),
+        _import("loguru").logger,
+        _import("pipecat.audio.vad.silero"),
+        _import("pipecat.audio.turn.smart_turn.local_smart_turn_v3"),
+    )
 
 
 def load_listening_engines(model_dir: Path) -> ListeningEngines[bytes]:
     """Carga el micro, el detector y el transcriptor de verdad, sin abrir el micro.
 
-    Falla con ``VoiceUnavailable`` si falta una biblioteca del extra ``voz``, si una no
-    carga o si el modelo de ``model_dir`` no carga; todo eso lo arregla la orden de
-    instalar.
+    Falla con ``VoiceUnavailable`` si falta un módulo del extra ``voz`` o el modelo de
+    ``model_dir`` no carga, que lo arregla la orden de instalar, o si una biblioteca está
+    pero no carga o Silero y Smart Turn no arrancan, que no lo arregla.
     """
-    numpy = _import("numpy")
-    sounddevice = _import("sounddevice")
-    logger = _import("loguru").logger
-    silero = _import("pipecat.audio.vad.silero")
-    smart_turn = _import("pipecat.audio.turn.smart_turn.local_smart_turn_v3")
+    numpy, sounddevice, logger, silero, smart_turn = _libraries()
     # Pipecat escribe con loguru, que por defecto lo saca todo por la consola.
     logger.remove()
     logger.add(sys.stderr, level="WARNING")
@@ -79,8 +118,9 @@ def load_listening_engines(model_dir: Path) -> ListeningEngines[bytes]:
             lambda: silero.SileroVADAnalyzer(sample_rate=SAMPLE_RATE),
             lambda: smart_turn.LocalSmartTurnAnalyzerV3(sample_rate=SAMPLE_RATE),
         )
-    except (OSError, RuntimeError, ValueError) as error:
-        raise VoiceUnavailable(f"el oído no carga ({error})", fixed_by_install=True) from error
+    except Exception as error:
+        msg = f"Silero o Smart Turn no arrancan ({error})"
+        raise VoiceUnavailable(msg, fixed_by_install=False) from error
     return ListeningEngines(
         microphone=SoundDeviceMicrophone(sounddevice),
         detector=detector,
@@ -92,14 +132,16 @@ def load_listening_model(model_dir: Path) -> Any:
     """El modelo de faster-whisper de ``model_dir``: solo de ahí y sin bajar nada.
 
     Falla con ``VoiceUnavailable`` si faster-whisper falta o no carga, o si el modelo no
-    carga; la orden de instalar lo usa para saber si tiene que bajarlo otra vez.
+    carga, falle como falle: un ``tokenizer.json`` roto, por ejemplo, da un ``Exception``
+    pelado de tokenizers. Un modelo que no carga lo arregla la orden de instalar, que lo
+    baja otra vez; la orden lo usa para saber si tiene que hacerlo.
     """
     whisper = _import("faster_whisper")
     try:
         return whisper.WhisperModel(
             str(model_dir), device="cpu", compute_type="int8", local_files_only=True
         )
-    except (OSError, RuntimeError, ValueError) as error:
+    except Exception as error:
         msg = f"el modelo de oír no carga ({error})"
         raise VoiceUnavailable(msg, fixed_by_install=True) from error
 
@@ -116,17 +158,18 @@ class SoundDeviceMicrophone:
     """El micrófono por defecto del sistema, a 16 kHz y en trozos de 512 muestras.
 
     PortAudio entrega cada trozo desde su hilo, y se guardan en una cola hasta que Sirius
-    los lee. Cada apertura es una generación: al cerrar se pasa a la siguiente, y ningún
-    trozo de una generación pasada entra ya en la cola, pare bien o mal PortAudio. Así,
-    cerrado el micro, a Sirius no le llega audio aunque el hardware siga encendido, y
-    cerrar no falla nunca: lo que PortAudio no puede hacer se apunta en el diario (ronda 3
-    de Codex sobre la PR #687).
+    los lee. Cada apertura es una generación: al cerrar se pasa a la siguiente, y cada
+    trozo va a la cola con la suya. Quien decide es ``read``, en el hilo de Sirius: lo que
+    sea de una generación pasada lo tira, llegue cuando llegue. Así, cerrado el micro, a
+    Sirius no le llega audio aunque el hardware siga encendido o el hilo de PortAudio se
+    quede a medias entre mirar la generación y encolar (rondas 3 y 4 de Codex sobre la
+    PR #687). Cerrar no falla nunca: lo que PortAudio no puede hacer se apunta.
     """
 
     def __init__(self, sounddevice: Any) -> None:
         self._sounddevice = sounddevice
         self._stream: Any = None
-        self._chunks: queue.SimpleQueue[bytes] = queue.SimpleQueue()
+        self._chunks: queue.SimpleQueue[tuple[int, bytes]] = queue.SimpleQueue()
         self._generation = 0
 
     def open(self) -> None:
@@ -162,16 +205,20 @@ class SoundDeviceMicrophone:
         self._drain()
 
     def read(self) -> bytes | None:
-        try:
-            return self._chunks.get_nowait()
-        except queue.Empty:
-            return None
+        while True:
+            try:
+                generation, chunk = self._chunks.get_nowait()
+            except queue.Empty:
+                return None
+            if generation == self._generation:
+                return chunk
 
     def _receiver(self, generation: int) -> Callable[[Any, int, Any, Any], None]:
         def arrived(data: Any, frames: int, time: Any, status: Any) -> None:
             del frames, time, status
+            # Solo para no llenar la cola con lo que ya no vale: quien decide es `read`.
             if generation == self._generation:
-                self._chunks.put(bytes(data))
+                self._chunks.put((generation, bytes(data)))
 
         return arrived
 
@@ -206,7 +253,12 @@ class PipecatTurnDetector:
         self._vad: Any = None
         self._turn: Any = None
         self._speaking = False
-        self.reset()
+        try:
+            self.reset()
+        except BaseException:
+            # Un detector que no arranca no deja su bucle de eventos abierto.
+            self._loop.close()
+            raise
 
     def reset(self) -> None:
         """Silero y Smart Turn nuevos; si no se pueden cargar, falla y deja los que tenía."""

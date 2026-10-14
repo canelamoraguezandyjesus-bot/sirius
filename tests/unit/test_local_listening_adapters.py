@@ -10,12 +10,13 @@ con ``local_files_only``, y Smart Turn no puede escribir el audio de cada turno.
 from __future__ import annotations
 
 import ast
+import asyncio
 import importlib.abc
 import importlib.machinery
 import os
 import sys
 import types
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -29,6 +30,7 @@ from sirius.adapters.audio.local_listening import (
     FasterWhisperTranscriber,
     PipecatTurnDetector,
     SoundDeviceMicrophone,
+    check_listening_libraries,
     load_listening_engines,
     load_listening_model,
 )
@@ -249,11 +251,12 @@ def test_sin_el_extra_instalado_no_carga_y_lo_arregla_la_orden_de_instalar(
 
 
 class _NoCarga(importlib.abc.MetaPathFinder, importlib.abc.Loader):
-    """Una biblioteca nativa que está pero no carga lo suyo: falla al importarse con OSError,
-    como sounddevice sin PortAudio o CTranslate2 si una de sus DLL no carga."""
+    """Una biblioteca que está pero no carga: falla al importarse con ``error`` o, si no se
+    dice, con OSError, como sounddevice sin PortAudio o CTranslate2 si una DLL no carga."""
 
-    def __init__(self, nombre: str) -> None:
+    def __init__(self, nombre: str, error: Exception | None = None) -> None:
         self._nombre = nombre
+        self._error = error
 
     def find_spec(self, nombre: str, *args: object) -> importlib.machinery.ModuleSpec | None:
         if nombre != self._nombre:
@@ -264,6 +267,8 @@ class _NoCarga(importlib.abc.MetaPathFinder, importlib.abc.Loader):
         return None
 
     def exec_module(self, module: types.ModuleType) -> None:
+        if self._error is not None:
+            raise self._error
         raise OSError("PortAudio library not found" if self._nombre == "sounddevice" else "DLL")
 
 
@@ -276,7 +281,9 @@ def test_si_una_biblioteca_nativa_no_carga_tampoco_se_cae(
     with pytest.raises(VoiceUnavailable) as fallo:
         load_listening_engines(tmp_path)
 
-    assert fallo.value.fixed_by_install
+    # Ronda 4 de Codex sobre la PR #687: la orden de instalar no reinstala lo que ya está,
+    # así que no se promete.
+    assert not fallo.value.fixed_by_install
     assert "PortAudio" in fallo.value.reason
 
 
@@ -291,7 +298,83 @@ def test_si_faster_whisper_no_carga_con_oserror_tambien_lo_dice(
     with pytest.raises(VoiceUnavailable) as fallo:
         load_listening_model(tmp_path)
 
+    assert not fallo.value.fixed_by_install
+    assert "faster_whisper no carga" in fallo.value.reason
+
+
+def test_una_dll_que_no_carga_no_promete_la_orden_de_instalar(
+    bibliotecas: _Bibliotecas, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # En Windows, un módulo compilado cuya DLL no carga falla con ImportError, como uno que
+    # no está; pero la orden de instalar no lo arregla, porque ya está instalado.
+    dll = ImportError("DLL load failed while importing _ext: No se encuentra el módulo")
+    monkeypatch.delitem(sys.modules, "faster_whisper")
+    monkeypatch.setattr(sys, "meta_path", [_NoCarga("faster_whisper", dll), *sys.meta_path])
+
+    with pytest.raises(VoiceUnavailable) as fallo:
+        load_listening_model(tmp_path)
+
+    assert not fallo.value.fixed_by_install
+    assert "DLL load failed" in fallo.value.reason
+
+
+def test_falle_como_falle_una_biblioteca_al_importarse_avisa_y_no_tumba_a_sirius(
+    bibliotecas: _Bibliotecas, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # numpy, por ejemplo, falla al importarse con RuntimeError si no pasa su comprobación.
+    roto = RuntimeError("The current Numpy installation fails to pass a sanity check")
+    monkeypatch.delitem(sys.modules, "numpy")
+    monkeypatch.setattr(sys, "meta_path", [_NoCarga("numpy", roto), *sys.meta_path])
+
+    with pytest.raises(VoiceUnavailable) as fallo:
+        load_listening_engines(tmp_path)
+
+    assert not fallo.value.fixed_by_install
+    assert "sanity check" in fallo.value.reason
+
+
+def test_si_pipecat_envuelve_el_modulo_que_falta_tambien_se_promete_la_orden(
+    bibliotecas: _Bibliotecas, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # Silero de Pipecat 1.12 hace `raise ImportError("Missing module(s): ...") from e` si
+    # falta onnxruntime: falta un módulo, y eso sí lo arregla la orden de instalar.
+    falta = ModuleNotFoundError("No module named 'onnxruntime'", name="onnxruntime")
+    envuelto = ImportError(f"Missing module(s): {falta}")
+    envuelto.__cause__ = falta
+    silero = "pipecat.audio.vad.silero"
+    monkeypatch.delitem(sys.modules, silero)
+    monkeypatch.setattr(sys.modules["pipecat.audio.vad"], "__path__", [], raising=False)
+    monkeypatch.setattr(sys, "meta_path", [_NoCarga(silero, envuelto), *sys.meta_path])
+
+    with pytest.raises(VoiceUnavailable) as fallo:
+        load_listening_engines(tmp_path)
+
     assert fallo.value.fixed_by_install
+    assert fallo.value.reason == "falta onnxruntime"
+
+
+def test_comprobar_las_bibliotecas_mira_las_del_micro_y_el_detector(
+    bibliotecas: _Bibliotecas, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    check_listening_libraries()
+    monkeypatch.delitem(sys.modules, "sounddevice")
+    monkeypatch.setattr(sys, "meta_path", [_NoCarga("sounddevice"), *sys.meta_path])
+
+    with pytest.raises(VoiceUnavailable) as fallo:
+        check_listening_libraries()
+
+    assert "PortAudio" in fallo.value.reason
+
+
+def test_comprobar_las_bibliotecas_mira_tambien_faster_whisper(
+    bibliotecas: _Bibliotecas, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delitem(sys.modules, "faster_whisper")
+    monkeypatch.setattr(sys, "meta_path", [_NoCarga("faster_whisper"), *sys.meta_path])
+
+    with pytest.raises(VoiceUnavailable) as fallo:
+        check_listening_libraries()
+
     assert "faster_whisper no carga" in fallo.value.reason
 
 
@@ -308,6 +391,25 @@ def test_ninguna_funcion_del_oido_importa_por_su_cuenta() -> None:
     ]
 
     assert sueltos == []
+
+
+class _InvalidProtobuf(Exception):
+    """Como los errores de onnxruntime, que heredan de Exception y de nada más concreto."""
+
+
+def test_si_silero_o_smart_turn_no_arrancan_no_se_promete_la_orden_de_instalar(
+    bibliotecas: _Bibliotecas, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    def no_arranca(*, sample_rate: int) -> None:
+        raise _InvalidProtobuf("no se pudo crear la sesión ONNX")
+
+    monkeypatch.setattr(sys.modules["pipecat.audio.vad.silero"], "SileroVADAnalyzer", no_arranca)
+
+    with pytest.raises(VoiceUnavailable) as fallo:
+        load_listening_engines(tmp_path)
+
+    assert not fallo.value.fixed_by_install
+    assert "sesión ONNX" in fallo.value.reason
 
 
 def test_el_modelo_se_carga_solo_de_su_carpeta_y_sin_bajar_nada(
@@ -342,6 +444,20 @@ def test_los_analizadores_oyen_a_16_khz_y_pipecat_solo_avisa_por_consola(
     assert [a.frecuencia for a in bibliotecas.analizadores] == [SAMPLE_RATE, SAMPLE_RATE]
     assert bibliotecas.loguru.llamadas == [("remove", None), ("add", "WARNING")]
     assert bibliotecas.sounddevice.flujos == [], "cargar no abre el micro"
+
+
+def test_un_tokenizer_roto_tampoco_tumba_a_sirius_y_lo_arregla_la_orden(
+    bibliotecas: _Bibliotecas, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # tokenizers falla con un Exception pelado si su fichero está roto.
+    roto = Exception("EOF while parsing a string at line 1 column 25")
+    monkeypatch.setattr(_Whisper, "falla_al_cargar", roto)
+
+    with pytest.raises(VoiceUnavailable) as fallo:
+        load_listening_engines(tmp_path)
+
+    assert fallo.value.fixed_by_install
+    assert "EOF while parsing" in fallo.value.reason
 
 
 def test_si_el_modelo_no_carga_lo_arregla_la_orden_de_instalar(
@@ -397,6 +513,67 @@ def test_al_cerrar_el_micro_se_tira_lo_que_nadie_leyo() -> None:
     assert micro.read() is None
 
 
+def test_un_trozo_que_portaudio_encola_tarde_no_llega_si_el_micro_ya_se_cerro() -> None:
+    # Ronda 4 de Codex sobre la PR #687: el hilo de PortAudio miraba la generación, se
+    # quedaba a medias en `bytes(data)` mientras se cerraba y reabría el micro, y luego
+    # encolaba su trozo viejo. Aquí `bytes` hace eso mismo, de forma determinista.
+    sounddevice = _SoundDevice()
+    micro = SoundDeviceMicrophone(sounddevice)
+    micro.open()
+    viejo = sounddevice.flujos[0].opciones["callback"]
+
+    class _QueSeQuedaAMedias:
+        def __bytes__(self) -> bytes:
+            micro.close()
+            micro.open()
+            return b"viejo"
+
+    viejo(_QueSeQuedaAMedias(), 1, None, None)
+    nuevo = sounddevice.flujos[1].opciones["callback"]
+    nuevo(memoryview(b"nuevo"), 1, None, None)
+
+    assert micro.read() == b"nuevo"
+    assert micro.read() is None
+
+
+class _MicroQueSeParaAlMirar(SoundDeviceMicrophone):
+    """Un micro cuyo hilo de PortAudio se queda parado justo después de mirar la generación:
+    mientras, ``al_mirar`` cierra y vuelve a abrir el micro desde el hilo de Sirius."""
+
+    al_mirar: Callable[[], None] | None = None
+
+    @property
+    def _generation(self) -> int:
+        valor = self._de_verdad
+        hacer, self.al_mirar = self.al_mirar, None
+        if hacer is not None:
+            hacer()
+        return valor
+
+    @_generation.setter
+    def _generation(self, valor: int) -> None:
+        self._de_verdad = valor
+
+
+def test_un_trozo_que_paso_la_comprobacion_lleva_la_generacion_de_su_flujo() -> None:
+    # La misma carrera, parada en el peor punto: después de comprobar y antes de encolar.
+    # El trozo va a la cola con la generación de su flujo, no con la que haya al encolarlo.
+    sounddevice = _SoundDevice()
+    micro = _MicroQueSeParaAlMirar(sounddevice)
+    micro.open()
+    viejo = sounddevice.flujos[0].opciones["callback"]
+
+    def cierra_y_abre() -> None:
+        micro.close()
+        micro.open()
+
+    micro.al_mirar = cierra_y_abre
+    viejo(memoryview(b"viejo"), 1, None, None)
+
+    assert len(sounddevice.flujos) == 2, "el micro se cerró y se abrió a mitad del trozo"
+    assert micro.read() is None
+
+
 def test_sin_micro_no_lo_arregla_la_orden_de_instalar_y_no_deja_nada_abierto() -> None:
     sounddevice = _SoundDevice(sin_micro=True)
     micro = SoundDeviceMicrophone(sounddevice)
@@ -421,6 +598,23 @@ def test_si_pararlo_falla_el_micro_se_cierra_igual_tira_lo_captado_y_no_falla() 
 
     assert flujo.cerrado
     assert micro.read() is None
+
+
+def test_un_micro_que_no_se_deja_cerrar_no_guarda_lo_que_sigue_captando() -> None:
+    # Si PortAudio no para, su hilo sigue mandando trozos y nadie lee la cola hasta volver
+    # a escuchar: no se guardan, o crecería en memoria con lo que ya no se escucha.
+    sounddevice = _SoundDevice()
+    micro = SoundDeviceMicrophone(sounddevice)
+    micro.open()
+    viejo = sounddevice.flujos[0]
+    viejo.falla_al_parar = True
+    viejo.falla_al_cerrar = True
+
+    micro.close()
+    for _ in range(100):
+        viejo.opciones["callback"](memoryview(b"\x01\x02"), 1, None, None)
+
+    assert micro._chunks.qsize() == 0
 
 
 def test_cerrado_el_micro_no_llega_audio_aunque_portaudio_lo_siga_mandando() -> None:
@@ -523,6 +717,27 @@ def test_reiniciar_es_tener_silero_y_smart_turn_nuevos_y_soltar_los_viejos() -> 
     assert detector.listen(b"b") is TurnSignal.VOICE
     assert nuevo_turno.inicios == [0.2], "empieza un turno nuevo, no sigue el viejo"
     assert nuevo_silero.trozos == [b"b"]
+
+
+def test_un_detector_que_no_arranca_no_deja_su_bucle_abierto(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    bucles: list[asyncio.AbstractEventLoop] = []
+    nuevo_bucle = asyncio.new_event_loop
+
+    def apunta() -> asyncio.AbstractEventLoop:
+        bucles.append(nuevo_bucle())
+        return bucles[-1]
+
+    def no_arranca() -> _Silero:
+        raise _InvalidProtobuf("silero_vad.onnx no es un modelo")
+
+    monkeypatch.setattr(asyncio, "new_event_loop", apunta)
+
+    with pytest.raises(_InvalidProtobuf):
+        PipecatTurnDetector(no_arranca, _SmartTurn)
+
+    assert [bucle.is_closed() for bucle in bucles] == [True]
 
 
 def test_si_no_se_pueden_cargar_los_nuevos_se_queda_con_los_que_tenia() -> None:

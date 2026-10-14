@@ -17,7 +17,11 @@ import shutil
 from collections.abc import Callable
 from pathlib import Path
 
-from sirius.adapters.audio.local_listening import load_listening_engines, load_listening_model
+from sirius.adapters.audio.local_listening import (
+    check_listening_libraries,
+    load_listening_engines,
+    load_listening_model,
+)
 from sirius.config.local_voice import LocalVoiceSettings
 from sirius.infrastructure.local_voice_installation import (
     listening_model_complete,
@@ -71,6 +75,13 @@ def main() -> int:
     settings = LocalVoiceSettings()
     folder = listening_model_dir(settings)
     model = settings.listening_model.value
+    try:
+        check_listening_libraries()
+    except VoiceUnavailable as error:
+        # Si una biblioteca falla, bajar el modelo otra vez no lo arregla (ronda 4 de
+        # Codex sobre la PR #687): se dice y se para.
+        print(f"[FALLA] Una biblioteca de la voz no está bien: {error.reason}")
+        return 1
     problem = _model_problem(folder)
     if not problem:
         print(f"[OK]    El modelo de oír (faster-whisper {model}) ya está en {folder}")
@@ -92,6 +103,9 @@ def main() -> int:
         load_listening_engines(folder)
     except VoiceUnavailable as error:
         print(f"[FALLA] El oído no carga: {error.reason}")
+        if not error.fixed_by_install:
+            # Que no se repita en balde: esto no lo arregla esta orden.
+            print("        Volver a ejecutar esta orden no lo arreglará.")
         return 1
     print("[OK]    Listo. Para probarlo: uv run --extra voz sirius-oye")
     return 0

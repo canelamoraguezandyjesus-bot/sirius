@@ -168,12 +168,12 @@ Medido el 14-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   la C (`tests/acceptance/test_dobles_del_conductor.py`). La tabla de
   `docs/evolution/PRUEBAS_0.3_DEL_ROBOT.md` pone PA-R03-01 en verde; PA-R03-08 sigue
   pendiente de la C.
-- **62 pruebas unitarias nuevas**: el servicio (`tests/unit/test_local_listening.py`), los
+- **75 pruebas unitarias nuevas**: el servicio (`tests/unit/test_local_listening.py`), los
   adaptadores de verdad con módulos de mentira (`tests/unit/test_local_listening_adapters.py`),
   la instalación y la orden de instalar (`tests/unit/test_local_voice_installation.py`), la
   orden de consola (`tests/unit/test_listen_console.py`) y la guarda de las descargas
   (`tests/unit/test_solo_la_orden_de_instalar_baja_modelos.py`).
-- **Mutación: 38 de 38 caen.** Quitar lo que suena antes de la voz, no mirar la
+- **Mutación: 56 de 56 caen.** Quitar lo que suena antes de la voz, no mirar la
   instalación, escribir lo oído en el diario, mandar un turno vacío, no vaciar el turno,
   leer el micro parado, empezar un turno o transcribir con un fin de turno sin voz
   delante, decir que no es para él, dar por local cualquier ajuste, no pedir
@@ -193,6 +193,19 @@ Medido el 14-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   que acepta trozos de cualquier apertura o que no cambia de apertura al cerrar, cerrar el
   micro o soltar un analizador propagando el fallo, parar sin apuntar el detector sin
   reiniciar, volver sin reintentarlo, y soltar las piezas si el micro falla al cerrar.
+  Y las dieciocho de la ronda 4: leer sin mirar la generación del trozo, etiquetarlo con
+  la generación del momento y no con la de su flujo, encolar lo de un micro ya cerrado,
+  importar atrapando solo `ImportError` y `OSError`, prometer la orden por cualquier
+  `ImportError`, no mirar la causa del error o mirar solo las causas, nombrar el módulo
+  importado en vez del que falta, prometer la orden con una biblioteca que está pero no
+  carga, atrapar solo tres tipos de error al arrancar Silero y Smart Turn o prometer ahí
+  la orden, atrapar solo tres tipos al cargar el modelo, comprobar las bibliotecas sin
+  faster-whisper o sin las demás, que la orden no las mire antes que el modelo, que no
+  diga que repetirla no lo arregla o que lo diga cuando sí lo arregla, y dejar abierto el
+  bucle de eventos de un detector que no arranca. La de etiquetar con la generación del
+  momento sobrevivió a la prueba que reproduce el caso de Codex, que para el hilo dentro
+  de `bytes(data)`, donde las dos coinciden; cayó con otra que lo para justo después de
+  comprobar.
 - **Las bibliotecas de verdad**, en un entorno aparte con el extra (`uv sync --frozen
   --extra voz`, Linux y Python 3.14.6, sin micro): Silero y Smart Turn cargan en 0,26 s y
   tardan 0,91 ms por trozo de 32 ms. Con la voz grabada que trae Pipecat
@@ -201,7 +214,12 @@ Medido el 14-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   1,09 s; con un tono de 220 Hz no da voz. Sin modelo, el oído no carga y lo dice, sin
   intentar ninguna conexión: con la carpeta que no existe, faster-whisper rechaza el
   nombre (`HFValidationError`); con ficheros que no son un modelo, CTranslate2 no los lee
-  (`RuntimeError`).
+  (`RuntimeError`). Con un modelo roto, el Silero de verdad falla con `InvalidProtobuf`
+  de onnxruntime, y tokenizers, con un `tokenizer.json` cortado, con un `Exception`
+  pelado: los dos heredan directamente de `Exception`, no de `RuntimeError`, y con el
+  cargador de antes de la ronda 4 habrían tumbado a Sirius. La orden de instalar, con las
+  bibliotecas de verdad y sin PortAudio, dice «sounddevice no carga (PortAudio library
+  not found)», sale con error y no intenta bajar nada.
 - **Lo que no se ha podido probar aquí:** que faster-whisper transcriba. La política de
   red del contenedor no deja llegar a huggingface.co (403), así que no hay modelo que
   cargar. Lo hace E-R03-01 en su ordenador.
@@ -235,14 +253,17 @@ Medido el 14-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
 - sin esto se repetiría: un adaptador que carga una biblioteca con código nativo solo
   atrapa `ImportError`, porque así fallan los módulos de mentira de sus pruebas, y se cae
   cuando la biblioteca de verdad no encuentra lo suyo y falla con `OSError`; a Piper, en la
-  pieza C, le puede pasar lo mismo. En esta misma PR mordió tres veces: el detector de
+  pieza C, le puede pasar lo mismo. En esta misma PR mordió cuatro veces: el detector de
   mentira de las pruebas no guardaba el turno entre trozos, Silero y Smart Turn sí
-  (ronda 1 de Codex); y el import con `OSError` volvió en la ronda 3, porque el arreglo
+  (ronda 1 de Codex); el import con `OSError` volvió en la ronda 3, porque el arreglo
   de la ronda 2 movió el import de faster-whisper a una función nueva que solo atrapaba
-  `ImportError`. La raíz es la misma: un doble que no tiene el estado ni los fallos de la
-  herramienta. Lo cierra que todos los imports del oído pasen por `_import`, que traduce
-  los dos errores, y una prueba que falla si una función del módulo importa por su
-  cuenta.
+  `ImportError`; y en la ronda 4 los dobles de Silero y del modelo de oír fallaban con
+  `RuntimeError`, mientras onnxruntime y tokenizers fallan con excepciones que heredan
+  directamente de `Exception`. La raíz es la misma: un doble que no tiene el estado ni
+  los fallos de la herramienta. Lo cierra que los tres sitios donde el oído carga algo de
+  fuera atrapen cualquier `Exception`, que todos los imports pasen por `_import`, con una
+  prueba que falla si una función del módulo importa por su cuenta, y que los dobles
+  fallen con los tipos medidos en las bibliotecas de verdad.
 - lo hace cumplir: `tests/unit/test_local_listening_adapters.py`
 
 ## Revisión externa
@@ -314,3 +335,41 @@ que se dejó de parchear y se cerró por construcción:
 Las nueve mutaciones de la raíz caen. Con las bibliotecas de verdad, el reinicio sigue
 dando solo silencio y un hilo vivo, y sin PortAudio o sin modelo el oído lo dice sin
 caerse.
+
+**Ronda 4** (`4b1b1b85`, 14-10-2026): dos hallazgos P2, ciertos los dos, y los dos sobre
+la raíz de la ronda 3.
+
+- **Una carrera en el micro.** El hilo de PortAudio miraba la generación y después
+  encolaba; si entre medias se cerraba y se volvía a abrir el micro, el trozo viejo
+  entraba con la apertura nueva. Codex lo reprodujo parando el hilo en `bytes(data)`.
+- **El aviso prometía un remedio que no remedia.** Con una biblioteca que está pero no
+  carga (`OSError`), Sirius decía que se ejecutara la orden de instalar, y la orden no
+  la repara; con faster-whisper, además, volvía a bajar el modelo.
+
+**La regla de las dos rondas vuelve a saltar, por las dos familias**, y se para a buscar
+la raíz de cada una antes de arreglar nada:
+
+- **La carrera** es de la familia de las rondas 2 y 3, y nace del agujero de su propia
+  raíz: la comprobación vivía en el hilo que no manda. Ahora cada trozo va a la cola con
+  la generación de su flujo, y quien la compara es `read`, en el hilo de Sirius, que es
+  el único que cambia de generación: no hay comprobación que se adelante a un cierre. Lo
+  que mira el hilo de PortAudio queda solo para que un micro que no se deja cerrar no
+  llene la memoria. La prueba que lo pide para el hilo en el peor punto, justo después
+  de comprobar, además del de Codex.
+- **El remedio que no remedia** es la segunda vez, tras la ronda 2. Se buscaron los
+  demás sitios con la misma suposición, que se sabe con qué falla una biblioteca y qué
+  significa, y salieron tres que el revisor no había visto: en Windows, una DLL que no
+  carga da `ImportError`, igual que un módulo que no está, y la orden tampoco lo
+  arregla; Silero y Smart Turn, con un modelo roto, fallan con excepciones de
+  onnxruntime, y el modelo de oír, con un `tokenizer.json` roto, con una de tokenizers,
+  que no heredan de `RuntimeError` y habrían tumbado a Sirius. La raíz: cargar algo de
+  fuera no tumba a Sirius, falle como falle, y la orden de instalar solo se promete donde
+  arregla, si falta un módulo (`ModuleNotFoundError`, suelto o como causa, que es como lo
+  envuelve Pipecat) o si el modelo de oír no carga, que la orden vuelve a bajar. La orden
+  mira las bibliotecas antes que el modelo y, si lo que falla no lo arregla ella, dice
+  que repetirla no servirá.
+
+Se sigue con lo construido: cada familia queda cerrada por construcción y no caso a caso,
+y las dieciocho mutaciones de la ronda caen. Con las bibliotecas de verdad, el detector
+da lo mismo que antes (voz a los 0,90 s, turno acabado a los 1,09 s, solo silencio tras
+parar a media frase y reiniciar, un hilo tras cinco reinicios).
