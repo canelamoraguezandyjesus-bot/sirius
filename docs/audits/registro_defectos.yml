@@ -1499,3 +1499,19 @@ defectos:
       - tests/acceptance/conductor_robot_0_3.py
       - tests/acceptance/test_dobles_del_conductor.py
       - tests/acceptance/test_vigilante_del_conductor.py
+
+  # ADR-242: el cargador del oido del robot solo atrapaba ImportError, que es como fallan
+  # los modulos de mentira de sus pruebas. Con las bibliotecas de verdad, sounddevice sin
+  # PortAudio falla al importarse con OSError, y Sirius se habria caido en vez de decir
+  # que falta. Lo encontro la prueba de humo antes de empujar.
+  - id: H-242
+    titulo: El oido del robot se caia si una biblioteca con codigo nativo fallaba al importarse con OSError, porque sus pruebas solo sabian fallar con ImportError
+    bloque: producto
+    gravedad: media-baja
+    estado: cerrado
+    cerrado_por: f53fdd719c94b0658da8d5a693edefffba71056f
+    pr: 687
+    adr: 242
+    ficheros:
+      - src/sirius/adapters/audio/local_listening.py
+      - tests/unit/test_local_listening_adapters.py
