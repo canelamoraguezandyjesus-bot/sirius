@@ -19,10 +19,12 @@ transcribe y le pasa el texto a la misma charla que la ventana
   se aconseja. Adivinar si la arreglaría salió mal en seis rondas de Codex sobre la PR
   #687 (2, 4, 5, 6, 7 y 8).
 - **Lo oído solo va a una charla de este ordenador.** Si el modelo de la charla es de
-  fuera (OpenAI, que Configuración sigue ofreciendo), no oye; y como la charla puede
-  cambiar de modelo mientras escucha, lo vuelve a mirar al cerrar cada turno, antes de
-  transcribirlo: si ya no se queda aquí, el turno no sale y deja de escuchar (PA-R03-08,
-  ronda 9 de Codex sobre la PR #687).
+  fuera (OpenAI, que Configuración sigue ofreciendo), no oye. Como la charla puede
+  cambiar de modelo en marcha, cada turno se entrega pidiendo que no salga: la charla
+  comprueba el mismo modelo con el que envía, leído una sola vez, y si es de fuera no
+  guarda ni envía nada. Entonces el turno no sale, deja de escuchar y lo dice. Mirarlo
+  también al cerrar el turno solo ahorra transcribirlo en balde (PA-R03-08, rondas 9 y
+  10 de Codex sobre la PR #687).
 - **En la pieza B todo lo oído es para él**; a quién le hablan lo decide la pieza D.
 """
 
@@ -33,7 +35,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
 
-from sirius.application.send_message import SendMessageResult
+from sirius.application.send_message import ChatLeavesThisComputer, SendMessageResult
 from sirius.domain.conversation import MessageStatus
 from sirius.infrastructure.logging import get_logger
 from sirius.ports.llm import runs_on_this_computer
@@ -65,7 +67,13 @@ class Chat(Protocol):
         """El modelo con el que conversa ahora, que puede cambiar en marcha."""
         ...
 
-    def send_message(self, user_text: str) -> SendMessageResult: ...
+    def send_message(
+        self, user_text: str, *, only_on_this_computer: bool = False
+    ) -> SendMessageResult:
+        """Lo entrega a la charla; con ``only_on_this_computer``, solo si el modelo con el
+        que lo envía, el mismo que comprueba, es de este ordenador, y si no,
+        ``ChatLeavesThisComputer`` sin guardar ni enviar nada."""
+        ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -217,18 +225,21 @@ class LocalListening[Chunk]:
             return None
         chunks, self._turn = self._turn, None
         if not runs_on_this_computer(self._chat.llm_provider):
-            # La charla cambió a un modelo de fuera mientras escuchaba: el turno no sale.
+            # La charla ya se fue a un modelo de fuera: ni se transcribe.
             del chunks
-            _logger.warning("La charla va a un modelo de fuera: el turno de voz no sale")
-            self._fail(CHAT_LEAVES)
-            self.stop()
+            self._chat_left()
             return None
         heard = self._engines.transcriber.transcribe(chunks).strip()
         del chunks
         if not heard:
             _logger.info("Turno de voz sin palabras: no va a la charla")
             return None
-        result = self._chat.send_message(heard)
+        try:
+            result = self._chat.send_message(heard, only_on_this_computer=True)
+        except ChatLeavesThisComputer:
+            # Se fue mientras se transcribía: la charla no ha guardado ni enviado nada.
+            self._chat_left()
+            return None
         _logger.info("Turno de voz entregado a la charla")
         return HeardTurn(
             heard=heard,
@@ -236,6 +247,12 @@ class LocalListening[Chunk]:
             reply=result.sirius_message.content or "",
             answered=result.outcome is MessageStatus.COMPLETED,
         )
+
+    def _chat_left(self) -> None:
+        """La charla va a un modelo de fuera: el turno no sale, deja de oír y lo dice."""
+        _logger.warning("La charla va a un modelo de fuera: el turno de voz no sale")
+        self._fail(CHAT_LEAVES)
+        self.stop()
 
     def _fail(self, problem: str, *, install: bool = False) -> str:
         """Apunta el aviso; con ``install``, con la orden de instalar y lo que hace."""

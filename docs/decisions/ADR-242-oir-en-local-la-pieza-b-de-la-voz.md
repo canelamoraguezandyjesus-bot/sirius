@@ -170,11 +170,14 @@ Medido el 14-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   la C (`tests/acceptance/test_dobles_del_conductor.py`). La tabla de
   `docs/evolution/PRUEBAS_0.3_DEL_ROBOT.md` pone PA-R03-01 en verde; PA-R03-08 sigue
   pendiente de la C.
-- **87 pruebas unitarias nuevas**: el servicio (`tests/unit/test_local_listening.py`), los
+- **88 pruebas unitarias nuevas**: el servicio (`tests/unit/test_local_listening.py`), los
   adaptadores de verdad con módulos de mentira (`tests/unit/test_local_listening_adapters.py`),
   la instalación y la orden de instalar (`tests/unit/test_local_voice_installation.py`), la
   orden de consola (`tests/unit/test_listen_console.py`) y la guarda de las descargas
-  (`tests/unit/test_solo_la_orden_de_instalar_baja_modelos.py`).
+  (`tests/unit/test_solo_la_orden_de_instalar_baja_modelos.py`). Y tres de integración en
+  `tests/integration/test_send_message.py`: pedida la charla solo en este ordenador, no
+  guarda ni envía nada a un modelo de fuera, envía con el modelo que comprobó aunque cambie
+  mientras prepara el turno, y con uno de aquí envía.
 - **Mutación: todas caen en su ronda.** Quitar lo que suena antes de la voz, no mirar la
   instalación, escribir lo oído en el diario, mandar un turno vacío, no vaciar el turno,
   leer el micro parado, empezar un turno o transcribir con un fin de turno sin voz
@@ -232,7 +235,14 @@ Medido el 14-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   a mandar cerrar Sirius y repetir o a decir que repetirla no lo arreglará. Al cerrar la
   ronda 9 se han vuelto a pasar las 35 de las rondas 4 a 9 que siguen vigilando algo, y
   caen todas; la de la ronda 8 que pedía decir que repetirla no lo arregla se retira con
-  lo que vigilaba. La de etiquetar con la generación del
+  lo que vigilaba. Y las seis de la ronda 10: que la charla no compruebe el modelo, que
+  envíe con el de ese momento y no con el que comprobó, que la voz no pida que el turno
+  no salga, que no atrape que la charla se fue, y que entonces siga oyendo o no diga por
+  qué. Al cerrar la ronda 10 se han vuelto a pasar las 41 de las rondas 4 a 10, y caen
+  todas. Antes, una sobrevivió sin deber: el corredor de mutaciones de la sesión
+  reutilizaba el código compilado de la anterior cuando las dos dejaban el fichero del
+  mismo tamaño en el mismo segundo. Se arregló, sin guardar código compilado y con una
+  fecha distinta en cada escritura, y las 41 se repitieron con el arreglo. La de etiquetar con la generación del
   momento sobrevivió a la prueba que reproduce el caso de Codex, que para el hilo dentro
   de `bytes(data)`, donde las dos coinciden; cayó con otra que lo para justo después de
   comprobar.
@@ -534,3 +544,25 @@ huggingface.co da 403).
   remedios, y una prueba mira que ninguna de sus salidas de fallo los adivine. Lo único
   que sigue diciendo de lo que hace es lo cierto por construcción: cómo escribirla si se
   ejecutó sin el extra, porque así uv instala lo que falta.
+
+**Ronda 10** (`d92151e7`, 14-10-2026): un hallazgo P1, cierto.
+
+- **P1: el modelo podía cambiar entre la comprobación y el envío.** La comprobación de la
+  ronda 9 miraba el modelo de la charla antes de transcribir, y la charla lo vuelve a
+  leer al enviar. Si Configuración lo cambiaba mientras faster-whisper transcribe, que
+  tarda, lo oído salía con el modelo nuevo; Codex lo reprodujo con «mi secreto» y un
+  proveedor de fuera.
+
+**La regla de las dos rondas** (9 y 10, la misma familia: lo oído puede salir del
+ordenador). La raíz es el sitio de la comprobación: el oído no puede ver con qué modelo
+se envía, porque ese modelo lo lee la charla al enviar. Se pone donde sí se ve:
+`send_message(..., only_on_this_computer=True)` lee el modelo una sola vez, comprueba ese
+y envía con ese; si es de fuera, no guarda ni envía nada y levanta
+`ChatLeavesThisComputer`. El oído entrega así cada turno, y si la charla se fue, el turno
+no sale, deja de escuchar y lo dice. Mirar antes de transcribir se queda solo para no
+transcribir en balde. Lo demás que toca el turno después de esa lectura no cambia de
+modelo: la respuesta, la frase de una orden de memoria y el resumen usan el mismo, las
+huellas de la búsqueda van a Ollama en `localhost` y el juez usa el modelo local elegido.
+Una prueba de integración cambia el modelo por uno de fuera mientras se prepara el turno,
+ya comprobado, y el de fuera no recibe nada. Lo que queda fuera es lo de la ronda 9: la
+charla, si después él elige OpenAI para escribir.

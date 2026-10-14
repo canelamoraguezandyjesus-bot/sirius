@@ -9,7 +9,7 @@ si se para a medias, y que el diario no se quede con nada de lo oído.
 from __future__ import annotations
 
 import logging
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from types import SimpleNamespace
 from typing import cast
 
@@ -25,7 +25,7 @@ from sirius.application.local_listening import (
     HeardTurn,
     LocalListening,
 )
-from sirius.application.send_message import SendMessageResult
+from sirius.application.send_message import ChatLeavesThisComputer, SendMessageResult
 from sirius.domain.conversation import MessageStatus
 from sirius.ports.llm import runs_on_this_computer
 from sirius.ports.local_voice import ListeningEngines, TurnSignal, VoiceUnavailable
@@ -106,9 +106,13 @@ class _Transcriptor:
     def __init__(self) -> None:
         self.turnos: list[list[str]] = []
         self.devuelve: str | None = None
+        #: Lo que pasa mientras transcribe, que tarda: por ejemplo, que cambie la charla.
+        self.al_transcribir: Callable[[], None] | None = None
 
     def transcribe(self, chunks: Sequence[str]) -> str:
         self.turnos.append(list(chunks))
+        if self.al_transcribir is not None:
+            self.al_transcribir()
         if self.devuelve is not None:
             return self.devuelve
         return " ".join(c.removeprefix("voz:") for c in chunks if c.startswith("voz:"))
@@ -122,7 +126,12 @@ class _Charla:
         self.falla: Exception | None = None
         self.desenlace = MessageStatus.COMPLETED
 
-    def send_message(self, user_text: str) -> SendMessageResult:
+    def send_message(
+        self, user_text: str, *, only_on_this_computer: bool = False
+    ) -> SendMessageResult:
+        # Como la de verdad: comprueba el mismo modelo con el que enviaría.
+        if only_on_this_computer and not runs_on_this_computer(self.llm_provider):
+            raise ChatLeavesThisComputer("de fuera")
         self.mensajes.append(user_text)
         if self.falla is not None:
             falla, self.falla = self.falla, None
@@ -325,6 +334,25 @@ def test_si_la_charla_se_va_a_un_modelo_de_fuera_mientras_oye_el_turno_no_sale()
     assert atendido == Attended(notice=CHAT_LEAVES)
     assert oido.charla.mensajes == []
     assert oido.transcriptor.turnos == [], "ni se transcribe"
+    assert not oido.servicio.listening
+    assert not oido.micro.abierto
+
+
+def test_si_la_charla_se_va_fuera_mientras_transcribe_el_turno_no_sale() -> None:
+    # Ronda 10 de Codex sobre la PR #687: la comprobación de antes de transcribir ya había
+    # pasado, y la charla cambió de modelo mientras faster-whisper transcribía.
+    oido = _Oido()
+    assert oido.servicio.start() == ""
+
+    def se_va_fuera() -> None:
+        oido.charla.llm_provider = SimpleNamespace()
+
+    oido.transcriptor.al_transcribir = se_va_fuera
+
+    atendido = oido.suena(voz("Mi clave es 1234"), FIN)
+
+    assert atendido == Attended(notice=CHAT_LEAVES)
+    assert oido.charla.mensajes == []
     assert not oido.servicio.listening
     assert not oido.micro.abierto
 
