@@ -173,13 +173,13 @@ Medido el 14-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   la instalación y la orden de instalar (`tests/unit/test_local_voice_installation.py`), la
   orden de consola (`tests/unit/test_listen_console.py`) y la guarda de las descargas
   (`tests/unit/test_solo_la_orden_de_instalar_baja_modelos.py`).
-- **Mutación: 15 de 15 caen.** Quitar lo que suena antes de la voz, no mirar la
+- **Mutación: 16 de 16 caen.** Quitar lo que suena antes de la voz, no mirar la
   instalación, escribir lo oído en el diario, mandar un turno vacío, no vaciar el turno,
   leer el micro parado, decir que no es para él, dar por local cualquier ajuste, no pedir
   `tokenizer.json`, cargar sin `local_files_only`, dejar que Smart Turn guarde audio,
   nombrar una descarga en el oído, que Smart Turn no decida, que el silencio largo no
-  acabe el turno y poner en su sitio un modelo a medias: cada una la tumba al menos una
-  prueba. La de `tokenizer.json` solo cayó cuando la prueba dejó de copiar la lista de
+  acabe el turno, poner en su sitio un modelo a medias y dejar en el disco una descarga
+  cortada: cada una la tumba al menos una prueba. La de `tokenizer.json` solo cayó cuando la prueba dejó de copiar la lista de
   ficheros de Sirius y escribió la suya.
 - **Las bibliotecas de verdad**, en un entorno aparte con el extra (`uv sync --frozen
   --extra voz`, Linux y Python 3.14.6, sin micro): Silero y Smart Turn cargan en 0,26 s y

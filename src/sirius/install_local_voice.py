@@ -41,7 +41,12 @@ def download_listening_model(
     partial = folder.with_name(f"{folder.name}.a-medias")
     shutil.rmtree(partial, ignore_errors=True)
     partial.parent.mkdir(parents=True, exist_ok=True)
-    fetch(settings.listening_model.value, output_dir=str(partial))
+    try:
+        fetch(settings.listening_model.value, output_dir=str(partial))
+    except BaseException:
+        # Una descarga cortada no deja cientos de megas a medias en su disco.
+        shutil.rmtree(partial, ignore_errors=True)
+        raise
     if not listening_model_complete(partial):
         shutil.rmtree(partial, ignore_errors=True)
         msg = "la descarga no trajo todos los ficheros del modelo"

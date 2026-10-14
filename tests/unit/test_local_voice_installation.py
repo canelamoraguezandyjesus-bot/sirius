@@ -112,6 +112,7 @@ def test_una_descarga_cortada_deja_el_modelo_que_ya_habia(tmp_path: Path) -> Non
         download_listening_model(LocalVoiceSettings(), carpeta, se_corta)
 
     assert listening_model_complete(carpeta)
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["faster-whisper-small"]
 
 
 def test_con_el_modelo_ya_instalado_no_baja_nada_y_comprueba_que_carga(
