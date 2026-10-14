@@ -106,27 +106,28 @@ class LocalListening[Chunk]:
         missing = self._installation.missing()
         if missing:
             _logger.info("El oído no arranca: falta %s", ", ".join(missing))
-            return self._fail(f"Para oírte me falta {_list(missing)} en este ordenador.", True)
+            problem = f"Para oírte me falta instalar {_list(missing)} en este ordenador."
+            return self._fail(problem, install=True)
         try:
             if self._engines is None:
                 self._engines = self._load_engines()
                 self._detector_stale = False
         except VoiceUnavailable as error:
             _logger.info("El oído no arranca: %s", error.reason)
-            return self._fail(f"No puedo oírte: {error.reason}.", error.fixed_by_install)
+            return self._fail(f"No puedo oírte: {error.reason}.")
         if self._detector_stale:
             try:
                 self._engines.detector.reset()
             except Exception as error:
                 _logger.warning("El detector de voz sigue sin reiniciarse: %s", error)
                 problem = f"No puedo oírte: el detector de voz no se ha podido reiniciar ({error})."
-                return self._fail(problem, False)
+                return self._fail(problem)
             self._detector_stale = False
         try:
             self._engines.microphone.open()
         except VoiceUnavailable as error:
             _logger.info("El oído no arranca: %s", error.reason)
-            return self._fail(f"No puedo oírte: {error.reason}.", error.fixed_by_install)
+            return self._fail(f"No puedo oírte: {error.reason}.")
         self._listening = True
         self._notice = ""
         return ""
@@ -205,9 +206,10 @@ class LocalListening[Chunk]:
             answered=result.outcome is MessageStatus.COMPLETED,
         )
 
-    def _fail(self, problem: str, fixed_by_install: bool) -> str:
+    def _fail(self, problem: str, *, install: bool = False) -> str:
+        """Apunta el aviso; con ``install``, que solo es por lo que falta, con la orden."""
         notice = problem
-        if fixed_by_install:
+        if install:
             notice += (
                 " Para instalarlo, ejecuta en PowerShell, dentro de la carpeta de Sirius: "
                 f"{self._installation.install_command}"

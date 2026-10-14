@@ -27,20 +27,17 @@ class TurnSignal(Enum):
 
 
 class VoiceUnavailable(RuntimeError):
-    """El oído no puede arrancar en este ordenador.
+    """El oído no puede arrancar en este ordenador: algo que está no carga o no se abre.
 
-    ``fixed_by_install`` dice si lo arregla la orden de instalar la voz, y solo lo
-    arregla seguro lo que no está: una distribución del extra sin instalar o un fichero
-    del modelo que falta, que es lo que la orden pone. Lo que está pero no carga (una
-    biblioteca, aunque le falte un módulo; el modelo de oír; Silero o Smart Turn) y el
-    micrófono que no se abre no lo arregla, y no se promete (rondas 2, 4, 5 y 6 de Codex
-    sobre la PR #687).
+    No dice si lo arregla la orden de instalar, y a propósito. La orden solo pone lo que
+    no está, y eso lo dice ``VoiceInstallation.missing`` antes de cargar nada; adivinarlo
+    desde el fallo salió mal cinco veces (rondas 2, 4, 5, 6 y 7 de Codex sobre la PR
+    #687), así que un fallo al cargar ya no puede prometer la orden.
     """
 
-    def __init__(self, reason: str, *, fixed_by_install: bool) -> None:
+    def __init__(self, reason: str) -> None:
         super().__init__(reason)
         self.reason = reason
-        self.fixed_by_install = fixed_by_install
 
 
 class Microphone[Chunk](Protocol):
@@ -104,5 +101,8 @@ class VoiceInstallation(Protocol):
         ...
 
     def missing(self) -> tuple[str, ...]:
-        """Lo que falta para oír, dicho para el propietario; vacío si no falta nada."""
+        """Lo que no está instalado para oír, dicho para el propietario; vacío si está todo.
+
+        Es lo único que la orden de instalar pone, y lo único por lo que se promete.
+        """
         ...

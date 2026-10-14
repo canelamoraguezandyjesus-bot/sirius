@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import asyncio
 import importlib
-import importlib.metadata
 import os
 import queue
 import sys
@@ -49,50 +48,16 @@ _SPEAKING = frozenset({"SPEAKING", "STOPPING"})
 
 
 def _import(module: str) -> Any:
-    """Una biblioteca del extra ``voz``; si no está o no carga, ``VoiceUnavailable``.
+    """Una biblioteca del extra ``voz``; si no carga, falle como falle, ``VoiceUnavailable``.
 
-    La orden de instalar solo arregla que falte una distribución: ``uv run --extra voz``
-    añade las del extra que no están instaladas, y no repara una instalada a la que le
-    falte un módulo, que sería ``--reinstall``. Así que se promete solo si falta un módulo
-    (``ModuleNotFoundError``, suelto o como causa: Pipecat lo envuelve en un
-    ``ImportError``) y ninguna distribución instalada trae su paquete, mirado en los mismos
-    metadatos que mira uv. Todo lo demás es que está pero no carga: en Windows, una DLL
-    que no carga da ``ImportError`` u ``OSError``. Entonces se dice qué pasa y no se
-    aconseja la orden (rondas 4, 5 y 6 de Codex sobre la PR #687).
+    Solo dice qué pasa. Si la orden de instalar lo arreglaría no se adivina desde aquí:
+    lo dice lo que falta en el ordenador, que se mira antes de cargar nada
+    (``VoiceInstallation.missing``, ronda 7 de Codex sobre la PR #687).
     """
     try:
         return importlib.import_module(module)
     except Exception as error:
-        missing = _missing_module(error)
-        name = module if missing is None else missing.name or module
-        if missing is not None and not _installed(name):
-            raise VoiceUnavailable(f"falta {name}", fixed_by_install=True) from error
-        raise VoiceUnavailable(f"{module} no carga ({error})", fixed_by_install=False) from error
-
-
-def _installed(module: str) -> bool:
-    """Si alguna distribución instalada trae el paquete de ``module``, según sus metadatos.
-
-    Si no se pueden leer, cuenta como instalada: es no prometer nada.
-    """
-    try:
-        distributions = importlib.metadata.packages_distributions()
-    except Exception as error:
-        _logger.warning("No se han podido leer las distribuciones instaladas: %s", error)
-        return True
-    return bool(distributions.get(module.partition(".")[0]))
-
-
-def _missing_module(error: BaseException) -> ModuleNotFoundError | None:
-    """El ``ModuleNotFoundError`` que es ``error`` o del que viene (``raise ... from``)."""
-    seen: set[int] = set()
-    cause: BaseException | None = error
-    while cause is not None and id(cause) not in seen:
-        if isinstance(cause, ModuleNotFoundError):
-            return cause
-        seen.add(id(cause))
-        cause = cause.__cause__
-    return None
+        raise VoiceUnavailable(f"{module} no carga ({error})") from error
 
 
 def check_listening_libraries() -> None:
@@ -136,7 +101,7 @@ def load_listening_engines(model_dir: Path) -> ListeningEngines[bytes]:
         )
     except Exception as error:
         msg = f"Silero o Smart Turn no arrancan ({error})"
-        raise VoiceUnavailable(msg, fixed_by_install=False) from error
+        raise VoiceUnavailable(msg) from error
     return ListeningEngines(
         microphone=SoundDeviceMicrophone(sounddevice),
         detector=detector,
@@ -162,7 +127,7 @@ def load_listening_model(model_dir: Path) -> Any:
         )
     except Exception as error:
         msg = f"el modelo de oír no carga ({error})"
-        raise VoiceUnavailable(msg, fixed_by_install=False) from error
+        raise VoiceUnavailable(msg) from error
 
 
 def _quietly(what: str, step: Callable[[], object]) -> None:
@@ -247,7 +212,7 @@ class SoundDeviceMicrophone:
 
 
 def _no_microphone(error: Exception) -> VoiceUnavailable:
-    return VoiceUnavailable(f"no puedo abrir el micrófono ({error})", fixed_by_install=False)
+    return VoiceUnavailable(f"no puedo abrir el micrófono ({error})")
 
 
 class PipecatTurnDetector:

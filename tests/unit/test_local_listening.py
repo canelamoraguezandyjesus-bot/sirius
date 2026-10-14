@@ -255,25 +255,26 @@ def test_si_faltan_varias_cosas_las_dice_todas() -> None:
     oido = _Oido()
     oido.instalacion.faltan = ("el modelo de oír", "la voz", "el detector")
 
-    assert "me falta el modelo de oír, la voz y el detector en este ordenador" in (
+    assert "me falta instalar el modelo de oír, la voz y el detector en este ordenador" in (
         oido.servicio.start()
     )
 
 
-def test_si_el_oido_no_carga_avisa_con_la_orden() -> None:
+def test_si_el_oido_no_carga_avisa_sin_prometer_la_orden() -> None:
+    # Ronda 7 de Codex sobre la PR #687: la orden solo se promete por lo que falta, que se
+    # mira antes de cargar; si lo que está no carga, la orden no lo arregla.
     oido = _Oido()
-    oido.falla_al_cargar = VoiceUnavailable("falta pipecat", fixed_by_install=True)
+    oido.falla_al_cargar = VoiceUnavailable("pipecat.audio.vad.silero no carga (DLL)")
 
     aviso = oido.servicio.start()
 
-    assert "No puedo oírte: falta pipecat." in aviso
-    assert "la orden de instalar" in aviso
+    assert aviso == "No puedo oírte: pipecat.audio.vad.silero no carga (DLL)."
     assert not oido.servicio.listening
 
 
 def test_sin_microfono_avisa_sin_la_orden_que_no_lo_arregla() -> None:
     oido = _Oido()
-    oido.micro.falla_al_abrir = VoiceUnavailable("no hay micrófono", fixed_by_install=False)
+    oido.micro.falla_al_abrir = VoiceUnavailable("no hay micrófono")
 
     aviso = oido.servicio.start()
 

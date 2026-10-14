@@ -152,7 +152,8 @@ lo que el propietario ve u oye).
   PowerShell y en la carpeta de Sirius: `uv run --extra voz sirius-instala-la-voz`.
   Instala las bibliotecas, baja el modelo a una carpeta aparte si falta y solo la pone
   en su sitio cuando está entera, y comprueba que el oído carga. Lo que ya está no lo
-  vuelve a bajar (ronda 5, abajo). `uv run sirius` no quita lo instalado: `uv run` solo
+  vuelve a bajar (ronda 5, abajo). Sirius solo la aconseja por lo que falta, mirado antes
+  de cargar nada (ronda 7, abajo). `uv run sirius` no quita lo instalado: `uv run` solo
   añade lo que falta.
 - **La orden para probarlo:** `uv run --extra voz sirius-oye`, en consola, sin ventana:
   le oye, escribe lo que oyó y lo que contesta Sirius, en la misma charla de la ventana,
@@ -169,12 +170,12 @@ Medido el 14-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   la C (`tests/acceptance/test_dobles_del_conductor.py`). La tabla de
   `docs/evolution/PRUEBAS_0.3_DEL_ROBOT.md` pone PA-R03-01 en verde; PA-R03-08 sigue
   pendiente de la C.
-- **80 pruebas unitarias nuevas**: el servicio (`tests/unit/test_local_listening.py`), los
+- **83 pruebas unitarias nuevas**: el servicio (`tests/unit/test_local_listening.py`), los
   adaptadores de verdad con módulos de mentira (`tests/unit/test_local_listening_adapters.py`),
   la instalación y la orden de instalar (`tests/unit/test_local_voice_installation.py`), la
   orden de consola (`tests/unit/test_listen_console.py`) y la guarda de las descargas
   (`tests/unit/test_solo_la_orden_de_instalar_baja_modelos.py`).
-- **Mutación: 64 de 64 caen.** Quitar lo que suena antes de la voz, no mirar la
+- **Mutación: todas caen en su ronda.** Quitar lo que suena antes de la voz, no mirar la
   instalación, escribir lo oído en el diario, mandar un turno vacío, no vaciar el turno,
   leer el micro parado, empezar un turno o transcribir con un fin de turno sin voz
   delante, decir que no es para él, dar por local cualquier ajuste, no pedir
@@ -210,7 +211,14 @@ Medido el 14-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   arregla. Y las cinco de la ronda 6: prometer la orden aunque una distribución
   instalada traiga el módulo que falta, buscar la distribución por el módulo entero y no
   por su paquete, dar todo por instalado, prometerla con los metadatos ilegibles, y que
-  la orden no diga cómo escribirla cuando falta algo. La de etiquetar con la generación del
+  la orden no diga cómo escribirla cuando falta algo. Y las diez de la ronda 7: contar
+  como ausente una distribución ilegible o no contar ninguna, que lo que falta no mire
+  las distribuciones, que el oído de verdad no las pida o que se pidan también con
+  motores de fuera, que la orden no las mire o no diga cómo escribirse, que un fallo al
+  cargar prometa la orden o que lo que falta no la prometa, y olvidar una distribución
+  del extra. Al cerrar la ronda 7 se han vuelto a pasar las 23 de las rondas 4 a 7 que
+  siguen vigilando algo, y caen todas; las 14 que vigilaban la promesa desde el fallo se
+  retiran con lo que vigilaban. La de etiquetar con la generación del
   momento sobrevivió a la prueba que reproduce el caso de Codex, que para el hilo dentro
   de `bytes(data)`, donde las dos coinciden; cayó con otra que lo para justo después de
   comprobar.
@@ -431,3 +439,28 @@ Lo que queda, a propósito: si la cadena de imports pidiera un módulo que no tr
 distribución del candado, uv no lo pondría y la promesa fallaría. Con el candado de hoy no
 pasa (la cadena entera carga en el entorno con el extra), pero en Windows no se ha podido
 mirar desde aquí.
+
+**Ronda 7** (`ec829788`, 14-10-2026): un hallazgo P2, cierto, y nacido del arreglo de la
+ronda 6. `packages_distributions()` sale de RECORD y de top_level.txt: una distribución
+dañada que conserva su METADATA y los pierde no aparece en el mapa, y Sirius volvía a
+prometer la orden aunque uv la ve instalada. Comprobado en Python 3.14.6: sin RECORD ni
+top_level.txt, `packages_distributions()` no la ve y `importlib.metadata.distribution()`
+sí, porque encuentra la distribución por su carpeta de metadatos.
+
+**La regla de las dos rondas salta por quinta vez en la familia** (rondas 2, 4, 5, 6 y 7),
+la segunda seguida. El patrón ya no es de un caso: desde la ronda 2, cada arreglo
+adivinaba a partir del fallo si la orden lo arreglaría, y cada adivinanza tenía un borde
+que el revisor encontraba en la ronda siguiente. Se decide **retirar lo construido para
+adivinar** (de las rondas 4 a 6: el `ModuleNotFoundError` como causa y el mapa de
+paquetes) y **sacar la promesa del camino del fallo**: `VoiceUnavailable` ya no dice si
+lo arregla la orden. La orden solo se promete por lo que falta, y eso lo mira la
+instalación antes de cargar nada: las distribuciones del extra por su nombre, por su
+carpeta de metadatos, que es como uv sabe si están, y los ficheros del modelo. Un fallo
+al cargar ya no puede prometerla, porque no tiene con qué.
+
+Lo que eso deja, a propósito: solo se miran las distribuciones que pide el extra, no las
+que piden ellas. Si falta una de esas (onnxruntime, por ejemplo), el aviso dice qué no
+carga y no promete la orden, aunque uv la pondría: es quedarse corto, nunca prometer de
+más. Con los dos entornos de verdad: sin el extra, faltan las cuatro y la orden dice cómo
+escribirla; con el extra y sin PortAudio, no falta ninguna, y la orden dice que
+sounddevice no carga y que repetirla no lo arreglará.

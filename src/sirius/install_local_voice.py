@@ -28,6 +28,7 @@ from sirius.infrastructure.local_voice_installation import (
     INSTALL_COMMAND,
     listening_model_complete,
     listening_model_dir,
+    voice_distributions_missing,
 )
 from sirius.ports.local_voice import VoiceUnavailable
 
@@ -66,6 +67,12 @@ def main() -> int:
     settings = LocalVoiceSettings()
     folder = listening_model_dir(settings)
     model = settings.listening_model.value
+    absent = voice_distributions_missing()
+    if absent:
+        # Solo pasa si se ejecutó sin el extra: así escrita, uv las instala antes.
+        print(f"[FALLA] Faltan bibliotecas de la voz: {', '.join(absent)}")
+        print(f"        Las instala esta orden escrita así: {INSTALL_COMMAND}")
+        return 1
     try:
         check_listening_libraries()
     except VoiceUnavailable as error:
@@ -93,14 +100,9 @@ def main() -> int:
 
 
 def _fail(problem: str, error: VoiceUnavailable) -> int:
-    """Dice qué falla y si esta orden lo arregla."""
+    """Dice qué falla y que repetir la orden no lo arreglará: no arregla lo que ya está."""
     print(f"[FALLA] {problem}: {error.reason}")
-    if error.fixed_by_install:
-        # Solo pasa si se ejecutó sin el extra: así escrita, uv instala lo que falta.
-        print(f"        Lo instala esta orden escrita así: {INSTALL_COMMAND}")
-    else:
-        # Que no se repita en balde: esta orden no arregla lo que ya está.
-        print("        Volver a ejecutar esta orden no lo arreglará.")
+    print("        Volver a ejecutar esta orden no lo arreglará.")
     return 1
 
 
