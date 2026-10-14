@@ -34,6 +34,7 @@ añade su letra a ``PIEZAS_ENTREGADAS``; la tabla de
 
 from __future__ import annotations
 
+import base64
 import functools
 import ipaddress
 import logging
@@ -463,17 +464,24 @@ class Audio:
 
     ``muestras`` son sus bytes, como los de una lectura de un micro de verdad: un
     segundo a 16 kHz y 16 bits, ruido que sale de ``texto``, siempre el mismo para el
-    mismo texto y que no se comprime. Nadie de mentira los lee; están para que un audio
-    volcado por error deje en el diario el rastro que dejaría uno de verdad, en
-    cualquier codificación (ronda 8 de Codex sobre la PR #686).
+    mismo texto, con ``MARCA_DEL_AUDIO`` en medio de cada 1 000 bytes. Nadie de mentira
+    los lee; están para que un audio guardado por error, entero o en trozos de más de
+    un kilobyte, lleve la marca a donde vaya: al diario o a un texto de la base (rondas 8
+    y 9 de Codex sobre la PR #686).
     """
 
     texto: str
     muestras: bytes = field(init=False, compare=False)
 
     def __post_init__(self) -> None:
-        ruido = random.Random(self.texto).randbytes(MUESTRAS_POR_LECTURA)
-        object.__setattr__(self, "muestras", ruido)
+        ruido = random.Random(self.texto)
+        antes = (_BLOQUE_DEL_AUDIO - len(MARCA_DEL_AUDIO)) // 2
+        despues = _BLOQUE_DEL_AUDIO - len(MARCA_DEL_AUDIO) - antes
+        bloques = (
+            ruido.randbytes(antes) + MARCA_DEL_AUDIO + ruido.randbytes(despues)
+            for _ in range(MUESTRAS_POR_LECTURA // _BLOQUE_DEL_AUDIO)
+        )
+        object.__setattr__(self, "muestras", b"".join(bloques))
 
     @property
     def es_silencio(self) -> bool:
@@ -937,7 +945,9 @@ _COLUMNAS_DEL_MODELO: Mapping[str, frozenset[str]] = {
 
 #: Las dos tablas del arnés en la base: lo que vieron sus disparadores y cuántas filas y
 #: cuánto texto escribió cada tabla desde que arrancó Sirius.
-TABLAS_DE_LA_PRUEBA: frozenset[str] = frozenset({"_vigilancia_escrituras", "_vigilancia_filas"})
+TABLAS_DE_LA_PRUEBA: frozenset[str] = frozenset(
+    {"_vigilancia_escrituras", "_vigilancia_filas", "_vigilancia_textos"}
+)
 #: Las sombras de los índices de texto de la 0.2: las únicas tablas en las que SQLite
 #: escribe desde dentro de otra sentencia al charlar.
 _SOMBRAS_DE_LA_0_2: frozenset[str] = frozenset(
@@ -954,14 +964,66 @@ _SOMBRAS_DE_LA_0_2: frozenset[str] = frozenset(
 _BLOQUE_MAS_GRANDE = 16 * 1024
 #: Lo que lee el micro de mentira cada vez, en bytes: un segundo a 16 kHz y 16 bits.
 MUESTRAS_POR_LECTURA = 32_000
-#: Un mensaje del registro es una línea corta: veinte turnos de charla escriben 5 080
-#: bytes en el diario, con la línea más larga de 126 caracteres y el tramo sin espacios
-#: más largo de 32 (medido el 14-10-2026). Una sola lectura del micro son 32 000 bytes
-#: de ruido que no se comprime: escrita en cualquier codificación de texto ocupa más,
-#: 42 668 en base64, así que el diario no puede guardarla sin crecer más de 16 KiB.
-_LINEA_LARGA = 4 * 1024
-_TRAMO_LARGO = 512
-_DIARIO_DE_MAS = 16 * 1024
+#: La marca que lleva el audio del micro de mentira en medio de cada 1 000 bytes de ruido.
+MARCA_DEL_AUDIO = b"SIRIUS-AUDIO-DE-PRUEBA"
+_BLOQUE_DEL_AUDIO = 1_000
+
+
+def _formas_de_la_marca() -> dict[str, tuple[str, ...]]:
+    """La marca del audio tal como queda en un texto, en cada forma en que Python escribe
+    unos bytes sin que nadie se lo pida.
+
+    Como texto, que es como sale dentro del ``repr`` de unos bytes; en hexadecimal; en
+    base64, normal o para direcciones, desde cualquiera de los tres sitios en que puede
+    caer dentro de un grupo de tres bytes; y como lista de bytes o de muestras de 16 bits,
+    con la muestra empezando en un byte par o impar. Los números van separados por comas
+    y sin espacios, que es como se comparan.
+    """
+    marca = MARCA_DEL_AUDIO
+    # La marca en base64 no lleva «+» ni «/», así que sirve igual para el base64 de
+    # direcciones, que solo cambia esos dos signos.
+    en_base64: set[str] = set()
+    for desfase in range(3):
+        trozo = marca[(3 - desfase) % 3 :]
+        en_base64.add(base64.b64encode(trozo[: len(trozo) // 3 * 3]).decode())
+    assert not any("+" in cifrado or "/" in cifrado for cifrado in en_base64)
+    de_16_bits = tuple(
+        ",".join(
+            str(int.from_bytes(marca[i : i + 2], "little", signed=True))
+            for i in range(inicio, len(marca) - 1, 2)
+        )
+        for inicio in (0, 1)
+    )
+    return {
+        "como texto": (marca.decode("ascii"),),
+        "en hexadecimal": (marca.hex(), marca.hex().upper()),
+        "en base64": tuple(sorted(en_base64)),
+        "como lista de bytes": (",".join(str(b) for b in marca),),
+        "como muestras de 16 bits": de_16_bits,
+    }
+
+
+_FORMAS_DE_LA_MARCA = _formas_de_la_marca()
+
+
+def _formas_del_audio_en(texto: str) -> list[str]:
+    """En qué formas lleva ``texto`` la marca del audio del micro, si la lleva."""
+    sin_espacios = re.sub(r"\s+", "", texto)
+    numeros = re.sub(r"[\s,]+", ",", texto)
+    donde = {
+        "como texto": texto,
+        "en hexadecimal": sin_espacios,
+        "en base64": sin_espacios,
+        "como lista de bytes": numeros,
+        "como muestras de 16 bits": numeros,
+    }
+    return [
+        forma
+        for forma, patrones in _FORMAS_DE_LA_MARCA.items()
+        if any(patron in donde[forma] for patron in patrones)
+    ]
+
+
 _TEXTO_LARGO = 16 * 1024
 _FILAS_DE_MAS = 1_000
 _TEXTO_TOTAL = 512 * 1024
@@ -1029,7 +1091,9 @@ def _disparador(tabla: str, columnas: Sequence[str], operacion: str) -> str:
 
     Apunta en ``_vigilancia_escrituras`` todo BLOB y todo texto de más de 16 KiB que
     entra (``NEW``) y, al actualizar o borrar, también el que había (``OLD``), que es como
-    se ve lo que se escribió a trozos con ``blobopen``; y suma en ``_vigilancia_filas``
+    se ve lo que se escribió a trozos con ``blobopen``; copia en ``_vigilancia_textos``
+    cada texto que entra, para buscarle la marca del audio del micro desde Python; y suma
+    en ``_vigilancia_filas``
     las filas insertadas y el texto escrito o cambiado, se escriba como se escriba:
     con un literal, con un parámetro, con una función, desde otra tabla o desde una
     sentencia anidada.
@@ -1053,6 +1117,16 @@ def _disparador(tabla: str, columnas: Sequence[str], operacion: str) -> str:
                 f" OR (typeof({v}) = 'text' AND length({v}) > {_TEXTO_LARGO});"
             )
     if operacion != "borrar":
+        # Cada texto que entra se copia, para buscarle la marca del audio del micro desde
+        # Python con la misma función que el diario; el que es más corto que la marca no
+        # puede llevarla.
+        for columna in columnas:
+            v = f'NEW."{_sql(columna)}"'
+            cuerpo.append(
+                "INSERT INTO _vigilancia_textos (tabla, columna, operacion, texto)"
+                f" SELECT '{_texto_sql(tabla)}', '{_texto_sql(columna)}', '{miradas[0][1]}', {v}"
+                f" WHERE typeof({v}) = 'text' AND length({v}) >= {len(MARCA_DEL_AUDIO)};"
+            )
         nuevas = 1 if operacion == "insertar" else 0
         sumandos: list[str] = []
         for columna in columnas:
@@ -1182,7 +1256,6 @@ class ConductorDeVoz(Conductor):
         )
         self._ficheros_de_antes = self._ficheros_que_no_son_suyos()
         self._filas_de_antes = self._filas_de_la_base()
-        self._diario_de_antes = self._tamano_del_diario()
         _vigilar()
         _vigila(self)
         self._arrancando = True
@@ -1504,6 +1577,10 @@ class ConductorDeVoz(Conductor):
                 " largo INTEGER NOT NULL, cabecera TEXT NOT NULL)"
             )
             conexion.execute(
+                "CREATE TABLE IF NOT EXISTS _vigilancia_textos (tabla TEXT NOT NULL,"
+                " columna TEXT NOT NULL, operacion TEXT NOT NULL, texto TEXT NOT NULL)"
+            )
+            conexion.execute(
                 "CREATE TABLE IF NOT EXISTS _vigilancia_filas (tabla TEXT PRIMARY KEY,"
                 " filas INTEGER NOT NULL, texto INTEGER NOT NULL)"
             )
@@ -1529,6 +1606,9 @@ class ConductorDeVoz(Conductor):
                     "SELECT tabla, columna, operacion, tipo, largo, cabecera"
                     " FROM _vigilancia_escrituras ORDER BY rowid"
                 ).fetchall()
+                textos = conexion.execute(
+                    "SELECT tabla, columna, operacion, texto FROM _vigilancia_textos ORDER BY rowid"
+                ).fetchall()
                 cuentas = conexion.execute(
                     "SELECT tabla, filas, texto FROM _vigilancia_filas ORDER BY tabla"
                 ).fetchall()
@@ -1542,6 +1622,11 @@ class ConductorDeVoz(Conductor):
                 encontrados.append(f"{tabla}.{columna} ({que} de {largo} bytes {operacion})")
             else:
                 encontrados.append(f"{tabla}.{columna} (texto de {largo} caracteres {operacion})")
+        for tabla, columna, operacion, texto in textos:
+            encontrados.extend(
+                f"{tabla}.{columna} (texto con audio del micro {forma} {operacion})"
+                for forma in _formas_del_audio_en(texto)
+            )
         texto_total = 0
         for tabla, filas, texto in cuentas:
             texto_total += int(texto)
@@ -1611,41 +1696,29 @@ class ConductorDeVoz(Conductor):
         )
 
     def audio_en_el_diario(self) -> list[str]:
-        """Si el diario, que sí puede escribir, guarda algo que no es un mensaje del registro.
+        """Si el diario, que sí puede escribir, guarda audio leído del micro.
 
-        Un mensaje del registro es una línea corta de texto. Un audio volcado, en la
-        forma que sea, ocupa al menos lo que el audio: una lectura del micro son 32 000
-        bytes de ruido que no se comprime, así que el diario no puede guardarla sin
-        crecer más de 16 KiB, la partan en líneas cortas o no (rondas 7 y 8 de Codex
-        sobre la PR #686). Cuentan ese crecimiento, rotaciones incluidas y desde antes de
-        arrancar Sirius, y además una línea de más de 4 KiB o un tramo de más de 512
-        caracteres sin espacios, que son un volcado más pequeño en un solo mensaje.
-        Vacío si solo guarda mensajes del registro.
+        El audio del micro de mentira lleva ``MARCA_DEL_AUDIO`` en medio de cada 1 000
+        bytes: un audio volcado, entero o en trozos de más de un kilobyte, la lleva
+        dentro. Se busca, rotaciones incluidas, en las formas en que Python escribe unos
+        bytes sin que nadie se lo pida (``_formas_de_la_marca``), también partido en
+        líneas. No hay umbral de volumen ni de largo: los mensajes del registro, por
+        muchos o largos que sean, no llevan la marca (rondas 7 a 9 de Codex sobre la PR
+        #686). Vacío si el diario no la lleva.
         """
-        encontrados: list[str] = []
-        crecido = self._tamano_del_diario() - self._diario_de_antes
-        if crecido > _DIARIO_DE_MAS:
-            encontrados.append(f"el diario (creció {crecido} bytes)")
-        linea_mas_larga = 0
-        tramo_mas_largo = 0
-        for fichero in self._ficheros_del_diario():
-            for linea in fichero.read_text(encoding="utf-8", errors="replace").splitlines():
-                linea_mas_larga = max(linea_mas_larga, len(linea))
-                tramo_mas_largo = max(tramo_mas_largo, max(map(len, linea.split()), default=0))
-        if linea_mas_larga > _LINEA_LARGA:
-            encontrados.append(f"el diario (una línea de {linea_mas_larga} caracteres)")
-        if tramo_mas_largo > _TRAMO_LARGO:
-            encontrados.append(f"el diario (un tramo de {tramo_mas_largo} caracteres sin espacios)")
-        return encontrados
+        texto = "\n".join(
+            fichero.read_text(encoding="utf-8", errors="replace")
+            for fichero in self._ficheros_del_diario()
+        )
+        return [
+            f"el diario (guarda audio del micro {forma})" for forma in _formas_del_audio_en(texto)
+        ]
 
     def _ficheros_del_diario(self) -> list[Path]:
         diario = self._permitidas.diario
         if not diario.parent.exists():
             return []
         return sorted(f for f in diario.parent.glob(f"{diario.name}*") if f.is_file())
-
-    def _tamano_del_diario(self) -> int:
-        return sum(fichero.stat().st_size for fichero in self._ficheros_del_diario())
 
     def ventana(self, qtbot: Any) -> VentanaDeVoz:
         return VentanaDeVoz(self.abre_la_ventana(qtbot), qtbot)

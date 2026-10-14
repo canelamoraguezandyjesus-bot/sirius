@@ -244,7 +244,7 @@ la misma PR que anote sus cifras.
 - La comprobación de la tabla: `tests/acceptance/test_robot_0_3_trazabilidad.py` pasa
   con el documento como está, y las 13 pruebas de `test_robot_0_2_trazabilidad.py`, diez
   de ellas con tablas rotas a propósito, siguen pasando sobre el módulo compartido.
-- La batería entera. Sobre `7209d783`, el primer head: 8 194 pasan, 16 saltadas y 28 `xfail`, los 26 de la 0.3 de entonces y los 2 que ya estaban, en 24 min 29 s. Sobre `main` (`d545ff17`) eran 8 181 pasan y 2 `xfail`: entran las esperadas y 13 que pasan, las dos de la trazabilidad de la 0.3, la tabla rota nueva de la 0.2 y las que los guardas de documentos añaden por cada ADR y documento nuevo. Sobre el head de la ronda 1: 8 194 pasan, 16 saltadas y 29 `xfail`, los 27 de la 0.3 y los 2 que ya estaban, en 25 min 40 s. Sobre el head de la ronda 2: 8 198 pasan, 16 saltadas y 29 `xfail`, en 23 min 44 s; las 4 que entran son las 3 del vigilante y la que los guardas añaden por el fichero nuevo. Sobre el árbol de la ronda 3 y H-241, `56017da1`: 8 199 pasan, 16 saltadas y 29 `xfail`, en 23 min 10 s. Sobre el árbol de la revisión propia, con sus cinco pasadas: 8 211 pasan, 16 saltadas y 29 `xfail`, en 22 min 49 s; las 12 que entran son las 10 de los dobles, la cuarta del vigilante y la que los guardas añaden por el fichero nuevo. Sobre el árbol de la ronda 4 y su mirada propia: 8 212 pasan, 16 saltadas y 29 `xfail`, en 21 min 34 s; la que entra es la del eco mezclado con la voz. Sobre el árbol de la ronda 5 y su mirada propia: 8 212 pasan, 16 saltadas y 29 `xfail`, en 21 min 23 s. Sobre el árbol de la ronda 6, sus ojos frescos y su mirada propia: 8 214 pasan, 16 saltadas y 29 `xfail`, en 20 min 4 s; las 2 que entran son la del vigilante sobre las sentencias y la de las filas de los dobles. Sobre el árbol de la ronda 7: 8 215 pasan, 16 saltadas y 29 `xfail`, en 20 min 44 s; la que entra es la del diario de los dobles. Sobre el árbol de la ronda 8: 8 215 pasan, 16 saltadas y 29 `xfail`, en 20 min 13 s. Y la línea base de la charla escrita, `di()` solo, en la nube el 13-10-2026: 34 ms en el P95 de 20 turnos, 25,7 ms la mediana y 57,7 ms el máximo.
+- La batería entera. Sobre `7209d783`, el primer head: 8 194 pasan, 16 saltadas y 28 `xfail`, los 26 de la 0.3 de entonces y los 2 que ya estaban, en 24 min 29 s. Sobre `main` (`d545ff17`) eran 8 181 pasan y 2 `xfail`: entran las esperadas y 13 que pasan, las dos de la trazabilidad de la 0.3, la tabla rota nueva de la 0.2 y las que los guardas de documentos añaden por cada ADR y documento nuevo. Sobre el head de la ronda 1: 8 194 pasan, 16 saltadas y 29 `xfail`, los 27 de la 0.3 y los 2 que ya estaban, en 25 min 40 s. Sobre el head de la ronda 2: 8 198 pasan, 16 saltadas y 29 `xfail`, en 23 min 44 s; las 4 que entran son las 3 del vigilante y la que los guardas añaden por el fichero nuevo. Sobre el árbol de la ronda 3 y H-241, `56017da1`: 8 199 pasan, 16 saltadas y 29 `xfail`, en 23 min 10 s. Sobre el árbol de la revisión propia, con sus cinco pasadas: 8 211 pasan, 16 saltadas y 29 `xfail`, en 22 min 49 s; las 12 que entran son las 10 de los dobles, la cuarta del vigilante y la que los guardas añaden por el fichero nuevo. Sobre el árbol de la ronda 4 y su mirada propia: 8 212 pasan, 16 saltadas y 29 `xfail`, en 21 min 34 s; la que entra es la del eco mezclado con la voz. Sobre el árbol de la ronda 5 y su mirada propia: 8 212 pasan, 16 saltadas y 29 `xfail`, en 21 min 23 s. Sobre el árbol de la ronda 6, sus ojos frescos y su mirada propia: 8 214 pasan, 16 saltadas y 29 `xfail`, en 20 min 4 s; las 2 que entran son la del vigilante sobre las sentencias y la de las filas de los dobles. Sobre el árbol de la ronda 7: 8 215 pasan, 16 saltadas y 29 `xfail`, en 20 min 44 s; la que entra es la del diario de los dobles. Sobre el árbol de la ronda 8: 8 215 pasan, 16 saltadas y 29 `xfail`, en 20 min 13 s. Sobre el árbol de la ronda 9: 8 216 pasan, 16 saltadas y 29 `xfail`, en 20 min 20 s; la que entra es la de las variantes de la marca. Y la línea base de la charla escrita, `di()` solo, en la nube el 13-10-2026: 34 ms en el P95 de 20 turnos, 25,7 ms la mediana y 57,7 ms el máximo.
 
 ## Consecuencias
 
@@ -673,6 +673,44 @@ la misma PR que anote sus cifras.
     reproducido.
   - **Lo que no cubre** queda escrito: un trozo de audio de menos de 16 KiB en total en
     el diario.
+- **Ronda 9 de Codex**, sobre `b553b9d1`: un hallazgo P2, cierto y dentro del alcance,
+  sobre el arreglo de la ronda 8 y en el sentido contrario: con el tope de 16 KiB, una
+  pieza correcta que escribiera en el diario unos cientos de mensajes de estado cortos
+  fallaba la prueba sin haber guardado audio.
+  - **La raíz.** Las rondas 7, 8 y 9 tantearon el diario por la forma del volcado y por
+    su volumen, y cada tanteo fallaba por un lado: la forma deja pasar un volcado en otra
+    forma, y el volumen confunde mensajes legítimos con audio. El contenido no falla por
+    ninguno: el audio del micro de mentira lo fabrica la propia prueba, así que puede
+    llevar una marca y buscarse esa marca, que ningún mensaje legítimo lleva.
+  - **El arreglo.** Cada lectura del micro de mentira lleva `MARCA_DEL_AUDIO` en medio de
+    cada 1 000 bytes de ruido: un audio volcado, entero o en trozos de más de un
+    kilobyte, la lleva dentro. `audio_en_el_diario` la busca en las formas en que Python
+    escribe unos bytes sin que nadie se lo pida: como texto, que es como sale en su
+    `repr`; en hexadecimal; en base64, normal o para direcciones, partido en líneas o no
+    y desde cualquiera de los tres sitios de un grupo de tres bytes; y como lista de bytes
+    o de muestras de 16 bits. Sin umbral de volumen ni de largo, que se retiran. La
+    misma búsqueda vale para la base: los disparadores copian cada texto que entra en
+    una tabla del arnés y se le busca la marca desde Python, así que un audio guardado
+    como texto corto, en base64 o como lista JSON, que no era ni BLOB ni texto largo, se
+    ve también.
+  - **Lo que costó verlo.** La primera versión metía la búsqueda de la marca dentro de
+    los disparadores, en SQL: 1,5 millones de caracteres de disparadores, y el primer
+    turno tardaba 476 ms en vez de 118 ms mientras SQLite los compilaba. Copiar el texto
+    y buscar desde Python deja 285 KB de disparadores, el primer turno en 112 ms y el P95
+    de veinte turnos de `di()` en 24 ms, frente a los 34 ms de la línea base.
+  - **Mutación**: once mutaciones, las once cazadas: cada una de las cinco formas
+    quitada, el audio sin marca, los disparadores sin copiar los textos, el base64 en un
+    solo desfase, el base64 sin quitar los saltos de línea, el hexadecimal sin mayúsculas
+    y las muestras de 16 bits solo desde un byte par. Las cuatro últimas sobrevivían a la
+    primera prueba, que volcaba el audio entero, en minúsculas y alineado; ahora la prueba
+    vuelca un kilobyte con una sola marca, mal alineada y partida por un salto, y otra
+    prueba pasa cada variante de cada forma por la función que busca la marca. Una
+    duodécima, el base64 para direcciones quitado, sobrevivió porque la marca en base64
+    no lleva «+» ni «/» y las dos formas coinciden: esa línea se quitó y el conductor
+    comprueba al cargar que sigue siendo así.
+  - **Lo que no cubre** queda escrito: un trozo de audio de menos de un kilobyte, que
+    puede no llevar la marca, y un audio transformado para que la marca no se reconozca,
+    que ya no es un error.
 - **El criterio cambia el 13-10-2026, tras la ronda 3.** El propietario, al ver la
   tercera ronda seguida con la misma familia, retiró el tope de rondas que ADR-233 había
   sacado de su «nada de cinco rondas» del 07-10-2026: «No nos podemos limitar a solo tres

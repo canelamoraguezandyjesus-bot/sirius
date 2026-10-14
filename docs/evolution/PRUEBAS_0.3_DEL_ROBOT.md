@@ -28,8 +28,9 @@ Igual que `docs/evolution/PRUEBAS_0.2_DEL_ROBOT.md`. Hay dos clases de prueba:
   verdad acierten. Hablan como el plan, y solo `tests/acceptance/conductor_robot_0_3.py`
   sabe cómo se hace cada cosa en el código. Es el conductor de la 0.2 con el oído y la
   voz encima: la charla, la semilla, la memoria y la ventana son las de siempre.
-  Los dobles hacen algo y apuntan lo que hacen: el micro lee, cada vez un segundo de
-  ruido que no se comprime, 32 000 bytes como los de un micro de verdad, el oído dice cuándo acaba
+  Los dobles hacen algo y apuntan lo que hacen: el micro lee, cada vez 32 000 bytes como
+  los de un segundo de un micro de verdad, ruido con una marca en medio de cada 1 000
+  bytes para que un audio guardado por error se reconozca allí donde acabe, el oído dice cuándo acaba
   el turno, el transcriptor transcribe, la voz dice, el altavoz suena y el modelo
   contesta, y cada uno apunta lo que hizo, con su momento, en el acto de hacerlo. Con el
   altavoz sonando y devolviendo eco, lo que el propietario dice llega al micro en un
@@ -70,7 +71,7 @@ propietario han pasado.
 | PA-R03-02 | Sirius habla con una voz de Piper en español de España y suena por el altavoz; empieza con la primera frase antes de que el modelo acabe; y dice todo lo que escribió y nada más, preparado para leerse, sin marcas ni código | Lo que se hace, 1 y 3; ya está hecho, preparar el texto | C | automática | — | — | pendiente | `tests/acceptance/test_robot_0_3_voz.py::test_empieza_a_hablar_con_la_primera_frase_antes_de_que_el_modelo_acabe`<br>`tests/acceptance/test_robot_0_3_voz.py::test_lo_que_dice_es_lo_que_escribio_sin_marcas_ni_codigo`<br>`tests/acceptance/test_robot_0_3_voz.py::test_habla_con_una_voz_de_piper_en_espanol_de_espana` |
 | PA-R03-03 | Su propia voz no se toma por la del propietario: lo que suena por el altavoz y vuelve por el micro, perdido con el micro cerrado o leído y cancelado, no se transcribe ni empieza un turno, ni entonces ni en los silencios de después. Antes de la cancelación de eco (pieza C) porque mientras habla no escucha; con ella (pieza E), el micro sigue abierto, el eco entra, no le corta ni se transcribe, y la voz del propietario, que llega en un mismo audio con el eco encima mientras el altavoz sigue sonando, sí atraviesa y le calla sin esperar al fin del turno; el eco que ya estaba en el micro cuando paró sigue sin ser suyo, y lo que Sirius dijo alguna vez, dicho por el propietario con el altavoz callado, sí se oye | Lo que se hace, 6 | C, E | automática | — | — | pendiente | `tests/acceptance/test_robot_0_3_voz.py::test_su_propia_voz_no_empieza_un_turno`<br>`tests/acceptance/test_robot_0_3_voz.py::test_con_la_cancelacion_de_eco_su_propia_voz_sigue_sin_empezar_un_turno` |
 | PA-R03-04 | Escucha siempre: al abrir la ventana escucha sin pulsar nada y lo dice; el botón de silencio cierra el micrófono y lo dice, y lo que sonó en silencio se pierde y no se atiende después; lo oído y lo contestado se ven en la ventana como la charla escrita, con sus dos botones; todo leído de la ventana de verdad | Lo que se hace, 4; EV-022; personalidad de la 0.2, paso 5 | D | parcial | windows-real | E-R03-01 | pendiente | `tests/acceptance/test_robot_0_3_ventana.py::test_al_abrir_la_ventana_escucha_sin_pulsar_nada_y_lo_dice`<br>`tests/acceptance/test_robot_0_3_ventana.py::test_el_boton_de_silencio_cierra_el_microfono_y_lo_dice`<br>`tests/acceptance/test_robot_0_3_ventana.py::test_lo_oido_y_lo_contestado_se_ven_en_la_ventana_con_sus_dos_botones` |
-| PA-R03-05 | No guarda audio: desde que arranca hasta que cierra, nada abre para escribir ningún fichero que no sea su base, sus ajustes o su diario, comparados por su ruta de verdad, esté donde esté lo demás y aunque lo borre después; tras varios turnos no ha aparecido en sus carpetas ningún fichero que no sea suyo, ni audio en la temporal, y la base solo ha cambiado como cambia charlando, mirada al acabar y fila a fila mientras vivía, también lo que se borró antes, y el diario solo guarda mensajes cortos, no audio volcado; lo que no era para él no se guarda ni como texto, tampoco en el diario | Lo que se hace, 4 y 5; §2, el audio no sale nunca; EV-022 | D | automática | — | — | pendiente | `tests/acceptance/test_robot_0_3_voz.py::test_tras_varios_turnos_de_voz_no_queda_ningun_audio_guardado`<br>`tests/acceptance/test_robot_0_3_voz.py::test_lo_que_no_era_para_el_no_se_guarda_ni_como_texto` |
+| PA-R03-05 | No guarda audio: desde que arranca hasta que cierra, nada abre para escribir ningún fichero que no sea su base, sus ajustes o su diario, comparados por su ruta de verdad, esté donde esté lo demás y aunque lo borre después; tras varios turnos no ha aparecido en sus carpetas ningún fichero que no sea suyo, ni audio en la temporal, y la base solo ha cambiado como cambia charlando, mirada al acabar y fila a fila mientras vivía, también lo que se borró antes, y ni el diario ni ningún texto de la base guardan el audio del micro, que lleva una marca y se busca en las formas en que Python escribe unos bytes; lo que no era para él no se guarda ni como texto, tampoco en el diario | Lo que se hace, 4 y 5; §2, el audio no sale nunca; EV-022 | D | automática | — | — | pendiente | `tests/acceptance/test_robot_0_3_voz.py::test_tras_varios_turnos_de_voz_no_queda_ningun_audio_guardado`<br>`tests/acceptance/test_robot_0_3_voz.py::test_lo_que_no_era_para_el_no_se_guarda_ni_como_texto` |
 | PA-R03-06 | Sabe cuándo le hablan a él: con su nombre, siempre; sin su nombre, solo mientras dura la charla, que dura entre 5 s y 2 min después de que Sirius calle; lo demás no llega al modelo ni se contesta | Lo que se hace, 5 | D | parcial | evaluación-humana | E-R03-05 | pendiente | `tests/acceptance/test_robot_0_3_voz.py::test_con_su_nombre_siempre_es_para_el`<br>`tests/acceptance/test_robot_0_3_voz.py::test_sin_su_nombre_es_para_el_solo_mientras_dura_la_charla`<br>`tests/acceptance/test_robot_0_3_voz.py::test_lo_que_no_es_para_el_no_llega_al_modelo` |
 | PA-R03-07 | Se le puede cortar: si el propietario habla mientras Sirius habla, Sirius se calla en menos de medio segundo desde que el micro lee su voz, medido con los relojes de los dobles, sin esperar al fin del turno ni a tener la respuesta nueva, y atiende lo nuevo; y lo que iba a decir queda escrito entero aunque le corte con el modelo aún escribiendo | Lo que se hace, 1 y 6; terminado cuando, 2 | E | parcial | windows-real | E-R03-03 | pendiente | `tests/acceptance/test_robot_0_3_voz.py::test_si_el_propietario_habla_sirius_se_calla_y_atiende_lo_nuevo`<br>`tests/acceptance/test_robot_0_3_voz.py::test_lo_que_iba_a_decir_queda_escrito_entero_aunque_le_corten` |
 | PA-R03-08 | Nada sale del ordenador: oye y habla con Silero, Smart Turn, faster-whisper y Piper, ninguna petición sale durante un turno de voz, el oído y la voz del robot solo pueden ir a este ordenador y, si falta un modelo, Sirius dice qué orden ejecutar, no contesta, no lanza ningún proceso y no lo baja él | Lo que se hace, 2 y 3; no se usa; §2 | B, C | automática | — | — | pendiente | `tests/acceptance/test_robot_0_3_voz.py::test_ninguna_peticion_sale_durante_un_turno_de_voz`<br>`tests/acceptance/test_robot_0_3_voz.py::test_el_oido_y_la_voz_del_robot_solo_pueden_ir_a_este_ordenador`<br>`tests/acceptance/test_robot_0_3_voz.py::test_si_falta_un_modelo_dice_que_orden_ejecutar_y_no_lo_baja_el`<br>`tests/acceptance/test_robot_0_3_voz.py::test_oye_y_habla_con_las_herramientas_locales_del_plan` |
@@ -225,36 +226,42 @@ en su gráfica.
   de 16 KiB con su tamaño, también el que había en la fila al actualizarla o borrarla, y
   cuenta las filas insertadas y el texto escrito por tabla, se escriba como se escriba:
   con un literal, con un parámetro, con una función de Python, desde otra tabla, desde
-  una sentencia anidada o a trozos con `blobopen`. Más de mil filas insertadas en una
+  una sentencia anidada o a trozos con `blobopen`. Copian además cada texto que entra, y
+  en él se busca la marca del audio del micro como en el diario: un audio guardado como
+  texto, en base64, en hexadecimal o como lista JSON, se ve aunque sea corto. Más de mil filas insertadas en una
   tabla o más de 512 KiB de texto en total desde el arranque cuentan; veinte turnos de
   charla escriben 61 filas y 5 590 caracteres (medido el 14-10-2026 con el modelo de
   mentira). Los disparadores viven en la base, no en una conexión, así que ven también lo
   que escriba una conexión que el vigilante no sigue; quitarlos o apagarlos lo ve el
-  vigilante. No ve texto corto, de menos de 16 KiB por valor y 512 KiB en total, ni hasta
-  mil filas por tabla, ni lo que una extensión en C escriba por una conexión suya, ni a
+  vigilante. No ve texto corto sin la marca, de menos de 16 KiB por valor y 512 KiB en
+  total, ni hasta mil filas por tabla, ni lo que una extensión en C escriba por una conexión suya, ni a
   una pieza que llame a los métodos de `sqlite3.Connection` sin ligar para saltarse su
   propia clase, que ya no ataja: engaña al arnés. Por eso el vigilante mira además cada
   fichero que se abre y cada conexión.
 - **Que la tubería no escriba en el diario lo que oye.** El diario sí puede escribirse;
   se mira que lo que no era para él y lo olvidado no estén en él al acabar, y que solo
-  guarde mensajes del registro. Un audio volcado ocupa al menos lo que el audio, en la
-  forma que sea: cada lectura del micro son 32 000 bytes de ruido que no se comprime, y
-  el diario no puede guardar una sin crecer más de 16 KiB, la partan en líneas cortas o
-  no; veinte turnos de charla escriben 5 080 bytes, con la línea más larga de 126
-  caracteres (medido el 14-10-2026). Cuentan ese crecimiento y, además, una línea de más
-  de 4 KiB o un tramo de más de 512 caracteres sin espacios. Un trozo de audio de menos
-  de 16 KiB en total no se ve, y una frase oída, corta, escrita por error en un mensaje
-  no se distingue de un mensaje; la frase concreta que no era para él sí se busca. El
+  guarde mensajes del registro y no el audio del micro. El audio del micro de mentira
+  lleva una marca en medio de cada 1 000 bytes, y se busca en el diario, rotaciones
+  incluidas, en las formas en que Python escribe unos bytes sin que nadie se lo pida:
+  como texto, que es como salen en su `repr`; en hexadecimal; en base64, partido en
+  líneas o no y desde cualquier sitio de un grupo de tres bytes; y como lista de bytes o
+  de muestras de 16 bits. No hay umbral de volumen ni de largo: los mensajes del
+  registro, por muchos o largos que sean, no llevan la marca. Un trozo de audio de menos
+  de un kilobyte puede no llevarla, y una frase oída, corta, escrita por error en un
+  mensaje no se distingue de un mensaje; la frase concreta que no era para él sí se busca. El
   conductor lo configura como `sirius.main` y vuelve a encender los registradores
   `sirius.*` que la migración de Alembic apaga; lo que una pieza escriba por el suyo llega.
 - **Que una pieza hecha para burlar al arnés no esconda audio.** Las pruebas de PA-R03-05
   vigilan que una pieza no guarde audio por error: un fichero, un binario o un texto
   largo en la base aunque lo borre después, filas o texto de más, el esquema, el audio
-  volcado en el diario. Una pieza escrita para esquivar la vigilancia tiene escondites
-  que ninguna prueba dentro del mismo proceso cierra del todo: muestras en una columna
-  numérica que ya existe y que se reescribe una y otra vez, escrituras directas en las
-  sombras de los índices de texto, escribir y borrar durante el arranque antes de que
-  existan los disparadores, o llamar a los métodos de `sqlite3.Connection` sin ligar.
+  del micro en el diario o en un texto de la base. Una pieza escrita para esquivar la
+  vigilancia tiene escondites que ninguna prueba dentro del mismo proceso cierra del
+  todo: muestras en una columna numérica que ya existe y que se reescribe una y otra vez,
+  escrituras directas en las sombras de los índices de texto, escribir y borrar durante
+  el arranque antes de que existan los disparadores, llamar a los métodos de
+  `sqlite3.Connection` sin ligar, o transformar el audio para que la marca no se
+  reconozca: comprimirlo, cifrarlo, o escribirlo en una forma que Python no usa por sí
+  solo.
   Eso no lo prueba nada: se revisa en el código de cada pieza, con la revisión propia y
   la de Codex (ronda 7 de Codex, ADR-241).
 - **Que un proceso lanzado sin pasar por Python se vea.** El vigilante ve `subprocess` y

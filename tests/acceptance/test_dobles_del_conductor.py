@@ -13,12 +13,14 @@ el audio de la base de verdad y la charla de la ventana de verdad.
 
 from __future__ import annotations
 
+import array
 import base64
+import json
 import logging
 import sqlite3
 import struct
 import time
-import zlib
+from collections.abc import Callable
 from contextlib import closing
 from pathlib import Path
 
@@ -26,6 +28,7 @@ import pytest
 import sqlite_vec
 from conductor_robot_0_2 import _respuestas
 from conductor_robot_0_3 import (
+    MARCA_DEL_AUDIO,
     AltavozDeMentira,
     Audio,
     ConductorDeVoz,
@@ -37,6 +40,7 @@ from conductor_robot_0_3 import (
     TranscriptorDeMentira,
     VentanaDeVoz,
     VozDeMentira,
+    _formas_del_audio_en,
 )
 from piezas_del_robot import PiezaPendiente
 from pytestqt.qtbot import QtBot
@@ -62,11 +66,13 @@ def test_el_micro_solo_lee_abierto_y_apunta_cada_lectura_con_su_momento() -> Non
     assert micro.lee() == Audio("Hola, Sirius.")
     assert micro.lee() == Audio("")
     # Cada lectura lleva bytes como los de un micro de verdad: un segundo de ruido, el
-    # mismo para el mismo texto, distinto para otro, y que no se comprime.
+    # mismo para el mismo texto y distinto para otro, con la marca en cada 1 000 bytes.
     lectura = Audio("Hola, Sirius.")
     assert len(lectura.muestras) == 32_000
     assert lectura.muestras == Audio("Hola, Sirius.").muestras != Audio("Otra.").muestras
-    assert len(zlib.compress(lectura.muestras, 9)) > 31_900
+    assert [
+        lectura.muestras[i : i + 1_000].count(MARCA_DEL_AUDIO) for i in range(0, 32_000, 1_000)
+    ] == [1] * 32
     assert micro.lee() is None
     assert micro.perdidos == (Sonido("Se pierde: el micro está cerrado."),)
     assert micro.leidos == (Sonido("Hola, Sirius."), Sonido(""))
@@ -418,6 +424,14 @@ def test_la_base_se_vigila_fila_a_fila_tambien_lo_que_se_borra_antes_de_acabar(
         conexion.execute("SELECT desde_dentro()").fetchone()
         conexion.execute("DELETE FROM memory_embeddings WHERE memory_id = 952")
         conexion.execute("DELETE FROM messages WHERE sequence IN (953, 954)")
+        # Audio del micro guardado como texto corto, en base64 y como lista JSON: sin
+        # BLOB ni texto largo, pero con la marca dentro.
+        lectura = Audio("Pues yo fatal.")
+        conexion.execute(
+            fila_de_mensaje, (955, base64.b64encode(lectura.muestras[:9_000]).decode())
+        )
+        conexion.execute(fila_de_mensaje, (956, json.dumps(list(lectura.muestras[:1_500]))))
+        conexion.execute("DELETE FROM messages WHERE sequence IN (955, 956)")
         # Muchas filas de golpe desde otra consulta, y mucho texto en trozos cortos: se
         # cuentan las filas y el texto de verdad, no las sentencias.
         conexion.execute(
@@ -470,6 +484,8 @@ def test_la_base_se_vigila_fila_a_fila_tambien_lo_que_se_borra_antes_de_acabar(
         in visto
     )
     assert "messages.content (texto de 25600 caracteres al insertar)" in visto
+    assert "messages.content (texto con audio del micro en base64 al insertar)" in visto
+    assert "messages.content (texto con audio del micro como lista de bytes al insertar)" in visto
     assert "messages (escritura dentro de otra sentencia, fuera de las sombras)" in visto
     assert "conversations (+5000 filas escritas)" in visto
     assert any(
@@ -494,27 +510,73 @@ def test_la_base_se_vigila_fila_a_fila_tambien_lo_que_se_borra_antes_de_acabar(
     assert [v for v in visto if v not in vivo] == ["sqlite_sequence (tabla nueva)"]
 
 
-def test_el_audio_volcado_en_el_diario_se_ve_regla_a_regla(tmp_path: Path) -> None:
+def test_la_marca_del_audio_se_reconoce_en_cada_variante_de_cada_forma() -> None:
+    muestras = Audio("Pues yo fatal.").muestras
+    # Trozos de un kilobyte con una sola marca, que empiezan en sitios distintos para
+    # que la marca caiga en cada desfase de un grupo de tres bytes y de una muestra de 16
+    # bits.
+    trozos = [muestras[inicio : inicio + 1_000] for inicio in (0, 1, 2, 37)]
+    variantes: list[tuple[str, str]] = []
+    for trozo in trozos:
+        variantes += [
+            ("como texto", repr(trozo)),
+            ("como texto", trozo.decode("latin-1")),
+            ("en hexadecimal", trozo.hex()),
+            ("en hexadecimal", trozo.hex().upper()),
+            ("en hexadecimal", trozo.hex(" ")),
+            ("en base64", base64.b64encode(trozo).decode()),
+            ("en base64", base64.urlsafe_b64encode(trozo).decode()),
+            ("en base64", base64.encodebytes(trozo).decode()),
+            ("como lista de bytes", str(list(trozo))),
+            ("como lista de bytes", json.dumps(list(trozo))),
+            ("como muestras de 16 bits", repr(array.array("h", trozo[: len(trozo) // 2 * 2]))),
+        ]
+    for forma, texto in variantes:
+        assert forma in _formas_del_audio_en(texto), (forma, texto[:60])
+    # Y ningún mensaje legítimo, por largo que sea, lleva la marca.
+    assert _formas_del_audio_en("el oído lleva 1234 bloques sin voz\n" * 5_000) == []
+    assert _formas_del_audio_en(json.dumps(list(range(256)) * 50)) == []
+
+
+def test_el_audio_del_micro_en_el_diario_se_ve_en_cada_forma_y_los_mensajes_no_cuentan(
+    tmp_path: Path,
+) -> None:
     conductor = ConductorDeVoz(tmp_path)
     for frase in ("Buenos días, Sirius.", "¿Qué tal has dormido?", "Pues yo fatal."):
         conductor.di(frase)
-    assert conductor.audio_en_el_diario() == [], "la charla solo escribe mensajes cortos"
+    assert conductor.audio_en_el_diario() == []
 
     registro = logging.getLogger(f"{LOGGER_NAME}.una_pieza")
-    # Una regla cada vez. Una lectura entera del micro en base64 partido en líneas de 76
-    # caracteres, como lo escribe ``base64.encodebytes``: ninguna línea larga ni ningún
-    # tramo largo, pero el diario crece lo que pesa el audio.
-    registro.warning("%s", base64.encodebytes(Audio("Pues yo fatal.").muestras).decode())
-    visto = conductor.audio_en_el_diario()
-    assert len(visto) == 1 and visto[0].startswith("el diario (creció "), visto
-    # Un volcado más pequeño en un solo mensaje: una línea larga de palabras cortas, y un
-    # tramo largo sin espacios en una línea corta.
-    registro.warning("muestras: %s", "muestra " * 600)
-    visto = conductor.audio_en_el_diario()
-    assert len(visto) == 2 and visto[1].startswith("el diario (una línea de "), visto
-    registro.warning("base64: %s", "UklGRiQIAABXQVZF" * 64)
-    visto = conductor.audio_en_el_diario()
-    assert visto[2:] == ["el diario (un tramo de 1024 caracteres sin espacios)"], visto
+    # Muchos mensajes del registro, cortos y largos, más de lo que escribe una charla: no
+    # cuentan, porque no llevan la marca del audio.
+    for numero in range(2_000):
+        registro.warning("el oído lleva %d bloques sin voz", numero)
+    registro.warning("ajustes: %s", "voz=es_ES-davefx-medium; " * 400)
+    assert conductor.audio_en_el_diario() == []
+
+    # Una lectura del micro volcada por error, en cada forma en que Python escribe unos
+    # bytes: cada una se ve, y solo esa.
+    lectura = Audio("Pues yo fatal.")
+    volcados: tuple[tuple[str, Callable[[], None]], ...] = (
+        ("como texto", lambda: registro.warning("leído: %r", lectura)),
+        # Un kilobyte con una sola marca, que cae a mitad de un grupo de tres bytes y que
+        # ``encodebytes`` parte con un salto de línea.
+        (
+            "en base64",
+            lambda: registro.warning("%s", base64.encodebytes(lectura.muestras[37:1_037]).decode()),
+        ),
+        ("en hexadecimal", lambda: registro.warning("%s", lectura.muestras[:2_000].hex(" "))),
+        ("como lista de bytes", lambda: registro.warning("%s", list(lectura.muestras[:2_000]))),
+        (
+            "como muestras de 16 bits",
+            lambda: registro.warning("%r", array.array("h", lectura.muestras[1:2_001])),
+        ),
+    )
+    vistas: list[str] = []
+    for forma, vuelca in volcados:
+        vuelca()
+        vistas.append(f"el diario (guarda audio del micro {forma})")
+        assert sorted(conductor.audio_en_el_diario()) == sorted(vistas), forma
     conductor.cierra()
 
 
