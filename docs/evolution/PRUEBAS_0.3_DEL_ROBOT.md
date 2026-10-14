@@ -28,7 +28,8 @@ Igual que `docs/evolution/PRUEBAS_0.2_DEL_ROBOT.md`. Hay dos clases de prueba:
   verdad acierten. Hablan como el plan, y solo `tests/acceptance/conductor_robot_0_3.py`
   sabe cómo se hace cada cosa en el código. Es el conductor de la 0.2 con el oído y la
   voz encima: la charla, la semilla, la memoria y la ventana son las de siempre.
-  Los dobles hacen algo y apuntan lo que hacen: el micro lee, el oído dice cuándo acaba
+  Los dobles hacen algo y apuntan lo que hacen: el micro lee, cada vez un segundo de
+  ruido que no se comprime, 32 000 bytes como los de un micro de verdad, el oído dice cuándo acaba
   el turno, el transcriptor transcribe, la voz dice, el altavoz suena y el modelo
   contesta, y cada uno apunta lo que hizo, con su momento, en el acto de hacerlo. Con el
   altavoz sonando y devolviendo eco, lo que el propietario dice llega al micro en un
@@ -236,11 +237,14 @@ en su gráfica.
   fichero que se abre y cada conexión.
 - **Que la tubería no escriba en el diario lo que oye.** El diario sí puede escribirse;
   se mira que lo que no era para él y lo olvidado no estén en él al acabar, y que solo
-  guarde mensajes del registro: una línea de más de 4 KiB, un tramo de más de 512
-  caracteres sin espacios o más de 256 KiB nuevos cuentan como audio volcado (veinte
-  turnos de charla escriben 5 080 bytes, con la línea más larga de 126 caracteres,
-  medido el 14-10-2026). Una frase oída, corta, escrita por error en un mensaje no se
-  distingue de un mensaje; la frase concreta que no era para él sí se busca. El
+  guarde mensajes del registro. Un audio volcado ocupa al menos lo que el audio, en la
+  forma que sea: cada lectura del micro son 32 000 bytes de ruido que no se comprime, y
+  el diario no puede guardar una sin crecer más de 16 KiB, la partan en líneas cortas o
+  no; veinte turnos de charla escriben 5 080 bytes, con la línea más larga de 126
+  caracteres (medido el 14-10-2026). Cuentan ese crecimiento y, además, una línea de más
+  de 4 KiB o un tramo de más de 512 caracteres sin espacios. Un trozo de audio de menos
+  de 16 KiB en total no se ve, y una frase oída, corta, escrita por error en un mensaje
+  no se distingue de un mensaje; la frase concreta que no era para él sí se busca. El
   conductor lo configura como `sirius.main` y vuelve a encender los registradores
   `sirius.*` que la migración de Alembic apaga; lo que una pieza escriba por el suyo llega.
 - **Que una pieza hecha para burlar al arnés no esconda audio.** Las pruebas de PA-R03-05

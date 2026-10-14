@@ -38,6 +38,7 @@ import functools
 import ipaddress
 import logging
 import os
+import random
 import re
 import sqlite3
 import sys
@@ -47,7 +48,7 @@ import time
 import weakref
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from contextlib import closing
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from types import FrameType
 from typing import Any, Protocol
@@ -459,9 +460,20 @@ class Audio:
     lo guarda el ``Sonido`` que la prueba hizo sonar, y solo la prueba lo ve.
     ``texto`` vacío es silencio. No dura nada: el micro de mentira es instantáneo,
     como el oído, el modelo y la voz, y la tubería no debe darle ritmo.
+
+    ``muestras`` son sus bytes, como los de una lectura de un micro de verdad: un
+    segundo a 16 kHz y 16 bits, ruido que sale de ``texto``, siempre el mismo para el
+    mismo texto y que no se comprime. Nadie de mentira los lee; están para que un audio
+    volcado por error deje en el diario el rastro que dejaría uno de verdad, en
+    cualquier codificación (ronda 8 de Codex sobre la PR #686).
     """
 
     texto: str
+    muestras: bytes = field(init=False, compare=False)
+
+    def __post_init__(self) -> None:
+        ruido = random.Random(self.texto).randbytes(MUESTRAS_POR_LECTURA)
+        object.__setattr__(self, "muestras", ruido)
 
     @property
     def es_silencio(self) -> bool:
@@ -940,12 +952,16 @@ _SOMBRAS_DE_LA_0_2: frozenset[str] = frozenset(
 #: fuera del arranque (medido el 14-10-2026 con los disparadores y el modelo de mentira),
 #: más de noventa veces menos que el tope.
 _BLOQUE_MAS_GRANDE = 16 * 1024
+#: Lo que lee el micro de mentira cada vez, en bytes: un segundo a 16 kHz y 16 bits.
+MUESTRAS_POR_LECTURA = 32_000
 #: Un mensaje del registro es una línea corta: veinte turnos de charla escriben 5 080
 #: bytes en el diario, con la línea más larga de 126 caracteres y el tramo sin espacios
-#: más largo de 32 (medido el 14-10-2026). Un segundo de audio a 16 kHz y 16 bits son 32 000 bytes.
+#: más largo de 32 (medido el 14-10-2026). Una sola lectura del micro son 32 000 bytes
+#: de ruido que no se comprime: escrita en cualquier codificación de texto ocupa más,
+#: 42 668 en base64, así que el diario no puede guardarla sin crecer más de 16 KiB.
 _LINEA_LARGA = 4 * 1024
 _TRAMO_LARGO = 512
-_DIARIO_DE_MAS = 256 * 1024
+_DIARIO_DE_MAS = 16 * 1024
 _TEXTO_LARGO = 16 * 1024
 _FILAS_DE_MAS = 1_000
 _TEXTO_TOTAL = 512 * 1024
@@ -1597,12 +1613,14 @@ class ConductorDeVoz(Conductor):
     def audio_en_el_diario(self) -> list[str]:
         """Si el diario, que sí puede escribir, guarda algo que no es un mensaje del registro.
 
-        Un mensaje del registro es una línea corta de texto. Un audio volcado por error,
-        sus bytes, sus muestras o su base64, es una línea larga, un tramo largo sin
-        espacios o un diario que crece de golpe (ronda 7 de Codex sobre la PR #686).
-        Cuentan una línea de más de 4 KiB, un tramo de más de 512 caracteres sin
-        espacios, y que el diario, rotaciones incluidas, crezca más de 256 KiB desde
-        antes de arrancar Sirius. Vacío si solo guarda mensajes del registro.
+        Un mensaje del registro es una línea corta de texto. Un audio volcado, en la
+        forma que sea, ocupa al menos lo que el audio: una lectura del micro son 32 000
+        bytes de ruido que no se comprime, así que el diario no puede guardarla sin
+        crecer más de 16 KiB, la partan en líneas cortas o no (rondas 7 y 8 de Codex
+        sobre la PR #686). Cuentan ese crecimiento, rotaciones incluidas y desde antes de
+        arrancar Sirius, y además una línea de más de 4 KiB o un tramo de más de 512
+        caracteres sin espacios, que son un volcado más pequeño en un solo mensaje.
+        Vacío si solo guarda mensajes del registro.
         """
         encontrados: list[str] = []
         crecido = self._tamano_del_diario() - self._diario_de_antes

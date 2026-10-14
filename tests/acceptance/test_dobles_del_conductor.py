@@ -13,10 +13,12 @@ el audio de la base de verdad y la charla de la ventana de verdad.
 
 from __future__ import annotations
 
+import base64
 import logging
 import sqlite3
 import struct
 import time
+import zlib
 from contextlib import closing
 from pathlib import Path
 
@@ -59,6 +61,12 @@ def test_el_micro_solo_lee_abierto_y_apunta_cada_lectura_con_su_momento() -> Non
     # La tubería recibe el audio sin quién lo dijo; la prueba ve el sonido entero.
     assert micro.lee() == Audio("Hola, Sirius.")
     assert micro.lee() == Audio("")
+    # Cada lectura lleva bytes como los de un micro de verdad: un segundo de ruido, el
+    # mismo para el mismo texto, distinto para otro, y que no se comprime.
+    lectura = Audio("Hola, Sirius.")
+    assert len(lectura.muestras) == 32_000
+    assert lectura.muestras == Audio("Hola, Sirius.").muestras != Audio("Otra.").muestras
+    assert len(zlib.compress(lectura.muestras, 9)) > 31_900
     assert micro.lee() is None
     assert micro.perdidos == (Sonido("Se pierde: el micro está cerrado."),)
     assert micro.leidos == (Sonido("Hola, Sirius."), Sonido(""))
@@ -493,19 +501,20 @@ def test_el_audio_volcado_en_el_diario_se_ve_regla_a_regla(tmp_path: Path) -> No
     assert conductor.audio_en_el_diario() == [], "la charla solo escribe mensajes cortos"
 
     registro = logging.getLogger(f"{LOGGER_NAME}.una_pieza")
-    # Una regla cada vez: una línea larga de palabras cortas; un tramo largo sin
-    # espacios en una línea corta, como un base64; y muchas líneas normales que juntas
-    # son más que charla, como unas muestras escritas una a una.
+    # Una regla cada vez. Una lectura entera del micro en base64 partido en líneas de 76
+    # caracteres, como lo escribe ``base64.encodebytes``: ninguna línea larga ni ningún
+    # tramo largo, pero el diario crece lo que pesa el audio.
+    registro.warning("%s", base64.encodebytes(Audio("Pues yo fatal.").muestras).decode())
+    visto = conductor.audio_en_el_diario()
+    assert len(visto) == 1 and visto[0].startswith("el diario (creció "), visto
+    # Un volcado más pequeño en un solo mensaje: una línea larga de palabras cortas, y un
+    # tramo largo sin espacios en una línea corta.
     registro.warning("muestras: %s", "muestra " * 600)
     visto = conductor.audio_en_el_diario()
-    assert len(visto) == 1 and visto[0].startswith("el diario (una línea de "), visto
+    assert len(visto) == 2 and visto[1].startswith("el diario (una línea de "), visto
     registro.warning("base64: %s", "UklGRiQIAABXQVZF" * 64)
     visto = conductor.audio_en_el_diario()
-    assert visto[-1] == "el diario (un tramo de 1024 caracteres sin espacios)", visto
-    for _ in range(300):
-        registro.warning("%s", "0.01 -0.02 " * 90)
-    assert conductor.audio_en_el_diario()[0].startswith("el diario (creció ")
-    assert len(conductor.audio_en_el_diario()) == 3
+    assert visto[2:] == ["el diario (un tramo de 1024 caracteres sin espacios)"], visto
     conductor.cierra()
 
 
