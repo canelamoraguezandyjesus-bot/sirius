@@ -424,14 +424,6 @@ def test_la_base_se_vigila_fila_a_fila_tambien_lo_que_se_borra_antes_de_acabar(
         conexion.execute("SELECT desde_dentro()").fetchone()
         conexion.execute("DELETE FROM memory_embeddings WHERE memory_id = 952")
         conexion.execute("DELETE FROM messages WHERE sequence IN (953, 954)")
-        # Audio del micro guardado como texto corto, en base64 y como lista JSON: sin
-        # BLOB ni texto largo, pero con la marca dentro.
-        lectura = Audio("Pues yo fatal.")
-        conexion.execute(
-            fila_de_mensaje, (955, base64.b64encode(lectura.muestras[:9_000]).decode())
-        )
-        conexion.execute(fila_de_mensaje, (956, json.dumps(list(lectura.muestras[:1_500]))))
-        conexion.execute("DELETE FROM messages WHERE sequence IN (955, 956)")
         # Muchas filas de golpe desde otra consulta, y mucho texto en trozos cortos: se
         # cuentan las filas y el texto de verdad, no las sentencias.
         conexion.execute(
@@ -484,8 +476,6 @@ def test_la_base_se_vigila_fila_a_fila_tambien_lo_que_se_borra_antes_de_acabar(
         in visto
     )
     assert "messages.content (texto de 25600 caracteres al insertar)" in visto
-    assert "messages.content (texto con audio del micro en base64 al insertar)" in visto
-    assert "messages.content (texto con audio del micro como lista de bytes al insertar)" in visto
     assert "messages (escritura dentro de otra sentencia, fuera de las sombras)" in visto
     assert "conversations (+5000 filas escritas)" in visto
     assert any(
@@ -577,6 +567,30 @@ def test_el_audio_del_micro_en_el_diario_se_ve_en_cada_forma_y_los_mensajes_no_c
         vuelca()
         vistas.append(f"el diario (guarda audio del micro {forma})")
         assert sorted(conductor.audio_en_el_diario()) == sorted(vistas), forma
+    conductor.cierra()
+
+
+def test_la_vigilancia_no_guarda_nada_de_lo_que_se_escribe(tmp_path: Path) -> None:
+    conductor = ConductorDeVoz(tmp_path)
+    conductor.di("Me gustan las zarzamoras del camino.")
+    # Un texto largo, que la vigilancia apunta: su tabla, su columna, su tamaño y su
+    # cabecera en hexadecimal, nunca el texto.
+    with closing(sqlite3.connect(conductor.base)) as conexion:
+        conexion.execute(
+            "INSERT INTO messages (conversation_id, sequence, role, content, created_at, status)"
+            " VALUES (1, 960, 'user', ?, '2026-10-13 00:00:00', 'completed')",
+            ("zarzamoras " * 2_000,),
+        )
+        conexion.execute("DELETE FROM messages WHERE sequence = 960")
+        conexion.commit()
+    assert (
+        "messages.content (texto de 22000 caracteres al insertar)" in conductor.audio_en_la_base()
+    )
+    # Lo que una pieza olvide no puede quedarse en las tablas del arnés: la búsqueda en
+    # toda la base de «olvida eso» las recorre también.
+    sitios = conductor.busca_en_toda_la_base("zarzamoras")
+    assert "messages.content" in sitios
+    assert not any(sitio.startswith("_vigilancia") for sitio in sitios), sitios
     conductor.cierra()
 
 

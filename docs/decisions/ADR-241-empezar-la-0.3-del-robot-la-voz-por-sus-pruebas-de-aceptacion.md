@@ -244,7 +244,7 @@ la misma PR que anote sus cifras.
 - La comprobación de la tabla: `tests/acceptance/test_robot_0_3_trazabilidad.py` pasa
   con el documento como está, y las 13 pruebas de `test_robot_0_2_trazabilidad.py`, diez
   de ellas con tablas rotas a propósito, siguen pasando sobre el módulo compartido.
-- La batería entera. Sobre `7209d783`, el primer head: 8 194 pasan, 16 saltadas y 28 `xfail`, los 26 de la 0.3 de entonces y los 2 que ya estaban, en 24 min 29 s. Sobre `main` (`d545ff17`) eran 8 181 pasan y 2 `xfail`: entran las esperadas y 13 que pasan, las dos de la trazabilidad de la 0.3, la tabla rota nueva de la 0.2 y las que los guardas de documentos añaden por cada ADR y documento nuevo. Sobre el head de la ronda 1: 8 194 pasan, 16 saltadas y 29 `xfail`, los 27 de la 0.3 y los 2 que ya estaban, en 25 min 40 s. Sobre el head de la ronda 2: 8 198 pasan, 16 saltadas y 29 `xfail`, en 23 min 44 s; las 4 que entran son las 3 del vigilante y la que los guardas añaden por el fichero nuevo. Sobre el árbol de la ronda 3 y H-241, `56017da1`: 8 199 pasan, 16 saltadas y 29 `xfail`, en 23 min 10 s. Sobre el árbol de la revisión propia, con sus cinco pasadas: 8 211 pasan, 16 saltadas y 29 `xfail`, en 22 min 49 s; las 12 que entran son las 10 de los dobles, la cuarta del vigilante y la que los guardas añaden por el fichero nuevo. Sobre el árbol de la ronda 4 y su mirada propia: 8 212 pasan, 16 saltadas y 29 `xfail`, en 21 min 34 s; la que entra es la del eco mezclado con la voz. Sobre el árbol de la ronda 5 y su mirada propia: 8 212 pasan, 16 saltadas y 29 `xfail`, en 21 min 23 s. Sobre el árbol de la ronda 6, sus ojos frescos y su mirada propia: 8 214 pasan, 16 saltadas y 29 `xfail`, en 20 min 4 s; las 2 que entran son la del vigilante sobre las sentencias y la de las filas de los dobles. Sobre el árbol de la ronda 7: 8 215 pasan, 16 saltadas y 29 `xfail`, en 20 min 44 s; la que entra es la del diario de los dobles. Sobre el árbol de la ronda 8: 8 215 pasan, 16 saltadas y 29 `xfail`, en 20 min 13 s. Sobre el árbol de la ronda 9: 8 216 pasan, 16 saltadas y 29 `xfail`, en 20 min 20 s; la que entra es la de las variantes de la marca. Y la línea base de la charla escrita, `di()` solo, en la nube el 13-10-2026: 34 ms en el P95 de 20 turnos, 25,7 ms la mediana y 57,7 ms el máximo.
+- La batería entera. Sobre `7209d783`, el primer head: 8 194 pasan, 16 saltadas y 28 `xfail`, los 26 de la 0.3 de entonces y los 2 que ya estaban, en 24 min 29 s. Sobre `main` (`d545ff17`) eran 8 181 pasan y 2 `xfail`: entran las esperadas y 13 que pasan, las dos de la trazabilidad de la 0.3, la tabla rota nueva de la 0.2 y las que los guardas de documentos añaden por cada ADR y documento nuevo. Sobre el head de la ronda 1: 8 194 pasan, 16 saltadas y 29 `xfail`, los 27 de la 0.3 y los 2 que ya estaban, en 25 min 40 s. Sobre el head de la ronda 2: 8 198 pasan, 16 saltadas y 29 `xfail`, en 23 min 44 s; las 4 que entran son las 3 del vigilante y la que los guardas añaden por el fichero nuevo. Sobre el árbol de la ronda 3 y H-241, `56017da1`: 8 199 pasan, 16 saltadas y 29 `xfail`, en 23 min 10 s. Sobre el árbol de la revisión propia, con sus cinco pasadas: 8 211 pasan, 16 saltadas y 29 `xfail`, en 22 min 49 s; las 12 que entran son las 10 de los dobles, la cuarta del vigilante y la que los guardas añaden por el fichero nuevo. Sobre el árbol de la ronda 4 y su mirada propia: 8 212 pasan, 16 saltadas y 29 `xfail`, en 21 min 34 s; la que entra es la del eco mezclado con la voz. Sobre el árbol de la ronda 5 y su mirada propia: 8 212 pasan, 16 saltadas y 29 `xfail`, en 21 min 23 s. Sobre el árbol de la ronda 6, sus ojos frescos y su mirada propia: 8 214 pasan, 16 saltadas y 29 `xfail`, en 20 min 4 s; las 2 que entran son la del vigilante sobre las sentencias y la de las filas de los dobles. Sobre el árbol de la ronda 7: 8 215 pasan, 16 saltadas y 29 `xfail`, en 20 min 44 s; la que entra es la del diario de los dobles. Sobre el árbol de la ronda 8: 8 215 pasan, 16 saltadas y 29 `xfail`, en 20 min 13 s. Sobre el árbol de la ronda 9: 8 216 pasan, 16 saltadas y 29 `xfail`, en 20 min 20 s; la que entra es la de las variantes de la marca. Sobre el árbol de la ronda 10: 8 217 pasan, 16 saltadas y 29 `xfail`, en 20 min 28 s; la que entra es la de que el arnés no guarda nada de lo que se escribe. Y la línea base de la charla escrita, `di()` solo, en la nube el 13-10-2026: 34 ms en el P95 de 20 turnos, 25,7 ms la mediana y 57,7 ms el máximo.
 
 ## Consecuencias
 
@@ -711,6 +711,22 @@ la misma PR que anote sus cifras.
   - **Lo que no cubre** queda escrito: un trozo de audio de menos de un kilobyte, que
     puede no llevar la marca, y un audio transformado para que la marca no se reconozca,
     que ya no es un error.
+- **Ronda 10 de Codex**, sobre `5d6d1d29`: un hallazgo P1, cierto, sobre el arreglo de la
+  ronda 9. Los disparadores copiaban cada texto que entraba en una tabla del arnés para
+  buscarle la marca, y la copia se quedaba: cuando la pieza B olvide de verdad lo que el
+  propietario le pida olvidar, la búsqueda en toda la base de «olvida eso» encontraría
+  la frase en la copia, y la prueba fallaría con una pieza correcta.
+  - **La raíz.** El arnés guardaba lo que la pieza escribía, y una prueba de olvidar no
+    puede convivir con un arnés que recuerda. La vigilancia apunta ahora solo dónde y
+    cuánto se escribió, y la cabecera de un BLOB o de un texto largo en hexadecimal,
+    nunca el texto; la marca del audio se queda donde no hace copia, en el diario, que
+    se lee entero sin guardar nada. En la base, un audio guardado como texto corto, en
+    base64 o en una lista, vuelve a lo que no se garantiza, como estaba escrito desde la
+    ronda 6, de menos de 16 KiB por valor y 512 KiB en total.
+  - **La prueba**: `test_dobles_del_conductor.py` escribe un texto largo con
+    «zarzamoras», lo borra, y comprueba que la búsqueda en toda la base no lo encuentra
+    en ninguna tabla del arnés. Mutación: la vigilancia guardando el texto en vez de su
+    cabecera en hexadecimal, cazada.
 - **El criterio cambia el 13-10-2026, tras la ronda 3.** El propietario, al ver la
   tercera ronda seguida con la misma familia, retiró el tope de rondas que ADR-233 había
   sacado de su «nada de cinco rondas» del 07-10-2026: «No nos podemos limitar a solo tres

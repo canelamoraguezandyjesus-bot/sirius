@@ -465,9 +465,8 @@ class Audio:
     ``muestras`` son sus bytes, como los de una lectura de un micro de verdad: un
     segundo a 16 kHz y 16 bits, ruido que sale de ``texto``, siempre el mismo para el
     mismo texto, con ``MARCA_DEL_AUDIO`` en medio de cada 1 000 bytes. Nadie de mentira
-    los lee; están para que un audio guardado por error, entero o en trozos de más de
-    un kilobyte, lleve la marca a donde vaya: al diario o a un texto de la base (rondas 8
-    y 9 de Codex sobre la PR #686).
+    los lee; están para que un audio volcado por error en el diario, entero o en trozos
+    de más de un kilobyte, lleve la marca (rondas 8 y 9 de Codex sobre la PR #686).
     """
 
     texto: str
@@ -945,9 +944,7 @@ _COLUMNAS_DEL_MODELO: Mapping[str, frozenset[str]] = {
 
 #: Las dos tablas del arnés en la base: lo que vieron sus disparadores y cuántas filas y
 #: cuánto texto escribió cada tabla desde que arrancó Sirius.
-TABLAS_DE_LA_PRUEBA: frozenset[str] = frozenset(
-    {"_vigilancia_escrituras", "_vigilancia_filas", "_vigilancia_textos"}
-)
+TABLAS_DE_LA_PRUEBA: frozenset[str] = frozenset({"_vigilancia_escrituras", "_vigilancia_filas"})
 #: Las sombras de los índices de texto de la 0.2: las únicas tablas en las que SQLite
 #: escribe desde dentro de otra sentencia al charlar.
 _SOMBRAS_DE_LA_0_2: frozenset[str] = frozenset(
@@ -1091,9 +1088,7 @@ def _disparador(tabla: str, columnas: Sequence[str], operacion: str) -> str:
 
     Apunta en ``_vigilancia_escrituras`` todo BLOB y todo texto de más de 16 KiB que
     entra (``NEW``) y, al actualizar o borrar, también el que había (``OLD``), que es como
-    se ve lo que se escribió a trozos con ``blobopen``; copia en ``_vigilancia_textos``
-    cada texto que entra, para buscarle la marca del audio del micro desde Python; y suma
-    en ``_vigilancia_filas``
+    se ve lo que se escribió a trozos con ``blobopen``; y suma en ``_vigilancia_filas``
     las filas insertadas y el texto escrito o cambiado, se escriba como se escriba:
     con un literal, con un parámetro, con una función, desde otra tabla o desde una
     sentencia anidada.
@@ -1117,16 +1112,6 @@ def _disparador(tabla: str, columnas: Sequence[str], operacion: str) -> str:
                 f" OR (typeof({v}) = 'text' AND length({v}) > {_TEXTO_LARGO});"
             )
     if operacion != "borrar":
-        # Cada texto que entra se copia, para buscarle la marca del audio del micro desde
-        # Python con la misma función que el diario; el que es más corto que la marca no
-        # puede llevarla.
-        for columna in columnas:
-            v = f'NEW."{_sql(columna)}"'
-            cuerpo.append(
-                "INSERT INTO _vigilancia_textos (tabla, columna, operacion, texto)"
-                f" SELECT '{_texto_sql(tabla)}', '{_texto_sql(columna)}', '{miradas[0][1]}', {v}"
-                f" WHERE typeof({v}) = 'text' AND length({v}) >= {len(MARCA_DEL_AUDIO)};"
-            )
         nuevas = 1 if operacion == "insertar" else 0
         sumandos: list[str] = []
         for columna in columnas:
@@ -1564,7 +1549,10 @@ class ConductorDeVoz(Conductor):
     def _pone_los_disparadores(self) -> None:
         """Pone los ojos sobre las filas, al acabar de arrancar Sirius.
 
-        Las dos tablas del arnés (``TABLAS_DE_LA_PRUEBA``) y, en cada tabla de la base
+        Las dos tablas del arnés (``TABLAS_DE_LA_PRUEBA``), que no guardan nada de lo que
+        se escribe, solo su tabla, su columna, su tipo, su tamaño y la cabecera de un BLOB
+        o un texto largo en hexadecimal, para que lo que la pieza olvide no se quede en
+        ellas (ronda 10 de Codex sobre la PR #686); y, en cada tabla de la base
         que no sea virtual, sombra ni de SQLite, un disparador por insertar, actualizar
         y borrar (``_disparador``). Viven en la base, no en una conexión: ven también lo
         que escriba una conexión que el trazador no sigue, y quitarlos es un cambio de
@@ -1575,10 +1563,6 @@ class ConductorDeVoz(Conductor):
                 "CREATE TABLE IF NOT EXISTS _vigilancia_escrituras (tabla TEXT NOT NULL,"
                 " columna TEXT NOT NULL, operacion TEXT NOT NULL, tipo TEXT NOT NULL,"
                 " largo INTEGER NOT NULL, cabecera TEXT NOT NULL)"
-            )
-            conexion.execute(
-                "CREATE TABLE IF NOT EXISTS _vigilancia_textos (tabla TEXT NOT NULL,"
-                " columna TEXT NOT NULL, operacion TEXT NOT NULL, texto TEXT NOT NULL)"
             )
             conexion.execute(
                 "CREATE TABLE IF NOT EXISTS _vigilancia_filas (tabla TEXT PRIMARY KEY,"
@@ -1606,9 +1590,6 @@ class ConductorDeVoz(Conductor):
                     "SELECT tabla, columna, operacion, tipo, largo, cabecera"
                     " FROM _vigilancia_escrituras ORDER BY rowid"
                 ).fetchall()
-                textos = conexion.execute(
-                    "SELECT tabla, columna, operacion, texto FROM _vigilancia_textos ORDER BY rowid"
-                ).fetchall()
                 cuentas = conexion.execute(
                     "SELECT tabla, filas, texto FROM _vigilancia_filas ORDER BY tabla"
                 ).fetchall()
@@ -1622,11 +1603,6 @@ class ConductorDeVoz(Conductor):
                 encontrados.append(f"{tabla}.{columna} ({que} de {largo} bytes {operacion})")
             else:
                 encontrados.append(f"{tabla}.{columna} (texto de {largo} caracteres {operacion})")
-        for tabla, columna, operacion, texto in textos:
-            encontrados.extend(
-                f"{tabla}.{columna} (texto con audio del micro {forma} {operacion})"
-                for forma in _formas_del_audio_en(texto)
-            )
         texto_total = 0
         for tabla, filas, texto in cuentas:
             texto_total += int(texto)
