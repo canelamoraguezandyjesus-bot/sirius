@@ -18,6 +18,11 @@ transcribe y le pasa el texto a la misma charla que la ventana
   falte y, si el problema es otro, dice cuál. Para el micro y el detector, que no toca, no
   se aconseja. Adivinar si la arreglaría salió mal en seis rondas de Codex sobre la PR
   #687 (2, 4, 5, 6, 7 y 8).
+- **Lo oído solo va a una charla de este ordenador.** Si el modelo de la charla es de
+  fuera (OpenAI, que Configuración sigue ofreciendo), no oye; y como la charla puede
+  cambiar de modelo mientras escucha, lo vuelve a mirar al cerrar cada turno, antes de
+  transcribirlo: si ya no se queda aquí, el turno no sale y deja de escuchar (PA-R03-08,
+  ronda 9 de Codex sobre la PR #687).
 - **En la pieza B todo lo oído es para él**; a quién le hablan lo decide la pieza D.
 """
 
@@ -31,6 +36,7 @@ from typing import Protocol
 from sirius.application.send_message import SendMessageResult
 from sirius.domain.conversation import MessageStatus
 from sirius.infrastructure.logging import get_logger
+from sirius.ports.llm import runs_on_this_computer
 from sirius.ports.local_voice import (
     ListeningEngines,
     TurnSignal,
@@ -44,10 +50,20 @@ _logger = get_logger(__name__)
 #: primera sílaba: Silero da la voz por empezada un poco después de que empiece. Con los
 #: trozos del micro de verdad, de 512 muestras a 16 kHz, son medio segundo.
 PRE_ROLL_CHUNKS = 16
+#: Lo que dice si la charla va a un modelo de fuera de este ordenador.
+CHAT_LEAVES = (
+    "No puedo oírte: la charla va ahora a un modelo de fuera de este ordenador, y lo que "
+    "oigo no sale de aquí."
+)
 
 
 class Chat(Protocol):
     """La charla de Sirius, la misma que usa la ventana."""
+
+    @property
+    def llm_provider(self) -> object:
+        """El modelo con el que conversa ahora, que puede cambiar en marcha."""
+        ...
 
     def send_message(self, user_text: str) -> SendMessageResult: ...
 
@@ -108,6 +124,9 @@ class LocalListening[Chunk]:
         """
         if self._listening:
             return ""
+        if not runs_on_this_computer(self._chat.llm_provider):
+            _logger.info("El oído no arranca: la charla va a un modelo de fuera")
+            return self._fail(CHAT_LEAVES)
         missing = self._installation.missing()
         if missing:
             _logger.info("El oído no arranca: falta %s", ", ".join(missing))
@@ -176,11 +195,11 @@ class LocalListening[Chunk]:
             return Attended(notice=self._notice)
         microphone = self._engines.microphone
         turns: list[HeardTurn] = []
-        while (chunk := microphone.read()) is not None:
+        while self._listening and (chunk := microphone.read()) is not None:
             turn = self._take(chunk)
             if turn is not None:
                 turns.append(turn)
-        return Attended(turns=tuple(turns))
+        return Attended(turns=tuple(turns), notice="" if self._listening else self._notice)
 
     def _take(self, chunk: Chunk) -> HeardTurn | None:
         """Le enseña ``chunk`` al detector y, si con él acaba el turno, lo atiende."""
@@ -197,6 +216,13 @@ class LocalListening[Chunk]:
         if signal is not TurnSignal.ENDED:
             return None
         chunks, self._turn = self._turn, None
+        if not runs_on_this_computer(self._chat.llm_provider):
+            # La charla cambió a un modelo de fuera mientras escuchaba: el turno no sale.
+            del chunks
+            _logger.warning("La charla va a un modelo de fuera: el turno de voz no sale")
+            self._fail(CHAT_LEAVES)
+            self.stop()
+            return None
         heard = self._engines.transcriber.transcribe(chunks).strip()
         del chunks
         if not heard:

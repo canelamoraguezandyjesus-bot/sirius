@@ -170,7 +170,7 @@ Medido el 14-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   la C (`tests/acceptance/test_dobles_del_conductor.py`). La tabla de
   `docs/evolution/PRUEBAS_0.3_DEL_ROBOT.md` pone PA-R03-01 en verde; PA-R03-08 sigue
   pendiente de la C.
-- **84 pruebas unitarias nuevas**: el servicio (`tests/unit/test_local_listening.py`), los
+- **87 pruebas unitarias nuevas**: el servicio (`tests/unit/test_local_listening.py`), los
   adaptadores de verdad con módulos de mentira (`tests/unit/test_local_listening_adapters.py`),
   la instalación y la orden de instalar (`tests/unit/test_local_voice_installation.py`), la
   orden de consola (`tests/unit/test_listen_console.py`) y la guarda de las descargas
@@ -224,8 +224,15 @@ Medido el 14-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   el modelo, que mande cerrar Sirius y repetir cuando faster-whisper no carga, y traer la
   descarga atrapando solo `ImportError`. Al cerrar la ronda 8 se han vuelto a pasar las 26
   de las rondas 4 a 8 que siguen vigilando algo, y caen todas; las cuatro de la ronda 7
-  que vigilaban lo que se retira en la 8 se retiran con ello. La de etiquetar con la
-  generación del
+  que vigilaban lo que se retira en la 8 se retiran con ello. Y las diez de la ronda 9:
+  oír con la charla en un modelo de fuera, entregar el turno aunque la charla se haya
+  ido fuera, seguir leyendo el micro después de dejar de oír, no decir por qué, que el
+  proveedor que no dice dónde corre cuente como de aquí, que Ollama no lo diga, que
+  OpenAI lo diga, que el modelo de mentira del conductor no lo diga, y que la orden vuelva
+  a mandar cerrar Sirius y repetir o a decir que repetirla no lo arreglará. Al cerrar la
+  ronda 9 se han vuelto a pasar las 35 de las rondas 4 a 9 que siguen vigilando algo, y
+  caen todas; la de la ronda 8 que pedía decir que repetirla no lo arregla se retira con
+  lo que vigilaba. La de etiquetar con la generación del
   momento sobrevivió a la prueba que reproduce el caso de Codex, que para el hilo dentro
   de `bytes(data)`, donde las dos coinciden; cayó con otra que lo para justo después de
   comprobar.
@@ -505,3 +512,25 @@ DLL que no carga, un ordenador sin memoria); entonces él la ejecuta, ve qué es
 repetirla no sirve. Con las bibliotecas de verdad, sin PortAudio y sin modelo, la orden
 intenta bajar el modelo antes de decir nada de sounddevice (en el contenedor,
 huggingface.co da 403).
+
+**Ronda 9** (`ad8fb320`, 14-10-2026): dos hallazgos, ciertos los dos.
+
+- **P1: lo dicho por voz podía salir del ordenador.** Configuración sigue ofreciendo
+  OpenAI (ADR-234), y la charla puede cambiar de modelo en marcha (`set_llm_provider`).
+  Con OpenAI elegido, el texto de lo oído iba a OpenAI al contestar, contra PA-R03-08
+  («ninguna petición sale durante un turno de voz»). La prueba de aceptación no lo veía
+  porque el conductor pone su modelo de mentira. Ahora cada proveedor dice si se queda en
+  este ordenador (`runs_on_this_computer`: Ollama, que solo va a `localhost`, el de
+  mentira y el sin configurar; OpenAI no), y el que no lo dice cuenta como de fuera. El
+  oído no arranca con una charla de fuera, y al cerrar cada turno, antes de transcribirlo,
+  lo vuelve a mirar: si la charla se fue fuera mientras escuchaba, el turno no sale, deja
+  de escuchar y lo dice. Lo que queda fuera, a propósito: si después él elige OpenAI
+  para escribir, la charla lleva consigo lo que se dijo antes por voz, como lleva lo
+  escrito. Eso es la charla, no un turno de voz, y lo decide él al elegir el modelo.
+- **P2: la orden aconsejaba cerrar Sirius y repetir ante cualquier fallo de descarga.**
+  Es la séptima vez del remedio que no remedia, y viene de un consejo de la ronda 2 que el
+  barrido de la ronda 8 no vio, como el «repetirla no lo arreglará» que esa misma ronda
+  añadió. Se barre lo que quedaba: la orden dice la causa y nada más, sin adivinar
+  remedios, y una prueba mira que ninguna de sus salidas de fallo los adivine. Lo único
+  que sigue diciendo de lo que hace es lo cierto por construcción: cómo escribirla si se
+  ejecutó sin el extra, porque así uv instala lo que falta.

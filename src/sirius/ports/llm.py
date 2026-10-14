@@ -117,3 +117,14 @@ class LLMProvider(Protocol):
     def cancel(self, operation_id: str) -> None:
         """Request cooperative cancellation of an in-flight operation. Idempotent."""
         ...
+
+
+def runs_on_this_computer(provider: object) -> bool:
+    """Si ``provider`` contesta sin que nada salga de este ordenador.
+
+    Lo declara cada proveedor con ``runs_on_this_computer = True``; el que no lo dice
+    cuenta como de fuera, que es no arriesgar. La voz del robot solo entrega lo que oye a
+    uno de estos: ninguna petición sale durante un turno de voz (PA-R03-08, ronda 9 de
+    Codex sobre la PR #687).
+    """
+    return getattr(provider, "runs_on_this_computer", False) is True

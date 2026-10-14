@@ -22,6 +22,9 @@ class FakeLLMProvider:
     exercise "cancel mid-stream" deterministically, with no threads or sleeps.
     """
 
+    #: No sale nada de este ordenador (``sirius.ports.llm.runs_on_this_computer``).
+    runs_on_this_computer = True
+
     def __init__(self, chunks: Iterable[str] = _DEFAULT_CHUNKS) -> None:
         self._chunks = tuple(chunks)
         self._cancelled_operations: set[str] = set()

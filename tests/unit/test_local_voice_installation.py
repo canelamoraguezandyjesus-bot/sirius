@@ -41,6 +41,15 @@ def bibliotecas_bien(monkeypatch: pytest.MonkeyPatch) -> None:
 #: Lo que lee faster-whisper 1.2.1 de la carpeta de un modelo (``WhisperModel`` y
 #: ``ctranslate2``), escrito aquí y no copiado de Sirius: si Sirius dejara de pedir uno,
 #: estas pruebas lo verían. Sin ``tokenizer.json``, faster-whisper lo pide a internet.
+#: Lo que la orden ya no dice al fallar: son remedios adivinados, y no sabe si sirven
+#: (rondas 2, 4, 5, 8 y 9 de Codex sobre la PR #687).
+_REMEDIOS_ADIVINADOS = ("repetirla", "ciérralo", "vuelve a ejecutar")
+
+
+def _sin_remedios_adivinados(salida: str) -> None:
+    assert not [r for r in _REMEDIOS_ADIVINADOS if r in salida], salida
+
+
 _MODELO_ENTERO = ("model.bin", "config.json", "tokenizer.json", "vocabulary.txt")
 
 
@@ -177,7 +186,7 @@ def test_un_modelo_que_esta_no_se_vuelve_a_bajar_aunque_no_cargue(
     # Ronda 5 de Codex sobre la PR #687: si no carga porque el ordenador no puede (sin
     # memoria, un motor que no admite), bajarlo otra vez gasta 500 MB y vuelve a fallar.
     # La orden no puede distinguirlo de un fichero roto, así que no lo baja otra vez y
-    # dice que repetirla no lo arreglará; Sirius tampoco se la promete.
+    # dice la causa.
     _pon_modelo(LocalVoiceInstallation(LocalVoiceSettings()).listening_model_dir)
 
     def no_baja(*args: object) -> None:
@@ -192,7 +201,7 @@ def test_un_modelo_que_esta_no_se_vuelve_a_bajar_aunque_no_cargue(
     assert install_local_voice.main() == 1
     salida = capsys.readouterr().out
     assert "Unable to allocate memory" in salida
-    assert f"Si la ejecutaste así, {INSTALL_COMMAND} , repetirla no lo arreglará" in salida
+    _sin_remedios_adivinados(salida)
 
 
 @pytest.mark.usefixtures("bibliotecas_bien")
@@ -209,8 +218,7 @@ def test_si_el_oido_no_carga_la_orden_acaba_en_error(
     assert install_local_voice.main() == 1
     salida = capsys.readouterr().out
     assert "INVALID_PROTOBUF" in salida
-    # Lo que está y no carga no lo arregla esta orden: se dice, para que no se repita.
-    assert f"Si la ejecutaste así, {INSTALL_COMMAND} , repetirla no lo arreglará" in salida
+    _sin_remedios_adivinados(salida)
 
 
 @pytest.mark.usefixtures("bibliotecas_bien")
@@ -224,8 +232,10 @@ def test_si_no_se_puede_bajar_la_orden_acaba_en_error(
 
     assert install_local_voice.main() == 1
     salida = capsys.readouterr().out
+    # Ronda 9 de Codex sobre la PR #687: cerrar Sirius no arregla quedarse sin internet,
+    # un 403 ni el disco lleno. Se dice la causa, sin adivinar el remedio.
     assert "sin internet" in salida
-    assert "ciérralo" in salida
+    _sin_remedios_adivinados(salida)
 
 
 def _biblioteca_rota(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -253,7 +263,7 @@ def test_con_una_biblioteca_rota_baja_igual_el_modelo_que_falta_y_lo_dice(
     salida = capsys.readouterr().out
     assert bajados == [LocalVoiceInstallation(LocalVoiceSettings()).listening_model_dir]
     assert "PortAudio" in salida
-    assert "repetirla no lo arreglará" in salida
+    _sin_remedios_adivinados(salida)
 
 
 def test_con_el_modelo_puesto_y_una_biblioteca_rota_no_baja_nada_y_lo_dice(
@@ -270,7 +280,7 @@ def test_con_el_modelo_puesto_y_una_biblioteca_rota_no_baja_nada_y_lo_dice(
     assert install_local_voice.main() == 1
     salida = capsys.readouterr().out
     assert "PortAudio" in salida
-    assert "repetirla no lo arreglará" in salida
+    _sin_remedios_adivinados(salida)
 
 
 def test_si_faster_whisper_no_carga_al_ir_a_bajar_falla_como_la_voz_y_no_tumba_la_orden(
@@ -293,7 +303,7 @@ def test_si_faster_whisper_no_carga_al_ir_a_bajar_falla_como_la_voz_y_no_tumba_l
 
 
 @pytest.mark.usefixtures("bibliotecas_bien")
-def test_si_faster_whisper_no_carga_dice_que_no_puede_bajar_el_modelo_sin_mandar_repetir(
+def test_si_faster_whisper_no_carga_dice_que_no_puede_bajar_el_modelo_y_por_que(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     def no_carga() -> object:
@@ -304,8 +314,7 @@ def test_si_faster_whisper_no_carga_dice_que_no_puede_bajar_el_modelo_sin_mandar
     assert install_local_voice.main() == 1
     salida = capsys.readouterr().out
     assert "No se puede bajar el modelo: faster_whisper no carga ([WinError 126])" in salida
-    assert "repetirla no lo arreglará" in salida
-    assert "ciérralo" not in salida, "cerrar Sirius y repetir no arregla una DLL"
+    _sin_remedios_adivinados(salida)
 
 
 # --- Las bibliotecas del extra: la orden mira si están como lo mira uv ---------------

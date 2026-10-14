@@ -15,9 +15,19 @@ from typing import cast
 
 import pytest
 
-from sirius.application.local_listening import Attended, HeardTurn, LocalListening
+from sirius.adapters.llm.fake import FakeLLMProvider
+from sirius.adapters.llm.ollama_chat import OllamaChatProvider
+from sirius.adapters.llm.openai_responses import OpenAIResponsesProvider
+from sirius.adapters.llm.unconfigured import UnconfiguredLLMProvider
+from sirius.application.local_listening import (
+    CHAT_LEAVES,
+    Attended,
+    HeardTurn,
+    LocalListening,
+)
 from sirius.application.send_message import SendMessageResult
 from sirius.domain.conversation import MessageStatus
+from sirius.ports.llm import runs_on_this_computer
 from sirius.ports.local_voice import ListeningEngines, TurnSignal, VoiceUnavailable
 
 FIN = "fin"
@@ -106,6 +116,8 @@ class _Transcriptor:
 
 class _Charla:
     def __init__(self) -> None:
+        #: Un modelo de este ordenador, como Ollama.
+        self.llm_provider: object = SimpleNamespace(runs_on_this_computer=True)
         self.mensajes: list[str] = []
         self.falla: Exception | None = None
         self.desenlace = MessageStatus.COMPLETED
@@ -274,6 +286,47 @@ def test_si_el_oido_no_carga_aconseja_la_orden_diciendo_lo_que_hace() -> None:
     assert "Instala o pone al día lo que falte de la voz" in aviso
     assert "si el problema es otro, te dice cuál" in aviso
     assert not oido.servicio.listening
+
+
+# --- Lo oído solo va a una charla de este ordenador (PA-R03-08) --------------------
+#
+# Ronda 9 de Codex sobre la PR #687: Configuración sigue ofreciendo OpenAI, y lo dicho por
+# voz habría salido con la charla. La voz solo entrega lo que oye a un modelo de aquí.
+
+
+def test_solo_los_modelos_de_este_ordenador_dicen_que_se_quedan_aqui() -> None:
+    assert runs_on_this_computer(OllamaChatProvider)
+    assert runs_on_this_computer(FakeLLMProvider)
+    assert runs_on_this_computer(UnconfiguredLLMProvider)
+    assert not runs_on_this_computer(OpenAIResponsesProvider)
+    assert not runs_on_this_computer(object()), "el que no lo dice, cuenta como de fuera"
+
+
+def test_con_la_charla_en_un_modelo_de_fuera_no_oye_ni_carga_ni_abre_nada() -> None:
+    oido = _Oido()
+    oido.charla.llm_provider = SimpleNamespace()
+
+    aviso = oido.servicio.start()
+
+    assert aviso == CHAT_LEAVES
+    assert "la orden de instalar" not in aviso, "instalar no lo arregla"
+    assert oido.cargas == 0
+    assert not oido.micro.abierto
+    assert not oido.servicio.listening
+
+
+def test_si_la_charla_se_va_a_un_modelo_de_fuera_mientras_oye_el_turno_no_sale() -> None:
+    oido = _Oido()
+    assert oido.servicio.start() == ""
+    oido.charla.llm_provider = SimpleNamespace()
+
+    atendido = oido.suena(voz("Mi clave es 1234"), FIN, voz("y otra cosa"))
+
+    assert atendido == Attended(notice=CHAT_LEAVES)
+    assert oido.charla.mensajes == []
+    assert oido.transcriptor.turnos == [], "ni se transcribe"
+    assert not oido.servicio.listening
+    assert not oido.micro.abierto
 
 
 def test_sin_microfono_avisa_sin_la_orden_que_no_lo_arregla() -> None:

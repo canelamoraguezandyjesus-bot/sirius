@@ -842,6 +842,9 @@ class ModeloDeMentira(_ProveedorGrabador):
     antes de que el modelo acabara.
     """
 
+    #: Hace del modelo de este ordenador, como Ollama: la voz solo habla con uno así.
+    runs_on_this_computer = True
+
     def __init__(self, respuestas: Iterator[str]) -> None:
         super().__init__(respuestas)
         self._trozos: list[str] | None = None

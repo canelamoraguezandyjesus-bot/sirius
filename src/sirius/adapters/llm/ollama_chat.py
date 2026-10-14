@@ -139,6 +139,10 @@ class _ThinkFilter:
 class OllamaChatProvider:
     """``LLMProvider`` que conversa con un modelo del Ollama de este ordenador."""
 
+    #: Solo va a ``localhost``, una dirección que no se puede cambiar
+    #: (``sirius.ports.llm.runs_on_this_computer``).
+    runs_on_this_computer = True
+
     def __init__(
         self,
         model: str,

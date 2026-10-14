@@ -3,8 +3,8 @@
 ADR-242. La ejecuta el propietario, una vez y con internet, en PowerShell y dentro de la
 carpeta de Sirius. Cuando llega aquí, ``uv run --extra voz`` ya ha instalado o puesto al
 día las bibliotecas; esto baja el modelo de oír a su carpeta si falta, antes de mirar lo
-demás, y comprueba que el oído carga. Lo que ya está no lo vuelve a bajar, y lo que no
-puede arreglar lo dice (rondas 5 y 8 de Codex sobre la PR #687).
+demás, y comprueba que el oído carga. Lo que ya está no lo vuelve a bajar, y lo que falla
+lo dice con su causa, sin adivinar remedios (rondas 5, 8 y 9 de Codex sobre la PR #687).
 
 Es lo único de Sirius que baja un modelo. Si a Sirius le falta, dice esta orden y no
 baja nada (PA-R03-08); una prueba recorre ``src/`` para que siga siendo así.
@@ -90,8 +90,9 @@ def main() -> int:
         except VoiceUnavailable as error:
             return _fail("No se puede bajar el modelo", error)
         except Exception as error:
+            # La causa, y nada más: sin internet, un 403, sin espacio o un fichero en uso
+            # tienen remedios distintos, y la orden no sabe cuál es (ronda 9 de Codex).
             print(f"[FALLA] No se pudo bajar el modelo: {error}")
-            print("        Si Sirius está abierto, ciérralo y vuelve a ejecutar la orden.")
             return 1
         print(f"[OK]    Modelo bajado a {folder}")
     try:
@@ -108,13 +109,12 @@ def main() -> int:
 
 
 def _fail(problem: str, error: VoiceUnavailable) -> int:
-    """Dice qué falla y que repetir la orden no lo arreglará.
+    """Dice qué falla, con su causa, y nada más: no adivina si repetirla lo arreglaría.
 
-    Escrita como la dice Sirius, uv ya puso al día las bibliotecas antes de empezar y el
-    modelo ya está: lo que quede no lo arregla repetirla.
+    Un fallo que vuelve (una DLL) y uno que no (sin memoria un momento) se ven igual desde
+    aquí (ronda 9 de Codex sobre la PR #687).
     """
     print(f"[FALLA] {problem}: {error.reason}")
-    print(f"        Si la ejecutaste así, {INSTALL_COMMAND} , repetirla no lo arreglará.")
     return 1
 
 
