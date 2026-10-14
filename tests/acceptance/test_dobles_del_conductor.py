@@ -217,7 +217,7 @@ def test_el_conductor_se_construye_lee_la_base_de_verdad_y_sus_piezas_pendientes
     conductor = ConductorDeVoz(tmp_path)
     assert not conductor.micro.abierto
     assert conductor.escrituras_en_disco() == []
-    assert conductor.ficheros_de_audio_nuevos() == []
+    assert conductor.ficheros_nuevos() == []
     assert conductor.conexiones_de_red() == []
     assert conductor.procesos_lanzados() == []
 
@@ -235,7 +235,7 @@ def test_el_conductor_se_construye_lee_la_base_de_verdad_y_sus_piezas_pendientes
     assert pendiente.value.letra == "B"
     conductor.cierra()
     assert conductor.escrituras_en_disco() == []
-    assert conductor.ficheros_de_audio_nuevos() == []
+    assert conductor.ficheros_nuevos() == []
     assert conductor.conexiones_de_red() == []
 
 
@@ -261,7 +261,7 @@ def test_el_diario_es_el_de_produccion_y_se_lee_entero(tmp_path: Path) -> None:
     assert conductor.escrituras_en_disco() == [], "el diario es una ruta permitida"
 
 
-def test_el_audio_en_la_base_ve_lo_que_no_cambia_como_la_charla_y_no_una_huella(
+def test_el_audio_en_la_base_ve_lo_que_no_cambia_como_la_charla_regla_a_regla(
     tmp_path: Path,
 ) -> None:
     conductor = ConductorDeVoz(tmp_path)
@@ -269,8 +269,11 @@ def test_el_audio_en_la_base_ve_lo_que_no_cambia_como_la_charla_y_no_una_huella(
     assert conductor.audio_en_la_base() == [], "la charla escrita cambia la base como la 0.2"
     conductor.cierra()
 
-    def sospechosas() -> list[str]:
-        return sorted(conductor.audio_en_la_base())
+    def foto() -> list[str]:
+        # Solo la foto final: lo que vieron los disparadores y el trazador mientras el
+        # conductor vivía se prueba aparte, y aquí se escribe con él ya cerrado.
+        vivo = set(conductor._escrituras_sospechosas_en_la_base())
+        return sorted(v for v in conductor.audio_en_la_base() if v not in vivo)
 
     huella = struct.pack("<4f", 0.1, 0.2, 0.3, 0.4)
     fila_de_huella = (
@@ -282,46 +285,55 @@ def test_el_audio_en_la_base_ve_lo_que_no_cambia_como_la_charla_y_no_una_huella(
         " VALUES (1, ?, 'user', ?, '2026-10-13 00:00:00', 'completed')"
     )
     with closing(sqlite3.connect(conductor.base)) as conexion:
-        # Una huella donde van las huellas: la base cambia como cambia charlando.
+        # Una huella donde van las huellas también cuenta: el modelo de huellas de estas
+        # pruebas no da ninguna, así que la charla no escribe binario en ninguna parte.
         conexion.execute(fila_de_huella, (1, 1, huella))
         conexion.commit()
-        assert sospechosas() == []
+        assert foto() == [
+            "memory_embeddings.embedding (BLOB, y la charla de estas pruebas no escribe ninguno)"
+        ]
+        conexion.execute("DELETE FROM memory_embeddings")
+        conexion.commit()
+        assert foto() == []
+        # Los disparadores viven en la base, no en una conexión: vieron la huella entrar
+        # y salir por una conexión abierta con el conductor ya cerrado.
+        assert (
+            "memory_embeddings.embedding (BLOB de 16 bytes al insertar)"
+            in conductor.audio_en_la_base()
+        )
+        assert (
+            "memory_embeddings.embedding (BLOB de 16 bytes al borrar)"
+            in conductor.audio_en_la_base()
+        )
 
         # Lo que sí cuenta, regla a regla: una tabla nueva, aunque guarde las muestras
-        # como filas enteras; una columna nueva; un BLOB fuera de las huellas; una
-        # huella con cabecera de audio; un texto largo; y una tabla que crece como una
-        # captura.
+        # como filas enteras; una columna nueva; un BLOB en la charla; un texto largo; y
+        # una tabla que crece como una captura.
         conexion.execute("CREATE TABLE audio (id INTEGER PRIMARY KEY, sample INTEGER)")
         conexion.commit()
-        assert sospechosas() == ["audio (tabla nueva)"]
+        assert foto() == ["audio (tabla nueva)"]
         conexion.execute("DROP TABLE audio")
         conexion.execute("ALTER TABLE conversations ADD COLUMN onda BLOB")
         conexion.commit()
-        assert sospechosas() == ["conversations.onda (columna nueva)"]
+        assert foto() == ["conversations.onda (columna nueva)"]
         conexion.execute(fila_de_mensaje, (900, b"\x00\x01" * 100))
         conexion.execute(fila_de_mensaje, (901, "QUJD " * (5 * 1024)))
-        conexion.execute(fila_de_huella, (2, 2, b"RIFF\x24\x08\x00\x00WAVEfmt "))
         conexion.commit()
-        assert sospechosas() == [
+        assert foto() == [
             "conversations.onda (columna nueva)",
-            "memory_embeddings.embedding (cabecera de audio)",
-            "messages.content (BLOB fuera de las huellas)",
+            "messages.content (BLOB, y la charla de estas pruebas no escribe ninguno)",
             "messages.content (texto largo)",
         ]
-        conexion.execute("DELETE FROM memory_embeddings WHERE memory_id = 2")
-        conexion.execute(fila_de_huella, (3, 3, bytes(range(256)) * 80))
-        conexion.commit()
-        assert "memory_embeddings.embedding (BLOB mayor que una huella)" in sospechosas()
         conexion.executemany(
             "INSERT INTO conversations (created_at, is_main) VALUES ('2026-10-13 00:00:00', 0)",
             [()] * 1_200,
         )
         conexion.commit()
         filas = conexion.execute("SELECT count(*) FROM conversations").fetchone()[0]
-        assert f"conversations (+{filas} filas)" in sospechosas()
+        assert f"conversations (+{filas} filas)" in foto()
 
         # Las sombras de los índices son binarias por construcción, pero ni con cabecera
-        # de audio ni mayores que una huella: ahí tampoco cabe un escondite.
+        # de audio ni en bloques de más de 16 KiB: ahí tampoco cabe un escondite.
         conexion.execute(
             "INSERT INTO message_fts_data (id, block) VALUES (999999, ?)", (b"RIFF\x24\x08WAVE",)
         )
@@ -330,9 +342,9 @@ def test_el_audio_en_la_base_ve_lo_que_no_cambia_como_la_charla_y_no_una_huella(
             (bytes(range(256)) * 80,),
         )
         conexion.commit()
-    encontrado = sospechosas()
+    encontrado = foto()
     assert "message_fts_data.block (cabecera de audio)" in encontrado
-    assert "knowledge_fts_data.block (BLOB mayor que una huella)" in encontrado
+    assert "knowledge_fts_data.block (bloque mayor de 16 KiB)" in encontrado
 
     # Una tabla de la 0.2 que desaparece se dice, y una tabla virtual de un módulo que
     # esta conexión no carga se señala en vez de reventar la comprobación.
@@ -342,10 +354,136 @@ def test_el_audio_en_la_base_ve_lo_que_no_cambia_como_la_charla_y_no_una_huella(
         sqlite_vec.load(conexion)
         conexion.execute("CREATE VIRTUAL TABLE escondite USING vec0(huella float[4])")
         conexion.commit()
-    encontrado = sospechosas()
+    encontrado = foto()
     assert "reply_marks (tabla que falta)" in encontrado
     assert "escondite (tabla nueva)" in encontrado
     assert "escondite (tabla que no se puede leer)" in encontrado
+
+
+def test_la_base_se_vigila_fila_a_fila_tambien_lo_que_se_borra_antes_de_acabar(
+    tmp_path: Path,
+) -> None:
+    conductor = ConductorDeVoz(tmp_path)
+    conductor.di("Buenos días, Sirius.")
+    assert conductor.audio_en_la_base() == []
+    escritas = conductor.sentencias_que_escriben()
+    assert any(s.startswith("INSERT INTO messages") for s in escritas), escritas
+    assert any(s.startswith("-- REPLACE INTO 'main'.'message_fts_") for s in escritas)
+
+    fila_de_mensaje = (
+        "INSERT INTO messages (conversation_id, sequence, role, content, created_at, status)"
+        " VALUES (1, ?, 'user', ?, '2026-10-13 00:00:00', 'completed')"
+    )
+    onda = b"RIFF\x24\x08WAVE" + bytes(range(256)) * 8
+    # Una conexión abierta mientras Sirius vive, como la de una pieza, que lo borra todo
+    # antes de que nadie mire. La foto final queda limpia; lo que pasó, no.
+    with closing(sqlite3.connect(conductor.base)) as conexion:
+        # Lo evidente: audio y un texto largo, con sus valores en la sentencia.
+        conexion.execute(fila_de_mensaje, (950, onda))
+        conexion.execute(fila_de_mensaje, (951, "QUJD " * (5 * 1024)))
+        conexion.execute("DELETE FROM messages WHERE sequence IN (950, 951)")
+        # Lo que no está en el texto de ninguna sentencia: un hueco que se rellena a
+        # trozos con ``blobopen`` (donde van las huellas, que no tienen índice de texto
+        # que proteste); una función de Python que devuelve el audio; y una función que
+        # lo inserta desde dentro de otra sentencia.
+        conexion.execute(
+            "INSERT INTO memory_embeddings (memory_id, revision_id, model, embedding, created_at)"
+            " VALUES (952, 952, 'prueba', zeroblob(?), '2026-10-13 00:00:00')",
+            (len(onda),),
+        )
+        hueco = conexion.execute(
+            "SELECT rowid FROM memory_embeddings WHERE memory_id = 952"
+        ).fetchone()[0]
+        with conexion.blobopen("memory_embeddings", "embedding", hueco) as trozo_a_trozo:
+            trozo_a_trozo.write(onda)
+        conexion.create_function("onda", 0, lambda: onda)
+        conexion.execute(
+            "INSERT INTO messages (conversation_id, sequence, role, content, created_at, status)"
+            " SELECT 1, 953, 'user', onda(), '2026-10-13 00:00:00', 'completed'"
+        )
+
+        def desde_dentro() -> int:
+            conexion.execute(fila_de_mensaje, (954, onda))
+            return 1
+
+        conexion.create_function("desde_dentro", 0, desde_dentro)
+        conexion.execute("SELECT desde_dentro()").fetchone()
+        conexion.execute("DELETE FROM memory_embeddings WHERE memory_id = 952")
+        conexion.execute("DELETE FROM messages WHERE sequence IN (953, 954)")
+        # Muchas filas de golpe desde otra consulta, y mucho texto en trozos cortos: se
+        # cuentan las filas y el texto de verdad, no las sentencias.
+        conexion.execute(
+            "WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM n WHERE x < 5000)"
+            " INSERT INTO conversations (created_at, is_main)"
+            " SELECT '2026-10-13 00:00:00', 0 FROM n"
+        )
+        conexion.execute("DELETE FROM conversations WHERE created_at = '2026-10-13 00:00:00'")
+        conexion.executemany(fila_de_mensaje, [(1000 + n, "a" * (15 * 1024)) for n in range(40)])
+        conexion.execute("DELETE FROM messages WHERE sequence >= 1000")
+        # Una tabla nueva, y una tabla virtual que escribe en sus sombras desde dentro de
+        # la sentencia: el esquema cambió, y esas sombras no son las de los índices.
+        conexion.execute("CREATE TABLE audio (id INTEGER PRIMARY KEY, sample INTEGER)")
+        conexion.execute("DROP TABLE audio")
+        conexion.enable_load_extension(True)
+        sqlite_vec.load(conexion)
+        conexion.execute("CREATE VIRTUAL TABLE escondite USING vec0(huella float[4])")
+        conexion.execute(
+            "INSERT INTO escondite (rowid, huella) VALUES (1, ?)", (struct.pack("<4f", 1, 2, 3, 4),)
+        )
+        conexion.execute("DROP TABLE escondite")
+        # Tocar la vigilancia o la estructura a mano, o apagar los disparadores, se dice.
+        conexion.execute("UPDATE _vigilancia_filas SET filas = 0 WHERE tabla = 'ninguna'")
+        conexion.execute("PRAGMA writable_schema = ON")
+        conexion.execute("PRAGMA writable_schema = OFF")
+        conexion.setconfig(sqlite3.SQLITE_DBCONFIG_ENABLE_TRIGGER, False)
+        conexion.setconfig(sqlite3.SQLITE_DBCONFIG_ENABLE_TRIGGER, True)
+        conexion.commit()
+    # Una conexión que no pasa por ``sqlite3.connect`` no se puede seguir: se dice.
+    with closing(sqlite3.Connection(str(conductor.base))) as directa:
+        directa.execute("SELECT count(*) FROM messages").fetchone()
+    # Una base aparte, al lado de la de Sirius, la crea SQLite en C sin pasar por ``open``
+    # y no es audio por su extensión: la foto del disco la ve, y el trazador, que se
+    # escribió en ella.
+    aparte = conductor.base.parent / "cache.db"
+    with closing(sqlite3.connect(aparte)) as otra:
+        otra.execute("CREATE TABLE trozos (onda BLOB)")
+        otra.execute("INSERT INTO trozos VALUES (?)", (b"OggS" + bytes(64),))
+        otra.commit()
+    conductor.cierra()
+    assert conductor.ficheros_nuevos() == [aparte]
+
+    visto = conductor.audio_en_la_base()
+    con_audio = f"messages.content (BLOB con cabecera de audio de {len(onda)} bytes"
+    assert visto.count(f"{con_audio} al insertar)") == 3, visto  # 950, 953 y 954
+    assert visto.count(f"{con_audio} al borrar)") == 3, visto
+    assert f"memory_embeddings.embedding (BLOB de {len(onda)} bytes al insertar)" in visto
+    assert (
+        f"memory_embeddings.embedding (BLOB con cabecera de audio de {len(onda)} bytes al borrar)"
+        in visto
+    )
+    assert "messages.content (texto de 25600 caracteres al insertar)" in visto
+    assert "messages (escritura dentro de otra sentencia, fuera de las sombras)" in visto
+    assert "conversations (+5000 filas escritas)" in visto
+    assert any(
+        v.startswith("la base (escribió ") and v.endswith(" caracteres de texto desde el arranque)")
+        for v in visto
+    ), visto
+    assert "audio (esquema cambiado fuera del arranque)" in visto
+    assert "escondite (esquema cambiado fuera del arranque)" in visto
+    assert any(
+        v.startswith("escondite_")
+        and v.endswith("(escritura dentro de otra sentencia, fuera de las sombras)")
+        for v in visto
+    ), visto
+    assert "_vigilancia_filas (tocó la vigilancia de la prueba)" in visto
+    assert any(v.startswith("la base (tocó la estructura a mano: PRAGMA") for v in visto), visto
+    assert "la base (una conexión apagó los disparadores)" in visto
+    assert "la base (una conexión que el vigilante no pudo seguir)" in visto
+    assert f"otra base escrita ({aparte})" in visto
+    # La foto final, sola, habría visto solo el rastro de la tabla vectorial: la tabla
+    # interna de los autoincrementos que sus sombras crearon. Todo lo demás se borró.
+    vivo = set(conductor._escrituras_sospechosas_en_la_base())
+    assert [v for v in visto if v not in vivo] == ["sqlite_sequence (tabla nueva)"]
 
 
 @pytest.mark.gui

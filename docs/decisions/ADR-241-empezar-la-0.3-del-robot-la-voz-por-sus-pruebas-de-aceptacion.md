@@ -244,7 +244,7 @@ la misma PR que anote sus cifras.
 - La comprobación de la tabla: `tests/acceptance/test_robot_0_3_trazabilidad.py` pasa
   con el documento como está, y las 13 pruebas de `test_robot_0_2_trazabilidad.py`, diez
   de ellas con tablas rotas a propósito, siguen pasando sobre el módulo compartido.
-- La batería entera. Sobre `7209d783`, el primer head: 8 194 pasan, 16 saltadas y 28 `xfail`, los 26 de la 0.3 de entonces y los 2 que ya estaban, en 24 min 29 s. Sobre `main` (`d545ff17`) eran 8 181 pasan y 2 `xfail`: entran las esperadas y 13 que pasan, las dos de la trazabilidad de la 0.3, la tabla rota nueva de la 0.2 y las que los guardas de documentos añaden por cada ADR y documento nuevo. Sobre el head de la ronda 1: 8 194 pasan, 16 saltadas y 29 `xfail`, los 27 de la 0.3 y los 2 que ya estaban, en 25 min 40 s. Sobre el head de la ronda 2: 8 198 pasan, 16 saltadas y 29 `xfail`, en 23 min 44 s; las 4 que entran son las 3 del vigilante y la que los guardas añaden por el fichero nuevo. Sobre el árbol de la ronda 3 y H-241, `56017da1`: 8 199 pasan, 16 saltadas y 29 `xfail`, en 23 min 10 s. Sobre el árbol de la revisión propia, con sus cinco pasadas: 8 211 pasan, 16 saltadas y 29 `xfail`, en 22 min 49 s; las 12 que entran son las 10 de los dobles, la cuarta del vigilante y la que los guardas añaden por el fichero nuevo. Sobre el árbol de la ronda 4 y su mirada propia: 8 212 pasan, 16 saltadas y 29 `xfail`, en 21 min 34 s; la que entra es la del eco mezclado con la voz. Sobre el árbol de la ronda 5 y su mirada propia: 8 212 pasan, 16 saltadas y 29 `xfail`, en 21 min 23 s. Y la línea base de la charla escrita, `di()` solo, en la nube el 13-10-2026: 34 ms en el P95 de 20 turnos, 25,7 ms la mediana y 57,7 ms el máximo.
+- La batería entera. Sobre `7209d783`, el primer head: 8 194 pasan, 16 saltadas y 28 `xfail`, los 26 de la 0.3 de entonces y los 2 que ya estaban, en 24 min 29 s. Sobre `main` (`d545ff17`) eran 8 181 pasan y 2 `xfail`: entran las esperadas y 13 que pasan, las dos de la trazabilidad de la 0.3, la tabla rota nueva de la 0.2 y las que los guardas de documentos añaden por cada ADR y documento nuevo. Sobre el head de la ronda 1: 8 194 pasan, 16 saltadas y 29 `xfail`, los 27 de la 0.3 y los 2 que ya estaban, en 25 min 40 s. Sobre el head de la ronda 2: 8 198 pasan, 16 saltadas y 29 `xfail`, en 23 min 44 s; las 4 que entran son las 3 del vigilante y la que los guardas añaden por el fichero nuevo. Sobre el árbol de la ronda 3 y H-241, `56017da1`: 8 199 pasan, 16 saltadas y 29 `xfail`, en 23 min 10 s. Sobre el árbol de la revisión propia, con sus cinco pasadas: 8 211 pasan, 16 saltadas y 29 `xfail`, en 22 min 49 s; las 12 que entran son las 10 de los dobles, la cuarta del vigilante y la que los guardas añaden por el fichero nuevo. Sobre el árbol de la ronda 4 y su mirada propia: 8 212 pasan, 16 saltadas y 29 `xfail`, en 21 min 34 s; la que entra es la del eco mezclado con la voz. Sobre el árbol de la ronda 5 y su mirada propia: 8 212 pasan, 16 saltadas y 29 `xfail`, en 21 min 23 s. Sobre el árbol de la ronda 6, sus ojos frescos y su mirada propia: 8 214 pasan, 16 saltadas y 29 `xfail`, en 20 min 4 s; las 2 que entran son la del vigilante sobre las sentencias y la de las filas de los dobles. Y la línea base de la charla escrita, `di()` solo, en la nube el 13-10-2026: 34 ms en el P95 de 20 turnos, 25,7 ms la mediana y 57,7 ms el máximo.
 
 ## Consecuencias
 
@@ -292,7 +292,10 @@ la misma PR que anote sus cifras.
   pieza; un doble tiene que hacer lo que la tubería le pide y apuntarlo él. Y lo que el
   conductor ya hace necesita una prueba que corra hoy: una en `xfail` estricto no
   ejecuta ni una línea de él, y el conductor de esta PR no se podía ni construir
-  durante tres rondas.
+  durante tres rondas. Y la ronda 6 lo repitió sobre la base, dos veces: una foto del
+  final no ve lo que pasó por el camino, y el texto de las sentencias no es lo que se
+  escribió; lo que se vigila se vigila mientras pasa, y en las filas, no en lo que se
+  dice de ellas.
 - lo hace cumplir: ninguna prueba mide la fuerza de una prueba; lo que hay es
   `tests/acceptance/test_vigilante_del_conductor.py`, que impide que el vigilante pase
   en vacío, `tests/acceptance/test_dobles_del_conductor.py`, que construye el conductor
@@ -532,6 +535,83 @@ la misma PR que anote sus cifras.
     que apartar el eco de dentro del audio y dejar pasar solo la voz. Un `Sonido`
     mezclado es de los dos (`de("propietario")` y `de("sirius")`), y la prueba de la
     cancelación exige verlo leído.
+- **Ronda 6 de Codex**, sobre `12630472`: dos hallazgos P2, los dos ciertos, los dos sobre
+  la base, que es la familia de las rondas 4 y 5: tercera ronda seguida. Lo que se escribe
+  en la base y se borra antes de acabar no lo veía nadie, porque `sirius.db` es una ruta
+  permitida para el vigilante y la foto final solo ve lo que queda; y la columna de las
+  huellas admitía PCM troceado en BLOB de menos de 16 KiB sin cabecera, cuando PA-R03-05
+  promete que la base solo guarda texto.
+  - **La raíz, esta vez, en dos pasos.** Mirar el estado final no ve el tránsito: la
+    propiedad sigue siendo «la base solo cambia como cambia charlando con la 0.2», pero
+    hay que mirarla también mientras pasa. El primer arreglo trazó cada sentencia SQL de
+    cada conexión abierta mientras el conductor vive, con sus valores puestos, y leyó en
+    su texto los BLOB, los textos largos y las filas. Una revisión con ojos frescos sobre
+    ese arreglo, antes de empujarlo, lo tumbó con un P1: todo lo que miraba era el texto
+    de la sentencia, y con la API corriente de `sqlite3` se escribe sin que el valor esté
+    en ese texto: un hueco de `zeroblob` que se rellena a trozos con `blobopen`, una
+    función de Python que devuelve el audio dentro de un `INSERT … SELECT`, y una función
+    que inserta desde dentro de otra sentencia, que SQLite entrega anidada y sin valores.
+    La raíz debajo: mirar las sentencias es mirar lo que se dice que se escribe; hay que
+    mirar las filas. Ahora, al acabar de arrancar Sirius, el conductor pone en cada tabla
+    de la 0.2 un disparador por insertar, actualizar y borrar, que apunta en una tabla
+    del arnés todo BLOB y todo texto de más de 16 KiB con su tamaño y su cabecera,
+    también lo que había en la fila al actualizarla o borrarla (que es como se ve lo que
+    entró con `blobopen`), y cuenta por tabla las filas insertadas y el texto escrito. Se
+    escriba como se escriba, el disparador lo ve; vive en la base, no en una conexión,
+    así que ve también lo que escriba una conexión que el trazador no sigue; y quitarlo
+    es un cambio de esquema, que el trazador ve. El trazador queda para la estructura:
+    cambios de esquema fuera del arranque, otra base escrita, enganchar una base o abrir
+    el esquema a mano, tocar las tablas del arnés, apagar los disparadores, una sentencia
+    anidada fuera de las sombras de los índices y la conexión que no pasó por
+    `sqlite3.connect`. Y en estas pruebas el modelo de huellas no da ninguna
+    (`_SinHuellas`), así que ningún BLOB es charla, ni en tránsito ni al final: la
+    columna de las huellas deja de estar eximida.
+  - **Cómo se engancha, y lo que costó verlo.** El evento de auditoría
+    `sqlite3.connect/handle` parecía el sitio: entrega la conexión, pero antes de que
+    termine de construirse, así que `set_trace_callback` ahí lanza `ProgrammingError`
+    y, aunque no lanzara, el constructor lo borra después; lo vio fallar la primera
+    versión de la prueba. El trazador se pone envolviendo `sqlite3.connect`, que es por
+    donde conectan `sqlite3` y SQLAlchemy (`sqlite3.dbapi2.connect`, comprobado), con
+    una clase de conexión cuyo `set_trace_callback` conserva al vigilante aunque la pieza
+    ponga el suyo o lo quite, y cuyo `setconfig` apunta si apaga los disparadores; el
+    evento de auditoría queda para lo contrario: una conexión que no pase por ahí se
+    apunta como no seguida y cuenta, y una fábrica que no sea una clase de conexión,
+    también. Las sentencias que SQLite ejecuta dentro de otra llegan sin valores y con
+    `-- ` delante, porque SQLite no expande una sentencia anidada, y repite la sentencia
+    al arrancar cada disparador, una vez por fila: la prueba de construcción dio
+    dieciséis hallazgos en un turno de charla hasta que las del índice de texto sobre
+    sus sombras se toleraron, y solo esas; y la prueba de las filas tardó 133 s hasta
+    que la repetición seguida dejó de guardarse. El índice cita las tablas como
+    `'main'.'message_fts_data'`, y el analizador de la tabla lo lee.
+  - **Ojos frescos sobre el primer arreglo**: cinco hallazgos, los cinco ciertos. El P1
+    de arriba. Un P2: una fábrica que no fuese una clase, o el método de la clase base
+    sin ligar, quitaban el trazador sin rastro; la fábrica se apunta, y el método sin
+    ligar queda en lo que no se garantiza, porque ya no es una pieza que ataja. Tres P3:
+    el recuento por sentencias contaba tres veces cada `INSERT` de `messages`, por los
+    disparadores del índice (los 15 912 caracteres medidos en veinte turnos eran ese
+    recuento triplicado; los disparadores cuentan 5 590 en los mismos turnos) y un
+    `INSERT … SELECT` de 5 000 filas contaba una; el ADR eximía a `reabre()` cuando el
+    código ya no lo hacía; y `UPDATE OR REPLACE` daba `OR` como tabla. Y dos huecos míos
+    de antes de esa revisión: una pieza podía quitar el trazador de su conexión con
+    `set_trace_callback(None)`, y la foto del disco solo buscaba extensiones de audio,
+    así que una base aparte al lado de la de Sirius, que SQLite crea en C sin pasar por
+    `open`, era invisible; ahora en las carpetas de Sirius cuenta cualquier fichero nuevo
+    que no sea su base, sus ajustes o su diario (`ficheros_nuevos`), y en la temporal del
+    sistema, solo los de audio.
+  - **Mutación**: diecinueve mutaciones nuevas, las diecinueve cazadas por
+    `test_dobles_del_conductor.py` y `test_vigilante_del_conductor.py`: los disparadores
+    sin poner, sin la regla del BLOB, sin la del texto largo, sin mirar lo que había al
+    borrar, las filas, el texto total, el esquema, lo anidado, la vigilancia tocada, la
+    estructura a mano, otra base, la conexión sin vigilar, los disparadores apagados sin
+    apuntar, la fábrica rara sin apuntar, el arranque sin marcar, la foto final sin la
+    regla del BLOB, la clase sin conservar al vigilante, la clase envuelta dos veces y la
+    foto del disco solo con audio. Una más, el arranque sin marcar al reabrir, sobrevivió
+    porque reabrir no escribe ninguna sentencia, y esa marca se quitó: lo que no se puede
+    ver fallar no se queda.
+  - **Lo que no cubre** queda en «Lo que estas pruebas no garantizan»: texto corto, de
+    menos de 16 KiB por valor y 512 KiB en total; hasta mil filas por tabla; lo que una
+    extensión en C escriba por una conexión suya, sin pasar por Python; y una pieza que
+    llame a los métodos de `sqlite3.Connection` sin ligar para saltarse su propia clase.
 - **El criterio cambia el 13-10-2026, tras la ronda 3.** El propietario, al ver la
   tercera ronda seguida con la misma familia, retiró el tope de rondas que ADR-233 había
   sacado de su «nada de cinco rondas» del 07-10-2026: «No nos podemos limitar a solo tres

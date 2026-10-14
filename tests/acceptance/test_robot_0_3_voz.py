@@ -324,7 +324,7 @@ def test_tras_varios_turnos_de_voz_no_queda_ningun_audio_guardado(tmp_path: Path
     conductor.cierra()
 
     assert conductor.escrituras_en_disco() == []
-    assert conductor.ficheros_de_audio_nuevos() == []
+    assert conductor.ficheros_nuevos() == []
     assert conductor.audio_en_la_base() == []
     assert conductor.busca_en_toda_la_base("Pues yo fatal.") != []
 
@@ -343,7 +343,7 @@ def test_lo_que_no_era_para_el_no_se_guarda_ni_como_texto(tmp_path: Path) -> Non
     assert conductor.busca_en_toda_la_base("cielos despejados") == []
     assert not conductor.el_diario_contiene("cielos despejados")
     assert conductor.escrituras_en_disco() == []
-    assert conductor.ficheros_de_audio_nuevos() == []
+    assert conductor.ficheros_nuevos() == []
 
 
 # --- PA-R03-06 · Sabe cuándo le hablan a él -----------------------------------

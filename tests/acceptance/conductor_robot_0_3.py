@@ -34,6 +34,7 @@ añade su letra a ``PIEZAS_ENTREGADAS``; la tabla de
 
 from __future__ import annotations
 
+import functools
 import ipaddress
 import logging
 import os
@@ -41,6 +42,7 @@ import re
 import sqlite3
 import sys
 import tempfile
+import threading
 import time
 import weakref
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
@@ -58,7 +60,6 @@ from conductor_robot_0_2 import (
     _respuestas,
 )
 from piezas_del_robot import PiezaPendiente, Piezas
-from sqlalchemy import LargeBinary
 
 from sirius.adapters.persistence.models import Base
 from sirius.config.settings import _CONFIG_FILE_NAME  # el nombre que usa `_config_file()`
@@ -90,10 +91,6 @@ EXTENSIONES_DE_AUDIO: frozenset[str] = frozenset(
     {".wav", ".mp3", ".ogg", ".flac", ".m4a", ".aac", ".wma", ".aiff", ".aif", ".webm", ".opus"}
 )
 
-#: Audio sin cabecera o volcados de ondas: cuentan en las carpetas de Sirius y en la de la
-#: prueba, no en la temporal del sistema, que en el Windows del propietario comparten
-#: todos sus programas y donde un ``.bin`` ajeno no es de Sirius.
-EXTENSIONES_DE_AUDIO_CRUDO: frozenset[str] = frozenset({".pcm", ".raw", ".bin", ".npy", ".npz"})
 
 #: Cómo empieza un fichero de audio con cabecera: WAV, Ogg, FLAC, MP3 con etiqueta y WebM.
 #: Un BLOB de la base que empiece así es audio guardado.
@@ -121,12 +118,21 @@ class Vigilado(Protocol):
 
     def anota_proceso(self, orden: str) -> None: ...
 
+    def anota_sentencia(self, sql: str, base: str = "") -> None: ...
+
 
 #: Los conductores vivos, desde que se construyen hasta que se cierran: a ellos les
 #: llega cada apertura de fichero para escribir, cada conexión o envío y cada proceso
 #: lanzado. Débil, para que un conductor olvidado no se quede vigilando.
 _EN_UN_TURNO: weakref.WeakSet[Vigilado] = weakref.WeakSet()
 _GANCHO_PUESTO = False
+#: Si la conexión a SQLite que se está abriendo en este hilo pasa por el ``connect`` vigilado.
+_CONECTANDO = threading.local()
+#: Lo que se apunta como sentencia cuando una conexión no pasa por ese ``connect``.
+_CONEXION_SIN_VIGILAR = "-- una conexión a la base que no pasó por sqlite3.connect"
+#: Lo que se apunta cuando una conexión vigilada apaga los disparadores de SQLite.
+_APAGO_LOS_DISPARADORES = "-- una conexión apagó los disparadores"
+_MARCAS_DEL_VIGILANTE = frozenset({_CONEXION_SIN_VIGILAR, _APAGO_LOS_DISPARADORES})
 _BYTECODE_DE_ANTES: bool | None = None
 
 
@@ -242,15 +248,21 @@ def _dentro_de_socketpair() -> bool:
 
 
 def _vigilar() -> None:
-    """Pone, una vez por proceso, el gancho que ve cada escritura, conexión y proceso.
+    """Pone, una vez por proceso, lo que ve cada escritura, conexión, proceso y sentencia.
 
     Un gancho de auditoría de Python no se puede quitar, así que se pone una vez y
     solo trabaja mientras algún conductor está vivo. Ve todo lo que abre Python
     para escribir, también ``tempfile`` y lo que se borra después, cada
     ``socket.connect``, cada envío sin conexión (``sendto``, ``sendmsg``) y cada
     proceso que lanza Python, por ``subprocess`` o por ``os`` (rondas 1 y 2 de
-    Codex y revisión propia de la PR #686). Lo que escriba, envíe o lance una
-    biblioteca en C por su cuenta no pasa por aquí, y por eso el disco y la base
+    Codex y revisión propia de la PR #686). Y envuelve ``sqlite3.connect``, que es
+    por donde conectan ``sqlite3`` y SQLAlchemy, para que cada conexión abierta
+    mientras alguien vigila cuente cada sentencia que ejecuta, con sus valores
+    puestos: así se ve lo que se escribe en la base aunque se borre antes de que
+    nadie mire (ronda 6 de Codex). El evento de auditoría de cada conexión llega
+    antes de que esté construida, así que no sirve para trazarla; sirve para ver la
+    que no pasó por ``connect`` y apuntarla como tal. Lo que escriba, envíe o lance
+    una biblioteca en C por su cuenta no pasa por aquí, y por eso el disco y la base
     se miran además al final.
     """
     global _GANCHO_PUESTO
@@ -279,18 +291,126 @@ def _vigilar() -> None:
                     conductor.anota_escritura(Path(dato))
                 elif que == "conexion":
                     conductor.anota_conexion(dato)
+                elif que == "sentencia":
+                    conductor.anota_sentencia(dato)
                 else:
                     conductor.anota_proceso(dato)
             except OSError, ValueError, RuntimeError:
                 # Una ruta que no se puede resolver tampoco puede abortar lo ajeno.
                 continue
 
+    conecta_de_verdad = sqlite3.dbapi2.connect
+
+    @functools.wraps(conecta_de_verdad)
+    def conecta(*args: Any, **kwargs: Any) -> Any:
+        if not _EN_UN_TURNO:
+            return conecta_de_verdad(*args, **kwargs)
+        # La conexión sale de una clase cuyo ``set_trace_callback`` no quita al vigilante:
+        # una pieza puede poner su trazador, o ninguno, y el vigilante sigue viendo. Una
+        # fábrica que no sea una clase de conexión no se puede envolver, y se apunta.
+        argumentos = list(args)
+        fabrica = kwargs.get("factory", argumentos[5] if len(argumentos) > 5 else None)
+        envuelta = fabrica is None or (
+            isinstance(fabrica, type) and issubclass(fabrica, sqlite3.Connection)
+        )
+        if envuelta:
+            if len(argumentos) > 5:
+                argumentos[5] = _vigilada(argumentos[5])
+            else:
+                kwargs["factory"] = _vigilada(fabrica or sqlite3.Connection)
+        _CONECTANDO.vigilada = True
+        try:
+            conexion = conecta_de_verdad(*argumentos, **kwargs)
+        finally:
+            _CONECTANDO.vigilada = False
+        base = kwargs.get("database", argumentos[0] if argumentos else "")
+        traza = functools.partial(_traza, base=_nombre_de_la_base(base))
+        try:
+            if envuelta:
+                conexion._traza_del_vigilante = traza
+            conexion.set_trace_callback(traza)
+        except AttributeError, sqlite3.Error:
+            envuelta = False
+        if not envuelta:
+            # Una conexión que no se deja envolver ni trazar se apunta como no seguida.
+            _traza(_CONEXION_SIN_VIGILAR)
+        return conexion
+
     sys.addaudithook(gancho)
+    sqlite3.connect = conecta
+    sqlite3.dbapi2.connect = conecta
     _GANCHO_PUESTO = True
+
+
+_VIGILADAS: dict[type[sqlite3.Connection], type[sqlite3.Connection]] = {}
+
+
+def _vigilada(fabrica: type[sqlite3.Connection]) -> type[sqlite3.Connection]:
+    """La clase de conexión pedida, con el vigilante dentro.
+
+    Su ``set_trace_callback`` no quita al vigilante: una pieza puede poner su propio
+    trazador, o quitarlo con ``None``, y el del vigilante sigue viendo cada sentencia
+    mientras el suyo recibe lo mismo. Y si apaga los disparadores de SQLite con
+    ``setconfig``, queda apuntado. Quien llame a los métodos de ``sqlite3.Connection``
+    sin ligar, saltándose su propia clase, se salta esto: eso ya no es una pieza que
+    ataja, es una que engaña al arnés, y queda escrito en lo que estas pruebas no
+    garantizan.
+    """
+    if fabrica in _VIGILADAS:
+        return _VIGILADAS[fabrica]
+    if fabrica in _VIGILADAS.values():
+        return fabrica
+
+    class ConexionVigilada(fabrica):  # type: ignore[misc,valid-type]
+        def set_trace_callback(self, trace_callback: Callable[[str], object] | None) -> None:
+            mia = getattr(self, "_traza_del_vigilante", None)
+            if mia is None:
+                super().set_trace_callback(trace_callback)
+                return
+            if trace_callback is None or trace_callback is mia:
+                super().set_trace_callback(mia)
+                return
+
+            def las_dos(sql: str) -> None:
+                mia(sql)
+                trace_callback(sql)
+
+            super().set_trace_callback(las_dos)
+
+        def setconfig(self, op: int, enable: bool = True) -> None:
+            mia = getattr(self, "_traza_del_vigilante", None)
+            if mia is not None and op == sqlite3.SQLITE_DBCONFIG_ENABLE_TRIGGER and not enable:
+                mia(_APAGO_LOS_DISPARADORES)
+            super().setconfig(op, enable)
+
+    _VIGILADAS[fabrica] = ConexionVigilada
+    return ConexionVigilada
+
+
+def _traza(sql: str, base: str = "") -> None:
+    """Una sentencia que acaba de ejecutar una conexión vigilada, con sus valores puestos.
+
+    ``base`` es la base a la que iba, tal como se pidió al conectar.
+    """
+    try:
+        conductores = list(_EN_UN_TURNO)
+    except RuntimeError:
+        return
+    for conductor in conductores:
+        try:
+            conductor.anota_sentencia(sql, base)
+        except ValueError, RuntimeError:
+            continue
 
 
 def _lo_que_ve(evento: str, args: tuple[Any, ...]) -> tuple[str, str] | None:
     """Qué es este evento de auditoría para el vigilante, o ``None`` si no le importa."""
+    if evento == "sqlite3.connect/handle":
+        # La conexión llega sin acabar de construirse: no se puede trazar desde aquí. Si
+        # la abre el ``connect`` vigilado, él la traza al volver; si no, queda apuntada.
+        if getattr(_CONECTANDO, "vigilada", False):
+            return None
+        return ("sentencia", _CONEXION_SIN_VIGILAR)
     if evento == "open":
         ruta, modo, flags = args
         if not _abre_para_escribir(modo, flags) or isinstance(ruta, int):
@@ -797,23 +917,139 @@ TABLAS_DE_LA_0_2: frozenset[str] = frozenset(
     }
 )
 
-#: Las columnas de cada tabla del modelo de producción, y las que guardan binario (las huellas).
+#: Las columnas de cada tabla del modelo de producción.
 _COLUMNAS_DEL_MODELO: Mapping[str, frozenset[str]] = {
     tabla.name: frozenset(columna.name for columna in tabla.columns)
     for tabla in Base.metadata.tables.values()
 }
-_COLUMNAS_BINARIAS: frozenset[tuple[str, str]] = frozenset(
-    (tabla.name, columna.name)
-    for tabla in Base.metadata.tables.values()
-    for columna in tabla.columns
-    if isinstance(columna.type, LargeBinary)
+
+#: Las dos tablas del arnés en la base: lo que vieron sus disparadores y cuántas filas y
+#: cuánto texto escribió cada tabla desde que arrancó Sirius.
+TABLAS_DE_LA_PRUEBA: frozenset[str] = frozenset({"_vigilancia_escrituras", "_vigilancia_filas"})
+#: Las sombras de los índices de texto de la 0.2: las únicas tablas en las que SQLite
+#: escribe desde dentro de otra sentencia al charlar.
+_SOMBRAS_DE_LA_0_2: frozenset[str] = frozenset(
+    t for t in TABLAS_DE_LA_0_2 if t.endswith(("_config", "_content", "_data", "_docsize", "_idx"))
 )
 
-#: Una huella son unos pocos KiB; un texto de la charla, menos de 16 KiB; una captura de
-#: audio son miles de muestras, así que mil filas de más en una tabla no son charla.
-_HUELLA_MAS_GRANDE = 16 * 1024
+#: En estas pruebas el modelo de huellas no da ninguna, así que la charla no escribe
+#: binario en ninguna columna del modelo; las sombras de los índices de texto sí son
+#: binarias por construcción, pero en bloques pequeños. Un texto de la charla no llega a
+#: 16 KiB; una captura de audio son miles de muestras, así que mil filas de más no son
+#: charla; y veinte turnos de charla escriben 5 590 caracteres de texto en total
+#: fuera del arranque (medido el 14-10-2026 con los disparadores y el modelo de mentira),
+#: más de noventa veces menos que el tope.
+_BLOQUE_MAS_GRANDE = 16 * 1024
 _TEXTO_LARGO = 16 * 1024
 _FILAS_DE_MAS = 1_000
+_TEXTO_TOTAL = 512 * 1024
+
+#: Un literal del SQL expandido: ``x'...'`` es binario; ``'...'``, texto con las comillas
+#: dobladas. Se recorren de izquierda a derecha, así que un ``x'`` dentro de un texto no
+#: se confunde con binario. Solo sirven para no leer verbos dentro de un texto.
+_LITERAL = re.compile(r"[xX]'([0-9A-Fa-f]*)'|'((?:[^']|'')*)'")
+_ESCRIBE = re.compile(r"\b(?:INSERT|REPLACE|UPDATE|DELETE|CREATE|ALTER|DROP)\b", re.IGNORECASE)
+_CAMBIA_EL_ESQUEMA = re.compile(r"\b(?:CREATE|ALTER|DROP)\b", re.IGNORECASE)
+#: Lo que toca la estructura sin ser una escritura: enganchar otra base o abrir el esquema.
+_TOCA_LA_ESTRUCTURA = re.compile(r"(?:ATTACH|PRAGMA\s+writable_schema)\b", re.IGNORECASE)
+#: La tabla que sigue a INTO, UPDATE, TABLE o FROM, con o sin esquema delante y entre
+#: cualquiera de las comillas que admite SQLite (el índice de texto escribe
+#: ``'main'.'message_fts_data'``).
+_TABLA_DE_LA_SENTENCIA = re.compile(
+    r"\b(?:INTO|UPDATE(?:\s+OR\s+\w+)?|TABLE(?:\s+IF\s+(?:NOT\s+)?EXISTS)?|FROM)\s+"
+    r"(?:['\"`\[]?\w+['\"`\]]?\s*\.\s*)?['\"`\[]?(\w+)",
+    re.IGNORECASE,
+)
+#: Una sentencia que SQLite ejecuta dentro de otra llega con ``-- `` delante de cada línea.
+_ANIDADA = re.compile(r"^-- ?", re.MULTILINE)
+#: Las tres operaciones sobre una fila, con el suceso de SQLite de cada una.
+_OPERACIONES = {"insertar": "INSERT", "actualizar": "UPDATE", "borrar": "DELETE"}
+
+
+def _sin_literales(sql: str) -> str:
+    """La sentencia sin sus literales: solo palabras del SQL, nombres y signos."""
+    return _LITERAL.sub(" ", sql)
+
+
+def _tabla_de(sql: str) -> str:
+    """La tabla sobre la que escribe la sentencia, o su principio si no se ve."""
+    visto = _TABLA_DE_LA_SENTENCIA.search(sql)
+    return visto.group(1) if visto else _sin_literales(sql)[:40].strip()
+
+
+def _nombre_de_la_base(base: object) -> str:
+    """La base tal como se pidió al conectar, en texto."""
+    try:
+        return os.fsdecode(base)  # type: ignore[arg-type]
+    except TypeError:
+        return str(base)
+
+
+def _en_memoria(base: str) -> bool:
+    """Si una base pedida al conectar vive solo en memoria: ahí no se guarda nada."""
+    return base in ("", ":memory:") or "mode=memory" in base
+
+
+def _misma_base(pedida: str, base: Path) -> bool:
+    """Si la base pedida al conectar es ``base``, comparando las rutas de verdad."""
+    try:
+        return Path(pedida.removeprefix("file:")).resolve() == base.resolve()
+    except OSError, ValueError:
+        return False
+
+
+def _texto_sql(valor: str) -> str:
+    return valor.replace("'", "''")
+
+
+def _disparador(tabla: str, columnas: Sequence[str], operacion: str) -> str:
+    """El disparador del arnés para ``tabla`` y ``operacion``: insertar, actualizar o borrar.
+
+    Apunta en ``_vigilancia_escrituras`` todo BLOB y todo texto de más de 16 KiB que
+    entra (``NEW``) y, al actualizar o borrar, también el que había (``OLD``), que es como
+    se ve lo que se escribió a trozos con ``blobopen``; y suma en ``_vigilancia_filas``
+    las filas insertadas y el texto escrito o cambiado, se escriba como se escriba:
+    con un literal, con un parámetro, con una función, desde otra tabla o desde una
+    sentencia anidada.
+    """
+    t = _sql(tabla)
+    miradas = {
+        "insertar": (("NEW", "al insertar"),),
+        "actualizar": (("NEW", "al actualizar"), ("OLD", "que tenía al actualizar")),
+        "borrar": (("OLD", "al borrar"),),
+    }[operacion]
+    cuerpo: list[str] = []
+    for fila, como in miradas:
+        for columna in columnas:
+            v = f'{fila}."{_sql(columna)}"'
+            cuerpo.append(
+                "INSERT INTO _vigilancia_escrituras"
+                " (tabla, columna, operacion, tipo, largo, cabecera)"
+                f" SELECT '{_texto_sql(tabla)}', '{_texto_sql(columna)}', '{como}', typeof({v}),"
+                f" length({v}), hex(substr({v}, 1, 4))"
+                f" WHERE typeof({v}) = 'blob'"
+                f" OR (typeof({v}) = 'text' AND length({v}) > {_TEXTO_LARGO});"
+            )
+    if operacion != "borrar":
+        nuevas = 1 if operacion == "insertar" else 0
+        sumandos: list[str] = []
+        for columna in columnas:
+            c = _sql(columna)
+            cambiada = "" if operacion == "insertar" else f' AND NEW."{c}" IS NOT OLD."{c}"'
+            sumandos.append(
+                f"(CASE WHEN typeof(NEW.\"{c}\") = 'text'{cambiada}"
+                f' THEN length(NEW."{c}") ELSE 0 END)'
+            )
+        cuerpo.append(
+            "INSERT INTO _vigilancia_filas (tabla, filas, texto)"
+            f" VALUES ('{_texto_sql(tabla)}', {nuevas}, {' + '.join(sumandos) or '0'})"
+            f" ON CONFLICT(tabla) DO UPDATE SET filas = filas + {nuevas},"
+            " texto = texto + excluded.texto;"
+        )
+    return (
+        f'CREATE TRIGGER "_vigila_{t}_{operacion}" AFTER {_OPERACIONES[operacion]} ON "{t}"'
+        f" BEGIN {' '.join(cuerpo)} END"
+    )
 
 
 def _sql(identificador: str) -> str:
@@ -903,6 +1139,8 @@ class ConductorDeVoz(Conductor):
         self._escrituras: list[Path] = []
         self._conexiones: list[str] = []
         self._procesos: list[str] = []
+        self._sentencias: list[tuple[bool, str, str]] = []
+        self._arrancando = False
         # Las rutas se saben antes de montar nada: el vigilante y la foto del disco
         # empiezan antes de que Sirius se monte, para ver también lo que la tubería
         # haga al montarse.
@@ -920,16 +1158,20 @@ class ConductorDeVoz(Conductor):
             rutas.config_dir,
             rutas.logs_dir,
         )
-        self._ficheros_de_antes = self._ficheros_de_audio()
+        self._ficheros_de_antes = self._ficheros_que_no_son_suyos()
         self._filas_de_antes = self._filas_de_la_base()
         _vigilar()
         _vigila(self)
+        self._arrancando = True
         try:
             super().__init__(carpeta, respuestas=respuestas, ajustes=ajustes)
+            assert self.base == self._permitidas.base, "la base de la 0.2 cambió de sitio"
+            self._pone_los_disparadores()
         except BaseException:
             _deja_de_vigilar(self)
             raise
-        assert self.base == self._permitidas.base, "la base del conductor de la 0.2 cambió de sitio"
+        finally:
+            self._arrancando = False
         # El diario, como en producción (`sirius.main`): es ruta permitida, y las
         # pruebas miran que lo oído que no era para él no acabe ahí. La configuración
         # de Alembic (`migrations/env.py`, `fileConfig`) apaga al migrar todos los
@@ -1037,6 +1279,31 @@ class ConductorDeVoz(Conductor):
         """Lo llama el vigilante por cada proceso lanzado mientras el conductor vive."""
         self._procesos.append(orden)
 
+    def anota_sentencia(self, sql: str, base: str = "") -> None:
+        """Lo llama el vigilante por cada sentencia SQL de cualquier conexión abierta mientras vive.
+
+        Llegan con sus valores puestos y con la base a la que iban. Se guardan las que
+        escriben o tocan la estructura, con si llegaron durante el arranque, que es
+        cuando Sirius migra y el conductor pone sus disparadores; las lecturas, no.
+        SQLite repite la misma sentencia al arrancar cada disparador que dispara, una
+        vez por fila: la repetición seguida no se guarda, que aquí no se cuenta nada por
+        sentencias, eso lo hacen los disparadores.
+        """
+        texto = sql.strip()
+        apunte = (self._arrancando, base, texto)
+        if self._sentencias and self._sentencias[-1] == apunte:
+            return
+        if (
+            texto in _MARCAS_DEL_VIGILANTE
+            or _TOCA_LA_ESTRUCTURA.match(texto)
+            or _ESCRIBE.search(_sin_literales(texto))
+        ):
+            self._sentencias.append(apunte)
+
+    def sentencias_que_escriben(self) -> list[str]:
+        """Cada sentencia que escribió en una base mientras el conductor vive, arranque incluido."""
+        return [sql for _, _, sql in self._sentencias]
+
     def destinos_posibles_de_la_voz(self) -> frozenset[str]:
         """Adónde pueden ir el oído y la voz del robot según sus ajustes: todo lo elegible.
 
@@ -1081,9 +1348,12 @@ class ConductorDeVoz(Conductor):
         """Cuánto dura la charla después de que Sirius calle: hasta entonces sobra el nombre."""
         raise _pendiente("D")
 
-    def ficheros_de_audio_nuevos(self) -> list[Path]:
-        """Audio aparecido desde que arrancó el conductor, en sus carpetas o en la temporal."""
-        return sorted(self._ficheros_de_audio() - self._ficheros_de_antes)
+    def ficheros_nuevos(self) -> list[Path]:
+        """Lo aparecido desde antes de arrancar Sirius: en sus carpetas, cualquier fichero que
+        no sea su base, sus ajustes o su diario, lo haya escrito quien lo haya escrito; en
+        la temporal del sistema, los de audio.
+        """
+        return sorted(self._ficheros_que_no_son_suyos() - self._ficheros_de_antes)
 
     def escrituras_en_disco(self) -> list[Path]:
         """Lo que algo abrió para escribir desde que arrancó, aunque lo borrara después.
@@ -1102,18 +1372,27 @@ class ConductorDeVoz(Conductor):
         """Dónde la base ha cambiado como no cambia la charla de la 0.2: ahí habría audio.
 
         No se infiere qué es audio por su forma: se comprueba que la base solo cambia
-        donde la 0.2 ya escribía (ronda 5 de Codex sobre la PR #686). Las tablas son
-        las de la 0.2 (``TABLAS_DE_LA_0_2``) y sus columnas las del modelo; un BLOB
-        solo en la columna de las huellas, no mayor que una huella y sin cabecera de
-        audio; ningún texto de más de 16 KiB; y ninguna tabla, sombras de los índices
-        incluidas, crece más de mil filas desde antes de arrancar Sirius, que es menos
-        que un segundo de muestras. Una tabla que falte o que no se pueda leer también
-        se dice. Vacío si la base solo ha cambiado como cambia charlando.
+        donde la 0.2 ya escribía (ronda 5 de Codex sobre la PR #686), y se mira dos
+        veces, porque la foto final no ve lo que se escribe y se borra antes (ronda 6).
+        La foto: las tablas son las de la 0.2 (``TABLAS_DE_LA_0_2``) y sus columnas las
+        del modelo; ningún BLOB en ninguna columna del modelo, porque el modelo de
+        huellas de estas pruebas no da ninguna; en las sombras de los índices, binarias
+        por construcción, ningún bloque mayor de 16 KiB ni con cabecera de audio; ningún
+        texto de más de 16 KiB; y ninguna tabla, sombras incluidas, crece más de mil
+        filas desde antes de arrancar Sirius, que es menos que un segundo de muestras.
+        Una tabla que falte o que no se pueda leer también se dice. Y lo que pasó
+        mientras vivía: cada fila escrita la vieron los disparadores del arnés, y cada
+        sentencia que tocó la estructura u otra base, el trazador
+        (``_escrituras_sospechosas_en_la_base``). Vacío si la base solo ha cambiado como
+        cambia charlando.
         """
         encontrados: list[str] = []
         with closing(sqlite3.connect(self.base)) as conexion:
             tablas = _tablas(conexion)
-            encontrados.extend(f"{t} (tabla nueva)" for t in sorted(set(tablas) - TABLAS_DE_LA_0_2))
+            encontrados.extend(
+                f"{t} (tabla nueva)"
+                for t in sorted(set(tablas) - TABLAS_DE_LA_0_2 - TABLAS_DE_LA_PRUEBA)
+            )
             encontrados.extend(
                 f"{t} (tabla que falta)" for t in sorted(TABLAS_DE_LA_0_2 - set(tablas))
             )
@@ -1136,6 +1415,119 @@ class ConductorDeVoz(Conductor):
                 crecimiento = ahora - (self._filas_de_antes.get(tabla) or 0)
                 if crecimiento > _FILAS_DE_MAS:
                     encontrados.append(f"{tabla} (+{crecimiento} filas)")
+        encontrados.extend(self._escrituras_sospechosas_en_la_base())
+        return encontrados
+
+    def _escrituras_sospechosas_en_la_base(self) -> list[str]:
+        """Lo que pasó en la base mientras el conductor vivía y no es charla, se haya
+        borrado después o no.
+
+        Dos ojos. Los disparadores del arnés (``_pone_los_disparadores``) ven cada fila
+        que se escribe en una tabla de la 0.2, se escriba como se escriba: cualquier
+        BLOB, un texto de más de 16 KiB, más de mil filas insertadas en una tabla y más
+        de ``_TEXTO_TOTAL`` de texto en total desde el arranque. El trazador de
+        sentencias (``_vigilar``) ve la estructura: un cambio de esquema fuera del
+        arranque, una sentencia que SQLite ejecuta dentro de otra fuera de las sombras
+        de los índices, que son las únicas que la charla provoca, una escritura en otra
+        base que no sea de memoria, enganchar otra base o abrir el esquema a mano,
+        tocar las tablas del arnés, apagar los disparadores y una conexión que no pasó
+        por ``sqlite3.connect``, que es la que no se pudo seguir.
+        """
+        sospechosas: list[str] = []
+        otras_bases: set[str] = set()
+        for en_el_arranque, base, sentencia in self._sentencias:
+            if sentencia == _CONEXION_SIN_VIGILAR:
+                sospechosas.append("la base (una conexión que el vigilante no pudo seguir)")
+                continue
+            if sentencia == _APAGO_LOS_DISPARADORES:
+                sospechosas.append("la base (una conexión apagó los disparadores)")
+                continue
+            if base and not _en_memoria(base) and not _misma_base(base, self.base):
+                otras_bases.add(base)
+                continue
+            anidada = sentencia.startswith("--")
+            sql = _ANIDADA.sub("", sentencia) if anidada else sentencia
+            tabla = _tabla_de(sql)
+            if anidada:
+                if tabla not in _SOMBRAS_DE_LA_0_2:
+                    sospechosas.append(
+                        f"{tabla} (escritura dentro de otra sentencia, fuera de las sombras)"
+                    )
+                continue
+            esqueleto = _sin_literales(sql)
+            if not en_el_arranque and _CAMBIA_EL_ESQUEMA.search(esqueleto):
+                sospechosas.append(f"{tabla} (esquema cambiado fuera del arranque)")
+            if not en_el_arranque and tabla in TABLAS_DE_LA_PRUEBA:
+                sospechosas.append(f"{tabla} (tocó la vigilancia de la prueba)")
+            if tabla in ("sqlite_master", "sqlite_schema") or _TOCA_LA_ESTRUCTURA.match(sql):
+                sospechosas.append(f"la base (tocó la estructura a mano: {esqueleto[:40].strip()})")
+        sospechosas.extend(f"otra base escrita ({base})" for base in sorted(otras_bases))
+        sospechosas.extend(self._lo_que_vieron_los_disparadores())
+        return sospechosas
+
+    def _pone_los_disparadores(self) -> None:
+        """Pone los ojos sobre las filas, al acabar de arrancar Sirius.
+
+        Las dos tablas del arnés (``TABLAS_DE_LA_PRUEBA``) y, en cada tabla de la base
+        que no sea virtual, sombra ni de SQLite, un disparador por insertar, actualizar
+        y borrar (``_disparador``). Viven en la base, no en una conexión: ven también lo
+        que escriba una conexión que el trazador no sigue, y quitarlos es un cambio de
+        esquema que el trazador ve.
+        """
+        with closing(sqlite3.connect(self.base)) as conexion:
+            conexion.execute(
+                "CREATE TABLE IF NOT EXISTS _vigilancia_escrituras (tabla TEXT NOT NULL,"
+                " columna TEXT NOT NULL, operacion TEXT NOT NULL, tipo TEXT NOT NULL,"
+                " largo INTEGER NOT NULL, cabecera TEXT NOT NULL)"
+            )
+            conexion.execute(
+                "CREATE TABLE IF NOT EXISTS _vigilancia_filas (tabla TEXT PRIMARY KEY,"
+                " filas INTEGER NOT NULL, texto INTEGER NOT NULL)"
+            )
+            for tabla, tipo in sorted(_tablas(conexion).items()):
+                if tipo != "table" or tabla in TABLAS_DE_LA_PRUEBA or tabla.startswith("sqlite_"):
+                    continue
+                columnas = [
+                    str(fila[1]) for fila in conexion.execute(f'PRAGMA table_info("{_sql(tabla)}")')
+                ]
+                for operacion in _OPERACIONES:
+                    conexion.execute(f'DROP TRIGGER IF EXISTS "_vigila_{_sql(tabla)}_{operacion}"')
+                    conexion.execute(_disparador(tabla, columnas, operacion))
+            conexion.commit()
+
+    def _lo_que_vieron_los_disparadores(self) -> list[str]:
+        """Cada BLOB y cada texto largo escrito en una tabla de la 0.2 desde el arranque, con
+        su tamaño y en qué operación; y las tablas con más de mil filas insertadas o más
+        texto del que escribe la charla.
+        """
+        try:
+            with closing(sqlite3.connect(self.base)) as conexion:
+                vistos = conexion.execute(
+                    "SELECT tabla, columna, operacion, tipo, largo, cabecera"
+                    " FROM _vigilancia_escrituras ORDER BY rowid"
+                ).fetchall()
+                cuentas = conexion.execute(
+                    "SELECT tabla, filas, texto FROM _vigilancia_filas ORDER BY tabla"
+                ).fetchall()
+        except sqlite3.Error as error:
+            return [f"la vigilancia de la prueba (no se puede leer: {error})"]
+        encontrados: list[str] = []
+        for tabla, columna, operacion, tipo, largo, cabecera in vistos:
+            if tipo == "blob":
+                con_cabecera = bytes.fromhex(cabecera).startswith(_CABECERAS_DE_AUDIO)
+                que = "BLOB con cabecera de audio" if con_cabecera else "BLOB"
+                encontrados.append(f"{tabla}.{columna} ({que} de {largo} bytes {operacion})")
+            else:
+                encontrados.append(f"{tabla}.{columna} (texto de {largo} caracteres {operacion})")
+        texto_total = 0
+        for tabla, filas, texto in cuentas:
+            texto_total += int(texto)
+            if int(filas) > _FILAS_DE_MAS:
+                encontrados.append(f"{tabla} (+{filas} filas escritas)")
+        if texto_total > _TEXTO_TOTAL:
+            encontrados.append(
+                f"la base (escribió {texto_total} caracteres de texto desde el arranque)"
+            )
         return encontrados
 
     @staticmethod
@@ -1158,10 +1550,12 @@ class ConductorDeVoz(Conductor):
                 f' max(CASE WHEN typeof("{c}") = \'text\' THEN length("{c}") ELSE 0 END)'
                 f' FROM "{tabla_sql}"'
             ).fetchone()
-            if blobs and not binaria and (tabla, columna) not in _COLUMNAS_BINARIAS:
-                sospechosas.append(f"{sitio} (BLOB fuera de las huellas)")
-            elif blobs and int(blob_mas_grande or 0) > _HUELLA_MAS_GRANDE:
-                sospechosas.append(f"{sitio} (BLOB mayor que una huella)")
+            if blobs and not binaria:
+                sospechosas.append(
+                    f"{sitio} (BLOB, y la charla de estas pruebas no escribe ninguno)"
+                )
+            elif blobs and int(blob_mas_grande or 0) > _BLOQUE_MAS_GRANDE:
+                sospechosas.append(f"{sitio} (bloque mayor de 16 KiB)")
             elif blobs:
                 cabeceras = (
                     bytes(valor)
@@ -1238,6 +1632,9 @@ class ConductorDeVoz(Conductor):
         Volver a arrancar vuelve a migrar, y la migración apaga otra vez los
         registradores: se encienden de nuevo, como al construir.
         """
+        # Reabrir no migra ni escribe ninguna sentencia (comprobado el 13-10-2026), así
+        # que el arranque solo se marca al construir: si una pieza cambiara el esquema al
+        # reabrir, se vería.
         super().reabre()
         _enciende_los_registradores_de_sirius()
 
@@ -1248,17 +1645,23 @@ class ConductorDeVoz(Conductor):
         finally:
             _deja_de_vigilar(self)
 
-    def _ficheros_de_audio(self) -> frozenset[Path]:
+    def _ficheros_que_no_son_suyos(self) -> frozenset[Path]:
+        """En las carpetas de Sirius, todo fichero que no sea de los tres permitidos, también
+        una base aparte o un fichero sin extensión de audio que escriba una biblioteca en
+        C; en la temporal del sistema, donde escribe todo el mundo, solo los de audio.
+        """
         encontrados: set[Path] = set()
         for carpeta in self._carpetas_vigiladas:
             if not carpeta.exists():
                 continue
-            crudo_cuenta = carpeta != self._temporal
+            en_la_temporal = carpeta == self._temporal
             for fichero in carpeta.rglob("*"):
-                sufijo = fichero.suffix.lower()
-                if sufijo in EXTENSIONES_DE_AUDIO or (
-                    crudo_cuenta and sufijo in EXTENSIONES_DE_AUDIO_CRUDO
-                ):
+                if fichero.is_dir():
+                    continue
+                if en_la_temporal:
+                    if fichero.suffix.lower() in EXTENSIONES_DE_AUDIO:
+                        encontrados.add(fichero)
+                elif not self._permitidas.permite(fichero):
                     encontrados.add(fichero)
         return frozenset(encontrados)
 

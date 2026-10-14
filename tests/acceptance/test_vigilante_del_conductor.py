@@ -13,6 +13,7 @@ from __future__ import annotations
 import contextlib
 import os
 import socket
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -30,6 +31,8 @@ class _Testigo:
         self.escrituras: list[Path] = []
         self.conexiones: list[str] = []
         self.procesos: list[str] = []
+        self.sentencias: list[str] = []
+        self.bases: set[str] = set()
 
     def anota_escritura(self, ruta: Path) -> None:
         self.escrituras.append(ruta)
@@ -39,6 +42,10 @@ class _Testigo:
 
     def anota_proceso(self, orden: str) -> None:
         self.procesos.append(orden)
+
+    def anota_sentencia(self, sql: str, base: str = "") -> None:
+        self.sentencias.append(sql)
+        self.bases.add(base)
 
 
 def test_ve_un_temporal_de_audio_borrado_antes_de_acabar_y_un_os_open(tmp_path: Path) -> None:
@@ -119,6 +126,73 @@ def test_ve_un_envio_sin_conexion_y_un_proceso_y_no_la_pareja_de_tomas_de_python
     # lo que importa es que ninguno de los dos se escapa.
     assert any(sys.executable in proceso for proceso in testigo.procesos)
     assert any("exit 0" in proceso for proceso in testigo.procesos)
+
+
+class _SuConexion(sqlite3.Connection):
+    """Una clase de conexión propia de una pieza."""
+
+
+def test_ve_cada_sentencia_de_una_conexion_abierta_mientras_vigila_con_sus_valores(
+    tmp_path: Path,
+) -> None:
+    conductor._vigilar()
+    testigo = _Testigo()
+    conductor._EN_UN_TURNO.add(testigo)
+    try:
+        with contextlib.closing(sqlite3.connect(tmp_path / "una.db")) as conexion:
+            conexion.execute("CREATE TABLE t (b BLOB, s TEXT)")
+            conexion.execute("INSERT INTO t VALUES (?, ?)", (b"RIFF\x00", "hola"))
+            conexion.execute("DELETE FROM t")
+            conexion.execute("SELECT count(*) FROM t").fetchone()
+        # Una conexión que no pasa por ``sqlite3.connect`` no se puede trazar: se apunta.
+        with contextlib.closing(sqlite3.Connection(str(tmp_path / "dos.db"))) as directa:
+            directa.execute("CREATE TABLE u (b BLOB)")
+        # La pieza puede poner su propio trazador, o quitarlo: el vigilante sigue viendo, y
+        # el suyo recibe lo mismo. También con una clase de conexión suya.
+        suyas: list[str] = []
+        with contextlib.closing(sqlite3.connect(tmp_path / "cuatro.db", factory=_SuConexion)) as c:
+            assert isinstance(c, _SuConexion)
+            c.set_trace_callback(suyas.append)
+            c.execute("CREATE TABLE w (b BLOB)")
+            c.set_trace_callback(None)
+            c.execute("INSERT INTO w VALUES (x'00')")
+        # Y con la clase que ya sale vigilada como fábrica, no se envuelve dos veces.
+        with contextlib.closing(sqlite3.connect(tmp_path / "cinco.db", factory=type(c))) as d:
+            assert type(d) is type(c)
+            d.execute("CREATE TABLE z (b BLOB)")
+            # Apagar los disparadores de SQLite en una conexión vigilada queda apuntado.
+            d.setconfig(sqlite3.SQLITE_DBCONFIG_ENABLE_TRIGGER, False)
+        # Una fábrica que no es una clase de conexión no se puede envolver: se apunta.
+        with contextlib.closing(
+            sqlite3.connect(  # type: ignore[call-overload]
+                tmp_path / "seis.db", factory=lambda *a, **k: sqlite3.Connection(*a, **k)
+            )
+        ) as suelta:
+            suelta.execute("CREATE TABLE y (b BLOB)")
+    finally:
+        conductor._EN_UN_TURNO.discard(testigo)
+    # Y sin nadie vigilando, una conexión nueva no apunta nada.
+    with contextlib.closing(sqlite3.connect(tmp_path / "tres.db")) as conexion:
+        conexion.execute("CREATE TABLE v (b BLOB)")
+
+    # Los valores van puestos: el BLOB se ve en hexadecimal, y el texto, entero.
+    assert "INSERT INTO t VALUES (x'5249464600', 'hola')" in testigo.sentencias
+    assert "DELETE FROM t" in testigo.sentencias
+    assert "SELECT count(*) FROM t" in testigo.sentencias
+    assert testigo.sentencias.count(conductor._CONEXION_SIN_VIGILAR) == 2
+    assert testigo.sentencias.count(conductor._APAGO_LOS_DISPARADORES) == 1
+    assert not any("TABLE u" in s or "TABLE v" in s for s in testigo.sentencias)
+    assert "CREATE TABLE y (b BLOB)" in testigo.sentencias, "se traza aunque no se envuelva"
+    assert {b.rsplit("/", 1)[-1] for b in testigo.bases if b} == {
+        "una.db",
+        "cuatro.db",
+        "cinco.db",
+        "seis.db",
+    }
+    assert suyas == ["CREATE TABLE w (b BLOB)"]
+    assert "CREATE TABLE w (b BLOB)" in testigo.sentencias
+    assert "INSERT INTO w VALUES (x'00')" in testigo.sentencias
+    assert testigo.sentencias.count("CREATE TABLE z (b BLOB)") == 1
 
 
 def test_solo_la_base_los_ajustes_y_el_diario_de_verdad_se_pueden_escribir(tmp_path: Path) -> None:
