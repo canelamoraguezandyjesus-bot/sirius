@@ -50,6 +50,7 @@ class _Flujo:
         self.parado = False
         self.cerrado = False
         self.falla_al_arrancar = False
+        self.falla_al_parar = False
 
     def start(self) -> None:
         if self.falla_al_arrancar:
@@ -57,6 +58,8 @@ class _Flujo:
         self.arrancado = True
 
     def stop(self) -> None:
+        if self.falla_al_parar:
+            raise _PortAudioError("Unanticipated host error")
         self.parado = True
 
     def close(self) -> None:
@@ -354,14 +357,31 @@ def test_al_cerrar_el_micro_se_tira_lo_que_nadie_leyo() -> None:
     assert micro.read() is None
 
 
-def test_sin_micro_no_lo_arregla_la_orden_de_instalar() -> None:
-    micro = SoundDeviceMicrophone(_SoundDevice(sin_micro=True))
+def test_sin_micro_no_lo_arregla_la_orden_de_instalar_y_no_deja_nada_abierto() -> None:
+    sounddevice = _SoundDevice(sin_micro=True)
+    micro = SoundDeviceMicrophone(sounddevice)
 
     with pytest.raises(VoiceUnavailable) as fallo:
         micro.open()
 
     assert not fallo.value.fixed_by_install
     assert "micrófono" in fallo.value.reason
+    assert sounddevice.flujos[0].cerrado, "el flujo que no arrancó se cierra"
+
+
+def test_si_pararlo_falla_el_micro_se_cierra_igual_y_tira_lo_captado() -> None:
+    sounddevice = _SoundDevice()
+    micro = SoundDeviceMicrophone(sounddevice)
+    micro.open()
+    flujo = sounddevice.flujos[0]
+    flujo.opciones["callback"](memoryview(b"\x01\x02"), 1, None, None)
+    flujo.falla_al_parar = True
+
+    with pytest.raises(_PortAudioError):
+        micro.close()
+
+    assert flujo.cerrado
+    assert micro.read() is None
 
 
 # --- Silero y Smart Turn, encadenados como en Pipecat -------------------------------
@@ -441,6 +461,33 @@ def test_reiniciar_es_tener_silero_y_smart_turn_nuevos_y_soltar_los_viejos() -> 
     assert detector.listen(b"b") is TurnSignal.VOICE
     assert nuevo_turno.inicios == [0.2], "empieza un turno nuevo, no sigue el viejo"
     assert nuevo_silero.trozos == [b"b"]
+
+
+def test_si_no_se_pueden_cargar_los_nuevos_se_queda_con_los_que_tenia() -> None:
+    # Ronda 2 de Codex sobre la PR #687: el reinicio sustituía antes de tener el par nuevo.
+    silero_creados: list[_Silero] = []
+    turno_creados: list[_SmartTurn] = []
+
+    def silero() -> _Silero:
+        silero_creados.append(_Silero(["SPEAKING", "SPEAKING"]))
+        return silero_creados[-1]
+
+    def smart_turn() -> _SmartTurn:
+        if turno_creados:
+            raise RuntimeError("sin memoria para otra sesión ONNX")
+        turno_creados.append(_SmartTurn())
+        return turno_creados[-1]
+
+    detector = PipecatTurnDetector(silero, smart_turn)
+
+    with pytest.raises(RuntimeError, match="sin memoria"):
+        detector.reset()
+
+    viejo, a_medias = silero_creados
+    assert a_medias.soltado, "el Silero nuevo que no llegó a usarse se suelta"
+    assert not viejo.soltado and not turno_creados[0].soltado
+    assert detector.listen(b"a") is TurnSignal.VOICE
+    assert viejo.trozos == [b"a"], "sigue oyendo con el par que tenía"
 
 
 # --- faster-whisper -----------------------------------------------------------------

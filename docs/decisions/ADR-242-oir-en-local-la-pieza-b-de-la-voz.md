@@ -168,12 +168,12 @@ Medido el 14-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   la C (`tests/acceptance/test_dobles_del_conductor.py`). La tabla de
   `docs/evolution/PRUEBAS_0.3_DEL_ROBOT.md` pone PA-R03-01 en verde; PA-R03-08 sigue
   pendiente de la C.
-- **53 pruebas unitarias nuevas**: el servicio (`tests/unit/test_local_listening.py`), los
+- **58 pruebas unitarias nuevas**: el servicio (`tests/unit/test_local_listening.py`), los
   adaptadores de verdad con módulos de mentira (`tests/unit/test_local_listening_adapters.py`),
   la instalación y la orden de instalar (`tests/unit/test_local_voice_installation.py`), la
   orden de consola (`tests/unit/test_listen_console.py`) y la guarda de las descargas
   (`tests/unit/test_solo_la_orden_de_instalar_baja_modelos.py`).
-- **Mutación: 22 de 22 caen.** Quitar lo que suena antes de la voz, no mirar la
+- **Mutación: 29 de 29 caen.** Quitar lo que suena antes de la voz, no mirar la
   instalación, escribir lo oído en el diario, mandar un turno vacío, no vaciar el turno,
   leer el micro parado, empezar un turno o transcribir con un fin de turno sin voz
   delante, decir que no es para él, dar por local cualquier ajuste, no pedir
@@ -185,7 +185,10 @@ Medido el 14-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   del fin de turno suelto, cuando la prueba miró también con qué empieza el turno. Las
   cuatro de la ronda 1 de Codex, abajo, también caen: parar sin reiniciar el detector,
   reiniciarlo sin cargar analizadores nuevos, sin soltar los viejos, y un oído de mentira
-  que no olvida al reiniciarse.
+  que no olvida al reiniciarse. Y las siete de la ronda 2: parar sin limpiar el estado
+  antes, no soltar las piezas cuando parar falla, sustituir el par del detector antes de
+  tenerlo entero, no soltar el nuevo a medias, no cerrar el micro que no arranca ni el que
+  no para, y no volver a bajar un modelo que está pero no carga.
 - **Las bibliotecas de verdad**, en un entorno aparte con el extra (`uv sync --frozen
   --extra voz`, Linux y Python 3.14.6, sin micro): Silero y Smart Turn cargan en 0,26 s y
   tardan 0,91 ms por trozo de 32 ms. Con la voz grabada que trae Pipecat
@@ -252,3 +255,24 @@ cinco reinicios sigue habiendo un hilo vivo, no seis. Arreglo: el detector tiene
 `reset()`, el servicio lo llama al parar, y el de verdad carga un Silero y un Smart Turn
 nuevos y suelta los viejos con su `cleanup()`. La prueba que lo pide usa un detector de
 mentira con memoria, como Silero; la anterior no podía verlo porque el suyo no tenía.
+
+**Ronda 2** (`294a44be`, 14-10-2026): dos hallazgos P2, ciertos los dos y de otra familia
+que la ronda 1, así que no salta la regla de las dos rondas.
+
+- **La orden de instalar no arreglaba un modelo que está pero no carga.** Sirius decía
+  que se ejecutara, la orden veía los ficheros, no bajaba nada y volvía a fallar: un
+  bucle. Ahora la orden comprueba que el modelo carga (`load_listening_model`, la misma
+  carga que usa el oído) y, si no, lo baja otra vez; si no puede bajarlo, dice además
+  que se cierre Sirius, que en Windows retiene el modelo abierto.
+- **El reinicio del detector no era atómico.** Si cargar el par nuevo fallaba, `stop()`
+  se cortaba a medias y el servicio seguía diciendo que escuchaba con el micro cerrado.
+  Ahora `stop()` limpia su estado antes y, si cerrar el micro o reiniciar el detector
+  falla, suelta las piezas para que el siguiente `start` las cargue de nuevo; el
+  detector construye el par nuevo entero antes de sustituir el viejo, y si no puede,
+  suelta lo que llegó a crear y se queda con el que tenía.
+
+Antes de arreglarlo se repasaron los caminos de fallo vecinos para no recibirlos de uno en
+uno, y salieron dos más del mismo código, arreglados en el mismo commit: el micro que no
+arranca dejaba su flujo sin cerrar, y si pararlo fallaba no se cerraba. Con las bibliotecas
+de verdad, el reinicio sigue dando solo silencio tras parar a media frase, y un hilo vivo
+tras cinco reinicios.

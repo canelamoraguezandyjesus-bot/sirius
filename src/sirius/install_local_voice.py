@@ -17,7 +17,7 @@ import shutil
 from collections.abc import Callable
 from pathlib import Path
 
-from sirius.adapters.audio.local_listening import load_listening_engines
+from sirius.adapters.audio.local_listening import load_listening_engines, load_listening_model
 from sirius.config.local_voice import LocalVoiceSettings
 from sirius.infrastructure.local_voice_installation import (
     listening_model_complete,
@@ -56,18 +56,35 @@ def download_listening_model(
     partial.rename(folder)
 
 
+def _model_problem(folder: Path) -> str:
+    """Por qué no vale el modelo de ``folder``, o vacío si está entero y carga."""
+    if not listening_model_complete(folder):
+        return "no está en este ordenador"
+    try:
+        load_listening_model(folder)
+    except VoiceUnavailable as error:
+        return error.reason
+    return ""
+
+
 def main() -> int:
     settings = LocalVoiceSettings()
     folder = listening_model_dir(settings)
     model = settings.listening_model.value
-    if listening_model_complete(folder):
+    problem = _model_problem(folder)
+    if not problem:
         print(f"[OK]    El modelo de oír (faster-whisper {model}) ya está en {folder}")
     else:
+        # Un modelo que está pero no carga también se baja otra vez: si no, Sirius
+        # diría que se ejecute esta orden y la orden no lo arreglaría nunca (ronda 2 de
+        # Codex sobre la PR #687).
+        print(f"El modelo de oír {problem}.")
         print(f"Bajando el modelo de oír (faster-whisper {model}, unos 500 MB). Solo esta vez.")
         try:
             download_listening_model(settings, folder)
         except Exception as error:
             print(f"[FALLA] No se pudo bajar el modelo: {error}")
+            print("        Si Sirius está abierto, ciérralo y vuelve a ejecutar la orden.")
             return 1
         print(f"[OK]    Modelo bajado a {folder}")
     print("Comprobando que el oído carga...")

@@ -35,6 +35,7 @@ class _Micro:
         self.abierto = False
         self.aperturas = 0
         self.falla_al_abrir: VoiceUnavailable | None = None
+        self.falla_al_cerrar: Exception | None = None
 
     def open(self) -> None:
         if self.falla_al_abrir is not None:
@@ -43,6 +44,8 @@ class _Micro:
         self.aperturas += 1
 
     def close(self) -> None:
+        if self.falla_al_cerrar is not None:
+            raise self.falla_al_cerrar
         self.abierto = False
 
     def read(self) -> str | None:
@@ -54,6 +57,7 @@ class _Detector:
     def __init__(self) -> None:
         self.vistos: list[str] = []
         self.reinicios = 0
+        self.falla_al_reiniciar: Exception | None = None
 
     def listen(self, chunk: str) -> TurnSignal:
         self.vistos.append(chunk)
@@ -62,6 +66,8 @@ class _Detector:
         return TurnSignal.VOICE if chunk.startswith("voz:") else TurnSignal.QUIET
 
     def reset(self) -> None:
+        if self.falla_al_reiniciar is not None:
+            raise self.falla_al_reiniciar
         self.reinicios += 1
 
 
@@ -325,6 +331,30 @@ def test_parar_a_media_frase_tambien_reinicia_el_detector() -> None:
     assert detector.reinicios == 1
     assert oido.suena("", "", FIN) == Attended()
     assert oido.transcriptor.turnos == []
+
+
+@pytest.mark.parametrize("falla_en", ["el micro", "el detector"])
+def test_si_parar_falla_el_servicio_queda_parado_y_vuelve_a_cargar_el_oido(falla_en: str) -> None:
+    # Ronda 2 de Codex sobre la PR #687: un fallo al parar dejaba el servicio diciendo
+    # que escuchaba, con el micro ya cerrado.
+    oido = _Oido()
+    oido.servicio.start()
+    oido.suena(voz("A medias"), "")
+    if falla_en == "el micro":
+        oido.micro.falla_al_cerrar = OSError("PortAudio no responde")
+    else:
+        oido.detector.falla_al_reiniciar = RuntimeError("sin memoria para Silero")
+
+    with pytest.raises((OSError, RuntimeError)):
+        oido.servicio.stop()
+
+    assert not oido.servicio.listening
+    assert oido.servicio.attend() == Attended(), "parado no lee el micro"
+    oido.micro.falla_al_cerrar = None
+    oido.detector.falla_al_reiniciar = None
+    assert oido.servicio.start() == ""
+    assert oido.cargas == 2, "las piezas se cargan de nuevo al volver"
+    assert [t.heard for t in oido.suena(voz("Hola"), FIN).turns] == ["Hola"]
 
 
 def test_si_la_charla_falla_el_turno_no_se_queda_a_medias() -> None:

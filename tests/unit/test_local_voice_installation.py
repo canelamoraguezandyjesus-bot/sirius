@@ -125,12 +125,40 @@ def test_con_el_modelo_ya_instalado_no_baja_nada_y_comprueba_que_carga(
         raise AssertionError("ha intentado bajar un modelo que ya estaba")
 
     monkeypatch.setattr(install_local_voice, "download_listening_model", no_baja)
+    monkeypatch.setattr(install_local_voice, "load_listening_model", lambda carpeta: None)
     monkeypatch.setattr(install_local_voice, "load_listening_engines", cargados.append)
 
     assert install_local_voice.main() == 0
 
     assert cargados == [LocalVoiceInstallation(LocalVoiceSettings()).listening_model_dir]
     assert "sirius-oye" in capsys.readouterr().out
+
+
+def test_un_modelo_que_esta_pero_no_carga_se_baja_otra_vez(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Ronda 2 de Codex sobre la PR #687: Sirius decía que se ejecutara esta orden, y la
+    # orden veía los ficheros, no bajaba nada y volvía a fallar.
+    carpeta = LocalVoiceInstallation(LocalVoiceSettings()).listening_model_dir
+    _pon_modelo(carpeta)
+    bajados: list[Path] = []
+
+    def no_carga(carpeta: Path) -> None:
+        raise VoiceUnavailable(
+            "el modelo de oír no carga (model.bin corrupto)", fixed_by_install=True
+        )
+
+    def baja(ajustes: LocalVoiceSettings, carpeta: Path) -> None:
+        bajados.append(carpeta)
+
+    monkeypatch.setattr(install_local_voice, "load_listening_model", no_carga)
+    monkeypatch.setattr(install_local_voice, "download_listening_model", baja)
+    monkeypatch.setattr(install_local_voice, "load_listening_engines", lambda carpeta: None)
+
+    assert install_local_voice.main() == 0
+
+    assert bajados == [carpeta]
+    assert "model.bin corrupto" in capsys.readouterr().out
 
 
 def test_si_el_oido_no_carga_la_orden_acaba_en_error(
@@ -141,6 +169,7 @@ def test_si_el_oido_no_carga_la_orden_acaba_en_error(
     def no_carga(carpeta: Path) -> None:
         raise VoiceUnavailable("falta pipecat", fixed_by_install=True)
 
+    monkeypatch.setattr(install_local_voice, "load_listening_model", lambda carpeta: None)
     monkeypatch.setattr(install_local_voice, "load_listening_engines", no_carga)
 
     assert install_local_voice.main() == 1
@@ -156,4 +185,6 @@ def test_si_no_se_puede_bajar_la_orden_acaba_en_error(
     monkeypatch.setattr(install_local_voice, "download_listening_model", sin_internet)
 
     assert install_local_voice.main() == 1
-    assert "sin internet" in capsys.readouterr().out
+    salida = capsys.readouterr().out
+    assert "sin internet" in salida
+    assert "ciérralo" in salida

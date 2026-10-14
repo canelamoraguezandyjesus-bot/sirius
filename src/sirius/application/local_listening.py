@@ -122,15 +122,23 @@ class LocalListening[Chunk]:
 
         Si no, al volver a escuchar el detector seguiría en el turno viejo: Silero
         creería que aún hay voz y el silencio siguiente abriría un turno sin palabras
-        (ronda 1 de Codex sobre la PR #687).
+        (ronda 1 de Codex sobre la PR #687). El estado del servicio se limpia antes, y si
+        cerrar el micro o reiniciar el detector falla, se sueltan las piezas: el siguiente
+        ``start`` las carga de nuevo, y el fallo sigue su camino (ronda 2).
         """
-        if self._engines is not None:
-            if self._listening:
-                self._engines.microphone.close()
-            self._engines.detector.reset()
+        engines, listening = self._engines, self._listening
         self._listening = False
         self._turn = None
         self._before_turn.clear()
+        if engines is None:
+            return
+        try:
+            if listening:
+                engines.microphone.close()
+            engines.detector.reset()
+        except BaseException:
+            self._engines = None
+            raise
 
     def attend(self) -> Attended:
         """Atiende todo lo que ha llegado al micro y devuelve los turnos que cerró.

@@ -42,7 +42,6 @@ def load_listening_engines(model_dir: Path) -> ListeningEngines[bytes]:
     try:
         import numpy
         import sounddevice
-        from faster_whisper import WhisperModel
         from loguru import logger
         from pipecat.audio.turn.smart_turn.local_smart_turn_v3 import LocalSmartTurnAnalyzerV3
         from pipecat.audio.vad.silero import SileroVADAnalyzer
@@ -57,10 +56,8 @@ def load_listening_engines(model_dir: Path) -> ListeningEngines[bytes]:
     logger.remove()
     logger.add(sys.stderr, level="WARNING")
     os.environ.pop(_SMART_TURN_AUDIO_LOG, None)
+    model = load_listening_model(model_dir)
     try:
-        model = WhisperModel(
-            str(model_dir), device="cpu", compute_type="int8", local_files_only=True
-        )
         detector = PipecatTurnDetector(
             lambda: SileroVADAnalyzer(sample_rate=SAMPLE_RATE),
             lambda: LocalSmartTurnAnalyzerV3(sample_rate=SAMPLE_RATE),
@@ -72,6 +69,26 @@ def load_listening_engines(model_dir: Path) -> ListeningEngines[bytes]:
         detector=detector,
         transcriber=FasterWhisperTranscriber(model, numpy),
     )
+
+
+def load_listening_model(model_dir: Path) -> Any:
+    """El modelo de faster-whisper de ``model_dir``: solo de ahí y sin bajar nada.
+
+    Falla con ``VoiceUnavailable`` si falta faster-whisper o si el modelo no carga; la
+    orden de instalar lo usa para saber si tiene que bajarlo otra vez.
+    """
+    try:
+        from faster_whisper import WhisperModel
+    except ImportError as error:
+        name = error.name or "faster_whisper"
+        raise VoiceUnavailable(f"falta {name}", fixed_by_install=True) from error
+    try:
+        return WhisperModel(
+            str(model_dir), device="cpu", compute_type="int8", local_files_only=True
+        )
+    except (OSError, RuntimeError, ValueError) as error:
+        msg = f"el modelo de oír no carga ({error})"
+        raise VoiceUnavailable(msg, fixed_by_install=True) from error
 
 
 class SoundDeviceMicrophone:
@@ -89,6 +106,7 @@ class SoundDeviceMicrophone:
     def open(self) -> None:
         if self._stream is not None:
             return
+        error_type = self._sounddevice.PortAudioError
         try:
             stream = self._sounddevice.RawInputStream(
                 samplerate=SAMPLE_RATE,
@@ -97,20 +115,26 @@ class SoundDeviceMicrophone:
                 dtype="int16",
                 callback=self._arrived,
             )
+        except error_type as error:
+            raise _no_microphone(error) from error
+        try:
             stream.start()
-        except self._sounddevice.PortAudioError as error:
-            raise VoiceUnavailable(
-                f"no puedo abrir el micrófono ({error})", fixed_by_install=False
-            ) from error
+        except error_type as error:
+            stream.close()
+            raise _no_microphone(error) from error
         self._stream = stream
 
     def close(self) -> None:
         stream, self._stream = self._stream, None
-        if stream is not None:
-            stream.stop()
-            stream.close()
-        while self.read() is not None:
-            pass
+        try:
+            if stream is not None:
+                try:
+                    stream.stop()
+                finally:
+                    stream.close()
+        finally:
+            while self.read() is not None:
+                pass
 
     def read(self) -> bytes | None:
         try:
@@ -121,6 +145,10 @@ class SoundDeviceMicrophone:
     def _arrived(self, data: Any, frames: int, time: Any, status: Any) -> None:
         del frames, time, status
         self._chunks.put(bytes(data))
+
+
+def _no_microphone(error: Exception) -> VoiceUnavailable:
+    return VoiceUnavailable(f"no puedo abrir el micrófono ({error})", fixed_by_install=False)
 
 
 class PipecatTurnDetector:
@@ -148,13 +176,23 @@ class PipecatTurnDetector:
         self.reset()
 
     def reset(self) -> None:
-        old = (self._vad, self._turn)
-        self._vad = self._make_vad()
-        self._turn = self._make_turn()
-        self._vad.set_sample_rate(SAMPLE_RATE)
-        self._turn.set_sample_rate(SAMPLE_RATE)
+        """Silero y Smart Turn nuevos; si no se pueden cargar, se queda con los que tenía."""
+        new: list[Any] = []
+        try:
+            new.append(self._make_vad())
+            new.append(self._make_turn())
+            for analyzer in new:
+                analyzer.set_sample_rate(SAMPLE_RATE)
+        except BaseException:
+            self._release(new)
+            raise
+        old = [self._vad, self._turn]
+        self._vad, self._turn = new
         self._speaking = False
-        for analyzer in old:
+        self._release(old)
+
+    def _release(self, analyzers: list[Any]) -> None:
+        for analyzer in analyzers:
             if analyzer is not None:
                 self._wait(analyzer.cleanup())
 
