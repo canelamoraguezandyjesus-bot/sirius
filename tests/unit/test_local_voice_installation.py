@@ -133,7 +133,6 @@ def test_con_el_modelo_ya_instalado_no_baja_nada_y_comprueba_que_carga(
         raise AssertionError("ha intentado bajar un modelo que ya estaba")
 
     monkeypatch.setattr(install_local_voice, "download_listening_model", no_baja)
-    monkeypatch.setattr(install_local_voice, "load_listening_model", lambda carpeta: None)
     monkeypatch.setattr(install_local_voice, "load_listening_engines", cargados.append)
 
     assert install_local_voice.main() == 0
@@ -143,31 +142,51 @@ def test_con_el_modelo_ya_instalado_no_baja_nada_y_comprueba_que_carga(
 
 
 @pytest.mark.usefixtures("bibliotecas_bien")
-def test_un_modelo_que_esta_pero_no_carga_se_baja_otra_vez(
+def test_sin_modelo_lo_baja_y_comprueba_que_carga(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    # Ronda 2 de Codex sobre la PR #687: Sirius decía que se ejecutara esta orden, y la
-    # orden veía los ficheros, no bajaba nada y volvía a fallar.
     carpeta = LocalVoiceInstallation(LocalVoiceSettings()).listening_model_dir
-    _pon_modelo(carpeta)
     bajados: list[Path] = []
-
-    def no_carga(carpeta: Path) -> None:
-        raise VoiceUnavailable(
-            "el modelo de oír no carga (model.bin corrupto)", fixed_by_install=True
-        )
+    cargados: list[Path] = []
 
     def baja(ajustes: LocalVoiceSettings, carpeta: Path) -> None:
         bajados.append(carpeta)
 
-    monkeypatch.setattr(install_local_voice, "load_listening_model", no_carga)
     monkeypatch.setattr(install_local_voice, "download_listening_model", baja)
-    monkeypatch.setattr(install_local_voice, "load_listening_engines", lambda carpeta: None)
+    monkeypatch.setattr(install_local_voice, "load_listening_engines", cargados.append)
 
     assert install_local_voice.main() == 0
 
     assert bajados == [carpeta]
-    assert "model.bin corrupto" in capsys.readouterr().out
+    assert cargados == [carpeta]
+    assert "sirius-oye" in capsys.readouterr().out
+
+
+@pytest.mark.usefixtures("bibliotecas_bien")
+def test_un_modelo_que_esta_no_se_vuelve_a_bajar_aunque_no_cargue(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Ronda 5 de Codex sobre la PR #687: si no carga porque el ordenador no puede (sin
+    # memoria, un motor que no admite), bajarlo otra vez gasta 500 MB y vuelve a fallar.
+    # La orden no puede distinguirlo de un fichero roto, así que no lo baja otra vez y
+    # dice que repetirla no lo arreglará; Sirius tampoco se la promete.
+    _pon_modelo(LocalVoiceInstallation(LocalVoiceSettings()).listening_model_dir)
+
+    def no_baja(*args: object) -> None:
+        raise AssertionError("ha vuelto a bajar un modelo que ya estaba")
+
+    def no_carga(carpeta: Path) -> None:
+        raise VoiceUnavailable(
+            "el modelo de oír no carga (Unable to allocate memory)", fixed_by_install=False
+        )
+
+    monkeypatch.setattr(install_local_voice, "download_listening_model", no_baja)
+    monkeypatch.setattr(install_local_voice, "load_listening_engines", no_carga)
+
+    assert install_local_voice.main() == 1
+    salida = capsys.readouterr().out
+    assert "Unable to allocate memory" in salida
+    assert "Volver a ejecutar esta orden no lo arreglará" in salida
 
 
 @pytest.mark.usefixtures("bibliotecas_bien")
@@ -180,7 +199,6 @@ def test_si_el_oido_no_carga_la_orden_acaba_en_error(
     def no_carga(carpeta: Path) -> None:
         raise VoiceUnavailable("INVALID_PROTOBUF", fixed_by_install=lo_arregla)
 
-    monkeypatch.setattr(install_local_voice, "load_listening_model", lambda carpeta: None)
     monkeypatch.setattr(install_local_voice, "load_listening_engines", no_carga)
 
     assert install_local_voice.main() == 1
@@ -221,4 +239,6 @@ def test_si_una_biblioteca_no_carga_la_orden_lo_dice_y_no_baja_nada(
     monkeypatch.setattr(install_local_voice, "download_listening_model", no_baja)
 
     assert install_local_voice.main() == 1
-    assert "WinError 126" in capsys.readouterr().out
+    salida = capsys.readouterr().out
+    assert "WinError 126" in salida
+    assert "Volver a ejecutar esta orden no lo arreglará" in salida

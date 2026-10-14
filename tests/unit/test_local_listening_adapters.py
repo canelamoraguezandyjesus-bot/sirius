@@ -446,30 +446,36 @@ def test_los_analizadores_oyen_a_16_khz_y_pipecat_solo_avisa_por_consola(
     assert bibliotecas.sounddevice.flujos == [], "cargar no abre el micro"
 
 
-def test_un_tokenizer_roto_tampoco_tumba_a_sirius_y_lo_arregla_la_orden(
-    bibliotecas: _Bibliotecas, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+@pytest.mark.parametrize(
+    ("error", "dice"),
+    [
+        # Un fichero roto: CTranslate2 no lo lee, y tokenizers falla con un Exception pelado.
+        (RuntimeError("Unable to open file 'model.bin'"), "model.bin"),
+        (Exception("EOF while parsing a string at line 1 column 25"), "EOF while parsing"),
+        # Un ordenador que no puede cargarlo, como lo dice CTranslate2.
+        (
+            ValueError("Requested int8 compute type, but the target device or backend do not"),
+            "int8 compute type",
+        ),
+        (RuntimeError("Unable to allocate 486 MB"), "allocate"),
+    ],
+)
+def test_un_modelo_que_esta_y_no_carga_avisa_sin_prometer_la_orden_de_instalar(
+    bibliotecas: _Bibliotecas,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    error: Exception,
+    dice: str,
 ) -> None:
-    # tokenizers falla con un Exception pelado si su fichero está roto.
-    roto = Exception("EOF while parsing a string at line 1 column 25")
-    monkeypatch.setattr(_Whisper, "falla_al_cargar", roto)
+    # Ronda 5 de Codex sobre la PR #687: los dos casos fallan igual en el constructor de
+    # faster-whisper, y volver a bajar el modelo solo arregla el primero.
+    monkeypatch.setattr(_Whisper, "falla_al_cargar", error)
 
     with pytest.raises(VoiceUnavailable) as fallo:
         load_listening_engines(tmp_path)
 
-    assert fallo.value.fixed_by_install
-    assert "EOF while parsing" in fallo.value.reason
-
-
-def test_si_el_modelo_no_carga_lo_arregla_la_orden_de_instalar(
-    bibliotecas: _Bibliotecas, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    monkeypatch.setattr(_Whisper, "falla_al_cargar", RuntimeError("Unable to open 'model.bin'"))
-
-    with pytest.raises(VoiceUnavailable) as fallo:
-        load_listening_engines(tmp_path)
-
-    assert fallo.value.fixed_by_install
-    assert "model.bin" in fallo.value.reason
+    assert not fallo.value.fixed_by_install
+    assert dice in fallo.value.reason
 
 
 # --- El micro -----------------------------------------------------------------------

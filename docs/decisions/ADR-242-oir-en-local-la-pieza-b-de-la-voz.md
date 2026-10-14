@@ -150,9 +150,10 @@ lo que el propietario ve u oye).
 - **Cómo se instalan.** Un extra opcional, `voz`, en `pyproject.toml`; Quality no lo
   instala (`uv sync --locked --all-groups` no toca los extras). La orden, una sola, en
   PowerShell y en la carpeta de Sirius: `uv run --extra voz sirius-instala-la-voz`.
-  Instala las bibliotecas, baja el modelo a una carpeta aparte y solo la pone en su
-  sitio cuando está entera, y comprueba que el oído carga. `uv run sirius` no quita lo
-  instalado: `uv run` solo añade lo que falta.
+  Instala las bibliotecas, baja el modelo a una carpeta aparte si falta y solo la pone
+  en su sitio cuando está entera, y comprueba que el oído carga. Lo que ya está no lo
+  vuelve a bajar (ronda 5, abajo). `uv run sirius` no quita lo instalado: `uv run` solo
+  añade lo que falta.
 - **La orden para probarlo:** `uv run --extra voz sirius-oye`, en consola, sin ventana:
   le oye, escribe lo que oyó y lo que contesta Sirius, en la misma charla de la ventana,
   hasta Ctrl+C. Es la mitad de E-R03-01 que no depende de la pieza C.
@@ -168,12 +169,12 @@ Medido el 14-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   la C (`tests/acceptance/test_dobles_del_conductor.py`). La tabla de
   `docs/evolution/PRUEBAS_0.3_DEL_ROBOT.md` pone PA-R03-01 en verde; PA-R03-08 sigue
   pendiente de la C.
-- **75 pruebas unitarias nuevas**: el servicio (`tests/unit/test_local_listening.py`), los
+- **78 pruebas unitarias nuevas**: el servicio (`tests/unit/test_local_listening.py`), los
   adaptadores de verdad con módulos de mentira (`tests/unit/test_local_listening_adapters.py`),
   la instalación y la orden de instalar (`tests/unit/test_local_voice_installation.py`), la
   orden de consola (`tests/unit/test_listen_console.py`) y la guarda de las descargas
   (`tests/unit/test_solo_la_orden_de_instalar_baja_modelos.py`).
-- **Mutación: 56 de 56 caen.** Quitar lo que suena antes de la voz, no mirar la
+- **Mutación: 59 de 59 caen.** Quitar lo que suena antes de la voz, no mirar la
   instalación, escribir lo oído en el diario, mandar un turno vacío, no vaciar el turno,
   leer el micro parado, empezar un turno o transcribir con un fin de turno sin voz
   delante, decir que no es para él, dar por local cualquier ajuste, no pedir
@@ -188,7 +189,8 @@ Medido el 14-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   que no olvida al reiniciarse. Y las siete de la ronda 2: parar sin limpiar el estado
   antes, no soltar las piezas cuando parar falla, sustituir el par del detector antes de
   tenerlo entero, no soltar el nuevo a medias, no cerrar el micro que no arranca ni el que
-  no para, y no volver a bajar un modelo que está pero no carga. Y las nueve de la raíz
+  no para, y no volver a bajar un modelo que está pero no carga; esta última se retiró
+  en la ronda 5 con lo que vigilaba, y hoy cae la contraria. Y las nueve de la raíz
   de la ronda 3: un import que no traduce `OSError`, un import suelto en el oído, un micro
   que acepta trozos de cualquier apertura o que no cambia de apertura al cerrar, cerrar el
   micro o soltar un analizador propagando el fallo, parar sin apuntar el detector sin
@@ -202,7 +204,10 @@ Medido el 14-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   la orden, atrapar solo tres tipos al cargar el modelo, comprobar las bibliotecas sin
   faster-whisper o sin las demás, que la orden no las mire antes que el modelo, que no
   diga que repetirla no lo arregla o que lo diga cuando sí lo arregla, y dejar abierto el
-  bucle de eventos de un detector que no arranca. La de etiquetar con la generación del
+  bucle de eventos de un detector que no arranca. Y las cuatro de la ronda 5: prometer la
+  orden con un modelo que está y no carga, volver a bajar un modelo que ya está, no bajar
+  el que falta, y que la orden no diga, con una biblioteca rota, que repetirla no lo
+  arregla. La de etiquetar con la generación del
   momento sobrevivió a la prueba que reproduce el caso de Codex, que para el hilo dentro
   de `bytes(data)`, donde las dos coinciden; cayó con otra que lo para justo después de
   comprobar.
@@ -373,3 +378,29 @@ Se sigue con lo construido: cada familia queda cerrada por construcción y no ca
 y las dieciocho mutaciones de la ronda caen. Con las bibliotecas de verdad, el detector
 da lo mismo que antes (voz a los 0,90 s, turno acabado a los 1,09 s, solo silencio tras
 parar a media frase y reiniciar, un hilo tras cinco reinicios).
+
+**Ronda 5** (`126045bd`, 14-10-2026): un hallazgo P2, cierto, y nacido del cierre de la
+ronda 4. Un modelo que está y no carga seguía prometiendo la orden de instalar, y la orden
+lo volvía a bajar. Pero el constructor de faster-whisper arranca CTranslate2 con el
+dispositivo y el tipo de cálculo
+(`faster_whisper/transcribe.py:689`, versión 1.2.1), y un ordenador sin memoria o con un
+motor que no admite el cálculo falla con los mismos tipos de error que un fichero roto:
+la orden gastaba unos 500 MB y volvía a fallar.
+
+**La regla de las dos rondas salta otra vez**: es la tercera vez del remedio que no
+remedia (rondas 2, 4 y 5), y la segunda seguida. El patrón, escrito: cada arreglo
+adivinaba por el tipo de error si la orden lo arreglaría, y el tipo de error no lo dice.
+La raíz es dejar de adivinar. La orden solo se promete cuando falta algo, porque eso es
+lo único que pone con seguridad: un módulo que no está (`ModuleNotFoundError`) o un
+fichero del modelo que no está. Todo lo que está y no carga se dice tal cual, sin
+prometer nada. Se decide **retirar lo construido en la ronda 2**: la orden ya no vuelve a
+bajar un modelo que está, porque no puede distinguir uno roto de un ordenador que no puede
+cargarlo, y cuando falla algo que ella no arregla, dice que repetirla no servirá, también
+con una biblioteca rota. Así el bucle de la ronda 2 no puede volver: Sirius no promete la
+orden en ese caso.
+
+Lo que queda sin arreglo automático, a propósito: un modelo que se estropea en el disco
+después de instalarlo. Sirius dice que no carga y por qué, y no promete nada; se arregla
+borrando su carpeta y volviendo a ejecutar la orden, guiado en su ordenador. Es raro: la
+orden solo pone el modelo en su sitio cuando la descarga está entera, y el antivirus que
+borra un fichero lo deja como «falta», que sí promete la orden.

@@ -2,7 +2,9 @@
 
 ADR-242. La ejecuta el propietario, una vez y con internet, en PowerShell y dentro de la
 carpeta de Sirius. Cuando llega aquí, ``uv run --extra voz`` ya ha instalado las
-bibliotecas; esto baja el modelo de oír a su carpeta y comprueba que el oído carga.
+bibliotecas; esto baja el modelo de oír a su carpeta si falta y comprueba que el oído
+carga. Lo que ya está no lo vuelve a bajar: si el modelo está y no carga, lo dice y dice
+que repetir la orden no lo arreglará (ronda 5 de Codex sobre la PR #687).
 
 Es lo único de Sirius que baja un modelo. Si a Sirius le falta, dice esta orden y no
 baja nada (PA-R03-08); una prueba recorre ``src/`` para que siga siendo así.
@@ -20,7 +22,6 @@ from pathlib import Path
 from sirius.adapters.audio.local_listening import (
     check_listening_libraries,
     load_listening_engines,
-    load_listening_model,
 )
 from sirius.config.local_voice import LocalVoiceSettings
 from sirius.infrastructure.local_voice_installation import (
@@ -60,17 +61,6 @@ def download_listening_model(
     partial.rename(folder)
 
 
-def _model_problem(folder: Path) -> str:
-    """Por qué no vale el modelo de ``folder``, o vacío si está entero y carga."""
-    if not listening_model_complete(folder):
-        return "no está en este ordenador"
-    try:
-        load_listening_model(folder)
-    except VoiceUnavailable as error:
-        return error.reason
-    return ""
-
-
 def main() -> int:
     settings = LocalVoiceSettings()
     folder = listening_model_dir(settings)
@@ -78,18 +68,12 @@ def main() -> int:
     try:
         check_listening_libraries()
     except VoiceUnavailable as error:
-        # Si una biblioteca falla, bajar el modelo otra vez no lo arregla (ronda 4 de
-        # Codex sobre la PR #687): se dice y se para.
-        print(f"[FALLA] Una biblioteca de la voz no está bien: {error.reason}")
-        return 1
-    problem = _model_problem(folder)
-    if not problem:
+        # Si una biblioteca falla, bajar el modelo no lo arregla (ronda 4 de Codex sobre
+        # la PR #687): se dice y se para, sin bajar nada.
+        return _fail("Una biblioteca de la voz no está bien", error)
+    if listening_model_complete(folder):
         print(f"[OK]    El modelo de oír (faster-whisper {model}) ya está en {folder}")
     else:
-        # Un modelo que está pero no carga también se baja otra vez: si no, Sirius
-        # diría que se ejecute esta orden y la orden no lo arreglaría nunca (ronda 2 de
-        # Codex sobre la PR #687).
-        print(f"El modelo de oír {problem}.")
         print(f"Bajando el modelo de oír (faster-whisper {model}, unos 500 MB). Solo esta vez.")
         try:
             download_listening_model(settings, folder)
@@ -102,13 +86,18 @@ def main() -> int:
     try:
         load_listening_engines(folder)
     except VoiceUnavailable as error:
-        print(f"[FALLA] El oído no carga: {error.reason}")
-        if not error.fixed_by_install:
-            # Que no se repita en balde: esto no lo arregla esta orden.
-            print("        Volver a ejecutar esta orden no lo arreglará.")
-        return 1
+        return _fail("El oído no carga", error)
     print("[OK]    Listo. Para probarlo: uv run --extra voz sirius-oye")
     return 0
+
+
+def _fail(problem: str, error: VoiceUnavailable) -> int:
+    """Dice qué falla y, si esta orden no lo arregla, que repetirla no servirá."""
+    print(f"[FALLA] {problem}: {error.reason}")
+    if not error.fixed_by_install:
+        # Que no se repita en balde: esta orden no arregla lo que ya está.
+        print("        Volver a ejecutar esta orden no lo arreglará.")
+    return 1
 
 
 if __name__ == "__main__":

@@ -103,9 +103,9 @@ def _libraries() -> tuple[Any, Any, Any, Any, Any]:
 def load_listening_engines(model_dir: Path) -> ListeningEngines[bytes]:
     """Carga el micro, el detector y el transcriptor de verdad, sin abrir el micro.
 
-    Falla con ``VoiceUnavailable`` si falta un módulo del extra ``voz`` o el modelo de
-    ``model_dir`` no carga, que lo arregla la orden de instalar, o si una biblioteca está
-    pero no carga o Silero y Smart Turn no arrancan, que no lo arregla.
+    Falla con ``VoiceUnavailable`` si falta un módulo del extra ``voz``, que lo arregla la
+    orden de instalar, o si una biblioteca o el modelo de ``model_dir`` están pero no
+    cargan o Silero y Smart Turn no arrancan, que no lo arregla.
     """
     numpy, sounddevice, logger, silero, smart_turn = _libraries()
     # Pipecat escribe con loguru, que por defecto lo saca todo por la consola.
@@ -133,8 +133,11 @@ def load_listening_model(model_dir: Path) -> Any:
 
     Falla con ``VoiceUnavailable`` si faster-whisper falta o no carga, o si el modelo no
     carga, falle como falle: un ``tokenizer.json`` roto, por ejemplo, da un ``Exception``
-    pelado de tokenizers. Un modelo que no carga lo arregla la orden de instalar, que lo
-    baja otra vez; la orden lo usa para saber si tiene que hacerlo.
+    pelado de tokenizers. Un modelo que está y no carga no se promete arreglarlo con la
+    orden de instalar: el constructor de faster-whisper arranca CTranslate2, que falla
+    igual con un fichero roto que con un ordenador que no puede cargarlo (sin memoria, un
+    motor que no admite), y volver a bajarlo solo arregla lo primero (ronda 5 de Codex
+    sobre la PR #687).
     """
     whisper = _import("faster_whisper")
     try:
@@ -143,7 +146,7 @@ def load_listening_model(model_dir: Path) -> Any:
         )
     except Exception as error:
         msg = f"el modelo de oír no carga ({error})"
-        raise VoiceUnavailable(msg, fixed_by_install=True) from error
+        raise VoiceUnavailable(msg, fixed_by_install=False) from error
 
 
 def _quietly(what: str, step: Callable[[], object]) -> None:
