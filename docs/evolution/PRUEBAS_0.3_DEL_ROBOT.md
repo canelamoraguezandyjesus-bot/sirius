@@ -226,9 +226,10 @@ en su gráfica.
   de 16 KiB con su tamaño, también el que había en la fila al actualizarla o borrarla, y
   cuenta las filas insertadas y el texto escrito por tabla, se escriba como se escriba:
   con un literal, con un parámetro, con una función de Python, desde otra tabla, desde
-  una sentencia anidada o a trozos con `blobopen`. Lo que apuntan es dónde y cuánto, y la
-  cabecera en hexadecimal, nunca el texto: lo que una pieza olvide no puede quedarse en
-  las tablas del arnés (ronda 10 de Codex). Más de mil filas insertadas en una
+  una sentencia anidada o a trozos con `blobopen`. Lo que apuntan es dónde, cuánto, de qué
+  tipo y si un BLOB empieza como un fichero de audio, nada del contenido, ni unos pocos
+  bytes: lo que una pieza olvide no puede quedarse en las tablas del arnés (rondas 10 y
+  11 de Codex). Más de mil filas insertadas en una
   tabla o más de 512 KiB de texto en total desde el arranque cuentan; veinte turnos de
   charla escriben 61 filas y 5 590 caracteres (medido el 14-10-2026 con el modelo de
   mentira). Los disparadores viven en la base, no en una conexión, así que ven también lo

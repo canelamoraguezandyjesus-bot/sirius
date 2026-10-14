@@ -1083,6 +1083,20 @@ def _texto_sql(valor: str) -> str:
     return valor.replace("'", "''")
 
 
+def _empieza_como_audio(valor: str) -> str:
+    """La condición SQL de que ``valor`` sea un BLOB que empieza como un fichero de audio.
+
+    Se decide en el disparador y se guarda solo el sí o el no: la vigilancia no guarda
+    nada del contenido de lo que se escribe, ni unos pocos bytes (ronda 11 de Codex
+    sobre la PR #686).
+    """
+    cabeceras = " OR ".join(
+        f"substr({valor}, 1, {len(cabecera)}) = x'{cabecera.hex()}'"
+        for cabecera in _CABECERAS_DE_AUDIO
+    )
+    return f"(typeof({valor}) = 'blob' AND ({cabeceras}))"
+
+
 def _disparador(tabla: str, columnas: Sequence[str], operacion: str) -> str:
     """El disparador del arnés para ``tabla`` y ``operacion``: insertar, actualizar o borrar.
 
@@ -1105,9 +1119,9 @@ def _disparador(tabla: str, columnas: Sequence[str], operacion: str) -> str:
             v = f'{fila}."{_sql(columna)}"'
             cuerpo.append(
                 "INSERT INTO _vigilancia_escrituras"
-                " (tabla, columna, operacion, tipo, largo, cabecera)"
+                " (tabla, columna, operacion, tipo, largo, cabecera_de_audio)"
                 f" SELECT '{_texto_sql(tabla)}', '{_texto_sql(columna)}', '{como}', typeof({v}),"
-                f" length({v}), hex(substr({v}, 1, 4))"
+                f" length({v}), {_empieza_como_audio(v)}"
                 f" WHERE typeof({v}) = 'blob'"
                 f" OR (typeof({v}) = 'text' AND length({v}) > {_TEXTO_LARGO});"
             )
@@ -1549,10 +1563,10 @@ class ConductorDeVoz(Conductor):
     def _pone_los_disparadores(self) -> None:
         """Pone los ojos sobre las filas, al acabar de arrancar Sirius.
 
-        Las dos tablas del arnés (``TABLAS_DE_LA_PRUEBA``), que no guardan nada de lo que
-        se escribe, solo su tabla, su columna, su tipo, su tamaño y la cabecera de un BLOB
-        o un texto largo en hexadecimal, para que lo que la pieza olvide no se quede en
-        ellas (ronda 10 de Codex sobre la PR #686); y, en cada tabla de la base
+        Las dos tablas del arnés (``TABLAS_DE_LA_PRUEBA``), que no guardan nada del
+        contenido de lo que se escribe: su tabla, su columna, su tipo, su tamaño y si un
+        BLOB empieza como un fichero de audio, para que lo que la pieza olvide no se quede
+        en ellas (rondas 10 y 11 de Codex sobre la PR #686); y, en cada tabla de la base
         que no sea virtual, sombra ni de SQLite, un disparador por insertar, actualizar
         y borrar (``_disparador``). Viven en la base, no en una conexión: ven también lo
         que escriba una conexión que el trazador no sigue, y quitarlos es un cambio de
@@ -1562,7 +1576,7 @@ class ConductorDeVoz(Conductor):
             conexion.execute(
                 "CREATE TABLE IF NOT EXISTS _vigilancia_escrituras (tabla TEXT NOT NULL,"
                 " columna TEXT NOT NULL, operacion TEXT NOT NULL, tipo TEXT NOT NULL,"
-                " largo INTEGER NOT NULL, cabecera TEXT NOT NULL)"
+                " largo INTEGER NOT NULL, cabecera_de_audio INTEGER NOT NULL)"
             )
             conexion.execute(
                 "CREATE TABLE IF NOT EXISTS _vigilancia_filas (tabla TEXT PRIMARY KEY,"
@@ -1587,7 +1601,7 @@ class ConductorDeVoz(Conductor):
         try:
             with closing(sqlite3.connect(self.base)) as conexion:
                 vistos = conexion.execute(
-                    "SELECT tabla, columna, operacion, tipo, largo, cabecera"
+                    "SELECT tabla, columna, operacion, tipo, largo, cabecera_de_audio"
                     " FROM _vigilancia_escrituras ORDER BY rowid"
                 ).fetchall()
                 cuentas = conexion.execute(
@@ -1596,10 +1610,9 @@ class ConductorDeVoz(Conductor):
         except sqlite3.Error as error:
             return [f"la vigilancia de la prueba (no se puede leer: {error})"]
         encontrados: list[str] = []
-        for tabla, columna, operacion, tipo, largo, cabecera in vistos:
+        for tabla, columna, operacion, tipo, largo, cabecera_de_audio in vistos:
             if tipo == "blob":
-                con_cabecera = bytes.fromhex(cabecera).startswith(_CABECERAS_DE_AUDIO)
-                que = "BLOB con cabecera de audio" if con_cabecera else "BLOB"
+                que = "BLOB con cabecera de audio" if cabecera_de_audio else "BLOB"
                 encontrados.append(f"{tabla}.{columna} ({que} de {largo} bytes {operacion})")
             else:
                 encontrados.append(f"{tabla}.{columna} (texto de {largo} caracteres {operacion})")

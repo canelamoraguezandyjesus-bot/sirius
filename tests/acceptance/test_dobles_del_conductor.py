@@ -573,18 +573,22 @@ def test_el_audio_del_micro_en_el_diario_se_ve_en_cada_forma_y_los_mensajes_no_c
 def test_la_vigilancia_no_guarda_nada_de_lo_que_se_escribe(tmp_path: Path) -> None:
     conductor = ConductorDeVoz(tmp_path)
     conductor.di("Me gustan las zarzamoras del camino.")
-    # Un texto largo, que la vigilancia apunta: su tabla, su columna, su tamaño y su
-    # cabecera en hexadecimal, nunca el texto.
+    # Un texto largo, que la vigilancia apunta: su tabla, su columna y su tamaño, nada de
+    # lo que dice, ni sus primeros caracteres en ninguna forma.
     with closing(sqlite3.connect(conductor.base)) as conexion:
         conexion.execute(
             "INSERT INTO messages (conversation_id, sequence, role, content, created_at, status)"
             " VALUES (1, 960, 'user', ?, '2026-10-13 00:00:00', 'completed')",
-            ("zarzamoras " * 2_000,),
+            ("QZXW zarzamoras " * 1_400,),
         )
         conexion.execute("DELETE FROM messages WHERE sequence = 960")
         conexion.commit()
+    for rastro in ("QZXW", b"QZXW".hex(), b"QZXW".hex().upper()):
+        assert not any(
+            sitio.startswith("_vigilancia") for sitio in conductor.busca_en_toda_la_base(rastro)
+        ), rastro
     assert (
-        "messages.content (texto de 22000 caracteres al insertar)" in conductor.audio_en_la_base()
+        "messages.content (texto de 22400 caracteres al insertar)" in conductor.audio_en_la_base()
     )
     # Lo que una pieza olvide no puede quedarse en las tablas del arnés: la búsqueda en
     # toda la base de «olvida eso» las recorre también.
