@@ -29,10 +29,9 @@ class TurnSignal(Enum):
 class VoiceUnavailable(RuntimeError):
     """El oído no puede arrancar en este ordenador: algo que está no carga o no se abre.
 
-    No dice si lo arregla la orden de instalar, y a propósito. La orden solo pone lo que
-    no está, y eso lo dice ``VoiceInstallation.missing`` antes de cargar nada; adivinarlo
-    desde el fallo salió mal cinco veces (rondas 2, 4, 5, 6 y 7 de Codex sobre la PR
-    #687), así que un fallo al cargar ya no puede prometer la orden.
+    No dice si lo arregla la orden de instalar, y a propósito: adivinarlo salió mal seis
+    veces (rondas 2, 4, 5, 6, 7 y 8 de Codex sobre la PR #687). Quien avisa aconseja la
+    orden para lo que ella toca y dice lo que hace, que es siempre lo mismo.
     """
 
     def __init__(self, reason: str) -> None:
@@ -101,8 +100,5 @@ class VoiceInstallation(Protocol):
         ...
 
     def missing(self) -> tuple[str, ...]:
-        """Lo que no está instalado para oír, dicho para el propietario; vacío si está todo.
-
-        Es lo único que la orden de instalar pone, y lo único por lo que se promete.
-        """
+        """Lo que falta para oír, dicho para el propietario; vacío si no falta nada."""
         ...

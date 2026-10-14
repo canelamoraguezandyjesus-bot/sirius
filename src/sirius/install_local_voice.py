@@ -1,10 +1,10 @@
 """La orden que instala la voz del robot: ``uv run --extra voz sirius-instala-la-voz``.
 
 ADR-242. La ejecuta el propietario, una vez y con internet, en PowerShell y dentro de la
-carpeta de Sirius. Cuando llega aquí, ``uv run --extra voz`` ya ha instalado las
-bibliotecas; esto baja el modelo de oír a su carpeta si falta y comprueba que el oído
-carga. Lo que ya está no lo vuelve a bajar: si el modelo está y no carga, lo dice y dice
-que repetir la orden no lo arreglará (ronda 5 de Codex sobre la PR #687).
+carpeta de Sirius. Cuando llega aquí, ``uv run --extra voz`` ya ha instalado o puesto al
+día las bibliotecas; esto baja el modelo de oír a su carpeta si falta, antes de mirar lo
+demás, y comprueba que el oído carga. Lo que ya está no lo vuelve a bajar, y lo que no
+puede arreglar lo dice (rondas 5 y 8 de Codex sobre la PR #687).
 
 Es lo único de Sirius que baja un modelo. Si a Sirius le falta, dice esta orden y no
 baja nada (PA-R03-08); una prueba recorre ``src/`` para que siga siendo así.
@@ -40,11 +40,7 @@ def download_listening_model(
     settings: LocalVoiceSettings, folder: Path, download: Download | None = None
 ) -> None:
     """Baja el modelo de oír de los ajustes a ``folder``, y solo lo deja ahí si está entero."""
-    fetch = download
-    if fetch is None:
-        from faster_whisper import download_model
-
-        fetch = download_model
+    fetch = download if download is not None else _faster_whisper_download()
     partial = folder.with_name(f"{folder.name}.a-medias")
     shutil.rmtree(partial, ignore_errors=True)
     partial.parent.mkdir(parents=True, exist_ok=True)
@@ -63,6 +59,16 @@ def download_listening_model(
     partial.rename(folder)
 
 
+def _faster_whisper_download() -> Download:
+    """La función de faster-whisper que baja un modelo; si no carga, ``VoiceUnavailable``."""
+    try:
+        from faster_whisper import download_model
+    except Exception as error:
+        raise VoiceUnavailable(f"faster_whisper no carga ({error})") from error
+    fetch: Download = download_model
+    return fetch
+
+
 def main() -> int:
     settings = LocalVoiceSettings()
     folder = listening_model_dir(settings)
@@ -73,23 +79,25 @@ def main() -> int:
         print(f"[FALLA] Faltan bibliotecas de la voz: {', '.join(absent)}")
         print(f"        Las instala esta orden escrita así: {INSTALL_COMMAND}")
         return 1
-    try:
-        check_listening_libraries()
-    except VoiceUnavailable as error:
-        # Si una biblioteca falla, bajar el modelo no lo arregla (ronda 4 de Codex sobre
-        # la PR #687): se dice y se para, sin bajar nada.
-        return _fail("Una biblioteca de la voz no está bien", error)
+    # El modelo, antes que las demás bibliotecas: si falta, se baja aunque otra esté rota,
+    # que lo que falta lo pone siempre (ronda 8 de Codex sobre la PR #687).
     if listening_model_complete(folder):
         print(f"[OK]    El modelo de oír (faster-whisper {model}) ya está en {folder}")
     else:
         print(f"Bajando el modelo de oír (faster-whisper {model}, unos 500 MB). Solo esta vez.")
         try:
             download_listening_model(settings, folder)
+        except VoiceUnavailable as error:
+            return _fail("No se puede bajar el modelo", error)
         except Exception as error:
             print(f"[FALLA] No se pudo bajar el modelo: {error}")
             print("        Si Sirius está abierto, ciérralo y vuelve a ejecutar la orden.")
             return 1
         print(f"[OK]    Modelo bajado a {folder}")
+    try:
+        check_listening_libraries()
+    except VoiceUnavailable as error:
+        return _fail("Una biblioteca de la voz no está bien", error)
     print("Comprobando que el oído carga...")
     try:
         load_listening_engines(folder)
@@ -100,9 +108,13 @@ def main() -> int:
 
 
 def _fail(problem: str, error: VoiceUnavailable) -> int:
-    """Dice qué falla y que repetir la orden no lo arreglará: no arregla lo que ya está."""
+    """Dice qué falla y que repetir la orden no lo arreglará.
+
+    Escrita como la dice Sirius, uv ya puso al día las bibliotecas antes de empezar y el
+    modelo ya está: lo que quede no lo arregla repetirla.
+    """
     print(f"[FALLA] {problem}: {error.reason}")
-    print("        Volver a ejecutar esta orden no lo arreglará.")
+    print(f"        Si la ejecutaste así, {INSTALL_COMMAND} , repetirla no lo arreglará.")
     return 1
 
 

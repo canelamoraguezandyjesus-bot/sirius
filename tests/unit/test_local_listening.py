@@ -260,15 +260,19 @@ def test_si_faltan_varias_cosas_las_dice_todas() -> None:
     )
 
 
-def test_si_el_oido_no_carga_avisa_sin_prometer_la_orden() -> None:
-    # Ronda 7 de Codex sobre la PR #687: la orden solo se promete por lo que falta, que se
-    # mira antes de cargar; si lo que está no carga, la orden no lo arregla.
+def test_si_el_oido_no_carga_aconseja_la_orden_diciendo_lo_que_hace() -> None:
+    # Ronda 8 de Codex sobre la PR #687: si la orden lo arreglaría no se adivina (una
+    # versión vieja sí la arregla; una DLL que no carga, no). Se aconseja diciendo lo que
+    # hace siempre: pone o pone al día lo que falte y, si es otra cosa, dice cuál.
     oido = _Oido()
     oido.falla_al_cargar = VoiceUnavailable("pipecat.audio.vad.silero no carga (DLL)")
 
     aviso = oido.servicio.start()
 
-    assert aviso == "No puedo oírte: pipecat.audio.vad.silero no carga (DLL)."
+    assert aviso.startswith("No puedo oírte: pipecat.audio.vad.silero no carga (DLL).")
+    assert "la orden de instalar" in aviso
+    assert "Instala o pone al día lo que falte de la voz" in aviso
+    assert "si el problema es otro, te dice cuál" in aviso
     assert not oido.servicio.listening
 
 

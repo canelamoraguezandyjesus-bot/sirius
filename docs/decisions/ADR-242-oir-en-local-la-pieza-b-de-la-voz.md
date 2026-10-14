@@ -152,8 +152,8 @@ lo que el propietario ve u oye).
   PowerShell y en la carpeta de Sirius: `uv run --extra voz sirius-instala-la-voz`.
   Instala las bibliotecas, baja el modelo a una carpeta aparte si falta y solo la pone
   en su sitio cuando está entera, y comprueba que el oído carga. Lo que ya está no lo
-  vuelve a bajar (ronda 5, abajo). Sirius solo la aconseja por lo que falta, mirado antes
-  de cargar nada (ronda 7, abajo). `uv run sirius` no quita lo instalado: `uv run` solo
+  vuelve a bajar (ronda 5, abajo), y si falta el modelo lo baja antes de mirar lo demás.
+  Sirius la aconseja para lo que ella toca y dice lo que hace (ronda 8, abajo). `uv run sirius` no quita lo instalado: `uv run` solo
   añade lo que falta.
 - **La orden para probarlo:** `uv run --extra voz sirius-oye`, en consola, sin ventana:
   le oye, escribe lo que oyó y lo que contesta Sirius, en la misma charla de la ventana,
@@ -170,7 +170,7 @@ Medido el 14-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   la C (`tests/acceptance/test_dobles_del_conductor.py`). La tabla de
   `docs/evolution/PRUEBAS_0.3_DEL_ROBOT.md` pone PA-R03-01 en verde; PA-R03-08 sigue
   pendiente de la C.
-- **83 pruebas unitarias nuevas**: el servicio (`tests/unit/test_local_listening.py`), los
+- **84 pruebas unitarias nuevas**: el servicio (`tests/unit/test_local_listening.py`), los
   adaptadores de verdad con módulos de mentira (`tests/unit/test_local_listening_adapters.py`),
   la instalación y la orden de instalar (`tests/unit/test_local_voice_installation.py`), la
   orden de consola (`tests/unit/test_listen_console.py`) y la guarda de las descargas
@@ -218,7 +218,14 @@ Medido el 14-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   cargar prometa la orden o que lo que falta no la prometa, y olvidar una distribución
   del extra. Al cerrar la ronda 7 se han vuelto a pasar las 23 de las rondas 4 a 7 que
   siguen vigilando algo, y caen todas; las 14 que vigilaban la promesa desde el fallo se
-  retiran con lo que vigilaban. La de etiquetar con la generación del
+  retiran con lo que vigilaban. Y las ocho de la ronda 8: que un fallo al cargar o lo que
+  falta no aconsejen la orden, que la aconsejen el micro o el detector sin reiniciar, que
+  el aviso no diga lo que hace la orden, que la orden mire las bibliotecas antes de bajar
+  el modelo, que mande cerrar Sirius y repetir cuando faster-whisper no carga, y traer la
+  descarga atrapando solo `ImportError`. Al cerrar la ronda 8 se han vuelto a pasar las 26
+  de las rondas 4 a 8 que siguen vigilando algo, y caen todas; las cuatro de la ronda 7
+  que vigilaban lo que se retira en la 8 se retiran con ello. La de etiquetar con la
+  generación del
   momento sobrevivió a la prueba que reproduce el caso de Codex, que para el hilo dentro
   de `bytes(data)`, donde las dos coinciden; cayó con otra que lo para justo después de
   comprobar.
@@ -464,3 +471,37 @@ carga y no promete la orden, aunque uv la pondría: es quedarse corto, nunca pro
 más. Con los dos entornos de verdad: sin el extra, faltan las cuatro y la orden dice cómo
 escribirla; con el extra y sin PortAudio, no falta ninguna, y la orden dice que
 sounddevice no carga y que repetirla no lo arreglará.
+
+**Ronda 8** (`faba32f0`, 14-10-2026): dos hallazgos P2, ciertos, y los dos de la misma
+familia, ahora por los dos lados.
+
+- **Prometía de más.** Con el modelo sin instalar y una biblioteca que está pero no carga
+  (sounddevice sin PortAudio, ya medido), Sirius aconsejaba la orden por el modelo, y la
+  orden se paraba en la biblioteca sin bajarlo.
+- **Prometía de menos.** Con una distribución en una versión vieja (pipecat-ai 1.11.0
+  frente al `>=1.12,<1.13` del extra), Sirius la daba por instalada y no aconsejaba la
+  orden, que sí la pondría al día.
+
+**La regla de las dos rondas, sexta vez en la familia** (rondas 2, 4, 5, 6, 7 y 8). Que el
+revisor encuentre bordes en las dos direcciones dice cuál es la raíz: Sirius intentaba
+predecir qué harían uv y el ordenador, y eso no se puede sin hacer lo que hace uv. Se
+decide **dejar de predecir**:
+
+- La orden se aconseja para lo que ella toca, lo que falta y lo que no carga, y no para
+  lo que no toca: el micro y el estado del detector.
+- El aviso dice lo que la orden hace siempre: instala o pone al día lo que falte de la voz
+  y, si el problema es otro, dice cuál. Es cierto por construcción, porque es lo que la
+  orden hace, y una prueba lo mira.
+- La orden baja el modelo antes de mirar las demás bibliotecas: lo que falta lo pone
+  aunque otra cosa esté rota. Cuando falla algo, dice que repetirla, escrita como la da
+  Sirius, no lo arreglará: uv ya puso al día lo que podía antes de empezar. Si es
+  faster-whisper lo que no carga, lo dice así, sin mandar cerrar Sirius y repetir.
+- Se retira lo de la ronda 7 en Sirius: antes de cargar vuelve a mirar solo los ficheros
+  del modelo. Las distribuciones del extra las mira la orden, para decir cómo escribirla
+  si se ejecutó sin el extra.
+
+Lo que eso deja, a propósito: la orden se aconseja también cuando no lo va a arreglar (una
+DLL que no carga, un ordenador sin memoria); entonces él la ejecuta, ve qué es y sabe que
+repetirla no sirve. Con las bibliotecas de verdad, sin PortAudio y sin modelo, la orden
+intenta bajar el modelo antes de decir nada de sounddevice (en el contenedor,
+huggingface.co da 403).

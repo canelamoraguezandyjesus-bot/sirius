@@ -9,14 +9,14 @@ from __future__ import annotations
 
 import importlib.metadata
 import re
+import sys
 import tomllib
+import types
 from pathlib import Path
 
 import pytest
 
 import sirius.install_local_voice as install_local_voice
-from sirius.application.send_message import SendMessageResult
-from sirius.composition_root import build_local_listening
 from sirius.config.local_voice import LocalVoiceSettings
 from sirius.infrastructure.local_voice_installation import (
     INSTALL_COMMAND,
@@ -28,7 +28,7 @@ from sirius.infrastructure.local_voice_installation import (
 )
 from sirius.infrastructure.paths import resolve_paths
 from sirius.install_local_voice import download_listening_model
-from sirius.ports.local_voice import ListeningEngines, VoiceUnavailable
+from sirius.ports.local_voice import VoiceUnavailable
 
 
 @pytest.fixture
@@ -57,7 +57,7 @@ def test_los_modelos_viven_en_la_carpeta_de_datos_de_siempre() -> None:
 
 
 def test_con_el_modelo_entero_no_falta_nada() -> None:
-    instalacion = LocalVoiceInstallation(LocalVoiceSettings(), distributions=())
+    instalacion = LocalVoiceInstallation(LocalVoiceSettings())
     _pon_modelo(instalacion.listening_model_dir)
 
     assert instalacion.missing() == ()
@@ -68,7 +68,7 @@ def test_con_el_modelo_entero_no_falta_nada() -> None:
 def test_falta_el_modelo_si_le_falta_cualquiera_de_sus_ficheros(
     tmp_path: Path, quitado: str
 ) -> None:
-    instalacion = LocalVoiceInstallation(LocalVoiceSettings(), tmp_path, distributions=())
+    instalacion = LocalVoiceInstallation(LocalVoiceSettings(), tmp_path)
     _pon_modelo(instalacion.listening_model_dir, tuple(n for n in _MODELO_ENTERO if n != quitado))
 
     assert instalacion.missing() == ("el modelo de oír (faster-whisper small)",)
@@ -192,7 +192,7 @@ def test_un_modelo_que_esta_no_se_vuelve_a_bajar_aunque_no_cargue(
     assert install_local_voice.main() == 1
     salida = capsys.readouterr().out
     assert "Unable to allocate memory" in salida
-    assert "Volver a ejecutar esta orden no lo arreglará" in salida
+    assert f"Si la ejecutaste así, {INSTALL_COMMAND} , repetirla no lo arreglará" in salida
 
 
 @pytest.mark.usefixtures("bibliotecas_bien")
@@ -210,7 +210,7 @@ def test_si_el_oido_no_carga_la_orden_acaba_en_error(
     salida = capsys.readouterr().out
     assert "INVALID_PROTOBUF" in salida
     # Lo que está y no carga no lo arregla esta orden: se dice, para que no se repita.
-    assert "Volver a ejecutar esta orden no lo arreglará" in salida
+    assert f"Si la ejecutaste así, {INSTALL_COMMAND} , repetirla no lo arreglará" in salida
 
 
 @pytest.mark.usefixtures("bibliotecas_bien")
@@ -228,33 +228,91 @@ def test_si_no_se_puede_bajar_la_orden_acaba_en_error(
     assert "ciérralo" in salida
 
 
-def test_si_una_biblioteca_no_carga_la_orden_lo_dice_y_no_baja_nada(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    # Ronda 4 de Codex sobre la PR #687: con una biblioteca rota, la orden bajaba el modelo
-    # otra vez, que no lo arregla.
+def _biblioteca_rota(monkeypatch: pytest.MonkeyPatch) -> None:
     def rota() -> None:
-        raise VoiceUnavailable("faster_whisper no carga ([WinError 126])")
-
-    def no_baja(*args: object) -> None:
-        raise AssertionError("ha bajado el modelo por una biblioteca rota")
+        raise VoiceUnavailable("sounddevice no carga (PortAudio library not found)")
 
     monkeypatch.setattr(install_local_voice, "voice_distributions_missing", lambda: ())
     monkeypatch.setattr(install_local_voice, "check_listening_libraries", rota)
+
+
+def test_con_una_biblioteca_rota_baja_igual_el_modelo_que_falta_y_lo_dice(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Ronda 8 de Codex sobre la PR #687: Sirius aconseja la orden porque falta el modelo,
+    # y la orden se paraba en la biblioteca rota sin bajarlo. Lo que falta lo pone siempre.
+    _biblioteca_rota(monkeypatch)
+    bajados: list[Path] = []
+
+    def baja(ajustes: LocalVoiceSettings, carpeta: Path) -> None:
+        bajados.append(carpeta)
+
+    monkeypatch.setattr(install_local_voice, "download_listening_model", baja)
+
+    assert install_local_voice.main() == 1
+    salida = capsys.readouterr().out
+    assert bajados == [LocalVoiceInstallation(LocalVoiceSettings()).listening_model_dir]
+    assert "PortAudio" in salida
+    assert "repetirla no lo arreglará" in salida
+
+
+def test_con_el_modelo_puesto_y_una_biblioteca_rota_no_baja_nada_y_lo_dice(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _biblioteca_rota(monkeypatch)
+    _pon_modelo(LocalVoiceInstallation(LocalVoiceSettings()).listening_model_dir)
+
+    def no_baja(*args: object) -> None:
+        raise AssertionError("ha vuelto a bajar un modelo que ya estaba")
+
     monkeypatch.setattr(install_local_voice, "download_listening_model", no_baja)
 
     assert install_local_voice.main() == 1
     salida = capsys.readouterr().out
-    assert "WinError 126" in salida
-    assert "Volver a ejecutar esta orden no lo arreglará" in salida
+    assert "PortAudio" in salida
+    assert "repetirla no lo arreglará" in salida
 
 
-# --- Las bibliotecas del extra: lo que falta se mira como lo mira uv ----------------
+def test_si_faster_whisper_no_carga_al_ir_a_bajar_falla_como_la_voz_y_no_tumba_la_orden(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Falle como falle: en Windows, una DLL de CTranslate2 puede fallar con algo que no es
+    # ImportError.
+    roto = types.ModuleType("faster_whisper")
+
+    def __getattr__(nombre: str) -> object:
+        raise RuntimeError("DLL load failed while importing _ext")
+
+    roto.__getattr__ = __getattr__  # type: ignore[method-assign]
+    monkeypatch.setitem(sys.modules, "faster_whisper", roto)
+
+    with pytest.raises(VoiceUnavailable) as fallo:
+        install_local_voice._faster_whisper_download()
+
+    assert "DLL load failed" in fallo.value.reason
+
+
+@pytest.mark.usefixtures("bibliotecas_bien")
+def test_si_faster_whisper_no_carga_dice_que_no_puede_bajar_el_modelo_sin_mandar_repetir(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def no_carga() -> object:
+        raise VoiceUnavailable("faster_whisper no carga ([WinError 126])")
+
+    monkeypatch.setattr(install_local_voice, "_faster_whisper_download", no_carga)
+
+    assert install_local_voice.main() == 1
+    salida = capsys.readouterr().out
+    assert "No se puede bajar el modelo: faster_whisper no carga ([WinError 126])" in salida
+    assert "repetirla no lo arreglará" in salida
+    assert "ciérralo" not in salida, "cerrar Sirius y repetir no arregla una DLL"
+
+
+# --- Las bibliotecas del extra: la orden mira si están como lo mira uv ---------------
 #
-# Ronda 7 de Codex sobre la PR #687: adivinar desde el fallo si la orden lo arreglaría
-# salió mal cinco veces. Ahora la orden solo se promete por lo que falta, mirado antes de
-# cargar nada: una distribución del extra sin carpeta de metadatos, que es como uv sabe
-# si está, o un fichero del modelo.
+# Si faltan, es que la orden no se ejecutó como se escribe: lo dice, con cómo escribirla.
+# Una distribución está si tiene su carpeta de metadatos, aunque esté dañada (ronda 7 de
+# Codex sobre la PR #687).
 
 
 def test_las_distribuciones_que_se_miran_son_las_del_extra_voz() -> None:
@@ -292,41 +350,6 @@ def test_unos_metadatos_que_no_se_pueden_leer_no_cuentan_como_que_falta(
     monkeypatch.setattr(importlib.metadata, "distribution", ilegibles)
 
     assert voice_distributions_missing(("numpy",)) == ()
-
-
-def test_lo_que_falta_incluye_las_bibliotecas_del_extra(tmp_path: Path) -> None:
-    instalacion = LocalVoiceInstallation(
-        LocalVoiceSettings(), tmp_path, distributions=("no-esta-en-este-ordenador",)
-    )
-    _pon_modelo(instalacion.listening_model_dir)
-
-    assert instalacion.missing() == ("las bibliotecas de la voz (no-esta-en-este-ordenador)",)
-
-
-class _Charla:
-    def send_message(self, user_text: str) -> SendMessageResult:
-        raise AssertionError("sin oír no se habla")
-
-
-def test_el_oido_de_verdad_pide_las_bibliotecas_y_con_motores_de_fuera_no(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    def ninguna(nombre: str) -> importlib.metadata.Distribution:
-        raise importlib.metadata.PackageNotFoundError(nombre)
-
-    monkeypatch.setattr(importlib.metadata, "distribution", ninguna)
-    _pon_modelo(LocalVoiceInstallation(LocalVoiceSettings()).listening_model_dir)
-
-    def motores_de_fuera() -> ListeningEngines[bytes]:
-        raise VoiceUnavailable("los de fuera no cargan")
-
-    de_verdad = build_local_listening(_Charla())
-    de_fuera = build_local_listening(_Charla(), motores_de_fuera)
-
-    aviso = de_verdad.start()
-    assert "las bibliotecas de la voz (pipecat-ai, faster-whisper" in aviso
-    assert INSTALL_COMMAND in aviso
-    assert de_fuera.start() == "No puedo oírte: los de fuera no cargan."
 
 
 @pytest.mark.usefixtures("bibliotecas_bien")

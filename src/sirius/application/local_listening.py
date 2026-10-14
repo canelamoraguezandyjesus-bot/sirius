@@ -13,6 +13,11 @@ transcribe y le pasa el texto a la misma charla que la ventana
 - **Sin el oído instalado no hace nada.** Antes de abrir el micro mira que esté todo en
   este ordenador; si falta algo, devuelve el aviso con la orden que lo instala, no abre
   el micro, no contesta y no baja nada (PA-R03-08).
+- **La orden no se promete como arreglo.** Se aconseja para lo que ella toca, lo que falta
+  y lo que no carga, y el aviso dice lo que hace siempre: instala o pone al día lo que
+  falte y, si el problema es otro, dice cuál. Para el micro y el detector, que no toca, no
+  se aconseja. Adivinar si la arreglaría salió mal en seis rondas de Codex sobre la PR
+  #687 (2, 4, 5, 6, 7 y 8).
 - **En la pieza B todo lo oído es para él**; a quién le hablan lo decide la pieza D.
 """
 
@@ -114,7 +119,7 @@ class LocalListening[Chunk]:
                 self._detector_stale = False
         except VoiceUnavailable as error:
             _logger.info("El oído no arranca: %s", error.reason)
-            return self._fail(f"No puedo oírte: {error.reason}.")
+            return self._fail(f"No puedo oírte: {error.reason}.", install=True)
         if self._detector_stale:
             try:
                 self._engines.detector.reset()
@@ -207,12 +212,13 @@ class LocalListening[Chunk]:
         )
 
     def _fail(self, problem: str, *, install: bool = False) -> str:
-        """Apunta el aviso; con ``install``, que solo es por lo que falta, con la orden."""
+        """Apunta el aviso; con ``install``, con la orden de instalar y lo que hace."""
         notice = problem
         if install:
             notice += (
-                " Para instalarlo, ejecuta en PowerShell, dentro de la carpeta de Sirius: "
-                f"{self._installation.install_command}"
+                " Ejecuta en PowerShell, dentro de la carpeta de Sirius: "
+                f"{self._installation.install_command} . Instala o pone al día lo que falte "
+                "de la voz y, si el problema es otro, te dice cuál."
             )
         self._notice = notice
         return notice

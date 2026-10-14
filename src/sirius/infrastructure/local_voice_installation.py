@@ -9,11 +9,10 @@ Turn vienen dentro de Pipecat, con la biblioteca.
 Aquí no se baja nada: solo se mira qué hay. Lo único que baja modelos es la orden de
 instalar, ``sirius.install_local_voice``, que ejecuta el propietario.
 
-Lo que falta es lo único por lo que se promete la orden, porque es lo único que pone: las
-distribuciones del extra que no están instaladas, que añade ``uv run --extra voz``, y los
-ficheros del modelo que no están, que baja ella. Las distribuciones se miran por su
-nombre, por su carpeta de metadatos, como las lista uv (ronda 7 de Codex sobre la PR
-#687).
+La orden de instalar mira si faltan las distribuciones del extra, por su nombre, por su
+carpeta de metadatos, como las lista uv: si faltan es que no se ejecutó como se escribe.
+Sirius no lo mira antes de cargar: si algo no carga, aconseja la orden igual, que pone al
+día lo que haga falta y dice qué es si es otra cosa (ronda 8 de Codex sobre la PR #687).
 """
 
 from __future__ import annotations
@@ -79,22 +78,11 @@ def listening_model_complete(folder: Path) -> bool:
 
 
 class LocalVoiceInstallation:
-    """Mira en este ordenador si están las distribuciones del extra y el modelo de oír.
+    """Mira en este ordenador si está el modelo de oír de los ajustes."""
 
-    ``distributions`` son las que hay que mirar: las del extra ``voz`` para el oído de
-    verdad, ninguna si el micro, el detector y el transcriptor vienen de otro sitio.
-    """
-
-    def __init__(
-        self,
-        settings: LocalVoiceSettings,
-        models_dir: Path | None = None,
-        *,
-        distributions: tuple[str, ...] = VOICE_DISTRIBUTIONS,
-    ) -> None:
+    def __init__(self, settings: LocalVoiceSettings, models_dir: Path | None = None) -> None:
         self._settings = settings
         self._models_dir = models_dir
-        self._distributions = distributions
 
     @property
     def install_command(self) -> str:
@@ -105,11 +93,7 @@ class LocalVoiceInstallation:
         return listening_model_dir(self._settings, self._models_dir)
 
     def missing(self) -> tuple[str, ...]:
-        missing: list[str] = []
-        absent = voice_distributions_missing(self._distributions)
-        if absent:
-            missing.append(f"las bibliotecas de la voz ({', '.join(absent)})")
-        if not listening_model_complete(self.listening_model_dir):
-            model = self._settings.listening_model.value
-            missing.append(f"el modelo de oír (faster-whisper {model})")
-        return tuple(missing)
+        if listening_model_complete(self.listening_model_dir):
+            return ()
+        model = self._settings.listening_model.value
+        return (f"el modelo de oír (faster-whisper {model})",)

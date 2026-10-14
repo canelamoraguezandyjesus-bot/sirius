@@ -150,10 +150,7 @@ from sirius.config.settings import load_settings, save_settings
 from sirius.domain.blind_test import BlindTestError
 from sirius.domain.capture import build_scene_registry
 from sirius.domain.robot_seed import ROBOT_SEED_REMINDER
-from sirius.infrastructure.local_voice_installation import (
-    VOICE_DISTRIBUTIONS,
-    LocalVoiceInstallation,
-)
+from sirius.infrastructure.local_voice_installation import LocalVoiceInstallation
 from sirius.infrastructure.logging import get_logger
 from sirius.ports.audio_playback import AudioPlayback
 from sirius.ports.embeddings import TextEmbedder
@@ -630,14 +627,10 @@ def build_local_listening(
     """El oído del robot (ADR-242), entregando lo oído a ``chat``.
 
     No carga nada al construirse: el micro, el detector y el transcriptor se cargan al
-    empezar a escuchar, y solo si está instalado lo que necesitan. Sin ``load_engines``,
-    los de verdad, con el modelo de la carpeta que dicen los ajustes, y entonces también
-    hacen falta las distribuciones del extra ``voz``; con ``load_engines``, no.
+    empezar a escuchar, y solo si el modelo de oír está en este ordenador. Sin
+    ``load_engines``, los de verdad, con el modelo de la carpeta que dicen los ajustes.
     """
-    distributions = VOICE_DISTRIBUTIONS if load_engines is None else ()
-    installation = LocalVoiceInstallation(
-        settings or LocalVoiceSettings(), distributions=distributions
-    )
+    installation = LocalVoiceInstallation(settings or LocalVoiceSettings())
     model_dir = installation.listening_model_dir
     return LocalListening(
         chat=chat,
