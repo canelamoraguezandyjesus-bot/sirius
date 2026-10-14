@@ -53,12 +53,37 @@ class _Micro:
 class _Detector:
     def __init__(self) -> None:
         self.vistos: list[str] = []
+        self.reinicios = 0
 
     def listen(self, chunk: str) -> TurnSignal:
         self.vistos.append(chunk)
         if chunk == FIN:
             return TurnSignal.ENDED
         return TurnSignal.VOICE if chunk.startswith("voz:") else TurnSignal.QUIET
+
+    def reset(self) -> None:
+        self.reinicios += 1
+
+
+class _DetectorQueRecuerda(_Detector):
+    """Como Silero: oída la voz, sigue diciendo que hay voz hasta el fin del turno."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.hablando = False
+
+    def listen(self, chunk: str) -> TurnSignal:
+        self.vistos.append(chunk)
+        if chunk == FIN:
+            self.hablando = False
+            return TurnSignal.ENDED
+        if chunk.startswith("voz:"):
+            self.hablando = True
+        return TurnSignal.VOICE if self.hablando else TurnSignal.QUIET
+
+    def reset(self) -> None:
+        super().reset()
+        self.hablando = False
 
 
 class _Transcriptor:
@@ -105,9 +130,9 @@ class _Instalacion:
 class _Oido:
     """Todo junto, con el servicio montado como en producción."""
 
-    def __init__(self, *, antes: int = 2) -> None:
+    def __init__(self, *, antes: int = 2, detector: _Detector | None = None) -> None:
         self.micro = _Micro()
-        self.detector = _Detector()
+        self.detector = detector or _Detector()
         self.transcriptor = _Transcriptor()
         self.charla = _Charla()
         self.instalacion = _Instalacion()
@@ -284,6 +309,22 @@ def test_parar_cierra_el_micro_y_olvida_el_turno_a_medias() -> None:
     atendido = oido.suena(voz("Hola"), FIN)
     assert [t.heard for t in atendido.turns] == ["Hola"]
     assert oido.transcriptor.turnos == [[voz("Hola"), FIN]]
+
+
+def test_parar_a_media_frase_tambien_reinicia_el_detector() -> None:
+    # Ronda 1 de Codex sobre la PR #687: sin reiniciarlo, el detector seguía en el turno
+    # viejo y el primer silencio al volver abría un turno sin palabras.
+    detector = _DetectorQueRecuerda()
+    oido = _Oido(detector=detector)
+    oido.servicio.start()
+    oido.suena(voz("Lo que no acabó"), "")
+
+    oido.servicio.stop()
+    oido.servicio.start()
+
+    assert detector.reinicios == 1
+    assert oido.suena("", "", FIN) == Attended()
+    assert oido.transcriptor.turnos == []
 
 
 def test_si_la_charla_falla_el_turno_no_se_queda_a_medias() -> None:

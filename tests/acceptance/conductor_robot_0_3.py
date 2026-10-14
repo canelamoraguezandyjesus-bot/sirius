@@ -620,6 +620,11 @@ class OidoDeMentira:
     def pide_silencios(self, cuantos: int) -> None:
         self._silencios_para_acabar = cuantos
 
+    def reinicia(self) -> None:
+        """Olvida el turno que llevaba, como Silero y Smart Turn recién cargados."""
+        self._hubo_voz = False
+        self._silencios_seguidos = 0
+
     @property
     def vistos(self) -> tuple[Audio, ...]:
         return tuple(self._vistos)
@@ -698,6 +703,9 @@ class _OidoEnchufado:
         if self._oido.escucha(chunk):
             return TurnSignal.ENDED
         return TurnSignal.VOICE if self._oido.hay_voz(chunk) else TurnSignal.QUIET
+
+    def reset(self) -> None:
+        self._oido.reinicia()
 
 
 class _TranscriptorEnchufado:

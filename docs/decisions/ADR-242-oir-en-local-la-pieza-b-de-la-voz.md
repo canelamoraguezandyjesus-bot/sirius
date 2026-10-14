@@ -168,12 +168,12 @@ Medido el 14-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   la C (`tests/acceptance/test_dobles_del_conductor.py`). La tabla de
   `docs/evolution/PRUEBAS_0.3_DEL_ROBOT.md` pone PA-R03-01 en verde; PA-R03-08 sigue
   pendiente de la C.
-- **51 pruebas unitarias nuevas**: el servicio (`tests/unit/test_local_listening.py`), los
+- **53 pruebas unitarias nuevas**: el servicio (`tests/unit/test_local_listening.py`), los
   adaptadores de verdad con módulos de mentira (`tests/unit/test_local_listening_adapters.py`),
   la instalación y la orden de instalar (`tests/unit/test_local_voice_installation.py`), la
   orden de consola (`tests/unit/test_listen_console.py`) y la guarda de las descargas
   (`tests/unit/test_solo_la_orden_de_instalar_baja_modelos.py`).
-- **Mutación: 18 de 18 caen.** Quitar lo que suena antes de la voz, no mirar la
+- **Mutación: 22 de 22 caen.** Quitar lo que suena antes de la voz, no mirar la
   instalación, escribir lo oído en el diario, mandar un turno vacío, no vaciar el turno,
   leer el micro parado, empezar un turno o transcribir con un fin de turno sin voz
   delante, decir que no es para él, dar por local cualquier ajuste, no pedir
@@ -182,7 +182,10 @@ Medido el 14-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   acabe el turno, poner en su sitio un modelo a medias y dejar en el disco una descarga
   cortada: cada una la tumba al menos una prueba. La de `tokenizer.json` solo cayó
   cuando la prueba dejó de copiar la lista de ficheros de Sirius y escribió la suya, y la
-  del fin de turno suelto, cuando la prueba miró también con qué empieza el turno.
+  del fin de turno suelto, cuando la prueba miró también con qué empieza el turno. Las
+  cuatro de la ronda 1 de Codex, abajo, también caen: parar sin reiniciar el detector,
+  reiniciarlo sin cargar analizadores nuevos, sin soltar los viejos, y un oído de mentira
+  que no olvida al reiniciarse.
 - **Las bibliotecas de verdad**, en un entorno aparte con el extra (`uv sync --frozen
   --extra voz`, Linux y Python 3.14.6, sin micro): Silero y Smart Turn cargan en 0,26 s y
   tardan 0,91 ms por trozo de 32 ms. Con la voz grabada que trae Pipecat
@@ -225,7 +228,10 @@ Medido el 14-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
 - sin esto se repetiría: un adaptador que carga una biblioteca con código nativo solo
   atrapa `ImportError`, porque así fallan los módulos de mentira de sus pruebas, y se cae
   cuando la biblioteca de verdad no encuentra lo suyo y falla con `OSError`; a Piper, en la
-  pieza C, le puede pasar lo mismo.
+  pieza C, le puede pasar lo mismo. En esta misma PR mordió dos veces: la segunda, el
+  detector de mentira de las pruebas no guardaba el turno entre trozos, Silero y Smart
+  Turn sí, y nadie vio que parar a media frase dejaba el turno viejo vivo (ronda 1 de
+  Codex). La raíz es la misma: un doble que no tiene el estado de la herramienta.
 - lo hace cumplir: `tests/unit/test_local_listening_adapters.py`
 
 ## Revisión externa
@@ -236,3 +242,13 @@ mismo camino que lo escrito, que el turno acabe donde dice el detector, que nada
 del ordenador ni se baje solo, y que sin modelos diga la orden y no haga nada más. No
 trae hablar, ni la ventana, ni a quién le hablan, ni cortarle; lo que no se puede ver
 sin su micro está en «Qué NO garantiza».
+
+**Ronda 1** (`921a3289`, 14-10-2026): un hallazgo P2, cierto. Al parar a media frase y
+volver a escuchar, el servicio olvidaba su turno pero el detector no: Silero seguía
+creyendo que había voz y Smart Turn guardaba el audio del turno viejo. Comprobado con las
+bibliotecas de verdad y la voz grabada de Pipecat: sin reiniciar, en el silencio de
+después el detector da el turno viejo por acabado; reiniciado, solo silencio, y tras
+cinco reinicios sigue habiendo un hilo vivo, no seis. Arreglo: el detector tiene
+`reset()`, el servicio lo llama al parar, y el de verdad carga un Silero y un Smart Turn
+nuevos y suelta los viejos con su `cleanup()`. La prueba que lo pide usa un detector de
+mentira con memoria, como Silero; la anterior no podía verlo porque el suyo no tenía.

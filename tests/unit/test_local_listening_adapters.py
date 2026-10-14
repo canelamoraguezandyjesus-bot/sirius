@@ -84,6 +84,10 @@ class _Silero:
         self.params = types.SimpleNamespace(start_secs=0.2)
         self.frecuencia: int | None = None
         self.trozos: list[bytes] = []
+        self.soltado = False
+
+    async def cleanup(self) -> None:
+        self.soltado = True
 
     def set_sample_rate(self, frecuencia: int) -> None:
         self.frecuencia = frecuencia
@@ -101,6 +105,10 @@ class _SmartTurn:
         self.analisis = 0
         self.completo_al_anadir: set[int] = set()
         self.veredicto = "INCOMPLETE"
+        self.soltado = False
+
+    async def cleanup(self) -> None:
+        self.soltado = True
 
     def set_sample_rate(self, frecuencia: int) -> None:
         self.frecuencia = frecuencia
@@ -362,7 +370,7 @@ def test_sin_micro_no_lo_arregla_la_orden_de_instalar() -> None:
 def _detector(estados: list[str]) -> tuple[PipecatTurnDetector, _Silero, _SmartTurn]:
     silero = _Silero(estados)
     smart_turn = _SmartTurn()
-    return PipecatTurnDetector(silero, smart_turn), silero, smart_turn
+    return PipecatTurnDetector(lambda: silero, lambda: smart_turn), silero, smart_turn
 
 
 def test_sin_voz_no_empieza_turno_y_cada_trozo_pasa_por_los_dos() -> None:
@@ -408,6 +416,31 @@ def test_el_silencio_largo_acaba_el_turno_aunque_smart_turn_dijera_que_no() -> N
 
     assert signals == [TurnSignal.VOICE, TurnSignal.QUIET, TurnSignal.QUIET, TurnSignal.ENDED]
     assert smart_turn.analisis == 1
+
+
+def test_reiniciar_es_tener_silero_y_smart_turn_nuevos_y_soltar_los_viejos() -> None:
+    # Ronda 1 de Codex sobre la PR #687: al parar a media frase, el detector se quedaba
+    # en el turno viejo.
+    creados: list[tuple[_Silero, _SmartTurn]] = []
+
+    def silero() -> _Silero:
+        analizador = _Silero(["SPEAKING", "SPEAKING", "QUIET"])
+        creados.append((analizador, _SmartTurn()))
+        return analizador
+
+    detector = PipecatTurnDetector(silero, lambda: creados[-1][1])
+    assert detector.listen(b"a") is TurnSignal.VOICE
+
+    detector.reset()
+
+    (viejo_silero, viejo_turno), (nuevo_silero, nuevo_turno) = creados
+    assert viejo_silero.soltado and viejo_turno.soltado
+    assert not nuevo_silero.soltado and not nuevo_turno.soltado
+    assert nuevo_silero.frecuencia == nuevo_turno.frecuencia == SAMPLE_RATE
+    # El turno viejo no sigue: lo primero que oye lo oye el Silero nuevo, desde cero.
+    assert detector.listen(b"b") is TurnSignal.VOICE
+    assert nuevo_turno.inicios == [0.2], "empieza un turno nuevo, no sigue el viejo"
+    assert nuevo_silero.trozos == [b"b"]
 
 
 # --- faster-whisper -----------------------------------------------------------------

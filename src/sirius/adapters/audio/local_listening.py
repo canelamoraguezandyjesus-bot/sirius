@@ -15,7 +15,7 @@ import asyncio
 import os
 import queue
 import sys
-from collections.abc import Coroutine, Sequence
+from collections.abc import Callable, Coroutine, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -61,13 +61,15 @@ def load_listening_engines(model_dir: Path) -> ListeningEngines[bytes]:
         model = WhisperModel(
             str(model_dir), device="cpu", compute_type="int8", local_files_only=True
         )
-        vad = SileroVADAnalyzer(sample_rate=SAMPLE_RATE)
-        turn = LocalSmartTurnAnalyzerV3(sample_rate=SAMPLE_RATE)
+        detector = PipecatTurnDetector(
+            lambda: SileroVADAnalyzer(sample_rate=SAMPLE_RATE),
+            lambda: LocalSmartTurnAnalyzerV3(sample_rate=SAMPLE_RATE),
+        )
     except (OSError, RuntimeError, ValueError) as error:
         raise VoiceUnavailable(f"el oído no carga ({error})", fixed_by_install=True) from error
     return ListeningEngines(
         microphone=SoundDeviceMicrophone(sounddevice),
-        detector=PipecatTurnDetector(vad, turn),
+        detector=detector,
         transcriber=FasterWhisperTranscriber(model, numpy),
     )
 
@@ -130,15 +132,31 @@ class PipecatTurnDetector:
     de oír voz, Smart Turn mira el turno entero, y si no lo da por acabado lo acaba el
     silencio largo (``stop_secs``, 3 s). Los dos analizadores son asíncronos: se les
     espera en un bucle de eventos propio.
+
+    Los dos llevan dentro el turno que oyen, y Pipecat no da forma de vaciarlos sin
+    tocar sus tripas: reiniciar es cargarlos otra vez con ``make_vad`` y ``make_turn``,
+    en unas décimas de segundo, y soltar los viejos.
     """
 
-    def __init__(self, vad: Any, turn: Any) -> None:
-        self._vad = vad
-        self._turn = turn
+    def __init__(self, make_vad: Callable[[], Any], make_turn: Callable[[], Any]) -> None:
+        self._make_vad = make_vad
+        self._make_turn = make_turn
         self._loop = asyncio.new_event_loop()
+        self._vad: Any = None
+        self._turn: Any = None
         self._speaking = False
-        vad.set_sample_rate(SAMPLE_RATE)
-        turn.set_sample_rate(SAMPLE_RATE)
+        self.reset()
+
+    def reset(self) -> None:
+        old = (self._vad, self._turn)
+        self._vad = self._make_vad()
+        self._turn = self._make_turn()
+        self._vad.set_sample_rate(SAMPLE_RATE)
+        self._turn.set_sample_rate(SAMPLE_RATE)
+        self._speaking = False
+        for analyzer in old:
+            if analyzer is not None:
+                self._wait(analyzer.cleanup())
 
     def listen(self, chunk: bytes) -> TurnSignal:
         state = self._wait(self._vad.analyze_audio(chunk))

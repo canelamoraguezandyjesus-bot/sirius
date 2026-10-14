@@ -64,6 +64,10 @@ class TurnDetector[Chunk](Protocol):
 
     def listen(self, chunk: Chunk) -> TurnSignal: ...
 
+    def reset(self) -> None:
+        """Olvida el turno que llevaba: lo siguiente que oiga empieza de cero."""
+        ...
+
 
 class Transcriber[Chunk](Protocol):
     """faster-whisper: lo dicho en los trozos de un turno, en texto."""

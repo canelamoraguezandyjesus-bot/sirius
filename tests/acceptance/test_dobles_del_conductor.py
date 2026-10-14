@@ -111,6 +111,17 @@ def test_el_oido_dice_fin_solo_tras_los_silencios_que_pide_y_despues_de_voz() ->
     assert len(oido.vistos) == 7
 
 
+def test_el_oido_reiniciado_olvida_el_turno_que_llevaba() -> None:
+    oido = OidoDeMentira()
+    oido.escucha(Audio("Sirius, estaba"))
+
+    oido.reinicia()
+
+    assert not oido.escucha(Audio("")), "sin voz desde el reinicio, un silencio no acaba nada"
+    assert oido.fines == ()
+    assert len(oido.vistos) == 2, "lo visto se queda apuntado"
+
+
 def test_el_transcriptor_devuelve_lo_escrito_en_la_voz_y_lo_apunta() -> None:
     transcriptor = TranscriptorDeMentira()
 

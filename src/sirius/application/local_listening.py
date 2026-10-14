@@ -118,9 +118,16 @@ class LocalListening[Chunk]:
         return ""
 
     def stop(self) -> None:
-        """Cierra el micro y olvida el turno a medias, si lo había."""
-        if self._engines is not None and self._listening:
-            self._engines.microphone.close()
+        """Cierra el micro y olvida el turno a medias, si lo había, también en el detector.
+
+        Si no, al volver a escuchar el detector seguiría en el turno viejo: Silero
+        creería que aún hay voz y el silencio siguiente abriría un turno sin palabras
+        (ronda 1 de Codex sobre la PR #687).
+        """
+        if self._engines is not None:
+            if self._listening:
+                self._engines.microphone.close()
+            self._engines.detector.reset()
         self._listening = False
         self._turn = None
         self._before_turn.clear()
