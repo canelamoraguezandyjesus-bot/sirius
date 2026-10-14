@@ -26,7 +26,7 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **235**.
+- Decisiones (ADR): **236**.
 - Bloques del motor: 17 cerrado, 3 fuera_de_alcance.
 - Defectos registrados: 2 abierto, 86 cerrado.
 - Ideas aparcadas o descartadas: 12 aparcada, 3 descartada, 2 promovida.
@@ -79,6 +79,7 @@ huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| [242](docs/decisions/ADR-242-oir-en-local-la-pieza-b-de-la-voz.md) | 2026-10-14 | APROBADO | Oír en local: la pieza B de la voz | Se adopta la opción 2. Lo decide la sesión (ADR-204: no es dinero, ni salud, ni cambia lo que el propietario ve u oye). |
 | [241](docs/decisions/ADR-241-empezar-la-0.3-del-robot-la-voz-por-sus-pruebas-de-aceptacion.md) | 2026-10-13 | APROBADO | Empezar la 0.3 del robot, la voz, por sus pruebas de aceptación | Se adopta la opción 2. |
 | [240](docs/decisions/ADR-240-ensenar-a-sirius-en-cada-turno-los-tres-ejemplos-que-mas-se-parecen-a-la-charla-darle-sus-palabras-sueltas-y-que-diga-el-lo-que-contesta-a-las-ordenes-de-memoria.md) | 2026-10-08 | APROBADO | Enseñar a Sirius en cada turno los tres ejemplos que más se parecen a la charla, darle sus palabras sueltas y que diga él lo que contesta a las órdenes de memoria | La opción 2, con lo que describe la nota de arranque. En concreto: Los ejemplos, como datos. `identity_versions.examples` guarda, en JSON, quién habla, |
 | [239](docs/decisions/ADR-239-guardar-los-hechos-con-su-fecha-y-quien-lo-dijo-como-recuerdos-sonar-sin-leer-a-sirius-y-obedecer-las-ordenes-de-memoria-sin-pasar-por-el-modelo.md) | 2026-10-07 | APROBADO | Guardar los hechos con su fecha y quién lo dijo como recuerdos, soñar sin leer a Sirius y obedecer las órdenes de memoria sin pasar por el modelo | Se adopta la opción 2. |
@@ -521,7 +522,7 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 
 - **ADR-205** — el ciclo volvería a quedarse horas en verde esperando (lo hace cumplir `tests/automation/test_sirius_merge.py`).
 
-Y **6** ADR declaran expresamente que no dejaron lección: 240, 236, 235, 234, 233, 232.
+Y **7** ADR declaran expresamente que no dejaron lección: 242, 240, 236, 235, 234, 233, 232.
 
 ## Los bloques del motor
 
