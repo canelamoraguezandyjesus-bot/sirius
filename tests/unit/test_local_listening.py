@@ -310,7 +310,12 @@ def test_si_la_charla_no_acaba_bien_el_turno_lo_dice() -> None:
     assert not turno.answered
 
 
-def test_el_diario_no_se_queda_con_nada_de_lo_oido(caplog: pytest.LogCaptureFixture) -> None:
+def test_el_diario_no_se_queda_con_nada_de_lo_oido(
+    caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Una migración anterior en el mismo proceso (Alembic, `fileConfig`) apaga los
+    # registradores que ya existían: se enciende el del oído para poder leerlo.
+    monkeypatch.setattr(logging.getLogger("sirius.application.local_listening"), "disabled", False)
     oido = _Oido()
     oido.servicio.start()
 
