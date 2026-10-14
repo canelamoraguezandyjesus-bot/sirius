@@ -215,6 +215,8 @@ meter su memoria ni sus gestos.
 **Dinero:** 0 €. Si la cancelación por software no basta, un micro con cancelación de eco
 de unos 60 €, que se le pregunta al propietario cuando haga falta.
 **Sale de:** inf. 4 §3, §5 y §8. Inf. 1 §3.4 y su etapa 1.
+**Pruebas de aceptación:** `docs/evolution/PRUEBAS_0.3_DEL_ROBOT.md`, escritas antes del
+código (ADR-241).
 
 ## 6. Versión 0.4 · Ojos
 

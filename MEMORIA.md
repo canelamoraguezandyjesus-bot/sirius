@@ -26,13 +26,13 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **234**.
+- Decisiones (ADR): **235**.
 - Bloques del motor: 17 cerrado, 3 fuera_de_alcance.
-- Defectos registrados: 2 abierto, 85 cerrado.
+- Defectos registrados: 2 abierto, 86 cerrado.
 - Ideas aparcadas o descartadas: 12 aparcada, 3 descartada, 2 promovida.
 - Skills: **19**.
 - Investigaciones: **14** (fotos con fecha; caducan).
-- Documentos: **212**, de los que **136** no declaran fecha.
+- Documentos: **213**, de los que **136** no declaran fecha.
 
 ## Las skills: lo que ya costó averiguar dos veces (ADR-211)
 
@@ -79,6 +79,7 @@ huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| [241](docs/decisions/ADR-241-empezar-la-0.3-del-robot-la-voz-por-sus-pruebas-de-aceptacion.md) | 2026-10-13 | APROBADO | Empezar la 0.3 del robot, la voz, por sus pruebas de aceptación | Se adopta la opción 2. |
 | [240](docs/decisions/ADR-240-ensenar-a-sirius-en-cada-turno-los-tres-ejemplos-que-mas-se-parecen-a-la-charla-darle-sus-palabras-sueltas-y-que-diga-el-lo-que-contesta-a-las-ordenes-de-memoria.md) | 2026-10-08 | APROBADO | Enseñar a Sirius en cada turno los tres ejemplos que más se parecen a la charla, darle sus palabras sueltas y que diga él lo que contesta a las órdenes de memoria | La opción 2, con lo que describe la nota de arranque. En concreto: Los ejemplos, como datos. `identity_versions.examples` guarda, en JSON, quién habla, |
 | [239](docs/decisions/ADR-239-guardar-los-hechos-con-su-fecha-y-quien-lo-dijo-como-recuerdos-sonar-sin-leer-a-sirius-y-obedecer-las-ordenes-de-memoria-sin-pasar-por-el-modelo.md) | 2026-10-07 | APROBADO | Guardar los hechos con su fecha y quién lo dijo como recuerdos, soñar sin leer a Sirius y obedecer las órdenes de memoria sin pasar por el modelo | Se adopta la opción 2. |
 | [238](docs/decisions/ADR-238-buscar-los-recuerdos-por-significado-dentro-de-sirius.db-y-sacar-a-ollama-de-cada-respuesta.md) | 2026-10-07 | APROBADO | Buscar los recuerdos por significado dentro de sirius.db y sacar a Ollama de cada respuesta | Se adopta la opción 2. |
@@ -336,6 +337,7 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 | `lista-a-mano` | 2 | sí | 181, 178 |
 | `medir-lo-que-se-tiene-en-vez-de-lo-que-hay` | 2 | sí | 184, 180 |
 | `paso-largo-sin-plazo-propio` | 2 | sí | 228, 224 |
+| `prueba-que-no-puede-ver-lo-que-vigila` | 2 | no en todas | 241, 238 |
 | `vista-que-copia-el-corpus-del-que-venia-huyendo` | 2 | sí | 218, 196 |
 | `comparar-instantes-como-texto` | 1 | sí | 229 |
 | `condicion-construida-sin-el-mecanismo-que-la-hace-cumplible` | 1 | sí | 200 |
@@ -354,7 +356,6 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 | `pieza-correcta-a-la-que-no-llama-quien-la-necesita` | 1 | sí | 197 |
 | `plan-que-hay-que-terminar-de-una-sentada` | 1 | sí | 176 |
 | `pregunta-al-propietario-que-nadie-vuelve-a-poner-delante` | 1 | no en todas | 198 |
-| `prueba-que-no-puede-ver-lo-que-vigila` | 1 | sí | 238 |
 | `registro-sin-decir-quien-lo-hizo` | 1 | sí | 230 |
 | `regla-nueva-sin-pasarla-por-los-casos-vivos` | 1 | sí | 231 |
 | `tarea-periodica-sin-reloj` | 1 | no en todas | 201 |
@@ -425,6 +426,11 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 
 - **ADR-228** — dar a un agente una regla que depende de la hora («para si no cabe») sin darle la hora ni un plazo propio, y dejar que el tope del job lo mate sin diagnóstico; la misma lección que ADR-155 dejó para el corrector y ADR-224 para los pasos de Quality, aplicada al paso que quedaba. (lo hace cumplir `tests/automation/test_implementador_con_reloj.py`).
 - **ADR-224** — dejar que el tope del job sea el único plazo de un paso que depende de la red, y descubrirlo en una cancelación muda que no guarda caché y se repite sola; es la misma lección que el paso de `apt` dejó escrita el 19-08, aplicada esta vez a los dos pasos que quedaban. (lo hace cumplir `tests/automation/test_quality_no_muere_por_un_sync_lento.py`).
+
+### `prueba-que-no-puede-ver-lo-que-vigila`
+
+- **ADR-241** — escribir las pruebas de aceptación de una versión antes del (sin prueba que lo haga cumplir: ninguna prueba mide la fuerza de una prueba; lo que hay es).
+- **ADR-238** — una prueba de «no se hace X» que pasa con X puesto, porque su (lo hace cumplir `tests/acceptance/test_robot_0_2_memoria.py`).
 
 ### `vista-que-copia-el-corpus-del-que-venia-huyendo`
 
@@ -498,10 +504,6 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 ### `pregunta-al-propietario-que-nadie-vuelve-a-poner-delante`
 
 - **ADR-198** — una incidencia formula una pregunta que solo el (sin prueba que lo haga cumplir: ninguna prueba: nada en este repositorio distingue una).
-
-### `prueba-que-no-puede-ver-lo-que-vigila`
-
-- **ADR-238** — una prueba de «no se hace X» que pasa con X puesto, porque su (lo hace cumplir `tests/acceptance/test_robot_0_2_memoria.py`).
 
 ### `registro-sin-decir-quien-lo-hizo`
 
@@ -637,6 +639,7 @@ mismo comando y vigila la misma prueba que esta vista (ADR-218).
 | 2026-10-06 | [Plan de Sirius, el robot](docs/evolution/PLAN_DEL_ROBOT.md) |
 | sin fecha declarada | [Propuesta de separación entre Sirius y su motor de trabajo](docs/evolution/PROPUESTA_SEPARACION_SIRIUS_MOTOR.md) |
 | 2026-10-08 | [Pruebas de aceptación de la 0.2 del robot](docs/evolution/PRUEBAS_0.2_DEL_ROBOT.md) |
+| 2026-10-13 | [Pruebas de aceptación de la 0.3 del robot](docs/evolution/PRUEBAS_0.3_DEL_ROBOT.md) |
 | sin fecha declarada | [Evolución de Sirius después de 0.1](docs/evolution/README.md) |
 | sin fecha declarada | [Documento Rector - Evolución de Sirius después de 0.1 (enmendado por su §20 el 06-10-2026: Sirius es el software del robot)](docs/evolution/RECTOR.md) |
 | sin fecha declarada | [Sirius AI Core y estrategia de modelos — recolección de ideas](docs/evolution/SIRIUS_AI_CORE_AND_MODEL_STRATEGY.md) |
