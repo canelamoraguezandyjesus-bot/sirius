@@ -15,6 +15,7 @@ import re
 
 import pytest
 
+from sirius.application import prepare_speech_text as preparacion
 from sirius.application.prepare_speech_text import prepare_speech_text
 from sirius.application.speech_cutter import SpeechCutter, final_speech_text
 
@@ -192,11 +193,12 @@ def test_la_sangria_de_una_linea_se_queda_con_ella() -> None:
 
 
 def test_una_marca_que_se_empareja_con_otra_ya_llegada_no_deja_cortar() -> None:
-    # Entera, la primera estrella va con la última, y la que sobra no se quita al acabar
-    # porque va pegada a una cifra: si la última ya ha llegado, el corte lo ve.
-    assert final_speech_text("*a*. Hola 5*. Fin") == "a. Hola 5. Fin"
+    # Entera, la primera estrella va con la de «5*3», que entre cifras no se quita al
+    # acabar: si ya ha llegado, el corte lo ve. Si aún no, aquí se diría «5*3», el caso que
+    # ADR-243 da por no visto.
+    assert final_speech_text("*a*. Hola 5*3. Fin") == "a. Hola 53. Fin"
 
-    assert _dicho(["*a*. Hola 5*. Fin"]) == ["a.", "Hola 5.", "Fin"]
+    assert _dicho(["*a*. Hola 5*3. Fin"]) == ["a.", "Hola 53.", "Fin"]
 
 
 def test_con_una_marca_sin_cerrar_espera_a_que_se_cierre() -> None:
@@ -221,11 +223,20 @@ def test_al_acabar_da_lo_que_quedaba_y_empieza_de_cero() -> None:
         ("Esto es **muy importante", ["Esto es muy importante"]),
         ("Y esto es _también", ["Y esto es también"]),
         ("Muy importante**", ["Muy importante"]),
+        ("**5 puntos", ["5 puntos"]),
         ("Usa `rm -rf", ["Usa rm -rf"]),
-        ("Lee [la guía", ["Lee la guía"]),
-        # Entre blancos, cifras o letras, una estrella puede ser una multiplicación y un
-        # guion bajo, parte de un nombre; y un corchete cerrado no abre nada.
-        ("Son 5 * 3, 5*3 y a_b [1]", ["Son 5 * 3, 5*3 y a_b [1]"]),
+        # Ronda 3: de un enlace a medias se dice el texto, como de uno entero.
+        ("Lee [la gu", ["Lee la gu"]),
+        ("Lee [la guía]", ["Lee la guía"]),
+        ("Lee [la guía](", ["Lee la guía"]),
+        ("Lee [la guía](https://ejemplo.org", ["Lee la guía"]),
+        ("Mira [la guía](https://x y luego más.", ["Mira la guía y luego más."]),
+        # Si su paréntesis se cierra más adelante, es un enlace entero para la preparación.
+        ("Mira [a](b c) y ya", ["Mira a y ya"]),
+        ("La nota [1]", ["La nota 1"]),
+        # Entre blancos, letras o cifras, una estrella puede ser una multiplicación y un
+        # guion bajo, parte de un nombre.
+        ("Son 5 * 3, 5*3 y a_b", ["Son 5 * 3, 5*3 y a_b"]),
     ],
 )
 def test_al_acabar_lo_que_quedo_sin_cerrar_no_se_dice_como_codigo_ni_marca(
@@ -234,6 +245,62 @@ def test_al_acabar_lo_que_quedo_sin_cerrar_no_se_dice_como_codigo_ni_marca(
     # Ronda 2 de Codex sobre la PR #688: ``prepare_speech_text`` solo quita lo emparejado.
     assert _dicho([respuesta]) == dichas
     assert final_speech_text(respuesta) == " ".join(dichas)
+
+
+def test_una_estrella_entre_blancos_al_principio_de_lo_que_queda_se_queda() -> None:
+    # Lo que queda al acabar empieza donde un corte se llevó los blancos: entera, la
+    # respuesta tiene un blanco delante de esa estrella, y la deja.
+    assert final_speech_text("dos\n- * x") == "dos. * x"
+
+    assert _dicho(["dos\n- * x"]) == ["dos.", "* x"]
+
+
+#: Lo que no puede llegar a la voz de una respuesta de la prueba, acabe donde acabe: una
+#: comilla de código, un corchete, una estrella (ninguna es una multiplicación) o un
+#: guion bajo que no va entre letras o cifras.
+_MARCA = re.compile(r"[`\[\]*]|(?<![^\W_])_|_(?![^\W_])")
+
+
+@pytest.mark.parametrize("respuesta", RESPUESTAS)
+def test_acabe_donde_acabe_la_respuesta_no_se_dice_ninguna_marca(respuesta: str) -> None:
+    # Rondas 2 y 3 de Codex sobre la PR #688, de la misma familia: lo que se queda a medias
+    # al acabar. Se para la respuesta en cada carácter, como si el modelo acabara ahí.
+    con_marcas = [
+        respuesta[:fin]
+        for fin in range(len(respuesta) + 1)
+        if _MARCA.search(final_speech_text(respuesta[:fin]))
+    ]
+
+    assert con_marcas == []
+
+
+def test_al_acabar_se_sabe_que_hacer_con_cada_construccion_de_prepare_speech_text() -> None:
+    # Rondas 2 y 3 de Codex sobre la PR #688: si ``prepare_speech_text`` gana o pierde una
+    # construcción, esta prueba falla hasta que ``final_speech_text`` diga qué hace con
+    # ella a medias.
+    patrones = {
+        nombre for nombre, valor in vars(preparacion).items() if isinstance(valor, re.Pattern)
+    }
+
+    assert patrones == {
+        # Con cierre, y lo que se hace con ellas a medias: el bloque se cierra; del enlace
+        # se cierra el destino y se quitan los corchetes; del código en línea, las comillas
+        # sueltas; y del énfasis, lo que abre o cierra una palabra.
+        "_CODE_FENCE",
+        "_FENCE_LANGUAGE",
+        "_MARKDOWN_LINK",
+        "_INLINE_CODE",
+        "_EMPHASIS",
+        # Sin cierre: están enteras en cuanto empiezan.
+        "_BARE_URL",
+        "_HEADING",
+        "_LIST_BULLET",
+        "_BLOCKQUOTE",
+        "_HORIZONTAL_RULE",
+        # Blancos.
+        "_BLANK_RUN",
+        "_SPACE_RUN",
+    }
 
 
 def test_lo_que_no_se_lee_no_da_ninguna_frase() -> None:

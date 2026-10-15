@@ -133,15 +133,17 @@ Se adopta la opción 2.
   vista una puntuación, que se pegaría a la frase de antes; un bloque de código sí vale,
   para que la frase que lo presenta no espere al bloque. Y lo de delante y lo de detrás,
   preparados por separado, dan lo mismo que todo lo llegado preparado de una vez. Al
-  acabar la charla se suelta lo que quede, y lo que se ha quedado sin cerrar no se dice
-  como código ni como marca (`final_speech_text`): un bloque de código abierto se cierra,
-  y se dice que queda en pantalla, y se quitan las comillas de código, las estrellas y
-  los guiones bajos que abren o cierran una palabra y un corchete que no se cierra. Entre
-  blancos o letras, o junto a una cifra, una estrella o un guion bajo se quedan: pueden
-  ser una multiplicación o parte de un nombre. Lo dicho, unido, es lo que da
-  `final_speech_text` con la respuesta entera, salvo los blancos y una frase de solo
-  puntos, que no se dice. Lo que no puede ver es lo que aún no ha llegado: una marca que
-  se empareja con otra de una frase posterior, como en `*a*. Hola 5*`.
+  acabar la charla se suelta lo que quede, y lo que se ha quedado a medias no se dice
+  como código ni como marca (`final_speech_text`): las cuatro construcciones con cierre
+  que quita `prepare_speech_text` se tratan como si se cerraran. El bloque de código se
+  cierra, y se dice que queda en pantalla; del enlace se cierra el destino donde acaba la
+  dirección, y se dice su texto; y del código en línea y del énfasis se quita lo que
+  queda suelto: comillas, corchetes, y estrellas o guiones bajos que no estén entre dos
+  letras o cifras ni entre dos blancos, donde pueden ser una multiplicación o parte de un
+  nombre. Lo dicho, unido, es lo que da `final_speech_text` con la respuesta entera,
+  salvo los blancos y una frase de solo puntos, que no se dice. Lo que no puede ver es lo
+  que aún no ha llegado: una marca que se empareja con otra de una frase posterior, como
+  en `*a*. Hola 5*3`.
 - **El oído habla** (`src/sirius/application/local_listening.py`): entrega cada turno a
   la charla con un `on_delta` que alimenta el corte, y cada frase cerrada se pide a la
   voz y suena en cuanto está. Antes de la primera cierra el micro, y lo vuelve a abrir
@@ -205,12 +207,14 @@ Medido el 15-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   enseña su PR en su comprobación»): la prueba unitaria que sigue el orden de todo lo que pasa en un turno
   ve cerrarse el micro antes de la primera frase y abrirse después de la última, y la
   mutación que no lo cierra hace que su propio eco entre como un turno en PA-R03-03.
-- **95 pruebas unitarias nuevas**: el servicio que oye y habla (16 más en
-  `tests/unit/test_local_listening.py`, de 30 a 46), el corte en frases (48 en
-  `tests/unit/test_speech_cutter.py`; entre ellas, lo mismo dicho que con el texto entero
-  de 302 maneras de trocear 18 respuestas, 5 436 troceos, y de 12 maneras de trocear 500
-  textos al azar hechos de palabras, puntuación, saltos, sangrías y marcas, en los que el
-  corte de `e41ff85f` falla 274 veces), Piper y el altavoz con
+- **122 pruebas unitarias nuevas**: el servicio que oye y habla (16 más en
+  `tests/unit/test_local_listening.py`, de 30 a 46), el corte en frases (75 en
+  `tests/unit/test_speech_cutter.py`; entre ellas, lo mismo dicho que `final_speech_text`
+  con el texto entero de 302 maneras de trocear 18 respuestas, 5 436 troceos, y de 12
+  maneras de trocear 500 textos al azar hechos de palabras, puntuación, saltos, sangrías y
+  marcas, en los que el corte de `e41ff85f` da otra cosa 373 veces; ninguna marca
+  dicha al acabar, pare donde pare cada una de las 18 respuestas; y lo que se hace a
+  medias con cada construcción de `prepare_speech_text`), Piper y el altavoz con
   módulos de mentira (15 en `tests/unit/test_local_speaking_adapters.py`), la
   instalación y la orden de instalar (12 más, de 24 a 36), `sirius-oye` y lo que tarda
   (3 más, de 13 a 16) y que el oído importa lo que dice `voice_tools` (1 más en
@@ -229,8 +233,9 @@ Medido el 15-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   de la orden no veía. Las 85 mutaciones de la pieza B, puestas al día para el código
   nuevo, siguen cayendo las 85. Tras la ronda 1 de Codex y el corte nuevo son 92: las
   del corte se rehicieron para sus tres condiciones, 18, y caen las 92. Tras la ronda 2,
-  100: 8 más para lo que se dice al acabar, y la de las tres comillas cambia,
-  porque ya no hace falta que abran una línea. Una más no se
+  100: 8 más para lo que se dice al acabar, y la de las tres comillas cambia, porque ya
+  no hace falta que abran una línea. Tras la ronda 3, 104: las de lo que se dice al
+  acabar se rehicieron para las cuatro construcciones, 12, y caen las 104. Una más no se
   cuenta porque es equivalente: quitar que lo de detrás tenga que decir algo no cambia
   nada, porque con lo de detrás vacío la frase y un blanco nunca dan lo llegado, que no
   acaba en blanco.
@@ -357,4 +362,24 @@ marca como llegado tarde por goteo, porque ya estaba en la ronda 1.
   respuesta entera se cerraba. Con esto, cortar delante de un bloque ya no pide que sea
   la línea que lo abre: cualquier bloque acaba diciendo que queda en pantalla. La nota de
   arranque lo daba por imposible y no lo era: al acabar, lo abierto se decía tal cual.
+
+**Ronda 3 de Codex**, sobre `6d9f60ac`, con la misma pregunta: un P2, cierto y comprobado
+contra el código. Con `Lee [la guía](https://ejemplo.org` se decía `Lee [la guía](un
+enlace`, y con `Lee [la guía](` quedaba todo: el arreglo de la ronda 2 quitaba el corchete
+solo si no había otro que lo cerrara.
+
+**Rondas 2 y 3, la misma familia: se paró a buscar la raíz** (ADR-001, la regla de las
+dos rondas). El patrón: al acabar, lo que se ha quedado a medias llega a la voz; la ronda
+2 lo vio con un bloque de código y la 3 con un enlace. La raíz: el arreglo de la ronda 2
+iba marca a marca, y lo que no estaba en la lista seguía pasando. La decisión: seguir,
+con el arreglo en la raíz, que ya no es una lista de marcas sino las cuatro
+construcciones con cierre que quita `prepare_speech_text`, cada una tratada como si se
+cerrara (en «Decisión»). Lo hacen cumplir dos pruebas nuevas en
+`tests/unit/test_speech_cutter.py`. Una para cada respuesta de la prueba en cada carácter,
+como si el modelo acabara ahí, y mira que no se diga ninguna marca; la primera vez que
+corrió encontró lo que ninguna ronda había visto, una marca de énfasis colgando al final
+(`Mira **`, `Un _`). La otra falla si `prepare_speech_text` gana o pierde una
+construcción, hasta que `final_speech_text` diga qué hace con ella a medias. Y la
+comparación al azar con el texto entero encontró que una estrella al principio de lo que
+queda se juzgaba sin el blanco que tiene delante en la respuesta entera; ya no.
 

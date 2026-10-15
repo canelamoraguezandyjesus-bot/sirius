@@ -3,11 +3,12 @@
 La voz del robot dice la respuesta desde la primera frase, mientras el modelo sigue
 escribiendo (PA-R03-02). Lo que dice es lo que da ``prepare_speech_text``, la misma
 función de Model Studio, sin quitar ni añadir nada: solo cambia el corte en frases. Y que
-al acabar, lo que se ha quedado sin cerrar no se dice como código ni como marca, cosa que
-``prepare_speech_text`` no mira porque solo quita lo emparejado (ronda 2 de Codex sobre la
-PR #688): un bloque de código abierto se cierra, y se dice que queda en pantalla, y las
-comillas de código, las estrellas y los guiones bajos que abren o cierran una palabra y un
-corchete que no se cierra se quitan. Es ``final_speech_text``.
+al acabar, lo que se ha quedado a medias no se dice como código ni como marca, cosa que
+``prepare_speech_text`` no mira porque solo quita lo que está entero (rondas 2 y 3 de
+Codex sobre la PR #688). Sus cuatro construcciones con cierre se tratan como si se
+cerraran: el bloque de código se cierra, y se dice que queda en pantalla; del enlace se
+cierra el destino, y se dice su texto; y del código en línea y del énfasis se quita lo que
+queda suelto. Es ``final_speech_text``.
 
 Para que, trozo a trozo, salga lo mismo que con la respuesta entera, no se imita dónde
 cae cada trozo: se comprueba que cortar no cambia nada (ronda 1 de Codex sobre la PR
@@ -28,7 +29,7 @@ si se cumplen tres cosas:
 
 Lo demás espera a que llegue más o a que la charla acabe. Lo que aún no ha llegado no se
 ve: una marca que la respuesta entera empareja con otra de una frase posterior aquí ya
-estaba cerrada, y si la que sobra no se quita al acabar, se nota, como en «*a*. Hola 5*».
+estaba cerrada, y si la que sobra no se quita al acabar, se nota, como en «*a*. Hola 5*3».
 Y una frase de solo puntos no se dice, como no la dice ``prepare_speech_text`` cuando no
 queda otra cosa: la que deja delante si la respuesta empieza por algo que no se lee, como
 una raya.
@@ -50,11 +51,15 @@ _OPEN_MARK = re.compile(r"[*`\[\]]|(?<!\w)_|_(?!\w)")
 _SETTLED_START = re.compile(r"[-*+]\s|[^*_`\[+\-]")
 #: Un bloque de código: cerrado, o al acabar, se dice «Te dejo el código en pantalla.».
 _CODE_BLOCK_START = re.compile(r"\s*```")
-#: Lo que se queda suelto al acabar y no se dice: comillas de código, estrellas o guiones
-#: bajos que abren o cierran una palabra, y un corchete que no se cierra. Entre blancos o
-#: letras, o junto a una cifra, una estrella puede ser una multiplicación, y un guion bajo,
-#: parte de un nombre: se quedan, como los deja ``prepare_speech_text``.
-_LOOSE_MARK = re.compile(r"`|(?<!\w)[*_]+(?=[^\W\d_])|(?<=[^\W\d_])[*_]+(?!\w)|\[(?![^\]]*\])")
+#: El destino de un enlace que no se cierra en lo que queda de respuesta: se cierra donde
+#: acaba la dirección, en el primer blanco, y del enlace se dice el texto, como de uno
+#: entero.
+_UNCLOSED_LINK_TARGET = re.compile(r"(\[[^\]]+\]\([^\s)]*)(?=[^)]*\Z)")
+#: Corchetes y comillas de código que quedan al acabar, ya preparado: ninguno es ya de un
+#: enlace ni de un código enteros, y no se dicen.
+_LOOSE_SYNTAX = re.compile(r"[`\[\]]")
+#: Estrellas y guiones bajos seguidos.
+_MARK_RUN = re.compile(r"[*_]+")
 #: Entre frase y frase, ya preparado.
 _BETWEEN_SENTENCES = re.compile(r"(?<=[.!?…])\s+")
 _FENCE = "```"
@@ -95,10 +100,28 @@ class SpeechCutter:
 
 def final_speech_text(text: str) -> str:
     """Lo que se dice de un texto que ya no sigue: lo que da ``prepare_speech_text``, sin
-    código ni marcas aunque algo se haya quedado sin cerrar."""
+    código ni marcas aunque algo se haya quedado a medias."""
     if text.count(_FENCE) % 2:
         text = f"{text}\n{_FENCE}"
-    return _LOOSE_MARK.sub("", prepare_speech_text(text))
+    text = _UNCLOSED_LINK_TARGET.sub(r"\1)", text)
+    return _without_loose_marks(_LOOSE_SYNTAX.sub("", prepare_speech_text(text)))
+
+
+def _without_loose_marks(text: str) -> str:
+    """Sin lo que sobra de un énfasis. Una estrella o un guion bajo solo se quedan entre dos
+    letras o cifras, o entre dos blancos, donde pueden ser una multiplicación o parte de un
+    nombre, como los deja ``prepare_speech_text``. Delante del texto cuenta como un blanco,
+    porque lo que se dice al acabar empieza donde un corte se llevó los blancos; detrás no,
+    porque ahí acaba la respuesta y lo que cuelga no va con nada."""
+
+    def keep_or_drop(run: re.Match[str]) -> str:
+        before = text[run.start() - 1 : run.start()] or " "
+        after = text[run.end() : run.end() + 1]
+        between_words = before.isalnum() and after.isalnum()
+        between_blanks = before.isspace() and after.isspace()
+        return run.group() if between_words or between_blanks else ""
+
+    return _MARK_RUN.sub(keep_or_drop, text)
 
 
 def _piece_end(cut: re.Match[str]) -> int:
