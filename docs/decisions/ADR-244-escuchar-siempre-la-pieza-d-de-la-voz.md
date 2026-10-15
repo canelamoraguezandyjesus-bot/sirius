@@ -209,6 +209,9 @@ Medido el 15-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   `7b8e796`), tras perder en un reinicio del contenedor el árbol en que corrieron la
   primera vez, con el mismo resultado.
 - **mypy** sobre `src` y `tests`, sin errores en 717 ficheros; **ruff**, limpio.
+- **La batería entera**, sobre `ec0395ad`: 8 632 en verde, 14 omitidas y 8 `xfail`, en
+  25 min 9 s. Sobre el último head de la pieza C, `dcdf08e6`, eran 8 521 en verde, 16
+  omitidas y 16 `xfail`: las 8 de la pieza D ya no esperan.
 
 ## Consecuencias
 
