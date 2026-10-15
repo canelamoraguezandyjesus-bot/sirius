@@ -406,9 +406,6 @@ class MainWindow(QMainWindow):
         # que el anterior termine de sonar.
         self._speech_queue: list[tuple[str, bool]] = []
         self._speech_busy = False
-        #: Cuántas veces se ha callado la voz: el desenlace de lo que se pidió antes ya no
-        #: es de la voz de ahora (ronda 4 de Codex sobre la PR #689, ADR-244).
-        self._speech_epoch = 0
         self._spoken_prefix_length = 0
         self._early_speech_used = False
         # La voz elegida tiene que sobrevivir al cierre: la raíz de composición
@@ -834,11 +831,17 @@ class MainWindow(QMainWindow):
         """
         self._active_voice_workers.add(worker)
         worker.signals.finished.connect(
-            lambda _outcome, retenido=worker: self._active_voice_workers.discard(retenido)
+            lambda _outcome, retenido=worker: self._forget_voice_worker(retenido)
         )
         worker.signals.crashed.connect(
-            lambda _message, retenido=worker: self._active_voice_workers.discard(retenido)
+            lambda _message, retenido=worker: self._forget_voice_worker(retenido)
         )
+
+    def _forget_voice_worker(self, worker: TranscribeWorker | SpeakWorker) -> None:
+        """Suelta el trabajador que ya entregó su desenlace; si era lo último que quedaba de
+        la voz de Model Studio, el oído puede volver a oír."""
+        self._active_voice_workers.discard(worker)
+        self._resume_listening_after_studio()
 
     def _stop_listening_and_transcribe(self) -> None:
         if self._studio_voice_use_case is None:
@@ -892,9 +895,7 @@ class MainWindow(QMainWindow):
         self._early_speech_used = False
 
     def _silence_pending_speech(self) -> None:
-        """Deja de leer una respuesta que se canceló o falló a mitad. Lo que aún se esté
-        sintetizando ya no suena, y lo que devuelva ya no cuenta."""
-        self._speech_epoch += 1
+        """Deja de leer una respuesta que se canceló o falló a mitad."""
         self._speech_queue.clear()
         self._reset_speech_stream()
         if self._studio_voice_use_case is not None:
@@ -917,22 +918,13 @@ class MainWindow(QMainWindow):
         if self._studio_voice_use_case is None:
             return
         self._mirror_studio_state(StudioInteractionState.SINTETIZANDO)
-        epoch = self._speech_epoch
         worker = SpeakWorker(self._studio_voice_use_case, text, status, read_code=read_code)
-        worker.signals.finished.connect(lambda outcome: self._on_spoken(outcome, epoch))
-        worker.signals.crashed.connect(lambda message: self._on_speech_crashed(message, epoch))
+        worker.signals.finished.connect(self._on_spoken)
+        worker.signals.crashed.connect(self._on_voice_crashed)
         self._retain_voice_worker(worker)
         self._thread_pool.start(worker)
 
-    def _on_speech_crashed(self, error_message: str, epoch: int) -> None:
-        if epoch == self._speech_epoch:
-            self._on_voice_crashed(error_message)
-
-    def _on_spoken(self, outcome: object, epoch: int) -> None:
-        if epoch != self._speech_epoch:
-            # Lo pidió una voz que ya se calló: lo que devuelva, fallo incluido, no es de
-            # la que suena ahora (ronda 4 de Codex sobre la PR #689, ADR-244).
-            return
+    def _on_spoken(self, outcome: object) -> None:
         if isinstance(outcome, VoiceFailure):
             # Un fallo de voz no puede dejar la cola atascada para siempre.
             self._speech_busy = False
@@ -964,6 +956,7 @@ class MainWindow(QMainWindow):
             return
         if self.studio_page.interaction_state is StudioInteractionState.HABLANDO:
             self._mirror_studio_state(StudioInteractionState.PREPARADO)
+        self._resume_listening_after_studio()
 
     def _handle_stop_voice_clicked(self) -> None:
         if self._studio_voice_use_case is None:
@@ -1994,14 +1987,26 @@ class MainWindow(QMainWindow):
         self._refresh_listening()
 
     def _resume_listening_after_studio(self) -> None:
-        """Al salir de Model Studio, el oído vuelve a oír si oía al entrar, salvo que la
-        ventana se esté cerrando: entonces ya no la mira nadie."""
-        if not self._listening_paused_for_studio:
+        """Al salir de Model Studio, el oído vuelve a oír si oía al entrar, en cuanto la voz
+        de Model Studio calla del todo, salvo que la ventana se esté cerrando: entonces ya no
+        la mira nadie.
+
+        Lo que Model Studio aún sintetizaba al salir suena después, como sin el oído; el oído
+        no lo oye porque espera (ronda 5 de Codex sobre la PR #689, ADR-244). Se mira al
+        salir, cada vez que un trabajador de la voz acaba y cuando acaba de sonar.
+        """
+        if not self._listening_paused_for_studio or self.model_studio_open:
+            return
+        if self._active_voice_workers or self._studio_voice_sounding():
             return
         self._listening_paused_for_studio = False
         if self._local_listening is None or self._closed or self._close_requested:
             return
         self._refresh_listening(self._listen(self._local_listening.start))
+
+    def _studio_voice_sounding(self) -> bool:
+        use_case = self._studio_voice_use_case
+        return use_case is not None and use_case.is_speaking
 
     def _refresh_listening(self, notice: str = "") -> None:
         """El indicador y el botón como está el oído de verdad, y el aviso si no oye."""

@@ -13,17 +13,24 @@ from __future__ import annotations
 
 import threading
 from collections.abc import Callable, Iterator, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 import pytest
 from PySide6.QtWidgets import QMainWindow
 from pytestqt.qtbot import QtBot
 
+from sirius.adapters.audio.fake import (
+    FakeAudioCapture,
+    FakeAudioPlayback,
+    FakeSpeechToText,
+    FakeTextToSpeech,
+)
 from sirius.adapters.persistence.bootstrap import initialize_persistence
 from sirius.adapters.secrets.fake import FakeSecretStore
 from sirius.application.listening_loop import ListeningLoop
 from sirius.application.memory_commands import FORGET_ABOUT_STORED
+from sirius.application.studio_voice import StudioVoiceUseCase, VoiceSettings
 from sirius.composition_root import ConversationDependencies, build_conversation_dependencies
 from sirius.config.local_voice import LocalVoiceSettings
 from sirius.infrastructure.local_voice_installation import (
@@ -50,6 +57,12 @@ from sirius.ports.llm import (
     LLMTextDelta,
 )
 from sirius.ports.local_voice import Captured, ListeningEngines, SpeakingEngines, TurnSignal
+from sirius.ports.text_to_speech import (
+    SpeechError,
+    SpeechErrorKind,
+    SpeechRequest,
+    SynthesizedSpeech,
+)
 from sirius.presentation.error_messages import failed_send_message
 from sirius.presentation.main_window import LISTENING, MUTED, VOICE_BUSY
 from sirius.presentation.message_view import MessageItemWidget
@@ -734,3 +747,112 @@ def test_si_la_ventana_se_esta_cerrando_salir_de_model_studio_no_reabre_el_oido(
 
     assert not sirius.micro.abierto
     assert not sirius.deps.local_listening.listening
+
+
+class _SintesisQueEspera(FakeTextToSpeech):
+    """La voz de Model Studio sintetiza cuando la prueba la deja: acaba después de salir.
+    Con ``falla``, acaba sin nada que sonar."""
+
+    def __init__(self, directory: Path) -> None:
+        super().__init__(directory)
+        self.empezo = threading.Event()
+        self.sigue = threading.Event()
+        self.falla = False
+
+    def synthesize(self, request: SpeechRequest) -> SynthesizedSpeech | SpeechError:
+        self.empezo.set()
+        self.sigue.wait(5)
+        if self.falla:
+            return SpeechError(SpeechErrorKind.TIMEOUT, "tarda")
+        return super().synthesize(request)
+
+
+def _con_la_voz_de_model_studio(
+    qtbot: QtBot, tmp_path: Path
+) -> tuple[_Sirius, ValidatedMainWindow, _SintesisQueEspera, FakeAudioPlayback]:
+    """Sirius con el oído y con una voz de Model Studio de mentira que la prueba gobierna."""
+    sirius = _monta(tmp_path)
+    directorio = tmp_path / "audio"
+    directorio.mkdir()
+    sintesis = _SintesisQueEspera(directorio)
+    su_altavoz = FakeAudioPlayback()
+    voz = StudioVoiceUseCase(
+        audio_capture=FakeAudioCapture(directorio),
+        speech_to_text=FakeSpeechToText(),
+        text_to_speech=sintesis,
+        audio_playback=su_altavoz,
+        settings=VoiceSettings(voice="onyx"),
+    )
+    sirius.deps = replace(sirius.deps, studio_voice_use_case=voz)
+    return sirius, _ventana(qtbot, sirius), sintesis, su_altavoz
+
+
+def test_al_salir_de_model_studio_el_oido_espera_a_que_su_voz_calle(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    # Ronda 5 de Codex sobre la PR #689 (ADR-244): lo que Model Studio aún sintetizaba al
+    # salir suena después, como sin el oído; el oído no lo oye porque espera a que calle.
+    sirius, ventana, sintesis, su_altavoz = _con_la_voz_de_model_studio(qtbot, tmp_path)
+    ventana.open_model_studio()
+    try:
+        ventana.studio_page.input.setPlainText("¿por dónde empiezo?")
+        ventana.studio_page.send_button.click()
+        qtbot.waitUntil(sintesis.empezo.is_set, timeout=5000)
+
+        ventana.close_model_studio()
+
+        assert not sirius.micro.abierto, "con su voz a medias, el oído aún no oye"
+        sintesis.sigue.set()
+        qtbot.waitUntil(lambda: bool(su_altavoz.played), timeout=5000)
+        qtbot.waitUntil(lambda: not ventana._active_voice_workers, timeout=5000)
+        assert not sirius.micro.abierto, "mientras suena, tampoco"
+
+        su_altavoz.finish()
+
+        assert sirius.micro.abierto
+        assert ventana.listening_label.text() == LISTENING
+    finally:
+        sintesis.sigue.set()
+        ventana._thread_pool.waitForDone(5000)
+
+
+def test_si_lo_que_sintetizaba_al_salir_no_llega_a_sonar_el_oido_vuelve_al_acabar(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    sirius, ventana, sintesis, su_altavoz = _con_la_voz_de_model_studio(qtbot, tmp_path)
+    sintesis.falla = True
+    ventana.open_model_studio()
+    try:
+        ventana.studio_page.input.setPlainText("¿por dónde empiezo?")
+        ventana.studio_page.send_button.click()
+        qtbot.waitUntil(sintesis.empezo.is_set, timeout=5000)
+        ventana.close_model_studio()
+        assert not sirius.micro.abierto
+
+        sintesis.sigue.set()
+
+        qtbot.waitUntil(lambda: sirius.micro.abierto, timeout=5000)
+        assert su_altavoz.played == []
+    finally:
+        sintesis.sigue.set()
+        ventana._thread_pool.waitForDone(5000)
+
+
+def test_dentro_de_model_studio_que_su_voz_acabe_no_abre_el_oido(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    sirius, ventana, sintesis, su_altavoz = _con_la_voz_de_model_studio(qtbot, tmp_path)
+    sintesis.sigue.set()
+    ventana.open_model_studio()
+    try:
+        ventana.studio_page.input.setPlainText("¿por dónde empiezo?")
+        ventana.studio_page.send_button.click()
+        qtbot.waitUntil(lambda: bool(su_altavoz.played), timeout=5000)
+        qtbot.waitUntil(lambda: not ventana._active_voice_workers, timeout=5000)
+
+        su_altavoz.finish()
+
+        assert not sirius.micro.abierto
+        assert not sirius.deps.local_listening.listening
+    finally:
+        ventana._thread_pool.waitForDone(5000)

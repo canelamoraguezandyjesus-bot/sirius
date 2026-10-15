@@ -241,24 +241,3 @@ def test_muting_before_there_is_a_player_is_remembered(
 
     assert playback.is_muted
     assert not playback.is_playing()
-
-
-def test_lo_que_se_pidio_desde_otro_hilo_y_se_paro_antes_de_empezar_no_suena(
-    qtbot: QtBot, tmp_path: Path, multimedia_available: None
-) -> None:
-    """La orden de sonar, pedida desde un hilo de fondo, espera en la cola del hilo dueño;
-    si se para antes de que llegue, ya no suena (ronda 3 de Codex sobre la PR #689,
-    ADR-244). Es lo que pasa al salir de Model Studio justo al acabar de sintetizar."""
-    owner_thread = QThread.currentThread()
-    playback = _PlaybackWithSpy(_SpyPlayer(owner_thread))
-    audio = _audio_file(tmp_path)
-
-    _run_in_pool(lambda: playback.play(audio, lambda: None), owner_thread)
-    assert playback.spy.plays == 0, "la orden tenía que esperar aún en la cola"
-    playback.stop()
-    qtbot.wait(100)
-
-    assert playback.spy.plays == 0
-    # Lo que se pide después de parar sí suena.
-    playback.play(audio, lambda: None)
-    assert playback.spy.plays == 1

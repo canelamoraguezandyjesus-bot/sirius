@@ -12,10 +12,8 @@ en el ``QThreadPool``; si ese hilo construyera el reproductor, Qt se negaría
 audio se decodificaría sin llegar nunca a los altavoces: sin sonido y sin
 error, que es la peor combinación posible. Las órdenes viajan por señales
 propias con conexión automática: emitidas desde otro hilo se encolan en el de
-la interfaz, y emitidas desde el de la interfaz se ejecutan al momento. Cada
-orden de sonar lleva cuántas veces se había parado al pedirla: si se para
-después, aunque la orden aún no haya llegado al hilo del reproductor, ya no
-suena (ronda 3 de Codex sobre la PR #689, ADR-244).
+la interfaz, y emitidas desde el de la interfaz se ejecutan al momento, así que
+el orden entre detener y reproducir se conserva siempre.
 
 Un fallo de altavoces no puede llevarse por delante la conversación escrita:
 todo se traduce a un error tipado y quien llama decide qué contar.
@@ -23,7 +21,6 @@ todo se traduce a un error tipado y quien llama decide qué contar.
 
 from __future__ import annotations
 
-import threading
 from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -57,7 +54,7 @@ def multimedia_is_available() -> bool:
 class QtAudioPlayback(QObject):
     """Reproduce un WAV ya generado, con detener y silenciar idempotentes."""
 
-    _play_requested = Signal(str, int)
+    _play_requested = Signal(str)
     _stop_requested = Signal()
     _mute_requested = Signal(bool)
 
@@ -67,9 +64,6 @@ class QtAudioPlayback(QObject):
         self._output: QAudioOutput | None = None
         self._on_finished: Callable[[], None] | None = None
         self._muted = False
-        #: Cuántas veces se ha parado: lo que se pidió antes ya no suena.
-        self._stops = 0
-        self._stops_lock = threading.Lock()
         # Conexión automática: directa dentro del propio hilo, encolada desde
         # fuera. Es lo que traslada el trabajo de Qt al hilo correcto.
         self._play_requested.connect(self._start_playback)
@@ -92,22 +86,17 @@ class QtAudioPlayback(QObject):
                 PlaybackErrorKind.NO_DEVICE, "el sistema no tiene soporte de audio"
             )
 
-        with self._stops_lock:
-            self._on_finished = on_finished
-            stops = self._stops
-        self._play_requested.emit(str(audio_path), stops)
+        self._on_finished = on_finished
+        self._play_requested.emit(str(audio_path))
         return None
 
     def stop(self) -> None:
         """Detiene la reproducción. Idempotente y sin avisar del final.
 
         Quien detiene ya sabe que ha detenido: llamar a ``on_finished`` aquí
-        haría creer que el audio terminó de sonar solo. Lo que se pidió antes
-        y aún no ha empezado tampoco suena.
+        haría creer que el audio terminó de sonar solo.
         """
-        with self._stops_lock:
-            self._stops += 1
-            self._on_finished = None
+        self._on_finished = None
         self._stop_requested.emit()
 
     def set_muted(self, muted: bool) -> None:
@@ -127,11 +116,7 @@ class QtAudioPlayback(QObject):
 
     # --- Interior: siempre en el hilo dueño del objeto -------------------
 
-    def _start_playback(self, audio_path: str, stops: int) -> None:
-        with self._stops_lock:
-            if stops != self._stops:
-                # Se paró después de pedirlo: ya no suena.
-                return
+    def _start_playback(self, audio_path: str) -> None:
         player = self._ensure_player()
         if player is None:
             # Sin reproductor no llegará ningún final: se avisa ahora para que

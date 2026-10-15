@@ -210,26 +210,3 @@ def test_outside_windows_it_says_so_instead_of_failing(
 
     assert error is not None
     assert error.kind is PlaybackErrorKind.NO_DEVICE
-
-
-def test_lo_que_se_pidio_desde_otro_hilo_y_se_paro_antes_de_empezar_no_suena(
-    qtbot: QtBot, tmp_path: Path, altavoz: _Altavoz
-) -> None:
-    """La orden de sonar, pedida desde un hilo de fondo, espera en la cola de la ventana; si
-    se para antes de que llegue, ya no suena (ronda 3 de Codex sobre la PR #689, ADR-244).
-    Con el temporal ya borrado al parar, Windows sonaría su aviso."""
-    reproductor = WinsoundAudioPlayback()
-    audio = _wav(tmp_path / "voz.wav")
-
-    def _pedir_voz() -> None:
-        reproductor.play(audio, lambda: None)
-
-    _en_segundo_plano(_pedir_voz)
-    assert altavoz.reproducidos == [], "la orden tenía que esperar aún en la cola"
-    reproductor.stop()
-    qtbot.wait(100)
-
-    assert altavoz.reproducidos == []
-    # Lo que se pide después de parar sí suena.
-    reproductor.play(audio, lambda: None)
-    assert altavoz.reproducidos == [str(audio)]

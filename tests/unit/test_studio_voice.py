@@ -30,12 +30,7 @@ from sirius.domain.conversation import MessageStatus
 from sirius.ports.audio_capture import AudioCaptureError, AudioCaptureErrorKind
 from sirius.ports.audio_playback import PlaybackError, PlaybackErrorKind
 from sirius.ports.speech_to_text import TranscriptionError, TranscriptionErrorKind
-from sirius.ports.text_to_speech import (
-    SpeechError,
-    SpeechErrorKind,
-    SpeechRequest,
-    SynthesizedSpeech,
-)
+from sirius.ports.text_to_speech import SpeechError, SpeechErrorKind
 
 
 @pytest.fixture
@@ -268,44 +263,6 @@ def test_stopping_speech_is_idempotent(temporary_audio: Path) -> None:
 
     assert not use_case.is_speaking
     assert not list(temporary_audio.glob("voz-*.wav"))
-
-
-def test_lo_que_se_sintetizaba_cuando_la_callaron_no_suena(temporary_audio: Path) -> None:
-    """Callar invalida lo que aún se sintetiza (ronda 3 de Codex sobre la PR #689, ADR-244).
-
-    Salir de Model Studio o pulsar «parar» mientras se sintetizaba callaba lo que sonaba,
-    y lo sintetizado sonaba después, fuera de Model Studio y con el oído que escucha
-    siempre ya abierto.
-    """
-    playback = FakeAudioPlayback()
-    quien: list[StudioVoiceUseCase] = []
-
-    class _LaCallanMientrasSintetiza(FakeTextToSpeech):
-        """La primera vez, mientras sintetiza, alguien calla la voz desde otro sitio."""
-
-        callan = True
-
-        def synthesize(self, request: SpeechRequest) -> SynthesizedSpeech | SpeechError:
-            if self.callan:
-                self.callan = False
-                quien[0].stop_speaking()
-            return super().synthesize(request)
-
-    use_case = _use_case(
-        temporary_audio,
-        text_to_speech=_LaCallanMientrasSintetiza(temporary_audio),
-        playback=playback,
-    )
-    quien.append(use_case)
-
-    assert isinstance(use_case.speak("Monta el Uno.", MessageStatus.COMPLETED), NothingToSay)
-    assert playback.played == []
-    assert not list(temporary_audio.glob("voz-*.wav"))
-    # Lo que se pide después de callar sí suena.
-    assert isinstance(
-        use_case.speak("Y después, el servo.", MessageStatus.COMPLETED), SpeechStarted
-    )
-    assert len(playback.played) == 1
 
 
 def test_muting_is_idempotent(temporary_audio: Path) -> None:

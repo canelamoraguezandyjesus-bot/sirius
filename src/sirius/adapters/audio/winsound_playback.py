@@ -26,7 +26,6 @@ Lo que este camino no da, y se dice claro:
 from __future__ import annotations
 
 import sys
-import threading
 import wave
 from collections.abc import Callable
 from pathlib import Path
@@ -116,7 +115,7 @@ def audio_seconds(audio_path: Path) -> float:
 class WinsoundAudioPlayback(QObject):
     """Reproduce un WAV con el reproductor de Windows."""
 
-    _play_requested = Signal(str, float, int)
+    _play_requested = Signal(str, float)
     _stop_requested = Signal()
 
     def __init__(self, parent: QObject | None = None) -> None:
@@ -124,11 +123,6 @@ class WinsoundAudioPlayback(QObject):
         self._muted = False
         self._playing = False
         self._on_finished: Callable[[], None] | None = None
-        #: Cuántas veces se ha parado: lo que se pidió antes ya no suena, aunque la
-        #: orden aún no haya llegado al hilo de la ventana (ronda 3 de Codex sobre la
-        #: PR #689, ADR-244). Con el temporal ya borrado, Windows sonaría su aviso.
-        self._stops = 0
-        self._stops_lock = threading.Lock()
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
         self._timer.timeout.connect(self._on_expected_end)
@@ -147,16 +141,12 @@ class WinsoundAudioPlayback(QObject):
                 PlaybackErrorKind.NO_DEVICE, "este sistema no es Windows con winsound"
             )
 
-        with self._stops_lock:
-            self._on_finished = on_finished
-            stops = self._stops
-        self._play_requested.emit(str(audio_path), audio_seconds(audio_path), stops)
+        self._on_finished = on_finished
+        self._play_requested.emit(str(audio_path), audio_seconds(audio_path))
         return None
 
     def stop(self) -> None:
-        with self._stops_lock:
-            self._stops += 1
-            self._on_finished = None
+        self._on_finished = None
         self._stop_requested.emit()
 
     def set_muted(self, muted: bool) -> None:
@@ -174,11 +164,7 @@ class WinsoundAudioPlayback(QObject):
 
     # --- Interior: siempre en el hilo dueño del objeto -------------------
 
-    def _start_playback(self, audio_path: str, seconds: float, stops: int) -> None:
-        with self._stops_lock:
-            if stops != self._stops:
-                # Se paró después de pedirlo: ya no suena.
-                return
+    def _start_playback(self, audio_path: str, seconds: float) -> None:
         self._silence()
         if self._muted:
             # No suena, pero el turno termina igual: si no, el temporal se
