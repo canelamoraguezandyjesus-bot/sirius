@@ -25,10 +25,10 @@ transcribe y le pasa el texto a la misma charla que la ventana
   guarda ni envía nada. Entonces el turno no sale, deja de escuchar y lo dice. Mirarlo
   también al cerrar el turno solo ahorra transcribirlo en balde (PA-R03-08, rondas 9 y
   10 de Codex sobre la PR #687).
-- **Nada de lo que contesta la charla se queda por el camino.** Lo que el modelo
-  propone recordar queda pendiente de que él lo confirme, como en la ventana, y el turno
-  lleva si acabó bien, por qué no y qué se propuso, para que quien lo enseñe lo cuente
-  entero (rondas 11 y 12 de Codex sobre la PR #687).
+- **Nada de lo que contesta la charla se queda por el camino.** El turno lleva lo que
+  devolvió la charla, entero y sin traducir, el mismo resultado que recibe la ventana con
+  lo escrito, y lo que el modelo propone recordar queda pendiente de que él lo confirme,
+  como en la ventana (rondas 11, 12 y 13 de Codex sobre la PR #687).
 - **En la pieza B todo lo oído es para él**; a quién le hablan lo decide la pieza D.
 """
 
@@ -42,7 +42,7 @@ from typing import Protocol
 from sirius.application.send_message import ChatLeavesThisComputer, SendMessageResult
 from sirius.domain.conversation import MessageStatus
 from sirius.infrastructure.logging import get_logger
-from sirius.ports.llm import LLMErrorKind, runs_on_this_computer
+from sirius.ports.llm import runs_on_this_computer
 from sirius.ports.local_voice import (
     ListeningEngines,
     TurnSignal,
@@ -90,19 +90,30 @@ class MemorySuggestions(Protocol):
 
 @dataclass(frozen=True, slots=True)
 class HeardTurn:
-    """Un turno de voz cerrado: lo que oyó, si era para él y lo que contestó.
+    """Un turno de voz cerrado: lo que oyó, si era para él, lo que contestó la charla y lo
+    que el modelo propuso recordar.
 
-    ``answered`` dice si la charla acabó bien; si no, ``reply`` es lo que llegara a
-    escribir, como en la ventana, y ``error_kind`` por qué no acabó. ``proposed`` es lo
-    que el modelo propuso recordar y quedó pendiente de que él lo confirme.
+    ``result`` es lo que devolvió la charla, entero y sin traducir: el mismo resultado que
+    recibe la ventana con lo escrito, para que quien enseñe el turno lo enseñe como ella.
+    Traducirlo a mano campo a campo perdió algo en tres rondas seguidas de Codex sobre la
+    PR #687 (11, 12 y 13). ``proposed`` es lo que el modelo propuso recordar y quedó
+    pendiente de que él lo confirme.
     """
 
     heard: str
     addressed: bool
-    reply: str
-    answered: bool = True
-    error_kind: LLMErrorKind | None = None
+    result: SendMessageResult
     proposed: str | None = None
+
+    @property
+    def answered(self) -> bool:
+        """Si la charla acabó bien."""
+        return self.result.outcome is MessageStatus.COMPLETED
+
+    @property
+    def reply(self) -> str:
+        """Lo que escribió: entero si acabó bien, y si no, lo que llegara a escribir."""
+        return self.result.sirius_message.content or ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -258,18 +269,10 @@ class LocalListening[Chunk]:
             self._chat_left()
             return None
         _logger.info("Turno de voz entregado a la charla")
-        answered = result.outcome is MessageStatus.COMPLETED
         proposed = None
-        if answered and result.memory_suggestion is not None:
+        if result.outcome is MessageStatus.COMPLETED and result.memory_suggestion is not None:
             proposed = self._propose(result.memory_suggestion, result.sirius_message.id)
-        return HeardTurn(
-            heard=heard,
-            addressed=True,
-            reply=result.sirius_message.content or "",
-            answered=answered,
-            error_kind=result.error_kind,
-            proposed=proposed,
-        )
+        return HeardTurn(heard=heard, addressed=True, result=result, proposed=proposed)
 
     def _propose(self, suggestion: str, message_id: int) -> str | None:
         """Deja pendiente lo que el modelo propone recordar, como la ventana con lo escrito.

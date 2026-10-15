@@ -22,7 +22,6 @@ from sirius.adapters.llm.unconfigured import UnconfiguredLLMProvider
 from sirius.application.local_listening import (
     CHAT_LEAVES,
     Attended,
-    HeardTurn,
     LocalListening,
 )
 from sirius.application.send_message import ChatLeavesThisComputer, SendMessageResult
@@ -141,7 +140,9 @@ class _Charla:
             raise falla
         respuesta = SimpleNamespace(
             outcome=self.desenlace,
-            sirius_message=SimpleNamespace(id=7, content=f"R: {user_text}"),
+            sirius_message=SimpleNamespace(
+                id=7, content=f"R: {user_text}", status=self.desenlace, operation_id="op-7"
+            ),
             error_kind=self.por_que,
             memory_suggestion=self.propone,
         )
@@ -211,7 +212,14 @@ def test_un_turno_va_a_la_charla_con_lo_que_sono_justo_antes_de_la_voz() -> None
 
     atendido = oido.suena("", "a", "b", voz("Hola"), "", FIN)
 
-    assert atendido == Attended(turns=(HeardTurn("Hola", True, "R: Hola"),))
+    (turno,) = atendido.turns
+    assert (turno.heard, turno.addressed, turno.reply, turno.answered) == (
+        "Hola",
+        True,
+        "R: Hola",
+        True,
+    )
+    assert atendido.notice == ""
     # Los dos trozos de antes de la voz, para no cortarle la primera sílaba; no más.
     assert oido.transcriptor.turnos == [["a", "b", voz("Hola"), "", FIN]]
     assert oido.charla.mensajes == ["Hola"]
@@ -522,7 +530,7 @@ def test_si_la_charla_no_acaba_bien_el_turno_dice_por_que() -> None:
     (turno,) = oido.suena(voz("Hola"), FIN).turns
 
     assert not turno.answered
-    assert turno.error_kind is LLMErrorKind.CONNECTION
+    assert turno.result.error_kind is LLMErrorKind.CONNECTION
     assert turno.proposed is None
     assert oido.propuestas.hechas == [], "un turno que no acabó bien no propone nada"
 

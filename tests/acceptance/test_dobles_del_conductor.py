@@ -23,6 +23,7 @@ import time
 from collections.abc import Callable
 from contextlib import closing
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
@@ -49,7 +50,9 @@ from piezas_del_robot import PiezaPendiente
 from pytestqt.qtbot import QtBot
 
 from sirius.application.local_listening import Attended, HeardTurn, LocalListening
+from sirius.application.send_message import SendMessageResult
 from sirius.config.local_voice import ListeningModel, LocalVoiceSettings
+from sirius.domain.conversation import Message, MessageRole, MessageStatus
 from sirius.infrastructure.logging import LOGGER_NAME
 from sirius.ports.llm import LLMCompleted, LLMRequest, LLMTextDelta
 
@@ -291,6 +294,16 @@ def test_el_conductor_se_construye_lee_la_base_de_verdad_y_sus_piezas_pendientes
     assert conductor.conexiones_de_red() == []
 
 
+def _resultado(
+    oido: str, contesta: str, desenlace: MessageStatus = MessageStatus.COMPLETED
+) -> SendMessageResult:
+    """Lo que devuelve la charla de un turno: sus dos mensajes, y cómo acabó."""
+    hoy = datetime(2026, 10, 15, tzinfo=UTC)
+    tuyo = Message(1, 1, 1, MessageRole.USER, oido, hoy, operation_id="op-1")
+    suyo = Message(2, 1, 2, MessageRole.SIRIUS, contesta, hoy, "op-1", 1, desenlace)
+    return SendMessageResult(desenlace, tuyo, suyo, None)
+
+
 def test_un_turno_que_la_charla_no_acabo_bien_no_cuenta_como_contestado(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -298,7 +311,11 @@ def test_un_turno_que_la_charla_no_acabo_bien_no_cuenta_como_contestado(
     # que llegó a escribir con `answered=False`, y una prueba que solo mirara `contestado`
     # lo daría por respuesta.
     conductor = ConductorDeVoz(tmp_path)
-    a_medias = HeardTurn("Buenos días, Sirius.", True, "Buenos d", answered=False)
+    a_medias = HeardTurn(
+        "Buenos días, Sirius.",
+        True,
+        _resultado("Buenos días, Sirius.", "Buenos d", MessageStatus.FAILED),
+    )
     monkeypatch.setattr(LocalListening, "attend", lambda self: Attended(turns=(a_medias,)))
 
     turno = conductor.oye("Buenos días, Sirius.")
@@ -314,7 +331,10 @@ def test_si_el_oido_cierra_varios_turnos_de_una_vez_el_conductor_falla(
     # La misma familia: el conductor da un turno, y quedarse con el último perdería los de
     # antes sin que ninguna prueba lo viera.
     conductor = ConductorDeVoz(tmp_path)
-    turnos = (HeardTurn("Primero.", True, "Uno."), HeardTurn("Segundo.", True, "Dos."))
+    turnos = (
+        HeardTurn("Primero.", True, _resultado("Primero.", "Uno.")),
+        HeardTurn("Segundo.", True, _resultado("Segundo.", "Dos.")),
+    )
     monkeypatch.setattr(LocalListening, "attend", lambda self: Attended(turns=turnos))
 
     with pytest.raises(AssertionError, match="2 turnos de una vez"):

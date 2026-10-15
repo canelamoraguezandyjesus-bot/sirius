@@ -170,7 +170,7 @@ Medido el 14-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   la C (`tests/acceptance/test_dobles_del_conductor.py`). La tabla de
   `docs/evolution/PRUEBAS_0.3_DEL_ROBOT.md` pone PA-R03-01 en verde; PA-R03-08 sigue
   pendiente de la C.
-- **94 pruebas unitarias nuevas**: el servicio (`tests/unit/test_local_listening.py`), los
+- **96 pruebas unitarias nuevas**: el servicio (`tests/unit/test_local_listening.py`), los
   adaptadores de verdad con módulos de mentira (`tests/unit/test_local_listening_adapters.py`),
   la instalación y la orden de instalar (`tests/unit/test_local_voice_installation.py`), la
   orden de consola (`tests/unit/test_listen_console.py`) y la guarda de las descargas
@@ -256,8 +256,16 @@ Medido el 14-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   proponga aunque la charla no acabe bien, que un fallo al proponer tumbe el turno, que
   el diario guarde lo propuesto, que el turno no diga qué se propuso, que la propuesta no
   se ligue a su respuesta, que la consola adivine el remedio y que calle lo propuesto. Al
-  cerrar la ronda 12 se han vuelto a pasar las 57 de las rondas 4 a 12, y caen todas. La
-  de etiquetar con la generación del
+  cerrar la ronda 12 se han vuelto a pasar las 57 de las rondas 4 a 12, y caen todas. Y
+  las doce de la ronda 13: que el turno diga que acabó bien aunque fallara o no lleve lo
+  que escribió, que la consola calle lo escrito si la charla falla, no marque cómo acabó,
+  adivine el remedio, no dé la referencia del fallo, no diga que se canceló o deje un
+  hueco si no escribió nada, que cambie la marca de fallido o el texto de cancelado,
+  vistos desde la consola y desde la ventana, y que la ventana deje de usar el texto
+  compartido. Al cerrar la ronda 13 se han vuelto a pasar las 67 de las rondas 4 a 13, y
+  caen todas; las dos de la ronda 12 que vigilaban el porqué traducido a mano y el
+  aviso de la consola se retiran con lo que vigilaban. La de etiquetar con la generación
+  del
   momento sobrevivió a la prueba que reproduce el caso de Codex, que para el hilo dentro
   de `bytes(data)`, donde las dos coinciden; cayó con otra que lo para justo después de
   comprobar.
@@ -626,3 +634,27 @@ sin que nadie lo vea. Se repasa cada paso entero, campo a campo:
   cerraron varios turnos de una vez, falla en vez de quedarse con el último. Lo propuesto
   y el porqué no van en `TurnoDeVoz`: ninguna prueba de aceptación los pide, y están en
   la base.
+
+**Ronda 13** (`b0d7c160`, 15-10-2026): un hallazgo P2, cierto.
+
+- **P2: `sirius-oye` callaba lo que Sirius llegó a escribir si la charla fallaba.** Ollama
+  puede escribir y después fallar, y la ventana enseña ese texto con su marca antes del
+  aviso; la consola enseñaba solo el aviso. En la ronda 12 se había decidido así, a
+  propósito, y la prueba construía el texto a medias sin mirar que saliera.
+
+**Tercera ronda seguida de la familia** (11, 12 y 13). El repaso de la ronda 12 fue campo a
+campo, pero a juicio: cada campo se traducía a mano y se decidía si hacía falta, y ese
+juicio dejó pasar uno. Se decide **dejar de traducir**:
+
+- El turno lleva lo que devolvió la charla, entero: el mismo resultado que recibe la
+  ventana con lo escrito. Si acabó bien y lo que escribió se leen de él, no se copian.
+- La consola enseña cada respuesta con lo mismo que usa la ventana al acabar un turno
+  escrito: el texto con la marca de cómo acabó, que pasa de la ventana a una función
+  compartida sin Qt (`sirius/presentation/message_text.py`), y el mismo aviso de fallo,
+  con su referencia, o el mismo «Envío cancelado.», que también pasa a esa función. La
+  referencia de lo que enseña es la ventana, no un juicio sobre qué hace falta.
+
+Lo que queda fuera, a propósito: los botones que la ventana pone en cada respuesta (las
+dos marcas, proponer un recuerdo a mano y reintentar) son para tocar, no texto; los trae
+la pieza D con la ventana. El juez no se pierde: puntúa desde la base las respuestas que
+no tienen nota, también las dichas por voz, cuando la ventana está abierta.
