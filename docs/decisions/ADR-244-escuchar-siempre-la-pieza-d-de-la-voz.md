@@ -185,7 +185,8 @@ Lo que se decidió al escribir el código, con su porqué:
   a la vez. Al salir, el oído vuelve a oír si oía al entrar: si estaba en silencio sigue
   así, si había dejado de oír por un fallo lo reabre el botón, y si la ventana se está
   cerrando no se abre, porque ya nadie haría de portera. Y fuera de Model Studio su voz no
-  suena: lo que acaba de sintetizarse después de salir se calla en cuanto empieza.
+  suena: callarla, al salir o con «parar», invalida lo que se estaba sintetizando y las
+  órdenes de sonar que aún no habían llegado al reproductor (ronda 3).
 
 ## Comprobación que la sostiene
 
@@ -235,7 +236,15 @@ Medido el 15-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   en `tests/gui/test_model_studio_integration.py` (de 38 a 39). Las del oído y las dos
   ventanas, 145 en verde. 10 mutaciones de los arreglos, y caen las 10; las 9 de la ronda
   1, repetidas sobre el código nuevo, caen las 9. mypy, sin errores en 717 ficheros; ruff,
-  limpio.
+  limpio. La batería entera sobre `df8de8d6`: 8 645 en verde, 14 omitidas y 8 `xfail`, en
+  22 min 11 s; sobre `ff8a0b5f` eran 8 638, 14 y 8: entran las 7 nuevas.
+- **Tras la ronda 3 de Codex** (abajo), 3 pruebas más y una que cambia: callar la voz de
+  Model Studio mientras sintetiza (`tests/unit/test_studio_voice.py`), los dos
+  reproductores con una orden de sonar que espera en la cola cuando se para
+  (`tests/gui/test_qt_playback.py` y `tests/gui/test_winsound_playback.py`), y la de salir
+  de Model Studio, que ahora exige que no suene nada. Los reproductores y Model Studio, 90
+  en verde. 9 mutaciones del arreglo, y caen las 9. mypy, sin errores en 717 ficheros;
+  ruff, limpio.
 
 ## Consecuencias
 
@@ -329,3 +338,18 @@ dura la charla. No trae cortarle (E) ni elegir su voz (F).
     fuera de Model Studio su voz no suena. Al revisarlo apareció un caso que el hallazgo
     no decía: salir de Model Studio callaba lo que sonaba, pero no lo que aún se estaba
     sintetizando, que sonaba después, ya fuera; también se arregla, con su prueba.
+- **Ronda 3, sobre `df8de8d6`**, preguntando si el enfoque está mal: no lo dijo. Repite el
+  P1 de la ronda 2, pero es el mismo hilo recolocado sobre el head nuevo, con su fecha de
+  entonces: no cuenta como hallazgo nuevo. Y trae uno nuevo, cierto.
+  - **P2, de la misma familia que el P1 de la ronda 2**: la guarda de la ventana contra la
+    voz de Model Studio que acababa de sintetizarse al salir llegaba tarde, porque cuando
+    la ventana se enteraba la reproducción ya había empezado; la prueba de la ronda 2 hasta
+    lo daba por bueno. **Dos rondas seguidas con la misma familia: se dejó de parchear y se
+    buscó la raíz.** Quien decide que algo suene es Model Studio, en un hilo de fondo, y
+    nunca volvía a mirar si aún podía sonar: parar solo paraba lo que ya sonaba. Y al
+    buscar la raíz salió un segundo sitio igual: los reproductores encolan la orden de
+    sonar en el hilo de la ventana, y una orden pedida antes de parar sonaba después; con
+    el temporal ya borrado, el de Windows habría sonado su aviso. Arreglo de la raíz, en
+    los dos sitios donde empieza el sonido: callar cuenta, y lo que se pidió antes no
+    suena. La guarda de la ventana sobra y se quita. Se sigue: no queda ningún camino por
+    el que la voz de Model Studio suene después de callarla.
