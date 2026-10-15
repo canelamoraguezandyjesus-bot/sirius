@@ -3,7 +3,8 @@
 La parte de E-R03-01 que no depende de la pieza C: Sirius le oye en local y escribe lo
 que oyó y lo que contesta, en la misma charla de la ventana, hasta Ctrl+C. No habla
 (pieza C) ni abre la ventana (pieza D). Si falta algo del oído, dice qué orden lo
-instala y sale sin hacer nada más.
+instala y sale sin hacer nada más. Si deja de oír mientras escucha, porque la charla se
+fue a un modelo de fuera, lo dice y sale.
 """
 
 from __future__ import annotations
@@ -33,7 +34,11 @@ def listen(
     keep_going: Callable[[], bool],
     pause: Callable[[], None],
 ) -> int:
-    """Escucha mientras ``keep_going`` lo diga y cuenta cada turno; cierra el micro al salir."""
+    """Escucha mientras ``keep_going`` lo diga y cuenta cada turno; cierra el micro al salir.
+
+    Si el oído deja de oír por su cuenta, dice su aviso y sale, en vez de seguir esperando
+    a un micro cerrado (ronda 11 de Codex sobre la PR #687).
+    """
     notice = listening.start()
     if notice:
         say(notice)
@@ -48,6 +53,9 @@ def listen(
                     say(f"Sirius: {turn.reply}")
                 else:
                     say("Sirius no ha podido contestar: mira que su modelo esté abierto.")
+            if attended.notice:
+                say(attended.notice)
+                return 1
             if not attended.turns:
                 pause()
     finally:

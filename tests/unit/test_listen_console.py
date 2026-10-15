@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from sirius.application.local_listening import Attended, HeardTurn
+from sirius.application.local_listening import CHAT_LEAVES, Attended, HeardTurn
 from sirius.listen_console import listen
 
 
@@ -77,6 +77,21 @@ def test_si_sirius_no_pudo_contestar_lo_dice_en_vez_de_dejarlo_en_blanco() -> No
         "Tú: Hola",
         "Sirius no ha podido contestar: mira que su modelo esté abierto.",
     ]
+
+
+def test_si_deja_de_oir_mientras_escucha_lo_dice_y_sale() -> None:
+    # Ronda 11 de Codex sobre la PR #687: la charla se fue a un modelo de fuera mientras
+    # oía. El oído para y lo dice; la orden cuenta lo que ya oyó, dice el aviso y sale en
+    # vez de esperar a un micro cerrado: otra vuelta pediría una atención que no hay.
+    turno = HeardTurn("Buenos días, Sirius.", True, "Buenos días.")
+    oido = _Oido(atenciones=[Attended(turns=(turno,), notice=CHAT_LEAVES)])
+
+    codigo, dicho, pausas = _escucha(oido, 5)
+
+    assert codigo == 1
+    assert dicho[1:] == ["Tú: Buenos días, Sirius.", "Sirius: Buenos días.", CHAT_LEAVES]
+    assert pausas == 0
+    assert oido.parado
 
 
 def test_con_ctrl_c_tambien_cierra_el_micro() -> None:

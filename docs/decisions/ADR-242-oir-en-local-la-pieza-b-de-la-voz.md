@@ -170,7 +170,7 @@ Medido el 14-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   la C (`tests/acceptance/test_dobles_del_conductor.py`). La tabla de
   `docs/evolution/PRUEBAS_0.3_DEL_ROBOT.md` pone PA-R03-01 en verde; PA-R03-08 sigue
   pendiente de la C.
-- **88 pruebas unitarias nuevas**: el servicio (`tests/unit/test_local_listening.py`), los
+- **89 pruebas unitarias nuevas**: el servicio (`tests/unit/test_local_listening.py`), los
   adaptadores de verdad con módulos de mentira (`tests/unit/test_local_listening_adapters.py`),
   la instalación y la orden de instalar (`tests/unit/test_local_voice_installation.py`), la
   orden de consola (`tests/unit/test_listen_console.py`) y la guarda de las descargas
@@ -242,7 +242,11 @@ Medido el 14-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   todas. Antes, una sobrevivió sin deber: el corredor de mutaciones de la sesión
   reutilizaba el código compilado de la anterior cuando las dos dejaban el fichero del
   mismo tamaño en el mismo segundo. Se arregló, sin guardar código compilado y con una
-  fecha distinta en cada escritura, y las 41 se repitieron con el arreglo. La de etiquetar con la generación del
+  fecha distinta en cada escritura, y las 41 se repitieron con el arreglo. Y las cuatro
+  de la ronda 11: que la orden de consola ignore el aviso de que dejó de oír, que salga
+  sin decirlo, que salga como si todo fuera bien, y que lo diga antes de contar lo que ya
+  oyó. Al cerrar la ronda 11 se han vuelto a pasar las 45 de las rondas 4 a 11, y caen
+  todas. La de etiquetar con la generación del
   momento sobrevivió a la prueba que reproduce el caso de Codex, que para el hilo dentro
   de `bytes(data)`, donde las dos coinciden; cayó con otra que lo para justo después de
   comprobar.
@@ -566,3 +570,17 @@ huellas de la búsqueda van a Ollama en `localhost` y el juez usa el modelo loca
 Una prueba de integración cambia el modelo por uno de fuera mientras se prepara el turno,
 ya comprobado, y el de fuera no recibe nada. Lo que queda fuera es lo de la ronda 9: la
 charla, si después él elige OpenAI para escribir.
+
+**Ronda 11** (`1c948bd7`, 15-10-2026): un hallazgo P2, cierto. El revisor dice que llega
+tarde por goteo; cuenta como ronda.
+
+- **P2: `sirius-oye` no decía que había dejado de oír.** Cuando la charla se va a un
+  modelo de fuera mientras oye, el oído para y devuelve su aviso, pero la orden de
+  consola no lo miraba: sin turnos, volvía a esperar para siempre a un micro cerrado.
+  Ahora, si llega un aviso, la orden cuenta lo que ya oyó, dice el aviso y sale con
+  error.
+
+Es una familia nueva, así que no salta la regla de las dos rondas. De dónde viene: la
+orden se escribió antes de que el oído pudiera parar solo, que llegó en la ronda 9, y
+entonces no se miró a quien lo usa. Lo atienden dos: la orden y el conductor de las
+pruebas de aceptación, que ya leía el aviso.
