@@ -42,7 +42,7 @@ from sirius.ports.llm import (
     LLMStreamEvent,
     LLMTextDelta,
 )
-from sirius.ports.local_voice import ListeningEngines, TurnSignal
+from sirius.ports.local_voice import ListeningEngines, SpeakingEngines, TurnSignal
 from sirius.presentation.memory_suggestion_trigger import propose_suggestion_if_completed_with_one
 
 
@@ -262,6 +262,22 @@ class _Detector:
         pass
 
 
+class _Voz:
+    def say(self, text: str) -> str:
+        return text
+
+
+class _Altavoz:
+    playing = False
+    latency = 0.0
+
+    def play(self, sound: str) -> None:
+        del sound
+
+    def stop(self) -> None:
+        pass
+
+
 class _Transcriptor:
     def transcribe(self, chunks: Sequence[str]) -> str:
         del chunks
@@ -287,6 +303,7 @@ def test_a_voice_turn_leaves_the_proposal_pending_like_the_window(tmp_path: Path
         chat=dependencies.send_message_use_case,
         installation=_TodoInstalado(),
         load_engines=lambda: ListeningEngines(_Micro(["voz", "fin"]), _Detector(), _Transcriptor()),
+        load_speaking=lambda: SpeakingEngines(_Voz(), _Altavoz()),
         memory_suggestions=dependencies.propose_memory_suggestion_use_case,
     )
     assert oido.start() == ""

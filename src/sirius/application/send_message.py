@@ -308,6 +308,7 @@ class SendMessageUseCase:
         *,
         operation_id: str | None = None,
         on_delta: Callable[[str], None] | None = None,
+        on_completed: Callable[[], None] | None = None,
         extra_instructions: str = "",
         only_on_this_computer: bool = False,
     ) -> SendMessageResult:
@@ -315,6 +316,12 @@ class SendMessageUseCase:
 
         ``on_delta`` is invoked synchronously, once per text fragment, in the
         caller's thread — it never touches persistence or Qt itself.
+
+        ``on_completed`` se llama una vez, en el mismo hilo, si la respuesta acaba bien:
+        en cuanto está guardada entera y antes de lo que la charla hace después del turno.
+        Resumir la charla pide otra respuesta al modelo y puede tardar segundos; la voz del
+        robot dice ahí lo que le quedaba, sin esperar al resumen (ADR-243). Tampoco debe
+        fallar.
 
         ``extra_instructions`` es una indicación **efímera** que se añade al
         final de las instrucciones de esta petición y nada más: no se guarda en
@@ -335,7 +342,9 @@ class SendMessageUseCase:
             raise ChatLeavesThisComputer(type(provider).__name__)
         self._in_flight[operation_id] = provider
         try:
-            return self._send(provider, user_text, operation_id, on_delta, extra_instructions)
+            return self._send(
+                provider, user_text, operation_id, on_delta, on_completed, extra_instructions
+            )
         finally:
             self._in_flight.pop(operation_id, None)
 
@@ -345,6 +354,7 @@ class SendMessageUseCase:
         user_text: str,
         operation_id: str,
         on_delta: Callable[[str], None] | None,
+        on_completed: Callable[[], None] | None,
         extra_instructions: str,
     ) -> SendMessageResult:
         if self._memory_commands is not None:
@@ -352,7 +362,7 @@ class SendMessageUseCase:
             # la búsqueda, que pediría la huella de la frase a olvidar.
             answer = self._memory_commands.handle(user_text)
             if answer is not None:
-                return self._answer_command(provider, answer, operation_id, on_delta)
+                return self._answer_command(provider, answer, operation_id, on_delta, on_completed)
         context = self._context_builder.build(user_text)
 
         conversation = self._conversation_repository.get_or_create_main_conversation()
@@ -415,6 +425,8 @@ class SendMessageUseCase:
             status=status,
         )
         if status is MessageStatus.COMPLETED:
+            if on_completed is not None:
+                on_completed()
             if self._reply_marks is not None:
                 model = getattr(provider, "model_name", None)
                 self._reply_marks.record_model(
@@ -438,6 +450,7 @@ class SendMessageUseCase:
         answer: CommandAnswer,
         operation_id: str,
         on_delta: Callable[[str], None] | None,
+        on_completed: Callable[[], None] | None,
     ) -> SendMessageResult:
         """Cumple la orden sin el modelo y guarda la orden y lo que contesta Sirius.
 
@@ -467,6 +480,8 @@ class SendMessageUseCase:
         sirius_message = self._with_voice(provider, reply, sirius_message, conversation.id)
         if on_delta is not None:
             on_delta(sirius_message.content or reply.fixed)
+        if on_completed is not None:
+            on_completed()
         return SendMessageResult(
             outcome=MessageStatus.COMPLETED,
             user_message=user_message,

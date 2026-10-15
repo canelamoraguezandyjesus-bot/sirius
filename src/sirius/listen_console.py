@@ -1,11 +1,13 @@
-"""Probar el oído del robot en consola: ``uv run --extra voz sirius-oye`` (ADR-242).
+"""Probar el oído y la voz del robot en consola: ``uv run --extra voz sirius-oye``.
 
-La parte de E-R03-01 que no depende de la pieza C: Sirius le oye en local y escribe lo
-que oyó y lo que contesta, en la misma charla de la ventana, hasta Ctrl+C. No habla
-(pieza C) ni abre la ventana (pieza D). Si falta algo del oído, dice qué orden lo
-instala y sale sin hacer nada más. Si deja de oír mientras escucha, porque la charla se
-fue a un modelo de fuera o porque falló una pieza del oído, lo dice y sale; y si un envío
-se rompe, cuenta lo que quedó guardado, como la ventana, y sale con error.
+ADR-242 y ADR-243. Sirius le oye en local, le contesta hablando y escribe lo que oyó y lo
+que contesta, en la misma charla de la ventana, hasta Ctrl+C; no abre la ventana (pieza
+D). Si falta algo de la voz, dice qué orden lo instala y sale sin hacer nada más. Si deja
+de oír mientras escucha, porque la charla se fue a un modelo de fuera o porque falló una
+pieza del oído o de la voz, lo dice y sale; y si un envío se rompe, cuenta lo que quedó
+guardado, como la ventana, y sale con error.
+
+Al salir dice cuánto tardó en empezar a hablar: es la cifra de E-R03-02.
 """
 
 from __future__ import annotations
@@ -54,12 +56,15 @@ def listen(
         say(notice)
         return 1
     say("Te escucho. Habla cuando quieras; Ctrl+C para salir.")
+    delays: list[float] = []
     try:
         while keep_going():
             attended = listening.attend()
             broken = False
             for turn in attended.turns:
                 broken = _say_turn(turn, say, history) or broken
+                if turn.first_sound_delay is not None:
+                    delays.append(turn.first_sound_delay)
             if attended.notice:
                 say(attended.notice)
                 return 1
@@ -69,7 +74,23 @@ def listen(
                 pause()
     finally:
         listening.stop()
+        if delays:
+            say(_delays_line(delays))
     return 0
+
+
+def _delays_line(delays: Sequence[float]) -> str:
+    """Lo que tardó en empezar a hablar en los turnos de esta vez, con su P95 (E-R03-02).
+
+    Por el rango más cercano, como PA-R03-09: con 20 turnos, el 19.º de menos a más.
+    """
+    ordered = sorted(delays)
+    p95 = ordered[max(0, -(-95 * len(ordered) // 100) - 1)]
+    turns = "1 turno" if len(ordered) == 1 else f"{len(ordered)} turnos"
+    return (
+        f"En {turns}, desde que dejé de oír tu voz hasta el primer sonido: P95 de "
+        f"{f'{p95:.2f}'.replace('.', ',')} s."
+    )
 
 
 def _say_turn(

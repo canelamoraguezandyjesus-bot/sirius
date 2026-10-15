@@ -1,10 +1,10 @@
-"""Sirius no baja un modelo por su cuenta: solo lo hace la orden de instalar (ADR-242).
+"""Sirius no baja un modelo ni una voz por su cuenta: solo lo hace la orden de instalar.
 
-Si al oído le falta su modelo, dice qué orden ejecutar y no baja nada (PA-R03-08). El
-vigilante de las pruebas de aceptación ve la red de Python, pero faster-whisper pide el
-``tokenizer.json`` que le falte desde Rust, donde no llega nadie. Así que la puerta se
-cierra por construcción: ningún módulo de ``src/``, salvo la orden de instalar, nombra
-una función que baje modelos.
+ADR-242 y ADR-243. Si al oído le falta su modelo, o a la voz la suya, dice qué orden
+ejecutar y no baja nada (PA-R03-08). El vigilante de las pruebas de aceptación ve la red
+de Python, pero faster-whisper pide el ``tokenizer.json`` que le falte desde Rust, donde no
+llega nadie. Así que la puerta se cierra por construcción: ningún módulo de ``src/``, salvo
+la orden de instalar, nombra una función que baje modelos o voces.
 """
 
 from __future__ import annotations
@@ -15,8 +15,11 @@ from pathlib import Path
 _SRC = Path(__file__).resolve().parents[2] / "src"
 _LA_ORDEN_DE_INSTALAR = _SRC / "sirius" / "install_local_voice.py"
 
-#: Las funciones con que faster-whisper, huggingface_hub y tokenizers bajan un modelo.
-QUE_BAJAN = frozenset({"download_model", "snapshot_download", "hf_hub_download", "from_pretrained"})
+#: Las funciones con que faster-whisper, huggingface_hub y tokenizers bajan un modelo, y
+#: con la que Piper baja una voz.
+QUE_BAJAN = frozenset(
+    {"download_model", "snapshot_download", "hf_hub_download", "from_pretrained", "download_voice"}
+)
 
 
 def nombres(fuente: str) -> set[str]:
@@ -44,8 +47,10 @@ def test_solo_la_orden_de_instalar_nombra_lo_que_baja_modelos() -> None:
     assert {ruta: n for ruta, n in culpables.items() if n} == {}
 
 
-def test_la_orden_de_instalar_si_baja_el_modelo() -> None:
-    assert "download_model" in nombres(_LA_ORDEN_DE_INSTALAR.read_text(encoding="utf-8"))
+def test_la_orden_de_instalar_si_baja_el_modelo_y_la_voz() -> None:
+    nombrados = nombres(_LA_ORDEN_DE_INSTALAR.read_text(encoding="utf-8"))
+
+    assert {"download_model", "download_voice"} <= nombrados
 
 
 def test_ve_lo_que_baja_se_llame_como_se_llame() -> None:
@@ -56,6 +61,7 @@ def test_ve_lo_que_baja_se_llame_como_se_llame() -> None:
         "huggingface_hub.snapshot_download('x')\n"
         "Tokenizer.from_pretrained('openai/whisper-tiny')\n"
         "hf_hub_download('x', 'y')\n"
+        "from piper.download_voices import download_voice as baja\n"
     )
 
     assert nombres(fuente) & QUE_BAJAN == QUE_BAJAN

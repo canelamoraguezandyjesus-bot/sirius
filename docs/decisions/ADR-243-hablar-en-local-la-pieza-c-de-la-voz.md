@@ -120,44 +120,148 @@ El de la nota de arranque, punto 3.
 
 Se adopta la opción 2.
 
-- **Dos puertos nuevos** en `src/sirius/ports/local_voice.py`: la voz, que convierte
-  una frase en sonido con una voz con nombre, y el altavoz, que lo hace sonar y dice si
-  sigue sonando. Van junto al micro, el detector y el transcriptor de la pieza B.
-- **El corte en frases**: lo que la charla va escribiendo se acumula, y se suelta un
-  trozo cuando acaba en un final de frase o de párrafo, fuera de un bloque de código, y
-  preparado con `prepare_speech_text` ya no enseña marcas sin cerrar. Al acabar la
-  charla se suelta lo que quede. Lo dicho, unido, es lo que da `prepare_speech_text`
-  con la respuesta entera, salvo los blancos.
-- **El oído habla**: entrega cada turno a la charla con un `on_delta` que alimenta el
-  corte; cada trozo se pide a la voz y suena por el altavoz en cuanto está cerrado. Al
-  empezar a hablar cierra el micro, y lo vuelve a abrir cuando el altavoz ha acabado,
-  con el detector y lo de antes del turno vaciados.
-- **La voz de verdad**: Piper, con una de las voces de ADR-241, en español de España,
-  cargada solo desde la carpeta de los modelos de la voz. Los ajustes ganan la voz como
-  elección cerrada; la orden de instalar la baja y la instalación la mira, como el
-  modelo de oír.
-- **El altavoz de verdad**: `sounddevice`, como el micro de la pieza B.
+- **Dos puertos nuevos** en `src/sirius/ports/local_voice.py`, junto al micro, el
+  detector y el transcriptor de la pieza B: la voz, que convierte una frase en sonido
+  (`say`), y el altavoz, que lo hace sonar sin esperar (`play`), dice si aún suena,
+  también lo que espera en cola (`playing`), cuánto tarda en sonar lo que se le da
+  (`latency`) y calla (`stop`), sin fallar.
+- **El corte en frases** (`src/sirius/application/speech_cutter.py`): lo que la charla va
+  escribiendo se acumula, y se suelta un trozo cuando acaba en un final de frase seguido
+  de un blanco o en un salto de línea, con los bloques de código cerrados, y preparado
+  con `prepare_speech_text` ya no enseña marcas sin cerrar. Al acabar la charla se suelta
+  lo que quede. Lo dicho, unido, es lo que da `prepare_speech_text` con la respuesta
+  entera, salvo los blancos.
+- **El oído habla** (`src/sirius/application/local_listening.py`): entrega cada turno a
+  la charla con un `on_delta` que alimenta el corte, y cada frase cerrada se pide a la
+  voz y suena en cuanto está. Antes de la primera cierra el micro, y lo vuelve a abrir
+  cuando el altavoz dice que ha acabado; al cerrarse, el micro tira lo que captó y nadie
+  leyó, como en la pieza B. Si la voz, el altavoz o el corte fallan, deja de hablar sin
+  que el fallo salga a la charla, que acaba y guarda la respuesta entera, y después deja
+  de oír con su aviso («No puedo hablarte: la voz ha fallado (…)» o «el altavoz»), sin la
+  orden de instalar. Parar le calla. Si la voz no carga al arrancar, no abre el micro y
+  aconseja la orden, como con el oído.
+- **La charla avisa cuando acaba** (`SendMessageUseCase.send_message`, `on_completed`):
+  en cuanto la respuesta acaba bien y está guardada, antes de lo que la charla hace
+  después del turno. El oído dice ahí lo que le quedaba. Esperar a que `send_message`
+  volviera hacía esperar la última frase al resumen de la charla, que pide otra
+  respuesta al modelo (abajo, la lección y H-243). Una orden de memoria avisa igual,
+  después de dar su respuesta.
+- **La voz de verdad** (`src/sirius/adapters/audio/local_speaking.py`): Piper 1.8, con
+  `es_ES-davefx-medium`, una de las cuatro voces masculinas en español de España de
+  ADR-241, cargada solo desde su fichero y su `.onnx.json`, en
+  `modelos\voz\piper\es_ES-davefx-medium\`, una carpeta por voz. Piper apunta en DEBUG
+  el texto de cada frase; su registrador queda en WARNING.
+- **El altavoz de verdad**: un flujo de salida de `sounddevice`, mono, de 16 bits y a la
+  frecuencia de la voz, que se abre al cargarla y sigue abierto. Da por acabado lo que
+  dijo cuando ha salido lo último, con la latencia del flujo y un cuarto de segundo más,
+  la cola de su voz en la habitación: hasta entonces el oído no abre el micro.
+- **Los ajustes** ganan la voz como elección cerrada (`SpeakingVoice`); la instalación la
+  mira, y la orden de instalar la baja con `download_voice` de Piper a una carpeta aparte,
+  la pone en su sitio solo si trae sus dos ficheros, mira las bibliotecas de hablar y
+  comprueba que la voz carga y el altavoz se abre. Es lo único que nombra
+  `download_voice`, y la guarda de las descargas lo vigila.
+- **Con qué oye y habla**, para PA-R03-08, lo da `voice_tools` en
+  `src/sirius/adapters/audio/voice_libraries.py`, leído de los módulos que importan los
+  cargadores. Los dos cargadores importan por `import_voice_library`, que antes era el
+  `_import` privado del oído.
 - **`sirius-oye`** dice las respuestas por el altavoz, además de escribirlas.
-- **Con qué oye y habla**, para PA-R03-08, se lee de los módulos que importan los
-  cargadores de producción, no de una constante.
+- **Lo que tarda, para E-R03-02.** Cada turno lleva cuánto pasó desde que el detector
+  dejó de oír su voz hasta que sonó la primera frase, contando la latencia del altavoz;
+  el diario apunta la cifra y nada más, y `sirius-oye` dice al salir el P95 de los turnos
+  de esa vez. La cifra empieza cuando Silero confirma que ha callado, 0,2 s después
+  (`VAD_STOP_SECS` de Pipecat), y la consola lee el micro cada 0,03 s: por eso E-R03-02
+  pasa si el P95 que dice queda por debajo de 1,25 s, que son los 1,5 s del plan contados
+  desde que él calla.
 
 ## Comprobación que la sostiene
 
-Se completa al cerrar la pieza.
+Medido el 15-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
+
+- **Las seis pruebas de la pieza C**, en verde con el conductor de verdad
+  (`tests/acceptance/test_robot_0_3_voz.py`): empieza a hablar con la primera frase antes
+  de que el modelo acabe, dice lo que escribió sin marcas ni código, con una voz de Piper
+  en español de España, su propia voz no empieza un turno, oye y habla con las
+  herramientas del plan, y la tubería añade menos de 200 ms en el P95 de 20 turnos. El
+  conductor dice ya que la pendiente es la D (`tests/acceptance/test_dobles_del_conductor.py`).
+  La tabla de `docs/evolution/PRUEBAS_0.3_DEL_ROBOT.md` pone en verde PA-R03-02, PA-R03-08
+  y PA-R03-09; PA-R03-03 sigue pendiente porque también es de la E, con su prueba de la C
+  en verde.
+- **Que cierra el micro mientras habla**, como pide `PRUEBAS_0.3_DEL_ROBOT.md` («lo
+  enseña su PR en su comprobación»): la prueba unitaria que sigue el orden de todo lo que pasa en un turno
+  ve cerrarse el micro antes de la primera frase y abrirse después de la última, y la
+  mutación que no lo cierra hace que su propio eco entre como un turno en PA-R03-03.
+- **66 pruebas unitarias nuevas**: el servicio que oye y habla (15 más en
+  `tests/unit/test_local_listening.py`, de 30 a 45), el corte en frases (21 en
+  `tests/unit/test_speech_cutter.py`, entre ellas lo mismo dicho de 302 maneras de trocear
+  14 respuestas, 4 228 troceos, que con la respuesta entera), Piper y el altavoz con
+  módulos de mentira (14 en `tests/unit/test_local_speaking_adapters.py`), la
+  instalación y la orden de instalar (12 más, de 24 a 36), `sirius-oye` y lo que tarda
+  (3 más, de 13 a 16) y que el oído importa lo que dice `voice_tools` (1 más en
+  `tests/unit/test_local_listening_adapters.py`). Y 4 de integración: la charla avisa de
+  que acabó con la respuesta guardada y antes de resumir, no avisa si falla ni si se
+  cancela (`tests/integration/test_send_message.py`), y una orden avisa también
+  (`tests/integration/test_ordenes_de_memoria.py`). Una de `sirius-oye` con la charla de
+  verdad mira además que una orden de olvido dicha por voz tampoco sale por el altavoz.
+- **Mutación.** 78 mutaciones de la pieza C, cada una con la prueba que tiene que
+  tumbarla: en la primera vuelta cayeron 74. Sobrevivieron cuatro, y las cuatro caen
+  desde la revisión propia: volver a cargar la voz en cada arranque y parar sin olvidar
+  que hablaba (la prueba de parar mientras habla no arrancaba otra vez ni seguía el micro
+  después), cortar dentro de un bloque de código (la marca que deja un bloque abierto
+  casi siempre lo paraba; no si una comilla de código suelta delante se empareja con
+  él, y ahora hay prueba de eso) y un remedio adivinado en mayúscula, que la comprobación
+  de la orden no veía. Las 85 mutaciones de la pieza B, puestas al día para el código
+  nuevo, siguen cayendo las 85.
+- **Lo que tarda, con los dobles**: PA-R03-09 da un P95 por debajo de 200 ms en 20 turnos,
+  con la charla de la 0.2 dentro; la cifra de verdad la da `sirius-oye` en E-R03-02.
+- **Piper, en el contenedor**: `piper-tts` 1.8.0 se instala con el extra, importa y pasa
+  español a fonemas sin red. La voz no se ha podido bajar ni cargar aquí
+  (huggingface.co responde 403) ni hay altavoz: que suene lo mira E-R03-01 en su
+  ordenador.
+- **El candado**: `uv lock` añade `piper-tts` 1.8.0 y `pathvalidate` 3.3.1 y no cambia
+  ninguna versión que ya estuviera; Quality no instala el extra.
 
 ## Consecuencias
 
-Se completa al cerrar la pieza.
+- **Mientras contesta no escucha**, desde que cierra el micro hasta que el altavoz calla,
+  y al cerrarlo se tira lo que nadie leyó: lo que él diga desde que acaba su turno hasta
+  que Sirius empieza a hablar también se pierde. Si Sirius no tiene nada que decir, el
+  micro no se cierra y lo que llegó se atiende, como en la pieza B. Oírle mientras habla
+  es la pieza E.
+- **La charla gana `on_completed`**, que solo usa la voz; la ventana sigue igual. Lo que
+  la charla hace después del turno, el resumen, sigue dentro de `send_message`: la voz ya
+  no lo espera para hablar, pero el micro no se vuelve a abrir hasta que acaba.
+- **El conductor de la 0.3** enchufa la voz y el altavoz de mentira por la raíz de
+  composición de producción, que les da a cargar el modelo de la voz de los ajustes: el
+  nombre de ese fichero es la voz con que suena. Pone también los dos ficheros de la voz
+  donde los deja la orden de instalar, y `quita_los_modelos_de_voz` los quita.
+- **La prueba de PA-R03-09**, escrita en la pieza A, contaba con que el turno n diría la
+  respuesta n del modelo grabador. La charla de la 0.2 le pide un resumen en el turno 18,
+  y el resumen se lleva una; ahora mira que dijo lo que escribió, con lo que guardó la
+  charla. Lo que mide, del final de su voz al primer sonido, no cambia.
+- Model Studio no cambia: `prepare_speech_text` se usa tal cual.
 
 ## Alternativas descartadas y por qué
 
 - **Decirla entera al acabar** (opción 1): incumple PA-R03-02.
 - **La tubería de salida de Pipecat** (opción 3): su transporte no tiene rueda para
   Python 3.14 en Windows, y la pieza B ya decidió el bucle propio.
+- **Decir la última frase cuando `send_message` vuelve**: es lo que había al principio, y
+  la hacía esperar al resumen de la charla (H-243).
+- **Guardar lo que llegó mientras pensaba y atenderlo después de hablar**: lo que había en
+  el micro al cerrarlo puede ser un turno a medias, cortado al cerrar, y saldría a la
+  charla una frase que él no acabó. Se tira, como hace el micro de la pieza B al cerrar.
 
 ## La lección
 
-- ninguna: al arrancar, la pieza C no ha encontrado todavía ningún error que otro pudiera repetir; si lo encuentra, se escribe aquí al cerrarla.
+- familia: `modelo-dentro-del-turno`
+- sin esto se repetiría: esperar a que `send_message` vuelva para hacer lo que toca en
+  cuanto acaba la respuesta. Dentro del turno la charla aún resume la conversación con el
+  mismo modelo, otra petición que tarda segundos, y la voz se habría callado ahí antes de
+  su última frase cada pocos turnos, y las respuestas de una sola frase, enteras. La
+  ventana no lo nota porque escribe lo que llega; la voz sí, y lo notarían la ventana que
+  habla de la pieza D y cortarle de la E. Lo cazó la prueba de PA-R03-09 al pasar por
+  primera vez: el resumen del turno 18 se llevaba una respuesta del modelo grabador (H-243).
+- lo hace cumplir: `tests/integration/test_send_message.py`
 
 ## Revisión externa
 
@@ -166,3 +270,14 @@ que diga lo que escribió desde la primera frase, con una voz de Piper en españ
 España, sin marcas ni código; que su propia voz no abra un turno; que nada salga del
 ordenador ni se baje solo; que lo que falle al hablar no tumbe a quien escucha; y que
 `sirius-oye` hable. No trae la ventana ni a quién le hablan (D), ni cortarle (E).
+
+**Revisión propia**, antes de la primera petición (regla del propietario del
+13-10-2026):
+
+- **Vuelta 1.** Encontró que la última frase de cada respuesta esperaba al resumen de la
+  charla (H-243 y la lección, arriba), una línea que no hacía nada en `start`, dos
+  pruebas que no miraban todo lo que decían mirar y las cuatro mutaciones que
+  sobrevivían. Todo arreglado, cada cosa con la prueba que la ve.
+- **Vuelta 2.** Nada que cambie lo que hace: dos descripciones de pruebas y un
+  comentario del conductor, puestos al día con la pieza C.
+

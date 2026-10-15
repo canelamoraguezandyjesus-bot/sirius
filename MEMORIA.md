@@ -339,6 +339,7 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 | `leccion-que-se-queda-en-el-informe` | 2 | sí | 215, 214 |
 | `lista-a-mano` | 2 | sí | 181, 178 |
 | `medir-lo-que-se-tiene-en-vez-de-lo-que-hay` | 2 | sí | 184, 180 |
+| `modelo-dentro-del-turno` | 2 | sí | 243, 237 |
 | `paso-largo-sin-plazo-propio` | 2 | sí | 228, 224 |
 | `prueba-que-no-puede-ver-lo-que-vigila` | 2 | no en todas | 241, 238 |
 | `vista-que-copia-el-corpus-del-que-venia-huyendo` | 2 | sí | 218, 196 |
@@ -353,7 +354,6 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 | `guarda-medida-que-se-queda-sin-autoridad-porque-nadie-relee-la-medida` | 1 | sí | 199 |
 | `instrumento-que-solo-mide-un-lado` | 1 | sí | 203 |
 | `interruptor-que-enciende-mas-de-lo-que-se-puede-medir` | 1 | sí | 185 |
-| `modelo-dentro-del-turno` | 1 | sí | 237 |
 | `parada-segura-que-tira-lo-ya-pagado` | 1 | sí | 226 |
 | `pieza-correcta-a-la-que-no-llama-quien-la-necesita` | 1 | sí | 197 |
 | `plan-que-hay-que-terminar-de-una-sentada` | 1 | sí | 176 |
@@ -429,6 +429,11 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 - **ADR-184** — poner una guarda a responder la pregunta que sabe contestar barata —«¿aparece la palabra?»— en lugar de la que tiene que contestar —«¿la orden lo pide?»—, y no notarlo porque el sustituto acierta casi siempre: aquí acertó en 1 de 3 paradas reales y paró sobre las salvaguardas que prohibían justo la operación. (lo hace cumplir `tests/engine/test_intent_interpreter.py`).
 - **ADR-180** — preguntarle a la copia local por un hecho que vive fuera -las ramas traídas en vez de las que existen- y creer que la respuesta cubre el caso; aquí el guion veía el 3,4% de las ramas y repartió el mismo número tres veces en un día. (lo hace cumplir `tests/automation/test_registro_de_decisiones.py`).
 
+### `modelo-dentro-del-turno`
+
+- **ADR-243** — esperar a que `send_message` vuelva para hacer lo que toca en (lo hace cumplir `tests/integration/test_send_message.py`).
+- **ADR-237** — poner otra petición al modelo de la charla dentro de cada turno, (lo hace cumplir `tests/acceptance/test_robot_0_2_personalidad.py`).
+
 ### `paso-largo-sin-plazo-propio`
 
 - **ADR-228** — dar a un agente una regla que depende de la hora («para si no cabe») sin darle la hora ni un plazo propio, y dejar que el tope del job lo mate sin diagnóstico; la misma lección que ADR-155 dejó para el corrector y ADR-224 para los pasos de Quality, aplicada al paso que quedaba. (lo hace cumplir `tests/automation/test_implementador_con_reloj.py`).
@@ -488,10 +493,6 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 
 - **ADR-185** — poner una sola puerta delante de varias piezas (lo hace cumplir `tests/unit/test_composition_root_relevance_gate.py`).
 
-### `modelo-dentro-del-turno`
-
-- **ADR-237** — poner otra petición al modelo de la charla dentro de cada turno, (lo hace cumplir `tests/acceptance/test_robot_0_2_personalidad.py`).
-
 ### `parada-segura-que-tira-lo-ya-pagado`
 
 - **ADR-226** — tratar toda parada de un revisor como pérdida del veredicto del otro, aunque el que para haya declarado que no va a revisar y el otro ya haya entregado hallazgos pagados; la asimetría que protege (no aprobar sin los dos) se conserva sin tirar el trabajo hecho. (lo hace cumplir `tests/automation/test_sirius_aggregate_reviews.py`).
@@ -524,7 +525,7 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 
 - **ADR-205** — el ciclo volvería a quedarse horas en verde esperando (lo hace cumplir `tests/automation/test_sirius_merge.py`).
 
-Y **7** ADR declaran expresamente que no dejaron lección: 243, 240, 236, 235, 234, 233, 232.
+Y **6** ADR declaran expresamente que no dejaron lección: 240, 236, 235, 234, 233, 232.
 
 ## Los bloques del motor
 

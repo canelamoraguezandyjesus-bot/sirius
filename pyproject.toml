@@ -32,6 +32,7 @@ voz = [
   "faster-whisper>=1.2.1,<1.3",
   "sounddevice>=0.5.6,<0.6",
   "numpy>=1.26.4,<3",
+  "piper-tts>=1.8,<1.9",
 ]
 
 [project.scripts]
@@ -156,9 +157,10 @@ module = ["sqlite_vec"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-# La voz del robot (ADR-242) es el extra `voz`, que Quality no instala: sus
-# bibliotecas se importan solo al cargar el oído, y sus pruebas usan módulos de mentira.
-module = ["faster_whisper"]
+# La voz del robot (ADR-242, ADR-243) es el extra `voz`, que Quality no instala: sus
+# bibliotecas se importan solo al cargar el oído o la voz, y sus pruebas usan módulos de
+# mentira.
+module = ["faster_whisper", "piper.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

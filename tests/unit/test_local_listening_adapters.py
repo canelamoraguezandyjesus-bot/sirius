@@ -34,6 +34,12 @@ from sirius.adapters.audio.local_listening import (
     load_listening_engines,
     load_listening_model,
 )
+from sirius.adapters.audio.voice_libraries import (
+    END_OF_TURN,
+    SPEECH_TO_TEXT,
+    VOICE_ACTIVITY,
+    voice_tools,
+)
 from sirius.ports.local_voice import TurnSignal, VoiceUnavailable
 
 # --- Los módulos de mentira ---------------------------------------------------------
@@ -371,8 +377,9 @@ def test_comprobar_las_bibliotecas_mira_tambien_faster_whisper(
 
 
 def test_ninguna_funcion_del_oido_importa_por_su_cuenta() -> None:
-    # Todas las bibliotecas del oído entran por `_import`, que traduce ImportError y
-    # OSError: un import suelto dentro de una función es como volvió el fallo de H-242.
+    # Todas las bibliotecas del oído entran por `import_voice_library`, que traduce
+    # ImportError y OSError: un import suelto dentro de una función es como volvió el fallo
+    # de H-242.
     fuente = Path(local_listening_module.__file__).read_text(encoding="utf-8")
     sueltos = [
         f"{funcion.name}:{nodo.lineno}"
@@ -383,6 +390,30 @@ def test_ninguna_funcion_del_oido_importa_por_su_cuenta() -> None:
     ]
 
     assert sueltos == []
+
+
+def test_oye_con_silero_smart_turn_y_faster_whisper_porque_es_lo_que_importa_al_cargar(
+    bibliotecas: _Bibliotecas, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # PA-R03-08 lee con qué oye de `voice_tools` (ADR-243): tiene que ser lo que carga.
+    importados: list[str] = []
+    importa = importlib.import_module
+
+    def apunta(nombre: str, *args: Any) -> types.ModuleType:
+        importados.append(nombre)
+        return importa(nombre, *args)
+
+    monkeypatch.setattr(importlib, "import_module", apunta)
+
+    load_listening_engines(tmp_path)
+
+    assert {VOICE_ACTIVITY, END_OF_TURN, SPEECH_TO_TEXT} <= set(importados)
+    herramientas = voice_tools()
+    assert [herramientas[k] for k in ("voz", "fin de turno", "texto")] == [
+        "silero",
+        "smart-turn",
+        "faster-whisper",
+    ]
 
 
 class _InvalidProtobuf(Exception):

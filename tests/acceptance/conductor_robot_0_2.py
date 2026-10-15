@@ -83,7 +83,7 @@ from sirius.ports.llm import (
     LLMStreamEvent,
     LLMTextDelta,
 )
-from sirius.ports.local_voice import ListeningEngines
+from sirius.ports.local_voice import ListeningEngines, SpeakingEngines
 
 #: Las letras de la tabla de piezas de ADR-233 que ya han entrado en ``main``.
 #: La A es esta: la nota de arranque y estas pruebas.
@@ -676,6 +676,7 @@ class Conductor:
             # acaba soñando con el Ollama de verdad de quien las ejecuta.
             fact_extractor=_ExtractorEnchufado(self._extractor or ExtractorDeMentira()),
             listening_engines=self._motores_de_voz(),
+            speaking_engines=self._motores_de_hablar(),
         )
         if not self._charla_por_ollama:
             dependencias.send_message_use_case.set_llm_provider(self._grabador)
@@ -685,6 +686,14 @@ class Conductor:
         """Con qué oye el robot: en la 0.2, con nada, porque no se le habla por voz.
 
         ``None`` es el oído de verdad, que no se carga hasta que algo empieza a
+        escuchar; el conductor de la 0.3 enchufa aquí sus dobles.
+        """
+        return None
+
+    def _motores_de_hablar(self) -> Callable[[Path], SpeakingEngines[Any]] | None:
+        """Con qué habla el robot: en la 0.2, con nada, porque no habla por voz.
+
+        ``None`` es la voz de verdad, que tampoco se carga hasta que algo empieza a
         escuchar; el conductor de la 0.3 enchufa aquí sus dobles.
         """
         return None
