@@ -221,6 +221,8 @@ Medido el 15-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   `tests/unit/test_local_listening_adapters.py`. Las de la voz, la consola y la ventana,
   193 en verde; las de aceptación de la 0.3 y los dobles, 42 en verde y 6 `xfail`. 9
   mutaciones del arreglo, y caen las 9. mypy, sin errores en 717 ficheros; ruff, limpio.
+  La batería entera sobre `ff8a0b5f`: 8 638 en verde, 14 omitidas y 8 `xfail`, en 24 min
+  22 s; sobre `ec0395ad` eran 8 632, 14 y 8: entran las 6 nuevas.
 
 ## Consecuencias
 
