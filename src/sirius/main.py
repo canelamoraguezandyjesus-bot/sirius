@@ -9,6 +9,7 @@ from PySide6.QtWidgets import QApplication, QMainWindow
 
 from sirius.adapters.persistence.bootstrap import initialize_persistence
 from sirius.application.data_location import DataLocationUseCase, LocationFileCorruptedError
+from sirius.application.listening_loop import ListeningLoop
 from sirius.composition_root import (
     ConversationDependencies,
     build_conversation_dependencies,
@@ -31,12 +32,19 @@ from sirius.presentation.validated_main_window import ValidatedMainWindow
 
 
 def _build_main_window(
-    dependencies: ConversationDependencies, windows: list[QMainWindow]
+    dependencies: ConversationDependencies,
+    windows: list[QMainWindow],
+    *,
+    listening_loop: ListeningLoop | None = None,
 ) -> ValidatedMainWindow:
     """Build the real conversation window, wired so completing the active
     project (RF-018) immediately reopens ``InitialProjectWindow`` — same
     process, no restart, exactly as it does the very first time no project
     is configured yet.
+
+    ``listening_loop`` atiende al oído mientras la ventana está abierta (ADR-244): la
+    ventana lo arranca al abrirse y lo para al cerrarse. Sin él, el oído lo atiende otro,
+    como el conductor de las pruebas; con los dos, habría dos leyendo el mismo micro.
     """
 
     def _on_project_completed() -> None:
@@ -87,9 +95,21 @@ def _build_main_window(
         memory_embedding_service=dependencies.memory_embedding_service,
         fact_proposals=dependencies.fact_proposals,
         dream_service=dependencies.dream_service,
+        local_listening=dependencies.local_listening,
+        listening_loop=listening_loop,
     )
     main_window.project_completed.connect(_on_project_completed)
     return main_window
+
+
+def _build_listening_main_window(
+    dependencies: ConversationDependencies, windows: list[QMainWindow]
+) -> ValidatedMainWindow:
+    """La ventana de verdad de Sirius, con su propio bucle para atender al oído: cada
+    ventana el suyo, porque un hilo parado no vuelve a arrancar (ADR-244)."""
+    return _build_main_window(
+        dependencies, windows, listening_loop=ListeningLoop(dependencies.local_listening)
+    )
 
 
 def _build_onboarding_window(
@@ -131,7 +151,7 @@ def _build_initial_project_window(
     """
 
     def _open_main_window() -> None:
-        main_window = _build_main_window(dependencies, windows)
+        main_window = _build_listening_main_window(dependencies, windows)
         windows.append(main_window)
         main_window.show()
         project_window.close()
@@ -155,7 +175,7 @@ def _build_post_key_window(
     is duplicated between callbacks.
     """
     if dependencies.initial_project_use_case.is_configured():
-        return _build_main_window(dependencies, windows)
+        return _build_listening_main_window(dependencies, windows)
     return _build_initial_project_window(dependencies, windows)
 
 

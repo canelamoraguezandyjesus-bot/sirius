@@ -14,6 +14,7 @@ la interfaz").
 from __future__ import annotations
 
 import threading
+import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -626,6 +627,7 @@ def build_local_listening(
     load_speaking: Callable[[Path], SpeakingEngines[Any]] | None = None,
     memory_suggestions: MemorySuggestions,
     settings: LocalVoiceSettings | None = None,
+    clock: Callable[[], float] = time.monotonic,
 ) -> LocalListening[Any]:
     """El oído y la voz del robot (ADR-242, ADR-243), entregando lo oído a ``chat`` y
     diciendo lo que contesta.
@@ -637,7 +639,8 @@ def build_local_listening(
     altavoz se cargan al empezar a escuchar, y solo si el modelo de oír y la voz están en
     este ordenador. Sin ``load_engines``, los de verdad, con el modelo de la carpeta que
     dicen los ajustes; sin ``load_speaking``, la voz de verdad, que recibe el modelo de la
-    voz que dicen los ajustes.
+    voz que dicen los ajustes. ``clock`` es el reloj con el que mide la charla y lo que
+    tarda en hablar (ADR-244).
     """
     installation = LocalVoiceInstallation(settings or LocalVoiceSettings())
     model_dir = installation.listening_model_dir
@@ -649,6 +652,7 @@ def build_local_listening(
         load_engines=load_engines or (lambda: load_listening_engines(model_dir)),
         load_speaking=lambda: speak(voice_model),
         memory_suggestions=memory_suggestions,
+        clock=clock,
     )
 
 
@@ -664,6 +668,7 @@ def build_conversation_dependencies(
     fact_extractor: FactExtractor | None = None,
     listening_engines: Callable[[], ListeningEngines[Any]] | None = None,
     speaking_engines: Callable[[Path], SpeakingEngines[Any]] | None = None,
+    listening_clock: Callable[[], float] = time.monotonic,
 ) -> ConversationDependencies:
     """Build repositories, the secret store, and use cases wired to SQLite.
 
@@ -680,7 +685,8 @@ def build_conversation_dependencies(
     ``listening_engines`` carga el micro, el detector de turno y el transcriptor del
     oído del robot; sin él, los de verdad del extra ``voz`` (ADR-242).
     ``speaking_engines`` carga su voz y su altavoz con el modelo de la voz que dicen los
-    ajustes; sin él, Piper y el altavoz de verdad (ADR-243).
+    ajustes; sin él, Piper y el altavoz de verdad (ADR-243). ``listening_clock`` es el
+    reloj con el que el oído mide la charla, la del sistema si no se da (ADR-244).
     """
     secret_store = secret_store or build_keyring_secret_store()
     conversation_repository = build_sqlite_conversation_repository(database_path)
@@ -1002,5 +1008,6 @@ def build_conversation_dependencies(
             listening_engines,
             load_speaking=speaking_engines,
             memory_suggestions=propose_memory_suggestion_use_case,
+            clock=listening_clock,
         ),
     )

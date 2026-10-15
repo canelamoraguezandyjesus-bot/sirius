@@ -677,6 +677,7 @@ class Conductor:
             fact_extractor=_ExtractorEnchufado(self._extractor or ExtractorDeMentira()),
             listening_engines=self._motores_de_voz(),
             speaking_engines=self._motores_de_hablar(),
+            listening_clock=self._reloj_del_oido(),
         )
         if not self._charla_por_ollama:
             dependencias.send_message_use_case.set_llm_provider(self._grabador)
@@ -697,6 +698,11 @@ class Conductor:
         escuchar; el conductor de la 0.3 enchufa aquí sus dobles.
         """
         return None
+
+    def _reloj_del_oido(self) -> Callable[[], float]:
+        """El reloj con el que el oído mide la charla: en la 0.2, el del sistema, porque
+        no se le habla por voz; el conductor de la 0.3 le pone el suyo."""
+        return time.monotonic
 
     def _modelo_de_huellas(self) -> TextEmbedder | None:
         """Quién da las huellas: el doble que haya enchufado la prueba, o ninguno.
