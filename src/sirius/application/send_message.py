@@ -60,6 +60,7 @@ from sirius.ports.llm import (
     LLMErrorKind,
     LLMProvider,
     LLMRequest,
+    runs_on_this_computer,
 )
 from sirius.ports.robot_conversation import ConversationModeRepository, ReplyMarkRepository
 
@@ -236,6 +237,10 @@ class CommandVoice:
         )
 
 
+class ChatLeavesThisComputer(RuntimeError):
+    """Se pidió que nada saliera de este ordenador y la charla va a un modelo de fuera."""
+
+
 class SendMessageUseCase:
     """Wires context building, the streaming LLM provider, and persistence."""
 
@@ -304,6 +309,7 @@ class SendMessageUseCase:
         operation_id: str | None = None,
         on_delta: Callable[[str], None] | None = None,
         extra_instructions: str = "",
+        only_on_this_computer: bool = False,
     ) -> SendMessageResult:
         """Persist the user's message, stream Sirius's reply, and persist its outcome.
 
@@ -316,9 +322,17 @@ class SendMessageUseCase:
         de la identidad. Va al final a propósito, para que no pueda desplazar ni
         reinterpretar la identidad canónica que la precede. Model Studio la usa
         para pedir respuestas breves mientras se graba (#126).
+
+        ``only_on_this_computer`` lo pide la voz del robot: ninguna petición sale durante
+        un turno de voz (PA-R03-08). Se comprueba el mismo modelo con el que se envía,
+        leído una sola vez aquí, así que cambiarlo en marcha no puede sacar el mensaje del
+        ordenador. Si es de fuera, no se guarda ni se envía nada y se levanta
+        ``ChatLeavesThisComputer`` (ronda 10 de Codex sobre la PR #687).
         """
         operation_id = operation_id or str(uuid.uuid4())
         provider = self._llm_provider
+        if only_on_this_computer and not runs_on_this_computer(provider):
+            raise ChatLeavesThisComputer(type(provider).__name__)
         self._in_flight[operation_id] = provider
         try:
             return self._send(provider, user_text, operation_id, on_delta, extra_instructions)

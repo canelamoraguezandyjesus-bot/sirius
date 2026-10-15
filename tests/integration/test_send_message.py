@@ -1,6 +1,7 @@
 from collections.abc import Iterable
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import cast
 
 import pytest
 from sqlalchemy import select
@@ -32,12 +33,16 @@ from sirius.adapters.persistence.sqlite_memory_repository import build_sqlite_me
 from sirius.adapters.persistence.sqlite_project_repository import build_sqlite_project_repository
 from sirius.adapters.persistence.sqlite_unit_of_work import build_sqlite_unit_of_work
 from sirius.application.approve_decision import ApproveDecisionUseCase
-from sirius.application.context import ContextBuilder
+from sirius.application.context import Context, ContextBuilder
 from sirius.application.project_continuity import ProjectContinuityUseCase
 from sirius.application.propose_decision import ProposeDecisionUseCase
 from sirius.application.rank_relevant_knowledge import RankRelevantKnowledgeUseCase
 from sirius.application.save_manual_memory import SaveManualMemoryUseCase
-from sirius.application.send_message import SendMessageUseCase, render_instructions
+from sirius.application.send_message import (
+    ChatLeavesThisComputer,
+    SendMessageUseCase,
+    render_instructions,
+)
 from sirius.domain.conversation import Conversation, Message, MessageRole, MessageStatus
 from sirius.domain.decision import DecisionStatus
 from sirius.domain.memory import MemoryStatus
@@ -253,6 +258,77 @@ def test_set_llm_provider_swaps_the_provider_used_by_a_later_send(tmp_path: Path
     result = use_case.send_message("hola")
 
     assert result.sirius_message.content == "respuesta activada"
+
+
+@pytest.mark.integration
+def test_solo_en_este_ordenador_no_guarda_ni_envia_nada_a_un_modelo_de_fuera(
+    tmp_path: Path,
+) -> None:
+    # Ronda 10 de Codex sobre la PR #687: la voz del robot pide que nada salga, y se
+    # comprueba el mismo modelo con el que se enviaría. `_StaticLLMProvider` no dice que
+    # se quede aquí, así que cuenta como de fuera.
+    database_path = tmp_path / "sirius.db"
+    preguntas: list[LLMRequest] = []
+
+    class _DeFuera(_StaticLLMProvider):
+        def stream_response(self, request: LLMRequest) -> Iterable[LLMStreamEvent]:
+            preguntas.append(request)
+            return super().stream_response(request)
+
+    use_case = _build_use_case(database_path, _DeFuera("contestada fuera"))
+
+    with pytest.raises(ChatLeavesThisComputer):
+        use_case.send_message("mi secreto", only_on_this_computer=True)
+
+    assert preguntas == []
+    conversation_repository = build_sqlite_conversation_repository(database_path)
+    conversation = conversation_repository.get_or_create_main_conversation()
+    assert conversation_repository.list_messages(conversation.id) == []
+
+
+@pytest.mark.integration
+def test_solo_en_este_ordenador_envia_con_el_modelo_que_comprobo_aunque_cambie(
+    tmp_path: Path,
+) -> None:
+    # El mismo cambio de la ronda 10, más tarde: Configuración pasa la charla a un
+    # modelo de fuera mientras se prepara el turno, ya comprobado el de aquí.
+    database_path = tmp_path / "sirius.db"
+    upgrade_to_head(database_path)
+    _seed_bootstrap_singletons(database_path)
+    repository = build_sqlite_conversation_repository(database_path)
+    contexto = _build_context_builder(database_path, repository)
+    preguntas_fuera: list[LLMRequest] = []
+
+    class _DeFuera(_StaticLLMProvider):
+        def stream_response(self, request: LLMRequest) -> Iterable[LLMStreamEvent]:
+            preguntas_fuera.append(request)
+            return super().stream_response(request)
+
+    class _CambiaElModeloMientrasLoPrepara:
+        def build(self, current_user_message: str) -> Context:
+            use_case.set_llm_provider(_DeFuera("contestada fuera"))
+            return contexto.build(current_user_message)
+
+    use_case = SendMessageUseCase(
+        context_builder=cast(ContextBuilder, _CambiaElModeloMientrasLoPrepara()),
+        conversation_repository=repository,
+        llm_provider=FakeLLMProvider(),
+    )
+
+    result = use_case.send_message("mi secreto", only_on_this_computer=True)
+
+    assert preguntas_fuera == []
+    assert result.sirius_message.content == "Respuesta simulada de Sirius."
+
+
+@pytest.mark.integration
+def test_solo_en_este_ordenador_envia_con_un_modelo_de_aqui(tmp_path: Path) -> None:
+    database_path = tmp_path / "sirius.db"
+    use_case = _build_use_case(database_path, FakeLLMProvider())
+
+    result = use_case.send_message("hola", only_on_this_computer=True)
+
+    assert result.outcome is MessageStatus.COMPLETED
 
 
 @pytest.mark.integration

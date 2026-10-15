@@ -22,7 +22,10 @@ import struct
 import time
 from collections.abc import Callable
 from contextlib import closing
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import Literal
 
 import pytest
 import sqlite_vec
@@ -41,10 +44,15 @@ from conductor_robot_0_3 import (
     VentanaDeVoz,
     VozDeMentira,
     _formas_del_audio_en,
+    destinos_de,
 )
 from piezas_del_robot import PiezaPendiente
 from pytestqt.qtbot import QtBot
 
+from sirius.application.local_listening import Attended, HeardTurn, LocalListening
+from sirius.application.send_message import SendMessageResult
+from sirius.config.local_voice import ListeningModel, LocalVoiceSettings
+from sirius.domain.conversation import Message, MessageRole, MessageStatus
 from sirius.infrastructure.logging import LOGGER_NAME
 from sirius.ports.llm import LLMCompleted, LLMRequest, LLMTextDelta
 
@@ -107,6 +115,17 @@ def test_el_oido_dice_fin_solo_tras_los_silencios_que_pide_y_despues_de_voz() ->
     assert len(oido.vistos) == 7
 
 
+def test_el_oido_reiniciado_olvida_el_turno_que_llevaba() -> None:
+    oido = OidoDeMentira()
+    oido.escucha(Audio("Sirius, estaba"))
+
+    oido.reinicia()
+
+    assert not oido.escucha(Audio("")), "sin voz desde el reinicio, un silencio no acaba nada"
+    assert oido.fines == ()
+    assert len(oido.vistos) == 2, "lo visto se queda apuntado"
+
+
 def test_el_transcriptor_devuelve_lo_escrito_en_la_voz_y_lo_apunta() -> None:
     transcriptor = TranscriptorDeMentira()
 
@@ -114,6 +133,26 @@ def test_el_transcriptor_devuelve_lo_escrito_en_la_voz_y_lo_apunta() -> None:
 
     assert texto == "Buenos días, Sirius."
     assert transcriptor.transcritos == ("Buenos días, Sirius.",)
+
+
+@dataclass(frozen=True)
+class _AjustesConServidor:
+    modelo: ListeningModel
+    activa: bool
+    volumen: float
+    modo: Literal["corto", "largo"]
+    servidor: str
+    clave: str | None = None
+
+
+def test_los_destinos_de_la_voz_ven_un_campo_de_texto_y_no_las_elecciones_cerradas() -> None:
+    # Lo que lee `destinos_posibles_de_la_voz`: un campo de texto es otro destino.
+    assert destinos_de(_AjustesConServidor) == {
+        "este ordenador",
+        "lo que se escriba en «servidor»",
+        "lo que se escriba en «clave»",
+    }
+    assert destinos_de(LocalVoiceSettings) == {"este ordenador"}
 
 
 def test_la_voz_apunta_cada_frase_con_su_voz_y_la_devuelve_como_sonido_de_sirius() -> None:
@@ -244,13 +283,63 @@ def test_el_conductor_se_construye_lee_la_base_de_verdad_y_sus_piezas_pendientes
     assert [p.texto for p in conductor.peticiones] == ["Buenos días, Sirius."]
     assert conductor.audio_en_la_base() == []
     conductor.reabre()
+    # La pieza B ya oye, también tras reabrir; la C todavía no ha entrado.
+    assert conductor.oye("Sirius, ¿me oyes?").oido == "Sirius, ¿me oyes?"
     with pytest.raises(PiezaPendiente) as pendiente:
-        conductor.oye("Sirius, ¿me oyes?")
-    assert pendiente.value.letra == "B"
+        conductor.herramientas()
+    assert pendiente.value.letra == "C"
     conductor.cierra()
     assert conductor.escrituras_en_disco() == []
     assert conductor.ficheros_nuevos() == []
     assert conductor.conexiones_de_red() == []
+
+
+def _resultado(
+    oido: str, contesta: str, desenlace: MessageStatus = MessageStatus.COMPLETED
+) -> SendMessageResult:
+    """Lo que devuelve la charla de un turno: sus dos mensajes, y cómo acabó."""
+    hoy = datetime(2026, 10, 15, tzinfo=UTC)
+    tuyo = Message(1, 1, 1, MessageRole.USER, oido, hoy, operation_id="op-1")
+    suyo = Message(2, 1, 2, MessageRole.SIRIUS, contesta, hoy, "op-1", 1, desenlace)
+    return SendMessageResult(desenlace, tuyo, suyo, None)
+
+
+def test_un_turno_que_la_charla_no_acabo_bien_no_cuenta_como_contestado(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Ronda 12 de Codex sobre la PR #687: si el modelo falla a medias, el oído devuelve lo
+    # que llegó a escribir con `answered=False`, y una prueba que solo mirara `contestado`
+    # lo daría por respuesta.
+    conductor = ConductorDeVoz(tmp_path)
+    a_medias = HeardTurn(
+        "Buenos días, Sirius.",
+        True,
+        _resultado("Buenos días, Sirius.", "Buenos d", MessageStatus.FAILED),
+        "op-1",
+    )
+    monkeypatch.setattr(LocalListening, "attend", lambda self: Attended(turns=(a_medias,)))
+
+    turno = conductor.oye("Buenos días, Sirius.")
+
+    assert turno.oido == "Buenos días, Sirius."
+    assert turno.para_el
+    assert turno.contestado is None
+
+
+def test_si_el_oido_cierra_varios_turnos_de_una_vez_el_conductor_falla(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # La misma familia: el conductor da un turno, y quedarse con el último perdería los de
+    # antes sin que ninguna prueba lo viera.
+    conductor = ConductorDeVoz(tmp_path)
+    turnos = (
+        HeardTurn("Primero.", True, _resultado("Primero.", "Uno."), "op-1"),
+        HeardTurn("Segundo.", True, _resultado("Segundo.", "Dos."), "op-2"),
+    )
+    monkeypatch.setattr(LocalListening, "attend", lambda self: Attended(turns=turnos))
+
+    with pytest.raises(AssertionError, match="2 turnos de una vez"):
+        conductor.oye("Segundo.")
 
 
 def test_el_diario_es_el_de_produccion_y_se_lee_entero(tmp_path: Path) -> None:

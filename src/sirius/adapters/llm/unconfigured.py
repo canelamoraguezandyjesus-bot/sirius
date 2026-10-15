@@ -17,6 +17,9 @@ from sirius.ports.llm import LLMError, LLMErrorKind, LLMRequest, LLMStreamEvent
 class UnconfiguredLLMProvider:
     """Always reports a configuration error; makes no network call, ever."""
 
+    #: No sale nada de este ordenador (``sirius.ports.llm.runs_on_this_computer``).
+    runs_on_this_computer = True
+
     def __init__(self, message: str) -> None:
         self._message = message
 

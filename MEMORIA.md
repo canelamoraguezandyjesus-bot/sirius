@@ -26,9 +26,9 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **235**.
+- Decisiones (ADR): **236**.
 - Bloques del motor: 17 cerrado, 3 fuera_de_alcance.
-- Defectos registrados: 2 abierto, 86 cerrado.
+- Defectos registrados: 2 abierto, 87 cerrado.
 - Ideas aparcadas o descartadas: 12 aparcada, 3 descartada, 2 promovida.
 - Skills: **19**.
 - Investigaciones: **14** (fotos con fecha; caducan).
@@ -79,6 +79,7 @@ huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| [242](docs/decisions/ADR-242-oir-en-local-la-pieza-b-de-la-voz.md) | 2026-10-14 | APROBADO | Oír en local: la pieza B de la voz | Se adopta la opción 2. Lo decide la sesión (ADR-204: no es dinero, ni salud, ni cambia lo que el propietario ve u oye). |
 | [241](docs/decisions/ADR-241-empezar-la-0.3-del-robot-la-voz-por-sus-pruebas-de-aceptacion.md) | 2026-10-13 | APROBADO | Empezar la 0.3 del robot, la voz, por sus pruebas de aceptación | Se adopta la opción 2. |
 | [240](docs/decisions/ADR-240-ensenar-a-sirius-en-cada-turno-los-tres-ejemplos-que-mas-se-parecen-a-la-charla-darle-sus-palabras-sueltas-y-que-diga-el-lo-que-contesta-a-las-ordenes-de-memoria.md) | 2026-10-08 | APROBADO | Enseñar a Sirius en cada turno los tres ejemplos que más se parecen a la charla, darle sus palabras sueltas y que diga él lo que contesta a las órdenes de memoria | La opción 2, con lo que describe la nota de arranque. En concreto: Los ejemplos, como datos. `identity_versions.examples` guarda, en JSON, quién habla, |
 | [239](docs/decisions/ADR-239-guardar-los-hechos-con-su-fecha-y-quien-lo-dijo-como-recuerdos-sonar-sin-leer-a-sirius-y-obedecer-las-ordenes-de-memoria-sin-pasar-por-el-modelo.md) | 2026-10-07 | APROBADO | Guardar los hechos con su fecha y quién lo dijo como recuerdos, soñar sin leer a Sirius y obedecer las órdenes de memoria sin pasar por el modelo | Se adopta la opción 2. |
@@ -332,6 +333,7 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 | `prosa-que-el-cambio-deja-falsa` | 4 | no en todas | 223, 219, 211, 177 |
 | `regla-del-propietario-que-solo-vive-en-una-conversacion` | 4 | sí | 213, 208, 204, 195 |
 | `decision-que-solo-vive-en-una-conversacion` | 2 | no en todas | 225, 202 |
+| `doble-mas-permisivo-que-la-herramienta-que-dobla` | 2 | sí | 242, 193 |
 | `guardian-que-mide-posicion-en-vez-de-estructura` | 2 | sí | 221, 187 |
 | `leccion-que-se-queda-en-el-informe` | 2 | sí | 215, 214 |
 | `lista-a-mano` | 2 | sí | 181, 178 |
@@ -342,7 +344,6 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 | `comparar-instantes-como-texto` | 1 | sí | 229 |
 | `condicion-construida-sin-el-mecanismo-que-la-hace-cumplible` | 1 | sí | 200 |
 | `criterio-que-se-pide-distinto-del-que-se-puntua` | 1 | sí | 212 |
-| `doble-mas-permisivo-que-la-herramienta-que-dobla` | 1 | sí | 193 |
 | `dos-sesiones-que-no-se-ven` | 1 | sí | 206 |
 | `espera-sin-fin-por-un-suceso-que-nadie-va-a-emitir` | 1 | sí | 194 |
 | `estado-compartido-entre-hilos` | 1 | sí | 239 |
@@ -402,6 +403,11 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 - **ADR-225** — una orden del propietario que cancela una línea entera queda en el comentario de una incidencia cerrada, y dieciocho días después el ADR, el código y el estado del proyecto siguen diciendo que esa línea está pendiente y bloquea algo; la siguiente sesión la retomaría o la pondría delante de él otra vez. (sin prueba que lo haga cumplir: ninguna prueba: una decisión del propietario no tiene hoy una forma mecánica que una guarda pueda leer; la caza la mina mensual (deuda 13) y la hoja de decisiones abiertas, a posteriori).
 - **ADR-202** — una decisión de NO hacer algo no deja rastro —no hay (sin prueba que lo haga cumplir: ninguna prueba: una decisión tomada de viva voz fuera del).
 
+### `doble-mas-permisivo-que-la-herramienta-que-dobla`
+
+- **ADR-242** — un adaptador que carga una biblioteca con código nativo solo (lo hace cumplir `tests/unit/test_local_listening_adapters.py`).
+- **ADR-193** — una prueba en verde sobre una invocación que la (lo hace cumplir `tests/automation/test_sirius_reconcile.py`).
+
 ### `guardian-que-mide-posicion-en-vez-de-estructura`
 
 - **ADR-221** — una puerta que comprueba la forma del cuerpo (las secciones) y no lo que el siguiente paso va a hacer con él (resolver el perfil), y da por válida una activación que muere a los seis segundos. (lo hace cumplir `tests/automation/test_sirius_activation.py`).
@@ -448,10 +454,6 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 ### `criterio-que-se-pide-distinto-del-que-se-puntua`
 
 - **ADR-212** — escribir a ojo la instrucción que se le da a un (lo hace cumplir `tests/unit/test_ollama_query_intent_classifier.py`).
-
-### `doble-mas-permisivo-que-la-herramienta-que-dobla`
-
-- **ADR-193** — una prueba en verde sobre una invocación que la (lo hace cumplir `tests/automation/test_sirius_reconcile.py`).
 
 ### `dos-sesiones-que-no-se-ven`
 

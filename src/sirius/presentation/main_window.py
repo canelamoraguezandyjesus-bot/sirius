@@ -131,6 +131,7 @@ from sirius.presentation.historical_projects_widget import HistoricalProjectsWid
 from sirius.presentation.knowledge_widget import KnowledgeWidget
 from sirius.presentation.memory_embedding_worker import MemoryEmbeddingWorker
 from sirius.presentation.memory_suggestion_trigger import propose_suggestion_if_completed_with_one
+from sirius.presentation.message_text import CANCELLED_SEND, HISTORY_NOT_LOADED, message_body
 from sirius.presentation.message_view import MessageItemDelegate, MessageItemWidget
 from sirius.presentation.model_studio.settings_dialog import StudioSettingsDialog
 from sirius.presentation.model_studio.studio_page import StudioPage
@@ -1363,7 +1364,7 @@ class MainWindow(QMainWindow):
         try:
             messages = self._get_history_use_case.get_history()
         except ConversationNotInitializedError:
-            self.error_label.setText("No se pudo cargar el historial de la conversación.")
+            self.error_label.setText(HISTORY_NOT_LOADED)
             return
         if self._mark_reply_use_case is not None:
             self._marks_by_message = {
@@ -1498,14 +1499,8 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def _compose_markdown_body(content: str | None, status: MessageStatus) -> str:
-        suffix = {
-            MessageStatus.CANCELLED: " (cancelado)",
-            MessageStatus.FAILED: " (fallido)",
-        }.get(status, "")
-        # REDACTED (B4d) is the only status whose content is ever None: the
-        # placeholder replaces it instead of literally rendering "None".
-        shown_content = "(mensaje redactado)" if status is MessageStatus.REDACTED else content
-        return f"{shown_content}{suffix}"
+        # El mismo texto que enseña `sirius-oye` de un turno de voz (ADR-242).
+        return message_body(content, status)
 
     def _handle_send_clicked(self) -> None:
         text = self.message_input.text()
@@ -1706,8 +1701,8 @@ class MainWindow(QMainWindow):
 
         operation_id = result.sirius_message.operation_id
         if result.outcome is MessageStatus.CANCELLED:
-            self.error_label.setText("Envío cancelado.")
-            self.studio_page.set_error("Envío cancelado.")
+            self.error_label.setText(CANCELLED_SEND)
+            self.studio_page.set_error(CANCELLED_SEND)
         elif result.outcome is MessageStatus.FAILED:
             self.error_label.setText(failed_send_message(result.error_kind, operation_id))
             self.studio_page.set_error(failed_send_message(result.error_kind, operation_id))
