@@ -36,6 +36,7 @@ from sirius.application.speech_cutter import SpeechCutter
 from sirius.domain.conversation import MessageStatus
 from sirius.ports.llm import LLMErrorKind, runs_on_this_computer
 from sirius.ports.local_voice import (
+    Captured,
     ListeningEngines,
     SpeakingEngines,
     TurnSignal,
@@ -53,7 +54,9 @@ class _Micro:
     """Un micro con lo que va a sonar ya escrito: ``voz:...`` es voz, vacío es silencio.
 
     Como el de verdad, lo que suena con él cerrado se pierde, y al cerrarlo se tira lo
-    que nadie ha leído. Apunta en ``eventos`` cuándo se abre y se cierra.
+    que nadie ha leído. Apunta en ``eventos`` cuándo se abre y se cierra. Lo que capta se
+    lee en el acto; con ``reloj``, apunta cuándo lo captó y dice cuánto esperó a que lo
+    leyeran, como el de verdad mientras el oído transcribe o contesta.
     """
 
     def __init__(self, eventos: list[str] | None = None) -> None:
@@ -64,9 +67,19 @@ class _Micro:
         self.aperturas = 0
         self.falla_al_abrir: VoiceUnavailable | None = None
         self.falla_al_cerrar: Exception | None = None
+        self.reloj: Callable[[], float] | None = None
+        #: Cuándo captó cada trozo de ``pendientes``, si tiene reloj.
+        self._captados_en: list[float] = []
+        #: Lo que pasa mientras se abre, ya abierto: por ejemplo, que capte algo.
+        self.al_abrir: Callable[[], None] | None = None
 
     def capta(self, *trozos: str) -> None:
-        (self.pendientes if self.abierto else self.perdidos).extend(trozos)
+        if not self.abierto:
+            self.perdidos.extend(trozos)
+            return
+        self.pendientes.extend(trozos)
+        if self.reloj is not None:
+            self._captados_en.extend([self.reloj()] * len(trozos))
 
     def open(self) -> None:
         if self.falla_al_abrir is not None:
@@ -74,17 +87,25 @@ class _Micro:
         self.abierto = True
         self.aperturas += 1
         self.eventos.append("abre")
+        if self.al_abrir is not None:
+            self.al_abrir()
 
     def close(self) -> None:
         if self.falla_al_cerrar is not None:
             raise self.falla_al_cerrar
         self.abierto = False
         self.pendientes.clear()
+        self._captados_en.clear()
         self.eventos.append("cierra")
 
-    def read(self) -> str | None:
+    def read(self) -> Captured[str] | None:
         assert self.abierto, "se ha leído el micro cerrado"
-        return self.pendientes.pop(0) if self.pendientes else None
+        if not self.pendientes:
+            return None
+        trozo = self.pendientes.pop(0)
+        if self.reloj is None or not self._captados_en:
+            return Captured(trozo)
+        return Captured(trozo, age=self.reloj() - self._captados_en.pop(0))
 
 
 class _Detector:
@@ -1229,6 +1250,96 @@ def test_si_no_dijo_nada_la_charla_empieza_al_acabar_el_turno() -> None:
     oido.reloj.avanza(9)
 
     assert [t.addressed for t in oido.suena(voz("¿Me oyes?"), FIN).turns] == [True]
+
+
+def test_lo_que_sono_mientras_contestaba_sin_decir_nada_no_es_de_la_charla_de_despues() -> None:
+    # Ronda 1 de Codex sobre la PR #689: mientras la charla contesta, el micro sigue
+    # captando y nadie lo lee. Si al final no dice nada, la charla empieza al acabar el
+    # turno, y lo que la tele dijo mientras tanto empezó antes: no es de ella, aunque el
+    # oído lo lea después.
+    oido = _oido_que_elige()
+    oido.micro.reloj = oido.reloj
+    oido.charla.desenlace = MessageStatus.FAILED
+
+    def la_tele_habla_mientras_contesta() -> None:
+        oido.charla.al_enviar = None
+        oido.reloj.avanza(1)
+        oido.micro.capta(voz("Y mañana, cielos despejados"), FIN)
+        oido.reloj.avanza(4)
+
+    oido.charla.al_enviar = la_tele_habla_mientras_contesta
+
+    atendido = oido.suena(voz("Sirius, hola"), FIN)
+
+    assert oido.dicho() == []
+    assert [(t.heard, t.addressed) for t in atendido.turns] == [
+        ("Sirius, hola", True),
+        ("Y mañana, cielos despejados", False),
+    ]
+    assert oido.charla.mensajes == ["Sirius, hola"]
+
+
+def test_la_charla_cuenta_desde_que_el_micro_capta_su_voz_y_no_desde_que_la_lee() -> None:
+    # Ronda 1 de Codex sobre la PR #689: lo que suena mientras el oído está con otra cosa
+    # espera en la cola del micro. Si empezó dentro de la charla, es de ella aunque el
+    # oído lo lea fuera.
+    oido = _oido_que_elige()
+    oido.micro.reloj = oido.reloj
+    mirador = _Mirador()
+    oido.servicio.watch(mirador)
+    oido.suena(voz("Sirius, hola"), FIN)
+    oido.reloj.avanza(8)
+
+    def la_ventana_tarda_en_decir_que_no() -> None:
+        # Mientras, él sigue hablando; a la pregunta siguiente, la ventana ya está libre.
+        oido.micro.capta(voz("¿Me oyes?"), FIN)
+        oido.reloj.avanza(5)
+        mirador.al_preguntar = lambda: setattr(mirador, "deja", True)
+
+    mirador.deja = False
+    mirador.al_preguntar = la_ventana_tarda_en_decir_que_no
+
+    atendido = oido.suena(voz("Sirius, ¿estás?"), FIN)
+
+    # El primero no fue: la ventana estaba con otra cosa. El segundo empezó a sonar a los
+    # 8 s de que callara, dentro de la charla, y el oído lo leyó a los 13.
+    assert [(t.heard, t.addressed) for t in atendido.turns] == [("¿Me oyes?", True)]
+    assert oido.charla.mensajes == ["Sirius, hola", "¿Me oyes?"]
+
+
+def test_lo_que_el_micro_capta_mientras_se_abre_tras_hablar_ya_es_de_la_charla() -> None:
+    # Calla antes de que se abra el micro: lo que capte al abrirse empezó después.
+    oido = _oido_que_elige()
+    oido.micro.reloj = oido.reloj
+    oido.altavoz.sigue_sonando = True
+    oido.suena(voz("Sirius, cuéntame"), FIN)
+    oido.altavoz.sigue_sonando = False
+
+    def capta_mientras_se_abre() -> None:
+        oido.micro.al_abrir = None
+        oido.micro.capta(voz("¿Y luego?"), FIN)
+        oido.reloj.avanza(0.5)
+
+    oido.micro.al_abrir = capta_mientras_se_abre
+
+    (turno,) = oido.servicio.attend().turns
+
+    assert (turno.heard, turno.addressed) == ("¿Y luego?", True)
+
+
+def test_lo_que_tarda_en_sonar_cuenta_lo_que_su_voz_espero_en_la_cola() -> None:
+    # E-R03-02 cuenta desde que deja de oírse su voz: desde que el micro la captó, no
+    # desde que el oído la leyó.
+    oido = _Oido()
+    oido.micro.reloj = oido.reloj
+    oido.servicio.start()
+    oido.micro.capta(voz("Cuéntame"), FIN)
+    # El oído estaba con otra cosa: dos segundos en la cola del micro.
+    oido.reloj.avanza(2)
+
+    (turno,) = oido.servicio.attend().turns
+
+    assert turno.first_sound_delay == 2.0
 
 
 def test_la_charla_cuenta_desde_que_empieza_a_oirse_su_voz() -> None:

@@ -49,7 +49,7 @@ from sirius.ports.llm import (
     LLMStreamEvent,
     LLMTextDelta,
 )
-from sirius.ports.local_voice import ListeningEngines, SpeakingEngines, TurnSignal
+from sirius.ports.local_voice import Captured, ListeningEngines, SpeakingEngines, TurnSignal
 from sirius.presentation.error_messages import failed_send_message
 from sirius.presentation.main_window import LISTENING, MUTED, VOICE_BUSY
 from sirius.presentation.message_view import MessageItemWidget
@@ -127,8 +127,8 @@ class _Micro:
         self.abierto = False
         self.trozos.clear()
 
-    def read(self) -> str | None:
-        return self.trozos.pop(0) if self.abierto and self.trozos else None
+    def read(self) -> Captured[str] | None:
+        return Captured(self.trozos.pop(0)) if self.abierto and self.trozos else None
 
 
 class _Detector:

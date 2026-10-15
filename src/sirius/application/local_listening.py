@@ -47,7 +47,9 @@ frase desde la primera, con la voz y el altavoz.
 - **Solo va a la charla lo que es para él** (pieza D, ADR-244): con su nombre, o sin él
   mientras dura la charla (``Addressing``). Lo que no es para él se transcribe, porque
   sin el texto no se sabe, y se descarta ahí: no va a la charla, que es lo único que
-  escribe en la base, y el diario no apunta nada de lo oído.
+  escribe en la base, y el diario no apunta nada de lo oído. Cuenta la hora a la que el
+  micro captó la voz, no la hora a la que la leyó: mientras transcribe o contesta, lo
+  que suena espera en la cola del micro (ronda 1 de Codex sobre la PR #689).
 - **Lo atiende un hilo y lo para otro.** La ventana abre, calla y cierra el oído desde el
   suyo mientras otro hilo lo atiende: todo lo que toca el micro, el detector y su estado
   va con un cerrojo, que se suelta mientras transcribe y contesta, para que el botón de
@@ -75,6 +77,7 @@ from sirius.domain.conversation import MessageStatus
 from sirius.infrastructure.logging import get_logger
 from sirius.ports.llm import runs_on_this_computer
 from sirius.ports.local_voice import (
+    Captured,
     ListeningEngines,
     SpeakingEngines,
     TurnSignal,
@@ -223,8 +226,9 @@ class _ClosedTurn[Chunk]:
 
     ``chunks`` se vacía en cuanto se transcribe: el audio no vive más que eso.
     ``began`` es cuándo empezó a oírse su voz, para la charla; ``voice_heard_at``, cuándo
-    se oyó por última vez, para E-R03-02; ``generation``, cuántas veces se había callado
-    o parado el oído al cerrarse.
+    se oyó por última vez, para E-R03-02: los dos, a la hora a la que el micro captó el
+    trozo, no a la que se leyó. ``generation``, cuántas veces se había callado o parado el
+    oído al cerrarse.
     """
 
     chunks: list[Chunk]
@@ -454,28 +458,31 @@ class LocalListening[Chunk]:
             while (
                 self._listening
                 and not self._paused_to_speak
-                and (chunk := microphone.read()) is not None
+                and (captured := microphone.read()) is not None
             ):
-                closed = self._listen(chunk)
+                closed = self._listen(captured)
                 if closed is not None:
                     return closed
             return None
 
-    def _listen(self, chunk: Chunk) -> _ClosedTurn[Chunk] | None:
-        """Le enseña ``chunk`` al detector; si con él acaba el turno, lo devuelve."""
+    def _listen(self, captured: Captured[Chunk]) -> _ClosedTurn[Chunk] | None:
+        """Le enseña el trozo al detector; si con él acaba el turno, lo devuelve."""
         assert self._engines is not None
+        chunk = captured.chunk
         try:
             signal = self._engines.detector.listen(chunk)
         except Exception as error:
             self._engine_failed("el detector de voz", error)
             return None
         if signal is TurnSignal.VOICE:
-            self._voice_heard_at = self._clock()
+            # La hora a la que lo captó el micro: lo que esperó en su cola mientras
+            # transcribía o contestaba no cuenta.
+            self._voice_heard_at = self._clock() - captured.age
         if self._turn is None:
             if signal is TurnSignal.VOICE:
                 self._turn = [*self._before_turn, chunk]
                 self._before_turn.clear()
-                self._turn_began_at = self._clock()
+                self._turn_began_at = self._voice_heard_at
             else:
                 self._before_turn.append(chunk)
             return None
@@ -640,6 +647,9 @@ class LocalListening[Chunk]:
         assert self._engines is not None and self._speaking is not None
         if self._speaking.speaker.playing:
             return False
+        # Ha callado ya, antes de abrir: lo que el micro capte mientras se abre es de la
+        # charla.
+        quiet_since = self._clock()
         try:
             self._engines.microphone.open()
         except VoiceUnavailable as error:
@@ -647,7 +657,7 @@ class LocalListening[Chunk]:
             self._give_up(f"No puedo oírte: {error.reason}.")
             return False
         self._paused_to_speak = False
-        self._addressing.fell_silent(self._clock())
+        self._addressing.fell_silent(quiet_since)
         return True
 
     def _engine_failed(self, what: str, error: Exception, *, doing: str = "oírte") -> None:

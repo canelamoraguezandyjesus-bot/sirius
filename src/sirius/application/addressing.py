@@ -8,7 +8,10 @@ demás no es para él, y el oído lo descarta antes de la charla.
   «¿Y tú qué opinas, Sirius?». Si el transcriptor lo escribe de otra forma, no es para
   él; lo mide E-R03-05 en su ordenador.
 - **La charla cuenta desde que Sirius calla** hasta que empieza a oírse la voz del turno
-  siguiente: lo que empezó a decir dentro, aunque acabe fuera, es para él.
+  siguiente: lo que empezó a decir dentro, aunque acabe fuera, es para él. Lo que empezó
+  antes de que callara no es de ella: si atendiendo un turno no dijo nada, la charla
+  empieza al acabarlo, y lo que sonó mientras tanto ya había empezado (ronda 1 de Codex
+  sobre la PR #689). La hora es la del micro al captarlo, no la del oído al leerlo.
 - **Cada vez que Sirius calla empieza otra charla.** Con la tele hablando sin pausa, lo
   que diga dentro de una se toma por él, y su respuesta abre la siguiente: nada de aquí
   lo distingue, y se dice en ADR-244.
@@ -49,9 +52,11 @@ class Addressing:
 
     def is_for_sirius(self, heard: str, began: float) -> bool:
         """Si lo oído, que empezó a oírse en ``began``, es para él: con su nombre, o dentro
-        de la charla. Antes de que Sirius haya hablado no hay charla."""
+        de la charla. Antes de que Sirius haya hablado no hay charla, y lo que empezó antes
+        de que callara no es de ella."""
         if says_his_name(heard):
             return True
-        return self._quiet_since is not None and began - self._quiet_since <= (
-            self.conversation_seconds
+        return (
+            self._quiet_since is not None
+            and 0 <= began - self._quiet_since <= self.conversation_seconds
         )

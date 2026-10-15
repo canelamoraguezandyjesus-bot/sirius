@@ -78,7 +78,7 @@ from sirius.infrastructure.local_voice_installation import (
 from sirius.infrastructure.logging import LOG_FILE_NAME, configure_logging
 from sirius.infrastructure.paths import resolve_paths
 from sirius.ports.llm import LLMCompleted, LLMRequest, LLMStreamEvent, LLMTextDelta
-from sirius.ports.local_voice import ListeningEngines, SpeakingEngines, TurnSignal
+from sirius.ports.local_voice import Captured, ListeningEngines, SpeakingEngines, TurnSignal
 
 #: Las letras de la tabla de piezas de ADR-241 que ya han entrado en ``main``.
 #: La A es la nota de arranque y estas pruebas; la B, oír en local (ADR-242); la C,
@@ -694,8 +694,10 @@ class _MicroEnchufado:
     def close(self) -> None:
         self._micro.cierra()
 
-    def read(self) -> Audio | None:
-        return self._micro.lee()
+    def read(self) -> Captured[Audio] | None:
+        # El micro de mentira es instantáneo: lo que capta se lee en el acto.
+        audio = self._micro.lee()
+        return None if audio is None else Captured(audio)
 
 
 class _OidoEnchufado:

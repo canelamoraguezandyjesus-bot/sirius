@@ -49,6 +49,16 @@ def test_sin_su_nombre_es_para_el_mientras_dura_la_charla_y_no_despues() -> None
     assert not a_quien.is_for_sirius("¿Has dormido bien?", began=110.5)
 
 
+def test_lo_que_empezo_antes_de_que_callara_no_es_de_esta_charla() -> None:
+    # Ronda 1 de Codex sobre la PR #689: si atendiendo un turno no dijo nada, la charla
+    # empieza al acabarlo, y lo que sonó mientras tanto ya había empezado.
+    a_quien = Addressing(conversation_seconds=10.0)
+    a_quien.fell_silent(100.0)
+
+    assert not a_quien.is_for_sirius("¿Has dormido bien?", began=99.5)
+    assert a_quien.is_for_sirius("¿Has dormido bien, Sirius?", began=99.5)
+
+
 def test_la_charla_cuenta_desde_la_ultima_vez_que_calla() -> None:
     a_quien = Addressing(conversation_seconds=10.0)
     a_quien.fell_silent(100.0)

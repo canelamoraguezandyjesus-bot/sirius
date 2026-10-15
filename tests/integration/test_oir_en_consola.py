@@ -27,7 +27,7 @@ from sirius.ports.llm import (
     LLMStreamEvent,
     LLMTextDelta,
 )
-from sirius.ports.local_voice import ListeningEngines, SpeakingEngines, TurnSignal
+from sirius.ports.local_voice import Captured, ListeningEngines, SpeakingEngines, TurnSignal
 from sirius.presentation.error_messages import describe_error
 
 pytestmark = pytest.mark.integration
@@ -81,8 +81,8 @@ class _Micro:
     def close(self) -> None:
         pass
 
-    def read(self) -> str | None:
-        return self.trozos.pop(0) if self.trozos else None
+    def read(self) -> Captured[str] | None:
+        return Captured(self.trozos.pop(0)) if self.trozos else None
 
 
 class _Detector:
