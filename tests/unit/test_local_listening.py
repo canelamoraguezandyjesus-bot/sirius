@@ -1,5 +1,5 @@
-"""El oído y la voz del robot, del micro a la charla y de ella al altavoz (ADR-242, ADR-243),
-con un doble en cada pieza.
+"""El oído y la voz del robot, del micro a la charla y de ella al altavoz (ADR-242, ADR-243,
+ADR-244), con un doble en cada pieza.
 
 Las pruebas de aceptación (``tests/acceptance/test_robot_0_3_voz.py``) miran lo que ve
 el propietario; estas miran los bordes del servicio que allí no salen: lo que guarda de
@@ -12,6 +12,7 @@ tarda en sonar.
 from __future__ import annotations
 
 import logging
+import threading
 from collections.abc import Callable, Sequence
 from types import SimpleNamespace
 from typing import cast
@@ -22,9 +23,12 @@ from sirius.adapters.llm.fake import FakeLLMProvider
 from sirius.adapters.llm.ollama_chat import OllamaChatProvider
 from sirius.adapters.llm.openai_responses import OpenAIResponsesProvider
 from sirius.adapters.llm.unconfigured import UnconfiguredLLMProvider
+from sirius.application.addressing import Addressing
 from sirius.application.local_listening import (
     CHAT_LEAVES,
+    Addressee,
     Attended,
+    HeardTurn,
     LocalListening,
 )
 from sirius.application.send_message import ChatLeavesThisComputer, SendMessageResult
@@ -162,6 +166,10 @@ class _Charla:
         self.por_que: LLMErrorKind | None = None
         #: Lo que el modelo propone recordar al contestar, como Ollama tras el delimitador.
         self.propone: str | None = None
+        #: Lo que pasa al empezar a enviar, y tras escribir cada trozo: por ejemplo, que
+        #: callen o paren el oído mientras contesta.
+        self.al_enviar: Callable[[], None] | None = None
+        self.al_escribir: Callable[[str], None] | None = None
 
     def send_message(
         self,
@@ -177,6 +185,8 @@ class _Charla:
             raise ChatLeavesThisComputer("de fuera")
         self.mensajes.append(user_text)
         self.operaciones.append(operation_id)
+        if self.al_enviar is not None:
+            self.al_enviar()
         if self.falla is not None:
             falla, self.falla = self.falla, None
             raise falla
@@ -185,6 +195,8 @@ class _Charla:
             self.eventos.append(f"escribe:{trozo}")
             if on_delta is not None:
                 on_delta(trozo)
+            if self.al_escribir is not None:
+                self.al_escribir(trozo)
         if self.se_rompe_al_acabar is not None:
             rotura, self.se_rompe_al_acabar = self.se_rompe_al_acabar, None
             raise rotura
@@ -270,10 +282,14 @@ class _Altavoz:
         self.suena_tras_callar = False
         self.falla: Exception | None = None
         self.latency = 0.0
+        #: Lo que pasa mientras toma cada sonido, antes de apuntarlo.
+        self.al_sonar: Callable[[], None] | None = None
 
     def play(self, sound: str) -> None:
         if self.falla is not None:
             raise self.falla
+        if self.al_sonar is not None:
+            self.al_sonar()
         self.eventos.append(f"suena:{sound}")
 
     @property
@@ -285,6 +301,24 @@ class _Altavoz:
         self.eventos.append("calla")
 
 
+class _TodoEsParaEl:
+    """Como en las piezas B y C: todo lo oído es para él. A quién le hablan (pieza D) se
+    prueba en ``test_addressing.py`` y, con el servicio, en las pruebas de la pieza D de
+    abajo, con ``Addressing``."""
+
+    conversation_seconds = 10.0
+
+    def __init__(self) -> None:
+        self.callados: list[float] = []
+
+    def fell_silent(self, at: float) -> None:
+        self.callados.append(at)
+
+    def is_for_sirius(self, heard: str, began: float) -> bool:
+        del heard, began
+        return True
+
+
 class _Oido:
     """Todo junto, con el servicio montado como en producción.
 
@@ -292,7 +326,13 @@ class _Oido:
     la charla, lo que se le pide a la voz y lo que suena.
     """
 
-    def __init__(self, *, antes: int = 2, detector: _Detector | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        antes: int = 2,
+        detector: _Detector | None = None,
+        a_quien: Addressee | None = None,
+    ) -> None:
         self.eventos: list[str] = []
         self.micro = _Micro(self.eventos)
         self.detector = detector or _Detector()
@@ -315,6 +355,7 @@ class _Oido:
             memory_suggestions=self.propuestas,
             pre_roll=antes,
             clock=self.reloj,
+            addressing=a_quien if a_quien is not None else _TodoEsParaEl(),
         )
 
     def _carga(self) -> ListeningEngines[str]:
@@ -1087,3 +1128,458 @@ def test_si_al_volver_aun_suena_lo_que_dijo_no_abre_el_micro_hasta_que_calle() -
     assert oido.micro.abierto
     assert [t.heard for t in oido.suena(voz("Hola"), FIN).turns] == ["Hola"]
     assert oido.charla.mensajes == ["Cuéntame", "Hola"]
+
+
+# --- A quién le hablan, el silencio y quien mira (pieza D, ADR-244) ----------------
+
+
+class _Mirador:
+    """Hace de la ventana: deja pasar cada turno o no, y apunta lo que le cuentan."""
+
+    def __init__(self, *, deja: bool = True) -> None:
+        self.deja = deja
+        self.preguntas: list[tuple[str, str]] = []
+        self.acabados: list[HeardTurn | None] = []
+        self.paros: list[str] = []
+        #: Lo que pasa mientras decide: por ejemplo, que callen el oído.
+        self.al_preguntar: Callable[[], None] | None = None
+
+    def may_answer(self, operation_id: str, heard: str) -> bool:
+        self.preguntas.append((operation_id, heard))
+        if self.al_preguntar is not None:
+            self.al_preguntar()
+        return self.deja
+
+    def answered(self, turn: HeardTurn | None) -> None:
+        self.acabados.append(turn)
+
+    def stopped(self, notice: str) -> None:
+        self.paros.append(notice)
+
+
+def _oido_que_elige() -> _Oido:
+    """El oído con ``Addressing``, como en producción: con su nombre o en la charla."""
+    oido = _Oido(a_quien=Addressing(conversation_seconds=10.0))
+    oido.servicio.start()
+    return oido
+
+
+def test_lo_que_no_es_para_el_se_transcribe_y_se_descarta_sin_ir_a_la_charla() -> None:
+    oido = _oido_que_elige()
+
+    (turno,) = oido.suena(voz("Y mañana, cielos despejados"), FIN).turns
+
+    assert (turno.heard, turno.addressed, turno.result, turno.operation_id) == (
+        "Y mañana, cielos despejados",
+        False,
+        None,
+        "",
+    )
+    assert oido.transcriptor.turnos == [[voz("Y mañana, cielos despejados"), FIN]]
+    assert oido.charla.mensajes == []
+    assert oido.dicho() == []
+    assert oido.micro.abierto, "sigue oyendo"
+
+
+def test_lo_que_no_es_para_el_no_queda_en_el_diario(
+    caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(logging.getLogger("sirius.application.local_listening"), "disabled", False)
+    oido = _oido_que_elige()
+
+    with caplog.at_level(logging.DEBUG):
+        oido.suena(voz("La clave es Zarzamora"), FIN)
+
+    assert "no era para él" in caplog.text
+    assert "zarzamora" not in caplog.text.casefold()
+
+
+def test_sin_su_nombre_va_a_la_charla_solo_mientras_dura_la_charla() -> None:
+    oido = _oido_que_elige()
+    oido.suena(voz("Sirius, hola"), FIN)
+
+    oido.reloj.avanza(9)
+    assert [t.addressed for t in oido.suena(voz("¿Qué tal?"), FIN).turns] == [True]
+    oido.reloj.avanza(11)
+    assert [t.addressed for t in oido.suena(voz("¿Qué tal?"), FIN).turns] == [False]
+    assert oido.charla.mensajes == ["Sirius, hola", "¿Qué tal?"]
+
+
+def test_la_charla_empieza_cuando_el_altavoz_acaba_de_sonar() -> None:
+    oido = _oido_que_elige()
+    oido.altavoz.sigue_sonando = True
+    oido.suena(voz("Sirius, cuéntame"), FIN)
+    # Medio minuto hablando: la charla aún no ha empezado.
+    oido.reloj.avanza(30)
+    assert oido.servicio.attend() == Attended()
+    oido.altavoz.sigue_sonando = False
+    oido.servicio.attend()
+
+    oido.reloj.avanza(9)
+
+    assert [t.addressed for t in oido.suena(voz("¿Y luego?"), FIN).turns] == [True]
+
+
+def test_si_no_dijo_nada_la_charla_empieza_al_acabar_el_turno() -> None:
+    oido = _oido_que_elige()
+    oido.charla.desenlace = MessageStatus.FAILED
+    oido.suena(voz("Sirius, hola"), FIN)
+    assert oido.dicho() == []
+
+    oido.reloj.avanza(9)
+
+    assert [t.addressed for t in oido.suena(voz("¿Me oyes?"), FIN).turns] == [True]
+
+
+def test_la_charla_cuenta_desde_que_empieza_a_oirse_su_voz() -> None:
+    oido = _oido_que_elige()
+    oido.suena(voz("Sirius, hola"), FIN)
+    oido.reloj.avanza(8)
+    # Cada trozo tarda un segundo: empieza a oírse dentro de la charla y acaba fuera.
+    oido.detector.al_oir = lambda _trozo: oido.reloj.avanza(1)
+
+    (turno,) = oido.suena(voz("Pues"), voz("verás,"), voz("es largo"), FIN).turns
+
+    assert turno.addressed
+    assert oido.reloj.ahora - 100.0 > 10
+
+
+def test_sin_decirle_a_quien_le_hablan_decide_como_en_produccion() -> None:
+    eventos: list[str] = []
+    micro, charla = _Micro(eventos), _Charla(eventos)
+    servicio: LocalListening[str] = LocalListening(
+        chat=charla,
+        installation=_Instalacion(),
+        load_engines=lambda: ListeningEngines(micro, _Detector(), _Transcriptor()),
+        load_speaking=lambda: SpeakingEngines(_Voz(eventos), _Altavoz(eventos)),
+        memory_suggestions=_Propuestas(),
+    )
+    servicio.start()
+    micro.capta(voz("Y mañana, cielos despejados"), FIN)
+
+    (turno,) = servicio.attend().turns
+
+    assert not turno.addressed
+    assert charla.mensajes == []
+    assert servicio.conversation_seconds == 10.0
+
+
+def test_la_charla_dura_lo_que_dice_a_quien_le_hablan() -> None:
+    assert _Oido(a_quien=Addressing(conversation_seconds=7.0)).servicio.conversation_seconds == 7.0
+
+
+def test_el_silencio_cierra_el_micro_y_nadie_lo_abre_hasta_quitarlo() -> None:
+    oido = _Oido()
+    oido.servicio.start()
+
+    oido.servicio.mute()
+
+    assert (oido.micro.abierto, oido.servicio.muted, oido.servicio.listening) == (
+        False,
+        True,
+        False,
+    )
+    assert oido.servicio.start() == ""
+    assert not oido.micro.abierto
+    assert oido.suena(voz("Hola"), FIN) == Attended()
+    assert oido.micro.perdidos == [voz("Hola"), FIN]
+
+    assert oido.servicio.unmute() == ""
+
+    assert (oido.micro.abierto, oido.servicio.muted, oido.servicio.listening) == (True, False, True)
+    assert [t.heard for t in oido.suena(voz("Otra"), FIN).turns] == ["Otra"]
+    assert oido.transcriptor.turnos == [[voz("Otra"), FIN]]
+
+
+def test_quitar_el_silencio_dice_si_no_puede_volver_a_oir() -> None:
+    oido = _Oido()
+    oido.servicio.start()
+    oido.servicio.mute()
+    oido.micro.falla_al_abrir = VoiceUnavailable("no puedo abrir el micrófono (ocupado)")
+
+    aviso = oido.servicio.unmute()
+
+    assert aviso == "No puedo oírte: no puedo abrir el micrófono (ocupado)."
+    assert not oido.servicio.muted
+    assert not oido.servicio.listening
+
+
+def test_el_silencio_olvida_el_turno_a_medias_y_reinicia_el_detector() -> None:
+    oido = _Oido()
+    oido.servicio.start()
+    oido.suena(voz("Estaba pensando"), "")
+
+    oido.servicio.mute()
+    oido.servicio.unmute()
+
+    assert oido.detector.reinicios == 1
+    assert oido.suena("", FIN) == Attended()
+    assert oido.transcriptor.turnos == []
+
+
+def test_lo_oido_antes_del_silencio_que_aun_no_habia_ido_a_la_charla_ya_no_va() -> None:
+    oido = _Oido()
+    mirador = _Mirador()
+    oido.servicio.watch(mirador)
+    oido.servicio.start()
+    oido.transcriptor.al_transcribir = oido.servicio.mute
+
+    assert oido.suena(voz("Sirius, hola"), FIN) == Attended()
+    assert oido.charla.mensajes == []
+    # Ni se le pregunta a quien mira por un turno que ya no va a ir.
+    assert mirador.preguntas == []
+
+
+def test_si_lo_callan_mientras_quien_mira_decide_el_turno_no_va() -> None:
+    oido = _Oido()
+    mirador = _Mirador()
+    mirador.al_preguntar = oido.servicio.mute
+    oido.servicio.watch(mirador)
+    oido.servicio.start()
+
+    assert oido.suena(voz("Sirius, hola"), FIN) == Attended()
+    assert oido.charla.mensajes == []
+    assert mirador.acabados == [None]
+
+
+def test_el_silencio_no_calla_lo_que_esta_diciendo() -> None:
+    oido = _Oido()
+    oido.servicio.start()
+    oido.charla.trozos = ["Primera frase.", " Segunda frase.", " Tercera."]
+    oido.charla.al_escribir = lambda trozo: (
+        oido.servicio.mute() if trozo == " Segunda frase." else None
+    )
+
+    oido.suena(voz("Cuéntame"), FIN)
+
+    assert oido.dicho() == ["Primera frase.", "Segunda frase.", "Tercera."]
+    assert "calla" not in oido.eventos
+    assert not oido.micro.abierto
+    assert oido.servicio.muted
+
+
+def test_si_lo_callan_antes_de_la_primera_frase_no_le_abre_el_micro_al_acabar() -> None:
+    oido = _Oido()
+    oido.servicio.start()
+    oido.charla.al_enviar = oido.servicio.mute
+
+    oido.suena(voz("Cuéntame"), FIN)
+
+    assert oido.dicho() == ["R: Cuéntame"]
+    assert not oido.micro.abierto
+    assert oido.eventos.count("abre") == 1
+
+
+def test_parar_mientras_prepara_una_frase_ya_no_la_da_al_altavoz() -> None:
+    oido = _Oido()
+    oido.servicio.start()
+    oido.voz.al_decir = oido.servicio.stop
+
+    oido.suena(voz("Cuéntame"), FIN)
+
+    assert oido.dicho() == ["R: Cuéntame"]
+    assert not any(evento.startswith("suena:") for evento in oido.eventos)
+
+
+def test_parar_mientras_contesta_calla_lo_que_quedaba_por_decir() -> None:
+    oido = _Oido()
+    oido.servicio.start()
+    oido.charla.trozos = ["Primera frase.", " Segunda frase.", " Tercera."]
+    oido.charla.al_escribir = lambda trozo: (
+        oido.servicio.stop() if trozo == " Segunda frase." else None
+    )
+
+    (turno,) = oido.suena(voz("Cuéntame"), FIN).turns
+
+    # La charla acaba y guarda la respuesta entera; lo que quedaba ya no suena.
+    assert turno.reply == "Primera frase. Segunda frase. Tercera."
+    assert oido.dicho() == ["Primera frase."]
+    assert oido.eventos.count("calla") == 1
+
+
+def test_quien_mira_decide_si_un_turno_para_el_va_a_la_charla() -> None:
+    oido = _Oido()
+    mirador = _Mirador(deja=False)
+    oido.servicio.watch(mirador)
+    oido.servicio.start()
+
+    assert oido.suena(voz("Hola"), FIN) == Attended()
+    assert [oido_ for _, oido_ in mirador.preguntas] == ["Hola"]
+    assert oido.charla.mensajes == []
+    assert mirador.acabados == []
+    assert oido.micro.abierto, "sigue oyendo"
+
+
+def test_quien_mira_se_entera_de_como_acabo_cada_turno_que_dejo_pasar() -> None:
+    oido = _Oido()
+    mirador = _Mirador()
+    oido.servicio.watch(mirador)
+    oido.servicio.start()
+
+    (turno,) = oido.suena(voz("Hola"), FIN).turns
+    oido.charla.falla = RuntimeError("rota")
+    (roto,) = oido.suena(voz("Otra"), FIN).turns
+
+    assert mirador.preguntas == [(turno.operation_id, "Hola"), (roto.operation_id, "Otra")]
+    assert oido.charla.operaciones == [turno.operation_id, roto.operation_id]
+    assert mirador.acabados == [turno, roto]
+    assert roto.result is None
+
+
+def test_si_la_charla_se_va_fuera_quien_mira_sabe_que_el_turno_no_fue() -> None:
+    oido = _Oido()
+    mirador = _Mirador()
+    mirador.al_preguntar = lambda: setattr(
+        oido.charla, "llm_provider", SimpleNamespace(runs_on_this_computer=False)
+    )
+    oido.servicio.watch(mirador)
+    oido.servicio.start()
+
+    assert oido.suena(voz("Hola"), FIN) == Attended(notice=CHAT_LEAVES)
+    assert mirador.acabados == [None]
+    assert mirador.paros == [CHAT_LEAVES]
+
+
+def test_lo_que_no_era_para_el_no_se_le_pregunta_a_quien_mira() -> None:
+    oido = _oido_que_elige()
+    mirador = _Mirador()
+    oido.servicio.watch(mirador)
+
+    oido.suena(voz("La tele"), FIN)
+
+    assert (mirador.preguntas, mirador.acabados) == ([], [])
+
+
+def test_si_deja_de_oir_por_su_cuenta_se_lo_dice_a_quien_mira_una_vez() -> None:
+    oido = _Oido()
+    mirador = _Mirador()
+    oido.servicio.watch(mirador)
+    oido.servicio.start()
+    oido.detector.falla_al_oir = RuntimeError("roto")
+
+    atendido = oido.suena(voz("Hola"))
+    oido.servicio.attend()
+
+    assert atendido.notice
+    assert mirador.paros == [atendido.notice]
+
+
+def test_quien_mira_no_se_entera_de_que_lo_callan_o_lo_paran_otros() -> None:
+    oido = _Oido()
+    mirador = _Mirador()
+    oido.servicio.watch(mirador)
+    oido.servicio.start()
+
+    oido.servicio.mute()
+    oido.servicio.attend()
+    oido.servicio.unmute()
+    oido.servicio.stop()
+    oido.servicio.attend()
+
+    assert mirador.paros == []
+
+
+def test_sin_quien_mire_ya_no_se_le_pregunta() -> None:
+    oido = _Oido()
+    mirador = _Mirador(deja=False)
+    oido.servicio.watch(mirador)
+    oido.servicio.watch(None)
+    oido.servicio.start()
+
+    assert [t.heard for t in oido.suena(voz("Hola"), FIN).turns] == ["Hola"]
+    assert mirador.preguntas == []
+
+
+# --- Desde dos hilos: la ventana calla el oído mientras otro lo atiende -------------
+
+
+def test_el_silencio_no_espera_a_que_acabe_el_turno_que_esta_contestando() -> None:
+    oido = _Oido()
+    oido.servicio.start()
+    escribiendo, sigue = threading.Event(), threading.Event()
+
+    def al_enviar() -> None:
+        escribiendo.set()
+        sigue.wait(5)
+
+    oido.charla.al_enviar = al_enviar
+    oido.micro.capta(voz("Hola"), FIN)
+    atiende = threading.Thread(target=oido.servicio.attend)
+    atiende.start()
+    calla = threading.Thread(target=oido.servicio.mute)
+    try:
+        assert escribiendo.wait(5)
+        calla.start()
+        calla.join(2)
+        assert not calla.is_alive(), "el silencio esperó a que acabara el turno"
+        assert not oido.micro.abierto
+    finally:
+        sigue.set()
+        atiende.join(5)
+        if calla.ident is not None:
+            calla.join(5)
+
+
+def test_el_silencio_espera_a_que_el_detector_acabe_con_su_trozo(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    oido = _Oido()
+    oido.servicio.start()
+    dentro, sigue = threading.Event(), threading.Event()
+    reiniciado_a_medias: list[bool] = []
+    reinicia = oido.detector.reset
+
+    def al_oir(trozo: str) -> None:
+        if trozo == voz("Hola"):
+            dentro.set()
+            sigue.wait(5)
+
+    def reset() -> None:
+        reiniciado_a_medias.append(dentro.is_set() and not sigue.is_set())
+        reinicia()
+
+    oido.detector.al_oir = al_oir
+    monkeypatch.setattr(oido.detector, "reset", reset)
+    oido.micro.capta(voz("Hola"), FIN)
+    atiende = threading.Thread(target=oido.servicio.attend)
+    atiende.start()
+    calla = threading.Thread(target=oido.servicio.mute)
+    try:
+        assert dentro.wait(5)
+        calla.start()
+        calla.join(0.5)
+        assert calla.is_alive(), "el silencio no esperó a que el detector acabara"
+    finally:
+        sigue.set()
+        atiende.join(5)
+        if calla.ident is not None:
+            calla.join(5)
+    assert reiniciado_a_medias == [False]
+
+
+def test_parar_espera_a_que_el_altavoz_tome_la_frase_y_despues_la_calla() -> None:
+    oido = _Oido()
+    oido.servicio.start()
+    tomando, sigue = threading.Event(), threading.Event()
+
+    def al_sonar() -> None:
+        tomando.set()
+        sigue.wait(5)
+
+    oido.altavoz.al_sonar = al_sonar
+    oido.micro.capta(voz("Cuéntame"), FIN)
+    atiende = threading.Thread(target=oido.servicio.attend)
+    atiende.start()
+    para = threading.Thread(target=oido.servicio.stop)
+    try:
+        assert tomando.wait(5)
+        para.start()
+        para.join(0.5)
+        assert para.is_alive(), "parar no esperó a que el altavoz tomara la frase"
+    finally:
+        sigue.set()
+        atiende.join(5)
+        if para.ident is not None:
+            para.join(5)
+    # Lo que tomó el altavoz, lo vació después al callar.
+    assert oido.eventos.index("calla") > oido.eventos.index("suena:sonido de R: Cuéntame")

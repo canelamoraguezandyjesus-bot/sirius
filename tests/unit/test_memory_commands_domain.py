@@ -18,6 +18,18 @@ K = MemoryCommandKind
         ("olvídalo", MemoryCommand(K.FORGET_LAST)),
         ("Olvídate de eso, por favor.", MemoryCommand(K.FORGET_LAST)),
         ("Sirius, olvida esto", MemoryCommand(K.FORGET_LAST)),
+        # Fuera de la charla se le llama por su nombre (ADR-244), delante o detrás.
+        ("Olvida eso, Sirius.", MemoryCommand(K.FORGET_LAST)),
+        ("Oye, Sirius, olvida eso", MemoryCommand(K.FORGET_LAST)),
+        ("Eh, olvídalo", MemoryCommand(K.FORGET_LAST)),
+        ("Olvida eso, Sirius, por favor", MemoryCommand(K.FORGET_LAST)),
+        ("Olvida eso, por favor, Sirius", MemoryCommand(K.FORGET_LAST)),
+        (
+            "Olvida lo de mi vecino Ramiro, Sirius.",
+            MemoryCommand(K.FORGET_ABOUT, "mi vecino Ramiro"),
+        ),
+        ("¿Qué sabes de mí, Sirius?", MemoryCommand(K.ABOUT_ME)),
+        ("¿Qué sabes de Sirius?", MemoryCommand(K.ABOUT_PERSON, "Sirius")),
         ("Borra lo que te acabo de decir", MemoryCommand(K.FORGET_LAST)),
         ("Olvida lo de mi vecino Ramiro.", MemoryCommand(K.FORGET_ABOUT, "mi vecino Ramiro")),
         ("¡Olvida todo lo del Préstamo!", MemoryCommand(K.FORGET_ABOUT, "Préstamo")),

@@ -5,7 +5,8 @@ que contesta, en la misma charla de la ventana, hasta Ctrl+C; no abre la ventana
 D). Si falta algo de la voz, dice qué orden lo instala y sale sin hacer nada más. Si deja
 de oír mientras escucha, porque la charla se fue a un modelo de fuera o porque falló una
 pieza del oído o de la voz, lo dice y sale; y si un envío se rompe, cuenta lo que quedó
-guardado, como la ventana, y sale con error.
+guardado, como la ventana, y sale con error. Lo que oye y no era para él no lo enseña:
+no es de la charla (ADR-244).
 
 Al salir dice cuánto tardó en empezar a hablar: es la cifra de E-R03-02.
 """
@@ -62,6 +63,9 @@ def listen(
             attended = listening.attend()
             broken = False
             for turn in attended.turns:
+                if not turn.addressed:
+                    # No fue a la charla: ni se enseña ni es un envío roto.
+                    continue
                 broken = _say_turn(turn, say, history) or broken
                 if turn.first_sound_delay is not None:
                     delays.append(turn.first_sound_delay)

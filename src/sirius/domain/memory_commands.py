@@ -40,9 +40,14 @@ class MemoryCommand:
     argument: str = ""
 
 
-# Lo que rodea a la orden y no cambia nada: signos, «Sirius,» delante y «por favor».
-_PREFIX = re.compile(r"[\s¿¡\"'«(]*(?:sirius\s*,?\s+)?")
-_SUFFIX = re.compile(r"(?:\s*,?\s*por favor)?[\s?!.,;:\"'»)…]*$")
+# Lo que rodea a la orden y no cambia nada: signos, «por favor» y su nombre, delante,
+# con «oye» o sin él, o detrás de una coma. Fuera de la charla hay que llamarle por su
+# nombre (ADR-244), y «olvida eso, Sirius» tiene que olvidar como «olvida eso». Sin coma
+# no se quita: «¿qué sabes de Sirius?» pregunta por él.
+_PREFIX = re.compile(r"[\s¿¡\"'«(]*(?:(?:oye|eh)\s*,?\s+)?(?:sirius\s*,?\s+)?")
+_SUFFIX = re.compile(
+    r"(?:\s*,\s*sirius)?(?:\s*,?\s*por favor)?(?:\s*,\s*sirius)?[\s?!.,;:\"'»)…]*$"
+)
 
 _FORGET_LAST = re.compile(
     r"(?:olvida(?:te de)?|borra|olvidalo|borralo)"

@@ -281,7 +281,8 @@ class _Altavoz:
 class _Transcriptor:
     def transcribe(self, chunks: Sequence[str]) -> str:
         del chunks
-        return "Me encanta el café."
+        # Con su nombre: fuera de la charla, sin él no es para él (ADR-244).
+        return "Sirius, me encanta el café."
 
 
 class _TodoInstalado:

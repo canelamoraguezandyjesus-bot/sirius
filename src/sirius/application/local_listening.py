@@ -44,11 +44,23 @@ frase desde la primera, con la voz y el altavoz.
 - **Si la voz o el altavoz fallan, deja de hablar y lo dice.** El fallo no sale a la
   charla, que sigue escribiendo y guarda la respuesta entera; después deja de oír con su
   aviso, como si fallara el detector.
-- **En la pieza B todo lo oído es para él**; a quién le hablan lo decide la pieza D.
+- **Solo va a la charla lo que es para él** (pieza D, ADR-244): con su nombre, o sin él
+  mientras dura la charla (``Addressing``). Lo que no es para él se transcribe, porque
+  sin el texto no se sabe, y se descarta ahí: no va a la charla, que es lo único que
+  escribe en la base, y el diario no apunta nada de lo oído.
+- **Lo atiende un hilo y lo para otro.** La ventana abre, calla y cierra el oído desde el
+  suyo mientras otro hilo lo atiende: todo lo que toca el micro, el detector y su estado
+  va con un cerrojo, que se suelta mientras transcribe y contesta, para que el botón de
+  silencio no espere a que acabe un turno. Lo que se cerró antes de callarlo o pararlo y
+  aún no había ido a la charla ya no va; y si se para mientras habla, deja de hablar.
+- **Quien enseña la escucha decide si un turno va ya a la charla** (``ListeningWatcher``):
+  la ventana le dice que no si está con otra cosa, y se entera de cómo acabó cada turno y
+  de cuándo deja de oír por su cuenta.
 """
 
 from __future__ import annotations
 
+import threading
 import time
 import uuid
 from collections import deque
@@ -56,6 +68,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from sirius.application.addressing import Addressing
 from sirius.application.send_message import ChatLeavesThisComputer, SendMessageResult
 from sirius.application.speech_cutter import SpeechCutter
 from sirius.domain.conversation import MessageStatus
@@ -116,6 +129,23 @@ class MemorySuggestions(Protocol):
         ...
 
 
+class Addressee(Protocol):
+    """A quién le hablan (``Addressing``): lleva la charla y decide si lo oído es para él."""
+
+    @property
+    def conversation_seconds(self) -> float:
+        """Lo que dura la charla desde que Sirius calla."""
+        ...
+
+    def fell_silent(self, at: float) -> None:
+        """Sirius acaba de callar."""
+        ...
+
+    def is_for_sirius(self, heard: str, began: float) -> bool:
+        """Si lo oído, que empezó a oírse en ``began``, es para él."""
+        ...
+
+
 @dataclass(frozen=True, slots=True)
 class HeardTurn:
     """Un turno de voz cerrado: lo que oyó, si era para él, lo que contestó la charla y lo
@@ -123,7 +153,9 @@ class HeardTurn:
 
     ``heard`` es lo oído, tal cual. Para enseñarlo está lo guardado,
     ``result.user_message``: tras «olvida lo de…» lo guardado ya no dice qué había que
-    olvidar, y lo oído sí (ronda 14 de Codex sobre la PR #687).
+    olvidar, y lo oído sí (ronda 14 de Codex sobre la PR #687). Si no era para él
+    (``addressed`` falso), no fue a la charla: ``result`` es ``None``, ``operation_id`` va
+    vacío y nada lo guarda (ADR-244).
 
     ``result`` es lo que devolvió la charla, entero y sin traducir: el mismo resultado que
     recibe la ventana con lo escrito, para que quien enseñe el turno lo enseñe como ella.
@@ -164,6 +196,43 @@ class Attended:
     notice: str = ""
 
 
+class ListeningWatcher(Protocol):
+    """Quien enseña la escucha, como la ventana: decide si un turno para él va ya a la
+    charla, y se entera de cómo acabó y de cuándo el oído deja de oír por su cuenta.
+
+    Se le llama desde el hilo que atiende al oído, sin su cerrojo puesto.
+    """
+
+    def may_answer(self, operation_id: str, heard: str) -> bool:
+        """Si el turno para él, con su operación y lo oído, puede ir ya a la charla. Puede
+        esperar a que acabe lo que tenga entre manos; si dice que no, el turno no va."""
+        ...
+
+    def answered(self, turn: HeardTurn | None) -> None:
+        """El turno que dejó pasar ha acabado: ``None`` si al final no fue a la charla."""
+        ...
+
+    def stopped(self, notice: str) -> None:
+        """El oído ha dejado de oír por su cuenta; ``notice`` dice por qué."""
+        ...
+
+
+@dataclass(slots=True)
+class _ClosedTurn[Chunk]:
+    """Un turno que el detector dio por acabado y aún no se ha transcrito.
+
+    ``chunks`` se vacía en cuanto se transcribe: el audio no vive más que eso.
+    ``began`` es cuándo empezó a oírse su voz, para la charla; ``voice_heard_at``, cuándo
+    se oyó por última vez, para E-R03-02; ``generation``, cuántas veces se había callado
+    o parado el oído al cerrarse.
+    """
+
+    chunks: list[Chunk]
+    began: float
+    voice_heard_at: float
+    generation: int
+
+
 class LocalListening[Chunk]:
     """El oído y la voz del robot: del micro a la charla y de la charla al altavoz, todo en
     este ordenador."""
@@ -178,22 +247,38 @@ class LocalListening[Chunk]:
         memory_suggestions: MemorySuggestions,
         pre_roll: int = PRE_ROLL_CHUNKS,
         clock: Callable[[], float] = time.monotonic,
+        addressing: Addressee | None = None,
     ) -> None:
         self._chat = chat
         self._clock = clock
+        self._addressing: Addressee = addressing if addressing is not None else Addressing()
         self._memory_suggestions = memory_suggestions
         self._installation = installation
         self._load_engines = load_engines
         self._load_speaking = load_speaking
         self._engines: ListeningEngines[Chunk] | None = None
         self._speaking: SpeakingEngines[Any] | None = None
+        #: Todo lo que toca el micro, el detector y el estado del oído, desde el hilo que
+        #: sea. Reentrante: lo que falla con él puesto para con él puesto.
+        self._lock = threading.RLock()
         #: El micro está cerrado porque Sirius habla; se abre cuando el altavoz acaba.
         self._paused_to_speak = False
         self._detector_stale = False
         self._listening = False
+        #: El botón de silencio: mientras, nada abre el micro, ni ``start``.
+        self._muted = False
+        #: Cuántas veces se ha callado o parado: un turno cerrado antes no va a la charla.
+        self._generation = 0
         self._notice = ""
+        #: El aviso de cuando dejó de oír por su cuenta, hasta contárselo a quien mira.
+        self._gave_up: str | None = None
+        self._watcher: ListeningWatcher | None = None
+        #: Lo que está diciendo, para callarlo si se para.
+        self._speech: _Speech | None = None
         self._before_turn: deque[Chunk] = deque(maxlen=pre_roll)
         self._turn: list[Chunk] | None = None
+        #: Cuándo empezó a oírse la voz del turno abierto: de ahí cuenta la charla.
+        self._turn_began_at = 0.0
         #: Cuándo dijo el detector por última vez que había voz: de ahí cuenta E-R03-02.
         self._voice_heard_at = 0.0
 
@@ -202,58 +287,78 @@ class LocalListening[Chunk]:
         """Si el micro está abierto y Sirius atiende lo que llega."""
         return self._listening
 
+    @property
+    def muted(self) -> bool:
+        """Si está callado con el botón de silencio."""
+        return self._muted
+
+    @property
+    def conversation_seconds(self) -> float:
+        """Lo que dura la charla desde que Sirius calla: hasta entonces sobra su nombre."""
+        return self._addressing.conversation_seconds
+
+    def watch(self, watcher: ListeningWatcher | None) -> None:
+        """Quien enseña la escucha a partir de ahora; ``None``, nadie."""
+        with self._lock:
+            self._watcher = watcher
+
     def start(self) -> str:
         """Abre el micro si el oído está instalado; devuelve el aviso si no puede, o vacío.
 
-        Si ya escucha, no hace nada. Sin el oído instalado, no carga nada, no abre el
-        micro y no baja nada: el aviso dice qué falta y qué orden lo instala. Si aún suena
-        lo último que dijo, escucha ya, pero abre el micro cuando calle, como tras hablar
-        (ronda 1 de Codex sobre la PR #688).
+        Si ya escucha, o si está callado con el botón de silencio, no hace nada. Sin el
+        oído instalado, no carga nada, no abre el micro y no baja nada: el aviso dice qué
+        falta y qué orden lo instala. Si aún suena lo último que dijo, escucha ya, pero
+        abre el micro cuando calle, como tras hablar (ronda 1 de Codex sobre la PR #688).
         """
-        if self._listening:
-            return ""
-        if not runs_on_this_computer(self._chat.llm_provider):
-            _logger.info("El oído no arranca: la charla va a un modelo de fuera")
-            return self._fail(CHAT_LEAVES)
-        missing = self._installation.missing()
-        if missing:
-            _logger.info("El oído no arranca: falta %s", ", ".join(missing))
-            problem = f"Para oírte y hablarte me falta instalar {_list(missing)} en este ordenador."
-            return self._fail(problem, install=True)
-        try:
-            if self._engines is None:
-                self._engines = self._load_engines()
-                self._detector_stale = False
-        except VoiceUnavailable as error:
-            _logger.info("El oído no arranca: %s", error.reason)
-            return self._fail(f"No puedo oírte: {error.reason}.", install=True)
-        try:
-            if self._speaking is None:
-                self._speaking = self._load_speaking()
-        except VoiceUnavailable as error:
-            _logger.info("La voz no arranca: %s", error.reason)
-            return self._fail(f"No puedo hablarte: {error.reason}.", install=True)
-        if self._detector_stale:
+        with self._lock:
+            if self._listening or self._muted:
+                return ""
+            if not runs_on_this_computer(self._chat.llm_provider):
+                _logger.info("El oído no arranca: la charla va a un modelo de fuera")
+                return self._fail(CHAT_LEAVES)
+            missing = self._installation.missing()
+            if missing:
+                _logger.info("El oído no arranca: falta %s", ", ".join(missing))
+                problem = (
+                    f"Para oírte y hablarte me falta instalar {_list(missing)} en este ordenador."
+                )
+                return self._fail(problem, install=True)
             try:
-                self._engines.detector.reset()
-            except Exception as error:
-                _logger.warning("El detector de voz sigue sin reiniciarse: %s", error)
-                problem = f"No puedo oírte: el detector de voz no se ha podido reiniciar ({error})."
-                return self._fail(problem)
-            self._detector_stale = False
-        if self._speaking.speaker.playing:
+                if self._engines is None:
+                    self._engines = self._load_engines()
+                    self._detector_stale = False
+            except VoiceUnavailable as error:
+                _logger.info("El oído no arranca: %s", error.reason)
+                return self._fail(f"No puedo oírte: {error.reason}.", install=True)
+            try:
+                if self._speaking is None:
+                    self._speaking = self._load_speaking()
+            except VoiceUnavailable as error:
+                _logger.info("La voz no arranca: %s", error.reason)
+                return self._fail(f"No puedo hablarte: {error.reason}.", install=True)
+            if self._detector_stale:
+                try:
+                    self._engines.detector.reset()
+                except Exception as error:
+                    _logger.warning("El detector de voz sigue sin reiniciarse: %s", error)
+                    problem = (
+                        f"No puedo oírte: el detector de voz no se ha podido reiniciar ({error})."
+                    )
+                    return self._fail(problem)
+                self._detector_stale = False
+            if self._speaking.speaker.playing:
+                self._listening = True
+                self._paused_to_speak = True
+                self._notice = ""
+                return ""
+            try:
+                self._engines.microphone.open()
+            except VoiceUnavailable as error:
+                _logger.info("El oído no arranca: %s", error.reason)
+                return self._fail(f"No puedo oírte: {error.reason}.")
             self._listening = True
-            self._paused_to_speak = True
             self._notice = ""
             return ""
-        try:
-            self._engines.microphone.open()
-        except VoiceUnavailable as error:
-            _logger.info("El oído no arranca: %s", error.reason)
-            return self._fail(f"No puedo oírte: {error.reason}.")
-        self._listening = True
-        self._notice = ""
-        return ""
 
     def stop(self) -> None:
         """Cierra el micro y olvida el turno a medias, si lo había, también en el detector.
@@ -262,23 +367,68 @@ class LocalListening[Chunk]:
         creería que aún hay voz y el silencio siguiente abriría un turno sin palabras
         (ronda 1 de Codex sobre la PR #687).
 
-        Si hablaba, se calla: el altavoz tira lo que le quedaba por decir, y lo que ya
-        estaba saliendo acaba en lo que tarda en sonar.
+        Si hablaba, se calla: lo que la charla siga escribiendo ya no se dice, el altavoz
+        tira lo que le quedaba por decir, y lo que ya estaba saliendo acaba en lo que tarda
+        en sonar.
 
         Nada de lo que falle aquí deja a Sirius oyendo ni suelta una pieza: el estado se
         limpia antes, el micro garantiza que al cerrarse no da más audio, y si el detector
         no se puede reiniciar se apunta, y el siguiente ``start`` lo vuelve a intentar y,
         si sigue sin poder, lo dice como aviso en vez de abrir el micro (rondas 2 y 3).
         """
+        with self._lock:
+            speech = self._speech
+            if speech is not None:
+                speech.silence()
+            if self._speaking is not None:
+                self._speaking.speaker.stop()
+            self._stop_hearing()
+
+    def mute(self) -> None:
+        """El botón de silencio: cierra el micro como ``stop`` y no lo abre nadie hasta
+        ``unmute``. Lo que suene mientras se pierde, y lo que había oído y aún no había ido
+        a la charla ya no va. Si está hablando, sigue: el silencio es para el micro."""
+        with self._lock:
+            self._muted = True
+            self._stop_hearing()
+
+    def unmute(self) -> str:
+        """Quita el silencio y vuelve a escuchar; devuelve el aviso si no puede, o vacío."""
+        with self._lock:
+            self._muted = False
+            return self.start()
+
+    def attend(self) -> Attended:
+        """Atiende todo lo que ha llegado al micro y devuelve los turnos que cerró.
+
+        Cada trozo se le enseña al detector una vez y en orden; cuando dice que el turno
+        ha acabado, se transcribe el turno entero y, si es para él, el texto va a la
+        charla. Sin escuchar, no lee el micro y devuelve el aviso de por qué. El cerrojo se
+        suelta mientras transcribe y contesta.
+        """
+        turns: list[HeardTurn] = []
+        while (closed := self._next_turn()) is not None:
+            turn = self._attend_turn(closed)
+            if turn is not None:
+                turns.append(turn)
+        with self._lock:
+            notice = "" if self._listening else self._notice
+            gave_up, self._gave_up = self._gave_up, None
+            watcher = self._watcher
+        if gave_up is not None and watcher is not None:
+            watcher.stopped(gave_up)
+        return Attended(turns=tuple(turns), notice=notice)
+
+    def _stop_hearing(self) -> None:
+        """Lo que hacen ``stop`` y ``mute`` con el micro y el detector; con el cerrojo."""
         engines = self._engines
         # Mientras habla, el micro ya está cerrado.
         microphone_open = self._listening and not self._paused_to_speak
         self._listening = False
         self._paused_to_speak = False
+        self._generation += 1
         self._turn = None
         self._before_turn.clear()
-        if self._speaking is not None:
-            self._speaking.speaker.stop()
         if engines is None:
             return
         try:
@@ -291,32 +441,28 @@ class LocalListening[Chunk]:
                 _logger.warning("El detector de voz no se ha podido reiniciar al parar: %s", error)
                 self._detector_stale = True
 
-    def attend(self) -> Attended:
-        """Atiende todo lo que ha llegado al micro y devuelve los turnos que cerró.
+    def _next_turn(self) -> _ClosedTurn[Chunk] | None:
+        """Lee el micro hasta que el detector cierra un turno o no queda nada; con el
+        cerrojo, que suelta al volver."""
+        with self._lock:
+            if not self._listening or self._engines is None:
+                return None
+            if self._paused_to_speak and not self._resume_listening():
+                # Sigue hablando: con el micro cerrado no hay nada que leer.
+                return None
+            microphone = self._engines.microphone
+            while (
+                self._listening
+                and not self._paused_to_speak
+                and (chunk := microphone.read()) is not None
+            ):
+                closed = self._listen(chunk)
+                if closed is not None:
+                    return closed
+            return None
 
-        Cada trozo se le enseña al detector una vez y en orden; cuando dice que el turno
-        ha acabado, se transcribe el turno entero y el texto va a la charla. Sin escuchar,
-        no lee el micro y devuelve el aviso de por qué.
-        """
-        if not self._listening or self._engines is None:
-            return Attended(notice=self._notice)
-        if self._paused_to_speak and not self._resume_listening():
-            # Sigue hablando: con el micro cerrado no hay nada que leer.
-            return Attended(notice="" if self._listening else self._notice)
-        microphone = self._engines.microphone
-        turns: list[HeardTurn] = []
-        while (
-            self._listening
-            and not self._paused_to_speak
-            and (chunk := microphone.read()) is not None
-        ):
-            turn = self._take(chunk)
-            if turn is not None:
-                turns.append(turn)
-        return Attended(turns=tuple(turns), notice="" if self._listening else self._notice)
-
-    def _take(self, chunk: Chunk) -> HeardTurn | None:
-        """Le enseña ``chunk`` al detector y, si con él acaba el turno, lo atiende."""
+    def _listen(self, chunk: Chunk) -> _ClosedTurn[Chunk] | None:
+        """Le enseña ``chunk`` al detector; si con él acaba el turno, lo devuelve."""
         assert self._engines is not None
         try:
             signal = self._engines.detector.listen(chunk)
@@ -329,6 +475,7 @@ class LocalListening[Chunk]:
             if signal is TurnSignal.VOICE:
                 self._turn = [*self._before_turn, chunk]
                 self._before_turn.clear()
+                self._turn_began_at = self._clock()
             else:
                 self._before_turn.append(chunk)
             return None
@@ -336,27 +483,73 @@ class LocalListening[Chunk]:
         if signal is not TurnSignal.ENDED:
             return None
         chunks, self._turn = self._turn, None
+        return _ClosedTurn(chunks, self._turn_began_at, self._voice_heard_at, self._generation)
+
+    def _attend_turn(self, closed: _ClosedTurn[Chunk]) -> HeardTurn | None:
+        """Transcribe el turno y, si es para él y quien mira lo deja, lo entrega a la charla.
+
+        Sin el cerrojo: transcribir y contestar tardan, y mientras tanto la ventana tiene
+        que poder callar el oído.
+        """
         if not runs_on_this_computer(self._chat.llm_provider):
             # La charla ya se fue a un modelo de fuera: ni se transcribe.
-            del chunks
+            closed.chunks.clear()
             self._chat_left()
             return None
+        assert self._engines is not None
         try:
-            heard = self._engines.transcriber.transcribe(chunks).strip()
+            heard = self._engines.transcriber.transcribe(closed.chunks).strip()
         except Exception as error:
             self._engine_failed("el modelo de oír", error)
             return None
         finally:
-            del chunks
+            closed.chunks.clear()
         if not heard:
             _logger.info("Turno de voz sin palabras: no va a la charla")
             return None
+        with self._lock:
+            current = closed.generation == self._generation
+            watcher = self._watcher
+        if not current:
+            _logger.info("Turno de voz de antes de callar o parar el oído: no va a la charla")
+            return None
+        if not self._addressing.is_for_sirius(heard, closed.began):
+            # Ni lo oído ni nada de ello: solo que no era para él.
+            _logger.info("Turno de voz que no era para él: no va a la charla")
+            return HeardTurn(heard=heard, addressed=False, result=None, operation_id="")
         # La operación la pone el oído, como la ventana: si la charla se rompe a medias,
         # con ella se sabe qué quedó guardado de este turno.
         operation_id = str(uuid.uuid4())
-        assert self._speaking is not None
-        speech = _Speech(self._speaking, before_first=self._pause_to_speak, clock=self._clock)
-        voice_heard_at = self._voice_heard_at
+        if watcher is not None and not watcher.may_answer(operation_id, heard):
+            _logger.info("Turno de voz para él con la ventana ocupada: no va a la charla")
+            return None
+        turn: HeardTurn | None = None
+        try:
+            with self._lock:
+                # Mientras la ventana decidía pudieron callarlo o pararlo. Desde aquí, lo que
+                # diga lo calla ``stop``: ninguna frase se le escapa.
+                if closed.generation != self._generation:
+                    _logger.info("Turno de voz callado o parado antes de ir a la charla")
+                    return None
+                assert self._speaking is not None
+                speech = _Speech(
+                    self._speaking,
+                    before_first=self._pause_to_speak,
+                    clock=self._clock,
+                    lock=self._lock,
+                )
+                self._speech = speech
+            turn = self._deliver(heard, operation_id, closed.voice_heard_at, speech)
+        finally:
+            if watcher is not None:
+                watcher.answered(turn)
+        return turn
+
+    def _deliver(
+        self, heard: str, operation_id: str, voice_heard_at: float, speech: _Speech
+    ) -> HeardTurn | None:
+        """Lo entrega a la charla, dice la respuesta mientras la escribe y deja pendiente lo
+        que el modelo proponga recordar; ``None`` si la charla se fue a un modelo de fuera."""
         try:
             # Lo que quedaba sin cerrar se dice en cuanto la respuesta acaba bien, sin esperar
             # a lo que la charla hace después del turno; si no acaba bien, lo escrito a
@@ -382,6 +575,8 @@ class LocalListening[Chunk]:
             )
             self._after_speaking(speech)
             return HeardTurn(heard=heard, addressed=True, result=None, operation_id=operation_id)
+        finally:
+            self._speech = None
         _logger.info("Turno de voz entregado a la charla")
         self._after_speaking(speech)
         delay = None
@@ -416,21 +611,32 @@ class LocalListening[Chunk]:
         return suggestion
 
     def _pause_to_speak(self) -> None:
-        """Cierra el micro antes de la primera frase: su propia voz no vuelve como un turno."""
-        assert self._engines is not None
-        self._engines.microphone.close()
-        self._paused_to_speak = True
+        """Cierra el micro antes de la primera frase: su propia voz no vuelve como un turno.
+
+        Si mientras tanto lo han callado o parado, el micro ya está cerrado y se queda así.
+        """
+        with self._lock:
+            if not self._listening or self._paused_to_speak:
+                return
+            assert self._engines is not None
+            self._engines.microphone.close()
+            self._paused_to_speak = True
 
     def _after_speaking(self, speech: _Speech) -> None:
-        """Si decirlo falló, deja de oír y lo dice; si no, vuelve a oír en cuanto calle."""
-        if speech.failure is not None:
-            what, error = speech.failure
-            self._engine_failed(what, error, doing="hablarte")
-        elif self._paused_to_speak:
-            self._resume_listening()
+        """Si decirlo falló, deja de oír y lo dice; si no, vuelve a oír en cuanto calle. Si
+        no dijo nada, ya ha callado: desde ahí corre la charla."""
+        with self._lock:
+            if speech.failure is not None:
+                what, error = speech.failure
+                self._engine_failed(what, error, doing="hablarte")
+            elif self._paused_to_speak:
+                self._resume_listening()
+            else:
+                self._addressing.fell_silent(self._clock())
 
     def _resume_listening(self) -> bool:
-        """Si el altavoz ya ha acabado, vuelve a abrir el micro; si no, espera a otra vuelta."""
+        """Si el altavoz ya ha acabado, vuelve a abrir el micro y empieza la charla; si no,
+        espera a otra vuelta. Con el cerrojo."""
         assert self._engines is not None and self._speaking is not None
         if self._speaking.speaker.playing:
             return False
@@ -438,10 +644,10 @@ class LocalListening[Chunk]:
             self._engines.microphone.open()
         except VoiceUnavailable as error:
             _logger.info("El micro no vuelve a abrirse: %s", error.reason)
-            self._fail(f"No puedo oírte: {error.reason}.")
-            self.stop()
+            self._give_up(f"No puedo oírte: {error.reason}.")
             return False
         self._paused_to_speak = False
+        self._addressing.fell_silent(self._clock())
         return True
 
     def _engine_failed(self, what: str, error: Exception, *, doing: str = "oírte") -> None:
@@ -449,14 +655,20 @@ class LocalListening[Chunk]:
         quien escucha y sin aconsejar la orden de instalar, que no lo arregla; el diario se
         queda solo con el tipo de fallo."""
         _logger.error("%s ha fallado (%s)", what, type(error).__name__)
-        self._fail(f"No puedo {doing}: {what} ha fallado ({type(error).__name__}).")
-        self.stop()
+        self._give_up(f"No puedo {doing}: {what} ha fallado ({type(error).__name__}).")
 
     def _chat_left(self) -> None:
         """La charla va a un modelo de fuera: el turno no sale, deja de oír y lo dice."""
         _logger.warning("La charla va a un modelo de fuera: el turno de voz no sale")
-        self._fail(CHAT_LEAVES)
-        self.stop()
+        self._give_up(CHAT_LEAVES)
+
+    def _give_up(self, problem: str) -> None:
+        """Deja de oír por su cuenta: apunta el aviso, para, y queda contárselo a quien mira
+        al acabar de atender."""
+        with self._lock:
+            self._fail(problem)
+            self.stop()
+            self._gave_up = self._notice
 
     def _fail(self, problem: str, *, install: bool = False) -> str:
         """Apunta el aviso; con ``install``, con la orden de instalar y lo que hace."""
@@ -483,7 +695,9 @@ class _Speech:
 
     Nada de lo que falle al decirla sale de aquí: la charla, que llama a ``hear`` mientras
     escribe, sigue hasta guardar la respuesta entera. El fallo queda en ``failure``, con
-    qué falló, para quien envió, y desde él no se dice nada más.
+    qué falló, para quien envió, y desde él no se dice nada más. Callada (``silence``),
+    tampoco: cada frase se da al altavoz con el cerrojo del oído, el mismo con el que
+    ``stop`` la calla y vacía el altavoz, así que ninguna se cuela después.
     """
 
     def __init__(
@@ -492,12 +706,15 @@ class _Speech:
         *,
         before_first: Callable[[], None],
         clock: Callable[[], float],
+        lock: threading.RLock,
     ) -> None:
         self._engines = engines
         self._before_first = before_first
         self._clock = clock
+        self._lock = lock
         self._cutter = SpeechCutter()
         self._started = False
+        self._silenced = False
         self.failure: tuple[str, Exception] | None = None
         #: Cuándo empezó a sonar la primera frase, con lo que tarda el altavoz.
         self.first_sound_at: float | None = None
@@ -510,8 +727,12 @@ class _Speech:
         """La charla acabó bien: dice lo que quedaba."""
         self._say(self._cutter.finish)
 
+    def silence(self) -> None:
+        """Deja de decir: lo que llegue después ya no suena."""
+        self._silenced = True
+
     def _say(self, cut: Callable[[], list[str]]) -> None:
-        if self.failure is not None:
+        if self.failure is not None or self._silenced:
             return
         what = "la voz"
         try:
@@ -523,7 +744,10 @@ class _Speech:
                 sound = self._engines.voice.say(sentence)
                 what = "el altavoz"
                 speaker = self._engines.speaker
-                speaker.play(sound)
+                with self._lock:
+                    if self._silenced:
+                        return
+                    speaker.play(sound)
                 if self.first_sound_at is None:
                     self.first_sound_at = self._clock() + speaker.latency
         except Exception as error:
