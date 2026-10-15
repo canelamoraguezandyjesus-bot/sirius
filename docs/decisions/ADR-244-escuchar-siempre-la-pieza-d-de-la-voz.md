@@ -186,7 +186,8 @@ Lo que se decidió al escribir el código, con su porqué:
   así, si había dejado de oír por un fallo lo reabre el botón, y si la ventana se está
   cerrando no se abre, porque ya nadie haría de portera. Y fuera de Model Studio su voz no
   suena: callarla, al salir o con «parar», invalida lo que se estaba sintetizando y las
-  órdenes de sonar que aún no habían llegado al reproductor (ronda 3).
+  órdenes de sonar que aún no habían llegado al reproductor (ronda 3), y lo que eso
+  devuelva después ya no cuenta para la voz de ahora (ronda 4).
 
 ## Comprobación que la sostiene
 
@@ -244,7 +245,13 @@ Medido el 15-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   (`tests/gui/test_qt_playback.py` y `tests/gui/test_winsound_playback.py`), y la de salir
   de Model Studio, que ahora exige que no suene nada. Los reproductores y Model Studio, 90
   en verde. 9 mutaciones del arreglo, y caen las 9. mypy, sin errores en 717 ficheros;
-  ruff, limpio.
+  ruff, limpio. La batería entera sobre `667cf41b`: 8 648 en verde, 14 omitidas y 8
+  `xfail`, en 22 min 47 s; sobre `df8de8d6` eran 8 645, 14 y 8.
+- **Tras la ronda 4 de Codex** (abajo), una prueba más con tres casos en
+  `tests/gui/test_model_studio_integration.py`: lo que devuelve la voz callada acaba
+  bien, falla o revienta, y no toca la voz de ahora. Con el código de antes fallaba en
+  los tres. La ventana, Model Studio, los reproductores y la voz, 206 en verde. 4
+  mutaciones del arreglo, y caen las 4. mypy, sin errores en 717 ficheros; ruff, limpio.
 
 ## Consecuencias
 
@@ -353,3 +360,17 @@ dura la charla. No trae cortarle (E) ni elegir su voz (F).
     los dos sitios donde empieza el sonido: callar cuenta, y lo que se pidió antes no
     suena. La guarda de la ventana sobra y se quita. Se sigue: no queda ningún camino por
     el que la voz de Model Studio suene después de callarla.
+- **Ronda 4, sobre `667cf41b`**, preguntando si el enfoque está mal: no lo dijo, y trajo un
+  hallazgo, cierto, que nace del arreglo de la ronda 3.
+  - **P2, tercera ronda seguida en la misma familia**: al callar la voz, la síntesis en
+    marcha acaba devolviendo «nada que decir», y la ventana lo tomaba por la voz de
+    ahora; si ya se sintetizaba otra, la daba por acabada y podía arrancar otra a la vez,
+    y un fallo o una excepción de la callada la dejaban en error. La raíz de la ronda 3
+    estaba a medias: una petición de voz no tenía identidad en todas sus etapas. La tenía
+    donde empieza el sonido y le faltaba donde se recoge lo que devuelve, la ventana.
+    Ahora la ventana cuenta también las veces que se calla, cada petición se lleva la
+    cuenta de cuando se pidió, y lo que devuelva una anterior se ignora. Con eso, las
+    tres etapas que actúan, la voz de Model Studio antes de pedir que suene, los
+    reproductores antes de empezar y la ventana antes de atender lo que vuelve, ignoran
+    lo pedido antes de callar; el final natural de lo que suena no puede llegar de una
+    voz callada, porque parar borra el aviso. Se sigue: no queda otra etapa con efecto.
