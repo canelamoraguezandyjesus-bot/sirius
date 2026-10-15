@@ -55,7 +55,12 @@ from sirius.ports.llm import (
     LLMStreamEvent,
     LLMTextDelta,
 )
-from sirius.ports.text_to_speech import SpeechError, SpeechRequest, SynthesizedSpeech
+from sirius.ports.text_to_speech import (
+    SpeechError,
+    SpeechErrorKind,
+    SpeechRequest,
+    SynthesizedSpeech,
+)
 from sirius.presentation.main_window import (
     MODEL_STUDIO_PAGE_INDEX,
     TECHNICAL_PAGE_INDEX,
@@ -1107,3 +1112,78 @@ def test_lo_que_acaba_de_sintetizarse_despues_de_salir_no_suena(
     assert list(directory.glob("voz-*.wav")) == []
     assert window._speech_busy is False
     assert window.studio_page.interaction_state is not StudioInteractionState.HABLANDO
+
+
+class _SintesisPorTurnos(FakeTextToSpeech):
+    """Cada síntesis espera a que la prueba la deje acabar; la primera acaba bien, con
+    error o reventando."""
+
+    def __init__(self, directory: Path, *, la_primera: str = "acaba") -> None:
+        super().__init__(directory)
+        self.empezo = [threading.Event() for _ in range(3)]
+        self.sigue = [threading.Event() for _ in range(3)]
+        self._la_primera = la_primera
+        self._llamadas = 0
+        self._cerrojo = threading.Lock()
+
+    def synthesize(self, request: SpeechRequest) -> SynthesizedSpeech | SpeechError:
+        with self._cerrojo:
+            turno, self._llamadas = self._llamadas, self._llamadas + 1
+        self.empezo[turno].set()
+        self.sigue[turno].wait(5)
+        if turno == 0 and self._la_primera == "falla":
+            return SpeechError(SpeechErrorKind.TIMEOUT, "tarda")
+        if turno == 0 and self._la_primera == "revienta":
+            msg = "un fallo que no es de la voz"
+            raise RuntimeError(msg)
+        return super().synthesize(request)
+
+
+@pytest.mark.gui
+@pytest.mark.parametrize("la_primera", ["acaba", "falla", "revienta"])
+def test_lo_que_devuelve_una_voz_callada_no_toca_la_de_ahora(
+    qtbot: QtBot, tmp_path: Path, la_primera: str
+) -> None:
+    """Ronda 4 de Codex sobre la PR #689 (ADR-244): callar la voz invalida lo que se
+    sintetizaba, y lo que eso devuelva después, fallo o excepción incluidos, ya no es de la voz de
+    ahora: no la da por acabada ni la deja en error, y no arranca otra a la vez."""
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    directory = tmp_path / "audio"
+    directory.mkdir(exist_ok=True)
+    text_to_speech = _SintesisPorTurnos(directory, la_primera=la_primera)
+    playback = FakeAudioPlayback()
+    voice = _voice_use_case(tmp_path, text_to_speech=text_to_speech, playback=playback)
+    window = _build_window(database_path, studio_voice_use_case=voice)
+    qtbot.addWidget(window)
+    _swap_provider(window, database_path, FakeLLMProvider(("Monta el Uno.",)))
+    window.open_model_studio()
+    try:
+        window.studio_page.input.setPlainText("¿por dónde empiezo?")
+        window.studio_page.send_button.click()
+        qtbot.waitUntil(text_to_speech.empezo[0].is_set, timeout=5000)
+        # Se sale con la primera a medias, se vuelve y se pide otra respuesta.
+        window.studio_page.exit_button.click()
+        window.open_model_studio()
+        qtbot.waitUntil(lambda: not window._is_sending, timeout=5000)
+        window.studio_page.input.setPlainText("¿y después?")
+        window.studio_page.send_button.click()
+        qtbot.waitUntil(text_to_speech.empezo[1].is_set, timeout=5000)
+
+        text_to_speech.sigue[0].set()
+        qtbot.waitUntil(lambda: len(window._active_voice_workers) == 1, timeout=5000)
+
+        assert window._speech_busy is True
+        assert window.studio_page.interaction_state is StudioInteractionState.SINTETIZANDO
+        assert window.studio_page.error_label.text() == ""
+        assert not text_to_speech.empezo[2].is_set(), "arrancó otra voz a la vez"
+        text_to_speech.sigue[1].set()
+        qtbot.waitUntil(
+            lambda: window.studio_page.interaction_state is StudioInteractionState.HABLANDO,
+            timeout=5000,
+        )
+        assert len(playback.played) == 1
+    finally:
+        # Si algo falla antes, ninguna síntesis se queda esperando a que la ventana muera.
+        for sigue in text_to_speech.sigue:
+            sigue.set()
+        window._thread_pool.waitForDone(5000)

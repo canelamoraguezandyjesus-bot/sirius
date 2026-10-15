@@ -406,6 +406,9 @@ class MainWindow(QMainWindow):
         # que el anterior termine de sonar.
         self._speech_queue: list[tuple[str, bool]] = []
         self._speech_busy = False
+        #: Cuántas veces se ha callado la voz: el desenlace de lo que se pidió antes ya no
+        #: es de la voz de ahora (ronda 4 de Codex sobre la PR #689, ADR-244).
+        self._speech_epoch = 0
         self._spoken_prefix_length = 0
         self._early_speech_used = False
         # La voz elegida tiene que sobrevivir al cierre: la raíz de composición
@@ -889,7 +892,9 @@ class MainWindow(QMainWindow):
         self._early_speech_used = False
 
     def _silence_pending_speech(self) -> None:
-        """Deja de leer una respuesta que se canceló o falló a mitad."""
+        """Deja de leer una respuesta que se canceló o falló a mitad. Lo que aún se esté
+        sintetizando ya no suena, y lo que devuelva ya no cuenta."""
+        self._speech_epoch += 1
         self._speech_queue.clear()
         self._reset_speech_stream()
         if self._studio_voice_use_case is not None:
@@ -912,13 +917,22 @@ class MainWindow(QMainWindow):
         if self._studio_voice_use_case is None:
             return
         self._mirror_studio_state(StudioInteractionState.SINTETIZANDO)
+        epoch = self._speech_epoch
         worker = SpeakWorker(self._studio_voice_use_case, text, status, read_code=read_code)
-        worker.signals.finished.connect(self._on_spoken)
-        worker.signals.crashed.connect(self._on_voice_crashed)
+        worker.signals.finished.connect(lambda outcome: self._on_spoken(outcome, epoch))
+        worker.signals.crashed.connect(lambda message: self._on_speech_crashed(message, epoch))
         self._retain_voice_worker(worker)
         self._thread_pool.start(worker)
 
-    def _on_spoken(self, outcome: object) -> None:
+    def _on_speech_crashed(self, error_message: str, epoch: int) -> None:
+        if epoch == self._speech_epoch:
+            self._on_voice_crashed(error_message)
+
+    def _on_spoken(self, outcome: object, epoch: int) -> None:
+        if epoch != self._speech_epoch:
+            # Lo pidió una voz que ya se calló: lo que devuelva, fallo incluido, no es de
+            # la que suena ahora (ronda 4 de Codex sobre la PR #689, ADR-244).
+            return
         if isinstance(outcome, VoiceFailure):
             # Un fallo de voz no puede dejar la cola atascada para siempre.
             self._speech_busy = False
