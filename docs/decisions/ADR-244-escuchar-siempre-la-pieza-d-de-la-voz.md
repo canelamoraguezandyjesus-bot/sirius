@@ -142,7 +142,10 @@ Lo que se decidió al escribir el código, con su porqué:
   empieza a oírse a 10 s o menos de que Sirius calle. Sirius calla cuando el altavoz acaba
   o, si no dijo nada, al acabar el turno. Se mide desde que empieza a oírse su voz, no
   desde que acaba el turno: lo que empezó a decir dentro de la charla es para él aunque
-  acabe fuera. Cada vez que Sirius calla empieza otra charla.
+  acabe fuera. Cada vez que Sirius calla empieza otra charla. La hora es la del micro al
+  captar el trozo en que el detector oye su voz, no la del oído al leerlo: el micro dice
+  cuánto esperó cada trozo en su cola (`Captured`), y lo que empezó antes de que Sirius
+  callara no es de esa charla (ronda 1 de Codex, abajo).
 - **Lo que no es para él** se transcribe, porque sin el texto no se sabe, y se descarta
   ahí: no va a la charla, el diario solo apunta que no era para él, y vuelve como turno con
   `addressed` falso, que ni la ventana ni `sirius-oye` enseñan.
@@ -212,6 +215,12 @@ Medido el 15-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
 - **La batería entera**, sobre `ec0395ad`: 8 632 en verde, 14 omitidas y 8 `xfail`, en
   25 min 9 s. Sobre el último head de la pieza C, `dcdf08e6`, eran 8 521 en verde, 16
   omitidas y 16 `xfail`: las 8 de la pieza D ya no esperan.
+- **Tras la ronda 1 de Codex** (abajo), 6 pruebas más: la que reproduce el hallazgo, que
+  fallaba con el código de antes, y tres del oído en `tests/unit/test_local_listening.py`
+  (de 73 a 77), una de la regla (de 16 a 17) y una del micro de verdad en
+  `tests/unit/test_local_listening_adapters.py`. Las de la voz, la consola y la ventana,
+  193 en verde; las de aceptación de la 0.3 y los dobles, 42 en verde y 6 `xfail`. 9
+  mutaciones del arreglo, y caen las 9. mypy, sin errores en 717 ficheros; ruff, limpio.
 
 ## Consecuencias
 
@@ -219,6 +228,15 @@ Medido el 15-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   contesta una vez dentro de la charla, puede seguir contestándole mientras la tele no
   calle 10 s. Lo que de verdad lo evita es saber si le miran, en la 0.4. E-R03-05 no lo
   mide: pone la tele sin hablarle, fuera de la charla.
+- **Lo que se dice mientras atiende un turno para él no es de ninguna charla**, salvo con
+  su nombre: si contesta en voz alta, el micro cerrado lo pierde, como en la pieza C; si
+  no dice nada, empezó antes de que callara.
+- **La charla cuenta desde el trozo en que el detector oye su voz**, un poco después de
+  que empiece de verdad, lo que tarda Silero en darla por empezada; no se ha medido. Con
+  su voz empezando justo al final de los 10 s, puede quedar fuera. No se adelanta con lo
+  que el oído guarda de antes de la voz (`PRE_ROLL_CHUNKS`, medio segundo con el micro de
+  verdad): la charla ganaría hasta ese medio segundo, y en los dobles, donde un silencio
+  no dura nada, lo guardado puede ser de mucho antes.
 - La ventana tarda más en abrirse la primera vez con la voz instalada: carga el oído y la
   voz antes de enseñarse. No se ha medido; se ve en E-R03-01.
 - El botón de silencio reinicia el detector en el hilo de la ventana, como parar desde la
@@ -259,3 +277,16 @@ que la ventana escuche desde que se abre y lo diga, que el silencio cierre el mi
 diga, que lo oído y lo contestado se vean como la charla escrita, que no se guarde audio
 ni lo que no era para él, y que conteste con su nombre siempre y sin él solo mientras
 dura la charla. No trae cortarle (E) ni elegir su voz (F).
+
+- **Ronda 1, sobre `e40d0360`**: un hallazgo P2, cierto. El inicio del turno se fechaba
+  cuando el oído leía el trozo, no cuando el micro lo captó. Mientras la charla contesta,
+  el micro sigue captando y nadie lo lee; si al final Sirius no dice nada, la charla
+  empieza al acabar el turno, y lo que la tele dijo mientras tanto se leía después, se
+  fechaba dentro de la charla y llegaba al modelo. Se reprodujo con una prueba antes de
+  arreglarlo: con el código de antes, la tele llegaba a la charla. Arreglo: el micro dice
+  cuánto esperó cada trozo en su cola (`Captured.age`, sin que el micro y el oído tengan
+  que llevar el mismo reloj), el oído fecha la voz con la hora del micro, para la charla
+  y para E-R03-02, sin su nombre la voz tiene que empezar después de que Sirius calle, y
+  Sirius calla antes de abrir el micro. El hallazgo pedía además adelantar el inicio con
+  lo guardado de antes de la voz; no se hace, por lo que dice «Consecuencias». Familia:
+  `la-hora-de-quien-lee-y-no-de-quien-capta`.
