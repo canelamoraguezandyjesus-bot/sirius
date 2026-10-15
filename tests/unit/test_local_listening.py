@@ -27,7 +27,7 @@ from sirius.application.local_listening import (
 )
 from sirius.application.send_message import ChatLeavesThisComputer, SendMessageResult
 from sirius.domain.conversation import MessageStatus
-from sirius.ports.llm import runs_on_this_computer
+from sirius.ports.llm import LLMErrorKind, runs_on_this_computer
 from sirius.ports.local_voice import ListeningEngines, TurnSignal, VoiceUnavailable
 
 FIN = "fin"
@@ -125,6 +125,9 @@ class _Charla:
         self.mensajes: list[str] = []
         self.falla: Exception | None = None
         self.desenlace = MessageStatus.COMPLETED
+        self.por_que: LLMErrorKind | None = None
+        #: Lo que el modelo propone recordar al contestar, como Ollama tras el delimitador.
+        self.propone: str | None = None
 
     def send_message(
         self, user_text: str, *, only_on_this_computer: bool = False
@@ -137,9 +140,26 @@ class _Charla:
             falla, self.falla = self.falla, None
             raise falla
         respuesta = SimpleNamespace(
-            outcome=self.desenlace, sirius_message=SimpleNamespace(content=f"R: {user_text}")
+            outcome=self.desenlace,
+            sirius_message=SimpleNamespace(id=7, content=f"R: {user_text}"),
+            error_kind=self.por_que,
+            memory_suggestion=self.propone,
         )
         return cast("SendMessageResult", respuesta)
+
+
+class _Propuestas:
+    """Donde quedan pendientes las propuestas de memoria, como el caso de uso de verdad."""
+
+    def __init__(self) -> None:
+        self.hechas: list[tuple[str, int | None]] = []
+        self.falla: Exception | None = None
+
+    def propose(self, content: str, *, message_id: int | None = None) -> object:
+        if self.falla is not None:
+            raise self.falla
+        self.hechas.append((content, message_id))
+        return object()
 
 
 class _Instalacion:
@@ -162,6 +182,7 @@ class _Oido:
         self.detector = detector or _Detector()
         self.transcriptor = _Transcriptor()
         self.charla = _Charla()
+        self.propuestas = _Propuestas()
         self.instalacion = _Instalacion()
         self.cargas = 0
         self.falla_al_cargar: VoiceUnavailable | None = None
@@ -169,6 +190,7 @@ class _Oido:
             chat=self.charla,
             installation=self.instalacion,
             load_engines=self._carga,
+            memory_suggestions=self.propuestas,
             pre_roll=antes,
         )
 
@@ -486,6 +508,64 @@ def test_si_la_charla_no_acaba_bien_el_turno_lo_dice() -> None:
 
     assert turno.heard == "Hola"
     assert not turno.answered
+
+
+def test_si_la_charla_no_acaba_bien_el_turno_dice_por_que() -> None:
+    # Ronda 12 de Codex sobre la PR #687: lo que devuelve la charla no se queda por el
+    # camino; quien enseña el turno dice lo mismo que la ventana para ese fallo.
+    oido = _Oido()
+    oido.servicio.start()
+    oido.charla.desenlace = MessageStatus.FAILED
+    oido.charla.por_que = LLMErrorKind.CONNECTION
+    oido.charla.propone = "Le gusta el café"
+
+    (turno,) = oido.suena(voz("Hola"), FIN).turns
+
+    assert not turno.answered
+    assert turno.error_kind is LLMErrorKind.CONNECTION
+    assert turno.proposed is None
+    assert oido.propuestas.hechas == [], "un turno que no acabó bien no propone nada"
+
+
+def test_lo_que_el_modelo_propone_recordar_queda_pendiente_como_en_la_ventana() -> None:
+    oido = _Oido()
+    oido.servicio.start()
+    oido.charla.propone = "Le gusta el café"
+
+    (turno,) = oido.suena(voz("Me encanta el café"), FIN).turns
+
+    assert oido.propuestas.hechas == [("Le gusta el café", 7)]
+    assert turno.proposed == "Le gusta el café"
+    assert turno.answered
+
+
+def test_sin_propuesta_no_propone_nada() -> None:
+    oido = _Oido()
+    oido.servicio.start()
+
+    (turno,) = oido.suena(voz("Hola"), FIN).turns
+
+    assert oido.propuestas.hechas == []
+    assert turno.proposed is None
+
+
+def test_si_proponer_falla_el_turno_contestado_sigue_y_el_diario_no_guarda_lo_propuesto(
+    caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(logging.getLogger("sirius.application.local_listening"), "disabled", False)
+    oido = _Oido()
+    oido.servicio.start()
+    oido.charla.propone = "La clave es Zarzamora"
+    oido.propuestas.falla = RuntimeError("la base está cerrada")
+
+    with caplog.at_level(logging.DEBUG):
+        (turno,) = oido.suena(voz("Hola"), FIN).turns
+
+    assert turno.answered
+    assert turno.reply == "R: Hola"
+    assert turno.proposed is None
+    assert "No se pudo proponer lo que recordar (RuntimeError)" in caplog.text
+    assert "zarzamora" not in caplog.text.casefold()
 
 
 def test_el_diario_no_se_queda_con_nada_de_lo_oido(

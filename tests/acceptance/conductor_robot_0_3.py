@@ -906,8 +906,10 @@ class TurnoDeVoz:
 
     ``oido`` es lo que Sirius dio por dicho, o ``None`` si el turno no se cerró
     o el micro estaba cerrado. ``para_el`` dice si Sirius lo tomó como dicho a
-    él. ``contestado`` es lo que escribió, y ``hablado`` lo que fue diciendo
-    por el altavoz, frase a frase. ``aviso`` es lo que Sirius enseña si no
+    él. ``contestado`` es lo que escribió si la charla acabó bien; si no acabó
+    bien es ``None``, como sin respuesta, y lo que llegara a escribir queda en
+    ``charla_guardada``. ``hablado`` es lo que fue diciendo por el altavoz,
+    frase a frase. ``aviso`` es lo que Sirius enseña si no
     puede oír o hablar, por ejemplo porque falta un modelo. Los tiempos no van
     aquí: se calculan con los relojes de los dobles (``micro.leido_en``,
     ``altavoz.sonados``, ``altavoz.parado_en``, ``modelo.acabo_en``), para que
@@ -1449,16 +1451,26 @@ class ConductorDeVoz(Conductor):
     def _turno_de_voz(self) -> TurnoDeVoz:
         """Deja a Sirius hacer con lo que ha sonado hasta que termine, y lo resume.
 
-        Lo oído, si era para él, lo contestado y el aviso son lo que dice Sirius de los
-        turnos que cerró; lo hablado es lo que apuntó el altavoz mientras tanto.
+        Lo oído, si era para él, lo contestado y el aviso son lo que dice Sirius del turno
+        que cerró; lo hablado es lo que apuntó el altavoz mientras tanto. Nada de lo que
+        devuelve el oído se queda por el camino (rondas 11 y 12 de Codex sobre la PR #687):
+        lo contestado solo cuenta si la charla acabó bien, y si se cerraron varios turnos
+        de una vez, falla en vez de quedarse con el último.
         """
         sonados_antes = len(self.altavoz.sonados)
         atendido = self._dependencias.local_listening.attend()
         hablado = tuple(sonido.texto for sonido, _ in self.altavoz.sonados[sonados_antes:])
+        if len(atendido.turns) > 1:
+            msg = (
+                f"Sirius cerró {len(atendido.turns)} turnos de una vez y el conductor da "
+                "uno: los de antes se perderían."
+            )
+            raise AssertionError(msg)
         if not atendido.turns:
             return TurnoDeVoz(None, False, None, hablado, aviso=atendido.notice)
-        turno = atendido.turns[-1]
-        return TurnoDeVoz(turno.heard, turno.addressed, turno.reply, hablado, aviso=atendido.notice)
+        (turno,) = atendido.turns
+        contestado = turno.reply if turno.answered else None
+        return TurnoDeVoz(turno.heard, turno.addressed, contestado, hablado, aviso=atendido.notice)
 
     def charla_guardada(self) -> tuple[tuple[str, str], ...]:
         """La charla tal como queda en la base: (quién, texto), en orden.

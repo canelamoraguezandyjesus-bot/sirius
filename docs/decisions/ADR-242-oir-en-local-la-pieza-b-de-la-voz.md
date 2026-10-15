@@ -170,14 +170,18 @@ Medido el 14-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   la C (`tests/acceptance/test_dobles_del_conductor.py`). La tabla de
   `docs/evolution/PRUEBAS_0.3_DEL_ROBOT.md` pone PA-R03-01 en verde; PA-R03-08 sigue
   pendiente de la C.
-- **89 pruebas unitarias nuevas**: el servicio (`tests/unit/test_local_listening.py`), los
+- **94 pruebas unitarias nuevas**: el servicio (`tests/unit/test_local_listening.py`), los
   adaptadores de verdad con módulos de mentira (`tests/unit/test_local_listening_adapters.py`),
   la instalación y la orden de instalar (`tests/unit/test_local_voice_installation.py`), la
   orden de consola (`tests/unit/test_listen_console.py`) y la guarda de las descargas
   (`tests/unit/test_solo_la_orden_de_instalar_baja_modelos.py`). Y tres de integración en
   `tests/integration/test_send_message.py`: pedida la charla solo en este ordenador, no
   guarda ni envía nada a un modelo de fuera, envía con el modelo que comprobó aunque cambie
-  mientras prepara el turno, y con uno de aquí envía.
+  mientras prepara el turno, y con uno de aquí envía. Una más en
+  `tests/integration/test_memory_suggestion_automatic_trigger.py`: un turno de voz deja
+  pendiente lo que el modelo propone recordar, con la charla y la base de verdad. Y dos
+  del conductor en `tests/acceptance/test_dobles_del_conductor.py`: lo contestado solo
+  cuenta si la charla acabó bien, y varios turnos cerrados de una vez lo hacen fallar.
 - **Mutación: todas caen en su ronda.** Quitar lo que suena antes de la voz, no mirar la
   instalación, escribir lo oído en el diario, mandar un turno vacío, no vaciar el turno,
   leer el micro parado, empezar un turno o transcribir con un fin de turno sin voz
@@ -246,7 +250,14 @@ Medido el 14-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   de la ronda 11: que la orden de consola ignore el aviso de que dejó de oír, que salga
   sin decirlo, que salga como si todo fuera bien, y que lo diga antes de contar lo que ya
   oyó. Al cerrar la ronda 11 se han vuelto a pasar las 45 de las rondas 4 a 11, y caen
-  todas. La de etiquetar con la generación del
+  todas. Y las doce de la ronda 12: que el conductor dé lo escrito aunque la charla falle
+  o se quede con el último turno, que el turno no diga por qué no acabó, que el oído no
+  proponga lo que el modelo quiere recordar (vista también en la base de verdad), que lo
+  proponga aunque la charla no acabe bien, que un fallo al proponer tumbe el turno, que
+  el diario guarde lo propuesto, que el turno no diga qué se propuso, que la propuesta no
+  se ligue a su respuesta, que la consola adivine el remedio y que calle lo propuesto. Al
+  cerrar la ronda 12 se han vuelto a pasar las 57 de las rondas 4 a 12, y caen todas. La
+  de etiquetar con la generación del
   momento sobrevivió a la prueba que reproduce el caso de Codex, que para el hilo dentro
   de `bytes(data)`, donde las dos coinciden; cayó con otra que lo para justo después de
   comprobar.
@@ -584,3 +595,34 @@ Es una familia nueva, así que no salta la regla de las dos rondas. De dónde vi
 orden se escribió antes de que el oído pudiera parar solo, que llegó en la ronda 9, y
 entonces no se miró a quien lo usa. Lo atienden dos: la orden y el conductor de las
 pruebas de aceptación, que ya leía el aviso.
+
+**Ronda 12** (`eb969154`, 15-10-2026): un hallazgo P2, cierto. El revisor dice que llega
+tarde por goteo; cuenta como ronda.
+
+- **P2: el conductor daba por contestado un turno que la charla no acabó bien.** Si el
+  modelo falla a medias, el oído devuelve lo que llegó a escribir con `answered=False`, y
+  el conductor lo pasaba como `contestado`: una prueba de aceptación que solo mirara eso
+  lo habría dado por respuesta.
+
+**La regla de las dos rondas** (11 y 12, la misma familia: quien usa lo que devuelve el
+oído pierde parte por el camino). En la ronda 11 se arregló un sitio y se dijo que el
+otro ya leía el aviso; era verdad del aviso, pero no se miró lo demás. La raíz: lo que
+devuelve cada paso se traduce a mano en el siguiente, y lo que no se traduce se pierde
+sin que nadie lo vea. Se repasa cada paso entero, campo a campo:
+
+- **De la charla al oído.** El oído pasaba si la charla acabó bien y lo escrito, y perdía
+  por qué no acabó y lo que el modelo proponía recordar, que Ollama también propone. Con
+  lo escrito, esa propuesta la deja pendiente la ventana al acabar el turno; con la voz
+  la dejaba nadie. Ahora la deja el oído, que es quien envía, con el mismo caso de uso
+  que la ventana, y el turno lleva por qué no acabó y qué se propuso. Un fallo al
+  proponer no deshace el turno, y el diario apunta solo el tipo de fallo.
+- **Del oído a la orden de consola.** Contaba lo oído, lo contestado y, desde la ronda 11,
+  el aviso. Ahora, si la charla no acabó bien, dice el mismo aviso que la ventana para
+  ese fallo, en vez de «mira que su modelo esté abierto», que adivinaba el remedio: con
+  el modelo sin configurar, por ejemplo, no lo es. Y si el modelo propuso algo, dice
+  dónde confirmarlo. Si era para él no lo mira: en la pieza B siempre lo es, y la pieza
+  D, que lo decide, tendrá que contarlo.
+- **Del oído al conductor.** Lo contestado solo cuenta si la charla acabó bien, y si se
+  cerraron varios turnos de una vez, falla en vez de quedarse con el último. Lo propuesto
+  y el porqué no van en `TurnoDeVoz`: ninguna prueba de aceptación los pide, y están en
+  la base.

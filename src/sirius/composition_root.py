@@ -105,7 +105,7 @@ from sirius.application.get_conversation_history import GetConversationHistoryUs
 from sirius.application.historical_projects import HistoricalProjectsUseCase
 from sirius.application.initial_project import InitialProjectUseCase
 from sirius.application.knowledge_overview import GetKnowledgeOverviewUseCase
-from sirius.application.local_listening import Chat, LocalListening
+from sirius.application.local_listening import Chat, LocalListening, MemorySuggestions
 from sirius.application.memory_commands import MemoryCommandService
 from sirius.application.memory_origin import GetMemoryOriginUseCase
 from sirius.application.memory_search import MemoryEmbeddingService, MemorySearch
@@ -622,9 +622,13 @@ def build_local_listening(
     chat: Chat,
     load_engines: Callable[[], ListeningEngines[Any]] | None = None,
     *,
+    memory_suggestions: MemorySuggestions,
     settings: LocalVoiceSettings | None = None,
 ) -> LocalListening[Any]:
     """El oído del robot (ADR-242), entregando lo oído a ``chat``.
+
+    Lo que el modelo propone recordar en un turno de voz queda en ``memory_suggestions``,
+    pendiente de que él lo confirme, como lo escrito en la ventana.
 
     No carga nada al construirse: el micro, el detector y el transcriptor se cargan al
     empezar a escuchar, y solo si el modelo de oír está en este ordenador. Sin
@@ -636,6 +640,7 @@ def build_local_listening(
         chat=chat,
         installation=installation,
         load_engines=load_engines or (lambda: load_listening_engines(model_dir)),
+        memory_suggestions=memory_suggestions,
     )
 
 
@@ -914,6 +919,9 @@ def build_conversation_dependencies(
         current_model=current_chat_model,
         seed_examples=seed_examples,
     )
+    # La misma para la ventana y para el oído: lo que el modelo propone recordar queda
+    # pendiente igual se le escriba o se le hable.
+    propose_memory_suggestion_use_case = ProposeMemorySuggestionUseCase(unit_of_work)
 
     return ConversationDependencies(
         send_message_use_case=send_message_use_case,
@@ -946,7 +954,7 @@ def build_conversation_dependencies(
         get_knowledge_overview_use_case=GetKnowledgeOverviewUseCase(
             memory_repository, decision_repository, memory_suggestion_repository
         ),
-        propose_memory_suggestion_use_case=ProposeMemorySuggestionUseCase(unit_of_work),
+        propose_memory_suggestion_use_case=propose_memory_suggestion_use_case,
         confirm_memory_suggestion_use_case=confirm_suggestion_use_case,
         reject_memory_suggestion_use_case=reject_suggestion_use_case,
         propose_criticality_use_case=propose_criticality_use_case,
@@ -978,5 +986,9 @@ def build_conversation_dependencies(
         facts_use_case=facts_use_case,
         fact_proposals=fact_proposals,
         dream_service=dream_service,
-        local_listening=build_local_listening(send_message_use_case, listening_engines),
+        local_listening=build_local_listening(
+            send_message_use_case,
+            listening_engines,
+            memory_suggestions=propose_memory_suggestion_use_case,
+        ),
     )

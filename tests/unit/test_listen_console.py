@@ -6,6 +6,8 @@ import pytest
 
 from sirius.application.local_listening import CHAT_LEAVES, Attended, HeardTurn
 from sirius.listen_console import listen
+from sirius.ports.llm import LLMErrorKind
+from sirius.presentation.error_messages import describe_error
 
 
 class _Oido:
@@ -67,15 +69,31 @@ def test_cuenta_cada_turno_espera_cuando_no_llega_nada_y_cierra_al_salir() -> No
     assert oido.parado
 
 
-def test_si_sirius_no_pudo_contestar_lo_dice_en_vez_de_dejarlo_en_blanco() -> None:
-    turno = HeardTurn("Hola", True, "", answered=False)
+def test_si_sirius_no_pudo_contestar_lo_dice_con_el_aviso_de_la_ventana() -> None:
+    # Ronda 12 de Codex sobre la PR #687: el porqué llega del oído, y se dice lo mismo que
+    # la ventana para ese fallo, sin adivinar el remedio.
+    turno = HeardTurn("Hola", True, "Ho", answered=False, error_kind=LLMErrorKind.TIMEOUT)
     oido = _Oido(atenciones=[Attended(turns=(turno,))])
 
     _, dicho, _ = _escucha(oido, 1)
 
     assert dicho[1:] == [
         "Tú: Hola",
-        "Sirius no ha podido contestar: mira que su modelo esté abierto.",
+        f"Sirius no ha podido contestar. {describe_error(LLMErrorKind.TIMEOUT)}",
+    ]
+
+
+def test_si_sirius_propone_recordar_algo_dice_donde_confirmarlo() -> None:
+    turno = HeardTurn("Me encanta el café", True, "¡Anotado!", proposed="Le gusta el café")
+    oido = _Oido(atenciones=[Attended(turns=(turno,))])
+
+    _, dicho, _ = _escucha(oido, 1)
+
+    assert dicho[1:] == [
+        "Tú: Me encanta el café",
+        "Sirius: ¡Anotado!",
+        "Sirius propone recordar «Le gusta el café»: lo confirmas o lo rechazas en "
+        "Memoria y decisiones, en la ventana.",
     ]
 
 

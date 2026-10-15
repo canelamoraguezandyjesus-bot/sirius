@@ -48,6 +48,7 @@ from conductor_robot_0_3 import (
 from piezas_del_robot import PiezaPendiente
 from pytestqt.qtbot import QtBot
 
+from sirius.application.local_listening import Attended, HeardTurn, LocalListening
 from sirius.config.local_voice import ListeningModel, LocalVoiceSettings
 from sirius.infrastructure.logging import LOGGER_NAME
 from sirius.ports.llm import LLMCompleted, LLMRequest, LLMTextDelta
@@ -288,6 +289,36 @@ def test_el_conductor_se_construye_lee_la_base_de_verdad_y_sus_piezas_pendientes
     assert conductor.escrituras_en_disco() == []
     assert conductor.ficheros_nuevos() == []
     assert conductor.conexiones_de_red() == []
+
+
+def test_un_turno_que_la_charla_no_acabo_bien_no_cuenta_como_contestado(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Ronda 12 de Codex sobre la PR #687: si el modelo falla a medias, el oído devuelve lo
+    # que llegó a escribir con `answered=False`, y una prueba que solo mirara `contestado`
+    # lo daría por respuesta.
+    conductor = ConductorDeVoz(tmp_path)
+    a_medias = HeardTurn("Buenos días, Sirius.", True, "Buenos d", answered=False)
+    monkeypatch.setattr(LocalListening, "attend", lambda self: Attended(turns=(a_medias,)))
+
+    turno = conductor.oye("Buenos días, Sirius.")
+
+    assert turno.oido == "Buenos días, Sirius."
+    assert turno.para_el
+    assert turno.contestado is None
+
+
+def test_si_el_oido_cierra_varios_turnos_de_una_vez_el_conductor_falla(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # La misma familia: el conductor da un turno, y quedarse con el último perdería los de
+    # antes sin que ninguna prueba lo viera.
+    conductor = ConductorDeVoz(tmp_path)
+    turnos = (HeardTurn("Primero.", True, "Uno."), HeardTurn("Segundo.", True, "Dos."))
+    monkeypatch.setattr(LocalListening, "attend", lambda self: Attended(turns=turnos))
+
+    with pytest.raises(AssertionError, match="2 turnos de una vez"):
+        conductor.oye("Segundo.")
 
 
 def test_el_diario_es_el_de_produccion_y_se_lee_entero(tmp_path: Path) -> None:

@@ -22,6 +22,7 @@ from sirius.infrastructure.data_path_validator import build_data_path_validator
 from sirius.infrastructure.logging import configure_logging
 from sirius.infrastructure.paths import SiriusPaths, resolve_paths
 from sirius.ports.data_location import DataLocationError
+from sirius.presentation.error_messages import describe_error
 
 #: Cuánto se espera antes de volver a mirar el micro cuando no ha llegado nada.
 PAUSE_SECONDS = 0.03
@@ -36,8 +37,10 @@ def listen(
 ) -> int:
     """Escucha mientras ``keep_going`` lo diga y cuenta cada turno; cierra el micro al salir.
 
-    Si el oído deja de oír por su cuenta, dice su aviso y sale, en vez de seguir esperando
-    a un micro cerrado (ronda 11 de Codex sobre la PR #687).
+    Cuenta todo lo que devuelve el oído (rondas 11 y 12 de Codex sobre la PR #687): si la
+    charla no acabó bien, lo dice con el mismo aviso que la ventana; si el modelo propuso
+    algo que recordar, dónde confirmarlo; y si el oído deja de oír por su cuenta, dice su
+    aviso y sale, en vez de seguir esperando a un micro cerrado.
     """
     notice = listening.start()
     if notice:
@@ -52,7 +55,12 @@ def listen(
                 if turn.answered:
                     say(f"Sirius: {turn.reply}")
                 else:
-                    say("Sirius no ha podido contestar: mira que su modelo esté abierto.")
+                    say(f"Sirius no ha podido contestar. {describe_error(turn.error_kind)}")
+                if turn.proposed is not None:
+                    say(
+                        f"Sirius propone recordar «{turn.proposed}»: lo confirmas o lo "
+                        "rechazas en Memoria y decisiones, en la ventana."
+                    )
             if attended.notice:
                 say(attended.notice)
                 return 1

@@ -13,7 +13,7 @@ either). No GUI, no Qt widget, is ever built here.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from pathlib import Path
 
 import pytest
@@ -27,6 +27,7 @@ from sirius.adapters.persistence.sqlite_identity_repository import (
 )
 from sirius.adapters.persistence.sqlite_project_repository import build_sqlite_project_repository
 from sirius.adapters.secrets.fake import FakeSecretStore
+from sirius.application.local_listening import LocalListening
 from sirius.application.send_message import SendMessageUseCase
 from sirius.composition_root import ConversationDependencies, build_conversation_dependencies
 from sirius.domain.conversation import MessageStatus
@@ -41,6 +42,7 @@ from sirius.ports.llm import (
     LLMStreamEvent,
     LLMTextDelta,
 )
+from sirius.ports.local_voice import ListeningEngines, TurnSignal
 from sirius.presentation.memory_suggestion_trigger import propose_suggestion_if_completed_with_one
 
 
@@ -230,3 +232,69 @@ def test_failed_turn_proposes_nothing_even_with_a_delimiter_already_started(tmp_
     assert MEMORY_SUGGESTION_DELIMITER not in (result.sirius_message.content or "")
     pending = dependencies.get_knowledge_overview_use_case.get_overview().pending_suggestions
     assert pending == ()
+
+
+class _LocalCompletedProvider(_CompletedProvider):
+    """El mismo, de este ordenador: la voz solo entrega a una charla que se queda aquí."""
+
+    runs_on_this_computer = True
+
+
+class _Micro:
+    def __init__(self, trozos: list[str]) -> None:
+        self._trozos = trozos
+
+    def open(self) -> None:
+        pass
+
+    def close(self) -> None:
+        pass
+
+    def read(self) -> str | None:
+        return self._trozos.pop(0) if self._trozos else None
+
+
+class _Detector:
+    def listen(self, chunk: str) -> TurnSignal:
+        return TurnSignal.ENDED if chunk == "fin" else TurnSignal.VOICE
+
+    def reset(self) -> None:
+        pass
+
+
+class _Transcriptor:
+    def transcribe(self, chunks: Sequence[str]) -> str:
+        del chunks
+        return "Me encanta el café."
+
+
+class _TodoInstalado:
+    install_command = "la orden de instalar"
+
+    def missing(self) -> tuple[str, ...]:
+        return ()
+
+
+@pytest.mark.integration
+def test_a_voice_turn_leaves_the_proposal_pending_like_the_window(tmp_path: Path) -> None:
+    """Rondas 11 y 12 de Codex sobre la PR #687: lo dicho por voz entra en la misma charla
+    que lo escrito, y lo que el modelo propone recordar queda pendiente igual, con la
+    charla y el caso de uso de verdad."""
+    dependencies = _bootstrapped_dependencies(tmp_path)
+    provider = _LocalCompletedProvider("Anotado.", memory_suggestion="le gusta el café")
+    _swap_provider(dependencies.send_message_use_case, provider)
+    oido: LocalListening[str] = LocalListening(
+        chat=dependencies.send_message_use_case,
+        installation=_TodoInstalado(),
+        load_engines=lambda: ListeningEngines(_Micro(["voz", "fin"]), _Detector(), _Transcriptor()),
+        memory_suggestions=dependencies.propose_memory_suggestion_use_case,
+    )
+    assert oido.start() == ""
+
+    (turno,) = oido.attend().turns
+
+    assert turno.reply == "Anotado."
+    assert turno.proposed == "le gusta el café"
+    pending = dependencies.get_knowledge_overview_use_case.get_overview().pending_suggestions
+    assert [suggestion.content for suggestion in pending] == ["le gusta el café"]
+    assert pending[0].source_event_id is not None

@@ -25,6 +25,10 @@ transcribe y le pasa el texto a la misma charla que la ventana
   guarda ni envía nada. Entonces el turno no sale, deja de escuchar y lo dice. Mirarlo
   también al cerrar el turno solo ahorra transcribirlo en balde (PA-R03-08, rondas 9 y
   10 de Codex sobre la PR #687).
+- **Nada de lo que contesta la charla se queda por el camino.** Lo que el modelo
+  propone recordar queda pendiente de que él lo confirme, como en la ventana, y el turno
+  lleva si acabó bien, por qué no y qué se propuso, para que quien lo enseñe lo cuente
+  entero (rondas 11 y 12 de Codex sobre la PR #687).
 - **En la pieza B todo lo oído es para él**; a quién le hablan lo decide la pieza D.
 """
 
@@ -38,7 +42,7 @@ from typing import Protocol
 from sirius.application.send_message import ChatLeavesThisComputer, SendMessageResult
 from sirius.domain.conversation import MessageStatus
 from sirius.infrastructure.logging import get_logger
-from sirius.ports.llm import runs_on_this_computer
+from sirius.ports.llm import LLMErrorKind, runs_on_this_computer
 from sirius.ports.local_voice import (
     ListeningEngines,
     TurnSignal,
@@ -76,18 +80,29 @@ class Chat(Protocol):
         ...
 
 
+class MemorySuggestions(Protocol):
+    """Donde queda lo que el modelo propone recordar, pendiente de que él lo confirme."""
+
+    def propose(self, content: str, *, message_id: int | None = None) -> object:
+        """Lo deja pendiente, ligado a la respuesta que lo propuso."""
+        ...
+
+
 @dataclass(frozen=True, slots=True)
 class HeardTurn:
     """Un turno de voz cerrado: lo que oyó, si era para él y lo que contestó.
 
     ``answered`` dice si la charla acabó bien; si no, ``reply`` es lo que llegara a
-    escribir, como en la ventana.
+    escribir, como en la ventana, y ``error_kind`` por qué no acabó. ``proposed`` es lo
+    que el modelo propuso recordar y quedó pendiente de que él lo confirme.
     """
 
     heard: str
     addressed: bool
     reply: str
     answered: bool = True
+    error_kind: LLMErrorKind | None = None
+    proposed: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,9 +122,11 @@ class LocalListening[Chunk]:
         chat: Chat,
         installation: VoiceInstallation,
         load_engines: Callable[[], ListeningEngines[Chunk]],
+        memory_suggestions: MemorySuggestions,
         pre_roll: int = PRE_ROLL_CHUNKS,
     ) -> None:
         self._chat = chat
+        self._memory_suggestions = memory_suggestions
         self._installation = installation
         self._load_engines = load_engines
         self._engines: ListeningEngines[Chunk] | None = None
@@ -241,12 +258,32 @@ class LocalListening[Chunk]:
             self._chat_left()
             return None
         _logger.info("Turno de voz entregado a la charla")
+        answered = result.outcome is MessageStatus.COMPLETED
+        proposed = None
+        if answered and result.memory_suggestion is not None:
+            proposed = self._propose(result.memory_suggestion, result.sirius_message.id)
         return HeardTurn(
             heard=heard,
             addressed=True,
             reply=result.sirius_message.content or "",
-            answered=result.outcome is MessageStatus.COMPLETED,
+            answered=answered,
+            error_kind=result.error_kind,
+            proposed=proposed,
         )
+
+    def _propose(self, suggestion: str, message_id: int) -> str | None:
+        """Deja pendiente lo que el modelo propone recordar, como la ventana con lo escrito.
+
+        Lo hace quien envía, no la charla: proponer es una llamada aparte, nunca un efecto
+        de enviar. Si falla, el turno ya contestado no se pierde, y el diario apunta solo
+        el tipo de fallo, nada de lo propuesto.
+        """
+        try:
+            self._memory_suggestions.propose(suggestion, message_id=message_id)
+        except Exception as error:
+            _logger.error("No se pudo proponer lo que recordar (%s)", type(error).__name__)
+            return None
+        return suggestion
 
     def _chat_left(self) -> None:
         """La charla va a un modelo de fuera: el turno no sale, deja de oír y lo dice."""
