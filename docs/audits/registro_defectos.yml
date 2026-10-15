@@ -1515,3 +1515,21 @@ defectos:
     ficheros:
       - src/sirius/adapters/audio/local_listening.py
       - tests/unit/test_local_listening_adapters.py
+
+  # ADR-243: la voz del robot decia la ultima frase de cada respuesta cuando la charla
+  # volvia de send_message, y dentro del turno la charla aun resume la conversacion con el
+  # mismo modelo: cada pocos turnos se habria callado segundos antes de la ultima frase, y
+  # las respuestas de una sola frase, enteras. Lo encontro la prueba de PA-R03-09 al pasar
+  # por primera vez, antes de empujar.
+  - id: H-243
+    titulo: La voz del robot habria esperado al resumen de la charla para decir la ultima frase de cada respuesta
+    bloque: producto
+    gravedad: media
+    estado: cerrado
+    cerrado_por: bed161e17978fcd10c12435b5cf5a494fb6582cf
+    pr: 688
+    adr: 243
+    ficheros:
+      - src/sirius/application/send_message.py
+      - src/sirius/application/local_listening.py
+      - tests/integration/test_send_message.py
