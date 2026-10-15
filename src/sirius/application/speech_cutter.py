@@ -2,14 +2,23 @@
 
 La voz del robot dice la respuesta desde la primera frase, mientras el modelo sigue
 escribiendo (PA-R03-02). Lo que dice es lo que da ``prepare_speech_text``, la misma
-función de Model Studio, con dos cosas que la voz no se puede saltar. Los bloques de
-código se reconocen como los ve Markdown, con su raya al principio de línea, y lo de
-dentro no llega a la preparación, que empareja tres comillas estén donde estén (ronda 4 de
-Codex sobre la PR #688). Y al acabar, lo que se ha quedado a medias no se dice como código
-ni como marca, porque ``prepare_speech_text`` solo quita lo que está entero (rondas 2 a 4):
-sus cuatro construcciones con cierre se tratan como si se cerraran. El bloque se cierra, y
-se dice que queda en pantalla; del enlace se cierra el destino, y se dice su texto; y del
-código en línea y del énfasis se quita lo que queda suelto. Es ``final_speech_text``.
+función de Model Studio, con dos cosas que la voz no se puede saltar.
+
+El código no se dice, y qué es código no lo deciden reglas propias, que en las rondas 2 a
+5 de Codex sobre la PR #688 dejaron siempre algún caso fuera. Es código lo que lo es para
+CommonMark, leído con un analizador de verdad sobre toda la respuesta llegada, con sus
+citas, sus listas y sus sangrías, y lo que la ventana enseña como bloque de código con su
+propia regla (B8b, en ``message_view``). Cada bloque se cambia por dos rayas de tres
+comillas, que ``prepare_speech_text`` dice que quedan en pantalla, y lo de dentro no llega
+a la preparación. Mientras la respuesta sigue, un bloque cuya primera línea aún llega,
+unas comillas que aún pueden abrir uno en la ventana o una línea que aún puede ser la raya
+de uno paran el corte ahí: lo de detrás no se dice hasta que se sabe qué es.
+
+Y al acabar, lo que se ha quedado a medias no se dice como código ni como marca, porque
+``prepare_speech_text`` solo quita lo que está entero (rondas 2 a 4): un bloque abierto es
+código hasta el final, como para CommonMark, y se dice que queda en pantalla; del enlace
+se cierra el destino, y se dice su texto; y del código en línea y del énfasis se quita lo
+que queda suelto. Es ``final_speech_text``.
 
 Para que, trozo a trozo, salga lo mismo que con la respuesta entera, no se imita dónde
 cae cada trozo: se comprueba que cortar no cambia nada (ronda 1 de Codex sobre la PR
@@ -20,27 +29,27 @@ si se cumplen tres cosas:
   ``]``, dos ``_`` seguidos o uno que no va entre letras), que ``prepare_speech_text``
   solo quita cuando se cierran;
 - lo de detrás ya dice algo, y no empieza por una marca que al cerrarse pueda dejar a la
-  vista una puntuación, que se pegaría a la frase de antes. La línea entera que abre un
-  bloque de código sí vale: cerrado, o al acabar, se dice «Te dejo el código en
-  pantalla.», y la frase que lo presenta no espera al bloque;
+  vista una puntuación, que se pegaría a la frase de antes. Un bloque de código sí vale:
+  cerrado, o al acabar, se dice «Te dejo el código en pantalla.», y la frase que lo
+  presenta no espera al bloque;
 - lo de delante y lo de detrás, preparados por separado, dan lo mismo que todo lo llegado
-  preparado de una vez. Así una puntuación detrás de los blancos se queda con su frase,
+  preparado de una vez. Así una puntuación detrás de los blancos se queda con su frase, y
   una raya, un guion o una almohadilla detrás de una frase, o la sangría de una línea, no
-  cambian de sentido al cortar, y no se corta dentro de un bloque abierto, porque lo de
-  detrás se prepararía como texto y en lo llegado no está.
+  cambian de sentido al cortar.
 
 Lo demás espera a que llegue más o a que la charla acabe. Lo que aún no ha llegado no se
 ve: una marca que la respuesta entera empareja con otra de una frase posterior aquí ya
 estaba cerrada, y si la que sobra no se quita al acabar, se nota, como en «*a*. Hola 5*3».
-Una frase de solo puntos no se dice, como no la dice ``prepare_speech_text`` cuando no
+Y una frase de solo puntos no se dice, como no la dice ``prepare_speech_text`` cuando no
 queda otra cosa: la que deja delante si la respuesta empieza por algo que no se lee, como
-una raya. Y un bloque de código sin rayas, sangrado con cuatro blancos, se lee: para
-Markdown es código, pero también es la sangría de una lista, y no se distingue.
+una raya.
 """
 
 from __future__ import annotations
 
 import re
+
+from markdown_it import MarkdownIt
 
 from sirius.application.prepare_speech_text import prepare_speech_text
 
@@ -53,10 +62,24 @@ _OPEN_MARK = re.compile(r"[*`\[\]]|(?<!\w)_|_(?!\w)|__")
 #: cerrarse pueda dejar a la vista una puntuación, que se pegaría a la frase de antes. Un
 #: guion, una estrella o un más con su blanco que siguen ahí ya no son una viñeta.
 _SETTLED_START = re.compile(r"[-*+]\s|[^*_`\[+\-]")
-#: Una línea que es una raya de bloque de código para Markdown: hasta tres blancos, tres o
-#: más comillas o virgulillas, y lo que siga, que tras comillas no lleva comillas.
-_FENCE_LINE = re.compile(r" {0,3}(`{3,}|~{3,})(.*)")
-#: Tres o más comillas a media línea: para Markdown no son una raya, y se quedan en una.
+#: La respuesta como la lee CommonMark, solo sus bloques: las citas, las listas y las
+#: sangrías de verdad. Sin HTML, como la ventana, que lo enseña como texto.
+_MARKDOWN = MarkdownIt("commonmark", {"html": False}).disable(["inline", "text_join"])
+#: Los saltos de línea que cuenta ``_MARKDOWN``.
+_LINE_END = re.compile(r"\r\n?|\n")
+#: Un bloque de código como lo separa la ventana (``_FENCED_CODE_BLOCK`` de
+#: ``sirius.presentation.message_view``, B8b): tres comillas en cualquier sitio, lo que
+#: las siga en su línea sin comillas, y hasta las tres comillas siguientes.
+_WINDOW_CODE_BLOCK = re.compile(r"```[^\n`]*\n(.*?)```", re.DOTALL)
+#: Unas comillas que aún pueden abrir uno de esos bloques: sin comillas detrás hasta el
+#: final de su línea o de lo llegado.
+_WINDOW_OPENING = re.compile(r"```[^\n`]*(?:\n|\Z)")
+#: Una línea que aún puede ser la raya de un bloque: detrás de sus blancos, sus citas y sus
+#: viñetas, nada todavía, unas cifras que aún pueden ser otra viñeta, o comillas o
+#: virgulillas.
+_MAY_BE_A_FENCE = re.compile(r"(?:[ \t]*(?:>|[-+*]|\d+[.)]))*[ \t]*(?=[`~]|\d*\Z)")
+#: Tres o más comillas fuera de un bloque, que son de un código en línea: se quedan en
+#: una, porque ``prepare_speech_text`` las emparejaría como un bloque.
 _LONG_BACKTICKS = re.compile(r"`{3,}")
 #: El destino de un enlace que no se cierra en lo que queda de respuesta: se cierra donde
 #: acaba la dirección, en el primer blanco, y del enlace se dice el texto, como de uno
@@ -76,103 +99,134 @@ class SpeechCutter:
     """Recibe lo que la charla escribe y da, en orden, las frases que ya se pueden decir."""
 
     def __init__(self) -> None:
-        self._pending = ""
-        #: Si lo que espera empieza una línea: la respuesta, y lo que sigue a un corte que se
-        #: llevó un salto de línea. Solo una línea puede empezar con la raya de un bloque.
-        self._line_start = True
+        #: Todo lo llegado: qué es código se lee siempre con la respuesta desde el principio.
+        self._arrived = ""
+        #: Cuánto de lo llegado, ya sin el código, se ha dado.
+        self._given = 0
 
     def feed(self, text: str) -> list[str]:
         """Añade ``text`` y devuelve las frases cerradas que aún no había dado."""
-        self._pending += text
-        arrived = _prepare(self._pending, line_start=self._line_start)
-        for cut in reversed(list(_CUT.finditer(self._pending))):
+        self._arrived += text
+        pending = _without_code(self._arrived, finished=False)[self._given :]
+        arrived = prepare_speech_text(pending)
+        for cut in reversed(list(_CUT.finditer(pending))):
             end = _piece_end(cut)
-            head, rest = self._pending[:end], self._pending[end:]
-            said = _prepare(head, line_start=self._line_start)
+            head, rest = pending[:end], pending[end:]
+            said = prepare_speech_text(head)
             if _OPEN_MARK.search(said):
                 continue
-            rest_line_start = head.endswith("\n")
-            then = _prepare(rest, line_start=rest_line_start)
-            opens_block = rest_line_start and _opens_code_block(rest)
-            if not (_SETTLED_START.match(then) or opens_block):
+            then = prepare_speech_text(rest)
+            if not (_SETTLED_START.match(then) or rest.startswith(_FENCE)):
                 continue
             if f"{said} {then}" != arrived:
                 continue
-            self._pending, self._line_start = rest, rest_line_start
+            self._given += end
             return _sentences(said)
         return []
 
     def finish(self) -> list[str]:
         """Lo que queda, cuando la charla ha acabado bien."""
-        rest, self._pending = self._pending, ""
-        line_start, self._line_start = self._line_start, True
-        return _sentences(final_speech_text(rest, line_start=line_start))
+        rest = _without_code(self._arrived, finished=True)[self._given :]
+        self._arrived, self._given = "", 0
+        return _sentences(_said_at_the_end(rest))
 
 
-def final_speech_text(text: str, *, line_start: bool = True) -> str:
-    """Lo que se dice de un texto que ya no sigue: lo que da ``prepare_speech_text``, sin
-    código ni marcas aunque algo se haya quedado a medias. ``line_start`` dice si empieza
-    una línea, como la respuesta entera, o sigue a una frase en su misma línea."""
-    text, block_open = _markdown_code_blocks(text, line_start=line_start)
-    if block_open:
-        text += _FENCE
+def final_speech_text(text: str) -> str:
+    """Lo que se dice de una respuesta entera: lo que da ``prepare_speech_text``, sin código
+    ni marcas aunque algo se haya quedado a medias."""
+    return _said_at_the_end(_without_code(text, finished=True))
+
+
+def _said_at_the_end(text: str) -> str:
+    """Lo que se dice de lo que queda, ya sin el código, cuando la respuesta ha acabado."""
     text = _UNCLOSED_LINK_TARGET.sub(r"\1)", text)
     return _without_loose_marks(_LOOSE_SYNTAX.sub("", prepare_speech_text(text)))
 
 
-def _prepare(text: str, *, line_start: bool) -> str:
-    """``prepare_speech_text`` con los bloques de código como los ve Markdown."""
-    return prepare_speech_text(_markdown_code_blocks(text, line_start=line_start)[0])
+def _without_code(text: str, *, finished: bool) -> str:
+    """``text`` con cada bloque de código cambiado por dos rayas de tres comillas, que
+    ``prepare_speech_text`` dice que quedan en pantalla, y sin nada de lo de dentro. Van
+    juntas, sin un salto de línea entre ellas: no se puede cortar entre las dos y dejar
+    una sola, que se emparejaría con una comilla suelta de antes. Detrás va siempre uno,
+    también si la ventana cierra el bloque a media línea, porque lo que sigue lo enseña
+    aparte.
+
+    Si la respuesta sigue (``finished`` falso) y desde algún sitio aún no se sabe qué es
+    código, de ahí en adelante no queda nada de lo llegado, y un trozo que llegue hasta ahí
+    no se dice. Si ahí empieza un bloque seguro, queda su raya, que no se cierra, y lo de
+    delante se dice sin esperarlo. Si no, queda una comilla suelta: lo de delante espera,
+    porque lo que venga puede no ser código y empezar por una puntuación que va con la
+    frase de antes.
+    """
+    blocks, known, block_starts = _code(text, finished=finished)
+    kept: list[str] = []
+    cursor = 0
+    for start, end in blocks:
+        kept.append(_LONG_BACKTICKS.sub("`", text[cursor:start]))
+        kept.append(f"{_FENCE}{_FENCE}\n")
+        cursor = end
+    kept.append(_LONG_BACKTICKS.sub("`", text[cursor:known]))
+    if known < len(text):
+        kept.append(f"{_FENCE}\n" if block_starts else "`")
+    return "".join(kept)
 
 
-def _markdown_code_blocks(text: str, *, line_start: bool) -> tuple[str, bool]:
-    """``text`` con cada bloque de código como lo ve Markdown y sin lo de dentro, y si el
-    último se ha quedado abierto (ronda 4 de Codex sobre la PR #688).
+def _code(text: str, *, finished: bool) -> tuple[list[tuple[int, int]], int, bool]:
+    """Dónde está el código de ``text``, en orden y sin solaparse, hasta dónde se sabe, y si
+    donde ya no se sabe empieza seguro un bloque.
 
-    Solo abre un bloque una línea que es una raya, de comillas o de virgulillas, y solo lo
-    cierra otra igual y al menos tan larga: tres comillas a media línea no son una raya,
-    estén dentro o fuera de un bloque, y fuera se quedan en una, la de un código en línea.
-    Cada bloque queda como dos rayas de tres comillas, que ``prepare_speech_text`` dice que
-    quedan en pantalla, y lo que había dentro no llega a la preparación; uno abierto queda
-    solo con la suya, y así no se dice nada de lo de dentro aunque traiga comillas. Si
-    ``text`` no empieza una línea, su primera línea no puede ser una raya."""
-    lines: list[str] = []
-    opened = ""
-    for number, line in enumerate(text.splitlines(keepends=True)):
-        fence = _fence(line) if number or line_start else None
-        if not opened:
-            if fence is None:
-                lines.append(_LONG_BACKTICKS.sub("`", line))
+    Es código lo que lo es para CommonMark o para la ventana, que no siempre coinciden:
+    tres comillas a media línea no abren un bloque para CommonMark y en la ventana sí, y
+    unas comillas dentro de una línea de código no cierran el bloque para CommonMark y en
+    la ventana sí. Un bloque que aún crece ya es código hasta donde ha llegado, y su marca
+    no cambia aunque crezca. Pero mientras la respuesta sigue, no se sabe nada a partir de
+    un bloque cuya primera línea aún no ha llegado entera, ni de unas comillas que aún
+    pueden abrir uno en la ventana, y tampoco de un bloque que pasa por ahí. Ni de la
+    última línea si aún no ha llegado entera y, detrás de sus blancos, sus citas y sus
+    viñetas, no hay nada, unas cifras que aún pueden ser otra viñeta, o comillas o
+    virgulillas: puede ser la raya de un bloque, y entonces la línea entera es código,
+    también un «1.» que ya parecía el final de una frase. Al acabar se sabe todo: un bloque
+    abierto es código hasta el final, como para CommonMark, y unas comillas que no se
+    cierran, texto, como en la ventana.
+
+    Donde ya no se sabe empieza seguro un bloque si ahí empieza uno que ya es código y no
+    puede dejar de serlo, con su primera línea ya llegada entera. Si su primera línea sigue
+    llegando, aún puede no serlo: tres comillas con una más detrás en esa línea ya no abren
+    nada.
+    """
+    starts = [0, *(found.end() for found in _LINE_END.finditer(text))]
+    unknown: list[int] = []
+    blocks: list[tuple[int, int]] = []
+    for token in _MARKDOWN.parse(text):
+        if token.type in {"fence", "code_block"} and token.map:
+            first, after = token.map
+            if finished or first + 1 < len(starts):
+                blocks.append((starts[first], starts[after] if after < len(starts) else len(text)))
             else:
-                opened = fence[0]
-                lines.append(f"{_FENCE}\n")
-        elif fence is not None and _closes(fence, opened):
-            opened = ""
-            lines.append(_FENCE + line[len(line.rstrip("\r\n")) :])
-    return "".join(lines), bool(opened)
-
-
-def _fence(line: str) -> tuple[str, str] | None:
-    """La raya de bloque de código de ``line`` y lo que la sigue; nada si no es una."""
-    found = _FENCE_LINE.fullmatch(line.rstrip("\r\n"))
-    if found is None or (found[1].startswith("`") and "`" in found[2]):
-        return None
-    return found[1], found[2]
-
-
-def _closes(fence: tuple[str, str], opened: str) -> bool:
-    """Si la raya ``fence`` cierra el bloque que abrió ``opened``: igual, al menos tan
-    larga y sola en su línea."""
-    marks, after = fence
-    return marks[0] == opened[0] and len(marks) >= len(opened) and not after.strip()
-
-
-def _opens_code_block(rest: str) -> bool:
-    """Si lo de detrás, que empieza una línea, empieza con la línea entera que abre un
-    bloque de código: cerrado, o al acabar, se dice «Te dejo el código en pantalla.», y la
-    frase que lo presenta no espera al bloque."""
-    first_line, newline, _ = rest.partition("\n")
-    return bool(newline) and _fence(first_line) is not None
+                unknown.append(starts[first])
+    window_end = 0
+    for found in _WINDOW_CODE_BLOCK.finditer(text):
+        blocks.append(found.span())
+        window_end = found.end()
+    opening = _WINDOW_OPENING.search(text, window_end)
+    if opening is not None and not finished:
+        unknown.append(opening.start())
+    if not finished and _MAY_BE_A_FENCE.match(text, starts[-1]):
+        unknown.append(starts[-1])
+    known, block_starts = min(unknown, default=len(text)), False
+    merged: list[tuple[int, int]] = []
+    for start, end in sorted(blocks):
+        if merged and start < merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        else:
+            merged.append((start, end))
+    # Un bloque que pasa por donde ya no se sabe empieza ahí lo que no se sabe, y seguro; uno
+    # que va entero por detrás no cuenta todavía.
+    while merged and merged[-1][1] > known:
+        start, _ = merged.pop()
+        if start <= known:
+            known, block_starts = start, True
+    return merged, known, block_starts
 
 
 def _without_loose_marks(text: str) -> str:

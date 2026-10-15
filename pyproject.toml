@@ -20,6 +20,9 @@ dependencies = [
   "argon2-cffi>=25",
   "pyyaml>=6.0",
   "sqlite-vec>=0.1.6",
+  # Qué es código en una respuesta, para que la voz no lo diga (ADR-243): CommonMark de
+  # verdad, con sus citas y sus listas, en vez de reglas propias.
+  "markdown-it-py>=4.2,<5",
 ]
 
 [project.optional-dependencies]

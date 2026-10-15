@@ -130,25 +130,30 @@ Se adopta la opción 2.
   salto de línea, solo si cortar no cambia nada. Lo de delante está cerrado: preparado
   con `prepare_speech_text`, sin marcas a medias. Lo de detrás ya dice algo y no empieza
   por una marca que al cerrarse pueda dejar a la vista una puntuación, que se pegaría a la
-  frase de antes; la línea entera que abre un bloque de código sí vale, para que la frase
-  que lo presenta no espere al bloque. Y lo de delante y lo de detrás, preparados por
-  separado, dan lo mismo que todo lo llegado preparado de una vez, lo que además impide
-  cortar dentro de un bloque abierto. Los bloques de código se reconocen como los ve
-  Markdown: solo una raya al principio de línea, de comillas o de virgulillas, abre uno, y
-  solo otra igual y al menos tan larga lo cierra; lo de dentro no llega a la preparación.
+  frase de antes; un bloque de código seguro sí vale, para que la frase que lo presenta no
+  espere al bloque. Y lo de delante y lo de detrás, preparados por separado, dan lo mismo
+  que todo lo llegado preparado de una vez. Qué es código no lo deciden reglas propias
+  (ronda 5): lo es lo que lo es para CommonMark, leído con un analizador de verdad,
+  `markdown-it-py`, sobre toda la respuesta llegada, con sus citas, sus listas y sus
+  sangrías, y lo que la ventana enseña como bloque con su propia regla, la de B8b en
+  `message_view`, que no es CommonMark. Cada bloque se cambia por una marca indivisible
+  que `prepare_speech_text` dice que queda en pantalla, y lo de dentro no llega a la
+  preparación. Mientras la respuesta sigue, desde donde aún no se sabe qué es código no se
+  corta: un bloque que llega a la última línea, que aún puede crecer; unas comillas que
+  aún pueden abrir un bloque en la ventana; o una última línea a medias que, detrás de sus
+  blancos, sus citas y sus viñetas, aún puede ser la raya de uno.
   Al acabar la charla se suelta lo que quede, y lo que se ha quedado a medias no se dice
   como código ni como marca (`final_speech_text`): las cuatro construcciones con cierre
-  que quita `prepare_speech_text` se tratan como si se cerraran. El bloque de código se
-  cierra, y se dice que queda en pantalla; del enlace se cierra el destino donde acaba la
-  dirección, y se dice su texto; y del código en línea y del énfasis se quita lo que
-  queda suelto: comillas, corchetes, dos o más estrellas o guiones bajos seguidos, y uno
-  solo que no esté entre dos letras o cifras ni entre dos blancos, donde puede ser una
-  multiplicación o parte de un nombre. Lo dicho, unido, es lo que da `final_speech_text`
-  con la respuesta entera, salvo los blancos y una frase de solo puntos, que no se dice.
-  Lo que no puede ver es lo que aún no ha llegado: una marca que se empareja con otra de
-  una frase posterior, como en `*a*. Hola 5*3`. Y un bloque sin rayas, sangrado con
-  cuatro blancos, se lee: para Markdown es código, pero también es la sangría de una
-  lista.
+  que quita `prepare_speech_text` se tratan como si se cerraran. Un bloque de código
+  abierto es código hasta el final, como para CommonMark, y se dice que queda en
+  pantalla; del enlace se cierra el destino donde acaba la dirección, y se dice su texto;
+  y del código en línea y del énfasis se quita lo que queda suelto: comillas, corchetes,
+  dos o más estrellas o guiones bajos seguidos, y uno solo que no esté entre dos letras o
+  cifras ni entre dos blancos, donde puede ser una multiplicación o parte de un nombre. Lo
+  dicho, unido, es lo que da `final_speech_text` con la respuesta entera, salvo los
+  blancos y una frase de solo puntos, que no se dice. Lo que no puede ver es lo que aún no
+  ha llegado: una marca que se empareja con otra de una frase posterior, como en
+  `*a*. Hola 5*3`.
 - **El oído habla** (`src/sirius/application/local_listening.py`): entrega cada turno a
   la charla con un `on_delta` que alimenta el corte, y cada frase cerrada se pide a la
   voz y suena en cuanto está. Antes de la primera cierra el micro, y lo vuelve a abrir
@@ -212,16 +217,19 @@ Medido el 15-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   enseña su PR en su comprobación»): la prueba unitaria que sigue el orden de todo lo que pasa en un turno
   ve cerrarse el micro antes de la primera frase y abrirse después de la última, y la
   mutación que no lo cierra hace que su propio eco entre como un turno en PA-R03-03.
-- **133 pruebas unitarias nuevas**: el servicio que oye y habla (16 más en
-  `tests/unit/test_local_listening.py`, de 30 a 46), el corte en frases (86 en
+- **162 pruebas unitarias nuevas**: el servicio que oye y habla (16 más en
+  `tests/unit/test_local_listening.py`, de 30 a 46), el corte en frases (115 en
   `tests/unit/test_speech_cutter.py`; entre ellas, lo mismo dicho que `final_speech_text`
   con el texto entero de 302 maneras de trocear 18 respuestas, 5 436 troceos, y de 12
   maneras de trocear 500 textos al azar hechos de palabras, puntuación, saltos, sangrías y
   marcas, en los que el corte de `e41ff85f` da otra cosa 373 veces; ninguna marca
   dicha al acabar, pare donde pare cada una de las 18 respuestas; lo que se hace a
   medias con cada construcción de `prepare_speech_text`; y que lo de dentro de un
-  bloque no se dice nunca, con cinco bloques que no se cierran donde parece, cada uno
-  troceado de 52 maneras), Piper y el altavoz con
+  bloque no se dice nunca, con dieciséis bloques que no se cierran donde parece o van dentro
+  de una cita, de una lista o de una regla de la ventana, cada uno troceado de 52
+  maneras, y con 150 respuestas al azar con citas, listas y sangrías, enteras y a medias,
+  en las que se pregunta qué es código a un analizador de CommonMark y a la ventana),
+  Piper y el altavoz con
   módulos de mentira (15 en `tests/unit/test_local_speaking_adapters.py`), la
   instalación y la orden de instalar (12 más, de 24 a 36), `sirius-oye` y lo que tarda
   (3 más, de 13 a 16) y que el oído importa lo que dice `voice_tools` (1 más en
@@ -250,18 +258,31 @@ Medido el 15-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   virgulillas tras una frase. Una más no se
   cuenta porque es equivalente: quitar que lo de detrás tenga que decir algo no cambia
   nada, porque con lo de detrás vacío la frase y un blanco nunca dan lo llegado, que no
-  acaba en blanco.
+  acaba en blanco. Tras la ronda 5 y la raíz, 145: las 20 que miraban las reglas propias
+  se fueron con ellas, y entran 45 para qué es código y hasta dónde se sabe; caen 142.
+  Sobreviven tres, y las tres son equivalentes: juntar dos bloques que se tocan solo
+  cambia cuántas veces se dice que queda en pantalla, igual trozo a trozo que entera; que
+  el analizador lea también lo de dentro de las líneas solo cambia lo que tarda (1,38 ms
+  frente a 0,43 ms con una respuesta de 2 730 caracteres); y mirar si un bloque trae su
+  mapa de líneas solo lo pide el comprobador de tipos, porque todos lo traen. Hasta llegar
+  ahí, la mutación quitó cuatro reglas que sobraban y dio una prueba a cada regla que no
+  la tenía.
 - **El corte, también en la sesión**: 8 000 textos al azar, la mitad con marcas, cada
   uno troceado de 42 maneras, sin una diferencia con el texto entero; y 3 000 bloques de
   código al azar, con líneas que parecen rayas sin serlo, cortados en siete sitios y
-  troceados de seis maneras, sin que se dijera una vez el secreto de dentro.
+  troceados de seis maneras, sin que se dijera una vez el secreto de dentro. Tras la
+  ronda 5, con respuestas al azar con citas, listas anidadas, sangrías, tabuladores,
+  comillas a media línea, líneas de HTML y saltos de Windows: 32 000, cada una entera y en
+  dos principios, troceada de cinco maneras, sin una diferencia con la entera y sin decir
+  nada de lo que CommonMark o la ventana tienen por código.
 - **Lo que tarda, con los dobles**: PA-R03-09 da un P95 por debajo de 200 ms en 20 turnos,
   con la charla de la 0.2 dentro; la cifra de verdad la da `sirius-oye` en E-R03-02.
 - **Piper, en el contenedor**: `piper-tts` 1.8.0 se instala con el extra, importa y pasa
   español a fonemas sin red. La voz no se ha podido bajar ni cargar aquí
   (huggingface.co responde 403) ni hay altavoz: que suene lo mira E-R03-01 en su
   ordenador.
-- **El candado**: `uv lock` añade `piper-tts` 1.8.0 y `pathvalidate` 3.3.1 y no cambia
+- **El candado**: `uv lock` añade `piper-tts` 1.8.0 y `pathvalidate` 3.3.1, del extra, y
+  en la ronda 5 `markdown-it-py` 4.2.0 y `mdurl` 0.1.2, con licencia MIT, y no cambia
   ninguna versión que ya estuviera; Quality no instala el extra.
 
 ## Consecuencias
@@ -285,9 +306,18 @@ Medido el 15-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
 - **Una frase sale cuando asoma lo que la sigue**, no al llegar su blanco: el corte
   necesita verlo para saber que no la cambia. Troceadas como las da el modelo, palabra a
   palabra con su blanco delante, las 18 respuestas de la prueba sacan la primera frase
-  igual que el corte de `e41ff85f` en 12 y un trozo más tarde en 6: cuando lo que sigue
-  es una viñeta, un guion con sangría, la línea que abre un bloque de código, una raya o
-  una puntuación.
+  igual que el corte de `e41ff85f` en 11 y un trozo más tarde en 7 (en 6 antes de la
+  ronda 5): cuando lo que sigue es una viñeta, un guion con sangría, un número de lista,
+  la línea que abre un bloque de código, una raya o una puntuación.
+- **Una dependencia nueva**, `markdown-it-py`, para saber qué es código: pura en Python,
+  sin red, y la voz lee con ella los bloques de toda la respuesta en cada trozo que llega;
+  con una respuesta de 2 730 caracteres tarda 0,43 ms.
+- **La voz y la ventana no leen el código igual en todo**, porque la ventana separa sus
+  bloques con una regla que no es CommonMark. La voz no dice lo que cualquiera de las dos
+  tiene por código: lo que sigue a una raya que para CommonMark abre un bloque sin cerrar
+  no se dice aunque la ventana lo enseñe como texto, y lo que la ventana enseña como
+  bloque tampoco, aunque CommonMark no lo vea. Que la ventana lea como CommonMark no es de
+  esta vertical.
 - Model Studio no cambia: `prepare_speech_text` se usa tal cual. Pero la voz ya no lee
   igual que él los bloques de código: Model Studio empareja tres comillas estén donde
   estén, y si una línea de código las trae, lee lo que sigue, como enseñó la ronda 4 de
@@ -422,3 +452,27 @@ azar. La comparación al azar con el texto entero encontró dos desajustes del p
 arreglo, unas comillas a media línea tomadas por raya tras un corte y dos guiones bajos
 dichos a media charla, y los dos tienen su prueba.
 
+**Ronda 5 de Codex**, sobre `ab072f93`, con la misma pregunta: un P2, cierto y comprobado
+contra el código, que la revisión propia había encontrado mientras tanto también con
+listas. Un bloque dentro de una cita, con sus líneas empezando por `> `, no se reconocía
+y se decía lo de dentro: ``> ```python\n> password = "secreto"\n> ``` `` daba
+`python. password = "secreto".`, y en `5adbee3a` no. Lo mismo dentro de una lista
+sangrada con cuatro blancos.
+
+**Cuarta ronda de la misma familia: la raíz eran las reglas propias.** El patrón de las
+rondas 2 a 5: lo que la voz no reconoce como código llega a la preparación. Cada arreglo
+afinaba una regla escrita aquí, para el bloque cerrado, el abierto o la raya a media
+línea, y la ronda siguiente encontraba la construcción de Markdown que la regla no veía:
+Markdown tiene citas y listas, y con ellas sangrías que cambian de sentido. La decisión:
+dejar de escribir reglas. Qué es código lo dicen un analizador de CommonMark de verdad,
+`markdown-it-py`, sobre toda la respuesta llegada, y la regla con la que la ventana separa
+sus bloques, que una prueba comprueba que es la misma; la voz no dice lo que cualquiera de
+los dos tiene por código. Lo hacen cumplir una prueba con 150 respuestas al azar que
+pregunta a los dos qué es código y compara con la respuesta entera, y en la sesión 32 000
+textos al azar. Antes de darlo por bueno, el arreglo tuvo seis fallos propios, cinco
+encontrados por esos textos y uno por una prueba que ya había, todos de cortar antes de
+saber qué es código: delante de unas comillas que luego
+no abrían nada; tras un «1. » cuya línea abría luego un bloque, o tras el primero de dos
+números; entre las dos rayas de la marca de un bloque; con unas comillas sobrantes que
+sumaban tres con las de otro bloque; y con un bloque entero por detrás que hacía parecer
+seguro lo de delante. Cada uno tiene su prueba.
