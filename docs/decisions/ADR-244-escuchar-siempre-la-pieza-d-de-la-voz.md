@@ -187,8 +187,11 @@ Lo que se decidió al escribir el código, con su porqué:
   cerrando no se abre, porque ya nadie haría de portera. Y no vuelve a oír hasta que la voz
   de Model Studio calla del todo, sin ningún trabajador de la voz en marcha y nada
   sonando: lo que aún sintetizaba al salir suena después, como sin esta pieza, y el oído
-  no lo oye (ronda 5). La voz de Model Studio, sus reproductores y su cola quedan como
-  estaban: esta pieza no los toca.
+  no lo oye (ronda 5). La espera está en el único sitio por el que la ventana abre el
+  oído, al abrirse, con el botón y al salir de Model Studio: ningún camino se la salta, el
+  botón se ve apagado mientras tanto, y lo que se pida entonces se hace cuando calle
+  (ronda 6). La voz de Model Studio, sus reproductores y su cola quedan como estaban: esta
+  pieza no los toca.
 
 ## Comprobación que la sostiene
 
@@ -261,8 +264,19 @@ Medido el 15-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   `tests/gui/test_escucha_en_la_ventana.py` (de 28 a 31): al salir, el oído espera a que
   calle lo que suena después; vuelve cuando lo que sintetizaba no llega a sonar; y
   dentro de Model Studio, que su voz acabe no lo abre. La ventana, Model Studio, los
-  reproductores y la voz, 115 en verde. 14 mutaciones de Model Studio y el oído tal como
+  reproductores y la voz, 117 en verde (aquí ponía 115: vuelto a contar en la ronda 6 con
+  los ficheros de `3363af57`, son 117). 14 mutaciones de Model Studio y el oído tal como
   quedan, y caen las 14. mypy, sin errores en 717 ficheros; ruff, limpio.
+- **Tras la ronda 6 de Codex** (abajo), la espera pasa al único sitio por el que la ventana
+  abre el oído. Entran 3 pruebas en `tests/gui/test_escucha_en_la_ventana.py` (de 31 a
+  34): con la voz de Model Studio a medias al salir, el botón se ve apagado y ni
+  pulsándolo se abre el oído hasta que calla; en silencio, el botón vuelve cuando calla y
+  sigue en silencio; y lo que se pida mientras tanto se hace cuando calla. Con la ventana
+  de la ronda 5 fallan las tres. 20 mutaciones de Model Studio y el oído: en la primera
+  pasada sobrevivió una, porque la comprobación que hacía la ventana al salir de Model
+  Studio repetía la de la puerta; se quitó del código, y de las 19 que quedan caen las 19.
+  La ventana, Model Studio, los reproductores y la voz, 120 en verde. mypy, sin errores en
+  717 ficheros; ruff, limpio.
 
 ## Consecuencias
 
@@ -281,8 +295,10 @@ Medido el 15-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   no dura nada, lo guardado puede ser de mucho antes.
 - **En Model Studio no se le habla con el oído**: allí se usa su micro, el de pulsar.
   Entrar en Model Studio mientras Sirius habla con la voz local lo calla. Al salir, si
-  Model Studio aún tenía voz en marcha, el oído tarda lo que ella tarde en callar; si
-  su síntesis no acabara nunca, el botón lo reabre.
+  Model Studio aún tenía voz en marcha, el oído y su botón esperan lo que ella tarde en
+  callar. Si su síntesis se colgara, esperan lo que tarde en fallar: Model Studio la pide
+  a OpenAI sin reintentos y con el plazo por defecto de su cliente, 600 s sin recibir
+  nada (openai 2.45.0). Hasta la ronda 6 el botón no esperaba (abajo).
 - **La voz de Model Studio sigue como estaba**, con lo que ya hacía antes de esta pieza:
   lo que sintetizaba al salir suena después, ya fuera; y con «Repetir» o «Leer todo»
   durante una síntesis puede haber dos peticiones a la vez, y lo que devuelve la
@@ -404,3 +420,16 @@ dura la charla. No trae cortarle (E) ni elegir su voz (F).
     Studio. **Decisión: se retira lo construido en las rondas 3 y 4** y la garantía se pone
     en el oído, que al salir de Model Studio espera a que su voz calle del todo. Lo que
     Model Studio ya hacía, y no hace esta pieza, queda escrito en «Consecuencias».
+- **Ronda 6, sobre `3363af57`**, preguntando si el enfoque está mal: no lo dijo. Repite el
+  P1 de la ronda 2, el mismo hilo recolocado, que no cuenta, y trae un hallazgo nuevo,
+  cierto.
+  - **P2, quinta ronda seguida en la misma familia**: el botón «Escuchar» no esperaba como
+    el oído. Con la voz de Model Studio aún sintetizándose al salir, abría el micro, y lo
+    que sonaba después podía tomarse por un turno; lo que la ronda 5 dejó escrito como
+    salida, «si su síntesis no acabara nunca, el botón lo reabre», era ese hueco. **El
+    patrón: la espera estaba en uno de los caminos que abren el oído, no en el sitio por el
+    que pasan todos.** La ventana abre el oído por un solo sitio, `_listen`: al abrirse,
+    con el botón y al salir de Model Studio, y no hay otro (comprobado con `grep`). La
+    espera va ahí: mientras Model Studio está abierto o su voz sigue sintetizando o
+    sonando, no lo abre y lo deja pedido para cuando calle, y el botón se ve apagado. Se
+    sigue: es la decisión de la ronda 5 en el sitio que no deja ningún camino fuera.
