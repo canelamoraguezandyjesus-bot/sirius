@@ -133,16 +133,104 @@ para que la tele entre poco, y larga lo bastante para contestarle sin su nombre.
 Se adopta la opción 3, y la charla dura 10 s, desde que Sirius calla hasta que empieza a
 oírse la voz del turno siguiente. Los turnos de voz no despiertan al juez: puntúa en
 segundo plano las respuestas que aún no tienen nota (PA-R02-08), así que las de voz las
-puntúa la próxima vez que corra, sin hacer esperar al turno de voz siguiente. Lo que
-queda por decidir al escribir el código se anota aquí con su porqué.
+puntúa la próxima vez que corra, sin hacer esperar al turno de voz siguiente.
+
+Lo que se decidió al escribir el código, con su porqué:
+
+- **A quién le hablan** va aparte, en `Addressing` (`src/sirius/application/addressing.py`):
+  su nombre, sin distinguir mayúsculas, como palabra suelta, siempre; sin él, si su voz
+  empieza a oírse a 10 s o menos de que Sirius calle. Sirius calla cuando el altavoz acaba
+  o, si no dijo nada, al acabar el turno. Se mide desde que empieza a oírse su voz, no
+  desde que acaba el turno: lo que empezó a decir dentro de la charla es para él aunque
+  acabe fuera. Cada vez que Sirius calla empieza otra charla.
+- **Lo que no es para él** se transcribe, porque sin el texto no se sabe, y se descarta
+  ahí: no va a la charla, el diario solo apunta que no era para él, y vuelve como turno con
+  `addressed` falso, que ni la ventana ni `sirius-oye` enseñan.
+- **El botón de silencio** (`mute`) cierra el micro, olvida el turno a medias y lo que
+  se había oído y aún no había ido a la charla, y nada lo abre hasta quitarlo, ni
+  `start`. No calla lo que está diciendo: el silencio es para el micro.
+- **El oído se guarda con un cerrojo** para el micro, el detector y su estado, que suelta
+  mientras transcribe y contesta. Se prueba con dos hilos de verdad: el silencio no espera
+  a que acabe un turno, sí a que el detector acabe con su trozo, y parar espera a que el
+  altavoz tome la frase que estaba tomando y después la calla. Parar calla también lo que
+  la charla siga escribiendo: ninguna frase se cuela después.
+- **La ventana es la portera** (`ListeningWatcher`, y `ListeningBridge` para cruzar de
+  hilo): el oído le pregunta antes de entregar cada turno para él y le avisa al acabar.
+  Un turno de voz es para ella como uno escrito: «pensando», lo escrito, las copias, la
+  exportación y el cambio de proyecto quietos, y lo de segundo plano parado y esperado,
+  como para un turno escrito. La espera la hace el hilo del oído, con un aviso que cada
+  trabajo de segundo plano pone al acabar (`done`), porque las señales de la ventana no le
+  llegan. Si la ventana está con otra cosa, el turno no va y lo dice. Sin «Cancelar»:
+  cortarle es la pieza E. Al cerrarse, deja de oír ya, y si hay un turno de voz en marcha
+  se cancela y espera a que acabe, como uno escrito.
+- **El bucle** (`ListeningLoop`) es de cada ventana de verdad: `sirius.main` se lo da a
+  la que monta al arrancar y a la que abre al crear el proyecto, la ventana lo arranca al
+  abrirse y lo para al cerrarse, sin esperarlo: si estuviera preguntándole por un turno,
+  esperarlo desde ella la colgaría. Las pruebas montan la ventana sin él y atienden al
+  oído ellas.
+- **El reloj de la charla** es el mismo con el que el oído mide lo que tarda en hablar:
+  `build_conversation_dependencies` lo recibe, y el conductor de la 0.3 le pasa el suyo.
+- **Las órdenes de memoria con su nombre detrás**, tras una coma («olvida eso, Sirius»), o
+  con «oye» o «eh» delante, son órdenes. Fuera de la charla hay que llamarle, y una orden
+  que no se reconoce llega al modelo, que puede decir que olvida sin olvidar. Sin coma no
+  se quita: «¿qué sabes de Sirius?» pregunta por él.
+- **Si abrir el oído falla de una forma que no se espera**, la ventana se abre igual y lo
+  dice, con el tipo de fallo; el botón vuelve a intentarlo.
 
 ## Comprobación que la sostiene
 
-Se escribe al acabar la pieza, con las cifras de sus pruebas, su mutación y su batería.
+Medido el 15-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
+
+- **Las ocho pruebas de la pieza D**, en verde con el conductor de verdad: las tres de la
+  ventana (`tests/acceptance/test_robot_0_3_ventana.py`) y las cinco de voz
+  (`tests/acceptance/test_robot_0_3_voz.py`). Con las de B y C, 21 en verde y 6 `xfail`,
+  las de E y F. El conductor dice ya que la pendiente con un método suyo es la F
+  (`tests/acceptance/test_dobles_del_conductor.py`, 19 en verde), y la tabla de
+  `docs/evolution/PRUEBAS_0.3_DEL_ROBOT.md` pone en verde PA-R03-04, PA-R03-05 y
+  PA-R03-06, como pide su guarda de trazabilidad.
+- **96 pruebas nuevas**: la regla de a quién le hablan (16 en
+  `tests/unit/test_addressing.py`); el oído (27 más en `tests/unit/test_local_listening.py`,
+  de 46 a 73: la regla con el servicio entero, el silencio, la portera, que no se cuele
+  ninguna frase al parar, y tres con dos hilos de verdad para el cerrojo); `sirius-oye`
+  con lo que no era para él (1 más, de 16 a 17); las órdenes con su nombre detrás o con
+  «oye» delante (8 más, de 26 a 34); el bucle (7 en `tests/unit/test_listening_loop.py`);
+  el puente entre hilos (8 en `tests/gui/test_listening_bridge.py`); la ventana con el
+  oído, la portera, el cierre a mitad de un turno y el bucle de producción (23 en
+  `tests/gui/test_escucha_en_la_ventana.py`); y que lo de segundo plano avisa al acabar
+  aunque falle (6 en `tests/gui/test_trabajos_de_segundo_plano_avisan_al_acabar.py`). Dos
+  de integración llaman ahora a Sirius por su nombre, con la regla de verdad. Con todas
+  las de la voz, la ventana, el arranque y las órdenes, 311 en verde y 6 `xfail`.
+- **Mutación**, cada mutación con la prueba que tiene que tumbarla: 45 en el oído y la
+  regla, y caen las 45; 6 en las órdenes de memoria, y caen las 6; 54 en la ventana, el
+  puente, el bucle, el arranque y los trabajos de segundo plano, y caen las 54. Una de
+  ellas, preguntar a la ventana con la conexión que espera también desde su propio hilo,
+  no hace fallar la prueba sino que la deja colgada, que tampoco pasa: se cuenta como
+  caída y se dice aparte. Las tres tandas se repitieron sobre lo confirmado (`fb2784b` y
+  `7b8e796`), tras perder en un reinicio del contenedor el árbol en que corrieron la
+  primera vez, con el mismo resultado.
+- **mypy** sobre `src` y `tests`, sin errores en 717 ficheros; **ruff**, limpio.
 
 ## Consecuencias
 
-Se escriben al acabar la pieza.
+- **Con la tele hablando sin pausa, cada respuesta abre otra charla**: si Sirius le
+  contesta una vez dentro de la charla, puede seguir contestándole mientras la tele no
+  calle 10 s. Lo que de verdad lo evita es saber si le miran, en la 0.4. E-R03-05 no lo
+  mide: pone la tele sin hablarle, fuera de la charla.
+- La ventana tarda más en abrirse la primera vez con la voz instalada: carga el oído y la
+  voz antes de enseñarse. No se ha medido; se ve en E-R03-01.
+- El botón de silencio reinicia el detector en el hilo de la ventana, como parar desde la
+  pieza B: Silero y Smart Turn nuevos, unas décimas de segundo en las que la ventana no
+  responde.
+- Mientras contesta por voz, lo escrito espera, como con un envío escrito; y si le hablan
+  mientras la ventana está con lo escrito, una copia, una exportación o el cambio de
+  proyecto, ese turno se pierde y la ventana lo dice.
+- El juez puntúa las respuestas dichas por voz más tarde, cuando corre tras lo escrito o
+  al abrir Sirius.
+- El silencio no se guarda: al volver a abrir Sirius, escucha.
+- Con la ventana abierta hay un hilo más, que mira el micro cada 30 ms; sin la voz
+  instalada, cada vuelta no hace nada.
+- Las órdenes de memoria con su nombre detrás, tras una coma, o con «oye» delante son
+  órdenes también por escrito.
 
 ## Alternativas descartadas y por qué
 
@@ -152,8 +240,14 @@ Se escriben al acabar la pieza.
 
 ## La lección
 
-- ninguna: esta es la nota de arranque; si la pieza deja una lección, se escribe al
-  acabarla.
+- familia: `regla-nueva-que-cambia-lo-que-otro-reconoce`
+- sin esto se repetiría: pedirle al propietario algo nuevo, aquí llamar a Sirius por su
+  nombre fuera de la charla, sin mirar qué deja de reconocerse con eso. Las órdenes de
+  memoria solo se reconocían con su nombre delante: «olvida eso, Sirius» u «oye, Sirius,
+  olvida eso» habrían llegado al modelo como una frase más, y el modelo puede decir que
+  olvida sin olvidar. Lo vio la revisión propia al poner su nombre en las pruebas de
+  integración, antes de empujar (H-244).
+- lo hace cumplir: `tests/unit/test_memory_commands_domain.py`
 
 ## Revisión externa
 
