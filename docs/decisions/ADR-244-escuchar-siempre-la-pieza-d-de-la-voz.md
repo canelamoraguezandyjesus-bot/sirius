@@ -184,10 +184,11 @@ Lo que se decidió al escribir el código, con su porqué:
   o la voz de Model Studio volvería por el micro como un turno y los dos micros captarían
   a la vez. Al salir, el oído vuelve a oír si oía al entrar: si estaba en silencio sigue
   así, si había dejado de oír por un fallo lo reabre el botón, y si la ventana se está
-  cerrando no se abre, porque ya nadie haría de portera. Y fuera de Model Studio su voz no
-  suena: callarla, al salir o con «parar», invalida lo que se estaba sintetizando y las
-  órdenes de sonar que aún no habían llegado al reproductor (ronda 3), y lo que eso
-  devuelva después ya no cuenta para la voz de ahora (ronda 4).
+  cerrando no se abre, porque ya nadie haría de portera. Y no vuelve a oír hasta que la voz
+  de Model Studio calla del todo, sin ningún trabajador de la voz en marcha y nada
+  sonando: lo que aún sintetizaba al salir suena después, como sin esta pieza, y el oído
+  no lo oye (ronda 5). La voz de Model Studio, sus reproductores y su cola quedan como
+  estaban: esta pieza no los toca.
 
 ## Comprobación que la sostiene
 
@@ -252,6 +253,16 @@ Medido el 15-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   bien, falla o revienta, y no toca la voz de ahora. Con el código de antes fallaba en
   los tres. La ventana, Model Studio, los reproductores y la voz, 206 en verde. 4
   mutaciones del arreglo, y caen las 4. mypy, sin errores en 717 ficheros; ruff, limpio.
+  La batería entera sobre `78d856a7`: 8 651 en verde, 14 omitidas y 8 `xfail`, en 21 min
+  58 s; sobre `667cf41b` eran 8 648, 14 y 8.
+- **Tras la ronda 5 de Codex** (abajo), lo de las rondas 3 y 4 se retira con sus pruebas:
+  la voz de Model Studio, sus dos reproductores y sus pruebas vuelven a ser los de `main`,
+  y la ventana pierde la cuenta de la ronda 4. Entran 3 pruebas en
+  `tests/gui/test_escucha_en_la_ventana.py` (de 28 a 31): al salir, el oído espera a que
+  calle lo que suena después; vuelve cuando lo que sintetizaba no llega a sonar; y
+  dentro de Model Studio, que su voz acabe no lo abre. La ventana, Model Studio, los
+  reproductores y la voz, 115 en verde. 14 mutaciones de Model Studio y el oído tal como
+  quedan, y caen las 14. mypy, sin errores en 717 ficheros; ruff, limpio.
 
 ## Consecuencias
 
@@ -269,7 +280,13 @@ Medido el 15-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   verdad): la charla ganaría hasta ese medio segundo, y en los dobles, donde un silencio
   no dura nada, lo guardado puede ser de mucho antes.
 - **En Model Studio no se le habla con el oído**: allí se usa su micro, el de pulsar.
-  Entrar en Model Studio mientras Sirius habla con la voz local lo calla.
+  Entrar en Model Studio mientras Sirius habla con la voz local lo calla. Al salir, si
+  Model Studio aún tenía voz en marcha, el oído tarda lo que ella tarde en callar; si
+  su síntesis no acabara nunca, el botón lo reabre.
+- **La voz de Model Studio sigue como estaba**, con lo que ya hacía antes de esta pieza:
+  lo que sintetizaba al salir suena después, ya fuera; y con «Repetir» o «Leer todo»
+  durante una síntesis puede haber dos peticiones a la vez, y lo que devuelve la
+  primera cambia el estado de la segunda. No lo arregla esta pieza (ronda 5, abajo).
 - La ventana tarda más en abrirse la primera vez con la voz instalada: carga el oído y la
   voz antes de enseñarse. No se ha medido; se ve en E-R03-01.
 - El botón de silencio reinicia el detector en el hilo de la ventana, como parar desde la
@@ -374,3 +391,16 @@ dura la charla. No trae cortarle (E) ni elegir su voz (F).
     reproductores antes de empezar y la ventana antes de atender lo que vuelve, ignoran
     lo pedido antes de callar; el final natural de lo que suena no puede llegar de una
     voz callada, porque parar borra el aviso. Se sigue: no queda otra etapa con efecto.
+- **Ronda 5, sobre `78d856a7`**, preguntando si el enfoque está mal: no lo dijo, y trajo un
+  hallazgo, cierto.
+  - **P2, cuarta ronda seguida en la misma familia**: con «Repetir» o «Leer todo» mientras
+    otra voz se sintetiza, las dos peticiones llevan la misma cuenta, que solo sube al
+    callar, y lo que devuelve la primera cambia el estado de la segunda. **El patrón, tras
+    cuatro rondas: cada arreglo dentro de la tubería de voz de Model Studio destapaba otro
+    hueco que ya estaba antes de esta pieza.** Las dos voces a la vez con «Repetir» las
+    confirma una prueba de `main`, y lo que sonaba tras salir también ocurría sin el oído.
+    Esta pieza no debe rediseñar esa tubería (CLAUDE.md: no rediseñar Sirius por iniciativa
+    propia), y lo que le toca garantizar es otra cosa: que el oído nunca oiga a Model
+    Studio. **Decisión: se retira lo construido en las rondas 3 y 4** y la garantía se pone
+    en el oído, que al salir de Model Studio espera a que su voz calle del todo. Lo que
+    Model Studio ya hacía, y no hace esta pieza, queda escrito en «Consecuencias».
