@@ -30,6 +30,9 @@ class ReplyJudgeWorker(QRunnable):
         self._service = service
         self._stop = threading.Event()
         self.signals = ReplyJudgeWorkerSignals()
+        #: Se pone al acabar ``run``, después de avisar: un turno de voz lo espera desde
+        #: el hilo del oído, que no recibe las señales de la ventana (ADR-244).
+        self.done = threading.Event()
 
     def stop(self) -> None:
         """Que pare antes de la siguiente respuesta; la que está puntuando la termina."""
@@ -42,3 +45,4 @@ class ReplyJudgeWorker(QRunnable):
             _logger.error("El juez se interrumpió (%s)", type(exc).__name__)
         finally:
             self.signals.finished.emit()
+            self.done.set()

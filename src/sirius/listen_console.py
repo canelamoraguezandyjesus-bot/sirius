@@ -19,6 +19,7 @@ from typing import Any
 
 from sirius.adapters.persistence.bootstrap import initialize_persistence
 from sirius.application.data_location import DataLocationUseCase
+from sirius.application.listening_loop import PAUSE_SECONDS
 from sirius.application.local_listening import HeardTurn, LocalListening
 from sirius.composition_root import build_conversation_dependencies
 from sirius.domain.conversation import Message, MessageRole, MessageStatus
@@ -29,9 +30,6 @@ from sirius.infrastructure.paths import SiriusPaths, resolve_paths
 from sirius.ports.data_location import DataLocationError
 from sirius.presentation.error_messages import failed_send_message
 from sirius.presentation.message_text import CANCELLED_SEND, HISTORY_NOT_LOADED, message_body
-
-#: Cuánto se espera antes de volver a mirar el micro cuando no ha llegado nada.
-PAUSE_SECONDS = 0.03
 
 _logger = get_logger(__name__)
 
