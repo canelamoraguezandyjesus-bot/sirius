@@ -41,12 +41,17 @@ class _Modelo:
 
     def __init__(self) -> None:
         self.falla_a_medias = False
+        self.se_rompe = False
 
     def health_check(self) -> bool:
         return True
 
     def stream_response(self, request: LLMRequest) -> Iterator[LLMStreamEvent]:
         del request
+        if self.se_rompe:
+            yield LLMTextDelta("Ho")
+            msg = "un fallo que no es del modelo: la base se cerró"
+            raise RuntimeError(msg)
         if self.falla_a_medias:
             yield LLMTextDelta("Ho")
             yield LLMError(kind=LLMErrorKind.TIMEOUT, message="tarda", partial_text="Ho")
@@ -111,6 +116,7 @@ class _Sirius:
     micro: _Micro
     transcriptor: _Transcriptor
     oido: LocalListening[str]
+    codigo: int = 0
 
     def dice_por_voz(self, frase: str) -> list[str]:
         """Suena ``frase`` por el micro y devuelve lo que escribe ``sirius-oye``."""
@@ -118,7 +124,13 @@ class _Sirius:
         self.micro.trozos = ["voz", "fin"]
         dicho: list[str] = []
         vueltas = iter([True, False])
-        listen(self.oido, dicho.append, keep_going=lambda: next(vueltas), pause=lambda: None)
+        self.codigo = listen(
+            self.oido,
+            dicho.append,
+            keep_going=lambda: next(vueltas),
+            pause=lambda: None,
+            history=self.deps.get_history_use_case.get_history,
+        )
         return dicho[1:]
 
 
@@ -166,3 +178,20 @@ def test_si_la_charla_falla_a_medias_la_consola_lo_ensena_como_la_ventana(
 
     assert dicho[:2] == ["Tú: Hola, Sirius.", "Sirius: Ho (fallido)"]
     assert dicho[2].startswith(describe_error(LLMErrorKind.TIMEOUT) + " (ref: ")
+
+
+def test_si_la_charla_se_rompe_la_consola_cuenta_lo_guardado_y_sale_sin_volcado(
+    sirius: _Sirius,
+) -> None:
+    # Ronda 15 de Codex sobre la PR #687: lo suyo quedó guardado antes de romperse, y es
+    # lo que se cuenta, como la ventana al releer la charla; después, su aviso y error.
+    sirius.deps.send_message_use_case.send_message("Lo de antes.")
+    sirius.modelo.se_rompe = True
+
+    dicho = sirius.dice_por_voz("Hola, Sirius.")
+
+    assert sirius.codigo == 1
+    assert dicho[0] == "Tú: Hola, Sirius."
+    assert dicho[1].startswith(describe_error(None) + " (ref: ")
+    assert len(dicho) == 2
+    assert not sirius.oido.listening

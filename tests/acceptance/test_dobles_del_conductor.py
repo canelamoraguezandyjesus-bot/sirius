@@ -315,6 +315,7 @@ def test_un_turno_que_la_charla_no_acabo_bien_no_cuenta_como_contestado(
         "Buenos días, Sirius.",
         True,
         _resultado("Buenos días, Sirius.", "Buenos d", MessageStatus.FAILED),
+        "op-1",
     )
     monkeypatch.setattr(LocalListening, "attend", lambda self: Attended(turns=(a_medias,)))
 
@@ -332,8 +333,8 @@ def test_si_el_oido_cierra_varios_turnos_de_una_vez_el_conductor_falla(
     # antes sin que ninguna prueba lo viera.
     conductor = ConductorDeVoz(tmp_path)
     turnos = (
-        HeardTurn("Primero.", True, _resultado("Primero.", "Uno.")),
-        HeardTurn("Segundo.", True, _resultado("Segundo.", "Dos.")),
+        HeardTurn("Primero.", True, _resultado("Primero.", "Uno."), "op-1"),
+        HeardTurn("Segundo.", True, _resultado("Segundo.", "Dos."), "op-2"),
     )
     monkeypatch.setattr(LocalListening, "attend", lambda self: Attended(turns=turnos))
 

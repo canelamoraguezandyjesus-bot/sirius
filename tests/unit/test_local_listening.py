@@ -67,9 +67,12 @@ class _Detector:
         self.vistos: list[str] = []
         self.reinicios = 0
         self.falla_al_reiniciar: Exception | None = None
+        self.falla_al_oir: Exception | None = None
 
     def listen(self, chunk: str) -> TurnSignal:
         self.vistos.append(chunk)
+        if self.falla_al_oir is not None:
+            raise self.falla_al_oir
         if chunk == FIN:
             return TurnSignal.ENDED
         return TurnSignal.VOICE if chunk.startswith("voz:") else TurnSignal.QUIET
@@ -122,6 +125,7 @@ class _Charla:
         #: Un modelo de este ordenador, como Ollama.
         self.llm_provider: object = SimpleNamespace(runs_on_this_computer=True)
         self.mensajes: list[str] = []
+        self.operaciones: list[str | None] = []
         self.falla: Exception | None = None
         self.desenlace = MessageStatus.COMPLETED
         self.por_que: LLMErrorKind | None = None
@@ -129,12 +133,17 @@ class _Charla:
         self.propone: str | None = None
 
     def send_message(
-        self, user_text: str, *, only_on_this_computer: bool = False
+        self,
+        user_text: str,
+        *,
+        operation_id: str | None = None,
+        only_on_this_computer: bool = False,
     ) -> SendMessageResult:
         # Como la de verdad: comprueba el mismo modelo con el que enviaría.
         if only_on_this_computer and not runs_on_this_computer(self.llm_provider):
             raise ChatLeavesThisComputer("de fuera")
         self.mensajes.append(user_text)
+        self.operaciones.append(operation_id)
         if self.falla is not None:
             falla, self.falla = self.falla, None
             raise falla
@@ -494,17 +503,75 @@ def test_si_el_micro_falla_al_cerrar_el_servicio_queda_parado_y_conserva_sus_pie
     assert oido.cargas == 1, "las mismas piezas: el micro que quizá sigue abierto no se suelta"
 
 
-def test_si_la_charla_falla_el_turno_no_se_queda_a_medias() -> None:
+def test_si_la_charla_se_rompe_el_turno_lo_dice_con_su_operacion_y_sigue_oyendo(
+    caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Ronda 15 de Codex sobre la PR #687: como la ventana con lo escrito, la excepción se
+    # queda en la frontera; el turno dice con qué operación se envió, para contar lo
+    # guardado, y se sigue oyendo. El diario, solo el tipo.
+    monkeypatch.setattr(logging.getLogger("sirius.application.local_listening"), "disabled", False)
     oido = _Oido()
     oido.servicio.start()
-    oido.charla.falla = RuntimeError("el modelo no contesta")
+    oido.charla.falla = RuntimeError("la base está cerrada: Zarzamora")
 
-    with pytest.raises(RuntimeError, match="el modelo no contesta"):
-        oido.suena(voz("Primero"), FIN)
+    with caplog.at_level(logging.DEBUG):
+        (roto,) = oido.suena(voz("Primero"), FIN).turns
 
+    assert roto.result is None
+    assert roto.operation_id == oido.charla.operaciones[-1]
+    assert not roto.answered
+    assert roto.reply == ""
+    assert oido.servicio.listening
+    assert "interrumpido por una excepción (RuntimeError)" in caplog.text
+    assert "zarzamora" not in caplog.text.casefold()
+    assert "primero" not in caplog.text.casefold()
     atendido = oido.suena(voz("Segundo"), FIN)
     assert [t.heard for t in atendido.turns] == ["Segundo"]
     assert oido.transcriptor.turnos[-1] == [voz("Segundo"), FIN]
+
+
+def test_cada_turno_va_a_la_charla_con_su_propia_operacion() -> None:
+    oido = _Oido()
+    oido.servicio.start()
+
+    turnos = oido.suena(voz("Uno"), FIN, voz("Dos"), FIN).turns
+
+    assert [t.operation_id for t in turnos] == oido.charla.operaciones
+    assert len(set(oido.charla.operaciones)) == 2
+    assert None not in oido.charla.operaciones
+
+
+def test_si_el_modelo_de_oir_falla_a_mitad_deja_de_oir_y_lo_dice() -> None:
+    oido = _Oido()
+    oido.servicio.start()
+
+    def rompe() -> None:
+        raise RuntimeError("sin memoria")
+
+    oido.transcriptor.al_transcribir = rompe
+
+    atendido = oido.suena(voz("Hola"), FIN)
+
+    assert atendido == Attended(
+        notice="No puedo oírte: el modelo de oír ha fallado (RuntimeError)."
+    )
+    assert oido.charla.mensajes == []
+    assert not oido.servicio.listening
+    assert not oido.micro.abierto
+
+
+def test_si_el_detector_falla_a_mitad_deja_de_oir_y_lo_dice() -> None:
+    oido = _Oido()
+    oido.servicio.start()
+    oido.detector.falla_al_oir = ValueError("onnx")
+
+    atendido = oido.suena(voz("Hola"), FIN)
+
+    assert atendido == Attended(
+        notice="No puedo oírte: el detector de voz ha fallado (ValueError)."
+    )
+    assert oido.charla.mensajes == []
+    assert not oido.servicio.listening
 
 
 def test_si_la_charla_no_acaba_bien_el_turno_lo_dice() -> None:
@@ -530,6 +597,7 @@ def test_si_la_charla_no_acaba_bien_el_turno_dice_por_que() -> None:
     (turno,) = oido.suena(voz("Hola"), FIN).turns
 
     assert not turno.answered
+    assert turno.result is not None
     assert turno.result.error_kind is LLMErrorKind.CONNECTION
     assert turno.proposed is None
     assert oido.propuestas.hechas == [], "un turno que no acabó bien no propone nada"

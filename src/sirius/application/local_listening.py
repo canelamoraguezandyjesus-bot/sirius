@@ -29,11 +29,17 @@ transcribe y le pasa el texto a la misma charla que la ventana
   devolvió la charla, entero y sin traducir, el mismo resultado que recibe la ventana con
   lo escrito, y lo que el modelo propone recordar queda pendiente de que él lo confirme,
   como en la ventana (rondas 11, 12 y 13 de Codex sobre la PR #687).
+- **Lo que falla dentro de un turno no tumba a quien escucha.** Como la ventana con lo
+  escrito, cada envío lleva su operación, y si la charla lanza una excepción el turno lo
+  dice con esa operación, para contar lo que quedó guardado, y se sigue oyendo. Si falla
+  el detector o el modelo de oír, deja de oír y lo dice. El diario apunta solo el tipo de
+  fallo (ronda 15 de Codex sobre la PR #687).
 - **En la pieza B todo lo oído es para él**; a quién le hablan lo decide la pieza D.
 """
 
 from __future__ import annotations
 
+import uuid
 from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -72,11 +78,16 @@ class Chat(Protocol):
         ...
 
     def send_message(
-        self, user_text: str, *, only_on_this_computer: bool = False
+        self,
+        user_text: str,
+        *,
+        operation_id: str | None = None,
+        only_on_this_computer: bool = False,
     ) -> SendMessageResult:
-        """Lo entrega a la charla; con ``only_on_this_computer``, solo si el modelo con el
-        que lo envía, el mismo que comprueba, es de este ordenador, y si no,
-        ``ChatLeavesThisComputer`` sin guardar ni enviar nada."""
+        """Lo entrega a la charla con la operación ``operation_id``; con
+        ``only_on_this_computer``, solo si el modelo con el que lo envía, el mismo que
+        comprueba, es de este ordenador, y si no, ``ChatLeavesThisComputer`` sin guardar ni
+        enviar nada."""
         ...
 
 
@@ -100,23 +111,28 @@ class HeardTurn:
     ``result`` es lo que devolvió la charla, entero y sin traducir: el mismo resultado que
     recibe la ventana con lo escrito, para que quien enseñe el turno lo enseñe como ella.
     Traducirlo a mano campo a campo perdió algo en tres rondas seguidas de Codex sobre la
-    PR #687 (11, 12 y 13). ``proposed`` es lo que el modelo propuso recordar y quedó
-    pendiente de que él lo confirme.
+    PR #687 (11, 12 y 13). Es ``None`` si la charla lanzó una excepción; entonces lo
+    guardado es lo de ``operation_id``, la operación con la que se envió, como la ventana
+    tras un envío roto (ronda 15). ``proposed`` es lo que el modelo propuso recordar y
+    quedó pendiente de que él lo confirme.
     """
 
     heard: str
     addressed: bool
-    result: SendMessageResult
+    result: SendMessageResult | None
+    operation_id: str
     proposed: str | None = None
 
     @property
     def answered(self) -> bool:
         """Si la charla acabó bien."""
-        return self.result.outcome is MessageStatus.COMPLETED
+        return self.result is not None and self.result.outcome is MessageStatus.COMPLETED
 
     @property
     def reply(self) -> str:
         """Lo que escribió: entero si acabó bien, y si no, lo que llegara a escribir."""
+        if self.result is None:
+            return ""
         return self.result.sirius_message.content or ""
 
 
@@ -244,7 +260,11 @@ class LocalListening[Chunk]:
     def _take(self, chunk: Chunk) -> HeardTurn | None:
         """Le enseña ``chunk`` al detector y, si con él acaba el turno, lo atiende."""
         assert self._engines is not None
-        signal = self._engines.detector.listen(chunk)
+        try:
+            signal = self._engines.detector.listen(chunk)
+        except Exception as error:
+            self._engine_failed("el detector de voz", error)
+            return None
         if self._turn is None:
             if signal is TurnSignal.VOICE:
                 self._turn = [*self._before_turn, chunk]
@@ -261,22 +281,47 @@ class LocalListening[Chunk]:
             del chunks
             self._chat_left()
             return None
-        heard = self._engines.transcriber.transcribe(chunks).strip()
-        del chunks
+        try:
+            heard = self._engines.transcriber.transcribe(chunks).strip()
+        except Exception as error:
+            self._engine_failed("el modelo de oír", error)
+            return None
+        finally:
+            del chunks
         if not heard:
             _logger.info("Turno de voz sin palabras: no va a la charla")
             return None
+        # La operación la pone el oído, como la ventana: si la charla se rompe a medias,
+        # con ella se sabe qué quedó guardado de este turno.
+        operation_id = str(uuid.uuid4())
         try:
-            result = self._chat.send_message(heard, only_on_this_computer=True)
+            result = self._chat.send_message(
+                heard, operation_id=operation_id, only_on_this_computer=True
+            )
         except ChatLeavesThisComputer:
             # Se fue mientras se transcribía: la charla no ha guardado ni enviado nada.
             self._chat_left()
             return None
+        except Exception as error:
+            # La frontera de la ventana con lo escrito (`SendMessageWorker`): se cuenta,
+            # no tumba a quien escucha, y el diario se queda solo con el tipo.
+            _logger.error(
+                "Turno de voz %s interrumpido por una excepción (%s)",
+                operation_id,
+                type(error).__name__,
+            )
+            return HeardTurn(heard=heard, addressed=True, result=None, operation_id=operation_id)
         _logger.info("Turno de voz entregado a la charla")
         proposed = None
         if result.outcome is MessageStatus.COMPLETED and result.memory_suggestion is not None:
             proposed = self._propose(result.memory_suggestion, result.sirius_message.id)
-        return HeardTurn(heard=heard, addressed=True, result=result, proposed=proposed)
+        return HeardTurn(
+            heard=heard,
+            addressed=True,
+            result=result,
+            operation_id=operation_id,
+            proposed=proposed,
+        )
 
     def _propose(self, suggestion: str, message_id: int) -> str | None:
         """Deja pendiente lo que el modelo propone recordar, como la ventana con lo escrito.
@@ -291,6 +336,14 @@ class LocalListening[Chunk]:
             _logger.error("No se pudo proponer lo que recordar (%s)", type(error).__name__)
             return None
         return suggestion
+
+    def _engine_failed(self, what: str, error: Exception) -> None:
+        """Una pieza del oído falló a mitad de oír: deja de oír y lo dice, sin tumbar a quien
+        escucha y sin aconsejar la orden de instalar, que no lo arregla; el diario se queda
+        solo con el tipo de fallo."""
+        _logger.error("%s falló mientras oía (%s)", what, type(error).__name__)
+        self._fail(f"No puedo oírte: {what} ha fallado ({type(error).__name__}).")
+        self.stop()
 
     def _chat_left(self) -> None:
         """La charla va a un modelo de fuera: el turno no sale, deja de oír y lo dice."""

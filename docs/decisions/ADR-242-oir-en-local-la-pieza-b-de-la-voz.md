@@ -170,7 +170,7 @@ Medido el 14-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   la C (`tests/acceptance/test_dobles_del_conductor.py`). La tabla de
   `docs/evolution/PRUEBAS_0.3_DEL_ROBOT.md` pone PA-R03-01 en verde; PA-R03-08 sigue
   pendiente de la C.
-- **97 pruebas unitarias nuevas**: el servicio (`tests/unit/test_local_listening.py`), los
+- **104 pruebas unitarias nuevas**: el servicio (`tests/unit/test_local_listening.py`), los
   adaptadores de verdad con módulos de mentira (`tests/unit/test_local_listening_adapters.py`),
   la instalación y la orden de instalar (`tests/unit/test_local_voice_installation.py`), la
   orden de consola (`tests/unit/test_listen_console.py`) y la guarda de las descargas
@@ -182,9 +182,10 @@ Medido el 14-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   pendiente lo que el modelo propone recordar, con la charla y la base de verdad. Y dos
   del conductor en `tests/acceptance/test_dobles_del_conductor.py`: lo contestado solo
   cuenta si la charla acabó bien, y varios turnos cerrados de una vez lo hacen fallar. Y
-  dos en `tests/integration/test_oir_en_consola.py`, que pasan por `sirius-oye` con la
-  charla y la base de verdad: una orden de olvido dicha por voz no sale por la consola, y
-  una respuesta que falla a medias sale como en la ventana.
+  tres en `tests/integration/test_oir_en_consola.py`, que pasan por `sirius-oye` con la
+  charla y la base de verdad: una orden de olvido dicha por voz no sale por la consola,
+  una respuesta que falla a medias sale como en la ventana, y una charla que se rompe
+  después de guardar lo suyo se cuenta desde lo guardado y sale con error, sin volcado.
 - **Mutación: todas caen en su ronda.** Quitar lo que suena antes de la voz, no mirar la
   instalación, escribir lo oído en el diario, mandar un turno vacío, no vaciar el turno,
   leer el micro parado, empezar un turno o transcribir con un fin de turno sin voz
@@ -267,8 +268,14 @@ Medido el 14-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   vistos desde la consola y desde la ventana, y que la ventana deje de usar el texto
   compartido. Y las tres de la ronda 14: que la consola enseñe lo oído y no lo guardado,
   vista también con la charla de verdad, y que calle lo escrito si falla, vista también
-  así. Al cerrar la ronda 14 se han vuelto a pasar las 70 de las rondas 4 a 14, y caen
-  todas; las dos de la ronda 12 que vigilaban el porqué traducido a mano y el
+  así. Y las quince de la ronda 15: que la charla rota tumbe el oído, que el oído no pase
+  su operación a la charla o que el turno roto no la lleve, que el diario guarde la
+  excepción entera, que el modelo de oír o el detector rotos tumben el oído o que tras
+  fallar siga oyendo, que la consola calle el envío roto, enseñe lo oído de él, no
+  filtre por su operación (vista también con la charla de verdad), no salga con error,
+  calle los turnos que venían con él o se caiga si no puede leer lo guardado, y que
+  cambie el texto del historial que no carga. Al cerrar la ronda 15 se han vuelto a pasar
+  las 85 de las rondas 4 a 15, y caen todas; las dos de la ronda 12 que vigilaban el porqué traducido a mano y el
   aviso de la consola se retiran con lo que vigilaban. La de etiquetar con la generación
   del
   momento sobrevivió a la prueba que reproduce el caso de Codex, que para el hilo dentro
@@ -689,3 +696,27 @@ o fuera con su porqué:
   gasto la ventana los enseña en etiquetas fijas, no en el turno: la respuesta a «ponte
   serio» ya sale seria, y la voz solo va a un modelo de este ordenador, que no gasta. La
   página de Model Studio y su voz son otra cosa. Y el juez puntúa desde la base.
+
+**Ronda 15** (`a624ff8e`, 15-10-2026): un hallazgo P2, cierto. El revisor dice que llega
+tarde por goteo; cuenta como ronda.
+
+- **P2: si la charla lanzaba una excepción, `sirius-oye` se caía con un volcado.** Por
+  ejemplo, al guardar la respuesta después de haber guardado lo suyo. Con lo escrito, la
+  ventana la para en la frontera (`SendMessageWorker`), vuelve a leer la charla guardada
+  y enseña el aviso de siempre con su referencia (`_on_crashed`).
+
+**Quinta ronda de la familia** (11 a 15). La 14 recorrió `_on_finished` entero, pero un
+turno escrito acaba por dos sitios, y el otro es `_on_crashed`. Ahora se recorren los dos:
+
+- **El oído** pone la operación de cada envío, como la ventana, y para en su frontera
+  cualquier excepción de la charla: el turno sale sin resultado y con su operación, el
+  diario apunta solo el tipo, y se sigue oyendo.
+- **`sirius-oye`**, con un envío roto, hace lo de `_on_crashed`: vuelve a leer la charla
+  guardada y cuenta lo de esa operación, con el mismo aviso y la misma referencia. Si no
+  puede leerla, lo dice con el texto de la ventana, que pasa también a la función
+  compartida. Cuenta los demás turnos que venían con él y sale con error.
+- **Lo que la ventana no tiene**, con la misma regla: si el detector o el modelo de oír
+  fallan a mitad, el oído deja de oír y lo dice, sin aconsejar la orden de instalar.
+
+Una prueba de integración rompe la charla de verdad después de guardar lo suyo: la
+consola cuenta lo guardado y el aviso, y sale con error, sin volcado.

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 
 import pytest
@@ -30,7 +31,12 @@ def _turno(
     tuyo = Message(1, 1, 1, MessageRole.USER, guardado or oido, hoy, operation_id="op-1")
     suyo = Message(2, 1, 2, MessageRole.SIRIUS, contesta, hoy, "op-1", 1, desenlace)
     resultado = SendMessageResult(desenlace, tuyo, suyo, None, error_kind=por_que)
-    return HeardTurn(oido, True, resultado, propuesto)
+    return HeardTurn(oido, True, resultado, "op-1", propuesto)
+
+
+def _roto(oido: str) -> HeardTurn:
+    """Un turno cuya charla lanzó una excepción: sin resultado, con su operación."""
+    return HeardTurn(oido, True, None, "op-9")
 
 
 class _Oido:
@@ -52,7 +58,9 @@ class _Oido:
         self.parado = True
 
 
-def _escucha(oido: _Oido, vueltas: int) -> tuple[int, list[str], int]:
+def _escucha(
+    oido: _Oido, vueltas: int, historia: Callable[[], Sequence[Message]] = list
+) -> tuple[int, list[str], int]:
     dicho: list[str] = []
     pausas = 0
 
@@ -66,6 +74,7 @@ def _escucha(oido: _Oido, vueltas: int) -> tuple[int, list[str], int]:
         dicho.append,
         keep_going=lambda: next(quedan),
         pause=pausa,
+        history=historia,
     )
     return codigo, dicho, pausas
 
@@ -168,6 +177,60 @@ def test_tras_una_orden_de_olvido_ensena_lo_guardado_y_no_lo_oido() -> None:
 
     assert dicho[1:] == ["Tú: Olvida lo de…", "Sirius: Hecho."]
     assert not any("Ramiro" in linea for linea in dicho)
+
+
+def test_si_la_charla_se_rompe_ensena_lo_guardado_y_el_aviso_como_la_ventana_y_sale() -> None:
+    # Ronda 15 de Codex sobre la PR #687: lo que quedó guardado de esa operación, como la
+    # ventana al releer la charla, y su aviso con la referencia; nunca lo oído.
+    hoy = datetime(2026, 10, 15, tzinfo=UTC)
+    otro = Message(1, 1, 1, MessageRole.USER, "Lo de antes", hoy, operation_id="op-0")
+    guardado = Message(3, 1, 3, MessageRole.USER, "Olvida lo de…", hoy, operation_id="op-9")
+    oido = _Oido(atenciones=[Attended(turns=(_roto("Olvida lo de mi vecino Ramiro."),))])
+
+    codigo, dicho, _ = _escucha(oido, 5, historia=lambda: [otro, guardado])
+
+    assert codigo == 1
+    assert dicho[1:] == ["Tú: Olvida lo de…", failed_send_message(None, "op-9")]
+    assert not any("Ramiro" in linea for linea in dicho)
+    assert oido.parado
+
+
+def test_si_no_quedo_nada_guardado_solo_dice_el_aviso() -> None:
+    oido = _Oido(atenciones=[Attended(turns=(_roto("Hola"),))])
+
+    codigo, dicho, _ = _escucha(oido, 5)
+
+    assert codigo == 1
+    assert dicho[1:] == [failed_send_message(None, "op-9")]
+
+
+def test_si_no_se_puede_leer_lo_guardado_lo_dice_como_la_ventana() -> None:
+    def rota() -> list[Message]:
+        raise RuntimeError("la base no abre")
+
+    oido = _Oido(atenciones=[Attended(turns=(_roto("Hola"),))])
+
+    codigo, dicho, _ = _escucha(oido, 5, historia=rota)
+
+    assert codigo == 1
+    assert dicho[1:] == [
+        "No se pudo cargar el historial de la conversación.",
+        failed_send_message(None, "op-9"),
+    ]
+
+
+def test_un_envio_roto_no_calla_los_turnos_que_venian_con_el() -> None:
+    bueno = _turno("Buenos días, Sirius.", "Buenos días.")
+    oido = _Oido(atenciones=[Attended(turns=(_roto("Hola"), bueno))])
+
+    codigo, dicho, _ = _escucha(oido, 5)
+
+    assert codigo == 1
+    assert dicho[1:] == [
+        failed_send_message(None, "op-9"),
+        "Tú: Buenos días, Sirius.",
+        "Sirius: Buenos días.",
+    ]
 
 
 def test_con_ctrl_c_tambien_cierra_el_micro() -> None:

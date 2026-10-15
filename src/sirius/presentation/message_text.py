@@ -10,10 +10,12 @@ from __future__ import annotations
 
 from sirius.domain.conversation import MessageStatus
 
-__all__ = ["CANCELLED_SEND", "message_body"]
+__all__ = ["CANCELLED_SEND", "HISTORY_NOT_LOADED", "message_body"]
 
 #: Lo que se dice cuando un envío se cancela.
 CANCELLED_SEND = "Envío cancelado."
+#: Lo que se dice si, tras un envío roto, no se puede leer lo que quedó guardado.
+HISTORY_NOT_LOADED = "No se pudo cargar el historial de la conversación."
 
 
 def message_body(content: str | None, status: MessageStatus) -> str:

@@ -131,7 +131,7 @@ from sirius.presentation.historical_projects_widget import HistoricalProjectsWid
 from sirius.presentation.knowledge_widget import KnowledgeWidget
 from sirius.presentation.memory_embedding_worker import MemoryEmbeddingWorker
 from sirius.presentation.memory_suggestion_trigger import propose_suggestion_if_completed_with_one
-from sirius.presentation.message_text import CANCELLED_SEND, message_body
+from sirius.presentation.message_text import CANCELLED_SEND, HISTORY_NOT_LOADED, message_body
 from sirius.presentation.message_view import MessageItemDelegate, MessageItemWidget
 from sirius.presentation.model_studio.settings_dialog import StudioSettingsDialog
 from sirius.presentation.model_studio.studio_page import StudioPage
@@ -1364,7 +1364,7 @@ class MainWindow(QMainWindow):
         try:
             messages = self._get_history_use_case.get_history()
         except ConversationNotInitializedError:
-            self.error_label.setText("No se pudo cargar el historial de la conversación.")
+            self.error_label.setText(HISTORY_NOT_LOADED)
             return
         if self._mark_reply_use_case is not None:
             self._marks_by_message = {
