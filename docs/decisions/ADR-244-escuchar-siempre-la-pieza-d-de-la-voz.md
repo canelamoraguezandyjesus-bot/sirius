@@ -179,6 +179,13 @@ Lo que se decidió al escribir el código, con su porqué:
   se quita: «¿qué sabes de Sirius?» pregunta por él.
 - **Si abrir el oído falla de una forma que no se espera**, la ventana se abre igual y lo
   dice, con el tipo de fallo; el botón vuelve a intentarlo.
+- **Model Studio y el oído no se pisan** (ronda 2 de Codex, abajo). Model Studio tiene su
+  micro y su voz: mientras está abierto, el oído no oye y lo que estaba diciendo se calla,
+  o la voz de Model Studio volvería por el micro como un turno y los dos micros captarían
+  a la vez. Al salir, el oído vuelve a oír si oía al entrar: si estaba en silencio sigue
+  así, si había dejado de oír por un fallo lo reabre el botón, y si la ventana se está
+  cerrando no se abre, porque ya nadie haría de portera. Y fuera de Model Studio su voz no
+  suena: lo que acaba de sintetizarse después de salir se calla en cuanto empieza.
 
 ## Comprobación que la sostiene
 
@@ -223,6 +230,12 @@ Medido el 15-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   mutaciones del arreglo, y caen las 9. mypy, sin errores en 717 ficheros; ruff, limpio.
   La batería entera sobre `ff8a0b5f`: 8 638 en verde, 14 omitidas y 8 `xfail`, en 24 min
   22 s; sobre `ec0395ad` eran 8 632, 14 y 8: entran las 6 nuevas.
+- **Tras la ronda 2 de Codex** (abajo), 7 pruebas más: una del oído con el detector lento
+  (de 77 a 78), cinco de la ventana con Model Studio (de 23 a 28) y una de Model Studio
+  en `tests/gui/test_model_studio_integration.py` (de 38 a 39). Las del oído y las dos
+  ventanas, 145 en verde. 10 mutaciones de los arreglos, y caen las 10; las 9 de la ronda
+  1, repetidas sobre el código nuevo, caen las 9. mypy, sin errores en 717 ficheros; ruff,
+  limpio.
 
 ## Consecuencias
 
@@ -234,11 +247,13 @@ Medido el 15-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   su nombre: si contesta en voz alta, el micro cerrado lo pierde, como en la pieza C; si
   no dice nada, empezó antes de que callara.
 - **La charla cuenta desde el trozo en que el detector oye su voz**, un poco después de
-  que empiece de verdad, lo que tarda Silero en darla por empezada; no se ha medido. Con
-  su voz empezando justo al final de los 10 s, puede quedar fuera. No se adelanta con lo
+  que empiece de verdad: lo que Silero necesita oír para darla por empezada; no se ha
+  medido. Con su voz empezando justo al final de los 10 s, puede quedar fuera. No se adelanta con lo
   que el oído guarda de antes de la voz (`PRE_ROLL_CHUNKS`, medio segundo con el micro de
   verdad): la charla ganaría hasta ese medio segundo, y en los dobles, donde un silencio
   no dura nada, lo guardado puede ser de mucho antes.
+- **En Model Studio no se le habla con el oído**: allí se usa su micro, el de pulsar.
+  Entrar en Model Studio mientras Sirius habla con la voz local lo calla.
 - La ventana tarda más en abrirse la primera vez con la voz instalada: carga el oído y la
   voz antes de enseñarse. No se ha medido; se ve en E-R03-01.
 - El botón de silencio reinicia el detector en el hilo de la ventana, como parar desde la
@@ -292,3 +307,25 @@ dura la charla. No trae cortarle (E) ni elegir su voz (F).
   Sirius calla antes de abrir el micro. El hallazgo pedía además adelantar el inicio con
   lo guardado de antes de la voz; no se hace, por lo que dice «Consecuencias». Familia:
   `la-hora-de-quien-lee-y-no-de-quien-capta`.
+- **Ronda 2, sobre `5f5e63a8`**, preguntando si el enfoque está mal: no lo dijo, y trajo
+  dos hallazgos, los dos ciertos.
+  - **P2, de la misma familia que la ronda 1**: la hora de captura se restaba de un reloj
+    leído después del detector, y lo que tardara en mirar el trozo volvía a contar; con
+    la charla abierta a los 0 s, una voz captada a los 9,9 s con un detector que tarda
+    0,2 s quedaba a los 10,1 s, fuera. **Dos rondas seguidas con la misma familia: se
+    dejó de parchear y se buscó la raíz.** En la ronda 1 la hora se dejó después del
+    detector a sabiendas, para no cambiar una prueba vieja en la que lo que tardaba el
+    detector hacía de lo que dura el audio: se acomodó el código a la prueba. Arreglo de
+    la raíz: la hora se toma una sola vez, al sacar el trozo del micro, antes de que nada
+    lo mire, y en las pruebas el tiempo pasa al llegar el audio (`al_leer` del micro de
+    mentira), no al procesarlo. Las otras tres horas que lee el oído son de sucesos, no
+    de captura (calla al acabar un turno sin decir nada, calla antes de abrir el micro,
+    el primer sonido) y se quedan. Una prueba con el detector lento lo sostiene. Se
+    sigue: la raíz se cierra en un solo sitio.
+  - **P1, familia nueva, `dos-voces-en-la-misma-ventana-sin-exclusion`**: Model Studio tiene
+    su micro y su voz, y el oído que escucha siempre los oía; su voz, con «Sirius»
+    dentro, volvía por el micro como un turno, y pulsar su micro dejaba dos capturas a la
+    vez. Arreglo, en «Decisión»: mientras Model Studio está abierto el oído no oye, y
+    fuera de Model Studio su voz no suena. Al revisarlo apareció un caso que el hallazgo
+    no decía: salir de Model Studio callaba lo que sonaba, pero no lo que aún se estaba
+    sintetizando, que sonaba después, ya fuera; también se arregla, con su prueba.
