@@ -5,7 +5,8 @@ que contesta, en la misma charla de la ventana, hasta Ctrl+C; no abre la ventana
 D). Si falta algo de la voz, dice qué orden lo instala y sale sin hacer nada más. Si deja
 de oír mientras escucha, porque la charla se fue a un modelo de fuera o porque falló una
 pieza del oído o de la voz, lo dice y sale; y si un envío se rompe, cuenta lo que quedó
-guardado, como la ventana, y sale con error.
+guardado, como la ventana, y sale con error. Lo que oye y no era para él no lo enseña:
+no es de la charla (ADR-244).
 
 Al salir dice cuánto tardó en empezar a hablar: es la cifra de E-R03-02.
 """
@@ -18,6 +19,7 @@ from typing import Any
 
 from sirius.adapters.persistence.bootstrap import initialize_persistence
 from sirius.application.data_location import DataLocationUseCase
+from sirius.application.listening_loop import PAUSE_SECONDS
 from sirius.application.local_listening import HeardTurn, LocalListening
 from sirius.composition_root import build_conversation_dependencies
 from sirius.domain.conversation import Message, MessageRole, MessageStatus
@@ -28,9 +30,6 @@ from sirius.infrastructure.paths import SiriusPaths, resolve_paths
 from sirius.ports.data_location import DataLocationError
 from sirius.presentation.error_messages import failed_send_message
 from sirius.presentation.message_text import CANCELLED_SEND, HISTORY_NOT_LOADED, message_body
-
-#: Cuánto se espera antes de volver a mirar el micro cuando no ha llegado nada.
-PAUSE_SECONDS = 0.03
 
 _logger = get_logger(__name__)
 
@@ -62,6 +61,9 @@ def listen(
             attended = listening.attend()
             broken = False
             for turn in attended.turns:
+                if not turn.addressed:
+                    # No fue a la charla: ni se enseña ni es un envío roto.
+                    continue
                 broken = _say_turn(turn, say, history) or broken
                 if turn.first_sound_delay is not None:
                     delays.append(turn.first_sound_delay)

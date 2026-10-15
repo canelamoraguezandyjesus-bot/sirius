@@ -26,9 +26,9 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **237**.
+- Decisiones (ADR): **238**.
 - Bloques del motor: 17 cerrado, 3 fuera_de_alcance.
-- Defectos registrados: 2 abierto, 88 cerrado.
+- Defectos registrados: 2 abierto, 89 cerrado.
 - Ideas aparcadas o descartadas: 12 aparcada, 3 descartada, 2 promovida.
 - Skills: **19**.
 - Investigaciones: **14** (fotos con fecha; caducan).
@@ -79,6 +79,7 @@ huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| [244](docs/decisions/ADR-244-escuchar-siempre-la-pieza-d-de-la-voz.md) | 2026-10-15 | APROBADO | Escuchar siempre: la pieza D de la voz | Se adopta la opción 3, y la charla dura 10 s, desde que Sirius calla hasta que empieza a oírse la voz del turno siguiente. Los turnos de voz no despiertan al juez: puntúa en segundo plano las respuestas que aún no tienen nota (PA-R02-08)… |
 | [243](docs/decisions/ADR-243-hablar-en-local-la-pieza-c-de-la-voz.md) | 2026-10-15 | APROBADO | Hablar en local: la pieza C de la voz | Se adopta la opción 2. |
 | [242](docs/decisions/ADR-242-oir-en-local-la-pieza-b-de-la-voz.md) | 2026-10-14 | APROBADO | Oír en local: la pieza B de la voz | Se adopta la opción 2. Lo decide la sesión (ADR-204: no es dinero, ni salud, ni cambia lo que el propietario ve u oye). |
 | [241](docs/decisions/ADR-241-empezar-la-0.3-del-robot-la-voz-por-sus-pruebas-de-aceptacion.md) | 2026-10-13 | APROBADO | Empezar la 0.3 del robot, la voz, por sus pruebas de aceptación | Se adopta la opción 2. |
@@ -359,6 +360,7 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 | `plan-que-hay-que-terminar-de-una-sentada` | 1 | sí | 176 |
 | `pregunta-al-propietario-que-nadie-vuelve-a-poner-delante` | 1 | no en todas | 198 |
 | `registro-sin-decir-quien-lo-hizo` | 1 | sí | 230 |
+| `regla-nueva-que-cambia-lo-que-otro-reconoce` | 1 | sí | 244 |
 | `regla-nueva-sin-pasarla-por-los-casos-vivos` | 1 | sí | 231 |
 | `tarea-periodica-sin-reloj` | 1 | no en todas | 201 |
 | `tramite-que-solo-puede-hacer-una-persona-y-no-anade-comprobacion` | 1 | sí | 205 |
@@ -512,6 +514,10 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 ### `registro-sin-decir-quien-lo-hizo`
 
 - **ADR-230** — comparar una ronda a la que le falta un revisor con rondas enteras y leer la ausencia de sus hallazgos como progreso, y su vuelta como reaparición (lo hace cumplir `tests/automation/test_sirius_convergence.py`).
+
+### `regla-nueva-que-cambia-lo-que-otro-reconoce`
+
+- **ADR-244** — pedirle al propietario algo nuevo, aquí llamar a Sirius por su (lo hace cumplir `tests/unit/test_memory_commands_domain.py`).
 
 ### `regla-nueva-sin-pasarla-por-los-casos-vivos`
 

@@ -32,6 +32,9 @@ class MemoryEmbeddingWorker(QRunnable):
         self._warm_up = warm_up
         self._stop = threading.Event()
         self.signals = MemoryEmbeddingWorkerSignals()
+        #: Se pone al acabar ``run``, después de avisar: un turno de voz lo espera desde
+        #: el hilo del oído, que no recibe las señales de la ventana (ADR-244).
+        self.done = threading.Event()
 
     def stop(self) -> None:
         """Que pare antes del siguiente grupo de recuerdos; el que está calculando lo termina."""
@@ -48,3 +51,4 @@ class MemoryEmbeddingWorker(QRunnable):
             _logger.error("Las huellas se interrumpieron (%s)", type(exc).__name__)
         finally:
             self.signals.finished.emit()
+            self.done.set()

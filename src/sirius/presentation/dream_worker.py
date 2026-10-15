@@ -32,6 +32,9 @@ class DreamWorker(QRunnable):
         self._today = today
         self._stop = threading.Event()
         self.signals = DreamWorkerSignals()
+        #: Se pone al acabar ``run``, después de avisar: un turno de voz lo espera desde
+        #: el hilo del oído, que no recibe las señales de la ventana (ADR-244).
+        self.done = threading.Event()
 
     def stop(self) -> None:
         """Que pare antes del siguiente día; el que está soñando lo termina."""
@@ -47,3 +50,4 @@ class DreamWorker(QRunnable):
             _logger.error("El sueño se interrumpió (%s)", type(exc).__name__)
         finally:
             self.signals.finished.emit(dreamed)
+            self.done.set()

@@ -41,6 +41,19 @@ class VoiceUnavailable(RuntimeError):
         self.reason = reason
 
 
+@dataclass(frozen=True, slots=True)
+class Captured[Chunk]:
+    """Un trozo del micro y cuánto llevaba esperando a que lo leyeran (ADR-244).
+
+    El micro capta sin parar, y lo captado espera en su cola mientras el oído transcribe o
+    contesta. Con ``age``, en segundos, el oído sabe cuándo sonó de verdad y no cuándo lo
+    leyó: no hace falta que los dos lleven el mismo reloj. Cero, si se lee en el acto.
+    """
+
+    chunk: Chunk
+    age: float = 0.0
+
+
 class Microphone[Chunk](Protocol):
     """El micrófono, trozo a trozo."""
 
@@ -56,8 +69,9 @@ class Microphone[Chunk](Protocol):
         """
         ...
 
-    def read(self) -> Chunk | None:
-        """El siguiente trozo captado, o ``None`` si no ha llegado ninguno. No espera."""
+    def read(self) -> Captured[Chunk] | None:
+        """El siguiente trozo captado, con cuánto llevaba esperando, o ``None`` si no ha
+        llegado ninguno. No espera."""
         ...
 
 

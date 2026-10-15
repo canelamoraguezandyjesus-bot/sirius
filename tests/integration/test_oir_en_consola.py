@@ -27,7 +27,7 @@ from sirius.ports.llm import (
     LLMStreamEvent,
     LLMTextDelta,
 )
-from sirius.ports.local_voice import ListeningEngines, SpeakingEngines, TurnSignal
+from sirius.ports.local_voice import Captured, ListeningEngines, SpeakingEngines, TurnSignal
 from sirius.presentation.error_messages import describe_error
 
 pytestmark = pytest.mark.integration
@@ -81,8 +81,8 @@ class _Micro:
     def close(self) -> None:
         pass
 
-    def read(self) -> str | None:
-        return self.trozos.pop(0) if self.trozos else None
+    def read(self) -> Captured[str] | None:
+        return Captured(self.trozos.pop(0)) if self.trozos else None
 
 
 class _Detector:
@@ -186,7 +186,8 @@ def sirius(tmp_path: Path) -> Iterator[_Sirius]:
 def test_una_orden_de_olvido_por_voz_no_sale_por_la_consola(sirius: _Sirius) -> None:
     sirius.deps.send_message_use_case.send_message("Mi vecino Ramiro me tiene frito.")
 
-    dicho = sirius.dice_por_voz("Olvida lo de mi vecino Ramiro.")
+    # Con su nombre, como hay que llamarle fuera de la charla (ADR-244).
+    dicho = sirius.dice_por_voz("Sirius, olvida lo de mi vecino Ramiro.")
 
     assert dicho[0] == f"Tú: {FORGET_ABOUT_STORED}"
     assert dicho[1].startswith("Sirius: ")

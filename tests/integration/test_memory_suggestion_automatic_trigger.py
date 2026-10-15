@@ -42,7 +42,7 @@ from sirius.ports.llm import (
     LLMStreamEvent,
     LLMTextDelta,
 )
-from sirius.ports.local_voice import ListeningEngines, SpeakingEngines, TurnSignal
+from sirius.ports.local_voice import Captured, ListeningEngines, SpeakingEngines, TurnSignal
 from sirius.presentation.memory_suggestion_trigger import propose_suggestion_if_completed_with_one
 
 
@@ -250,8 +250,8 @@ class _Micro:
     def close(self) -> None:
         pass
 
-    def read(self) -> str | None:
-        return self._trozos.pop(0) if self._trozos else None
+    def read(self) -> Captured[str] | None:
+        return Captured(self._trozos.pop(0)) if self._trozos else None
 
 
 class _Detector:
@@ -281,7 +281,8 @@ class _Altavoz:
 class _Transcriptor:
     def transcribe(self, chunks: Sequence[str]) -> str:
         del chunks
-        return "Me encanta el café."
+        # Con su nombre: fuera de la charla, sin él no es para él (ADR-244).
+        return "Sirius, me encanta el café."
 
 
 class _TodoInstalado:

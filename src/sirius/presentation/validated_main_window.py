@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import QPushButton
@@ -26,6 +27,8 @@ from sirius.application.facts import FactProposals
 from sirius.application.get_conversation_history import GetConversationHistoryUseCase
 from sirius.application.historical_projects import HistoricalProjectsUseCase
 from sirius.application.knowledge_overview import GetKnowledgeOverviewUseCase
+from sirius.application.listening_loop import ListeningLoop
+from sirius.application.local_listening import LocalListening
 from sirius.application.memory_origin import GetMemoryOriginUseCase
 from sirius.application.memory_search import MemoryEmbeddingService
 from sirius.application.project_continuity import ProjectContinuityUseCase
@@ -100,6 +103,8 @@ class ValidatedMainWindow(MainWindow):
         memory_embedding_service: MemoryEmbeddingService | None = None,
         fact_proposals: FactProposals | None = None,
         dream_service: DreamService | None = None,
+        local_listening: LocalListening[Any] | None = None,
+        listening_loop: ListeningLoop | None = None,
         show_warning: Callable[[str, str], None] | None = None,
         show_information: Callable[[str, str], None] | None = None,
         confirm_restore: Callable[[str, str], bool] | None = None,
@@ -153,6 +158,8 @@ class ValidatedMainWindow(MainWindow):
             memory_embedding_service=memory_embedding_service,
             fact_proposals=fact_proposals,
             dream_service=dream_service,
+            local_listening=local_listening,
+            listening_loop=listening_loop,
             show_warning=show_warning,
             show_information=show_information,
             confirm_restore=confirm_restore,

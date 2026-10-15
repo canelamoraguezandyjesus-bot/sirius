@@ -1533,3 +1533,19 @@ defectos:
       - src/sirius/application/send_message.py
       - src/sirius/application/local_listening.py
       - tests/integration/test_send_message.py
+  # ADR-244: la pieza D obliga a llamar a Sirius por su nombre fuera de la charla, y las
+  # ordenes de memoria solo se reconocian con el nombre delante: olvida eso, Sirius, u
+  # oye, Sirius, olvida eso, habrian llegado al modelo como una frase mas, y el modelo
+  # puede decir que olvida sin olvidar. Lo vio la revision propia al poner el nombre en
+  # las pruebas de integracion, antes de empujar.
+  - id: H-244
+    titulo: Una orden de memoria con el nombre de Sirius detras o con oye delante no se reconocia como orden
+    bloque: producto
+    gravedad: media
+    estado: cerrado
+    cerrado_por: b99ed19a0172a3535b417e3a2a777cb198c82be0
+    pr: 689
+    adr: 244
+    ficheros:
+      - src/sirius/domain/memory_commands.py
+      - tests/unit/test_memory_commands_domain.py

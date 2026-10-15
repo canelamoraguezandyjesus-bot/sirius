@@ -40,7 +40,7 @@ from sirius.adapters.audio.voice_libraries import (
     VOICE_ACTIVITY,
     voice_tools,
 )
-from sirius.ports.local_voice import TurnSignal, VoiceUnavailable
+from sirius.ports.local_voice import Captured, TurnSignal, VoiceUnavailable
 
 # --- Los módulos de mentira ---------------------------------------------------------
 
@@ -502,9 +502,14 @@ def test_un_modelo_que_esta_y_no_carga_avisa_y_no_tumba_a_sirius(
 # --- El micro -----------------------------------------------------------------------
 
 
+def _trozo(captado: Captured[bytes] | None) -> bytes | None:
+    """Lo captado, sin cuánto esperó."""
+    return None if captado is None else captado.chunk
+
+
 def test_el_micro_capta_a_16_khz_mono_en_trozos_de_512_y_los_da_en_orden() -> None:
     sounddevice = _SoundDevice()
-    micro = SoundDeviceMicrophone(sounddevice)
+    micro = SoundDeviceMicrophone(sounddevice, clock=lambda: 7.0)
 
     micro.open()
     micro.open()
@@ -521,9 +526,27 @@ def test_el_micro_capta_a_16_khz_mono_en_trozos_de_512_y_los_da_en_orden() -> No
     assert micro.read() is None
     callback(memoryview(b"\x01\x02"), 1, None, None)
     callback(memoryview(b"\x03\x04"), 1, None, None)
-    assert micro.read() == b"\x01\x02"
-    assert micro.read() == b"\x03\x04"
+    assert micro.read() == Captured(b"\x01\x02")
+    assert micro.read() == Captured(b"\x03\x04")
     assert micro.read() is None
+
+
+def test_el_micro_dice_cuanto_espero_cada_trozo_a_que_lo_leyeran() -> None:
+    # Ronda 1 de Codex sobre la PR #689: mientras Sirius transcribe o contesta, lo que se
+    # capta espera en la cola, y el oído tiene que saber cuándo sonó, no cuándo lo leyó.
+    ahora = [10.0]
+    sounddevice = _SoundDevice()
+    micro = SoundDeviceMicrophone(sounddevice, clock=lambda: ahora[0])
+    micro.open()
+    callback = sounddevice.flujos[0].opciones["callback"]
+
+    callback(memoryview(b"\x01\x02"), 1, None, None)
+    ahora[0] = 12.5
+    callback(memoryview(b"\x03\x04"), 1, None, None)
+    ahora[0] = 13.0
+
+    assert micro.read() == Captured(b"\x01\x02", age=3.0)
+    assert micro.read() == Captured(b"\x03\x04", age=0.5)
 
 
 def test_al_cerrar_el_micro_se_tira_lo_que_nadie_leyo() -> None:
@@ -559,7 +582,7 @@ def test_un_trozo_que_portaudio_encola_tarde_no_llega_si_el_micro_ya_se_cerro() 
     nuevo = sounddevice.flujos[1].opciones["callback"]
     nuevo(memoryview(b"nuevo"), 1, None, None)
 
-    assert micro.read() == b"nuevo"
+    assert _trozo(micro.read()) == b"nuevo"
     assert micro.read() is None
 
 
@@ -662,7 +685,7 @@ def test_cerrado_el_micro_no_llega_audio_aunque_portaudio_lo_siga_mandando() -> 
     nuevo = sounddevice.flujos[1]
     viejo.opciones["callback"](memoryview(b"\x03\x04"), 1, None, None)
     nuevo.opciones["callback"](memoryview(b"\x05\x06"), 1, None, None)
-    assert micro.read() == b"\x05\x06"
+    assert _trozo(micro.read()) == b"\x05\x06"
     assert micro.read() is None
 
 

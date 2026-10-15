@@ -78,12 +78,12 @@ from sirius.infrastructure.local_voice_installation import (
 from sirius.infrastructure.logging import LOG_FILE_NAME, configure_logging
 from sirius.infrastructure.paths import resolve_paths
 from sirius.ports.llm import LLMCompleted, LLMRequest, LLMStreamEvent, LLMTextDelta
-from sirius.ports.local_voice import ListeningEngines, SpeakingEngines, TurnSignal
+from sirius.ports.local_voice import Captured, ListeningEngines, SpeakingEngines, TurnSignal
 
 #: Las letras de la tabla de piezas de ADR-241 que ya han entrado en ``main``.
 #: La A es la nota de arranque y estas pruebas; la B, oír en local (ADR-242); la C,
 #: hablar en local (ADR-243).
-PIEZAS_ENTREGADAS: frozenset[str] = frozenset({"A", "B", "C"})
+PIEZAS_ENTREGADAS: frozenset[str] = frozenset({"A", "B", "C", "D"})
 
 #: Qué trae cada pieza, con las palabras de la tabla de ADR-241.
 PIEZAS: Mapping[str, str] = {
@@ -694,8 +694,10 @@ class _MicroEnchufado:
     def close(self) -> None:
         self._micro.cierra()
 
-    def read(self) -> Audio | None:
-        return self._micro.lee()
+    def read(self) -> Captured[Audio] | None:
+        # El micro de mentira es instantáneo: lo que capta se lee en el acto.
+        audio = self._micro.lee()
+        return None if audio is None else Captured(audio)
 
 
 class _OidoEnchufado:
@@ -1627,8 +1629,16 @@ class ConductorDeVoz(Conductor):
     # --- Pieza D: escucha siempre y a quién le hablan ---
 
     def segundos_de_charla(self) -> float:
-        """Cuánto dura la charla después de que Sirius calle: hasta entonces sobra el nombre."""
-        raise _pendiente("D")
+        """Cuánto dura la charla después de que Sirius calle: hasta entonces sobra el nombre.
+
+        Se lee del oído de Sirius, el que monta la raíz de composición, no de una
+        constante del conductor.
+        """
+        return self._dependencias.local_listening.conversation_seconds
+
+    def _reloj_del_oido(self) -> Callable[[], float]:
+        """El reloj de mentira: con él mide Sirius cuánto hace que calló."""
+        return lambda: self.reloj.ahora
 
     def ficheros_nuevos(self) -> list[Path]:
         """Lo aparecido desde antes de arrancar Sirius: en sus carpetas, cualquier fichero que

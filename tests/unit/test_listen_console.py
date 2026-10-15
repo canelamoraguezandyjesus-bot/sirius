@@ -102,6 +102,19 @@ def test_cuenta_cada_turno_espera_cuando_no_llega_nada_y_cierra_al_salir() -> No
     assert oido.parado
 
 
+def test_lo_que_no_era_para_el_no_se_ensena_ni_para_la_escucha() -> None:
+    # ADR-244: no fue a la charla, así que no hay nada que contar, y no es un envío roto.
+    tele = HeardTurn("Y mañana, cielos despejados.", False, None, "")
+    turno = _turno("Sirius, ¿qué tal?", "Bien.")
+    oido = _Oido(atenciones=[Attended(turns=(tele,)), Attended(turns=(turno,))])
+
+    codigo, dicho, _ = _escucha(oido, 2)
+
+    assert codigo == 0
+    assert dicho[1:] == ["Tú: Sirius, ¿qué tal?", "Sirius: Bien."]
+    assert not any("cielos" in linea for linea in dicho)
+
+
 def test_si_la_charla_falla_a_medias_ensena_lo_escrito_y_el_aviso_como_la_ventana() -> None:
     # Rondas 12 y 13 de Codex sobre la PR #687: lo que llegó a escribir, con su marca, y el
     # mismo aviso que la ventana para ese fallo, con su referencia, sin adivinar el remedio.

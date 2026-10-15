@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 import uuid
 from collections.abc import Callable
 from pathlib import Path
@@ -63,6 +64,8 @@ from sirius.application.get_conversation_history import (
 )
 from sirius.application.historical_projects import HistoricalProjectsUseCase
 from sirius.application.knowledge_overview import GetKnowledgeOverviewUseCase
+from sirius.application.listening_loop import ListeningLoop
+from sirius.application.local_listening import HeardTurn, LocalListening
 from sirius.application.memory_origin import GetMemoryOriginUseCase
 from sirius.application.memory_search import MemoryEmbeddingService
 from sirius.application.project_continuity import ProjectContinuityUseCase
@@ -129,6 +132,7 @@ from sirius.presentation.error_messages import failed_send_message
 from sirius.presentation.export_worker import ExportWorker
 from sirius.presentation.historical_projects_widget import HistoricalProjectsWidget
 from sirius.presentation.knowledge_widget import KnowledgeWidget
+from sirius.presentation.listening_bridge import ListeningBridge
 from sirius.presentation.memory_embedding_worker import MemoryEmbeddingWorker
 from sirius.presentation.memory_suggestion_trigger import propose_suggestion_if_completed_with_one
 from sirius.presentation.message_text import CANCELLED_SEND, HISTORY_NOT_LOADED, message_body
@@ -159,6 +163,14 @@ _AT_BOTTOM_TOLERANCE_PX = 8
 # convive con ella y se conmuta.
 TECHNICAL_PAGE_INDEX = 0
 MODEL_STUDIO_PAGE_INDEX = 1
+
+#: Lo que dice el indicador de escucha (PA-R03-04, ADR-244).
+LISTENING = "Escuchando"
+MUTED = "En silencio"
+#: Lo que dice si le hablan mientras está con otra cosa: ese turno no va a la charla.
+VOICE_BUSY = "Te he oído, pero estaba con otra cosa: dímelo otra vez cuando acabe."
+#: Lo que dice si abrir el oído falla de una forma que no se espera.
+LISTENING_BROKEN = "No puedo oírte: algo ha fallado al abrir el oído ({kind})."
 
 VOICE_PREVIEW_TEXT = "Hola. Soy Sirius, y esta es mi voz. Uno, dos, tres."
 """Frase de prueba al elegir voz.
@@ -309,6 +321,8 @@ class MainWindow(QMainWindow):
         memory_embedding_service: MemoryEmbeddingService | None = None,
         fact_proposals: FactProposals | None = None,
         dream_service: DreamService | None = None,
+        local_listening: LocalListening[Any] | None = None,
+        listening_loop: ListeningLoop | None = None,
         show_warning: Callable[[str, str], None] | None = None,
         show_information: Callable[[str, str], None] | None = None,
         prompt_multiline_with_default: Callable[[str, str, str], str | None] | None = None,
@@ -341,6 +355,14 @@ class MainWindow(QMainWindow):
         self._fact_proposals = fact_proposals
         self._dream_service = dream_service
         self._active_dream_worker: DreamWorker | None = None
+        # Pieza D de la 0.3 (ADR-244): escucha siempre, y cada turno de voz es como
+        # uno escrito. Sin el oído, la ventana es la de antes.
+        self._local_listening = local_listening
+        self._listening_bridge: ListeningBridge | None = None
+        #: Quien atiende al oído en producción; sin él, lo atiende otro (las pruebas).
+        self._listening_loop = listening_loop
+        #: El oído dejó de oír al entrar en Model Studio, y vuelve a oír al salir.
+        self._listening_paused_for_studio = False
         self._pending_user_item: QListWidgetItem | None = None
         self._send_message_use_case = send_message_use_case
         self._get_history_use_case = get_history_use_case
@@ -488,6 +510,7 @@ class MainWindow(QMainWindow):
 
         self._load_history()
         self._refresh_studio_context()
+        self._start_listening()
 
     def _default_show_warning(self, title: str, text: str) -> None:
         QMessageBox.warning(self, title, text)
@@ -808,11 +831,17 @@ class MainWindow(QMainWindow):
         """
         self._active_voice_workers.add(worker)
         worker.signals.finished.connect(
-            lambda _outcome, retenido=worker: self._active_voice_workers.discard(retenido)
+            lambda _outcome, retenido=worker: self._forget_voice_worker(retenido)
         )
         worker.signals.crashed.connect(
-            lambda _message, retenido=worker: self._active_voice_workers.discard(retenido)
+            lambda _message, retenido=worker: self._forget_voice_worker(retenido)
         )
+
+    def _forget_voice_worker(self, worker: TranscribeWorker | SpeakWorker) -> None:
+        """Suelta el trabajador que ya entregó su desenlace; si era lo último que quedaba de
+        la voz de Model Studio, el oído puede volver a oír."""
+        self._active_voice_workers.discard(worker)
+        self._resume_listening_after_studio()
 
     def _stop_listening_and_transcribe(self) -> None:
         if self._studio_voice_use_case is None:
@@ -927,6 +956,7 @@ class MainWindow(QMainWindow):
             return
         if self.studio_page.interaction_state is StudioInteractionState.HABLANDO:
             self._mirror_studio_state(StudioInteractionState.PREPARADO)
+        self._resume_listening_after_studio()
 
     def _handle_stop_voice_clicked(self) -> None:
         if self._studio_voice_use_case is None:
@@ -1012,7 +1042,13 @@ class MainWindow(QMainWindow):
         return self._pages.currentIndex() == MODEL_STUDIO_PAGE_INDEX
 
     def open_model_studio(self) -> None:
-        """Conmuta a la superficie de grabación. Idempotente."""
+        """Conmuta a la superficie de grabación. Idempotente.
+
+        Model Studio tiene su micro y su voz: mientras está abierto, el oído que escucha
+        siempre no oye, o su voz volvería por el micro como un turno y los dos micros
+        captarían a la vez (ronda 2 de Codex sobre la PR #689, ADR-244).
+        """
+        self._pause_listening_for_studio()
         self._pages.setCurrentIndex(MODEL_STUDIO_PAGE_INDEX)
         self._refresh_studio_context()
         self.studio_page.input.setFocus()
@@ -1021,7 +1057,8 @@ class MainWindow(QMainWindow):
         """Vuelve a la interfaz técnica, saliendo antes del modo limpio.
 
         Salir corta la voz y el micrófono: nada puede seguir escuchando ni
-        sonando en una superficie que ya no está a la vista.
+        sonando en una superficie que ya no está a la vista. Callada su voz, el
+        oído vuelve a oír si oía al entrar.
         """
         if self.studio_page.clean_mode:
             self.studio_page.toggle_clean_mode()
@@ -1030,6 +1067,7 @@ class MainWindow(QMainWindow):
         # tampoco hay motivo para seguir preguntándoselo a OBS.
         self._capture_heartbeat.stop()
         self._pages.setCurrentIndex(TECHNICAL_PAGE_INDEX)
+        self._resume_listening_after_studio()
 
     def _silence_voice(self) -> None:
         """Cierra micrófono y reproducción. Idempotente."""
@@ -1215,6 +1253,18 @@ class MainWindow(QMainWindow):
         mode_row.addWidget(self.judge_label)
         mode_row.addStretch(1)
 
+        # PA-R03-04: si escucha, y el botón que cierra el micro y lo vuelve a abrir.
+        self.listening_label = QLabel("")
+        self.listening_label.setVisible(False)
+        self.mute_button = QPushButton("Silencio")
+        self.mute_button.setAccessibleName("Silencio: cerrar o abrir el micrófono")
+        self.mute_button.setVisible(False)
+        self.mute_button.clicked.connect(self._handle_mute_clicked)
+        listening_row = QHBoxLayout()
+        listening_row.addWidget(self.listening_label)
+        listening_row.addWidget(self.mute_button)
+        listening_row.addStretch(1)
+
         input_row = QHBoxLayout()
         input_row.addWidget(self.message_input)
         input_row.addWidget(self.send_button)
@@ -1232,6 +1282,11 @@ class MainWindow(QMainWindow):
         self.budget_warning_label.setStyleSheet("color: #8a6d00;")
         self.budget_warning_label.setWordWrap(True)
 
+        # Por qué no oye, si no oye, o que le hablaron mientras estaba con otra cosa.
+        self.voice_notice_label = QLabel("")
+        self.voice_notice_label.setStyleSheet("color: #8a6d00;")
+        self.voice_notice_label.setWordWrap(True)
+
         # La conversación es la superficie principal de Sirius: ocupa su propia
         # columna, con el historial como único elemento que crece. Antes esta
         # columna compartía un QVBoxLayout con el bloque de continuidad y el
@@ -1242,10 +1297,12 @@ class MainWindow(QMainWindow):
         conversation_layout.setContentsMargins(0, 0, 0, 0)
         conversation_layout.addWidget(self.message_list, 1)
         conversation_layout.addLayout(mode_row)
+        conversation_layout.addLayout(listening_row)
         conversation_layout.addLayout(input_row)
         conversation_layout.addWidget(self.status_label)
         conversation_layout.addWidget(self.error_label)
         conversation_layout.addWidget(self.budget_warning_label)
+        conversation_layout.addWidget(self.voice_notice_label)
         conversation_column.setMinimumWidth(_CONVERSATION_MINIMUM_WIDTH)
 
         # Proyecto, contexto, recuerdos y decisiones son secundarios: van a una
@@ -1534,8 +1591,21 @@ class MainWindow(QMainWindow):
         self._start_send(self._last_failed_text)
 
     def _start_send(self, text: str, *, extra_instructions: str = "") -> None:
+        operation_id = str(uuid.uuid4())
+        self._enter_turn(text, operation_id)
+
+        # Lo que se ve ya está: «pensando» y su mensaje. El turno empieza cuando
+        # el juez y las huellas han soltado Ollama, no antes (ronda 2 de Codex).
+        # Si cancela o cierra mientras tanto, el modelo ya lo sabe al empezar.
+        self._when_background_idle(
+            lambda: self._launch_send(text, operation_id, extra_instructions)
+        )
+
+    def _enter_turn(self, text: str, operation_id: str) -> None:
+        """Lo que se ve al empezar un turno, escrito o de voz: «pensando», todo lo demás
+        quieto y su mensaje en la lista, como lo escribió o como se oyó."""
         self._is_sending = True
-        self._active_operation_id = str(uuid.uuid4())
+        self._active_operation_id = operation_id
         self._active_send_text = text
         self._last_failed_text = None
         self._streaming_item = None
@@ -1556,14 +1626,6 @@ class MainWindow(QMainWindow):
         self._update_retry_button()
 
         self._pending_user_item = self._append_message_item(MessageRole.USER, text)
-
-        # Lo que se ve ya está: «pensando» y su mensaje. El turno empieza cuando
-        # el juez y las huellas han soltado Ollama, no antes (ronda 2 de Codex).
-        # Si cancela o cierra mientras tanto, el modelo ya lo sabe al empezar.
-        operation_id = self._active_operation_id
-        self._when_background_idle(
-            lambda: self._launch_send(text, operation_id, extra_instructions)
-        )
 
     def _launch_send(self, text: str, operation_id: str, extra_instructions: str) -> None:
         worker = SendMessageWorker(
@@ -1699,6 +1761,20 @@ class MainWindow(QMainWindow):
             else:
                 self.knowledge_widget.refresh()
 
+        self._show_send_outcome(result)
+        self._refresh_budget_warning()
+        self._refresh_mode_indicator()
+        # La respuesta nueva queda para el juez: sigue, con lo demás que quedó
+        # pendiente, en cuanto acaba el turno (_finish_sending).
+        self._judge_again = True
+        self._finish_sending()
+        # Después de _finish_sending, que es quien devuelve el estado a
+        # PREPARADO: si se hablara antes, ese reajuste borraría SINTETIZANDO.
+        self._speak_if_studio_is_open(result.sirius_message.content, result.sirius_message.status)
+
+    def _show_send_outcome(self, result: SendMessageResult) -> None:
+        """Cómo acabó el turno, si no acabó bien, con el mismo aviso para lo escrito y lo
+        dicho por voz."""
         operation_id = result.sirius_message.operation_id
         if result.outcome is MessageStatus.CANCELLED:
             self.error_label.setText(CANCELLED_SEND)
@@ -1709,15 +1785,6 @@ class MainWindow(QMainWindow):
             # Only a genuine failure offers "Reintentar" (D-05/B7b): a
             # CANCELLED outcome is a deliberate stop and never sets this.
             self._last_failed_text = self._active_send_text
-        self._refresh_budget_warning()
-        self._refresh_mode_indicator()
-        # La respuesta nueva queda para el juez: sigue, con lo demás que quedó
-        # pendiente, en cuanto acaba el turno (_finish_sending).
-        self._judge_again = True
-        self._finish_sending()
-        # Después de _finish_sending, que es quien devuelve el estado a
-        # PREPARADO: si se hablara antes, ese reajuste borraría SINTETIZANDO.
-        self._speak_if_studio_is_open(result.sirius_message.content, result.sirius_message.status)
 
     def _can_propose(
         self,
@@ -1874,10 +1941,176 @@ class MainWindow(QMainWindow):
         self._update_retry_button()
         self._when_background_idle(self.project_completed.emit, show_wait=self.status_label.setText)
 
+    # --- Escucha siempre (pieza D de la 0.3, ADR-244) --------------------------
+
+    def _start_listening(self) -> None:
+        """PA-R03-04: al abrirse escucha sin pulsar nada, y lo dice. Desde ahora la
+        ventana mira la escucha: el oído le pregunta antes de cada turno para él y le avisa
+        al acabarlo (``ListeningBridge``)."""
+        if self._local_listening is None:
+            return
+        self._listening_bridge = ListeningBridge(self, parent=self)
+        self._local_listening.watch(self._listening_bridge)
+        self._refresh_listening(self._listen(self._local_listening.start))
+        if self._listening_loop is not None:
+            self._listening_loop.start()
+
+    def _listen(self, start: Callable[[], str]) -> str:
+        """Abre el oído con ``start`` y devuelve su aviso. Falle como falle, la ventana se
+        abre igual y lo dice, con el tipo de fallo y nada más.
+
+        Es el único sitio por el que la ventana abre el oído, y aquí espera a Model Studio:
+        mientras está abierto o su voz sigue en marcha, no lo abre y lo deja pedido para
+        cuando calle (``_resume_listening_after_studio``). Así ningún camino, tampoco el
+        botón, abre el micro con su voz a punto de sonar (ronda 6 de Codex sobre la PR
+        #689, ADR-244).
+        """
+        if self._studio_voice_holds():
+            self._listening_paused_for_studio = True
+            return ""
+        try:
+            return start()
+        except Exception as error:
+            _logger.error("El oído no se ha podido abrir (%s)", type(error).__name__)
+            return LISTENING_BROKEN.format(kind=type(error).__name__)
+
+    def _handle_mute_clicked(self) -> None:
+        """El botón de silencio: si escucha, cierra el micro; si no, lo vuelve a abrir,
+        también tras dejar de oír por un fallo, y dice por qué si no puede."""
+        listening = self._local_listening
+        if listening is None:
+            return
+        if listening.listening:
+            listening.mute()
+            self._refresh_listening()
+        else:
+            self._refresh_listening(self._listen(listening.unmute))
+
+    def _pause_listening_for_studio(self) -> None:
+        """Al entrar en Model Studio, el oído deja de oír si oía; lo que estaba diciendo,
+        también se calla."""
+        listening = self._local_listening
+        if listening is None or not listening.listening:
+            return
+        listening.stop()
+        self._listening_paused_for_studio = True
+        self._refresh_listening()
+
+    def _resume_listening_after_studio(self) -> None:
+        """Al salir de Model Studio, el oído vuelve a oír si oía al entrar o si se le pidió
+        mientras tanto, salvo que la ventana se esté cerrando: entonces ya no la mira nadie.
+        Lo abre por ``_listen``, que mientras la voz de Model Studio siga en marcha no lo
+        abre y lo deja pedido otra vez; y hasta que calla, el botón del oído se ve apagado.
+
+        Lo que Model Studio aún sintetizaba al salir suena después, como sin el oído; el oído
+        no lo oye porque espera (rondas 5 y 6 de Codex sobre la PR #689, ADR-244). Se mira
+        al salir, cada vez que un trabajador de la voz acaba y cuando acaba de sonar.
+        """
+        self.mute_button.setEnabled(not self._studio_voice_holds())
+        if not self._listening_paused_for_studio:
+            return
+        self._listening_paused_for_studio = False
+        if self._local_listening is None or self._closed or self._close_requested:
+            return
+        self._refresh_listening(self._listen(self._local_listening.unmute))
+
+    def _studio_voice_holds(self) -> bool:
+        """Si Model Studio está abierto o su voz sigue en marcha, sintetizando o sonando:
+        mientras, el oído no se abre."""
+        return (
+            self.model_studio_open
+            or bool(self._active_voice_workers)
+            or self._studio_voice_sounding()
+        )
+
+    def _studio_voice_sounding(self) -> bool:
+        use_case = self._studio_voice_use_case
+        return use_case is not None and use_case.is_speaking
+
+    def _refresh_listening(self, notice: str = "") -> None:
+        """El indicador y el botón como está el oído de verdad, y el aviso si no oye."""
+        listening = self._local_listening
+        if listening is None:
+            return
+        if listening.muted:
+            text, button = MUTED, "Escuchar"
+        elif listening.listening:
+            text, button = LISTENING, "Silencio"
+        else:
+            text, button = "", "Escuchar"
+        self.listening_label.setText(text)
+        self.listening_label.setVisible(bool(text))
+        self.mute_button.setText(button)
+        self.mute_button.setVisible(True)
+        self.voice_notice_label.setText("" if listening.listening or listening.muted else notice)
+
+    def begin_voice_turn(self, operation_id: str, heard: str) -> list[threading.Event] | None:
+        """Un turno de voz para él quiere ir a la charla: va si la ventana no está con otra
+        cosa, y desde ahí es como uno escrito. Devuelve lo de segundo plano que tiene que
+        acabar antes de entregarlo, o ``None`` si no va.
+
+        Lo pregunta el oído (``ListeningBridge``), y se contesta en el hilo de la ventana.
+        Mientras está con lo escrito, una copia, una exportación o el cambio de proyecto,
+        el turno no va y lo dice; cerrándose, tampoco.
+        """
+        if self._closed or self._close_requested:
+            return None
+        if self._foreground_busy() or self._is_export_busy:
+            self.voice_notice_label.setText(VOICE_BUSY)
+            return None
+        self.voice_notice_label.setText("")
+        self._enter_turn(heard, operation_id)
+        # Cortarle mientras contesta por voz es la pieza E: aquí no hay «Cancelar».
+        self.cancel_button.setVisible(False)
+        # Como para un turno escrito: lo de segundo plano para, y lo que tiene entre
+        # manos lo acaba antes de que el turno empiece. Se espera en el hilo del oído.
+        self._stop_background()
+        running = (
+            self._active_judge_worker,
+            self._active_embedding_worker,
+            self._active_dream_worker,
+        )
+        return [worker.done for worker in running if worker is not None]
+
+    def finish_voice_turn(self, turn: HeardTurn | None) -> None:
+        """El turno de voz que dejó pasar ha acabado: se ve como uno escrito al acabar.
+
+        Lo que el modelo propuso recordar ya lo dejó pendiente el oído; aquí solo se
+        enseña. Si al final no fue a la charla, lo que se enseñó como suyo no se guardó, y
+        la lista vuelve a ser la de la base.
+        """
+        if turn is None:
+            self._replace_history_with_authoritative_state()
+            self._finish_sending()
+            return
+        result = turn.result
+        if result is None:
+            self._on_crashed("")
+            return
+        self._settle_user_item(result)
+        self._append_message_item(
+            MessageRole.SIRIUS,
+            result.sirius_message.content,
+            result.sirius_message.status,
+            message_id=result.sirius_message.id,
+        )
+        if turn.proposed is not None:
+            self.knowledge_widget.refresh()
+        self._show_send_outcome(result)
+        # El presupuesto no: un turno de voz solo va a un modelo de este ordenador.
+        self._refresh_mode_indicator()
+        self._finish_sending()
+
+    def listening_stopped(self, notice: str) -> None:
+        """El oído dejó de oír por su cuenta: se ve, con por qué."""
+        self._refresh_listening(notice)
+
     def closeEvent(self, event: QCloseEvent) -> None:
         """Cierra micrófono y voz, y luego aplica el cierre diferido de siempre.
 
-        Un temporal de audio no puede sobrevivir al cierre de la ventana.
+        Un temporal de audio no puede sobrevivir al cierre de la ventana. El oído deja de
+        oír y de hablar ya, aunque el cierre espere a que acabe un turno de voz en marcha,
+        que se cancela como uno escrito.
 
         The worker keeps running to completion on its own thread; once it
         finishes, ``_finish_sending``/``_finish_backup_operation`` notices the
@@ -1886,6 +2119,9 @@ class MainWindow(QMainWindow):
         """
         self._silence_voice()
         self._capture_heartbeat.stop()
+        if self._local_listening is not None:
+            self._local_listening.watch(None)
+            self._local_listening.stop()
         if self._is_sending:
             self._close_requested = True
             if self._active_operation_id is not None:
@@ -1909,6 +2145,8 @@ class MainWindow(QMainWindow):
         # los mismos repositorios que la nueva (ronda 1 de Codex).
         self._closed = True
         self._stop_background()
+        if self._listening_loop is not None:
+            self._listening_loop.stop()
         super().closeEvent(event)
 
     # --- Configuración ---------------------------------------------------

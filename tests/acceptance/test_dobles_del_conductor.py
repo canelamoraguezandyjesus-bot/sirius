@@ -283,12 +283,14 @@ def test_el_conductor_se_construye_lee_la_base_de_verdad_y_sus_piezas_pendientes
     assert [p.texto for p in conductor.peticiones] == ["Buenos días, Sirius."]
     assert conductor.audio_en_la_base() == []
     conductor.reabre()
-    # Las piezas B y C ya oyen y hablan, también tras reabrir; la D todavía no ha entrado.
+    # Las piezas B, C y D ya oyen, hablan y saben cuándo les hablan, también tras
+    # reabrir; la F todavía no ha entrado.
     turno = conductor.oye("Sirius, ¿me oyes?")
     assert (turno.oido, turno.hablado) == ("Sirius, ¿me oyes?", ("Respuesta 2 de Sirius.",))
+    assert conductor.segundos_de_charla() == 10.0
     with pytest.raises(PiezaPendiente) as pendiente:
-        conductor.segundos_de_charla()
-    assert pendiente.value.letra == "D"
+        conductor.hoja_de_voces()
+    assert pendiente.value.letra == "F"
     conductor.cierra()
     assert conductor.escrituras_en_disco() == []
     assert conductor.ficheros_nuevos() == []

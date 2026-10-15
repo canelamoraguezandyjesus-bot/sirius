@@ -25,6 +25,7 @@ import asyncio
 import os
 import queue
 import sys
+import time
 from collections.abc import Callable, Coroutine, Sequence
 from functools import partial
 from pathlib import Path
@@ -37,7 +38,7 @@ from sirius.adapters.audio.voice_libraries import (
     import_voice_library,
 )
 from sirius.infrastructure.logging import get_logger
-from sirius.ports.local_voice import ListeningEngines, TurnSignal, VoiceUnavailable
+from sirius.ports.local_voice import Captured, ListeningEngines, TurnSignal, VoiceUnavailable
 
 _logger = get_logger(__name__)
 
@@ -141,12 +142,17 @@ class SoundDeviceMicrophone:
     Sirius no le llega audio aunque el hardware siga encendido o el hilo de PortAudio se
     quede a medias entre mirar la generación y encolar (rondas 3 y 4 de Codex sobre la
     PR #687). Cerrar no falla nunca: lo que PortAudio no puede hacer se apunta.
+
+    Cada trozo va a la cola con la hora a la que llegó, y ``read`` dice cuánto llevaba
+    esperando: mientras Sirius transcribe o contesta, lo que se capta espera, y el oído
+    tiene que saber cuándo sonó (ronda 1 de Codex sobre la PR #689).
     """
 
-    def __init__(self, sounddevice: Any) -> None:
+    def __init__(self, sounddevice: Any, *, clock: Callable[[], float] = time.monotonic) -> None:
         self._sounddevice = sounddevice
+        self._clock = clock
         self._stream: Any = None
-        self._chunks: queue.SimpleQueue[tuple[int, bytes]] = queue.SimpleQueue()
+        self._chunks: queue.SimpleQueue[tuple[int, float, bytes]] = queue.SimpleQueue()
         self._generation = 0
 
     def open(self) -> None:
@@ -181,21 +187,21 @@ class SoundDeviceMicrophone:
             _quietly("cerrar el micrófono", stream.close)
         self._drain()
 
-    def read(self) -> bytes | None:
+    def read(self) -> Captured[bytes] | None:
         while True:
             try:
-                generation, chunk = self._chunks.get_nowait()
+                generation, arrived_at, chunk = self._chunks.get_nowait()
             except queue.Empty:
                 return None
             if generation == self._generation:
-                return chunk
+                return Captured(chunk, age=self._clock() - arrived_at)
 
     def _receiver(self, generation: int) -> Callable[[Any, int, Any, Any], None]:
         def arrived(data: Any, frames: int, time: Any, status: Any) -> None:
             del frames, time, status
             # Solo para no llenar la cola con lo que ya no vale: quien decide es `read`.
             if generation == self._generation:
-                self._chunks.put((generation, bytes(data)))
+                self._chunks.put((generation, self._clock(), bytes(data)))
 
         return arrived
 
