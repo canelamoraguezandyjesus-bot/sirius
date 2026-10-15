@@ -135,19 +135,89 @@ def test_con_un_bloque_de_codigo_abierto_espera_a_que_se_cierre() -> None:
     assert corte.feed("```\nListo. Y") == ["Te dejo el código en pantalla.", "Listo."]
 
 
-def test_tres_comillas_que_no_se_cierran_son_un_bloque_al_acabar() -> None:
-    # Ronda 2 de Codex sobre la PR #688: entera, la respuesta las empareja con una comilla
-    # suelta y dejaría a la vista «:». Al acabar se cierran, y son un bloque.
-    assert prepare_speech_text("Uno. ```: `. Y") == "Uno.:. Y"
+def test_tres_comillas_a_media_linea_no_abren_un_bloque() -> None:
+    # Ronda 4 de Codex sobre la PR #688: para Markdown solo es una raya la que empieza una
+    # línea. A media línea son las de un código en línea.
+    assert final_speech_text("Usa ```x``` aquí y `a`.") == "Usa x aquí y a."
+    # Ni dos comillas, ni una raya con cuatro blancos delante: lo de detrás se dice.
+    assert final_speech_text("Mira:\n``\nY sigue.").endswith("Y sigue.")
+    assert final_speech_text("Mira:\n    ```\nY sigue.").endswith("Y sigue.")
+    assert _dicho(["Uno. ```", ": `. Y"]) == ["Uno.:.", "Y"]
+    assert _dicho(["Usa `x y ```python\nprint(1). Dos.\n"]) == [
+        "Usa x y python.",
+        "print(1).",
+        "Dos.",
+    ]
 
-    assert _dicho(["Uno. ```", ": `. Y"]) == ["Uno.", "Te dejo el código en pantalla."]
+
+@pytest.mark.parametrize(
+    "respuesta",
+    [
+        # Las comillas de una línea de código no cierran el bloque.
+        'Mira:\n```python\nprint("``` dentro")\npassword = "secreto"',
+        'Mira:\n```python\nprint("``` dentro")\npassword = "secreto"\n```\nFin.',
+        # Ni una raya más corta, ni otra con algo detrás, ni una de virgulillas.
+        'Mira:\n````\n```\npassword = "secreto"\n````\nFin.',
+        'Mira:\n```\n```python\npassword = "secreto"\n```\nFin.',
+        'Mira:\n~~~\n```\npassword = "secreto"\n```\n~~~\nFin.',
+        # Ni una comilla suelta de antes que se empareja con la raya.
+        'Mira `a:\n```python\npassword = "secreto"\n```\nFin.',
+    ],
+)
+def test_lo_de_dentro_de_un_bloque_de_codigo_no_se_dice_nunca(respuesta: str) -> None:
+    # Ronda 4 de Codex sobre la PR #688: el bloque se reconoce como lo ve Markdown.
+    entera = final_speech_text(respuesta)
+    azar = random.Random(respuesta)
+    maneras = [[respuesta], list(respuesta)] + [_trocea(respuesta, azar) for _ in range(50)]
+
+    assert "secreto" not in entera
+    assert "Te dejo el código en pantalla." in entera
+    assert [trozos for trozos in maneras if "secreto" in " ".join(_dicho(trozos))] == []
 
 
-def test_un_bloque_abierto_espera_aunque_una_comilla_suelta_se_coma_sus_marcas() -> None:
-    # Preparado, «`x y ```» empareja sus cuatro comillas y no deja marca: lo para el bloque.
+def test_tres_comillas_tras_una_frase_no_son_un_bloque_aunque_lleguen_solas() -> None:
+    # Cortado detrás de «Uno. », lo que sigue no empieza una línea: sus tres comillas no son
+    # una raya, ni aunque la línea se acabe con ellas.
+    assert final_speech_text("Uno. ```\nDos.") == "Uno. . Dos."
+
+    assert _dicho(["Uno. ```\n", "Dos."]) == ["Uno.", "Dos."]
+
+
+def test_tres_comillas_tras_una_frase_no_dejan_cortar_por_si_abren_un_bloque() -> None:
+    # A media línea no abren un bloque: si se cortara delante, lo que viniera después
+    # podría emparejarlas con una comilla y dejar a la vista una coma.
+    assert final_speech_text("Uno. ```\n, x`") == "Uno., x"
+
+    assert _dicho(["Uno. ```\n", ", x`"]) == ["Uno., x"]
+
+
+def test_unas_virgulillas_tras_una_frase_no_abren_un_bloque() -> None:
+    # Tampoco si lo que sigue llega en otro trozo: lo que queda tras el corte sigue sin
+    # empezar una línea, y la línea siguiente, sí.
+    respuesta = "Uno. ~~~ y sigue\nnada secreto\n~~~\nFin. Y"
+    assert final_speech_text(respuesta) == (
+        "Uno. ~~~ y sigue. nada secreto. Te dejo el código en pantalla."
+    )
     corte = SpeechCutter()
 
-    assert corte.feed("Usa `x y ```python\nprint(1). Dos.\n") == []
+    assert corte.feed("Uno. ~~~ y sigue") == ["Uno."]
+    assert corte.feed("\nnada secreto\n~~~\nFin. Y") == ["~~~ y sigue.", "nada secreto."]
+    assert corte.finish() == ["Te dejo el código en pantalla."]
+
+
+def test_dos_guiones_bajos_entre_letras_no_se_dicen() -> None:
+    # Ronda 4 de Codex sobre la PR #688: al acabar se quitan, y mientras tanto no se corta.
+    assert final_speech_text("Hola__mundo. Y") == "Holamundo. Y"
+
+    assert _dicho(["Hola__mundo. Y"]) == ["Holamundo.", "Y"]
+
+
+def test_la_raya_de_un_bloque_se_reconoce_con_su_linea_entera() -> None:
+    # Con tres comillas aún sin el resto de su línea no se sabe si abren un bloque: aquí
+    # son un código en línea, y la coma que dejan se pega a la frase de antes.
+    assert final_speech_text("Mira:\n```,```. Y") == "Mira:.,. Y"
+
+    assert _dicho(["Mira:\n```", ",```. Y"]) == ["Mira:.,.", "Y"]
 
 
 @pytest.mark.parametrize("resto", ["---", "- dos", "# no es título", "> no es cita"])
@@ -214,6 +284,9 @@ def test_al_acabar_da_lo_que_quedaba_y_empieza_de_cero() -> None:
 
     assert corte.finish() == ["Jefe"]
     assert corte.finish() == []
+    # Y lo siguiente vuelve a empezar una línea: ahí tres comillas abren un bloque.
+    dichas = corte.feed("```\nsecreto\n```\nFin. Y") + corte.finish()
+    assert dichas == ["Te dejo el código en pantalla.", "Fin.", "Y"]
 
 
 @pytest.mark.parametrize(
@@ -224,6 +297,8 @@ def test_al_acabar_da_lo_que_quedaba_y_empieza_de_cero() -> None:
         ("Y esto es _también", ["Y esto es también"]),
         ("Muy importante**", ["Muy importante"]),
         ("**5 puntos", ["5 puntos"]),
+        # Ronda 4: dos o más seguidas son siempre lo que sobra de un énfasis.
+        ("Mira a**muy", ["Mira amuy"]),
         ("Usa `rm -rf", ["Usa rm -rf"]),
         # Ronda 3: de un enlace a medias se dice el texto, como de uno entero.
         ("Lee [la gu", ["Lee la gu"]),

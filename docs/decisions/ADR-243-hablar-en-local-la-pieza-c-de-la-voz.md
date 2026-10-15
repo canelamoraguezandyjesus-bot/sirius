@@ -127,23 +127,28 @@ Se adopta la opción 2.
   (`latency`) y calla (`stop`), sin fallar.
 - **El corte en frases** (`src/sirius/application/speech_cutter.py`): lo que la charla va
   escribiendo se acumula, y se corta detrás de un final de frase y su blanco, o de un
-  salto de línea, solo si cortar no cambia nada. Lo de delante está cerrado: sin un
-  bloque de código abierto y, preparado con `prepare_speech_text`, sin marcas a medias.
-  Lo de detrás ya dice algo y no empieza por una marca que al cerrarse pueda dejar a la
-  vista una puntuación, que se pegaría a la frase de antes; un bloque de código sí vale,
-  para que la frase que lo presenta no espere al bloque. Y lo de delante y lo de detrás,
-  preparados por separado, dan lo mismo que todo lo llegado preparado de una vez. Al
-  acabar la charla se suelta lo que quede, y lo que se ha quedado a medias no se dice
+  salto de línea, solo si cortar no cambia nada. Lo de delante está cerrado: preparado
+  con `prepare_speech_text`, sin marcas a medias. Lo de detrás ya dice algo y no empieza
+  por una marca que al cerrarse pueda dejar a la vista una puntuación, que se pegaría a la
+  frase de antes; la línea entera que abre un bloque de código sí vale, para que la frase
+  que lo presenta no espere al bloque. Y lo de delante y lo de detrás, preparados por
+  separado, dan lo mismo que todo lo llegado preparado de una vez, lo que además impide
+  cortar dentro de un bloque abierto. Los bloques de código se reconocen como los ve
+  Markdown: solo una raya al principio de línea, de comillas o de virgulillas, abre uno, y
+  solo otra igual y al menos tan larga lo cierra; lo de dentro no llega a la preparación.
+  Al acabar la charla se suelta lo que quede, y lo que se ha quedado a medias no se dice
   como código ni como marca (`final_speech_text`): las cuatro construcciones con cierre
   que quita `prepare_speech_text` se tratan como si se cerraran. El bloque de código se
   cierra, y se dice que queda en pantalla; del enlace se cierra el destino donde acaba la
   dirección, y se dice su texto; y del código en línea y del énfasis se quita lo que
-  queda suelto: comillas, corchetes, y estrellas o guiones bajos que no estén entre dos
-  letras o cifras ni entre dos blancos, donde pueden ser una multiplicación o parte de un
-  nombre. Lo dicho, unido, es lo que da `final_speech_text` con la respuesta entera,
-  salvo los blancos y una frase de solo puntos, que no se dice. Lo que no puede ver es lo
-  que aún no ha llegado: una marca que se empareja con otra de una frase posterior, como
-  en `*a*. Hola 5*3`.
+  queda suelto: comillas, corchetes, dos o más estrellas o guiones bajos seguidos, y uno
+  solo que no esté entre dos letras o cifras ni entre dos blancos, donde puede ser una
+  multiplicación o parte de un nombre. Lo dicho, unido, es lo que da `final_speech_text`
+  con la respuesta entera, salvo los blancos y una frase de solo puntos, que no se dice.
+  Lo que no puede ver es lo que aún no ha llegado: una marca que se empareja con otra de
+  una frase posterior, como en `*a*. Hola 5*3`. Y un bloque sin rayas, sangrado con
+  cuatro blancos, se lee: para Markdown es código, pero también es la sangría de una
+  lista.
 - **El oído habla** (`src/sirius/application/local_listening.py`): entrega cada turno a
   la charla con un `on_delta` que alimenta el corte, y cada frase cerrada se pide a la
   voz y suena en cuanto está. Antes de la primera cierra el micro, y lo vuelve a abrir
@@ -207,14 +212,16 @@ Medido el 15-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   enseña su PR en su comprobación»): la prueba unitaria que sigue el orden de todo lo que pasa en un turno
   ve cerrarse el micro antes de la primera frase y abrirse después de la última, y la
   mutación que no lo cierra hace que su propio eco entre como un turno en PA-R03-03.
-- **122 pruebas unitarias nuevas**: el servicio que oye y habla (16 más en
-  `tests/unit/test_local_listening.py`, de 30 a 46), el corte en frases (75 en
+- **133 pruebas unitarias nuevas**: el servicio que oye y habla (16 más en
+  `tests/unit/test_local_listening.py`, de 30 a 46), el corte en frases (86 en
   `tests/unit/test_speech_cutter.py`; entre ellas, lo mismo dicho que `final_speech_text`
   con el texto entero de 302 maneras de trocear 18 respuestas, 5 436 troceos, y de 12
   maneras de trocear 500 textos al azar hechos de palabras, puntuación, saltos, sangrías y
   marcas, en los que el corte de `e41ff85f` da otra cosa 373 veces; ninguna marca
-  dicha al acabar, pare donde pare cada una de las 18 respuestas; y lo que se hace a
-  medias con cada construcción de `prepare_speech_text`), Piper y el altavoz con
+  dicha al acabar, pare donde pare cada una de las 18 respuestas; lo que se hace a
+  medias con cada construcción de `prepare_speech_text`; y que lo de dentro de un
+  bloque no se dice nunca, con cinco bloques que no se cierran donde parece, cada uno
+  troceado de 52 maneras), Piper y el altavoz con
   módulos de mentira (15 en `tests/unit/test_local_speaking_adapters.py`), la
   instalación y la orden de instalar (12 más, de 24 a 36), `sirius-oye` y lo que tarda
   (3 más, de 13 a 16) y que el oído importa lo que dice `voice_tools` (1 más en
@@ -235,12 +242,19 @@ Medido el 15-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   del corte se rehicieron para sus tres condiciones, 18, y caen las 92. Tras la ronda 2,
   100: 8 más para lo que se dice al acabar, y la de las tres comillas cambia, porque ya
   no hace falta que abran una línea. Tras la ronda 3, 104: las de lo que se dice al
-  acabar se rehicieron para las cuatro construcciones, 12, y caen las 104. Una más no se
+  acabar se rehicieron para las cuatro construcciones, 12, y caen las 104. Tras la ronda
+  4, 120: 20 para los bloques como los ve Markdown, dónde empieza una línea y el
+  énfasis doble, y caen las 120. Sobrevivió la que quitaba no cortar dentro de un
+  bloque abierto: esa comprobación sobraba, porque la comparación con lo llegado ya lo
+  impide, y se quitó; y cuatro más hasta que hubo pruebas de unas comillas y unas
+  virgulillas tras una frase. Una más no se
   cuenta porque es equivalente: quitar que lo de detrás tenga que decir algo no cambia
   nada, porque con lo de detrás vacío la frase y un blanco nunca dan lo llegado, que no
   acaba en blanco.
 - **El corte, también en la sesión**: 8 000 textos al azar, la mitad con marcas, cada
-  uno troceado de 42 maneras, sin una diferencia con el texto entero.
+  uno troceado de 42 maneras, sin una diferencia con el texto entero; y 3 000 bloques de
+  código al azar, con líneas que parecen rayas sin serlo, cortados en siete sitios y
+  troceados de seis maneras, sin que se dijera una vez el secreto de dentro.
 - **Lo que tarda, con los dobles**: PA-R03-09 da un P95 por debajo de 200 ms en 20 turnos,
   con la charla de la 0.2 dentro; la cifra de verdad la da `sirius-oye` en E-R03-02.
 - **Piper, en el contenedor**: `piper-tts` 1.8.0 se instala con el extra, importa y pasa
@@ -271,9 +285,14 @@ Medido el 15-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
 - **Una frase sale cuando asoma lo que la sigue**, no al llegar su blanco: el corte
   necesita verlo para saber que no la cambia. Troceadas como las da el modelo, palabra a
   palabra con su blanco delante, las 18 respuestas de la prueba sacan la primera frase
-  igual que el corte de `e41ff85f` en 13 y un trozo más tarde en 5: cuando lo que sigue
-  es una viñeta, un guion con sangría, una raya o una puntuación.
-- Model Studio no cambia: `prepare_speech_text` se usa tal cual.
+  igual que el corte de `e41ff85f` en 12 y un trozo más tarde en 6: cuando lo que sigue
+  es una viñeta, un guion con sangría, la línea que abre un bloque de código, una raya o
+  una puntuación.
+- Model Studio no cambia: `prepare_speech_text` se usa tal cual. Pero la voz ya no lee
+  igual que él los bloques de código: Model Studio empareja tres comillas estén donde
+  estén, y si una línea de código las trae, lee lo que sigue, como enseñó la ronda 4 de
+  Codex. Es un fallo de Model Studio que esta pieza no arregla, porque no es de esta
+  vertical.
 
 ## Alternativas descartadas y por qué
 
@@ -382,4 +401,24 @@ corrió encontró lo que ninguna ronda había visto, una marca de énfasis colga
 construcción, hasta que `final_speech_text` diga qué hace con ella a medias. Y la
 comparación al azar con el texto entero encontró que una estrella al principio de lo que
 queda se juzgaba sin el blanco que tiene delante en la respuesta entera; ya no.
+
+**Ronda 4 de Codex**, sobre `5adbee3a`, con la misma pregunta: dos P2, ciertos y
+comprobados contra el código. Tres comillas dentro de una línea de código cerraban el
+bloque y se leía lo de después: con un bloque abierto que traía `print("``` dentro")` y
+luego `password = "secreto"`, se oía la contraseña, al acabar y también a media charla. Y
+dos estrellas entre letras, como en `Mira a**muy`, se quedaban por si eran una
+multiplicación.
+
+**Tercera ronda de la misma familia: la raíz de la ronda 3 no era toda la raíz.** El
+patrón sigue: lo que la preparación no reconoce como una construcción llega a la voz.
+Tratar las construcciones como si se cerraran estaba bien, pero se fiaba de cómo las
+reconoce `prepare_speech_text`, que empareja tres comillas estén donde estén, y eso no es
+Markdown: hasta con la respuesta entera y cerrada, Model Studio lee lo que sigue a unas
+comillas dentro de un bloque. La raíz está en dónde se reconoce un bloque, y se arregla
+ahí: la voz los reconoce como Markdown, por su raya al principio de línea, y lo de dentro
+no llega nunca a la preparación. Lo hacen cumplir una prueba con cinco bloques que no se
+cierran donde parece, cada uno troceado de 52 maneras, y en la sesión 3 000 bloques al
+azar. La comparación al azar con el texto entero encontró dos desajustes del propio
+arreglo, unas comillas a media línea tomadas por raya tras un corte y dos guiones bajos
+dichos a media charla, y los dos tienen su prueba.
 
