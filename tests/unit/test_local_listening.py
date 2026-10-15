@@ -1,9 +1,12 @@
-"""El oído del robot, del micro a la charla (ADR-242), con un doble en cada pieza.
+"""El oído y la voz del robot, del micro a la charla y de ella al altavoz (ADR-242, ADR-243),
+con un doble en cada pieza.
 
 Las pruebas de aceptación (``tests/acceptance/test_robot_0_3_voz.py``) miran lo que ve
 el propietario; estas miran los bordes del servicio que allí no salen: lo que guarda de
 antes de la voz, un turno sin palabras, lo que pasa si falta algo, si la charla falla o
-si se para a medias, y que el diario no se quede con nada de lo oído.
+si se para a medias, y que el diario no se quede con nada de lo oído; y, al hablar, el
+orden de lo que se dice y del micro, lo que pasa si la voz o el altavoz fallan y lo que
+tarda en sonar.
 """
 
 from __future__ import annotations
@@ -25,9 +28,15 @@ from sirius.application.local_listening import (
     LocalListening,
 )
 from sirius.application.send_message import ChatLeavesThisComputer, SendMessageResult
+from sirius.application.speech_cutter import SpeechCutter
 from sirius.domain.conversation import MessageStatus
 from sirius.ports.llm import LLMErrorKind, runs_on_this_computer
-from sirius.ports.local_voice import ListeningEngines, TurnSignal, VoiceUnavailable
+from sirius.ports.local_voice import (
+    ListeningEngines,
+    SpeakingEngines,
+    TurnSignal,
+    VoiceUnavailable,
+)
 
 FIN = "fin"
 
@@ -37,25 +46,37 @@ def voz(texto: str) -> str:
 
 
 class _Micro:
-    """Un micro con lo que va a sonar ya escrito: ``voz:...`` es voz, vacío es silencio."""
+    """Un micro con lo que va a sonar ya escrito: ``voz:...`` es voz, vacío es silencio.
 
-    def __init__(self) -> None:
+    Como el de verdad, lo que suena con él cerrado se pierde, y al cerrarlo se tira lo
+    que nadie ha leído. Apunta en ``eventos`` cuándo se abre y se cierra.
+    """
+
+    def __init__(self, eventos: list[str] | None = None) -> None:
+        self.eventos = eventos if eventos is not None else []
         self.pendientes: list[str] = []
+        self.perdidos: list[str] = []
         self.abierto = False
         self.aperturas = 0
         self.falla_al_abrir: VoiceUnavailable | None = None
         self.falla_al_cerrar: Exception | None = None
+
+    def capta(self, *trozos: str) -> None:
+        (self.pendientes if self.abierto else self.perdidos).extend(trozos)
 
     def open(self) -> None:
         if self.falla_al_abrir is not None:
             raise self.falla_al_abrir
         self.abierto = True
         self.aperturas += 1
+        self.eventos.append("abre")
 
     def close(self) -> None:
         if self.falla_al_cerrar is not None:
             raise self.falla_al_cerrar
         self.abierto = False
+        self.pendientes.clear()
+        self.eventos.append("cierra")
 
     def read(self) -> str | None:
         assert self.abierto, "se ha leído el micro cerrado"
@@ -68,9 +89,13 @@ class _Detector:
         self.reinicios = 0
         self.falla_al_reiniciar: Exception | None = None
         self.falla_al_oir: Exception | None = None
+        #: Lo que pasa mientras oye cada trozo: por ejemplo, que pase el tiempo.
+        self.al_oir: Callable[[str], None] | None = None
 
     def listen(self, chunk: str) -> TurnSignal:
         self.vistos.append(chunk)
+        if self.al_oir is not None:
+            self.al_oir(chunk)
         if self.falla_al_oir is not None:
             raise self.falla_al_oir
         if chunk == FIN:
@@ -121,12 +146,18 @@ class _Transcriptor:
 
 
 class _Charla:
-    def __init__(self) -> None:
+    def __init__(self, eventos: list[str] | None = None) -> None:
+        self.eventos = eventos if eventos is not None else []
         #: Un modelo de este ordenador, como Ollama.
         self.llm_provider: object = SimpleNamespace(runs_on_this_computer=True)
         self.mensajes: list[str] = []
         self.operaciones: list[str | None] = []
         self.falla: Exception | None = None
+        #: Lo que escribe el modelo, a trozos, para el próximo turno; sin ellos, «R: <lo
+        #: oído>» de una vez. Lo guardado es todo junto, como en la charla de verdad.
+        self.trozos: list[str] | None = None
+        #: Si se rompe después de escribir los trozos, sin guardar la respuesta.
+        self.se_rompe_al_acabar: Exception | None = None
         self.desenlace = MessageStatus.COMPLETED
         self.por_que: LLMErrorKind | None = None
         #: Lo que el modelo propone recordar al contestar, como Ollama tras el delimitador.
@@ -137,6 +168,8 @@ class _Charla:
         user_text: str,
         *,
         operation_id: str | None = None,
+        on_delta: Callable[[str], None] | None = None,
+        on_completed: Callable[[], None] | None = None,
         only_on_this_computer: bool = False,
     ) -> SendMessageResult:
         # Como la de verdad: comprueba el mismo modelo con el que enviaría.
@@ -147,10 +180,22 @@ class _Charla:
         if self.falla is not None:
             falla, self.falla = self.falla, None
             raise falla
+        trozos, self.trozos = self.trozos or [f"R: {user_text}"], None
+        for trozo in trozos:
+            self.eventos.append(f"escribe:{trozo}")
+            if on_delta is not None:
+                on_delta(trozo)
+        if self.se_rompe_al_acabar is not None:
+            rotura, self.se_rompe_al_acabar = self.se_rompe_al_acabar, None
+            raise rotura
+        if self.desenlace is MessageStatus.COMPLETED and on_completed is not None:
+            on_completed()
+        # Lo que la charla hace después del turno, como resumir, que puede tardar.
+        self.eventos.append("después del turno")
         respuesta = SimpleNamespace(
             outcome=self.desenlace,
             sirius_message=SimpleNamespace(
-                id=7, content=f"R: {user_text}", status=self.desenlace, operation_id="op-7"
+                id=7, content="".join(trozos), status=self.desenlace, operation_id="op-7"
             ),
             error_kind=self.por_que,
             memory_suggestion=self.propone,
@@ -184,24 +229,92 @@ class _Instalacion:
         return self.faltan
 
 
+class _Voz:
+    """Piper: apunta cada frase que le piden y la devuelve como sonido."""
+
+    def __init__(self, eventos: list[str]) -> None:
+        self.eventos = eventos
+        self.falla: Exception | None = None
+        #: Lo que pasa mientras dice cada frase: por ejemplo, que pase el tiempo.
+        self.al_decir: Callable[[], None] | None = None
+
+    def say(self, text: str) -> str:
+        self.eventos.append(f"di:{text}")
+        if self.al_decir is not None:
+            self.al_decir()
+        if self.falla is not None:
+            raise self.falla
+        return f"sonido de {text}"
+
+
+class _Reloj:
+    """El reloj con que el oído mide lo que tarda: solo avanza cuando la prueba lo dice."""
+
+    def __init__(self) -> None:
+        self.ahora = 100.0
+
+    def __call__(self) -> float:
+        return self.ahora
+
+    def avanza(self, segundos: float) -> None:
+        self.ahora += segundos
+
+
+class _Altavoz:
+    """Apunta lo que suena; sigue sonando mientras la prueba lo diga."""
+
+    def __init__(self, eventos: list[str]) -> None:
+        self.eventos = eventos
+        self.sigue_sonando = False
+        #: Como el de verdad: lo que ya estaba saliendo sigue sonando después de callar.
+        self.suena_tras_callar = False
+        self.falla: Exception | None = None
+        self.latency = 0.0
+
+    def play(self, sound: str) -> None:
+        if self.falla is not None:
+            raise self.falla
+        self.eventos.append(f"suena:{sound}")
+
+    @property
+    def playing(self) -> bool:
+        return self.sigue_sonando
+
+    def stop(self) -> None:
+        self.sigue_sonando = self.sigue_sonando and self.suena_tras_callar
+        self.eventos.append("calla")
+
+
 class _Oido:
-    """Todo junto, con el servicio montado como en producción."""
+    """Todo junto, con el servicio montado como en producción.
+
+    ``eventos`` es lo que pasa en orden: el micro que se abre y se cierra, lo que escribe
+    la charla, lo que se le pide a la voz y lo que suena.
+    """
 
     def __init__(self, *, antes: int = 2, detector: _Detector | None = None) -> None:
-        self.micro = _Micro()
+        self.eventos: list[str] = []
+        self.micro = _Micro(self.eventos)
         self.detector = detector or _Detector()
         self.transcriptor = _Transcriptor()
-        self.charla = _Charla()
+        self.charla = _Charla(self.eventos)
+        self.voz = _Voz(self.eventos)
+        self.altavoz = _Altavoz(self.eventos)
         self.propuestas = _Propuestas()
         self.instalacion = _Instalacion()
+        self.reloj = _Reloj()
         self.cargas = 0
+        self.cargas_de_la_voz = 0
         self.falla_al_cargar: VoiceUnavailable | None = None
+        self.falla_al_cargar_la_voz: VoiceUnavailable | None = None
         self.servicio: LocalListening[str] = LocalListening(
             chat=self.charla,
             installation=self.instalacion,
             load_engines=self._carga,
+            load_speaking=self._carga_la_voz,
             memory_suggestions=self.propuestas,
             pre_roll=antes,
+            clock=self.reloj,
         )
 
     def _carga(self) -> ListeningEngines[str]:
@@ -210,9 +323,19 @@ class _Oido:
             raise self.falla_al_cargar
         return ListeningEngines(self.micro, self.detector, self.transcriptor)
 
+    def _carga_la_voz(self) -> SpeakingEngines[str]:
+        self.cargas_de_la_voz += 1
+        if self.falla_al_cargar_la_voz is not None:
+            raise self.falla_al_cargar_la_voz
+        return SpeakingEngines(self.voz, self.altavoz)
+
     def suena(self, *trozos: str) -> Attended:
-        self.micro.pendientes.extend(trozos)
+        self.micro.capta(*trozos)
         return self.servicio.attend()
+
+    def dicho(self) -> list[str]:
+        """Lo que se le pidió a la voz, en orden."""
+        return [e.removeprefix("di:") for e in self.eventos if e.startswith("di:")]
 
 
 def test_un_turno_va_a_la_charla_con_lo_que_sono_justo_antes_de_la_voz() -> None:
@@ -238,7 +361,8 @@ def test_cada_trozo_se_le_ensena_al_detector_una_vez_y_en_orden() -> None:
     oido = _Oido()
     oido.servicio.start()
 
-    oido.suena("", voz("Uno"), "", FIN, "", voz("Dos"), FIN)
+    oido.suena("", voz("Uno"), "", FIN)
+    oido.suena("", voz("Dos"), FIN)
 
     assert oido.detector.vistos == ["", voz("Uno"), "", FIN, "", voz("Dos"), FIN]
 
@@ -274,13 +398,17 @@ def test_un_fin_de_turno_sin_voz_delante_ni_empieza_turno_ni_transcribe() -> Non
 
 
 def test_dos_turnos_en_una_sola_atencion_se_devuelven_en_orden() -> None:
+    # Si no dice nada, no cierra el micro (pieza C) y sigue con lo que ya había llegado:
+    # aquí, la charla no acaba bien y lo escrito a medias no se dice.
     oido = _Oido()
     oido.servicio.start()
+    oido.charla.desenlace = MessageStatus.FAILED
 
     atendido = oido.suena(voz("Uno"), FIN, voz("Dos"), FIN)
 
     assert [t.heard for t in atendido.turns] == ["Uno", "Dos"]
     assert oido.charla.mensajes == ["Uno", "Dos"]
+    assert oido.dicho() == []
 
 
 def test_un_turno_sin_palabras_no_va_a_la_charla() -> None:
@@ -315,8 +443,9 @@ def test_si_faltan_varias_cosas_las_dice_todas() -> None:
     oido = _Oido()
     oido.instalacion.faltan = ("el modelo de oír", "la voz", "el detector")
 
-    assert "me falta instalar el modelo de oír, la voz y el detector en este ordenador" in (
-        oido.servicio.start()
+    assert oido.servicio.start().startswith(
+        "Para oírte y hablarte me falta instalar el modelo de oír, la voz y el detector en "
+        "este ordenador."
     )
 
 
@@ -413,6 +542,7 @@ def test_arrancar_dos_veces_no_vuelve_a_cargar_ni_a_abrir() -> None:
     assert oido.servicio.start() == ""
 
     assert oido.cargas == 1
+    assert oido.cargas_de_la_voz == 1
     assert oido.micro.aperturas == 1
 
 
@@ -534,7 +664,7 @@ def test_cada_turno_va_a_la_charla_con_su_propia_operacion() -> None:
     oido = _Oido()
     oido.servicio.start()
 
-    turnos = oido.suena(voz("Uno"), FIN, voz("Dos"), FIN).turns
+    turnos = (*oido.suena(voz("Uno"), FIN).turns, *oido.suena(voz("Dos"), FIN).turns)
 
     assert [t.operation_id for t in turnos] == oido.charla.operaciones
     assert len(set(oido.charla.operaciones)) == 2
@@ -658,3 +788,302 @@ def test_el_diario_no_se_queda_con_nada_de_lo_oido(
 
     assert "Turno de voz entregado a la charla" in caplog.text
     assert "zarzamora" not in caplog.text.casefold()
+
+
+# --- Lo que contesta, lo dice en voz alta (pieza C, ADR-243) ------------------------
+
+
+def test_dice_cada_frase_en_cuanto_la_charla_la_cierra_con_el_micro_cerrado() -> None:
+    oido = _Oido()
+    oido.servicio.start()
+    oido.charla.trozos = ["Primera frase.", " Segunda", " frase. Y la", " tercera."]
+
+    (turno,) = oido.suena(voz("Cuéntame"), FIN).turns
+
+    assert turno.reply == "Primera frase. Segunda frase. Y la tercera."
+    # Cada frase, en cuanto la charla escribe lo que la cierra, y la última en cuanto la
+    # respuesta acaba, sin esperar a lo que la charla hace después del turno, como
+    # resumir. Antes de la primera se cierra el micro, y se abre cuando el altavoz acaba.
+    assert oido.eventos == [
+        "abre",
+        "escribe:Primera frase.",
+        "escribe: Segunda",
+        "cierra",
+        "di:Primera frase.",
+        "suena:sonido de Primera frase.",
+        "escribe: frase. Y la",
+        "di:Segunda frase.",
+        "suena:sonido de Segunda frase.",
+        "escribe: tercera.",
+        "di:Y la tercera.",
+        "suena:sonido de Y la tercera.",
+        "después del turno",
+        "abre",
+    ]
+    assert oido.servicio.listening
+
+
+def test_mientras_suena_no_lee_el_micro_y_vuelve_a_oir_cuando_calla() -> None:
+    oido = _Oido()
+    oido.servicio.start()
+    oido.altavoz.sigue_sonando = True
+
+    oido.suena(voz("Cuéntame"), FIN)
+
+    assert not oido.micro.abierto
+    assert oido.servicio.listening
+    # Su propia voz, de vuelta por el micro, se pierde: está cerrado.
+    assert oido.suena(voz("R: Cuéntame"), FIN) == Attended()
+    assert oido.micro.perdidos == [voz("R: Cuéntame"), FIN]
+    oido.altavoz.sigue_sonando = False
+    assert oido.servicio.attend() == Attended()
+    assert oido.micro.abierto
+    assert [t.heard for t in oido.suena(voz("Otra cosa"), FIN).turns] == ["Otra cosa"]
+    assert oido.transcriptor.turnos == [[voz("Cuéntame"), FIN], [voz("Otra cosa"), FIN]]
+
+
+def test_lo_que_llego_mientras_pensaba_se_pierde_al_empezar_a_hablar() -> None:
+    # Mientras contesta no escucha (ADR-243): al cerrar el micro para hablar, se tira lo
+    # que nadie ha leído. Oírle mientras habla es la pieza E.
+    oido = _Oido()
+    oido.servicio.start()
+
+    atendido = oido.suena(voz("Uno"), FIN, voz("Dos"), FIN)
+
+    assert [t.heard for t in atendido.turns] == ["Uno"]
+    assert oido.detector.vistos == [voz("Uno"), FIN]
+    assert oido.charla.mensajes == ["Uno"]
+    assert oido.micro.abierto
+
+
+def test_si_la_charla_no_acaba_bien_no_dice_lo_que_quedo_a_medias() -> None:
+    oido = _Oido()
+    oido.servicio.start()
+    oido.charla.trozos = ["Una frase entera.", " Y otra a med"]
+    oido.charla.desenlace = MessageStatus.CANCELLED
+
+    (turno,) = oido.suena(voz("Cuéntame"), FIN).turns
+
+    assert not turno.answered
+    assert oido.dicho() == ["Una frase entera."]
+    assert oido.micro.abierto
+
+
+def test_si_no_hay_nada_que_decir_no_cierra_el_micro() -> None:
+    oido = _Oido()
+    oido.servicio.start()
+    oido.charla.trozos = ["---"]
+
+    (turno,) = oido.suena(voz("Cuéntame"), FIN).turns
+
+    assert turno.answered
+    assert turno.first_sound_delay is None
+    assert oido.eventos == ["abre", "escribe:---", "después del turno"]
+
+
+@pytest.mark.parametrize(
+    ("pieza", "que", "aviso"),
+    [
+        ("voz", "la voz", "No puedo hablarte: la voz ha fallado (RuntimeError)."),
+        ("altavoz", "el altavoz", "No puedo hablarte: el altavoz ha fallado (RuntimeError)."),
+    ],
+)
+def test_si_falla_al_hablar_la_charla_acaba_y_deja_de_oir_diciendolo(
+    caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
+    pieza: str,
+    que: str,
+    aviso: str,
+) -> None:
+    monkeypatch.setattr(logging.getLogger("sirius.application.local_listening"), "disabled", False)
+    oido = _Oido()
+    oido.servicio.start()
+    oido.charla.trozos = ["Una frase.", " Otra frase con Zarzamora.", " Y otra."]
+    falla = RuntimeError("onnxruntime: Zarzamora")
+    if pieza == "voz":
+        oido.voz.falla = falla
+    else:
+        oido.altavoz.falla = falla
+
+    with caplog.at_level(logging.DEBUG):
+        atendido = oido.suena(voz("Cuéntame"), FIN)
+
+    (turno,) = atendido.turns
+    # El fallo no sale a la charla: acaba y guarda la respuesta entera.
+    assert turno.answered
+    assert turno.reply == "Una frase. Otra frase con Zarzamora. Y otra."
+    assert atendido.notice == aviso
+    assert "la orden de instalar" not in aviso
+    assert not oido.servicio.listening
+    # Desde el fallo no dice nada más, calla lo que sonara y el micro sigue cerrado.
+    assert oido.dicho() == ["Una frase."]
+    assert oido.eventos[-1] == "calla"
+    assert oido.eventos.count("cierra") == 1
+    assert not oido.micro.abierto
+    assert f"{que} ha fallado (RuntimeError)" in caplog.text
+    assert "zarzamora" not in caplog.text.casefold()
+
+
+def test_si_falla_al_preparar_la_frase_tampoco_sale_a_la_charla(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def rompe(self: SpeechCutter, text: str) -> list[str]:
+        raise ValueError(text)
+
+    monkeypatch.setattr(SpeechCutter, "feed", rompe)
+    oido = _Oido()
+    oido.servicio.start()
+
+    atendido = oido.suena(voz("Cuéntame"), FIN)
+
+    assert [t.answered for t in atendido.turns] == [True]
+    assert atendido.notice == "No puedo hablarte: la voz ha fallado (ValueError)."
+    assert oido.dicho() == []
+
+
+def test_si_la_charla_se_rompe_tras_empezar_a_hablar_vuelve_a_oir_al_callar() -> None:
+    oido = _Oido()
+    oido.servicio.start()
+    oido.charla.trozos = ["Una frase.", " Otra a med"]
+    oido.charla.se_rompe_al_acabar = RuntimeError("la base está cerrada")
+
+    atendido = oido.suena(voz("Cuéntame"), FIN)
+
+    (roto,) = atendido.turns
+    assert roto.result is None
+    assert atendido.notice == ""
+    assert oido.dicho() == ["Una frase."]
+    assert oido.micro.abierto
+    assert oido.servicio.listening
+
+
+def test_si_la_charla_se_rompe_y_la_voz_fallo_deja_de_oir_diciendolo() -> None:
+    oido = _Oido()
+    oido.servicio.start()
+    oido.charla.trozos = ["Una frase.", " Otra a med"]
+    oido.charla.se_rompe_al_acabar = RuntimeError("la base está cerrada")
+    oido.voz.falla = OSError("sin memoria")
+
+    atendido = oido.suena(voz("Cuéntame"), FIN)
+
+    assert [t.result for t in atendido.turns] == [None]
+    assert atendido.notice == "No puedo hablarte: la voz ha fallado (OSError)."
+    assert not oido.servicio.listening
+
+
+def test_si_la_voz_no_carga_aconseja_la_orden_y_no_abre_el_micro() -> None:
+    oido = _Oido()
+    oido.falla_al_cargar_la_voz = VoiceUnavailable("piper no carga (DLL)")
+
+    aviso = oido.servicio.start()
+
+    assert aviso.startswith("No puedo hablarte: piper no carga (DLL).")
+    assert "la orden de instalar" in aviso
+    assert not oido.micro.abierto
+    assert not oido.servicio.listening
+    # Al volver a intentarlo, carga lo que faltaba y nada más.
+    oido.falla_al_cargar_la_voz = None
+    assert oido.servicio.start() == ""
+    assert (oido.cargas, oido.cargas_de_la_voz) == (1, 2)
+
+
+def test_parar_mientras_habla_le_calla_y_al_volver_abre_el_micro() -> None:
+    oido = _Oido()
+    oido.servicio.start()
+    oido.altavoz.sigue_sonando = True
+    oido.suena(voz("Cuéntame"), FIN)
+
+    oido.servicio.stop()
+
+    assert not oido.altavoz.sigue_sonando
+    assert oido.servicio.start() == ""
+    assert oido.cargas_de_la_voz == 1, "la misma voz, sin volver a cargarla"
+    assert [t.heard for t in oido.suena(voz("Hola"), FIN).turns] == ["Hola"]
+    # Al volver, el micro se abre una vez: parar olvidó que estaba hablando.
+    assert oido.eventos == [
+        "abre",
+        "escribe:R: Cuéntame",
+        "cierra",
+        "di:R: Cuéntame",
+        "suena:sonido de R: Cuéntame",
+        "después del turno",
+        "calla",
+        "abre",
+        "escribe:R: Hola",
+        "cierra",
+        "di:R: Hola",
+        "suena:sonido de R: Hola",
+        "después del turno",
+        "abre",
+    ]
+
+
+def test_si_el_micro_no_vuelve_a_abrirse_al_callar_deja_de_oir_y_lo_dice() -> None:
+    oido = _Oido()
+    oido.servicio.start()
+    oido.altavoz.sigue_sonando = True
+    oido.suena(voz("Cuéntame"), FIN)
+    oido.micro.falla_al_abrir = VoiceUnavailable("no puedo abrir el micrófono (desenchufado)")
+    oido.altavoz.sigue_sonando = False
+
+    aviso = "No puedo oírte: no puedo abrir el micrófono (desenchufado)."
+    assert oido.servicio.attend() == Attended(notice=aviso)
+    assert not oido.servicio.listening
+
+
+def test_si_el_micro_no_vuelve_a_abrirse_tras_contestar_el_turno_llega_con_el_aviso() -> None:
+    oido = _Oido()
+    oido.servicio.start()
+    oido.micro.falla_al_abrir = VoiceUnavailable("no puedo abrir el micrófono (desenchufado)")
+
+    atendido = oido.suena(voz("Cuéntame"), FIN)
+
+    assert [t.answered for t in atendido.turns] == [True]
+    assert atendido.notice == "No puedo oírte: no puedo abrir el micrófono (desenchufado)."
+    assert not oido.servicio.listening
+
+
+def test_mide_desde_que_deja_de_oir_su_voz_hasta_que_suena_la_primera_frase(
+    caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # E-R03-02: cuenta el silencio que espera el detector, transcribir, la charla, la voz y
+    # lo que tarda el altavoz en sonar; no lo que había antes de la última voz.
+    monkeypatch.setattr(logging.getLogger("sirius.application.local_listening"), "disabled", False)
+    oido = _Oido()
+    oido.servicio.start()
+    oido.detector.al_oir = lambda trozo: oido.reloj.avanza(0.25) if trozo != FIN else None
+    oido.transcriptor.al_transcribir = lambda: oido.reloj.avanza(0.5)
+    oido.voz.al_decir = lambda: oido.reloj.avanza(0.125)
+    oido.altavoz.latency = 0.0625
+    oido.charla.trozos = ["La clave es Zarzamora.", " Y otra frase."]
+
+    with caplog.at_level(logging.DEBUG):
+        (turno,) = oido.suena("", voz("La clave"), "", voz("es Zarzamora"), "", FIN).turns
+
+    # Desde la segunda voz: su silencio, 0,25; transcribir, 0,5; la primera frase, 0,125;
+    # y el altavoz, 0,0625.
+    assert turno.first_sound_delay == 0.9375
+    assert "Turno de voz: primer sonido a 937 ms de dejar de oír su voz" in caplog.text
+    assert "zarzamora" not in caplog.text.casefold()
+
+
+def test_si_al_volver_aun_suena_lo_que_dijo_no_abre_el_micro_hasta_que_calle() -> None:
+    # Ronda 1 de Codex sobre la PR #688: parar no calla lo que el altavoz ya tenía, y
+    # abrir el micro entonces dejaría entrar su propia voz.
+    oido = _Oido()
+    oido.servicio.start()
+    oido.altavoz.sigue_sonando = True
+    oido.altavoz.suena_tras_callar = True
+    oido.suena(voz("Cuéntame"), FIN)
+    oido.servicio.stop()
+
+    assert oido.servicio.start() == ""
+
+    assert oido.servicio.listening
+    assert not oido.micro.abierto
+    assert oido.suena(voz("R: Cuéntame"), FIN) == Attended(), "su propia voz se pierde"
+    oido.altavoz.sigue_sonando = False
+    assert oido.servicio.attend() == Attended()
+    assert oido.micro.abierto
+    assert [t.heard for t in oido.suena(voz("Hola"), FIN).turns] == ["Hola"]
+    assert oido.charla.mensajes == ["Cuéntame", "Hola"]

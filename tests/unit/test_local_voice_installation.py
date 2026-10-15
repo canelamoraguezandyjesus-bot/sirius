@@ -1,8 +1,8 @@
-"""Qué necesita instalado la voz del robot, y la orden que lo instala (ADR-242).
+"""Qué necesita instalado la voz del robot, y la orden que lo instala (ADR-242, ADR-243).
 
-Sirius mira que el modelo de oír esté entero antes de abrir el micro; si no, dice la
-orden. La orden baja el modelo a una carpeta aparte y solo lo pone en su sitio cuando
-está entero, así que una descarga cortada nunca parece un modelo instalado.
+Sirius mira que el modelo de oír y la voz de hablar estén enteros antes de abrir el micro;
+si no, dice la orden. La orden baja cada uno a una carpeta aparte y solo lo pone en su
+sitio cuando está entero, así que una descarga cortada nunca parece instalada.
 """
 
 from __future__ import annotations
@@ -23,12 +23,41 @@ from sirius.infrastructure.local_voice_installation import (
     VOICE_DISTRIBUTIONS,
     LocalVoiceInstallation,
     listening_model_complete,
+    speaking_voice_complete,
     voice_distributions_missing,
     voice_models_dir,
 )
 from sirius.infrastructure.paths import resolve_paths
-from sirius.install_local_voice import download_listening_model
+from sirius.install_local_voice import download_listening_model, download_speaking_voice
 from sirius.ports.local_voice import VoiceUnavailable
+
+#: La voz de los ajustes, como la nombra Piper.
+_VOZ = "es_ES-davefx-medium"
+_VOZ_ENTERA = (f"{_VOZ}.onnx", f"{_VOZ}.onnx.json")
+
+
+def _pon_voz(carpeta: Path, ficheros: tuple[str, ...] = _VOZ_ENTERA) -> None:
+    carpeta.mkdir(parents=True, exist_ok=True)
+    for nombre in ficheros:
+        (carpeta / nombre).write_bytes(b"voz")
+
+
+@pytest.fixture(autouse=True)
+def la_voz_esta(monkeypatch: pytest.MonkeyPatch) -> list[Path]:
+    """Un ordenador con la voz de hablar puesta y que carga. Las pruebas del modelo de oír
+    no la miran; las de la voz la quitan o la rompen. Devuelve lo que se cargó."""
+    _pon_voz(LocalVoiceInstallation(LocalVoiceSettings()).speaking_voice_dir)
+    cargadas: list[Path] = []
+    monkeypatch.setattr(install_local_voice, "load_speaking_engines", cargadas.append)
+    return cargadas
+
+
+@pytest.fixture
+def aparte(tmp_path: Path) -> Path:
+    """Una carpeta vacía, fuera de la de datos, donde la voz ya puesta no se ve."""
+    carpeta = tmp_path / "aparte"
+    carpeta.mkdir()
+    return carpeta
 
 
 @pytest.fixture
@@ -36,6 +65,7 @@ def bibliotecas_bien(monkeypatch: pytest.MonkeyPatch) -> None:
     """Las bibliotecas de la voz están y cargan, como tras `uv run --extra voz`."""
     monkeypatch.setattr(install_local_voice, "voice_distributions_missing", lambda: ())
     monkeypatch.setattr(install_local_voice, "check_listening_libraries", lambda: None)
+    monkeypatch.setattr(install_local_voice, "check_speaking_libraries", lambda: None)
 
 
 #: Lo que lee faster-whisper 1.2.1 de la carpeta de un modelo (``WhisperModel`` y
@@ -47,7 +77,7 @@ _REMEDIOS_ADIVINADOS = ("repetirla", "ciérralo", "vuelve a ejecutar")
 
 
 def _sin_remedios_adivinados(salida: str) -> None:
-    assert not [r for r in _REMEDIOS_ADIVINADOS if r in salida], salida
+    assert not [r for r in _REMEDIOS_ADIVINADOS if r in salida.casefold()], salida
 
 
 _MODELO_ENTERO = ("model.bin", "config.json", "tokenizer.json", "vocabulary.txt")
@@ -79,8 +109,36 @@ def test_falta_el_modelo_si_le_falta_cualquiera_de_sus_ficheros(
 ) -> None:
     instalacion = LocalVoiceInstallation(LocalVoiceSettings(), tmp_path)
     _pon_modelo(instalacion.listening_model_dir, tuple(n for n in _MODELO_ENTERO if n != quitado))
+    _pon_voz(instalacion.speaking_voice_dir)
 
     assert instalacion.missing() == ("el modelo de oír (faster-whisper small)",)
+
+
+def test_la_voz_vive_en_su_carpeta_dentro_de_los_modelos() -> None:
+    instalacion = LocalVoiceInstallation(LocalVoiceSettings())
+
+    assert instalacion.speaking_voice_dir == voice_models_dir() / "piper" / _VOZ
+    assert instalacion.speaking_voice_model == instalacion.speaking_voice_dir / f"{_VOZ}.onnx"
+
+
+@pytest.mark.parametrize("quitado", _VOZ_ENTERA)
+def test_falta_la_voz_si_le_falta_cualquiera_de_sus_dos_ficheros(
+    tmp_path: Path, quitado: str
+) -> None:
+    instalacion = LocalVoiceInstallation(LocalVoiceSettings(), tmp_path)
+    _pon_modelo(instalacion.listening_model_dir)
+    _pon_voz(instalacion.speaking_voice_dir, tuple(n for n in _VOZ_ENTERA if n != quitado))
+
+    assert instalacion.missing() == (f"la voz (Piper {_VOZ})",)
+
+
+def test_sin_nada_instalado_faltan_el_modelo_de_oir_y_la_voz(tmp_path: Path) -> None:
+    instalacion = LocalVoiceInstallation(LocalVoiceSettings(), tmp_path)
+
+    assert instalacion.missing() == (
+        "el modelo de oír (faster-whisper small)",
+        f"la voz (Piper {_VOZ})",
+    )
 
 
 def test_el_vocabulario_vale_en_texto_o_en_json(tmp_path: Path) -> None:
@@ -96,7 +154,7 @@ def test_la_orden_se_pega_tal_cual_en_powershell() -> None:
 # --- La orden de instalar -----------------------------------------------------------
 
 
-def test_baja_el_modelo_aparte_y_lo_pone_en_su_sitio_entero(tmp_path: Path) -> None:
+def test_baja_el_modelo_aparte_y_lo_pone_en_su_sitio_entero(aparte: Path) -> None:
     pedidos: list[tuple[str, str]] = []
 
     def baja(nombre: str, *, output_dir: str) -> str:
@@ -104,16 +162,16 @@ def test_baja_el_modelo_aparte_y_lo_pone_en_su_sitio_entero(tmp_path: Path) -> N
         _pon_modelo(Path(output_dir))
         return output_dir
 
-    carpeta = tmp_path / "faster-whisper-small"
+    carpeta = aparte / "faster-whisper-small"
     download_listening_model(LocalVoiceSettings(), carpeta, baja)
 
-    assert pedidos == [("small", str(tmp_path / "faster-whisper-small.a-medias"))]
+    assert pedidos == [("small", str(aparte / "faster-whisper-small.a-medias"))]
     assert listening_model_complete(carpeta)
-    assert sorted(p.name for p in tmp_path.iterdir()) == ["faster-whisper-small"]
+    assert sorted(p.name for p in aparte.iterdir()) == ["faster-whisper-small"]
 
 
-def test_una_descarga_a_medias_no_deja_nada_que_parezca_instalado(tmp_path: Path) -> None:
-    carpeta = tmp_path / "faster-whisper-small"
+def test_una_descarga_a_medias_no_deja_nada_que_parezca_instalado(aparte: Path) -> None:
+    carpeta = aparte / "faster-whisper-small"
 
     def baja_a_medias(nombre: str, *, output_dir: str) -> None:
         _pon_modelo(Path(output_dir), ("model.bin",))
@@ -121,11 +179,11 @@ def test_una_descarga_a_medias_no_deja_nada_que_parezca_instalado(tmp_path: Path
     with pytest.raises(RuntimeError, match="no trajo todos los ficheros"):
         download_listening_model(LocalVoiceSettings(), carpeta, baja_a_medias)
 
-    assert list(tmp_path.iterdir()) == []
+    assert list(aparte.iterdir()) == []
 
 
-def test_una_descarga_cortada_deja_el_modelo_que_ya_habia(tmp_path: Path) -> None:
-    carpeta = tmp_path / "faster-whisper-small"
+def test_una_descarga_cortada_deja_el_modelo_que_ya_habia(aparte: Path) -> None:
+    carpeta = aparte / "faster-whisper-small"
     _pon_modelo(carpeta)
 
     def se_corta(nombre: str, *, output_dir: str) -> None:
@@ -136,25 +194,28 @@ def test_una_descarga_cortada_deja_el_modelo_que_ya_habia(tmp_path: Path) -> Non
         download_listening_model(LocalVoiceSettings(), carpeta, se_corta)
 
     assert listening_model_complete(carpeta)
-    assert sorted(p.name for p in tmp_path.iterdir()) == ["faster-whisper-small"]
+    assert sorted(p.name for p in aparte.iterdir()) == ["faster-whisper-small"]
 
 
 @pytest.mark.usefixtures("bibliotecas_bien")
 def test_con_el_modelo_ya_instalado_no_baja_nada_y_comprueba_que_carga(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], la_voz_esta: list[Path]
 ) -> None:
-    _pon_modelo(LocalVoiceInstallation(LocalVoiceSettings()).listening_model_dir)
+    instalacion = LocalVoiceInstallation(LocalVoiceSettings())
+    _pon_modelo(instalacion.listening_model_dir)
     cargados: list[Path] = []
 
     def no_baja(*args: object) -> None:
         raise AssertionError("ha intentado bajar un modelo que ya estaba")
 
     monkeypatch.setattr(install_local_voice, "download_listening_model", no_baja)
+    monkeypatch.setattr(install_local_voice, "download_speaking_voice", no_baja)
     monkeypatch.setattr(install_local_voice, "load_listening_engines", cargados.append)
 
     assert install_local_voice.main() == 0
 
-    assert cargados == [LocalVoiceInstallation(LocalVoiceSettings()).listening_model_dir]
+    assert cargados == [instalacion.listening_model_dir]
+    assert la_voz_esta == [instalacion.speaking_voice_model]
     assert "sirius-oye" in capsys.readouterr().out
 
 
@@ -375,3 +436,147 @@ def test_sin_las_bibliotecas_del_extra_la_orden_dice_como_escribirla_y_no_baja_n
     salida = capsys.readouterr().out
     assert "numpy" in salida
     assert INSTALL_COMMAND in salida
+
+
+# --- La voz de hablar (pieza C, ADR-243) ----------------------------------------------
+
+
+def test_baja_la_voz_aparte_y_la_pone_en_su_sitio_entera(aparte: Path) -> None:
+    pedidos: list[tuple[str, Path]] = []
+
+    def baja(voz: str, carpeta: Path) -> None:
+        pedidos.append((voz, carpeta))
+        _pon_voz(carpeta)
+
+    carpeta = aparte / _VOZ
+    download_speaking_voice(LocalVoiceSettings(), carpeta, baja)
+
+    assert pedidos == [(_VOZ, aparte / f"{_VOZ}.a-medias")]
+    assert speaking_voice_complete(carpeta, _VOZ)
+    assert sorted(p.name for p in aparte.iterdir()) == [_VOZ]
+
+
+def test_una_voz_a_medias_no_deja_nada_que_parezca_instalado(aparte: Path) -> None:
+    def baja_a_medias(voz: str, carpeta: Path) -> None:
+        _pon_voz(carpeta, (f"{voz}.onnx",))
+
+    with pytest.raises(RuntimeError, match="no trajo los dos ficheros"):
+        download_speaking_voice(LocalVoiceSettings(), aparte / _VOZ, baja_a_medias)
+
+    assert list(aparte.iterdir()) == []
+
+
+def test_una_descarga_cortada_deja_la_voz_que_ya_habia(aparte: Path) -> None:
+    carpeta = aparte / _VOZ
+    _pon_voz(carpeta)
+
+    def se_corta(voz: str, carpeta: Path) -> None:
+        raise ConnectionError("se fue internet")
+
+    with pytest.raises(ConnectionError):
+        download_speaking_voice(LocalVoiceSettings(), carpeta, se_corta)
+
+    assert speaking_voice_complete(carpeta, _VOZ)
+    assert sorted(p.name for p in aparte.iterdir()) == [_VOZ]
+
+
+@pytest.mark.usefixtures("bibliotecas_bien")
+def test_sin_la_voz_la_baja_y_comprueba_que_carga_y_que_el_altavoz_se_abre(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], la_voz_esta: list[Path]
+) -> None:
+    instalacion = LocalVoiceInstallation(LocalVoiceSettings())
+    _pon_modelo(instalacion.listening_model_dir)
+    for nombre in _VOZ_ENTERA:
+        (instalacion.speaking_voice_dir / nombre).unlink()
+    bajadas: list[Path] = []
+
+    def baja(ajustes: LocalVoiceSettings, carpeta: Path) -> None:
+        bajadas.append(carpeta)
+
+    monkeypatch.setattr(install_local_voice, "download_speaking_voice", baja)
+    monkeypatch.setattr(install_local_voice, "load_listening_engines", lambda carpeta: None)
+
+    assert install_local_voice.main() == 0
+
+    assert bajadas == [instalacion.speaking_voice_dir]
+    assert la_voz_esta == [instalacion.speaking_voice_model]
+    salida = capsys.readouterr().out
+    assert f"Bajando la voz (Piper {_VOZ}" in salida
+    assert "sirius-oye" in salida
+
+
+@pytest.mark.usefixtures("bibliotecas_bien")
+def test_si_no_se_puede_bajar_la_voz_lo_dice_con_su_causa(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    instalacion = LocalVoiceInstallation(LocalVoiceSettings())
+    _pon_modelo(instalacion.listening_model_dir)
+    (instalacion.speaking_voice_dir / f"{_VOZ}.onnx").unlink()
+
+    def sin_internet(*args: object) -> None:
+        raise ConnectionError("HTTP Error 403: Forbidden")
+
+    monkeypatch.setattr(install_local_voice, "download_speaking_voice", sin_internet)
+
+    assert install_local_voice.main() == 1
+    salida = capsys.readouterr().out
+    assert "[FALLA] No se pudo bajar la voz: HTTP Error 403: Forbidden" in salida
+    _sin_remedios_adivinados(salida)
+
+
+@pytest.mark.usefixtures("bibliotecas_bien")
+def test_si_piper_no_carga_dice_que_no_puede_bajar_la_voz_y_por_que(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    instalacion = LocalVoiceInstallation(LocalVoiceSettings())
+    _pon_modelo(instalacion.listening_model_dir)
+    (instalacion.speaking_voice_dir / f"{_VOZ}.onnx.json").unlink()
+    roto = types.ModuleType("piper.download_voices")
+
+    def __getattr__(nombre: str) -> object:
+        raise OSError("DLL load failed while importing espeakbridge")
+
+    roto.__getattr__ = __getattr__  # type: ignore[method-assign]
+    monkeypatch.setitem(sys.modules, "piper.download_voices", roto)
+
+    assert install_local_voice.main() == 1
+    salida = capsys.readouterr().out
+    assert "No se puede bajar la voz: piper no carga (DLL load failed" in salida
+    _sin_remedios_adivinados(salida)
+
+
+@pytest.mark.usefixtures("bibliotecas_bien")
+def test_si_la_voz_no_carga_o_el_altavoz_no_se_abre_la_orden_lo_dice(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _pon_modelo(LocalVoiceInstallation(LocalVoiceSettings()).listening_model_dir)
+
+    def sin_altavoz(modelo: Path) -> None:
+        raise VoiceUnavailable("no puedo abrir el altavoz (Error querying device -1)")
+
+    monkeypatch.setattr(install_local_voice, "load_listening_engines", lambda carpeta: None)
+    monkeypatch.setattr(install_local_voice, "load_speaking_engines", sin_altavoz)
+
+    assert install_local_voice.main() == 1
+    salida = capsys.readouterr().out
+    assert "[FALLA] La voz no carga: no puedo abrir el altavoz (Error querying device -1)" in (
+        salida
+    )
+    _sin_remedios_adivinados(salida)
+
+
+def test_si_una_biblioteca_de_hablar_esta_rota_la_orden_lo_dice(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _pon_modelo(LocalVoiceInstallation(LocalVoiceSettings()).listening_model_dir)
+
+    def rota() -> None:
+        raise VoiceUnavailable("piper no carga (No module named 'onnxruntime')")
+
+    monkeypatch.setattr(install_local_voice, "voice_distributions_missing", lambda: ())
+    monkeypatch.setattr(install_local_voice, "check_listening_libraries", lambda: None)
+    monkeypatch.setattr(install_local_voice, "check_speaking_libraries", rota)
+
+    assert install_local_voice.main() == 1
+    salida = capsys.readouterr().out
+    assert "Una biblioteca de la voz no está bien: piper no carga" in salida

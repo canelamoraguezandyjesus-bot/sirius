@@ -993,3 +993,54 @@ def test_cancelar_tras_cambiar_de_modelo_para_la_respuesta_que_va_en_curso(
     assert result.outcome is MessageStatus.CANCELLED
     assert antes.cancelados == ["op-a-mitad"]
     assert despues.cancelados == []
+
+
+@pytest.mark.integration
+def test_avisa_de_que_acabo_bien_con_la_respuesta_guardada_y_antes_de_resumir(
+    tmp_path: Path,
+) -> None:
+    """ADR-243: la voz del robot dice lo que le quedaba en cuanto la respuesta acaba, sin
+    esperar al resumen de la charla, que pide otra respuesta al modelo y puede tardar."""
+    use_case, apuntador = _con_modelo_que_cambia(tmp_path, _ModeloConNombre("modelo"))
+    repositorio = build_sqlite_conversation_repository(tmp_path / "sirius.db")
+    vistos: list[tuple[list[str | None], int, int]] = []
+
+    def acabo() -> None:
+        charla = repositorio.get_or_create_main_conversation()
+        guardados = [m.content for m in repositorio.list_messages(charla.id)]
+        vistos.append((guardados, len(apuntador.atribuidas), len(apuntador.resumidas_con)))
+
+    result = use_case.send_message("hola", on_completed=acabo)
+
+    assert result.outcome is MessageStatus.COMPLETED
+    assert vistos == [(["hola", "uno dos tres"], 0, 0)]
+    assert (len(apuntador.atribuidas), len(apuntador.resumidas_con)) == (1, 1)
+
+
+@pytest.mark.integration
+def test_si_la_respuesta_no_acaba_bien_no_avisa_de_que_acabo(tmp_path: Path) -> None:
+    database_path = tmp_path / "sirius.db"
+    use_case = _build_use_case(database_path, _FailAfterDeltasProvider())
+    acabadas: list[str] = []
+
+    result = use_case.send_message("hola", on_completed=lambda: acabadas.append("acabó"))
+
+    assert result.outcome is MessageStatus.FAILED
+    assert acabadas == []
+
+
+@pytest.mark.integration
+def test_si_la_respuesta_se_cancela_no_avisa_de_que_acabo(tmp_path: Path) -> None:
+    database_path = tmp_path / "sirius.db"
+    use_case = _build_use_case(database_path, FakeLLMProvider(chunks=("uno ", "dos ")))
+    acabadas: list[str] = []
+
+    result = use_case.send_message(
+        "hola",
+        operation_id="op-a-medias",
+        on_delta=lambda texto: use_case.cancel("op-a-medias"),
+        on_completed=lambda: acabadas.append("acabó"),
+    )
+
+    assert result.outcome is MessageStatus.CANCELLED
+    assert acabadas == []

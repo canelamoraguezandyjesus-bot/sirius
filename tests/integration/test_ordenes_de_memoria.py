@@ -534,3 +534,16 @@ def test_si_sirius_se_cierra_mientras_pone_la_voz_la_orden_ya_tiene_su_respuesta
             "SELECT operation_id FROM messages WHERE role = 'user' ORDER BY id DESC LIMIT 1"
         ).fetchone()
     assert operacion == orden
+
+
+def test_una_orden_tambien_avisa_de_que_acabo_despues_de_dar_su_respuesta(
+    sirius: _Sirius,
+) -> None:
+    # ADR-243: la voz del robot dice lo que le queda al acabar, también tras una orden.
+    pasos: list[str] = []
+
+    resultado = sirius.deps.send_message_use_case.send_message(
+        "¿Qué sabes de mí?", on_delta=pasos.append, on_completed=lambda: pasos.append("acabó")
+    )
+
+    assert pasos == [resultado.sirius_message.content, "acabó"]

@@ -1,9 +1,10 @@
 """El oído de verdad: el micro con sounddevice, Silero y Smart Turn de Pipecat y faster-whisper.
 
 ADR-242. Las bibliotecas son del extra ``voz`` y se importan al cargar el oído, no al
-importar este módulo, y todas por ``_import``: sin el extra, o si una biblioteca nativa no
-carga, el módulo se importa igual y lo que se cargue levanta ``VoiceUnavailable`` diciendo
-qué falta. Ninguna función de aquí importa por su cuenta, y una prueba lo mira.
+importar este módulo, y todas por ``import_voice_library``: sin el extra, o si una
+biblioteca nativa no carga, el módulo se importa igual y lo que se cargue levanta
+``VoiceUnavailable`` diciendo qué falta. Ninguna función de aquí importa por su cuenta, y
+una prueba lo mira.
 
 Cargar el oído no tumba a Sirius, falle como falle lo de fuera. Una biblioteca nativa no
 falla solo con ``ImportError``: con ``OSError`` si carga su DLL con ctypes, y con lo que
@@ -21,7 +22,6 @@ no se nombra ninguna función que baje modelos: eso vive solo en la orden de ins
 from __future__ import annotations
 
 import asyncio
-import importlib
 import os
 import queue
 import sys
@@ -30,6 +30,12 @@ from functools import partial
 from pathlib import Path
 from typing import Any
 
+from sirius.adapters.audio.voice_libraries import (
+    END_OF_TURN,
+    SPEECH_TO_TEXT,
+    VOICE_ACTIVITY,
+    import_voice_library,
+)
 from sirius.infrastructure.logging import get_logger
 from sirius.ports.local_voice import ListeningEngines, TurnSignal, VoiceUnavailable
 
@@ -47,19 +53,6 @@ _SMART_TURN_AUDIO_LOG = "PIPECAT_SMART_TURN_LOG_DATA"
 _SPEAKING = frozenset({"SPEAKING", "STOPPING"})
 
 
-def _import(module: str) -> Any:
-    """Una biblioteca del extra ``voz``; si no carga, falle como falle, ``VoiceUnavailable``.
-
-    Solo dice qué pasa. Si la orden de instalar lo arreglaría no se adivina desde aquí:
-    lo dice lo que falta en el ordenador, que se mira antes de cargar nada
-    (``VoiceInstallation.missing``, ronda 7 de Codex sobre la PR #687).
-    """
-    try:
-        return importlib.import_module(module)
-    except Exception as error:
-        raise VoiceUnavailable(f"{module} no carga ({error})") from error
-
-
 def check_listening_libraries() -> None:
     """Que las bibliotecas del oído están y cargan; si no, ``VoiceUnavailable``.
 
@@ -67,17 +60,17 @@ def check_listening_libraries() -> None:
     modelo otra vez no lo arregla.
     """
     _libraries()
-    _import("faster_whisper")
+    import_voice_library(SPEECH_TO_TEXT)
 
 
 def _libraries() -> tuple[Any, Any, Any, Any, Any]:
     """numpy, sounddevice, el registrador de loguru y los módulos de Silero y Smart Turn."""
     return (
-        _import("numpy"),
-        _import("sounddevice"),
-        _import("loguru").logger,
-        _import("pipecat.audio.vad.silero"),
-        _import("pipecat.audio.turn.smart_turn.local_smart_turn_v3"),
+        import_voice_library("numpy"),
+        import_voice_library("sounddevice"),
+        import_voice_library("loguru").logger,
+        import_voice_library(VOICE_ACTIVITY),
+        import_voice_library(END_OF_TURN),
     )
 
 
@@ -120,7 +113,7 @@ def load_listening_model(model_dir: Path) -> Any:
     motor que no admite), y volver a bajarlo solo arregla lo primero (ronda 5 de Codex
     sobre la PR #687).
     """
-    whisper = _import("faster_whisper")
+    whisper = import_voice_library(SPEECH_TO_TEXT)
     try:
         return whisper.WhisperModel(
             str(model_dir), device="cpu", compute_type="int8", local_files_only=True

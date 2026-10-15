@@ -1,4 +1,5 @@
-"""La orden ``sirius-oye``: escucha, cuenta cada turno y cierra el micro al salir (ADR-242)."""
+"""La orden ``sirius-oye``: escucha, cuenta cada turno y cierra el micro al salir (ADR-242),
+y dice lo que tardó en empezar a hablar (ADR-243)."""
 
 from __future__ import annotations
 
@@ -240,3 +241,54 @@ def test_con_ctrl_c_tambien_cierra_el_micro() -> None:
         _escucha(oido, 5)
 
     assert oido.parado
+
+
+# --- Lo que tardó en empezar a hablar (E-R03-02) -------------------------------------
+
+
+def _hablado(segundos: float) -> HeardTurn:
+    """Un turno contestado en voz alta, que empezó a sonar ``segundos`` después de su voz."""
+    turno = _turno("Hola", "Hola.")
+    return HeardTurn(
+        turno.heard, True, turno.result, turno.operation_id, first_sound_delay=segundos
+    )
+
+
+def test_al_salir_dice_el_p95_de_lo_que_tardo_en_empezar_a_hablar() -> None:
+    # Veinte turnos, de 0,1 s a 2,0 s: el P95 por el rango más cercano es el 19.º.
+    turnos = [_hablado(n / 10) for n in range(20, 0, -1)]
+    oido = _Oido(atenciones=[Attended(turns=(t,)) for t in turnos])
+
+    codigo, dicho, _ = _escucha(oido, 20)
+
+    assert codigo == 0
+    assert dicho[-1] == (
+        "En 20 turnos, desde que dejé de oír tu voz hasta el primer sonido: P95 de 1,90 s."
+    )
+
+
+def test_lo_dice_tambien_si_sale_con_ctrl_c() -> None:
+    oido = _Oido(atenciones=[Attended(turns=(_hablado(1.234),)), KeyboardInterrupt()])
+    dicho: list[str] = []
+
+    with pytest.raises(KeyboardInterrupt):
+        listen(
+            oido,  # type: ignore[arg-type]
+            dicho.append,
+            keep_going=lambda: True,
+            pause=lambda: None,
+            history=list,
+        )
+
+    assert dicho[-1] == (
+        "En 1 turno, desde que dejé de oír tu voz hasta el primer sonido: P95 de 1,23 s."
+    )
+    assert oido.parado
+
+
+def test_sin_nada_dicho_no_dice_cuanto_tardo() -> None:
+    oido = _Oido(atenciones=[Attended(turns=(_turno("Hola", "---"),))])
+
+    _, dicho, _ = _escucha(oido, 1)
+
+    assert not any("primer sonido" in linea for linea in dicho)

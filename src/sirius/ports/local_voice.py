@@ -1,10 +1,11 @@
-"""Puertos del oído local del robot (pieza B de ADR-241, ADR-242).
+"""Puertos del oído y de la voz locales del robot (piezas B y C de ADR-241; ADR-242, ADR-243).
 
-El micro, el detector de turno y el transcriptor, sin tipos de ninguna biblioteca: los
-de verdad (``sounddevice``, Silero y Smart Turn de Pipecat, faster-whisper) viven en
-``sirius.adapters.audio.local_listening`` y se cargan solo si están instalados, y las
-pruebas ponen dobles. Lo que pasa de uno a otro es un trozo de audio que Sirius no abre:
-solo el micro que lo dio, el detector y el transcriptor saben qué hay dentro.
+El micro, el detector de turno y el transcriptor, y la voz y el altavoz, sin tipos de
+ninguna biblioteca: los de verdad (``sounddevice``, Silero y Smart Turn de Pipecat,
+faster-whisper y Piper) viven en ``sirius.adapters.audio`` y se cargan solo si están
+instalados, y las pruebas ponen dobles. Lo que pasa de uno a otro es audio que Sirius no
+abre: un trozo, que solo saben leer el micro que lo dio, el detector y el transcriptor;
+o un sonido, que solo saben leer la voz que lo hizo y el altavoz.
 """
 
 from __future__ import annotations
@@ -27,7 +28,8 @@ class TurnSignal(Enum):
 
 
 class VoiceUnavailable(RuntimeError):
-    """El oído no puede arrancar en este ordenador: algo que está no carga o no se abre.
+    """El oído o la voz no pueden arrancar en este ordenador: algo que está no carga o no
+    se abre.
 
     No dice si lo arregla la orden de instalar, y a propósito: adivinarlo salió mal seis
     veces (rondas 2, 4, 5, 6, 7 y 8 de Codex sobre la PR #687). Quien avisa aconseja la
@@ -91,8 +93,48 @@ class ListeningEngines[Chunk]:
     transcriber: Transcriber[Chunk]
 
 
+class Voice[Sound](Protocol):
+    """Piper, con la voz que dicen los ajustes: una frase en sonido."""
+
+    def say(self, text: str) -> Sound:
+        """El sonido de ``text`` dicho con esta voz."""
+        ...
+
+
+class Speaker[Sound](Protocol):
+    """El altavoz: suena lo que le dan, en orden, y dice si aún suena."""
+
+    def play(self, sound: Sound) -> None:
+        """Lo pone a sonar detrás de lo que ya suene, y vuelve sin esperar a que acabe."""
+        ...
+
+    @property
+    def playing(self) -> bool:
+        """Si aún suena algo de lo que le dieron, lo que espera en cola incluido."""
+        ...
+
+    @property
+    def latency(self) -> float:
+        """Cuánto tarda en sonar, como mucho, lo que se le da cuando no suena nada, en
+        segundos."""
+        ...
+
+    def stop(self) -> None:
+        """Tira lo que esperaba y no da nada más. Lo que ya estaba saliendo acaba en lo que
+        tarda en sonar, y hasta entonces sigue sonando (``playing``). No falla."""
+        ...
+
+
+@dataclass(frozen=True, slots=True)
+class SpeakingEngines[Sound]:
+    """La voz y el altavoz, ya cargados."""
+
+    voice: Voice[Sound]
+    speaker: Speaker[Sound]
+
+
 class VoiceInstallation(Protocol):
-    """Lo instalado en este ordenador para oír, y la orden que lo instala."""
+    """Lo instalado en este ordenador para oír y hablar, y la orden que lo instala."""
 
     @property
     def install_command(self) -> str:
@@ -100,5 +142,5 @@ class VoiceInstallation(Protocol):
         ...
 
     def missing(self) -> tuple[str, ...]:
-        """Lo que falta para oír, dicho para el propietario; vacío si no falta nada."""
+        """Lo que falta para oír y hablar, dicho para el propietario; vacío si no falta nada."""
         ...

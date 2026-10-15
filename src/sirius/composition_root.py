@@ -23,6 +23,7 @@ import httpx
 import openai
 
 from sirius.adapters.audio.local_listening import load_listening_engines
+from sirius.adapters.audio.local_speaking import load_speaking_engines
 from sirius.adapters.audio.openai_speech import DEFAULT_VOICE, OpenAISpeech
 from sirius.adapters.audio.openai_transcription import OpenAITranscription
 from sirius.adapters.audio.qt_capture import QtAudioCapture
@@ -155,7 +156,7 @@ from sirius.infrastructure.logging import get_logger
 from sirius.ports.audio_playback import AudioPlayback
 from sirius.ports.embeddings import TextEmbedder
 from sirius.ports.llm import LLMProvider
-from sirius.ports.local_voice import ListeningEngines
+from sirius.ports.local_voice import ListeningEngines, SpeakingEngines
 from sirius.ports.robot_conversation import ConversationSummarizer, FactExtractor, ReplyJudge
 from sirius.ports.secrets import SecretStore
 
@@ -309,9 +310,9 @@ class ConversationDependencies:
     abrirse y al guardar uno. ``rank_relevant_knowledge_use_case`` es la
     búsqueda de recuerdos que usa cada turno.
 
-    ``local_listening`` es el oído del robot (pieza B de ADR-241, ADR-242): del micro
-    a esta misma charla, todo en local. La ventana aún no lo usa (pieza D); lo usa la
-    orden ``sirius-oye``.
+    ``local_listening`` es el oído y la voz del robot (piezas B y C de ADR-241, ADR-242 y
+    ADR-243): del micro a esta misma charla y de ella al altavoz, todo en local. La ventana
+    aún no lo usa (pieza D); lo usa la orden ``sirius-oye``.
 
     ``propose_criticality_use_case`` (M21a, ADR-130) is likewise wired but not
     yet called from anywhere: the interface that shows a proposal and lets
@@ -622,24 +623,31 @@ def build_local_listening(
     chat: Chat,
     load_engines: Callable[[], ListeningEngines[Any]] | None = None,
     *,
+    load_speaking: Callable[[Path], SpeakingEngines[Any]] | None = None,
     memory_suggestions: MemorySuggestions,
     settings: LocalVoiceSettings | None = None,
 ) -> LocalListening[Any]:
-    """El oído del robot (ADR-242), entregando lo oído a ``chat``.
+    """El oído y la voz del robot (ADR-242, ADR-243), entregando lo oído a ``chat`` y
+    diciendo lo que contesta.
 
     Lo que el modelo propone recordar en un turno de voz queda en ``memory_suggestions``,
     pendiente de que él lo confirme, como lo escrito en la ventana.
 
-    No carga nada al construirse: el micro, el detector y el transcriptor se cargan al
-    empezar a escuchar, y solo si el modelo de oír está en este ordenador. Sin
-    ``load_engines``, los de verdad, con el modelo de la carpeta que dicen los ajustes.
+    No carga nada al construirse: el micro, el detector, el transcriptor, la voz y el
+    altavoz se cargan al empezar a escuchar, y solo si el modelo de oír y la voz están en
+    este ordenador. Sin ``load_engines``, los de verdad, con el modelo de la carpeta que
+    dicen los ajustes; sin ``load_speaking``, la voz de verdad, que recibe el modelo de la
+    voz que dicen los ajustes.
     """
     installation = LocalVoiceInstallation(settings or LocalVoiceSettings())
     model_dir = installation.listening_model_dir
+    voice_model = installation.speaking_voice_model
+    speak = load_speaking or load_speaking_engines
     return LocalListening(
         chat=chat,
         installation=installation,
         load_engines=load_engines or (lambda: load_listening_engines(model_dir)),
+        load_speaking=lambda: speak(voice_model),
         memory_suggestions=memory_suggestions,
     )
 
@@ -655,6 +663,7 @@ def build_conversation_dependencies(
     text_embedder: TextEmbedder | None = None,
     fact_extractor: FactExtractor | None = None,
     listening_engines: Callable[[], ListeningEngines[Any]] | None = None,
+    speaking_engines: Callable[[Path], SpeakingEngines[Any]] | None = None,
 ) -> ConversationDependencies:
     """Build repositories, the secret store, and use cases wired to SQLite.
 
@@ -670,6 +679,8 @@ def build_conversation_dependencies(
 
     ``listening_engines`` carga el micro, el detector de turno y el transcriptor del
     oído del robot; sin él, los de verdad del extra ``voz`` (ADR-242).
+    ``speaking_engines`` carga su voz y su altavoz con el modelo de la voz que dicen los
+    ajustes; sin él, Piper y el altavoz de verdad (ADR-243).
     """
     secret_store = secret_store or build_keyring_secret_store()
     conversation_repository = build_sqlite_conversation_repository(database_path)
@@ -989,6 +1000,7 @@ def build_conversation_dependencies(
         local_listening=build_local_listening(
             send_message_use_case,
             listening_engines,
+            load_speaking=speaking_engines,
             memory_suggestions=propose_memory_suggestion_use_case,
         ),
     )

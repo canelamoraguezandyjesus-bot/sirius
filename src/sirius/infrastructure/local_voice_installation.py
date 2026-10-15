@@ -1,10 +1,10 @@
 """Lo que la voz del robot necesita instalado en este ordenador, y la orden que lo instala.
 
-ADR-242. Las bibliotecas van en el extra ``voz`` de ``pyproject.toml``, y el modelo de
-faster-whisper en ``modelos/voz`` de la carpeta de datos de siempre (en Windows,
-``%LOCALAPPDATA%\\sirius``), fija como la de los ajustes aunque el propietario haya movido
-sus datos: la orden de instalar y Sirius la encuentran sin mirar nada más. Silero y Smart
-Turn vienen dentro de Pipecat, con la biblioteca.
+ADR-242 y ADR-243. Las bibliotecas van en el extra ``voz`` de ``pyproject.toml``, y el
+modelo de faster-whisper y la voz de Piper en ``modelos/voz`` de la carpeta de datos de
+siempre (en Windows, ``%LOCALAPPDATA%\\sirius``), fija como la de los ajustes aunque el
+propietario haya movido sus datos: la orden de instalar y Sirius la encuentran sin mirar
+nada más. Silero y Smart Turn vienen dentro de Pipecat, con la biblioteca.
 
 Aquí no se baja nada: solo se mira qué hay. Lo único que baja modelos es la orden de
 instalar, ``sirius.install_local_voice``, que ejecuta el propietario.
@@ -35,7 +35,7 @@ LISTENING_MODEL_FILES = ("model.bin", "config.json", "tokenizer.json")
 LISTENING_MODEL_VOCABULARY = "vocabulary.*"
 #: Las distribuciones que pide el extra ``voz`` de ``pyproject.toml``; una prueba mira que
 #: sean esas.
-VOICE_DISTRIBUTIONS = ("pipecat-ai", "faster-whisper", "sounddevice", "numpy")
+VOICE_DISTRIBUTIONS = ("pipecat-ai", "faster-whisper", "sounddevice", "numpy", "piper-tts")
 
 
 def voice_distributions_missing(names: tuple[str, ...] = VOICE_DISTRIBUTIONS) -> tuple[str, ...]:
@@ -77,8 +77,24 @@ def listening_model_complete(folder: Path) -> bool:
     )
 
 
+def speaking_voice_dir(settings: LocalVoiceSettings, models_dir: Path | None = None) -> Path:
+    """La carpeta de la voz de Piper que eligen los ajustes, una por voz."""
+    base = models_dir if models_dir is not None else voice_models_dir()
+    return base / "piper" / settings.speaking_voice.value
+
+
+def speaking_voice_files(voice: str) -> tuple[str, str]:
+    """Lo que Piper lee de una voz: el modelo y, a su lado, su configuración."""
+    return (f"{voice}.onnx", f"{voice}.onnx.json")
+
+
+def speaking_voice_complete(folder: Path, voice: str) -> bool:
+    """Si ``folder`` tiene los dos ficheros de la voz ``voice``."""
+    return all((folder / name).is_file() for name in speaking_voice_files(voice))
+
+
 class LocalVoiceInstallation:
-    """Mira en este ordenador si está el modelo de oír de los ajustes."""
+    """Mira en este ordenador si están el modelo de oír y la voz de los ajustes."""
 
     def __init__(self, settings: LocalVoiceSettings, models_dir: Path | None = None) -> None:
         self._settings = settings
@@ -92,8 +108,22 @@ class LocalVoiceInstallation:
     def listening_model_dir(self) -> Path:
         return listening_model_dir(self._settings, self._models_dir)
 
+    @property
+    def speaking_voice_dir(self) -> Path:
+        return speaking_voice_dir(self._settings, self._models_dir)
+
+    @property
+    def speaking_voice_model(self) -> Path:
+        """El modelo de la voz, el fichero que se le da a Piper."""
+        model, _config = speaking_voice_files(self._settings.speaking_voice.value)
+        return self.speaking_voice_dir / model
+
     def missing(self) -> tuple[str, ...]:
-        if listening_model_complete(self.listening_model_dir):
-            return ()
-        model = self._settings.listening_model.value
-        return (f"el modelo de oír (faster-whisper {model})",)
+        missing: list[str] = []
+        if not listening_model_complete(self.listening_model_dir):
+            model = self._settings.listening_model.value
+            missing.append(f"el modelo de oír (faster-whisper {model})")
+        voice = self._settings.speaking_voice.value
+        if not speaking_voice_complete(self.speaking_voice_dir, voice):
+            missing.append(f"la voz (Piper {voice})")
+        return tuple(missing)

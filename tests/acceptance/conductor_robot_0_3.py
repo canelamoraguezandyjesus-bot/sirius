@@ -65,6 +65,7 @@ from conductor_robot_0_2 import (
 )
 from piezas_del_robot import PiezaPendiente, Piezas
 
+from sirius.adapters.audio.voice_libraries import voice_tools
 from sirius.adapters.persistence.models import Base
 from sirius.config.local_voice import LocalVoiceSettings
 from sirius.config.settings import _CONFIG_FILE_NAME  # el nombre que usa `_config_file()`
@@ -72,15 +73,17 @@ from sirius.infrastructure.local_voice_installation import (
     INSTALL_COMMAND,
     LISTENING_MODEL_FILES,
     LocalVoiceInstallation,
+    speaking_voice_files,
 )
 from sirius.infrastructure.logging import LOG_FILE_NAME, configure_logging
 from sirius.infrastructure.paths import resolve_paths
 from sirius.ports.llm import LLMCompleted, LLMRequest, LLMStreamEvent, LLMTextDelta
-from sirius.ports.local_voice import ListeningEngines, TurnSignal
+from sirius.ports.local_voice import ListeningEngines, SpeakingEngines, TurnSignal
 
 #: Las letras de la tabla de piezas de ADR-241 que ya han entrado en ``main``.
-#: La A es la nota de arranque y estas pruebas; la B, oír en local (ADR-242).
-PIEZAS_ENTREGADAS: frozenset[str] = frozenset({"A", "B"})
+#: La A es la nota de arranque y estas pruebas; la B, oír en local (ADR-242); la C,
+#: hablar en local (ADR-243).
+PIEZAS_ENTREGADAS: frozenset[str] = frozenset({"A", "B", "C"})
 
 #: Qué trae cada pieza, con las palabras de la tabla de ADR-241.
 PIEZAS: Mapping[str, str] = {
@@ -823,6 +826,41 @@ class AltavozDeMentira:
         self._sonando = None
 
 
+# --- La voz y el altavoz, enchufados a Sirius -----------------------------------------
+#
+# Como los del oído: traducen los puertos de la voz a los dobles y nada más. La voz con
+# que habla la dice Sirius, con el modelo que le da a cargar.
+
+
+class _VozEnchufada:
+    def __init__(self, voz: VozDeMentira, nombre: str) -> None:
+        self._voz = voz
+        self._nombre = nombre
+
+    def say(self, text: str) -> Sonido:
+        return self._voz.di(text, self._nombre)
+
+
+class _AltavozEnchufado:
+    def __init__(self, altavoz: AltavozDeMentira) -> None:
+        self._altavoz = altavoz
+
+    def play(self, sound: Sonido) -> None:
+        self._altavoz.suena(sound)
+
+    @property
+    def playing(self) -> bool:
+        return self._altavoz.sonando is not None
+
+    @property
+    def latency(self) -> float:
+        # Suena en el acto, como apunta el altavoz de mentira.
+        return 0.0
+
+    def stop(self) -> None:
+        self._altavoz.para()
+
+
 @dataclass
 class RelojDeMentira:
     """El reloj con el que Sirius mide cuánto hace que acabó la charla."""
@@ -1338,10 +1376,16 @@ class ConductorDeVoz(Conductor):
         # orden de instalar, antes de la foto del disco y del vigilante. Sus ficheros no son
         # un modelo, porque oye el doble; lo que es de verdad es que Sirius mire que estén
         # (``quita_los_modelos_de_voz`` los quita).
-        self._modelo_de_oir = LocalVoiceInstallation(LocalVoiceSettings()).listening_model_dir
+        instalacion = LocalVoiceInstallation(LocalVoiceSettings())
+        self._modelo_de_oir = instalacion.listening_model_dir
         self._modelo_de_oir.mkdir(parents=True, exist_ok=True)
         for nombre in (*LISTENING_MODEL_FILES, "vocabulary.txt"):
             (self._modelo_de_oir / nombre).write_bytes(b"un modelo de mentira")
+        # Y la voz de hablar, donde la deja la misma orden.
+        self._voz_de_hablar = instalacion.speaking_voice_dir
+        self._voz_de_hablar.mkdir(parents=True, exist_ok=True)
+        for nombre in speaking_voice_files(LocalVoiceSettings().speaking_voice.value):
+            (self._voz_de_hablar / nombre).write_bytes(b"una voz de mentira")
         self._carpetas_vigiladas = (
             carpeta,
             self._temporal,
@@ -1435,6 +1479,19 @@ class ConductorDeVoz(Conductor):
                 microphone=_MicroEnchufado(self.micro),
                 detector=_OidoEnchufado(self.oido),
                 transcriber=_TranscriptorEnchufado(self.transcriptor),
+            )
+
+        return motores
+
+    def _motores_de_hablar(self) -> Callable[[Path], SpeakingEngines[Any]]:
+        """La voz de Sirius, con los dobles donde irían Piper y el altavoz; los monta la raíz
+        de composición de producción, que les da a cargar el modelo de la voz de sus
+        ajustes: su nombre es la voz con que habla."""
+
+        def motores(modelo: Path) -> SpeakingEngines[Any]:
+            return SpeakingEngines(
+                voice=_VozEnchufada(self.voz, modelo.name.removesuffix(".onnx")),
+                speaker=_AltavozEnchufado(self.altavoz),
             )
 
         return motores
@@ -1539,6 +1596,7 @@ class ConductorDeVoz(Conductor):
     def quita_los_modelos_de_voz(self) -> None:
         """Deja a Sirius sin los modelos de oír y hablar, como un ordenador sin instalarlos."""
         shutil.rmtree(self._modelo_de_oir)
+        shutil.rmtree(self._voz_de_hablar)
 
     def orden_para_instalar_la_voz(self) -> str:
         """La orden que el propietario tiene que ejecutar para instalar los modelos de la voz."""
@@ -1564,7 +1622,7 @@ class ConductorDeVoz(Conductor):
         Se lee de los módulos de los procesadores que monta la raíz de composición
         de producción, no de una constante.
         """
-        raise _pendiente("C")
+        return voice_tools()
 
     # --- Pieza D: escucha siempre y a quién le hablan ---
 

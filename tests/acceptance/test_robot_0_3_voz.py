@@ -554,7 +554,11 @@ def test_del_final_de_su_voz_al_primer_sonido_la_tuberia_anade_menos_de_200_ms(
         leidos_antes = len(conductor.micro.leidos)
         sonados_antes = len(conductor.altavoz.sonados)
         turno = conductor.oye(f"Sirius, pregunta número {n}.")
-        assert turno.hablado == (f"Respuesta {n} de Sirius.",)
+        # Dijo lo que escribió, una frase. No es la respuesta n del modelo grabador: la
+        # charla de la 0.2 le pide un resumen en el turno 18, y el resumen se lleva una
+        # (ADR-243, al pasar por primera vez esta prueba).
+        assert turno.contestado is not None
+        assert turno.hablado == (turno.contestado,)
         # Del último sonido con su voz que leyó el micro al primero que sonó por el
         # altavoz, con los relojes de los dobles.
         fin_de_su_voz = max(_momentos_de_su_voz(conductor, leidos_antes))

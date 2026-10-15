@@ -27,7 +27,7 @@ from sirius.ports.llm import (
     LLMStreamEvent,
     LLMTextDelta,
 )
-from sirius.ports.local_voice import ListeningEngines, TurnSignal
+from sirius.ports.local_voice import ListeningEngines, SpeakingEngines, TurnSignal
 from sirius.presentation.error_messages import describe_error
 
 pytestmark = pytest.mark.integration
@@ -102,6 +102,28 @@ class _Transcriptor:
         return self.dira
 
 
+class _Voz:
+    """Apunta cada frase que Sirius dice en voz alta."""
+
+    def __init__(self) -> None:
+        self.frases: list[str] = []
+
+    def say(self, text: str) -> str:
+        self.frases.append(text)
+        return text
+
+
+class _Altavoz:
+    playing = False
+    latency = 0.0
+
+    def play(self, sound: str) -> None:
+        del sound
+
+    def stop(self) -> None:
+        pass
+
+
 class _TodoInstalado:
     install_command = "la orden de instalar"
 
@@ -115,6 +137,7 @@ class _Sirius:
     modelo: _Modelo
     micro: _Micro
     transcriptor: _Transcriptor
+    voz: _Voz
     oido: LocalListening[str]
     codigo: int = 0
 
@@ -148,14 +171,15 @@ def sirius(tmp_path: Path) -> Iterator[_Sirius]:
     deps.send_message_use_case.set_llm_provider(modelo)
     if not deps.initial_project_use_case.is_configured():
         deps.initial_project_use_case.create_initial_project("Charla", "Charlar")
-    micro, transcriptor = _Micro(), _Transcriptor()
+    micro, transcriptor, voz = _Micro(), _Transcriptor(), _Voz()
     oido: LocalListening[str] = LocalListening(
         chat=deps.send_message_use_case,
         installation=_TodoInstalado(),
         load_engines=lambda: ListeningEngines(micro, _Detector(), transcriptor),
+        load_speaking=lambda: SpeakingEngines(voz, _Altavoz()),
         memory_suggestions=deps.propose_memory_suggestion_use_case,
     )
-    yield _Sirius(deps, modelo, micro, transcriptor, oido)
+    yield _Sirius(deps, modelo, micro, transcriptor, voz, oido)
     deps.close_database_connections()
 
 
@@ -167,6 +191,9 @@ def test_una_orden_de_olvido_por_voz_no_sale_por_la_consola(sirius: _Sirius) -> 
     assert dicho[0] == f"Tú: {FORGET_ABOUT_STORED}"
     assert dicho[1].startswith("Sirius: ")
     assert not any("Ramiro" in linea for linea in dicho)
+    # Ni por el altavoz: dice la respuesta de la orden, que ya no lo nombra (ADR-243).
+    assert sirius.voz.frases
+    assert not any("Ramiro" in frase for frase in sirius.voz.frases)
 
 
 def test_si_la_charla_falla_a_medias_la_consola_lo_ensena_como_la_ventana(
