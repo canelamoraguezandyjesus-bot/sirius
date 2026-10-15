@@ -8,11 +8,15 @@ interfaz.
 
 Es **síncrono a propósito**. Las llamadas que tardan —transcribir y sintetizar—
 las envuelve la presentación en el patrón ``QThreadPool``/señales que Sirius ya
-usa para enviar mensajes, igual que ``SendMessageUseCase``. Aquí no hay hilos.
+usa para enviar mensajes, igual que ``SendMessageUseCase``. Aquí no se crean
+hilos, pero se llega desde dos: se sintetiza en uno y se calla desde el de la
+interfaz. Callar invalida lo que aún se esté sintetizando: eso ya no suena
+(ronda 3 de Codex sobre la PR #689, ADR-244).
 """
 
 from __future__ import annotations
 
+import threading
 from collections.abc import Callable
 from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass, field, replace
@@ -218,6 +222,10 @@ class StudioVoiceUseCase:
         self._budget = budget_guard
         self._spoken_audio: Path | None = None
         self._speech_finished: Callable[[], None] | None = None
+        #: Callar y empezar a sonar no se cruzan: o suena antes y callar lo para, o no suena.
+        self._playing_lock = threading.Lock()
+        #: Cuántas veces se ha callado la voz: lo que se sintetizaba antes ya no suena.
+        self._silenced = 0
 
     def set_speech_finished_callback(self, callback: Callable[[], None] | None) -> None:
         """Avisa cuando la voz termina **sola**, no cuando se la detiene.
@@ -314,6 +322,8 @@ class StudioVoiceUseCase:
         pronounceable = prepare_speech_text(text, read_code=read_code)
         if not pronounceable:
             return NothingToSay()
+        with self._playing_lock:
+            silenced = self._silenced
 
         # Aquí el estimado es casi exacto: los caracteres se conocen ANTES.
         estimado = (
@@ -337,12 +347,18 @@ class StudioVoiceUseCase:
                 )
 
             self._record_speech(synthesized)
-        return self._play(synthesized)
+        return self._play(synthesized, silenced)
 
     def stop_speaking(self) -> None:
-        """Detiene la reproducción y limpia el temporal. Idempotente."""
-        self._playback.stop()
-        self._discard_spoken_audio()
+        """Detiene la reproducción y limpia el temporal. Idempotente.
+
+        Lo que aún se esté sintetizando ya no suena: salir de Model Studio o pulsar
+        «parar» lo calla también.
+        """
+        with self._playing_lock:
+            self._silenced += 1
+            self._playback.stop()
+            self._discard_spoken_audio()
 
     def set_muted(self, muted: bool) -> None:
         """Silencia o reactiva la salida hablada. Idempotente."""
@@ -376,20 +392,25 @@ class StudioVoiceUseCase:
 
     # --- Interior --------------------------------------------------------
 
-    def _play(self, synthesized: SynthesizedSpeech) -> SpeakOutcome:
-        # Una reproducción nueva sustituye a la anterior: nunca dos voces a la
-        # vez, y el temporal de la anterior se va con ella.
-        self._playback.stop()
-        self._discard_spoken_audio()
-        self._spoken_audio = synthesized.audio_path
-
-        error = self._playback.play(synthesized.audio_path, self._on_playback_finished)
-        if isinstance(error, PlaybackError):
+    def _play(self, synthesized: SynthesizedSpeech, silenced: int) -> SpeakOutcome:
+        with self._playing_lock:
+            if silenced != self._silenced:
+                # La callaron mientras se sintetizaba: no suena, y el temporal se va.
+                self._capture.discard(synthesized.audio_path)
+                return NothingToSay()
+            # Una reproducción nueva sustituye a la anterior: nunca dos voces a la
+            # vez, y el temporal de la anterior se va con ella.
+            self._playback.stop()
             self._discard_spoken_audio()
-            return VoiceFailure(
-                "No he podido reproducir la voz, pero la respuesta está en pantalla."
-            )
-        return SpeechStarted()
+            self._spoken_audio = synthesized.audio_path
+
+            error = self._playback.play(synthesized.audio_path, self._on_playback_finished)
+            if isinstance(error, PlaybackError):
+                self._discard_spoken_audio()
+                return VoiceFailure(
+                    "No he podido reproducir la voz, pero la respuesta está en pantalla."
+                )
+            return SpeechStarted()
 
     def _on_playback_finished(self) -> None:
         self._discard_spoken_audio()

@@ -926,12 +926,6 @@ class MainWindow(QMainWindow):
             self._report_voice_failure(outcome)
             return
         if isinstance(outcome, SpeechStarted):
-            if not self.model_studio_open:
-                # Fuera de Model Studio no se habla: lo que acabó de sintetizarse después
-                # de salir se calla en cuanto empieza, o el oído que escucha siempre lo
-                # oiría como un turno (ronda 2 de Codex sobre la PR #689, ADR-244).
-                self._silence_pending_speech()
-                return
             self._mirror_studio_state(StudioInteractionState.HABLANDO)
             return
         if isinstance(outcome, NothingToSay):

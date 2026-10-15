@@ -1079,10 +1079,11 @@ class _SintesisQueEspera(FakeTextToSpeech):
 def test_lo_que_acaba_de_sintetizarse_despues_de_salir_no_suena(
     qtbot: QtBot, tmp_path: Path
 ) -> None:
-    """Fuera de Model Studio no se habla (ronda 2 de Codex sobre la PR #689, ADR-244).
+    """Fuera de Model Studio no se habla (rondas 2 y 3 de Codex sobre la PR #689, ADR-244).
 
     Salir callaba lo que sonaba, pero no lo que aún se estaba sintetizando: sonaba
     después, ya fuera, y el oído que escucha siempre lo habría oído como un turno.
+    Callarlo cuando ya sonaba llegaba tarde: ni siquiera empieza, y su temporal se va.
     """
     database_path = _bootstrapped_database(tmp_path / "sirius.db")
     directory = tmp_path / "audio"
@@ -1101,6 +1102,8 @@ def test_lo_que_acaba_de_sintetizarse_despues_de_salir_no_suena(
     window.studio_page.exit_button.click()
     text_to_speech.sigue.set()
 
-    qtbot.waitUntil(lambda: bool(playback.played) and not playback.is_playing(), timeout=5000)
+    qtbot.waitUntil(lambda: not window._active_voice_workers, timeout=5000)
+    assert playback.played == []
+    assert list(directory.glob("voz-*.wav")) == []
     assert window._speech_busy is False
     assert window.studio_page.interaction_state is not StudioInteractionState.HABLANDO
