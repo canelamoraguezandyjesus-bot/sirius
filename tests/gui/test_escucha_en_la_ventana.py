@@ -816,6 +816,102 @@ def test_al_salir_de_model_studio_el_oido_espera_a_que_su_voz_calle(
         ventana._thread_pool.waitForDone(5000)
 
 
+def _sal_con_su_voz_a_medias(
+    qtbot: QtBot, ventana: ValidatedMainWindow, sintesis: _SintesisQueEspera
+) -> None:
+    """Entra en Model Studio, le pide algo y sale mientras su voz aún lo sintetiza."""
+    ventana.open_model_studio()
+    ventana.studio_page.input.setPlainText("¿por dónde empiezo?")
+    ventana.studio_page.send_button.click()
+    qtbot.waitUntil(sintesis.empezo.is_set, timeout=5000)
+    ventana.close_model_studio()
+
+
+def test_con_su_voz_en_marcha_al_salir_ni_el_boton_abre_el_oido_hasta_que_calle(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    # Ronda 6 de Codex sobre la PR #689 (ADR-244): el botón no esperaba como el oído, y
+    # abría el micro con la voz de Model Studio a punto de sonar. Se ve apagado, y aunque
+    # algo lo pulsara, el oído no se abre hasta que su voz calla.
+    sirius, ventana, sintesis, su_altavoz = _con_la_voz_de_model_studio(qtbot, tmp_path)
+    try:
+        _sal_con_su_voz_a_medias(qtbot, ventana, sintesis)
+
+        assert not ventana.mute_button.isEnabled()
+        ventana._handle_mute_clicked()
+        assert not sirius.micro.abierto, "con su voz a medias, ni el botón abre el oído"
+
+        sintesis.sigue.set()
+        qtbot.waitUntil(lambda: bool(su_altavoz.played), timeout=5000)
+        qtbot.waitUntil(lambda: not ventana._active_voice_workers, timeout=5000)
+        assert not ventana.mute_button.isEnabled()
+        ventana._handle_mute_clicked()
+        assert not sirius.micro.abierto, "mientras suena, tampoco"
+
+        su_altavoz.finish()
+
+        assert sirius.micro.abierto
+        assert ventana.mute_button.isEnabled()
+        assert (ventana.listening_label.text(), ventana.mute_button.text()) == (
+            LISTENING,
+            "Silencio",
+        )
+    finally:
+        sintesis.sigue.set()
+        ventana._thread_pool.waitForDone(5000)
+
+
+def test_en_silencio_y_con_su_voz_en_marcha_al_salir_el_boton_vuelve_cuando_calla(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    sirius, ventana, sintesis, su_altavoz = _con_la_voz_de_model_studio(qtbot, tmp_path)
+    ventana.mute_button.click()
+    try:
+        _sal_con_su_voz_a_medias(qtbot, ventana, sintesis)
+        assert not ventana.mute_button.isEnabled()
+
+        sintesis.sigue.set()
+        qtbot.waitUntil(lambda: bool(su_altavoz.played), timeout=5000)
+        qtbot.waitUntil(lambda: not ventana._active_voice_workers, timeout=5000)
+        su_altavoz.finish()
+
+        assert ventana.mute_button.isEnabled()
+        assert not sirius.micro.abierto
+        assert (ventana.listening_label.text(), ventana.mute_button.text()) == (
+            MUTED,
+            "Escuchar",
+        )
+    finally:
+        sintesis.sigue.set()
+        ventana._thread_pool.waitForDone(5000)
+
+
+def test_lo_que_pida_escuchar_mientras_su_voz_sigue_en_marcha_se_hace_cuando_calla(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    # Pedido en silencio con su voz a medias, no se pierde: se escucha cuando calla.
+    sirius, ventana, sintesis, su_altavoz = _con_la_voz_de_model_studio(qtbot, tmp_path)
+    ventana.mute_button.click()
+    try:
+        _sal_con_su_voz_a_medias(qtbot, ventana, sintesis)
+
+        ventana._handle_mute_clicked()
+
+        assert not sirius.micro.abierto
+        sintesis.sigue.set()
+        qtbot.waitUntil(lambda: bool(su_altavoz.played), timeout=5000)
+        qtbot.waitUntil(lambda: not ventana._active_voice_workers, timeout=5000)
+        assert not sirius.micro.abierto
+        su_altavoz.finish()
+
+        assert sirius.micro.abierto
+        assert not sirius.deps.local_listening.muted
+        assert ventana.listening_label.text() == LISTENING
+    finally:
+        sintesis.sigue.set()
+        ventana._thread_pool.waitForDone(5000)
+
+
 def test_si_lo_que_sintetizaba_al_salir_no_llega_a_sonar_el_oido_vuelve_al_acabar(
     qtbot: QtBot, tmp_path: Path
 ) -> None:

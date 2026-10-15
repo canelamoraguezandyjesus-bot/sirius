@@ -1957,7 +1957,17 @@ class MainWindow(QMainWindow):
 
     def _listen(self, start: Callable[[], str]) -> str:
         """Abre el oído con ``start`` y devuelve su aviso. Falle como falle, la ventana se
-        abre igual y lo dice, con el tipo de fallo y nada más."""
+        abre igual y lo dice, con el tipo de fallo y nada más.
+
+        Es el único sitio por el que la ventana abre el oído, y aquí espera a Model Studio:
+        mientras está abierto o su voz sigue en marcha, no lo abre y lo deja pedido para
+        cuando calle (``_resume_listening_after_studio``). Así ningún camino, tampoco el
+        botón, abre el micro con su voz a punto de sonar (ronda 6 de Codex sobre la PR
+        #689, ADR-244).
+        """
+        if self._studio_voice_holds():
+            self._listening_paused_for_studio = True
+            return ""
         try:
             return start()
         except Exception as error:
@@ -1987,22 +1997,31 @@ class MainWindow(QMainWindow):
         self._refresh_listening()
 
     def _resume_listening_after_studio(self) -> None:
-        """Al salir de Model Studio, el oído vuelve a oír si oía al entrar, en cuanto la voz
-        de Model Studio calla del todo, salvo que la ventana se esté cerrando: entonces ya no
-        la mira nadie.
+        """Al salir de Model Studio, el oído vuelve a oír si oía al entrar o si se le pidió
+        mientras tanto, salvo que la ventana se esté cerrando: entonces ya no la mira nadie.
+        Lo abre por ``_listen``, que mientras la voz de Model Studio siga en marcha no lo
+        abre y lo deja pedido otra vez; y hasta que calla, el botón del oído se ve apagado.
 
         Lo que Model Studio aún sintetizaba al salir suena después, como sin el oído; el oído
-        no lo oye porque espera (ronda 5 de Codex sobre la PR #689, ADR-244). Se mira al
-        salir, cada vez que un trabajador de la voz acaba y cuando acaba de sonar.
+        no lo oye porque espera (rondas 5 y 6 de Codex sobre la PR #689, ADR-244). Se mira
+        al salir, cada vez que un trabajador de la voz acaba y cuando acaba de sonar.
         """
-        if not self._listening_paused_for_studio or self.model_studio_open:
-            return
-        if self._active_voice_workers or self._studio_voice_sounding():
+        self.mute_button.setEnabled(not self._studio_voice_holds())
+        if not self._listening_paused_for_studio:
             return
         self._listening_paused_for_studio = False
         if self._local_listening is None or self._closed or self._close_requested:
             return
-        self._refresh_listening(self._listen(self._local_listening.start))
+        self._refresh_listening(self._listen(self._local_listening.unmute))
+
+    def _studio_voice_holds(self) -> bool:
+        """Si Model Studio está abierto o su voz sigue en marcha, sintetizando o sonando:
+        mientras, el oído no se abre."""
+        return (
+            self.model_studio_open
+            or bool(self._active_voice_workers)
+            or self._studio_voice_sounding()
+        )
 
     def _studio_voice_sounding(self) -> bool:
         use_case = self._studio_voice_use_case
