@@ -476,3 +476,15 @@ no abrían nada; tras un «1. » cuya línea abría luego un bloque, o tras el p
 números; entre las dos rayas de la marca de un bloque; con unas comillas sobrantes que
 sumaban tres con las de otro bloque; y con un bloque entero por detrás que hacía parecer
 seguro lo de delante. Cada uno tiene su prueba.
+
+**Ronda 6 de Codex**, sobre `9a453efb`, con la misma pregunta: un P2 que no se acepta,
+comprobado contra el código y contra lo aprobado. Pide que la voz calle también el código
+en línea, como `` `rm -rf /` ``, porque CommonMark lo tiene por código. Pero la prueba de
+aceptación de PA-R03-02 fija que lo dicho es lo escrito preparado por
+`prepare_speech_text`, sin quitar ni añadir nada (`tests/acceptance/test_robot_0_3_voz.py`),
+y esa función conserva a propósito lo de dentro del código en línea, porque es parte de la
+frase: sin él, «Instálalo con `pip`.» se oiría «Instálalo con.». El «sin código» de
+PA-R03-02 son los bloques, que la ventana enseña aparte y la voz dice que quedan en
+pantalla. Callar el código en línea cambiaría lo que Sirius dice, una decisión de producto
+que no es de esta pieza. No es de la familia de las rondas 2 a 5: no encuentra un caso
+que el reconocimiento del código no vea, sino que pide cambiar qué se dice.
