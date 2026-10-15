@@ -21,11 +21,13 @@ def _turno(
     *,
     por_que: LLMErrorKind | None = None,
     propuesto: str | None = None,
+    guardado: str | None = None,
 ) -> HeardTurn:
     """Un turno con el resultado de la charla tal como lo devuelve ella: los dos mensajes
-    guardados, el de Sirius con lo que escribió y cómo acabó, y su operación."""
+    guardados, el suyo como quedó (``guardado``, si no es lo oído) y el de Sirius con lo
+    que escribió y cómo acabó, y su operación."""
     hoy = datetime(2026, 10, 15, tzinfo=UTC)
-    tuyo = Message(1, 1, 1, MessageRole.USER, oido, hoy, operation_id="op-1")
+    tuyo = Message(1, 1, 1, MessageRole.USER, guardado or oido, hoy, operation_id="op-1")
     suyo = Message(2, 1, 2, MessageRole.SIRIUS, contesta, hoy, "op-1", 1, desenlace)
     resultado = SendMessageResult(desenlace, tuyo, suyo, None, error_kind=por_que)
     return HeardTurn(oido, True, resultado, propuesto)
@@ -154,6 +156,18 @@ def test_si_deja_de_oir_mientras_escucha_lo_dice_y_sale() -> None:
     assert dicho[1:] == ["Tú: Buenos días, Sirius.", "Sirius: Buenos días.", CHAT_LEAVES]
     assert pausas == 0
     assert oido.parado
+
+
+def test_tras_una_orden_de_olvido_ensena_lo_guardado_y_no_lo_oido() -> None:
+    # Ronda 14 de Codex sobre la PR #687: la ventana enseña lo guardado, que ya no dice
+    # qué había que olvidar; lo oído sí lo dice, y no puede salir por la consola.
+    turno = _turno("Olvida lo de mi vecino Ramiro.", "Hecho.", guardado="Olvida lo de…")
+    oido = _Oido(atenciones=[Attended(turns=(turno,))])
+
+    _, dicho, _ = _escucha(oido, 1)
+
+    assert dicho[1:] == ["Tú: Olvida lo de…", "Sirius: Hecho."]
+    assert not any("Ramiro" in linea for linea in dicho)
 
 
 def test_con_ctrl_c_tambien_cierra_el_micro() -> None:

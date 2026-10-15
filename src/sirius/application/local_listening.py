@@ -93,6 +93,10 @@ class HeardTurn:
     """Un turno de voz cerrado: lo que oyó, si era para él, lo que contestó la charla y lo
     que el modelo propuso recordar.
 
+    ``heard`` es lo oído, tal cual. Para enseñarlo está lo guardado,
+    ``result.user_message``: tras «olvida lo de…» lo guardado ya no dice qué había que
+    olvidar, y lo oído sí (ronda 14 de Codex sobre la PR #687).
+
     ``result`` es lo que devolvió la charla, entero y sin traducir: el mismo resultado que
     recibe la ventana con lo escrito, para que quien enseñe el turno lo enseñe como ella.
     Traducirlo a mano campo a campo perdió algo en tres rondas seguidas de Codex sobre la

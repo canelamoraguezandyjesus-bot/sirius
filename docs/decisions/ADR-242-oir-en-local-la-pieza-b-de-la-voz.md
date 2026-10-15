@@ -170,7 +170,7 @@ Medido el 14-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   la C (`tests/acceptance/test_dobles_del_conductor.py`). La tabla de
   `docs/evolution/PRUEBAS_0.3_DEL_ROBOT.md` pone PA-R03-01 en verde; PA-R03-08 sigue
   pendiente de la C.
-- **96 pruebas unitarias nuevas**: el servicio (`tests/unit/test_local_listening.py`), los
+- **97 pruebas unitarias nuevas**: el servicio (`tests/unit/test_local_listening.py`), los
   adaptadores de verdad con módulos de mentira (`tests/unit/test_local_listening_adapters.py`),
   la instalación y la orden de instalar (`tests/unit/test_local_voice_installation.py`), la
   orden de consola (`tests/unit/test_listen_console.py`) y la guarda de las descargas
@@ -181,7 +181,10 @@ Medido el 14-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   `tests/integration/test_memory_suggestion_automatic_trigger.py`: un turno de voz deja
   pendiente lo que el modelo propone recordar, con la charla y la base de verdad. Y dos
   del conductor en `tests/acceptance/test_dobles_del_conductor.py`: lo contestado solo
-  cuenta si la charla acabó bien, y varios turnos cerrados de una vez lo hacen fallar.
+  cuenta si la charla acabó bien, y varios turnos cerrados de una vez lo hacen fallar. Y
+  dos en `tests/integration/test_oir_en_consola.py`, que pasan por `sirius-oye` con la
+  charla y la base de verdad: una orden de olvido dicha por voz no sale por la consola, y
+  una respuesta que falla a medias sale como en la ventana.
 - **Mutación: todas caen en su ronda.** Quitar lo que suena antes de la voz, no mirar la
   instalación, escribir lo oído en el diario, mandar un turno vacío, no vaciar el turno,
   leer el micro parado, empezar un turno o transcribir con un fin de turno sin voz
@@ -262,8 +265,10 @@ Medido el 14-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   adivine el remedio, no dé la referencia del fallo, no diga que se canceló o deje un
   hueco si no escribió nada, que cambie la marca de fallido o el texto de cancelado,
   vistos desde la consola y desde la ventana, y que la ventana deje de usar el texto
-  compartido. Al cerrar la ronda 13 se han vuelto a pasar las 67 de las rondas 4 a 13, y
-  caen todas; las dos de la ronda 12 que vigilaban el porqué traducido a mano y el
+  compartido. Y las tres de la ronda 14: que la consola enseñe lo oído y no lo guardado,
+  vista también con la charla de verdad, y que calle lo escrito si falla, vista también
+  así. Al cerrar la ronda 14 se han vuelto a pasar las 70 de las rondas 4 a 14, y caen
+  todas; las dos de la ronda 12 que vigilaban el porqué traducido a mano y el
   aviso de la consola se retiran con lo que vigilaban. La de etiquetar con la generación
   del
   momento sobrevivió a la prueba que reproduce el caso de Codex, que para el hilo dentro
@@ -658,3 +663,29 @@ Lo que queda fuera, a propósito: los botones que la ventana pone en cada respue
 dos marcas, proponer un recuerdo a mano y reintentar) son para tocar, no texto; los trae
 la pieza D con la ventana. El juez no se pierde: puntúa desde la base las respuestas que
 no tienen nota, también las dichas por voz, cuando la ventana está abierta.
+
+**Ronda 14** (`fb3b1e3b`, 15-10-2026): un hallazgo P2, cierto. El revisor dice que llega
+tarde por goteo; cuenta como ronda.
+
+- **P2: tras «olvida lo de…» dicho por voz, `sirius-oye` seguía enseñando lo que había que
+  olvidar.** La orden guarda «Olvida lo de…», sin el tema, y la ventana enseña lo
+  guardado precisamente para quitarlo de la pantalla; la consola escribía lo oído, con el
+  tema entero.
+
+**Cuarta ronda de la familia** (11 a 14). La 13 dijo que la referencia era la ventana,
+pero copió la mitad de `_on_finished`: la respuesta, no lo suyo (`_settle_user_item`).
+Ahora se recorre `_on_finished` entero, llamada a llamada, y cada una queda en la consola
+o fuera con su porqué:
+
+- **Lo suyo, como quedó guardado**: en la consola, con el mismo texto que la ventana. Lo
+  oído tal cual sigue en el turno (`heard`), y el turno dice que para enseñarlo está lo
+  guardado.
+- **La respuesta con su marca, el aviso del fallo con su referencia y «Envío
+  cancelado.»**: en la consola desde la ronda 13, con las funciones de la ventana.
+- **Lo que el modelo propone recordar**: lo deja pendiente el oído, y la consola dice
+  dónde confirmarlo.
+- **Fuera, con su porqué.** Los botones de cada mensaje (las marcas, proponer a mano y
+  reintentar) son para tocar y los trae la pieza D. El modo de la charla y el aviso de
+  gasto la ventana los enseña en etiquetas fijas, no en el turno: la respuesta a «ponte
+  serio» ya sale seria, y la voz solo va a un modelo de este ordenador, que no gasta. La
+  página de Model Studio y su voz son otra cosa. Y el juez puntúa desde la base.

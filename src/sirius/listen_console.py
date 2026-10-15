@@ -15,10 +15,9 @@ from typing import Any
 
 from sirius.adapters.persistence.bootstrap import initialize_persistence
 from sirius.application.data_location import DataLocationUseCase
-from sirius.application.local_listening import LocalListening
-from sirius.application.send_message import SendMessageResult
+from sirius.application.local_listening import HeardTurn, LocalListening
 from sirius.composition_root import build_conversation_dependencies
-from sirius.domain.conversation import MessageStatus
+from sirius.domain.conversation import Message, MessageStatus
 from sirius.infrastructure.bootstrap_location_store import build_bootstrap_location_store
 from sirius.infrastructure.data_path_validator import build_data_path_validator
 from sirius.infrastructure.logging import configure_logging
@@ -40,10 +39,8 @@ def listen(
 ) -> int:
     """Escucha mientras ``keep_going`` lo diga y cuenta cada turno; cierra el micro al salir.
 
-    Cuenta todo lo que devuelve el oído (rondas 11, 12 y 13 de Codex sobre la PR #687).
-    Cada respuesta, como la ventana: lo que escribió con la marca de cómo acabó, también
-    lo que llegó a escribir si falló, y después el mismo aviso que ella. Si el modelo
-    propuso algo que recordar, dónde confirmarlo. Y si el oído deja de oír por su cuenta,
+    Cada turno lo cuenta como la ventana uno escrito, con lo guardado y no con lo oído
+    (rondas 11 a 14 de Codex sobre la PR #687). Y si el oído deja de oír por su cuenta,
     dice su aviso y sale, en vez de seguir esperando a un micro cerrado.
     """
     notice = listening.start()
@@ -55,13 +52,7 @@ def listen(
         while keep_going():
             attended = listening.attend()
             for turn in attended.turns:
-                say(f"Tú: {turn.heard}")
-                _say_reply(turn.result, say)
-                if turn.proposed is not None:
-                    say(
-                        f"Sirius propone recordar «{turn.proposed}»: lo confirmas o lo "
-                        "rechazas en Memoria y decisiones, en la ventana."
-                    )
+                _say_turn(turn, say)
             if attended.notice:
                 say(attended.notice)
                 return 1
@@ -72,16 +63,34 @@ def listen(
     return 0
 
 
-def _say_reply(result: SendMessageResult, say: Callable[[str], None]) -> None:
-    """La respuesta como la enseña la ventana al acabar un turno escrito (``_on_finished``):
-    lo que escribió con la marca de cómo acabó y, si no acabó bien, el mismo aviso."""
-    sirius = result.sirius_message
-    body = message_body(sirius.content, sirius.status).strip()
-    say(f"Sirius: {body}" if body else "Sirius:")
+def _say_turn(turn: HeardTurn, say: Callable[[str], None]) -> None:
+    """El turno como lo enseña la ventana al acabar uno escrito (``_on_finished``), línea a
+    línea y con lo guardado, nunca con lo oído:
+
+    - lo suyo, como quedó guardado (``_settle_user_item``): tras «olvida lo de…» ya no
+      dice qué había que olvidar (ronda 14 de Codex sobre la PR #687);
+    - la respuesta, con la marca de cómo acabó, también lo que llegó a escribir si falló;
+    - si no acabó bien, el mismo aviso que ella;
+    - y lo que el modelo propuso recordar, que ella deja en Memoria y decisiones.
+    """
+    result = turn.result
+    say(_line("Tú", result.user_message))
+    say(_line("Sirius", result.sirius_message))
     if result.outcome is MessageStatus.CANCELLED:
         say(CANCELLED_SEND)
     elif result.outcome is MessageStatus.FAILED:
-        say(failed_send_message(result.error_kind, sirius.operation_id))
+        say(failed_send_message(result.error_kind, result.sirius_message.operation_id))
+    if turn.proposed is not None:
+        say(
+            f"Sirius propone recordar «{turn.proposed}»: lo confirmas o lo rechazas en "
+            "Memoria y decisiones, en la ventana."
+        )
+
+
+def _line(who: str, message: Message) -> str:
+    """Una línea de la charla con el texto que enseña la ventana de ese mensaje."""
+    body = message_body(message.content, message.status).strip()
+    return f"{who}: {body}" if body else f"{who}:"
 
 
 def _data_paths() -> SiriusPaths | None:
