@@ -126,11 +126,17 @@ Se adopta la opción 2.
   también lo que espera en cola (`playing`), cuánto tarda en sonar lo que se le da
   (`latency`) y calla (`stop`), sin fallar.
 - **El corte en frases** (`src/sirius/application/speech_cutter.py`): lo que la charla va
-  escribiendo se acumula, y se suelta un trozo cuando acaba en un final de frase seguido
-  de un blanco o en un salto de línea, con los bloques de código cerrados, y preparado
-  con `prepare_speech_text` ya no enseña marcas sin cerrar. Al acabar la charla se suelta
-  lo que quede. Lo dicho, unido, es lo que da `prepare_speech_text` con la respuesta
-  entera, salvo los blancos.
+  escribiendo se acumula, y se corta detrás de un final de frase y su blanco, o de un
+  salto de línea, solo si cortar no cambia nada. Lo de delante está cerrado: sin un
+  bloque de código abierto y, preparado con `prepare_speech_text`, sin marcas a medias.
+  Lo de detrás ya dice algo y no empieza por una marca que al cerrarse pueda dejar a la
+  vista una puntuación, que se pegaría a la frase de antes; la línea que abre un bloque
+  de código sí vale, para que la frase que lo presenta no espere al bloque. Y lo de
+  delante y lo de detrás, preparados por separado, dan lo mismo que todo lo llegado
+  preparado de una vez. Al acabar la charla se suelta lo que quede. Lo dicho, unido, es
+  lo que da `prepare_speech_text` con la respuesta entera, salvo los blancos y una frase
+  de solo puntos, que no se dice. Lo que no puede ver es lo que aún no ha llegado: una
+  marca que se empareja con otra de una frase posterior, como en `*a*. Hola b*`.
 - **El oído habla** (`src/sirius/application/local_listening.py`): entrega cada turno a
   la charla con un `on_delta` que alimenta el corte, y cada frase cerrada se pide a la
   voz y suena en cuanto está. Antes de la primera cierra el micro, y lo vuelve a abrir
@@ -139,7 +145,8 @@ Se adopta la opción 2.
   que el fallo salga a la charla, que acaba y guarda la respuesta entera, y después deja
   de oír con su aviso («No puedo hablarte: la voz ha fallado (…)» o «el altavoz»), sin la
   orden de instalar. Parar le calla. Si la voz no carga al arrancar, no abre el micro y
-  aconseja la orden, como con el oído.
+  aconseja la orden, como con el oído. Si al volver a escuchar aún suena lo último que
+  dijo, no abre el micro hasta que calle.
 - **La charla avisa cuando acaba** (`SendMessageUseCase.send_message`, `on_completed`):
   en cuanto la respuesta acaba bien y está guardada, antes de lo que la charla hace
   después del turno. El oído dice ahí lo que le quedaba. Esperar a que `send_message`
@@ -151,10 +158,12 @@ Se adopta la opción 2.
   ADR-241, cargada solo desde su fichero y su `.onnx.json`, en
   `modelos\voz\piper\es_ES-davefx-medium\`, una carpeta por voz. Piper apunta en DEBUG
   el texto de cada frase; su registrador queda en WARNING.
-- **El altavoz de verdad**: un flujo de salida de `sounddevice`, mono, de 16 bits y a la
-  frecuencia de la voz, que se abre al cargarla y sigue abierto. Da por acabado lo que
-  dijo cuando ha salido lo último, con la latencia del flujo y un cuarto de segundo más,
-  la cola de su voz en la habitación: hasta entonces el oído no abre el micro.
+- **El altavoz de verdad**: un flujo de salida de `sounddevice`, mono, de 16 bits, a la
+  frecuencia de la voz y en bloques de 512 muestras, que se abre al cargarla y sigue
+  abierto. Da por acabado lo que dijo cuando ha salido lo último, con la latencia del
+  flujo y un cuarto de segundo más, la cola de su voz en la habitación: hasta entonces el
+  oído no abre el micro. Callar tira lo que esperaba; lo que PortAudio ya tiene sale
+  igual y, hasta que sale, sigue sonando.
 - **Los ajustes** ganan la voz como elección cerrada (`SpeakingVoice`); la instalación la
   mira, y la orden de instalar la baja con `download_voice` de Piper a una carpeta aparte,
   la pone en su sitio solo si trae sus dos ficheros, mira las bibliotecas de hablar y
@@ -166,7 +175,8 @@ Se adopta la opción 2.
   `_import` privado del oído.
 - **`sirius-oye`** dice las respuestas por el altavoz, además de escribirlas.
 - **Lo que tarda, para E-R03-02.** Cada turno lleva cuánto pasó desde que el detector
-  dejó de oír su voz hasta que sonó la primera frase, contando la latencia del altavoz;
+  dejó de oír su voz hasta que sonó la primera frase, contando lo más que tarda el
+  altavoz en sonar: lo que puede esperar al siguiente bloque y la latencia del flujo;
   el diario apunta la cifra y nada más, y `sirius-oye` dice al salir el P95 de los turnos
   de esa vez. La cifra empieza cuando Silero confirma que ha callado, 0,2 s después
   (`VAD_STOP_SECS` de Pipecat), y la consola lee el micro cada 0,03 s: por eso E-R03-02
@@ -190,11 +200,13 @@ Medido el 15-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   enseña su PR en su comprobación»): la prueba unitaria que sigue el orden de todo lo que pasa en un turno
   ve cerrarse el micro antes de la primera frase y abrirse después de la última, y la
   mutación que no lo cierra hace que su propio eco entre como un turno en PA-R03-03.
-- **66 pruebas unitarias nuevas**: el servicio que oye y habla (15 más en
-  `tests/unit/test_local_listening.py`, de 30 a 45), el corte en frases (21 en
-  `tests/unit/test_speech_cutter.py`, entre ellas lo mismo dicho de 302 maneras de trocear
-  14 respuestas, 4 228 troceos, que con la respuesta entera), Piper y el altavoz con
-  módulos de mentira (14 en `tests/unit/test_local_speaking_adapters.py`), la
+- **88 pruebas unitarias nuevas**: el servicio que oye y habla (16 más en
+  `tests/unit/test_local_listening.py`, de 30 a 46), el corte en frases (41 en
+  `tests/unit/test_speech_cutter.py`; entre ellas, lo mismo dicho que con el texto entero
+  de 302 maneras de trocear 18 respuestas, 5 436 troceos, y de 12 maneras de trocear 500
+  textos al azar hechos de palabras, puntuación, saltos, sangrías y marcas, en los que el
+  corte de `e41ff85f` falla 107 veces), Piper y el altavoz con
+  módulos de mentira (15 en `tests/unit/test_local_speaking_adapters.py`), la
   instalación y la orden de instalar (12 más, de 24 a 36), `sirius-oye` y lo que tarda
   (3 más, de 13 a 16) y que el oído importa lo que dice `voice_tools` (1 más en
   `tests/unit/test_local_listening_adapters.py`). Y 4 de integración: la charla avisa de
@@ -210,7 +222,13 @@ Medido el 15-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   casi siempre lo paraba; no si una comilla de código suelta delante se empareja con
   él, y ahora hay prueba de eso) y un remedio adivinado en mayúscula, que la comprobación
   de la orden no veía. Las 85 mutaciones de la pieza B, puestas al día para el código
-  nuevo, siguen cayendo las 85.
+  nuevo, siguen cayendo las 85. Tras la ronda 1 de Codex y el corte nuevo son 92: las
+  del corte se rehicieron para sus tres condiciones, 18, y caen las 92. Una más no se
+  cuenta porque es equivalente: quitar que lo de detrás tenga que decir algo no cambia
+  nada, porque con lo de detrás vacío la frase y un blanco nunca dan lo llegado, que no
+  acaba en blanco.
+- **El corte, también en la sesión**: 8 000 textos al azar, la mitad con marcas, cada
+  uno troceado de 42 maneras, sin una diferencia con el texto entero.
 - **Lo que tarda, con los dobles**: PA-R03-09 da un P95 por debajo de 200 ms en 20 turnos,
   con la charla de la 0.2 dentro; la cifra de verdad la da `sirius-oye` en E-R03-02.
 - **Piper, en el contenedor**: `piper-tts` 1.8.0 se instala con el extra, importa y pasa
@@ -238,6 +256,12 @@ Medido el 15-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   respuesta n del modelo grabador. La charla de la 0.2 le pide un resumen en el turno 18,
   y el resumen se lleva una; ahora mira que dijo lo que escribió, con lo que guardó la
   charla. Lo que mide, del final de su voz al primer sonido, no cambia.
+- **Una frase sale cuando asoma lo que la sigue**, no al llegar su blanco: el corte
+  necesita verlo para saber que no la cambia. Troceadas como las da el modelo, palabra a
+  palabra con su blanco delante, las 18 respuestas de la prueba sacan la primera frase
+  igual que el corte de `e41ff85f` en 12 y un trozo más tarde en 6: cuando lo que sigue
+  es una viñeta, un guion con sangría, la línea de un bloque de código, una raya o una
+  puntuación.
 - Model Studio no cambia: `prepare_speech_text` se usa tal cual.
 
 ## Alternativas descartadas y por qué
@@ -280,4 +304,37 @@ ordenador ni se baje solo; que lo que falle al hablar no tumbe a quien escucha; 
   sobrevivían. Todo arreglado, cada cosa con la prueba que la ve.
 - **Vuelta 2.** Nada que cambie lo que hace: dos descripciones de pruebas y un
   comentario del conductor, puestos al día con la pieza C.
+- **Vuelta 3**, sobre los arreglos de la ronda 1 de Codex. Un caso nuevo de la prueba de
+  los troceos falló con el código bueno: `Hola. ... Adiós.` entero da `Hola.. Adiós.`, y
+  a trozos, `Hola. Adiós.`. Buscando por qué salieron más de la misma familia que el
+  hallazgo del corte, un trozo preparado fuera de su sitio: una puntuación detrás de los
+  blancos, que el texto entero pega a la frase de antes, y la sangría de una línea, que
+  dice si un guion es una viñeta. Con tres de la misma familia no se parchea: la raíz va
+  en la ronda 1, abajo. Y una lección de método: un caso nuevo de una prueba se pasa
+  primero con el código bueno, no solo con las mutaciones.
+
+**Ronda 1 de Codex**, sobre `e41ff85f`: tres P2, los tres ciertos y comprobados contra el
+código antes de tocarlo.
+
+- **Callar declaraba al altavoz callado con sonido aún en PortAudio**
+  (`src/sirius/adapters/audio/local_speaking.py`): vaciaba la cola y daba por acabado lo
+  que sonaba, aunque lo que PortAudio ya tenía siguiera saliendo, y un `start` justo
+  después habría abierto el micro con su voz aún sonando. Ahora callar solo tira la cola,
+  `playing` sigue diciendo que suena hasta que sale lo ya dado y su cola, y `start` no
+  abre el micro mientras suene: escucha ya y lo abre al callar, como tras hablar. No se
+  aborta el flujo: volver a arrancarlo puede fallar y dejar el altavoz mudo con la cola
+  llenándose, y en `sirius-oye` parar es salir. Cortarle en el acto es de la pieza E.
+- **La medida de E-R03-02 no contaba la espera al siguiente bloque**: la primera frase
+  se daba por sonando al dejarla en la cola, más la latencia del flujo, y entra en
+  PortAudio en la siguiente llamada. Ahora el flujo va en bloques fijos de 512 muestras y
+  el altavoz dice lo más que tarda: un bloque más la latencia. La cifra no puede quedarse
+  corta por eso; puede pasarse de un bloque, 23 ms.
+- **El corte trataba como principio de línea lo que seguía a una frase**: con
+  `Uno. ---` o `Uno. - dos`, la respuesta entera dice la raya o el guion, y a trozos se
+  borraban como si fueran una raya horizontal o una viñeta. El primer arreglo preparaba
+  el trozo con una letra delante, y la revisión propia encontró dos casos más de la misma
+  familia (vuelta 3). Se fue a la raíz: el corte ya no imita dónde cae cada trozo, sino
+  que comprueba que cortar no cambia nada, con las tres condiciones de «Decisión». La
+  prueba de los troceos gana los ejemplos de la ronda y otros dos, y hay otra con 500
+  textos al azar.
 

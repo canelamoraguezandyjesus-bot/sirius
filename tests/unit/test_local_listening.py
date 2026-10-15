@@ -266,6 +266,8 @@ class _Altavoz:
     def __init__(self, eventos: list[str]) -> None:
         self.eventos = eventos
         self.sigue_sonando = False
+        #: Como el de verdad: lo que ya estaba saliendo sigue sonando después de callar.
+        self.suena_tras_callar = False
         self.falla: Exception | None = None
         self.latency = 0.0
 
@@ -279,7 +281,7 @@ class _Altavoz:
         return self.sigue_sonando
 
     def stop(self) -> None:
-        self.sigue_sonando = False
+        self.sigue_sonando = self.sigue_sonando and self.suena_tras_callar
         self.eventos.append("calla")
 
 
@@ -1063,3 +1065,25 @@ def test_mide_desde_que_deja_de_oir_su_voz_hasta_que_suena_la_primera_frase(
     assert turno.first_sound_delay == 0.9375
     assert "Turno de voz: primer sonido a 937 ms de dejar de oír su voz" in caplog.text
     assert "zarzamora" not in caplog.text.casefold()
+
+
+def test_si_al_volver_aun_suena_lo_que_dijo_no_abre_el_micro_hasta_que_calle() -> None:
+    # Ronda 1 de Codex sobre la PR #688: parar no calla lo que el altavoz ya tenía, y
+    # abrir el micro entonces dejaría entrar su propia voz.
+    oido = _Oido()
+    oido.servicio.start()
+    oido.altavoz.sigue_sonando = True
+    oido.altavoz.suena_tras_callar = True
+    oido.suena(voz("Cuéntame"), FIN)
+    oido.servicio.stop()
+
+    assert oido.servicio.start() == ""
+
+    assert oido.servicio.listening
+    assert not oido.micro.abierto
+    assert oido.suena(voz("R: Cuéntame"), FIN) == Attended(), "su propia voz se pierde"
+    oido.altavoz.sigue_sonando = False
+    assert oido.servicio.attend() == Attended()
+    assert oido.micro.abierto
+    assert [t.heard for t in oido.suena(voz("Hola"), FIN).turns] == ["Hola"]
+    assert oido.charla.mensajes == ["Cuéntame", "Hola"]

@@ -122,9 +122,9 @@ en su gráfica.
 - **Pasa si** el P95 de los 20 turnos queda por debajo de 1,5 s.
 - **Cómo se lee, desde la pieza C** (ADR-243). La orden es `sirius-oye`: al salir dice el
   P95 de los turnos de esa vez. Sirius cuenta desde que su detector deja de oír su voz,
-  que Silero confirma 0,2 s después de que calle, y lee el micro cada 0,03 s; la
-  latencia del altavoz sí va dentro. Así que los 1,5 s desde que él calla son un P95 por
-  debajo de 1,25 s en lo que dice la orden.
+  que Silero confirma 0,2 s después de que calle, y lee el micro cada 0,03 s; lo más que
+  tarda el altavoz en sonar sí va dentro. Así que los 1,5 s desde que él calla son un P95
+  por debajo de 1,25 s en lo que dice la orden.
 - **Resultado:** pendiente.
 
 ### E-R03-03

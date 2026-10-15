@@ -4,11 +4,28 @@ La voz del robot dice la respuesta desde la primera frase, mientras el modelo si
 escribiendo (PA-R03-02). Lo que dice es lo que da ``prepare_speech_text``, la misma
 función de Model Studio, sin quitar ni añadir nada: solo cambia el corte en frases.
 
-Para que, trozo a trozo, salga lo mismo que con la respuesta entera, solo se suelta un
-trozo cerrado: acaba en un final de frase seguido de un blanco o en un salto de línea,
-deja cerrados los bloques de código, y preparado ya no enseña marcas a medias (``*``,
-`` ` ``, ``[``, ``]`` o un ``_`` que no va entre letras), que ``prepare_speech_text``
-solo quita cuando se cierran. Lo demás espera a cerrarse o a que la charla acabe.
+Para que, trozo a trozo, salga lo mismo que con la respuesta entera, no se imita dónde
+cae cada trozo: se comprueba que cortar no cambia nada (ronda 1 de Codex sobre la PR
+#688). Se corta detrás de un final de frase y su blanco, o de un salto de línea, y solo
+si se cumplen tres cosas:
+
+- lo de delante está cerrado: sin un bloque de código abierto y, preparado, sin marcas a
+  medias (``*``, `` ` ``, ``[``, ``]`` o un ``_`` que no va entre letras), que
+  ``prepare_speech_text`` solo quita cuando se cierran;
+- lo de detrás ya dice algo, y no empieza por una marca que al cerrarse pueda dejar a la
+  vista una puntuación, que se pegaría a la frase de antes. Una línea que abre un bloque
+  de código sí vale: cerrado, se dice «Te dejo el código en pantalla.», y la frase que lo
+  presenta no espera al bloque entero;
+- lo de delante y lo de detrás, preparados por separado, dan lo mismo que todo lo llegado
+  preparado de una vez. Así una puntuación detrás de los blancos se queda con su frase, y
+  una raya, un guion o una almohadilla detrás de una frase, o la sangría de una línea, no
+  cambian de sentido al cortar.
+
+Lo demás espera a que llegue más o a que la charla acabe. Lo que aún no ha llegado no se
+ve: una marca que la respuesta entera empareja con otra de una frase posterior, como en
+«*a*. Hola b*», aquí ya estaba cerrada. Y una frase de solo puntos no se dice, como no
+la dice ``prepare_speech_text`` cuando no queda otra cosa: la que deja delante si la
+respuesta empieza por algo que no se lee, como una raya.
 """
 
 from __future__ import annotations
@@ -21,6 +38,12 @@ from sirius.application.prepare_speech_text import prepare_speech_text
 _CUT = re.compile(r"[.!?…][\"'»”)\]]*\s+|\n")
 #: Lo que deja una marca sin cerrar al prepararlo: un trozo así todavía no se dice.
 _OPEN_MARK = re.compile(r"[*`\[\]]|(?<!\w)_|_(?!\w)")
+#: Con qué puede empezar, ya preparado, lo que sigue a un corte: no con una marca que al
+#: cerrarse pueda dejar a la vista una puntuación, que se pegaría a la frase de antes. Un
+#: guion, una estrella o un más con su blanco que siguen ahí ya no son una viñeta.
+_SETTLED_START = re.compile(r"[-*+]\s|[^*_`\[+\-]")
+#: La línea que abre un bloque de código: cerrado, se dice «Te dejo el código en pantalla.».
+_CODE_BLOCK_START = re.compile(r"\s*```(?:\w[\w+-]*)?\n")
 #: Entre frase y frase, ya preparado.
 _BETWEEN_SENTENCES = re.compile(r"(?<=[.!?…])\s+")
 _FENCE = "```"
@@ -35,28 +58,37 @@ class SpeechCutter:
     def feed(self, text: str) -> list[str]:
         """Añade ``text`` y devuelve las frases cerradas que aún no había dado."""
         self._pending += text
-        for match in reversed(list(_CUT.finditer(self._pending))):
-            head = self._pending[: match.end()]
+        arrived = prepare_speech_text(self._pending)
+        for cut in reversed(list(_CUT.finditer(self._pending))):
+            end = _piece_end(cut)
+            head, rest = self._pending[:end], self._pending[end:]
             if head.count(_FENCE) % 2:
                 continue
-            prepared = _prepare(head)
-            if _OPEN_MARK.search(prepared):
+            said = prepare_speech_text(head)
+            if _OPEN_MARK.search(said):
                 continue
-            self._pending = self._pending[match.end() :]
-            return _sentences(prepared)
+            then = prepare_speech_text(rest)
+            if not (_SETTLED_START.match(then) or _CODE_BLOCK_START.match(rest)):
+                continue
+            if f"{said} {then}" != arrived:
+                continue
+            self._pending = rest
+            return _sentences(said)
         return []
 
     def finish(self) -> list[str]:
         """Lo que queda, cuando la charla ha acabado bien."""
         rest, self._pending = self._pending, ""
-        return _sentences(_prepare(rest))
+        return _sentences(prepare_speech_text(rest))
 
 
-def _prepare(piece: str) -> str:
-    """El trozo preparado para leerse. Sin los blancos de delante: una tanda de saltos de
-    línea partida entre dos trozos daría un punto suelto, y entera se queda en un salto."""
-    return prepare_speech_text(piece.lstrip())
+def _piece_end(cut: re.Match[str]) -> int:
+    """Dónde acaba lo de delante: detrás del corte o, si se lleva un salto de línea, detrás
+    del último, y la sangría de la línea siguiente se queda con ella."""
+    line_break = cut.group().rfind("\n")
+    return cut.end() if line_break < 0 else cut.start() + line_break + 1
 
 
 def _sentences(prepared: str) -> list[str]:
-    return [sentence for sentence in _BETWEEN_SENTENCES.split(prepared) if sentence.strip()]
+    """Las frases del trozo que dicen algo: no las de solo puntos."""
+    return [s for s in _BETWEEN_SENTENCES.split(prepared) if s.strip(" .\t\n")]

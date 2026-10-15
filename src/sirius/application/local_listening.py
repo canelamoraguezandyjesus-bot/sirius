@@ -206,7 +206,9 @@ class LocalListening[Chunk]:
         """Abre el micro si el oído está instalado; devuelve el aviso si no puede, o vacío.
 
         Si ya escucha, no hace nada. Sin el oído instalado, no carga nada, no abre el
-        micro y no baja nada: el aviso dice qué falta y qué orden lo instala.
+        micro y no baja nada: el aviso dice qué falta y qué orden lo instala. Si aún suena
+        lo último que dijo, escucha ya, pero abre el micro cuando calle, como tras hablar
+        (ronda 1 de Codex sobre la PR #688).
         """
         if self._listening:
             return ""
@@ -239,6 +241,11 @@ class LocalListening[Chunk]:
                 problem = f"No puedo oírte: el detector de voz no se ha podido reiniciar ({error})."
                 return self._fail(problem)
             self._detector_stale = False
+        if self._speaking.speaker.playing:
+            self._listening = True
+            self._paused_to_speak = True
+            self._notice = ""
+            return ""
         try:
             self._engines.microphone.open()
         except VoiceUnavailable as error:
@@ -255,7 +262,8 @@ class LocalListening[Chunk]:
         creería que aún hay voz y el silencio siguiente abriría un turno sin palabras
         (ronda 1 de Codex sobre la PR #687).
 
-        Si hablaba, se calla: el altavoz tira lo que le quedaba por decir.
+        Si hablaba, se calla: el altavoz tira lo que le quedaba por decir, y lo que ya
+        estaba saliendo acaba en lo que tarda en sonar.
 
         Nada de lo que falle aquí deja a Sirius oyendo ni suelta una pieza: el estado se
         limpia antes, el micro garantiza que al cerrarse no da más audio, y si el detector

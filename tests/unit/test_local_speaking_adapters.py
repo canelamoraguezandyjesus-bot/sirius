@@ -23,6 +23,7 @@ import pytest
 
 import sirius.adapters.audio.local_speaking as local_speaking_module
 from sirius.adapters.audio.local_speaking import (
+    BLOCK_FRAMES,
     ECHO_TAIL_SECONDS,
     PiperSpeech,
     SoundDeviceSpeaker,
@@ -132,11 +133,14 @@ def test_carga_la_voz_solo_de_su_fichero_y_abre_el_altavoz_a_su_frecuencia(
     (flujo,) = sounddevice.flujos
     assert {k: v for k, v in flujo.opciones.items() if k != "callback"} == {
         "samplerate": _FRECUENCIA,
+        "blocksize": BLOCK_FRAMES,
         "channels": 1,
         "dtype": "int16",
     }
     assert flujo.arrancado
-    assert motores.speaker.latency == 0.1
+    # A lo sumo: lo que puede esperar al siguiente bloque y lo que tarda en salir (ronda 1
+    # de Codex sobre la PR #688).
+    assert motores.speaker.latency == BLOCK_FRAMES / _FRECUENCIA + 0.1
 
 
 def test_sin_el_extra_instalado_avisa_y_no_tumba_a_sirius(
@@ -309,14 +313,30 @@ def test_sigue_sonando_hasta_que_lo_ultimo_sale_y_pasa_la_cola_del_eco() -> None
     assert not altavoz.playing
 
 
-def test_callar_tira_lo_que_esperaba_y_deja_de_sonar() -> None:
-    altavoz, llena = _altavoz()
+def test_callar_tira_lo_que_esperaba_y_lo_ya_dado_sigue_sonando_hasta_salir() -> None:
+    # Ronda 1 de Codex sobre la PR #688: lo que PortAudio ya tiene sale igual, y hasta que
+    # sale no se puede decir que calla, o el oído abriría el micro con su voz aún sonando.
+    reloj = _Reloj()
+    altavoz, llena = _altavoz(reloj)
     altavoz.play(b"abcd")
     llena(bytearray(2), 1, None, None)
 
     altavoz.stop()
 
-    assert not altavoz.playing
     salida = bytearray(2)
     llena(salida, 1, None, None)
-    assert bytes(salida) == b"\x00\x00"
+    assert bytes(salida) == b"\x00\x00", "lo que esperaba ya no se da"
+    final = 0.1 + 1 / _FRECUENCIA + ECHO_TAIL_SECONDS
+    reloj.ahora = 50.0 + final - 0.001
+    assert altavoz.playing
+    reloj.ahora = 50.0 + final + 0.001
+    assert not altavoz.playing
+
+
+def test_callar_lo_que_aun_no_habia_empezado_calla_en_el_acto() -> None:
+    altavoz, _llena = _altavoz()
+    altavoz.play(b"abcd")
+
+    altavoz.stop()
+
+    assert not altavoz.playing

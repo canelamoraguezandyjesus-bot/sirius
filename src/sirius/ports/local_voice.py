@@ -115,11 +115,13 @@ class Speaker[Sound](Protocol):
 
     @property
     def latency(self) -> float:
-        """Cuánto tarda en sonar, en segundos, lo que se le da cuando no suena nada."""
+        """Cuánto tarda en sonar, como mucho, lo que se le da cuando no suena nada, en
+        segundos."""
         ...
 
     def stop(self) -> None:
-        """Calla lo que suena y tira lo que esperaba. No falla."""
+        """Tira lo que esperaba y no da nada más. Lo que ya estaba saliendo acaba en lo que
+        tarda en sonar, y hasta entonces sigue sonando (``playing``). No falla."""
         ...
 
 

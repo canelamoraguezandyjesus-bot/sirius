@@ -31,6 +31,9 @@ _logger = get_logger(__name__)
 #: por acabado lo que dijo hasta que pasa, y el oído no abre el micro hasta entonces: la
 #: cola de su propia voz no entra como un turno.
 ECHO_TAIL_SECONDS = 0.25
+#: Las muestras que se le dan a PortAudio de cada vez: 23 ms a 22 050 Hz. Fijas, para saber
+#: cuánto puede esperar una frase al siguiente bloque (ronda 1 de Codex sobre la PR #688).
+BLOCK_FRAMES = 512
 
 
 def check_speaking_libraries() -> None:
@@ -89,10 +92,12 @@ class SoundDeviceSpeaker:
     """El altavoz por defecto del sistema, mono, en 16 bits y a la frecuencia de la voz.
 
     El flujo se abre al cargar la voz y sigue abierto: abrirlo para cada frase añadiría su
-    latencia a cada una. PortAudio pide audio desde su hilo, y se le da lo que espera en la
-    cola o, si no hay nada, silencio. Lo dicho sigue sonando mientras queda algo en la cola
-    o lo último que se le dio no ha acabado de salir, con la latencia del flujo y la cola
-    del eco en la habitación.
+    latencia a cada una. PortAudio pide audio desde su hilo, de bloque en bloque, y se le
+    da lo que espera en la cola o, si no hay nada, silencio. Lo dicho sigue sonando
+    mientras queda algo en la cola o lo último que se le dio no ha acabado de salir, con la
+    latencia del flujo y la cola del eco en la habitación. Callar tira la cola, pero lo que
+    PortAudio ya tiene sale igual: hasta que acaba, sigue sonando (ronda 1 de Codex sobre
+    la PR #688).
     """
 
     def __init__(
@@ -109,7 +114,11 @@ class SoundDeviceSpeaker:
         self._until = 0.0
         try:
             stream = sounddevice.RawOutputStream(
-                samplerate=sample_rate, channels=1, dtype="int16", callback=self._fill
+                samplerate=sample_rate,
+                blocksize=BLOCK_FRAMES,
+                channels=1,
+                dtype="int16",
+                callback=self._fill,
             )
         except Exception as error:
             raise _no_speaker(error) from error
@@ -132,12 +141,12 @@ class SoundDeviceSpeaker:
 
     @property
     def latency(self) -> float:
-        return self._latency
+        """A lo sumo: lo que puede esperar al siguiente bloque y lo que tarda en salir."""
+        return BLOCK_FRAMES / self._sample_rate + self._latency
 
     def stop(self) -> None:
         with self._lock:
             self._pending.clear()
-            self._until = 0.0
 
     def _fill(self, outdata: Any, frames: int, time: Any, status: Any) -> None:
         """Lo llama PortAudio desde su hilo: lo siguiente de la cola y, si falta, silencio."""
