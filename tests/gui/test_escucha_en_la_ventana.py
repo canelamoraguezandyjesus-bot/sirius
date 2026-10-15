@@ -656,3 +656,81 @@ def test_al_crear_el_proyecto_la_ventana_que_se_abre_trae_su_bucle(
     assert bucle is not None and bucle.running
     ventana.close()
     assert bucle.wait(5)
+
+
+# --- Model Studio y el oído no se pisan (ronda 2 de Codex sobre la PR #689) ----------
+#
+# Model Studio tiene su micro y su voz. Con el oído abierto, su voz volvería por el micro
+# como un turno, y los dos micros captarían a la vez: mientras está abierto, el oído no
+# oye, y al salir vuelve a oír si oía.
+
+
+def test_en_model_studio_el_oido_no_oye_y_al_salir_vuelve_a_oir(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    sirius = _monta(tmp_path)
+    ventana = _ventana(qtbot, sirius)
+
+    ventana.open_model_studio()
+
+    assert not sirius.micro.abierto
+    assert not sirius.deps.local_listening.listening
+    assert ventana.listening_label.isHidden()
+    sirius.suena("Sirius, soy la voz de Model Studio")
+    assert sirius.deps.local_listening.attend().turns == ()
+    assert sirius.modelo.peticiones == []
+
+    ventana.close_model_studio()
+
+    assert sirius.micro.abierto
+    assert (ventana.listening_label.text(), ventana.mute_button.text()) == (LISTENING, "Silencio")
+
+
+def test_en_silencio_al_entrar_en_model_studio_sigue_en_silencio_al_salir(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    sirius = _monta(tmp_path)
+    ventana = _ventana(qtbot, sirius)
+    ventana.mute_button.click()
+
+    ventana.open_model_studio()
+    ventana.close_model_studio()
+
+    assert not sirius.micro.abierto
+    assert (ventana.listening_label.text(), ventana.mute_button.text()) == (MUTED, "Escuchar")
+
+
+def test_si_dejo_de_oir_por_un_fallo_salir_de_model_studio_no_lo_reabre(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    # Tras un fallo, lo reabre el botón, como siempre: salir de Model Studio no lo intenta.
+    sirius = _monta(tmp_path)
+    ventana = _ventana(qtbot, sirius)
+    sirius.detector.falla = RuntimeError("roto")
+    sirius.suena("Sirius, hola")
+    sirius.deps.local_listening.attend()
+    sirius.detector.falla = None
+    aviso = ventana.voice_notice_label.text()
+
+    ventana.open_model_studio()
+    ventana.close_model_studio()
+
+    assert not sirius.micro.abierto
+    assert not sirius.deps.local_listening.listening
+    assert ventana.voice_notice_label.text() == aviso
+
+
+@pytest.mark.parametrize("cerrandose", ["_close_requested", "_closed"])
+def test_si_la_ventana_se_esta_cerrando_salir_de_model_studio_no_reabre_el_oido(
+    qtbot: QtBot, tmp_path: Path, cerrandose: str
+) -> None:
+    # Cerrándose, la ventana ya no mira al oído: si oyera, nadie haría de portera.
+    sirius = _monta(tmp_path)
+    ventana = _ventana(qtbot, sirius)
+    ventana.open_model_studio()
+    setattr(ventana, cerrandose, True)
+
+    ventana.close_model_studio()
+
+    assert not sirius.micro.abierto
+    assert not sirius.deps.local_listening.listening

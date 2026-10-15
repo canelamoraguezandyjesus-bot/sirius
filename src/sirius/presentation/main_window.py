@@ -361,6 +361,8 @@ class MainWindow(QMainWindow):
         self._listening_bridge: ListeningBridge | None = None
         #: Quien atiende al oído en producción; sin él, lo atiende otro (las pruebas).
         self._listening_loop = listening_loop
+        #: El oído dejó de oír al entrar en Model Studio, y vuelve a oír al salir.
+        self._listening_paused_for_studio = False
         self._pending_user_item: QListWidgetItem | None = None
         self._send_message_use_case = send_message_use_case
         self._get_history_use_case = get_history_use_case
@@ -924,6 +926,12 @@ class MainWindow(QMainWindow):
             self._report_voice_failure(outcome)
             return
         if isinstance(outcome, SpeechStarted):
+            if not self.model_studio_open:
+                # Fuera de Model Studio no se habla: lo que acabó de sintetizarse después
+                # de salir se calla en cuanto empieza, o el oído que escucha siempre lo
+                # oiría como un turno (ronda 2 de Codex sobre la PR #689, ADR-244).
+                self._silence_pending_speech()
+                return
             self._mirror_studio_state(StudioInteractionState.HABLANDO)
             return
         if isinstance(outcome, NothingToSay):
@@ -1033,7 +1041,13 @@ class MainWindow(QMainWindow):
         return self._pages.currentIndex() == MODEL_STUDIO_PAGE_INDEX
 
     def open_model_studio(self) -> None:
-        """Conmuta a la superficie de grabación. Idempotente."""
+        """Conmuta a la superficie de grabación. Idempotente.
+
+        Model Studio tiene su micro y su voz: mientras está abierto, el oído que escucha
+        siempre no oye, o su voz volvería por el micro como un turno y los dos micros
+        captarían a la vez (ronda 2 de Codex sobre la PR #689, ADR-244).
+        """
+        self._pause_listening_for_studio()
         self._pages.setCurrentIndex(MODEL_STUDIO_PAGE_INDEX)
         self._refresh_studio_context()
         self.studio_page.input.setFocus()
@@ -1042,7 +1056,8 @@ class MainWindow(QMainWindow):
         """Vuelve a la interfaz técnica, saliendo antes del modo limpio.
 
         Salir corta la voz y el micrófono: nada puede seguir escuchando ni
-        sonando en una superficie que ya no está a la vista.
+        sonando en una superficie que ya no está a la vista. Callada su voz, el
+        oído vuelve a oír si oía al entrar.
         """
         if self.studio_page.clean_mode:
             self.studio_page.toggle_clean_mode()
@@ -1051,6 +1066,7 @@ class MainWindow(QMainWindow):
         # tampoco hay motivo para seguir preguntándoselo a OBS.
         self._capture_heartbeat.stop()
         self._pages.setCurrentIndex(TECHNICAL_PAGE_INDEX)
+        self._resume_listening_after_studio()
 
     def _silence_voice(self) -> None:
         """Cierra micrófono y reproducción. Idempotente."""
@@ -1958,6 +1974,26 @@ class MainWindow(QMainWindow):
             self._refresh_listening()
         else:
             self._refresh_listening(self._listen(listening.unmute))
+
+    def _pause_listening_for_studio(self) -> None:
+        """Al entrar en Model Studio, el oído deja de oír si oía; lo que estaba diciendo,
+        también se calla."""
+        listening = self._local_listening
+        if listening is None or not listening.listening:
+            return
+        listening.stop()
+        self._listening_paused_for_studio = True
+        self._refresh_listening()
+
+    def _resume_listening_after_studio(self) -> None:
+        """Al salir de Model Studio, el oído vuelve a oír si oía al entrar, salvo que la
+        ventana se esté cerrando: entonces ya no la mira nadie."""
+        if not self._listening_paused_for_studio:
+            return
+        self._listening_paused_for_studio = False
+        if self._local_listening is None or self._closed or self._close_requested:
+            return
+        self._refresh_listening(self._listen(self._local_listening.start))
 
     def _refresh_listening(self, notice: str = "") -> None:
         """El indicador y el botón como está el oído de verdad, y el aviso si no oye."""

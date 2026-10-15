@@ -56,7 +56,8 @@ class _Micro:
     Como el de verdad, lo que suena con él cerrado se pierde, y al cerrarlo se tira lo
     que nadie ha leído. Apunta en ``eventos`` cuándo se abre y se cierra. Lo que capta se
     lee en el acto; con ``reloj``, apunta cuándo lo captó y dice cuánto esperó a que lo
-    leyeran, como el de verdad mientras el oído transcribe o contesta.
+    leyeran, como el de verdad mientras el oído transcribe o contesta. Con ``al_leer``,
+    cada trozo llega cuando se lee: ahí pasa el tiempo que dura el audio.
     """
 
     def __init__(self, eventos: list[str] | None = None) -> None:
@@ -72,6 +73,8 @@ class _Micro:
         self._captados_en: list[float] = []
         #: Lo que pasa mientras se abre, ya abierto: por ejemplo, que capte algo.
         self.al_abrir: Callable[[], None] | None = None
+        #: Lo que pasa justo antes de dar cada trozo: por ejemplo, que dure lo que dura.
+        self.al_leer: Callable[[str], None] | None = None
 
     def capta(self, *trozos: str) -> None:
         if not self.abierto:
@@ -103,6 +106,8 @@ class _Micro:
         if not self.pendientes:
             return None
         trozo = self.pendientes.pop(0)
+        if self.al_leer is not None:
+            self.al_leer(trozo)
         if self.reloj is None or not self._captados_en:
             return Captured(trozo)
         return Captured(trozo, age=self.reloj() - self._captados_en.pop(0))
@@ -1113,7 +1118,8 @@ def test_mide_desde_que_deja_de_oir_su_voz_hasta_que_suena_la_primera_frase(
     monkeypatch.setattr(logging.getLogger("sirius.application.local_listening"), "disabled", False)
     oido = _Oido()
     oido.servicio.start()
-    oido.detector.al_oir = lambda trozo: oido.reloj.avanza(0.25) if trozo != FIN else None
+    # Cada trozo llega un cuarto de segundo después del anterior.
+    oido.micro.al_leer = lambda trozo: oido.reloj.avanza(0.25) if trozo != FIN else None
     oido.transcriptor.al_transcribir = lambda: oido.reloj.avanza(0.5)
     oido.voz.al_decir = lambda: oido.reloj.avanza(0.125)
     oido.altavoz.latency = 0.0625
@@ -1346,13 +1352,28 @@ def test_la_charla_cuenta_desde_que_empieza_a_oirse_su_voz() -> None:
     oido = _oido_que_elige()
     oido.suena(voz("Sirius, hola"), FIN)
     oido.reloj.avanza(8)
-    # Cada trozo tarda un segundo: empieza a oírse dentro de la charla y acaba fuera.
-    oido.detector.al_oir = lambda _trozo: oido.reloj.avanza(1)
+    # Cada trozo dura un segundo: empieza a oírse dentro de la charla y acaba fuera.
+    oido.micro.al_leer = lambda _trozo: oido.reloj.avanza(1)
 
     (turno,) = oido.suena(voz("Pues"), voz("verás,"), voz("es largo"), FIN).turns
 
     assert turno.addressed
     assert oido.reloj.ahora - 100.0 > 10
+
+
+def test_lo_que_tarda_el_detector_en_mirar_el_trozo_no_cuenta_para_la_charla() -> None:
+    # Ronda 2 de Codex sobre la PR #689: la hora es la del micro al captar el trozo, antes
+    # de que el detector lo mire. Su voz empieza a los 9,9 s de que calle; el detector
+    # tarda 0,2 s en decir que es voz, y sigue siendo de la charla.
+    oido = _oido_que_elige()
+    oido.suena(voz("Sirius, hola"), FIN)
+    oido.reloj.avanza(9.9)
+    oido.detector.al_oir = lambda trozo: oido.reloj.avanza(0.2) if trozo != FIN else None
+
+    (turno,) = oido.suena(voz("¿Me oyes?"), FIN).turns
+
+    assert turno.addressed
+    assert oido.charla.mensajes == ["Sirius, hola", "¿Me oyes?"]
 
 
 def test_sin_decirle_a_quien_le_hablan_decide_como_en_produccion() -> None:

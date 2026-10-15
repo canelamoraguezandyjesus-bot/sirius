@@ -469,15 +469,17 @@ class LocalListening[Chunk]:
         """Le enseña el trozo al detector; si con él acaba el turno, lo devuelve."""
         assert self._engines is not None
         chunk = captured.chunk
+        # La hora a la que lo captó el micro, antes de mirarlo: ni lo que esperó en su
+        # cola mientras transcribía o contestaba ni lo que tarde el detector cuentan
+        # (rondas 1 y 2 de Codex sobre la PR #689).
+        captured_at = self._clock() - captured.age
         try:
             signal = self._engines.detector.listen(chunk)
         except Exception as error:
             self._engine_failed("el detector de voz", error)
             return None
         if signal is TurnSignal.VOICE:
-            # La hora a la que lo captó el micro: lo que esperó en su cola mientras
-            # transcribía o contestaba no cuenta.
-            self._voice_heard_at = self._clock() - captured.age
+            self._voice_heard_at = captured_at
         if self._turn is None:
             if signal is TurnSignal.VOICE:
                 self._turn = [*self._before_turn, chunk]

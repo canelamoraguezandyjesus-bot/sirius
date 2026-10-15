@@ -1059,3 +1059,48 @@ def test_repetir_durante_la_sintesis_no_pierde_al_trabajador_anterior(
     # solo crece sería una fuga. Además evita que los trabajadores sobrevivan a
     # la ventana durante el desmontaje.
     qtbot.waitUntil(lambda: not window._active_voice_workers, timeout=5000)
+
+
+class _SintesisQueEspera(FakeTextToSpeech):
+    """Sintetiza cuando la prueba la deja: así acaba después de salir de Model Studio."""
+
+    def __init__(self, directory: Path) -> None:
+        super().__init__(directory)
+        self.empezo = threading.Event()
+        self.sigue = threading.Event()
+
+    def synthesize(self, request: SpeechRequest) -> SynthesizedSpeech | SpeechError:
+        self.empezo.set()
+        self.sigue.wait(5)
+        return super().synthesize(request)
+
+
+@pytest.mark.gui
+def test_lo_que_acaba_de_sintetizarse_despues_de_salir_no_suena(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """Fuera de Model Studio no se habla (ronda 2 de Codex sobre la PR #689, ADR-244).
+
+    Salir callaba lo que sonaba, pero no lo que aún se estaba sintetizando: sonaba
+    después, ya fuera, y el oído que escucha siempre lo habría oído como un turno.
+    """
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    directory = tmp_path / "audio"
+    directory.mkdir(exist_ok=True)
+    text_to_speech = _SintesisQueEspera(directory)
+    playback = FakeAudioPlayback()
+    voice = _voice_use_case(tmp_path, text_to_speech=text_to_speech, playback=playback)
+    window = _build_window(database_path, studio_voice_use_case=voice)
+    qtbot.addWidget(window)
+    _swap_provider(window, database_path, FakeLLMProvider(("Monta el Uno.",)))
+    window.open_model_studio()
+    window.studio_page.input.setPlainText("¿por dónde empiezo?")
+    window.studio_page.send_button.click()
+    qtbot.waitUntil(text_to_speech.empezo.is_set, timeout=5000)
+
+    window.studio_page.exit_button.click()
+    text_to_speech.sigue.set()
+
+    qtbot.waitUntil(lambda: bool(playback.played) and not playback.is_playing(), timeout=5000)
+    assert window._speech_busy is False
+    assert window.studio_page.interaction_state is not StudioInteractionState.HABLANDO
