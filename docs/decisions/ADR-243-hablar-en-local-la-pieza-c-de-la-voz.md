@@ -130,13 +130,18 @@ Se adopta la opción 2.
   salto de línea, solo si cortar no cambia nada. Lo de delante está cerrado: sin un
   bloque de código abierto y, preparado con `prepare_speech_text`, sin marcas a medias.
   Lo de detrás ya dice algo y no empieza por una marca que al cerrarse pueda dejar a la
-  vista una puntuación, que se pegaría a la frase de antes; la línea que abre un bloque
-  de código sí vale, para que la frase que lo presenta no espere al bloque. Y lo de
-  delante y lo de detrás, preparados por separado, dan lo mismo que todo lo llegado
-  preparado de una vez. Al acabar la charla se suelta lo que quede. Lo dicho, unido, es
-  lo que da `prepare_speech_text` con la respuesta entera, salvo los blancos y una frase
-  de solo puntos, que no se dice. Lo que no puede ver es lo que aún no ha llegado: una
-  marca que se empareja con otra de una frase posterior, como en `*a*. Hola b*`.
+  vista una puntuación, que se pegaría a la frase de antes; un bloque de código sí vale,
+  para que la frase que lo presenta no espere al bloque. Y lo de delante y lo de detrás,
+  preparados por separado, dan lo mismo que todo lo llegado preparado de una vez. Al
+  acabar la charla se suelta lo que quede, y lo que se ha quedado sin cerrar no se dice
+  como código ni como marca (`final_speech_text`): un bloque de código abierto se cierra,
+  y se dice que queda en pantalla, y se quitan las comillas de código, las estrellas y
+  los guiones bajos que abren o cierran una palabra y un corchete que no se cierra. Entre
+  blancos o letras, o junto a una cifra, una estrella o un guion bajo se quedan: pueden
+  ser una multiplicación o parte de un nombre. Lo dicho, unido, es lo que da
+  `final_speech_text` con la respuesta entera, salvo los blancos y una frase de solo
+  puntos, que no se dice. Lo que no puede ver es lo que aún no ha llegado: una marca que
+  se empareja con otra de una frase posterior, como en `*a*. Hola 5*`.
 - **El oído habla** (`src/sirius/application/local_listening.py`): entrega cada turno a
   la charla con un `on_delta` que alimenta el corte, y cada frase cerrada se pide a la
   voz y suena en cuanto está. Antes de la primera cierra el micro, y lo vuelve a abrir
@@ -200,12 +205,12 @@ Medido el 15-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   enseña su PR en su comprobación»): la prueba unitaria que sigue el orden de todo lo que pasa en un turno
   ve cerrarse el micro antes de la primera frase y abrirse después de la última, y la
   mutación que no lo cierra hace que su propio eco entre como un turno en PA-R03-03.
-- **88 pruebas unitarias nuevas**: el servicio que oye y habla (16 más en
-  `tests/unit/test_local_listening.py`, de 30 a 46), el corte en frases (41 en
+- **95 pruebas unitarias nuevas**: el servicio que oye y habla (16 más en
+  `tests/unit/test_local_listening.py`, de 30 a 46), el corte en frases (48 en
   `tests/unit/test_speech_cutter.py`; entre ellas, lo mismo dicho que con el texto entero
   de 302 maneras de trocear 18 respuestas, 5 436 troceos, y de 12 maneras de trocear 500
   textos al azar hechos de palabras, puntuación, saltos, sangrías y marcas, en los que el
-  corte de `e41ff85f` falla 107 veces), Piper y el altavoz con
+  corte de `e41ff85f` falla 274 veces), Piper y el altavoz con
   módulos de mentira (15 en `tests/unit/test_local_speaking_adapters.py`), la
   instalación y la orden de instalar (12 más, de 24 a 36), `sirius-oye` y lo que tarda
   (3 más, de 13 a 16) y que el oído importa lo que dice `voice_tools` (1 más en
@@ -223,7 +228,9 @@ Medido el 15-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
   él, y ahora hay prueba de eso) y un remedio adivinado en mayúscula, que la comprobación
   de la orden no veía. Las 85 mutaciones de la pieza B, puestas al día para el código
   nuevo, siguen cayendo las 85. Tras la ronda 1 de Codex y el corte nuevo son 92: las
-  del corte se rehicieron para sus tres condiciones, 18, y caen las 92. Una más no se
+  del corte se rehicieron para sus tres condiciones, 18, y caen las 92. Tras la ronda 2,
+  100: 8 más para lo que se dice al acabar, y la de las tres comillas cambia,
+  porque ya no hace falta que abran una línea. Una más no se
   cuenta porque es equivalente: quitar que lo de detrás tenga que decir algo no cambia
   nada, porque con lo de detrás vacío la frase y un blanco nunca dan lo llegado, que no
   acaba en blanco.
@@ -259,9 +266,8 @@ Medido el 15-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
 - **Una frase sale cuando asoma lo que la sigue**, no al llegar su blanco: el corte
   necesita verlo para saber que no la cambia. Troceadas como las da el modelo, palabra a
   palabra con su blanco delante, las 18 respuestas de la prueba sacan la primera frase
-  igual que el corte de `e41ff85f` en 12 y un trozo más tarde en 6: cuando lo que sigue
-  es una viñeta, un guion con sangría, la línea de un bloque de código, una raya o una
-  puntuación.
+  igual que el corte de `e41ff85f` en 13 y un trozo más tarde en 5: cuando lo que sigue
+  es una viñeta, un guion con sangría, una raya o una puntuación.
 - Model Studio no cambia: `prepare_speech_text` se usa tal cual.
 
 ## Alternativas descartadas y por qué
@@ -337,4 +343,18 @@ código antes de tocarlo.
   que comprueba que cortar no cambia nada, con las tres condiciones de «Decisión». La
   prueba de los troceos gana los ejemplos de la ronda y otros dos, y hay otra con 500
   textos al azar.
+
+**Ronda 2 de Codex**, sobre `2825637e`, con la pregunta de si el enfoque de los tres
+arreglos estaba mal: un P2, cierto y comprobado contra el código, que el propio revisor
+marca como llegado tarde por goteo, porque ya estaba en la ronda 1.
+
+- **Al acabar se decía lo que había quedado sin cerrar**: con
+  ``Mira:\n```python\nprint('secreto')`` se oía `` `python. print('secreto') ``, porque
+  `prepare_speech_text` solo quita bloques y marcas emparejados. Ahora, al acabar, un
+  bloque abierto se cierra y se dice que queda en pantalla, y las marcas sueltas que
+  abren o cierran una palabra se quitan (`final_speech_text`, en «Decisión»). No es de
+  la familia de la ronda 1, un trozo preparado fuera de su sitio: aquí tampoco la
+  respuesta entera se cerraba. Con esto, cortar delante de un bloque ya no pide que sea
+  la línea que lo abre: cualquier bloque acaba diciendo que queda en pantalla. La nota de
+  arranque lo daba por imposible y no lo era: al acabar, lo abierto se decía tal cual.
 

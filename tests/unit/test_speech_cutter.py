@@ -1,10 +1,11 @@
 """El corte en frases de lo que la charla va escribiendo (ADR-243, PA-R03-02).
 
-Lo que se dice, trozo a trozo, tiene que ser lo que da ``prepare_speech_text`` con la
+Lo que se dice, trozo a trozo, tiene que ser lo que da ``final_speech_text`` con la
 respuesta entera, salvo los blancos y las frases de solo puntos, que no se dicen: se corta
-lo mismo de mil maneras y se compara. Y una frase solo sale cuando está cerrada y lo que
-sigue ya no puede cambiarla: ni a media frase, ni con un bloque de código abierto, ni con
-una marca sin cerrar, ni antes de ver qué viene detrás.
+lo mismo de mil maneras y se compara. Esa es ``prepare_speech_text`` sin lo que se quedó
+sin cerrar al acabar. Y una frase solo sale cuando está cerrada y lo que sigue ya no puede
+cambiarla: ni a media frase, ni con un bloque de código abierto, ni con una marca sin
+cerrar, ni antes de ver qué viene detrás.
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ import re
 import pytest
 
 from sirius.application.prepare_speech_text import prepare_speech_text
-from sirius.application.speech_cutter import SpeechCutter
+from sirius.application.speech_cutter import SpeechCutter, final_speech_text
 
 #: Respuestas como las de la charla: con frases, párrafos, listas, enlaces, negritas,
 #: código en línea y en bloque, títulos, números con punto y comillas.
@@ -84,7 +85,7 @@ def _trocea(texto: str, azar: random.Random) -> list[str]:
 
 @pytest.mark.parametrize("respuesta", RESPUESTAS)
 def test_trozo_a_trozo_dice_lo_mismo_que_con_la_respuesta_entera(respuesta: str) -> None:
-    esperado = _sin_blancos(prepare_speech_text(respuesta))
+    esperado = _sin_blancos(final_speech_text(respuesta))
     azar = random.Random(respuesta)
     maneras = [[respuesta], list(respuesta)] + [_trocea(respuesta, azar) for _ in range(300)]
 
@@ -100,7 +101,7 @@ def test_con_textos_al_azar_tambien_dice_lo_mismo_que_con_el_texto_entero() -> N
     distintos = []
     for _ in range(500):
         texto = "".join(azar.choice(PIEZAS) for _ in range(azar.randint(2, 14)))
-        esperado = _lo_que_se_dice(prepare_speech_text(texto))
+        esperado = _lo_que_se_dice(final_speech_text(texto))
         maneras = [[texto], list(texto)] + [_trocea(texto, azar) for _ in range(10)]
         if any(_lo_que_se_dice(" ".join(_dicho(trozos))) != esperado for trozos in maneras):
             distintos.append(texto)
@@ -133,11 +134,12 @@ def test_con_un_bloque_de_codigo_abierto_espera_a_que_se_cierre() -> None:
     assert corte.feed("```\nListo. Y") == ["Te dejo el código en pantalla.", "Listo."]
 
 
-def test_tres_comillas_que_no_abren_un_bloque_no_dejan_cortar_delante() -> None:
-    # Pueden emparejarse con otra comilla y dejar a la vista una puntuación.
+def test_tres_comillas_que_no_se_cierran_son_un_bloque_al_acabar() -> None:
+    # Ronda 2 de Codex sobre la PR #688: entera, la respuesta las empareja con una comilla
+    # suelta y dejaría a la vista «:». Al acabar se cierran, y son un bloque.
     assert prepare_speech_text("Uno. ```: `. Y") == "Uno.:. Y"
 
-    assert _dicho(["Uno. ```", ": `. Y"]) == ["Uno.:.", "Y"]
+    assert _dicho(["Uno. ```", ": `. Y"]) == ["Uno.", "Te dejo el código en pantalla."]
 
 
 def test_un_bloque_abierto_espera_aunque_una_comilla_suelta_se_coma_sus_marcas() -> None:
@@ -190,10 +192,11 @@ def test_la_sangria_de_una_linea_se_queda_con_ella() -> None:
 
 
 def test_una_marca_que_se_empareja_con_otra_ya_llegada_no_deja_cortar() -> None:
-    # Entera, la primera estrella va con la última: si ya ha llegado, el corte lo ve.
-    assert prepare_speech_text("*a*. Hola b*. Fin") == "a*. Hola b. Fin"
+    # Entera, la primera estrella va con la última, y la que sobra no se quita al acabar
+    # porque va pegada a una cifra: si la última ya ha llegado, el corte lo ve.
+    assert final_speech_text("*a*. Hola 5*. Fin") == "a. Hola 5. Fin"
 
-    assert _dicho(["*a*. Hola b*. Fin"]) == ["a*.", "Hola b.", "Fin"]
+    assert _dicho(["*a*. Hola 5*. Fin"]) == ["a.", "Hola 5.", "Fin"]
 
 
 def test_con_una_marca_sin_cerrar_espera_a_que_se_cierre() -> None:
@@ -209,6 +212,28 @@ def test_al_acabar_da_lo_que_quedaba_y_empieza_de_cero() -> None:
 
     assert corte.finish() == ["Jefe"]
     assert corte.finish() == []
+
+
+@pytest.mark.parametrize(
+    ("respuesta", "dichas"),
+    [
+        ("Mira:\n```python\nprint('secreto')", ["Mira:.", "Te dejo el código en pantalla."]),
+        ("Esto es **muy importante", ["Esto es muy importante"]),
+        ("Y esto es _también", ["Y esto es también"]),
+        ("Muy importante**", ["Muy importante"]),
+        ("Usa `rm -rf", ["Usa rm -rf"]),
+        ("Lee [la guía", ["Lee la guía"]),
+        # Entre blancos, cifras o letras, una estrella puede ser una multiplicación y un
+        # guion bajo, parte de un nombre; y un corchete cerrado no abre nada.
+        ("Son 5 * 3, 5*3 y a_b [1]", ["Son 5 * 3, 5*3 y a_b [1]"]),
+    ],
+)
+def test_al_acabar_lo_que_quedo_sin_cerrar_no_se_dice_como_codigo_ni_marca(
+    respuesta: str, dichas: list[str]
+) -> None:
+    # Ronda 2 de Codex sobre la PR #688: ``prepare_speech_text`` solo quita lo emparejado.
+    assert _dicho([respuesta]) == dichas
+    assert final_speech_text(respuesta) == " ".join(dichas)
 
 
 def test_lo_que_no_se_lee_no_da_ninguna_frase() -> None:

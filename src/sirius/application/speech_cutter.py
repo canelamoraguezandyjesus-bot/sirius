@@ -2,7 +2,12 @@
 
 La voz del robot dice la respuesta desde la primera frase, mientras el modelo sigue
 escribiendo (PA-R03-02). Lo que dice es lo que da ``prepare_speech_text``, la misma
-función de Model Studio, sin quitar ni añadir nada: solo cambia el corte en frases.
+función de Model Studio, sin quitar ni añadir nada: solo cambia el corte en frases. Y que
+al acabar, lo que se ha quedado sin cerrar no se dice como código ni como marca, cosa que
+``prepare_speech_text`` no mira porque solo quita lo emparejado (ronda 2 de Codex sobre la
+PR #688): un bloque de código abierto se cierra, y se dice que queda en pantalla, y las
+comillas de código, las estrellas y los guiones bajos que abren o cierran una palabra y un
+corchete que no se cierra se quitan. Es ``final_speech_text``.
 
 Para que, trozo a trozo, salga lo mismo que con la respuesta entera, no se imita dónde
 cae cada trozo: se comprueba que cortar no cambia nada (ronda 1 de Codex sobre la PR
@@ -13,8 +18,8 @@ si se cumplen tres cosas:
   medias (``*``, `` ` ``, ``[``, ``]`` o un ``_`` que no va entre letras), que
   ``prepare_speech_text`` solo quita cuando se cierran;
 - lo de detrás ya dice algo, y no empieza por una marca que al cerrarse pueda dejar a la
-  vista una puntuación, que se pegaría a la frase de antes. Una línea que abre un bloque
-  de código sí vale: cerrado, se dice «Te dejo el código en pantalla.», y la frase que lo
+  vista una puntuación, que se pegaría a la frase de antes. Un bloque de código sí vale:
+  cerrado, o al acabar, se dice «Te dejo el código en pantalla.», y la frase que lo
   presenta no espera al bloque entero;
 - lo de delante y lo de detrás, preparados por separado, dan lo mismo que todo lo llegado
   preparado de una vez. Así una puntuación detrás de los blancos se queda con su frase, y
@@ -22,10 +27,11 @@ si se cumplen tres cosas:
   cambian de sentido al cortar.
 
 Lo demás espera a que llegue más o a que la charla acabe. Lo que aún no ha llegado no se
-ve: una marca que la respuesta entera empareja con otra de una frase posterior, como en
-«*a*. Hola b*», aquí ya estaba cerrada. Y una frase de solo puntos no se dice, como no
-la dice ``prepare_speech_text`` cuando no queda otra cosa: la que deja delante si la
-respuesta empieza por algo que no se lee, como una raya.
+ve: una marca que la respuesta entera empareja con otra de una frase posterior aquí ya
+estaba cerrada, y si la que sobra no se quita al acabar, se nota, como en «*a*. Hola 5*».
+Y una frase de solo puntos no se dice, como no la dice ``prepare_speech_text`` cuando no
+queda otra cosa: la que deja delante si la respuesta empieza por algo que no se lee, como
+una raya.
 """
 
 from __future__ import annotations
@@ -42,8 +48,13 @@ _OPEN_MARK = re.compile(r"[*`\[\]]|(?<!\w)_|_(?!\w)")
 #: cerrarse pueda dejar a la vista una puntuación, que se pegaría a la frase de antes. Un
 #: guion, una estrella o un más con su blanco que siguen ahí ya no son una viñeta.
 _SETTLED_START = re.compile(r"[-*+]\s|[^*_`\[+\-]")
-#: La línea que abre un bloque de código: cerrado, se dice «Te dejo el código en pantalla.».
-_CODE_BLOCK_START = re.compile(r"\s*```(?:\w[\w+-]*)?\n")
+#: Un bloque de código: cerrado, o al acabar, se dice «Te dejo el código en pantalla.».
+_CODE_BLOCK_START = re.compile(r"\s*```")
+#: Lo que se queda suelto al acabar y no se dice: comillas de código, estrellas o guiones
+#: bajos que abren o cierran una palabra, y un corchete que no se cierra. Entre blancos o
+#: letras, o junto a una cifra, una estrella puede ser una multiplicación, y un guion bajo,
+#: parte de un nombre: se quedan, como los deja ``prepare_speech_text``.
+_LOOSE_MARK = re.compile(r"`|(?<!\w)[*_]+(?=[^\W\d_])|(?<=[^\W\d_])[*_]+(?!\w)|\[(?![^\]]*\])")
 #: Entre frase y frase, ya preparado.
 _BETWEEN_SENTENCES = re.compile(r"(?<=[.!?…])\s+")
 _FENCE = "```"
@@ -79,7 +90,15 @@ class SpeechCutter:
     def finish(self) -> list[str]:
         """Lo que queda, cuando la charla ha acabado bien."""
         rest, self._pending = self._pending, ""
-        return _sentences(prepare_speech_text(rest))
+        return _sentences(final_speech_text(rest))
+
+
+def final_speech_text(text: str) -> str:
+    """Lo que se dice de un texto que ya no sigue: lo que da ``prepare_speech_text``, sin
+    código ni marcas aunque algo se haya quedado sin cerrar."""
+    if text.count(_FENCE) % 2:
+        text = f"{text}\n{_FENCE}"
+    return _LOOSE_MARK.sub("", prepare_speech_text(text))
 
 
 def _piece_end(cut: re.Match[str]) -> int:
