@@ -1579,3 +1579,21 @@ defectos:
     ficheros:
       - src/sirius/application/voice_test.py
       - tests/unit/test_voice_test.py
+  # ADR-247: la orden de E-R02-05 no daba su veredicto en su ordenador. Buscaba su base en
+  # la carpeta de serie y no en la que el eligiera al configurar Sirius, asi que con otra
+  # carpeta media una memoria vacia; y dejaba abiertas las bases de decisiones y proyectos
+  # de cada memoria medida, que Windows no deja borrar: el 16-10-2026 midio y se rompio al
+  # salir, sin decir si pasaba. Su prueba pasaba en Linux, que borra un fichero abierto.
+  - id: H-247
+    titulo: La orden de E-R02-05 buscaba su base en la carpeta de serie y en Windows se rompia al borrar las bases que dejaba abiertas
+    bloque: producto
+    gravedad: media
+    estado: cerrado
+    cerrado_por: 95368146706dc39e5959a069395c88c6484b0ddd
+    pr: 692
+    adr: 247
+    ficheros:
+      - scripts/medir_busqueda_de_memoria.py
+      - src/sirius/composition_root.py
+      - src/sirius/infrastructure/temporary_folder.py
+      - tests/integration/test_medir_busqueda_de_memoria.py

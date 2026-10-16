@@ -28,7 +28,7 @@
 
 - Decisiones (ADR): **241**.
 - Bloques del motor: 17 cerrado, 3 fuera_de_alcance.
-- Defectos registrados: 2 abierto, 91 cerrado.
+- Defectos registrados: 2 abierto, 92 cerrado.
 - Ideas aparcadas o descartadas: 12 aparcada, 3 descartada, 2 promovida.
 - Skills: **19**.
 - Investigaciones: **14** (fotos con fecha; caducan).
@@ -337,6 +337,7 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 | `pieza-sin-lector` | 5 | no en todas | 210, 209, 207, 183, 175 |
 | `prosa-que-el-cambio-deja-falsa` | 4 | no en todas | 223, 219, 211, 177 |
 | `regla-del-propietario-que-solo-vive-en-una-conversacion` | 4 | sí | 213, 208, 204, 195 |
+| `prueba-que-no-puede-ver-lo-que-vigila` | 3 | no en todas | 247, 241, 238 |
 | `decision-que-solo-vive-en-una-conversacion` | 2 | no en todas | 225, 202 |
 | `doble-mas-permisivo-que-la-herramienta-que-dobla` | 2 | sí | 242, 193 |
 | `guardian-que-mide-posicion-en-vez-de-estructura` | 2 | sí | 221, 187 |
@@ -345,7 +346,6 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 | `medir-lo-que-se-tiene-en-vez-de-lo-que-hay` | 2 | sí | 184, 180 |
 | `modelo-dentro-del-turno` | 2 | sí | 243, 237 |
 | `paso-largo-sin-plazo-propio` | 2 | sí | 228, 224 |
-| `prueba-que-no-puede-ver-lo-que-vigila` | 2 | no en todas | 241, 238 |
 | `vista-que-copia-el-corpus-del-que-venia-huyendo` | 2 | sí | 218, 196 |
 | `comparar-instantes-como-texto` | 1 | sí | 229 |
 | `condicion-construida-sin-el-mecanismo-que-la-hace-cumplible` | 1 | sí | 200 |
@@ -406,6 +406,12 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 - **ADR-204** — la sesión seguiría devolviéndole decisiones técnicas (lo hace cumplir `tests/automation/test_reglas_de_agents.py`).
 - **ADR-195** — una regla dada de viva voz —«no se elimina nada»— que no (lo hace cumplir `tests/automation/test_registro_de_defectos.py`).
 
+### `prueba-que-no-puede-ver-lo-que-vigila`
+
+- **ADR-247** — probar una orden que él ejecuta en su ordenador solo como es la (lo hace cumplir `tests/integration/test_medir_busqueda_de_memoria.py`).
+- **ADR-241** — escribir las pruebas de aceptación de una versión antes del (sin prueba que lo haga cumplir: ninguna prueba mide la fuerza de una prueba; lo que hay es).
+- **ADR-238** — una prueba de «no se hace X» que pasa con X puesto, porque su (lo hace cumplir `tests/acceptance/test_robot_0_2_memoria.py`).
+
 ### `decision-que-solo-vive-en-una-conversacion`
 
 - **ADR-225** — una orden del propietario que cancela una línea entera queda en el comentario de una incidencia cerrada, y dieciocho días después el ADR, el código y el estado del proyecto siguen diciendo que esa línea está pendiente y bloquea algo; la siguiente sesión la retomaría o la pondría delante de él otra vez. (sin prueba que lo haga cumplir: ninguna prueba: una decisión del propietario no tiene hoy una forma mecánica que una guarda pueda leer; la caza la mina mensual (deuda 13) y la hoja de decisiones abiertas, a posteriori).
@@ -445,11 +451,6 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 
 - **ADR-228** — dar a un agente una regla que depende de la hora («para si no cabe») sin darle la hora ni un plazo propio, y dejar que el tope del job lo mate sin diagnóstico; la misma lección que ADR-155 dejó para el corrector y ADR-224 para los pasos de Quality, aplicada al paso que quedaba. (lo hace cumplir `tests/automation/test_implementador_con_reloj.py`).
 - **ADR-224** — dejar que el tope del job sea el único plazo de un paso que depende de la red, y descubrirlo en una cancelación muda que no guarda caché y se repite sola; es la misma lección que el paso de `apt` dejó escrita el 19-08, aplicada esta vez a los dos pasos que quedaban. (lo hace cumplir `tests/automation/test_quality_no_muere_por_un_sync_lento.py`).
-
-### `prueba-que-no-puede-ver-lo-que-vigila`
-
-- **ADR-241** — escribir las pruebas de aceptación de una versión antes del (sin prueba que lo haga cumplir: ninguna prueba mide la fuerza de una prueba; lo que hay es).
-- **ADR-238** — una prueba de «no se hace X» que pasa con X puesto, porque su (lo hace cumplir `tests/acceptance/test_robot_0_2_memoria.py`).
 
 ### `vista-que-copia-el-corpus-del-que-venia-huyendo`
 
@@ -544,7 +545,7 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 
 - **ADR-205** — el ciclo volvería a quedarse horas en verde esperando (lo hace cumplir `tests/automation/test_sirius_merge.py`).
 
-Y **7** ADR declaran expresamente que no dejaron lección: 247, 240, 236, 235, 234, 233, 232.
+Y **6** ADR declaran expresamente que no dejaron lección: 240, 236, 235, 234, 233, 232.
 
 ## Los bloques del motor
 

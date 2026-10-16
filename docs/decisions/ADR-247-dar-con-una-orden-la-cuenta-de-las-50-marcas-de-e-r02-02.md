@@ -209,8 +209,12 @@ prueba por cada regla nueva. Encontró dos cosas, arregladas:
 
 ## La lección
 
-- ninguna: se escribe con su entrada en el registro de defectos, en el commit siguiente,
-  que es cuando existe el sha del arreglo (skill `registro-de-defectos`).
+- familia: `prueba-que-no-puede-ver-lo-que-vigila`
+- sin esto se repetiría: probar una orden que él ejecuta en su ordenador solo como es la
+  máquina de las pruebas. La de E-R02-05 pasaba en Linux con la carpeta de serie, y en su
+  ordenador falló por las dos cosas que su prueba no podía ver: la carpeta que él eligió y
+  que Windows no borra un fichero abierto (H-247).
+- lo hace cumplir: `tests/integration/test_medir_busqueda_de_memoria.py`
 
 ## Revisión externa
 
