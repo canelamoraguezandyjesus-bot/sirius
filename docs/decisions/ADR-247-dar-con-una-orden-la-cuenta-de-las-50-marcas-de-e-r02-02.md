@@ -66,6 +66,52 @@ revisión.
      y trabaja sobre una copia. La prueba tiene cogido el cerrojo de escritura de su base
      mientras corre la orden: cualquier escritura fallaría.
 
+## Nota de arranque del diagnóstico del banco
+
+Escrita el 16-10-2026, después de lo anterior y antes de tocar
+`scripts/pasar_el_banco_de_memoria.py` y de cualquier revisión.
+
+1. **Dónde vive el fallo y dónde va el arreglo.** En su ordenador el banco de memoria de
+   E-R02-04 dio 70 de 100 con su modelo de huellas de verdad, `qwen3-embedding:0.6b`. Según
+   lo que investigó otra sesión el mismo día, con solo palabras serían 64, y con las huellas
+   de mentira de las pruebas salen 99. Los fallos de «cosas que cambian» y el de MB-071 se
+   explican leyendo la lógica; los 17 de personas, gustos y fechas no se pueden explicar
+   sin ver los parecidos que da su modelo. Lo que falta aquí es medir, no arreglar:
+   - **La orden de E-R02-04** gana `--diagnostico`: además de lo de siempre, una línea por
+     cada uno de los 100 casos, con lo que llegó al modelo y en qué orden, el puesto por
+     palabras de cada recuerdo, el parecido de la pregunta con cada recuerdo y el de los
+     recuerdos entre sí, como se piden hoy y con el formato que recomienda cada modelo, y
+     el umbral en vigor. Y `--modelo`, para pasarlo con otro modelo de huellas, como
+     EmbeddingGemma, sin tocar sus ajustes.
+   - **La de E-R02-05** gana `--modelo` también.
+   - **El umbral y el formato no se tocan aquí**: se decidirán con sus cifras, en el trabajo
+     siguiente.
+
+   **¿Puede el sitio del arreglo observar el fallo?** Sí: cada línea sale del mismo Sirius
+   que pasa el caso, por el camino real y con su modelo de verdad, después de preguntarle.
+   Por qué su modelo da esos parecidos, no lo observa nadie.
+2. **Qué NO garantiza.**
+   - Que con esas cifras se llegue a 90 de 100: lo dirá el trabajo siguiente.
+   - Que los parecidos sean los de la búsqueda hasta el último decimal: la búsqueda los
+     calcula en sqlite-vec con números de 32 bits, y la línea, en Python sobre las mismas
+     huellas que da Ollama. Van con cuatro decimales.
+   - Que el formato recomendado sea el de su versión de cada modelo: es el de su ficha.
+3. **Criterio de parada**, fijado antes de escribir código:
+   - **Terminado** cuando las dos opciones funcionan en las dos órdenes; una prueba lee la
+     línea de un caso conocido, con huellas de mentira de parecidos sabidos, y la encuentra
+     entera; caen las mutaciones de lo que dice la línea (los parecidos, los puestos, el
+     orden, el formato de cada modelo, el umbral y el modelo elegido); la cadena entera
+     está en verde; y la revisión propia no encuentra nada.
+   - **De su base no sale nada**: la línea solo lleva el banco, que es inventado.
+   - **Si diagnosticar pidiera cambiar cómo busca Sirius**, se para: eso es el arreglo, y va
+     aparte.
+4. **Qué lo haría imposible.**
+   - Que la línea cuente otra cosa que el camino real: se escribe dentro del mismo caso,
+     con el mismo Sirius, y el umbral se lee de donde lo lee la búsqueda.
+   - Que no se pueda reconstruir aquí: cada línea lleva todos los parecidos entre la
+     pregunta y los tres recuerdos, en cada formato, y con eso se rehacen huellas con los
+     mismos cosenos.
+
 ## Contexto y problema
 
 La 0.2 está programada entera y le quedan las cinco evaluaciones del propietario, que
@@ -219,6 +265,7 @@ prueba por cada regla nueva. Encontró dos cosas, arregladas:
 ## Revisión externa
 
 Alcance, escrito antes de la primera petición: esta PR trae la orden de E-R02-02, el arreglo
-de la de E-R02-05 y los dos apuntes de las rondas limpias, y nada más. Mira que la orden
-cuente como PA-R02-06, que las dos lean la base que abre la ventana y que la de las marcas
-no escriba en ella, y que lo que dicen al propietario sea cierto en cada caso.
+de la de E-R02-05, el diagnóstico del banco de E-R02-04 y los dos apuntes de las rondas
+limpias, y nada más. Mira que la orden cuente como PA-R02-06, que las dos lean la base que
+abre la ventana y que la de las marcas no escriba en ella, que la línea de cada caso diga lo
+que pasó por el camino real, y que lo que dicen al propietario sea cierto en cada caso.
