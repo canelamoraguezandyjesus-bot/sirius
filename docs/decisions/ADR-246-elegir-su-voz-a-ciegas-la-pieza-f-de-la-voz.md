@@ -289,3 +289,8 @@ y que ningún camino de Sirius acepte un audio para imitar una voz.
   instala la orden, así que no se adivina nada; y si una voz no carga por otra cosa, el
   aviso lleva la orden de instalar, como el del oído (ADR-242). Cuatro pruebas más, y
   cuatro mutaciones que caen.
+
+**La ronda limpia.** Ronda 2, sobre `3a3a968c`, preguntando si el enfoque está mal: «Didn't
+find any major issues», del conector, el 16-10-2026. Con ella y Quality en verde se fusionó
+la PR #691 (`65f52939`). Se anota desde la PR de ADR-247: anotarlo en su PR habría cambiado
+el head que la ronda revisó.

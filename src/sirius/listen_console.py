@@ -19,16 +19,15 @@ from typing import Any
 
 from sirius.adapters.audio.voice_libraries import hugging_face_offline
 from sirius.adapters.persistence.bootstrap import initialize_persistence
-from sirius.application.data_location import DataLocationUseCase
 from sirius.application.listening_loop import PAUSE_SECONDS
 from sirius.application.local_listening import HeardTurn, LocalListening
-from sirius.composition_root import build_conversation_dependencies
+from sirius.composition_root import (
+    DATA_PATHS_UNKNOWN,
+    build_conversation_dependencies,
+    known_data_paths,
+)
 from sirius.domain.conversation import Message, MessageRole, MessageStatus
-from sirius.infrastructure.bootstrap_location_store import build_bootstrap_location_store
-from sirius.infrastructure.data_path_validator import build_data_path_validator
 from sirius.infrastructure.logging import configure_logging, get_logger
-from sirius.infrastructure.paths import SiriusPaths, resolve_paths
-from sirius.ports.data_location import DataLocationError
 from sirius.presentation.error_messages import failed_send_message
 from sirius.presentation.message_text import CANCELLED_SEND, HISTORY_NOT_LOADED, message_body
 
@@ -150,29 +149,12 @@ def _line(who: str, message: Message) -> str:
     return f"{who}: {body}" if body else f"{who}:"
 
 
-def _data_paths() -> SiriusPaths | None:
-    """Dónde guarda Sirius sus datos, como lo resuelve la ventana; ``None`` si aún no lo sabe."""
-    default = resolve_paths()
-    location = DataLocationUseCase(
-        location_store=build_bootstrap_location_store(),
-        validator=build_data_path_validator(),
-        default_data_dir=default.data_dir,
-    )
-    try:
-        resolution = location.resolve()
-    except DataLocationError:
-        return None
-    if resolution.needs_selection:
-        return None
-    return resolve_paths(resolution.path)
-
-
 def main() -> int:
     # Como la ventana: sin conexión a Hugging Face antes de cargar nada (ADR-246).
     hugging_face_offline()
-    paths = _data_paths()
+    paths = known_data_paths()
     if paths is None:
-        print("Abre Sirius una vez con su ventana: todavía no sabe dónde guardar tus datos.")
+        print(DATA_PATHS_UNKNOWN)
         return 2
     configure_logging(paths.logs_dir)
     initialize_persistence(paths)

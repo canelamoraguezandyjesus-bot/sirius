@@ -55,9 +55,13 @@ class MarkReplyUseCase:
     def marked_replies(self) -> list[MarkedReply]:
         return self._repository.marked_replies()
 
+    def recent(self, last: int) -> list[MarkedReply]:
+        """Las ``last`` últimas respuestas marcadas: las que cuenta ``count``."""
+        return self._repository.marked_replies()[-last:] if last > 0 else []
+
     def count(self, last: int) -> tuple[int, int]:
         """Cuántas «eso es Sirius» hay entre las ``last`` últimas marcadas, y cuántas son."""
-        recientes = self._repository.marked_replies()[-last:] if last > 0 else []
+        recientes = self.recent(last)
         sirius = sum(1 for reply in recientes if reply.mark is ReplyMark.ES_SIRIUS)
         return sirius, len(recientes)
 

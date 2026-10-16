@@ -223,7 +223,7 @@ def test_la_ventana_y_la_consola_se_ponen_sin_conexion_antes_de_nada(
     monkeypatch.setattr(ventana, "QApplication", _QtTodaviaNo)
     monkeypatch.setattr(ventana, "hugging_face_offline", apunta)
     monkeypatch.setattr(consola, "hugging_face_offline", apunta)
-    monkeypatch.setattr(consola, "_data_paths", lambda: pytest.fail("leyó antes los datos"))
+    monkeypatch.setattr(consola, "known_data_paths", lambda: pytest.fail("leyó antes los datos"))
 
     with pytest.raises(Primero):
         ventana.main()

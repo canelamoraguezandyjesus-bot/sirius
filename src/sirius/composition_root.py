@@ -97,6 +97,7 @@ from sirius.application.confirm_memory_suggestion import ConfirmMemorySuggestion
 from sirius.application.context import ContextBuilder
 from sirius.application.correct_memory import CorrectMemoryUseCase
 from sirius.application.create_backup import CreateBackupUseCase
+from sirius.application.data_location import DataLocationUseCase
 from sirius.application.decision_origin import GetDecisionOriginUseCase
 from sirius.application.delete_memory import DeleteMemoryUseCase
 from sirius.application.detect_precedence_conflicts import DetectPrecedenceConflictsUseCase
@@ -158,6 +159,8 @@ from sirius.config.settings import load_settings, save_settings
 from sirius.domain.blind_test import BlindTestError
 from sirius.domain.capture import build_scene_registry
 from sirius.domain.robot_seed import ROBOT_SEED_REMINDER
+from sirius.infrastructure.bootstrap_location_store import build_bootstrap_location_store
+from sirius.infrastructure.data_path_validator import build_data_path_validator
 from sirius.infrastructure.local_voice_installation import (
     CHARACTER_INSTALL_COMMAND,
     ChosenVoiceInstallation,
@@ -165,7 +168,9 @@ from sirius.infrastructure.local_voice_installation import (
     voice_test_missing,
 )
 from sirius.infrastructure.logging import get_logger
+from sirius.infrastructure.paths import SiriusPaths, resolve_paths
 from sirius.ports.audio_playback import AudioPlayback
+from sirius.ports.data_location import DataLocationError
 from sirius.ports.embeddings import TextEmbedder
 from sirius.ports.llm import LLMProvider
 from sirius.ports.local_voice import ListeningEngines, SpeakingEngines
@@ -292,6 +297,32 @@ def save_local_voice(voice: SpeakingVoice) -> None:
 def current_local_voice_settings() -> LocalVoiceSettings:
     """Los ajustes de la voz como están ahora en el disco, con la voz que él eligió."""
     return local_voice_settings(load_settings())
+
+
+DATA_PATHS_UNKNOWN = "Abre Sirius una vez con su ventana: todavía no sabe dónde guardar tus datos."
+"""Lo que dicen las órdenes de consola cuando Sirius aún no sabe dónde están sus datos."""
+
+
+def known_data_paths() -> SiriusPaths | None:
+    """Dónde guarda Sirius sus datos, como lo resuelve la ventana; ``None`` si aún no lo sabe.
+
+    Respeta la carpeta que él eligiera al configurarlo. La usan ``sirius-oye`` y las órdenes
+    de sus evaluaciones, que no abren la ventana: una sola función, para que ninguna busque
+    su base en otra carpeta que la ventana (ADR-247).
+    """
+    default = resolve_paths()
+    location = DataLocationUseCase(
+        location_store=build_bootstrap_location_store(),
+        validator=build_data_path_validator(),
+        default_data_dir=default.data_dir,
+    )
+    try:
+        resolution = location.resolve()
+    except DataLocationError:
+        return None
+    if resolution.needs_selection:
+        return None
+    return resolve_paths(resolution.path)
 
 
 @dataclass(frozen=True, slots=True)

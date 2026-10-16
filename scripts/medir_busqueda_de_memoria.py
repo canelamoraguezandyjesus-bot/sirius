@@ -9,8 +9,10 @@ cuenta es su ordenador, con el modelo de huellas de verdad. Este guion busca 100
 veces en una copia de su memoria y otras 100 en una de 10.000 recuerdos de
 prueba, contando la huella de cada pregunta, y dice si el P95 queda por debajo.
 
-Nunca toca su ``sirius.db``: trabaja sobre una copia en una carpeta temporal que
-borra al acabar. Las preguntas son las 100 del banco de memoria.
+Busca su ``sirius.db`` donde la busca la ventana, también si él eligió otra carpeta
+para sus datos, y nunca la toca: trabaja sobre una copia en una carpeta temporal que
+borra al acabar, después de decir si pasa, y cerrando antes cada base, porque Windows no
+borra un fichero abierto (ADR-247). Las preguntas son las 100 del banco de memoria.
 
 USO
 ===
@@ -28,7 +30,6 @@ import random
 import sqlite3
 import struct
 import sys
-import tempfile
 import time
 from collections.abc import Callable, Sequence
 from contextlib import closing
@@ -50,10 +51,10 @@ from sirius.adapters.persistence.sqlite_memory_repository import build_sqlite_me
 from sirius.adapters.persistence.sqlite_project_repository import build_sqlite_project_repository
 from sirius.application.memory_search import MemoryEmbeddingService, MemorySearch
 from sirius.application.rank_relevant_knowledge import RankRelevantKnowledgeUseCase
-from sirius.composition_root import embedding_model
+from sirius.composition_root import DATA_PATHS_UNKNOWN, embedding_model, known_data_paths
 from sirius.config.settings import load_settings
 from sirius.domain.memory_bank import MEMORY_BANK
-from sirius.infrastructure.paths import resolve_paths
+from sirius.infrastructure.temporary_folder import temporary_folder
 from sirius.ports.embeddings import EmbeddingError, TextEmbedder
 
 #: El límite del plan para el P95.
@@ -89,6 +90,8 @@ def mide(base: Path, huellas: TextEmbedder, preguntas: Sequence[str]) -> list[fl
     recuerdos = build_sqlite_memory_repository(base)
     palabras = build_sqlite_knowledge_search_repository(base)
     almacen = build_sqlite_memory_embedding_store(base)
+    decisiones = build_sqlite_decision_repository(base)
+    proyectos = build_sqlite_project_repository(base)
     try:
         if not almacen.available:
             raise SinSqliteVec
@@ -96,8 +99,8 @@ def mide(base: Path, huellas: TextEmbedder, preguntas: Sequence[str]) -> list[fl
         servicio.embed_pending()
         busqueda = RankRelevantKnowledgeUseCase(
             memory_repository=recuerdos,
-            decision_repository=build_sqlite_decision_repository(base),
-            project_repository=build_sqlite_project_repository(base),
+            decision_repository=decisiones,
+            project_repository=proyectos,
             knowledge_search_repository=palabras,
             memory_search=MemorySearch(palabras, recuerdos, servicio),
         )
@@ -111,6 +114,8 @@ def mide(base: Path, huellas: TextEmbedder, preguntas: Sequence[str]) -> list[fl
         recuerdos.close()
         palabras.close()
         almacen.close()
+        decisiones.close()
+        proyectos.close()
 
 
 def llena_de_prueba(base: Path, cuantos: int, modelo: str, dimension: int) -> None:
@@ -168,6 +173,8 @@ def main(
     huellas_de: Callable[[str], TextEmbedder] = OllamaEmbedder,
     escribe: Callable[[str], None] = print,
 ) -> int:
+    """0 si pasa, 1 si no, 2 si falta el modelo de huellas, 3 si sqlite-vec no carga y 4 si
+    Sirius no sabe dónde están sus datos."""
     modelo = embedding_model(load_settings())
     huellas = huellas_de(modelo)
     try:
@@ -176,10 +183,15 @@ def main(
         escribe(f"El modelo de huellas {modelo} no contesta.")
         escribe(f"Abre Ollama y ejecuta: ollama pull {modelo}")
         return 2
+    rutas = known_data_paths()
+    if rutas is None:
+        escribe(DATA_PATHS_UNKNOWN)
+        return 4
     preguntas = [caso.question for caso in MEMORY_BANK]
-    with tempfile.TemporaryDirectory() as carpeta:
-        suya = Path(carpeta) / "su-memoria.db"
-        cuantos = copia_su_memoria(resolve_paths().data_dir / "sirius.db", suya)
+    # Dice si pasa antes de borrar la carpeta: si no se puede borrar, lo avisa después.
+    with temporary_folder("sirius-busqueda-", escribe) as carpeta:
+        suya = carpeta / "su-memoria.db"
+        cuantos = copia_su_memoria(rutas.data_dir / "sirius.db", suya)
         escribe(f"Modelo de huellas: {modelo} ({dimension} números por huella).")
         try:
             en_la_suya = mide(suya, huellas, preguntas)
@@ -187,14 +199,14 @@ def main(
             escribe("sqlite-vec no carga en este Python: Sirius buscaría solo por palabras.")
             return 3
         escribe(_linea(f"Tu memoria, {cuantos} recuerdos", en_la_suya))
-        prueba = Path(carpeta) / "prueba.db"
+        prueba = carpeta / "prueba.db"
         upgrade_to_head(prueba)
         llena_de_prueba(prueba, RECUERDOS_DE_PRUEBA, modelo, dimension)
         en_la_de_prueba = mide(prueba, huellas, preguntas)
         escribe(_linea(f"{RECUERDOS_DE_PRUEBA} recuerdos de prueba", en_la_de_prueba))
-    pasa = max(percentil(en_la_suya, 95), percentil(en_la_de_prueba, 95)) < LIMITE_MS
-    escribe("Pasa: sí." if pasa else f"Pasa: no. El P95 tiene que bajar de {LIMITE_MS:.0f} ms.")
-    return 0 if pasa else 1
+        pasa = max(percentil(en_la_suya, 95), percentil(en_la_de_prueba, 95)) < LIMITE_MS
+        escribe("Pasa: sí." if pasa else f"Pasa: no. El P95 tiene que bajar de {LIMITE_MS:.0f} ms.")
+        return 0 if pasa else 1
 
 
 if __name__ == "__main__":

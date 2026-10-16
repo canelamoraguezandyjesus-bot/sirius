@@ -447,3 +447,8 @@ su ADR lo dijera. No trae elegir su voz (F).
   harían cierto el hallazgo: que el resumen llegue a la última respuesta y que el corte no
   se guarde. No es un defecto, así que no cuenta para la regla de las dos rondas; lo que
   sí queda sin garantizar está en «Consecuencias».
+
+**La ronda limpia.** Ronda 4, sobre `244eb23c`, preguntando otra vez si el enfoque está mal:
+«Didn't find any major issues», del conector, el 16-10-2026. Con ella y Quality en verde se
+fusionó la PR #690 (`473ccb13`). Se anota desde la PR de ADR-247: anotarlo en su PR habría
+cambiado el head que la ronda revisó.
