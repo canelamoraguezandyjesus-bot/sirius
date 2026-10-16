@@ -82,6 +82,10 @@ class Message:
     ``content`` is ``str | None`` because it becomes ``None`` exactly once
     redacted; every other status always carries real (possibly partial)
     content.
+
+    ``heard_when_cut`` (ADR-245): si a Sirius le cortaron esta respuesta mientras la
+    decía, lo que el propietario llegó a oír de ella; ``None`` si no le cortaron. El
+    contenido sigue entero.
     """
 
     id: int
@@ -94,3 +98,4 @@ class Message:
     identity_version: int | None = None
     status: MessageStatus = MessageStatus.COMPLETED
     redacted_at: datetime | None = None
+    heard_when_cut: str | None = None

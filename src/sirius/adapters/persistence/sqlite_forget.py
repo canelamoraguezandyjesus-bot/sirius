@@ -59,6 +59,7 @@ FORGETS = "olvidar la limpia"
 #: Cada columna de texto del esquema y qué hace olvidar con ella.
 FORGET_COVERAGE: dict[str, str] = {
     "messages.content": FORGETS,
+    "messages.heard_when_cut": FORGETS,
     "memory_revisions.content": FORGETS,
     "memory_revisions.said_by": FORGETS,
     "memories.person": FORGETS,
@@ -209,7 +210,9 @@ class SqliteForgetter:
             for message in session.scalars(
                 select(MessageModel).where(MessageModel.content.is_not(None))
             ):
-                if mentions(message.content or ""):
+                # Lo que se oyó de una respuesta cortada sale de ella, pero se mira igual
+                # (ADR-245).
+                if mentions(message.content or "") or mentions(message.heard_when_cut or ""):
                     for in_turn in _turn_of(session, message):
                         said[in_turn.id] = in_turn
             messages = list(said.values())
@@ -351,8 +354,10 @@ def _any(texts: Iterable[str | None], mentions: Callable[[str], bool]) -> bool:
 
 
 def _redact(message: MessageModel) -> None:
-    """Como «borrar» un mensaje en 0.1 (PA-016): sin contenido y marcado borrado."""
+    """Como «borrar» un mensaje en 0.1 (PA-016): sin contenido y marcado borrado. Lo que
+    se oyó de él, si le cortaron, se va con el contenido (ADR-245)."""
     message.content = None
+    message.heard_when_cut = None
     message.status = MessageStatus.REDACTED
     message.redacted_at = _now()
 

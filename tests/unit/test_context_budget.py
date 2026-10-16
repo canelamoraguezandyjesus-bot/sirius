@@ -6,6 +6,7 @@ only value objects, mirroring ``test_relevance_domain.py``/
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime
 
 import pytest
@@ -243,6 +244,22 @@ def test_messages_fill_the_remaining_budget_dropping_the_oldest_first() -> None:
     )
 
     assert result.recent_messages == (middle, newest)
+
+
+def test_a_cut_reply_also_costs_what_was_heard_of_it() -> None:
+    # ADR-245: el modelo lee entera la respuesta que le cortaron, y detrás lo que se oyó.
+    oldest = _message(1, 1, "a" * 5)
+    cut = replace(_message(2, 2, "b" * 5), role=MessageRole.SIRIUS, heard_when_cut="b" * 3)
+
+    result = apply_context_budget(
+        protected_tokens=0,
+        ranked_knowledge=(),
+        recent_messages=(oldest, cut),
+        token_counter=_COUNTER,
+        token_budget=10,
+    )
+
+    assert result.recent_messages == (cut,)
 
 
 # --- Source-message exemption: survives older non-source messages, not forever. ---

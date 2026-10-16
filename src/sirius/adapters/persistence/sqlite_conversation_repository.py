@@ -41,6 +41,7 @@ def _to_domain_message(model: MessageModel) -> Message:
         redacted_at=(
             model.redacted_at.replace(tzinfo=UTC) if model.redacted_at is not None else None
         ),
+        heard_when_cut=model.heard_when_cut,
     )
 
 
@@ -191,6 +192,19 @@ class SqliteConversationRepository:
                 session.flush()
             return _to_domain_message(model)
 
+    def mark_cut(self, message_id: int, heard: str) -> Message:
+        """ADR-245: le cortaron la respuesta mientras la decía; queda apuntado lo que se
+        oyó. Solo una respuesta de Sirius completada, y el contenido no se toca."""
+        with self._scope() as session:
+            model = session.get(MessageModel, message_id)
+            if model is None:
+                msg = f"Unknown message id: {message_id}"
+                raise ValueError(msg)
+            if model.role is MessageRole.SIRIUS and model.status is MessageStatus.COMPLETED:
+                model.heard_when_cut = heard
+                session.flush()
+            return _to_domain_message(model)
+
     def redact_message(self, message_id: int) -> Message:
         with self._scope() as session:
             model = session.get(MessageModel, message_id)
@@ -199,6 +213,8 @@ class SqliteConversationRepository:
                 raise ValueError(msg)
 
             model.content = None
+            # Lo que se oyó es parte de lo dicho: se va con ello (ADR-245).
+            model.heard_when_cut = None
             model.status = MessageStatus.REDACTED
             model.redacted_at = _utc_now_naive()
             session.flush()

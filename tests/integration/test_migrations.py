@@ -75,6 +75,7 @@ def test_upgrade_head_columns_match_the_domain_schema(tmp_path: Path) -> None:
         "identity_version",
         "status",
         "redacted_at",
+        "heard_when_cut",
     }
     assert llm_usage_columns == {"id", "year_month", "spent_usd", "updated_at"}
     assert project_columns == {
@@ -1862,4 +1863,44 @@ def test_upgrading_from_the_robot_facts_head_keeps_identity_versions_without_exa
             text("SELECT personality_instructions FROM identity_versions")
         ).fetchall()
     assert [tuple(row) for row in texts] == [("texto con sus ejemplos dentro",)]
+    engine.dispose()
+
+
+@pytest.mark.integration
+def test_upgrading_from_the_seed_examples_head_keeps_messages_without_a_cut(
+    tmp_path: Path,
+) -> None:
+    """ADR-245: un mensaje de antes de la columna ``heard_when_cut`` se queda entero y sin
+    corte, ``NULL``; y volver atrás quita solo la columna."""
+    database_path = tmp_path / "sirius.db"
+    config = _alembic_config(database_path)
+    command.upgrade(config, "96dcb8c3d40e")
+
+    now = datetime.now(UTC).replace(tzinfo=None).isoformat(sep=" ")
+    engine = build_engine(database_path)
+    with engine.begin() as connection:
+        connection.execute(
+            text("INSERT INTO conversations (created_at, is_main) VALUES (:now, 1)"), {"now": now}
+        )
+        connection.execute(
+            text(
+                "INSERT INTO messages (conversation_id, sequence, role, content, created_at, "
+                "status) VALUES (1, 1, 'sirius', 'una respuesta de antes', :now, 'completed')"
+            ),
+            {"now": now},
+        )
+
+    command.upgrade(config, "head")
+
+    with engine.begin() as connection:
+        rows = connection.execute(text("SELECT content, heard_when_cut FROM messages")).fetchall()
+    assert [tuple(row) for row in rows] == [("una respuesta de antes", None)]
+
+    command.downgrade(config, "96dcb8c3d40e")
+
+    columns = {column["name"] for column in inspect(engine).get_columns("messages")}
+    assert "heard_when_cut" not in columns
+    with engine.begin() as connection:
+        texts = connection.execute(text("SELECT content FROM messages")).fetchall()
+    assert [tuple(row) for row in texts] == [("una respuesta de antes",)]
     engine.dispose()

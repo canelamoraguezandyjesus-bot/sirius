@@ -361,3 +361,50 @@ def test_replace_reply_cambia_solo_una_respuesta_de_sirius_completada(tmp_path: 
     ]
     with pytest.raises(ValueError, match="Unknown message id"):
         repository.replace_reply(9999, "otra cosa")
+
+
+@pytest.mark.integration
+def test_mark_cut_apunta_lo_que_se_oyo_solo_en_una_respuesta_de_sirius_completada(
+    tmp_path: Path,
+) -> None:
+    """ADR-245: le cortan mientras dice una respuesta; queda entera, y se apunta lo oído."""
+    repository = build_sqlite_conversation_repository(tmp_path / "sirius.db")
+    Base.metadata.create_all(build_engine(tmp_path / "sirius.db"))
+    conversation = repository.get_or_create_main_conversation()
+    suya = repository.append_message(conversation.id, MessageRole.USER, "Cuéntame.")
+    respuesta = repository.append_message(
+        conversation.id, MessageRole.SIRIUS, "Una frase. Otra frase."
+    )
+    a_medias = repository.append_message(
+        conversation.id, MessageRole.SIRIUS, "Algo a", status=MessageStatus.FAILED
+    )
+
+    cortada = repository.mark_cut(respuesta.id, "Una frase.")
+
+    assert (cortada.content, cortada.heard_when_cut) == ("Una frase. Otra frase.", "Una frase.")
+    assert repository.mark_cut(suya.id, "x").heard_when_cut is None
+    assert repository.mark_cut(a_medias.id, "x").heard_when_cut is None
+    assert [m.heard_when_cut for m in repository.list_messages(conversation.id)] == [
+        None,
+        "Una frase.",
+        None,
+    ]
+    with pytest.raises(ValueError, match="Unknown message id"):
+        repository.mark_cut(9999, "x")
+
+
+@pytest.mark.integration
+def test_redactar_una_respuesta_cortada_borra_tambien_lo_que_se_oyo(tmp_path: Path) -> None:
+    repository = build_sqlite_conversation_repository(tmp_path / "sirius.db")
+    Base.metadata.create_all(build_engine(tmp_path / "sirius.db"))
+    conversation = repository.get_or_create_main_conversation()
+    respuesta = repository.append_message(
+        conversation.id, MessageRole.SIRIUS, "Una frase. Otra frase."
+    )
+    repository.mark_cut(respuesta.id, "Una frase.")
+
+    redactada = repository.redact_message(respuesta.id)
+
+    assert (redactada.content, redactada.heard_when_cut) == (None, None)
+    (guardada,) = repository.list_messages(conversation.id)
+    assert guardada.heard_when_cut is None

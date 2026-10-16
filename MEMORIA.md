@@ -356,6 +356,7 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 | `guarda-medida-que-se-queda-sin-autoridad-porque-nadie-relee-la-medida` | 1 | sí | 199 |
 | `instrumento-que-solo-mide-un-lado` | 1 | sí | 203 |
 | `interruptor-que-enciende-mas-de-lo-que-se-puede-medir` | 1 | sí | 185 |
+| `la-hora-de-quien-lee-y-no-de-quien-capta` | 1 | sí | 245 |
 | `parada-segura-que-tira-lo-ya-pagado` | 1 | sí | 226 |
 | `pieza-correcta-a-la-que-no-llama-quien-la-necesita` | 1 | sí | 197 |
 | `plan-que-hay-que-terminar-de-una-sentada` | 1 | sí | 176 |
@@ -496,6 +497,10 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 
 - **ADR-185** — poner una sola puerta delante de varias piezas (lo hace cumplir `tests/unit/test_composition_root_relevance_gate.py`).
 
+### `la-hora-de-quien-lee-y-no-de-quien-capta`
+
+- **ADR-245** — decidir algo de lo oído con el estado del momento en que se (lo hace cumplir `tests/unit/test_local_listening.py`).
+
 ### `parada-segura-que-tira-lo-ya-pagado`
 
 - **ADR-226** — tratar toda parada de un revisor como pérdida del veredicto del otro, aunque el que para haya declarado que no va a revisar y el otro ya haya entregado hallazgos pagados; la asimetría que protege (no aprobar sin los dos) se conserva sin tirar el trabajo hecho. (lo hace cumplir `tests/automation/test_sirius_aggregate_reviews.py`).
@@ -532,7 +537,7 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 
 - **ADR-205** — el ciclo volvería a quedarse horas en verde esperando (lo hace cumplir `tests/automation/test_sirius_merge.py`).
 
-Y **7** ADR declaran expresamente que no dejaron lección: 245, 240, 236, 235, 234, 233, 232.
+Y **6** ADR declaran expresamente que no dejaron lección: 240, 236, 235, 234, 233, 232.
 
 ## Los bloques del motor
 

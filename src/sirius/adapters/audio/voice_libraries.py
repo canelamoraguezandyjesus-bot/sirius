@@ -24,6 +24,10 @@ END_OF_TURN = "pipecat.audio.turn.smart_turn.local_smart_turn_v3"
 SPEECH_TO_TEXT = "faster_whisper"
 #: Piper: lo escrito, en voz.
 TEXT_TO_SPEECH = "piper"
+#: La APM de WebRTC de livekit: lo que vuelve del altavoz, fuera de lo que capta el micro
+#: (pieza E, ADR-245). No es una herramienta con que oye o habla: sin ella oye y habla
+#: igual, pero no se le puede cortar.
+ECHO_CANCELLATION = "livekit.rtc"
 
 
 def import_voice_library(module: str) -> Any:

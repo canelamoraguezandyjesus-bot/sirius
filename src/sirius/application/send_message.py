@@ -50,7 +50,11 @@ from sirius.domain.own_memory import render_own_memory
 from sirius.domain.project import blockers_to_text
 from sirius.domain.robot_seed import EXAMPLES_FRAME, render_examples
 from sirius.infrastructure.logging import get_logger
-from sirius.ports.conversation_repository import ConversationRepository, ReplyRewriter
+from sirius.ports.conversation_repository import (
+    ConversationRepository,
+    CutRecorder,
+    ReplyRewriter,
+)
 from sirius.ports.identity_repository import IdentityRepository
 from sirius.ports.llm import (
     MEMORY_SUGGESTION_DELIMITER,
@@ -186,7 +190,7 @@ def render_instructions(context: Context) -> str:
         lines += ["# Resumen de la charla", context.summary, ""]
     lines += [
         "# Mensajes recientes",
-        *(f"[{message.role.value}] {message.content}" for message in context.recent_messages),
+        *(render_recent_message(message) for message in context.recent_messages),
         "",
         "# Sugerir un recuerdo (opcional, SIRIUS-ARQ-0.2 §3.2)",
         "Si, y solo si, esta conversación contiene una preferencia o un dato "
@@ -196,6 +200,24 @@ def render_instructions(context: Context) -> str:
         "No lo incluyas si no hay nada que proponer.",
     ]
     return "\n".join(lines)
+
+
+#: Cómo ve el modelo una respuesta suya que le cortaron mientras la decía (ADR-245): entera,
+#: y detrás lo que el propietario llegó a oír, para que no dé por dicho lo que no sonó.
+CUT_HEARD = "(Te cortó mientras lo decías: solo llegó a oír «{heard}».)"
+#: Lo mismo, si le cortaron antes de que sonara nada.
+CUT_NOTHING_HEARD = "(Te cortó antes de que llegara a oír nada de esto.)"
+
+
+def render_recent_message(message: Message) -> str:
+    """Un mensaje reciente, como lo lee el modelo: quién y qué; y, si a Sirius le cortaron
+    esa respuesta, hasta dónde se oyó (ADR-245)."""
+    line = f"[{message.role.value}] {message.content}"
+    heard = message.heard_when_cut
+    if heard is None:
+        return line
+    mark = CUT_HEARD.format(heard=heard) if heard else CUT_NOTHING_HEARD
+    return f"{line}\n{mark}"
 
 
 class CommandVoice:
@@ -256,6 +278,7 @@ class SendMessageUseCase:
         reminder: str = "",
         memory_commands: MemoryCommandService | None = None,
         command_voice: CommandVoice | None = None,
+        cuts: CutRecorder | None = None,
     ) -> None:
         """Lo de la charla del robot (pieza D de ADR-233) es opcional: sin ello,
         este caso de uso hace exactamente lo de antes.
@@ -273,9 +296,12 @@ class SendMessageUseCase:
         - ``command_voice`` (ADR-240): con él, Sirius dice con su voz lo que hizo la
           orden, sin que el modelo vea lo olvidado; sin él, o si el modelo no
           contesta, la frase de siempre.
+        - ``cuts`` (ADR-245): donde se apunta hasta dónde se oyó una respuesta que le
+          cortaron mientras la decía; sin él, no se apunta.
         """
         self._memory_commands = memory_commands
         self._command_voice = command_voice
+        self._cuts = cuts
         self._mode_repository = mode_repository
         self._reply_marks = reply_marks
         self._summary_service = summary_service
@@ -287,6 +313,12 @@ class SendMessageUseCase:
         #: mitad de una, esa respuesta sigue con el suyo de principio a fin: se
         #: cancela, se atribuye y se resume con él (ronda 3 de Codex).
         self._in_flight: dict[str, LLMProvider] = {}
+
+    def mark_cut(self, message_id: int, heard: str) -> None:
+        """Le cortaron la respuesta ``message_id`` cuando el propietario había oído
+        ``heard``: queda apuntado, y la respuesta sigue entera (ADR-245)."""
+        if self._cuts is not None:
+            self._cuts.mark_cut(message_id, heard)
 
     def set_llm_provider(self, llm_provider: LLMProvider) -> None:
         """Swap the active provider (e.g. after B2a onboarding validates a key).

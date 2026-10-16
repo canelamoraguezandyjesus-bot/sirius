@@ -10,7 +10,14 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from sirius.application.context import Context
-from sirius.application.send_message import render_identity, render_instructions
+from sirius.application.send_message import (
+    CUT_HEARD,
+    CUT_NOTHING_HEARD,
+    render_identity,
+    render_instructions,
+    render_recent_message,
+)
+from sirius.domain.conversation import Message, MessageRole
 from sirius.domain.decision import Decision, DecisionRevision, DecisionStatus
 from sirius.domain.identity import (
     INITIAL_PERSONALITY_INSTRUCTIONS,
@@ -375,3 +382,36 @@ def test_el_texto_de_la_semilla_no_lleva_ningun_ejemplo() -> None:
     for ejemplo in ROBOT_SEED_EXAMPLES:
         assert ejemplo.said not in ROBOT_SEED_INSTRUCTIONS
         assert ejemplo.reply not in ROBOT_SEED_INSTRUCTIONS
+
+
+def test_una_respuesta_que_le_cortaron_se_ve_entera_y_con_lo_que_se_oyo() -> None:
+    # ADR-245: el modelo lee la respuesta entera y, detrás, lo que el propietario llegó a
+    # oír de ella, para que no dé por dicho lo que no sonó.
+    def mensaje(heard: str | None) -> Message:
+        return Message(
+            id=1,
+            conversation_id=1,
+            sequence=1,
+            role=MessageRole.SIRIUS,
+            content="Una frase. Otra frase.",
+            created_at=_NOW,
+            heard_when_cut=heard,
+        )
+
+    assert render_recent_message(mensaje(None)) == "[sirius] Una frase. Otra frase."
+    assert render_recent_message(mensaje("Una frase.")) == (
+        "[sirius] Una frase. Otra frase.\n" + CUT_HEARD.format(heard="Una frase.")
+    )
+    assert render_recent_message(mensaje("")) == (
+        "[sirius] Una frase. Otra frase.\n" + CUT_NOTHING_HEARD
+    )
+    context = _context_without_project()
+    context = Context(
+        identity=context.identity,
+        project=None,
+        decisions=(),
+        memories=(),
+        recent_messages=(mensaje("Una frase."),),
+        current_user_message="Espera.",
+    )
+    assert "solo llegó a oír «Una frase.»" in render_instructions(context)

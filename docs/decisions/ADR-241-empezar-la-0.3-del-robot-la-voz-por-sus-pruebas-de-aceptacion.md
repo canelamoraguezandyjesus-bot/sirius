@@ -749,3 +749,8 @@ la misma PR que anote sus cifras.
   la revisión externa; la externa se repite sobre cada head nuevo hasta que una ronda
   vuelva limpia, sea la que sea. La regla de las dos rondas sigue: misma familia dos
   veces, raíz antes que parche. El tope de tres de ADR-233 queda sin efecto.
+
+**La ronda limpia.** Ronda 12, sobre `5a1438b9`: «Didn't find any major issues», del
+conector, el 14-10-2026. Con ella y Quality en verde se fusionó la PR #686 (`d72f20b4`).
+Se anota desde la PR de la pieza E de la 0.3 (ADR-245): anotarlo en su PR habría cambiado
+el head que la ronda revisó.

@@ -433,3 +433,8 @@ dura la charla. No trae cortarle (E) ni elegir su voz (F).
     espera va ahí: mientras Model Studio está abierto o su voz sigue sintetizando o
     sonando, no lo abre y lo deja pedido para cuando calle, y el botón se ve apagado. Se
     sigue: es la decisión de la ronda 5 en el sitio que no deja ningún camino fuera.
+
+**La ronda limpia.** Ronda 7, sobre `d1aec4f5`: «Didn't find any major issues», del
+conector, el 15-10-2026. Con ella y Quality en verde se fusionó la PR #689 (`654ee7a0`).
+Se anota desde la PR de la pieza E de la 0.3 (ADR-245): anotarlo en su PR habría cambiado
+el head que la ronda revisó.

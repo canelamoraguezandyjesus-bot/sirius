@@ -63,6 +63,17 @@ class ConversationRepository(Protocol):
         ...
 
 
+class CutRecorder(Protocol):
+    """Apuntar en una respuesta de Sirius ya guardada hasta dónde se oyó, si le cortaron
+    mientras la decía (ADR-245). La respuesta sigue entera."""
+
+    def mark_cut(self, message_id: int, heard: str) -> Message:
+        """Apunta ``heard``, lo que el propietario llegó a oír, en la respuesta
+        ``message_id`` si es de Sirius y está completada, y la devuelve; si no, la deja
+        como está y la devuelve igual. ``ValueError`` si no existe."""
+        ...
+
+
 class ReplyRewriter(Protocol):
     """Cambiar el texto de una respuesta de Sirius ya guardada (ADR-240).
 

@@ -117,8 +117,13 @@ class _Altavoz:
     playing = False
     latency = 0.0
 
+    def __init__(self) -> None:
+        #: Suena en el acto: todo lo que toma empieza a sonar.
+        self.started = 0
+
     def play(self, sound: str) -> None:
         del sound
+        self.started += 1
 
     def stop(self) -> None:
         pass

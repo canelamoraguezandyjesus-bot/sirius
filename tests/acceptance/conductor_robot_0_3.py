@@ -67,8 +67,10 @@ from piezas_del_robot import PiezaPendiente, Piezas
 
 from sirius.adapters.audio.voice_libraries import voice_tools
 from sirius.adapters.persistence.models import Base
+from sirius.application.send_message import CUT_HEARD, CUT_NOTHING_HEARD
 from sirius.config.local_voice import LocalVoiceSettings
 from sirius.config.settings import _CONFIG_FILE_NAME  # el nombre que usa `_config_file()`
+from sirius.domain.conversation import MessageRole
 from sirius.infrastructure.local_voice_installation import (
     INSTALL_COMMAND,
     LISTENING_MODEL_FILES,
@@ -78,12 +80,18 @@ from sirius.infrastructure.local_voice_installation import (
 from sirius.infrastructure.logging import LOG_FILE_NAME, configure_logging
 from sirius.infrastructure.paths import resolve_paths
 from sirius.ports.llm import LLMCompleted, LLMRequest, LLMStreamEvent, LLMTextDelta
-from sirius.ports.local_voice import Captured, ListeningEngines, SpeakingEngines, TurnSignal
+from sirius.ports.local_voice import (
+    Captured,
+    Cleaned,
+    ListeningEngines,
+    SpeakingEngines,
+    TurnSignal,
+)
 
 #: Las letras de la tabla de piezas de ADR-241 que ya han entrado en ``main``.
 #: La A es la nota de arranque y estas pruebas; la B, oír en local (ADR-242); la C,
-#: hablar en local (ADR-243).
-PIEZAS_ENTREGADAS: frozenset[str] = frozenset({"A", "B", "C", "D"})
+#: hablar en local (ADR-243); la D, escuchar siempre (ADR-244); la E, cortarle (ADR-245).
+PIEZAS_ENTREGADAS: frozenset[str] = frozenset({"A", "B", "C", "D", "E"})
 
 #: Qué trae cada pieza, con las palabras de la tabla de ADR-241.
 PIEZAS: Mapping[str, str] = {
@@ -555,6 +563,7 @@ class MicroDeMentira:
         self._leidos: list[Sonido] = []
         self._leido_en: list[float] = []
         self._perdidos: list[Sonido] = []
+        self._captados = 0
 
     @property
     def abierto(self) -> bool:
@@ -580,6 +589,12 @@ class MicroDeMentira:
         """Lo que sonó con el micro cerrado y nadie pudo leer."""
         return tuple(self._perdidos)
 
+    @property
+    def captados(self) -> int:
+        """Cuántos sonidos ha captado con el micro abierto. Se leen en el orden en que se
+        captaron, así que el que se capte ahora será el de este índice en ``leidos``."""
+        return self._captados
+
     def abre(self) -> None:
         self._abierto = True
 
@@ -588,7 +603,11 @@ class MicroDeMentira:
 
     def suena(self, sonido: Sonido) -> None:
         """Algo suena delante del micro: queda pendiente de leer, o se pierde si está cerrado."""
-        (self._pendientes if self._abierto else self._perdidos).append(sonido)
+        if self._abierto:
+            self._pendientes.append(sonido)
+            self._captados += 1
+        else:
+            self._perdidos.append(sonido)
 
     def lee(self) -> Audio | None:
         """El siguiente sonido pendiente, o ``None`` si no hay ninguno. Cerrado, no se lee."""
@@ -776,6 +795,20 @@ class VozDeMentira:
         return Sonido(texto, de_quien="sirius", voz=voz)
 
 
+@dataclass
+class _EnElAire:
+    """Un sonido de Sirius en el aire, contado en capturas del micro: desde la que captó el
+    micro al empezar a sonar hasta la última antes de acabar (``hasta``, excluida; ``None``
+    mientras sigue sonando)."""
+
+    texto: str
+    desde: int
+    hasta: int | None = None
+
+    def en(self, captura: int) -> bool:
+        return self.desde <= captura and (self.hasta is None or captura < self.hasta)
+
+
 class AltavozDeMentira:
     """Lo que suena por el altavoz.
 
@@ -786,6 +819,10 @@ class AltavozDeMentira:
     sirve para cortarle. Sirius sabe si algo sigue sonando por ``sonando``, y no
     llama a ``acaba``: quien sabe cuándo termina un sonido es el altavoz. Las dos
     banderas y ``acaba`` son de la prueba; los registros, solo de él.
+
+    Como el altavoz de verdad le da a la cancelación de eco lo que suena, este apunta qué
+    tuvo en el aire y durante qué capturas del micro (``en_el_aire``): desde la que captó
+    al sonar, la copia del eco, hasta la última antes de acabar o de que le paren (pieza E).
     """
 
     def __init__(self, micro: MicroDeMentira) -> None:
@@ -795,6 +832,7 @@ class AltavozDeMentira:
         self._sonados: list[tuple[Sonido, float]] = []
         self._sonando: Sonido | None = None
         self._parado_en: float | None = None
+        self._al_aire: list[_EnElAire] = []
 
     @property
     def sonados(self) -> tuple[tuple[Sonido, float], ...]:
@@ -810,22 +848,74 @@ class AltavozDeMentira:
         """Cuándo mandó Sirius callar lo que sonaba; ``None`` si nunca lo hizo."""
         return self._parado_en
 
+    def en_el_aire(self, captura: int) -> tuple[str, ...]:
+        """Lo que tenía en el aire cuando el micro hizo su captura ``captura``."""
+        return tuple(tramo.texto for tramo in self._al_aire if tramo.en(captura))
+
     def suena(self, sonido: Sonido) -> None:
         self._sonados.append((sonido, _ahora()))
+        self._deja_de_sonar()
+        self._al_aire.append(_EnElAire(sonido.texto, self._micro.captados))
         if self.con_eco:
             self._micro.suena(sonido)
         if self.sigue_sonando:
             self._sonando = sonido
+        else:
+            self._deja_de_sonar()
 
     def para(self) -> None:
         """Sirius manda callar: lo que sonaba deja de sonar, y queda apuntado cuándo."""
         if self._sonando is not None:
             self._parado_en = _ahora()
             self._sonando = None
+            self._deja_de_sonar()
 
     def acaba(self) -> None:
         """La prueba deja que lo que sonaba termine por sí solo. No lo llama Sirius."""
         self._sonando = None
+        self._deja_de_sonar()
+
+    def _deja_de_sonar(self) -> None:
+        """Lo último que sonó deja el aire: las capturas de después ya no lo llevan."""
+        if self._al_aire and self._al_aire[-1].hasta is None:
+            self._al_aire[-1].hasta = self._micro.captados
+
+
+class CanceladorDeMentira:
+    """Hace de la APM de WebRTC: aparta de cada audio el eco de lo que sonaba por el
+    altavoz cuando el micro lo captó (pieza E).
+
+    Como a la de verdad, lo que suena se lo da el altavoz (``en_el_aire``) y lo que limpia
+    se lo da Sirius, audio a audio, en cuanto lo lee: el que limpia es el último que leyó
+    el micro, y su captura es su sitio en ``leidos``. No mira quién lo dijo: aparta lo que
+    sonaba entonces, de dentro del audio, y lo que queda llega al oído; si no queda nada,
+    llega como silencio. Lo que Sirius dijo alguna vez, dicho por el propietario con el
+    altavoz callado, pasa entero. Apunta cada audio que limpia, con lo que quedó
+    (``limpiados``).
+    """
+
+    def __init__(self, micro: MicroDeMentira, altavoz: AltavozDeMentira) -> None:
+        self._micro = micro
+        self._altavoz = altavoz
+        self._limpiados: list[tuple[Audio, Audio]] = []
+
+    @property
+    def limpiados(self) -> tuple[tuple[Audio, Audio], ...]:
+        """Cada audio que limpió, con lo que quedó, en orden."""
+        return tuple(self._limpiados)
+
+    def limpia(self, audio: Audio) -> tuple[Audio, bool]:
+        """``audio`` sin el eco de lo que sonaba cuando el micro lo captó, y si lo había."""
+        ecos = self._altavoz.en_el_aire(len(self._micro.leidos) - 1)
+        texto = audio.texto
+        for eco in ecos:
+            if texto == eco:
+                texto = ""
+            elif texto.startswith(f"{eco} "):
+                texto = texto[len(eco) + 1 :]
+        limpio = Audio(texto)
+        self._limpiados.append((audio, limpio))
+        return limpio, bool(ecos)
 
 
 # --- La voz y el altavoz, enchufados a Sirius -----------------------------------------
@@ -861,6 +951,20 @@ class _AltavozEnchufado:
 
     def stop(self) -> None:
         self._altavoz.para()
+
+    @property
+    def started(self) -> int:
+        # Suena en el acto: todo lo que se le dio empezó a sonar.
+        return len(self._altavoz.sonados)
+
+
+class _CanceladorEnchufado:
+    def __init__(self, cancelador: CanceladorDeMentira) -> None:
+        self._cancelador = cancelador
+
+    def clean(self, captured: Captured[Audio]) -> Cleaned[Audio]:
+        limpio, habia_eco = self._cancelador.limpia(captured.chunk)
+        return Cleaned(limpio, echoing=habia_eco)
 
 
 @dataclass
@@ -1358,6 +1462,7 @@ class ConductorDeVoz(Conductor):
         self.transcriptor = TranscriptorDeMentira()
         self.voz = VozDeMentira()
         self.altavoz = AltavozDeMentira(self.micro)
+        self.cancelador = CanceladorDeMentira(self.micro, self.altavoz)
         self.reloj = RelojDeMentira()
         self._escrituras: list[Path] = []
         self._conexiones: list[str] = []
@@ -1494,6 +1599,7 @@ class ConductorDeVoz(Conductor):
             return SpeakingEngines(
                 voice=_VozEnchufada(self.voz, modelo.name.removesuffix(".onnx")),
                 speaker=_AltavozEnchufado(self.altavoz),
+                echo_canceller=_CanceladorEnchufado(self.cancelador),
             )
 
         return motores
@@ -1915,6 +2021,26 @@ class ConductorDeVoz(Conductor):
         """El propietario habla mientras el altavoz sigue sonando con la respuesta anterior."""
         self._suena(Sonido(texto), silencios=1)
         return self._turno_de_voz()
+
+    @staticmethod
+    def lo_que_oyo_de(respuesta: str, peticion: Peticion) -> str | None:
+        """Lo que ``peticion`` le dice al modelo que el propietario oyó de su ``respuesta``,
+        si se la cortaron; ``None`` si no la lleva o no la marca como cortada.
+
+        Se lee de lo que recibió el modelo, con las marcas con que Sirius pinta el corte
+        (``CUT_HEARD`` y ``CUT_NOTHING_HEARD``): no se le pregunta a nadie.
+        """
+        linea = f"[{MessageRole.SIRIUS.value}] {respuesta}\n"
+        recibido = f"{peticion.instrucciones}\n{peticion.texto}"
+        if linea not in recibido:
+            return None
+        marca = recibido.split(linea, 1)[1].split("\n", 1)[0]
+        if marca == CUT_NOTHING_HEARD:
+            return ""
+        prefijo, sufijo = CUT_HEARD.split("{heard}")
+        if marca.startswith(prefijo) and marca.endswith(sufijo):
+            return marca[len(prefijo) : len(marca) - len(sufijo)]
+        return None
 
     # --- Pieza F: elegir su voz ---
 

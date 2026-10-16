@@ -51,6 +51,10 @@ class MessageModel(Base):
     ``status`` is REDACTED (RF-025/DR-012); every other status always
     carries real, possibly partial, content. ``redacted_at`` mirrors
     ``EventModel.redacted_at`` and stays NULL until a message is redacted.
+
+    ``heard_when_cut`` (ADR-245) es lo que el propietario llegó a oír de una respuesta de
+    Sirius que le cortaron mientras la decía; NULL si no le cortaron. ``content`` sigue
+    entera. Se borra con ella al redactarla.
     """
 
     __tablename__ = "messages"
@@ -91,6 +95,7 @@ class MessageModel(Base):
         server_default=MessageStatus.COMPLETED.value,
     )
     redacted_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    heard_when_cut: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class EventModel(Base):

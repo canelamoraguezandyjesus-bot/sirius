@@ -127,11 +127,18 @@ def _trim_messages(
     source_message_ids: frozenset[int],
 ) -> tuple[Message, ...]:
     """Drop the oldest non-source message first, newest turns last; a source
-    message is only dropped once no non-source message remains."""
+    message is only dropped once no non-source message remains.
+
+    Una respuesta que le cortaron cuesta también lo que se oyó de ella, que el modelo
+    lee detrás (ADR-245)."""
     completed = [
         message for message in recent_messages if message.status is MessageStatus.COMPLETED
     ]
-    costs = {message.id: token_counter.count_tokens(message.content or "") for message in completed}
+    costs = {
+        message.id: token_counter.count_tokens(message.content or "")
+        + token_counter.count_tokens(message.heard_when_cut or "")
+        for message in completed
+    }
     included = list(completed)
     total_cost = sum(costs.values())
 

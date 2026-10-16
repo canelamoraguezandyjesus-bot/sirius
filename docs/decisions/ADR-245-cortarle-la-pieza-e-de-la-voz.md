@@ -145,13 +145,154 @@ La opción 2, el micro leído desde lo que la charla escribe, y el corte apuntad
 mensaje de Sirius. Lo que queda por decidir al escribir el código se anota aquí con su
 porqué.
 
+Lo que se decidió al escribir el código, con su porqué:
+
+- **El cancelador va con el altavoz** (`SpeakingEngines.echo_canceller`, puerto
+  `EchoCanceller` en `src/sirius/ports/local_voice.py`): es el altavoz quien le da lo que
+  suena. El oído le da cada trozo que capta, todos y en orden, y recibe lo limpio y si su
+  voz estaba en el aire cuando el micro lo captó (`Cleaned.echoing`). Sin cancelador, el
+  oído cierra el micro mientras habla, como en la pieza C.
+- **Cuándo le cortan.** Cuando el detector oye voz en lo limpio mientras contesta, desde
+  que el turno va a la charla hasta que calla, pensando o hablando; o cuando el trozo se
+  captó con su voz en el aire, aunque se lea cuando ya ha callado. Calla lo que dice y el
+  altavoz; la charla sigue escribiendo y guarda la respuesta entera.
+- **Mientras la charla escribe**, el oído lee el micro cada vez que le llega texto de ella,
+  antes de decir las frases cerradas: así no dice otra frase encima de quien ya habla. Los
+  turnos que se cierran entonces van a la charla cuando acaba la respuesta, y si son de la
+  charla se decide al cerrarse cada uno, con la que corre entonces: contestar al primero le
+  hace callar otra vez, y eso no deja fuera al siguiente (revisión propia, abajo).
+- **Lo que le corta es para él**: calla en el instante en que empieza esa voz, y ahí
+  empieza la charla. Lo que le siga diciendo mientras la charla escribe no le hace callar
+  otra vez: cae en esa charla, sin alargarla, y pasados 10 s del corte necesita su nombre,
+  como en la pieza D. Sin corte, la charla empieza con el primer trozo que el micro capta
+  sin su voz cuando el altavoz ya no tiene nada que decir: en una pausa entre frase y
+  frase aún contesta. Si se para el oído mientras contesta, empieza al parar.
+- **Hasta dónde la oyó** son las frases que el altavoz llegó a empezar (`Speaker.started`):
+  lo que tiró al callarlo no cuenta. Al cortarle calla el altavoz lo primero, y después
+  mira hasta dónde llegó y lo apunta: lo que empezó a sonar mientras callaba cuenta, y
+  apuntarlo no le hace seguir hablando. Se apunta en el mensaje de Sirius
+  (`messages.heard_when_cut`, migración `b0f472943480`), que sigue entero; si le cortan
+  mientras la charla escribe, en cuanto la respuesta queda guardada. Lo que el modelo lee
+  después lleva la respuesta y, detrás, lo que se oyó de ella (`CUT_HEARD` en
+  `src/sirius/application/send_message.py`), y el presupuesto del contexto cuenta las dos
+  cosas. Olvidar lo busca también ahí y se lo lleva con el mensaje.
+- **El cancelador de verdad** (`src/sirius/adapters/audio/echo_cancellation.py`) es la APM
+  de WebRTC de `livekit`, con su filtro de paso alto. Lo que suena entra con la hora a la
+  que se oye y lo captado con la hora a la que se captó, y la APM recibe lo que suena antes
+  que lo captado a esa hora, en tramas de 10 ms; lo que suena se pasa de 22 050 Hz a
+  16 kHz sin numpy, que Quality no instala. Lo limpio sale con 10 ms de retraso como mucho.
+  Su voz está en el aire mientras suena lo que tiene algo más que silencio y 0,25 s
+  después, la cola del eco en la habitación. El altavoz suena siempre, silencio incluido,
+  y con el micro cerrado nadie limpia: de lo que suena guarda los dos últimos minutos, y lo
+  que acabó de sonar más de un segundo antes de lo captado no se le da a la APM. Si no,
+  tras una hora con el micro callado, el primer trozo esperaría a que la APM tragara la
+  hora entera, con el oído parado.
+- **Dos pruebas de la A no podían pasar por un defecto suyo**, y se arreglan sin quitarles
+  nada, como pide el criterio de parada. En la de su propia voz con cancelación, el
+  detector pide tres silencios desde la mitad de la prueba y el último turno solo traía
+  uno: el turno se quedaba abierto (`TurnoDeVoz(oido=None, …)`); ahora trae tres. En la de
+  guardar entera la respuesta, lo que dice encima se cerraba en el mismo `oye` que su
+  pregunta, y el conductor da un turno por `oye` desde la pieza B (rondas 11 y 12 de Codex
+  sobre la PR #687): fallaba con «Sirius cerró 2 turnos de una vez»; ahora el detector pide
+  dos silencios, como la de callarse con el turno abierto, y se cierra con `calla(1)`.
+
 ## Comprobación que la sostiene
 
-Se escribe al acabar la pieza, con las cifras de sus pruebas, su mutación y su batería.
+Medido el 15 y el 16-10-2026 en el contenedor de la sesión, sobre la rama de esta PR.
+
+- **La APM de verdad con el adaptador de Sirius**, en Linux: `livekit` 1.1.20 en un
+  entorno aparte, con eco sintético (una señal con banda y sílabas de voz a 22 050 Hz, y
+  su eco a 16 kHz con 40 ms de retraso, la mitad de fuerte y tres reflexiones). El eco
+  baja 16,3 dB entre los 4 y los 8 s, y entre 15,1 y 17,6 dB cada segundo desde el
+  primero. Con otra voz encima en los dos últimos segundos, la limpia se le parece 0,79
+  con 18 ms de retraso (lo captado sin limpiar, 0,84): la voz del propietario pasa. La
+  pista de retraso que se le da no cambia nada: de 0 a 200 ms, entre 16,2 y 16,4 dB.
+  Vuelto a medir el 16-10-2026 con el adaptador que guarda solo lo último de lo que suena
+  (revisión propia, abajo): lo mismo, 16,3 dB y 0,79.
+- **Alinear por la hora es lo que hace que funcione leyendo tarde.** Con el oído ocupado
+  1,5 s de cada 3, como mientras transcribe y contesta, el eco baja 16,3 dB alineado por
+  la hora, y 5,5 dB dándole a la APM lo que suena en el acto, como hace `livekit` en su
+  `media_devices.py`. Lo de 5,5 dB se midió antes de que el adaptador tirara lo que sonó
+  mucho antes de lo captado: con ese cambio, lo que llega sin su hora se tira, y la
+  comparación ya no se puede repetir con él. Alineado por la hora, vuelto a medir: 16,3 dB.
+- **Sin red**: la misma prueba corrió dentro de `unshare -n`, sin ninguna red, y
+  vigilada con `strace -e trace=connect,socket`: ninguna llamada.
+- **Las cuatro pruebas de la pieza E**, en verde con el conductor de verdad: las tres que
+  esperaban en `xfail` y la nueva de PA-R03-07, hasta dónde la oyó. Las de voz de la 0.3
+  (`tests/acceptance/test_robot_0_3_voz.py`), 22 en verde y 3 `xfail`, las de la F; los
+  dobles del conductor (`tests/acceptance/test_dobles_del_conductor.py`), 22 en verde; y la
+  tabla de `docs/evolution/PRUEBAS_0.3_DEL_ROBOT.md` pone en verde PA-R03-03 y PA-R03-07,
+  como pide su guarda de trazabilidad, con el inventario en 28.
+- **45 pruebas nuevas**, 50 casos con sus parámetros: el oído (19 más en
+  `tests/unit/test_local_listening.py`, de 77 a 96: el corte pensando y hablando, la
+  charla del corte, lo que se cierra mientras contesta, hasta dónde se oyó y el cancelador
+  que falla); el cancelador de verdad con una APM de mentira (12 en
+  `tests/unit/test_echo_cancellation.py`); el altavoz que cuenta lo que empezó a sonar y
+  le da a la cancelación lo que suena (4 más en
+  `tests/unit/test_local_speaking_adapters.py`, de 14 a 18); lo que lee el modelo de una
+  respuesta cortada (1 más en `tests/unit/test_render_instructions.py`, de 20 a 21) y lo
+  que cuesta en el presupuesto (1 más en `tests/unit/test_context_budget.py`, de 14 a 15);
+  la base que apunta el corte y lo borra al redactar (2 más en
+  `tests/integration/test_sqlite_conversation_repository.py`, de 17 a 19); olvidar lo que
+  se oyó (1 más en `tests/integration/test_olvidar.py`, de 12 a 13); la migración, que
+  deja los mensajes de antes enteros y sin corte (1 más en
+  `tests/integration/test_migrations.py`); la de aceptación nueva, y 3 más de los dobles
+  del conductor, de 19 a 22. Las de la regla de a quién le hablan
+  (`tests/unit/test_addressing.py`) miran ahora cada mitad, la charla y el nombre: 8, como
+  antes. Con todas las que toca la pieza, 401 en verde y 3 `xfail`.
+- **Mutación**, cada mutación con las pruebas que tienen que tumbarla: 51 en el oído, la
+  regla, el cancelador de verdad, el altavoz, la base, olvidar, lo que lee el modelo, su
+  presupuesto y el doble del conductor, y caen las 51. En la primera pasada sobrevivieron
+  cuatro: a dos les faltaba la prueba, que se escribió; a otra la prueba solo la tocaba con
+  sonidos de una muestra, y se cambió; y la cuarta era código equivalente, que se quitó
+  (`started_answering`: toda voz que empieza mientras contesta le corta, y el corte ya pone
+  la charla). Otra no valía, porque dejaba un `if` sin cuerpo, y se repitió con `pass`.
+  En la de los arreglos de la revisión propia sobrevivió una, callar el altavoz después
+  de mirar lo que se oyó mientras la charla escribe, y se escribió su prueba.
+- **mypy** sobre `src` y `tests`, sin errores en 719 ficheros; **ruff**, limpio.
+- **La batería entera**, sobre el árbol de esta PR: 8 703 en verde, 14 omitidas y 5
+  `xfail`, en 22 min 3 s. Sobre el último head de la pieza D, `d1aec4f5`, eran 8 650 en
+  verde, 14 omitidas y 8 `xfail`: las 3 de la E ya no esperan, y entran las nuevas. Su
+  primera pasada encontró tres fallos, y se arreglaron: la foto del esquema de la base en
+  `tests/integration/test_migrations.py` no tenía la columna nueva (se añade, con una
+  prueba que sube y baja la migración y deja los mensajes de antes enteros y sin corte);
+  la lista de bibliotecas que mira `sirius-instala-la-voz` no tenía `livekit`, y la prueba
+  que la compara con el extra `voz` lo vio; y la prueba del diario al apuntar el corte no
+  veía nada detrás de otra que configura el diario
+  (`tests/integration/test_secret_leakage.py`): enciende su registrador, como las de la
+  pieza D, y así pasa en ese orden, donde antes fallaba.
 
 ## Consecuencias
 
-Se escriben al acabar la pieza.
+- **Con la tele hablando, le corta**: cualquier voz en lo limpio mientras contesta le
+  calla, sea suya o no. Hasta la 0.4 no sabe quién habla ni si le miran. Y lo que le corta
+  es para él, así que la charla sigue con lo que dijera la tele.
+- **Si le hablan mientras piensa, no empieza a hablar**: la respuesta se guarda entera y
+  queda apuntado que no se oyó nada de ella.
+- **Si quien le calla es la ventana**, al entrar en Model Studio o al cerrarse, no se
+  apunta hasta dónde se oyó: el corte que se apunta es el del propietario hablándole.
+- **Si la cancelación de eco falla a mitad**, el oído deja de oír y lo dice, como cuando
+  falla el detector; el botón lo reabre. Si no está o no carga al empezar, oye y habla
+  como en la pieza C, con el micro cerrado mientras habla, y solo el diario lo dice.
+- **La biblioteca nativa de `livekit`** se ha visto en Linux, no en Windows: sin red y
+  vigilada, no intentó ninguna conexión (abajo). Al salir del programa puede escribir en
+  la consola «Exception ignored … FfiHandle.__del__» al deshacerse de la APM: no es un
+  fallo de Sirius.
+- **Hasta dónde la oyó se cuenta por frases**: la frase que sonaba al cortarle cuenta
+  como oída entera.
+- **Lo que le dice al cortarle se contesta cuando la charla acaba de escribir la respuesta
+  cortada**: guardarla entera, como decidió el propietario, pide dejarla acabar. Un modelo
+  que escribe más deprisa de lo que Sirius habla casi siempre ha acabado cuando le cortan;
+  con uno lento, se nota.
+- **Lo apuntado lo ve el modelo en los mensajes recientes**, y el presupuesto del contexto
+  lo cuenta; el resumen de lo anterior (PA-R02-05) no lo lleva.
+- **Si la charla tarda en acabar después del corte**, lo que le diga pasados 10 s del
+  corte necesita su nombre, como cuando calla en la pieza D: la charla corre desde que
+  calló, y calló al cortarle. Así la tele, hablando mientras la charla escribe, no la
+  alarga.
+- **Cuánto aparta la APM el eco en su habitación** no se sabe hasta E-R03-03: con eco
+  sintético, unos 16 dB (abajo). Si no basta para cortarle sin que se corte solo, es el
+  micro de unos 60 €, y se le pregunta.
 
 ## Alternativas descartadas y por qué
 
@@ -161,10 +302,46 @@ Se escriben al acabar la pieza.
 - **Un hilo más leyendo el micro**: dos lectores del mismo micro, lo que la D ya descartó.
 - **El corte solo como nota del turno siguiente**: no queda apuntado en la charla.
 
+## Revisión propia
+
+Quien implementó revisó la pieza entera antes de pedir otra revisión, corrigiendo y
+volviendo a revisar (punto 3 de la nota de arranque).
+
+- **Primera pasada, 15-10-2026**: si le cortaban dos veces mientras la charla escribía, el
+  segundo corte movía la charla a la segunda voz, y la primera quedaba antes de ella y no
+  era para él. Se arregló con que un segundo corte no la mueve, y la prueba nueva siguió
+  fallando, ahora en lo segundo que dijo: después de contestar a lo primero, Sirius calla
+  otra vez, la charla se mueve, y lo segundo queda antes de ella.
+- **Segunda pasada, 16-10-2026**: es la misma familia que la primera, la charla se movía
+  entre que se oía un turno y que se decidía si era para él, así que se dejó de parchear y
+  se buscó la raíz: se decidía al atenderlo, con la charla de ese momento, y no al
+  cerrarlo, con la que corría cuando se oyó. Ahora se decide al cerrarlo, como la
+  generación (`_ClosedTurn.in_conversation`), y el nombre se mira al transcribir: la regla
+  se parte en `Addressing.in_conversation` y `says_his_name`. Que un segundo corte no
+  mueva la charla se queda por otra razón: así no se alarga. La misma pasada encontró
+  otras tres cosas, de otras familias:
+  - **El cancelador de verdad lo guardaba todo**: el altavoz suena siempre, y con el micro
+    callado nadie limpiaba, así que lo que sonaba se acumulaba sin fin, unos 150 MB por
+    hora, y al volver a escuchar el primer trozo esperaba a que la APM lo tragara todo,
+    con el oído parado. Ahora guarda los dos últimos minutos y no le da a la APM lo que
+    acabó de sonar más de un segundo antes de lo captado.
+  - **Al cortarle, miraba hasta dónde se oyó antes de callar el altavoz**: lo que este
+    empezara entretanto sonaba y no contaba, y apuntarlo en la base retrasaba el silencio.
+    Ahora calla lo primero.
+  - **El presupuesto del contexto no contaba lo que se oyó**, que el modelo lee detrás de
+    la respuesta: una respuesta cortada podía costar el doble de lo contado. Ahora lo
+    cuenta.
+
 ## La lección
 
-- ninguna: esta es la nota de arranque; si la pieza deja una lección, se escribe al
-  acabarla.
+- familia: `la-hora-de-quien-lee-y-no-de-quien-capta`
+- sin esto se repetiría: decidir algo de lo oído con el estado del momento en que se
+  atiende, no con el del momento en que se oyó. La pieza D lo aprendió con la hora (ronda
+  1 de Codex sobre la PR #689) y esta nota lo aplicó desde el principio a la hora, pero
+  no a la charla: si le hablaban dos veces mientras la charla escribía, contestar a lo
+  primero movía la charla, y lo segundo, dicho dentro de ella, dejaba de ser para él. Lo
+  vio la revisión propia antes de empujar (H-245).
+- lo hace cumplir: `tests/unit/test_local_listening.py`
 
 ## Revisión externa
 

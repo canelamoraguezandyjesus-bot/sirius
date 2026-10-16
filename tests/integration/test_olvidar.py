@@ -414,3 +414,25 @@ def test_olvidar_va_por_palabras_enteras_y_no_se_lleva_lo_que_no_se_pidio() -> N
     assert vecino("Mi vecino\nRamiro me tiene frito")
     assert not vecino("Ramiro, el vecino")
     assert not phrase_matcher("   ")("cualquier cosa")
+
+
+def test_olvidar_se_lleva_tambien_lo_que_se_oyo_de_una_respuesta_cortada(tmp_path: Path) -> None:
+    # ADR-245: si le cortan, se apunta lo que se oyó de la respuesta. Sale de ella, pero
+    # olvidar lo busca también ahí, y se va con el mensaje.
+    base = _base(tmp_path)
+    conversacion = build_sqlite_conversation_repository(base)
+    try:
+        principal = conversacion.get_or_create_main_conversation()
+        conversacion.append_message(principal.id, MessageRole.USER, "Cuéntame.", operation_id="a")
+        respuesta = conversacion.append_message(
+            principal.id, MessageRole.SIRIUS, "Te lo cuento.", operation_id="a"
+        )
+        conversacion.mark_cut(respuesta.id, f"Te lo cuento, {SECRETO}.")
+        assert _en_el_fichero(base, SECRETO), "el dato tenía que estar antes de olvidarlo"
+
+        informe = build_sqlite_forgetter(base).forget_phrase(SECRETO.lower())
+
+        assert _en_el_fichero(base, SECRETO) == []
+        assert informe.messages == 2
+    finally:
+        conversacion.close()

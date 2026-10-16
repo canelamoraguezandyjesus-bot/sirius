@@ -25,9 +25,11 @@ _VERSION = Version(
 )
 
 #: El inventario aprobado en ADR-241: 10 PA, 27 pruebas de máquina y seis
-#: evaluaciones del propietario. Una prueba se puede renombrar o mejorar, pero
-#: quitar una PA, una prueba o una evaluación es retirar una prueba, y eso no lo
-#: hace una sesión sola (AGENTS.md): se cambia aquí, a la vista de la revisión.
+#: evaluaciones del propietario; ADR-245 añade una prueba a PA-R03-07, hasta dónde oyó lo
+#: que le cortaron, por decisión del propietario del 15-10-2026: 28. Una prueba se puede
+#: renombrar o mejorar, pero quitar una PA, una prueba o una evaluación es retirar una
+#: prueba, y eso no lo hace una sesión sola (AGENTS.md): se cambia aquí, a la vista de la
+#: revisión.
 INVENTARIO_APROBADO = Inventario(
     pruebas_por_pa={
         "PA-R03-01": 4,
@@ -36,7 +38,7 @@ INVENTARIO_APROBADO = Inventario(
         "PA-R03-04": 3,
         "PA-R03-05": 2,
         "PA-R03-06": 3,
-        "PA-R03-07": 2,
+        "PA-R03-07": 3,
         "PA-R03-08": 4,
         "PA-R03-09": 1,
         "PA-R03-10": 3,
@@ -52,7 +54,7 @@ def test_la_tabla_de_las_pruebas_de_la_0_3_dice_la_verdad() -> None:
     )
 
 
-def test_el_inventario_aprobado_suma_las_27_pruebas_y_las_seis_evaluaciones() -> None:
+def test_el_inventario_aprobado_suma_las_28_pruebas_y_las_seis_evaluaciones() -> None:
     assert len(INVENTARIO_APROBADO.pruebas_por_pa) == 10
-    assert sum(INVENTARIO_APROBADO.pruebas_por_pa.values()) == 27
+    assert sum(INVENTARIO_APROBADO.pruebas_por_pa.values()) == 28
     assert len(INVENTARIO_APROBADO.evaluaciones) == 6

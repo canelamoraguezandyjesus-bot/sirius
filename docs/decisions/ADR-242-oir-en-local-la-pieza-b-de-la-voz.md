@@ -720,3 +720,8 @@ turno escrito acaba por dos sitios, y el otro es `_on_crashed`. Ahora se recorre
 
 Una prueba de integración rompe la charla de verdad después de guardar lo suyo: la
 consola cuenta lo guardado y el aviso, y sale con error, sin volcado.
+
+**La ronda limpia.** Ronda 16, sobre `f9220284`: «Didn't find any major issues», del
+conector, el 15-10-2026. Con ella y Quality en verde se fusionó la PR #687 (`2f15ee27`).
+Se anota desde la PR de la pieza E de la 0.3 (ADR-245): anotarlo en su PR habría cambiado
+el head que la ronda revisó.
