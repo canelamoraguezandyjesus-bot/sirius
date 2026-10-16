@@ -773,7 +773,9 @@ class LocalListening[Chunk]:
             self._speech = None
         _logger.info("Turno de voz entregado a la charla")
         message_id = result.sirius_message.id if result.outcome is MessageStatus.COMPLETED else None
-        # Si le cortaron mientras la charla escribía, la respuesta no estaba guardada aún.
+        # Si le cortaron mientras la charla escribía, la respuesta no estaba guardada aún. Lo
+        # que la charla resuma en este turno no la lleva: deja fuera las cuatro últimas
+        # respuestas, y esta es la última (ronda 3 de Codex sobre la PR #690).
         self._mark_cut(message_id, speech)
         self._after_speaking(speech, message_id)
         delay = None

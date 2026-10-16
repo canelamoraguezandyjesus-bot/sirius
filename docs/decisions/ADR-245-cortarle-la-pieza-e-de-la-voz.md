@@ -304,6 +304,10 @@ Medido el 15 y el 16-10-2026 en el contenedor de la sesión, sobre la rama de es
   respuesta entera: «corrige eso» busca el hecho con sus palabras, y un «sí» sigue
   contestando a la pregunta del final aunque le cortaran antes de oírla, que es raro y no
   se quiso adivinar.
+- **Un resumen no se rehace si después se corta lo que resumió.** Con la voz no pasa: el
+  resumen deja fuera las cuatro últimas respuestas, y la que suena es la última (ronda 3 de
+  Codex, abajo). Solo pasaría si, mientras suena una respuesta de voz, él escribe en la
+  ventana, se contestan cuatro mensajes y toca resumir justo entonces.
 - **Mientras contesta con cancelador hay un hilo más**, que mira el micro cada 30 ms y se
   para cuando la charla acaba.
 - **Si la charla tarda en acabar después del corte**, lo que le diga pasados 10 s del
@@ -432,3 +436,14 @@ su ADR lo dijera. No trae elegir su voz (F).
   que lo cuentan, así que no se corrigió solo esa línea: se repasó el ADR entero contra el
   código, y lo demás estaba al día. La nota de arranque se deja como se publicó, porque es
   lo escrito antes de empezar.
+- **Ronda 3, sobre `22e01bb3`**, preguntando otra vez si el enfoque está mal: no lo dijo, y
+  trajo un hallazgo P2 que no se da. Decía que si le cortan mientras la charla resume en el
+  turno 18, el resumen da por oída entera la respuesta que sonaba, porque el corte se
+  guarda al volver de la charla. Se hizo su caso con Sirius de verdad, el conductor de la
+  0.3: el resumen de ese turno deja fuera las cuatro últimas respuestas
+  (`TURNS_KEPT_VERBATIM`) y la que suena es la última, así que no la lleva; y el corte se
+  guarda al acabar el turno, antes de que nada más la lea. La prueba queda de guarda
+  (`tests/integration/test_voz_corte_y_resumen.py`) y cae con las dos mutaciones que
+  harían cierto el hallazgo: que el resumen llegue a la última respuesta y que el corte no
+  se guarde. No es un defecto, así que no cuenta para la regla de las dos rondas; lo que
+  sí queda sin garantizar está en «Consecuencias».
