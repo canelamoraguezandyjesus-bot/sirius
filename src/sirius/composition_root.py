@@ -137,6 +137,7 @@ from sirius.application.supersede_decision import SupersedeDecisionUseCase
 from sirius.application.trick_questions import TrickQuestionsUseCase
 from sirius.application.validate_and_save_api_key import ValidateAndSaveApiKeyUseCase
 from sirius.application.validate_backup import ValidateBackupUseCase
+from sirius.application.voice_test import VoiceTestUseCase
 from sirius.capture_setup import leer_contrasena_guardada
 from sirius.config.llm_provider_settings import (
     OLLAMA_CHAT_MODEL_SETTING,
@@ -147,12 +148,21 @@ from sirius.config.llm_provider_settings import (
     resolve_openai_provider_settings,
     resolve_provider_kind,
 )
-from sirius.config.local_voice import LocalVoiceSettings
+from sirius.config.local_voice import (
+    SPEAKING_VOICE_SETTING,
+    LocalVoiceSettings,
+    SpeakingVoice,
+    local_voice_settings,
+)
 from sirius.config.settings import load_settings, save_settings
 from sirius.domain.blind_test import BlindTestError
 from sirius.domain.capture import build_scene_registry
 from sirius.domain.robot_seed import ROBOT_SEED_REMINDER
-from sirius.infrastructure.local_voice_installation import LocalVoiceInstallation
+from sirius.infrastructure.local_voice_installation import (
+    ChosenVoiceInstallation,
+    voice_model,
+    voice_test_missing,
+)
 from sirius.infrastructure.logging import get_logger
 from sirius.ports.audio_playback import AudioPlayback
 from sirius.ports.embeddings import TextEmbedder
@@ -270,6 +280,19 @@ def save_studio_voice(voice: str) -> None:
     save_settings(settings)
 
 
+def save_local_voice(voice: SpeakingVoice) -> None:
+    """Guarda la voz que él eligió a ciegas sin tocar el resto de la configuración
+    (pieza F, ADR-246)."""
+    settings = dict(load_settings())
+    settings[SPEAKING_VOICE_SETTING] = voice.value
+    save_settings(settings)
+
+
+def current_local_voice_settings() -> LocalVoiceSettings:
+    """Los ajustes de la voz como están ahora en el disco, con la voz que él eligió."""
+    return local_voice_settings(load_settings())
+
+
 @dataclass(frozen=True, slots=True)
 class ConversationDependencies:
     """Everything ``MainWindow`` needs to drive its tabs, already wired.
@@ -311,9 +334,12 @@ class ConversationDependencies:
     abrirse y al guardar uno. ``rank_relevant_knowledge_use_case`` es la
     búsqueda de recuerdos que usa cada turno.
 
-    ``local_listening`` es el oído y la voz del robot (piezas B y C de ADR-241, ADR-242 y
-    ADR-243): del micro a esta misma charla y de ella al altavoz, todo en local. La ventana
-    aún no lo usa (pieza D); lo usa la orden ``sirius-oye``.
+    ``local_listening`` es el oído y la voz del robot (piezas B a E de ADR-241, ADR-242 a
+    ADR-245): del micro a esta misma charla y de ella al altavoz, todo en local. Lo abre la
+    ventana al abrirse (pieza D), y lo usa también la orden ``sirius-oye``.
+
+    ``voice_test_use_case`` es la prueba de voces de la pieza F (ADR-246): la hoja a ciegas
+    con la que él elige con qué voz habla el oído.
 
     ``propose_criticality_use_case`` (M21a, ADR-130) is likewise wired but not
     yet called from anywhere: the interface that shows a proposal and lets
@@ -368,6 +394,7 @@ class ConversationDependencies:
     fact_proposals: FactProposals
     dream_service: DreamService
     local_listening: LocalListening[Any]
+    voice_test_use_case: VoiceTestUseCase
 
 
 def chat_goes_through_ollama() -> bool:
@@ -626,7 +653,7 @@ def build_local_listening(
     *,
     load_speaking: Callable[[Path], SpeakingEngines[Any]] | None = None,
     memory_suggestions: MemorySuggestions,
-    settings: LocalVoiceSettings | None = None,
+    settings: Callable[[], LocalVoiceSettings] = current_local_voice_settings,
     clock: Callable[[], float] = time.monotonic,
 ) -> LocalListening[Any]:
     """El oído y la voz del robot (ADR-242, ADR-243), entregando lo oído a ``chat`` y
@@ -639,18 +666,18 @@ def build_local_listening(
     altavoz se cargan al empezar a escuchar, y solo si el modelo de oír y la voz están en
     este ordenador. Sin ``load_engines``, los de verdad, con el modelo de la carpeta que
     dicen los ajustes; sin ``load_speaking``, la voz de verdad, que recibe el modelo de la
-    voz que dicen los ajustes. ``clock`` es el reloj con el que mide la charla y lo que
-    tarda en hablar (ADR-244).
+    voz que dicen los ajustes. Los ajustes se leen cada vez que hacen falta (``settings``):
+    la voz que él elige vale desde que la elige (ADR-246). ``clock`` es el reloj con el que
+    mide la charla y lo que tarda en hablar (ADR-244).
     """
-    installation = LocalVoiceInstallation(settings or LocalVoiceSettings())
-    model_dir = installation.listening_model_dir
-    voice_model = installation.speaking_voice_model
+    installation = ChosenVoiceInstallation(settings)
     speak = load_speaking or load_speaking_engines
     return LocalListening(
         chat=chat,
         installation=installation,
-        load_engines=load_engines or (lambda: load_listening_engines(model_dir)),
-        load_speaking=lambda: speak(voice_model),
+        load_engines=load_engines
+        or (lambda: load_listening_engines(installation.listening_model_dir)),
+        load_speaking=lambda: speak(installation.speaking_voice_model),
         memory_suggestions=memory_suggestions,
         clock=clock,
     )
@@ -941,6 +968,14 @@ def build_conversation_dependencies(
     # pendiente igual se le escriba o se le hable.
     propose_memory_suggestion_use_case = ProposeMemorySuggestionUseCase(unit_of_work)
 
+    local_listening = build_local_listening(
+        send_message_use_case,
+        listening_engines,
+        load_speaking=speaking_engines,
+        memory_suggestions=propose_memory_suggestion_use_case,
+        clock=listening_clock,
+    )
+
     return ConversationDependencies(
         send_message_use_case=send_message_use_case,
         get_history_use_case=get_history_use_case,
@@ -1004,11 +1039,26 @@ def build_conversation_dependencies(
         facts_use_case=facts_use_case,
         fact_proposals=fact_proposals,
         dream_service=dream_service,
-        local_listening=build_local_listening(
-            send_message_use_case,
-            listening_engines,
-            load_speaking=speaking_engines,
-            memory_suggestions=propose_memory_suggestion_use_case,
-            clock=listening_clock,
-        ),
+        local_listening=local_listening,
+        voice_test_use_case=_build_voice_test_use_case(local_listening, speaking_engines),
+    )
+
+
+def _build_voice_test_use_case(
+    local_listening: LocalListening[Any],
+    speaking_engines: Callable[[Path], SpeakingEngines[Any]] | None,
+) -> VoiceTestUseCase:
+    """La prueba de voces (pieza F, ADR-246): carga cada voz como la carga el oído, y la
+    elegida queda en los ajustes y es la del oído desde el turno siguiente."""
+    speak = speaking_engines or load_speaking_engines
+
+    def choose_voice(voice: SpeakingVoice) -> None:
+        save_local_voice(voice)
+        local_listening.reload_voice()
+
+    return VoiceTestUseCase(
+        load_voice=lambda voice: speak(voice_model(voice)),
+        choose_voice=choose_voice,
+        missing=voice_test_missing,
+        pause_listening=local_listening.stop,
     )

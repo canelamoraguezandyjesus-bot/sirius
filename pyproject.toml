@@ -39,6 +39,13 @@ voz = [
   "piper-tts>=1.8,<1.9",
   "livekit>=1.1.20,<1.2",
 ]
+# La voz de personaje de la prueba a ciegas (pieza F, ADR-246): Chatterbox, con su voz de
+# serie y sin audio de nadie. Va aparte porque pesa mucho más que la voz (torch): sin ella,
+# Sirius oye y habla igual. La instala `uv run --extra voz --extra personaje
+# sirius-instala-la-voz`, y Quality no la instala.
+personaje = [
+  "chatterbox-tts==0.1.7",
+]
 
 [project.scripts]
 sirius = "sirius.main:main"
@@ -118,6 +125,13 @@ packaging = [
 
 [tool.uv]
 default-groups = ["dev"]
+# Chatterbox pide spacy-pkuseg, que solo segmenta chino y no tiene rueda para Windows con
+# Python 3.14 (habría que compilar C++ en su ordenador), y gradio, que es de sus demos: la
+# biblioteca no lo importa. Se dejan fuera con un marcador que nunca se cumple (ADR-246).
+override-dependencies = [
+  "spacy-pkuseg; sys_platform == 'never'",
+  "gradio; sys_platform == 'never'",
+]
 
 [tool.ruff]
 target-version = "py314"

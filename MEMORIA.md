@@ -79,7 +79,7 @@ huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
-| [246](docs/decisions/ADR-246-elegir-su-voz-a-ciegas-la-pieza-f-de-la-voz.md) | 2026-10-16 | APROBADO | Elegir su voz a ciegas: la pieza F de la voz | La opción 1, y la voz elegida vale desde el turno siguiente. Lo que quede por decidir al escribir el código se anota aquí con su porqué. |
+| [246](docs/decisions/ADR-246-elegir-su-voz-a-ciegas-la-pieza-f-de-la-voz.md) | 2026-10-16 | APROBADO | Elegir su voz a ciegas: la pieza F de la voz | La opción 1: la voz de personaje es la voz de serie de Chatterbox, sin audio de nadie; y la voz elegida vale desde el turno siguiente, sin volver a abrir Sirius. Cinco candidatas, cuatro de Piper y la de personaje, dicen cinco frases suyas… |
 | [245](docs/decisions/ADR-245-cortarle-la-pieza-e-de-la-voz.md) | 2026-10-15 | APROBADO | Cortarle: la pieza E de la voz | La opción 2; el micro leído todo el rato que la charla contesta, por un hilo aparte y antes de decir cada frase; y el corte apuntado en el mensaje de Sirius. Al principio se leía solo desde lo que la charla escribe, y la ronda 1 de Codex… |
 | [244](docs/decisions/ADR-244-escuchar-siempre-la-pieza-d-de-la-voz.md) | 2026-10-15 | APROBADO | Escuchar siempre: la pieza D de la voz | Se adopta la opción 3, y la charla dura 10 s, desde que Sirius calla hasta que empieza a oírse la voz del turno siguiente. Los turnos de voz no despiertan al juez: puntúa en segundo plano las respuestas que aún no tienen nota (PA-R02-08)… |
 | [243](docs/decisions/ADR-243-hablar-en-local-la-pieza-c-de-la-voz.md) | 2026-10-15 | APROBADO | Hablar en local: la pieza C de la voz | Se adopta la opción 2. |
@@ -358,6 +358,7 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 | `instrumento-que-solo-mide-un-lado` | 1 | sí | 203 |
 | `interruptor-que-enciende-mas-de-lo-que-se-puede-medir` | 1 | sí | 185 |
 | `la-hora-de-quien-lee-y-no-de-quien-capta` | 1 | sí | 245 |
+| `lo-que-un-hilo-carga-despues-de-cerrar` | 1 | sí | 246 |
 | `parada-segura-que-tira-lo-ya-pagado` | 1 | sí | 226 |
 | `pieza-correcta-a-la-que-no-llama-quien-la-necesita` | 1 | sí | 197 |
 | `plan-que-hay-que-terminar-de-una-sentada` | 1 | sí | 176 |
@@ -502,6 +503,10 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 
 - **ADR-245** — decidir algo de lo oído con el estado del momento en que se (lo hace cumplir `tests/unit/test_local_listening.py`).
 
+### `lo-que-un-hilo-carga-despues-de-cerrar`
+
+- **ADR-246** — que un trabajo en segundo plano siga cargando después de que (lo hace cumplir `tests/unit/test_voice_test.py`).
+
 ### `parada-segura-que-tira-lo-ya-pagado`
 
 - **ADR-226** — tratar toda parada de un revisor como pérdida del veredicto del otro, aunque el que para haya declarado que no va a revisar y el otro ya haya entregado hallazgos pagados; la asimetría que protege (no aprobar sin los dos) se conserva sin tirar el trabajo hecho. (lo hace cumplir `tests/automation/test_sirius_aggregate_reviews.py`).
@@ -538,7 +543,7 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 
 - **ADR-205** — el ciclo volvería a quedarse horas en verde esperando (lo hace cumplir `tests/automation/test_sirius_merge.py`).
 
-Y **7** ADR declaran expresamente que no dejaron lección: 246, 240, 236, 235, 234, 233, 232.
+Y **6** ADR declaran expresamente que no dejaron lección: 240, 236, 235, 234, 233, 232.
 
 ## Los bloques del motor
 

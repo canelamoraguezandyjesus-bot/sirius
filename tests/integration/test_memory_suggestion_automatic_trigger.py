@@ -282,6 +282,9 @@ class _Altavoz:
     def stop(self) -> None:
         pass
 
+    def close(self) -> None:
+        pass
+
 
 class _Transcriptor:
     def transcribe(self, chunks: Sequence[str]) -> str:

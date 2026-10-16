@@ -128,6 +128,9 @@ class _Altavoz:
     def stop(self) -> None:
         pass
 
+    def close(self) -> None:
+        pass
+
 
 class _TodoInstalado:
     install_command = "la orden de instalar"

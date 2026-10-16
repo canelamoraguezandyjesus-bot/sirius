@@ -54,6 +54,9 @@ class _Flujo:
             raise _PortAudioError("Error querying device -1")
         self.arrancado = True
 
+    def stop(self) -> None:
+        self.arrancado = False
+
     def close(self) -> None:
         self.cerrado = True
 
@@ -80,12 +83,14 @@ class _Trozo:
 
 
 class _VozDePiper:
-    def __init__(self) -> None:
-        self.config = types.SimpleNamespace(sample_rate=_FRECUENCIA)
+    def __init__(self, locutores: dict[str, int] | None = None) -> None:
+        self.config = types.SimpleNamespace(sample_rate=_FRECUENCIA, speaker_id_map=locutores or {})
         self.dichas: list[str] = []
+        self.configuraciones: list[object] = []
 
-    def synthesize(self, texto: str) -> Iterator[_Trozo]:
+    def synthesize(self, texto: str, syn_config: object = None) -> Iterator[_Trozo]:
         self.dichas.append(texto)
+        self.configuraciones.append(syn_config)
         # Una frase por trozo, como Piper.
         for frase in texto.split(". "):
             yield _Trozo(frase.encode())
@@ -94,6 +99,9 @@ class _VozDePiper:
 class _PiperVoice:
     cargas: list[tuple[tuple[Any, ...], dict[str, Any]]] = []  # noqa: RUF012
     falla_al_cargar: Exception | None = None
+    #: Los locutores que trae la voz que se carga: sharvard, un hombre y una mujer.
+    locutores: dict[str, int] = {}  # noqa: RUF012
+    cargadas: list[_VozDePiper] = []  # noqa: RUF012
 
     @staticmethod
     def load(*args: Any, **kwargs: Any) -> _VozDePiper:
@@ -101,7 +109,14 @@ class _PiperVoice:
         if falla is not None:
             raise falla
         _PiperVoice.cargas.append((args, kwargs))
-        return _VozDePiper()
+        voz = _VozDePiper(_PiperVoice.locutores)
+        _PiperVoice.cargadas.append(voz)
+        return voz
+
+
+@dataclass(frozen=True)
+class _SynthesisConfig:
+    speaker_id: int | None = None
 
 
 @pytest.fixture
@@ -109,8 +124,11 @@ def sounddevice(monkeypatch: pytest.MonkeyPatch) -> _SoundDevice:
     """Pone un Piper y un sounddevice de mentira, y deja el registrador de Piper como estaba."""
     monkeypatch.setattr(_PiperVoice, "cargas", [])
     monkeypatch.setattr(_PiperVoice, "falla_al_cargar", None)
+    monkeypatch.setattr(_PiperVoice, "locutores", {})
+    monkeypatch.setattr(_PiperVoice, "cargadas", [])
     piper = types.ModuleType("piper")
     piper.PiperVoice = _PiperVoice  # type: ignore[attr-defined]
+    piper.SynthesisConfig = _SynthesisConfig  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "piper", piper)
     falso = _SoundDevice()
     monkeypatch.setitem(sys.modules, "sounddevice", falso)
@@ -455,3 +473,93 @@ def test_sin_cancelacion_de_eco_la_voz_carga_igual(
     motores = load_speaking_engines(tmp_path / "es_ES-davefx-medium.onnx")
 
     assert motores.echo_canceller is None
+
+
+# --- Las voces de la prueba a ciegas (pieza F, ADR-246) -------------------------------
+
+
+def test_sharvard_habla_con_su_locutor_masculino(sounddevice: _SoundDevice, tmp_path: Path) -> None:
+    _PiperVoice.locutores = {"M": 0, "F": 1}
+
+    motores = load_speaking_engines(tmp_path / "es_ES-sharvard-medium.onnx")
+    motores.voice.say("Buenos días, jefe.")
+
+    [voz] = _PiperVoice.cargadas
+    assert voz.configuraciones == [_SynthesisConfig(speaker_id=0)]
+
+
+def test_una_voz_sin_el_locutor_que_pide_el_catalogo_no_carga_ni_abre_el_altavoz(
+    sounddevice: _SoundDevice, tmp_path: Path
+) -> None:
+    _PiperVoice.locutores = {"F": 0}
+
+    with pytest.raises(VoiceUnavailable, match="no trae el locutor M"):
+        load_speaking_engines(tmp_path / "es_ES-sharvard-medium.onnx")
+
+    assert sounddevice.flujos == []
+
+
+def test_las_voces_de_un_locutor_hablan_sin_pedir_ninguno(
+    sounddevice: _SoundDevice, tmp_path: Path
+) -> None:
+    motores = load_speaking_engines(tmp_path / "es_ES-carlfm-x_low.onnx")
+    motores.voice.say("Hola.")
+
+    [voz] = _PiperVoice.cargadas
+    assert voz.configuraciones == [None]
+
+
+def test_la_voz_de_personaje_se_carga_de_su_carpeta_con_el_altavoz_a_su_frecuencia(
+    sounddevice: _SoundDevice, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    cargadas: list[Path] = []
+
+    def carga(carpeta: Path) -> SimpleNamespace:
+        cargadas.append(carpeta)
+        return SimpleNamespace(sample_rate=24_000, say=lambda texto: b"")
+
+    monkeypatch.setattr(local_speaking_module, "load_character_voice", carga)
+    carpeta = tmp_path / "chatterbox-multilingual"
+
+    load_speaking_engines(carpeta)
+
+    assert cargadas == [carpeta]
+    assert _PiperVoice.cargas == []
+    (flujo,) = sounddevice.flujos
+    assert flujo.opciones["samplerate"] == 24_000
+
+
+def test_soltar_el_altavoz_tira_lo_que_esperaba_y_cierra_el_flujo() -> None:
+    sounddevice = _SoundDevice()
+    altavoz = SoundDeviceSpeaker(sounddevice, _FRECUENCIA, clock=_Reloj())
+    altavoz.play(b"abcd")
+
+    altavoz.close()
+
+    (flujo,) = sounddevice.flujos
+    assert not flujo.arrancado
+    assert flujo.cerrado
+    assert not altavoz.playing
+
+
+def test_soltar_un_altavoz_que_no_se_deja_cerrar_no_falla_y_lo_apunta(
+    caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Otras pruebas de la batería configuran el diario y apagan los registradores que ya
+    # había: este tiene que estar encendido para que se vea lo que apunta.
+    monkeypatch.setattr(logging.getLogger(local_speaking_module.__name__), "disabled", False)
+    sounddevice = _SoundDevice()
+    altavoz = SoundDeviceSpeaker(sounddevice, _FRECUENCIA, clock=_Reloj())
+
+    def no_se_deja() -> None:
+        raise _PortAudioError("Stream is not open")
+
+    flujo = sounddevice.flujos[0]
+    flujo.stop = no_se_deja  # type: ignore[method-assign]
+    flujo.close = no_se_deja  # type: ignore[method-assign]
+
+    with caplog.at_level(logging.WARNING, logger="sirius"):
+        altavoz.close()
+
+    assert "No se ha podido parar el altavoz: Stream is not open" in caplog.text
+    assert "No se ha podido cerrar el altavoz: Stream is not open" in caplog.text

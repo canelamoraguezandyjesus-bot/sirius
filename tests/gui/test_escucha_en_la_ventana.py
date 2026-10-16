@@ -186,6 +186,9 @@ class _Altavoz:
     def stop(self) -> None:
         pass
 
+    def close(self) -> None:
+        pass
+
 
 @dataclass
 class _Sirius:

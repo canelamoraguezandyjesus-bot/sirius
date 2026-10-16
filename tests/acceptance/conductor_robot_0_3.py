@@ -34,9 +34,11 @@ añade su letra a ``PIEZAS_ENTREGADAS``; la tabla de
 
 from __future__ import annotations
 
+import ast
 import base64
 import enum
 import functools
+import inspect
 import ipaddress
 import logging
 import os
@@ -67,14 +69,16 @@ from piezas_del_robot import PiezaPendiente, Piezas
 
 from sirius.adapters.audio.voice_libraries import voice_tools
 from sirius.adapters.persistence.models import Base
-from sirius.config.local_voice import LocalVoiceSettings
+from sirius.config.local_voice import LocalVoiceSettings, SpeakingVoice
 from sirius.config.settings import _CONFIG_FILE_NAME  # el nombre que usa `_config_file()`
 from sirius.domain.conversation import CUT_HEARD, CUT_NOTHING_HEARD, MessageRole
+from sirius.domain.voice_test import VoiceTestSheet
 from sirius.infrastructure.local_voice_installation import (
     INSTALL_COMMAND,
     LISTENING_MODEL_FILES,
     LocalVoiceInstallation,
     speaking_voice_files,
+    voice_dir,
 )
 from sirius.infrastructure.logging import LOG_FILE_NAME, configure_logging
 from sirius.infrastructure.paths import resolve_paths
@@ -85,12 +89,14 @@ from sirius.ports.local_voice import (
     ListeningEngines,
     SpeakingEngines,
     TurnSignal,
+    Voice,
 )
 
 #: Las letras de la tabla de piezas de ADR-241 que ya han entrado en ``main``.
 #: La A es la nota de arranque y estas pruebas; la B, oír en local (ADR-242); la C,
-#: hablar en local (ADR-243); la D, escuchar siempre (ADR-244); la E, cortarle (ADR-245).
-PIEZAS_ENTREGADAS: frozenset[str] = frozenset({"A", "B", "C", "D", "E"})
+#: hablar en local (ADR-243); la D, escuchar siempre (ADR-244); la E, cortarle (ADR-245);
+#: la F, elegir su voz a ciegas (ADR-246).
+PIEZAS_ENTREGADAS: frozenset[str] = frozenset({"A", "B", "C", "D", "E", "F"})
 
 #: Qué trae cada pieza, con las palabras de la tabla de ADR-241.
 PIEZAS: Mapping[str, str] = {
@@ -956,6 +962,11 @@ class _AltavozEnchufado:
         # Suena en el acto: todo lo que se le dio empezó a sonar.
         return len(self._altavoz.sonados)
 
+    def close(self) -> None:
+        # El altavoz de mentira es uno, el de la habitación: soltar el de una voz calla lo
+        # que sonaba, como callarlo.
+        self._altavoz.para()
+
 
 class _CanceladorEnchufado:
     def __init__(self, cancelador: CanceladorDeMentira) -> None:
@@ -1487,11 +1498,14 @@ class ConductorDeVoz(Conductor):
         self._modelo_de_oir.mkdir(parents=True, exist_ok=True)
         for nombre in (*LISTENING_MODEL_FILES, "vocabulary.txt"):
             (self._modelo_de_oir / nombre).write_bytes(b"un modelo de mentira")
-        # Y la voz de hablar, donde la deja la misma orden.
-        self._voz_de_hablar = instalacion.speaking_voice_dir
-        self._voz_de_hablar.mkdir(parents=True, exist_ok=True)
-        for nombre in speaking_voice_files(LocalVoiceSettings().speaking_voice.value):
-            (self._voz_de_hablar / nombre).write_bytes(b"una voz de mentira")
+        # Y las voces de hablar, donde las deja la misma orden: todas las de la prueba a
+        # ciegas, la de los ajustes y las demás (pieza F, ADR-246).
+        self._voces_de_hablar = tuple(voice_dir(voz) for voz in SpeakingVoice)
+        for voz, carpeta_de_la_voz in zip(SpeakingVoice, self._voces_de_hablar, strict=True):
+            carpeta_de_la_voz.mkdir(parents=True, exist_ok=True)
+            for nombre in speaking_voice_files(voz.value):
+                (carpeta_de_la_voz / nombre).write_bytes(b"una voz de mentira")
+        self._hoja_de_voces: VoiceTestSheet[SpeakingVoice, Any] | None = None
         self._carpetas_vigiladas = (
             carpeta,
             self._temporal,
@@ -1703,7 +1717,8 @@ class ConductorDeVoz(Conductor):
     def quita_los_modelos_de_voz(self) -> None:
         """Deja a Sirius sin los modelos de oír y hablar, como un ordenador sin instalarlos."""
         shutil.rmtree(self._modelo_de_oir)
-        shutil.rmtree(self._voz_de_hablar)
+        for carpeta in self._voces_de_hablar:
+            shutil.rmtree(carpeta)
 
     def orden_para_instalar_la_voz(self) -> str:
         """La orden que el propietario tiene que ejecutar para instalar los modelos de la voz."""
@@ -2044,25 +2059,43 @@ class ConductorDeVoz(Conductor):
     # --- Pieza F: elegir su voz ---
 
     def hoja_de_voces(self) -> HojaDeVoces:
-        raise _pendiente("F")
+        """Abre la prueba de voces en el Sirius vivo, como su botón: el caso de uso de verdad
+        carga cada voz con los dobles y le pide las frases. Lo que ve el propietario es lo
+        que pinta la ventana, la vista de la hoja (``VoiceTestView``), botones incluidos."""
+        caso = self._dependencias.voice_test_use_case
+        self._hoja_de_voces = caso.prepare()
+        hoja = self._hoja_de_voces
+        return HojaDeVoces(
+            frases=hoja.phrases,
+            candidatas=tuple(
+                VozCandidata(candidata.label, dict(candidata.samples))
+                for candidata in hoja.candidates
+            ),
+            lo_que_ve_el_propietario="\n".join(caso.view(hoja).lines()),
+        )
 
     def elige_voz(self, etiqueta: str) -> None:
-        del etiqueta
-        raise _pendiente("F")
+        """Elige en la última hoja la voz ``etiqueta``, como su botón."""
+        self._dependencias.voice_test_use_case.choose(self._hoja_abierta(), etiqueta)
 
     def voz_tras(self, etiqueta: str) -> str:
         """La voz de verdad tras una etiqueta de la hoja: la ve la prueba, no el propietario."""
-        del etiqueta
-        raise _pendiente("F")
+        return self._hoja_abierta().voice_behind(etiqueta).value
 
     def escucha_en_la_hoja(self, etiqueta: str, frase: str) -> None:
         """Escuchar en la hoja la muestra de ``frase`` con la voz ``etiqueta``, como su botón."""
-        del etiqueta, frase
-        raise _pendiente("F")
+        self._dependencias.voice_test_use_case.listen(self._hoja_abierta(), etiqueta, frase)
 
     def hay_forma_de_clonar_una_voz(self) -> bool:
-        """Si algún camino de Sirius acepta un audio de alguien para imitar su voz."""
-        raise _pendiente("F")
+        """Si algún camino de Sirius acepta un audio de alguien para imitar su voz.
+
+        Se mira lo que hay, no se pregunta a nadie (``caminos_para_clonar``).
+        """
+        return bool(caminos_para_clonar())
+
+    def _hoja_abierta(self) -> VoiceTestSheet[SpeakingVoice, Any]:
+        assert self._hoja_de_voces is not None, "primero hay que abrir la hoja de voces"
+        return self._hoja_de_voces
 
     # --- Lo que es solo de las pruebas ---
 
@@ -2105,6 +2138,84 @@ class ConductorDeVoz(Conductor):
                 elif not self._permitidas.permite(fichero):
                     encontrados.add(fichero)
         return frozenset(encontrados)
+
+
+#: Lo que usa Chatterbox para imitar la voz de un audio: el argumento de ``generate`` y el
+#: método que prepara la voz a partir de él (chatterbox-tts 0.1.7, ``mtl_tts.py``).
+_LO_QUE_CLONA_EN_CHATTERBOX: frozenset[str] = frozenset(
+    {"audio_prompt_path", "prepare_conditionals"}
+)
+#: Los diálogos de Qt con los que la ventana deja elegir un fichero para abrirlo.
+_DIALOGOS_DE_ABRIR: frozenset[str] = frozenset(
+    {"getOpenFileName", "getOpenFileNames", "getOpenFileUrl", "getOpenFileUrls"}
+)
+
+
+def caminos_para_clonar(src: Path | None = None) -> list[str]:
+    """Por dónde podría Sirius darle a una voz el audio de alguien para imitarlo; vacío si
+    por ningún sitio (PA-R03-10, ADR-246). Se mira lo que hay en el código, no se pregunta:
+
+    - el puerto de la voz: ``Voice.say`` solo recibe el texto;
+    - los ajustes de la voz: todos son elecciones cerradas, sin sitio para la ruta de un
+      audio;
+    - el código de Sirius: nada nombra lo que usa Chatterbox para imitar
+      (``_LO_QUE_CLONA_EN_CHATTERBOX``), ni como argumento, ni como atributo, ni como nombre;
+      los comentarios y las cadenas no cuentan;
+    - la ventana: ningún diálogo de abrir ficheros que deje elegir un audio.
+    """
+    raiz = src if src is not None else Path(__file__).resolve().parents[2] / "src" / "sirius"
+    caminos: list[str] = []
+    parametros = [nombre for nombre in inspect.signature(Voice.say).parameters if nombre != "self"]
+    if parametros != ["text"]:
+        caminos.append(f"Voice.say recibe {parametros}")
+    abiertos = [
+        nombre
+        for nombre, tipo in get_type_hints(LocalVoiceSettings).items()
+        if not _eleccion_cerrada(tipo)
+    ]
+    if abiertos:
+        caminos.append(f"los ajustes de la voz tienen campos abiertos: {abiertos}")
+    for fichero in sorted(raiz.rglob("*.py")):
+        arbol = ast.parse(fichero.read_text(encoding="utf-8"), filename=str(fichero))
+        for nodo in ast.walk(arbol):
+            nombre = (
+                nodo.arg
+                if isinstance(nodo, ast.keyword)
+                else nodo.attr
+                if isinstance(nodo, ast.Attribute)
+                else nodo.id
+                if isinstance(nodo, ast.Name)
+                else nodo.arg
+                if isinstance(nodo, ast.arg)
+                else None
+            )
+            if nombre in _LO_QUE_CLONA_EN_CHATTERBOX:
+                caminos.append(f"{fichero.name}:{getattr(nodo, 'lineno', 0)} nombra {nombre}")
+            if (
+                isinstance(nodo, ast.Call)
+                and isinstance(nodo.func, ast.Attribute)
+                and nodo.func.attr in _DIALOGOS_DE_ABRIR
+                and _filtra_audio(nodo)
+            ):
+                caminos.append(f"{fichero.name}:{nodo.lineno} deja abrir un audio")
+    return caminos
+
+
+def _filtra_audio(llamada: ast.Call) -> bool:
+    """Si alguna cadena de la llamada deja elegir un fichero de audio, o no filtra nada."""
+    cadenas = [
+        nodo.value
+        for nodo in ast.walk(llamada)
+        if isinstance(nodo, ast.Constant) and isinstance(nodo.value, str)
+    ]
+    filtros = [cadena for cadena in cadenas if "*" in cadena]
+    if not filtros:
+        return True
+    return any(
+        extension in filtro.casefold() or "*.*" in filtro or filtro.strip() == "*"
+        for filtro in filtros
+        for extension in EXTENSIONES_DE_AUDIO
+    )
 
 
 def percentil(valores: Sequence[float], p: int) -> float:

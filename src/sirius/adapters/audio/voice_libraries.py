@@ -12,6 +12,8 @@ del oído y de la voz, y ``voice_tools`` lo lee de ellos (PA-R03-08).
 from __future__ import annotations
 
 import importlib
+import os
+import sys
 from typing import Any
 
 from sirius.ports.local_voice import VoiceUnavailable
@@ -28,6 +30,10 @@ TEXT_TO_SPEECH = "piper"
 #: (pieza E, ADR-245). No es una herramienta con que oye o habla: sin ella oye y habla
 #: igual, pero no se le puede cortar.
 ECHO_CANCELLATION = "livekit.rtc"
+#: Chatterbox multilingüe, del extra ``personaje``: la voz de personaje de la prueba a
+#: ciegas (pieza F, ADR-246). Tampoco es una herramienta del plan con que habla: lo es
+#: Piper, y esta habla solo si él la elige.
+CHARACTER_VOICE_LIBRARY = "chatterbox.mtl_tts"
 
 
 def import_voice_library(module: str) -> Any:
@@ -43,6 +49,32 @@ def import_voice_library(module: str) -> Any:
         return importlib.import_module(module)
     except Exception as error:
         raise VoiceUnavailable(f"{module} no carga ({error})") from error
+
+
+#: Lo que pone a Hugging Face sin conexión: lo lee huggingface_hub, y transformers con él.
+OFFLINE_VARIABLES = ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE")
+
+
+def hugging_face_offline() -> None:
+    """Pone a Hugging Face sin conexión en este proceso (ADR-246).
+
+    faster-whisper y Chatterbox traen huggingface_hub, y Chatterbox le pide un fichero al
+    cargar aunque hable español: sin conexión, esa petición falla sin salir del ordenador
+    (PA-R03-08). huggingface_hub lee las variables al importarse; si ya estaba importado,
+    se le apaga la constante, que su versión 1.33 mira en cada petición
+    (``constants.is_offline_mode``). Si después de eso no dice que está sin conexión, o no
+    se puede saber, ``VoiceUnavailable``: cargar así podría salir.
+    """
+    for variable in OFFLINE_VARIABLES:
+        os.environ[variable] = "1"
+    constants: Any = sys.modules.get("huggingface_hub.constants")
+    if constants is None:
+        return
+    constants.HF_HUB_OFFLINE = True
+    offline = getattr(constants, "is_offline_mode", None)
+    if not callable(offline) or offline() is not True:
+        msg = "no puedo poner a Hugging Face sin conexión en este proceso"
+        raise VoiceUnavailable(msg)
 
 
 def voice_tools() -> dict[str, str]:

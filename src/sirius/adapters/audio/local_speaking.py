@@ -1,4 +1,5 @@
-"""La voz de verdad: Piper, y el altavoz con sounddevice (ADR-243).
+"""La voz de verdad: Piper o la de personaje, y el altavoz con sounddevice (ADR-243,
+ADR-246).
 
 Como el oído de la pieza B (ADR-242): las bibliotecas son del extra ``voz``, se importan
 al cargar la voz y todas por ``import_voice_library``, y cargarla no tumba a Sirius, falle
@@ -22,9 +23,11 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from sirius.adapters.audio.character_voice import load_character_voice
 from sirius.adapters.audio.echo_cancellation import WebRtcEchoCanceller, load_echo_canceller
 from sirius.adapters.audio.local_listening import portaudio_seconds
 from sirius.adapters.audio.voice_libraries import TEXT_TO_SPEECH, import_voice_library
+from sirius.config.local_voice import SpeakingVoice
 from sirius.infrastructure.logging import get_logger
 from sirius.ports.local_voice import SpeakingEngines, VoiceUnavailable
 
@@ -50,23 +53,49 @@ def _libraries() -> tuple[Any, Any]:
 
 
 def load_speaking_engines(model: Path) -> SpeakingEngines[bytes]:
-    """Carga la voz de Piper de ``model``, abre el altavoz a su frecuencia y, si se puede,
-    la cancelación de eco, a la que el altavoz le da lo que suena (pieza E, ADR-245).
+    """Carga la voz de ``model``, abre el altavoz a su frecuencia y, si se puede, la
+    cancelación de eco, a la que el altavoz le da lo que suena (pieza E, ADR-245).
 
-    Falla con ``VoiceUnavailable`` si falta Piper o sounddevice, si la voz está pero no
-    carga o si el altavoz no se puede abrir. Sin cancelación de eco no falla: habla igual,
+    ``model`` es el ``.onnx`` de una voz de Piper, o la carpeta de la de personaje, con
+    Chatterbox (pieza F, ADR-246): así los deja la orden de instalar.
+
+    Falla con ``VoiceUnavailable`` si falta su biblioteca o sounddevice, si la voz está pero
+    no carga o si el altavoz no se puede abrir. Sin cancelación de eco no falla: habla igual,
     con el micro cerrado mientras habla, como en la pieza C.
     """
-    _piper, sounddevice = _libraries()
+    if model.suffix != ".onnx":
+        sounddevice = import_voice_library("sounddevice")
+        character = load_character_voice(model)
+        return _engines(character, sounddevice, character.sample_rate)
+    piper, sounddevice = _libraries()
     logging.getLogger(TEXT_TO_SPEECH).setLevel(logging.WARNING)
     voice = load_speaking_voice(model)
-    rate = voice.config.sample_rate
+    speaker = _piper_speaker(voice, model.name.removesuffix(".onnx"))
+    return _engines(PiperSpeech(voice, piper, speaker), sounddevice, voice.config.sample_rate)
+
+
+def _engines(voice: Any, sounddevice: Any, rate: int) -> SpeakingEngines[bytes]:
     echo = load_echo_canceller(rate)
     return SpeakingEngines(
-        voice=PiperSpeech(voice),
+        voice=voice,
         speaker=SoundDeviceSpeaker(sounddevice, rate, echo=echo),
         echo_canceller=echo,
     )
+
+
+def _piper_speaker(voice: Any, name: str) -> int | None:
+    """El número del locutor que pide el catálogo para la voz ``name``, si pide uno.
+
+    Si la voz no lo trae, ``VoiceUnavailable``: mejor no hablar que hablar con otro.
+    """
+    wanted = next((v.piper_speaker for v in SpeakingVoice if v.value == name), None)
+    if wanted is None:
+        return None
+    speakers = getattr(voice.config, "speaker_id_map", None) or {}
+    if wanted not in speakers:
+        msg = f"la voz no trae el locutor {wanted}"
+        raise VoiceUnavailable(msg)
+    return int(speakers[wanted])
 
 
 def load_speaking_voice(model: Path) -> Any:
@@ -87,13 +116,20 @@ def load_speaking_voice(model: Path) -> Any:
 
 
 class PiperSpeech:
-    """Piper con la voz ya cargada: cada frase, en muestras de 16 bits a su frecuencia."""
+    """Piper con la voz ya cargada: cada frase, en muestras de 16 bits a su frecuencia, con
+    su locutor si la voz trae varios."""
 
-    def __init__(self, voice: Any) -> None:
+    def __init__(self, voice: Any, piper: Any = None, speaker: int | None = None) -> None:
         self._voice = voice
+        self._config = None if speaker is None else piper.SynthesisConfig(speaker_id=speaker)
 
     def say(self, text: str) -> bytes:
-        return b"".join(chunk.audio_int16_bytes for chunk in self._voice.synthesize(text))
+        chunks = (
+            self._voice.synthesize(text)
+            if self._config is None
+            else self._voice.synthesize(text, syn_config=self._config)
+        )
+        return b"".join(chunk.audio_int16_bytes for chunk in chunks)
 
 
 class SoundDeviceSpeaker:
@@ -180,6 +216,19 @@ class SoundDeviceSpeaker:
     def started(self) -> int:
         with self._lock:
             return self._started
+
+    def close(self) -> None:
+        """Tira lo que esperaba, para el flujo y lo cierra; si no se deja, lo apunta en el
+        diario y sigue: no falla."""
+        self.stop()
+        try:
+            self._stream.stop()
+        except Exception as error:
+            _logger.warning("No se ha podido parar el altavoz: %s", error)
+        try:
+            self._stream.close()
+        except Exception as error:
+            _logger.warning("No se ha podido cerrar el altavoz: %s", error)
 
     def _fill(self, outdata: Any, frames: int, time: Any, status: Any) -> None:
         """Lo llama PortAudio desde su hilo: lo siguiente de la cola y, si falta, silencio."""

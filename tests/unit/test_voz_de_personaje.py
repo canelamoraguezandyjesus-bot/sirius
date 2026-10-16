@@ -1,0 +1,231 @@
+"""La voz de personaje, Chatterbox, cableada con módulos de mentira (pieza F, ADR-246).
+
+Chatterbox es del extra ``personaje``, que Quality no instala: aquí se pone un módulo de
+mentira en su sitio, y en el de torch, y se mira cómo los usa Sirius. Lo que se mira es lo
+que cierra puertas: carga solo de su carpeta y sin conexión a Hugging Face, y nunca le da
+un audio para imitar a nadie. Cómo suena lo dice él (E-R03-06).
+"""
+
+from __future__ import annotations
+
+import ast
+import os
+import sys
+import types
+from array import array
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+import sirius.adapters.audio.character_voice as character_voice_module
+from sirius.adapters.audio.character_voice import LANGUAGE, CharacterSpeech, load_character_voice
+from sirius.adapters.audio.voice_libraries import (
+    CHARACTER_VOICE_LIBRARY,
+    OFFLINE_VARIABLES,
+    hugging_face_offline,
+)
+from sirius.ports.local_voice import VoiceUnavailable
+
+
+class _Onda:
+    """Lo que devuelve ``generate``: un tensor de (1, N) muestras entre -1 y 1."""
+
+    def __init__(self, muestras: list[float]) -> None:
+        self._muestras = muestras
+
+    def squeeze(self, eje: int) -> _Onda:
+        assert eje == 0
+        return self
+
+    def tolist(self) -> list[float]:
+        return list(self._muestras)
+
+
+class _Modelo:
+    sr = 24_000
+
+    def __init__(self) -> None:
+        self.pedidos: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
+
+    def generate(self, *args: Any, **kwargs: Any) -> _Onda:
+        self.pedidos.append((args, kwargs))
+        return _Onda([0.5, -2.0, 1.5, 0.0])
+
+
+class _Chatterbox:
+    cargas: list[tuple[Path, str]] = []  # noqa: RUF012
+    falla: Exception | None = None
+
+    @staticmethod
+    def from_local(carpeta: Path, device: str) -> _Modelo:
+        if _Chatterbox.falla is not None:
+            raise _Chatterbox.falla
+        _Chatterbox.cargas.append((carpeta, device))
+        return _Modelo()
+
+
+@pytest.fixture
+def chatterbox(monkeypatch: pytest.MonkeyPatch) -> type[_Chatterbox]:
+    """Un Chatterbox y un torch de mentira, sin gráfica, y Hugging Face sin importar."""
+    monkeypatch.setattr(_Chatterbox, "cargas", [])
+    monkeypatch.setattr(_Chatterbox, "falla", None)
+    multilingue = types.ModuleType(CHARACTER_VOICE_LIBRARY)
+    multilingue.ChatterboxMultilingualTTS = _Chatterbox  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, CHARACTER_VOICE_LIBRARY, multilingue)
+    torch = types.ModuleType("torch")
+    torch.cuda = types.SimpleNamespace(is_available=lambda: False)  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "torch", torch)
+    monkeypatch.delitem(sys.modules, "huggingface_hub.constants", raising=False)
+    for variable in OFFLINE_VARIABLES:
+        monkeypatch.delenv(variable, raising=False)
+    return _Chatterbox
+
+
+def test_carga_solo_de_su_carpeta_sin_conexion_y_en_el_procesador_sin_grafica(
+    chatterbox: type[_Chatterbox], tmp_path: Path
+) -> None:
+    voz = load_character_voice(tmp_path)
+
+    assert chatterbox.cargas == [(tmp_path, "cpu")]
+    assert all(os.environ[variable] == "1" for variable in OFFLINE_VARIABLES)
+    assert voz.sample_rate == 24_000
+
+
+def test_con_grafica_carga_en_la_grafica(
+    chatterbox: type[_Chatterbox], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    torch = sys.modules["torch"]
+    monkeypatch.setattr(torch, "cuda", types.SimpleNamespace(is_available=lambda: True))
+
+    load_character_voice(tmp_path)
+
+    assert chatterbox.cargas == [(tmp_path, "cuda")]
+
+
+def test_si_no_carga_avisa_y_no_tumba_a_sirius(
+    chatterbox: type[_Chatterbox], tmp_path: Path
+) -> None:
+    chatterbox.falla = RuntimeError("CUDA out of memory")
+
+    with pytest.raises(
+        VoiceUnavailable, match="la voz de personaje no carga \\(CUDA out of memory\\)"
+    ):
+        load_character_voice(tmp_path)
+
+
+def test_sin_el_extra_personaje_avisa_y_no_tumba_a_sirius(
+    chatterbox: type[_Chatterbox], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setitem(sys.modules, CHARACTER_VOICE_LIBRARY, None)
+
+    with pytest.raises(VoiceUnavailable, match="chatterbox"):
+        load_character_voice(tmp_path)
+
+
+def test_solo_le_da_el_texto_y_el_idioma_y_ningun_audio() -> None:
+    modelo = _Modelo()
+
+    sonido = CharacterSpeech(modelo).say("Buenos días, jefe.")
+
+    assert modelo.pedidos == [(("Buenos días, jefe.",), {"language_id": LANGUAGE})]
+    # En 16 bits como Piper, con lo que se pasa de -1 a 1 recortado.
+    assert sonido == array("h", [16384, -32767, 32767, 0]).tobytes()
+
+
+def test_ninguna_funcion_de_la_voz_de_personaje_importa_por_su_cuenta() -> None:
+    fuente = Path(character_voice_module.__file__).read_text(encoding="utf-8")
+    sueltos = [
+        f"{funcion.name}:{nodo.lineno}"
+        for funcion in ast.walk(ast.parse(fuente))
+        if isinstance(funcion, ast.FunctionDef | ast.AsyncFunctionDef)
+        for nodo in ast.walk(funcion)
+        if isinstance(nodo, ast.Import | ast.ImportFrom)
+    ]
+
+    assert sueltos == []
+
+
+# --- Hugging Face sin conexión -------------------------------------------------------
+
+
+def _hub(monkeypatch: pytest.MonkeyPatch, *, mira: bool = True) -> types.ModuleType:
+    """Un ``huggingface_hub.constants`` ya importado con conexión, que en cada petición mira
+    su constante, como el de la versión 1.33."""
+    constantes = types.ModuleType("huggingface_hub.constants")
+    constantes.HF_HUB_OFFLINE = False  # type: ignore[attr-defined]
+    if mira:
+        constantes.is_offline_mode = lambda: constantes.HF_HUB_OFFLINE  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "huggingface_hub.constants", constantes)
+    return constantes
+
+
+def test_sin_conexion_pone_las_variables_que_lee_hugging_face(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delitem(sys.modules, "huggingface_hub.constants", raising=False)
+    for variable in OFFLINE_VARIABLES:
+        monkeypatch.delenv(variable, raising=False)
+
+    hugging_face_offline()
+
+    assert {variable: os.environ[variable] for variable in OFFLINE_VARIABLES} == {
+        "HF_HUB_OFFLINE": "1",
+        "TRANSFORMERS_OFFLINE": "1",
+    }
+
+
+def test_si_ya_estaba_importado_con_conexion_lo_apaga(monkeypatch: pytest.MonkeyPatch) -> None:
+    constantes = _hub(monkeypatch)
+
+    hugging_face_offline()
+
+    assert constantes.is_offline_mode() is True
+
+
+def test_si_no_se_puede_saber_que_esta_sin_conexion_no_carga(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _hub(monkeypatch, mira=False)
+
+    with pytest.raises(VoiceUnavailable, match="sin conexión"):
+        hugging_face_offline()
+
+
+def test_si_sigue_con_conexion_despues_de_apagarlo_no_carga(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    constantes = _hub(monkeypatch)
+    constantes.is_offline_mode = lambda: False  # type: ignore[attr-defined]
+
+    with pytest.raises(VoiceUnavailable, match="sin conexión"):
+        hugging_face_offline()
+
+
+def test_la_ventana_y_la_consola_se_ponen_sin_conexion_antes_de_nada(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import sirius.listen_console as consola
+    import sirius.main as ventana
+
+    class Primero(Exception):
+        pass
+
+    def apunta() -> None:
+        raise Primero
+
+    class _QtTodaviaNo:
+        @staticmethod
+        def instance() -> None:
+            pytest.fail("abrió Qt antes de ponerse sin conexión")
+
+    monkeypatch.setattr(ventana, "install_crash_handler", lambda: None)
+    monkeypatch.setattr(ventana, "QApplication", _QtTodaviaNo)
+    monkeypatch.setattr(ventana, "hugging_face_offline", apunta)
+    monkeypatch.setattr(consola, "hugging_face_offline", apunta)
+    monkeypatch.setattr(consola, "_data_paths", lambda: pytest.fail("leyó antes los datos"))
+
+    with pytest.raises(Primero):
+        ventana.main()
+    with pytest.raises(Primero):
+        consola.main()
