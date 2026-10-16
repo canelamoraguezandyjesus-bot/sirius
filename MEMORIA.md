@@ -26,7 +26,7 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **239**.
+- Decisiones (ADR): **240**.
 - Bloques del motor: 17 cerrado, 3 fuera_de_alcance.
 - Defectos registrados: 2 abierto, 90 cerrado.
 - Ideas aparcadas o descartadas: 12 aparcada, 3 descartada, 2 promovida.
@@ -79,6 +79,7 @@ huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| [246](docs/decisions/ADR-246-elegir-su-voz-a-ciegas-la-pieza-f-de-la-voz.md) | 2026-10-16 | APROBADO | Elegir su voz a ciegas: la pieza F de la voz | La opción 1, y la voz elegida vale desde el turno siguiente. Lo que quede por decidir al escribir el código se anota aquí con su porqué. |
 | [245](docs/decisions/ADR-245-cortarle-la-pieza-e-de-la-voz.md) | 2026-10-15 | APROBADO | Cortarle: la pieza E de la voz | La opción 2; el micro leído todo el rato que la charla contesta, por un hilo aparte y antes de decir cada frase; y el corte apuntado en el mensaje de Sirius. Al principio se leía solo desde lo que la charla escribe, y la ronda 1 de Codex… |
 | [244](docs/decisions/ADR-244-escuchar-siempre-la-pieza-d-de-la-voz.md) | 2026-10-15 | APROBADO | Escuchar siempre: la pieza D de la voz | Se adopta la opción 3, y la charla dura 10 s, desde que Sirius calla hasta que empieza a oírse la voz del turno siguiente. Los turnos de voz no despiertan al juez: puntúa en segundo plano las respuestas que aún no tienen nota (PA-R02-08)… |
 | [243](docs/decisions/ADR-243-hablar-en-local-la-pieza-c-de-la-voz.md) | 2026-10-15 | APROBADO | Hablar en local: la pieza C de la voz | Se adopta la opción 2. |
@@ -537,7 +538,7 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 
 - **ADR-205** — el ciclo volvería a quedarse horas en verde esperando (lo hace cumplir `tests/automation/test_sirius_merge.py`).
 
-Y **6** ADR declaran expresamente que no dejaron lección: 240, 236, 235, 234, 233, 232.
+Y **7** ADR declaran expresamente que no dejaron lección: 246, 240, 236, 235, 234, 233, 232.
 
 ## Los bloques del motor
 
