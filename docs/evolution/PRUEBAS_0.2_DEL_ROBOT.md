@@ -129,6 +129,9 @@ Los umbrales están fijados el 07-10-2026, antes de medir nada.
   verdad, Qwen3-Embedding 0.6B o EmbeddingGemma, y pega lo que sale.
 - **Pasa si** acierta 90 o más de los 100, y todos los de «olvida eso» y los de «quién
   dijo qué».
+- **Si no pasa.** La misma orden con `--diagnostico` da una línea por caso con lo que llegó
+  al modelo y con qué parecidos, y con `--modelo` se pasa con otro modelo de huellas sin
+  tocar sus ajustes (ADR-247).
 - **Resultado:** pendiente.
 
 ### E-R02-05

@@ -170,8 +170,25 @@ pasa antes de borrar su carpeta. En detalle:
   `src/sirius/infrastructure/temporary_folder.py`, para las dos órdenes: se borra al salir
   y, si no se puede, lo avisa después de lo que la orden ya dijo, sin tapar el veredicto ni
   su código de salida.
-- **La orden de E-R02-04 no se toca**: la va a cambiar otro trabajo, por su resultado en su
-  ordenador. Se midió que no deja ninguna base abierta (abajo).
+- **El diagnóstico del banco de E-R02-04**, con su propia nota de arranque, arriba:
+  - `--diagnostico` escribe primero una línea que dice cómo se leen las demás, y después
+    una por caso, en JSON, según pasa: el id, la familia, si acierta, qué recuerdos del
+    caso llegaron al modelo y en qué orden, el que tenía que llegar el primero, el puesto
+    de cada uno en la búsqueda por palabras, el parecido de la pregunta con cada recuerdo y
+    el de cada par de recuerdos, como se piden hoy y con el formato del modelo, y el
+    umbral. Lo de siempre va después.
+  - Todo sale del mismo caso, después de preguntar: los parecidos con el mismo modelo y el
+    coseno que mide la búsqueda; los puestos, de la búsqueda por palabras del turno; y el
+    umbral y el límite de esa búsqueda, del módulo de la búsqueda al escribir la línea.
+  - Los formatos son los de la ficha de cada modelo. Qwen3-Embedding pide la pregunta con
+    su instrucción, `Instruct: Given a question, retrieve the memories that answer it` y
+    `Query:`, y los recuerdos tal cual; EmbeddingGemma, `task: search result | query:` y
+    `title: none | text:`. Se reconocen por el nombre del modelo en Ollama, y si no es
+    ninguno de los dos, la línea dice `null` en vez de inventarlo.
+  - `--modelo NOMBRE`, en las dos órdenes de la memoria: el modelo de huellas con el que se
+    pasan, sin tocar sus ajustes. Sin él, el de los ajustes, como hasta ahora.
+  - Lo que cuenta si un caso acierta no cambia: se saca a `acierta`, para que el
+    diagnóstico diga lo mismo que el recuento.
 - **La ventana no se toca.**
 
 De paso, en los documentos, las rondas limpias de Codex que no se pudieron anotar en sus
@@ -193,6 +210,14 @@ PR sin cambiar el head que revisaron: la de ADR-245 (PR #690) y la de ADR-246 (P
   cerraría las conexiones antes de borrar y la prueba pasaría por suerte.
 - **La orden de E-R02-04**, medida igual: con un caso de cada familia del banco y con 12
   casos por `pasa_el_banco`, ninguna base queda abierta al acabar.
+- **El diagnóstico del banco** (`tests/integration/test_pasar_el_banco_de_memoria.py`, 8
+  pruebas), con huellas de mentira de parecidos sabidos y de largos distintos, para que el
+  producto no pase por el coseno: la línea de MB-001 sale entera y se lee de vuelta igual;
+  con EmbeddingGemma pide la pregunta y los recuerdos con su formato, y lo de hoy sigue tal
+  cual; con un modelo desconocido, `null`; con el umbral subido a 0,7, la línea lo dice y
+  el café, que se parece 0,6, ya no llega; `--diagnostico` escribe una línea por caso y
+  después lo de siempre, y sin él ninguna; y `--modelo` elige el modelo en las dos órdenes
+  sin tocar sus ajustes.
 - **La orden de las marcas, de punta a punta**, con Sirius de verdad, el conductor de la
   0.2 (`tests/integration/test_contar_las_marcas.py`, 9 pruebas): cuenta lo mismo que
   PA-R02-06 con sus mismas 60 marcas, 40 de 50; con 39 no pasa; con 23 dice cuántas faltan;
@@ -200,7 +225,7 @@ PR sin cambiar el head que revisaron: la de ADR-245 (PR #690) y la de ADR-246 (P
   de la carpeta que él eligió; no escribe en su base aunque sea de la versión anterior y
   tenga cogido el cerrojo de escritura; al borrar su carpeta no queda ninguna base abierta;
   y si no puede borrarla, la cuenta queda dicha y lo avisa después.
-- **Mutación**: 17 mutaciones, caen 16.
+- **Mutación**: 31 mutaciones, caen 30.
   - De la orden de las marcas: el umbral con `>` y con 39, las 50 cambiadas por 49, la cuenta
     hecha con otra ventana que la de `recent`, migrar su base en su sitio, leer su base sin
     copiarla, no cerrar las marcas, leer la carpeta de serie, y que un fallo al borrar se
@@ -209,13 +234,20 @@ PR sin cambiar el head que revisaron: la de ADR-245 (PR #690) y la de ADR-246 (P
     serie y decir el veredicto después de borrar.
   - Del resto: contar las primeras 50 en vez de las últimas, la función común devolviendo la
     carpeta de serie, y devolviéndola cuando él aún no ha elegido.
+  - Del diagnóstico y `--modelo`, caen las 14: el producto en vez del coseno, cada par
+    consigo mismo, los puestos desde 1, lo traído al revés, el formato de Qwen con un
+    espacio tras `Query:`, los recuerdos de EmbeddingGemma sin su `title`, ningún formato,
+    el umbral escrito a mano, `--modelo` sin efecto en cada una de las dos órdenes,
+    `--diagnostico` sin líneas, lo de hoy con el formato, el esperado corrido y la pregunta
+    contra los recuerdos al revés.
   - **Sobrevive una**, quitar `?mode=ro`, y es equivalente: la copia solo lee, así que una
     conexión de lectura y escritura no escribe nada distinto. Queda como segunda puerta: si
     algún día esa conexión escribiera, fallaría.
-- **La batería entera** sobre el código: 8 809 en verde, 14 omitidas y 2 `xfail`, ningún
-  fallo, en 22 min 34 s. Son 13 pruebas nuevas: 9 de la orden de las marcas y 4 de la de
-  E-R02-05.
-- **ruff** limpio; **mypy** sin errores en 732 ficheros; **el comprobador de documentos**,
+- **La batería entera**, con el diagnóstico: 8 818 en verde, 14 omitidas y 2 `xfail`,
+  ningún fallo, en 22 min 50 s. Son 21 pruebas nuevas: 9 de la orden de las marcas, 4 de la
+  de E-R02-05 y 8 del diagnóstico y `--modelo`. Antes del diagnóstico eran 8 809, en
+  22 min 34 s.
+- **ruff** limpio; **mypy** sin errores en 733 ficheros; **el comprobador de documentos**,
   sin defectos en ADR-245, ADR-246, ADR-247, `PRUEBAS_0.2_DEL_ROBOT.md` y `MEMORIA.md`.
 
 ## Consecuencias
@@ -231,6 +263,11 @@ PR sin cambiar el head que revisaron: la de ADR-245 (PR #690) y la de ADR-246 (P
   carpeta de serie, que puede no ser la suya: hay que volver a pasarla.
 - **Ninguna prueba corre en Windows**: lo que Windows rechaza, un fichero abierto al
   borrar, se mira en Linux, en `/proc/self/fd`; donde no lo hay, esas dos pruebas se saltan.
+- **Para leer los fallos del banco** él lo pasa con `--diagnostico`, con su modelo y con
+  otro por `--modelo`, y pega lo que sale: aquí se rehacen huellas con esos parecidos y se
+  prueban por el camino real el umbral y el formato. Hasta entonces no cambia ninguno.
+- **Con `--diagnostico` el banco pide dos huellas más por caso**, las de hoy y las del
+  formato, y tarda algo más.
 
 ## Alternativas descartadas y por qué
 
@@ -246,12 +283,16 @@ PR sin cambiar el head que revisaron: la de ADR-245 (PR #690) y la de ADR-246 (P
 ## Revisión propia
 
 Antes de empujar se releyó el diff entero contra el código y la nota, y se escribió una
-prueba por cada regla nueva. Encontró dos cosas, arregladas:
+prueba por cada regla nueva. Encontró cuatro cosas, arregladas:
 
 - **La nota citaba la orden nueva antes de que existiera**, y la guarda de las citas de los
   ADR la rechazó: se nombra por su fichero, sin la ruta, hasta que existe.
 - **La orden de E-R02-05 no decía qué significa cada código de salida**, y ahora tiene
   cinco: lo dice su `main`.
+- **El bucle del banco llamaba `acierta` a lo que devuelve cada caso**, y con la función
+  nueva del mismo nombre se leía como ella: ahora es `bien`.
+- **La cabecera del diagnóstico decía «de 0 a 2»**, que vale mientras cada caso tenga tres
+  recuerdos: ahora dice «desde 0».
 
 ## La lección
 

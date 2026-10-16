@@ -20,11 +20,13 @@ USO
     uv run python scripts/medir_busqueda_de_memoria.py
 
 Necesita Ollama abierto y el modelo de huellas instalado
-(``ollama pull qwen3-embedding:0.6b``).
+(``ollama pull qwen3-embedding:0.6b``). Con ``--modelo NOMBRE`` mide con otro modelo
+de huellas de Ollama, sin tocar sus ajustes (ADR-247).
 """
 
 from __future__ import annotations
 
+import argparse
 import logging
 import random
 import sqlite3
@@ -169,13 +171,25 @@ def _linea(nombre: str, tiempos: Sequence[float]) -> str:
     )
 
 
+def opciones() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="medir_busqueda_de_memoria",
+        description="Mide lo que tarda Sirius en buscar en su memoria (E-R02-05).",
+    )
+    parser.add_argument(
+        "--modelo", help="el modelo de huellas de Ollama; sin él, el de tus ajustes, que no cambian"
+    )
+    return parser
+
+
 def main(
+    argv: Sequence[str] = (),
     huellas_de: Callable[[str], TextEmbedder] = OllamaEmbedder,
     escribe: Callable[[str], None] = print,
 ) -> int:
     """0 si pasa, 1 si no, 2 si falta el modelo de huellas, 3 si sqlite-vec no carga y 4 si
     Sirius no sabe dónde están sus datos."""
-    modelo = embedding_model(load_settings())
+    modelo = opciones().parse_args(list(argv)).modelo or embedding_model(load_settings())
     huellas = huellas_de(modelo)
     try:
         dimension = len(huellas.embed(["prueba"])[0])
@@ -211,4 +225,4 @@ def main(
 
 if __name__ == "__main__":
     logging.disable(logging.WARNING)
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:]))
