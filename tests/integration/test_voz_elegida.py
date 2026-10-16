@@ -13,7 +13,17 @@ from pathlib import Path
 import pytest
 from conductor_robot_0_3 import ConductorDeVoz
 
+from sirius.adapters.persistence.bootstrap import initialize_persistence
+from sirius.adapters.secrets.fake import FakeSecretStore
+from sirius.composition_root import build_conversation_dependencies
 from sirius.config.local_voice import SpeakingVoice
+from sirius.infrastructure.local_voice_installation import (
+    CHARACTER_INSTALL_COMMAND,
+    speaking_voice_files,
+    voice_dir,
+    voice_distributions_missing,
+)
+from sirius.infrastructure.paths import resolve_paths
 
 pytestmark = pytest.mark.integration
 
@@ -54,3 +64,29 @@ def test_mientras_suena_una_muestra_el_micro_esta_cerrado(tmp_path: Path) -> Non
     assert not conductor.micro.abierto
     turno = conductor.oye("Sirius, ¿sigues ahí?")
     assert turno.oido == "Sirius, ¿sigues ahí?"
+
+
+@pytest.mark.skipif(
+    not voice_distributions_missing(("chatterbox-tts",)),
+    reason="aquí está instalada la voz de personaje: no se puede ver que falte",
+)
+def test_con_la_voz_de_verdad_la_hoja_mira_que_este_la_biblioteca_de_personaje(
+    tmp_path: Path,
+) -> None:
+    # Ronda 1 de Codex sobre la PR #691: con todos los ficheros puestos y sin el extra
+    # `personaje`, como Quality, la hoja no se abre y dice la orden.
+    rutas = resolve_paths()
+    initialize_persistence(rutas)
+    for voz in SpeakingVoice:
+        carpeta = voice_dir(voz)
+        carpeta.mkdir(parents=True, exist_ok=True)
+        for nombre in speaking_voice_files(voz.value):
+            (carpeta / nombre).write_bytes(b"de mentira")
+    deps = build_conversation_dependencies(
+        rutas.data_dir / "sirius.db", tmp_path / "copias", secret_store=FakeSecretStore()
+    )
+
+    [aviso] = deps.voice_test_use_case.missing()
+
+    assert "la biblioteca de la voz de personaje (chatterbox-tts)" in aviso
+    assert CHARACTER_INSTALL_COMMAND in aviso

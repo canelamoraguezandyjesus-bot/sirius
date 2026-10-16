@@ -156,6 +156,7 @@ class _Entorno:
         self.falta = falta
         self.no_carga = no_carga
         self.al_cargar: Callable[[SpeakingVoice], None] | None = None
+        self.orden = "uv run la orden de instalar"
 
     def carga(self, voz: SpeakingVoice) -> SpeakingEngines[str]:
         if voz is self.no_carga:
@@ -176,6 +177,7 @@ class _Entorno:
             choose_voice=self.elegidas.append,
             missing=lambda: self.falta,
             pause_listening=self.pausa,
+            install_command=self.orden,
             rng=random.Random(7),
         )
 
@@ -219,11 +221,17 @@ def test_sin_todas_las_voces_instaladas_no_prepara_nada_y_dice_que_falta() -> No
     assert entorno.cargadas == []
 
 
-def test_si_una_voz_no_carga_lo_dice_con_su_causa() -> None:
-    caso = _Entorno(no_carga=SpeakingVoice.CHARACTER).caso()
+def test_si_una_voz_no_carga_lo_dice_con_su_causa_y_la_orden_que_lo_pone_al_dia() -> None:
+    entorno = _Entorno(no_carga=SpeakingVoice.CHARACTER)
+    caso = entorno.caso()
 
-    with pytest.raises(VoiceTestError, match="la voz de personaje no carga \\(sin memoria\\)"):
+    with pytest.raises(VoiceTestError) as fallo:
         caso.prepare()
+
+    # Como el oído: aconseja la orden igual, que pone al día lo que falte y dice qué es si
+    # es otra cosa (ronda 1 de Codex sobre la PR #691).
+    assert "la voz de personaje no carga (sin memoria)" in str(fallo.value)
+    assert entorno.orden in str(fallo.value)
 
 
 def test_si_se_cierra_mientras_prepara_no_pide_mas_frases() -> None:

@@ -67,11 +67,14 @@ class VoiceTestUseCase:
         choose_voice: Callable[[SpeakingVoice], None],
         missing: Callable[[], tuple[str, ...]],
         pause_listening: Callable[[], None],
+        install_command: str = "",
         rng: random.Random | None = None,
     ) -> None:
         """``load_voice`` carga una voz con su altavoz; ``choose_voice`` la guarda en los
         ajustes y se la da al oído; ``missing`` dice qué voces faltan en este ordenador,
-        con la orden que las instala; ``pause_listening`` cierra el micro."""
+        con la orden que las instala; ``pause_listening`` cierra el micro;
+        ``install_command`` es la orden que se aconseja si una voz no carga."""
+        self._install_command = install_command
         self._load_voice = load_voice
         self._choose_voice = choose_voice
         self._missing = missing
@@ -180,7 +183,15 @@ class VoiceTestUseCase:
         try:
             engines = self._load_voice(voice)
         except VoiceUnavailable as error:
+            # Como el oído: si algo no carga, se aconseja la orden igual, que pone al día lo
+            # que falte y dice qué es si es otra cosa (ronda 1 de Codex sobre la PR #691).
             msg = f"No puedo preparar la prueba de voces: {error.reason}."
+            if self._install_command:
+                msg += (
+                    " Ejecuta en PowerShell, dentro de la carpeta de Sirius: "
+                    f"{self._install_command} . Instala o pone al día lo que falte de la voz "
+                    "y, si el problema es otro, te dice cuál."
+                )
             raise VoiceTestError(msg) from error
         with self._lock:
             if self._closings == closings:

@@ -278,3 +278,14 @@ Alcance, escrito antes de la primera petición: esta PR trae la pieza F y nada m
 la hoja dé cinco frases con cinco voces barajadas y sin nombre, que cada muestra salga de
 su voz y suene por el altavoz, que la elegida quede para hablar, también la de personaje,
 y que ningún camino de Sirius acepte un audio para imitar una voz.
+
+- **Ronda 1, sobre `afc6787a`**: un hallazgo P2, cierto, verificado antes de tocar nada.
+  La comprobación previa de la hoja miraba solo los ficheros de las voces: con los de
+  Chatterbox puestos y su biblioteca no, como queda un entorno rehecho sin el extra
+  `personaje`, se habilitaba «Preparar las voces», se cargaban las de Piper y el error salía
+  sin la orden. Se reprodujo con los cinco juegos de ficheros puestos y `chatterbox-tts` sin
+  instalar: la hoja decía que no faltaba nada. Ahora la comprobación mira también esa
+  biblioteca cuando las voces las carga la de verdad (`voice_test_missing`), y que falte la
+  instala la orden, así que no se adivina nada; y si una voz no carga por otra cosa, el
+  aviso lleva la orden de instalar, como el del oído (ADR-242). Cuatro pruebas más, y
+  cuatro mutaciones que caen.

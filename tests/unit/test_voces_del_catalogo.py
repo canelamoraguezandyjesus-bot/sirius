@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 
+import sirius.infrastructure.local_voice_installation as instalacion_module
 from sirius.config.local_voice import (
     SPEAKING_VOICE_SETTING,
     LocalVoiceSettings,
@@ -77,13 +78,13 @@ def test_la_prueba_de_voces_dice_que_voces_faltan_y_con_que_orden(tmp_path: Path
     for voz in SpeakingVoice:
         _pon(voz, tmp_path)
     assert voices_missing(tmp_path) == ()
-    assert voice_test_missing(tmp_path) == ()
+    assert voice_test_missing(tmp_path, libraries=False) == ()
 
     (voice_dir(SpeakingVoice.CARLFM, tmp_path) / f"{SpeakingVoice.CARLFM.value}.onnx").unlink()
     (voice_dir(SpeakingVoice.CHARACTER, tmp_path) / "conds.pt").unlink()
 
     assert voices_missing(tmp_path) == (SpeakingVoice.CARLFM, SpeakingVoice.CHARACTER)
-    [aviso] = voice_test_missing(tmp_path)
+    [aviso] = voice_test_missing(tmp_path, libraries=False)
     assert (
         f"la voz (Piper {SpeakingVoice.CARLFM.value}) y la voz de personaje (Chatterbox)" in aviso
     )
@@ -115,3 +116,27 @@ def test_la_instalacion_elegida_sigue_a_los_ajustes_de_cada_momento(tmp_path: Pa
         instalacion.listening_model_dir
         == LocalVoiceInstallation(ahora[0], tmp_path).listening_model_dir
     )
+
+
+def test_con_los_ficheros_y_sin_la_biblioteca_de_personaje_la_hoja_no_se_abre(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Ronda 1 de Codex sobre la PR #691: los ficheros de la voz de personaje siguen aquí con
+    # el entorno rehecho sin el extra `personaje`.
+    for voz in SpeakingVoice:
+        _pon(voz, tmp_path)
+    mirados: list[tuple[str, ...]] = []
+
+    def sin_chatterbox(nombres: tuple[str, ...]) -> tuple[str, ...]:
+        mirados.append(nombres)
+        return ("chatterbox-tts",)
+
+    monkeypatch.setattr(instalacion_module, "voice_distributions_missing", sin_chatterbox)
+
+    [aviso] = voice_test_missing(tmp_path)
+
+    assert mirados == [("chatterbox-tts",)]
+    assert "la biblioteca de la voz de personaje (chatterbox-tts)" in aviso
+    assert CHARACTER_INSTALL_COMMAND in aviso
+    monkeypatch.setattr(instalacion_module, "voice_distributions_missing", lambda nombres: ())
+    assert voice_test_missing(tmp_path) == ()

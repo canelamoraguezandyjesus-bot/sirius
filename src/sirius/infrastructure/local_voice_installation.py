@@ -190,10 +190,21 @@ class LocalVoiceInstallation:
         return tuple(missing)
 
 
-def voice_test_missing(models_dir: Path | None = None) -> tuple[str, ...]:
+def voice_test_missing(
+    models_dir: Path | None = None, *, libraries: bool = True
+) -> tuple[str, ...]:
     """Lo que falta para la prueba de voces, dicho para él con la orden que lo instala; vacío
-    si están todas (pieza F, ADR-246). Sin una, la hoja no se abre a medias."""
+    si están todas (pieza F, ADR-246). Sin una, la hoja no se abre a medias.
+
+    Con ``libraries`` mira además la biblioteca de la voz de personaje, la del extra
+    ``personaje``: sus ficheros pueden seguir aquí con el entorno rehecho sin ella (ronda 1
+    de Codex sobre la PR #691). Que falte la instala la orden, así que no se adivina nada.
+    Sin ``libraries`` no la mira, para quien carga las voces con otra cosa.
+    """
     missing = [voice_label(voice) for voice in voices_missing(models_dir)]
+    absent = voice_distributions_missing(CHARACTER_DISTRIBUTIONS) if libraries else ()
+    if absent:
+        missing.append(f"la biblioteca de la voz de personaje ({', '.join(absent)})")
     if not missing:
         return ()
     names = missing[0] if len(missing) == 1 else f"{', '.join(missing[:-1])} y {missing[-1]}"

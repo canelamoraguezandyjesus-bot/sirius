@@ -159,6 +159,7 @@ from sirius.domain.blind_test import BlindTestError
 from sirius.domain.capture import build_scene_registry
 from sirius.domain.robot_seed import ROBOT_SEED_REMINDER
 from sirius.infrastructure.local_voice_installation import (
+    CHARACTER_INSTALL_COMMAND,
     ChosenVoiceInstallation,
     voice_model,
     voice_test_missing,
@@ -1059,6 +1060,8 @@ def _build_voice_test_use_case(
     return VoiceTestUseCase(
         load_voice=lambda voice: speak(voice_model(voice)),
         choose_voice=choose_voice,
-        missing=voice_test_missing,
+        # La biblioteca de la voz de personaje se mira cuando la carga la de verdad.
+        missing=lambda: voice_test_missing(libraries=speaking_engines is None),
         pause_listening=local_listening.stop,
+        install_command=CHARACTER_INSTALL_COMMAND,
     )
