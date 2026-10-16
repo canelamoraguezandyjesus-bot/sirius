@@ -67,10 +67,9 @@ from piezas_del_robot import PiezaPendiente, Piezas
 
 from sirius.adapters.audio.voice_libraries import voice_tools
 from sirius.adapters.persistence.models import Base
-from sirius.application.send_message import CUT_HEARD, CUT_NOTHING_HEARD
 from sirius.config.local_voice import LocalVoiceSettings
 from sirius.config.settings import _CONFIG_FILE_NAME  # el nombre que usa `_config_file()`
-from sirius.domain.conversation import MessageRole
+from sirius.domain.conversation import CUT_HEARD, CUT_NOTHING_HEARD, MessageRole
 from sirius.infrastructure.local_voice_installation import (
     INSTALL_COMMAND,
     LISTENING_MODEL_FILES,

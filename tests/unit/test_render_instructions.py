@@ -11,13 +11,11 @@ from datetime import UTC, datetime
 
 from sirius.application.context import Context
 from sirius.application.send_message import (
-    CUT_HEARD,
-    CUT_NOTHING_HEARD,
     render_identity,
     render_instructions,
     render_recent_message,
 )
-from sirius.domain.conversation import Message, MessageRole
+from sirius.domain.conversation import CUT_HEARD, CUT_NOTHING_HEARD, Message, MessageRole
 from sirius.domain.decision import Decision, DecisionRevision, DecisionStatus
 from sirius.domain.identity import (
     INITIAL_PERSONALITY_INSTRUCTIONS,

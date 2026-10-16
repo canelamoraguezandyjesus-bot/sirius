@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any
 
 from sirius.adapters.audio.echo_cancellation import WebRtcEchoCanceller, load_echo_canceller
+from sirius.adapters.audio.local_listening import portaudio_seconds
 from sirius.adapters.audio.voice_libraries import TEXT_TO_SPEECH, import_voice_library
 from sirius.infrastructure.logging import get_logger
 from sirius.ports.local_voice import SpeakingEngines, VoiceUnavailable
@@ -109,7 +110,9 @@ class SoundDeviceSpeaker:
     Cuenta los sonidos que han empezado a salir (``started``): uno empieza cuando PortAudio
     se lleva su primera muestra, y lo que callar tira de la cola no llega a empezar
     (pieza E, ADR-245). Con cancelación de eco, le da cada bloque que sale, silencio
-    incluido, con la hora a la que se oye.
+    incluido, con la hora a la que se oye: la del DAC que da PortAudio para su primera
+    muestra, y si no la da, la de su llamada más la latencia del flujo (ronda 1 de Codex
+    sobre la PR #690).
     """
 
     def __init__(
@@ -180,7 +183,12 @@ class SoundDeviceSpeaker:
 
     def _fill(self, outdata: Any, frames: int, time: Any, status: Any) -> None:
         """Lo llama PortAudio desde su hilo: lo siguiente de la cola y, si falta, silencio."""
-        del time, status
+        del status
+        now = self._clock()
+        ahead = portaudio_seconds(
+            getattr(time, "outputBufferDacTime", None), getattr(time, "currentTime", None)
+        )
+        heard_at = now + (self._latency if ahead is None else ahead)
         size = len(outdata)
         with self._lock:
             sound = bytes(self._pending[:size])
@@ -190,13 +198,11 @@ class SoundDeviceSpeaker:
                 self._waiting.popleft()
                 self._started += 1
             if sound:
-                self._until = (
-                    self._clock() + self._latency + frames / self._sample_rate + ECHO_TAIL_SECONDS
-                )
+                self._until = heard_at + frames / self._sample_rate + ECHO_TAIL_SECONDS
         block = sound + bytes(size - len(sound))
         outdata[:] = block
         if self._echo is not None:
-            self._echo.played(block, at=self._clock() + self._latency)
+            self._echo.played(block, at=heard_at)
 
 
 def _no_speaker(error: Exception) -> VoiceUnavailable:

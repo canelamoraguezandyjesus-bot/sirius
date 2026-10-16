@@ -156,11 +156,19 @@ Lo que se decidió al escribir el código, con su porqué:
   que el turno va a la charla hasta que calla, pensando o hablando; o cuando el trozo se
   captó con su voz en el aire, aunque se lea cuando ya ha callado. Calla lo que dice y el
   altavoz; la charla sigue escribiendo y guarda la respuesta entera.
-- **Mientras la charla escribe**, el oído lee el micro cada vez que le llega texto de ella,
-  antes de decir las frases cerradas: así no dice otra frase encima de quien ya habla. Los
-  turnos que se cierran entonces van a la charla cuando acaba la respuesta, y si son de la
-  charla se decide al cerrarse cada uno, con la que corre entonces: contestar al primero le
-  hace callar otra vez, y eso no deja fuera al siguiente (revisión propia, abajo).
+- **Mientras la charla contesta**, un hilo aparte lee el micro cada 30 ms: cuando escribe,
+  cuando se para a pensar y cuando, ya escrita la respuesta, hace lo de después del turno,
+  que puede ser otra llamada al modelo para resumir (ronda 1 de Codex, abajo). Y antes de
+  decir cada frase lo mira también quien la dice: así no dice otra frase encima de quien ya
+  habla. El cerrojo del oído pone en fila a los dos, y cada trozo se lee y se mira de una
+  vez. Los turnos que se cierran entonces van a la charla cuando acaba la respuesta, y si
+  son de la charla se decide al cerrarse cada uno, con la que corre entonces: contestar al
+  primero le hace callar otra vez, y eso no deja fuera al siguiente (revisión propia,
+  abajo).
+- **Una respuesta a la vez en el altavoz.** Mientras suena lo último que dijo, los turnos
+  que esperan siguen esperando, y lo que se cierre entonces va detrás de ellos: nunca hay
+  dos respuestas en el altavoz, y si le cortan se sabe de cuál es lo que sonaba y hasta
+  dónde se oyó (ronda 1 de Codex, abajo).
 - **Lo que le corta es para él**: calla en el instante en que empieza esa voz, y ahí
   empieza la charla. Lo que le siga diciendo mientras la charla escribe no le hace callar
   otra vez: cae en esa charla, sin alargarla, y pasados 10 s del corte necesita su nombre,
@@ -173,12 +181,16 @@ Lo que se decidió al escribir el código, con su porqué:
   apuntarlo no le hace seguir hablando. Se apunta en el mensaje de Sirius
   (`messages.heard_when_cut`, migración `b0f472943480`), que sigue entero; si le cortan
   mientras la charla escribe, en cuanto la respuesta queda guardada. Lo que el modelo lee
-  después lleva la respuesta y, detrás, lo que se oyó de ella (`CUT_HEARD` en
-  `src/sirius/application/send_message.py`), y el presupuesto del contexto cuenta las dos
-  cosas. Olvidar lo busca también ahí y se lo lleva con el mensaje.
+  después lleva la respuesta y, detrás, la nota de lo que se oyó de ella. La nota sale de
+  un solo sitio, `cut_note` en `src/sirius/domain/conversation.py`, y la usa todo lo que le
+  lee al modelo una respuesta pasada: los mensajes recientes, lo que cuestan en el
+  presupuesto del contexto y lo que se le da a resumir, en tercera persona (ronda 1 de
+  Codex, abajo). Olvidar lo busca también ahí y se lo lleva con el mensaje.
 - **El cancelador de verdad** (`src/sirius/adapters/audio/echo_cancellation.py`) es la APM
   de WebRTC de `livekit`, con su filtro de paso alto. Lo que suena entra con la hora a la
-  que se oye y lo captado con la hora a la que se captó, y la APM recibe lo que suena antes
+  que se oye y lo captado con la hora a la que se captó, las del DAC y el ADC que da
+  PortAudio en cada bloque, y si no las da, las de su llamada (ronda 1 de Codex, abajo);
+  y la APM recibe lo que suena antes
   que lo captado a esa hora, en tramas de 10 ms; lo que suena se pasa de 22 050 Hz a
   16 kHz sin numpy, que Quality no instala. Lo limpio sale con 10 ms de retraso como mucho.
   Su voz está en el aire mientras suena lo que tiene algo más que silencio y 0,25 s
@@ -284,8 +296,14 @@ Medido el 15 y el 16-10-2026 en el contenedor de la sesión, sobre la rama de es
   cortada**: guardarla entera, como decidió el propietario, pide dejarla acabar. Un modelo
   que escribe más deprisa de lo que Sirius habla casi siempre ha acabado cuando le cortan;
   con uno lento, se nota.
-- **Lo apuntado lo ve el modelo en los mensajes recientes**, y el presupuesto del contexto
-  lo cuenta; el resumen de lo anterior (PA-R02-05) no lo lleva.
+- **Lo apuntado lo ve el modelo en los mensajes recientes y en el resumen de lo anterior**
+  (PA-R02-05), y el presupuesto del contexto lo cuenta. La exportación abierta no lo lleva,
+  como tampoco lleva cuándo se borró un mensaje. Las órdenes de memoria siguen mirando la
+  respuesta entera: «corrige eso» busca el hecho con sus palabras, y un «sí» sigue
+  contestando a la pregunta del final aunque le cortaran antes de oírla, que es raro y no
+  se quiso adivinar.
+- **Mientras contesta con cancelador hay un hilo más**, que mira el micro cada 30 ms y se
+  para cuando la charla acaba.
 - **Si la charla tarda en acabar después del corte**, lo que le diga pasados 10 s del
   corte necesita su nombre, como cuando calla en la pieza D: la charla corre desde que
   calló, y calló al cortarle. Así la tele, hablando mientras la charla escribe, no la
@@ -299,7 +317,11 @@ Medido el 15 y el 16-10-2026 en el contenedor de la sesión, sobre la rama de es
 - **speexdsp** (opción 3): sin ruedas para Windows.
 - **El micro con cancelación** (opción 4): es dinero; solo si la de software no basta, y
   preguntándole.
-- **Un hilo más leyendo el micro**: dos lectores del mismo micro, lo que la D ya descartó.
+- **Leer el micro solo cuando la charla escribe**, sin un hilo más: la pieza D no quiso
+  dos que atendieran al oído en sus pruebas, y al principio se hizo así. La ronda 1 de
+  Codex enseñó el hueco: mientras la charla resume después del turno no llega texto, y no
+  se le podía cortar. El hilo de ahora no atiende al oído, solo lee el micro con su cerrojo,
+  como quien dice cada frase.
 - **El corte solo como nota del turno siguiente**: no queda apuntado en la charla.
 
 ## Revisión propia
@@ -343,6 +365,10 @@ volviendo a revisar (punto 3 de la nota de arranque).
   vio la revisión propia antes de empujar (H-245).
 - lo hace cumplir: `tests/unit/test_local_listening.py`
 
+La ronda 1 de Codex la encontró otra vez, en los adaptadores: el micro y el altavoz ponían
+la hora a la que Python atendía la llamada de PortAudio, y no la del ADC ni la del DAC
+(abajo).
+
 ## Revisión externa
 
 Alcance, escrito antes de la primera petición: esta PR trae la pieza E y nada más de la
@@ -351,3 +377,49 @@ la voz del propietario le calle sin esperar al fin del turno ni a la respuesta n
 la respuesta quede entera en la charla y que la charla apunte hasta dónde la oyó. Trae
 además, en documentos, las rondas limpias de ADR-240 a ADR-244, que se fusionaron sin que
 su ADR lo dijera. No trae elegir su voz (F).
+
+- **Ronda 1, sobre `8715774d`**: cuatro hallazgos, los cuatro ciertos, verificados contra el
+  código antes de tocar nada.
+  - **P1, las horas del ADC y del DAC.** El altavoz le decía a la cancelación que cada
+    bloque se oía a la hora de su llamada más la latencia media del flujo, y el micro
+    fechaba cada trozo a la hora a la que llegaba su llamada; PortAudio da en cada una la
+    hora del DAC y la del ADC, y si las llamadas llegan antes o después según el sistema,
+    la APM recibe otro tramo como referencia. Ahora el altavoz usa la del DAC de la
+    primera muestra, y el micro la del ADC de la primera más lo que dura el trozo, que es
+    su final, como en la medida de la APM; si PortAudio no las da o no tienen sentido, las
+    de antes (`portaudio_seconds` en `src/sirius/adapters/audio/local_listening.py`).
+  - **P1, el micro sin leer después del último trozo de texto.** El micro solo se leía
+    cuando la charla escribía, y después de escribir la charla puede resumir, que es otra
+    llamada al modelo: si le hablaba entonces, no callaba hasta que acabara. Ahora lo lee
+    un hilo todo el rato que la charla contesta (`read_meanwhile`), y se para cuando acaba;
+    sin cancelador no hay hilo. Cierra también lo que la nota de arranque no garantizaba,
+    cortarle mientras el modelo se para a mitad de escribir.
+  - **P2, una sola respuesta sonando apuntada.** Si se cerraban dos turnos mientras la
+    charla escribía, contestaba al segundo mientras aún sonaba lo del primero, y un corte
+    se apuntaba en la segunda respuesta, con lo que había empezado a sonar de las dos.
+    Ahora no se atiende otro turno mientras suena lo último que dijo: el error se hace
+    imposible en vez de contarlo mejor.
+  - **P2, el resumen sin la nota del corte.** La entrada del resumen escribía solo la
+    respuesta, y al resumirla quedaba por dicha entera.
+  - **Dos hallazgos repiten familia, y se buscó la raíz.** El del resumen es de la familia
+    del presupuesto de la revisión propia, la nota del corte en un camino y no en los demás
+    que le leen al modelo una respuesta: la nota sale ahora de un solo sitio del dominio
+    (`cut_note`), y se miró todo lo que lee mensajes: los recientes, el presupuesto y el
+    resumen la llevan; soñar y las fichas de personas solo leen lo que dice él; el juez
+    mira cómo escribe Sirius, no qué se oyó; y lo que no la lleva se dice en
+    «Consecuencias». El de las horas es de la familia de la lección: se miró cada sitio
+    donde el oído pone hora a algo. La captura y lo que suena van ya con las horas de
+    PortAudio; la charla, con las de captura; y lo que tarda en sonar la primera frase
+    (E-R03-02) sigue siendo la hora de dársela al altavoz más lo más que puede tardar,
+    una cota de la pieza C que no decide nada.
+  - 7 pruebas más del oído (de 96 a 103 en `tests/unit/test_local_listening.py`), 5 de los
+    adaptadores con las horas de PortAudio, 1 del resumen y la del presupuesto, cambiada
+    para la nota entera. 20 mutaciones de los arreglos: en la primera pasada sobrevivieron
+    dos, que un turno nuevo se adelantara a los que esperaban y que, al callar sin corte,
+    no fuera ya lo que esperaba; se escribieron sus pruebas, y caen las 20. Las de
+    aceptación de la 0.3 y los dobles, tres veces seguidas, 47 en verde y 3 `xfail`, con el
+    hilo de verdad. La batería entera: 8 718 en verde, 1 fallo, 14 omitidas y 5 `xfail`, en
+    26 min 36 s, con la máquina más lenta que en las pasadas de antes, de 22 min. El fallo
+    es la guarda de rendimiento de construir el contexto, de 1 500 ms, que midió entre
+    1 561 y 1 656 ms; sola, con este código, 807 a 870 ms, y con el de antes de la ronda,
+    `8715774d`, 864 a 890 ms: la ronda no la mueve.

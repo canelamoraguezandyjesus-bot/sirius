@@ -43,14 +43,17 @@ frase desde la primera, con la voz y el altavoz.
   vuelve como un turno (PA-R03-03), y no se le puede cortar.
 - **Con cancelador de eco, se le puede cortar** (pieza E, ADR-245). El micro sigue
   abierto mientras contesta, y cada trozo pasa por el cancelador antes del detector: su
-  propia voz se aparta ahí. Mientras la charla escribe, el oído lee el micro cada vez que
-  le llega texto de ella; después, al atender. En cuanto oye voz en lo limpio mientras
+  propia voz se aparta ahí. Mientras la charla contesta, un hilo aparte lee el micro cada
+  30 ms, también si se para a pensar y cuando, ya escrita la respuesta, hace lo que hace
+  después del turno; y antes de decir cada frase lo mira también quien la dice. Después,
+  al atender (ronda 1 de Codex sobre la PR #690). En cuanto oye voz en lo limpio mientras
   contesta, pensando o hablando, o con su voz aún en el aire cuando el micro la captó,
   calla la voz y el altavoz; la charla sigue escribiendo y guarda la respuesta entera, y
   se le apunta hasta dónde se oyó. Lo que le corta es para él: calla en el instante en
   que empieza esa voz. Los turnos que se cierran mientras contesta van a la charla cuando
   acaba, y si son de la charla se decide al cerrarlos: contestar al primero no deja fuera
-  al siguiente.
+  al siguiente. Mientras suena lo último que dijo no se atiende el siguiente: nunca hay
+  dos respuestas en el altavoz, y si le cortan se sabe de cuál es lo que sonaba.
 - **Si la voz o el altavoz fallan, deja de hablar y lo dice.** El fallo no sale a la
   charla, que sigue escribiendo y guarda la respuesta entera; después deja de oír con su
   aviso, como si fallara el detector.
@@ -102,6 +105,8 @@ _logger = get_logger(__name__)
 #: primera sílaba: Silero da la voz por empezada un poco después de que empiece. Con los
 #: trozos del micro de verdad, de 512 muestras a 16 kHz, son medio segundo.
 PRE_ROLL_CHUNKS = 16
+#: Cada cuánto mira el micro, mientras la charla contesta, el hilo que lo lee entonces.
+MEANWHILE_SECONDS = 0.03
 #: Lo que dice si la charla va a un modelo de fuera de este ordenador.
 CHAT_LEAVES = (
     "No puedo oírte: la charla va ahora a un modelo de fuera de este ordenador, y lo que "
@@ -138,6 +143,46 @@ class Chat(Protocol):
         """Le cortaron la respuesta ``message_id`` cuando el propietario había oído
         ``heard``: queda apuntado con ella, que sigue entera (pieza E, ADR-245)."""
         ...
+
+
+class MeanwhileReader(Protocol):
+    """Quien lee el micro desde otro hilo mientras la charla contesta (ronda 1 de Codex
+    sobre la PR #690)."""
+
+    def stop(self) -> None:
+        """Deja de leer, y no vuelve hasta que ya no lee."""
+        ...
+
+
+def read_meanwhile(hear: Callable[[], None]) -> MeanwhileReader:
+    """Llama a ``hear`` cada ``MEANWHILE_SECONDS`` desde un hilo aparte, hasta ``stop``."""
+    return _MeanwhileThread(hear, MEANWHILE_SECONDS)
+
+
+class _MeanwhileThread:
+    """El hilo que lee el micro mientras la charla contesta. Si leer falla, deja de leer y
+    el diario se queda con el tipo de fallo: lo que se lee antes de cada frase sigue."""
+
+    def __init__(self, hear: Callable[[], None], every: float) -> None:
+        self._stopping = threading.Event()
+        self._thread = threading.Thread(
+            target=self._run, args=(hear, every), name="sirius-oido-mientras", daemon=True
+        )
+        self._thread.start()
+
+    def _run(self, hear: Callable[[], None], every: float) -> None:
+        while not self._stopping.wait(every):
+            try:
+                hear()
+            except Exception as error:
+                _logger.error(
+                    "El oído dejó de mirar el micro mientras contestaba (%s)", type(error).__name__
+                )
+                return
+
+    def stop(self) -> None:
+        self._stopping.set()
+        self._thread.join()
 
 
 class MemorySuggestions(Protocol):
@@ -271,8 +316,11 @@ class LocalListening[Chunk]:
         pre_roll: int = PRE_ROLL_CHUNKS,
         clock: Callable[[], float] = time.monotonic,
         addressing: Addressee | None = None,
+        reader: Callable[[Callable[[], None]], MeanwhileReader] = read_meanwhile,
     ) -> None:
         self._chat = chat
+        #: Pone a leer el micro mientras la charla contesta, con cancelador.
+        self._reader = reader
         self._clock = clock
         self._addressing: Addressee = addressing if addressing is not None else Addressing()
         self._memory_suggestions = memory_suggestions
@@ -477,13 +525,18 @@ class LocalListening[Chunk]:
                 self._detector_stale = True
 
     def _next_turn(self) -> _ClosedTurn[Chunk] | None:
-        """El turno que se cerró mientras contestaba, si quedó alguno; si no, lee el micro
-        hasta que el detector cierra un turno o no queda nada. Con el cerrojo, que suelta al
-        volver."""
+        """El primero de los turnos que se cerraron mientras contestaba, si no suena nada de
+        lo que dijo; si no, lee el micro hasta que el detector cierra un turno o no queda
+        nada. Con el cerrojo, que suelta al volver.
+
+        Mientras suena lo último que dijo no se atiende otro turno: así nunca hay dos
+        respuestas en el altavoz, y si le cortan se sabe de cuál es lo que sonaba (ronda 1
+        de Codex sobre la PR #690). Lo que se cierra entonces va detrás de lo que ya
+        esperaba."""
         with self._lock:
             if not self._listening or self._engines is None:
                 return None
-            if self._closed_meanwhile:
+            if self._closed_meanwhile and self._still_sounding is None:
                 return self._closed_meanwhile.popleft()
             if self._paused_to_speak and not self._resume_listening():
                 # Sigue hablando: con el micro cerrado no hay nada que leer.
@@ -495,8 +548,15 @@ class LocalListening[Chunk]:
                 and (captured := microphone.read()) is not None
             ):
                 closed = self._listen(captured)
-                if closed is not None:
+                if closed is None:
+                    continue
+                if not self._closed_meanwhile:
                     return closed
+                # Empezó cortándole: ya no suena nada, y va detrás de los que esperaban.
+                self._closed_meanwhile.append(closed)
+                return self._closed_meanwhile.popleft()
+            if self._closed_meanwhile and self._still_sounding is None:
+                return self._closed_meanwhile.popleft()
             return None
 
     def _listen(self, captured: Captured[Chunk]) -> _ClosedTurn[Chunk] | None:
@@ -595,9 +655,11 @@ class LocalListening[Chunk]:
             _logger.error("No se pudo apuntar hasta dónde se oyó (%s)", type(error).__name__)
 
     def _hear_meanwhile(self) -> None:
-        """Mientras la charla escribe, con cancelador: lee lo que ha llegado al micro, para
-        que le puedan cortar sin esperar a que acabe. Los turnos que se cierran ahora van a
-        la charla cuando acabe la respuesta."""
+        """Mientras la charla contesta, con cancelador: lee lo que ha llegado al micro, para
+        que le puedan cortar sin esperar a que acabe. Lo llaman el hilo que lee mientras
+        contesta y, antes de cada frase, quien la dice; el cerrojo los pone en fila, y cada
+        trozo se lee y se mira de una vez. Los turnos que se cierran ahora esperan, en orden,
+        a que acabe la respuesta."""
         with self._lock:
             if not self._listening or self._engines is None or self._echo_canceller() is None:
                 return
@@ -673,17 +735,26 @@ class LocalListening[Chunk]:
     ) -> HeardTurn | None:
         """Lo entrega a la charla, dice la respuesta mientras la escribe y deja pendiente lo
         que el modelo proponga recordar; ``None`` si la charla se fue a un modelo de fuera."""
+        # Con cancelador, el micro se lee todo el rato que la charla contesta: cuando
+        # escribe, cuando se para a pensar y cuando hace lo que hace después del turno, que
+        # puede ser otra llamada al modelo (ronda 1 de Codex sobre la PR #690).
+        canceller = self._echo_canceller()
+        reader = self._reader(self._hear_meanwhile) if canceller is not None else None
         try:
-            # Lo que quedaba sin cerrar se dice en cuanto la respuesta acaba bien, sin esperar
-            # a lo que la charla hace después del turno; si no acaba bien, lo escrito a
-            # medias no se dice.
-            result = self._chat.send_message(
-                heard,
-                operation_id=operation_id,
-                on_delta=speech.hear,
-                on_completed=speech.finish,
-                only_on_this_computer=True,
-            )
+            try:
+                # Lo que quedaba sin cerrar se dice en cuanto la respuesta acaba bien, sin
+                # esperar a lo que la charla hace después del turno; si no acaba bien, lo
+                # escrito a medias no se dice.
+                result = self._chat.send_message(
+                    heard,
+                    operation_id=operation_id,
+                    on_delta=speech.hear,
+                    on_completed=speech.finish,
+                    only_on_this_computer=True,
+                )
+            finally:
+                if reader is not None:
+                    reader.stop()
         except ChatLeavesThisComputer:
             # Se fue mientras se transcribía: la charla no ha guardado ni enviado nada.
             self._chat_left()
@@ -860,9 +931,9 @@ class _Speech:
     ``stop`` la calla y vacía el altavoz, así que ninguna se cuela después.
 
     Cada vez que la charla escribe, antes de decir lo cerrado, llama a ``meanwhile``: con
-    cancelador, el oído lee ahí el micro, para que le puedan cortar sin esperar a que la
-    charla acabe, y sin decir otra frase encima de quien ya habla. Si le cortan (``cut``),
-    queda lo que se oyó: las frases que el altavoz llegó a empezar (pieza E, ADR-245).
+    cancelador, el oído lee ahí el micro, además de lo que lee su hilo, para no decir otra
+    frase encima de quien ya habla. Si le cortan (``cut``), queda lo que se oyó: las frases
+    que el altavoz llegó a empezar (pieza E, ADR-245).
     """
 
     def __init__(

@@ -17,6 +17,7 @@ import types
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
@@ -387,6 +388,48 @@ def test_le_da_a_la_cancelacion_de_eco_cada_bloque_con_la_hora_a_la_que_se_oye()
 
     # Silencio incluido: la cancelación necesita lo que sale, suene o no.
     assert eco.oido == [(b"ab\x00\x00", 50.0 + 0.1), (b"\x00\x00\x00\x00", 51.0 + 0.1)]
+
+
+def test_la_hora_a_la_que_se_oye_cada_bloque_es_la_del_dac_de_portaudio() -> None:
+    # Ronda 1 de Codex sobre la PR #690: la latencia del flujo es una media; PortAudio dice,
+    # bloque a bloque, cuándo llega al DAC su primera muestra. Esa hora va a la
+    # cancelación de eco y a hasta cuándo suena.
+    reloj = _Reloj()
+    sounddevice = _SoundDevice()
+    eco = _Eco()
+    altavoz = SoundDeviceSpeaker(sounddevice, _FRECUENCIA, clock=reloj, echo=eco)  # type: ignore[arg-type]
+    llena = sounddevice.flujos[0].opciones["callback"]
+    altavoz.play(b"ab")
+
+    llena(bytearray(4), 2, SimpleNamespace(outputBufferDacTime=700.03, currentTime=700.0), None)
+
+    ((bloque, hora),) = eco.oido
+    assert bloque == b"ab\x00\x00"
+    assert hora == pytest.approx(50.0 + 0.03)
+    final = 0.03 + 2 / _FRECUENCIA + ECHO_TAIL_SECONDS
+    reloj.ahora = 50.0 + final - 0.001
+    assert altavoz.playing
+    reloj.ahora = 50.0 + final + 0.001
+    assert not altavoz.playing
+
+
+def test_sin_hora_del_dac_que_tenga_sentido_se_oye_con_la_latencia_del_flujo() -> None:
+    reloj = _Reloj()
+    sounddevice = _SoundDevice()
+    eco = _Eco()
+    SoundDeviceSpeaker(sounddevice, _FRECUENCIA, clock=reloj, echo=eco)  # type: ignore[arg-type]
+    llena = sounddevice.flujos[0].opciones["callback"]
+
+    for horas in (
+        # Cero es como dice PortAudio que no la sabe.
+        SimpleNamespace(outputBufferDacTime=0.0, currentTime=0.0),
+        SimpleNamespace(outputBufferDacTime=0.0, currentTime=700.0),
+        SimpleNamespace(outputBufferDacTime=699.0, currentTime=700.0),
+        SimpleNamespace(outputBufferDacTime=705.0, currentTime=700.0),
+    ):
+        llena(bytearray(4), 2, horas, None)
+
+    assert [hora for _bloque, hora in eco.oido] == [50.0 + 0.1] * 4
 
 
 def test_cargar_la_voz_trae_la_cancelacion_de_eco_si_se_puede_y_el_altavoz_la_alimenta(

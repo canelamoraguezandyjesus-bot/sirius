@@ -37,7 +37,7 @@ from sirius.application.context import Context, ContextBuilder
 from sirius.application.memory_commands import CommandAnswer, CommandReply, MemoryCommandService
 from sirius.application.robot_conversation import ConversationSummaryService
 from sirius.application.seed_examples import SeedExamplePicker
-from sirius.domain.conversation import Message, MessageRole, MessageStatus
+from sirius.domain.conversation import Message, MessageRole, MessageStatus, cut_note
 from sirius.domain.conversation_mode import (
     ENTERING_SERIOUS_MODE,
     MODE_INSTRUCTIONS,
@@ -202,22 +202,12 @@ def render_instructions(context: Context) -> str:
     return "\n".join(lines)
 
 
-#: Cómo ve el modelo una respuesta suya que le cortaron mientras la decía (ADR-245): entera,
-#: y detrás lo que el propietario llegó a oír, para que no dé por dicho lo que no sonó.
-CUT_HEARD = "(Te cortó mientras lo decías: solo llegó a oír «{heard}».)"
-#: Lo mismo, si le cortaron antes de que sonara nada.
-CUT_NOTHING_HEARD = "(Te cortó antes de que llegara a oír nada de esto.)"
-
-
 def render_recent_message(message: Message) -> str:
     """Un mensaje reciente, como lo lee el modelo: quién y qué; y, si a Sirius le cortaron
-    esa respuesta, hasta dónde se oyó (ADR-245)."""
+    esa respuesta, hasta dónde se oyó (``cut_note``, ADR-245)."""
     line = f"[{message.role.value}] {message.content}"
-    heard = message.heard_when_cut
-    if heard is None:
-        return line
-    mark = CUT_HEARD.format(heard=heard) if heard else CUT_NOTHING_HEARD
-    return f"{line}\n{mark}"
+    note = cut_note(message)
+    return line if note is None else f"{line}\n{note}"
 
 
 class CommandVoice:

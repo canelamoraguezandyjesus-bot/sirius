@@ -99,3 +99,30 @@ class Message:
     status: MessageStatus = MessageStatus.COMPLETED
     redacted_at: datetime | None = None
     heard_when_cut: str | None = None
+
+
+#: Cómo lee Sirius, en los mensajes recientes, una respuesta suya que le cortaron mientras
+#: la decía (ADR-245): entera, y detrás lo que el propietario llegó a oír, para que no dé
+#: por dicho lo que no sonó.
+CUT_HEARD = "(Te cortó mientras lo decías: solo llegó a oír «{heard}».)"
+#: Lo mismo, si le cortaron antes de que sonara nada.
+CUT_NOTHING_HEARD = "(Te cortó antes de que llegara a oír nada de esto.)"
+#: Cómo lo lee quien resume la charla, que habla de él y de Sirius en tercera persona.
+CUT_HEARD_IN_SUMMARY = "(Él le cortó mientras lo decía: solo llegó a oír «{heard}».)"
+CUT_NOTHING_HEARD_IN_SUMMARY = "(Él le cortó antes de que llegara a oír nada de esto.)"
+
+
+def cut_note(message: Message, *, in_summary: bool = False) -> str | None:
+    """La nota que va detrás de una respuesta que le cortaron, para quien se la lea al
+    modelo; ``None`` si no le cortaron (ADR-245).
+
+    Todo lo que le lee al modelo una respuesta pasada la lleva: los mensajes recientes, lo
+    que cuestan en el contexto y lo que se le da a resumir. Con ``in_summary``, en
+    tercera persona, como habla la entrada del resumen.
+    """
+    heard = message.heard_when_cut
+    if heard is None:
+        return None
+    if in_summary:
+        return CUT_HEARD_IN_SUMMARY.format(heard=heard) if heard else CUT_NOTHING_HEARD_IN_SUMMARY
+    return CUT_HEARD.format(heard=heard) if heard else CUT_NOTHING_HEARD

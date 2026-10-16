@@ -2,9 +2,16 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime
 
-from sirius.domain.conversation import Message, MessageRole, MessageStatus
+from sirius.domain.conversation import (
+    CUT_HEARD_IN_SUMMARY,
+    CUT_NOTHING_HEARD_IN_SUMMARY,
+    Message,
+    MessageRole,
+    MessageStatus,
+)
 from sirius.domain.conversation_summary import (
     TURNS_BETWEEN_SUMMARIES,
     TURNS_KEPT_VERBATIM,
@@ -76,3 +83,22 @@ def test_lo_que_se_da_a_resumir_lleva_el_resumen_anterior_y_quien_dijo_que() -> 
     assert texto.startswith("Resumen anterior:\nHablaron de coches.")
     assert "Él: pregunta 1" in texto
     assert "Sirius: respuesta 1" in texto
+
+
+def test_una_respuesta_que_le_cortaron_se_resume_con_lo_que_se_oyo() -> None:
+    # Ronda 1 de Codex sobre la PR #690 (ADR-245): si no, al resumirla quedaría por dicha
+    # entera, y la nota se perdería del contexto de después.
+    pregunta, respuesta, otra_pregunta, otra = _charla(2)
+    cortada = replace(respuesta, heard_when_cut="respuesta")
+    nada = replace(otra, heard_when_cut="")
+
+    texto = summary_input(None, [pregunta, cortada, otra_pregunta, nada])
+
+    assert texto.splitlines() == [
+        "Él: pregunta 1",
+        "Sirius: respuesta 1",
+        CUT_HEARD_IN_SUMMARY.format(heard="respuesta"),
+        "Él: pregunta 2",
+        "Sirius: respuesta 2",
+        CUT_NOTHING_HEARD_IN_SUMMARY,
+    ]
