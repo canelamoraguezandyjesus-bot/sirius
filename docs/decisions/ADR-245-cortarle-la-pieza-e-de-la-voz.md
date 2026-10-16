@@ -141,9 +141,11 @@ Para apuntar hasta dónde la oyó:
 
 ## Decisión
 
-La opción 2, el micro leído desde lo que la charla escribe, y el corte apuntado en el
-mensaje de Sirius. Lo que queda por decidir al escribir el código se anota aquí con su
-porqué.
+La opción 2; el micro leído todo el rato que la charla contesta, por un hilo aparte y
+antes de decir cada frase; y el corte apuntado en el mensaje de Sirius. Al principio se
+leía solo desde lo que la charla escribe, y la ronda 1 de Codex enseñó el hueco: después
+de escribir, la charla puede resumir, y entonces no se le podía cortar. Lo que queda por
+decidir al escribir el código se anota aquí con su porqué.
 
 Lo que se decidió al escribir el código, con su porqué:
 
@@ -423,3 +425,10 @@ su ADR lo dijera. No trae elegir su voz (F).
     es la guarda de rendimiento de construir el contexto, de 1 500 ms, que midió entre
     1 561 y 1 656 ms; sola, con este código, 807 a 870 ms, y con el de antes de la ronda,
     `8715774d`, 864 a 890 ms: la ronda no la mueve.
+- **Ronda 2, sobre `05ef0758`**, preguntando si el enfoque está mal: no lo dijo, y trajo un
+  hallazgo P2, cierto, de documento. El primer párrafo de «Decisión», el que copia
+  `MEMORIA.md`, decía aún que el micro se leía solo desde lo que la charla escribe. Es de
+  la familia de la nota del corte de la ronda 1, un cambio que no llega a todos los sitios
+  que lo cuentan, así que no se corrigió solo esa línea: se repasó el ADR entero contra el
+  código, y lo demás estaba al día. La nota de arranque se deja como se publicó, porque es
+  lo escrito antes de empezar.

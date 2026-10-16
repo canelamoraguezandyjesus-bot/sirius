@@ -79,7 +79,7 @@ huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
-| [245](docs/decisions/ADR-245-cortarle-la-pieza-e-de-la-voz.md) | 2026-10-15 | APROBADO | Cortarle: la pieza E de la voz | La opción 2, el micro leído desde lo que la charla escribe, y el corte apuntado en el mensaje de Sirius. Lo que queda por decidir al escribir el código se anota aquí con su porqué. |
+| [245](docs/decisions/ADR-245-cortarle-la-pieza-e-de-la-voz.md) | 2026-10-15 | APROBADO | Cortarle: la pieza E de la voz | La opción 2; el micro leído todo el rato que la charla contesta, por un hilo aparte y antes de decir cada frase; y el corte apuntado en el mensaje de Sirius. Al principio se leía solo desde lo que la charla escribe, y la ronda 1 de Codex… |
 | [244](docs/decisions/ADR-244-escuchar-siempre-la-pieza-d-de-la-voz.md) | 2026-10-15 | APROBADO | Escuchar siempre: la pieza D de la voz | Se adopta la opción 3, y la charla dura 10 s, desde que Sirius calla hasta que empieza a oírse la voz del turno siguiente. Los turnos de voz no despiertan al juez: puntúa en segundo plano las respuestas que aún no tienen nota (PA-R02-08)… |
 | [243](docs/decisions/ADR-243-hablar-en-local-la-pieza-c-de-la-voz.md) | 2026-10-15 | APROBADO | Hablar en local: la pieza C de la voz | Se adopta la opción 2. |
 | [242](docs/decisions/ADR-242-oir-en-local-la-pieza-b-de-la-voz.md) | 2026-10-14 | APROBADO | Oír en local: la pieza B de la voz | Se adopta la opción 2. Lo decide la sesión (ADR-204: no es dinero, ni salud, ni cambia lo que el propietario ve u oye). |
