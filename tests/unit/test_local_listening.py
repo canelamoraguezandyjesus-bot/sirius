@@ -389,6 +389,10 @@ class _Altavoz:
         self.sigue_sonando = self.sigue_sonando and self.suena_tras_callar
         self.eventos.append("calla")
 
+    def close(self) -> None:
+        self.sigue_sonando = False
+        self.eventos.append("suelta")
+
 
 class _Lector:
     """Hace del hilo que lee el micro mientras la charla contesta: la prueba dice cuándo lee
@@ -2316,3 +2320,83 @@ def test_lo_que_esperaba_va_en_cuanto_calla_lo_anterior() -> None:
 
     # En cuanto el micro capta sin su voz, ya calló: va lo que esperaba.
     assert [t.heard for t in oido.suena("").turns] == ["Y cuéntame otra cosa"]
+
+
+# --- Cambiar de voz (pieza F, ADR-246) ------------------------------------------------
+
+
+def _voz_nueva(oido: _Oido) -> list[str]:
+    """La voz que dirán los ajustes desde ahora, con su altavoz: lo que hagan va aparte."""
+    nuevos: list[str] = []
+    oido.voz = _Voz(nuevos)
+    oido.altavoz = _Altavoz(nuevos)
+    return nuevos
+
+
+def test_al_cambiar_de_voz_suelta_la_de_antes_y_el_turno_siguiente_habla_con_la_nueva() -> None:
+    oido = _Oido()
+    oido.servicio.start()
+    oido.suena(voz("Hola"), FIN)
+    nuevos = _voz_nueva(oido)
+
+    assert oido.servicio.reload_voice() == ""
+
+    # Paró, soltó el altavoz de antes y volvió a escuchar, ya con la voz nueva.
+    assert oido.eventos[-2:] == ["suelta", "abre"]
+    assert oido.servicio.listening
+    assert oido.cargas_de_la_voz == 2
+    antes = len(oido.eventos)
+    oido.suena(voz("Otra"), FIN)
+    assert [e for e in nuevos if e.startswith(("di:", "suena:"))] == [
+        "di:R: Otra",
+        "suena:sonido de R: Otra",
+    ]
+    assert not [e for e in oido.eventos[antes:] if e.startswith(("di:", "suena:"))]
+
+
+def test_sin_escuchar_cambiar_de_voz_no_abre_el_micro_y_la_nueva_se_carga_al_escuchar() -> None:
+    oido = _Oido()
+    oido.servicio.start()
+    oido.servicio.stop()
+    _voz_nueva(oido)
+
+    assert oido.servicio.reload_voice() == ""
+
+    assert not oido.servicio.listening
+    assert oido.cargas_de_la_voz == 1
+    assert oido.servicio.start() == ""
+    assert oido.cargas_de_la_voz == 2
+
+
+def test_callado_cambiar_de_voz_no_lo_abre_y_al_quitar_el_silencio_habla_con_la_nueva() -> None:
+    oido = _Oido()
+    oido.servicio.start()
+    oido.servicio.mute()
+    _voz_nueva(oido)
+
+    oido.servicio.reload_voice()
+
+    assert not oido.servicio.listening
+    assert oido.servicio.unmute() == ""
+    assert oido.cargas_de_la_voz == 2
+
+
+def test_cambiar_de_voz_antes_de_escuchar_no_carga_nada() -> None:
+    oido = _Oido()
+
+    assert oido.servicio.reload_voice() == ""
+
+    assert oido.cargas_de_la_voz == 0
+    assert oido.eventos == []
+
+
+def test_si_la_voz_nueva_no_carga_lo_dice_y_no_escucha() -> None:
+    oido = _Oido()
+    oido.servicio.start()
+    oido.falla_al_cargar_la_voz = VoiceUnavailable("la voz de personaje no carga (sin memoria)")
+
+    aviso = oido.servicio.reload_voice()
+
+    assert "No puedo hablarte: la voz de personaje no carga (sin memoria)." in aviso
+    assert oido.instalacion.install_command in aviso
+    assert not oido.servicio.listening

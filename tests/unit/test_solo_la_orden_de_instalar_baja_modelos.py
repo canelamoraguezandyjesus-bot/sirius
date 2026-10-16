@@ -15,10 +15,17 @@ from pathlib import Path
 _SRC = Path(__file__).resolve().parents[2] / "src"
 _LA_ORDEN_DE_INSTALAR = _SRC / "sirius" / "install_local_voice.py"
 
-#: Las funciones con que faster-whisper, huggingface_hub y tokenizers bajan un modelo, y
-#: con la que Piper baja una voz.
+#: Las funciones con que faster-whisper, huggingface_hub y tokenizers bajan un modelo, con
+#: la que Piper baja una voz, y con la que la orden baja la voz de personaje (ADR-246).
 QUE_BAJAN = frozenset(
-    {"download_model", "snapshot_download", "hf_hub_download", "from_pretrained", "download_voice"}
+    {
+        "download_model",
+        "snapshot_download",
+        "hf_hub_download",
+        "from_pretrained",
+        "download_voice",
+        "urlopen",
+    }
 )
 
 
@@ -50,7 +57,7 @@ def test_solo_la_orden_de_instalar_nombra_lo_que_baja_modelos() -> None:
 def test_la_orden_de_instalar_si_baja_el_modelo_y_la_voz() -> None:
     nombrados = nombres(_LA_ORDEN_DE_INSTALAR.read_text(encoding="utf-8"))
 
-    assert {"download_model", "download_voice"} <= nombrados
+    assert {"download_model", "download_voice", "urlopen"} <= nombrados
 
 
 def test_ve_lo_que_baja_se_llame_como_se_llame() -> None:
@@ -62,6 +69,7 @@ def test_ve_lo_que_baja_se_llame_como_se_llame() -> None:
         "Tokenizer.from_pretrained('openai/whisper-tiny')\n"
         "hf_hub_download('x', 'y')\n"
         "from piper.download_voices import download_voice as baja\n"
+        "urllib.request.urlopen('https://huggingface.co/x')\n"
     )
 
     assert nombres(fuente) & QUE_BAJAN == QUE_BAJAN

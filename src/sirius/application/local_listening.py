@@ -474,6 +474,21 @@ class LocalListening[Chunk]:
             self._muted = False
             return self.start()
 
+    def reload_voice(self) -> str:
+        """Habla desde ahora con la voz que digan los ajustes (pieza F, ADR-246).
+
+        Para como ``stop`` y suelta la voz y su altavoz, que va a la frecuencia de su voz; la
+        nueva se carga al volver a escuchar. Si escuchaba, vuelve a escuchar ya, con ella, y
+        devuelve el aviso si no puede, o vacío.
+        """
+        with self._lock:
+            was_listening = self._listening
+            self.stop()
+            speaking, self._speaking = self._speaking, None
+            if speaking is not None:
+                speaking.speaker.close()
+            return self.start() if was_listening else ""
+
     def attend(self) -> Attended:
         """Atiende todo lo que ha llegado al micro y devuelve los turnos que cerró.
 

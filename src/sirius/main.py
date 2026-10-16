@@ -7,6 +7,7 @@ from pathlib import Path
 
 from PySide6.QtWidgets import QApplication, QMainWindow
 
+from sirius.adapters.audio.voice_libraries import hugging_face_offline
 from sirius.adapters.persistence.bootstrap import initialize_persistence
 from sirius.application.data_location import DataLocationUseCase, LocationFileCorruptedError
 from sirius.application.listening_loop import ListeningLoop
@@ -97,6 +98,7 @@ def _build_main_window(
         dream_service=dependencies.dream_service,
         local_listening=dependencies.local_listening,
         listening_loop=listening_loop,
+        voice_test_use_case=dependencies.voice_test_use_case,
     )
     main_window.project_completed.connect(_on_project_completed)
     return main_window
@@ -260,6 +262,9 @@ def main() -> int:
     # (tras resolver el directorio de datos); en la ventana anterior el
     # manejador solo puede intentar stderr, si existe.
     install_crash_handler()
+    # Antes de que nada importe huggingface_hub: Sirius en marcha no le pide nada a Hugging
+    # Face, ni la voz de personaje al cargar (ADR-246). Lo que baja es la orden de instalar.
+    hugging_face_offline()
 
     app = QApplication.instance()
     owns_app = app is None

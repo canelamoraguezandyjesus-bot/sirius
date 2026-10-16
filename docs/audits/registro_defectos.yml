@@ -1565,3 +1565,17 @@ defectos:
       - src/sirius/application/local_listening.py
       - src/sirius/application/addressing.py
       - tests/unit/test_local_listening.py
+  # ADR-246: la hoja de voces se prepara en otro hilo, y si se cerraba a medias, la voz que
+  # ese hilo cargaba despues se quedaba cargada, con su altavoz abierto: cerrar soltaba solo
+  # lo que ya estaba cargado. Lo vio la revision propia antes de empujar.
+  - id: H-246
+    titulo: Cerrar la hoja de voces a medias dejaba cargada la voz que se cargaba despues
+    bloque: producto
+    gravedad: media-baja
+    estado: cerrado
+    cerrado_por: 7980bd31f4c8abd60b9ef60748cd5286254ac0da
+    pr: 691
+    adr: 246
+    ficheros:
+      - src/sirius/application/voice_test.py
+      - tests/unit/test_voice_test.py

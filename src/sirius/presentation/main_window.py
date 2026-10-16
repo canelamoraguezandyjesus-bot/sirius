@@ -100,6 +100,7 @@ from sirius.application.studio_voice import (
 from sirius.application.supersede_decision import SupersedeDecisionUseCase
 from sirius.application.trick_questions import TrickQuestionsUseCase
 from sirius.application.validate_backup import ValidateBackupUseCase
+from sirius.application.voice_test import VoiceTestUseCase
 from sirius.config.llm_provider_settings import (
     LLMProviderConfigurationError,
     LLMProviderKind,
@@ -143,6 +144,7 @@ from sirius.presentation.project_continuity_widget import ProjectContinuityWidge
 from sirius.presentation.reply_judge_worker import ReplyJudgeWorker
 from sirius.presentation.studio_workers import CaptureWorker, SpeakWorker, TranscribeWorker
 from sirius.presentation.trick_questions_dialog import TrickQuestionsDialog
+from sirius.presentation.voice_test_dialog import VoiceTestDialog
 
 _logger = get_logger(__name__)
 
@@ -323,6 +325,7 @@ class MainWindow(QMainWindow):
         dream_service: DreamService | None = None,
         local_listening: LocalListening[Any] | None = None,
         listening_loop: ListeningLoop | None = None,
+        voice_test_use_case: VoiceTestUseCase | None = None,
         show_warning: Callable[[str, str], None] | None = None,
         show_information: Callable[[str, str], None] | None = None,
         prompt_multiline_with_default: Callable[[str, str, str], str | None] | None = None,
@@ -363,6 +366,8 @@ class MainWindow(QMainWindow):
         self._listening_loop = listening_loop
         #: El oído dejó de oír al entrar en Model Studio, y vuelve a oír al salir.
         self._listening_paused_for_studio = False
+        # Pieza F de la 0.3 (ADR-246): la prueba de voces, para elegir su voz a ciegas.
+        self._voice_test_use_case = voice_test_use_case
         self._pending_user_item: QListWidgetItem | None = None
         self._send_message_use_case = send_message_use_case
         self._get_history_use_case = get_history_use_case
@@ -2230,6 +2235,8 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.key_feedback_label)
         if self._blind_test_use_case is not None:
             layout.addWidget(self._build_chat_model_group(self._blind_test_use_case))
+        if self._voice_test_use_case is not None:
+            layout.addWidget(self._build_voice_group(self._voice_test_use_case))
         layout.addWidget(self._build_backup_group())
         layout.addWidget(self._build_export_group())
         layout.addStretch()
@@ -3277,6 +3284,49 @@ class MainWindow(QMainWindow):
         )
         dialog.exec()
         self._refresh_chat_model_label(use_case)
+
+    def _build_voice_group(self, use_case: VoiceTestUseCase) -> QGroupBox:
+        """Su voz y la prueba a ciegas para elegirla (PA-R03-10, ADR-246)."""
+        group = QGroupBox("Voz de Sirius")
+        layout = QVBoxLayout(group)
+        explanation = QLabel(
+            "Elige con qué voz habla Sirius: oyes cinco frases con cada voz, sin saber cuál "
+            "es cuál."
+        )
+        explanation.setWordWrap(True)
+        self.voice_test_button = QPushButton("Elegir su voz a ciegas…")
+        self.voice_test_button.clicked.connect(lambda: self._open_voice_test(use_case))
+        layout.addWidget(explanation)
+        layout.addWidget(self.voice_test_button)
+        return group
+
+    def _open_voice_test(self, use_case: VoiceTestUseCase) -> None:
+        """La hoja de voces, con el micro cerrado mientras está abierta: sus muestras no son
+        algo que le digan. Al cerrarla vuelve a escuchar si escuchaba, ya con la voz que
+        eligiera; lo abre por ``_listen``, como siempre."""
+        listening = self._local_listening
+        was_listening = listening is not None and listening.listening
+        if listening is not None and was_listening:
+            listening.stop()
+            self._refresh_listening()
+        try:
+            self._run_voice_test_dialog(use_case)
+        finally:
+            if (
+                listening is not None
+                and was_listening
+                and not self._closed
+                and not self._close_requested
+            ):
+                self._refresh_listening(self._listen(listening.start))
+
+    def _run_voice_test_dialog(self, use_case: VoiceTestUseCase) -> None:
+        VoiceTestDialog(
+            use_case,
+            show_warning=self._show_warning,
+            show_information=self._show_information,
+            parent=self,
+        ).exec()
 
     def _open_trick_questions(self, use_case: TrickQuestionsUseCase) -> None:
         """E-R02-03: solo con la charla en un modelo de este ordenador, que no cuesta dinero."""

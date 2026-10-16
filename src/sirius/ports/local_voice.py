@@ -136,7 +136,11 @@ class ListeningEngines[Chunk]:
 
 
 class Voice[Sound](Protocol):
-    """Piper, con la voz que dicen los ajustes: una frase en sonido."""
+    """Piper o Chatterbox, con la voz que dicen los ajustes: una frase en sonido.
+
+    Solo recibe texto: no hay por dónde darle el audio de alguien para que lo imite
+    (PA-R03-10, ADR-246).
+    """
 
     def say(self, text: str) -> Sound:
         """El sonido de ``text`` dicho con esta voz."""
@@ -172,6 +176,11 @@ class Speaker[Sound](Protocol):
 
         Lo que tiró al callarlo sin que llegara a sonar no cuenta: con eso sabe el oído
         hasta dónde se oyó lo que decía (pieza E, ADR-245)."""
+        ...
+
+    def close(self) -> None:
+        """Calla y suelta el altavoz: después no suena nada más. Para cambiar de voz, que
+        trae su altavoz a su frecuencia (pieza F, ADR-246). No falla."""
         ...
 
 

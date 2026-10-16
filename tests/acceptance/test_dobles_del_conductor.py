@@ -32,6 +32,8 @@ import sqlite_vec
 from conductor_robot_0_2 import _respuestas
 from conductor_robot_0_3 import (
     MARCA_DEL_AUDIO,
+    PIEZAS,
+    PIEZAS_ENTREGADAS,
     AltavozDeMentira,
     Audio,
     CanceladorDeMentira,
@@ -47,7 +49,6 @@ from conductor_robot_0_3 import (
     _formas_del_audio_en,
     destinos_de,
 )
-from piezas_del_robot import PiezaPendiente
 from pytestqt.qtbot import QtBot
 
 from sirius.application.local_listening import Attended, HeardTurn, LocalListening
@@ -265,7 +266,7 @@ def test_el_modelo_apunta_cuando_acabo_y_puede_contestar_a_trozos_con_pausa() ->
     assert [p.texto for p in modelo.peticiones] == ["hola", "hola"]
 
 
-def test_el_conductor_se_construye_lee_la_base_de_verdad_y_sus_piezas_pendientes_lo_dicen(
+def test_el_conductor_se_construye_lee_la_base_de_verdad_y_ya_tiene_todas_sus_piezas(
     tmp_path: Path,
 ) -> None:
     conductor = ConductorDeVoz(tmp_path)
@@ -284,14 +285,14 @@ def test_el_conductor_se_construye_lee_la_base_de_verdad_y_sus_piezas_pendientes
     assert [p.texto for p in conductor.peticiones] == ["Buenos días, Sirius."]
     assert conductor.audio_en_la_base() == []
     conductor.reabre()
-    # Las piezas B, C y D ya oyen, hablan y saben cuándo les hablan, también tras
-    # reabrir; la F todavía no ha entrado.
+    # Las piezas B a E ya oyen, hablan, saben cuándo les hablan y se dejan cortar, también
+    # tras reabrir; con la F ya no queda ninguna pendiente, y la hoja de voces se abre sin
+    # escribir nada (ADR-246).
+    assert frozenset(PIEZAS) == PIEZAS_ENTREGADAS
     turno = conductor.oye("Sirius, ¿me oyes?")
     assert (turno.oido, turno.hablado) == ("Sirius, ¿me oyes?", ("Respuesta 2 de Sirius.",))
     assert conductor.segundos_de_charla() == 10.0
-    with pytest.raises(PiezaPendiente) as pendiente:
-        conductor.hoja_de_voces()
-    assert pendiente.value.letra == "F"
+    assert 4 <= len(conductor.hoja_de_voces().candidatas) <= 6
     conductor.cierra()
     assert conductor.escrituras_en_disco() == []
     assert conductor.ficheros_nuevos() == []

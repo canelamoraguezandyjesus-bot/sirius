@@ -17,6 +17,7 @@ import time
 from collections.abc import Callable, Sequence
 from typing import Any
 
+from sirius.adapters.audio.voice_libraries import hugging_face_offline
 from sirius.adapters.persistence.bootstrap import initialize_persistence
 from sirius.application.data_location import DataLocationUseCase
 from sirius.application.listening_loop import PAUSE_SECONDS
@@ -167,6 +168,8 @@ def _data_paths() -> SiriusPaths | None:
 
 
 def main() -> int:
+    # Como la ventana: sin conexión a Hugging Face antes de cargar nada (ADR-246).
+    hugging_face_offline()
     paths = _data_paths()
     if paths is None:
         print("Abre Sirius una vez con su ventana: todavía no sabe dónde guardar tus datos.")
