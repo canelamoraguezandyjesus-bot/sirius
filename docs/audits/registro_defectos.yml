@@ -1597,3 +1597,18 @@ defectos:
       - src/sirius/composition_root.py
       - src/sirius/infrastructure/temporary_folder.py
       - tests/integration/test_medir_busqueda_de_memoria.py
+  # ADR-249: el diario de Sirius dejaba de apuntar en cuanto se migraba la base, es decir
+  # en cada arranque: la configuracion de Alembic apagaba todos los registradores que ya
+  # existian. En su ordenador acababa en "Sirius iniciando". Las pruebas lo tapaban
+  # encendiendolos a mano.
+  - id: H-249
+    titulo: Migrar la base al arrancar apagaba el diario de Sirius
+    bloque: producto
+    gravedad: media
+    estado: cerrado
+    cerrado_por: 636c6af0602e60854be17953c84e18446f5f3178
+    pr: 692
+    adr: 249
+    ficheros:
+      - migrations/env.py
+      - tests/gui/test_app_bootstrap.py

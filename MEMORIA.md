@@ -28,7 +28,7 @@
 
 - Decisiones (ADR): **243**.
 - Bloques del motor: 17 cerrado, 3 fuera_de_alcance.
-- Defectos registrados: 2 abierto, 92 cerrado.
+- Defectos registrados: 2 abierto, 93 cerrado.
 - Ideas aparcadas o descartadas: 12 aparcada, 3 descartada, 2 promovida.
 - Skills: **19**.
 - Investigaciones: **14** (fotos con fecha; caducan).
@@ -366,6 +366,7 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 | `pieza-correcta-a-la-que-no-llama-quien-la-necesita` | 1 | sí | 197 |
 | `plan-que-hay-que-terminar-de-una-sentada` | 1 | sí | 176 |
 | `pregunta-al-propietario-que-nadie-vuelve-a-poner-delante` | 1 | no en todas | 198 |
+| `prueba-que-tapa-un-defecto-del-producto` | 1 | sí | 249 |
 | `registro-sin-decir-quien-lo-hizo` | 1 | sí | 230 |
 | `regla-nueva-que-cambia-lo-que-otro-reconoce` | 1 | sí | 244 |
 | `regla-nueva-sin-pasarla-por-los-casos-vivos` | 1 | sí | 231 |
@@ -527,6 +528,10 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 
 - **ADR-198** — una incidencia formula una pregunta que solo el (sin prueba que lo haga cumplir: ninguna prueba: nada en este repositorio distingue una).
 
+### `prueba-que-tapa-un-defecto-del-producto`
+
+- **ADR-249** — arreglar en la prueba lo que falla en el producto. El conductor de (lo hace cumplir `tests/gui/test_app_bootstrap.py`).
+
 ### `registro-sin-decir-quien-lo-hizo`
 
 - **ADR-230** — comparar una ronda a la que le falta un revisor con rondas enteras y leer la ausencia de sus hallazgos como progreso, y su vuelta como reaparición (lo hace cumplir `tests/automation/test_sirius_convergence.py`).
@@ -547,7 +552,7 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 
 - **ADR-205** — el ciclo volvería a quedarse horas en verde esperando (lo hace cumplir `tests/automation/test_sirius_merge.py`).
 
-Y **8** ADR declaran expresamente que no dejaron lección: 249, 248, 240, 236, 235, 234, 233, 232.
+Y **7** ADR declaran expresamente que no dejaron lección: 248, 240, 236, 235, 234, 233, 232.
 
 ## Los bloques del motor
 
