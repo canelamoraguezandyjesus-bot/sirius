@@ -26,7 +26,7 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **241**.
+- Decisiones (ADR): **242**.
 - Bloques del motor: 17 cerrado, 3 fuera_de_alcance.
 - Defectos registrados: 2 abierto, 92 cerrado.
 - Ideas aparcadas o descartadas: 12 aparcada, 3 descartada, 2 promovida.
@@ -79,6 +79,7 @@ huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| [248](docs/decisions/ADR-248-poner-tope-a-lo-que-escribe-el-modelo-de-ollama-y-apuntar-lo-que-dice-cuando-falla.md) | 2026-10-16 | APROBADO | Poner tope a lo que escribe el modelo de Ollama y apuntar lo que dice cuando falla | La opción 1. Lo que quede por decidir al escribir el código se anota aquí con su porqué. |
 | [247](docs/decisions/ADR-247-dar-con-una-orden-la-cuenta-de-las-50-marcas-de-e-r02-02.md) | 2026-10-16 | APROBADO | Dar con una orden la cuenta de las 50 marcas de E-R02-02 | La opción 1: una orden da la cuenta de PA-R02-06 sobre una copia de su base, sin escribir en ella; y la de E-R02-05 busca su base donde la ventana, cierra todo lo que abre y dice si pasa antes de borrar su carpeta. En detalle: La orden de… |
 | [246](docs/decisions/ADR-246-elegir-su-voz-a-ciegas-la-pieza-f-de-la-voz.md) | 2026-10-16 | APROBADO | Elegir su voz a ciegas: la pieza F de la voz | La opción 1: la voz de personaje es la voz de serie de Chatterbox, sin audio de nadie; y la voz elegida vale desde el turno siguiente, sin volver a abrir Sirius. Cinco candidatas, cuatro de Piper y la de personaje, dicen cinco frases suyas… |
 | [245](docs/decisions/ADR-245-cortarle-la-pieza-e-de-la-voz.md) | 2026-10-15 | APROBADO | Cortarle: la pieza E de la voz | La opción 2; el micro leído todo el rato que la charla contesta, por un hilo aparte y antes de decir cada frase; y el corte apuntado en el mensaje de Sirius. Al principio se leía solo desde lo que la charla escribe, y la ronda 1 de Codex… |
@@ -545,7 +546,7 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 
 - **ADR-205** — el ciclo volvería a quedarse horas en verde esperando (lo hace cumplir `tests/automation/test_sirius_merge.py`).
 
-Y **6** ADR declaran expresamente que no dejaron lección: 240, 236, 235, 234, 233, 232.
+Y **7** ADR declaran expresamente que no dejaron lección: 248, 240, 236, 235, 234, 233, 232.
 
 ## Los bloques del motor
 
