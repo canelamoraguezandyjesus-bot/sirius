@@ -488,3 +488,8 @@ PA-R03-02 son los bloques, que la ventana enseña aparte y la voz dice que queda
 pantalla. Callar el código en línea cambiaría lo que Sirius dice, una decisión de producto
 que no es de esta pieza. No es de la familia de las rondas 2 a 5: no encuentra un caso
 que el reconocimiento del código no vea, sino que pide cambiar qué se dice.
+
+**La ronda limpia.** Ronda 7, sobre `dcdf08e6`: «Didn't find any major issues», del
+conector, el 15-10-2026. Con ella y Quality en verde se fusionó la PR #688 (`7c88a66b`).
+Se anota desde la PR de la pieza E de la 0.3 (ADR-245): anotarlo en su PR habría cambiado
+el head que la ronda revisó.

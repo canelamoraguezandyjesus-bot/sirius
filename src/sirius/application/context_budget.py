@@ -37,7 +37,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from sirius.domain.conversation import Message, MessageStatus
+from sirius.domain.conversation import Message, MessageStatus, cut_note
 from sirius.domain.event import Event
 from sirius.domain.relevance import KnowledgeKind, RankedKnowledge
 from sirius.ports.token_counter import TokenCounter
@@ -127,11 +127,18 @@ def _trim_messages(
     source_message_ids: frozenset[int],
 ) -> tuple[Message, ...]:
     """Drop the oldest non-source message first, newest turns last; a source
-    message is only dropped once no non-source message remains."""
+    message is only dropped once no non-source message remains.
+
+    Una respuesta que le cortaron cuesta también la nota del corte, que el modelo lee
+    detrás (``cut_note``, ADR-245)."""
     completed = [
         message for message in recent_messages if message.status is MessageStatus.COMPLETED
     ]
-    costs = {message.id: token_counter.count_tokens(message.content or "") for message in completed}
+    costs = {
+        message.id: token_counter.count_tokens(message.content or "")
+        + token_counter.count_tokens(cut_note(message) or "")
+        for message in completed
+    }
     included = list(completed)
     total_cost = sum(costs.values())
 

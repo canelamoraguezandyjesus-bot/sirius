@@ -12,7 +12,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from sirius.domain.conversation import Message, MessageRole
+from sirius.domain.conversation import Message, MessageRole, cut_note
 
 #: Turnos sin resumir que disparan un resumen: dentro de los 15 a 20 del plan.
 TURNS_BETWEEN_SUMMARIES = 18
@@ -49,11 +49,17 @@ def messages_to_summarize(
 
 
 def summary_input(previous: str | None, messages: Sequence[Message]) -> str:
-    """El texto que se le da a resumir: el resumen anterior, si lo hay, y la charla."""
+    """El texto que se le da a resumir: el resumen anterior, si lo hay, y la charla. Una
+    respuesta que le cortaron va entera y con lo que se oyó de ella detrás, como en los
+    mensajes recientes: si no, al resumirla quedaría por dicha entera (ronda 1 de Codex
+    sobre la PR #690, ADR-245)."""
     lines: list[str] = []
     if previous:
         lines += ["Resumen anterior:", previous, "", "Lo que se habló después:"]
     for message in messages:
         speaker = "Él" if message.role is MessageRole.USER else "Sirius"
         lines.append(f"{speaker}: {message.content or ''}")
+        note = cut_note(message, in_summary=True)
+        if note is not None:
+            lines.append(note)
     return "\n".join(lines)

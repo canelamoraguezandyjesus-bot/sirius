@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 from collections.abc import Callable, Sequence
 from types import SimpleNamespace
 from typing import cast
@@ -30,6 +31,7 @@ from sirius.application.local_listening import (
     Attended,
     HeardTurn,
     LocalListening,
+    read_meanwhile,
 )
 from sirius.application.send_message import ChatLeavesThisComputer, SendMessageResult
 from sirius.application.speech_cutter import SpeechCutter
@@ -37,6 +39,7 @@ from sirius.domain.conversation import MessageStatus
 from sirius.ports.llm import LLMErrorKind, runs_on_this_computer
 from sirius.ports.local_voice import (
     Captured,
+    Cleaned,
     ListeningEngines,
     SpeakingEngines,
     TurnSignal,
@@ -44,10 +47,17 @@ from sirius.ports.local_voice import (
 )
 
 FIN = "fin"
+#: Lo que capta el micro con su propia voz sonando: su eco.
+ECO = "eco"
 
 
 def voz(texto: str) -> str:
     return f"voz:{texto}"
+
+
+def eco(trozo: str = "") -> str:
+    """Lo que capta el micro mientras suena su voz: el eco, y encima ``trozo`` si lo hay."""
+    return f"{ECO}+{trozo}" if trozo else ECO
 
 
 class _Micro:
@@ -111,6 +121,25 @@ class _Micro:
         if self.reloj is None or not self._captados_en:
             return Captured(trozo)
         return Captured(trozo, age=self.reloj() - self._captados_en.pop(0))
+
+
+class _Cancelador:
+    """Hace de la cancelación de eco: quita de cada trozo el eco y dice si lo había. Apunta
+    cada trozo que limpia, en orden."""
+
+    def __init__(self) -> None:
+        self.limpiados: list[str] = []
+        self.falla: Exception | None = None
+
+    def clean(self, captured: Captured[str]) -> Cleaned[str]:
+        if self.falla is not None:
+            raise self.falla
+        self.limpiados.append(captured.chunk)
+        if captured.chunk == ECO:
+            return Cleaned("", echoing=True)
+        if captured.chunk.startswith(f"{ECO}+"):
+            return Cleaned(captured.chunk.removeprefix(f"{ECO}+"), echoing=True)
+        return Cleaned(captured.chunk)
 
 
 class _Detector:
@@ -196,6 +225,20 @@ class _Charla:
         #: callen o paren el oído mientras contesta.
         self.al_enviar: Callable[[], None] | None = None
         self.al_escribir: Callable[[str], None] | None = None
+        #: Los cortes apuntados: el mensaje y lo que se oyó de él (pieza E).
+        self.cortes: list[tuple[int, str]] = []
+        self.falla_al_apuntar: Exception | None = None
+        #: Lo que pasa en cuanto la respuesta queda guardada, antes de lo que la charla hace
+        #: después del turno, como resumir, que puede ser otra llamada al modelo.
+        self.al_acabar: Callable[[], None] | None = None
+        #: Cada respuesta se guarda con su número, del 7 en adelante.
+        self._siguiente = 7
+
+    def mark_cut(self, message_id: int, heard: str) -> None:
+        if self.falla_al_apuntar is not None:
+            raise self.falla_al_apuntar
+        self.cortes.append((message_id, heard))
+        self.eventos.append(f"corte:{message_id}:{heard}")
 
     def send_message(
         self,
@@ -228,12 +271,18 @@ class _Charla:
             raise rotura
         if self.desenlace is MessageStatus.COMPLETED and on_completed is not None:
             on_completed()
+        if self.al_acabar is not None:
+            self.al_acabar()
         # Lo que la charla hace después del turno, como resumir, que puede tardar.
         self.eventos.append("después del turno")
+        numero, self._siguiente = self._siguiente, self._siguiente + 1
         respuesta = SimpleNamespace(
             outcome=self.desenlace,
             sirius_message=SimpleNamespace(
-                id=7, content="".join(trozos), status=self.desenlace, operation_id="op-7"
+                id=numero,
+                content="".join(trozos),
+                status=self.desenlace,
+                operation_id=f"op-{numero}",
             ),
             error_kind=self.por_que,
             memory_suggestion=self.propone,
@@ -310,6 +359,12 @@ class _Altavoz:
         self.latency = 0.0
         #: Lo que pasa mientras toma cada sonido, antes de apuntarlo.
         self.al_sonar: Callable[[], None] | None = None
+        #: Cuántos de los sonidos que tomó han empezado a sonar; sin más, todos en el acto.
+        self.empezados = 0
+        #: Si lo que toma espera en cola sin empezar a sonar hasta que la prueba lo diga.
+        self.en_cola = False
+        #: Lo que pasa mientras calla: por ejemplo, que aún empiece a sonar lo siguiente.
+        self.al_callar: Callable[[], None] | None = None
 
     def play(self, sound: str) -> None:
         if self.falla is not None:
@@ -317,14 +372,46 @@ class _Altavoz:
         if self.al_sonar is not None:
             self.al_sonar()
         self.eventos.append(f"suena:{sound}")
+        if not self.en_cola:
+            self.empezados += 1
+
+    @property
+    def started(self) -> int:
+        return self.empezados
 
     @property
     def playing(self) -> bool:
         return self.sigue_sonando
 
     def stop(self) -> None:
+        if self.al_callar is not None:
+            self.al_callar()
         self.sigue_sonando = self.sigue_sonando and self.suena_tras_callar
         self.eventos.append("calla")
+
+
+class _Lector:
+    """Hace del hilo que lee el micro mientras la charla contesta: la prueba dice cuándo lee
+    (``lee``), y apunta cuántas veces se puso a leer y cuántas paró."""
+
+    def __init__(self) -> None:
+        self.arranques = 0
+        self.paradas = 0
+        self._oye: Callable[[], None] | None = None
+
+    def __call__(self, oye: Callable[[], None]) -> _Lector:
+        self.arranques += 1
+        self._oye = oye
+        return self
+
+    def lee(self) -> None:
+        """Lo que haría el hilo en una de sus vueltas, si está leyendo."""
+        if self._oye is not None:
+            self._oye()
+
+    def stop(self) -> None:
+        self.paradas += 1
+        self._oye = None
 
 
 class _TodoEsParaEl:
@@ -340,8 +427,8 @@ class _TodoEsParaEl:
     def fell_silent(self, at: float) -> None:
         self.callados.append(at)
 
-    def is_for_sirius(self, heard: str, began: float) -> bool:
-        del heard, began
+    def in_conversation(self, began: float) -> bool:
+        del began
         return True
 
 
@@ -358,8 +445,11 @@ class _Oido:
         antes: int = 2,
         detector: _Detector | None = None,
         a_quien: Addressee | None = None,
+        cancelador: bool = False,
     ) -> None:
         self.eventos: list[str] = []
+        self.cancelador = _Cancelador()
+        self._con_cancelador = cancelador
         self.micro = _Micro(self.eventos)
         self.detector = detector or _Detector()
         self.transcriptor = _Transcriptor()
@@ -369,6 +459,7 @@ class _Oido:
         self.propuestas = _Propuestas()
         self.instalacion = _Instalacion()
         self.reloj = _Reloj()
+        self.lector = _Lector()
         self.cargas = 0
         self.cargas_de_la_voz = 0
         self.falla_al_cargar: VoiceUnavailable | None = None
@@ -382,6 +473,7 @@ class _Oido:
             pre_roll=antes,
             clock=self.reloj,
             addressing=a_quien if a_quien is not None else _TodoEsParaEl(),
+            reader=self.lector,
         )
 
     def _carga(self) -> ListeningEngines[str]:
@@ -394,7 +486,9 @@ class _Oido:
         self.cargas_de_la_voz += 1
         if self.falla_al_cargar_la_voz is not None:
             raise self.falla_al_cargar_la_voz
-        return SpeakingEngines(self.voz, self.altavoz)
+        return SpeakingEngines(
+            self.voz, self.altavoz, self.cancelador if self._con_cancelador else None
+        )
 
     def suena(self, *trozos: str) -> Attended:
         self.micro.capta(*trozos)
@@ -1715,3 +1809,510 @@ def test_parar_espera_a_que_el_altavoz_tome_la_frase_y_despues_la_calla() -> Non
             para.join(5)
     # Lo que tomó el altavoz, lo vació después al callar.
     assert oido.eventos.index("calla") > oido.eventos.index("suena:sonido de R: Cuéntame")
+
+
+# --- Pieza E: con cancelación de eco se le puede cortar (ADR-245) -----------------------
+
+
+def _oido_con_cancelador(*, a_quien: Addressee | None = None) -> _Oido:
+    oido = _Oido(cancelador=True, a_quien=a_quien)
+    oido.micro.reloj = oido.reloj
+    oido.servicio.start()
+    return oido
+
+
+def test_con_cancelador_el_micro_sigue_abierto_mientras_habla_y_su_eco_no_es_un_turno() -> None:
+    oido = _oido_con_cancelador()
+    oido.altavoz.sigue_sonando = True
+
+    (turno,) = oido.suena(voz("Cuéntame"), FIN).turns
+
+    assert turno.reply == "R: Cuéntame"
+    assert oido.micro.abierto
+    assert "cierra" not in oido.eventos
+    # Su propia voz vuelve por el micro y el cancelador la aparta antes del detector.
+    assert oido.suena(eco(), eco()) == Attended()
+    assert oido.cancelador.limpiados == [voz("Cuéntame"), FIN, ECO, ECO]
+    assert oido.detector.vistos == [voz("Cuéntame"), FIN, "", ""]
+    assert "calla" not in oido.eventos
+    assert oido.transcriptor.turnos == [[voz("Cuéntame"), FIN]]
+
+
+def test_si_le_hablan_encima_mientras_suena_calla_al_oirle_y_lo_que_dice_es_para_el() -> None:
+    oido = _oido_con_cancelador(a_quien=Addressing(conversation_seconds=10.0))
+    oido.altavoz.sigue_sonando = True
+    oido.suena(voz("Sirius, cuéntame"), FIN)
+
+    # Le habla encima: la voz llega con el eco, y calla al oírla, con el turno abierto. Calla
+    # antes de apuntar hasta dónde se oyó.
+    assert oido.suena(eco(voz("Espera"))) == Attended()
+
+    assert oido.eventos[-2:] == ["calla", "corte:7:R: Sirius, cuéntame"]
+    assert not oido.altavoz.playing
+    # Lo que le corta es para él aunque no diga su nombre.
+    (turno,) = oido.suena(FIN).turns
+    assert (turno.heard, turno.addressed, turno.reply) == ("Espera", True, "R: Espera")
+
+
+def test_al_cortarle_apunta_lo_que_llego_a_sonar_y_la_respuesta_sigue_entera() -> None:
+    oido = _oido_con_cancelador()
+    oido.charla.trozos = ["Una frase. ", "Otra frase. ", "Y otra."]
+    oido.altavoz.sigue_sonando = True
+    # Las tres frases esperan en la cola del altavoz, y solo la primera empieza a sonar.
+    oido.altavoz.en_cola = True
+    (turno,) = oido.suena(voz("Cuéntame"), FIN).turns
+    assert oido.dicho() == ["Una frase.", "Otra frase.", "Y otra."]
+    oido.altavoz.empezados = 1
+
+    oido.suena(eco(voz("Espera")))
+
+    assert turno.reply == "Una frase. Otra frase. Y otra."
+    assert oido.charla.cortes == [(7, "Una frase.")]
+
+
+def test_cuenta_como_oido_lo_que_empezo_a_sonar_hasta_que_callo_mientras_escribe() -> None:
+    # Mientras calla, el altavoz aún puede empezar la frase siguiente, y esa ya se oyó.
+    oido = _oido_con_cancelador()
+    oido.charla.trozos = ["Una frase. ", "Otra frase. ", "Y otra. ", "Y más."]
+    oido.altavoz.en_cola = True
+
+    def habla_encima(trozo: str) -> None:
+        if trozo == "Y otra. ":
+            # Las dos primeras esperan en el altavoz, que empieza la primera, y le habla
+            # encima; mientras calla, empieza la segunda.
+            oido.altavoz.empezados = 1
+            oido.altavoz.al_callar = lambda: setattr(oido.altavoz, "empezados", 2)
+            oido.micro.capta(voz("Espera"))
+
+    oido.charla.al_escribir = habla_encima
+
+    oido.suena(voz("Cuéntame"), FIN)
+
+    assert oido.charla.cortes == [(7, "Una frase. Otra frase.")]
+
+
+def test_cuenta_como_oido_lo_que_empezo_a_sonar_hasta_que_callo_ya_escrito() -> None:
+    oido = _oido_con_cancelador()
+    oido.charla.trozos = ["Una frase. ", "Otra frase. ", "Y otra."]
+    oido.altavoz.sigue_sonando = True
+    oido.altavoz.en_cola = True
+    oido.suena(voz("Cuéntame"), FIN)
+    oido.altavoz.empezados = 1
+    oido.altavoz.al_callar = lambda: setattr(oido.altavoz, "empezados", 2)
+
+    oido.suena(eco(voz("Espera")))
+
+    assert oido.charla.cortes == [(7, "Una frase. Otra frase.")]
+
+
+def test_si_le_hablan_mientras_la_charla_escribe_calla_sin_decir_otra_frase() -> None:
+    oido = _oido_con_cancelador()
+    oido.charla.trozos = ["Una frase. ", "Otra frase. ", "Y otra."]
+
+    def habla_encima() -> None:
+        # En cuanto el altavoz toma la primera frase, el propietario habla encima.
+        if oido.altavoz.empezados == 0:
+            oido.micro.capta(eco(voz("Espera")))
+
+    oido.altavoz.al_sonar = habla_encima
+
+    (turno,) = oido.suena(voz("Cuéntame"), FIN).turns
+
+    # Calla al leerle, antes de decir la frase siguiente; la charla sigue y guarda la
+    # respuesta entera, y en ella queda apuntado lo que se oyó.
+    assert oido.dicho() == ["Una frase."]
+    assert "calla" in oido.eventos
+    assert turno.reply == "Una frase. Otra frase. Y otra."
+    assert oido.charla.cortes == [(7, "Una frase.")]
+
+
+def test_si_le_hablan_mientras_piensa_no_empieza_a_hablar_encima() -> None:
+    oido = _oido_con_cancelador()
+    oido.charla.al_enviar = lambda: oido.micro.capta(voz("Y otra cosa"))
+
+    (turno,) = oido.suena(voz("Cuéntame"), FIN).turns
+
+    assert turno.reply == "R: Cuéntame"
+    assert oido.dicho() == []
+    assert oido.charla.cortes == [(7, "")]
+
+
+def test_lo_que_se_cierra_mientras_contesta_va_a_la_charla_cuando_acaba() -> None:
+    oido = _oido_con_cancelador()
+    oido.charla.trozos = ["Una frase. ", "Otra frase. ", "Y otra."]
+    dicho_encima: list[bool] = []
+
+    def habla_encima() -> None:
+        if not dicho_encima:
+            dicho_encima.append(True)
+            oido.micro.capta(eco(voz("Espera")), FIN)
+
+    oido.altavoz.al_sonar = habla_encima
+
+    atendido = oido.suena(voz("Cuéntame"), FIN)
+
+    assert [t.heard for t in atendido.turns] == ["Cuéntame", "Espera"]
+    assert oido.charla.mensajes == ["Cuéntame", "Espera"]
+
+
+def test_la_charla_empieza_con_el_primer_trozo_que_capta_sin_su_voz() -> None:
+    oido = _oido_con_cancelador(a_quien=Addressing(conversation_seconds=10.0))
+    oido.altavoz.sigue_sonando = True
+    oido.suena(voz("Sirius, cuéntame"), FIN)
+    # Habla un buen rato: lo que capta el micro mientras tanto lleva su eco.
+    oido.reloj.avanza(30)
+    oido.suena(eco(), eco())
+    oido.altavoz.sigue_sonando = False
+    oido.reloj.avanza(1)
+    oido.micro.capta("")
+    oido.reloj.avanza(5)
+
+    (turno,) = oido.suena(voz("Y otra cosa"), FIN).turns
+
+    # A 5 s de que el micro dejara de captar su voz: dentro de la charla, sin su nombre.
+    assert turno.addressed
+    oido.reloj.avanza(11)
+    (fuera,) = oido.suena(voz("Y otra más"), FIN).turns
+    assert not fuera.addressed
+
+
+def test_lo_que_le_dijo_encima_es_para_el_aunque_se_lea_cuando_ya_ha_callado() -> None:
+    oido = _oido_con_cancelador(a_quien=Addressing(conversation_seconds=10.0))
+
+    def habla_encima() -> None:
+        # Mientras suena la frase, el propietario le habla encima; el oído lo leerá
+        # cuando la charla acabe, y para entonces ya ha callado.
+        oido.micro.capta(eco(voz("Espera")))
+        oido.reloj.avanza(1)
+
+    oido.altavoz.al_sonar = habla_encima
+    oido.suena(voz("Sirius, cuéntame"), FIN)
+    oido.altavoz.al_sonar = None
+
+    (turno,) = oido.suena(FIN).turns
+
+    assert (turno.heard, turno.addressed) == ("Espera", True)
+
+
+def test_parar_mientras_aun_suena_lo_que_dijo_empieza_la_charla_al_parar() -> None:
+    oido = _oido_con_cancelador(a_quien=Addressing(conversation_seconds=10.0))
+    oido.altavoz.sigue_sonando = True
+    oido.suena(voz("Sirius, cuéntame"), FIN)
+    oido.reloj.avanza(30)
+
+    oido.servicio.stop()
+    oido.servicio.start()
+    oido.reloj.avanza(5)
+
+    (turno,) = oido.suena(voz("Otra cosa"), FIN).turns
+    assert turno.addressed
+
+
+def test_si_falla_el_cancelador_deja_de_oir_y_lo_dice() -> None:
+    oido = _oido_con_cancelador()
+    oido.cancelador.falla = RuntimeError("roto")
+
+    atendido = oido.suena(voz("Hola"), FIN)
+
+    assert atendido.notice == "No puedo oírte: la cancelación de eco ha fallado (RuntimeError)."
+    assert not oido.servicio.listening
+    assert oido.charla.mensajes == []
+
+
+def test_si_no_se_puede_apuntar_el_corte_el_diario_solo_dice_el_tipo(
+    caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Otras pruebas de la batería configuran el diario y apagan los registradores que ya
+    # había: este tiene que estar encendido para que se vea lo que apunta.
+    monkeypatch.setattr(logging.getLogger("sirius.application.local_listening"), "disabled", False)
+    oido = _oido_con_cancelador()
+    oido.altavoz.sigue_sonando = True
+    oido.charla.trozos = ["Una frase secreta."]
+    oido.charla.falla_al_apuntar = RuntimeError("Una frase secreta.")
+    oido.suena(voz("Cuéntame"), FIN)
+
+    with caplog.at_level(logging.INFO, logger="sirius"):
+        oido.suena(eco(voz("Espera")), FIN)
+
+    assert "No se pudo apuntar hasta dónde se oyó (RuntimeError)" in caplog.text
+    assert "secreta" not in caplog.text
+    assert oido.charla.mensajes == ["Cuéntame", "Espera"]
+
+
+def test_le_corta_aunque_le_hable_en_una_pausa_de_lo_que_aun_le_queda_por_decir() -> None:
+    # Entre frase y frase su voz no está en el aire, pero sigue contestando: le corta igual.
+    oido = _oido_con_cancelador()
+    oido.altavoz.sigue_sonando = True
+    oido.suena(voz("Cuéntame"), FIN)
+
+    oido.suena(voz("Espera"))
+
+    assert oido.eventos[-2:] == ["calla", "corte:7:R: Cuéntame"]
+
+
+def test_lo_que_le_corta_mientras_escribe_es_para_el_aunque_la_charla_tarde_en_acabar() -> None:
+    oido = _oido_con_cancelador(a_quien=Addressing(conversation_seconds=10.0))
+    oido.charla.trozos = ["Una frase. ", "Otra frase. ", "Y otra."]
+
+    def habla_encima() -> None:
+        if oido.altavoz.empezados == 0:
+            oido.micro.capta(eco(voz("Espera")))
+
+    oido.altavoz.al_sonar = habla_encima
+    # La charla tarda: entre trozo y trozo pasan 6 s, y acaba mucho después del corte.
+    oido.charla.al_escribir = lambda _trozo: oido.reloj.avanza(6)
+    oido.suena(voz("Sirius, cuéntame"), FIN)
+    oido.altavoz.al_sonar = None
+    oido.charla.al_escribir = None
+
+    (turno,) = oido.suena(FIN).turns
+
+    assert (turno.heard, turno.addressed) == ("Espera", True)
+
+
+def _con_su_respuesta_aun_sonando(oido: _Oido) -> None:
+    """Le pregunta con su nombre y contesta; su voz sigue sonando, y su eco vuelve."""
+    oido.altavoz.sigue_sonando = True
+    oido.suena(voz("Sirius, cuéntame"), FIN)
+    oido.suena(eco(), eco())
+
+
+def test_si_tarda_en_hablarle_despues_de_callar_ya_no_es_de_la_charla() -> None:
+    oido = _oido_con_cancelador(a_quien=Addressing(conversation_seconds=10.0))
+    _con_su_respuesta_aun_sonando(oido)
+    oido.altavoz.sigue_sonando = False
+    # Ya calló: el micro sigue captando, sin su voz.
+    oido.suena("")
+    oido.reloj.avanza(11)
+
+    (turno,) = oido.suena(voz("Y otra cosa"), FIN).turns
+
+    assert not turno.addressed
+
+
+def test_la_charla_cuenta_desde_que_el_micro_capta_sin_su_voz_aunque_lo_lea_tarde() -> None:
+    oido = _oido_con_cancelador(a_quien=Addressing(conversation_seconds=10.0))
+    _con_su_respuesta_aun_sonando(oido)
+    oido.altavoz.sigue_sonando = False
+    oido.micro.capta("")
+    oido.reloj.avanza(2)
+    oido.micro.capta(voz("Y otra cosa"), FIN)
+    # El oído lo lee todo diez segundos después: la charla cuenta desde que lo captó.
+    oido.reloj.avanza(10)
+
+    (turno,) = oido.servicio.attend().turns
+
+    assert turno.addressed
+
+
+def test_si_le_dice_dos_cosas_mientras_la_charla_escribe_las_dos_son_para_el() -> None:
+    # La charla empieza con el primer corte, y lo que le dice mientras la charla escribe
+    # cae dentro. Contestar a lo primero le hace callar otra vez después de que empezara lo
+    # segundo: si es de la charla se decide al cerrarse, no al ir a ella.
+    oido = _oido_con_cancelador(a_quien=Addressing(conversation_seconds=10.0))
+    oido.charla.trozos = ["Una frase. ", "Otra frase. ", "Y otra. ", "Y más."]
+    dicho_encima: list[bool] = []
+
+    def habla_encima() -> None:
+        if not dicho_encima:
+            dicho_encima.append(True)
+            oido.micro.capta(eco(voz("Espera")), FIN)
+
+    def sigue_hablando(trozo: str) -> None:
+        oido.reloj.avanza(2)
+        if trozo == "Y otra. ":
+            oido.micro.capta(voz("Y cuéntame otra cosa"), FIN)
+
+    oido.altavoz.al_sonar = habla_encima
+    oido.charla.al_escribir = sigue_hablando
+
+    atendido = oido.suena(voz("Sirius, cuéntame"), FIN)
+
+    assert [(t.heard, t.addressed) for t in atendido.turns] == [
+        ("Sirius, cuéntame", True),
+        ("Espera", True),
+        ("Y cuéntame otra cosa", True),
+    ]
+
+
+def test_lo_que_le_dice_mientras_la_charla_escribe_no_alarga_la_charla() -> None:
+    # Calló con el primer corte, y la charla dura desde ahí: lo que siga diciéndole
+    # mientras la charla escribe no le hace callar otra vez.
+    oido = _oido_con_cancelador(a_quien=Addressing(conversation_seconds=10.0))
+    oido.charla.trozos = ["Una frase. ", "Otra frase. ", "Y otra. ", "Y más. ", "Y ya."]
+    dicho_encima: list[bool] = []
+
+    def habla_encima() -> None:
+        if not dicho_encima:
+            dicho_encima.append(True)
+            oido.micro.capta(eco(voz("Espera")), FIN)
+
+    def sigue_hablando(trozo: str) -> None:
+        oido.reloj.avanza(4)
+        if trozo == "Otra frase. ":
+            oido.micro.capta(voz("Y cuéntame otra cosa"), FIN)
+        if trozo == "Y más. ":
+            oido.micro.capta(voz("Y otra más"), FIN)
+
+    oido.altavoz.al_sonar = habla_encima
+    oido.charla.al_escribir = sigue_hablando
+
+    atendido = oido.suena(voz("Sirius, cuéntame"), FIN)
+
+    # A 8 s del corte, dentro; a 16 s, fuera, aunque a 8 s de lo anterior.
+    assert [(t.heard, t.addressed) for t in atendido.turns] == [
+        ("Sirius, cuéntame", True),
+        ("Espera", True),
+        ("Y cuéntame otra cosa", True),
+        ("Y otra más", False),
+    ]
+
+
+# --- Ronda 1 de Codex sobre la PR #690 ---------------------------------------------------
+
+
+def test_le_corta_aunque_le_hable_cuando_la_charla_ya_escribio_y_hace_lo_de_despues() -> None:
+    # Después de escribir, la charla puede seguir con lo de después del turno, como resumir,
+    # que es otra llamada al modelo: el micro se lee también entonces, y le calla en cuanto
+    # le habla, sin esperar a que acabe.
+    oido = _oido_con_cancelador()
+    oido.altavoz.sigue_sonando = True
+
+    def le_habla() -> None:
+        oido.micro.capta(eco(voz("Espera")))
+        oido.lector.lee()
+
+    oido.charla.al_acabar = le_habla
+    oido.suena(voz("Cuéntame"), FIN)
+
+    assert oido.eventos.index("calla") < oido.eventos.index("después del turno")
+    assert oido.charla.cortes == [(7, "R: Cuéntame")]
+
+
+def test_le_corta_mientras_piensa_aunque_la_charla_tarde_en_escribir() -> None:
+    # Antes de la primera frase el modelo puede tardar: el micro se lee igual, y la
+    # respuesta no empieza a sonar encima.
+    oido = _oido_con_cancelador()
+
+    def le_habla() -> None:
+        oido.micro.capta(voz("Espera"))
+        oido.lector.lee()
+
+    oido.charla.al_enviar = le_habla
+    oido.suena(voz("Cuéntame"), FIN)
+
+    assert oido.eventos.index("calla") < oido.eventos.index("escribe:R: Cuéntame")
+    assert oido.dicho() == []
+
+
+def test_el_hilo_que_lee_mientras_contesta_va_con_cancelador_y_para_con_la_charla() -> None:
+    sin = _Oido()
+    sin.servicio.start()
+    sin.suena(voz("Hola"), FIN)
+    assert sin.lector.arranques == 0
+
+    con = _oido_con_cancelador()
+    con.suena(voz("Hola"), FIN)
+    assert (con.lector.arranques, con.lector.paradas) == (1, 1)
+    # También si la charla se rompe a medias.
+    con.charla.falla = RuntimeError("rota")
+    con.suena(voz("Otra"), FIN)
+    assert (con.lector.arranques, con.lector.paradas) == (2, 2)
+
+
+def test_el_hilo_que_lee_mientras_contesta_mira_el_micro_hasta_que_para() -> None:
+    vueltas: list[int] = []
+    dos = threading.Event()
+
+    def oye() -> None:
+        vueltas.append(1)
+        if len(vueltas) >= 2:
+            dos.set()
+
+    lector = read_meanwhile(oye)
+    try:
+        assert dos.wait(2), "no miró el micro dos veces en 2 s"
+    finally:
+        lector.stop()
+    hechas = len(vueltas)
+    time.sleep(0.1)
+    assert len(vueltas) == hechas, "siguió mirando después de parar"
+
+
+def test_si_falla_mirar_el_micro_mientras_contesta_deja_de_mirar_y_el_diario_dice_el_tipo(
+    caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(logging.getLogger("sirius.application.local_listening"), "disabled", False)
+    vueltas: list[int] = []
+
+    def oye() -> None:
+        vueltas.append(1)
+        raise RuntimeError("Una frase secreta.")
+
+    with caplog.at_level(logging.ERROR, logger="sirius"):
+        lector = read_meanwhile(oye)
+        time.sleep(0.2)
+        lector.stop()
+
+    assert vueltas == [1]
+    assert "dejó de mirar el micro mientras contestaba (RuntimeError)" in caplog.text
+    assert "secreta" not in caplog.text
+
+
+def _dos_turnos_y_lo_primero_aun_suena() -> _Oido:
+    """Dos turnos se cierran mientras la charla escribe; contesta al primero, «Espera», y su
+    respuesta se queda sonando."""
+    oido = _oido_con_cancelador(a_quien=Addressing(conversation_seconds=10.0))
+    oido.charla.trozos = ["Una frase. ", "Otra frase. ", "Y otra. ", "Y más."]
+    dicho_encima: list[bool] = []
+
+    def habla_encima() -> None:
+        if not dicho_encima:
+            dicho_encima.append(True)
+            oido.micro.capta(eco(voz("Espera")), FIN)
+
+    def sigue_hablando(trozo: str) -> None:
+        if trozo == "Y otra. ":
+            oido.micro.capta(voz("Y cuéntame otra cosa"), FIN)
+
+    def contesta() -> None:
+        if oido.charla.mensajes[-1] == "Espera":
+            oido.altavoz.sigue_sonando = True
+
+    oido.altavoz.al_sonar = habla_encima
+    oido.charla.al_escribir = sigue_hablando
+    oido.charla.al_enviar = contesta
+
+    atendido = oido.suena(voz("Sirius, cuéntame"), FIN)
+
+    # Mientras suena lo que contestó a «Espera», no contesta al segundo.
+    assert [t.heard for t in atendido.turns] == ["Sirius, cuéntame", "Espera"]
+    assert oido.charla.mensajes == ["Sirius, cuéntame", "Espera"]
+    oido.altavoz.al_sonar = None
+    return oido
+
+
+def test_no_contesta_lo_siguiente_mientras_suena_lo_anterior_y_el_corte_es_de_lo_que_sonaba() -> (
+    None
+):
+    # Así nunca hay dos respuestas en el altavoz, y si le cortan, el corte se apunta en la
+    # que sonaba, con lo que se oyó de ella (ronda 1 de Codex sobre la PR #690).
+    oido = _dos_turnos_y_lo_primero_aun_suena()
+
+    # Le corta mientras suena la respuesta a «Espera»: se apunta en ella, y lo que esperaba
+    # va antes que lo que le acaba de decir.
+    despues = oido.suena(eco(voz("Para")), FIN)
+
+    assert oido.charla.cortes == [(7, "Una frase."), (8, "R: Espera")]
+    assert [(t.heard, t.addressed) for t in despues.turns] == [
+        ("Y cuéntame otra cosa", True),
+        ("Para", True),
+    ]
+
+
+def test_lo_que_esperaba_va_en_cuanto_calla_lo_anterior() -> None:
+    oido = _dos_turnos_y_lo_primero_aun_suena()
+    oido.altavoz.sigue_sonando = False
+
+    # En cuanto el micro capta sin su voz, ya calló: va lo que esperaba.
+    assert [t.heard for t in oido.suena("").turns] == ["Y cuéntame otra cosa"]

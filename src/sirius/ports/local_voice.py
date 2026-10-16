@@ -1,11 +1,13 @@
-"""Puertos del oído y de la voz locales del robot (piezas B y C de ADR-241; ADR-242, ADR-243).
+"""Puertos del oído y de la voz locales del robot (piezas B, C y E de ADR-241; ADR-242,
+ADR-243, ADR-245).
 
-El micro, el detector de turno y el transcriptor, y la voz y el altavoz, sin tipos de
-ninguna biblioteca: los de verdad (``sounddevice``, Silero y Smart Turn de Pipecat,
-faster-whisper y Piper) viven en ``sirius.adapters.audio`` y se cargan solo si están
-instalados, y las pruebas ponen dobles. Lo que pasa de uno a otro es audio que Sirius no
-abre: un trozo, que solo saben leer el micro que lo dio, el detector y el transcriptor;
-o un sonido, que solo saben leer la voz que lo hizo y el altavoz.
+El micro, el detector de turno y el transcriptor, la voz y el altavoz, y el cancelador de
+eco, sin tipos de ninguna biblioteca: los de verdad (``sounddevice``, Silero y Smart Turn
+de Pipecat, faster-whisper, Piper y la APM de WebRTC de ``livekit``) viven en
+``sirius.adapters.audio`` y se cargan solo si están instalados, y las pruebas ponen dobles.
+Lo que pasa de uno a otro es audio que Sirius no abre: un trozo, que solo saben leer el
+micro que lo dio, el cancelador, el detector y el transcriptor; o un sonido, que solo
+saben leer la voz que lo hizo y el altavoz.
 """
 
 from __future__ import annotations
@@ -13,7 +15,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import Enum
-from typing import Protocol
+from typing import Any, Protocol
 
 
 class TurnSignal(Enum):
@@ -52,6 +54,32 @@ class Captured[Chunk]:
 
     chunk: Chunk
     age: float = 0.0
+
+
+@dataclass(frozen=True, slots=True)
+class Cleaned[Chunk]:
+    """Un trozo del micro sin el eco de su voz (pieza E, ADR-245).
+
+    ``chunk`` es lo que queda; ``echoing``, si su voz sonaba por el altavoz cuando el micro
+    lo captó.
+    """
+
+    chunk: Chunk
+    echoing: bool = False
+
+
+class EchoCanceller[Chunk](Protocol):
+    """La cancelación de eco por software: aparta de lo que capta el micro lo que vuelve del
+    altavoz (pieza E, ADR-245).
+
+    El oído le da cada trozo que capta el micro, todos y en orden, con cuánto esperó en su
+    cola; lo que suena se lo da el altavoz por su cuenta, con su hora. Así puede apartar el
+    eco aunque el oído lea tarde.
+    """
+
+    def clean(self, captured: Captured[Chunk]) -> Cleaned[Chunk]:
+        """``captured`` sin el eco de lo que sonaba cuando el micro lo captó."""
+        ...
 
 
 class Microphone[Chunk](Protocol):
@@ -138,13 +166,27 @@ class Speaker[Sound](Protocol):
         tarda en sonar, y hasta entonces sigue sonando (``playing``). No falla."""
         ...
 
+    @property
+    def started(self) -> int:
+        """Cuántos de los sonidos que le han dado desde que se abrió han empezado a sonar.
+
+        Lo que tiró al callarlo sin que llegara a sonar no cuenta: con eso sabe el oído
+        hasta dónde se oyó lo que decía (pieza E, ADR-245)."""
+        ...
+
 
 @dataclass(frozen=True, slots=True)
 class SpeakingEngines[Sound]:
-    """La voz y el altavoz, ya cargados."""
+    """La voz y el altavoz, ya cargados, y el cancelador de eco si lo hay.
+
+    El cancelador va con el altavoz porque es él quien le da lo que suena. Sin él, el oído
+    cierra el micro mientras habla y no se le puede cortar (pieza C, ADR-243); con él, el
+    micro sigue abierto (pieza E, ADR-245).
+    """
 
     voice: Voice[Sound]
     speaker: Speaker[Sound]
+    echo_canceller: EchoCanceller[Any] | None = None
 
 
 class VoiceInstallation(Protocol):

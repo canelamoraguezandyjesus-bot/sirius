@@ -203,6 +203,11 @@ La opción 2, con lo que describe la nota de arranque. En concreto:
     complete. Es rehacer cómo cumple las órdenes la pieza G, y queda fuera de esta PR, que
     solo había ensanchado el hueco y ya lo ha dejado donde estaba.
 
+**La ronda limpia.** Ronda 3, sobre `a7c1f959`: «Didn't find any major issues», del
+conector, el 08-10-2026. Con ella y Quality en verde se fusionó la PR #685 (`d545ff17`).
+Se anota desde la PR de la pieza E de la 0.3 (ADR-245): anotarlo en su PR habría cambiado
+el head que la ronda revisó.
+
 ## Consecuencias
 
 - Una orden de memoria tarda lo que tarde el modelo en decir una frase: con el modelo de

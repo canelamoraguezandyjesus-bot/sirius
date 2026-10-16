@@ -1549,3 +1549,19 @@ defectos:
     ficheros:
       - src/sirius/domain/memory_commands.py
       - tests/unit/test_memory_commands_domain.py
+  # ADR-245: con la cancelacion de eco, si el propietario le decia dos cosas mientras la
+  # charla escribia, contestar a la primera hacia callar a Sirius otra vez y movia la
+  # charla, y la segunda, dicha dentro de ella, se descartaba como si no fuera para el: se
+  # decidia al atender el turno y no al cerrarlo. Lo vio la revision propia antes de empujar.
+  - id: H-245
+    titulo: Lo que el propietario decia mientras la charla escribia podia dejar de ser para Sirius al contestar a lo anterior
+    bloque: producto
+    gravedad: media
+    estado: cerrado
+    cerrado_por: 1aabf58235a52bdb884e6ed1cb72eb502d6f09a8
+    pr: 690
+    adr: 245
+    ficheros:
+      - src/sirius/application/local_listening.py
+      - src/sirius/application/addressing.py
+      - tests/unit/test_local_listening.py

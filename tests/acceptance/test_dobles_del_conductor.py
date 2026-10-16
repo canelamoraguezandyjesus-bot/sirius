@@ -1,7 +1,7 @@
 """Los dobles del conductor de la 0.3 hacen lo que dicen, y sus registros los escriben ellos.
 
-Las 27 pruebas de la 0.3 miran lo que apuntan el micro, el oído, el transcriptor,
-la voz, el altavoz y el modelo de mentira. Si esos registros los rellenara el
+Las 28 pruebas de la 0.3 miran lo que apuntan el micro, el oído, el transcriptor,
+la voz, el altavoz, la cancelación de eco y el modelo de mentira. Si esos registros los rellenara el
 conductor, que escribe quien implementa cada pieza, no probarían nada; y una
 prueba en ``xfail`` estricto no ejecuta ni una línea del conductor, así que lo
 que el conductor ya hace necesita una prueba que corra hoy (revisión propia de
@@ -34,6 +34,7 @@ from conductor_robot_0_3 import (
     MARCA_DEL_AUDIO,
     AltavozDeMentira,
     Audio,
+    CanceladorDeMentira,
     ConductorDeVoz,
     MicroCerrado,
     MicroDeMentira,
@@ -703,3 +704,77 @@ def test_la_ventana_de_voz_lee_la_charla_de_la_ventana_de_verdad(
         ("propietario", "Buenos días, Sirius."),
         ("Sirius", "Respuesta 1 de Sirius."),
     )
+
+
+# --- La cancelación de eco de mentira (pieza E, ADR-245) ----------------------------
+
+
+def test_el_micro_cuenta_lo_que_capta_abierto_en_el_orden_en_que_se_lee() -> None:
+    micro = MicroDeMentira()
+    micro.suena(Sonido("Perdido."))
+    assert micro.captados == 0
+
+    micro.abre()
+    micro.suena(Sonido("Uno."))
+    micro.suena(Sonido("Dos."))
+
+    assert micro.captados == 2
+    assert micro.lee() == Audio("Uno.")
+    assert micro.leidos[0].texto == "Uno."
+
+
+def test_el_altavoz_apunta_que_tuvo_en_el_aire_en_cada_captura_del_micro() -> None:
+    micro = MicroDeMentira()
+    micro.abre()
+    altavoz = AltavozDeMentira(micro)
+    altavoz.con_eco = True
+
+    # Sin seguir sonando, solo la copia del eco lo capta.
+    altavoz.suena(Sonido("Corto.", de_quien="sirius"))
+    assert altavoz.en_el_aire(0) == ("Corto.",)
+    assert altavoz.en_el_aire(1) == ()
+
+    # Siguiendo, lo lleva cada captura hasta que le paran; lo captado antes, también.
+    altavoz.sigue_sonando = True
+    altavoz.suena(Sonido("Largo.", de_quien="sirius"))
+    micro.suena(Sonido("Encima."))
+    micro.suena(Sonido(""))
+    altavoz.para()
+    micro.suena(Sonido("Después."))
+
+    assert [altavoz.en_el_aire(i) for i in range(1, 5)] == [
+        ("Largo.",),
+        ("Largo.",),
+        ("Largo.",),
+        (),
+    ]
+
+
+def test_el_cancelador_aparta_lo_que_sonaba_al_captar_sin_mirar_quien_lo_dijo() -> None:
+    micro = MicroDeMentira()
+    micro.abre()
+    altavoz = AltavozDeMentira(micro)
+    altavoz.con_eco = True
+    altavoz.sigue_sonando = True
+    cancelador = CanceladorDeMentira(micro, altavoz)
+    altavoz.suena(Sonido("Una respuesta.", de_quien="sirius"))
+    micro.suena(Sonido("Una respuesta. Espera.", de_quien="propietario y sirius"))
+    altavoz.acaba()
+    micro.suena(Sonido("Una respuesta."))
+
+    limpios = []
+    while (audio := micro.lee()) is not None:
+        limpios.append(cancelador.limpia(audio))
+
+    # El eco solo queda en silencio; la voz que llegó encima pasa; y lo que Sirius dijo
+    # alguna vez, dicho por el propietario con el altavoz callado, pasa entero.
+    assert limpios == [
+        (Audio(""), True),
+        (Audio("Espera."), True),
+        (Audio("Una respuesta."), False),
+    ]
+    assert [limpio for _, limpio in cancelador.limpiados] == [
+        Audio(""),
+        Audio("Espera."),
+        Audio("Una respuesta."),
+    ]

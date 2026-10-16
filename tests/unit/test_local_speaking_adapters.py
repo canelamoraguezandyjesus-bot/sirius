@@ -17,7 +17,8 @@ import types
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 
@@ -340,3 +341,117 @@ def test_callar_lo_que_aun_no_habia_empezado_calla_en_el_acto() -> None:
     altavoz.stop()
 
     assert not altavoz.playing
+
+
+# --- Pieza E: lo que empieza a sonar y lo que oye la cancelación de eco (ADR-245) ---
+
+
+def test_cuenta_lo_que_empieza_a_sonar_y_no_lo_que_tira_al_callar() -> None:
+    altavoz, llena = _altavoz()
+    altavoz.play(b"abcd")
+    altavoz.play(b"ef")
+    altavoz.play(b"gh")
+    assert altavoz.started == 0, "lo que espera en la cola aún no ha empezado"
+
+    llena(bytearray(4), 2, None, None)
+    assert altavoz.started == 1
+    llena(bytearray(2), 1, None, None)
+    assert altavoz.started == 2, "empieza en cuanto sale su primera muestra"
+
+    altavoz.stop()
+    llena(bytearray(4), 2, None, None)
+    assert altavoz.started == 2, "lo que se tiró al callar no llega a empezar"
+    altavoz.play(b"ijkl")
+    llena(bytearray(4), 2, None, None)
+    assert altavoz.started == 3, "lo que suena después cuenta una vez, y lo tirado nunca"
+
+
+class _Eco:
+    def __init__(self) -> None:
+        self.oido: list[tuple[bytes, float]] = []
+
+    def played(self, block: bytes, at: float) -> None:
+        self.oido.append((block, at))
+
+
+def test_le_da_a_la_cancelacion_de_eco_cada_bloque_con_la_hora_a_la_que_se_oye() -> None:
+    reloj = _Reloj()
+    sounddevice = _SoundDevice()
+    eco = _Eco()
+    altavoz = SoundDeviceSpeaker(sounddevice, _FRECUENCIA, clock=reloj, echo=eco)  # type: ignore[arg-type]
+    llena = sounddevice.flujos[0].opciones["callback"]
+    altavoz.play(b"ab")
+
+    llena(bytearray(4), 2, None, None)
+    reloj.ahora = 51.0
+    llena(bytearray(4), 2, None, None)
+
+    # Silencio incluido: la cancelación necesita lo que sale, suene o no.
+    assert eco.oido == [(b"ab\x00\x00", 50.0 + 0.1), (b"\x00\x00\x00\x00", 51.0 + 0.1)]
+
+
+def test_la_hora_a_la_que_se_oye_cada_bloque_es_la_del_dac_de_portaudio() -> None:
+    # Ronda 1 de Codex sobre la PR #690: la latencia del flujo es una media; PortAudio dice,
+    # bloque a bloque, cuándo llega al DAC su primera muestra. Esa hora va a la
+    # cancelación de eco y a hasta cuándo suena.
+    reloj = _Reloj()
+    sounddevice = _SoundDevice()
+    eco = _Eco()
+    altavoz = SoundDeviceSpeaker(sounddevice, _FRECUENCIA, clock=reloj, echo=eco)  # type: ignore[arg-type]
+    llena = sounddevice.flujos[0].opciones["callback"]
+    altavoz.play(b"ab")
+
+    llena(bytearray(4), 2, SimpleNamespace(outputBufferDacTime=700.03, currentTime=700.0), None)
+
+    ((bloque, hora),) = eco.oido
+    assert bloque == b"ab\x00\x00"
+    assert hora == pytest.approx(50.0 + 0.03)
+    final = 0.03 + 2 / _FRECUENCIA + ECHO_TAIL_SECONDS
+    reloj.ahora = 50.0 + final - 0.001
+    assert altavoz.playing
+    reloj.ahora = 50.0 + final + 0.001
+    assert not altavoz.playing
+
+
+def test_sin_hora_del_dac_que_tenga_sentido_se_oye_con_la_latencia_del_flujo() -> None:
+    reloj = _Reloj()
+    sounddevice = _SoundDevice()
+    eco = _Eco()
+    SoundDeviceSpeaker(sounddevice, _FRECUENCIA, clock=reloj, echo=eco)  # type: ignore[arg-type]
+    llena = sounddevice.flujos[0].opciones["callback"]
+
+    for horas in (
+        # Cero es como dice PortAudio que no la sabe.
+        SimpleNamespace(outputBufferDacTime=0.0, currentTime=0.0),
+        SimpleNamespace(outputBufferDacTime=0.0, currentTime=700.0),
+        SimpleNamespace(outputBufferDacTime=699.0, currentTime=700.0),
+        SimpleNamespace(outputBufferDacTime=705.0, currentTime=700.0),
+    ):
+        llena(bytearray(4), 2, horas, None)
+
+    assert [hora for _bloque, hora in eco.oido] == [50.0 + 0.1] * 4
+
+
+def test_cargar_la_voz_trae_la_cancelacion_de_eco_si_se_puede_y_el_altavoz_la_alimenta(
+    sounddevice: _SoundDevice, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    eco = _Eco()
+    monkeypatch.setattr(local_speaking_module, "load_echo_canceller", lambda rate: eco)
+
+    motores = load_speaking_engines(tmp_path / "es_ES-davefx-medium.onnx")
+
+    assert cast(object, motores.echo_canceller) is eco
+    motores.speaker.play(b"ab")
+    sounddevice.flujos[0].opciones["callback"](bytearray(2), 1, None, None)
+    assert [bloque for bloque, _ in eco.oido] == [b"ab"]
+
+
+def test_sin_cancelacion_de_eco_la_voz_carga_igual(
+    sounddevice: _SoundDevice, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setitem(sys.modules, "livekit", None)
+    monkeypatch.setitem(sys.modules, "livekit.rtc", None)
+
+    motores = load_speaking_engines(tmp_path / "es_ES-davefx-medium.onnx")
+
+    assert motores.echo_canceller is None

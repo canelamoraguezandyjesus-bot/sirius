@@ -6,6 +6,7 @@ only value objects, mirroring ``test_relevance_domain.py``/
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime
 
 import pytest
@@ -16,7 +17,7 @@ from sirius.application.context_budget import (
     ContextBudgetSelection,
     apply_context_budget,
 )
-from sirius.domain.conversation import Message, MessageRole, MessageStatus
+from sirius.domain.conversation import Message, MessageRole, MessageStatus, cut_note
 from sirius.domain.decision import Decision, DecisionRevision, DecisionStatus
 from sirius.domain.event import Event
 from sirius.domain.memory import Memory, MemoryRevision, MemoryStatus
@@ -243,6 +244,26 @@ def test_messages_fill_the_remaining_budget_dropping_the_oldest_first() -> None:
     )
 
     assert result.recent_messages == (middle, newest)
+
+
+def test_a_cut_reply_also_costs_the_note_of_the_cut() -> None:
+    # ADR-245: el modelo lee entera la respuesta que le cortaron, y detrás la nota con lo
+    # que se oyó; las dos cosas cuestan.
+    oldest = _message(1, 1, "a" * 5)
+    cut = replace(_message(2, 2, "b" * 5), role=MessageRole.SIRIUS, heard_when_cut="b" * 3)
+    note = cut_note(cut)
+    assert note is not None
+
+    result = apply_context_budget(
+        protected_tokens=0,
+        ranked_knowledge=(),
+        recent_messages=(oldest, cut),
+        token_counter=_COUNTER,
+        token_budget=5 + len(note) + 4,
+    )
+
+    # Sin la nota cabrían las dos; con ella, solo la más nueva.
+    assert result.recent_messages == (cut,)
 
 
 # --- Source-message exemption: survives older non-source messages, not forever. ---

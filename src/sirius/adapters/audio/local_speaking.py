@@ -17,10 +17,13 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from collections import deque
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from sirius.adapters.audio.echo_cancellation import WebRtcEchoCanceller, load_echo_canceller
+from sirius.adapters.audio.local_listening import portaudio_seconds
 from sirius.adapters.audio.voice_libraries import TEXT_TO_SPEECH, import_voice_library
 from sirius.infrastructure.logging import get_logger
 from sirius.ports.local_voice import SpeakingEngines, VoiceUnavailable
@@ -47,17 +50,22 @@ def _libraries() -> tuple[Any, Any]:
 
 
 def load_speaking_engines(model: Path) -> SpeakingEngines[bytes]:
-    """Carga la voz de Piper de ``model`` y abre el altavoz a su frecuencia.
+    """Carga la voz de Piper de ``model``, abre el altavoz a su frecuencia y, si se puede,
+    la cancelación de eco, a la que el altavoz le da lo que suena (pieza E, ADR-245).
 
     Falla con ``VoiceUnavailable`` si falta Piper o sounddevice, si la voz está pero no
-    carga o si el altavoz no se puede abrir.
+    carga o si el altavoz no se puede abrir. Sin cancelación de eco no falla: habla igual,
+    con el micro cerrado mientras habla, como en la pieza C.
     """
     _piper, sounddevice = _libraries()
     logging.getLogger(TEXT_TO_SPEECH).setLevel(logging.WARNING)
     voice = load_speaking_voice(model)
+    rate = voice.config.sample_rate
+    echo = load_echo_canceller(rate)
     return SpeakingEngines(
         voice=PiperSpeech(voice),
-        speaker=SoundDeviceSpeaker(sounddevice, voice.config.sample_rate),
+        speaker=SoundDeviceSpeaker(sounddevice, rate, echo=echo),
+        echo_canceller=echo,
     )
 
 
@@ -98,6 +106,13 @@ class SoundDeviceSpeaker:
     latencia del flujo y la cola del eco en la habitación. Callar tira la cola, pero lo que
     PortAudio ya tiene sale igual: hasta que acaba, sigue sonando (ronda 1 de Codex sobre
     la PR #688).
+
+    Cuenta los sonidos que han empezado a salir (``started``): uno empieza cuando PortAudio
+    se lleva su primera muestra, y lo que callar tira de la cola no llega a empezar
+    (pieza E, ADR-245). Con cancelación de eco, le da cada bloque que sale, silencio
+    incluido, con la hora a la que se oye: la del DAC que da PortAudio para su primera
+    muestra, y si no la da, la de su llamada más la latencia del flujo (ronda 1 de Codex
+    sobre la PR #690).
     """
 
     def __init__(
@@ -106,12 +121,20 @@ class SoundDeviceSpeaker:
         sample_rate: int,
         *,
         clock: Callable[[], float] = time.monotonic,
+        echo: WebRtcEchoCanceller | None = None,
     ) -> None:
         self._sample_rate = sample_rate
         self._clock = clock
+        self._echo = echo
         self._lock = threading.Lock()
         self._pending = bytearray()
         self._until = 0.0
+        #: Bytes que se le han dado y que PortAudio se ha llevado, desde que se abrió.
+        self._given = 0
+        self._taken = 0
+        #: Dónde empieza, en lo dado, cada sonido que aún no ha empezado a salir.
+        self._waiting: deque[int] = deque()
+        self._started = 0
         try:
             stream = sounddevice.RawOutputStream(
                 samplerate=sample_rate,
@@ -132,6 +155,8 @@ class SoundDeviceSpeaker:
 
     def play(self, sound: bytes) -> None:
         with self._lock:
+            self._waiting.append(self._given)
+            self._given += len(sound)
             self._pending.extend(sound)
 
     @property
@@ -147,19 +172,37 @@ class SoundDeviceSpeaker:
     def stop(self) -> None:
         with self._lock:
             self._pending.clear()
+            # Lo que esperaba y se tira no llega a empezar.
+            self._given = self._taken
+            self._waiting.clear()
+
+    @property
+    def started(self) -> int:
+        with self._lock:
+            return self._started
 
     def _fill(self, outdata: Any, frames: int, time: Any, status: Any) -> None:
         """Lo llama PortAudio desde su hilo: lo siguiente de la cola y, si falta, silencio."""
-        del time, status
+        del status
+        now = self._clock()
+        ahead = portaudio_seconds(
+            getattr(time, "outputBufferDacTime", None), getattr(time, "currentTime", None)
+        )
+        heard_at = now + (self._latency if ahead is None else ahead)
         size = len(outdata)
         with self._lock:
             sound = bytes(self._pending[:size])
             del self._pending[:size]
+            self._taken += len(sound)
+            while self._waiting and self._waiting[0] < self._taken:
+                self._waiting.popleft()
+                self._started += 1
             if sound:
-                self._until = (
-                    self._clock() + self._latency + frames / self._sample_rate + ECHO_TAIL_SECONDS
-                )
-        outdata[:] = sound + bytes(size - len(sound))
+                self._until = heard_at + frames / self._sample_rate + ECHO_TAIL_SECONDS
+        block = sound + bytes(size - len(sound))
+        outdata[:] = block
+        if self._echo is not None:
+            self._echo.played(block, at=heard_at)
 
 
 def _no_speaker(error: Exception) -> VoiceUnavailable:

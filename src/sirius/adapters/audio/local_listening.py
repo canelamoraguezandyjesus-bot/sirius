@@ -46,12 +46,35 @@ _logger = get_logger(__name__)
 SAMPLE_RATE = 16_000
 #: Las muestras de cada trozo del micro: 32 ms, lo que Silero analiza de cada vez.
 BLOCK_SAMPLES = 512
+#: Lo más que creemos que separa dos horas de PortAudio del mismo bloque: más es una hora
+#: sin sentido, y se usa la de cuando llega la llamada.
+_PORTAUDIO_MAX_SECONDS = 1.0
 #: Si está puesta, Smart Turn escribe en disco el audio de cada turno
 #: (``LocalSmartTurnAnalyzerV3._write_audio_to_wav``). Sirius no guarda audio: se quita.
 _SMART_TURN_AUDIO_LOG = "PIPECAT_SMART_TURN_LOG_DATA"
 #: Los estados de Silero en que hay alguien hablando, como los cuenta Pipecat: desde que
 #: confirma que empieza hasta que confirma que ha parado.
 _SPEAKING = frozenset({"SPEAKING", "STOPPING"})
+
+
+def portaudio_seconds(later: Any, earlier: Any) -> float | None:
+    """Los segundos de ``earlier`` a ``later``, dos horas que da PortAudio en la llamada de
+    un bloque (``currentTime``, ``inputBufferAdcTime``, ``outputBufferDacTime``); ``None``
+    si no las da, alguna es cero, que es como dice que no la sabe, o no tienen sentido.
+
+    Con ellas, el micro y el altavoz dicen cuándo se captó y cuándo suena de verdad cada
+    bloque, no cuándo atendió Python su llamada, que puede llegar antes o después según el
+    sistema: es con lo que la cancelación de eco pone en fila lo que suena y lo captado
+    (ronda 1 de Codex sobre la PR #690).
+    """
+    try:
+        later_s, earlier_s = float(later), float(earlier)
+    except TypeError, ValueError:
+        return None
+    if later_s <= 0 or earlier_s <= 0:
+        return None
+    seconds = later_s - earlier_s
+    return seconds if 0 <= seconds < _PORTAUDIO_MAX_SECONDS else None
 
 
 def check_listening_libraries() -> None:
@@ -143,9 +166,11 @@ class SoundDeviceMicrophone:
     quede a medias entre mirar la generación y encolar (rondas 3 y 4 de Codex sobre la
     PR #687). Cerrar no falla nunca: lo que PortAudio no puede hacer se apunta.
 
-    Cada trozo va a la cola con la hora a la que llegó, y ``read`` dice cuánto llevaba
-    esperando: mientras Sirius transcribe o contesta, lo que se capta espera, y el oído
-    tiene que saber cuándo sonó (ronda 1 de Codex sobre la PR #689).
+    Cada trozo va a la cola con la hora a la que acabó de captarse, y ``read`` dice cuánto
+    hace: mientras Sirius transcribe o contesta, lo que se capta espera, y el oído tiene que
+    saber cuándo sonó (ronda 1 de Codex sobre la PR #689). La hora sale de la del ADC que
+    da PortAudio para la primera muestra, más lo que dura el trozo; si no la da, es la de
+    cuando llega (ronda 1 de Codex sobre la PR #690).
     """
 
     def __init__(self, sounddevice: Any, *, clock: Callable[[], float] = time.monotonic) -> None:
@@ -190,18 +215,23 @@ class SoundDeviceMicrophone:
     def read(self) -> Captured[bytes] | None:
         while True:
             try:
-                generation, arrived_at, chunk = self._chunks.get_nowait()
+                generation, captured_at, chunk = self._chunks.get_nowait()
             except queue.Empty:
                 return None
             if generation == self._generation:
-                return Captured(chunk, age=self._clock() - arrived_at)
+                return Captured(chunk, age=self._clock() - captured_at)
 
     def _receiver(self, generation: int) -> Callable[[Any, int, Any, Any], None]:
         def arrived(data: Any, frames: int, time: Any, status: Any) -> None:
-            del frames, time, status
+            del status
+            now = self._clock()
+            since = portaudio_seconds(
+                getattr(time, "currentTime", None), getattr(time, "inputBufferAdcTime", None)
+            )
+            captured_at = now if since is None else min(now, now - since + frames / SAMPLE_RATE)
             # Solo para no llenar la cola con lo que ya no vale: quien decide es `read`.
             if generation == self._generation:
-                self._chunks.put((generation, self._clock(), bytes(data)))
+                self._chunks.put((generation, captured_at, bytes(data)))
 
         return arrived
 

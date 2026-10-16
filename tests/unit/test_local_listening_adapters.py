@@ -549,6 +549,77 @@ def test_el_micro_dice_cuanto_espero_cada_trozo_a_que_lo_leyeran() -> None:
     assert micro.read() == Captured(b"\x03\x04", age=0.5)
 
 
+def test_el_micro_fecha_cada_trozo_con_la_hora_del_adc_de_portaudio() -> None:
+    # Ronda 1 de Codex sobre la PR #690: la hora a la que Python atiende la llamada puede
+    # llegar antes o después según el sistema; la del ADC, no. El trozo acabó de captarse
+    # a la hora del ADC de su primera muestra más lo que dura.
+    ahora = [10.0]
+    sounddevice = _SoundDevice()
+    micro = SoundDeviceMicrophone(sounddevice, clock=lambda: ahora[0])
+    micro.open()
+    callback = sounddevice.flujos[0].opciones["callback"]
+    muestras = 160  # 10 ms
+
+    # PortAudio dice que la primera muestra entró 50 ms antes de la llamada.
+    callback(
+        memoryview(b"\x01\x02" * muestras),
+        muestras,
+        types.SimpleNamespace(currentTime=500.25, inputBufferAdcTime=500.2),
+        None,
+    )
+    ahora[0] = 11.0
+
+    capturado = micro.read()
+    assert capturado is not None
+    assert capturado.chunk == b"\x01\x02" * muestras
+    assert capturado.age == pytest.approx(1.0 + 0.04)
+
+
+def test_un_trozo_no_se_fecha_despues_de_llegar() -> None:
+    # Si PortAudio dice que la primera muestra entró hace menos de lo que dura el trozo, la
+    # hora del final caería en el futuro: se queda en la de llegada.
+    ahora = [10.0]
+    sounddevice = _SoundDevice()
+    micro = SoundDeviceMicrophone(sounddevice, clock=lambda: ahora[0])
+    micro.open()
+    callback = sounddevice.flujos[0].opciones["callback"]
+    muestras = 160  # 10 ms
+
+    callback(
+        memoryview(b"\x01\x02" * muestras),
+        muestras,
+        types.SimpleNamespace(currentTime=500.001, inputBufferAdcTime=500.0),
+        None,
+    )
+    ahora[0] = 12.0
+
+    assert micro.read() == Captured(b"\x01\x02" * muestras, age=2.0)
+
+
+@pytest.mark.parametrize(
+    "horas",
+    [
+        None,
+        types.SimpleNamespace(currentTime=0.0, inputBufferAdcTime=0.0),
+        types.SimpleNamespace(currentTime=500.0, inputBufferAdcTime=500.5),
+        types.SimpleNamespace(currentTime=500.0, inputBufferAdcTime=480.0),
+    ],
+)
+def test_sin_horas_de_portaudio_que_tengan_sentido_el_trozo_se_fecha_al_llegar(
+    horas: Any,
+) -> None:
+    ahora = [10.0]
+    sounddevice = _SoundDevice()
+    micro = SoundDeviceMicrophone(sounddevice, clock=lambda: ahora[0])
+    micro.open()
+    callback = sounddevice.flujos[0].opciones["callback"]
+
+    callback(memoryview(b"\x01\x02"), 1, horas, None)
+    ahora[0] = 12.0
+
+    assert micro.read() == Captured(b"\x01\x02", age=2.0)
+
+
 def test_al_cerrar_el_micro_se_tira_lo_que_nadie_leyo() -> None:
     sounddevice = _SoundDevice()
     micro = SoundDeviceMicrophone(sounddevice)

@@ -303,7 +303,9 @@ def test_con_la_cancelacion_de_eco_su_propia_voz_sigue_sin_empezar_un_turno(
     assert len(conductor.peticiones) == 2
 
     conductor.altavoz.acaba()
-    repetida = conductor.oye("Vale, vale.")
+    # El detector sigue pidiendo tres silencios (ADR-245: con uno solo, el turno se quedaba
+    # abierto y esta parte no podía pasar).
+    repetida = conductor.oye("Vale, vale.", y_calla=3)
 
     # Lo que Sirius dijo alguna vez no es eco para siempre: dicho por el propietario
     # con el altavoz callado, se oye y se contesta.
@@ -466,8 +468,12 @@ def test_lo_que_iba_a_decir_queda_escrito_entero_aunque_le_corten(tmp_path: Path
 
     hilo = threading.Thread(target=le_corta_cuando_suene_la_primera_frase, daemon=True)
     conductor.el_modelo_contesta_despacio(trozos, pausa=0.6, tras_el_primer_trozo=hilo.start)
+    # El detector pide dos silencios: lo que dice encima queda abierto hasta que se calla
+    # aquí abajo, y no se cierra en el mismo ``oye`` que su pregunta, que solo da un turno
+    # (ADR-245).
+    conductor.oido.pide_silencios(2)
 
-    conductor.oye("Sirius, cuéntame tu vida.")
+    conductor.oye("Sirius, cuéntame tu vida.", y_calla=2)
     hilo.join(timeout=5)
 
     # La primera frase sonó antes de que él hablara; Sirius se calló mientras el
@@ -483,9 +489,46 @@ def test_lo_que_iba_a_decir_queda_escrito_entero_aunque_le_corten(tmp_path: Path
     sonado = [s.texto for s, _ in conductor.altavoz.sonados]
     assert sonado[0] == "Una respuesta larguísima."
     assert "Y que no acaba nunca." not in sonado
+    conductor.calla(1)
     assert conductor.transcriptor.transcritos == (
         "Sirius, cuéntame tu vida.",
         "Espera, espera, que tengo prisa.",
+    )
+
+
+@pieza("E", "la charla apunta hasta dónde oyó lo que le cortaron")
+def test_la_charla_apunta_hasta_donde_oyo_lo_que_le_cortaron(tmp_path: Path) -> None:
+    # Lo decidió el propietario el 15-10-2026 (ADR-245): la respuesta se guarda entera,
+    # y la charla apunta hasta dónde la oyó, para que el modelo no dé por dicho lo que
+    # no sonó.
+    trozos = ("Una respuesta larguísima.", " Que sigue y sigue.", " Y que no acaba nunca.")
+    entera = "".join(trozos)
+    conductor = ConductorDeVoz(tmp_path)
+    conductor.altavoz.sigue_sonando = True
+
+    def le_corta_cuando_suene_la_primera_frase() -> None:
+        limite = time.perf_counter() + 2
+        while not conductor.altavoz.sonados and time.perf_counter() < limite:
+            time.sleep(0.01)
+        conductor.habla_encima("Espera, espera, que tengo prisa.")
+
+    hilo = threading.Thread(target=le_corta_cuando_suene_la_primera_frase, daemon=True)
+    conductor.el_modelo_contesta_despacio(trozos, pausa=0.6, tras_el_primer_trozo=hilo.start)
+    conductor.oido.pide_silencios(2)
+    conductor.oye("Sirius, cuéntame tu vida.", y_calla=2)
+    hilo.join(timeout=5)
+
+    corte = conductor.calla(1)
+
+    # Lo que dijo encima va a la charla, y el modelo lee con ello la respuesta entera y
+    # que de ella solo sonó la primera frase.
+    assert corte.oido == "Espera, espera, que tengo prisa."
+    sonado = [s.texto for s, _ in conductor.altavoz.sonados]
+    assert sonado[:1] == ["Una respuesta larguísima."]
+    assert "Que sigue y sigue." not in sonado
+    assert ("Sirius", entera) in conductor.charla_guardada()
+    assert conductor.lo_que_oyo_de(entera, conductor.peticiones[-1]) == (
+        "Una respuesta larguísima."
     )
 
 

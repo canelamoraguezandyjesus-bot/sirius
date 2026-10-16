@@ -34,8 +34,16 @@ LISTENING_MODEL_FILES = ("model.bin", "config.json", "tokenizer.json")
 #: Y su vocabulario, que según el modelo es ``vocabulary.txt`` o ``vocabulary.json``.
 LISTENING_MODEL_VOCABULARY = "vocabulary.*"
 #: Las distribuciones que pide el extra ``voz`` de ``pyproject.toml``; una prueba mira que
-#: sean esas.
-VOICE_DISTRIBUTIONS = ("pipecat-ai", "faster-whisper", "sounddevice", "numpy", "piper-tts")
+#: sean esas. ``livekit`` trae la cancelación de eco (ADR-245): sin ella oye y habla igual,
+#: pero la orden de instalar la pone con lo demás.
+VOICE_DISTRIBUTIONS = (
+    "pipecat-ai",
+    "faster-whisper",
+    "sounddevice",
+    "numpy",
+    "piper-tts",
+    "livekit",
+)
 
 
 def voice_distributions_missing(names: tuple[str, ...] = VOICE_DISTRIBUTIONS) -> tuple[str, ...]:
