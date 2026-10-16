@@ -275,6 +275,28 @@ def test_existing_default_installation_without_location_file_skips_the_selection
 
 
 @pytest.mark.gui
+def test_after_migrating_at_startup_the_diary_keeps_writing(
+    qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # ADR-249: la ventana escribe «Sirius iniciando», migra al arrancar, y la configuración
+    # de Alembic apagaba todos los registradores que ya existían: en su ordenador el diario
+    # acababa ahí, sin «Sirius iniciado» ni nada de lo que vino después.
+    monkeypatch.setattr(
+        "sirius.composition_root.build_keyring_secret_store", lambda: FakeSecretStore()
+    )
+    default_paths = resolve_paths()
+    initialize_persistence(default_paths)
+    windows: list[QMainWindow] = []
+
+    window = _build_first_window(_location_use_case(), windows)
+    qtbot.addWidget(window)
+
+    diario = (default_paths.logs_dir / "application.log").read_text(encoding="utf-8")
+    assert "Sirius iniciando" in diario
+    assert "Sirius iniciado" in diario
+
+
+@pytest.mark.gui
 def test_previously_saved_custom_location_is_used_silently_without_reprompting(
     qtbot: QtBot, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

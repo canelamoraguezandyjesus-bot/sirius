@@ -545,9 +545,6 @@ def test_soltar_el_altavoz_tira_lo_que_esperaba_y_cierra_el_flujo() -> None:
 def test_soltar_un_altavoz_que_no_se_deja_cerrar_no_falla_y_lo_apunta(
     caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # Otras pruebas de la batería configuran el diario y apagan los registradores que ya
-    # había: este tiene que estar encendido para que se vea lo que apunta.
-    monkeypatch.setattr(logging.getLogger(local_speaking_module.__name__), "disabled", False)
     sounddevice = _SoundDevice()
     altavoz = SoundDeviceSpeaker(sounddevice, _FRECUENCIA, clock=_Reloj())
 

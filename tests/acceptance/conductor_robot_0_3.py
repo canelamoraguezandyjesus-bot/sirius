@@ -40,7 +40,6 @@ import enum
 import functools
 import inspect
 import ipaddress
-import logging
 import os
 import random
 import re
@@ -1432,16 +1431,6 @@ def _filas_por_tabla(conexion: sqlite3.Connection) -> dict[str, int | None]:
     return filas
 
 
-def _enciende_los_registradores_de_sirius() -> None:
-    """Vuelve a encender ``sirius`` y cada ``sirius.*`` que la migración apagó."""
-    registradores = logging.root.manager.loggerDict
-    for nombre, registrador in list(registradores.items()):
-        es_de_sirius = nombre == "sirius" or nombre.startswith("sirius.")
-        if es_de_sirius and isinstance(registrador, logging.Logger):
-            registrador.disabled = False
-    logging.getLogger("sirius").disabled = False
-
-
 # --- El conductor ------------------------------------------------------------
 
 
@@ -1488,6 +1477,9 @@ class ConductorDeVoz(Conductor):
             ajustes=rutas.config_dir / _CONFIG_FILE_NAME,
             diario=rutas.logs_dir / LOG_FILE_NAME,
         )
+        # El diario, como en producción (`sirius.main`), antes de montar nada: es ruta
+        # permitida, y las pruebas miran que lo oído que no era para él no acabe ahí.
+        configure_logging(rutas.logs_dir)
         self._temporal = Path(tempfile.gettempdir())
         # Un ordenador con la voz instalada: el modelo de oír, en la carpeta donde lo deja la
         # orden de instalar, antes de la foto del disco y del vigilante. Sus ficheros no son
@@ -1527,14 +1519,6 @@ class ConductorDeVoz(Conductor):
             raise
         finally:
             self._arrancando = False
-        # El diario, como en producción (`sirius.main`): es ruta permitida, y las
-        # pruebas miran que lo oído que no era para él no acabe ahí. La configuración
-        # de Alembic (`migrations/env.py`, `fileConfig`) apaga al migrar todos los
-        # registradores que ya existían, el `sirius` y cada `sirius.*` de módulo, y
-        # `configure_logging` no los vuelve a encender: aquí se encienden todos, para
-        # que lo que la tubería escriba por el suyo llegue al diario de verdad.
-        configure_logging(rutas.logs_dir)
-        _enciende_los_registradores_de_sirius()
         # El modelo de la charla: el grabador de la 0.2 con reloj encima. Es el mismo
         # que ve `peticiones`, y el que la pieza C tiene que escuchar a trozos.
         self.modelo = ModeloDeMentira(_respuestas(respuestas))
@@ -2098,18 +2082,6 @@ class ConductorDeVoz(Conductor):
         return self._hoja_de_voces
 
     # --- Lo que es solo de las pruebas ---
-
-    def reabre(self) -> None:
-        """Cierra Sirius y lo vuelve a abrir, arranque incluido; el diario sigue encendido.
-
-        Volver a arrancar vuelve a migrar, y la migración apaga otra vez los
-        registradores: se encienden de nuevo, como al construir.
-        """
-        # Reabrir no migra ni escribe ninguna sentencia (comprobado el 13-10-2026), así
-        # que el arranque solo se marca al construir: si una pieza cambiara el esquema al
-        # reabrir, se vería.
-        super().reabre()
-        _enciende_los_registradores_de_sirius()
 
     def cierra(self) -> None:
         """Cierra Sirius, y con él el micro; lo que escriba al cerrar también lo ve el vigilante."""

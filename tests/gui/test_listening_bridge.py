@@ -79,9 +79,6 @@ def test_si_la_ventana_no_lo_deja_ir_el_turno_no_va(qtbot: QtBot) -> None:
 def test_si_la_ventana_falla_al_preguntarle_el_turno_no_va_y_solo_se_apunta_el_tipo(
     qtbot: QtBot, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(
-        logging.getLogger("sirius.presentation.listening_bridge"), "disabled", False
-    )
     ventana = _Ventana()
     ventana.falla = RuntimeError("la clave es Zarzamora")
     puente = ListeningBridge(ventana)
@@ -156,9 +153,6 @@ def test_desde_el_hilo_de_la_ventana_los_avisos_llegan_en_el_acto(qtbot: QtBot) 
 def test_si_la_ventana_falla_al_enterarse_no_rompe_al_oido(
     qtbot: QtBot, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(
-        logging.getLogger("sirius.presentation.listening_bridge"), "disabled", False
-    )
 
     class _Rota(_Ventana):
         def finish_voice_turn(self, turn: HeardTurn | None) -> None:

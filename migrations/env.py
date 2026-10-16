@@ -13,7 +13,9 @@ from sirius.infrastructure.paths import resolve_paths
 config = context.config
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # Sin apagar los registradores que ya existen: Sirius migra al arrancar, y con el valor
+    # por defecto su diario dejaba de apuntar desde ahí (ADR-249).
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = Base.metadata
 

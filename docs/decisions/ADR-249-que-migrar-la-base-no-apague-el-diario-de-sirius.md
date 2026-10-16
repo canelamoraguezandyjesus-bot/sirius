@@ -69,16 +69,41 @@ El de la nota de arranque, punto 3.
 
 La opción 1: `fileConfig` con `disable_existing_loggers=False` en `migrations/env.py`. Es
 una línea, y vale para todo lo que migra, también para las pruebas y la línea de órdenes,
-que llaman a Alembic sin pasar por `upgrade_to_head`. Lo que quede por decidir al escribir
-el código se anota aquí con su porqué.
+que llaman a Alembic sin pasar por `upgrade_to_head`. Al escribir el código se decidió
+además:
+
+- **Se quitan los doce parches de las pruebas** que encendían un registrador antes de
+  mirar el diario: dos del puente de la ventana, ocho del oído, uno del bucle que lo atiende
+  y uno del altavoz de la pieza F; y el del conductor de la 0.3, con la función que los
+  encendía todos y el `reabre` que solo existía para llamarla.
+- **El conductor de la 0.3 configura el diario antes de montar Sirius**, como
+  `sirius.main`. Lo configuraba después, así que lo que Sirius apuntaba al montarse iba por
+  el registrador de la prueba anterior, a su carpeta. No se veía porque migrar lo apagaba;
+  con el diario encendido, el vigilante de escrituras lo vio en dos pruebas de la voz.
 
 ## Comprobación que la sostiene
 
-Se escribe al acabar.
+- **El fallo, visto con la ventana de verdad antes de arreglarlo**:
+  `test_after_migrating_at_startup_the_diary_keeps_writing`, en
+  `tests/gui/test_app_bootstrap.py`, arranca la ventana con `_build_first_window` sobre una
+  instalación de antes. Con el código de `main`, el diario decía solo «Sirius iniciando»,
+  como el suyo. Con el arreglo dice también «Sirius iniciado».
+- **Mutación**: con el `fileConfig` de antes y sin los parches, caen 10 pruebas: la de la
+  ventana y nueve de las que llevaban parche.
+- **Sin los parches**, la aceptación entera, el oído, su bucle, el altavoz, el puente de la
+  ventana, el arranque y el diario: 346 en verde, 2 omitidas y 1 `xfail`.
+- **ruff** limpio; **mypy** sin errores en 733 ficheros.
+- **La batería entera**: se escribe la última, sobre el árbol final.
 
 ## Consecuencias
 
-Se escriben al acabar.
+- **Su diario apunta desde que arranca la ventana o `sirius-oye`**, también después de
+  migrar: lo que hace la prueba a ciegas, la charla y la voz.
+- **Migrar sigue configurando el registro de fuera de Sirius**: `fileConfig` pone el suyo
+  en la consola y cierra los manejadores que había. El del diario de Sirius se vuelve a
+  abrir solo con la línea siguiente, que es lo que mira la prueba de la ventana.
+- **Una prueba que lea el diario ya no tiene que encenderlo**; si alguna vuelve a
+  necesitarlo, algo lo está apagando otra vez.
 
 ## Alternativas descartadas y por qué
 
@@ -87,9 +112,17 @@ Se escriben al acabar.
   de las migraciones, seguiría apagando el diario de todo lo que corre después en el mismo
   proceso, y los parches de las pruebas seguirían haciendo falta.
 
+## Revisión propia
+
+Antes de empujar se releyó el diff entero contra el código y la nota. Encontró una cosa,
+arreglada: el conductor de la 0.3 configuraba el diario después de montar Sirius, y al
+quitar su parche dos pruebas de la voz vieron escrituras en la carpeta de la prueba
+anterior. Se configura antes, como en `sirius.main`.
+
 ## La lección
 
-- ninguna: esta es la nota de arranque; si deja una lección, se escribe al acabar.
+- ninguna: se escribe con su entrada en el registro de defectos, en el commit siguiente,
+  que es cuando existe el sha del arreglo (skill `registro-de-defectos`).
 
 ## Revisión externa
 

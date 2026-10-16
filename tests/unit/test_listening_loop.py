@@ -93,7 +93,6 @@ def test_si_no_llega_nada_espera_la_pausa_antes_de_volver() -> None:
 def test_un_fallo_que_se_escapa_no_lo_mata_y_solo_apunta_el_tipo(
     caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(logging.getLogger("sirius.application.listening_loop"), "disabled", False)
     oido = _Oido([RuntimeError("la clave es Zarzamora")])
     dos = threading.Event()
     atiende = oido.attend
