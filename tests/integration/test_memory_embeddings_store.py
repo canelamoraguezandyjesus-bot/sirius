@@ -210,3 +210,109 @@ def test_carga_de_una_vez_los_recuerdos_pedidos_en_su_orden(
 
     assert [r.current_revision.content for r in cargados] == ["segundo", "primero"]
     assert recuerdos.get_memories([]) == []
+
+
+# --- ADR-251: los bits, la búsqueda en dos pasos y el parecido entre dos recuerdos ---
+
+
+def test_cada_huella_se_guarda_con_un_bit_por_numero_y_se_sustituyen_juntos(
+    base: Path, recuerdos: SqliteMemoryRepository, huellas: SqliteMemoryEmbeddingStore
+) -> None:
+    memoria, revision = _guarda(recuerdos, "Le pirra el cocido.")
+
+    huellas.save(memoria, revision, _MODELO, [0.5, -1.0, 0.0, 2.0] + [-1.0] * 4 + [1.0])
+    with sqlite3.connect(base) as conexion:
+        [(bits,)] = conexion.execute("SELECT bits FROM memory_embeddings").fetchall()
+    assert bits == bytes([0b0000_1001, 0b0000_0001])
+
+    huellas.save(memoria, revision, "otro#formato", [-1.0, 1.0])
+    with sqlite3.connect(base) as conexion:
+        assert conexion.execute("SELECT model, bits FROM memory_embeddings").fetchall() == [
+            ("otro#formato", bytes([0b10]))
+        ]
+
+
+def _cuatro_con_trampa(
+    recuerdos: SqliteMemoryRepository, huellas: SqliteMemoryEmbeddingStore
+) -> tuple[int, int, list[float]]:
+    """Una pregunta, el recuerdo que más se le parece por coseno con los signos casi
+    todos al revés, y otro que comparte todos sus signos y se le parece poco."""
+    pregunta = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 10.0]
+    exacto = [-0.01, -0.01, -0.01, -0.01, -0.01, -0.01, -0.01, 10.0]
+    mismos_signos = [10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 0.01]
+    ids = []
+    for texto, huella in (
+        ("El exacto.", exacto),
+        ("Los mismos signos.", mismos_signos),
+        ("Uno.", [-1.0] * 8),
+        ("Dos.", [-2.0] * 8),
+    ):
+        memoria, revision = _guarda(recuerdos, texto)
+        huellas.save(memoria, revision, _MODELO, huella)
+        ids.append(memoria)
+    return ids[0], ids[1], pregunta
+
+
+def test_con_pocas_huellas_busca_en_un_solo_paso_exacto(
+    recuerdos: SqliteMemoryRepository,
+    huellas: SqliteMemoryEmbeddingStore,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    exacto, _, pregunta = _cuatro_con_trampa(recuerdos, huellas)
+    # Con una sola candidata, dos pasos traerían la de los mismos signos.
+    monkeypatch.setattr(sqlite_memory_embeddings, "TWO_STEP_CANDIDATES", 1)
+
+    [(primero, _)] = huellas.nearest(pregunta, _MODELO, min_similarity=0.0, limit=1)
+
+    assert primero == exacto
+
+
+def test_con_muchas_huellas_las_mas_cercanas_por_bits_pasan_al_coseno_exacto(
+    recuerdos: SqliteMemoryRepository,
+    huellas: SqliteMemoryEmbeddingStore,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    exacto, mismos_signos, pregunta = _cuatro_con_trampa(recuerdos, huellas)
+    monkeypatch.setattr(sqlite_memory_embeddings, "ONE_STEP_UP_TO", 3)
+    monkeypatch.setattr(sqlite_memory_embeddings, "TWO_STEP_CANDIDATES", 1)
+
+    encontrados = huellas.nearest(pregunta, _MODELO, min_similarity=0.0, limit=4)
+
+    # Por bits, el más cercano es el de los mismos signos, y solo él pasa al coseno.
+    assert [memoria for memoria, _ in encontrados] == [mismos_signos]
+    monkeypatch.setattr(sqlite_memory_embeddings, "TWO_STEP_CANDIDATES", 4)
+    assert huellas.nearest(pregunta, _MODELO, min_similarity=0.0, limit=1)[0][0] == exacto
+
+
+def test_si_a_alguna_huella_le_faltan_los_bits_busca_en_un_solo_paso(
+    base: Path,
+    recuerdos: SqliteMemoryRepository,
+    huellas: SqliteMemoryEmbeddingStore,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    exacto, _, pregunta = _cuatro_con_trampa(recuerdos, huellas)
+    monkeypatch.setattr(sqlite_memory_embeddings, "ONE_STEP_UP_TO", 3)
+    monkeypatch.setattr(sqlite_memory_embeddings, "TWO_STEP_CANDIDATES", 1)
+    with sqlite3.connect(base) as conexion:
+        # Una huella de antes de ADR-251, sin bits.
+        conexion.execute("UPDATE memory_embeddings SET bits = NULL WHERE memory_id = ?", (exacto,))
+
+    [(primero, _)] = huellas.nearest(pregunta, _MODELO, min_similarity=0.0, limit=1)
+
+    assert primero == exacto
+
+
+def test_el_parecido_entre_dos_recuerdos_es_el_de_sus_huellas_de_esa_clave(
+    recuerdos: SqliteMemoryRepository, huellas: SqliteMemoryEmbeddingStore
+) -> None:
+    uno = _guarda(recuerdos, "Vive en Madrid.")
+    otro = _guarda(recuerdos, "Se ha mudado a Valencia.")
+    tercero = _guarda(recuerdos, "Tiene dos gatos.")
+    huellas.save(*uno, _MODELO, [1.0, 0.0])
+    huellas.save(*otro, _MODELO, [1.0, 1.0])
+    huellas.save(*tercero, "otro#formato", [1.0, 1.0])
+
+    assert huellas.similarity(uno[0], otro[0], _MODELO) == pytest.approx(0.7071, abs=1e-4)
+    # Con otra clave, o sin huella, no se sabe.
+    assert huellas.similarity(uno[0], tercero[0], _MODELO) is None
+    assert huellas.similarity(uno[0], otro[0], "otro#formato") is None

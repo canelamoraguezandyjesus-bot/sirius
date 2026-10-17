@@ -31,8 +31,10 @@ class _Huellas:
     def __init__(self, model: str, *, falla: bool = False) -> None:
         self.model_name = model
         self.falla = falla
+        self.pedidas: list[str] = []
 
     def embed(self, texts: Sequence[str]) -> list[list[float]]:
+        self.pedidas.extend(texts)
         if self.falla:
             msg = "sin Ollama"
             raise EmbeddingError(msg)
@@ -53,7 +55,7 @@ def test_mide_su_memoria_y_la_de_prueba_y_dice_si_pasa(monkeypatch: pytest.Monke
     codigo = orden.main(huellas_de=_Huellas, escribe=lineas.append)
 
     assert codigo == 0
-    assert lineas[0] == "Modelo de huellas: qwen3-embedding:0.6b (8 números por huella)."
+    assert lineas[0] == "Modelo de huellas: embeddinggemma (8 números por huella)."
     assert lineas[1].startswith("Tu memoria, 1 recuerdos: P50 ")
     assert lineas[2].startswith("300 recuerdos de prueba: P50 ")
     assert lineas[3] == "Pasa: sí."
@@ -148,9 +150,30 @@ def test_sin_el_modelo_de_huellas_dice_que_hay_que_instalarlo() -> None:
 
     assert codigo == 2
     assert lineas == [
-        "El modelo de huellas qwen3-embedding:0.6b no contesta.",
-        "Abre Ollama y ejecuta: ollama pull qwen3-embedding:0.6b",
+        "El modelo de huellas embeddinggemma no contesta.",
+        "Abre Ollama y ejecuta: ollama pull embeddinggemma",
     ]
+
+
+def test_las_huellas_de_prueba_van_con_su_clave_y_sus_bits_y_no_se_recalculan(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # ADR-251: con el formato en la clave, unas huellas de prueba guardadas con el nombre
+    # del modelo a secas serían de otra clave, y medir pediría 10.000 huellas a Ollama.
+    rutas = resolve_paths()
+    initialize_persistence(rutas)
+    monkeypatch.setattr(orden, "RECUERDOS_DE_PRUEBA", 300)
+    huellas: list[_Huellas] = []
+
+    def huellas_de(modelo: str) -> _Huellas:
+        huellas.append(_Huellas(modelo))
+        return huellas[-1]
+
+    assert orden.main(huellas_de=huellas_de, escribe=lambda _linea: None) == 0
+
+    [suyas] = huellas
+    assert not [texto for texto in suyas.pedidas if "Recuerdo de prueba" in texto]
+    assert all(texto.startswith("task: search result | query: ") for texto in suyas.pedidas[1:])
 
 
 def test_el_percentil_es_el_del_rango_mas_cercano() -> None:

@@ -31,8 +31,10 @@ __all__ = [
 #: La única dirección a la que van las frases para sacar su huella.
 OLLAMA_EMBED_URL = "http://localhost:11434/api/embed"
 
-#: El modelo de huellas si los ajustes no dicen otro: uno de los dos del plan.
-DEFAULT_EMBEDDING_MODEL = "qwen3-embedding:0.6b"
+#: El modelo de huellas si los ajustes no dicen otro: uno de los dos del plan. Con su
+#: formato, el que más acertó el banco de memoria con los parecidos de su ordenador
+#: (ADR-251).
+DEFAULT_EMBEDDING_MODEL = "embeddinggemma"
 
 #: Como la charla: el modelo se queda cargado media hora tras cada uso.
 _KEEP_ALIVE = "30m"

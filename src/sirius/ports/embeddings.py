@@ -34,7 +34,11 @@ class PendingMemory:
 
 
 class MemoryEmbeddingStore(Protocol):
-    """Las huellas de los recuerdos, guardadas en la misma base que ellos."""
+    """Las huellas de los recuerdos, guardadas en la misma base que ellos.
+
+    ``model`` es la clave de las huellas: el nombre del modelo y, si se le piden con
+    formato, el formato (ADR-251). Una huella solo se compara con las de su clave.
+    """
 
     @property
     def available(self) -> bool:
@@ -59,6 +63,11 @@ class MemoryEmbeddingStore(Protocol):
         self, embedding: Sequence[float], model: str, *, min_similarity: float, limit: int
     ) -> list[tuple[int, float]]:
         """Los recuerdos vigentes más parecidos, con su parecido de 0 a 1, del más al menos."""
+        ...
+
+    def similarity(self, first: int, second: int, model: str) -> float | None:
+        """El parecido entre dos recuerdos por sus huellas de ``model``, o ``None`` si a
+        alguno le falta."""
         ...
 
     def count(self, model: str | None = None) -> int:

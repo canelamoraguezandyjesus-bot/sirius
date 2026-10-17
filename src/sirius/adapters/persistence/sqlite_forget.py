@@ -74,6 +74,9 @@ FORGET_COVERAGE: dict[str, str] = {
         "la huella se va con el recuerdo: la borran los disparadores de ADR-238 al borrarlo"
     ),
     "memory_embeddings.model": "el nombre del modelo de huellas",
+    "memory_embeddings.bits": (
+        "los bits de la huella van en su misma fila: se borran con ella (ADR-251)"
+    ),
     "messages.operation_id": "un identificador del turno, sin texto suyo",
     "messages.role": "un valor fijo",
     "messages.status": "un valor fijo",

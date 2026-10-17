@@ -24,7 +24,9 @@ __all__ = [
 ]
 
 
-def sanitize_fts5_query(query_text: str) -> str:
+def sanitize_fts5_query(
+    query_text: str, vacias: frozenset[str] = lexical_query_treatment.VACIAS
+) -> str:
     """Turn free-form user text into a safe FTS5 ``MATCH`` argument.
 
     Diagnosed in issue #455: joining every raw token with ``OR`` —
@@ -51,7 +53,7 @@ def sanitize_fts5_query(query_text: str) -> str:
     FTS5 match" and never execute a ``MATCH ''`` — FTS5 itself rejects an
     empty match expression as a syntax error.
     """
-    terms = lexical_query_treatment.terminos_significativos(query_text)
+    terms = lexical_query_treatment.terminos_significativos(query_text, vacias)
     if not terms:
         return ""
     seen: set[str] = set()
@@ -102,8 +104,11 @@ class SqliteKnowledgeSearchRepository:
             return frozenset((KnowledgeKind(row.kind), row.item_id) for row in rows)
 
     def search_memory_ids(self, query_text: str, limit: int) -> list[int]:
-        """Pieza F (ADR-238): los recuerdos vigentes que casan, ordenados por bm25."""
-        sanitized = sanitize_fts5_query(query_text)
+        """Pieza F (ADR-238): los recuerdos vigentes que casan, ordenados por bm25.
+
+        Sin las palabras que tampoco discriminan entre recuerdos (ADR-251).
+        """
+        sanitized = sanitize_fts5_query(query_text, _MEMORY_STOPWORDS)
         if not sanitized or limit <= 0:
             return []
         with self._scope() as session:
@@ -119,6 +124,10 @@ class SqliteKnowledgeSearchRepository:
                 {"query": sanitized, "limit": limit},
             ).all()
             return [int(row.item_id) for row in rows]
+
+
+#: Las vacías de siempre y las de los recuerdos (ADR-251).
+_MEMORY_STOPWORDS = lexical_query_treatment.VACIAS | lexical_query_treatment.VACIAS_DE_LOS_RECUERDOS
 
 
 def build_sqlite_knowledge_search_repository(

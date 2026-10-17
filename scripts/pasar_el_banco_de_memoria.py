@@ -25,7 +25,7 @@ USO
     uv run python scripts/pasar_el_banco_de_memoria.py
 
 Necesita Ollama abierto y el modelo de huellas instalado
-(``ollama pull qwen3-embedding:0.6b``). Con ``--modelo NOMBRE`` lo pasa con otro
+(``ollama pull embeddinggemma``). Con ``--modelo NOMBRE`` lo pasa con otro
 modelo de huellas de Ollama, sin tocar sus ajustes. Con ``--diagnostico`` escribe
 además una línea por caso con lo que llegó al modelo, los puestos por palabras, los
 parecidos de la pregunta y los recuerdos, como se piden hoy y con el formato que

@@ -275,7 +275,7 @@ EMBEDDING_MODEL_SETTING = "ollama_embedding_model"
 
 
 def embedding_model(settings: Mapping[str, Any]) -> str:
-    """El modelo de huellas de Ollama: el de los ajustes, o ``qwen3-embedding:0.6b``."""
+    """El modelo de huellas de Ollama: el de los ajustes, o ``embeddinggemma`` (ADR-251)."""
     value = settings.get(EMBEDDING_MODEL_SETTING)
     if isinstance(value, str) and value.strip():
         return value.strip()
