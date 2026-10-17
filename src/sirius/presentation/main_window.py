@@ -3337,7 +3337,8 @@ class MainWindow(QMainWindow):
     def _chat_went_local(self) -> None:
         """La charla va ya a un modelo de este ordenador, elegido a ciegas: «Guardar
         configuración» ya no la devuelve a OpenAI, y el oído, que no oía porque la charla
-        iba fuera, oye ya y quita ese aviso. Callado con el botón, sigue callado (ADR-253)."""
+        iba fuera, intenta oír, como al abrirse la ventana: si puede, ese aviso se va, y si
+        no, el aviso dice por qué. Callado con el botón, sigue callado (ADR-253)."""
         self.provider_combo.setCurrentText(LLMProviderKind.OLLAMA.value)
         if self._local_listening is not None and not (self._closed or self._close_requested):
             self._refresh_listening(self._listen(self._local_listening.start))

@@ -9,6 +9,7 @@ manos, el turno empieza después y las huellas siguen al acabar el turno.
 
 from __future__ import annotations
 
+import contextlib
 import threading
 
 from PySide6.QtCore import QObject, QRunnable, Signal
@@ -50,5 +51,8 @@ class MemoryEmbeddingWorker(QRunnable):
         except Exception as exc:  # las huellas nunca pueden romper la ventana
             _logger.error("Las huellas se interrumpieron (%s)", type(exc).__name__)
         finally:
-            self.signals.finished.emit()
+            # Si se cerró Sirius mientras calculaba, ya no hay ventana a la que avisar. Nada
+            # al diario: puede estar cerrado ya (ADR-253).
+            with contextlib.suppress(RuntimeError):
+                self.signals.finished.emit()
             self.done.set()
