@@ -120,8 +120,10 @@ def test_con_embeddinggemma_pide_la_pregunta_y_los_recuerdos_con_su_formato(
     }
     assert f"task: search result | query: {_PREGUNTA}" in huellas.pedidas
     assert f"title: none | text: {_HERMANA}" in huellas.pedidas
-    # Lo de hoy se sigue pidiendo tal cual: el formato es solo para medirlo.
-    assert linea["hoy"]["pregunta"] == [0.8, 0.0, 0.6]
+    # Desde ADR-251 Sirius ya se las pide con ese formato: lo de hoy es lo mismo, y el
+    # umbral, el de ese formato.
+    assert {**linea["hoy"], "nombre": "embeddinggemma"} == linea["formato"]
+    assert linea["umbral"] == 0.26
 
 
 def test_con_un_modelo_sin_formato_conocido_no_se_lo_inventa(tmp_path: Path) -> None:
@@ -157,7 +159,7 @@ def test_con_diagnostico_escribe_una_linea_por_caso_y_despues_lo_de_siempre() ->
     assert lineas[0] == orden.CABECERA_DEL_DIAGNOSTICO
     assert [json.loads(linea)["id"] for linea in lineas[1:3]] == ["MB-001", "MB-002"]
     assert lineas[-2].startswith("En total: ")
-    assert lineas[-2].endswith(" de 2, con el modelo de huellas qwen3-embedding:0.6b.")
+    assert lineas[-2].endswith(" de 2, con el modelo de huellas embeddinggemma.")
 
 
 def test_sin_diagnostico_no_escribe_ninguna_linea_de_caso() -> None:
