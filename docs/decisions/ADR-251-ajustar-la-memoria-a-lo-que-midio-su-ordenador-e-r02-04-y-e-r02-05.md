@@ -182,8 +182,10 @@ Todo aquí, en la nube. Lo que solo se ve en su ordenador va al final.
 - **Mutación**: 21 mutaciones, una por regla nueva; caen las 21. Dos sobrevivían en la
   primera pasada, «dos pasos con pocas huellas» y «desempatar con lo que solo traen las
   palabras», y sus pruebas se reforzaron.
-- **La batería entera**: pendiente. Se pasa sobre el árbol completo de la PR, y su cifra
-  se anota aquí antes de fusionar.
+- **La batería entera**, sobre `eef79b5f`, que tiene el mismo código que el head de la PR
+  #692 con ADR-251 y ADR-252, `c7a30d00`: 8 975 en verde, 15 omitidas y 2 `xfail`, ningún
+  fallo, en 25 min 23 s. La omitida de más es la de la APM de livekit de ADR-252, que se
+  salta sin livekit.
 - **Lo que solo se ve en su ordenador**: lo que dan E-R02-04 y E-R02-05 al repetirlas;
   lo que tarda la huella de la pregunta con embeddinggemma, que aquí se supone igual que
   con qwen3; y que la búsqueda en dos pasos, por encima de 1.000 recuerdos de verdad,

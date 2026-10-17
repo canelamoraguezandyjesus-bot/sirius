@@ -211,7 +211,8 @@ Y además:
 ## Comprobación que la sostiene
 
 - **Cada regla, con su mutación**: 77 mutaciones sobre el código final, una por regla, y
-  caen las 77. Las pruebas de la ventana se vieron fallar antes del arreglo.
+  caen las 77, cada una con su caché de bytecode vacía. Las pruebas de la ventana se
+  vieron fallar antes del arreglo.
 - **45 pruebas nuevas**, entre ellas:
   - en Linux, un Ollama de mentira por la red de verdad que no contesta: cortar devuelve al
     momento, leyendo y escribiendo, y el de mentira ve que la conexión se ha ido;
@@ -231,6 +232,10 @@ Y además:
 - **Las suites de lo que toca**, 38 ficheros, sobre el código de esta rama (`39015ebe`): 801
   en verde y 1 saltada, la de livekit.
 - **ruff** limpio; **mypy** sin errores en 742 ficheros.
+- **La batería entera**, sobre `eef79b5f`, que tiene el mismo código que el head de la PR
+  #692 con ADR-251 y este, `c7a30d00`: 8 975 en verde, 15 omitidas y 2 `xfail`, ningún
+  fallo, en 25 min 23 s. La omitida de más es la de la APM de livekit, que se salta sin
+  livekit.
 
 ## Consecuencias
 
