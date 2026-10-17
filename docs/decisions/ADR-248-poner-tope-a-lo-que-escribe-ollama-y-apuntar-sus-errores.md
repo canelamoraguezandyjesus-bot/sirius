@@ -155,8 +155,9 @@ de OpenAI. Al escribir el código se decidió además:
 - **Las pruebas que tocan Ollama, sus ajustes y quien los usa**, 40 ficheros: 1 057 en
   verde, 2 omitidas y 2 `xfail`.
 - **ruff** limpio; **mypy** sin errores en 734 ficheros.
-- **La batería entera**, con la ronda 2 de Codex: se escribe la última. Con la ronda 1,
-  sobre `76daa2dc`: 8 869 en verde, 14 omitidas y 2 `xfail`, ningún fallo, en 23 min 32 s.
+- **La batería entera**, con la ronda 2 de Codex, sobre `3174574f`, el árbol final de la
+  PR: 8 890 en verde, 14 omitidas y 2 `xfail`, ningún fallo, en 29 min 5 s. Con la ronda 1,
+  sobre `76daa2dc`: 8 869 en verde, en 23 min 32 s.
 
 ## Consecuencias
 

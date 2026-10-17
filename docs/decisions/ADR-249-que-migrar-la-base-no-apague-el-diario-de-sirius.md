@@ -94,8 +94,8 @@ decidió además:
 - **Sin los parches**, la aceptación entera, el oído, su bucle, el altavoz, el puente de la
   ventana, el arranque y el diario: 346 en verde, 2 omitidas y 1 `xfail`.
 - **ruff** limpio; **mypy** sin errores en 733 ficheros.
-- **La batería entera**, sobre `76daa2dc`, el árbol final de la PR: 8 869 en verde,
-  14 omitidas y 2 `xfail`, ningún fallo, en 23 min 32 s.
+- **La batería entera**, sobre `3174574f`, el árbol final de la PR: 8 890 en verde,
+  14 omitidas y 2 `xfail`, ningún fallo, en 29 min 5 s.
 
 ## Consecuencias
 
