@@ -488,9 +488,9 @@ class LocalListening[Chunk]:
 
     def close(self) -> None:
         """Para como ``stop`` y suelta la voz y su altavoz, que va a la frecuencia de su voz,
-        y con él la cancelación de eco. Lo llaman la ventana y ``sirius-oye`` al salir: la
-        APM de livekit viva hasta que Python se cierra pinta en rojo un error suyo
-        (ADR-252). Si vuelve a escuchar, carga la voz otra vez.
+        y con él la cancelación de eco. Lo llaman Sirius y ``sirius-oye`` al salir: la APM
+        de livekit viva hasta que Python se cierra pinta en rojo un error suyo (ADR-252).
+        Si vuelve a escuchar, carga la voz otra vez.
         """
         with self._lock:
             self.stop()
