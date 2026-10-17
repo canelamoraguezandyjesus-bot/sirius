@@ -9,18 +9,24 @@ guardado, como la ventana, y sale con error. Lo que oye y no era para él no lo 
 no es de la charla (ADR-244).
 
 Al salir dice cuánto tardó en empezar a hablar: es la cifra de E-R03-02.
+
+Solo arranca con la charla en un modelo de Ollama de este ordenador: con la simulada o sin
+configurar, oiría y contestaría igual, y la cifra no sería la de ningún modelo (#696).
 """
 
 from __future__ import annotations
 
+import threading
 import time
 from collections.abc import Callable, Sequence
 from typing import Any
 
 from sirius.adapters.audio.voice_libraries import hugging_face_offline
+from sirius.adapters.llm.ollama_chat import OllamaChatProvider
 from sirius.adapters.persistence.bootstrap import initialize_persistence
 from sirius.application.listening_loop import PAUSE_SECONDS
-from sirius.application.local_listening import HeardTurn, LocalListening
+from sirius.application.local_listening import CHAT_LEAVES, HeardTurn, LocalListening
+from sirius.application.memory_search import MemoryEmbeddingService
 from sirius.composition_root import (
     DATA_PATHS_UNKNOWN,
     build_conversation_dependencies,
@@ -28,10 +34,22 @@ from sirius.composition_root import (
 )
 from sirius.domain.conversation import Message, MessageRole, MessageStatus
 from sirius.infrastructure.logging import configure_logging, get_logger
+from sirius.ports.llm import LLMErrorKind, runs_on_this_computer
 from sirius.presentation.error_messages import failed_send_message
 from sirius.presentation.message_text import CANCELLED_SEND, HISTORY_NOT_LOADED, message_body
 
 _logger = get_logger(__name__)
+
+#: Lo que dice si la charla es de este ordenador pero no tiene un modelo de Ollama: está
+#: sin configurar o es la simulada (#696). Acaba como CHAT_LEAVES, con cómo elegirlo.
+NO_LOCAL_MODEL = (
+    "No puedo oírte: la charla todavía no tiene un modelo de este ordenador. Elige uno en la "
+    "ventana de Sirius: Configuración, «Elegir el modelo a ciegas…»."
+)
+
+#: Lo que dice si Ollama no contesta: la charla de esta orden solo va a Ollama, y aquí no
+#: hace falta internet, también en la prueba que va sin wifi (#696).
+OLLAMA_UNREACHABLE = "Ollama no contesta en este ordenador: ábrelo. No hace falta internet."
 
 
 def listen(
@@ -76,9 +94,11 @@ def listen(
             if not attended.turns:
                 pause()
     finally:
-        listening.close()
+        # La cifra, antes de cerrar: cerrar tarda, y un segundo Ctrl+C mientras se la
+        # llevaría (#696).
         if delays:
             say(_delays_line(delays))
+        listening.close()
     return 0
 
 
@@ -119,6 +139,9 @@ def _say_turn(
     say(_line("Sirius", result.sirius_message))
     if result.outcome is MessageStatus.CANCELLED:
         say(CANCELLED_SEND)
+    elif result.outcome is MessageStatus.FAILED and result.error_kind is LLMErrorKind.CONNECTION:
+        # Aquí la charla solo va a Ollama: «revisa tu red» mandaría a encender el wifi.
+        say(f"{OLLAMA_UNREACHABLE} (ref: {result.sirius_message.operation_id})")
     elif result.outcome is MessageStatus.FAILED:
         say(failed_send_message(result.error_kind, result.sirius_message.operation_id))
     if turn.proposed is not None:
@@ -150,6 +173,41 @@ def _line(who: str, message: Message) -> str:
     return f"{who}: {body}" if body else f"{who}:"
 
 
+def without_a_local_model(provider: object) -> str:
+    """Por qué no puede oír con la charla en ``provider``; vacío si es un modelo de Ollama.
+
+    Uno de fuera, lo de siempre (CHAT_LEAVES). Uno de este ordenador que no es de Ollama, la
+    charla simulada o sin configurar, no es ningún modelo: contestaría o fallaría sin que
+    nada lo pare, y la cifra de E-R03-02 no sería de nadie (#696).
+    """
+    if isinstance(provider, OllamaChatProvider):
+        return ""
+    return NO_LOCAL_MODEL if runs_on_this_computer(provider) else CHAT_LEAVES
+
+
+def warm_up_embeddings_in_background(
+    service: MemoryEmbeddingService, should_stop: Callable[[], bool]
+) -> threading.Thread:
+    """Como la ventana al abrirse: calcula las huellas que falten y, si no falta ninguna,
+    carga el modelo de huellas, para que el primer turno no lo espere (#696).
+
+    En un hilo demonio que nadie espera: escuchar no se retrasa por esto, y si falla, el
+    diario se queda con el tipo de fallo y la búsqueda sigue como pueda.
+    """
+
+    def run() -> None:
+        try:
+            done = service.embed_pending(should_stop=should_stop)
+            if done == 0 and not should_stop():
+                service.warm_up()
+        except Exception as error:  # las huellas nunca pueden romper la escucha
+            _logger.error("Las huellas se interrumpieron (%s)", type(error).__name__)
+
+    thread = threading.Thread(target=run, name="sirius-huellas", daemon=True)
+    thread.start()
+    return thread
+
+
 def main() -> int:
     # Como la ventana: sin conexión a Hugging Face antes de cargar nada (ADR-246).
     hugging_face_offline()
@@ -160,12 +218,21 @@ def main() -> int:
     configure_logging(paths.logs_dir)
     initialize_persistence(paths)
     dependencies = build_conversation_dependencies(paths.data_dir / "sirius.db", paths.backups_dir)
+    stop_embedding = threading.Event()
     try:
         if not dependencies.initial_project_use_case.is_configured():
             print("Abre Sirius una vez con su ventana antes de hablarle por aquí.")
             return 2
-        # Que el modelo de la charla vaya cargando mientras carga la voz (ADR-252).
+        notice = without_a_local_model(dependencies.send_message_use_case.llm_provider)
+        if notice:
+            print(notice)
+            return 2
+        # Que el modelo de la charla vaya cargando mientras carga la voz (ADR-252), y el de
+        # huellas con las que falten, como la ventana al abrirse (#696).
         dependencies.send_message_use_case.warm_up_in_background()
+        warm_up_embeddings_in_background(
+            dependencies.memory_embedding_service, stop_embedding.is_set
+        )
         return listen(
             dependencies.local_listening,
             print,
@@ -177,6 +244,8 @@ def main() -> int:
         print("Hasta luego.")
         return 0
     finally:
+        # Las huellas paran antes del siguiente grupo: la base se cierra ahora.
+        stop_embedding.set()
         dependencies.close_database_connections()
 
 

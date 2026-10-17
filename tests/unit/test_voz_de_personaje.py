@@ -9,9 +9,11 @@ un audio para imitar a nadie. Cómo suena lo dice él (E-R03-06).
 from __future__ import annotations
 
 import ast
+import importlib
 import logging
 import os
 import sys
+import threading
 import types
 import warnings
 from array import array
@@ -184,6 +186,126 @@ def test_al_cargar_calla_los_tres_avisos_que_no_dicen_nada_y_solo_esos(
     ]
     assert [registro.getMessage() for registro in caplog.records] == ["pkuseg not available"]
     assert tokenizador.level == logging.NOTSET
+
+
+#: Dónde avisa transformers 5.2.0 de que ``output_attentions`` no vale para generar.
+_GENERACION = "transformers.generation.configuration_utils"
+_AVISO_DE_TORCH = (
+    "`torch.backends.cuda.sdp_kernel()` is deprecated. In the future, this context manager "
+    "will be removed. Please see `torch.nn.attention.sdpa_kernel()` for the new context "
+    "manager, with updated signature."
+)
+_AVISO_DE_TRANSFORMERS = (
+    "The following generation flags are not valid and may be ignored: ['output_attentions']. "
+    "Set `TRANSFORMERS_VERBOSITY=info` for more details."
+)
+
+
+def _pinta_como_chatterbox_al_decir() -> None:
+    """Lo que pinta Chatterbox 0.1.7 al decir una frase: la barra de tqdm de verdad, el aviso
+    de torch y el de transformers; y además otras cosas, que tienen que salir."""
+    tqdm = importlib.import_module("tqdm").tqdm
+    for _ in tqdm(range(3), desc="Sampling", dynamic_ncols=True):
+        pass
+    warnings.warn(_AVISO_DE_TORCH, FutureWarning, stacklevel=1)
+    logging.getLogger(_GENERACION).warning(_AVISO_DE_TRANSFORMERS)
+    print("otra cosa por la consola", file=sys.stderr)
+    warnings.warn("Este aviso sí cuenta algo.", UserWarning, stacklevel=1)
+    warnings.warn("Y este del futuro, también.", FutureWarning, stacklevel=1)
+    logging.getLogger(_GENERACION).warning("Otro aviso de transformers")
+
+
+class _ModeloQuePinta(_Modelo):
+    def generate(self, *args: Any, **kwargs: Any) -> _Onda:
+        _pinta_como_chatterbox_al_decir()
+        return super().generate(*args, **kwargs)
+
+
+class _Registro(logging.Handler):
+    """Lo que llega a un registrador, leído de él y no de la raíz."""
+
+    def __init__(self) -> None:
+        super().__init__(logging.DEBUG)
+        self.lineas: list[str] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.lineas.append(record.getMessage())
+
+
+def test_al_decir_cada_frase_calla_la_barra_y_los_dos_avisos_y_solo_esos(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # #696: con la voz de personaje, cada frase pintaba su barra «Sampling», el aviso de
+    # torch por ``sdp_kernel`` y el de transformers por ``output_attentions``.
+    generacion = logging.getLogger(_GENERACION)
+    registro = _Registro()
+    generacion.addHandler(registro)
+    consola = sys.stderr
+    try:
+        with warnings.catch_warnings(record=True) as avisos:
+            warnings.simplefilter("always")
+            CharacterSpeech(_ModeloQuePinta()).say("Buenos días, jefe.")
+            dentro = [str(aviso.message) for aviso in avisos]
+            del avisos[:]
+            # Después de decirla, todo sale como siempre.
+            _pinta_como_chatterbox_al_decir()
+            fuera = [str(aviso.message) for aviso in avisos]
+    finally:
+        generacion.removeHandler(registro)
+
+    pintado = capsys.readouterr().err
+    assert sys.stderr is consola
+    assert dentro == ["Este aviso sí cuenta algo.", "Y este del futuro, también."]
+    assert fuera == [_AVISO_DE_TORCH, "Este aviso sí cuenta algo.", "Y este del futuro, también."]
+    assert registro.lineas == [
+        "Otro aviso de transformers",
+        _AVISO_DE_TRANSFORMERS,
+        "Otro aviso de transformers",
+    ]
+    dicho_al_decir, _, dicho_despues = pintado.partition("otra cosa por la consola\n")
+    # Al decirla, ni la barra ni el salto de línea con que la cierra tqdm.
+    assert dicho_al_decir == ""
+    assert "Sampling:" in dicho_despues
+    assert dicho_despues.endswith("otra cosa por la consola\n")
+
+
+class _ModeloQueEspera(_Modelo):
+    """Avisa con ``dentro`` al empezar su frase, y la acaba cuando ``salir`` le deja."""
+
+    def __init__(self, dentro: threading.Event, salir: threading.Event) -> None:
+        super().__init__()
+        self._dentro = dentro
+        self._salir = salir
+
+    def generate(self, *args: Any, **kwargs: Any) -> _Onda:
+        self._dentro.set()
+        assert self._salir.wait(timeout=5)
+        return super().generate(*args, **kwargs)
+
+
+def test_dos_frases_a_la_vez_en_dos_hilos_no_dejan_la_consola_envuelta() -> None:
+    # La primera empieza, la segunda empieza, la primera acaba y después la segunda: si la
+    # segunda envolviera la consola otra vez, al acabar dejaría puesta la de la primera.
+    consola = sys.stderr
+    a_dentro, b_dentro, a_fuera = threading.Event(), threading.Event(), threading.Event()
+    primera = _ModeloQueEspera(a_dentro, b_dentro)
+    segunda = _ModeloQueEspera(b_dentro, a_fuera)
+
+    def dice_la_primera() -> None:
+        CharacterSpeech(primera).say("Una.")
+        a_fuera.set()
+
+    hilo_a = threading.Thread(target=dice_la_primera)
+    hilo_a.start()
+    assert a_dentro.wait(timeout=5)
+    hilo_b = threading.Thread(target=CharacterSpeech(segunda).say, args=("Y otra.",))
+    hilo_b.start()
+    hilo_a.join(timeout=5)
+    hilo_b.join(timeout=5)
+
+    assert sys.stderr is consola
+    assert primera.pedidos
+    assert segunda.pedidos
 
 
 def test_solo_le_da_el_texto_y_el_idioma_y_ningun_audio() -> None:
