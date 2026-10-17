@@ -270,42 +270,74 @@ def test_al_decir_cada_frase_calla_la_barra_y_los_dos_avisos_y_solo_esos(
 
 
 class _ModeloQueEspera(_Modelo):
-    """Avisa con ``dentro`` al empezar su frase, y la acaba cuando ``salir`` le deja."""
+    """Avisa con ``dentro`` al empezar su frase, espera a ``seguir`` como mucho ``espera``
+    segundos, y la dice pintando como Chatterbox. Cuenta cuántas frases se dicen a la vez."""
 
-    def __init__(self, dentro: threading.Event, salir: threading.Event) -> None:
+    a_la_vez = 0
+    mas_a_la_vez = 0
+    _cuenta = threading.Lock()
+
+    def __init__(self, dentro: threading.Event, seguir: threading.Event, espera: float) -> None:
         super().__init__()
         self._dentro = dentro
-        self._salir = salir
+        self._seguir = seguir
+        self._espera = espera
 
     def generate(self, *args: Any, **kwargs: Any) -> _Onda:
-        self._dentro.set()
-        assert self._salir.wait(timeout=5)
-        return super().generate(*args, **kwargs)
+        with _ModeloQueEspera._cuenta:
+            _ModeloQueEspera.a_la_vez += 1
+            _ModeloQueEspera.mas_a_la_vez = max(
+                _ModeloQueEspera.mas_a_la_vez, _ModeloQueEspera.a_la_vez
+            )
+        try:
+            self._dentro.set()
+            self._seguir.wait(timeout=self._espera)
+            tqdm = importlib.import_module("tqdm").tqdm
+            for _ in tqdm(range(3), desc="Sampling", dynamic_ncols=True):
+                pass
+            warnings.warn(_AVISO_DE_TORCH, FutureWarning, stacklevel=1)
+            return super().generate(*args, **kwargs)
+        finally:
+            with _ModeloQueEspera._cuenta:
+                _ModeloQueEspera.a_la_vez -= 1
 
 
-def test_dos_frases_a_la_vez_en_dos_hilos_no_dejan_la_consola_envuelta() -> None:
-    # La primera empieza, la segunda empieza, la primera acaba y después la segunda: si la
-    # segunda envolviera la consola otra vez, al acabar dejaría puesta la de la primera.
+def test_dos_frases_a_la_vez_en_dos_hilos_van_una_detras_de_otra_y_lo_dejan_todo_como_estaba(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # #696, revisión de 0d74123c: con dos frases entrelazadas, la segunda pintaba su barra y
+    # el filtro de ``sdp_kernel`` se quedaba para siempre en ``warnings.filters``. Si pueden,
+    # la primera empieza, la segunda empieza, la primera acaba y después la segunda.
+    monkeypatch.setattr(_ModeloQueEspera, "a_la_vez", 0)
+    monkeypatch.setattr(_ModeloQueEspera, "mas_a_la_vez", 0)
     consola = sys.stderr
     a_dentro, b_dentro, a_fuera = threading.Event(), threading.Event(), threading.Event()
-    primera = _ModeloQueEspera(a_dentro, b_dentro)
-    segunda = _ModeloQueEspera(b_dentro, a_fuera)
+    primera = _ModeloQueEspera(a_dentro, b_dentro, espera=1.0)
+    segunda = _ModeloQueEspera(b_dentro, a_fuera, espera=5.0)
 
     def dice_la_primera() -> None:
         CharacterSpeech(primera).say("Una.")
         a_fuera.set()
 
-    hilo_a = threading.Thread(target=dice_la_primera)
-    hilo_a.start()
-    assert a_dentro.wait(timeout=5)
-    hilo_b = threading.Thread(target=CharacterSpeech(segunda).say, args=("Y otra.",))
-    hilo_b.start()
-    hilo_a.join(timeout=5)
-    hilo_b.join(timeout=5)
+    with warnings.catch_warnings(record=True) as avisos:
+        warnings.simplefilter("always")
+        filtros = list(warnings.filters)
+        hilo_a = threading.Thread(target=dice_la_primera)
+        hilo_a.start()
+        assert a_dentro.wait(timeout=5)
+        hilo_b = threading.Thread(target=CharacterSpeech(segunda).say, args=("Y otra.",))
+        hilo_b.start()
+        hilo_a.join(timeout=10)
+        hilo_b.join(timeout=10)
+        filtros_despues = list(warnings.filters)
 
-    assert sys.stderr is consola
     assert primera.pedidos
     assert segunda.pedidos
+    assert filtros_despues == filtros
+    assert "Sampling" not in capsys.readouterr().err
+    assert not [aviso for aviso in avisos if "sdp_kernel" in str(aviso.message)]
+    assert sys.stderr is consola
+    assert _ModeloQueEspera.mas_a_la_vez == 1
 
 
 def test_solo_le_da_el_texto_y_el_idioma_y_ningun_audio() -> None:

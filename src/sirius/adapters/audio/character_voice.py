@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import logging
 import sys
+import threading
 import warnings
 from array import array
 from collections.abc import Iterator
@@ -110,33 +111,37 @@ class CharacterSpeech:
         return int(self._model.sr)
 
     def say(self, text: str) -> bytes:
-        # Solo el texto y el idioma: ningún audio, que es como imita una voz.
-        with _quiet_say():
+        # Solo el texto y el idioma: ningún audio, que es como imita una voz. Una frase cada
+        # vez: callar lo que pinta toca la consola y los avisos de todo el proceso.
+        with _SAYING, _quiet_say():
             wav = self._model.generate(text, language_id=LANGUAGE)
         samples = wav.squeeze(0).tolist()
         return array("h", (round(max(-1.0, min(1.0, s)) * 32767) for s in samples)).tobytes()
 
 
+#: Una frase de la voz de personaje cada vez, la diga quien la diga (#696). Dos a la vez,
+#: en dos hilos, se pisarían al callar lo que pinta Chatterbox: ``warnings.catch_warnings``
+#: no es seguro entre hilos, y la consola se envuelve y se devuelve para todo el proceso. Y
+#: tampoco se le piden dos frases a la vez al mismo modelo.
+_SAYING = threading.Lock()
+
+
 @contextmanager
 def _quiet_say() -> Iterator[None]:
     """Calla, mientras dice una frase, las tres cosas que pinta Chatterbox con cada una, y
-    nada más (#696)."""
+    nada más (#696). Con ``_SAYING`` puesto: no se entrelaza con otra."""
     flags = logging.getLogger(_GENERATION_FLAGS_LOGGER)
     without_flags = _WithoutText(_GENERATION_FLAGS)
     flags.addFilter(without_flags)
     stderr = sys.stderr
-    # Si ya lo está callando otra frase, en otro hilo, no lo envuelve otra vez: así nunca
-    # deja la consola envuelta al acabar. tqdm se queda con la que hay al crear la barra.
-    wrapped = not isinstance(stderr, _WithoutSamplingBar)
-    if wrapped:
-        sys.stderr = _WithoutSamplingBar(stderr)
+    # tqdm se queda con la consola que hay al crear la barra.
+    sys.stderr = _WithoutSamplingBar(stderr)
     try:
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", _SDP_KERNEL, FutureWarning)
             yield
     finally:
-        if wrapped:
-            sys.stderr = stderr
+        sys.stderr = stderr
         flags.removeFilter(without_flags)
 
 
