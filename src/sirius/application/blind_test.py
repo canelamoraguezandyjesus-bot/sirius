@@ -90,17 +90,25 @@ class BlindTestUseCase:
     def questions(self) -> tuple[str, ...]:
         return BLIND_TEST_QUESTIONS
 
-    def installed_models(self) -> OfferedModels:
+    def installed_models(self, should_stop: Callable[[], bool] = lambda: False) -> OfferedModels:
         """Los modelos de Ollama que conversan, que son los que ofrece la prueba, y los
         que se quedan fuera, con su motivo.
 
         Si Ollama no contesta, ``BlindTestError`` con la explicación: la ventana
         no sabe nada de Ollama, solo de la prueba. Si no dice qué sabe hacer un
         modelo, ese se queda fuera y los demás se ofrecen igual (ADR-247).
+
+        ``should_stop`` se mira antes de pedir la lista y antes de preguntar qué sabe hacer
+        cada modelo: si cierran la hoja mientras pregunta, no se pregunta más, y lo que
+        devuelve ya no lo usa nadie (ronda 1 de Codex sobre la PR #698).
         """
         chat: list[str] = []
         left_out: list[tuple[str, str]] = []
+        if should_stop():
+            return OfferedModels(chat=(), left_out=())
         for model in self._list_models():
+            if should_stop():
+                break
             try:
                 capabilities = self._model_capabilities(model)
             except BlindTestError as exc:

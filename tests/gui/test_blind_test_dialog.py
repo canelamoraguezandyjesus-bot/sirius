@@ -532,6 +532,35 @@ def test_sin_nada_hecho_cierra_sin_preguntar(qtbot: QtBot) -> None:
     assert not dialogo.isVisible()
 
 
+def test_cerrar_mientras_pregunta_la_lista_deja_de_preguntar_y_no_pregunta_antes(
+    qtbot: QtBot,
+) -> None:
+    # Ronda 1 de Codex sobre la PR #698: con «Preguntando a Ollama qué modelos tiene…» en
+    # pantalla, cerrar dejaba seguir las peticiones a Ollama, una por modelo. Aún no se ha
+    # elegido nada, así que cierra sin preguntar.
+    entorno = _Entorno(instalados=("gemma-y", "mistral-z", "qwen-x"))
+    pendientes: list[QRunnable] = []
+    dialogo = BlindTestDialog(entorno.caso, run_worker=pendientes.append, confirm=entorno.confirma)
+    qtbot.addWidget(dialogo)
+    abre(dialogo, qtbot)
+    preguntados: list[str] = []
+
+    def sabe_y_la_cierran(nombre: str) -> tuple[str, ...]:
+        preguntados.append(nombre)
+        if len(preguntados) == 1:
+            dialogo.reject()  # Esc o la cruz, con la lista a medias
+        return ("completion",)
+
+    entorno.caso._model_capabilities = sabe_y_la_cierran
+    [lista] = pendientes
+    lista.run()
+
+    assert preguntados == ["gemma-y"]
+    assert entorno.confirmaciones == []
+    assert not dialogo.isVisible()
+    assert dialogo.model_checks == []
+
+
 def test_cerrar_a_mitad_corta_la_respuesta_en_curso(
     qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
 ) -> None:

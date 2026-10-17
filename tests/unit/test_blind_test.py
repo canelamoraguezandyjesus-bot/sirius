@@ -260,6 +260,53 @@ def test_solo_ofrece_los_modelos_que_conversan_y_dice_por_que_deja_fuera_los_dem
     )
 
 
+def test_si_cierran_la_hoja_deja_de_preguntar_que_sabe_hacer_cada_modelo() -> None:
+    # Ronda 1 de Codex sobre la PR #698: cerrar la hoja mientras pregunta la lista no
+    # paraba las peticiones a Ollama, una por modelo.
+    preguntados: list[str] = []
+    cerrada: list[bool] = []
+
+    def sabe(nombre: str) -> tuple[str, ...]:
+        preguntados.append(nombre)
+        cerrada.append(True)  # la cierran mientras pregunta por el primero
+        return ("completion",)
+
+    caso = BlindTestUseCase(
+        identity_repository=_Identidades(),  # type: ignore[arg-type]
+        provider_for=_Modelo,
+        list_models=lambda: ("dos", "tres", "uno"),
+        model_capabilities=sabe,
+        choose_model=lambda _nombre: None,
+        current_model=lambda: None,
+    )
+
+    caso.installed_models(should_stop=lambda: bool(cerrada))
+
+    assert preguntados == ["dos"]
+
+
+def test_si_ya_cerraron_la_hoja_no_pide_ni_la_lista() -> None:
+    listas: list[bool] = []
+
+    def lista() -> tuple[str, ...]:
+        listas.append(True)
+        return ("uno",)
+
+    caso = BlindTestUseCase(
+        identity_repository=_Identidades(),  # type: ignore[arg-type]
+        provider_for=_Modelo,
+        list_models=lista,
+        model_capabilities=_conversa,
+        choose_model=lambda _nombre: None,
+        current_model=lambda: None,
+    )
+
+    ofrecidos = caso.installed_models(should_stop=lambda: True)
+
+    assert listas == []
+    assert ofrecidos.chat == ()
+
+
 def test_elegir_lo_deja_como_modelo_de_la_charla() -> None:
     elegidos: list[str] = []
     caso = _caso({"uno": _Modelo("uno"), "dos": _Modelo("dos")}, elegidos)

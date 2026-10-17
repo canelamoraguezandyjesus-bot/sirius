@@ -105,13 +105,18 @@ class BlindTestModelsWorker(QRunnable):
     def __init__(self, use_case: BlindTestUseCase) -> None:
         super().__init__()
         self._use_case = use_case
+        self._stop = threading.Event()
         self.signals = BlindTestWorkerSignals()
+
+    def stop(self) -> None:
+        """Que no pregunte más: cerraron la hoja (ronda 1 de Codex sobre la PR #698)."""
+        self._stop.set()
 
     def run(self) -> None:
         offered: OfferedModels | None = None
         failure: str | None
         try:
-            offered = self._use_case.installed_models()
+            offered = self._use_case.installed_models(should_stop=self._stop.is_set)
         except BlindTestError as exc:
             failure = str(exc)
         except Exception as exc:
@@ -456,12 +461,17 @@ class BlindTestDialog(QDialog):
         super().reject()
 
     def done(self, result: int) -> None:
-        """Al cerrarse, a medias o no, para las preguntas pendientes, y la lista de modelos
-        que llegue después se descarta."""
+        """Al cerrarse, a medias o no, para las preguntas pendientes y lo que quede por
+        preguntar de la lista de modelos, y la lista que llegue después se descarta.
+
+        Mientras solo pregunta la lista no se pregunta antes de cerrar: aún no se ha elegido
+        nada, y no se pierde nada."""
         if self._worker is not None:
             self._worker.stop()
             self._worker = None
-        self._models_worker = None
+        if self._models_worker is not None:
+            self._models_worker.stop()
+            self._models_worker = None
         super().done(result)
 
     def _warning_box(self, title: str, text: str) -> None:
