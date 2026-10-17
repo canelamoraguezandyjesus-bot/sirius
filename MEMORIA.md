@@ -28,7 +28,7 @@
 
 - Decisiones (ADR): **243**.
 - Bloques del motor: 17 cerrado, 3 fuera_de_alcance.
-- Defectos registrados: 2 abierto, 93 cerrado.
+- Defectos registrados: 2 abierto, 94 cerrado.
 - Ideas aparcadas o descartadas: 12 aparcada, 3 descartada, 2 promovida.
 - Skills: **19**.
 - Investigaciones: **14** (fotos con fecha; caducan).
@@ -348,6 +348,7 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 | `medir-lo-que-se-tiene-en-vez-de-lo-que-hay` | 2 | sí | 184, 180 |
 | `modelo-dentro-del-turno` | 2 | sí | 243, 237 |
 | `paso-largo-sin-plazo-propio` | 2 | sí | 228, 224 |
+| `pieza-correcta-a-la-que-no-llama-quien-la-necesita` | 2 | sí | 248, 197 |
 | `vista-que-copia-el-corpus-del-que-venia-huyendo` | 2 | sí | 218, 196 |
 | `comparar-instantes-como-texto` | 1 | sí | 229 |
 | `condicion-construida-sin-el-mecanismo-que-la-hace-cumplible` | 1 | sí | 200 |
@@ -363,7 +364,6 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 | `la-hora-de-quien-lee-y-no-de-quien-capta` | 1 | sí | 245 |
 | `lo-que-un-hilo-carga-despues-de-cerrar` | 1 | sí | 246 |
 | `parada-segura-que-tira-lo-ya-pagado` | 1 | sí | 226 |
-| `pieza-correcta-a-la-que-no-llama-quien-la-necesita` | 1 | sí | 197 |
 | `plan-que-hay-que-terminar-de-una-sentada` | 1 | sí | 176 |
 | `pregunta-al-propietario-que-nadie-vuelve-a-poner-delante` | 1 | no en todas | 198 |
 | `prueba-que-tapa-un-defecto-del-producto` | 1 | sí | 249 |
@@ -455,6 +455,11 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 - **ADR-228** — dar a un agente una regla que depende de la hora («para si no cabe») sin darle la hora ni un plazo propio, y dejar que el tope del job lo mate sin diagnóstico; la misma lección que ADR-155 dejó para el corrector y ADR-224 para los pasos de Quality, aplicada al paso que quedaba. (lo hace cumplir `tests/automation/test_implementador_con_reloj.py`).
 - **ADR-224** — dejar que el tope del job sea el único plazo de un paso que depende de la red, y descubrirlo en una cancelación muda que no guarda caché y se repite sola; es la misma lección que el paso de `apt` dejó escrita el 19-08, aplicada esta vez a los dos pasos que quedaban. (lo hace cumplir `tests/automation/test_quality_no_muere_por_un_sync_lento.py`).
 
+### `pieza-correcta-a-la-que-no-llama-quien-la-necesita`
+
+- **ADR-248** — un proveedor nuevo sin las salvaguardas del de antes. El tope de (lo hace cumplir `tests/integration/test_tope_de_salida_de_ollama.py`).
+- **ADR-197** — dos piezas del mismo árbol leen la misma clase de dato (lo hace cumplir `tests/engine/test_round_family_detector.py`).
+
 ### `vista-que-copia-el-corpus-del-que-venia-huyendo`
 
 - **ADR-218** — dejar que la única lectura lleve dos veces la misma ruta y la fila de cada pieza de evidencia, y descubrirlo cuando la guardia bloquea una PR que no tiene la culpa; es la segunda vez que muerde esta familia en 17 días, y el suelo que no se puede cortar está declarado arriba con su cifra. (lo hace cumplir `tests/engine/test_memoria.py`).
@@ -516,10 +521,6 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 
 - **ADR-226** — tratar toda parada de un revisor como pérdida del veredicto del otro, aunque el que para haya declarado que no va a revisar y el otro ya haya entregado hallazgos pagados; la asimetría que protege (no aprobar sin los dos) se conserva sin tirar el trabajo hecho. (lo hace cumplir `tests/automation/test_sirius_aggregate_reviews.py`).
 
-### `pieza-correcta-a-la-que-no-llama-quien-la-necesita`
-
-- **ADR-197** — dos piezas del mismo árbol leen la misma clase de dato (lo hace cumplir `tests/engine/test_round_family_detector.py`).
-
 ### `plan-que-hay-que-terminar-de-una-sentada`
 
 - **ADR-176** — escribir un plan de varios pasos contra un almacén que los aplica uno a uno, y comprobar la precondición del primero en vez del estado real en que el motor está, de modo que una interrupción a la mitad deja el trabajo atascado para siempre. (lo hace cumplir `tests/engine/test_reflect.py`).
@@ -552,7 +553,7 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 
 - **ADR-205** — el ciclo volvería a quedarse horas en verde esperando (lo hace cumplir `tests/automation/test_sirius_merge.py`).
 
-Y **7** ADR declaran expresamente que no dejaron lección: 248, 240, 236, 235, 234, 233, 232.
+Y **6** ADR declaran expresamente que no dejaron lección: 240, 236, 235, 234, 233, 232.
 
 ## Los bloques del motor
 

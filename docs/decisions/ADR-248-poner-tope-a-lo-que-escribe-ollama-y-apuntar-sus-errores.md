@@ -150,8 +150,11 @@ conector.
 
 ## La lección
 
-- ninguna: se escribe con su entrada en el registro de defectos, en el commit siguiente,
-  que es cuando existe el sha del arreglo (skill `registro-de-defectos`).
+- familia: `pieza-correcta-a-la-que-no-llama-quien-la-necesita`
+- sin esto se repetiría: un proveedor nuevo sin las salvaguardas del de antes. El tope de
+  salida de OpenAI existía, y el de Ollama, escrito después, no lo leía: sin él, una
+  respuesta podía no acabar nunca (H-248).
+- lo hace cumplir: `tests/integration/test_tope_de_salida_de_ollama.py`
 
 ## Revisión externa
 

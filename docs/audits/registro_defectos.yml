@@ -1612,3 +1612,19 @@ defectos:
     ficheros:
       - migrations/env.py
       - tests/gui/test_app_bootstrap.py
+  # ADR-248: el proveedor de Ollama no pedia ningun tope de salida, y Ollama sin
+  # num_predict puede escribir sin fin: en su ordenador la pregunta 46 de la prueba a ciegas
+  # no acabo en mas de 10 minutos. Y su diario no decia que contestaba Ollama al fallar.
+  - id: H-248
+    titulo: El proveedor de Ollama no pedia tope de salida y una respuesta podia no acabar
+    bloque: producto
+    gravedad: alta
+    estado: cerrado
+    cerrado_por: 70795ec01e1e55b2d5b4309843a0f6b0fd5917cc
+    pr: 692
+    adr: 248
+    ficheros:
+      - src/sirius/adapters/llm/ollama_chat.py
+      - src/sirius/composition_root.py
+      - src/sirius/config/llm_provider_settings.py
+      - tests/integration/test_tope_de_salida_de_ollama.py
