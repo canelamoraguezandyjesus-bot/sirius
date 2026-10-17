@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import logging
 import socket
 import threading
 from collections.abc import Iterable, Iterator
@@ -445,12 +446,19 @@ def test_si_ollama_acepta_apagar_el_pensamiento_el_juez_pregunta_una_vez() -> No
     assert cuerpo["options"]["num_predict"] == JUDGE_MAX_OUTPUT_TOKENS
 
 
-def test_si_ollama_no_deja_apagar_el_pensamiento_el_juez_pregunta_sin_apagarlo() -> None:
+def test_si_ollama_no_deja_apagar_el_pensamiento_el_juez_pregunta_sin_apagarlo(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     ollama = _OllamaDeUnaManera(rechaza_think=True)
     juez = _juez_con(ollama)
 
-    assert juez.score("Venga, jefe, al lío.") == 4
-    assert juez.score("Eso lo arreglamos en un momento.") == 4
+    with caplog.at_level(logging.INFO, logger="sirius"):
+        assert juez.score("Venga, jefe, al lío.") == 4
+        assert juez.score("Eso lo arreglamos en un momento.") == 4
+
+    # El diario lo dice, sin nada de lo que dijo Ollama.
+    assert "Ollama no deja apagar el pensamiento de gemma3:4b" in caplog.text
+    assert "does not support" not in caplog.text
 
     # La primera vez lo repite sin apagarlo; después ya no lo apaga: no pierde una
     # petición por nota.
