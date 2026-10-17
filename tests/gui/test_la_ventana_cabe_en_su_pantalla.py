@@ -14,8 +14,9 @@ from pytestqt.qtbot import QtBot
 
 from .test_escucha_en_la_ventana import _monta, _ventana
 
-#: Lo que le deja su pantalla de alto al 150 %.
-SU_ALTO_DISPONIBLE = 672
+#: Lo que le deja su pantalla de alto al 150 %, menos el marco: en Windows, al 150 %, la
+#: barra de título mide unos 30 px, y el mínimo de Qt no la cuenta.
+SU_ALTO_DISPONIBLE = 672 - 40
 
 
 def test_la_ventana_abre_a_900x620_y_cabe_en_su_pantalla(qtbot: QtBot, tmp_path: Path) -> None:
