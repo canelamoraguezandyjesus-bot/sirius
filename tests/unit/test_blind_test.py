@@ -158,11 +158,26 @@ class _Modelo:
         del operation_id
 
 
+def _conversa(nombre: str) -> tuple[str, ...]:
+    """Lo que dice ``/api/show`` de un modelo de charla."""
+    del nombre
+    return ("completion", "tools")
+
+
+class _Callado(_Modelo):
+    """Un modelo que acaba sin decir nada."""
+
+    def stream_response(self, request: LLMRequest) -> Iterable[LLMStreamEvent]:
+        self.peticiones.append(request)
+        return iter(())
+
+
 def _caso(modelos: dict[str, _Modelo], elegidos: list[str]) -> BlindTestUseCase:
     return BlindTestUseCase(
         identity_repository=_Identidades(),  # type: ignore[arg-type]
         provider_for=lambda nombre: modelos[nombre],
         list_models=lambda: tuple(sorted(modelos)),
+        model_capabilities=_conversa,
         choose_model=elegidos.append,
         current_model=lambda: elegidos[-1] if elegidos else None,
         rng=random.Random(11),
@@ -198,6 +213,44 @@ def test_si_un_modelo_no_contesta_la_prueba_se_para_y_dice_cual() -> None:
         _caso(modelos, []).prepare(["uno", "dos"])
 
 
+@pytest.mark.parametrize("dos", [_Modelo("dos", falla=True), _Callado("dos")])
+def test_si_un_modelo_no_contesta_el_aviso_dice_que_hacer(dos: _Modelo) -> None:
+    # En su ordenador el aviso solo decía qué modelo no contestó (ADR-247).
+    with pytest.raises(BlindTestError) as error:
+        _caso({"uno": _Modelo("uno"), "dos": dos}, []).prepare(["uno", "dos"])
+
+    assert "El modelo dos" in str(error.value)
+    assert str(error.value).endswith("Vuelve a pulsar Empezar; si se repite, desmarca ese modelo.")
+
+
+def test_solo_ofrece_los_modelos_que_conversan_y_dice_por_que_deja_fuera_los_demas() -> None:
+    # En su ordenador ofrecía también los de huellas (ADR-247).
+    modelos = {nombre: _Modelo(nombre) for nombre in ("uno", "dos", "huellas", "raro")}
+
+    def sabe(nombre: str) -> tuple[str, ...]:
+        if nombre == "raro":
+            msg = "Ollama no dijo qué sabe hacer"
+            raise BlindTestError(msg)
+        return ("embedding",) if nombre == "huellas" else ("completion", "tools")
+
+    caso = BlindTestUseCase(
+        identity_repository=_Identidades(),  # type: ignore[arg-type]
+        provider_for=lambda nombre: modelos[nombre],
+        list_models=lambda: tuple(sorted(modelos)),
+        model_capabilities=sabe,
+        choose_model=lambda _nombre: None,
+        current_model=lambda: None,
+    )
+
+    ofrecidos = caso.installed_models()
+
+    assert ofrecidos.chat == ("dos", "uno")
+    assert ofrecidos.left_out == (
+        ("huellas", "no conversa"),
+        ("raro", "Ollama no dijo qué sabe hacer"),
+    )
+
+
 def test_elegir_lo_deja_como_modelo_de_la_charla() -> None:
     elegidos: list[str] = []
     caso = _caso({"uno": _Modelo("uno"), "dos": _Modelo("dos")}, elegidos)
@@ -207,7 +260,7 @@ def test_elegir_lo_deja_como_modelo_de_la_charla() -> None:
 
     assert elegidos == ["dos"]
     assert caso.chat_model() == "dos"
-    assert caso.installed_models() == ("dos", "uno")
+    assert caso.installed_models().chat == ("dos", "uno")
 
 
 # --- ADR-240: los ejemplos de la semilla, pregunta a pregunta ---------------------------
@@ -231,6 +284,7 @@ def test_cada_pregunta_lleva_tres_ejemplos_y_todos_los_modelos_las_mismas_instru
         identity_repository=_IdentidadesConEjemplos(),  # type: ignore[arg-type]
         provider_for=lambda nombre: modelos[nombre],
         list_models=lambda: tuple(sorted(modelos)),
+        model_capabilities=_conversa,
         choose_model=lambda _nombre: None,
         current_model=lambda: None,
         rng=random.Random(11),
@@ -263,6 +317,7 @@ def _caso_con(modelos: dict[str, _Modelo], selector: SeedExamplePicker) -> Blind
         identity_repository=_IdentidadesConEjemplos(),  # type: ignore[arg-type]
         provider_for=lambda nombre: modelos[nombre],
         list_models=lambda: tuple(sorted(modelos)),
+        model_capabilities=_conversa,
         choose_model=lambda _nombre: None,
         current_model=lambda: None,
         rng=random.Random(11),

@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import Callable, Iterable, Iterator
+from typing import Any
 
 import httpx
 import pytest
@@ -18,6 +19,7 @@ from sirius.adapters.llm.ollama_chat import (
     OllamaChatProvider,
     OllamaNotAvailableError,
     list_installed_models,
+    model_capabilities,
 )
 from sirius.ports.llm import (
     MEMORY_SUGGESTION_DELIMITER,
@@ -275,6 +277,63 @@ def test_si_ollama_no_contesta_no_hay_lista_de_modelos() -> None:
 
     with pytest.raises(OllamaNotAvailableError, match="Ollama"):
         list_installed_models(httpx.MockTransport(contestar))
+
+
+# --- Qué sabe hacer un modelo, para la prueba a ciegas (ADR-247) --------------------
+
+
+def test_lo_que_sabe_hacer_un_modelo_lo_pregunta_a_su_api_show() -> None:
+    pedidos: list[tuple[str, object]] = []
+
+    def contestar(request: httpx.Request) -> httpx.Response:
+        pedidos.append((str(request.url), json.loads(request.content)))
+        return httpx.Response(200, json={"capabilities": ["embedding"], "license": "..."})
+
+    assert model_capabilities("embeddinggemma", httpx.MockTransport(contestar)) == ("embedding",)
+    assert pedidos == [("http://localhost:11434/api/show", {"model": "embeddinggemma"})]
+
+
+@pytest.mark.parametrize(
+    ("contesta", "motivo"),
+    [
+        (httpx.Response(200, json={"license": "..."}), "Ollama no dijo qué sabe hacer"),
+        (httpx.Response(200, json={"capabilities": "completion"}), "Ollama no dijo qué sabe hacer"),
+        (httpx.Response(200, text="esto no es json"), "Ollama no dijo qué sabe hacer"),
+        (httpx.Response(404, json={"error": "model not found"}), "Ollama no contestó"),
+    ],
+)
+def test_si_api_show_no_dice_que_sabe_hacer_lo_dice(contesta: httpx.Response, motivo: str) -> None:
+    with pytest.raises(OllamaNotAvailableError, match=motivo):
+        model_capabilities("raro", httpx.MockTransport(lambda request: contesta))
+
+
+def test_si_ollama_no_contesta_a_api_show_lo_dice() -> None:
+    def contestar(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("conexión rechazada", request=request)
+
+    with pytest.raises(OllamaNotAvailableError, match="Ollama no contestó"):
+        model_capabilities("raro", httpx.MockTransport(contestar))
+
+
+def test_preguntar_que_sabe_hacer_un_modelo_no_lee_los_proxies_del_sistema(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Con un transporte enchufado, httpx no usa los proxies aunque los lea: se mira el
+    # cliente que abre, como en la charla.
+    abiertos: list[httpx.Client] = []
+
+    class _Cliente(httpx.Client):
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            super().__init__(*args, **kwargs)
+            abiertos.append(self)
+
+    monkeypatch.setattr(httpx, "Client", _Cliente)
+
+    def contestar(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"capabilities": ["completion"]})
+
+    assert model_capabilities("gemma3:4b", httpx.MockTransport(contestar)) == ("completion",)
+    assert [cliente.trust_env for cliente in abiertos] == [False]
 
 
 # --- El tope de salida y el diario (ADR-248) ---------------------------------------

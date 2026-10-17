@@ -284,6 +284,16 @@ pasa antes de borrar su carpeta:
     al lado su texto, en una etiqueta que parte las líneas y lo enseña tal cual, sin
     pintarlo como HTML, como hacía el botón. Pulsar el texto es pulsar el botón, y
     `choose_letter` y lo que se guarda no cambian.
+- **La prueba a ciegas, solo con modelos que conversan**, con su añadido a la nota de las
+  hojas, arriba:
+  - **El conector pregunta a `/api/show` qué sabe hacer cada modelo**
+    (`model_capabilities`), a la dirección fija de siempre y sin los proxies del sistema,
+    con diez segundos de espera: decirlo no carga el modelo.
+  - **El caso de uso de la prueba ofrece solo los que dicen `completion`**, y deja los
+    demás fuera con su motivo: «no conversa», o lo que falló al preguntarlo. Los demás se
+    ofrecen igual, y la hoja lo dice debajo de la lista.
+  - **El aviso de un modelo que no contesta o no termina** acaba en «Vuelve a pulsar
+    Empezar; si se repite, desmarca ese modelo.»
 
 De paso, en los documentos, las rondas limpias de Codex que no se pudieron anotar en sus
 PR sin cambiar el head que revisaron: la de ADR-245 (PR #690) y la de ADR-246 (PR #691).
@@ -357,6 +367,17 @@ PR sin cambiar el head que revisaron: la de ADR-245 (PR #690) y la de ADR-246 (P
   las de antes eligen ahora la respuesta por su texto. Mutación: 16, caen las 16. Las
   pruebas de la interfaz, 565 en verde; **ruff** limpio; **mypy** sin errores en 737
   ficheros.
+- **La prueba a ciegas, solo con modelos que conversan**: con un Ollama de mentira como el
+  suyo, con `gemma3:4b`, `qwen3:4b-instruct`, `embeddinggemma` y `qwen3-embedding:0.6b`, la
+  hoja ofrecía los cuatro con el código de antes; con el arreglo ofrece los dos que
+  conversan y dice que los otros dos no conversan. Esa prueba va por el camino real, desde
+  `build_conversation_dependencies`; además, tres del caso de uso, lo que deja fuera y el
+  aviso con un modelo que falla y con otro que acaba sin decir nada, y siete del conector:
+  la dirección y lo que pide, cuatro respuestas que no dicen qué sabe hacer, Ollama sin
+  contestar y el cliente sin proxies. El Ollama de mentira del conductor de la 0.2 contesta
+  ahora `/api/show` como el de verdad. Mutación: 13, caen las 13. Las pruebas de la prueba a
+  ciegas y de Ollama, 48 ficheros: 1 206 en verde, 2 omitidas y 2 `xfail`; **ruff**
+  limpio; **mypy** sin errores en 737 ficheros.
 
 ## Consecuencias
 
@@ -366,6 +387,11 @@ PR sin cambiar el head que revisaron: la de ADR-245 (PR #690) y la de ADR-246 (P
 - **Una respuesta larga se lee bajando**, y «Siguiente» queda al final de las respuestas.
   Una palabra sin espacios más ancha que la hoja se lee yendo de lado: con una de 2 000
   caracteres, la hoja sigue cabiendo.
+- **La prueba a ciegas ya no ofrece los modelos de huellas**, y dice debajo de la lista
+  cuáles se quedan fuera y por qué. Con un Ollama que no dijera qué sabe hacer cada modelo,
+  todos se quedarían fuera, cada uno con su motivo.
+- **Abrir la prueba pregunta a Ollama una vez por modelo**, además de la lista: tarda algo
+  más en abrirse, y como mucho diez segundos por modelo si Ollama no contesta.
 - **El propietario tiene la orden de E-R02-02**: `uv run python scripts/contar_las_marcas.py`.
   La puede ejecutar con Sirius abierto: la copia espera si la ventana está guardando.
 - **Las últimas 50 son las de la charla, en su orden**, como en PA-R02-06: una respuesta
@@ -412,6 +438,12 @@ prueba por cada regla nueva. Encontró cuatro cosas, arregladas:
 una cosa, arreglada: mypy rechazó la prueba que pulsa el texto de una respuesta con
 `qtbot.mouseClick`, que no tiene tipos; pulsa con `QTest.mouseClick`, como las demás.
 
+**La lista de modelos.** Antes de empujar se releyó el diff contra el código y su nota.
+Encontró una cosa, arreglada: la prueba de que no se leen los proxies los ponía en el
+entorno, y no miraba nada, porque con un transporte enchufado httpx no los usa aunque los
+lea. Lo dijo la mutación que vuelve a leerlos, que sobrevivía; ahora la prueba mira el
+cliente que se abre, como la de la charla.
+
 ## La lección
 
 - familia: `prueba-que-no-puede-ver-lo-que-vigila`
@@ -432,4 +464,6 @@ que pasó por el camino real, y que lo que dicen al propietario sea cierto en ca
 **Alcance añadido para la ronda 2**, escrito antes de pedirla: las tres hojas en su
 pantalla. Mira que una respuesta larga no haga ninguna hoja más ancha ni más alta que la
 pantalla, que todo se alcance bajando, que la prueba a ciegas elija y guarde como antes, y
-que las tres se minimicen, se maximicen y cambien de tamaño.
+que las tres se minimicen, se maximicen y cambien de tamaño. Y la lista de modelos de la
+prueba a ciegas: que solo ofrezca los que conversan, que un modelo del que `/api/show` no
+dice nada no rompa la lista, y que el aviso diga qué hacer.

@@ -198,6 +198,11 @@ class OllamaDeMentira:
         self.urls.append(request.url)
         cuerpo: dict[str, Any] = json.loads(request.content or b"{}")
         modelo = cuerpo.get("model")
+        if request.url.path == "/api/show":
+            # Qué sabe hacer un modelo, como el de verdad: los instalados conversan.
+            if modelo in self.modelos_instalados:
+                return httpx.Response(200, json={"capabilities": ["completion"]})
+            return httpx.Response(404, json={"error": f"model '{modelo}' not found"})
         if isinstance(modelo, str):
             self.modelos.append(modelo)
         if request.url.path == "/api/tags":
@@ -920,7 +925,7 @@ class Conductor:
         )
         self.reabre()
         caso = self._dependencias.blind_test_use_case
-        assert caso.installed_models() == tuple(sorted(respuestas_por_modelo))
+        assert caso.installed_models().chat == tuple(sorted(respuestas_por_modelo))
         self._hoja = caso.prepare(list(respuestas_por_modelo))
         # Lo que enseña la ventana en cada pregunta: el texto y «letra) respuesta».
         vista = [

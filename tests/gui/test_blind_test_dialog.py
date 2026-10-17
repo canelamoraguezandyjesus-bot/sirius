@@ -6,11 +6,13 @@ El trabajo de preguntar a los modelos corre aquí en el mismo hilo
 
 from __future__ import annotations
 
+import json
 import random
 from collections.abc import Iterable
 from datetime import UTC, datetime
 from pathlib import Path
 
+import httpx
 import pytest
 from _hojas_en_su_pantalla import (
     abre,
@@ -105,6 +107,7 @@ class _Entorno:
                 nombre, falla=nombre == falla, larga=nombre == larga
             ),
             list_models=listar,
+            model_capabilities=lambda nombre: ("completion",),
             choose_model=self.elegidos.append,
             current_model=lambda: self.elegidos[-1] if self.elegidos else None,
             rng=random.Random(4),
@@ -318,3 +321,44 @@ def test_la_configuracion_dice_con_que_modelo_conversa_sirius(qtbot: QtBot, tmp_
 
     assert ventana.chat_model_label.text() == "Sirius conversa con gemma-y, en este ordenador."
     assert ventana.blind_test_button.text() == "Elegir el modelo a ciegas…"
+
+
+def _ollama_con_modelos_de_huellas(request: httpx.Request) -> httpx.Response:
+    """Un Ollama de mentira como el suyo: dos modelos que conversan y dos de huellas."""
+    if request.url.path == "/api/tags":
+        nombres = ("gemma3:4b", "embeddinggemma", "qwen3:4b-instruct", "qwen3-embedding:0.6b")
+        return httpx.Response(200, json={"models": [{"name": nombre} for nombre in nombres]})
+    if request.url.path == "/api/show":
+        modelo = json.loads(request.content)["model"]
+        sabe = ["embedding"] if "embedding" in modelo else ["completion", "tools"]
+        return httpx.Response(200, json={"capabilities": sabe})
+    return httpx.Response(404, json={"error": f"ruta no simulada: {request.url.path}"})
+
+
+def test_con_modelos_de_huellas_en_ollama_solo_ofrece_los_que_conversan(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    # En su ordenador ofrecía embeddinggemma y qwen3-embedding:0.6b, y marcar uno hacía
+    # fallar la prueba tras muchos minutos (ADR-247).
+    save_settings({"llm_provider": "ollama", "ollama_chat_model": "gemma3:4b"})
+    rutas = resolve_paths()
+    initialize_persistence(rutas)
+    dependencias = build_conversation_dependencies(
+        rutas.data_dir / "sirius.db",
+        tmp_path / "copias",
+        secret_store=FakeSecretStore(),
+        ollama_transport=httpx.MockTransport(_ollama_con_modelos_de_huellas),
+    )
+    try:
+        dialogo = BlindTestDialog(dependencias.blind_test_use_case, run_worker=lambda _: None)
+        qtbot.addWidget(dialogo)
+
+        assert [check.text() for check in dialogo.model_checks] == [
+            "gemma3:4b",
+            "qwen3:4b-instruct",
+        ]
+        fuera = dialogo.left_out_status.text()
+        assert "embeddinggemma: no conversa" in fuera
+        assert "qwen3-embedding:0.6b: no conversa" in fuera
+    finally:
+        dependencias.close_database_connections()

@@ -56,6 +56,24 @@ class BlindTestError(ValueError):
     """La prueba no se puede preparar o contar tal como se ha pedido."""
 
 
+#: Lo que dice Ollama de un modelo que conversa. Los de huellas dicen ``embedding``, y la
+#: prueba no los ofrece: en su ordenador, marcar uno la hacía fallar tras muchos minutos
+#: (ADR-247).
+CHAT_CAPABILITY = "completion"
+
+#: Por qué se queda fuera de la prueba un modelo que Ollama dice que no conversa.
+NOT_A_CHAT_MODEL = "no conversa"
+
+
+@dataclass(frozen=True, slots=True)
+class OfferedModels:
+    """Los modelos que ofrece la prueba, los que conversan, y los que deja fuera, cada uno
+    con su motivo."""
+
+    chat: tuple[str, ...]
+    left_out: tuple[tuple[str, str], ...] = ()
+
+
 @dataclass(frozen=True, slots=True)
 class BlindTestItem:
     """Una pregunta con sus respuestas en el orden en que las ve el propietario."""

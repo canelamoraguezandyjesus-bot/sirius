@@ -56,10 +56,12 @@ __all__ = [
     "DEFAULT_NUM_CTX",
     "DEFAULT_NUM_PREDICT",
     "OLLAMA_CHAT_URL",
+    "OLLAMA_SHOW_URL",
     "OLLAMA_TAGS_URL",
     "OllamaChatProvider",
     "OllamaNotAvailableError",
     "list_installed_models",
+    "model_capabilities",
 ]
 
 _logger = get_logger(__name__)
@@ -69,6 +71,9 @@ OLLAMA_CHAT_URL = "http://localhost:11434/api/chat"
 
 #: Dónde dice Ollama qué modelos tiene instalados.
 OLLAMA_TAGS_URL = "http://localhost:11434/api/tags"
+
+#: Dónde dice Ollama qué sabe hacer un modelo (ADR-247).
+OLLAMA_SHOW_URL = "http://localhost:11434/api/show"
 
 #: Contexto que se pide al modelo si los ajustes no dicen otro.
 DEFAULT_NUM_CTX = 8192
@@ -92,6 +97,10 @@ _KEEP_ALIVE = "30m"
 #: Cargar un modelo de varios gigas puede llevar más de un minuto en un disco
 #: lento, y Ollama no envía nada hasta tener la primera palabra.
 _TIMEOUT = httpx.Timeout(connect=5.0, read=180.0, write=30.0, pool=5.0)
+
+#: Decir qué sabe hacer un modelo no lo carga: si en diez segundos Ollama no lo dice, ese
+#: modelo se queda fuera de la prueba a ciegas, y la ventana no espera más.
+_SHOW_TIMEOUT = httpx.Timeout(10.0)
 
 _SAFE_MESSAGES: dict[LLMErrorKind, str] = {
     LLMErrorKind.CONNECTION: "No se pudo contactar con Ollama en este ordenador. ¿Está abierto?",
@@ -384,3 +393,30 @@ def list_installed_models(transport: httpx.BaseTransport | None = None) -> tuple
         if isinstance(model, dict) and isinstance(model.get("name"), str) and model["name"].strip()
     }
     return tuple(sorted(names))
+
+
+def model_capabilities(model: str, transport: httpx.BaseTransport | None = None) -> tuple[str, ...]:
+    """Lo que dice el Ollama de este ordenador que sabe hacer ``model``: ``completion`` si
+    conversa, ``embedding`` si da huellas.
+
+    Va a la misma dirección fija que la charla y tampoco lee los proxies del sistema. Si
+    Ollama no contesta, o contesta sin decir qué sabe hacer, ``OllamaNotAvailableError``
+    con el motivo: la prueba a ciegas deja ese modelo fuera y sigue con los demás
+    (ADR-247).
+    """
+    try:
+        with httpx.Client(timeout=_SHOW_TIMEOUT, transport=transport, trust_env=False) as client:
+            response = client.post(OLLAMA_SHOW_URL, json={"model": model})
+            response.raise_for_status()
+    except httpx.HTTPError as exc:
+        msg = "Ollama no contestó al preguntarle qué sabe hacer"
+        raise OllamaNotAvailableError(msg) from exc
+    try:
+        body = response.json()
+    except json.JSONDecodeError:
+        body = None
+    capabilities = body.get("capabilities") if isinstance(body, dict) else None
+    if not isinstance(capabilities, list) or not all(isinstance(c, str) for c in capabilities):
+        msg = "Ollama no dijo qué sabe hacer"
+        raise OllamaNotAvailableError(msg)
+    return tuple(capabilities)

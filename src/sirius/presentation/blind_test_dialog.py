@@ -148,6 +148,10 @@ class BlindTestDialog(QDialog):
         self.models_status = QLabel("")
         self.models_status.setWordWrap(True)
         layout.addWidget(self.models_status)
+        self.left_out_status = QLabel("")
+        self.left_out_status.setTextFormat(Qt.TextFormat.PlainText)
+        self.left_out_status.setWordWrap(True)
+        layout.addWidget(self.left_out_status)
         self.start_button = QPushButton("Empezar")
         self.start_button.setEnabled(False)
         self.start_button.clicked.connect(self._start)
@@ -158,16 +162,21 @@ class BlindTestDialog(QDialog):
 
     def _load_models(self) -> None:
         try:
-            models = self._use_case.installed_models()
+            offered = self._use_case.installed_models()
         except BlindTestError as exc:
             self.models_status.setText(str(exc))
             return
-        if len(models) < MIN_MODELS:
+        if len(offered.chat) < MIN_MODELS:
             self.models_status.setText(
-                "Ollama tiene menos de dos modelos instalados: hacen falta dos o tres "
+                "Ollama tiene menos de dos modelos que conversan: hacen falta dos o tres "
                 "para compararlos."
             )
-        for model in models:
+        if offered.left_out:
+            self.left_out_status.setText(
+                "Se quedan fuera, porque no sirven para la prueba:\n"
+                + "\n".join(f"{model}: {reason}." for model, reason in offered.left_out)
+            )
+        for model in offered.chat:
             check = QCheckBox(model)
             check.toggled.connect(self._refresh_start)
             self.models_box.addWidget(check)

@@ -16,16 +16,22 @@ from sirius.application.seed_examples import SeedExamplePicker
 from sirius.application.send_message import render_identity
 from sirius.domain.blind_test import (
     BLIND_TEST_QUESTIONS,
+    CHAT_CAPABILITY,
+    NOT_A_CHAT_MODEL,
     BlindTestError,
     BlindTestResult,
     BlindTestSheet,
+    OfferedModels,
     prepare_blind_test,
     tally,
 )
 from sirius.ports.identity_repository import IdentityRepository
 from sirius.ports.llm import LLMCompleted, LLMError, LLMProvider, LLMRequest
 
-__all__ = ["BlindTestUseCase"]
+__all__ = ["RETRY_ADVICE", "BlindTestUseCase"]
+
+#: Lo que dice el aviso de un modelo que no contesta: qué hacer (ADR-247).
+RETRY_ADVICE = "Vuelve a pulsar Empezar; si se repite, desmarca ese modelo."
 
 
 class BlindTestUseCase:
@@ -37,16 +43,19 @@ class BlindTestUseCase:
         identity_repository: IdentityRepository,
         provider_for: Callable[[str], LLMProvider],
         list_models: Callable[[], tuple[str, ...]],
+        model_capabilities: Callable[[str], tuple[str, ...]],
         choose_model: Callable[[str], None],
         current_model: Callable[[], str | None],
         rng: random.Random | None = None,
         seed_examples: SeedExamplePicker | None = None,
     ) -> None:
         """``seed_examples`` elige los ejemplos de la semilla de cada pregunta, como en
-        la charla (ADR-240)."""
+        la charla (ADR-240). ``model_capabilities`` dice qué sabe hacer un modelo, o
+        lanza ``BlindTestError`` con el motivo si no se sabe (ADR-247)."""
         self._identity_repository = identity_repository
         self._provider_for = provider_for
         self._list_models = list_models
+        self._model_capabilities = model_capabilities
         self._choose_model = choose_model
         self._current_model = current_model
         self._rng = rng or random.Random()
@@ -55,13 +64,27 @@ class BlindTestUseCase:
     def questions(self) -> tuple[str, ...]:
         return BLIND_TEST_QUESTIONS
 
-    def installed_models(self) -> tuple[str, ...]:
-        """Los modelos que tiene Ollama en este ordenador.
+    def installed_models(self) -> OfferedModels:
+        """Los modelos de Ollama que conversan, que son los que ofrece la prueba, y los
+        que se quedan fuera, con su motivo.
 
         Si Ollama no contesta, ``BlindTestError`` con la explicación: la ventana
-        no sabe nada de Ollama, solo de la prueba.
+        no sabe nada de Ollama, solo de la prueba. Si no dice qué sabe hacer un
+        modelo, ese se queda fuera y los demás se ofrecen igual (ADR-247).
         """
-        return self._list_models()
+        chat: list[str] = []
+        left_out: list[tuple[str, str]] = []
+        for model in self._list_models():
+            try:
+                capabilities = self._model_capabilities(model)
+            except BlindTestError as exc:
+                left_out.append((model, str(exc)))
+                continue
+            if CHAT_CAPABILITY in capabilities:
+                chat.append(model)
+            else:
+                left_out.append((model, NOT_A_CHAT_MODEL))
+        return OfferedModels(chat=tuple(chat), left_out=tuple(left_out))
 
     def chat_model(self) -> str | None:
         """El modelo que conversa ahora, si ya se eligió uno."""
@@ -132,7 +155,7 @@ def _answer(
         if isinstance(event, LLMCompleted):
             return event.text.strip()
         if isinstance(event, LLMError):
-            msg = f"El modelo {model} no contestó: {event.message}"
+            msg = f"El modelo {model} no contestó: {event.message} {RETRY_ADVICE}"
             raise BlindTestError(msg)
-    msg = f"El modelo {model} no terminó su respuesta."
+    msg = f"El modelo {model} no terminó su respuesta. {RETRY_ADVICE}"
     raise BlindTestError(msg)

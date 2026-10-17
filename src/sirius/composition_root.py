@@ -46,6 +46,7 @@ from sirius.adapters.llm.ollama_chat import (
     OllamaChatProvider,
     OllamaNotAvailableError,
     list_installed_models,
+    model_capabilities,
 )
 from sirius.adapters.llm.ollama_embeddings import (
     DEFAULT_EMBEDDING_MODEL,
@@ -998,9 +999,15 @@ def build_conversation_dependencies(
         local = _local_chat(send_message_use_case.llm_provider)
         return local.model_name if local is not None else None
 
-    def installed_chat_models() -> tuple[str, ...]:
+    def installed_ollama_models() -> tuple[str, ...]:
         try:
             return list_installed_models(ollama_transport)
+        except OllamaNotAvailableError as exc:
+            raise BlindTestError(str(exc)) from exc
+
+    def ollama_model_capabilities(model: str) -> tuple[str, ...]:
+        try:
+            return model_capabilities(model, ollama_transport)
         except OllamaNotAvailableError as exc:
             raise BlindTestError(str(exc)) from exc
 
@@ -1009,7 +1016,8 @@ def build_conversation_dependencies(
         provider_for=lambda model: OllamaChatProvider(
             model, num_predict=_blind_test_num_predict(), transport=ollama_transport
         ),
-        list_models=installed_chat_models,
+        list_models=installed_ollama_models,
+        model_capabilities=ollama_model_capabilities,
         choose_model=choose_chat_model,
         current_model=current_chat_model,
         seed_examples=seed_examples,
