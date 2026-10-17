@@ -188,18 +188,20 @@ def without_a_local_model(provider: object) -> str:
 def warm_up_embeddings_in_background(
     service: MemoryEmbeddingService, should_stop: Callable[[], bool]
 ) -> threading.Thread:
-    """Como la ventana al abrirse: calcula las huellas que falten y, si no falta ninguna,
-    carga el modelo de huellas, para que el primer turno no lo espere (#696).
+    """Como la ventana al abrirse: calcula las huellas que falten y, si no calculó ninguna,
+    porque no faltaba ninguna o porque fallaron, carga el modelo de huellas, para que el
+    primer turno no lo espere (#696).
 
     En un hilo demonio que nadie espera: escuchar no se retrasa por esto, y si falla, el
-    diario se queda con el tipo de fallo y la búsqueda sigue como pueda.
+    diario se queda con el tipo de fallo y la búsqueda sigue como pueda. Lo que corte el
+    cierre al salir, después de pedirle parar, no se apunta como fallo.
     """
 
     def run() -> None:
         try:
             done = service.embed_pending(should_stop=should_stop)
             if done == 0 and not should_stop():
-                service.warm_up()
+                service.warm_up(should_stop=should_stop)
         except Exception as error:  # las huellas nunca pueden romper la escucha
             _logger.error("Las huellas se interrumpieron (%s)", type(error).__name__)
 

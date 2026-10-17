@@ -382,6 +382,9 @@ class _Huellas:
         self.llamadas: list[str] = []
         self.hilos: list[threading.Thread] = []
         self.parar: Callable[[], bool] = lambda: False
+        #: Con qué se le dijo si parar al cargar el modelo, si se cargó.
+        self.parar_al_cargar: Callable[[], bool] | None = None
+        self.empezo = threading.Event()
         self.escuchando = threading.Event()
         #: Si al calcularlas ya se estaba escuchando: nadie esperó a las huellas.
         self.vio_escuchar = False
@@ -391,6 +394,7 @@ class _Huellas:
         self.llamadas.append("calcula las que faltan")
         self.hilos.append(threading.current_thread())
         self.parar = should_stop
+        self.empezo.set()
         try:
             self.vio_escuchar = self.escuchando.wait(timeout=5)
             if self.falla is not None:
@@ -400,8 +404,9 @@ class _Huellas:
             if self.falla is not None or self.pendientes:
                 self.acabadas.set()
 
-    def warm_up(self) -> None:
+    def warm_up(self, should_stop: Callable[[], bool] = lambda: False) -> None:
         self.llamadas.append("carga el modelo")
+        self.parar_al_cargar = should_stop
         self.acabadas.set()
 
 
@@ -418,7 +423,13 @@ def arranque(
             proveedores.append(ollama)
             charla = ollama
         huellas = huellas or _Huellas()
-        visto = SimpleNamespace(orden=[], huellas=huellas, codigo=None)
+        visto = SimpleNamespace(orden=[], huellas=huellas, codigo=None, parado_al_cerrar=None)
+
+        def cierra_la_base() -> None:
+            # Si a las huellas ya se les había pedido parar cuando se cierra la base.
+            visto.parado_al_cerrar = huellas.parar()
+            visto.orden.append("cierra la base")
+
         dependencias = SimpleNamespace(
             initial_project_use_case=SimpleNamespace(is_configured=lambda: True),
             send_message_use_case=SimpleNamespace(
@@ -428,13 +439,15 @@ def arranque(
             memory_embedding_service=huellas,
             local_listening=object(),
             get_history_use_case=SimpleNamespace(get_history=list),
-            close_database_connections=lambda: visto.orden.append("cierra la base"),
+            close_database_connections=cierra_la_base,
         )
         rutas = SimpleNamespace(logs_dir=tmp_path, data_dir=tmp_path, backups_dir=tmp_path)
 
         def escucha(*args: object, **kwargs: object) -> int:
             visto.orden.append("escucha")
             huellas.escuchando.set()
+            # Que las huellas hayan empezado antes de salir: así se ve con qué paran.
+            huellas.empezo.wait(timeout=5)
             return 0
 
         monkeypatch.setattr(consola, "hugging_face_offline", lambda: None)
@@ -523,8 +536,8 @@ def test_al_arrancar_calcula_las_huellas_que_faltan_sin_que_la_escucha_espere(
     [hilo] = huellas.hilos
     assert hilo is not threading.main_thread()
     assert hilo.daemon
-    # Al salir se le pide parar, antes de cerrar la base.
-    assert huellas.parar()
+    # Al salir se le pide parar, y antes de cerrar la base.
+    assert visto.parado_al_cerrar is True
 
 
 def test_sin_huellas_que_calcular_carga_el_modelo_de_huellas() -> None:
@@ -534,6 +547,20 @@ def test_sin_huellas_que_calcular_carga_el_modelo_de_huellas() -> None:
     consola.warm_up_embeddings_in_background(huellas, lambda: False).join(timeout=5)  # type: ignore[arg-type]
 
     assert huellas.llamadas == ["calcula las que faltan", "carga el modelo"]
+
+
+def test_al_cargar_el_modelo_de_huellas_sabe_si_le_pidieron_parar() -> None:
+    # #696: un fallo al cargarlo porque se cierra al salir no se apunta como aviso.
+    huellas = _Huellas(pendientes=0)
+    huellas.escuchando.set()
+    parar = threading.Event()
+
+    consola.warm_up_embeddings_in_background(huellas, parar.is_set).join(timeout=5)  # type: ignore[arg-type]
+    parar.set()
+
+    assert huellas.llamadas == ["calcula las que faltan", "carga el modelo"]
+    assert huellas.parar_al_cargar is not None
+    assert huellas.parar_al_cargar()
 
 
 def test_si_ya_le_pidieron_parar_no_carga_el_modelo_de_huellas() -> None:
