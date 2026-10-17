@@ -61,12 +61,18 @@ class VoiceTestWorker(QRunnable):
         """Que no pida más frases; la que está en marcha la termina."""
         self._stop.set()
 
+    def _progress(self, done: int, total: int) -> None:
+        # Como el aviso final: si Sirius se cerró, la hoja ya no existe y no hay a quién
+        # avisar; sin esto el diario diría que se interrumpió (#696).
+        with contextlib.suppress(RuntimeError):
+            self.signals.progress.emit(done, total)
+
     def run(self) -> None:
         sheet: VoiceTestSheet[Any, Any] | None = None
         failure: str | None
         try:
             sheet = self._use_case.prepare(
-                on_progress=self.signals.progress.emit, should_stop=self._stop.is_set
+                on_progress=self._progress, should_stop=self._stop.is_set
             )
         except VoiceTestError as exc:
             failure = str(exc)

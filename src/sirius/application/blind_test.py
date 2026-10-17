@@ -9,7 +9,9 @@ cuando el propietario pulsa.
 
 from __future__ import annotations
 
+import itertools
 import random
+import threading
 from collections.abc import Callable, Mapping, Sequence
 
 from sirius.application.seed_examples import SeedExamplePicker
@@ -78,8 +80,12 @@ class BlindTestUseCase:
         # Las respuestas ya dadas, por versión de la identidad, modelo y pregunta, mientras
         # Sirius siga abierto: un «Empezar» después de un fallo pide solo las que faltan.
         self._answered: dict[tuple[int, str, str], str] = {}
-        # La respuesta que se está pidiendo, para poder cortarla al cerrar la hoja.
-        self._in_flight: tuple[LLMProvider, str] | None = None
+        # La respuesta que está pidiendo cada pasada, para cortarlas al cerrar la hoja. Una
+        # por pasada, y no una sola para todas: una pasada que acaba tarde, tras cerrar su
+        # hoja, no puede borrar la de la siguiente, que ya no se cortaría (#696).
+        self._in_flight: dict[int, tuple[LLMProvider, str]] = {}
+        self._runs = itertools.count()
+        self._lock = threading.Lock()
 
     def questions(self) -> tuple[str, ...]:
         return BLIND_TEST_QUESTIONS
@@ -134,6 +140,7 @@ class BlindTestUseCase:
         total = len(models) * len(questions)
         done = 0
         answers: dict[str, list[str]] = {}
+        run = next(self._runs)
         try:
             for model in models:
                 provider = self._provider_for(model)
@@ -143,7 +150,8 @@ class BlindTestUseCase:
                     # Se apunta antes de mirar si se cerró la hoja: un cierre, o lo ve esta
                     # mirada, o lo corta ``cancel()``; nunca se pierde entre las dos, ni
                     # mientras se eligen los ejemplos, que pide huellas a Ollama (#696).
-                    self._in_flight = (provider, operation_id)
+                    with self._lock:
+                        self._in_flight[run] = (provider, operation_id)
                     if should_stop():
                         raise _Cancelled(_CANCELLED)
                     key = (version.id, model, question)
@@ -178,15 +186,17 @@ class BlindTestUseCase:
                     if on_progress is not None:
                         on_progress(done, total)
         finally:
-            self._in_flight = None
+            with self._lock:
+                self._in_flight.pop(run, None)
         return prepare_blind_test(questions, answers, self._rng)
 
     def cancel(self) -> None:
-        """Corta la respuesta que se esté pidiendo: al cerrar la hoja a mitad, no se espera a
-        que el modelo acabe (incidencia #696)."""
-        in_flight = self._in_flight
-        if in_flight is not None:
-            provider, operation_id = in_flight
+        """Corta las respuestas que se estén pidiendo: al cerrar la hoja a mitad, no se espera
+        a que el modelo acabe (incidencia #696). Todas: la de una pasada anterior que aún no
+        ha acabado ya estaba cortada, y la hoja abierta es una sola."""
+        with self._lock:
+            in_flight = list(self._in_flight.values())
+        for provider, operation_id in in_flight:
             provider.cancel(operation_id)
 
     def _ask(
