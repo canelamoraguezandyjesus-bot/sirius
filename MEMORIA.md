@@ -28,7 +28,7 @@
 
 - Decisiones (ADR): **244**.
 - Bloques del motor: 17 cerrado, 3 fuera_de_alcance.
-- Defectos registrados: 2 abierto, 94 cerrado.
+- Defectos registrados: 2 abierto, 95 cerrado.
 - Ideas aparcadas o descartadas: 12 aparcada, 3 descartada, 2 promovida.
 - Skills: **19**.
 - Investigaciones: **14** (fotos con fecha; caducan).
@@ -341,8 +341,8 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 | `prosa-que-el-cambio-deja-falsa` | 4 | no en todas | 223, 219, 211, 177 |
 | `prueba-que-no-puede-ver-lo-que-vigila` | 4 | no en todas | 249, 247, 241, 238 |
 | `regla-del-propietario-que-solo-vive-en-una-conversacion` | 4 | sí | 213, 208, 204, 195 |
+| `doble-mas-permisivo-que-la-herramienta-que-dobla` | 3 | sí | 250, 242, 193 |
 | `decision-que-solo-vive-en-una-conversacion` | 2 | no en todas | 225, 202 |
-| `doble-mas-permisivo-que-la-herramienta-que-dobla` | 2 | sí | 242, 193 |
 | `guardian-que-mide-posicion-en-vez-de-estructura` | 2 | sí | 221, 187 |
 | `leccion-que-se-queda-en-el-informe` | 2 | sí | 215, 214 |
 | `lista-a-mano` | 2 | sí | 181, 178 |
@@ -416,15 +416,16 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 - **ADR-204** — la sesión seguiría devolviéndole decisiones técnicas (lo hace cumplir `tests/automation/test_reglas_de_agents.py`).
 - **ADR-195** — una regla dada de viva voz —«no se elimina nada»— que no (lo hace cumplir `tests/automation/test_registro_de_defectos.py`).
 
+### `doble-mas-permisivo-que-la-herramienta-que-dobla`
+
+- **ADR-250** — probar con dobles una biblioteca que nadie cargó. (lo hace cumplir `tests/automation/test_marca_de_agua.py`).
+- **ADR-242** — un adaptador que carga una biblioteca con código nativo solo (lo hace cumplir `tests/unit/test_local_listening_adapters.py`).
+- **ADR-193** — una prueba en verde sobre una invocación que la (lo hace cumplir `tests/automation/test_sirius_reconcile.py`).
+
 ### `decision-que-solo-vive-en-una-conversacion`
 
 - **ADR-225** — una orden del propietario que cancela una línea entera queda en el comentario de una incidencia cerrada, y dieciocho días después el ADR, el código y el estado del proyecto siguen diciendo que esa línea está pendiente y bloquea algo; la siguiente sesión la retomaría o la pondría delante de él otra vez. (sin prueba que lo haga cumplir: ninguna prueba: una decisión del propietario no tiene hoy una forma mecánica que una guarda pueda leer; la caza la mina mensual (deuda 13) y la hoja de decisiones abiertas, a posteriori).
 - **ADR-202** — una decisión de NO hacer algo no deja rastro —no hay (sin prueba que lo haga cumplir: ninguna prueba: una decisión tomada de viva voz fuera del).
-
-### `doble-mas-permisivo-que-la-herramienta-que-dobla`
-
-- **ADR-242** — un adaptador que carga una biblioteca con código nativo solo (lo hace cumplir `tests/unit/test_local_listening_adapters.py`).
-- **ADR-193** — una prueba en verde sobre una invocación que la (lo hace cumplir `tests/automation/test_sirius_reconcile.py`).
 
 ### `guardian-que-mide-posicion-en-vez-de-estructura`
 
@@ -550,7 +551,7 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 
 - **ADR-205** — el ciclo volvería a quedarse horas en verde esperando (lo hace cumplir `tests/automation/test_sirius_merge.py`).
 
-Y **7** ADR declaran expresamente que no dejaron lección: 250, 240, 236, 235, 234, 233, 232.
+Y **6** ADR declaran expresamente que no dejaron lección: 240, 236, 235, 234, 233, 232.
 
 ## Los bloques del motor
 

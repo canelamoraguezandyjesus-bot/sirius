@@ -121,8 +121,12 @@ reescrita.
 
 ## La lección
 
-- ninguna: se escribe con su entrada en el registro de defectos, en el commit siguiente,
-  que es cuando existe el sha del arreglo (skill `registro-de-defectos`).
+- familia: `doble-mas-permisivo-que-la-herramienta-que-dobla`
+- sin esto se repetiría: probar con dobles una biblioteca que nadie cargó.
+  Ninguna prueba de la pieza F cargó nunca Chatterbox de verdad, solo uno de mentira, y
+  con el `setuptools` del lock su marca de agua no cargaba (H-250). La guarda vigila este
+  caso, el del lock; que la voz cargue lo dice la orden de instalar en su ordenador.
+- lo hace cumplir: `tests/automation/test_marca_de_agua.py`
 
 ## Revisión externa
 

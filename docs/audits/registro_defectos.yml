@@ -1628,3 +1628,19 @@ defectos:
       - src/sirius/composition_root.py
       - src/sirius/config/llm_provider_settings.py
       - tests/integration/test_tope_de_salida_de_ollama.py
+  # ADR-250: en su ordenador la voz de personaje no cargaba: "'NoneType' object is not
+  # callable". La marca de agua de Perth importa pkg_resources, y el uv.lock de la pieza F
+  # fijaba setuptools 84.0.0, que ya no lo trae. Ninguna prueba cargo nunca Chatterbox de
+  # verdad, solo uno de mentira.
+  - id: H-250
+    titulo: La voz de personaje no cargaba porque el lock fijaba un setuptools sin el pkg_resources que importa Perth
+    bloque: producto
+    gravedad: media
+    estado: cerrado
+    cerrado_por: 8c6ba388d43afbefda770ec3690743fc181264a2
+    pr: 692
+    adr: 250
+    ficheros:
+      - pyproject.toml
+      - uv.lock
+      - tests/automation/test_marca_de_agua.py
