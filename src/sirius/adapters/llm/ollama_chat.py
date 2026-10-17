@@ -26,6 +26,9 @@ Lo que garantiza por construcción:
   ``cancel`` cuelga la conexión de esa petición, y Ollama deja de trabajar en
   ella en cuanto ve que se ha ido: un turno de voz no espera a la nota del juez
   (ADR-252). Por eso cada petición abre su conexión y la cierra al acabar.
+- **El juez no piensa antes de contestar.** Una petición que no deja pensar
+  (``may_think``) apaga ``think``. Si Ollama la rechazara por eso, se repite
+  una vez sin apagarlo, y ese modelo ya no lo apaga más (ADR-252).
 - **Ni el razonamiento interno ni la sugerencia de recuerdo llegan al
   propietario.** Los modelos que «piensan» escriben ``<think>…</think>`` antes
   de contestar, y ``render_instructions()`` pide la sugerencia detrás de un
@@ -237,6 +240,9 @@ class OllamaChatProvider:
         self._cancelled_operations: set[str] = set()
         #: La conexión de cada petición en curso, para colgarla si se corta.
         self._connections: dict[str, socket.socket] = {}
+        #: Si Ollama rechazó ya que se apagara el pensamiento de este modelo: las
+        #: peticiones siguientes ya no lo apagan (ADR-252).
+        self._refuses_think = False
         self._lock = threading.Lock()
 
     @property
@@ -302,10 +308,42 @@ class OllamaChatProvider:
             "keep_alive": _KEEP_ALIVE,
             "options": {"num_ctx": self._num_ctx, "num_predict": num_predict},
         }
-        if not request.may_think:
-            # Solo se apaga: pedir que piense a un modelo que no piensa es un error de Ollama.
+        if self._turns_off_thinking(request):
+            # Solo se apaga, nunca se pide: la charla va como siempre, sin «think».
             body["think"] = False
         return body
+
+    def _turns_off_thinking(self, request: LLMRequest) -> bool:
+        with self._lock:
+            return not request.may_think and not self._refuses_think
+
+    def _refused_think(self, response: httpx.Response) -> bool:
+        """Si Ollama rechazó la petición por apagar el pensamiento: que lo haga con un
+        modelo que no piensa no se ha comprobado con ninguna versión, y si lo hace, se
+        pregunta otra vez sin apagarlo, y este modelo ya no lo apaga (ADR-252).
+
+        Lo que dice Ollama solo se mira para decidirlo: al diario no va nada de su texto.
+        """
+        if response.status_code != httpx.codes.BAD_REQUEST:
+            return False
+        said = _what_ollama_said(response)
+        # Sin el nombre del modelo, que podría llevar la palabra: «qwen3:4b-thinking».
+        if "think" not in said.lower().replace(self._model.lower(), ""):
+            return False
+        with self._lock:
+            self._refuses_think = True
+        _logger.info(
+            "Ollama no deja apagar el pensamiento de %s: se pregunta sin apagarlo", self._model
+        )
+        return True
+
+    def _post(self, request: LLMRequest) -> contextlib.AbstractContextManager[httpx.Response]:
+        return self._client.stream(
+            "POST",
+            OLLAMA_CHAT_URL,
+            json=self._body(request),
+            extensions={"trace": self._note_connection(request.operation_id)},
+        )
 
     def stream_response(self, request: LLMRequest) -> Iterable[LLMStreamEvent]:
         try:
@@ -313,29 +351,13 @@ class OllamaChatProvider:
                 yield LLMCancelled(partial_text="")
                 return
             try:
-                with self._client.stream(
-                    "POST",
-                    OLLAMA_CHAT_URL,
-                    json=self._body(request),
-                    extensions={"trace": self._note_connection(request.operation_id)},
-                ) as r:
-                    if r.status_code == httpx.codes.NOT_FOUND:
-                        _logger.error(
-                            "Ollama no tiene el modelo de la charla (%s): %s",
-                            self._model,
-                            _category(_what_ollama_said(r)),
-                        )
-                        yield _error(LLMErrorKind.CONFIGURATION)
-                        return
-                    if r.status_code >= httpx.codes.BAD_REQUEST:
-                        _logger.error(
-                            "Ollama respondió %s a la charla: %s",
-                            r.status_code,
-                            _category(_what_ollama_said(r)),
-                        )
-                        yield _error(LLMErrorKind.UNKNOWN)
-                        return
-                    yield from self._consume(request, r.iter_lines())
+                if self._turns_off_thinking(request):
+                    with self._post(request) as r:
+                        if not self._refused_think(r):
+                            yield from self._answer(request, r)
+                            return
+                with self._post(request) as r:
+                    yield from self._answer(request, r)
             except httpx.ConnectError:
                 _logger.error("Operación %s: Ollama no contesta", request.operation_id)
                 yield _error(LLMErrorKind.CONNECTION)
@@ -357,6 +379,25 @@ class OllamaChatProvider:
             with self._lock:
                 self._cancelled_operations.discard(request.operation_id)
                 self._connections.pop(request.operation_id, None)
+
+    def _answer(self, request: LLMRequest, r: httpx.Response) -> Iterable[LLMStreamEvent]:
+        if r.status_code == httpx.codes.NOT_FOUND:
+            _logger.error(
+                "Ollama no tiene el modelo de la charla (%s): %s",
+                self._model,
+                _category(_what_ollama_said(r)),
+            )
+            yield _error(LLMErrorKind.CONFIGURATION)
+            return
+        if r.status_code >= httpx.codes.BAD_REQUEST:
+            _logger.error(
+                "Ollama respondió %s a la charla: %s",
+                r.status_code,
+                _category(_what_ollama_said(r)),
+            )
+            yield _error(LLMErrorKind.UNKNOWN)
+            return
+        yield from self._consume(request, r.iter_lines())
 
     def _consume(self, request: LLMRequest, lines: Iterator[str]) -> Iterable[LLMStreamEvent]:
         accumulated: list[str] = []

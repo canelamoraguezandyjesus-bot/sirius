@@ -233,7 +233,7 @@ def test_ollama_apaga_el_pensamiento_solo_si_la_peticion_lo_pide() -> None:
     list(proveedor.stream_response(LLMRequest("op-2", "Instrucciones.", "Hola.")))
 
     assert cuerpos[0]["think"] is False
-    # La charla, como siempre: pedir que piense a un modelo que no piensa es un error.
+    # La charla, como siempre, sin «think».
     assert "think" not in cuerpos[1]
 
 
@@ -401,3 +401,97 @@ def test_un_turno_de_voz_no_espera_a_la_peticion_del_juez(
     assert notas.guardadas == []
     # Cortarle no es un fallo del juez: el diario no lo apunta como tal.
     assert "no pudo puntuar" not in caplog.text
+
+
+# --- Con un Ollama que no deja apagar el pensamiento ----------------------------------------
+
+
+class _OllamaDeUnaManera:
+    """Un Ollama de mentira que contesta ``respuesta``. Con ``rechaza_think``, a una
+    petición que apaga el pensamiento le contesta 400, como contestaría uno que no deja
+    apagarlo en un modelo que no piensa; si no, la acepta."""
+
+    def __init__(self, *, rechaza_think: bool, respuesta: str = "4") -> None:
+        self.cuerpos: list[dict[str, Any]] = []
+        self._rechaza_think = rechaza_think
+        self._respuesta = respuesta
+
+    def transporte(self) -> httpx.MockTransport:
+        return httpx.MockTransport(self._contestar)
+
+    def _contestar(self, request: httpx.Request) -> httpx.Response:
+        cuerpo = json.loads(request.content)
+        self.cuerpos.append(cuerpo)
+        if self._rechaza_think and "think" in cuerpo:
+            error = {"error": f'"{cuerpo["model"]}" does not support thinking'}
+            return httpx.Response(400, json=error)
+        fin = {"message": {"content": self._respuesta}, "done": True}
+        return httpx.Response(200, content=(json.dumps(fin) + "\n").encode())
+
+
+def _juez_con(ollama: _OllamaDeUnaManera) -> LLMReplyJudge:
+    proveedor = OllamaChatProvider("gemma3:4b", transport=ollama.transporte())
+    return LLMReplyJudge(_Identidades(), lambda: proveedor)  # type: ignore[arg-type]
+
+
+def test_si_ollama_acepta_apagar_el_pensamiento_el_juez_pregunta_una_vez() -> None:
+    # Una respuesta buena no se repite, aunque diga «think».
+    ollama = _OllamaDeUnaManera(rechaza_think=False, respuesta="A 4, I think.")
+
+    assert _juez_con(ollama).score("Venga, jefe, al lío.") == 4
+
+    [cuerpo] = ollama.cuerpos
+    assert cuerpo["think"] is False
+    assert cuerpo["options"]["num_predict"] == JUDGE_MAX_OUTPUT_TOKENS
+
+
+def test_si_ollama_no_deja_apagar_el_pensamiento_el_juez_pregunta_sin_apagarlo() -> None:
+    ollama = _OllamaDeUnaManera(rechaza_think=True)
+    juez = _juez_con(ollama)
+
+    assert juez.score("Venga, jefe, al lío.") == 4
+    assert juez.score("Eso lo arreglamos en un momento.") == 4
+
+    # La primera vez lo repite sin apagarlo; después ya no lo apaga: no pierde una
+    # petición por nota.
+    assert ["think" in cuerpo for cuerpo in ollama.cuerpos] == [True, False, False]
+    assert {cuerpo["options"]["num_predict"] for cuerpo in ollama.cuerpos} == {
+        JUDGE_MAX_OUTPUT_TOKENS
+    }
+
+
+def test_las_preguntas_trampa_tambien_valen_con_un_ollama_que_no_deja_apagarlo() -> None:
+    ollama = _OllamaDeUnaManera(rechaza_think=True, respuesta="discrepa")
+
+    veredicto = _juez_con(ollama).verdict("Voy a dejar el trabajo mañana.", "Ni de broma.")
+
+    assert veredicto is TrickVerdict.DISCREPA
+
+
+def test_un_400_por_otra_cosa_no_se_repite() -> None:
+    cuerpos: list[dict[str, Any]] = []
+
+    def rechaza(request: httpx.Request) -> httpx.Response:
+        cuerpos.append(json.loads(request.content))
+        return httpx.Response(400, json={"error": '"qwen3:4b-thinking" does not support chat'})
+
+    proveedor = OllamaChatProvider("qwen3:4b-thinking", transport=httpx.MockTransport(rechaza))
+    juez = LLMReplyJudge(_Identidades(), lambda: proveedor)  # type: ignore[arg-type]
+
+    with pytest.raises(JudgeError):
+        juez.score("Venga, jefe, al lío.")
+
+    # Ni el nombre del modelo, que lleva la palabra, lo confunde con un rechazo de think.
+    assert len(cuerpos) == 1
+
+
+def test_la_charla_no_lleva_think_ni_con_un_ollama_que_no_lo_deja_apagar() -> None:
+    ollama = _OllamaDeUnaManera(rechaza_think=True, respuesta="Hola, jefe.")
+    proveedor = OllamaChatProvider("gemma3:4b", transport=ollama.transporte())
+
+    eventos = list(proveedor.stream_response(LLMRequest("op", "Instrucciones.", "Hola.")))
+
+    assert isinstance(eventos[-1], LLMCompleted)
+    [cuerpo] = ollama.cuerpos
+    assert "think" not in cuerpo
+    assert cuerpo["options"]["num_predict"] == 4096
