@@ -242,6 +242,10 @@ class ValidatedMainWindow(MainWindow):
 
     def closeEvent(self, event: QCloseEvent) -> None:
         if self._is_credential_busy:
+            # Antes de aplazar el cierre, se cuelga lo que siga pidiendo por la red: la
+            # validación acaba en el acto y el cierre no la espera hasta su tope (ronda 3 de
+            # Codex sobre la #698, ADR-255).
+            self._hang_up_on_close_request()
             self._close_requested = True
             event.ignore()
             return

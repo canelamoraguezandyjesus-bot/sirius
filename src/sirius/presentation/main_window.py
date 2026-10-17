@@ -2170,10 +2170,9 @@ class MainWindow(QMainWindow):
         if self._local_listening is not None:
             self._local_listening.watch(None)
             self._local_listening.stop()
+        self._hang_up_on_close_request()
         if self._is_sending:
             self._close_requested = True
-            if self._active_operation_id is not None:
-                self._send_message_use_case.cancel(self._active_operation_id)
             event.ignore()
             return
         if self._is_backup_busy:
@@ -2206,10 +2205,21 @@ class MainWindow(QMainWindow):
             self._active_dream_worker.cancel()
         if self._listening_loop is not None:
             self._listening_loop.stop()
-        # Y lo que siga pidiendo por la red, se cuelga: ni sigue pidiendo ni hace esperar a la
-        # salida, sea del trabajo que sea (ADR-255).
-        hang_up_all()
         super().closeEvent(event)
+
+    def _hang_up_on_close_request(self) -> None:
+        """Al pedir cerrar, antes de aplazarlo, cancela el envío en curso y cuelga lo que siga
+        pidiendo por la red: nada sigue pidiendo mientras el cierre espera, ni lo retrasa
+        (ronda 3 de Codex sobre la #698, ADR-255). Va en cada ``closeEvent``, también en el
+        que cierra de verdad tras esperar: lo que se abrió mientras, se cuelga entonces.
+
+        El envío se cancela antes de colgar: así acaba cancelado y no fallido. La orden de
+        captura no se cuelga: su WebSocket no es de la fábrica, y el cierre la espera para
+        saber cómo quedó la grabación.
+        """
+        if self._is_sending and self._active_operation_id is not None:
+            self._send_message_use_case.cancel(self._active_operation_id)
+        hang_up_all()
 
     # --- Configuración ---------------------------------------------------
 

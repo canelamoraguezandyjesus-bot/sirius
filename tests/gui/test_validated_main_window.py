@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 from typing import cast
 
@@ -9,6 +10,7 @@ import pytest
 from PySide6.QtCore import QRunnable, QThreadPool
 from pytestqt.qtbot import QtBot
 
+from sirius.adapters.llm.openai_credential_validator import OpenAICredentialValidator
 from sirius.adapters.persistence.database import build_engine
 from sirius.adapters.persistence.models import Base
 from sirius.adapters.persistence.sqlite_conversation_repository import (
@@ -21,9 +23,11 @@ from sirius.adapters.persistence.sqlite_project_repository import build_sqlite_p
 from sirius.adapters.secrets.fake import FakeSecretStore
 from sirius.application.validate_and_save_api_key import ValidateAndSaveApiKeyUseCase
 from sirius.composition_root import build_conversation_dependencies
+from sirius.infrastructure.network import openai_client
 from sirius.ports.credential_validation import (
     CredentialValidationError,
     CredentialValidationKind,
+    CredentialValidator,
 )
 from sirius.presentation.validated_main_window import ValidatedMainWindow
 
@@ -67,7 +71,7 @@ def _bootstrapped_database(database_path: Path) -> Path:
 
 def _build_window(
     database_path: Path,
-    validator: _RecordingValidator,
+    validator: CredentialValidator,
     secret_store: FakeSecretStore,
 ) -> ValidatedMainWindow:
     dependencies = build_conversation_dependencies(
@@ -160,3 +164,47 @@ def test_rejected_key_is_not_saved_and_safe_message_is_shown(
     assert not window._api_key_settings_use_case.has_key()
     assert window.api_key_input.text() == ""
     assert window.key_feedback_label.text() == "La clave no es válida."
+
+
+@pytest.mark.gui
+def test_cerrar_mientras_valida_cuelga_la_peticion_y_no_espera_a_su_tope(
+    qtbot: QtBot, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ronda 3 de Codex sobre la #698: el cierre se aplazaba hasta que acabara la
+    validación, sin colgarla, y ni llegaba a la salida: la petición a OpenAI seguía hasta su
+    tope de 10 s. Con el validador de verdad, contra un servidor que acepta y no contesta
+    (ADR-255)."""
+    # Aquí y no arriba: hay sondas que importan este módulo en otro proceso, sin las
+    # rutas de las pruebas.
+    from servidor_mudo import ServidorMudo, quita_los_proxies
+
+    quita_los_proxies(monkeypatch)
+    servidor = ServidorMudo()
+    try:
+        validator = OpenAICredentialValidator(
+            lambda credential: openai_client(
+                api_key=credential,
+                base_url=f"http://127.0.0.1:{servidor.puerto}/v1",
+                max_retries=0,
+                timeout=10.0,
+            )
+        )
+        window = _build_window(
+            _bootstrapped_database(tmp_path / "sirius.db"), validator, FakeSecretStore()
+        )
+        window._thread_pool = QThreadPool()
+        qtbot.addWidget(window)
+        window.show()
+        window.api_key_input.setText("sk-candidate")
+        window.model_input.setText("gpt-model")
+        window._save_api_key()
+        qtbot.waitUntil(lambda: bool(servidor.aceptadas), timeout=5000)
+
+        empieza = time.perf_counter()
+        window.close()
+        qtbot.waitUntil(lambda: not window.isVisible(), timeout=3000)
+
+        assert time.perf_counter() - empieza < 1
+        assert window._api_key_settings_use_case.has_key() is False
+    finally:
+        servidor.cierra()

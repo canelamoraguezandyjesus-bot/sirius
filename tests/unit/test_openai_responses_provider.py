@@ -542,6 +542,45 @@ def test_cancel_mid_stream_stops_and_closes_the_stream() -> None:
     assert stream.closed is True
 
 
+def test_si_le_cuelgan_tras_cancelarla_es_un_corte_y_no_un_fallo() -> None:
+    """Ronda 3 de Codex sobre la #698: al pedir cerrar, la ventana cancela el envío y cuelga
+    lo que siga en vuelo por la red (ADR-255). La conexión colgada llega como un error del
+    SDK, y la respuesta tiene que acabar cancelada, no fallida."""
+    conexion_colgada = openai.APIConnectionError(
+        request=httpx.Request("POST", "https://api.openai.com/v1/responses")
+    )
+    stream = _RaisingAfterNStream([_delta_event("a")], conexion_colgada)
+    provider, _client = _build_provider(lambda **kwargs: stream)
+
+    generator = iter(provider.stream_response(_request(operation_id="op-colgada")))
+    assert isinstance(next(generator), LLMTextDelta)
+    provider.cancel("op-colgada")
+    final = next(generator)
+
+    assert isinstance(final, LLMCancelled)
+    assert final.partial_text == "a"
+
+
+def test_cancelada_mientras_conecta_no_se_reintenta() -> None:
+    """Colgada al conectar, tras cancelarla, no abre otra conexión con un reintento: acaba
+    cancelada en el primer intento (ronda 3 de Codex sobre la #698, ADR-255)."""
+    holder: dict[str, OpenAIResponsesProvider] = {}
+
+    def _create(**kwargs: object) -> object:
+        holder["provider"].cancel("op-al-conectar")
+        raise openai.APIConnectionError(
+            request=httpx.Request("POST", "https://api.openai.com/v1/responses")
+        )
+
+    provider, client = _build_provider(_create)
+    holder["provider"] = provider
+
+    events = list(provider.stream_response(_request(operation_id="op-al-conectar")))
+
+    assert [type(event) for event in events] == [LLMCancelled]
+    assert len(client.responses.calls) == 1
+
+
 def test_cancelling_repeatedly_is_a_safe_no_op() -> None:
     provider, client = _build_provider(lambda **kwargs: _FakeStream([_completed_event("ok")]))
 

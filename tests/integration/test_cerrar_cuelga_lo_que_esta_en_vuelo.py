@@ -8,7 +8,6 @@ trabajo. Con la fábrica de ``sirius.infrastructure.network``, el cierre la cort
 from __future__ import annotations
 
 import os
-import socket
 import subprocess
 import sys
 import threading
@@ -19,8 +18,11 @@ from pathlib import Path
 import httpx
 import openai
 import pytest
+from servidor_mudo import ServidorMudo as _Mudo
+from servidor_mudo import quita_los_proxies
 
 import sirius.adapters.ollama_criticality_classifier as criticidad
+from sirius.adapters.capture.websocket_client import TimeoutWebSocketError, WebSocketClient
 from sirius.adapters.llm.ollama_chat import OllamaChatProvider
 from sirius.adapters.llm.ollama_embeddings import OllamaEmbedder
 from sirius.adapters.ollama_criticality_classifier import OllamaCriticalityClassifierAdapter
@@ -56,36 +58,6 @@ class _Redirige(httpx.BaseTransport):
         self._dentro.close()
 
 
-class _Mudo:
-    """Un servidor que acepta conexiones y no contesta nunca."""
-
-    def __init__(self) -> None:
-        self._servidor = socket.socket()
-        self._servidor.bind(("127.0.0.1", 0))
-        self._servidor.listen(16)
-        self._servidor.settimeout(0.05)
-        self.puerto: int = self._servidor.getsockname()[1]
-        self.aceptadas: list[socket.socket] = []
-        self._parar = threading.Event()
-        self._hilo = threading.Thread(target=self._acepta, daemon=True)
-        self._hilo.start()
-
-    def _acepta(self) -> None:
-        while not self._parar.is_set():
-            try:
-                conexion, _ = self._servidor.accept()
-            except OSError:
-                continue
-            self.aceptadas.append(conexion)
-
-    def cierra(self) -> None:
-        self._parar.set()
-        self._hilo.join(timeout=1)
-        for conexion in self.aceptadas:
-            conexion.close()
-        self._servidor.close()
-
-
 @pytest.fixture
 def mudo() -> Iterator[_Mudo]:
     servidor = _Mudo()
@@ -96,9 +68,7 @@ def mudo() -> Iterator[_Mudo]:
 @pytest.fixture
 def sin_proxies(monkeypatch: pytest.MonkeyPatch) -> None:
     """El SDK de OpenAI lee los proxies del sistema: aquí no, que el servidor es local."""
-    for nombre in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy"):
-        monkeypatch.delenv(nombre, raising=False)
-    monkeypatch.delenv("all_proxy", raising=False)
+    quita_los_proxies(monkeypatch)
 
 
 def _lo_que_tarda_tras_colgar(
@@ -227,6 +197,34 @@ def test_cerrar_una_ventana_no_cuelga_lo_que_conecta_despues(mudo: _Mudo) -> Non
 
     with pytest.raises(httpx.ReadTimeout):
         cliente.get("http://127.0.0.1:11434/api/tags")
+
+
+def test_colgar_no_corta_la_orden_de_captura(mudo: _Mudo) -> None:
+    """La orden de captura no se cuelga: su WebSocket no es de la fábrica, y el cierre la
+    espera para saber cómo quedó la grabación (ADR-255). Ahora se cuelga al pedir cerrar,
+    antes de esperarla (ronda 3 de Codex sobre la #698): sigue sin tocarla."""
+    captura = WebSocketClient("127.0.0.1", mudo.puerto, timeout_seconds=1.0)
+    fallo: list[Exception] = []
+
+    def conecta() -> None:
+        try:
+            captura.connect()
+        except Exception as error:  # el servidor mudo no saluda: acaba por su tope
+            fallo.append(error)
+
+    hilo = threading.Thread(target=conecta, daemon=True)
+    hilo.start()
+    limite = time.perf_counter() + 5
+    while not mudo.aceptadas and time.perf_counter() < limite:
+        time.sleep(0.01)
+    assert mudo.aceptadas, "la orden no llegó a conectar con el servidor mudo"
+
+    hang_up_all()
+    time.sleep(0.3)
+
+    assert hilo.is_alive(), "colgar cortó la orden de captura, que tenía que esperarse"
+    hilo.join(timeout=3)
+    assert isinstance(fallo[0], TimeoutWebSocketError)
 
 
 _SALIR = """

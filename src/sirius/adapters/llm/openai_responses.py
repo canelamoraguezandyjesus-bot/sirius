@@ -149,7 +149,8 @@ class OpenAIResponsesProvider:
                 )
             except _RETRYABLE_EXCEPTIONS:
                 attempt += 1
-                if attempt > _MAX_RETRIES:
+                # Cancelada, no se reintenta: colgarla al cerrar no puede abrir otra (ADR-255).
+                if attempt > _MAX_RETRIES or self._is_cancelled(request.operation_id):
                     raise
                 backoff = _BASE_BACKOFF_SECONDS * (2 ** (attempt - 1))
                 self._sleep_fn(backoff + random.uniform(0, _MAX_JITTER_SECONDS))
@@ -187,6 +188,10 @@ class OpenAIResponsesProvider:
                 try:
                     stream = self._create_stream(request)
                 except Exception as exc:  # translated to a safe, typed event; never re-raised
+                    if self._is_cancelled(request.operation_id):
+                        # Colgada al conectar, tras cancelarla: un corte (ADR-255).
+                        yield LLMCancelled(partial_text="")
+                        return
                     kind = _classify_exception(exc)
                     _logger.error(
                         "Operación %s falló al conectar (%s)", request.operation_id, kind.value
@@ -260,6 +265,11 @@ class OpenAIResponsesProvider:
             trailing, _ = splitter.finish(completed=False)
             if trailing:
                 accumulated.append(trailing)
+            if self._is_cancelled(request.operation_id):
+                # Le colgaron la conexión después de cancelarla, al cerrar: es un corte, no un
+                # fallo (ronda 3 de Codex sobre la #698, ADR-255).
+                yield LLMCancelled(partial_text="".join(accumulated))
+                return
             kind = _classify_exception(exc)
             _logger.error(
                 "Operación %s falló durante el streaming (%s)", request.operation_id, kind.value

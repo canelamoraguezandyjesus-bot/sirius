@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
 )
 
 from sirius.application.validate_and_save_api_key import ValidateAndSaveApiKeyUseCase
+from sirius.infrastructure.network import hang_up_all
 from sirius.presentation.credential_validation_worker import CredentialValidationWorker
 
 DATA_POLICY_TEXT = (
@@ -175,8 +176,13 @@ class OnboardingWindow(QMainWindow):
         """Defer closing while a validation is in flight (same policy as
         ``ValidatedMainWindow``): never destroy the worker or this window
         while a request is still running.
+
+        Antes de aplazarlo, cuelga lo que siga pidiendo por la red: la validación acaba en el
+        acto, sin guardar la clave, y el cierre no la espera hasta su tope (ronda 3 de Codex
+        sobre la #698, ADR-255).
         """
         if self._is_credential_busy:
+            hang_up_all()
             self._close_requested = True
             event.ignore()
             return

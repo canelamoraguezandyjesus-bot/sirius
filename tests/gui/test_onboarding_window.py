@@ -8,6 +8,7 @@ everywhere) or the real OpenAI API: a recording/blocking test double replaces
 from __future__ import annotations
 
 import threading
+import time
 from pathlib import Path
 from typing import cast
 
@@ -15,6 +16,7 @@ import pytest
 from PySide6.QtCore import QRunnable, QThreadPool
 from pytestqt.qtbot import QtBot
 
+from sirius.adapters.llm.openai_credential_validator import OpenAICredentialValidator
 from sirius.adapters.llm.openai_responses import OpenAIResponsesProvider
 from sirius.adapters.persistence.database import build_engine
 from sirius.adapters.persistence.models import Base
@@ -30,6 +32,7 @@ from sirius.application.validate_and_save_api_key import ValidateAndSaveApiKeyUs
 from sirius.composition_root import ConversationDependencies, build_conversation_dependencies
 from sirius.config.llm_provider_settings import LLMProviderKind, resolve_openai_provider_settings
 from sirius.config.settings import load_settings
+from sirius.infrastructure.network import openai_client
 from sirius.ports.credential_validation import (
     CredentialValidationError,
     CredentialValidationKind,
@@ -262,3 +265,44 @@ def test_closing_while_validating_is_deferred_and_completes_without_a_crash(
     # opening the way to the main conversation.
     assert dependencies.api_key_settings_use_case.has_key() is True
     assert configured_calls == []
+
+
+def test_cerrar_mientras_valida_cuelga_la_peticion_y_no_espera_a_su_tope(
+    qtbot: QtBot, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ronda 3 de Codex sobre la #698: el cierre se aplazaba hasta que acabara la
+    validación, sin colgarla, y la petición a OpenAI seguía hasta su tope de 10 s. Con el
+    validador de verdad, contra un servidor que acepta y no contesta (ADR-255)."""
+    # Aquí y no arriba: hay sondas que importan este módulo en otro proceso, sin las
+    # rutas de las pruebas.
+    from servidor_mudo import ServidorMudo, quita_los_proxies
+
+    quita_los_proxies(monkeypatch)
+    servidor = ServidorMudo()
+    try:
+        validator = OpenAICredentialValidator(
+            lambda credential: openai_client(
+                api_key=credential,
+                base_url=f"http://127.0.0.1:{servidor.puerto}/v1",
+                max_retries=0,
+                timeout=10.0,
+            )
+        )
+        window, dependencies = _build_onboarding(
+            _bootstrapped_database(tmp_path / "sirius.db"), validator, FakeSecretStore()
+        )
+        qtbot.addWidget(window)
+        window.show()
+        window.api_key_input.setText("sk-candidate")
+        window.continue_button.click()
+        qtbot.waitUntil(lambda: bool(servidor.aceptadas), timeout=5000)
+
+        empieza = time.perf_counter()
+        window.close()
+        qtbot.waitUntil(lambda: not window.isVisible(), timeout=3000)
+
+        assert time.perf_counter() - empieza < 1
+        # Cortada antes de validar, la clave no se guarda.
+        assert dependencies.api_key_settings_use_case.has_key() is False
+    finally:
+        servidor.cierra()

@@ -766,11 +766,14 @@ def test_al_cerrar_espera_a_la_orden_de_captura_y_despues_cuelga(
         ventana.close()
         qtbot.wait(100)
 
+        # Cuelga al pedir cerrar, antes de esperar (ronda 3 de Codex sobre la #698), y la
+        # orden sigue: su WebSocket no es de la fábrica.
         assert ventana.isVisible(), "cerró sin esperar a la orden de captura"
-        assert colgadas == []
+        assert colgadas == [False]
 
         backend.suelta.set()
         qtbot.waitUntil(lambda: not ventana.isVisible(), timeout=5000)
 
-    assert colgadas == [False]
+    # Y otra vez en el cierre de verdad, tras la orden.
+    assert colgadas == [False, False]
     assert f"Orden de captura acabada al cerrar: {quedo}" in caplog.text
