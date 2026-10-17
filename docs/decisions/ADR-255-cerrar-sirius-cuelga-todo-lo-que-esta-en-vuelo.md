@@ -129,6 +129,8 @@ salida siguiera esperando por trabajo que no es red.
   la salida con ello.
 - Colgar en Windows: visto en Linux, como en ADR-252.
 - La orden de captura puede retrasar el cierre hasta su tope, 5 s.
+- Si se cierra con una clave de OpenAI a medio validar, la validación se corta y esa clave
+  no se guarda: hay que volver a ponerla.
 
 ## La lección
 
@@ -144,3 +146,15 @@ Va en la PR #698, con ADR-253 y ADR-254, y su alcance se suma al de allí: que a
 Sirius ninguna petición de red siga en vuelo ni haga esperar a la salida, que la orden de
 captura se espere y se sepa cómo quedó, y que ningún cliente de red nazca fuera de la
 fábrica. Las rondas se anotan aquí.
+
+**Ronda 3** de la PR, sobre `fee19290`: un P2 de la misma familia. El cuelgue iba al final
+del cierre, detrás de lo que lo aplaza: validar la clave, enviar, copiar, exportar o
+capturar. Mientras tanto, lo que estaba en vuelo seguía pidiendo. Era la tercera ronda con
+la familia, y el criterio de parada de la #699 mandaba parar y decírselo al propietario.
+Se le dijo, y contestó el 18-10-2026 que se siguiera trabajando. Lo arregla `5c8291e1`:
+las tres ventanas cuelgan la red al pedir cerrar, antes de aplazarlo, y la principal otra
+vez al cerrar de verdad. El proveedor de OpenAI da por corte, y no por fallo, una conexión
+colgada tras cancelarla. De sus 6 pruebas nuevas, 5 fallan con el código de antes; la
+sexta fija que colgar no toca la captura, y la tumba su mutación. Caen sus 8 mutaciones.
+Con una clave a medio validar, cada ventana cierra en menos de 1 s; antes esperaba al tope
+de 10 s.
