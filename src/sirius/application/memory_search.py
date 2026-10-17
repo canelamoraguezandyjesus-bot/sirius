@@ -37,6 +37,7 @@ __all__ = [
     "MemoryEmbeddingService",
     "MemorySearch",
     "embedding_format",
+    "min_similarity_for",
 ]
 
 _logger = get_logger(__name__)
@@ -68,7 +69,8 @@ class EmbeddingFormat:
     name: str
     query: str
     document: str
-    min_similarity: float
+    #: ``None``: el de los modelos sin formato conocido, ``MIN_SIMILARITY``.
+    min_similarity: float | None
 
     def key(self, model: str) -> str:
         """La clave de las huellas de ``model`` con este formato."""
@@ -82,7 +84,7 @@ class EmbeddingFormat:
 
 
 #: Las frases tal cual, como hasta ADR-251: la clave es el nombre del modelo.
-PLAIN_FORMAT = EmbeddingFormat("", "{text}", "{text}", MIN_SIMILARITY)
+PLAIN_FORMAT = EmbeddingFormat("", "{text}", "{text}", None)
 
 #: El formato que recomienda la ficha de cada modelo para buscar, por la familia en su
 #: nombre de Ollama. El umbral de EmbeddingGemma es el centro del tramo en el que el
@@ -104,6 +106,12 @@ def embedding_format(model: str) -> EmbeddingFormat:
     return next(
         (found for family, found in EMBEDDING_FORMATS.items() if family in name), PLAIN_FORMAT
     )
+
+
+def min_similarity_for(model: str) -> float:
+    """El parecido mínimo con que busca ``model``: el de su formato, o ``MIN_SIMILARITY``."""
+    threshold = embedding_format(model).min_similarity
+    return MIN_SIMILARITY if threshold is None else threshold
 
 
 @dataclass(frozen=True, slots=True)
@@ -153,7 +161,7 @@ class MemoryEmbeddingService:
     @property
     def min_similarity(self) -> float:
         """El parecido mínimo para que el significado traiga un recuerdo solo."""
-        return self._format.min_similarity
+        return min_similarity_for(self._embedder.model_name)
 
     def embed_pending(self, should_stop: Callable[[], bool] = lambda: False) -> int:
         """Calcula las huellas que faltan, las de los recuerdos nuevos antes. Devuelve cuántas.
@@ -253,7 +261,7 @@ class MemoryEmbeddingService:
             return self._store.nearest(
                 embedding,
                 self.model_key,
-                min_similarity=self._format.min_similarity,
+                min_similarity=self.min_similarity,
                 limit=SEARCH_LIMIT,
             )
         except Exception as exc:  # sin búsqueda por significado, sigue por palabras
