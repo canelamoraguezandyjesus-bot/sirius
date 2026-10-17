@@ -28,7 +28,7 @@ from conductor_robot_0_2 import (
 
 pytestmark = pytest.mark.acceptance
 
-_LOCAL = {"localhost", "127.0.0.1"}
+_LOCAL = {"127.0.0.1"}
 
 
 # --- PA-R02-01 · La semilla del robot ----------------------------------------

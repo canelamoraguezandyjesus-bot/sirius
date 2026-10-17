@@ -4,7 +4,7 @@
 Tercer adaptador con la misma forma estructural que §6.3 exige del filtro de
 relevancia y que ``OllamaCategoryClassifierAdapter``/
 ``OllamaCriticalityClassifierAdapter`` ya tienen: apunta exclusivamente a
-``localhost``, sin ningún parámetro de constructor que pueda redirigirlo a un
+``127.0.0.1``, sin ningún parámetro de constructor que pueda redirigirlo a un
 host remoto, y **falla abierto** ante cualquier problema —Ollama no
 instalado, conexión rechazada, tiempo agotado, o una respuesta fuera del
 vocabulario cerrado— devolviendo ``None``, nunca lanzando.
@@ -14,9 +14,9 @@ real (ADR-125): ``/api/chat`` con el razonamiento explícitamente apagado
 (``think: false``), un esquema JSON cerrado para la respuesta (``format``),
 temperatura baja y ``keep_alive`` — no ``/api/generate`` con texto libre, que
 con el Qwen3 por defecto razona durante minutos y contesta fuera del
-vocabulario. La petición va a una URL absoluta de localhost con
+vocabulario. La petición va a una URL absoluta de 127.0.0.1 con
 ``follow_redirects=False`` por la misma razón que los otros tres: ni el
-``base_url`` de un cliente inyectado ni un 307/308 desde localhost pueden
+``base_url`` de un cliente inyectado ni un 307/308 desde 127.0.0.1 pueden
 llevar la consulta del usuario fuera de la máquina.
 
 Qué se le pide al modelo, y qué NO
@@ -97,7 +97,7 @@ __all__ = ["OllamaQueryIntentClassifierAdapter", "instante_utc"]
 
 _logger = get_logger(__name__)
 
-_OLLAMA_LOCAL_BASE_URL = "http://localhost:11434"
+_OLLAMA_LOCAL_BASE_URL = "http://127.0.0.1:11434"
 #: Mismo techo que los otros dos clasificadores locales (ADR-125).
 _REQUEST_TIMEOUT_SECONDS = 30.0
 
@@ -231,7 +231,7 @@ class OllamaQueryIntentClassifierAdapter:
         self._ahora = ahora
         # ``client`` existe solo como costura de prueba (un
         # ``httpx.MockTransport`` nunca sale del proceso); el código de
-        # producción cae siempre en un cliente clavado a localhost — ningún
+        # producción cae siempre en un cliente clavado a 127.0.0.1 — ningún
         # parámetro acepta un host remoto, y ``classify_intent`` nunca se fía
         # del ``base_url`` del cliente.
         self._client = client or httpx.Client(
@@ -248,9 +248,9 @@ class OllamaQueryIntentClassifierAdapter:
         try:
             # URL absoluta, no una ruta relativa al ``base_url`` del cliente:
             # el ``base_url`` de un cliente inyectado nunca debe poder desviar
-            # la petición fuera de localhost. ``follow_redirects=False``
+            # la petición fuera de 127.0.0.1. ``follow_redirects=False``
             # anula cualquier cliente inyectado que los siga: un 307/308
-            # desde localhost no debe reenviar la consulta a un host remoto.
+            # desde 127.0.0.1 no debe reenviar la consulta a un host remoto.
             response = self._client.post(
                 f"{_OLLAMA_LOCAL_BASE_URL}/api/chat",
                 json={

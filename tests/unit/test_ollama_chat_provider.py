@@ -70,7 +70,7 @@ def test_pide_al_ollama_local_con_la_semilla_como_sistema_y_un_contexto_explicit
 
     [request] = vistas
     assert str(request.url) == OLLAMA_CHAT_URL
-    assert request.url.host == "localhost"
+    assert request.url.host == "127.0.0.1"
     cuerpo = json.loads(request.content)
     assert cuerpo["model"] == "qwen-x"
     assert cuerpo["stream"] is True
@@ -263,7 +263,7 @@ def test_dice_con_que_modelo_contesta() -> None:
 
 def test_los_modelos_instalados_salen_ordenados_y_sin_repetir() -> None:
     def contestar(request: httpx.Request) -> httpx.Response:
-        assert request.url.host == "localhost"
+        assert request.url.host == "127.0.0.1"
         assert request.url.path == "/api/tags"
         modelos = [{"name": "qwen-x"}, {"name": "gemma-y"}, {"name": "qwen-x"}, {"nombre": "raro"}]
         return httpx.Response(200, json={"models": modelos})
@@ -290,7 +290,7 @@ def test_lo_que_sabe_hacer_un_modelo_lo_pregunta_a_su_api_show() -> None:
         return httpx.Response(200, json={"capabilities": ["embedding"], "license": "..."})
 
     assert model_capabilities("embeddinggemma", httpx.MockTransport(contestar)) == ("embedding",)
-    assert pedidos == [("http://localhost:11434/api/show", {"model": "embeddinggemma"})]
+    assert pedidos == [("http://127.0.0.1:11434/api/show", {"model": "embeddinggemma"})]
 
 
 @pytest.mark.parametrize(

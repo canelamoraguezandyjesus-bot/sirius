@@ -36,7 +36,7 @@ def test_pide_las_huellas_al_ollama_de_este_ordenador_todas_de_una_vez() -> None
 
     assert huellas == [[0.1, 0.2], [0.3, 0.4]]
     [peticion] = vistas
-    assert str(peticion.url) == OLLAMA_EMBED_URL == "http://localhost:11434/api/embed"
+    assert str(peticion.url) == OLLAMA_EMBED_URL == "http://127.0.0.1:11434/api/embed"
     cuerpo = json.loads(peticion.content)
     assert cuerpo["model"] == "modelo-de-huellas"
     assert cuerpo["input"] == ["uno", "dos"]

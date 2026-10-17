@@ -15,7 +15,7 @@ PR #519):
   enum is exactly the vocabulary injected in the constructor, sorted for a
   deterministic request — asserted literally on the request body;
 - §6.3's structural property at the request level: neither an injected
-  client's remote ``base_url`` nor a redirect from localhost ever moves the
+  client's remote ``base_url`` nor a redirect from 127.0.0.1 ever moves the
   request off the machine — asserted on the hosts the transport actually
   saw, never on ``classify``'s return value, which is ``None`` on both the
   correct and the broken path.
@@ -34,7 +34,7 @@ _VOCABULARY = frozenset({"trabajo", "personal"})
 
 
 def _adapter(handler: httpx.MockTransport) -> OllamaCategoryClassifierAdapter:
-    client = httpx.Client(transport=handler, base_url="http://localhost:11434")
+    client = httpx.Client(transport=handler, base_url="http://127.0.0.1:11434")
     return OllamaCategoryClassifierAdapter("llama3.2", _VOCABULARY, client=client)
 
 
@@ -132,7 +132,7 @@ def test_classify_sends_the_contract_validated_against_the_real_model() -> None:
     assert len(seen) == 1
     peticion = seen[0]
     assert peticion.method == "POST"
-    assert peticion.url.host == "localhost"
+    assert peticion.url.host == "127.0.0.1"
     assert peticion.url.path == "/api/chat"
     cuerpo = json.loads(peticion.content)
     assert cuerpo["model"] == "llama3.2"
@@ -153,7 +153,7 @@ def test_classify_sends_the_contract_validated_against_the_real_model() -> None:
 
 def test_classify_never_targets_a_remote_host() -> None:
     """§6.3's structural property, D7 §6.1: no parameter anywhere lets a
-    caller redirect this adapter away from localhost."""
+    caller redirect this adapter away from 127.0.0.1."""
     import inspect
 
     signature = inspect.signature(OllamaCategoryClassifierAdapter.__init__)
@@ -165,7 +165,7 @@ def test_classify_never_targets_a_remote_host() -> None:
 def test_classify_ignores_an_injected_clients_remote_base_url() -> None:
     """§6.3's structural property, at the request level: even the test seam
     must not let an injected ``httpx.Client`` with a remote ``base_url``
-    redirect the actual request away from localhost."""
+    redirect the actual request away from 127.0.0.1."""
     seen_hosts: list[str | None] = []
 
     def _handle(request: httpx.Request) -> httpx.Response:
@@ -179,13 +179,13 @@ def test_classify_ignores_an_injected_clients_remote_base_url() -> None:
 
     result = adapter.classify("contenido cualquiera")
 
-    assert seen_hosts == ["localhost"]
+    assert seen_hosts == ["127.0.0.1"]
     assert result == "trabajo"
 
 
 def test_classify_never_follows_a_redirect_to_a_remote_host() -> None:
     """An injected client with ``follow_redirects=True`` must not let a
-    307/308 from localhost resend this request (and the content) to a remote
+    307/308 from 127.0.0.1 resend this request (and the content) to a remote
     host. Asserted on the hosts the transport saw — ``classify`` returns
     ``None`` on both the correct and the broken path, so its return value
     cannot tell them apart."""
@@ -201,21 +201,21 @@ def test_classify_never_follows_a_redirect_to_a_remote_host() -> None:
 
     client = httpx.Client(
         transport=httpx.MockTransport(_handle),
-        base_url="http://localhost:11434",
+        base_url="http://127.0.0.1:11434",
         follow_redirects=True,
     )
     adapter = OllamaCategoryClassifierAdapter("llama3.2", _VOCABULARY, client=client)
 
     result = adapter.classify("contenido cualquiera")
 
-    assert seen_hosts == ["localhost"]
+    assert seen_hosts == ["127.0.0.1"]
     assert result is None
 
 
 @pytest.mark.integration
-def test_classify_defaults_to_a_client_pointed_at_localhost() -> None:
+def test_classify_defaults_to_a_client_pointed_at_127_0_0_1() -> None:
     """No injected ``client``: production code always falls back to a client
-    hardcoded to localhost, never a remote host, and never raises even
+    hardcoded to 127.0.0.1, never a remote host, and never raises even
     though nothing is actually listening there."""
     adapter = OllamaCategoryClassifierAdapter("llama3.2", _VOCABULARY)
 
