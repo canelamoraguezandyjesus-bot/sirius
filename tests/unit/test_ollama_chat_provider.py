@@ -448,7 +448,7 @@ def test_lo_que_ollama_repita_de_la_charla_no_llega_al_diario(diario: list[str],
 
     _eventos(_proveedor(contestar), _CON_UN_SECRETO)
 
-    assert diario == ["Ollama respondió 400 a la charla: otro"]
+    assert diario == ["Operación op-2, modelo modelo-de-prueba: Ollama respondió 400: otro"]
 
 
 @pytest.mark.parametrize("eco", _ECOS)
@@ -462,7 +462,7 @@ def test_lo_que_repita_a_mitad_de_respuesta_no_llega_al_diario(diario: list[str]
 
     _eventos(_proveedor(contestar), _CON_UN_SECRETO)
 
-    assert diario == ["Operación op-2: Ollama devolvió un error: otro"]
+    assert diario == ["Operación op-2, modelo modelo-de-prueba: Ollama devolvió un error: otro"]
 
 
 @pytest.mark.parametrize(
@@ -495,7 +495,7 @@ def test_cada_error_conocido_de_ollama_sale_con_su_categoria(
 
     assert isinstance(evento, LLMError)
     assert evento.kind is LLMErrorKind.UNKNOWN
-    assert diario == [f"Ollama respondió 500 a la charla: {categoria}"]
+    assert diario == [f"Operación op-1, modelo modelo-de-prueba: Ollama respondió 500: {categoria}"]
 
 
 def test_un_modelo_que_ollama_no_tiene_lo_dice_con_su_nombre(diario: list[str]) -> None:
@@ -507,7 +507,8 @@ def test_un_modelo_que_ollama_no_tiene_lo_dice_con_su_nombre(diario: list[str]) 
     assert isinstance(evento, LLMError)
     assert evento.kind is LLMErrorKind.CONFIGURATION
     assert diario == [
-        "Ollama no tiene el modelo de la charla (modelo-de-prueba): modelo no encontrado"
+        "Operación op-1, modelo modelo-de-prueba:"
+        " Ollama no tiene el modelo de la charla: modelo no encontrado"
     ]
 
 
@@ -517,7 +518,7 @@ def test_un_cuerpo_que_no_es_json_tambien_sale_con_su_categoria(diario: list[str
 
     _eventos(_proveedor(contestar), _CON_UN_SECRETO)
 
-    assert diario == ["Ollama respondió 502 a la charla: cancelado"]
+    assert diario == ["Operación op-2, modelo modelo-de-prueba: Ollama respondió 502: cancelado"]
 
 
 def test_un_fallo_de_red_antes_de_contestar_dice_solo_su_clase(diario: list[str]) -> None:
@@ -528,7 +529,9 @@ def test_un_fallo_de_red_antes_de_contestar_dice_solo_su_clase(diario: list[str]
 
     assert isinstance(evento, LLMError)
     assert evento.kind is LLMErrorKind.UNKNOWN
-    assert diario == ["Operación op-2: fallo de red con Ollama (RemoteProtocolError)"]
+    assert diario == [
+        "Operación op-2, modelo modelo-de-prueba: fallo de red con Ollama (RemoteProtocolError)"
+    ]
 
 
 def _se_corta_a_mitad(error: httpx.HTTPError) -> Callable[[httpx.Request], httpx.Response]:
@@ -556,7 +559,8 @@ def test_un_fallo_de_red_a_mitad_de_respuesta_dice_solo_su_clase(diario: list[st
     assert eventos[-1].kind is LLMErrorKind.CONNECTION
     assert eventos[-1].partial_text == "Empez"
     assert diario == [
-        "Operación op-2: fallo de red con Ollama a mitad de respuesta (RemoteProtocolError)"
+        "Operación op-2, modelo modelo-de-prueba: fallo de red con Ollama a mitad de respuesta"
+        " (RemoteProtocolError)"
     ]
 
 
@@ -568,4 +572,54 @@ def test_un_tope_de_lectura_a_mitad_de_respuesta_dice_solo_su_clase(diario: list
     assert isinstance(eventos[-1], LLMError)
     assert eventos[-1].kind is LLMErrorKind.TIMEOUT
     assert eventos[-1].partial_text == "Empez"
-    assert diario == ["Operación op-2: fallo de red con Ollama a mitad de respuesta (ReadTimeout)"]
+    assert diario == [
+        "Operación op-2, modelo modelo-de-prueba:"
+        " fallo de red con Ollama a mitad de respuesta (ReadTimeout)"
+    ]
+
+
+# --- Qué modelo falló y en qué operación (incidencia #696) ---------------------------
+
+
+@pytest.mark.parametrize(
+    ("cuerpo", "clase"),
+    [
+        ("esto no es json\n", "JSONDecodeError"),
+        ('["una", "lista"]\n', "list"),
+        (_lineas(), "vacía"),
+        (json.dumps({"message": {"content": "Hola"}, "done": False}) + "\n", "sin final"),
+    ],
+)
+def test_una_respuesta_no_valida_queda_en_el_diario_con_su_clase(
+    diario: list[str], cuerpo: str, clase: str
+) -> None:
+    # No dejaba ningún rastro: ni qué modelo ni por qué no valía.
+    def contestar(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, text=cuerpo)
+
+    evento = _eventos(_proveedor(contestar))[-1]
+
+    assert isinstance(evento, LLMError)
+    assert evento.kind is LLMErrorKind.INVALID_RESPONSE
+    assert diario == [
+        "Operación op-1, modelo modelo-de-prueba:"
+        f" Ollama devolvió una respuesta no válida ({clase})"
+    ]
+
+
+@pytest.mark.parametrize(
+    ("fallo", "dice"),
+    [
+        (httpx.ConnectError("conexión rechazada"), "Ollama no contesta"),
+        (httpx.ReadTimeout("timed out"), "Ollama tardó demasiado"),
+    ],
+)
+def test_si_ollama_no_contesta_o_tarda_el_diario_dice_con_que_modelo(
+    diario: list[str], fallo: httpx.HTTPError, dice: str
+) -> None:
+    def contestar(request: httpx.Request) -> httpx.Response:
+        raise fallo
+
+    _eventos(_proveedor(contestar))
+
+    assert diario == [f"Operación op-1, modelo modelo-de-prueba: {dice}"]
