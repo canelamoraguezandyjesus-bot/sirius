@@ -179,6 +179,8 @@ class _Altavoz:
     def __init__(self) -> None:
         #: Suena en el acto: todo lo que toma empieza a sonar.
         self.started = 0
+        #: Si lo soltaron: con él se suelta su cancelación de eco (ADR-252).
+        self.cerrado = False
 
     def play(self, sound: str) -> None:
         del sound
@@ -188,7 +190,7 @@ class _Altavoz:
         pass
 
     def close(self) -> None:
-        pass
+        self.cerrado = True
 
 
 @dataclass
@@ -198,6 +200,8 @@ class _Sirius:
     micro: _Micro = field(default_factory=_Micro)
     detector: _Detector = field(default_factory=_Detector)
     transcriptor: _Transcriptor = field(default_factory=_Transcriptor)
+    #: Cada altavoz que carga la voz, en orden.
+    altavoces: list[_Altavoz] = field(default_factory=list)
 
     def suena(self, frase: str) -> None:
         """El propietario dice ``frase`` por el micro; aún nadie lo ha atendido."""
@@ -250,13 +254,19 @@ def _monta(
         assert isinstance(sirius, _Sirius)
         return ListeningEngines(sirius.micro, sirius.detector, sirius.transcriptor)
 
+    def altavoz() -> _Altavoz:
+        sirius = piezas["sirius"]
+        assert isinstance(sirius, _Sirius)
+        sirius.altavoces.append(_Altavoz())
+        return sirius.altavoces[-1]
+
     deps = build_conversation_dependencies(
         rutas.data_dir / "sirius.db",
         tmp_path / "copias",
         secret_store=FakeSecretStore(),
         text_embedder=_SinHuellas(),
         listening_engines=oido,
-        speaking_engines=lambda modelo_de_voz: SpeakingEngines(_Voz(), _Altavoz()),
+        speaking_engines=lambda modelo_de_voz: SpeakingEngines(_Voz(), altavoz()),
         reply_judge=juez,
     )
     deps.initial_project_use_case.create_initial_project("Charla", "Charlar")
@@ -503,11 +513,14 @@ def test_un_turno_de_voz_para_lo_de_segundo_plano_y_espera_a_que_acabe(
 def test_cerrar_la_ventana_deja_de_oir_y_ya_no_la_mira(qtbot: QtBot, tmp_path: Path) -> None:
     sirius = _monta(tmp_path)
     ventana = _ventana(qtbot, sirius)
+    (altavoz,) = sirius.altavoces
 
     ventana.close()
 
     assert not sirius.deps.local_listening.listening
     assert not sirius.micro.abierto
+    # Suelta la voz y su altavoz, con su cancelación de eco (ADR-252).
+    assert altavoz.cerrado
     # Si alguien vuelve a abrir el oído, la ventana cerrada ya no es quien lo mira.
     sirius.deps.local_listening.start()
     sirius.suena("Sirius, ¿sigues ahí?")
@@ -542,6 +555,8 @@ def test_cerrar_mientras_contesta_por_voz_lo_cancela_y_cierra_al_acabar(
     finally:
         sigue.set()
     qtbot.waitUntil(lambda: not ventana.isVisible(), timeout=5000)
+    # Al cerrarse de verdad, suelta la voz (ADR-252).
+    assert sirius.altavoces[-1].cerrado
     bucle.stop()
     assert bucle.wait(5)
 

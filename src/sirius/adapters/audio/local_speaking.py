@@ -218,8 +218,8 @@ class SoundDeviceSpeaker:
             return self._started
 
     def close(self) -> None:
-        """Tira lo que esperaba, para el flujo y lo cierra; si no se deja, lo apunta en el
-        diario y sigue: no falla."""
+        """Tira lo que esperaba, para el flujo y lo cierra, y el cancelador suelta su APM;
+        si algo no se deja, lo apunta en el diario y sigue: no falla."""
         self.stop()
         try:
             self._stream.stop()
@@ -229,6 +229,9 @@ class SoundDeviceSpeaker:
             self._stream.close()
         except Exception as error:
             _logger.warning("No se ha podido cerrar el altavoz: %s", error)
+        # Con el flujo parado, PortAudio ya no le da nada que sonó (ADR-252).
+        if self._echo is not None:
+            self._echo.close()
 
     def _fill(self, outdata: Any, frames: int, time: Any, status: Any) -> None:
         """Lo llama PortAudio desde su hilo: lo siguiente de la cola y, si falta, silencio."""

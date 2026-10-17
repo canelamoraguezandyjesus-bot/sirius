@@ -8,8 +8,10 @@ propietario en su ordenador (E-R03-03).
 
 from __future__ import annotations
 
+import gc
 import sys
 import types
+import weakref
 from array import array
 from itertools import pairwise
 from typing import Any
@@ -197,6 +199,31 @@ def test_lo_que_suena_se_pasa_a_la_frecuencia_del_micro_sin_cortes_entre_bloques
 
 def test_a_la_misma_frecuencia_pasa_tal_cual() -> None:
     assert _Resampler(_MICRO, _MICRO).push(_muestras(1, 2, 3)) == _muestras(1, 2, 3)
+
+
+def test_al_cerrar_suelta_la_apm_y_lo_captado_sale_tal_cual() -> None:
+    cancelador, apm, reloj = _cancelador()
+    cancelador.played(_trozo(1000, FRAME_SAMPLES), at=0.0)
+    cancelador.clean(Captured(_trozo(5, FRAME_SAMPLES), age=0.0))
+    # Lo que aún no se ha oído cuando se cierra.
+    cancelador.played(_trozo(1000, FRAME_SAMPLES), at=5.0)
+    viva = weakref.ref(apm)
+    del apm
+
+    cancelador.close()
+    cancelador.close()
+    gc.collect()
+
+    # Nadie la tiene: livekit la libera ahora, con su lado abierto, y no al cerrarse
+    # Python, cuando pinta en rojo el error de ``FfiHandle`` (ADR-252).
+    assert viva() is None
+    cancelador.played(_trozo(1000, FRAME_SAMPLES), at=6.0)
+    reloj.ahora = 7.0
+    limpio = cancelador.clean(Captured(_trozo(5, FRAME_SAMPLES), age=0.0))
+    assert limpio.chunk == _trozo(5, FRAME_SAMPLES)
+    assert not limpio.echoing
+    # Y no guarda lo que suena: ya nadie se lo va a dar a nadie.
+    assert not cancelador._played
 
 
 def test_sin_livekit_no_hay_cancelador_y_sirius_no_cae(monkeypatch: pytest.MonkeyPatch) -> None:

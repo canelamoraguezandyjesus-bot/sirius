@@ -42,7 +42,8 @@ def listen(
     pause: Callable[[], None],
     history: Callable[[], Sequence[Message]],
 ) -> int:
-    """Escucha mientras ``keep_going`` lo diga y cuenta cada turno; cierra el micro al salir.
+    """Escucha mientras ``keep_going`` lo diga y cuenta cada turno; al salir cierra el micro y
+    suelta la voz, también si no llegó a escuchar (ADR-252).
 
     Cada turno lo cuenta como la ventana uno escrito, con lo guardado y no con lo oído
     (rondas 11 a 15 de Codex sobre la PR #687); ``history`` es la charla guardada, la que
@@ -50,13 +51,13 @@ def listen(
     que ya traía y sale con error; y si el oído deja de oír por su cuenta, dice su aviso y
     sale, en vez de seguir esperando a un micro cerrado.
     """
-    notice = listening.start()
-    if notice:
-        say(notice)
-        return 1
-    say("Te escucho. Habla cuando quieras; Ctrl+C para salir.")
     delays: list[float] = []
     try:
+        notice = listening.start()
+        if notice:
+            say(notice)
+            return 1
+        say("Te escucho. Habla cuando quieras; Ctrl+C para salir.")
         while keep_going():
             attended = listening.attend()
             broken = False
@@ -75,7 +76,7 @@ def listen(
             if not attended.turns:
                 pause()
     finally:
-        listening.stop()
+        listening.close()
         if delays:
             say(_delays_line(delays))
     return 0

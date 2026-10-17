@@ -2310,6 +2310,33 @@ def test_lo_que_esperaba_va_en_cuanto_calla_lo_anterior() -> None:
     assert [t.heard for t in oido.suena("").turns] == ["Y cuéntame otra cosa"]
 
 
+# --- Al salir (ADR-252) -----------------------------------------------------------------
+
+
+def test_al_cerrar_para_y_suelta_la_voz_con_su_altavoz() -> None:
+    oido = _Oido()
+    oido.servicio.start()
+    oido.suena(voz("Hola"), FIN)
+
+    oido.servicio.close()
+
+    # El altavoz se suelta, y con él la cancelación de eco, que va dentro.
+    assert oido.eventos[-1] == "suelta"
+    assert not oido.servicio.listening
+    # Si vuelve a escuchar, carga la voz otra vez.
+    assert oido.servicio.start() == ""
+    assert oido.cargas_de_la_voz == 2
+
+
+def test_cerrar_sin_haber_escuchado_no_carga_ni_suelta_nada() -> None:
+    oido = _Oido()
+
+    oido.servicio.close()
+
+    assert oido.eventos == []
+    assert oido.cargas_de_la_voz == 0
+
+
 # --- Cambiar de voz (pieza F, ADR-246) ------------------------------------------------
 
 
