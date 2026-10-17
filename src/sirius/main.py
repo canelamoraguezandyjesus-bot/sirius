@@ -108,7 +108,12 @@ def _build_listening_main_window(
     dependencies: ConversationDependencies, windows: list[QMainWindow]
 ) -> ValidatedMainWindow:
     """La ventana de verdad de Sirius, con su propio bucle para atender al oído: cada
-    ventana el suyo, porque un hilo parado no vuelve a arrancar (ADR-244)."""
+    ventana el suyo, porque un hilo parado no vuelve a arrancar (ADR-244).
+
+    Al arrancar, pide al modelo de la charla que se cargue, en segundo plano: la primera
+    frase no espera a que cargue (ADR-252).
+    """
+    dependencies.send_message_use_case.warm_up_in_background()
     return _build_main_window(
         dependencies, windows, listening_loop=ListeningLoop(dependencies.local_listening)
     )

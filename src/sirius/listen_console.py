@@ -164,6 +164,8 @@ def main() -> int:
         if not dependencies.initial_project_use_case.is_configured():
             print("Abre Sirius una vez con su ventana antes de hablarle por aquí.")
             return 2
+        # Que el modelo de la charla vaya cargando mientras carga la voz (ADR-252).
+        dependencies.send_message_use_case.warm_up_in_background()
         return listen(
             dependencies.local_listening,
             print,

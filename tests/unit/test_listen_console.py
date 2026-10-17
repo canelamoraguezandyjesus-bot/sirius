@@ -6,6 +6,8 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
+from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -309,3 +311,37 @@ def test_sin_nada_dicho_no_dice_cuanto_tardo() -> None:
     _, dicho, _ = _escucha(oido, 1)
 
     assert not any("primer sonido" in linea for linea in dicho)
+
+
+def test_al_arrancar_pide_que_el_modelo_de_la_charla_vaya_cargando(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    import sirius.listen_console as consola
+
+    orden: list[str] = []
+    dependencias = SimpleNamespace(
+        initial_project_use_case=SimpleNamespace(is_configured=lambda: True),
+        send_message_use_case=SimpleNamespace(
+            warm_up_in_background=lambda: orden.append("precarga")
+        ),
+        local_listening=object(),
+        get_history_use_case=SimpleNamespace(get_history=list),
+        close_database_connections=lambda: orden.append("cierra la base"),
+    )
+    rutas = SimpleNamespace(logs_dir=tmp_path, data_dir=tmp_path, backups_dir=tmp_path)
+
+    def escucha(*args: object, **kwargs: object) -> int:
+        orden.append("escucha")
+        return 0
+
+    monkeypatch.setattr(consola, "hugging_face_offline", lambda: None)
+    monkeypatch.setattr(consola, "known_data_paths", lambda: rutas)
+    monkeypatch.setattr(consola, "configure_logging", lambda carpeta: None)
+    monkeypatch.setattr(consola, "initialize_persistence", lambda rutas: None)
+    monkeypatch.setattr(consola, "build_conversation_dependencies", lambda *a, **k: dependencias)
+    monkeypatch.setattr(consola, "listen", escucha)
+
+    assert consola.main() == 0
+
+    # Antes de escuchar: va cargando mientras carga la voz.
+    assert orden == ["precarga", "escucha", "cierra la base"]
