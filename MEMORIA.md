@@ -26,9 +26,9 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **246**.
+- Decisiones (ADR): **247**.
 - Bloques del motor: 17 cerrado, 3 fuera_de_alcance.
-- Defectos registrados: 2 abierto, 97 cerrado.
+- Defectos registrados: 2 abierto, 98 cerrado.
 - Ideas aparcadas o descartadas: 12 aparcada, 3 descartada, 2 promovida.
 - Skills: **19**.
 - Investigaciones: **14** (fotos con fecha; caducan).
@@ -79,6 +79,7 @@ huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| [253](docs/decisions/ADR-253-arreglar-lo-que-salio-del-repaso-final-antes-de-sus-pruebas.md) | 2026-10-17 | APROBADO | Arreglar lo que salió del repaso final antes de sus pruebas | Un arreglo por punto, en los ficheros donde vive el fallo: `127.0.0.1`. Los seis adaptadores de Ollama, la charla, las huellas y los cuatro |
 | [252](docs/decisions/ADR-252-dejar-la-voz-y-la-ventana-listas-para-sus-pruebas-de-voz.md) | 2026-10-17 | APROBADO | Dejar la voz y la ventana listas para sus pruebas de voz | Tope propio del juez, cortarle colgando su conexión, `think` apagado con reintento, la APM soltada al salir y migrar sin el registro de Alembic. Son 1(a)… |
 | [251](docs/decisions/ADR-251-ajustar-la-memoria-a-lo-que-midio-su-ordenador-e-r02-04-y-e-r02-05.md) | 2026-10-17 | APROBADO | Ajustar la memoria a lo que midió su ordenador: E-R02-04 y E-R02-05 | La opción 1. Las decisiones son técnicas y caben en lo que permite ADR-238, que dejó el umbral para que lo moviera lo que dijera E-R02-04; las toma la sesión… |
 | [250](docs/decisions/ADR-250-que-la-voz-de-personaje-cargue-con-su-marca-de-agua.md) | 2026-10-17 | APROBADO | Que la voz de personaje cargue con su marca de agua | La opción 1: `setuptools<82` en el extra `personaje`. |
@@ -350,6 +351,7 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 | `lista-a-mano` | 2 | sí | 181, 178 |
 | `medir-lo-que-se-tiene-en-vez-de-lo-que-hay` | 2 | sí | 184, 180 |
 | `modelo-dentro-del-turno` | 2 | sí | 243, 237 |
+| `parada-segura-que-tira-lo-ya-pagado` | 2 | sí | 253, 226 |
 | `paso-largo-sin-plazo-propio` | 2 | sí | 228, 224 |
 | `pieza-correcta-a-la-que-no-llama-quien-la-necesita` | 2 | sí | 248, 197 |
 | `vista-que-copia-el-corpus-del-que-venia-huyendo` | 2 | sí | 218, 196 |
@@ -367,7 +369,6 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 | `interruptor-que-enciende-mas-de-lo-que-se-puede-medir` | 1 | sí | 185 |
 | `la-hora-de-quien-lee-y-no-de-quien-capta` | 1 | sí | 245 |
 | `lo-que-un-hilo-carga-despues-de-cerrar` | 1 | sí | 246 |
-| `parada-segura-que-tira-lo-ya-pagado` | 1 | sí | 226 |
 | `plan-que-hay-que-terminar-de-una-sentada` | 1 | sí | 176 |
 | `pregunta-al-propietario-que-nadie-vuelve-a-poner-delante` | 1 | no en todas | 198 |
 | `registro-sin-decir-quien-lo-hizo` | 1 | sí | 230 |
@@ -456,6 +457,11 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 - **ADR-243** — esperar a que `send_message` vuelva para hacer lo que toca en (lo hace cumplir `tests/integration/test_send_message.py`).
 - **ADR-237** — poner otra petición al modelo de la charla dentro de cada turno, (lo hace cumplir `tests/acceptance/test_robot_0_2_personalidad.py`).
 
+### `parada-segura-que-tira-lo-ya-pagado`
+
+- **ADR-253** — un fallo de un modelo en la respuesta 46 de 60, o un Esc sin (lo hace cumplir `tests/unit/test_blind_test.py`, `tests/unit/test_trick_questions.py`,`).
+- **ADR-226** — tratar toda parada de un revisor como pérdida del veredicto del otro, aunque el que para haya declarado que no va a revisar y el otro ya haya entregado hallazgos pagados; la asimetría que protege (no aprobar sin los dos) se conserva sin tirar el trabajo hecho. (lo hace cumplir `tests/automation/test_sirius_aggregate_reviews.py`).
+
 ### `paso-largo-sin-plazo-propio`
 
 - **ADR-228** — dar a un agente una regla que depende de la hora («para si no cabe») sin darle la hora ni un plazo propio, y dejar que el tope del job lo mate sin diagnóstico; la misma lección que ADR-155 dejó para el corrector y ADR-224 para los pasos de Quality, aplicada al paso que quedaba. (lo hace cumplir `tests/automation/test_implementador_con_reloj.py`).
@@ -526,10 +532,6 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 ### `lo-que-un-hilo-carga-despues-de-cerrar`
 
 - **ADR-246** — que un trabajo en segundo plano siga cargando después de que (lo hace cumplir `tests/unit/test_voice_test.py`).
-
-### `parada-segura-que-tira-lo-ya-pagado`
-
-- **ADR-226** — tratar toda parada de un revisor como pérdida del veredicto del otro, aunque el que para haya declarado que no va a revisar y el otro ya haya entregado hallazgos pagados; la asimetría que protege (no aprobar sin los dos) se conserva sin tirar el trabajo hecho. (lo hace cumplir `tests/automation/test_sirius_aggregate_reviews.py`).
 
 ### `plan-que-hay-que-terminar-de-una-sentada`
 

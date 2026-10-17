@@ -103,8 +103,8 @@ en su gráfica.
 - **Qué hace él.** Apaga el wifi, abre Sirius, dice cinco cosas y pega lo que sale de la
   orden que mide qué ocupan, cargados a la vez, el modelo de la charla, el oído y la voz.
 - **Con la pieza B sola** (ADR-242), la orden de instalar baja el modelo de oír y
-  `uv run --extra voz sirius-oye` le oye en consola y escribe lo que contesta, sin
-  hablar. Hablar y medir la gráfica esperan a la pieza C.
+  `uv run --link-mode=copy --extra voz sirius-oye` le oye en consola y escribe lo que
+  contesta, sin hablar. Hablar y medir la gráfica esperan a la pieza C.
 - **Con la pieza C** (ADR-243), la misma orden baja también la voz de Piper y comprueba
   que el altavoz se abre, y `sirius-oye` le contesta hablando. El oído y la voz van en
   el procesador, así que en la gráfica solo está el modelo de la charla: lo que ocupa lo
