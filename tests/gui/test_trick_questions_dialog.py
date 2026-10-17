@@ -277,6 +277,13 @@ def test_cada_idea_mala_se_empieza_a_leer_desde_arriba(qtbot: QtBot) -> None:
     assert barra.value() == 0
 
 
+def _espera_a_que_acepten(ventana: TrickQuestionsDialog, qtbot: QtBot) -> None:
+    """Hasta que pase la pausa de doble clic y los botones acepten otra marca."""
+    qtbot.waitUntil(
+        ventana.contrary_button.isEnabled, timeout=QApplication.doubleClickInterval() + 2000
+    )
+
+
 def _doble_clic(boton: QPushButton) -> None:
     """Lo que manda Windows con un doble clic: pulsar, soltar, doble clic y soltar."""
     centro = QPointF(boton.rect().center())
@@ -300,18 +307,58 @@ def test_un_doble_clic_marca_una_sola_idea_mala(qtbot: QtBot) -> None:
     ventana, _ = _ventana(qtbot, _caso(), pausa=None)
     ventana.start_button.click()
     abre(ventana, qtbot)
+    _espera_a_que_acepten(ventana, qtbot)
 
     _doble_clic(ventana.contrary_button)
 
     assert ventana.answer_number.text() == "Idea mala 2 de 40"
     assert len(ventana._marks) == 1
     # Pasado el intervalo de doble clic, el botón vuelve a marcar.
-    qtbot.waitUntil(
-        ventana.contrary_button.isEnabled, timeout=QApplication.doubleClickInterval() + 2000
-    )
+    _espera_a_que_acepten(ventana, qtbot)
     ventana.agrees_button.click()
     assert ventana.answer_number.text() == "Idea mala 3 de 40"
     assert len(ventana._marks) == 2
+
+
+def _segundo_clic(boton: QPushButton) -> None:
+    """La segunda mitad de un doble clic, donde está ahora el ratón: doble clic y soltar."""
+    centro = QPointF(boton.rect().center())
+    fuera = QPointF(boton.mapToGlobal(boton.rect().center()))
+    izquierdo = Qt.MouseButton.LeftButton
+    for tipo, pulsados in (
+        (QEvent.Type.MouseButtonDblClick, izquierdo),
+        (QEvent.Type.MouseButtonRelease, Qt.MouseButton.NoButton),
+    ):
+        evento = QMouseEvent(
+            tipo, centro, fuera, izquierdo, pulsados, Qt.KeyboardModifier.NoModifier
+        )
+        QApplication.sendEvent(boton, evento)
+
+
+def test_un_doble_clic_en_empezar_no_marca_la_primera_sin_verla(qtbot: QtBot) -> None:
+    ventana, _ = _ventana(qtbot, _caso(), pausa=None)
+    abre(ventana, qtbot)
+
+    ventana.start_button.click()
+    _segundo_clic(ventana.contrary_button)  # si el ratón quedó encima de él
+
+    assert ventana.answer_number.text() == "Idea mala 1 de 40"
+    assert ventana._marks == {}
+
+
+def test_un_doble_clic_en_la_ultima_no_cierra_el_resultado_sin_verlo(qtbot: QtBot) -> None:
+    ventana, _ = _ventana(qtbot, _caso(), pausa=None)
+    abre(ventana, qtbot)
+    ventana.start_button.click()
+    for _ in range(39):
+        ventana.mark(contrary=True)
+    _espera_a_que_acepten(ventana, qtbot)
+
+    ventana.agrees_button.click()
+    _segundo_clic(ventana.close_button)  # si el ratón quedó encima de «Cerrar»
+
+    assert ventana.pages.currentIndex() == 2
+    assert ventana.isVisible()
 
 
 def test_intro_no_marca_la_siguiente_tras_marcar_con_el_raton(qtbot: QtBot) -> None:
@@ -319,13 +366,12 @@ def test_intro_no_marca_la_siguiente_tras_marcar_con_el_raton(qtbot: QtBot) -> N
     ventana.start_button.click()
     abre(ventana, qtbot)
     ventana.activateWindow()
+    _espera_a_que_acepten(ventana, qtbot)
 
     # Dos, para que «Anterior» esté a mano al marcar la segunda.
     for _ in range(2):
         QTest.mouseClick(ventana.contrary_button, Qt.MouseButton.LeftButton)
-        qtbot.waitUntil(
-            ventana.contrary_button.isEnabled, timeout=QApplication.doubleClickInterval() + 2000
-        )
+        _espera_a_que_acepten(ventana, qtbot)
     # Ni Intro ni la barra: el clic no les deja el foco a los botones, ni a «Anterior».
     for tecla in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space):
         QTest.keyClick(QApplication.focusWidget() or ventana, tecla)
