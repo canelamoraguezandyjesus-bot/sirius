@@ -251,7 +251,12 @@ def puestos_por_palabras(caso: MemoryCase, base: Path) -> list[int | None]:
 def diagnostico(
     caso: MemoryCase, traidos: list[str], base: Path, huellas: TextEmbedder, *, bien: bool
 ) -> dict[str, Any]:
-    """Lo que pasó en ``caso`` por el camino real, para leerlo y reconstruirlo fuera."""
+    """Lo que pasó en ``caso`` por el camino real, para leerlo y reconstruirlo fuera.
+
+    «hoy» es como pide Sirius las huellas a ese modelo: desde ADR-251, con el formato que
+    tenga, el mismo que «formato» con EmbeddingGemma. «umbral» es el de ese modelo.
+    """
+    como_hoy = memory_search.embedding_format(huellas.model_name)
     formato: dict[str, Any] | None = None
     clave = formato_de(huellas.model_name)
     if clave is not None:
@@ -271,8 +276,12 @@ def diagnostico(
         "traidos": [caso.memories.index(t) if t in caso.memories else t for t in traidos],
         "esperado": caso.memories.index(caso.expected) if caso.expected is not None else None,
         "palabras": puestos_por_palabras(caso, base),
-        "umbral": memory_search.MIN_SIMILARITY,
-        "hoy": parecidos(huellas, caso.question, caso.memories),
+        "umbral": memory_search.min_similarity_for(huellas.model_name),
+        "hoy": parecidos(
+            huellas,
+            como_hoy.for_query(caso.question),
+            [como_hoy.for_document(recuerdo) for recuerdo in caso.memories],
+        ),
         "formato": formato,
     }
 

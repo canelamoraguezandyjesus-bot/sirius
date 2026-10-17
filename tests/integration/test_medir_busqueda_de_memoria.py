@@ -56,7 +56,7 @@ def test_mide_su_memoria_y_la_de_prueba_y_dice_si_pasa(monkeypatch: pytest.Monke
 
     assert codigo == 0
     assert lineas[0] == "Modelo de huellas: embeddinggemma (8 números por huella)."
-    assert lineas[1].startswith("Tu memoria, 1 recuerdos: P50 ")
+    assert lineas[1].startswith("Tu memoria, 1 recuerdo: P50 ")
     assert lineas[2].startswith("300 recuerdos de prueba: P50 ")
     assert lineas[3] == "Pasa: sí."
     # Su base no se toca: ni una huella, ni un byte.
@@ -82,7 +82,7 @@ def test_mide_la_memoria_de_la_carpeta_que_eligio_y_no_la_de_serie(
     codigo = orden.main(huellas_de=_Huellas, escribe=lineas.append)
 
     assert codigo == 0
-    assert lineas[1].startswith("Tu memoria, 1 recuerdos: P50 ")
+    assert lineas[1].startswith("Tu memoria, 1 recuerdo: P50 ")
     assert not (resolve_paths().data_dir / "sirius.db").exists()
 
 
@@ -174,6 +174,13 @@ def test_las_huellas_de_prueba_van_con_su_clave_y_sus_bits_y_no_se_recalculan(
     [suyas] = huellas
     assert not [texto for texto in suyas.pedidas if "Recuerdo de prueba" in texto]
     assert all(texto.startswith("task: search result | query: ") for texto in suyas.pedidas[1:])
+
+
+def test_cada_cuenta_lleva_su_plural() -> None:
+    # «Tu memoria, 1 recuerdos», escrito así en su ordenador el 16-10-2026.
+    assert orden._cuantos(1, "recuerdo", "recuerdos") == "1 recuerdo"
+    assert orden._cuantos(0, "recuerdo", "recuerdos") == "0 recuerdos"
+    assert orden._cuantos(10_000, "recuerdo", "recuerdos") == "10000 recuerdos"
 
 
 def test_el_percentil_es_el_del_rango_mas_cercano() -> None:

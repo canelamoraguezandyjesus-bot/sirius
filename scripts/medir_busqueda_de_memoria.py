@@ -175,6 +175,11 @@ def copia_su_memoria(origen: Path, destino: Path) -> int:
     return int(fila[0])
 
 
+def _cuantos(numero: int, uno: str, varios: str) -> str:
+    """«1 recuerdo», «0 recuerdos», «300 recuerdos»."""
+    return f"{numero} {uno if numero == 1 else varios}"
+
+
 def _linea(nombre: str, tiempos: Sequence[float]) -> str:
     return (
         f"{nombre}: P50 {percentil(tiempos, 50):.0f} ms, P95 {percentil(tiempos, 95):.0f} ms,"
@@ -217,18 +222,21 @@ def main(
     with temporary_folder("sirius-busqueda-", escribe) as carpeta:
         suya = carpeta / "su-memoria.db"
         cuantos = copia_su_memoria(rutas.data_dir / "sirius.db", suya)
-        escribe(f"Modelo de huellas: {modelo} ({dimension} números por huella).")
+        escribe(
+            f"Modelo de huellas: {modelo} ({_cuantos(dimension, 'número', 'números')} por huella)."
+        )
         try:
             en_la_suya = mide(suya, huellas, preguntas)
         except SinSqliteVec:
             escribe("sqlite-vec no carga en este Python: Sirius buscaría solo por palabras.")
             return 3
-        escribe(_linea(f"Tu memoria, {cuantos} recuerdos", en_la_suya))
+        escribe(_linea(f"Tu memoria, {_cuantos(cuantos, 'recuerdo', 'recuerdos')}", en_la_suya))
         prueba = carpeta / "prueba.db"
         upgrade_to_head(prueba)
         llena_de_prueba(prueba, RECUERDOS_DE_PRUEBA, modelo, dimension)
         en_la_de_prueba = mide(prueba, huellas, preguntas)
-        escribe(_linea(f"{RECUERDOS_DE_PRUEBA} recuerdos de prueba", en_la_de_prueba))
+        de_prueba = _cuantos(RECUERDOS_DE_PRUEBA, "recuerdo", "recuerdos")
+        escribe(_linea(f"{de_prueba} de prueba", en_la_de_prueba))
         pasa = max(percentil(en_la_suya, 95), percentil(en_la_de_prueba, 95)) < LIMITE_MS
         escribe("Pasa: sí." if pasa else f"Pasa: no. El P95 tiene que bajar de {LIMITE_MS:.0f} ms.")
         return 0 if pasa else 1
