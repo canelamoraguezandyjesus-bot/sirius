@@ -164,6 +164,9 @@ class SqliteRobotConversationRepository:
                     MessageModel.role == MessageRole.SIRIUS,
                     MessageModel.status == MessageStatus.COMPLETED,
                     MessageModel.content.is_not(None),
+                    # Las que le cortaron no: quedan a medias, y puntuarlas le bajaría la
+                    # media sin motivo (ADR-254).
+                    MessageModel.heard_when_cut.is_(None),
                 )
                 .order_by(MessageModel.id)
             ).all()

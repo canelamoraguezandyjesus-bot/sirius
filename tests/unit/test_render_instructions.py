@@ -383,8 +383,9 @@ def test_el_texto_de_la_semilla_no_lleva_ningun_ejemplo() -> None:
 
 
 def test_una_respuesta_que_le_cortaron_se_ve_entera_y_con_lo_que_se_oyo() -> None:
-    # ADR-245: el modelo lee la respuesta entera y, detrás, lo que el propietario llegó a
-    # oír de ella, para que no dé por dicho lo que no sonó.
+    # ADR-245: el modelo lee la respuesta entera, como quedó guardada, y detrás lo que el
+    # propietario llegó a oír de ella, para que no dé por dicho lo que no sonó. Desde ADR-254
+    # lo guardado es lo que llevaba escrito cuando le cortaron.
     def mensaje(heard: str | None) -> Message:
         return Message(
             id=1,
