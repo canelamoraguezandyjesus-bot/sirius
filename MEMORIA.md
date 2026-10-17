@@ -26,9 +26,9 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **245**.
+- Decisiones (ADR): **246**.
 - Bloques del motor: 17 cerrado, 3 fuera_de_alcance.
-- Defectos registrados: 3 abierto, 95 cerrado.
+- Defectos registrados: 4 abierto, 95 cerrado.
 - Ideas aparcadas o descartadas: 12 aparcada, 3 descartada, 2 promovida.
 - Skills: **19**.
 - Investigaciones: **14** (fotos con fecha; caducan).
@@ -79,6 +79,7 @@ huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| [252](docs/decisions/ADR-252-dejar-la-voz-y-la-ventana-listas-para-sus-pruebas-de-voz.md) | 2026-10-17 | APROBADO | Dejar la voz y la ventana listas para sus pruebas de voz | Tope propio del juez, cortarle colgando su conexión, `think` apagado con reintento, la APM soltada al salir y migrar sin el registro de Alembic. Son 1(a)… |
 | [251](docs/decisions/ADR-251-ajustar-la-memoria-a-lo-que-midio-su-ordenador-e-r02-04-y-e-r02-05.md) | 2026-10-17 | APROBADO | Ajustar la memoria a lo que midió su ordenador: E-R02-04 y E-R02-05 | La opción 1. Las decisiones son técnicas y caben en lo que permite ADR-238, que dejó el umbral para que lo moviera lo que dijera E-R02-04; las toma la sesión… |
 | [250](docs/decisions/ADR-250-que-la-voz-de-personaje-cargue-con-su-marca-de-agua.md) | 2026-10-17 | APROBADO | Que la voz de personaje cargue con su marca de agua | La opción 1: `setuptools<82` en el extra `personaje`. |
 | [249](docs/decisions/ADR-249-que-migrar-la-base-no-apague-el-diario-de-sirius.md) | 2026-10-16 | APROBADO | Que migrar la base no apague el diario de Sirius | La opción 1: `disable_existing_loggers=False` en el `fileConfig` de Alembic. |
@@ -354,6 +355,7 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 | `vista-que-copia-el-corpus-del-que-venia-huyendo` | 2 | sí | 218, 196 |
 | `comparar-instantes-como-texto` | 1 | sí | 229 |
 | `condicion-construida-sin-el-mecanismo-que-la-hace-cumplible` | 1 | sí | 200 |
+| `cortar-solo-entre-trozos` | 1 | sí | 252 |
 | `criterio-que-se-pide-distinto-del-que-se-puntua` | 1 | sí | 212 |
 | `dos-sesiones-que-no-se-ven` | 1 | sí | 206 |
 | `espera-sin-fin-por-un-suceso-que-nadie-va-a-emitir` | 1 | sí | 194 |
@@ -477,6 +479,10 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 
 - **ADR-200** — una guarda se construye entera y se deja sin llamante (lo hace cumplir `tests/automation/test_cola.py`).
 
+### `cortar-solo-entre-trozos`
+
+- **ADR-252** — un corte que se mira entre trozos no corta mientras el otro calla. (lo hace cumplir `tests/unit/test_el_juez_no_frena_la_voz.py`).
+
 ### `criterio-que-se-pide-distinto-del-que-se-puntua`
 
 - **ADR-212** — escribir a ojo la instrucción que se le da a un (lo hace cumplir `tests/unit/test_ollama_query_intent_classifier.py`).
@@ -593,6 +599,7 @@ cerrados; el recuento completo está arriba.
 | H-202 | abierto | Una decision de no hacer algo no dejaba rastro, y una precondicion escrita antes que ella bloqueo trabajo real trece dias |
 | H-203 | abierto | El banco solo sabia medir el camino con el motor encendido, asi que la linea base contra la que comparar no existia |
 | H-251 | abierto | El banco de memoria de la nube no podia ver que lo de antes se pareciera a la pregunta tanto como lo de ahora |
+| H-252 | abierto | Un turno de voz esperaba entera la nota del juez, porque cortarle solo se miraba entre trozos |
 
 ## Las ideas aparcadas y descartadas (ADR-208)
 
