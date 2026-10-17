@@ -58,10 +58,11 @@ CARPETA_SKILLS = Path(".claude/skills")
 CARPETA_AUDITORIAS = Path("docs/audits")
 FICHERO_INDICE_AUDITORIAS = (CARPETA_AUDITORIAS / "INDICE.md").as_posix()
 
-#: El resumen de cada ADR en la vista, en caracteres. Era 240; a 200 desde ADR-251, para
-#: que su fila quepa en una sola lectura con sitio para otra: es la opción 3 que ADR-218
-#: dejó, y no toca lo que crece.
-LONGITUD_RESUMEN = 200
+#: El resumen de cada ADR en la vista, en caracteres. Era 240; 160 desde ADR-251, el
+#: recorte más pequeño que deja sitio para cuatro ADR más con su lección y su entrada en
+#: el registro, medido sobre el árbol de la PR #692. Es la opción 3 que dejó ADR-218, y
+#: no toca lo que crece: cuando vuelva a no caber, hará falta otro corte.
+LONGITUD_RESUMEN = 160
 LONGITUD_OBJETIVO = 110
 LINEAS_DE_CABECERA = 20
 SIN_FECHA = "sin fecha declarada"

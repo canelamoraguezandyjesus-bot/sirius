@@ -392,6 +392,20 @@ def test_un_modelo_sin_formato_conocido_se_pide_tal_cual_como_antes() -> None:
     assert almacen.busquedas == [([1.0], "qwen3-embedding:0.6b", MIN_SIMILARITY, SEARCH_LIMIT)]
 
 
+def test_sin_formato_conocido_el_umbral_es_el_de_siempre_y_se_puede_mover(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import sirius.application.memory_search as memory_search
+
+    monkeypatch.setattr(memory_search, "MIN_SIMILARITY", 0.7)
+
+    assert memory_search.min_similarity_for("qwen3-embedding:0.6b") == 0.7
+    assert memory_search.min_similarity_for("embeddinggemma") == 0.26
+    almacen = _Almacen()
+    MemoryEmbeddingService(_Huellas(model_name="qwen3-embedding:0.6b"), almacen).nearest([1.0])
+    assert almacen.busquedas == [([1.0], "qwen3-embedding:0.6b", 0.7, SEARCH_LIMIT)]
+
+
 def test_el_formato_se_reconoce_por_la_familia_en_su_nombre_de_ollama() -> None:
     assert embedding_format("embeddinggemma:300m").name == "busqueda-1"
     assert embedding_format("EmbeddingGemma").name == "busqueda-1"
