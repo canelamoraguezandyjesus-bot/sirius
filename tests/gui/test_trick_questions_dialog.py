@@ -6,19 +6,24 @@ ejecuta en el acto), así que cada paso se ve sin esperar.
 
 from __future__ import annotations
 
+import threading
+import time
 from collections.abc import Callable, Iterable
 from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+import shiboken6
 from _hojas_en_su_pantalla import (
     abre,
     cabe_en_su_pantalla,
     mira_que_es_una_ventana_que_cabe,
     se_ve_en,
 )
-from PySide6.QtCore import QRunnable
-from PySide6.QtWidgets import QMessageBox, QScrollArea
+from PySide6.QtCore import QEvent, QPointF, QRunnable, Qt
+from PySide6.QtGui import QMouseEvent
+from PySide6.QtTest import QTest
+from PySide6.QtWidgets import QApplication, QMessageBox, QPushButton, QScrollArea
 from pytestqt.qtbot import QtBot
 
 from sirius.adapters.persistence.bootstrap import initialize_persistence
@@ -31,7 +36,7 @@ from sirius.domain.trick_questions import TRICK_QUESTIONS
 from sirius.infrastructure.paths import resolve_paths
 from sirius.main import _build_main_window
 from sirius.ports.llm import LLMCompleted, LLMError, LLMErrorKind, LLMRequest, LLMStreamEvent
-from sirius.presentation.trick_questions_dialog import TrickQuestionsDialog
+from sirius.presentation.trick_questions_dialog import TrickQuestionsDialog, TrickQuestionsWorker
 
 pytestmark = pytest.mark.gui
 
@@ -92,14 +97,35 @@ def _caso(*, falla: bool = False, local: bool = True, larga: bool = False) -> Tr
     )
 
 
-def _ventana(qtbot: QtBot, caso: TrickQuestionsUseCase) -> tuple[TrickQuestionsDialog, list[str]]:
+def _apunta(preguntas: list[str], respuesta: bool) -> Callable[[str, str], bool]:
+    """Una confirmación de mentira: apunta lo que pregunta y contesta ``respuesta``."""
+
+    def confirma(titulo: str, texto: str) -> bool:
+        preguntas.append(texto)
+        return respuesta
+
+    return confirma
+
+
+def _ventana(
+    qtbot: QtBot,
+    caso: TrickQuestionsUseCase,
+    *,
+    pausa: int | None = 0,
+    cierra: Callable[[str, str], bool] = lambda titulo, texto: True,
+) -> tuple[TrickQuestionsDialog, list[str]]:
+    """``pausa`` 0, salvo donde se prueba: así se marcan las 40 seguidas sin esperar."""
     avisos: list[str] = []
 
     def ejecutar(worker: QRunnable) -> None:
         worker.run()
 
     ventana = TrickQuestionsDialog(
-        caso, show_warning=lambda titulo, texto: avisos.append(texto), run_worker=ejecutar
+        caso,
+        show_warning=lambda titulo, texto: avisos.append(texto),
+        confirm=cierra,
+        run_worker=ejecutar,
+        mark_pause_ms=pausa,
     )
     qtbot.addWidget(ventana)
     return ventana, avisos
@@ -167,7 +193,9 @@ def test_cerrar_la_ventana_a_medias_para_las_preguntas_pendientes(qtbot: QtBot) 
         judge=_Juez(),
     )
     pendientes: list[QRunnable] = []
-    ventana = TrickQuestionsDialog(caso, run_worker=pendientes.append)
+    ventana = TrickQuestionsDialog(
+        caso, confirm=lambda titulo, texto: True, run_worker=pendientes.append
+    )
     qtbot.addWidget(ventana)
 
     ventana.start_button.click()
@@ -222,3 +250,238 @@ def test_la_hoja_se_minimiza_se_maximiza_y_cabe_en_su_pantalla(qtbot: QtBot) -> 
     ventana, _ = _ventana(qtbot, _caso())
 
     mira_que_es_una_ventana_que_cabe(ventana, ventana.pages, qtbot)
+
+
+# --- ADR-253: lo que salió del repaso final antes de sus pruebas ----------------------
+
+
+def test_cada_idea_mala_se_empieza_a_leer_desde_arriba(qtbot: QtBot) -> None:
+    # En su pantalla: tras bajar para marcar, la idea siguiente se veía bajada, sin su
+    # principio.
+    ventana, _ = _ventana(qtbot, _caso(larga=True))
+    ventana.start_button.click()
+    abre(ventana, qtbot)
+    paso = ventana.pages.currentWidget()
+    assert isinstance(paso, QScrollArea)
+    barra = paso.verticalScrollBar()
+
+    for _ in range(2):
+        barra.setValue(barra.maximum())
+        ventana.contrary_button.click()
+        QApplication.processEvents()
+        assert barra.value() == 0
+        assert se_ve_en(paso, ventana.bad_idea_label)
+    barra.setValue(barra.maximum())
+    ventana.previous_button.click()
+    QApplication.processEvents()
+    assert barra.value() == 0
+
+
+def _doble_clic(boton: QPushButton) -> None:
+    """Lo que manda Windows con un doble clic: pulsar, soltar, doble clic y soltar."""
+    centro = QPointF(boton.rect().center())
+    fuera = QPointF(boton.mapToGlobal(boton.rect().center()))
+    izquierdo = Qt.MouseButton.LeftButton
+    for tipo, pulsados in (
+        (QEvent.Type.MouseButtonPress, izquierdo),
+        (QEvent.Type.MouseButtonRelease, Qt.MouseButton.NoButton),
+        (QEvent.Type.MouseButtonDblClick, izquierdo),
+        (QEvent.Type.MouseButtonRelease, Qt.MouseButton.NoButton),
+    ):
+        evento = QMouseEvent(
+            tipo, centro, fuera, izquierdo, pulsados, Qt.KeyboardModifier.NoModifier
+        )
+        QApplication.sendEvent(boton, evento)
+
+
+def test_un_doble_clic_marca_una_sola_idea_mala(qtbot: QtBot) -> None:
+    # En el repaso: un doble clic en «Me lleva la contraria» marcaba también la siguiente,
+    # sin verla.
+    ventana, _ = _ventana(qtbot, _caso(), pausa=None)
+    ventana.start_button.click()
+    abre(ventana, qtbot)
+
+    _doble_clic(ventana.contrary_button)
+
+    assert ventana.answer_number.text() == "Idea mala 2 de 40"
+    assert len(ventana._marks) == 1
+    # Pasado el intervalo de doble clic, el botón vuelve a marcar.
+    qtbot.waitUntil(
+        ventana.contrary_button.isEnabled, timeout=QApplication.doubleClickInterval() + 2000
+    )
+    ventana.agrees_button.click()
+    assert ventana.answer_number.text() == "Idea mala 3 de 40"
+    assert len(ventana._marks) == 2
+
+
+def test_intro_no_marca_la_siguiente_tras_marcar_con_el_raton(qtbot: QtBot) -> None:
+    ventana, _ = _ventana(qtbot, _caso(), pausa=None)
+    ventana.start_button.click()
+    abre(ventana, qtbot)
+    ventana.activateWindow()
+
+    QTest.mouseClick(ventana.contrary_button, Qt.MouseButton.LeftButton)
+    qtbot.waitUntil(
+        ventana.contrary_button.isEnabled, timeout=QApplication.doubleClickInterval() + 2000
+    )
+    # Ni Intro ni la barra: el clic no le deja el foco al botón.
+    for tecla in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space):
+        QTest.keyClick(QApplication.focusWidget() or ventana, tecla)
+    # Y aunque se llegue a él con el tabulador, Intro no lo pulsa.
+    for tecla in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+        QTest.keyClick(ventana.contrary_button, tecla)
+
+    assert ventana.answer_number.text() == "Idea mala 2 de 40"
+    assert len(ventana._marks) == 1
+    assert not ventana.contrary_button.autoDefault()
+    assert not ventana.agrees_button.autoDefault()
+
+
+def test_esc_y_la_cruz_preguntan_antes_de_perder_lo_marcado(qtbot: QtBot) -> None:
+    preguntas: list[str] = []
+    respuesta = [False]
+
+    def cierra(titulo: str, texto: str) -> bool:
+        preguntas.append(texto)
+        return respuesta[0]
+
+    ventana, _ = _ventana(qtbot, _caso(), cierra=cierra)
+    abre(ventana, qtbot)
+    ventana.start_button.click()
+    ventana.contrary_button.click()
+
+    QTest.keyClick(ventana, Qt.Key.Key_Escape)
+    ventana.close()
+
+    assert ventana.isVisible()
+    assert ventana.answer_number.text() == "Idea mala 2 de 40"
+    assert len(preguntas) == 2
+    assert "Se pierde lo que has marcado: 1 de 40." in preguntas[0]
+    respuesta[0] = True
+    QTest.keyClick(ventana, Qt.Key.Key_Escape)
+    assert not ventana.isVisible()
+
+
+def test_en_el_resultado_esc_pregunta_y_cerrar_no(qtbot: QtBot) -> None:
+    preguntas: list[str] = []
+    ventana, _ = _ventana(qtbot, _caso(), cierra=_apunta(preguntas, False))
+    abre(ventana, qtbot)
+    ventana.start_button.click()
+    for _ in range(40):
+        ventana.contrary_button.click()
+    assert ventana.pages.currentIndex() == 2
+
+    QTest.keyClick(ventana, Qt.Key.Key_Escape)
+
+    assert ventana.isVisible()
+    assert preguntas == ["Se deja de ver el resultado; sus cifras ya están en el diario."]
+    [cerrar] = [b for b in ventana.findChildren(QPushButton) if b.text() == "Cerrar"]
+    cerrar.click()
+    assert not ventana.isVisible()
+    assert len(preguntas) == 1
+
+
+def test_sin_nada_hecho_esc_cierra_sin_preguntar(qtbot: QtBot) -> None:
+    preguntas: list[str] = []
+    ventana, _ = _ventana(qtbot, _caso(), cierra=_apunta(preguntas, False))
+    abre(ventana, qtbot)
+
+    QTest.keyClick(ventana, Qt.Key.Key_Escape)
+
+    assert not ventana.isVisible()
+    assert preguntas == []
+
+
+def test_con_sirius_contestando_cerrar_pregunta_y_corta_la_respuesta_en_curso(
+    qtbot: QtBot,
+) -> None:
+    pedida = threading.Event()
+    cortadas: list[str] = []
+
+    class _Lento(_Modelo):
+        def stream_response(self, request: LLMRequest) -> Iterable[LLMStreamEvent]:
+            pedida.set()
+            for _ in range(500):  # hasta 5 s, como una respuesta larga de Ollama
+                if request.operation_id in cortadas:
+                    yield LLMError(kind=LLMErrorKind.UNKNOWN, message="cortada")
+                    return
+                time.sleep(0.01)
+            yield LLMCompleted(text="Ni de broma.", input_tokens=1, output_tokens=1)
+
+        def cancel(self, operation_id: str) -> None:
+            cortadas.append(operation_id)
+
+    modelo = _Lento()
+    caso = TrickQuestionsUseCase(
+        _Identidades(),  # type: ignore[arg-type]
+        local_chat_provider=lambda: modelo,
+        judge=_Juez(),
+    )
+    preguntas: list[str] = []
+    hilos: list[threading.Thread] = []
+
+    def en_otro_hilo(worker: QRunnable) -> None:
+        hilos.append(threading.Thread(target=worker.run))
+        hilos[-1].start()
+
+    ventana = TrickQuestionsDialog(
+        caso,
+        confirm=_apunta(preguntas, True),
+        run_worker=en_otro_hilo,
+    )
+    qtbot.addWidget(ventana)
+    ventana.start_button.click()
+    assert pedida.wait(5)
+
+    empieza = time.monotonic()
+    ventana.reject()
+    [hilo] = hilos
+    hilo.join(5)
+
+    assert preguntas and "Sirius está contestando" in preguntas[0]
+    assert len(cortadas) == 1
+    assert not hilo.is_alive()
+    assert time.monotonic() - empieza < 2
+
+
+def test_el_trabajador_acaba_sin_traza_aunque_la_ventana_ya_no_exista() -> None:
+    # Al cerrar Sirius con las preguntas en marcha: «Signal source has been deleted».
+    for caso in (_caso(), _caso(falla=True)):
+        trabajador = TrickQuestionsWorker(caso)
+        shiboken6.delete(trabajador.signals)
+
+        trabajador.run()
+
+
+class _JuezQueCalla(_Juez):
+    def verdict(self, bad_idea: str, reply: str) -> TrickVerdict:
+        if bad_idea in {q.bad_idea for q in TRICK_QUESTIONS[38:]}:  # T39 y T40
+            msg = "el juez no contesta"
+            raise RuntimeError(msg)
+        return super().verdict(bad_idea, reply)
+
+
+def test_el_resultado_dice_cuales_y_cuando_el_juez_no_contesto(qtbot: QtBot) -> None:
+    modelo = _Modelo()
+    caso = TrickQuestionsUseCase(
+        _Identidades(),  # type: ignore[arg-type]
+        local_chat_provider=lambda: modelo,
+        judge=_JuezQueCalla(),
+    )
+    ventana, _ = _ventana(qtbot, caso)
+    ventana.start_button.click()
+
+    ventana.agrees_button.click()  # T01: me da la razón, y el juez dice que discrepa
+    for _ in range(39):
+        ventana.contrary_button.click()
+
+    texto = ventana.result_label.text()
+    assert (
+        "El juez dice otra cosa que tú en 1 de 40, y el juez no contestó en 2: "
+        "ya vale para avisar." in texto
+    )
+    primera = f"T01: {TRICK_QUESTIONS[0].bad_idea}"
+    assert texto.count(primera) == 2  # te da la razón, y el juez dice otra cosa
+    assert "Te da la razón en:" in texto
+    assert "El juez dice otra cosa que tú en:" in texto
+    assert "T39" not in texto
