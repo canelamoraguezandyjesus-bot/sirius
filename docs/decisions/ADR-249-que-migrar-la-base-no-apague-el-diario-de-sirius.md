@@ -89,8 +89,13 @@ decidió además:
   `tests/gui/test_app_bootstrap.py`, arranca la ventana con `_build_first_window` sobre una
   instalación de antes. Con el código de `main`, el diario decía solo «Sirius iniciando»,
   como el suyo. Con el arreglo dice también «Sirius iniciado».
-- **Mutación**: con el `fileConfig` de antes y sin los parches, caen 10 pruebas: la de la
-  ventana y nueve de las que llevaban parche.
+- **Mutación**: con el `fileConfig` de antes y sin los parches, caen siempre la de la
+  ventana y la del diario del conductor de las pruebas
+  (`tests/acceptance/test_dobles_del_conductor.py`). Las que llevaban parche caen o no
+  según si algo migró antes en el mismo proceso: con la aceptación delante caen 13 más,
+  15 en total; con la aceptación detrás, ninguna. Medido de nuevo el 17-10-2026 sobre
+  `e4a76dc9`, con una caché de bytecode propia y en los dos órdenes: las 10 que decía
+  antes no salen en ninguno.
 - **Sin los parches**, la aceptación entera, el oído, su bucle, el altavoz, el puente de la
   ventana, el arranque y el diario: 346 en verde, 2 omitidas y 1 `xfail`.
 - **ruff** limpio; **mypy** sin errores en 733 ficheros.
