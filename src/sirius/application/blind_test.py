@@ -25,13 +25,28 @@ from sirius.domain.blind_test import (
     prepare_blind_test,
     tally,
 )
+from sirius.infrastructure.logging import get_logger
 from sirius.ports.identity_repository import IdentityRepository
-from sirius.ports.llm import LLMCompleted, LLMError, LLMProvider, LLMRequest
+from sirius.ports.llm import LLMCancelled, LLMCompleted, LLMError, LLMProvider, LLMRequest
 
 __all__ = ["RETRY_ADVICE", "BlindTestUseCase"]
 
 #: Lo que dice el aviso de un modelo que no contesta: qué hacer (ADR-247).
 RETRY_ADVICE = "Vuelve a pulsar Empezar; si se repite, desmarca ese modelo."
+
+#: Cuántas veces se vuelve a pedir una respuesta que falla antes de parar la prueba: un
+#: fallo suelto no tira lo que llevaba (incidencia #696).
+RETRIES = 1
+
+_logger = get_logger(__name__)
+
+
+#: Lo que dice la prueba si se cierra la hoja a mitad.
+_CANCELLED = "La prueba a ciegas se canceló."
+
+
+class _Cancelled(BlindTestError):
+    """Se cerró la hoja a mitad: no es un fallo del modelo, y no se vuelve a pedir."""
 
 
 class BlindTestUseCase:
@@ -60,6 +75,11 @@ class BlindTestUseCase:
         self._current_model = current_model
         self._rng = rng or random.Random()
         self._seed_examples = seed_examples or SeedExamplePicker()
+        # Las respuestas ya dadas, por versión de la identidad, modelo y pregunta, mientras
+        # Sirius siga abierto: un «Empezar» después de un fallo pide solo las que faltan.
+        self._answered: dict[tuple[int, str, str], str] = {}
+        # La respuesta que se está pidiendo, para poder cortarla al cerrar la hoja.
+        self._in_flight: tuple[LLMProvider, str] | None = None
 
     def questions(self) -> tuple[str, ...]:
         return BLIND_TEST_QUESTIONS
@@ -114,30 +134,80 @@ class BlindTestUseCase:
         total = len(models) * len(questions)
         done = 0
         answers: dict[str, list[str]] = {}
-        for model in models:
-            provider = self._provider_for(model)
-            answers[model] = []
-            for number, question in enumerate(questions, start=1):
-                if should_stop():
-                    msg = "La prueba a ciegas se canceló."
-                    raise BlindTestError(msg)
-                if question not in instructions:
-                    instructions[question] = render_identity(
-                        version, self._seed_examples.pick(version.examples, question)
-                    )
-                answers[model].append(
-                    _answer(
-                        provider,
-                        model,
-                        instructions[question],
-                        question,
-                        f"prueba-a-ciegas-{number}",
-                    )
-                )
-                done += 1
-                if on_progress is not None:
-                    on_progress(done, total)
+        try:
+            for model in models:
+                provider = self._provider_for(model)
+                answers[model] = []
+                for number, question in enumerate(questions, start=1):
+                    operation_id = f"prueba-a-ciegas-{number}"
+                    # Se apunta antes de mirar si se cerró la hoja: un cierre, o lo ve esta
+                    # mirada, o lo corta ``cancel()``; nunca se pierde entre las dos, ni
+                    # mientras se eligen los ejemplos, que pide huellas a Ollama (#696).
+                    self._in_flight = (provider, operation_id)
+                    if should_stop():
+                        raise _Cancelled(_CANCELLED)
+                    key = (version.id, model, question)
+                    answer = self._answered.get(key)
+                    if answer is None:
+                        if question not in instructions:
+                            instructions[question] = render_identity(
+                                version, self._seed_examples.pick(version.examples, question)
+                            )
+                        try:
+                            answer = self._ask(
+                                provider,
+                                model,
+                                instructions[question],
+                                question,
+                                operation_id,
+                                should_stop,
+                            )
+                        except _Cancelled:
+                            raise
+                        except BlindTestError:
+                            _logger.error(
+                                "La prueba a ciegas falló en %s de %s, con el modelo %s",
+                                done + 1,
+                                total,
+                                model,
+                            )
+                            raise
+                        self._answered[key] = answer
+                    answers[model].append(answer)
+                    done += 1
+                    if on_progress is not None:
+                        on_progress(done, total)
+        finally:
+            self._in_flight = None
         return prepare_blind_test(questions, answers, self._rng)
+
+    def cancel(self) -> None:
+        """Corta la respuesta que se esté pidiendo: al cerrar la hoja a mitad, no se espera a
+        que el modelo acabe (incidencia #696)."""
+        in_flight = self._in_flight
+        if in_flight is not None:
+            provider, operation_id = in_flight
+            provider.cancel(operation_id)
+
+    def _ask(
+        self,
+        provider: LLMProvider,
+        model: str,
+        instructions: str,
+        question: str,
+        operation_id: str,
+        should_stop: Callable[[], bool],
+    ) -> str:
+        """Pide una respuesta, y si falla la vuelve a pedir ``RETRIES`` veces antes de parar."""
+        for attempt in range(RETRIES + 1):
+            try:
+                return _answer(provider, model, instructions, question, operation_id)
+            except _Cancelled:
+                raise
+            except BlindTestError:
+                if attempt == RETRIES or should_stop():
+                    raise
+        raise AssertionError  # pragma: no cover: el bucle siempre devuelve o lanza
 
     def result(self, sheet: BlindTestSheet, choices: Mapping[int, str]) -> BlindTestResult:
         return tally(sheet, choices)
@@ -154,6 +224,8 @@ def _answer(
     for event in provider.stream_response(request):
         if isinstance(event, LLMCompleted):
             return event.text.strip()
+        if isinstance(event, LLMCancelled):
+            raise _Cancelled(_CANCELLED)
         if isinstance(event, LLMError):
             msg = f"El modelo {model} no contestó: {event.message} {RETRY_ADVICE}"
             raise BlindTestError(msg)
