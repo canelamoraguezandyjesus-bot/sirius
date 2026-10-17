@@ -237,3 +237,17 @@ P2, los dos de cerrar una hoja con una petición en marcha que el cierre no cort
 Familia: `cierre-que-no-corta-todo-lo-que-pide`. La nota decía «cerrar una hoja corta sus
 peticiones», y se cumplía para las respuestas, no para el juez ni para la lista. Es la
 primera ronda con ella.
+
+**Ronda 2**, sobre `9c68c3a1`, pedida con Quality en verde y preguntando si el enfoque
+estaba mal: cuatro hallazgos P2, de la misma familia. Al cerrar Sirius seguían en vuelo:
+
+- la petición de huellas (`memory_embedding_worker.py:57`);
+- la propuesta de criticidad (`criticality_proposal_worker.py:69`);
+- la transcripción y la voz de Model Studio (`studio_workers.py:60`);
+- y su orden de captura (`studio_workers.py:116`).
+
+Es la segunda ronda seguida con la familia, así que no se parcheó trabajador a trabajador:
+se buscó la raíz. El cierre no tenía un camino único que cortara lo que estaba en vuelo, y
+solo la charla sabía colgar una petición ya enviada. Lo arregla ADR-255, con su nota en la
+#699: todos los clientes de red salen de una fábrica que apunta cada conexión, el cierre las
+cuelga todas, y la orden de captura se espera.

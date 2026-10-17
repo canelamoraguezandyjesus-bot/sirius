@@ -26,9 +26,9 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **248**.
+- Decisiones (ADR): **249**.
 - Bloques del motor: 17 cerrado, 3 fuera_de_alcance.
-- Defectos registrados: 2 abierto, 99 cerrado.
+- Defectos registrados: 2 abierto, 100 cerrado.
 - Ideas aparcadas o descartadas: 12 aparcada, 3 descartada, 2 promovida.
 - Skills: **19**.
 - Investigaciones: **14** (fotos con fecha; caducan).
@@ -79,6 +79,7 @@ huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| [255](docs/decisions/ADR-255-cerrar-sirius-cuelga-todo-lo-que-esta-en-vuelo.md) | 2026-10-17 | APROBADO | Cerrar Sirius cuelga todo lo que está en vuelo | La opción B, con la orden de captura esperada. C queda como segunda línea solo si, con B, la salida siguiera esperando por trabajo que no es red. |
 | [254](docs/decisions/ADR-254-al-cortarle-dejar-de-escribir-la-respuesta.md) | 2026-10-17 | APROBADO | Al cortarle, dejar de escribir la respuesta | La opción A. Cortarle por voz no es cancelar el envío: lo dicho queda dicho, ahora solo hasta donde llegó a escribir. Es el modelo de ADR-245 frente a la letra… |
 | [253](docs/decisions/ADR-253-arreglar-lo-que-salio-del-repaso-final-antes-de-sus-pruebas.md) | 2026-10-17 | APROBADO | Arreglar lo que salió del repaso final antes de sus pruebas | Un arreglo por punto, en los ficheros donde vive el fallo: `127.0.0.1`. Los seis adaptadores de Ollama, la charla, las huellas y los cuatro |
 | [252](docs/decisions/ADR-252-dejar-la-voz-y-la-ventana-listas-para-sus-pruebas-de-voz.md) | 2026-10-17 | APROBADO | Dejar la voz y la ventana listas para sus pruebas de voz | Tope propio del juez, cortarle colgando su conexión, `think` apagado con reintento, la APM soltada al salir y migrar sin el registro de Alembic. Son 1(a)… |
@@ -356,6 +357,7 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 | `paso-largo-sin-plazo-propio` | 2 | sí | 228, 224 |
 | `pieza-correcta-a-la-que-no-llama-quien-la-necesita` | 2 | sí | 248, 197 |
 | `vista-que-copia-el-corpus-del-que-venia-huyendo` | 2 | sí | 218, 196 |
+| `cierre-que-no-corta-todo-lo-que-pide` | 1 | sí | 255 |
 | `comparar-instantes-como-texto` | 1 | sí | 229 |
 | `condicion-construida-sin-el-mecanismo-que-la-hace-cumplible` | 1 | sí | 200 |
 | `cortar-solo-entre-trozos` | 1 | sí | 252 |
@@ -478,6 +480,10 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 
 - **ADR-218** — dejar que la única lectura lleve dos veces la misma ruta y la fila de cada pieza de evidencia, y descubrirlo cuando la guardia bloquea una PR que no tiene la culpa; es la segunda vez que muerde esta familia en 17 días, y el suelo que no se puede cortar está declarado arriba con su cifra. (lo hace cumplir `tests/engine/test_memoria.py`).
 - **ADR-196** — una vista que existe para caber en una sola lectura (lo hace cumplir `tests/engine/test_memoria.py`).
+
+### `cierre-que-no-corta-todo-lo-que-pide`
+
+- **ADR-255** — cada trabajo de fondo nuevo nacería sin saber cortarse al cerrar (lo hace cumplir `tests/unit/test_toda_conexion_nace_colgable.py`).
 
 ### `comparar-instantes-como-texto`
 

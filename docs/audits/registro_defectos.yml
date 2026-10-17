@@ -1715,3 +1715,22 @@ defectos:
       - src/sirius/application/send_message.py
       - src/sirius/application/robot_conversation.py
       - tests/acceptance/test_robot_0_3_voz.py
+  # ADR-255: al cerrar Sirius, las peticiones de red en vuelo de los trabajos de fondo no se
+  # cortaban, y la salida esperaba a que acabaran, de 5 s a 600 s según el trabajo: cada
+  # trabajador decidía cómo parar. Lo encontraron las rondas 1 y 2 de Codex sobre la #698, y
+  # su nota de arranque sigue en la incidencia.
+  - id: H-255
+    titulo: Al cerrar Sirius, las peticiones de red en vuelo no se cortaban y la salida esperaba a que acabaran
+    bloque: producto
+    gravedad: media
+    estado: cerrado
+    cerrado_por: c2b4aa9960292c1c124ba6c8a74957c1ccfb5106
+    pr: 698
+    adr: 255
+    incidencia: 699
+    ficheros:
+      - src/sirius/infrastructure/network.py
+      - src/sirius/presentation/main_window.py
+      - src/sirius/main.py
+      - src/sirius/listen_console.py
+      - tests/unit/test_toda_conexion_nace_colgable.py
