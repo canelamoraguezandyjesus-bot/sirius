@@ -350,7 +350,8 @@ PR sin cambiar el head que revisaron: la de ADR-245 (PR #690) y la de ADR-246 (P
 - **La batería entera**, con el diagnóstico: 8 818 en verde, 14 omitidas y 2 `xfail`,
   ningún fallo, en 22 min 50 s. Son 21 pruebas nuevas: 9 de la orden de las marcas, 4 de la
   de E-R02-05 y 8 del diagnóstico y `--modelo`. Antes del diagnóstico eran 8 809, en
-  22 min 34 s.
+  22 min 34 s. Con las hojas, la lista de modelos y lo demás de la PR, sobre `76daa2dc`, el
+  árbol final: 8 869 en verde, 14 omitidas y 2 `xfail`, ningún fallo, en 23 min 32 s.
 - **ruff** limpio; **mypy** sin errores en 733 ficheros; **el comprobador de documentos**,
   sin defectos en ADR-245, ADR-246, ADR-247, `PRUEBAS_0.2_DEL_ROBOT.md` y `MEMORIA.md`.
 - **Las hojas en su pantalla**, con una respuesta de 3 000 caracteres, en la pantalla de

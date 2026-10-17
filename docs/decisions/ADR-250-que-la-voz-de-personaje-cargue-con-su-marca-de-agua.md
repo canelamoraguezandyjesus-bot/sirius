@@ -86,8 +86,8 @@ Es una dependencia de verdad de ese extra: Perth importa `pkg_resources`, y quie
 - **Las pruebas que leen los extras, el lock o `pyproject.toml`**, 18 ficheros: 1 342 en
   verde.
 - **ruff** limpio; **mypy** sin errores en 735 ficheros.
-- **La batería entera**, sobre `401ea5a1`, el árbol final de la PR: 8 847 en verde,
-  14 omitidas y 2 `xfail`, ningún fallo, en 23 min 41 s.
+- **La batería entera**, sobre `76daa2dc`, el árbol final de la PR: 8 869 en verde,
+  14 omitidas y 2 `xfail`, ningún fallo, en 23 min 32 s.
 - **Perth de verdad**, en un entorno aparte con los 157 paquetes que el lock instala con el
   extra `personaje`, `torch` 2.14.1 incluido, sin la gráfica ni los pesos de Chatterbox:
   - con `setuptools` 81.0.0, `import chatterbox.mtl_tts, perth` deja
