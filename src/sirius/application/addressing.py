@@ -33,7 +33,11 @@ import re
 #: que la tele entre poco y larga para contestarle sin repetir su nombre.
 CONVERSATION_SECONDS = 10.0
 
-_NAME = re.compile(r"\bsirius\b", re.IGNORECASE)
+#: Su nombre, el que le despierta. El transcriptor lo recibe como pista para escribirlo
+#: así (ADR-252), pero aquí se reconoce exacto: «sirio» también es «de Siria».
+NAME = "Sirius"
+
+_NAME = re.compile(rf"\b{NAME}\b", re.IGNORECASE)
 
 
 def says_his_name(text: str) -> bool:
