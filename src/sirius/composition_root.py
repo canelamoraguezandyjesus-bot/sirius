@@ -42,6 +42,7 @@ from sirius.adapters.export.filesystem_export_service import build_filesystem_ex
 from sirius.adapters.llm.budget import BudgetPolicy, BudgetTracker
 from sirius.adapters.llm.fake import FakeLLMProvider
 from sirius.adapters.llm.ollama_chat import (
+    DEFAULT_NUM_PREDICT,
     OllamaChatProvider,
     OllamaNotAvailableError,
     list_installed_models,
@@ -144,6 +145,7 @@ from sirius.config.llm_provider_settings import (
     OLLAMA_CHAT_MODEL_SETTING,
     LLMProviderConfigurationError,
     LLMProviderKind,
+    resolve_max_output_tokens,
     resolve_ollama_chat_settings,
     resolve_openai_api_key,
     resolve_openai_provider_settings,
@@ -437,6 +439,16 @@ def chat_goes_through_ollama() -> bool:
         return False
 
 
+def _blind_test_num_predict() -> int:
+    """El tope de salida de los ajustes para la prueba a ciegas, que pregunta a modelos aún
+    sin elegir (ADR-248). Si los ajustes no lo dan bien, el de serie: elegir modelo no se
+    para por eso, y la charla ya dice qué está mal."""
+    try:
+        return resolve_max_output_tokens(dict(load_settings()))
+    except LLMProviderConfigurationError:
+        return DEFAULT_NUM_PREDICT
+
+
 def _local_chat(provider: LLMProvider) -> OllamaChatProvider | None:
     """La charla, si va por el Ollama de este ordenador; si no, ninguna.
 
@@ -461,7 +473,7 @@ class _LocalChatModel:
 
     def __init__(self, transport: httpx.BaseTransport | None) -> None:
         self._transport = transport
-        self._key: tuple[str, int] | None = None
+        self._key: tuple[str, int, int] | None = None
         self._provider: OllamaChatProvider | None = None
         # El juez de cada turno y el de las preguntas trampa corren en hilos distintos.
         self._lock = threading.Lock()
@@ -471,13 +483,16 @@ class _LocalChatModel:
             settings = resolve_ollama_chat_settings(dict(load_settings()))
         except LLMProviderConfigurationError:
             return None
-        key = (settings.model, settings.num_ctx)
+        key = (settings.model, settings.num_ctx, settings.num_predict)
         with self._lock:
             if self._provider is None or self._key != key:
                 if self._provider is not None:
                     self._provider.close()
                 self._provider = OllamaChatProvider(
-                    settings.model, num_ctx=settings.num_ctx, transport=self._transport
+                    settings.model,
+                    num_ctx=settings.num_ctx,
+                    num_predict=settings.num_predict,
+                    transport=self._transport,
                 )
                 self._key = key
             return self._provider
@@ -525,6 +540,7 @@ def _build_llm_provider(
             return OllamaChatProvider(
                 ollama_settings.model,
                 num_ctx=ollama_settings.num_ctx,
+                num_predict=ollama_settings.num_predict,
                 transport=ollama_transport,
             )
 
@@ -990,7 +1006,9 @@ def build_conversation_dependencies(
 
     blind_test_use_case = BlindTestUseCase(
         identity_repository=identity_repository,
-        provider_for=lambda model: OllamaChatProvider(model, transport=ollama_transport),
+        provider_for=lambda model: OllamaChatProvider(
+            model, num_predict=_blind_test_num_predict(), transport=ollama_transport
+        ),
         list_models=installed_chat_models,
         choose_model=choose_chat_model,
         current_model=current_chat_model,

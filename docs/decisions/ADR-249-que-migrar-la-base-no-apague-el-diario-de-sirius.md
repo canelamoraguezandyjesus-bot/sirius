@@ -67,10 +67,11 @@ El de la nota de arranque, punto 3.
 
 ## Decisión
 
-La opción 1: `fileConfig` con `disable_existing_loggers=False` en `migrations/env.py`. Es
-una línea, y vale para todo lo que migra, también para las pruebas y la línea de órdenes,
-que llaman a Alembic sin pasar por `upgrade_to_head`. Al escribir el código se decidió
-además:
+La opción 1: `disable_existing_loggers=False` en el `fileConfig` de Alembic.
+
+Es una línea, y vale para todo lo que migra, también para las pruebas y la línea de
+órdenes, que llaman a Alembic sin pasar por `upgrade_to_head`. Al escribir el código se
+decidió además:
 
 - **Se quitan los doce parches de las pruebas** que encendían un registrador antes de
   mirar el diario: dos del puente de la ventana, ocho del oído, uno del bucle que lo atiende

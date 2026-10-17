@@ -7,7 +7,8 @@ contesta en su formato de líneas JSON.
 from __future__ import annotations
 
 import json
-from collections.abc import Callable, Iterable
+import logging
+from collections.abc import Callable, Iterable, Iterator
 
 import httpx
 import pytest
@@ -71,7 +72,7 @@ def test_pide_al_ollama_local_con_la_semilla_como_sistema_y_un_contexto_explicit
     cuerpo = json.loads(request.content)
     assert cuerpo["model"] == "qwen-x"
     assert cuerpo["stream"] is True
-    assert cuerpo["options"] == {"num_ctx": 4096}
+    assert cuerpo["options"] == {"num_ctx": 4096, "num_predict": 4096}
     assert cuerpo["keep_alive"]
     assert cuerpo["messages"] == [
         {"role": "system", "content": "Eres Sirius."},
@@ -91,7 +92,7 @@ def test_el_contexto_por_defecto_es_de_8192_tokens() -> None:
 
     _eventos(_proveedor(contestar))
 
-    assert cuerpos[0]["options"] == {"num_ctx": 8192}
+    assert cuerpos[0]["options"] == {"num_ctx": 8192, "num_predict": 4096}
 
 
 def test_cuenta_los_tokens_que_dice_ollama_al_terminar() -> None:
@@ -274,3 +275,164 @@ def test_si_ollama_no_contesta_no_hay_lista_de_modelos() -> None:
 
     with pytest.raises(OllamaNotAvailableError, match="Ollama"):
         list_installed_models(httpx.MockTransport(contestar))
+
+
+# --- El tope de salida y el diario (ADR-248) ---------------------------------------
+
+
+def ollama_que_no_para(request: httpx.Request) -> httpx.Response:
+    """Un Ollama que, sin tope, escribe sin parar: 50 000 trozos, más de lo que acabaría
+    nunca una respuesta. Con ``num_predict`` para ahí, con ``done_reason`` «length», como
+    el de verdad."""
+    cuerpo = json.loads(request.content)
+    tope = cuerpo.get("options", {}).get("num_predict")
+    cuantos = tope if isinstance(tope, int) and tope > 0 else 50_000
+
+    def trozos() -> Iterator[bytes]:
+        trozo = {"message": {"role": "assistant", "content": "bla "}, "done": False}
+        for _ in range(cuantos):
+            yield (json.dumps(trozo) + "\n").encode()
+        final = {
+            "message": {"role": "assistant", "content": ""},
+            "done": True,
+            "done_reason": "length" if tope else "stop",
+            "eval_count": cuantos,
+        }
+        yield (json.dumps(final) + "\n").encode()
+
+    return httpx.Response(200, content=trozos())
+
+
+def test_pide_el_tope_de_salida_que_le_dan() -> None:
+    cuerpos: list[dict[str, object]] = []
+
+    def contestar(request: httpx.Request) -> httpx.Response:
+        cuerpos.append(json.loads(request.content))
+        return httpx.Response(200, text=_lineas("Vale."))
+
+    _eventos(
+        OllamaChatProvider("qwen-x", num_predict=300, transport=httpx.MockTransport(contestar))
+    )
+
+    assert cuerpos[0]["options"] == {"num_ctx": 8192, "num_predict": 300}
+
+
+def test_un_ollama_que_no_para_de_escribir_acaba_en_el_tope() -> None:
+    # En su ordenador, el 16-10-2026: la pregunta 46 de la prueba a ciegas no acabó en
+    # más de 10 minutos, porque sin tope Ollama escribe sin fin (ADR-248).
+    proveedor = OllamaChatProvider(
+        "qwen3:4b-instruct", num_predict=300, transport=httpx.MockTransport(ollama_que_no_para)
+    )
+
+    completado = _eventos(proveedor)[-1]
+
+    assert isinstance(completado, LLMCompleted)
+    assert completado.output_tokens == 300
+    assert completado.text.count("bla") == 300
+
+
+def test_una_respuesta_cortada_por_el_tope_acaba_como_cualquier_otra() -> None:
+    def contestar(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200, text=_lineas("Una respuesta a medi", final={"done_reason": "length"})
+        )
+
+    completado = _eventos(_proveedor(contestar))[-1]
+
+    assert isinstance(completado, LLMCompleted)
+    assert completado.text == "Una respuesta a medi"
+
+
+@pytest.fixture
+def diario() -> Iterator[list[str]]:
+    """Lo que el conector apunta en el diario, leído de su propio registrador."""
+    registrador = logging.getLogger("sirius.adapters.llm.ollama_chat")
+    apuntado: list[str] = []
+
+    class _Apunta(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            apuntado.append(record.getMessage())
+
+    manejador = _Apunta()
+    registrador.addHandler(manejador)
+    try:
+        yield apuntado
+    finally:
+        registrador.removeHandler(manejador)
+
+
+def test_si_ollama_responde_con_un_error_el_diario_dice_el_codigo_y_lo_que_dijo(
+    diario: list[str],
+) -> None:
+    def contestar(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            500, json={"error": "llama runner process has terminated: exit status 2"}
+        )
+
+    [evento] = _eventos(_proveedor(contestar))
+
+    assert isinstance(evento, LLMError)
+    assert evento.kind is LLMErrorKind.UNKNOWN
+    assert diario == [
+        "Ollama respondió 500 a la charla: llama runner process has terminated: exit status 2"
+    ]
+
+
+def test_un_error_a_mitad_de_respuesta_queda_en_el_diario_con_lo_que_dijo_ollama(
+    diario: list[str],
+) -> None:
+    def contestar(request: httpx.Request) -> httpx.Response:
+        lineas = [
+            json.dumps({"message": {"content": "Empez"}, "done": False}),
+            json.dumps({"error": "se acabó la memoria"}),
+        ]
+        return httpx.Response(200, text="\n".join(lineas) + "\n")
+
+    _eventos(_proveedor(contestar))
+
+    assert diario == ["Operación op-1: Ollama devolvió un error: se acabó la memoria"]
+
+
+def test_lo_que_ollama_repita_de_la_charla_no_llega_al_diario(diario: list[str]) -> None:
+    peticion = LLMRequest(
+        operation_id="op-2",
+        instructions="Eres Sirius.\nSu hermana Lucía es enfermera en el hospital.",
+        input_text="¿A qué se dedica mi hermana Lucía?",
+    )
+
+    def contestar(request: httpx.Request) -> httpx.Response:
+        dicho = (
+            "bad input: ¿A qué se dedica mi hermana Lucía?"
+            " Su hermana Lucía es enfermera en el hospital."
+        )
+        return httpx.Response(400, json={"error": dicho})
+
+    _eventos(_proveedor(contestar), peticion)
+
+    assert diario == ["Ollama respondió 400 a la charla: bad input: […] […]"]
+
+
+def test_un_error_muy_largo_llega_recortado_al_diario(diario: list[str]) -> None:
+    def contestar(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(500, json={"error": "x" * 1000})
+
+    _eventos(_proveedor(contestar))
+
+    [linea] = diario
+    dicho = linea.removeprefix("Ollama respondió 500 a la charla: ")
+    assert len(dicho) == 300
+    assert dicho.endswith("…")
+
+
+def test_un_fallo_de_red_antes_de_contestar_dice_cual_fue(diario: list[str]) -> None:
+    def contestar(request: httpx.Request) -> httpx.Response:
+        raise httpx.RemoteProtocolError("Server disconnected without sending a response.")
+
+    [evento] = _eventos(_proveedor(contestar))
+
+    assert isinstance(evento, LLMError)
+    assert evento.kind is LLMErrorKind.UNKNOWN
+    assert diario == [
+        "Operación op-1: fallo de red con Ollama"
+        " (RemoteProtocolError: Server disconnected without sending a response.)"
+    ]

@@ -1,4 +1,4 @@
-# ADR-248 — Poner tope a lo que escribe el modelo de Ollama y apuntar lo que dice cuando falla
+# ADR-248 — Poner tope a lo que escribe Ollama y apuntar sus errores
 
 - Estado: APROBADO
 - Fecha: 2026-10-16
@@ -80,15 +80,59 @@ El de la nota de arranque, punto 3.
 
 ## Decisión
 
-La opción 1. Lo que quede por decidir al escribir el código se anota aquí con su porqué.
+La opción 1: `num_predict` con el «Máximo de tokens de salida» de los ajustes.
+
+El proveedor de Ollama lo pide en cada petición, 4 096 si los ajustes no dicen otro, como el
+de OpenAI. Al escribir el código se decidió además:
+
+- **Un solo sitio lee el tope**: `resolve_max_output_tokens`, en
+  `src/sirius/config/llm_provider_settings.py`, con la misma clave y la misma validación
+  que tenía OpenAI, que ahora también la usa. La clave conserva su nombre de la 0.1,
+  `openai_max_output_tokens`, porque es la que guarda la pestaña Configuración.
+- **Quién lo pasa**: la charla y el modelo de la charla que usan el juez y el sueño, con
+  los ajustes de la charla; la prueba a ciegas, que pregunta a modelos aún sin elegir, lo
+  lee de los ajustes al construir cada uno, y si están mal puestos usa el de serie: elegir
+  modelo no se para por eso, y la charla ya dice qué está mal. Las preguntas trampa usan el
+  de la charla.
+- **El proveedor no se puede construir sin tope**: si nadie se lo da, lleva el de serie.
+- **Una respuesta cortada por el tope** acaba como hoy cualquier otra: con lo escrito.
+- **El diario** apunta, cuando Ollama contesta con un error, el código HTTP y su texto; con
+  un error a mitad de respuesta, su texto; y con un fallo de red antes de contestar, cuál
+  fue. El texto va en una línea, recortado a 300 caracteres, y lo que repita de lo que se
+  le pidió al modelo, cada línea de 12 caracteres o más de las instrucciones y de lo que
+  dijo él, se tacha antes de apuntarlo.
 
 ## Comprobación que la sostiene
 
-Se escribe al acabar.
+- **El cuelgue, visto antes de arreglarlo**, con un Ollama de mentira que sin tope escribe
+  50 000 trozos y con él para ahí, con `done_reason` «length»
+  (`tests/integration/test_tope_de_salida_de_ollama.py`): con el código de `main`, la
+  charla, las preguntas trampa con su juez y la prueba a ciegas pedían sin tope. Con el
+  arreglo, las tres piden el de los ajustes, 5 en la prueba, y acaban en él.
+- **El proveedor** (`tests/unit/test_ollama_chat_provider.py`): pide el tope que le dan y
+  4 096 si no le dan ninguno; con el Ollama que no para, acaba en el tope; una respuesta
+  cortada por él acaba con lo escrito; y el diario dice el código y el texto de Ollama, el
+  error a mitad de respuesta, el fallo de red y cuál fue, tacha lo que repita de la charla
+  y recorta lo largo.
+- **Mutación**: 9, caen las 9: sin `num_predict` en la petición; la charla, el juez y la
+  prueba a ciegas, cada uno sin el tope de sus ajustes; el diario sin tachar, sin recortar,
+  y sin el texto en cada uno de sus tres casos.
+- **Las pruebas que tocan Ollama, sus ajustes y quien los usa**, 40 ficheros: 1 057 en
+  verde, 2 omitidas y 2 `xfail`.
+- **ruff** limpio; **mypy** sin errores en 734 ficheros.
+- **La batería entera**: se escribe la última, sobre el árbol final.
 
 ## Consecuencias
 
-Se escriben al acabar.
+- **Ninguna respuesta de Ollama pasa del tope**: la prueba a ciegas, las preguntas trampa,
+  el juez, el sueño, la charla y la voz acaban como mucho en él.
+- **Con 4 096 tokens, una respuesta puede tardar minutos** con un modelo lento, pero acaba.
+- **Si él baja el «Máximo de tokens de salida»**, también se cortan antes las respuestas de
+  Ollama, como pasaba con OpenAI.
+- **Su diario dirá por qué falla Ollama la próxima vez**, si el diario apunta: por eso va en
+  la misma PR que ADR-249.
+- **Lo que Ollama repita de la charla en un error se tacha** si es una línea de 12
+  caracteres o más; una más corta podría llegar al diario.
 
 ## Alternativas descartadas y por qué
 
@@ -97,9 +141,17 @@ Se escriben al acabar.
 - **Un tope de tiempo** (opción 3): cortaría también una respuesta buena de un modelo
   lento, y el texto sigue llegando, así que no hay silencio que medir.
 
+## Revisión propia
+
+Antes de empujar se releyó el diff entero contra el código y la nota. Encontró una cosa,
+arreglada: las pruebas del diario leían el registro de la raíz, que no ve lo que apunta
+`sirius` cuando ya se configuró su diario en el mismo proceso; leen el registrador del
+conector.
+
 ## La lección
 
-- ninguna: esta es la nota de arranque; si deja una lección, se escribe al acabar.
+- ninguna: se escribe con su entrada en el registro de defectos, en el commit siguiente,
+  que es cuando existe el sha del arreglo (skill `registro-de-defectos`).
 
 ## Revisión externa
 

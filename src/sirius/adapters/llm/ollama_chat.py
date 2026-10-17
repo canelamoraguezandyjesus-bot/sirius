@@ -17,6 +17,10 @@ Lo que garantiza por construcción:
   recorta, y el que trae Ollama por defecto puede ser más corto que la
   semilla, sus ejemplos y la charla juntos. Se pide uno explícito,
   ``num_ctx``, de 8.192 tokens salvo que los ajustes digan otro.
+- **Una respuesta que acaba.** Sin tope, Ollama puede escribir sin fin, y como
+  no deja de llegar texto, el tope de lectura no salta nunca. Se pide uno,
+  ``num_predict``, el «Máximo de tokens de salida» de los ajustes, 4.096 si no
+  dicen otro (ADR-248). Una respuesta cortada por él acaba como cualquier otra.
 - **Ni el razonamiento interno ni la sugerencia de recuerdo llegan al
   propietario.** Los modelos que «piensan» escriben ``<think>…</think>`` antes
   de contestar, y ``render_instructions()`` pide la sugerencia detrás de un
@@ -50,6 +54,7 @@ from sirius.ports.llm import (
 
 __all__ = [
     "DEFAULT_NUM_CTX",
+    "DEFAULT_NUM_PREDICT",
     "OLLAMA_CHAT_URL",
     "OLLAMA_TAGS_URL",
     "OllamaChatProvider",
@@ -67,6 +72,17 @@ OLLAMA_TAGS_URL = "http://localhost:11434/api/tags"
 
 #: Contexto que se pide al modelo si los ajustes no dicen otro.
 DEFAULT_NUM_CTX = 8192
+
+#: Cuánto puede escribir como mucho si no le dicen otro: el «Máximo de tokens de salida»
+#: de serie de los ajustes (ADR-248).
+DEFAULT_NUM_PREDICT = 4096
+
+#: Cuánto del texto de un error de Ollama va al diario.
+_ERROR_TEXT_LIMIT = 300
+
+#: Lo más corto que se tacha si un error de Ollama repite lo que se le pidió: más corto,
+#: tacharía palabras sueltas de su mensaje.
+_SHORTEST_ECHO = 12
 
 #: Cuánto tiempo deja Ollama el modelo cargado después de cada respuesta. Con
 #: el valor por defecto, cinco minutos, la primera frase tras una pausa
@@ -95,6 +111,34 @@ _SAFE_MESSAGES: dict[LLMErrorKind, str] = {
 
 def _error(kind: LLMErrorKind, partial_text: str = "") -> LLMError:
     return LLMError(kind=kind, message=_SAFE_MESSAGES[kind], partial_text=partial_text)
+
+
+def _for_the_log(text: str, request: LLMRequest) -> str:
+    """Lo que dijo Ollama al fallar, para el diario: en una línea, recortado, y sin lo que
+    se le pidió al modelo, por si lo repite (ADR-248)."""
+    for asked in (request.instructions, request.input_text):
+        for line in asked.splitlines():
+            line = line.strip()
+            if len(line) >= _SHORTEST_ECHO:
+                text = text.replace(line, "[…]")
+    text = " ".join(text.split())
+    if len(text) > _ERROR_TEXT_LIMIT:
+        text = text[: _ERROR_TEXT_LIMIT - 1] + "…"
+    return text
+
+
+def _what_ollama_said(response: httpx.Response) -> str:
+    """El texto del error con que contestó Ollama, o el cuerpo tal cual si no es su JSON."""
+    try:
+        raw = response.read().decode("utf-8", errors="replace")
+    except httpx.HTTPError:
+        return ""
+    try:
+        body = json.loads(raw)
+    except json.JSONDecodeError:
+        return raw
+    error = body.get("error") if isinstance(body, dict) else None
+    return error if isinstance(error, str) else raw
 
 
 class _ThinkFilter:
@@ -148,10 +192,12 @@ class OllamaChatProvider:
         model: str,
         *,
         num_ctx: int = DEFAULT_NUM_CTX,
+        num_predict: int = DEFAULT_NUM_PREDICT,
         transport: httpx.BaseTransport | None = None,
     ) -> None:
         self._model = model
         self._num_ctx = num_ctx
+        self._num_predict = num_predict
         self._client = httpx.Client(timeout=_TIMEOUT, transport=transport, trust_env=False)
         self._cancelled_operations: set[str] = set()
         self._lock = threading.Lock()
@@ -186,7 +232,7 @@ class OllamaChatProvider:
             ],
             "stream": True,
             "keep_alive": _KEEP_ALIVE,
-            "options": {"num_ctx": self._num_ctx},
+            "options": {"num_ctx": self._num_ctx, "num_predict": self._num_predict},
         }
 
     def stream_response(self, request: LLMRequest) -> Iterable[LLMStreamEvent]:
@@ -197,11 +243,19 @@ class OllamaChatProvider:
             try:
                 with self._client.stream("POST", OLLAMA_CHAT_URL, json=self._body(request)) as r:
                     if r.status_code == httpx.codes.NOT_FOUND:
-                        _logger.error("Ollama no tiene el modelo de la charla (%s)", self._model)
+                        _logger.error(
+                            "Ollama no tiene el modelo de la charla (%s): %s",
+                            self._model,
+                            _for_the_log(_what_ollama_said(r), request),
+                        )
                         yield _error(LLMErrorKind.CONFIGURATION)
                         return
                     if r.status_code >= httpx.codes.BAD_REQUEST:
-                        _logger.error("Ollama respondió %s a la charla", r.status_code)
+                        _logger.error(
+                            "Ollama respondió %s a la charla: %s",
+                            r.status_code,
+                            _for_the_log(_what_ollama_said(r), request),
+                        )
                         yield _error(LLMErrorKind.UNKNOWN)
                         return
                     yield from self._consume(request, r.iter_lines())
@@ -211,8 +265,13 @@ class OllamaChatProvider:
             except httpx.TimeoutException:
                 _logger.error("Operación %s: Ollama tardó demasiado", request.operation_id)
                 yield _error(LLMErrorKind.TIMEOUT)
-            except httpx.HTTPError:
-                _logger.error("Operación %s: fallo de red con Ollama", request.operation_id)
+            except httpx.HTTPError as exc:
+                _logger.error(
+                    "Operación %s: fallo de red con Ollama (%s: %s)",
+                    request.operation_id,
+                    type(exc).__name__,
+                    _for_the_log(str(exc), request),
+                )
                 yield _error(LLMErrorKind.UNKNOWN)
         finally:
             with self._lock:
@@ -251,7 +310,11 @@ class OllamaChatProvider:
                     yield _error(LLMErrorKind.INVALID_RESPONSE, partial())
                     return
                 if "error" in chunk:
-                    _logger.error("Operación %s: Ollama devolvió un error", request.operation_id)
+                    _logger.error(
+                        "Operación %s: Ollama devolvió un error: %s",
+                        request.operation_id,
+                        _for_the_log(str(chunk["error"]), request),
+                    )
                     yield _error(LLMErrorKind.UNKNOWN, partial())
                     return
                 message = chunk.get("message")

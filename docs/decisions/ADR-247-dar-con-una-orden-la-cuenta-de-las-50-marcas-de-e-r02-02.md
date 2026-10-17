@@ -138,9 +138,11 @@ la misma vara: la prueba que lo mira se ve fallar con el código de antes.
 
 ## Decisión
 
-La opción 1: una orden da la cuenta de PA-R02-06 sobre una copia de su base, sin escribir
-en ella; y la de E-R02-05 busca su base donde la ventana, cierra todo lo que abre y dice si
-pasa antes de borrar su carpeta. En detalle:
+La opción 1: una orden da la cuenta de las marcas, y la de E-R02-05 mide su base y acaba.
+
+En detalle, la orden da la cuenta de PA-R02-06 sobre una copia de su base, sin escribir en
+ella; y la de E-R02-05 busca su base donde la ventana, cierra todo lo que abre y dice si
+pasa antes de borrar su carpeta:
 
 - **La orden de las marcas**, `scripts/contar_las_marcas.py`. Copia su base con una
   conexión de solo lectura (`?mode=ro`), pone la copia al día con las migraciones, por si
