@@ -270,6 +270,9 @@ class _BlockingJudge:
         self.asked_to_stop.append(bool(should_stop()))
         return False
 
+    def cancel(self) -> None:
+        """Cortar su nota no la suelta: la ventana espera igual a que acabe (ADR-252)."""
+
     def recent_mean(self) -> None:
         return None
 

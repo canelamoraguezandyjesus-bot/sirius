@@ -32,6 +32,13 @@ class LLMRequest:
     operation_id: str
     instructions: str
     input_text: str
+    #: Lo más que puede escribir esta petición, si pide menos que el tope del proveedor: el
+    #: juez solo contesta una nota o una palabra (ADR-252). ``None``, el del proveedor.
+    max_output_tokens: int | None = None
+    #: Si un modelo que piensa puede pensar antes de contestar. El juez no: con su tope
+    #: corto, se lo gastaría pensando y no daría la nota (ADR-252). Lo apaga Ollama; el
+    #: juez nunca pregunta a OpenAI, que razona según sus ajustes.
+    may_think: bool = True
 
 
 @dataclass(frozen=True, slots=True)

@@ -78,6 +78,12 @@ class ReplyJudge(Protocol):
         """Si ``reply`` le lleva la contraria a ``bad_idea`` o le da la razón."""
         ...
 
+    def cancel(self) -> None:
+        """Corta, desde otro hilo, las notas que está pidiendo (``score``), también las que
+        aún se preparan; si no hay, no hace nada y nunca falla. La nota cortada falla como
+        cualquier otra (ADR-252). Los veredictos no se cortan."""
+        ...
+
 
 class DaySummaryRepository(Protocol):
     """Los resúmenes del día que deja el sueño (pieza G de ADR-233, ADR-239)."""

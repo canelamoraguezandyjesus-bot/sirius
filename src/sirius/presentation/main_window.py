@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import math
 import threading
+import time
 import uuid
 from collections.abc import Callable
 from pathlib import Path
@@ -173,6 +175,9 @@ MUTED = "En silencio"
 VOICE_BUSY = "Te he oído, pero estaba con otra cosa: dímelo otra vez cuando acabe."
 #: Lo que dice si abrir el oído falla de una forma que no se espera.
 LISTENING_BROKEN = "No puedo oírte: algo ha fallado al abrir el oído ({kind})."
+#: Cuánto espera el juez desde el último turno de voz: mientras dura una charla de voz no
+#: puntúa, porque usa el mismo modelo y cada turno tendría que esperarle (ADR-252).
+VOICE_QUIET_SECONDS = 60.0
 
 VOICE_PREVIEW_TEXT = "Hola. Soy Sirius, y esta es mi voz. Uno, dos, tres."
 """Frase de prueba al elegir voz.
@@ -348,6 +353,13 @@ class MainWindow(QMainWindow):
         self._trick_questions_use_case = trick_questions_use_case
         self._active_judge_worker: ReplyJudgeWorker | None = None
         self._judge_again = False
+        #: Cuándo fue el último turno de voz, por el reloj de ``_monotonic``: el juez no
+        #: arranca hasta ``VOICE_QUIET_SECONDS`` después (ADR-252).
+        self._monotonic: Callable[[], float] = time.monotonic
+        self._last_voice_turn_at: float | None = None
+        self._judge_timer = QTimer(self)
+        self._judge_timer.setSingleShot(True)
+        self._judge_timer.timeout.connect(self._start_judge)
         # Pieza F de ADR-233: las huellas de los recuerdos para buscar por
         # significado. Sin el servicio, la ventana es la de antes.
         self._memory_embedding_service = memory_embedding_service
@@ -2060,6 +2072,9 @@ class MainWindow(QMainWindow):
         """
         if self._closed or self._close_requested:
             return None
+        # Le están hablando: vaya o no este turno, la charla de voz sigue, y el juez espera
+        # desde aquí (ADR-252).
+        self._last_voice_turn_at = self._monotonic()
         if self._foreground_busy() or self._is_export_busy:
             self.voice_notice_label.setText(VOICE_BUSY)
             return None
@@ -2068,7 +2083,8 @@ class MainWindow(QMainWindow):
         # Cortarle mientras contesta por voz es la pieza E: aquí no hay «Cancelar».
         self.cancel_button.setVisible(False)
         # Como para un turno escrito: lo de segundo plano para, y lo que tiene entre
-        # manos lo acaba antes de que el turno empiece. Se espera en el hilo del oído.
+        # manos lo acaba antes de que el turno empiece. Se espera en el hilo del oído. El
+        # juez no acaba su nota: la corta, y el turno espera solo a que la deje (ADR-252).
         self._stop_background()
         running = (
             self._active_judge_worker,
@@ -2084,6 +2100,8 @@ class MainWindow(QMainWindow):
         enseña. Si al final no fue a la charla, lo que se enseñó como suyo no se guardó, y
         la lista vuelve a ser la de la base.
         """
+        # La charla de voz sigue viva desde que acaba este turno: el juez espera desde aquí.
+        self._last_voice_turn_at = self._monotonic()
         if turn is None:
             self._replace_history_with_authoritative_state()
             self._finish_sending()
@@ -2104,6 +2122,9 @@ class MainWindow(QMainWindow):
         self._show_send_outcome(result)
         # El presupuesto no: un turno de voz solo va a un modelo de este ordenador.
         self._refresh_mode_indicator()
+        # La respuesta nueva queda para el juez, como una escrita, pero no la puntúa hasta
+        # que pase la charla de voz (_start_judge).
+        self._judge_again = True
         self._finish_sending()
 
     def listening_stopped(self, notice: str) -> None:
@@ -2149,6 +2170,7 @@ class MainWindow(QMainWindow):
         # repetir: la ventana puede seguir viva tras un cambio de proyecto, con
         # los mismos repositorios que la nueva (ronda 1 de Codex).
         self._closed = True
+        self._judge_timer.stop()
         self._stop_background()
         if self._listening_loop is not None:
             self._listening_loop.stop()
@@ -3063,11 +3085,25 @@ class MainWindow(QMainWindow):
             # Sigue cuando acabe el que corre o lo de delante (_resume_background).
             self._judge_again = True
             return
+        quiet = self._voice_quiet_left()
+        if quiet > 0:
+            # Mientras dura una charla de voz, el juez espera a que pase (ADR-252).
+            self._judge_again = True
+            self._judge_timer.start(math.ceil(quiet * 1000))
+            return
         worker = ReplyJudgeWorker(self._reply_judge_service)
         worker.signals.finished.connect(self._on_judge_finished)
         self._active_judge_worker = worker
         self._judge_again = False
         self._thread_pool.start(worker)
+
+    def _voice_quiet_left(self) -> float:
+        """Cuántos segundos faltan para que el juez pueda puntuar: ``VOICE_QUIET_SECONDS``
+        desde el último turno de voz, o ninguno si no ha habido."""
+        if self._last_voice_turn_at is None:
+            return 0.0
+        since = self._monotonic() - self._last_voice_turn_at
+        return max(0.0, VOICE_QUIET_SECONDS - since)
 
     def _on_judge_finished(self) -> None:
         self._active_judge_worker = None

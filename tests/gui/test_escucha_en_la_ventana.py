@@ -33,6 +33,7 @@ from sirius.application.memory_commands import FORGET_ABOUT_STORED
 from sirius.application.studio_voice import StudioVoiceUseCase, VoiceSettings
 from sirius.composition_root import ConversationDependencies, build_conversation_dependencies
 from sirius.config.local_voice import LocalVoiceSettings
+from sirius.domain.reply_judge import TrickVerdict
 from sirius.infrastructure.local_voice_installation import (
     INSTALL_COMMAND,
     LISTENING_MODEL_FILES,
@@ -64,7 +65,7 @@ from sirius.ports.text_to_speech import (
     SynthesizedSpeech,
 )
 from sirius.presentation.error_messages import failed_send_message
-from sirius.presentation.main_window import LISTENING, MUTED, VOICE_BUSY
+from sirius.presentation.main_window import LISTENING, MUTED, VOICE_BUSY, VOICE_QUIET_SECONDS
 from sirius.presentation.message_view import MessageItemWidget
 from sirius.presentation.validated_main_window import ValidatedMainWindow
 
@@ -216,7 +217,27 @@ def _instala_la_voz() -> None:
         (instalacion.speaking_voice_dir / nombre).write_bytes(b"de mentira")
 
 
-def _monta(tmp_path: Path, *, con_la_voz: bool = True) -> _Sirius:
+class _JuezQueCuenta:
+    """Un juez de mentira: apunta lo que puntúa y da siempre un 4."""
+
+    def __init__(self) -> None:
+        self.puntuadas: list[str] = []
+
+    def score(self, reply: str) -> int:
+        self.puntuadas.append(reply)
+        return 4
+
+    def verdict(self, bad_idea: str, reply: str) -> TrickVerdict:
+        del bad_idea, reply
+        return TrickVerdict.DISCREPA
+
+    def cancel(self) -> None:
+        pass
+
+
+def _monta(
+    tmp_path: Path, *, con_la_voz: bool = True, juez: _JuezQueCuenta | None = None
+) -> _Sirius:
     rutas = resolve_paths()
     initialize_persistence(rutas)
     if con_la_voz:
@@ -236,6 +257,7 @@ def _monta(tmp_path: Path, *, con_la_voz: bool = True) -> _Sirius:
         text_embedder=_SinHuellas(),
         listening_engines=oido,
         speaking_engines=lambda modelo_de_voz: SpeakingEngines(_Voz(), _Altavoz()),
+        reply_judge=juez,
     )
     deps.initial_project_use_case.create_initial_project("Charla", "Charlar")
     deps.send_message_use_case.set_llm_provider(modelo)
@@ -960,3 +982,88 @@ def test_dentro_de_model_studio_que_su_voz_acabe_no_abre_el_oido(
         assert not sirius.deps.local_listening.listening
     finally:
         ventana._thread_pool.waitForDone(5000)
+
+
+# --- El juez no frena la voz (ADR-252) -----------------------------------------------------
+
+
+def test_el_juez_no_puntua_mientras_dura_la_charla_de_voz(qtbot: QtBot, tmp_path: Path) -> None:
+    juez = _JuezQueCuenta()
+    sirius = _monta(tmp_path, juez=juez)
+    ventana = _ventana(qtbot, sirius)
+    reloj = [1000.0]
+    ventana._monotonic = lambda: reloj[0]
+
+    # El primer turno tarda en contestar 50 s: la espera cuenta desde que acaba.
+    sirius.modelo.antes = lambda: reloj.__setitem__(0, reloj[0] + 50)
+    sirius.suena("Sirius, ¿qué tal?")
+    sirius.deps.local_listening.attend()
+    sirius.modelo.antes = None
+
+    # Acabado el turno de voz, el juez no arranca: espera a que pase la charla.
+    assert _mensajes(ventana)[-1] == ("Sirius", "Respuesta 1.")
+    assert not ventana.judge_in_progress
+    assert ventana._judge_timer.isActive()
+    assert ventana._judge_timer.interval() >= (VOICE_QUIET_SECONDS - 1) * 1000
+    qtbot.wait(100)
+    assert juez.puntuadas == []
+
+    # Otro turno antes de que pase: vuelve a esperar, ahora desde este.
+    reloj[0] += 30
+    sirius.suena("Sirius, ¿sigues ahí?")
+    sirius.deps.local_listening.attend()
+    ventana._judge_timer.timeout.emit()
+    qtbot.wait(100)
+    assert juez.puntuadas == []
+
+    # Pasado el rato sin hablarle, puntúa lo que quedó sin nota.
+    reloj[0] += VOICE_QUIET_SECONDS + 1
+    ventana._judge_timer.timeout.emit()
+    qtbot.waitUntil(lambda: len(juez.puntuadas) == 2, timeout=5000)
+    assert juez.puntuadas == ["Respuesta 1.", "Respuesta 2."]
+
+
+def test_sin_charla_de_voz_el_juez_puntua_al_acabar_lo_escrito(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    juez = _JuezQueCuenta()
+    sirius = _monta(tmp_path, juez=juez)
+    ventana = _ventana(qtbot, sirius)
+
+    ventana.message_input.setText("Hola, Sirius.")
+    ventana.send_button.click()
+
+    qtbot.waitUntil(lambda: juez.puntuadas == ["Respuesta 1."], timeout=5000)
+    assert not ventana._judge_timer.isActive()
+
+
+def test_un_turno_de_voz_que_no_va_tambien_hace_esperar_al_juez(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    juez = _JuezQueCuenta()
+    sirius = _monta(tmp_path, juez=juez)
+    ventana = _ventana(qtbot, sirius)
+    ventana._monotonic = lambda: 1000.0
+    escribiendo, sigue = threading.Event(), threading.Event()
+
+    def espera() -> None:
+        escribiendo.set()
+        sigue.wait(5)
+
+    sirius.modelo.antes = espera
+    ventana.message_input.setText("Hola por escrito.")
+    ventana.send_button.click()
+    qtbot.waitUntil(escribiendo.is_set, timeout=5000)
+    sirius.modelo.antes = None
+    sirius.suena("Sirius, ¿me oyes?")
+
+    # Le hablan mientras escribe: ese turno no va, pero la charla de voz ha empezado.
+    try:
+        sirius.deps.local_listening.attend()
+    finally:
+        sigue.set()
+    qtbot.waitUntil(ventana.send_button.isEnabled, timeout=5000)
+
+    assert ventana._judge_timer.isActive()
+    qtbot.wait(100)
+    assert juez.puntuadas == []
