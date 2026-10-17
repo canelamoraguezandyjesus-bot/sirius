@@ -7,12 +7,14 @@ propietario, EV-023). Este adaptador habla con el Ollama de esta máquina por
 
 Lo que garantiza por construcción:
 
-- **Solo va a este ordenador.** La dirección es ``http://localhost:11434``,
+- **Solo va a este ordenador.** La dirección es ``http://127.0.0.1:11434``,
   absoluta en cada petición, y ningún parámetro ni ajuste la cambia. El
   cliente no lee los proxies del sistema (``trust_env=False``): un proxy
   configurado en Windows podría sacar de la máquina hasta lo que va a
-  ``localhost``. Las pruebas enchufan un transporte de mentira, nunca otra
+  ``127.0.0.1``. Las pruebas enchufan un transporte de mentira, nunca otra
   dirección.
+  Es ``127.0.0.1`` y no ``localhost``: en Windows, ``localhost`` prueba antes
+  ``::1``, y Ollama escucha de serie solo en ``127.0.0.1`` (incidencia #696).
 - **Un contexto que quepa.** Lo que no cabe en el contexto del modelo se
   recorta, y el que trae Ollama por defecto puede ser más corto que la
   semilla, sus ejemplos y la charla juntos. Se pide uno explícito,
@@ -83,13 +85,13 @@ __all__ = [
 _logger = get_logger(__name__)
 
 #: La única dirección a la que puede ir la charla.
-OLLAMA_CHAT_URL = "http://localhost:11434/api/chat"
+OLLAMA_CHAT_URL = "http://127.0.0.1:11434/api/chat"
 
 #: Dónde dice Ollama qué modelos tiene instalados.
-OLLAMA_TAGS_URL = "http://localhost:11434/api/tags"
+OLLAMA_TAGS_URL = "http://127.0.0.1:11434/api/tags"
 
 #: Dónde dice Ollama qué sabe hacer un modelo (ADR-247).
-OLLAMA_SHOW_URL = "http://localhost:11434/api/show"
+OLLAMA_SHOW_URL = "http://127.0.0.1:11434/api/show"
 
 #: Contexto que se pide al modelo si los ajustes no dicen otro.
 DEFAULT_NUM_CTX = 8192
@@ -218,7 +220,7 @@ class _ThinkFilter:
 class OllamaChatProvider:
     """``LLMProvider`` que conversa con un modelo del Ollama de este ordenador."""
 
-    #: Solo va a ``localhost``, una dirección que no se puede cambiar
+    #: Solo va a ``127.0.0.1``, una dirección que no se puede cambiar
     #: (``sirius.ports.llm.runs_on_this_computer``).
     runs_on_this_computer = True
 

@@ -55,7 +55,7 @@ def _candidate(decision_id: int, content: str) -> RankedKnowledge:
 
 
 def _adapter(handler: httpx.MockTransport) -> OllamaRelevanceFilterAdapter:
-    client = httpx.Client(transport=handler, base_url="http://localhost:11434")
+    client = httpx.Client(transport=handler, base_url="http://127.0.0.1:11434")
     return OllamaRelevanceFilterAdapter("llama3.2", client=client)
 
 
@@ -166,7 +166,7 @@ def test_filter_candidates_returns_candidates_unmodified_on_a_server_error_respo
 
 def test_filter_candidates_never_targets_a_remote_host() -> None:
     """§6.3's structural property: no parameter anywhere lets a caller
-    redirect this adapter away from localhost."""
+    redirect this adapter away from 127.0.0.1."""
     import inspect
 
     signature = inspect.signature(OllamaRelevanceFilterAdapter.__init__)
@@ -178,7 +178,7 @@ def test_filter_candidates_never_targets_a_remote_host() -> None:
 def test_filter_candidates_ignores_an_injected_clients_remote_base_url() -> None:
     """§6.3's structural property, at the request level: even the test seam
     must not let an injected ``httpx.Client`` with a remote ``base_url``
-    redirect the actual request away from localhost."""
+    redirect the actual request away from 127.0.0.1."""
     candidates = (_candidate(1, "contenido"),)
     seen_hosts: list[str | None] = []
 
@@ -193,13 +193,13 @@ def test_filter_candidates_ignores_an_injected_clients_remote_base_url() -> None
 
     result = adapter.filter_candidates("consulta", candidates)
 
-    assert seen_hosts == ["localhost"]
+    assert seen_hosts == ["127.0.0.1"]
     assert result == candidates
 
 
 def test_filter_candidates_never_follows_a_redirect_to_a_remote_host() -> None:
     """CODEX-001 regression (PR #452): an injected client with
-    ``follow_redirects=True`` must not let a 307/308 from localhost resend
+    ``follow_redirects=True`` must not let a 307/308 from 127.0.0.1 resend
     this request (and its body) to a remote host."""
     candidates = (_candidate(1, "contenido"),)
     seen_hosts: list[str | None] = []
@@ -214,14 +214,14 @@ def test_filter_candidates_never_follows_a_redirect_to_a_remote_host() -> None:
 
     client = httpx.Client(
         transport=httpx.MockTransport(_handle),
-        base_url="http://localhost:11434",
+        base_url="http://127.0.0.1:11434",
         follow_redirects=True,
     )
     adapter = OllamaRelevanceFilterAdapter("llama3.2", client=client)
 
     result = adapter.filter_candidates("consulta", candidates)
 
-    assert seen_hosts == ["localhost"]
+    assert seen_hosts == ["127.0.0.1"]
     assert result == candidates
 
 

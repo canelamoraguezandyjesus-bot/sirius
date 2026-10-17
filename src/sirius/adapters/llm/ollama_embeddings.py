@@ -5,7 +5,7 @@ significado se parece. Las da el Ollama de este ordenador por ``/api/embed``.
 
 Lo que garantiza por construcción, como la charla (ADR-234):
 
-- **Solo va a este ordenador.** La dirección es ``http://localhost:11434``,
+- **Solo va a este ordenador.** La dirección es ``http://127.0.0.1:11434``,
   absoluta, y ningún ajuste la cambia. El cliente no lee los proxies del
   sistema (``trust_env=False``). Las pruebas enchufan un transporte de mentira,
   nunca otra dirección.
@@ -29,7 +29,7 @@ __all__ = [
 ]
 
 #: La única dirección a la que van las frases para sacar su huella.
-OLLAMA_EMBED_URL = "http://localhost:11434/api/embed"
+OLLAMA_EMBED_URL = "http://127.0.0.1:11434/api/embed"
 
 #: El modelo de huellas si los ajustes no dicen otro: uno de los dos del plan. Con su
 #: formato, el que más acertó el banco de memoria con los parecidos de su ordenador
