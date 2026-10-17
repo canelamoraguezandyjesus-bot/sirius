@@ -26,9 +26,9 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **244**.
+- Decisiones (ADR): **245**.
 - Bloques del motor: 17 cerrado, 3 fuera_de_alcance.
-- Defectos registrados: 2 abierto, 95 cerrado.
+- Defectos registrados: 3 abierto, 95 cerrado.
 - Ideas aparcadas o descartadas: 12 aparcada, 3 descartada, 2 promovida.
 - Skills: **19**.
 - Investigaciones: **14** (fotos con fecha; caducan).
@@ -79,6 +79,7 @@ huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| [251](docs/decisions/ADR-251-ajustar-la-memoria-a-lo-que-midio-su-ordenador-e-r02-04-y-e-r02-05.md) | 2026-10-17 | APROBADO | Ajustar la memoria a lo que midió su ordenador: E-R02-04 y E-R02-05 | La opción 1. Las decisiones son técnicas y caben en lo que permite ADR-238, que dejó el umbral para que lo moviera lo que dijera E-R02-04; las toma la sesión… |
 | [250](docs/decisions/ADR-250-que-la-voz-de-personaje-cargue-con-su-marca-de-agua.md) | 2026-10-17 | APROBADO | Que la voz de personaje cargue con su marca de agua | La opción 1: `setuptools<82` en el extra `personaje`. |
 | [249](docs/decisions/ADR-249-que-migrar-la-base-no-apague-el-diario-de-sirius.md) | 2026-10-16 | APROBADO | Que migrar la base no apague el diario de Sirius | La opción 1: `disable_existing_loggers=False` en el `fileConfig` de Alembic. |
 | [248](docs/decisions/ADR-248-poner-tope-a-lo-que-escribe-ollama-y-apuntar-sus-errores.md) | 2026-10-16 | APROBADO | Poner tope a lo que escribe Ollama y apuntar sus errores | La opción 1: `num_predict` con el «Máximo de tokens de salida» de los ajustes. |
@@ -338,10 +339,10 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 |---|---|---|---|
 | `regla-que-depende-de-que-alguien-se-acuerde` | 11 | no en todas | 227, 222, 220, 217, 216, 192, 191, 188, 182, 179, 174 |
 | `pieza-sin-lector` | 5 | no en todas | 210, 209, 207, 183, 175 |
+| `doble-mas-permisivo-que-la-herramienta-que-dobla` | 4 | sí | 251, 250, 242, 193 |
 | `prosa-que-el-cambio-deja-falsa` | 4 | no en todas | 223, 219, 211, 177 |
 | `prueba-que-no-puede-ver-lo-que-vigila` | 4 | no en todas | 249, 247, 241, 238 |
 | `regla-del-propietario-que-solo-vive-en-una-conversacion` | 4 | sí | 213, 208, 204, 195 |
-| `doble-mas-permisivo-que-la-herramienta-que-dobla` | 3 | sí | 250, 242, 193 |
 | `decision-que-solo-vive-en-una-conversacion` | 2 | no en todas | 225, 202 |
 | `guardian-que-mide-posicion-en-vez-de-estructura` | 2 | sí | 221, 187 |
 | `leccion-que-se-queda-en-el-informe` | 2 | sí | 215, 214 |
@@ -395,6 +396,13 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 - **ADR-183** — escribir la rama «no hay nada que hacer» de un encaminador como un `return 0` con un `echo`, de modo que la única prueba de que el ciclo se ha parado viva en un log que nadie lee. (lo hace cumplir `tests/automation/test_sirius_apply_verdict.py`).
 - **ADR-175** — proyectar en cada pasada el estado entero de una incidencia -fase, rondas, Quality, PR, diagnóstico- y no enseñárselo nunca a quien tiene que decidir; es la novena vez que un dato correcto de esta casa no tiene lector, tres días después de la octava. (lo hace cumplir `tests/engine/test_tablero.py`).
 
+### `doble-mas-permisivo-que-la-herramienta-que-dobla`
+
+- **ADR-251** — el banco de memoria pasaba en la nube con unas huellas de (lo hace cumplir `tests/integration/test_memoria_en_su_ordenador.py`).
+- **ADR-250** — probar con dobles una biblioteca que nadie cargó. (lo hace cumplir `tests/automation/test_marca_de_agua.py`).
+- **ADR-242** — un adaptador que carga una biblioteca con código nativo solo (lo hace cumplir `tests/unit/test_local_listening_adapters.py`).
+- **ADR-193** — una prueba en verde sobre una invocación que la (lo hace cumplir `tests/automation/test_sirius_reconcile.py`).
+
 ### `prosa-que-el-cambio-deja-falsa`
 
 - **ADR-223** — un camino de reinicio escrito cuando activar era una etiqueta, que anuncia «autorizado» sin releer la puerta que ahora exige dos; el aviso en verde era verdad el día que se escribió y dejó de serlo sin que nadie lo tocara. (lo hace cumplir `tests/automation/test_reanudar_ejecutando_el_guion.py`).
@@ -415,12 +423,6 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 - **ADR-208** — las ideas aparcadas volverían como nuevas y cada (lo hace cumplir `tests/automation/test_registro_de_ideas.py`).
 - **ADR-204** — la sesión seguiría devolviéndole decisiones técnicas (lo hace cumplir `tests/automation/test_reglas_de_agents.py`).
 - **ADR-195** — una regla dada de viva voz —«no se elimina nada»— que no (lo hace cumplir `tests/automation/test_registro_de_defectos.py`).
-
-### `doble-mas-permisivo-que-la-herramienta-que-dobla`
-
-- **ADR-250** — probar con dobles una biblioteca que nadie cargó. (lo hace cumplir `tests/automation/test_marca_de_agua.py`).
-- **ADR-242** — un adaptador que carga una biblioteca con código nativo solo (lo hace cumplir `tests/unit/test_local_listening_adapters.py`).
-- **ADR-193** — una prueba en verde sobre una invocación que la (lo hace cumplir `tests/automation/test_sirius_reconcile.py`).
 
 ### `decision-que-solo-vive-en-una-conversacion`
 
@@ -590,6 +592,7 @@ cerrados; el recuento completo está arriba.
 |---|---|---|
 | H-202 | abierto | Una decision de no hacer algo no dejaba rastro, y una precondicion escrita antes que ella bloqueo trabajo real trece dias |
 | H-203 | abierto | El banco solo sabia medir el camino con el motor encendido, asi que la linea base contra la que comparar no existia |
+| H-251 | abierto | El banco de memoria de la nube no podia ver que lo de antes se pareciera a la pregunta tanto como lo de ahora |
 
 ## Las ideas aparcadas y descartadas (ADR-208)
 
