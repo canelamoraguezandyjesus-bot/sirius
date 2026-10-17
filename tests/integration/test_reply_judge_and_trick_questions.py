@@ -92,11 +92,17 @@ class _Juez:
         self.puntuadas.append(reply)
         return self.notas[len(self.puntuadas) - 1]
 
-    def verdict(self, bad_idea: str, reply: str) -> TrickVerdict:
+    def verdict(
+        self, bad_idea: str, reply: str, *, should_stop: Callable[[], bool] | None = None
+    ) -> TrickVerdict:
+        del should_stop
         self.juzgadas.append((bad_idea, reply))
         return self.veredicto
 
     def cancel(self) -> None:
+        pass
+
+    def cancel_verdicts(self) -> None:
         pass
 
 

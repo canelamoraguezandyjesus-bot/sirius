@@ -273,11 +273,16 @@ class _JuezQueNoPregunta:
         del reply, should_stop
         return 4
 
-    def verdict(self, bad_idea: str, reply: str) -> TrickVerdict:
-        del bad_idea, reply
+    def verdict(
+        self, bad_idea: str, reply: str, *, should_stop: Callable[[], bool] | None = None
+    ) -> TrickVerdict:
+        del bad_idea, reply, should_stop
         return TrickVerdict.DISCREPA
 
     def cancel(self) -> None:
+        pass
+
+    def cancel_verdicts(self) -> None:
         pass
 
 

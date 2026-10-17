@@ -80,14 +80,25 @@ class ReplyJudge(Protocol):
         cuando la nota está a punto de pedirse, no la pide y falla (ADR-252)."""
         ...
 
-    def verdict(self, bad_idea: str, reply: str) -> TrickVerdict:
-        """Si ``reply`` le lleva la contraria a ``bad_idea`` o le da la razón."""
+    def verdict(
+        self, bad_idea: str, reply: str, *, should_stop: Callable[[], bool] | None = None
+    ) -> TrickVerdict:
+        """Si ``reply`` le lleva la contraria a ``bad_idea`` o le da la razón. Si
+        ``should_stop`` dice que pare cuando el veredicto está a punto de pedirse, no lo
+        pide y falla (ADR-253)."""
         ...
 
     def cancel(self) -> None:
         """Corta, desde otro hilo, las notas que está pidiendo (``score``); si no hay, no
         hace nada y nunca falla. La nota cortada falla como cualquier otra (ADR-252). Los
-        veredictos no se cortan."""
+        veredictos no los corta: un turno de voz no debe quitarle uno a las preguntas
+        trampa."""
+        ...
+
+    def cancel_verdicts(self) -> None:
+        """Corta, desde otro hilo, los veredictos que está pidiendo (``verdict``); si no hay,
+        no hace nada y nunca falla. Lo pide la hoja de las preguntas trampa al cerrarse, y
+        el veredicto cortado falla como cualquier otro (ADR-253)."""
         ...
 
 

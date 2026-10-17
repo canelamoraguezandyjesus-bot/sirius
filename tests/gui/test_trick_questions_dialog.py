@@ -80,11 +80,16 @@ class _Juez:
         del reply, should_stop
         return 5
 
-    def verdict(self, bad_idea: str, reply: str) -> TrickVerdict:
-        del bad_idea, reply
+    def verdict(
+        self, bad_idea: str, reply: str, *, should_stop: Callable[[], bool] | None = None
+    ) -> TrickVerdict:
+        del bad_idea, reply, should_stop
         return TrickVerdict.DISCREPA
 
     def cancel(self) -> None:
+        pass
+
+    def cancel_verdicts(self) -> None:
         pass
 
 
@@ -502,11 +507,13 @@ def test_el_trabajador_acaba_sin_traza_aunque_la_ventana_ya_no_exista() -> None:
 
 
 class _JuezQueCalla(_Juez):
-    def verdict(self, bad_idea: str, reply: str) -> TrickVerdict:
+    def verdict(
+        self, bad_idea: str, reply: str, *, should_stop: Callable[[], bool] | None = None
+    ) -> TrickVerdict:
         if bad_idea in {q.bad_idea for q in TRICK_QUESTIONS[38:]}:  # T39 y T40
             msg = "el juez no contesta"
             raise RuntimeError(msg)
-        return super().verdict(bad_idea, reply)
+        return super().verdict(bad_idea, reply, should_stop=should_stop)
 
 
 def test_el_resultado_dice_cuales_y_cuando_el_juez_no_contesto(qtbot: QtBot) -> None:

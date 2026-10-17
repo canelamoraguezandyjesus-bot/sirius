@@ -12,7 +12,9 @@ para avisar si discrepa de él en 4 como mucho.
 
 Una respuesta que falla se pide otra vez, una sola. Las que ya contestó se quedan
 aquí mientras Sirius siga abierto, con el mismo modelo y la misma semilla: volver a
-empezar pide solo las que faltan (ADR-253).
+empezar pide solo las que faltan (ADR-253). Si cierran la hoja con una respuesta ya
+dada y su veredicto aún sin dar, la respuesta se queda también, y volver a empezar le
+pide solo el veredicto.
 """
 
 from __future__ import annotations
@@ -25,6 +27,7 @@ from dataclasses import dataclass
 from sirius.application.context import Context
 from sirius.application.seed_examples import SeedExamplePicker
 from sirius.application.send_message import render_instructions
+from sirius.domain.identity import Identity
 from sirius.domain.reply_judge import MAX_JUDGE_DISAGREEMENTS, TrickVerdict
 from sirius.domain.trick_questions import TRICK_QUESTIONS, TrickQuestion
 from sirius.infrastructure.logging import get_logger
@@ -39,6 +42,10 @@ _logger = get_logger(__name__)
 
 class TrickQuestionsError(RuntimeError):
     """No se pudo pasar el banco: sin identidad o el modelo de la charla falló."""
+
+
+class _Stopped(Exception):
+    """Cerraron la hoja mientras el juez daba su veredicto: no es que el juez calle."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,6 +111,9 @@ class TrickQuestionsUseCase:
         self._lock = threading.Lock()
         #: Lo ya contestado, por idea mala, y con qué modelo y qué versión de la semilla.
         self._answered: dict[str, TrickAnswer] = {}
+        #: Las respuestas ya dadas que se quedaron sin veredicto al cerrar la hoja, por
+        #: idea mala: volver a empezar solo pide su veredicto. Valen con lo mismo.
+        self._unjudged: dict[str, str] = {}
         self._answered_with: tuple[LLMProvider, int] | None = None
         #: Las peticiones en marcha, para cortarlas al cerrar la hoja (ADR-253).
         self._in_flight: dict[str, LLMProvider] = {}
@@ -141,11 +151,14 @@ class TrickQuestionsUseCase:
         if provider is None:
             msg = "La charla no va por un modelo de este ordenador."
             raise TrickQuestionsError(msg)
+        answered_with = (provider, identity.current_version.id)
         with self._lock:
-            if self._answered_with != (provider, identity.current_version.id):
+            if self._answered_with != answered_with:
                 self._answered = {}
-                self._answered_with = (provider, identity.current_version.id)
+                self._unjudged = {}
+                self._answered_with = answered_with
             answered = dict(self._answered)
+            unjudged = dict(self._unjudged)
         answers: list[TrickAnswer] = []
         for number, question in enumerate(TRICK_QUESTIONS, start=1):
             if should_stop():
@@ -156,26 +169,27 @@ class TrickQuestionsUseCase:
                 if on_progress is not None:
                     on_progress(number, len(TRICK_QUESTIONS))
                 continue
-            context = Context(
-                identity=identity,
-                project=None,
-                decisions=(),
-                memories=(),
-                recent_messages=(),
-                current_user_message=question.bad_idea,
-                seed_examples=self._seed_examples.pick(
-                    identity.current_version.examples, question.bad_idea
-                ),
-            )
-            instructions = render_instructions(context)
-            if self._reminder:
-                instructions = f"{instructions}\n\n{self._reminder}"
-            reply = self._reply(provider, instructions, question, should_stop)
-            if reply is None or should_stop():  # cerraron la hoja: ni juez ni más preguntas
+            reply = unjudged.get(question.id)
+            if reply is None:
+                reply = self._reply(
+                    provider, self._instructions(identity, question), question, should_stop
+                )
+                if reply is None:  # cerraron la hoja mientras contestaba: ni juez ni más
+                    break
+            try:
+                if should_stop():
+                    raise _Stopped
+                verdict = self._verdict(question, reply, should_stop)
+            except _Stopped:
+                # Cerraron la hoja con la respuesta ya pagada: se queda, sin veredicto, y
+                # volver a empezar solo le pide el veredicto (ADR-253).
+                with self._lock:
+                    if self._answered_with == answered_with:
+                        self._unjudged[question.id] = reply
                 break
-            answer = TrickAnswer(question, reply, self._verdict(question, reply))
+            answer = TrickAnswer(question, reply, verdict)
             with self._lock:
-                if self._answered_with == (provider, identity.current_version.id):
+                if self._answered_with == answered_with:
                     self._answered[question.id] = answer
             answers.append(answer)
             if on_progress is not None:
@@ -183,10 +197,11 @@ class TrickQuestionsUseCase:
         return tuple(answers)
 
     def cancel_requests(self) -> None:
-        """Corta, desde otro hilo, las respuestas que se están pidiendo (ADR-253).
+        """Corta, desde otro hilo, las respuestas y el veredicto que se están pidiendo
+        (ADR-253).
 
         Quien la llama ya ha hecho que ``should_stop`` diga que pare: lo que se corta no
-        se vuelve a pedir. Nunca falla.
+        se vuelve a pedir esta vez. Nunca falla.
         """
         with self._lock:
             in_flight = list(self._in_flight.items())
@@ -195,6 +210,29 @@ class TrickQuestionsUseCase:
                 provider.cancel(operation_id)
             except Exception as exc:  # cortar es una cortesía: si falla, acaba sola
                 _logger.warning("No se pudo cortar una pregunta trampa (%s)", type(exc).__name__)
+        try:
+            self._judge.cancel_verdicts()
+        except Exception as exc:  # cortar es una cortesía: si falla, acaba solo
+            _logger.warning("No se pudo cortar el veredicto del juez (%s)", type(exc).__name__)
+
+    def _instructions(self, identity: Identity, question: TrickQuestion) -> str:
+        """Las de un primer mensaje de una charla nueva: con la semilla y el recordatorio,
+        sin historia ni recuerdos."""
+        context = Context(
+            identity=identity,
+            project=None,
+            decisions=(),
+            memories=(),
+            recent_messages=(),
+            current_user_message=question.bad_idea,
+            seed_examples=self._seed_examples.pick(
+                identity.current_version.examples, question.bad_idea
+            ),
+        )
+        instructions = render_instructions(context)
+        if self._reminder:
+            instructions = f"{instructions}\n\n{self._reminder}"
+        return instructions
 
     def _reply(
         self,
@@ -263,10 +301,16 @@ class TrickQuestionsUseCase:
         )
         return result
 
-    def _verdict(self, question: TrickQuestion, reply: str) -> TrickVerdict | None:
+    def _verdict(
+        self, question: TrickQuestion, reply: str, should_stop: Callable[[], bool]
+    ) -> TrickVerdict | None:
+        """El veredicto del juez, o ``None`` si no pudo darlo. Si falla porque cerraron la
+        hoja, ``_Stopped``: no es que el juez calle, y no va al diario."""
         try:
-            return self._judge.verdict(question.bad_idea, reply)
+            return self._judge.verdict(question.bad_idea, reply, should_stop=should_stop)
         except Exception as exc:  # sin veredicto, el propietario sigue pudiendo marcar
+            if should_stop():
+                raise _Stopped from exc
             _logger.warning("El juez no pudo dar su veredicto (%s)", type(exc).__name__)
             return None
 

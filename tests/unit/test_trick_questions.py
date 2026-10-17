@@ -81,14 +81,19 @@ class _Juez:
         del reply, should_stop
         return 5
 
-    def verdict(self, bad_idea: str, reply: str) -> TrickVerdict:
-        del reply
+    def verdict(
+        self, bad_idea: str, reply: str, *, should_stop: Callable[[], bool] | None = None
+    ) -> TrickVerdict:
+        del reply, should_stop
         if bad_idea in self.calla_en:
             msg = "el juez no contesta"
             raise RuntimeError(msg)
         return TrickVerdict.DISCREPA
 
     def cancel(self) -> None:
+        pass
+
+    def cancel_verdicts(self) -> None:
         pass
 
 
@@ -193,27 +198,107 @@ def test_un_corte_entre_mirar_y_pedir_no_deja_salir_la_peticion() -> None:
     assert modelo.pedidas == []
 
 
-def test_si_cierran_mientras_contesta_no_se_pide_la_nota_ni_se_guarda_la_respuesta() -> None:
-    class _JuezQueCuenta(_Juez):
-        def __init__(self) -> None:
-            super().__init__()
-            self.juzgadas = 0
+class _JuezQueCuenta(_Juez):
+    def __init__(self) -> None:
+        super().__init__()
+        self.juzgadas: list[str] = []
 
-        def verdict(self, bad_idea: str, reply: str) -> TrickVerdict:
-            self.juzgadas += 1
-            return super().verdict(bad_idea, reply)
+    def verdict(
+        self, bad_idea: str, reply: str, *, should_stop: Callable[[], bool] | None = None
+    ) -> TrickVerdict:
+        self.juzgadas.append(bad_idea)
+        return super().verdict(bad_idea, reply, should_stop=should_stop)
 
+
+def test_si_cierran_mientras_contesta_no_se_pide_el_veredicto_y_la_respuesta_se_queda() -> None:
+    # Ronda 1 de Codex sobre la #698: la respuesta ya pagada no se tira al cerrar la hoja
+    # (ADR-253); volver a empezar solo le pide el veredicto.
     modelo = _Modelo()
     juez = _JuezQueCuenta()
     caso = _caso(modelo, juez=juez)
     miradas = iter([False, False])  # antes de la pregunta y antes de pedirla
 
     assert caso.run(should_stop=lambda: next(miradas, True)) == ()
+    assert modelo.pedidas == [TRICK_QUESTIONS[0].bad_idea]
+    assert juez.juzgadas == []
+
+    respuestas = caso.run()
+
+    assert modelo.pedidas.count(TRICK_QUESTIONS[0].bad_idea) == 1
+    assert len(modelo.pedidas) == 40
+    assert juez.juzgadas == [q.bad_idea for q in TRICK_QUESTIONS]
+    assert [r.judge_verdict for r in respuestas] == [TrickVerdict.DISCREPA] * 40
+
+
+def test_cerrar_con_el_veredicto_en_marcha_lo_corta_y_la_respuesta_se_queda(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    # Ronda 1 de Codex sobre la #698: cerrar la hoja con el juez dando su veredicto lo
+    # corta, como a las respuestas. No es que el juez calle, y la respuesta pagada se queda.
+    pedido = threading.Event()
+    cortado = threading.Event()
+    parar = threading.Event()
+
+    class _JuezLento(_JuezQueCuenta):
+        def __init__(self) -> None:
+            super().__init__()
+            self.cortes = 0
+            self.lento = True
+
+        def verdict(
+            self, bad_idea: str, reply: str, *, should_stop: Callable[[], bool] | None = None
+        ) -> TrickVerdict:
+            if self.lento:
+                self.juzgadas.append(bad_idea)
+                pedido.set()
+                if cortado.wait(5):
+                    msg = "El juez no terminó."
+                    raise RuntimeError(msg)
+                return TrickVerdict.DISCREPA
+            return super().verdict(bad_idea, reply, should_stop=should_stop)
+
+        def cancel_verdicts(self) -> None:
+            self.cortes += 1
+            cortado.set()
+
+    modelo = _Modelo()
+    juez = _JuezLento()
+    caso = _caso(modelo, juez=juez)
+    respuestas: list[object] = []
+    hilo = threading.Thread(target=lambda: respuestas.extend(caso.run(should_stop=parar.is_set)))
+    with caplog.at_level(logging.WARNING):
+        hilo.start()
+        assert pedido.wait(5)
+        parar.set()
+        caso.cancel_requests()
+        hilo.join(3)
+
+        assert not hilo.is_alive()
+        assert juez.cortes == 1
+        assert respuestas == []
+        assert "veredicto" not in caplog.text
+
+    juez.lento = False
+    otra_vez = caso.run()
+
+    t01 = TRICK_QUESTIONS[0].bad_idea
+    assert modelo.pedidas.count(t01) == 1
+    assert juez.juzgadas.count(t01) == 2
+    assert otra_vez[0].judge_verdict is TrickVerdict.DISCREPA
+
+
+def test_la_respuesta_sin_veredicto_no_vale_con_otra_semilla() -> None:
+    identidades = _Identidades()
+    modelo = _Modelo()
+    caso = _caso(modelo, identidades)
+    miradas = iter([False, False])
+    caso.run(should_stop=lambda: next(miradas, True))
     assert len(modelo.pedidas) == 1
-    assert juez.juzgadas == 0
-    # Y no se quedó guardada: la próxima vez se pide otra vez.
+
+    identidades.version = 3
     caso.run()
-    assert len(modelo.pedidas) == 41
+
+    assert modelo.pedidas.count(TRICK_QUESTIONS[0].bad_idea) == 2
 
 
 def test_el_juez_que_no_contesta_se_cuenta_aparte_y_el_diario_lleva_solo_identificadores(

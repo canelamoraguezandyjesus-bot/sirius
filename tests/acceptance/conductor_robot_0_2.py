@@ -255,11 +255,16 @@ class _JuezEnchufado:
         del should_stop
         return self._juez.puntua(reply)
 
-    def verdict(self, bad_idea: str, reply: str) -> TrickVerdict:
-        del bad_idea
+    def verdict(
+        self, bad_idea: str, reply: str, *, should_stop: Callable[[], bool] | None = None
+    ) -> TrickVerdict:
+        del bad_idea, should_stop
         return TrickVerdict(self._juez.discrepa(reply))
 
     def cancel(self) -> None:
+        pass
+
+    def cancel_verdicts(self) -> None:
         pass
 
 
