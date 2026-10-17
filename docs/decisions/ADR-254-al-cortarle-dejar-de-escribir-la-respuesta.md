@@ -154,3 +154,6 @@ Va en la misma PR que ADR-253, y su alcance se suma al de allí, escrito antes d
 petición: que al cortarle deje de escribir, que lo nuevo no espere, que se guarde
 exactamente lo escrito con su nota, y que el juez y el resumen no hagan esperar ni cuenten
 lo cortado.
+
+**Ronda 1**, sobre `001ede34`: nada del corte. Sus dos hallazgos son de ADR-253, y allí se
+anotan.

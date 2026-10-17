@@ -217,3 +217,23 @@ leer el bytecode de la anterior.
 
 Alcance, escrito antes de la primera petición: los 19 puntos de la nota de arranque, que
 esta PR arregla, sin nada más. Las rondas se anotan aquí.
+
+**Ronda 1**, sobre `001ede34`, pedida con Quality y la batería entera en verde: dos hallazgos
+P2, los dos de cerrar una hoja con una petición en marcha que el cierre no cortaba.
+
+- `trick_questions.py:176`: si se cerraba la hoja de preguntas trampa con el juez dando su
+  veredicto, esa petición seguía hasta acabar. Ahora el juez apunta sus veredictos y
+  `cancel_verdicts()` los corta: lo llama la hoja al cerrarse, y un turno de voz no, que
+  sigue cortando solo las notas con `cancel()`. `verdict()` acepta `should_stop`, como
+  `score()`. La respuesta ya pagada se queda sin veredicto, y volver a empezar solo pide
+  el veredicto. Lo arregla `7fc71768`: 4 de sus 5 pruebas fallan con el código de antes, y
+  caen sus 10 mutaciones.
+- `blind_test_dialog.py:450`: si se cerraba la prueba a ciegas mientras preguntaba a Ollama
+  qué modelos tiene, esas peticiones seguían. Ahora se paran. Lo que no se hace es
+  preguntar antes de cerrar en esa fase: aún no se ha elegido nada y no se pierde nada. Lo
+  arregla `3f2767f1`: sus 3 pruebas fallan con el código de antes, y caen sus 6
+  mutaciones.
+
+Familia: `cierre-que-no-corta-todo-lo-que-pide`. La nota decía «cerrar una hoja corta sus
+peticiones», y se cumplía para las respuestas, no para el juez ni para la lista. Es la
+primera ronda con ella.
