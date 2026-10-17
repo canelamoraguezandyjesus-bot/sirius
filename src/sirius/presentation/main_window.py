@@ -2177,6 +2177,10 @@ class MainWindow(QMainWindow):
         self._closed = True
         self._judge_timer.stop()
         self._stop_background()
+        # Al cerrar, el sueño corta además la petición que tiene en curso, para que salir no
+        # espere al modelo; ese día queda por soñar. Un turno no lo corta (ADR-253).
+        if self._active_dream_worker is not None:
+            self._active_dream_worker.cancel()
         if self._listening_loop is not None:
             self._listening_loop.stop()
         super().closeEvent(event)

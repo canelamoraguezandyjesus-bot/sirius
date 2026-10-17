@@ -12,6 +12,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+import shiboken6
 
 from sirius.presentation.dream_worker import DreamWorker
 from sirius.presentation.memory_embedding_worker import MemoryEmbeddingWorker
@@ -59,3 +60,21 @@ def test_el_sueno_avisa_al_acabar(falla: bool) -> None:
     trabajo.run()
 
     assert trabajo.done.is_set()
+
+
+@pytest.mark.parametrize("trabajo", ["juez", "sueño"])
+def test_acaban_sin_traza_aunque_ya_no_haya_ventana(trabajo: str) -> None:
+    """Al cerrar Sirius con ellos en marcha, sus señales desaparecen antes de que acaben: el
+    aviso final no puede pintar «Signal source has been deleted» en la consola, ni dejar
+    ``done`` sin poner (ADR-253)."""
+    if trabajo == "juez":
+        juez = SimpleNamespace(judge_pending=lambda should_stop: 0)
+        corre: ReplyJudgeWorker | DreamWorker = ReplyJudgeWorker(juez)  # type: ignore[arg-type]
+    else:
+        sueno = SimpleNamespace(dream_pending=lambda today, should_stop: 0)
+        corre = DreamWorker(sueno, today=date(2026, 10, 17))  # type: ignore[arg-type]
+    shiboken6.delete(corre.signals)
+
+    corre.run()
+
+    assert corre.done.is_set()
