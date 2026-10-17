@@ -42,9 +42,12 @@ voz = [
 # La voz de personaje de la prueba a ciegas (pieza F, ADR-246): Chatterbox, con su voz de
 # serie y sin audio de nadie. Va aparte porque pesa mucho más que la voz (torch): sin ella,
 # Sirius oye y habla igual. La instala `uv run --extra voz --extra personaje
-# sirius-instala-la-voz`, y Quality no la instala.
+# sirius-instala-la-voz`, y Quality no la instala. `setuptools` por debajo de la 82: la marca
+# de agua de Perth, que Chatterbox crea al cargar, importa `pkg_resources`, y la 82 ya no lo
+# trae; sin él, la voz de personaje no carga (ADR-250). La marca de agua no se quita.
 personaje = [
   "chatterbox-tts==0.1.7",
+  "setuptools<82",
 ]
 
 [project.scripts]

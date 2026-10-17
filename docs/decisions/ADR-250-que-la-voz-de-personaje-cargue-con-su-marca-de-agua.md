@@ -65,15 +65,46 @@ El de la nota de arranque, punto 3.
 La opción 1: `setuptools<82` en el extra `personaje`.
 
 Es una dependencia de verdad de ese extra: Perth importa `pkg_resources`, y quien lo trae es
-`setuptools`. Lo que quede por decidir al escribir el código se anota aquí con su porqué.
+`setuptools`. Al escribir el código se decidió además:
+
+- **`uv.lock` rehecho**: solo se mueve `setuptools`, de 84.0.0 a 81.0.0. Ningún otro
+  paquete cambia. Entró en el lock con la pieza F, porque lo pide `torch`, que solo está en
+  ese extra: sin el extra no se instala.
+- **La guarda** (`tests/automation/test_marca_de_agua.py`) mira el lock, porque Quality no
+  instala el extra: mientras lleve un Perth del que no se sepa que ya no importa
+  `pkg_resources`, todo `setuptools` del lock tiene que ser anterior a la 82. Falla
+  cerrada: un Perth nuevo solo sale de ella si alguien lee su código y lo apunta en su
+  lista.
+- **La marca de agua no se toca.**
 
 ## Comprobación que la sostiene
 
-Se escribe al acabar.
+- **La guarda, vista fallar con el lock de `main`**: «el lock lleva resemble-perth
+  ['1.0.1'], que importa pkg_resources, y setuptools ['84.0.0'], que ya no lo trae». Con el
+  arreglo pasa.
+- **`uv lock`**: 205 paquetes en 3,6 s; solo cambia `setuptools`.
+- **Las pruebas que leen los extras, el lock o `pyproject.toml`**, 18 ficheros: 1 342 en
+  verde.
+- **ruff** limpio; **mypy** sin errores.
+- **Perth de verdad**, en un entorno aparte con los 157 paquetes que el lock instala con el
+  extra `personaje`, `torch` 2.14.1 incluido, sin la gráfica ni los pesos de Chatterbox:
+  - con `setuptools` 81.0.0, `import chatterbox.mtl_tts, perth` deja
+    `perth.PerthImplicitWatermarker` como clase, se crea («loaded PerthNet (Implicit) at
+    step 250,000») y marca dos segundos de audio sin fallar;
+  - con `setuptools` 84.0.0 en el mismo entorno, es `None`, y crearla da «'NoneType' object
+    is not callable», el error de su ordenador.
+
+  Que la marca se detecte no se comprobó: con un tono de prueba, su detector da 1,0 con
+  ella y sin ella.
 
 ## Consecuencias
 
-Se escriben al acabar.
+- **Con el extra `personaje` se instala `setuptools` 81.0.0** en vez de 84.0.0. Sin el extra,
+  como en Quality, no se instala.
+- **En su ordenador hay que volver a pasar la orden de instalar con el extra**, después de
+  traer la rama: es la que comprueba que la voz carga.
+- **Si un Perth nuevo deja de importar `pkg_resources`**, la guarda lo seguirá pidiendo
+  hasta que se lea su código y se apunte.
 
 ## Alternativas descartadas y por qué
 
@@ -82,9 +113,16 @@ Se escriben al acabar.
 - **Una marca de agua de mentira** (opción 3): quitaría la marca de que el audio es
   generado. No.
 
+## Revisión propia
+
+Antes de empujar se releyó el diff entero contra el código y la nota. En el código no
+encontró nada; en este ADR, una frase que no decía bien de dónde venía `setuptools`,
+reescrita.
+
 ## La lección
 
-- ninguna: esta es la nota de arranque; si deja una lección, se escribe al acabar.
+- ninguna: se escribe con su entrada en el registro de defectos, en el commit siguiente,
+  que es cuando existe el sha del arreglo (skill `registro-de-defectos`).
 
 ## Revisión externa
 

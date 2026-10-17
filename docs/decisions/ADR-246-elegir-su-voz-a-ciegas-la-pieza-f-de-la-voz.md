@@ -220,6 +220,10 @@ Lo que se decidió al escribir el código, con su porqué:
   carga, la ventana espera.
 - **Chatterbox sortea cada vez**: la misma frase no sale igual dos veces, y la hoja enseña
   la de esa vez. Y lleva la marca de agua de Perth en todo lo que dice.
+- **Corrección del 17-10-2026 (ADR-250)**: con el `uv.lock` de esta PR la voz de personaje
+  no cargaba. La marca de agua de Perth importa `pkg_resources`, y el `setuptools` del lock
+  ya no lo traía. Que cargara y llevara la marca de agua no lo comprobó nada: sus pruebas
+  cargan un Chatterbox de mentira, y que `uv lock` resuelva no es que cargue.
 - **Dos bibliotecas de la voz cambian de versión** (arriba): faster-whisper con
   `huggingface-hub` 1.33.0 y `tokenizers` 0.22.2 se prueba en su ordenador con la orden de
   instalar.
