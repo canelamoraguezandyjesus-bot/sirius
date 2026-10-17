@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 from PySide6.QtCore import QObject, Signal
-from PySide6.QtWidgets import QMainWindow
+from PySide6.QtWidgets import QMainWindow, QPushButton
 from pytestqt.qtbot import QtBot
 
 from sirius.adapters.audio.fake import (
@@ -29,12 +29,14 @@ from sirius.adapters.audio.fake import (
 )
 from sirius.adapters.persistence.bootstrap import initialize_persistence
 from sirius.adapters.secrets.fake import FakeSecretStore
+from sirius.application.blind_test import BlindTestUseCase
 from sirius.application.listening_loop import ListeningLoop
 from sirius.application.local_listening import CHAT_LEAVES
 from sirius.application.memory_commands import FORGET_ABOUT_STORED
 from sirius.application.studio_voice import StudioVoiceUseCase, VoiceSettings
 from sirius.composition_root import ConversationDependencies, build_conversation_dependencies
 from sirius.config.local_voice import LocalVoiceSettings
+from sirius.config.settings import load_settings
 from sirius.domain.reply_judge import TrickVerdict
 from sirius.infrastructure.local_voice_installation import (
     INSTALL_COMMAND,
@@ -1100,6 +1102,78 @@ def test_el_aviso_de_la_charla_de_fuera_dice_donde_elegir_un_modelo_de_aqui(
     pestanas = [ventana.tabs.tabText(indice) for indice in range(ventana.tabs.count())]
     assert "Configuración" in pestanas
     assert f"Configuración, «{ventana.blind_test_button.text()}»" in CHAT_LEAVES
+
+
+class _ModeloDeFuera:
+    """Un modelo de fuera de este ordenador, como el de OpenAI."""
+
+    def health_check(self) -> bool:
+        return True
+
+    def stream_response(self, request: LLMRequest) -> Iterator[LLMStreamEvent]:
+        del request
+        yield LLMCompleted(text="De fuera.", input_tokens=1, output_tokens=1)
+
+    def cancel(self, operation_id: str) -> None:
+        del operation_id
+
+
+class _EligeACiegas:
+    """La hoja de la prueba a ciegas, donde él acaba eligiendo ``ELEGIDO``."""
+
+    ELEGIDO = "gemma3:4b"
+
+    def __init__(self, use_case: BlindTestUseCase, **kwargs: object) -> None:
+        del kwargs
+        self._use_case = use_case
+
+    def exec(self) -> int:
+        self._use_case.choose(self.ELEGIDO)
+        return 0
+
+
+def test_tras_elegir_a_ciegas_un_modelo_de_aqui_oye_y_guardar_no_vuelve_a_openai(
+    qtbot: QtBot, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ADR-253: tras elegirlo, la ventana seguía diciendo que la charla iba fuera, no oía, y
+    «Guardar configuración» la devolvía a OpenAI sin decir nada."""
+    sirius = _monta(tmp_path)
+    sirius.deps.send_message_use_case.set_llm_provider(_ModeloDeFuera())
+    ventana = _ventana(qtbot, sirius)
+    assert ventana.voice_notice_label.text() == CHAT_LEAVES
+    monkeypatch.setattr("sirius.presentation.main_window.BlindTestDialog", _EligeACiegas)
+
+    ventana.blind_test_button.click()
+
+    assert ventana.voice_notice_label.text() == ""
+    assert sirius.deps.local_listening.listening
+    assert ventana.listening_label.text() == LISTENING
+    ventana._show_information = lambda title, text: None
+    ventana.name_input.setText("Andy")
+    guardar = next(
+        boton
+        for boton in ventana.findChildren(QPushButton)
+        if boton.text() == "Guardar configuración"
+    )
+    guardar.click()
+    assert load_settings()["llm_provider"] == "ollama"
+    assert load_settings()["ollama_chat_model"] == _EligeACiegas.ELEGIDO
+
+
+def test_callado_con_el_boton_sigue_callado_tras_elegir_a_ciegas(
+    qtbot: QtBot, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sirius = _monta(tmp_path)
+    ventana = _ventana(qtbot, sirius)
+    ventana.mute_button.click()
+    assert sirius.deps.local_listening.muted
+    monkeypatch.setattr("sirius.presentation.main_window.BlindTestDialog", _EligeACiegas)
+
+    ventana.blind_test_button.click()
+
+    assert sirius.deps.local_listening.muted
+    assert not sirius.deps.local_listening.listening
+    assert ventana.listening_label.text() == MUTED
 
 
 class _Aplicacion(QObject):
