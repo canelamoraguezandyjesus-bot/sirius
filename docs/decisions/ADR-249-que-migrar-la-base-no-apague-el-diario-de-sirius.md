@@ -122,7 +122,7 @@ anterior. Se configura antes, como en `sirius.main`.
 
 ## La lección
 
-- familia: `prueba-que-tapa-un-defecto-del-producto`
+- familia: `prueba-que-no-puede-ver-lo-que-vigila`
 - sin esto se repetiría: arreglar en la prueba lo que falla en el producto. El conductor de
   la 0.3 y doce pruebas volvían a encender los registradores que la migración apagaba, y
   todas pasaban mientras el diario de su ordenador dejaba de apuntar al arrancar (H-249).

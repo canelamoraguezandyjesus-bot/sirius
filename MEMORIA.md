@@ -26,7 +26,7 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **243**.
+- Decisiones (ADR): **244**.
 - Bloques del motor: 17 cerrado, 3 fuera_de_alcance.
 - Defectos registrados: 2 abierto, 94 cerrado.
 - Ideas aparcadas o descartadas: 12 aparcada, 3 descartada, 2 promovida.
@@ -79,6 +79,7 @@ huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| [250](docs/decisions/ADR-250-que-la-voz-de-personaje-cargue-con-su-marca-de-agua.md) | 2026-10-17 | APROBADO | Que la voz de personaje cargue con su marca de agua | La opción 1: `setuptools<82` en el extra `personaje`. |
 | [249](docs/decisions/ADR-249-que-migrar-la-base-no-apague-el-diario-de-sirius.md) | 2026-10-16 | APROBADO | Que migrar la base no apague el diario de Sirius | La opción 1: `disable_existing_loggers=False` en el `fileConfig` de Alembic. |
 | [248](docs/decisions/ADR-248-poner-tope-a-lo-que-escribe-ollama-y-apuntar-sus-errores.md) | 2026-10-16 | APROBADO | Poner tope a lo que escribe Ollama y apuntar sus errores | La opción 1: `num_predict` con el «Máximo de tokens de salida» de los ajustes. |
 | [247](docs/decisions/ADR-247-dar-con-una-orden-la-cuenta-de-las-50-marcas-de-e-r02-02.md) | 2026-10-16 | APROBADO | Dar con una orden la cuenta de las 50 marcas de E-R02-02 | La opción 1: una orden da la cuenta de las marcas, y la de E-R02-05 mide su base y acaba. |
@@ -338,8 +339,8 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 | `regla-que-depende-de-que-alguien-se-acuerde` | 11 | no en todas | 227, 222, 220, 217, 216, 192, 191, 188, 182, 179, 174 |
 | `pieza-sin-lector` | 5 | no en todas | 210, 209, 207, 183, 175 |
 | `prosa-que-el-cambio-deja-falsa` | 4 | no en todas | 223, 219, 211, 177 |
+| `prueba-que-no-puede-ver-lo-que-vigila` | 4 | no en todas | 249, 247, 241, 238 |
 | `regla-del-propietario-que-solo-vive-en-una-conversacion` | 4 | sí | 213, 208, 204, 195 |
-| `prueba-que-no-puede-ver-lo-que-vigila` | 3 | no en todas | 247, 241, 238 |
 | `decision-que-solo-vive-en-una-conversacion` | 2 | no en todas | 225, 202 |
 | `doble-mas-permisivo-que-la-herramienta-que-dobla` | 2 | sí | 242, 193 |
 | `guardian-que-mide-posicion-en-vez-de-estructura` | 2 | sí | 221, 187 |
@@ -366,7 +367,6 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 | `parada-segura-que-tira-lo-ya-pagado` | 1 | sí | 226 |
 | `plan-que-hay-que-terminar-de-una-sentada` | 1 | sí | 176 |
 | `pregunta-al-propietario-que-nadie-vuelve-a-poner-delante` | 1 | no en todas | 198 |
-| `prueba-que-tapa-un-defecto-del-producto` | 1 | sí | 249 |
 | `registro-sin-decir-quien-lo-hizo` | 1 | sí | 230 |
 | `regla-nueva-que-cambia-lo-que-otro-reconoce` | 1 | sí | 244 |
 | `regla-nueva-sin-pasarla-por-los-casos-vivos` | 1 | sí | 231 |
@@ -402,18 +402,19 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 - **ADR-211** — escribir un documento de método que nadie vuelve a (lo hace cumplir `tests/automation/test_skills.py`).
 - **ADR-177** — retirar un símbolo de producción y dejar vivas las frases que lo daban por cierto; al quitar `pide_contexto` quedaron falsos los once pasajes de prosa que la sección 6 de esta ficha enumera, 22 referencias del literal en las pruebas más otros cuatro pasajes de pruebas que describían el mecanismo sin nombrarlo, y el criterio de aceptación de M16 de la Arquitectura Técnica; y el barrido que las buscó en `scripts/` y `tests/` no miró en `docs/evolution/` ni podía ver lo que no escribe el literal, así que una lista solo se declara completa sobre el alcance del barrido que la produjo y el resto se dice cubierto por lectura. (sin prueba que lo haga cumplir: ninguna prueba: nada en este repositorio vigila la coherencia de la prosa de `docs/` con el árbol, y la ocurrencia que queda viva está en la Arquitectura Técnica, que la salvaguarda de #581 prohíbe tocar sin decisión del propietario.).
 
+### `prueba-que-no-puede-ver-lo-que-vigila`
+
+- **ADR-249** — arreglar en la prueba lo que falla en el producto. El conductor de (lo hace cumplir `tests/gui/test_app_bootstrap.py`).
+- **ADR-247** — probar una orden que él ejecuta en su ordenador solo como es la (lo hace cumplir `tests/integration/test_medir_busqueda_de_memoria.py`).
+- **ADR-241** — escribir las pruebas de aceptación de una versión antes del (sin prueba que lo haga cumplir: ninguna prueba mide la fuerza de una prueba; lo que hay es).
+- **ADR-238** — una prueba de «no se hace X» que pasa con X puesto, porque su (lo hace cumplir `tests/acceptance/test_robot_0_2_memoria.py`).
+
 ### `regla-del-propietario-que-solo-vive-en-una-conversacion`
 
 - **ADR-213** — que una regla que él dijo el 14-09 («que me contestes (lo hace cumplir `tests/automation/test_reglas_de_agents.py`).
 - **ADR-208** — las ideas aparcadas volverían como nuevas y cada (lo hace cumplir `tests/automation/test_registro_de_ideas.py`).
 - **ADR-204** — la sesión seguiría devolviéndole decisiones técnicas (lo hace cumplir `tests/automation/test_reglas_de_agents.py`).
 - **ADR-195** — una regla dada de viva voz —«no se elimina nada»— que no (lo hace cumplir `tests/automation/test_registro_de_defectos.py`).
-
-### `prueba-que-no-puede-ver-lo-que-vigila`
-
-- **ADR-247** — probar una orden que él ejecuta en su ordenador solo como es la (lo hace cumplir `tests/integration/test_medir_busqueda_de_memoria.py`).
-- **ADR-241** — escribir las pruebas de aceptación de una versión antes del (sin prueba que lo haga cumplir: ninguna prueba mide la fuerza de una prueba; lo que hay es).
-- **ADR-238** — una prueba de «no se hace X» que pasa con X puesto, porque su (lo hace cumplir `tests/acceptance/test_robot_0_2_memoria.py`).
 
 ### `decision-que-solo-vive-en-una-conversacion`
 
@@ -529,10 +530,6 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 
 - **ADR-198** — una incidencia formula una pregunta que solo el (sin prueba que lo haga cumplir: ninguna prueba: nada en este repositorio distingue una).
 
-### `prueba-que-tapa-un-defecto-del-producto`
-
-- **ADR-249** — arreglar en la prueba lo que falla en el producto. El conductor de (lo hace cumplir `tests/gui/test_app_bootstrap.py`).
-
 ### `registro-sin-decir-quien-lo-hizo`
 
 - **ADR-230** — comparar una ronda a la que le falta un revisor con rondas enteras y leer la ausencia de sus hallazgos como progreso, y su vuelta como reaparición (lo hace cumplir `tests/automation/test_sirius_convergence.py`).
@@ -553,7 +550,7 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 
 - **ADR-205** — el ciclo volvería a quedarse horas en verde esperando (lo hace cumplir `tests/automation/test_sirius_merge.py`).
 
-Y **6** ADR declaran expresamente que no dejaron lección: 240, 236, 235, 234, 233, 232.
+Y **7** ADR declaran expresamente que no dejaron lección: 250, 240, 236, 235, 234, 233, 232.
 
 ## Los bloques del motor
 
