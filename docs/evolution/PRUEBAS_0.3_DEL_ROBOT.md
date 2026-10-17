@@ -93,10 +93,12 @@ Sirius debía dejar de escribirla en cuanto le corta, aunque quedara a medias en
 y dijo que sí. Cambia la decisión del 15-10-2026 en lo primero, no en lo segundo: queda
 escrito lo que llegó a escribir, la charla apunta hasta dónde lo oyó, y eso es lo que el
 modelo lee después. Cortarle no es cancelar el envío: lo dicho queda dicho, hasta donde
-llegó a escribir. El juez no puntúa las respuestas cortadas, que quedan a medias. La
-segunda prueba de PA-R03-07 pasa a fijar esto y la tercera lee lo escrito: el inventario
-aprobado sigue en 28 (ADR-254). Que Ollama deje de escribir al momento al colgarle la
-conexión no se ha comprobado con el de verdad (ADR-252).
+llegó a escribir. El juez no puntúa las respuestas cortadas, que quedan a medias. Si le
+corta mientras la charla resume, cada 18 turnos, corta también el resumen, que hace el
+turno siguiente: lo nuevo tampoco espera a él. La segunda prueba de PA-R03-07 pasa a fijar
+esto y la tercera lee lo escrito: el inventario aprobado sigue en 28 (ADR-254). Que Ollama
+deje de escribir al momento al colgarle la conexión no se ha comprobado con el de verdad
+(ADR-252).
 
 ## Las evaluaciones del propietario
 

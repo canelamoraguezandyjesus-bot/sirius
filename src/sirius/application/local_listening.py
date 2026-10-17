@@ -255,7 +255,8 @@ class HeardTurn:
 
     @property
     def reply(self) -> str:
-        """Lo que escribió: entero si acabó bien, y si no, lo que llegara a escribir."""
+        """Lo que escribió: entero si acabó bien, lo que llevaba escrito si le cortaron
+        (ADR-254), y si no, lo que llegara a escribir."""
         if self.result is None:
             return ""
         return self.result.sirius_message.content or ""

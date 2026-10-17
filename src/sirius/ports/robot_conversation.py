@@ -44,8 +44,12 @@ class ConversationSummaryRepository(Protocol):
 
 
 class ConversationSummarizer(Protocol):
-    def summarize(self, text: str, provider: LLMProvider) -> str:
-        """Resume ``text`` con el modelo de la charla. Puede fallar con cualquier error."""
+    def summarize(self, text: str, provider: LLMProvider, operation_id: str | None = None) -> str:
+        """Resume ``text`` con el modelo de la charla. Puede fallar con cualquier error.
+
+        ``operation_id`` es el de la petición, para poder cortarla (ADR-254); sin él, uno
+        nuevo.
+        """
         ...
 
 

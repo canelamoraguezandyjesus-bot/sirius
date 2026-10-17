@@ -58,8 +58,8 @@ class _SinHuellas:
 
 
 class _Resumidor:
-    def summarize(self, text: str, provider: LLMProvider) -> str:
-        del provider
+    def summarize(self, text: str, provider: LLMProvider, operation_id: str | None = None) -> str:
+        del provider, operation_id
         return f"Resumen: {text}"
 
 
@@ -77,11 +77,11 @@ class _ResumidorQueEspera(_Resumidor):
         self.suelta = threading.Event()
         self.resumidos: list[str] = []
 
-    def summarize(self, text: str, provider: LLMProvider) -> str:
+    def summarize(self, text: str, provider: LLMProvider, operation_id: str | None = None) -> str:
         self.empezado.set()
         self.suelta.wait(timeout=5)
         self.resumidos.append(text)
-        return super().summarize(text, provider)
+        return super().summarize(text, provider, operation_id)
 
 
 def _sirius(

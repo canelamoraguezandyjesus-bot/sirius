@@ -924,12 +924,16 @@ class _Apuntador:
     def __init__(self) -> None:
         self.atribuidas: list[str | None] = []
         self.resumidas_con: list[object] = []
+        self.resumidas_tras: list[str | None] = []
 
     def record_model(self, message_id: int, model: str | None) -> None:
         self.atribuidas.append(model)
 
-    def maybe_summarize(self, conversation_id: int, provider: object) -> bool:
+    def maybe_summarize(
+        self, conversation_id: int, provider: object, operation_id: str | None = None
+    ) -> bool:
         self.resumidas_con.append(provider)
+        self.resumidas_tras.append(operation_id)
         return False
 
 
@@ -1067,7 +1071,8 @@ def test_cortarle_por_voz_a_mitad_guarda_lo_escrito_como_respuesta_acabada(
     )
 
     assert recibidos == ["uno ", "dos "]
-    assert modelo.cancelados == ["op-cortada"]
+    # Corta la respuesta y, por si ya resumía, el resumen de ese turno.
+    assert modelo.cancelados == ["op-cortada", "resumen-op-cortada"]
     assert result.outcome is MessageStatus.COMPLETED
     assert result.sirius_message.status is MessageStatus.COMPLETED
     assert result.sirius_message.content == "uno dos "
@@ -1078,6 +1083,37 @@ def test_cortarle_por_voz_a_mitad_guarda_lo_escrito_como_respuesta_acabada(
 
     assert siguiente.context is not None
     assert "uno dos " in [m.content for m in siguiente.context.recent_messages]
+
+
+@pytest.mark.integration
+def test_al_acabar_el_turno_mira_si_toca_resumir_con_su_operacion(tmp_path: Path) -> None:
+    """ADR-254: el resumen va con la operación del turno, para que cortarle lo corte."""
+    modelo = _ModeloConNombre("modelo-local")
+    use_case, apuntador = _con_modelo_que_cambia(tmp_path, modelo)
+
+    use_case.send_message("hola", operation_id="op-entera")
+
+    assert apuntador.resumidas_tras == ["op-entera"]
+
+
+@pytest.mark.integration
+def test_si_le_cortan_con_la_respuesta_ya_escrita_no_mira_si_toca_resumir(
+    tmp_path: Path,
+) -> None:
+    """Revisión del corte (ADR-254): le cortan con el modelo ya acabado, mientras dice la
+    última frase. La respuesta queda entera, porque acabó, pero no se resume: sería otra
+    petición al modelo, y lo nuevo esperaría detrás."""
+    modelo = _ModeloConNombre("modelo-local", chunks=("uno ", "dos ", "tres."))
+    use_case, apuntador = _con_modelo_que_cambia(tmp_path, modelo)
+
+    result = use_case.send_message(
+        "hola", operation_id="op-al-acabar", on_completed=lambda: use_case.cut("op-al-acabar")
+    )
+
+    assert result.outcome is MessageStatus.COMPLETED
+    assert result.sirius_message.content == "uno dos tres."
+    assert apuntador.atribuidas == ["modelo-local"]
+    assert apuntador.resumidas_con == []
 
 
 @pytest.mark.integration

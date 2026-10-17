@@ -70,7 +70,9 @@ Para lo que se guarda al cortar, una vez cortada la petición:
 
 La opción A. Cortarle por voz no es cancelar el envío: lo dicho queda dicho, ahora solo
 hasta donde llegó a escribir. Es el modelo de ADR-245 frente a la letra de SIRIUS-ARQ-0.1
-S5.1, que habla de la cancelación del envío y no se toca.
+S5.1, que habla de la cancelación del envío y no se toca. Cambia lo que fijó ADR-245 para
+PA-R03-07, que lo que iba a decir «queda escrito entero aunque le corte con el modelo aún
+escribiendo».
 
 - **`_cut`**, en el oído, además de callar la voz, pide a la charla que deje de escribir esa
   respuesta, con su operación, que viaja con lo que se está diciendo.
@@ -78,8 +80,15 @@ S5.1, que habla de la cancelación del envío y no se toca.
   Ollama desde ADR-252. Lo que el modelo llevaba escrito queda como su respuesta,
   COMPLETED; se le atribuye su modelo, se apunta hasta dónde se oyó y el modelo lo lee
   después con esa nota.
-- **Tras un turno cortado no se mira si toca resumir**: sería otra petición al modelo, y lo
+- **Tras un turno cortado no se mira si toca resumir**, tampoco si le cortan con la
+  respuesta ya escrita, mientras dice la última frase: sería otra petición al modelo, y lo
   nuevo esperaría detrás. Lo mira el turno siguiente.
+- **Si le cortan mientras resume**, cosa que pasa cada 18 turnos, se corta también el
+  resumen, que va con la operación del turno, `resumen-<operación>`. Un resumen cortado no
+  guarda nada ni cuenta como fallo en el diario, y lo hace el turno siguiente.
+- **Si le cortan antes de que escriba nada**, su respuesta queda acabada y vacía, con la
+  nota de que no oyó nada. La ventana y `sirius-oye` enseñan «(le cortaste antes de que
+  dijera nada)», no una línea vacía.
 - **El juez no puntúa las respuestas cortadas**, porque quedan a medias: diez cortes de
   E-R03-03 le bajarían la media sin motivo.
 - **Si cortar la charla falla**, la respuesta acaba entera, como antes, y el diario apunta
@@ -101,6 +110,18 @@ S5.1, que habla de la cancelación del envío y no se toca.
 - **Las suites afectadas**: 1 231 en verde, 2 omitidas y 1 `xfail`, en 13 min 30 s.
 - **ruff** limpio; **mypy** sin errores en 743 ficheros; el comprobador de documentos, sin
   defectos.
+- **La revisión en adversario de `01937923`**, por otra bifurcación: 193 pruebas en verde y
+  sus 5 mutaciones caen. Encontró dos fallos y tres textos:
+  - si le cortan mientras resume, lo nuevo espera al resumen entero;
+  - si le cortan con la respuesta ya escrita, antes de mirar si toca resumir, resume igual;
+  - tres docstrings seguían diciendo que la respuesta queda entera.
+
+  Y una nota que se arregla también: una respuesta cortada antes de la primera palabra se
+  enseñaba como una línea vacía. Las seis pruebas nuevas o cambiadas fallan con el código de
+  antes del arreglo, y pasan con él. Caen las 8 mutaciones del arreglo, cada una con su caché
+  de bytecode vacía. La que mide el tiempo: si le cortan mientras resume, lo nuevo llega al
+  modelo de 0,02 a 0,03 s después de que calle, en tres pasadas con los dobles; sin cortar
+  el resumen, a los 2,02 s, cuando acaba el resumen.
 - **La batería entera**: la de la PR, en ADR-253.
 
 ## Consecuencias
@@ -113,8 +134,19 @@ S5.1, que habla de la cancelación del envío y no se toca.
 
 **Qué NO garantiza, después del código:**
 - Que su Ollama deje de escribir al momento con la conexión colgada.
-- Si le corta mientras la charla está resumiendo, cosa que pasa cada 18 turnos, lo nuevo
-  espera a ese resumen: esa petición lleva su propia operación y no se corta.
+- Que un corte sea suyo: un corte falso, por eco que se cuela, una tos o la tele, ahora
+  también deja la respuesta a medias en la charla, no solo la voz.
+- Que el juez puntúe las cortadas que ya estaban escritas enteras: las deja fuera todas,
+  porque no hay ningún dato para distinguirlas.
+
+## La lección
+
+- familia: `modelo-dentro-del-turno`
+- sin esto se repetiría: al cortarle, dejar que siga dentro del turno una petición al modelo
+  que ya nadie va a oír, el resto de la respuesta o el resumen de cada 18 turnos, con lo
+  nuevo esperando detrás: decenas de segundos con una respuesta larga. El corte callaba la
+  voz, y la petición seguía.
+- lo hace cumplir: `tests/acceptance/test_robot_0_3_voz.py`
 
 ## Revisión externa
 

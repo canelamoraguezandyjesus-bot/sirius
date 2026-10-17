@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 import sqlite3
 from collections.abc import Iterable
 from pathlib import Path
 
 import pytest
 
+from sirius.adapters.llm.fake import FakeLLMProvider
 from sirius.adapters.persistence.bootstrap import initialize_persistence
 from sirius.adapters.persistence.migrations import upgrade_to_head
 from sirius.adapters.persistence.sqlite_conversation_repository import (
@@ -20,6 +22,7 @@ from sirius.adapters.secrets.fake import FakeSecretStore
 from sirius.application.robot_conversation import (
     ConversationModeUseCase,
     ConversationSummaryService,
+    LLMConversationSummarizer,
     MarkReplyUseCase,
 )
 from sirius.application.send_message import SendMessageUseCase
@@ -139,15 +142,15 @@ class _Modelo:
 
 
 class _ResumidorQueFalla:
-    def summarize(self, text: str, provider: LLMProvider) -> str:
-        del text, provider
+    def summarize(self, text: str, provider: LLMProvider, operation_id: str | None = None) -> str:
+        del text, provider, operation_id
         msg = "sin modelo"
         raise RuntimeError(msg)
 
 
 class _ResumidorQueCuenta:
-    def summarize(self, text: str, provider: LLMProvider) -> str:
-        del text, provider
+    def summarize(self, text: str, provider: LLMProvider, operation_id: str | None = None) -> str:
+        del text, provider, operation_id
         return "resumen"
 
 
@@ -182,6 +185,35 @@ def test_si_resumir_falla_la_charla_sigue_y_no_se_guarda_nada(tmp_path: Path) ->
 
     assert servicio.maybe_summarize(conversacion.id, _Modelo()) is False
     assert repositorio.latest(conversacion.id) is None
+
+
+def test_el_resumen_va_con_la_operacion_del_turno_y_cortado_no_guarda_nada(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Revisión del corte (ADR-254): el resumen lleva la operación del turno que acaba, y
+    cortar ese turno lo corta también. Cortado no guarda nada ni es un fallo en el diario,
+    y lo hace el turno siguiente."""
+    base = _base(tmp_path)
+    conversaciones = build_sqlite_conversation_repository(base)
+    conversacion = conversaciones.get_or_create_main_conversation()
+    for n in range(20):
+        conversaciones.append_message(conversacion.id, MessageRole.USER, f"pregunta {n}")
+        conversaciones.append_message(conversacion.id, MessageRole.SIRIUS, f"respuesta {n}")
+    repositorio = build_sqlite_robot_conversation_repository(base)
+    servicio = ConversationSummaryService(conversaciones, repositorio, LLMConversationSummarizer())
+    modelo = FakeLLMProvider(chunks=("Un ", "resumen."))
+    # Le cortaron el turno «op-cortada»: lo que cortarle pide al modelo (ADR-254).
+    modelo.cancel("resumen-op-cortada")
+
+    with caplog.at_level(logging.INFO):
+        assert servicio.maybe_summarize(conversacion.id, modelo, "op-cortada") is False
+
+    assert repositorio.latest(conversacion.id) is None
+    assert [r.levelname for r in caplog.records if r.levelno >= logging.WARNING] == []
+    assert servicio.maybe_summarize(conversacion.id, modelo, "op-siguiente") is True
+    vigente = repositorio.latest(conversacion.id)
+    assert vigente is not None
+    assert vigente.content == "Un resumen."
 
 
 def test_los_textos_de_los_modos_son_distintos_y_el_vacile_solo_es_del_serio() -> None:

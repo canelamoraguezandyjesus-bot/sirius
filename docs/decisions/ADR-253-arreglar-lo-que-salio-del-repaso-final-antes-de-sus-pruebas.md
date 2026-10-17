@@ -200,9 +200,10 @@ leer el bytecode de la anterior.
 - familia: `parada-segura-que-tira-lo-ya-pagado`
 - sin esto se repetiría: un fallo de un modelo en la respuesta 46 de 60, o un Esc sin
   querer, tiraba las respuestas ya generadas, de 30 a 40 minutos de su tarde, y había que
-  pedirlas todas otra vez. Parar era seguro; tirar lo pagado, no.
-- lo hace cumplir: `tests/unit/test_blind_test.py`, `tests/unit/test_trick_questions.py`,
-  `tests/gui/test_blind_test_dialog.py` y `tests/gui/test_trick_questions_dialog.py`
+  pedirlas todas otra vez. Parar era seguro; tirar lo pagado, no. Lo mismo fijan, para
+  las preguntas trampa y las dos hojas, `tests/unit/test_trick_questions.py`,
+  `tests/gui/test_blind_test_dialog.py` y `tests/gui/test_trick_questions_dialog.py`.
+- lo hace cumplir: `tests/unit/test_blind_test.py`
 
 ## Revisión externa
 

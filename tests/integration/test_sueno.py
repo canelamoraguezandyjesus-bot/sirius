@@ -44,8 +44,8 @@ class _Resumidor:
     pedidos: list[str] = field(default_factory=list)
     falla: bool = False
 
-    def summarize(self, text: str, provider: LLMProvider) -> str:
-        del provider
+    def summarize(self, text: str, provider: LLMProvider, operation_id: str | None = None) -> str:
+        del provider, operation_id
         self.pedidos.append(text)
         if self.falla:
             raise RuntimeError("sin modelo")

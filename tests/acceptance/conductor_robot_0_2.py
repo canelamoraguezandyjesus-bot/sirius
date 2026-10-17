@@ -283,8 +283,8 @@ class _ResumidorEnchufado:
     def __init__(self, resumidor: ResumidorDeMentira) -> None:
         self._resumidor = resumidor
 
-    def summarize(self, text: str, provider: object) -> str:
-        del provider
+    def summarize(self, text: str, provider: object, operation_id: str | None = None) -> str:
+        del provider, operation_id
         return self._resumidor.resume(text)
 
 

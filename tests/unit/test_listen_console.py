@@ -181,6 +181,17 @@ def test_un_turno_cancelado_se_ensena_como_en_la_ventana() -> None:
     assert dicho[1:] == ["Tú: Hola", "Sirius: Ho (cancelado)", "Envío cancelado."]
 
 
+def test_si_le_cortaron_antes_de_que_escribiera_nada_lo_dice_y_no_una_linea_vacia() -> None:
+    # Revisión del corte (ADR-254): le cortan antes de la primera palabra, y su respuesta
+    # queda acabada y vacía. Se enseña igual en la ventana.
+    turno = _turno("Hola", "")
+    oido = _Oido(atenciones=[Attended(turns=(turno,))])
+
+    _, dicho, _ = _escucha(oido, 1)
+
+    assert dicho[1:] == ["Tú: Hola", "Sirius: (le cortaste antes de que dijera nada)"]
+
+
 def test_si_sirius_propone_recordar_algo_dice_donde_confirmarlo() -> None:
     turno = _turno("Me encanta el café", "¡Anotado!", propuesto="Le gusta el café")
     oido = _Oido(atenciones=[Attended(turns=(turno,))])
