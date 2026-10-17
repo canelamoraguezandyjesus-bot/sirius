@@ -320,19 +320,21 @@ def test_intro_no_marca_la_siguiente_tras_marcar_con_el_raton(qtbot: QtBot) -> N
     abre(ventana, qtbot)
     ventana.activateWindow()
 
-    QTest.mouseClick(ventana.contrary_button, Qt.MouseButton.LeftButton)
-    qtbot.waitUntil(
-        ventana.contrary_button.isEnabled, timeout=QApplication.doubleClickInterval() + 2000
-    )
-    # Ni Intro ni la barra: el clic no le deja el foco al botón.
+    # Dos, para que «Anterior» esté a mano al marcar la segunda.
+    for _ in range(2):
+        QTest.mouseClick(ventana.contrary_button, Qt.MouseButton.LeftButton)
+        qtbot.waitUntil(
+            ventana.contrary_button.isEnabled, timeout=QApplication.doubleClickInterval() + 2000
+        )
+    # Ni Intro ni la barra: el clic no les deja el foco a los botones, ni a «Anterior».
     for tecla in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space):
         QTest.keyClick(QApplication.focusWidget() or ventana, tecla)
     # Y aunque se llegue a él con el tabulador, Intro no lo pulsa.
     for tecla in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
         QTest.keyClick(ventana.contrary_button, tecla)
 
-    assert ventana.answer_number.text() == "Idea mala 2 de 40"
-    assert len(ventana._marks) == 1
+    assert ventana.answer_number.text() == "Idea mala 3 de 40"
+    assert len(ventana._marks) == 2
     assert not ventana.contrary_button.autoDefault()
     assert not ventana.agrees_button.autoDefault()
 
