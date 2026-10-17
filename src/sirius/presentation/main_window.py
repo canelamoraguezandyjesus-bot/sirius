@@ -3321,6 +3321,7 @@ class MainWindow(QMainWindow):
         )
 
     def _open_blind_test(self, use_case: BlindTestUseCase) -> None:
+        chosen_before = use_case.chat_model()
         dialog = BlindTestDialog(
             use_case,
             show_warning=self._show_warning,
@@ -3329,6 +3330,17 @@ class MainWindow(QMainWindow):
         )
         dialog.exec()
         self._refresh_chat_model_label(use_case)
+        chosen = use_case.chat_model()
+        if chosen is not None and chosen != chosen_before:
+            self._chat_went_local()
+
+    def _chat_went_local(self) -> None:
+        """La charla va ya a un modelo de este ordenador, elegido a ciegas: «Guardar
+        configuración» ya no la devuelve a OpenAI, y el oído, que no oía porque la charla
+        iba fuera, oye ya y quita ese aviso. Callado con el botón, sigue callado (ADR-253)."""
+        self.provider_combo.setCurrentText(LLMProviderKind.OLLAMA.value)
+        if self._local_listening is not None and not (self._closed or self._close_requested):
+            self._refresh_listening(self._listen(self._local_listening.start))
 
     def _build_voice_group(self, use_case: VoiceTestUseCase) -> QGroupBox:
         """Su voz y la prueba a ciegas para elegirla (PA-R03-10, ADR-246)."""
