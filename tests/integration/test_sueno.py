@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import threading
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass, field
@@ -311,11 +312,12 @@ def _sueno_que_pregunta_a(tmp_path: Path, modelo: LLMProvider) -> _Mundo:
 
 
 def test_cortado_el_sueno_corta_su_peticion_no_hace_mas_y_el_dia_queda_por_sonar(
-    tmp_path: Path,
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
     """Al cerrar Sirius no se espera al modelo (ADR-253): se corta la petición en curso, no
     sale ninguna más, ni la de los hechos de ese día ni las del día siguiente, y lo cortado
-    queda por soñar."""
+    queda por soñar. El diario dice que se cortó, no que algo falló."""
+    caplog.set_level(logging.INFO)
     modelo = _ModeloQueNoAcaba()
     mundo = _sueno_que_pregunta_a(tmp_path, modelo)
     mundo.di("Anteayer fui a la obra.", hace_dias=2)
@@ -334,6 +336,9 @@ def test_cortado_el_sueno_corta_su_peticion_no_hace_mas_y_el_dia_queda_por_sonar
     assert len(modelo.pedidas) == 1
     assert modelo.cortadas == modelo.pedidas
     assert mundo.sueno.latest_summary() is None
+    assert [r.getMessage() for r in caplog.records if r.name == "sirius.application.dream"] == [
+        "El sueño se cortó: ese día queda por soñar"
+    ]
 
 
 def test_cortar_sin_sueno_en_marcha_no_corta_el_siguiente(tmp_path: Path) -> None:
