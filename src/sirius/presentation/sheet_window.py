@@ -11,7 +11,7 @@ en líneas en vez de ensancharla.
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QEvent, QObject, Qt
 from PySide6.QtWidgets import QDialog, QFrame, QScrollArea, QWidget
 
 __all__ = ["OPEN_SHARE", "fit_as_sheet", "scrollable"]
@@ -29,15 +29,41 @@ def scrollable(page: QWidget) -> QScrollArea:
     return area
 
 
+class _MinimizeTheOwner(QObject):
+    """Minimizar una hoja minimiza la ventana de Sirius, la dueña.
+
+    En Windows, una hoja modal que pertenece a la ventana no tiene botón en la barra de
+    tareas: minimizada, se quedaba como una barrita abajo a la izquierda, con la ventana de
+    Sirius bloqueada, y parecía colgada. Así la hoja no se queda minimizada; se minimiza la
+    dueña, que Windows esconde con todas las suyas y vuelve a enseñar con ellas al
+    restaurarla desde la barra de tareas (incidencia #696).
+    """
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        if (
+            event.type() == QEvent.Type.WindowStateChange
+            and isinstance(watched, QWidget)
+            and watched.windowState() & Qt.WindowState.WindowMinimized
+        ):
+            owner = watched.parentWidget()
+            if owner is not None:
+                watched.setWindowState(watched.windowState() & ~Qt.WindowState.WindowMinimized)
+                window = owner.window()
+                window.setWindowState(window.windowState() | Qt.WindowState.WindowMinimized)
+        return False
+
+
 def fit_as_sheet(dialog: QDialog) -> None:
     """Botones de minimizar, maximizar y cerrar, sin el «?» de ayuda, y un tamaño que cabe.
 
     Se llama al final de construir la hoja, con sus pasos ya dentro de sus barras: así lo
-    menos que puede medir es poco, y nada la ensancha más que la pantalla.
+    menos que puede medir es poco, y nada la ensancha más que la pantalla. Minimizarla
+    minimiza la ventana de Sirius (``_MinimizeTheOwner``).
     """
     dialog.setWindowFlag(Qt.WindowType.WindowContextHelpButtonHint, False)
     dialog.setWindowFlag(Qt.WindowType.WindowMinMaxButtonsHint, True)
     dialog.setWindowFlag(Qt.WindowType.WindowCloseButtonHint, True)
+    dialog.installEventFilter(_MinimizeTheOwner(dialog))
     owner = dialog.parentWidget()
     available = (owner if owner is not None else dialog).screen().availableGeometry().size()
     size = (available * OPEN_SHARE).expandedTo(dialog.minimumSizeHint()).boundedTo(available)
