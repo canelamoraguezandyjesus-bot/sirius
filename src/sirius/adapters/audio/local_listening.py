@@ -37,6 +37,7 @@ from sirius.adapters.audio.voice_libraries import (
     VOICE_ACTIVITY,
     import_voice_library,
 )
+from sirius.application.addressing import NAME
 from sirius.infrastructure.logging import get_logger
 from sirius.ports.local_voice import Captured, ListeningEngines, TurnSignal, VoiceUnavailable
 
@@ -329,6 +330,11 @@ class FasterWhisperTranscriber:
         samples = np.frombuffer(b"".join(chunks), dtype=np.int16)
         audio = samples.astype(np.float32) / 32768.0
         segments, _info = self._model.transcribe(
-            audio, language="es", condition_on_previous_text=False
+            audio,
+            language="es",
+            condition_on_previous_text=False,
+            # Una pista para que escriba su nombre como es, y no «Sirio» o «serios»: el oído
+            # solo lo reconoce exacto (ADR-252).
+            hotwords=NAME,
         )
         return " ".join(segment.text.strip() for segment in segments).strip()
