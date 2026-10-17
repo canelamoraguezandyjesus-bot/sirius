@@ -2174,10 +2174,6 @@ class MainWindow(QMainWindow):
         self._stop_background()
         if self._listening_loop is not None:
             self._listening_loop.stop()
-        if self._local_listening is not None:
-            # La voz se suelta, y con ella la cancelación de eco: viva hasta que Python se
-            # cierra, livekit pinta en rojo un error suyo al salir (ADR-252).
-            self._local_listening.close()
         super().closeEvent(event)
 
     # --- Configuración ---------------------------------------------------

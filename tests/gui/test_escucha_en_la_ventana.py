@@ -17,6 +17,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 import pytest
+from PySide6.QtCore import QObject, Signal
 from PySide6.QtWidgets import QMainWindow
 from pytestqt.qtbot import QtBot
 
@@ -47,6 +48,7 @@ from sirius.main import (
     _build_listening_main_window,
     _build_main_window,
     _build_post_key_window,
+    _release_on_quit,
 )
 from sirius.ports.embeddings import EmbeddingError
 from sirius.ports.llm import (
@@ -519,14 +521,11 @@ def test_un_turno_de_voz_para_lo_de_segundo_plano_y_espera_a_que_acabe(
 def test_cerrar_la_ventana_deja_de_oir_y_ya_no_la_mira(qtbot: QtBot, tmp_path: Path) -> None:
     sirius = _monta(tmp_path)
     ventana = _ventana(qtbot, sirius)
-    (altavoz,) = sirius.altavoces
 
     ventana.close()
 
     assert not sirius.deps.local_listening.listening
     assert not sirius.micro.abierto
-    # Suelta la voz y su altavoz, con su cancelación de eco (ADR-252).
-    assert altavoz.cerrado
     # Si alguien vuelve a abrir el oído, la ventana cerrada ya no es quien lo mira.
     sirius.deps.local_listening.start()
     sirius.suena("Sirius, ¿sigues ahí?")
@@ -561,8 +560,6 @@ def test_cerrar_mientras_contesta_por_voz_lo_cancela_y_cierra_al_acabar(
     finally:
         sigue.set()
     qtbot.waitUntil(lambda: not ventana.isVisible(), timeout=5000)
-    # Al cerrarse de verdad, suelta la voz (ADR-252).
-    assert sirius.altavoces[-1].cerrado
     bucle.stop()
     assert bucle.wait(5)
 
@@ -1102,3 +1099,27 @@ def test_el_aviso_de_la_charla_de_fuera_dice_donde_elegir_un_modelo_de_aqui(
     pestanas = [ventana.tabs.tabText(indice) for indice in range(ventana.tabs.count())]
     assert "Configuración" in pestanas
     assert f"Configuración, «{ventana.blind_test_button.text()}»" in CHAT_LEAVES
+
+
+class _Aplicacion(QObject):
+    """Hace de la QApplication de Sirius: solo su aviso de que sale."""
+
+    aboutToQuit = Signal()
+
+
+def test_al_salir_de_sirius_suelta_la_voz_y_no_al_cerrar_una_ventana(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    sirius = _monta(tmp_path)
+    ventana = _ventana(qtbot, sirius)
+    (altavoz,) = sirius.altavoces
+    aplicacion = _Aplicacion()
+    _release_on_quit(aplicacion, sirius.deps)  # type: ignore[arg-type]
+
+    # Tras acabar un proyecto se cierra la ventana y se abre otra: sigue con su voz.
+    ventana.close()
+    assert not altavoz.cerrado
+
+    # Al salir se suelta, y con ella la cancelación de eco (ADR-252).
+    aplicacion.aboutToQuit.emit()
+    assert altavoz.cerrado

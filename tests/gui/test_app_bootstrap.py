@@ -16,7 +16,7 @@ from typing import cast
 
 import pytest
 from PySide6.QtCore import QRunnable, QThreadPool
-from PySide6.QtWidgets import QMainWindow, QPushButton
+from PySide6.QtWidgets import QApplication, QMainWindow, QPushButton
 from pytestqt.qtbot import QtBot
 
 from sirius.adapters.persistence.bootstrap import initialize_persistence
@@ -294,6 +294,30 @@ def test_after_migrating_at_startup_the_diary_keeps_writing(
     diario = (default_paths.logs_dir / "application.log").read_text(encoding="utf-8")
     assert "Sirius iniciando" in diario
     assert "Sirius iniciado" in diario
+
+
+@pytest.mark.gui
+def test_the_real_app_releases_the_voice_when_sirius_quits(
+    qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # ADR-252: la cancelación de eco viva hasta que Python se cierra pinta en rojo un error
+    # de livekit al salir. La suelta Sirius al salir, no cada ventana al cerrarse.
+    monkeypatch.setattr(
+        "sirius.composition_root.build_keyring_secret_store", lambda: FakeSecretStore()
+    )
+    al_salir: list[tuple[object, object]] = []
+    monkeypatch.setattr(
+        "sirius.main._release_on_quit",
+        lambda app, dependencies: al_salir.append((app, dependencies.local_listening)),
+    )
+    initialize_persistence(resolve_paths())
+
+    window = _build_first_window(_location_use_case(), [])
+    qtbot.addWidget(window)
+
+    ((app, oido),) = al_salir
+    assert app is QApplication.instance()
+    assert oido is not None
 
 
 @pytest.mark.gui
