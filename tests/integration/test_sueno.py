@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import threading
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from pathlib import Path
@@ -32,7 +32,7 @@ from sirius.application.robot_conversation import LLMConversationSummarizer
 from sirius.domain.conversation import MessageRole
 from sirius.domain.facts import Certainty, ProposedFact
 from sirius.infrastructure.paths import resolve_paths
-from sirius.ports.llm import LLMCancelled, LLMProvider, LLMRequest, LLMStreamEvent
+from sirius.ports.llm import LLMCancelled, LLMCompleted, LLMProvider, LLMRequest, LLMStreamEvent
 
 pytestmark = pytest.mark.integration
 
@@ -295,6 +295,27 @@ class _ModeloQueNoAcaba:
             self._cortes.setdefault(operation_id, threading.Event()).set()
 
 
+class _ModeloQueContesta:
+    """Un modelo de este ordenador que contesta enseguida. Con ``al_contestar``, eso pasa
+    mientras contesta la primera petición."""
+
+    def __init__(self) -> None:
+        self.pedidas: list[str] = []
+        self.al_contestar: Callable[[], None] = lambda: None
+
+    def health_check(self) -> bool:
+        return True
+
+    def stream_response(self, request: LLMRequest) -> Iterator[LLMStreamEvent]:
+        self.pedidas.append(request.operation_id)
+        if len(self.pedidas) == 1:
+            self.al_contestar()
+        yield LLMCompleted(text="Fue a la obra.", input_tokens=1, output_tokens=1)
+
+    def cancel(self, operation_id: str) -> None:
+        del operation_id
+
+
 def _sueno_que_pregunta_a(tmp_path: Path, modelo: LLMProvider) -> _Mundo:
     """El sueño con el resumidor y el extractor de verdad, que preguntan a ``modelo``."""
     mundo = _mundo(tmp_path)
@@ -335,6 +356,26 @@ def test_cortado_el_sueno_corta_su_peticion_no_hace_mas_y_el_dia_queda_por_sonar
     assert not hilo.is_alive(), "el sueño seguiría esperando al modelo"
     assert len(modelo.pedidas) == 1
     assert modelo.cortadas == modelo.pedidas
+    assert mundo.sueno.latest_summary() is None
+    assert [r.getMessage() for r in caplog.records if r.name == "sirius.application.dream"] == [
+        "El sueño se cortó: ese día queda por soñar"
+    ]
+
+
+def test_cortado_cuando_ya_acababa_una_peticion_la_siguiente_no_sale(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """El corte llega tarde para el resumen, que ya estaba contestado, pero no para los
+    hechos de ese día: esa petición ya no sale, y el día queda por soñar (ADR-253)."""
+    caplog.set_level(logging.INFO)
+    modelo = _ModeloQueContesta()
+    mundo = _sueno_que_pregunta_a(tmp_path, modelo)
+    modelo.al_contestar = mundo.sueno.cancel
+    mundo.di("Ayer fui a la obra.", hace_dias=1)
+
+    mundo.sueno.dream_pending(date.today())
+
+    assert len(modelo.pedidas) == 1
     assert mundo.sueno.latest_summary() is None
     assert [r.getMessage() for r in caplog.records if r.name == "sirius.application.dream"] == [
         "El sueño se cortó: ese día queda por soñar"
