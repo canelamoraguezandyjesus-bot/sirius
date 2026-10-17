@@ -1659,3 +1659,19 @@ defectos:
       - tests/acceptance/conductor_robot_0_2.py
       - tests/integration/test_memoria_en_su_ordenador.py
       - src/sirius/domain/relevance.py
+  # ADR-252: en la ventana, un turno de voz esperaba entera la nota del juez. El juez pedia
+  # con el tope de la charla, 4 096, y cortarle solo se miraba con cada trozo, que no llega
+  # mientras Ollama lee la pregunta. Se cierra con la PR que lo lleve a main; hasta entonces
+  # lo sigue la incidencia de su nota de arranque.
+  - id: H-252
+    titulo: Un turno de voz esperaba entera la nota del juez, porque cortarle solo se miraba entre trozos
+    bloque: producto
+    gravedad: media
+    estado: abierto
+    adr: 252
+    incidencia: 694
+    ficheros:
+      - src/sirius/adapters/llm/ollama_chat.py
+      - src/sirius/application/reply_judge.py
+      - src/sirius/presentation/main_window.py
+      - tests/unit/test_el_juez_no_frena_la_voz.py
