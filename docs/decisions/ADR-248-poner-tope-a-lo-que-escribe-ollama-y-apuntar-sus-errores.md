@@ -97,10 +97,12 @@ de OpenAI. Al escribir el código se decidió además:
 - **El proveedor no se puede construir sin tope**: si nadie se lo da, lleva el de serie.
 - **Una respuesta cortada por el tope** acaba como hoy cualquier otra: con lo escrito.
 - **El diario** apunta, cuando Ollama contesta con un error, el código HTTP y su texto; con
-  un error a mitad de respuesta, su texto; y con un fallo de red antes de contestar, cuál
-  fue. El texto va en una línea, recortado a 300 caracteres, y lo que repita de lo que se
-  le pidió al modelo, cada línea de 12 caracteres o más de las instrucciones y de lo que
-  dijo él, se tacha antes de apuntarlo.
+  un error a mitad de respuesta, su texto; y con un fallo de red, antes de contestar o a
+  mitad de respuesta, cuál fue. El texto va en una línea, recortado a 300 caracteres, y lo
+  que repita de lo que se le pidió al modelo se tacha antes de apuntarlo, línea a línea de
+  las instrucciones y de lo que dijo él: las de 12 caracteres o más donde aparezcan, y las
+  más cortas solo como frase entera, para no tachar trozos de las palabras del error. El
+  fallo de red a mitad de respuesta y las líneas cortas, desde la ronda 1 de Codex (abajo).
 
 ## Comprobación que la sostiene
 
@@ -120,8 +122,8 @@ de OpenAI. Al escribir el código se decidió además:
 - **Las pruebas que tocan Ollama, sus ajustes y quien los usa**, 40 ficheros: 1 057 en
   verde, 2 omitidas y 2 `xfail`.
 - **ruff** limpio; **mypy** sin errores en 734 ficheros.
-- **La batería entera**, sobre `401ea5a1`, el árbol final de la PR: 8 847 en verde,
-  14 omitidas y 2 `xfail`, ningún fallo, en 23 min 41 s.
+- **La batería entera**, sobre `401ea5a1`: 8 847 en verde, 14 omitidas y 2 `xfail`, ningún
+  fallo, en 23 min 41 s. Con la ronda 1 de Codex, se escribe la última.
 
 ## Consecuencias
 
@@ -132,8 +134,12 @@ de OpenAI. Al escribir el código se decidió además:
   Ollama, como pasaba con OpenAI.
 - **Su diario dirá por qué falla Ollama la próxima vez**, si el diario apunta: por eso va en
   la misma PR que ADR-249.
-- **Lo que Ollama repita de la charla en un error se tacha** si es una línea de 12
-  caracteres o más; una más corta podría llegar al diario.
+- **Lo que Ollama repita de la charla en un error se tacha**, cada línea entera: las de 12
+  caracteres o más donde aparezcan, y las más cortas cuando salen como frase entera. No
+  garantiza tachar un eco parcial de una línea: si Ollama repite solo un trozo, ese trozo
+  llega al diario.
+- **Una línea corta de la charla que sea también una palabra del error** se tacha en él
+  aunque Ollama no la repitiera: un «Hola» suyo tacha cualquier «Hola» suelto del error.
 
 ## Alternativas descartadas y por qué
 
@@ -162,3 +168,23 @@ conector.
 Va en la misma PR que ADR-247, y su alcance se suma al de allí: que toda petición a Ollama
 lleve el tope de los ajustes, que una respuesta cortada por él acabe como hoy, y que el
 diario diga lo que dijo Ollama sin nada de la charla.
+
+- **Ronda 1, sobre `11306860`**: dos hallazgos, los dos ciertos, verificados contra el
+  código antes de tocar nada.
+  - **P1, las líneas cortas de la charla.** Solo se tachaban las de 12 caracteres o más: un
+    «PIN 1234» que Ollama repitiera en su error llegaba entero al diario. Ahora las cortas
+    se tachan también, solo como frase entera, con bordes de palabra, para no tachar trozos
+    de las palabras del error; las largas, como antes, donde aparezcan; y las más largas
+    primero, para que tachar una corta no deje a medias una larga que la lleva dentro.
+  - **P2, el fallo de red a mitad de respuesta.** `_consume` lo convertía en error sin
+    apuntar nada, y la rama que lo apuntaba no llegaba a verlo. Ahora lo apunta él, con la
+    clase y el mensaje pasados por el mismo filtro, también el del tope de lectura.
+
+  Cinco pruebas más en `tests/unit/test_ollama_chat_provider.py`. Con el código de la
+  ronda fallaban cuatro: el «PIN 1234», una línea larga pegada a una corta, y el
+  `RemoteProtocolError` y el `ReadTimeout` a mitad de respuesta. La quinta mira que una
+  palabra del error que solo lleva dentro una línea corta no se tache. Mutación: 12, caen
+  las 12, siete del P1 y cinco del P2. Las pruebas que tocan Ollama, sus ajustes y quien los
+  usa, 48 ficheros: 1 211 en verde, 2 omitidas y 2 `xfail`. Los dos hallazgos son de la
+  misma familia: el diario prometía más de lo que el código cubría. Si la ronda 2 trae otro
+  de ella, se para a buscar la raíz.

@@ -31,6 +31,7 @@ Lo que garantiza por construcción:
 from __future__ import annotations
 
 import json
+import re
 import threading
 from collections.abc import Iterable, Iterator
 from typing import Any
@@ -85,8 +86,9 @@ DEFAULT_NUM_PREDICT = 4096
 #: Cuánto del texto de un error de Ollama va al diario.
 _ERROR_TEXT_LIMIT = 300
 
-#: Lo más corto que se tacha si un error de Ollama repite lo que se le pidió: más corto,
-#: tacharía palabras sueltas de su mensaje.
+#: Lo más corto que se tacha donde aparezca si un error de Ollama repite lo que se le pidió;
+#: una línea más corta se tacha solo como frase entera, para no tachar trozos de las
+#: palabras de su mensaje (ronda 1 de Codex de ADR-248).
 _SHORTEST_ECHO = 12
 
 #: Cuánto tiempo deja Ollama el modelo cargado después de cada respuesta. Con
@@ -124,12 +126,22 @@ def _error(kind: LLMErrorKind, partial_text: str = "") -> LLMError:
 
 def _for_the_log(text: str, request: LLMRequest) -> str:
     """Lo que dijo Ollama al fallar, para el diario: en una línea, recortado, y sin lo que
-    se le pidió al modelo, por si lo repite (ADR-248)."""
-    for asked in (request.instructions, request.input_text):
-        for line in asked.splitlines():
-            line = line.strip()
-            if len(line) >= _SHORTEST_ECHO:
-                text = text.replace(line, "[…]")
+    se le pidió al modelo, por si lo repite (ADR-248).
+
+    Las líneas más largas se tachan primero: tachar antes una corta que va dentro de otra
+    dejaría la larga a medias.
+    """
+    asked = {
+        line.strip()
+        for prompt in (request.instructions, request.input_text)
+        for line in prompt.splitlines()
+        if line.strip()
+    }
+    for line in sorted(asked, key=lambda line: (-len(line), line)):
+        if len(line) >= _SHORTEST_ECHO:
+            text = text.replace(line, "[…]")
+        else:
+            text = re.sub(rf"(?<!\w){re.escape(line)}(?!\w)", "[…]", text)
     text = " ".join(text.split())
     if len(text) > _ERROR_TEXT_LIMIT:
         text = text[: _ERROR_TEXT_LIMIT - 1] + "…"
@@ -351,11 +363,16 @@ class OllamaChatProvider:
                         memory_suggestion=memory_suggestion,
                     )
                     return
-        except httpx.TimeoutException:
-            yield _error(LLMErrorKind.TIMEOUT, partial())
-            return
-        except httpx.HTTPError:
-            yield _error(LLMErrorKind.CONNECTION, partial())
+        except httpx.HTTPError as exc:
+            # La rama de fuera, en ``stream_response``, no llega a verlo (ronda 1 de ADR-248).
+            _logger.error(
+                "Operación %s: fallo de red con Ollama a mitad de respuesta (%s: %s)",
+                request.operation_id,
+                type(exc).__name__,
+                _for_the_log(str(exc), request),
+            )
+            timed_out = isinstance(exc, httpx.TimeoutException)
+            yield _error(LLMErrorKind.TIMEOUT if timed_out else LLMErrorKind.CONNECTION, partial())
             return
         yield _error(LLMErrorKind.INVALID_RESPONSE, partial())
 

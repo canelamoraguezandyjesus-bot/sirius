@@ -471,6 +471,53 @@ def test_lo_que_ollama_repita_de_la_charla_no_llega_al_diario(diario: list[str])
     assert diario == ["Ollama respondió 400 a la charla: bad input: […] […]"]
 
 
+def test_una_linea_corta_de_la_charla_que_ollama_repita_tampoco_llega_al_diario(
+    diario: list[str],
+) -> None:
+    # Ronda 1 de Codex: solo se tachaban las líneas de 12 caracteres o más.
+    peticion = LLMRequest(operation_id="op-3", instructions="Eres Sirius.", input_text="PIN 1234")
+
+    def contestar(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(400, json={"error": "bad input: PIN 1234"})
+
+    _eventos(_proveedor(contestar), peticion)
+
+    assert diario == ["Ollama respondió 400 a la charla: bad input: […]"]
+
+
+def test_una_linea_corta_solo_se_tacha_como_frase_entera(diario: list[str]) -> None:
+    # «red», que dijo él, va dentro de cuatro palabras del error, y ninguna se tacha.
+    peticion = LLMRequest(operation_id="op-4", instructions="Eres Sirius.", input_text="red")
+    dicho = "authentication required: credentials expired, reduce retries"
+
+    def contestar(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(401, json={"error": dicho})
+
+    _eventos(_proveedor(contestar), peticion)
+
+    assert diario == [f"Ollama respondió 401 a la charla: {dicho}"]
+
+
+def test_una_linea_larga_se_tacha_aunque_vaya_pegada_y_antes_que_las_cortas(
+    diario: list[str],
+) -> None:
+    # Si Ollama repite la charla sin sus saltos de línea, la larga va pegada a la corta: se
+    # tacha donde aparezca, y primero, para que la corta quede como frase entera.
+    peticion = LLMRequest(
+        operation_id="op-5",
+        instructions="Eres Sirius\nSu hermana Lucía es enfermera en el hospital",
+        input_text="Hola",
+    )
+
+    def contestar(request: httpx.Request) -> httpx.Response:
+        dicho = "bad input: Eres SiriusSu hermana Lucía es enfermera en el hospital"
+        return httpx.Response(400, json={"error": dicho})
+
+    _eventos(_proveedor(contestar), peticion)
+
+    assert diario == ["Ollama respondió 400 a la charla: bad input: […][…]"]
+
+
 def test_un_error_muy_largo_llega_recortado_al_diario(diario: list[str]) -> None:
     def contestar(request: httpx.Request) -> httpx.Response:
         return httpx.Response(500, json={"error": "x" * 1000})
@@ -494,4 +541,53 @@ def test_un_fallo_de_red_antes_de_contestar_dice_cual_fue(diario: list[str]) -> 
     assert diario == [
         "Operación op-1: fallo de red con Ollama"
         " (RemoteProtocolError: Server disconnected without sending a response.)"
+    ]
+
+
+def _se_corta_a_mitad(error: httpx.HTTPError) -> Callable[[httpx.Request], httpx.Response]:
+    """Un Ollama que empieza a contestar y deja de hacerlo: la red falla a mitad."""
+
+    def contestar(request: httpx.Request) -> httpx.Response:
+        def trozos() -> Iterator[bytes]:
+            yield (json.dumps({"message": {"content": "Empez"}, "done": False}) + "\n").encode()
+            raise error
+
+        return httpx.Response(200, content=trozos())
+
+    return contestar
+
+
+def test_un_fallo_de_red_a_mitad_de_respuesta_dice_cual_fue(diario: list[str]) -> None:
+    # Ronda 1 de Codex: a mitad de respuesta, el fallo de red no dejaba nada en el diario.
+    error = httpx.RemoteProtocolError(
+        "peer closed connection without sending complete message body (incomplete chunked read)"
+    )
+
+    eventos = _eventos(_proveedor(_se_corta_a_mitad(error)))
+
+    assert isinstance(eventos[-1], LLMError)
+    assert eventos[-1].kind is LLMErrorKind.CONNECTION
+    assert eventos[-1].partial_text == "Empez"
+    assert diario == [
+        "Operación op-1: fallo de red con Ollama a mitad de respuesta (RemoteProtocolError:"
+        " peer closed connection without sending complete message body"
+        " (incomplete chunked read))"
+    ]
+
+
+def test_un_tope_de_lectura_a_mitad_de_respuesta_dice_cual_fue_sin_la_charla(
+    diario: list[str],
+) -> None:
+    # El mensaje repite una línea de la charla: pasa por el mismo filtro que los demás.
+    peticion = LLMRequest(operation_id="op-6", instructions="Eres Sirius.", input_text="PIN 1234")
+    error = httpx.ReadTimeout("timed out after PIN 1234")
+
+    eventos = _eventos(_proveedor(_se_corta_a_mitad(error)), peticion)
+
+    assert isinstance(eventos[-1], LLMError)
+    assert eventos[-1].kind is LLMErrorKind.TIMEOUT
+    assert eventos[-1].partial_text == "Empez"
+    assert diario == [
+        "Operación op-6: fallo de red con Ollama a mitad de respuesta"
+        " (ReadTimeout: timed out after […])"
     ]
