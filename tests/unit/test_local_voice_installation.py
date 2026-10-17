@@ -615,6 +615,47 @@ def test_si_la_voz_no_carga_o_el_altavoz_no_se_abre_la_orden_lo_dice(
     _sin_remedios_adivinados(salida)
 
 
+@pytest.mark.usefixtures("bibliotecas_bien")
+def test_si_la_voz_de_personaje_no_carga_lo_dice_una_vez_con_su_causa(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], la_voz_esta: _Cargadas
+) -> None:
+    _pon_modelo(LocalVoiceInstallation(LocalVoiceSettings()).listening_model_dir)
+    _pon_voz(voice_dir(SpeakingVoice.CHARACTER), CHARACTER_VOICE_FILES)
+
+    def no_carga(modelo: Path) -> object:
+        if modelo == voice_dir(SpeakingVoice.CHARACTER):
+            msg = "la voz de personaje no carga ('NoneType' object is not callable)"
+            raise VoiceUnavailable(msg)
+        return la_voz_esta.carga(modelo)
+
+    monkeypatch.setattr(install_local_voice, "voice_distributions_missing", _con_personaje)
+    monkeypatch.setattr(install_local_voice, "load_listening_engines", lambda carpeta: None)
+    monkeypatch.setattr(install_local_voice, "load_speaking_engines", no_carga)
+
+    assert install_local_voice.main() == 1
+
+    # «No carga» una vez, con la causa: no «no carga: la voz de personaje no carga (…)».
+    (linea,) = [linea for linea in capsys.readouterr().out.splitlines() if "[FALLA]" in linea]
+    assert linea == (
+        "[FALLA] La voz de personaje (Chatterbox) no carga: 'NoneType' object is not callable"
+    )
+
+
+@pytest.mark.usefixtures("bibliotecas_bien")
+def test_si_el_modelo_de_oir_no_carga_lo_dice_una_vez_con_su_causa(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _pon_modelo(LocalVoiceInstallation(LocalVoiceSettings()).listening_model_dir)
+
+    def no_carga(carpeta: Path) -> None:
+        raise VoiceUnavailable("el modelo de oír no carga (Unable to allocate memory)")
+
+    monkeypatch.setattr(install_local_voice, "load_listening_engines", no_carga)
+
+    assert install_local_voice.main() == 1
+    assert "[FALLA] El oído no carga: Unable to allocate memory\n" in capsys.readouterr().out
+
+
 def test_si_una_biblioteca_de_hablar_esta_rota_la_orden_lo_dice(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
