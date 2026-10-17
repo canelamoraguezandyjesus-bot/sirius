@@ -13,14 +13,17 @@ resume el día y propone hechos nuevos. Quedan pendientes del sí del propietari
   que ya están apuntados o pendientes no se vuelven a proponer.
 
 La ventana sueña al abrirse los días anteriores que aún no ha soñado, en segundo
-plano. Si falla, ese día se queda sin soñar y lo intenta la vez siguiente.
+plano. Si falla, ese día se queda sin soñar y lo intenta la vez siguiente. Al cerrar
+Sirius se corta, también la petición en curso, para que salir no espere al modelo; ese
+día queda igual por soñar (ADR-253).
 """
 
 from __future__ import annotations
 
 import json
+import threading
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Iterable, Iterator
 from datetime import UTC, date, timedelta
 
 from sirius.application.facts import FactProposals
@@ -29,7 +32,7 @@ from sirius.domain.facts import OWNER, Certainty, ProposedFact, is_sirius, perso
 from sirius.domain.plain_text import plain
 from sirius.infrastructure.logging import get_logger
 from sirius.ports.conversation_repository import ConversationRepository
-from sirius.ports.llm import LLMCompleted, LLMError, LLMProvider, LLMRequest
+from sirius.ports.llm import LLMCompleted, LLMError, LLMProvider, LLMRequest, LLMStreamEvent
 from sirius.ports.memory_repository import FactRepository
 from sirius.ports.memory_suggestion_repository import FactSuggestionRepository
 from sirius.ports.robot_conversation import (
@@ -76,25 +79,45 @@ class DreamService:
         self._facts = facts
         self._suggestions = suggestions
         self._local_model = local_model
+        #: Lo que está soñando ``dream_pending`` ahora, para que ``cancel`` lo corte.
+        self._dreaming: _Dreaming | None = None
+        self._lock = threading.Lock()
+
+    def cancel(self) -> None:
+        """Corta lo que está soñando ``dream_pending``: la petición en curso, y desde ahí
+        no sale ninguna más hasta que acabe. Es para cerrar Sirius sin esperar al modelo
+        (ADR-253). El día a medias queda por soñar, porque su resumen se guarda lo último."""
+        with self._lock:
+            dreaming = self._dreaming
+        if dreaming is not None:
+            dreaming.cut()
 
     def dream(self, day: date) -> list[ProposedFact]:
         """Sueña ``day``. Devuelve los hechos que deja propuestos."""
+        return self._dream(day, _Dreaming())
+
+    def _dream(self, day: date, dreaming: _Dreaming) -> list[ProposedFact]:
         said = self._said_by_owner(day)
         if not said:
             return []
-        provider = self._local_model()
-        if provider is None:
+        local = self._local_model()
+        if local is None:
             _logger.info("Sin modelo de este ordenador: hoy no sueña")
             return []
+        provider = _AskingThrough(local, dreaming)
         text = "\n".join(f"Él: {line}" for line in said)
         try:
             summary = self._summarizer.summarize(text, provider).strip()
         except Exception as exc:  # soñar nunca puede romper nada: se intenta otro día
+            if dreaming.is_cut:
+                return _cut_short()
             _logger.warning("El sueño no pudo resumir el día (%s)", type(exc).__name__)
             summary = ""
         try:
             proposed = list(self._extractor.extract(text, provider))
         except Exception as exc:  # sin hechos propuestos, el día queda por soñar
+            if dreaming.is_cut:
+                return _cut_short()
             _logger.warning("El sueño no pudo proponer hechos (%s)", type(exc).__name__)
             return []
         # Una vez cada hecho, aunque el modelo lo repita en la misma respuesta.
@@ -128,13 +151,20 @@ class DreamService:
             }
             - dreamed
         )
-        done = 0
-        for day in days:
-            if should_stop():
-                break
-            self.dream(day)
-            done += 1
-        return done
+        dreaming = _Dreaming()
+        with self._lock:
+            self._dreaming = dreaming
+        try:
+            done = 0
+            for day in days:
+                if should_stop() or dreaming.is_cut:
+                    break
+                self._dream(day, dreaming)
+                done += 1
+            return done
+        finally:
+            with self._lock:
+                self._dreaming = None
 
     def latest_summary(self) -> str | None:
         """El resumen del último día soñado, o ``None`` si aún no ha soñado ninguno."""
@@ -177,6 +207,63 @@ class DreamService:
         return any(
             _fact_key(suggestion.person or "", suggestion.content) == key for suggestion in answered
         )
+
+
+class _Dreaming:
+    """Las peticiones de un sueño mientras duran, para poder cortarlas: cortado, corta la
+    que esté en curso y ya no deja salir ninguna más (ADR-253)."""
+
+    def __init__(self) -> None:
+        self._asking: dict[str, LLMProvider] = {}
+        self._cut = False
+        self._lock = threading.Lock()
+
+    @property
+    def is_cut(self) -> bool:
+        with self._lock:
+            return self._cut
+
+    def cut(self) -> None:
+        with self._lock:
+            self._cut = True
+            asking = list(self._asking.items())
+        for operation_id, provider in asking:
+            provider.cancel(operation_id)
+
+    def ask(self, provider: LLMProvider, request: LLMRequest) -> Iterator[LLMStreamEvent]:
+        """La respuesta de ``provider`` a ``request``, apuntada mientras dura. Cortado el
+        sueño, no pregunta: sin respuesta, quien la esperaba falla y el día queda por soñar."""
+        with self._lock:
+            if self._cut:
+                return
+            self._asking[request.operation_id] = provider
+        try:
+            yield from provider.stream_response(request)
+        finally:
+            with self._lock:
+                del self._asking[request.operation_id]
+
+
+class _AskingThrough:
+    """``provider``, con cada petición apuntada en ``dreaming`` para poder cortarla."""
+
+    def __init__(self, provider: LLMProvider, dreaming: _Dreaming) -> None:
+        self._provider = provider
+        self._dreaming = dreaming
+
+    def health_check(self) -> bool:
+        return self._provider.health_check()
+
+    def stream_response(self, request: LLMRequest) -> Iterable[LLMStreamEvent]:
+        return self._dreaming.ask(self._provider, request)
+
+    def cancel(self, operation_id: str) -> None:
+        self._provider.cancel(operation_id)
+
+
+def _cut_short() -> list[ProposedFact]:
+    _logger.info("El sueño se cortó: ese día queda por soñar")
+    return []
 
 
 def _fact_key(person: str, text: str) -> tuple[str, str]:
