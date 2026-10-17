@@ -387,21 +387,17 @@ class OllamaChatProvider:
                 with self._post(request) as r:
                     yield from self._answer(request, r)
             except httpx.ConnectError:
-                _logger.error("Operación %s: Ollama no contesta", request.operation_id)
+                self._log_error(request, "Ollama no contesta")
                 yield _error(LLMErrorKind.CONNECTION)
             except httpx.TimeoutException:
-                _logger.error("Operación %s: Ollama tardó demasiado", request.operation_id)
+                self._log_error(request, "Ollama tardó demasiado")
                 yield _error(LLMErrorKind.TIMEOUT)
             except httpx.HTTPError as exc:
                 if self._is_cancelled(request.operation_id):
                     # La colgó cancel(): no es un fallo, es el corte que se pidió.
                     yield LLMCancelled(partial_text="")
                     return
-                _logger.error(
-                    "Operación %s: fallo de red con Ollama (%s)",
-                    request.operation_id,
-                    type(exc).__name__,
-                )
+                self._log_error(request, "fallo de red con Ollama (%s)", type(exc).__name__)
                 yield _error(LLMErrorKind.UNKNOWN)
         finally:
             with self._lock:
@@ -410,18 +406,16 @@ class OllamaChatProvider:
 
     def _answer(self, request: LLMRequest, r: httpx.Response) -> Iterable[LLMStreamEvent]:
         if r.status_code == httpx.codes.NOT_FOUND:
-            _logger.error(
-                "Ollama no tiene el modelo de la charla (%s): %s",
-                self._model,
+            self._log_error(
+                request,
+                "Ollama no tiene el modelo de la charla: %s",
                 _category(_what_ollama_said(r)),
             )
             yield _error(LLMErrorKind.CONFIGURATION)
             return
         if r.status_code >= httpx.codes.BAD_REQUEST:
-            _logger.error(
-                "Ollama respondió %s a la charla: %s",
-                r.status_code,
-                _category(_what_ollama_said(r)),
+            self._log_error(
+                request, "Ollama respondió %s: %s", r.status_code, _category(_what_ollama_said(r))
             )
             yield _error(LLMErrorKind.UNKNOWN)
             return
@@ -453,17 +447,17 @@ class OllamaChatProvider:
                     continue
                 try:
                     chunk = json.loads(line)
-                except json.JSONDecodeError:
+                except json.JSONDecodeError as exc:
+                    self._log_invalid(request, type(exc).__name__)
                     yield _error(LLMErrorKind.INVALID_RESPONSE, partial())
                     return
                 if not isinstance(chunk, dict):
+                    self._log_invalid(request, type(chunk).__name__)
                     yield _error(LLMErrorKind.INVALID_RESPONSE, partial())
                     return
                 if "error" in chunk:
-                    _logger.error(
-                        "Operación %s: Ollama devolvió un error: %s",
-                        request.operation_id,
-                        _category(str(chunk["error"])),
+                    self._log_error(
+                        request, "Ollama devolvió un error: %s", _category(str(chunk["error"]))
                     )
                     yield _error(LLMErrorKind.UNKNOWN, partial())
                     return
@@ -483,6 +477,7 @@ class OllamaChatProvider:
                         yield LLMTextDelta(text=rest)
                     text = "".join(accumulated)
                     if not text.strip():
+                        self._log_invalid(request, "vacía")
                         yield _error(LLMErrorKind.INVALID_RESPONSE)
                         return
                     yield LLMCompleted(
@@ -498,15 +493,25 @@ class OllamaChatProvider:
                 yield LLMCancelled(partial_text=partial())
                 return
             # La rama de fuera, en ``stream_response``, no llega a verlo (ronda 1 de ADR-248).
-            _logger.error(
-                "Operación %s: fallo de red con Ollama a mitad de respuesta (%s)",
-                request.operation_id,
-                type(exc).__name__,
+            self._log_error(
+                request, "fallo de red con Ollama a mitad de respuesta (%s)", type(exc).__name__
             )
             timed_out = isinstance(exc, httpx.TimeoutException)
             yield _error(LLMErrorKind.TIMEOUT if timed_out else LLMErrorKind.CONNECTION, partial())
             return
+        self._log_invalid(request, "sin final")
         yield _error(LLMErrorKind.INVALID_RESPONSE, partial())
+
+    def _log_error(self, request: LLMRequest, what: str, *args: object) -> None:
+        """Una línea del diario por fallo, con la operación y el modelo (incidencia #696).
+        Nunca texto de Ollama ni de la charla: solo lo que dicen ``what`` y ``args``, que son
+        códigos, clases y categorías (ADR-248)."""
+        _logger.error("Operación %s, modelo %s: " + what, request.operation_id, self._model, *args)
+
+    def _log_invalid(self, request: LLMRequest, kind: str) -> None:
+        """Una respuesta no válida, con su clase: una línea que no es JSON, una que no es un
+        objeto, una respuesta vacía o una que acaba sin ``done`` (incidencia #696)."""
+        self._log_error(request, "Ollama devolvió una respuesta no válida (%s)", kind)
 
 
 def _count(value: object) -> int:
