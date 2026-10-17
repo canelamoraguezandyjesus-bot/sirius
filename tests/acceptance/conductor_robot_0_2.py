@@ -251,7 +251,8 @@ class _JuezEnchufado:
     def __init__(self, juez: JuezDeMentira) -> None:
         self._juez = juez
 
-    def score(self, reply: str) -> int:
+    def score(self, reply: str, *, should_stop: Callable[[], bool] | None = None) -> int:
+        del should_stop
         return self._juez.puntua(reply)
 
     def verdict(self, bad_idea: str, reply: str) -> TrickVerdict:

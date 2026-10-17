@@ -235,7 +235,8 @@ class _JuezQueCuenta:
     def __init__(self) -> None:
         self.puntuadas: list[str] = []
 
-    def score(self, reply: str) -> int:
+    def score(self, reply: str, *, should_stop: Callable[[], bool] | None = None) -> int:
+        del should_stop
         self.puntuadas.append(reply)
         return 4
 

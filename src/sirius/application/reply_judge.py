@@ -48,25 +48,20 @@ class LLMReplyJudge:
         #: Las notas que está pidiendo, cada una con su proveedor, para poder cortarlas. Los
         #: veredictos de las preguntas trampa no: esas las pide él a propósito.
         self._scoring: dict[str, LLMProvider] = {}
-        #: Cuántas veces le han cortado: una nota que empezó antes de un corte y aún no
-        #: había preguntado, ya no pregunta.
-        self._cuts = 0
         self._lock = threading.Lock()
 
     def cancel(self) -> None:
-        """Corta las notas que está pidiendo, y las que aún se preparan: un turno de voz no
-        las espera (ADR-252). Esas respuestas se quedan sin nota y se puntúan la vez
-        siguiente."""
+        """Corta las notas que está pidiendo: un turno de voz no las espera (ADR-252). Esas
+        respuestas se quedan sin nota y se puntúan la vez siguiente."""
         with self._lock:
-            self._cuts += 1
             scoring = list(self._scoring.items())
         for operation_id, provider in scoring:
             provider.cancel(operation_id)
 
-    def score(self, reply: str) -> int:
-        with self._lock:
-            cuts = self._cuts
-        answer = self._ask(SCORE_TASK, f"Respuesta de Sirius:\n{reply}", cuts=cuts)
+    def score(self, reply: str, *, should_stop: Callable[[], bool] | None = None) -> int:
+        answer = self._ask(
+            SCORE_TASK, f"Respuesta de Sirius:\n{reply}", scoring=True, should_stop=should_stop
+        )
         score = parse_score(answer)
         if score is None:
             msg = "El juez no dio una nota del 1 al 5."
@@ -82,9 +77,16 @@ class LLMReplyJudge:
             raise JudgeError(msg)
         return verdict
 
-    def _ask(self, task: str, input_text: str, *, cuts: int | None = None) -> str:
-        """Lo que contesta el modelo local a ``task``. Con ``cuts``, los cortes que llevaba
-        al empezar la nota, ``cancel`` la corta."""
+    def _ask(
+        self,
+        task: str,
+        input_text: str,
+        *,
+        scoring: bool = False,
+        should_stop: Callable[[], bool] | None = None,
+    ) -> str:
+        """Lo que contesta el modelo local a ``task``. Si es una nota (``scoring``),
+        ``cancel`` la corta, y no se pide si ``should_stop`` ya dice que pare."""
         provider = self._local_provider()
         if provider is None:
             msg = "No hay modelo local elegido para el juez."
@@ -106,11 +108,13 @@ class LLMReplyJudge:
             max_output_tokens=JUDGE_MAX_OUTPUT_TOKENS,
             may_think=False,
         )
-        if cuts is None:
+        if not scoring:
             return _answer(provider, request)
         with self._lock:
-            if self._cuts != cuts:
-                msg = "Al juez le cortaron la nota antes de pedirla."
+            # Se mira y se apunta a la vez: quien le para pone su bandera antes de cortar,
+            # así que o la ve aquí, o el corte encuentra apuntada la nota (ADR-252).
+            if should_stop is not None and should_stop():
+                msg = "Al juez le pidieron parar antes de pedir la nota."
                 raise JudgeError(msg)
             self._scoring[request.operation_id] = provider
         try:
