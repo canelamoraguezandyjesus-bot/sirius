@@ -60,6 +60,39 @@ escritos antes del primer cambio de código y antes de cualquier revisión.
    - Que el diario lleve la charla: el texto del error se recorta, y lo que repita de lo que
      se le pidió al modelo se tacha antes de apuntarlo.
 
+## Nota de arranque de la ronda 2
+
+Escrita el 17-10-2026, antes de volver a tocar el diario y de cualquier otra revisión.
+
+1. **Dónde vive el fallo y dónde va el arreglo.** La ronda 2 de Codex, sobre `efda01af`, vio
+   que la charla sigue entrando en el diario si Ollama repite «pin 1234» en minúsculas, o
+   solo «1234». Es la misma familia que el P1 de la ronda 1: el diario lleva texto de la
+   charla. Con dos rondas de la misma familia no se parchea más (ADR-001). La raíz es
+   apuntar el texto libre que devuelve Ollama y tacharlo después, y tachar no es un límite
+   seguro: lo que repite puede venir en cualquier forma. El arreglo va en
+   `src/sirius/adapters/llm/ollama_chat.py`: el diario no lleva nunca el texto de Ollama ni
+   el de la excepción, solo lo permitido de forma explícita: el código HTTP, la clase de la
+   excepción y una categoría de una lista cerrada de firmas de errores de Ollama, buscadas
+   sin distinguir mayúsculas y sin copiar nada del texto. Si no encaja ninguna, «otro». El
+   tachado se va.
+
+   **¿Puede el sitio del arreglo observar el fallo?** Sí: el proveedor es quien escribe en
+   el diario, y una prueba mira la línea entera.
+2. **Qué NO garantiza.**
+   - Saber qué dijo Ollama cuando no encaja en la lista: sale «otro», y eso lo dice el
+     diario de Ollama.
+   - Que la categoría acierte siempre la causa: es la primera firma que se encuentra.
+3. **Criterio de parada**, fijado antes de escribir código:
+   - **Terminado** cuando las pruebas ven con el código de hoy que «pin 1234», «1234» y un
+     eco en mayúsculas llegan al diario, y con el arreglo cada línea es solo lo permitido;
+     cada categoría sale con su firma; el fallo de red lleva solo su clase; caen las
+     mutaciones; ruff, mypy, las pruebas de Ollama y la batería entera están en verde; y la
+     revisión propia no encuentra nada.
+   - **Si otra ronda trae un defecto más de la misma familia**, se para y se pregunta.
+4. **Qué lo haría imposible.** Que el diario lleve algo de la charla o de Ollama: cada línea
+   se escribe solo con el código, la clase, el modelo de sus ajustes, la operación y una
+   categoría que no copia nada del texto.
+
 ## Contexto y problema
 
 Desde la 0.2 la charla va al Ollama de su ordenador (ADR-234), y con ella la prueba a
