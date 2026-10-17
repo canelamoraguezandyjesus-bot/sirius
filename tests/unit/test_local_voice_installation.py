@@ -190,7 +190,11 @@ def test_el_vocabulario_vale_en_texto_o_en_json(tmp_path: Path) -> None:
 
 
 def test_la_orden_se_pega_tal_cual_en_powershell() -> None:
-    assert INSTALL_COMMAND == "uv run --extra voz sirius-instala-la-voz"
+    # Con --link-mode=copy: su carpeta de Sirius está en OneDrive (punto 19 de la #696).
+    assert INSTALL_COMMAND == "uv run --link-mode=copy --extra voz sirius-instala-la-voz"
+    assert CHARACTER_INSTALL_COMMAND == (
+        "uv run --link-mode=copy --extra voz --extra personaje sirius-instala-la-voz"
+    )
 
 
 # --- La orden de instalar -----------------------------------------------------------
@@ -284,7 +288,9 @@ def test_sin_modelo_lo_baja_y_comprueba_que_carga(
 
     assert bajados == [carpeta]
     assert cargados == [carpeta]
-    assert "sirius-oye" in capsys.readouterr().out
+    assert (
+        "Para probarlo: uv run --link-mode=copy --extra voz sirius-oye" in capsys.readouterr().out
+    )
 
 
 @pytest.mark.usefixtures("bibliotecas_bien")
