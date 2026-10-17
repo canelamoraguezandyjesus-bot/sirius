@@ -29,6 +29,7 @@ FALLIDO y no se usa como respuesta completa." So:
 
 from __future__ import annotations
 
+import threading
 import uuid
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
@@ -323,6 +324,22 @@ class SendMessageUseCase:
     def llm_provider(self) -> LLMProvider:
         """El modelo con el que conversa ahora: las preguntas trampa se le hacen a él."""
         return self._llm_provider
+
+    def warm_up_in_background(self) -> threading.Thread | None:
+        """Pide al modelo de la charla que se cargue ya, en otro hilo y sin esperarle: así
+        la primera frase no espera a que cargue (ADR-252). Lo piden la ventana y
+        ``sirius-oye`` al arrancar.
+
+        Solo el de este ordenador que sabe cargarse (``warm_up``, el de Ollama); devuelve el
+        hilo, o ``None`` si no hay nada que cargar.
+        """
+        provider = self._llm_provider
+        warm_up = getattr(provider, "warm_up", None)
+        if not callable(warm_up) or not runs_on_this_computer(provider):
+            return None
+        thread = threading.Thread(target=warm_up, name="sirius-precarga", daemon=True)
+        thread.start()
+        return thread
 
     def send_message(
         self,

@@ -286,6 +286,30 @@ class OllamaChatProvider:
 
         return note
 
+    def warm_up(self) -> None:
+        """Pide a Ollama que cargue ya el modelo, sin preguntarle nada: así la primera frase
+        no espera a que cargue (ADR-252).
+
+        Con el contexto de la charla, que Ollama recargaría el modelo para otro, y con su
+        ``keep_alive``. Lo piden la ventana y ``sirius-oye`` al arrancar, en segundo plano.
+        Si falla, lo apunta en el diario y nada más: la primera frase lo cargará.
+        """
+        body = {
+            "model": self._model,
+            "messages": [],
+            "stream": False,
+            "keep_alive": _KEEP_ALIVE,
+            "options": {"num_ctx": self._num_ctx, "num_predict": self._num_predict},
+        }
+        try:
+            response = self._client.post(OLLAMA_CHAT_URL, json=body)
+        except httpx.HTTPError as error:
+            _logger.info("No se pudo precargar %s (%s)", self._model, type(error).__name__)
+            return
+        if response.status_code >= httpx.codes.BAD_REQUEST:
+            said = " ".join(_what_ollama_said(response).split())[:_ERROR_TEXT_LIMIT]
+            _logger.info("Ollama no precargó %s (%s): %s", self._model, response.status_code, said)
+
     def close(self) -> None:
         self._client.close()
 

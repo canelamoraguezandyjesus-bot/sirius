@@ -88,9 +88,14 @@ class _Modelo:
         self.se_rompe = False
         self.propone: str | None = None
         self.falla_con: LLMErrorKind | None = None
+        #: Cuántas veces le pidieron que cargara, como a Ollama al arrancar (ADR-252).
+        self.precargas = 0
 
     def health_check(self) -> bool:
         return True
+
+    def warm_up(self) -> None:
+        self.precargas += 1
 
     def stream_response(self, request: LLMRequest) -> Iterator[LLMStreamEvent]:
         self.peticiones.append(request.input_text)
@@ -569,6 +574,8 @@ def test_la_ventana_de_verdad_atiende_al_oido_con_su_bucle_y_lo_para_al_cerrarse
     qtbot.addWidget(ventana)
     bucle = ventana._listening_loop
     assert bucle is not None and bucle.running
+    # Al arrancar pidió que el modelo de la charla fuera cargando (ADR-252).
+    qtbot.waitUntil(lambda: sirius.modelo.precargas == 1, timeout=5000)
 
     sirius.suena("Sirius, hola.")
     qtbot.waitUntil(lambda: ("Sirius", "Respuesta 1.") in _mensajes(ventana), timeout=5000)
