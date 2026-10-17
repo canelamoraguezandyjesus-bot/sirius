@@ -69,12 +69,18 @@ class BlindTestWorker(QRunnable):
         self._stop.set()
         self._use_case.cancel()
 
+    def _progress(self, done: int, total: int) -> None:
+        # Como el aviso final: si Sirius se cerró, la hoja ya no existe y no hay a quién
+        # avisar; sin esto el diario diría que se interrumpió (#696).
+        with contextlib.suppress(RuntimeError):
+            self.signals.progress.emit(done, total)
+
     def run(self) -> None:
         sheet: BlindTestSheet | None = None
         failure: str | None
         try:
             sheet = self._use_case.prepare(
-                self._models, on_progress=self.signals.progress.emit, should_stop=self._stop.is_set
+                self._models, on_progress=self._progress, should_stop=self._stop.is_set
             )
         except BlindTestError as exc:
             failure = str(exc)
@@ -443,7 +449,8 @@ class BlindTestDialog(QDialog):
         working = self._worker is not None or self._sheet is not None
         if working and not self._confirm(
             "Cerrar la prueba a ciegas",
-            "Si la cierras ahora, se pierde lo que lleva hecho. ¿La cierras?",
+            "Si la cierras ahora, se pierde lo que has elegido; las respuestas ya pedidas se "
+            "guardan mientras Sirius siga abierto. ¿La cierras?",
         ):
             return
         super().reject()

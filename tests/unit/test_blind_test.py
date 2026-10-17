@@ -611,3 +611,68 @@ def test_cortar_cuando_ya_acabo_no_deja_un_corte_apuntado() -> None:
     caso.cancel()
 
     assert [m.cortadas for m in modelos.values()] == [[], []]
+
+
+class _SelectorQueTardaLaPrimeraVez(_SelectorQueApunta):
+    """Elegir los ejemplos pide huellas a Ollama y puede tardar segundos: la primera vez, el
+    de la primera pasada, tarda hasta que lo sueltan."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.eligiendo = threading.Event()
+        self.suelta = threading.Event()
+
+    def pick(self, examples: Sequence[SeedExample], text: str) -> tuple[SeedExample, ...]:
+        if not self.eligiendo.is_set():
+            self.eligiendo.set()
+            self.suelta.wait(timeout=5)
+        return super().pick(examples, text)
+
+
+def test_con_dos_pasadas_solapadas_cerrar_la_segunda_corta_su_respuesta() -> None:
+    """Se cierra la hoja mientras elige los ejemplos, y se vuelve a empezar antes de que esa
+    pasada acabe. Al acabar, la primera no puede llevarse lo que está pidiendo la segunda:
+    si no, cerrar la segunda ya no la cortaría y se esperaría su respuesta entera (#696)."""
+    pedidos: list[_QueEspera] = []
+
+    def nuevo(nombre: str) -> _QueEspera:
+        # Como el de verdad: cada pasada, un proveedor nuevo para cada modelo.
+        pedidos.append(_QueEspera(nombre))
+        return pedidos[-1]
+
+    selector = _SelectorQueTardaLaPrimeraVez()
+    caso = BlindTestUseCase(
+        identity_repository=_IdentidadesConEjemplos(),  # type: ignore[arg-type]
+        provider_for=nuevo,
+        list_models=lambda: ("uno",),
+        model_capabilities=_conversa,
+        choose_model=lambda _nombre: None,
+        current_model=lambda: None,
+        rng=random.Random(11),
+        seed_examples=selector,
+    )
+    para_la_primera, para_la_segunda = threading.Event(), threading.Event()
+
+    def pasada(parar: threading.Event) -> None:
+        with pytest.raises(BlindTestError, match="canceló"):
+            caso.prepare(["uno"], should_stop=parar.is_set)
+
+    primera = threading.Thread(target=pasada, args=(para_la_primera,))
+    primera.start()
+    assert selector.eligiendo.wait(timeout=5)
+    para_la_primera.set()  # se cierra la primera hoja
+    caso.cancel()
+    segunda = threading.Thread(target=pasada, args=(para_la_segunda,))
+    segunda.start()
+    assert len(pedidos) == 2
+    assert pedidos[1].preguntando.wait(timeout=5)
+    selector.suelta.set()  # la primera acaba de desenrollarse
+    primera.join(timeout=5)
+    assert not primera.is_alive()
+
+    para_la_segunda.set()  # se cierra la segunda hoja
+    caso.cancel()
+    segunda.join(timeout=2)
+
+    assert not segunda.is_alive(), "cerrar la segunda esperaría su respuesta entera"
+    assert pedidos[1].cortadas == ["prueba-a-ciegas-1"]

@@ -9,6 +9,7 @@ escucha.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -349,3 +350,32 @@ def test_el_aviso_final_no_falla_si_la_hoja_ya_no_existe(tmp_path: Path, desenla
         trabajador.run()
     finally:
         caso.close()
+
+
+class _Apunta(logging.Handler):
+    """Lo que apunta al diario la hoja, leído de su registrador (ADR-248)."""
+
+    def __init__(self) -> None:
+        super().__init__(logging.DEBUG)
+        self.lineas: list[str] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.lineas.append(record.getMessage())
+
+
+def test_el_aviso_de_progreso_tampoco_falla_si_la_hoja_ya_no_existe(tmp_path: Path) -> None:
+    # Como el aviso final: si Sirius se cerró, el de progreso tampoco tiene a quién avisar,
+    # y no por eso se ha interrumpido nada (#696).
+    caso = _monta(tmp_path).deps.voice_test_use_case
+    trabajador = VoiceTestWorker(caso)
+    diario = _Apunta()
+    registrador = logging.getLogger("sirius.presentation.voice_test_dialog")
+    registrador.addHandler(diario)
+    shiboken6.delete(trabajador.signals)
+    try:
+        trabajador.run()
+    finally:
+        registrador.removeHandler(diario)
+        caso.close()
+
+    assert diario.lineas == []

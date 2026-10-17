@@ -7,6 +7,7 @@ El trabajo de preguntar a los modelos corre aquí en el mismo hilo
 from __future__ import annotations
 
 import json
+import logging
 import random
 import threading
 import time
@@ -463,7 +464,8 @@ def test_si_preguntar_la_lista_se_rompe_lo_dice_sin_romper_la_hoja(qtbot: QtBot)
 #: Lo que pregunta la hoja antes de cerrarse con trabajo hecho.
 _CERRAR = (
     "Cerrar la prueba a ciegas",
-    "Si la cierras ahora, se pierde lo que lleva hecho. ¿La cierras?",
+    "Si la cierras ahora, se pierde lo que has elegido; las respuestas ya pedidas se guardan "
+    "mientras Sirius siga abierto. ¿La cierras?",
 )
 
 
@@ -577,3 +579,32 @@ def test_el_aviso_final_no_falla_si_la_hoja_ya_no_existe(
     monkeypatch.setattr(entorno.caso, nombre, y_se_cierra_sirius)
 
     trabajador.run()
+
+
+class _Apunta(logging.Handler):
+    """Lo que apunta al diario la hoja, leído de su registrador: con el diario de Sirius ya
+    configurado en el mismo proceso, ``sirius`` no propaga (ADR-248)."""
+
+    def __init__(self) -> None:
+        super().__init__(logging.DEBUG)
+        self.lineas: list[str] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.lineas.append(record.getMessage())
+
+
+def test_el_aviso_de_progreso_tampoco_falla_si_la_hoja_ya_no_existe() -> None:
+    # Como el aviso final: si Sirius se cerró, el de progreso tampoco tiene a quién avisar,
+    # y no por eso se ha interrumpido nada (#696).
+    entorno = _Entorno(instalados=("gemma-y", "qwen-x"))
+    trabajador = BlindTestWorker(entorno.caso, ["gemma-y", "qwen-x"])
+    diario = _Apunta()
+    registrador = logging.getLogger("sirius.presentation.blind_test_dialog")
+    registrador.addHandler(diario)
+    shiboken6.delete(trabajador.signals)
+    try:
+        trabajador.run()
+    finally:
+        registrador.removeHandler(diario)
+
+    assert diario.lineas == []
