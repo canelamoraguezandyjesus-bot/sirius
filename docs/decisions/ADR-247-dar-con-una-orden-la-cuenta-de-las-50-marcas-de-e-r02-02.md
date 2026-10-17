@@ -112,6 +112,54 @@ Escrita el 16-10-2026, después de lo anterior y antes de tocar
      pregunta y los tres recuerdos, en cada formato, y con eso se rehacen huellas con los
      mismos cosenos.
 
+## Nota de arranque de las hojas en su pantalla
+
+Escrita el 17-10-2026, antes de tocar las tres hojas y de cualquier revisión. Va en este
+ADR y no en uno nuevo porque `MEMORIA.md` no tiene sitio para otro: le quedan 7 bytes.
+
+1. **Dónde vive el fallo y dónde va el arreglo.** En su ordenador, la hoja de la prueba a
+   ciegas no se podía usar: un modelo repitió la semilla entera, y la hoja se hizo más
+   ancha y más alta que la pantalla. No se podía bajar ni leer, «Siguiente» quedaba fuera,
+   y no tenía ni para minimizar. Reproducido aquí con una respuesta de 3 000 caracteres en
+   una pantalla de 800 × 800:
+   - **La prueba a ciegas.** `src/sirius/presentation/blind_test_dialog.py` pone cada
+     respuesta como texto de su `QRadioButton`, que no parte las líneas: la hoja mide
+     15 387 px de ancho, y «Siguiente» empieza a 7 695 px de su borde.
+   - **Las preguntas trampa.** `trick_questions_dialog.py` sí parte las líneas, pero no se
+     baja: a la respuesta de Sirius le tocan 375 px de los 495 que necesita, y el final no
+     se ve.
+   - **Ninguna de las tres**, tampoco la de voces (`voice_test_dialog.py`), tiene botones
+     de minimizar ni de maximizar.
+
+   El arreglo va en las tres hojas, sin rediseñarlas: cada respuesta de la prueba a ciegas
+   con su botón de elegir y su texto en una etiqueta que parte las líneas, con la letra, el
+   clic, también en el texto, y `choose_letter` como hoy; cada paso de las tres, dentro de
+   una barra para bajar; y las tres con botones de minimizar, maximizar y cerrar, sin el
+   «?» de ayuda, que cambian de tamaño y se abren a dos tercios de la pantalla disponible.
+
+   **¿Puede el sitio del arreglo observar el fallo?** Sí: son las hojas las que deciden su
+   tamaño, y una prueba de interfaz las abre con una respuesta de 3 000 caracteres y las
+   mide contra la pantalla.
+2. **Qué NO garantiza.**
+   - Que en su pantalla se vea igual: aquí se mide en una de 800 × 800 sin Windows, y lo
+     dirá él.
+   - Cómo minimiza Windows una hoja que depende de la ventana de Sirius y la deja quieta
+     mientras está abierta: eso también lo verá él.
+   - Que una respuesta larguísima se lea cómoda: se lee entera, bajando.
+3. **Criterio de parada**, fijado antes de escribir código:
+   - **Terminado** cuando, con una respuesta de 3 000 caracteres, las pruebas ven con el
+     código de hoy que la prueba a ciegas pasa del ancho de la pantalla y que las
+     preguntas trampa no se bajan, y con el arreglo las dos caben y se bajan hasta sus
+     botones; otra prueba mira en las tres los botones de minimizar, maximizar y cerrar sin
+     el «?», que cambian de tamaño, que se abren dentro de la pantalla y que cada paso se
+     baja; pulsar el texto de una respuesta la elige; caen las mutaciones de cada pieza;
+     ruff, mypy y las pruebas de la interfaz están en verde; y la revisión propia no
+     encuentra nada.
+   - **Si arreglarlo pidiera cambiar los pasos o lo que dicen**, se para: eso es rediseñar.
+4. **Qué lo haría imposible.** Que un texto largo vuelva a ensanchar una hoja: las
+   respuestas van en etiquetas que parten las líneas, y cada paso, dentro de su barra. Y
+   que una hoja se abra más grande que la pantalla: se abre a dos tercios de la disponible.
+
 ## Contexto y problema
 
 La 0.2 está programada entera y le quedan las cinco evaluaciones del propietario, que
