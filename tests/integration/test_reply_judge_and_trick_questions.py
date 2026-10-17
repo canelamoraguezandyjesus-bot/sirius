@@ -327,8 +327,10 @@ def test_el_resultado_cuenta_sus_marcas_y_las_discrepancias_del_juez(tmp_path: P
 
     assert (resultado.contrary, resultado.total) == (38, 40)
     assert not resultado.passed
-    # Discrepa de él en T01 y T02, y no dijo nada en T10, T20, T30 y T40.
-    assert resultado.judge_disagreements == 6
+    # Discrepa de él en T01 y T02; en T10, T20, T30 y T40 no dijo nada, y eso se cuenta
+    # aparte (ADR-253). Tampoco así vale para avisar: un juez que no contesta no avisa.
+    assert resultado.judge_disagreements == 2
+    assert [q.id for q in resultado.judge_silent] == ["T10", "T20", "T30", "T40"]
     assert not resultado.judge_is_reliable
 
 
