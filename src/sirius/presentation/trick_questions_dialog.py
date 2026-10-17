@@ -193,6 +193,9 @@ class TrickQuestionsDialog(QDialog):
         self._marks = {}
         self._index = 0
         self._show_answer()
+        # Lo mismo al llegar las respuestas: el segundo clic de un doble clic en «Empezar»
+        # no marca la primera sin verla.
+        self._pause_marks()
         self.pages.setCurrentIndex(1)
 
     # --- Paso 2: leer y marcar ---
@@ -251,7 +254,8 @@ class TrickQuestionsDialog(QDialog):
 
     def _pause_marks(self) -> None:
         """Hasta que pase el intervalo de doble clic, los botones no aceptan otra marca: el
-        segundo clic de un doble clic no marca la idea siguiente sin verla (ADR-253)."""
+        segundo clic de un doble clic no marca la idea siguiente sin verla, ni cierra el
+        resultado tras la última (ADR-253)."""
         pause = (
             QApplication.doubleClickInterval()
             if self._mark_pause_ms is None
@@ -259,13 +263,16 @@ class TrickQuestionsDialog(QDialog):
         )
         if pause <= 0:
             return
-        self.contrary_button.setEnabled(False)
-        self.agrees_button.setEnabled(False)
+        for button in self._paused_buttons():
+            button.setEnabled(False)
         self._marks_pause.start(pause)
 
     def _accept_marks(self) -> None:
-        self.contrary_button.setEnabled(True)
-        self.agrees_button.setEnabled(True)
+        for button in self._paused_buttons():
+            button.setEnabled(True)
+
+    def _paused_buttons(self) -> tuple[QPushButton, ...]:
+        return (self.contrary_button, self.agrees_button, self.close_button)
 
     def _previous(self) -> None:
         if self._index > 0:
@@ -280,9 +287,9 @@ class TrickQuestionsDialog(QDialog):
         self.result_label = QLabel("")
         self.result_label.setWordWrap(True)
         layout.addWidget(self.result_label)
-        close = QPushButton("Cerrar")
-        close.clicked.connect(self.accept)
-        layout.addWidget(close)
+        self.close_button = QPushButton("Cerrar")
+        self.close_button.clicked.connect(self.accept)
+        layout.addWidget(self.close_button)
         layout.addStretch()
         return page
 
