@@ -38,6 +38,7 @@ from sirius.adapters.audio.voice_libraries import (
     END_OF_TURN,
     SPEECH_TO_TEXT,
     VOICE_ACTIVITY,
+    import_voice_library,
     voice_tools,
 )
 from sirius.application.addressing import says_his_name
@@ -467,6 +468,29 @@ def test_los_analizadores_oyen_a_16_khz_y_pipecat_solo_avisa_por_consola(
     assert [a.frecuencia for a in bibliotecas.analizadores] == [SAMPLE_RATE, SAMPLE_RATE]
     assert bibliotecas.loguru.llamadas == [("remove", None), ("add", "WARNING")]
     assert bibliotecas.sounddevice.flujos == [], "cargar no abre el micro"
+
+
+@pytest.mark.parametrize("como", ["al cargar el oído", "al comprobar las bibliotecas"])
+def test_loguru_se_deja_en_los_avisos_antes_de_importar_pipecat(
+    bibliotecas: _Bibliotecas, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, como: str
+) -> None:
+    # Pipecat pinta su cartel al importarse, con loguru: después ya no hay quien lo calle.
+    def apunta(modulo: str) -> Any:
+        bibliotecas.loguru.llamadas.append(("importa", modulo))
+        return import_voice_library(modulo)
+
+    monkeypatch.setattr(local_listening_module, "import_voice_library", apunta)
+
+    if como == "al cargar el oído":
+        load_listening_engines(tmp_path)
+    else:
+        check_listening_libraries()
+
+    llamadas = bibliotecas.loguru.llamadas
+    primera_de_pipecat = next(
+        i for i, (que, modulo) in enumerate(llamadas) if str(modulo).startswith("pipecat")
+    )
+    assert llamadas.index(("add", "WARNING")) < primera_de_pipecat
 
 
 @pytest.mark.parametrize(
