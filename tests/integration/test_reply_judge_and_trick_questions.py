@@ -151,6 +151,20 @@ def test_el_juez_puntua_en_orden_solo_las_respuestas_de_la_0_2(tmp_path: Path) -
     assert [nota.score for nota in sirius.reply_judge_service.scores()] == [5, 4, 3]
 
 
+def test_el_juez_no_puntua_las_respuestas_que_le_cortaron(tmp_path: Path) -> None:
+    """ADR-254: una respuesta cortada queda a medias. Puntuarla le bajaría la media sin
+    motivo, y diez cortes de E-R03-03 darían un aviso falso."""
+    juez = _Juez([5, 4])
+    _, sirius = _sirius(tmp_path, juez=juez)
+    cortada = sirius.send_message_use_case.send_message("Mensaje 1.")
+    sirius.send_message_use_case.send_message("Mensaje 2.")
+    sirius.send_message_use_case.mark_cut(cortada.sirius_message.id, "Respuesta")
+
+    sirius.reply_judge_service.judge_pending()
+
+    assert juez.puntuadas == ["Respuesta a: Mensaje 2."]
+
+
 def test_el_turno_no_llama_al_juez(tmp_path: Path) -> None:
     juez = _Juez([5])
     _, sirius = _sirius(tmp_path, juez=juez)

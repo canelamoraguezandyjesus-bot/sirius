@@ -62,7 +62,8 @@ class JudgeScoreRepository(Protocol):
         """Las respuestas completas de la 0.2 que el juez aún no ha puntuado, en orden.
 
         De la 0.2 son las que tienen apuntado con qué modelo se dieron (pieza D):
-        las de antes se dieron con otra semilla y no se puntúan.
+        las de antes se dieron con otra semilla y no se puntúan. Las que le cortaron
+        tampoco: quedan a medias (ADR-254).
         """
         ...
 
