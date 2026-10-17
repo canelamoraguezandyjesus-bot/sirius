@@ -292,7 +292,8 @@ class OllamaChatProvider:
 
         Con el contexto de la charla, que Ollama recargaría el modelo para otro, y con su
         ``keep_alive``. Lo piden la ventana y ``sirius-oye`` al arrancar, en segundo plano.
-        Si falla, lo apunta en el diario y nada más: la primera frase lo cargará.
+        Si falla, apunta en el diario el código o la clase del fallo, nada de lo que dijo
+        Ollama, y nada más: la primera frase lo cargará.
         """
         body = {
             "model": self._model,
@@ -307,8 +308,7 @@ class OllamaChatProvider:
             _logger.info("No se pudo precargar %s (%s)", self._model, type(error).__name__)
             return
         if response.status_code >= httpx.codes.BAD_REQUEST:
-            said = " ".join(_what_ollama_said(response).split())[:_ERROR_TEXT_LIMIT]
-            _logger.info("Ollama no precargó %s (%s): %s", self._model, response.status_code, said)
+            _logger.info("Ollama no precargó %s (%s)", self._model, response.status_code)
 
     def close(self) -> None:
         self._client.close()

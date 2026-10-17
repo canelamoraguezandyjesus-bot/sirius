@@ -121,4 +121,6 @@ def test_si_ollama_no_tiene_el_modelo_la_precarga_lo_apunta_y_no_falla(
     with caplog.at_level(logging.INFO, logger="sirius"):
         _ollama(no_lo_tiene).warm_up()
 
-    assert 'Ollama no precargó gemma3:4b (404): model "gemma3:4b" not found' in caplog.text
+    assert "Ollama no precargó gemma3:4b (404)" in caplog.text
+    # Nada de lo que dice Ollama va al diario.
+    assert "not found" not in caplog.text
