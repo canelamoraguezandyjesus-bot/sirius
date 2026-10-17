@@ -26,7 +26,7 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **247**.
+- Decisiones (ADR): **248**.
 - Bloques del motor: 17 cerrado, 3 fuera_de_alcance.
 - Defectos registrados: 2 abierto, 98 cerrado.
 - Ideas aparcadas o descartadas: 12 aparcada, 3 descartada, 2 promovida.
@@ -79,6 +79,7 @@ huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| [254](docs/decisions/ADR-254-al-cortarle-dejar-de-escribir-la-respuesta.md) | 2026-10-17 | APROBADO | Al cortarle, dejar de escribir la respuesta | La opción A. Cortarle por voz no es cancelar el envío: lo dicho queda dicho, ahora solo hasta donde llegó a escribir. Es el modelo de ADR-245 frente a la letra… |
 | [253](docs/decisions/ADR-253-arreglar-lo-que-salio-del-repaso-final-antes-de-sus-pruebas.md) | 2026-10-17 | APROBADO | Arreglar lo que salió del repaso final antes de sus pruebas | Un arreglo por punto, en los ficheros donde vive el fallo: `127.0.0.1`. Los seis adaptadores de Ollama, la charla, las huellas y los cuatro |
 | [252](docs/decisions/ADR-252-dejar-la-voz-y-la-ventana-listas-para-sus-pruebas-de-voz.md) | 2026-10-17 | APROBADO | Dejar la voz y la ventana listas para sus pruebas de voz | Tope propio del juez, cortarle colgando su conexión, `think` apagado con reintento, la APM soltada al salir y migrar sin el registro de Alembic. Son 1(a)… |
 | [251](docs/decisions/ADR-251-ajustar-la-memoria-a-lo-que-midio-su-ordenador-e-r02-04-y-e-r02-05.md) | 2026-10-17 | APROBADO | Ajustar la memoria a lo que midió su ordenador: E-R02-04 y E-R02-05 | La opción 1. Las decisiones son técnicas y caben en lo que permite ADR-238, que dejó el umbral para que lo moviera lo que dijera E-R02-04; las toma la sesión… |
