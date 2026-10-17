@@ -26,12 +26,15 @@ Lo que garantiza por construcción:
   de contestar, y ``render_instructions()`` pide la sugerencia detrás de un
   delimitador. Las dos cosas se quitan antes de que exista un solo
   ``LLMTextDelta``, aunque lleguen partidas entre trozos.
+- **El diario no lleva nada de lo que dijo Ollama.** Al fallar apunta el código
+  HTTP, la clase del fallo de red o una categoría de una lista cerrada, nunca
+  su texto: lo que repite de la charla puede venir en cualquier forma, y
+  tacharlo no era un límite seguro (ronda 2 de Codex de ADR-248).
 """
 
 from __future__ import annotations
 
 import json
-import re
 import threading
 from collections.abc import Iterable, Iterator
 from typing import Any
@@ -83,13 +86,22 @@ DEFAULT_NUM_CTX = 8192
 #: de serie de los ajustes (ADR-248).
 DEFAULT_NUM_PREDICT = 4096
 
-#: Cuánto del texto de un error de Ollama va al diario.
-_ERROR_TEXT_LIMIT = 300
+#: Lo único que el diario dice de lo que contestó Ollama al fallar: la categoría de la
+#: primera de estas firmas que aparezca en su texto, sin distinguir mayúsculas. Cada firma
+#: son trozos que tienen que salir todos. Del texto no se copia nada (ronda 2 de Codex de
+#: ADR-248). La memoria va antes que el proceso caído: dice por qué se cayó.
+_ERROR_CATEGORIES: tuple[tuple[tuple[str, ...], str], ...] = (
+    (("memory",), "sin memoria"),
+    (("cuda",), "sin memoria"),
+    (("does not support thinking",), "no admite think"),
+    (("not found",), "modelo no encontrado"),
+    (("context canceled",), "cancelado"),
+    (("runner process", "terminated"), "el proceso del modelo se cayó"),
+    (("no longer running",), "el proceso del modelo se cayó"),
+)
 
-#: Lo más corto que se tacha donde aparezca si un error de Ollama repite lo que se le pidió;
-#: una línea más corta se tacha solo como frase entera, para no tachar trozos de las
-#: palabras de su mensaje (ronda 1 de Codex de ADR-248).
-_SHORTEST_ECHO = 12
+#: La categoría de un error que no encaja en ninguna firma.
+_OTHER_ERROR = "otro"
 
 #: Cuánto tiempo deja Ollama el modelo cargado después de cada respuesta. Con
 #: el valor por defecto, cinco minutos, la primera frase tras una pausa
@@ -124,32 +136,18 @@ def _error(kind: LLMErrorKind, partial_text: str = "") -> LLMError:
     return LLMError(kind=kind, message=_SAFE_MESSAGES[kind], partial_text=partial_text)
 
 
-def _for_the_log(text: str, request: LLMRequest) -> str:
-    """Lo que dijo Ollama al fallar, para el diario: en una línea, recortado, y sin lo que
-    se le pidió al modelo, por si lo repite (ADR-248).
-
-    Las líneas más largas se tachan primero: tachar antes una corta que va dentro de otra
-    dejaría la larga a medias.
-    """
-    asked = {
-        line.strip()
-        for prompt in (request.instructions, request.input_text)
-        for line in prompt.splitlines()
-        if line.strip()
-    }
-    for line in sorted(asked, key=lambda line: (-len(line), line)):
-        if len(line) >= _SHORTEST_ECHO:
-            text = text.replace(line, "[…]")
-        else:
-            text = re.sub(rf"(?<!\w){re.escape(line)}(?!\w)", "[…]", text)
-    text = " ".join(text.split())
-    if len(text) > _ERROR_TEXT_LIMIT:
-        text = text[: _ERROR_TEXT_LIMIT - 1] + "…"
-    return text
+def _category(text: str) -> str:
+    """La categoría con que el diario apunta un error de Ollama: de la lista, nunca su texto."""
+    folded = text.casefold()
+    for signature, category in _ERROR_CATEGORIES:
+        if all(part in folded for part in signature):
+            return category
+    return _OTHER_ERROR
 
 
 def _what_ollama_said(response: httpx.Response) -> str:
-    """El texto del error con que contestó Ollama, o el cuerpo tal cual si no es su JSON."""
+    """El texto del error con que contestó Ollama, o el cuerpo tal cual si no es su JSON:
+    solo para sacar su categoría, nunca para el diario."""
     try:
         raw = response.read().decode("utf-8", errors="replace")
     except httpx.HTTPError:
@@ -267,7 +265,7 @@ class OllamaChatProvider:
                         _logger.error(
                             "Ollama no tiene el modelo de la charla (%s): %s",
                             self._model,
-                            _for_the_log(_what_ollama_said(r), request),
+                            _category(_what_ollama_said(r)),
                         )
                         yield _error(LLMErrorKind.CONFIGURATION)
                         return
@@ -275,7 +273,7 @@ class OllamaChatProvider:
                         _logger.error(
                             "Ollama respondió %s a la charla: %s",
                             r.status_code,
-                            _for_the_log(_what_ollama_said(r), request),
+                            _category(_what_ollama_said(r)),
                         )
                         yield _error(LLMErrorKind.UNKNOWN)
                         return
@@ -288,10 +286,9 @@ class OllamaChatProvider:
                 yield _error(LLMErrorKind.TIMEOUT)
             except httpx.HTTPError as exc:
                 _logger.error(
-                    "Operación %s: fallo de red con Ollama (%s: %s)",
+                    "Operación %s: fallo de red con Ollama (%s)",
                     request.operation_id,
                     type(exc).__name__,
-                    _for_the_log(str(exc), request),
                 )
                 yield _error(LLMErrorKind.UNKNOWN)
         finally:
@@ -334,7 +331,7 @@ class OllamaChatProvider:
                     _logger.error(
                         "Operación %s: Ollama devolvió un error: %s",
                         request.operation_id,
-                        _for_the_log(str(chunk["error"]), request),
+                        _category(str(chunk["error"])),
                     )
                     yield _error(LLMErrorKind.UNKNOWN, partial())
                     return
@@ -366,10 +363,9 @@ class OllamaChatProvider:
         except httpx.HTTPError as exc:
             # La rama de fuera, en ``stream_response``, no llega a verlo (ronda 1 de ADR-248).
             _logger.error(
-                "Operación %s: fallo de red con Ollama a mitad de respuesta (%s: %s)",
+                "Operación %s: fallo de red con Ollama a mitad de respuesta (%s)",
                 request.operation_id,
                 type(exc).__name__,
-                _for_the_log(str(exc), request),
             )
             timed_out = isinstance(exc, httpx.TimeoutException)
             yield _error(LLMErrorKind.TIMEOUT if timed_out else LLMErrorKind.CONNECTION, partial())

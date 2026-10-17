@@ -420,128 +420,115 @@ def diario() -> Iterator[list[str]]:
         registrador.removeHandler(manejador)
 
 
-def test_si_ollama_responde_con_un_error_el_diario_dice_el_codigo_y_lo_que_dijo(
-    diario: list[str],
-) -> None:
+# El diario no lleva nunca lo que dijo Ollama ni el texto de una excepción: solo el código,
+# la clase y una categoría de una lista cerrada. Tachar la charla después no era un límite
+# seguro, y en dos rondas de Codex se coló (ronda 2 de ADR-248).
+
+#: Una charla con algo que no debe llegar nunca al diario.
+_CON_UN_SECRETO = LLMRequest(
+    operation_id="op-2",
+    instructions="Eres Sirius.\nSu hermana Lucía es enfermera en el hospital.",
+    input_text="PIN 1234",
+)
+
+#: Formas en que Ollama podría repetir la charla en su error.
+_ECOS = (
+    "bad input: PIN 1234",
+    "bad input: pin 1234",
+    "bad input: 1234",
+    "BAD INPUT: SU HERMANA LUCÍA ES ENFERMERA EN EL HOSPITAL.",
+    "bad input: hermana Lucía es enfermera",
+)
+
+
+@pytest.mark.parametrize("eco", _ECOS)
+def test_lo_que_ollama_repita_de_la_charla_no_llega_al_diario(diario: list[str], eco: str) -> None:
     def contestar(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(
-            500, json={"error": "llama runner process has terminated: exit status 2"}
-        )
+        return httpx.Response(400, json={"error": eco})
 
-    [evento] = _eventos(_proveedor(contestar))
+    _eventos(_proveedor(contestar), _CON_UN_SECRETO)
 
-    assert isinstance(evento, LLMError)
-    assert evento.kind is LLMErrorKind.UNKNOWN
-    assert diario == [
-        "Ollama respondió 500 a la charla: llama runner process has terminated: exit status 2"
-    ]
+    assert diario == ["Ollama respondió 400 a la charla: otro"]
 
 
-def test_un_error_a_mitad_de_respuesta_queda_en_el_diario_con_lo_que_dijo_ollama(
-    diario: list[str],
-) -> None:
+@pytest.mark.parametrize("eco", _ECOS)
+def test_lo_que_repita_a_mitad_de_respuesta_no_llega_al_diario(diario: list[str], eco: str) -> None:
     def contestar(request: httpx.Request) -> httpx.Response:
         lineas = [
             json.dumps({"message": {"content": "Empez"}, "done": False}),
-            json.dumps({"error": "se acabó la memoria"}),
+            json.dumps({"error": eco}),
         ]
         return httpx.Response(200, text="\n".join(lineas) + "\n")
 
-    _eventos(_proveedor(contestar))
+    _eventos(_proveedor(contestar), _CON_UN_SECRETO)
 
-    assert diario == ["Operación op-1: Ollama devolvió un error: se acabó la memoria"]
-
-
-def test_lo_que_ollama_repita_de_la_charla_no_llega_al_diario(diario: list[str]) -> None:
-    peticion = LLMRequest(
-        operation_id="op-2",
-        instructions="Eres Sirius.\nSu hermana Lucía es enfermera en el hospital.",
-        input_text="¿A qué se dedica mi hermana Lucía?",
-    )
-
-    def contestar(request: httpx.Request) -> httpx.Response:
-        dicho = (
-            "bad input: ¿A qué se dedica mi hermana Lucía?"
-            " Su hermana Lucía es enfermera en el hospital."
-        )
-        return httpx.Response(400, json={"error": dicho})
-
-    _eventos(_proveedor(contestar), peticion)
-
-    assert diario == ["Ollama respondió 400 a la charla: bad input: […] […]"]
+    assert diario == ["Operación op-2: Ollama devolvió un error: otro"]
 
 
-def test_una_linea_corta_de_la_charla_que_ollama_repita_tampoco_llega_al_diario(
-    diario: list[str],
+@pytest.mark.parametrize(
+    ("dicho", "categoria"),
+    [
+        ("model requires more system memory (5.6 GiB) than is available (3.2 GiB)", "sin memoria"),
+        ("CUDA error: out of memory", "sin memoria"),
+        ("cudaMalloc failed", "sin memoria"),
+        ('"gemma3:4b" does not support thinking', "no admite think"),
+        ('model "qwen9" not found, try pulling it first', "modelo no encontrado"),
+        ("context canceled", "cancelado"),
+        ("llama runner process has terminated: exit status 2", "el proceso del modelo se cayó"),
+        ("LLAMA RUNNER PROCESS HAS TERMINATED", "el proceso del modelo se cayó"),
+        ("llama runner process no longer running: -1", "el proceso del modelo se cayó"),
+        # La memoria va antes: dice por qué se cayó.
+        ("llama runner process has terminated: CUDA error: out of memory", "sin memoria"),
+        # Una firma de dos trozos pide los dos.
+        ("stream terminated unexpectedly", "otro"),
+        ("algo que no sale en la lista", "otro"),
+        ("", "otro"),
+    ],
+)
+def test_cada_error_conocido_de_ollama_sale_con_su_categoria(
+    diario: list[str], dicho: str, categoria: str
 ) -> None:
-    # Ronda 1 de Codex: solo se tachaban las líneas de 12 caracteres o más.
-    peticion = LLMRequest(operation_id="op-3", instructions="Eres Sirius.", input_text="PIN 1234")
-
     def contestar(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(400, json={"error": "bad input: PIN 1234"})
-
-    _eventos(_proveedor(contestar), peticion)
-
-    assert diario == ["Ollama respondió 400 a la charla: bad input: […]"]
-
-
-def test_una_linea_corta_solo_se_tacha_como_frase_entera(diario: list[str]) -> None:
-    # «red», que dijo él, va dentro de cuatro palabras del error, y ninguna se tacha.
-    peticion = LLMRequest(operation_id="op-4", instructions="Eres Sirius.", input_text="red")
-    dicho = "authentication required: credentials expired, reduce retries"
-
-    def contestar(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(401, json={"error": dicho})
-
-    _eventos(_proveedor(contestar), peticion)
-
-    assert diario == [f"Ollama respondió 401 a la charla: {dicho}"]
-
-
-def test_una_linea_larga_se_tacha_aunque_vaya_pegada_y_antes_que_las_cortas(
-    diario: list[str],
-) -> None:
-    # Si Ollama repite la charla sin sus saltos de línea, la larga va pegada a la corta: se
-    # tacha donde aparezca, y primero, para que la corta quede como frase entera.
-    peticion = LLMRequest(
-        operation_id="op-5",
-        instructions="Eres Sirius\nSu hermana Lucía es enfermera en el hospital",
-        input_text="Hola",
-    )
-
-    def contestar(request: httpx.Request) -> httpx.Response:
-        dicho = "bad input: Eres SiriusSu hermana Lucía es enfermera en el hospital"
-        return httpx.Response(400, json={"error": dicho})
-
-    _eventos(_proveedor(contestar), peticion)
-
-    assert diario == ["Ollama respondió 400 a la charla: bad input: […][…]"]
-
-
-def test_un_error_muy_largo_llega_recortado_al_diario(diario: list[str]) -> None:
-    def contestar(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(500, json={"error": "x" * 1000})
-
-    _eventos(_proveedor(contestar))
-
-    [linea] = diario
-    dicho = linea.removeprefix("Ollama respondió 500 a la charla: ")
-    assert len(dicho) == 300
-    assert dicho.endswith("…")
-
-
-def test_un_fallo_de_red_antes_de_contestar_dice_cual_fue(diario: list[str]) -> None:
-    def contestar(request: httpx.Request) -> httpx.Response:
-        raise httpx.RemoteProtocolError("Server disconnected without sending a response.")
+        return httpx.Response(500, json={"error": dicho})
 
     [evento] = _eventos(_proveedor(contestar))
 
     assert isinstance(evento, LLMError)
     assert evento.kind is LLMErrorKind.UNKNOWN
+    assert diario == [f"Ollama respondió 500 a la charla: {categoria}"]
+
+
+def test_un_modelo_que_ollama_no_tiene_lo_dice_con_su_nombre(diario: list[str]) -> None:
+    def contestar(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(404, json={"error": 'model "modelo-de-prueba" not found'})
+
+    [evento] = _eventos(_proveedor(contestar))
+
+    assert isinstance(evento, LLMError)
+    assert evento.kind is LLMErrorKind.CONFIGURATION
     assert diario == [
-        "Operación op-1: fallo de red con Ollama"
-        " (RemoteProtocolError: Server disconnected without sending a response.)"
+        "Ollama no tiene el modelo de la charla (modelo-de-prueba): modelo no encontrado"
     ]
+
+
+def test_un_cuerpo_que_no_es_json_tambien_sale_con_su_categoria(diario: list[str]) -> None:
+    def contestar(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(502, text="pin 1234: upstream context canceled")
+
+    _eventos(_proveedor(contestar), _CON_UN_SECRETO)
+
+    assert diario == ["Ollama respondió 502 a la charla: cancelado"]
+
+
+def test_un_fallo_de_red_antes_de_contestar_dice_solo_su_clase(diario: list[str]) -> None:
+    def contestar(request: httpx.Request) -> httpx.Response:
+        raise httpx.RemoteProtocolError("Server disconnected: pin 1234")
+
+    [evento] = _eventos(_proveedor(contestar), _CON_UN_SECRETO)
+
+    assert isinstance(evento, LLMError)
+    assert evento.kind is LLMErrorKind.UNKNOWN
+    assert diario == ["Operación op-2: fallo de red con Ollama (RemoteProtocolError)"]
 
 
 def _se_corta_a_mitad(error: httpx.HTTPError) -> Callable[[httpx.Request], httpx.Response]:
@@ -557,37 +544,28 @@ def _se_corta_a_mitad(error: httpx.HTTPError) -> Callable[[httpx.Request], httpx
     return contestar
 
 
-def test_un_fallo_de_red_a_mitad_de_respuesta_dice_cual_fue(diario: list[str]) -> None:
+def test_un_fallo_de_red_a_mitad_de_respuesta_dice_solo_su_clase(diario: list[str]) -> None:
     # Ronda 1 de Codex: a mitad de respuesta, el fallo de red no dejaba nada en el diario.
     error = httpx.RemoteProtocolError(
-        "peer closed connection without sending complete message body (incomplete chunked read)"
+        "peer closed connection without sending complete message body: pin 1234"
     )
 
-    eventos = _eventos(_proveedor(_se_corta_a_mitad(error)))
+    eventos = _eventos(_proveedor(_se_corta_a_mitad(error)), _CON_UN_SECRETO)
 
     assert isinstance(eventos[-1], LLMError)
     assert eventos[-1].kind is LLMErrorKind.CONNECTION
     assert eventos[-1].partial_text == "Empez"
     assert diario == [
-        "Operación op-1: fallo de red con Ollama a mitad de respuesta (RemoteProtocolError:"
-        " peer closed connection without sending complete message body"
-        " (incomplete chunked read))"
+        "Operación op-2: fallo de red con Ollama a mitad de respuesta (RemoteProtocolError)"
     ]
 
 
-def test_un_tope_de_lectura_a_mitad_de_respuesta_dice_cual_fue_sin_la_charla(
-    diario: list[str],
-) -> None:
-    # El mensaje repite una línea de la charla: pasa por el mismo filtro que los demás.
-    peticion = LLMRequest(operation_id="op-6", instructions="Eres Sirius.", input_text="PIN 1234")
+def test_un_tope_de_lectura_a_mitad_de_respuesta_dice_solo_su_clase(diario: list[str]) -> None:
     error = httpx.ReadTimeout("timed out after PIN 1234")
 
-    eventos = _eventos(_proveedor(_se_corta_a_mitad(error)), peticion)
+    eventos = _eventos(_proveedor(_se_corta_a_mitad(error)), _CON_UN_SECRETO)
 
     assert isinstance(eventos[-1], LLMError)
     assert eventos[-1].kind is LLMErrorKind.TIMEOUT
     assert eventos[-1].partial_text == "Empez"
-    assert diario == [
-        "Operación op-6: fallo de red con Ollama a mitad de respuesta"
-        " (ReadTimeout: timed out after […])"
-    ]
+    assert diario == ["Operación op-2: fallo de red con Ollama a mitad de respuesta (ReadTimeout)"]

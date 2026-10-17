@@ -294,6 +294,9 @@ pasa antes de borrar su carpeta:
     ofrecen igual, y la hoja lo dice debajo de la lista.
   - **El aviso de un modelo que no contesta o no termina** acaba en «Vuelve a pulsar
     Empezar; si se repite, desmarca ese modelo.»
+  - **La lista la pide un trabajador**, fuera del hilo de la ventana, como las respuestas:
+    la hoja se ve al momento con «Preguntando a Ollama qué modelos tiene…», y «Empezar»
+    espera a que llegue (ronda 2 de Codex, abajo).
 
 De paso, en los documentos, las rondas limpias de Codex que no se pudieron anotar en sus
 PR sin cambiar el head que revisaron: la de ADR-245 (PR #690) y la de ADR-246 (PR #691).
@@ -391,8 +394,9 @@ PR sin cambiar el head que revisaron: la de ADR-245 (PR #690) y la de ADR-246 (P
 - **La prueba a ciegas ya no ofrece los modelos de huellas**, y dice debajo de la lista
   cuáles se quedan fuera y por qué. Con un Ollama que no dijera qué sabe hacer cada modelo,
   todos se quedarían fuera, cada uno con su motivo.
-- **Abrir la prueba pregunta a Ollama una vez por modelo**, además de la lista: tarda algo
-  más en abrirse, y como mucho diez segundos por modelo si Ollama no contesta.
+- **Abrir la prueba pregunta a Ollama una vez por modelo**, además de la lista, sin que la
+  ventana espere: la hoja se abre al momento, y la lista llega cuando Ollama contesta, o
+  como mucho diez segundos por modelo después si no lo hace.
 - **El propietario tiene la orden de E-R02-02**: `uv run python scripts/contar_las_marcas.py`.
   La puede ejecutar con Sirius abierto: la copia espera si la ventana está guardando.
 - **Las últimas 50 son las de la charla, en su orden**, como en PA-R02-06: una respuesta
@@ -468,3 +472,18 @@ pantalla, que todo se alcance bajando, que la prueba a ciegas elija y guarde com
 que las tres se minimicen, se maximicen y cambien de tamaño. Y la lista de modelos de la
 prueba a ciegas: que solo ofrezca los que conversan, que un modelo del que `/api/show` no
 dice nada no rompa la lista, y que el aviso diga qué hacer.
+
+- **Ronda 2, sobre `efda01af`**: dos hallazgos, los dos ciertos, verificados contra el
+  código antes de tocar nada. El P1, el diario, va en ADR-248. El de este ADR:
+  - **P2, la lista de modelos en el hilo de la ventana.** `_load_models` pedía
+    `installed_models()` al construir la hoja, en el hilo de Qt, con un `/api/show` por
+    modelo de hasta diez segundos cada uno: con un Ollama que tarda, la ventana se quedaba
+    quieta. Ahora la pide un trabajador, `BlindTestModelsWorker`, como la generación: la
+    hoja se ve al momento con «Preguntando a Ollama qué modelos tiene…», «Empezar» se puede
+    pulsar cuando llega, y si se cierra antes, lo que llega se descarta.
+
+  Con un Ollama de mentira que tarda dos segundos por modelo, la prueba que abre la hoja
+  tardaba 8,4 s con el código de la ronda; con el arreglo se abre al momento. Tres pruebas
+  más, la que tarda, la que cierra antes de que llegue la lista y la de un fallo
+  inesperado al pedirla, y una de antes que ahora espera la lista: las cuatro fallaban con
+  el código de la ronda. Mutación: 7, caen las 7.
