@@ -1382,7 +1382,12 @@ class MainWindow(QMainWindow):
         container = QWidget()
         layout = QVBoxLayout(container)
         layout.addWidget(self.knowledge_widget)
-        return container
+        # Como Configuración: sin barra, esta pestaña no dejaba a la ventana medir menos de
+        # 787 px de alto, y al 150 % no cabía en su pantalla (ADR-253).
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setWidget(container)
+        return scroll_area
 
     def _build_historical_projects_tab(self) -> QWidget:
         # Pestaña propia y separada de "Conversación" (§5.4/§6.4): nunca
@@ -2172,6 +2177,10 @@ class MainWindow(QMainWindow):
         self._closed = True
         self._judge_timer.stop()
         self._stop_background()
+        # Al cerrar, el sueño corta además la petición que tiene en curso, para que salir no
+        # espere al modelo; ese día queda por soñar. Un turno no lo corta (ADR-253).
+        if self._active_dream_worker is not None:
+            self._active_dream_worker.cancel()
         if self._listening_loop is not None:
             self._listening_loop.stop()
         super().closeEvent(event)
@@ -3312,6 +3321,7 @@ class MainWindow(QMainWindow):
         )
 
     def _open_blind_test(self, use_case: BlindTestUseCase) -> None:
+        chosen_before = use_case.chat_model()
         dialog = BlindTestDialog(
             use_case,
             show_warning=self._show_warning,
@@ -3320,6 +3330,18 @@ class MainWindow(QMainWindow):
         )
         dialog.exec()
         self._refresh_chat_model_label(use_case)
+        chosen = use_case.chat_model()
+        if chosen is not None and chosen != chosen_before:
+            self._chat_went_local()
+
+    def _chat_went_local(self) -> None:
+        """La charla va ya a un modelo de este ordenador, elegido a ciegas: «Guardar
+        configuración» ya no la devuelve a OpenAI, y el oído, que no oía porque la charla
+        iba fuera, intenta oír, como al abrirse la ventana: si puede, ese aviso se va, y si
+        no, el aviso dice por qué. Callado con el botón, sigue callado (ADR-253)."""
+        self.provider_combo.setCurrentText(LLMProviderKind.OLLAMA.value)
+        if self._local_listening is not None and not (self._closed or self._close_requested):
+            self._refresh_listening(self._listen(self._local_listening.start))
 
     def _build_voice_group(self, use_case: VoiceTestUseCase) -> QGroupBox:
         """Su voz y la prueba a ciegas para elegirla (PA-R03-10, ADR-246)."""

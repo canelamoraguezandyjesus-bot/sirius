@@ -1044,3 +1044,53 @@ def test_si_la_respuesta_se_cancela_no_avisa_de_que_acabo(tmp_path: Path) -> Non
 
     assert result.outcome is MessageStatus.CANCELLED
     assert acabadas == []
+
+
+@pytest.mark.integration
+def test_cortarle_por_voz_a_mitad_guarda_lo_escrito_como_respuesta_acabada(
+    tmp_path: Path,
+) -> None:
+    """ADR-254: cortarle por voz no es cancelar el envío. Deja de escribir, como al
+    cancelar, pero lo escrito hasta ahí queda como su respuesta, acabada: se le atribuye su
+    modelo y el modelo lo lee después. Tras el corte no se resume: lo nuevo no espera."""
+    modelo = _ModeloConNombre("modelo-local", chunks=("uno ", "dos ", "tres ", "cuatro"))
+    use_case, apuntador = _con_modelo_que_cambia(tmp_path, modelo)
+    recibidos: list[str] = []
+
+    def corta_tras_el_segundo(texto: str) -> None:
+        recibidos.append(texto)
+        if len(recibidos) == 2:
+            use_case.cut("op-cortada")
+
+    result = use_case.send_message(
+        "hola", operation_id="op-cortada", on_delta=corta_tras_el_segundo
+    )
+
+    assert recibidos == ["uno ", "dos "]
+    assert modelo.cancelados == ["op-cortada"]
+    assert result.outcome is MessageStatus.COMPLETED
+    assert result.sirius_message.status is MessageStatus.COMPLETED
+    assert result.sirius_message.content == "uno dos "
+    assert apuntador.atribuidas == ["modelo-local"]
+    assert apuntador.resumidas_con == []
+
+    siguiente = use_case.send_message("¿Y qué más?")
+
+    assert siguiente.context is not None
+    assert "uno dos " in [m.content for m in siguiente.context.recent_messages]
+
+
+@pytest.mark.integration
+def test_cortarle_antes_de_que_escriba_nada_deja_su_respuesta_vacia_y_acabada(
+    tmp_path: Path,
+) -> None:
+    modelo = _ModeloConNombre("modelo-local")
+    use_case, _ = _con_modelo_que_cambia(tmp_path, modelo)
+
+    use_case.cut("op-sin-empezar")
+    result = use_case.send_message("hola", operation_id="op-sin-empezar")
+
+    assert result.outcome is MessageStatus.COMPLETED
+    assert result.sirius_message.content == ""
+    # Y al acabar se olvida que la cortaron: no se queda apuntada para siempre.
+    assert not use_case._was_cut("op-sin-empezar")

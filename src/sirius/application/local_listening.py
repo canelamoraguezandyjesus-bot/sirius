@@ -48,10 +48,12 @@ frase desde la primera, con la voz y el altavoz.
   después del turno; y antes de decir cada frase lo mira también quien la dice. Después,
   al atender (ronda 1 de Codex sobre la PR #690). En cuanto oye voz en lo limpio mientras
   contesta, pensando o hablando, o con su voz aún en el aire cuando el micro la captó,
-  calla la voz y el altavoz; la charla sigue escribiendo y guarda la respuesta entera, y
-  se le apunta hasta dónde se oyó. Lo que le corta es para él: calla en el instante en
-  que empieza esa voz. Los turnos que se cierran mientras contesta van a la charla cuando
-  acaba, y si son de la charla se decide al cerrarlos: contestar al primero no deja fuera
+  calla la voz y el altavoz, y si la charla aún escribe, deja de escribir: lo que llevaba
+  escrito queda como su respuesta (ADR-254; hasta el 17-10-2026 seguía escribiendo y la
+  guardaba entera, ADR-245). Se le apunta hasta dónde se oyó. Lo que le corta es para él:
+  calla en el instante en que empieza esa voz. Los turnos que se cierran mientras contesta van a la
+  charla cuando acaba, y si le cortaron, sin esperar a que el modelo termine lo que
+  escribía; si son de la charla se decide al cerrarlos: contestar al primero no deja fuera
   al siguiente. Mientras suena lo último que dijo no se atiende el siguiente: nunca hay
   dos respuestas en el altavoz, y si le cortan se sabe de cuál es lo que sonaba.
 - **Si la voz o el altavoz fallan, deja de hablar y lo dice.** El fallo no sale a la
@@ -140,9 +142,14 @@ class Chat(Protocol):
         enviar nada."""
         ...
 
+    def cut(self, operation_id: str) -> None:
+        """Le cortan mientras escribe la respuesta de ``operation_id``: deja de escribirla,
+        y lo que llevaba escrito queda como su respuesta (ADR-254)."""
+        ...
+
     def mark_cut(self, message_id: int, heard: str) -> None:
         """Le cortaron la respuesta ``message_id`` cuando el propietario había oído
-        ``heard``: queda apuntado con ella, que sigue entera (pieza E, ADR-245)."""
+        ``heard``: queda apuntado con ella (pieza E, ADR-245)."""
         ...
 
 
@@ -345,6 +352,8 @@ class LocalListening[Chunk]:
         #: El aviso de cuando dejó de oír por su cuenta, hasta contárselo a quien mira.
         self._gave_up: str | None = None
         self._watcher: ListeningWatcher | None = None
+        #: A quién se avisa justo antes de cargar la voz, que con la de personaje tarda.
+        self._before_loading_voice: Callable[[], None] = lambda: None
         #: Lo que está diciendo, para callarlo si se para.
         self._speech: _Speech | None = None
         #: Lo que dijo y aún suena, ya entregado a la charla, con su mensaje: si le cortan,
@@ -379,6 +388,13 @@ class LocalListening[Chunk]:
         with self._lock:
             self._watcher = watcher
 
+    def before_loading_voice(self, tell: Callable[[], None]) -> None:
+        """Llama a ``tell`` justo antes de cargar la voz, cada vez que la cargue. La ventana
+        la carga al abrirse, y con la de personaje no se ve hasta que acaba: así se puede
+        decir antes por la consola (ADR-253). ``tell`` no puede fallar."""
+        with self._lock:
+            self._before_loading_voice = tell
+
     def start(self) -> str:
         """Abre el micro si el oído está instalado; devuelve el aviso si no puede, o vacío.
 
@@ -409,6 +425,7 @@ class LocalListening[Chunk]:
                 return self._fail(f"No puedo oírte: {error.reason}.", install=True)
             try:
                 if self._speaking is None:
+                    self._before_loading_voice()
                     self._speaking = self._load_speaking()
             except VoiceUnavailable as error:
                 _logger.info("La voz no arranca: %s", error.reason)
@@ -646,8 +663,9 @@ class LocalListening[Chunk]:
     def _cut(self) -> None:
         """Le hablan encima mientras contesta, o con su voz aún en el aire: calla la voz y
         el altavoz, apunta hasta dónde se oyó lo que decía, y lo que le corta es para él,
-        porque calla en el instante en que empieza esa voz. La charla sigue escribiendo y
-        guarda la respuesta entera (pieza E, ADR-245). Con el cerrojo.
+        porque calla en el instante en que empieza esa voz (pieza E, ADR-245). Si la charla
+        aún escribe, deja de escribir: lo que llevaba escrito queda como su respuesta, y lo
+        nuevo no espera a que el modelo acabe (ADR-254). Con el cerrojo.
 
         Si ya le cortaron mientras la charla escribe, no hace nada: calló con ese corte, y
         lo que siga diciéndole cae en la charla que empezó ahí, sin alargarla.
@@ -661,15 +679,25 @@ class LocalListening[Chunk]:
         self._addressing.fell_silent(self._turn_began_at)
         if self._speech is not None:
             self._speech.cut()
+            self._stop_writing(self._speech.operation_id)
         sounding, self._still_sounding = self._still_sounding, None
         if sounding is not None:
             sounding.speech.cut()
             self._mark_cut(sounding.message_id, sounding.speech)
 
+    def _stop_writing(self, operation_id: str) -> None:
+        """Le pide a la charla que deje de escribir la respuesta que le cortaron. Si falla,
+        la charla la acaba entera, como antes de ADR-254, y el diario se queda con el tipo de
+        fallo."""
+        try:
+            self._chat.cut(operation_id)
+        except Exception as error:
+            _logger.error("No se pudo cortar la respuesta (%s)", type(error).__name__)
+
     def _mark_cut(self, message_id: int | None, speech: _Speech) -> None:
         """Apunta en la charla hasta dónde se oyó la respuesta ``message_id``, si le
-        cortaron. Si falla, la respuesta sigue guardada entera y el diario se queda con el
-        tipo de fallo."""
+        cortaron. Si falla, la respuesta sigue guardada como quedó, sin la nota, y el diario
+        se queda con el tipo de fallo."""
         heard = speech.heard_when_cut
         if message_id is None or heard is None:
             return
@@ -742,6 +770,7 @@ class LocalListening[Chunk]:
                 assert self._speaking is not None
                 speech = _Speech(
                     self._speaking,
+                    operation_id=operation_id,
                     before_first=self._pause_to_speak,
                     clock=self._clock,
                     lock=self._lock,
@@ -966,12 +995,16 @@ class _Speech:
         self,
         engines: SpeakingEngines[Any],
         *,
+        operation_id: str,
         before_first: Callable[[], None],
         clock: Callable[[], float],
         lock: threading.RLock,
         meanwhile: Callable[[], None] = lambda: None,
     ) -> None:
         self._engines = engines
+        #: La operación con la que la charla escribe lo que dice: si le cortan, esa deja de
+        #: escribir (ADR-254).
+        self.operation_id = operation_id
         self._before_first = before_first
         self._clock = clock
         self._lock = lock

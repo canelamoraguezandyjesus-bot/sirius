@@ -26,7 +26,9 @@ _VERSION = Version(
 
 #: El inventario aprobado en ADR-241: 10 PA, 27 pruebas de máquina y seis
 #: evaluaciones del propietario; ADR-245 añade una prueba a PA-R03-07, hasta dónde oyó lo
-#: que le cortaron, por decisión del propietario del 15-10-2026: 28. Una prueba se puede
+#: que le cortaron, por decisión del propietario del 15-10-2026: 28. ADR-254, por la suya
+#: del 17-10-2026, cambia lo que fija la segunda: al cortarle deja de escribir, y lo nuevo
+#: llega al modelo enseguida; siguen siendo 28. Una prueba se puede
 #: renombrar o mejorar, pero quitar una PA, una prueba o una evaluación es retirar una
 #: prueba, y eso no lo hace una sesión sola (AGENTS.md): se cambia aquí, a la vista de la
 #: revisión.

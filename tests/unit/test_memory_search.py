@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+import logging
+import threading
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 import pytest
 
+import sirius.application.memory_search as memory_search_module
 from sirius.application.memory_search import (
     EMBED_BATCH,
     MIN_SIMILARITY,
@@ -303,6 +306,80 @@ def test_cargar_el_modelo_pide_una_huella_y_nunca_rompe_nada() -> None:
     assert sin_vec.pedidas == []
 
     MemoryEmbeddingService(_Huellas(falla=True), _Almacen()).warm_up()
+
+
+class _Diario(logging.Handler):
+    """Lo que apunta el registrador de la búsqueda. Se lee de él, no de la raíz: con el
+    diario de Sirius ya configurado en el mismo proceso, ``sirius`` no propaga (ADR-248)."""
+
+    def __init__(self) -> None:
+        super().__init__(logging.DEBUG)
+        self.lineas: list[str] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.lineas.append(record.getMessage())
+
+
+@pytest.fixture
+def diario() -> Iterator[list[str]]:
+    registrador = logging.getLogger(memory_search_module.__name__)
+    manejador = _Diario()
+    registrador.addHandler(manejador)
+    yield manejador.lineas
+    registrador.removeHandler(manejador)
+
+
+class _HuellasQueSeCierran(_Huellas):
+    """Al salir se pide parar y se cierra su cliente: la petición en curso falla."""
+
+    def __init__(self, parar: threading.Event) -> None:
+        super().__init__()
+        self._parar = parar
+
+    def embed(self, texts: Sequence[str]) -> list[list[float]]:
+        self.pedidas.append(list(texts))
+        self._parar.set()
+        msg = "No se pudo contactar con Ollama para las huellas (ReadError)."
+        raise EmbeddingError(msg)
+
+
+def test_si_el_fallo_es_el_cierre_despues_de_pedir_parar_no_se_apunta_como_aviso(
+    diario: list[str],
+) -> None:
+    # #696: al salir de sirius-oye, cerrar el cliente a mitad de una petición apuntaba
+    # «No se pudieron calcular huellas (EmbeddingError)» en una salida normal.
+    parar = threading.Event()
+    almacen = _Almacen(pendientes=[PendingMemory(1, 10, "recuerdo 1")])
+    huellas = _HuellasQueSeCierran(parar)
+    servicio = MemoryEmbeddingService(huellas, almacen)
+
+    assert servicio.embed_pending(should_stop=parar.is_set) == 0
+
+    assert huellas.pedidas == [["recuerdo 1"]]
+    assert diario == []
+
+
+def test_cargar_el_modelo_tampoco_avisa_si_el_fallo_es_el_cierre(diario: list[str]) -> None:
+    parar = threading.Event()
+    huellas = _HuellasQueSeCierran(parar)
+
+    MemoryEmbeddingService(huellas, _Almacen()).warm_up(should_stop=parar.is_set)
+
+    assert huellas.pedidas == [["hola"]]
+    assert diario == []
+
+
+def test_si_falla_sin_que_le_pidieran_parar_sigue_avisando(diario: list[str]) -> None:
+    almacen = _Almacen(pendientes=[PendingMemory(1, 10, "recuerdo 1")])
+    servicio = MemoryEmbeddingService(_Huellas(falla=True), almacen)
+
+    servicio.embed_pending(should_stop=lambda: False)
+    servicio.warm_up(should_stop=lambda: False)
+
+    assert diario == [
+        "No se pudieron calcular huellas (EmbeddingError)",
+        "No se pudo cargar el modelo de huellas (EmbeddingError)",
+    ]
 
 
 # --- ADR-240: la misma pregunta una sola vez, y las huellas de los ejemplos ------------

@@ -100,8 +100,10 @@ Los umbrales están fijados el 07-10-2026, antes de medir nada.
 - **Qué hace él.** Charla con Sirius como siempre y marca cada respuesta con «eso es
   Sirius» o «eso no». Se marca si suena a Sirius, no si le gusta.
 - **Pasa si**, de las últimas 50 respuestas marcadas, 40 o más son «eso es Sirius». La
-  cuenta la da Sirius con una orden, `uv run python scripts/contar_las_marcas.py`, que dice
-  también qué modelos dieron esas 50 (ADR-247).
+  cuenta la da Sirius con una orden,
+  `uv run --link-mode=copy python scripts/contar_las_marcas.py`, que dice también qué
+  modelos dieron esas 50 (ADR-247). `--link-mode=copy`, porque su repositorio está en
+  OneDrive (ADR-253).
 - **Si no pasa.** Se ajusta la semilla con sus marcas, como mucho dos veces. Si sigue sin
   llegar, se le pregunta si se prueba otro modelo o se le entrena.
 - **Resultado:** pendiente.

@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import logging
 import random
-from collections.abc import Iterable, Sequence
+import threading
+from collections.abc import Callable, Iterable, Iterator, Sequence
 from dataclasses import replace
 from datetime import UTC, datetime
 
@@ -19,7 +21,14 @@ from sirius.domain.blind_test import (
 )
 from sirius.domain.identity import Identity, IdentityVersion, SeedExample
 from sirius.domain.robot_seed import EXAMPLES_FRAME
-from sirius.ports.llm import LLMCompleted, LLMError, LLMErrorKind, LLMRequest, LLMStreamEvent
+from sirius.ports.llm import (
+    LLMCancelled,
+    LLMCompleted,
+    LLMError,
+    LLMErrorKind,
+    LLMRequest,
+    LLMStreamEvent,
+)
 
 _PREGUNTAS = ("¿Qué tal?", "Cuéntame un chiste.", "Ponte serio.")
 
@@ -354,3 +363,316 @@ def test_cerrada_a_medias_solo_eligio_los_ejemplos_de_lo_preguntado_y_una_vez() 
 
     assert selector.textos == list(preguntas)
     assert len(modelos["dos"].peticiones) == 2
+
+
+# --- Un fallo suelto, un «Empezar» después de un fallo y cerrar a mitad (incidencia #696) ---
+
+
+class _FallaUnasVeces(_Modelo):
+    """Falla las primeras ``veces`` que le preguntan ``pregunta``; después contesta."""
+
+    def __init__(self, nombre: str, pregunta: str, veces: int) -> None:
+        super().__init__(nombre)
+        self.pregunta = pregunta
+        self.quedan = veces
+
+    def stream_response(self, request: LLMRequest) -> Iterable[LLMStreamEvent]:
+        if request.input_text == self.pregunta and self.quedan > 0:
+            self.quedan -= 1
+            self.peticiones.append(request)
+            return iter([LLMError(kind=LLMErrorKind.CONNECTION, message="No se pudo contactar.")])
+        return super().stream_response(request)
+
+
+@pytest.fixture
+def diario() -> Iterator[list[str]]:
+    """Lo que apunta en el diario el caso de uso, leído de su propio registrador."""
+    registrador = logging.getLogger("sirius.application.blind_test")
+    apuntado: list[str] = []
+
+    class _Apunta(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            apuntado.append(record.getMessage())
+
+    manejador = _Apunta()
+    registrador.addHandler(manejador)
+    try:
+        yield apuntado
+    finally:
+        registrador.removeHandler(manejador)
+
+
+def test_una_respuesta_que_falla_una_vez_se_vuelve_a_pedir_y_la_prueba_sigue() -> None:
+    tercera = BLIND_TEST_QUESTIONS[2]
+    dos = _FallaUnasVeces("dos", tercera, veces=1)
+
+    hoja = _caso({"uno": _Modelo("uno"), "dos": dos}, []).prepare(["uno", "dos"])
+
+    assert len(hoja.items) == 20
+    assert [p.input_text for p in dos.peticiones].count(tercera) == 2
+
+
+def test_si_vuelve_a_fallar_para_y_el_diario_dice_donde_y_con_que_modelo(
+    diario: list[str],
+) -> None:
+    quinta = BLIND_TEST_QUESTIONS[4]
+    dos = _FallaUnasVeces("dos", quinta, veces=2)
+
+    with pytest.raises(BlindTestError, match="El modelo dos no contestó"):
+        _caso({"uno": _Modelo("uno"), "dos": dos}, []).prepare(["uno", "dos"])
+
+    # Las 20 de «uno», cuatro de «dos» y la quinta de «dos», que falla dos veces.
+    assert diario == ["La prueba a ciegas falló en 25 de 40, con el modelo dos"]
+    assert [p.input_text for p in dos.peticiones].count(quinta) == 2
+
+
+def test_empezar_otra_vez_pide_solo_las_que_faltan() -> None:
+    quinta = BLIND_TEST_QUESTIONS[4]
+    uno, dos = _Modelo("uno"), _FallaUnasVeces("dos", quinta, veces=2)
+    caso = _caso({"uno": uno, "dos": dos}, [])
+    with pytest.raises(BlindTestError):
+        caso.prepare(["uno", "dos"])
+    antes_uno, antes_dos = len(uno.peticiones), len(dos.peticiones)
+
+    hoja = caso.prepare(["uno", "dos"])
+
+    assert len(hoja.items) == 20
+    assert uno.peticiones[antes_uno:] == []
+    assert [p.input_text for p in dos.peticiones[antes_dos:]] == list(BLIND_TEST_QUESTIONS[4:])
+
+
+class _IdentidadesQueCambian(_Identidades):
+    """La identidad vigente, con una versión que la prueba puede cambiar."""
+
+    def __init__(self) -> None:
+        self.version_id = 1
+
+    def get_or_create_current_identity(self) -> Identity:
+        version = replace(
+            super().get_or_create_current_identity().current_version, id=self.version_id
+        )
+        return Identity(id=1, current_version=version, created_at=version.created_at)
+
+
+def test_con_otra_version_de_la_identidad_se_vuelve_a_pedir_todo() -> None:
+    uno, dos = _Modelo("uno"), _Modelo("dos")
+    identidades = _IdentidadesQueCambian()
+    caso = BlindTestUseCase(
+        identity_repository=identidades,  # type: ignore[arg-type]
+        provider_for=lambda nombre: {"uno": uno, "dos": dos}[nombre],
+        list_models=lambda: ("dos", "uno"),
+        model_capabilities=_conversa,
+        choose_model=lambda _nombre: None,
+        current_model=lambda: None,
+    )
+    caso.prepare(["uno", "dos"])
+    caso.prepare(["uno", "dos"])
+    assert len(uno.peticiones) == len(dos.peticiones) == 20
+
+    identidades.version_id = 2
+    caso.prepare(["uno", "dos"])
+
+    assert len(uno.peticiones) == len(dos.peticiones) == 40
+
+
+class _QueEspera(_Modelo):
+    """Un modelo que no acaba de contestar hasta que se corta su petición."""
+
+    def __init__(self, nombre: str) -> None:
+        super().__init__(nombre)
+        self.preguntando = threading.Event()
+        self.cortadas: list[str] = []
+        self._corte = threading.Event()
+
+    def stream_response(self, request: LLMRequest) -> Iterable[LLMStreamEvent]:
+        self.peticiones.append(request)
+        self.preguntando.set()
+        self._corte.wait(timeout=5)
+        yield LLMCancelled(partial_text="")
+
+    def cancel(self, operation_id: str) -> None:
+        self.cortadas.append(operation_id)
+        self._corte.set()
+
+
+def test_cerrar_a_mitad_corta_la_respuesta_en_curso_y_no_la_vuelve_a_pedir(
+    diario: list[str],
+) -> None:
+    lento = _QueEspera("uno")
+    caso = _caso({"uno": lento, "dos": _Modelo("dos")}, [])
+    errores: list[BaseException] = []
+
+    def preparar() -> None:
+        try:
+            caso.prepare(["uno", "dos"])
+        except BlindTestError as exc:
+            errores.append(exc)
+
+    hilo = threading.Thread(target=preparar)
+    hilo.start()
+    assert lento.preguntando.wait(timeout=5)
+
+    caso.cancel()
+    hilo.join(timeout=5)
+
+    assert not hilo.is_alive()
+    assert lento.cortadas == ["prueba-a-ciegas-1"]
+    assert [str(e) for e in errores] == ["La prueba a ciegas se canceló."]
+    assert len(lento.peticiones) == 1
+    assert diario == []
+
+
+class _QueRecuerdaElCorte(_Modelo):
+    """Como el proveedor de verdad: un corte pedido antes de que empiece la respuesta se
+    cumple en cuanto empieza, sin contestar."""
+
+    def __init__(self, nombre: str) -> None:
+        super().__init__(nombre)
+        self.cortadas: list[str] = []
+        self.contestadas: list[str] = []
+
+    def stream_response(self, request: LLMRequest) -> Iterable[LLMStreamEvent]:
+        self.peticiones.append(request)
+        if request.operation_id in self.cortadas:
+            yield LLMCancelled(partial_text="")
+            return
+        self.contestadas.append(request.operation_id)
+        yield LLMCompleted(
+            text=f"{self.nombre}: {request.input_text}", input_tokens=1, output_tokens=1
+        )
+
+    def cancel(self, operation_id: str) -> None:
+        self.cortadas.append(operation_id)
+
+
+class _SelectorQueCierra(_SelectorQueApunta):
+    """Elegir los ejemplos pide huellas a Ollama y tarda: mientras, se cierra la hoja."""
+
+    def __init__(self, cierra: Callable[[], None]) -> None:
+        super().__init__()
+        self._cierra = cierra
+
+    def pick(self, examples: Sequence[SeedExample], text: str) -> tuple[SeedExample, ...]:
+        self._cierra()
+        return super().pick(examples, text)
+
+
+def test_cerrar_mientras_elige_los_ejemplos_corta_la_respuesta_que_viene_detras() -> None:
+    """El cierre no se pierde entre mirar si se cerró y pedir la respuesta: si llega
+    mientras se eligen los ejemplos, la respuesta que viene detrás se corta y no se espera
+    entera."""
+    modelo = _QueRecuerdaElCorte("uno")
+    cerrada = threading.Event()
+
+    def cierra() -> None:
+        # Lo que hace la hoja al cerrarse (BlindTestWorker.stop): marca, y corta.
+        cerrada.set()
+        caso.cancel()
+
+    caso = _caso_con({"uno": modelo}, _SelectorQueCierra(cierra))
+
+    with pytest.raises(BlindTestError, match="canceló"):
+        caso.prepare(["uno"], should_stop=cerrada.is_set)
+
+    assert modelo.cortadas == ["prueba-a-ciegas-1"]
+    assert modelo.contestadas == []
+
+
+def test_un_cierre_justo_despues_de_mirar_si_se_cerro_tampoco_se_pierde() -> None:
+    """La hoja marca que se cierra y después corta lo que se esté pidiendo; la prueba, al
+    revés: apunta lo que va a pedir y después mira si se cerró. Así, aunque el cierre
+    llegue justo después de mirar, el corte encuentra la respuesta apuntada."""
+    modelo = _QueRecuerdaElCorte("uno")
+    cerrada = threading.Event()
+
+    def mira_y_justo_se_cierra() -> bool:
+        visto = cerrada.is_set()
+        if not visto:
+            cerrada.set()
+            caso.cancel()
+        return visto
+
+    caso = _caso_con({"uno": modelo}, _SelectorQueApunta())
+
+    with pytest.raises(BlindTestError, match="canceló"):
+        caso.prepare(["uno"], should_stop=mira_y_justo_se_cierra)
+
+    assert modelo.cortadas == ["prueba-a-ciegas-1"]
+    assert modelo.contestadas == []
+
+
+def test_cortar_cuando_ya_acabo_no_deja_un_corte_apuntado() -> None:
+    """``cancel()`` corta solo lo que se está pidiendo: con la prueba ya preparada no deja
+    un corte que cayera sobre la próxima vez que se pidiera esa pregunta."""
+    modelos = {"uno": _QueRecuerdaElCorte("uno"), "dos": _QueRecuerdaElCorte("dos")}
+    caso = _caso_con(modelos, _SelectorQueApunta())  # type: ignore[arg-type]
+    caso.prepare(["uno", "dos"])
+
+    caso.cancel()
+
+    assert [m.cortadas for m in modelos.values()] == [[], []]
+
+
+class _SelectorQueTardaLaPrimeraVez(_SelectorQueApunta):
+    """Elegir los ejemplos pide huellas a Ollama y puede tardar segundos: la primera vez, el
+    de la primera pasada, tarda hasta que lo sueltan."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.eligiendo = threading.Event()
+        self.suelta = threading.Event()
+
+    def pick(self, examples: Sequence[SeedExample], text: str) -> tuple[SeedExample, ...]:
+        if not self.eligiendo.is_set():
+            self.eligiendo.set()
+            self.suelta.wait(timeout=5)
+        return super().pick(examples, text)
+
+
+def test_con_dos_pasadas_solapadas_cerrar_la_segunda_corta_su_respuesta() -> None:
+    """Se cierra la hoja mientras elige los ejemplos, y se vuelve a empezar antes de que esa
+    pasada acabe. Al acabar, la primera no puede llevarse lo que está pidiendo la segunda:
+    si no, cerrar la segunda ya no la cortaría y se esperaría su respuesta entera (#696)."""
+    pedidos: list[_QueEspera] = []
+
+    def nuevo(nombre: str) -> _QueEspera:
+        # Como el de verdad: cada pasada, un proveedor nuevo para cada modelo.
+        pedidos.append(_QueEspera(nombre))
+        return pedidos[-1]
+
+    selector = _SelectorQueTardaLaPrimeraVez()
+    caso = BlindTestUseCase(
+        identity_repository=_IdentidadesConEjemplos(),  # type: ignore[arg-type]
+        provider_for=nuevo,
+        list_models=lambda: ("uno",),
+        model_capabilities=_conversa,
+        choose_model=lambda _nombre: None,
+        current_model=lambda: None,
+        rng=random.Random(11),
+        seed_examples=selector,
+    )
+    para_la_primera, para_la_segunda = threading.Event(), threading.Event()
+
+    def pasada(parar: threading.Event) -> None:
+        with pytest.raises(BlindTestError, match="canceló"):
+            caso.prepare(["uno"], should_stop=parar.is_set)
+
+    primera = threading.Thread(target=pasada, args=(para_la_primera,))
+    primera.start()
+    assert selector.eligiendo.wait(timeout=5)
+    para_la_primera.set()  # se cierra la primera hoja
+    caso.cancel()
+    segunda = threading.Thread(target=pasada, args=(para_la_segunda,))
+    segunda.start()
+    assert len(pedidos) == 2
+    assert pedidos[1].preguntando.wait(timeout=5)
+    selector.suelta.set()  # la primera acaba de desenrollarse
+    primera.join(timeout=5)
+    assert not primera.is_alive()
+
+    para_la_segunda.set()  # se cierra la segunda hoja
+    caso.cancel()
+    segunda.join(timeout=2)
+
+    assert not segunda.is_alive(), "cerrar la segunda esperaría su respuesta entera"
+    assert pedidos[1].cortadas == ["prueba-a-ciegas-1"]

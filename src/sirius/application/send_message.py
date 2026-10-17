@@ -304,6 +304,9 @@ class SendMessageUseCase:
         #: mitad de una, esa respuesta sigue con el suyo de principio a fin: se
         #: cancela, se atribuye y se resume con él (ronda 3 de Codex).
         self._in_flight: dict[str, LLMProvider] = {}
+        #: Las respuestas que le cortaron por voz mientras las escribía (ADR-254).
+        self._cut_operations: set[str] = set()
+        self._cut_lock = threading.Lock()
 
     def mark_cut(self, message_id: int, heard: str) -> None:
         """Le cortaron la respuesta ``message_id`` cuando el propietario había oído
@@ -386,6 +389,8 @@ class SendMessageUseCase:
             )
         finally:
             self._in_flight.pop(operation_id, None)
+            with self._cut_lock:
+                self._cut_operations.discard(operation_id)
 
     def _send(
         self,
@@ -454,6 +459,10 @@ class SendMessageUseCase:
 
         if not final_text and status is not MessageStatus.COMPLETED:
             final_text = "".join(accumulated)
+        was_cut = status is MessageStatus.CANCELLED and self._was_cut(operation_id)
+        if was_cut:
+            # Le cortaron por voz: lo que llevaba escrito es su respuesta (ADR-254).
+            status = MessageStatus.COMPLETED
 
         sirius_message = self._conversation_repository.append_message(
             conversation.id,
@@ -471,7 +480,9 @@ class SendMessageUseCase:
                 self._reply_marks.record_model(
                     sirius_message.id, model if isinstance(model, str) else None
                 )
-            if self._summary_service is not None:
+            # Tras un corte no se resume: sería otra petición al modelo, y lo que le dijo
+            # al cortarle esperaría detrás. Lo mira el turno siguiente (ADR-254).
+            if self._summary_service is not None and not was_cut:
                 self._summary_service.maybe_summarize(conversation.id, provider)
 
         return SendMessageResult(
@@ -573,6 +584,20 @@ class SendMessageUseCase:
         de modelo; si no hay respuesta en curso con ese id, al modelo de ahora.
         """
         self._in_flight.get(operation_id, self._llm_provider).cancel(operation_id)
+
+    def cut(self, operation_id: str) -> None:
+        """Le cortan por voz mientras escribe la respuesta de ``operation_id``: deja de
+        escribirla, como con ``cancel``, pero lo que llevaba escrito queda como su respuesta,
+        acabada ahí y no cancelada, y el modelo lo lee después con la nota de hasta dónde se
+        oyó. Cortarle no es cancelar el envío: lo dicho queda dicho, hasta donde llegó a
+        escribir (decisión del propietario del 17-10-2026, ADR-254)."""
+        with self._cut_lock:
+            self._cut_operations.add(operation_id)
+        self.cancel(operation_id)
+
+    def _was_cut(self, operation_id: str) -> bool:
+        with self._cut_lock:
+            return operation_id in self._cut_operations
 
     def _mode_block(self, conversation_id: int, user_text: str) -> str:
         """Aplica la orden de modo del mensaje, si la hay, y devuelve lo que toca añadir.

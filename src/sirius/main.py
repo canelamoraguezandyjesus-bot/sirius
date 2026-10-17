@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import contextlib
 import sys
 from pathlib import Path
+from typing import Any
 
 from PySide6.QtCore import QCoreApplication
 from PySide6.QtWidgets import QApplication, QMainWindow
@@ -12,10 +14,12 @@ from sirius.adapters.audio.voice_libraries import hugging_face_offline
 from sirius.adapters.persistence.bootstrap import initialize_persistence
 from sirius.application.data_location import DataLocationUseCase, LocationFileCorruptedError
 from sirius.application.listening_loop import ListeningLoop
+from sirius.application.local_listening import LocalListening
 from sirius.composition_root import (
     ConversationDependencies,
     build_conversation_dependencies,
     chat_goes_through_ollama,
+    current_local_voice_settings,
     save_studio_voice,
 )
 from sirius.config.llm_provider_settings import (
@@ -221,6 +225,7 @@ def _start_with_resolved_path(data_dir: Path, windows: list[QMainWindow]) -> QMa
     app = QApplication.instance()
     if app is not None:
         _release_on_quit(app, dependencies)
+    _say_when_loading_the_character_voice(dependencies.local_listening)
     logger.info("Sirius iniciado")
 
     return _build_initial_window(dependencies, windows)
@@ -232,6 +237,28 @@ def _release_on_quit(app: QCoreApplication, dependencies: ConversationDependenci
     cerrarse una ventana: tras acabar un proyecto, la ventana siguiente sigue con la voz
     cargada, que la de personaje tarda en cargar."""
     app.aboutToQuit.connect(dependencies.local_listening.close)
+
+
+#: Lo que dice la consola justo antes de cargar la voz de personaje (ADR-253).
+CHARACTER_VOICE_LOADING = (
+    "Cargando la voz de personaje. Tarda un poco: hasta que acabe, la ventana de Sirius no "
+    "sale o no responde."
+)
+
+
+def _say_when_loading_the_character_voice(listening: LocalListening[Any]) -> None:
+    """Con la voz de personaje, la ventana no sale hasta que la carga: que la consola lo diga
+    antes de empezar, en vez de quedarse callada (ADR-253). La de Piper carga enseguida.
+
+    Una consola rota no puede dejarle sin oído: el aviso va justo antes de cargar la voz.
+    """
+
+    def tell() -> None:
+        if current_local_voice_settings().speaking_voice.is_character:
+            with contextlib.suppress(OSError):
+                print(CHARACTER_VOICE_LOADING, flush=True)
+
+    listening.before_loading_voice(tell)
 
 
 def _build_data_location_window(

@@ -1679,3 +1679,20 @@ defectos:
       - src/sirius/application/reply_judge.py
       - src/sirius/presentation/main_window.py
       - tests/unit/test_el_juez_no_frena_la_voz.py
+  # ADR-253: la prueba a ciegas y las preguntas trampa tiraban lo ya generado. Un fallo de un
+  # modelo en la respuesta 46 de 60, o un Esc sin querer, obligaba a pedir otra vez las 60, de
+  # 30 a 40 minutos de su tarde. Salió del repaso final del 17-10-2026, antes de sus pruebas.
+  - id: H-253
+    titulo: Un fallo de un modelo o un Esc sin querer tiraban las respuestas ya generadas de la prueba a ciegas
+    bloque: producto
+    gravedad: media
+    estado: cerrado
+    cerrado_por: 4e3b0e4f3f32ea41e1418760254f5abba9af3c44
+    pr: 698
+    adr: 253
+    incidencia: 696
+    ficheros:
+      - src/sirius/application/blind_test.py
+      - src/sirius/application/trick_questions.py
+      - src/sirius/presentation/blind_test_dialog.py
+      - src/sirius/presentation/trick_questions_dialog.py

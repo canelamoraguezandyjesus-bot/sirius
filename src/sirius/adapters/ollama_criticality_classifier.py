@@ -1,7 +1,7 @@
 """Local-only Ollama adapter for automatic criticality proposal (M21a,
 ADR-130).
 
-Points exclusively at ``localhost``, with no constructor parameter that could
+Points exclusively at ``127.0.0.1``, with no constructor parameter that could
 redirect it to a remote host, and fails open on every kind of problem —
 Ollama not installed, connection refused, timed out, or a response outside
 the closed vocabulary — by returning ``None``, never raising. The model is
@@ -16,10 +16,10 @@ with reasoning explicitly switched off (``think: false``), a closed JSON
 schema for the answer (``format``), a low temperature and ``keep_alive`` —
 not ``/api/generate`` with a free-text prompt, which with the default Qwen3
 model reasons for minutes and answers outside the vocabulary (ADR-125;
-CODEX-001 of incidencia #518). The request goes to an absolute localhost URL
+CODEX-001 of incidencia #518). The request goes to an absolute 127.0.0.1 URL
 with ``follow_redirects=False`` for the same reason the relevance filter
 does (CODEX-001 of PR #452): neither an injected client's ``base_url`` nor a
-307/308 from localhost may ever carry a memory's content off the machine.
+307/308 from 127.0.0.1 may ever carry a memory's content off the machine.
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ __all__ = ["OllamaCriticalityClassifierAdapter"]
 
 _logger = get_logger(__name__)
 
-_OLLAMA_LOCAL_BASE_URL = "http://localhost:11434"
+_OLLAMA_LOCAL_BASE_URL = "http://127.0.0.1:11434"
 #: Same ceiling as the relevance filter's client (ADR-125): the only value
 #: this repository has measured for this model with ``think: false``. The
 #: real cost of a criticality proposal is for the owner to measure in use
@@ -84,7 +84,7 @@ class OllamaCriticalityClassifierAdapter:
         self._model = model
         # ``client`` exists only as a test seam (an ``httpx.MockTransport``
         # never leaves the process); production code always falls back to a
-        # client hardcoded to localhost — no parameter anywhere accepts a
+        # client hardcoded to 127.0.0.1 — no parameter anywhere accepts a
         # remote host, and ``propose`` never trusts the client's ``base_url``.
         self._client = client or httpx.Client(
             base_url=_OLLAMA_LOCAL_BASE_URL, timeout=_REQUEST_TIMEOUT_SECONDS
@@ -94,9 +94,9 @@ class OllamaCriticalityClassifierAdapter:
         try:
             # Absolute URL, not a path relative to ``self._client``'s own
             # ``base_url``: an injected client's ``base_url`` must never be
-            # able to redirect the actual request away from localhost.
+            # able to redirect the actual request away from 127.0.0.1.
             # ``follow_redirects=False`` overrides any injected client that
-            # sets ``follow_redirects=True``: a 307/308 from localhost must
+            # sets ``follow_redirects=True``: a 307/308 from 127.0.0.1 must
             # never resend this request (and the content) to a remote host.
             response = self._client.post(
                 f"{_OLLAMA_LOCAL_BASE_URL}/api/chat",

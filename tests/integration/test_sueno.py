@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+import logging
+import threading
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from pathlib import Path
@@ -24,12 +26,13 @@ from sirius.adapters.persistence.sqlite_robot_conversation import (
     build_sqlite_robot_conversation_repository,
 )
 from sirius.adapters.persistence.sqlite_unit_of_work import build_sqlite_unit_of_work
-from sirius.application.dream import DreamService, parse_facts
+from sirius.application.dream import DreamService, LLMFactExtractor, parse_facts
 from sirius.application.facts import FactProposals
+from sirius.application.robot_conversation import LLMConversationSummarizer
 from sirius.domain.conversation import MessageRole
 from sirius.domain.facts import Certainty, ProposedFact
 from sirius.infrastructure.paths import resolve_paths
-from sirius.ports.llm import LLMProvider
+from sirius.ports.llm import LLMCancelled, LLMCompleted, LLMProvider, LLMRequest, LLMStreamEvent
 
 pytestmark = pytest.mark.integration
 
@@ -262,6 +265,131 @@ def test_parar_el_sueno_deja_los_dias_que_faltan_para_otra_vez(tmp_path: Path) -
 
     assert mundo.sueno.dream_pending(date.today(), should_stop=lambda: True) == 0
     assert mundo.resumidor.pedidos == []
+
+
+class _ModeloQueNoAcaba:
+    """Un modelo de este ordenador que no acaba de contestar hasta que le cortan la petición,
+    como el de Ollama desde ADR-252: cortada, la respuesta acaba en ``LLMCancelled``."""
+
+    def __init__(self) -> None:
+        self.pedidas: list[str] = []
+        self.cortadas: list[str] = []
+        self.preguntando = threading.Event()
+        self._cortes: dict[str, threading.Event] = {}
+        self._lock = threading.Lock()
+
+    def health_check(self) -> bool:
+        return True
+
+    def stream_response(self, request: LLMRequest) -> Iterator[LLMStreamEvent]:
+        with self._lock:
+            self.pedidas.append(request.operation_id)
+            corte = self._cortes.setdefault(request.operation_id, threading.Event())
+        self.preguntando.set()
+        corte.wait(timeout=10)
+        yield LLMCancelled(partial_text="")
+
+    def cancel(self, operation_id: str) -> None:
+        with self._lock:
+            self.cortadas.append(operation_id)
+            self._cortes.setdefault(operation_id, threading.Event()).set()
+
+
+class _ModeloQueContesta:
+    """Un modelo de este ordenador que contesta enseguida. Con ``al_contestar``, eso pasa
+    mientras contesta la primera petición."""
+
+    def __init__(self) -> None:
+        self.pedidas: list[str] = []
+        self.al_contestar: Callable[[], None] = lambda: None
+
+    def health_check(self) -> bool:
+        return True
+
+    def stream_response(self, request: LLMRequest) -> Iterator[LLMStreamEvent]:
+        self.pedidas.append(request.operation_id)
+        if len(self.pedidas) == 1:
+            self.al_contestar()
+        yield LLMCompleted(text="Fue a la obra.", input_tokens=1, output_tokens=1)
+
+    def cancel(self, operation_id: str) -> None:
+        del operation_id
+
+
+def _sueno_que_pregunta_a(tmp_path: Path, modelo: LLMProvider) -> _Mundo:
+    """El sueño con el resumidor y el extractor de verdad, que preguntan a ``modelo``."""
+    mundo = _mundo(tmp_path)
+    mundo.sueno = DreamService(
+        build_sqlite_conversation_repository(mundo.base),
+        build_sqlite_robot_conversation_repository(mundo.base),
+        LLMConversationSummarizer(),
+        LLMFactExtractor(),
+        FactProposals(build_sqlite_unit_of_work(mundo.base)),
+        build_sqlite_memory_repository(mundo.base),
+        build_sqlite_memory_suggestion_repository(mundo.base),
+        lambda: modelo,
+    )
+    return mundo
+
+
+def test_cortado_el_sueno_corta_su_peticion_no_hace_mas_y_el_dia_queda_por_sonar(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Al cerrar Sirius no se espera al modelo (ADR-253): se corta la petición en curso, no
+    sale ninguna más, ni la de los hechos de ese día ni las del día siguiente, y lo cortado
+    queda por soñar. El diario dice que se cortó, no que algo falló."""
+    caplog.set_level(logging.INFO)
+    modelo = _ModeloQueNoAcaba()
+    mundo = _sueno_que_pregunta_a(tmp_path, modelo)
+    mundo.di("Anteayer fui a la obra.", hace_dias=2)
+    mundo.di("Ayer fui al médico.", hace_dias=1)
+    sonados: list[int] = []
+    hilo = threading.Thread(
+        target=lambda: sonados.append(mundo.sueno.dream_pending(date.today())), daemon=True
+    )
+    hilo.start()
+    assert modelo.preguntando.wait(timeout=5)
+
+    mundo.sueno.cancel()
+    hilo.join(timeout=1)
+
+    assert not hilo.is_alive(), "el sueño seguiría esperando al modelo"
+    assert len(modelo.pedidas) == 1
+    assert modelo.cortadas == modelo.pedidas
+    assert mundo.sueno.latest_summary() is None
+    assert [r.getMessage() for r in caplog.records if r.name == "sirius.application.dream"] == [
+        "El sueño se cortó: ese día queda por soñar"
+    ]
+
+
+def test_cortado_cuando_ya_acababa_una_peticion_la_siguiente_no_sale(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """El corte llega tarde para el resumen, que ya estaba contestado, pero no para los
+    hechos de ese día: esa petición ya no sale, y el día queda por soñar (ADR-253)."""
+    caplog.set_level(logging.INFO)
+    modelo = _ModeloQueContesta()
+    mundo = _sueno_que_pregunta_a(tmp_path, modelo)
+    modelo.al_contestar = mundo.sueno.cancel
+    mundo.di("Ayer fui a la obra.", hace_dias=1)
+
+    mundo.sueno.dream_pending(date.today())
+
+    assert len(modelo.pedidas) == 1
+    assert mundo.sueno.latest_summary() is None
+    assert [r.getMessage() for r in caplog.records if r.name == "sirius.application.dream"] == [
+        "El sueño se cortó: ese día queda por soñar"
+    ]
+
+
+def test_cortar_sin_sueno_en_marcha_no_corta_el_siguiente(tmp_path: Path) -> None:
+    mundo = _mundo(tmp_path)
+    mundo.di("Ayer fui a la obra.", hace_dias=1)
+
+    mundo.sueno.cancel()
+
+    assert mundo.sueno.dream_pending(date.today()) == 1
+    assert mundo.sueno.latest_summary() == "Cableó un edificio."
 
 
 def test_lo_que_responde_el_modelo_se_lee_con_cuidado() -> None:

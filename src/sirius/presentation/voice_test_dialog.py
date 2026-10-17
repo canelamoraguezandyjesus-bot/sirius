@@ -9,6 +9,7 @@ nada se guarda hasta que él pulsa «Elegir…» (ADR-246).
 
 from __future__ import annotations
 
+import contextlib
 import threading
 from collections.abc import Callable
 from typing import Any
@@ -60,18 +61,33 @@ class VoiceTestWorker(QRunnable):
         """Que no pida más frases; la que está en marcha la termina."""
         self._stop.set()
 
+    def _progress(self, done: int, total: int) -> None:
+        # Como el aviso final: si Sirius se cerró, la hoja ya no existe y no hay a quién
+        # avisar; sin esto el diario diría que se interrumpió (#696).
+        with contextlib.suppress(RuntimeError):
+            self.signals.progress.emit(done, total)
+
     def run(self) -> None:
+        sheet: VoiceTestSheet[Any, Any] | None = None
+        failure: str | None
         try:
             sheet = self._use_case.prepare(
-                on_progress=self.signals.progress.emit, should_stop=self._stop.is_set
+                on_progress=self._progress, should_stop=self._stop.is_set
             )
         except VoiceTestError as exc:
-            self.signals.failed.emit(str(exc))
+            failure = str(exc)
         except Exception as exc:
             _logger.error("La prueba de voces se interrumpió (%s)", type(exc).__name__)
-            self.signals.failed.emit("La prueba de voces se interrumpió. Inténtalo de nuevo.")
+            failure = "La prueba de voces se interrumpió. Inténtalo de nuevo."
         else:
-            self.signals.succeeded.emit(sheet)
+            failure = None
+        # Si Sirius se cerró con las voces preparándose, la hoja ya no existe y no hay a quién
+        # avisar: sin esto salía una traza roja, «Signal source has been deleted» (#696).
+        with contextlib.suppress(RuntimeError):
+            if failure is not None:
+                self.signals.failed.emit(failure)
+            else:
+                self.signals.succeeded.emit(sheet)
 
 
 class VoiceTestDialog(QDialog):
@@ -84,12 +100,14 @@ class VoiceTestDialog(QDialog):
         show_warning: Callable[[str, str], None] | None = None,
         show_information: Callable[[str, str], None] | None = None,
         run_worker: Callable[[QRunnable], None] | None = None,
+        confirm: Callable[[str, str], bool] | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle("Prueba de voces")
         self._use_case = use_case
         self._show_warning = show_warning or self._warning_box
+        self._confirm = confirm or self._question_box
         self._show_information = show_information or self._information_box
         self._run_worker = run_worker or QThreadPool.globalInstance().start
         self._worker: VoiceTestWorker | None = None
@@ -244,6 +262,17 @@ class VoiceTestDialog(QDialog):
         texts.extend(button.text() for button in self.choose_buttons)
         return tuple(texts)
 
+    def reject(self) -> None:
+        """Esc o la cruz: mientras prepara las voces, o con ellas preparadas y sin elegir,
+        pregunta antes de cerrar, que se pierde lo hecho (incidencia #696)."""
+        working = self._worker is not None or self._sheet is not None
+        if working and not self._confirm(
+            "Cerrar la prueba de voces",
+            "Si la cierras ahora, se pierde lo que lleva hecho. ¿La cierras?",
+        ):
+            return
+        super().reject()
+
     def done(self, result: int) -> None:
         """Al cerrarse, a medias o no, para lo que se estuviera preparando y suelta las
         voces."""
@@ -255,6 +284,16 @@ class VoiceTestDialog(QDialog):
 
     def _warning_box(self, title: str, text: str) -> None:
         QMessageBox.warning(self, title, text)
+
+    def _question_box(self, title: str, text: str) -> bool:
+        answer = QMessageBox.question(
+            self,
+            title,
+            text,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        return answer == QMessageBox.StandardButton.Yes
 
     def _information_box(self, title: str, text: str) -> None:
         QMessageBox.information(self, title, text)

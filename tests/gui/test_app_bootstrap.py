@@ -11,6 +11,7 @@ or the real OpenAI API.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import cast
 
@@ -33,12 +34,19 @@ from sirius.adapters.secrets.fake import FakeSecretStore
 from sirius.application.data_location import DataLocationUseCase
 from sirius.application.validate_and_save_api_key import ValidateAndSaveApiKeyUseCase
 from sirius.composition_root import build_conversation_dependencies
+from sirius.config.local_voice import SPEAKING_VOICE_SETTING, SpeakingVoice
 from sirius.config.secrets_config import OPENAI_API_KEY_SECRET_NAME
-from sirius.config.settings import save_settings
+from sirius.config.settings import load_settings, save_settings
 from sirius.infrastructure.bootstrap_location_store import BootstrapLocationStore
 from sirius.infrastructure.data_path_validator import WindowsDataPathValidator
 from sirius.infrastructure.paths import resolve_paths
-from sirius.main import _build_first_window, _build_initial_window, _build_onboarding_window
+from sirius.main import (
+    CHARACTER_VOICE_LOADING,
+    _build_first_window,
+    _build_initial_window,
+    _build_onboarding_window,
+    _say_when_loading_the_character_voice,
+)
 from sirius.presentation.data_location_window import RECOVERY_INTRO_TEXT, DataLocationWindow
 from sirius.presentation.initial_project_window import InitialProjectWindow
 from sirius.presentation.onboarding_window import OnboardingWindow
@@ -318,6 +326,72 @@ def test_the_real_app_releases_the_voice_when_sirius_quits(
     ((app, oido),) = al_salir
     assert app is QApplication.instance()
     assert oido is not None
+
+
+def _con_la_voz(voz: SpeakingVoice) -> None:
+    ajustes = dict(load_settings())
+    ajustes[SPEAKING_VOICE_SETTING] = voz.value
+    save_settings(ajustes)
+
+
+@pytest.mark.gui
+def test_la_consola_dice_que_carga_la_voz_de_personaje_antes_de_abrir_la_ventana(
+    qtbot: QtBot, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # ADR-253: con ella, la ventana no sale hasta que la carga, y la consola callaba.
+    monkeypatch.setattr(
+        "sirius.composition_root.build_keyring_secret_store", lambda: FakeSecretStore()
+    )
+    initialize_persistence(resolve_paths())
+    _con_la_voz(SpeakingVoice.CHARACTER)
+
+    def la_ventana_carga_la_voz(dependencies: object, windows: object) -> QMainWindow:
+        del windows
+        # Lo primero que hace al abrirse: empezar a cargarla.
+        dependencies.local_listening._before_loading_voice()  # type: ignore[attr-defined]
+        return QMainWindow()
+
+    monkeypatch.setattr("sirius.main._build_initial_window", la_ventana_carga_la_voz)
+
+    window = _build_first_window(_location_use_case(), [])
+    qtbot.addWidget(window)
+
+    assert capsys.readouterr().out == CHARACTER_VOICE_LOADING + "\n"
+
+
+class _Oido:
+    def __init__(self) -> None:
+        self.avisa: list[Callable[[], None]] = []
+
+    def before_loading_voice(self, tell: Callable[[], None]) -> None:
+        self.avisa.append(tell)
+
+
+def test_con_una_voz_de_piper_la_consola_no_dice_nada(capsys: pytest.CaptureFixture[str]) -> None:
+    initialize_persistence(resolve_paths())
+    _con_la_voz(SpeakingVoice.DAVEFX)
+    oido = _Oido()
+    _say_when_loading_the_character_voice(oido)  # type: ignore[arg-type]
+
+    (avisa,) = oido.avisa
+    avisa()
+
+    assert capsys.readouterr().out == ""
+
+
+def test_una_consola_rota_no_deja_sin_oido(monkeypatch: pytest.MonkeyPatch) -> None:
+    initialize_persistence(resolve_paths())
+    _con_la_voz(SpeakingVoice.CHARACTER)
+    oido = _Oido()
+    _say_when_loading_the_character_voice(oido)  # type: ignore[arg-type]
+
+    def rota(*args: object, **kwargs: object) -> None:
+        del args, kwargs
+        raise BrokenPipeError
+
+    monkeypatch.setattr("builtins.print", rota)
+    (avisa,) = oido.avisa
+    avisa()
 
 
 @pytest.mark.gui
