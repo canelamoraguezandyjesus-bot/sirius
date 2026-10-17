@@ -129,13 +129,14 @@ de OpenAI. Al escribir el código se decidió además:
   de la charla.
 - **El proveedor no se puede construir sin tope**: si nadie se lo da, lleva el de serie.
 - **Una respuesta cortada por el tope** acaba como hoy cualquier otra: con lo escrito.
-- **El diario** apunta, cuando Ollama contesta con un error, el código HTTP y su texto; con
-  un error a mitad de respuesta, su texto; y con un fallo de red, antes de contestar o a
-  mitad de respuesta, cuál fue. El texto va en una línea, recortado a 300 caracteres, y lo
-  que repita de lo que se le pidió al modelo se tacha antes de apuntarlo, línea a línea de
-  las instrucciones y de lo que dijo él: las de 12 caracteres o más donde aparezcan, y las
-  más cortas solo como frase entera, para no tachar trozos de las palabras del error. El
-  fallo de red a mitad de respuesta y las líneas cortas, desde la ronda 1 de Codex (abajo).
+- **El diario** apunta, cuando Ollama contesta con un error, el código HTTP; con un error a
+  mitad de respuesta, que lo hubo; y con un fallo de red, antes de contestar o a mitad de
+  respuesta, su clase. De lo que dijo Ollama, solo una categoría de una lista cerrada de
+  firmas de sus errores, buscadas sin distinguir mayúsculas: «sin memoria», «no admite
+  think», «modelo no encontrado», «cancelado» o «el proceso del modelo se cayó», y «otro»
+  si no encaja ninguna. La memoria va antes que el proceso caído, porque dice por qué se
+  cayó. Nunca su texto ni el de la excepción. Así desde la ronda 2 de Codex (abajo): antes
+  apuntaba el texto y tachaba la charla, y en dos rondas se coló.
 
 ## Comprobación que la sostiene
 
@@ -146,18 +147,16 @@ de OpenAI. Al escribir el código se decidió además:
   arreglo, las tres piden el de los ajustes, 5 en la prueba, y acaban en él.
 - **El proveedor** (`tests/unit/test_ollama_chat_provider.py`): pide el tope que le dan y
   4 096 si no le dan ninguno; con el Ollama que no para, acaba en el tope; una respuesta
-  cortada por él acaba con lo escrito; y el diario dice el código y el texto de Ollama, el
-  error a mitad de respuesta, el fallo de red y cuál fue, tacha lo que repita de la charla
-  y recorta lo largo.
-- **Mutación**: 9, caen las 9: sin `num_predict` en la petición; la charla, el juez y la
-  prueba a ciegas, cada uno sin el tope de sus ajustes; el diario sin tachar, sin recortar,
-  y sin el texto en cada uno de sus tres casos.
+  cortada por él acaba con lo escrito; y el diario dice el código, la clase o la
+  categoría, y nada de lo que dijo Ollama ni de la charla (ronda 2, abajo).
+- **Mutación**: del tope, 4, caen las 4: sin `num_predict` en la petición, y la charla, el
+  juez y la prueba a ciegas, cada uno sin el tope de sus ajustes. Las del diario, las de la
+  ronda 2, abajo.
 - **Las pruebas que tocan Ollama, sus ajustes y quien los usa**, 40 ficheros: 1 057 en
   verde, 2 omitidas y 2 `xfail`.
 - **ruff** limpio; **mypy** sin errores en 734 ficheros.
-- **La batería entera**, con la ronda 1 de Codex, sobre `76daa2dc`, el árbol final de la
-  PR: 8 869 en verde, 14 omitidas y 2 `xfail`, ningún fallo, en 23 min 32 s. Antes de la
-  ronda, sobre `401ea5a1`: 8 847 en verde, en 23 min 41 s.
+- **La batería entera**, con la ronda 2 de Codex: se escribe la última. Con la ronda 1,
+  sobre `76daa2dc`: 8 869 en verde, 14 omitidas y 2 `xfail`, ningún fallo, en 23 min 32 s.
 
 ## Consecuencias
 
@@ -166,14 +165,11 @@ de OpenAI. Al escribir el código se decidió además:
 - **Con 4 096 tokens, una respuesta puede tardar minutos** con un modelo lento, pero acaba.
 - **Si él baja el «Máximo de tokens de salida»**, también se cortan antes las respuestas de
   Ollama, como pasaba con OpenAI.
-- **Su diario dirá por qué falla Ollama la próxima vez**, si el diario apunta: por eso va en
-  la misma PR que ADR-249.
-- **Lo que Ollama repita de la charla en un error se tacha**, cada línea entera: las de 12
-  caracteres o más donde aparezcan, y las más cortas cuando salen como frase entera. No
-  garantiza tachar un eco parcial de una línea: si Ollama repite solo un trozo, ese trozo
-  llega al diario.
-- **Una línea corta de la charla que sea también una palabra del error** se tacha en él
-  aunque Ollama no la repitiera: un «Hola» suyo tacha cualquier «Hola» suelto del error.
+- **Su diario dirá qué clase de fallo de Ollama fue la próxima vez**, si el diario apunta:
+  por eso va en la misma PR que ADR-249.
+- **El diario no dice qué dijo Ollama**: solo el código, la clase o la categoría. Un error
+  que no encaja en la lista sale como «otro», y para saber más hay que mirar el diario del
+  propio Ollama. Una firma nueva se añade a la lista, nunca el texto.
 
 ## Alternativas descartadas y por qué
 
@@ -189,12 +185,24 @@ arreglada: las pruebas del diario leían el registro de la raíz, que no ve lo q
 `sirius` cuando ya se configuró su diario en el mismo proceso; leen el registrador del
 conector.
 
+**Ronda 2.** Antes de empujar se releyó el diff contra el código y su nota. Encontró una
+cosa en la forma de comprobar, arreglada: el lanzador de mutaciones podía leer el bytecode
+de la mutación anterior, si las dos ocupaban lo mismo y se escribían en el mismo segundo, y
+así una mutación de la ronda 2 cayó por la prueba de otra. Ahora cada mutación usa su propia
+caché, y se volvieron a pasar con ella las de las hojas y la lista de modelos de ADR-247:
+siguen cayendo todas. Las cifras de mutación de antes de este arreglo no se volvieron a
+medir.
+
 ## La lección
 
 - familia: `pieza-correcta-a-la-que-no-llama-quien-la-necesita`
 - sin esto se repetiría: un proveedor nuevo sin las salvaguardas del de antes. El tope de
   salida de OpenAI existía, y el de Ollama, escrito después, no lo leía: sin él, una
-  respuesta podía no acabar nunca (H-248).
+  respuesta podía no acabar nunca (H-248). Y en este mismo ADR, en dos rondas de Codex: el
+  diario apuntaba el texto de Ollama y tachaba la charla, y la charla se coló, primero en
+  una línea corta y después en minúsculas o a trozos. Lo que no debe llevar la charla se
+  escribe solo con lo permitido, nunca tachando lo prohibido; lo miran las pruebas del
+  diario en `tests/unit/test_ollama_chat_provider.py`.
 - lo hace cumplir: `tests/integration/test_tope_de_salida_de_ollama.py`
 
 ## Revisión externa
@@ -222,3 +230,23 @@ diario diga lo que dijo Ollama sin nada de la charla.
   usa, 48 ficheros: 1 211 en verde, 2 omitidas y 2 `xfail`. Los dos hallazgos son de la
   misma familia: el diario prometía más de lo que el código cubría. Si la ronda 2 trae otro
   de ella, se para a buscar la raíz.
+- **Ronda 2, sobre `efda01af`**: dos hallazgos, los dos ciertos, verificados contra el
+  código antes de tocar nada. El de este ADR:
+  - **P1, la charla sigue entrando en el diario** si Ollama repite «pin 1234» en
+    minúsculas, o solo «1234». Es la misma familia que el P1 de la ronda 1, el diario con
+    texto de la charla, y con dos rondas de la misma familia no se parcheó más (ADR-001):
+    se buscó la raíz, con su nota de arranque, arriba. La raíz es apuntar el texto libre
+    que devuelve Ollama y tacharlo después: tachar no es un límite seguro, porque lo que
+    repite puede venir en cualquier forma. La decisión nueva, arriba: el diario no lleva
+    nunca el texto de Ollama ni el de la excepción, solo el código HTTP, la clase y una
+    categoría de una lista cerrada. El tachado se fue.
+
+  Desde esta ronda, lo que se mira del diario es que no lleve nada de lo que dijo Ollama
+  ni de la charla. Las pruebas del diario se rehicieron: con el código de la ronda fallaban
+  28. «PIN 1234», «pin 1234», «1234», un eco en mayúsculas y otro a trozos llegaban al
+  diario, en la respuesta con error y a mitad de respuesta; ninguna categoría salía; y el
+  fallo de red llevaba su texto. Con el arreglo, cada línea es solo lo permitido.
+  Mutación: 16, caen las 16: apuntar el texto en cada uno de los cinco sitios, distinguir
+  mayúsculas, quitar cada una de las siete firmas, conformarse con un trozo de una firma de
+  dos, poner el proceso caído antes que la memoria y dejar salir tal cual lo que no
+  encaja. El otro hallazgo, la lista de modelos en el hilo de la ventana, va en ADR-247.

@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import json
 import random
+import threading
+import time
 from collections.abc import Iterable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -20,7 +22,7 @@ from _hojas_en_su_pantalla import (
     mira_que_es_una_ventana_que_cabe,
     se_ve_en,
 )
-from PySide6.QtCore import QRunnable, Qt
+from PySide6.QtCore import QRunnable, Qt, QThreadPool
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QAbstractButton, QLabel, QMainWindow, QScrollArea
 from pytestqt.qtbot import QtBot
@@ -294,6 +296,7 @@ def test_cerrar_a_medias_para_las_preguntas_y_no_avisa_de_nada(qtbot: QtBot) -> 
         run_worker=pendientes.append,
     )
     qtbot.addWidget(dialogo)
+    pendientes.pop(0).run()  # la lista de modelos
     _marca(dialogo, "gemma-y", "qwen-x")
     dialogo.start_button.click()
 
@@ -350,7 +353,9 @@ def test_con_modelos_de_huellas_en_ollama_solo_ofrece_los_que_conversan(
         ollama_transport=httpx.MockTransport(_ollama_con_modelos_de_huellas),
     )
     try:
-        dialogo = BlindTestDialog(dependencias.blind_test_use_case, run_worker=lambda _: None)
+        dialogo = BlindTestDialog(
+            dependencias.blind_test_use_case, run_worker=lambda trabajo: trabajo.run()
+        )
         qtbot.addWidget(dialogo)
 
         assert [check.text() for check in dialogo.model_checks] == [
@@ -362,3 +367,73 @@ def test_con_modelos_de_huellas_en_ollama_solo_ofrece_los_que_conversan(
         assert "qwen3-embedding:0.6b: no conversa" in fuera
     finally:
         dependencias.close_database_connections()
+
+
+def test_la_hoja_se_abre_sin_esperar_a_que_ollama_diga_que_modelos_tiene(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    # Ronda 2 de Codex: la lista se pedía en el hilo de la ventana, con un /api/show por
+    # modelo de hasta diez segundos cada uno (ADR-247).
+    suelta = threading.Event()
+
+    def ollama_que_tarda(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/show":
+            suelta.wait(timeout=2)
+        return _ollama_con_modelos_de_huellas(request)
+
+    save_settings({"llm_provider": "ollama", "ollama_chat_model": "gemma3:4b"})
+    rutas = resolve_paths()
+    initialize_persistence(rutas)
+    dependencias = build_conversation_dependencies(
+        rutas.data_dir / "sirius.db",
+        tmp_path / "copias",
+        secret_store=FakeSecretStore(),
+        ollama_transport=httpx.MockTransport(ollama_que_tarda),
+    )
+    try:
+        antes = time.monotonic()
+        dialogo = BlindTestDialog(dependencias.blind_test_use_case)
+        qtbot.addWidget(dialogo)
+
+        assert time.monotonic() - antes < 1
+        assert dialogo.models_status.text() == "Preguntando a Ollama qué modelos tiene…"
+        assert not dialogo.start_button.isEnabled()
+        suelta.set()
+        qtbot.waitUntil(lambda: len(dialogo.model_checks) == 2, timeout=5000)
+        assert dialogo.models_status.text() == ""
+        _marca(dialogo, "gemma3:4b", "qwen3:4b-instruct")
+        assert dialogo.start_button.isEnabled()
+    finally:
+        suelta.set()
+        QThreadPool.globalInstance().waitForDone(5000)
+        dependencias.close_database_connections()
+
+
+def test_si_se_cierra_antes_de_saber_que_modelos_hay_la_lista_se_descarta(qtbot: QtBot) -> None:
+    entorno = _Entorno(instalados=("gemma-y", "qwen-x"))
+    pendientes: list[QRunnable] = []
+    dialogo = BlindTestDialog(entorno.caso, run_worker=pendientes.append)
+    qtbot.addWidget(dialogo)
+
+    dialogo.reject()
+    [lista] = pendientes
+    lista.run()
+
+    assert dialogo.model_checks == []
+
+
+def test_si_preguntar_la_lista_se_rompe_lo_dice_sin_romper_la_hoja(qtbot: QtBot) -> None:
+    entorno = _Entorno(instalados=("gemma-y", "qwen-x"))
+
+    def se_rompe() -> tuple[str, ...]:
+        msg = "algo inesperado"
+        raise RuntimeError(msg)
+
+    entorno.caso._list_models = se_rompe
+    dialogo = entorno.ventana(qtbot)
+
+    assert dialogo.models_status.text() == (
+        "No se pudo preguntar a Ollama qué modelos tiene. Vuelve a abrir la prueba."
+    )
+    assert dialogo.model_checks == []
+    assert not dialogo.start_button.isEnabled()

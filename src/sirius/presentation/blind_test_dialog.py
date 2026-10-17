@@ -36,11 +36,15 @@ from sirius.domain.blind_test import (
     BlindTestError,
     BlindTestResult,
     BlindTestSheet,
+    OfferedModels,
 )
 from sirius.infrastructure.logging import get_logger
 from sirius.presentation.sheet_window import fit_as_sheet, scrollable
 
 _logger = get_logger(__name__)
+
+#: Lo que dice la hoja mientras Ollama dice qué modelos tiene y qué sabe hacer cada uno.
+ASKING_FOR_MODELS = "Preguntando a Ollama qué modelos tiene…"
 
 
 class BlindTestWorkerSignals(QObject):
@@ -75,6 +79,29 @@ class BlindTestWorker(QRunnable):
             self.signals.failed.emit("La prueba a ciegas se interrumpió. Inténtalo de nuevo.")
         else:
             self.signals.succeeded.emit(sheet)
+
+
+class BlindTestModelsWorker(QRunnable):
+    """Pregunta a Ollama qué modelos tiene fuera del hilo de la ventana: por cada uno
+    pregunta también qué sabe hacer, y eso puede tardar (ronda 2 de Codex de ADR-247)."""
+
+    def __init__(self, use_case: BlindTestUseCase) -> None:
+        super().__init__()
+        self._use_case = use_case
+        self.signals = BlindTestWorkerSignals()
+
+    def run(self) -> None:
+        try:
+            offered = self._use_case.installed_models()
+        except BlindTestError as exc:
+            self.signals.failed.emit(str(exc))
+        except Exception as exc:
+            _logger.error("No se pudo saber qué modelos tiene Ollama (%s)", type(exc).__name__)
+            self.signals.failed.emit(
+                "No se pudo preguntar a Ollama qué modelos tiene. Vuelve a abrir la prueba."
+            )
+        else:
+            self.signals.succeeded.emit(offered)
 
 
 class _AnswerText(QLabel):
@@ -117,6 +144,7 @@ class BlindTestDialog(QDialog):
         self._show_information = show_information or self._information_box
         self._run_worker = run_worker or QThreadPool.globalInstance().start
         self._worker: BlindTestWorker | None = None
+        self._models_worker: BlindTestModelsWorker | None = None
         self._sheet: BlindTestSheet | None = None
         self._choices: dict[int, str] = {}
         self._index = 0
@@ -161,11 +189,27 @@ class BlindTestDialog(QDialog):
         return page
 
     def _load_models(self) -> None:
-        try:
-            offered = self._use_case.installed_models()
-        except BlindTestError as exc:
-            self.models_status.setText(str(exc))
+        """Pide la lista fuera del hilo de la ventana: la hoja se ve al momento, y
+        «Empezar» espera a que llegue."""
+        self.models_status.setText(ASKING_FOR_MODELS)
+        worker = BlindTestModelsWorker(self._use_case)
+        worker.signals.succeeded.connect(self._on_models)
+        worker.signals.failed.connect(self._on_models_failed)
+        self._models_worker = worker
+        self._run_worker(worker)
+
+    def _on_models_failed(self, message: str) -> None:
+        if self._models_worker is None:  # la ventana ya se cerró
             return
+        self._models_worker = None
+        self.models_status.setText(message)
+
+    def _on_models(self, offered: object) -> None:
+        if self._models_worker is None:  # la ventana ya se cerró: la lista se descarta
+            return
+        self._models_worker = None
+        assert isinstance(offered, OfferedModels)
+        self.models_status.setText("")
         if len(offered.chat) < MIN_MODELS:
             self.models_status.setText(
                 "Ollama tiene menos de dos modelos que conversan: hacen falta dos o tres "
@@ -373,10 +417,12 @@ class BlindTestDialog(QDialog):
         self.accept()
 
     def done(self, result: int) -> None:
-        """Al cerrarse, a medias o no, para las preguntas pendientes."""
+        """Al cerrarse, a medias o no, para las preguntas pendientes, y la lista de modelos
+        que llegue después se descarta."""
         if self._worker is not None:
             self._worker.stop()
             self._worker = None
+        self._models_worker = None
         super().done(result)
 
     def _warning_box(self, title: str, text: str) -> None:
