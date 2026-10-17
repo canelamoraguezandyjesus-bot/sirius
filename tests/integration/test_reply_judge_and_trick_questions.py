@@ -95,6 +95,9 @@ class _Juez:
         self.juzgadas.append((bad_idea, reply))
         return self.veredicto
 
+    def cancel(self) -> None:
+        pass
+
 
 def _sirius(
     tmp_path: Path,

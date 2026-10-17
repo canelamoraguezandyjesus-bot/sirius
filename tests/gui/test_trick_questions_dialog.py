@@ -79,6 +79,9 @@ class _Juez:
         del bad_idea, reply
         return TrickVerdict.DISCREPA
 
+    def cancel(self) -> None:
+        pass
+
 
 def _caso(*, falla: bool = False, local: bool = True, larga: bool = False) -> TrickQuestionsUseCase:
     modelo = _Modelo(falla=falla, larga=larga)

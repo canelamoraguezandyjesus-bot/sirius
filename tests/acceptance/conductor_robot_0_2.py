@@ -258,6 +258,9 @@ class _JuezEnchufado:
         del bad_idea
         return TrickVerdict(self._juez.discrepa(reply))
 
+    def cancel(self) -> None:
+        pass
+
 
 class _ExtractorEnchufado:
     """Enchufa un ``ExtractorDeMentira`` donde Sirius saca hechos al soñar."""

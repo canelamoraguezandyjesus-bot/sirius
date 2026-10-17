@@ -21,6 +21,11 @@ Lo que garantiza por construcción:
   no deja de llegar texto, el tope de lectura no salta nunca. Se pide uno,
   ``num_predict``, el «Máximo de tokens de salida» de los ajustes, 4.096 si no
   dicen otro (ADR-248). Una respuesta cortada por él acaba como cualquier otra.
+- **Cortar es al momento.** Mientras Ollama lee la pregunta no envía nada, y
+  un corte que esperara al siguiente trozo esperaría a que acabara de leerla.
+  ``cancel`` cuelga la conexión de esa petición, y Ollama deja de trabajar en
+  ella en cuanto ve que se ha ido: un turno de voz no espera a la nota del juez
+  (ADR-252). Por eso cada petición abre su conexión y la cierra al acabar.
 - **Ni el razonamiento interno ni la sugerencia de recuerdo llegan al
   propietario.** Los modelos que «piensan» escriben ``<think>…</think>`` antes
   de contestar, y ``render_instructions()`` pide la sugerencia detrás de un
@@ -34,9 +39,11 @@ Lo que garantiza por construcción:
 
 from __future__ import annotations
 
+import contextlib
 import json
+import socket
 import threading
-from collections.abc import Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from typing import Any
 
 import httpx
@@ -115,6 +122,10 @@ _TIMEOUT = httpx.Timeout(connect=5.0, read=180.0, write=30.0, pool=5.0)
 #: Decir qué sabe hacer un modelo no lo carga: si en diez segundos Ollama no lo dice, ese
 #: modelo se queda fuera de la prueba a ciegas, y la ventana no espera más.
 _SHOW_TIMEOUT = httpx.Timeout(10.0)
+
+#: Cada petición abre su conexión y la cierra al acabar: así se sabe cuál colgar al
+#: cortarla (ADR-252). A este ordenador, abrir una cuesta nada.
+_ONE_CONNECTION_PER_REQUEST = httpx.Limits(max_keepalive_connections=0)
 
 _SAFE_MESSAGES: dict[LLMErrorKind, str] = {
     LLMErrorKind.CONNECTION: "No se pudo contactar con Ollama en este ordenador. ¿Está abierto?",
@@ -217,8 +228,15 @@ class OllamaChatProvider:
         self._model = model
         self._num_ctx = num_ctx
         self._num_predict = num_predict
-        self._client = httpx.Client(timeout=_TIMEOUT, transport=transport, trust_env=False)
+        self._client = httpx.Client(
+            timeout=_TIMEOUT,
+            limits=_ONE_CONNECTION_PER_REQUEST,
+            transport=transport,
+            trust_env=False,
+        )
         self._cancelled_operations: set[str] = set()
+        #: La conexión de cada petición en curso, para colgarla si se corta.
+        self._connections: dict[str, socket.socket] = {}
         self._lock = threading.Lock()
 
     @property
@@ -231,9 +249,36 @@ class OllamaChatProvider:
         return bool(self._model)
 
     def cancel(self, operation_id: str) -> None:
-        """Pide cortar la respuesta en curso. Se puede llamar más de una vez."""
+        """Corta la respuesta en curso, y si ya está con Ollama, cuelga su conexión: no
+        espera al siguiente trozo (ADR-252). Se puede llamar más de una vez."""
         with self._lock:
             self._cancelled_operations.add(operation_id)
+            connection = self._connections.get(operation_id)
+        if connection is not None:
+            _hang_up(connection)
+
+    def _note_connection(self, operation_id: str) -> Callable[[str, dict[str, Any]], None]:
+        """Apunta la conexión que abre la petición ``operation_id``, para poder colgarla.
+
+        Lo avisa httpx al conectar (su extensión ``trace``). Si la cortaron mientras
+        conectaba, la cuelga ya.
+        """
+
+        def note(event: str, info: dict[str, Any]) -> None:
+            if event != "connection.connect_tcp.complete":
+                return
+            stream = info.get("return_value")
+            get_extra_info = getattr(stream, "get_extra_info", None)
+            connection = get_extra_info("socket") if callable(get_extra_info) else None
+            if not isinstance(connection, socket.socket):
+                return
+            with self._lock:
+                self._connections[operation_id] = connection
+                cancelled = operation_id in self._cancelled_operations
+            if cancelled:
+                _hang_up(connection)
+
+        return note
 
     def close(self) -> None:
         self._client.close()
@@ -243,7 +288,11 @@ class OllamaChatProvider:
             return operation_id in self._cancelled_operations
 
     def _body(self, request: LLMRequest) -> dict[str, Any]:
-        return {
+        # Una petición puede pedir menos que el tope de los ajustes, nunca más (ADR-252).
+        num_predict = self._num_predict
+        if request.max_output_tokens is not None:
+            num_predict = min(num_predict, request.max_output_tokens)
+        body: dict[str, Any] = {
             "model": self._model,
             "messages": [
                 {"role": "system", "content": request.instructions},
@@ -251,8 +300,12 @@ class OllamaChatProvider:
             ],
             "stream": True,
             "keep_alive": _KEEP_ALIVE,
-            "options": {"num_ctx": self._num_ctx, "num_predict": self._num_predict},
+            "options": {"num_ctx": self._num_ctx, "num_predict": num_predict},
         }
+        if not request.may_think:
+            # Solo se apaga: pedir que piense a un modelo que no piensa es un error de Ollama.
+            body["think"] = False
+        return body
 
     def stream_response(self, request: LLMRequest) -> Iterable[LLMStreamEvent]:
         try:
@@ -260,7 +313,12 @@ class OllamaChatProvider:
                 yield LLMCancelled(partial_text="")
                 return
             try:
-                with self._client.stream("POST", OLLAMA_CHAT_URL, json=self._body(request)) as r:
+                with self._client.stream(
+                    "POST",
+                    OLLAMA_CHAT_URL,
+                    json=self._body(request),
+                    extensions={"trace": self._note_connection(request.operation_id)},
+                ) as r:
                     if r.status_code == httpx.codes.NOT_FOUND:
                         _logger.error(
                             "Ollama no tiene el modelo de la charla (%s): %s",
@@ -285,6 +343,10 @@ class OllamaChatProvider:
                 _logger.error("Operación %s: Ollama tardó demasiado", request.operation_id)
                 yield _error(LLMErrorKind.TIMEOUT)
             except httpx.HTTPError as exc:
+                if self._is_cancelled(request.operation_id):
+                    # La colgó cancel(): no es un fallo, es el corte que se pidió.
+                    yield LLMCancelled(partial_text="")
+                    return
                 _logger.error(
                     "Operación %s: fallo de red con Ollama (%s)",
                     request.operation_id,
@@ -294,6 +356,7 @@ class OllamaChatProvider:
         finally:
             with self._lock:
                 self._cancelled_operations.discard(request.operation_id)
+                self._connections.pop(request.operation_id, None)
 
     def _consume(self, request: LLMRequest, lines: Iterator[str]) -> Iterable[LLMStreamEvent]:
         accumulated: list[str] = []
@@ -361,6 +424,10 @@ class OllamaChatProvider:
                     )
                     return
         except httpx.HTTPError as exc:
+            if self._is_cancelled(request.operation_id):
+                # La colgó cancel(): no es un fallo, es el corte que se pidió (ADR-252).
+                yield LLMCancelled(partial_text=partial())
+                return
             # La rama de fuera, en ``stream_response``, no llega a verlo (ronda 1 de ADR-248).
             _logger.error(
                 "Operación %s: fallo de red con Ollama a mitad de respuesta (%s)",
@@ -375,6 +442,13 @@ class OllamaChatProvider:
 
 def _count(value: object) -> int:
     return value if isinstance(value, int) and value >= 0 else 0
+
+
+def _hang_up(connection: socket.socket) -> None:
+    """Cuelga una conexión desde otro hilo: el que lee de ella deja de esperar al
+    momento, y Ollama ve que se ha ido. Si ya estaba cerrada, no pasa nada."""
+    with contextlib.suppress(OSError):
+        connection.shutdown(socket.SHUT_RDWR)
 
 
 class OllamaNotAvailableError(RuntimeError):
