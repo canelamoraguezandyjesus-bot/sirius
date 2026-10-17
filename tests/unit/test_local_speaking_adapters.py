@@ -387,9 +387,16 @@ def test_cuenta_lo_que_empieza_a_sonar_y_no_lo_que_tira_al_callar() -> None:
 class _Eco:
     def __init__(self) -> None:
         self.oido: list[tuple[bytes, float]] = []
+        #: El flujo del altavoz, para ver cómo estaba al soltar la APM.
+        self.flujo: _Flujo | None = None
+        #: Si el flujo seguía arrancado cuando se soltó la APM; ``None``, sin soltar.
+        self.soltada_con_el_flujo_arrancado: bool | None = None
 
     def played(self, block: bytes, at: float) -> None:
         self.oido.append((block, at))
+
+    def close(self) -> None:
+        self.soltada_con_el_flujo_arrancado = self.flujo is not None and self.flujo.arrancado
 
 
 def test_le_da_a_la_cancelacion_de_eco_cada_bloque_con_la_hora_a_la_que_se_oye() -> None:
@@ -542,11 +549,24 @@ def test_soltar_el_altavoz_tira_lo_que_esperaba_y_cierra_el_flujo() -> None:
     assert not altavoz.playing
 
 
+def test_soltar_el_altavoz_suelta_la_apm_con_el_flujo_ya_parado() -> None:
+    sounddevice = _SoundDevice()
+    eco = _Eco()
+    altavoz = SoundDeviceSpeaker(sounddevice, _FRECUENCIA, clock=_Reloj(), echo=eco)  # type: ignore[arg-type]
+    eco.flujo = sounddevice.flujos[0]
+
+    altavoz.close()
+
+    # Parado el flujo, PortAudio ya no le da lo que suena a la APM que se suelta.
+    assert eco.soltada_con_el_flujo_arrancado is False
+
+
 def test_soltar_un_altavoz_que_no_se_deja_cerrar_no_falla_y_lo_apunta(
     caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     sounddevice = _SoundDevice()
-    altavoz = SoundDeviceSpeaker(sounddevice, _FRECUENCIA, clock=_Reloj())
+    eco = _Eco()
+    altavoz = SoundDeviceSpeaker(sounddevice, _FRECUENCIA, clock=_Reloj(), echo=eco)  # type: ignore[arg-type]
 
     def no_se_deja() -> None:
         raise _PortAudioError("Stream is not open")
@@ -560,3 +580,5 @@ def test_soltar_un_altavoz_que_no_se_deja_cerrar_no_falla_y_lo_apunta(
 
     assert "No se ha podido parar el altavoz: Stream is not open" in caplog.text
     assert "No se ha podido cerrar el altavoz: Stream is not open" in caplog.text
+    # La APM se suelta igual: lo que suene después ya no se le da (ADR-252).
+    assert eco.soltada_con_el_flujo_arrancado is not None

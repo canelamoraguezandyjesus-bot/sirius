@@ -16,6 +16,10 @@ El altavoz suena siempre, silencio incluido, y con el micro cerrado nadie limpia
 suena se guardan los últimos ``RENDER_KEPT_SECONDS``, y lo que acabó de sonar más de
 ``ECHO_REACH_SECONDS`` antes de lo captado se tira sin dárselo a la APM. Si no, tras una
 hora callado, el primer trozo esperaría a que la APM tragara la hora entera.
+
+Al cerrarse el altavoz, el cancelador suelta la APM (``close``). Si siguiera viva hasta que
+Python se cierra, livekit pintaría al salir un error suyo en rojo, el de ``FfiHandle``,
+porque para entonces ya ha cerrado su lado (ADR-252).
 """
 
 from __future__ import annotations
@@ -86,7 +90,8 @@ class WebRtcEchoCanceller:
         render_rate: int,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
-        self._apm = apm
+        #: ``None`` desde ``close``: ya no aparta nada.
+        self._apm: Any = apm
         self._frame = frame
         self._render_rate = render_rate
         self._clock = clock
@@ -102,32 +107,45 @@ class WebRtcEchoCanceller:
         #: Hasta cuándo se oye lo último que sonó con voz.
         self._sounding_until = float("-inf")
 
+    def close(self) -> None:
+        """Suelta la APM: desde aquí lo que suena no se apunta y lo captado sale tal cual.
+        Lo llama el altavoz al cerrarse; se puede llamar más de una vez."""
+        with self._lock:
+            self._apm = None
+            self._played.clear()
+
     def played(self, block: bytes, at: float) -> None:
         """El altavoz da ``block`` a PortAudio, y se oirá a la hora ``at``. No espera, y de
         lo que nadie ha limpiado guarda solo lo de los últimos ``RENDER_KEPT_SECONDS``."""
         with self._lock:
+            if self._apm is None:
+                return
             self._played.append((at, block))
             while self._played[0][0] < at - RENDER_KEPT_SECONDS:
                 self._played.popleft()
 
     def clean(self, captured: Captured[bytes]) -> Cleaned[bytes]:
+        with self._lock:
+            apm = self._apm
+        if apm is None:
+            return Cleaned(captured.chunk, echoing=False)
         captured_at = self._clock() - captured.age
-        self._feed_render(until=captured_at)
+        self._feed_render(apm, until=captured_at)
         echoing = captured_at < self._sounding_until + ECHO_TAIL_SECONDS
-        self._apm.set_stream_delay_ms(_STREAM_DELAY_MS)
+        apm.set_stream_delay_ms(_STREAM_DELAY_MS)
         self._capture.extend(captured.chunk)
         size = FRAME_SAMPLES * 2
         while len(self._capture) >= size:
             frame = self._frame(bytearray(self._capture[:size]), SAMPLE_RATE, 1, FRAME_SAMPLES)
             del self._capture[:size]
-            self._apm.process_stream(frame)
+            apm.process_stream(frame)
             self._clean.extend(bytes(frame.data))
         out = len(captured.chunk)
         chunk = bytes(self._clean[:out])
         del self._clean[:out]
         return Cleaned(chunk, echoing=echoing)
 
-    def _feed_render(self, until: float) -> None:
+    def _feed_render(self, apm: Any, until: float) -> None:
         """Le da a la APM lo que sonó hasta ``until``, a la frecuencia del micro y en
         tramas de 10 ms, menos lo que acabó de sonar mucho antes, cuyo eco ya no llega."""
         with self._lock:
@@ -145,7 +163,7 @@ class WebRtcEchoCanceller:
             while len(self._render) >= size:
                 frame = self._frame(bytearray(self._render[:size]), SAMPLE_RATE, 1, FRAME_SAMPLES)
                 del self._render[:size]
-                self._apm.process_reverse_stream(frame)
+                apm.process_reverse_stream(frame)
 
 
 def _has_sound(block: bytes) -> bool:

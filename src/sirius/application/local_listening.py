@@ -477,17 +477,25 @@ class LocalListening[Chunk]:
     def reload_voice(self) -> str:
         """Habla desde ahora con la voz que digan los ajustes (pieza F, ADR-246).
 
-        Para como ``stop`` y suelta la voz y su altavoz, que va a la frecuencia de su voz; la
-        nueva se carga al volver a escuchar. Si escuchaba, vuelve a escuchar ya, con ella, y
-        devuelve el aviso si no puede, o vacío.
+        Para y suelta la voz como ``close``; la nueva se carga al volver a escuchar. Si
+        escuchaba, vuelve a escuchar ya, con ella, y devuelve el aviso si no puede, o vacío.
         """
         with self._lock:
             was_listening = self._listening
+            self.close()
+            return self.start() if was_listening else ""
+
+    def close(self) -> None:
+        """Para como ``stop`` y suelta la voz y su altavoz, que va a la frecuencia de su voz,
+        y con él la cancelación de eco. Lo llaman la ventana y ``sirius-oye`` al salir: la
+        APM de livekit viva hasta que Python se cierra pinta en rojo un error suyo
+        (ADR-252). Si vuelve a escuchar, carga la voz otra vez.
+        """
+        with self._lock:
             self.stop()
             speaking, self._speaking = self._speaking, None
             if speaking is not None:
                 speaking.speaker.close()
-            return self.start() if was_listening else ""
 
     def attend(self) -> Attended:
         """Atiende todo lo que ha llegado al micro y devuelve los turnos que cerró.
