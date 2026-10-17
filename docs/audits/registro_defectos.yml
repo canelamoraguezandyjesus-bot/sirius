@@ -1646,13 +1646,15 @@ defectos:
       - tests/automation/test_marca_de_agua.py
   # ADR-251: el banco de memoria pasaba en la nube con unas huellas de mentira en las que solo
   # lo esperado se parecia a la pregunta. Con un modelo de verdad lo de antes tambien se
-  # parece, y en su ordenador «cosas que cambian» dio 2 de 14 el 16-10-2026. Se cierra con la
-  # PR que lo lleve a main; hasta entonces lo sigue la incidencia de su nota de arranque.
+  # parece, y en su ordenador «cosas que cambian» dio 2 de 14 el 16-10-2026. Lo cierra la
+  # PR #692, junto con lo de ADR-247 a ADR-250; su nota de arranque sigue en la incidencia.
   - id: H-251
     titulo: El banco de memoria de la nube no podia ver que lo de antes se pareciera a la pregunta tanto como lo de ahora
     bloque: memoria
     gravedad: media
-    estado: abierto
+    estado: cerrado
+    cerrado_por: 95283d1210e30292cbd73cc61eb6e99943cf9609
+    pr: 692
     adr: 251
     incidencia: 693
     ficheros:
@@ -1661,13 +1663,15 @@ defectos:
       - src/sirius/domain/relevance.py
   # ADR-252: en la ventana, un turno de voz esperaba entera la nota del juez. El juez pedia
   # con el tope de la charla, 4 096, y cortarle solo se miraba con cada trozo, que no llega
-  # mientras Ollama lee la pregunta. Se cierra con la PR que lo lleve a main; hasta entonces
-  # lo sigue la incidencia de su nota de arranque.
+  # mientras Ollama lee la pregunta. Lo cierra la PR #692, junto con lo de ADR-247 a ADR-251;
+  # su nota de arranque sigue en la incidencia.
   - id: H-252
     titulo: Un turno de voz esperaba entera la nota del juez, porque cortarle solo se miraba entre trozos
     bloque: producto
     gravedad: media
-    estado: abierto
+    estado: cerrado
+    cerrado_por: 3d95b0477b84e8214f7b3421ba2f5fb306a58405
+    pr: 692
     adr: 252
     incidencia: 694
     ficheros:
