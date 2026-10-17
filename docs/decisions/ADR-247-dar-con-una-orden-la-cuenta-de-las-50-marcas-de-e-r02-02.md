@@ -488,3 +488,8 @@ dice nada no rompa la lista, y que el aviso diga qué hacer.
   más, la que tarda, la que cierra antes de que llegue la lista y la de un fallo
   inesperado al pedirla, y una de antes que ahora espera la lista: las cuatro fallaban con
   el código de la ronda. Mutación: 7, caen las 7.
+
+**La ronda limpia.** Ronda 3, sobre `54b208f0`, preguntando si el enfoque está mal:
+«Didn't find any major issues», del conector, el 17-10-2026. Con ella y Quality en verde
+se fusionó la PR #692 (`c7c378f5`). Se anota desde la PR de ADR-253: anotarlo en su PR
+habría cambiado el head que la ronda revisó.

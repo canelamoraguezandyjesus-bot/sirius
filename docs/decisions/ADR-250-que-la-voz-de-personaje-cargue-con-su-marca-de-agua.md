@@ -134,3 +134,8 @@ reescrita.
 
 Va en la misma PR que ADR-247, y su alcance se suma al de allí: que con el extra
 `personaje` cargue la marca de agua de Perth, sin quitarla nunca.
+
+**La ronda limpia.** Ronda 3, sobre `54b208f0`, preguntando si el enfoque está mal:
+«Didn't find any major issues», del conector, el 17-10-2026. Con ella y Quality en verde
+se fusionó la PR #692 (`c7c378f5`). Se anota desde la PR de ADR-253: anotarlo en su PR
+habría cambiado el head que la ronda revisó.

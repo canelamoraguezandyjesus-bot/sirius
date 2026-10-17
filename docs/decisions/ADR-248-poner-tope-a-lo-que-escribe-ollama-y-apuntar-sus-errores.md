@@ -251,3 +251,8 @@ diario diga lo que dijo Ollama sin nada de la charla.
   mayúsculas, quitar cada una de las siete firmas, conformarse con un trozo de una firma de
   dos, poner el proceso caído antes que la memoria y dejar salir tal cual lo que no
   encaja. El otro hallazgo, la lista de modelos en el hilo de la ventana, va en ADR-247.
+
+**La ronda limpia.** Ronda 3, sobre `54b208f0`, preguntando si el enfoque está mal:
+«Didn't find any major issues», del conector, el 17-10-2026. Con ella y Quality en verde
+se fusionó la PR #692 (`c7c378f5`). Se anota desde la PR de ADR-253: anotarlo en su PR
+habría cambiado el head que la ronda revisó.
