@@ -9,9 +9,11 @@ un audio para imitar a nadie. Cómo suena lo dice él (E-R03-06).
 from __future__ import annotations
 
 import ast
+import logging
 import os
 import sys
 import types
+import warnings
 from array import array
 from pathlib import Path
 from typing import Any
@@ -123,6 +125,67 @@ def test_sin_el_extra_personaje_avisa_y_no_tumba_a_sirius(
         load_character_voice(tmp_path)
 
 
+#: Un Chatterbox de mentira que avisa como el de verdad al cargar: al importarse, la marca
+#: de agua de Perth importa ``pkg_resources``; al construirse, diffusers y el tokenizador.
+_CHATTERBOX_QUE_AVISA = """
+import logging
+import warnings
+
+warnings.warn(
+    "pkg_resources is deprecated as an API. See https://setuptools.pypa.io/.", UserWarning
+)
+
+
+class ChatterboxMultilingualTTS:
+    sr = 24_000
+
+    @staticmethod
+    def from_local(carpeta, device):
+        warnings.warn(
+            "`LoRACompatibleLinear` is deprecated and will be removed in version 1.0.0.",
+            FutureWarning,
+        )
+        tokenizador = logging.getLogger("chatterbox.models.tokenizers.tokenizer")
+        tokenizador.warning("Could not load Cangjie mapping: sin conexión")
+        tokenizador.warning("pkuseg not available - Chinese segmentation will be skipped")
+        warnings.warn("Este aviso sí cuenta algo.", UserWarning)
+        return ChatterboxMultilingualTTS()
+"""
+
+
+def test_al_cargar_calla_los_tres_avisos_que_no_dicen_nada_y_solo_esos(
+    chatterbox: type[_Chatterbox],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    del chatterbox  # solo por su torch de mentira y Hugging Face sin importar
+    paquete = tmp_path / "chatterbox"
+    paquete.mkdir()
+    (paquete / "__init__.py").write_text("", encoding="utf-8")
+    (paquete / "mtl_tts.py").write_text(_CHATTERBOX_QUE_AVISA, encoding="utf-8")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.delitem(sys.modules, CHARACTER_VOICE_LIBRARY)
+    tokenizador = logging.getLogger("chatterbox.models.tokenizers.tokenizer")
+    try:
+        with warnings.catch_warnings(record=True) as avisos, caplog.at_level(logging.WARNING):
+            warnings.simplefilter("always")
+            load_character_voice(tmp_path)
+            # Después de cargar, avisan como siempre.
+            warnings.warn("`LoRACompatibleLinear` is deprecated.", FutureWarning, stacklevel=1)
+            tokenizador.warning("pkuseg not available")
+    finally:
+        sys.modules.pop(CHARACTER_VOICE_LIBRARY, None)
+        sys.modules.pop("chatterbox", None)
+
+    assert [str(aviso.message) for aviso in avisos] == [
+        "Este aviso sí cuenta algo.",
+        "`LoRACompatibleLinear` is deprecated.",
+    ]
+    assert [registro.getMessage() for registro in caplog.records] == ["pkuseg not available"]
+    assert tokenizador.level == logging.NOTSET
+
+
 def test_solo_le_da_el_texto_y_el_idioma_y_ningun_audio() -> None:
     modelo = _Modelo()
 
@@ -223,7 +286,7 @@ def test_la_ventana_y_la_consola_se_ponen_sin_conexion_antes_de_nada(
     monkeypatch.setattr(ventana, "QApplication", _QtTodaviaNo)
     monkeypatch.setattr(ventana, "hugging_face_offline", apunta)
     monkeypatch.setattr(consola, "hugging_face_offline", apunta)
-    monkeypatch.setattr(consola, "_data_paths", lambda: pytest.fail("leyó antes los datos"))
+    monkeypatch.setattr(consola, "known_data_paths", lambda: pytest.fail("leyó antes los datos"))
 
     with pytest.raises(Primero):
         ventana.main()

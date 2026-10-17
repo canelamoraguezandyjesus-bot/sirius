@@ -11,9 +11,11 @@ import pytest
 from sirius.application.memory_search import (
     EMBED_BATCH,
     MIN_SIMILARITY,
+    PLAIN_FORMAT,
     SEARCH_LIMIT,
     MemoryEmbeddingService,
     MemorySearch,
+    embedding_format,
 )
 from sirius.domain.memory import Memory, MemoryRevision, MemoryStatus
 from sirius.ports.embeddings import EmbeddingError, PendingMemory
@@ -70,6 +72,9 @@ class _Almacen:
     busquedas: list[tuple[list[float], str, float, int]] = field(default_factory=list)
     #: Recuerdos que se archivaron o borraron mientras se calculaba su huella.
     rechaza: set[int] = field(default_factory=set)
+    #: El parecido entre dos recuerdos, y qué se preguntó (ADR-251).
+    entre: dict[tuple[int, int], float] = field(default_factory=dict)
+    comparados: list[tuple[int, int, str]] = field(default_factory=list)
 
     def pending(self, model: str, limit: int) -> list[PendingMemory]:
         hechas = {memoria for memoria, _, modelo, _ in self.guardadas if modelo == model}
@@ -91,6 +96,13 @@ class _Almacen:
             msg = "vec_distance_cosine falló"
             raise RuntimeError(msg)
         return list(self.parecidos)
+
+    def similarity(self, first: int, second: int, model: str) -> float | None:
+        self.comparados.append((first, second, model))
+        if self.falla_al_buscar:
+            msg = "vec_distance_cosine falló"
+            raise RuntimeError(msg)
+        return self.entre.get((first, second))
 
     def count(self, model: str | None = None) -> int:
         return len(self.guardadas)
@@ -342,3 +354,84 @@ def test_si_el_modelo_no_da_una_huella_por_texto_no_devuelve_ninguna() -> None:
             return super().embed(texts)[:-1]
 
     assert MemoryEmbeddingService(_Corto(), _Almacen()).embed_texts(["a", "b"]) is None
+
+
+# --- ADR-251: el formato de cada modelo, su clave y su umbral ---------------------------
+
+
+def test_a_embeddinggemma_se_le_piden_con_su_formato_y_su_clave_lo_dice() -> None:
+    huellas = _Huellas(model_name="embeddinggemma")
+    almacen = _Almacen(pendientes=[PendingMemory(1, 10, "Le pirra el cocido.")])
+    servicio = MemoryEmbeddingService(huellas, almacen)
+
+    servicio.embed_pending()
+    servicio.embed_query("¿Qué comida me gusta?")
+    servicio.nearest([1.0])
+
+    assert huellas.pedidas == [
+        ["title: none | text: Le pirra el cocido."],
+        ["task: search result | query: ¿Qué comida me gusta?"],
+    ]
+    assert servicio.model_key == "embeddinggemma#busqueda-1"
+    assert [modelo for _, _, modelo, _ in almacen.guardadas] == ["embeddinggemma#busqueda-1"]
+    assert almacen.busquedas == [([1.0], "embeddinggemma#busqueda-1", 0.26, SEARCH_LIMIT)]
+    assert servicio.min_similarity == 0.26
+
+
+def test_un_modelo_sin_formato_conocido_se_pide_tal_cual_como_antes() -> None:
+    huellas = _Huellas(model_name="qwen3-embedding:0.6b")
+    almacen = _Almacen()
+    servicio = MemoryEmbeddingService(huellas, almacen)
+
+    servicio.embed_query("¿Qué comida me gusta?")
+    servicio.nearest([1.0])
+
+    assert huellas.pedidas == [["¿Qué comida me gusta?"]]
+    assert embedding_format("qwen3-embedding:0.6b") is PLAIN_FORMAT
+    assert servicio.model_key == "qwen3-embedding:0.6b"
+    assert almacen.busquedas == [([1.0], "qwen3-embedding:0.6b", MIN_SIMILARITY, SEARCH_LIMIT)]
+
+
+def test_sin_formato_conocido_el_umbral_es_el_de_siempre_y_se_puede_mover(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import sirius.application.memory_search as memory_search
+
+    monkeypatch.setattr(memory_search, "MIN_SIMILARITY", 0.7)
+
+    assert memory_search.min_similarity_for("qwen3-embedding:0.6b") == 0.7
+    assert memory_search.min_similarity_for("embeddinggemma") == 0.26
+    almacen = _Almacen()
+    MemoryEmbeddingService(_Huellas(model_name="qwen3-embedding:0.6b"), almacen).nearest([1.0])
+    assert almacen.busquedas == [([1.0], "qwen3-embedding:0.6b", 0.7, SEARCH_LIMIT)]
+
+
+def test_el_formato_se_reconoce_por_la_familia_en_su_nombre_de_ollama() -> None:
+    assert embedding_format("embeddinggemma:300m").name == "busqueda-1"
+    assert embedding_format("EmbeddingGemma").name == "busqueda-1"
+    # Las llaves que escriba él no son un hueco: el texto se pone tal cual.
+    assert embedding_format("embeddinggemma").for_query("¿{text}?") == (
+        "task: search result | query: ¿{text}?"
+    )
+
+
+def test_los_ejemplos_de_la_semilla_se_piden_como_recuerdos_y_la_pregunta_como_pregunta() -> None:
+    huellas = _Huellas(model_name="embeddinggemma")
+    servicio = MemoryEmbeddingService(huellas, _Almacen())
+
+    servicio.embed_texts(["¿Qué tal?"])
+
+    assert huellas.pedidas == [["title: none | text: ¿Qué tal?"]]
+    assert servicio.query_model_name == "embeddinggemma#busqueda-1"
+
+
+def test_el_parecido_entre_dos_recuerdos_se_pide_con_su_clave_y_si_falla_no_rompe() -> None:
+    almacen = _Almacen(entre={(1, 2): 0.8})
+    servicio = MemoryEmbeddingService(_Huellas(model_name="embeddinggemma"), almacen)
+    busqueda = MemorySearch(_Palabras(), _Recuerdos({}), servicio)
+
+    assert busqueda.similarity_between(1, 2) == 0.8
+    assert almacen.comparados == [(1, 2, "embeddinggemma#busqueda-1")]
+    almacen.falla_al_buscar = True
+    assert busqueda.similarity_between(1, 2) is None
+    assert MemorySearch(_Palabras(), _Recuerdos({}), None).similarity_between(1, 2) is None

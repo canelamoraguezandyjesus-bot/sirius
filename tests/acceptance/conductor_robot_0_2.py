@@ -49,6 +49,7 @@ from sirius.adapters.persistence.migrations import upgrade_to_head
 from sirius.adapters.persistence.sqlite_identity_repository import (
     build_sqlite_identity_repository,
 )
+from sirius.adapters.persistence.sqlite_memory_embeddings import to_bits
 from sirius.adapters.secrets.fake import FakeSecretStore
 from sirius.application.memory_commands import ASK_TO_CONFIRM, FORGOT
 from sirius.application.send_message import SendMessageResult
@@ -198,6 +199,11 @@ class OllamaDeMentira:
         self.urls.append(request.url)
         cuerpo: dict[str, Any] = json.loads(request.content or b"{}")
         modelo = cuerpo.get("model")
+        if request.url.path == "/api/show":
+            # Qué sabe hacer un modelo, como el de verdad: los instalados conversan.
+            if modelo in self.modelos_instalados:
+                return httpx.Response(200, json={"capabilities": ["completion"]})
+            return httpx.Response(404, json={"error": f"model '{modelo}' not found"})
         if isinstance(modelo, str):
             self.modelos.append(modelo)
         if request.url.path == "/api/tags":
@@ -245,12 +251,16 @@ class _JuezEnchufado:
     def __init__(self, juez: JuezDeMentira) -> None:
         self._juez = juez
 
-    def score(self, reply: str) -> int:
+    def score(self, reply: str, *, should_stop: Callable[[], bool] | None = None) -> int:
+        del should_stop
         return self._juez.puntua(reply)
 
     def verdict(self, bad_idea: str, reply: str) -> TrickVerdict:
         del bad_idea
         return TrickVerdict(self._juez.discrepa(reply))
+
+    def cancel(self) -> None:
+        pass
 
 
 class _ExtractorEnchufado:
@@ -920,7 +930,7 @@ class Conductor:
         )
         self.reabre()
         caso = self._dependencias.blind_test_use_case
-        assert caso.installed_models() == tuple(sorted(respuestas_por_modelo))
+        assert caso.installed_models().chat == tuple(sorted(respuestas_por_modelo))
         self._hoja = caso.prepare(list(respuestas_por_modelo))
         # Lo que enseña la ventana en cada pregunta: el texto y «letra) respuesta».
         vista = [
@@ -1156,13 +1166,16 @@ class Conductor:
                 " VALUES (?, ?, 1, ?, 'prueba', 1, ?)",
                 [(rev, memoria, texto, ahora) for memoria, rev, texto in filas],
             )
+            huellas = [self._huellas_fijas.huella(texto) for _, _, texto in filas]
+            # Con sus bits, como las guarda Sirius: así se mide la búsqueda en dos pasos
+            # de ADR-251, que es la de su ordenador con tantas huellas.
             conexion.executemany(
                 "INSERT INTO memory_embeddings"
-                " (memory_id, revision_id, model, embedding, created_at)"
-                " VALUES (?, ?, ?, ?, ?)",
+                " (memory_id, revision_id, model, embedding, created_at, bits)"
+                " VALUES (?, ?, ?, ?, ?, ?)",
                 [
-                    (memoria, rev, modelo, _blob(self._huellas_fijas.huella(texto)), ahora)
-                    for memoria, rev, texto in filas
+                    (memoria, rev, modelo, _blob(huella), ahora, to_bits(huella))
+                    for (memoria, rev, _), huella in zip(filas, huellas, strict=True)
                 ],
             )
 

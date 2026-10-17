@@ -25,24 +25,37 @@ USO
     uv run python scripts/pasar_el_banco_de_memoria.py
 
 Necesita Ollama abierto y el modelo de huellas instalado
-(``ollama pull qwen3-embedding:0.6b``).
+(``ollama pull embeddinggemma``). Con ``--modelo NOMBRE`` lo pasa con otro
+modelo de huellas de Ollama, sin tocar sus ajustes. Con ``--diagnostico`` escribe
+además una línea por caso con lo que llegó al modelo, los puestos por palabras, los
+parecidos de la pregunta y los recuerdos, como se piden hoy y con el formato que
+recomienda el modelo, y el umbral en vigor (ADR-247): con ella se rehacen aquí
+huellas con los mismos parecidos. Solo lleva el banco, que es inventado.
 """
 
 from __future__ import annotations
 
+import argparse
 import itertools
+import json
 import logging
+import math
 import shutil
 import sqlite3
 import sys
 import tempfile
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Sequence
 from contextlib import closing
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
+import sirius.application.memory_search as memory_search
 from sirius.adapters.llm.ollama_embeddings import OllamaEmbedder
 from sirius.adapters.persistence.bootstrap import initialize_persistence
+from sirius.adapters.persistence.sqlite_knowledge_search_repository import (
+    build_sqlite_knowledge_search_repository,
+)
 from sirius.adapters.secrets.fake import FakeSecretStore
 from sirius.composition_root import (
     ConversationDependencies,
@@ -61,6 +74,30 @@ FAMILIAS_ENTERAS = (OLVIDA, QUIEN)
 
 #: Así empieza lo que dijo Sirius en el banco.
 _DIJO_SIRIUS = "Sirius dijo"
+
+#: El formato que recomienda la ficha de cada modelo de huellas para buscar: cómo se pide
+#: la pregunta y cómo los recuerdos. La búsqueda de hoy los pide tal cual.
+FORMATOS: dict[str, tuple[str, str]] = {
+    "qwen3-embedding": (
+        "Instruct: Given a question, retrieve the memories that answer it\nQuery:{pregunta}",
+        "{recuerdo}",
+    ),
+    "embeddinggemma": (
+        "task: search result | query: {pregunta}",
+        "title: none | text: {recuerdo}",
+    ),
+}
+
+#: Lo que dice la primera línea de ``--diagnostico``: cómo se lee cada una de las demás.
+CABECERA_DEL_DIAGNOSTICO = (
+    "Diagnóstico: una línea por caso, en JSON. «traidos»: los recuerdos del caso que"
+    " llegaron al modelo, en ese orden, por su número en el caso, desde 0. «esperado»: el"
+    " que tenía que llegar el primero. «palabras»: el puesto de cada recuerdo en la búsqueda"
+    " por palabras, 0 el mejor y null si no salió. «hoy»: el parecido de la pregunta con"
+    " cada recuerdo, y el de cada par de recuerdos, pedidos como hoy. «formato»: lo mismo con"
+    " el formato que recomienda el modelo, o null si no se conoce. «umbral»: el parecido"
+    " mínimo en vigor."
+)
 
 
 @dataclass
@@ -152,8 +189,115 @@ class _Sirius:
         return [memoria.current_revision.content or "" for memoria in resultado.context.memories]
 
 
-def pasa_un_caso(caso: MemoryCase, huellas: TextEmbedder, carpeta: Path) -> bool:
-    """Si Sirius acierta ``caso`` por el camino real."""
+def acierta(caso: MemoryCase, traidos: list[str], base: Path) -> bool:
+    """Si lo que llevó la petición al modelo, ``traidos``, es lo que pide ``caso``."""
+    if caso.family == OLVIDA:
+        assert caso.forget is not None
+        return caso.forget not in traidos and not en_toda_la_base(base, caso.forget)
+    if caso.family == NO_LO_SE:
+        return not set(traidos) & set(caso.memories)
+    bien = traidos[:1] == [caso.expected]
+    if caso.family == QUIEN:
+        bien = bien and not any(es_de_sirius(traido) for traido in traidos)
+    return bien
+
+
+def formato_de(modelo: str) -> str | None:
+    """Qué formato de ``FORMATOS`` recomienda ``modelo``, por su nombre en Ollama."""
+    nombre = modelo.lower()
+    return next((clave for clave in FORMATOS if clave in nombre), None)
+
+
+def coseno(a: Sequence[float], b: Sequence[float]) -> float:
+    """El parecido de dos huellas, el mismo que mide la búsqueda: su coseno."""
+    normas = math.sqrt(sum(x * x for x in a)) * math.sqrt(sum(y * y for y in b))
+    return sum(x * y for x, y in zip(a, b, strict=True)) / normas if normas else 0.0
+
+
+def parecidos(huellas: TextEmbedder, pregunta: str, recuerdos: Sequence[str]) -> dict[str, Any]:
+    """El parecido de ``pregunta`` con cada recuerdo, y el de cada par de recuerdos."""
+    [suya, *de_ellos] = huellas.embed([pregunta, *recuerdos])
+    return {
+        "pregunta": [round(coseno(suya, huella), 4) for huella in de_ellos],
+        "entre": {
+            f"{i}{j}": round(coseno(de_ellos[i], de_ellos[j]), 4)
+            for i, j in itertools.combinations(range(len(de_ellos)), 2)
+        },
+    }
+
+
+def puestos_por_palabras(caso: MemoryCase, base: Path) -> list[int | None]:
+    """El puesto de cada recuerdo del caso en la búsqueda por palabras del turno, o ``None``."""
+    palabras = build_sqlite_knowledge_search_repository(base)
+    try:
+        encontrados = palabras.search_memory_ids(caso.question, memory_search.SEARCH_LIMIT)
+    finally:
+        palabras.close()
+    with closing(sqlite3.connect(base)) as conexion:
+        guardados: dict[str, int] = dict(
+            conexion.execute(
+                "SELECT r.content, m.id FROM memories AS m"
+                " JOIN memory_revisions AS r ON r.memory_id = m.id AND r.is_current = 1"
+                " WHERE m.status = 'current'"
+            ).fetchall()
+        )
+    puestos = {memoria: puesto for puesto, memoria in enumerate(encontrados)}
+    return [
+        puestos.get(guardados[recuerdo]) if recuerdo in guardados else None
+        for recuerdo in caso.memories
+    ]
+
+
+def diagnostico(
+    caso: MemoryCase, traidos: list[str], base: Path, huellas: TextEmbedder, *, bien: bool
+) -> dict[str, Any]:
+    """Lo que pasó en ``caso`` por el camino real, para leerlo y reconstruirlo fuera.
+
+    «hoy» es como pide Sirius las huellas a ese modelo: desde ADR-251, con el formato que
+    tenga, el mismo que «formato» con EmbeddingGemma. «umbral» es el de ese modelo.
+    """
+    como_hoy = memory_search.embedding_format(huellas.model_name)
+    formato: dict[str, Any] | None = None
+    clave = formato_de(huellas.model_name)
+    if clave is not None:
+        molde_de_la_pregunta, molde_de_los_recuerdos = FORMATOS[clave]
+        formato = {
+            "nombre": clave,
+            **parecidos(
+                huellas,
+                molde_de_la_pregunta.replace("{pregunta}", caso.question),
+                [molde_de_los_recuerdos.replace("{recuerdo}", r) for r in caso.memories],
+            ),
+        }
+    return {
+        "id": caso.id,
+        "familia": caso.family,
+        "acierta": bien,
+        "traidos": [caso.memories.index(t) if t in caso.memories else t for t in traidos],
+        "esperado": caso.memories.index(caso.expected) if caso.expected is not None else None,
+        "palabras": puestos_por_palabras(caso, base),
+        "umbral": memory_search.min_similarity_for(huellas.model_name),
+        "hoy": parecidos(
+            huellas,
+            como_hoy.for_query(caso.question),
+            [como_hoy.for_document(recuerdo) for recuerdo in caso.memories],
+        ),
+        "formato": formato,
+    }
+
+
+def linea_del_diagnostico(caso: dict[str, Any]) -> str:
+    return json.dumps(caso, ensure_ascii=False, separators=(",", ":"))
+
+
+def pasa_un_caso(
+    caso: MemoryCase,
+    huellas: TextEmbedder,
+    carpeta: Path,
+    *,
+    apunta: Callable[[dict[str, Any]], None] | None = None,
+) -> bool:
+    """Si Sirius acierta ``caso`` por el camino real; con ``apunta``, le da su diagnóstico."""
     sirius = _Sirius(carpeta, huellas)
     try:
         for recuerdo in caso.memories:
@@ -161,15 +305,10 @@ def pasa_un_caso(caso: MemoryCase, huellas: TextEmbedder, carpeta: Path) -> bool
         if caso.forget is not None:
             sirius.deps.send_message_use_case.send_message("Olvida eso.")
         traidos = sirius.pregunta(caso.question)
-        if caso.family == OLVIDA:
-            assert caso.forget is not None
-            return caso.forget not in traidos and not en_toda_la_base(sirius.base, caso.forget)
-        if caso.family == NO_LO_SE:
-            return not set(traidos) & set(caso.memories)
-        acierta = traidos[:1] == [caso.expected]
-        if caso.family == QUIEN:
-            acierta = acierta and not any(es_de_sirius(traido) for traido in traidos)
-        return acierta
+        bien = acierta(caso, traidos, sirius.base)
+        if apunta is not None:
+            apunta(diagnostico(caso, traidos, sirius.base, huellas, bien=bien))
+        return bien
     finally:
         sirius.cierra()
 
@@ -179,16 +318,18 @@ def pasa_el_banco(
     carpeta: Path,
     *,
     casos: tuple[MemoryCase, ...] = MEMORY_BANK,
+    apunta: Callable[[dict[str, Any]], None] | None = None,
 ) -> dict[str, tuple[int, int]]:
     """Aciertos y casos por familia, con un Sirius nuevo por caso.
 
     ``huellas_de`` da el modelo de huellas de cada caso: en su ordenador, el mismo
-    para todos; en las pruebas, uno de mentira hecho para ese caso.
+    para todos; en las pruebas, uno de mentira hecho para ese caso. ``apunta`` recibe
+    el diagnóstico de cada caso, si se le da.
     """
     cuenta = {familia: [0, 0] for familia in FAMILIES}
     for numero, caso in zip(itertools.count(1), casos, strict=False):
-        acierta = pasa_un_caso(caso, huellas_de(caso), carpeta / f"{numero:03d}")
-        cuenta[caso.family][0] += int(acierta)
+        bien = pasa_un_caso(caso, huellas_de(caso), carpeta / f"{numero:03d}", apunta=apunta)
+        cuenta[caso.family][0] += int(bien)
         cuenta[caso.family][1] += 1
     return {familia: (aciertos, total) for familia, (aciertos, total) in cuenta.items()}
 
@@ -199,27 +340,58 @@ def aprueba(resultado: dict[str, tuple[int, int]]) -> bool:
     return aciertos >= APROBADO and enteras
 
 
+def opciones() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="pasar_el_banco_de_memoria",
+        description="Pasa el banco de memoria de E-R02-04 por el camino real.",
+    )
+    parser.add_argument(
+        "--modelo", help="el modelo de huellas de Ollama; sin él, el de tus ajustes, que no cambian"
+    )
+    parser.add_argument(
+        "--diagnostico",
+        action="store_true",
+        help="además, una línea por caso con lo que llegó al modelo y los parecidos",
+    )
+    return parser
+
+
 def main(
+    argv: Sequence[str] = (),
     huellas_de: Callable[[str], TextEmbedder] = OllamaEmbedder,
     escribe: Callable[[str], None] = print,
+    *,
+    casos: tuple[MemoryCase, ...] = MEMORY_BANK,
 ) -> int:
     """0 si pasa, 1 si no, 2 si falta el modelo de huellas."""
-    modelo = embedding_model(load_settings())
+    elegidas = opciones().parse_args(list(argv))
+    modelo = elegidas.modelo or embedding_model(load_settings())
     huellas = huellas_de(modelo)
     try:
         huellas.embed(["hola"])
     except EmbeddingError:
         escribe(f"No hay modelo de huellas. Abre Ollama y ejecuta: ollama pull {modelo}")
         return 2
+
+    def apunta(caso: dict[str, Any]) -> None:
+        escribe(linea_del_diagnostico(caso))
+
+    if elegidas.diagnostico:
+        escribe(CABECERA_DEL_DIAGNOSTICO)
     carpeta = Path(tempfile.mkdtemp(prefix="sirius-banco-"))
     try:
-        resultado = pasa_el_banco(lambda _caso: huellas, carpeta)
+        resultado = pasa_el_banco(
+            lambda _caso: huellas,
+            carpeta,
+            casos=casos,
+            apunta=apunta if elegidas.diagnostico else None,
+        )
     finally:
         shutil.rmtree(carpeta, ignore_errors=True)
     for familia, (aciertos, total) in resultado.items():
         escribe(f"{familia}: {aciertos} de {total}")
     aciertos = sum(acertados for acertados, _ in resultado.values())
-    escribe(f"En total: {aciertos} de 100, con el modelo de huellas {modelo}.")
+    escribe(f"En total: {aciertos} de {len(casos)}, con el modelo de huellas {modelo}.")
     if aprueba(resultado):
         escribe("Pasa.")
         return 0
@@ -229,4 +401,4 @@ def main(
 
 if __name__ == "__main__":
     logging.disable(logging.WARNING)
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:]))

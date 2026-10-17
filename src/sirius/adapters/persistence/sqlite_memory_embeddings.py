@@ -1,8 +1,11 @@
 """Las huellas de los recuerdos en sirius.db, buscadas con sqlite-vec (pieza F, ADR-238).
 
-Una tabla normal, ``memory_embeddings``, con la huella en un BLOB de float32. La
-búsqueda las recorre todas con ``vec_distance_cosine`` de sqlite-vec: con
-10.000 huellas de 1.024 números tarda unos 20 ms (medido el 07-10-2026).
+Una tabla normal, ``memory_embeddings``, con la huella en un BLOB de float32 y sus
+bits, uno por número. Con pocas huellas, la búsqueda las recorre todas con
+``vec_distance_cosine`` de sqlite-vec. Con muchas, casi todo el tiempo se va en esos
+cosenos (35 de 40 ms con 10.000 huellas de 1.024 números, medido el 16-10-2026): la
+búsqueda mira primero los bits de todas y calcula el coseno exacto solo de las más
+cercanas (ADR-251).
 
 sqlite-vec se carga solo en las conexiones de este almacén. Si no carga, guardar
 sigue funcionando, ``available`` es falso y la búsqueda por significado no
@@ -31,14 +34,41 @@ from sirius.domain.memory import MemoryStatus
 from sirius.infrastructure.logging import get_logger
 from sirius.ports.embeddings import PendingMemory
 
-__all__ = ["SqliteMemoryEmbeddingStore", "build_sqlite_memory_embedding_store", "to_blob"]
+__all__ = [
+    "ONE_STEP_UP_TO",
+    "TWO_STEP_CANDIDATES",
+    "SqliteMemoryEmbeddingStore",
+    "build_sqlite_memory_embedding_store",
+    "to_bits",
+    "to_blob",
+]
 
 _logger = get_logger(__name__)
+
+
+#: Hasta cuántas huellas la búsqueda va en un solo paso, exacto, como antes de ADR-251.
+ONE_STEP_UP_TO = 1_000
+
+#: Cuántas huellas, las más cercanas por bits, pasan al coseno exacto (ADR-251).
+TWO_STEP_CANDIDATES = 200
 
 
 def to_blob(embedding: Sequence[float]) -> bytes:
     """La huella como la guarda y la lee sqlite-vec: float32 seguidos."""
     return struct.pack(f"<{len(embedding)}f", *embedding)
+
+
+def to_bits(embedding: Sequence[float]) -> bytes:
+    """Un bit por número de la huella, 1 si es positivo, de ocho en ocho por byte.
+
+    Los de las huellas y los de la pregunta salen de aquí, así que siempre se comparan
+    con el mismo orden de bits.
+    """
+    packed = bytearray((len(embedding) + 7) // 8)
+    for index, value in enumerate(embedding):
+        if value > 0:
+            packed[index // 8] |= 1 << (index % 8)
+    return bytes(packed)
 
 
 def _load_sqlite_vec(dbapi_connection: sqlite3.Connection, _record: Any) -> None:
@@ -89,11 +119,67 @@ _NEAREST = text(
     """
 )
 
+# ADR-251: el primer paso lee del índice (model, bits) los bits de todas las huellas del
+# modelo, sin abrir ninguna, y se queda con las más cercanas por bits; el segundo es
+# _NEAREST sobre esas. El CASE hace con los bits lo mismo que con las huellas: con otro
+# tamaño, NULL, que no pasa.
+_NEAREST_IN_TWO_STEPS = text(
+    """
+    WITH cercanas AS MATERIALIZED (
+        SELECT memory_id FROM (
+            SELECT memory_id,
+                   CASE WHEN length(bits) = :bits_size
+                        THEN vec_distance_hamming(vec_bit(bits), vec_bit(:bits))
+                   END AS distancia
+            FROM memory_embeddings
+            WHERE model = :model AND bits IS NOT NULL
+        )
+        WHERE distancia IS NOT NULL
+        ORDER BY distancia, memory_id DESC
+        LIMIT :candidates
+    ),
+    parecidos AS MATERIALIZED (
+        SELECT e.memory_id AS memory_id,
+               CASE WHEN length(e.embedding) = :size
+                    THEN 1.0 - vec_distance_cosine(e.embedding, :query)
+               END AS similarity
+        FROM cercanas
+        JOIN memory_embeddings AS e ON e.memory_id = cercanas.memory_id
+        JOIN memories AS m ON m.id = e.memory_id
+        JOIN memory_revisions AS r ON r.id = e.revision_id AND r.is_current = 1
+        WHERE e.model = :model
+          AND m.status = :current
+          AND r.content IS NOT NULL
+    )
+    SELECT memory_id, similarity FROM parecidos
+    WHERE similarity >= :min_similarity
+    ORDER BY similarity DESC, memory_id DESC
+    LIMIT :limit
+    """
+)
+
+# Cuántas huellas hay del modelo y cuántas tienen bits, del mismo índice.
+_COUNT_BITS = text(
+    "SELECT COUNT(*) AS total, COUNT(bits) AS with_bits FROM memory_embeddings WHERE model = :model"
+)
+
+# El parecido entre dos recuerdos, por sus huellas del mismo modelo (ADR-251).
+_BETWEEN = text(
+    """
+    SELECT CASE WHEN length(a.embedding) = length(b.embedding)
+                THEN 1.0 - vec_distance_cosine(a.embedding, b.embedding)
+           END AS similarity
+    FROM memory_embeddings AS a JOIN memory_embeddings AS b
+    WHERE a.memory_id = :first AND b.memory_id = :second
+      AND a.model = :model AND b.model = :model
+    """
+)
+
 
 _SAVE = text(
     """
-    INSERT INTO memory_embeddings (memory_id, revision_id, model, embedding, created_at)
-    SELECT :memory_id, :revision_id, :model, :embedding, :created_at
+    INSERT INTO memory_embeddings (memory_id, revision_id, model, embedding, created_at, bits)
+    SELECT :memory_id, :revision_id, :model, :embedding, :created_at, :bits
     WHERE EXISTS (
         SELECT 1 FROM memories AS m
         JOIN memory_revisions AS r ON r.memory_id = m.id
@@ -104,7 +190,8 @@ _SAVE = text(
         revision_id = excluded.revision_id,
         model = excluded.model,
         embedding = excluded.embedding,
-        created_at = excluded.created_at
+        created_at = excluded.created_at,
+        bits = excluded.bits
     """
 )
 
@@ -152,6 +239,7 @@ class SqliteMemoryEmbeddingStore:
                     "revision_id": revision_id,
                     "model": model,
                     "embedding": to_blob(embedding),
+                    "bits": to_bits(embedding),
                     # Como guarda SQLAlchemy las fechas en SQLite, y sin el adaptador
                     # de fechas de sqlite3, que está en desuso.
                     "created_at": datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S.%f"),
@@ -163,14 +251,23 @@ class SqliteMemoryEmbeddingStore:
     def nearest(
         self, embedding: Sequence[float], model: str, *, min_similarity: float, limit: int
     ) -> list[tuple[int, float]]:
+        """Con ``ONE_STEP_UP_TO`` huellas o menos, o si a alguna le faltan los bits, en un
+        solo paso exacto; si no, en dos: las ``TWO_STEP_CANDIDATES`` más cercanas por bits
+        y, de esas, el coseno exacto (ADR-251)."""
         if not self._available or not embedding:
             return []
         query = to_blob(embedding)
+        bits = to_bits(embedding)
         with session_scope(self._session_factory) as session:
+            counted = session.execute(_COUNT_BITS, {"model": model}).one()
+            two_steps = counted.total > ONE_STEP_UP_TO and counted.with_bits == counted.total
             rows = session.execute(
-                _NEAREST,
+                _NEAREST_IN_TWO_STEPS if two_steps else _NEAREST,
                 {
                     "query": query,
+                    "bits": bits,
+                    "bits_size": len(bits),
+                    "candidates": TWO_STEP_CANDIDATES,
                     "model": model,
                     "current": MemoryStatus.CURRENT.value,
                     "size": len(query),
@@ -179,6 +276,17 @@ class SqliteMemoryEmbeddingStore:
                 },
             ).all()
             return [(int(row.memory_id), float(row.similarity)) for row in rows]
+
+    def similarity(self, first: int, second: int, model: str) -> float | None:
+        """El parecido entre dos recuerdos por sus huellas de ``model``; ``None`` si a
+        alguno le falta, si son de distinto tamaño o si sqlite-vec no cargó."""
+        if not self._available:
+            return None
+        with session_scope(self._session_factory) as session:
+            value = session.execute(
+                _BETWEEN, {"first": first, "second": second, "model": model}
+            ).scalar()
+            return None if value is None else float(value)
 
     def count(self, model: str | None = None) -> int:
         with session_scope(self._session_factory) as session:

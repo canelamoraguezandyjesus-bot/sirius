@@ -55,9 +55,13 @@ class MarkReplyUseCase:
     def marked_replies(self) -> list[MarkedReply]:
         return self._repository.marked_replies()
 
+    def recent(self, last: int) -> list[MarkedReply]:
+        """Las ``last`` últimas respuestas marcadas: las que cuenta ``count``."""
+        return self._repository.marked_replies()[-last:] if last > 0 else []
+
     def count(self, last: int) -> tuple[int, int]:
         """Cuántas «eso es Sirius» hay entre las ``last`` últimas marcadas, y cuántas son."""
-        recientes = self._repository.marked_replies()[-last:] if last > 0 else []
+        recientes = self.recent(last)
         sirius = sum(1 for reply in recientes if reply.mark is ReplyMark.ES_SIRIUS)
         return sirius, len(recientes)
 
@@ -150,9 +154,11 @@ class ReplyJudgeService:
             if should_stop():
                 break
             try:
-                score = self._judge.score(reply)
+                score = self._judge.score(reply, should_stop=should_stop)
             except Exception as exc:  # el juez nunca puede romper la charla
-                _logger.warning("El juez no pudo puntuar (%s)", type(exc).__name__)
+                # Si le pidieron parar, es su nota cortada (cancel): eso no es un fallo.
+                if not should_stop():
+                    _logger.warning("El juez no pudo puntuar (%s)", type(exc).__name__)
                 break
             if not LOWEST_SCORE <= score <= HIGHEST_SCORE:
                 _logger.warning("El juez dio una nota fuera de escala: %s", score)
@@ -162,6 +168,11 @@ class ReplyJudgeService:
             self._repository.add_score(message_id, score, warned=warned)
             warned_now = warned_now or warned
         return warned_now
+
+    def cancel(self) -> None:
+        """Corta la nota que está pidiendo, si pide una: esa respuesta se queda sin nota y
+        se puntúa la vez siguiente (ADR-252)."""
+        self._judge.cancel()
 
     def scores(self) -> list[JudgeScore]:
         return self._repository.judge_scores()

@@ -18,6 +18,7 @@ descarga cortada no deja un modelo ni una voz a medias que parezcan instalados.
 
 from __future__ import annotations
 
+import re
 import shutil
 import urllib.request
 from collections.abc import Callable
@@ -265,8 +266,20 @@ def _fail(problem: str, error: VoiceUnavailable) -> int:
     Un fallo que vuelve (una DLL) y uno que no (sin memoria un momento) se ven igual desde
     aquí (ronda 9 de Codex sobre la PR #687).
     """
-    print(f"[FALLA] {problem}: {error.reason}")
+    print(f"[FALLA] {problem}: {_cause(error.reason)}")
     return 1
+
+
+#: Un motivo que vuelve a decir que lo comprobado no carga: el de una voz o del modelo de
+#: oír, «la voz de personaje no carga (causa)». El de una biblioteca empieza por su nombre,
+#: «torch no carga (causa)», y se deja entero, que dice cuál.
+_SAME_FAILURE = re.compile(r"(?:la|el) [^()]* no carga \((?P<cause>.*)\)", re.DOTALL)
+
+
+def _cause(reason: str) -> str:
+    """La causa de ``reason``, sin repetir que lo comprobado no carga (ADR-252)."""
+    same = _SAME_FAILURE.fullmatch(reason)
+    return same["cause"] if same else reason
 
 
 if __name__ == "__main__":

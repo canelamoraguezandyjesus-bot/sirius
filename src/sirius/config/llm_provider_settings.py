@@ -44,10 +44,12 @@ class LLMProviderConfigurationError(RuntimeError):
 
 @dataclass(frozen=True, slots=True)
 class OllamaChatSettings:
-    """Lo que hace falta para construir la charla con Ollama: qué modelo y qué contexto."""
+    """Lo que hace falta para construir la charla con Ollama: qué modelo, qué contexto y
+    cuánto puede escribir."""
 
     model: str
     num_ctx: int
+    num_predict: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,16 +126,26 @@ def _positive_float(raw_value: Any, setting_name: str) -> float:
     return value
 
 
-def resolve_openai_provider_settings(settings: dict[str, Any]) -> OpenAIProviderSettings:
-    """Read the non-sensitive OpenAI settings (model, output limit, budget)."""
-    model = str(settings.get("openai_model") or "").strip() or _DEFAULT_MODEL
+#: El «Máximo de tokens de salida» de la pestaña Configuración. Conserva el nombre de la
+#: 0.1, cuando solo lo usaba OpenAI; desde ADR-248 es también el tope de Ollama.
+MAX_OUTPUT_TOKENS_SETTING = "openai_max_output_tokens"
 
-    raw_max_output_tokens = settings.get("openai_max_output_tokens")
-    max_output_tokens = (
+
+def resolve_max_output_tokens(settings: dict[str, Any]) -> int:
+    """El tope de lo que puede escribir el modelo de la charla, sea de OpenAI o de Ollama."""
+    raw_max_output_tokens = settings.get(MAX_OUTPUT_TOKENS_SETTING)
+    return (
         _positive_int(raw_max_output_tokens, "El límite de tokens de salida")
         if raw_max_output_tokens is not None
         else _DEFAULT_MAX_OUTPUT_TOKENS
     )
+
+
+def resolve_openai_provider_settings(settings: dict[str, Any]) -> OpenAIProviderSettings:
+    """Read the non-sensitive OpenAI settings (model, output limit, budget)."""
+    model = str(settings.get("openai_model") or "").strip() or _DEFAULT_MODEL
+
+    max_output_tokens = resolve_max_output_tokens(settings)
 
     raw_monthly_budget = settings.get("openai_monthly_budget_usd")
     monthly_budget_usd = (
@@ -156,12 +168,13 @@ _MIN_OLLAMA_CHAT_NUM_CTX = 2048
 
 
 def resolve_ollama_chat_settings(settings: dict[str, Any]) -> OllamaChatSettings:
-    """Lee qué modelo de Ollama conversa y con cuánto contexto.
+    """Lee qué modelo de Ollama conversa, con cuánto contexto y cuánto puede escribir.
 
     Sin modelo elegido no hay charla con Ollama: es un error de configuración
     con su explicación, nunca un modelo puesto por defecto que el propietario
     no ha elegido (decisión 4: el modelo se elige a ciegas). El contexto no
-    baja de 2.048 tokens: por debajo no caben la semilla y sus ejemplos.
+    baja de 2.048 tokens: por debajo no caben la semilla y sus ejemplos. Lo que
+    escribe tiene el tope de OpenAI: sin él, Ollama puede no acabar (ADR-248).
     """
     model = str(settings.get(OLLAMA_CHAT_MODEL_SETTING) or "").strip()
     if not model:
@@ -182,4 +195,6 @@ def resolve_ollama_chat_settings(settings: dict[str, Any]) -> OllamaChatSettings
             f"el mínimo es {_MIN_OLLAMA_CHAT_NUM_CTX} tokens."
         )
         raise LLMProviderConfigurationError(msg)
-    return OllamaChatSettings(model=model, num_ctx=num_ctx)
+    return OllamaChatSettings(
+        model=model, num_ctx=num_ctx, num_predict=resolve_max_output_tokens(settings)
+    )

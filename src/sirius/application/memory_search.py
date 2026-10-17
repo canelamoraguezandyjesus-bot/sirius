@@ -10,6 +10,9 @@ Cada turno busca de las dos maneras y carga solo lo que encuentra:
 
 Las huellas de los recuerdos las calcula ``MemoryEmbeddingService`` en segundo
 plano. Si el modelo de huellas no está, la búsqueda sigue por palabras.
+
+A cada modelo se le piden las huellas con el formato que recomienda su ficha para
+buscar, y su umbral va con ese formato (ADR-251).
 """
 
 from __future__ import annotations
@@ -24,18 +27,24 @@ from sirius.ports.knowledge_search_repository import MemoryKeywordSearch
 from sirius.ports.memory_repository import MemoryLoader
 
 __all__ = [
+    "EMBEDDING_FORMATS",
     "EMBED_BATCH",
     "MIN_SIMILARITY",
+    "PLAIN_FORMAT",
     "SEARCH_LIMIT",
+    "EmbeddingFormat",
     "FoundMemory",
     "MemoryEmbeddingService",
     "MemorySearch",
+    "embedding_format",
+    "min_similarity_for",
 ]
 
 _logger = get_logger(__name__)
 
-#: Parecido mínimo, de 0 a 1, para que el significado traiga un recuerdo solo. Se
-#: fija sin datos del propietario: E-R02-04 dirá si hay que moverlo (ADR-238).
+#: Parecido mínimo, de 0 a 1, para que el significado traiga un recuerdo solo, con un
+#: modelo sin formato conocido. Se fijó sin datos del propietario (ADR-238); el de
+#: EmbeddingGemma ya sale de los suyos (ADR-251).
 MIN_SIMILARITY = 0.5
 
 #: Cuántos recuerdos trae cada manera de buscar, como mucho.
@@ -47,6 +56,62 @@ SEARCH_LIMIT = 12
 #: cuatro frases cortas son décimas; el primer grupo tarda además lo que tarde
 #: Ollama en cargarlo, y eso el turno lo esperaría igual.
 EMBED_BATCH = 4
+
+
+@dataclass(frozen=True, slots=True)
+class EmbeddingFormat:
+    """Cómo se le piden las huellas a un modelo para buscar, y desde qué parecido cuentan.
+
+    ``name`` va dentro de la clave de las huellas: las pedidas con otro formato, o con
+    otro modelo, no se comparan con estas, y se vuelven a calcular.
+    """
+
+    name: str
+    query: str
+    document: str
+    #: ``None``: el de los modelos sin formato conocido, ``MIN_SIMILARITY``.
+    min_similarity: float | None
+
+    def key(self, model: str) -> str:
+        """La clave de las huellas de ``model`` con este formato."""
+        return f"{model}#{self.name}" if self.name else model
+
+    def for_query(self, text: str) -> str:
+        return self.query.replace("{text}", text)
+
+    def for_document(self, text: str) -> str:
+        return self.document.replace("{text}", text)
+
+
+#: Las frases tal cual, como hasta ADR-251: la clave es el nombre del modelo.
+PLAIN_FORMAT = EmbeddingFormat("", "{text}", "{text}", None)
+
+#: El formato que recomienda la ficha de cada modelo para buscar, por la familia en su
+#: nombre de Ollama. El umbral de EmbeddingGemma es el centro del tramo en el que el
+#: banco de memoria, con los parecidos que midió su ordenador el 16-10-2026, da lo
+#: mismo: de 0,24 a 0,28 (ADR-251).
+EMBEDDING_FORMATS: dict[str, EmbeddingFormat] = {
+    "embeddinggemma": EmbeddingFormat(
+        "busqueda-1",
+        "task: search result | query: {text}",
+        "title: none | text: {text}",
+        0.26,
+    ),
+}
+
+
+def embedding_format(model: str) -> EmbeddingFormat:
+    """El formato con que se le piden las huellas a ``model``; sin uno conocido, tal cual."""
+    name = model.lower()
+    return next(
+        (found for family, found in EMBEDDING_FORMATS.items() if family in name), PLAIN_FORMAT
+    )
+
+
+def min_similarity_for(model: str) -> float:
+    """El parecido mínimo con que busca ``model``: el de su formato, o ``MIN_SIMILARITY``."""
+    threshold = embedding_format(model).min_similarity
+    return MIN_SIMILARITY if threshold is None else threshold
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,6 +143,7 @@ class MemoryEmbeddingService:
         self._embedder = embedder
         self._store = store
         self._query_embedder = query_embedder or embedder
+        self._format = embedding_format(embedder.model_name)
         #: La última pregunta, con su modelo y su huella. Dentro de un turno la piden
         #: la búsqueda de recuerdos y los ejemplos de la semilla (ADR-240), y Ollama
         #: solo tiene que darla una vez.
@@ -87,13 +153,23 @@ class MemoryEmbeddingService:
     def model_name(self) -> str:
         return self._embedder.model_name
 
+    @property
+    def model_key(self) -> str:
+        """La clave de las huellas: el modelo y su formato (ADR-251)."""
+        return self._format.key(self._embedder.model_name)
+
+    @property
+    def min_similarity(self) -> float:
+        """El parecido mínimo para que el significado traiga un recuerdo solo."""
+        return min_similarity_for(self._embedder.model_name)
+
     def embed_pending(self, should_stop: Callable[[], bool] = lambda: False) -> int:
         """Calcula las huellas que faltan, las de los recuerdos nuevos antes. Devuelve cuántas.
 
         Lo lanza la ventana en segundo plano, al abrirse y al guardar un recuerdo.
         Si el modelo de huellas falla, para y lo intenta la vez siguiente.
         """
-        model = self._embedder.model_name
+        model = self.model_key
         done = 0
         seen: set[tuple[int, int]] = set()
         while not should_stop():
@@ -105,7 +181,9 @@ class MemoryEmbeddingService:
                 break
             seen |= batch
             try:
-                embeddings = self._embedder.embed([memory.content for memory in pending])
+                embeddings = self._embedder.embed(
+                    [self._format.for_document(memory.content) for memory in pending]
+                )
             except Exception as exc:  # sin modelo de huellas, la búsqueda sigue por palabras
                 _logger.warning("No se pudieron calcular huellas (%s)", type(exc).__name__)
                 break
@@ -135,12 +213,12 @@ class MemoryEmbeddingService:
         """La huella de la pregunta, o ``None`` si no se puede buscar por significado."""
         if not self._store.available or not query_text.strip():
             return None
-        model = self._query_embedder.model_name
+        model = self.query_model_name
         last = self._last_query
         if last is not None and last[0] == query_text and last[1] == model:
             return list(last[2])
         try:
-            [embedding] = self._query_embedder.embed([query_text])
+            [embedding] = self._query_embedder.embed([self._format.for_query(query_text)])
         except Exception as exc:  # sin modelo de huellas, la búsqueda sigue por palabras
             _logger.warning("No se pudo calcular la huella de la pregunta (%s)", type(exc).__name__)
             return None
@@ -157,7 +235,9 @@ class MemoryEmbeddingService:
         if not self._store.available or not texts:
             return None
         try:
-            embeddings = self._query_embedder.embed(list(texts))
+            embeddings = self._query_embedder.embed(
+                [self._format.for_document(text) for text in texts]
+            )
         except Exception as exc:  # sin modelo de huellas, los ejemplos van por palabras
             _logger.warning("No se pudieron calcular huellas (%s)", type(exc).__name__)
             return None
@@ -168,8 +248,8 @@ class MemoryEmbeddingService:
 
     @property
     def query_model_name(self) -> str:
-        """El modelo que da las huellas dentro del turno."""
-        return self._query_embedder.model_name
+        """La clave de las huellas que se piden dentro del turno: el modelo y su formato."""
+        return self._format.key(self._query_embedder.model_name)
 
     def nearest(self, embedding: Sequence[float]) -> list[tuple[int, float]]:
         """Los recuerdos que se parecen a ``embedding`` por encima del umbral, del más al menos.
@@ -180,13 +260,25 @@ class MemoryEmbeddingService:
         try:
             return self._store.nearest(
                 embedding,
-                self._embedder.model_name,
-                min_similarity=MIN_SIMILARITY,
+                self.model_key,
+                min_similarity=self.min_similarity,
                 limit=SEARCH_LIMIT,
             )
         except Exception as exc:  # sin búsqueda por significado, sigue por palabras
             _logger.warning("No se pudo buscar por significado (%s)", type(exc).__name__)
             return []
+
+    def similarity_between(self, first: int, second: int) -> float | None:
+        """El parecido entre dos recuerdos por sus huellas, o ``None`` si no se puede saber.
+
+        Lo pide el desempate por lo más nuevo (ADR-251). Si falla, no desempata: nunca
+        rompe el turno.
+        """
+        try:
+            return self._store.similarity(first, second, self.model_key)
+        except Exception as exc:  # sin el parecido, el orden se queda como estaba
+            _logger.warning("No se pudo comparar dos recuerdos (%s)", type(exc).__name__)
+            return None
 
 
 class MemorySearch:
@@ -223,3 +315,9 @@ class MemorySearch:
             FoundMemory(memory, word_ranks.get(memory.id), similarities.get(memory.id))
             for memory in found
         ]
+
+    def similarity_between(self, first: int, second: int) -> float | None:
+        """El parecido entre dos recuerdos, o ``None`` sin búsqueda por significado."""
+        if self._embeddings is None:
+            return None
+        return self._embeddings.similarity_between(first, second)

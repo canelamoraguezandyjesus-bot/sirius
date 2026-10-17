@@ -1579,3 +1579,103 @@ defectos:
     ficheros:
       - src/sirius/application/voice_test.py
       - tests/unit/test_voice_test.py
+  # ADR-247: la orden de E-R02-05 no daba su veredicto en su ordenador. Buscaba su base en
+  # la carpeta de serie y no en la que el eligiera al configurar Sirius, asi que con otra
+  # carpeta media una memoria vacia; y dejaba abiertas las bases de decisiones y proyectos
+  # de cada memoria medida, que Windows no deja borrar: el 16-10-2026 midio y se rompio al
+  # salir, sin decir si pasaba. Su prueba pasaba en Linux, que borra un fichero abierto.
+  - id: H-247
+    titulo: La orden de E-R02-05 buscaba su base en la carpeta de serie y en Windows se rompia al borrar las bases que dejaba abiertas
+    bloque: producto
+    gravedad: media
+    estado: cerrado
+    cerrado_por: 95368146706dc39e5959a069395c88c6484b0ddd
+    pr: 692
+    adr: 247
+    ficheros:
+      - scripts/medir_busqueda_de_memoria.py
+      - src/sirius/composition_root.py
+      - src/sirius/infrastructure/temporary_folder.py
+      - tests/integration/test_medir_busqueda_de_memoria.py
+  # ADR-249: el diario de Sirius dejaba de apuntar en cuanto se migraba la base, es decir
+  # en cada arranque: la configuracion de Alembic apagaba todos los registradores que ya
+  # existian. En su ordenador acababa en "Sirius iniciando". Las pruebas lo tapaban
+  # encendiendolos a mano.
+  - id: H-249
+    titulo: Migrar la base al arrancar apagaba el diario de Sirius
+    bloque: producto
+    gravedad: media
+    estado: cerrado
+    cerrado_por: 636c6af0602e60854be17953c84e18446f5f3178
+    pr: 692
+    adr: 249
+    ficheros:
+      - migrations/env.py
+      - tests/gui/test_app_bootstrap.py
+  # ADR-248: el proveedor de Ollama no pedia ningun tope de salida, y Ollama sin
+  # num_predict puede escribir sin fin: en su ordenador la pregunta 46 de la prueba a ciegas
+  # no acabo en mas de 10 minutos. Y su diario no decia que contestaba Ollama al fallar.
+  - id: H-248
+    titulo: El proveedor de Ollama no pedia tope de salida y una respuesta podia no acabar
+    bloque: producto
+    gravedad: alta
+    estado: cerrado
+    cerrado_por: 70795ec01e1e55b2d5b4309843a0f6b0fd5917cc
+    pr: 692
+    adr: 248
+    ficheros:
+      - src/sirius/adapters/llm/ollama_chat.py
+      - src/sirius/composition_root.py
+      - src/sirius/config/llm_provider_settings.py
+      - tests/integration/test_tope_de_salida_de_ollama.py
+  # ADR-250: en su ordenador la voz de personaje no cargaba: "'NoneType' object is not
+  # callable". La marca de agua de Perth importa pkg_resources, y el uv.lock de la pieza F
+  # fijaba setuptools 84.0.0, que ya no lo trae. Ninguna prueba cargo nunca Chatterbox de
+  # verdad, solo uno de mentira.
+  - id: H-250
+    titulo: La voz de personaje no cargaba porque el lock fijaba un setuptools sin el pkg_resources que importa Perth
+    bloque: producto
+    gravedad: media
+    estado: cerrado
+    cerrado_por: 8c6ba388d43afbefda770ec3690743fc181264a2
+    pr: 692
+    adr: 250
+    ficheros:
+      - pyproject.toml
+      - uv.lock
+      - tests/automation/test_marca_de_agua.py
+  # ADR-251: el banco de memoria pasaba en la nube con unas huellas de mentira en las que solo
+  # lo esperado se parecia a la pregunta. Con un modelo de verdad lo de antes tambien se
+  # parece, y en su ordenador «cosas que cambian» dio 2 de 14 el 16-10-2026. Lo cierra la
+  # PR #692, junto con lo de ADR-247 a ADR-250; su nota de arranque sigue en la incidencia.
+  - id: H-251
+    titulo: El banco de memoria de la nube no podia ver que lo de antes se pareciera a la pregunta tanto como lo de ahora
+    bloque: memoria
+    gravedad: media
+    estado: cerrado
+    cerrado_por: 95283d1210e30292cbd73cc61eb6e99943cf9609
+    pr: 692
+    adr: 251
+    incidencia: 693
+    ficheros:
+      - tests/acceptance/conductor_robot_0_2.py
+      - tests/integration/test_memoria_en_su_ordenador.py
+      - src/sirius/domain/relevance.py
+  # ADR-252: en la ventana, un turno de voz esperaba entera la nota del juez. El juez pedia
+  # con el tope de la charla, 4 096, y cortarle solo se miraba con cada trozo, que no llega
+  # mientras Ollama lee la pregunta. Lo cierra la PR #692, junto con lo de ADR-247 a ADR-251;
+  # su nota de arranque sigue en la incidencia.
+  - id: H-252
+    titulo: Un turno de voz esperaba entera la nota del juez, porque cortarle solo se miraba entre trozos
+    bloque: producto
+    gravedad: media
+    estado: cerrado
+    cerrado_por: 3d95b0477b84e8214f7b3421ba2f5fb306a58405
+    pr: 692
+    adr: 252
+    incidencia: 694
+    ficheros:
+      - src/sirius/adapters/llm/ollama_chat.py
+      - src/sirius/application/reply_judge.py
+      - src/sirius/presentation/main_window.py
+      - tests/unit/test_el_juez_no_frena_la_voz.py

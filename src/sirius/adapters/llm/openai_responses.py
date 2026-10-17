@@ -127,6 +127,13 @@ class OpenAIResponsesProvider:
         with self._lock:
             return operation_id in self._cancelled_operations
 
+    def _output_cap(self, request: LLMRequest) -> int:
+        """Lo más que puede escribir ``request``: menos que el tope si lo pide, nunca más
+        (ADR-252)."""
+        if request.max_output_tokens is None:
+            return self._max_output_tokens
+        return min(self._max_output_tokens, request.max_output_tokens)
+
     def _create_stream(self, request: LLMRequest) -> Iterable[object]:
         attempt = 0
         while True:
@@ -137,7 +144,7 @@ class OpenAIResponsesProvider:
                     input=request.input_text,
                     stream=True,
                     store=False,
-                    max_output_tokens=self._max_output_tokens,
+                    max_output_tokens=self._output_cap(request),
                     reasoning={"effort": self._reasoning_effort},
                 )
             except _RETRYABLE_EXCEPTIONS:

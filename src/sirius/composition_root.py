@@ -42,9 +42,11 @@ from sirius.adapters.export.filesystem_export_service import build_filesystem_ex
 from sirius.adapters.llm.budget import BudgetPolicy, BudgetTracker
 from sirius.adapters.llm.fake import FakeLLMProvider
 from sirius.adapters.llm.ollama_chat import (
+    DEFAULT_NUM_PREDICT,
     OllamaChatProvider,
     OllamaNotAvailableError,
     list_installed_models,
+    model_capabilities,
 )
 from sirius.adapters.llm.ollama_embeddings import (
     DEFAULT_EMBEDDING_MODEL,
@@ -97,6 +99,7 @@ from sirius.application.confirm_memory_suggestion import ConfirmMemorySuggestion
 from sirius.application.context import ContextBuilder
 from sirius.application.correct_memory import CorrectMemoryUseCase
 from sirius.application.create_backup import CreateBackupUseCase
+from sirius.application.data_location import DataLocationUseCase
 from sirius.application.decision_origin import GetDecisionOriginUseCase
 from sirius.application.delete_memory import DeleteMemoryUseCase
 from sirius.application.detect_precedence_conflicts import DetectPrecedenceConflictsUseCase
@@ -143,6 +146,7 @@ from sirius.config.llm_provider_settings import (
     OLLAMA_CHAT_MODEL_SETTING,
     LLMProviderConfigurationError,
     LLMProviderKind,
+    resolve_max_output_tokens,
     resolve_ollama_chat_settings,
     resolve_openai_api_key,
     resolve_openai_provider_settings,
@@ -158,6 +162,8 @@ from sirius.config.settings import load_settings, save_settings
 from sirius.domain.blind_test import BlindTestError
 from sirius.domain.capture import build_scene_registry
 from sirius.domain.robot_seed import ROBOT_SEED_REMINDER
+from sirius.infrastructure.bootstrap_location_store import build_bootstrap_location_store
+from sirius.infrastructure.data_path_validator import build_data_path_validator
 from sirius.infrastructure.local_voice_installation import (
     CHARACTER_INSTALL_COMMAND,
     ChosenVoiceInstallation,
@@ -165,7 +171,9 @@ from sirius.infrastructure.local_voice_installation import (
     voice_test_missing,
 )
 from sirius.infrastructure.logging import get_logger
+from sirius.infrastructure.paths import SiriusPaths, resolve_paths
 from sirius.ports.audio_playback import AudioPlayback
+from sirius.ports.data_location import DataLocationError
 from sirius.ports.embeddings import TextEmbedder
 from sirius.ports.llm import LLMProvider
 from sirius.ports.local_voice import ListeningEngines, SpeakingEngines
@@ -267,7 +275,7 @@ EMBEDDING_MODEL_SETTING = "ollama_embedding_model"
 
 
 def embedding_model(settings: Mapping[str, Any]) -> str:
-    """El modelo de huellas de Ollama: el de los ajustes, o ``qwen3-embedding:0.6b``."""
+    """El modelo de huellas de Ollama: el de los ajustes, o ``embeddinggemma`` (ADR-251)."""
     value = settings.get(EMBEDDING_MODEL_SETTING)
     if isinstance(value, str) and value.strip():
         return value.strip()
@@ -292,6 +300,32 @@ def save_local_voice(voice: SpeakingVoice) -> None:
 def current_local_voice_settings() -> LocalVoiceSettings:
     """Los ajustes de la voz como están ahora en el disco, con la voz que él eligió."""
     return local_voice_settings(load_settings())
+
+
+DATA_PATHS_UNKNOWN = "Abre Sirius una vez con su ventana: todavía no sabe dónde guardar tus datos."
+"""Lo que dicen las órdenes de consola cuando Sirius aún no sabe dónde están sus datos."""
+
+
+def known_data_paths() -> SiriusPaths | None:
+    """Dónde guarda Sirius sus datos, como lo resuelve la ventana; ``None`` si aún no lo sabe.
+
+    Respeta la carpeta que él eligiera al configurarlo. La usan ``sirius-oye`` y las órdenes
+    de sus evaluaciones, que no abren la ventana: una sola función, para que ninguna busque
+    su base en otra carpeta que la ventana (ADR-247).
+    """
+    default = resolve_paths()
+    location = DataLocationUseCase(
+        location_store=build_bootstrap_location_store(),
+        validator=build_data_path_validator(),
+        default_data_dir=default.data_dir,
+    )
+    try:
+        resolution = location.resolve()
+    except DataLocationError:
+        return None
+    if resolution.needs_selection:
+        return None
+    return resolve_paths(resolution.path)
 
 
 @dataclass(frozen=True, slots=True)
@@ -406,6 +440,16 @@ def chat_goes_through_ollama() -> bool:
         return False
 
 
+def _blind_test_num_predict() -> int:
+    """El tope de salida de los ajustes para la prueba a ciegas, que pregunta a modelos aún
+    sin elegir (ADR-248). Si los ajustes no lo dan bien, el de serie: elegir modelo no se
+    para por eso, y la charla ya dice qué está mal."""
+    try:
+        return resolve_max_output_tokens(dict(load_settings()))
+    except LLMProviderConfigurationError:
+        return DEFAULT_NUM_PREDICT
+
+
 def _local_chat(provider: LLMProvider) -> OllamaChatProvider | None:
     """La charla, si va por el Ollama de este ordenador; si no, ninguna.
 
@@ -430,7 +474,7 @@ class _LocalChatModel:
 
     def __init__(self, transport: httpx.BaseTransport | None) -> None:
         self._transport = transport
-        self._key: tuple[str, int] | None = None
+        self._key: tuple[str, int, int] | None = None
         self._provider: OllamaChatProvider | None = None
         # El juez de cada turno y el de las preguntas trampa corren en hilos distintos.
         self._lock = threading.Lock()
@@ -440,13 +484,16 @@ class _LocalChatModel:
             settings = resolve_ollama_chat_settings(dict(load_settings()))
         except LLMProviderConfigurationError:
             return None
-        key = (settings.model, settings.num_ctx)
+        key = (settings.model, settings.num_ctx, settings.num_predict)
         with self._lock:
             if self._provider is None or self._key != key:
                 if self._provider is not None:
                     self._provider.close()
                 self._provider = OllamaChatProvider(
-                    settings.model, num_ctx=settings.num_ctx, transport=self._transport
+                    settings.model,
+                    num_ctx=settings.num_ctx,
+                    num_predict=settings.num_predict,
+                    transport=self._transport,
                 )
                 self._key = key
             return self._provider
@@ -494,6 +541,7 @@ def _build_llm_provider(
             return OllamaChatProvider(
                 ollama_settings.model,
                 num_ctx=ollama_settings.num_ctx,
+                num_predict=ollama_settings.num_predict,
                 transport=ollama_transport,
             )
 
@@ -951,16 +999,25 @@ def build_conversation_dependencies(
         local = _local_chat(send_message_use_case.llm_provider)
         return local.model_name if local is not None else None
 
-    def installed_chat_models() -> tuple[str, ...]:
+    def installed_ollama_models() -> tuple[str, ...]:
         try:
             return list_installed_models(ollama_transport)
         except OllamaNotAvailableError as exc:
             raise BlindTestError(str(exc)) from exc
 
+    def ollama_model_capabilities(model: str) -> tuple[str, ...]:
+        try:
+            return model_capabilities(model, ollama_transport)
+        except OllamaNotAvailableError as exc:
+            raise BlindTestError(str(exc)) from exc
+
     blind_test_use_case = BlindTestUseCase(
         identity_repository=identity_repository,
-        provider_for=lambda model: OllamaChatProvider(model, transport=ollama_transport),
-        list_models=installed_chat_models,
+        provider_for=lambda model: OllamaChatProvider(
+            model, num_predict=_blind_test_num_predict(), transport=ollama_transport
+        ),
+        list_models=installed_ollama_models,
+        model_capabilities=ollama_model_capabilities,
         choose_model=choose_chat_model,
         current_model=current_chat_model,
         seed_examples=seed_examples,

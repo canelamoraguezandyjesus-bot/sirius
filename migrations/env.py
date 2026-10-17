@@ -12,8 +12,12 @@ from sirius.infrastructure.paths import resolve_paths
 
 config = context.config
 
-if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+# El registro de alembic.ini es el de su línea de órdenes. Sirius migra al arrancar sin él
+# (``configure_logger``), que pintaba en su consola sus «INFO [alembic…]» (ADR-252). Y sin
+# apagar los registradores que ya existen: con el valor por defecto, el diario de Sirius
+# dejaba de apuntar desde ahí (ADR-249).
+if config.config_file_name is not None and config.attributes.get("configure_logger", True):
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = Base.metadata
 

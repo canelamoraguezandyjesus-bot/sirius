@@ -5,6 +5,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+from PySide6.QtCore import QCoreApplication
 from PySide6.QtWidgets import QApplication, QMainWindow
 
 from sirius.adapters.audio.voice_libraries import hugging_face_offline
@@ -108,7 +109,12 @@ def _build_listening_main_window(
     dependencies: ConversationDependencies, windows: list[QMainWindow]
 ) -> ValidatedMainWindow:
     """La ventana de verdad de Sirius, con su propio bucle para atender al oído: cada
-    ventana el suyo, porque un hilo parado no vuelve a arrancar (ADR-244)."""
+    ventana el suyo, porque un hilo parado no vuelve a arrancar (ADR-244).
+
+    Al arrancar, pide al modelo de la charla que se cargue, en segundo plano: la primera
+    frase no espera a que cargue (ADR-252).
+    """
+    dependencies.send_message_use_case.warm_up_in_background()
     return _build_main_window(
         dependencies, windows, listening_loop=ListeningLoop(dependencies.local_listening)
     )
@@ -212,9 +218,20 @@ def _start_with_resolved_path(data_dir: Path, windows: list[QMainWindow]) -> QMa
 
     initialize_persistence(paths)
     dependencies = build_conversation_dependencies(paths.data_dir / "sirius.db", paths.backups_dir)
+    app = QApplication.instance()
+    if app is not None:
+        _release_on_quit(app, dependencies)
     logger.info("Sirius iniciado")
 
     return _build_initial_window(dependencies, windows)
+
+
+def _release_on_quit(app: QCoreApplication, dependencies: ConversationDependencies) -> None:
+    """Al salir de Sirius, suelta la voz y con ella la cancelación de eco: viva hasta que
+    Python se cierra, livekit pinta en rojo un error suyo (ADR-252). Al salir, y no al
+    cerrarse una ventana: tras acabar un proyecto, la ventana siguiente sigue con la voz
+    cargada, que la de personaje tarda en cargar."""
+    app.aboutToQuit.connect(dependencies.local_listening.close)
 
 
 def _build_data_location_window(

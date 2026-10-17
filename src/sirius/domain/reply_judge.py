@@ -29,6 +29,12 @@ HIGHEST_SCORE = 5
 #: Si discrepa del propietario en más de estas de las 40, el juez aún no vale.
 MAX_JUDGE_DISAGREEMENTS = 4
 
+#: Lo más que escribe el juez. Contesta con una nota o una palabra, que salen al principio
+#: («4», «un 4 de 5», «discrepa: …»); cabe una frase antes, por si la dice. Con el tope de
+#: la charla, 4 096, un modelo que divagara tendría ocupado el modelo mucho rato, y la
+#: voz, esperando (ADR-252).
+JUDGE_MAX_OUTPUT_TOKENS = 64
+
 
 class TrickVerdict(StrEnum):
     """Qué hizo Sirius con una idea mala."""

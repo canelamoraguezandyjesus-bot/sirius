@@ -100,7 +100,8 @@ Los umbrales están fijados el 07-10-2026, antes de medir nada.
 - **Qué hace él.** Charla con Sirius como siempre y marca cada respuesta con «eso es
   Sirius» o «eso no». Se marca si suena a Sirius, no si le gusta.
 - **Pasa si**, de las últimas 50 respuestas marcadas, 40 o más son «eso es Sirius». La
-  cuenta la da Sirius.
+  cuenta la da Sirius con una orden, `uv run python scripts/contar_las_marcas.py`, que dice
+  también qué modelos dieron esas 50 (ADR-247).
 - **Si no pasa.** Se ajusta la semilla con sus marcas, como mucho dos veces. Si sigue sin
   llegar, se le pregunta si se prueba otro modelo o se le entrena.
 - **Resultado:** pendiente.
@@ -128,7 +129,14 @@ Los umbrales están fijados el 07-10-2026, antes de medir nada.
   verdad, Qwen3-Embedding 0.6B o EmbeddingGemma, y pega lo que sale.
 - **Pasa si** acierta 90 o más de los 100, y todos los de «olvida eso» y los de «quién
   dijo qué».
-- **Resultado:** pendiente.
+- **Si no pasa.** La misma orden con `--diagnostico` da una línea por caso con lo que llegó
+  al modelo y con qué parecidos, y con `--modelo` se pasa con otro modelo de huellas sin
+  tocar sus ajustes (ADR-247).
+- **Resultado:** el 16-10-2026, en su ordenador, no pasa: 70 de 100 con
+  qwen3-embedding:0.6b y 77 de 100 con embeddinggemma, las dos con 14 de 14 en «olvida
+  eso» y en «quién dijo qué». ADR-251 cambia el modelo, su formato, el umbral y el orden;
+  con los parecidos que midió su ordenador ese día, rehecho aquí por el camino real, da 93
+  de 100. Lo que da en su ordenador está pendiente de que repita la orden.
 
 ### E-R02-05
 
@@ -137,7 +145,10 @@ Los umbrales están fijados el 07-10-2026, antes de medir nada.
 - **Qué hace él.** Ejecuta una orden que busca 100 veces en su memoria y otras 100 en una
   de 10.000 recuerdos de prueba, contando la huella de cada pregunta, y pega lo que sale.
 - **Pasa si** el P95 queda por debajo de 150 ms en las dos.
-- **Resultado:** pendiente.
+- **Resultado:** el 16-10-2026, en su ordenador, no pasa: con 10.000 recuerdos de prueba
+  el P95 es 170 ms, y el límite es 150; con su memoria, de 1 recuerdo, 61 ms. ADR-251
+  busca en dos pasos cuando hay muchas huellas. Lo que da en su ordenador está pendiente de
+  que repita la orden.
 
 ## Lo que estas pruebas no garantizan
 

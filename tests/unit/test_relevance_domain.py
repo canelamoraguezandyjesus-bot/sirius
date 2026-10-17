@@ -6,6 +6,7 @@ D-11). No fakes, no SQLite — only ``Memory``/``Decision`` value objects and
 from __future__ import annotations
 
 import dataclasses
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -15,6 +16,8 @@ from sirius.domain.criticality import Criticality
 from sirius.domain.decision import Decision, DecisionRevision, DecisionStatus
 from sirius.domain.memory import Memory, MemoryRevision, MemoryStatus
 from sirius.domain.relevance import (
+    NEWER_FIRST_BETWEEN,
+    NEWER_FIRST_MARGIN,
     KnowledgeKind,
     RankedKnowledge,
     candidate_currently_valid,
@@ -23,6 +26,7 @@ from sirius.domain.relevance import (
     category_index_matches_query,
     category_matches_query,
     cupo_del_filtro,
+    newer_first_on_near_tie,
     rank_relevant_knowledge,
     recortar_al_cupo,
     rescue_max_criticality_candidates,
@@ -1108,3 +1112,99 @@ def test_recortar_al_cupo_con_un_cupo_mayor_que_lo_conservado_no_quita_nada() ->
     candidates = tuple(_ranked_memory(_memory(n)) for n in (1, 2))
 
     assert recortar_al_cupo(candidates, 9) == candidates
+
+
+# --- ADR-251: lo más nuevo que dice casi lo mismo, delante ------------------------------
+
+
+def _por_significado(memory_id: int, parecido: float, *, minutos: int) -> RankedKnowledge:
+    return RankedKnowledge(
+        kind=KnowledgeKind.MEMORY,
+        item=_memory(memory_id, updated_at=_NOW + timedelta(minutes=minutos)),
+        subject_matches_query=False,
+        project_matches_active=True,
+        fts_match=False,
+        semantic_match=True,
+        semantic_similarity=parecido,
+    )
+
+
+def _entre(parecidos: dict[tuple[int, int], float]) -> Callable[[int, int], float | None]:
+    def parecido(first: int, second: int) -> float | None:
+        return parecidos.get((first, second))
+
+    return parecido
+
+
+def test_lo_nuevo_que_dice_casi_lo_mismo_pasa_delante_del_primero() -> None:
+    # «Vive en Madrid.» se parece algo más a «¿Dónde vivo ahora?» que «Se ha mudado a
+    # Valencia.», dicho después: casi lo mismo, así que va delante lo de ahora.
+    viejo = _por_significado(1, 0.62, minutos=0)
+    otro = _por_significado(2, 0.40, minutos=1)
+    nuevo = _por_significado(3, 0.62 - NEWER_FIRST_MARGIN, minutos=2)
+
+    ordenados = newer_first_on_near_tie((viejo, otro, nuevo), _entre({(1, 3): NEWER_FIRST_BETWEEN}))
+
+    assert [c.item_id for c in ordenados] == [3, 1, 2]
+
+
+@pytest.mark.parametrize(
+    ("parecido_del_nuevo", "entre", "minutos_del_nuevo"),
+    [
+        # Se parece a la pregunta más de 0,05 menos que el primero.
+        (0.62 - NEWER_FIRST_MARGIN - 0.001, NEWER_FIRST_BETWEEN, 2),
+        # Los dos no dicen casi lo mismo.
+        (0.61, NEWER_FIRST_BETWEEN - 0.001, 2),
+        # No es más nuevo.
+        (0.61, 0.9, -1),
+        # No se sabe cuánto se parecen.
+        (0.61, None, 2),
+    ],
+)
+def test_si_no_dice_casi_lo_mismo_o_no_es_mas_nuevo_el_orden_no_cambia(
+    parecido_del_nuevo: float, entre: float | None, minutos_del_nuevo: int
+) -> None:
+    viejo = _por_significado(1, 0.62, minutos=0)
+    nuevo = _por_significado(3, parecido_del_nuevo, minutos=minutos_del_nuevo)
+    parecidos = {} if entre is None else {(1, 3): entre}
+
+    ordenados = newer_first_on_near_tie((viejo, nuevo), _entre(parecidos))
+
+    assert [c.item_id for c in ordenados] == [1, 3]
+
+
+@pytest.mark.parametrize("parecido_del_primero", [0.62, NEWER_FIRST_MARGIN - 0.01])
+def test_lo_que_solo_traen_las_palabras_no_desempata(parecido_del_primero: float) -> None:
+    # También si el primero se parece tan poco que el margen dejaría pasar un parecido 0.
+    viejo = _por_significado(1, parecido_del_primero, minutos=0)
+    por_palabras = dataclasses.replace(
+        _por_significado(3, 0.0, minutos=2), semantic_match=False, fts_match=True
+    )
+
+    ordenados = newer_first_on_near_tie((viejo, por_palabras), _entre({(1, 3): 0.95}))
+
+    assert [c.item_id for c in ordenados] == [1, 3]
+
+
+def test_solo_se_mueve_uno_y_solo_delante_del_primer_recuerdo() -> None:
+    decision = RankedKnowledge(
+        kind=KnowledgeKind.DECISION,
+        item=_decision(9),
+        subject_matches_query=True,
+        project_matches_active=True,
+        fts_match=True,
+    )
+    viejo = _por_significado(1, 0.62, minutos=0)
+    segundo = _por_significado(2, 0.61, minutos=1)
+    tercero = _por_significado(3, 0.60, minutos=2)
+
+    ordenados = newer_first_on_near_tie(
+        (decision, viejo, segundo, tercero), _entre({(1, 2): 0.8, (1, 3): 0.8})
+    )
+
+    assert [(c.kind, c.item_id) for c in ordenados] == [
+        (KnowledgeKind.DECISION, 9),
+        (KnowledgeKind.MEMORY, 2),
+        (KnowledgeKind.MEMORY, 1),
+        (KnowledgeKind.MEMORY, 3),
+    ]

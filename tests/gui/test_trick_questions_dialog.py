@@ -6,13 +6,19 @@ ejecuta en el acto), así que cada paso se ve sin esperar.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from _hojas_en_su_pantalla import (
+    abre,
+    cabe_en_su_pantalla,
+    mira_que_es_una_ventana_que_cabe,
+    se_ve_en,
+)
 from PySide6.QtCore import QRunnable
-from PySide6.QtWidgets import QMessageBox
+from PySide6.QtWidgets import QMessageBox, QScrollArea
 from pytestqt.qtbot import QtBot
 
 from sirius.adapters.persistence.bootstrap import initialize_persistence
@@ -45,8 +51,9 @@ class _Identidades:
 
 
 class _Modelo:
-    def __init__(self, *, falla: bool = False) -> None:
+    def __init__(self, *, falla: bool = False, larga: bool = False) -> None:
         self._falla = falla
+        self._larga = larga
 
     def health_check(self) -> bool:
         return True
@@ -55,26 +62,29 @@ class _Modelo:
         if self._falla:
             yield LLMError(kind=LLMErrorKind.CONNECTION, message="No se pudo contactar.")
             return
-        yield LLMCompleted(
-            text=f"Ni de broma: {request.input_text}", input_tokens=1, output_tokens=1
-        )
+        # Con ``larga``, 3 000 caracteres más, como una respuesta que repite la semilla.
+        texto = f"Ni de broma: {request.input_text}" + (" bla" * 750 if self._larga else "")
+        yield LLMCompleted(text=texto, input_tokens=1, output_tokens=1)
 
     def cancel(self, operation_id: str) -> None:
         del operation_id
 
 
 class _Juez:
-    def score(self, reply: str) -> int:
-        del reply
+    def score(self, reply: str, *, should_stop: Callable[[], bool] | None = None) -> int:
+        del reply, should_stop
         return 5
 
     def verdict(self, bad_idea: str, reply: str) -> TrickVerdict:
         del bad_idea, reply
         return TrickVerdict.DISCREPA
 
+    def cancel(self) -> None:
+        pass
 
-def _caso(*, falla: bool = False, local: bool = True) -> TrickQuestionsUseCase:
-    modelo = _Modelo(falla=falla)
+
+def _caso(*, falla: bool = False, local: bool = True, larga: bool = False) -> TrickQuestionsUseCase:
+    modelo = _Modelo(falla=falla, larga=larga)
     return TrickQuestionsUseCase(
         _Identidades(),  # type: ignore[arg-type]
         local_chat_provider=lambda: modelo if local else None,
@@ -187,3 +197,28 @@ def test_con_la_charla_fuera_de_este_ordenador_la_ventana_no_se_abre(
 
     [aviso] = avisos
     assert "Elige uno antes con la prueba a ciegas" in aviso
+
+
+def test_con_una_respuesta_larguisima_la_hoja_cabe_en_su_pantalla_y_se_baja(
+    qtbot: QtBot,
+) -> None:
+    # Como en la prueba a ciegas de su ordenador: una respuesta de Sirius de 3 000
+    # caracteres no se podía leer entera ni bajar (ADR-247).
+    ventana, _ = _ventana(qtbot, _caso(larga=True))
+    ventana.start_button.click()
+    abre(ventana, qtbot)
+
+    assert cabe_en_su_pantalla(ventana)
+    paso = ventana.pages.currentWidget()
+    assert isinstance(paso, QScrollArea)
+    barra = paso.verticalScrollBar()
+    assert barra.maximum() > 0
+    assert paso.horizontalScrollBar().maximum() == 0
+    barra.setValue(barra.maximum())
+    assert se_ve_en(paso, ventana.agrees_button)
+
+
+def test_la_hoja_se_minimiza_se_maximiza_y_cabe_en_su_pantalla(qtbot: QtBot) -> None:
+    ventana, _ = _ventana(qtbot, _caso())
+
+    mira_que_es_una_ventana_que_cabe(ventana, ventana.pages, qtbot)

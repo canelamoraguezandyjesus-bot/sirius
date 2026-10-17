@@ -15,6 +15,7 @@ from __future__ import annotations
 from sirius.adapters.persistence.lexical_query_treatment import (
     RAIZ_MINIMA,
     VACIAS,
+    VACIAS_DE_LOS_RECUERDOS,
     condicion_declarada,
     ordenar_estable,
     plegar,
@@ -151,3 +152,16 @@ def test_sujeto_estructural_sin_clave_ni_terminos_es_vacio() -> None:
 
 def test_ordenar_estable_es_determinista_y_sin_duplicados() -> None:
     assert ordenar_estable(["b", "a", "b", "c"]) == ("a", "b", "c")
+
+
+def test_las_vacias_de_los_recuerdos_van_aparte_y_la_lista_del_laboratorio_no_cambia() -> None:
+    # ADR-251: «tiene» y «cuántos» no discriminan entre recuerdos, pero la lista del
+    # laboratorio, que usan el motor por etapas y el banco de 47 casos, sigue igual.
+    pregunta = "¿Cuántos metros tiene el salón?"
+
+    assert terminos_significativos(pregunta) == ("cuantos", "metros", "tiene", "salon")
+    assert terminos_significativos(pregunta, VACIAS | VACIAS_DE_LOS_RECUERDOS) == (
+        "metros",
+        "salon",
+    )
+    assert not VACIAS & VACIAS_DE_LOS_RECUERDOS

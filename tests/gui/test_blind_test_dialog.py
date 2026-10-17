@@ -6,14 +6,25 @@ El trabajo de preguntar a los modelos corre aquí en el mismo hilo
 
 from __future__ import annotations
 
+import json
 import random
+import threading
+import time
 from collections.abc import Iterable
 from datetime import UTC, datetime
 from pathlib import Path
 
+import httpx
 import pytest
-from PySide6.QtCore import QRunnable
-from PySide6.QtWidgets import QAbstractButton, QLabel, QMainWindow
+from _hojas_en_su_pantalla import (
+    abre,
+    cabe_en_su_pantalla,
+    mira_que_es_una_ventana_que_cabe,
+    se_ve_en,
+)
+from PySide6.QtCore import QRunnable, Qt, QThreadPool
+from PySide6.QtTest import QTest
+from PySide6.QtWidgets import QAbstractButton, QLabel, QMainWindow, QScrollArea
 from pytestqt.qtbot import QtBot
 
 from sirius.adapters.persistence.bootstrap import initialize_persistence
@@ -47,10 +58,16 @@ class _Identidades:
         return Identity(id=1, current_version=version, created_at=version.created_at)
 
 
+#: Lo que añade a cada respuesta un modelo que se alarga: 3 000 caracteres, como el suyo que
+#: repitió la semilla entera.
+_LARGUISIMA = " bla" * 750
+
+
 class _Modelo:
-    def __init__(self, nombre: str, *, falla: bool = False) -> None:
+    def __init__(self, nombre: str, *, falla: bool = False, larga: bool = False) -> None:
         self._fruta = _FRUTAS[nombre]
         self._falla = falla
+        self._larga = larga
 
     def health_check(self) -> bool:
         return True
@@ -60,7 +77,8 @@ class _Modelo:
             yield LLMError(kind=LLMErrorKind.CONNECTION, message="No se pudo contactar.")
             return
         numero = BLIND_TEST_QUESTIONS.index(request.input_text) + 1
-        yield LLMCompleted(text=f"{self._fruta} {numero}", input_tokens=1, output_tokens=1)
+        texto = f"{self._fruta} {numero}" + (_LARGUISIMA if self._larga else "")
+        yield LLMCompleted(text=texto, input_tokens=1, output_tokens=1)
 
     def cancel(self, operation_id: str) -> None:
         del operation_id
@@ -68,7 +86,11 @@ class _Modelo:
 
 class _Entorno:
     def __init__(
-        self, *, instalados: tuple[str, ...] | None = None, falla: str | None = None
+        self,
+        *,
+        instalados: tuple[str, ...] | None = None,
+        falla: str | None = None,
+        larga: str | None = None,
     ) -> None:
         self.elegidos: list[str] = []
         self.avisos: list[tuple[str, str]] = []
@@ -83,8 +105,11 @@ class _Entorno:
 
         self.caso = BlindTestUseCase(
             identity_repository=_Identidades(),  # type: ignore[arg-type]
-            provider_for=lambda nombre: _Modelo(nombre, falla=nombre == falla),
+            provider_for=lambda nombre: _Modelo(
+                nombre, falla=nombre == falla, larga=nombre == larga
+            ),
             list_models=listar,
+            model_capabilities=lambda nombre: ("completion",),
             choose_model=self.elegidos.append,
             current_model=lambda: self.elegidos[-1] if self.elegidos else None,
             rng=random.Random(4),
@@ -142,8 +167,8 @@ def test_mientras_elige_no_ve_ningun_nombre_y_al_final_se_queda_el_que_mas_eligi
         visibles = _textos_visibles(dialogo)
         for modelo in _FRUTAS:
             assert modelo not in visibles
-        boton = next(b for b in dialogo.option_buttons if f"manzana {numero}" in b.text())
-        dialogo.choose_letter(str(boton.property("letter")))
+        texto = next(t for t in dialogo.option_texts if f"manzana {numero}" in t.text())
+        dialogo.choose_letter(str(texto.property("letter")))
         dialogo.next_button.click()
 
     assert dialogo.pages.currentIndex() == 3
@@ -172,6 +197,46 @@ def test_no_deja_pasar_de_pregunta_sin_elegir_y_deja_volver_atras(qtbot: QtBot) 
     assert dialogo.next_button.isEnabled()
 
 
+def test_con_una_respuesta_larguisima_la_hoja_cabe_en_su_pantalla_y_se_baja(
+    qtbot: QtBot,
+) -> None:
+    # En su ordenador un modelo repitió la semilla entera: la hoja se hizo más ancha y más
+    # alta que la pantalla, sin poder bajar ni llegar a «Siguiente» (ADR-247).
+    dialogo = _Entorno(instalados=("gemma-y", "qwen-x"), larga="qwen-x").ventana(qtbot)
+    _marca(dialogo, "qwen-x", "gemma-y")
+    dialogo.start_button.click()
+    abre(dialogo, qtbot)
+
+    assert cabe_en_su_pantalla(dialogo)
+    paso = dialogo.pages.currentWidget()
+    assert isinstance(paso, QScrollArea)
+    barra = paso.verticalScrollBar()
+    assert barra.maximum() > 0
+    assert paso.horizontalScrollBar().maximum() == 0
+    barra.setValue(barra.maximum())
+    assert se_ve_en(paso, dialogo.next_button)
+
+
+def test_pulsar_el_texto_de_una_respuesta_la_elige(qtbot: QtBot) -> None:
+    dialogo = _Entorno(instalados=("gemma-y", "qwen-x")).ventana(qtbot)
+    _marca(dialogo, "qwen-x", "gemma-y")
+    dialogo.start_button.click()
+
+    QTest.mouseClick(dialogo.option_texts[1], Qt.MouseButton.LeftButton)
+
+    assert dialogo.option_buttons[1].isChecked()
+    # El texto va tal cual, como iba en el botón: una respuesta con etiquetas no se pinta.
+    assert dialogo.option_texts[1].textFormat() == Qt.TextFormat.PlainText
+    assert dialogo.option_buttons[1].text() == f"{dialogo.option_texts[1].property('letter')})"
+    assert dialogo.next_button.isEnabled()
+
+
+def test_la_hoja_se_minimiza_se_maximiza_y_cabe_en_su_pantalla(qtbot: QtBot) -> None:
+    dialogo = _Entorno(instalados=("gemma-y", "qwen-x")).ventana(qtbot)
+
+    mira_que_es_una_ventana_que_cabe(dialogo, dialogo.pages, qtbot)
+
+
 def test_con_empate_elige_el_propietario_entre_los_empatados(qtbot: QtBot) -> None:
     entorno = _Entorno(instalados=("gemma-y", "qwen-x"))
     dialogo = entorno.ventana(qtbot)
@@ -180,8 +245,8 @@ def test_con_empate_elige_el_propietario_entre_los_empatados(qtbot: QtBot) -> No
 
     for numero in range(1, 21):
         fruta = "pera" if numero <= 10 else "manzana"
-        boton = next(b for b in dialogo.option_buttons if f"{fruta} {numero}" in b.text())
-        dialogo.choose_letter(str(boton.property("letter")))
+        texto = next(t for t in dialogo.option_texts if f"{fruta} {numero}" in t.text())
+        dialogo.choose_letter(str(texto.property("letter")))
         dialogo.next_button.click()
 
     assert "Empate" in dialogo.result_label.text()
@@ -231,6 +296,7 @@ def test_cerrar_a_medias_para_las_preguntas_y_no_avisa_de_nada(qtbot: QtBot) -> 
         run_worker=pendientes.append,
     )
     qtbot.addWidget(dialogo)
+    pendientes.pop(0).run()  # la lista de modelos
     _marca(dialogo, "gemma-y", "qwen-x")
     dialogo.start_button.click()
 
@@ -258,3 +324,116 @@ def test_la_configuracion_dice_con_que_modelo_conversa_sirius(qtbot: QtBot, tmp_
 
     assert ventana.chat_model_label.text() == "Sirius conversa con gemma-y, en este ordenador."
     assert ventana.blind_test_button.text() == "Elegir el modelo a ciegas…"
+
+
+def _ollama_con_modelos_de_huellas(request: httpx.Request) -> httpx.Response:
+    """Un Ollama de mentira como el suyo: dos modelos que conversan y dos de huellas."""
+    if request.url.path == "/api/tags":
+        nombres = ("gemma3:4b", "embeddinggemma", "qwen3:4b-instruct", "qwen3-embedding:0.6b")
+        return httpx.Response(200, json={"models": [{"name": nombre} for nombre in nombres]})
+    if request.url.path == "/api/show":
+        modelo = json.loads(request.content)["model"]
+        sabe = ["embedding"] if "embedding" in modelo else ["completion", "tools"]
+        return httpx.Response(200, json={"capabilities": sabe})
+    return httpx.Response(404, json={"error": f"ruta no simulada: {request.url.path}"})
+
+
+def test_con_modelos_de_huellas_en_ollama_solo_ofrece_los_que_conversan(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    # En su ordenador ofrecía embeddinggemma y qwen3-embedding:0.6b, y marcar uno hacía
+    # fallar la prueba tras muchos minutos (ADR-247).
+    save_settings({"llm_provider": "ollama", "ollama_chat_model": "gemma3:4b"})
+    rutas = resolve_paths()
+    initialize_persistence(rutas)
+    dependencias = build_conversation_dependencies(
+        rutas.data_dir / "sirius.db",
+        tmp_path / "copias",
+        secret_store=FakeSecretStore(),
+        ollama_transport=httpx.MockTransport(_ollama_con_modelos_de_huellas),
+    )
+    try:
+        dialogo = BlindTestDialog(
+            dependencias.blind_test_use_case, run_worker=lambda trabajo: trabajo.run()
+        )
+        qtbot.addWidget(dialogo)
+
+        assert [check.text() for check in dialogo.model_checks] == [
+            "gemma3:4b",
+            "qwen3:4b-instruct",
+        ]
+        fuera = dialogo.left_out_status.text()
+        assert "embeddinggemma: no conversa" in fuera
+        assert "qwen3-embedding:0.6b: no conversa" in fuera
+    finally:
+        dependencias.close_database_connections()
+
+
+def test_la_hoja_se_abre_sin_esperar_a_que_ollama_diga_que_modelos_tiene(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    # Ronda 2 de Codex: la lista se pedía en el hilo de la ventana, con un /api/show por
+    # modelo de hasta diez segundos cada uno (ADR-247).
+    suelta = threading.Event()
+
+    def ollama_que_tarda(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/show":
+            suelta.wait(timeout=2)
+        return _ollama_con_modelos_de_huellas(request)
+
+    save_settings({"llm_provider": "ollama", "ollama_chat_model": "gemma3:4b"})
+    rutas = resolve_paths()
+    initialize_persistence(rutas)
+    dependencias = build_conversation_dependencies(
+        rutas.data_dir / "sirius.db",
+        tmp_path / "copias",
+        secret_store=FakeSecretStore(),
+        ollama_transport=httpx.MockTransport(ollama_que_tarda),
+    )
+    try:
+        antes = time.monotonic()
+        dialogo = BlindTestDialog(dependencias.blind_test_use_case)
+        qtbot.addWidget(dialogo)
+
+        assert time.monotonic() - antes < 1
+        assert dialogo.models_status.text() == "Preguntando a Ollama qué modelos tiene…"
+        assert not dialogo.start_button.isEnabled()
+        suelta.set()
+        qtbot.waitUntil(lambda: len(dialogo.model_checks) == 2, timeout=5000)
+        assert dialogo.models_status.text() == ""
+        _marca(dialogo, "gemma3:4b", "qwen3:4b-instruct")
+        assert dialogo.start_button.isEnabled()
+    finally:
+        suelta.set()
+        QThreadPool.globalInstance().waitForDone(5000)
+        dependencias.close_database_connections()
+
+
+def test_si_se_cierra_antes_de_saber_que_modelos_hay_la_lista_se_descarta(qtbot: QtBot) -> None:
+    entorno = _Entorno(instalados=("gemma-y", "qwen-x"))
+    pendientes: list[QRunnable] = []
+    dialogo = BlindTestDialog(entorno.caso, run_worker=pendientes.append)
+    qtbot.addWidget(dialogo)
+
+    dialogo.reject()
+    [lista] = pendientes
+    lista.run()
+
+    assert dialogo.model_checks == []
+
+
+def test_si_preguntar_la_lista_se_rompe_lo_dice_sin_romper_la_hoja(qtbot: QtBot) -> None:
+    entorno = _Entorno(instalados=("gemma-y", "qwen-x"))
+
+    def se_rompe() -> tuple[str, ...]:
+        msg = "algo inesperado"
+        raise RuntimeError(msg)
+
+    entorno.caso._list_models = se_rompe
+    dialogo = entorno.ventana(qtbot)
+
+    assert dialogo.models_status.text() == (
+        "No se pudo preguntar a Ollama qué modelos tiene. Vuelve a abrir la prueba."
+    )
+    assert dialogo.model_checks == []
+    assert not dialogo.start_button.isEnabled()

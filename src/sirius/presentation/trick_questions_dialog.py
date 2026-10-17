@@ -32,6 +32,7 @@ from sirius.application.trick_questions import (
     TrickResult,
 )
 from sirius.infrastructure.logging import get_logger
+from sirius.presentation.sheet_window import fit_as_sheet, scrollable
 
 _logger = get_logger(__name__)
 
@@ -95,11 +96,12 @@ class TrickQuestionsDialog(QDialog):
         self.trick_result: TrickResult | None = None
 
         self.pages = QStackedWidget()
-        self.pages.addWidget(self._build_start_page())
-        self.pages.addWidget(self._build_answer_page())
-        self.pages.addWidget(self._build_result_page())
+        self.pages.addWidget(scrollable(self._build_start_page()))
+        self.pages.addWidget(scrollable(self._build_answer_page()))
+        self.pages.addWidget(scrollable(self._build_result_page()))
         layout = QVBoxLayout(self)
         layout.addWidget(self.pages)
+        fit_as_sheet(self)
 
     # --- Paso 1: que conteste ---
 

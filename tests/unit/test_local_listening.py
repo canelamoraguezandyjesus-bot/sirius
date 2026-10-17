@@ -804,7 +804,6 @@ def test_si_la_charla_se_rompe_el_turno_lo_dice_con_su_operacion_y_sigue_oyendo(
     # Ronda 15 de Codex sobre la PR #687: como la ventana con lo escrito, la excepción se
     # queda en la frontera; el turno dice con qué operación se envió, para contar lo
     # guardado, y se sigue oyendo. El diario, solo el tipo.
-    monkeypatch.setattr(logging.getLogger("sirius.application.local_listening"), "disabled", False)
     oido = _Oido()
     oido.servicio.start()
     oido.charla.falla = RuntimeError("la base está cerrada: Zarzamora")
@@ -923,7 +922,6 @@ def test_sin_propuesta_no_propone_nada() -> None:
 def test_si_proponer_falla_el_turno_contestado_sigue_y_el_diario_no_guarda_lo_propuesto(
     caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(logging.getLogger("sirius.application.local_listening"), "disabled", False)
     oido = _Oido()
     oido.servicio.start()
     oido.charla.propone = "La clave es Zarzamora"
@@ -942,9 +940,6 @@ def test_si_proponer_falla_el_turno_contestado_sigue_y_el_diario_no_guarda_lo_pr
 def test_el_diario_no_se_queda_con_nada_de_lo_oido(
     caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # Una migración anterior en el mismo proceso (Alembic, `fileConfig`) apaga los
-    # registradores que ya existían: se enciende el del oído para poder leerlo.
-    monkeypatch.setattr(logging.getLogger("sirius.application.local_listening"), "disabled", False)
     oido = _Oido()
     oido.servicio.start()
 
@@ -1060,7 +1055,6 @@ def test_si_falla_al_hablar_la_charla_acaba_y_deja_de_oir_diciendolo(
     que: str,
     aviso: str,
 ) -> None:
-    monkeypatch.setattr(logging.getLogger("sirius.application.local_listening"), "disabled", False)
     oido = _Oido()
     oido.servicio.start()
     oido.charla.trozos = ["Una frase.", " Otra frase con Zarzamora.", " Y otra."]
@@ -1213,7 +1207,6 @@ def test_mide_desde_que_deja_de_oir_su_voz_hasta_que_suena_la_primera_frase(
 ) -> None:
     # E-R03-02: cuenta el silencio que espera el detector, transcribir, la charla, la voz y
     # lo que tarda el altavoz en sonar; no lo que había antes de la última voz.
-    monkeypatch.setattr(logging.getLogger("sirius.application.local_listening"), "disabled", False)
     oido = _Oido()
     oido.servicio.start()
     # Cada trozo llega un cuarto de segundo después del anterior.
@@ -1309,7 +1302,6 @@ def test_lo_que_no_es_para_el_se_transcribe_y_se_descarta_sin_ir_a_la_charla() -
 def test_lo_que_no_es_para_el_no_queda_en_el_diario(
     caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(logging.getLogger("sirius.application.local_listening"), "disabled", False)
     oido = _oido_que_elige()
 
     with caplog.at_level(logging.DEBUG):
@@ -2026,9 +2018,6 @@ def test_si_falla_el_cancelador_deja_de_oir_y_lo_dice() -> None:
 def test_si_no_se_puede_apuntar_el_corte_el_diario_solo_dice_el_tipo(
     caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # Otras pruebas de la batería configuran el diario y apagan los registradores que ya
-    # había: este tiene que estar encendido para que se vea lo que apunta.
-    monkeypatch.setattr(logging.getLogger("sirius.application.local_listening"), "disabled", False)
     oido = _oido_con_cancelador()
     oido.altavoz.sigue_sonando = True
     oido.charla.trozos = ["Una frase secreta."]
@@ -2246,7 +2235,6 @@ def test_el_hilo_que_lee_mientras_contesta_mira_el_micro_hasta_que_para() -> Non
 def test_si_falla_mirar_el_micro_mientras_contesta_deja_de_mirar_y_el_diario_dice_el_tipo(
     caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(logging.getLogger("sirius.application.local_listening"), "disabled", False)
     vueltas: list[int] = []
 
     def oye() -> None:
@@ -2320,6 +2308,33 @@ def test_lo_que_esperaba_va_en_cuanto_calla_lo_anterior() -> None:
 
     # En cuanto el micro capta sin su voz, ya calló: va lo que esperaba.
     assert [t.heard for t in oido.suena("").turns] == ["Y cuéntame otra cosa"]
+
+
+# --- Al salir (ADR-252) -----------------------------------------------------------------
+
+
+def test_al_cerrar_para_y_suelta_la_voz_con_su_altavoz() -> None:
+    oido = _Oido()
+    oido.servicio.start()
+    oido.suena(voz("Hola"), FIN)
+
+    oido.servicio.close()
+
+    # El altavoz se suelta, y con él la cancelación de eco, que va dentro.
+    assert oido.eventos[-1] == "suelta"
+    assert not oido.servicio.listening
+    # Si vuelve a escuchar, carga la voz otra vez.
+    assert oido.servicio.start() == ""
+    assert oido.cargas_de_la_voz == 2
+
+
+def test_cerrar_sin_haber_escuchado_no_carga_ni_suelta_nada() -> None:
+    oido = _Oido()
+
+    oido.servicio.close()
+
+    assert oido.eventos == []
+    assert oido.cargas_de_la_voz == 0
 
 
 # --- Cambiar de voz (pieza F, ADR-246) ------------------------------------------------

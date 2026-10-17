@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
 from sirius.application.voice_test import VoiceTestUseCase
 from sirius.domain.voice_test import VoiceTestError, VoiceTestSheet
 from sirius.infrastructure.logging import get_logger
+from sirius.presentation.sheet_window import fit_as_sheet, scrollable
 
 _logger = get_logger(__name__)
 
@@ -95,12 +96,13 @@ class VoiceTestDialog(QDialog):
         self._sheet: VoiceTestSheet[Any, Any] | None = None
 
         self.pages = QStackedWidget()
-        self.pages.addWidget(self._build_start_page())
-        self.pages.addWidget(self._build_progress_page())
-        self.pages.addWidget(self._build_sheet_page())
+        self.pages.addWidget(scrollable(self._build_start_page()))
+        self.pages.addWidget(scrollable(self._build_progress_page()))
+        self.pages.addWidget(scrollable(self._build_sheet_page()))
         layout = QVBoxLayout(self)
         layout.addWidget(self.pages)
         self._check_installed()
+        fit_as_sheet(self)
 
     # --- Paso 1: preparar ---
 

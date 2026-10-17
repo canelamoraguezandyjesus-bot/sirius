@@ -37,6 +37,7 @@ from sirius.adapters.audio.voice_libraries import (
     VOICE_ACTIVITY,
     import_voice_library,
 )
+from sirius.application.addressing import NAME
 from sirius.infrastructure.logging import get_logger
 from sirius.ports.local_voice import Captured, ListeningEngines, TurnSignal, VoiceUnavailable
 
@@ -88,11 +89,20 @@ def check_listening_libraries() -> None:
 
 
 def _libraries() -> tuple[Any, Any, Any, Any, Any]:
-    """numpy, sounddevice, el registrador de loguru y los módulos de Silero y Smart Turn."""
+    """numpy, sounddevice, el registrador de loguru y los módulos de Silero y Smart Turn.
+
+    Pipecat escribe con loguru, que por defecto lo saca todo por la consola, y al importarse
+    ya pinta su cartel: loguru se deja en los avisos antes de importar Pipecat (ADR-252).
+    """
+    numpy = import_voice_library("numpy")
+    sounddevice = import_voice_library("sounddevice")
+    logger = import_voice_library("loguru").logger
+    logger.remove()
+    logger.add(sys.stderr, level="WARNING")
     return (
-        import_voice_library("numpy"),
-        import_voice_library("sounddevice"),
-        import_voice_library("loguru").logger,
+        numpy,
+        sounddevice,
+        logger,
         import_voice_library(VOICE_ACTIVITY),
         import_voice_library(END_OF_TURN),
     )
@@ -105,10 +115,7 @@ def load_listening_engines(model_dir: Path) -> ListeningEngines[bytes]:
     orden de instalar, o si una biblioteca o el modelo de ``model_dir`` están pero no
     cargan o Silero y Smart Turn no arrancan, que no lo arregla.
     """
-    numpy, sounddevice, logger, silero, smart_turn = _libraries()
-    # Pipecat escribe con loguru, que por defecto lo saca todo por la consola.
-    logger.remove()
-    logger.add(sys.stderr, level="WARNING")
+    numpy, sounddevice, _, silero, smart_turn = _libraries()
     os.environ.pop(_SMART_TURN_AUDIO_LOG, None)
     model = load_listening_model(model_dir)
     try:
@@ -329,6 +336,11 @@ class FasterWhisperTranscriber:
         samples = np.frombuffer(b"".join(chunks), dtype=np.int16)
         audio = samples.astype(np.float32) / 32768.0
         segments, _info = self._model.transcribe(
-            audio, language="es", condition_on_previous_text=False
+            audio,
+            language="es",
+            condition_on_previous_text=False,
+            # Una pista para que escriba su nombre como es, y no «Sirio» o «serios»: el oído
+            # solo lo reconoce exacto (ADR-252).
+            hotwords=NAME,
         )
         return " ".join(segment.text.strip() for segment in segments).strip()

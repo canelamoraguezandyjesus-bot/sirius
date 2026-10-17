@@ -17,18 +17,38 @@ Lo que garantiza por construcción:
   recorta, y el que trae Ollama por defecto puede ser más corto que la
   semilla, sus ejemplos y la charla juntos. Se pide uno explícito,
   ``num_ctx``, de 8.192 tokens salvo que los ajustes digan otro.
+- **Una respuesta que acaba.** Sin tope, Ollama puede escribir sin fin, y como
+  no deja de llegar texto, el tope de lectura no salta nunca. Se pide uno,
+  ``num_predict``, el «Máximo de tokens de salida» de los ajustes, 4.096 si no
+  dicen otro (ADR-248). Una respuesta cortada por él acaba como cualquier otra.
+- **Cortar no espera al siguiente trozo.** Mientras Ollama lee la pregunta no
+  envía nada, y un corte que esperara al siguiente trozo esperaría a que
+  acabara de leerla. ``cancel`` cuelga la conexión de esa petición, y quien la
+  lee deja de esperar: un turno de voz no espera a la nota del juez (ADR-252).
+  Visto en Linux; en Windows no se ha comprobado, y lo que haga entonces Ollama
+  con la pregunta, tampoco. Por eso cada petición abre su conexión y la cierra
+  al acabar.
+- **El juez no piensa antes de contestar.** Una petición que no deja pensar
+  (``may_think``) apaga ``think``. Si Ollama la rechazara por eso, se repite
+  una vez sin apagarlo, y ese modelo ya no lo apaga más (ADR-252).
 - **Ni el razonamiento interno ni la sugerencia de recuerdo llegan al
   propietario.** Los modelos que «piensan» escriben ``<think>…</think>`` antes
   de contestar, y ``render_instructions()`` pide la sugerencia detrás de un
   delimitador. Las dos cosas se quitan antes de que exista un solo
   ``LLMTextDelta``, aunque lleguen partidas entre trozos.
+- **El diario no lleva nada de lo que dijo Ollama.** Al fallar apunta el código
+  HTTP, la clase del fallo de red o una categoría de una lista cerrada, nunca
+  su texto: lo que repite de la charla puede venir en cualquier forma, y
+  tacharlo no era un límite seguro (ronda 2 de Codex de ADR-248).
 """
 
 from __future__ import annotations
 
+import contextlib
 import json
+import socket
 import threading
-from collections.abc import Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from typing import Any
 
 import httpx
@@ -50,11 +70,14 @@ from sirius.ports.llm import (
 
 __all__ = [
     "DEFAULT_NUM_CTX",
+    "DEFAULT_NUM_PREDICT",
     "OLLAMA_CHAT_URL",
+    "OLLAMA_SHOW_URL",
     "OLLAMA_TAGS_URL",
     "OllamaChatProvider",
     "OllamaNotAvailableError",
     "list_installed_models",
+    "model_capabilities",
 ]
 
 _logger = get_logger(__name__)
@@ -65,8 +88,32 @@ OLLAMA_CHAT_URL = "http://localhost:11434/api/chat"
 #: Dónde dice Ollama qué modelos tiene instalados.
 OLLAMA_TAGS_URL = "http://localhost:11434/api/tags"
 
+#: Dónde dice Ollama qué sabe hacer un modelo (ADR-247).
+OLLAMA_SHOW_URL = "http://localhost:11434/api/show"
+
 #: Contexto que se pide al modelo si los ajustes no dicen otro.
 DEFAULT_NUM_CTX = 8192
+
+#: Cuánto puede escribir como mucho si no le dicen otro: el «Máximo de tokens de salida»
+#: de serie de los ajustes (ADR-248).
+DEFAULT_NUM_PREDICT = 4096
+
+#: Lo único que el diario dice de lo que contestó Ollama al fallar: la categoría de la
+#: primera de estas firmas que aparezca en su texto, sin distinguir mayúsculas. Cada firma
+#: son trozos que tienen que salir todos. Del texto no se copia nada (ronda 2 de Codex de
+#: ADR-248). La memoria va antes que el proceso caído: dice por qué se cayó.
+_ERROR_CATEGORIES: tuple[tuple[tuple[str, ...], str], ...] = (
+    (("memory",), "sin memoria"),
+    (("cuda",), "sin memoria"),
+    (("does not support thinking",), "no admite think"),
+    (("not found",), "modelo no encontrado"),
+    (("context canceled",), "cancelado"),
+    (("runner process", "terminated"), "el proceso del modelo se cayó"),
+    (("no longer running",), "el proceso del modelo se cayó"),
+)
+
+#: La categoría de un error que no encaja en ninguna firma.
+_OTHER_ERROR = "otro"
 
 #: Cuánto tiempo deja Ollama el modelo cargado después de cada respuesta. Con
 #: el valor por defecto, cinco minutos, la primera frase tras una pausa
@@ -76,6 +123,14 @@ _KEEP_ALIVE = "30m"
 #: Cargar un modelo de varios gigas puede llevar más de un minuto en un disco
 #: lento, y Ollama no envía nada hasta tener la primera palabra.
 _TIMEOUT = httpx.Timeout(connect=5.0, read=180.0, write=30.0, pool=5.0)
+
+#: Decir qué sabe hacer un modelo no lo carga: si en diez segundos Ollama no lo dice, ese
+#: modelo se queda fuera de la prueba a ciegas, y la ventana no espera más.
+_SHOW_TIMEOUT = httpx.Timeout(10.0)
+
+#: Cada petición abre su conexión y la cierra al acabar: así se sabe cuál colgar al
+#: cortarla (ADR-252). A este ordenador, abrir una cuesta nada.
+_ONE_CONNECTION_PER_REQUEST = httpx.Limits(max_keepalive_connections=0)
 
 _SAFE_MESSAGES: dict[LLMErrorKind, str] = {
     LLMErrorKind.CONNECTION: "No se pudo contactar con Ollama en este ordenador. ¿Está abierto?",
@@ -95,6 +150,30 @@ _SAFE_MESSAGES: dict[LLMErrorKind, str] = {
 
 def _error(kind: LLMErrorKind, partial_text: str = "") -> LLMError:
     return LLMError(kind=kind, message=_SAFE_MESSAGES[kind], partial_text=partial_text)
+
+
+def _category(text: str) -> str:
+    """La categoría con que el diario apunta un error de Ollama: de la lista, nunca su texto."""
+    folded = text.casefold()
+    for signature, category in _ERROR_CATEGORIES:
+        if all(part in folded for part in signature):
+            return category
+    return _OTHER_ERROR
+
+
+def _what_ollama_said(response: httpx.Response) -> str:
+    """El texto del error con que contestó Ollama, o el cuerpo tal cual si no es su JSON:
+    solo para sacar su categoría, nunca para el diario."""
+    try:
+        raw = response.read().decode("utf-8", errors="replace")
+    except httpx.HTTPError:
+        return ""
+    try:
+        body = json.loads(raw)
+    except json.JSONDecodeError:
+        return raw
+    error = body.get("error") if isinstance(body, dict) else None
+    return error if isinstance(error, str) else raw
 
 
 class _ThinkFilter:
@@ -148,12 +227,24 @@ class OllamaChatProvider:
         model: str,
         *,
         num_ctx: int = DEFAULT_NUM_CTX,
+        num_predict: int = DEFAULT_NUM_PREDICT,
         transport: httpx.BaseTransport | None = None,
     ) -> None:
         self._model = model
         self._num_ctx = num_ctx
-        self._client = httpx.Client(timeout=_TIMEOUT, transport=transport, trust_env=False)
+        self._num_predict = num_predict
+        self._client = httpx.Client(
+            timeout=_TIMEOUT,
+            limits=_ONE_CONNECTION_PER_REQUEST,
+            transport=transport,
+            trust_env=False,
+        )
         self._cancelled_operations: set[str] = set()
+        #: La conexión de cada petición en curso, para colgarla si se corta.
+        self._connections: dict[str, socket.socket] = {}
+        #: Si Ollama rechazó ya que se apagara el pensamiento de este modelo: las
+        #: peticiones siguientes ya no lo apagan (ADR-252).
+        self._refuses_think = False
         self._lock = threading.Lock()
 
     @property
@@ -166,9 +257,60 @@ class OllamaChatProvider:
         return bool(self._model)
 
     def cancel(self, operation_id: str) -> None:
-        """Pide cortar la respuesta en curso. Se puede llamar más de una vez."""
+        """Corta la respuesta en curso, y si ya está con Ollama, cuelga su conexión: no
+        espera al siguiente trozo (ADR-252). Se puede llamar más de una vez."""
         with self._lock:
             self._cancelled_operations.add(operation_id)
+            connection = self._connections.get(operation_id)
+        if connection is not None:
+            _hang_up(connection)
+
+    def _note_connection(self, operation_id: str) -> Callable[[str, dict[str, Any]], None]:
+        """Apunta la conexión que abre la petición ``operation_id``, para poder colgarla.
+
+        Lo avisa httpx al conectar (su extensión ``trace``). Si la cortaron mientras
+        conectaba, la cuelga ya.
+        """
+
+        def note(event: str, info: dict[str, Any]) -> None:
+            if event != "connection.connect_tcp.complete":
+                return
+            stream = info.get("return_value")
+            get_extra_info = getattr(stream, "get_extra_info", None)
+            connection = get_extra_info("socket") if callable(get_extra_info) else None
+            if not isinstance(connection, socket.socket):
+                return
+            with self._lock:
+                self._connections[operation_id] = connection
+                cancelled = operation_id in self._cancelled_operations
+            if cancelled:
+                _hang_up(connection)
+
+        return note
+
+    def warm_up(self) -> None:
+        """Pide a Ollama que cargue ya el modelo, sin preguntarle nada: así la primera frase
+        no espera a que cargue (ADR-252).
+
+        Con el contexto de la charla, que Ollama recargaría el modelo para otro, y con su
+        ``keep_alive``. Lo piden la ventana y ``sirius-oye`` al arrancar, en segundo plano.
+        Si falla, apunta en el diario el código o la clase del fallo, nada de lo que dijo
+        Ollama, y nada más: la primera frase lo cargará.
+        """
+        body = {
+            "model": self._model,
+            "messages": [],
+            "stream": False,
+            "keep_alive": _KEEP_ALIVE,
+            "options": {"num_ctx": self._num_ctx, "num_predict": self._num_predict},
+        }
+        try:
+            response = self._client.post(OLLAMA_CHAT_URL, json=body)
+        except httpx.HTTPError as error:
+            _logger.info("No se pudo precargar %s (%s)", self._model, type(error).__name__)
+            return
+        if response.status_code >= httpx.codes.BAD_REQUEST:
+            _logger.info("Ollama no precargó %s (%s)", self._model, response.status_code)
 
     def close(self) -> None:
         self._client.close()
@@ -178,7 +320,11 @@ class OllamaChatProvider:
             return operation_id in self._cancelled_operations
 
     def _body(self, request: LLMRequest) -> dict[str, Any]:
-        return {
+        # Una petición puede pedir menos que el tope de los ajustes, nunca más (ADR-252).
+        num_predict = self._num_predict
+        if request.max_output_tokens is not None:
+            num_predict = min(num_predict, request.max_output_tokens)
+        body: dict[str, Any] = {
             "model": self._model,
             "messages": [
                 {"role": "system", "content": request.instructions},
@@ -186,8 +332,44 @@ class OllamaChatProvider:
             ],
             "stream": True,
             "keep_alive": _KEEP_ALIVE,
-            "options": {"num_ctx": self._num_ctx},
+            "options": {"num_ctx": self._num_ctx, "num_predict": num_predict},
         }
+        if self._turns_off_thinking(request):
+            # Solo se apaga, nunca se pide: la charla va como siempre, sin «think».
+            body["think"] = False
+        return body
+
+    def _turns_off_thinking(self, request: LLMRequest) -> bool:
+        with self._lock:
+            return not request.may_think and not self._refuses_think
+
+    def _refused_think(self, response: httpx.Response) -> bool:
+        """Si Ollama rechazó la petición por apagar el pensamiento: que lo haga con un
+        modelo que no piensa no se ha comprobado con ninguna versión, y si lo hace, se
+        pregunta otra vez sin apagarlo, y este modelo ya no lo apaga (ADR-252).
+
+        Lo que dice Ollama solo se mira para decidirlo: al diario no va nada de su texto.
+        """
+        if response.status_code != httpx.codes.BAD_REQUEST:
+            return False
+        said = _what_ollama_said(response)
+        # Sin el nombre del modelo, que podría llevar la palabra: «qwen3:4b-thinking».
+        if "think" not in said.lower().replace(self._model.lower(), ""):
+            return False
+        with self._lock:
+            self._refuses_think = True
+        _logger.info(
+            "Ollama no deja apagar el pensamiento de %s: se pregunta sin apagarlo", self._model
+        )
+        return True
+
+    def _post(self, request: LLMRequest) -> contextlib.AbstractContextManager[httpx.Response]:
+        return self._client.stream(
+            "POST",
+            OLLAMA_CHAT_URL,
+            json=self._body(request),
+            extensions={"trace": self._note_connection(request.operation_id)},
+        )
 
     def stream_response(self, request: LLMRequest) -> Iterable[LLMStreamEvent]:
         try:
@@ -195,28 +377,53 @@ class OllamaChatProvider:
                 yield LLMCancelled(partial_text="")
                 return
             try:
-                with self._client.stream("POST", OLLAMA_CHAT_URL, json=self._body(request)) as r:
-                    if r.status_code == httpx.codes.NOT_FOUND:
-                        _logger.error("Ollama no tiene el modelo de la charla (%s)", self._model)
-                        yield _error(LLMErrorKind.CONFIGURATION)
-                        return
-                    if r.status_code >= httpx.codes.BAD_REQUEST:
-                        _logger.error("Ollama respondió %s a la charla", r.status_code)
-                        yield _error(LLMErrorKind.UNKNOWN)
-                        return
-                    yield from self._consume(request, r.iter_lines())
+                if self._turns_off_thinking(request):
+                    with self._post(request) as r:
+                        if not self._refused_think(r):
+                            yield from self._answer(request, r)
+                            return
+                with self._post(request) as r:
+                    yield from self._answer(request, r)
             except httpx.ConnectError:
                 _logger.error("Operación %s: Ollama no contesta", request.operation_id)
                 yield _error(LLMErrorKind.CONNECTION)
             except httpx.TimeoutException:
                 _logger.error("Operación %s: Ollama tardó demasiado", request.operation_id)
                 yield _error(LLMErrorKind.TIMEOUT)
-            except httpx.HTTPError:
-                _logger.error("Operación %s: fallo de red con Ollama", request.operation_id)
+            except httpx.HTTPError as exc:
+                if self._is_cancelled(request.operation_id):
+                    # La colgó cancel(): no es un fallo, es el corte que se pidió.
+                    yield LLMCancelled(partial_text="")
+                    return
+                _logger.error(
+                    "Operación %s: fallo de red con Ollama (%s)",
+                    request.operation_id,
+                    type(exc).__name__,
+                )
                 yield _error(LLMErrorKind.UNKNOWN)
         finally:
             with self._lock:
                 self._cancelled_operations.discard(request.operation_id)
+                self._connections.pop(request.operation_id, None)
+
+    def _answer(self, request: LLMRequest, r: httpx.Response) -> Iterable[LLMStreamEvent]:
+        if r.status_code == httpx.codes.NOT_FOUND:
+            _logger.error(
+                "Ollama no tiene el modelo de la charla (%s): %s",
+                self._model,
+                _category(_what_ollama_said(r)),
+            )
+            yield _error(LLMErrorKind.CONFIGURATION)
+            return
+        if r.status_code >= httpx.codes.BAD_REQUEST:
+            _logger.error(
+                "Ollama respondió %s a la charla: %s",
+                r.status_code,
+                _category(_what_ollama_said(r)),
+            )
+            yield _error(LLMErrorKind.UNKNOWN)
+            return
+        yield from self._consume(request, r.iter_lines())
 
     def _consume(self, request: LLMRequest, lines: Iterator[str]) -> Iterable[LLMStreamEvent]:
         accumulated: list[str] = []
@@ -251,7 +458,11 @@ class OllamaChatProvider:
                     yield _error(LLMErrorKind.INVALID_RESPONSE, partial())
                     return
                 if "error" in chunk:
-                    _logger.error("Operación %s: Ollama devolvió un error", request.operation_id)
+                    _logger.error(
+                        "Operación %s: Ollama devolvió un error: %s",
+                        request.operation_id,
+                        _category(str(chunk["error"])),
+                    )
                     yield _error(LLMErrorKind.UNKNOWN, partial())
                     return
                 message = chunk.get("message")
@@ -279,17 +490,33 @@ class OllamaChatProvider:
                         memory_suggestion=memory_suggestion,
                     )
                     return
-        except httpx.TimeoutException:
-            yield _error(LLMErrorKind.TIMEOUT, partial())
-            return
-        except httpx.HTTPError:
-            yield _error(LLMErrorKind.CONNECTION, partial())
+        except httpx.HTTPError as exc:
+            if self._is_cancelled(request.operation_id):
+                # La colgó cancel(): no es un fallo, es el corte que se pidió (ADR-252).
+                yield LLMCancelled(partial_text=partial())
+                return
+            # La rama de fuera, en ``stream_response``, no llega a verlo (ronda 1 de ADR-248).
+            _logger.error(
+                "Operación %s: fallo de red con Ollama a mitad de respuesta (%s)",
+                request.operation_id,
+                type(exc).__name__,
+            )
+            timed_out = isinstance(exc, httpx.TimeoutException)
+            yield _error(LLMErrorKind.TIMEOUT if timed_out else LLMErrorKind.CONNECTION, partial())
             return
         yield _error(LLMErrorKind.INVALID_RESPONSE, partial())
 
 
 def _count(value: object) -> int:
     return value if isinstance(value, int) and value >= 0 else 0
+
+
+def _hang_up(connection: socket.socket) -> None:
+    """Cuelga una conexión desde otro hilo para que el que lee de ella deje de esperar: en
+    Linux, al momento; en Windows no se ha comprobado (ADR-252). Si ya estaba cerrada, no
+    pasa nada."""
+    with contextlib.suppress(OSError):
+        connection.shutdown(socket.SHUT_RDWR)
 
 
 class OllamaNotAvailableError(RuntimeError):
@@ -321,3 +548,30 @@ def list_installed_models(transport: httpx.BaseTransport | None = None) -> tuple
         if isinstance(model, dict) and isinstance(model.get("name"), str) and model["name"].strip()
     }
     return tuple(sorted(names))
+
+
+def model_capabilities(model: str, transport: httpx.BaseTransport | None = None) -> tuple[str, ...]:
+    """Lo que dice el Ollama de este ordenador que sabe hacer ``model``: ``completion`` si
+    conversa, ``embedding`` si da huellas.
+
+    Va a la misma dirección fija que la charla y tampoco lee los proxies del sistema. Si
+    Ollama no contesta, o contesta sin decir qué sabe hacer, ``OllamaNotAvailableError``
+    con el motivo: la prueba a ciegas deja ese modelo fuera y sigue con los demás
+    (ADR-247).
+    """
+    try:
+        with httpx.Client(timeout=_SHOW_TIMEOUT, transport=transport, trust_env=False) as client:
+            response = client.post(OLLAMA_SHOW_URL, json={"model": model})
+            response.raise_for_status()
+    except httpx.HTTPError as exc:
+        msg = "Ollama no contestó al preguntarle qué sabe hacer"
+        raise OllamaNotAvailableError(msg) from exc
+    try:
+        body = response.json()
+    except json.JSONDecodeError:
+        body = None
+    capabilities = body.get("capabilities") if isinstance(body, dict) else None
+    if not isinstance(capabilities, list) or not all(isinstance(c, str) for c in capabilities):
+        msg = "Ollama no dijo qué sabe hacer"
+        raise OllamaNotAvailableError(msg)
+    return tuple(capabilities)

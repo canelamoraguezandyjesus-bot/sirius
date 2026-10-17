@@ -1,10 +1,13 @@
 """La orden ``sirius-oye``: escucha, cuenta cada turno y cierra el micro al salir (ADR-242),
-y dice lo que tardó en empezar a hablar (ADR-243)."""
+y dice lo que tardó en empezar a hablar (ADR-243). Al salir suelta también la voz (ADR-252).
+"""
 
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
+from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -44,7 +47,8 @@ class _Oido:
     def __init__(self, aviso: str = "", atenciones: list[Attended | BaseException] | None = None):
         self.aviso = aviso
         self.atenciones = list(atenciones or [])
-        self.parado = False
+        #: Si se cerró: el micro, y la voz con su cancelación de eco (ADR-252).
+        self.cerrado = False
 
     def start(self) -> str:
         return self.aviso
@@ -55,8 +59,8 @@ class _Oido:
             raise atencion
         return atencion
 
-    def stop(self) -> None:
-        self.parado = True
+    def close(self) -> None:
+        self.cerrado = True
 
 
 def _escucha(
@@ -88,6 +92,8 @@ def test_sin_el_oido_instalado_dice_el_aviso_y_sale_sin_escuchar() -> None:
     assert codigo == 1
     assert dicho == ["Para oírte me falta el modelo. Ejecuta: la orden"]
     assert oido.atenciones == []
+    # Suelta lo que llegara a cargar: con la voz cargada, el micro pudo no abrirse.
+    assert oido.cerrado
 
 
 def test_cuenta_cada_turno_espera_cuando_no_llega_nada_y_cierra_al_salir() -> None:
@@ -99,7 +105,7 @@ def test_cuenta_cada_turno_espera_cuando_no_llega_nada_y_cierra_al_salir() -> No
     assert codigo == 0
     assert dicho[1:] == ["Tú: Buenos días, Sirius.", "Sirius: Buenos días."]
     assert pausas == 1
-    assert oido.parado
+    assert oido.cerrado
 
 
 def test_lo_que_no_era_para_el_no_se_ensena_ni_para_la_escucha() -> None:
@@ -178,7 +184,7 @@ def test_si_deja_de_oir_mientras_escucha_lo_dice_y_sale() -> None:
     assert codigo == 1
     assert dicho[1:] == ["Tú: Buenos días, Sirius.", "Sirius: Buenos días.", CHAT_LEAVES]
     assert pausas == 0
-    assert oido.parado
+    assert oido.cerrado
 
 
 def test_tras_una_orden_de_olvido_ensena_lo_guardado_y_no_lo_oido() -> None:
@@ -206,7 +212,7 @@ def test_si_la_charla_se_rompe_ensena_lo_guardado_y_el_aviso_como_la_ventana_y_s
     assert codigo == 1
     assert dicho[1:] == ["Tú: Olvida lo de…", failed_send_message(None, "op-9")]
     assert not any("Ramiro" in linea for linea in dicho)
-    assert oido.parado
+    assert oido.cerrado
 
 
 def test_si_no_quedo_nada_guardado_solo_dice_el_aviso() -> None:
@@ -253,7 +259,7 @@ def test_con_ctrl_c_tambien_cierra_el_micro() -> None:
     with pytest.raises(KeyboardInterrupt):
         _escucha(oido, 5)
 
-    assert oido.parado
+    assert oido.cerrado
 
 
 # --- Lo que tardó en empezar a hablar (E-R03-02) -------------------------------------
@@ -296,7 +302,7 @@ def test_lo_dice_tambien_si_sale_con_ctrl_c() -> None:
     assert dicho[-1] == (
         "En 1 turno, desde que dejé de oír tu voz hasta el primer sonido: P95 de 1,23 s."
     )
-    assert oido.parado
+    assert oido.cerrado
 
 
 def test_sin_nada_dicho_no_dice_cuanto_tardo() -> None:
@@ -305,3 +311,37 @@ def test_sin_nada_dicho_no_dice_cuanto_tardo() -> None:
     _, dicho, _ = _escucha(oido, 1)
 
     assert not any("primer sonido" in linea for linea in dicho)
+
+
+def test_al_arrancar_pide_que_el_modelo_de_la_charla_vaya_cargando(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    import sirius.listen_console as consola
+
+    orden: list[str] = []
+    dependencias = SimpleNamespace(
+        initial_project_use_case=SimpleNamespace(is_configured=lambda: True),
+        send_message_use_case=SimpleNamespace(
+            warm_up_in_background=lambda: orden.append("precarga")
+        ),
+        local_listening=object(),
+        get_history_use_case=SimpleNamespace(get_history=list),
+        close_database_connections=lambda: orden.append("cierra la base"),
+    )
+    rutas = SimpleNamespace(logs_dir=tmp_path, data_dir=tmp_path, backups_dir=tmp_path)
+
+    def escucha(*args: object, **kwargs: object) -> int:
+        orden.append("escucha")
+        return 0
+
+    monkeypatch.setattr(consola, "hugging_face_offline", lambda: None)
+    monkeypatch.setattr(consola, "known_data_paths", lambda: rutas)
+    monkeypatch.setattr(consola, "configure_logging", lambda carpeta: None)
+    monkeypatch.setattr(consola, "initialize_persistence", lambda rutas: None)
+    monkeypatch.setattr(consola, "build_conversation_dependencies", lambda *a, **k: dependencias)
+    monkeypatch.setattr(consola, "listen", escucha)
+
+    assert consola.main() == 0
+
+    # Antes de escuchar: va cargando mientras carga la voz.
+    assert orden == ["precarga", "escucha", "cierra la base"]

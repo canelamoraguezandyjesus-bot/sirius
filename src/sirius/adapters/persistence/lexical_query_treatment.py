@@ -181,6 +181,30 @@ MARCADORES_CONDICION: Final[tuple[str, ...]] = (
 )
 
 
+#: ADR-251: lo que además no discrimina al buscar recuerdos de la 0.2 por palabras. «tiene»
+#: traía «Tiene dos gatos.» a «¿Cuántos metros tiene el salón?» (MB-071 del banco de
+#: memoria). Va aparte de ``VACIAS``, que sigue idéntica a la del laboratorio: solo la
+#: usa la búsqueda de recuerdos de cada turno.
+VACIAS_DE_LOS_RECUERDOS: Final[frozenset[str]] = frozenset(
+    [
+        "cuanta",
+        "cuantas",
+        "cuanto",
+        "cuantos",
+        "tenemos",
+        "tengo",
+        "tenia",
+        "teniamos",
+        "tenian",
+        "tenias",
+        "teneis",
+        "tiene",
+        "tienen",
+        "tienes",
+    ]
+)
+
+
 def plegar(palabra: str) -> str:
     """Minúscula sin diacríticos: el mismo pliegue del índice léxico medido."""
     descompuesta = unicodedata.normalize("NFKD", palabra.lower())
@@ -192,11 +216,11 @@ def tokenizar(texto: str) -> tuple[str, ...]:
     return tuple(plegar(t) for t in _CORRIDA.findall(texto))
 
 
-def terminos_significativos(texto: str) -> tuple[str, ...]:
-    """Tokens que discriminan: sin vacías y sin duplicados, en orden estable."""
+def terminos_significativos(texto: str, vacias: frozenset[str] = VACIAS) -> tuple[str, ...]:
+    """Tokens que discriminan: sin ``vacias`` y sin duplicados, en orden estable."""
     vistos: list[str] = []
     for token in tokenizar(texto):
-        if token in VACIAS or len(token) < 2 or token in vistos:
+        if token in vacias or len(token) < 2 or token in vistos:
             continue
         vistos.append(token)
     return tuple(vistos)
@@ -305,6 +329,7 @@ __all__ = [
     "RAIZ_MINIMA",
     "SUFIJOS",
     "VACIAS",
+    "VACIAS_DE_LOS_RECUERDOS",
     "condicion_declarada",
     "ordenar_estable",
     "plegar",

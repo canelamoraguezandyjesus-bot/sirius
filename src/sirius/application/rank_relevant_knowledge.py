@@ -68,6 +68,7 @@ from sirius.domain.relevance import (
     category_index_matches_query,
     category_matches_query,
     cupo_del_filtro,
+    newer_first_on_near_tie,
     rank_relevant_knowledge,
     subject_matches_query,
 )
@@ -737,7 +738,11 @@ class RankRelevantKnowledgeUseCase:
             for decision in self._decision_repository.list_current_decisions()
         )
 
-        return rank_relevant_knowledge(candidates)
+        ranked = rank_relevant_knowledge(candidates)
+        if self._memory_search is None:
+            return ranked
+        # ADR-251: lo más nuevo que dice casi lo mismo, delante.
+        return newer_first_on_near_tie(ranked, self._memory_search.similarity_between)
 
     def _found_memories(
         self, query_text: str, active_project_id: int | None

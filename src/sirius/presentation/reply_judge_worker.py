@@ -1,9 +1,9 @@
 """El juez en segundo plano (pieza E de ADR-233, PA-R02-08).
 
 La ventana lo lanza al abrirse y al acabar cada turno, con la respuesta ya en
-pantalla, y le pide que pare cuando el propietario escribe, para que el modelo
-local quede libre para la charla: el turno espera a que acabe la respuesta que
-está puntuando.
+pantalla, y le pide que pare cuando el propietario escribe o le habla, para que el
+modelo local quede libre para la charla: corta la nota que está pidiendo, y el turno
+espera solo a que la deje (ADR-252).
 """
 
 from __future__ import annotations
@@ -35,8 +35,10 @@ class ReplyJudgeWorker(QRunnable):
         self.done = threading.Event()
 
     def stop(self) -> None:
-        """Que pare antes de la siguiente respuesta; la que está puntuando la termina."""
+        """Que pare antes de la siguiente respuesta, y que corte la que está puntuando: un
+        turno de voz no espera a que el juez acabe su petición (ADR-252)."""
         self._stop.set()
+        self._service.cancel()
 
     def run(self) -> None:
         try:

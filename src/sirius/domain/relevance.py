@@ -142,6 +142,8 @@ from sirius.domain.memory import Memory, MemoryStatus
 from sirius.domain.staged_engine_contracts import Cardinalidad, Peticion
 
 __all__ = [
+    "NEWER_FIRST_BETWEEN",
+    "NEWER_FIRST_MARGIN",
     "KnowledgeKind",
     "RankedKnowledge",
     "candidate_currently_valid",
@@ -150,6 +152,7 @@ __all__ = [
     "category_index_matches_query",
     "category_matches_query",
     "cupo_del_filtro",
+    "newer_first_on_near_tie",
     "rank_relevant_knowledge",
     "recortar_al_cupo",
     "rescue_max_criticality_candidates",
@@ -617,3 +620,58 @@ def rank_relevant_knowledge(candidates: Sequence[RankedKnowledge]) -> tuple[Rank
         candidate for candidate in candidates if candidate.is_current and candidate.is_related
     ]
     return tuple(sorted(related_and_current, key=_sort_key))
+
+
+#: El desempate por lo más nuevo (ADR-251). Dos recuerdos que se parecen entre sí
+#: al menos esto hablan casi de lo mismo...
+NEWER_FIRST_BETWEEN = 0.70
+#: ...y si el más nuevo se parece a la pregunta como mucho esto menos que el primero,
+#: va delante: es lo que hay ahora.
+NEWER_FIRST_MARGIN = 0.05
+
+
+def newer_first_on_near_tie(
+    ranked: Sequence[RankedKnowledge],
+    similarity_between: Callable[[int, int], float | None],
+) -> tuple[RankedKnowledge, ...]:
+    """Pone delante del primer recuerdo uno más nuevo que dice casi lo mismo (ADR-251).
+
+    El orden de ``rank_relevant_knowledge`` deja lo más nuevo para cuando dos parecidos
+    son exactamente iguales, y con un modelo de verdad nunca lo son: en «cosas que
+    cambian», lo de antes suele parecerse más a la pregunta que lo de ahora. Aquí, si un
+    recuerdo más nuevo que el primero, traído también por significado, se parece al
+    primero ``NEWER_FIRST_BETWEEN`` o más y a la pregunta como mucho
+    ``NEWER_FIRST_MARGIN`` menos que él, pasa delante del primero. Solo uno, y solo
+    delante del primero: lo demás se queda como estaba. Sin el parecido entre los dos,
+    no se mueve nada.
+
+    Los dos números salen del banco de memoria con los parecidos que midió su
+    ordenador, y quedan a 0,01 o 0,02 de romper «quién dijo qué» (ADR-251).
+    """
+    memories = [candidate for candidate in ranked if candidate.kind is KnowledgeKind.MEMORY]
+    if len(memories) < 2 or not memories[0].semantic_match:
+        return tuple(ranked)
+    first = memories[0]
+    for candidate in memories[1:]:
+        if not candidate.semantic_match or not _said_later(candidate, first):
+            continue
+        if candidate.semantic_similarity < first.semantic_similarity - NEWER_FIRST_MARGIN:
+            continue
+        between = similarity_between(first.item_id, candidate.item_id)
+        if between is None or between < NEWER_FIRST_BETWEEN:
+            continue
+        reordered = [other for other in ranked if other is not candidate]
+        position = next(index for index, other in enumerate(reordered) if other is first)
+        reordered.insert(position, candidate)
+        return tuple(reordered)
+    return tuple(ranked)
+
+
+def _said_later(candidate: RankedKnowledge, first: RankedKnowledge) -> bool:
+    """Si ``candidate`` se dijo después que ``first``: por su revisión vigente."""
+    assert isinstance(candidate.item, Memory)
+    assert isinstance(first.item, Memory)
+    return (candidate.item.current_revision.created_at, candidate.item_id) > (
+        first.item.current_revision.created_at,
+        first.item_id,
+    )

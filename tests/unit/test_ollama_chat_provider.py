@@ -7,7 +7,9 @@ contesta en su formato de líneas JSON.
 from __future__ import annotations
 
 import json
-from collections.abc import Callable, Iterable
+import logging
+from collections.abc import Callable, Iterable, Iterator
+from typing import Any
 
 import httpx
 import pytest
@@ -17,6 +19,7 @@ from sirius.adapters.llm.ollama_chat import (
     OllamaChatProvider,
     OllamaNotAvailableError,
     list_installed_models,
+    model_capabilities,
 )
 from sirius.ports.llm import (
     MEMORY_SUGGESTION_DELIMITER,
@@ -71,7 +74,7 @@ def test_pide_al_ollama_local_con_la_semilla_como_sistema_y_un_contexto_explicit
     cuerpo = json.loads(request.content)
     assert cuerpo["model"] == "qwen-x"
     assert cuerpo["stream"] is True
-    assert cuerpo["options"] == {"num_ctx": 4096}
+    assert cuerpo["options"] == {"num_ctx": 4096, "num_predict": 4096}
     assert cuerpo["keep_alive"]
     assert cuerpo["messages"] == [
         {"role": "system", "content": "Eres Sirius."},
@@ -91,7 +94,7 @@ def test_el_contexto_por_defecto_es_de_8192_tokens() -> None:
 
     _eventos(_proveedor(contestar))
 
-    assert cuerpos[0]["options"] == {"num_ctx": 8192}
+    assert cuerpos[0]["options"] == {"num_ctx": 8192, "num_predict": 4096}
 
 
 def test_cuenta_los_tokens_que_dice_ollama_al_terminar() -> None:
@@ -274,3 +277,295 @@ def test_si_ollama_no_contesta_no_hay_lista_de_modelos() -> None:
 
     with pytest.raises(OllamaNotAvailableError, match="Ollama"):
         list_installed_models(httpx.MockTransport(contestar))
+
+
+# --- Qué sabe hacer un modelo, para la prueba a ciegas (ADR-247) --------------------
+
+
+def test_lo_que_sabe_hacer_un_modelo_lo_pregunta_a_su_api_show() -> None:
+    pedidos: list[tuple[str, object]] = []
+
+    def contestar(request: httpx.Request) -> httpx.Response:
+        pedidos.append((str(request.url), json.loads(request.content)))
+        return httpx.Response(200, json={"capabilities": ["embedding"], "license": "..."})
+
+    assert model_capabilities("embeddinggemma", httpx.MockTransport(contestar)) == ("embedding",)
+    assert pedidos == [("http://localhost:11434/api/show", {"model": "embeddinggemma"})]
+
+
+@pytest.mark.parametrize(
+    ("contesta", "motivo"),
+    [
+        (httpx.Response(200, json={"license": "..."}), "Ollama no dijo qué sabe hacer"),
+        (httpx.Response(200, json={"capabilities": "completion"}), "Ollama no dijo qué sabe hacer"),
+        (httpx.Response(200, text="esto no es json"), "Ollama no dijo qué sabe hacer"),
+        (httpx.Response(404, json={"error": "model not found"}), "Ollama no contestó"),
+    ],
+)
+def test_si_api_show_no_dice_que_sabe_hacer_lo_dice(contesta: httpx.Response, motivo: str) -> None:
+    with pytest.raises(OllamaNotAvailableError, match=motivo):
+        model_capabilities("raro", httpx.MockTransport(lambda request: contesta))
+
+
+def test_si_ollama_no_contesta_a_api_show_lo_dice() -> None:
+    def contestar(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("conexión rechazada", request=request)
+
+    with pytest.raises(OllamaNotAvailableError, match="Ollama no contestó"):
+        model_capabilities("raro", httpx.MockTransport(contestar))
+
+
+def test_preguntar_que_sabe_hacer_un_modelo_no_lee_los_proxies_del_sistema(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Con un transporte enchufado, httpx no usa los proxies aunque los lea: se mira el
+    # cliente que abre, como en la charla.
+    abiertos: list[httpx.Client] = []
+
+    class _Cliente(httpx.Client):
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            super().__init__(*args, **kwargs)
+            abiertos.append(self)
+
+    monkeypatch.setattr(httpx, "Client", _Cliente)
+
+    def contestar(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"capabilities": ["completion"]})
+
+    assert model_capabilities("gemma3:4b", httpx.MockTransport(contestar)) == ("completion",)
+    assert [cliente.trust_env for cliente in abiertos] == [False]
+
+
+# --- El tope de salida y el diario (ADR-248) ---------------------------------------
+
+
+def ollama_que_no_para(request: httpx.Request) -> httpx.Response:
+    """Un Ollama que, sin tope, escribe sin parar: 50 000 trozos, más de lo que acabaría
+    nunca una respuesta. Con ``num_predict`` para ahí, con ``done_reason`` «length», como
+    el de verdad."""
+    cuerpo = json.loads(request.content)
+    tope = cuerpo.get("options", {}).get("num_predict")
+    cuantos = tope if isinstance(tope, int) and tope > 0 else 50_000
+
+    def trozos() -> Iterator[bytes]:
+        trozo = {"message": {"role": "assistant", "content": "bla "}, "done": False}
+        for _ in range(cuantos):
+            yield (json.dumps(trozo) + "\n").encode()
+        final = {
+            "message": {"role": "assistant", "content": ""},
+            "done": True,
+            "done_reason": "length" if tope else "stop",
+            "eval_count": cuantos,
+        }
+        yield (json.dumps(final) + "\n").encode()
+
+    return httpx.Response(200, content=trozos())
+
+
+def test_pide_el_tope_de_salida_que_le_dan() -> None:
+    cuerpos: list[dict[str, object]] = []
+
+    def contestar(request: httpx.Request) -> httpx.Response:
+        cuerpos.append(json.loads(request.content))
+        return httpx.Response(200, text=_lineas("Vale."))
+
+    _eventos(
+        OllamaChatProvider("qwen-x", num_predict=300, transport=httpx.MockTransport(contestar))
+    )
+
+    assert cuerpos[0]["options"] == {"num_ctx": 8192, "num_predict": 300}
+
+
+def test_un_ollama_que_no_para_de_escribir_acaba_en_el_tope() -> None:
+    # En su ordenador, el 16-10-2026: la pregunta 46 de la prueba a ciegas no acabó en
+    # más de 10 minutos, porque sin tope Ollama escribe sin fin (ADR-248).
+    proveedor = OllamaChatProvider(
+        "qwen3:4b-instruct", num_predict=300, transport=httpx.MockTransport(ollama_que_no_para)
+    )
+
+    completado = _eventos(proveedor)[-1]
+
+    assert isinstance(completado, LLMCompleted)
+    assert completado.output_tokens == 300
+    assert completado.text.count("bla") == 300
+
+
+def test_una_respuesta_cortada_por_el_tope_acaba_como_cualquier_otra() -> None:
+    def contestar(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200, text=_lineas("Una respuesta a medi", final={"done_reason": "length"})
+        )
+
+    completado = _eventos(_proveedor(contestar))[-1]
+
+    assert isinstance(completado, LLMCompleted)
+    assert completado.text == "Una respuesta a medi"
+
+
+@pytest.fixture
+def diario() -> Iterator[list[str]]:
+    """Lo que el conector apunta en el diario, leído de su propio registrador."""
+    registrador = logging.getLogger("sirius.adapters.llm.ollama_chat")
+    apuntado: list[str] = []
+
+    class _Apunta(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            apuntado.append(record.getMessage())
+
+    manejador = _Apunta()
+    registrador.addHandler(manejador)
+    try:
+        yield apuntado
+    finally:
+        registrador.removeHandler(manejador)
+
+
+# El diario no lleva nunca lo que dijo Ollama ni el texto de una excepción: solo el código,
+# la clase y una categoría de una lista cerrada. Tachar la charla después no era un límite
+# seguro, y en dos rondas de Codex se coló (ronda 2 de ADR-248).
+
+#: Una charla con algo que no debe llegar nunca al diario.
+_CON_UN_SECRETO = LLMRequest(
+    operation_id="op-2",
+    instructions="Eres Sirius.\nSu hermana Lucía es enfermera en el hospital.",
+    input_text="PIN 1234",
+)
+
+#: Formas en que Ollama podría repetir la charla en su error.
+_ECOS = (
+    "bad input: PIN 1234",
+    "bad input: pin 1234",
+    "bad input: 1234",
+    "BAD INPUT: SU HERMANA LUCÍA ES ENFERMERA EN EL HOSPITAL.",
+    "bad input: hermana Lucía es enfermera",
+)
+
+
+@pytest.mark.parametrize("eco", _ECOS)
+def test_lo_que_ollama_repita_de_la_charla_no_llega_al_diario(diario: list[str], eco: str) -> None:
+    def contestar(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(400, json={"error": eco})
+
+    _eventos(_proveedor(contestar), _CON_UN_SECRETO)
+
+    assert diario == ["Ollama respondió 400 a la charla: otro"]
+
+
+@pytest.mark.parametrize("eco", _ECOS)
+def test_lo_que_repita_a_mitad_de_respuesta_no_llega_al_diario(diario: list[str], eco: str) -> None:
+    def contestar(request: httpx.Request) -> httpx.Response:
+        lineas = [
+            json.dumps({"message": {"content": "Empez"}, "done": False}),
+            json.dumps({"error": eco}),
+        ]
+        return httpx.Response(200, text="\n".join(lineas) + "\n")
+
+    _eventos(_proveedor(contestar), _CON_UN_SECRETO)
+
+    assert diario == ["Operación op-2: Ollama devolvió un error: otro"]
+
+
+@pytest.mark.parametrize(
+    ("dicho", "categoria"),
+    [
+        ("model requires more system memory (5.6 GiB) than is available (3.2 GiB)", "sin memoria"),
+        ("CUDA error: out of memory", "sin memoria"),
+        ("cudaMalloc failed", "sin memoria"),
+        ('"gemma3:4b" does not support thinking', "no admite think"),
+        ('model "qwen9" not found, try pulling it first', "modelo no encontrado"),
+        ("context canceled", "cancelado"),
+        ("llama runner process has terminated: exit status 2", "el proceso del modelo se cayó"),
+        ("LLAMA RUNNER PROCESS HAS TERMINATED", "el proceso del modelo se cayó"),
+        ("llama runner process no longer running: -1", "el proceso del modelo se cayó"),
+        # La memoria va antes: dice por qué se cayó.
+        ("llama runner process has terminated: CUDA error: out of memory", "sin memoria"),
+        # Una firma de dos trozos pide los dos.
+        ("stream terminated unexpectedly", "otro"),
+        ("algo que no sale en la lista", "otro"),
+        ("", "otro"),
+    ],
+)
+def test_cada_error_conocido_de_ollama_sale_con_su_categoria(
+    diario: list[str], dicho: str, categoria: str
+) -> None:
+    def contestar(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(500, json={"error": dicho})
+
+    [evento] = _eventos(_proveedor(contestar))
+
+    assert isinstance(evento, LLMError)
+    assert evento.kind is LLMErrorKind.UNKNOWN
+    assert diario == [f"Ollama respondió 500 a la charla: {categoria}"]
+
+
+def test_un_modelo_que_ollama_no_tiene_lo_dice_con_su_nombre(diario: list[str]) -> None:
+    def contestar(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(404, json={"error": 'model "modelo-de-prueba" not found'})
+
+    [evento] = _eventos(_proveedor(contestar))
+
+    assert isinstance(evento, LLMError)
+    assert evento.kind is LLMErrorKind.CONFIGURATION
+    assert diario == [
+        "Ollama no tiene el modelo de la charla (modelo-de-prueba): modelo no encontrado"
+    ]
+
+
+def test_un_cuerpo_que_no_es_json_tambien_sale_con_su_categoria(diario: list[str]) -> None:
+    def contestar(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(502, text="pin 1234: upstream context canceled")
+
+    _eventos(_proveedor(contestar), _CON_UN_SECRETO)
+
+    assert diario == ["Ollama respondió 502 a la charla: cancelado"]
+
+
+def test_un_fallo_de_red_antes_de_contestar_dice_solo_su_clase(diario: list[str]) -> None:
+    def contestar(request: httpx.Request) -> httpx.Response:
+        raise httpx.RemoteProtocolError("Server disconnected: pin 1234")
+
+    [evento] = _eventos(_proveedor(contestar), _CON_UN_SECRETO)
+
+    assert isinstance(evento, LLMError)
+    assert evento.kind is LLMErrorKind.UNKNOWN
+    assert diario == ["Operación op-2: fallo de red con Ollama (RemoteProtocolError)"]
+
+
+def _se_corta_a_mitad(error: httpx.HTTPError) -> Callable[[httpx.Request], httpx.Response]:
+    """Un Ollama que empieza a contestar y deja de hacerlo: la red falla a mitad."""
+
+    def contestar(request: httpx.Request) -> httpx.Response:
+        def trozos() -> Iterator[bytes]:
+            yield (json.dumps({"message": {"content": "Empez"}, "done": False}) + "\n").encode()
+            raise error
+
+        return httpx.Response(200, content=trozos())
+
+    return contestar
+
+
+def test_un_fallo_de_red_a_mitad_de_respuesta_dice_solo_su_clase(diario: list[str]) -> None:
+    # Ronda 1 de Codex: a mitad de respuesta, el fallo de red no dejaba nada en el diario.
+    error = httpx.RemoteProtocolError(
+        "peer closed connection without sending complete message body: pin 1234"
+    )
+
+    eventos = _eventos(_proveedor(_se_corta_a_mitad(error)), _CON_UN_SECRETO)
+
+    assert isinstance(eventos[-1], LLMError)
+    assert eventos[-1].kind is LLMErrorKind.CONNECTION
+    assert eventos[-1].partial_text == "Empez"
+    assert diario == [
+        "Operación op-2: fallo de red con Ollama a mitad de respuesta (RemoteProtocolError)"
+    ]
+
+
+def test_un_tope_de_lectura_a_mitad_de_respuesta_dice_solo_su_clase(diario: list[str]) -> None:
+    error = httpx.ReadTimeout("timed out after PIN 1234")
+
+    eventos = _eventos(_proveedor(_se_corta_a_mitad(error)), _CON_UN_SECRETO)
+
+    assert isinstance(eventos[-1], LLMError)
+    assert eventos[-1].kind is LLMErrorKind.TIMEOUT
+    assert eventos[-1].partial_text == "Empez"
+    assert diario == ["Operación op-2: fallo de red con Ollama a mitad de respuesta (ReadTimeout)"]
