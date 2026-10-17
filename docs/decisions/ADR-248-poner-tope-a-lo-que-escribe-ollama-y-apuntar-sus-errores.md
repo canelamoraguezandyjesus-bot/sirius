@@ -120,7 +120,8 @@ de OpenAI. Al escribir el código se decidió además:
 - **Las pruebas que tocan Ollama, sus ajustes y quien los usa**, 40 ficheros: 1 057 en
   verde, 2 omitidas y 2 `xfail`.
 - **ruff** limpio; **mypy** sin errores en 734 ficheros.
-- **La batería entera**: se escribe la última, sobre el árbol final.
+- **La batería entera**, sobre `401ea5a1`, el árbol final de la PR: 8 847 en verde,
+  14 omitidas y 2 `xfail`, ningún fallo, en 23 min 41 s.
 
 ## Consecuencias
 
