@@ -160,6 +160,38 @@ ADR y no en uno nuevo porque `MEMORIA.md` no tiene sitio para otro: le quedan 7 
    respuestas van en etiquetas que parten las líneas, y cada paso, dentro de su barra. Y
    que una hoja se abra más grande que la pantalla: se abre a dos tercios de la disponible.
 
+**Añadido el 17-10-2026, antes de tocar la lista de modelos de la prueba a ciegas:**
+
+1. **Dónde vive el fallo y dónde va el arreglo.** La prueba a ciegas ofrece también los
+   modelos de huellas: `list_installed_models`, en `src/sirius/adapters/llm/ollama_chat.py`,
+   devuelve todo lo que dice `/api/tags`, y él tiene `embeddinggemma` y
+   `qwen3-embedding:0.6b`. Si marca uno, la prueba falla después de muchos minutos, y el
+   aviso no dice qué hacer. El arreglo:
+   - **La prueba a ciegas solo ofrece los modelos que conversan**: los que, según
+     `/api/show`, saben hacer `completion`. Se pregunta a la misma dirección fija, sin
+     proxies. Si no contesta o no dice qué sabe hacer, ese modelo se queda fuera con su
+     motivo, y los demás se ofrecen igual. La hoja dice cuáles se quedan fuera y por qué.
+   - **El aviso de un modelo que no contesta dice qué hacer**: «Vuelve a pulsar Empezar; si
+     se repite, desmarca ese modelo».
+
+   **¿Puede el sitio del arreglo observar el fallo?** Sí: el caso de uso de la prueba hace
+   la lista, y una prueba con un Ollama de mentira que tiene un modelo de huellas mira lo
+   que ofrece.
+2. **Qué NO garantiza.**
+   - Que su Ollama diga `capabilities`: si es tan viejo que no lo dice, todos sus modelos
+     se quedan fuera, cada uno con su motivo.
+   - Que un modelo que conversa conteste bien en la prueba: solo que sabe conversar.
+3. **Criterio de parada**, fijado antes de escribir código:
+   - **Terminado** cuando, con un Ollama de mentira que tiene un modelo de huellas, las
+     pruebas ven con el código de hoy que la prueba lo ofrece y con el arreglo no, y la
+     hoja dice por qué; un modelo cuyo `/api/show` no contesta o no dice qué sabe hacer se
+     queda fuera sin romper la lista; la pregunta va a la dirección fija y sin proxies; el
+     aviso dice qué hacer; caen las mutaciones; ruff, mypy y las pruebas de la prueba a
+     ciegas y de Ollama están en verde; y la revisión propia no encuentra nada.
+   - **Si filtrar pidiera cambiar cómo se elige o se guarda el modelo**, se para.
+4. **Qué lo haría imposible.** Que la prueba ofrezca un modelo que no conversa: solo entra
+   en la lista el que `/api/show` dice que sabe hacer `completion`.
+
 ## Contexto y problema
 
 La 0.2 está programada entera y le quedan las cinco evaluaciones del propietario, que
