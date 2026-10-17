@@ -21,11 +21,13 @@ Lo que garantiza por construcción:
   no deja de llegar texto, el tope de lectura no salta nunca. Se pide uno,
   ``num_predict``, el «Máximo de tokens de salida» de los ajustes, 4.096 si no
   dicen otro (ADR-248). Una respuesta cortada por él acaba como cualquier otra.
-- **Cortar es al momento.** Mientras Ollama lee la pregunta no envía nada, y
-  un corte que esperara al siguiente trozo esperaría a que acabara de leerla.
-  ``cancel`` cuelga la conexión de esa petición, y Ollama deja de trabajar en
-  ella en cuanto ve que se ha ido: un turno de voz no espera a la nota del juez
-  (ADR-252). Por eso cada petición abre su conexión y la cierra al acabar.
+- **Cortar no espera al siguiente trozo.** Mientras Ollama lee la pregunta no
+  envía nada, y un corte que esperara al siguiente trozo esperaría a que
+  acabara de leerla. ``cancel`` cuelga la conexión de esa petición, y quien la
+  lee deja de esperar: un turno de voz no espera a la nota del juez (ADR-252).
+  Visto en Linux; en Windows no se ha comprobado, y lo que haga entonces Ollama
+  con la pregunta, tampoco. Por eso cada petición abre su conexión y la cierra
+  al acabar.
 - **El juez no piensa antes de contestar.** Una petición que no deja pensar
   (``may_think``) apaga ``think``. Si Ollama la rechazara por eso, se repite
   una vez sin apagarlo, y ese modelo ya no lo apaga más (ADR-252).
@@ -510,8 +512,9 @@ def _count(value: object) -> int:
 
 
 def _hang_up(connection: socket.socket) -> None:
-    """Cuelga una conexión desde otro hilo: el que lee de ella deja de esperar al
-    momento, y Ollama ve que se ha ido. Si ya estaba cerrada, no pasa nada."""
+    """Cuelga una conexión desde otro hilo para que el que lee de ella deje de esperar: en
+    Linux, al momento; en Windows no se ha comprobado (ADR-252). Si ya estaba cerrada, no
+    pasa nada."""
     with contextlib.suppress(OSError):
         connection.shutdown(socket.SHUT_RDWR)
 
