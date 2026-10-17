@@ -1696,3 +1696,22 @@ defectos:
       - src/sirius/application/trick_questions.py
       - src/sirius/presentation/blind_test_dialog.py
       - src/sirius/presentation/trick_questions_dialog.py
+  # ADR-254: al cortarle por voz, Sirius callaba al momento, pero lo nuevo esperaba a que el
+  # modelo acabara de escribir lo de antes, y si le cortaba mientras la charla resumía,
+  # también al resumen. Con una respuesta larga, decenas de segundos. Salió del repaso de la
+  # consola del 17-10-2026; lo decidió el propietario ese día, y su nota de arranque sigue en
+  # la incidencia.
+  - id: H-254
+    titulo: Al cortarle por voz, lo nuevo esperaba a que el modelo acabara de escribir lo de antes
+    bloque: producto
+    gravedad: media
+    estado: cerrado
+    cerrado_por: 019379237c749a4cab6815e91773a901a8c7a9ac
+    pr: 698
+    adr: 254
+    incidencia: 697
+    ficheros:
+      - src/sirius/application/local_listening.py
+      - src/sirius/application/send_message.py
+      - src/sirius/application/robot_conversation.py
+      - tests/acceptance/test_robot_0_3_voz.py

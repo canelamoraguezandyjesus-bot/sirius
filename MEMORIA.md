@@ -28,7 +28,7 @@
 
 - Decisiones (ADR): **248**.
 - Bloques del motor: 17 cerrado, 3 fuera_de_alcance.
-- Defectos registrados: 2 abierto, 98 cerrado.
+- Defectos registrados: 2 abierto, 99 cerrado.
 - Ideas aparcadas o descartadas: 12 aparcada, 3 descartada, 2 promovida.
 - Skills: **19**.
 - Investigaciones: **14** (fotos con fecha; caducan).

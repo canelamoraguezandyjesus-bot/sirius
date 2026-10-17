@@ -167,8 +167,16 @@ leer el bytecode de la anterior.
   juntarla. Encontró un trabajador sin proteger, el solape de dos pasadas, dos frases a la
   vez, una prueba que no contaba el marco de la ventana, otra que no veía el orden al salir, un aviso falso del diario y dos textos que
   decían más que el código. Todo se arregló con su prueba vista fallar.
-- **La batería entera**: pendiente. Se pasa sobre el árbol completo de la PR, y su cifra se anota
-  aquí antes de pedir la revisión externa.
+- **La batería entera**, sobre `47c174d3`, con los dos ADR y el arreglo de la revisión del
+  corte: 9 102 pasan, 15 omitidas, 2 `xfail` y 1 falla, en 34 min 8 s con la máquina
+  cargada. La que falla es la guarda del registro de defectos, que pedía la entrada de
+  ADR-254: es H-254, que entra en el commit siguiente, y con ella `tests/automation` y
+  `tests/engine` pasan enteras. Quality dio lo mismo sobre ese head, con 9 098 en verde. La
+  del head final se anota con la ronda de Codex.
+- **Quality paró dos heads por guardas de documentos** que no se habían pasado antes de
+  empujar: `458eb044`, por la de lecciones, y `47c174d3`, por la del registro. Es la misma
+  raíz, y desde ahí, antes de empujar documentos, se pasan enteras `tests/automation` y
+  `tests/engine`.
 - **ruff** limpio; **mypy** sin errores.
 
 ## Consecuencias
