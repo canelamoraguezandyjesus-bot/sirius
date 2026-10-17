@@ -315,15 +315,15 @@ def test_openai_pide_el_tope_menor_entre_el_suyo_y_el_de_la_peticion(
     assert respuestas.pedidos[0]["max_output_tokens"] == pedido
 
 
-# --- Cortar es al momento, aunque Ollama aún no haya escrito nada ----------------------------
+# --- Cortar no espera al siguiente trozo, aunque Ollama aún no haya escrito nada -------------
 
 
 class _OllamaQueLee:
     """Un Ollama de mentira que recibe la pregunta y no contesta mientras «la lee», como el
     de verdad con una pregunta larga; con ``primer_trozo``, escribe uno y se queda ahí.
 
-    Si el otro lado cuelga, lo apunta y cierra, como el de verdad, que deja de trabajar en
-    esa pregunta en cuanto ve que se ha ido.
+    Si el otro lado cuelga, lo apunta y cierra el suyo. Es lo que se espera del de verdad, y
+    con él no se ha comprobado (ADR-252).
     """
 
     def __init__(self, *, primer_trozo: bool = False) -> None:
