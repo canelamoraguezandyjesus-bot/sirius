@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from pathlib import Path
 
 import httpx
@@ -83,7 +83,8 @@ class _Juez:
         self.puntuadas: list[str] = []
         self.juzgadas: list[tuple[str, str]] = []
 
-    def score(self, reply: str) -> int:
+    def score(self, reply: str, *, should_stop: Callable[[], bool] | None = None) -> int:
+        del should_stop
         if self.falla_en is not None and len(self.puntuadas) + 1 == self.falla_en:
             self.falla_en = None
             msg = "el juez no contestó"

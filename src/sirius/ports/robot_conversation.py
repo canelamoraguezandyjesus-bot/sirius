@@ -3,7 +3,7 @@ y el sueño (G)."""
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from datetime import date
 from typing import Protocol
 
@@ -70,8 +70,9 @@ class JudgeScoreRepository(Protocol):
 class ReplyJudge(Protocol):
     """El juez (pieza E de ADR-233). Sus dos preguntas pueden fallar con cualquier error."""
 
-    def score(self, reply: str) -> int:
-        """Del 1 al 5, cuánto suena a Sirius ``reply``."""
+    def score(self, reply: str, *, should_stop: Callable[[], bool] | None = None) -> int:
+        """Del 1 al 5, cuánto suena a Sirius ``reply``. Si ``should_stop`` dice que pare
+        cuando la nota está a punto de pedirse, no la pide y falla (ADR-252)."""
         ...
 
     def verdict(self, bad_idea: str, reply: str) -> TrickVerdict:
@@ -79,9 +80,9 @@ class ReplyJudge(Protocol):
         ...
 
     def cancel(self) -> None:
-        """Corta, desde otro hilo, las notas que está pidiendo (``score``), también las que
-        aún se preparan; si no hay, no hace nada y nunca falla. La nota cortada falla como
-        cualquier otra (ADR-252). Los veredictos no se cortan."""
+        """Corta, desde otro hilo, las notas que está pidiendo (``score``); si no hay, no
+        hace nada y nunca falla. La nota cortada falla como cualquier otra (ADR-252). Los
+        veredictos no se cortan."""
         ...
 
 

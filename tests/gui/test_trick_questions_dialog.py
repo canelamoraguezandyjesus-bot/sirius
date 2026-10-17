@@ -6,7 +6,7 @@ ejecuta en el acto), así que cada paso se ve sin esperar.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -71,8 +71,8 @@ class _Modelo:
 
 
 class _Juez:
-    def score(self, reply: str) -> int:
-        del reply
+    def score(self, reply: str, *, should_stop: Callable[[], bool] | None = None) -> int:
+        del reply, should_stop
         return 5
 
     def verdict(self, bad_idea: str, reply: str) -> TrickVerdict:

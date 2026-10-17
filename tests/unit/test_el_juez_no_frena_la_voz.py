@@ -143,20 +143,74 @@ def test_cortar_al_juez_corta_la_peticion_que_tiene_en_marcha() -> None:
     assert len(fallo) == 1
 
 
-def test_cortar_al_juez_mientras_prepara_la_nota_no_llega_a_preguntar() -> None:
+def test_si_le_paran_mientras_prepara_la_nota_no_llega_a_preguntar() -> None:
     modelo = _Modelo()
+    parado = threading.Event()
     juez: LLMReplyJudge
 
-    def el_corte_llega_mientras_lee_los_ajustes() -> _Modelo:
+    def le_paran_mientras_lee_los_ajustes() -> _Modelo:
+        # Como la ventana al pararle: pone la bandera y después corta.
+        parado.set()
         juez.cancel()
         return modelo
 
-    juez = LLMReplyJudge(_Identidades(), el_corte_llega_mientras_lee_los_ajustes)  # type: ignore[arg-type]
+    juez = LLMReplyJudge(_Identidades(), le_paran_mientras_lee_los_ajustes)  # type: ignore[arg-type]
 
     with pytest.raises(JudgeError):
-        juez.score("Venga, jefe, al lío.")
+        juez.score("Venga, jefe, al lío.", should_stop=parado.is_set)
 
     assert modelo.peticiones == []
+
+
+def test_si_le_paran_justo_despues_de_mirar_no_llega_a_preguntar(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    # El hueco que había: el servicio mira que no le han parado y, antes de que el juez
+    # apunte su nota, la ventana pone la bandera y corta. Ese corte no encontraba nada.
+    modelo = _Modelo()
+    juez = _juez(modelo)
+    parado = threading.Event()
+
+    def mira() -> bool:
+        visto = parado.is_set()
+        if not visto:
+            parado.set()
+            juez.cancel()
+        return visto
+
+    with caplog.at_level(logging.WARNING, logger="sirius"):
+        ReplyJudgeService(juez, _Notas()).judge_pending(should_stop=mira)
+
+    assert modelo.peticiones == []
+    assert "no pudo puntuar" not in caplog.text
+
+
+def test_un_corte_mientras_apunta_la_nota_la_encuentra_apuntada() -> None:
+    # Mirar si le han parado y apuntar la nota van a la vez: un corte que llega mientras
+    # tanto espera a que esté apuntada, y la corta.
+    modelo = _Modelo(espera=True)
+    juez = _juez(modelo)
+    fallo: list[JudgeError] = []
+
+    def mira() -> bool:
+        corte = threading.Thread(target=juez.cancel, daemon=True)
+        corte.start()
+        corte.join(0.2)
+        return False
+
+    def puntua() -> None:
+        try:
+            juez.score("Venga, jefe, al lío.", should_stop=mira)
+        except JudgeError as error:
+            fallo.append(error)
+
+    hilo = threading.Thread(target=puntua)
+    hilo.start()
+    hilo.join(5)
+
+    assert not hilo.is_alive()
+    assert modelo.cortadas == [modelo.peticiones[0].operation_id]
+    assert len(fallo) == 1
 
 
 def test_cortar_al_juez_no_corta_las_preguntas_trampa() -> None:

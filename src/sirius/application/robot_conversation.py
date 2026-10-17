@@ -154,7 +154,7 @@ class ReplyJudgeService:
             if should_stop():
                 break
             try:
-                score = self._judge.score(reply)
+                score = self._judge.score(reply, should_stop=should_stop)
             except Exception as exc:  # el juez nunca puede romper la charla
                 # Si le pidieron parar, es su nota cortada (cancel): eso no es un fallo.
                 if not should_stop():
