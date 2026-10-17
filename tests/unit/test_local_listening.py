@@ -2369,6 +2369,23 @@ def test_al_cambiar_de_voz_suelta_la_de_antes_y_el_turno_siguiente_habla_con_la_
     assert not [e for e in oido.eventos[antes:] if e.startswith(("di:", "suena:"))]
 
 
+def test_avisa_justo_antes_de_cargar_la_voz_y_solo_cuando_la_carga() -> None:
+    """La ventana carga la voz al abrirse, y con la de personaje no sale hasta que acaba:
+    quien lo dice por la consola se entera antes de que empiece a cargarla (ADR-253)."""
+    oido = _Oido()
+    avisos: list[int] = []
+    oido.servicio.before_loading_voice(lambda: avisos.append(oido.cargas_de_la_voz))
+
+    oido.servicio.start()
+    oido.servicio.stop()
+    oido.servicio.start()
+
+    assert avisos == [0], "una vez, con la voz aún por cargar"
+    _voz_nueva(oido)
+    oido.servicio.reload_voice()
+    assert avisos == [0, 1]
+
+
 def test_sin_escuchar_cambiar_de_voz_no_abre_el_micro_y_la_nueva_se_carga_al_escuchar() -> None:
     oido = _Oido()
     oido.servicio.start()

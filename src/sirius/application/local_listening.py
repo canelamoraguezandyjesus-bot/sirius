@@ -345,6 +345,8 @@ class LocalListening[Chunk]:
         #: El aviso de cuando dejó de oír por su cuenta, hasta contárselo a quien mira.
         self._gave_up: str | None = None
         self._watcher: ListeningWatcher | None = None
+        #: A quién se avisa justo antes de cargar la voz, que con la de personaje tarda.
+        self._before_loading_voice: Callable[[], None] = lambda: None
         #: Lo que está diciendo, para callarlo si se para.
         self._speech: _Speech | None = None
         #: Lo que dijo y aún suena, ya entregado a la charla, con su mensaje: si le cortan,
@@ -379,6 +381,13 @@ class LocalListening[Chunk]:
         with self._lock:
             self._watcher = watcher
 
+    def before_loading_voice(self, tell: Callable[[], None]) -> None:
+        """Llama a ``tell`` justo antes de cargar la voz, cada vez que la cargue. La ventana
+        la carga al abrirse, y con la de personaje no se ve hasta que acaba: así se puede
+        decir antes por la consola (ADR-253). ``tell`` no puede fallar."""
+        with self._lock:
+            self._before_loading_voice = tell
+
     def start(self) -> str:
         """Abre el micro si el oído está instalado; devuelve el aviso si no puede, o vacío.
 
@@ -409,6 +418,7 @@ class LocalListening[Chunk]:
                 return self._fail(f"No puedo oírte: {error.reason}.", install=True)
             try:
                 if self._speaking is None:
+                    self._before_loading_voice()
                     self._speaking = self._load_speaking()
             except VoiceUnavailable as error:
                 _logger.info("La voz no arranca: %s", error.reason)
