@@ -15,6 +15,7 @@ its type only, and reported to the user with a generic, safe message.
 
 from __future__ import annotations
 
+import contextlib
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QRunnable, Signal
@@ -31,7 +32,11 @@ _GENERIC_FAILURE_MESSAGE = "No se pudo completar la operación. Inténtalo de nu
 
 
 class CreateBackupWorkerSignals(QObject):
-    """Signals emitted by ``CreateBackupWorker``."""
+    """Signals emitted by ``CreateBackupWorker``.
+
+    If Sirius closed before the worker finished, the signal is dropped instead of
+    printing a traceback (ADR-253).
+    """
 
     succeeded = Signal(object)  # BackupResult
     failed = Signal(str)
@@ -51,18 +56,25 @@ class CreateBackupWorker(QRunnable):
             result = self._use_case.create_backup(self._password)
         except BackupError as exc:
             _logger.warning("Creación de copia rechazada (%s)", type(exc).__name__)
-            self.signals.failed.emit(str(exc))
+            with contextlib.suppress(RuntimeError):
+                self.signals.failed.emit(str(exc))
         except Exception as exc:  # A worker-boundary catch: report, never crash the pool thread.
             _logger.error(
                 "Creación de copia interrumpida por un error inesperado (%s)", type(exc).__name__
             )
-            self.signals.failed.emit(_GENERIC_FAILURE_MESSAGE)
+            with contextlib.suppress(RuntimeError):
+                self.signals.failed.emit(_GENERIC_FAILURE_MESSAGE)
         else:
-            self.signals.succeeded.emit(result)
+            with contextlib.suppress(RuntimeError):
+                self.signals.succeeded.emit(result)
 
 
 class ValidateBackupWorkerSignals(QObject):
-    """Signals emitted by ``ValidateBackupWorker``."""
+    """Signals emitted by ``ValidateBackupWorker``.
+
+    If Sirius closed before the worker finished, the signal is dropped instead of
+    printing a traceback (ADR-253).
+    """
 
     succeeded = Signal(object)  # BackupValidationResult
     failed = Signal(str)
@@ -83,18 +95,25 @@ class ValidateBackupWorker(QRunnable):
             result = self._use_case.validate_backup(self._backup_path, self._password)
         except BackupError as exc:
             _logger.warning("Validación de copia rechazada (%s)", type(exc).__name__)
-            self.signals.failed.emit(str(exc))
+            with contextlib.suppress(RuntimeError):
+                self.signals.failed.emit(str(exc))
         except Exception as exc:
             _logger.error(
                 "Validación de copia interrumpida por un error inesperado (%s)", type(exc).__name__
             )
-            self.signals.failed.emit(_GENERIC_FAILURE_MESSAGE)
+            with contextlib.suppress(RuntimeError):
+                self.signals.failed.emit(_GENERIC_FAILURE_MESSAGE)
         else:
-            self.signals.succeeded.emit(result)
+            with contextlib.suppress(RuntimeError):
+                self.signals.succeeded.emit(result)
 
 
 class RestoreBackupWorkerSignals(QObject):
-    """Signals emitted by ``RestoreBackupWorker``."""
+    """Signals emitted by ``RestoreBackupWorker``.
+
+    If Sirius closed before the worker finished, the signal is dropped instead of
+    printing a traceback (ADR-253).
+    """
 
     succeeded = Signal(object)  # BackupRestoreResult
     failed = Signal(str)
@@ -121,11 +140,14 @@ class RestoreBackupWorker(QRunnable):
             )
         except BackupError as exc:
             _logger.warning("Restauración rechazada (%s)", type(exc).__name__)
-            self.signals.failed.emit(str(exc))
+            with contextlib.suppress(RuntimeError):
+                self.signals.failed.emit(str(exc))
         except Exception as exc:
             _logger.error(
                 "Restauración interrumpida por un error inesperado (%s)", type(exc).__name__
             )
-            self.signals.failed.emit(_GENERIC_FAILURE_MESSAGE)
+            with contextlib.suppress(RuntimeError):
+                self.signals.failed.emit(_GENERIC_FAILURE_MESSAGE)
         else:
-            self.signals.succeeded.emit(result)
+            with contextlib.suppress(RuntimeError):
+                self.signals.succeeded.emit(result)

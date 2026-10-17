@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import contextlib
+
 from PySide6.QtCore import QObject, QRunnable, Signal
 
 from sirius.application.validate_and_save_api_key import (
@@ -15,6 +17,12 @@ _logger = get_logger(__name__)
 
 
 class CredentialValidationWorkerSignals(QObject):
+    """Signals emitted by ``CredentialValidationWorker``.
+
+    If Sirius closed before the worker finished, the signal is dropped instead of
+    printing a traceback (ADR-253).
+    """
+
     succeeded = Signal()
     failed = Signal(str)
 
@@ -42,12 +50,15 @@ class CredentialValidationWorker(QRunnable):
                 "Validación o guardado de credencial rechazado (%s)",
                 type(exc).__name__,
             )
-            self.signals.failed.emit(str(exc))
+            with contextlib.suppress(RuntimeError):
+                self.signals.failed.emit(str(exc))
         except Exception as exc:
             _logger.error(
                 "Validación de credencial interrumpida por un error inesperado (%s)",
                 type(exc).__name__,
             )
-            self.signals.failed.emit("No se pudo validar la clave. Inténtalo de nuevo.")
+            with contextlib.suppress(RuntimeError):
+                self.signals.failed.emit("No se pudo validar la clave. Inténtalo de nuevo.")
         else:
-            self.signals.succeeded.emit()
+            with contextlib.suppress(RuntimeError):
+                self.signals.succeeded.emit()

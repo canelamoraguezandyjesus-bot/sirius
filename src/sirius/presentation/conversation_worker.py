@@ -8,6 +8,8 @@ signals (queued automatically across threads).
 
 from __future__ import annotations
 
+import contextlib
+
 from PySide6.QtCore import QObject, QRunnable, Signal
 
 from sirius.application.send_message import SendMessageResult, SendMessageUseCase
@@ -17,7 +19,11 @@ _logger = get_logger(__name__)
 
 
 class SendMessageWorkerSignals(QObject):
-    """Signals emitted by ``SendMessageWorker``."""
+    """Signals emitted by ``SendMessageWorker``.
+
+    If Sirius closed before the worker finished, the signal is dropped instead of
+    printing a traceback (ADR-253).
+    """
 
     delta = Signal(str)
     finished = Signal(object)
@@ -56,7 +62,9 @@ class SendMessageWorker(QRunnable):
                 self._operation_id,
                 type(exc).__name__,
             )
-            self.signals.crashed.emit(str(exc))
+            with contextlib.suppress(RuntimeError):
+                self.signals.crashed.emit(str(exc))
         else:
             _logger.info("Operación %s finalizada: %s", self._operation_id, result.outcome.value)
-            self.signals.finished.emit(result)
+            with contextlib.suppress(RuntimeError):
+                self.signals.finished.emit(result)
