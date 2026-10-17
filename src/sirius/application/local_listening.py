@@ -110,7 +110,8 @@ MEANWHILE_SECONDS = 0.03
 #: Lo que dice si la charla va a un modelo de fuera de este ordenador.
 CHAT_LEAVES = (
     "No puedo oírte: la charla va ahora a un modelo de fuera de este ordenador, y lo que "
-    "oigo no sale de aquí."
+    "oigo no sale de aquí. Elige uno de este ordenador en la ventana de Sirius: "
+    "Configuración, «Elegir el modelo a ciegas…»."
 )
 
 

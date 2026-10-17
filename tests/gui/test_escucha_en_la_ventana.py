@@ -29,6 +29,7 @@ from sirius.adapters.audio.fake import (
 from sirius.adapters.persistence.bootstrap import initialize_persistence
 from sirius.adapters.secrets.fake import FakeSecretStore
 from sirius.application.listening_loop import ListeningLoop
+from sirius.application.local_listening import CHAT_LEAVES
 from sirius.application.memory_commands import FORGET_ABOUT_STORED
 from sirius.application.studio_voice import StudioVoiceUseCase, VoiceSettings
 from sirius.composition_root import ConversationDependencies, build_conversation_dependencies
@@ -1089,3 +1090,15 @@ def test_un_turno_de_voz_que_no_va_tambien_hace_esperar_al_juez(
     assert ventana._judge_timer.isActive()
     qtbot.wait(100)
     assert juez.puntuadas == []
+
+
+def test_el_aviso_de_la_charla_de_fuera_dice_donde_elegir_un_modelo_de_aqui(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    sirius = _monta(tmp_path)
+    ventana = _ventana(qtbot, sirius)
+
+    # La pestaña y el botón que nombra son los de verdad (ADR-252).
+    pestanas = [ventana.tabs.tabText(indice) for indice in range(ventana.tabs.count())]
+    assert "Configuración" in pestanas
+    assert f"Configuración, «{ventana.blind_test_button.text()}»" in CHAT_LEAVES
