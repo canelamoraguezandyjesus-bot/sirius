@@ -1382,7 +1382,12 @@ class MainWindow(QMainWindow):
         container = QWidget()
         layout = QVBoxLayout(container)
         layout.addWidget(self.knowledge_widget)
-        return container
+        # Como Configuración: sin barra, esta pestaña no dejaba a la ventana medir menos de
+        # 787 px de alto, y al 150 % no cabía en su pantalla (ADR-253).
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setWidget(container)
+        return scroll_area
 
     def _build_historical_projects_tab(self) -> QWidget:
         # Pestaña propia y separada de "Conversación" (§5.4/§6.4): nunca
