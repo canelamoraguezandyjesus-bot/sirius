@@ -12,7 +12,8 @@ from __future__ import annotations
 import threading
 from collections.abc import Callable, Sequence
 
-from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal
+from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, Signal
+from PySide6.QtGui import QMouseEvent
 from PySide6.QtWidgets import (
     QButtonGroup,
     QCheckBox,
@@ -37,6 +38,7 @@ from sirius.domain.blind_test import (
     BlindTestSheet,
 )
 from sirius.infrastructure.logging import get_logger
+from sirius.presentation.sheet_window import fit_as_sheet, scrollable
 
 _logger = get_logger(__name__)
 
@@ -75,6 +77,27 @@ class BlindTestWorker(QRunnable):
             self.signals.succeeded.emit(sheet)
 
 
+class _AnswerText(QLabel):
+    """El texto de una respuesta, tal cual y partido en líneas: pulsarlo es pulsar su botón.
+
+    Iba en el propio botón, que no parte las líneas: una respuesta larguísima ensanchaba la
+    hoja más que la pantalla (ADR-247).
+    """
+
+    def __init__(self, text: str, button: QRadioButton) -> None:
+        super().__init__(text)
+        self.setTextFormat(Qt.TextFormat.PlainText)
+        self.setWordWrap(True)
+        self._button = button
+
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:
+        if event.button() == Qt.MouseButton.LeftButton and self.rect().contains(
+            event.position().toPoint()
+        ):
+            self._button.click()
+        super().mouseReleaseEvent(event)
+
+
 class BlindTestDialog(QDialog):
     """Elegir a ciegas el modelo con el que conversa Sirius."""
 
@@ -100,13 +123,14 @@ class BlindTestDialog(QDialog):
         self._result: BlindTestResult | None = None
 
         self.pages = QStackedWidget()
-        self.pages.addWidget(self._build_models_page())
-        self.pages.addWidget(self._build_progress_page())
-        self.pages.addWidget(self._build_question_page())
-        self.pages.addWidget(self._build_result_page())
+        self.pages.addWidget(scrollable(self._build_models_page()))
+        self.pages.addWidget(scrollable(self._build_progress_page()))
+        self.pages.addWidget(scrollable(self._build_question_page()))
+        self.pages.addWidget(scrollable(self._build_result_page()))
         layout = QVBoxLayout(self)
         layout.addWidget(self.pages)
         self._load_models()
+        fit_as_sheet(self)
 
     # --- Paso 1: elegir los modelos ---
 
@@ -219,6 +243,8 @@ class BlindTestDialog(QDialog):
         self.option_group = QButtonGroup(page)
         self.option_group.buttonClicked.connect(self._on_option)
         self.option_buttons: list[QRadioButton] = []
+        self.option_texts: list[QLabel] = []
+        self._option_rows: list[QWidget] = []
         buttons = QHBoxLayout()
         self.previous_button = QPushButton("Anterior")
         self.previous_button.clicked.connect(self._previous)
@@ -237,16 +263,28 @@ class BlindTestDialog(QDialog):
         self.question_text.setText(item.question)
         for button in self.option_buttons:
             self.option_group.removeButton(button)
-            self.options_box.removeWidget(button)
-            button.deleteLater()
+        for row in self._option_rows:
+            self.options_box.removeWidget(row)
+            row.deleteLater()
         self.option_buttons = []
+        self.option_texts = []
+        self._option_rows = []
         for letter, answer in item.options:
-            button = QRadioButton(f"{letter}) {answer}")
+            button = QRadioButton(f"{letter})")
             button.setProperty("letter", letter)
             button.setChecked(self._choices.get(self._index) == letter)
+            text = _AnswerText(answer, button)
+            text.setProperty("letter", letter)
+            row = QWidget()
+            row_layout = QHBoxLayout(row)
+            row_layout.setContentsMargins(0, 0, 0, 0)
+            row_layout.addWidget(button, 0, Qt.AlignmentFlag.AlignTop)
+            row_layout.addWidget(text, 1)
             self.option_group.addButton(button)
-            self.options_box.addWidget(button)
+            self.options_box.addWidget(row)
             self.option_buttons.append(button)
+            self.option_texts.append(text)
+            self._option_rows.append(row)
         self.previous_button.setEnabled(self._index > 0)
         last = self._index == len(self._sheet.items) - 1
         self.next_button.setText("Ver el resultado" if last else "Siguiente")

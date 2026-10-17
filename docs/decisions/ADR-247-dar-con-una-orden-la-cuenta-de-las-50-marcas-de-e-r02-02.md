@@ -240,6 +240,18 @@ pasa antes de borrar su carpeta:
   - Lo que cuenta si un caso acierta no cambia: se saca a `acierta`, para que el
     diagnóstico diga lo mismo que el recuento.
 - **La ventana no se toca.**
+- **Las hojas en su pantalla**, con su propia nota de arranque, arriba, y sin rediseñarlas:
+  - **Las tres comparten `src/sirius/presentation/sheet_window.py`**: `scrollable` mete un
+    paso en una barra para bajar que le da el ancho de la hoja, y `fit_as_sheet` les pone
+    los botones de minimizar, maximizar y cerrar, sin el «?» de ayuda, y las abre a dos
+    tercios de la pantalla disponible donde está Sirius, nunca por debajo de lo menos que
+    miden. Cambian de tamaño como cualquier ventana.
+  - **Cada paso de las tres va en su propia barra**, también los cortos. Los botones de
+    cada paso van con él: «Siguiente» se alcanza bajando hasta el final de las respuestas.
+  - **Cada respuesta de la prueba a ciegas** lleva su botón de elegir con la letra, «A)», y
+    al lado su texto, en una etiqueta que parte las líneas y lo enseña tal cual, sin
+    pintarlo como HTML, como hacía el botón. Pulsar el texto es pulsar el botón, y
+    `choose_letter` y lo que se guarda no cambian.
 
 De paso, en los documentos, las rondas limpias de Codex que no se pudieron anotar en sus
 PR sin cambiar el head que revisaron: la de ADR-245 (PR #690) y la de ADR-246 (PR #691).
@@ -299,9 +311,29 @@ PR sin cambiar el head que revisaron: la de ADR-245 (PR #690) y la de ADR-246 (P
   22 min 34 s.
 - **ruff** limpio; **mypy** sin errores en 733 ficheros; **el comprobador de documentos**,
   sin defectos en ADR-245, ADR-246, ADR-247, `PRUEBAS_0.2_DEL_ROBOT.md` y `MEMORIA.md`.
+- **Las hojas en su pantalla**, con una respuesta de 3 000 caracteres, en la pantalla de
+  800 × 800 de las pruebas:
+  - con el código de antes, la prueba a ciegas medía 15 387 px de ancho, con «Siguiente» a
+    7 695 px de su borde; a la respuesta de las preguntas trampa le tocaban 375 px de los
+    495 que necesita, sin poder bajar; y ninguna de las tres tenía minimizar ni maximizar;
+  - con el arreglo, las dos se abren a 533 × 533 y se bajan, 144 px y 132 px, sin ir de
+    lado, hasta sus botones.
+
+  Seis pruebas nuevas en `tests/gui/`, tres de la prueba a ciegas, dos de las preguntas
+  trampa y una de la de voces, con lo que miran en común en
+  `tests/unit/_hojas_en_su_pantalla.py`; las seis fallaban con el código de antes. Dos de
+  las de antes eligen ahora la respuesta por su texto. Mutación: 16, caen las 16. Las
+  pruebas de la interfaz, 565 en verde; **ruff** limpio; **mypy** sin errores en 737
+  ficheros.
 
 ## Consecuencias
 
+- **Las tres hojas se abren más grandes que antes**, a dos tercios de su pantalla, y se
+  pueden minimizar, maximizar y cambiar de tamaño. Cómo minimiza Windows una hoja que
+  depende de la ventana de Sirius lo verá él.
+- **Una respuesta larga se lee bajando**, y «Siguiente» queda al final de las respuestas.
+  Una palabra sin espacios más ancha que la hoja se lee yendo de lado: con una de 2 000
+  caracteres, la hoja sigue cabiendo.
 - **El propietario tiene la orden de E-R02-02**: `uv run python scripts/contar_las_marcas.py`.
   La puede ejecutar con Sirius abierto: la copia espera si la ventana está guardando.
 - **Las últimas 50 son las de la charla, en su orden**, como en PA-R02-06: una respuesta
@@ -344,6 +376,10 @@ prueba por cada regla nueva. Encontró cuatro cosas, arregladas:
 - **La cabecera del diagnóstico decía «de 0 a 2»**, que vale mientras cada caso tenga tres
   recuerdos: ahora dice «desde 0».
 
+**Las hojas.** Antes de empujar se releyó el diff contra el código y su nota. Encontró
+una cosa, arreglada: mypy rechazó la prueba que pulsa el texto de una respuesta con
+`qtbot.mouseClick`, que no tiene tipos; pulsa con `QTest.mouseClick`, como las demás.
+
 ## La lección
 
 - familia: `prueba-que-no-puede-ver-lo-que-vigila`
@@ -360,3 +396,8 @@ de la de E-R02-05, el diagnóstico del banco de E-R02-04 y los dos apuntes de la
 limpias, y nada más. Mira que la orden cuente como PA-R02-06, que las dos lean la base que
 abre la ventana y que la de las marcas no escriba en ella, que la línea de cada caso diga lo
 que pasó por el camino real, y que lo que dicen al propietario sea cierto en cada caso.
+
+**Alcance añadido para la ronda 2**, escrito antes de pedirla: las tres hojas en su
+pantalla. Mira que una respuesta larga no haga ninguna hoja más ancha ni más alta que la
+pantalla, que todo se alcance bajando, que la prueba a ciegas elija y guarde como antes, y
+que las tres se minimicen, se maximicen y cambien de tamaño.

@@ -12,8 +12,15 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-from PySide6.QtCore import QRunnable
-from PySide6.QtWidgets import QAbstractButton, QLabel, QMainWindow
+from _hojas_en_su_pantalla import (
+    abre,
+    cabe_en_su_pantalla,
+    mira_que_es_una_ventana_que_cabe,
+    se_ve_en,
+)
+from PySide6.QtCore import QRunnable, Qt
+from PySide6.QtTest import QTest
+from PySide6.QtWidgets import QAbstractButton, QLabel, QMainWindow, QScrollArea
 from pytestqt.qtbot import QtBot
 
 from sirius.adapters.persistence.bootstrap import initialize_persistence
@@ -47,10 +54,16 @@ class _Identidades:
         return Identity(id=1, current_version=version, created_at=version.created_at)
 
 
+#: Lo que añade a cada respuesta un modelo que se alarga: 3 000 caracteres, como el suyo que
+#: repitió la semilla entera.
+_LARGUISIMA = " bla" * 750
+
+
 class _Modelo:
-    def __init__(self, nombre: str, *, falla: bool = False) -> None:
+    def __init__(self, nombre: str, *, falla: bool = False, larga: bool = False) -> None:
         self._fruta = _FRUTAS[nombre]
         self._falla = falla
+        self._larga = larga
 
     def health_check(self) -> bool:
         return True
@@ -60,7 +73,8 @@ class _Modelo:
             yield LLMError(kind=LLMErrorKind.CONNECTION, message="No se pudo contactar.")
             return
         numero = BLIND_TEST_QUESTIONS.index(request.input_text) + 1
-        yield LLMCompleted(text=f"{self._fruta} {numero}", input_tokens=1, output_tokens=1)
+        texto = f"{self._fruta} {numero}" + (_LARGUISIMA if self._larga else "")
+        yield LLMCompleted(text=texto, input_tokens=1, output_tokens=1)
 
     def cancel(self, operation_id: str) -> None:
         del operation_id
@@ -68,7 +82,11 @@ class _Modelo:
 
 class _Entorno:
     def __init__(
-        self, *, instalados: tuple[str, ...] | None = None, falla: str | None = None
+        self,
+        *,
+        instalados: tuple[str, ...] | None = None,
+        falla: str | None = None,
+        larga: str | None = None,
     ) -> None:
         self.elegidos: list[str] = []
         self.avisos: list[tuple[str, str]] = []
@@ -83,7 +101,9 @@ class _Entorno:
 
         self.caso = BlindTestUseCase(
             identity_repository=_Identidades(),  # type: ignore[arg-type]
-            provider_for=lambda nombre: _Modelo(nombre, falla=nombre == falla),
+            provider_for=lambda nombre: _Modelo(
+                nombre, falla=nombre == falla, larga=nombre == larga
+            ),
             list_models=listar,
             choose_model=self.elegidos.append,
             current_model=lambda: self.elegidos[-1] if self.elegidos else None,
@@ -142,8 +162,8 @@ def test_mientras_elige_no_ve_ningun_nombre_y_al_final_se_queda_el_que_mas_eligi
         visibles = _textos_visibles(dialogo)
         for modelo in _FRUTAS:
             assert modelo not in visibles
-        boton = next(b for b in dialogo.option_buttons if f"manzana {numero}" in b.text())
-        dialogo.choose_letter(str(boton.property("letter")))
+        texto = next(t for t in dialogo.option_texts if f"manzana {numero}" in t.text())
+        dialogo.choose_letter(str(texto.property("letter")))
         dialogo.next_button.click()
 
     assert dialogo.pages.currentIndex() == 3
@@ -172,6 +192,46 @@ def test_no_deja_pasar_de_pregunta_sin_elegir_y_deja_volver_atras(qtbot: QtBot) 
     assert dialogo.next_button.isEnabled()
 
 
+def test_con_una_respuesta_larguisima_la_hoja_cabe_en_su_pantalla_y_se_baja(
+    qtbot: QtBot,
+) -> None:
+    # En su ordenador un modelo repitió la semilla entera: la hoja se hizo más ancha y más
+    # alta que la pantalla, sin poder bajar ni llegar a «Siguiente» (ADR-247).
+    dialogo = _Entorno(instalados=("gemma-y", "qwen-x"), larga="qwen-x").ventana(qtbot)
+    _marca(dialogo, "qwen-x", "gemma-y")
+    dialogo.start_button.click()
+    abre(dialogo, qtbot)
+
+    assert cabe_en_su_pantalla(dialogo)
+    paso = dialogo.pages.currentWidget()
+    assert isinstance(paso, QScrollArea)
+    barra = paso.verticalScrollBar()
+    assert barra.maximum() > 0
+    assert paso.horizontalScrollBar().maximum() == 0
+    barra.setValue(barra.maximum())
+    assert se_ve_en(paso, dialogo.next_button)
+
+
+def test_pulsar_el_texto_de_una_respuesta_la_elige(qtbot: QtBot) -> None:
+    dialogo = _Entorno(instalados=("gemma-y", "qwen-x")).ventana(qtbot)
+    _marca(dialogo, "qwen-x", "gemma-y")
+    dialogo.start_button.click()
+
+    QTest.mouseClick(dialogo.option_texts[1], Qt.MouseButton.LeftButton)
+
+    assert dialogo.option_buttons[1].isChecked()
+    # El texto va tal cual, como iba en el botón: una respuesta con etiquetas no se pinta.
+    assert dialogo.option_texts[1].textFormat() == Qt.TextFormat.PlainText
+    assert dialogo.option_buttons[1].text() == f"{dialogo.option_texts[1].property('letter')})"
+    assert dialogo.next_button.isEnabled()
+
+
+def test_la_hoja_se_minimiza_se_maximiza_y_cabe_en_su_pantalla(qtbot: QtBot) -> None:
+    dialogo = _Entorno(instalados=("gemma-y", "qwen-x")).ventana(qtbot)
+
+    mira_que_es_una_ventana_que_cabe(dialogo, dialogo.pages, qtbot)
+
+
 def test_con_empate_elige_el_propietario_entre_los_empatados(qtbot: QtBot) -> None:
     entorno = _Entorno(instalados=("gemma-y", "qwen-x"))
     dialogo = entorno.ventana(qtbot)
@@ -180,8 +240,8 @@ def test_con_empate_elige_el_propietario_entre_los_empatados(qtbot: QtBot) -> No
 
     for numero in range(1, 21):
         fruta = "pera" if numero <= 10 else "manzana"
-        boton = next(b for b in dialogo.option_buttons if f"{fruta} {numero}" in b.text())
-        dialogo.choose_letter(str(boton.property("letter")))
+        texto = next(t for t in dialogo.option_texts if f"{fruta} {numero}" in t.text())
+        dialogo.choose_letter(str(texto.property("letter")))
         dialogo.next_button.click()
 
     assert "Empate" in dialogo.result_label.text()

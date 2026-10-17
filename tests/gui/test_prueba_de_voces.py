@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import pytest
+from _hojas_en_su_pantalla import mira_que_es_una_ventana_que_cabe
 from PySide6.QtCore import QRunnable
 from PySide6.QtWidgets import QMainWindow
 from pytestqt.qtbot import QtBot
@@ -214,6 +215,15 @@ def test_cada_boton_suena_su_muestra_y_elegir_deja_esa_voz(qtbot: QtBot, tmp_pat
     assert hoja.result() == VoiceTestDialog.DialogCode.Accepted
     # Al cerrarse suelta las voces que cargó para la hoja.
     assert all(altavoz.soltado for _nombre, altavoz in sirius.altavoces)
+
+
+def test_la_hoja_se_minimiza_se_maximiza_y_cabe_en_su_pantalla(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    hoja = _hoja(qtbot, _monta(tmp_path), _Dialogos())
+    hoja.start_button.click()
+
+    mira_que_es_una_ventana_que_cabe(hoja, hoja.pages, qtbot)
 
 
 def test_sin_todas_las_voces_no_se_prepara_y_dice_que_falta(qtbot: QtBot, tmp_path: Path) -> None:
