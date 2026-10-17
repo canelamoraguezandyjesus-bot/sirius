@@ -85,8 +85,11 @@ def test_sin_ollama_es_un_error_de_huellas() -> None:
 
 
 def test_el_modelo_de_huellas_sale_de_los_ajustes_y_si_no_el_del_plan() -> None:
-    assert embedding_model({}) == DEFAULT_EMBEDDING_MODEL == "qwen3-embedding:0.6b"
-    assert embedding_model({EMBEDDING_MODEL_SETTING: "  embeddinggemma  "}) == "embeddinggemma"
+    assert embedding_model({}) == DEFAULT_EMBEDDING_MODEL == "embeddinggemma"
+    assert (
+        embedding_model({EMBEDDING_MODEL_SETTING: "  qwen3-embedding:0.6b  "})
+        == "qwen3-embedding:0.6b"
+    )
     assert embedding_model({EMBEDDING_MODEL_SETTING: ""}) == DEFAULT_EMBEDDING_MODEL
     assert embedding_model({EMBEDDING_MODEL_SETTING: 3}) == DEFAULT_EMBEDDING_MODEL
 

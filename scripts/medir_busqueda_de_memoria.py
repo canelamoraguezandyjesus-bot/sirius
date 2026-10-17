@@ -20,8 +20,8 @@ USO
     uv run python scripts/medir_busqueda_de_memoria.py
 
 Necesita Ollama abierto y el modelo de huellas instalado
-(``ollama pull qwen3-embedding:0.6b``). Con ``--modelo NOMBRE`` mide con otro modelo
-de huellas de Ollama, sin tocar sus ajustes (ADR-247).
+(``ollama pull embeddinggemma``). Con ``--modelo NOMBRE`` mide con otro modelo de
+huellas de Ollama, sin tocar sus ajustes (ADR-247).
 """
 
 from __future__ import annotations
@@ -48,10 +48,15 @@ from sirius.adapters.persistence.sqlite_knowledge_search_repository import (
 )
 from sirius.adapters.persistence.sqlite_memory_embeddings import (
     build_sqlite_memory_embedding_store,
+    to_bits,
 )
 from sirius.adapters.persistence.sqlite_memory_repository import build_sqlite_memory_repository
 from sirius.adapters.persistence.sqlite_project_repository import build_sqlite_project_repository
-from sirius.application.memory_search import MemoryEmbeddingService, MemorySearch
+from sirius.application.memory_search import (
+    MemoryEmbeddingService,
+    MemorySearch,
+    embedding_format,
+)
 from sirius.application.rank_relevant_knowledge import RankRelevantKnowledgeUseCase
 from sirius.composition_root import DATA_PATHS_UNKNOWN, embedding_model, known_data_paths
 from sirius.config.settings import load_settings
@@ -123,9 +128,11 @@ def mide(base: Path, huellas: TextEmbedder, preguntas: Sequence[str]) -> list[fl
 def llena_de_prueba(base: Path, cuantos: int, modelo: str, dimension: int) -> None:
     """Guarda ``cuantos`` recuerdos de prueba con huellas de ``dimension`` números.
 
-    Las huellas son al azar, con el nombre del modelo de verdad: buscar cuesta lo
-    mismo que con las de verdad, y no hace falta calcular 10.000 con el modelo.
+    Las huellas son al azar, con la clave del modelo de verdad y sus bits, como las
+    guarda Sirius: buscar cuesta lo mismo que con las de verdad, y no hace falta
+    calcular 10.000 con el modelo (ADR-251).
     """
+    clave = embedding_format(modelo).key(modelo)
     azar = random.Random(cuantos)
     ahora = datetime.now(UTC).replace(tzinfo=None).strftime("%Y-%m-%d %H:%M:%S.%f")
     with closing(sqlite3.connect(base)) as conexion, conexion:
@@ -147,10 +154,14 @@ def llena_de_prueba(base: Path, cuantos: int, modelo: str, dimension: int) -> No
         )
         conexion.executemany(
             "INSERT INTO memory_embeddings"
-            " (memory_id, revision_id, model, embedding, created_at)"
-            " VALUES (?, ?, ?, ?, ?)",
-            [(n, n, modelo, huella, ahora) for n, _, huella in filas],
+            " (memory_id, revision_id, model, embedding, created_at, bits)"
+            " VALUES (?, ?, ?, ?, ?, ?)",
+            [(n, n, clave, huella, ahora, _bits(huella)) for n, _, huella in filas],
         )
+
+
+def _bits(huella: bytes) -> bytes:
+    return to_bits(struct.unpack(f"<{len(huella) // 4}f", huella))
 
 
 def copia_su_memoria(origen: Path, destino: Path) -> int:

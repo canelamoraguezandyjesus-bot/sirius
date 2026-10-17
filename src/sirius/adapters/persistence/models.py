@@ -313,6 +313,9 @@ class MemoryEmbeddingModel(Base):
     model: Mapped[str] = mapped_column(Text, nullable=False)
     embedding: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
     created_at: Mapped[datetime] = mapped_column(nullable=False)
+    #: Un bit por número de la huella, para el primer paso de la búsqueda (ADR-251).
+    #: Las huellas de antes de ADR-251 no los tienen.
+    bits: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
 
 
 class DecisionModel(Base):
