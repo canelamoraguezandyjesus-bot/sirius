@@ -18,6 +18,7 @@ from typing import Any
 
 import httpx
 
+from sirius.infrastructure.network import http_client
 from sirius.ports.embeddings import EmbeddingError
 
 __all__ = [
@@ -64,7 +65,7 @@ class OllamaEmbedder:
         self._client = self._new_client()
 
     def _new_client(self) -> httpx.Client:
-        return httpx.Client(timeout=self._timeout, transport=self._transport, trust_env=False)
+        return http_client(timeout=self._timeout, transport=self._transport, trust_env=False)
 
     @property
     def model_name(self) -> str:

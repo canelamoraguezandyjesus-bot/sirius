@@ -21,7 +21,6 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-import openai
 
 from sirius.adapters.audio.local_listening import load_listening_engines
 from sirius.adapters.audio.local_speaking import load_speaking_engines
@@ -171,6 +170,7 @@ from sirius.infrastructure.local_voice_installation import (
     voice_test_missing,
 )
 from sirius.infrastructure.logging import get_logger
+from sirius.infrastructure.network import openai_client
 from sirius.infrastructure.paths import SiriusPaths, resolve_paths
 from sirius.ports.audio_playback import AudioPlayback
 from sirius.ports.data_location import DataLocationError
@@ -559,7 +559,7 @@ def _build_llm_provider(
         return UnconfiguredLLMProvider(str(exc))
 
     _logger.info("Proveedor LLM seleccionado: openai (modelo=%s)", provider_settings.model)
-    client = openai.OpenAI(api_key=api_key, max_retries=0)
+    client = openai_client(api_key=api_key, max_retries=0)
     budget_tracker = BudgetTracker(
         policy=BudgetPolicy(monthly_limit_usd=provider_settings.monthly_budget_usd),
         usage_repository=llm_usage_repository or build_sqlite_llm_usage_repository(database_path),
@@ -642,7 +642,7 @@ def _build_studio_voice_use_case(
             settings=VoiceSettings(voice=chosen_voice),
         )
 
-    client = openai.OpenAI(api_key=resolve_openai_api_key(secret_store), max_retries=0)
+    client = openai_client(api_key=resolve_openai_api_key(secret_store), max_retries=0)
     # El MISMO contador mensual que el texto: la voz y el chat gastan del mismo
     # bolsillo, así que el tope de DR-018 sigue siendo uno solo.
     try:

@@ -7,6 +7,7 @@ calienta las huellas en segundo plano; y la cifra sale antes de cerrar (#696).
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import threading
 from collections.abc import Callable, Iterator, Sequence
@@ -296,6 +297,28 @@ def test_con_ctrl_c_tambien_cierra_el_micro() -> None:
     assert oido.cerrado
 
 
+@pytest.mark.parametrize("atencion", [Attended(notice="Ya no te oigo."), KeyboardInterrupt()])
+def test_antes_de_cerrar_cuelga_lo_que_siga_pidiendo_por_la_red(
+    atencion: Attended | BaseException,
+) -> None:
+    # ADR-255: cerrar no espera a una respuesta en vuelo, tampoco con Ctrl+C.
+    oido = _Oido(atenciones=[atencion])
+    colgado: list[bool] = []
+
+    with contextlib.suppress(KeyboardInterrupt):
+        listen(
+            oido,  # type: ignore[arg-type]
+            lambda texto: None,
+            keep_going=lambda: True,
+            pause=lambda: None,
+            history=list,
+            hang_up=lambda: colgado.append(oido.cerrado),
+        )
+
+    assert colgado == [False], "tenía que colgar una vez, antes de cerrar el micro"
+    assert oido.cerrado
+
+
 # --- Lo que tardó en empezar a hablar (E-R03-02) -------------------------------------
 
 
@@ -434,7 +457,9 @@ def arranque(
             proveedores.append(ollama)
             charla = ollama
         huellas = huellas or _Huellas()
-        visto = SimpleNamespace(orden=[], huellas=huellas, codigo=None, parado_al_cerrar=None)
+        visto = SimpleNamespace(
+            orden=[], huellas=huellas, codigo=None, parado_al_cerrar=None, cuelga=None, colgado=[]
+        )
 
         def cierra_la_base() -> None:
             # Si a las huellas ya se les había pedido parar cuando se cierra la base.
@@ -456,6 +481,7 @@ def arranque(
 
         def escucha(*args: object, **kwargs: object) -> int:
             visto.orden.append("escucha")
+            visto.cuelga = kwargs.get("hang_up")
             huellas.escuchando.set()
             # Que las huellas hayan empezado antes de salir: así se ve con qué paran.
             huellas.empezo.wait(timeout=5)
@@ -469,12 +495,30 @@ def arranque(
             consola, "build_conversation_dependencies", lambda *a, **k: dependencias
         )
         monkeypatch.setattr(consola, "listen", escucha)
+        # Salir de verdad dejaría sin red a las demás pruebas (ADR-255): se apunta, con lo
+        # que había pasado hasta entonces.
+        monkeypatch.setattr(
+            consola,
+            "hang_up_all",
+            lambda *, final=False: visto.colgado.append((final, list(visto.orden))),
+        )
         visto.codigo = consola.main()
         return visto
 
     yield arranca
     for proveedor in proveedores:
         proveedor.close()
+
+
+def test_al_salir_cuelga_lo_que_siga_pidiendo_antes_de_cerrar_la_base(
+    arranque: Callable[..., SimpleNamespace],
+) -> None:
+    """ADR-255: escuchando, antes de cerrar el micro; y al salir, antes de cerrar la base, lo
+    que siga pidiendo por la red y lo que se abra después."""
+    visto = arranque()
+
+    assert visto.cuelga is consola._hang_up_on_exit
+    assert visto.colgado == [(True, ["precarga", "escucha"])], "antes de cerrar la base"
 
 
 def test_al_arrancar_pide_que_el_modelo_de_la_charla_vaya_cargando(

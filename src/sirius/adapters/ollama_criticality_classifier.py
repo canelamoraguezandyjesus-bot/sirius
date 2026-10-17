@@ -30,6 +30,7 @@ import httpx
 
 from sirius.domain.criticality import Criticality
 from sirius.infrastructure.logging import get_logger
+from sirius.infrastructure.network import http_client
 
 __all__ = ["OllamaCriticalityClassifierAdapter"]
 
@@ -86,7 +87,7 @@ class OllamaCriticalityClassifierAdapter:
         # never leaves the process); production code always falls back to a
         # client hardcoded to 127.0.0.1 — no parameter anywhere accepts a
         # remote host, and ``propose`` never trusts the client's ``base_url``.
-        self._client = client or httpx.Client(
+        self._client = client or http_client(
             base_url=_OLLAMA_LOCAL_BASE_URL, timeout=_REQUEST_TIMEOUT_SECONDS
         )
 

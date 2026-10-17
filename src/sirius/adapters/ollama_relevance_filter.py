@@ -21,6 +21,7 @@ import httpx
 
 from sirius.domain.relevance import RankedKnowledge, recortar_al_cupo
 from sirius.infrastructure.logging import get_logger
+from sirius.infrastructure.network import http_client
 
 __all__ = ["OllamaRelevanceFilterAdapter"]
 
@@ -96,7 +97,7 @@ class OllamaRelevanceFilterAdapter:
         # client hardcoded to 127.0.0.1 — no parameter anywhere accepts a
         # remote host. ``timeout_seconds`` only shapes that fallback client;
         # M11 (§6.4) is the one that measures and fixes its real value.
-        self._client = client or httpx.Client(
+        self._client = client or http_client(
             base_url=_OLLAMA_LOCAL_BASE_URL, timeout=timeout_seconds
         )
 

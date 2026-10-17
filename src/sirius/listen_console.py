@@ -34,6 +34,7 @@ from sirius.composition_root import (
 )
 from sirius.domain.conversation import Message, MessageRole, MessageStatus
 from sirius.infrastructure.logging import configure_logging, get_logger
+from sirius.infrastructure.network import hang_up_all
 from sirius.ports.llm import LLMErrorKind, runs_on_this_computer
 from sirius.presentation.error_messages import failed_send_message
 from sirius.presentation.message_text import CANCELLED_SEND, HISTORY_NOT_LOADED, message_body
@@ -59,9 +60,13 @@ def listen(
     keep_going: Callable[[], bool],
     pause: Callable[[], None],
     history: Callable[[], Sequence[Message]],
+    hang_up: Callable[[], object] = lambda: None,
 ) -> int:
     """Escucha mientras ``keep_going`` lo diga y cuenta cada turno; al salir cierra el micro y
     suelta la voz, también si no llegó a escuchar (ADR-252).
+
+    Antes de cerrar llama a ``hang_up``, que en ``sirius-oye`` cuelga lo que siga pidiendo por
+    la red: cerrar no espera a una respuesta en vuelo, tampoco con Ctrl+C (ADR-255).
 
     Cada turno lo cuenta como la ventana uno escrito, con lo guardado y no con lo oído
     (rondas 11 a 15 de Codex sobre la PR #687); ``history`` es la charla guardada, la que
@@ -98,6 +103,7 @@ def listen(
         # llevaría (#696).
         if delays:
             say(_delays_line(delays))
+        hang_up()
         listening.close()
     return 0
 
@@ -241,14 +247,23 @@ def main() -> int:
             keep_going=lambda: True,
             pause=lambda: time.sleep(PAUSE_SECONDS),
             history=dependencies.get_history_use_case.get_history,
+            hang_up=_hang_up_on_exit,
         )
     except KeyboardInterrupt:
         print("Hasta luego.")
         return 0
     finally:
-        # Las huellas paran antes del siguiente grupo: la base se cierra ahora.
+        # Las huellas paran antes del siguiente grupo, lo que siga pidiendo por la red se
+        # cuelga (ADR-255), y la base se cierra ahora.
         stop_embedding.set()
+        _hang_up_on_exit()
         dependencies.close_database_connections()
+
+
+def _hang_up_on_exit() -> None:
+    """Al salir de ``sirius-oye``: cuelga todo lo que esté pidiendo por la red, y lo que se
+    abra después (ADR-255)."""
+    hang_up_all(final=True)
 
 
 if __name__ == "__main__":

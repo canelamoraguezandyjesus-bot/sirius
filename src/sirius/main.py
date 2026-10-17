@@ -30,6 +30,7 @@ from sirius.infrastructure.bootstrap_location_store import build_bootstrap_locat
 from sirius.infrastructure.crash_handler import install_crash_handler
 from sirius.infrastructure.data_path_validator import build_data_path_validator
 from sirius.infrastructure.logging import configure_logging, get_logger
+from sirius.infrastructure.network import hang_up_all
 from sirius.infrastructure.paths import resolve_paths
 from sirius.presentation.data_location_window import DataLocationWindow
 from sirius.presentation.initial_project_window import InitialProjectWindow
@@ -235,8 +236,17 @@ def _release_on_quit(app: QCoreApplication, dependencies: ConversationDependenci
     """Al salir de Sirius, suelta la voz y con ella la cancelación de eco: viva hasta que
     Python se cierra, livekit pinta en rojo un error suyo (ADR-252). Al salir, y no al
     cerrarse una ventana: tras acabar un proyecto, la ventana siguiente sigue con la voz
-    cargada, que la de personaje tarda en cargar."""
+    cargada, que la de personaje tarda en cargar.
+
+    Antes, cuelga todo lo que siga pidiendo por la red, y lo que se abra después: la salida
+    no espera a ninguna petición en vuelo (ADR-255)."""
+    app.aboutToQuit.connect(_hang_up_on_exit)
     app.aboutToQuit.connect(dependencies.local_listening.close)
+
+
+def _hang_up_on_exit() -> None:
+    """Al salir de Sirius: cuelga todo lo que esté pidiendo por la red (ADR-255)."""
+    hang_up_all(final=True)
 
 
 #: Lo que dice la consola justo antes de cargar la voz de personaje (ADR-253).

@@ -7,12 +7,15 @@ confirmado.
 
 from __future__ import annotations
 
+import logging
+import threading
 from pathlib import Path
 
 import pytest
 from PySide6.QtWidgets import QPushButton
 from pytestqt.qtbot import QtBot
 
+import sirius.presentation.main_window as ventana_principal
 from sirius.adapters.capture.fake import FakeCaptureBackend
 from sirius.adapters.persistence.migrations import upgrade_to_head
 from sirius.adapters.persistence.sqlite_conversation_repository import (
@@ -678,3 +681,96 @@ def test_una_orden_de_captura_que_revienta_no_deja_model_studio_bloqueado(
     assert window.studio_page.input.isEnabled()
     assert window.studio_page.send_button.isEnabled()
     assert window.studio_page.error_label.text() != ""
+
+
+# --- ADR-255: cerrar cuelga lo que está en vuelo y espera a la captura ------------
+#
+# Lo que cuelga, y en cuánto, lo miden con conexiones de verdad las pruebas de
+# ``tests/integration/test_cerrar_cuelga_lo_que_esta_en_vuelo.py``. Aquí, cuándo lo pide la
+# ventana: una vez, en el cierre efectivo, y no mientras espera a una orden de captura, que
+# no se cuelga, para saber cómo quedó la grabación.
+
+
+class _CapturaQueTarda(FakeCaptureBackend):
+    """Conectado, y su orden se queda esperando hasta que la suelten: como OBS al tardar."""
+
+    def __init__(self, *, revienta: bool = False) -> None:
+        super().__init__()
+        self.tarda = False
+        self.revienta = revienta
+        self.empezo = threading.Event()
+        self.suelta = threading.Event()
+
+    def get_status(self) -> CaptureStatus | CaptureError:
+        if self.tarda:
+            self.empezo.set()
+            self.suelta.wait(timeout=10)
+            if self.revienta:
+                raise ConnectionResetError("OBS se fue")
+        return super().get_status()
+
+
+@pytest.fixture
+def colgadas(monkeypatch: pytest.MonkeyPatch) -> list[bool]:
+    """Apunta cada vez que la ventana pide colgar, y si fue para salir."""
+    vistas: list[bool] = []
+
+    def cuelga(*, final: bool = False) -> int:
+        vistas.append(final)
+        return 0
+
+    monkeypatch.setattr(ventana_principal, "hang_up_all", cuelga)
+    return vistas
+
+
+@pytest.mark.gui
+def test_al_cerrar_la_ventana_cuelga_una_vez_lo_que_esta_en_vuelo(
+    qtbot: QtBot, tmp_path: Path, colgadas: list[bool]
+) -> None:
+    ventana = _window(tmp_path)
+    qtbot.addWidget(ventana)
+    ventana.show()
+
+    ventana.close()
+
+    # Sin ``final``: tras cambiar de proyecto se abre otra ventana con las mismas
+    # dependencias, y lo que ella abra no se cuelga.
+    assert colgadas == [False]
+
+
+@pytest.mark.gui
+@pytest.mark.parametrize(("revienta", "quedo"), [(False, "PREPARADO"), (True, "sin saber cómo")])
+def test_al_cerrar_espera_a_la_orden_de_captura_y_despues_cuelga(
+    qtbot: QtBot,
+    tmp_path: Path,
+    colgadas: list[bool],
+    caplog: pytest.LogCaptureFixture,
+    revienta: bool,
+    quedo: str,
+) -> None:
+    """Ronda 2 de Codex sobre la #698: cerrar con una orden de captura en vuelo descartaba
+    su desenlace, y la grabación podía cambiar sin que Sirius lo supiera. La orden no se
+    cuelga: el cierre la espera, como a la copia, y el diario apunta cómo quedó. Si la orden
+    revienta, se cierra igual, diciendo que no se sabe."""
+    backend = _CapturaQueTarda(revienta=revienta)
+    backend.connect()
+    captura = StudioCaptureUseCase(backend, _SCENES, enabled=True)
+    ventana = _window(tmp_path, captura)
+    qtbot.addWidget(ventana)
+    ventana.show()
+    backend.tarda = True
+    ventana._run_capture(captura.refresh_status)
+    assert backend.empezo.wait(timeout=5)
+
+    with caplog.at_level(logging.INFO):
+        ventana.close()
+        qtbot.wait(100)
+
+        assert ventana.isVisible(), "cerró sin esperar a la orden de captura"
+        assert colgadas == []
+
+        backend.suelta.set()
+        qtbot.waitUntil(lambda: not ventana.isVisible(), timeout=5000)
+
+    assert colgadas == [False]
+    assert f"Orden de captura acabada al cerrar: {quedo}" in caplog.text

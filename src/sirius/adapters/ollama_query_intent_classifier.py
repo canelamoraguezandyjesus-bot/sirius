@@ -92,6 +92,7 @@ import httpx
 from sirius.domain.query_intent import IntencionDeConsulta
 from sirius.domain.staged_engine_contracts import Cardinalidad, Modo
 from sirius.infrastructure.logging import get_logger
+from sirius.infrastructure.network import http_client
 
 __all__ = ["OllamaQueryIntentClassifierAdapter", "instante_utc"]
 
@@ -234,7 +235,7 @@ class OllamaQueryIntentClassifierAdapter:
         # producción cae siempre en un cliente clavado a 127.0.0.1 — ningún
         # parámetro acepta un host remoto, y ``classify_intent`` nunca se fía
         # del ``base_url`` del cliente.
-        self._client = client or httpx.Client(
+        self._client = client or http_client(
             base_url=_OLLAMA_LOCAL_BASE_URL, timeout=timeout_seconds
         )
 

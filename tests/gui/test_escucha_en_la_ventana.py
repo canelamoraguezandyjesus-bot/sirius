@@ -1188,18 +1188,29 @@ class _Aplicacion(QObject):
 
 
 def test_al_salir_de_sirius_suelta_la_voz_y_no_al_cerrar_una_ventana(
-    qtbot: QtBot, tmp_path: Path
+    qtbot: QtBot, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     sirius = _monta(tmp_path)
     ventana = _ventana(qtbot, sirius)
     (altavoz,) = sirius.altavoces
     aplicacion = _Aplicacion()
+    # Salir de verdad dejaría sin red a las demás pruebas: se apunta, con la voz como estaba.
+    colgado: list[tuple[bool, bool]] = []
+
+    def cuelga(*, final: bool = False) -> int:
+        colgado.append((final, altavoz.cerrado))
+        return 0
+
+    monkeypatch.setattr("sirius.main.hang_up_all", cuelga)
     _release_on_quit(aplicacion, sirius.deps)  # type: ignore[arg-type]
 
     # Tras acabar un proyecto se cierra la ventana y se abre otra: sigue con su voz.
     ventana.close()
     assert not altavoz.cerrado
 
-    # Al salir se suelta, y con ella la cancelación de eco (ADR-252).
+    # Al salir se suelta, y con ella la cancelación de eco (ADR-252). Antes se cuelga lo
+    # que siga pidiendo por la red, y lo que se abra después, para que soltar la voz no
+    # espere a una respuesta en vuelo (ADR-255).
     aplicacion.aboutToQuit.emit()
     assert altavoz.cerrado
+    assert colgado == [(True, False)]

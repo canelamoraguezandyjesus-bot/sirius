@@ -116,6 +116,7 @@ from sirius.domain.conversation_mode import ConversationMode
 from sirius.domain.model_studio import StudioCaptureState, StudioInteractionState
 from sirius.domain.reply_mark import ReplyMark
 from sirius.infrastructure.logging import get_logger
+from sirius.infrastructure.network import hang_up_all
 from sirius.ports.backup import (
     BackupManifest,
     BackupRestoreResult,
@@ -750,6 +751,10 @@ class MainWindow(QMainWindow):
     def _on_capture_finished(self, feedback: object) -> None:
         self._active_capture_worker = None
         self._capture_busy = False
+        if self._close_requested:
+            state = feedback.state if isinstance(feedback, CaptureFeedback) else None
+            self._close_after_capture(state)
+            return
         if not isinstance(feedback, CaptureFeedback):
             return
         # El estado que se pinta es el que devolvió el backend, nunca uno
@@ -769,6 +774,15 @@ class MainWindow(QMainWindow):
             self._announce_capture(feedback)
             self._capture_turn += 1
         self._sync_capture_module()
+
+    def _close_after_capture(self, state: StudioCaptureState | None) -> None:
+        """El cierre esperaba a esta orden de captura: el diario apunta cómo quedó la
+        grabación, y la ventana se cierra (ADR-255)."""
+        _logger.info(
+            "Orden de captura acabada al cerrar: %s", state.name if state else "sin saber cómo"
+        )
+        self._close_requested = False
+        self.close()
 
     def _announce_capture(self, feedback: CaptureFeedback) -> None:
         """Cuenta cómo quedó la orden: en pantalla y, si hay voz, en voz alta.
@@ -804,6 +818,9 @@ class MainWindow(QMainWindow):
         del error_message  # el mensaje al usuario es seguro y genérico
         self._capture_busy = False
         self._active_capture_worker = None
+        if self._close_requested:
+            self._close_after_capture(None)
+            return
         aviso = "No sé cómo ha quedado la grabación. Vuelve a abrir el panel para comprobarlo."
         self.studio_page.set_capture_state(StudioCaptureState.INCIERTO)
         self.studio_page.capture_panel.set_message(aviso)
@@ -2167,6 +2184,12 @@ class MainWindow(QMainWindow):
             self._close_requested = True
             event.ignore()
             return
+        if self._capture_busy:
+            # Una orden de captura no se cuelga: se espera, como a la copia, para saber cómo
+            # quedó la grabación (ADR-255).
+            self._close_requested = True
+            event.ignore()
+            return
         # Cierre efectivo: el panel de conocimiento no debe arrancar ni
         # mostrar nada más, aunque un worker en vuelo termine después
         # (#520, ronda 4).
@@ -2183,6 +2206,9 @@ class MainWindow(QMainWindow):
             self._active_dream_worker.cancel()
         if self._listening_loop is not None:
             self._listening_loop.stop()
+        # Y lo que siga pidiendo por la red, se cuelga: ni sigue pidiendo ni hace esperar a la
+        # salida, sea del trabajo que sea (ADR-255).
+        hang_up_all()
         super().closeEvent(event)
 
     # --- Configuración ---------------------------------------------------

@@ -143,12 +143,11 @@ def comprobar_clave() -> tuple[Paso, str]:
 
 
 def comprobar_sintesis(clave: str, directorio: Path) -> tuple[Paso, Path | None]:
-    import openai
-
     from sirius.adapters.audio.openai_speech import DEFAULT_VOICE, OpenAISpeech
+    from sirius.infrastructure.network import openai_client
     from sirius.ports.text_to_speech import SpeechError, SpeechRequest
 
-    adaptador = OpenAISpeech(openai.OpenAI(api_key=clave, max_retries=0), directorio)
+    adaptador = OpenAISpeech(openai_client(api_key=clave, max_retries=0), directorio)
     resultado = adaptador.synthesize(
         SpeechRequest(text=FRASE_DE_PRUEBA, voice=DEFAULT_VOICE, instructions="")
     )

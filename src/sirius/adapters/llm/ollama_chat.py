@@ -60,6 +60,7 @@ from sirius.adapters.llm.memory_suggestion import (
     longest_prefix_as_suffix,
 )
 from sirius.infrastructure.logging import get_logger
+from sirius.infrastructure.network import http_client
 from sirius.ports.llm import (
     LLMCancelled,
     LLMCompleted,
@@ -235,7 +236,7 @@ class OllamaChatProvider:
         self._model = model
         self._num_ctx = num_ctx
         self._num_predict = num_predict
-        self._client = httpx.Client(
+        self._client = http_client(
             timeout=_TIMEOUT,
             limits=_ONE_CONNECTION_PER_REQUEST,
             transport=transport,
@@ -538,7 +539,7 @@ def list_installed_models(transport: httpx.BaseTransport | None = None) -> tuple
     dos y tres.
     """
     try:
-        with httpx.Client(timeout=_TIMEOUT, transport=transport, trust_env=False) as client:
+        with http_client(timeout=_TIMEOUT, transport=transport, trust_env=False) as client:
             response = client.get(OLLAMA_TAGS_URL)
             response.raise_for_status()
             body = response.json()
@@ -567,7 +568,7 @@ def model_capabilities(model: str, transport: httpx.BaseTransport | None = None)
     (ADR-247).
     """
     try:
-        with httpx.Client(timeout=_SHOW_TIMEOUT, transport=transport, trust_env=False) as client:
+        with http_client(timeout=_SHOW_TIMEOUT, transport=transport, trust_env=False) as client:
             response = client.post(OLLAMA_SHOW_URL, json={"model": model})
             response.raise_for_status()
     except httpx.HTTPError as exc:
