@@ -181,3 +181,17 @@ retomara el banco de 47 casos, y el plan no lo hace.
 cambia.
 
 El gesto sobre #653 de arriba es de septiembre y no forma parte de esto.
+
+---
+
+## D-6, el 18 de octubre de 2026
+
+Añadido al final, sin tocar lo anterior.
+
+El margen de ADR-218 se gastó: el 17-10 ADR-251 recortó el resumen de cada ADR de 240 a
+160 caracteres, y el 18-10 `MEMORIA.md` volvió a no caber, con 463 bytes de margen en
+`main`. ADR-258 quita de cada fila de la tabla de decisiones la ruta del ADR, que
+repetía su título, y lo deja por su número: ninguna fila ni ningún resumen sale. Pasa de
+121 084 bytes a 92 599, unos 57 ADR de margen.
+
+**D-6 sigue abierta**, con las mismas tres salidas, y no se toma sin él.

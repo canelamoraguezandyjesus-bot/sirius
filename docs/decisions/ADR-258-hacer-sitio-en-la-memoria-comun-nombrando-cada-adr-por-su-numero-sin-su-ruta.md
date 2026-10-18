@@ -89,14 +89,25 @@ propietario lo apunta con el margen que queda.
   120 498 bytes.
 - `MEMORIA.md` en `main` (`7fb10525`): 119 537 bytes, medido con `git show
   origin/main:MEMORIA.md | wc -c`.
-- Dónde pesa, medido con el generador sobre este árbol antes de tocarlo: la tabla de
+- Dónde pesa, medido con el generador sobre `3af419ea` antes de tocarlo: la tabla de
   decisiones, 72 417 bytes de 120 498; sus 251 filas, 284 bytes de media; sin la ruta,
   la vista pesaría 92 008 bytes, 28 490 menos. Con el resumen a 140, 120, 100 y 80
   caracteres, 119 588, 118 425, 117 400 y 116 132 bytes.
+- El arreglo, medido sobre el mismo árbol con el generador de antes y el de ahora, con
+  este ADR dentro: 121 084 bytes antes y **92 599** después, 28 485 menos. Ninguna fila
+  sale: 252 filas, una por ADR, de 172 bytes de media, y 254 las que llevan resumen.
+- Lo que añade ahora cada ADR: su fila con resumen, 254 bytes de media, y su lección,
+  219 de media sobre las 77 que hay. Son unos 473 bytes: con 27 401 de margen, **unos
+  57 ADR**, menos si el ADR trae skills, investigaciones o documentos.
+- Las pruebas de la vista, 42 en verde en `tests/engine/test_memoria.py`, con la nueva
+  que mira que la tabla no repite la ruta y que cada número lleva a su fichero.
+- Tres mutaciones del generador, y las tres caen: volver a poner la ruta en la fila
+  (fallan 4), quitar de la cabecera dónde se abre cada ADR (falla 1) y dejar la fila
+  sin título (fallan 2). El fichero se restaura byte a byte, con su resumen sha256.
 
 ## Consecuencias
 
-- `MEMORIA.md` vuelve a caber, con unos 28 000 bytes de margen.
+- `MEMORIA.md` vuelve a caber: 92 599 bytes, 27 401 de margen, unos 57 ADR.
 - Quien lee la vista en GitHub ya no puede pinchar en la fila de un ADR: lo abre por su
   número.
 - D-6 sigue abierta: el margen se gasta otra vez al ritmo de los ADR.

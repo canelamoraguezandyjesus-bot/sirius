@@ -197,10 +197,25 @@ def test_el_indice_de_decisiones_esta_completo_aunque_el_resumen_no(arbol: Path)
     orientación que esta vista existe para dar: saber QUÉ se decidió.
     """
     texto = generar_memoria(arbol)
-    for decision in leer_decisiones(arbol):
-        assert f"[{decision.numero:03d}]({decision.ruta})" in texto, (
-            f"falta la fila de {decision.ruta} en la vista: el índice tiene que estar completo"
+    for d in leer_decisiones(arbol):
+        assert f"| {d.numero:03d} | {d.fecha} | {d.estado} | {d.titulo} |" in texto, (
+            f"falta la fila de {d.ruta} en la vista: el índice tiene que estar completo"
         )
+
+
+def test_la_tabla_nombra_cada_decision_por_su_numero_sin_repetir_su_ruta(arbol: Path) -> None:
+    """La ruta de un ADR es su título otra vez, y pesaba la cuarta parte de la vista.
+
+    Sin ella la fila no pierde nada: el número lleva a su fichero, que es por donde
+    ya lo buscan las lecciones (ADR-218). ADR-258.
+    """
+    texto = generar_memoria(arbol)
+    decisiones = texto.split("## Qué se decidió", 1)[1].split("\n## ", 1)[0]
+    assert "](docs/decisions/" not in decisiones, "la tabla no repite la ruta de cada ADR"
+    assert "docs/decisions/ADR-NNN-*.md" in decisiones, "la vista dice dónde abrir cada uno"
+    for decision in leer_decisiones(arbol):
+        ficheros = sorted(arbol.glob(f"docs/decisions/ADR-{decision.numero:03d}-*.md"))
+        assert decision.ruta in [f.relative_to(arbol).as_posix() for f in ficheros]
 
 
 def test_solo_las_decisiones_desde_la_frontera_llevan_resumen_en_la_vista(
@@ -224,7 +239,7 @@ def test_solo_las_decisiones_desde_la_frontera_llevan_resumen_en_la_vista(
     assert f"| {primera.resumen} |" not in texto, (
         "un ADR anterior a la frontera no copia su resumen en la vista (ADR-196)"
     )
-    assert f"[001]({primera.ruta}) | {primera.fecha} | {primera.estado} |" in texto, (
+    assert f"| 001 | {primera.fecha} | {primera.estado} | {primera.titulo} |" in texto, (
         "...pero su fila sigue ahí entera hasta la columna del título"
     )
 
@@ -294,16 +309,16 @@ def test_la_guardia_vigila_el_indice_de_auditorias_igual_que_la_vista(arbol: Pat
     assert comprobar_memoria(arbol) is None
 
 
-def test_las_lecciones_nombran_el_adr_por_numero_y_no_repiten_la_ruta_que_la_tabla_enlaza(
+def test_las_lecciones_nombran_el_adr_por_numero_como_la_tabla_de_decisiones(
     arbol: Path,
 ) -> None:
-    """ADR-218: 86 enlaces repetidos costaban 11.000 bytes de la única lectura."""
+    """ADR-218: 86 enlaces repetidos costaban 11.000 bytes de la única lectura. Desde
+    ADR-258 la tabla de decisiones tampoco lleva la ruta: los dos van por el número."""
     texto = generar_memoria(arbol)
     decisiones = texto[texto.index("## Qué se decidió") : texto.index("## Las lecciones")]
     lecciones = texto[texto.index("## Las lecciones") : texto.index("## Los bloques")]
     numero = memoria.PRIMER_ADR_CON_LECCION
-    ruta = f"docs/decisions/ADR-{numero}-la-moderna.md"
-    assert f"[{numero}]({ruta})" in decisiones, "la tabla de decisiones es quien enlaza"
+    assert f"| {numero} | " in decisiones, "la tabla de decisiones lo nombra por su número"
     assert f"| `familia-de-prueba` | 1 | sí | {numero} |" in lecciones
     assert f"- **ADR-{numero}** — contar a mano lo que la máquina puede contar" in lecciones
     assert "](docs/decisions/" not in lecciones, "la sección de lecciones no repite la ruta"
