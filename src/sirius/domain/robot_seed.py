@@ -235,4 +235,14 @@ def render_examples(examples: Sequence[SeedExample], frame: str = EXAMPLES_FRAME
     return "\n\n".join(parts)
 
 
+def example_turns(examples: Sequence[SeedExample]) -> tuple[str, ...]:
+    """Cómo empieza un turno en los ejemplos de ``render_examples``: un salto de línea y quién
+    habla. Son paradas de la petición: un modelo pequeño que siguiera el diálogo se
+    inventaría lo que dice el otro y se lo contestaría, hasta su tope (incidencia #700)."""
+    speakers = dict.fromkeys(example.who for example in examples)
+    if speakers:
+        speakers[ROBOT_SEED_NAME] = None
+    return tuple(f"\n{who}:" for who in speakers)
+
+
 ROBOT_SEED_INSTRUCTIONS = render_robot_seed()

@@ -52,7 +52,7 @@ from sirius.domain.facts import fact_lines, memory_note
 from sirius.domain.identity import IdentityVersion, SeedExample
 from sirius.domain.own_memory import render_own_memory
 from sirius.domain.project import blockers_to_text
-from sirius.domain.robot_seed import EXAMPLES_FRAME, render_examples
+from sirius.domain.robot_seed import EXAMPLES_FRAME, example_turns, render_examples
 from sirius.infrastructure.logging import get_logger
 from sirius.ports.conversation_repository import (
     ConversationRepository,
@@ -214,6 +214,18 @@ def render_recent_message(message: Message) -> str:
     return line if note is None else f"{line}\n{note}"
 
 
+#: Cómo empieza cada mensaje de ``render_recent_message``. También son paradas, por lo
+#: mismo que los turnos de los ejemplos (incidencia #700).
+RECENT_MESSAGE_TURNS: tuple[str, ...] = tuple(f"\n[{role.value}]" for role in MessageRole)
+
+
+def context_turns(context: Context) -> tuple[str, ...]:
+    """Las paradas de una petición con ``render_instructions(context)``: los comienzos de
+    turno de los ejemplos y, si los lleva, de los mensajes recientes (incidencia #700)."""
+    recent = RECENT_MESSAGE_TURNS if context.recent_messages else ()
+    return example_turns(context.seed_examples) + recent
+
+
 class CommandVoice:
     """La petición con la que Sirius dice a su manera lo que hizo una orden de memoria.
 
@@ -240,7 +252,8 @@ class CommandVoice:
         if identity is None:
             return None
         version = identity.current_version
-        parts = [render_identity(version, self._examples.pick(version.examples, said))]
+        examples = self._examples.pick(version.examples, said)
+        parts = [render_identity(version, examples)]
         if mode_block:
             parts.append(mode_block)
         parts.append(COMMAND_VOICE_TASK)
@@ -250,6 +263,7 @@ class CommandVoice:
             operation_id=operation_id,
             instructions="\n\n".join(parts),
             input_text=f"Lo que le tienes que decir: «{said}»",
+            stop=example_turns(examples),
         )
 
 
@@ -436,6 +450,7 @@ class SendMessageUseCase:
             operation_id=operation_id,
             instructions=instructions,
             input_text=user_text,
+            stop=context_turns(context),
         )
 
         accumulated: list[str] = []
