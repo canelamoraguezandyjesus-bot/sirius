@@ -26,7 +26,7 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **251**.
+- Decisiones (ADR): **252**.
 - Bloques del motor: 17 cerrado, 3 fuera_de_alcance.
 - Defectos registrados: 2 abierto, 101 cerrado.
 - Ideas aparcadas o descartadas: 12 aparcada, 3 descartada, 2 promovida.
@@ -79,6 +79,7 @@ huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| [258](docs/decisions/ADR-258-hacer-sitio-en-la-memoria-comun-nombrando-cada-adr-por-su-numero-sin-su-ruta.md) | 2026-10-18 | APROBADO | Hacer sitio en la memoria común nombrando cada ADR por su número, sin su ruta | La tabla de decisiones de `MEMORIA.md` nombra cada ADR por su número, con su fecha, su estado, su título y, desde el 174, su resumen, y ya no lleva la ruta de… |
 | [257](docs/decisions/ADR-257-apuntar-lo-que-midio-y-decidio-el-propietario-la-noche-del-17-al-18-10.md) | 2026-10-18 | APROBADO | Apuntar lo que midió y decidió el propietario la noche del 17 al 18-10 | Pasan E-R02-04 y E-R02-05, y E-R02-03 no pasa. La prueba sin internet no se hace, y la 0.4 empieza sin esperar a sus pruebas. |
 | [256](docs/decisions/ADR-256-cortar-la-respuesta-cuando-el-modelo-se-inventa-el-turno-del-propietario.md) | 2026-10-18 | APROBADO | Cortar la respuesta cuando el modelo se inventa el turno del propietario | La opción A: cada petición que lleva diálogo en sus instrucciones lleva sus comienzos de turno como paradas, y Ollama deja de escribir en cuanto el modelo… |
 | [255](docs/decisions/ADR-255-cerrar-sirius-cuelga-todo-lo-que-esta-en-vuelo.md) | 2026-10-17 | APROBADO | Cerrar Sirius cuelga todo lo que está en vuelo | La opción B, con la orden de captura esperada. C queda como segunda línea solo si, con B, la salida siguiera esperando por trabajo que no es red. |
@@ -350,6 +351,7 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 | `prueba-que-no-puede-ver-lo-que-vigila` | 4 | no en todas | 249, 247, 241, 238 |
 | `regla-del-propietario-que-solo-vive-en-una-conversacion` | 4 | sí | 213, 208, 204, 195 |
 | `modelo-dentro-del-turno` | 3 | sí | 254, 243, 237 |
+| `vista-que-copia-el-corpus-del-que-venia-huyendo` | 3 | sí | 258, 218, 196 |
 | `decision-que-solo-vive-en-una-conversacion` | 2 | no en todas | 225, 202 |
 | `guardian-que-mide-posicion-en-vez-de-estructura` | 2 | sí | 221, 187 |
 | `leccion-que-se-queda-en-el-informe` | 2 | sí | 215, 214 |
@@ -358,7 +360,6 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 | `parada-segura-que-tira-lo-ya-pagado` | 2 | sí | 253, 226 |
 | `paso-largo-sin-plazo-propio` | 2 | sí | 228, 224 |
 | `pieza-correcta-a-la-que-no-llama-quien-la-necesita` | 2 | sí | 248, 197 |
-| `vista-que-copia-el-corpus-del-que-venia-huyendo` | 2 | sí | 218, 196 |
 | `cierre-que-no-corta-todo-lo-que-pide` | 1 | sí | 255 |
 | `comparar-instantes-como-texto` | 1 | sí | 229 |
 | `condicion-construida-sin-el-mecanismo-que-la-hace-cumplible` | 1 | sí | 200 |
@@ -439,6 +440,12 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 - **ADR-243** — esperar a que `send_message` vuelva para hacer lo que toca en (lo hace cumplir `tests/integration/test_send_message.py`).
 - **ADR-237** — poner otra petición al modelo de la charla dentro de cada turno, (lo hace cumplir `tests/acceptance/test_robot_0_2_personalidad.py`).
 
+### `vista-que-copia-el-corpus-del-que-venia-huyendo`
+
+- **ADR-258** — la fila de cada ADR llevaba su título dos veces, una en su ruta, y la vista volvía a no caber con el ADR siguiente (lo hace cumplir `tests/engine/test_memoria.py`).
+- **ADR-218** — dejar que la única lectura lleve dos veces la misma ruta y la fila de cada pieza de evidencia, y descubrirlo cuando la guardia bloquea una PR que no tiene la culpa; es la segunda vez que muerde esta familia en 17 días, y el suelo que no se puede cortar está declarado arriba con su cifra. (lo hace cumplir `tests/engine/test_memoria.py`).
+- **ADR-196** — una vista que existe para caber en una sola lectura (lo hace cumplir `tests/engine/test_memoria.py`).
+
 ### `decision-que-solo-vive-en-una-conversacion`
 
 - **ADR-225** — una orden del propietario que cancela una línea entera queda en el comentario de una incidencia cerrada, y dieciocho días después el ADR, el código y el estado del proyecto siguen diciendo que esa línea está pendiente y bloquea algo; la siguiente sesión la retomaría o la pondría delante de él otra vez. (sin prueba que lo haga cumplir: ninguna prueba: una decisión del propietario no tiene hoy una forma mecánica que una guarda pueda leer; la caza la mina mensual (deuda 13) y la hoja de decisiones abiertas, a posteriori).
@@ -478,11 +485,6 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 
 - **ADR-248** — un proveedor nuevo sin las salvaguardas del de antes. El tope de (lo hace cumplir `tests/integration/test_tope_de_salida_de_ollama.py`).
 - **ADR-197** — dos piezas del mismo árbol leen la misma clase de dato (lo hace cumplir `tests/engine/test_round_family_detector.py`).
-
-### `vista-que-copia-el-corpus-del-que-venia-huyendo`
-
-- **ADR-218** — dejar que la única lectura lleve dos veces la misma ruta y la fila de cada pieza de evidencia, y descubrirlo cuando la guardia bloquea una PR que no tiene la culpa; es la segunda vez que muerde esta familia en 17 días, y el suelo que no se puede cortar está declarado arriba con su cifra. (lo hace cumplir `tests/engine/test_memoria.py`).
-- **ADR-196** — una vista que existe para caber en una sola lectura (lo hace cumplir `tests/engine/test_memoria.py`).
 
 ### `cierre-que-no-corta-todo-lo-que-pide`
 
