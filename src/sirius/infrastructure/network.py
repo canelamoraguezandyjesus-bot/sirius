@@ -10,15 +10,20 @@ composición les da el registro como ``ConnectionCloser`` (ronda 4 de Codex sobr
 
 Lo que garantiza, y lo que no:
 
-- **Nada de red sobrevive al cierre.** Una guarda de la batería falla si un cliente de
-  red se construye fuera de aquí, así que una petición nueva nace colgable
-  (``tests/unit/test_toda_conexion_nace_colgable.py``).
+- **Toda petición nueva nace colgable.** Una guarda de la batería falla si un cliente de
+  red se construye fuera de aquí (``tests/unit/test_toda_conexion_nace_colgable.py``).
 - **Mientras una ventana se cierra, tampoco lo que conecte entonces.** Desde que pide
   cerrarse (``begin_close``) hasta que se cierra de verdad (``end_close``), toda conexión
   que se abra se cuelga en el acto, también la que estaba a medio abrir al pedirlo. Al
   cerrarse de verdad se vuelve a poder abrir: tras cambiar de proyecto se abre otra
   ventana con las mismas dependencias. Es de todo el proceso: si se abriera otra ventana
   con red mientras la primera espera para cerrarse, lo de la nueva también se colgaría.
+- **No cuelga lo que aún no ha acabado de abrirse.** Mientras una conexión resuelve el DNS
+  o conecta, el transporte aún no la ha devuelto y no hay nada que colgar: se cuelga en
+  cuanto se abre. Si el servidor no contesta nunca al conectar, se espera a su tope de
+  conexión, 10 s en la validación de la clave y 5 s en los demás clientes de OpenAI; si no
+  contesta el DNS, lo que tarde el sistema. Las de Ollama van a 127.0.0.1, y abren o fallan
+  en el acto.
 - **Al salir, tampoco lo que conecte después.** Con ``final=True`` se cuelga además, en
   el acto, toda conexión que se abra desde entonces, para siempre: solo es para salir del
   proceso.

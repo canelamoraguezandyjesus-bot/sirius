@@ -77,12 +77,15 @@ salida siguiera esperando por trabajo que no es red.
 - **Todos los clientes por la fábrica:** la charla, las huellas, los cuatro clasificadores,
   los dos clientes del SDK de OpenAI de la composición, el de la validación de la clave y el
   del médico de la voz. Con los mismos topes, proxies y transportes que tenían.
-- **El cierre.** El cierre efectivo de la ventana llama a `hang_up_all()`. Al salir de
-  Sirius, antes de soltar la voz, `hang_up_all(final=True)`: además de colgar lo abierto,
-  cuelga en el acto lo que se abra después. `final` es solo para salir del proceso, porque
-  cerrar una ventana puede abrir otra con las mismas dependencias tras cambiar de proyecto.
-  `sirius-oye` cuelga antes de cerrar el micro, también con Ctrl+C, y otra vez al salir. El
-  diario apunta cuántas conexiones cuelga, nada más.
+- **El cierre.** Cada ventana cuelga lo que está en vuelo. Al principio lo hacía al cerrarse
+  de verdad, con `hang_up_all()`; desde las rondas 3 y 4 lo hace al pedir cerrarse, antes de
+  aplazarlo, y hasta que se cierra cuelga también lo que se abra, por el puerto
+  `ConnectionCloser`, como cuenta «Revisión externa». Al salir de Sirius, antes de soltar la
+  voz, `hang_up_all(final=True)`: además de colgar lo abierto, cuelga en el acto lo que se
+  abra después. `final` es solo para salir del proceso, porque cerrar una ventana puede abrir
+  otra con las mismas dependencias tras cambiar de proyecto. `sirius-oye` cuelga antes de
+  cerrar el micro, también con Ctrl+C, y otra vez al salir. El diario apunta cuántas
+  conexiones cuelga, nada más.
 - **La orden de captura no se cuelga.** El cierre la espera, como a la copia y a la
   exportación, y el diario apunta cómo quedó la grabación, o que no se sabe si la orden
   reventó.
@@ -118,8 +121,10 @@ salida siguiera esperando por trabajo que no es red.
 ## Consecuencias
 
 - Cerrar Sirius o `sirius-oye` ya no espera a una petición de red en vuelo, sea del trabajo
-  que sea. Las peticiones cortadas fallan por el camino de fallo que ya tenía su trabajador,
-  y el diario dice antes cuántas conexiones colgó el cierre.
+  que sea, con dos salvedades escritas abajo: la orden de captura, que se espera a propósito,
+  y una conexión que aún no ha acabado de abrirse. Las peticiones cortadas fallan por el
+  camino de fallo que ya tenía su trabajador, y el diario dice antes cuántas conexiones colgó
+  el cierre.
 - Un cliente de red nuevo tiene que salir de la fábrica, o la batería falla.
 
 **Qué NO garantiza, después del código:**
@@ -129,6 +134,14 @@ salida siguiera esperando por trabajo que no es red.
   la salida con ello.
 - Colgar en Windows: visto en Linux, como en ADR-252.
 - La orden de captura puede retrasar el cierre hasta su tope, 5 s.
+- Colgar una conexión que aún no ha acabado de abrirse. Mientras resuelve el DNS o conecta,
+  el transporte aún no la ha devuelto y no hay nada que colgar: se cuelga en cuanto se abre.
+  Si el servidor no contesta nunca al conectar, se espera a su tope de conexión, 10 s en la
+  validación de la clave y 5 s en los demás clientes de OpenAI; si no contesta el DNS, lo que
+  tarde el sistema. Las de Ollama van a `127.0.0.1` y abren o fallan en el acto. Medido con
+  un servidor local que no contesta al conectar, porque tiene llena la cola de aceptar: con
+  un tope de conexión de 1,5 s, la petición acaba a los 1,50 s, se cuelgue o no. Cortarla
+  exigiría cambiar por dentro el transporte de httpx, y no se hace.
 - Si se cierra con una clave de OpenAI a medio validar, la validación se corta y esa clave
   no se guarda: hay que volver a ponerla.
 - Mientras una ventana espera para cerrarse, se cuelga todo lo que se abra en el proceso,
@@ -183,3 +196,6 @@ de 10 s.
   abría con el cierre de la principal ya pedido acababa a los 10,01 s, y ahora cae en
   0,001 s. Las 13 pruebas nuevas fallan con el código de antes, y las del cierre de la
   ronda 3 siguen en verde. Caen sus 20 mutaciones.
+- **Lo que no cubre**, visto al repasar el arreglo antes de pedir la ronda 5: una conexión
+  que no acaba de abrirse nunca, porque el servidor no contesta al conectar. Queda en «Qué NO
+  garantiza», con su medida.
