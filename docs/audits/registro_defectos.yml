@@ -1734,3 +1734,21 @@ defectos:
       - src/sirius/main.py
       - src/sirius/listen_console.py
       - tests/unit/test_toda_conexion_nace_colgable.py
+  # ADR-256: las instrucciones llevan ejemplos y mensajes escritos por turnos, y a Ollama no
+  # se le pedía ninguna parada: un modelo pequeño seguía el diálogo, inventándose el turno
+  # del propietario, hasta el tope de 4.096 tokens. Lo vio el propietario en la prueba a
+  # ciegas del 18-10-2026, y su nota de arranque sigue en la incidencia.
+  - id: H-256
+    titulo: El modelo seguía el diálogo de sus instrucciones, inventándose el turno del propietario, hasta su tope
+    bloque: producto
+    gravedad: media
+    estado: cerrado
+    cerrado_por: e58122b68bf2c0c03f9bcdf5f1825d149acbad3f
+    pr: 701
+    adr: 256
+    incidencia: 700
+    ficheros:
+      - src/sirius/domain/robot_seed.py
+      - src/sirius/application/send_message.py
+      - src/sirius/adapters/llm/ollama_chat.py
+      - tests/unit/test_paradas_de_turno.py

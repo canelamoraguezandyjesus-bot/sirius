@@ -126,7 +126,8 @@ en su gráfica.
 - **Pasa si** la orden de instalar acaba sin error, Sirius le oye y le contesta las 5 de 5
   veces sin internet, y lo cargado cabe en los 6 GB de su gráfica. Si no cabe, no se para: el oído y
   la voz van al procesador, como dice el plan, y se anota.
-- **Resultado:** pendiente.
+- **Resultado:** pendiente. El 18-10-2026 decidió que no se hace sin internet: «no vamos
+  a hacer ningún día apaga el wifi» (ADR-257).
 
 ### E-R03-02
 
@@ -196,7 +197,9 @@ en su gráfica.
   masculina y de España. Si elige la de Chatterbox y no puede hablar en vivo con la
   charla cargada en su gráfica, se le dice con la cifra y se le pregunta, porque es
   producto.
-- **Resultado:** pendiente.
+- **Resultado:** el 18-10-2026 eligió una voz. Cuál, y si le suena masculina y de
+  España, no lo dijo, así que no se da por pasada. De las voces dijo que se nota que son
+  de máquina (ADR-257).
 
 ## Lo que estas pruebas no garantizan
 

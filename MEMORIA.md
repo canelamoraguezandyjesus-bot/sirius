@@ -26,9 +26,9 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **249**.
+- Decisiones (ADR): **251**.
 - Bloques del motor: 17 cerrado, 3 fuera_de_alcance.
-- Defectos registrados: 2 abierto, 100 cerrado.
+- Defectos registrados: 2 abierto, 101 cerrado.
 - Ideas aparcadas o descartadas: 12 aparcada, 3 descartada, 2 promovida.
 - Skills: **19**.
 - Investigaciones: **14** (fotos con fecha; caducan).
@@ -79,6 +79,8 @@ huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| [257](docs/decisions/ADR-257-apuntar-lo-que-midio-y-decidio-el-propietario-la-noche-del-17-al-18-10.md) | 2026-10-18 | APROBADO | Apuntar lo que midió y decidió el propietario la noche del 17 al 18-10 | Pasan E-R02-04 y E-R02-05, y E-R02-03 no pasa. La prueba sin internet no se hace, y la 0.4 empieza sin esperar a sus pruebas. |
+| [256](docs/decisions/ADR-256-cortar-la-respuesta-cuando-el-modelo-se-inventa-el-turno-del-propietario.md) | 2026-10-18 | APROBADO | Cortar la respuesta cuando el modelo se inventa el turno del propietario | La opción A: cada petición que lleva diálogo en sus instrucciones lleva sus comienzos de turno como paradas, y Ollama deja de escribir en cuanto el modelo… |
 | [255](docs/decisions/ADR-255-cerrar-sirius-cuelga-todo-lo-que-esta-en-vuelo.md) | 2026-10-17 | APROBADO | Cerrar Sirius cuelga todo lo que está en vuelo | La opción B, con la orden de captura esperada. C queda como segunda línea solo si, con B, la salida siguiera esperando por trabajo que no es red. |
 | [254](docs/decisions/ADR-254-al-cortarle-dejar-de-escribir-la-respuesta.md) | 2026-10-17 | APROBADO | Al cortarle, dejar de escribir la respuesta | La opción A. Cortarle por voz no es cancelar el envío: lo dicho queda dicho, ahora solo hasta donde llegó a escribir. Es el modelo de ADR-245 frente a la letra… |
 | [253](docs/decisions/ADR-253-arreglar-lo-que-salio-del-repaso-final-antes-de-sus-pruebas.md) | 2026-10-17 | APROBADO | Arreglar lo que salió del repaso final antes de sus pruebas | Un arreglo por punto, en los ficheros donde vive el fallo: `127.0.0.1`. Los seis adaptadores de Ollama, la charla, las huellas y los cuatro |
@@ -379,6 +381,7 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 | `regla-nueva-sin-pasarla-por-los-casos-vivos` | 1 | sí | 231 |
 | `tarea-periodica-sin-reloj` | 1 | no en todas | 201 |
 | `tramite-que-solo-puede-hacer-una-persona-y-no-anade-comprobacion` | 1 | sí | 205 |
+| `turnos-en-las-instrucciones-sin-parada` | 1 | sí | 256 |
 
 ### `regla-que-depende-de-que-alguien-se-acuerde`
 
@@ -569,7 +572,11 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 
 - **ADR-205** — el ciclo volvería a quedarse horas en verde esperando (lo hace cumplir `tests/automation/test_sirius_merge.py`).
 
-Y **6** ADR declaran expresamente que no dejaron lección: 240, 236, 235, 234, 233, 232.
+### `turnos-en-las-instrucciones-sin-parada`
+
+- **ADR-256** — un modelo pequeño seguiría el diálogo de sus instrucciones hasta su tope (lo hace cumplir `tests/unit/test_paradas_de_turno.py`).
+
+Y **7** ADR declaran expresamente que no dejaron lección: 257, 240, 236, 235, 234, 233, 232.
 
 ## Los bloques del motor
 
