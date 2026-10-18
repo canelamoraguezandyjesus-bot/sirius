@@ -28,6 +28,14 @@ def par() -> Iterator[tuple[socket.socket, socket.socket]]:
     suyo.close()
 
 
+@pytest.fixture
+def otro_par() -> Iterator[tuple[socket.socket, socket.socket]]:
+    nuestro, suyo = socket.socketpair()
+    yield nuestro, suyo
+    nuestro.close()
+    suyo.close()
+
+
 def _colgado(nuestro: socket.socket, suyo: socket.socket) -> bool:
     """Si ``nuestro`` está colgado: el otro extremo lee el fin de la conexión."""
     suyo.settimeout(0.5)
@@ -92,7 +100,7 @@ def test_al_salir_cuelga_en_el_acto_lo_que_se_abre_despues(
     assert _colgado(nuestro, suyo)
 
 
-def test_cerrar_una_ventana_no_cuelga_lo_que_se_abre_despues(
+def test_colgar_sin_salir_no_cuelga_lo_que_se_abre_despues(
     par: tuple[socket.socket, socket.socket],
 ) -> None:
     nuestro, suyo = par
@@ -102,3 +110,73 @@ def test_cerrar_una_ventana_no_cuelga_lo_que_se_abre_despues(
     registro.trace("connection.connect_tcp.complete", {"return_value": _Flujo(nuestro)})
 
     assert not _colgado(nuestro, suyo)
+
+
+def test_al_pedir_cerrar_una_ventana_cuelga_lo_abierto(
+    par: tuple[socket.socket, socket.socket],
+) -> None:
+    nuestro, suyo = par
+    registro = ConnectionRegistry()
+    registro.trace("connection.connect_tcp.complete", {"return_value": _Flujo(nuestro)})
+
+    registro.begin_close()
+
+    assert _colgado(nuestro, suyo)
+
+
+def test_mientras_se_cierra_una_ventana_cuelga_en_el_acto_lo_que_se_abre(
+    par: tuple[socket.socket, socket.socket],
+) -> None:
+    """Ronda 4 de Codex sobre la #698: una conexión a medio abrir al pedir cerrar no estaba
+    apuntada al colgar, y seguía hasta su tope. Hasta que la ventana se cierra de verdad, lo
+    que se abre se cuelga en el acto."""
+    nuestro, suyo = par
+    registro = ConnectionRegistry()
+    registro.begin_close()
+
+    registro.trace("connection.connect_tcp.complete", {"return_value": _Flujo(nuestro)})
+
+    assert _colgado(nuestro, suyo)
+
+
+def test_al_cerrarse_de_verdad_la_ventana_no_cuelga_lo_que_se_abre_despues(
+    par: tuple[socket.socket, socket.socket],
+) -> None:
+    """Tras cambiar de proyecto se abre otra ventana con las mismas dependencias."""
+    nuestro, suyo = par
+    registro = ConnectionRegistry()
+    registro.begin_close()
+    registro.end_close()
+
+    registro.trace("connection.connect_tcp.complete", {"return_value": _Flujo(nuestro)})
+
+    assert not _colgado(nuestro, suyo)
+
+
+def test_con_dos_ventanas_cerrandose_cuelga_hasta_que_se_cierra_la_ultima(
+    par: tuple[socket.socket, socket.socket], otro_par: tuple[socket.socket, socket.socket]
+) -> None:
+    registro = ConnectionRegistry()
+    registro.begin_close()
+    registro.begin_close()
+    registro.end_close()
+
+    registro.trace("connection.connect_tcp.complete", {"return_value": _Flujo(par[0])})
+    assert _colgado(*par)
+
+    registro.end_close()
+    registro.trace("connection.connect_tcp.complete", {"return_value": _Flujo(otro_par[0])})
+    assert not _colgado(*otro_par)
+
+
+def test_un_fin_de_cierre_de_mas_no_deja_sin_colgar_el_siguiente(
+    par: tuple[socket.socket, socket.socket],
+) -> None:
+    nuestro, suyo = par
+    registro = ConnectionRegistry()
+    registro.end_close()
+    registro.begin_close()
+
+    registro.trace("connection.connect_tcp.complete", {"return_value": _Flujo(nuestro)})
+
+    assert _colgado(nuestro, suyo)

@@ -6,9 +6,12 @@ from __future__ import annotations
 import socket
 import threading
 
+import httpx
 import pytest
 
-__all__ = ["ServidorMudo", "quita_los_proxies"]
+from sirius.infrastructure.network import ConnectionRegistry, http_client
+
+__all__ = ["ServidorMudo", "quita_los_proxies", "se_cuelga_al_abrirse"]
 
 
 class ServidorMudo:
@@ -53,3 +56,18 @@ def quita_los_proxies(monkeypatch: pytest.MonkeyPatch) -> None:
         "all_proxy",
     ):
         monkeypatch.delenv(nombre, raising=False)
+
+
+def se_cuelga_al_abrirse(registro: ConnectionRegistry, servidor: ServidorMudo) -> bool:
+    """Si una petición nueva, apuntada en ``registro``, se cuelga en cuanto conecta con el
+    servidor mudo, en vez de esperar su tope de 0,3 s (ronda 4 de Codex sobre la #698)."""
+    cliente = http_client(registry=registro, timeout=httpx.Timeout(0.3), trust_env=False)
+    try:
+        cliente.get(f"http://127.0.0.1:{servidor.puerto}/")
+    except httpx.TimeoutException:
+        return False
+    except httpx.HTTPError:
+        return True
+    finally:
+        cliente.close()
+    raise AssertionError("el servidor mudo no contesta nunca")

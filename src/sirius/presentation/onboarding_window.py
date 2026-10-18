@@ -27,7 +27,7 @@ from PySide6.QtWidgets import (
 )
 
 from sirius.application.validate_and_save_api_key import ValidateAndSaveApiKeyUseCase
-from sirius.infrastructure.network import hang_up_all
+from sirius.ports.connections import ConnectionCloser
 from sirius.presentation.credential_validation_worker import CredentialValidationWorker
 
 DATA_POLICY_TEXT = (
@@ -65,6 +65,7 @@ class OnboardingWindow(QMainWindow):
         default_model: str,
         *,
         show_warning: Callable[[str, str], None] | None = None,
+        connections: ConnectionCloser | None = None,
     ) -> None:
         super().__init__()
         self._validate_and_save_api_key_use_case = validate_and_save_api_key_use_case
@@ -73,6 +74,10 @@ class OnboardingWindow(QMainWindow):
         self._show_warning = show_warning or self._default_show_warning
         self._is_credential_busy = False
         self._close_requested = False
+        #: Lo que cuelga la red al cerrar, que da el punto de composición (ADR-255), y si
+        #: ya se pidió colgar y falta decir que se cerró.
+        self._connections = connections
+        self._closing_connections = False
         # QThreadPool.start() keeps no Python reference to a QRunnable: kept
         # here so a fast validation can't be garbage-collected before its
         # queued cross-thread signal is delivered (same reasoning as
@@ -179,11 +184,20 @@ class OnboardingWindow(QMainWindow):
 
         Antes de aplazarlo, cuelga lo que siga pidiendo por la red: la validación acaba en el
         acto, sin guardar la clave, y el cierre no la espera hasta su tope (ronda 3 de Codex
-        sobre la #698, ADR-255).
+        sobre la #698, ADR-255). Hasta que se cierra de verdad, lo que se abra se cuelga en
+        el acto, como la petición de la validación si aún se estaba abriendo (ronda 4).
+
+        Sin aplazarlo no cuelga nada: tras configurar la clave, la ventana siguiente ya pide
+        por la red cuando esta se cierra.
         """
         if self._is_credential_busy:
-            hang_up_all()
+            if self._connections is not None and not self._closing_connections:
+                self._closing_connections = True
+                self._connections.begin_close()
             self._close_requested = True
             event.ignore()
             return
+        if self._connections is not None and self._closing_connections:
+            self._closing_connections = False
+            self._connections.end_close()
         super().closeEvent(event)

@@ -72,10 +72,19 @@ def sin_proxies(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _lo_que_tarda_tras_colgar(
-    mudo: _Mudo, pide: Callable[[], object], cuelga: Callable[[], object] = hang_up_all
+    mudo: _Mudo,
+    pide: Callable[[], object],
+    cuelga: Callable[[], object] = hang_up_all,
+    *,
+    conectada: threading.Event | None = None,
+    sigue: Callable[[], object] = lambda: None,
 ) -> tuple[float, Exception | None]:
     """Lanza ``pide`` en otro hilo, espera a que tenga su conexión con el servidor mudo,
-    cuelga, y devuelve cuánto tardó en acabar desde entonces y con qué fallo, si falló."""
+    cuelga, y devuelve cuánto tardó en acabar desde entonces y con qué fallo, si falló.
+
+    Con ``conectada``, espera a ella en vez de a la conexión, y tras colgar llama a
+    ``sigue``: así se cuelga con la conexión aún abriéndose.
+    """
     acabo: list[float] = []
     fallo: list[Exception] = []
 
@@ -88,14 +97,18 @@ def _lo_que_tarda_tras_colgar(
 
     hilo = threading.Thread(target=corre, daemon=True)
     hilo.start()
-    limite = time.perf_counter() + 5
-    while not mudo.aceptadas and time.perf_counter() < limite:
-        time.sleep(0.01)
-    assert mudo.aceptadas, "la petición no llegó a conectar con el servidor mudo"
+    if conectada is None:
+        limite = time.perf_counter() + 5
+        while not mudo.aceptadas and time.perf_counter() < limite:
+            time.sleep(0.01)
+        assert mudo.aceptadas, "la petición no llegó a conectar con el servidor mudo"
+    else:
+        assert conectada.wait(timeout=5), "la petición no llegó a abrir su conexión"
     time.sleep(0.1)
     assert hilo.is_alive(), "acabó sola: el servidor mudo tenía que dejarla esperando"
     colgada = time.perf_counter()
     cuelga()
+    sigue()
     hilo.join(timeout=3)
     assert not hilo.is_alive(), "colgar no la cortó: seguiría hasta su tope"
     return acabo[0] - colgada, (fallo[0] if fallo else None)
@@ -183,9 +196,44 @@ def test_al_salir_lo_que_conecta_despues_se_cuelga_en_el_acto(mudo: _Mudo) -> No
     assert time.perf_counter() - empieza < _EN_EL_ACTO
 
 
-def test_cerrar_una_ventana_no_cuelga_lo_que_conecta_despues(mudo: _Mudo) -> None:
-    """Cerrar una ventana puede abrir otra con las mismas dependencias, tras cambiar de
-    proyecto: lo que se abra después no se cuelga."""
+def test_al_pedir_cerrar_cuelga_la_conexion_que_aun_se_estaba_abriendo(mudo: _Mudo) -> None:
+    """Ronda 4 de Codex sobre la #698: una conexión que se estaba abriendo al pedir cerrar,
+    en el DNS o en ``connect_tcp``, aún no estaba apuntada, y colgar no la cortaba: seguía
+    hasta su tope. Mientras la ventana se cierra, se cuelga en cuanto acaba de abrirse."""
+    registro = ConnectionRegistry()
+    cliente = http_client(
+        registry=registro,
+        transport=_Redirige(mudo.puerto),
+        timeout=httpx.Timeout(30.0),
+        trust_env=False,
+    )
+    abriendose = threading.Event()
+    sigue = threading.Event()
+
+    def a_medio_abrir(evento: str, info: dict[str, object]) -> None:
+        if evento == "connection.connect_tcp.started":
+            abriendose.set()
+            sigue.wait(timeout=5)
+
+    def pide() -> None:
+        cliente.get("http://127.0.0.1:11434/api/tags", extensions={"trace": a_medio_abrir})
+
+    try:
+        tarda, fallo = _lo_que_tarda_tras_colgar(
+            mudo, pide, cuelga=registro.begin_close, conectada=abriendose, sigue=sigue.set
+        )
+    finally:
+        sigue.set()
+
+    assert tarda < _EN_EL_ACTO
+    assert isinstance(fallo, httpx.HTTPError)
+
+
+def test_al_cerrarse_de_verdad_la_ventana_no_cuelga_lo_que_conecta_despues(
+    mudo: _Mudo,
+) -> None:
+    """Tras cerrarse de verdad una ventana puede abrirse otra con las mismas dependencias, al
+    cambiar de proyecto: lo que se abra después no se cuelga."""
     registro = ConnectionRegistry()
     cliente = http_client(
         registry=registro,
@@ -193,7 +241,8 @@ def test_cerrar_una_ventana_no_cuelga_lo_que_conecta_despues(mudo: _Mudo) -> Non
         timeout=httpx.Timeout(0.3),
         trust_env=False,
     )
-    registro.hang_up_all()
+    registro.begin_close()
+    registro.end_close()
 
     with pytest.raises(httpx.ReadTimeout):
         cliente.get("http://127.0.0.1:11434/api/tags")

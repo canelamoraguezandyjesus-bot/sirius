@@ -116,13 +116,13 @@ from sirius.domain.conversation_mode import ConversationMode
 from sirius.domain.model_studio import StudioCaptureState, StudioInteractionState
 from sirius.domain.reply_mark import ReplyMark
 from sirius.infrastructure.logging import get_logger
-from sirius.infrastructure.network import hang_up_all
 from sirius.ports.backup import (
     BackupManifest,
     BackupRestoreResult,
     BackupResult,
     BackupValidationResult,
 )
+from sirius.ports.connections import ConnectionCloser
 from sirius.presentation.backup_worker import (
     CreateBackupWorker,
     RestoreBackupWorker,
@@ -332,6 +332,7 @@ class MainWindow(QMainWindow):
         local_listening: LocalListening[Any] | None = None,
         listening_loop: ListeningLoop | None = None,
         voice_test_use_case: VoiceTestUseCase | None = None,
+        connections: ConnectionCloser | None = None,
         show_warning: Callable[[str, str], None] | None = None,
         show_information: Callable[[str, str], None] | None = None,
         prompt_multiline_with_default: Callable[[str, str, str], str | None] | None = None,
@@ -476,6 +477,10 @@ class MainWindow(QMainWindow):
         self._close_requested = False
         #: El cierre ya ocurrió: nada de segundo plano vuelve a arrancar.
         self._closed = False
+        #: Lo que cuelga la red al cerrar, que da el punto de composición (ADR-255); sin
+        #: él, cerrar no cuelga nada. Y si ya se pidió colgar y falta decir que se cerró.
+        self._connections = connections
+        self._closing_connections = False
         # Ruta de la última copia creada en esta sesión. Es lo que permite
         # abrir su carpeta, reutilizarla sin volver a buscarla a mano y
         # arrancar el selector de archivos donde de verdad está la copia.
@@ -2205,13 +2210,15 @@ class MainWindow(QMainWindow):
             self._active_dream_worker.cancel()
         if self._listening_loop is not None:
             self._listening_loop.stop()
+        self._end_closing_connections()
         super().closeEvent(event)
 
     def _hang_up_on_close_request(self) -> None:
         """Al pedir cerrar, antes de aplazarlo, cancela el envío en curso y cuelga lo que siga
         pidiendo por la red: nada sigue pidiendo mientras el cierre espera, ni lo retrasa
-        (ronda 3 de Codex sobre la #698, ADR-255). Va en cada ``closeEvent``, también en el
-        que cierra de verdad tras esperar: lo que se abrió mientras, se cuelga entonces.
+        (ronda 3 de Codex sobre la #698, ADR-255). Y hasta que la ventana se cierra de
+        verdad, lo que se abra se cuelga en el acto, también lo que estaba a medio abrir
+        (ronda 4).
 
         El envío se cancela antes de colgar: así acaba cancelado y no fallido. La orden de
         captura no se cuelga: su WebSocket no es de la fábrica, y el cierre la espera para
@@ -2219,7 +2226,19 @@ class MainWindow(QMainWindow):
         """
         if self._is_sending and self._active_operation_id is not None:
             self._send_message_use_case.cancel(self._active_operation_id)
-        hang_up_all()
+        self._begin_closing_connections()
+
+    def _begin_closing_connections(self) -> None:
+        """Pide colgar la red, una vez por cierre aunque el cierre se aplace varias veces."""
+        if self._connections is not None and not self._closing_connections:
+            self._closing_connections = True
+            self._connections.begin_close()
+
+    def _end_closing_connections(self) -> None:
+        """La ventana se cerró de verdad: lo que se abra ya no se cuelga por ella."""
+        if self._connections is not None and self._closing_connections:
+            self._closing_connections = False
+            self._connections.end_close()
 
     # --- Configuración ---------------------------------------------------
 

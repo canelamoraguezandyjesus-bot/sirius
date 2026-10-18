@@ -53,6 +53,7 @@ from sirius.application.trick_questions import TrickQuestionsUseCase
 from sirius.application.validate_and_save_api_key import ValidateAndSaveApiKeyUseCase
 from sirius.application.validate_backup import ValidateBackupUseCase
 from sirius.application.voice_test import VoiceTestUseCase
+from sirius.ports.connections import ConnectionCloser
 from sirius.presentation.credential_validation_worker import CredentialValidationWorker
 from sirius.presentation.main_window import MainWindow
 
@@ -107,6 +108,7 @@ class ValidatedMainWindow(MainWindow):
         local_listening: LocalListening[Any] | None = None,
         listening_loop: ListeningLoop | None = None,
         voice_test_use_case: VoiceTestUseCase | None = None,
+        connections: ConnectionCloser | None = None,
         show_warning: Callable[[str, str], None] | None = None,
         show_information: Callable[[str, str], None] | None = None,
         confirm_restore: Callable[[str, str], bool] | None = None,
@@ -163,6 +165,7 @@ class ValidatedMainWindow(MainWindow):
             local_listening=local_listening,
             listening_loop=listening_loop,
             voice_test_use_case=voice_test_use_case,
+            connections=connections,
             show_warning=show_warning,
             show_information=show_information,
             confirm_restore=confirm_restore,

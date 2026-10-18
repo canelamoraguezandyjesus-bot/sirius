@@ -15,7 +15,6 @@ import pytest
 from PySide6.QtWidgets import QPushButton
 from pytestqt.qtbot import QtBot
 
-import sirius.presentation.main_window as ventana_principal
 from sirius.adapters.capture.fake import FakeCaptureBackend
 from sirius.adapters.persistence.migrations import upgrade_to_head
 from sirius.adapters.persistence.sqlite_conversation_repository import (
@@ -30,6 +29,7 @@ from sirius.composition_root import build_conversation_dependencies
 from sirius.domain.capture import Scene, SceneRegistry
 from sirius.domain.model_studio import StudioCaptureState, StudioInteractionState
 from sirius.ports.capture_backend import CaptureError, CaptureStatus
+from sirius.ports.connections import ConnectionCloser
 from sirius.presentation.main_window import MainWindow
 from sirius.presentation.model_studio.capture_panel import StudioCapturePanel, format_elapsed
 
@@ -185,7 +185,12 @@ def test_every_scene_button_has_an_accessible_name(qtbot: QtBot) -> None:
 # --- Criterio 11: parada de emergencia ----------------------------------
 
 
-def _window(tmp_path: Path, capture: StudioCaptureUseCase | None = None) -> MainWindow:
+def _window(
+    tmp_path: Path,
+    capture: StudioCaptureUseCase | None = None,
+    *,
+    connections: ConnectionCloser | None = None,
+) -> MainWindow:
     database_path = tmp_path / "sirius.db"
     upgrade_to_head(database_path)
     build_sqlite_conversation_repository(database_path).get_or_create_main_conversation()
@@ -228,6 +233,7 @@ def _window(tmp_path: Path, capture: StudioCaptureUseCase | None = None) -> Main
         historical_projects_use_case=dependencies.historical_projects_use_case,
         close_database_connections=dependencies.close_database_connections,
         studio_capture_use_case=capture,
+        connections=connections,
         show_warning=lambda title, text: None,
         show_information=lambda title, text: None,
     )
@@ -687,8 +693,8 @@ def test_una_orden_de_captura_que_revienta_no_deja_model_studio_bloqueado(
 #
 # Lo que cuelga, y en cuánto, lo miden con conexiones de verdad las pruebas de
 # ``tests/integration/test_cerrar_cuelga_lo_que_esta_en_vuelo.py``. Aquí, cuándo lo pide la
-# ventana: una vez, en el cierre efectivo, y no mientras espera a una orden de captura, que
-# no se cuelga, para saber cómo quedó la grabación.
+# ventana: una vez, al pedir cerrar, y hasta que se cierra de verdad, también mientras espera
+# a una orden de captura, que no se cuelga, para saber cómo quedó la grabación.
 
 
 class _CapturaQueTarda(FakeCaptureBackend):
@@ -710,32 +716,37 @@ class _CapturaQueTarda(FakeCaptureBackend):
         return super().get_status()
 
 
+class _Cierres:
+    """Apunta cuándo la ventana empieza a colgar la red y cuándo deja de hacerlo."""
+
+    def __init__(self) -> None:
+        self.vistos: list[str] = []
+
+    def begin_close(self) -> None:
+        self.vistos.append("empieza")
+
+    def end_close(self) -> None:
+        self.vistos.append("acaba")
+
+
 @pytest.fixture
-def colgadas(monkeypatch: pytest.MonkeyPatch) -> list[bool]:
-    """Apunta cada vez que la ventana pide colgar, y si fue para salir."""
-    vistas: list[bool] = []
-
-    def cuelga(*, final: bool = False) -> int:
-        vistas.append(final)
-        return 0
-
-    monkeypatch.setattr(ventana_principal, "hang_up_all", cuelga)
-    return vistas
+def cierres() -> _Cierres:
+    return _Cierres()
 
 
 @pytest.mark.gui
 def test_al_cerrar_la_ventana_cuelga_una_vez_lo_que_esta_en_vuelo(
-    qtbot: QtBot, tmp_path: Path, colgadas: list[bool]
+    qtbot: QtBot, tmp_path: Path, cierres: _Cierres
 ) -> None:
-    ventana = _window(tmp_path)
+    ventana = _window(tmp_path, connections=cierres)
     qtbot.addWidget(ventana)
     ventana.show()
 
     ventana.close()
 
-    # Sin ``final``: tras cambiar de proyecto se abre otra ventana con las mismas
+    # Y acaba al cerrarse: tras cambiar de proyecto se abre otra ventana con las mismas
     # dependencias, y lo que ella abra no se cuelga.
-    assert colgadas == [False]
+    assert cierres.vistos == ["empieza", "acaba"]
 
 
 @pytest.mark.gui
@@ -743,7 +754,7 @@ def test_al_cerrar_la_ventana_cuelga_una_vez_lo_que_esta_en_vuelo(
 def test_al_cerrar_espera_a_la_orden_de_captura_y_despues_cuelga(
     qtbot: QtBot,
     tmp_path: Path,
-    colgadas: list[bool],
+    cierres: _Cierres,
     caplog: pytest.LogCaptureFixture,
     revienta: bool,
     quedo: str,
@@ -755,7 +766,7 @@ def test_al_cerrar_espera_a_la_orden_de_captura_y_despues_cuelga(
     backend = _CapturaQueTarda(revienta=revienta)
     backend.connect()
     captura = StudioCaptureUseCase(backend, _SCENES, enabled=True)
-    ventana = _window(tmp_path, captura)
+    ventana = _window(tmp_path, captura, connections=cierres)
     qtbot.addWidget(ventana)
     ventana.show()
     backend.tarda = True
@@ -767,13 +778,14 @@ def test_al_cerrar_espera_a_la_orden_de_captura_y_despues_cuelga(
         qtbot.wait(100)
 
         # Cuelga al pedir cerrar, antes de esperar (ronda 3 de Codex sobre la #698), y la
-        # orden sigue: su WebSocket no es de la fábrica.
+        # orden sigue: su WebSocket no es de la fábrica. Mientras espera, lo que se abra se
+        # cuelga en el acto (ronda 4).
         assert ventana.isVisible(), "cerró sin esperar a la orden de captura"
-        assert colgadas == [False]
+        assert cierres.vistos == ["empieza"]
 
         backend.suelta.set()
         qtbot.waitUntil(lambda: not ventana.isVisible(), timeout=5000)
 
-    # Y otra vez en el cierre de verdad, tras la orden.
-    assert colgadas == [False, False]
+    # Y deja de colgar en el cierre de verdad, tras la orden.
+    assert cierres.vistos == ["empieza", "acaba"]
     assert f"Orden de captura acabada al cerrar: {quedo}" in caplog.text

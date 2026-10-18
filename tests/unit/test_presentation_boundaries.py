@@ -9,6 +9,10 @@ secret-related dependency is ``ApiKeySettingsUseCase`` (application layer),
 whose API cannot return the key's value. As a second, independent check, no
 module in ``sirius.presentation`` may call a method named ``get_secret``
 anywhere, even via an untyped/duck-typed reference.
+
+AGENTS.md: «Mantén las dependencias hacia dentro: presentación -> aplicación ->
+dominio». De la infraestructura, la presentación solo importa el diario: colgar la red
+al cerrar se lo da el punto de composición (ronda 4 de Codex sobre la #698).
 """
 
 from __future__ import annotations
@@ -30,6 +34,9 @@ _FORBIDDEN_MODULE_PREFIXES = (
 
 _FORBIDDEN_METHOD_CALLS = ("get_secret",)
 
+#: Lo único de ``sirius.infrastructure`` que puede importar la presentación.
+_ALLOWED_INFRASTRUCTURE = "sirius.infrastructure.logging"
+
 
 def _imported_module_names(source_path: Path) -> set[str]:
     tree = ast.parse(source_path.read_text(encoding="utf-8"), filename=str(source_path))
@@ -39,6 +46,18 @@ def _imported_module_names(source_path: Path) -> set[str]:
             names.update(alias.name for alias in node.names)
         elif isinstance(node, ast.ImportFrom) and node.module is not None:
             names.add(node.module)
+    return names
+
+
+def _imported_names(source_path: Path) -> set[str]:
+    """Cada nombre importado con su módulo delante: ``from a import b`` da ``a.b``."""
+    tree = ast.parse(source_path.read_text(encoding="utf-8"), filename=str(source_path))
+    names: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            names.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module is not None:
+            names.update(f"{node.module}.{alias.name}" for alias in node.names)
     return names
 
 
@@ -79,5 +98,24 @@ def test_presentation_never_calls_get_secret() -> None:
         forbidden = called & set(_FORBIDDEN_METHOD_CALLS)
         if forbidden:
             offenders[source_path.name] = forbidden
+
+    assert offenders == {}
+
+
+def test_presentation_imports_nothing_from_infrastructure_but_logging() -> None:
+    presentation_files = sorted(_PRESENTATION_DIR.rglob("*.py"))
+    assert presentation_files, "expected to find presentation source files"
+
+    offenders: dict[str, set[str]] = {}
+    for source_path in presentation_files:
+        forbidden = {
+            name
+            for name in _imported_names(source_path)
+            if (name == "sirius.infrastructure" or name.startswith("sirius.infrastructure."))
+            and name != _ALLOWED_INFRASTRUCTURE
+            and not name.startswith(f"{_ALLOWED_INFRASTRUCTURE}.")
+        }
+        if forbidden:
+            offenders[str(source_path.relative_to(_PRESENTATION_DIR))] = forbidden
 
     assert offenders == {}

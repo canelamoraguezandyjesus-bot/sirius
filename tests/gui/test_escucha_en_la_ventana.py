@@ -44,11 +44,13 @@ from sirius.infrastructure.local_voice_installation import (
     LocalVoiceInstallation,
     speaking_voice_files,
 )
+from sirius.infrastructure.network import connection_registry
 from sirius.infrastructure.paths import resolve_paths
 from sirius.main import (
     _build_initial_project_window,
     _build_listening_main_window,
     _build_main_window,
+    _build_onboarding_window,
     _build_post_key_window,
     _release_on_quit,
 )
@@ -1214,3 +1216,18 @@ def test_al_salir_de_sirius_suelta_la_voz_y_no_al_cerrar_una_ventana(
     aplicacion.aboutToQuit.emit()
     assert altavoz.cerrado
     assert colgado == [(True, False)]
+
+
+def test_las_ventanas_cuelgan_la_red_con_el_registro_que_les_da_main(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """Ronda 4 de Codex sobre la #698: la presentación no importa la red de la
+    infraestructura; el punto de composición da a cada ventana el registro del proceso, y
+    ellas solo lo invocan al cerrarse."""
+    sirius = _monta(tmp_path)
+    ventana = _ventana(qtbot, sirius)
+    bienvenida = _build_onboarding_window(sirius.deps, [])
+    qtbot.addWidget(bienvenida)
+
+    assert ventana._connections is connection_registry()
+    assert bienvenida._connections is connection_registry()

@@ -30,7 +30,7 @@ from sirius.infrastructure.bootstrap_location_store import build_bootstrap_locat
 from sirius.infrastructure.crash_handler import install_crash_handler
 from sirius.infrastructure.data_path_validator import build_data_path_validator
 from sirius.infrastructure.logging import configure_logging, get_logger
-from sirius.infrastructure.network import hang_up_all
+from sirius.infrastructure.network import connection_registry, hang_up_all
 from sirius.infrastructure.paths import resolve_paths
 from sirius.presentation.data_location_window import DataLocationWindow
 from sirius.presentation.initial_project_window import InitialProjectWindow
@@ -52,6 +52,9 @@ def _build_main_window(
     ``listening_loop`` atiende al oído mientras la ventana está abierta (ADR-244): la
     ventana lo arranca al abrirse y lo para al cerrarse. Sin él, el oído lo atiende otro,
     como el conductor de las pruebas; con los dos, habría dos leyendo el mismo micro.
+
+    Le da el registro de conexiones del proceso, para que al cerrarse cuelgue la red sin
+    importar nada de la infraestructura (ronda 4 de Codex sobre la #698, ADR-255).
     """
 
     def _on_project_completed() -> None:
@@ -105,6 +108,7 @@ def _build_main_window(
         local_listening=dependencies.local_listening,
         listening_loop=listening_loop,
         voice_test_use_case=dependencies.voice_test_use_case,
+        connections=connection_registry(),
     )
     main_window.project_completed.connect(_on_project_completed)
     return main_window
@@ -149,6 +153,7 @@ def _build_onboarding_window(
         activate_llm_provider=dependencies.activate_configured_llm_provider,
         default_provider=LLMProviderKind.OPENAI.value,
         default_model=provider_defaults.model,
+        connections=connection_registry(),
     )
     onboarding_window.configured.connect(_continue_after_onboarding)
     return onboarding_window
