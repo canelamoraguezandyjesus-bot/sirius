@@ -1752,3 +1752,18 @@ defectos:
       - src/sirius/application/send_message.py
       - src/sirius/adapters/llm/ollama_chat.py
       - tests/unit/test_paradas_de_turno.py
+  # ADR-258: MEMORIA.md volvió a no caber en una sola lectura, por tercera vez (ADR-196,
+  # ADR-218 y ADR-251): con ADR-256 y ADR-257 pesaba 120 509 bytes y su tope es 120 000, y
+  # en main quedaban 463 bytes de margen. La fila de cada ADR llevaba su ruta, que es su
+  # título otra vez. La raíz es D-6, la decisión abierta del propietario.
+  - id: H-258
+    titulo: La vista de memoria volvió a no caber porque la fila de cada ADR llevaba su ruta, que repite su título
+    bloque: motor
+    gravedad: alta
+    estado: cerrado
+    cerrado_por: 006c8dd2fb2594119fcdcc3b568f735cc062ebeb
+    pr: 701
+    adr: 258
+    ficheros:
+      - src/sirius_engine/memoria.py
+      - tests/engine/test_memoria.py
