@@ -1737,7 +1737,9 @@ defectos:
   # ADR-256: las instrucciones llevan ejemplos y mensajes escritos por turnos, y a Ollama no
   # se le pedía ninguna parada: un modelo pequeño seguía el diálogo, inventándose el turno
   # del propietario, hasta el tope de 4.096 tokens. Lo vio el propietario en la prueba a
-  # ciegas del 18-10-2026, y su nota de arranque sigue en la incidencia.
+  # ciegas del 18-10-2026, y su nota de arranque sigue en la incidencia. La ronda 1 de Codex
+  # encontró dos peticiones más con diálogo y paradas que no eran las suyas, y al mirar las
+  # siete salieron otras dos: el juez, el resumen y los hechos del sueño (ADR-256).
   - id: H-256
     titulo: El modelo seguía el diálogo de sus instrucciones, inventándose el turno del propietario, hasta su tope
     bloque: producto
@@ -1751,6 +1753,10 @@ defectos:
       - src/sirius/domain/robot_seed.py
       - src/sirius/application/send_message.py
       - src/sirius/adapters/llm/ollama_chat.py
+      - src/sirius/application/reply_judge.py
+      - src/sirius/domain/conversation_summary.py
+      - src/sirius/application/robot_conversation.py
+      - src/sirius/application/dream.py
       - tests/unit/test_paradas_de_turno.py
   # ADR-258: MEMORIA.md volvió a no caber en una sola lectura, por tercera vez (ADR-196,
   # ADR-218 y ADR-251): con ADR-256 y ADR-257 pesaba 120 509 bytes y su tope es 120 000, y

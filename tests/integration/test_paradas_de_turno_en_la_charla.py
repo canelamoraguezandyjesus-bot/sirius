@@ -19,7 +19,14 @@ from sirius.application.send_message import COMMAND_VOICE_TASK
 from sirius.composition_root import ConversationDependencies, build_conversation_dependencies
 from sirius.domain.robot_seed import ROBOT_SEED_EXAMPLES, ROBOT_SEED_NAME
 from sirius.infrastructure.paths import resolve_paths
-from sirius.ports.llm import LLMCompleted, LLMRequest, LLMStreamEvent, LLMTextDelta
+from sirius.ports.llm import (
+    LLMCompleted,
+    LLMError,
+    LLMErrorKind,
+    LLMRequest,
+    LLMStreamEvent,
+    LLMTextDelta,
+)
 
 pytestmark = pytest.mark.integration
 
@@ -32,12 +39,18 @@ _DE_LOS_MENSAJES = {"\n[user]", "\n[sirius]"}
 class _Modelo:
     model_name: str = "grabador"
     peticiones: list[LLMRequest] = field(default_factory=list)
+    #: Si la próxima respuesta falla, como un Ollama que se cae a mitad.
+    falla: bool = False
 
     def health_check(self) -> bool:
         return True
 
     def stream_response(self, request: LLMRequest) -> Iterator[LLMStreamEvent]:
         self.peticiones.append(request)
+        if self.falla:
+            self.falla = False
+            yield LLMError(kind=LLMErrorKind.CONNECTION, message="Ollama se ha caído.")
+            return
         yield LLMTextDelta("Vale.")
         yield LLMCompleted(text="Vale.", input_tokens=1, output_tokens=1)
 
@@ -116,3 +129,20 @@ def test_la_voz_de_una_orden_para_en_los_turnos_de_sus_ejemplos(sirius: _Sirius)
     [voz] = sirius.de_las_ordenes()
     assert voz.stop
     assert set(voz.stop) == _turnos_que_lee(voz)
+
+
+def test_con_mensajes_recientes_de_uno_solo_para_solo_en_los_suyos(sirius: _Sirius) -> None:
+    """Una respuesta que falla no va a los mensajes recientes: la charla siguiente lleva
+    solo los de él, y una parada «[sirius]» no empezaría ningún turno de lo que lee el
+    modelo (ronda 1 de Codex sobre la PR #701)."""
+    sirius.modelo.falla = True
+    sirius.di("Buenos días, Sirius.")
+
+    sirius.di("¿Me oyes ahora?")
+
+    segunda = sirius.de_la_charla()[-1]
+    assert "\n[user] Buenos días, Sirius." in f"\n{segunda.instructions}"
+    assert "\n[sirius] " not in f"\n{segunda.instructions}"
+    assert set(segunda.stop) == _turnos_que_lee(segunda)
+    assert "\n[user]" in segunda.stop
+    assert "\n[sirius]" not in segunda.stop

@@ -214,16 +214,18 @@ def render_recent_message(message: Message) -> str:
     return line if note is None else f"{line}\n{note}"
 
 
-#: Cómo empieza cada mensaje de ``render_recent_message``. También son paradas, por lo
-#: mismo que los turnos de los ejemplos (incidencia #700).
-RECENT_MESSAGE_TURNS: tuple[str, ...] = tuple(f"\n[{role.value}]" for role in MessageRole)
+def recent_message_turns(messages: Sequence[Message]) -> tuple[str, ...]:
+    """Cómo empieza cada mensaje de ``render_recent_message`` que hay en ``messages``, sin
+    repetir. También son paradas, por lo mismo que los turnos de los ejemplos (incidencia
+    #700), y solo de los que están: una parada que no empieza ningún turno de lo que lee
+    el modelo podría cortar una respuesta buena (ronda 1 de Codex sobre la PR #701)."""
+    return tuple(dict.fromkeys(f"\n[{message.role.value}]" for message in messages))
 
 
 def context_turns(context: Context) -> tuple[str, ...]:
     """Las paradas de una petición con ``render_instructions(context)``: los comienzos de
-    turno de los ejemplos y, si los lleva, de los mensajes recientes (incidencia #700)."""
-    recent = RECENT_MESSAGE_TURNS if context.recent_messages else ()
-    return example_turns(context.seed_examples) + recent
+    turno de los ejemplos y de los mensajes recientes que lleva (incidencia #700)."""
+    return example_turns(context.seed_examples) + recent_message_turns(context.recent_messages)
 
 
 class CommandVoice:

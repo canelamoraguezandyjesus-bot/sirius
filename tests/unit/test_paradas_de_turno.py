@@ -9,17 +9,25 @@ como paradas, y Ollama deja de escribir en cuanto el modelo empieza uno.
 
 from __future__ import annotations
 
+import ast
 import json
 import random
 from collections.abc import Iterator
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import httpx
 
 from sirius.adapters.llm.ollama_chat import OllamaChatProvider
 from sirius.application.blind_test import BlindTestUseCase
+from sirius.application.dream import LLMFactExtractor
+from sirius.application.reply_judge import LLMReplyJudge
+from sirius.application.robot_conversation import LLMConversationSummarizer
+from sirius.application.send_message import recent_message_turns, render_recent_message
 from sirius.application.trick_questions import TrickQuestionsUseCase
+from sirius.domain.conversation import Message, MessageRole
+from sirius.domain.conversation_summary import said_turns, summary_input
 from sirius.domain.identity import Identity, IdentityVersion, SeedExample
 from sirius.domain.reply_judge import TrickVerdict
 from sirius.domain.robot_seed import example_turns, render_examples
@@ -179,3 +187,92 @@ def test_cada_respuesta_a_una_pregunta_trampa_para_en_los_turnos_de_sus_ejemplos
     assert len(modelo.peticiones) == len(TRICK_QUESTIONS)
     for peticion in modelo.peticiones:
         assert set(peticion.stop) == _turnos_que_lee(peticion) == _TURNOS
+
+
+# --- Ronda 1 de Codex sobre la PR #701: el juez, los roles que están, y el resumen y el
+# sueño, que reciben la charla escrita por turnos ---------------------------------------
+
+
+class _ModeloQueJuzga(_Modelo):
+    """Contesta lo que vale para una nota y para un veredicto a la vez: un 4 y «discrepa»."""
+
+    def stream_response(self, request: LLMRequest) -> Iterator[LLMStreamEvent]:
+        self.peticiones.append(request)
+        yield LLMCompleted(text="4, discrepa", input_tokens=1, output_tokens=1)
+
+
+def test_el_juez_para_en_los_turnos_de_los_ejemplos_que_ve_enteros() -> None:
+    modelo = _ModeloQueJuzga()
+    juez = LLMReplyJudge(_Identidades(), lambda: modelo)  # type: ignore[arg-type]
+
+    juez.score("Buenos días, jefe.")
+    juez.verdict("Me voy a comprar un barco.", "Ni de broma.")
+
+    assert len(modelo.peticiones) == 2
+    for peticion in modelo.peticiones:
+        assert set(peticion.stop) == _turnos_que_lee(peticion) == _TURNOS
+
+
+def _mensaje(rol: MessageRole, texto: str) -> Message:
+    return Message(1, 1, 1, rol, texto, datetime(2026, 10, 18, tzinfo=UTC))
+
+
+def test_las_paradas_de_los_mensajes_recientes_son_solo_de_los_que_estan() -> None:
+    suyo = _mensaje(MessageRole.USER, "Hola.")
+    de_sirius = _mensaje(MessageRole.SIRIUS, "Hola, jefe.")
+
+    assert recent_message_turns([]) == ()
+    assert recent_message_turns([suyo, suyo]) == ("\n[user]",)
+    assert recent_message_turns([de_sirius, suyo, de_sirius]) == ("\n[sirius]", "\n[user]")
+    escrito = "\n" + "\n".join(render_recent_message(m) for m in (suyo, de_sirius))
+    for parada in recent_message_turns([suyo, de_sirius]):
+        assert f"{parada} " in escrito, "cada parada empieza un mensaje de lo que lee"
+
+
+def test_lo_que_se_da_a_resumir_o_a_sonar_para_en_los_turnos_que_lleva() -> None:
+    suyo = _mensaje(MessageRole.USER, "Me he comprado un barco.")
+    de_sirius = _mensaje(MessageRole.SIRIUS, "¿Otro?")
+
+    assert said_turns(summary_input(None, [suyo, de_sirius])) == ("\nÉl:", "\nSirius:")
+    assert said_turns(summary_input("Habló de barcos.", [suyo])) == ("\nÉl:",)
+    assert said_turns("Resumen anterior:\nHabló de barcos.") == ()
+
+
+def test_el_resumen_y_los_hechos_del_sueno_paran_en_los_turnos_de_lo_que_reciben() -> None:
+    modelo = _Modelo()
+    charla = "Él: Me he comprado un barco.\nSirius: ¿Otro?"
+    dia = "Él: Me he comprado un barco.\nÉl: Mañana lo estreno."
+
+    LLMConversationSummarizer().summarize(charla, modelo)
+    LLMFactExtractor().extract(dia, modelo)
+
+    resumen, hechos = modelo.peticiones
+    assert resumen.stop == ("\nÉl:", "\nSirius:")
+    assert hechos.stop == ("\nÉl:",)
+
+
+def _nombre(funcion: ast.expr) -> str:
+    if isinstance(funcion, ast.Name):
+        return funcion.id
+    if isinstance(funcion, ast.Attribute):
+        return funcion.attr
+    return ""
+
+
+def test_toda_peticion_al_modelo_dice_sus_paradas_aunque_sean_ninguna() -> None:
+    """Olvidar las paradas de una petición nueva no puede pasar sin que se vea: cada
+    ``LLMRequest`` del código las dice, aunque sea ``stop=()``. Si lleva diálogo, las
+    pruebas de arriba miran que sean las suyas (ronda 1 de Codex sobre la PR #701)."""
+    raiz = Path(__file__).resolve().parents[2] / "src"
+    peticiones: list[str] = []
+    sin_paradas: list[str] = []
+    for fichero in sorted(raiz.rglob("*.py")):
+        for nodo in ast.walk(ast.parse(fichero.read_text(encoding="utf-8"))):
+            if isinstance(nodo, ast.Call) and _nombre(nodo.func) == "LLMRequest":
+                donde = f"{fichero.relative_to(raiz).as_posix()}:{nodo.lineno}"
+                peticiones.append(donde)
+                if not any(clave.arg == "stop" for clave in nodo.keywords):
+                    sin_paradas.append(donde)
+
+    assert len(peticiones) >= 7, peticiones
+    assert sin_paradas == []

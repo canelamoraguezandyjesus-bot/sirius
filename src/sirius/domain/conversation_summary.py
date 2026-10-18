@@ -20,6 +20,10 @@ TURNS_BETWEEN_SUMMARIES = 18
 #: Turnos que se quedan sin resumir, para que lo último vaya con sus palabras.
 TURNS_KEPT_VERBATIM = 4
 
+#: Quién habla en la charla que se da a resumir, al principio de cada línea: él y Sirius.
+OWNER_SPEAKER = "Él"
+SIRIUS_SPEAKER = "Sirius"
+
 
 @dataclass(frozen=True, slots=True)
 class ConversationSummary:
@@ -57,9 +61,22 @@ def summary_input(previous: str | None, messages: Sequence[Message]) -> str:
     if previous:
         lines += ["Resumen anterior:", previous, "", "Lo que se habló después:"]
     for message in messages:
-        speaker = "Él" if message.role is MessageRole.USER else "Sirius"
+        speaker = OWNER_SPEAKER if message.role is MessageRole.USER else SIRIUS_SPEAKER
         lines.append(f"{speaker}: {message.content or ''}")
         note = cut_note(message, in_summary=True)
         if note is not None:
             lines.append(note)
     return "\n".join(lines)
+
+
+def said_turns(text: str) -> tuple[str, ...]:
+    """Los comienzos de turno que lleva ``text``, escrito como ``summary_input`` o como el
+    día que sueña: «Él:» o «Sirius:» al principio de una línea. Son paradas: el modelo que
+    resume o que saca hechos podría seguir la charla en vez de hacer lo suyo, como en la
+    charla (incidencia #700, ronda 1 de Codex sobre la PR #701)."""
+    lines = text.splitlines()
+    return tuple(
+        f"\n{speaker}:"
+        for speaker in (OWNER_SPEAKER, SIRIUS_SPEAKER)
+        if any(line.startswith(f"{speaker}: ") for line in lines)
+    )

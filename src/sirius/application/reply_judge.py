@@ -15,7 +15,7 @@ from sirius.domain.reply_judge import (
     parse_score,
 )
 from sirius.domain.reply_judge import parse_verdict as parse_trick_verdict
-from sirius.domain.robot_seed import TONE_FRAME
+from sirius.domain.robot_seed import TONE_FRAME, example_turns
 from sirius.ports.identity_repository import IdentityRepository
 from sirius.ports.llm import LLMCompleted, LLMError, LLMProvider, LLMRequest
 
@@ -117,6 +117,9 @@ class LLMReplyJudge:
             # Una nota o una palabra: sin pensar antes, que se comería el tope (ADR-252).
             max_output_tokens=JUDGE_MAX_OUTPUT_TOKENS,
             may_think=False,
+            # Ve todos los ejemplos, escritos por turnos: si siguiera el diálogo, la nota o
+            # el veredicto se perderían detrás (ronda 1 de Codex sobre la PR #701).
+            stop=example_turns(version.examples),
         )
         with self._lock:
             # Se mira y se apunta a la vez: quien le para pone su bandera antes de cortar,

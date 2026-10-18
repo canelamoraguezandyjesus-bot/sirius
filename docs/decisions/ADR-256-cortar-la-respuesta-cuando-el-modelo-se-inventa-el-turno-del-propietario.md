@@ -75,19 +75,26 @@ El de la nota de arranque, punto 3.
 ## Decisión
 
 La opción A: cada petición que lleva diálogo en sus instrucciones lleva sus comienzos de
-turno como paradas, y Ollama deja de escribir en cuanto el modelo empieza uno.
+turno como paradas, y Ollama deja de escribir en cuanto el modelo empieza uno. Desde la
+ronda 1 de Codex, también las que lo llevan en lo que se le da a leer, y toda petición
+dice sus paradas, aunque sean ninguna.
 
 - **Las paradas de los ejemplos**, `example_turns` en `src/sirius/domain/robot_seed.py`,
   junto a `render_examples`, que es quien los escribe: un salto de línea y quién habla,
   sin repetir, y `Sirius`. Sin ejemplos, ninguna.
-- **Las de los mensajes recientes**, `RECENT_MESSAGE_TURNS` en
+- **Las de los mensajes recientes**, `recent_message_turns` en
   `src/sirius/application/send_message.py`, junto a `render_recent_message`: `\n[user]` y
-  `\n[sirius]`. `context_turns` junta las dos, y las de los mensajes solo si la petición
-  los lleva.
+  `\n[sirius]`, solo de los que lleva la petición. `context_turns` junta las dos.
+- **Las de lo que se da a resumir y al sueño**, `said_turns` en
+  `src/sirius/domain/conversation_summary.py`, junto a `summary_input`: `\nÉl:` y
+  `\nSirius:`, solo de quien habla en el texto.
 - **El puerto**, `LLMRequest.stop`, vacío si no se dice otra cosa.
-- **Las cuatro peticiones que llevan ejemplos**: la charla, con `context_turns`; la voz de
-  las órdenes, la prueba a ciegas y las preguntas trampa, con los turnos de sus ejemplos.
-  El juez, el sueño y el resumen no llevan diálogo que seguir y no cambian.
+- **Las siete peticiones al modelo**: la charla y las preguntas trampa, con
+  `context_turns`; la voz de las órdenes, la prueba a ciegas y el juez, que ve todos los
+  ejemplos, con los turnos de sus ejemplos; y el resumen y los hechos del sueño, que
+  reciben la charla escrita por turnos, con `said_turns`. Una prueba mira que cada
+  `LLMRequest` del código diga sus paradas, aunque sea `stop=()`: olvidarlas en una
+  petición nueva no pasa sin que se vea.
 - **Ollama** las recibe en `options.stop`. OpenAI no: su API de respuestas no tiene
   paradas.
 
@@ -106,13 +113,14 @@ turno como paradas, y Ollama deja de escribir en cuanto el modelo empieza uno.
   de los mensajes recientes, que se pongan aunque no haya mensajes, y que los mensajes no
   den ninguna.
 - **ruff** limpio.
+- **La ronda 1 de Codex**, abajo, añade 6 pruebas y 6 mutaciones, y caen las 6.
 
 ## Consecuencias
 
 - Un modelo que siga el diálogo de sus instrucciones deja de escribir en cuanto empieza
   un turno. Lo escrito hasta ahí es su respuesta, como cualquier otra.
-- Una petición nueva que lleve ejemplos o mensajes por turnos tiene que llevar sus
-  paradas, o vuelve el fallo.
+- Una petición nueva tiene que decir sus paradas, o falla la guarda; si lleva ejemplos
+  o mensajes por turnos y dice otras, la pillan las pruebas de su petición, si las tiene.
 
 **Qué NO garantiza, después del código:**
 - Que deje de enrollarse por otro camino: un monólogo largo que no abra turno sigue hasta
@@ -143,3 +151,18 @@ bastan, y se le preguntaría al propietario, porque cambia lo que él escribió.
 Va en su PR, con ADR-257. Su alcance: que cada petición con ejemplos o mensajes por turnos
 lleve exactamente sus comienzos de turno como paradas, que Ollama las reciba, y que las
 peticiones sin diálogo no cambien. Las rondas se anotan aquí.
+
+- **Ronda 1 de Codex**, sobre `57081638`: dos hallazgos P2, los dos ciertos y de la familia
+  de la lección, paradas que no son los comienzos de turno de lo que lee el modelo.
+  - El juez ve todos los ejemplos, escritos por turnos, y su petición no llevaba paradas:
+    este ADR decía que no llevaba diálogo, y no era verdad. Ahora lleva las de sus
+    ejemplos.
+  - Las paradas de los mensajes recientes eran las de todos los roles en cuanto había
+    uno, aunque solo estuvieran los de él, por ejemplo tras una respuesta que falló. Ahora
+    son solo las de los roles que están.
+  - Visto el fallo, se miraron las siete peticiones del código, no solo las dos señaladas:
+    el resumen y los hechos del sueño reciben la charla escrita como `Él: …` y
+    `Sirius: …`, y tampoco llevaban paradas. Ahora las llevan, y una guarda pide que toda
+    `LLMRequest` diga las suyas.
+  - Familia: la de la lección. Es la primera ronda; si la segunda la repite, se deja de
+    parchear y se sacan las paradas del propio texto que lee el modelo.
