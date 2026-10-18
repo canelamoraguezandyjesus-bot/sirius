@@ -11,6 +11,7 @@ responder al instante para que el estado ``ESCUCHANDO`` aparezca sin retraso.
 
 from __future__ import annotations
 
+import contextlib
 from collections.abc import Callable
 
 from PySide6.QtCore import QObject, QRunnable, Signal
@@ -28,7 +29,12 @@ _logger = get_logger(__name__)
 
 
 class StudioVoiceWorkerSignals(QObject):
-    """Un único desenlace, siempre: o ``finished`` o ``crashed``."""
+    """Un único desenlace, siempre: o ``finished`` o ``crashed``.
+
+    Si Sirius se cerró mientras el trabajador seguía, ya no hay ventana a la que avisar y
+    el aviso se pierde sin pintar una traza; nada al diario, que puede estar cerrado ya
+    (ADR-253).
+    """
 
     finished = Signal(object)
     crashed = Signal(str)
@@ -47,9 +53,11 @@ class TranscribeWorker(QRunnable):
             outcome: TranscribeOutcome = self._use_case.stop_and_transcribe()
         except Exception as exc:  # frontera del trabajador: informa, nunca tumba el hilo
             _logger.error("Transcripción interrumpida (%s)", type(exc).__name__)
-            self.signals.crashed.emit(str(exc))
+            with contextlib.suppress(RuntimeError):
+                self.signals.crashed.emit(str(exc))
         else:
-            self.signals.finished.emit(outcome)
+            with contextlib.suppress(RuntimeError):
+                self.signals.finished.emit(outcome)
 
 
 class SpeakWorker(QRunnable):
@@ -77,9 +85,11 @@ class SpeakWorker(QRunnable):
             )
         except Exception as exc:  # frontera del trabajador: informa, nunca tumba el hilo
             _logger.error("Síntesis interrumpida (%s)", type(exc).__name__)
-            self.signals.crashed.emit(str(exc))
+            with contextlib.suppress(RuntimeError):
+                self.signals.crashed.emit(str(exc))
         else:
-            self.signals.finished.emit(outcome)
+            with contextlib.suppress(RuntimeError):
+                self.signals.finished.emit(outcome)
 
 
 class CaptureWorker(QRunnable):
@@ -100,6 +110,8 @@ class CaptureWorker(QRunnable):
             feedback = self._command()
         except Exception as exc:  # frontera del trabajador: informa, nunca tumba el hilo
             _logger.error("Orden de captura interrumpida (%s)", type(exc).__name__)
-            self.signals.crashed.emit(str(exc))
+            with contextlib.suppress(RuntimeError):
+                self.signals.crashed.emit(str(exc))
         else:
-            self.signals.finished.emit(feedback)
+            with contextlib.suppress(RuntimeError):
+                self.signals.finished.emit(feedback)

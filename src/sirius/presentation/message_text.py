@@ -10,10 +10,12 @@ from __future__ import annotations
 
 from sirius.domain.conversation import MessageStatus
 
-__all__ = ["CANCELLED_SEND", "HISTORY_NOT_LOADED", "message_body"]
+__all__ = ["CANCELLED_SEND", "CUT_BEFORE_A_WORD", "HISTORY_NOT_LOADED", "message_body"]
 
 #: Lo que se dice cuando un envío se cancela.
 CANCELLED_SEND = "Envío cancelado."
+#: Lo que se enseña de una respuesta que le cortaron antes de que escribiera nada.
+CUT_BEFORE_A_WORD = "(le cortaste antes de que dijera nada)"
 #: Lo que se dice si, tras un envío roto, no se puede leer lo que quedó guardado.
 HISTORY_NOT_LOADED = "No se pudo cargar el historial de la conversación."
 
@@ -27,4 +29,7 @@ def message_body(content: str | None, status: MessageStatus) -> str:
     # REDACTED (B4d) is the only status whose content is ever None: the
     # placeholder replaces it instead of literally rendering "None".
     shown_content = "(mensaje redactado)" if status is MessageStatus.REDACTED else content
+    if status is MessageStatus.COMPLETED and not (content or "").strip():
+        # Solo una respuesta que le cortaron antes de que escribiera nada (ADR-254).
+        shown_content = CUT_BEFORE_A_WORD
     return f"{shown_content}{suffix}"

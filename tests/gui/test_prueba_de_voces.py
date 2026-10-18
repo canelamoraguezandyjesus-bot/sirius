@@ -9,13 +9,17 @@ escucha.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+import logging
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import pytest
-from _hojas_en_su_pantalla import mira_que_es_una_ventana_que_cabe
-from PySide6.QtCore import QRunnable
+import shiboken6
+from _hojas_en_su_pantalla import abre, mira_que_es_una_ventana_que_cabe
+from PySide6.QtCore import QRunnable, Qt
+from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QMainWindow
 from pytestqt.qtbot import QtBot
 
@@ -24,7 +28,7 @@ from sirius.adapters.secrets.fake import FakeSecretStore
 from sirius.composition_root import ConversationDependencies, build_conversation_dependencies
 from sirius.config.local_voice import LocalVoiceSettings, SpeakingVoice
 from sirius.config.settings import load_settings
-from sirius.domain.voice_test import VOICE_TEST_PHRASES
+from sirius.domain.voice_test import VOICE_TEST_PHRASES, VoiceTestError
 from sirius.infrastructure.local_voice_installation import (
     LISTENING_MODEL_FILES,
     LocalVoiceInstallation,
@@ -35,7 +39,7 @@ from sirius.infrastructure.paths import resolve_paths
 from sirius.main import _build_main_window
 from sirius.ports.embeddings import EmbeddingError
 from sirius.ports.local_voice import Captured, ListeningEngines, SpeakingEngines, TurnSignal
-from sirius.presentation.voice_test_dialog import VoiceTestDialog
+from sirius.presentation.voice_test_dialog import VoiceTestDialog, VoiceTestWorker
 
 pytestmark = pytest.mark.gui
 
@@ -158,17 +162,31 @@ def _monta(tmp_path: Path, *, con_las_voces: bool = True) -> _Sirius:
 class _Dialogos:
     avisos: list[tuple[str, str]] = field(default_factory=list)
     informes: list[tuple[str, str]] = field(default_factory=list)
+    #: Lo que la hoja preguntó antes de cerrarse, y lo que contesta el propietario.
+    confirmaciones: list[tuple[str, str]] = field(default_factory=list)
+    cierra: bool = True
+
+    def confirma(self, titulo: str, texto: str) -> bool:
+        self.confirmaciones.append((titulo, texto))
+        return self.cierra
 
 
-def _hoja(qtbot: QtBot, sirius: _Sirius, dialogos: _Dialogos) -> VoiceTestDialog:
-    def en_el_acto(trabajo: QRunnable) -> None:
-        trabajo.run()
+def _en_el_acto(trabajo: QRunnable) -> None:
+    trabajo.run()
 
+
+def _hoja(
+    qtbot: QtBot,
+    sirius: _Sirius,
+    dialogos: _Dialogos,
+    run_worker: Callable[[QRunnable], None] = _en_el_acto,
+) -> VoiceTestDialog:
     hoja = VoiceTestDialog(
         sirius.deps.voice_test_use_case,
         show_warning=lambda titulo, texto: dialogos.avisos.append((titulo, texto)),
         show_information=lambda titulo, texto: dialogos.informes.append((titulo, texto)),
-        run_worker=en_el_acto,
+        run_worker=run_worker,
+        confirm=dialogos.confirma,
     )
     qtbot.addWidget(hoja)
     return hoja
@@ -255,3 +273,109 @@ def test_mientras_la_hoja_esta_abierta_no_escucha_y_al_cerrarla_vuelve(
 
     assert durante == [False]
     assert oido.listening and sirius.micro.abierto
+
+
+# --- Cerrar la hoja con trabajo hecho (incidencia #696) -----------------------------
+
+#: Lo que pregunta la hoja antes de cerrarse con trabajo hecho.
+_CERRAR = (
+    "Cerrar la prueba de voces",
+    "Si la cierras ahora, se pierde lo que lleva hecho. ¿La cierras?",
+)
+
+
+def test_cerrar_con_las_voces_preparadas_y_sin_elegir_pregunta_antes(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    dialogos = _Dialogos(cierra=False)
+    hoja = _hoja(qtbot, _monta(tmp_path), dialogos)
+    hoja.start_button.click()
+    abre(hoja, qtbot)
+
+    QTest.keyClick(hoja, Qt.Key.Key_Escape)
+
+    assert dialogos.confirmaciones == [_CERRAR]
+    assert hoja.isVisible()
+    dialogos.cierra = True
+    hoja.close()
+    assert dialogos.confirmaciones == [_CERRAR, _CERRAR]
+    assert not hoja.isVisible()
+
+
+def test_cerrar_mientras_prepara_las_voces_tambien_pregunta(qtbot: QtBot, tmp_path: Path) -> None:
+    dialogos = _Dialogos(cierra=False)
+    pendientes: list[QRunnable] = []
+    hoja = _hoja(qtbot, _monta(tmp_path), dialogos, run_worker=pendientes.append)
+    hoja.start_button.click()
+
+    hoja.reject()
+
+    assert dialogos.confirmaciones == [_CERRAR]
+    assert hoja._worker is not None
+
+
+def test_sin_preparar_nada_o_tras_elegir_cierra_sin_preguntar(qtbot: QtBot, tmp_path: Path) -> None:
+    sirius = _monta(tmp_path)
+    dialogos = _Dialogos()
+    sin_nada = _hoja(qtbot, sirius, dialogos)
+    sin_nada.reject()
+    elegida = _hoja(qtbot, sirius, dialogos)
+    elegida.start_button.click()
+    assert elegida._sheet is not None
+    elegida.choose(elegida._sheet.candidates[0].label)
+
+    assert dialogos.confirmaciones == []
+    assert elegida.result() == VoiceTestDialog.DialogCode.Accepted
+
+
+@pytest.mark.parametrize("desenlace", ["contesta", "falla", "se rompe"])
+def test_el_aviso_final_no_falla_si_la_hoja_ya_no_existe(tmp_path: Path, desenlace: str) -> None:
+    # Al cerrar Sirius con las voces preparándose salía «Signal source has been deleted»:
+    # acabe como acabe, con la hoja o con cualquiera de los dos avisos de fallo.
+    caso = _monta(tmp_path).deps.voice_test_use_case
+    trabajador = VoiceTestWorker(caso)
+    original = caso.prepare
+
+    def y_se_cierra_sirius(*args: Any, **kwargs: Any) -> Any:
+        hecho = original(*args, **kwargs) if desenlace == "contesta" else None
+        shiboken6.delete(trabajador.signals)
+        if desenlace == "falla":
+            raise VoiceTestError("No puedo preparar la prueba de voces.")
+        if desenlace == "se rompe":
+            raise OSError("algo que nadie esperaba")
+        return hecho
+
+    caso.prepare = y_se_cierra_sirius  # type: ignore[method-assign]
+    try:
+        trabajador.run()
+    finally:
+        caso.close()
+
+
+class _Apunta(logging.Handler):
+    """Lo que apunta al diario la hoja, leído de su registrador (ADR-248)."""
+
+    def __init__(self) -> None:
+        super().__init__(logging.DEBUG)
+        self.lineas: list[str] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.lineas.append(record.getMessage())
+
+
+def test_el_aviso_de_progreso_tampoco_falla_si_la_hoja_ya_no_existe(tmp_path: Path) -> None:
+    # Como el aviso final: si Sirius se cerró, el de progreso tampoco tiene a quién avisar,
+    # y no por eso se ha interrumpido nada (#696).
+    caso = _monta(tmp_path).deps.voice_test_use_case
+    trabajador = VoiceTestWorker(caso)
+    diario = _Apunta()
+    registrador = logging.getLogger("sirius.presentation.voice_test_dialog")
+    registrador.addHandler(diario)
+    shiboken6.delete(trabajador.signals)
+    try:
+        trabajador.run()
+    finally:
+        registrador.removeHandler(diario)
+        caso.close()
+
+    assert diario.lineas == []

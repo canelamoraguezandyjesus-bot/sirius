@@ -63,3 +63,23 @@ def _sin_vigilantes_de_voz_al_acabar() -> Iterator[None]:
     conductor = sys.modules.get("conductor_robot_0_3")
     if conductor is not None:
         conductor.deja_de_vigilar_a_todos()
+
+
+@pytest.fixture(autouse=True)
+def _ninguna_prueba_sale_de_sirius_de_verdad() -> Iterator[None]:
+    """Salir de Sirius cuelga toda conexión que se abra después (ADR-255), y una ventana que
+    se está cerrando, hasta que se cierra de verdad (ronda 4 de Codex sobre la #698). Una
+    prueba que saliera de verdad, o que dejara a medio cerrar una ventana con el registro
+    del proceso, dejaría sin red a las que vienen detrás: si alguna lo hace, se deshace y
+    falla aquí, en vez de fallar las otras sin que se sepa por qué."""
+    yield
+    red = sys.modules.get("sirius.infrastructure.network")
+    if red is None:
+        return
+    registro = red._REGISTRY
+    salio, a_medio_cerrar = registro._final, registro._closing
+    registro._final, registro._closing = False, 0
+    if salio:
+        pytest.fail("Esta prueba salió de Sirius de verdad: apunta `hang_up_all`, no lo llames.")
+    if a_medio_cerrar:
+        pytest.fail("Esta prueba dejó a medio cerrar una ventana con el registro del proceso.")

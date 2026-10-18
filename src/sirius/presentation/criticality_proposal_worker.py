@@ -11,6 +11,8 @@ proposes (M21a, ADR-130); the only write remains an explicit
 
 from __future__ import annotations
 
+import contextlib
+
 from PySide6.QtCore import QObject, QRunnable, Signal
 
 from sirius.application.propose_criticality import ProposeCriticalityUseCase
@@ -21,7 +23,11 @@ _logger = get_logger(__name__)
 
 
 class CriticalityProposalWorkerSignals(QObject):
-    """Signals emitted by ``CriticalityProposalWorker``."""
+    """Signals emitted by ``CriticalityProposalWorker``.
+
+    If Sirius closed before the worker finished, the signal is dropped instead of
+    printing a traceback (ADR-253).
+    """
 
     #: Emitted once ``run()`` finishes, carrying the ``kind``/``item_id`` it
     #: was asked about — so a caller can discard a proposal for a selection
@@ -56,6 +62,8 @@ class CriticalityProposalWorker(QRunnable):
                 self._item_id,
                 type(exc).__name__,
             )
-            self.signals.finished.emit(self._kind, self._item_id, None)
+            with contextlib.suppress(RuntimeError):
+                self.signals.finished.emit(self._kind, self._item_id, None)
         else:
-            self.signals.finished.emit(self._kind, self._item_id, proposal)
+            with contextlib.suppress(RuntimeError):
+                self.signals.finished.emit(self._kind, self._item_id, proposal)

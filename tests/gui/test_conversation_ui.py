@@ -1,8 +1,11 @@
+import contextlib
 import itertools
 import threading
+import time
 from collections.abc import Iterable
 from pathlib import Path
 
+import httpx
 import pytest
 from PySide6.QtCore import QRect, Qt
 from PySide6.QtWidgets import (
@@ -36,6 +39,8 @@ from sirius.application.rank_relevant_knowledge import RankRelevantKnowledgeUseC
 from sirius.application.send_message import SendMessageUseCase
 from sirius.composition_root import build_conversation_dependencies
 from sirius.domain.conversation import Conversation, Message, MessageRole, MessageStatus
+from sirius.infrastructure.network import ConnectionRegistry, http_client
+from sirius.ports.connections import ConnectionCloser
 from sirius.ports.conversation_repository import ConversationRepository
 from sirius.ports.llm import (
     LLMCancelled,
@@ -75,7 +80,9 @@ def _bootstrapped_database(database_path: Path) -> Path:
     return database_path
 
 
-def _build_window(database_path: Path) -> MainWindow:
+def _build_window(
+    database_path: Path, *, connections: ConnectionCloser | None = None
+) -> MainWindow:
     dependencies = build_conversation_dependencies(
         database_path, database_path.parent / "backups", secret_store=FakeSecretStore()
     )
@@ -107,6 +114,7 @@ def _build_window(database_path: Path) -> MainWindow:
         export_structured_use_case=dependencies.export_structured_use_case,
         historical_projects_use_case=dependencies.historical_projects_use_case,
         close_database_connections=dependencies.close_database_connections,
+        connections=connections,
         show_warning=lambda title, text: None,
         show_information=lambda title, text: None,
     )
@@ -653,6 +661,105 @@ def test_closing_while_streaming_requests_cancellation_and_closes_once_done(
     conversation = conversation_repository.get_or_create_main_conversation()
     persisted = conversation_repository.list_messages(conversation.id)
     assert [m.content for m in persisted] == ["hola", "parcial"]
+
+
+@pytest.mark.gui
+def test_cerrar_mientras_envia_cuelga_lo_demas_al_pedir_cerrar(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """Ronda 3 de Codex sobre la #698: el cierre se aplaza mientras acaba el envío, y lo que
+    otros trabajos pedían por la red seguía hasta su tope, porque se colgaba al cerrar de
+    verdad. Ahora se cuelga al pedir cerrar, y el envío, que se cancela antes, acaba
+    cancelado y no fallido (ADR-255)."""
+    # Aquí y no arriba: hay sondas que importan este módulo en otro proceso, sin las
+    # rutas de las pruebas.
+    from servidor_mudo import ServidorMudo
+
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    registro = ConnectionRegistry()
+    window = _build_window(database_path, connections=registro)
+    qtbot.addWidget(window)
+    window.show()
+    provider = _BlockingUntilReleasedProvider()
+    _swap_send_message_use_case(window, database_path, provider)
+    servidor = ServidorMudo()
+    otra: list[float] = []
+
+    def pide_otra_cosa() -> None:
+        cliente = http_client(registry=registro, timeout=httpx.Timeout(10.0), trust_env=False)
+        with contextlib.suppress(httpx.HTTPError):
+            cliente.get(f"http://127.0.0.1:{servidor.puerto}/api/embed")
+        otra.append(time.perf_counter())
+
+    hilo = threading.Thread(target=pide_otra_cosa, daemon=True)
+    try:
+        window.message_input.setText("hola")
+        window.send_button.click()
+        qtbot.waitUntil(lambda: window.message_list.count() == 2, timeout=5000)
+        hilo.start()
+        qtbot.waitUntil(lambda: bool(servidor.aceptadas), timeout=5000)
+
+        empieza = time.perf_counter()
+        window.close()
+        hilo.join(timeout=3)
+
+        # La otra petición cayó al pedir cerrar, con el cierre aún aplazado por el envío.
+        assert otra, "la otra petición seguía en vuelo"
+        assert otra[0] - empieza < 1
+        assert window.isVisible() is True
+
+        provider.release()
+        qtbot.waitUntil(lambda: not window.isVisible(), timeout=5000)
+    finally:
+        provider.release()
+        servidor.cierra()
+
+    conversation_repository = build_sqlite_conversation_repository(database_path)
+    conversation = conversation_repository.get_or_create_main_conversation()
+    persisted = conversation_repository.list_messages(conversation.id)
+    assert [(m.content, m.status) for m in persisted] == [
+        ("hola", MessageStatus.COMPLETED),
+        ("parcial", MessageStatus.CANCELLED),
+    ]
+
+
+@pytest.mark.gui
+def test_mientras_espera_para_cerrar_cuelga_lo_que_se_abre_y_al_cerrar_ya_no(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """Ronda 4 de Codex sobre la #698: lo que empezaba a pedir por la red mientras el cierre
+    esperaba al envío no estaba abierto al colgar, y seguía hasta su tope. Hasta que la
+    ventana se cierra de verdad, se cuelga en el acto; después ya no, que tras cambiar de
+    proyecto se abre otra ventana con las mismas dependencias (ADR-255)."""
+    # Aquí y no arriba: hay sondas que importan este módulo en otro proceso, sin las
+    # rutas de las pruebas.
+    from servidor_mudo import ServidorMudo, se_cuelga_al_abrirse
+
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    registro = ConnectionRegistry()
+    window = _build_window(database_path, connections=registro)
+    qtbot.addWidget(window)
+    window.show()
+    provider = _BlockingUntilReleasedProvider()
+    _swap_send_message_use_case(window, database_path, provider)
+    servidor = ServidorMudo()
+    try:
+        window.message_input.setText("hola")
+        window.send_button.click()
+        qtbot.waitUntil(lambda: window.message_list.count() == 2, timeout=5000)
+        window.close()
+        assert window.isVisible() is True
+
+        # Se abre con el cierre aún aplazado por el envío.
+        assert se_cuelga_al_abrirse(registro, servidor)
+
+        provider.release()
+        qtbot.waitUntil(lambda: not window.isVisible(), timeout=5000)
+
+        assert not se_cuelga_al_abrirse(registro, servidor)
+    finally:
+        provider.release()
+        servidor.cierra()
 
 
 @pytest.mark.gui

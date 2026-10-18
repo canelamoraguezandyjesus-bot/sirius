@@ -8,6 +8,7 @@ espera solo a que la deje (ADR-252).
 
 from __future__ import annotations
 
+import contextlib
 import threading
 
 from PySide6.QtCore import QObject, QRunnable, Signal
@@ -46,5 +47,8 @@ class ReplyJudgeWorker(QRunnable):
         except Exception as exc:  # el juez nunca puede romper la ventana
             _logger.error("El juez se interrumpió (%s)", type(exc).__name__)
         finally:
-            self.signals.finished.emit()
+            # Si se cerró Sirius mientras puntuaba, ya no hay ventana a la que avisar. Nada al
+            # diario: puede estar cerrado ya (ADR-253).
+            with contextlib.suppress(RuntimeError):
+                self.signals.finished.emit()
             self.done.set()

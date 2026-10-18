@@ -92,11 +92,17 @@ class _Juez:
         self.puntuadas.append(reply)
         return self.notas[len(self.puntuadas) - 1]
 
-    def verdict(self, bad_idea: str, reply: str) -> TrickVerdict:
+    def verdict(
+        self, bad_idea: str, reply: str, *, should_stop: Callable[[], bool] | None = None
+    ) -> TrickVerdict:
+        del should_stop
         self.juzgadas.append((bad_idea, reply))
         return self.veredicto
 
     def cancel(self) -> None:
+        pass
+
+    def cancel_verdicts(self) -> None:
         pass
 
 
@@ -149,6 +155,20 @@ def test_el_juez_puntua_en_orden_solo_las_respuestas_de_la_0_2(tmp_path: Path) -
 
     assert juez.puntuadas == [f"Respuesta a: Mensaje {n}." for n in range(1, 4)]
     assert [nota.score for nota in sirius.reply_judge_service.scores()] == [5, 4, 3]
+
+
+def test_el_juez_no_puntua_las_respuestas_que_le_cortaron(tmp_path: Path) -> None:
+    """ADR-254: una respuesta cortada queda a medias. Puntuarla le bajaría la media sin
+    motivo, y diez cortes de E-R03-03 darían un aviso falso."""
+    juez = _Juez([5, 4])
+    _, sirius = _sirius(tmp_path, juez=juez)
+    cortada = sirius.send_message_use_case.send_message("Mensaje 1.")
+    sirius.send_message_use_case.send_message("Mensaje 2.")
+    sirius.send_message_use_case.mark_cut(cortada.sirius_message.id, "Respuesta")
+
+    sirius.reply_judge_service.judge_pending()
+
+    assert juez.puntuadas == ["Respuesta a: Mensaje 2."]
 
 
 def test_el_turno_no_llama_al_juez(tmp_path: Path) -> None:
@@ -236,7 +256,7 @@ def test_el_juez_pregunta_al_ollama_de_este_ordenador_aunque_la_charla_vaya_por_
     # El turno también pide a Ollama la huella de su pregunta (pieza F, ADR-238);
     # aquí solo cuenta lo que pide el juez.
     [(url, cuerpo)] = ollama.al_chat()
-    assert url.host in {"localhost", "127.0.0.1"}
+    assert url.host == "127.0.0.1"
     assert url.path == "/api/chat"
     assert cuerpo["model"] == "modelo-local"
     mensajes = cuerpo["messages"]
@@ -327,8 +347,10 @@ def test_el_resultado_cuenta_sus_marcas_y_las_discrepancias_del_juez(tmp_path: P
 
     assert (resultado.contrary, resultado.total) == (38, 40)
     assert not resultado.passed
-    # Discrepa de él en T01 y T02, y no dijo nada en T10, T20, T30 y T40.
-    assert resultado.judge_disagreements == 6
+    # Discrepa de él en T01 y T02; en T10, T20, T30 y T40 no dijo nada, y eso se cuenta
+    # aparte (ADR-253). Tampoco así vale para avisar: un juez que no contesta no avisa.
+    assert resultado.judge_disagreements == 2
+    assert [q.id for q in resultado.judge_silent] == ["T10", "T20", "T30", "T40"]
     assert not resultado.judge_is_reliable
 
 

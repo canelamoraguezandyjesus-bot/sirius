@@ -13,6 +13,7 @@ user with a generic, safe message.
 
 from __future__ import annotations
 
+import contextlib
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QRunnable, Signal
@@ -27,7 +28,11 @@ _GENERIC_FAILURE_MESSAGE = "No se pudo completar la operación. Inténtalo de nu
 
 
 class ExportWorkerSignals(QObject):
-    """Signals emitted by ``ExportWorker``."""
+    """Signals emitted by ``ExportWorker``.
+
+    If Sirius closed before the worker finished, the signal is dropped instead of
+    printing a traceback (ADR-253).
+    """
 
     succeeded = Signal(object)  # Path
     failed = Signal(str)
@@ -47,11 +52,14 @@ class ExportWorker(QRunnable):
             result = self._use_case.export_structured(self._destination_dir)
         except ExportError as exc:
             _logger.warning("Exportación rechazada (%s)", type(exc).__name__)
-            self.signals.failed.emit(str(exc))
+            with contextlib.suppress(RuntimeError):
+                self.signals.failed.emit(str(exc))
         except Exception as exc:  # A worker-boundary catch: report, never crash the pool thread.
             _logger.error(
                 "Exportación interrumpida por un error inesperado (%s)", type(exc).__name__
             )
-            self.signals.failed.emit(_GENERIC_FAILURE_MESSAGE)
+            with contextlib.suppress(RuntimeError):
+                self.signals.failed.emit(_GENERIC_FAILURE_MESSAGE)
         else:
-            self.signals.succeeded.emit(result)
+            with contextlib.suppress(RuntimeError):
+                self.signals.succeeded.emit(result)

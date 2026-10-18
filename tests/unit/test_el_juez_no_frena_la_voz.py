@@ -231,6 +231,40 @@ def test_cortar_al_juez_no_corta_las_preguntas_trampa() -> None:
     assert veredicto == [TrickVerdict.DISCREPA]
 
 
+def test_cortar_los_veredictos_corta_el_que_tiene_en_marcha() -> None:
+    # Ronda 1 de Codex sobre la #698: la hoja de las preguntas trampa, al cerrarse, corta
+    # el veredicto que el juez está pidiendo (ADR-253).
+    modelo = _Modelo(espera=True, respuesta="discrepa")
+    juez = _juez(modelo)
+    fallo: list[BaseException] = []
+
+    def juzga() -> None:
+        try:
+            juez.verdict("Voy a dejar el trabajo.", "Ni de broma.")
+        except JudgeError as error:
+            fallo.append(error)
+
+    hilo = threading.Thread(target=juzga)
+    hilo.start()
+    assert modelo.empezo.wait(5)
+
+    juez.cancel_verdicts()
+    hilo.join(5)
+
+    assert not hilo.is_alive()
+    assert modelo.cortadas == [modelo.peticiones[0].operation_id]
+    assert len(fallo) == 1
+
+
+def test_si_ya_le_pidieron_parar_no_pide_el_veredicto() -> None:
+    modelo = _Modelo(respuesta="discrepa")
+
+    with pytest.raises(JudgeError):
+        _juez(modelo).verdict("Voy a dejar el trabajo.", "Ni de broma.", should_stop=lambda: True)
+
+    assert modelo.peticiones == []
+
+
 def test_cortar_al_juez_sin_nada_en_marcha_no_hace_nada() -> None:
     modelo = _Modelo()
     juez = _juez(modelo)

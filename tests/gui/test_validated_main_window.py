@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import threading
+import time
 from pathlib import Path
 from typing import cast
 
+import openai
 import pytest
 from PySide6.QtCore import QRunnable, QThreadPool
 from pytestqt.qtbot import QtBot
 
+from sirius.adapters.llm.openai_credential_validator import OpenAICredentialValidator
 from sirius.adapters.persistence.database import build_engine
 from sirius.adapters.persistence.models import Base
 from sirius.adapters.persistence.sqlite_conversation_repository import (
@@ -21,9 +25,12 @@ from sirius.adapters.persistence.sqlite_project_repository import build_sqlite_p
 from sirius.adapters.secrets.fake import FakeSecretStore
 from sirius.application.validate_and_save_api_key import ValidateAndSaveApiKeyUseCase
 from sirius.composition_root import build_conversation_dependencies
+from sirius.infrastructure.network import ConnectionRegistry, openai_client
+from sirius.ports.connections import ConnectionCloser
 from sirius.ports.credential_validation import (
     CredentialValidationError,
     CredentialValidationKind,
+    CredentialValidator,
 )
 from sirius.presentation.validated_main_window import ValidatedMainWindow
 
@@ -67,8 +74,10 @@ def _bootstrapped_database(database_path: Path) -> Path:
 
 def _build_window(
     database_path: Path,
-    validator: _RecordingValidator,
+    validator: CredentialValidator,
     secret_store: FakeSecretStore,
+    *,
+    connections: ConnectionCloser | None = None,
 ) -> ValidatedMainWindow:
     dependencies = build_conversation_dependencies(
         database_path,
@@ -107,6 +116,7 @@ def _build_window(
         export_structured_use_case=dependencies.export_structured_use_case,
         historical_projects_use_case=dependencies.historical_projects_use_case,
         close_database_connections=dependencies.close_database_connections,
+        connections=connections,
         show_warning=lambda title, text: None,
         show_information=lambda title, text: None,
     )
@@ -160,3 +170,113 @@ def test_rejected_key_is_not_saved_and_safe_message_is_shown(
     assert not window._api_key_settings_use_case.has_key()
     assert window.api_key_input.text() == ""
     assert window.key_feedback_label.text() == "La clave no es válida."
+
+
+@pytest.mark.gui
+def test_cerrar_mientras_valida_cuelga_la_peticion_y_no_espera_a_su_tope(
+    qtbot: QtBot, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ronda 3 de Codex sobre la #698: el cierre se aplazaba hasta que acabara la
+    validación, sin colgarla, y ni llegaba a la salida: la petición a OpenAI seguía hasta su
+    tope de 10 s. Con el validador de verdad, contra un servidor que acepta y no contesta
+    (ADR-255)."""
+    # Aquí y no arriba: hay sondas que importan este módulo en otro proceso, sin las
+    # rutas de las pruebas.
+    from servidor_mudo import ServidorMudo, quita_los_proxies
+
+    quita_los_proxies(monkeypatch)
+    servidor = ServidorMudo()
+    registro = ConnectionRegistry()
+    try:
+        validator = OpenAICredentialValidator(
+            lambda credential: openai_client(
+                registry=registro,
+                api_key=credential,
+                base_url=f"http://127.0.0.1:{servidor.puerto}/v1",
+                max_retries=0,
+                timeout=10.0,
+            )
+        )
+        window = _build_window(
+            _bootstrapped_database(tmp_path / "sirius.db"),
+            validator,
+            FakeSecretStore(),
+            connections=registro,
+        )
+        window._thread_pool = QThreadPool()
+        qtbot.addWidget(window)
+        window.show()
+        window.api_key_input.setText("sk-candidate")
+        window.model_input.setText("gpt-model")
+        window._save_api_key()
+        qtbot.waitUntil(lambda: bool(servidor.aceptadas), timeout=5000)
+
+        empieza = time.perf_counter()
+        window.close()
+        qtbot.waitUntil(lambda: not window.isVisible(), timeout=3000)
+
+        assert time.perf_counter() - empieza < 1
+        assert window._api_key_settings_use_case.has_key() is False
+    finally:
+        servidor.cierra()
+
+
+@pytest.mark.gui
+def test_cerrar_antes_de_que_la_validacion_conecte_la_cuelga_al_conectar(
+    qtbot: QtBot, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ronda 4 de Codex sobre la #698: si se pedía cerrar con la conexión de la validación
+    aún abriéndose, colgar no la encontraba, y el cierre volvía a esperar a su tope de 10 s.
+    Hasta que la ventana se cierra de verdad, lo que se abre se cuelga en el acto; después
+    ya no (ADR-255)."""
+    # Aquí y no arriba: hay sondas que importan este módulo en otro proceso, sin las
+    # rutas de las pruebas.
+    from servidor_mudo import ServidorMudo, quita_los_proxies, se_cuelga_al_abrirse
+
+    quita_los_proxies(monkeypatch)
+    servidor = ServidorMudo()
+    registro = ConnectionRegistry()
+    abriendose = threading.Event()
+    sigue = threading.Event()
+
+    def cliente_que_tarda_en_conectar(credential: str) -> openai.OpenAI:
+        cliente = openai_client(
+            registry=registro,
+            api_key=credential,
+            base_url=f"http://127.0.0.1:{servidor.puerto}/v1",
+            max_retries=0,
+            timeout=10.0,
+        )
+        # La primera vez, el SDK carga aquí sus recursos, casi un segundo que no es del cierre.
+        _ = cliente.models
+        abriendose.set()
+        sigue.wait(timeout=5)
+        return cliente
+
+    try:
+        window = _build_window(
+            _bootstrapped_database(tmp_path / "sirius.db"),
+            OpenAICredentialValidator(cliente_que_tarda_en_conectar),
+            FakeSecretStore(),
+            connections=registro,
+        )
+        window._thread_pool = QThreadPool()
+        qtbot.addWidget(window)
+        window.show()
+        window.api_key_input.setText("sk-candidate")
+        window.model_input.setText("gpt-model")
+        window._save_api_key()
+        assert abriendose.wait(timeout=5)
+
+        empieza = time.perf_counter()
+        window.close()
+        sigue.set()
+        qtbot.waitUntil(lambda: not window.isVisible(), timeout=3000)
+
+        assert time.perf_counter() - empieza < 1
+        assert servidor.aceptadas, "la validación tenía que llegar a conectar"
+        assert window._api_key_settings_use_case.has_key() is False
+        assert not se_cuelga_al_abrirse(registro, servidor)
+    finally:
+        sigue.set()
+        servidor.cierra()

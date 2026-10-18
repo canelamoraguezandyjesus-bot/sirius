@@ -14,6 +14,7 @@ from typing import Protocol, cast
 import openai
 
 from sirius.infrastructure.logging import get_logger
+from sirius.infrastructure.network import openai_client
 from sirius.ports.credential_validation import (
     CredentialValidationError,
     CredentialValidationKind,
@@ -37,7 +38,7 @@ ClientFactory = Callable[[str], _OpenAIClient]
 def _default_client_factory(credential: str) -> _OpenAIClient:
     return cast(
         _OpenAIClient,
-        openai.OpenAI(api_key=credential, max_retries=0, timeout=10.0),
+        openai_client(api_key=credential, max_retries=0, timeout=10.0),
     )
 
 

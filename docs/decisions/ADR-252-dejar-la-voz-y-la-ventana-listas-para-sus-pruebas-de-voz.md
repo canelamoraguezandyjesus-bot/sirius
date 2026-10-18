@@ -283,3 +283,13 @@ primera entrega:
   Ollama no manda nada mientras lee la pregunta, y la voz esperaba a un juez que se creía
   cortado (H-252).
 - lo hace cumplir: `tests/unit/test_el_juez_no_frena_la_voz.py`
+
+## Revisión externa
+
+Entró en la PR #692, con lo de ADR-247 a ADR-250, y su alcance se sumó al de allí para
+la ronda 3, escrito antes de pedirla.
+
+**La ronda limpia.** Ronda 3, sobre `54b208f0`, preguntando si el enfoque está mal:
+«Didn't find any major issues», del conector, el 17-10-2026. Con ella y Quality en verde
+se fusionó la PR #692 (`c7c378f5`). Se anota desde la PR de ADR-253: anotarlo en su PR
+habría cambiado el head que la ronda revisó.

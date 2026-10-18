@@ -19,7 +19,7 @@ from sirius.domain.reply_judge import (
 from sirius.domain.reply_mark import MarkedReply, ReplyMark
 from sirius.infrastructure.logging import get_logger
 from sirius.ports.conversation_repository import ConversationRepository
-from sirius.ports.llm import LLMCompleted, LLMError, LLMProvider, LLMRequest
+from sirius.ports.llm import LLMCancelled, LLMCompleted, LLMError, LLMProvider, LLMRequest
 from sirius.ports.robot_conversation import (
     ConversationModeRepository,
     ConversationSummarizer,
@@ -35,6 +35,8 @@ __all__ = [
     "LLMConversationSummarizer",
     "MarkReplyUseCase",
     "ReplyJudgeService",
+    "SummaryCut",
+    "summary_operation_id",
 ]
 
 _logger = get_logger(__name__)
@@ -103,8 +105,15 @@ class ConversationSummaryService:
         self._summary_repository = summary_repository
         self._summarizer = summarizer
 
-    def maybe_summarize(self, conversation_id: int, provider: LLMProvider) -> bool:
-        """Resume si hay 18 turnos sin resumir. Devuelve si guardó un resumen."""
+    def maybe_summarize(
+        self, conversation_id: int, provider: LLMProvider, operation_id: str | None = None
+    ) -> bool:
+        """Resume si hay 18 turnos sin resumir. Devuelve si guardó un resumen.
+
+        ``operation_id`` es el del turno que acaba: la petición del resumen lleva
+        ``summary_operation_id`` de él, y cortar ese turno la corta también. Un resumen
+        cortado no guarda nada, y lo hace el turno siguiente (ADR-254).
+        """
         previous = self._summary_repository.latest(conversation_id)
         since = previous.up_to_sequence if previous is not None else 0
         unsummarized = [
@@ -116,8 +125,12 @@ class ConversationSummaryService:
         if not to_summarize:
             return False
         text = summary_input(previous.content if previous is not None else None, to_summarize)
+        request_id = summary_operation_id(operation_id) if operation_id is not None else None
         try:
-            content = self._summarizer.summarize(text, provider).strip()
+            content = self._summarizer.summarize(text, provider, request_id).strip()
+        except SummaryCut:
+            _logger.info("Le cortaron mientras resumía: lo resume el turno siguiente")
+            return False
         except Exception as exc:  # resumir nunca puede romper la charla
             _logger.warning("No se pudo resumir la charla (%s)", type(exc).__name__)
             return False
@@ -186,6 +199,8 @@ class ReplyJudgeService:
         return is_low([judged.score for judged in self._repository.judge_scores()])
 
 
+_SUMMARY_NOT_FINISHED = "El resumen no terminó."
+
 _SUMMARY_INSTRUCTIONS = (
     "Resume esta charla entre Sirius y su dueño en español, en pocas líneas y en tercera "
     "persona. Conserva nombres, fechas, lo que se decidió y lo que quedó pendiente. No "
@@ -193,12 +208,22 @@ _SUMMARY_INSTRUCTIONS = (
 )
 
 
+def summary_operation_id(operation_id: str) -> str:
+    """La operación del resumen que se pide al acabar el turno ``operation_id``: cortar el
+    turno corta también su resumen, y lo nuevo no espera a él (ADR-254)."""
+    return f"resumen-{operation_id}"
+
+
+class SummaryCut(RuntimeError):
+    """Le cortaron al modelo el resumen a mitad: no se guarda nada (ADR-254)."""
+
+
 class LLMConversationSummarizer:
     """Resume con el mismo modelo que conversa: la charla no sale del ordenador."""
 
-    def summarize(self, text: str, provider: LLMProvider) -> str:
+    def summarize(self, text: str, provider: LLMProvider, operation_id: str | None = None) -> str:
         request = LLMRequest(
-            operation_id=f"resumen-{uuid.uuid4()}",
+            operation_id=operation_id or summary_operation_id(str(uuid.uuid4())),
             instructions=_SUMMARY_INSTRUCTIONS,
             input_text=text,
         )
@@ -207,5 +232,6 @@ class LLMConversationSummarizer:
                 return event.text
             if isinstance(event, LLMError):
                 raise RuntimeError(event.message)
-        msg = "El resumen no terminó."
-        raise RuntimeError(msg)
+            if isinstance(event, LLMCancelled):
+                raise SummaryCut(_SUMMARY_NOT_FINISHED)
+        raise RuntimeError(_SUMMARY_NOT_FINISHED)

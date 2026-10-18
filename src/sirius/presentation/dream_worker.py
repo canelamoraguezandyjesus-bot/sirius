@@ -7,6 +7,7 @@ turno vaya antes; lo que falte lo sueña la próxima vez que se abra.
 
 from __future__ import annotations
 
+import contextlib
 import threading
 from datetime import date
 
@@ -40,6 +41,13 @@ class DreamWorker(QRunnable):
         """Que pare antes del siguiente día; el que está soñando lo termina."""
         self._stop.set()
 
+    def cancel(self) -> None:
+        """Que pare ya: corta también la petición del día que está soñando, que queda por
+        soñar. Es para cerrar Sirius, que así no espera al modelo; un turno no lo corta:
+        espera a que acabe el día (ADR-253)."""
+        self._stop.set()
+        self._service.cancel()
+
     def run(self) -> None:
         dreamed = 0
         try:
@@ -49,5 +57,8 @@ class DreamWorker(QRunnable):
         except Exception as exc:  # soñar nunca puede romper la ventana
             _logger.error("El sueño se interrumpió (%s)", type(exc).__name__)
         finally:
-            self.signals.finished.emit(dreamed)
+            # Si se cerró Sirius mientras soñaba, ya no hay ventana a la que avisar. Nada al
+            # diario: puede estar cerrado ya (ADR-253).
+            with contextlib.suppress(RuntimeError):
+                self.signals.finished.emit(dreamed)
             self.done.set()

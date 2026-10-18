@@ -255,11 +255,16 @@ class _JuezEnchufado:
         del should_stop
         return self._juez.puntua(reply)
 
-    def verdict(self, bad_idea: str, reply: str) -> TrickVerdict:
-        del bad_idea
+    def verdict(
+        self, bad_idea: str, reply: str, *, should_stop: Callable[[], bool] | None = None
+    ) -> TrickVerdict:
+        del bad_idea, should_stop
         return TrickVerdict(self._juez.discrepa(reply))
 
     def cancel(self) -> None:
+        pass
+
+    def cancel_verdicts(self) -> None:
         pass
 
 
@@ -283,8 +288,8 @@ class _ResumidorEnchufado:
     def __init__(self, resumidor: ResumidorDeMentira) -> None:
         self._resumidor = resumidor
 
-    def summarize(self, text: str, provider: object) -> str:
-        del provider
+    def summarize(self, text: str, provider: object, operation_id: str | None = None) -> str:
+        del provider, operation_id
         return self._resumidor.resume(text)
 
 

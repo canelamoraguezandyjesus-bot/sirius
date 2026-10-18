@@ -7,12 +7,14 @@ propietario, EV-023). Este adaptador habla con el Ollama de esta máquina por
 
 Lo que garantiza por construcción:
 
-- **Solo va a este ordenador.** La dirección es ``http://localhost:11434``,
+- **Solo va a este ordenador.** La dirección es ``http://127.0.0.1:11434``,
   absoluta en cada petición, y ningún parámetro ni ajuste la cambia. El
   cliente no lee los proxies del sistema (``trust_env=False``): un proxy
   configurado en Windows podría sacar de la máquina hasta lo que va a
-  ``localhost``. Las pruebas enchufan un transporte de mentira, nunca otra
+  ``127.0.0.1``. Las pruebas enchufan un transporte de mentira, nunca otra
   dirección.
+  Es ``127.0.0.1`` y no ``localhost``: en Windows, ``localhost`` prueba antes
+  ``::1``, y Ollama escucha de serie solo en ``127.0.0.1`` (incidencia #696).
 - **Un contexto que quepa.** Lo que no cabe en el contexto del modelo se
   recorta, y el que trae Ollama por defecto puede ser más corto que la
   semilla, sus ejemplos y la charla juntos. Se pide uno explícito,
@@ -58,6 +60,7 @@ from sirius.adapters.llm.memory_suggestion import (
     longest_prefix_as_suffix,
 )
 from sirius.infrastructure.logging import get_logger
+from sirius.infrastructure.network import http_client
 from sirius.ports.llm import (
     LLMCancelled,
     LLMCompleted,
@@ -83,13 +86,13 @@ __all__ = [
 _logger = get_logger(__name__)
 
 #: La única dirección a la que puede ir la charla.
-OLLAMA_CHAT_URL = "http://localhost:11434/api/chat"
+OLLAMA_CHAT_URL = "http://127.0.0.1:11434/api/chat"
 
 #: Dónde dice Ollama qué modelos tiene instalados.
-OLLAMA_TAGS_URL = "http://localhost:11434/api/tags"
+OLLAMA_TAGS_URL = "http://127.0.0.1:11434/api/tags"
 
 #: Dónde dice Ollama qué sabe hacer un modelo (ADR-247).
-OLLAMA_SHOW_URL = "http://localhost:11434/api/show"
+OLLAMA_SHOW_URL = "http://127.0.0.1:11434/api/show"
 
 #: Contexto que se pide al modelo si los ajustes no dicen otro.
 DEFAULT_NUM_CTX = 8192
@@ -218,7 +221,7 @@ class _ThinkFilter:
 class OllamaChatProvider:
     """``LLMProvider`` que conversa con un modelo del Ollama de este ordenador."""
 
-    #: Solo va a ``localhost``, una dirección que no se puede cambiar
+    #: Solo va a ``127.0.0.1``, una dirección que no se puede cambiar
     #: (``sirius.ports.llm.runs_on_this_computer``).
     runs_on_this_computer = True
 
@@ -233,7 +236,7 @@ class OllamaChatProvider:
         self._model = model
         self._num_ctx = num_ctx
         self._num_predict = num_predict
-        self._client = httpx.Client(
+        self._client = http_client(
             timeout=_TIMEOUT,
             limits=_ONE_CONNECTION_PER_REQUEST,
             transport=transport,
@@ -385,21 +388,17 @@ class OllamaChatProvider:
                 with self._post(request) as r:
                     yield from self._answer(request, r)
             except httpx.ConnectError:
-                _logger.error("Operación %s: Ollama no contesta", request.operation_id)
+                self._log_error(request, "Ollama no contesta")
                 yield _error(LLMErrorKind.CONNECTION)
             except httpx.TimeoutException:
-                _logger.error("Operación %s: Ollama tardó demasiado", request.operation_id)
+                self._log_error(request, "Ollama tardó demasiado")
                 yield _error(LLMErrorKind.TIMEOUT)
             except httpx.HTTPError as exc:
                 if self._is_cancelled(request.operation_id):
                     # La colgó cancel(): no es un fallo, es el corte que se pidió.
                     yield LLMCancelled(partial_text="")
                     return
-                _logger.error(
-                    "Operación %s: fallo de red con Ollama (%s)",
-                    request.operation_id,
-                    type(exc).__name__,
-                )
+                self._log_error(request, "fallo de red con Ollama (%s)", type(exc).__name__)
                 yield _error(LLMErrorKind.UNKNOWN)
         finally:
             with self._lock:
@@ -408,18 +407,16 @@ class OllamaChatProvider:
 
     def _answer(self, request: LLMRequest, r: httpx.Response) -> Iterable[LLMStreamEvent]:
         if r.status_code == httpx.codes.NOT_FOUND:
-            _logger.error(
-                "Ollama no tiene el modelo de la charla (%s): %s",
-                self._model,
+            self._log_error(
+                request,
+                "Ollama no tiene el modelo de la charla: %s",
                 _category(_what_ollama_said(r)),
             )
             yield _error(LLMErrorKind.CONFIGURATION)
             return
         if r.status_code >= httpx.codes.BAD_REQUEST:
-            _logger.error(
-                "Ollama respondió %s a la charla: %s",
-                r.status_code,
-                _category(_what_ollama_said(r)),
+            self._log_error(
+                request, "Ollama respondió %s: %s", r.status_code, _category(_what_ollama_said(r))
             )
             yield _error(LLMErrorKind.UNKNOWN)
             return
@@ -451,17 +448,17 @@ class OllamaChatProvider:
                     continue
                 try:
                     chunk = json.loads(line)
-                except json.JSONDecodeError:
+                except json.JSONDecodeError as exc:
+                    self._log_invalid(request, type(exc).__name__)
                     yield _error(LLMErrorKind.INVALID_RESPONSE, partial())
                     return
                 if not isinstance(chunk, dict):
+                    self._log_invalid(request, type(chunk).__name__)
                     yield _error(LLMErrorKind.INVALID_RESPONSE, partial())
                     return
                 if "error" in chunk:
-                    _logger.error(
-                        "Operación %s: Ollama devolvió un error: %s",
-                        request.operation_id,
-                        _category(str(chunk["error"])),
+                    self._log_error(
+                        request, "Ollama devolvió un error: %s", _category(str(chunk["error"]))
                     )
                     yield _error(LLMErrorKind.UNKNOWN, partial())
                     return
@@ -481,6 +478,7 @@ class OllamaChatProvider:
                         yield LLMTextDelta(text=rest)
                     text = "".join(accumulated)
                     if not text.strip():
+                        self._log_invalid(request, "vacía")
                         yield _error(LLMErrorKind.INVALID_RESPONSE)
                         return
                     yield LLMCompleted(
@@ -496,15 +494,25 @@ class OllamaChatProvider:
                 yield LLMCancelled(partial_text=partial())
                 return
             # La rama de fuera, en ``stream_response``, no llega a verlo (ronda 1 de ADR-248).
-            _logger.error(
-                "Operación %s: fallo de red con Ollama a mitad de respuesta (%s)",
-                request.operation_id,
-                type(exc).__name__,
+            self._log_error(
+                request, "fallo de red con Ollama a mitad de respuesta (%s)", type(exc).__name__
             )
             timed_out = isinstance(exc, httpx.TimeoutException)
             yield _error(LLMErrorKind.TIMEOUT if timed_out else LLMErrorKind.CONNECTION, partial())
             return
+        self._log_invalid(request, "sin final")
         yield _error(LLMErrorKind.INVALID_RESPONSE, partial())
+
+    def _log_error(self, request: LLMRequest, what: str, *args: object) -> None:
+        """Una línea del diario por fallo, con la operación y el modelo (incidencia #696).
+        Nunca texto de Ollama ni de la charla: solo lo que dicen ``what`` y ``args``, que son
+        códigos, clases y categorías (ADR-248)."""
+        _logger.error("Operación %s, modelo %s: " + what, request.operation_id, self._model, *args)
+
+    def _log_invalid(self, request: LLMRequest, kind: str) -> None:
+        """Una respuesta no válida, con su clase: una línea que no es JSON, una que no es un
+        objeto, una respuesta vacía o una que acaba sin ``done`` (incidencia #696)."""
+        self._log_error(request, "Ollama devolvió una respuesta no válida (%s)", kind)
 
 
 def _count(value: object) -> int:
@@ -531,7 +539,7 @@ def list_installed_models(transport: httpx.BaseTransport | None = None) -> tuple
     dos y tres.
     """
     try:
-        with httpx.Client(timeout=_TIMEOUT, transport=transport, trust_env=False) as client:
+        with http_client(timeout=_TIMEOUT, transport=transport, trust_env=False) as client:
             response = client.get(OLLAMA_TAGS_URL)
             response.raise_for_status()
             body = response.json()
@@ -560,7 +568,7 @@ def model_capabilities(model: str, transport: httpx.BaseTransport | None = None)
     (ADR-247).
     """
     try:
-        with httpx.Client(timeout=_SHOW_TIMEOUT, transport=transport, trust_env=False) as client:
+        with http_client(timeout=_SHOW_TIMEOUT, transport=transport, trust_env=False) as client:
             response = client.post(OLLAMA_SHOW_URL, json={"model": model})
             response.raise_for_status()
     except httpx.HTTPError as exc:

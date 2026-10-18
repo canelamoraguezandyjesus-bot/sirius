@@ -7,15 +7,18 @@ El trabajo de preguntar a los modelos corre aquí en el mismo hilo
 from __future__ import annotations
 
 import json
+import logging
 import random
 import threading
 import time
 from collections.abc import Iterable
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import httpx
 import pytest
+import shiboken6
 from _hojas_en_su_pantalla import (
     abre,
     cabe_en_su_pantalla,
@@ -37,7 +40,11 @@ from sirius.domain.identity import Identity, IdentityVersion
 from sirius.infrastructure.paths import resolve_paths
 from sirius.main import _build_main_window
 from sirius.ports.llm import LLMCompleted, LLMError, LLMErrorKind, LLMRequest, LLMStreamEvent
-from sirius.presentation.blind_test_dialog import BlindTestDialog
+from sirius.presentation.blind_test_dialog import (
+    BlindTestDialog,
+    BlindTestModelsWorker,
+    BlindTestWorker,
+)
 
 pytestmark = pytest.mark.gui
 
@@ -95,6 +102,9 @@ class _Entorno:
         self.elegidos: list[str] = []
         self.avisos: list[tuple[str, str]] = []
         self.informes: list[tuple[str, str]] = []
+        #: Lo que la hoja preguntó antes de cerrarse, y lo que contesta el propietario.
+        self.confirmaciones: list[tuple[str, str]] = []
+        self.cierra = True
         self._instalados = instalados
 
         def listar() -> tuple[str, ...]:
@@ -124,9 +134,14 @@ class _Entorno:
             show_warning=lambda titulo, texto: self.avisos.append((titulo, texto)),
             show_information=lambda titulo, texto: self.informes.append((titulo, texto)),
             run_worker=correr,
+            confirm=self.confirma,
         )
         qtbot.addWidget(dialogo)
         return dialogo
+
+    def confirma(self, titulo: str, texto: str) -> bool:
+        self.confirmaciones.append((titulo, texto))
+        return self.cierra
 
 
 def _marca(dialogo: BlindTestDialog, *modelos: str) -> None:
@@ -294,6 +309,7 @@ def test_cerrar_a_medias_para_las_preguntas_y_no_avisa_de_nada(qtbot: QtBot) -> 
         entorno.caso,
         show_warning=lambda titulo, texto: entorno.avisos.append((titulo, texto)),
         run_worker=pendientes.append,
+        confirm=entorno.confirma,
     )
     qtbot.addWidget(dialogo)
     pendientes.pop(0).run()  # la lista de modelos
@@ -354,7 +370,9 @@ def test_con_modelos_de_huellas_en_ollama_solo_ofrece_los_que_conversan(
     )
     try:
         dialogo = BlindTestDialog(
-            dependencias.blind_test_use_case, run_worker=lambda trabajo: trabajo.run()
+            dependencias.blind_test_use_case,
+            run_worker=lambda trabajo: trabajo.run(),
+            confirm=lambda titulo, texto: True,
         )
         qtbot.addWidget(dialogo)
 
@@ -392,7 +410,9 @@ def test_la_hoja_se_abre_sin_esperar_a_que_ollama_diga_que_modelos_tiene(
     )
     try:
         antes = time.monotonic()
-        dialogo = BlindTestDialog(dependencias.blind_test_use_case)
+        dialogo = BlindTestDialog(
+            dependencias.blind_test_use_case, confirm=lambda titulo, texto: True
+        )
         qtbot.addWidget(dialogo)
 
         assert time.monotonic() - antes < 1
@@ -412,7 +432,7 @@ def test_la_hoja_se_abre_sin_esperar_a_que_ollama_diga_que_modelos_tiene(
 def test_si_se_cierra_antes_de_saber_que_modelos_hay_la_lista_se_descarta(qtbot: QtBot) -> None:
     entorno = _Entorno(instalados=("gemma-y", "qwen-x"))
     pendientes: list[QRunnable] = []
-    dialogo = BlindTestDialog(entorno.caso, run_worker=pendientes.append)
+    dialogo = BlindTestDialog(entorno.caso, run_worker=pendientes.append, confirm=entorno.confirma)
     qtbot.addWidget(dialogo)
 
     dialogo.reject()
@@ -437,3 +457,183 @@ def test_si_preguntar_la_lista_se_rompe_lo_dice_sin_romper_la_hoja(qtbot: QtBot)
     )
     assert dialogo.model_checks == []
     assert not dialogo.start_button.isEnabled()
+
+
+# --- Lo que salió del repaso final (incidencia #696) --------------------------------
+
+#: Lo que pregunta la hoja antes de cerrarse con trabajo hecho.
+_CERRAR = (
+    "Cerrar la prueba a ciegas",
+    "Si la cierras ahora, se pierde lo que has elegido; las respuestas ya pedidas se guardan "
+    "mientras Sirius siga abierto. ¿La cierras?",
+)
+
+
+def test_cada_pregunta_empieza_arriba(qtbot: QtBot) -> None:
+    # Se quedaba bajada al pasar de pregunta, y la respuesta A quedaba fuera de la vista.
+    dialogo = _Entorno(instalados=("gemma-y", "qwen-x"), larga="qwen-x").ventana(qtbot)
+    _marca(dialogo, "qwen-x", "gemma-y")
+    dialogo.start_button.click()
+    abre(dialogo, qtbot)
+    paso = dialogo.pages.currentWidget()
+    assert isinstance(paso, QScrollArea)
+    barra = paso.verticalScrollBar()
+    barra.setValue(barra.maximum())
+    assert barra.value() > 0
+
+    dialogo.choose_letter("A")
+    dialogo.next_button.click()
+
+    assert barra.value() == 0
+
+
+def test_esc_o_la_cruz_con_respuestas_preparadas_preguntan_antes_de_cerrar(qtbot: QtBot) -> None:
+    entorno = _Entorno(instalados=("gemma-y", "qwen-x"))
+    dialogo = entorno.ventana(qtbot)
+    _marca(dialogo, "qwen-x", "gemma-y")
+    dialogo.start_button.click()
+    abre(dialogo, qtbot)
+    entorno.cierra = False
+
+    QTest.keyClick(dialogo, Qt.Key.Key_Escape)
+
+    assert entorno.confirmaciones == [_CERRAR]
+    assert dialogo.isVisible()
+    entorno.cierra = True
+    dialogo.close()
+    assert entorno.confirmaciones == [_CERRAR, _CERRAR]
+    assert not dialogo.isVisible()
+
+
+def test_esc_mientras_pide_las_respuestas_tambien_pregunta(qtbot: QtBot) -> None:
+    entorno = _Entorno(instalados=("gemma-y", "qwen-x"))
+    pendientes: list[QRunnable] = []
+    dialogo = BlindTestDialog(entorno.caso, run_worker=pendientes.append, confirm=entorno.confirma)
+    qtbot.addWidget(dialogo)
+    pendientes.pop(0).run()  # la lista de modelos
+    _marca(dialogo, "gemma-y", "qwen-x")
+    dialogo.start_button.click()
+    entorno.cierra = False
+
+    dialogo.reject()
+
+    assert entorno.confirmaciones == [_CERRAR]
+    assert dialogo._worker is not None
+
+
+def test_sin_nada_hecho_cierra_sin_preguntar(qtbot: QtBot) -> None:
+    entorno = _Entorno(instalados=("gemma-y", "qwen-x"))
+    dialogo = entorno.ventana(qtbot)
+    abre(dialogo, qtbot)
+
+    QTest.keyClick(dialogo, Qt.Key.Key_Escape)
+
+    assert entorno.confirmaciones == []
+    assert not dialogo.isVisible()
+
+
+def test_cerrar_mientras_pregunta_la_lista_deja_de_preguntar_y_no_pregunta_antes(
+    qtbot: QtBot,
+) -> None:
+    # Ronda 1 de Codex sobre la PR #698: con «Preguntando a Ollama qué modelos tiene…» en
+    # pantalla, cerrar dejaba seguir las peticiones a Ollama, una por modelo. Aún no se ha
+    # elegido nada, así que cierra sin preguntar.
+    entorno = _Entorno(instalados=("gemma-y", "mistral-z", "qwen-x"))
+    pendientes: list[QRunnable] = []
+    dialogo = BlindTestDialog(entorno.caso, run_worker=pendientes.append, confirm=entorno.confirma)
+    qtbot.addWidget(dialogo)
+    abre(dialogo, qtbot)
+    preguntados: list[str] = []
+
+    def sabe_y_la_cierran(nombre: str) -> tuple[str, ...]:
+        preguntados.append(nombre)
+        if len(preguntados) == 1:
+            dialogo.reject()  # Esc o la cruz, con la lista a medias
+        return ("completion",)
+
+    entorno.caso._model_capabilities = sabe_y_la_cierran
+    [lista] = pendientes
+    lista.run()
+
+    assert preguntados == ["gemma-y"]
+    assert entorno.confirmaciones == []
+    assert not dialogo.isVisible()
+    assert dialogo.model_checks == []
+
+
+def test_cerrar_a_mitad_corta_la_respuesta_en_curso(
+    qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    entorno = _Entorno(instalados=("gemma-y", "qwen-x"))
+    cortes: list[bool] = []
+    monkeypatch.setattr(entorno.caso, "cancel", lambda: cortes.append(True), raising=False)
+    pendientes: list[QRunnable] = []
+    dialogo = BlindTestDialog(entorno.caso, run_worker=pendientes.append, confirm=entorno.confirma)
+    qtbot.addWidget(dialogo)
+    pendientes.pop(0).run()  # la lista de modelos
+    _marca(dialogo, "gemma-y", "qwen-x")
+    dialogo.start_button.click()
+
+    dialogo.reject()
+
+    assert cortes == [True]
+
+
+@pytest.mark.parametrize("desenlace", ["contesta", "falla", "se rompe"])
+@pytest.mark.parametrize("trabajo", ["las respuestas", "la lista de modelos"])
+def test_el_aviso_final_no_falla_si_la_hoja_ya_no_existe(
+    trabajo: str, desenlace: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Al cerrar Sirius con un trabajo en marcha salía «Signal source has been deleted»:
+    # acabe como acabe, con la hoja o con cualquiera de los dos avisos de fallo.
+    entorno = _Entorno(instalados=("gemma-y", "qwen-x"))
+    trabajador: BlindTestWorker | BlindTestModelsWorker
+    if trabajo == "las respuestas":
+        trabajador = BlindTestWorker(entorno.caso, ["gemma-y", "qwen-x"])
+        nombre = "prepare"
+    else:
+        trabajador = BlindTestModelsWorker(entorno.caso)
+        nombre = "installed_models"
+    original = getattr(entorno.caso, nombre)
+
+    def y_se_cierra_sirius(*args: Any, **kwargs: Any) -> Any:
+        hecho = original(*args, **kwargs) if desenlace == "contesta" else None
+        shiboken6.delete(trabajador.signals)
+        if desenlace == "falla":
+            raise BlindTestError("Ollama no contesta.")
+        if desenlace == "se rompe":
+            raise OSError("algo que nadie esperaba")
+        return hecho
+
+    monkeypatch.setattr(entorno.caso, nombre, y_se_cierra_sirius)
+
+    trabajador.run()
+
+
+class _Apunta(logging.Handler):
+    """Lo que apunta al diario la hoja, leído de su registrador: con el diario de Sirius ya
+    configurado en el mismo proceso, ``sirius`` no propaga (ADR-248)."""
+
+    def __init__(self) -> None:
+        super().__init__(logging.DEBUG)
+        self.lineas: list[str] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.lineas.append(record.getMessage())
+
+
+def test_el_aviso_de_progreso_tampoco_falla_si_la_hoja_ya_no_existe() -> None:
+    # Como el aviso final: si Sirius se cerró, el de progreso tampoco tiene a quién avisar,
+    # y no por eso se ha interrumpido nada (#696).
+    entorno = _Entorno(instalados=("gemma-y", "qwen-x"))
+    trabajador = BlindTestWorker(entorno.caso, ["gemma-y", "qwen-x"])
+    diario = _Apunta()
+    registrador = logging.getLogger("sirius.presentation.blind_test_dialog")
+    registrador.addHandler(diario)
+    shiboken6.delete(trabajador.signals)
+    try:
+        trabajador.run()
+    finally:
+        registrador.removeHandler(diario)
+
+    assert diario.lineas == []

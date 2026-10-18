@@ -45,22 +45,29 @@ class LLMReplyJudge:
     ) -> None:
         self._identity_repository = identity_repository
         self._local_provider = local_provider
-        #: Las notas que está pidiendo, cada una con su proveedor, para poder cortarlas. Los
-        #: veredictos de las preguntas trampa no: esas las pide él a propósito.
+        #: Las notas que está pidiendo, cada una con su proveedor, para poder cortarlas.
         self._scoring: dict[str, LLMProvider] = {}
+        #: Los veredictos de las preguntas trampa que está pidiendo. Los corta su hoja al
+        #: cerrarse (``cancel_verdicts``), no un turno de voz: esos los pide él (ADR-253).
+        self._judging: dict[str, LLMProvider] = {}
         self._lock = threading.Lock()
 
     def cancel(self) -> None:
         """Corta las notas que está pidiendo: un turno de voz no las espera (ADR-252). Esas
         respuestas se quedan sin nota y se puntúan la vez siguiente."""
-        with self._lock:
-            scoring = list(self._scoring.items())
-        for operation_id, provider in scoring:
-            provider.cancel(operation_id)
+        _cut(self._lock, self._scoring)
+
+    def cancel_verdicts(self) -> None:
+        """Corta los veredictos que está pidiendo: lo pide la hoja de las preguntas trampa al
+        cerrarse (ADR-253). El veredicto cortado falla, como cualquier otro."""
+        _cut(self._lock, self._judging)
 
     def score(self, reply: str, *, should_stop: Callable[[], bool] | None = None) -> int:
         answer = self._ask(
-            SCORE_TASK, f"Respuesta de Sirius:\n{reply}", scoring=True, should_stop=should_stop
+            SCORE_TASK,
+            f"Respuesta de Sirius:\n{reply}",
+            in_flight=self._scoring,
+            should_stop=should_stop,
         )
         score = parse_score(answer)
         if score is None:
@@ -68,9 +75,11 @@ class LLMReplyJudge:
             raise JudgeError(msg)
         return score
 
-    def verdict(self, bad_idea: str, reply: str) -> TrickVerdict:
+    def verdict(
+        self, bad_idea: str, reply: str, *, should_stop: Callable[[], bool] | None = None
+    ) -> TrickVerdict:
         said = f"Lo que le dijo a Sirius:\n{bad_idea}\n\nLo que contestó Sirius:\n{reply}"
-        answer = self._ask(VERDICT_TASK, said)
+        answer = self._ask(VERDICT_TASK, said, in_flight=self._judging, should_stop=should_stop)
         verdict = parse_trick_verdict(answer)
         if verdict is None:
             msg = "El juez no dijo si le lleva la contraria o le da la razón."
@@ -82,11 +91,12 @@ class LLMReplyJudge:
         task: str,
         input_text: str,
         *,
-        scoring: bool = False,
+        in_flight: dict[str, LLMProvider],
         should_stop: Callable[[], bool] | None = None,
     ) -> str:
-        """Lo que contesta el modelo local a ``task``. Si es una nota (``scoring``),
-        ``cancel`` la corta, y no se pide si ``should_stop`` ya dice que pare."""
+        """Lo que contesta el modelo local a ``task``. Mientras se pide queda apuntado en
+        ``in_flight``, de donde lo corta ``cancel`` o ``cancel_verdicts``, y no se pide si
+        ``should_stop`` ya dice que pare."""
         provider = self._local_provider()
         if provider is None:
             msg = "No hay modelo local elegido para el juez."
@@ -108,20 +118,26 @@ class LLMReplyJudge:
             max_output_tokens=JUDGE_MAX_OUTPUT_TOKENS,
             may_think=False,
         )
-        if not scoring:
-            return _answer(provider, request)
         with self._lock:
             # Se mira y se apunta a la vez: quien le para pone su bandera antes de cortar,
-            # así que o la ve aquí, o el corte encuentra apuntada la nota (ADR-252).
+            # así que o la ve aquí, o el corte encuentra apuntada la petición (ADR-252).
             if should_stop is not None and should_stop():
-                msg = "Al juez le pidieron parar antes de pedir la nota."
+                msg = "Al juez le pidieron parar antes de preguntar."
                 raise JudgeError(msg)
-            self._scoring[request.operation_id] = provider
+            in_flight[request.operation_id] = provider
         try:
             return _answer(provider, request)
         finally:
             with self._lock:
-                del self._scoring[request.operation_id]
+                del in_flight[request.operation_id]
+
+
+def _cut(lock: threading.Lock, in_flight: dict[str, LLMProvider]) -> None:
+    """Corta, desde otro hilo, las peticiones apuntadas en ``in_flight``."""
+    with lock:
+        pending = list(in_flight.items())
+    for operation_id, provider in pending:
+        provider.cancel(operation_id)
 
 
 def _answer(provider: LLMProvider, request: LLMRequest) -> str:

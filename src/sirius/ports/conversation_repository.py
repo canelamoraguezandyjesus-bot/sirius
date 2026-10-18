@@ -65,7 +65,8 @@ class ConversationRepository(Protocol):
 
 class CutRecorder(Protocol):
     """Apuntar en una respuesta de Sirius ya guardada hasta dónde se oyó, si le cortaron
-    mientras la decía (ADR-245). La respuesta sigue entera."""
+    mientras la decía (ADR-245). La respuesta es lo que llevaba escrito cuando le cortaron
+    (ADR-254)."""
 
     def mark_cut(self, message_id: int, heard: str) -> Message:
         """Apunta ``heard``, lo que el propietario llegó a oír, en la respuesta

@@ -9,6 +9,7 @@ guarda hasta que él pulsa «Usar … para la charla».
 
 from __future__ import annotations
 
+import contextlib
 import threading
 from collections.abc import Callable, Sequence
 
@@ -64,21 +65,37 @@ class BlindTestWorker(QRunnable):
         self.signals = BlindTestWorkerSignals()
 
     def stop(self) -> None:
-        """Que no haga más preguntas; la que está en marcha la termina."""
+        """Que no haga más preguntas, y corta la que está en marcha (incidencia #696)."""
         self._stop.set()
+        self._use_case.cancel()
+
+    def _progress(self, done: int, total: int) -> None:
+        # Como el aviso final: si Sirius se cerró, la hoja ya no existe y no hay a quién
+        # avisar; sin esto el diario diría que se interrumpió (#696).
+        with contextlib.suppress(RuntimeError):
+            self.signals.progress.emit(done, total)
 
     def run(self) -> None:
+        sheet: BlindTestSheet | None = None
+        failure: str | None
         try:
             sheet = self._use_case.prepare(
-                self._models, on_progress=self.signals.progress.emit, should_stop=self._stop.is_set
+                self._models, on_progress=self._progress, should_stop=self._stop.is_set
             )
         except BlindTestError as exc:
-            self.signals.failed.emit(str(exc))
+            failure = str(exc)
         except Exception as exc:
             _logger.error("La prueba a ciegas se interrumpió (%s)", type(exc).__name__)
-            self.signals.failed.emit("La prueba a ciegas se interrumpió. Inténtalo de nuevo.")
+            failure = "La prueba a ciegas se interrumpió. Inténtalo de nuevo."
         else:
-            self.signals.succeeded.emit(sheet)
+            failure = None
+        # Si Sirius se cerró con la prueba en marcha, la hoja ya no existe y no hay a quién
+        # avisar: sin esto salía una traza roja, «Signal source has been deleted» (#696).
+        with contextlib.suppress(RuntimeError):
+            if failure is not None:
+                self.signals.failed.emit(failure)
+            else:
+                self.signals.succeeded.emit(sheet)
 
 
 class BlindTestModelsWorker(QRunnable):
@@ -88,20 +105,30 @@ class BlindTestModelsWorker(QRunnable):
     def __init__(self, use_case: BlindTestUseCase) -> None:
         super().__init__()
         self._use_case = use_case
+        self._stop = threading.Event()
         self.signals = BlindTestWorkerSignals()
 
+    def stop(self) -> None:
+        """Que no pregunte más: cerraron la hoja (ronda 1 de Codex sobre la PR #698)."""
+        self._stop.set()
+
     def run(self) -> None:
+        offered: OfferedModels | None = None
+        failure: str | None
         try:
-            offered = self._use_case.installed_models()
+            offered = self._use_case.installed_models(should_stop=self._stop.is_set)
         except BlindTestError as exc:
-            self.signals.failed.emit(str(exc))
+            failure = str(exc)
         except Exception as exc:
             _logger.error("No se pudo saber qué modelos tiene Ollama (%s)", type(exc).__name__)
-            self.signals.failed.emit(
-                "No se pudo preguntar a Ollama qué modelos tiene. Vuelve a abrir la prueba."
-            )
+            failure = "No se pudo preguntar a Ollama qué modelos tiene. Vuelve a abrir la prueba."
         else:
-            self.signals.succeeded.emit(offered)
+            failure = None
+        with contextlib.suppress(RuntimeError):  # la hoja ya no existe (#696)
+            if failure is not None:
+                self.signals.failed.emit(failure)
+            else:
+                self.signals.succeeded.emit(offered)
 
 
 class _AnswerText(QLabel):
@@ -135,12 +162,14 @@ class BlindTestDialog(QDialog):
         show_warning: Callable[[str, str], None] | None = None,
         show_information: Callable[[str, str], None] | None = None,
         run_worker: Callable[[QRunnable], None] | None = None,
+        confirm: Callable[[str, str], bool] | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle("Prueba a ciegas")
         self._use_case = use_case
         self._show_warning = show_warning or self._warning_box
+        self._confirm = confirm or self._question_box
         self._show_information = show_information or self._information_box
         self._run_worker = run_worker or QThreadPool.globalInstance().start
         self._worker: BlindTestWorker | None = None
@@ -153,7 +182,8 @@ class BlindTestDialog(QDialog):
         self.pages = QStackedWidget()
         self.pages.addWidget(scrollable(self._build_models_page()))
         self.pages.addWidget(scrollable(self._build_progress_page()))
-        self.pages.addWidget(scrollable(self._build_question_page()))
+        self._question_scroll = scrollable(self._build_question_page())
+        self.pages.addWidget(self._question_scroll)
         self.pages.addWidget(scrollable(self._build_result_page()))
         layout = QVBoxLayout(self)
         layout.addWidget(self.pages)
@@ -342,6 +372,8 @@ class BlindTestDialog(QDialog):
         last = self._index == len(self._sheet.items) - 1
         self.next_button.setText("Ver el resultado" if last else "Siguiente")
         self.next_button.setEnabled(self._index in self._choices)
+        # Cada pregunta empieza arriba: bajada, la respuesta A quedaba fuera (incidencia #696).
+        self._question_scroll.verticalScrollBar().setValue(0)
 
     def _on_option(self, button: QRadioButton) -> None:
         self._choices[self._index] = str(button.property("letter"))
@@ -416,17 +448,44 @@ class BlindTestDialog(QDialog):
         )
         self.accept()
 
+    def reject(self) -> None:
+        """Esc o la cruz: con respuestas en marcha o ya preparadas, pregunta antes de cerrar,
+        que se pierde lo hecho (incidencia #696)."""
+        working = self._worker is not None or self._sheet is not None
+        if working and not self._confirm(
+            "Cerrar la prueba a ciegas",
+            "Si la cierras ahora, se pierde lo que has elegido; las respuestas ya pedidas se "
+            "guardan mientras Sirius siga abierto. ¿La cierras?",
+        ):
+            return
+        super().reject()
+
     def done(self, result: int) -> None:
-        """Al cerrarse, a medias o no, para las preguntas pendientes, y la lista de modelos
-        que llegue después se descarta."""
+        """Al cerrarse, a medias o no, para las preguntas pendientes y lo que quede por
+        preguntar de la lista de modelos, y la lista que llegue después se descarta.
+
+        Mientras solo pregunta la lista no se pregunta antes de cerrar: aún no se ha elegido
+        nada, y no se pierde nada."""
         if self._worker is not None:
             self._worker.stop()
             self._worker = None
-        self._models_worker = None
+        if self._models_worker is not None:
+            self._models_worker.stop()
+            self._models_worker = None
         super().done(result)
 
     def _warning_box(self, title: str, text: str) -> None:
         QMessageBox.warning(self, title, text)
+
+    def _question_box(self, title: str, text: str) -> bool:
+        answer = QMessageBox.question(
+            self,
+            title,
+            text,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        return answer == QMessageBox.StandardButton.Yes
 
     def _information_box(self, title: str, text: str) -> None:
         QMessageBox.information(self, title, text)

@@ -7,12 +7,14 @@ olvidar, y al abrirse sueña los días que faltan, sin que el turno se cruce con
 
 from __future__ import annotations
 
+import json
 import threading
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Iterator, Sequence
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
+import httpx
 import pytest
 from pytestqt.qtbot import QtBot
 from sqlalchemy import update
@@ -25,6 +27,7 @@ from sirius.composition_root import ConversationDependencies, build_conversation
 from sirius.config.settings import load_settings, save_settings
 from sirius.domain.conversation import MessageRole
 from sirius.domain.facts import ProposedFact
+from sirius.domain.reply_judge import TrickVerdict
 from sirius.infrastructure.paths import resolve_paths
 from sirius.main import _build_main_window
 from sirius.ports.embeddings import EmbeddingError
@@ -55,8 +58,8 @@ class _SinHuellas:
 
 
 class _Resumidor:
-    def summarize(self, text: str, provider: LLMProvider) -> str:
-        del provider
+    def summarize(self, text: str, provider: LLMProvider, operation_id: str | None = None) -> str:
+        del provider, operation_id
         return f"Resumen: {text}"
 
 
@@ -74,11 +77,11 @@ class _ResumidorQueEspera(_Resumidor):
         self.suelta = threading.Event()
         self.resumidos: list[str] = []
 
-    def summarize(self, text: str, provider: LLMProvider) -> str:
+    def summarize(self, text: str, provider: LLMProvider, operation_id: str | None = None) -> str:
         self.empezado.set()
         self.suelta.wait(timeout=5)
         self.resumidos.append(text)
-        return super().summarize(text, provider)
+        return super().summarize(text, provider, operation_id)
 
 
 def _sirius(
@@ -230,3 +233,128 @@ def test_el_turno_espera_al_dia_que_esta_sonando_y_el_sueno_no_vuelve_entre_turn
     assert [texto for texto in resumidor.resumidos if "obra" in texto or "médico" in texto] == [
         "Él: Anteayer fui a la obra."
     ]
+
+
+class _OllamaQueEscribeDespacio:
+    """El Ollama de este ordenador, de mentira, para el sueño: cada respuesta llega a trozos
+    vacíos, uno cada 20 ms, hasta que la sueltan. Sirius deja de leerla si la corta."""
+
+    def __init__(self) -> None:
+        self.suelta = threading.Event()
+        self.preguntando = threading.Event()
+        self.pedidas = 0
+
+    def transporte(self) -> httpx.MockTransport:
+        return httpx.MockTransport(self._contesta)
+
+    def _contesta(self, peticion: httpx.Request) -> httpx.Response:
+        if peticion.url.path != "/api/chat" or not json.loads(peticion.content).get("messages"):
+            return httpx.Response(200, json={"done": True})
+        self.pedidas += 1
+        self.preguntando.set()
+        return httpx.Response(200, stream=_Trozos(self.suelta))
+
+
+class _Trozos(httpx.SyncByteStream):
+    def __init__(self, suelta: threading.Event) -> None:
+        self._suelta = suelta
+
+    def __iter__(self) -> Iterator[bytes]:
+        vacio = {"message": {"role": "assistant", "content": ""}, "done": False}
+        while not self._suelta.wait(0.02):
+            yield json.dumps(vacio).encode() + b"\n"
+        dicho = {"message": {"role": "assistant", "content": "Fue a la obra."}, "done": False}
+        fin = {**vacio, "done": True, "prompt_eval_count": 1, "eval_count": 1}
+        yield json.dumps(dicho).encode() + b"\n" + json.dumps(fin).encode() + b"\n"
+
+
+class _JuezQueNoPregunta:
+    def score(self, reply: str, *, should_stop: Callable[[], bool] | None = None) -> int:
+        del reply, should_stop
+        return 4
+
+    def verdict(
+        self, bad_idea: str, reply: str, *, should_stop: Callable[[], bool] | None = None
+    ) -> TrickVerdict:
+        del bad_idea, reply, should_stop
+        return TrickVerdict.DISCREPA
+
+    def cancel(self) -> None:
+        pass
+
+    def cancel_verdicts(self) -> None:
+        pass
+
+
+def _ventana_sonando(
+    qtbot: QtBot, tmp_path: Path, ollama: _OllamaQueEscribeDespacio
+) -> tuple[Any, ConversationDependencies]:
+    """La ventana, recién abierta y soñando ayer con ``ollama``: su primera petición ya va."""
+    rutas = resolve_paths()
+    initialize_persistence(rutas)
+    base = rutas.data_dir / "sirius.db"
+    dependencias = build_conversation_dependencies(
+        base,
+        tmp_path / "copias",
+        secret_store=FakeSecretStore(),
+        ollama_transport=ollama.transporte(),
+        text_embedder=_SinHuellas(),
+        reply_judge=_JuezQueNoPregunta(),
+    )
+    dependencias.initial_project_use_case.create_initial_project("Charla", "Charlar")
+    dependencias.send_message_use_case.set_llm_provider(_Modelo())
+    ajustes = dict(load_settings())
+    ajustes["ollama_chat_model"] = "modelo-local"
+    save_settings(ajustes)
+    resultado = dependencias.send_message_use_case.send_message("Ayer fui a la obra.")
+    motor = build_engine(base)
+    with motor.begin() as conexion:
+        conexion.execute(
+            update(MessageModel)
+            .where(MessageModel.id == resultado.user_message.id)
+            .values(
+                created_at=(resultado.user_message.created_at - timedelta(days=1)).replace(
+                    tzinfo=None
+                )
+            )
+        )
+    motor.dispose()
+    ventana = _build_main_window(dependencias, [])
+    qtbot.addWidget(ventana)
+    assert ollama.preguntando.wait(timeout=5)
+    return ventana, dependencias
+
+
+def test_al_cerrar_sirius_el_sueno_corta_su_peticion_y_salir_no_espera(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """ADR-253: si no, cerrar Sirius soñando deja la consola esperando a que el modelo acabe
+    de escribir. Lo cortado queda por soñar."""
+    ollama = _OllamaQueEscribeDespacio()
+    ventana, dependencias = _ventana_sonando(qtbot, tmp_path, ollama)
+    sueno = ventana._active_dream_worker
+    try:
+        ventana.close()
+
+        assert sueno.done.wait(timeout=1), "salir esperaría a que el modelo acabe de escribir"
+    finally:
+        ollama.suelta.set()
+    assert ollama.pedidas == 1
+    assert dependencias.dream_service.latest_summary() is None
+
+
+def test_un_turno_no_corta_el_sueno_espera_a_que_acabe_el_dia(qtbot: QtBot, tmp_path: Path) -> None:
+    """Cortar el sueño es solo para cerrar Sirius (ADR-253): si un turno lo cortara, a quien
+    escribe a menudo nunca se le soñaría un día."""
+    ollama = _OllamaQueEscribeDespacio()
+    ventana, dependencias = _ventana_sonando(qtbot, tmp_path, ollama)
+
+    ventana.message_input.setText("Hola")
+    ventana.send_button.click()
+    qtbot.wait(100)
+    ollama.suelta.set()
+
+    qtbot.waitUntil(lambda: ventana.send_button.isEnabled(), timeout=5000)
+    qtbot.waitUntil(lambda: not ventana.dream_in_progress, timeout=5000)
+    assert ollama.pedidas == 2, "el resumen del día y sus hechos"
+    assert dependencias.dream_service.latest_summary() == "Fue a la obra."

@@ -217,7 +217,7 @@ def main() -> int:
             name = _name(voice)
             return _fail(f"{name[0].upper()}{name[1:]} no carga", error)
         engines.speaker.close()
-    print("[OK]    Listo. Para probarlo: uv run --extra voz sirius-oye")
+    print("[OK]    Listo. Para probarlo: uv run --link-mode=copy --extra voz sirius-oye")
     return 0
 
 

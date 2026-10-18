@@ -27,10 +27,15 @@ from sirius.infrastructure.paths import resolve_paths
 
 #: La orden que instala la voz, tal como se pega en PowerShell en la carpeta de Sirius.
 #: Instala el extra ``voz`` y baja el modelo; ``uv run`` no quita después lo instalado.
-INSTALL_COMMAND = "uv run --extra voz sirius-instala-la-voz"
+#: Con ``--link-mode=copy``, como toda orden de uv que se le enseña: su carpeta de Sirius
+#: está en OneDrive, y así uv copia lo que instala en vez de enlazarlo a su caché
+#: (punto 19 de la incidencia #696).
+INSTALL_COMMAND = "uv run --link-mode=copy --extra voz sirius-instala-la-voz"
 #: La misma orden con la voz de personaje: instala además el extra ``personaje`` y baja la
 #: voz de Chatterbox. Pesa mucho más, y sin ella Sirius oye y habla igual (ADR-246).
-CHARACTER_INSTALL_COMMAND = "uv run --extra voz --extra personaje sirius-instala-la-voz"
+CHARACTER_INSTALL_COMMAND = (
+    "uv run --link-mode=copy --extra voz --extra personaje sirius-instala-la-voz"
+)
 
 #: Lo que faster-whisper lee de la carpeta de un modelo. Sin ``tokenizer.json`` no falla:
 #: lo pide a internet desde Rust (``tokenizers.Tokenizer.from_pretrained``), donde no lo

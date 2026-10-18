@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import contextlib
 import sys
 from pathlib import Path
+from typing import Any
 
 from PySide6.QtCore import QCoreApplication
 from PySide6.QtWidgets import QApplication, QMainWindow
@@ -12,10 +14,12 @@ from sirius.adapters.audio.voice_libraries import hugging_face_offline
 from sirius.adapters.persistence.bootstrap import initialize_persistence
 from sirius.application.data_location import DataLocationUseCase, LocationFileCorruptedError
 from sirius.application.listening_loop import ListeningLoop
+from sirius.application.local_listening import LocalListening
 from sirius.composition_root import (
     ConversationDependencies,
     build_conversation_dependencies,
     chat_goes_through_ollama,
+    current_local_voice_settings,
     save_studio_voice,
 )
 from sirius.config.llm_provider_settings import (
@@ -26,6 +30,7 @@ from sirius.infrastructure.bootstrap_location_store import build_bootstrap_locat
 from sirius.infrastructure.crash_handler import install_crash_handler
 from sirius.infrastructure.data_path_validator import build_data_path_validator
 from sirius.infrastructure.logging import configure_logging, get_logger
+from sirius.infrastructure.network import connection_registry, hang_up_all
 from sirius.infrastructure.paths import resolve_paths
 from sirius.presentation.data_location_window import DataLocationWindow
 from sirius.presentation.initial_project_window import InitialProjectWindow
@@ -47,6 +52,9 @@ def _build_main_window(
     ``listening_loop`` atiende al oído mientras la ventana está abierta (ADR-244): la
     ventana lo arranca al abrirse y lo para al cerrarse. Sin él, el oído lo atiende otro,
     como el conductor de las pruebas; con los dos, habría dos leyendo el mismo micro.
+
+    Le da el registro de conexiones del proceso, para que al cerrarse cuelgue la red sin
+    importar nada de la infraestructura (ronda 4 de Codex sobre la #698, ADR-255).
     """
 
     def _on_project_completed() -> None:
@@ -100,6 +108,7 @@ def _build_main_window(
         local_listening=dependencies.local_listening,
         listening_loop=listening_loop,
         voice_test_use_case=dependencies.voice_test_use_case,
+        connections=connection_registry(),
     )
     main_window.project_completed.connect(_on_project_completed)
     return main_window
@@ -144,6 +153,7 @@ def _build_onboarding_window(
         activate_llm_provider=dependencies.activate_configured_llm_provider,
         default_provider=LLMProviderKind.OPENAI.value,
         default_model=provider_defaults.model,
+        connections=connection_registry(),
     )
     onboarding_window.configured.connect(_continue_after_onboarding)
     return onboarding_window
@@ -221,6 +231,7 @@ def _start_with_resolved_path(data_dir: Path, windows: list[QMainWindow]) -> QMa
     app = QApplication.instance()
     if app is not None:
         _release_on_quit(app, dependencies)
+    _say_when_loading_the_character_voice(dependencies.local_listening)
     logger.info("Sirius iniciado")
 
     return _build_initial_window(dependencies, windows)
@@ -230,8 +241,39 @@ def _release_on_quit(app: QCoreApplication, dependencies: ConversationDependenci
     """Al salir de Sirius, suelta la voz y con ella la cancelación de eco: viva hasta que
     Python se cierra, livekit pinta en rojo un error suyo (ADR-252). Al salir, y no al
     cerrarse una ventana: tras acabar un proyecto, la ventana siguiente sigue con la voz
-    cargada, que la de personaje tarda en cargar."""
+    cargada, que la de personaje tarda en cargar.
+
+    Antes, cuelga todo lo que siga pidiendo por la red, y lo que se abra después: la salida
+    no espera a ninguna petición en vuelo (ADR-255)."""
+    app.aboutToQuit.connect(_hang_up_on_exit)
     app.aboutToQuit.connect(dependencies.local_listening.close)
+
+
+def _hang_up_on_exit() -> None:
+    """Al salir de Sirius: cuelga todo lo que esté pidiendo por la red (ADR-255)."""
+    hang_up_all(final=True)
+
+
+#: Lo que dice la consola justo antes de cargar la voz de personaje (ADR-253).
+CHARACTER_VOICE_LOADING = (
+    "Cargando la voz de personaje. Tarda un poco: hasta que acabe, la ventana de Sirius no "
+    "sale o no responde."
+)
+
+
+def _say_when_loading_the_character_voice(listening: LocalListening[Any]) -> None:
+    """Con la voz de personaje, la ventana no sale hasta que la carga: que la consola lo diga
+    antes de empezar, en vez de quedarse callada (ADR-253). La de Piper carga enseguida.
+
+    Una consola rota no puede dejarle sin oído: el aviso va justo antes de cargar la voz.
+    """
+
+    def tell() -> None:
+        if current_local_voice_settings().speaking_voice.is_character:
+            with contextlib.suppress(OSError):
+                print(CHARACTER_VOICE_LOADING, flush=True)
+
+    listening.before_loading_voice(tell)
 
 
 def _build_data_location_window(

@@ -89,7 +89,10 @@ def test_las_preguntas_trampa_y_su_juez_piden_el_tope_de_sus_ajustes(tmp_path: P
     vistas: list[dict[str, object]] = []
     deps = _sirius(tmp_path, vistas)
     try:
-        respuestas = deps.trick_questions_use_case.run(should_stop=lambda: len(vistas) >= 2)
+        # Para con la respuesta de la segunda ya pedida: la primera vuelve con su veredicto.
+        # Parar con el veredicto en marcha lo corta, y esa respuesta no vuelve: se guarda
+        # para pedirle solo el veredicto la vez siguiente (ronda 1 de Codex sobre la #698).
+        respuestas = deps.trick_questions_use_case.run(should_stop=lambda: len(vistas) >= 3)
     finally:
         deps.close_database_connections()
 

@@ -1,7 +1,7 @@
 """Local-only Ollama adapter for the relevance filter (D7, SIRIUS-ARQ-0.2 §6.3).
 
 Mirrors ``OllamaCategoryClassifierAdapter``'s structural property: points
-exclusively at ``localhost``, with no constructor parameter that could
+exclusively at ``127.0.0.1``, with no constructor parameter that could
 redirect it to a remote host, and fails open on every kind of problem —
 Ollama not installed, connection refused, accepted-but-never-answered until
 the time budget is exhausted, or a response outside the expected shape — by
@@ -21,12 +21,13 @@ import httpx
 
 from sirius.domain.relevance import RankedKnowledge, recortar_al_cupo
 from sirius.infrastructure.logging import get_logger
+from sirius.infrastructure.network import http_client
 
 __all__ = ["OllamaRelevanceFilterAdapter"]
 
 _logger = get_logger(__name__)
 
-_OLLAMA_LOCAL_BASE_URL = "http://localhost:11434"
+_OLLAMA_LOCAL_BASE_URL = "http://127.0.0.1:11434"
 _DEFAULT_TIMEOUT_SECONDS = 5.0
 
 #: Esquema que el servidor impone AL GENERAR, portado literal del laboratorio
@@ -93,10 +94,10 @@ class OllamaRelevanceFilterAdapter:
         self._model = model
         # ``client`` exists only as a test seam (an ``httpx.MockTransport``
         # never leaves the process); production code always falls back to a
-        # client hardcoded to localhost — no parameter anywhere accepts a
+        # client hardcoded to 127.0.0.1 — no parameter anywhere accepts a
         # remote host. ``timeout_seconds`` only shapes that fallback client;
         # M11 (§6.4) is the one that measures and fixes its real value.
-        self._client = client or httpx.Client(
+        self._client = client or http_client(
             base_url=_OLLAMA_LOCAL_BASE_URL, timeout=timeout_seconds
         )
 
@@ -120,9 +121,9 @@ class OllamaRelevanceFilterAdapter:
         try:
             # Absolute URL, not a path relative to ``self._client``'s own
             # ``base_url``: an injected client's ``base_url`` must never be
-            # able to redirect the actual request away from localhost.
+            # able to redirect the actual request away from 127.0.0.1.
             # ``follow_redirects=False`` overrides any injected client that
-            # sets ``follow_redirects=True``: a 307/308 from localhost must
+            # sets ``follow_redirects=True``: a 307/308 from 127.0.0.1 must
             # never resend this request (and its body) to a remote host.
             response = self._client.post(
                 f"{_OLLAMA_LOCAL_BASE_URL}/api/chat",

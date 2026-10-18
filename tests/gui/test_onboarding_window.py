@@ -8,13 +8,16 @@ everywhere) or the real OpenAI API: a recording/blocking test double replaces
 from __future__ import annotations
 
 import threading
+import time
 from pathlib import Path
 from typing import cast
 
+import openai
 import pytest
 from PySide6.QtCore import QRunnable, QThreadPool
 from pytestqt.qtbot import QtBot
 
+from sirius.adapters.llm.openai_credential_validator import OpenAICredentialValidator
 from sirius.adapters.llm.openai_responses import OpenAIResponsesProvider
 from sirius.adapters.persistence.database import build_engine
 from sirius.adapters.persistence.models import Base
@@ -30,6 +33,8 @@ from sirius.application.validate_and_save_api_key import ValidateAndSaveApiKeyUs
 from sirius.composition_root import ConversationDependencies, build_conversation_dependencies
 from sirius.config.llm_provider_settings import LLMProviderKind, resolve_openai_provider_settings
 from sirius.config.settings import load_settings
+from sirius.infrastructure.network import ConnectionRegistry, openai_client
+from sirius.ports.connections import ConnectionCloser
 from sirius.ports.credential_validation import (
     CredentialValidationError,
     CredentialValidationKind,
@@ -76,6 +81,19 @@ class _ImmediateThreadPool:
         worker.run()
 
 
+class _Cierres:
+    """Apunta cuándo la ventana empieza a colgar la red y cuándo deja de hacerlo."""
+
+    def __init__(self) -> None:
+        self.vistos: list[str] = []
+
+    def begin_close(self) -> None:
+        self.vistos.append("empieza")
+
+    def end_close(self) -> None:
+        self.vistos.append("acaba")
+
+
 @pytest.fixture(autouse=True)
 def isolated_local_appdata(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("WIN_PD_OVERRIDE_LOCAL_APPDATA", str(tmp_path / "appdata"))
@@ -93,6 +111,8 @@ def _build_onboarding(
     database_path: Path,
     validator: CredentialValidator,
     secret_store: FakeSecretStore,
+    *,
+    connections: ConnectionCloser | None = None,
 ) -> tuple[OnboardingWindow, ConversationDependencies]:
     dependencies = build_conversation_dependencies(
         database_path,
@@ -104,6 +124,7 @@ def _build_onboarding(
         activate_llm_provider=dependencies.activate_configured_llm_provider,
         default_provider=LLMProviderKind.OPENAI.value,
         default_model=_DEFAULT_MODEL,
+        connections=connections,
     )
     return window, dependencies
 
@@ -262,3 +283,155 @@ def test_closing_while_validating_is_deferred_and_completes_without_a_crash(
     # opening the way to the main conversation.
     assert dependencies.api_key_settings_use_case.has_key() is True
     assert configured_calls == []
+
+
+def test_cerrar_mientras_valida_cuelga_la_peticion_y_no_espera_a_su_tope(
+    qtbot: QtBot, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ronda 3 de Codex sobre la #698: el cierre se aplazaba hasta que acabara la
+    validación, sin colgarla, y la petición a OpenAI seguía hasta su tope de 10 s. Con el
+    validador de verdad, contra un servidor que acepta y no contesta (ADR-255)."""
+    # Aquí y no arriba: hay sondas que importan este módulo en otro proceso, sin las
+    # rutas de las pruebas.
+    from servidor_mudo import ServidorMudo, quita_los_proxies
+
+    quita_los_proxies(monkeypatch)
+    servidor = ServidorMudo()
+    registro = ConnectionRegistry()
+    try:
+        validator = OpenAICredentialValidator(
+            lambda credential: openai_client(
+                registry=registro,
+                api_key=credential,
+                base_url=f"http://127.0.0.1:{servidor.puerto}/v1",
+                max_retries=0,
+                timeout=10.0,
+            )
+        )
+        window, dependencies = _build_onboarding(
+            _bootstrapped_database(tmp_path / "sirius.db"),
+            validator,
+            FakeSecretStore(),
+            connections=registro,
+        )
+        qtbot.addWidget(window)
+        window.show()
+        window.api_key_input.setText("sk-candidate")
+        window.continue_button.click()
+        qtbot.waitUntil(lambda: bool(servidor.aceptadas), timeout=5000)
+
+        empieza = time.perf_counter()
+        window.close()
+        qtbot.waitUntil(lambda: not window.isVisible(), timeout=3000)
+
+        assert time.perf_counter() - empieza < 1
+        # Cortada antes de validar, la clave no se guarda.
+        assert dependencies.api_key_settings_use_case.has_key() is False
+    finally:
+        servidor.cierra()
+
+
+def test_cerrar_antes_de_que_la_validacion_conecte_la_cuelga_al_conectar(
+    qtbot: QtBot, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ronda 4 de Codex sobre la #698: si se pedía cerrar con la conexión de la validación
+    aún abriéndose, colgar no la encontraba, y el cierre volvía a esperar a su tope de 10 s.
+    Hasta que la ventana se cierra de verdad, lo que se abre se cuelga en el acto; después
+    ya no (ADR-255)."""
+    # Aquí y no arriba: hay sondas que importan este módulo en otro proceso, sin las
+    # rutas de las pruebas.
+    from servidor_mudo import ServidorMudo, quita_los_proxies, se_cuelga_al_abrirse
+
+    quita_los_proxies(monkeypatch)
+    servidor = ServidorMudo()
+    registro = ConnectionRegistry()
+    abriendose = threading.Event()
+    sigue = threading.Event()
+
+    def cliente_que_tarda_en_conectar(credential: str) -> openai.OpenAI:
+        cliente = openai_client(
+            registry=registro,
+            api_key=credential,
+            base_url=f"http://127.0.0.1:{servidor.puerto}/v1",
+            max_retries=0,
+            timeout=10.0,
+        )
+        # La primera vez, el SDK carga aquí sus recursos, casi un segundo que no es del cierre.
+        _ = cliente.models
+        abriendose.set()
+        sigue.wait(timeout=5)
+        return cliente
+
+    try:
+        window, dependencies = _build_onboarding(
+            _bootstrapped_database(tmp_path / "sirius.db"),
+            OpenAICredentialValidator(cliente_que_tarda_en_conectar),
+            FakeSecretStore(),
+            connections=registro,
+        )
+        qtbot.addWidget(window)
+        window.show()
+        window.api_key_input.setText("sk-candidate")
+        window.continue_button.click()
+        assert abriendose.wait(timeout=5)
+
+        empieza = time.perf_counter()
+        window.close()
+        sigue.set()
+        qtbot.waitUntil(lambda: not window.isVisible(), timeout=3000)
+
+        assert time.perf_counter() - empieza < 1
+        assert servidor.aceptadas, "la validación tenía que llegar a conectar"
+        assert dependencies.api_key_settings_use_case.has_key() is False
+        assert not se_cuelga_al_abrirse(registro, servidor)
+    finally:
+        sigue.set()
+        servidor.cierra()
+
+
+def test_cuelga_una_vez_aunque_pidan_cerrar_dos_veces_y_al_cerrarse_deja_de_colgar(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """Ronda 4 de Codex sobre la #698: empieza a colgar al pedir cerrar, una vez por cierre,
+    y deja de colgar al cerrarse de verdad; si no, el registro seguiría colgando lo que
+    abriera la ventana siguiente."""
+    validator = _BlockingUntilReleasedValidator()
+    cierres = _Cierres()
+    window, _ = _build_onboarding(
+        _bootstrapped_database(tmp_path / "sirius.db"),
+        validator,
+        FakeSecretStore(),
+        connections=cierres,
+    )
+    qtbot.addWidget(window)
+    window.show()
+    window.api_key_input.setText("sk-candidate")
+    window.continue_button.click()
+    try:
+        window.close()
+        window.close()
+        assert cierres.vistos == ["empieza"]
+    finally:
+        validator.release()
+    qtbot.waitUntil(lambda: not window.isVisible(), timeout=5000)
+
+    assert cierres.vistos == ["empieza", "acaba"]
+
+
+def test_cerrar_sin_una_validacion_en_marcha_no_cuelga_nada(qtbot: QtBot, tmp_path: Path) -> None:
+    """Tras configurar la clave, ``sirius.main`` abre la ventana siguiente, que ya pide por
+    la red, y después cierra esta: sin una validación que esperar, cerrar no cuelga nada."""
+    cierres = _Cierres()
+    window, _ = _build_onboarding(
+        _bootstrapped_database(tmp_path / "sirius.db"),
+        _RecordingValidator(),
+        FakeSecretStore(),
+        connections=cierres,
+    )
+    qtbot.addWidget(window)
+    window.show()
+
+    window.close()
+
+    assert not window.isVisible()
+    assert cierres.vistos == []

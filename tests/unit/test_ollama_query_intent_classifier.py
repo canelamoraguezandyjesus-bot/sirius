@@ -15,7 +15,7 @@ gemelos ya corregidos (``test_ollama_category_classifier.py``,
   ``/api/chat`` con ``think: false`` y un ``format`` cerrado, afirmado
   literalmente sobre el cuerpo de la petición;
 - la propiedad estructural de §6.3 a nivel de petición: ni el ``base_url``
-  remoto de un cliente inyectado ni una redirección desde localhost mueven la
+  remoto de un cliente inyectado ni una redirección desde 127.0.0.1 mueven la
   consulta fuera de la máquina.
 """
 
@@ -56,7 +56,7 @@ _BANCO = Path(__file__).resolve().parents[1] / "acceptance/fixtures/evidence_ban
 
 
 def _adapter(handler: httpx.MockTransport) -> OllamaQueryIntentClassifierAdapter:
-    client = httpx.Client(transport=handler, base_url="http://localhost:11434")
+    client = httpx.Client(transport=handler, base_url="http://127.0.0.1:11434")
     return OllamaQueryIntentClassifierAdapter(
         "qwen3:4b-instruct", ahora="2026-06-15", client=client
     )
@@ -318,7 +318,7 @@ def test_envia_el_contrato_validado_contra_el_modelo_real() -> None:
     assert len(seen) == 1
     peticion = seen[0]
     assert peticion.method == "POST"
-    assert peticion.url.host == "localhost"
+    assert peticion.url.host == "127.0.0.1"
     assert peticion.url.path == "/api/chat"
     cuerpo = json.loads(peticion.content)
     assert cuerpo["model"] == "qwen3:4b-instruct"
@@ -383,13 +383,13 @@ def test_ignora_el_base_url_remoto_de_un_cliente_inyectado() -> None:
 
     intencion = adapter.classify_intent("pregunta")
 
-    assert seen_hosts == ["localhost"]
+    assert seen_hosts == ["127.0.0.1"]
     assert intencion is not None
 
 
 def test_nunca_sigue_una_redireccion_a_un_host_remoto() -> None:
     """Un cliente inyectado con ``follow_redirects=True`` no debe permitir
-    que un 307/308 desde localhost reenvíe la consulta a un host remoto. Se
+    que un 307/308 desde 127.0.0.1 reenvíe la consulta a un host remoto. Se
     afirma sobre los hosts que vio el transporte: el valor devuelto es
     ``None`` en el camino correcto y en el roto, así que no los distingue."""
     seen_hosts: list[str | None] = []
@@ -404,13 +404,13 @@ def test_nunca_sigue_una_redireccion_a_un_host_remoto() -> None:
 
     client = httpx.Client(
         transport=httpx.MockTransport(_handle),
-        base_url="http://localhost:11434",
+        base_url="http://127.0.0.1:11434",
         follow_redirects=True,
     )
     adapter = OllamaQueryIntentClassifierAdapter("qwen3:4b-instruct", client=client)
 
     assert adapter.classify_intent("pregunta") is None
-    assert seen_hosts == ["localhost"]
+    assert seen_hosts == ["127.0.0.1"]
 
 
 # --------------------------------------------------------------------------
@@ -508,7 +508,7 @@ def test_el_hoy_de_la_instruccion_se_resuelve_en_cada_consulta() -> None:
         instrucciones.append(cuerpo["messages"][0]["content"])
         return _answer()
 
-    client = httpx.Client(transport=httpx.MockTransport(_handle), base_url="http://localhost:11434")
+    client = httpx.Client(transport=httpx.MockTransport(_handle), base_url="http://127.0.0.1:11434")
     adaptador = OllamaQueryIntentClassifierAdapter("qwen3:4b-instruct", client=client)
 
     dias = iter([datetime(2026, 3, 1, 9, tzinfo=UTC), datetime(2026, 3, 2, 9, tzinfo=UTC)])

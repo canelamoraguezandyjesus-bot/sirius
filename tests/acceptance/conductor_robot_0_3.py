@@ -81,7 +81,13 @@ from sirius.infrastructure.local_voice_installation import (
 )
 from sirius.infrastructure.logging import LOG_FILE_NAME, configure_logging
 from sirius.infrastructure.paths import resolve_paths
-from sirius.ports.llm import LLMCompleted, LLMRequest, LLMStreamEvent, LLMTextDelta
+from sirius.ports.llm import (
+    LLMCancelled,
+    LLMCompleted,
+    LLMRequest,
+    LLMStreamEvent,
+    LLMTextDelta,
+)
 from sirius.ports.local_voice import (
     Captured,
     Cleaned,
@@ -989,10 +995,12 @@ class RelojDeMentira:
 class ModeloDeMentira(_ProveedorGrabador):
     """El modelo grabador de la 0.2, con reloj.
 
-    Apunta cuándo dio por acabada cada respuesta (``acabo_en``), y puede contestar
-    a trozos con una pausa entre ellos, como un modelo que tarda
-    (``contesta_despacio``): así una prueba puede ver que Sirius empezó a hablar
-    antes de que el modelo acabara.
+    Apunta cuándo dio por acabada cada respuesta (``acabo_en``) y cuándo le llegó cada
+    petición (``pedidas_en``), y puede contestar a trozos con una pausa entre ellos, como
+    un modelo que tarda (``contesta_despacio``): así una prueba puede ver que Sirius
+    empezó a hablar antes de que el modelo acabara. Mientras contesta despacio, cortarle
+    la operación (``cancel``) le hace dejar de escribir en el acto, como a Ollama desde
+    ADR-252: lo que llevaba escrito queda en ``escrito_al_cortar``.
     """
 
     #: Hace del modelo de este ordenador, como Ollama: la voz solo habla con uno así.
@@ -1004,6 +1012,14 @@ class ModeloDeMentira(_ProveedorGrabador):
         self._pausa = 0.0
         self._tras_el_primer_trozo: Callable[[], None] | None = None
         self._acabo_en: float | None = None
+        #: Cuándo le llegó cada petición, con el reloj de los dobles.
+        self.pedidas_en: list[float] = []
+        #: Lo que llevaba escrito cuando le cortaron; ``None`` si no le han cortado.
+        self.escrito_al_cortar: str | None = None
+        #: La operación que está contestando despacio, y lo que se le corta.
+        self._escribiendo: str | None = None
+        self._corte = threading.Event()
+        self._cerrojo = threading.Lock()
 
     @property
     def acabo_en(self) -> float | None:
@@ -1030,6 +1046,7 @@ class ModeloDeMentira(_ProveedorGrabador):
         self._tras_el_primer_trozo = tras_el_primer_trozo
 
     def stream_response(self, request: LLMRequest) -> Iterable[LLMStreamEvent]:
+        self.pedidas_en.append(_ahora())
         if self._trozos is None:
             for evento in super().stream_response(request):
                 if isinstance(evento, LLMCompleted):
@@ -1039,15 +1056,31 @@ class ModeloDeMentira(_ProveedorGrabador):
         trozos, self._trozos = self._trozos, None
         gancho, self._tras_el_primer_trozo = self._tras_el_primer_trozo, None
         self.peticiones.append(Peticion(request.instructions, request.input_text))
+        with self._cerrojo:
+            self._escribiendo = request.operation_id
+            self._corte.clear()
         texto = ""
-        for indice, trozo in enumerate(trozos):
-            if indice == 1 and gancho is not None:
-                gancho()
-            time.sleep(self._pausa)
-            texto += trozo
-            yield LLMTextDelta(text=trozo)
+        try:
+            for indice, trozo in enumerate(trozos):
+                if indice == 1 and gancho is not None:
+                    gancho()
+                if self._corte.wait(self._pausa):
+                    self.escrito_al_cortar = texto
+                    yield LLMCancelled(partial_text=texto)
+                    return
+                texto += trozo
+                yield LLMTextDelta(text=trozo)
+        finally:
+            with self._cerrojo:
+                self._escribiendo = None
         self._acabo_en = _ahora()
         yield LLMCompleted(text=texto, input_tokens=1, output_tokens=len(texto))
+
+    def cancel(self, operation_id: str) -> None:
+        """Deja de escribir la respuesta de ``operation_id``, si es la que contesta despacio."""
+        with self._cerrojo:
+            if operation_id == self._escribiendo:
+                self._corte.set()
 
 
 # --- Lo que el conductor devuelve a las pruebas ------------------------------

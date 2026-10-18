@@ -53,8 +53,8 @@ class MessageModel(Base):
     ``EventModel.redacted_at`` and stays NULL until a message is redacted.
 
     ``heard_when_cut`` (ADR-245) es lo que el propietario llegó a oír de una respuesta de
-    Sirius que le cortaron mientras la decía; NULL si no le cortaron. ``content`` sigue
-    entera. Se borra con ella al redactarla.
+    Sirius que le cortaron mientras la decía; NULL si no le cortaron. ``content`` es lo que
+    llevaba escrito cuando le cortaron (ADR-254). Se borra con ella al redactarla.
     """
 
     __tablename__ = "messages"

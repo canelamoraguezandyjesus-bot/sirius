@@ -185,7 +185,10 @@ class MemoryEmbeddingService:
                     [self._format.for_document(memory.content) for memory in pending]
                 )
             except Exception as exc:  # sin modelo de huellas, la búsqueda sigue por palabras
-                _logger.warning("No se pudieron calcular huellas (%s)", type(exc).__name__)
+                # Si ya le pidieron parar, el fallo es el de cerrar al salir, que corta la
+                # petición a medias: no es un fallo del modelo, y no se avisa (#696).
+                if not should_stop():
+                    _logger.warning("No se pudieron calcular huellas (%s)", type(exc).__name__)
                 break
             if len(embeddings) != len(pending):
                 _logger.warning("El modelo de huellas no dio una por recuerdo")
@@ -196,18 +199,20 @@ class MemoryEmbeddingService:
                     done += 1
         return done
 
-    def warm_up(self) -> None:
+    def warm_up(self, should_stop: Callable[[], bool] = lambda: False) -> None:
         """Pide una huella para que Ollama cargue el modelo antes del primer turno.
 
-        La ventana lo hace al abrirse, en segundo plano. Si falla, no pasa nada: el
-        primer turno lo cargará o seguirá por palabras.
+        La ventana lo hace al abrirse, en segundo plano, y ``sirius-oye`` al arrancar. Si
+        falla, no pasa nada: el primer turno lo cargará o seguirá por palabras. Si ya le
+        pidieron parar, el fallo es el de cerrar al salir, y no se avisa (#696).
         """
         if not self._store.available:
             return
         try:
             self._embedder.embed(["hola"])
         except Exception as exc:  # sin modelo de huellas, la búsqueda sigue por palabras
-            _logger.warning("No se pudo cargar el modelo de huellas (%s)", type(exc).__name__)
+            if not should_stop():
+                _logger.warning("No se pudo cargar el modelo de huellas (%s)", type(exc).__name__)
 
     def embed_query(self, query_text: str) -> list[float] | None:
         """La huella de la pregunta, o ``None`` si no se puede buscar por significado."""

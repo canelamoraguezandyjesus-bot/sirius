@@ -2,7 +2,7 @@
 SIRIUS-ARQ-0.2 §6.1).
 
 Mirrors the structural property §6.3 requires of the relevance filter
-adapter: points exclusively at ``localhost``, with no constructor parameter
+adapter: points exclusively at ``127.0.0.1``, with no constructor parameter
 that could redirect it to a remote host, and fails open on every kind of
 problem — Ollama not installed, connection refused, timed out, or a response
 outside the closed vocabulary — by returning ``None``, never raising.
@@ -17,9 +17,9 @@ prompt, which with the default Qwen3 model reasons for minutes and answers
 outside the vocabulary (ADR-125; the same family of defect that caused the
 two P1 of incidencia #518, confirmed for this adapter by the mina de
 aprendizaje operativo de 2026-09 and corrected here, ADR-132, incidencia
-#522). The request goes to an absolute localhost URL with
+#522). The request goes to an absolute 127.0.0.1 URL with
 ``follow_redirects=False`` for the same reason the other two adapters do:
-neither an injected client's ``base_url`` nor a 307/308 from localhost may
+neither an injected client's ``base_url`` nor a 307/308 from 127.0.0.1 may
 ever carry a memory's content off the machine.
 """
 
@@ -30,12 +30,13 @@ import json
 import httpx
 
 from sirius.infrastructure.logging import get_logger
+from sirius.infrastructure.network import http_client
 
 __all__ = ["OllamaCategoryClassifierAdapter"]
 
 _logger = get_logger(__name__)
 
-_OLLAMA_LOCAL_BASE_URL = "http://localhost:11434"
+_OLLAMA_LOCAL_BASE_URL = "http://127.0.0.1:11434"
 #: Same ceiling as the criticality classifier's client (ADR-125): the only
 #: value this repository has measured for this model with ``think: false``.
 _REQUEST_TIMEOUT_SECONDS = 30.0
@@ -73,9 +74,9 @@ class OllamaCategoryClassifierAdapter:
         self._instruccion = _build_instruccion(self._categorias_ordenadas)
         # ``client`` exists only as a test seam (an ``httpx.MockTransport``
         # never leaves the process); production code always falls back to a
-        # client hardcoded to localhost — no parameter anywhere accepts a
+        # client hardcoded to 127.0.0.1 — no parameter anywhere accepts a
         # remote host, and ``classify`` never trusts the client's ``base_url``.
-        self._client = client or httpx.Client(
+        self._client = client or http_client(
             base_url=_OLLAMA_LOCAL_BASE_URL, timeout=_REQUEST_TIMEOUT_SECONDS
         )
 
@@ -83,9 +84,9 @@ class OllamaCategoryClassifierAdapter:
         try:
             # Absolute URL, not a path relative to ``self._client``'s own
             # ``base_url``: an injected client's ``base_url`` must never be
-            # able to redirect the actual request away from localhost.
+            # able to redirect the actual request away from 127.0.0.1.
             # ``follow_redirects=False`` overrides any injected client that
-            # sets ``follow_redirects=True``: a 307/308 from localhost must
+            # sets ``follow_redirects=True``: a 307/308 from 127.0.0.1 must
             # never resend this request (and the content) to a remote host.
             response = self._client.post(
                 f"{_OLLAMA_LOCAL_BASE_URL}/api/chat",

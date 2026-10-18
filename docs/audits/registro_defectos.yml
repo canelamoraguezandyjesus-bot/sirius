@@ -1679,3 +1679,58 @@ defectos:
       - src/sirius/application/reply_judge.py
       - src/sirius/presentation/main_window.py
       - tests/unit/test_el_juez_no_frena_la_voz.py
+  # ADR-253: la prueba a ciegas y las preguntas trampa tiraban lo ya generado. Un fallo de un
+  # modelo en la respuesta 46 de 60, o un Esc sin querer, obligaba a pedir otra vez las 60, de
+  # 30 a 40 minutos de su tarde. Salió del repaso final del 17-10-2026, antes de sus pruebas.
+  - id: H-253
+    titulo: Un fallo de un modelo o un Esc sin querer tiraban las respuestas ya generadas de la prueba a ciegas
+    bloque: producto
+    gravedad: media
+    estado: cerrado
+    cerrado_por: 4e3b0e4f3f32ea41e1418760254f5abba9af3c44
+    pr: 698
+    adr: 253
+    incidencia: 696
+    ficheros:
+      - src/sirius/application/blind_test.py
+      - src/sirius/application/trick_questions.py
+      - src/sirius/presentation/blind_test_dialog.py
+      - src/sirius/presentation/trick_questions_dialog.py
+  # ADR-254: al cortarle por voz, Sirius callaba al momento, pero lo nuevo esperaba a que el
+  # modelo acabara de escribir lo de antes, y si le cortaba mientras la charla resumía,
+  # también al resumen. Con una respuesta larga, decenas de segundos. Salió del repaso de la
+  # consola del 17-10-2026; lo decidió el propietario ese día, y su nota de arranque sigue en
+  # la incidencia.
+  - id: H-254
+    titulo: Al cortarle por voz, lo nuevo esperaba a que el modelo acabara de escribir lo de antes
+    bloque: producto
+    gravedad: media
+    estado: cerrado
+    cerrado_por: 019379237c749a4cab6815e91773a901a8c7a9ac
+    pr: 698
+    adr: 254
+    incidencia: 697
+    ficheros:
+      - src/sirius/application/local_listening.py
+      - src/sirius/application/send_message.py
+      - src/sirius/application/robot_conversation.py
+      - tests/acceptance/test_robot_0_3_voz.py
+  # ADR-255: al cerrar Sirius, las peticiones de red en vuelo de los trabajos de fondo no se
+  # cortaban, y la salida esperaba a que acabaran, de 5 s a 600 s según el trabajo: cada
+  # trabajador decidía cómo parar. Lo encontraron las rondas 1 y 2 de Codex sobre la #698, y
+  # su nota de arranque sigue en la incidencia.
+  - id: H-255
+    titulo: Al cerrar Sirius, las peticiones de red en vuelo no se cortaban y la salida esperaba a que acabaran
+    bloque: producto
+    gravedad: media
+    estado: cerrado
+    cerrado_por: c2b4aa9960292c1c124ba6c8a74957c1ccfb5106
+    pr: 698
+    adr: 255
+    incidencia: 699
+    ficheros:
+      - src/sirius/infrastructure/network.py
+      - src/sirius/presentation/main_window.py
+      - src/sirius/main.py
+      - src/sirius/listen_console.py
+      - tests/unit/test_toda_conexion_nace_colgable.py

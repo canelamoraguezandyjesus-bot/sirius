@@ -228,11 +228,21 @@ class _Charla:
         #: Los cortes apuntados: el mensaje y lo que se oyó de él (pieza E).
         self.cortes: list[tuple[int, str]] = []
         self.falla_al_apuntar: Exception | None = None
+        #: Las respuestas que le cortaron mientras las escribía: como la de verdad, deja de
+        #: escribirlas, y lo que llevaba escrito es lo que guarda (ADR-254).
+        self.cortadas: list[str] = []
+        self.falla_al_cortar: Exception | None = None
         #: Lo que pasa en cuanto la respuesta queda guardada, antes de lo que la charla hace
         #: después del turno, como resumir, que puede ser otra llamada al modelo.
         self.al_acabar: Callable[[], None] | None = None
         #: Cada respuesta se guarda con su número, del 7 en adelante.
         self._siguiente = 7
+
+    def cut(self, operation_id: str) -> None:
+        if self.falla_al_cortar is not None:
+            raise self.falla_al_cortar
+        self.cortadas.append(operation_id)
+        self.eventos.append("deja de escribir")
 
     def mark_cut(self, message_id: int, heard: str) -> None:
         if self.falla_al_apuntar is not None:
@@ -260,7 +270,11 @@ class _Charla:
             falla, self.falla = self.falla, None
             raise falla
         trozos, self.trozos = self.trozos or [f"R: {user_text}"], None
+        escritos: list[str] = []
         for trozo in trozos:
+            if operation_id in self.cortadas:
+                break
+            escritos.append(trozo)
             self.eventos.append(f"escribe:{trozo}")
             if on_delta is not None:
                 on_delta(trozo)
@@ -280,7 +294,7 @@ class _Charla:
             outcome=self.desenlace,
             sirius_message=SimpleNamespace(
                 id=numero,
-                content="".join(trozos),
+                content="".join(escritos),
                 status=self.desenlace,
                 operation_id=f"op-{numero}",
             ),
@@ -1864,6 +1878,8 @@ def test_al_cortarle_apunta_lo_que_llego_a_sonar_y_la_respuesta_sigue_entera() -
 
     assert turno.reply == "Una frase. Otra frase. Y otra."
     assert oido.charla.cortes == [(7, "Una frase.")]
+    # Ya estaba escrita: no hay nada que dejar de escribir (ADR-254).
+    assert oido.charla.cortadas == []
 
 
 def test_cuenta_como_oido_lo_que_empezo_a_sonar_hasta_que_callo_mientras_escribe() -> None:
@@ -1920,6 +1936,53 @@ def test_si_le_hablan_mientras_la_charla_escribe_calla_sin_decir_otra_frase() ->
     assert "calla" in oido.eventos
     assert turno.reply == "Una frase. Otra frase. Y otra."
     assert oido.charla.cortes == [(7, "Una frase.")]
+
+
+def test_al_cortarle_mientras_escribe_la_charla_deja_de_escribir_y_queda_lo_escrito() -> None:
+    # Lo decidió el propietario el 17-10-2026 (ADR-254): al cortarle, la charla deja de
+    # escribir la respuesta, aunque quede a medias, y en lo escrito se apunta lo que se oyó.
+    oido = _oido_con_cancelador()
+    oido.charla.trozos = ["Una frase. ", "Otra frase. ", "Y otra. ", "Y más. ", "Y ya."]
+
+    def habla_encima() -> None:
+        if oido.altavoz.empezados == 0:
+            oido.micro.capta(eco(voz("Espera")))
+
+    oido.altavoz.al_sonar = habla_encima
+
+    (turno,) = oido.suena(voz("Cuéntame"), FIN).turns
+
+    assert oido.charla.cortadas == [oido.charla.operaciones[0]]
+    assert oido.eventos.index("calla") < oido.eventos.index("deja de escribir")
+    assert turno.reply is not None
+    assert "Una frase. Otra frase. Y otra. Y más. Y ya.".startswith(turno.reply)
+    assert "Y ya." not in turno.reply
+    assert oido.dicho() == ["Una frase."]
+    assert oido.charla.cortes == [(7, "Una frase.")]
+
+
+def test_si_no_se_puede_dejar_de_escribir_la_respuesta_acaba_entera_y_el_diario_dice_el_tipo(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    oido = _oido_con_cancelador()
+    oido.charla.trozos = ["Una frase. ", "Otra frase. ", "Y otra. ", "Y más. ", "Y ya."]
+    oido.charla.falla_al_cortar = RuntimeError("Una frase secreta.")
+
+    def habla_encima() -> None:
+        if oido.altavoz.empezados == 0:
+            oido.micro.capta(eco(voz("Espera")))
+
+    oido.altavoz.al_sonar = habla_encima
+
+    with caplog.at_level(logging.ERROR, logger="sirius"):
+        (turno,) = oido.suena(voz("Cuéntame"), FIN).turns
+
+    # Como antes de ADR-254: calla, la charla acaba la respuesta y se apunta lo que se oyó.
+    assert turno.reply == "Una frase. Otra frase. Y otra. Y más. Y ya."
+    assert oido.dicho() == ["Una frase."]
+    assert oido.charla.cortes == [(7, "Una frase.")]
+    assert "No se pudo cortar la respuesta (RuntimeError)" in caplog.text
+    assert "secreta" not in caplog.text
 
 
 def test_si_le_hablan_mientras_piensa_no_empieza_a_hablar_encima() -> None:
@@ -2130,9 +2193,11 @@ def test_si_le_dice_dos_cosas_mientras_la_charla_escribe_las_dos_son_para_el() -
 
 def test_lo_que_le_dice_mientras_la_charla_escribe_no_alarga_la_charla() -> None:
     # Calló con el primer corte, y la charla dura desde ahí: lo que siga diciéndole
-    # mientras la charla escribe no le hace callar otra vez.
+    # mientras la charla escribe no le hace callar otra vez. Desde ADR-254, al cortarle la
+    # charla deja de escribir; aquí cortarla falla, y sigue escribiendo como antes.
     oido = _oido_con_cancelador(a_quien=Addressing(conversation_seconds=10.0))
     oido.charla.trozos = ["Una frase. ", "Otra frase. ", "Y otra. ", "Y más. ", "Y ya."]
+    oido.charla.falla_al_cortar = RuntimeError("no se deja cortar")
     dicho_encima: list[bool] = []
 
     def habla_encima() -> None:
@@ -2194,7 +2259,9 @@ def test_le_corta_mientras_piensa_aunque_la_charla_tarde_en_escribir() -> None:
     oido.charla.al_enviar = le_habla
     oido.suena(voz("Cuéntame"), FIN)
 
-    assert oido.eventos.index("calla") < oido.eventos.index("escribe:R: Cuéntame")
+    # Y la charla deja de escribir antes de escribir nada (ADR-254).
+    assert oido.eventos.index("calla") < oido.eventos.index("deja de escribir")
+    assert not any(evento.startswith("escribe:") for evento in oido.eventos)
     assert oido.dicho() == []
 
 
@@ -2252,8 +2319,8 @@ def test_si_falla_mirar_el_micro_mientras_contesta_deja_de_mirar_y_el_diario_dic
 
 
 def _dos_turnos_y_lo_primero_aun_suena() -> _Oido:
-    """Dos turnos se cierran mientras la charla escribe; contesta al primero, «Espera», y su
-    respuesta se queda sonando."""
+    """Dos turnos se cierran mientras la charla contesta: le corta, «Espera», y sigue,
+    «Y cuéntame otra cosa». Contesta al primero, y su respuesta se queda sonando."""
     oido = _oido_con_cancelador(a_quien=Addressing(conversation_seconds=10.0))
     oido.charla.trozos = ["Una frase. ", "Otra frase. ", "Y otra. ", "Y más."]
     dicho_encima: list[bool] = []
@@ -2261,18 +2328,13 @@ def _dos_turnos_y_lo_primero_aun_suena() -> _Oido:
     def habla_encima() -> None:
         if not dicho_encima:
             dicho_encima.append(True)
-            oido.micro.capta(eco(voz("Espera")), FIN)
-
-    def sigue_hablando(trozo: str) -> None:
-        if trozo == "Y otra. ":
-            oido.micro.capta(voz("Y cuéntame otra cosa"), FIN)
+            oido.micro.capta(eco(voz("Espera")), FIN, voz("Y cuéntame otra cosa"), FIN)
 
     def contesta() -> None:
         if oido.charla.mensajes[-1] == "Espera":
             oido.altavoz.sigue_sonando = True
 
     oido.altavoz.al_sonar = habla_encima
-    oido.charla.al_escribir = sigue_hablando
     oido.charla.al_enviar = contesta
 
     atendido = oido.suena(voz("Sirius, cuéntame"), FIN)
@@ -2367,6 +2429,23 @@ def test_al_cambiar_de_voz_suelta_la_de_antes_y_el_turno_siguiente_habla_con_la_
         "suena:sonido de R: Otra",
     ]
     assert not [e for e in oido.eventos[antes:] if e.startswith(("di:", "suena:"))]
+
+
+def test_avisa_justo_antes_de_cargar_la_voz_y_solo_cuando_la_carga() -> None:
+    """La ventana carga la voz al abrirse, y con la de personaje no sale hasta que acaba:
+    quien lo dice por la consola se entera antes de que empiece a cargarla (ADR-253)."""
+    oido = _Oido()
+    avisos: list[int] = []
+    oido.servicio.before_loading_voice(lambda: avisos.append(oido.cargas_de_la_voz))
+
+    oido.servicio.start()
+    oido.servicio.stop()
+    oido.servicio.start()
+
+    assert avisos == [0], "una vez, con la voz aún por cargar"
+    _voz_nueva(oido)
+    oido.servicio.reload_voice()
+    assert avisos == [0, 1]
 
 
 def test_sin_escuchar_cambiar_de_voz_no_abre_el_micro_y_la_nueva_se_carga_al_escuchar() -> None:
