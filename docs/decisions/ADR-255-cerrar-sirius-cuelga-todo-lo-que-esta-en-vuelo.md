@@ -131,6 +131,9 @@ salida siguiera esperando por trabajo que no es red.
 - La orden de captura puede retrasar el cierre hasta su tope, 5 s.
 - Si se cierra con una clave de OpenAI a medio validar, la validación se corta y esa clave
   no se guarda: hay que volver a ponerla.
+- Mientras una ventana espera para cerrarse, se cuelga todo lo que se abra en el proceso,
+  también lo de otra ventana. Hoy solo pasaría si se acaba un proyecto con una orden de
+  captura en vuelo y se crea el siguiente antes de que acabe, como mucho 5 s.
 
 ## La lección
 
@@ -158,3 +161,25 @@ colgada tras cancelarla. De sus 6 pruebas nuevas, 5 fallan con el código de ant
 sexta fija que colgar no toca la captura, y la tumba su mutación. Caen sus 8 mutaciones.
 Con una clave a medio validar, cada ventana cierra en menos de 1 s; antes esperaba al tope
 de 10 s.
+
+**Ronda 4** de la PR, sobre `814e7b0d`: un P1 y un P2, los dos arreglados en `1e6b1c52`.
+
+- **El P1 es de capas.** La presentación importaba `hang_up_all` de
+  `sirius.infrastructure.network`, y AGENTS.md pide las dependencias hacia dentro. Ahora hay
+  un puerto, `ConnectionCloser` en `src/sirius/ports/connections.py`, y `sirius.main` da a la
+  ventana principal y a la de bienvenida el registro del proceso, que lo implementa. Las
+  ventanas solo lo invocan. Una guarda de `tests/unit/test_presentation_boundaries.py` falla
+  si la presentación importa de `sirius.infrastructure` algo que no sea el diario.
+- **El P2 es de la familia, que llega así a su cuarta ronda.** Una conexión que aún se abría
+  al pedir cerrar, en el DNS o en `connect_tcp`, no estaba apuntada al colgar, y seguía hasta
+  su tope. Así, el cierre aplazado volvía a esperar a la validación hasta 10 s. Ahora, desde
+  que una ventana pide cerrarse hasta que se cierra de verdad, toda conexión que se abre se
+  cuelga en el acto. Al cerrarse se vuelve a poder abrir, porque tras cambiar de proyecto se
+  abre otra ventana con las mismas dependencias. Un contador deja cerrarse dos ventanas a la
+  vez sin pisarse, y al salir sigue `final=True`. El propietario había dicho que se siguiera
+  trabajando sin preguntarle.
+- **Las cifras.** Con el código de `814e7b0d`, cerrar la bienvenida con la conexión de la
+  validación aún abriéndose tardaba 10,03 s, su tope; con el arreglo, 0,014 s. Lo que se
+  abría con el cierre de la principal ya pedido acababa a los 10,01 s, y ahora cae en
+  0,001 s. Las 13 pruebas nuevas fallan con el código de antes, y las del cierre de la
+  ronda 3 siguen en verde. Caen sus 20 mutaciones.
