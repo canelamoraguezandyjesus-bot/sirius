@@ -90,10 +90,11 @@ Se adopta la opción 3.
   bloque que se oye ahora. El oído lo lee sin cerrojo. Los dobles de las pruebas lo
   tienen: el altavoz de mentira suena con el `volumen` que pone la prueba mientras algo
   sigue en el aire.
-- **El conductor** lee la cara de la ventana de verdad: la dibuja con `grab`, que pasa
-  por su `paintEvent` en el acto, y lee lo último que dibujó con el instante del reloj
-  con que lo dibujó. `repaint` no basta: con la plataforma de Qt de las pruebas no
-  dibuja en el acto.
+- **El conductor** lee la cara de la pantalla, como la vería el propietario: deja correr
+  Qt hasta que la pinta sola, a su paso, y la lee de los píxeles por los colores con que
+  se pinta. Nunca le pide que se pinte: con `grab`, como se hizo al principio, una cara
+  congelada en reposo se habría leído viva (rondas 1 y 2 de Codex sobre la PR #702, en
+  ADR-259).
 
 ## Comprobación que la sostiene
 
@@ -116,8 +117,10 @@ Se adopta la opción 3.
   boca cerrada.
 - El puerto del altavoz gana `level`: todo altavoz lo dice, los dobles también.
 - La cara dice con qué colores se pinta (`PALETTE`): las pruebas de aceptación la leen de
-  los píxeles de la ventana con ellos, no de lo que dice que pintó (ronda 1 de Codex sobre
+  los píxeles de la pantalla con ellos, no de lo que dice que pintó (ronda 1 de Codex sobre
   la PR #702, en ADR-259).
+- Las dos pruebas de la vida en reposo miran un minuto entero fotograma a fotograma, como
+  lo pinta la cara: tardan un minuto cada una (ronda 2 de Codex sobre la PR #702).
 - El propietario tiene E-R04-05 por delante.
 
 ## Alternativas descartadas y por qué

@@ -56,6 +56,9 @@ from sirius.infrastructure.logging import LOGGER_NAME
 
 pytestmark = pytest.mark.acceptance
 
+#: La cabecera de un PNG.
+_PNG = b"\x89PNG\r\n\x1a\n"
+
 
 class _Reloj:
     def __init__(self) -> None:
@@ -320,6 +323,39 @@ def test_el_conductor_ve_imagenes_en_el_disco_en_la_base_y_en_el_diario(tmp_path
     conductor.cierra()
 
 
+@pytest.mark.parametrize(
+    ("como", "delata"),
+    [
+        ("en una dirección", "data:image/png;base64,iVBORw0KGgoAAAA"),
+        ("en hexadecimal", (_PNG + b"\x00" * 8).hex()),
+        ("en el repr de sus bytes", repr(_PNG + b"\x00" * 8)),
+        ("en base64", base64.b64encode(b"\xff\xd8\xff\xe0" + b"\x00" * 8).decode()),
+    ],
+)
+@pytest.mark.parametrize("donde", ["la base", "el diario"])
+def test_una_imagen_codificada_se_ve_igual_en_la_base_y_en_el_diario(
+    tmp_path: Path, donde: str, como: str, delata: str
+) -> None:
+    """Una imagen comprimida no lleva la marca de los fotogramas, pero sí lo que lleva dentro
+    toda imagen; y se busca igual en los dos sitios (ronda 2 de Codex sobre la PR #702)."""
+    del como
+    conductor = ConductorDeOjos(tmp_path)
+    assert conductor.imagenes_guardadas() == []
+
+    if donde == "la base":
+        with closing(sqlite3.connect(conductor.base)) as conexion:
+            conexion.execute("CREATE TABLE fotos_en_texto (foto TEXT)")
+            conexion.execute("INSERT INTO fotos_en_texto VALUES (?)", (delata,))
+            conexion.commit()
+    else:
+        logging.getLogger(LOGGER_NAME).warning("lo visto: %s", delata)
+
+    vistas = conductor.imagenes_guardadas()
+    assert vistas, f"no se ve una imagen guardada en {donde}"
+    assert all(vista.startswith(f"{donde} lleva una imagen: ") for vista in vistas), vistas
+    conductor.cierra()
+
+
 def test_oye_y_oye_a_suenan_con_su_voz_y_marcan_el_turno(tmp_path: Path) -> None:
     conductor = ConductorDeOjos(tmp_path)
 
@@ -374,6 +410,70 @@ def test_gestos_dibujados_ve_cada_gesto_que_hace_la_cara_y_ninguno_si_no_hace(
 
 
 # --- La cara, leída de los píxeles (ronda 1 de Codex sobre la PR #702) ----------------
+
+
+@pytest.mark.gui
+def test_una_cara_que_solo_se_pinta_si_se_lo_piden_se_lee_congelada(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """El conductor no le pide a la cara que se pinte: si deja de pintarse sola, como al
+    parar su reloj, leerla falla, aunque pintada a la fuerza se viera viva (ronda 2 de Codex
+    sobre la PR #702)."""
+    conductor = ConductorDeOjos(tmp_path)
+    ventana = conductor.ventana(qtbot)
+    assert conductor.pasa_el_tiempo(0.5), "viva, se lee"
+
+    ventana._cara().stop()
+
+    with pytest.raises(AssertionError, match="congelada"):
+        conductor.pasa_el_tiempo(0.5)
+    assert lee(ventana._cara().grab().toImage(), conductor.reloj.ahora) is not None, (
+        "pintada a la fuerza se vería"
+    )
+    conductor.cierra()
+
+
+@pytest.mark.gui
+def test_lo_que_se_lee_es_lo_que_queda_en_la_pantalla_no_lo_que_pintaria_a_la_fuerza(
+    qtbot: QtBot, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Una cara que en la pantalla nunca parpadea y pintada a la fuerza sí, se lee sin
+    parpadear: lo que ve el propietario (ronda 2 de Codex sobre la PR #702)."""
+    from sirius.domain.face import FacePose
+    from sirius.presentation import main_window
+    from sirius.presentation.face_widget import FaceWidget
+
+    class Tramposa(FaceWidget):
+        a_la_fuerza = False
+
+        def grab(self, *args: Any) -> Any:
+            self.a_la_fuerza = True
+            try:
+                return super().grab(*args)
+            finally:
+                self.a_la_fuerza = False
+
+        def _draw(self, painter: Any, pose: Any) -> None:
+            if not self.a_la_fuerza:
+                pose = FacePose(1.0, (0.0, 0.0), 0.0, 0.0, 0.0)
+            super()._draw(painter, pose)
+
+    monkeypatch.setattr(main_window, "FaceWidget", Tramposa)
+    conductor = ConductorDeOjos(tmp_path)
+    ventana = conductor.ventana(qtbot)
+    assert isinstance(ventana._cara(), Tramposa)
+
+    dibujos = conductor.pasa_el_tiempo(8.0)
+
+    assert all(dibujo.ojos > 0.8 for dibujo in dibujos), "ha leído lo que pintaría a la fuerza"
+    forzados = []
+    for _ in range(400):
+        conductor.reloj.avanza(0.02)
+        lectura = lee(ventana._cara().grab().toImage(), conductor.reloj.ahora)
+        assert lectura is not None
+        forzados.append(lectura.dibujo.ojos)
+    assert min(forzados) <= 0.2, "a la fuerza tenía que parpadear"
+    conductor.cierra()
 
 
 def _cara_suelta(qtbot: QtBot, reloj: _Reloj, cara_de: type[Any] | None = None) -> Any:

@@ -215,6 +215,17 @@ pruebas no garantizan».
   cara no se congela leyó una vez la pantalla aún sin pintar. Una captura vacía ya no es
   una cara, se salta; con eso, `tests/acceptance` entera, 190 en verde, 2 omitidas y 20
   xfail.
+- Tras la ronda 2 de Codex (abajo): con el conductor de antes, una cara que nunca arranca
+  su reloj pasa las dos pruebas de la vida en reposo y la de la boca; con el de ahora,
+  las tres fallan. Una cara que en la pantalla nunca parpadea y pintada a la fuerza sí se
+  lee sin parpadear. Nueve cambios a propósito, en la cara, en cómo la lee el conductor y
+  en la búsqueda de imágenes: las pruebas cazan los nueve. Una imagen codificada de cuatro
+  maneras, en una dirección, en hexadecimal, en el `repr` de sus bytes y en base64, se ve
+  igual en la base y en el diario: 8 casos. Los dobles, 24 en verde. La batería entera:
+  hasta `tests/integration`, 6 228 en verde, 15 omitidas y 20 xfail, en 22 min 14 s, y una
+  roja, la medida de rendimiento de construir el contexto, con el ordenador ocupado en otra
+  cosa a la vez; sola, en verde. Y `tests/integration` y `tests/unit` enteras, otra vez y
+  sin nada más: 3 274 en verde, 1 omitida y 1 xfail, en 7 min 12 s.
 
 ## Consecuencias
 
@@ -239,6 +250,12 @@ pruebas no garantizan».
 - familia: `prueba-que-no-puede-ver-lo-que-vigila`
 - sin esto se repetiría: una huella de mentira con una marca en sus bytes la pierde en cuanto la pieza la pasa a números, y la prueba de «cifradas» pasaría con la huella guardada en claro. Volvió en la ronda 1 de Codex de tres maneras: la cara se leía de lo que decía que pintó, y un fotograma o una huella en base64 no se veían en la base. La raíz es la misma: el conductor miraba lo que la pieza dice, o una sola forma de lo guardado, y no lo que se ve. Ahora la cara se lee de los píxeles, y lo guardado se busca en todas sus formas que se deshacen sin llave, en la base igual que en el diario
 - lo hace cumplir: `tests/acceptance/test_dobles_del_conductor_0_4.py`
+
+Y volvió en la ronda 2, dos veces más, porque el arreglo de la ronda 1 seguía siendo caso
+a caso: una imagen codificada en el diario no se buscaba, y la cara se pintaba a la
+fuerza para leerla. Ahora la cara se lee por un solo camino, lo que Qt pinta sola en la
+pantalla, y cada cosa guardada se busca con una sola función, la misma en la base y en el
+diario.
 
 ## Revisión externa
 
@@ -273,3 +290,29 @@ el conductor digan lo mismo.
 
   Los tres P1 son de la familia de la lección de arriba, y el arreglo va a su raíz, no a
   cada caso.
+- **Ronda 2, sobre `8cc180d7`**: dos hallazgos, los dos ciertos, y se le preguntó además
+  si el enfoque estaba mal.
+  - **P1, una imagen codificada en el diario no se veía**: en la base se buscaban la marca
+    de los fotogramas y las cabeceras de imagen; en el diario, solo la marca. Una imagen
+    comprimida y escrita en base64 en el diario no lleva la marca, y pasaba PA-R04-09.
+    La ronda 1 decía que lo guardado se buscaba igual en la base que en el diario, y para
+    las imágenes no era verdad.
+  - **P2, la cara se pintaba a la fuerza para leerla**: el conductor la leía con `grab`,
+    que pasa por su `paintEvent` en el acto, así que una cara congelada en reposo o al
+    hablar se habría leído viva en PA-R04-02 y PA-R04-04. Se comprobó: con el conductor
+    de entonces y una cara que nunca arranca su reloj, las tres pruebas pasan.
+
+  **Dos rondas seguidas con la misma familia**, `prueba-que-no-puede-ver-lo-que-vigila`:
+  se dejó de parchear y se buscó la raíz (ADR-001). La raíz es que cada sitio por donde el
+  conductor mira se hizo caso a caso: la cara se leía de una forma en una prueba y de otra
+  en las demás, y lo guardado se buscaba con una lista en la base y con otra en el diario.
+  Cada ronda encontraba otra combinación. Se decidió seguir, arreglando eso:
+  - **La cara se lee por un solo camino**, el de la pantalla: el conductor deja correr Qt
+    hasta que la pinta sola y lee lo que quedó, en todas las pruebas. Nunca le pide que
+    se pinte; si en un segundo no se ha pintado sola, está congelada y la prueba falla.
+    Se mira fotograma a fotograma, cada 33 ms del reloj de las pruebas, como los pinta, en
+    vez de cada 20 ms: ningún umbral cambia, y cada prueba de un minuto tarda un minuto.
+  - **Lo guardado se busca con una sola función por cosa**, la misma en cada sitio:
+    `lo_que_delata_una_imagen` mira la marca en todas sus formas y lo que lleva dentro una
+    imagen codificada, en binario, en hexadecimal, como texto y en base64, en la base y en
+    el diario igual. Las huellas ya se buscaban así.

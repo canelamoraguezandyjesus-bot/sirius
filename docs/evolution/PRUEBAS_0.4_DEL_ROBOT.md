@@ -61,7 +61,7 @@ reconocerle. E-R04-03 empieza por eso: da permiso él y otra persona.
 | ID | Qué demuestra | Sale de (§6 del plan) | Piezas | Cobertura | Motivo | Evaluación | Estado | Pruebas |
 |---|---|---|---|---|---|---|---|---|
 | PA-R04-01 | Su cara está en la ventana de verdad: ojos, párpados, cejas y boca, dibujados por la app, sin imágenes ni vídeos | Lo que se hace, 4 | B | parcial | evaluación-humana | E-R04-05 | en verde | `tests/acceptance/test_robot_0_4_cara.py::test_su_cara_esta_en_la_ventana_con_ojos_parpados_cejas_y_boca` |
-| PA-R04-02 | Vida en reposo: sin nadie delante y sin hablar, en un minuto del reloj de las pruebas, mirando la cara cada 20 ms, parpadea entre 6 y 30 veces, nunca pasa más de 10 s sin parpadear y no siempre al mismo ritmo, con al menos medio segundo entre el hueco más corto y el más largo; la mirada se va más de una vez a más de 0,05 de donde estaba, sin pasar nunca de 0,3 del frente; y respira, al menos seis respiraciones enteras de entre 2 y 8 s cada una | Lo que se hace, 5 | B | automática | — | — | en verde | `tests/acceptance/test_robot_0_4_cara.py::test_en_reposo_parpadea_sin_ritmo_fijo`<br>`tests/acceptance/test_robot_0_4_cara.py::test_en_reposo_mueve_un_poco_los_ojos_y_respira` |
+| PA-R04-02 | Vida en reposo: sin nadie delante y sin hablar, en un minuto del reloj de las pruebas, mirando cada fotograma que la cara pinta sola, uno cada 33 ms, parpadea entre 6 y 30 veces, nunca pasa más de 10 s sin parpadear y no siempre al mismo ritmo, con al menos medio segundo entre el hueco más corto y el más largo; la mirada se va más de una vez a más de 0,05 de donde estaba, sin pasar nunca de 0,3 del frente; y respira, al menos seis respiraciones enteras de entre 2 y 8 s cada una | Lo que se hace, 5 | B | automática | — | — | en verde | `tests/acceptance/test_robot_0_4_cara.py::test_en_reposo_parpadea_sin_ritmo_fijo`<br>`tests/acceptance/test_robot_0_4_cara.py::test_en_reposo_mueve_un_poco_los_ojos_y_respira` |
 | PA-R04-03 | Nunca se queda congelada, aunque el modelo tarde: mientras el modelo de la charla tarda 3 s de verdad en contestar, la cara se sigue dibujando, al menos 10 veces por segundo, y cambia | Terminado cuando, 4 | B | parcial | evaluación-humana | E-R04-05 | en verde | `tests/acceptance/test_robot_0_4_cara.py::test_la_cara_no_se_congela_aunque_el_modelo_tarde` |
 | PA-R04-04 | La boca se mueve con el volumen de su voz: mientras suena lo que dice, de 0,2 s en 0,2 s, con dos décimas o más de volumen la boca está más abierta, y en los silencios y al callar, cerrada | Lo que se hace, 6 | B | automática | — | — | en verde | `tests/acceptance/test_robot_0_4_cara.py::test_la_boca_se_mueve_con_el_volumen_de_su_voz` |
 | PA-R04-05 | Gestos de una lista cerrada: el modelo sabe cuáles hay, porque la lista va en sus instrucciones; un gesto de la lista que el modelo escribe entre corchetes lo hace la cara cuando le toca; uno que no está en la lista se ignora; y las etiquetas ni se ven en la ventana, ni las dice la voz, ni quedan en la charla | Lo que se hace, 7 | C | automática | — | — | en verde | `tests/acceptance/test_robot_0_4_gestos.py::test_el_modelo_sabe_que_gestos_hay`<br>`tests/acceptance/test_robot_0_4_gestos.py::test_la_cara_hace_el_gesto_que_escribe_el_modelo`<br>`tests/acceptance/test_robot_0_4_gestos.py::test_un_gesto_que_no_esta_en_la_lista_se_ignora`<br>`tests/acceptance/test_robot_0_4_gestos.py::test_las_etiquetas_ni_se_ven_ni_se_dicen_ni_se_guardan` |
@@ -163,10 +163,12 @@ cuando entra la pieza que la necesita (skill `comandos-para-su-ordenador`).
   su cuenta una biblioteca en C no lo ve, y por eso se miran además el disco, la
   temporal, la base y el diario al acabar.
 - **Una imagen o una huella escondidas a propósito.** Se buscan donde las dejaría un
-  error: ficheros de imagen por su extensión o su cabecera, la marca de los fotogramas y
-  las cabeceras de imagen en la base y en el diario, y las huellas en float32, en float64
-  y como texto. Una pieza que las cifrara a medias, las comprimiera o las partiera en
-  números sueltos para esconderlas no se ve aquí: eso es engaño, y lo mira la revisión
-  del código de cada pieza (lección de ADR-241).
+  error: ficheros de imagen por su extensión o su cabecera; y en la base y en el diario,
+  con la misma búsqueda en los dos, la marca de los fotogramas en todas las formas en que
+  Python escribe unos bytes, lo que lleva dentro una imagen codificada, en binario, en
+  hexadecimal, como texto o en base64, y las huellas en float32, en float64 y como texto,
+  también en hexadecimal y en base64. Una pieza que las cifrara a medias, las comprimiera
+  o las partiera en números sueltos para esconderlas no se ve aquí: eso es engaño, y lo
+  mira la revisión del código de cada pieza (lección de ADR-241).
 - **Qué lleva puesto la gente o cómo está la habitación.** Las herramientas del plan no
   lo ven; ver más es producto.

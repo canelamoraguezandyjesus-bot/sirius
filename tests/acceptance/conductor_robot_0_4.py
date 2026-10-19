@@ -25,16 +25,21 @@ que les llegan, como uno de verdad. Lo que la tubería recibe del micro sigue si
 quién habló, como en la 0.3; lo que sí lleva, como una voz de verdad, es su timbre,
 dentro de las muestras (``AudioConVoz``), y solo el reconocedor de voces lo lee.
 
-**La cara de Sirius no es un doble.** Se lee de los píxeles de la ventana de verdad, como
-la vería el propietario (``lector_de_la_cara``), no de lo que la cara dice que dibujó; y
-las veces que se pinta las cuenta Qt, no ella (ronda 1 de Codex sobre la PR #702). Las
-cifras de las pruebas salen de esos dibujos y de los registros de los dobles, nunca de un
-campo que rellene el conductor.
+**La cara de Sirius no es un doble.** Se lee de los píxeles de la pantalla, como la vería
+el propietario (``lector_de_la_cara``), no de lo que la cara dice que dibujó; las veces
+que se pinta las cuenta Qt, no ella (ronda 1 de Codex sobre la PR #702); y el conductor
+nunca le pide que se pinte: deja correr Qt hasta que la pinta sola, con su reloj, y lee lo
+que quedó en la pantalla. Una cara que solo se pintara al pedírselo se leería congelada
+(ronda 2). Las cifras de las pruebas salen de esos dibujos y de los registros de los
+dobles, nunca de un campo que rellene el conductor.
 
 **Lo que no se guarda se busca con un alcance escrito.** Que no quede ninguna imagen ni
 ninguna huella en claro es una negación sin borde: se buscan donde las dejaría un error,
 en las formas en que Python, numpy y SQLite guardan unos bytes o unos números, y lo
-demás es engaño, que va a la revisión del código de cada pieza (lección de ADR-241).
+demás es engaño, que va a la revisión del código de cada pieza (lección de ADR-241). Cada
+cosa se busca con una sola función, la misma en cada sitio: buscarla a mano sitio a sitio
+dejó la base sin unas formas en la ronda 1 de Codex sobre la PR #702, y el diario sin
+otras en la ronda 2.
 
 Las piezas de ADR-259 que aún no han entrado levantan ``PiezaPendiente``
 (``piezas_del_robot``). Cuando una entra, se implementan sus métodos aquí y se añade su
@@ -73,6 +78,7 @@ from piezas_del_robot import PiezaPendiente, Piezas
 
 from sirius.domain.gestures import GESTURES
 from sirius.infrastructure.paths import resolve_paths
+from sirius.presentation.face_widget import FRAME_MS
 
 #: Las letras de la tabla de piezas de ADR-259 que ya han entrado en ``main``. La A es la
 #: nota de arranque y estas pruebas; la B, su cara (ADR-260); la C, sus gestos (ADR-261).
@@ -136,21 +142,35 @@ CABECERAS_DE_IMAGEN: tuple[bytes, ...] = (
     b"MM\x00*",
 )
 
-#: Lo que delata una imagen codificada dentro de la base, en binario o en base64: las
-#: cabeceras que no se dan por casualidad en unos bytes cualesquiera. Las de dos o tres
-#: bytes, como la de BMP o el principio de la de JPEG, sí se dan, y se dejan fuera.
-IMAGEN_DENTRO: tuple[bytes, ...] = (
+#: Lo que lleva dentro una imagen, en binario, que no se da por casualidad en unos bytes
+#: cualesquiera: la cabecera de PNG, las marcas de JPEG, la de GIF y la de WEBP. Las de dos
+#: o tres bytes, como la de BMP o el principio de la de JPEG, sí se dan, y se dejan fuera.
+_DENTRO_DE_UNA_IMAGEN: tuple[bytes, ...] = (
     b"\x89PNG\r\n\x1a\n",
     b"JFIF\x00",
     b"Exif\x00\x00",
     b"GIF87a",
     b"GIF89a",
     b"WEBPVP8",
-    b"/9j/",
-    b"iVBORw0KGgo",
-    b"R0lGOD",
-    b"UklGR",
-    b"data:image/",
+)
+#: Cómo empieza en base64 una imagen entera: JPEG, PNG, GIF y las de RIFF, como WEBP.
+_UNA_IMAGEN_EN_BASE64: tuple[bytes, ...] = (b"/9j/", b"iVBORw0KGgo", b"R0lGOD", b"UklGR")
+
+#: Lo que delata una imagen codificada, en la base o en el diario: lo que lleva dentro, en
+#: binario, en hexadecimal y como texto, que es como sale en el ``repr`` de unos bytes; su
+#: principio en base64; y la cabecera de una imagen en una dirección (ronda 2 de Codex sobre
+#: la PR #702).
+IMAGEN_DENTRO: tuple[bytes, ...] = tuple(
+    dict.fromkeys(
+        (
+            *_DENTRO_DE_UNA_IMAGEN,
+            *(dentro.hex().encode() for dentro in _DENTRO_DE_UNA_IMAGEN),
+            *(dentro.hex().upper().encode() for dentro in _DENTRO_DE_UNA_IMAGEN),
+            *(repr(dentro)[2:-1].encode() for dentro in _DENTRO_DE_UNA_IMAGEN),
+            *_UNA_IMAGEN_EN_BASE64,
+            b"data:image/",
+        )
+    )
 )
 
 
@@ -545,6 +565,13 @@ ALTO_DE_LA_CARA = 480
 #: Lo más que se deja pasar del reloj de las pruebas buscando sus partes: el párpado solo
 #: se ve al parpadear, y parpadea cada 2 a 6 s.
 BUSCANDO_LAS_PARTES = 8.0
+#: De cuánto en cuánto se mira la cara al dejar pasar el reloj de las pruebas, en segundos:
+#: lo que tarda en pintarse sola un fotograma, como lo ve el propietario. Un parpadeo deja
+#: los ojos casi cerrados 0,09 s: se ve siempre.
+PASO_DE_LA_CARA = FRAME_MS / 1000
+#: Lo que se espera a que Qt pinte la cara sola, en milisegundos: se pinta cada 33 ms, y si
+#: en un segundo no lo ha hecho, está congelada.
+ESPERA_A_QUE_SE_PINTE_MS = 1000
 #: Lo que puede dejar de verse un gesto, en segundos, y seguir siendo el mismo.
 HUECO_DE_UN_GESTO = 0.3
 
@@ -552,9 +579,10 @@ HUECO_DE_UN_GESTO = 0.3
 class VentanaDeOjos(VentanaDeVoz):
     """La ventana de Sirius con lo que la 0.4 le añade: su cara y lo que dice de la cámara.
 
-    La cara se lee de los píxeles de ``face_widget``, la de verdad, con
-    ``lector_de_la_cara``; y las veces que se pinta las cuenta Qt con un filtro de eventos
-    puesto desde fuera, no la cara (pieza B y ronda 1 de Codex sobre la PR #702).
+    La cara se lee de los píxeles de la pantalla, donde la pinta ``face_widget``, la de
+    verdad, con ``lector_de_la_cara``; las veces que se pinta las cuenta Qt con un filtro de
+    eventos puesto desde fuera, no la cara (pieza B y ronda 1 de Codex sobre la PR #702); y
+    nunca se le pide que se pinte: se lee lo que pinta sola (ronda 2).
     """
 
     def __init__(self, ventana: Any, qtbot: Any, reloj: RelojDeMentira) -> None:
@@ -564,8 +592,7 @@ class VentanaDeOjos(VentanaDeVoz):
         self._pintadas = _cuenta_las_pintadas(ventana.face_widget)
 
     def _cara(self) -> Any:
-        """La cara de la ventana; tiene que estar a la vista en ella, no solo existir:
-        ``grab`` dibuja también una cara escondida."""
+        """La cara de la ventana; tiene que estar a la vista en ella, no solo existir."""
         cara = self._ventana.face_widget
         assert cara.window() is self._ventana, "la cara no está en la ventana"
         assert cara.isVisible(), "la cara está en la ventana pero no se ve"
@@ -580,23 +607,28 @@ class VentanaDeOjos(VentanaDeVoz):
         self._qtbot.waitExposed(self._ventana)
 
     def _lee(self) -> Lectura:
-        """Dibuja la cara ahora y la lee de la imagen que pinta.
+        """La cara como la pinta ella sola ahora: deja correr Qt hasta que la pinta por su
+        cuenta, y la lee de la pantalla.
 
-        La dibuja con ``grab``, que pasa por su ``paintEvent`` en el acto: ``repaint`` no
-        lo garantiza con todas las plataformas de Qt, y la de las pruebas lo deja para
-        después.
+        No le pide que se pinte: con ``grab`` pasaba por su ``paintEvent`` en el acto, y una
+        cara que solo se pintara así, congelada en reposo o al hablar, se habría leído viva
+        (ronda 2 de Codex sobre la PR #702). Si en ``ESPERA_A_QUE_SE_PINTE_MS`` no se ha
+        pintado sola, está congelada, y la prueba falla.
         """
-        lectura = lee(self._cara().grab().toImage(), self._reloj.ahora)
+        antes = self._pintadas()
+        try:
+            self._qtbot.waitUntil(
+                lambda: self._pintadas() > antes, timeout=ESPERA_A_QUE_SE_PINTE_MS
+            )
+        except Exception as error:
+            msg = f"la cara no se ha pintado sola en {ESPERA_A_QUE_SE_PINTE_MS} ms: está congelada"
+            raise AssertionError(msg) from error
+        lectura = self._en_la_pantalla()
         assert lectura is not None, "en la ventana no se ve ninguna cara"
         return lectura
 
-    def cara(self) -> Dibujo:
-        """Dibuja la cara ahora, y devuelve lo que se ve en lo que pintó."""
-        return self._lee().dibujo
-
-    def lo_que_se_ve(self) -> Dibujo | None:
-        """La cara tal como está ahora en la pantalla, sin pedirle que se pinte: lo último
-        que pintó ella sola. ``None`` si no se ve ninguna cara."""
+    def _en_la_pantalla(self) -> Lectura | None:
+        """Lo que se ve de la cara en la pantalla ahora: lo último que pintó."""
         from PySide6.QtCore import QPoint
 
         cara = self._cara()
@@ -604,7 +636,17 @@ class VentanaDeOjos(VentanaDeVoz):
         pantalla = cara.screen().grabWindow(
             self._ventana.winId(), donde.x(), donde.y(), cara.width(), cara.height()
         )
-        lectura = lee(pantalla.toImage(), self._reloj.ahora)
+        return lee(pantalla.toImage(), self._reloj.ahora)
+
+    def cara(self) -> Dibujo:
+        """Lo que se ve de la cara en cuanto se pinta sola, a la hora del reloj de las
+        pruebas."""
+        return self._lee().dibujo
+
+    def lo_que_se_ve(self) -> Dibujo | None:
+        """La cara tal como está ahora en la pantalla, sin esperar a nada: lo último que
+        pintó ella sola. ``None`` si no se ve ninguna cara."""
+        lectura = self._en_la_pantalla()
         return None if lectura is None else lectura.dibujo
 
     def dibujos(self) -> int:
@@ -614,13 +656,14 @@ class VentanaDeOjos(VentanaDeVoz):
 
     def partes_de_la_cara(self) -> frozenset[str]:
         """Lo que se ve dibujado de la cara: «ojos», «párpados», «cejas», «boca». El párpado
-        solo se ve al parpadear: se deja pasar el reloj de las pruebas, de 20 en 20 ms, hasta
-        haberlas visto todas o ``BUSCANDO_LAS_PARTES`` segundos."""
+        solo se ve al parpadear: se deja pasar el reloj de las pruebas, de
+        ``PASO_DE_LA_CARA`` en ``PASO_DE_LA_CARA``, hasta haberlas visto todas o
+        ``BUSCANDO_LAS_PARTES`` segundos."""
         vistas = set(self._lee().partes)
-        for _ in range(round(BUSCANDO_LAS_PARTES / 0.02)):
+        for _ in range(round(BUSCANDO_LAS_PARTES / PASO_DE_LA_CARA)):
             if vistas >= PARTES:
                 break
-            self._reloj.avanza(0.02)
+            self._reloj.avanza(PASO_DE_LA_CARA)
             vistas |= self._lee().partes
         return frozenset(vistas)
 
@@ -726,9 +769,11 @@ class ConductorDeOjos(ConductorDeVoz):
 
     # --- Pieza B: su cara ---
 
-    def pasa_el_tiempo(self, segundos: float, *, cada: float = 0.02) -> tuple[Dibujo, ...]:
+    def pasa_el_tiempo(
+        self, segundos: float, *, cada: float = PASO_DE_LA_CARA
+    ) -> tuple[Dibujo, ...]:
         """Deja pasar ``segundos`` del reloj de las pruebas, de ``cada`` en ``cada``, y
-        devuelve lo que dibujó la cara en cada paso, leído de la ventana."""
+        devuelve lo que pintó sola la cara en cada paso, leído de la pantalla."""
         ventana = self._la_ventana()
         dibujos: list[Dibujo] = []
         for _ in range(round(segundos / cada)):
@@ -943,31 +988,17 @@ class ConductorDeOjos(ConductorDeVoz):
 
     def imagenes_guardadas(self) -> list[str]:
         """Lo que delata una imagen guardada desde que arrancó: ficheros de imagen nuevos
-        en sus carpetas o en la temporal; la marca de los fotogramas o una imagen
-        codificada en la base; y la marca en el diario, en cualquiera de las formas en que
-        Python escribe unos bytes."""
+        en sus carpetas o en la temporal; y en la base y en el diario, lo mismo en los dos
+        (``lo_que_delata_una_imagen``)."""
         encontradas = [
             str(fichero)
             for fichero in sorted(self._imagenes_en_el_disco() - self._imagenes_de_antes)
         ]
-        base = self._bytes_de_la_base()
-        # En cualquiera de las formas en que Python escribe unos bytes, como en el diario: un
-        # fotograma guardado en base64 en una columna de texto no lleva la marca tal cual
-        # (ronda 1 de Codex sobre la PR #702).
-        encontradas.extend(
-            f"la base lleva la marca de los fotogramas {forma}"
-            for forma in formas_en(MARCA_DE_LA_IMAGEN, base.decode("latin-1"))
-        )
-        encontradas.extend(
-            f"la base lleva una imagen: {cabecera!r}"
-            for cabecera in IMAGEN_DENTRO
-            if cabecera in base
-        )
-        diario = self._bytes_del_diario().decode("utf-8", errors="replace")
-        encontradas.extend(
-            f"el diario lleva la marca de los fotogramas {forma}"
-            for forma in formas_en(MARCA_DE_LA_IMAGEN, diario)
-        )
+        for sitio, datos in (
+            ("la base", self._bytes_de_la_base()),
+            ("el diario", self._bytes_del_diario()),
+        ):
+            encontradas.extend(f"{sitio} lleva {lo}" for lo in lo_que_delata_una_imagen(datos))
         return encontradas
 
     def _bytes_de_la_base(self) -> bytes:
@@ -1046,6 +1077,21 @@ def formas_de(marca: bytes) -> dict[str, tuple[str, ...]]:
         "en base64": tuple(sorted(en_base64)),
         "como lista de bytes": (",".join(str(b) for b in marca),),
     }
+
+
+def lo_que_delata_una_imagen(datos: bytes) -> list[str]:
+    """Lo que delata en ``datos`` una imagen guardada: la marca de los fotogramas, en
+    cualquiera de las formas en que Python escribe unos bytes (``formas_en``), y lo que
+    lleva dentro una imagen codificada (``IMAGEN_DENTRO``). Es lo mismo en cada sitio donde
+    la dejaría un error, la base y el diario: buscarla sitio a sitio dejó la base sin las
+    formas de la marca en la ronda 1 de Codex sobre la PR #702, y el diario sin las
+    imágenes codificadas en la ronda 2."""
+    delata = [
+        f"la marca de los fotogramas {forma}"
+        for forma in formas_en(MARCA_DE_LA_IMAGEN, datos.decode("latin-1"))
+    ]
+    delata.extend(f"una imagen: {dentro!r}" for dentro in IMAGEN_DENTRO if dentro in datos)
+    return delata
 
 
 def formas_en(marca: bytes, texto: str) -> list[str]:
