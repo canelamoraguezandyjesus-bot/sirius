@@ -1837,3 +1837,19 @@ defectos:
       - src/sirius/adapters/recognition/age.py
       - src/sirius/infrastructure/local_sight_installation.py
       - tests/unit/test_edad_adaptador.py
+  # ADR-265: quien recuerda lo que ve solo miraba a quien se veía y a quien ya estaba, así
+  # que alguien a medio llegar que en el fotograma siguiente no se veía seguía a medio llegar:
+  # quien asomaba, se perdía un fotograma y volvía, habría llegado sin estar 3 s seguidos. Lo
+  # cazó su prueba antes del primer commit; ahora mira también a quien estaba llegando o
+  # yéndose.
+  - id: H-265
+    titulo: Alguien a medio llegar que dejaba de verse seguía a medio llegar, y habría llegado sin estar 3 s seguidos
+    bloque: producto
+    gravedad: baja
+    estado: cerrado
+    cerrado_por: 4c0981ebbe91165dc69ebbbd2ccb3730a5cc39a5
+    pr: 703
+    adr: 265
+    ficheros:
+      - src/sirius/application/sight_log.py
+      - tests/unit/test_lo_que_ve.py
