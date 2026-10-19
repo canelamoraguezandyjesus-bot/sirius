@@ -1805,3 +1805,19 @@ defectos:
     adr: 261
     ficheros:
       - tests/gui/test_conversation_ui.py
+  # ADR-263: quien reconoce caras y voces cogía un solo cerrojo para todo, también mientras
+  # cargaba InsightFace y ECAPA, que tarda segundos en el hilo de la vista. La ventana mira
+  # el permiso dos veces por segundo y se habría quedado esperando, congelada. Se vio al
+  # repasar el código antes de escribir sus pruebas; ahora cargar tiene su propio cerrojo, y
+  # el de cambiar el permiso nunca se coge mientras algo tarda.
+  - id: H-263
+    titulo: Quien reconoce cogía el cerrojo del permiso mientras cargaba los modelos, y la ventana se habría congelado esperándolo
+    bloque: producto
+    gravedad: media
+    estado: cerrado
+    cerrado_por: bd7dc478f9b95f46062be4b2ca37cbf160bf3054
+    pr: 703
+    adr: 263
+    ficheros:
+      - src/sirius/application/recognition.py
+      - tests/unit/test_reconocer.py
