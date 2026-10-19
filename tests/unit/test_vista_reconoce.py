@@ -13,6 +13,7 @@ from sirius.application.local_sight import (
     RECOGNIZE_AGAIN_SECONDS,
     SAME_FACE_GAP_SECONDS,
     SAME_PLACE,
+    Glimpse,
     LocalSight,
 )
 from sirius.ports.local_sight import SeenFace, SightEngines
@@ -277,3 +278,90 @@ def test_mientras_reconoce_una_cara_nueva_no_dice_quien_hay() -> None:
 
     assert durante == [None]
     assert montaje.vista.in_front_names() == ("Marta", None)
+
+
+# --- Lo que sabe, de una vez y comprobado al leerlo (ronda 3 de Codex sobre la PR #703) --
+
+
+def test_si_alguien_quita_su_permiso_su_nombre_deja_de_valer_en_el_acto() -> None:
+    """Con su cara quieta en su sitio, quitar el permiso no ponía en duda a nadie, y hasta
+    volver a reconocer a todos se seguía diciendo su nombre. Lo reconocido con otros
+    permisos no vale desde que cambian, sin esperar a que la vista vuelva a mirar."""
+    montaje = _Montaje()
+    montaje.ve(("marta", 0.3), ("pepe", 0.7))
+    assert montaje.vista.in_front_names() == ("Marta", None)
+
+    del montaje.reconocer.nombres["marta"]
+    montaje.reconocer.version += 1
+
+    assert montaje.vista.in_front_names() is None
+    assert [cara.who for cara in montaje.vista.in_front()] == [None, None]
+    montaje.ve(("marta", 0.3), ("pepe", 0.7))
+    assert montaje.vista.in_front_names() == (None, None)
+
+
+def test_si_quita_su_permiso_mientras_se_la_reconoce_su_nombre_no_se_da_por_actual() -> None:
+    montaje = _Montaje()
+    reconocer = montaje.reconocer
+    reconoce = reconocer.who_by_face
+
+    def y_lo_quita(crop: str) -> str | None:
+        quien = reconoce(crop)
+        reconocer.nombres.pop("marta", None)
+        reconocer.version += 1
+        return quien
+
+    reconocer.who_by_face = y_lo_quita  # type: ignore[method-assign]
+    montaje.ve(("marta", 0.3))
+
+    assert montaje.vista.in_front_names() is None
+    assert [cara.who for cara in montaje.vista.in_front()] == [None]
+
+
+def test_quien_lee_los_nombres_mientras_la_vista_entra_en_duda_no_lee_que_no_hay_nadie() -> None:
+    """Si el hilo de la vista entraba en duda entre dos lecturas de quien la lee, este
+    juntaba lo de dos momentos, y la duda se leía como que no hay nadie. Lo que sabe se lee
+    de una sola vez: lo de antes, o que no lo sabe."""
+    detector, reloj = _Detector(), _Reloj()
+
+    class _DudaAlLeerla(LocalSight):
+        def in_front(self) -> tuple[Glimpse, ...]:
+            # El hilo de la vista, justo ahora: el detector falla.
+            detector.falla = RuntimeError("MediaPipe")
+            self.look()
+            detector.falla = None
+            return super().in_front()
+
+    vista = _DudaAlLeerla(
+        load_engines=lambda: SightEngines(_Camara(), detector),
+        clock=reloj,
+        install_command=_ORDEN,
+        recognition=_Reconocer(),
+    )
+    vista.start()
+    detector.caras.append((SeenFace(0.3, False, False, "marta"),))
+    vista.look()
+
+    assert vista.in_front_names() in (("Marta",), None)
+
+
+def test_si_vuelve_a_abrir_la_camara_mientras_reconoce_lo_de_antes_no_vale_para_lo_nuevo() -> None:
+    montaje = _Montaje(_Reconocer(nombres={"marta": "Marta", "pepe": "Pepe"}))
+    reconoce = montaje.reconocer.who_by_face
+    reabiertas: list[str] = []
+
+    def reabriendo(crop: str) -> str | None:
+        if not reabiertas:
+            reabiertas.append(crop)
+            montaje.vista.stop()
+            montaje.vista.start()
+        return reconoce(crop)
+
+    montaje.reconocer.who_by_face = reabriendo  # type: ignore[method-assign]
+    montaje.ve(("marta", 0.3))
+    assert montaje.vista.in_front_names() is None, "de la vez nueva aún no ha leído nada"
+
+    montaje.ve(("pepe", 0.3))
+
+    assert montaje.vista.in_front_names() == ("Pepe",)
+    assert montaje.reconocer.preguntadas == ["marta", "pepe"], "Pepe no hereda el de Marta"

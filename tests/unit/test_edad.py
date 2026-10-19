@@ -12,9 +12,11 @@ import pytest
 
 from sirius.application.age import CARE_HEADING, CARE_RULE, Ages, care_block, needs_care
 from sirius.application.local_sight import (
+    FRESH_SECONDS,
     RECOGNIZE_AGAIN_SECONDS,
     SAME_FACE_GAP_SECONDS,
     SAME_PLACE,
+    Glimpse,
     LocalSight,
 )
 from sirius.ports.age import AgeReading, AgeUnavailable
@@ -439,3 +441,88 @@ def test_una_cara_que_sigue_no_pone_en_duda_a_nadie() -> None:
         montaje.ve(("marta", 0.3))
 
     assert durante == [(AgeReading(40, True),)], "al volver a estimarla, sigue sabiéndola"
+
+
+# --- Lo que sabe, de una vez y comprobado al leerlo (ronda 3 de Codex sobre la PR #703) --
+
+
+def test_quien_lee_la_edad_mientras_la_vista_entra_en_duda_no_lee_que_no_hay_nadie() -> None:
+    """Si el hilo de la vista entraba en duda entre dos lecturas de quien la lee, este
+    juntaba lo de dos momentos, y la duda se leía como que no hay nadie, sin la regla. Lo
+    que sabe se lee de una sola vez: lo de antes, o la duda."""
+    camara, detector, reloj = _Camara(), _Detector(), _Reloj()
+
+    class _DudaAlLeerla(LocalSight):
+        def in_front(self) -> tuple[Glimpse, ...]:
+            # El hilo de la vista, justo ahora: un fotograma que no se puede leer.
+            camara.sin_imagen = True
+            self.look()
+            camara.sin_imagen = False
+            return super().in_front()
+
+    vista = _DudaAlLeerla(
+        load_engines=lambda: SightEngines(camara, detector),
+        clock=reloj,
+        install_command=_ORDEN,
+        ages=Ages(_Estimador),
+    )
+    vista.start()
+    detector.caras.append((SeenFace(0.3, False, False, "marta"),))
+    vista.look()
+
+    assert vista.in_front_ages() in ((AgeReading(40, True),), (None,))
+
+
+def test_si_la_vista_lleva_mas_de_un_segundo_sin_mirar_la_edad_es_duda() -> None:
+    """La cámara puede colgarse sin fallar, y el hilo, ir lento: lo que vio hace más de
+    ``FRESH_SECONDS`` no dice quién hay ahora."""
+    montaje = _Montaje()
+    montaje.ve(("marta", 0.3))
+
+    montaje.reloj.ahora += FRESH_SECONDS / 2
+    assert montaje.vista.in_front_ages() == (AgeReading(40, True),)
+    montaje.reloj.ahora += FRESH_SECONDS
+    assert montaje.vista.in_front_ages() == (None,)
+    assert montaje.vista.in_front() == ()
+
+    montaje.ve(("marta", 0.3))
+    assert montaje.vista.in_front_ages() == (AgeReading(40, True),)
+
+
+def test_si_suelta_la_camara_mientras_estima_lo_que_estimaba_no_se_da_por_visto() -> None:
+    # Al entrar en Model Studio, la ventana suelta la cámara cuando sea.
+    montaje = _Montaje()
+    estima = montaje.estimador.estimate
+
+    def soltando(crop: str) -> AgeReading:
+        montaje.vista.stop()
+        return estima(crop)
+
+    montaje.estimador.estimate = soltando  # type: ignore[method-assign]
+    montaje.ve(("lucas", 0.5))
+
+    assert montaje.vista.in_front_ages() is None, "no ve"
+    assert montaje.vista.in_front() == ()
+
+
+def test_si_vuelve_a_abrir_la_camara_mientras_estima_lo_de_antes_no_vale_para_lo_nuevo() -> None:
+    # Al salir de Model Studio, la ventana la vuelve a abrir cuando sea.
+    montaje = _Montaje()
+    estima = montaje.estimador.estimate
+    reabiertas: list[str] = []
+
+    def reabriendo(crop: str) -> AgeReading:
+        if not reabiertas:
+            reabiertas.append(crop)
+            montaje.vista.stop()
+            montaje.vista.start()
+        return estima(crop)
+
+    montaje.estimador.estimate = reabriendo  # type: ignore[method-assign]
+    montaje.ve(("marta", 0.3))
+    assert montaje.vista.in_front_ages() == (None,), "de la vez nueva aún no ha leído nada"
+
+    montaje.ve(("lucas", 0.3))
+
+    assert montaje.vista.in_front_ages() == (AgeReading(8, True),)
+    assert montaje.estimador.vistos == ["marta", "lucas"], "Lucas no hereda la de Marta"

@@ -115,8 +115,11 @@ Se adoptan las dos últimas.
   a un modelo de este ordenador, como «# Quién hay».
 - **Quitar el permiso** quita su nombre de lo apuntado, en el mismo paso que borra sus
   huellas, y de lo que se está mirando: pasa a ser alguien sin identificar, y no se apunta
-  que se fue. Y lo que se le dice al modelo solo lleva nombres de quien tiene permiso: si
-  quitar un nombre falló, se lee como alguien sin identificar y se vuelve a quitar.
+  que se fue. Lo que la vista reconoció de él justo antes, si llega después, tampoco lleva
+  su nombre: el permiso se mira al apuntar, con el cerrojo con el que se quita (ronda 3 de
+  Codex sobre la PR #703). Y lo que se le dice al modelo solo lleva nombres de quien tiene
+  permiso: si quitar un nombre falló, se lee como alguien sin identificar y se vuelve a
+  quitar.
 - **La hora** es la de este ordenador; la raíz de composición la recibe, y las pruebas
   ponen la suya.
 - Olvidar (ADR-239) no la toca: no guarda nada dicho. Así queda en `FORGET_COVERAGE`.

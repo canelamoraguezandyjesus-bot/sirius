@@ -1157,6 +1157,11 @@ class _ProveedorQueApunta(_StaticLLMProvider):
         yield from super().stream_response(request)
 
 
+def _con_permiso() -> tuple[str, ...]:
+    """Quiénes tienen permiso en estas pruebas, como lo diría quien reconoce."""
+    return ("Marta", "Pepe")
+
+
 def _quien_hay(instrucciones: str) -> list[str]:
     """Las líneas de «# Quién hay», sin el título ni la regla."""
     lineas = instrucciones.splitlines()
@@ -1171,7 +1176,7 @@ def _quien_hay(instrucciones: str) -> list[str]:
 def test_el_modelo_lee_quien_le_habla_y_a_quienes_tiene_delante(tmp_path: Path) -> None:
     proveedor = _ProveedorQueApunta()
     use_case = _build_use_case(tmp_path / "sirius.db", proveedor)
-    use_case.set_presence(lambda: ("Pepe", None))
+    use_case.set_presence(lambda: ("Pepe", None), allowed=_con_permiso)
 
     use_case.send_message("hola", speaker="Marta")
 
@@ -1188,7 +1193,7 @@ def test_el_modelo_lee_quien_le_habla_y_a_quienes_tiene_delante(tmp_path: Path) 
 def test_lo_escrito_en_la_ventana_no_lleva_quien_lo_escribe(tmp_path: Path) -> None:
     proveedor = _ProveedorQueApunta()
     use_case = _build_use_case(tmp_path / "sirius.db", proveedor)
-    use_case.set_presence(lambda: ())
+    use_case.set_presence(lambda: (), allowed=_con_permiso)
 
     use_case.send_message("hola")
 
@@ -1201,7 +1206,7 @@ def test_sin_vista_ni_quien_hable_no_hay_seccion_de_quien_hay(tmp_path: Path) ->
     proveedor = _ProveedorQueApunta()
     use_case = _build_use_case(tmp_path / "sirius.db", proveedor)
     use_case.send_message("uno")
-    use_case.set_presence(lambda: None)
+    use_case.set_presence(lambda: None, allowed=_con_permiso)
     use_case.send_message("dos")
 
     assert all(HEADING not in p.instructions for p in proveedor.peticiones)
@@ -1218,7 +1223,7 @@ def test_si_no_se_sabe_quien_hay_se_apunta_una_vez_y_la_charla_sigue(
         msg = "la cámara en /ruta/secreta"
         raise RuntimeError(msg)
 
-    use_case.set_presence(rota)
+    use_case.set_presence(rota, allowed=_con_permiso)
 
     primera = use_case.send_message("uno", speaker="Marta")
     use_case.send_message("dos")
@@ -1230,6 +1235,75 @@ def test_si_no_se_sabe_quien_hay_se_apunta_una_vez_y_la_charla_sigue(
     assert len(avisos) == 1
     assert "RuntimeError" in avisos[0].getMessage()
     assert "/ruta/secreta" not in caplog.text
+
+
+@pytest.mark.integration
+def test_quien_quita_su_permiso_entre_oirle_y_escribir_la_peticion_no_va_con_nombre(
+    tmp_path: Path,
+) -> None:
+    """Ronda 3 de Codex sobre la PR #703: la voz se reconoce al acabar de oírle, y la
+    petición se escribe después; si entretanto quita su permiso, ni su voz ni su cara van
+    con su nombre. Se mira al escribirla."""
+    proveedor = _ProveedorQueApunta()
+    use_case = _build_use_case(tmp_path / "sirius.db", proveedor)
+    con_permiso = ["Marta", "Pepe"]
+    use_case.set_presence(lambda: ("Marta", "Pepe"), allowed=lambda: tuple(con_permiso))
+
+    use_case.send_message("hola", speaker="Marta")
+    con_permiso.remove("Marta")
+    use_case.send_message("adiós", speaker="Marta")
+
+    antes, despues = proveedor.peticiones
+    assert _quien_hay(antes.instructions) == [
+        "Te habla Marta.",
+        "Tienes delante a Marta.",
+        "Tienes delante a Pepe.",
+    ]
+    assert _quien_hay(despues.instructions) == [
+        "Te habla alguien sin identificar.",
+        "Tienes delante a Pepe.",
+        "Tienes delante a alguien sin identificar.",
+    ]
+    assert "Marta" not in despues.instructions
+
+
+@pytest.mark.integration
+def test_si_no_se_sabe_quien_tiene_permiso_nadie_va_con_nombre_y_se_apunta_una_vez(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    proveedor = _ProveedorQueApunta()
+    use_case = _build_use_case(tmp_path / "sirius.db", proveedor)
+
+    def roto() -> tuple[str, ...]:
+        msg = "las huellas en /ruta/secreta"
+        raise RuntimeError(msg)
+
+    use_case.set_presence(lambda: ("Pepe",), allowed=roto)
+
+    primera = use_case.send_message("uno", speaker="Marta")
+    use_case.send_message("dos", speaker="Marta")
+
+    assert primera.outcome is MessageStatus.COMPLETED
+    for peticion in proveedor.peticiones:
+        assert _quien_hay(peticion.instructions) == [
+            "Te habla alguien sin identificar.",
+            "Tienes delante a alguien sin identificar.",
+        ]
+    avisos = [r for r in caplog.records if "No se sabe quiénes han dado permiso" in r.getMessage()]
+    assert len(avisos) == 1
+    assert "RuntimeError" in avisos[0].getMessage()
+    assert "/ruta/secreta" not in caplog.text
+
+
+@pytest.mark.integration
+def test_sin_saber_quien_tiene_permiso_quien_habla_no_va_con_nombre(tmp_path: Path) -> None:
+    proveedor = _ProveedorQueApunta()
+    use_case = _build_use_case(tmp_path / "sirius.db", proveedor)
+
+    use_case.send_message("hola", speaker="Marta")
+
+    [peticion] = proveedor.peticiones
+    assert _quien_hay(peticion.instructions) == ["Te habla alguien sin identificar."]
 
 
 # --- Con quién se corta (pieza F de la 0.4, ADR-264) ------------------------------------
@@ -1255,7 +1329,7 @@ def test_con_un_crio_delante_la_peticion_lleva_la_regla_tras_quien_hay_y_antes_d
 ) -> None:
     proveedor = _ProveedorQueApunta()
     use_case = _con_recordatorio(tmp_path, proveedor)
-    use_case.set_presence(lambda: (None, None))
+    use_case.set_presence(lambda: (None, None), allowed=_con_permiso)
     use_case.set_ages(lambda: (AgeReading(40, sure=True), AgeReading(8, sure=True)))
 
     use_case.send_message("hola", speaker="Marta")
@@ -1335,7 +1409,7 @@ def test_si_no_se_sabe_la_edad_de_nadie_la_lleva_ante_la_duda_y_se_apunta_una_ve
 def test_el_modelo_lee_lo_que_ha_visto_antes_de_quien_hay(tmp_path: Path) -> None:
     proveedor = _ProveedorQueApunta()
     use_case = _build_use_case(tmp_path / "sirius.db", proveedor)
-    use_case.set_presence(lambda: ("Marta",))
+    use_case.set_presence(lambda: ("Marta",), allowed=_con_permiso)
     use_case.set_seen(
         lambda: ("A las 18:02 vino Marta.", "A las 18:10 vino alguien sin identificar.")
     )
@@ -1378,7 +1452,7 @@ def test_a_un_modelo_de_fuera_no_le_llega_ni_quien_hay_ni_lo_que_ha_visto_y_la_r
         return ("Marta", None)
 
     use_case.set_seen(lo_visto)
-    use_case.set_presence(quien_hay)
+    use_case.set_presence(quien_hay, allowed=_con_permiso)
     use_case.set_ages(lambda: (AgeReading(8, sure=True),))
 
     use_case.send_message("hola")

@@ -368,6 +368,34 @@ def test_la_regla_se_mira_en_cada_pregunta() -> None:
     assert [care_block() in i for i in modelo.instrucciones] == [n % 2 == 0 for n in range(40)]
 
 
+def test_al_volver_a_pedir_una_respuesta_que_fallo_la_regla_se_mira_otra_vez() -> None:
+    """Ronda 3 de Codex sobre la PR #703: lo que tarda en fallar una petición es tiempo para
+    que llegue alguien; la que se vuelve a pedir lleva la regla de ese momento. Y la
+    respuesta se guarda con la regla con que se pidió."""
+    regla = [""]
+
+    class _FallaYLlegaUnCrio(_Modelo):
+        def stream_response(self, request: LLMRequest) -> Iterator[LLMStreamEvent]:
+            if self.falla.get(request.input_text, 0) > 0:
+                regla[0] = care_block()
+            return super().stream_response(request)
+
+    modelo = _FallaYLlegaUnCrio(falla={_T05: 1})
+    caso = _caso_con_regla(modelo, lambda: regla[0])
+
+    caso.run()
+
+    pares = zip(modelo.pedidas, modelo.instrucciones, strict=True)
+    fallida, repetida = [i for p, i in pares if p == _T05]
+    assert care_block() not in fallida
+    assert care_block() in repetida
+    antes = len(modelo.pedidas)
+    caso.run()
+    assert modelo.pedidas[antes:] == [q.bad_idea for q in TRICK_QUESTIONS[:4]], (
+        "con la regla, solo las cuatro que se pidieron sin ella"
+    )
+
+
 def test_una_respuesta_pedida_sin_la_regla_no_vale_cuando_hace_falta() -> None:
     modelo = _Modelo()
     regla = [""]

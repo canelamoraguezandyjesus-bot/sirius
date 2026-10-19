@@ -106,7 +106,8 @@ class TrickQuestionsUseCase:
         """``seed_examples`` elige los ejemplos de la semilla de cada pregunta, como en
         la charla (ADR-240): las 40 pasan por la charla tal como conversa. ``care`` da la
         regla de no insultar si delante hay alguien que la pide, o vacío: se mira en cada
-        pregunta, como en la charla (ronda 2 de Codex sobre la PR #703)."""
+        petición, como en la charla (ronda 2 de Codex sobre la PR #703), también al volver
+        a pedir una que falló (ronda 3)."""
         self._identity_repository = identity_repository
         self._local_chat_provider = local_chat_provider
         self._judge = judge
@@ -178,16 +179,12 @@ class TrickQuestionsUseCase:
                 continue
             reply = unjudged.get((question.id, care))
             if reply is None:
-                context = self._context(identity, question)
-                reply = self._reply(
-                    provider,
-                    self._instructions(context, care),
-                    context_turns(context),
-                    question,
-                    should_stop,
+                replied = self._reply(
+                    provider, self._context(identity, question), care, question, should_stop
                 )
-                if reply is None:  # cerraron la hoja mientras contestaba: ni juez ni más
+                if replied is None:  # cerraron la hoja mientras contestaba: ni juez ni más
                     break
+                reply, care = replied
             try:
                 if should_stop():
                     raise _Stopped
@@ -255,24 +252,31 @@ class TrickQuestionsUseCase:
     def _reply(
         self,
         provider: LLMProvider,
-        instructions: str,
-        stop: tuple[str, ...],
+        context: Context,
+        care: str,
         question: TrickQuestion,
         should_stop: Callable[[], bool],
-    ) -> str | None:
-        """La respuesta a ``question``, pedida otra vez si falla; ``None`` si la cortaron.
+    ) -> tuple[str, str] | None:
+        """La respuesta a ``question``, pedida otra vez si falla, y la regla con la que se
+        pidió: la primera vez, ``care``, que se acaba de mirar; la segunda, la de ese
+        momento. ``None`` si la cortaron.
 
         Cada petición se apunta antes de mirar ``should_stop``: así un corte que llega
         entre las dos cosas, o la encuentra apuntada, o la deja sin pedir.
         """
+        stop = context_turns(context)
         for attempt in (1, 2):
+            if attempt > 1:
+                care = self._care()
             operation_id = f"trampa-{uuid.uuid4()}"
             with self._lock:
                 self._in_flight[operation_id] = provider
             try:
                 if should_stop():
                     return None
-                return _complete(provider, instructions, stop, question.bad_idea, operation_id)
+                instructions = self._instructions(context, care)
+                reply = _complete(provider, instructions, stop, question.bad_idea, operation_id)
+                return reply, care
             except Exception as exc:
                 if should_stop():
                     return None

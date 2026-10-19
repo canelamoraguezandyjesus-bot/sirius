@@ -20,7 +20,10 @@ acto, y lo recordado son números y nombres.
   cámara, en la vuelta que no lee fotograma o en la que el detector falla, y mientras mira
   quiénes son y qué edad tienen las caras nuevas, no sabe quién hay: no lo dice, y la edad
   de quien haya es duda; lo que recordaba de cada cara se olvida (ronda 2 de Codex sobre
-  la PR #703).
+  la PR #703). Y lo deja de una vez, en una sola foto (``_View``), que quien la lee
+  comprueba al leerla: que sea de hace como mucho ``FRESH_SECONDS`` y, los nombres, que
+  nadie haya dado ni quitado su permiso desde que se reconocieron; si no, tampoco sabe
+  quién hay (ronda 3).
 - **Reconocer cuesta**: cada cara se reconoce al aparecer y después cada
   ``RECOGNIZE_AGAIN_SECONDS``, siguiéndola por dónde está mientras se la vea sin hueco: un
   fotograma sin nadie, o más de ``SAME_FACE_GAP_SECONDS`` sin mirar, y la que aparezca
@@ -39,7 +42,7 @@ from __future__ import annotations
 
 import threading
 from collections.abc import Callable, Iterable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Protocol
 
 from sirius.infrastructure.logging import get_logger
@@ -66,6 +69,11 @@ SAME_PLACE = 0.15
 #: Lo más que puede pasar sin mirarla para que una cara sea la misma, en segundos: la vista
 #: mira unas diez veces por segundo, y con un hueco mayor no se sabe quién ha entrado.
 SAME_FACE_GAP_SECONDS = 0.5
+#: Lo más viejo que puede ser el último fotograma que leyó para decir quién hay, en
+#: segundos: la vista mira unas diez veces por segundo, y si lleva más sin poder mirar,
+#: porque la cámara se ha colgado o el hilo va lento, no sabe quién ha entrado. Es más que
+#: una vuelta en la que vuelve a reconocer a varios, que no pone en duda a quien sigue.
+FRESH_SECONDS = 1.0
 
 
 class FaceRecognizer(Protocol):
@@ -127,6 +135,20 @@ class Glimpse:
     age: AgeReading | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class _View:
+    """Lo que sabe de quién hay, de una vez: si ve; si sabe quién hay; el momento del último
+    fotograma que pudo leer entero, con qué versión de los permisos reconoció sus caras y
+    lo que vio de cada una. Se cambia entero y se lee de una sola vez: quien lo lee desde
+    otro hilo no junta lo de dos momentos (ronda 3 de Codex sobre la PR #703)."""
+
+    seeing: bool = False
+    known: bool = False
+    at: float = 0.0
+    version: int = -1
+    faces: tuple[Glimpse, ...] = ()
+
+
 class LocalSight:
     """La vista: la cámara, el detector de caras y lo que vio los últimos segundos."""
 
@@ -147,7 +169,7 @@ class LocalSight:
         self._recognition_failed = False
         #: De quién era cada cara la última vez que se reconoció: dónde estaba, quién era,
         #: cuándo se reconoció y cuándo se vio por última vez; y con qué versión de los
-        #: permisos.
+        #: permisos. Solo lo toca el hilo de la vista, como ``_aged``.
         self._known: tuple[tuple[float, str | None, float, float], ...] = ()
         self._known_version = -1
         #: Quien estima la edad; sin él, no se mira.
@@ -156,6 +178,8 @@ class LocalSight:
         #: La edad de cada cara la última vez que se estimó: dónde estaba, qué edad, cuándo
         #: se estimó y cuándo se vio por última vez.
         self._aged: tuple[tuple[float, AgeReading | None, float, float], ...] = ()
+        #: De qué vez que abrió la cámara son ``_known`` y ``_aged``.
+        self._cache_session = 0
         #: Quien recuerda lo que ve; sin él, no se recuerda.
         self._log = log
         self._log_failed = False
@@ -166,9 +190,12 @@ class LocalSight:
         #: La cámara y su estado, desde el hilo que sea.
         self._lock = threading.Lock()
         self._seeing = False
-        #: Si ve, pero no sabe quién hay: acaba de abrir la cámara, la última vuelta no pudo
-        #: leer un fotograma, o está mirando quiénes son las caras nuevas.
-        self._in_doubt = False
+        #: Cuántas veces ha abierto la cámara: lo que mira una vuelta de una vez anterior no
+        #: se deja como de esta.
+        self._session = 0
+        #: Lo que sabe de quién hay (``_View``): se cambia entero, con el cerrojo, y se lee
+        #: sin él, de una sola vez.
+        self._view = _View()
         self._notice = ""
         self._detector_failed = False
         #: Lo visto, del más viejo al más nuevo: cada fotograma con su momento. Se cambia
@@ -212,8 +239,10 @@ class LocalSight:
                 self._notice = NO_CAMERA.format(reason=error.reason)
                 return self._notice
             self._seeing = True
-            # Hasta el primer fotograma que lea, no sabe quién hay.
-            self._doubt()
+            # Hasta el primer fotograma que lea, no sabe quién hay; y lo que recordaba de
+            # cada cara, de cuando veía antes, no vale: lo olvida el hilo de la vista.
+            self._session += 1
+            self._view = _View(seeing=True)
             self._notice = ""
             return ""
 
@@ -223,6 +252,7 @@ class LocalSight:
             if self._engines is not None and self._seeing:
                 self._engines.camera.close()
             self._seeing = False
+            self._view = _View()
         self._paused()
 
     def look(self) -> None:
@@ -235,15 +265,20 @@ class LocalSight:
             if not self._seeing or self._engines is None:
                 return
             engines = self._engines
+            session = self._session
             try:
                 frame = engines.camera.read()
             except CameraUnavailable as error:
                 _logger.warning("La cámara ha dejado de dar imagen: %s", error.reason)
                 engines.camera.close()
                 self._seeing = False
+                self._view = _View()
                 self._notice = NO_CAMERA.format(reason=error.reason)
                 self._paused()
                 return
+        if session != self._cache_session:
+            # Lo que recordaba de cada cara es de antes de volver a abrir la cámara.
+            self._known, self._aged, self._cache_session = (), (), session
         if frame is None:
             self._doubt()
             return
@@ -258,11 +293,14 @@ class LocalSight:
         finally:
             del frame
         now = self._clock()
+        # Los permisos, antes de reconocer: lo que se reconozca vale para estos, y si alguien
+        # da o quita el suyo mientras tanto, quien lo lea no lo da por actual.
+        version = self._permissions()
         if not self._all_followed(faces, now):
             # Mientras mira quiénes son y qué edad tienen las caras nuevas, que puede tardar
             # (la primera vez, cargar los modelos), no sabe quién hay.
-            self._in_doubt = True
-        names = self._identify(faces, now)
+            self._doubt(forget=False)
+        names = self._identify(faces, now, version)
         ages = self._age(faces, now)
         seen = tuple(
             Glimpse(face.x, face.talking, face.looking, who, age)
@@ -270,15 +308,28 @@ class LocalSight:
         )
         kept = tuple(entry for entry in self._history if now - entry[0] <= self._memory)
         self._history = (*kept, (now, seen))
-        self._in_doubt = False
-        self._remember(now, names)
+        with self._lock:
+            # Si entretanto ha soltado la cámara, o la ha vuelto a abrir, esto ya no es lo
+            # que ve.
+            current = self._seeing and self._session == session
+            if current:
+                self._view = _View(seeing=True, known=True, at=now, version=version, faces=seen)
+        if current:
+            self._remember(now, names)
 
-    def _doubt(self) -> None:
-        """Deja de saber quién hay: lo que recordaba de cada cara no vale para lo que vea
-        después."""
-        self._in_doubt = True
-        self._known = ()
-        self._aged = ()
+    def _doubt(self, *, forget: bool = True) -> None:
+        """Deja de saber quién hay: hasta el siguiente fotograma que pueda leer entero, quien
+        lo lea no lo da por actual. Con ``forget``, lo que recordaba de cada cara tampoco
+        vale para lo que vea después."""
+        with self._lock:
+            self._view = replace(self._view, known=False)
+        if forget:
+            self._known, self._aged = (), ()
+
+    def _permissions(self) -> int:
+        """La versión de los permisos de quien reconoce caras; ``-1`` si no hay quien."""
+        recognition = self._recognition
+        return -1 if recognition is None else recognition.version
 
     def _all_followed(self, faces: Sequence[Any], now: float) -> bool:
         """Si cada cara de ``faces`` es una que ya sabía quién era y qué edad tenía, seguida
@@ -328,9 +379,10 @@ class LocalSight:
                 self._log_failed = True
                 _logger.error("Quien recuerda lo que ve ha fallado (%s)", type(error).__name__)
 
-    def _identify(self, faces: Sequence[Any], now: float) -> list[str | None]:
+    def _identify(self, faces: Sequence[Any], now: float, version: int) -> list[str | None]:
         """Quién es cada cara de ``faces``: la que ya se reconoció hace poco donde está,
-        sin volver a hacerlo; las demás, ahora. Si alguien está dando permiso y su cara está
+        sin volver a hacerlo; las demás, ahora. Con otra ``version`` de los permisos que la
+        de lo que recordaba, todas, ahora. Si alguien está dando permiso y su cara está
         sola delante, va a quien reconoce. Un fallo se apunta una vez, con su tipo, y esa
         vez nadie es nadie."""
         recognition = self._recognition
@@ -344,8 +396,8 @@ class LocalSight:
         try:
             if recognition.wants_face() and len(faces) == 1:
                 recognition.take_face(faces[0].crop)
-            if recognition.version != self._known_version:
-                self._known, self._known_version = (), recognition.version
+            if version != self._known_version:
+                self._known, self._known_version = (), version
             self._known = _again_or_kept(
                 self._known, faces, now, lambda face: recognition.who_by_face(face.crop)
             )
@@ -379,26 +431,39 @@ class LocalSight:
 
     def in_front_names(self) -> tuple[str | None, ...] | None:
         """Quiénes tiene delante en el último fotograma, su nombre o ``None`` por cada uno;
-        ``None`` si no ve, o si ve pero no sabe quién hay, que entonces no lo dice."""
-        if not self._seeing or self._in_doubt:
+        ``None`` si no sabe quién hay ahora (``_current``), o si alguien ha dado o quitado
+        su permiso desde que los reconoció: entonces no lo dice."""
+        view = self._view
+        if not self._current(view) or view.version != self._permissions():
             return None
-        return tuple(face.who for face in self.in_front())
+        return tuple(face.who for face in view.faces)
 
     def in_front_ages(self) -> tuple[AgeReading | None, ...] | None:
         """La edad que aparentan los que tiene delante en el último fotograma, ``None`` por
         cada uno cuya edad no se sabe; ``None`` si no ve o no tiene quien estime la edad. Si
-        ve pero no sabe quién hay, una edad que no se sabe: es duda."""
-        if not self._seeing or self._ages is None:
+        ve pero no sabe quién hay ahora (``_current``), una edad que no se sabe: es duda."""
+        view = self._view
+        if not view.seeing or self._ages is None:
             return None
-        if self._in_doubt:
+        if not self._current(view):
             return (None,)
-        return tuple(face.age for face in self.in_front())
+        return tuple(face.age for face in view.faces)
 
     def in_front(self) -> tuple[Glimpse, ...]:
         """Las caras del último fotograma; ninguna si aún no ha visto nada, si no ve o si no
-        sabe quién hay."""
-        history = self._history
-        return history[-1][1] if history and self._seeing and not self._in_doubt else ()
+        sabe quién hay ahora (``_current``). Si alguien ha dado o quitado su permiso desde
+        que se reconocieron, sin nombre."""
+        view = self._view
+        if not self._current(view):
+            return ()
+        if view.version != self._permissions():
+            return tuple(replace(face, who=None) for face in view.faces)
+        return view.faces
+
+    def _current(self, view: _View) -> bool:
+        """Si ``view`` dice quién hay ahora: ve, sabe quién hay y su fotograma es de hace
+        como mucho ``FRESH_SECONDS``."""
+        return view.seeing and view.known and self._clock() - view.at <= FRESH_SECONDS
 
     def talker_x(self) -> float | None:
         """Dónde está quien mueve la boca en el último fotograma; si son varios, el más al

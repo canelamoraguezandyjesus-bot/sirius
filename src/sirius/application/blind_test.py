@@ -72,7 +72,9 @@ class BlindTestUseCase:
         la charla (ADR-240). ``model_capabilities`` dice qué sabe hacer un modelo, o
         lanza ``BlindTestError`` con el motivo si no se sabe (ADR-247). ``care`` da la
         regla de no insultar si delante hay alguien que la pide, o vacío: las respuestas
-        se enseñan como de Sirius (ronda 2 de Codex sobre la PR #703)."""
+        se enseñan como de Sirius (ronda 2 de Codex sobre la PR #703). Se mira al pedir
+        cada respuesta, también al volver a pedirla: quién hay delante puede cambiar de un
+        modelo al siguiente (ronda 3)."""
         self._identity_repository = identity_repository
         self._provider_for = provider_for
         self._list_models = list_models
@@ -150,9 +152,8 @@ class BlindTestUseCase:
         # Los ejemplos de cada pregunta se eligen al llegar a ella, después de mirar si
         # se cerró la ventana, y una sola vez: todos los modelos la contestan con las
         # mismas instrucciones, como en la charla (ADR-240, ronda 2 de Codex). La regla
-        # de no insultar, igual: se mira al llegar a la pregunta, y vale para todos.
+        # de no insultar, no: va aparte, y se mira en cada petición (``_ask``).
         instructions: dict[str, str] = {}
-        cares: dict[str, str] = {}
         #: Los comienzos de turno de sus ejemplos: dónde deja de escribir cada respuesta
         #: (incidencia #700).
         stops: dict[str, tuple[str, ...]] = {}
@@ -173,24 +174,19 @@ class BlindTestUseCase:
                         self._in_flight[run] = (provider, operation_id)
                     if should_stop():
                         raise _Cancelled(_CANCELLED)
-                    if question not in cares:
-                        cares[question] = self._care()
-                    care = cares[question]
-                    key = (version.id, model, question, care)
-                    answer = self._answered.get(key)
+                    care = self._care()
+                    answer = self._answered.get((version.id, model, question, care))
                     if answer is None:
                         if question not in instructions:
                             examples = self._seed_examples.pick(version.examples, question)
-                            identity_text = render_identity(version, examples)
-                            instructions[question] = (
-                                f"{identity_text}\n\n{care}" if care else identity_text
-                            )
+                            instructions[question] = render_identity(version, examples)
                             stops[question] = example_turns(examples)
                         try:
-                            answer = self._ask(
+                            answer, care = self._ask(
                                 provider,
                                 model,
                                 instructions[question],
+                                care,
                                 stops[question],
                                 question,
                                 operation_id,
@@ -206,7 +202,7 @@ class BlindTestUseCase:
                                 model,
                             )
                             raise
-                        self._answered[key] = answer
+                        self._answered[(version.id, model, question, care)] = answer
                     answers[model].append(answer)
                     done += 1
                     if on_progress is not None:
@@ -230,15 +226,21 @@ class BlindTestUseCase:
         provider: LLMProvider,
         model: str,
         instructions: str,
+        care: str,
         stop: tuple[str, ...],
         question: str,
         operation_id: str,
         should_stop: Callable[[], bool],
-    ) -> str:
-        """Pide una respuesta, y si falla la vuelve a pedir ``RETRIES`` veces antes de parar."""
+    ) -> tuple[str, str]:
+        """Pide una respuesta, y si falla la vuelve a pedir ``RETRIES`` veces antes de parar.
+        La primera vez, con la regla ``care`` que se acaba de mirar; las siguientes, con la
+        de ese momento. Devuelve la respuesta y la regla con la que se pidió."""
         for attempt in range(RETRIES + 1):
+            if attempt:
+                care = self._care()
+            asked = f"{instructions}\n\n{care}" if care else instructions
             try:
-                return _answer(provider, model, instructions, stop, question, operation_id)
+                return _answer(provider, model, asked, stop, question, operation_id), care
             except _Cancelled:
                 raise
             except BlindTestError:

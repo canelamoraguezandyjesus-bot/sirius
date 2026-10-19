@@ -17,9 +17,11 @@ para que la reconozca, o nadie. De eso saca los cambios y los apunta, con su hor
   está abierto, cada ``TIDY_EVERY`` desde el hilo de la vista, vea o no: no depende de que
   cambie nada ni de que la charla lo lea (ronda 1 de Codex sobre la PR #703).
 - **Quien quita su permiso** deja de tener nombre en lo apuntado y en lo que se está
-  mirando: pasa a ser alguien sin identificar, sin que se apunte que se fue. Y al leerlo,
-  un nombre de quien ya no tiene permiso, porque algo falló al quitárselo, se lee como
-  alguien sin identificar y se quita entonces: el modelo nunca lo lee.
+  mirando: pasa a ser alguien sin identificar, sin que se apunte que se fue; y lo que la
+  vista reconoció de él justo antes, si llega después, también (ronda 3 de Codex sobre la
+  PR #703). Y al leerlo, un nombre de quien ya no tiene permiso, porque algo falló al
+  quitárselo, se lee como alguien sin identificar y se quita entonces: el modelo nunca lo
+  lee.
 """
 
 from __future__ import annotations
@@ -101,9 +103,14 @@ class SightLog:
     def see(self, now: float, names: Sequence[str | None]) -> None:
         """Lo que ve la vista en un fotograma, en el instante ``now`` de su reloj: quién es
         cada cara, su nombre o ``None``. Apunta los cambios que ya se dan por hechos. Un
-        fallo al apuntar se dice una vez, con su tipo, y no para la vista."""
-        seen: Counter[str | None] = Counter(names)
+        fallo al apuntar se dice una vez, con su tipo, y no para la vista.
+
+        El nombre de quien ya no tiene permiso, porque se lo ha quitado mientras la vista le
+        reconocía, es alguien sin identificar: se mira con el cerrojo con el que se quita,
+        así que no se apunta después de quitárselo (ronda 3 de Codex sobre la PR #703)."""
         with self._lock:
+            allowed = set(self._allowed())
+            seen: Counter[str | None] = Counter(who if who in allowed else None for who in names)
             changes = self._changes(now, self._wall_clock(), seen)
             if changes:
                 self._write(changes)

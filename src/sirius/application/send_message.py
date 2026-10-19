@@ -31,7 +31,7 @@ from __future__ import annotations
 
 import threading
 import uuid
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Collection, Sequence
 from dataclasses import dataclass
 
 from sirius.application.age import CareWatch, care_block
@@ -342,6 +342,10 @@ class SendMessageUseCase:
         #: se le dice.
         self._presence: Callable[[], Sequence[str | None] | None] | None = None
         self._presence_failed = False
+        #: Quiénes tienen permiso para que se les reconozca, que se mira al escribir cada
+        #: petición; sin ello, nadie tiene nombre (ronda 3 de Codex sobre la PR #703).
+        self._allowed: Callable[[], Collection[str]] | None = None
+        self._allowed_failed = False
         #: Si hay que cortarse, con la edad que aparentan los que tiene delante, de la
         #: vista (pieza F de la 0.4, ADR-264); sin ella, no se mira.
         self._care_watch = CareWatch()
@@ -350,10 +354,19 @@ class SendMessageUseCase:
         self._seen: Callable[[], Sequence[str]] | None = None
         self._seen_failed = False
 
-    def set_presence(self, in_front: Callable[[], Sequence[str | None] | None]) -> None:
+    def set_presence(
+        self,
+        in_front: Callable[[], Sequence[str | None] | None],
+        *,
+        allowed: Callable[[], Collection[str]],
+    ) -> None:
         """Le dice de dónde saber a quiénes tiene delante: de la vista, su nombre o ``None``
-        por cada uno, o ``None`` si no ve (pieza E de la 0.4, ADR-263)."""
+        por cada uno, o ``None`` si no ve (pieza E de la 0.4, ADR-263); y quiénes tienen
+        permiso para que se les reconozca, que se mira al escribir cada petición: el nombre
+        de quien ya no lo tiene, de la vista o de la voz, es alguien sin identificar (ronda
+        3 de Codex sobre la PR #703)."""
         self._presence = in_front
+        self._allowed = allowed
 
     def set_ages(self, in_front: Callable[[], Sequence[AgeReading | None] | None]) -> None:
         """Le dice de dónde saber la edad que aparentan los que tiene delante: de la vista,
@@ -380,6 +393,19 @@ class SendMessageUseCase:
                 self._presence_failed = True
                 _logger.warning("No se sabe a quiénes tiene delante (%s)", type(error).__name__)
             return None
+
+    def _allowed_now(self) -> Collection[str]:
+        """Quiénes tienen permiso ahora; si no se puede saber, nadie, y se apunta una vez."""
+        allowed = self._allowed
+        if allowed is None:
+            return frozenset()
+        try:
+            return frozenset(allowed())
+        except Exception as error:
+            if not self._allowed_failed:
+                self._allowed_failed = True
+                _logger.warning("No se sabe quiénes han dado permiso (%s)", type(error).__name__)
+            return frozenset()
 
     def set_seen(self, lines: Callable[[], Sequence[str]]) -> None:
         """Le dice de dónde saber lo que recuerda haber visto: una línea por cambio, con su
@@ -543,7 +569,9 @@ class SendMessageUseCase:
             seen = sight_block(self._seen_lines())
             if seen:
                 instructions = f"{instructions}\n\n{seen}"
-            presence = presence_block(speaker=speaker, in_front=self._in_front())
+            presence = presence_block(
+                speaker=speaker, in_front=self._in_front(), allowed=self._allowed_now()
+            )
             if presence:
                 instructions = f"{instructions}\n\n{presence}"
         if self._care():

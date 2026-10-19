@@ -129,14 +129,18 @@ Se adoptan las dos últimas.
   (ronda 1 de Codex sobre la PR #703). Si ve pero no sabe quién hay, porque acaba de abrir
   la cámara, la vuelta no leyó fotograma, el detector falló o está reconociendo una cara
   nueva, no dice a quiénes tiene delante (ronda 2). Si alguien da o quita su permiso,
-  vuelve a mirar a todos. **El oído** dice a la
-  charla quién le habla, de la voz de cada turno que va a ella. Un fallo de quien reconoce
-  se apunta una vez, con su tipo, y esa vez es «sin identificar».
+  vuelve a mirar a todos, y lo reconocido antes deja de valer en el acto, sin esperar a
+  que vuelva a mirar: quien lee lo que ve comprueba con qué permisos se reconoció (ronda
+  3). **El oído** dice a la charla quién le habla, de la voz de cada turno que va a ella.
+  Un fallo de quien reconoce se apunta una vez, con su tipo, y esa vez es «sin
+  identificar».
 - **La charla** le dice al modelo, en «# Quién hay», quién le habla en un turno de voz y a
   quiénes tiene delante, su nombre o «alguien sin identificar», con una regla: solo
   reconoce a quien le dio permiso, y a los demás, aunque le digan quiénes son, no dice que
   los reconoce. Lo escrito en la ventana no lleva quién lo escribe. Y como lleva nombres,
-  solo va a un modelo de este ordenador, como lo que oye.
+  solo va a un modelo de este ordenador, como lo que oye. Un nombre solo va si quien lo
+  lleva tiene permiso al escribir la petición: si lo quitó después de que se le
+  reconociera, por la voz o por la cara, es alguien sin identificar (ronda 3).
 - **Cargar**, la primera vez que hace falta, en el hilo de la vista o del oído; la ventana
   lee y cambia el permiso sin esperar a que acabe. Si no carga, se dice una vez por qué y
   no se vuelve a intentar.

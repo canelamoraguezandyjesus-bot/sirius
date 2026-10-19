@@ -111,7 +111,10 @@ Se adoptan las dos últimas.
   segundo sin mirar, la estima de nuevo, así que un crío no hereda la edad de quien ocupaba
   su sitio (ronda 1 de Codex sobre la PR #703). Y si ve pero no sabe quién hay, al abrir la
   cámara, en la vuelta que no lee fotograma o en la que el detector falla, y mientras
-  estima la de una cara nueva, la edad es duda, y va la regla (ronda 2). Lo que recuerda
+  estima la de una cara nueva, la edad es duda, y va la regla (ronda 2); y también si lo
+  último que vio es de hace más de un segundo, o si se lee a la vez que entra en duda: lo
+  que sabe se lee de una vez, nunca la mitad de antes y la mitad de después (ronda 3).
+  Lo que recuerda
   son los números, nunca el recorte. Seguir una cara por dónde está lo hacen ya las dos
   con la misma función.
 - **La charla** le pone al modelo la regla, «# Con quién te cortas», detrás de «# Quién
@@ -120,7 +123,9 @@ Se adoptan las dos últimas.
   diciendo lo suyo. Si preguntarle a la vista falla, va, ante la duda, y se apunta una vez.
   La lleva también la voz de las órdenes de memoria, que también escribe el modelo (ronda 1
   de Codex sobre la PR #703); y la prueba a ciegas y las preguntas trampa, que se enseñan
-  como de Sirius, mirada en cada pregunta (ronda 2). Lo decide `CareWatch`, uno por sitio
+  como de Sirius (ronda 2), mirada al pedir cada respuesta, también al volver a pedir una
+  que falló, y nunca guardada para la siguiente (ronda 3). Lo decide `CareWatch`, uno por
+  sitio
   y todos con la misma lectura de la vista, y `CARE_COVERAGE` dice de cada petición al
   modelo si la lleva o por qué no: una guarda las busca todas en el código.
 - **La orden de instalar** mira además que el modelo de la edad carga, y si no, lo dice con

@@ -310,6 +310,22 @@ def test_un_fotograma_que_aun_la_nombraba_tras_quitar_el_permiso_no_la_hace_lleg
     assert all(cambio[2] != "Marta" for cambio in montaje.apuntado())
 
 
+def test_lo_que_la_vista_reconocio_antes_de_quitar_el_permiso_nunca_lleva_su_nombre() -> None:
+    """Ronda 3 de Codex sobre la PR #703: la vista pudo reconocerla justo antes de que
+    quitara el permiso y decirlo después, en muchos fotogramas seguidos. El permiso se mira
+    al apuntar, con el cerrojo con el que se quita: su nombre no vuelve a lo apuntado."""
+    montaje = _Montaje()
+    _con_lo_primero(montaje, None)
+
+    # Como al quitarlo desde la ventana: primero deja de tener permiso, y después se quita
+    # de lo apuntado.
+    montaje.permiso.remove("Marta")
+    montaje.log.forget("Marta")
+    montaje.ve(None, "Marta", durante=ARRIVE_SECONDS + 0.2)
+
+    assert [cambio[1:] for cambio in montaje.apuntado()] == [(Change.CAME, None)]
+
+
 def test_un_cambio_suyo_a_medias_tampoco_se_apunta_con_su_nombre() -> None:
     montaje = _Montaje()
     _con_lo_primero(montaje, None)

@@ -1157,7 +1157,7 @@ def build_conversation_dependencies(
         looked_at=local_sight.talker_looked_since,
         recognition=recognition,
     )
-    send_message_use_case.set_presence(local_sight.in_front_names)
+    send_message_use_case.set_presence(local_sight.in_front_names, allowed=recognition.people)
     send_message_use_case.set_ages(local_sight.in_front_ages)
     care_watch.watch(local_sight.in_front_ages)
     send_message_use_case.set_seen(sight_log.lines)

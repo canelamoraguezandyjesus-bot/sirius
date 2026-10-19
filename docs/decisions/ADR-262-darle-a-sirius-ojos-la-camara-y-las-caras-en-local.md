@@ -304,3 +304,55 @@ nuevo.
   Cada arreglo, con su prueba vista caer con el código de antes, y mutación: ocho cambios
   a propósito en la duda de la vista y seis en la regla, del montaje a la guarda y las
   cachés de la prueba a ciegas; las pruebas cazan los catorce.
+- **Ronda 3, sobre `1f6a9847`**: tres hallazgos P1, los tres ciertos, de las dos mismas
+  familias, y los tres nacidos de los arreglos de la ronda 2.
+  - **P1, la prueba a ciegas guardaba la regla de cada pregunta para todos los modelos.**
+    Hace las 20 de un modelo antes de pasar al siguiente: si llegaba un crío entre medias,
+    los demás contestaban sin ella. Familia de la regla.
+  - **P1, quien leía la edad podía juntar dos momentos.** Miraba la duda y después las
+    caras, por separado: si el hilo de la vista entraba en duda entre las dos, leía que no
+    había nadie, y la regla no iba. Familia de lo que se sabe de quién hay.
+  - **P1, quitar el permiso con la cara quieta en su sitio no ponía en duda a nadie**, y
+    mientras se volvía a reconocer a todos se seguía diciendo su nombre: la duda de la
+    ronda 2 miraba la cara, no los permisos. Misma familia.
+
+  **Tres rondas seguidas con las mismas familias, y esta, en lo que se puso como raíz**: lo
+  de la ronda 2 eran más sitios donde poner la duda o la regla, cada uno con su forma de
+  equivocarse. Se paró, se le contó al propietario y se buscó la raíz otra vez, con la
+  nota de arranque de este arreglo:
+  1. **Dónde vive el fallo y dónde va el arreglo.** En que quien usa lo que se sabe de quién
+     hay lo daba por bueno sin poder comprobarlo: lo leía en varios trozos, o lo guardaba
+     para después. El arreglo va donde se usa, que es lo único que puede ver si sigue
+     valiendo en ese momento: al leer lo que ve, al escribir cada petición y al apuntar.
+  2. **Qué no garantiza.** Una respuesta que ya se está escribiendo cuando llega un crío
+     acaba como empezó, sin la regla; y lo que la cámara no ve, como dos caras que se
+     cambian de sitio entre dos fotogramas, la vista tampoco lo sabe.
+  3. **Criterio de parada**, escrito antes de pedir la ronda 4: si trae otro hallazgo de
+     estas familias, no se arregla; se para y se le pregunta al propietario si sacar del
+     paquete lo que lo cause.
+  4. **Qué lo hace imposible y no improbable.** Juntar dos momentos, una foto que no se
+     cambia y se lee de una vez; darla por actual, la comprobación al leerla; la regla
+     guardada, mirarla en cada petición. Esto último lo vigilan pruebas, no una guarda: lo
+     ya contestado se guarda por la regla con que se pidió, y la guarda tendría que leer
+     de dónde sale cada clave.
+
+  Y la raíz, escrita como tres reglas:
+  - **Lo que se sabe de quién hay se deja de una vez y se comprueba al leerlo.** La vista
+    deja una sola foto (`_View`): si ve, si sabe quién hay, el momento del último fotograma
+    que pudo leer entero, con qué permisos reconoció cada cara y lo que vio de ella. Quien
+    la lee, la lee una vez, y comprueba que sea de hace como mucho un segundo y, los
+    nombres, que nadie haya dado ni quitado su permiso desde que se reconocieron. No la
+    deja si entretanto soltó la cámara o la volvió a abrir, y lo que recordaba de cada
+    cara no pasa de una vez a la siguiente.
+  - **Un nombre solo sale o se guarda si quien lo lleva tiene permiso en ese momento.** La
+    charla lo mira al escribir cada petición, para quien le habla y para quienes tiene
+    delante; lo que recuerda haber visto, al apuntar, con el cerrojo con el que se quita.
+  - **La regla se mira al construir cada petición, y nunca se guarda.** En la prueba a
+    ciegas y en las preguntas trampa, también al volver a pedir una que falló; lo ya
+    contestado se guarda con la regla con que se pidió.
+
+  Cada arreglo, con su prueba vista caer con el código de antes: de las dieciséis pruebas
+  nuevas caen quince, y la otra fija que soltar la cámara mientras mira no deja nada por
+  visto, que el código de antes ya hacía bien y ahora vigila la mutación. Y mutación:
+  veintiún cambios a propósito, de la foto de la vista a los permisos, lo apuntado y la
+  regla; las pruebas cazan los veintiuno.
