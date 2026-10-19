@@ -17,7 +17,8 @@ ventana, que no suena, en cuanto llega el texto (``make``). Los dibuja con lo qu
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
+from types import MappingProxyType
 
 from PySide6.QtCore import QPointF, QRectF, Qt, QTimer
 from PySide6.QtGui import QColor, QPainter, QPainterPath, QPaintEvent, QPen
@@ -33,12 +34,27 @@ FRAME_MS = 33
 #: Las partes que dibuja, con el nombre con que las lee quien mira la cara.
 PARTS = frozenset({"ojos", "párpados", "cejas", "boca"})
 
-_FONDO = QColor("#1f2430")
-_CARA = QColor("#2b3242")
-_OJO = QColor("#f2f4f8")
-_IRIS = QColor("#3fb6d8")
-_PUPILA = QColor("#1b1e27")
-_TRAZO = QColor("#c9d1e3")
+#: Los colores con que se dibuja, por lo que pintan: el fondo, la cara, el blanco de los
+#: ojos y su brillo, el iris, la pupila y el dentro de la boca abierta, y el trazo de las
+#: cejas, la boca y las pestañas. Las pruebas de aceptación leen la cara de los píxeles de
+#: la ventana por estos colores (ronda 1 de Codex sobre la PR #702).
+PALETTE: Mapping[str, str] = MappingProxyType(
+    {
+        "fondo": "#1f2430",
+        "cara": "#2b3242",
+        "ojo": "#f2f4f8",
+        "iris": "#3fb6d8",
+        "pupila": "#1b1e27",
+        "trazo": "#c9d1e3",
+    }
+)
+
+_FONDO = QColor(PALETTE["fondo"])
+_CARA = QColor(PALETTE["cara"])
+_OJO = QColor(PALETTE["ojo"])
+_IRIS = QColor(PALETTE["iris"])
+_PUPILA = QColor(PALETTE["pupila"])
+_TRAZO = QColor(PALETTE["trazo"])
 
 
 class FaceWidget(QWidget):

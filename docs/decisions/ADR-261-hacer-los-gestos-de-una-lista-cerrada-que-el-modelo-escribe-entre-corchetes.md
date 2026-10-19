@@ -141,6 +141,9 @@ Se adopta la opción 3.
   las dos, con lo que esperaban antes y una espera más corta que la del modelo de
   mentira, fallan siempre en local, y con lo que se ve mientras llega pasan: las 65 de
   `tests/gui/test_conversation_ui.py` en verde.
+- Tras la ronda 1 de Codex: dos respuestas más en el banco del filtro, con un bloque de
+  cuatro comillas que lleva tres dentro y otro que se cierra con cinco; con lo de antes,
+  la primera falla.
 
 ## Consecuencias
 
@@ -151,6 +154,9 @@ Se adopta la opción 3.
   ventana miran lo que se ve mientras llega.
 - Una respuesta cortada o fallida se guarda sin el corchete del final que aún podía ser
   una etiqueta.
+- Un bloque de código se cierra con tantas comillas invertidas como lo abrieron, o más,
+  como en Markdown: tres no cierran uno de cuatro (ronda 1 de Codex sobre la PR #702, en
+  ADR-259).
 - Las instrucciones de la charla llevan unas sesenta palabras más.
 - Lo guardado no lleva los gestos, así que las respuestas que marque para entrenarle en la
   0.5 tampoco: el modelo entrenado seguirá sabiendo qué gestos tiene por sus

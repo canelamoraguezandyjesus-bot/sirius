@@ -29,6 +29,7 @@ def test_reconoce_por_la_cara_a_quien_dio_permiso(tmp_path: Path) -> None:
     assert huella_de_cara("Marta") in conductor.caras.dadas
     assert conductor.quienes_tiene_delante(peticion) == ["Marta", "sin identificar"]
     assert conductor.quien_le_habla(peticion) == "sin identificar"
+    assert "insightface" in conductor.herramientas_de_reconocer()
 
 
 @pieza("E", "reconoce por la voz a quien dio permiso")
@@ -43,6 +44,7 @@ def test_reconoce_por_la_voz_a_quien_dio_permiso(tmp_path: Path) -> None:
     [peticion] = conductor.peticiones_del_ultimo_turno()
     assert huella_de_voz("Marta") in conductor.voces.dadas
     assert conductor.quien_le_habla(peticion) == "Marta"
+    assert "speechbrain-ecapa" in conductor.herramientas_de_reconocer()
 
 
 @pieza("E", "a un desconocido lo trata como «sin identificar» y no guarda su huella")

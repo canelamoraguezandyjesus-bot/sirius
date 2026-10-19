@@ -51,6 +51,13 @@ _CASOS: list[tuple[str, str, tuple[str, ...]]] = [
         "```\n[database]\nx = 1\n```\nHecho.",
         ("guino",),
     ),
+    # Un bloque abierto con cuatro comillas no lo cierran tres, sino cuatro o más.
+    (
+        "````\n```\n[sonrisa] dentro\n```\n````\n[guino] Fuera.",
+        "````\n```\n[sonrisa] dentro\n```\n````\nFuera.",
+        ("guino",),
+    ),
+    ("````\n[sonrisa]\n`````\n[guino] Hecho.", "````\n[sonrisa]\n`````\nHecho.", ("guino",)),
     ("Una [nota del autor] aquí", "Una [nota del autor] aquí", ()),
     ("- [x] hecho\n- [ ] no", "- [x] hecho\n- [ ] no", ()),
     ("Cita [1] y [a] y [uno dos tres cuatro]", "Cita [1] y [a] y [uno dos tres cuatro]", ()),

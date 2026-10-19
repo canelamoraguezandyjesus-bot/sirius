@@ -203,6 +203,18 @@ pruebas no garantizan».
   «-wal» de la base, pidió una comprobación más en esa prueba, y con ella cae.
 - La comprobación de la tabla: `tests/acceptance/test_robot_0_4_trazabilidad.py`, 2 en
   verde con el documento como está.
+- Tras la ronda 1 de Codex (abajo): el lector de la cara, contra la cara de verdad, en
+  1 700 imágenes con sus ocho gestos y con tres semillas, se aparta como mucho 0,03 en
+  los ojos, la mirada y las cejas, y no confunde ni se inventa ningún gesto. Seis caras
+  rotas a propósito, sin párpados, con la boca siempre cerrada, sin cejas, con la ceja sola
+  quieta, sin respirar y con la pupila quieta: las pruebas de aceptación cazan las seis, y
+  con la lectura de antes pasaban las seis. Quitando cada búsqueda nueva de lo guardado,
+  su prueba falla. Los dobles, 14 en verde. La batería entera, en dos partes: 5 362 en
+  verde, 12 omitidas y 19 xfail en `tests/automation`, `tests/engine` y lo tocado, y
+  4 132 en verde, 3 omitidas y 21 xfail en lo demás, con una roja: la prueba de que la
+  cara no se congela leyó una vez la pantalla aún sin pintar. Una captura vacía ya no es
+  una cara, se salta; con eso, `tests/acceptance` entera, 190 en verde, 2 omitidas y 20
+  xfail.
 
 ## Consecuencias
 
@@ -225,5 +237,39 @@ pruebas no garantizan».
 ## La lección
 
 - familia: `prueba-que-no-puede-ver-lo-que-vigila`
-- sin esto se repetiría: una huella de mentira con una marca en sus bytes la pierde en cuanto la pieza la pasa a números, y la prueba de «cifradas» pasaría con la huella guardada en claro
+- sin esto se repetiría: una huella de mentira con una marca en sus bytes la pierde en cuanto la pieza la pasa a números, y la prueba de «cifradas» pasaría con la huella guardada en claro. Volvió en la ronda 1 de Codex de tres maneras: la cara se leía de lo que decía que pintó, y un fotograma o una huella en base64 no se veían en la base. La raíz es la misma: el conductor miraba lo que la pieza dice, o una sola forma de lo guardado, y no lo que se ve. Ahora la cara se lee de los píxeles, y lo guardado se busca en todas sus formas que se deshacen sin llave, en la base igual que en el diario
 - lo hace cumplir: `tests/acceptance/test_dobles_del_conductor_0_4.py`
+
+## Revisión externa
+
+Alcance, escrito antes de la primera petición, el de la PR #702, que trae las piezas A, B
+y C: que cada cláusula del §6 tenga su prueba o su evaluación, y que ninguna pueda pasar
+con una pieza que haga trampa; que los dobles hagan algo y lo apunten ellos; que la
+búsqueda de imágenes y huellas guardadas vea lo que dejaría un error; que la cara no pueda
+congelarse por la charla, y que se lea de la ventana de verdad; que ninguna etiqueta llegue
+a la ventana, a la voz o a la base, se parta como se parta; y que la tabla, el inventario y
+el conductor digan lo mismo.
+
+- **Ronda 1, sobre `80f309f2`**: cinco hallazgos, los cinco ciertos.
+  - **P1, la cara se leía de lo que decía que pintó.** El conductor llamaba a `grab`,
+    tiraba la imagen y leía `last_drawn`, la pose que la cara apuntaba de sí misma: una
+    cara que pintara otra cosa, o nada, pasaba PA-R04-01 a PA-R04-05. Ahora se lee de los
+    píxeles (`tests/acceptance/lector_de_la_cara.py`), por los colores con que se pinta
+    (`PALETTE`) y las proporciones del dibujo; las veces que se pinta las cuenta Qt, con un
+    filtro de eventos puesto desde fuera; y lo que pinta sola mientras el modelo tarda se
+    lee de la pantalla, sin pedirle que se pinte. Para leerla con precisión, en las
+    pruebas la cara mide 480 píxeles de alto.
+  - **P1, un fotograma guardado en base64 en la base no se veía**: la marca de los
+    fotogramas se buscaba en la base tal cual, y en el diario en todas sus formas. Ahora,
+    en la base, en las mismas que en el diario.
+  - **P1, una huella guardada en base64 tampoco**: ahora se busca también en hexadecimal y
+    en base64, la normal y la de las direcciones, desde los tres sitios en que puede caer
+    en un grupo de tres bytes, y sin blancos, por si va partida en líneas.
+  - **P2, un bloque de código abierto con cuatro comillas lo cerraban tres**: ahora lo
+    cierran cuatro o más, como en Markdown (pieza C, ADR-261).
+  - **P2, las filas de reconocer y de la edad no decían con qué**: PA-R04-10 nombra
+    InsightFace y ECAPA, y PA-R04-13, InsightFace; sus pruebas miran, cuando entren sus
+    piezas, que sean los que monta Sirius sin dobles.
+
+  Los tres P1 son de la familia de la lección de arriba, y el arreglo va a su raíz, no a
+  cada caso.

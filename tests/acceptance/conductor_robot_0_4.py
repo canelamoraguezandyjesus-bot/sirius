@@ -25,10 +25,11 @@ que les llegan, como uno de verdad. Lo que la tubería recibe del micro sigue si
 quién habló, como en la 0.3; lo que sí lleva, como una voz de verdad, es su timbre,
 dentro de las muestras (``AudioConVoz``), y solo el reconocedor de voces lo lee.
 
-**La cara de Sirius no es un doble.** Se lee de la ventana de verdad, del último dibujo
-que hizo (``Dibujo``), y de cuántas veces se ha dibujado. Las cifras de las pruebas salen
-de esos dibujos y de los registros de los dobles, nunca de un campo que rellene el
-conductor.
+**La cara de Sirius no es un doble.** Se lee de los píxeles de la ventana de verdad, como
+la vería el propietario (``lector_de_la_cara``), no de lo que la cara dice que dibujó; y
+las veces que se pinta las cuenta Qt, no ella (ronda 1 de Codex sobre la PR #702). Las
+cifras de las pruebas salen de esos dibujos y de los registros de los dobles, nunca de un
+campo que rellene el conductor.
 
 **Lo que no se guarda se busca con un alcance escrito.** Que no quede ninguna imagen ni
 ninguna huella en claro es una negación sin borde: se buscan donde las dejaría un error,
@@ -61,10 +62,13 @@ from conductor_robot_0_2 import Peticion
 from conductor_robot_0_3 import (
     Audio,
     ConductorDeVoz,
+    RelojDeMentira,
     Sonido,
     TurnoDeVoz,
     VentanaDeVoz,
 )
+from lector_de_la_cara import PARTES, Lectura, lee
+from lector_de_la_cara import Dibujo as Dibujo
 from piezas_del_robot import PiezaPendiente, Piezas
 
 from sirius.domain.gestures import GESTURES
@@ -463,43 +467,42 @@ def formas_de_la_huella(huella: Sequence[float]) -> tuple[bytes, ...]:
     """Trozos de ``huella`` tal como quedarían guardados en claro.
 
     De 16 en 16 números, en float32 y en float64 en binario, que es como los guardan
-    ``struct``, numpy y sqlite-vec, y como texto, que es como los escriben ``json`` y
-    ``repr``. A trozos, porque SQLite parte lo largo entre páginas. Solo los trozos con al
-    menos cuatro números que no son cero: uno de ceros casaría con cualquier cosa.
+    ``struct``, numpy y sqlite-vec, y esos bytes pasados a texto sin cifrarlos, en
+    hexadecimal o en base64 (``codificados``); y como texto, que es como los escriben
+    ``json`` y ``repr``. A trozos, porque SQLite parte lo largo entre páginas. Solo los
+    trozos con al menos cuatro números que no son cero: uno de ceros casaría con cualquier
+    cosa.
     """
     formas: list[bytes] = []
     for inicio in range(0, len(huella) - 15, 16):
         trozo = huella[inicio : inicio + 16]
         if sum(1 for numero in trozo if numero) < 4:
             continue
-        formas.append(struct.pack(f"<{len(trozo)}f", *trozo))
-        formas.append(struct.pack(f"<{len(trozo)}d", *trozo))
+        for binario in (
+            struct.pack(f"<{len(trozo)}f", *trozo),
+            struct.pack(f"<{len(trozo)}d", *trozo),
+        ):
+            formas.append(binario)
+            formas.extend(codificados(binario))
         formas.append(", ".join(repr(numero) for numero in trozo).encode())
         formas.append(",".join(repr(numero) for numero in trozo).encode())
     return tuple(formas)
 
 
+def codificados(datos: bytes) -> tuple[bytes, ...]:
+    """``datos`` pasados a texto sin cifrarlos, que se deshace sin llave: en hexadecimal, en
+    minúsculas y en mayúsculas, y en base64, la normal y la de las direcciones, desde
+    cualquiera de los tres sitios en que pueden caer en un grupo de tres bytes (ronda 1 de
+    Codex sobre la PR #702)."""
+    formas = [datos.hex().encode(), datos.hex().upper().encode()]
+    for desfase in range(3):
+        trozo = datos[(3 - desfase) % 3 :]
+        entero = trozo[: len(trozo) // 3 * 3]
+        formas.extend((base64.b64encode(entero), base64.urlsafe_b64encode(entero)))
+    return tuple(dict.fromkeys(formas))
+
+
 # --- La cara de Sirius, leída de la ventana ------------------------------------------
-
-
-@dataclass(frozen=True, slots=True)
-class Dibujo:
-    """La cara de Sirius tal como se dibujó la última vez, leída de la ventana de verdad.
-
-    ``ojos`` va de 0, cerrados, a 1, abiertos. ``mirada`` es hacia dónde miran, de -1 a 1
-    en cada eje, con la misma izquierda y derecha que ve la cámara; (0, 0) es al frente.
-    ``cejas`` va de -1, fruncidas, a 1, arriba; ``boca``, de 0, cerrada, a 1, abierta del
-    todo; ``respira`` es lo que sube y baja al respirar. ``gesto`` es el de la lista que
-    está haciendo, si hace alguno, y ``momento``, el del reloj de las pruebas.
-    """
-
-    momento: float
-    ojos: float
-    mirada: tuple[float, float]
-    cejas: float
-    boca: float
-    respira: float
-    gesto: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -536,12 +539,29 @@ _LO_QUE_PINTA_IMAGENES: tuple[str, ...] = (
 )
 
 
+#: Lo alta que se pone la cara en las pruebas, en píxeles: más que en la ventana de siempre,
+#: para leerla con precisión. Se dibuja igual, a otra escala.
+ALTO_DE_LA_CARA = 480
+#: Lo más que se deja pasar del reloj de las pruebas buscando sus partes: el párpado solo
+#: se ve al parpadear, y parpadea cada 2 a 6 s.
+BUSCANDO_LAS_PARTES = 8.0
+#: Lo que puede dejar de verse un gesto, en segundos, y seguir siendo el mismo.
+HUECO_DE_UN_GESTO = 0.3
+
+
 class VentanaDeOjos(VentanaDeVoz):
     """La ventana de Sirius con lo que la 0.4 le añade: su cara y lo que dice de la cámara.
 
-    La cara se lee de ``face_widget``, la de verdad: lo que dibujó la última vez, con el
-    instante del reloj con que lo dibujó, y cuántas veces se ha dibujado (pieza B).
+    La cara se lee de los píxeles de ``face_widget``, la de verdad, con
+    ``lector_de_la_cara``; y las veces que se pinta las cuenta Qt con un filtro de eventos
+    puesto desde fuera, no la cara (pieza B y ronda 1 de Codex sobre la PR #702).
     """
+
+    def __init__(self, ventana: Any, qtbot: Any, reloj: RelojDeMentira) -> None:
+        super().__init__(ventana, qtbot)
+        self._reloj = reloj
+        # Desde antes de enseñarla: se cuenta todo lo que se pinta desde que se abre.
+        self._pintadas = _cuenta_las_pintadas(ventana.face_widget)
 
     def _cara(self) -> Any:
         """La cara de la ventana; tiene que estar a la vista en ella, no solo existir:
@@ -552,31 +572,57 @@ class VentanaDeOjos(VentanaDeVoz):
         return cara
 
     def muestra(self) -> None:
-        """La enseña en pantalla, como al arrancar: escondida, nada se dibuja."""
+        """La enseña en pantalla, como al arrancar: escondida, nada se dibuja. La cara, más
+        alta que en la ventana de siempre, para leerla con precisión."""
+        self._ventana.face_widget.setMinimumHeight(ALTO_DE_LA_CARA)
+        self._ventana.resize(1000, ALTO_DE_LA_CARA + 520)
         self._ventana.show()
         self._qtbot.waitExposed(self._ventana)
 
-    def cara(self) -> Dibujo:
-        """Dibuja la cara ahora, y devuelve lo que dibujó, tal como se pintó.
+    def _lee(self) -> Lectura:
+        """Dibuja la cara ahora y la lee de la imagen que pinta.
 
         La dibuja con ``grab``, que pasa por su ``paintEvent`` en el acto: ``repaint`` no
         lo garantiza con todas las plataformas de Qt, y la de las pruebas lo deja para
         después.
         """
+        lectura = lee(self._cara().grab().toImage(), self._reloj.ahora)
+        assert lectura is not None, "en la ventana no se ve ninguna cara"
+        return lectura
+
+    def cara(self) -> Dibujo:
+        """Dibuja la cara ahora, y devuelve lo que se ve en lo que pintó."""
+        return self._lee().dibujo
+
+    def lo_que_se_ve(self) -> Dibujo | None:
+        """La cara tal como está ahora en la pantalla, sin pedirle que se pinte: lo último
+        que pintó ella sola. ``None`` si no se ve ninguna cara."""
+        from PySide6.QtCore import QPoint
+
         cara = self._cara()
-        cara.grab()
-        return _dibujo(cara)
+        donde = cara.mapTo(self._ventana, QPoint(0, 0))
+        pantalla = cara.screen().grabWindow(
+            self._ventana.winId(), donde.x(), donde.y(), cara.width(), cara.height()
+        )
+        lectura = lee(pantalla.toImage(), self._reloj.ahora)
+        return None if lectura is None else lectura.dibujo
 
     def dibujos(self) -> int:
-        """Cuántas veces se ha dibujado la cara desde que se abrió la ventana."""
-        return int(self._cara().paints)
+        """Cuántas veces le ha pedido Qt a la cara que se pinte desde que se abrió la
+        ventana, también para leerla."""
+        return self._pintadas()
 
     def partes_de_la_cara(self) -> frozenset[str]:
-        """Lo que se ve dibujado de la cara: «ojos», «párpados», «cejas», «boca». La dibuja
-        antes, para leer lo que dibuja ahora y no lo de antes."""
-        cara = self._cara()
-        cara.grab()
-        return frozenset(cara.drawn_parts)
+        """Lo que se ve dibujado de la cara: «ojos», «párpados», «cejas», «boca». El párpado
+        solo se ve al parpadear: se deja pasar el reloj de las pruebas, de 20 en 20 ms, hasta
+        haberlas visto todas o ``BUSCANDO_LAS_PARTES`` segundos."""
+        vistas = set(self._lee().partes)
+        for _ in range(round(BUSCANDO_LAS_PARTES / 0.02)):
+            if vistas >= PARTES:
+                break
+            self._reloj.avanza(0.02)
+            vistas |= self._lee().partes
+        return frozenset(vistas)
 
     def la_cara_usa_imagenes(self) -> bool:
         """Si la cara se pinta con imágenes o vídeos en vez de dibujarse: un hijo que las
@@ -642,7 +688,7 @@ class ConductorDeOjos(ConductorDeVoz):
 
     def ventana(self, qtbot: Any) -> VentanaDeOjos:
         """La ventana de verdad, en pantalla, como cuando arranca."""
-        ventana = VentanaDeOjos(self.abre_la_ventana(qtbot), qtbot)
+        ventana = VentanaDeOjos(self.abre_la_ventana(qtbot), qtbot, self.reloj)
         ventana.muestra()
         self._ventana_de_ojos = ventana
         return ventana
@@ -694,17 +740,16 @@ class ConductorDeOjos(ConductorDeVoz):
         self, qtbot: Any, texto: str, *, segundos: float
     ) -> tuple[int, tuple[Dibujo, ...]]:
         """Le escribe ``texto`` en la ventana con un modelo que tarda ``segundos`` de verdad
-        en contestar, y devuelve cuántas veces se dibujó la cara mientras y los dibujos que
+        en contestar, y devuelve cuántas veces se pintó la cara mientras y los dibujos que
         se leyeron. El reloj de las pruebas avanza con el de verdad mientras tanto.
 
-        Los dibujos se leen sin pedirlos: lo que la cara dibujó por su cuenta, cada 50 ms.
-        Las veces las cuenta la propia cara; si se congela, no hay ninguna.
+        Los dibujos se leen de la pantalla sin pedirlos, cada 50 ms: lo que la cara pintó
+        por su cuenta. Las veces las cuenta Qt; si se congela, no hay ninguna.
         """
         from PySide6.QtCore import QTimer
 
         del qtbot
         ventana = self._la_ventana()
-        cara = ventana._cara()
         self.el_modelo_contesta_despacio(["Ya está pensado."], pausa=segundos)
         dibujos: list[Dibujo] = []
         visto = [time.monotonic()]
@@ -713,19 +758,20 @@ class ConductorDeOjos(ConductorDeVoz):
             ahora = time.monotonic()
             self.reloj.avanza(ahora - visto[0])
             visto[0] = ahora
-            if cara.last_drawn is not None:
-                dibujos.append(_dibujo(cara))
+            dibujo = ventana.lo_que_se_ve()
+            if dibujo is not None:
+                dibujos.append(dibujo)
 
         mirada = QTimer()
         mirada.setInterval(50)
         mirada.timeout.connect(mira)
-        antes = int(cara.paints)
+        antes = ventana.dibujos()
         mirada.start()
         try:
             ventana.escribe(texto)
         finally:
             mirada.stop()
-        return int(cara.paints) - antes, tuple(dibujos)
+        return ventana.dibujos() - antes, tuple(dibujos)
 
     def habla_con_volumen(
         self, texto: str, niveles: Sequence[float], *, cada: float = 0.2
@@ -766,16 +812,21 @@ class ConductorDeOjos(ConductorDeVoz):
         """Los gestos que hizo la cara, en orden y sin repetir seguidos, dejando pasar
         ``segundos`` del reloj de las pruebas tras la última respuesta.
 
-        Se leen de la ventana de verdad, del dibujo de cada paso de ``pasa_el_tiempo``: un
-        gesto que dura menos de un paso podría no verse, y ninguno de la lista dura tan
-        poco.
+        Se leen de los píxeles de la ventana de verdad, en cada paso de ``pasa_el_tiempo``:
+        un gesto que dura menos de un paso podría no verse, y ninguno de la lista dura tan
+        poco. Un gesto que deja de verse menos de ``HUECO_DE_UN_GESTO`` y vuelve es el
+        mismo: al asentir y al negar, la cabeza pasa por el medio, donde no se le ve; y dos
+        iguales seguidos se leen como uno.
         """
         hechos: list[str] = []
-        antes: str | None = None
+        ultimo: str | None = None
+        visto_en = -math.inf
         for dibujo in self.pasa_el_tiempo(segundos):
-            if dibujo.gesto is not None and dibujo.gesto != antes:
+            if dibujo.gesto is None:
+                continue
+            if dibujo.gesto != ultimo or dibujo.momento - visto_en > HUECO_DE_UN_GESTO:
                 hechos.append(dibujo.gesto)
-            antes = dibujo.gesto
+            ultimo, visto_en = dibujo.gesto, dibujo.momento
         return tuple(hechos)
 
     # --- Pieza D: la cámara ---
@@ -802,14 +853,17 @@ class ConductorDeOjos(ConductorDeVoz):
     def a_quien_mira(self, dibujo: Dibujo) -> str | None:
         """A quién de los que hay delante mira la cara en ``dibujo``: el más cerca de su
         mirada, si está a menos de 0,25 en horizontal y la mirada no se va más de 0,5 en
-        vertical; ``None`` si mira a otro sitio."""
+        vertical; ``None`` si mira a otro sitio, o si no se ve adónde mira."""
+        mirada = dibujo.mirada
+        if mirada is None:
+            return None
         mas_cerca: tuple[float, str] | None = None
         for persona in self.camara.delante:
             # La mirada va con la izquierda y la derecha de la cámara: se compara tal cual.
-            distancia = abs(dibujo.mirada[0] - (persona.x * 2 - 1))
+            distancia = abs(mirada[0] - (persona.x * 2 - 1))
             if mas_cerca is None or distancia < mas_cerca[0]:
                 mas_cerca = (distancia, persona.quien)
-        if mas_cerca is None or mas_cerca[0] > 0.25 or abs(dibujo.mirada[1]) > 0.5:
+        if mas_cerca is None or mas_cerca[0] > 0.25 or abs(mirada[1]) > 0.5:
             return None
         return mas_cerca[1]
 
@@ -839,6 +893,11 @@ class ConductorDeOjos(ConductorDeVoz):
         «sin identificar», ordenados; ``None`` si no se lo dice."""
         raise _pendiente("E")
 
+    def herramientas_de_reconocer(self) -> frozenset[str]:
+        """Con qué reconocería Sirius en producción, leído de su montaje: los nombres de los
+        reconocedores de cara y de voz que carga la raíz de composición sin dobles."""
+        raise _pendiente("E")
+
     def huellas_guardadas(self) -> int:
         """Cuántas huellas hay en la base, de caras y de voces, se usen o no: una huella
         marcada como borrada sigue guardada."""
@@ -853,13 +912,21 @@ class ConductorDeOjos(ConductorDeVoz):
             "el diario": self._bytes_del_diario(),
         }
         huellas = dict.fromkeys((*self.caras.dadas, *self.voces.dadas))
-        return [
-            f"{sitio} lleva una huella en claro"
-            for sitio, datos in donde.items()
-            if any(forma in datos for huella in huellas for forma in formas_de_la_huella(huella))
-        ]
+        formas = {forma for huella in huellas for forma in formas_de_la_huella(huella)}
+        encontradas: list[str] = []
+        for sitio, datos in donde.items():
+            # Lo pasado a texto puede ir partido en líneas, como lo parte base64 al escribirlo
+            # en un correo: también se busca sin blancos.
+            junto = re.sub(rb"\s+", b"", datos)
+            if any(forma in datos or forma in junto for forma in formas):
+                encontradas.append(f"{sitio} lleva una huella en claro")
+        return encontradas
 
     # --- Pieza F: la edad ---
+
+    def herramientas_de_la_edad(self) -> frozenset[str]:
+        """Con qué estimaría Sirius la edad en producción, leído de su montaje."""
+        raise _pendiente("F")
 
     def lleva_la_regla_de_no_insultar(self, peticion: Peticion) -> bool:
         """Si ``peticion`` le dice al modelo que delante hay alguien a quien no se insulta."""
@@ -884,8 +951,13 @@ class ConductorDeOjos(ConductorDeVoz):
             for fichero in sorted(self._imagenes_en_el_disco() - self._imagenes_de_antes)
         ]
         base = self._bytes_de_la_base()
-        if MARCA_DE_LA_IMAGEN in base:
-            encontradas.append("la base lleva la marca de los fotogramas")
+        # En cualquiera de las formas en que Python escribe unos bytes, como en el diario: un
+        # fotograma guardado en base64 en una columna de texto no lleva la marca tal cual
+        # (ronda 1 de Codex sobre la PR #702).
+        encontradas.extend(
+            f"la base lleva la marca de los fotogramas {forma}"
+            for forma in formas_en(MARCA_DE_LA_IMAGEN, base.decode("latin-1"))
+        )
         encontradas.extend(
             f"la base lleva una imagen: {cabecera!r}"
             for cabecera in IMAGEN_DENTRO
@@ -930,20 +1002,22 @@ class ConductorDeOjos(ConductorDeVoz):
         return frozenset(encontradas)
 
 
-def _dibujo(cara: Any) -> Dibujo:
-    """Lo que dibujó ``cara`` la última vez, con el instante del reloj con que lo dibujó."""
-    ultimo = cara.last_drawn
-    assert ultimo is not None, "la cara aún no se ha dibujado"
-    momento, pose = ultimo
-    return Dibujo(
-        momento=momento,
-        ojos=pose.eyes,
-        mirada=pose.gaze,
-        cejas=pose.brows,
-        boca=pose.mouth,
-        respira=pose.breath,
-        gesto=pose.gesture,
-    )
+def _cuenta_las_pintadas(cara: Any) -> Callable[[], int]:
+    """Cuenta cada vez que Qt le pide a ``cara`` que se pinte, con un filtro de eventos puesto
+    desde fuera: no lo cuenta la cara, lo cuenta Qt."""
+    from PySide6.QtCore import QEvent, QObject
+
+    class Contador(QObject):
+        veces = 0
+
+        def eventFilter(self, objeto: Any, evento: Any) -> bool:
+            if objeto is cara and evento.type() == QEvent.Type.Paint:
+                self.veces += 1
+            return False
+
+    contador = Contador(cara)
+    cara.installEventFilter(contador)
+    return lambda: contador.veces
 
 
 def _empieza_como_imagen(fichero: Path) -> bool:
@@ -958,12 +1032,14 @@ def _empieza_como_imagen(fichero: Path) -> bool:
 def formas_de(marca: bytes) -> dict[str, tuple[str, ...]]:
     """``marca`` tal como queda en un texto, en las formas en que Python escribe unos bytes
     sin que nadie se lo pida: como texto, que es como sale en el ``repr``; en hexadecimal;
-    en base64, desde cualquiera de los tres sitios en que puede caer en un grupo de tres
-    bytes; y como lista de bytes."""
+    en base64, la normal y la de las direcciones, desde cualquiera de los tres sitios en que
+    puede caer en un grupo de tres bytes; y como lista de bytes."""
     en_base64: set[str] = set()
     for desfase in range(3):
         trozo = marca[(3 - desfase) % 3 :]
-        en_base64.add(base64.b64encode(trozo[: len(trozo) // 3 * 3]).decode())
+        entero = trozo[: len(trozo) // 3 * 3]
+        en_base64.add(base64.b64encode(entero).decode())
+        en_base64.add(base64.urlsafe_b64encode(entero).decode())
     return {
         "como texto": (marca.decode("ascii"),),
         "en hexadecimal": (marca.hex(), marca.hex().upper()),

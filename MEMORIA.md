@@ -406,7 +406,7 @@ ADR-258).
 ### `prueba-que-no-puede-ver-lo-que-vigila`
 
 - **ADR-261** — cambiar lo que llega a trozos y ajustar solo las pruebas que (lo hace cumplir `tests/gui/test_conversation_ui.py`).
-- **ADR-259** — una huella de mentira con una marca en sus bytes la pierde en cuanto la pieza la pasa a números, y la prueba de «cifradas» pasaría con la huella guardada en claro (lo hace cumplir `tests/acceptance/test_dobles_del_conductor_0_4.py`).
+- **ADR-259** — una huella de mentira con una marca en sus bytes la pierde en cuanto la pieza la pasa a números, y la prueba de «cifradas» pasaría con la huella guardada en claro. Volvió en la ronda 1 de Codex de tres maneras: la cara se leía de lo que decía que pintó, y un fotograma o una huella en base64 no se veían en la base. La raíz es la misma: el conductor miraba lo que la pieza dice, o una sola forma de lo guardado, y no lo que se ve. Ahora la cara se lee de los píxeles, y lo guardado se busca en todas sus formas que se deshacen sin llave, en la base igual que en el diario (lo hace cumplir `tests/acceptance/test_dobles_del_conductor_0_4.py`).
 - **ADR-249** — arreglar en la prueba lo que falla en el producto. El conductor de (lo hace cumplir `tests/gui/test_app_bootstrap.py`).
 - **ADR-247** — probar una orden que él ejecuta en su ordenador solo como es la (lo hace cumplir `tests/integration/test_medir_busqueda_de_memoria.py`).
 - **ADR-241** — escribir las pruebas de aceptación de una versión antes del (sin prueba que lo haga cumplir: ninguna prueba mide la fuerza de una prueba; lo que hay es).

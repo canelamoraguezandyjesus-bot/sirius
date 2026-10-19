@@ -29,6 +29,7 @@ def test_con_un_crio_delante_la_peticion_lleva_la_regla_de_no_insultar(tmp_path:
 
     assert _lleva_la_regla(conductor, Persona("Lucas", x=0.8, edad=8))
     assert (8, True) in conductor.edades.estimadas
+    assert "insightface" in conductor.herramientas_de_la_edad()
 
 
 @pieza("F", "con un anciano delante, también")

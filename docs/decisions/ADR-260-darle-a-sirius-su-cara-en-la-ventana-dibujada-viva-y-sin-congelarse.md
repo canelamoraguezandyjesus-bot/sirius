@@ -115,6 +115,9 @@ Se adopta la opción 3.
 - La ventana tiene cara desde que se abre; sin oído, vive con el reloj de siempre y la
   boca cerrada.
 - El puerto del altavoz gana `level`: todo altavoz lo dice, los dobles también.
+- La cara dice con qué colores se pinta (`PALETTE`): las pruebas de aceptación la leen de
+  los píxeles de la ventana con ellos, no de lo que dice que pintó (ronda 1 de Codex sobre
+  la PR #702, en ADR-259).
 - El propietario tiene E-R04-05 por delante.
 
 ## Alternativas descartadas y por qué

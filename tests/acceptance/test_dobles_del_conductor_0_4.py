@@ -20,10 +20,12 @@ import sqlite3
 import struct
 from contextlib import closing
 from pathlib import Path
+from typing import Any
 
 import pytest
 from conductor_robot_0_3 import Audio, Sonido
 from conductor_robot_0_4 import (
+    ALTO_DE_LA_CARA,
     MARCA_DE_LA_IMAGEN,
     NUMEROS_DE_LA_HUELLA_DE_CARA,
     NUMEROS_DE_LA_HUELLA_DE_VOZ,
@@ -46,8 +48,10 @@ from conductor_robot_0_4 import (
     huella_de_voz,
     parecido,
 )
+from lector_de_la_cara import lee
 from pytestqt.qtbot import QtBot
 
+from sirius.domain.gestures import GESTURES
 from sirius.infrastructure.logging import LOGGER_NAME
 
 pytestmark = pytest.mark.acceptance
@@ -194,12 +198,25 @@ def test_una_huella_en_claro_se_reconoce_en_cada_forma_y_cifrada_no() -> None:
         "json": json.dumps(list(huella)).encode(),
         "json apretado": json.dumps(list(huella), separators=(",", ":")).encode(),
         "repr": repr(huella).encode(),
+        "float32 en base64": base64.b64encode(en_float32),
+        "float32 en base64 tras un byte": base64.b64encode(b"x" + en_float32),
+        "float32 en base64 tras dos bytes": base64.b64encode(b"xy" + en_float32),
+        "float64 en base64 de direcciones": base64.urlsafe_b64encode(
+            struct.pack(f"<{len(huella)}d", *huella)
+        ),
+        "float32 en hexadecimal": en_float32.hex().encode(),
+        "float64 en hexadecimal en mayúsculas": struct.pack(f"<{len(huella)}d", *huella)
+        .hex()
+        .upper()
+        .encode(),
     }
     for nombre, guardada in guardadas.items():
         assert any(forma in guardada for forma in formas), nombre
     llave = random.Random(7).randbytes(len(en_float32))
     cifrada = bytes(a ^ b for a, b in zip(en_float32, llave, strict=True))
     assert not any(forma in cifrada for forma in formas)
+    assert not any(forma in base64.b64encode(cifrada) for forma in formas)
+    assert not any(forma in cifrada.hex().encode() for forma in formas)
     assert not any(forma in json.dumps(list(huella_de_cara("Pepe"))).encode() for forma in formas)
 
 
@@ -234,6 +251,20 @@ def test_el_conductor_se_construye_con_sus_dobles_y_ve_huellas_en_claro(tmp_path
     wal.unlink()
     assert conductor.huellas_en_claro() == []
 
+    # En base64, partida en líneas como la escribe ``encodebytes``: no está cifrada.
+    with closing(sqlite3.connect(conductor.base)) as conexion:
+        conexion.execute("CREATE TABLE huellas_en_texto (huella TEXT)")
+        conexion.execute(
+            "INSERT INTO huellas_en_texto VALUES (?)", (base64.encodebytes(en_claro).decode(),)
+        )
+        conexion.commit()
+    assert conductor.huellas_en_claro() == ["la base lleva una huella en claro"]
+    with closing(sqlite3.connect(conductor.base)) as conexion:
+        conexion.execute("DROP TABLE huellas_en_texto")
+        conexion.execute("VACUUM")
+        conexion.commit()
+    assert conductor.huellas_en_claro() == []
+
     with closing(sqlite3.connect(conductor.base)) as conexion:
         conexion.execute("CREATE TABLE huellas_de_prueba (huella BLOB)")
         conexion.execute("INSERT INTO huellas_de_prueba VALUES (?)", (en_claro,))
@@ -258,6 +289,19 @@ def test_el_conductor_ve_imagenes_en_el_disco_en_la_base_y_en_el_diario(tmp_path
     (datos / "cara").write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 100)
     assert conductor.imagenes_guardadas() == [str(datos / "cara")]
 
+    # Un fotograma en base64 en una columna de texto no lleva la marca tal cual.
+    with closing(sqlite3.connect(conductor.base)) as conexion:
+        conexion.execute("CREATE TABLE fotos_en_texto (foto TEXT)")
+        conexion.execute(
+            "INSERT INTO fotos_en_texto VALUES (?)",
+            (base64.b64encode(b"z" + Persona("Pepe").recorte()).decode(),),
+        )
+        conexion.commit()
+    assert conductor.imagenes_guardadas() == [
+        str(datos / "cara"),
+        "la base lleva la marca de los fotogramas en base64",
+    ]
+
     with closing(sqlite3.connect(conductor.base)) as conexion:
         conexion.execute("CREATE TABLE fotos_de_prueba (foto BLOB, texto TEXT)")
         conexion.execute(
@@ -266,7 +310,7 @@ def test_el_conductor_ve_imagenes_en_el_disco_en_la_base_y_en_el_diario(tmp_path
         )
         conexion.commit()
     vistas = conductor.imagenes_guardadas()
-    assert "la base lleva la marca de los fotogramas" in vistas
+    assert "la base lleva la marca de los fotogramas como texto" in vistas
     assert "la base lleva una imagen: b'iVBORw0KGgo'" in vistas
 
     logging.getLogger(LOGGER_NAME).warning("fotograma: %s", Persona("Pepe").recorte().hex())
@@ -327,3 +371,79 @@ def test_gestos_dibujados_ve_cada_gesto_que_hace_la_cara_y_ninguno_si_no_hace(
     ventana._cara().make("asiente")
     assert conductor.gestos_dibujados(3.0) == ("guino", "asiente")
     conductor.cierra()
+
+
+# --- La cara, leída de los píxeles (ronda 1 de Codex sobre la PR #702) ----------------
+
+
+def _cara_suelta(qtbot: QtBot, reloj: _Reloj, cara_de: type[Any] | None = None) -> Any:
+    """La cara de verdad, sola y del alto con que se lee en las pruebas, con una vida de
+    semilla fija."""
+    from sirius.domain.face import FaceLife
+    from sirius.presentation.face_widget import FaceWidget
+
+    clase = cara_de or FaceWidget
+    cara = clase(lambda: reloj.ahora, life=FaceLife(seed=5))
+    cara.resize(1000, ALTO_DE_LA_CARA)
+    qtbot.addWidget(cara)
+    cara.show()
+    return cara
+
+
+@pytest.mark.gui
+def test_el_lector_lee_de_los_pixeles_lo_que_pinta_la_cara(qtbot: QtBot) -> None:
+    """Lo que lee el lector es lo que se ve: imagen a imagen, se parece a lo que la cara
+    dice que pintó, que aquí solo sirve para comprobar al lector."""
+    reloj = _Reloj()
+    cara = _cara_suelta(qtbot, reloj)
+    vistos: set[str] = set()
+    for paso in range(1, 1501):
+        reloj.ahora += 0.02
+        if paso % 150 == 0:
+            cara.make(GESTURES[(paso // 150 - 1) % len(GESTURES)])
+        lectura = lee(cara.grab().toImage(), reloj.ahora)
+        assert lectura is not None
+        dibujo, (_, pose) = lectura.dibujo, cara.last_drawn
+        izquierdo = min(max(pose.eyes, 0.0), 1.0)
+        derecho = 1.0 - max(1.0 - izquierdo, min(max(pose.wink, 0.0), 1.0))
+        assert abs(dibujo.ojos - (izquierdo + derecho) / 2) < 0.05
+        if dibujo.mirada is not None and min(izquierdo, derecho) > 0.6:
+            assert abs(dibujo.mirada[0] - pose.gaze[0]) < 0.06
+            assert abs(dibujo.mirada[1] - pose.gaze[1]) < 0.06
+        assert abs(dibujo.cejas - pose.brows) < 0.06
+        if dibujo.gesto is not None:
+            assert dibujo.gesto == pose.gesture, "lee un gesto que no hace"
+            vistos.add(dibujo.gesto)
+    assert vistos == set(GESTURES), "no ha visto todos los gestos"
+
+
+@pytest.mark.gui
+def test_una_cara_que_no_pinta_lo_que_dice_no_se_lee_como_si_lo_pintara(qtbot: QtBot) -> None:
+    """Una cara que dice que parpadea y pinta siempre los ojos abiertos se lee con los ojos
+    abiertos; y una que no pinta nada, sin cara."""
+    from sirius.domain.face import FacePose
+    from sirius.presentation.face_widget import FaceWidget
+
+    class Quieta(FaceWidget):
+        def _draw(self, painter: Any, pose: Any) -> None:
+            del pose
+            super()._draw(painter, FacePose(1.0, (0.0, 0.0), 0.0, 0.0, 0.0))
+
+    class Vacia(FaceWidget):
+        def _draw(self, painter: Any, pose: Any) -> None:
+            del pose
+            painter.fillRect(self.rect(), 0)
+
+    reloj = _Reloj()
+    quieta = _cara_suelta(qtbot, reloj, Quieta)
+    dice, se_ve = set(), set()
+    for _ in range(500):
+        reloj.ahora += 0.02
+        lectura = lee(quieta.grab().toImage(), reloj.ahora)
+        assert lectura is not None
+        dice.add(quieta.last_drawn[1].eyes <= 0.2)
+        se_ve.add(lectura.dibujo.ojos <= 0.2)
+    assert dice == {True, False}, "la cara de la prueba tenía que decir que parpadea"
+    assert se_ve == {False}, "ha leído un parpadeo que no se pinta"
+    vacia = _cara_suelta(qtbot, reloj, Vacia)
+    assert lee(vacia.grab().toImage(), reloj.ahora) is None

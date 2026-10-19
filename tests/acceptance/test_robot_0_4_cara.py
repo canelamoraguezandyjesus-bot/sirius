@@ -3,7 +3,8 @@
 La cara dibujada, la vida en reposo, que no se congele y la boca con su voz salen de la
 sección 0.4 de ``docs/evolution/PLAN_DEL_ROBOT.md`` (§6, «Lo que se hace», 4 a 6, y
 «Terminado cuando», 4), y llevan su ``PA-R04-NN`` de
-``docs/evolution/PRUEBAS_0.4_DEL_ROBOT.md``. La cara se lee de la ventana de verdad.
+``docs/evolution/PRUEBAS_0.4_DEL_ROBOT.md``. La cara se lee de los píxeles de la ventana de
+verdad, como la vería el propietario (``lector_de_la_cara``).
 """
 
 from __future__ import annotations
@@ -100,7 +101,9 @@ def test_en_reposo_mueve_un_poco_los_ojos_y_respira(qtbot: QtBot, tmp_path: Path
     dibujos = conductor.pasa_el_tiempo(60.0)
 
     assert dibujos, "no se ha dibujado"
-    miradas = [dibujo.mirada for dibujo in dibujos]
+    # Con los ojos cerrados no se ve adónde miran: al parpadear, un poco cada vez.
+    miradas = [dibujo.mirada for dibujo in dibujos if dibujo.mirada is not None]
+    assert len(miradas) >= 0.9 * len(dibujos), "casi nunca se ve adónde mira"
     assert _saltos(miradas) >= 2, "los ojos no se mueven"
     assert all(abs(x) <= 0.3 and abs(y) <= 0.3 for x, y in miradas), "se mueven demasiado"
     subidas = _subidas([(dibujo.momento, dibujo.respira) for dibujo in dibujos])

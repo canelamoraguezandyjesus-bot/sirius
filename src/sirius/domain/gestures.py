@@ -186,7 +186,9 @@ class GestureFilter:
             self._code = len(run)
             return
         pieces.append(run)
-        if len(run) == self._code or (self._code >= 3 and len(run) >= 3):
+        # Un trozo de código entre comillas se cierra con las mismas; un bloque, con tantas
+        # o más que las que lo abrieron, como en Markdown (ronda 1 de Codex sobre la PR #702).
+        if len(run) == self._code or (self._code >= 3 and len(run) >= self._code):
             self._code = 0
 
     def _show(self, pieces: list[Piece], seen: str) -> None:
