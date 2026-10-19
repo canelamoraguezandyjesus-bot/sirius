@@ -177,6 +177,14 @@ Se adoptan las dos últimas.
   0.3 fallaban: su conductor, que vigila que no se guarde audio en la base, tomaba
   `recognition_prints` por una tabla nueva, y así lo tenía que decir. Ahora la cuenta entre
   las tablas de Sirius y la mira columna a columna, como las demás.
+- **Al repasar el paquete antes de la revisión externa**, dos cosas de esta pieza:
+  - Ninguna prueba fijaba que la raíz de composición, sin dobles, cargara
+    `load_recognition_engines`: PA-R04-10 lee los nombres de lo que ese construye y lo
+    daba por hecho. Ahora lo fija una prueba de la ventana: lo carga con las carpetas de la
+    orden de instalar, y solo al hacer falta. Con la raíz cargando otra cosa, o de otra
+    carpeta, cae.
+  - Reconocer miraba también el modelo de la edad. Es la lección de ADR-264, del otro
+    lado, y se cuenta allí.
 - **La batería entera, con las cuatro piezas de la 0.4 juntas**: 9 675 en verde, 15 omitidas
   y 2 xfail, en 33 min 9 s, y una roja: la medida de rendimiento de construir el contexto,
   que tras media hora de pruebas pasa en este ordenador de su tope de disparate, 1 500 ms.

@@ -32,6 +32,7 @@ from sirius.adapters.recognition.engines import (
 )
 from sirius.adapters.vision.local_sight import FaceCrop
 from sirius.infrastructure.local_sight_installation import (
+    AGE_MODEL,
     FACE_RECOGNITION_FILES,
     FACE_RECOGNITION_MODEL,
     VOICE_RECOGNITION_FILES,
@@ -244,6 +245,24 @@ def test_con_los_modelos_carga_insightface_y_ecapa(
     [arcface] = bibliotecas.arcfaces
     assert arcface.ruta == str(caras / FACE_RECOGNITION_MODEL)
     assert arcface.preparado == [-1], "en el procesador: la gráfica es de la charla"
+
+
+@pytest.mark.parametrize("contenido", [None, b""], ids=["sin el fichero", "vacío"])
+def test_sin_el_modelo_de_la_edad_reconocer_carga_igual(
+    bibliotecas: _Bibliotecas, tmp_path: Path, contenido: bytes | None
+) -> None:
+    # El de la edad lo saca la misma orden de instalar, pero no es suyo (ADR-264).
+    caras, voces = _modelos(tmp_path)
+    if contenido is None:
+        (caras / AGE_MODEL).unlink()
+    else:
+        (caras / AGE_MODEL).write_bytes(contenido)
+
+    motores = load_recognition_engines(caras, voces)
+
+    assert motores.faces.name == "insightface"
+    [arcface] = bibliotecas.arcfaces
+    assert arcface.ruta == str(caras / FACE_RECOGNITION_MODEL)
 
 
 def test_onnx_runtime_se_calla_antes_de_cargar_el_modelo_de_las_caras(

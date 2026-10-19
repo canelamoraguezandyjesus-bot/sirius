@@ -109,8 +109,15 @@ def voice_recognition_dir(models_dir: Path | None = None) -> Path:
 
 
 def face_recognition_complete(folder: Path) -> bool:
-    """Si ``folder`` tiene los modelos de InsightFace, sin ninguno vacío."""
+    """Si ``folder`` tiene los modelos de InsightFace que saca la orden de instalar, el de
+    reconocer caras y el de la edad, sin ninguno vacío."""
     return _all_there(folder, FACE_RECOGNITION_FILES)
+
+
+def face_recognition_model_complete(folder: Path) -> bool:
+    """Si ``folder`` tiene el modelo de reconocer caras, sin vaciar: el que carga
+    reconocer, sin mirar el de la edad, que no es suyo (ADR-264)."""
+    return _all_there(folder, (FACE_RECOGNITION_MODEL,))
 
 
 def voice_recognition_complete(folder: Path) -> bool:

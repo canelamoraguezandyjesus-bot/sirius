@@ -20,6 +20,7 @@ from pathlib import Path
 import pytest
 from pytestqt.qtbot import QtBot
 
+import sirius.composition_root as composition_root
 from sirius.adapters.persistence.bootstrap import initialize_persistence
 from sirius.adapters.secrets.fake import FakeSecretStore
 from sirius.application.recognition import (
@@ -30,11 +31,15 @@ from sirius.application.recognition import (
     EnrollmentStep,
 )
 from sirius.composition_root import ConversationDependencies, build_conversation_dependencies
+from sirius.infrastructure.local_sight_installation import (
+    face_recognition_dir,
+    voice_recognition_dir,
+)
 from sirius.infrastructure.paths import resolve_paths
 from sirius.main import _build_main_window
 from sirius.ports.embeddings import EmbeddingError
 from sirius.ports.local_sight import CameraUnavailable, SeenFace, SightEngines
-from sirius.ports.recognition import Print, RecognitionEngines
+from sirius.ports.recognition import Print, RecognitionEngines, RecognitionUnavailable
 from sirius.presentation.main_window import ENROLL_HELP, NOT_FORGOTTEN
 from sirius.presentation.validated_main_window import ValidatedMainWindow
 
@@ -270,3 +275,35 @@ def test_los_botones_dicen_lo_que_hacen_para_un_lector_de_pantalla(
     assert ventana.forget_button.accessibleName() == "Quitar el permiso y borrar sus huellas"
     assert ventana.forget_combo.accessibleName() == "A quién olvidar"
     assert ventana.enroll_label.accessibleName() == "El permiso para reconocerte"
+
+
+# --- Cómo se monta ---------------------------------------------------------------------
+
+
+def test_sin_decir_con_que_reconoce_carga_lo_de_la_orden_de_instalar_y_solo_al_hacer_falta(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # PA-R04-10 lee con qué reconoce de los reconocedores que construye
+    # `load_recognition_engines`; esto fija que es lo que carga Sirius sin dobles.
+    cargas: list[tuple[Path, Path]] = []
+
+    def carga(caras: Path, voces: Path) -> RecognitionEngines[str, str]:
+        cargas.append((caras, voces))
+        raise RecognitionUnavailable("de mentira")
+
+    monkeypatch.setattr(composition_root, "load_recognition_engines", carga)
+    rutas = resolve_paths()
+    initialize_persistence(rutas)
+    deps = build_conversation_dependencies(
+        rutas.data_dir / "sirius.db",
+        tmp_path / "copias",
+        secret_store=FakeSecretStore(),
+        text_embedder=_SinHuellas(),
+    )
+    deps.recognition.begin("Marta")
+    assert cargas == [], "construirlo y empezar a dar permiso no cargan nada"
+
+    deps.recognition.take_face("marta")
+
+    assert cargas == [(face_recognition_dir(), voice_recognition_dir())]
+    assert _paso(deps) is EnrollmentStep.FAILED

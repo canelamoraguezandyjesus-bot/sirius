@@ -1031,8 +1031,10 @@ class ConductorDeOjos(ConductorDeVoz):
         return motores
 
     def herramientas_de_los_ojos(self) -> frozenset[str]:
-        """Las herramientas con que vería Sirius en producción, leídas de su montaje: las de
-        la vista de verdad, la que monta la raíz de composición sin dobles."""
+        """Las herramientas con que vería Sirius en producción: las que importa la vista de
+        verdad, que es la que carga la raíz de composición sin dobles. Lo primero lo fija
+        ``tests/unit/test_vista_adaptadores.py``, y lo segundo,
+        ``tests/gui/test_camara_en_la_ventana.py``."""
         return frozenset(TOOLS)
 
     def _viendo(self) -> None:
@@ -1186,9 +1188,11 @@ class ConductorDeOjos(ConductorDeVoz):
         return sorted(delante) if delante else None
 
     def herramientas_de_reconocer(self) -> frozenset[str]:
-        """Con qué reconocería Sirius en producción, leído de su montaje: los nombres de los
-        reconocedores de cara y de voz que carga la raíz de composición sin dobles, los de
-        ``load_recognition_engines``."""
+        """Con qué reconocería Sirius en producción: los nombres de los reconocedores de
+        cara y de voz que construye ``load_recognition_engines``, que es lo que carga la
+        raíz de composición sin dobles. Lo primero lo fija
+        ``tests/unit/test_reconocer_adaptadores.py``, y lo segundo,
+        ``tests/gui/test_reconocer_en_la_ventana.py``."""
         return frozenset({InsightFacePrints.name, EcapaPrints.name})
 
     def huellas_guardadas(self) -> int:
@@ -1229,9 +1233,10 @@ class ConductorDeOjos(ConductorDeVoz):
         return estimador
 
     def herramientas_de_la_edad(self) -> frozenset[str]:
-        """Con qué estimaría Sirius la edad en producción, leído de su montaje: el nombre
-        del estimador que carga la raíz de composición sin dobles, el de
-        ``load_age_estimator``."""
+        """Con qué estimaría Sirius la edad en producción: el nombre del estimador que
+        construye ``load_age_estimator``, que es lo que carga la raíz de composición sin
+        dobles. Lo primero lo fija ``tests/unit/test_edad_adaptador.py``, y lo segundo,
+        ``tests/integration/test_edad_montada.py``."""
         return frozenset({InsightFaceAges.name})
 
     def lleva_la_regla_de_no_insultar(self, peticion: Peticion) -> bool:

@@ -470,7 +470,7 @@ ADR-258).
 
 ### `guarda-ampliada-a-un-corpus-que-no-es-el-suyo`
 
-- **ADR-264** — cargar la edad mirando, con la comprobación de la pieza E, que estén los dos modelos de InsightFace, el de reconocer y el de la edad; sin el de reconocer, la edad no habría cargado y habría dicho que faltaba el suyo, que estaba. Se vio al escribir sus pruebas, antes del primer commit: ahora mira solo el suyo (lo hace cumplir `tests/unit/test_edad_adaptador.py`).
+- **ADR-264** — cargar la edad mirando, con la comprobación de la pieza E, que estén los dos modelos de InsightFace, el de reconocer y el de la edad; sin el de reconocer, la edad no habría cargado y habría dicho que faltaba el suyo, que estaba. Se vio al escribir sus pruebas, antes del primer commit: ahora mira solo el suyo. Y del otro lado, lo mismo: reconocer miraba también el de la edad, y sin él habría dicho que faltaba el suyo; se vio al repasar el paquete antes de la revisión externa, y ahora cada cargador mira solo su modelo (lo hace cumplir `tests/unit/test_edad_adaptador.py`).
 - **ADR-190** — llevar una comprobación al sitio donde el hueco está declarado sin medir antes qué cosecharía allí, y pagar la ampliación con excepciones escritas a mano; aquí el criterio calibrado sobre `docs/decisions/` —un corpus homogéneo, donde un ADR cita este árbol— habría gritado 17 veces en falso y cazado cero defectos al salir a `docs/`, donde una investigación cita los árboles de otros repositorios. (lo hace cumplir `tests/automation/test_citas_de_los_adr.py`).
 
 ### `guardian-que-mide-posicion-en-vez-de-estructura`

@@ -28,7 +28,7 @@ from sirius.adapters.audio.voice_libraries import onnx_runtime_quiet
 from sirius.adapters.vision.local_sight import FaceCrop, import_sight_library
 from sirius.infrastructure.local_sight_installation import (
     FACE_RECOGNITION_MODEL,
-    face_recognition_complete,
+    face_recognition_model_complete,
     voice_recognition_complete,
 )
 from sirius.ports.local_sight import SightUnavailable
@@ -45,7 +45,7 @@ def load_recognition_engines(
 ) -> RecognitionEngines[FaceCrop, bytes]:
     """InsightFace con el modelo de ``face_models`` y ECAPA con el de ``voice_model``;
     ``RecognitionUnavailable`` si falta un modelo o una biblioteca, o no carga."""
-    if not face_recognition_complete(face_models):
+    if not face_recognition_model_complete(face_models):
         msg = "falta el modelo de reconocer caras"
         raise RecognitionUnavailable(msg)
     if not voice_recognition_complete(voice_model):

@@ -134,6 +134,11 @@ Se adoptan las dos últimas.
 - **Mutación**: 47 cambios a propósito en lo que la pieza trae, de los umbrales de la regla
   y de la lectura segura al montaje, la orden de instalar y el conductor; las pruebas cazan
   los 47.
+- **Al repasar el paquete antes de la revisión externa**, la misma guarda, del otro lado:
+  reconocer, de la pieza E, miraba también el modelo de la edad, y sin él habría dicho que
+  faltaba el de reconocer, que estaba. Ahora cada cargador mira solo su modelo, y la orden
+  de instalar, los dos, porque los saca del mismo paquete. Con el cargador de antes, la
+  prueba nueva cae, sin el fichero y con él vacío (`tests/unit/test_reconocer_adaptadores.py`).
 - InsightFace 2.1, ONNX Runtime 1.24.4 y MediaPipe 1.1.1 de verdad, en un entorno aparte,
   con los adaptadores de Sirius: el recorte de MediaPipe y el estimador de la edad.
   - **La foto de pruebas** da 35 años; en espejo, 36; al 60 %, 31; al 30 %, 29; al 15 %,
@@ -179,5 +184,5 @@ Se adoptan las dos últimas.
 ## La lección
 
 - familia: `guarda-ampliada-a-un-corpus-que-no-es-el-suyo`
-- sin esto se repetiría: cargar la edad mirando, con la comprobación de la pieza E, que estén los dos modelos de InsightFace, el de reconocer y el de la edad; sin el de reconocer, la edad no habría cargado y habría dicho que faltaba el suyo, que estaba. Se vio al escribir sus pruebas, antes del primer commit: ahora mira solo el suyo
+- sin esto se repetiría: cargar la edad mirando, con la comprobación de la pieza E, que estén los dos modelos de InsightFace, el de reconocer y el de la edad; sin el de reconocer, la edad no habría cargado y habría dicho que faltaba el suyo, que estaba. Se vio al escribir sus pruebas, antes del primer commit: ahora mira solo el suyo. Y del otro lado, lo mismo: reconocer miraba también el de la edad, y sin él habría dicho que faltaba el suyo; se vio al repasar el paquete antes de la revisión externa, y ahora cada cargador mira solo su modelo
 - lo hace cumplir: `tests/unit/test_edad_adaptador.py`
