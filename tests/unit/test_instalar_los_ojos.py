@@ -53,6 +53,7 @@ from sirius.install_local_voice import (
     download_face_recognition,
     download_voice_recognition,
 )
+from sirius.ports.age import AgeUnavailable
 from sirius.ports.local_sight import CameraUnavailable, SightUnavailable
 from sirius.ports.recognition import RecognitionUnavailable
 
@@ -260,6 +261,8 @@ def la_voz_esta(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(install_local_voice, "face_recognition_complete", lambda carpeta: True)
     monkeypatch.setattr(install_local_voice, "voice_recognition_complete", lambda carpeta: True)
     monkeypatch.setattr(install_local_voice, "load_recognition_engines", lambda caras, voces: None)
+    # Y el de la edad (pieza F, ADR-264).
+    monkeypatch.setattr(install_local_voice, "load_age_estimator", lambda carpeta: None)
 
 
 def _con_ojos(nombres: tuple[str, ...] = ()) -> tuple[str, ...]:
@@ -589,6 +592,9 @@ def test_con_el_extra_ojos_baja_los_modelos_de_reconocer_y_mira_que_cargan(
         "load_recognition_engines",
         lambda caras, voces: hecho.append(f"carga:{caras}:{voces}"),
     )
+    monkeypatch.setattr(
+        install_local_voice, "load_age_estimator", lambda caras: hecho.append(f"edad:{caras}")
+    )
 
     assert install_local_voice.main() == 0
 
@@ -596,11 +602,13 @@ def test_con_el_extra_ojos_baja_los_modelos_de_reconocer_y_mira_que_cargan(
         f"caras:{face_recognition_dir()}",
         f"voces:{voice_recognition_dir()}",
         f"carga:{face_recognition_dir()}:{voice_recognition_dir()}",
+        f"edad:{face_recognition_dir()}",
     ]
     salida = capsys.readouterr().out
     assert "Bajando el modelo de reconocer caras (InsightFace" in salida
     assert "Bajando el modelo de reconocer voces (ECAPA" in salida
     assert "Comprobando que reconocer caras y voces carga" in salida
+    assert "Comprobando que estimar la edad carga" in salida
     assert salida.rstrip().endswith("sirius-oye")
 
 
@@ -679,6 +687,27 @@ def test_si_reconocer_no_carga_lo_dice_una_vez_con_su_causa_y_acaba_en_error(
 
 
 @pytest.mark.usefixtures("la_voz_esta")
+def test_si_estimar_la_edad_no_carga_lo_dice_una_vez_con_su_causa_y_acaba_en_error(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    face_model_path().parent.mkdir(parents=True)
+    face_model_path().write_bytes(_modelo())
+    _vista(monkeypatch, _Camara([]))
+
+    def no_carga(caras: Path) -> None:
+        raise AgeUnavailable("el modelo de la edad no carga (un onnx roto)")
+
+    monkeypatch.setattr(install_local_voice, "voice_distributions_missing", _con_ojos)
+    monkeypatch.setattr(install_local_voice, "load_age_estimator", no_carga)
+
+    assert install_local_voice.main() == 1
+    salida = capsys.readouterr().out
+    assert "[FALLA] Estimar la edad no carga: un onnx roto" in salida
+    assert salida.count("no carga") == 1
+    assert not salida.rstrip().endswith("sirius-oye")
+
+
+@pytest.mark.usefixtures("la_voz_esta")
 def test_sin_el_extra_ojos_no_baja_ni_carga_lo_de_reconocer(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -689,6 +718,7 @@ def test_sin_el_extra_ojos_no_baja_ni_carga_lo_de_reconocer(
     monkeypatch.setattr(install_local_voice, "download_face_recognition", no)
     monkeypatch.setattr(install_local_voice, "download_voice_recognition", no)
     monkeypatch.setattr(install_local_voice, "load_recognition_engines", no)
+    monkeypatch.setattr(install_local_voice, "load_age_estimator", no)
 
     assert install_local_voice.main() == 0
 

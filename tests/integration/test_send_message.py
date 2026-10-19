@@ -32,6 +32,7 @@ from sirius.adapters.persistence.sqlite_knowledge_search_repository import (
 from sirius.adapters.persistence.sqlite_memory_repository import build_sqlite_memory_repository
 from sirius.adapters.persistence.sqlite_project_repository import build_sqlite_project_repository
 from sirius.adapters.persistence.sqlite_unit_of_work import build_sqlite_unit_of_work
+from sirius.application.age import care_block
 from sirius.application.approve_decision import ApproveDecisionUseCase
 from sirius.application.context import Context, ContextBuilder
 from sirius.application.presence import HEADING, RULE
@@ -48,6 +49,7 @@ from sirius.domain.conversation import Conversation, Message, MessageRole, Messa
 from sirius.domain.decision import DecisionStatus
 from sirius.domain.memory import MemoryStatus
 from sirius.domain.project import is_configured
+from sirius.ports.age import AgeReading
 from sirius.ports.conversation_repository import ConversationRepository
 from sirius.ports.llm import (
     LLMCompleted,
@@ -1220,6 +1222,102 @@ def test_si_no_se_sabe_quien_hay_se_apunta_una_vez_y_la_charla_sigue(
     assert _quien_hay(proveedor.peticiones[0].instructions) == ["Te habla Marta."]
     assert HEADING not in proveedor.peticiones[1].instructions
     avisos = [r for r in caplog.records if "No se sabe a quiénes tiene delante" in r.getMessage()]
+    assert len(avisos) == 1
+    assert "RuntimeError" in avisos[0].getMessage()
+    assert "/ruta/secreta" not in caplog.text
+
+
+# --- Con quién se corta (pieza F de la 0.4, ADR-264) ------------------------------------
+
+
+def _con_recordatorio(tmp_path: Path, proveedor: LLMProvider) -> SendMessageUseCase:
+    """Como ``_build_use_case``, con el recordatorio de la semilla, lo último que lee."""
+    database_path = tmp_path / "sirius.db"
+    upgrade_to_head(database_path)
+    _seed_bootstrap_singletons(database_path)
+    repository = build_sqlite_conversation_repository(database_path)
+    return SendMessageUseCase(
+        context_builder=_build_context_builder(database_path, repository),
+        conversation_repository=repository,
+        llm_provider=proveedor,
+        reminder="El recordatorio de la semilla.",
+    )
+
+
+@pytest.mark.integration
+def test_con_un_crio_delante_la_peticion_lleva_la_regla_tras_quien_hay_y_antes_del_recordatorio(
+    tmp_path: Path,
+) -> None:
+    proveedor = _ProveedorQueApunta()
+    use_case = _con_recordatorio(tmp_path, proveedor)
+    use_case.set_presence(lambda: (None, None))
+    use_case.set_ages(lambda: (AgeReading(40, sure=True), AgeReading(8, sure=True)))
+
+    use_case.send_message("hola", speaker="Marta")
+
+    [peticion] = proveedor.peticiones
+    instrucciones = peticion.instructions
+    assert instrucciones.count(care_block()) == 1
+    assert instrucciones.index(RULE) < instrucciones.index(care_block())
+    assert instrucciones.endswith(f"{care_block()}\n\nEl recordatorio de la semilla.")
+    assert "hola" not in instrucciones
+
+
+@pytest.mark.integration
+def test_con_solo_adultos_bien_vistos_no_la_lleva_y_con_uno_dudoso_si(tmp_path: Path) -> None:
+    proveedor = _ProveedorQueApunta()
+    use_case = _build_use_case(tmp_path / "sirius.db", proveedor)
+    edades: list[tuple[AgeReading | None, ...]] = [
+        (AgeReading(40, sure=True), AgeReading(30, sure=True)),
+        (AgeReading(40, sure=True), AgeReading(30, sure=False)),
+        (AgeReading(40, sure=True), None),
+        (AgeReading(70, sure=True),),
+    ]
+    use_case.set_ages(lambda: edades[len(proveedor.peticiones)])
+
+    for texto in ("uno", "dos", "tres", "cuatro"):
+        use_case.send_message(texto)
+
+    assert [care_block() in p.instructions for p in proveedor.peticiones] == [
+        False,
+        True,
+        True,
+        True,
+    ]
+
+
+@pytest.mark.integration
+def test_sin_vista_o_sin_nadie_delante_no_la_lleva(tmp_path: Path) -> None:
+    proveedor = _ProveedorQueApunta()
+    use_case = _build_use_case(tmp_path / "sirius.db", proveedor)
+    use_case.send_message("uno")
+    use_case.set_ages(lambda: None)
+    use_case.send_message("dos")
+    use_case.set_ages(lambda: ())
+    use_case.send_message("tres")
+
+    assert all(care_block() not in p.instructions for p in proveedor.peticiones)
+
+
+@pytest.mark.integration
+def test_si_no_se_sabe_la_edad_de_nadie_la_lleva_ante_la_duda_y_se_apunta_una_vez(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    proveedor = _ProveedorQueApunta()
+    use_case = _build_use_case(tmp_path / "sirius.db", proveedor)
+
+    def rota() -> tuple[AgeReading | None, ...] | None:
+        msg = "la cámara en /ruta/secreta"
+        raise RuntimeError(msg)
+
+    use_case.set_ages(rota)
+
+    primera = use_case.send_message("uno")
+    use_case.send_message("dos")
+
+    assert primera.outcome is MessageStatus.COMPLETED
+    assert all(care_block() in p.instructions for p in proveedor.peticiones)
+    avisos = [r for r in caplog.records if "No se sabe la edad" in r.getMessage()]
     assert len(avisos) == 1
     assert "RuntimeError" in avisos[0].getMessage()
     assert "/ruta/secreta" not in caplog.text

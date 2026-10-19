@@ -78,13 +78,16 @@ from lector_de_la_cara import PARTES, Lectura, lee
 from lector_de_la_cara import Dibujo as Dibujo
 from piezas_del_robot import PiezaPendiente, Piezas
 
+from sirius.adapters.recognition.age import InsightFaceAges
 from sirius.adapters.recognition.engines import EcapaPrints, InsightFacePrints
 from sirius.adapters.secrets.fake import FakeSecretStore
 from sirius.adapters.vision.local_sight import TOOLS
+from sirius.application.age import care_block
 from sirius.application.presence import HEADING, IN_FRONT_LINE, NOBODY_LINE, SOMEONE, SPEAKER_LINE
 from sirius.application.recognition import UNKNOWN, EnrollmentStep
 from sirius.domain.gestures import GESTURES
 from sirius.infrastructure.paths import resolve_paths
+from sirius.ports.age import AgeEstimator, AgeReading
 from sirius.ports.local_sight import CameraUnavailable, SeenFace, SightEngines
 from sirius.ports.recognition import Print, RecognitionEngines
 from sirius.ports.secrets import SecretStore
@@ -93,8 +96,9 @@ from sirius.presentation.main_window import SIGHT_REFRESH_MS
 
 #: Las letras de la tabla de piezas de ADR-259 que ya han entrado en ``main``. La A es la
 #: nota de arranque y estas pruebas; la B, su cara (ADR-260); la C, sus gestos (ADR-261);
-#: la D, sus ojos (ADR-262); y la E, reconocer a quien dé permiso (ADR-263).
-PIEZAS_ENTREGADAS: frozenset[str] = frozenset({"A", "B", "C", "D", "E"})
+#: la D, sus ojos (ADR-262); la E, reconocer a quien dé permiso (ADR-263); y la F, la regla
+#: de los críos y los ancianos frágiles (ADR-264).
+PIEZAS_ENTREGADAS: frozenset[str] = frozenset({"A", "B", "C", "D", "E", "F"})
 
 #: Qué trae cada pieza, con las palabras de la tabla de ADR-259.
 PIEZAS: Mapping[str, str] = {
@@ -419,6 +423,8 @@ class EstimadorDeEdadDeMentira:
 
     Apunta cada estimación que da, en el acto.
     """
+
+    nombre = "insightface"
 
     def __init__(self) -> None:
         self._estimadas: list[tuple[int, bool]] = []
@@ -781,6 +787,18 @@ class _VocesEnchufadas:
 
     def fingerprint(self, chunks: Sequence[Audio]) -> Print | None:
         return self._voces.huella(b"".join(audio.muestras for audio in chunks))
+
+
+class _EdadEnchufada:
+    """El estimador de edad de mentira con la cara del puerto de Sirius."""
+
+    def __init__(self, edades: EstimadorDeEdadDeMentira) -> None:
+        self._edades = edades
+        self.name = edades.nombre
+
+    def estimate(self, crop: bytes) -> AgeReading:
+        anos, segura = self._edades.estima(crop)
+        return AgeReading(years=anos, sure=segura)
 
 
 def _lineas_de_quien_hay(peticion: Peticion, formato: str) -> list[str]:
@@ -1186,13 +1204,25 @@ class ConductorDeOjos(ConductorDeVoz):
 
     # --- Pieza F: la edad ---
 
+    def _estimador_de_edad(self) -> Callable[[], AgeEstimator[Any]]:
+        """Quien estima la edad, con el doble donde iría el modelo de la edad de
+        InsightFace."""
+
+        def estimador() -> AgeEstimator[Any]:
+            return _EdadEnchufada(self.edades)
+
+        return estimador
+
     def herramientas_de_la_edad(self) -> frozenset[str]:
-        """Con qué estimaría Sirius la edad en producción, leído de su montaje."""
-        raise _pendiente("F")
+        """Con qué estimaría Sirius la edad en producción, leído de su montaje: el nombre
+        del estimador que carga la raíz de composición sin dobles, el de
+        ``load_age_estimator``."""
+        return frozenset({InsightFaceAges.name})
 
     def lleva_la_regla_de_no_insultar(self, peticion: Peticion) -> bool:
-        """Si ``peticion`` le dice al modelo que delante hay alguien a quien no se insulta."""
-        raise _pendiente("F")
+        """Si ``peticion`` le dice al modelo que delante hay alguien a quien no se insulta:
+        la regla, entera, en sus instrucciones."""
+        return care_block() in peticion.instrucciones
 
     # --- Pieza G: lo que ve ---
 

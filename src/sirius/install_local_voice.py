@@ -7,10 +7,10 @@ voces de Piper de la prueba a ciegas a sus carpetas si faltan, antes de mirar lo
 comprueba que el oído y cada voz cargan. Con ``--extra personaje`` baja además la voz de
 personaje, la de Chatterbox; sin él, dice cómo se pone. Con ``--extra ojos`` baja además
 el modelo de las caras, comprueba que la vista carga y mira si la cámara se abre (pieza D
-de la 0.4, ADR-262), y baja los modelos de reconocer caras y voces y comprueba que cargan
-(pieza E, ADR-263); sin él, dice cómo se pone. Lo que ya está no lo vuelve a bajar, y lo
-que falla lo dice con su causa, sin adivinar remedios (rondas 5, 8 y 9 de Codex sobre la
-PR #687).
+de la 0.4, ADR-262), y baja los modelos de reconocer caras y voces y el de la edad y
+comprueba que cargan (piezas E y F, ADR-263 y ADR-264); sin él, dice cómo se pone. Lo que
+ya está no lo vuelve a bajar, y lo que falla lo dice con su causa, sin adivinar remedios
+(rondas 5, 8 y 9 de Codex sobre la PR #687).
 
 Es lo único de Sirius que baja un modelo o una voz. Si a Sirius le falta, dice esta orden
 y no baja nada (PA-R03-08); una prueba recorre ``src/`` para que siga siendo así.
@@ -37,6 +37,7 @@ from sirius.adapters.audio.local_speaking import (
     check_speaking_libraries,
     load_speaking_engines,
 )
+from sirius.adapters.recognition.age import load_age_estimator
 from sirius.adapters.recognition.engines import load_recognition_engines
 from sirius.adapters.vision.local_sight import load_sight_engines
 from sirius.config.local_voice import LocalVoiceSettings, SpeakingVoice
@@ -70,6 +71,7 @@ from sirius.infrastructure.local_voice_installation import (
     voice_distributions_missing,
     voice_model,
 )
+from sirius.ports.age import AgeUnavailable
 from sirius.ports.local_sight import CameraUnavailable, SightUnavailable
 from sirius.ports.local_voice import VoiceUnavailable
 from sirius.ports.recognition import RecognitionUnavailable
@@ -353,7 +355,7 @@ def main() -> int:
             return _fail(f"{name[0].upper()}{name[1:]} no carga", error)
         engines.speaker.close()
     if sight:
-        failed = _check_sight() or _check_recognition()
+        failed = _check_sight() or _check_recognition() or _check_age()
         if failed is not None:
             return failed
     print("[OK]    Listo. Para probarlo: uv run --link-mode=copy --extra voz sirius-oye")
@@ -453,6 +455,16 @@ def _check_recognition() -> int | None:
     return None
 
 
+def _check_age() -> int | None:
+    """Que estimar la edad carga; el código con que acaba la orden si no."""
+    print("Comprobando que estimar la edad carga...")
+    try:
+        load_age_estimator(face_recognition_dir())
+    except AgeUnavailable as error:
+        return _fail("Estimar la edad no carga", error)
+    return None
+
+
 def _check_sight() -> int | None:
     """Que la vista carga y si la cámara se abre; el código con que acaba la orden si la
     vista no carga. Sin cámara no falla: Sirius oye y habla igual, y lo dice."""
@@ -470,7 +482,10 @@ def _check_sight() -> int | None:
     return None
 
 
-def _fail(problem: str, error: VoiceUnavailable | SightUnavailable | RecognitionUnavailable) -> int:
+def _fail(
+    problem: str,
+    error: VoiceUnavailable | SightUnavailable | RecognitionUnavailable | AgeUnavailable,
+) -> int:
     """Dice qué falla, con su causa, y nada más: no adivina si repetirla lo arreglaría.
 
     Un fallo que vuelve (una DLL) y uno que no (sin memoria un momento) se ven igual desde

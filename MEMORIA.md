@@ -81,7 +81,7 @@ la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
-| 264 | 2026-10-19 | APROBADO | No insultar con un crío o un anciano frágil delante: la edad que estima la cámara, y ante la duda, tampoco | (sin sección Decisión) |
+| 264 | 2026-10-19 | APROBADO | No insultar con un crío o un anciano frágil delante: la edad que estima la cámara, y ante la duda, tampoco | Se adoptan las dos últimas. |
 | 263 | 2026-10-19 | APROBADO | Reconocer por la cara y por la voz a quien dé permiso, con sus huellas cifradas | Se adoptan las dos últimas. |
 | 262 | 2026-10-19 | APROBADO | Darle a Sirius ojos: la cámara y las caras en local | Se adopta la opción 3. |
 | 261 | 2026-10-19 | APROBADO | Hacer los gestos de una lista cerrada que el modelo escribe entre corchetes | Se adopta la opción 3. |
@@ -361,6 +361,7 @@ ADR-258).
 | `modelo-dentro-del-turno` | 3 | sí | 254, 243, 237 |
 | `vista-que-copia-el-corpus-del-que-venia-huyendo` | 3 | sí | 258, 218, 196 |
 | `decision-que-solo-vive-en-una-conversacion` | 2 | no en todas | 225, 202 |
+| `guarda-ampliada-a-un-corpus-que-no-es-el-suyo` | 2 | sí | 264, 190 |
 | `guardian-que-mide-posicion-en-vez-de-estructura` | 2 | sí | 221, 187 |
 | `leccion-que-se-queda-en-el-informe` | 2 | sí | 215, 214 |
 | `lista-a-mano` | 2 | sí | 181, 178 |
@@ -378,7 +379,6 @@ ADR-258).
 | `espera-sin-fin-por-un-suceso-que-nadie-va-a-emitir` | 1 | sí | 194 |
 | `estado-compartido-entre-hilos` | 1 | sí | 239 |
 | `estado-en-el-que-se-entra-y-del-que-no-se-sale` | 1 | sí | 189 |
-| `guarda-ampliada-a-un-corpus-que-no-es-el-suyo` | 1 | sí | 190 |
 | `guarda-medida-que-se-queda-sin-autoridad-porque-nadie-relee-la-medida` | 1 | sí | 199 |
 | `instrumento-que-solo-mide-un-lado` | 1 | sí | 203 |
 | `interruptor-que-enciende-mas-de-lo-que-se-puede-medir` | 1 | sí | 185 |
@@ -462,6 +462,11 @@ ADR-258).
 - **ADR-225** — una orden del propietario que cancela una línea entera queda en el comentario de una incidencia cerrada, y dieciocho días después el ADR, el código y el estado del proyecto siguen diciendo que esa línea está pendiente y bloquea algo; la siguiente sesión la retomaría o la pondría delante de él otra vez. (sin prueba que lo haga cumplir: ninguna prueba: una decisión del propietario no tiene hoy una forma mecánica que una guarda pueda leer; la caza la mina mensual (deuda 13) y la hoja de decisiones abiertas, a posteriori).
 - **ADR-202** — una decisión de NO hacer algo no deja rastro —no hay (sin prueba que lo haga cumplir: ninguna prueba: una decisión tomada de viva voz fuera del).
 
+### `guarda-ampliada-a-un-corpus-que-no-es-el-suyo`
+
+- **ADR-264** — cargar la edad mirando, con la comprobación de la pieza E, que estén los dos modelos de InsightFace, el de reconocer y el de la edad; sin el de reconocer, la edad no habría cargado y habría dicho que faltaba el suyo, que estaba. Se vio al escribir sus pruebas, antes del primer commit: ahora mira solo el suyo (lo hace cumplir `tests/unit/test_edad_adaptador.py`).
+- **ADR-190** — llevar una comprobación al sitio donde el hueco está declarado sin medir antes qué cosecharía allí, y pagar la ampliación con excepciones escritas a mano; aquí el criterio calibrado sobre `docs/decisions/` —un corpus homogéneo, donde un ADR cita este árbol— habría gritado 17 veces en falso y cazado cero defectos al salir a `docs/`, donde una investigación cita los árboles de otros repositorios. (lo hace cumplir `tests/automation/test_citas_de_los_adr.py`).
+
 ### `guardian-que-mide-posicion-en-vez-de-estructura`
 
 - **ADR-221** — una puerta que comprueba la forma del cuerpo (las secciones) y no lo que el siguiente paso va a hacer con él (resolver el perfil), y da por válida una activación que muere a los seis segundos. (lo hace cumplir `tests/automation/test_sirius_activation.py`).
@@ -536,10 +541,6 @@ ADR-258).
 ### `estado-en-el-que-se-entra-y-del-que-no-se-sale`
 
 - **ADR-189** — dar por buena una arista del dominio que en producción no llama nadie, y dejar así un estado en el que el motor entra solo y del que solo puede salir un mecanismo que necesita un dato que ese estado, por definición, no tiene. (lo hace cumplir `tests/engine/test_decision_cli.py`).
-
-### `guarda-ampliada-a-un-corpus-que-no-es-el-suyo`
-
-- **ADR-190** — llevar una comprobación al sitio donde el hueco está declarado sin medir antes qué cosecharía allí, y pagar la ampliación con excepciones escritas a mano; aquí el criterio calibrado sobre `docs/decisions/` —un corpus homogéneo, donde un ADR cita este árbol— habría gritado 17 veces en falso y cazado cero defectos al salir a `docs/`, donde una investigación cita los árboles de otros repositorios. (lo hace cumplir `tests/automation/test_citas_de_los_adr.py`).
 
 ### `guarda-medida-que-se-queda-sin-autoridad-porque-nadie-relee-la-medida`
 

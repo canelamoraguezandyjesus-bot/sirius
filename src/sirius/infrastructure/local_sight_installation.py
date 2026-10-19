@@ -118,5 +118,10 @@ def voice_recognition_complete(folder: Path) -> bool:
     return _all_there(folder, VOICE_RECOGNITION_FILES)
 
 
+def age_model_complete(folder: Path) -> bool:
+    """Si ``folder`` tiene el modelo de la edad, sin vaciar (pieza F de la 0.4, ADR-264)."""
+    return _all_there(folder, (AGE_MODEL,))
+
+
 def _all_there(folder: Path, names: tuple[str, ...]) -> bool:
     return all((folder / name).is_file() and (folder / name).stat().st_size > 0 for name in names)

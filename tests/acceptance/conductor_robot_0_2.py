@@ -75,6 +75,7 @@ from sirius.domain.robot_seed import (
     ROBOT_SEED_REMINDER,
 )
 from sirius.infrastructure.paths import ensure_paths, resolve_paths
+from sirius.ports.age import AgeEstimator
 from sirius.ports.embeddings import EmbeddingError, TextEmbedder
 from sirius.ports.llm import (
     LLMCompleted,
@@ -698,6 +699,7 @@ class Conductor:
             listening_clock=self._reloj_del_oido(),
             sight_engines=self._motores_de_los_ojos(),
             recognition_engines=self._motores_de_reconocer(),
+            age_estimator=self._estimador_de_edad(),
         )
         if not self._charla_por_ollama:
             dependencias.send_message_use_case.set_llm_provider(self._grabador)
@@ -733,6 +735,15 @@ class Conductor:
 
         ``None`` es lo de verdad, InsightFace y ECAPA, que no cargan mientras falten sus
         modelos, y en las pruebas faltan. El conductor de la 0.4 enchufa aquí sus dobles.
+        """
+        return None
+
+    def _estimador_de_edad(self) -> Callable[[], AgeEstimator[Any]] | None:
+        """Con qué estima la edad de quien ve: en la 0.2, con nada.
+
+        ``None`` es lo de verdad, el modelo de la edad de InsightFace, que no se carga
+        mientras la vista no vea a nadie, y en las pruebas no ve. El conductor de la 0.4
+        enchufa aquí su doble.
         """
         return None
 

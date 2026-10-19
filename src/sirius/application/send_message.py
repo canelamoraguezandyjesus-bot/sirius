@@ -34,6 +34,7 @@ import uuid
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
+from sirius.application.age import care_block, needs_care
 from sirius.application.context import Context, ContextBuilder
 from sirius.application.memory_commands import CommandAnswer, CommandReply, MemoryCommandService
 from sirius.application.presence import presence_block
@@ -56,6 +57,7 @@ from sirius.domain.own_memory import render_own_memory
 from sirius.domain.project import blockers_to_text
 from sirius.domain.robot_seed import EXAMPLES_FRAME, example_turns, render_examples
 from sirius.infrastructure.logging import get_logger
+from sirius.ports.age import AgeReading
 from sirius.ports.conversation_repository import (
     ConversationRepository,
     CutRecorder,
@@ -335,11 +337,21 @@ class SendMessageUseCase:
         #: se le dice.
         self._presence: Callable[[], Sequence[str | None] | None] | None = None
         self._presence_failed = False
+        #: La edad que aparentan los que tiene delante, de la vista (pieza F de la 0.4,
+        #: ADR-264); sin ella, no se mira.
+        self._ages: Callable[[], Sequence[AgeReading | None] | None] | None = None
+        self._ages_failed = False
 
     def set_presence(self, in_front: Callable[[], Sequence[str | None] | None]) -> None:
         """Le dice de dónde saber a quiénes tiene delante: de la vista, su nombre o ``None``
         por cada uno, o ``None`` si no ve (pieza E de la 0.4, ADR-263)."""
         self._presence = in_front
+
+    def set_ages(self, in_front: Callable[[], Sequence[AgeReading | None] | None]) -> None:
+        """Le dice de dónde saber la edad que aparentan los que tiene delante: de la vista,
+        la de cada uno o ``None`` si no se sabe, o ``None`` si no ve (pieza F de la 0.4,
+        ADR-264)."""
+        self._ages = in_front
 
     def mark_cut(self, message_id: int, heard: str) -> None:
         """Le cortaron la respuesta ``message_id`` cuando el propietario había oído
@@ -360,6 +372,24 @@ class SendMessageUseCase:
                 self._presence_failed = True
                 _logger.warning("No se sabe a quiénes tiene delante (%s)", type(error).__name__)
             return None
+
+    def _care(self) -> bool:
+        """Si tiene delante a alguien con quien se corta: un crío, un anciano o alguien cuya
+        edad no se sabe (``needs_care``). Si no se puede saber la de nadie, también, ante la
+        duda, y se apunta una vez; sin vista que lo diga, no."""
+        ages = self._ages
+        if ages is None:
+            return False
+        try:
+            readings = ages()
+        except Exception as error:
+            if not self._ages_failed:
+                self._ages_failed = True
+                _logger.warning(
+                    "No se sabe la edad de los que tiene delante (%s)", type(error).__name__
+                )
+            return True
+        return readings is not None and needs_care(readings)
 
     def set_llm_provider(self, llm_provider: LLMProvider) -> None:
         """Swap the active provider (e.g. after B2a onboarding validates a key).
@@ -435,7 +465,9 @@ class SendMessageUseCase:
         ``speaker`` es quién le habla, en un turno de voz: su nombre o «sin identificar»
         (pieza E de la 0.4, ADR-263). Con él y con lo que ve la vista, la petición lleva
         «# Quién hay» (``presence_block``); lo escrito en la ventana no lleva quién lo
-        escribe.
+        escribe. Y si la vista tiene delante a un crío, a un anciano o a alguien cuya edad
+        no se sabe, lleva detrás la regla de no insultar (``care_block``, pieza F de la
+        0.4, ADR-264).
         """
         operation_id = operation_id or str(uuid.uuid4())
         provider = self._llm_provider
@@ -493,6 +525,8 @@ class SendMessageUseCase:
         presence = presence_block(speaker=speaker, in_front=self._in_front())
         if presence:
             instructions = f"{instructions}\n\n{presence}"
+        if self._care():
+            instructions = f"{instructions}\n\n{care_block()}"
         if extra_instructions.strip():
             instructions = f"{instructions}\n\n{extra_instructions.strip()}"
         if self._reminder:
