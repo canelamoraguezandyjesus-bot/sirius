@@ -105,8 +105,9 @@ Se adoptan las dos últimas.
   va: no se apunta nada, y al volver a ver se empieza de nuevo.
 - **La base** gana la tabla `sight_log`, con su migración: cuándo, qué cambió y quién. Su
   conexión lleva `secure_delete`, como las huellas. Lo de hace más de 24 horas se borra
-  cada vez que se apunta algo y cada vez que la charla lo lee: aunque no cambie nada
-  delante, no se queda en la base.
+  cada vez que se apunta algo, cada vez que la charla lo lee y, con Sirius abierto, cada
+  minuto desde el hilo de la vista, vea o no: no depende de que cambie nada delante ni de
+  que la charla lo lea (ronda 1 de Codex sobre la PR #703).
 - **La charla** le pone al modelo «# Lo que has visto», antes de «# Quién hay»: una línea
   por cambio de las últimas 24 horas, las 30 más nuevas, con su hora en la de este
   ordenador, «A las 18:02 vino Marta.», «A las 18:30 se fue Marta.», y lo de ayer, «Ayer,
@@ -160,7 +161,8 @@ Se adoptan las dos últimas.
   - Lo de hace más de 24 horas solo se borraba al apuntar algo nuevo: sin cambios
     delante, se quedaba en la base. Ahora también al leerlo la charla, y un fallo al
     borrarlo se dice una vez y se lee igual. Tres cambios a propósito, y las pruebas cazan
-    los tres (`tests/unit/test_lo_que_ve.py`).
+    los tres (`tests/unit/test_lo_que_ve.py`). Aún faltaba la otra mitad, y la encontró la
+    ronda 1 de Codex: lo cuenta ADR-262, en «Revisión externa».
   - «# Lo que has visto» iba también a un modelo de fuera, con nombres y horas. Ahora solo
     va a uno de este ordenador, y ni se lee si no; sin esa puerta, la prueba nueva cae
     (`tests/integration/test_send_message.py`).
@@ -176,8 +178,8 @@ Se adoptan las dos últimas.
 
 - Cada petición lleva lo que ha visto en el día, hasta 30 líneas, unas 250 palabras como
   mucho.
-- Lo que recuerda de cada uno dura 24 horas; después se borra, en cuanto apunta algo o la
-  charla lo lee. Con Sirius cerrado, nada lo borra hasta volver a abrirlo.
+- Lo que recuerda de cada uno dura 24 horas; después se borra: con Sirius abierto, en un
+  minuto como mucho. Con Sirius cerrado, nada lo borra hasta volver a abrirlo.
 - Quien pasa menos de 3 s por delante no ha venido, y quien sale menos de 20 s no se ha
   ido.
 - Quien da su permiso delante de la cámara deja de ser alguien sin identificar y pasa a

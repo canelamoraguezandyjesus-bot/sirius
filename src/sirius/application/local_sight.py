@@ -17,9 +17,11 @@ acto, y lo recordado son números y nombres.
 - **Lo que no puede leer no la para**: un fotograma que el detector no entiende se deja, y
   se apunta una vez; un fallo de quien reconoce, igual, y esa vez nadie es reconocido.
 - **Reconocer cuesta**: cada cara se reconoce al aparecer y después cada
-  ``RECOGNIZE_AGAIN_SECONDS``, siguiéndola por dónde está; si alguien da o quita su
-  permiso, se vuelve a mirar a todos. Y cuando alguien está dando permiso, su cara, si
-  está sola delante, va a quien reconoce.
+  ``RECOGNIZE_AGAIN_SECONDS``, siguiéndola por dónde está mientras se la vea sin hueco: un
+  fotograma sin nadie, o más de ``SAME_FACE_GAP_SECONDS`` sin mirar, y la que aparezca
+  después se reconoce de nuevo, aunque sea en el mismo sitio (ronda 1 de Codex sobre la
+  PR #703). Si alguien da o quita su permiso, se vuelve a mirar a todos. Y cuando alguien
+  está dando permiso, su cara, si está sola delante, va a quien reconoce.
 - **La edad, igual**: desde la pieza F (ADR-264), la que aparenta cada cara se estima al
   aparecer y después cada ``RECOGNIZE_AGAIN_SECONDS``, y se recuerda en números, con si se
   lee segura. Un fallo al estimarla es no saberla, que es duda.
@@ -56,6 +58,9 @@ NO_CAMERA = "Sin cámara: {reason}. Sigo oyéndote y hablando."
 RECOGNIZE_AGAIN_SECONDS = 2.0
 #: Lo lejos que puede estar una cara de donde estaba para ser la misma, de 0 a 1.
 SAME_PLACE = 0.15
+#: Lo más que puede pasar sin mirarla para que una cara sea la misma, en segundos: la vista
+#: mira unas diez veces por segundo, y con un hueco mayor no se sabe quién ha entrado.
+SAME_FACE_GAP_SECONDS = 0.5
 
 
 class FaceRecognizer(Protocol):
@@ -88,6 +93,10 @@ class SeenNames(Protocol):
 
     def pause(self) -> None:
         """Ha dejado de ver."""
+        ...
+
+    def tidy(self) -> None:
+        """Borra lo que recuerda de hace demasiado: se le pide en cada vuelta, vea o no."""
         ...
 
 
@@ -131,15 +140,17 @@ class LocalSight:
         #: Quien reconoce caras; sin él, nadie es nadie.
         self._recognition = recognition
         self._recognition_failed = False
-        #: De quién era cada cara la última vez que se reconoció: dónde estaba, quién era y
-        #: cuándo se reconoció; y con qué versión de los permisos.
-        self._known: tuple[tuple[float, str | None, float], ...] = ()
+        #: De quién era cada cara la última vez que se reconoció: dónde estaba, quién era,
+        #: cuándo se reconoció y cuándo se vio por última vez; y con qué versión de los
+        #: permisos.
+        self._known: tuple[tuple[float, str | None, float, float], ...] = ()
         self._known_version = -1
         #: Quien estima la edad; sin él, no se mira.
         self._ages = ages
         self._ages_failed = False
-        #: La edad de cada cara la última vez que se estimó: dónde estaba, qué edad y cuándo.
-        self._aged: tuple[tuple[float, AgeReading | None, float], ...] = ()
+        #: La edad de cada cara la última vez que se estimó: dónde estaba, qué edad, cuándo
+        #: se estimó y cuándo se vio por última vez.
+        self._aged: tuple[tuple[float, AgeReading | None, float, float], ...] = ()
         #: Quien recuerda lo que ve; sin él, no se recuerda.
         self._log = log
         self._log_failed = False
@@ -206,7 +217,10 @@ class LocalSight:
 
     def look(self) -> None:
         """Mira una vez: lee la cámara, busca las caras y lo apunta con su momento. Si la
-        cámara deja de dar imagen, la suelta y lo dice."""
+        cámara deja de dar imagen, la suelta y lo dice. Antes, vea o no, le pide a quien
+        recuerda lo que ve que borre lo de hace demasiado (ronda 1 de Codex sobre la PR
+        #703)."""
+        self._tidy()
         with self._lock:
             if not self._seeing or self._engines is None:
                 return
@@ -255,6 +269,19 @@ class LocalSight:
                 self._log_failed = True
                 _logger.error("Quien recuerda lo que ve ha fallado (%s)", type(error).__name__)
 
+    def _tidy(self) -> None:
+        """Le pide a quien recuerda lo que ve que borre lo viejo. Un fallo se apunta una vez,
+        con su tipo, y la vista sigue."""
+        log = self._log
+        if log is None:
+            return
+        try:
+            log.tidy()
+        except Exception as error:
+            if not self._log_failed:
+                self._log_failed = True
+                _logger.error("Quien recuerda lo que ve ha fallado (%s)", type(error).__name__)
+
     def _paused(self) -> None:
         """Le dice a quien recuerda lo que ve que ha dejado de ver."""
         log = self._log
@@ -273,8 +300,13 @@ class LocalSight:
         sola delante, va a quien reconoce. Un fallo se apunta una vez, con su tipo, y esa
         vez nadie es nadie."""
         recognition = self._recognition
-        if recognition is None or not faces:
+        if recognition is None:
             return [None] * len(faces)
+        if not faces:
+            # Sin nadie delante, lo que se supo de cada cara deja de valer: la que aparezca
+            # después se reconoce de nuevo, aunque sea en el mismo sitio.
+            self._known = ()
+            return []
         try:
             if recognition.wants_face() and len(faces) == 1:
                 recognition.take_face(faces[0].crop)
@@ -283,7 +315,7 @@ class LocalSight:
             self._known = _again_or_kept(
                 self._known, faces, now, lambda face: recognition.who_by_face(face.crop)
             )
-            return [who for _, who, _ in self._known]
+            return [who for _, who, _, _ in self._known]
         except Exception as error:
             if not self._recognition_failed:
                 self._recognition_failed = True
@@ -295,13 +327,16 @@ class LocalSight:
         está, sin volver a hacerlo; las demás, ahora. Un fallo se apunta una vez, con su
         tipo, y esa vez no se sabe la de nadie."""
         ages = self._ages
-        if ages is None or not faces:
+        if ages is None:
             return [None] * len(faces)
+        if not faces:
+            self._aged = ()
+            return []
         try:
             self._aged = _again_or_kept(
                 self._aged, faces, now, lambda face: ages.estimate(face.crop)
             )
-            return [age for _, age, _ in self._aged]
+            return [age for _, age, _, _ in self._aged]
         except Exception as error:
             if not self._ages_failed:
                 self._ages_failed = True
@@ -351,23 +386,29 @@ def _most_centered(faces: Iterable[Glimpse]) -> float | None:
 
 
 def _again_or_kept[T](
-    kept: Sequence[tuple[float, T, float]],
+    kept: Sequence[tuple[float, T, float, float]],
     faces: Sequence[Any],
     now: float,
     look_again: Callable[[Any], T],
-) -> tuple[tuple[float, T, float], ...]:
-    """Lo de cada cara de ``faces``, con dónde está y desde cuándo se sabe: lo que se supo
-    hace menos de ``RECOGNIZE_AGAIN_SECONDS`` de la cara más cerca de donde está, a menos de
-    ``SAME_PLACE``; y si no hay ninguna, ``look_again``, ahora. Cada cara de antes vale para
-    una sola de ahora."""
-    candidates = [entry for entry in kept if now - entry[2] < RECOGNIZE_AGAIN_SECONDS]
-    found: list[tuple[float, T, float]] = []
+) -> tuple[tuple[float, T, float, float], ...]:
+    """Lo de cada cara de ``faces``, con dónde está, desde cuándo se sabe y cuándo se vio:
+    lo que se supo hace menos de ``RECOGNIZE_AGAIN_SECONDS`` de la cara más cerca de donde
+    está, a menos de ``SAME_PLACE``, si se vio hace como mucho ``SAME_FACE_GAP_SECONDS``; y
+    si no hay ninguna, ``look_again``, ahora. Cada cara de antes vale para una sola de
+    ahora: la posición sola no dice que sea la misma, la sigue de un fotograma al
+    siguiente."""
+    candidates = [
+        entry
+        for entry in kept
+        if now - entry[2] < RECOGNIZE_AGAIN_SECONDS and now - entry[3] <= SAME_FACE_GAP_SECONDS
+    ]
+    found: list[tuple[float, T, float, float]] = []
     for face in faces:
         near = [entry for entry in candidates if abs(entry[0] - face.x) <= SAME_PLACE]
         if near:
             cached = min(near, key=lambda entry: abs(entry[0] - face.x))
             candidates.remove(cached)
-            found.append((face.x, cached[1], cached[2]))
+            found.append((face.x, cached[1], cached[2], now))
         else:
-            found.append((face.x, look_again(face), now))
+            found.append((face.x, look_again(face), now, now))
     return tuple(found)

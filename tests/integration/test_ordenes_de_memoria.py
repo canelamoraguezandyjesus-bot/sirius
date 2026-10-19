@@ -14,6 +14,7 @@ import pytest
 
 from sirius.adapters.persistence.bootstrap import initialize_persistence
 from sirius.adapters.secrets.fake import FakeSecretStore
+from sirius.application.age import care_block
 from sirius.application.memory_commands import ASK_TO_CONFIRM, FORGET_ABOUT_STORED
 from sirius.application.send_message import COMMAND_VOICE_TASK, CommandVoice
 from sirius.composition_root import ConversationDependencies, build_conversation_dependencies
@@ -21,6 +22,7 @@ from sirius.domain.conversation import MessageRole
 from sirius.domain.conversation_mode import MODE_INSTRUCTIONS, ConversationMode
 from sirius.domain.facts import Certainty, ProposedFact
 from sirius.infrastructure.paths import resolve_paths
+from sirius.ports.age import AgeReading
 from sirius.ports.embeddings import EmbeddingError
 from sirius.ports.llm import (
     LLMCancelled,
@@ -453,6 +455,34 @@ def test_la_voz_habla_en_el_modo_de_la_charla(sirius: _Sirius) -> None:
     [voz] = sirius.modelo.voces
     assert MODE_INSTRUCTIONS[ConversationMode.SERIO] in voz.instructions
     assert not _lo_ve_la_voz(sirius, "Zarzamora")
+
+
+def test_con_un_crio_delante_la_voz_de_la_orden_lleva_la_regla_de_no_insultar(
+    sirius: _Sirius,
+) -> None:
+    # Ronda 1 de Codex sobre la PR #703: esta frase también la escribe el modelo.
+    sirius.di("La clave de la alarma es Zarzamora.")
+    sirius.modelo.voz = "Hecho."
+    sirius.deps.send_message_use_case.set_ages(
+        lambda: (AgeReading(40, sure=True), AgeReading(8, sure=True))
+    )
+
+    sirius.di("Olvida eso.")
+
+    [voz] = sirius.modelo.voces
+    assert voz.instructions.count(care_block()) == 1
+    assert voz.instructions.index(COMMAND_VOICE_TASK) < voz.instructions.index(care_block())
+
+
+def test_con_solo_adultos_delante_la_voz_de_la_orden_no_la_lleva(sirius: _Sirius) -> None:
+    sirius.di("La clave de la alarma es Zarzamora.")
+    sirius.modelo.voz = "Hecho."
+    sirius.deps.send_message_use_case.set_ages(lambda: (AgeReading(40, sure=True),))
+
+    sirius.di("Olvida eso.")
+
+    [voz] = sirius.modelo.voces
+    assert care_block() not in voz.instructions
 
 
 def test_si_la_voz_se_cancela_la_orden_queda_cumplida_con_la_frase_de_siempre(

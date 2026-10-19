@@ -11,7 +11,12 @@ from dataclasses import dataclass, field
 import pytest
 
 from sirius.application.age import CARE_HEADING, CARE_RULE, Ages, care_block, needs_care
-from sirius.application.local_sight import RECOGNIZE_AGAIN_SECONDS, SAME_PLACE, LocalSight
+from sirius.application.local_sight import (
+    RECOGNIZE_AGAIN_SECONDS,
+    SAME_FACE_GAP_SECONDS,
+    SAME_PLACE,
+    LocalSight,
+)
 from sirius.ports.age import AgeReading, AgeUnavailable
 from sirius.ports.local_sight import SeenFace, SightEngines
 
@@ -245,13 +250,36 @@ def test_una_cara_que_sigue_donde_estaba_no_se_vuelve_a_estimar_hasta_pasado_un_
     montaje = _Montaje()
     montaje.ve(("lucas", 0.3))
 
-    montaje.ve(("lucas", 0.3 + SAME_PLACE * 0.9), despues=RECOGNIZE_AGAIN_SECONDS * 0.4)
-    montaje.ve(("lucas", 0.3), despues=RECOGNIZE_AGAIN_SECONDS * 0.5)
+    # Fotograma a fotograma, como mira la vista, moviéndose sin salir de su sitio.
+    for _ in range(round(RECOGNIZE_AGAIN_SECONDS / 0.1) - 2):
+        montaje.ve(("lucas", 0.3 + SAME_PLACE * 0.9))
     assert montaje.estimador.vistos == ["lucas"]
     assert montaje.vista.in_front_ages() == (AgeReading(8, True),), "con lo que recuerda"
 
-    montaje.ve(("lucas", 0.3), despues=RECOGNIZE_AGAIN_SECONDS * 0.2)
+    montaje.ve(("lucas", 0.3), despues=0.3)
     assert montaje.estimador.vistos == ["lucas", "lucas"]
+
+
+def test_un_crio_que_ocupa_el_sitio_de_un_adulto_no_hereda_su_edad() -> None:
+    # Ronda 1 de Codex sobre la PR #703: con la edad de Marta, la regla no iría.
+    montaje = _Montaje()
+    montaje.ve(("marta", 0.3))
+    montaje.ve()
+
+    montaje.ve(("lucas", 0.3))
+
+    assert montaje.vista.in_front_ages() == (AgeReading(8, True),)
+    assert montaje.estimador.vistos == ["marta", "lucas"]
+
+
+def test_tras_un_rato_sin_mirar_la_edad_se_estima_de_nuevo_aunque_este_en_el_mismo_sitio() -> None:
+    montaje = _Montaje()
+    montaje.ve(("marta", 0.3))
+
+    montaje.ve(("lucas", 0.3), despues=SAME_FACE_GAP_SECONDS + 0.1)
+
+    assert montaje.vista.in_front_ages() == (AgeReading(8, True),)
+    assert montaje.estimador.vistos == ["marta", "lucas"]
 
 
 def test_una_cara_que_aparece_en_otro_sitio_se_estima_en_el_acto() -> None:

@@ -20,6 +20,7 @@ from sirius.application.sight_log import (
     LEAVE_SECONDS,
     MOST_LINES,
     REMEMBER,
+    TIDY_EVERY,
     SightLog,
     sight_block,
 )
@@ -428,6 +429,36 @@ def test_al_leerlo_tambien_se_borra_lo_de_hace_mas_de_un_dia_aunque_no_cambie_na
     assert len(lineas) == 1
 
 
+def test_lo_de_hace_mas_de_un_dia_se_borra_cada_minuto_aunque_no_cambie_nada_ni_se_lea() -> None:
+    # Ronda 1 de Codex sobre la PR #703: sin cambios delante y sin charla, se va igual.
+    montaje = _Montaje()
+    montaje.almacen.apuntado = [
+        SeenChange(montaje.reloj.hora() - REMEMBER - timedelta(minutes=1), Change.CAME, "Marta")
+    ]
+
+    montaje.log.tidy()
+    assert montaje.almacen.apuntado == []
+    assert montaje.almacen.borrados_antes_de == [montaje.reloj.hora() - REMEMBER]
+
+    montaje.reloj.avanza(TIDY_EVERY.total_seconds() - 1)
+    montaje.log.tidy()
+    assert len(montaje.almacen.borrados_antes_de) == 1, "como mucho cada minuto"
+
+    montaje.reloj.avanza(1)
+    montaje.log.tidy()
+    assert len(montaje.almacen.borrados_antes_de) == 2
+
+
+def test_si_la_hora_del_ordenador_vuelve_atras_se_borra_igual() -> None:
+    montaje = _Montaje()
+    montaje.log.tidy()
+    montaje.reloj.pared -= timedelta(hours=1)
+
+    montaje.log.tidy()
+
+    assert len(montaje.almacen.borrados_antes_de) == 2
+
+
 def test_un_fallo_al_borrar_lo_viejo_se_dice_una_vez_y_se_lee_igual(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
@@ -497,7 +528,9 @@ class _Quien:
 
     vistos: list[tuple[float, tuple[str | None, ...]]] = field(default_factory=list)
     pausas: int = 0
+    limpiezas: int = 0
     falla: Exception | None = None
+    falla_al_limpiar: Exception | None = None
 
     def see(self, now: float, names: Sequence[str | None]) -> None:
         if self.falla is not None:
@@ -506,6 +539,11 @@ class _Quien:
 
     def pause(self) -> None:
         self.pausas += 1
+
+    def tidy(self) -> None:
+        if self.falla_al_limpiar is not None:
+            raise self.falla_al_limpiar
+        self.limpiezas += 1
 
 
 class _Reconocer:
@@ -574,3 +612,36 @@ def test_un_fallo_de_quien_recuerda_se_apunta_una_vez_y_la_vista_sigue(
     assert vista.in_front_names() == ("Marta",)
     errores = [r.getMessage() for r in caplog.records if r.levelno >= logging.ERROR]
     assert errores == ["Quien recuerda lo que ve ha fallado (RuntimeError)"]
+
+
+def test_la_vista_le_pide_borrar_lo_viejo_en_cada_vuelta_vea_o_no() -> None:
+    quien = _Quien()
+    vista, _, camara, _ = _vista(quien)
+
+    vista.look()
+    vista.stop()
+    vista.look()
+    vista.start()
+    camara.perdida = True
+    vista.look()
+    vista.look()
+
+    assert quien.limpiezas == 4
+
+
+def test_un_fallo_al_borrar_lo_viejo_se_apunta_una_vez_y_la_vista_sigue(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    quien = _Quien(falla_al_limpiar=OSError("disco lleno en /ruta/secreta"))
+    vista, detector, _, _ = _vista(quien)
+
+    with caplog.at_level(logging.ERROR):
+        for _ in range(2):
+            detector.caras.append((SeenFace(0.3, False, False, "marta"),))
+            vista.look()
+
+    assert vista.in_front_names() == ("Marta",)
+    assert len(quien.vistos) == 2
+    errores = [r.getMessage() for r in caplog.records if r.levelno >= logging.ERROR]
+    assert errores == ["Quien recuerda lo que ve ha fallado (OSError)"]
+    assert "/ruta/secreta" not in caplog.text

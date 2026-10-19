@@ -239,3 +239,43 @@ Se adopta la opción 3.
   le miran, con MediaPipe de verdad sobre una foto; un aviso de la cámara que se borraba
   al medio segundo, y otro que nadie podía ver, en Model Studio, al repasar la ventana; y
   dos pruebas que no veían lo que vigilaban, con la mutación.
+
+## Revisión externa
+
+La de la PR #703, que trae las piezas D a G, de ADR-262 a ADR-265, se cuenta aquí, en el
+primero del paquete.
+
+Alcance, escrito antes de la primera petición: que ninguna imagen ni ninguna huella se
+guarde en claro ni salga del ordenador, y que lo de un desconocido no se guarde; que los
+reconocedores y el estimador de verdad se carguen en el hilo de la vista, sin parar la
+ventana ni la charla; que la regla de no insultar llegue al modelo siempre que tiene delante
+a un crío, a un anciano o a alguien cuya edad no se lee segura, y solo entonces; que quitar
+el permiso borre sus huellas y su nombre de lo que recuerda haber visto, y que los nombres
+de lo que ve solo vayan a un modelo de este ordenador; y que las pruebas de la 0.4 vean lo
+que vigilan, sin dobles más permisivos que lo que doblan.
+
+Antes de la primera petición, un repaso propio del paquete entero encontró cuatro cosas, que
+cuentan ADR-263, ADR-264 y ADR-265: reconocer miraba también el modelo de la edad; ninguna
+prueba fijaba lo que monta Sirius para reconocer; «# Quién hay» y «# Lo que has visto» iban
+también a un modelo de fuera; y lo de hace más de un día solo se borraba al apuntar algo
+nuevo.
+
+- **Ronda 1, sobre `03c3b0d7`**: tres hallazgos, los tres ciertos.
+  - **P1, una cara heredaba nombre y edad solo por la posición.** Lo que se supo de una
+    cara valía 2 s para cualquiera que apareciera cerca de donde estaba, aunque entre medias
+    no se viera ninguna: si Marta se iba y un crío ocupaba su sitio, «# Quién hay» lo habría
+    llamado Marta y la regla no habría ido. Ahora vale solo para la del fotograma siguiente
+    que esté cerca, si se la sigue viendo sin hueco: tras un fotograma sin nadie, o medio
+    segundo sin mirar, se reconoce y se estima de nuevo.
+  - **P1, la voz de las órdenes de memoria no llevaba la regla de no insultar**, y esa
+    frase también la escribe el modelo. Ahora la lleva, con las mismas condiciones que la
+    charla.
+  - **P1, lo de hace más de un día seguía en la base sin cambios ni charla.** El repaso
+    propio había añadido el borrado al leer, y con un modelo de fuera ya no se lee. Es la
+    misma familia, encontrada a medias en el repaso y entera aquí: un mantenimiento atado a
+    un suceso que puede no llegar. Ahora lo borra también la vista, cada minuto como mucho,
+    vea o no: con Sirius abierto no depende de nada más.
+
+  Cada arreglo, con su prueba vista caer con el código de antes, y mutación: cuatro
+  cambios a propósito en seguir la cara, dos en la voz de la orden y cinco en el borrado;
+  las pruebas cazan los once.

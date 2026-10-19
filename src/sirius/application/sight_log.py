@@ -13,8 +13,9 @@ para que la reconozca, o nadie. De eso saca los cambios y los apunta, con su hor
 - **De los desconocidos se cuenta cuántos hay**: sin permiso no hay nombre ni nada que los
   distinga, así que dos sin identificar son dos, sin saber cuál es cuál.
 - **Lo apuntado lo lee la charla**, una línea por cambio de las últimas ``REMEMBER``, las
-  ``MOST_LINES`` más nuevas; lo de antes se borra, al apuntar y al leer: aunque no cambie
-  nada delante, no se queda en la base.
+  ``MOST_LINES`` más nuevas; lo de antes se borra al apuntar, al leer y, mientras Sirius
+  está abierto, cada ``TIDY_EVERY`` desde el hilo de la vista, vea o no: no depende de que
+  cambie nada ni de que la charla lo lea (ronda 1 de Codex sobre la PR #703).
 - **Quien quita su permiso** deja de tener nombre en lo apuntado y en lo que se está
   mirando: pasa a ser alguien sin identificar, sin que se apunte que se fue. Y al leerlo,
   un nombre de quien ya no tiene permiso, porque algo falló al quitárselo, se lee como
@@ -42,6 +43,8 @@ LEAVE_SECONDS = 20.0
 REMEMBER = timedelta(hours=24)
 #: Las líneas que se le dicen como mucho, las más nuevas.
 MOST_LINES = 30
+#: Cada cuánto, como mucho, se borra lo de antes de ``REMEMBER`` desde el hilo de la vista.
+TIDY_EVERY = timedelta(minutes=1)
 #: El título de la sección y lo que dice antes de las líneas.
 HEADING = "# Lo que has visto"
 INTRO = "Lo que has visto con la cámara en las últimas 24 horas, con su hora:"
@@ -92,6 +95,8 @@ class SightLog:
         self._coming: dict[str | None, _Pending] = {}
         self._going: dict[str | None, _Pending] = {}
         self._failed = False
+        #: Cuándo se borró lo viejo desde el hilo de la vista; ``None`` si aún no.
+        self._tidied_at: datetime | None = None
 
     def see(self, now: float, names: Sequence[str | None]) -> None:
         """Lo que ve la vista en un fotograma, en el instante ``now`` de su reloj: quién es
@@ -102,6 +107,18 @@ class SightLog:
             changes = self._changes(now, self._wall_clock(), seen)
             if changes:
                 self._write(changes)
+
+    def tidy(self) -> None:
+        """Borra lo apuntado antes de ``REMEMBER``, como mucho cada ``TIDY_EVERY``. Lo pide
+        la vista en cada vuelta, vea o no: así lo viejo se va aunque no cambie nada delante
+        ni la charla lo lea. Si la hora de este ordenador vuelve atrás, se borra igual."""
+        now = self._wall_clock()
+        with self._lock:
+            tidied_at = self._tidied_at
+            if tidied_at is not None and timedelta(0) <= now - tidied_at < TIDY_EVERY:
+                return
+            self._tidied_at = now
+        self._drop_old(now)
 
     def pause(self) -> None:
         """La vista ha dejado de ver: no se sabe quién se va, y al volver a ver se empieza

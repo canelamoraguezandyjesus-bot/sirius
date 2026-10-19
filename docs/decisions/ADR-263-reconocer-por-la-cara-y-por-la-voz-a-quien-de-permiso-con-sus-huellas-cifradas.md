@@ -123,8 +123,11 @@ Se adoptan las dos últimas.
 - **La base** gana la tabla `recognition_prints`, con su migración: de quién, de qué y la
   huella cifrada. Olvidar (ADR-239) no la toca: no guarda nada dicho, y la borra quitar
   el permiso; así queda en `FORGET_COVERAGE`.
-- **La vista** reconoce cada cara al aparecer y después cada 2 s, siguiéndola por dónde
-  está; si alguien da o quita su permiso, vuelve a mirar a todos. **El oído** dice a la
+- **La vista** reconoce cada cara al aparecer y después cada 2 s, siguiéndola de un
+  fotograma al siguiente por dónde está mientras la vea sin hueco: tras un fotograma sin
+  nadie, o medio segundo sin mirar, la reconoce de nuevo, aunque esté en el mismo sitio
+  (ronda 1 de Codex sobre la PR #703). Si alguien da o quita su permiso, vuelve a mirar a
+  todos. **El oído** dice a la
   charla quién le habla, de la voz de cada turno que va a ella. Un fallo de quien reconoce
   se apunta una vez, con su tipo, y esa vez es «sin identificar».
 - **La charla** le dice al modelo, en «# Quién hay», quién le habla en un turno de voz y a

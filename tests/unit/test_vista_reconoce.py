@@ -9,7 +9,12 @@ from dataclasses import dataclass, field
 
 import pytest
 
-from sirius.application.local_sight import RECOGNIZE_AGAIN_SECONDS, SAME_PLACE, LocalSight
+from sirius.application.local_sight import (
+    RECOGNIZE_AGAIN_SECONDS,
+    SAME_FACE_GAP_SECONDS,
+    SAME_PLACE,
+    LocalSight,
+)
 from sirius.ports.local_sight import SeenFace, SightEngines
 
 _ORDEN = "uv run --link-mode=copy --extra voz --extra ojos sirius-instala-la-voz"
@@ -100,13 +105,37 @@ def test_una_cara_que_sigue_donde_estaba_no_se_vuelve_a_reconocer_hasta_pasado_u
     montaje = _Montaje()
     montaje.ve(("marta", 0.3))
 
-    montaje.ve(("marta", 0.3 + SAME_PLACE * 0.9), despues=RECOGNIZE_AGAIN_SECONDS * 0.4)
-    montaje.ve(("marta", 0.3), despues=RECOGNIZE_AGAIN_SECONDS * 0.5)
+    # Fotograma a fotograma, como mira la vista, moviéndose sin salir de su sitio.
+    for _ in range(round(RECOGNIZE_AGAIN_SECONDS / 0.1) - 2):
+        montaje.ve(("marta", 0.3 + SAME_PLACE * 0.9))
     assert montaje.reconocer.preguntadas == ["marta"]
     assert montaje.vista.in_front_names() == ("Marta",), "con lo que recuerda de ella"
 
-    montaje.ve(("marta", 0.3), despues=RECOGNIZE_AGAIN_SECONDS * 0.2)
+    montaje.ve(("marta", 0.3), despues=0.3)
     assert montaje.reconocer.preguntadas == ["marta", "marta"]
+
+
+def test_quien_ocupa_el_sitio_de_otra_tras_un_fotograma_sin_nadie_no_hereda_su_nombre() -> None:
+    # Ronda 1 de Codex sobre la PR #703: si Marta se va y alguien ocupa su sitio, estar
+    # donde estaba ella no le hace Marta.
+    montaje = _Montaje()
+    montaje.ve(("marta", 0.3))
+    montaje.ve()
+
+    montaje.ve(("pepe", 0.3))
+
+    assert montaje.vista.in_front_names() == (None,)
+    assert montaje.reconocer.preguntadas == ["marta", "pepe"]
+
+
+def test_tras_un_rato_sin_mirar_una_cara_en_el_mismo_sitio_se_reconoce_de_nuevo() -> None:
+    montaje = _Montaje()
+    montaje.ve(("marta", 0.3))
+
+    montaje.ve(("pepe", 0.3), despues=SAME_FACE_GAP_SECONDS + 0.1)
+
+    assert montaje.vista.in_front_names() == (None,)
+    assert montaje.reconocer.preguntadas == ["marta", "pepe"]
 
 
 def test_una_cara_que_aparece_en_otro_sitio_se_reconoce_en_el_acto() -> None:

@@ -240,9 +240,11 @@ class CommandVoice:
     """La petición con la que Sirius dice a su manera lo que hizo una orden de memoria.
 
     Lleva la identidad, con los ejemplos que más se parecen a la frase, el modo de la
-    charla, la tarea y el recordatorio. La frase es fija y no sale de la base ni del
-    mensaje de la orden: el modelo nunca ve lo olvidado (ADR-240). ``replies`` cambia
-    la respuesta ya guardada con la frase de siempre por la que dice con su voz.
+    charla, la tarea y el recordatorio; y, con un crío, un anciano o alguien cuya edad no
+    se sabe delante, la regla de no insultar (``care``, ronda 1 de Codex sobre la PR
+    #703): esta frase también la escribe el modelo. La frase es fija y no sale de la base
+    ni del mensaje de la orden: el modelo nunca ve lo olvidado (ADR-240). ``replies``
+    cambia la respuesta ya guardada con la frase de siempre por la que dice con su voz.
     """
 
     def __init__(
@@ -256,7 +258,7 @@ class CommandVoice:
         self.replies = replies
 
     def request(
-        self, said: str, *, mode_block: str, reminder: str, operation_id: str
+        self, said: str, *, mode_block: str, reminder: str, operation_id: str, care: str = ""
     ) -> LLMRequest | None:
         identity = self._identities.get_current_identity()
         if identity is None:
@@ -267,6 +269,8 @@ class CommandVoice:
         if mode_block:
             parts.append(mode_block)
         parts.append(COMMAND_VOICE_TASK)
+        if care:
+            parts.append(care)
         if reminder:
             parts.append(reminder)
         return LLMRequest(
@@ -705,6 +709,7 @@ class SendMessageUseCase:
                 mode_block=self._current_mode_block(conversation_id),
                 reminder=self._reminder,
                 operation_id=stored.operation_id or str(uuid.uuid4()),
+                care=care_block() if self._care() else "",
             )
         except Exception as exc:  # la orden ya está cumplida: sin voz, la frase de siempre
             _logger.warning("No se pudo preparar la voz de la orden (%s)", type(exc).__name__)
