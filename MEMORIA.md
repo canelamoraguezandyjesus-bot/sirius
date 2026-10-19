@@ -26,7 +26,7 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **254**.
+- Decisiones (ADR): **255**.
 - Bloques del motor: 17 cerrado, 3 fuera_de_alcance.
 - Defectos registrados: 2 abierto, 103 cerrado.
 - Ideas aparcadas o descartadas: 12 aparcada, 3 descartada, 2 promovida.
@@ -81,6 +81,7 @@ la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| 261 | 2026-10-19 | APROBADO | Hacer los gestos de una lista cerrada que el modelo escribe entre corchetes | (sin sección Decisión) |
 | 260 | 2026-10-18 | APROBADO | Darle a Sirius su cara en la ventana, dibujada, viva y sin congelarse | Se adopta la opción 3. |
 | 259 | 2026-10-18 | APROBADO | Empezar la 0.4 del robot, los ojos, por sus pruebas de aceptación | Se adopta la opción 2. |
 | 258 | 2026-10-18 | APROBADO | Hacer sitio en la memoria común nombrando cada ADR por su número, sin su ruta | La tabla de decisiones de `MEMORIA.md` nombra cada ADR por su número, con su fecha, su estado, su título y, desde el 174, su resumen, y ya no lleva la ruta de… |
