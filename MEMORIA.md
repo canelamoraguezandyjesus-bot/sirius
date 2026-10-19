@@ -32,7 +32,7 @@
 - Ideas aparcadas o descartadas: 12 aparcada, 3 descartada, 2 promovida.
 - Skills: **19**.
 - Investigaciones: **14** (fotos con fecha; caducan).
-- Documentos: **213**, de los que **136** no declaran fecha.
+- Documentos: **214**, de los que **136** no declaran fecha.
 
 ## Las skills: lo que ya costó averiguar dos veces (ADR-211)
 
@@ -701,6 +701,7 @@ mismo comando y vigila la misma prueba que esta vista (ADR-218).
 | sin fecha declarada | [Propuesta de separación entre Sirius y su motor de trabajo](docs/evolution/PROPUESTA_SEPARACION_SIRIUS_MOTOR.md) |
 | 2026-10-08 | [Pruebas de aceptación de la 0.2 del robot](docs/evolution/PRUEBAS_0.2_DEL_ROBOT.md) |
 | 2026-10-13 | [Pruebas de aceptación de la 0.3 del robot](docs/evolution/PRUEBAS_0.3_DEL_ROBOT.md) |
+| 2026-10-18 | [Pruebas de aceptación de la 0.4 del robot](docs/evolution/PRUEBAS_0.4_DEL_ROBOT.md) |
 | sin fecha declarada | [Evolución de Sirius después de 0.1](docs/evolution/README.md) |
 | sin fecha declarada | [Documento Rector - Evolución de Sirius después de 0.1 (enmendado por su §20 el 06-10-2026: Sirius es el software del robot)](docs/evolution/RECTOR.md) |
 | sin fecha declarada | [Sirius AI Core y estrategia de modelos — recolección de ideas](docs/evolution/SIRIUS_AI_CORE_AND_MODEL_STRATEGY.md) |
