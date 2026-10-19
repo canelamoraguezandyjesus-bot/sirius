@@ -34,7 +34,7 @@ import uuid
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
-from sirius.application.age import care_block, needs_care
+from sirius.application.age import CareWatch, care_block
 from sirius.application.context import Context, ContextBuilder
 from sirius.application.memory_commands import CommandAnswer, CommandReply, MemoryCommandService
 from sirius.application.presence import presence_block
@@ -342,10 +342,9 @@ class SendMessageUseCase:
         #: se le dice.
         self._presence: Callable[[], Sequence[str | None] | None] | None = None
         self._presence_failed = False
-        #: La edad que aparentan los que tiene delante, de la vista (pieza F de la 0.4,
-        #: ADR-264); sin ella, no se mira.
-        self._ages: Callable[[], Sequence[AgeReading | None] | None] | None = None
-        self._ages_failed = False
+        #: Si hay que cortarse, con la edad que aparentan los que tiene delante, de la
+        #: vista (pieza F de la 0.4, ADR-264); sin ella, no se mira.
+        self._care_watch = CareWatch()
         #: Lo que recuerda haber visto, como texto (pieza G de la 0.4, ADR-265); sin ello, no
         #: se le dice.
         self._seen: Callable[[], Sequence[str]] | None = None
@@ -360,7 +359,7 @@ class SendMessageUseCase:
         """Le dice de dónde saber la edad que aparentan los que tiene delante: de la vista,
         la de cada uno o ``None`` si no se sabe, o ``None`` si no ve (pieza F de la 0.4,
         ADR-264)."""
-        self._ages = in_front
+        self._care_watch.watch(in_front)
 
     def mark_cut(self, message_id: int, heard: str) -> None:
         """Le cortaron la respuesta ``message_id`` cuando el propietario había oído
@@ -401,22 +400,8 @@ class SendMessageUseCase:
             return ()
 
     def _care(self) -> bool:
-        """Si tiene delante a alguien con quien se corta: un crío, un anciano o alguien cuya
-        edad no se sabe (``needs_care``). Si no se puede saber la de nadie, también, ante la
-        duda, y se apunta una vez; sin vista que lo diga, no."""
-        ages = self._ages
-        if ages is None:
-            return False
-        try:
-            readings = ages()
-        except Exception as error:
-            if not self._ages_failed:
-                self._ages_failed = True
-                _logger.warning(
-                    "No se sabe la edad de los que tiene delante (%s)", type(error).__name__
-                )
-            return True
-        return readings is not None and needs_care(readings)
+        """Si tiene delante a alguien con quien se corta (``CareWatch``)."""
+        return self._care_watch.needed()
 
     def set_llm_provider(self, llm_provider: LLMProvider) -> None:
         """Swap the active provider (e.g. after B2a onboarding validates a key).

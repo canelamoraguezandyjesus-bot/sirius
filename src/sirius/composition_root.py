@@ -95,7 +95,7 @@ from sirius.adapters.recognition.engines import load_recognition_engines
 from sirius.adapters.recognition.sealer import FernetSealer
 from sirius.adapters.secrets.keyring_store import build_keyring_secret_store
 from sirius.adapters.vision.local_sight import load_sight_engines
-from sirius.application.age import Ages
+from sirius.application.age import Ages, CareWatch
 from sirius.application.api_key_settings import ApiKeySettingsUseCase
 from sirius.application.approve_decision import ApproveDecisionUseCase
 from sirius.application.archive_decision import ArchiveDecisionUseCase
@@ -981,12 +981,17 @@ def build_conversation_dependencies(
         command_voice=CommandVoice(identity_repository, seed_examples, conversation_repository),
         cuts=conversation_repository,
     )
+    # Si hay que cortarse, para lo que el modelo escribe como Sirius fuera de la charla: la
+    # prueba a ciegas y las preguntas trampa. Mira la vista, que se monta más abajo (ronda
+    # 2 de Codex sobre la PR #703).
+    care_watch = CareWatch()
     trick_questions_use_case = TrickQuestionsUseCase(
         identity_repository,
         local_chat_provider=lambda: _local_chat(send_message_use_case.llm_provider),
         judge=judge,
         reminder=ROBOT_SEED_REMINDER,
         seed_examples=seed_examples,
+        care=care_watch.block,
     )
     get_history_use_case = GetConversationHistoryUseCase(conversation_repository)
 
@@ -1117,6 +1122,7 @@ def build_conversation_dependencies(
         choose_model=choose_chat_model,
         current_model=current_chat_model,
         seed_examples=seed_examples,
+        care=care_watch.block,
     )
     # La misma para la ventana y para el oído: lo que el modelo propone recordar queda
     # pendiente igual se le escriba o se le hable.
@@ -1153,6 +1159,7 @@ def build_conversation_dependencies(
     )
     send_message_use_case.set_presence(local_sight.in_front_names)
     send_message_use_case.set_ages(local_sight.in_front_ages)
+    care_watch.watch(local_sight.in_front_ages)
     send_message_use_case.set_seen(sight_log.lines)
 
     return ConversationDependencies(

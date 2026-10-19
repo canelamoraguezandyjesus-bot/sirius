@@ -186,11 +186,14 @@ class _Reloj:
 
 
 class _Camara:
+    def __init__(self) -> None:
+        self.sin_imagen = False
+
     def open(self) -> None:
         return None
 
-    def read(self) -> str:
-        return "fotograma"
+    def read(self) -> str | None:
+        return None if self.sin_imagen else "fotograma"
 
     def close(self) -> None:
         return None
@@ -200,18 +203,22 @@ class _Camara:
 class _Detector:
     name: str = "mediapipe"
     caras: list[tuple[SeenFace[str], ...]] = field(default_factory=list)
+    falla: Exception | None = None
 
     def detect(self, frame: str) -> tuple[SeenFace[str], ...]:
+        if self.falla is not None:
+            raise self.falla
         return self.caras.pop(0) if self.caras else ()
 
 
 class _Montaje:
     def __init__(self, estimador: _Estimador | None = None, *, con_edad: bool = True) -> None:
         self.reloj = _Reloj()
+        self.camara = _Camara()
         self.detector = _Detector()
         self.estimador = estimador if estimador is not None else _Estimador()
         self.vista = LocalSight(
-            load_engines=lambda: SightEngines(_Camara(), self.detector),
+            load_engines=lambda: SightEngines(self.camara, self.detector),
             clock=self.reloj,
             install_command=_ORDEN,
             ages=Ages(lambda: self.estimador) if con_edad else None,
@@ -358,3 +365,77 @@ def test_sin_ver_o_sin_quien_estime_la_edad_no_se_sabe_quien_hay() -> None:
     sin_edad.ve(("lucas", 0.5))
     assert sin_edad.vista.in_front_ages() is None
     assert sin_edad.estimador.vistos == []
+
+
+# --- Cuando no sabe quién hay, la edad es duda (ronda 2 de Codex sobre la PR #703) -----
+
+
+def test_al_abrir_la_camara_hasta_el_primer_fotograma_la_edad_es_duda() -> None:
+    montaje = _Montaje()
+
+    assert montaje.vista.in_front_ages() == (None,)
+    assert needs_care(montaje.vista.in_front_ages() or ())
+
+    montaje.ve(("marta", 0.3))
+    assert montaje.vista.in_front_ages() == (AgeReading(40, True),)
+
+
+def test_si_el_detector_falla_tras_un_adulto_la_edad_es_duda_y_despues_se_estima_de_nuevo() -> None:
+    # Un crío puede ocupar el sitio de Marta mientras el detector falla.
+    montaje = _Montaje()
+    montaje.ve(("marta", 0.3))
+    montaje.detector.falla = RuntimeError("MediaPipe")
+
+    montaje.reloj.ahora += 0.1
+    montaje.vista.look()
+    assert montaje.vista.in_front_ages() == (None,)
+    assert montaje.vista.in_front() == ()
+
+    montaje.detector.falla = None
+    montaje.ve(("lucas", 0.3))
+    assert montaje.vista.in_front_ages() == (AgeReading(8, True),)
+    assert montaje.estimador.vistos == ["marta", "lucas"]
+
+
+def test_si_la_camara_no_da_fotograma_la_edad_es_duda() -> None:
+    montaje = _Montaje()
+    montaje.ve(("marta", 0.3))
+    montaje.camara.sin_imagen = True
+
+    montaje.ve(("marta", 0.3))
+
+    assert montaje.vista.in_front_ages() == (None,)
+
+
+def test_mientras_estima_la_edad_de_una_cara_nueva_es_duda() -> None:
+    montaje = _Montaje()
+    montaje.ve(("marta", 0.3))
+    durante: list[tuple[AgeReading | None, ...] | None] = []
+    estima = montaje.estimador.estimate
+
+    def mirando(crop: str) -> AgeReading:
+        durante.append(montaje.vista.in_front_ages())
+        return estima(crop)
+
+    montaje.estimador.estimate = mirando  # type: ignore[method-assign]
+    montaje.ve(("marta", 0.3), ("lucas", 0.7))
+
+    assert durante == [(None,)], "mientras estima la de Lucas, no se sabe"
+    assert montaje.vista.in_front_ages() == (AgeReading(40, True), AgeReading(8, True))
+
+
+def test_una_cara_que_sigue_no_pone_en_duda_a_nadie() -> None:
+    montaje = _Montaje()
+    montaje.ve(("marta", 0.3))
+    durante: list[tuple[AgeReading | None, ...] | None] = []
+    estima = montaje.estimador.estimate
+
+    def mirando(crop: str) -> AgeReading:
+        durante.append(montaje.vista.in_front_ages())
+        return estima(crop)
+
+    montaje.estimador.estimate = mirando  # type: ignore[method-assign]
+    for _ in range(round(RECOGNIZE_AGAIN_SECONDS / 0.1) + 1):
+        montaje.ve(("marta", 0.3))
+
+    assert durante == [(AgeReading(40, True),)], "al volver a estimarla, sigue sabiéndola"

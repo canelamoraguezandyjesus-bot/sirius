@@ -43,8 +43,11 @@ class _Camara:
 class _Detector:
     name: str = "mediapipe"
     caras: list[tuple[SeenFace[str], ...]] = field(default_factory=list)
+    falla: Exception | None = None
 
     def detect(self, frame: str) -> tuple[SeenFace[str], ...]:
+        if self.falla is not None:
+            raise self.falla
         return self.caras.pop(0) if self.caras else ()
 
 
@@ -231,3 +234,46 @@ def test_sin_quien_reconozca_todos_son_sin_identificar() -> None:
 
     assert [cara.who for cara in vista.in_front()] == [None]
     assert vista.in_front_names() == (None,)
+
+
+# --- Cuando no sabe quién hay, no lo dice (ronda 2 de Codex sobre la PR #703) ----------
+
+
+def test_si_el_detector_falla_no_dice_a_quien_tiene_delante_y_despues_reconoce_de_nuevo() -> None:
+    montaje = _Montaje(_Reconocer(nombres={"marta": "Marta", "pepe": "Pepe"}))
+    montaje.ve(("marta", 0.3))
+    montaje.detector.falla = RuntimeError("MediaPipe")
+
+    montaje.reloj.ahora += 0.1
+    montaje.vista.look()
+    assert montaje.vista.in_front_names() is None
+
+    montaje.detector.falla = None
+    montaje.ve(("pepe", 0.3))
+    assert montaje.vista.in_front_names() == ("Pepe",)
+    assert montaje.reconocer.preguntadas == ["marta", "pepe"]
+
+
+def test_al_abrir_la_camara_hasta_el_primer_fotograma_no_dice_quien_hay() -> None:
+    montaje = _Montaje()
+
+    assert montaje.vista.in_front_names() is None
+    montaje.ve()
+    assert montaje.vista.in_front_names() == ()
+
+
+def test_mientras_reconoce_una_cara_nueva_no_dice_quien_hay() -> None:
+    montaje = _Montaje()
+    montaje.ve(("marta", 0.3))
+    durante: list[tuple[str | None, ...] | None] = []
+    reconoce = montaje.reconocer.who_by_face
+
+    def mirando(crop: str) -> str | None:
+        durante.append(montaje.vista.in_front_names())
+        return reconoce(crop)
+
+    montaje.reconocer.who_by_face = mirando  # type: ignore[method-assign]
+    montaje.ve(("marta", 0.3), ("pepe", 0.7))
+
+    assert durante == [None]
+    assert montaje.vista.in_front_names() == ("Marta", None)

@@ -279,3 +279,28 @@ nuevo.
   Cada arreglo, con su prueba vista caer con el código de antes, y mutación: cuatro
   cambios a propósito en seguir la cara, dos en la voz de la orden y cinco en el borrado;
   las pruebas cazan los once.
+- **Ronda 2, sobre `2710c078`**: dos hallazgos P1, los dos ciertos, y los dos de familias
+  que ya había traído la ronda 1.
+  - **P1, la prueba a ciegas y las preguntas trampa escribían como Sirius sin la regla de
+    no insultar**, con la cámara encendida: son diálogos aparte, no Model Studio. Es la
+    familia de la voz de las órdenes en la ronda 1: la regla se ponía camino a camino.
+  - **P1, si el detector fallaba tras un fotograma bueno, lo de antes seguía valiendo**: el
+    nombre y la edad de Marta para quien ocupara su sitio. Es la familia de la cara que
+    heredaba por la posición en la ronda 1: lo que se sabe de quién hay se daba por
+    actual sin comprobarlo.
+
+  **Dos rondas seguidas con las mismas familias**: se dejó de parchear y se buscó la raíz
+  (ADR-001). Se decidió seguir, con estas dos:
+  - **La regla, para toda petición que escribe como Sirius.** Decide `CareWatch`, uno por
+    sitio y todos con la misma lectura de la vista: la llevan la charla, la voz de las
+    órdenes, la prueba a ciegas y las preguntas trampa, mirada en cada pregunta. Y
+    `CARE_COVERAGE` dice de cada petición al modelo si la lleva o por qué no: una guarda
+    las busca todas en el código, y una nueva no pasa sin que alguien lo decida.
+  - **Lo que se sabe de quién hay, solo del último fotograma que se pudo leer.** Al abrir
+    la cámara, en la vuelta que no lee fotograma o en la que el detector falla, y mientras
+    mira quiénes son y qué edad tienen las caras nuevas, la vista no sabe quién hay: no lo
+    dice, la edad es duda y va la regla. Lo que recordaba de cada cara se olvida.
+
+  Cada arreglo, con su prueba vista caer con el código de antes, y mutación: ocho cambios
+  a propósito en la duda de la vista y seis en la regla, del montaje a la guarda y las
+  cachés de la prueba a ciegas; las pruebas cazan los catorce.

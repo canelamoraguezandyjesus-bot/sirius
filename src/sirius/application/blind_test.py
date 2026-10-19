@@ -66,10 +66,13 @@ class BlindTestUseCase:
         current_model: Callable[[], str | None],
         rng: random.Random | None = None,
         seed_examples: SeedExamplePicker | None = None,
+        care: Callable[[], str] = lambda: "",
     ) -> None:
         """``seed_examples`` elige los ejemplos de la semilla de cada pregunta, como en
         la charla (ADR-240). ``model_capabilities`` dice qué sabe hacer un modelo, o
-        lanza ``BlindTestError`` con el motivo si no se sabe (ADR-247)."""
+        lanza ``BlindTestError`` con el motivo si no se sabe (ADR-247). ``care`` da la
+        regla de no insultar si delante hay alguien que la pide, o vacío: las respuestas
+        se enseñan como de Sirius (ronda 2 de Codex sobre la PR #703)."""
         self._identity_repository = identity_repository
         self._provider_for = provider_for
         self._list_models = list_models
@@ -78,9 +81,11 @@ class BlindTestUseCase:
         self._current_model = current_model
         self._rng = rng or random.Random()
         self._seed_examples = seed_examples or SeedExamplePicker()
-        # Las respuestas ya dadas, por versión de la identidad, modelo y pregunta, mientras
-        # Sirius siga abierto: un «Empezar» después de un fallo pide solo las que faltan.
-        self._answered: dict[tuple[int, str, str], str] = {}
+        self._care = care
+        # Las respuestas ya dadas, por versión de la identidad, modelo, pregunta y regla,
+        # mientras Sirius siga abierto: un «Empezar» después de un fallo pide solo las que
+        # faltan, y una pedida sin la regla no vale cuando hace falta.
+        self._answered: dict[tuple[int, str, str, str], str] = {}
         # La respuesta que está pidiendo cada pasada, para cortarlas al cerrar la hoja. Una
         # por pasada, y no una sola para todas: una pasada que acaba tarde, tras cerrar su
         # hoja, no puede borrar la de la siguiente, que ya no se cortaría (#696).
@@ -144,8 +149,10 @@ class BlindTestUseCase:
         questions = self.questions()
         # Los ejemplos de cada pregunta se eligen al llegar a ella, después de mirar si
         # se cerró la ventana, y una sola vez: todos los modelos la contestan con las
-        # mismas instrucciones, como en la charla (ADR-240, ronda 2 de Codex).
+        # mismas instrucciones, como en la charla (ADR-240, ronda 2 de Codex). La regla
+        # de no insultar, igual: se mira al llegar a la pregunta, y vale para todos.
         instructions: dict[str, str] = {}
+        cares: dict[str, str] = {}
         #: Los comienzos de turno de sus ejemplos: dónde deja de escribir cada respuesta
         #: (incidencia #700).
         stops: dict[str, tuple[str, ...]] = {}
@@ -166,12 +173,18 @@ class BlindTestUseCase:
                         self._in_flight[run] = (provider, operation_id)
                     if should_stop():
                         raise _Cancelled(_CANCELLED)
-                    key = (version.id, model, question)
+                    if question not in cares:
+                        cares[question] = self._care()
+                    care = cares[question]
+                    key = (version.id, model, question, care)
                     answer = self._answered.get(key)
                     if answer is None:
                         if question not in instructions:
                             examples = self._seed_examples.pick(version.examples, question)
-                            instructions[question] = render_identity(version, examples)
+                            identity_text = render_identity(version, examples)
+                            instructions[question] = (
+                                f"{identity_text}\n\n{care}" if care else identity_text
+                            )
                             stops[question] = example_turns(examples)
                         try:
                             answer = self._ask(

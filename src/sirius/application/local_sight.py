@@ -16,6 +16,11 @@ acto, y lo recordado son números y nombres.
   qué, y Sirius sigue oyendo y hablando. El diario se queda con el tipo de fallo.
 - **Lo que no puede leer no la para**: un fotograma que el detector no entiende se deja, y
   se apunta una vez; un fallo de quien reconoce, igual, y esa vez nadie es reconocido.
+- **Lo que sabe de quién hay vale lo que el último fotograma que pudo leer**: al abrir la
+  cámara, en la vuelta que no lee fotograma o en la que el detector falla, y mientras mira
+  quiénes son y qué edad tienen las caras nuevas, no sabe quién hay: no lo dice, y la edad
+  de quien haya es duda; lo que recordaba de cada cara se olvida (ronda 2 de Codex sobre
+  la PR #703).
 - **Reconocer cuesta**: cada cara se reconoce al aparecer y después cada
   ``RECOGNIZE_AGAIN_SECONDS``, siguiéndola por dónde está mientras se la vea sin hueco: un
   fotograma sin nadie, o más de ``SAME_FACE_GAP_SECONDS`` sin mirar, y la que aparezca
@@ -161,6 +166,9 @@ class LocalSight:
         #: La cámara y su estado, desde el hilo que sea.
         self._lock = threading.Lock()
         self._seeing = False
+        #: Si ve, pero no sabe quién hay: acaba de abrir la cámara, la última vuelta no pudo
+        #: leer un fotograma, o está mirando quiénes son las caras nuevas.
+        self._in_doubt = False
         self._notice = ""
         self._detector_failed = False
         #: Lo visto, del más viejo al más nuevo: cada fotograma con su momento. Se cambia
@@ -204,6 +212,8 @@ class LocalSight:
                 self._notice = NO_CAMERA.format(reason=error.reason)
                 return self._notice
             self._seeing = True
+            # Hasta el primer fotograma que lea, no sabe quién hay.
+            self._doubt()
             self._notice = ""
             return ""
 
@@ -235,10 +245,12 @@ class LocalSight:
                 self._paused()
                 return
         if frame is None:
+            self._doubt()
             return
         try:
             faces = engines.detector.detect(frame)
         except Exception as error:
+            self._doubt()
             if not self._detector_failed:
                 self._detector_failed = True
                 _logger.error("El detector de caras ha fallado (%s)", type(error).__name__)
@@ -246,6 +258,10 @@ class LocalSight:
         finally:
             del frame
         now = self._clock()
+        if not self._all_followed(faces, now):
+            # Mientras mira quiénes son y qué edad tienen las caras nuevas, que puede tardar
+            # (la primera vez, cargar los modelos), no sabe quién hay.
+            self._in_doubt = True
         names = self._identify(faces, now)
         ages = self._age(faces, now)
         seen = tuple(
@@ -254,7 +270,25 @@ class LocalSight:
         )
         kept = tuple(entry for entry in self._history if now - entry[0] <= self._memory)
         self._history = (*kept, (now, seen))
+        self._in_doubt = False
         self._remember(now, names)
+
+    def _doubt(self) -> None:
+        """Deja de saber quién hay: lo que recordaba de cada cara no vale para lo que vea
+        después."""
+        self._in_doubt = True
+        self._known = ()
+        self._aged = ()
+
+    def _all_followed(self, faces: Sequence[Any], now: float) -> bool:
+        """Si cada cara de ``faces`` es una que ya sabía quién era y qué edad tenía, seguida
+        sin hueco desde el fotograma anterior."""
+        return all(
+            entry is not None
+            for kept, used in ((self._known, self._recognition), (self._aged, self._ages))
+            if used is not None
+            for entry in _followed(kept, faces, now)
+        )
 
     def _remember(self, now: float, names: Sequence[str | None]) -> None:
         """Le dice a quien recuerda lo que ve quién es cada cara de este fotograma. Un fallo
@@ -345,20 +379,26 @@ class LocalSight:
 
     def in_front_names(self) -> tuple[str | None, ...] | None:
         """Quiénes tiene delante en el último fotograma, su nombre o ``None`` por cada uno;
-        ``None`` si no ve, que entonces no sabe quién hay."""
-        return tuple(face.who for face in self.in_front()) if self._seeing else None
+        ``None`` si no ve, o si ve pero no sabe quién hay, que entonces no lo dice."""
+        if not self._seeing or self._in_doubt:
+            return None
+        return tuple(face.who for face in self.in_front())
 
     def in_front_ages(self) -> tuple[AgeReading | None, ...] | None:
         """La edad que aparentan los que tiene delante en el último fotograma, ``None`` por
-        cada uno cuya edad no se sabe; ``None`` si no ve o no tiene quien estime la edad."""
+        cada uno cuya edad no se sabe; ``None`` si no ve o no tiene quien estime la edad. Si
+        ve pero no sabe quién hay, una edad que no se sabe: es duda."""
         if not self._seeing or self._ages is None:
             return None
+        if self._in_doubt:
+            return (None,)
         return tuple(face.age for face in self.in_front())
 
     def in_front(self) -> tuple[Glimpse, ...]:
-        """Las caras del último fotograma; ninguna si aún no ha visto nada o no ve."""
+        """Las caras del último fotograma; ninguna si aún no ha visto nada, si no ve o si no
+        sabe quién hay."""
         history = self._history
-        return history[-1][1] if history and self._seeing else ()
+        return history[-1][1] if history and self._seeing and not self._in_doubt else ()
 
     def talker_x(self) -> float | None:
         """Dónde está quien mueve la boca en el último fotograma; si son varios, el más al
@@ -392,23 +432,33 @@ def _again_or_kept[T](
     look_again: Callable[[Any], T],
 ) -> tuple[tuple[float, T, float, float], ...]:
     """Lo de cada cara de ``faces``, con dónde está, desde cuándo se sabe y cuándo se vio:
-    lo que se supo hace menos de ``RECOGNIZE_AGAIN_SECONDS`` de la cara más cerca de donde
-    está, a menos de ``SAME_PLACE``, si se vio hace como mucho ``SAME_FACE_GAP_SECONDS``; y
-    si no hay ninguna, ``look_again``, ahora. Cada cara de antes vale para una sola de
-    ahora: la posición sola no dice que sea la misma, la sigue de un fotograma al
-    siguiente."""
-    candidates = [
-        entry
-        for entry in kept
-        if now - entry[2] < RECOGNIZE_AGAIN_SECONDS and now - entry[3] <= SAME_FACE_GAP_SECONDS
-    ]
+    lo que se supo de ella hace menos de ``RECOGNIZE_AGAIN_SECONDS``, si se la ha seguido
+    sin hueco (``_followed``); y si no, ``look_again``, ahora."""
     found: list[tuple[float, T, float, float]] = []
+    for face, cached in zip(faces, _followed(kept, faces, now), strict=True):
+        if cached is not None and now - cached[2] < RECOGNIZE_AGAIN_SECONDS:
+            found.append((face.x, cached[1], cached[2], now))
+        else:
+            found.append((face.x, look_again(face), now, now))
+    return tuple(found)
+
+
+def _followed[T](
+    kept: Sequence[tuple[float, T, float, float]], faces: Sequence[Any], now: float
+) -> list[tuple[float, T, float, float] | None]:
+    """Para cada cara de ``faces``, lo que se supo de ella si se la ha seguido sin hueco: la
+    de antes más cerca de donde está, a menos de ``SAME_PLACE``, vista hace como mucho
+    ``SAME_FACE_GAP_SECONDS``; si no hay ninguna, ``None``. Cada cara de antes vale para una
+    sola de ahora: la posición sola no dice que sea la misma, la sigue de un fotograma al
+    siguiente."""
+    candidates = [entry for entry in kept if now - entry[3] <= SAME_FACE_GAP_SECONDS]
+    found: list[tuple[float, T, float, float] | None] = []
     for face in faces:
         near = [entry for entry in candidates if abs(entry[0] - face.x) <= SAME_PLACE]
         if near:
             cached = min(near, key=lambda entry: abs(entry[0] - face.x))
             candidates.remove(cached)
-            found.append((face.x, cached[1], cached[2], now))
+            found.append(cached)
         else:
-            found.append((face.x, look_again(face), now, now))
-    return tuple(found)
+            found.append(None)
+    return found

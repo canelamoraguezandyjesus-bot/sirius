@@ -109,14 +109,20 @@ Se adoptan las dos últimas.
 - **La vista** estima la edad de cada cara al aparecer y después cada 2 s, siguiéndola por
   dónde está, como quién es, y con el mismo hueco: tras un fotograma sin nadie, o medio
   segundo sin mirar, la estima de nuevo, así que un crío no hereda la edad de quien ocupaba
-  su sitio (ronda 1 de Codex sobre la PR #703). Lo que recuerda son los números, nunca el
-  recorte. Seguir una cara por dónde está lo hacen ya las dos con la misma función.
+  su sitio (ronda 1 de Codex sobre la PR #703). Y si ve pero no sabe quién hay, al abrir la
+  cámara, en la vuelta que no lee fotograma o en la que el detector falla, y mientras
+  estima la de una cara nueva, la edad es duda, y va la regla (ronda 2). Lo que recuerda
+  son los números, nunca el recorte. Seguir una cara por dónde está lo hacen ya las dos
+  con la misma función.
 - **La charla** le pone al modelo la regla, «# Con quién te cortas», detrás de «# Quién
   hay» y antes del recordatorio de la semilla, cuando la vista tiene delante a alguien así
   en el último fotograma. Sin cámara no se sabe quién hay, y no va: la semilla sigue
   diciendo lo suyo. Si preguntarle a la vista falla, va, ante la duda, y se apunta una vez.
   La lleva también la voz de las órdenes de memoria, que también escribe el modelo (ronda 1
-  de Codex sobre la PR #703).
+  de Codex sobre la PR #703); y la prueba a ciegas y las preguntas trampa, que se enseñan
+  como de Sirius, mirada en cada pregunta (ronda 2). Lo decide `CareWatch`, uno por sitio
+  y todos con la misma lectura de la vista, y `CARE_COVERAGE` dice de cada petición al
+  modelo si la lleva o por qué no: una guarda las busca todas en el código.
 - **La orden de instalar** mira además que el modelo de la edad carga, y si no, lo dice con
   su causa.
 - El diario no lleva edades: solo que no se puede estimar, y por qué, o el tipo de un fallo.

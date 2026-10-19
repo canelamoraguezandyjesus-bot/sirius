@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 
 import pytest
 
+from sirius.application.age import care_block
 from sirius.application.trick_questions import TrickQuestionsError, TrickQuestionsUseCase
 from sirius.domain.identity import Identity, IdentityVersion
 from sirius.domain.reply_judge import TrickVerdict
@@ -54,6 +55,7 @@ class _Modelo:
     def __init__(self, falla: dict[str, int] | None = None) -> None:
         self.falla = dict(falla or {})
         self.pedidas: list[str] = []
+        self.instrucciones: list[str] = []
         self.cortadas: list[str] = []
 
     def health_check(self) -> bool:
@@ -61,6 +63,7 @@ class _Modelo:
 
     def stream_response(self, request: LLMRequest) -> Iterator[LLMStreamEvent]:
         self.pedidas.append(request.input_text)
+        self.instrucciones.append(request.instructions)
         if self.falla.get(request.input_text, 0) > 0:
             self.falla[request.input_text] -= 1
             yield LLMError(kind=LLMErrorKind.CONNECTION, message="Ollama se cayó.")
@@ -325,3 +328,54 @@ def test_el_juez_que_no_contesta_se_cuenta_aparte_y_el_diario_lleva_solo_identif
     assert "T10, T20, T30, T40 (4)" in linea
     assert not any(q.bad_idea in linea for q in TRICK_QUESTIONS)
     assert "Ni de broma" not in linea
+
+
+# --- La regla de no insultar (ronda 2 de Codex sobre la PR #703) ----------------------
+
+
+def _caso_con_regla(modelo: _Modelo, regla: Callable[[], str]) -> TrickQuestionsUseCase:
+    return TrickQuestionsUseCase(
+        _Identidades(),  # type: ignore[arg-type]
+        local_chat_provider=lambda: modelo,
+        judge=_Juez(),
+        reminder="El recordatorio de la semilla.",
+        care=regla,
+    )
+
+
+def test_con_alguien_delante_que_la_pide_lleva_la_regla_antes_del_recordatorio() -> None:
+    # Las respuestas se enseñan como de Sirius: con un crío delante, también se corta.
+    modelo = _Modelo()
+
+    _caso_con_regla(modelo, care_block).run()
+
+    assert len(modelo.instrucciones) == 40
+    for instrucciones in modelo.instrucciones:
+        assert instrucciones.endswith(f"{care_block()}\n\nEl recordatorio de la semilla.")
+
+
+def test_la_regla_se_mira_en_cada_pregunta() -> None:
+    modelo = _Modelo()
+    miradas: list[int] = []
+
+    def regla() -> str:
+        miradas.append(len(miradas))
+        return care_block() if len(miradas) % 2 else ""
+
+    _caso_con_regla(modelo, regla).run()
+
+    assert len(miradas) == 40
+    assert [care_block() in i for i in modelo.instrucciones] == [n % 2 == 0 for n in range(40)]
+
+
+def test_una_respuesta_pedida_sin_la_regla_no_vale_cuando_hace_falta() -> None:
+    modelo = _Modelo()
+    regla = [""]
+    caso = _caso_con_regla(modelo, lambda: regla[0])
+    caso.run()
+    regla[0] = care_block()
+
+    caso.run()
+
+    assert len(modelo.pedidas) == 80, "se vuelven a pedir todas"
+    assert all(care_block() in i for i in modelo.instrucciones[40:])

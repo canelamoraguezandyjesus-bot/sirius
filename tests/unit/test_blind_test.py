@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 
 import pytest
 
+from sirius.application.age import care_block
 from sirius.application.blind_test import BlindTestUseCase
 from sirius.application.seed_examples import SeedExamplePicker
 from sirius.domain.blind_test import (
@@ -723,3 +724,61 @@ def test_con_dos_pasadas_solapadas_cerrar_la_segunda_corta_su_respuesta() -> Non
 
     assert not segunda.is_alive(), "cerrar la segunda esperaría su respuesta entera"
     assert pedidos[1].cortadas == ["prueba-a-ciegas-1"]
+
+
+# --- La regla de no insultar (ronda 2 de Codex sobre la PR #703) ----------------------
+
+
+def _caso_con_regla(modelos: dict[str, _Modelo], regla: Callable[[], str]) -> BlindTestUseCase:
+    return BlindTestUseCase(
+        identity_repository=_Identidades(),  # type: ignore[arg-type]
+        provider_for=lambda nombre: modelos[nombre],
+        list_models=lambda: tuple(sorted(modelos)),
+        model_capabilities=_conversa,
+        choose_model=lambda modelo: None,
+        current_model=lambda: None,
+        rng=random.Random(11),
+        care=regla,
+    )
+
+
+def test_con_alguien_delante_que_la_pide_cada_respuesta_lleva_la_regla_de_no_insultar() -> None:
+    # Las respuestas se enseñan como de Sirius: con un crío delante, también se corta.
+    modelos = {"uno": _Modelo("uno"), "dos": _Modelo("dos")}
+
+    _caso_con_regla(modelos, care_block).prepare(["uno", "dos"])
+
+    for modelo in modelos.values():
+        assert len(modelo.peticiones) == len(BLIND_TEST_QUESTIONS)
+        assert all(p.instructions.endswith(care_block()) for p in modelo.peticiones)
+
+
+def test_la_regla_se_mira_en_cada_pregunta_y_vale_igual_para_todos_los_modelos() -> None:
+    modelos = {"uno": _Modelo("uno"), "dos": _Modelo("dos")}
+    miradas: list[int] = []
+
+    def regla() -> str:
+        miradas.append(len(miradas))
+        return care_block() if len(miradas) % 2 else ""
+
+    _caso_con_regla(modelos, regla).prepare(["uno", "dos"])
+
+    assert len(miradas) == len(BLIND_TEST_QUESTIONS), "una vez por pregunta"
+    pares = zip(modelos["uno"].peticiones, modelos["dos"].peticiones, strict=True)
+    for numero, (de_uno, de_dos) in enumerate(pares):
+        assert de_uno.instructions == de_dos.instructions, "las mismas para todos"
+        assert (care_block() in de_uno.instructions) == (numero % 2 == 0)
+
+
+def test_una_respuesta_pedida_sin_la_regla_no_vale_cuando_hace_falta() -> None:
+    modelos = {"uno": _Modelo("uno"), "dos": _Modelo("dos")}
+    regla = [""]
+    caso = _caso_con_regla(modelos, lambda: regla[0])
+    caso.prepare(["uno", "dos"])
+    regla[0] = care_block()
+
+    caso.prepare(["uno", "dos"])
+
+    segunda = modelos["uno"].peticiones[len(BLIND_TEST_QUESTIONS) :]
+    assert len(segunda) == len(BLIND_TEST_QUESTIONS), "se vuelven a pedir todas"
+    assert all(care_block() in p.instructions for p in segunda)

@@ -134,3 +134,32 @@ def test_sin_nadie_delante_o_sin_camara_no_la_lleva(tmp_path: Path) -> None:
     deps.send_message_use_case.send_message("sin nadie")
 
     assert [care_block() in p.instructions for p in modelo.peticiones] == [False, False]
+
+
+def test_las_preguntas_trampa_y_la_prueba_a_ciegas_llevan_la_regla_con_la_misma_vista(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Ronda 2 de Codex sobre la PR #703: también escriben como Sirius, y se enseña.
+    a_ciegas: list[_ModeloQueApunta] = []
+
+    def ollama(modelo: str, **opciones: object) -> _ModeloQueApunta:
+        del modelo, opciones
+        nuevo = _ModeloQueApunta()
+        a_ciegas.append(nuevo)
+        return nuevo
+
+    monkeypatch.setattr(composition_root, "OllamaChatProvider", ollama)
+    monkeypatch.setattr(composition_root, "_local_chat", lambda proveedor: proveedor)
+    detector = _Detector(caras=[(SeenFace(0.5, False, False, "alguien"),)])
+    deps, modelo = _monta(tmp_path, detector)
+    deps.local_sight.start()
+    deps.local_sight.look()
+
+    deps.trick_questions_use_case.run()
+    deps.blind_test_use_case.prepare(["uno", "dos"])
+
+    trampa = [p for p in modelo.peticiones if care_block() in p.instructions]
+    assert len(trampa) == 40, "las 40 preguntas trampa, sin el modelo de la edad: ante la duda"
+    assert len(a_ciegas) == 2
+    assert all(care_block() in p.instructions for m in a_ciegas for p in m.peticiones)
+    assert sum(len(m.peticiones) for m in a_ciegas) == 40
