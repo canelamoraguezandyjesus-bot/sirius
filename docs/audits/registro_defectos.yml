@@ -1790,3 +1790,18 @@ defectos:
     ficheros:
       - tests/acceptance/conductor_robot_0_4.py
       - tests/acceptance/test_dobles_del_conductor_0_4.py
+  # ADR-261: desde la pieza C, el filtro de gestos guarda hasta el trozo siguiente un blanco
+  # o unas comillas invertidas del final. Dos pruebas de la ventana esperaban verlos mientras
+  # llegaba la respuesta, y pasaban por carrera con su modelo de mentira, que acaba solo a
+  # los 5 s: en local siempre, y en Quality, sobre la #702, una fallo. Ahora esperan lo que
+  # se ve mientras llega, en menos tiempo del que tarda el modelo en acabar solo.
+  - id: H-261
+    titulo: Dos pruebas de la ventana esperaban ver mientras llega lo que el filtro de gestos guarda hasta el trozo siguiente, y pasaban por carrera
+    bloque: producto
+    gravedad: media-baja
+    estado: cerrado
+    cerrado_por: 03e1eb6930701bb5fb9c736f39f4c1a9ff3f6774
+    pr: 702
+    adr: 261
+    ficheros:
+      - tests/gui/test_conversation_ui.py
