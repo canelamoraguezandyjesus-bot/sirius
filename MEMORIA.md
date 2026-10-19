@@ -26,7 +26,7 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **253**.
+- Decisiones (ADR): **254**.
 - Bloques del motor: 17 cerrado, 3 fuera_de_alcance.
 - Defectos registrados: 2 abierto, 103 cerrado.
 - Ideas aparcadas o descartadas: 12 aparcada, 3 descartada, 2 promovida.
@@ -81,6 +81,7 @@ la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| 260 | 2026-10-18 | APROBADO | Darle a Sirius su cara en la ventana, dibujada, viva y sin congelarse | Se adopta la opción 3. |
 | 259 | 2026-10-18 | APROBADO | Empezar la 0.4 del robot, los ojos, por sus pruebas de aceptación | Se adopta la opción 2. |
 | 258 | 2026-10-18 | APROBADO | Hacer sitio en la memoria común nombrando cada ADR por su número, sin su ruta | La tabla de decisiones de `MEMORIA.md` nombra cada ADR por su número, con su fecha, su estado, su título y, desde el 174, su resumen, y ya no lleva la ruta de… |
 | 257 | 2026-10-18 | APROBADO | Apuntar lo que midió y decidió el propietario la noche del 17 al 18-10 | Pasan E-R02-04 y E-R02-05, y E-R02-03 no pasa. La prueba sin internet no se hace, y la 0.4 empieza sin esperar a sus pruebas. |
@@ -582,7 +583,7 @@ ADR-258).
 
 - **ADR-256** — un modelo pequeño seguiría el diálogo de sus instrucciones hasta su tope (lo hace cumplir `tests/unit/test_paradas_de_turno.py`).
 
-Y **7** ADR declaran expresamente que no dejaron lección: 257, 240, 236, 235, 234, 233, 232.
+Y **8** ADR declaran expresamente que no dejaron lección: 260, 257, 240, 236, 235, 234, 233, 232.
 
 ## Los bloques del motor
 
