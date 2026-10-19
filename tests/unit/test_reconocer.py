@@ -448,6 +448,56 @@ def test_quitar_el_permiso_borra_sus_huellas_y_deja_de_reconocerle() -> None:
     assert montaje.reconocer.version > version
 
 
+def test_quitar_el_permiso_quita_tambien_su_nombre_de_lo_que_ha_visto(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    olvidados: list[str] = []
+    montaje = _Montaje()
+    montaje.reconocer = Recognition(
+        load_engines=montaje._carga,
+        store=montaje.almacen,
+        sealer=montaje.sellador,
+        also_forget=olvidados.append,
+    )
+    montaje.da_permiso("Marta", "marta", "marta")
+
+    assert montaje.reconocer.forget("Marta")
+    assert olvidados == ["Marta"]
+
+    def rota(nombre: str) -> None:
+        raise OSError(nombre)
+
+    montaje.reconocer = Recognition(
+        load_engines=montaje._carga,
+        store=montaje.almacen,
+        sealer=montaje.sellador,
+        also_forget=rota,
+    )
+    montaje.da_permiso("Pepe", "pepe", "pepe")
+    with caplog.at_level(logging.ERROR):
+        assert not montaje.reconocer.forget("Pepe"), "dice que no ha podido"
+    assert "No se pudo quitar un nombre de lo que ha visto (OSError)" in caplog.text
+    assert "Pepe" not in caplog.text
+    assert montaje.reconocer.people() == (), "sus huellas, borradas igual"
+
+
+def test_si_no_se_pueden_borrar_sus_huellas_no_se_toca_lo_que_ha_visto() -> None:
+    olvidados: list[str] = []
+    montaje = _Montaje()
+    montaje.reconocer = Recognition(
+        load_engines=montaje._carga,
+        store=montaje.almacen,
+        sealer=montaje.sellador,
+        also_forget=olvidados.append,
+    )
+    montaje.da_permiso("Marta", "marta", "marta")
+    montaje.almacen.falla_al_borrar = RuntimeError("la base está ocupada")
+
+    assert not montaje.reconocer.forget("Marta")
+
+    assert olvidados == []
+
+
 def test_si_no_se_pueden_borrar_lo_dice_y_no_cambia_nada() -> None:
     montaje = _Montaje()
     montaje.da_permiso("Marta", "marta", "marta")

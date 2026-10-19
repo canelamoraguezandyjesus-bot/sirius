@@ -23,6 +23,9 @@ acto, y lo recordado son números y nombres.
 - **La edad, igual**: desde la pieza F (ADR-264), la que aparenta cada cara se estima al
   aparecer y después cada ``RECOGNIZE_AGAIN_SECONDS``, y se recuerda en números, con si se
   lee segura. Un fallo al estimarla es no saberla, que es duda.
+- **Lo que ve, como texto**: desde la pieza G (ADR-265), quién es cada cara de cada
+  fotograma va a quien recuerda lo que ve, que saca de ahí quién llega y quién se va; al
+  dejar de ver, se le dice, que no sabe quién se fue.
 """
 
 from __future__ import annotations
@@ -76,6 +79,18 @@ class FaceRecognizer(Protocol):
         ...
 
 
+class SeenNames(Protocol):
+    """Lo que la vista necesita de quien recuerda lo que ve (pieza G de la 0.4, ADR-265)."""
+
+    def see(self, now: float, names: Sequence[str | None]) -> None:
+        """Quién es cada cara del fotograma de ``now``, su nombre o ``None``."""
+        ...
+
+    def pause(self) -> None:
+        """Ha dejado de ver."""
+        ...
+
+
 class AgeOf(Protocol):
     """Lo que la vista necesita de quien estima la edad (pieza F de la 0.4, ADR-264)."""
 
@@ -110,6 +125,7 @@ class LocalSight:
         memory_seconds: float = MEMORY_SECONDS,
         recognition: FaceRecognizer | None = None,
         ages: AgeOf | None = None,
+        log: SeenNames | None = None,
     ) -> None:
         self._load_engines = load_engines
         #: Quien reconoce caras; sin él, nadie es nadie.
@@ -124,6 +140,9 @@ class LocalSight:
         self._ages_failed = False
         #: La edad de cada cara la última vez que se estimó: dónde estaba, qué edad y cuándo.
         self._aged: tuple[tuple[float, AgeReading | None, float], ...] = ()
+        #: Quien recuerda lo que ve; sin él, no se recuerda.
+        self._log = log
+        self._log_failed = False
         self._install_command = install_command
         self._clock = clock
         self._memory = memory_seconds
@@ -183,6 +202,7 @@ class LocalSight:
             if self._engines is not None and self._seeing:
                 self._engines.camera.close()
             self._seeing = False
+        self._paused()
 
     def look(self) -> None:
         """Mira una vez: lee la cámara, busca las caras y lo apunta con su momento. Si la
@@ -198,6 +218,7 @@ class LocalSight:
                 engines.camera.close()
                 self._seeing = False
                 self._notice = NO_CAMERA.format(reason=error.reason)
+                self._paused()
                 return
         if frame is None:
             return
@@ -219,6 +240,32 @@ class LocalSight:
         )
         kept = tuple(entry for entry in self._history if now - entry[0] <= self._memory)
         self._history = (*kept, (now, seen))
+        self._remember(now, names)
+
+    def _remember(self, now: float, names: Sequence[str | None]) -> None:
+        """Le dice a quien recuerda lo que ve quién es cada cara de este fotograma. Un fallo
+        se apunta una vez, con su tipo, y la vista sigue."""
+        log = self._log
+        if log is None:
+            return
+        try:
+            log.see(now, names)
+        except Exception as error:
+            if not self._log_failed:
+                self._log_failed = True
+                _logger.error("Quien recuerda lo que ve ha fallado (%s)", type(error).__name__)
+
+    def _paused(self) -> None:
+        """Le dice a quien recuerda lo que ve que ha dejado de ver."""
+        log = self._log
+        if log is None:
+            return
+        try:
+            log.pause()
+        except Exception as error:
+            if not self._log_failed:
+                self._log_failed = True
+                _logger.error("Quien recuerda lo que ve ha fallado (%s)", type(error).__name__)
 
     def _identify(self, faces: Sequence[Any], now: float) -> list[str | None]:
         """Quién es cada cara de ``faces``: la que ya se reconoció hace poco donde está,

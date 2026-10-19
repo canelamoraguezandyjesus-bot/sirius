@@ -700,6 +700,7 @@ class Conductor:
             sight_engines=self._motores_de_los_ojos(),
             recognition_engines=self._motores_de_reconocer(),
             age_estimator=self._estimador_de_edad(),
+            wall_clock=self._reloj_de_pared(),
         )
         if not self._charla_por_ollama:
             dependencias.send_message_use_case.set_llm_provider(self._grabador)
@@ -745,6 +746,11 @@ class Conductor:
         mientras la vista no vea a nadie, y en las pruebas no ve. El conductor de la 0.4
         enchufa aquí su doble.
         """
+        return None
+
+    def _reloj_de_pared(self) -> Callable[[], datetime] | None:
+        """La hora con que apunta Sirius lo que ve: en la 0.2, la de este ordenador, que no
+        ve nada. El conductor de la 0.4 le pone la suya."""
         return None
 
     def _almacen_de_secretos(self) -> SecretStore:

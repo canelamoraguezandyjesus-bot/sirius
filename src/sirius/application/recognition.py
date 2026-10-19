@@ -102,10 +102,14 @@ class Recognition[Crop, Chunk]:
         load_engines: Callable[[], RecognitionEngines[Crop, Chunk]],
         store: PrintStore,
         sealer: Sealer,
+        also_forget: Callable[[str], object] | None = None,
     ) -> None:
         self._load_engines = load_engines
         self._store = store
         self._sealer = sealer
+        #: Lo demás que se olvida de quien quita su permiso: su nombre en lo que recuerda
+        #: haber visto (pieza G de la 0.4, ADR-265).
+        self._also_forget = also_forget
         #: Lo que se cambia desde varios hilos; se coge solo para cambiarlo, nunca mientras
         #: se carga algo.
         self._lock = threading.Lock()
@@ -300,8 +304,10 @@ class Recognition[Crop, Chunk]:
         _logger.info("Alguien ha dado permiso para que le reconozca")
 
     def forget(self, name: str) -> bool:
-        """Quita el permiso de ``name``: borra todas sus huellas, y deja de reconocerle. Si
-        no se pueden borrar, no cambia nada y da ``False``."""
+        """Quita el permiso de ``name``: borra todas sus huellas, deja de reconocerle y
+        quita su nombre de lo que recuerda haber visto. Si no se pueden borrar sus huellas,
+        no cambia nada y da ``False``; si no se puede quitar su nombre de lo visto, también
+        da ``False``, y volver a quitar el permiso lo intenta otra vez."""
         self._ensure_prints()
         with self._lock:
             try:
@@ -313,6 +319,14 @@ class Recognition[Crop, Chunk]:
             self._people = tuple(person for person in self._people if person != name)
             self._version += 1
         _logger.info("Alguien ha quitado su permiso para que le reconozca")
+        if self._also_forget is not None:
+            try:
+                self._also_forget(name)
+            except Exception as error:
+                _logger.error(
+                    "No se pudo quitar un nombre de lo que ha visto (%s)", type(error).__name__
+                )
+                return False
         return True
 
     def _fail(self, enrollment: Enrollment, reason: str) -> None:

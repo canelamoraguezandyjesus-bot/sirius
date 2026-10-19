@@ -45,6 +45,8 @@ from sirius.application.send_message import (
     SendMessageUseCase,
     render_instructions,
 )
+from sirius.application.sight_log import HEADING as SEEN_HEADING
+from sirius.application.sight_log import INTRO as SEEN_INTRO
 from sirius.domain.conversation import Conversation, Message, MessageRole, MessageStatus
 from sirius.domain.decision import DecisionStatus
 from sirius.domain.memory import MemoryStatus
@@ -1318,6 +1320,68 @@ def test_si_no_se_sabe_la_edad_de_nadie_la_lleva_ante_la_duda_y_se_apunta_una_ve
     assert primera.outcome is MessageStatus.COMPLETED
     assert all(care_block() in p.instructions for p in proveedor.peticiones)
     avisos = [r for r in caplog.records if "No se sabe la edad" in r.getMessage()]
+    assert len(avisos) == 1
+    assert "RuntimeError" in avisos[0].getMessage()
+    assert "/ruta/secreta" not in caplog.text
+
+
+# --- Lo que ha visto (pieza G de la 0.4, ADR-265) ---------------------------------------
+
+
+@pytest.mark.integration
+def test_el_modelo_lee_lo_que_ha_visto_antes_de_quien_hay(tmp_path: Path) -> None:
+    proveedor = _ProveedorQueApunta()
+    use_case = _build_use_case(tmp_path / "sirius.db", proveedor)
+    use_case.set_presence(lambda: ("Marta",))
+    use_case.set_seen(
+        lambda: ("A las 18:02 vino Marta.", "A las 18:10 vino alguien sin identificar.")
+    )
+
+    use_case.send_message("¿quién ha venido?")
+
+    [peticion] = proveedor.peticiones
+    lineas = peticion.instructions.splitlines()
+    desde = lineas.index(SEEN_HEADING)
+    assert lineas[desde : desde + 4] == [
+        SEEN_HEADING,
+        SEEN_INTRO,
+        "A las 18:02 vino Marta.",
+        "A las 18:10 vino alguien sin identificar.",
+    ]
+    assert desde < lineas.index(HEADING), "lo que vio, antes de quién hay"
+    assert "¿quién ha venido?" not in peticion.instructions
+
+
+@pytest.mark.integration
+def test_sin_nada_visto_no_hay_seccion(tmp_path: Path) -> None:
+    proveedor = _ProveedorQueApunta()
+    use_case = _build_use_case(tmp_path / "sirius.db", proveedor)
+    use_case.send_message("uno")
+    use_case.set_seen(lambda: ())
+    use_case.send_message("dos")
+
+    assert all(SEEN_HEADING not in p.instructions for p in proveedor.peticiones)
+
+
+@pytest.mark.integration
+def test_si_no_se_sabe_lo_que_ha_visto_se_apunta_una_vez_y_la_charla_sigue(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    proveedor = _ProveedorQueApunta()
+    use_case = _build_use_case(tmp_path / "sirius.db", proveedor)
+
+    def roto() -> tuple[str, ...]:
+        msg = "Marta, en /ruta/secreta"
+        raise RuntimeError(msg)
+
+    use_case.set_seen(roto)
+
+    primera = use_case.send_message("uno")
+    use_case.send_message("dos")
+
+    assert primera.outcome is MessageStatus.COMPLETED
+    assert all(SEEN_HEADING not in p.instructions for p in proveedor.peticiones)
+    avisos = [r for r in caplog.records if "No se sabe lo que ha visto" in r.getMessage()]
     assert len(avisos) == 1
     assert "RuntimeError" in avisos[0].getMessage()
     assert "/ruta/secreta" not in caplog.text

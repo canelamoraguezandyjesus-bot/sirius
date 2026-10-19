@@ -1253,9 +1253,10 @@ TABLAS_DE_LA_0_2: frozenset[str] = frozenset(
     }
 )
 #: Las que añade la 0.4 (ADR-259): las huellas cifradas de quien da permiso para que le
-#: reconozca (ADR-263). En las pruebas de la voz nadie da permiso, así que se queda vacía;
-#: se mira igual que las de la 0.2, columna a columna.
-TABLAS_DE_LA_0_4: frozenset[str] = frozenset({"recognition_prints"})
+#: reconozca (ADR-263) y lo que recuerda haber visto, como texto (ADR-265). En las pruebas
+#: de la voz nadie da permiso ni hay cámara, así que se quedan vacías; se miran igual que
+#: las de la 0.2, columna a columna.
+TABLAS_DE_LA_0_4: frozenset[str] = frozenset({"recognition_prints", "sight_log"})
 #: Las tablas que tiene Sirius.
 TABLAS_DE_SIRIUS: frozenset[str] = TABLAS_DE_LA_0_2 | TABLAS_DE_LA_0_4
 

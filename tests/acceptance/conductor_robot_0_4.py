@@ -62,6 +62,8 @@ import time
 from collections.abc import Callable, Mapping, Sequence
 from contextlib import closing
 from dataclasses import dataclass, replace
+from datetime import UTC, date, datetime, timedelta
+from datetime import time as dt_time
 from pathlib import Path
 from typing import Any
 
@@ -96,9 +98,9 @@ from sirius.presentation.main_window import SIGHT_REFRESH_MS
 
 #: Las letras de la tabla de piezas de ADR-259 que ya han entrado en ``main``. La A es la
 #: nota de arranque y estas pruebas; la B, su cara (ADR-260); la C, sus gestos (ADR-261);
-#: la D, sus ojos (ADR-262); la E, reconocer a quien dé permiso (ADR-263); y la F, la regla
-#: de los críos y los ancianos frágiles (ADR-264).
-PIEZAS_ENTREGADAS: frozenset[str] = frozenset({"A", "B", "C", "D", "E", "F"})
+#: la D, sus ojos (ADR-262); la E, reconocer a quien dé permiso (ADR-263); la F, la regla de
+#: los críos y los ancianos frágiles (ADR-264); y la G, recordar lo que ve (ADR-265).
+PIEZAS_ENTREGADAS: frozenset[str] = frozenset({"A", "B", "C", "D", "E", "F", "G"})
 
 #: Qué trae cada pieza, con las palabras de la tabla de ADR-259.
 PIEZAS: Mapping[str, str] = {
@@ -801,6 +803,16 @@ class _EdadEnchufada:
         return AgeReading(years=anos, sure=segura)
 
 
+#: El día de las pruebas de lo que ve: la hora la pone ``son_las``.
+DIA_DE_LAS_PRUEBAS = date(2026, 10, 19)
+
+
+def _a_las(hora: str) -> datetime:
+    """``hora``, «HH:MM», del día de las pruebas, en la hora de este ordenador."""
+    horas, minutos = (int(trozo) for trozo in hora.split(":"))
+    return datetime.combine(DIA_DE_LAS_PRUEBAS, dt_time(horas, minutos)).astimezone()
+
+
 def _lineas_de_quien_hay(peticion: Peticion, formato: str) -> list[str]:
     """Quiénes nombran en «# Quién hay» de ``peticion`` las líneas con ``formato``: su
     nombre, o «sin identificar»."""
@@ -843,6 +855,9 @@ class ConductorDeOjos(ConductorDeVoz):
         self.caras = ReconocedorDeCarasDeMentira()
         self.voces = ReconocedorDeVocesDeMentira()
         self.edades = EstimadorDeEdadDeMentira()
+        #: La hora de Sirius que puso ``son_las`` y el momento del reloj de las pruebas en
+        #: que la puso; ``None`` hasta que se pone, o se lee por primera vez.
+        self._pared: tuple[datetime, float] | None = None
         #: La última ventana abierta: la cara se lee de ella.
         self._ventana_de_ojos: VentanaDeOjos | None = None
         # Las imágenes que ya había, antes de montar nada: así cuenta también lo que se
@@ -1226,10 +1241,21 @@ class ConductorDeOjos(ConductorDeVoz):
 
     # --- Pieza G: lo que ve ---
 
+    def _reloj_de_pared(self) -> Callable[[], datetime]:
+        """La hora de Sirius, con la que apunta lo que ve: la que pone ``son_las``, que
+        avanza con el reloj de las pruebas; antes de ponerla, las nueve de la mañana."""
+        return self._hora_de_sirius
+
+    def _hora_de_sirius(self) -> datetime:
+        if self._pared is None:
+            self._pared = (_a_las("09:00"), self.reloj.ahora)
+        desde, ancla = self._pared
+        return (desde + timedelta(seconds=self.reloj.ahora - ancla)).astimezone(UTC)
+
     def son_las(self, hora: str) -> None:
         """Pone la hora del día del reloj de Sirius, «HH:MM»; desde ahí avanza con el reloj
         de las pruebas."""
-        raise _pendiente("G")
+        self._pared = (_a_las(hora), self.reloj.ahora)
 
     # --- Las imágenes ---
 

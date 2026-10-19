@@ -600,3 +600,20 @@ class RecognitionPrintModel(Base):
     kind: Mapped[str] = mapped_column(Text, nullable=False)
     sealed: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
     created_at: Mapped[datetime] = mapped_column(nullable=False)
+
+
+class SightLogModel(Base):
+    """Un cambio de quién tenía delante la cámara, como texto (pieza G de la 0.4, ADR-265).
+
+    ``change`` es qué cambió, ``came``, ``left`` o ``there``, y ``person``, quién: su nombre
+    si dio permiso para que le reconozca, o nada. Nada de la imagen. Quitar el permiso deja
+    sus cambios sin nombre, y lo de hace más de 24 horas se borra.
+    """
+
+    __tablename__ = "sight_log"
+    __table_args__ = (Index("ix_sight_log_seen_at", "seen_at"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    seen_at: Mapped[datetime] = mapped_column(nullable=False)
+    change: Mapped[str] = mapped_column(Text, nullable=False)
+    person: Mapped[str | None] = mapped_column(Text, nullable=True)

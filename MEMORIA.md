@@ -81,7 +81,7 @@ la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
-| 265 | 2026-10-19 | APROBADO | Recordar lo que ve como texto: quién vino, a qué hora y quién se fue, sin ninguna imagen | (sin sección Decisión) |
+| 265 | 2026-10-19 | APROBADO | Recordar lo que ve como texto: quién vino, a qué hora y quién se fue, sin ninguna imagen | Se adoptan las dos últimas. |
 | 264 | 2026-10-19 | APROBADO | No insultar con un crío o un anciano frágil delante: la edad que estima la cámara, y ante la duda, tampoco | Se adoptan las dos últimas. |
 | 263 | 2026-10-19 | APROBADO | Reconocer por la cara y por la voz a quien dé permiso, con sus huellas cifradas | Se adoptan las dos últimas. |
 | 262 | 2026-10-19 | APROBADO | Darle a Sirius ojos: la cámara y las caras en local | Se adopta la opción 3. |
@@ -362,6 +362,7 @@ ADR-258).
 | `modelo-dentro-del-turno` | 3 | sí | 254, 243, 237 |
 | `vista-que-copia-el-corpus-del-que-venia-huyendo` | 3 | sí | 258, 218, 196 |
 | `decision-que-solo-vive-en-una-conversacion` | 2 | no en todas | 225, 202 |
+| `estado-en-el-que-se-entra-y-del-que-no-se-sale` | 2 | sí | 265, 189 |
 | `guarda-ampliada-a-un-corpus-que-no-es-el-suyo` | 2 | sí | 264, 190 |
 | `guardian-que-mide-posicion-en-vez-de-estructura` | 2 | sí | 221, 187 |
 | `leccion-que-se-queda-en-el-informe` | 2 | sí | 215, 214 |
@@ -379,7 +380,6 @@ ADR-258).
 | `dos-sesiones-que-no-se-ven` | 1 | sí | 206 |
 | `espera-sin-fin-por-un-suceso-que-nadie-va-a-emitir` | 1 | sí | 194 |
 | `estado-compartido-entre-hilos` | 1 | sí | 239 |
-| `estado-en-el-que-se-entra-y-del-que-no-se-sale` | 1 | sí | 189 |
 | `guarda-medida-que-se-queda-sin-autoridad-porque-nadie-relee-la-medida` | 1 | sí | 199 |
 | `instrumento-que-solo-mide-un-lado` | 1 | sí | 203 |
 | `interruptor-que-enciende-mas-de-lo-que-se-puede-medir` | 1 | sí | 185 |
@@ -463,6 +463,11 @@ ADR-258).
 - **ADR-225** — una orden del propietario que cancela una línea entera queda en el comentario de una incidencia cerrada, y dieciocho días después el ADR, el código y el estado del proyecto siguen diciendo que esa línea está pendiente y bloquea algo; la siguiente sesión la retomaría o la pondría delante de él otra vez. (sin prueba que lo haga cumplir: ninguna prueba: una decisión del propietario no tiene hoy una forma mecánica que una guarda pueda leer; la caza la mina mensual (deuda 13) y la hoja de decisiones abiertas, a posteriori).
 - **ADR-202** — una decisión de NO hacer algo no deja rastro —no hay (sin prueba que lo haga cumplir: ninguna prueba: una decisión tomada de viva voz fuera del).
 
+### `estado-en-el-que-se-entra-y-del-que-no-se-sale`
+
+- **ADR-265** — quien recuerda lo que ve dejaba a alguien a medio llegar aunque en el fotograma siguiente no se le viera, porque solo miraba a quien se veía y a quien ya estaba; quien asomaba, se perdía un fotograma y volvía, habría llegado sin estar 3 s seguidos. Lo cazó su prueba antes del primer commit: ahora mira también a quien estaba llegando o yéndose (lo hace cumplir `tests/unit/test_lo_que_ve.py`).
+- **ADR-189** — dar por buena una arista del dominio que en producción no llama nadie, y dejar así un estado en el que el motor entra solo y del que solo puede salir un mecanismo que necesita un dato que ese estado, por definición, no tiene. (lo hace cumplir `tests/engine/test_decision_cli.py`).
+
 ### `guarda-ampliada-a-un-corpus-que-no-es-el-suyo`
 
 - **ADR-264** — cargar la edad mirando, con la comprobación de la pieza E, que estén los dos modelos de InsightFace, el de reconocer y el de la edad; sin el de reconocer, la edad no habría cargado y habría dicho que faltaba el suyo, que estaba. Se vio al escribir sus pruebas, antes del primer commit: ahora mira solo el suyo (lo hace cumplir `tests/unit/test_edad_adaptador.py`).
@@ -538,10 +543,6 @@ ADR-258).
 ### `estado-compartido-entre-hilos`
 
 - **ADR-239** — un caso de uso nuevo que corre en segundo plano reutiliza la (lo hace cumplir `tests/integration/test_ordenes_de_memoria.py`).
-
-### `estado-en-el-que-se-entra-y-del-que-no-se-sale`
-
-- **ADR-189** — dar por buena una arista del dominio que en producción no llama nadie, y dejar así un estado en el que el motor entra solo y del que solo puede salir un mecanismo que necesita un dato que ese estado, por definición, no tiene. (lo hace cumplir `tests/engine/test_decision_cli.py`).
 
 ### `guarda-medida-que-se-queda-sin-autoridad-porque-nadie-relee-la-medida`
 

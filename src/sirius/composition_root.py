@@ -17,6 +17,7 @@ import threading
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -87,6 +88,7 @@ from sirius.adapters.persistence.sqlite_recognition_prints import build_sqlite_r
 from sirius.adapters.persistence.sqlite_robot_conversation import (
     build_sqlite_robot_conversation_repository,
 )
+from sirius.adapters.persistence.sqlite_sight_log import build_sqlite_sight_log
 from sirius.adapters.persistence.sqlite_unit_of_work import build_sqlite_unit_of_work
 from sirius.adapters.recognition.age import load_age_estimator
 from sirius.adapters.recognition.engines import load_recognition_engines
@@ -121,7 +123,7 @@ from sirius.application.local_listening import (
     MemorySuggestions,
     VoiceRecognizer,
 )
-from sirius.application.local_sight import AgeOf, FaceRecognizer, LocalSight
+from sirius.application.local_sight import AgeOf, FaceRecognizer, LocalSight, SeenNames
 from sirius.application.memory_commands import MemoryCommandService
 from sirius.application.memory_origin import GetMemoryOriginUseCase
 from sirius.application.memory_search import MemoryEmbeddingService, MemorySearch
@@ -146,6 +148,7 @@ from sirius.application.save_manual_memory import SaveManualMemoryUseCase
 from sirius.application.seed_examples import SeedExamplePicker
 from sirius.application.send_message import CommandVoice, SendMessageUseCase
 from sirius.application.set_criticality import SetCriticalityUseCase
+from sirius.application.sight_log import SightLog
 from sirius.application.studio_capture import StudioCaptureUseCase
 from sirius.application.studio_voice import StudioVoiceUseCase, VoiceSettings
 from sirius.application.supersede_decision import SupersedeDecisionUseCase
@@ -407,7 +410,9 @@ class ConversationDependencies:
     permisos; la vista y el oído le preguntan.
 
     La vista estima además la edad que aparenta cada cara (pieza F de la 0.4, ADR-264), y la
-    charla la lee para saber si tiene delante a alguien con quien cortarse.
+    charla la lee para saber si tiene delante a alguien con quien cortarse; y recuerda lo
+    que ve como texto, quién vino y quién se fue, con su hora, que la charla también lee
+    (pieza G de la 0.4, ADR-265).
 
     ``propose_criticality_use_case`` (M21a, ADR-130) is likewise wired but not
     yet called from anywhere: the interface that shows a proposal and lets
@@ -789,18 +794,21 @@ def build_local_sight(
     clock: Callable[[], float] = time.monotonic,
     recognition: FaceRecognizer | None = None,
     ages: AgeOf | None = None,
+    log: SeenNames | None = None,
 ) -> LocalSight:
     """La vista del robot (pieza D de la 0.4, ADR-262): no carga nada al construirse; la
     cámara y el detector se cargan al empezar a ver, y solo si el modelo de las caras está
     en este ordenador. Sin ``load_engines``, los de verdad, OpenCV y MediaPipe. ``clock``
     es el del oído: lo que ve y lo que oye se comparan en el mismo reloj. ``recognition``
-    reconoce las caras (ADR-263), y ``ages`` estima su edad (ADR-264)."""
+    reconoce las caras (ADR-263), ``ages`` estima su edad (ADR-264) y ``log`` recuerda lo
+    que ve (ADR-265)."""
     return LocalSight(
         load_engines=load_engines or (lambda: load_sight_engines(face_model_path())),
         clock=clock,
         install_command=SIGHT_INSTALL_COMMAND,
         recognition=recognition,
         ages=ages,
+        log=log,
     )
 
 
@@ -820,6 +828,7 @@ def build_conversation_dependencies(
     sight_engines: Callable[[], SightEngines[Any, Any]] | None = None,
     recognition_engines: Callable[[], RecognitionEngines[Any, Any]] | None = None,
     age_estimator: Callable[[], AgeEstimator[Any]] | None = None,
+    wall_clock: Callable[[], datetime] | None = None,
 ) -> ConversationDependencies:
     """Build repositories, the secret store, and use cases wired to SQLite.
 
@@ -842,7 +851,8 @@ def build_conversation_dependencies(
     sin él, OpenCV y MediaPipe (pieza D de la 0.4, ADR-262). ``recognition_engines`` carga
     quien reconoce caras y voces; sin él, InsightFace y ECAPA (pieza E de la 0.4, ADR-263).
     ``age_estimator`` carga quien estima la edad; sin él, el modelo de la edad de
-    InsightFace (pieza F de la 0.4, ADR-264).
+    InsightFace (pieza F de la 0.4, ADR-264). ``wall_clock`` es la hora con que se apunta lo
+    que ve, la de este ordenador si no se da (pieza G de la 0.4, ADR-265).
     """
     secret_store = secret_store or build_keyring_secret_store()
     conversation_repository = build_sqlite_conversation_repository(database_path)
@@ -1017,8 +1027,11 @@ def build_conversation_dependencies(
 
     # Pieza E de la 0.4 (ADR-263): las huellas cifradas de quien da permiso.
     recognition_prints = build_sqlite_recognition_prints(database_path)
+    # Pieza G de la 0.4 (ADR-265): lo que recuerda haber visto, como texto.
+    sight_log_store = build_sqlite_sight_log(database_path)
     repositories = (
         recognition_prints,
+        sight_log_store,
         conversation_repository,
         identity_repository,
         project_repository,
@@ -1109,16 +1122,25 @@ def build_conversation_dependencies(
     # pendiente igual se le escriba o se le hable.
     propose_memory_suggestion_use_case = ProposeMemorySuggestionUseCase(unit_of_work)
 
+    # Solo tienen nombre en lo que recuerda haber visto quienes tienen permiso, y al quitarlo
+    # se quita también de ahí.
+    sight_log = SightLog(
+        sight_log_store,
+        allowed=lambda: recognition.people(),
+        wall_clock=wall_clock or (lambda: datetime.now(UTC)),
+    )
     recognition = Recognition(
         load_engines=recognition_engines or _real_recognition_engines,
         store=recognition_prints,
         sealer=FernetSealer(secret_store),
+        also_forget=sight_log.forget,
     )
     local_sight = build_local_sight(
         sight_engines,
         clock=listening_clock,
         recognition=recognition,
         ages=Ages(age_estimator or _real_age_estimator),
+        log=sight_log,
     )
     local_listening = build_local_listening(
         send_message_use_case,
@@ -1131,6 +1153,7 @@ def build_conversation_dependencies(
     )
     send_message_use_case.set_presence(local_sight.in_front_names)
     send_message_use_case.set_ages(local_sight.in_front_ages)
+    send_message_use_case.set_seen(sight_log.lines)
 
     return ConversationDependencies(
         send_message_use_case=send_message_use_case,

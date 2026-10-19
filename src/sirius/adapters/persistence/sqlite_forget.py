@@ -122,6 +122,11 @@ FORGET_COVERAGE: dict[str, str] = {
     "recognition_prints.sealed": (
         "una huella cifrada, sin nada dicho: la borra quitar el permiso (ADR-263)"
     ),
+    "sight_log.change": "«came», «left» o «there»: qué cambió de quién tenía delante",
+    "sight_log.person": (
+        "el nombre de quien dio permiso, en lo que recuerda haber visto, sin nada dicho: "
+        "lo quita quitar el permiso, y lo de hace más de 24 horas se borra (ADR-265)"
+    ),
 }
 
 _SENTENCE_END = re.compile(r"(?<=[.!?…])\s+")

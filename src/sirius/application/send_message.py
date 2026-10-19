@@ -43,6 +43,7 @@ from sirius.application.robot_conversation import (
     summary_operation_id,
 )
 from sirius.application.seed_examples import SeedExamplePicker
+from sirius.application.sight_log import sight_block
 from sirius.domain.conversation import Message, MessageRole, MessageStatus, cut_note
 from sirius.domain.conversation_mode import (
     ENTERING_SERIOUS_MODE,
@@ -341,6 +342,10 @@ class SendMessageUseCase:
         #: ADR-264); sin ella, no se mira.
         self._ages: Callable[[], Sequence[AgeReading | None] | None] | None = None
         self._ages_failed = False
+        #: Lo que recuerda haber visto, como texto (pieza G de la 0.4, ADR-265); sin ello, no
+        #: se le dice.
+        self._seen: Callable[[], Sequence[str]] | None = None
+        self._seen_failed = False
 
     def set_presence(self, in_front: Callable[[], Sequence[str | None] | None]) -> None:
         """Le dice de dónde saber a quiénes tiene delante: de la vista, su nombre o ``None``
@@ -372,6 +377,24 @@ class SendMessageUseCase:
                 self._presence_failed = True
                 _logger.warning("No se sabe a quiénes tiene delante (%s)", type(error).__name__)
             return None
+
+    def set_seen(self, lines: Callable[[], Sequence[str]]) -> None:
+        """Le dice de dónde saber lo que recuerda haber visto: una línea por cambio, con su
+        hora (pieza G de la 0.4, ADR-265)."""
+        self._seen = lines
+
+    def _seen_lines(self) -> Sequence[str]:
+        """Lo que recuerda haber visto; si no se puede saber, nada, y se apunta una vez."""
+        seen = self._seen
+        if seen is None:
+            return ()
+        try:
+            return seen()
+        except Exception as error:
+            if not self._seen_failed:
+                self._seen_failed = True
+                _logger.warning("No se sabe lo que ha visto (%s)", type(error).__name__)
+            return ()
 
     def _care(self) -> bool:
         """Si tiene delante a alguien con quien se corta: un crío, un anciano o alguien cuya
@@ -467,7 +490,8 @@ class SendMessageUseCase:
         «# Quién hay» (``presence_block``); lo escrito en la ventana no lleva quién lo
         escribe. Y si la vista tiene delante a un crío, a un anciano o a alguien cuya edad
         no se sabe, lleva detrás la regla de no insultar (``care_block``, pieza F de la
-        0.4, ADR-264).
+        0.4, ADR-264). Antes de «# Quién hay» va lo que recuerda haber visto, quién vino y
+        quién se fue, con su hora (``sight_block``, pieza G de la 0.4, ADR-265).
         """
         operation_id = operation_id or str(uuid.uuid4())
         provider = self._llm_provider
@@ -522,6 +546,9 @@ class SendMessageUseCase:
         instructions = render_instructions(context)
         if mode_block:
             instructions = f"{instructions}\n\n{mode_block}"
+        seen = sight_block(self._seen_lines())
+        if seen:
+            instructions = f"{instructions}\n\n{seen}"
         presence = presence_block(speaker=speaker, in_front=self._in_front())
         if presence:
             instructions = f"{instructions}\n\n{presence}"

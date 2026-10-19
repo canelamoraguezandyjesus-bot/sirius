@@ -58,3 +58,135 @@ que se da por hecho un cambio no los fijó: se fijan aquí, antes de medir nada.
      apuntado, y lo borrado se pone a ceros en el fichero, como sus huellas.
    - **Lo que no se puede hacer imposible**: que el modelo lea mal una hora o se invente a
      alguien.
+
+## Contexto y problema
+
+Con las piezas D y E, Sirius sabe a quién tiene delante en cada fotograma: «# Quién hay»
+se lo dice al modelo en cada petición. Pero lo de antes se pierde: si le preguntan quién
+ha venido esta tarde, no lo sabe, y al cerrarlo no queda nada. El plan pide recordar lo
+que ve como texto, quién vino, a qué hora y qué cambió, y nunca como imagen (§6, «Lo que
+se hace», 8); PA-R04-14 lo concreta en quién llega, quién se va y quiénes hay, también
+tras cerrar y volver a abrir, y de un desconocido, que vino alguien sin identificar, sin
+nada que lo reconozca.
+
+Lo que se recuerda de alguien que dio permiso es un dato suyo: cuándo estuvo delante. Si
+retira su permiso, su nombre no puede quedarse ahí. Y la cámara parpadea, la gente se gira
+y MediaPipe pierde una cara un momento: tomar cada fotograma al pie de la letra llenaría lo
+apuntado de llegadas y salidas que no han pasado.
+
+## Opciones consideradas
+
+Para saber qué cambió:
+
+1. **Cada fotograma tal cual**: un parpadeo de la cámara sería una salida y una llegada.
+2. **Dar un cambio por hecho cuando dura**: llega quien se ve 3 s seguidos, y se va quien
+   lleva 20 s sin vérsele. **Esta.** Irse pide más que llegar porque perder una cara un
+   momento es más común que verla sin estar.
+
+Para guardarlo:
+
+1. **Como frases, tal cual se le dicen al modelo**: quitar un nombre sería reescribir
+   texto, y cambiar cómo se dice obligaría a migrar lo guardado.
+2. **Cuándo, qué cambió y quién**, y las frases se escriben al leerlo. **Esta.**
+
+## Decisión
+
+Se adoptan las dos últimas.
+
+- **El puerto**, en `src/sirius/ports/sight_log.py`: un cambio es cuándo, en UTC, qué
+  cambió, si vino, se fue o ya estaba, y quién, su nombre o nadie.
+- **Quien recuerda** (`src/sirius/application/sight_log.py`) recibe de la vista, en cada
+  fotograma, quién es cada cara, su nombre si dio permiso o nadie, y cuenta cuántos de
+  cada uno ve. Llega quien se ve 3 s seguidos, y se va quien lleva 20 s sin vérsele; la
+  hora es la del primer fotograma con él, o sin él. De los desconocidos se cuenta cuántos
+  hay: si se ven tres donde había uno, han llegado dos.
+- **Lo primero que ve al abrir la cámara**, cuando lleva 3 s igual, se apunta como quien
+  ya estaba, no como quien llega. Al perder la cámara, o al pararla, no se sabe quién se
+  va: no se apunta nada, y al volver a ver se empieza de nuevo.
+- **La base** gana la tabla `sight_log`, con su migración: cuándo, qué cambió y quién. Su
+  conexión lleva `secure_delete`, como las huellas. Lo de hace más de 24 horas se borra
+  cada vez que se apunta algo.
+- **La charla** le pone al modelo «# Lo que has visto», antes de «# Quién hay»: una línea
+  por cambio de las últimas 24 horas, las 30 más nuevas, con su hora en la de este
+  ordenador, «A las 18:02 vino Marta.», «A las 18:30 se fue Marta.», y lo de ayer, «Ayer,
+  a las…». Quien no tiene nombre es «alguien sin identificar».
+- **Quitar el permiso** quita su nombre de lo apuntado, en el mismo paso que borra sus
+  huellas, y de lo que se está mirando: pasa a ser alguien sin identificar, y no se apunta
+  que se fue. Y lo que se le dice al modelo solo lleva nombres de quien tiene permiso: si
+  quitar un nombre falló, se lee como alguien sin identificar y se vuelve a quitar.
+- **La hora** es la de este ordenador; la raíz de composición la recibe, y las pruebas
+  ponen la suya.
+- Olvidar (ADR-239) no la toca: no guarda nada dicho. Así queda en `FORGET_COVERAGE`.
+- Un fallo al apuntar o al leer se dice una vez, con su tipo, sin nombres, y la vista y la
+  charla siguen.
+
+## Comprobación que la sostiene
+
+- **Las dos pruebas de PA-R04-14**, en verde con el conductor de la 0.4: recuerda quién
+  vino y a qué hora, también tras cerrar y volver a abrir Sirius, y quién se fue; de un
+  desconocido, que vino alguien sin identificar, sin su nombre ni nada suyo.
+- **35 pruebas nuevas**: 25 de quien recuerda, de la vista que se lo dice y de lo que se le
+  dice al modelo, también con la hora de otro sitio (`tests/unit/test_lo_que_ve.py`); 4 de
+  la base, con lo quitado y lo borrado fuera del fichero
+  (`tests/integration/test_sqlite_sight_log.py`); 1 de lo montado sin dobles, que quita el
+  nombre de la base en el acto al quitar el permiso
+  (`tests/integration/test_lo_que_ve_montado.py`); 3 de la charla
+  (`tests/integration/test_send_message.py`); y 2 de quitar el permiso
+  (`tests/unit/test_reconocer.py`).
+- **Mutación**: 41 cambios a propósito, de cuándo se da un cambio por hecho a la hora que
+  se le dice, la base, el montaje y el conductor. A la primera, las pruebas cazaron 35; las
+  seis que vivían pidieron seis pruebas más: un desconocido que se pierde un fotograma al
+  llegar, dos que se pierden un momento, un fotograma que aún la nombraba tras quitar el
+  permiso, el montaje de quitar el permiso, y la hora de este ordenador en lo que se dice y
+  en lo que se guarda, con la de Tokio. Con ellas, las 41.
+- Lo que le llega al modelo, con el conductor: tras ver al propietario, llegar a Marta a
+  las 18:02 y a alguien más a las 18:10, irse Marta a las 18:30 y cerrar y volver a abrir
+  Sirius:
+
+  ```text
+  # Lo que has visto
+  Lo que has visto con la cámara en las últimas 24 horas, con su hora:
+  A las 09:00, al abrir los ojos, estaba delante alguien sin identificar.
+  A las 18:02 vino Marta.
+  A las 18:10 vino alguien sin identificar.
+  A las 18:30 se fue Marta.
+  ```
+
+- Lo mismo con `sight_log` en el conductor de la 0.3, que vigila que no se guarde audio en
+  la base: la cuenta entre las tablas de Sirius.
+- **La batería entera, con las cuatro piezas de la 0.4 juntas**: 9 675 en verde, 15 omitidas
+  y 2 xfail, en 33 min 9 s, y una roja: la medida de rendimiento de construir el contexto,
+  que tras media hora de pruebas pasa en este ordenador de su tope de disparate, 1 500 ms.
+  Sola, en verde, con un P95 de 756 ms. Tras las mismas pruebas de la ventana y de
+  aceptación, `main` llega a 1 433 ms y el paquete a 1 860: no la mueve ninguna de estas
+  piezas, que no tocan el contexto, sino lo que tarda este ordenador al cabo de un rato. Y
+  ningún hilo queda vivo al acabar las pruebas de la 0.4.
+
+## Consecuencias
+
+- Cada petición lleva lo que ha visto en el día, hasta 30 líneas, unas 250 palabras como
+  mucho.
+- Lo que recuerda de cada uno dura 24 horas; después se borra.
+- Quien pasa menos de 3 s por delante no ha venido, y quien sale menos de 20 s no se ha
+  ido.
+- Quien da su permiso delante de la cámara deja de ser alguien sin identificar y pasa a
+  tener nombre: se apunta que llegó él y, a los 20 s, que se fue alguien sin identificar.
+  Es lo que vio la cámara, y no se arregla a mano.
+- Con la pieza G, la 0.4 tiene todas sus piezas. Quedan las evaluaciones del propietario,
+  E-R04-01 a E-R04-05.
+
+## Alternativas descartadas y por qué
+
+- **Guardar una foto de quien viene**: no se guardan imágenes (§2 del plan).
+- **Distinguir a los desconocidos entre sí**: haría falta algo que los reconozca, y sin
+  permiso no se guarda nada suyo.
+- **Recordarlo para siempre**: lo que recuerda de alguien es suyo; 24 horas bastan para
+  «¿quién ha venido?», y es lo único que se le dice al modelo.
+- **Apuntar como llegadas lo primero que ve al abrir**: al volver a abrir Sirius diría que
+  acaba de llegar quien llevaba una hora delante.
+
+## La lección
+
+- familia: `estado-en-el-que-se-entra-y-del-que-no-se-sale`
+- sin esto se repetiría: quien recuerda lo que ve dejaba a alguien a medio llegar aunque en el fotograma siguiente no se le viera, porque solo miraba a quien se veía y a quien ya estaba; quien asomaba, se perdía un fotograma y volvía, habría llegado sin estar 3 s seguidos. Lo cazó su prueba antes del primer commit: ahora mira también a quien estaba llegando o yéndose
+- lo hace cumplir: `tests/unit/test_lo_que_ve.py`
