@@ -26,7 +26,7 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **258**.
+- Decisiones (ADR): **259**.
 - Bloques del motor: 17 cerrado, 3 fuera_de_alcance.
 - Defectos registrados: 2 abierto, 106 cerrado.
 - Ideas aparcadas o descartadas: 12 aparcada, 3 descartada, 2 promovida.
@@ -81,6 +81,7 @@ la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| 265 | 2026-10-19 | APROBADO | Recordar lo que ve como texto: quién vino, a qué hora y quién se fue, sin ninguna imagen | (sin sección Decisión) |
 | 264 | 2026-10-19 | APROBADO | No insultar con un crío o un anciano frágil delante: la edad que estima la cámara, y ante la duda, tampoco | Se adoptan las dos últimas. |
 | 263 | 2026-10-19 | APROBADO | Reconocer por la cara y por la voz a quien dé permiso, con sus huellas cifradas | Se adoptan las dos últimas. |
 | 262 | 2026-10-19 | APROBADO | Darle a Sirius ojos: la cámara y las caras en local | Se adopta la opción 3. |
