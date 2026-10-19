@@ -8,6 +8,11 @@ trabajan en los suyos: aunque el modelo tarde, la cara sigue viva.
 El reloj y el volumen se los dan: el reloj de la ventana en Sirius y el de las pruebas en
 las pruebas, y el volumen, el de lo que suena por el altavoz. Apunta lo que dibujó la
 última vez y cuántas veces ha dibujado: es lo que leen las pruebas de aceptación.
+
+Los gestos le llegan por dos sitios (pieza C de la 0.4, ADR-261): los de lo que dice en
+voz alta, del oído, cuando empieza a sonar la frase en que van, y los de lo escrito en la
+ventana, que no suena, en cuanto llega el texto (``make``). Los dibuja con lo que dice
+``FaceLife``: una ceja, las dos, la sonrisa, el guiño, los ojos en blanco y la cabeza.
 """
 
 from __future__ import annotations
@@ -43,6 +48,7 @@ class FaceWidget(QWidget):
         self,
         clock: Callable[[], float],
         level: Callable[[], float] = lambda: 0.0,
+        gestures: Callable[[], tuple[str, tuple[str, ...]]] = lambda: ("", ()),
         *,
         life: FaceLife | None = None,
         parent: QWidget | None = None,
@@ -50,11 +56,18 @@ class FaceWidget(QWidget):
         super().__init__(parent)
         self._clock = clock
         self._level = level
+        #: Los gestos de lo que dice en voz alta que ya suenan, con la operación de su
+        #: turno: ``LocalListening.speaking_gestures``.
+        self._gestures = gestures
         self._life = life if life is not None else FaceLife()
         self._paints = 0
         self._last: tuple[float, FacePose] | None = None
         self._drawn: frozenset[str] = frozenset()
         self._volume_failed = False
+        self._gestures_failed = False
+        #: El turno de voz cuyos gestos ha visto, y cuántos ha hecho ya.
+        self._gesture_turn = ""
+        self._gestures_made = 0
         self.setMinimumHeight(150)
         self.setAccessibleName("La cara de Sirius")
         self._timer = QTimer(self)
@@ -65,6 +78,10 @@ class FaceWidget(QWidget):
     def stop(self) -> None:
         """Deja de redibujarse sola: la ventana se cierra."""
         self._timer.stop()
+
+    def make(self, gesture: str) -> None:
+        """Hace ``gesture``: lo escrito en la ventana, que no suena, lo hace al llegar."""
+        self._life.make(gesture)
 
     @property
     def paints(self) -> int:
@@ -84,6 +101,7 @@ class FaceWidget(QWidget):
     def paintEvent(self, event: QPaintEvent) -> None:
         del event
         now = self._clock()
+        self._new_gestures()
         pose = self._life.pose(now, level=self._volume())
         painter = QPainter(self)
         try:
@@ -106,11 +124,31 @@ class FaceWidget(QWidget):
                 _logger.warning("La cara no puede leer el volumen de su voz: %s", error)
             return 0.0
 
+    def _new_gestures(self) -> None:
+        """Le pide a la vida los gestos de lo que dice que han empezado a sonar desde la
+        última vez. Si no se pueden leer, sigue sin ellos, por lo mismo que el volumen."""
+        try:
+            turn, started = self._gestures()
+        except Exception as error:
+            if not self._gestures_failed:
+                self._gestures_failed = True
+                _logger.warning("La cara no puede leer los gestos de lo que dice: %s", error)
+            return
+        if turn != self._gesture_turn:
+            self._gesture_turn, self._gestures_made = turn, 0
+        for gesture in started[self._gestures_made :]:
+            self._life.make(gesture)
+        self._gestures_made = len(started)
+
     def _draw(self, painter: QPainter, pose: FacePose) -> None:
         ancho, alto = float(self.width()), float(self.height())
         painter.fillRect(self.rect(), _FONDO)
         lado = min(ancho, alto * 1.6)
-        centro = QPointF(ancho / 2, alto / 2 - pose.breath * alto * 0.012)
+        # Asentir y negar mueven la cabeza entera; respirar, un poco arriba y abajo.
+        centro = QPointF(
+            ancho / 2 + pose.head[0] * lado * 0.05,
+            alto / 2 - pose.breath * alto * 0.012 - pose.head[1] * alto * 0.06,
+        )
         cara = QRectF(centro.x() - lado * 0.45, centro.y() - alto * 0.45, lado * 0.9, alto * 0.9)
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(_CARA)
@@ -121,11 +159,20 @@ class FaceWidget(QWidget):
         altura_ojos = centro.y() - alto * 0.08
         for lado_x in (-1, 1):
             ojo = QPointF(centro.x() + lado_x * separacion, altura_ojos)
-            self._draw_eye(painter, ojo, radio, pose)
-            self._draw_brow(painter, ojo, radio, lado_x, pose.brows)
+            # El guiño y la ceja que sube sola son los de la derecha de la pantalla. Con el
+            # ceño, las puntas de dentro bajan; la ceja que sube sola baja la de dentro un
+            # poco, como quien no se lo cree; las dos que suben, suben rectas.
+            guino = pose.wink if lado_x == 1 else 0.0
+            sola = pose.brow_raise if lado_x == 1 else 0.0
+            self._draw_eye(painter, ojo, radio, pose, guino)
+            self._draw_brow(
+                painter, ojo, radio, lado_x, pose.brows + sola, max(-pose.brows, 0.0) + 0.6 * sola
+            )
         self._draw_mouth(painter, QPointF(centro.x(), centro.y() + alto * 0.22), lado, alto, pose)
 
-    def _draw_eye(self, painter: QPainter, ojo: QPointF, radio: float, pose: FacePose) -> None:
+    def _draw_eye(
+        self, painter: QPainter, ojo: QPointF, radio: float, pose: FacePose, guino: float
+    ) -> None:
         painter.setBrush(_OJO)
         painter.drawEllipse(ojo, radio, radio)
         pupila = QPointF(ojo.x() + pose.gaze[0] * radio * 0.5, ojo.y() - pose.gaze[1] * radio * 0.5)
@@ -139,7 +186,7 @@ class FaceWidget(QWidget):
             QPointF(pupila.x() - radio * 0.14, pupila.y() - radio * 0.16), radio * 0.1, radio * 0.1
         )
         # El párpado baja desde arriba lo que tenga cerrado el ojo, sin salirse de él.
-        cerrado = 1.0 - min(max(pose.eyes, 0.0), 1.0)
+        cerrado = max(1.0 - min(max(pose.eyes, 0.0), 1.0), min(max(guino, 0.0), 1.0))
         if cerrado > 0:
             caja = QRectF(ojo.x() - radio, ojo.y() - radio, radio * 2, radio * 2).adjusted(
                 -2, -2, 2, 2
@@ -152,16 +199,34 @@ class FaceWidget(QWidget):
                 QRectF(caja.left(), caja.top(), caja.width(), caja.height() * cerrado), _CARA
             )
             painter.restore()
+        if cerrado >= 0.95:
+            # Cerrado del todo, como en un guiño, se ve la raya de las pestañas.
+            raya = QPainterPath(QPointF(ojo.x() - radio * 0.85, ojo.y()))
+            raya.quadTo(
+                QPointF(ojo.x(), ojo.y() + radio * 0.35), QPointF(ojo.x() + radio * 0.85, ojo.y())
+            )
+            painter.setPen(_trazo(radio * 0.16))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawPath(raya)
+            painter.setPen(Qt.PenStyle.NoPen)
 
     def _draw_brow(
-        self, painter: QPainter, ojo: QPointF, radio: float, lado_x: int, cejas: float
+        self,
+        painter: QPainter,
+        ojo: QPointF,
+        radio: float,
+        lado_x: int,
+        alzada: float,
+        giro: float,
     ) -> None:
-        altura = ojo.y() - radio * (1.45 + 0.35 * cejas)
-        inclinacion = radio * 0.25 * cejas * lado_x
+        """Una ceja: ``alzada`` la sube, de -1 a 1, y ``giro`` le baja la punta de dentro y
+        le sube la de fuera, de 0 a 1."""
+        altura = ojo.y() - radio * (1.45 + 0.35 * alzada)
+        caida = radio * 0.25 * giro
         painter.setPen(_trazo(radio * 0.22))
         painter.drawLine(
-            QPointF(ojo.x() - radio * 0.8, altura + inclinacion),
-            QPointF(ojo.x() + radio * 0.8, altura - inclinacion),
+            QPointF(ojo.x() + lado_x * radio * 0.8, altura - caida),
+            QPointF(ojo.x() - lado_x * radio * 0.8, altura + caida),
         )
         painter.setPen(Qt.PenStyle.NoPen)
 
@@ -171,11 +236,16 @@ class FaceWidget(QWidget):
         ancho = lado * 0.22
         abierta = alto * 0.16 * min(max(pose.mouth, 0.0), 1.0)
         if abierta < 1.5:
-            painter.setPen(_trazo(alto * 0.025))
-            painter.drawLine(
-                QPointF(centro.x() - ancho / 2, centro.y()),
-                QPointF(centro.x() + ancho / 2, centro.y()),
+            # Cerrada es una línea; sonriendo, se curva hacia arriba por las puntas.
+            sonrisa = min(max(pose.smile, 0.0), 1.0)
+            boca = QPainterPath(QPointF(centro.x() - ancho / 2, centro.y() - sonrisa * alto * 0.03))
+            boca.quadTo(
+                QPointF(centro.x(), centro.y() + sonrisa * alto * 0.07),
+                QPointF(centro.x() + ancho / 2, centro.y() - sonrisa * alto * 0.03),
             )
+            painter.setPen(_trazo(alto * 0.025))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawPath(boca)
             painter.setPen(Qt.PenStyle.NoPen)
             return
         painter.setBrush(_PUPILA)

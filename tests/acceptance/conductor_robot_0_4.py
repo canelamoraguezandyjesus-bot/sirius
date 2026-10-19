@@ -67,11 +67,12 @@ from conductor_robot_0_3 import (
 )
 from piezas_del_robot import PiezaPendiente, Piezas
 
+from sirius.domain.gestures import GESTURES
 from sirius.infrastructure.paths import resolve_paths
 
 #: Las letras de la tabla de piezas de ADR-259 que ya han entrado en ``main``. La A es la
-#: nota de arranque y estas pruebas; la B, su cara (ADR-260).
-PIEZAS_ENTREGADAS: frozenset[str] = frozenset({"A", "B"})
+#: nota de arranque y estas pruebas; la B, su cara (ADR-260); la C, sus gestos (ADR-261).
+PIEZAS_ENTREGADAS: frozenset[str] = frozenset({"A", "B", "C"})
 
 #: Qué trae cada pieza, con las palabras de la tabla de ADR-259.
 PIEZAS: Mapping[str, str] = {
@@ -759,12 +760,23 @@ class ConductorDeOjos(ConductorDeVoz):
 
     def gestos(self) -> tuple[str, ...]:
         """La lista cerrada de gestos que sabe hacer la cara, leída de Sirius."""
-        raise _pendiente("C")
+        return GESTURES
 
     def gestos_dibujados(self, segundos: float = 3.0) -> tuple[str, ...]:
         """Los gestos que hizo la cara, en orden y sin repetir seguidos, dejando pasar
-        ``segundos`` del reloj de las pruebas tras la última respuesta."""
-        raise _pendiente("C")
+        ``segundos`` del reloj de las pruebas tras la última respuesta.
+
+        Se leen de la ventana de verdad, del dibujo de cada paso de ``pasa_el_tiempo``: un
+        gesto que dura menos de un paso podría no verse, y ninguno de la lista dura tan
+        poco.
+        """
+        hechos: list[str] = []
+        antes: str | None = None
+        for dibujo in self.pasa_el_tiempo(segundos):
+            if dibujo.gesto is not None and dibujo.gesto != antes:
+                hechos.append(dibujo.gesto)
+            antes = dibujo.gesto
+        return tuple(hechos)
 
     # --- Pieza D: la cámara ---
 

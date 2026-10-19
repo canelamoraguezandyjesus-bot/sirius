@@ -55,3 +55,116 @@ aquí no se añade ni se afloja ninguno.
    modelo de la charla, antes de todo lo demás. Lo que no se hace imposible es que el
    modelo escriba entre corchetes algo que no es una etiqueta: eso se ve, como cualquier
    texto.
+
+## Contexto y problema
+
+La pieza B le dio a Sirius su cara (ADR-260). La C le da los gestos, de una lista cerrada
+que es la misma que usará la cabeza en la 0.6: el modelo nunca manda ángulos, pide gestos
+(§8 del plan). El plan no dice qué gestos son; los decide esta pieza.
+
+Lo difícil no es la cara, es el texto. El modelo escribe a trozos, como Ollama, y una
+etiqueta como `[ceja_arriba]` llega partida en cinco o seis. La ventana enseña cada trozo
+según llega, la voz empieza a decir la primera frase antes de que el modelo acabe
+(PA-R03-02), y lo que se guarda es lo que leen después la charla, el resumen, el sueño y
+el juez. Si el filtro dejara pasar media etiqueta, se vería, se diría o se guardaría.
+
+## Opciones consideradas
+
+1. **Quitar las etiquetas al final**, de la respuesta entera. La ventana y la voz van
+   antes: se verían y se dirían mientras llegan.
+2. **Que la ventana, la voz y la base quiten cada una las suyas.** Tres reglas que tienen
+   que decir lo mismo, y lo que lea la charla después sería de la que guarde.
+3. **Un filtro en la charla, a trozos**, delante de todo lo demás, que da lo mismo que con
+   la respuesta entera y los gestos en su sitio. **Esta.**
+
+## Decisión
+
+Se adopta la opción 3.
+
+- **La lista**, ocho gestos de cara y de cabeza que van con su carácter:
+  `ceja_arriba`, el del plan; `cejas_arriba`, `cejas_fruncidas`, `sonrisa`, `guino`,
+  `ojos_en_blanco`, `asiente` y `niega`. Los decidió la sesión (ADR-204): elegir los
+  gestos de la lista no cambia el producto que pide el plan.
+- **Qué es una etiqueta**, en `src/sirius/domain/gestures.py`: un corchete, de una a tres
+  palabras de letras unidas por guiones bajos, guiones o un blanco, y otro corchete.
+  `[Guiño]` y `[ceja arriba]` son de la lista. Una de fuera de la lista es etiqueta si va
+  de una pieza y no pegada a una palabra: `[bailar]` se quita, y `datos[clave]` y
+  `[nota del autor]` se quedan. Nunca lo es delante de un paréntesis, que es un enlace,
+  ni dentro de un código entre comillas invertidas, ni con cifras: `lista[0]` y `[1]`
+  se quedan.
+- **El blanco**: con la etiqueta se va uno, el de detrás, o el de delante si detrás viene
+  una puntuación de cierre o nada, y de dos se queda el que lleva más saltos de línea.
+  «Eso es mentira [ceja_arriba].» queda «Eso es mentira.».
+- **El filtro**, `GestureFilter`, lee lo que llega y da lo que ya no puede cambiar; lo
+  que aún puede, como un corchete abierto, unos blancos o unas comillas invertidas al
+  final, espera al trozo siguiente. Así, a trozos da lo mismo que entero. Lo que no lleva
+  corchetes no cambia ni un byte, pero los trozos que da no son los del modelo: un blanco
+  del final va al principio del trozo siguiente. Si la respuesta se corta o falla, lo
+  guardado es lo escrito, sin el corchete del final que aún podía ser una etiqueta.
+- **La charla**, `SendMessageService`, pasa por el filtro lo que escribe el modelo, lo
+  guarda sin etiquetas, y da cada gesto con `on_gesture` en su sitio: después del texto
+  de delante y antes del de detrás. Sus instrucciones llevan la lista, en «# Tus gestos»,
+  delante de la sugerencia de recuerdo. Las preguntas trampa usan las mismas
+  instrucciones, y su respuesta se ve sin etiquetas.
+- **La voz**: cada gesto se marca, entre lo que se corta en frases, con un carácter de
+  uso privado de Unicode, y va con la frase que sale con la marca; si esa frase se queda
+  sin nada que decir, con la de antes. La cara lo hace cuando esa frase empieza a sonar,
+  y lo que no llega a sonar, por un corte, no lo hace. El oído se lo da a la cara sin su
+  cerrojo (`LocalListening.speaking_gestures`).
+- **Lo escrito en la ventana**, que no suena: la cara hace el gesto en cuanto llega.
+- **La cara**: `FaceLife` hace los gestos uno detrás de otro, con tres como mucho
+  esperando; cada uno se hace en 0,15 s, se sostiene y se deshace en 0,3, y dura de
+  0,6 s el guiño a 1,6 la sonrisa. `FaceWidget` los dibuja: una ceja o las dos, el ceño,
+  la sonrisa, el guiño, los ojos en blanco y la cabeza que asiente o niega.
+
+## Comprobación que la sostiene
+
+- Las cuatro pruebas de aceptación de la pieza C, PA-R04-05, en verde; las de la pieza B
+  siguen en verde, y las demás de la 0.4, en `xfail` estricto con su pieza.
+- Pruebas nuevas, 71: 34 del filtro (`tests/unit/test_gestos.py`), 12 de la vida de la
+  cara, 11 del widget, 7 del oído, 4 de la charla montada de verdad
+  (`tests/integration/test_gestos_en_la_charla.py`), 1 de las preguntas trampa, 1 de lo
+  escrito en la ventana y 1 de que el conductor ve los gestos que hace la cara.
+- El filtro, a trozos y entero: cada respuesta de un banco de 26, cortada por cada sitio
+  posible en dos, en tres las de hasta 45 caracteres, y letra a letra, da lo mismo que
+  entera; y 3 000 respuestas al azar, cortadas al azar, también, acabadas y cortadas
+  antes de acabar. Ninguna deja un gesto de la lista a la vista, y 3 000 sin corchetes
+  salen sin cambiar ni un byte.
+- Mutación: 46, cada una con su caché de bytecode vacía y su fichero restaurado byte a
+  byte. Caen 42 a la primera; vivían cuatro, y cada una pidió una prueba más fuerte: un
+  gesto al final de la respuesta que no llegaba al acabar, el gesto de una frase que se
+  queda sin nada que decir, un gesto nuevo que pisaba al que se hacía y una duración que
+  no era la suya. Con ellas, caen las 46.
+- La batería entera, sobre `f95c3073`: 9 323 en verde, 15 omitidas y 21 xfail, los 19
+  de la 0.4 que esperan su pieza y 2 de antes, ninguna roja, en 24 min 32 s.
+
+## Consecuencias
+
+- La cara gesticula con lo que dice, cuando el modelo escribe gestos.
+- `on_delta` ya no recibe los trozos del modelo, sino los del filtro: un blanco del final
+  espera al trozo siguiente, por si va delante de una etiqueta. Juntos dicen lo mismo.
+  Cinco pruebas de la charla miraban los trozos exactos y ahora miran estos.
+- Una respuesta cortada o fallida se guarda sin el corchete del final que aún podía ser
+  una etiqueta.
+- Las instrucciones de la charla llevan unas sesenta palabras más.
+- Lo guardado no lleva los gestos, así que las respuestas que marque para entrenarle en la
+  0.5 tampoco: el modelo entrenado seguirá sabiendo qué gestos tiene por sus
+  instrucciones. Si se quieren en lo que aprende, habrá que guardarlos aparte.
+
+## Alternativas descartadas y por qué
+
+- **Quitar las etiquetas al final**: se verían y se dirían mientras llegan.
+- **Un filtro en la ventana, otro en la voz y otro al guardar**: tres reglas que tienen
+  que coincidir, y lo que lee la charla después sería de una de ellas.
+- **Marcar los gestos con su sitio en el texto en vez de con una marca entre lo que se
+  corta en frases**: el corte en frases cambia el texto, quita el código y las marcas de
+  formato, y saber qué sitio queda en qué frase sería otra cuenta, con sus fallos. La
+  marca va dentro y sale con su frase.
+
+## La lección
+
+- ninguna: lo que salió al hacerla quedó arreglado y escrito antes de la revisión. Que
+  los trozos de `on_delta` ya no son los del modelo lo dijeron cinco pruebas de la charla;
+  que una marca perdida dentro de un código movía los gestos de detrás, y que las cejas
+  de la pieza B, al fruncirse, bajaban las puntas de fuera, se vio al repasar el código y
+  al mirar la cara dibujada con cada gesto.

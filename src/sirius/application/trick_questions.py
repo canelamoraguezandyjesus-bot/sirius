@@ -27,6 +27,7 @@ from dataclasses import dataclass
 from sirius.application.context import Context
 from sirius.application.seed_examples import SeedExamplePicker
 from sirius.application.send_message import context_turns, render_instructions
+from sirius.domain.gestures import strip_gestures
 from sirius.domain.identity import Identity
 from sirius.domain.reply_judge import MAX_JUDGE_DISAGREEMENTS, TrickVerdict
 from sirius.domain.trick_questions import TRICK_QUESTIONS, TrickQuestion
@@ -342,7 +343,10 @@ def _complete(
     )
     for event in provider.stream_response(request):
         if isinstance(event, LLMCompleted):
-            return event.text
+            # Las instrucciones son las de la charla, con sus gestos: la respuesta se ve
+            # como en la charla, sin etiquetas (pieza C de la 0.4, ADR-261).
+            text, _ = strip_gestures(event.text)
+            return text
         if isinstance(event, LLMError):
             raise TrickQuestionsError(event.message)
     msg = "El modelo de la charla no terminó la respuesta."

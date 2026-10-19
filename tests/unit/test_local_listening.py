@@ -31,11 +31,13 @@ from sirius.application.local_listening import (
     Attended,
     HeardTurn,
     LocalListening,
+    gesture_mark,
     read_meanwhile,
 )
 from sirius.application.send_message import ChatLeavesThisComputer, SendMessageResult
 from sirius.application.speech_cutter import SpeechCutter
 from sirius.domain.conversation import MessageStatus
+from sirius.domain.gestures import Gesture
 from sirius.ports.llm import LLMErrorKind, runs_on_this_computer
 from sirius.ports.local_voice import (
     Captured,
@@ -213,8 +215,9 @@ class _Charla:
         self.operaciones: list[str | None] = []
         self.falla: Exception | None = None
         #: Lo que escribe el modelo, a trozos, para el próximo turno; sin ellos, «R: <lo
-        #: oído>» de una vez. Lo guardado es todo junto, como en la charla de verdad.
-        self.trozos: list[str] | None = None
+        #: oído>» de una vez. Lo guardado es todo junto, como en la charla de verdad. Un
+        #: gesto entre los trozos lo da como la de verdad, en su sitio (ADR-261).
+        self.trozos: list[str | Gesture] | None = None
         #: Si se rompe después de escribir los trozos, sin guardar la respuesta.
         self.se_rompe_al_acabar: Exception | None = None
         self.desenlace = MessageStatus.COMPLETED
@@ -257,6 +260,7 @@ class _Charla:
         operation_id: str | None = None,
         on_delta: Callable[[str], None] | None = None,
         on_completed: Callable[[], None] | None = None,
+        on_gesture: Callable[[str], None] | None = None,
         only_on_this_computer: bool = False,
     ) -> SendMessageResult:
         # Como la de verdad: comprueba el mismo modelo con el que enviaría.
@@ -274,6 +278,11 @@ class _Charla:
         for trozo in trozos:
             if operation_id in self.cortadas:
                 break
+            if isinstance(trozo, Gesture):
+                self.eventos.append(f"gesto:{trozo.name}")
+                if on_gesture is not None:
+                    on_gesture(trozo.name)
+                continue
             escritos.append(trozo)
             self.eventos.append(f"escribe:{trozo}")
             if on_delta is not None:
@@ -2527,6 +2536,124 @@ def test_la_cara_lee_lo_fuerte_que_habla_aunque_la_charla_tenga_el_cerrojo() -> 
     try:
         empieza = time.monotonic()
         assert oido.servicio.speaking_level == 0.6
+        assert time.monotonic() - empieza < 1.0
+    finally:
+        suelta.set()
+        hilo.join()
+
+
+# --- Pieza C de la 0.4: los gestos de lo que dice, con su frase (ADR-261) ---
+
+
+def test_cada_gesto_va_con_su_frase_y_se_hace_cuando_esa_empieza_a_sonar() -> None:
+    oido = _Oido()
+    oido.servicio.start()
+    oido.charla.trozos = [
+        "Vale. ",
+        Gesture("sonrisa"),
+        "Me parece bien. Hombre, ",
+        Gesture("ceja_arriba"),
+        "eso ya. Adiós.",
+    ]
+    oido.altavoz.en_cola = True
+
+    (turno,) = oido.suena(voz("Cuéntame"), FIN).turns
+
+    assert oido.dicho() == ["Vale.", "Me parece bien.", "Hombre, eso ya.", "Adiós."]
+    assert turno.reply == "Vale. Me parece bien. Hombre, eso ya. Adiós."
+    operacion = turno.operation_id
+    sonando = []
+    for empezados in range(5):
+        oido.altavoz.empezados = empezados
+        sonando.append(oido.servicio.speaking_gestures)
+    assert sonando == [
+        (operacion, ()),
+        (operacion, ()),
+        (operacion, ("sonrisa",)),
+        (operacion, ("sonrisa", "ceja_arriba")),
+        (operacion, ("sonrisa", "ceja_arriba")),
+    ]
+
+
+@pytest.mark.parametrize("final", ["Claro.", "Claro. "])
+def test_un_gesto_del_final_va_con_la_ultima_frase_y_no_se_dice(final: str) -> None:
+    # Pegado a la frase, la marca sale con ella; tras un blanco, sale sola y sin nada que
+    # decir, como tras un bloque de código al final.
+    oido = _Oido()
+    oido.servicio.start()
+    oido.charla.trozos = [final, Gesture("guino")]
+
+    (turno,) = oido.suena(voz("Cuéntame"), FIN).turns
+
+    assert oido.dicho() == ["Claro."]
+    assert oido.servicio.speaking_gestures == (turno.operation_id, ("guino",))
+
+
+def test_el_gesto_de_lo_que_no_llega_a_sonar_no_se_hace() -> None:
+    oido = _oido_con_cancelador()
+    oido.charla.trozos = ["Una frase. ", Gesture("sonrisa"), "Otra frase. ", "Y otra."]
+    oido.altavoz.sigue_sonando = True
+    # Las frases esperan en la cola del altavoz, y solo la primera empieza a sonar.
+    oido.altavoz.en_cola = True
+    oido.suena(voz("Cuéntame"), FIN)
+    oido.altavoz.empezados = 1
+
+    oido.suena(eco(voz("Espera")))
+
+    assert oido.charla.cortes == [(7, "Una frase.")]
+    assert oido.servicio.speaking_gestures[1] == ()
+
+
+def test_las_marcas_de_los_gestos_no_se_pueden_escribir_desde_la_charla() -> None:
+    oido = _Oido()
+    oido.servicio.start()
+    oido.charla.trozos = [f"Hola {gesture_mark(0)}ami{gesture_mark(7)}go.", Gesture("guino")]
+
+    (turno,) = oido.suena(voz("Cuéntame"), FIN).turns
+
+    assert oido.dicho() == ["Hola amigo."]
+    assert oido.servicio.speaking_gestures == (turno.operation_id, ("guino",))
+
+
+def test_un_gesto_que_se_pierde_dentro_de_un_codigo_no_cambia_el_de_los_demas() -> None:
+    # Un bloque de código no se dice, y la marca que cae dentro se pierde con él.
+    oido = _Oido()
+    oido.servicio.start()
+    oido.charla.trozos = [
+        "Mira:\n\n    codigo ",
+        Gesture("sonrisa"),
+        "aqui\n\nY luego ",
+        Gesture("guino"),
+        "más.",
+    ]
+
+    (turno,) = oido.suena(voz("Cuéntame"), FIN).turns
+
+    assert "Y luego más." in oido.dicho()
+    assert oido.servicio.speaking_gestures == (turno.operation_id, ("guino",))
+
+
+def test_la_cara_lee_los_gestos_aunque_la_charla_tenga_el_cerrojo() -> None:
+    oido = _Oido()
+    oido.servicio.start()
+    antes = oido.servicio.speaking_gestures
+    assert antes == ("", ()), "sin haber dicho nada, ninguno"
+    oido.charla.trozos = [Gesture("asiente"), "Sí."]
+    (turno,) = oido.suena(voz("Cuéntame"), FIN).turns
+
+    cogido, suelta = threading.Event(), threading.Event()
+
+    def coge() -> None:
+        with oido.servicio._lock:
+            cogido.set()
+            suelta.wait(5)
+
+    hilo = threading.Thread(target=coge)
+    hilo.start()
+    assert cogido.wait(5)
+    try:
+        empieza = time.monotonic()
+        assert oido.servicio.speaking_gestures == (turno.operation_id, ("asiente",))
         assert time.monotonic() - empieza < 1.0
     finally:
         suelta.set()

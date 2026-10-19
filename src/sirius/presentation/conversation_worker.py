@@ -26,6 +26,9 @@ class SendMessageWorkerSignals(QObject):
     """
 
     delta = Signal(str)
+    #: Un gesto de la lista que escribió el modelo, en su sitio entre los ``delta`` (pieza C
+    #: de la 0.4, ADR-261).
+    gesture = Signal(str)
     finished = Signal(object)
     crashed = Signal(str)
 
@@ -54,6 +57,7 @@ class SendMessageWorker(QRunnable):
                 self._user_text,
                 operation_id=self._operation_id,
                 on_delta=self.signals.delta.emit,
+                on_gesture=self.signals.gesture.emit,
                 extra_instructions=self._extra_instructions,
             )
         except Exception as exc:  # A worker-boundary catch: report, never crash the pool thread.

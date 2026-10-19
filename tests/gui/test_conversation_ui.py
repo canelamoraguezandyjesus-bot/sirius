@@ -366,6 +366,29 @@ def test_response_streams_progressively_before_completion(qtbot: QtBot, tmp_path
 
 
 @pytest.mark.gui
+def test_lo_escrito_en_la_ventana_llega_sin_etiquetas_y_su_gesto_a_la_cara(
+    qtbot: QtBot, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Pieza C de la 0.4 (ADR-261): lo que se escribe en la ventana no suena, y la cara hace
+    el gesto en cuanto llega el texto que lo lleva."""
+    database_path = _bootstrapped_database(tmp_path / "sirius.db")
+    window = _build_window(database_path)
+    qtbot.addWidget(window)
+    _swap_send_message_use_case(
+        window, database_path, FakeLLMProvider(chunks=("Claro, [son", "risa] ahora mismo."))
+    )
+    hechos: list[str] = []
+    monkeypatch.setattr(window.face_widget, "make", hechos.append)
+
+    window.message_input.setText("hola")
+    window.send_button.click()
+
+    qtbot.waitUntil(lambda: window.send_button.isEnabled(), timeout=5000)
+    assert window.message_list.item(1).text() == "Sirius: Claro, ahora mismo."
+    assert hechos == ["sonrisa"]
+
+
+@pytest.mark.gui
 def test_messages_persist_after_closing_and_reopening(qtbot: QtBot, tmp_path: Path) -> None:
     database_path = _bootstrapped_database(tmp_path / "sirius.db")
     first_window = _build_window(database_path)

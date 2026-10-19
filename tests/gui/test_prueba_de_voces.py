@@ -96,6 +96,8 @@ class _Altavoz:
     playing: bool = False
     latency: float = 0.0
     started: int = 0
+    #: Lo fuerte que suena: la cara lo lee desde la pieza B de la 0.4 (ADR-260).
+    level: float = 0.0
 
     def play(self, sound: str) -> None:
         self.sonados.append(sound)

@@ -81,7 +81,7 @@ la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
-| 261 | 2026-10-19 | APROBADO | Hacer los gestos de una lista cerrada que el modelo escribe entre corchetes | (sin sección Decisión) |
+| 261 | 2026-10-19 | APROBADO | Hacer los gestos de una lista cerrada que el modelo escribe entre corchetes | Se adopta la opción 3. |
 | 260 | 2026-10-18 | APROBADO | Darle a Sirius su cara en la ventana, dibujada, viva y sin congelarse | Se adopta la opción 3. |
 | 259 | 2026-10-18 | APROBADO | Empezar la 0.4 del robot, los ojos, por sus pruebas de aceptación | Se adopta la opción 2. |
 | 258 | 2026-10-18 | APROBADO | Hacer sitio en la memoria común nombrando cada ADR por su número, sin su ruta | La tabla de decisiones de `MEMORIA.md` nombra cada ADR por su número, con su fecha, su estado, su título y, desde el 174, su resumen, y ya no lleva la ruta de… |
@@ -584,7 +584,7 @@ ADR-258).
 
 - **ADR-256** — un modelo pequeño seguiría el diálogo de sus instrucciones hasta su tope (lo hace cumplir `tests/unit/test_paradas_de_turno.py`).
 
-Y **8** ADR declaran expresamente que no dejaron lección: 260, 257, 240, 236, 235, 234, 233, 232.
+Y **9** ADR declaran expresamente que no dejaron lección: 261, 260, 257, 240, 236, 235, 234, 233, 232.
 
 ## Los bloques del motor
 

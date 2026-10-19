@@ -46,6 +46,7 @@ from conductor_robot_0_4 import (
     huella_de_voz,
     parecido,
 )
+from pytestqt.qtbot import QtBot
 
 from sirius.infrastructure.logging import LOGGER_NAME
 
@@ -309,4 +310,20 @@ def test_a_quien_mira_va_con_la_izquierda_y_la_derecha_de_la_camara(tmp_path: Pa
     assert conductor.a_quien_mira(mirando(0.6, 0.8)) is None, "hacia arriba"
     conductor.delante()
     assert conductor.a_quien_mira(mirando(0.0)) is None, "sin nadie delante"
+    conductor.cierra()
+
+
+@pytest.mark.gui
+def test_gestos_dibujados_ve_cada_gesto_que_hace_la_cara_y_ninguno_si_no_hace(
+    qtbot: QtBot, tmp_path: Path
+) -> None:
+    """Lo que lee ``gestos_dibujados`` sale de la cara de la ventana de verdad: sin gestos
+    no ve ninguno, y con dos ve los dos, en orden (pieza C)."""
+    conductor = ConductorDeOjos(tmp_path)
+    ventana = conductor.ventana(qtbot)
+
+    assert conductor.gestos_dibujados(1.0) == ()
+    ventana._cara().make("guino")
+    ventana._cara().make("asiente")
+    assert conductor.gestos_dibujados(3.0) == ("guino", "asiente")
     conductor.cierra()

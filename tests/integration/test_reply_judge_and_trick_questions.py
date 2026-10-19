@@ -20,6 +20,7 @@ from sirius.application.trick_questions import TrickAnswer, TrickQuestionsError
 from sirius.composition_root import ConversationDependencies, build_conversation_dependencies
 from sirius.config.settings import save_settings
 from sirius.domain.conversation import MessageRole
+from sirius.domain.gestures import gestures_line
 from sirius.domain.reply_judge import SCORE_TASK, TrickVerdict
 from sirius.domain.reply_mark import ReplyMark
 from sirius.domain.robot_seed import (
@@ -321,6 +322,22 @@ def test_las_preguntas_trampa_pasan_por_el_modelo_de_la_charla_sin_guardar_nada(
     assert len(juez.juzgadas) == 40
     for tabla in ("messages", "reply_marks", "judge_scores", "conversation_summaries"):
         assert _filas(base, tabla) == 0, tabla
+
+
+def test_las_preguntas_trampa_ven_la_respuesta_como_la_charla_sin_etiquetas(
+    tmp_path: Path,
+) -> None:
+    """Las instrucciones son las de la charla, con sus gestos: la respuesta que marca el
+    propietario y juzga el juez va sin etiquetas, como en la charla (ADR-261)."""
+    ollama = _OllamaQueApunta("Ni de broma [ojos_en_blanco].")
+    juez = _Juez()
+    _, sirius = _sirius(tmp_path, juez=juez)
+    _charla_local(sirius, ollama.transporte())
+
+    respuestas = sirius.trick_questions_use_case.run()
+
+    assert all(gestures_line() in c["messages"][0]["content"] for _, c in ollama.al_chat())  # type: ignore[index]
+    assert [r.reply for r in respuestas] == ["Ni de broma."] * 40
 
 
 def test_si_el_modelo_de_la_charla_falla_el_banco_para_con_su_error(tmp_path: Path) -> None:

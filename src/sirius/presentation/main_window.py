@@ -1231,13 +1231,18 @@ class MainWindow(QMainWindow):
             show_information=self._show_information,
         )
 
-        # Su cara, encima de la charla (pieza B de ADR-259): con el reloj de su voz y el
-        # volumen de lo que dice. Sin oído, con el reloj de siempre y la boca cerrada.
+        # Su cara, encima de la charla (pieza B de ADR-259): con el reloj de su voz, el
+        # volumen de lo que dice y sus gestos cuando suenan (pieza C, ADR-261). Sin oído,
+        # con el reloj de siempre, la boca cerrada y solo los gestos de lo escrito.
         escucha = self._local_listening
-        self.face_widget = FaceWidget(
-            escucha.clock if escucha is not None else time.monotonic,
-            (lambda: escucha.speaking_level) if escucha is not None else (lambda: 0.0),
-        )
+        if escucha is not None:
+            self.face_widget = FaceWidget(
+                escucha.clock,
+                lambda: escucha.speaking_level,
+                lambda: escucha.speaking_gestures,
+            )
+        else:
+            self.face_widget = FaceWidget(time.monotonic)
 
         self.message_list = QListWidget()
         # Bugfix (historial solapado): con el modo por defecto (Fixed), Qt no
@@ -1689,6 +1694,7 @@ class MainWindow(QMainWindow):
             extra_instructions=extra_instructions,
         )
         worker.signals.delta.connect(self._on_delta)
+        worker.signals.gesture.connect(self.face_widget.make)
         worker.signals.finished.connect(self._on_finished)
         worker.signals.crashed.connect(self._on_crashed)
         self._active_send_worker = worker
