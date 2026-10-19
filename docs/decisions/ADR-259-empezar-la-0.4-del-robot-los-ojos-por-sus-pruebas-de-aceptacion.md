@@ -316,3 +316,6 @@ el conductor digan lo mismo.
     `lo_que_delata_una_imagen` mira la marca en todas sus formas y lo que lleva dentro una
     imagen codificada, en binario, en hexadecimal, como texto y en base64, en la base y en
     el diario igual. Las huellas ya se buscaban así.
+- **Ronda 3, sobre `b6e8d384`**: limpia, «Didn't find any major issues». Se le preguntó
+  otra vez si el enfoque estaba mal, y no puso nada en contra. La #702 se fusionó
+  aplastada en `c9469442`.
