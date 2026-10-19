@@ -34,6 +34,7 @@ from sirius.adapters.persistence.sqlite_project_repository import build_sqlite_p
 from sirius.adapters.persistence.sqlite_unit_of_work import build_sqlite_unit_of_work
 from sirius.application.approve_decision import ApproveDecisionUseCase
 from sirius.application.context import Context, ContextBuilder
+from sirius.application.presence import HEADING, RULE
 from sirius.application.project_continuity import ProjectContinuityUseCase
 from sirius.application.propose_decision import ProposeDecisionUseCase
 from sirius.application.rank_relevant_knowledge import RankRelevantKnowledgeUseCase
@@ -1132,3 +1133,93 @@ def test_cortarle_antes_de_que_escriba_nada_deja_su_respuesta_vacia_y_acabada(
     assert result.sirius_message.content == ""
     # Y al acabar se olvida que la cortaron: no se queda apuntada para siempre.
     assert not use_case._was_cut("op-sin-empezar")
+
+
+# --- Quién hay (pieza E de la 0.4, ADR-263) -------------------------------------------
+
+
+class _ProveedorQueApunta(_StaticLLMProvider):
+    """Contesta siempre lo mismo y apunta cada petición, con sus instrucciones."""
+
+    def __init__(self) -> None:
+        super().__init__("vale")
+        self.peticiones: list[LLMRequest] = []
+
+    def stream_response(self, request: LLMRequest) -> Iterable[LLMStreamEvent]:
+        self.peticiones.append(request)
+        yield from super().stream_response(request)
+
+
+def _quien_hay(instrucciones: str) -> list[str]:
+    """Las líneas de «# Quién hay», sin el título ni la regla."""
+    lineas = instrucciones.splitlines()
+    if HEADING not in lineas:
+        return []
+    desde = lineas.index(HEADING) + 1
+    hasta = lineas.index(RULE, desde)
+    return lineas[desde:hasta]
+
+
+@pytest.mark.integration
+def test_el_modelo_lee_quien_le_habla_y_a_quienes_tiene_delante(tmp_path: Path) -> None:
+    proveedor = _ProveedorQueApunta()
+    use_case = _build_use_case(tmp_path / "sirius.db", proveedor)
+    use_case.set_presence(lambda: ("Pepe", None))
+
+    use_case.send_message("hola", speaker="Marta")
+
+    [peticion] = proveedor.peticiones
+    assert _quien_hay(peticion.instructions) == [
+        "Te habla Marta.",
+        "Tienes delante a Pepe.",
+        "Tienes delante a alguien sin identificar.",
+    ]
+    assert "hola" not in peticion.instructions, "quién hay no se mezcla con lo dicho"
+
+
+@pytest.mark.integration
+def test_lo_escrito_en_la_ventana_no_lleva_quien_lo_escribe(tmp_path: Path) -> None:
+    proveedor = _ProveedorQueApunta()
+    use_case = _build_use_case(tmp_path / "sirius.db", proveedor)
+    use_case.set_presence(lambda: ())
+
+    use_case.send_message("hola")
+
+    [peticion] = proveedor.peticiones
+    assert _quien_hay(peticion.instructions) == ["No tienes a nadie delante."]
+
+
+@pytest.mark.integration
+def test_sin_vista_ni_quien_hable_no_hay_seccion_de_quien_hay(tmp_path: Path) -> None:
+    proveedor = _ProveedorQueApunta()
+    use_case = _build_use_case(tmp_path / "sirius.db", proveedor)
+    use_case.send_message("uno")
+    use_case.set_presence(lambda: None)
+    use_case.send_message("dos")
+
+    assert all(HEADING not in p.instructions for p in proveedor.peticiones)
+
+
+@pytest.mark.integration
+def test_si_no_se_sabe_quien_hay_se_apunta_una_vez_y_la_charla_sigue(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    proveedor = _ProveedorQueApunta()
+    use_case = _build_use_case(tmp_path / "sirius.db", proveedor)
+
+    def rota() -> tuple[str | None, ...] | None:
+        msg = "la cámara en /ruta/secreta"
+        raise RuntimeError(msg)
+
+    use_case.set_presence(rota)
+
+    primera = use_case.send_message("uno", speaker="Marta")
+    use_case.send_message("dos")
+
+    assert primera.outcome is MessageStatus.COMPLETED
+    assert _quien_hay(proveedor.peticiones[0].instructions) == ["Te habla Marta."]
+    assert HEADING not in proveedor.peticiones[1].instructions
+    avisos = [r for r in caplog.records if "No se sabe a quiénes tiene delante" in r.getMessage()]
+    assert len(avisos) == 1
+    assert "RuntimeError" in avisos[0].getMessage()
+    assert "/ruta/secreta" not in caplog.text

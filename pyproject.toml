@@ -50,11 +50,14 @@ personaje = [
   "setuptools<82",
 ]
 # Los ojos del robot (pieza D de la 0.4, ADR-262): MediaPipe, que trae su OpenCV, para la
-# cámara y las caras en este ordenador. Va aparte como la voz: la instala `uv run
-# --link-mode=copy --extra voz --extra ojos sirius-instala-la-voz`, que baja también el
-# modelo de las caras, y Quality no la instala. Sin ella, Sirius oye y habla igual.
+# cámara y las caras en este ordenador; InsightFace y SpeechBrain, para reconocer por la
+# cara y por la voz a quien dé permiso (pieza E, ADR-263). Va aparte como la voz: la instala
+# `uv run --link-mode=copy --extra voz --extra ojos sirius-instala-la-voz`, que baja también
+# sus modelos, y Quality no la instala. Sin ella, Sirius oye y habla igual.
 ojos = [
   "mediapipe>=1.1.1,<1.2",
+  "insightface>=2.1,<2.2",
+  "speechbrain>=1.1.2,<1.2",
 ]
 
 [project.scripts]

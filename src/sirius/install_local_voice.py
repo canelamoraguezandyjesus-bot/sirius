@@ -7,7 +7,8 @@ voces de Piper de la prueba a ciegas a sus carpetas si faltan, antes de mirar lo
 comprueba que el oído y cada voz cargan. Con ``--extra personaje`` baja además la voz de
 personaje, la de Chatterbox; sin él, dice cómo se pone. Con ``--extra ojos`` baja además
 el modelo de las caras, comprueba que la vista carga y mira si la cámara se abre (pieza D
-de la 0.4, ADR-262); sin él, dice cómo se pone. Lo que ya está no lo vuelve a bajar, y lo
+de la 0.4, ADR-262), y baja los modelos de reconocer caras y voces y comprueba que cargan
+(pieza E, ADR-263); sin él, dice cómo se pone. Lo que ya está no lo vuelve a bajar, y lo
 que falla lo dice con su causa, sin adivinar remedios (rondas 5, 8 y 9 de Codex sobre la
 PR #687).
 
@@ -24,8 +25,9 @@ import hashlib
 import re
 import shutil
 import urllib.request
+import zipfile
 from collections.abc import Callable
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from sirius.adapters.audio.local_listening import (
     check_listening_libraries,
@@ -35,15 +37,25 @@ from sirius.adapters.audio.local_speaking import (
     check_speaking_libraries,
     load_speaking_engines,
 )
+from sirius.adapters.recognition.engines import load_recognition_engines
 from sirius.adapters.vision.local_sight import load_sight_engines
 from sirius.config.local_voice import LocalVoiceSettings, SpeakingVoice
 from sirius.infrastructure.local_sight_installation import (
     FACE_MODEL_SHA256,
     FACE_MODEL_URL,
+    FACE_RECOGNITION_FILES,
+    FACE_RECOGNITION_PACK_SHA256,
+    FACE_RECOGNITION_PACK_URL,
     SIGHT_DISTRIBUTIONS,
     SIGHT_INSTALL_COMMAND,
+    VOICE_RECOGNITION_FILES,
+    VOICE_RECOGNITION_URL,
     face_model_complete,
     face_model_path,
+    face_recognition_complete,
+    face_recognition_dir,
+    voice_recognition_complete,
+    voice_recognition_dir,
 )
 from sirius.infrastructure.local_voice_installation import (
     CHARACTER_DISTRIBUTIONS,
@@ -60,6 +72,7 @@ from sirius.infrastructure.local_voice_installation import (
 )
 from sirius.ports.local_sight import CameraUnavailable, SightUnavailable
 from sirius.ports.local_voice import VoiceUnavailable
+from sirius.ports.recognition import RecognitionUnavailable
 
 #: Cómo se baja un modelo de faster-whisper: ``download_model(nombre, output_dir=...)``.
 Download = Callable[..., object]
@@ -161,6 +174,77 @@ def download_face_model(target: Path, download: DownloadFile | None = None) -> N
     partial.replace(target)
 
 
+def download_face_recognition(folder: Path, download: DownloadFile | None = None) -> None:
+    """Baja el paquete de modelos de InsightFace, mira que es el de su huella, saca de él el
+    de reconocer caras y el de la edad a ``folder`` y lo borra. Solo deja la carpeta si está
+    entera: un paquete a medias, cambiado en el servidor o sin uno de los dos, no se pone.
+    De cada fichero del paquete se mira solo su nombre, no su ruta: nada se escribe fuera
+    de la carpeta."""
+    fetch = download if download is not None else _download_file
+    partial = folder.with_name(f"{folder.name}.a-medias")
+    shutil.rmtree(partial, ignore_errors=True)
+    partial.mkdir(parents=True)
+    pack = partial / "paquete.zip"
+    try:
+        fetch(FACE_RECOGNITION_PACK_URL, pack)
+        if _sha256(pack) != FACE_RECOGNITION_PACK_SHA256:
+            msg = "lo bajado no es el paquete de reconocer caras que se espera, o no llegó entero"
+            raise RuntimeError(msg)
+        with zipfile.ZipFile(pack) as bundle:
+            for name in FACE_RECOGNITION_FILES:
+                with (
+                    bundle.open(_member(bundle, name)) as source,
+                    (partial / name).open("wb") as sink,
+                ):
+                    shutil.copyfileobj(source, sink, length=1 << 20)
+        pack.unlink()
+    except BaseException:
+        # Cientos de megas a medias no se quedan en su disco.
+        shutil.rmtree(partial, ignore_errors=True)
+        raise
+    if not face_recognition_complete(partial):
+        shutil.rmtree(partial, ignore_errors=True)
+        msg = "el paquete no trae enteros los modelos de reconocer caras"
+        raise RuntimeError(msg)
+    if folder.exists():
+        shutil.rmtree(folder)
+    partial.rename(folder)
+
+
+def _member(bundle: zipfile.ZipFile, name: str) -> zipfile.ZipInfo:
+    """El único fichero de ``bundle`` que se llama ``name``, esté en la carpeta que esté."""
+    found = [
+        info
+        for info in bundle.infolist()
+        if not info.is_dir() and PurePosixPath(info.filename.replace("\\", "/")).name == name
+    ]
+    if len(found) != 1:
+        msg = f"el paquete de reconocer caras no trae un {name}, o trae más de uno"
+        raise RuntimeError(msg)
+    return found[0]
+
+
+def download_voice_recognition(folder: Path, download: DownloadFile | None = None) -> None:
+    """Baja ECAPA a ``folder``, fichero a fichero, y solo lo deja ahí si está entero."""
+    fetch = download if download is not None else _download_file
+    partial = folder.with_name(f"{folder.name}.a-medias")
+    shutil.rmtree(partial, ignore_errors=True)
+    partial.mkdir(parents=True)
+    try:
+        for name in VOICE_RECOGNITION_FILES:
+            fetch(VOICE_RECOGNITION_URL.format(name=name), partial / name)
+    except BaseException:
+        shutil.rmtree(partial, ignore_errors=True)
+        raise
+    if not voice_recognition_complete(partial):
+        shutil.rmtree(partial, ignore_errors=True)
+        msg = "la descarga no trajo todos los ficheros de reconocer voces"
+        raise RuntimeError(msg)
+    if folder.exists():
+        shutil.rmtree(folder)
+    partial.rename(folder)
+
+
 def _sha256(path: Path) -> str:
     """La huella de ``path``, leída a trozos de un mega."""
     digest = hashlib.sha256()
@@ -246,7 +330,7 @@ def main() -> int:
             f"[--]    La vista (la cámara y las caras) no está: la instala {SIGHT_INSTALL_COMMAND}"
         )
     else:
-        failed = _install_face_model()
+        failed = _install_face_model() or _install_recognition_models()
         if failed is not None:
             return failed
     try:
@@ -269,7 +353,7 @@ def main() -> int:
             return _fail(f"{name[0].upper()}{name[1:]} no carga", error)
         engines.speaker.close()
     if sight:
-        failed = _check_sight()
+        failed = _check_sight() or _check_recognition()
         if failed is not None:
             return failed
     print("[OK]    Listo. Para probarlo: uv run --link-mode=copy --extra voz sirius-oye")
@@ -331,6 +415,44 @@ def _install_face_model() -> int | None:
     return None
 
 
+def _install_recognition_models() -> int | None:
+    """Baja los modelos de reconocer caras y voces si faltan; el código con que acaba la
+    orden si falla uno."""
+    faces = face_recognition_dir()
+    if face_recognition_complete(faces):
+        print(f"[OK]    El modelo de reconocer caras (InsightFace) ya está en {faces}")
+    else:
+        print("Bajando el modelo de reconocer caras (InsightFace, unos 280 MB). Solo esta vez.")
+        try:
+            download_face_recognition(faces)
+        except Exception as error:
+            print(f"[FALLA] No se pudo bajar el modelo de reconocer caras: {error}")
+            return 1
+        print(f"[OK]    Modelo de reconocer caras bajado a {faces}")
+    voices = voice_recognition_dir()
+    if voice_recognition_complete(voices):
+        print(f"[OK]    El modelo de reconocer voces (ECAPA) ya está en {voices}")
+        return None
+    print("Bajando el modelo de reconocer voces (ECAPA, unos 90 MB). Solo esta vez.")
+    try:
+        download_voice_recognition(voices)
+    except Exception as error:
+        print(f"[FALLA] No se pudo bajar el modelo de reconocer voces: {error}")
+        return 1
+    print(f"[OK]    Modelo de reconocer voces bajado a {voices}")
+    return None
+
+
+def _check_recognition() -> int | None:
+    """Que reconocer caras y voces carga; el código con que acaba la orden si no."""
+    print("Comprobando que reconocer caras y voces carga...")
+    try:
+        load_recognition_engines(face_recognition_dir(), voice_recognition_dir())
+    except RecognitionUnavailable as error:
+        return _fail("Reconocer caras y voces no carga", error)
+    return None
+
+
 def _check_sight() -> int | None:
     """Que la vista carga y si la cámara se abre; el código con que acaba la orden si la
     vista no carga. Sin cámara no falla: Sirius oye y habla igual, y lo dice."""
@@ -348,7 +470,7 @@ def _check_sight() -> int | None:
     return None
 
 
-def _fail(problem: str, error: VoiceUnavailable | SightUnavailable) -> int:
+def _fail(problem: str, error: VoiceUnavailable | SightUnavailable | RecognitionUnavailable) -> int:
     """Dice qué falla, con su causa, y nada más: no adivina si repetirla lo arreglaría.
 
     Un fallo que vuelve (una DLL) y uno que no (sin memoria un momento) se ven igual desde

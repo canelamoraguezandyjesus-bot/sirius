@@ -582,3 +582,21 @@ class ConversationSummaryModel(Base):
     up_to_sequence: Mapped[int] = mapped_column(nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(nullable=False)
+
+
+class RecognitionPrintModel(Base):
+    """Una huella de quien dio permiso para que Sirius le reconozca, cifrada (pieza E de la
+    0.4, ADR-263).
+
+    ``kind`` es de qué es, ``face`` o ``voice``, y ``sealed``, sus números cifrados: la base
+    nunca los ve en claro. Quitar el permiso borra todas las de esa persona.
+    """
+
+    __tablename__ = "recognition_prints"
+    __table_args__ = (Index("ix_recognition_prints_person", "person"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    person: Mapped[str] = mapped_column(Text, nullable=False)
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    sealed: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(nullable=False)

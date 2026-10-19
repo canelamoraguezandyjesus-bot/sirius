@@ -36,6 +36,7 @@ from dataclasses import dataclass
 
 from sirius.application.context import Context, ContextBuilder
 from sirius.application.memory_commands import CommandAnswer, CommandReply, MemoryCommandService
+from sirius.application.presence import presence_block
 from sirius.application.robot_conversation import (
     ConversationSummaryService,
     summary_operation_id,
@@ -330,6 +331,15 @@ class SendMessageUseCase:
         #: Las respuestas que le cortaron por voz mientras las escribía (ADR-254).
         self._cut_operations: set[str] = set()
         self._cut_lock = threading.Lock()
+        #: A quiénes tiene delante, de la vista (pieza E de la 0.4, ADR-263); sin ella, no
+        #: se le dice.
+        self._presence: Callable[[], Sequence[str | None] | None] | None = None
+        self._presence_failed = False
+
+    def set_presence(self, in_front: Callable[[], Sequence[str | None] | None]) -> None:
+        """Le dice de dónde saber a quiénes tiene delante: de la vista, su nombre o ``None``
+        por cada uno, o ``None`` si no ve (pieza E de la 0.4, ADR-263)."""
+        self._presence = in_front
 
     def mark_cut(self, message_id: int, heard: str) -> None:
         """Le cortaron la respuesta ``message_id`` cuando el propietario había oído
@@ -337,6 +347,19 @@ class SendMessageUseCase:
         cortaron (ADR-254)."""
         if self._cuts is not None:
             self._cuts.mark_cut(message_id, heard)
+
+    def _in_front(self) -> Sequence[str | None] | None:
+        """A quiénes tiene delante; si no se puede saber, ``None``, y se apunta una vez."""
+        presence = self._presence
+        if presence is None:
+            return None
+        try:
+            return presence()
+        except Exception as error:
+            if not self._presence_failed:
+                self._presence_failed = True
+                _logger.warning("No se sabe a quiénes tiene delante (%s)", type(error).__name__)
+            return None
 
     def set_llm_provider(self, llm_provider: LLMProvider) -> None:
         """Swap the active provider (e.g. after B2a onboarding validates a key).
@@ -378,6 +401,7 @@ class SendMessageUseCase:
         on_gesture: Callable[[str], None] | None = None,
         extra_instructions: str = "",
         only_on_this_computer: bool = False,
+        speaker: str | None = None,
     ) -> SendMessageResult:
         """Persist the user's message, stream Sirius's reply, and persist its outcome.
 
@@ -407,6 +431,11 @@ class SendMessageUseCase:
         leído una sola vez aquí, así que cambiarlo en marcha no puede sacar el mensaje del
         ordenador. Si es de fuera, no se guarda ni se envía nada y se levanta
         ``ChatLeavesThisComputer`` (ronda 10 de Codex sobre la PR #687).
+
+        ``speaker`` es quién le habla, en un turno de voz: su nombre o «sin identificar»
+        (pieza E de la 0.4, ADR-263). Con él y con lo que ve la vista, la petición lleva
+        «# Quién hay» (``presence_block``); lo escrito en la ventana no lleva quién lo
+        escribe.
         """
         operation_id = operation_id or str(uuid.uuid4())
         provider = self._llm_provider
@@ -422,6 +451,7 @@ class SendMessageUseCase:
                 on_completed,
                 on_gesture,
                 extra_instructions,
+                speaker,
             )
         finally:
             self._in_flight.pop(operation_id, None)
@@ -437,6 +467,7 @@ class SendMessageUseCase:
         on_completed: Callable[[], None] | None,
         on_gesture: Callable[[str], None] | None,
         extra_instructions: str,
+        speaker: str | None = None,
     ) -> SendMessageResult:
         if self._memory_commands is not None:
             # Antes que nada: una orden de memoria no puede llegar al modelo ni a
@@ -459,6 +490,9 @@ class SendMessageUseCase:
         instructions = render_instructions(context)
         if mode_block:
             instructions = f"{instructions}\n\n{mode_block}"
+        presence = presence_block(speaker=speaker, in_front=self._in_front())
+        if presence:
+            instructions = f"{instructions}\n\n{presence}"
         if extra_instructions.strip():
             instructions = f"{instructions}\n\n{extra_instructions.strip()}"
         if self._reminder:

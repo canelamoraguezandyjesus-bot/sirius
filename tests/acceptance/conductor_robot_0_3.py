@@ -52,7 +52,7 @@ import time
 import weakref
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from contextlib import closing
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from types import FrameType
 from typing import Any, Literal, Protocol, get_origin, get_type_hints
@@ -941,7 +941,11 @@ class CanceladorDeMentira:
         return tuple(self._limpiados)
 
     def limpia(self, audio: Audio) -> tuple[Audio, bool]:
-        """``audio`` sin el eco de lo que sonaba cuando el micro lo captó, y si lo había."""
+        """``audio`` sin el eco de lo que sonaba cuando el micro lo captó, y si lo había.
+
+        Quita el eco y nada más: lo que queda es el mismo audio con lo que se dijo, de la
+        misma clase y, si lo trae, con el timbre de quien lo dijo, como un cancelador de
+        verdad deja la voz de quien habla (pieza E de la 0.4, ADR-263)."""
         ecos = self._altavoz.en_el_aire(len(self._micro.leidos) - 1)
         texto = audio.texto
         for eco in ecos:
@@ -949,7 +953,7 @@ class CanceladorDeMentira:
                 texto = ""
             elif texto.startswith(f"{eco} "):
                 texto = texto[len(eco) + 1 :]
-        limpio = Audio(texto)
+        limpio = audio if texto == audio.texto else replace(audio, texto=texto)
         self._limpiados.append((audio, limpio))
         return limpio, bool(ecos)
 
@@ -1248,6 +1252,12 @@ TABLAS_DE_LA_0_2: frozenset[str] = frozenset(
         "reply_marks",
     }
 )
+#: Las que añade la 0.4 (ADR-259): las huellas cifradas de quien da permiso para que le
+#: reconozca (ADR-263). En las pruebas de la voz nadie da permiso, así que se queda vacía;
+#: se mira igual que las de la 0.2, columna a columna.
+TABLAS_DE_LA_0_4: frozenset[str] = frozenset({"recognition_prints"})
+#: Las tablas que tiene Sirius.
+TABLAS_DE_SIRIUS: frozenset[str] = TABLAS_DE_LA_0_2 | TABLAS_DE_LA_0_4
 
 #: Las columnas de cada tabla del modelo de producción.
 _COLUMNAS_DEL_MODELO: Mapping[str, frozenset[str]] = {
@@ -1842,7 +1852,7 @@ class ConductorDeVoz(Conductor):
         No se infiere qué es audio por su forma: se comprueba que la base solo cambia
         donde la 0.2 ya escribía (ronda 5 de Codex sobre la PR #686), y se mira dos
         veces, porque la foto final no ve lo que se escribe y se borra antes (ronda 6).
-        La foto: las tablas son las de la 0.2 (``TABLAS_DE_LA_0_2``) y sus columnas las
+        La foto: las tablas son las de Sirius (``TABLAS_DE_SIRIUS``) y sus columnas las
         del modelo; ningún BLOB en ninguna columna del modelo, porque el modelo de
         huellas de estas pruebas no da ninguna; en las sombras de los índices, binarias
         por construcción, ningún bloque mayor de 16 KiB ni con cabecera de audio; ningún
@@ -1859,10 +1869,10 @@ class ConductorDeVoz(Conductor):
             tablas = _tablas(conexion)
             encontrados.extend(
                 f"{t} (tabla nueva)"
-                for t in sorted(set(tablas) - TABLAS_DE_LA_0_2 - TABLAS_DE_LA_PRUEBA)
+                for t in sorted(set(tablas) - TABLAS_DE_SIRIUS - TABLAS_DE_LA_PRUEBA)
             )
             encontrados.extend(
-                f"{t} (tabla que falta)" for t in sorted(TABLAS_DE_LA_0_2 - set(tablas))
+                f"{t} (tabla que falta)" for t in sorted(TABLAS_DE_SIRIUS - set(tablas))
             )
             filas = _filas_por_tabla(conexion)
             for tabla, tipo in sorted(tablas.items()):
@@ -1870,7 +1880,7 @@ class ConductorDeVoz(Conductor):
                 if ahora is None:
                     encontrados.append(f"{tabla} (tabla que no se puede leer)")
                     continue
-                if tabla not in TABLAS_DE_LA_0_2:
+                if tabla not in TABLAS_DE_SIRIUS:
                     continue
                 # Un índice de contenido externo no guarda nada suyo: lee de la tabla
                 # real, que ya se mira. Lo demás, sombras incluidas, se mira columna a

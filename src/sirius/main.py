@@ -113,6 +113,7 @@ def _build_main_window(
         voice_test_use_case=dependencies.voice_test_use_case,
         local_sight=dependencies.local_sight,
         sight_loop=sight_loop,
+        recognition=dependencies.recognition,
         connections=connection_registry(),
     )
     main_window.project_completed.connect(_on_project_completed)

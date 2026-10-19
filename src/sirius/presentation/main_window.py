@@ -81,6 +81,7 @@ from sirius.application.propose_memory_suggestion import (
     InvalidMemorySuggestionProposalDataError,
     ProposeMemorySuggestionUseCase,
 )
+from sirius.application.recognition import LONGEST_NAME, EnrollmentStep, Recognition
 from sirius.application.reject_memory_suggestion import RejectMemorySuggestionUseCase
 from sirius.application.restore_backup import RestoreBackupUseCase
 from sirius.application.robot_conversation import (
@@ -181,6 +182,15 @@ SEEING = "Cámara: te veo"
 #: Cada cuánto mira la ventana si la vista sigue viendo, en milisegundos: si se desenchufa
 #: la cámara, lo dice sin esperar a nada más.
 SIGHT_REFRESH_MS = 500
+#: Lo que se le explica a quien va a dar permiso para que le reconozca (pieza E de la 0.4,
+#: ADR-263).
+ENROLL_HELP = (
+    "Guardo una huella de tu cara y otra de tu voz, cifradas y solo en este ordenador, para "
+    "saber quién eres. Escribe tu nombre, ponte tú solo delante de la cámara y di la frase "
+    "que te pida. Puedes quitar el permiso cuando quieras, y se borran."
+)
+#: Lo que dice si no puede borrar las huellas de quien quita su permiso.
+NOT_FORGOTTEN = "No he podido borrar las huellas de {name}. Prueba otra vez."
 #: Lo que dice si le hablan mientras está con otra cosa: ese turno no va a la charla.
 VOICE_BUSY = "Te he oído, pero estaba con otra cosa: dímelo otra vez cuando acabe."
 #: Lo que dice si abrir el oído falla de una forma que no se espera.
@@ -343,6 +353,7 @@ class MainWindow(QMainWindow):
         voice_test_use_case: VoiceTestUseCase | None = None,
         local_sight: LocalSight | None = None,
         sight_loop: SightLoop | None = None,
+        recognition: Recognition[Any, Any] | None = None,
         connections: ConnectionCloser | None = None,
         show_warning: Callable[[str, str], None] | None = None,
         show_information: Callable[[str, str], None] | None = None,
@@ -399,6 +410,12 @@ class MainWindow(QMainWindow):
         self._local_sight = local_sight
         #: Quien atiende a la vista en producción; sin él, la atiende otro (las pruebas).
         self._sight_loop = sight_loop
+        # Pieza E de la 0.4 (ADR-263): dar y quitar el permiso para que la reconozca.
+        self._recognition = recognition
+        #: Si está abierto el formulario de dar permiso, con el nombre.
+        self._enroll_form = False
+        #: Quiénes dieron permiso, como están en la lista de olvidar.
+        self._people_shown: tuple[str, ...] = ()
         self._sight_paused_for_studio = False
         #: El aviso de la última vez que se abrió la vista: el de un fallo que no esperaba
         #: no lo guarda ella.
@@ -1353,6 +1370,45 @@ class MainWindow(QMainWindow):
         listening_row.addWidget(self.mute_button)
         listening_row.addWidget(self.camera_label, 1)
         listening_row.addStretch(1)
+        # PA-R04-10 a PA-R04-12: dar permiso para que la reconozca, con su nombre, su cara y
+        # su voz, y quitarlo (pieza E de la 0.4, ADR-263).
+        self.recognize_button = QPushButton("Que me reconozca")
+        self.recognize_button.setAccessibleName("Dar permiso para que Sirius te reconozca")
+        self.recognize_button.setVisible(False)
+        self.recognize_button.clicked.connect(self._handle_recognize_clicked)
+        self.enroll_name = QLineEdit()
+        self.enroll_name.setPlaceholderText("Tu nombre")
+        self.enroll_name.setMaxLength(LONGEST_NAME)
+        self.enroll_name.setVisible(False)
+        self.enroll_name.returnPressed.connect(self._handle_enroll_confirm)
+        self.enroll_confirm = QPushButton("Dar permiso")
+        self.enroll_confirm.setVisible(False)
+        self.enroll_confirm.clicked.connect(self._handle_enroll_confirm)
+        self.enroll_cancel = QPushButton("Cancelar")
+        self.enroll_cancel.setVisible(False)
+        self.enroll_cancel.clicked.connect(self._handle_enroll_cancel)
+        self.forget_combo = QComboBox()
+        self.forget_combo.setAccessibleName("A quién olvidar")
+        self.forget_combo.setVisible(False)
+        self.forget_button = QPushButton("Que me olvide")
+        self.forget_button.setAccessibleName("Quitar el permiso y borrar sus huellas")
+        self.forget_button.setVisible(False)
+        self.forget_button.clicked.connect(self._handle_forget_clicked)
+        recognize_row = QHBoxLayout()
+        recognize_row.addWidget(self.recognize_button)
+        recognize_row.addWidget(self.enroll_name, 1)
+        recognize_row.addWidget(self.enroll_confirm)
+        recognize_row.addWidget(self.enroll_cancel)
+        recognize_row.addWidget(self.forget_combo)
+        recognize_row.addWidget(self.forget_button)
+        recognize_row.addStretch(1)
+        self.enroll_help = QLabel(ENROLL_HELP)
+        self.enroll_help.setWordWrap(True)
+        self.enroll_help.setVisible(False)
+        self.enroll_label = QLabel("")
+        self.enroll_label.setAccessibleName("El permiso para reconocerte")
+        self.enroll_label.setWordWrap(True)
+        self.enroll_label.setVisible(False)
 
         input_row = QHBoxLayout()
         input_row.addWidget(self.message_input)
@@ -1388,6 +1444,9 @@ class MainWindow(QMainWindow):
         conversation_layout.addWidget(self.message_list, 1)
         conversation_layout.addLayout(mode_row)
         conversation_layout.addLayout(listening_row)
+        conversation_layout.addLayout(recognize_row)
+        conversation_layout.addWidget(self.enroll_help)
+        conversation_layout.addWidget(self.enroll_label)
         conversation_layout.addLayout(input_row)
         conversation_layout.addWidget(self.status_label)
         conversation_layout.addWidget(self.error_label)
@@ -2082,6 +2141,67 @@ class MainWindow(QMainWindow):
         text = SEEING if sight.seeing else (sight.notice or self._sight_notice)
         self.camera_label.setText(text)
         self.camera_label.setVisible(bool(text))
+        self._refresh_recognition()
+
+    # --- Reconocer a quien dé permiso (pieza E de la 0.4, ADR-263) ----------------------
+
+    def _refresh_recognition(self) -> None:
+        """Los botones de dar y quitar el permiso, y lo que dice el permiso que se está
+        dando, como están de verdad. Se puede dar con la cámara viendo; quitar, siempre."""
+        recognition = self._recognition
+        sight = self._local_sight
+        if recognition is None or sight is None:
+            return
+        enrollment = recognition.enrollment
+        busy = enrollment.step in (EnrollmentStep.FACE, EnrollmentStep.VOICE)
+        self.enroll_label.setText(enrollment.notice)
+        self.enroll_label.setVisible(bool(enrollment.notice))
+        self.recognize_button.setVisible(sight.seeing and not busy and not self._enroll_form)
+        for form_widget in (self.enroll_name, self.enroll_confirm, self.enroll_help):
+            form_widget.setVisible(self._enroll_form)
+        self.enroll_cancel.setVisible(self._enroll_form or busy)
+        people = recognition.people()
+        if people != self._people_shown:
+            self._people_shown = people
+            self.forget_combo.clear()
+            self.forget_combo.addItems(people)
+        for forget_widget in (self.forget_combo, self.forget_button):
+            forget_widget.setVisible(bool(people) and not busy and not self._enroll_form)
+
+    def _handle_recognize_clicked(self) -> None:
+        """Abre el formulario de dar permiso: su nombre y qué se guarda."""
+        self._enroll_form = True
+        self.enroll_name.clear()
+        self._refresh_recognition()
+        self.enroll_name.setFocus()
+
+    def _handle_enroll_confirm(self) -> None:
+        """Empieza a dar permiso con el nombre escrito: ahora le mira, y después le oye."""
+        recognition = self._recognition
+        name = self.enroll_name.text()
+        if recognition is None or not name.strip():
+            return
+        recognition.begin(name)
+        self._enroll_form = False
+        self._refresh_recognition()
+
+    def _handle_enroll_cancel(self) -> None:
+        """Deja el permiso que se estaba dando, sin guardar nada."""
+        self._enroll_form = False
+        if self._recognition is not None:
+            self._recognition.cancel()
+        self._refresh_recognition()
+
+    def _handle_forget_clicked(self) -> None:
+        """Quita el permiso de quien está elegido en la lista: borra sus huellas. Si no se
+        pueden borrar, lo dice."""
+        recognition = self._recognition
+        name = self.forget_combo.currentText()
+        if recognition is None or not name:
+            return
+        if not recognition.forget(name):
+            self.error_label.setText(NOT_FORGOTTEN.format(name=name))
+        self._refresh_recognition()
 
     def _pause_sight_for_studio(self) -> None:
         """Al entrar en Model Studio suelta la cámara, por si la quiere OBS para grabar. El

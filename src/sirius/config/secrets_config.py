@@ -22,3 +22,10 @@ It is a credential —it is what keeps the local WebSocket port from being open
 to any process that finds it— so it lives in the OS credential store, next to
 the API key, and never in ``settings.json``: that file is non-sensitive
 configuration, and `AGENTS.md` forbids keeping keys in plain-text files."""
+
+RECOGNITION_KEY_SECRET_NAME = "recognition_prints_key"
+"""The key name (not value) used to store the key that encrypts the face and voice
+prints of whoever gave Sirius permission to recognize them (pieza E de la 0.4, ADR-263).
+
+The prints live encrypted in the database; the key never does. Without a secure backend
+it is never created, so no print is stored at all."""

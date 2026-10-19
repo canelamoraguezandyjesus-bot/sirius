@@ -28,6 +28,7 @@ import pytest
 
 import sirius.adapters.vision.local_sight as vista_module
 from sirius.adapters.vision.local_sight import (
+    CROP_MARGIN,
     EYE_DEGREES,
     FAILURES_TO_GIVE_UP,
     LOOKING_ASIDE_DEGREES,
@@ -148,9 +149,23 @@ def _de_frente() -> list[list[float]]:
     return _cabeza()
 
 
+#: Cuántos puntos da MediaPipe de cada cara, y los que dicen dónde están los ojos, la nariz
+#: y las comisuras: las dos esquinas del ojo de la izquierda de la imagen, las del de la
+#: derecha, la punta de la nariz y la comisura de la izquierda y la de la derecha.
+_PUNTOS_DE_UNA_CARA = 478
+_OJO_IZQUIERDO = (33, 133)
+_OJO_DERECHO = (362, 263)
+_NARIZ = 1
+_COMISURAS = (61, 291)
+
+
 @dataclass
 class _CaraVista:
-    """Una cara como la da MediaPipe: su caja de puntos, la boca y los ojos y cómo gira."""
+    """Una cara como la da MediaPipe: sus 478 puntos dentro de su caja, la boca y los ojos y
+    cómo gira. Los puntos van en parejas que se miran en un espejo desde el centro de la caja,
+    así que el centro de todos es el de la caja; los ojos, a un cuarto de cada lado y a un
+    tercio de arriba; la nariz, en medio; y las comisuras, a un tercio de cada lado y a tres
+    cuartos de arriba."""
 
     izquierda: float
     derecha: float
@@ -160,13 +175,31 @@ class _CaraVista:
     ojos: dict[str, float] = field(default_factory=dict)
     giro: list[list[float]] = field(default_factory=_de_frente)
 
+    def punto(self, de_lado: float, de_arriba: float) -> _Punto:
+        """El punto a ``de_lado`` del ancho de la caja desde su izquierda y a ``de_arriba``
+        del alto desde arriba."""
+        ancho, alto = self.derecha - self.izquierda, self.abajo - self.arriba
+        return _Punto(self.izquierda + de_lado * ancho, self.arriba + de_arriba * alto)
+
     def puntos(self) -> list[_Punto]:
-        return [
-            _Punto(self.izquierda, self.arriba),
-            _Punto(self.derecha, self.arriba),
-            _Punto(self.izquierda, self.abajo),
-            _Punto(self.derecha, self.abajo),
-        ]
+        medio = self.punto(0.5, 0.5)
+        puntos = [medio] * _PUNTOS_DE_UNA_CARA
+        puntos[10], puntos[152] = self.punto(0.0, 0.0), self.punto(1.0, 1.0)
+        puntos[234], puntos[454] = self.punto(0.0, 1.0), self.punto(1.0, 0.0)
+        puntos[_OJO_IZQUIERDO[0]], puntos[_OJO_IZQUIERDO[1]] = (
+            self.punto(0.2, 1 / 3),
+            self.punto(0.3, 1 / 3),
+        )
+        puntos[_OJO_DERECHO[0]], puntos[_OJO_DERECHO[1]] = (
+            self.punto(0.7, 1 / 3),
+            self.punto(0.8, 1 / 3),
+        )
+        puntos[_NARIZ] = medio
+        puntos[_COMISURAS[0]], puntos[_COMISURAS[1]] = (
+            self.punto(1 / 3, 0.75),
+            self.punto(2 / 3, 0.75),
+        )
+        return puntos
 
     def formas(self) -> list[_Forma]:
         return [_Forma("jawOpen", self.boca), *(_Forma(n, v) for n, v in self.ojos.items())]
@@ -509,21 +542,65 @@ def test_donde_esta_cada_cara_es_el_centro_de_sus_puntos(
     assert [cara.x for cara in vistas] == pytest.approx([0.2, 0.75])
 
 
-def test_el_recorte_es_una_copia_de_su_trozo_del_fotograma(
+def test_el_recorte_es_una_copia_de_su_trozo_del_fotograma_con_margen(
     bibliotecas: _Bibliotecas, modelo: Path
 ) -> None:
     caras = _caras(bibliotecas, modelo)
-    bibliotecas.detector.caras.append([_CaraVista(0.2, 0.5, arriba=0.1, abajo=0.4)])
-    fotograma = _Fotograma.de(10, 10)
+    bibliotecas.detector.caras.append([_CaraVista(0.2, 0.6, arriba=0.2, abajo=0.6)])
+    fotograma = _Fotograma.de(20, 20)
 
     (cara,) = caras.detect(fotograma)
-    recorte = cara.crop
-    fotograma.pixeles[2][3] = -1
+    recorte = cara.crop.image
+    fotograma.pixeles[3][4] = -1
 
-    assert recorte.shape[:2] == (4, 4)
-    assert recorte.pixeles[0] == [1002, 1003, 1004, 1005]
+    # La cara va del píxel 4 al 12 en los dos lados de 20: con un cuarto de 8 de margen, del
+    # 2 al 14, los dos incluidos.
+    assert CROP_MARGIN == 0.25
+    assert recorte.shape[:2] == (13, 13)
+    assert recorte.pixeles[0] == [2000 + columna for columna in range(2, 15)]
     assert recorte.base is None, "el recorte se queda agarrado al fotograma entero"
     assert -1 not in [p for fila in recorte.pixeles for p in fila], "no es una copia"
+
+
+def test_el_recorte_lleva_su_caja_y_sus_cinco_puntos_en_pixeles_del_recorte(
+    bibliotecas: _Bibliotecas, modelo: Path
+) -> None:
+    caras = _caras(bibliotecas, modelo)
+    bibliotecas.detector.caras.append([_CaraVista(0.2, 0.6, arriba=0.2, abajo=0.6)])
+
+    (cara,) = caras.detect(_Fotograma.de(20, 20))
+
+    # El recorte empieza en el píxel 2 de cada lado: todo se mueve 2 hacia arriba y a la
+    # izquierda. La cara mide 8 de ancho y de alto.
+    assert cara.crop.box == pytest.approx((2.0, 2.0, 10.0, 10.0))
+    ojo_izquierdo, ojo_derecho, nariz, comisura_izquierda, comisura_derecha = cara.crop.points
+    assert ojo_izquierdo == pytest.approx((2 + 0.25 * 8, 2 + 8 / 3))
+    assert ojo_derecho == pytest.approx((2 + 0.75 * 8, 2 + 8 / 3))
+    assert nariz == pytest.approx((6.0, 6.0))
+    assert comisura_izquierda == pytest.approx((2 + 8 / 3, 2 + 0.75 * 8))
+    assert comisura_derecha == pytest.approx((2 + 16 / 3, 2 + 0.75 * 8))
+
+
+def test_los_cinco_puntos_van_de_izquierda_a_derecha_de_la_imagen_aunque_mire_al_reves(
+    bibliotecas: _Bibliotecas, modelo: Path
+) -> None:
+    """Si la cámara da la imagen en espejo, el ojo de la izquierda de la imagen es el otro:
+    los puntos van siempre de izquierda a derecha de la imagen, que es como los espera quien
+    endereza la cara."""
+    caras = _caras(bibliotecas, modelo)
+    al_reves = _CaraVista(0.2, 0.6, arriba=0.2, abajo=0.6)
+    puntos = al_reves.puntos()
+    for uno, otro in ((_OJO_IZQUIERDO[0], _OJO_DERECHO[1]), (_OJO_IZQUIERDO[1], _OJO_DERECHO[0])):
+        puntos[uno], puntos[otro] = puntos[otro], puntos[uno]
+    puntos[_COMISURAS[0]], puntos[_COMISURAS[1]] = puntos[_COMISURAS[1]], puntos[_COMISURAS[0]]
+    bibliotecas.detector.caras.append([al_reves])
+    al_reves.puntos = lambda: puntos  # type: ignore[method-assign]
+
+    (cara,) = caras.detect(_Fotograma.de(20, 20))
+
+    ojo_izquierdo, ojo_derecho, _, comisura_izquierda, comisura_derecha = cara.crop.points
+    assert ojo_izquierdo[0] < ojo_derecho[0]
+    assert comisura_izquierda[0] < comisura_derecha[0]
 
 
 def test_una_cara_que_se_sale_por_un_borde_se_recorta_hasta_el_borde(
@@ -534,7 +611,9 @@ def test_una_cara_que_se_sale_por_un_borde_se_recorta_hasta_el_borde(
 
     (cara,) = caras.detect(_Fotograma.de(10, 10))
 
-    assert cara.crop.shape[:2] == (10, 2)
+    # De -2 a 1,5 de ancho y de -1 a 13 de alto: el margen es un cuarto de 14, 3,5, y el
+    # recorte llega de 0 a 6 a lo ancho y de 0 a 10, todo el fotograma, a lo alto.
+    assert cara.crop.image.shape[:2] == (10, 6)
 
 
 def _boca(

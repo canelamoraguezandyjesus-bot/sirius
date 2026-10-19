@@ -1,10 +1,12 @@
 """La vista del robot: la cámara y las caras, en este ordenador (pieza D de la 0.4, ADR-262).
 
 Lee la cámara, busca las caras y recuerda lo visto unos segundos: de cada cara, dónde está,
-si mueve la boca y si mira a la cámara. Con eso dice a quién mirar y si quien habla le
-mira, que es lo que leen la cara y el oído. Ningún fotograma ni recorte sale de aquí ni se
-guarda: el fotograma se suelta en cuanto el detector lo ha mirado, y lo recordado son
-números.
+si mueve la boca, si mira a la cámara y, desde la pieza E (ADR-263), quién es, si dio
+permiso para que la reconozca. Con eso dice a quién mirar, si quien habla le mira y a
+quiénes tiene delante, que es lo que leen la cara, el oído y la charla. Ningún fotograma ni
+recorte sale de aquí ni se guarda: el fotograma se suelta en cuanto el detector lo ha
+mirado, el recorte de cada cara solo lo lee quien reconoce, en el acto, y lo recordado son
+números y nombres.
 
 - **La atiende un hilo**, como al oído (``SightLoop``), unas diez veces por segundo; la
   cara y el oído la leen sin esperarla, de lo último que vio.
@@ -12,15 +14,19 @@ números.
   tiene otro programa, o si deja de dar imagen, como al desenchufarla, ``notice`` dice por
   qué, y Sirius sigue oyendo y hablando. El diario se queda con el tipo de fallo.
 - **Lo que no puede leer no la para**: un fotograma que el detector no entiende se deja, y
-  se apunta una vez.
+  se apunta una vez; un fallo de quien reconoce, igual, y esa vez nadie es reconocido.
+- **Reconocer cuesta**: cada cara se reconoce al aparecer y después cada
+  ``RECOGNIZE_AGAIN_SECONDS``, siguiéndola por dónde está; si alguien da o quita su
+  permiso, se vuelve a mirar a todos. Y cuando alguien está dando permiso, su cara, si
+  está sola delante, va a quien reconoce.
 """
 
 from __future__ import annotations
 
 import threading
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Protocol
 
 from sirius.infrastructure.logging import get_logger
 from sirius.ports.local_sight import CameraUnavailable, SightEngines, SightUnavailable
@@ -38,16 +44,43 @@ CANNOT_SEE = (
 )
 #: Lo que dice si no tiene cámara, o si la ha perdido.
 NO_CAMERA = "Sin cámara: {reason}. Sigo oyéndote y hablando."
+#: Cada cuánto vuelve a reconocer una cara que sigue delante, en segundos.
+RECOGNIZE_AGAIN_SECONDS = 2.0
+#: Lo lejos que puede estar una cara de donde estaba para ser la misma, de 0 a 1.
+SAME_PLACE = 0.15
+
+
+class FaceRecognizer(Protocol):
+    """Lo que la vista necesita de quien reconoce caras (pieza E de la 0.4, ADR-263)."""
+
+    @property
+    def version(self) -> int:
+        """Cambia cada vez que alguien da o quita su permiso."""
+        ...
+
+    def wants_face(self) -> bool:
+        """Si espera la cara de quien está dando permiso."""
+        ...
+
+    def take_face(self, crop: Any) -> None:
+        """La cara de quien da permiso, sola delante."""
+        ...
+
+    def who_by_face(self, crop: Any) -> str | None:
+        """De quién es la cara de ``crop``, o ``None`` si de nadie que diera permiso."""
+        ...
 
 
 @dataclass(frozen=True, slots=True)
 class Glimpse:
     """Lo que vio de una cara en un fotograma, sin nada de la imagen: dónde está, de 0 a 1
-    con la izquierda y la derecha de la cámara, si movía la boca y si le miraba."""
+    con la izquierda y la derecha de la cámara, si movía la boca, si le miraba y quién es,
+    su nombre si dio permiso para que la reconozca; si no, ``None``."""
 
     x: float
     talking: bool
     looking: bool
+    who: str | None = None
 
 
 class LocalSight:
@@ -60,8 +93,16 @@ class LocalSight:
         clock: Callable[[], float],
         install_command: str,
         memory_seconds: float = MEMORY_SECONDS,
+        recognition: FaceRecognizer | None = None,
     ) -> None:
         self._load_engines = load_engines
+        #: Quien reconoce caras; sin él, nadie es nadie.
+        self._recognition = recognition
+        self._recognition_failed = False
+        #: De quién era cada cara la última vez que se reconoció: dónde estaba, quién era y
+        #: cuándo se reconoció; y con qué versión de los permisos.
+        self._known: tuple[tuple[float, str | None, float], ...] = ()
+        self._known_version = -1
         self._install_command = install_command
         self._clock = clock
         self._memory = memory_seconds
@@ -149,9 +190,52 @@ class LocalSight:
         finally:
             del frame
         now = self._clock()
-        seen = tuple(Glimpse(face.x, face.talking, face.looking) for face in faces)
+        names = self._identify(faces, now)
+        seen = tuple(
+            Glimpse(face.x, face.talking, face.looking, who)
+            for face, who in zip(faces, names, strict=True)
+        )
         kept = tuple(entry for entry in self._history if now - entry[0] <= self._memory)
         self._history = (*kept, (now, seen))
+
+    def _identify(self, faces: Sequence[Any], now: float) -> list[str | None]:
+        """Quién es cada cara de ``faces``: la que ya se reconoció hace poco donde está,
+        sin volver a hacerlo; las demás, ahora. Si alguien está dando permiso y su cara está
+        sola delante, va a quien reconoce. Un fallo se apunta una vez, con su tipo, y esa
+        vez nadie es nadie."""
+        recognition = self._recognition
+        if recognition is None or not faces:
+            return [None] * len(faces)
+        try:
+            if recognition.wants_face() and len(faces) == 1:
+                recognition.take_face(faces[0].crop)
+            if recognition.version != self._known_version:
+                self._known, self._known_version = (), recognition.version
+            candidates = [k for k in self._known if now - k[2] < RECOGNIZE_AGAIN_SECONDS]
+            names: list[str | None] = []
+            known: list[tuple[float, str | None, float]] = []
+            for face in faces:
+                near = [k for k in candidates if abs(k[0] - face.x) <= SAME_PLACE]
+                if near:
+                    cached = min(near, key=lambda k: abs(k[0] - face.x))
+                    candidates.remove(cached)
+                    who, at = cached[1], cached[2]
+                else:
+                    who, at = recognition.who_by_face(face.crop), now
+                names.append(who)
+                known.append((face.x, who, at))
+            self._known = tuple(known)
+            return names
+        except Exception as error:
+            if not self._recognition_failed:
+                self._recognition_failed = True
+                _logger.error("Quien reconoce caras ha fallado (%s)", type(error).__name__)
+            return [None] * len(faces)
+
+    def in_front_names(self) -> tuple[str | None, ...] | None:
+        """Quiénes tiene delante en el último fotograma, su nombre o ``None`` por cada uno;
+        ``None`` si no ve, que entonces no sabe quién hay."""
+        return tuple(face.who for face in self.in_front()) if self._seeing else None
 
     def in_front(self) -> tuple[Glimpse, ...]:
         """Las caras del último fotograma; ninguna si aún no ha visto nada o no ve."""

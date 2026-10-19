@@ -20,8 +20,10 @@ carpeta de los modelos; aquí no se baja nada.
   mira si eso no se aparta más de ``LOOKING_ASIDE_DEGREES`` a un lado ni más de
   ``LOOKING_UP_DEGREES`` hacia arriba, y hacia abajo hasta ``LOOKING_DOWN_DEGREES``,
   porque Sirius está en la pantalla, debajo de la cámara.
-- **El recorte** de cada cara es una copia de su trozo del fotograma, para quien reconoce
-  caras; el fotograma no se queda en ningún sitio.
+- **El recorte** de cada cara es una copia de su trozo del fotograma, con margen, con su
+  caja y sus cinco puntos, los ojos, la nariz y las comisuras: lo que necesita quien
+  reconoce caras para enderezarla (pieza E de la 0.4, ADR-263). El fotograma no se queda
+  en ningún sitio.
 """
 
 from __future__ import annotations
@@ -128,6 +130,29 @@ class OpenCvCamera:
                 return
 
 
+#: Lo que se añade al recortar una cara, por cada lado, de lo que mide: sitio para
+#: enderezarla.
+CROP_MARGIN = 0.25
+#: Los puntos de MediaPipe de los que salen los cinco con que se endereza una cara: las dos
+#: esquinas de un ojo, las del otro, la punta de la nariz y las dos comisuras.
+_ONE_EYE = (33, 133)
+_OTHER_EYE = (362, 263)
+_NOSE = 1
+_MOUTH = (61, 291)
+
+
+@dataclass(frozen=True, slots=True)
+class FaceCrop:
+    """El recorte de una cara: una copia de su trozo del fotograma, con margen; su caja, de
+    izquierda, arriba, derecha y abajo; y sus cinco puntos, el ojo de la izquierda de la
+    imagen, el de la derecha, la nariz y la comisura de la izquierda y la de la derecha.
+    Caja y puntos, en píxeles del recorte."""
+
+    image: Any
+    box: tuple[float, float, float, float]
+    points: tuple[tuple[float, float], ...]
+
+
 @dataclass(slots=True)
 class _Mouth:
     """Una cara seguida de fotograma en fotograma: dónde estaba y lo abierta que tenía la
@@ -175,7 +200,6 @@ class MediaPipeFaces:
         faces: list[SeenFace[Any]] = []
         for index, points in enumerate(result.face_landmarks):
             xs = [point.x for point in points]
-            ys = [point.y for point in points]
             x = sum(xs) / len(xs)
             shapes = _shapes(result.face_blendshapes, index)
             mouth = self._follow(x, mouths)
@@ -188,7 +212,7 @@ class MediaPipeFaces:
                     x=x,
                     talking=max(opened) - min(opened) > TALKING_SPREAD,
                     looking=_looking(result.facial_transformation_matrixes, index, shapes),
-                    crop=_crop(frame, xs, ys, width, height),
+                    crop=_crop(frame, points, width, height),
                 )
             )
         self._mouths = mouths
@@ -263,10 +287,30 @@ def _eyes(shapes: dict[str, float], toward: tuple[str, str], away: tuple[str, st
     ) / 2
 
 
-def _crop(frame: Any, xs: list[float], ys: list[float], width: int, height: int) -> Any:
-    """Una copia del trozo del fotograma donde está la cara."""
-    left = max(int(min(xs) * width), 0)
-    right = min(int(max(xs) * width) + 1, width)
-    top = max(int(min(ys) * height), 0)
-    bottom = min(int(max(ys) * height) + 1, height)
-    return frame[top:bottom, left:right].copy()
+def _crop(frame: Any, points: Any, width: int, height: int) -> FaceCrop:
+    """Una copia del trozo del fotograma donde está la cara, con margen, con su caja y sus
+    cinco puntos en píxeles del recorte."""
+    pixels = [(point.x * width, point.y * height) for point in points]
+    xs = [x for x, _ in pixels]
+    ys = [y for _, y in pixels]
+    margin = max(max(xs) - min(xs), max(ys) - min(ys)) * CROP_MARGIN
+    left = min(max(int(min(xs) - margin), 0), width)
+    right = max(min(int(max(xs) + margin) + 1, width), left)
+    top = min(max(int(min(ys) - margin), 0), height)
+    bottom = max(min(int(max(ys) + margin) + 1, height), top)
+
+    def at(index: int) -> tuple[float, float]:
+        x, y = pixels[index]
+        return (x - left, y - top)
+
+    def middle(pair: tuple[int, int]) -> tuple[float, float]:
+        (ax, ay), (bx, by) = at(pair[0]), at(pair[1])
+        return ((ax + bx) / 2, (ay + by) / 2)
+
+    eyes = sorted((middle(_ONE_EYE), middle(_OTHER_EYE)))
+    mouth = sorted((at(_MOUTH[0]), at(_MOUTH[1])))
+    return FaceCrop(
+        image=frame[top:bottom, left:right].copy(),
+        box=(min(xs) - left, min(ys) - top, max(xs) - left, max(ys) - top),
+        points=(eyes[0], eyes[1], at(_NOSE), mouth[0], mouth[1]),
+    )

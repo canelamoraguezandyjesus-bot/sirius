@@ -78,6 +78,10 @@ frase desde la primera, con la voz y el altavoz.
 - **La cara sabe en qué está** (``phase``, pieza D de la 0.4, ADR-262): oyendo un turno,
   pensando, con la respuesta pedida y nada dicho aún, o hablando. Lo lee sin el cerrojo,
   como el volumen y los gestos.
+- **Quién le habla** (pieza E de la 0.4, ADR-263): con quien reconoce voces, la voz de
+  cada turno que va a la charla dice quién le habla, su nombre o «sin identificar», y lo
+  que sonó se suelta al acabar el turno. Mientras alguien da permiso para que le reconozca, el
+  turno siguiente es su voz: va a quien reconoce, sin transcribirse ni ir a la charla.
 """
 
 from __future__ import annotations
@@ -86,12 +90,13 @@ import threading
 import time
 import uuid
 from collections import deque
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Protocol
 
 from sirius.application.addressing import Addressing, says_his_name
+from sirius.application.recognition import describe
 from sirius.application.send_message import ChatLeavesThisComputer, SendMessageResult
 from sirius.application.speech_cutter import SpeechCutter
 from sirius.domain.conversation import MessageStatus
@@ -167,6 +172,7 @@ class Chat(Protocol):
         on_completed: Callable[[], None] | None = None,
         on_gesture: Callable[[str], None] | None = None,
         only_on_this_computer: bool = False,
+        speaker: str | None = None,
     ) -> SendMessageResult:
         """Lo entrega a la charla con la operación ``operation_id``. Le pasa a ``on_delta``
         lo que va escribiendo, sin etiquetas, y a ``on_gesture`` cada gesto de la lista en
@@ -174,7 +180,8 @@ class Chat(Protocol):
         respuesta está guardada, antes de lo que la charla hace después del turno. Con
         ``only_on_this_computer``, solo si el modelo con el que lo envía, el mismo que
         comprueba, es de este ordenador, y si no, ``ChatLeavesThisComputer`` sin guardar ni
-        enviar nada."""
+        enviar nada. ``speaker`` es quién le habla, su nombre o «sin identificar», si se sabe
+        (pieza E de la 0.4)."""
         ...
 
     def cut(self, operation_id: str) -> None:
@@ -305,6 +312,22 @@ class Attended:
     notice: str = ""
 
 
+class VoiceRecognizer[Chunk](Protocol):
+    """Lo que el oído necesita de quien reconoce voces (pieza E de la 0.4, ADR-263)."""
+
+    def wants_voice(self) -> bool:
+        """Si espera la voz de quien está dando permiso."""
+        ...
+
+    def take_voice(self, chunks: Sequence[Chunk]) -> None:
+        """Lo que dijo quien da permiso."""
+        ...
+
+    def who_by_voice(self, chunks: Sequence[Chunk]) -> str | None:
+        """De quién es la voz de ``chunks``, o ``None`` si de nadie que diera permiso."""
+        ...
+
+
 class ListeningWatcher(Protocol):
     """Quien enseña la escucha, como la ventana: decide si un turno para él va ya a la
     charla, y se entera de cómo acabó y de cuándo el oído deja de oír por su cuenta.
@@ -377,12 +400,16 @@ class LocalListening[Chunk]:
         addressing: Addressee | None = None,
         reader: Callable[[Callable[[], None]], MeanwhileReader] = read_meanwhile,
         looked_at: Callable[[float], bool] = lambda since: False,
+        recognition: VoiceRecognizer[Chunk] | None = None,
     ) -> None:
         self._chat = chat
         #: Pone a leer el micro mientras la charla contesta, con cancelador.
         self._reader = reader
         #: Si desde un momento quien habla le mira: lo dice la vista (pieza D de la 0.4).
         self._looked_at = looked_at
+        #: Quien reconoce voces (pieza E de la 0.4); sin él, la charla no sabe quién habla.
+        self._recognition = recognition
+        self._recognition_failed = False
         self._clock = clock
         self._addressing: Addressee = addressing if addressing is not None else Addressing()
         self._memory_suggestions = memory_suggestions
@@ -838,6 +865,24 @@ class LocalListening[Chunk]:
             closed.chunks.clear()
             self._chat_left()
             return None
+        recognition = self._recognition
+        if recognition is not None and recognition.wants_voice():
+            # Quien está dando permiso dice su frase: es su voz, no algo para la charla. La
+            # de antes de callar o parar el oído no cuenta, como no iría a la charla.
+            with self._lock:
+                current = closed.generation == self._generation
+            try:
+                if current:
+                    recognition.take_voice(tuple(closed.chunks))
+            except Exception as error:
+                _logger.error("Quien reconoce voces ha fallado (%s)", type(error).__name__)
+            finally:
+                closed.chunks.clear()
+            _logger.info("Turno de voz para dar permiso: no va a la charla")
+            return None
+        # Lo que sonó, para saber de quién es la voz si el turno va a la charla; se suelta
+        # al acabar este turno.
+        voice = tuple(closed.chunks) if recognition is not None else ()
         assert self._engines is not None
         try:
             heard = self._engines.transcriber.transcribe(closed.chunks).strip()
@@ -884,14 +929,37 @@ class LocalListening[Chunk]:
                 )
                 self._speech = speech
                 self._last_speech = speech
-            turn = self._deliver(heard, operation_id, closed.voice_heard_at, speech)
+            turn = self._deliver(
+                heard, operation_id, closed.voice_heard_at, speech, self._speaker(voice)
+            )
         finally:
             if watcher is not None:
                 watcher.answered(turn)
         return turn
 
+    def _speaker(self, voice: Sequence[Chunk]) -> str | None:
+        """Quién habla en ``voice``: su nombre o «sin identificar», también si nadie ha dado
+        permiso; ``None`` si no hay quien reconozca voces. Un fallo se apunta una vez, con su
+        tipo, y esa vez es «sin identificar»."""
+        recognition = self._recognition
+        if recognition is None:
+            return None
+        try:
+            who = recognition.who_by_voice(voice)
+        except Exception as error:
+            if not self._recognition_failed:
+                self._recognition_failed = True
+                _logger.error("Quien reconoce voces ha fallado (%s)", type(error).__name__)
+            who = None
+        return describe(who)
+
     def _deliver(
-        self, heard: str, operation_id: str, voice_heard_at: float, speech: _Speech
+        self,
+        heard: str,
+        operation_id: str,
+        voice_heard_at: float,
+        speech: _Speech,
+        speaker: str | None = None,
     ) -> HeardTurn | None:
         """Lo entrega a la charla, dice la respuesta mientras la escribe y deja pendiente lo
         que el modelo proponga recordar; ``None`` si la charla se fue a un modelo de fuera."""
@@ -912,6 +980,7 @@ class LocalListening[Chunk]:
                     on_completed=speech.finish,
                     on_gesture=speech.gesture,
                     only_on_this_computer=True,
+                    speaker=speaker,
                 )
             finally:
                 if reader is not None:

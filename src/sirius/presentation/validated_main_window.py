@@ -37,6 +37,7 @@ from sirius.application.project_lifecycle import ProjectLifecycleUseCase
 from sirius.application.propose_criticality import ProposeCriticalityUseCase
 from sirius.application.propose_decision import ProposeDecisionUseCase
 from sirius.application.propose_memory_suggestion import ProposeMemorySuggestionUseCase
+from sirius.application.recognition import Recognition
 from sirius.application.reject_memory_suggestion import RejectMemorySuggestionUseCase
 from sirius.application.restore_backup import RestoreBackupUseCase
 from sirius.application.robot_conversation import (
@@ -112,6 +113,7 @@ class ValidatedMainWindow(MainWindow):
         voice_test_use_case: VoiceTestUseCase | None = None,
         local_sight: LocalSight | None = None,
         sight_loop: SightLoop | None = None,
+        recognition: Recognition[Any, Any] | None = None,
         connections: ConnectionCloser | None = None,
         show_warning: Callable[[str, str], None] | None = None,
         show_information: Callable[[str, str], None] | None = None,
@@ -171,6 +173,7 @@ class ValidatedMainWindow(MainWindow):
             voice_test_use_case=voice_test_use_case,
             local_sight=local_sight,
             sight_loop=sight_loop,
+            recognition=recognition,
             connections=connections,
             show_warning=show_warning,
             show_information=show_information,

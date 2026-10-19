@@ -81,7 +81,7 @@ la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
-| 263 | 2026-10-19 | APROBADO | Reconocer por la cara y por la voz a quien dé permiso, con sus huellas cifradas | (sin sección Decisión) |
+| 263 | 2026-10-19 | APROBADO | Reconocer por la cara y por la voz a quien dé permiso, con sus huellas cifradas | Se adoptan las dos últimas. |
 | 262 | 2026-10-19 | APROBADO | Darle a Sirius ojos: la cámara y las caras en local | Se adopta la opción 3. |
 | 261 | 2026-10-19 | APROBADO | Hacer los gestos de una lista cerrada que el modelo escribe entre corchetes | Se adopta la opción 3. |
 | 260 | 2026-10-18 | APROBADO | Darle a Sirius su cara en la ventana, dibujada, viva y sin congelarse | Se adopta la opción 3. |
@@ -367,6 +367,7 @@ ADR-258).
 | `parada-segura-que-tira-lo-ya-pagado` | 2 | sí | 253, 226 |
 | `paso-largo-sin-plazo-propio` | 2 | sí | 228, 224 |
 | `pieza-correcta-a-la-que-no-llama-quien-la-necesita` | 2 | sí | 248, 197 |
+| `cerrojo-cogido-mientras-tarda` | 1 | sí | 263 |
 | `cierre-que-no-corta-todo-lo-que-pide` | 1 | sí | 255 |
 | `comparar-instantes-como-texto` | 1 | sí | 229 |
 | `condicion-construida-sin-el-mecanismo-que-la-hace-cumplible` | 1 | sí | 200 |
@@ -494,6 +495,10 @@ ADR-258).
 
 - **ADR-248** — un proveedor nuevo sin las salvaguardas del de antes. El tope de (lo hace cumplir `tests/integration/test_tope_de_salida_de_ollama.py`).
 - **ADR-197** — dos piezas del mismo árbol leen la misma clase de dato (lo hace cumplir `tests/engine/test_round_family_detector.py`).
+
+### `cerrojo-cogido-mientras-tarda`
+
+- **ADR-263** — un solo cerrojo para todo, cogido también mientras se cargan (lo hace cumplir `tests/unit/test_reconocer.py`).
 
 ### `cierre-que-no-corta-todo-lo-que-pide`
 

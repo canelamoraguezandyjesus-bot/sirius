@@ -55,10 +55,12 @@ import inspect
 import math
 import random
 import re
+import sqlite3
 import struct
 import tempfile
 import time
 from collections.abc import Callable, Mapping, Sequence
+from contextlib import closing
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
@@ -76,17 +78,23 @@ from lector_de_la_cara import PARTES, Lectura, lee
 from lector_de_la_cara import Dibujo as Dibujo
 from piezas_del_robot import PiezaPendiente, Piezas
 
+from sirius.adapters.recognition.engines import EcapaPrints, InsightFacePrints
+from sirius.adapters.secrets.fake import FakeSecretStore
 from sirius.adapters.vision.local_sight import TOOLS
+from sirius.application.presence import HEADING, IN_FRONT_LINE, NOBODY_LINE, SOMEONE, SPEAKER_LINE
+from sirius.application.recognition import UNKNOWN, EnrollmentStep
 from sirius.domain.gestures import GESTURES
 from sirius.infrastructure.paths import resolve_paths
 from sirius.ports.local_sight import CameraUnavailable, SeenFace, SightEngines
+from sirius.ports.recognition import Print, RecognitionEngines
+from sirius.ports.secrets import SecretStore
 from sirius.presentation.face_widget import FRAME_MS
 from sirius.presentation.main_window import SIGHT_REFRESH_MS
 
 #: Las letras de la tabla de piezas de ADR-259 que ya han entrado en ``main``. La A es la
 #: nota de arranque y estas pruebas; la B, su cara (ADR-260); la C, sus gestos (ADR-261);
-#: y la D, sus ojos (ADR-262).
-PIEZAS_ENTREGADAS: frozenset[str] = frozenset({"A", "B", "C", "D"})
+#: la D, sus ojos (ADR-262); y la E, reconocer a quien dé permiso (ADR-263).
+PIEZAS_ENTREGADAS: frozenset[str] = frozenset({"A", "B", "C", "D", "E"})
 
 #: Qué trae cada pieza, con las palabras de la tabla de ADR-259.
 PIEZAS: Mapping[str, str] = {
@@ -752,6 +760,46 @@ class _DetectorEnchufado:
         )
 
 
+class _CarasEnchufadas:
+    """El reconocedor de caras de mentira con la cara del puerto de Sirius."""
+
+    def __init__(self, caras: ReconocedorDeCarasDeMentira) -> None:
+        self._caras = caras
+        self.name = caras.nombre
+
+    def fingerprint(self, crop: bytes) -> Print:
+        return self._caras.huella(crop)
+
+
+class _VocesEnchufadas:
+    """El reconocedor de voces de mentira con la cara del puerto de Sirius: lee las
+    muestras de lo que sonó en el turno, juntas."""
+
+    def __init__(self, voces: ReconocedorDeVocesDeMentira) -> None:
+        self._voces = voces
+        self.name = voces.nombre
+
+    def fingerprint(self, chunks: Sequence[Audio]) -> Print | None:
+        return self._voces.huella(b"".join(audio.muestras for audio in chunks))
+
+
+def _lineas_de_quien_hay(peticion: Peticion, formato: str) -> list[str]:
+    """Quiénes nombran en «# Quién hay» de ``peticion`` las líneas con ``formato``: su
+    nombre, o «sin identificar»."""
+    antes, despues = formato.split("{who}")
+    lineas = peticion.instrucciones.splitlines()
+    if HEADING not in lineas:
+        return []
+    nombrados: list[str] = []
+    for linea in lineas[lineas.index(HEADING) + 1 :]:
+        if not linea:
+            break
+        if linea.startswith(antes) and linea.endswith(despues):
+            quien = linea[len(antes) : len(linea) - len(despues)]
+            nombrados.append(UNKNOWN if quien == SOMEONE else quien)
+    return nombrados
+
+
 # --- El conductor ---------------------------------------------------------------------
 
 
@@ -1059,34 +1107,63 @@ class ConductorDeOjos(ConductorDeVoz):
 
     # --- Pieza E: reconocer ---
 
+    def _almacen_de_secretos(self) -> SecretStore:
+        """El mismo al volver a abrir, como el almacén de secretos de Windows, que no se
+        borra al cerrar Sirius: ahí vive la llave de las huellas."""
+        secretos: SecretStore | None = getattr(self, "_secretos", None)
+        if secretos is None:
+            secretos = self._secretos = FakeSecretStore()
+        return secretos
+
+    def _motores_de_reconocer(self) -> Callable[[], RecognitionEngines[Any, Any]]:
+        """Quien reconoce caras y voces, con los dobles donde irían InsightFace y ECAPA."""
+
+        def motores() -> RecognitionEngines[Any, Any]:
+            return RecognitionEngines(_CarasEnchufadas(self.caras), _VocesEnchufadas(self.voces))
+
+        return motores
+
     def da_permiso(self, quien: str) -> None:
         """``quien``, delante de la cámara, da permiso para que Sirius le reconozca, por la
-        cara y por la voz, como lo haga la ventana."""
-        raise _pendiente("E")
+        cara y por la voz, como lo hace la ventana: empieza con su nombre, Sirius le mira
+        mientras está solo delante, un segundo, y dice su frase."""
+        reconocer = self._dependencias.recognition
+        reconocer.begin(quien)
+        self.mira_un_rato(1.0)
+        assert reconocer.wants_voice(), reconocer.enrollment.notice
+        self.oye_a(quien, f"Sirius, soy {quien}, y quiero que me reconozcas por la voz.")
+        assert reconocer.enrollment.step is EnrollmentStep.DONE, reconocer.enrollment.notice
 
     def quita_el_permiso(self, quien: str) -> None:
-        """``quien`` retira su permiso, como lo haga la ventana."""
-        raise _pendiente("E")
+        """``quien`` retira su permiso, como lo hace la ventana."""
+        self._dependencias.recognition.forget(quien)
 
     def quien_le_habla(self, peticion: Peticion) -> str | None:
         """Quién le dice ``peticion`` al modelo que le está hablando: su nombre o «sin
         identificar»; ``None`` si no se lo dice."""
-        raise _pendiente("E")
+        habla = _lineas_de_quien_hay(peticion, SPEAKER_LINE)
+        return habla[0] if habla else None
 
     def quienes_tiene_delante(self, peticion: Peticion) -> list[str] | None:
         """A quiénes le dice ``peticion`` al modelo que tiene delante ahora, por su nombre o
         «sin identificar», ordenados; ``None`` si no se lo dice."""
-        raise _pendiente("E")
+        if NOBODY_LINE in peticion.instrucciones.splitlines():
+            return []
+        delante = _lineas_de_quien_hay(peticion, IN_FRONT_LINE)
+        return sorted(delante) if delante else None
 
     def herramientas_de_reconocer(self) -> frozenset[str]:
         """Con qué reconocería Sirius en producción, leído de su montaje: los nombres de los
-        reconocedores de cara y de voz que carga la raíz de composición sin dobles."""
-        raise _pendiente("E")
+        reconocedores de cara y de voz que carga la raíz de composición sin dobles, los de
+        ``load_recognition_engines``."""
+        return frozenset({InsightFacePrints.name, EcapaPrints.name})
 
     def huellas_guardadas(self) -> int:
         """Cuántas huellas hay en la base, de caras y de voces, se usen o no: una huella
         marcada como borrada sigue guardada."""
-        raise _pendiente("E")
+        with closing(sqlite3.connect(self.base)) as conexion:
+            (cuantas,) = conexion.execute("SELECT COUNT(*) FROM recognition_prints").fetchone()
+        return int(cuantas)
 
     def huellas_en_claro(self) -> list[str]:
         """Dónde está guardada en claro alguna huella de las que dieron los reconocedores

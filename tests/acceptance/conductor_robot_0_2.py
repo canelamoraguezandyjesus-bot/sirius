@@ -86,6 +86,8 @@ from sirius.ports.llm import (
 )
 from sirius.ports.local_sight import SightEngines
 from sirius.ports.local_voice import ListeningEngines, SpeakingEngines
+from sirius.ports.recognition import RecognitionEngines
+from sirius.ports.secrets import SecretStore
 
 #: Las letras de la tabla de piezas de ADR-233 que ya han entrado en ``main``.
 #: La A es esta: la nota de arranque y estas pruebas.
@@ -681,7 +683,7 @@ class Conductor:
         dependencias = build_conversation_dependencies(
             self.base,
             self.carpeta / "copias",
-            secret_store=FakeSecretStore(),
+            secret_store=self._almacen_de_secretos(),
             ollama_transport=self._ollama.transporte() if self._ollama is not None else None,
             conversation_summarizer=(
                 _ResumidorEnchufado(self._resumidor) if self._resumidor is not None else None
@@ -695,6 +697,7 @@ class Conductor:
             speaking_engines=self._motores_de_hablar(),
             listening_clock=self._reloj_del_oido(),
             sight_engines=self._motores_de_los_ojos(),
+            recognition_engines=self._motores_de_reconocer(),
         )
         if not self._charla_por_ollama:
             dependencias.send_message_use_case.set_llm_provider(self._grabador)
@@ -724,6 +727,19 @@ class Conductor:
         enchufa aquí sus dobles.
         """
         return None
+
+    def _motores_de_reconocer(self) -> Callable[[], RecognitionEngines[Any, Any]] | None:
+        """Con qué reconoce caras y voces: en la 0.2, con nada.
+
+        ``None`` es lo de verdad, InsightFace y ECAPA, que no cargan mientras falten sus
+        modelos, y en las pruebas faltan. El conductor de la 0.4 enchufa aquí sus dobles.
+        """
+        return None
+
+    def _almacen_de_secretos(self) -> SecretStore:
+        """Dónde guarda Sirius sus secretos: uno de mentira, nuevo cada vez que se monta.
+        El conductor de la 0.4 guarda el mismo al volver a abrir, como el de Windows."""
+        return FakeSecretStore()
 
     def _reloj_del_oido(self) -> Callable[[], float]:
         """El reloj con el que el oído mide la charla: en la 0.2, el del sistema, porque
