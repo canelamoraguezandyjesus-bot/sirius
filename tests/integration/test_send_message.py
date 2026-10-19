@@ -576,7 +576,9 @@ def test_send_message_reports_deltas_in_order_via_on_delta(tmp_path: Path) -> No
 
     result = use_case.send_message("hola", on_delta=received.append)
 
-    assert received == ["uno ", "dos ", "tres"]
+    # Los trozos son los que da el filtro de los gestos: un blanco del final espera a lo que
+    # sigue, por si va delante de una etiqueta (ADR-261). Juntos dicen lo mismo.
+    assert received == ["uno", " dos", " tres"]
     assert result.sirius_message.content == "uno dos tres"
 
 
@@ -675,7 +677,7 @@ def test_send_message_cancelled_mid_stream_persists_the_partial_text_as_cancelle
         "hola", operation_id="op-cancel-mid", on_delta=_cancel_after_second_delta
     )
 
-    assert received == ["uno ", "dos "]
+    assert received == ["uno", " dos"]
     assert result.outcome is MessageStatus.CANCELLED
     assert result.sirius_message.status is MessageStatus.CANCELLED
     assert result.sirius_message.content == "uno dos "
@@ -966,7 +968,7 @@ def test_si_la_charla_cambia_de_modelo_a_mitad_esa_respuesta_sigue_con_el_suyo(
     use_case, apuntador = _con_modelo_que_cambia(tmp_path, antes)
 
     def cambia_a_mitad(texto: str) -> None:
-        if texto == "uno ":
+        if texto.strip() == "uno":
             use_case.set_llm_provider(despues)
 
     result = use_case.send_message("hola", on_delta=cambia_a_mitad)
@@ -988,7 +990,7 @@ def test_cancelar_tras_cambiar_de_modelo_para_la_respuesta_que_va_en_curso(
     use_case, _ = _con_modelo_que_cambia(tmp_path, antes)
 
     def cambia_y_cancela(texto: str) -> None:
-        if texto == "uno ":
+        if texto.strip() == "uno":
             use_case.set_llm_provider(despues)
             use_case.cancel("op-a-mitad")
 
@@ -1070,7 +1072,7 @@ def test_cortarle_por_voz_a_mitad_guarda_lo_escrito_como_respuesta_acabada(
         "hola", operation_id="op-cortada", on_delta=corta_tras_el_segundo
     )
 
-    assert recibidos == ["uno ", "dos "]
+    assert recibidos == ["uno", " dos"]
     # Corta la respuesta y, por si ya resumía, el resumen de ese turno.
     assert modelo.cancelados == ["op-cortada", "resumen-op-cortada"]
     assert result.outcome is MessageStatus.COMPLETED

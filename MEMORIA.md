@@ -26,13 +26,13 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **252**.
+- Decisiones (ADR): **255**.
 - Bloques del motor: 17 cerrado, 3 fuera_de_alcance.
-- Defectos registrados: 2 abierto, 102 cerrado.
+- Defectos registrados: 2 abierto, 104 cerrado.
 - Ideas aparcadas o descartadas: 12 aparcada, 3 descartada, 2 promovida.
 - Skills: **19**.
 - Investigaciones: **14** (fotos con fecha; caducan).
-- Documentos: **213**, de los que **136** no declaran fecha.
+- Documentos: **214**, de los que **136** no declaran fecha.
 
 ## Las skills: lo que ya costó averiguar dos veces (ADR-211)
 
@@ -81,6 +81,9 @@ la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
+| 261 | 2026-10-19 | APROBADO | Hacer los gestos de una lista cerrada que el modelo escribe entre corchetes | Se adopta la opción 3. |
+| 260 | 2026-10-18 | APROBADO | Darle a Sirius su cara en la ventana, dibujada, viva y sin congelarse | Se adopta la opción 3. |
+| 259 | 2026-10-18 | APROBADO | Empezar la 0.4 del robot, los ojos, por sus pruebas de aceptación | Se adopta la opción 2. |
 | 258 | 2026-10-18 | APROBADO | Hacer sitio en la memoria común nombrando cada ADR por su número, sin su ruta | La tabla de decisiones de `MEMORIA.md` nombra cada ADR por su número, con su fecha, su estado, su título y, desde el 174, su resumen, y ya no lleva la ruta de… |
 | 257 | 2026-10-18 | APROBADO | Apuntar lo que midió y decidió el propietario la noche del 17 al 18-10 | Pasan E-R02-04 y E-R02-05, y E-R02-03 no pasa. La prueba sin internet no se hace, y la 0.4 empieza sin esperar a sus pruebas. |
 | 256 | 2026-10-18 | APROBADO | Cortar la respuesta cuando el modelo se inventa el turno del propietario | La opción A: cada petición que lleva diálogo en sus instrucciones lleva sus comienzos de turno como paradas, y Ollama deja de escribir en cuanto el modelo… |
@@ -347,10 +350,10 @@ ADR-258).
 | Familia | Veces | Hay prueba que la haga cumplir | ADR |
 |---|---|---|---|
 | `regla-que-depende-de-que-alguien-se-acuerde` | 11 | no en todas | 227, 222, 220, 217, 216, 192, 191, 188, 182, 179, 174 |
+| `prueba-que-no-puede-ver-lo-que-vigila` | 6 | no en todas | 261, 259, 249, 247, 241, 238 |
 | `pieza-sin-lector` | 5 | no en todas | 210, 209, 207, 183, 175 |
 | `doble-mas-permisivo-que-la-herramienta-que-dobla` | 4 | sí | 251, 250, 242, 193 |
 | `prosa-que-el-cambio-deja-falsa` | 4 | no en todas | 223, 219, 211, 177 |
-| `prueba-que-no-puede-ver-lo-que-vigila` | 4 | no en todas | 249, 247, 241, 238 |
 | `regla-del-propietario-que-solo-vive-en-una-conversacion` | 4 | sí | 213, 208, 204, 195 |
 | `modelo-dentro-del-turno` | 3 | sí | 254, 243, 237 |
 | `vista-que-copia-el-corpus-del-que-venia-huyendo` | 3 | sí | 258, 218, 196 |
@@ -400,6 +403,15 @@ ADR-258).
 - **ADR-179** — escribir un guardián sobre una lista de inclusión (lo hace cumplir `tests/automation/test_piezas_con_llamante.py`).
 - **ADR-174** — escribir la regla de captura en un catálogo y dar por hecho que alguien la aplicará; los dos sitios de lecciones de este repositorio llevaban 48 ADR sin una sola entrada, con sus reglas escritas dentro. (lo hace cumplir `tests/automation/test_mina_de_lecciones.py`).
 
+### `prueba-que-no-puede-ver-lo-que-vigila`
+
+- **ADR-261** — cambiar lo que llega a trozos y ajustar solo las pruebas que (lo hace cumplir `tests/gui/test_conversation_ui.py`).
+- **ADR-259** — una huella de mentira con una marca en sus bytes la pierde en cuanto la pieza la pasa a números, y la prueba de «cifradas» pasaría con la huella guardada en claro. Volvió en la ronda 1 de Codex de tres maneras: la cara se leía de lo que decía que pintó, y un fotograma o una huella en base64 no se veían en la base. La raíz es la misma: el conductor miraba lo que la pieza dice, o una sola forma de lo guardado, y no lo que se ve. Ahora la cara se lee de los píxeles, y lo guardado se busca en todas sus formas que se deshacen sin llave, en la base igual que en el diario (lo hace cumplir `tests/acceptance/test_dobles_del_conductor_0_4.py`).
+- **ADR-249** — arreglar en la prueba lo que falla en el producto. El conductor de (lo hace cumplir `tests/gui/test_app_bootstrap.py`).
+- **ADR-247** — probar una orden que él ejecuta en su ordenador solo como es la (lo hace cumplir `tests/integration/test_medir_busqueda_de_memoria.py`).
+- **ADR-241** — escribir las pruebas de aceptación de una versión antes del (sin prueba que lo haga cumplir: ninguna prueba mide la fuerza de una prueba; lo que hay es).
+- **ADR-238** — una prueba de «no se hace X» que pasa con X puesto, porque su (lo hace cumplir `tests/acceptance/test_robot_0_2_memoria.py`).
+
 ### `pieza-sin-lector`
 
 - **ADR-210** — el tablero de incidencias seguiría llenándose de cosas (sin prueba que lo haga cumplir: ninguna prueba: cerrar una incidencia ocurre en GitHub, no).
@@ -421,13 +433,6 @@ ADR-258).
 - **ADR-219** — cambiar la regla (ADR-205) y dejar el aviso que la contaba al propietario diciendo la regla vieja; y dar por publicada una línea de un comentario sin haber leído nunca un comentario publicado. (lo hace cumplir `tests/automation/test_sirius_notifications.py`).
 - **ADR-211** — escribir un documento de método que nadie vuelve a (lo hace cumplir `tests/automation/test_skills.py`).
 - **ADR-177** — retirar un símbolo de producción y dejar vivas las frases que lo daban por cierto; al quitar `pide_contexto` quedaron falsos los once pasajes de prosa que la sección 6 de esta ficha enumera, 22 referencias del literal en las pruebas más otros cuatro pasajes de pruebas que describían el mecanismo sin nombrarlo, y el criterio de aceptación de M16 de la Arquitectura Técnica; y el barrido que las buscó en `scripts/` y `tests/` no miró en `docs/evolution/` ni podía ver lo que no escribe el literal, así que una lista solo se declara completa sobre el alcance del barrido que la produjo y el resto se dice cubierto por lectura. (sin prueba que lo haga cumplir: ninguna prueba: nada en este repositorio vigila la coherencia de la prosa de `docs/` con el árbol, y la ocurrencia que queda viva está en la Arquitectura Técnica, que la salvaguarda de #581 prohíbe tocar sin decisión del propietario.).
-
-### `prueba-que-no-puede-ver-lo-que-vigila`
-
-- **ADR-249** — arreglar en la prueba lo que falla en el producto. El conductor de (lo hace cumplir `tests/gui/test_app_bootstrap.py`).
-- **ADR-247** — probar una orden que él ejecuta en su ordenador solo como es la (lo hace cumplir `tests/integration/test_medir_busqueda_de_memoria.py`).
-- **ADR-241** — escribir las pruebas de aceptación de una versión antes del (sin prueba que lo haga cumplir: ninguna prueba mide la fuerza de una prueba; lo que hay es).
-- **ADR-238** — una prueba de «no se hace X» que pasa con X puesto, porque su (lo hace cumplir `tests/acceptance/test_robot_0_2_memoria.py`).
 
 ### `regla-del-propietario-que-solo-vive-en-una-conversacion`
 
@@ -580,7 +585,7 @@ ADR-258).
 
 - **ADR-256** — un modelo pequeño seguiría el diálogo de sus instrucciones hasta su tope (lo hace cumplir `tests/unit/test_paradas_de_turno.py`).
 
-Y **7** ADR declaran expresamente que no dejaron lección: 257, 240, 236, 235, 234, 233, 232.
+Y **8** ADR declaran expresamente que no dejaron lección: 260, 257, 240, 236, 235, 234, 233, 232.
 
 ## Los bloques del motor
 
@@ -699,6 +704,7 @@ mismo comando y vigila la misma prueba que esta vista (ADR-218).
 | sin fecha declarada | [Propuesta de separación entre Sirius y su motor de trabajo](docs/evolution/PROPUESTA_SEPARACION_SIRIUS_MOTOR.md) |
 | 2026-10-08 | [Pruebas de aceptación de la 0.2 del robot](docs/evolution/PRUEBAS_0.2_DEL_ROBOT.md) |
 | 2026-10-13 | [Pruebas de aceptación de la 0.3 del robot](docs/evolution/PRUEBAS_0.3_DEL_ROBOT.md) |
+| 2026-10-18 | [Pruebas de aceptación de la 0.4 del robot](docs/evolution/PRUEBAS_0.4_DEL_ROBOT.md) |
 | sin fecha declarada | [Evolución de Sirius después de 0.1](docs/evolution/README.md) |
 | sin fecha declarada | [Documento Rector - Evolución de Sirius después de 0.1 (enmendado por su §20 el 06-10-2026: Sirius es el software del robot)](docs/evolution/RECTOR.md) |
 | sin fecha declarada | [Sirius AI Core y estrategia de modelos — recolección de ideas](docs/evolution/SIRIUS_AI_CORE_AND_MODEL_STRATEGY.md) |

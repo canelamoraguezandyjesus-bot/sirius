@@ -49,6 +49,7 @@ from sirius.domain.conversation_mode import (
     detect_mode_command,
 )
 from sirius.domain.facts import fact_lines, memory_note
+from sirius.domain.gestures import Gesture, GestureFilter, Piece, gestures_line, strip_gestures
 from sirius.domain.identity import IdentityVersion, SeedExample
 from sirius.domain.own_memory import render_own_memory
 from sirius.domain.project import blockers_to_text
@@ -195,6 +196,9 @@ def render_instructions(context: Context) -> str:
     lines += [
         "# Mensajes recientes",
         *(render_recent_message(message) for message in context.recent_messages),
+        "",
+        # Pieza C de la 0.4 (ADR-261): la lista cerrada de gestos que hace su cara.
+        gestures_line(),
         "",
         "# Sugerir un recuerdo (opcional, SIRIUS-ARQ-0.2 §3.2)",
         "Si, y solo si, esta conversación contiene una preferencia o un dato "
@@ -371,6 +375,7 @@ class SendMessageUseCase:
         operation_id: str | None = None,
         on_delta: Callable[[str], None] | None = None,
         on_completed: Callable[[], None] | None = None,
+        on_gesture: Callable[[str], None] | None = None,
         extra_instructions: str = "",
         only_on_this_computer: bool = False,
     ) -> SendMessageResult:
@@ -378,6 +383,11 @@ class SendMessageUseCase:
 
         ``on_delta`` is invoked synchronously, once per text fragment, in the
         caller's thread — it never touches persistence or Qt itself.
+
+        Lo que escribe el modelo pasa antes por ``GestureFilter`` (pieza C de la 0.4,
+        ADR-261): ``on_delta`` recibe el texto sin etiquetas, lo que se guarda tampoco las
+        lleva, y ``on_gesture`` recibe el nombre de cada gesto de la lista, en el mismo
+        hilo y en su sitio: después del texto que va delante de él y antes del de detrás.
 
         ``on_completed`` se llama una vez, en el mismo hilo, si la respuesta acaba bien:
         en cuanto está guardada entera y antes de lo que la charla hace después del turno.
@@ -405,7 +415,13 @@ class SendMessageUseCase:
         self._in_flight[operation_id] = provider
         try:
             return self._send(
-                provider, user_text, operation_id, on_delta, on_completed, extra_instructions
+                provider,
+                user_text,
+                operation_id,
+                on_delta,
+                on_completed,
+                on_gesture,
+                extra_instructions,
             )
         finally:
             self._in_flight.pop(operation_id, None)
@@ -419,6 +435,7 @@ class SendMessageUseCase:
         operation_id: str,
         on_delta: Callable[[str], None] | None,
         on_completed: Callable[[], None] | None,
+        on_gesture: Callable[[str], None] | None,
         extra_instructions: str,
     ) -> SendMessageResult:
         if self._memory_commands is not None:
@@ -460,23 +477,33 @@ class SendMessageUseCase:
         error_kind: LLMErrorKind | None = None
         final_text = ""
         memory_suggestion: str | None = None
+        gestures = GestureFilter()
+
+        def deliver(pieces: list[Piece]) -> None:
+            for piece in pieces:
+                if isinstance(piece, Gesture):
+                    if on_gesture is not None:
+                        on_gesture(piece.name)
+                    continue
+                accumulated.append(piece)
+                if on_delta is not None:
+                    on_delta(piece)
 
         for event in provider.stream_response(request):
             if isinstance(event, LLMCompleted):
+                deliver(gestures.finish())
                 status = MessageStatus.COMPLETED
-                final_text = event.text
+                final_text, _ = strip_gestures(event.text)
                 memory_suggestion = event.memory_suggestion
             elif isinstance(event, LLMCancelled):
                 status = MessageStatus.CANCELLED
-                final_text = event.partial_text
+                final_text, _ = strip_gestures(event.partial_text, cut=True)
             elif isinstance(event, LLMError):
                 status = MessageStatus.FAILED
                 error_kind = event.kind
-                final_text = event.partial_text
+                final_text, _ = strip_gestures(event.partial_text, cut=True)
             else:
-                accumulated.append(event.text)
-                if on_delta is not None:
-                    on_delta(event.text)
+                deliver(gestures.feed(event.text))
 
         if not final_text and status is not MessageStatus.COMPLETED:
             final_text = "".join(accumulated)

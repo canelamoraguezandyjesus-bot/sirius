@@ -166,3 +166,6 @@ peticiones sin diálogo no cambien. Las rondas se anotan aquí.
     `LLMRequest` diga las suyas.
   - Familia: la de la lección. Es la primera ronda; si la segunda la repite, se deja de
     parchear y se sacan las paradas del propio texto que lee el modelo.
+- **Ronda 2 de Codex**, sobre `4d32f5ef`, pedida con la batería y Quality en verde y con la
+  pregunta de si el enfoque estaba mal: limpia, «Didn't find any major issues». La #701 se
+  fusionó aplastada el 19-10-2026 en `5931f80e`.

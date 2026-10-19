@@ -171,6 +171,13 @@ class Speaker[Sound](Protocol):
         ...
 
     @property
+    def level(self) -> float:
+        """Lo fuerte que suena ahora lo que dice, de 0, callado, a 1, a toda voz: con eso
+        mueve la boca la cara (pieza B de ADR-259). No espera a nadie: lo lee la ventana
+        unas 30 veces por segundo mientras la charla trabaja. No falla."""
+        ...
+
+    @property
     def started(self) -> int:
         """Cuántos de los sonidos que le han dado desde que se abrió han empezado a sonar.
 

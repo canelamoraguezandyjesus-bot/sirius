@@ -230,6 +230,20 @@ def test_el_altavoz_apunta_lo_que_suena_devuelve_el_eco_y_sabe_cuando_le_paran()
     assert altavoz.sonando is None
 
 
+def test_el_altavoz_suena_con_el_volumen_de_la_prueba_solo_mientras_algo_esta_en_el_aire() -> None:
+    # Pieza B de la 0.4 (ADR-260): la boca de la cara sigue a lo fuerte que suena.
+    altavoz = AltavozDeMentira(MicroDeMentira())
+    altavoz.volumen = 0.7
+    assert altavoz.nivel == 0.0, "sin nada en el aire no suena nada"
+
+    altavoz.sigue_sonando = True
+    altavoz.suena(Sonido("Hombre, ¿qué tal?", de_quien="sirius"))
+    assert altavoz.nivel == 0.7
+
+    altavoz.acaba()
+    assert altavoz.nivel == 0.0, "al acabar se calla, aunque el volumen siga puesto"
+
+
 def test_el_modelo_apunta_cuando_acabo_y_puede_contestar_a_trozos_con_pausa() -> None:
     modelo = ModeloDeMentira(_respuestas(()))
     peticion = LLMRequest(operation_id="op-1", instructions="x", input_text="hola")

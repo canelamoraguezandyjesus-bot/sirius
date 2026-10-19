@@ -1773,3 +1773,35 @@ defectos:
     ficheros:
       - src/sirius_engine/memoria.py
       - tests/engine/test_memoria.py
+  # ADR-259: las pruebas de la 0.4 buscan huellas guardadas en claro. El primer borrador
+  # del conductor marcaba cada huella de mentira con unos bytes y buscaba la marca, y una
+  # pieza que pasara la huella a números la habría perdido: la prueba de «cifradas» pasaba
+  # con la huella en claro. Se vio al repasar los dobles, antes del primer commit; ahora
+  # son unos números de longitud uno, como los de verdad, y se buscan en cada forma en que
+  # Python, numpy y SQLite guardan unos números.
+  - id: H-259
+    titulo: Una huella de mentira marcada en sus bytes se perdía al pasarla a números, y la prueba de «cifradas» pasaba con ella en claro
+    bloque: producto
+    gravedad: media
+    estado: cerrado
+    cerrado_por: 692946e276f5902d5fa7716f3fe6fd443ec11e12
+    pr: 702
+    adr: 259
+    ficheros:
+      - tests/acceptance/conductor_robot_0_4.py
+      - tests/acceptance/test_dobles_del_conductor_0_4.py
+  # ADR-261: desde la pieza C, el filtro de gestos guarda hasta el trozo siguiente un blanco
+  # o unas comillas invertidas del final. Dos pruebas de la ventana esperaban verlos mientras
+  # llegaba la respuesta, y pasaban por carrera con su modelo de mentira, que acaba solo a
+  # los 5 s: en local siempre, y en Quality, sobre la #702, una fallo. Ahora esperan lo que
+  # se ve mientras llega, en menos tiempo del que tarda el modelo en acabar solo.
+  - id: H-261
+    titulo: Dos pruebas de la ventana esperaban ver mientras llega lo que el filtro de gestos guarda hasta el trozo siguiente, y pasaban por carrera
+    bloque: producto
+    gravedad: media-baja
+    estado: cerrado
+    cerrado_por: 03e1eb6930701bb5fb9c736f39f4c1a9ff3f6774
+    pr: 702
+    adr: 261
+    ficheros:
+      - tests/gui/test_conversation_ui.py

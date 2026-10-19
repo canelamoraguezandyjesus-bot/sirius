@@ -70,6 +70,9 @@ Las cifras son las que pegó de su terminal y de sus capturas, en esta misma ses
   (gemma3:4b: 16, mistral:7b: 0, qwen3:4b-instruct: 4).».
 - La hoja de las preguntas trampa: «Te lleva la contraria en 38 de 40.» y «El juez dice
   otra cosa que tú en 2 de 40».
+- La revisión de la #701, que lo trajo: la ronda 1 de Codex no encontró nada de este ADR, y
+  la ronda 2, sobre `4d32f5ef`, fue limpia. Se fusionó aplastada el 19-10-2026 en
+  `5931f80e`.
 
 ## Consecuencias
 

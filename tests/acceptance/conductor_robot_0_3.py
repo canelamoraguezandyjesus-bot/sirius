@@ -833,12 +833,17 @@ class AltavozDeMentira:
     Como el altavoz de verdad le da a la cancelación de eco lo que suena, este apunta qué
     tuvo en el aire y durante qué capturas del micro (``en_el_aire``): desde la que captó
     al sonar, la copia del eco, hasta la última antes de acabar o de que le paren (pieza E).
+
+    Lo fuerte que suena (``nivel``) es ``volumen`` mientras algo sigue en el aire, y 0
+    cuando nada suena: ``volumen``, de 0 a 1, lo pone la prueba, como las dos banderas
+    (pieza B de la 0.4, ADR-259).
     """
 
     def __init__(self, micro: MicroDeMentira) -> None:
         self._micro = micro
         self.con_eco = False
         self.sigue_sonando = False
+        self.volumen = 0.0
         self._sonados: list[tuple[Sonido, float]] = []
         self._sonando: Sonido | None = None
         self._parado_en: float | None = None
@@ -857,6 +862,11 @@ class AltavozDeMentira:
     def parado_en(self) -> float | None:
         """Cuándo mandó Sirius callar lo que sonaba; ``None`` si nunca lo hizo."""
         return self._parado_en
+
+    @property
+    def nivel(self) -> float:
+        """Lo fuerte que suena: ``volumen`` si algo sigue en el aire, y 0 si no."""
+        return self.volumen if self._sonando is not None else 0.0
 
     def en_el_aire(self, captura: int) -> tuple[str, ...]:
         """Lo que tenía en el aire cuando el micro hizo su captura ``captura``."""
@@ -961,6 +971,10 @@ class _AltavozEnchufado:
 
     def stop(self) -> None:
         self._altavoz.para()
+
+    @property
+    def level(self) -> float:
+        return self._altavoz.nivel
 
     @property
     def started(self) -> int:

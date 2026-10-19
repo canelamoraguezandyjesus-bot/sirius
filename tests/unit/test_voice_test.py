@@ -125,6 +125,10 @@ class _Altavoz:
         self.callados += 1
 
     @property
+    def level(self) -> float:
+        return 0.0
+
+    @property
     def started(self) -> int:
         return len(self.sonados)
 

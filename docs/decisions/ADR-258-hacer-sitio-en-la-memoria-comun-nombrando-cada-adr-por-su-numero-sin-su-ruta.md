@@ -104,6 +104,9 @@ propietario lo apunta con el margen que queda.
 - Tres mutaciones del generador, y las tres caen: volver a poner la ruta en la fila
   (fallan 4), quitar de la cabecera dónde se abre cada ADR (falla 1) y dejar la fila
   sin título (fallan 2). El fichero se restaura byte a byte, con su resumen sha256.
+- La revisión de la #701, que lo trajo: la ronda 1 de Codex no encontró nada de este ADR, y
+  la ronda 2, sobre `4d32f5ef`, fue limpia. Se fusionó aplastada el 19-10-2026 en
+  `5931f80e`.
 
 ## Consecuencias
 

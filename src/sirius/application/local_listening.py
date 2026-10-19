@@ -109,6 +109,29 @@ _logger = get_logger(__name__)
 PRE_ROLL_CHUNKS = 16
 #: Cada cuánto mira el micro, mientras la charla contesta, el hilo que lo lee entonces.
 MEANWHILE_SECONDS = 0.03
+#: Con qué se marca, entre lo que se corta en frases, dónde escribió la charla cada gesto
+#: (pieza C de la 0.4, ADR-261): los caracteres de uso privado de Unicode, de U+E000 a
+#: U+F8FF, uno por gesto del turno y en orden. La preparación para la voz los deja pasar
+#: como una letra, y la frase que lleva uno es la de su gesto; si una se pierde, como
+#: dentro de un código, que no se dice, los demás siguen yendo con el suyo. Lo que escribe
+#: el modelo no los lleva nunca: se le quitan antes.
+_FIRST_MARK = 0xE000
+_MARKS = 0x1900
+
+
+def gesture_mark(number: int) -> str:
+    """La marca del gesto ``number`` de un turno, desde el 0."""
+    return chr(_FIRST_MARK + number % _MARKS)
+
+
+def _is_mark(char: str) -> bool:
+    return _FIRST_MARK <= ord(char) < _FIRST_MARK + _MARKS
+
+
+def _without_marks(text: str) -> str:
+    return "".join(char for char in text if not _is_mark(char))
+
+
 #: Lo que dice si la charla va a un modelo de fuera de este ordenador.
 CHAT_LEAVES = (
     "No puedo oírte: la charla va ahora a un modelo de fuera de este ordenador, y lo que "
@@ -132,10 +155,12 @@ class Chat(Protocol):
         operation_id: str | None = None,
         on_delta: Callable[[str], None] | None = None,
         on_completed: Callable[[], None] | None = None,
+        on_gesture: Callable[[str], None] | None = None,
         only_on_this_computer: bool = False,
     ) -> SendMessageResult:
         """Lo entrega a la charla con la operación ``operation_id``. Le pasa a ``on_delta``
-        lo que va escribiendo y, si acaba bien, llama a ``on_completed`` en cuanto la
+        lo que va escribiendo, sin etiquetas, y a ``on_gesture`` cada gesto de la lista en
+        su sitio entre lo escrito; si acaba bien, llama a ``on_completed`` en cuanto la
         respuesta está guardada, antes de lo que la charla hace después del turno. Con
         ``only_on_this_computer``, solo si el modelo con el que lo envía, el mismo que
         comprueba, es de este ordenador, y si no, ``ChatLeavesThisComputer`` sin guardar ni
@@ -357,6 +382,9 @@ class LocalListening[Chunk]:
         self._before_loading_voice: Callable[[], None] = lambda: None
         #: Lo que está diciendo, para callarlo si se para.
         self._speech: _Speech | None = None
+        #: Lo último que empezó a decir, aunque la charla ya lo haya escrito entero: de ahí
+        #: lee la cara sus gestos mientras suena (pieza C de la 0.4, ADR-261).
+        self._last_speech: _Speech | None = None
         #: Lo que dijo y aún suena, ya entregado a la charla, con su mensaje: si le cortan,
         #: se calla y se apunta hasta dónde se oyó (pieza E, ADR-245).
         self._still_sounding: _Sounding | None = None
@@ -383,6 +411,34 @@ class LocalListening[Chunk]:
     def conversation_seconds(self) -> float:
         """Lo que dura la charla desde que Sirius calla: hasta entonces sobra su nombre."""
         return self._addressing.conversation_seconds
+
+    @property
+    def clock(self) -> Callable[[], float]:
+        """El reloj con que mide la charla: la cara vive con el mismo (pieza B, ADR-259)."""
+        return self._clock
+
+    @property
+    def speaking_level(self) -> float:
+        """Lo fuerte que suena ahora lo que dice, de 0 a 1; 0 si no tiene voz cargada.
+
+        No coge el cerrojo: lo lee la cara desde el hilo de la ventana unas 30 veces por
+        segundo, y el cerrojo lo puede tener la charla todo lo que tarde el modelo.
+        """
+        speaking = self._speaking
+        return speaking.speaker.level if speaking is not None else 0.0
+
+    @property
+    def speaking_gestures(self) -> tuple[str, tuple[str, ...]]:
+        """Los gestos de lo último que dijo cuya frase ya ha empezado a sonar, en orden, con
+        la operación de su turno, para que la cara sepa cuáles son nuevos (pieza C de la
+        0.4, ADR-261). ``("", ())`` si aún no ha dicho nada.
+
+        No coge el cerrojo, por lo mismo que ``speaking_level``.
+        """
+        speech = self._last_speech
+        if speech is None:
+            return "", ()
+        return speech.operation_id, speech.gestures_started()
 
     def watch(self, watcher: ListeningWatcher | None) -> None:
         """Quien enseña la escucha a partir de ahora; ``None``, nadie."""
@@ -778,6 +834,7 @@ class LocalListening[Chunk]:
                     meanwhile=self._hear_meanwhile,
                 )
                 self._speech = speech
+                self._last_speech = speech
             turn = self._deliver(heard, operation_id, closed.voice_heard_at, speech)
         finally:
             if watcher is not None:
@@ -804,6 +861,7 @@ class LocalListening[Chunk]:
                     operation_id=operation_id,
                     on_delta=speech.hear,
                     on_completed=speech.finish,
+                    on_gesture=speech.gesture,
                     only_on_this_computer=True,
                 )
             finally:
@@ -990,6 +1048,13 @@ class _Speech:
     cancelador, el oído lee ahí el micro, además de lo que lee su hilo, para no decir otra
     frase encima de quien ya habla. Si le cortan (``cut``), queda lo que se oyó: las frases
     que el altavoz llegó a empezar (pieza E, ADR-245).
+
+    Cada gesto que escribe la charla (``gesture``) va con la frase en que cae: se marca
+    ahí, entre lo que se corta en frases, con su ``gesture_mark``, y la frase que sale con
+    la marca es la suya. Si la frase se queda sin nada que decir, como la de una etiqueta
+    al final, va con la frase de antes. La cara lo hace cuando esa frase empieza a sonar
+    (``gestures_started``); lo que no llega a sonar, por un corte o un fallo, no lo hace
+    (pieza C de la 0.4, ADR-261).
     """
 
     def __init__(
@@ -1022,6 +1087,10 @@ class _Speech:
         self.first_sound_at: float | None = None
         #: Lo que se oyó cuando le cortaron; ``None`` si no le han cortado.
         self.heard_when_cut: str | None = None
+        #: Los gestos que la charla ha escrito, en orden: el número de cada uno es su marca.
+        self._gestures: list[str] = []
+        #: Cada gesto con el número de la frase con que va, entre las del altavoz.
+        self._placed: list[tuple[int, str]] = []
 
     @property
     def spoke(self) -> bool:
@@ -1032,7 +1101,23 @@ class _Speech:
         """Lo nuevo que ha escrito la charla: deja al oído mirar el micro, por si le hablan
         encima, y dice las frases que ya están cerradas."""
         self._meanwhile()
-        self._say(lambda: self._cutter.feed(text))
+        written = _without_marks(text)
+        self._say(lambda: self._cutter.feed(written))
+
+    def gesture(self, name: str) -> None:
+        """La charla ha escrito aquí el gesto ``name``: va con la frase en que cae."""
+        mark = gesture_mark(len(self._gestures))
+        self._gestures.append(name)
+        self._say(lambda: self._cutter.feed(mark))
+
+    def gestures_started(self) -> tuple[str, ...]:
+        """Los gestos cuya frase ya ha empezado a sonar, en orden. Sin el cerrojo del oído:
+        lo lee la cara desde el hilo de la ventana."""
+        base = self._base
+        if base is None:
+            return ()
+        sounded = self._engines.speaker.started - base
+        return tuple(name for number, name in list(self._placed) if number < sounded)
 
     def finish(self) -> None:
         """La charla acabó bien: dice lo que quedaba."""
@@ -1062,7 +1147,15 @@ class _Speech:
             return
         what = "la voz"
         try:
-            for sentence in cut():
+            for marked in cut():
+                numbers = [ord(char) - _FIRST_MARK for char in marked if _is_mark(char)]
+                gestures = [self._gestures[n] for n in numbers if n < len(self._gestures)]
+                sentence = " ".join(_without_marks(marked).split()) if numbers else marked
+                if not sentence.strip(" .\t\n"):
+                    # Nada que decir: sus gestos van con la frase de antes, o con la
+                    # primera si aún no ha dicho ninguna.
+                    self._placed += [(max(len(self._said) - 1, 0), name) for name in gestures]
+                    continue
                 if not self._started:
                     self._started = True
                     self._before_first()
@@ -1075,6 +1168,7 @@ class _Speech:
                         return
                     if self._base is None:
                         self._base = speaker.started
+                    self._placed += [(len(self._said), name) for name in gestures]
                     speaker.play(sound)
                     self._said.append(sentence)
                 if self.first_sound_at is None:

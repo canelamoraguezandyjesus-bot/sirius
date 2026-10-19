@@ -116,6 +116,7 @@ class _Voz:
 class _Altavoz:
     playing = False
     latency = 0.0
+    level = 0.0
 
     def __init__(self) -> None:
         #: Suena en el acto: todo lo que toma empieza a sonar.
