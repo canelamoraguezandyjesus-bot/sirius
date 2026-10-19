@@ -23,6 +23,10 @@ Lo que garantiza por construcción:
   no deja de llegar texto, el tope de lectura no salta nunca. Se pide uno,
   ``num_predict``, el «Máximo de tokens de salida» de los ajustes, 4.096 si no
   dicen otro (ADR-248). Una respuesta cortada por él acaba como cualquier otra.
+- **Una respuesta que no sigue el diálogo.** Las instrucciones llevan ejemplos y
+  mensajes escritos por turnos, y un modelo pequeño puede seguir escribiendo el del
+  otro y contestárselo. La petición trae los comienzos de turno como ``stop``, y
+  Ollama deja de escribir en cuanto el modelo empieza uno (incidencia #700).
 - **Cortar no espera al siguiente trozo.** Mientras Ollama lee la pregunta no
   envía nada, y un corte que esperara al siguiente trozo esperaría a que
   acabara de leerla. ``cancel`` cuelga la conexión de esa petición, y quien la
@@ -337,6 +341,8 @@ class OllamaChatProvider:
             "keep_alive": _KEEP_ALIVE,
             "options": {"num_ctx": self._num_ctx, "num_predict": num_predict},
         }
+        if request.stop:
+            body["options"]["stop"] = list(request.stop)
         if self._turns_off_thinking(request):
             # Solo se apaga, nunca se pide: la charla va como siempre, sin «think».
             body["think"] = False

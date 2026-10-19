@@ -26,9 +26,9 @@
 
 ## Qué hay, en números
 
-- Decisiones (ADR): **249**.
+- Decisiones (ADR): **252**.
 - Bloques del motor: 17 cerrado, 3 fuera_de_alcance.
-- Defectos registrados: 2 abierto, 100 cerrado.
+- Defectos registrados: 2 abierto, 102 cerrado.
 - Ideas aparcadas o descartadas: 12 aparcada, 3 descartada, 2 promovida.
 - Skills: **19**.
 - Investigaciones: **14** (fotos con fecha; caducan).
@@ -66,268 +66,273 @@ escribe una nueva lo dice `crear-una-skill`.
 
 ## Qué se decidió: los ADR, del más reciente al más antiguo
 
-**Están todos**: el índice completo -número, fecha, estado, título y enlace-
-se queda entero aquí, porque saber QUÉ se decidió es la orientación que esta
-vista existe para dar.
+**Están todos**: el índice completo -número, fecha, estado y título- se queda
+entero aquí, porque saber QUÉ se decidió es la orientación que esta vista
+existe para dar. Cada uno se abre por su número, en
+`docs/decisions/ADR-NNN-*.md`: su ruta repetía el título y
+pesaba la cuarta parte de la vista (ADR-258).
 
 El resumen -el primer párrafo de la sección «Decisión»- solo lo llevan los ADR
-desde el 174. De los anteriores está en el ADR que la fila
-enlaza, a un clic, sin copiarlo aquí. No es una poda: el texto no se ha ido a
-ninguna parte -aquí no se borra nada-. Es que llevar el párrafo de las ciento
-y pico decisiones viejas convertía esta vista en el corpus del que venía
-huyendo, y la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
+desde el 174. De los anteriores está en el propio ADR,
+sin copiarlo aquí. No es una poda: el texto no se ha ido a ninguna parte
+-aquí no se borra nada-. Es que llevar el párrafo de las ciento y pico
+decisiones viejas convertía esta vista en el corpus del que venía huyendo, y
+la dejó a 630 bytes de no caber en una sola lectura (ADR-196).
 
 | ADR | Fecha | Estado | Decisión | Resumen |
 |---|---|---|---|---|
-| [255](docs/decisions/ADR-255-cerrar-sirius-cuelga-todo-lo-que-esta-en-vuelo.md) | 2026-10-17 | APROBADO | Cerrar Sirius cuelga todo lo que está en vuelo | La opción B, con la orden de captura esperada. C queda como segunda línea solo si, con B, la salida siguiera esperando por trabajo que no es red. |
-| [254](docs/decisions/ADR-254-al-cortarle-dejar-de-escribir-la-respuesta.md) | 2026-10-17 | APROBADO | Al cortarle, dejar de escribir la respuesta | La opción A. Cortarle por voz no es cancelar el envío: lo dicho queda dicho, ahora solo hasta donde llegó a escribir. Es el modelo de ADR-245 frente a la letra… |
-| [253](docs/decisions/ADR-253-arreglar-lo-que-salio-del-repaso-final-antes-de-sus-pruebas.md) | 2026-10-17 | APROBADO | Arreglar lo que salió del repaso final antes de sus pruebas | Un arreglo por punto, en los ficheros donde vive el fallo: `127.0.0.1`. Los seis adaptadores de Ollama, la charla, las huellas y los cuatro |
-| [252](docs/decisions/ADR-252-dejar-la-voz-y-la-ventana-listas-para-sus-pruebas-de-voz.md) | 2026-10-17 | APROBADO | Dejar la voz y la ventana listas para sus pruebas de voz | Tope propio del juez, cortarle colgando su conexión, `think` apagado con reintento, la APM soltada al salir y migrar sin el registro de Alembic. Son 1(a)… |
-| [251](docs/decisions/ADR-251-ajustar-la-memoria-a-lo-que-midio-su-ordenador-e-r02-04-y-e-r02-05.md) | 2026-10-17 | APROBADO | Ajustar la memoria a lo que midió su ordenador: E-R02-04 y E-R02-05 | La opción 1. Las decisiones son técnicas y caben en lo que permite ADR-238, que dejó el umbral para que lo moviera lo que dijera E-R02-04; las toma la sesión… |
-| [250](docs/decisions/ADR-250-que-la-voz-de-personaje-cargue-con-su-marca-de-agua.md) | 2026-10-17 | APROBADO | Que la voz de personaje cargue con su marca de agua | La opción 1: `setuptools<82` en el extra `personaje`. |
-| [249](docs/decisions/ADR-249-que-migrar-la-base-no-apague-el-diario-de-sirius.md) | 2026-10-16 | APROBADO | Que migrar la base no apague el diario de Sirius | La opción 1: `disable_existing_loggers=False` en el `fileConfig` de Alembic. |
-| [248](docs/decisions/ADR-248-poner-tope-a-lo-que-escribe-ollama-y-apuntar-sus-errores.md) | 2026-10-16 | APROBADO | Poner tope a lo que escribe Ollama y apuntar sus errores | La opción 1: `num_predict` con el «Máximo de tokens de salida» de los ajustes. |
-| [247](docs/decisions/ADR-247-dar-con-una-orden-la-cuenta-de-las-50-marcas-de-e-r02-02.md) | 2026-10-16 | APROBADO | Dar con una orden la cuenta de las 50 marcas de E-R02-02 | La opción 1: una orden da la cuenta de las marcas, y la de E-R02-05 mide su base y acaba. |
-| [246](docs/decisions/ADR-246-elegir-su-voz-a-ciegas-la-pieza-f-de-la-voz.md) | 2026-10-16 | APROBADO | Elegir su voz a ciegas: la pieza F de la voz | La opción 1: la voz de personaje es la voz de serie de Chatterbox, sin audio de nadie; y la voz elegida vale desde el turno siguiente, sin volver a abrir… |
-| [245](docs/decisions/ADR-245-cortarle-la-pieza-e-de-la-voz.md) | 2026-10-15 | APROBADO | Cortarle: la pieza E de la voz | La opción 2; el micro leído todo el rato que la charla contesta, por un hilo aparte y antes de decir cada frase; y el corte apuntado en el mensaje de Sirius.… |
-| [244](docs/decisions/ADR-244-escuchar-siempre-la-pieza-d-de-la-voz.md) | 2026-10-15 | APROBADO | Escuchar siempre: la pieza D de la voz | Se adopta la opción 3, y la charla dura 10 s, desde que Sirius calla hasta que empieza a oírse la voz del turno siguiente. Los turnos de voz no despiertan al… |
-| [243](docs/decisions/ADR-243-hablar-en-local-la-pieza-c-de-la-voz.md) | 2026-10-15 | APROBADO | Hablar en local: la pieza C de la voz | Se adopta la opción 2. |
-| [242](docs/decisions/ADR-242-oir-en-local-la-pieza-b-de-la-voz.md) | 2026-10-14 | APROBADO | Oír en local: la pieza B de la voz | Se adopta la opción 2. Lo decide la sesión (ADR-204: no es dinero, ni salud, ni cambia lo que el propietario ve u oye). |
-| [241](docs/decisions/ADR-241-empezar-la-0.3-del-robot-la-voz-por-sus-pruebas-de-aceptacion.md) | 2026-10-13 | APROBADO | Empezar la 0.3 del robot, la voz, por sus pruebas de aceptación | Se adopta la opción 2. |
-| [240](docs/decisions/ADR-240-ensenar-a-sirius-en-cada-turno-los-tres-ejemplos-que-mas-se-parecen-a-la-charla-darle-sus-palabras-sueltas-y-que-diga-el-lo-que-contesta-a-las-ordenes-de-memoria.md) | 2026-10-08 | APROBADO | Enseñar a Sirius en cada turno los tres ejemplos que más se parecen a la charla, darle sus palabras sueltas y que diga él lo que contesta a las órdenes de memoria | La opción 2, con lo que describe la nota de arranque. En concreto: Los ejemplos, como datos. `identity_versions.examples` guarda, en JSON, quién habla, |
-| [239](docs/decisions/ADR-239-guardar-los-hechos-con-su-fecha-y-quien-lo-dijo-como-recuerdos-sonar-sin-leer-a-sirius-y-obedecer-las-ordenes-de-memoria-sin-pasar-por-el-modelo.md) | 2026-10-07 | APROBADO | Guardar los hechos con su fecha y quién lo dijo como recuerdos, soñar sin leer a Sirius y obedecer las órdenes de memoria sin pasar por el modelo | Se adopta la opción 2. |
-| [238](docs/decisions/ADR-238-buscar-los-recuerdos-por-significado-dentro-de-sirius.db-y-sacar-a-ollama-de-cada-respuesta.md) | 2026-10-07 | APROBADO | Buscar los recuerdos por significado dentro de sirius.db y sacar a Ollama de cada respuesta | Se adopta la opción 2. |
-| [237](docs/decisions/ADR-237-dar-a-sirius-memoria-propia-un-juez-y-las-40-preguntas-trampa.md) | 2026-10-07 | APROBADO | Dar a Sirius memoria propia, un juez y las 40 preguntas trampa | Se adopta la opción 2 para la memoria propia, y las preguntas trampa se contestan aparte, como el primer turno de una charla nueva. |
-| [236](docs/decisions/ADR-236-dar-a-la-charla-de-sirius-sus-modos-su-recordatorio-su-resumen-y-los-dos-botones.md) | 2026-10-07 | APROBADO | Dar a la charla de Sirius sus modos, su recordatorio, su resumen y los dos botones | Se adopta la opción 2, y el resumen se hace al acabar el turno que lo dispara. |
-| [235](docs/decisions/ADR-235-dar-a-sirius-la-semilla-del-robot-hecha-con-las-marcas-y-las-palabras-del-propietario.md) | 2026-10-07 | APROBADO | Dar a Sirius la semilla del robot hecha con las marcas y las palabras del propietario | Se adopta la opción 2. |
-| [234](docs/decisions/ADR-234-llevar-la-charla-de-sirius-al-ollama-de-este-ordenador-y-elegir-su-modelo-a-ciegas.md) | 2026-10-07 | APROBADO | Llevar la charla de Sirius al Ollama de este ordenador y elegir su modelo a ciegas | Se adoptan la opción 1 y, para la prueba, una ventana dentro de Sirius. |
-| [233](docs/decisions/ADR-233-empezar-la-0.2-del-robot-por-su-semilla-y-por-sus-pruebas-de-aceptacion.md) | 2026-10-07 | APROBADO | Empezar la 0.2 del robot por su semilla y por sus pruebas de aceptación | Se adopta la opción 2. |
-| [232](docs/decisions/ADR-232-hacer-de-sirius-solo-el-software-del-robot-y-revisar-el-roadmap-primero-el-cerebro-despues-la-cabeza.md) | 2026-10-06 | APROBADO | Hacer de Sirius solo el software del robot y revisar el roadmap: primero el cerebro, después la cabeza | La opción 3, en estos documentos: |
-| [231](docs/decisions/ADR-231-un-defecto-se-cierra-desde-la-pr-que-mete-en-main-el-adr-que-lo-nombra-no-solo-desde-la-del-adr-que-lo-declaro.md) | 2026-10-02 | APROBADO | Un defecto se cierra desde la PR que mete en `main` el ADR que lo nombra, no solo desde la del ADR que lo declaró | Un defecto cerrado puede citar en `pr:` la PR que metió en `main` el ADR que lo declaró (ADR-222) o la que metió un ADR posterior que lo nombra por su id… |
-| [230](docs/decisions/ADR-230-registrar-que-revisores-tuvo-cada-ronda-y-medir-la-convergencia-y-las-familias-solo-entre-rondas-comparables.md) | 2026-10-02 | APROBADO | Registrar qué revisores tuvo cada ronda y medir la convergencia y las familias solo entre rondas comparables | El veredicto agregado dice qué revisores tuvo la ronda. La regla 5 de `sirius_aggregate_reviews.py` añade `reviewers`: `["CLAUDE", "CODEX"]` en la revisión… |
-| [229](docs/decisions/ADR-229-los-instantes-de-g8-se-comparan-en-una-sola-forma-canonica-sean-cuales-sean-sus-escrituras.md) | 2026-10-01 | APROBADO | Los instantes de G8 se comparan en una sola forma canónica, sean cuales sean sus escrituras | `src/sirius/domain/instantes.py` (nuevo): `FORMA_CANONICA` (`%Y-%m-%dT%H:%M:%S.%fZ`), `en_forma_canonica(texto) -> str \| None` (una fecha ISO con hora opcional… |
-| [228](docs/decisions/ADR-228-el-implementador-sabe-que-hora-es-su-paso-tiene-plazo-propio-y-el-prompt-lleva-la-hora-a-la-que-muere-y-la-hora-limite-de-la-validacion-final.md) | 2026-10-01 | APROBADO | El implementador sabe qué hora es: su paso tiene plazo propio y el prompt lleva la hora a la que muere y la hora límite de la validación final | En `.github/workflows/implement-sirius-work.yml`: El primer paso del job, «Anotar el arranque del job», deja |
-| [227](docs/decisions/ADR-227-las-divergencias-que-el-reflector-aparta-para-una-persona-quedan-escritas-junto-al-diario-y-la-vista-de-desenlaces-las-ensena-con-su-edad.md) | 2026-10-01 | APROBADO | Las divergencias que el reflector aparta para una persona quedan escritas junto al diario y la vista de desenlaces las enseña con su edad | Módulo nuevo `src/sirius_engine/divergencias.py`: `DivergenciaVista` (lo que la pasada declara), `DivergenciaApartada` (lo que se conserva: encargo… |
-| [226](docs/decisions/ADR-226-cuando-codex-declara-que-no-revisa-y-claude-pidio-cambios-la-ronda-entrega-los-hallazgos-de-claude-en-vez-de-tirarlos.md) | 2026-10-01 | APROBADO | Cuando Codex declara que no revisa y Claude pidió cambios, la ronda entrega los hallazgos de Claude en vez de tirarlos | En `scripts/automation/sirius_aggregate_reviews.py`: Las razones con las que el recolector dice que el conector declaró que |
-| [225](docs/decisions/ADR-225-la-linea-del-contador-de-los-siete-dias-quedo-cancelada-por-decision-del-propietario-el-13-09-y-adr-101-deja-de-tenerla-como-bloque-pendiente.md) | 2026-10-01 | APROBADO | La línea del contador de los siete días quedó cancelada por decisión del propietario el 13-09 y ADR-101 deja de tenerla como bloque pendiente | La pieza (C) de #376 queda cancelada por decisión del propietario del 13-09-2026 (#610). No se ordenará salvo decisión nueva suya; si algún día la quiere, la… |
-| [224](docs/decisions/ADR-224-quality-no-muere-por-un-uv-sync-sin-cache-los-dos-pasos-largos-llevan-plazo-propio-y-el-job-sube-de-20-a-60-minutos.md) | 2026-10-01 | APROBADO | Quality no muere por un `uv sync` sin caché: los dos pasos largos llevan plazo propio y el job sube de 20 a 60 minutos | En `.github/workflows/quality.yml`: el job pasa de `timeout-minutes: 20` a 60; «Sync environment» lleva `timeout-minutes: 20` (peor medido sin caché: |
-| [223](docs/decisions/ADR-223-continua-sobre-una-parada-anterior-a-la-pr-repone-sirius-planned-si-consta-que-ya-estuvo-planificada-y-si-no-consta-lo-dice-sin-pedir-la-orden-otra-vez.md) | 2026-10-01 | APROBADO | `continua` sobre una parada anterior a la PR repone `sirius:planned` si consta que ya estuvo planificada, y si no consta lo dice sin pedir la orden otra vez | En el camino `sin_pr`, cuando la fase de destino es `sirius:implement-requested` y la incidencia no lleva `sirius:planned`, el guion: Lee la cronología de la… |
-| [222](docs/decisions/ADR-222-un-defecto-cerrado-lleva-la-pr-que-lo-fusiono-la-referencia-que-un-clon-de-main-puede-seguir.md) | 2026-10-01 | APROBADO | Un defecto cerrado lleva la PR que lo fusionó: la referencia que un clon de `main` puede seguir | Desde este ADR, un defecto `cerrado` lleva, además de `cerrado_por`, `pr: <número de la PR que lo fusiona>`; si lo cerró un encargo del motor, cuya PR la abre… |
-| [221](docs/decisions/ADR-221-la-puerta-de-activacion-resuelve-el-perfil-con-el-mismo-resolutor-que-el-implementador-y-avisa-si-la-version-no-es-la-vigente.md) | 2026-10-01 | APROBADO | La puerta de activación resuelve el `Perfil: rol@N` con el mismo resolutor que el implementador, y avisa si la versión no es la vigente | La puerta gana el paso 4: con el cuerpo ya leído, y solo para los roles del carril de ejecución del manifiesto (hoy `implementer` y `documentalista`, leídos… |
-| [220](docs/decisions/ADR-220-la-cola-regenera-las-vistas-de-la-memoria-al-traer-la-base-y-resuelve-sola-el-conflicto-que-solo-esta-en-ellas.md) | 2026-10-01 | APROBADO | La cola regenera las vistas de la memoria al traer la base, y resuelve sola el conflicto que solo está en ellas | La puesta al día pasa a dos jobs nuevos, `regenerar` y `empujar`, que arrancan con las salidas del paso «Advance matching Sirius work item» (`ponerse_al_dia`… |
-| [219](docs/decisions/ADR-219-el-motor-dice-lo-que-hace-el-veredicto-nombra-su-pr-el-aviso-de-listo-no-pide-una-autorizacion-que-ya-no-necesita-y-una-casi-orden-recibe-respuesta.md) | 2026-10-01 | APROBADO | El motor dice lo que hace: el veredicto nombra su PR, el aviso de «listo» no pide una autorización que ya no necesita y una casi-orden recibe respuesta | `sirius_apply_verdict.sh` publica la línea con `printf '%s\n' "- PR: …"`: el texto va como argumento, nunca como formato. Vale para los dos caminos del… |
-| [218](docs/decisions/ADR-218-la-vista-de-memoria-deja-fuera-el-indice-de-docs-audits-y-no-repite-las-rutas-que-ya-enlaza.md) | 2026-10-01 | APROBADO | La vista de memoria deja fuera el índice de `docs/audits`, que pasa a una vista generada aparte, y no repite las rutas que ya enlaza | El índice de `docs/audits/` sale de `MEMORIA.md` y vive en `docs/audits/INDICE.md`, generado. Lo escribe el mismo comando (`uv run sirius-memoria conocimiento`… |
-| [217](docs/decisions/ADR-217-la-bitacora-del-ciclo-entra-en-main-con-su-familia-y-la-evidencia-de-adr-002-se-queda-en-su-rama.md) | 2026-10-01 | APROBADO | La bitácora del ciclo entra en `main` con su familia, y la evidencia de ADR-002 se queda en su rama | Entran en `main`, tal como estaban en `a044fb4a`, los 48 ficheros de `docs/audits/` que la rama añade y… |
-| [216](docs/decisions/ADR-216-cerrar-el-ciclo-el-motor-se-queda-sin-trabajo-vivo-los-horarios-se-apagan-desde-actions-y-el-estado-real-queda-escrito.md) | 2026-09-24 | APROBADO | Cerrar el ciclo: el motor se queda sin trabajo vivo, los horarios se apagan desde Actions y el estado real queda escrito | Las PR abiertas, cerradas. La #661 (cinco skills, ADR-215) fusionada aplastada en `6a58c75e`. La #117 —la rama de evidencia de julio, abierta desde el 25-07 y… |
-| [215](docs/decisions/ADR-215-cinco-skills-mas-de-flujo-de-trabajo-salidas-de-la-auditoria-y-de-los-adr-la-validacion-manual-en-windows-medir-con-linea-base-el-documento-con-lector-la-rama-y-la-pr-de-sesion-y-las-paradas-del-motor-delante-del-propietario.md) | 2026-09-21 | APROBADO | Cinco skills más de flujo de trabajo, salidas de la auditoría y de los ADR: la validación manual en Windows, medir con línea base, el documento con lector, la rama y la PR de sesión y las paradas del motor delante del propietario | Cinco skills nuevas en `.claude/skills/`: |
-| [214](docs/decisions/ADR-214-siete-skills-de-flujo-de-trabajo-salidas-de-las-transcripciones-la-noche-delegada-la-revision-externa-el-coste-antes-de-gastar-los-comandos-para-su-ordenador-el-paquete-pegado-el-traspaso-y-el-estado-real.md) | 2026-09-21 | APROBADO | Siete skills de flujo de trabajo salidas de las transcripciones: la noche delegada, la revisión externa, el coste antes de gastar, los comandos para su ordenador, el paquete pegado, el traspaso y el estado real | La tercera. Siete skills nuevas, en `.claude/skills/`: |
-| [213](docs/decisions/ADR-213-escribir-las-tres-reglas-de-septiembre-del-propietario-dar-proporcion-a-la-cadena-de-comprobacion-y-fechar-en-las-transcripciones-las-reglas-del-20-09.md) | 2026-09-20 | APROBADO | Escribir las tres reglas de septiembre del propietario, dar proporción a la cadena de comprobación y fechar en las transcripciones las reglas del 20-09 | `AGENTS.md`, sección «Cómo conversa el propietario, y qué espera (ADR-208)», gana las reglas 11, 12 y 13, con sus palabras y su fecha: *contesta primero… |
-| [212](docs/decisions/ADR-212-la-cardinalidad-se-instruye-con-el-criterio-del-canon-determinacion-contra-extension-no-con-la-forma-de-la-pregunta.md) | 2026-09-20 | APROBADO | La cardinalidad se instruye con el criterio del canon: determinacion contra extension, no la forma de la pregunta | Se toma la opción 1. El bloque `cardinalidad` de `_INSTRUCCION` (`src/sirius/adapters/ollama_query_intent_classifier.py`) enuncia las tres definiciones de… |
-| [211](docs/decisions/ADR-211-convertir-en-skills-lo-que-ya-costo-averiguar-dos-veces-con-una-guarda-que-impida-que-se-pudran.md) | 2026-09-20 | APROBADO | Convertir en skills lo que ya costó averiguar dos veces, con una guarda que impida que se pudran | La tercera. Cinco skills nuevas, una guarda, y las dos puertas de entrada de una sesión enterándose de que existen. |
-| [210](docs/decisions/ADR-210-archivar-las-incidencias-que-ya-no-describen-nada-y-decir-donde-vive-la-bitacora-del-ciclo.md) | 2026-09-20 | APROBADO | Archivar las incidencias que ya no describen nada, y decir dónde vive la bitácora del ciclo | De las nueve abiertas que la decisión 2 nombraba: |
-| [209](docs/decisions/ADR-209-un-adr-fusionado-esta-aprobado-y-propuesto-deja-de-existir-como-estado.md) | 2026-09-20 | APROBADO | Un ADR fusionado está aprobado, y PROPUESTO deja de existir como estado | Un ADR que está en el árbol está aprobado, porque lo que lo aprueba, según él mismo, es la fusión de su PR. `PROPUESTO` deja de existir como estado. |
-| [208](docs/decisions/ADR-208-las-ideas-aparcadas-tienen-registro-y-el-metodo-de-conversacion-del-propietario-entra-en-agents.md) | 2026-09-20 | APROBADO | Las ideas aparcadas tienen registro, y el método de conversación del propietario entra en AGENTS.md | `docs/ideas/registro_de_ideas.yml`, con tres estados y un campo que cada uno exige: |
-| [207](docs/decisions/ADR-207-archivar-los-dos-mapas-caducados-de-julio-retirar-el-workflow-de-word-y-poner-en-d4-el-estado-que-ya-tenia.md) | 2026-09-20 | APROBADO | Archivar los dos mapas caducados de julio, retirar el workflow de Word y poner en D4 el estado que ya tenía | `docs/operations/CLAUDE_SIRIUS_KNOWLEDGE_BASE.md` y `docs/operations/CLAUDE_PROJECT_ONBOARDING.md` son fotos del 20-07-2026. El primero dice que el contrato… |
-| [206](docs/decisions/ADR-206-cada-sesion-declara-su-obra-antes-de-empezar-y-la-cola-impide-que-dos-se-pisen.md) | 2026-09-20 | APROBADO | Cada sesión declara su obra antes de empezar, y una guarda impide que dos se pisen | Una sesión declara su obra abriendo su pull request en cuanto tiene su primer commit, aunque sea borrador, y antes de empezar comprueba si otra obra viva toca… |
-| [205](docs/decisions/ADR-205-la-fusion-no-espera-al-propietario-cuando-los-dos-revisores-aprueban.md) | 2026-09-20 | APROBADO | La fusión no espera al propietario cuando los dos revisores aprueban | La aprobación de los dos revisores es la autorización de merge. El comentario `fusiona` del propietario deja de ser necesario y se conserva como mando manual… |
-| [204](docs/decisions/ADR-204-el-propietario-decide-producto-dinero-y-salud-y-lo-tecnico-lo-resuelve-la-sesion.md) | 2026-09-20 | APROBADO | El propietario decide producto, dinero y salud, y lo técnico lo resuelve la sesión | Se pregunta al propietario solo por tres cosas: |
-| [203](docs/decisions/ADR-203-el-banco-mide-tambien-el-camino-de-puerta-cerrada-la-linea-base-que-faltaba.md) | 2026-09-19 | APROBADO | El banco mide tambien el camino de puerta cerrada: la linea base que faltaba | El instrumento aprende el otro camino; el sistema medido no se toca. |
-| [202](docs/decisions/ADR-202-m17-la-medicion-que-cerraba-la-ola-de-paridad-no-se-hace-y-la-razon-no-consta.md) | 2026-09-14 | APROBADO | M17, la medición que cerraba la ola de paridad, no se hace; y la razón no consta | 1. M17 no se hace. Es una decisión del propietario, tomada antes de hoy. Si algún día se hace, es una decisión nueva: nada de lo escrito aquí la prepara. |
-| [201](docs/decisions/ADR-201-la-mina-de-aprendizaje-tiene-reloj-el-dia-1-de-cada-mes-se-pide-la-edicion-del-mes-que-se-cierra.md) | 2026-09-14 | APROBADO | La mina de aprendizaje tiene reloj: el día 1 de cada mes se pide la edición del mes que se cierra | (sin sección Decisión) |
-| [200](docs/decisions/ADR-200-la-cola-deja-de-ser-una-condicion-y-pasa-a-ser-un-mecanismo-el-ciclo-trae-la-base-a-la-rama-que-espera.md) | 2026-09-14 | APROBADO | La cola deja de ser una condición y pasa a ser un mecanismo: el ciclo trae la base a la rama que espera | 1. La cola se consulta antes de reponer la revisión. En la rama `success)` de `.github/workflows/advance-sirius-after-quality.yml`, antes de aplicar… |
-| [199](docs/decisions/ADR-199-el-detector-de-familia-repetida-detiene-el-ciclo-y-esa-parada-vuelve-al-corrector-no-al-revisor-que-la-emitio.md) | 2026-09-14 | APROBADO | El detector de familia repetida detiene el ciclo, y esa parada vuelve al corrector, no al revisor que la emitió | 1. Con familia repetida detectada, la puerta del veredicto detiene el ciclo. En vez de `sirius:repair-requested`, publica `sirius:blocked-decision`. El… |
-| [198](docs/decisions/ADR-198-partir-un-objetivo-grande-lo-hace-la-sesion-interactiva-el-descomponedor-automatico-queda-descartado.md) | 2026-09-14 | APROBADO | Partir un objetivo grande lo hace la sesión interactiva; el descomponedor automático queda descartado | (sin sección Decisión) |
-| [197](docs/decisions/ADR-197-el-detector-de-familia-repetida-agrupa-por-la-ruta-que-el-revisor-escribe-no-por-el-recorte-anclado.md) | 2026-09-14 | APROBADO | El detector de familia repetida agrupa por la ruta que el revisor escribe, no por el recorte anclado | El detector agrupa por la ruta que encabeza la cita, extraída con `parse_archivo_location`, y normalizada con `_normalize_text` para que la comparación siga… |
-| [196](docs/decisions/ADR-196-la-vista-de-memoria-lleva-el-indice-completo-de-decisiones-y-el-resumen-solo-de-las-vigentes-como-metodo.md) | 2026-09-14 | APROBADO | La vista de memoria lleva el índice completo de decisiones, y el resumen solo de las que siguen vigentes como método | El índice se queda entero; la copia del resumen, no. |
-| [195](docs/decisions/ADR-195-podar-significa-archivar-en-este-repositorio-no-se-borra-nada.md) | 2026-09-14 | APROBADO | «Podar» significa archivar: en este repositorio no se borra nada | (sin sección Decisión) |
-| [194](docs/decisions/ADR-194-ci-pending-distingue-quality-todavia-no-ha-contestado-de-quality-no-va-a-contestar-nunca.md) | 2026-09-14 | APROBADO | `ci-pending` distingue «Quality todavía no ha contestado» de «Quality no va a contestar nunca» | El caso «sin resultado» se parte en dos, y solo lo parte un hecho explícito. |
-| [193](docs/decisions/ADR-193-el-doble-de-gh-rechaza-lo-que-el-gh-real-rechaza-y-la-red-de-seguridad-vuelve-a-poder-fechar.md) | 2026-09-14 | APROBADO | El doble de `gh` rechaza lo que el `gh` real rechaza, y la red de seguridad vuelve a poder fechar | Dos mitades, y ninguna vale sola. |
-| [192](docs/decisions/ADR-192-el-numero-de-un-defecto-es-el-numero-de-su-adr-no-un-contador-aparte.md) | 2026-09-14 | APROBADO | El numero de un defecto es el numero de su ADR, no un contador aparte | Uno. El número de un defecto nuevo es el número de su ADR. `H-192` para el defecto que declara ADR-192. Nadie elige nada: se copia un dato que la entrada ya… |
-| [191](docs/decisions/ADR-191-la-revision-es-una-cola-una-rama-entra-a-revision-solo-si-main-ya-esta-dentro-de-ella.md) | 2026-09-14 | APROBADO | La revision es una cola: una rama entra a revision solo si main ya esta dentro de ella | Uno. La condición es una sola pregunta: ¿es la punta de `main` ancestro del head de la rama? Si lo es, lo que se revise es lo que aterrizará. Si no, la… |
-| [190](docs/decisions/ADR-190-la-guarda-de-citas-no-sale-de-docs-decisions-medidos-590-citas-y-23-rotas-fuera-del-registro-cero-son-defectos-de-este-arbol.md) | 2026-09-14 | APROBADO | La guarda de citas no sale de docs/decisions/: medidas 590 citas y 23 rotas fuera del registro, cero son defectos de este árbol | La guarda de citas no sale de `docs/decisions/`. Con 0 defectos reales y 23 falsos positivos, el criterio de la incidencia #267 no se salva cambiándole la… |
-| [189](docs/decisions/ADR-189-la-salida-de-una-parada-sin-incidencia-es-una-orden-del-propietario-y-reanudar-es-despachar-en-el-mismo-gesto.md) | 2026-09-13 | APROBADO | La salida de una parada sin incidencia es una orden del propietario, y reanudar es despachar en el mismo gesto | Se elige la opción 1: un comando del propietario, `sirius-decidir`. Y la respuesta a «qué pasa al reanudar» es que reanudar es despachar en el mismo gesto: si… |
-| [188](docs/decisions/ADR-188-el-alcance-que-el-motor-no-puede-escribir-para-la-puerta-antes-de-crear-la-incidencia-y-remite-a-la-sesion-interactiva.md) | 2026-09-13 | APROBADO | Parar antes de crear la incidencia cuando la orden pide tocar lo que el motor no puede escribir | Opción 1 (variante B), como QUINTA causa de sensibilidad del intérprete, con la causa `permisos_o_credenciales_sensibles`. |
-| [187](docs/decisions/ADR-187-una-revision-sobrevive-a-ponerse-al-dia-con-main-si-el-trabajo-propio-de-la-rama-no-cambia.md) | 2026-09-13 | APROBADO | Una revision sobrevive a ponerse al dia con main si el trabajo propio de la rama no cambia | La guarda de ADR-142 pasa de «mismo head» a «mismo trabajo»: la aprobación registrada sigue valiendo si el trabajo PROPIO de la rama es el mismo en el head… |
-| [185](docs/decisions/ADR-185-la-puerta-de-la-memoria-se-parte-en-tres-interruptores-antes-de-abrirla.md) | 2026-09-13 | APROBADO | la puerta de la memoria se parte en tres interruptores antes de abrirla | Se añade `src/sirius/config/memory_gates.py` con una función pura, `puertas_de_memoria(settings) -> PuertasDeMemoria`, y un `dataclass(frozen=True)` de tres… |
-| [184](docs/decisions/ADR-184-la-prohibicion-no-es-una-peticion-el-detector-de-sensibilidad-exige-que-el-marcador-no-vaya-negado.md) | 2026-09-13 | APROBADO | La prohibicion no es una peticion: el detector de sensibilidad exige que el marcador no vaya negado | `_detectar_sensibilidad` deja de preguntar ¿aparece el marcador? y pregunta ¿la orden lo PIDE?. Una aparición cuenta solo si no va negada, y basta una… |
-| [183](docs/decisions/ADR-183-la-ausencia-de-run-de-quality-para-el-head-se-encamina-no-se-espera-en-silencio.md) | 2026-09-13 | APROBADO | La ausencia de run de Quality para el head se encamina, no se espera en silencio | Opción 3. En `relanzar_quality_si_ya_termino`, la rama que hoy sale con `return 0` cuando no hay ningún run relanzable pasa a llamar a… |
-| [182](docs/decisions/ADR-182-la-guarda-del-registro-de-defectos-deriva-de-los-adr-que-declaran-leccion.md) | 2026-09-13 | APROBADO | La guarda del registro de defectos deriva de los ADR que declaran leccion | La guarda del registro de defectos gana una segunda mitad, y esa mitad deriva su inventario de `docs/decisions/`: un ADR que declara una lección con `familia:`… |
-| [181](docs/decisions/ADR-181-la-contradiccion-de-etiquetas-se-decide-por-lo-que-proyectan-no-por-cuantas-son.md) | 2026-09-12 | APROBADO | La contradicción de etiquetas se decide por lo que proyectan, no por cuántas son | Opción 2. `_estado_y_fase` calcula el conjunto de destinos de las etiquetas presentes y marca contradicción si y solo si hay más de uno: |
-| [180](docs/decisions/ADR-180-el-numero-del-siguiente-adr-se-calcula-contra-las-ramas-del-remoto-no-contra-las-que-el-clon-tenga-traidas.md) | 2026-09-12 | APROBADO | El numero del siguiente ADR se calcula contra las ramas del remoto, no contra las que el clon tenga traidas | `scripts/siguiente_adr.py` trae las cabezas del remoto antes de calcular el número, con el refspec explícito `+refs/heads/*:refs/remotes/origin/*` para que un… |
-| [179](docs/decisions/ADR-179-la-guarda-de-piezas-sin-llamante-deriva-su-inventario-del-codigo-del-motor.md) | 2026-09-12 | APROBADO | La guarda de piezas sin llamante deriva su inventario del codigo del motor | El inventario de `tests/automation/test_piezas_con_llamante.py` se deriva de `src/sirius_engine` con `ast`, en tres formas de pieza: `modulo:`, `definicion:` y… |
-| [178](docs/decisions/ADR-178-la-autoridad-por-clase-se-deriva-de-la-via-github-que-el-despachador-declara-no-de-una-segunda-tabla-a-mano.md) | 2026-09-12 | APROBADO | La autoridad por clase se deriva de la vía GitHub que el despachador declara, no de una segunda tabla a mano | La autoridad por clase se deriva de una sola definición en el dominio de qué clases existen en la vía GitHub (`CLASES_CON_VIA_GITHUB`, en… |
-| [177](docs/decisions/ADR-177-la-ampliacion-por-categoria-entra-por-una-senal-explicita-de-la-peticion-no-por-la-subcadena-contexto.md) | 2026-09-12 | APROBADO | La ampliación por categoría entra por una señal explícita de la petición, no por la subcadena «contexto» | `Peticion` gana un campo booleano propio, `amplia_por_categoria`, apagado por defecto, y el consumidor lee ese campo y nada más. `pide_contexto` y… |
-| [176](docs/decisions/ADR-176-el-cierre-de-una-incidencia-se-retoma-desde-donde-se-quedo.md) | 2026-09-12 | APROBADO | El cierre de una incidencia se retoma desde donde se quedó | El cierre de una parada sin salida se comprueba DESPUÉS de todo lo demás, y se retoma desde el estado en que el motor está. Primero se calcula el plan por… |
-| [175](docs/decisions/ADR-175-un-tablero-por-incidencia-un-solo-comentario-que-el-motor-mantiene-al-dia.md) | 2026-09-12 | APROBADO | Un tablero por incidencia: un solo comentario que el motor mantiene al día | Uno. Un solo comentario por incidencia, reescrito en cada cambio de estado. Lleva: qué se pidió (del cuerpo declarado), por dónde va el ciclo, qué se ha… |
-| [174](docs/decisions/ADR-174-la-mina-en-dos-pasadas-la-leccion-se-declara-en-el-adr-que-la-produce-y-las-familias-se-cuentan-solas.md) | 2026-09-12 | APROBADO | La mina en dos pasadas: la lección se declara en el ADR que la produce y las familias se cuentan solas | Uno. La lección se declara en el ADR que la produce, en un bloque `## La lección` con tres líneas —`familia`, `sin esto se repetiría`, `lo hace cumplir`— o con… |
-| [173](docs/decisions/ADR-173-el-cierre-de-la-incidencia-es-un-desenlace-y-el-reflector-mira-todas-las-clases-que-el-despachador-despacha.md) | 2026-09-12 | APROBADO | El cierre de la incidencia es un desenlace, y el reflector mira todas las clases que el despachador despacha | — |
-| [172](docs/decisions/ADR-172-la-memoria-de-sesion-vive-en-supermemory-y-el-conocimiento-en-el-repositorio-con-una-regla-de-reparto-que-toda-ia-lee.md) | 2026-09-12 | APROBADO | La memoria de sesión vive en Supermemory y el conocimiento en el repositorio, con una regla de reparto que toda IA lee | — |
-| [171](docs/decisions/ADR-171-la-memoria-comun-arranca-sobre-lo-que-ya-existe-evaluacion-funcional-de-las-tres-piezas-y-lo-que-el-motor-tiene-que-publicar.md) | 2026-09-11 | APROBADO | La memoria común arranca sobre lo que ya existe: evaluación funcional de las tres piezas (T-5) y lo que el motor tiene que publicar | — |
-| [170](docs/decisions/ADR-170-dec-001-entra-por-pertenencia-a-su-lista-cerrada-portar-los-miembros-del-origen-y-que-g4-decida-por-pertenencia.md) | 2026-09-11 | APROBADO | DEC-001 entra por pertenencia a su lista cerrada: portar los miembros del origen y que G4 decida por pertenencia | — |
-| [169](docs/decisions/ADR-169-el-filtro-recorta-por-la-cardinalidad-que-la-peticion-declara.md) | 2026-09-08 | APROBADO | El filtro recorta por la cardinalidad que la peticion declara | — |
-| [168](docs/decisions/ADR-168-listar-por-vigencia-cuando-la-pregunta-declara-un-intervalo-y-la-busqueda-lexica-no-tiene-de-donde-partir.md) | 2026-09-08 | APROBADO | Listar por vigencia cuando la pregunta declara un intervalo y la busqueda lexica no tiene de donde partir | — |
-| [167](docs/decisions/ADR-167-las-dos-puertas-de-carril-retirado-comprueban-el-estado-real-no-declaran-exito-sin-confirmarlo-y-se-cierran-ante-cualquier-fallo-del-lector.md) | 2026-09-08 | APROBADO | Las dos puertas de carril retirado comprueban el estado real, no declaran éxito sin confirmarlo y se cierran ante cualquier fallo del lector | — |
-| [166](docs/decisions/ADR-166-el-cargador-del-banco-da-a-cada-item-la-fecha-de-registro-que-el-corpus-declara.md) | 2026-09-08 | APROBADO | El cargador del banco da a cada ítem la fecha de registro que el corpus declara | — |
-| [164](docs/decisions/ADR-164-la-pregunta-se-convierte-en-una-peticion-propia-interpretada-no-en-la-politica-uniforme-de-hoy.md) | 2026-09-08 | APROBADO | La pregunta se convierte en una petición propia interpretada, no en la política uniforme de hoy | — |
-| [163](docs/decisions/ADR-163-desactivar-de-forma-reversible-los-carriles-de-investigacion-y-auditoria-el-registro-de-carriles-retirados-cierra-sus-entradas-y-explica-en-vez-de-esperar.md) | 2026-09-08 | APROBADO | Desactivar de forma reversible los carriles de investigación y auditoría: el registro de carriles retirados cierra sus entradas y explica en vez de esperar | — |
-| [162](docs/decisions/ADR-162-la-altura-de-una-fila-del-chat-se-mide-sobre-un-layout-asentado-no-en-cuanto-aparece-el-texto.md) | 2026-09-08 | APROBADO | La altura de una fila del chat se mide sobre un layout asentado, no en cuanto aparece el texto | — |
-| [161](docs/decisions/ADR-161-retirar-los-carriles-dedicados-de-investigacion-y-auditoria-conservando-los-revisores-del-ciclo-decision-tomada-ejecucion-pendiente.md) | 2026-09-08 | APROBADO | Retirar los carriles dedicados de investigación y auditoría, conservando los revisores del ciclo: decisión tomada, ejecución pendiente | — |
-| [160](docs/decisions/ADR-160-formalizar-la-separacion-entre-sirius-y-su-motor-sirius-es-el-companero-el-motor-ejecuta-y-las-ias-externas-son-el-lugar-de-trabajo.md) | 2026-09-08 | APROBADO | Formalizar la separación entre Sirius y su motor: Sirius es el compañero, el motor ejecuta y las IAs externas son el lugar de trabajo | — |
-| [159](docs/decisions/ADR-159-el-recibo-de-una-reanudacion-distingue-cada-permiso-escrito-no-solo-su-head.md) | 2026-09-08 | APROBADO | El recibo de una reanudación distingue cada permiso escrito, no solo su head | — |
-| [158](docs/decisions/ADR-158-cada-evento-de-etiqueta-tiene-su-propia-ranura-de-notificacion.md) | 2026-09-07 | APROBADO | Cada evento de etiqueta tiene su propia ranura de notificación | — |
-| [157](docs/decisions/ADR-157-cada-parada-deja-su-propio-marcador-de-notificacion.md) | 2026-09-07 | APROBADO | Cada parada deja su propio marcador de notificación | — |
-| [156](docs/decisions/ADR-156-el-recolector-lee-los-hallazgos-que-codex-publica-en-el-cuerpo-de-la-revision.md) | 2026-09-07 | APROBADO | El recolector lee los hallazgos que Codex publica en el cuerpo de la revisión | — |
-| [155](docs/decisions/ADR-155-el-corrector-entrega-por-hallazgo-con-el-plazo-a-la-vista.md) | 2026-09-06 | APROBADO | El corrector entrega por hallazgo, con el plazo a la vista | — |
-| [154](docs/decisions/ADR-154-las-cifras-de-la-validacion-se-citan-ancladas-al-arbol-que-las-produjo.md) | 2026-09-06 | APROBADO | Las cifras de la validación se citan ancladas al árbol que las produjo | — |
-| [153](docs/decisions/ADR-153-check.ps1-se-detiene-en-el-primer-paso-rojo-y-propaga-su-codigo-de-salida.md) | 2026-09-06 | APROBADO | check.ps1 se detiene en el primer paso rojo y propaga su código de salida | — |
-| [152](docs/decisions/ADR-152-los-pasos-posteriores-al-agente-ejecutan-la-automatizacion-de-main-no-la-del-arbol-que-el-agente-dejo.md) | 2026-09-06 | APROBADO | Los pasos posteriores al agente ejecutan la automatización de `main`, no la del árbol que el agente dejó | — |
-| [151](docs/decisions/ADR-151-la-pasada-del-contador-mide-y-declara-su-entrega.md) | 2026-09-06 | APROBADO | La pasada del contador mide y declara su entrega: retraso e higiene de su ventana previa | — |
-| [150](docs/decisions/ADR-150-dar-al-corrector-tiempo-para-corregir-y-validar-con-la-cadena-completa-dentro-de-su-paso.md) | 2026-09-06 | APROBADO | Dar al corrector tiempo para corregir y validar con la cadena completa dentro de su paso | — |
-| [149](docs/decisions/ADR-149-relanzar-quality-al-entrar-en-ci-pending-cuando-su-cierre-ya-se-consumio-con-la-incidencia-en-otro-estado.md) | 2026-09-06 | APROBADO | Relanzar Quality al entrar en `ci-pending` cuando su cierre ya se consumió con la incidencia en otro estado | — |
-| [148](docs/decisions/ADR-148-dar-la-memoria-por-bien-hecha-solo-con-todos-los-numeros-del-banco-bien-y-llegar-por-palancas-medidas.md) | 2026-09-05 | APROBADO | Dar la memoria por bien hecha solo con todos los números del banco bien, y llegar por palancas medidas | — |
-| [147](docs/decisions/ADR-147-la-salida-de-una-parada-la-acredita-el-permiso-escrito-del-propietario.md) | 2026-09-05 | APROBADO | La salida de una parada la acredita el permiso escrito del propietario | — |
-| [146](docs/decisions/ADR-146-el-fallo-transitorio-que-codex-declara-se-reintenta-con-el-candado-existente.md) | 2026-09-05 | APROBADO | El fallo transitorio que Codex declara se reintenta con el candado existente | — |
-| [145](docs/decisions/ADR-145-la-validacion-obligatoria-es-una-sola-invocacion-del-script-de-comprobacion.md) | 2026-09-05 | APROBADO | La validación obligatoria es una sola invocación del script de comprobación | — |
-| [144](docs/decisions/ADR-144-el-derivador-de-la-hora-del-contador-no-se-cuenta-a-si-mismo.md) | 2026-09-05 | APROBADO | El derivador de la hora del contador no se cuenta a sí mismo | — |
-| [143](docs/decisions/ADR-143-los-dos-lectores-de-cron-del-repositorio-hablan-un-unico-dialecto.md) | 2026-09-05 | APROBADO | Los dos lectores de cron del repositorio hablan un único dialecto | — |
-| [142](docs/decisions/ADR-142-la-ruta-de-avance-repone-la-revision-cuando-la-aprobacion-caduco.md) | 2026-09-05 | APROBADO | La ruta de avance repone la revisión cuando la aprobación caducó | — |
-| [141](docs/decisions/ADR-141-una-parada-de-infraestructura-del-revisor-rearma-una-ronda-una-sola-vez.md) | 2026-09-05 | APROBADO | Una parada de infraestructura del revisor rearma una ronda, una sola vez | — |
-| [140](docs/decisions/ADR-140-el-corrector-firma-su-run-y-demuestra-cada-mutacion.md) | 2026-09-05 | APROBADO | El corrector firma su run y demuestra cada mutación | — |
-| [139](docs/decisions/ADR-139-la-reconciliacion-pasa-cada-hora-activa-en-vez-de-cada-seis.md) | 2026-09-05 | RECHAZADO | La reconciliación pasa cada hora activa en vez de cada seis | — |
-| [138](docs/decisions/ADR-138-los-tres-agentes-del-ciclo-corren-con-el-modelo-opus.md) | 2026-09-04 | APROBADO | Los tres agentes del ciclo corren con el modelo opus | — |
-| [137](docs/decisions/ADR-137-el-enganche-de-sirius-reflejar-corre-en-un-workflow-propio-tras-cada-cambio-de-etiqueta.md) | 2026-09-04 | APROBADO | El enganche de sirius-reflejar corre en un workflow propio tras cada cambio de etiqueta | — |
-| [136](docs/decisions/ADR-136-el-reflejo-del-desenlace-de-github-vuelve-al-almacen-del-motor.md) | 2026-09-04 | APROBADO | El reflejo del desenlace de GitHub vuelve al almacén del motor | — |
-| [135](docs/decisions/ADR-135-el-corrector-actualiza-en-el-mismo-commit-el-papel-que-depende-de-su-correccion.md) | 2026-09-04 | APROBADO | El corrector actualiza en el mismo commit el papel que depende de su corrección | — |
-| [134](docs/decisions/ADR-134-el-guardian-del-suelo-de-prueba-muerto-retira-las-dos-cotas-tautologicas-del-banco-de-evidencia.md) | 2026-09-04 | APROBADO | El guardián del suelo de prueba muerto retira las dos cotas tautológicas del banco de evidencia | — |
-| [133](docs/decisions/ADR-133-g3-el-guardian-de-goteo-entiende-las-citas-tal-como-los-revisores-las-escriben-de-verdad.md) | 2026-09-04 | APROBADO | G3: el guardian de goteo entiende las citas tal como los revisores las escriben de verdad | — |
-| [132](docs/decisions/ADR-132-el-guardian-del-contrato-local-de-ollama-convierte-adr-125-en-prueba-y-corrige-ollama-category-classifier.md) | 2026-09-04 | APROBADO | El guardián del contrato local de Ollama convierte ADR-125 en prueba y corrige ollama_category_classifier | — |
-| [131](docs/decisions/ADR-131-m21b-la-interfaz-de-la-criticidad-sirius-propone-y-el-usuario-confirma-o-rechaza.md) | 2026-09-03 | APROBADO | M21b: la interfaz de la criticidad, Sirius propone y el usuario confirma o rechaza | — |
-| [130](docs/decisions/ADR-130-m21a-sirius-propone-la-criticidad-sin-escribirla.md) | 2026-09-03 | APROBADO | M21a: Sirius propone la criticidad sin escribirla | — |
-| [129](docs/decisions/ADR-129-m20-la-siembra-en-contexto-por-criticidad.md) | 2026-09-03 | APROBADO | M20: la siembra en contexto por criticidad | — |
-| [128](docs/decisions/ADR-128-m19b-el-rescate-rf-25-rf-26-y-la-prioridad-de-g12-por-criticidad.md) | 2026-09-03 | APROBADO | M19b: el rescate RF-25/RF-26 y la prioridad de G12 por criticidad | — |
-| [127](docs/decisions/ADR-127-m19a-el-indice-de-criticidad-en-la-busqueda.md) | 2026-09-03 | APROBADO | M19a: el índice de criticidad en la búsqueda | — |
-| [126](docs/decisions/ADR-126-m18b-la-senal-de-criticidad-como-dato-propio-de-cada-recuerdo-y-decision.md) | 2026-09-02 | APROBADO | M18b: la señal de criticidad como dato propio de cada recuerdo y decisión | — |
-| [125](docs/decisions/ADR-125-suspender-el-limite-de-300-ms-de-rnf-003-en-el-camino-del-filtro-de-relevancia-mientras-se-mide-su-coste-real.md) | 2026-09-02 | APROBADO | Suspender el limite de 300 ms de RNF-003 en el camino del filtro de relevancia mientras se mide su coste real | — |
-| [124](docs/decisions/ADR-124-cablear-la-peticion-de-produccion-en-rankrelevantknowledgeusecase-con-ambito-real-derivado-del-proyecto-activo-y-proposito-honesto-que-activa-pide-contexto-m16.md) | 2026-09-01 | APROBADO | Cablear la petición de producción en RankRelevantKnowledgeUseCase con ámbito real derivado del proyecto activo y propósito honesto que activa pide_contexto (M16) | — |
-| [123](docs/decisions/ADR-123-guardian-de-goteo-en-vivo-integrado-con-el-aviso-de-familia-repetida.md) | 2026-08-31 | APROBADO | Guardián de goteo en vivo, integrado con el aviso de familia repetida | — |
-| [122](docs/decisions/ADR-122-consulta-por-lote-en-stagedengineport-y-ampliacion-por-categoria-filtrada-en-sql.md) | 2026-08-31 | APROBADO | Consulta por lote en StagedEnginePort y ampliación por categoría filtrada en SQL (M13, incidencia #489, integrado sobre M14) | — |
-| [121](docs/decisions/ADR-121-cablear-el-detector-de-familia-repetida-al-ciclo-real-como-aviso-informativo.md) | 2026-08-31 | APROBADO | Cablear el detector de familia repetida al ciclo real como aviso informativo | — |
-| [120](docs/decisions/ADR-120-m15-rf-25-rf-26-sustituye-el-candado-de-m10-y-g8-g12-se-aplican-sobre-el-conjunto-combinado-ambos-tras-la-puerta.md) | 2026-08-31 | APROBADO | M15: RF-25/RF-26 sustituye el candado de M10 y G8/G12 se aplican sobre el conjunto combinado, ambos tras la puerta | — |
-| [119](docs/decisions/ADR-119-disenar-la-ola-de-paridad-en-produccion-portar-la-semantica-del-arnes-tras-la-puerta-category-matching-enabled-la-peticion-de-contexto-real-y-el-plan-de-optimizacion-de-rnf-003-incidencia-478.md) | 2026-08-31 | APROBADO | Diseñar la ola de paridad en producción: portar la semántica del arnés tras la puerta category_matching_enabled, la petición de contexto real y el plan de optimización de RNF-003 (incidencia #478) | — |
-| [118](docs/decisions/ADR-118-cuatro-huecos-operativos-del-motor-verdes-sin-registrar-reparaciones-tras-mover-el-head-bloqueos-mal-enrutados-y-decisiones-invisibles-al-corrector-incidencias-435-442-453-469-471.md) | 2026-08-31 | APROBADO | Cuatro huecos operativos del motor: verdes sin registrar, reparaciones tras mover el head, bloqueos mal enrutados y decisiones invisibles al corrector (incidencias #435, #442, #453, #469, #471) | — |
-| [117](docs/decisions/ADR-117-m11-mide-rnf-003-con-el-paquete-completo-activo-y-publica-la-coincidencia-del-etiquetado-sin-abrir-la-puerta-de-d7-punto-6.md) | 2026-08-31 | APROBADO | M11 mide RNF-003 con el paquete completo activo y publica la coincidencia del etiquetado, sin abrir la puerta de D7 punto 6 | — |
-| [116](docs/decisions/ADR-116-categoria-de-maxima-criticidad-y-etiquetas-canonicas-provisionales-del-banco-de-47-casos-para-m11.md) | 2026-08-31 | APROBADO | Categoría de máxima criticidad y etiquetas canónicas provisionales del banco de 47 casos para M11 | — |
-| [115](docs/decisions/ADR-115-las-dos-puertas-que-la-ampliacion-del-arnes-no-heredaba-bajan-los-aciertos-exactos-a-29-47-y-elementos-de-mas-alcanza-d1-bajo-la-poblacion-del-umbral-publicado-incidencia-469.md) | 2026-08-31 | APROBADO | Las dos puertas que la ampliación del arnés no heredaba bajan los aciertos exactos a 29/47 y elementos de más alcanza D1 bajo la población del umbral publicado (incidencia #469) | — |
-| [114](docs/decisions/ADR-114-la-restriccion-por-ambito-del-indice-de-categoria-baja-los-elementos-de-mas-de-110-a-62-pero-no-alcanza-d1-incidencia-467.md) | 2026-08-30 | APROBADO | La restricción por ámbito del índice de categoría baja los elementos de más de 110 a 62 pero no alcanza D1 (incidencia #467) | — |
-| [113](docs/decisions/ADR-113-el-indice-de-categoria-buscable-la-regla-de-las-criticas-original-y-la-siembra-en-contexto-cierran-las-dos-causas-de-adr-112-pero-no-alcanzan-d1-incidencia-465.md) | 2026-08-30 | APROBADO | El índice de categoría buscable, la regla de las críticas original y la siembra en contexto cierran las dos causas de ADR-112 pero no alcanzan D1 (incidencia #465) | — |
-| [112](docs/decisions/ADR-112-el-indice-de-categoria-y-el-filtro-de-relevancia-conectados-al-arnes-del-banco-incidencia-463-mejoran-cobertura-y-omisiones-criticas-pero-empeoran-los-elementos-de-mas-y-no-alcanzan-d1.md) | 2026-08-30 | APROBADO | El índice de categoría y el filtro de relevancia, conectados al arnés del banco (incidencia #463), mejoran cobertura y omisiones críticas pero empeoran los elementos de más y no alcanzan D1 | — |
-| [111](docs/decisions/ADR-111-la-peticion-por-caso-portada-mejora-el-banco-a-23-47-pero-d1-exige-ademas-el-indice-de-categoria-y-el-filtro-de-relevancia-ollama.md) | 2026-08-30 | APROBADO | La petición por caso portada mejora el banco a 23/47 pero D1 exige además el índice de categoría y el filtro de relevancia Ollama | — |
-| [110](docs/decisions/ADR-110-el-motor-por-etapas-portado-mejora-el-banco-a-11-47-pero-no-alcanza-el-suelo-d1-porque-la-peticion-por-caso-del-laboratorio-no-esta-autorizada-a-portarse.md) | 2026-08-30 | APROBADO | El motor por etapas portado mejora el banco a 11/47 pero no alcanza el suelo D1 porque la petición por caso del laboratorio no está autorizada a portarse | — |
-| [109](docs/decisions/ADR-109-el-tratamiento-lexico-portado-mejora-el-banco-de-1-47-a-10-47-pero-no-alcanza-el-suelo-d1-porque-la-precision-restante-vive-en-las-puertas-del-motor-por-etapas.md) | 2026-08-30 | APROBADO | El tratamiento léxico portado mejora el banco de 1/47 a 10/47, pero no alcanza el suelo D1 porque la precisión restante vive en las puertas del motor por etapas | — |
-| [106](docs/decisions/ADR-106-vocabulario-y-modelo-provisionales-del-clasificador-de-categoria-en-composition-root.md) | 2026-08-29 | APROBADO | Vocabulario y modelo provisionales del clasificador de categoría en composition_root | — |
-| [105](docs/decisions/ADR-105-anadir-rama-de-origen-no-fusionada-al-guardian-de-citas-de-los-adr.md) | 2026-08-29 | APROBADO | Añadir RAMA_DE_ORIGEN_NO_FUSIONADA al guardián de citas de los ADR | — |
-| [104](docs/decisions/ADR-104-portar-el-banco-de-47-casos-de-evidence-adr001-spikes-al-modelo-real-de-sirius.md) | 2026-08-29 | APROBADO | Portar el banco de 47 casos de evidence/adr001-spikes al modelo real de Sirius | — |
-| [103](docs/decisions/ADR-103-via-automatica-de-sugerencias-de-memoria-delimitador-compartido-divisor-incremental-y-superficie-de-disparo-sin-qt.md) | 2026-08-29 | APROBADO | Vía automática de sugerencias de memoria: delimitador compartido, divisor incremental y superficie de disparo sin Qt | — |
-| [102](docs/decisions/ADR-102-las-pruebas-de-aceptacion-de-sirius-0.2-no-resuelven-las-decisiones-que-la-definicion-deja-abiertas.md) | 2026-08-29 | APROBADO | Las pruebas de aceptación de Sirius 0.2 no resuelven las decisiones que la Definición deja abiertas | — |
-| [101](docs/decisions/ADR-101-declarar-la-precondicion-del-contador-de-siete-dias-en-vez-de-inferirla-por-caso.md) | 2026-08-28 | APROBADO | Declarar la precondicion del contador de siete dias en vez de inferirla por caso | — |
-| [100](docs/decisions/ADR-100-el-manifiesto-versionado-decide-que-texto-es-cada-perfil.md) | 2026-08-28 | APROBADO | Fijar cada `rol@N` a un texto exacto con un manifiesto verificado por sha256 | — |
-| [099](docs/decisions/ADR-099-la-clase-investigacion-entra-en-la-tabla-de-activacion-y-su-ejecutor-es-el-investigador-medido.md) | 2026-08-28 | APROBADO | La clase investigacion entra en la tabla de activación, y su ejecutor es el investigador medido | — |
-| [098](docs/decisions/ADR-098-el-investigador-se-queda-con-nvidia-porque-fue-el-unico-que-pudo-correr-la-prueba.md) | 2026-08-27 | APROBADO | El investigador se queda con NVIDIA, porque fue el único que pudo correr la prueba | — |
-| [097](docs/decisions/ADR-097-un-tres-no-es-un-fallo-sino-un-veredicto-con-motivo-y-el-plazo-se-reparte-por-pregunta.md) | 2026-08-27 | APROBADO | Un tres no es un fallo sino un veredicto con motivo, y el plazo se reparte por pregunta | — |
-| [096](docs/decisions/ADR-096-una-contradiccion-de-etiquetas-no-es-una-divergencia-y-confundirlas-gasta-la-salida-de-emergencia.md) | 2026-08-27 | APROBADO | Una contradicción de etiquetas no es una divergencia, y confundirlas gasta la salida de emergencia | — |
-| [095](docs/decisions/ADR-095-la-escalera-de-cuatro-preguntas-y-el-atestado-que-impide-medir-un-modelo-muerto.md) | 2026-08-27 | APROBADO | La escalera de cuatro preguntas, y el atestado que impide medir un modelo muerto | — |
-| [094](docs/decisions/ADR-094-una-parada-anterior-a-la-primera-pr-se-reanuda-repitiendo-la-fase-no-continuando-sobre-un-head.md) | 2026-08-25 | APROBADO | Una parada anterior a la primera PR se reanuda repitiendo la fase, no continuando sobre un head | — |
-| [093](docs/decisions/ADR-093-el-registro-de-la-racha-vive-en-la-rama-de-memoria-no-en-main.md) | 2026-08-25 | APROBADO | El registro de la racha vive en la rama de memoria, no en `main` | — |
-| [092](docs/decisions/ADR-092-cerrar-el-marcador-de-corte-por-presupuesto-abandonandolo-cuando-el-workitem-sale-de-curso.md) | 2026-08-25 | APROBADO | Cerrar el marcador de corte por presupuesto abandonándolo cuando el WorkItem sale de curso | — |
-| [091](docs/decisions/ADR-091-la-disciplina-de-evidencia-alcanza-tambien-a-responder-no-solo-a-modificar-codigo.md) | 2026-08-25 | APROBADO | La disciplina de evidencia alcanza también a responder, no solo a modificar código | — |
-| [090](docs/decisions/ADR-090-darle-horario-al-motor-treinta-minutos-despues-del-reconciliador.md) | 2026-08-25 | APROBADO | Darle horario al motor, dentro de la ventana que dejan el reconciliador y el contador | — |
-| [089](docs/decisions/ADR-089-partir-un-objetivo-grande-lo-hace-la-sesion-interactiva-y-el-descomponedor-automatico-queda-aplazado.md) | 2026-08-25 | APROBADO | Partir un objetivo grande lo hace la sesión interactiva, y el descomponedor automático queda aplazado | — |
-| [088](docs/decisions/ADR-088-elegir-el-prompt-por-el-perfil-del-encargo-y-morir-en-rojo-si-no-se-reconoce.md) | 2026-08-25 | APROBADO | Elegir el prompt por el perfil del encargo, y morir en rojo si no se reconoce | — |
-| [087](docs/decisions/ADR-087-dar-nombre-propio-a-los-bloques-del-motor-y-exigir-evidencia-para-cerrar-uno.md) | 2026-08-25 | APROBADO | Dar nombre propio a los bloques del motor y exigir evidencia para cerrar uno | — |
-| [086](docs/decisions/ADR-086-dar-manos-al-despachador-dentro-de-actions-para-que-el-encargo-llegue-al-diario-del-motor.md) | 2026-08-25 | APROBADO | Dar manos al despachador dentro de Actions, para que el encargo llegue al diario del motor | — |
-| [085](docs/decisions/ADR-085-el-interprete-de-intencion-comprueba-sensibilidad-y-verbo-reconocido-antes-que-marcadores-de-pasado.md) | 2026-08-25 | APROBADO | El intérprete de intención comprueba sensibilidad y verbo reconocido antes que marcadores de pasado | — |
-| [084](docs/decisions/ADR-084-el-aviso-de-lecturas-caidas-hoy-no-interrumpe-el-contador-de-la-racha.md) | 2026-08-25 | APROBADO | El aviso de lecturas caidas hoy no interrumpe el contador de la racha | — |
-| [083](docs/decisions/ADR-083-la-memoria-del-motor-vive-en-su-propia-rama-no-en-main.md) | 2026-08-24 | APROBADO | La memoria del motor vive en su propia rama, no en `main` | — |
-| [082](docs/decisions/ADR-082-el-motor-corre-dentro-de-github-actions-y-su-memoria-vive-en-el-repositorio.md) | 2026-08-24 | APROBADO | El motor corre dentro de GitHub Actions y su memoria vive en el repositorio | — |
-| [081](docs/decisions/ADR-081-un-doble-de-pruebas-que-se-calla-esconde-el-defecto-que-deberia-delatar.md) | 2026-08-23 | APROBADO | Un doble de pruebas que se calla esconde el defecto que debería delatar | — |
-| [080](docs/decisions/ADR-080-un-arreglo-fusionado-se-reconoce-por-el-asunto-del-commit.md) | 2026-08-23 | APROBADO | Un arreglo fusionado se reconoce por el asunto del commit, y por eso la guarda ve poco pero no se equivoca | — |
-| [079](docs/decisions/ADR-079-una-tabla-indexada-por-un-enum-cubre-el-enum-entero-o-lo-declara.md) | 2026-08-23 | APROBADO | Una tabla indexada por un enum cubre el enum entero, o lo declara | — |
-| [078](docs/decisions/ADR-078-tres-rondas-consecutivas-sobre-el-mismo-archivo-son-la-familia-repetida-medido-antes-de-fijarlo.md) | 2026-08-23 | APROBADO | Tres rondas consecutivas sobre el mismo archivo son la familia repetida, medido antes de fijarlo | — |
-| [077](docs/decisions/ADR-077-la-autoridad-de-una-clase-es-la-tabla-estatica-mas-un-registro-fechado-y-su-reversion-no-espera-a-la-segunda-divergencia.md) | 2026-08-23 | APROBADO | La autoridad de una clase es la tabla estática más un registro fechado, y su reversión no espera a la segunda divergencia | — |
-| [076](docs/decisions/ADR-076-el-motor-deja-de-necesitar-el-arbol-de-codigo-para-ejecutar-la-proyeccion.md) | 2026-08-23 | APROBADO | El motor deja de necesitar el árbol de código para ejecutar la proyección | — |
-| [075](docs/decisions/ADR-075-el-estado-de-un-defecto-lo-dice-el-registro-versionado-y-la-incidencia-se-cierra-con-el.md) | 2026-08-22 | APROBADO | El estado de un defecto lo dice el registro versionado y la incidencia se cierra con el | — |
-| [074](docs/decisions/ADR-074-el-contador-de-los-siete-dias-deriva-la-correccion-manual-del-diario-de-eventos-del-motor.md) | 2026-08-22 | APROBADO | El contador de los siete días deriva la corrección manual del diario de eventos del motor | — |
-| [073](docs/decisions/ADR-073-el-verificador-de-proyeccion-se-ve-fallar-antes-de-fiarse-de-que-de-verde.md) | 2026-08-22 | APROBADO | El verificador de proyección se ve fallar antes de fiarse de que dé verde | — |
-| [072](docs/decisions/ADR-072-reparar-tiene-dos-entradas-porque-el-ciclo-real-tiene-dos.md) | 2026-08-22 | APROBADO | REPARAR tiene dos entradas, porque el ciclo real tiene dos | — |
-| [071](docs/decisions/ADR-071-la-inversa-de-la-proyeccion-del-cuerpo-para-que-haya-algo-que-verificar.md) | 2026-08-22 | APROBADO | La inversa de la proyección del cuerpo, para que haya algo que verificar | — |
-| [070](docs/decisions/ADR-070-las-defensas-de-workflow-reconocen-accion-clasificada-no-un-nombre.md) | 2026-08-22 | APROBADO | Las defensas de workflow reconocen «acción clasificada», no un nombre | — |
-| [069](docs/decisions/ADR-069-fusionar-exige-que-la-rama-este-al-dia-con-su-base.md) | 2026-08-22 | APROBADO | Fusionar exige que la rama esté al día con su base | — |
-| [068](docs/decisions/ADR-068-la-etiqueta-que-el-motor-aplica-depende-de-la-clase-que-despacha.md) | 2026-08-22 | APROBADO | La etiqueta que el motor aplica depende de la clase que despacha | — |
-| [067](docs/decisions/ADR-067-las-ordenes-del-propietario-toleran-la-firma-que-anade-la-herramienta.md) | 2026-08-22 | APROBADO | Las órdenes del propietario toleran la firma que añade la herramienta | — |
-| [066](docs/decisions/ADR-066-perfiles-documentales-documentalista-y-revisor-documental-coherentes-con-la-maquinaria-existente.md) | 2026-08-22 | APROBADO | Perfiles documentales: documentalista y revisor documental, coherentes con la maquinaria existente | — |
-| [065](docs/decisions/ADR-065-el-despachador-usa-el-diario-durable-ahora-y-no-en-d2.md) | 2026-08-22 | APROBADO | El despachador usa el diario durable ahora y no en D2 | — |
-| [064](docs/decisions/ADR-064-diario-del-despachador-durable-reutiliza-adr-061.md) | 2026-08-22 | APROBADO | Diario del despachador durable reutiliza ADR-061 | — |
-| [063](docs/decisions/ADR-063-sirius-despachar-la-costura-entre-una-orden-y-la-via-github-con-ensayo-por-defecto.md) | 2026-08-21 | APROBADO | `sirius-despachar`: la costura entre una orden y la vía GitHub, con ensayo por defecto | — |
-| [062](docs/decisions/ADR-062-c2-despacho-end-to-end-de-programacion-escritura-minima-enumerada-y-orden-enlazada-en-la-evidencia.md) | 2026-08-21 | APROBADO | C2 — despacho end-to-end de programación: escritura mínima enumerada y orden enlazada en la evidencia | — |
-| [061](docs/decisions/ADR-061-diario-del-supervisor-durable-como-outbox-propio-no-acoplado-al-almacen.md) | 2026-08-21 | APROBADO | Diario del supervisor durable como outbox propio, no acoplado al almacen | — |
-| [060](docs/decisions/ADR-060-un-error-del-conector-no-es-silencio-y-no-debe-costar-el-plazo-entero.md) | 2026-08-21 | APROBADO | Un error del conector no es silencio, y no debe costar el plazo entero | — |
-| [059](docs/decisions/ADR-059-la-sesion-dice-no-pude-mirar-en-vez-de-no-hay-nada-y-lo-dice-tambien-cuando-encontro-algo.md) | 2026-08-21 | APROBADO | La sesión dice «no pude mirar» en vez de «no hay nada», y lo dice también cuando sí encontró algo | — |
-| [058](docs/decisions/ADR-058-la-fase-entra-en-la-tabla-de-estados-como-coordenada-dependiente-y-el-eje-fase-gana-su-propia-guarda.md) | 2026-08-21 | APROBADO | La fase entra en la tabla de estados como coordenada dependiente, y el eje fase gana su propia guarda | — |
-| [057](docs/decisions/ADR-057-supervisor-de-la-via-github-detectar-runs-perdidos-y-actuar.md) | 2026-08-21 | APROBADO | Supervisor de la vía GitHub: detectar Runs perdidos y actuar | — |
-| [056](docs/decisions/ADR-056-el-motor-puede-transportar-una-orden-ya-dada-y-reparar-sus-propios-runs.md) | 2026-08-21 | APROBADO | El motor puede transportar una orden ya dada y reparar sus propios Runs | — |
-| [055](docs/decisions/ADR-055-un-comando-de-consola-que-el-propietario-pueda-teclear-para-hablar-con-el-motor.md) | 2026-08-21 | APROBADO | Dar al motor un comando de consola que conversa y consulta, y que no puede crear trabajo | — |
-| [054](docs/decisions/ADR-054-un-run-tiene-que-poder-decir-con-que-modelo-se-ejecuto.md) | 2026-08-21 | APROBADO | Un Run tiene que poder decir con qué modelo se ejecutó | — |
-| [053](docs/decisions/ADR-053-no-pude-observar-es-un-valor-del-puerto-y-el-barrido-no-lo-convierte-en-exito.md) | 2026-08-21 | APROBADO | «No pude observar» es un valor del puerto, y el barrido no lo convierte en éxito | — |
-| [052](docs/decisions/ADR-052-una-ruta-citada-por-un-adr-existe-o-esta-fijada-como-historia.md) | 2026-08-21 | APROBADO | Una ruta citada por un ADR existe, o está fijada como historia | — |
-| [051](docs/decisions/ADR-051-el-cuerpo-de-una-incidencia-pasa-por-el-mismo-filtro-de-confianza-que-sus-comentarios.md) | 2026-08-21 | APROBADO | El cuerpo de una incidencia pasa por el mismo filtro de confianza que sus comentarios | — |
-| [050](docs/decisions/ADR-050-los-tres-proveedores-de-contexto-tienen-la-misma-firma-y-reportan-su-fallo.md) | 2026-08-21 | APROBADO | Los tres proveedores de `contexto.recuperar` tienen la misma firma y reportan su fallo | — |
-| [048](docs/decisions/ADR-048-la-capa-que-llama-a-las-reglas-tambien-necesita-su-tabla-exhaustiva-de-estados.md) | 2026-08-21 | APROBADO | La capa que llama a las reglas también necesita su tabla exhaustiva de estados | — |
-| [047](docs/decisions/ADR-047-un-defecto-encontrado-se-registra-con-incidencia-y-no-se-borra-nunca.md) | 2026-08-21 | APROBADO | Un defecto encontrado se registra con incidencia y no se borra nunca | — |
-| [046](docs/decisions/ADR-046-spike-i1-bordes-de-status-sobre-runs-de-actions.md) | 2026-08-21 | APROBADO | Spike I1: bordes de STATUS sobre runs de Actions | — |
-| [045](docs/decisions/ADR-045-el-corte-por-presupuesto-tiene-que-salir-tambien-de-waiting-que-es-donde-se-gasta-el-dinero.md) | 2026-08-21 | APROBADO | El corte por presupuesto tiene que salir también de WAITING, que es donde se gasta el dinero | — |
-| [044](docs/decisions/ADR-044-abrir-el-repositorio-al-publico-sin-que-el-propio-repositorio-lo-desmienta.md) | 2026-08-20 | APROBADO | Abrir el repositorio al público sin que el propio repositorio lo desmienta | — |
-| [043](docs/decisions/ADR-043-gobierno-previo-al-primer-worker-externo-puerta-determinista-presupuesto-con-corte-y-siete-causas-cerradas-de-escalado.md) | 2026-08-19 | APROBADO | Gobierno previo al primer Worker externo: puerta determinista, presupuesto con corte y siete causas cerradas de escalado | — |
-| [042](docs/decisions/ADR-042-un-paso-de-preparacion-sin-plazo-propio-puede-costar-el-trabajo-entero.md) | 2026-08-19 | APROBADO | Un paso de preparación sin plazo propio puede costar el trabajo entero | — |
-| [041](docs/decisions/ADR-041-la-autoridad-de-cada-clase-de-trabajo-se-fija-antes-de-que-exista-el-primer-workitem.md) | 2026-08-19 | APROBADO | La autoridad de cada clase de trabajo se fija antes de que exista el primer WorkItem | — |
-| [040](docs/decisions/ADR-040-convertir-una-intencion-en-encargo-preguntando-una-cosa-cada-vez.md) | 2026-08-19 | APROBADO | Convertir una intención en encargo preguntando una cosa cada vez | — |
-| [039](docs/decisions/ADR-039-perfiles-versionados-gobiernan-a-los-workers-sin-acoplarse-a-runtimes-y-el-egress-es-imposible-de-saltar.md) | 2026-08-19 | APROBADO | Perfiles versionados gobiernan a los Workers sin acoplarse a runtimes, y el egress es imposible de saltar | — |
-| [038](docs/decisions/ADR-038-una-prueba-que-mutila-datos-debe-alterar-siempre-lo-que-comprueba.md) | 2026-08-19 | APROBADO | Una prueba que mutila datos debe alterar siempre lo que comprueba | — |
-| [037](docs/decisions/ADR-037-reanudar-y-fusionar-son-gestos-humanos-y-la-automatizacion-no-los-rodea.md) | 2026-08-18 | APROBADO | Reanudar y fusionar son gestos humanos, y la automatización no los rodea | — |
-| [036](docs/decisions/ADR-036-una-lectura-caida-no-es-una-ausencia-y-el-llamador-tiene-que-poder-distinguirlas.md) | 2026-08-18 | APROBADO | Una lectura caída no es una ausencia, y el llamador tiene que poder distinguirlas | — |
-| [035](docs/decisions/ADR-035-el-revisor-no-juzga-con-el-interprete-del-runner-y-toda-parada-tiene-vuelta.md) | 2026-08-18 | APROBADO | El revisor no juzga con el intérprete del runner, y toda parada tiene vuelta | — |
-| [034](docs/decisions/ADR-034-espejo-de-solo-lectura-marca-cada-proyeccion-y-nunca-confunde-fallo-con-ausencia.md) | 2026-08-18 | APROBADO | El espejo de solo lectura de la vía GitHub marca cada proyección como no autoritativa y nunca confunde un fallo de lectura con una ausencia | — |
-| [033](docs/decisions/ADR-033-una-regla-que-enumera-vehiculos-siempre-tiene-un-hueco-mas.md) | 2026-08-18 | APROBADO | Una regla que enumera vehículos siempre tiene un hueco más: enunciar la propiedad | — |
-| [032](docs/decisions/ADR-032-el-numero-de-un-adr-es-el-maximo-existente-mas-uno.md) | 2026-08-17 | APROBADO | Calcular el número de un ADR como el máximo existente más uno | — |
-| [031](docs/decisions/ADR-031-el-corrector-puede-declarar-que-el-fallo-de-ci-no-es-suyo.md) | 2026-08-18 | APROBADO | Un rol necesita un veredicto para cada desenlace real, incluido «esto no lo he roto yo» | — |
-| [030](docs/decisions/ADR-030-una-parada-se-levanta-con-una-orden-no-con-cirugia.md) | 2026-08-18 | APROBADO | Todo estado de parada declara la orden que lo levanta | — |
-| [029](docs/decisions/ADR-029-almacen-durable-de-referencia-y-barrido-de-recuperacion-a2.md) | 2026-08-18 | APROBADO | Promocionar el patrón de escritura de S1 a almacén de referencia del Work Engine, más el barrido de recuperación (A2) | — |
-| [028](docs/decisions/ADR-028-una-averia-transitoria-no-justifica-una-invariante-permanente.md) | 2026-08-17 | APROBADO | Una avería transitoria de un tercero no justifica una invariante permanente en la suite | — |
-| [027](docs/decisions/ADR-027-las-etiquetas-se-leen-del-objeto-de-la-incidencia.md) | 2026-08-17 | APROBADO | Las etiquetas se leen del objeto de la incidencia, nunca del endpoint `/issues/{n}/labels` | — |
-| [026](docs/decisions/ADR-026-spike-i3-diario-append-only-con-checksum-e-idempotencia.md) | 2026-08-17 | APROBADO | Adoptar diario append-only con `fsync`, checksum por registro e idempotencia por clave como patrón de escritura seguro del spike I3 | — |
-| [025](docs/decisions/ADR-025-una-afirmacion-del-prompt-sobre-el-entorno-debe-ser-verificable.md) | 2026-08-17 | APROBADO | Ninguna afirmación de un prompt sobre su entorno vale sin una prueba que la ate al workflow que lo ejecuta | — |
-| [024](docs/decisions/ADR-024-ninguna-regla-de-rol-puede-faltar-en-un-prompt.md) | 2026-08-17 | APROBADO | Extender al implementador las tres reglas de rol y vigilarlas con una prueba que recorre el directorio de prompts | — |
-| [023](docs/decisions/ADR-023-admitir-el-canal-por-el-que-codex-declara-que-no-encontro-hallazgos.md) | 2026-08-16 | APROBADO | Admitir como aprobación de Codex el comentario en el que declara no haber encontrado hallazgos | — |
-| [022](docs/decisions/ADR-022-el-revisor-escribe-antes-de-revisar-no-espera-y-usa-el-entorno-que-hay.md) | 2026-08-16 | APROBADO | Endurecer el prompt del revisor: veredicto provisional, prohibición de esperar nada (subagentes incluidos) y revisión con el entorno acotado que hay | — |
-| [021](docs/decisions/ADR-021-el-corrector-no-espera-nada-en-segundo-plano.md) | 2026-08-16 | APROBADO | Prohibir en el prompt que el corrector cierre el turno esperando trabajo en segundo plano | — |
-| [020](docs/decisions/ADR-020-construir-el-work-engine-por-verticales-delgadas-sobre-la-via-github.md) | 2026-08-15 | APROBADO | Construir el Work Engine por verticales delgadas, reutilizando la vía GitHub y aplazando cada decisión a su punto exacto de consumo | — |
-| [019](docs/decisions/ADR-019-el-motor-de-trabajo-posee-el-estado-y-los-workers-son-sustituibles.md) | 2026-08-15 | APROBADO | Diseñar el Motor de Trabajo como software determinista que posee el estado, con Workers sustituibles detrás de Adapters | — |
-| [016](docs/decisions/ADR-016-el-auditor-se-lanza-por-etiqueta-y-no-escribe-nunca.md) | 2026-08-14 | APROBADO | El Auditor se lanza con una etiqueta, y el trabajo que puede escribir no ejecuta modelos | — |
-| [016](docs/decisions/ADR-016-el-estado-se-lee-de-main-no-de-la-rama.md) | 2026-08-14 | APROBADO | El estado del proyecto se lee de `main`, nunca de la rama de trabajo | — |
-| [015](docs/decisions/ADR-015-toda-escritura-de-etiqueta-pasa-por-una-envoltura.md) | 2026-08-14 | APROBADO | Toda escritura de etiqueta pasa por una envoltura con el PAT, y la prueba busca lo malo en vez de lo bueno | — |
-| [014](docs/decisions/ADR-014-la-identidad-que-escribe-una-etiqueta-decide-si-avisa.md) | 2026-08-14 | APROBADO | Quien escribe una etiqueta notificable usa la identidad real, y el recolector de Codex no aprueba por comentario | — |
-| [013](docs/decisions/ADR-013-la-contrasena-de-obs-vive-en-el-almacen-del-sistema.md) | 2026-08-14 | APROBADO | La contraseña de OBS vive en el almacén del sistema, y sin él no se guarda | — |
-| [012](docs/decisions/ADR-012-frontera-de-confianza-de-sirius-0.1.md) | 2026-08-14 | APROBADO | Un proceso local que corre como el usuario está dentro de la frontera de confianza | — |
-| [011](docs/decisions/ADR-011-la-respuesta-de-obs-se-correlaciona-con-su-peticion.md) | 2026-08-14 | APROBADO | Correlacionar cada respuesta de OBS con su petición, en vez de desconectar ante un plazo agotado | — |
-| [010](docs/decisions/ADR-010-auditor-agent-v0-como-primer-piloto.md) | 2026-08-12 | APROBADO | Adoptar Auditor Agent v0 (solo lectura) como primer piloto de agentes | — |
-| [009](docs/decisions/ADR-009-la-voz-de-model-studio-suena-por-el-sistema-y-empieza-antes.md) | 2026-08-12 | APROBADO | Sacar la voz de Model Studio por el reproductor del sistema y empezar a hablar antes de terminar | — |
-| [008](docs/decisions/ADR-008-cargar-en-lote-las-revisiones-vigentes-al-listar.md) | 2026-08-11 | APROBADO | Cargar en lote las revisiones vigentes al listar recuerdos y decisiones | — |
-| [007](docs/decisions/ADR-007-el-limite-de-rendimiento-solo-se-afirma-con-holgura.md) | 2026-08-10 | APROBADO | Afirmar el límite de rendimiento en CI solo si hay un orden de magnitud de holgura | — |
-| [006](docs/decisions/ADR-006-la-trazabilidad-se-declara-y-se-comprueba.md) | 2026-08-10 | APROBADO | Declarar la trazabilidad PA/SP y comprobarla por máquina, en vez de derivarla por búsqueda | — |
-| [005](docs/decisions/ADR-005-un-solo-registro-de-estado-para-v8.md) | 2026-08-10 | APROBADO | Mantener el estado de V8 en un único registro que la automatización pueda escribir | — |
-| [004](docs/decisions/ADR-004-red-de-seguridad-periodica-para-estados-que-no-avanzan.md) | 2026-08-10 | APROBADO | Una red de seguridad periódica, porque un run muerto no puede avisar | — |
-| [003](docs/decisions/ADR-003-los-plazos-son-minimos-contra-una-cota-absoluta.md) | 2026-08-10 | APROBADO | Un plazo es un mínimo contra una cota absoluta, nunca una ventana propia | — |
-| [002](docs/decisions/ADR-002-permisos-de-la-automatizacion-sobre-workflows.md) | 2026-08-09 | APROBADO | No conceder a la automatización permiso sobre sus propios workflows | — |
-| [001](docs/decisions/ADR-001-disciplina-de-evidencia.md) | 2026-08-08 | APROBADO | Instrumentar la disciplina de evidencia con una skill y este registro | — |
+| 258 | 2026-10-18 | APROBADO | Hacer sitio en la memoria común nombrando cada ADR por su número, sin su ruta | La tabla de decisiones de `MEMORIA.md` nombra cada ADR por su número, con su fecha, su estado, su título y, desde el 174, su resumen, y ya no lleva la ruta de… |
+| 257 | 2026-10-18 | APROBADO | Apuntar lo que midió y decidió el propietario la noche del 17 al 18-10 | Pasan E-R02-04 y E-R02-05, y E-R02-03 no pasa. La prueba sin internet no se hace, y la 0.4 empieza sin esperar a sus pruebas. |
+| 256 | 2026-10-18 | APROBADO | Cortar la respuesta cuando el modelo se inventa el turno del propietario | La opción A: cada petición que lleva diálogo en sus instrucciones lleva sus comienzos de turno como paradas, y Ollama deja de escribir en cuanto el modelo… |
+| 255 | 2026-10-17 | APROBADO | Cerrar Sirius cuelga todo lo que está en vuelo | La opción B, con la orden de captura esperada. C queda como segunda línea solo si, con B, la salida siguiera esperando por trabajo que no es red. |
+| 254 | 2026-10-17 | APROBADO | Al cortarle, dejar de escribir la respuesta | La opción A. Cortarle por voz no es cancelar el envío: lo dicho queda dicho, ahora solo hasta donde llegó a escribir. Es el modelo de ADR-245 frente a la letra… |
+| 253 | 2026-10-17 | APROBADO | Arreglar lo que salió del repaso final antes de sus pruebas | Un arreglo por punto, en los ficheros donde vive el fallo: `127.0.0.1`. Los seis adaptadores de Ollama, la charla, las huellas y los cuatro |
+| 252 | 2026-10-17 | APROBADO | Dejar la voz y la ventana listas para sus pruebas de voz | Tope propio del juez, cortarle colgando su conexión, `think` apagado con reintento, la APM soltada al salir y migrar sin el registro de Alembic. Son 1(a)… |
+| 251 | 2026-10-17 | APROBADO | Ajustar la memoria a lo que midió su ordenador: E-R02-04 y E-R02-05 | La opción 1. Las decisiones son técnicas y caben en lo que permite ADR-238, que dejó el umbral para que lo moviera lo que dijera E-R02-04; las toma la sesión… |
+| 250 | 2026-10-17 | APROBADO | Que la voz de personaje cargue con su marca de agua | La opción 1: `setuptools<82` en el extra `personaje`. |
+| 249 | 2026-10-16 | APROBADO | Que migrar la base no apague el diario de Sirius | La opción 1: `disable_existing_loggers=False` en el `fileConfig` de Alembic. |
+| 248 | 2026-10-16 | APROBADO | Poner tope a lo que escribe Ollama y apuntar sus errores | La opción 1: `num_predict` con el «Máximo de tokens de salida» de los ajustes. |
+| 247 | 2026-10-16 | APROBADO | Dar con una orden la cuenta de las 50 marcas de E-R02-02 | La opción 1: una orden da la cuenta de las marcas, y la de E-R02-05 mide su base y acaba. |
+| 246 | 2026-10-16 | APROBADO | Elegir su voz a ciegas: la pieza F de la voz | La opción 1: la voz de personaje es la voz de serie de Chatterbox, sin audio de nadie; y la voz elegida vale desde el turno siguiente, sin volver a abrir… |
+| 245 | 2026-10-15 | APROBADO | Cortarle: la pieza E de la voz | La opción 2; el micro leído todo el rato que la charla contesta, por un hilo aparte y antes de decir cada frase; y el corte apuntado en el mensaje de Sirius.… |
+| 244 | 2026-10-15 | APROBADO | Escuchar siempre: la pieza D de la voz | Se adopta la opción 3, y la charla dura 10 s, desde que Sirius calla hasta que empieza a oírse la voz del turno siguiente. Los turnos de voz no despiertan al… |
+| 243 | 2026-10-15 | APROBADO | Hablar en local: la pieza C de la voz | Se adopta la opción 2. |
+| 242 | 2026-10-14 | APROBADO | Oír en local: la pieza B de la voz | Se adopta la opción 2. Lo decide la sesión (ADR-204: no es dinero, ni salud, ni cambia lo que el propietario ve u oye). |
+| 241 | 2026-10-13 | APROBADO | Empezar la 0.3 del robot, la voz, por sus pruebas de aceptación | Se adopta la opción 2. |
+| 240 | 2026-10-08 | APROBADO | Enseñar a Sirius en cada turno los tres ejemplos que más se parecen a la charla, darle sus palabras sueltas y que diga él lo que contesta a las órdenes de memoria | La opción 2, con lo que describe la nota de arranque. En concreto: Los ejemplos, como datos. `identity_versions.examples` guarda, en JSON, quién habla, |
+| 239 | 2026-10-07 | APROBADO | Guardar los hechos con su fecha y quién lo dijo como recuerdos, soñar sin leer a Sirius y obedecer las órdenes de memoria sin pasar por el modelo | Se adopta la opción 2. |
+| 238 | 2026-10-07 | APROBADO | Buscar los recuerdos por significado dentro de sirius.db y sacar a Ollama de cada respuesta | Se adopta la opción 2. |
+| 237 | 2026-10-07 | APROBADO | Dar a Sirius memoria propia, un juez y las 40 preguntas trampa | Se adopta la opción 2 para la memoria propia, y las preguntas trampa se contestan aparte, como el primer turno de una charla nueva. |
+| 236 | 2026-10-07 | APROBADO | Dar a la charla de Sirius sus modos, su recordatorio, su resumen y los dos botones | Se adopta la opción 2, y el resumen se hace al acabar el turno que lo dispara. |
+| 235 | 2026-10-07 | APROBADO | Dar a Sirius la semilla del robot hecha con las marcas y las palabras del propietario | Se adopta la opción 2. |
+| 234 | 2026-10-07 | APROBADO | Llevar la charla de Sirius al Ollama de este ordenador y elegir su modelo a ciegas | Se adoptan la opción 1 y, para la prueba, una ventana dentro de Sirius. |
+| 233 | 2026-10-07 | APROBADO | Empezar la 0.2 del robot por su semilla y por sus pruebas de aceptación | Se adopta la opción 2. |
+| 232 | 2026-10-06 | APROBADO | Hacer de Sirius solo el software del robot y revisar el roadmap: primero el cerebro, después la cabeza | La opción 3, en estos documentos: |
+| 231 | 2026-10-02 | APROBADO | Un defecto se cierra desde la PR que mete en `main` el ADR que lo nombra, no solo desde la del ADR que lo declaró | Un defecto cerrado puede citar en `pr:` la PR que metió en `main` el ADR que lo declaró (ADR-222) o la que metió un ADR posterior que lo nombra por su id… |
+| 230 | 2026-10-02 | APROBADO | Registrar qué revisores tuvo cada ronda y medir la convergencia y las familias solo entre rondas comparables | El veredicto agregado dice qué revisores tuvo la ronda. La regla 5 de `sirius_aggregate_reviews.py` añade `reviewers`: `["CLAUDE", "CODEX"]` en la revisión… |
+| 229 | 2026-10-01 | APROBADO | Los instantes de G8 se comparan en una sola forma canónica, sean cuales sean sus escrituras | `src/sirius/domain/instantes.py` (nuevo): `FORMA_CANONICA` (`%Y-%m-%dT%H:%M:%S.%fZ`), `en_forma_canonica(texto) -> str \| None` (una fecha ISO con hora opcional… |
+| 228 | 2026-10-01 | APROBADO | El implementador sabe qué hora es: su paso tiene plazo propio y el prompt lleva la hora a la que muere y la hora límite de la validación final | En `.github/workflows/implement-sirius-work.yml`: El primer paso del job, «Anotar el arranque del job», deja |
+| 227 | 2026-10-01 | APROBADO | Las divergencias que el reflector aparta para una persona quedan escritas junto al diario y la vista de desenlaces las enseña con su edad | Módulo nuevo `src/sirius_engine/divergencias.py`: `DivergenciaVista` (lo que la pasada declara), `DivergenciaApartada` (lo que se conserva: encargo… |
+| 226 | 2026-10-01 | APROBADO | Cuando Codex declara que no revisa y Claude pidió cambios, la ronda entrega los hallazgos de Claude en vez de tirarlos | En `scripts/automation/sirius_aggregate_reviews.py`: Las razones con las que el recolector dice que el conector declaró que |
+| 225 | 2026-10-01 | APROBADO | La línea del contador de los siete días quedó cancelada por decisión del propietario el 13-09 y ADR-101 deja de tenerla como bloque pendiente | La pieza (C) de #376 queda cancelada por decisión del propietario del 13-09-2026 (#610). No se ordenará salvo decisión nueva suya; si algún día la quiere, la… |
+| 224 | 2026-10-01 | APROBADO | Quality no muere por un `uv sync` sin caché: los dos pasos largos llevan plazo propio y el job sube de 20 a 60 minutos | En `.github/workflows/quality.yml`: el job pasa de `timeout-minutes: 20` a 60; «Sync environment» lleva `timeout-minutes: 20` (peor medido sin caché: |
+| 223 | 2026-10-01 | APROBADO | `continua` sobre una parada anterior a la PR repone `sirius:planned` si consta que ya estuvo planificada, y si no consta lo dice sin pedir la orden otra vez | En el camino `sin_pr`, cuando la fase de destino es `sirius:implement-requested` y la incidencia no lleva `sirius:planned`, el guion: Lee la cronología de la… |
+| 222 | 2026-10-01 | APROBADO | Un defecto cerrado lleva la PR que lo fusionó: la referencia que un clon de `main` puede seguir | Desde este ADR, un defecto `cerrado` lleva, además de `cerrado_por`, `pr: <número de la PR que lo fusiona>`; si lo cerró un encargo del motor, cuya PR la abre… |
+| 221 | 2026-10-01 | APROBADO | La puerta de activación resuelve el `Perfil: rol@N` con el mismo resolutor que el implementador, y avisa si la versión no es la vigente | La puerta gana el paso 4: con el cuerpo ya leído, y solo para los roles del carril de ejecución del manifiesto (hoy `implementer` y `documentalista`, leídos… |
+| 220 | 2026-10-01 | APROBADO | La cola regenera las vistas de la memoria al traer la base, y resuelve sola el conflicto que solo está en ellas | La puesta al día pasa a dos jobs nuevos, `regenerar` y `empujar`, que arrancan con las salidas del paso «Advance matching Sirius work item» (`ponerse_al_dia`… |
+| 219 | 2026-10-01 | APROBADO | El motor dice lo que hace: el veredicto nombra su PR, el aviso de «listo» no pide una autorización que ya no necesita y una casi-orden recibe respuesta | `sirius_apply_verdict.sh` publica la línea con `printf '%s\n' "- PR: …"`: el texto va como argumento, nunca como formato. Vale para los dos caminos del… |
+| 218 | 2026-10-01 | APROBADO | La vista de memoria deja fuera el índice de `docs/audits`, que pasa a una vista generada aparte, y no repite las rutas que ya enlaza | El índice de `docs/audits/` sale de `MEMORIA.md` y vive en `docs/audits/INDICE.md`, generado. Lo escribe el mismo comando (`uv run sirius-memoria conocimiento`… |
+| 217 | 2026-10-01 | APROBADO | La bitácora del ciclo entra en `main` con su familia, y la evidencia de ADR-002 se queda en su rama | Entran en `main`, tal como estaban en `a044fb4a`, los 48 ficheros de `docs/audits/` que la rama añade y… |
+| 216 | 2026-09-24 | APROBADO | Cerrar el ciclo: el motor se queda sin trabajo vivo, los horarios se apagan desde Actions y el estado real queda escrito | Las PR abiertas, cerradas. La #661 (cinco skills, ADR-215) fusionada aplastada en `6a58c75e`. La #117 —la rama de evidencia de julio, abierta desde el 25-07 y… |
+| 215 | 2026-09-21 | APROBADO | Cinco skills más de flujo de trabajo, salidas de la auditoría y de los ADR: la validación manual en Windows, medir con línea base, el documento con lector, la rama y la PR de sesión y las paradas del motor delante del propietario | Cinco skills nuevas en `.claude/skills/`: |
+| 214 | 2026-09-21 | APROBADO | Siete skills de flujo de trabajo salidas de las transcripciones: la noche delegada, la revisión externa, el coste antes de gastar, los comandos para su ordenador, el paquete pegado, el traspaso y el estado real | La tercera. Siete skills nuevas, en `.claude/skills/`: |
+| 213 | 2026-09-20 | APROBADO | Escribir las tres reglas de septiembre del propietario, dar proporción a la cadena de comprobación y fechar en las transcripciones las reglas del 20-09 | `AGENTS.md`, sección «Cómo conversa el propietario, y qué espera (ADR-208)», gana las reglas 11, 12 y 13, con sus palabras y su fecha: *contesta primero… |
+| 212 | 2026-09-20 | APROBADO | La cardinalidad se instruye con el criterio del canon: determinacion contra extension, no la forma de la pregunta | Se toma la opción 1. El bloque `cardinalidad` de `_INSTRUCCION` (`src/sirius/adapters/ollama_query_intent_classifier.py`) enuncia las tres definiciones de… |
+| 211 | 2026-09-20 | APROBADO | Convertir en skills lo que ya costó averiguar dos veces, con una guarda que impida que se pudran | La tercera. Cinco skills nuevas, una guarda, y las dos puertas de entrada de una sesión enterándose de que existen. |
+| 210 | 2026-09-20 | APROBADO | Archivar las incidencias que ya no describen nada, y decir dónde vive la bitácora del ciclo | De las nueve abiertas que la decisión 2 nombraba: |
+| 209 | 2026-09-20 | APROBADO | Un ADR fusionado está aprobado, y PROPUESTO deja de existir como estado | Un ADR que está en el árbol está aprobado, porque lo que lo aprueba, según él mismo, es la fusión de su PR. `PROPUESTO` deja de existir como estado. |
+| 208 | 2026-09-20 | APROBADO | Las ideas aparcadas tienen registro, y el método de conversación del propietario entra en AGENTS.md | `docs/ideas/registro_de_ideas.yml`, con tres estados y un campo que cada uno exige: |
+| 207 | 2026-09-20 | APROBADO | Archivar los dos mapas caducados de julio, retirar el workflow de Word y poner en D4 el estado que ya tenía | `docs/operations/CLAUDE_SIRIUS_KNOWLEDGE_BASE.md` y `docs/operations/CLAUDE_PROJECT_ONBOARDING.md` son fotos del 20-07-2026. El primero dice que el contrato… |
+| 206 | 2026-09-20 | APROBADO | Cada sesión declara su obra antes de empezar, y una guarda impide que dos se pisen | Una sesión declara su obra abriendo su pull request en cuanto tiene su primer commit, aunque sea borrador, y antes de empezar comprueba si otra obra viva toca… |
+| 205 | 2026-09-20 | APROBADO | La fusión no espera al propietario cuando los dos revisores aprueban | La aprobación de los dos revisores es la autorización de merge. El comentario `fusiona` del propietario deja de ser necesario y se conserva como mando manual… |
+| 204 | 2026-09-20 | APROBADO | El propietario decide producto, dinero y salud, y lo técnico lo resuelve la sesión | Se pregunta al propietario solo por tres cosas: |
+| 203 | 2026-09-19 | APROBADO | El banco mide tambien el camino de puerta cerrada: la linea base que faltaba | El instrumento aprende el otro camino; el sistema medido no se toca. |
+| 202 | 2026-09-14 | APROBADO | M17, la medición que cerraba la ola de paridad, no se hace; y la razón no consta | 1. M17 no se hace. Es una decisión del propietario, tomada antes de hoy. Si algún día se hace, es una decisión nueva: nada de lo escrito aquí la prepara. |
+| 201 | 2026-09-14 | APROBADO | La mina de aprendizaje tiene reloj: el día 1 de cada mes se pide la edición del mes que se cierra | (sin sección Decisión) |
+| 200 | 2026-09-14 | APROBADO | La cola deja de ser una condición y pasa a ser un mecanismo: el ciclo trae la base a la rama que espera | 1. La cola se consulta antes de reponer la revisión. En la rama `success)` de `.github/workflows/advance-sirius-after-quality.yml`, antes de aplicar… |
+| 199 | 2026-09-14 | APROBADO | El detector de familia repetida detiene el ciclo, y esa parada vuelve al corrector, no al revisor que la emitió | 1. Con familia repetida detectada, la puerta del veredicto detiene el ciclo. En vez de `sirius:repair-requested`, publica `sirius:blocked-decision`. El… |
+| 198 | 2026-09-14 | APROBADO | Partir un objetivo grande lo hace la sesión interactiva; el descomponedor automático queda descartado | (sin sección Decisión) |
+| 197 | 2026-09-14 | APROBADO | El detector de familia repetida agrupa por la ruta que el revisor escribe, no por el recorte anclado | El detector agrupa por la ruta que encabeza la cita, extraída con `parse_archivo_location`, y normalizada con `_normalize_text` para que la comparación siga… |
+| 196 | 2026-09-14 | APROBADO | La vista de memoria lleva el índice completo de decisiones, y el resumen solo de las que siguen vigentes como método | El índice se queda entero; la copia del resumen, no. |
+| 195 | 2026-09-14 | APROBADO | «Podar» significa archivar: en este repositorio no se borra nada | (sin sección Decisión) |
+| 194 | 2026-09-14 | APROBADO | `ci-pending` distingue «Quality todavía no ha contestado» de «Quality no va a contestar nunca» | El caso «sin resultado» se parte en dos, y solo lo parte un hecho explícito. |
+| 193 | 2026-09-14 | APROBADO | El doble de `gh` rechaza lo que el `gh` real rechaza, y la red de seguridad vuelve a poder fechar | Dos mitades, y ninguna vale sola. |
+| 192 | 2026-09-14 | APROBADO | El numero de un defecto es el numero de su ADR, no un contador aparte | Uno. El número de un defecto nuevo es el número de su ADR. `H-192` para el defecto que declara ADR-192. Nadie elige nada: se copia un dato que la entrada ya… |
+| 191 | 2026-09-14 | APROBADO | La revision es una cola: una rama entra a revision solo si main ya esta dentro de ella | Uno. La condición es una sola pregunta: ¿es la punta de `main` ancestro del head de la rama? Si lo es, lo que se revise es lo que aterrizará. Si no, la… |
+| 190 | 2026-09-14 | APROBADO | La guarda de citas no sale de docs/decisions/: medidas 590 citas y 23 rotas fuera del registro, cero son defectos de este árbol | La guarda de citas no sale de `docs/decisions/`. Con 0 defectos reales y 23 falsos positivos, el criterio de la incidencia #267 no se salva cambiándole la… |
+| 189 | 2026-09-13 | APROBADO | La salida de una parada sin incidencia es una orden del propietario, y reanudar es despachar en el mismo gesto | Se elige la opción 1: un comando del propietario, `sirius-decidir`. Y la respuesta a «qué pasa al reanudar» es que reanudar es despachar en el mismo gesto: si… |
+| 188 | 2026-09-13 | APROBADO | Parar antes de crear la incidencia cuando la orden pide tocar lo que el motor no puede escribir | Opción 1 (variante B), como QUINTA causa de sensibilidad del intérprete, con la causa `permisos_o_credenciales_sensibles`. |
+| 187 | 2026-09-13 | APROBADO | Una revision sobrevive a ponerse al dia con main si el trabajo propio de la rama no cambia | La guarda de ADR-142 pasa de «mismo head» a «mismo trabajo»: la aprobación registrada sigue valiendo si el trabajo PROPIO de la rama es el mismo en el head… |
+| 185 | 2026-09-13 | APROBADO | la puerta de la memoria se parte en tres interruptores antes de abrirla | Se añade `src/sirius/config/memory_gates.py` con una función pura, `puertas_de_memoria(settings) -> PuertasDeMemoria`, y un `dataclass(frozen=True)` de tres… |
+| 184 | 2026-09-13 | APROBADO | La prohibicion no es una peticion: el detector de sensibilidad exige que el marcador no vaya negado | `_detectar_sensibilidad` deja de preguntar ¿aparece el marcador? y pregunta ¿la orden lo PIDE?. Una aparición cuenta solo si no va negada, y basta una… |
+| 183 | 2026-09-13 | APROBADO | La ausencia de run de Quality para el head se encamina, no se espera en silencio | Opción 3. En `relanzar_quality_si_ya_termino`, la rama que hoy sale con `return 0` cuando no hay ningún run relanzable pasa a llamar a… |
+| 182 | 2026-09-13 | APROBADO | La guarda del registro de defectos deriva de los ADR que declaran leccion | La guarda del registro de defectos gana una segunda mitad, y esa mitad deriva su inventario de `docs/decisions/`: un ADR que declara una lección con `familia:`… |
+| 181 | 2026-09-12 | APROBADO | La contradicción de etiquetas se decide por lo que proyectan, no por cuántas son | Opción 2. `_estado_y_fase` calcula el conjunto de destinos de las etiquetas presentes y marca contradicción si y solo si hay más de uno: |
+| 180 | 2026-09-12 | APROBADO | El numero del siguiente ADR se calcula contra las ramas del remoto, no contra las que el clon tenga traidas | `scripts/siguiente_adr.py` trae las cabezas del remoto antes de calcular el número, con el refspec explícito `+refs/heads/*:refs/remotes/origin/*` para que un… |
+| 179 | 2026-09-12 | APROBADO | La guarda de piezas sin llamante deriva su inventario del codigo del motor | El inventario de `tests/automation/test_piezas_con_llamante.py` se deriva de `src/sirius_engine` con `ast`, en tres formas de pieza: `modulo:`, `definicion:` y… |
+| 178 | 2026-09-12 | APROBADO | La autoridad por clase se deriva de la vía GitHub que el despachador declara, no de una segunda tabla a mano | La autoridad por clase se deriva de una sola definición en el dominio de qué clases existen en la vía GitHub (`CLASES_CON_VIA_GITHUB`, en… |
+| 177 | 2026-09-12 | APROBADO | La ampliación por categoría entra por una señal explícita de la petición, no por la subcadena «contexto» | `Peticion` gana un campo booleano propio, `amplia_por_categoria`, apagado por defecto, y el consumidor lee ese campo y nada más. `pide_contexto` y… |
+| 176 | 2026-09-12 | APROBADO | El cierre de una incidencia se retoma desde donde se quedó | El cierre de una parada sin salida se comprueba DESPUÉS de todo lo demás, y se retoma desde el estado en que el motor está. Primero se calcula el plan por… |
+| 175 | 2026-09-12 | APROBADO | Un tablero por incidencia: un solo comentario que el motor mantiene al día | Uno. Un solo comentario por incidencia, reescrito en cada cambio de estado. Lleva: qué se pidió (del cuerpo declarado), por dónde va el ciclo, qué se ha… |
+| 174 | 2026-09-12 | APROBADO | La mina en dos pasadas: la lección se declara en el ADR que la produce y las familias se cuentan solas | Uno. La lección se declara en el ADR que la produce, en un bloque `## La lección` con tres líneas —`familia`, `sin esto se repetiría`, `lo hace cumplir`— o con… |
+| 173 | 2026-09-12 | APROBADO | El cierre de la incidencia es un desenlace, y el reflector mira todas las clases que el despachador despacha | — |
+| 172 | 2026-09-12 | APROBADO | La memoria de sesión vive en Supermemory y el conocimiento en el repositorio, con una regla de reparto que toda IA lee | — |
+| 171 | 2026-09-11 | APROBADO | La memoria común arranca sobre lo que ya existe: evaluación funcional de las tres piezas (T-5) y lo que el motor tiene que publicar | — |
+| 170 | 2026-09-11 | APROBADO | DEC-001 entra por pertenencia a su lista cerrada: portar los miembros del origen y que G4 decida por pertenencia | — |
+| 169 | 2026-09-08 | APROBADO | El filtro recorta por la cardinalidad que la peticion declara | — |
+| 168 | 2026-09-08 | APROBADO | Listar por vigencia cuando la pregunta declara un intervalo y la busqueda lexica no tiene de donde partir | — |
+| 167 | 2026-09-08 | APROBADO | Las dos puertas de carril retirado comprueban el estado real, no declaran éxito sin confirmarlo y se cierran ante cualquier fallo del lector | — |
+| 166 | 2026-09-08 | APROBADO | El cargador del banco da a cada ítem la fecha de registro que el corpus declara | — |
+| 164 | 2026-09-08 | APROBADO | La pregunta se convierte en una petición propia interpretada, no en la política uniforme de hoy | — |
+| 163 | 2026-09-08 | APROBADO | Desactivar de forma reversible los carriles de investigación y auditoría: el registro de carriles retirados cierra sus entradas y explica en vez de esperar | — |
+| 162 | 2026-09-08 | APROBADO | La altura de una fila del chat se mide sobre un layout asentado, no en cuanto aparece el texto | — |
+| 161 | 2026-09-08 | APROBADO | Retirar los carriles dedicados de investigación y auditoría, conservando los revisores del ciclo: decisión tomada, ejecución pendiente | — |
+| 160 | 2026-09-08 | APROBADO | Formalizar la separación entre Sirius y su motor: Sirius es el compañero, el motor ejecuta y las IAs externas son el lugar de trabajo | — |
+| 159 | 2026-09-08 | APROBADO | El recibo de una reanudación distingue cada permiso escrito, no solo su head | — |
+| 158 | 2026-09-07 | APROBADO | Cada evento de etiqueta tiene su propia ranura de notificación | — |
+| 157 | 2026-09-07 | APROBADO | Cada parada deja su propio marcador de notificación | — |
+| 156 | 2026-09-07 | APROBADO | El recolector lee los hallazgos que Codex publica en el cuerpo de la revisión | — |
+| 155 | 2026-09-06 | APROBADO | El corrector entrega por hallazgo, con el plazo a la vista | — |
+| 154 | 2026-09-06 | APROBADO | Las cifras de la validación se citan ancladas al árbol que las produjo | — |
+| 153 | 2026-09-06 | APROBADO | check.ps1 se detiene en el primer paso rojo y propaga su código de salida | — |
+| 152 | 2026-09-06 | APROBADO | Los pasos posteriores al agente ejecutan la automatización de `main`, no la del árbol que el agente dejó | — |
+| 151 | 2026-09-06 | APROBADO | La pasada del contador mide y declara su entrega: retraso e higiene de su ventana previa | — |
+| 150 | 2026-09-06 | APROBADO | Dar al corrector tiempo para corregir y validar con la cadena completa dentro de su paso | — |
+| 149 | 2026-09-06 | APROBADO | Relanzar Quality al entrar en `ci-pending` cuando su cierre ya se consumió con la incidencia en otro estado | — |
+| 148 | 2026-09-05 | APROBADO | Dar la memoria por bien hecha solo con todos los números del banco bien, y llegar por palancas medidas | — |
+| 147 | 2026-09-05 | APROBADO | La salida de una parada la acredita el permiso escrito del propietario | — |
+| 146 | 2026-09-05 | APROBADO | El fallo transitorio que Codex declara se reintenta con el candado existente | — |
+| 145 | 2026-09-05 | APROBADO | La validación obligatoria es una sola invocación del script de comprobación | — |
+| 144 | 2026-09-05 | APROBADO | El derivador de la hora del contador no se cuenta a sí mismo | — |
+| 143 | 2026-09-05 | APROBADO | Los dos lectores de cron del repositorio hablan un único dialecto | — |
+| 142 | 2026-09-05 | APROBADO | La ruta de avance repone la revisión cuando la aprobación caducó | — |
+| 141 | 2026-09-05 | APROBADO | Una parada de infraestructura del revisor rearma una ronda, una sola vez | — |
+| 140 | 2026-09-05 | APROBADO | El corrector firma su run y demuestra cada mutación | — |
+| 139 | 2026-09-05 | RECHAZADO | La reconciliación pasa cada hora activa en vez de cada seis | — |
+| 138 | 2026-09-04 | APROBADO | Los tres agentes del ciclo corren con el modelo opus | — |
+| 137 | 2026-09-04 | APROBADO | El enganche de sirius-reflejar corre en un workflow propio tras cada cambio de etiqueta | — |
+| 136 | 2026-09-04 | APROBADO | El reflejo del desenlace de GitHub vuelve al almacén del motor | — |
+| 135 | 2026-09-04 | APROBADO | El corrector actualiza en el mismo commit el papel que depende de su corrección | — |
+| 134 | 2026-09-04 | APROBADO | El guardián del suelo de prueba muerto retira las dos cotas tautológicas del banco de evidencia | — |
+| 133 | 2026-09-04 | APROBADO | G3: el guardian de goteo entiende las citas tal como los revisores las escriben de verdad | — |
+| 132 | 2026-09-04 | APROBADO | El guardián del contrato local de Ollama convierte ADR-125 en prueba y corrige ollama_category_classifier | — |
+| 131 | 2026-09-03 | APROBADO | M21b: la interfaz de la criticidad, Sirius propone y el usuario confirma o rechaza | — |
+| 130 | 2026-09-03 | APROBADO | M21a: Sirius propone la criticidad sin escribirla | — |
+| 129 | 2026-09-03 | APROBADO | M20: la siembra en contexto por criticidad | — |
+| 128 | 2026-09-03 | APROBADO | M19b: el rescate RF-25/RF-26 y la prioridad de G12 por criticidad | — |
+| 127 | 2026-09-03 | APROBADO | M19a: el índice de criticidad en la búsqueda | — |
+| 126 | 2026-09-02 | APROBADO | M18b: la señal de criticidad como dato propio de cada recuerdo y decisión | — |
+| 125 | 2026-09-02 | APROBADO | Suspender el limite de 300 ms de RNF-003 en el camino del filtro de relevancia mientras se mide su coste real | — |
+| 124 | 2026-09-01 | APROBADO | Cablear la petición de producción en RankRelevantKnowledgeUseCase con ámbito real derivado del proyecto activo y propósito honesto que activa pide_contexto (M16) | — |
+| 123 | 2026-08-31 | APROBADO | Guardián de goteo en vivo, integrado con el aviso de familia repetida | — |
+| 122 | 2026-08-31 | APROBADO | Consulta por lote en StagedEnginePort y ampliación por categoría filtrada en SQL (M13, incidencia #489, integrado sobre M14) | — |
+| 121 | 2026-08-31 | APROBADO | Cablear el detector de familia repetida al ciclo real como aviso informativo | — |
+| 120 | 2026-08-31 | APROBADO | M15: RF-25/RF-26 sustituye el candado de M10 y G8/G12 se aplican sobre el conjunto combinado, ambos tras la puerta | — |
+| 119 | 2026-08-31 | APROBADO | Diseñar la ola de paridad en producción: portar la semántica del arnés tras la puerta category_matching_enabled, la petición de contexto real y el plan de optimización de RNF-003 (incidencia #478) | — |
+| 118 | 2026-08-31 | APROBADO | Cuatro huecos operativos del motor: verdes sin registrar, reparaciones tras mover el head, bloqueos mal enrutados y decisiones invisibles al corrector (incidencias #435, #442, #453, #469, #471) | — |
+| 117 | 2026-08-31 | APROBADO | M11 mide RNF-003 con el paquete completo activo y publica la coincidencia del etiquetado, sin abrir la puerta de D7 punto 6 | — |
+| 116 | 2026-08-31 | APROBADO | Categoría de máxima criticidad y etiquetas canónicas provisionales del banco de 47 casos para M11 | — |
+| 115 | 2026-08-31 | APROBADO | Las dos puertas que la ampliación del arnés no heredaba bajan los aciertos exactos a 29/47 y elementos de más alcanza D1 bajo la población del umbral publicado (incidencia #469) | — |
+| 114 | 2026-08-30 | APROBADO | La restricción por ámbito del índice de categoría baja los elementos de más de 110 a 62 pero no alcanza D1 (incidencia #467) | — |
+| 113 | 2026-08-30 | APROBADO | El índice de categoría buscable, la regla de las críticas original y la siembra en contexto cierran las dos causas de ADR-112 pero no alcanzan D1 (incidencia #465) | — |
+| 112 | 2026-08-30 | APROBADO | El índice de categoría y el filtro de relevancia, conectados al arnés del banco (incidencia #463), mejoran cobertura y omisiones críticas pero empeoran los elementos de más y no alcanzan D1 | — |
+| 111 | 2026-08-30 | APROBADO | La petición por caso portada mejora el banco a 23/47 pero D1 exige además el índice de categoría y el filtro de relevancia Ollama | — |
+| 110 | 2026-08-30 | APROBADO | El motor por etapas portado mejora el banco a 11/47 pero no alcanza el suelo D1 porque la petición por caso del laboratorio no está autorizada a portarse | — |
+| 109 | 2026-08-30 | APROBADO | El tratamiento léxico portado mejora el banco de 1/47 a 10/47, pero no alcanza el suelo D1 porque la precisión restante vive en las puertas del motor por etapas | — |
+| 106 | 2026-08-29 | APROBADO | Vocabulario y modelo provisionales del clasificador de categoría en composition_root | — |
+| 105 | 2026-08-29 | APROBADO | Añadir RAMA_DE_ORIGEN_NO_FUSIONADA al guardián de citas de los ADR | — |
+| 104 | 2026-08-29 | APROBADO | Portar el banco de 47 casos de evidence/adr001-spikes al modelo real de Sirius | — |
+| 103 | 2026-08-29 | APROBADO | Vía automática de sugerencias de memoria: delimitador compartido, divisor incremental y superficie de disparo sin Qt | — |
+| 102 | 2026-08-29 | APROBADO | Las pruebas de aceptación de Sirius 0.2 no resuelven las decisiones que la Definición deja abiertas | — |
+| 101 | 2026-08-28 | APROBADO | Declarar la precondicion del contador de siete dias en vez de inferirla por caso | — |
+| 100 | 2026-08-28 | APROBADO | Fijar cada `rol@N` a un texto exacto con un manifiesto verificado por sha256 | — |
+| 099 | 2026-08-28 | APROBADO | La clase investigacion entra en la tabla de activación, y su ejecutor es el investigador medido | — |
+| 098 | 2026-08-27 | APROBADO | El investigador se queda con NVIDIA, porque fue el único que pudo correr la prueba | — |
+| 097 | 2026-08-27 | APROBADO | Un tres no es un fallo sino un veredicto con motivo, y el plazo se reparte por pregunta | — |
+| 096 | 2026-08-27 | APROBADO | Una contradicción de etiquetas no es una divergencia, y confundirlas gasta la salida de emergencia | — |
+| 095 | 2026-08-27 | APROBADO | La escalera de cuatro preguntas, y el atestado que impide medir un modelo muerto | — |
+| 094 | 2026-08-25 | APROBADO | Una parada anterior a la primera PR se reanuda repitiendo la fase, no continuando sobre un head | — |
+| 093 | 2026-08-25 | APROBADO | El registro de la racha vive en la rama de memoria, no en `main` | — |
+| 092 | 2026-08-25 | APROBADO | Cerrar el marcador de corte por presupuesto abandonándolo cuando el WorkItem sale de curso | — |
+| 091 | 2026-08-25 | APROBADO | La disciplina de evidencia alcanza también a responder, no solo a modificar código | — |
+| 090 | 2026-08-25 | APROBADO | Darle horario al motor, dentro de la ventana que dejan el reconciliador y el contador | — |
+| 089 | 2026-08-25 | APROBADO | Partir un objetivo grande lo hace la sesión interactiva, y el descomponedor automático queda aplazado | — |
+| 088 | 2026-08-25 | APROBADO | Elegir el prompt por el perfil del encargo, y morir en rojo si no se reconoce | — |
+| 087 | 2026-08-25 | APROBADO | Dar nombre propio a los bloques del motor y exigir evidencia para cerrar uno | — |
+| 086 | 2026-08-25 | APROBADO | Dar manos al despachador dentro de Actions, para que el encargo llegue al diario del motor | — |
+| 085 | 2026-08-25 | APROBADO | El intérprete de intención comprueba sensibilidad y verbo reconocido antes que marcadores de pasado | — |
+| 084 | 2026-08-25 | APROBADO | El aviso de lecturas caidas hoy no interrumpe el contador de la racha | — |
+| 083 | 2026-08-24 | APROBADO | La memoria del motor vive en su propia rama, no en `main` | — |
+| 082 | 2026-08-24 | APROBADO | El motor corre dentro de GitHub Actions y su memoria vive en el repositorio | — |
+| 081 | 2026-08-23 | APROBADO | Un doble de pruebas que se calla esconde el defecto que debería delatar | — |
+| 080 | 2026-08-23 | APROBADO | Un arreglo fusionado se reconoce por el asunto del commit, y por eso la guarda ve poco pero no se equivoca | — |
+| 079 | 2026-08-23 | APROBADO | Una tabla indexada por un enum cubre el enum entero, o lo declara | — |
+| 078 | 2026-08-23 | APROBADO | Tres rondas consecutivas sobre el mismo archivo son la familia repetida, medido antes de fijarlo | — |
+| 077 | 2026-08-23 | APROBADO | La autoridad de una clase es la tabla estática más un registro fechado, y su reversión no espera a la segunda divergencia | — |
+| 076 | 2026-08-23 | APROBADO | El motor deja de necesitar el árbol de código para ejecutar la proyección | — |
+| 075 | 2026-08-22 | APROBADO | El estado de un defecto lo dice el registro versionado y la incidencia se cierra con el | — |
+| 074 | 2026-08-22 | APROBADO | El contador de los siete días deriva la corrección manual del diario de eventos del motor | — |
+| 073 | 2026-08-22 | APROBADO | El verificador de proyección se ve fallar antes de fiarse de que dé verde | — |
+| 072 | 2026-08-22 | APROBADO | REPARAR tiene dos entradas, porque el ciclo real tiene dos | — |
+| 071 | 2026-08-22 | APROBADO | La inversa de la proyección del cuerpo, para que haya algo que verificar | — |
+| 070 | 2026-08-22 | APROBADO | Las defensas de workflow reconocen «acción clasificada», no un nombre | — |
+| 069 | 2026-08-22 | APROBADO | Fusionar exige que la rama esté al día con su base | — |
+| 068 | 2026-08-22 | APROBADO | La etiqueta que el motor aplica depende de la clase que despacha | — |
+| 067 | 2026-08-22 | APROBADO | Las órdenes del propietario toleran la firma que añade la herramienta | — |
+| 066 | 2026-08-22 | APROBADO | Perfiles documentales: documentalista y revisor documental, coherentes con la maquinaria existente | — |
+| 065 | 2026-08-22 | APROBADO | El despachador usa el diario durable ahora y no en D2 | — |
+| 064 | 2026-08-22 | APROBADO | Diario del despachador durable reutiliza ADR-061 | — |
+| 063 | 2026-08-21 | APROBADO | `sirius-despachar`: la costura entre una orden y la vía GitHub, con ensayo por defecto | — |
+| 062 | 2026-08-21 | APROBADO | C2 — despacho end-to-end de programación: escritura mínima enumerada y orden enlazada en la evidencia | — |
+| 061 | 2026-08-21 | APROBADO | Diario del supervisor durable como outbox propio, no acoplado al almacen | — |
+| 060 | 2026-08-21 | APROBADO | Un error del conector no es silencio, y no debe costar el plazo entero | — |
+| 059 | 2026-08-21 | APROBADO | La sesión dice «no pude mirar» en vez de «no hay nada», y lo dice también cuando sí encontró algo | — |
+| 058 | 2026-08-21 | APROBADO | La fase entra en la tabla de estados como coordenada dependiente, y el eje fase gana su propia guarda | — |
+| 057 | 2026-08-21 | APROBADO | Supervisor de la vía GitHub: detectar Runs perdidos y actuar | — |
+| 056 | 2026-08-21 | APROBADO | El motor puede transportar una orden ya dada y reparar sus propios Runs | — |
+| 055 | 2026-08-21 | APROBADO | Dar al motor un comando de consola que conversa y consulta, y que no puede crear trabajo | — |
+| 054 | 2026-08-21 | APROBADO | Un Run tiene que poder decir con qué modelo se ejecutó | — |
+| 053 | 2026-08-21 | APROBADO | «No pude observar» es un valor del puerto, y el barrido no lo convierte en éxito | — |
+| 052 | 2026-08-21 | APROBADO | Una ruta citada por un ADR existe, o está fijada como historia | — |
+| 051 | 2026-08-21 | APROBADO | El cuerpo de una incidencia pasa por el mismo filtro de confianza que sus comentarios | — |
+| 050 | 2026-08-21 | APROBADO | Los tres proveedores de `contexto.recuperar` tienen la misma firma y reportan su fallo | — |
+| 048 | 2026-08-21 | APROBADO | La capa que llama a las reglas también necesita su tabla exhaustiva de estados | — |
+| 047 | 2026-08-21 | APROBADO | Un defecto encontrado se registra con incidencia y no se borra nunca | — |
+| 046 | 2026-08-21 | APROBADO | Spike I1: bordes de STATUS sobre runs de Actions | — |
+| 045 | 2026-08-21 | APROBADO | El corte por presupuesto tiene que salir también de WAITING, que es donde se gasta el dinero | — |
+| 044 | 2026-08-20 | APROBADO | Abrir el repositorio al público sin que el propio repositorio lo desmienta | — |
+| 043 | 2026-08-19 | APROBADO | Gobierno previo al primer Worker externo: puerta determinista, presupuesto con corte y siete causas cerradas de escalado | — |
+| 042 | 2026-08-19 | APROBADO | Un paso de preparación sin plazo propio puede costar el trabajo entero | — |
+| 041 | 2026-08-19 | APROBADO | La autoridad de cada clase de trabajo se fija antes de que exista el primer WorkItem | — |
+| 040 | 2026-08-19 | APROBADO | Convertir una intención en encargo preguntando una cosa cada vez | — |
+| 039 | 2026-08-19 | APROBADO | Perfiles versionados gobiernan a los Workers sin acoplarse a runtimes, y el egress es imposible de saltar | — |
+| 038 | 2026-08-19 | APROBADO | Una prueba que mutila datos debe alterar siempre lo que comprueba | — |
+| 037 | 2026-08-18 | APROBADO | Reanudar y fusionar son gestos humanos, y la automatización no los rodea | — |
+| 036 | 2026-08-18 | APROBADO | Una lectura caída no es una ausencia, y el llamador tiene que poder distinguirlas | — |
+| 035 | 2026-08-18 | APROBADO | El revisor no juzga con el intérprete del runner, y toda parada tiene vuelta | — |
+| 034 | 2026-08-18 | APROBADO | El espejo de solo lectura de la vía GitHub marca cada proyección como no autoritativa y nunca confunde un fallo de lectura con una ausencia | — |
+| 033 | 2026-08-18 | APROBADO | Una regla que enumera vehículos siempre tiene un hueco más: enunciar la propiedad | — |
+| 032 | 2026-08-17 | APROBADO | Calcular el número de un ADR como el máximo existente más uno | — |
+| 031 | 2026-08-18 | APROBADO | Un rol necesita un veredicto para cada desenlace real, incluido «esto no lo he roto yo» | — |
+| 030 | 2026-08-18 | APROBADO | Todo estado de parada declara la orden que lo levanta | — |
+| 029 | 2026-08-18 | APROBADO | Promocionar el patrón de escritura de S1 a almacén de referencia del Work Engine, más el barrido de recuperación (A2) | — |
+| 028 | 2026-08-17 | APROBADO | Una avería transitoria de un tercero no justifica una invariante permanente en la suite | — |
+| 027 | 2026-08-17 | APROBADO | Las etiquetas se leen del objeto de la incidencia, nunca del endpoint `/issues/{n}/labels` | — |
+| 026 | 2026-08-17 | APROBADO | Adoptar diario append-only con `fsync`, checksum por registro e idempotencia por clave como patrón de escritura seguro del spike I3 | — |
+| 025 | 2026-08-17 | APROBADO | Ninguna afirmación de un prompt sobre su entorno vale sin una prueba que la ate al workflow que lo ejecuta | — |
+| 024 | 2026-08-17 | APROBADO | Extender al implementador las tres reglas de rol y vigilarlas con una prueba que recorre el directorio de prompts | — |
+| 023 | 2026-08-16 | APROBADO | Admitir como aprobación de Codex el comentario en el que declara no haber encontrado hallazgos | — |
+| 022 | 2026-08-16 | APROBADO | Endurecer el prompt del revisor: veredicto provisional, prohibición de esperar nada (subagentes incluidos) y revisión con el entorno acotado que hay | — |
+| 021 | 2026-08-16 | APROBADO | Prohibir en el prompt que el corrector cierre el turno esperando trabajo en segundo plano | — |
+| 020 | 2026-08-15 | APROBADO | Construir el Work Engine por verticales delgadas, reutilizando la vía GitHub y aplazando cada decisión a su punto exacto de consumo | — |
+| 019 | 2026-08-15 | APROBADO | Diseñar el Motor de Trabajo como software determinista que posee el estado, con Workers sustituibles detrás de Adapters | — |
+| 016 | 2026-08-14 | APROBADO | El Auditor se lanza con una etiqueta, y el trabajo que puede escribir no ejecuta modelos | — |
+| 016 | 2026-08-14 | APROBADO | El estado del proyecto se lee de `main`, nunca de la rama de trabajo | — |
+| 015 | 2026-08-14 | APROBADO | Toda escritura de etiqueta pasa por una envoltura con el PAT, y la prueba busca lo malo en vez de lo bueno | — |
+| 014 | 2026-08-14 | APROBADO | Quien escribe una etiqueta notificable usa la identidad real, y el recolector de Codex no aprueba por comentario | — |
+| 013 | 2026-08-14 | APROBADO | La contraseña de OBS vive en el almacén del sistema, y sin él no se guarda | — |
+| 012 | 2026-08-14 | APROBADO | Un proceso local que corre como el usuario está dentro de la frontera de confianza | — |
+| 011 | 2026-08-14 | APROBADO | Correlacionar cada respuesta de OBS con su petición, en vez de desconectar ante un plazo agotado | — |
+| 010 | 2026-08-12 | APROBADO | Adoptar Auditor Agent v0 (solo lectura) como primer piloto de agentes | — |
+| 009 | 2026-08-12 | APROBADO | Sacar la voz de Model Studio por el reproductor del sistema y empezar a hablar antes de terminar | — |
+| 008 | 2026-08-11 | APROBADO | Cargar en lote las revisiones vigentes al listar recuerdos y decisiones | — |
+| 007 | 2026-08-10 | APROBADO | Afirmar el límite de rendimiento en CI solo si hay un orden de magnitud de holgura | — |
+| 006 | 2026-08-10 | APROBADO | Declarar la trazabilidad PA/SP y comprobarla por máquina, en vez de derivarla por búsqueda | — |
+| 005 | 2026-08-10 | APROBADO | Mantener el estado de V8 en un único registro que la automatización pueda escribir | — |
+| 004 | 2026-08-10 | APROBADO | Una red de seguridad periódica, porque un run muerto no puede avisar | — |
+| 003 | 2026-08-10 | APROBADO | Un plazo es un mínimo contra una cota absoluta, nunca una ventana propia | — |
+| 002 | 2026-08-09 | APROBADO | No conceder a la automatización permiso sobre sus propios workflows | — |
+| 001 | 2026-08-08 | APROBADO | Instrumentar la disciplina de evidencia con una skill y este registro | — |
 
 ## Las lecciones, por familia (ADR-174)
 
@@ -336,8 +341,8 @@ contado por la máquina. **La cuenta no la lleva nadie**: un número escrito a
 mano caduca en silencio -`AGENTS.md` decía «seis veces» cuando ya iban ocho-.
 Declararla es obligatorio desde ADR-174; los anteriores
 quedan exentos, así que esta vista crece desde cero en vez de nacer rellenada
-de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
-(ADR-218).
+de memoria. Cada ADR va por su número, como en la tabla de arriba (ADR-218 y
+ADR-258).
 
 | Familia | Veces | Hay prueba que la haga cumplir | ADR |
 |---|---|---|---|
@@ -348,6 +353,7 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 | `prueba-que-no-puede-ver-lo-que-vigila` | 4 | no en todas | 249, 247, 241, 238 |
 | `regla-del-propietario-que-solo-vive-en-una-conversacion` | 4 | sí | 213, 208, 204, 195 |
 | `modelo-dentro-del-turno` | 3 | sí | 254, 243, 237 |
+| `vista-que-copia-el-corpus-del-que-venia-huyendo` | 3 | sí | 258, 218, 196 |
 | `decision-que-solo-vive-en-una-conversacion` | 2 | no en todas | 225, 202 |
 | `guardian-que-mide-posicion-en-vez-de-estructura` | 2 | sí | 221, 187 |
 | `leccion-que-se-queda-en-el-informe` | 2 | sí | 215, 214 |
@@ -356,7 +362,6 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 | `parada-segura-que-tira-lo-ya-pagado` | 2 | sí | 253, 226 |
 | `paso-largo-sin-plazo-propio` | 2 | sí | 228, 224 |
 | `pieza-correcta-a-la-que-no-llama-quien-la-necesita` | 2 | sí | 248, 197 |
-| `vista-que-copia-el-corpus-del-que-venia-huyendo` | 2 | sí | 218, 196 |
 | `cierre-que-no-corta-todo-lo-que-pide` | 1 | sí | 255 |
 | `comparar-instantes-como-texto` | 1 | sí | 229 |
 | `condicion-construida-sin-el-mecanismo-que-la-hace-cumplible` | 1 | sí | 200 |
@@ -379,6 +384,7 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 | `regla-nueva-sin-pasarla-por-los-casos-vivos` | 1 | sí | 231 |
 | `tarea-periodica-sin-reloj` | 1 | no en todas | 201 |
 | `tramite-que-solo-puede-hacer-una-persona-y-no-anade-comprobacion` | 1 | sí | 205 |
+| `turnos-en-las-instrucciones-sin-parada` | 1 | sí | 256 |
 
 ### `regla-que-depende-de-que-alguien-se-acuerde`
 
@@ -436,6 +442,12 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 - **ADR-243** — esperar a que `send_message` vuelva para hacer lo que toca en (lo hace cumplir `tests/integration/test_send_message.py`).
 - **ADR-237** — poner otra petición al modelo de la charla dentro de cada turno, (lo hace cumplir `tests/acceptance/test_robot_0_2_personalidad.py`).
 
+### `vista-que-copia-el-corpus-del-que-venia-huyendo`
+
+- **ADR-258** — la fila de cada ADR llevaba su título dos veces, una en su ruta, y la vista volvía a no caber con el ADR siguiente (lo hace cumplir `tests/engine/test_memoria.py`).
+- **ADR-218** — dejar que la única lectura lleve dos veces la misma ruta y la fila de cada pieza de evidencia, y descubrirlo cuando la guardia bloquea una PR que no tiene la culpa; es la segunda vez que muerde esta familia en 17 días, y el suelo que no se puede cortar está declarado arriba con su cifra. (lo hace cumplir `tests/engine/test_memoria.py`).
+- **ADR-196** — una vista que existe para caber en una sola lectura (lo hace cumplir `tests/engine/test_memoria.py`).
+
 ### `decision-que-solo-vive-en-una-conversacion`
 
 - **ADR-225** — una orden del propietario que cancela una línea entera queda en el comentario de una incidencia cerrada, y dieciocho días después el ADR, el código y el estado del proyecto siguen diciendo que esa línea está pendiente y bloquea algo; la siguiente sesión la retomaría o la pondría delante de él otra vez. (sin prueba que lo haga cumplir: ninguna prueba: una decisión del propietario no tiene hoy una forma mecánica que una guarda pueda leer; la caza la mina mensual (deuda 13) y la hoja de decisiones abiertas, a posteriori).
@@ -475,11 +487,6 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 
 - **ADR-248** — un proveedor nuevo sin las salvaguardas del de antes. El tope de (lo hace cumplir `tests/integration/test_tope_de_salida_de_ollama.py`).
 - **ADR-197** — dos piezas del mismo árbol leen la misma clase de dato (lo hace cumplir `tests/engine/test_round_family_detector.py`).
-
-### `vista-que-copia-el-corpus-del-que-venia-huyendo`
-
-- **ADR-218** — dejar que la única lectura lleve dos veces la misma ruta y la fila de cada pieza de evidencia, y descubrirlo cuando la guardia bloquea una PR que no tiene la culpa; es la segunda vez que muerde esta familia en 17 días, y el suelo que no se puede cortar está declarado arriba con su cifra. (lo hace cumplir `tests/engine/test_memoria.py`).
-- **ADR-196** — una vista que existe para caber en una sola lectura (lo hace cumplir `tests/engine/test_memoria.py`).
 
 ### `cierre-que-no-corta-todo-lo-que-pide`
 
@@ -569,7 +576,11 @@ de memoria. Cada ADR va por su número; su enlace está en la tabla de arriba
 
 - **ADR-205** — el ciclo volvería a quedarse horas en verde esperando (lo hace cumplir `tests/automation/test_sirius_merge.py`).
 
-Y **6** ADR declaran expresamente que no dejaron lección: 240, 236, 235, 234, 233, 232.
+### `turnos-en-las-instrucciones-sin-parada`
+
+- **ADR-256** — un modelo pequeño seguiría el diálogo de sus instrucciones hasta su tope (lo hace cumplir `tests/unit/test_paradas_de_turno.py`).
+
+Y **7** ADR declaran expresamente que no dejaron lección: 257, 240, 236, 235, 234, 233, 232.
 
 ## Los bloques del motor
 

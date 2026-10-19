@@ -251,3 +251,8 @@ se buscó la raíz. El cierre no tenía un camino único que cortara lo que esta
 solo la charla sabía colgar una petición ya enviada. Lo arregla ADR-255, con su nota en la
 #699: todos los clientes de red salen de una fábrica que apunta cada conexión, el cierre las
 cuelga todas, y la orden de captura se espera.
+
+**Rondas 3 y 4**, sobre `fee19290` y `814e7b0d`: las anota ADR-255, porque son del cierre.
+
+**Ronda 5**, sobre `e0c5e901`, pedida con la batería y Quality en verde: limpia, «Didn't
+find any major issues». La #698 se fusionó aplastada el 18-10-2026 en `7fb10525`.

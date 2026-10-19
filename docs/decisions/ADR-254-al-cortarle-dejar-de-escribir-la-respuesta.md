@@ -157,3 +157,8 @@ lo cortado.
 
 **Ronda 1**, sobre `001ede34`: nada del corte. Sus dos hallazgos son de ADR-253, y allí se
 anotan.
+
+**Rondas 2 a 4**: nada del corte; sus hallazgos son de ADR-253 y ADR-255.
+
+**Ronda 5**, sobre `e0c5e901`: limpia, «Didn't find any major issues». La #698 se
+fusionó aplastada el 18-10-2026 en `7fb10525`.

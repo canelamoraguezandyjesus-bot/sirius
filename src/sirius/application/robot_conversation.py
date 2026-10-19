@@ -7,7 +7,7 @@ from collections.abc import Callable
 
 from sirius.domain.conversation import MessageStatus
 from sirius.domain.conversation_mode import ConversationMode
-from sirius.domain.conversation_summary import messages_to_summarize, summary_input
+from sirius.domain.conversation_summary import messages_to_summarize, said_turns, summary_input
 from sirius.domain.reply_judge import (
     HIGHEST_SCORE,
     LOWEST_SCORE,
@@ -226,6 +226,7 @@ class LLMConversationSummarizer:
             operation_id=operation_id or summary_operation_id(str(uuid.uuid4())),
             instructions=_SUMMARY_INSTRUCTIONS,
             input_text=text,
+            stop=said_turns(text),
         )
         for event in provider.stream_response(request):
             if isinstance(event, LLMCompleted):

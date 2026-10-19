@@ -199,3 +199,7 @@ de 10 s.
 - **Lo que no cubre**, visto al repasar el arreglo antes de pedir la ronda 5: una conexión
   que no acaba de abrirse nunca, porque el servidor no contesta al conectar. Queda en «Qué NO
   garantiza», con su medida.
+
+**Ronda 5** de la PR, sobre `e0c5e901`, pedida con la batería y Quality en verde:
+limpia, «Didn't find any major issues». La #698 se fusionó aplastada el 18-10-2026 en
+`7fb10525`.

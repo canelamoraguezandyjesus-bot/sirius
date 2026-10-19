@@ -28,6 +28,7 @@ from datetime import UTC, date, timedelta
 
 from sirius.application.facts import FactProposals
 from sirius.domain.conversation import Message, MessageRole, MessageStatus
+from sirius.domain.conversation_summary import OWNER_SPEAKER, said_turns
 from sirius.domain.facts import OWNER, Certainty, ProposedFact, is_sirius, person_key
 from sirius.domain.plain_text import plain
 from sirius.infrastructure.logging import get_logger
@@ -105,7 +106,7 @@ class DreamService:
             _logger.info("Sin modelo de este ordenador: hoy no sueña")
             return []
         provider = _AskingThrough(local, dreaming)
-        text = "\n".join(f"Él: {line}" for line in said)
+        text = "\n".join(f"{OWNER_SPEAKER}: {line}" for line in said)
         try:
             summary = self._summarizer.summarize(text, provider).strip()
         except Exception as exc:  # soñar nunca puede romper nada: se intenta otro día
@@ -292,6 +293,7 @@ class LLMFactExtractor:
             operation_id=f"sueno-{uuid.uuid4()}",
             instructions=_EXTRACT_INSTRUCTIONS,
             input_text=text,
+            stop=said_turns(text),
         )
         for event in provider.stream_response(request):
             if isinstance(event, LLMCompleted):

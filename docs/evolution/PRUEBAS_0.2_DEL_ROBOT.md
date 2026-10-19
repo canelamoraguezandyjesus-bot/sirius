@@ -91,7 +91,11 @@ Los umbrales están fijados el 07-10-2026, antes de medir nada.
 - **Si no pasa.** Si ninguno le suena a Sirius, no se pasa a la siguiente pieza: se le
   pregunta si se prueba un modelo mayor o se le entrena (§10 del plan), porque es dinero
   o producto.
-- **Resultado:** pendiente.
+- **Resultado:** el 18-10-2026, en su ordenador, eligió gemma3:4b en 16 de 20
+  preguntas, qwen3:4b-instruct en 4 y mistral:7b en ninguna. Que el ganador quedara como
+  modelo de la charla no lo confirmó. De los tres dijo que se inventan cosas, que se
+  quedan escribiendo respuesta tras respuesta y que dicen frases sin sentido; lo de
+  quedarse escribiendo lo ataja ADR-256 (ADR-257).
 
 ### E-R02-02
 
@@ -121,7 +125,9 @@ Los umbrales están fijados el 07-10-2026, antes de medir nada.
   pregunta si se prueba un modelo mayor o se le entrena.
 - **El juez, de paso.** El juez marca las mismas 40. Si discrepa del propietario en más de
   4, el juez todavía no vale para avisar y se dice.
-- **Resultado:** pendiente.
+- **Resultado:** el 18-10-2026, según sus marcas, le lleva la contraria en 38 de 40, y
+  el juez dice otra cosa que él en 2: no pasa. Dijo que marcó a voleo, y que la prueba
+  cuenta y está hecha (ADR-257).
 
 ### E-R02-04
 
@@ -138,7 +144,9 @@ Los umbrales están fijados el 07-10-2026, antes de medir nada.
   qwen3-embedding:0.6b y 77 de 100 con embeddinggemma, las dos con 14 de 14 en «olvida
   eso» y en «quién dijo qué». ADR-251 cambia el modelo, su formato, el umbral y el orden;
   con los parecidos que midió su ordenador ese día, rehecho aquí por el camino real, da 93
-  de 100. Lo que da en su ordenador está pendiente de que repita la orden.
+  de 100. El 18-10-2026, en su ordenador, pasa: 93 de 100 con embeddinggemma, con 14 de
+  14 en «olvida eso» y en «quién dijo qué»; «cosas que cambian» se queda en 8 de 14
+  (ADR-257).
 
 ### E-R02-05
 
@@ -149,8 +157,8 @@ Los umbrales están fijados el 07-10-2026, antes de medir nada.
 - **Pasa si** el P95 queda por debajo de 150 ms en las dos.
 - **Resultado:** el 16-10-2026, en su ordenador, no pasa: con 10.000 recuerdos de prueba
   el P95 es 170 ms, y el límite es 150; con su memoria, de 1 recuerdo, 61 ms. ADR-251
-  busca en dos pasos cuando hay muchas huellas. Lo que da en su ordenador está pendiente de
-  que repita la orden.
+  busca en dos pasos cuando hay muchas huellas. El 18-10-2026, en su ordenador, pasa: con
+  10.000 recuerdos de prueba, P95 de 93 ms; con su memoria, 60 ms (ADR-257).
 
 ## Lo que estas pruebas no garantizan
 

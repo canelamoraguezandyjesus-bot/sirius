@@ -27,6 +27,7 @@ from sirius.domain.blind_test import (
     prepare_blind_test,
     tally,
 )
+from sirius.domain.robot_seed import example_turns
 from sirius.infrastructure.logging import get_logger
 from sirius.ports.identity_repository import IdentityRepository
 from sirius.ports.llm import LLMCancelled, LLMCompleted, LLMError, LLMProvider, LLMRequest
@@ -145,6 +146,9 @@ class BlindTestUseCase:
         # se cerró la ventana, y una sola vez: todos los modelos la contestan con las
         # mismas instrucciones, como en la charla (ADR-240, ronda 2 de Codex).
         instructions: dict[str, str] = {}
+        #: Los comienzos de turno de sus ejemplos: dónde deja de escribir cada respuesta
+        #: (incidencia #700).
+        stops: dict[str, tuple[str, ...]] = {}
         total = len(models) * len(questions)
         done = 0
         answers: dict[str, list[str]] = {}
@@ -166,14 +170,15 @@ class BlindTestUseCase:
                     answer = self._answered.get(key)
                     if answer is None:
                         if question not in instructions:
-                            instructions[question] = render_identity(
-                                version, self._seed_examples.pick(version.examples, question)
-                            )
+                            examples = self._seed_examples.pick(version.examples, question)
+                            instructions[question] = render_identity(version, examples)
+                            stops[question] = example_turns(examples)
                         try:
                             answer = self._ask(
                                 provider,
                                 model,
                                 instructions[question],
+                                stops[question],
                                 question,
                                 operation_id,
                                 should_stop,
@@ -212,6 +217,7 @@ class BlindTestUseCase:
         provider: LLMProvider,
         model: str,
         instructions: str,
+        stop: tuple[str, ...],
         question: str,
         operation_id: str,
         should_stop: Callable[[], bool],
@@ -219,7 +225,7 @@ class BlindTestUseCase:
         """Pide una respuesta, y si falla la vuelve a pedir ``RETRIES`` veces antes de parar."""
         for attempt in range(RETRIES + 1):
             try:
-                return _answer(provider, model, instructions, question, operation_id)
+                return _answer(provider, model, instructions, stop, question, operation_id)
             except _Cancelled:
                 raise
             except BlindTestError:
@@ -236,9 +242,16 @@ class BlindTestUseCase:
 
 
 def _answer(
-    provider: LLMProvider, model: str, instructions: str, question: str, operation_id: str
+    provider: LLMProvider,
+    model: str,
+    instructions: str,
+    stop: tuple[str, ...],
+    question: str,
+    operation_id: str,
 ) -> str:
-    request = LLMRequest(operation_id=operation_id, instructions=instructions, input_text=question)
+    request = LLMRequest(
+        operation_id=operation_id, instructions=instructions, input_text=question, stop=stop
+    )
     for event in provider.stream_response(request):
         if isinstance(event, LLMCompleted):
             return event.text.strip()

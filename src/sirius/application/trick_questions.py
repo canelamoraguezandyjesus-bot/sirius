@@ -26,7 +26,7 @@ from dataclasses import dataclass
 
 from sirius.application.context import Context
 from sirius.application.seed_examples import SeedExamplePicker
-from sirius.application.send_message import render_instructions
+from sirius.application.send_message import context_turns, render_instructions
 from sirius.domain.identity import Identity
 from sirius.domain.reply_judge import MAX_JUDGE_DISAGREEMENTS, TrickVerdict
 from sirius.domain.trick_questions import TRICK_QUESTIONS, TrickQuestion
@@ -171,8 +171,13 @@ class TrickQuestionsUseCase:
                 continue
             reply = unjudged.get(question.id)
             if reply is None:
+                context = self._context(identity, question)
                 reply = self._reply(
-                    provider, self._instructions(identity, question), question, should_stop
+                    provider,
+                    self._instructions(context),
+                    context_turns(context),
+                    question,
+                    should_stop,
                 )
                 if reply is None:  # cerraron la hoja mientras contestaba: ni juez ni más
                     break
@@ -215,10 +220,10 @@ class TrickQuestionsUseCase:
         except Exception as exc:  # cortar es una cortesía: si falla, acaba solo
             _logger.warning("No se pudo cortar el veredicto del juez (%s)", type(exc).__name__)
 
-    def _instructions(self, identity: Identity, question: TrickQuestion) -> str:
-        """Las de un primer mensaje de una charla nueva: con la semilla y el recordatorio,
-        sin historia ni recuerdos."""
-        context = Context(
+    def _context(self, identity: Identity, question: TrickQuestion) -> Context:
+        """El de un primer mensaje de una charla nueva: con la semilla, sin historia ni
+        recuerdos."""
+        return Context(
             identity=identity,
             project=None,
             decisions=(),
@@ -229,6 +234,9 @@ class TrickQuestionsUseCase:
                 identity.current_version.examples, question.bad_idea
             ),
         )
+
+    def _instructions(self, context: Context) -> str:
+        """Las de ``context``, con el recordatorio detrás."""
         instructions = render_instructions(context)
         if self._reminder:
             instructions = f"{instructions}\n\n{self._reminder}"
@@ -238,6 +246,7 @@ class TrickQuestionsUseCase:
         self,
         provider: LLMProvider,
         instructions: str,
+        stop: tuple[str, ...],
         question: TrickQuestion,
         should_stop: Callable[[], bool],
     ) -> str | None:
@@ -253,7 +262,7 @@ class TrickQuestionsUseCase:
             try:
                 if should_stop():
                     return None
-                return _complete(provider, instructions, question.bad_idea, operation_id)
+                return _complete(provider, instructions, stop, question.bad_idea, operation_id)
             except Exception as exc:
                 if should_stop():
                     return None
@@ -321,8 +330,16 @@ def _ids(questions: Sequence[TrickQuestion]) -> str:
     return f"{ids} ({len(questions)})"
 
 
-def _complete(provider: LLMProvider, instructions: str, text: str, operation_id: str) -> str:
-    request = LLMRequest(operation_id=operation_id, instructions=instructions, input_text=text)
+def _complete(
+    provider: LLMProvider,
+    instructions: str,
+    stop: tuple[str, ...],
+    text: str,
+    operation_id: str,
+) -> str:
+    request = LLMRequest(
+        operation_id=operation_id, instructions=instructions, input_text=text, stop=stop
+    )
     for event in provider.stream_response(request):
         if isinstance(event, LLMCompleted):
             return event.text

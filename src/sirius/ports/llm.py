@@ -35,6 +35,10 @@ class LLMRequest:
     #: Lo más que puede escribir esta petición, si pide menos que el tope del proveedor: el
     #: juez solo contesta una nota o una palabra (ADR-252). ``None``, el del proveedor.
     max_output_tokens: int | None = None
+    #: Dónde deja de escribir el modelo: los comienzos de turno que llevan las instrucciones,
+    #: para que no siga el diálogo inventándose lo que dice el otro (incidencia #700). Las
+    #: usa Ollama; OpenAI no, porque su API de respuestas no tiene paradas.
+    stop: tuple[str, ...] = ()
     #: Si un modelo que piensa puede pensar antes de contestar. El juez no: con su tope
     #: corto, se lo gastaría pensando y no daría la nota (ADR-252). Lo apaga Ollama; el
     #: juez nunca pregunta a OpenAI, que razona según sus ajustes.

@@ -54,6 +54,9 @@ Orden nuevo:
 - **Modelos.** En Ollama, que Sirius ya usa para clasificar recuerdos.
 - **Quién.** Las sesiones programan en el repositorio y el propietario prueba en su
   ordenador. Cada versión acaba con una prueba suya, y sin ella no se pasa a la siguiente.
+  Desde el 18-10-2026, por decisión suya, la siguiente puede empezar antes de que él haga
+  esas pruebas, que hace cuando quiere; una versión no se da por terminada hasta que
+  pasan (ADR-257).
 - **Cuándo.** Sumando lo que estiman las investigaciones, el cerebro entero son unos tres
   a cinco meses para una persona sola. Programando las sesiones, el ritmo lo marcan las
   pruebas del propietario. La cabeza va después.
