@@ -350,8 +350,8 @@ ADR-258).
 | Familia | Veces | Hay prueba que la haga cumplir | ADR |
 |---|---|---|---|
 | `regla-que-depende-de-que-alguien-se-acuerde` | 11 | no en todas | 227, 222, 220, 217, 216, 192, 191, 188, 182, 179, 174 |
+| `prueba-que-no-puede-ver-lo-que-vigila` | 6 | no en todas | 261, 259, 249, 247, 241, 238 |
 | `pieza-sin-lector` | 5 | no en todas | 210, 209, 207, 183, 175 |
-| `prueba-que-no-puede-ver-lo-que-vigila` | 5 | no en todas | 259, 249, 247, 241, 238 |
 | `doble-mas-permisivo-que-la-herramienta-que-dobla` | 4 | sí | 251, 250, 242, 193 |
 | `prosa-que-el-cambio-deja-falsa` | 4 | no en todas | 223, 219, 211, 177 |
 | `regla-del-propietario-que-solo-vive-en-una-conversacion` | 4 | sí | 213, 208, 204, 195 |
@@ -403,6 +403,15 @@ ADR-258).
 - **ADR-179** — escribir un guardián sobre una lista de inclusión (lo hace cumplir `tests/automation/test_piezas_con_llamante.py`).
 - **ADR-174** — escribir la regla de captura en un catálogo y dar por hecho que alguien la aplicará; los dos sitios de lecciones de este repositorio llevaban 48 ADR sin una sola entrada, con sus reglas escritas dentro. (lo hace cumplir `tests/automation/test_mina_de_lecciones.py`).
 
+### `prueba-que-no-puede-ver-lo-que-vigila`
+
+- **ADR-261** — cambiar lo que llega a trozos y ajustar solo las pruebas que (lo hace cumplir `tests/gui/test_conversation_ui.py`).
+- **ADR-259** — una huella de mentira con una marca en sus bytes la pierde en cuanto la pieza la pasa a números, y la prueba de «cifradas» pasaría con la huella guardada en claro (lo hace cumplir `tests/acceptance/test_dobles_del_conductor_0_4.py`).
+- **ADR-249** — arreglar en la prueba lo que falla en el producto. El conductor de (lo hace cumplir `tests/gui/test_app_bootstrap.py`).
+- **ADR-247** — probar una orden que él ejecuta en su ordenador solo como es la (lo hace cumplir `tests/integration/test_medir_busqueda_de_memoria.py`).
+- **ADR-241** — escribir las pruebas de aceptación de una versión antes del (sin prueba que lo haga cumplir: ninguna prueba mide la fuerza de una prueba; lo que hay es).
+- **ADR-238** — una prueba de «no se hace X» que pasa con X puesto, porque su (lo hace cumplir `tests/acceptance/test_robot_0_2_memoria.py`).
+
 ### `pieza-sin-lector`
 
 - **ADR-210** — el tablero de incidencias seguiría llenándose de cosas (sin prueba que lo haga cumplir: ninguna prueba: cerrar una incidencia ocurre en GitHub, no).
@@ -410,14 +419,6 @@ ADR-258).
 - **ADR-207** — seguirían conviviendo documentos que nadie mantiene y (lo hace cumplir `tests/automation/test_registro_de_bloques.py`).
 - **ADR-183** — escribir la rama «no hay nada que hacer» de un encaminador como un `return 0` con un `echo`, de modo que la única prueba de que el ciclo se ha parado viva en un log que nadie lee. (lo hace cumplir `tests/automation/test_sirius_apply_verdict.py`).
 - **ADR-175** — proyectar en cada pasada el estado entero de una incidencia -fase, rondas, Quality, PR, diagnóstico- y no enseñárselo nunca a quien tiene que decidir; es la novena vez que un dato correcto de esta casa no tiene lector, tres días después de la octava. (lo hace cumplir `tests/engine/test_tablero.py`).
-
-### `prueba-que-no-puede-ver-lo-que-vigila`
-
-- **ADR-259** — una huella de mentira con una marca en sus bytes la pierde en cuanto la pieza la pasa a números, y la prueba de «cifradas» pasaría con la huella guardada en claro (lo hace cumplir `tests/acceptance/test_dobles_del_conductor_0_4.py`).
-- **ADR-249** — arreglar en la prueba lo que falla en el producto. El conductor de (lo hace cumplir `tests/gui/test_app_bootstrap.py`).
-- **ADR-247** — probar una orden que él ejecuta en su ordenador solo como es la (lo hace cumplir `tests/integration/test_medir_busqueda_de_memoria.py`).
-- **ADR-241** — escribir las pruebas de aceptación de una versión antes del (sin prueba que lo haga cumplir: ninguna prueba mide la fuerza de una prueba; lo que hay es).
-- **ADR-238** — una prueba de «no se hace X» que pasa con X puesto, porque su (lo hace cumplir `tests/acceptance/test_robot_0_2_memoria.py`).
 
 ### `doble-mas-permisivo-que-la-herramienta-que-dobla`
 
@@ -584,7 +585,7 @@ ADR-258).
 
 - **ADR-256** — un modelo pequeño seguiría el diálogo de sus instrucciones hasta su tope (lo hace cumplir `tests/unit/test_paradas_de_turno.py`).
 
-Y **9** ADR declaran expresamente que no dejaron lección: 261, 260, 257, 240, 236, 235, 234, 233, 232.
+Y **8** ADR declaran expresamente que no dejaron lección: 260, 257, 240, 236, 235, 234, 233, 232.
 
 ## Los bloques del motor
 

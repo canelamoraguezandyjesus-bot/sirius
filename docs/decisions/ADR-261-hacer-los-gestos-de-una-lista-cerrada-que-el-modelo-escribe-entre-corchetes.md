@@ -137,13 +137,18 @@ Se adopta la opción 3.
   no era la suya. Con ellas, caen las 46.
 - La batería entera, sobre `f95c3073`: 9 323 en verde, 15 omitidas y 21 xfail, los 19
   de la 0.4 que esperan su pieza y 2 de antes, ninguna roja, en 24 min 32 s.
+- Quality, sobre la #702, vio fallar una de las dos pruebas de la ventana de la lección;
+  las dos, con lo que esperaban antes y una espera más corta que la del modelo de
+  mentira, fallan siempre en local, y con lo que se ve mientras llega pasan: las 65 de
+  `tests/gui/test_conversation_ui.py` en verde.
 
 ## Consecuencias
 
 - La cara gesticula con lo que dice, cuando el modelo escribe gestos.
 - `on_delta` ya no recibe los trozos del modelo, sino los del filtro: un blanco del final
   espera al trozo siguiente, por si va delante de una etiqueta. Juntos dicen lo mismo.
-  Cinco pruebas de la charla miraban los trozos exactos y ahora miran estos.
+  Cinco pruebas de la charla miraban los trozos exactos y ahora miran estos, y dos de la
+  ventana miran lo que se ve mientras llega.
 - Una respuesta cortada o fallida se guarda sin el corchete del final que aún podía ser
   una etiqueta.
 - Las instrucciones de la charla llevan unas sesenta palabras más.
@@ -163,8 +168,14 @@ Se adopta la opción 3.
 
 ## La lección
 
-- ninguna: lo que salió al hacerla quedó arreglado y escrito antes de la revisión. Que
-  los trozos de `on_delta` ya no son los del modelo lo dijeron cinco pruebas de la charla;
-  que una marca perdida dentro de un código movía los gestos de detrás, y que las cejas
-  de la pieza B, al fruncirse, bajaban las puntas de fuera, se vio al repasar el código y
-  al mirar la cara dibujada con cada gesto.
+- familia: `prueba-que-no-puede-ver-lo-que-vigila`
+- sin esto se repetiría: cambiar lo que llega a trozos y ajustar solo las pruebas que
+  fallan. Dos de la ventana esperaban ver, mientras llega la respuesta, lo que el filtro
+  guarda hasta el trozo siguiente: un blanco del final y unas comillas invertidas. Su
+  modelo de mentira acaba solo a los 5 s, y lo que llegaba al acabar se veía un instante
+  antes de redibujarse, así que pasaban por carrera: en local, siempre; en Quality, sobre
+  la #702, una falló. Ahora esperan lo que se ve mientras llega, en menos tiempo del que
+  tarda el modelo en acabar solo. Con lo que esperaban antes fallan siempre. Lo demás que
+  salió al hacerla quedó arreglado antes de la revisión: los cinco trozos de la charla,
+  una marca perdida dentro de un código y el ceño de la pieza B.
+- lo hace cumplir: `tests/gui/test_conversation_ui.py`

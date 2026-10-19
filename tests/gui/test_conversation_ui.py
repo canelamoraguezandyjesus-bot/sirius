@@ -1077,7 +1077,10 @@ def test_streaming_shows_literal_text_and_final_result_renders_as_markdown(
     window.message_input.setText("hola")
     window.send_button.click()
     qtbot.waitUntil(lambda: window.message_list.count() == 2, timeout=5000)
-    qtbot.waitUntil(lambda: _widget_at(window, 1).rendered_plain_text() == "**uno** ", timeout=5000)
+    # El blanco del final espera al trozo siguiente, por si va delante de un gesto
+    # (ADR-261). La espera es más corta que la del modelo de mentira, que acaba solo a los
+    # 5 s: así no puede pasar viendo lo que llega al acabar.
+    qtbot.waitUntil(lambda: _widget_at(window, 1).rendered_plain_text() == "**uno**", timeout=3000)
 
     provider.release()
     qtbot.waitUntil(lambda: window.send_button.isEnabled(), timeout=5000)
@@ -1302,9 +1305,11 @@ def test_streaming_final_result_segments_code_block_with_copy_button(
     window.message_input.setText("hola")
     window.send_button.click()
     qtbot.waitUntil(lambda: window.message_list.count() == 2, timeout=5000)
+    # Las comillas invertidas del final esperan al trozo siguiente, por si siguen (ADR-261),
+    # y la espera es más corta que la del modelo de mentira, como en la de Markdown.
     qtbot.waitUntil(
-        lambda: _widget_at(window, 1).rendered_plain_text() == "```\ncodigo en streaming\n```",
-        timeout=5000,
+        lambda: _widget_at(window, 1).rendered_plain_text() == "```\ncodigo en streaming\n",
+        timeout=3000,
     )
     # B8a: no segmentation while streaming, so no "Copiar" button appears yet.
     assert _widget_at(window, 1).copy_buttons() == []
