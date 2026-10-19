@@ -130,7 +130,8 @@ Se adoptan las dos últimas.
 - **La charla** le dice al modelo, en «# Quién hay», quién le habla en un turno de voz y a
   quiénes tiene delante, su nombre o «alguien sin identificar», con una regla: solo
   reconoce a quien le dio permiso, y a los demás, aunque le digan quiénes son, no dice que
-  los reconoce. Lo escrito en la ventana no lleva quién lo escribe.
+  los reconoce. Lo escrito en la ventana no lleva quién lo escribe. Y como lleva nombres,
+  solo va a un modelo de este ordenador, como lo que oye.
 - **Cargar**, la primera vez que hace falta, en el hilo de la vista o del oído; la ventana
   lee y cambia el permiso sin esperar a que acabe. Si no carga, se dice una vez por qué y
   no se vuelve a intentar.
@@ -185,6 +186,10 @@ Se adoptan las dos últimas.
     carpeta, cae.
   - Reconocer miraba también el modelo de la edad. Es la lección de ADR-264, del otro
     lado, y se cuenta allí.
+  - «# Quién hay» iba también a un modelo de fuera, en lo escrito en la ventana, con los
+    nombres de quien tiene delante. Ahora solo va a uno de este ordenador, como lo que
+    oye; la regla de no insultar, que no nombra a nadie, va siempre. Sin esa puerta, la
+    prueba nueva cae (`tests/integration/test_send_message.py`).
 - **La batería entera, con las cuatro piezas de la 0.4 juntas**: 9 675 en verde, 15 omitidas
   y 2 xfail, en 33 min 9 s, y una roja: la medida de rendimiento de construir el contexto,
   que tras media hora de pruebas pasa en este ordenador de su tope de disparate, 1 500 ms.

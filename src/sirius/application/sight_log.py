@@ -13,7 +13,8 @@ para que la reconozca, o nadie. De eso saca los cambios y los apunta, con su hor
 - **De los desconocidos se cuenta cuántos hay**: sin permiso no hay nombre ni nada que los
   distinga, así que dos sin identificar son dos, sin saber cuál es cuál.
 - **Lo apuntado lo lee la charla**, una línea por cambio de las últimas ``REMEMBER``, las
-  ``MOST_LINES`` más nuevas; lo de antes se borra.
+  ``MOST_LINES`` más nuevas; lo de antes se borra, al apuntar y al leer: aunque no cambie
+  nada delante, no se queda en la base.
 - **Quien quita su permiso** deja de tener nombre en lo apuntado y en lo que se está
   mirando: pasa a ser alguien sin identificar, sin que se apunte que se fue. Y al leerlo,
   un nombre de quien ya no tiene permiso, porque algo falló al quitárselo, se lee como
@@ -125,8 +126,10 @@ class SightLog:
     def lines(self) -> tuple[str, ...]:
         """Lo que se le dice al modelo: los cambios de las últimas ``REMEMBER``, como texto,
         del más viejo al más nuevo, los ``MOST_LINES`` más nuevos. El nombre de quien ya no
-        tiene permiso se lee como alguien sin identificar, y se quita de lo apuntado."""
+        tiene permiso se lee como alguien sin identificar, y se quita de lo apuntado. Antes
+        de leer, se borra lo de antes de ``REMEMBER``."""
         now = self._wall_clock()
+        self._drop_old(now)
         seen = self._store.since(now - REMEMBER)[-MOST_LINES:]
         allowed = set(self._allowed())
         stale = {change.who for change in seen if change.who is not None} - allowed
@@ -202,6 +205,19 @@ class SightLog:
             if not self._failed:
                 self._failed = True
                 _logger.error("No se pudo apuntar lo que ha visto (%s)", type(error).__name__)
+
+    def _drop_old(self, now: datetime) -> None:
+        """Borra lo apuntado antes de ``REMEMBER``. Un fallo se dice una vez, con su tipo, y
+        lo apuntado se lee igual."""
+        try:
+            self._store.drop_before(now - REMEMBER)
+        except Exception as error:
+            if not self._failed:
+                self._failed = True
+                _logger.error(
+                    "No se pudo borrar lo que ha visto hace más de un día (%s)",
+                    type(error).__name__,
+                )
 
 
 def sight_block(lines: Sequence[str]) -> str:

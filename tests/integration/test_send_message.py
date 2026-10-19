@@ -1143,7 +1143,10 @@ def test_cortarle_antes_de_que_escriba_nada_deja_su_respuesta_vacia_y_acabada(
 
 
 class _ProveedorQueApunta(_StaticLLMProvider):
-    """Contesta siempre lo mismo y apunta cada petición, con sus instrucciones."""
+    """Contesta siempre lo mismo y apunta cada petición, con sus instrucciones. Corre en
+    este ordenador, como Ollama: lo que ve la cámara de quién hay solo va a uno así."""
+
+    runs_on_this_computer = True
 
     def __init__(self) -> None:
         super().__init__("vale")
@@ -1350,6 +1353,42 @@ def test_el_modelo_lee_lo_que_ha_visto_antes_de_quien_hay(tmp_path: Path) -> Non
     ]
     assert desde < lineas.index(HEADING), "lo que vio, antes de quién hay"
     assert "¿quién ha venido?" not in peticion.instructions
+
+
+class _ProveedorDeFuera(_ProveedorQueApunta):
+    """El mismo, pero de fuera: no corre en este ordenador."""
+
+    runs_on_this_computer = False
+
+
+@pytest.mark.integration
+def test_a_un_modelo_de_fuera_no_le_llega_ni_quien_hay_ni_lo_que_ha_visto_y_la_regla_si(
+    tmp_path: Path,
+) -> None:
+    proveedor = _ProveedorDeFuera()
+    use_case = _build_use_case(tmp_path / "sirius.db", proveedor)
+    leido: list[str] = []
+
+    def lo_visto() -> tuple[str, ...]:
+        leido.append("lo visto")
+        return ("A las 18:02 vino Marta.",)
+
+    def quien_hay() -> tuple[str | None, ...]:
+        leido.append("quién hay")
+        return ("Marta", None)
+
+    use_case.set_seen(lo_visto)
+    use_case.set_presence(quien_hay)
+    use_case.set_ages(lambda: (AgeReading(8, sure=True),))
+
+    use_case.send_message("hola")
+
+    [peticion] = proveedor.peticiones
+    assert "Marta" not in peticion.instructions
+    assert SEEN_HEADING not in peticion.instructions
+    assert HEADING not in peticion.instructions
+    assert care_block() in peticion.instructions, "la regla no nombra a nadie, y va"
+    assert leido == [], "ni se lee: leerlo puede tocar la base"
 
 
 @pytest.mark.integration

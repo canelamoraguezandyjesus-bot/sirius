@@ -105,11 +105,13 @@ Se adoptan las dos últimas.
   va: no se apunta nada, y al volver a ver se empieza de nuevo.
 - **La base** gana la tabla `sight_log`, con su migración: cuándo, qué cambió y quién. Su
   conexión lleva `secure_delete`, como las huellas. Lo de hace más de 24 horas se borra
-  cada vez que se apunta algo.
+  cada vez que se apunta algo y cada vez que la charla lo lee: aunque no cambie nada
+  delante, no se queda en la base.
 - **La charla** le pone al modelo «# Lo que has visto», antes de «# Quién hay»: una línea
   por cambio de las últimas 24 horas, las 30 más nuevas, con su hora en la de este
   ordenador, «A las 18:02 vino Marta.», «A las 18:30 se fue Marta.», y lo de ayer, «Ayer,
-  a las…». Quien no tiene nombre es «alguien sin identificar».
+  a las…». Quien no tiene nombre es «alguien sin identificar». Como lleva nombres, solo va
+  a un modelo de este ordenador, como «# Quién hay».
 - **Quitar el permiso** quita su nombre de lo apuntado, en el mismo paso que borra sus
   huellas, y de lo que se está mirando: pasa a ser alguien sin identificar, y no se apunta
   que se fue. Y lo que se le dice al modelo solo lleva nombres de quien tiene permiso: si
@@ -154,6 +156,14 @@ Se adoptan las dos últimas.
 
 - Lo mismo con `sight_log` en el conductor de la 0.3, que vigila que no se guarde audio en
   la base: la cuenta entre las tablas de Sirius.
+- **Al repasar el paquete antes de la revisión externa**, dos cosas:
+  - Lo de hace más de 24 horas solo se borraba al apuntar algo nuevo: sin cambios
+    delante, se quedaba en la base. Ahora también al leerlo la charla, y un fallo al
+    borrarlo se dice una vez y se lee igual. Tres cambios a propósito, y las pruebas cazan
+    los tres (`tests/unit/test_lo_que_ve.py`).
+  - «# Lo que has visto» iba también a un modelo de fuera, con nombres y horas. Ahora solo
+    va a uno de este ordenador, y ni se lee si no; sin esa puerta, la prueba nueva cae
+    (`tests/integration/test_send_message.py`).
 - **La batería entera, con las cuatro piezas de la 0.4 juntas**: 9 675 en verde, 15 omitidas
   y 2 xfail, en 33 min 9 s, y una roja: la medida de rendimiento de construir el contexto,
   que tras media hora de pruebas pasa en este ordenador de su tope de disparate, 1 500 ms.
@@ -166,7 +176,8 @@ Se adoptan las dos últimas.
 
 - Cada petición lleva lo que ha visto en el día, hasta 30 líneas, unas 250 palabras como
   mucho.
-- Lo que recuerda de cada uno dura 24 horas; después se borra.
+- Lo que recuerda de cada uno dura 24 horas; después se borra, en cuanto apunta algo o la
+  charla lo lee. Con Sirius cerrado, nada lo borra hasta volver a abrirlo.
 - Quien pasa menos de 3 s por delante no ha venido, y quien sale menos de 20 s no se ha
   ido.
 - Quien da su permiso delante de la cámara deja de ser alguien sin identificar y pasa a

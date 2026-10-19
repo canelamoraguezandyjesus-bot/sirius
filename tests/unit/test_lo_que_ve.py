@@ -40,6 +40,7 @@ class _Almacen:
     borrados_antes_de: list[datetime] = field(default_factory=list)
     falla: Exception | None = None
     falla_al_olvidar: Exception | None = None
+    falla_al_borrar: Exception | None = None
 
     def add(self, changes: Sequence[SeenChange]) -> None:
         if self.falla is not None:
@@ -50,6 +51,8 @@ class _Almacen:
         return tuple(sorted((c for c in self.apuntado if c.at >= moment), key=lambda c: c.at))
 
     def drop_before(self, moment: datetime) -> int:
+        if self.falla_al_borrar is not None:
+            raise self.falla_al_borrar
         self.borrados_antes_de.append(moment)
         antes = len(self.apuntado)
         self.apuntado = [c for c in self.apuntado if c.at >= moment]
@@ -409,6 +412,39 @@ def test_al_apuntar_se_borra_lo_de_hace_mas_de_un_dia() -> None:
 
     assert montaje.almacen.apuntado, "lo primero que ve, apuntado en este fotograma"
     assert montaje.almacen.borrados_antes_de == [montaje.reloj.hora() - REMEMBER]
+
+
+def test_al_leerlo_tambien_se_borra_lo_de_hace_mas_de_un_dia_aunque_no_cambie_nada() -> None:
+    montaje = _Montaje()
+    hace_un_rato = montaje.reloj.hora() - timedelta(hours=1)
+    montaje.almacen.apuntado = [
+        SeenChange(montaje.reloj.hora() - REMEMBER - timedelta(minutes=1), Change.CAME, "Marta"),
+        SeenChange(hace_un_rato, Change.CAME, "Pepe"),
+    ]
+
+    lineas = montaje.log.lines()
+
+    assert [c.who for c in montaje.almacen.apuntado] == ["Pepe"], "lo de ayer ya no está"
+    assert len(lineas) == 1
+
+
+def test_un_fallo_al_borrar_lo_viejo_se_dice_una_vez_y_se_lee_igual(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    montaje = _Montaje()
+    montaje.almacen.apuntado = [
+        SeenChange(montaje.reloj.hora() - timedelta(hours=1), Change.CAME, "Pepe")
+    ]
+    montaje.almacen.falla_al_borrar = OSError("disco lleno en /ruta/secreta")
+
+    with caplog.at_level(logging.ERROR):
+        primera = montaje.log.lines()
+        segunda = montaje.log.lines()
+
+    assert len(primera) == len(segunda) == 1
+    errores = [r.getMessage() for r in caplog.records if r.levelno >= logging.ERROR]
+    assert errores == ["No se pudo borrar lo que ha visto hace más de un día (OSError)"]
+    assert "/ruta/secreta" not in caplog.text
 
 
 def test_un_fallo_al_apuntar_se_dice_una_vez_con_su_tipo_y_no_para_nada(

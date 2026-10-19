@@ -491,7 +491,8 @@ class SendMessageUseCase:
         escribe. Y si la vista tiene delante a un crío, a un anciano o a alguien cuya edad
         no se sabe, lleva detrás la regla de no insultar (``care_block``, pieza F de la
         0.4, ADR-264). Antes de «# Quién hay» va lo que recuerda haber visto, quién vino y
-        quién se fue, con su hora (``sight_block``, pieza G de la 0.4, ADR-265).
+        quién se fue, con su hora (``sight_block``, pieza G de la 0.4, ADR-265). Esas dos
+        llevan nombres, y solo van a un modelo de este ordenador; la regla va siempre.
         """
         operation_id = operation_id or str(uuid.uuid4())
         provider = self._llm_provider
@@ -546,12 +547,16 @@ class SendMessageUseCase:
         instructions = render_instructions(context)
         if mode_block:
             instructions = f"{instructions}\n\n{mode_block}"
-        seen = sight_block(self._seen_lines())
-        if seen:
-            instructions = f"{instructions}\n\n{seen}"
-        presence = presence_block(speaker=speaker, in_front=self._in_front())
-        if presence:
-            instructions = f"{instructions}\n\n{presence}"
+        # Lo que ve la cámara de quién hay y de quién vino lleva nombres: solo va a un
+        # modelo de este ordenador, como lo que oye. La regla de no insultar no nombra a
+        # nadie, y va siempre.
+        if runs_on_this_computer(provider):
+            seen = sight_block(self._seen_lines())
+            if seen:
+                instructions = f"{instructions}\n\n{seen}"
+            presence = presence_block(speaker=speaker, in_front=self._in_front())
+            if presence:
+                instructions = f"{instructions}\n\n{presence}"
         if self._care():
             instructions = f"{instructions}\n\n{care_block()}"
         if extra_instructions.strip():
