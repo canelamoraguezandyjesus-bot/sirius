@@ -1821,3 +1821,19 @@ defectos:
     ficheros:
       - src/sirius/application/recognition.py
       - tests/unit/test_reconocer.py
+  # ADR-264: cargar la edad miraba, con la comprobación de la pieza E, que estuvieran los dos
+  # modelos de InsightFace, el de reconocer y el de la edad. Sin el de reconocer, la edad no
+  # habría cargado y habría dicho que faltaba el suyo, que estaba. Se vio al escribir sus
+  # pruebas, antes del primer commit; ahora mira solo el suyo.
+  - id: H-264
+    titulo: Cargar la edad miraba también el modelo de reconocer caras, y sin él habría dicho que faltaba el de la edad
+    bloque: producto
+    gravedad: baja
+    estado: cerrado
+    cerrado_por: 76d29ad7679bf2e67fad5589c53452c8df1437ac
+    pr: 703
+    adr: 264
+    ficheros:
+      - src/sirius/adapters/recognition/age.py
+      - src/sirius/infrastructure/local_sight_installation.py
+      - tests/unit/test_edad_adaptador.py
