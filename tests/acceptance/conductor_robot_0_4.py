@@ -59,7 +59,7 @@ import struct
 import tempfile
 import time
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -76,13 +76,17 @@ from lector_de_la_cara import PARTES, Lectura, lee
 from lector_de_la_cara import Dibujo as Dibujo
 from piezas_del_robot import PiezaPendiente, Piezas
 
+from sirius.adapters.vision.local_sight import TOOLS
 from sirius.domain.gestures import GESTURES
 from sirius.infrastructure.paths import resolve_paths
+from sirius.ports.local_sight import CameraUnavailable, SeenFace, SightEngines
 from sirius.presentation.face_widget import FRAME_MS
+from sirius.presentation.main_window import SIGHT_REFRESH_MS
 
 #: Las letras de la tabla de piezas de ADR-259 que ya han entrado en ``main``. La A es la
-#: nota de arranque y estas pruebas; la B, su cara (ADR-260); la C, sus gestos (ADR-261).
-PIEZAS_ENTREGADAS: frozenset[str] = frozenset({"A", "B", "C"})
+#: nota de arranque y estas pruebas; la B, su cara (ADR-260); la C, sus gestos (ADR-261);
+#: y la D, sus ojos (ADR-262).
+PIEZAS_ENTREGADAS: frozenset[str] = frozenset({"A", "B", "C", "D"})
 
 #: Qué trae cada pieza, con las palabras de la tabla de ADR-259.
 PIEZAS: Mapping[str, str] = {
@@ -572,6 +576,8 @@ PASO_DE_LA_CARA = FRAME_MS / 1000
 #: Lo que se espera a que Qt pinte la cara sola, en milisegundos: se pinta cada 33 ms, y si
 #: en un segundo no lo ha hecho, está congelada.
 ESPERA_A_QUE_SE_PINTE_MS = 1000
+#: Lo más que se espera a que abra los ojos para ver adónde mira, en segundos.
+ESPERA_A_QUE_ABRA = 0.3
 #: Lo que puede dejar de verse un gesto, en segundos, y seguir siendo el mismo.
 HUECO_DE_UN_GESTO = 0.3
 
@@ -643,6 +649,19 @@ class VentanaDeOjos(VentanaDeVoz):
         pruebas."""
         return self._lee().dibujo
 
+    def mirando(self) -> Dibujo:
+        """Lo que se ve de la cara en cuanto se pinta sola; si parpadea y no se ve adónde
+        mira, deja pasar el reloj de las pruebas de fotograma en fotograma, hasta
+        ``ESPERA_A_QUE_ABRA`` segundos, hasta que se vea: lo que se lee es adónde mira en
+        cuanto abre los ojos. Un parpadeo dura un cuarto de segundo."""
+        dibujo = self.cara()
+        for _ in range(round(ESPERA_A_QUE_ABRA / PASO_DE_LA_CARA)):
+            if dibujo.mirada is not None:
+                break
+            self._reloj.avanza(PASO_DE_LA_CARA)
+            dibujo = self.cara()
+        return dibujo
+
     def lo_que_se_ve(self) -> Dibujo | None:
         """La cara tal como está ahora en la pantalla, sin esperar a nada: lo último que
         pintó ella sola. ``None`` si no se ve ninguna cara."""
@@ -684,8 +703,53 @@ class VentanaDeOjos(VentanaDeVoz):
         return any(rastro in codigo for rastro in _LO_QUE_PINTA_IMAGENES)
 
     def indicador_de_la_camara(self) -> str:
-        """Lo que dice la ventana de la cámara, tal como se ve; vacío si no dice nada."""
-        raise _pendiente("D")
+        """Lo que dice la ventana de la cámara, tal como se ve; vacío si no dice nada.
+
+        Lo lee después de dejarle a la ventana el rato con que mira la vista, como quien
+        mira la pantalla un momento después: el indicador se pone al día solo.
+        """
+        self._qtbot.wait(SIGHT_REFRESH_MS + 100)
+        etiqueta = self._ventana.camera_label
+        return str(etiqueta.text()) if etiqueta.isVisible() else ""
+
+
+# --- Los dobles, enchufados a Sirius ------------------------------------------------
+
+
+class _CamaraEnchufada:
+    """La cámara de mentira con la cara del puerto de Sirius."""
+
+    def __init__(self, camara: CamaraDeMentira) -> None:
+        self._camara = camara
+
+    def open(self) -> None:
+        try:
+            self._camara.abre()
+        except CamaraNoEncontrada as error:
+            raise CameraUnavailable(str(error)) from error
+
+    def read(self) -> Fotograma | None:
+        try:
+            return self._camara.lee()
+        except CamaraNoEncontrada as error:
+            raise CameraUnavailable(str(error)) from error
+
+    def close(self) -> None:
+        self._camara.cierra()
+
+
+class _DetectorEnchufado:
+    """El detector de mentira con la cara del puerto de Sirius."""
+
+    def __init__(self, detector: DetectorDeMentira) -> None:
+        self._detector = detector
+        self.name = detector.nombre
+
+    def detect(self, frame: Fotograma) -> tuple[SeenFace[bytes], ...]:
+        return tuple(
+            SeenFace(x=cara.x, talking=cara.habla, looking=cara.mira, crop=cara.recorte)
+            for cara in self._detector.detecta(frame)
+        )
 
 
 # --- El conductor ---------------------------------------------------------------------
@@ -876,13 +940,36 @@ class ConductorDeOjos(ConductorDeVoz):
 
     # --- Pieza D: la cámara ---
 
-    def herramientas_de_los_ojos(self) -> frozenset[str]:
-        """Las herramientas con que vería Sirius en producción, leídas de su montaje."""
-        raise _pendiente("D")
+    def _motores_de_los_ojos(self) -> Callable[[], SightEngines[Any, Any]]:
+        """La vista de Sirius, con los dobles donde irían la cámara y MediaPipe; los monta la
+        raíz de composición de producción."""
 
-    def mira_un_rato(self, segundos: float) -> None:
-        """Deja a Sirius mirar con la cámara ``segundos`` del reloj de las pruebas."""
-        raise _pendiente("D")
+        def motores() -> SightEngines[Any, Any]:
+            return SightEngines(_CamaraEnchufada(self.camara), _DetectorEnchufado(self.detector))
+
+        return motores
+
+    def herramientas_de_los_ojos(self) -> frozenset[str]:
+        """Las herramientas con que vería Sirius en producción, leídas de su montaje: las de
+        la vista de verdad, la que monta la raíz de composición sin dobles."""
+        return frozenset(TOOLS)
+
+    def _viendo(self) -> None:
+        """Abre la vista de Sirius si no está abierta: lo que hace la ventana al abrirse.
+        Sin cámara no ve, y lo dice; la prueba lo lee de la ventana."""
+        self._dependencias.local_sight.start()
+
+    def mira_un_rato(self, segundos: float, *, cada: float = 0.1) -> None:
+        """Deja a Sirius mirar con la cámara ``segundos`` del reloj de las pruebas, de
+        ``cada`` en ``cada``, como lo hace su hilo; con la ventana abierta, la cara se dibuja
+        en cada paso, como se dibuja sola."""
+        self._viendo()
+        ventana = self._ventana_de_ojos
+        for _ in range(round(segundos / cada)):
+            self.reloj.avanza(cada)
+            self._dependencias.local_sight.look()
+            if ventana is not None:
+                ventana.cara()
 
     def mira_y_oye(self, quien: str, texto: str) -> TurnoConMirada:
         """``quien``, que está delante de la cámara, dice ``texto`` con su voz y moviendo la
@@ -892,8 +979,61 @@ class ConductorDeOjos(ConductorDeVoz):
         mientras el micro leía lo último que dijo, mientras el modelo pensaba, antes de
         su primera palabra, y cuando el altavoz empezó a sonar con la respuesta. Lo que
         reciba el modelo desde aquí es lo del último turno.
+
+        Antes de decirlo, Sirius le ve medio segundo moviendo la boca, como cuando alguien
+        empieza a hablar. Los momentos los marcan el micro al leer lo que dijo, el modelo al
+        recibir la petición y el altavoz al empezar a sonar. En cada momento la cara se
+        dibuja en el acto, como se dibuja sola, y se deja pasar lo que tarda en mover los
+        ojos: los dibujos de mientras piensa son ese y tres más, de 0,1 s en 0,1 s, y el de
+        al contestar es el de 0,15 s después de empezar a sonar. Si en uno parpadea, se lee
+        en cuanto abre los ojos (``mirando``).
         """
-        raise _pendiente("D")
+        antes = self.camara.delante
+        assert quien in {persona.quien for persona in antes}, f"{quien} no está delante"
+        self.camara.pon_delante(
+            [replace(persona, habla=persona.quien == quien) for persona in antes]
+        )
+        ventana = self._ventana_de_ojos
+        oyendo: list[Dibujo] = []
+        pensando: list[Dibujo] = []
+        contestando: list[Dibujo] = []
+
+        def al_leer(sonido: Sonido, quedan: int) -> None:
+            del quedan
+            if ventana is not None and sonido.texto == texto:
+                oyendo.append(ventana.mirando())
+
+        def al_pensar() -> None:
+            if ventana is not None:
+                pensando.append(ventana.mirando())
+                for _ in range(3):
+                    self.reloj.avanza(0.1)
+                    pensando.append(ventana.mirando())
+
+        def al_sonar(sonido: Sonido) -> None:
+            del sonido
+            if ventana is not None and not contestando:
+                ventana.cara()
+                self.reloj.avanza(0.15)
+                contestando.append(ventana.mirando())
+
+        try:
+            self.mira_un_rato(0.5)
+            self.micro.al_leer = al_leer
+            self.modelo.al_pensar = al_pensar
+            self.altavoz.al_sonar = al_sonar
+            turno = self.oye_a(quien, texto)
+        finally:
+            self.micro.al_leer = None
+            self.modelo.al_pensar = None
+            self.altavoz.al_sonar = None
+            self.camara.pon_delante(antes)
+        return TurnoConMirada(
+            turno,
+            oyendo[-1] if oyendo else None,
+            tuple(pensando),
+            contestando[0] if contestando else None,
+        )
 
     def a_quien_mira(self, dibujo: Dibujo) -> str | None:
         """A quién de los que hay delante mira la cara en ``dibujo``: el más cerca de su

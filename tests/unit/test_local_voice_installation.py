@@ -18,6 +18,7 @@ import pytest
 
 import sirius.install_local_voice as install_local_voice
 from sirius.config.local_voice import LocalVoiceSettings, SpeakingVoice
+from sirius.infrastructure.local_sight_installation import SIGHT_DISTRIBUTIONS
 from sirius.infrastructure.local_voice_installation import (
     CHARACTER_DISTRIBUTIONS,
     CHARACTER_INSTALL_COMMAND,
@@ -79,18 +80,32 @@ class _Cargadas(list[Path]):
 
 
 def _sin_personaje(nombres: tuple[str, ...] = VOICE_DISTRIBUTIONS) -> tuple[str, ...]:
-    """Las bibliotecas del extra ``voz`` están; las de ``personaje``, no."""
-    return tuple(nombre for nombre in nombres if nombre in CHARACTER_DISTRIBUTIONS)
+    """Las bibliotecas del extra ``voz`` están; las de ``personaje`` y ``ojos``, no."""
+    return tuple(
+        nombre for nombre in nombres if nombre in (*CHARACTER_DISTRIBUTIONS, *SIGHT_DISTRIBUTIONS)
+    )
 
 
 @pytest.fixture(autouse=True)
 def la_voz_esta(monkeypatch: pytest.MonkeyPatch) -> _Cargadas:
     """Un ordenador con las voces de Piper puestas y que cargan. Las pruebas del modelo de
-    oír no las miran; las de la voz las quitan o las rompen. Devuelve lo que se cargó."""
+    oír no las miran; las de la voz las quitan o las rompen. Devuelve lo que se cargó.
+
+    Y ninguna prueba baja nada de verdad: la descarga de ficheros falla, y la vista no
+    carga si una prueba llega a ella sin ponerla (pieza D de la 0.4, ADR-262)."""
     for voz in _PIPER:
         _pon_voz(voice_dir(voz), speaking_voice_files(voz.value))
     cargadas = _Cargadas()
     monkeypatch.setattr(install_local_voice, "load_speaking_engines", cargadas.carga)
+
+    def no_baja(url: str, destino: Path) -> None:
+        raise AssertionError(f"una prueba ha ido a bajar {url}")
+
+    def no_ve(modelo: Path) -> object:
+        raise AssertionError("una prueba ha ido a cargar la vista de verdad")
+
+    monkeypatch.setattr(install_local_voice, "_download_file", no_baja)
+    monkeypatch.setattr(install_local_voice, "load_sight_engines", no_ve)
     return cargadas
 
 
@@ -683,9 +698,9 @@ def test_si_una_biblioteca_de_hablar_esta_rota_la_orden_lo_dice(
 
 
 def _con_personaje(nombres: tuple[str, ...] = VOICE_DISTRIBUTIONS) -> tuple[str, ...]:
-    """Las bibliotecas de los dos extras están, como tras `--extra voz --extra personaje`."""
-    del nombres
-    return ()
+    """Las bibliotecas de los dos extras de la voz están, como tras `--extra voz --extra
+    personaje`; las de ``ojos``, no."""
+    return tuple(nombre for nombre in nombres if nombre in SIGHT_DISTRIBUTIONS)
 
 
 @pytest.mark.usefixtures("bibliotecas_bien")

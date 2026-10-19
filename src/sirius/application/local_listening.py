@@ -60,7 +60,9 @@ frase desde la primera, con la voz y el altavoz.
   charla, que sigue escribiendo y guarda la respuesta entera; después deja de oír con su
   aviso, como si fallara el detector.
 - **Solo va a la charla lo que es para él** (pieza D, ADR-244): con su nombre, o sin él
-  mientras dura la charla (``Addressing``). Lo que no es para él se transcribe, porque
+  mientras dura la charla (``Addressing``), o, desde la 0.4, si quien habla le mira
+  mientras lo dice o justo antes (``looked_at``, pieza D de la 0.4, ADR-262). Lo que no
+  es para él se transcribe, porque
   sin el texto no se sabe, y se descarta ahí: no va a la charla, que es lo único que
   escribe en la base, y el diario no apunta nada de lo oído. Cuenta la hora a la que el
   micro captó la voz, no la hora a la que la leyó: mientras transcribe o contesta, lo
@@ -73,6 +75,9 @@ frase desde la primera, con la voz y el altavoz.
 - **Quien enseña la escucha decide si un turno va ya a la charla** (``ListeningWatcher``):
   la ventana le dice que no si está con otra cosa, y se entera de cómo acabó cada turno y
   de cuándo deja de oír por su cuenta.
+- **La cara sabe en qué está** (``phase``, pieza D de la 0.4, ADR-262): oyendo un turno,
+  pensando, con la respuesta pedida y nada dicho aún, o hablando. Lo lee sin el cerrojo,
+  como el volumen y los gestos.
 """
 
 from __future__ import annotations
@@ -83,6 +88,7 @@ import uuid
 from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass
+from enum import Enum
 from typing import Any, Protocol
 
 from sirius.application.addressing import Addressing, says_his_name
@@ -109,6 +115,10 @@ _logger = get_logger(__name__)
 PRE_ROLL_CHUNKS = 16
 #: Cada cuánto mira el micro, mientras la charla contesta, el hilo que lo lee entonces.
 MEANWHILE_SECONDS = 0.03
+#: Desde cuántos segundos antes de empezar a oírse su voz cuenta que quien habla le mira:
+#: quien le habla a alguien suele mirarle al empezar, y la cámara puede verlo antes de que
+#: el detector oiga la voz (pieza D de la 0.4, ADR-262).
+LOOK_BEFORE_SECONDS = 1.0
 #: Con qué se marca, entre lo que se corta en frases, dónde escribió la charla cada gesto
 #: (pieza C de la 0.4, ADR-261): los caracteres de uso privado de Unicode, de U+E000 a
 #: U+F8FF, uno por gesto del turno y en orden. La preparación para la voz los deja pasar
@@ -316,6 +326,19 @@ class ListeningWatcher(Protocol):
         ...
 
 
+class VoicePhase(Enum):
+    """En qué está el oído, para la cara (pieza D de la 0.4, ADR-262)."""
+
+    #: Ni oye un turno ni contesta.
+    QUIET = "quiet"
+    #: Oye un turno que aún no ha acabado.
+    HEARING = "hearing"
+    #: Ha dado el turno a la charla y aún no ha dicho nada: el modelo piensa.
+    THINKING = "thinking"
+    #: Dice la respuesta, o aún suena.
+    SPEAKING = "speaking"
+
+
 @dataclass(slots=True)
 class _ClosedTurn[Chunk]:
     """Un turno que el detector dio por acabado y aún no se ha transcrito.
@@ -326,13 +349,15 @@ class _ClosedTurn[Chunk]:
     la hora a la que el micro captó el trozo, no a la que se leyó. ``generation``, cuántas
     veces se había callado o parado el oído al cerrarse. Lo de la charla se decide al
     cerrarlo, como la generación: hasta que le toca ir a la charla puede contestar a otro
-    turno y callar otra vez (pieza E, ADR-245).
+    turno y callar otra vez (pieza E, ADR-245). ``looked_at``, si quien hablaba le miraba
+    mientras lo decía o justo antes (pieza D de la 0.4, ADR-262).
     """
 
     chunks: list[Chunk]
     in_conversation: bool
     voice_heard_at: float
     generation: int
+    looked_at: bool = False
 
 
 class LocalListening[Chunk]:
@@ -351,10 +376,13 @@ class LocalListening[Chunk]:
         clock: Callable[[], float] = time.monotonic,
         addressing: Addressee | None = None,
         reader: Callable[[Callable[[], None]], MeanwhileReader] = read_meanwhile,
+        looked_at: Callable[[float], bool] = lambda since: False,
     ) -> None:
         self._chat = chat
         #: Pone a leer el micro mientras la charla contesta, con cancelador.
         self._reader = reader
+        #: Si desde un momento quien habla le mira: lo dice la vista (pieza D de la 0.4).
+        self._looked_at = looked_at
         self._clock = clock
         self._addressing: Addressee = addressing if addressing is not None else Addressing()
         self._memory_suggestions = memory_suggestions
@@ -426,6 +454,24 @@ class LocalListening[Chunk]:
         """
         speaking = self._speaking
         return speaking.speaker.level if speaking is not None else 0.0
+
+    @property
+    def phase(self) -> VoicePhase:
+        """En qué está: oyendo un turno, pensando la respuesta, diciéndola o en nada.
+
+        No coge el cerrojo: lo lee la cara desde el hilo de la ventana, por lo mismo que
+        ``speaking_level``.
+        """
+        speech = self._speech
+        if speech is not None:
+            return VoicePhase.SPEAKING if speech.sounding else VoicePhase.THINKING
+        last = self._last_speech
+        speaking = self._speaking
+        if last is not None and last.sounding and speaking is not None and speaking.speaker.playing:
+            return VoicePhase.SPEAKING
+        if self._turn is not None:
+            return VoicePhase.HEARING
+        return VoicePhase.QUIET
 
     @property
     def speaking_gestures(self) -> tuple[str, tuple[str, ...]]:
@@ -703,7 +749,10 @@ class LocalListening[Chunk]:
             return None
         chunks, self._turn = self._turn, None
         in_conversation = self._addressing.in_conversation(self._turn_began_at)
-        return _ClosedTurn(chunks, in_conversation, self._voice_heard_at, self._generation)
+        looked_at = self._looked_at(self._turn_began_at - LOOK_BEFORE_SECONDS)
+        return _ClosedTurn(
+            chunks, in_conversation, self._voice_heard_at, self._generation, looked_at
+        )
 
     def _echo_canceller(self) -> EchoCanceller[Any] | None:
         """El cancelador de eco, si la voz trae uno."""
@@ -806,7 +855,7 @@ class LocalListening[Chunk]:
         if not current:
             _logger.info("Turno de voz de antes de callar o parar el oído: no va a la charla")
             return None
-        if not (says_his_name(heard) or closed.in_conversation):
+        if not (says_his_name(heard) or closed.in_conversation or closed.looked_at):
             # Ni lo oído ni nada de ello: solo que no era para él.
             _logger.info("Turno de voz que no era para él: no va a la charla")
             return HeardTurn(heard=heard, addressed=False, result=None, operation_id="")
@@ -1096,6 +1145,12 @@ class _Speech:
     def spoke(self) -> bool:
         """Si le dio al altavoz alguna frase."""
         return bool(self._said)
+
+    @property
+    def sounding(self) -> bool:
+        """Si ya ha empezado a darle frases al altavoz: desde que le da la primera, antes de
+        que acabe de tomarla."""
+        return self._base is not None
 
     def hear(self, text: str) -> None:
         """Lo nuevo que ha escrito la charla: deja al oído mirar el micro, por si le hablan

@@ -23,7 +23,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from conductor_robot_0_3 import Audio, Sonido
+from conductor_robot_0_2 import Conductor
+from conductor_robot_0_3 import Audio, ConductorDeVoz, Sonido
 from conductor_robot_0_4 import (
     ALTO_DE_LA_CARA,
     MARCA_DE_LA_IMAGEN,
@@ -51,6 +52,7 @@ from conductor_robot_0_4 import (
 from lector_de_la_cara import lee
 from pytestqt.qtbot import QtBot
 
+import sirius.adapters.vision.local_sight as vista_de_verdad
 from sirius.domain.gestures import GESTURES
 from sirius.infrastructure.logging import LOGGER_NAME
 
@@ -406,6 +408,25 @@ def test_gestos_dibujados_ve_cada_gesto_que_hace_la_cara_y_ninguno_si_no_hace(
     ventana._cara().make("guino")
     ventana._cara().make("asiente")
     assert conductor.gestos_dibujados(3.0) == ("guino", "asiente")
+    conductor.cierra()
+
+
+@pytest.mark.parametrize("de_la", [Conductor, ConductorDeVoz], ids=["0.2", "0.3"])
+def test_las_pruebas_de_la_0_2_y_la_0_3_no_abren_ninguna_camara(
+    qtbot: QtBot, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, de_la: type[Conductor]
+) -> None:
+    # Sus conductores no enchufan vista: la de verdad no carga nada mientras falte el modelo
+    # de las caras, y en las pruebas falta. Ni una biblioteca de la cámara se importa.
+    importadas: list[str] = []
+    monkeypatch.setattr(vista_de_verdad, "import_sight_library", importadas.append)
+    conductor = de_la(tmp_path)
+
+    ventana = conductor.abre_la_ventana(qtbot)
+
+    assert conductor._motores_de_los_ojos() is None
+    assert importadas == []
+    assert not conductor._dependencias.local_sight.seeing
+    assert ventana.camera_label.text().startswith("No puedo verte: falta el modelo de las caras.")
     conductor.cierra()
 
 

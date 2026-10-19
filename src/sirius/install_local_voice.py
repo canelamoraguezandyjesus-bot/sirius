@@ -5,9 +5,11 @@ PowerShell y dentro de la carpeta de Sirius. Cuando llega aquí, ``uv run --extr
 ha instalado o puesto al día las bibliotecas; esto baja el modelo de oír y las cuatro
 voces de Piper de la prueba a ciegas a sus carpetas si faltan, antes de mirar lo demás, y
 comprueba que el oído y cada voz cargan. Con ``--extra personaje`` baja además la voz de
-personaje, la de Chatterbox; sin él, dice cómo se pone. Lo que ya está no lo vuelve a
-bajar, y lo que falla lo dice con su causa, sin adivinar remedios (rondas 5, 8 y 9 de
-Codex sobre la PR #687).
+personaje, la de Chatterbox; sin él, dice cómo se pone. Con ``--extra ojos`` baja además
+el modelo de las caras, comprueba que la vista carga y mira si la cámara se abre (pieza D
+de la 0.4, ADR-262); sin él, dice cómo se pone. Lo que ya está no lo vuelve a bajar, y lo
+que falla lo dice con su causa, sin adivinar remedios (rondas 5, 8 y 9 de Codex sobre la
+PR #687).
 
 Es lo único de Sirius que baja un modelo o una voz. Si a Sirius le falta, dice esta orden
 y no baja nada (PA-R03-08); una prueba recorre ``src/`` para que siga siendo así.
@@ -18,6 +20,7 @@ descarga cortada no deja un modelo ni una voz a medias que parezcan instalados.
 
 from __future__ import annotations
 
+import hashlib
 import re
 import shutil
 import urllib.request
@@ -32,7 +35,16 @@ from sirius.adapters.audio.local_speaking import (
     check_speaking_libraries,
     load_speaking_engines,
 )
+from sirius.adapters.vision.local_sight import load_sight_engines
 from sirius.config.local_voice import LocalVoiceSettings, SpeakingVoice
+from sirius.infrastructure.local_sight_installation import (
+    FACE_MODEL_SHA256,
+    FACE_MODEL_URL,
+    SIGHT_DISTRIBUTIONS,
+    SIGHT_INSTALL_COMMAND,
+    face_model_complete,
+    face_model_path,
+)
 from sirius.infrastructure.local_voice_installation import (
     CHARACTER_DISTRIBUTIONS,
     CHARACTER_INSTALL_COMMAND,
@@ -46,6 +58,7 @@ from sirius.infrastructure.local_voice_installation import (
     voice_distributions_missing,
     voice_model,
 )
+from sirius.ports.local_sight import CameraUnavailable, SightUnavailable
 from sirius.ports.local_voice import VoiceUnavailable
 
 #: Cómo se baja un modelo de faster-whisper: ``download_model(nombre, output_dir=...)``.
@@ -129,6 +142,34 @@ def download_character_voice(folder: Path, download: DownloadFile | None = None)
     partial.rename(folder)
 
 
+def download_face_model(target: Path, download: DownloadFile | None = None) -> None:
+    """Baja el modelo de las caras a ``target``, y solo lo deja ahí si está entero y es el
+    de su huella: uno a medias, o uno cambiado en el servidor, no se pone."""
+    fetch = download if download is not None else _download_file
+    partial = target.with_name(f"{target.name}.a-medias")
+    partial.unlink(missing_ok=True)
+    partial.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        fetch(FACE_MODEL_URL, partial)
+    except BaseException:
+        partial.unlink(missing_ok=True)
+        raise
+    if _sha256(partial) != FACE_MODEL_SHA256 or not face_model_complete(partial):
+        partial.unlink(missing_ok=True)
+        msg = "lo bajado no es el modelo de las caras que se espera, o no llegó entero"
+        raise RuntimeError(msg)
+    partial.replace(target)
+
+
+def _sha256(path: Path) -> str:
+    """La huella de ``path``, leída a trozos de un mega."""
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        for block in iter(lambda: source.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
 def _download_file(url: str, target: Path) -> None:
     """Baja ``url`` a ``target`` a trozos de un mega, sin tenerlo entero en memoria."""
     with urllib.request.urlopen(url) as source, target.open("wb") as sink:
@@ -198,6 +239,16 @@ def main() -> int:
         failed = _install_character_voice()
         if failed is not None:
             return failed
+    # La vista, con el modelo de las caras (pieza D de la 0.4, ADR-262).
+    sight = not voice_distributions_missing(SIGHT_DISTRIBUTIONS)
+    if not sight:
+        print(
+            f"[--]    La vista (la cámara y las caras) no está: la instala {SIGHT_INSTALL_COMMAND}"
+        )
+    else:
+        failed = _install_face_model()
+        if failed is not None:
+            return failed
     try:
         check_listening_libraries()
         check_speaking_libraries()
@@ -217,6 +268,10 @@ def main() -> int:
             name = _name(voice)
             return _fail(f"{name[0].upper()}{name[1:]} no carga", error)
         engines.speaker.close()
+    if sight:
+        failed = _check_sight()
+        if failed is not None:
+            return failed
     print("[OK]    Listo. Para probarlo: uv run --link-mode=copy --extra voz sirius-oye")
     return 0
 
@@ -260,7 +315,40 @@ def _install_character_voice() -> int | None:
     return None
 
 
-def _fail(problem: str, error: VoiceUnavailable) -> int:
+def _install_face_model() -> int | None:
+    """Baja el modelo de las caras si falta; el código con que acaba la orden si falla."""
+    model = face_model_path()
+    if face_model_complete(model):
+        print(f"[OK]    El modelo de las caras (MediaPipe) ya está en {model}")
+        return None
+    print("Bajando el modelo de las caras (MediaPipe, unos 4 MB). Solo esta vez.")
+    try:
+        download_face_model(model)
+    except Exception as error:
+        print(f"[FALLA] No se pudo bajar el modelo de las caras: {error}")
+        return 1
+    print(f"[OK]    Modelo de las caras bajado a {model}")
+    return None
+
+
+def _check_sight() -> int | None:
+    """Que la vista carga y si la cámara se abre; el código con que acaba la orden si la
+    vista no carga. Sin cámara no falla: Sirius oye y habla igual, y lo dice."""
+    print("Comprobando que la vista carga y que la cámara se abre...")
+    try:
+        engines = load_sight_engines(face_model_path())
+    except SightUnavailable as error:
+        return _fail("La vista no carga", error)
+    try:
+        engines.camera.open()
+    except CameraUnavailable as error:
+        print(f"[--]    La cámara no se abre: {error.reason}. Sirius oye y habla igual sin ella.")
+        return None
+    engines.camera.close()
+    return None
+
+
+def _fail(problem: str, error: VoiceUnavailable | SightUnavailable) -> int:
     """Dice qué falla, con su causa, y nada más: no adivina si repetirla lo arreglaría.
 
     Un fallo que vuelve (una DLL) y uno que no (sin memoria un momento) se ven igual desde

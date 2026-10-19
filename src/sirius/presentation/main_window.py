@@ -47,6 +47,7 @@ from sirius.application.api_key_settings import ApiKeySettingsError, ApiKeySetti
 from sirius.application.approve_decision import ApproveDecisionUseCase
 from sirius.application.archive_decision import ArchiveDecisionUseCase
 from sirius.application.archive_memory import ArchiveMemoryUseCase
+from sirius.application.attention import Attention
 from sirius.application.blind_test import BlindTestUseCase
 from sirius.application.budget_status import GetBudgetStatusUseCase
 from sirius.application.capture_commands import CaptureCommand, CaptureIntent, interpret
@@ -68,6 +69,7 @@ from sirius.application.historical_projects import HistoricalProjectsUseCase
 from sirius.application.knowledge_overview import GetKnowledgeOverviewUseCase
 from sirius.application.listening_loop import ListeningLoop
 from sirius.application.local_listening import HeardTurn, LocalListening
+from sirius.application.local_sight import LocalSight
 from sirius.application.memory_origin import GetMemoryOriginUseCase
 from sirius.application.memory_search import MemoryEmbeddingService
 from sirius.application.project_continuity import ProjectContinuityUseCase
@@ -89,6 +91,7 @@ from sirius.application.robot_conversation import (
 from sirius.application.save_manual_memory import SaveManualMemoryUseCase
 from sirius.application.send_message import SendMessageResult, SendMessageUseCase
 from sirius.application.set_criticality import SetCriticalityUseCase
+from sirius.application.sight_loop import SightLoop
 from sirius.application.studio_brief import MODEL_STUDIO_BRIEF
 from sirius.application.studio_capture import CaptureFeedback, StudioCaptureUseCase
 from sirius.application.studio_voice import (
@@ -173,6 +176,11 @@ MODEL_STUDIO_PAGE_INDEX = 1
 #: Lo que dice el indicador de escucha (PA-R03-04, ADR-244).
 LISTENING = "Escuchando"
 MUTED = "En silencio"
+#: Lo que dice de la cámara mientras ve (pieza D de la 0.4, ADR-262); si no ve, dice por qué.
+SEEING = "Cámara: te veo"
+#: Cada cuánto mira la ventana si la vista sigue viendo, en milisegundos: si se desenchufa
+#: la cámara, lo dice sin esperar a nada más.
+SIGHT_REFRESH_MS = 500
 #: Lo que dice si le hablan mientras está con otra cosa: ese turno no va a la charla.
 VOICE_BUSY = "Te he oído, pero estaba con otra cosa: dímelo otra vez cuando acabe."
 #: Lo que dice si abrir el oído falla de una forma que no se espera.
@@ -333,6 +341,8 @@ class MainWindow(QMainWindow):
         local_listening: LocalListening[Any] | None = None,
         listening_loop: ListeningLoop | None = None,
         voice_test_use_case: VoiceTestUseCase | None = None,
+        local_sight: LocalSight | None = None,
+        sight_loop: SightLoop | None = None,
         connections: ConnectionCloser | None = None,
         show_warning: Callable[[str, str], None] | None = None,
         show_information: Callable[[str, str], None] | None = None,
@@ -383,6 +393,19 @@ class MainWindow(QMainWindow):
         self._listening_paused_for_studio = False
         # Pieza F de la 0.3 (ADR-246): la prueba de voces, para elegir su voz a ciegas.
         self._voice_test_use_case = voice_test_use_case
+        # Pieza D de la 0.4 (ADR-262): la vista, que se abre con la ventana como el oído y
+        # suelta la cámara en Model Studio, por si OBS la quiere. Sin ella, la cara mira a su
+        # aire salvo al pensar.
+        self._local_sight = local_sight
+        #: Quien atiende a la vista en producción; sin él, la atiende otro (las pruebas).
+        self._sight_loop = sight_loop
+        self._sight_paused_for_studio = False
+        #: El aviso de la última vez que se abrió la vista: el de un fallo que no esperaba
+        #: no lo guarda ella.
+        self._sight_notice = ""
+        self._sight_timer = QTimer(self)
+        self._sight_timer.setInterval(SIGHT_REFRESH_MS)
+        self._sight_timer.timeout.connect(self._refresh_camera)
         self._pending_user_item: QListWidgetItem | None = None
         self._send_message_use_case = send_message_use_case
         self._get_history_use_case = get_history_use_case
@@ -535,6 +558,7 @@ class MainWindow(QMainWindow):
         self._load_history()
         self._refresh_studio_context()
         self._start_listening()
+        self._start_sight()
 
     def _default_show_warning(self, title: str, text: str) -> None:
         QMessageBox.warning(self, title, text)
@@ -1089,6 +1113,7 @@ class MainWindow(QMainWindow):
         captarían a la vez (ronda 2 de Codex sobre la PR #689, ADR-244).
         """
         self._pause_listening_for_studio()
+        self._pause_sight_for_studio()
         self._pages.setCurrentIndex(MODEL_STUDIO_PAGE_INDEX)
         self._refresh_studio_context()
         self.studio_page.input.setFocus()
@@ -1108,6 +1133,7 @@ class MainWindow(QMainWindow):
         self._capture_heartbeat.stop()
         self._pages.setCurrentIndex(TECHNICAL_PAGE_INDEX)
         self._resume_listening_after_studio()
+        self._resume_sight_after_studio()
 
     def _silence_voice(self) -> None:
         """Cierra micrófono y reproducción. Idempotente."""
@@ -1234,15 +1260,19 @@ class MainWindow(QMainWindow):
         # Su cara, encima de la charla (pieza B de ADR-259): con el reloj de su voz, el
         # volumen de lo que dice y sus gestos cuando suenan (pieza C, ADR-261). Sin oído,
         # con el reloj de siempre, la boca cerrada y solo los gestos de lo escrito.
+        # Adónde mira se lo dice la atención, con lo que ve y lo que oye (pieza D de la 0.4,
+        # ADR-262).
         escucha = self._local_listening
+        atencion = Attention(escucha, self._local_sight)
         if escucha is not None:
             self.face_widget = FaceWidget(
                 escucha.clock,
                 lambda: escucha.speaking_level,
                 lambda: escucha.speaking_gestures,
+                atencion.gaze,
             )
         else:
-            self.face_widget = FaceWidget(time.monotonic)
+            self.face_widget = FaceWidget(time.monotonic, gaze=atencion.gaze)
 
         self.message_list = QListWidget()
         # Bugfix (historial solapado): con el modo por defecto (Fixed), Qt no
@@ -1313,9 +1343,15 @@ class MainWindow(QMainWindow):
         self.mute_button.setAccessibleName("Silencio: cerrar o abrir el micrófono")
         self.mute_button.setVisible(False)
         self.mute_button.clicked.connect(self._handle_mute_clicked)
+        # PA-R04-06: si ve con la cámara, y si no, por qué (pieza D de la 0.4, ADR-262).
+        self.camera_label = QLabel("")
+        self.camera_label.setAccessibleName("La cámara")
+        self.camera_label.setWordWrap(True)
+        self.camera_label.setVisible(False)
         listening_row = QHBoxLayout()
         listening_row.addWidget(self.listening_label)
         listening_row.addWidget(self.mute_button)
+        listening_row.addWidget(self.camera_label, 1)
         listening_row.addStretch(1)
 
         input_row = QHBoxLayout()
@@ -2015,6 +2051,59 @@ class MainWindow(QMainWindow):
         if self._listening_loop is not None:
             self._listening_loop.start()
 
+    # --- Los ojos (pieza D de la 0.4, ADR-262) -----------------------------------------
+
+    def _start_sight(self) -> None:
+        """PA-R04-06: al abrirse empieza a ver, como empieza a oír, y lo dice. Sin cámara, o
+        sin lo que ve, dice por qué y sigue oyendo y hablando."""
+        if self._local_sight is None:
+            return
+        self._sight_notice = self._see(self._local_sight.start)
+        self._refresh_camera()
+        self._sight_timer.start()
+        if self._sight_loop is not None:
+            self._sight_loop.start()
+
+    def _see(self, start: Callable[[], str]) -> str:
+        """Abre la vista con ``start`` y devuelve su aviso. Falle como falle, la ventana
+        sigue y lo dice, con el tipo de fallo y nada más."""
+        try:
+            return start()
+        except Exception as error:
+            _logger.error("La vista no se ha podido abrir (%s)", type(error).__name__)
+            return f"No puedo verte: ha fallado ({type(error).__name__}). Sigo oyéndote y hablando."
+
+    def _refresh_camera(self) -> None:
+        """El indicador de la cámara como está la vista de verdad: si ve, que ve; si no, por
+        qué, el aviso que dejó al perder la cámara o el que dio al abrirse."""
+        sight = self._local_sight
+        if sight is None or self._sight_paused_for_studio:
+            return
+        text = SEEING if sight.seeing else (sight.notice or self._sight_notice)
+        self.camera_label.setText(text)
+        self.camera_label.setVisible(bool(text))
+
+    def _pause_sight_for_studio(self) -> None:
+        """Al entrar en Model Studio suelta la cámara, por si la quiere OBS para grabar. El
+        indicador se queda como estaba: Model Studio no lo enseña, y al salir se pone al
+        día."""
+        sight = self._local_sight
+        if sight is None or not sight.seeing:
+            return
+        sight.stop()
+        self._sight_paused_for_studio = True
+
+    def _resume_sight_after_studio(self) -> None:
+        """Al salir de Model Studio vuelve a ver si veía al entrar, salvo que la ventana se
+        esté cerrando."""
+        if not self._sight_paused_for_studio:
+            return
+        self._sight_paused_for_studio = False
+        if self._local_sight is None or self._closed or self._close_requested:
+            return
+        self._sight_notice = self._see(self._local_sight.start)
+        self._refresh_camera()
+
     def _listen(self, start: Callable[[], str]) -> str:
         """Abre el oído con ``start`` y devuelve su aviso. Falle como falle, la ventana se
         abre igual y lo dice, con el tipo de fallo y nada más.
@@ -2228,6 +2317,12 @@ class MainWindow(QMainWindow):
             self._active_dream_worker.cancel()
         if self._listening_loop is not None:
             self._listening_loop.stop()
+        # La vista deja de mirar y suelta la cámara (pieza D de la 0.4, ADR-262).
+        self._sight_timer.stop()
+        if self._sight_loop is not None:
+            self._sight_loop.stop()
+        if self._local_sight is not None:
+            self._local_sight.stop()
         self._end_closing_connections()
         super().closeEvent(event)
 

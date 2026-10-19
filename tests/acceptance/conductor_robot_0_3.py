@@ -565,9 +565,15 @@ class MicroDeMentira:
     cerrado se pierden, como en uno de verdad, y quedan en ``perdidos``. La
     tubería lee (``lee``) y recibe ``Audio``, sin quién lo dijo; cada lectura
     queda apuntada aquí, con su momento, en el acto de leer.
+
+    ``al_leer``, si la prueba lo pone, se llama en el acto de cada lectura, con lo leído y
+    lo que queda por leer: así marca el micro el momento en que lee lo último de un turno
+    (pieza D de la 0.4).
     """
 
     def __init__(self) -> None:
+        #: Lo que pasa en el acto de cada lectura; lo pone la prueba.
+        self.al_leer: Callable[[Sonido, int], None] | None = None
         self._abierto = False
         self._pendientes: list[Sonido] = []
         self._leidos: list[Sonido] = []
@@ -628,6 +634,8 @@ class MicroDeMentira:
         sonido = self._pendientes.pop(0)
         self._leidos.append(sonido)
         self._leido_en.append(_ahora())
+        if self.al_leer is not None:
+            self.al_leer(sonido, len(self._pendientes))
         return sonido.audio
 
 
@@ -837,9 +845,15 @@ class AltavozDeMentira:
     Lo fuerte que suena (``nivel``) es ``volumen`` mientras algo sigue en el aire, y 0
     cuando nada suena: ``volumen``, de 0 a 1, lo pone la prueba, como las dos banderas
     (pieza B de la 0.4, ADR-259).
+
+    ``al_sonar``, si la prueba lo pone, se llama en el acto de empezar a sonar cada sonido,
+    ya apuntado: así marca el altavoz el momento en que empieza la respuesta (pieza D de la
+    0.4).
     """
 
     def __init__(self, micro: MicroDeMentira) -> None:
+        #: Lo que pasa en el acto de empezar a sonar cada sonido; lo pone la prueba.
+        self.al_sonar: Callable[[Sonido], None] | None = None
         self._micro = micro
         self.con_eco = False
         self.sigue_sonando = False
@@ -882,6 +896,8 @@ class AltavozDeMentira:
             self._sonando = sonido
         else:
             self._deja_de_sonar()
+        if self.al_sonar is not None:
+            self.al_sonar(sonido)
 
     def para(self) -> None:
         """Sirius manda callar: lo que sonaba deja de sonar, y queda apuntado cuándo."""
@@ -1015,6 +1031,10 @@ class ModeloDeMentira(_ProveedorGrabador):
     empezó a hablar antes de que el modelo acabara. Mientras contesta despacio, cortarle
     la operación (``cancel``) le hace dejar de escribir en el acto, como a Ollama desde
     ADR-252: lo que llevaba escrito queda en ``escrito_al_cortar``.
+
+    ``al_pensar``, si la prueba lo pone, se llama una vez, en el acto de recibir la
+    siguiente petición y antes de escribir nada: así marca el modelo el momento en que
+    piensa (pieza D de la 0.4).
     """
 
     #: Hace del modelo de este ordenador, como Ollama: la voz solo habla con uno así.
@@ -1030,6 +1050,8 @@ class ModeloDeMentira(_ProveedorGrabador):
         self.pedidas_en: list[float] = []
         #: Lo que llevaba escrito cuando le cortaron; ``None`` si no le han cortado.
         self.escrito_al_cortar: str | None = None
+        #: Lo que pasa una vez, al recibir la siguiente petición; lo pone la prueba.
+        self.al_pensar: Callable[[], None] | None = None
         #: La operación que está contestando despacio, y lo que se le corta.
         self._escribiendo: str | None = None
         self._corte = threading.Event()
@@ -1061,6 +1083,9 @@ class ModeloDeMentira(_ProveedorGrabador):
 
     def stream_response(self, request: LLMRequest) -> Iterable[LLMStreamEvent]:
         self.pedidas_en.append(_ahora())
+        gancho, self.al_pensar = self.al_pensar, None
+        if gancho is not None:
+            gancho()
         if self._trozos is None:
             for evento in super().stream_response(request):
                 if isinstance(evento, LLMCompleted):

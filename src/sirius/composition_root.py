@@ -88,6 +88,7 @@ from sirius.adapters.persistence.sqlite_robot_conversation import (
 )
 from sirius.adapters.persistence.sqlite_unit_of_work import build_sqlite_unit_of_work
 from sirius.adapters.secrets.keyring_store import build_keyring_secret_store
+from sirius.adapters.vision.local_sight import load_sight_engines
 from sirius.application.api_key_settings import ApiKeySettingsUseCase
 from sirius.application.approve_decision import ApproveDecisionUseCase
 from sirius.application.archive_decision import ArchiveDecisionUseCase
@@ -110,6 +111,7 @@ from sirius.application.historical_projects import HistoricalProjectsUseCase
 from sirius.application.initial_project import InitialProjectUseCase
 from sirius.application.knowledge_overview import GetKnowledgeOverviewUseCase
 from sirius.application.local_listening import Chat, LocalListening, MemorySuggestions
+from sirius.application.local_sight import LocalSight
 from sirius.application.memory_commands import MemoryCommandService
 from sirius.application.memory_origin import GetMemoryOriginUseCase
 from sirius.application.memory_search import MemoryEmbeddingService, MemorySearch
@@ -163,6 +165,7 @@ from sirius.domain.capture import build_scene_registry
 from sirius.domain.robot_seed import ROBOT_SEED_REMINDER
 from sirius.infrastructure.bootstrap_location_store import build_bootstrap_location_store
 from sirius.infrastructure.data_path_validator import build_data_path_validator
+from sirius.infrastructure.local_sight_installation import SIGHT_INSTALL_COMMAND, face_model_path
 from sirius.infrastructure.local_voice_installation import (
     CHARACTER_INSTALL_COMMAND,
     ChosenVoiceInstallation,
@@ -176,6 +179,7 @@ from sirius.ports.audio_playback import AudioPlayback
 from sirius.ports.data_location import DataLocationError
 from sirius.ports.embeddings import TextEmbedder
 from sirius.ports.llm import LLMProvider
+from sirius.ports.local_sight import SightEngines
 from sirius.ports.local_voice import ListeningEngines, SpeakingEngines
 from sirius.ports.robot_conversation import ConversationSummarizer, FactExtractor, ReplyJudge
 from sirius.ports.secrets import SecretStore
@@ -376,6 +380,10 @@ class ConversationDependencies:
     ``voice_test_use_case`` es la prueba de voces de la pieza F (ADR-246): la hoja a ciegas
     con la que él elige con qué voz habla el oído.
 
+    ``local_sight`` es la vista del robot (pieza D de la 0.4, ADR-262): la cámara y las
+    caras, en local. La abre la ventana al abrirse, como el oído, y el oído le pregunta si
+    quien le habla le mira.
+
     ``propose_criticality_use_case`` (M21a, ADR-130) is likewise wired but not
     yet called from anywhere: the interface that shows a proposal and lets
     the user confirm or correct it is M21b, a later, separate cut. Wiring it
@@ -430,6 +438,7 @@ class ConversationDependencies:
     dream_service: DreamService
     local_listening: LocalListening[Any]
     voice_test_use_case: VoiceTestUseCase
+    local_sight: LocalSight
 
 
 def chat_goes_through_ollama() -> bool:
@@ -704,6 +713,7 @@ def build_local_listening(
     memory_suggestions: MemorySuggestions,
     settings: Callable[[], LocalVoiceSettings] = current_local_voice_settings,
     clock: Callable[[], float] = time.monotonic,
+    looked_at: Callable[[float], bool] = lambda since: False,
 ) -> LocalListening[Any]:
     """El oído y la voz del robot (ADR-242, ADR-243), entregando lo oído a ``chat`` y
     diciendo lo que contesta.
@@ -717,7 +727,8 @@ def build_local_listening(
     dicen los ajustes; sin ``load_speaking``, la voz de verdad, que recibe el modelo de la
     voz que dicen los ajustes. Los ajustes se leen cada vez que hacen falta (``settings``):
     la voz que él elige vale desde que la elige (ADR-246). ``clock`` es el reloj con el que
-    mide la charla y lo que tarda en hablar (ADR-244).
+    mide la charla y lo que tarda en hablar (ADR-244). ``looked_at`` dice si quien habla le
+    mira, de la vista (pieza D de la 0.4, ADR-262).
     """
     installation = ChosenVoiceInstallation(settings)
     speak = load_speaking or load_speaking_engines
@@ -729,6 +740,23 @@ def build_local_listening(
         load_speaking=lambda: speak(installation.speaking_voice_model),
         memory_suggestions=memory_suggestions,
         clock=clock,
+        looked_at=looked_at,
+    )
+
+
+def build_local_sight(
+    load_engines: Callable[[], SightEngines[Any, Any]] | None = None,
+    *,
+    clock: Callable[[], float] = time.monotonic,
+) -> LocalSight:
+    """La vista del robot (pieza D de la 0.4, ADR-262): no carga nada al construirse; la
+    cámara y el detector se cargan al empezar a ver, y solo si el modelo de las caras está
+    en este ordenador. Sin ``load_engines``, los de verdad, OpenCV y MediaPipe. ``clock``
+    es el del oído: lo que ve y lo que oye se comparan en el mismo reloj."""
+    return LocalSight(
+        load_engines=load_engines or (lambda: load_sight_engines(face_model_path())),
+        clock=clock,
+        install_command=SIGHT_INSTALL_COMMAND,
     )
 
 
@@ -745,6 +773,7 @@ def build_conversation_dependencies(
     listening_engines: Callable[[], ListeningEngines[Any]] | None = None,
     speaking_engines: Callable[[Path], SpeakingEngines[Any]] | None = None,
     listening_clock: Callable[[], float] = time.monotonic,
+    sight_engines: Callable[[], SightEngines[Any, Any]] | None = None,
 ) -> ConversationDependencies:
     """Build repositories, the secret store, and use cases wired to SQLite.
 
@@ -762,7 +791,9 @@ def build_conversation_dependencies(
     oído del robot; sin él, los de verdad del extra ``voz`` (ADR-242).
     ``speaking_engines`` carga su voz y su altavoz con el modelo de la voz que dicen los
     ajustes; sin él, Piper y el altavoz de verdad (ADR-243). ``listening_clock`` es el
-    reloj con el que el oído mide la charla, la del sistema si no se da (ADR-244).
+    reloj con el que el oído mide la charla, la del sistema si no se da (ADR-244), y con el
+    que la vista apunta lo que ve. ``sight_engines`` carga la cámara y el detector de caras;
+    sin él, OpenCV y MediaPipe (pieza D de la 0.4, ADR-262).
     """
     secret_store = secret_store or build_keyring_secret_store()
     conversation_repository = build_sqlite_conversation_repository(database_path)
@@ -1026,12 +1057,14 @@ def build_conversation_dependencies(
     # pendiente igual se le escriba o se le hable.
     propose_memory_suggestion_use_case = ProposeMemorySuggestionUseCase(unit_of_work)
 
+    local_sight = build_local_sight(sight_engines, clock=listening_clock)
     local_listening = build_local_listening(
         send_message_use_case,
         listening_engines,
         load_speaking=speaking_engines,
         memory_suggestions=propose_memory_suggestion_use_case,
         clock=listening_clock,
+        looked_at=local_sight.talker_looked_since,
     )
 
     return ConversationDependencies(
@@ -1099,6 +1132,7 @@ def build_conversation_dependencies(
         dream_service=dream_service,
         local_listening=local_listening,
         voice_test_use_case=_build_voice_test_use_case(local_listening, speaking_engines),
+        local_sight=local_sight,
     )
 
 

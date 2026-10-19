@@ -15,6 +15,8 @@ dice, o que no pinte nada, no pasa.
   respirar y con la cabeza, se mide en cada imagen. Si la cara cambia de proporciones, se
   cambian aquí: lo que no se puede es que pinte una cosa y diga otra.
 - **Lo que no se ve no se lee**: con los ojos cerrados no se sabe adónde miran.
+- **La mirada va con la izquierda y la derecha de la cámara**, y la cámara no es un espejo:
+  desde la pieza D (ADR-262), la cara dibuja la pupila al revés en horizontal, y así se lee.
 """
 
 from __future__ import annotations
@@ -39,6 +41,9 @@ OJOS_A_LOS_LADOS = 0.17
 OJOS_ENCIMA = 0.08
 RADIO_DEL_OJO = 0.13
 IRIS_POR_OJO = 0.5
+#: La pupila se dibuja al revés en horizontal (ADR-262): hacia la derecha de la cámara es
+#: hacia la izquierda de la pantalla.
+ESPEJO = -1
 #: Las cejas: en reposo, a 1,45 radios del ojo por encima de su centro; suben 0,35 radios de
 #: 0 a 1.
 CEJA_EN_REPOSO = 1.45
@@ -269,7 +274,7 @@ def _ojo(imagen: _Imagen, x: float, y: float, radio: float) -> _Ojo:
     recorrido = radio - radio_del_iris
     return _Ojo(
         abierto=abierto,
-        mirada=((iris_x - x) / recorrido, (y - iris_y) / recorrido),
+        mirada=(ESPEJO * (iris_x - x) / recorrido, (y - iris_y) / recorrido),
         se_ve=True,
     )
 

@@ -84,6 +84,7 @@ from sirius.ports.llm import (
     LLMStreamEvent,
     LLMTextDelta,
 )
+from sirius.ports.local_sight import SightEngines
 from sirius.ports.local_voice import ListeningEngines, SpeakingEngines
 
 #: Las letras de la tabla de piezas de ADR-233 que ya han entrado en ``main``.
@@ -693,6 +694,7 @@ class Conductor:
             listening_engines=self._motores_de_voz(),
             speaking_engines=self._motores_de_hablar(),
             listening_clock=self._reloj_del_oido(),
+            sight_engines=self._motores_de_los_ojos(),
         )
         if not self._charla_por_ollama:
             dependencias.send_message_use_case.set_llm_provider(self._grabador)
@@ -711,6 +713,15 @@ class Conductor:
 
         ``None`` es la voz de verdad, que tampoco se carga hasta que algo empieza a
         escuchar; el conductor de la 0.3 enchufa aquí sus dobles.
+        """
+        return None
+
+    def _motores_de_los_ojos(self) -> Callable[[], SightEngines[Any, Any]] | None:
+        """Con qué ve el robot: en la 0.2, con nada, porque no tiene ojos.
+
+        ``None`` es la vista de verdad, que no carga nada mientras falte el modelo de las
+        caras, y en las pruebas falta: no se abre ninguna cámara. El conductor de la 0.4
+        enchufa aquí sus dobles.
         """
         return None
 

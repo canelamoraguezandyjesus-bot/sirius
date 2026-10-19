@@ -51,6 +51,12 @@ def import_voice_library(module: str) -> Any:
         raise VoiceUnavailable(f"{module} no carga ({error})") from error
 
 
+#: ONNX Runtime: con él cargan Silero, Smart Turn y Piper.
+ONNX_RUNTIME = "onnxruntime"
+#: La variable con que InsightFace 2.1 apaga la telemetría de ONNX Runtime antes de
+#: importarlo, para los ONNX Runtime que la leen al arrancar.
+ONNX_RUNTIME_TELEMETRY = "ORT_DISABLE_TELEMETRY"
+
 #: Lo que pone a Hugging Face sin conexión: lo lee huggingface_hub, y transformers con él.
 OFFLINE_VARIABLES = ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE")
 
@@ -75,6 +81,24 @@ def hugging_face_offline() -> None:
     if not callable(offline) or offline() is not True:
         msg = "no puedo poner a Hugging Face sin conexión en este proceso"
         raise VoiceUnavailable(msg)
+
+
+def onnx_runtime_quiet() -> None:
+    """Apaga la telemetría de ONNX Runtime en este proceso, antes de cargar ningún modelo
+    (pieza D de la 0.4, ADR-259 y ADR-262).
+
+    ONNX Runtime la trae encendida, y en Windows la manda al sistema. Se apaga de las dos
+    maneras que hay: la variable que lee al arrancar, que tiene que estar antes de
+    importarlo, y ``disable_telemetry_events``, que la 1.24 trae y vale aunque ya
+    estuviera importado. Si ONNX Runtime no carga, no hay nada que apagar: lo que lo
+    necesita falla después, con su causa.
+    """
+    os.environ[ONNX_RUNTIME_TELEMETRY] = "1"
+    try:
+        runtime = importlib.import_module(ONNX_RUNTIME)
+    except Exception:
+        return
+    runtime.disable_telemetry_events()
 
 
 def voice_tools() -> dict[str, str]:

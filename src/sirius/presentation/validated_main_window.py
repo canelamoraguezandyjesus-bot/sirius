@@ -29,6 +29,7 @@ from sirius.application.historical_projects import HistoricalProjectsUseCase
 from sirius.application.knowledge_overview import GetKnowledgeOverviewUseCase
 from sirius.application.listening_loop import ListeningLoop
 from sirius.application.local_listening import LocalListening
+from sirius.application.local_sight import LocalSight
 from sirius.application.memory_origin import GetMemoryOriginUseCase
 from sirius.application.memory_search import MemoryEmbeddingService
 from sirius.application.project_continuity import ProjectContinuityUseCase
@@ -46,6 +47,7 @@ from sirius.application.robot_conversation import (
 from sirius.application.save_manual_memory import SaveManualMemoryUseCase
 from sirius.application.send_message import SendMessageUseCase
 from sirius.application.set_criticality import SetCriticalityUseCase
+from sirius.application.sight_loop import SightLoop
 from sirius.application.studio_capture import StudioCaptureUseCase
 from sirius.application.studio_voice import StudioVoiceUseCase
 from sirius.application.supersede_decision import SupersedeDecisionUseCase
@@ -108,6 +110,8 @@ class ValidatedMainWindow(MainWindow):
         local_listening: LocalListening[Any] | None = None,
         listening_loop: ListeningLoop | None = None,
         voice_test_use_case: VoiceTestUseCase | None = None,
+        local_sight: LocalSight | None = None,
+        sight_loop: SightLoop | None = None,
         connections: ConnectionCloser | None = None,
         show_warning: Callable[[str, str], None] | None = None,
         show_information: Callable[[str, str], None] | None = None,
@@ -165,6 +169,8 @@ class ValidatedMainWindow(MainWindow):
             local_listening=local_listening,
             listening_loop=listening_loop,
             voice_test_use_case=voice_test_use_case,
+            local_sight=local_sight,
+            sight_loop=sight_loop,
             connections=connections,
             show_warning=show_warning,
             show_information=show_information,

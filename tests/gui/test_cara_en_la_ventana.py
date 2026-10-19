@@ -4,18 +4,21 @@ ADR-260 y ADR-261).
 Las pruebas de aceptación (``tests/acceptance/test_robot_0_4_cara.py`` y
 ``test_robot_0_4_gestos.py``) miran la cara en la ventana de verdad con el conductor.
 Estas miran el widget solo: que se redibuja por su cuenta, que dibuja lo que dice su vida
-con el reloj, el volumen y los gestos que le dan, que lo apunta, y que al pararlo deja de
-dibujarse.
+con el reloj, el volumen, los gestos y la mirada que le dan, que lo apunta, y que al
+pararlo deja de dibujarse; y que la pupila se dibuja al revés que la imagen de la cámara
+(pieza D, ADR-262).
 """
 
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 
 import pytest
+from PySide6.QtGui import QColor, QImage
 from pytestqt.qtbot import QtBot
 
-from sirius.domain.face import FaceLife
+from sirius.domain.face import GAZE_FOCUS_REACH, GAZE_REACH, FaceLife
 from sirius.domain.gestures import GESTURES
 from sirius.presentation.face_widget import PARTS, FaceWidget
 
@@ -174,3 +177,80 @@ def test_cada_gesto_cambia_lo_que_se_ve(qtbot: QtBot, gesto: str) -> None:
     reloj.ahora += 0.3
 
     assert con_gesto.grab().toImage() != quieta.grab().toImage(), "el gesto no se ve"
+
+
+# --- Adónde mira (pieza D de la 0.4, ADR-262) ---
+
+
+def _cara_que_mira(
+    qtbot: QtBot, reloj: _Reloj, mirada: Callable[[], tuple[float, float] | None]
+) -> FaceWidget:
+    cara = FaceWidget(reloj, gaze=mirada, life=FaceLife(seed=1))
+    qtbot.addWidget(cara)
+    cara.resize(400, 180)
+    return cara
+
+
+def test_mira_adonde_le_dicen(qtbot: QtBot) -> None:
+    reloj = _Reloj()
+    cara = _cara_que_mira(qtbot, reloj, lambda: (0.6, 0.2))
+    cara.grab()
+
+    reloj.ahora += 0.1
+    cara.grab()
+
+    assert cara.last_drawn is not None
+    x, y = cara.last_drawn[1].gaze
+    assert abs(x - 0.6) <= GAZE_FOCUS_REACH[0] and abs(y - 0.2) <= GAZE_FOCUS_REACH[1]
+
+
+def test_si_no_puede_saber_adonde_mirar_sigue_viva_a_su_aire_y_lo_apunta_una_vez(
+    qtbot: QtBot, caplog: pytest.LogCaptureFixture
+) -> None:
+    def falla() -> tuple[float, float] | None:
+        raise RuntimeError("la cámara se ha ido")
+
+    reloj = _Reloj()
+    cara = _cara_que_mira(qtbot, reloj, falla)
+
+    with caplog.at_level(logging.WARNING):
+        cara.grab()
+        reloj.ahora += 0.1
+        cara.grab()
+
+    assert cara.paints == 2, "la cara se para si no sabe adónde mirar"
+    assert cara.last_drawn is not None
+    x, y = cara.last_drawn[1].gaze
+    assert abs(x) <= GAZE_REACH[0] and abs(y) <= GAZE_REACH[1]
+    assert len([r for r in caplog.records if "adónde mirar" in r.getMessage()]) == 1
+
+
+def _centro_del_iris(imagen: QImage) -> float:
+    """Dónde está, en horizontal, el color del iris en la mitad izquierda de la imagen."""
+    iris = QColor("#3fb6d8")
+    xs = [
+        x
+        for x in range(imagen.width() // 2)
+        for y in range(imagen.height())
+        if imagen.pixelColor(x, y) == iris
+    ]
+    assert xs, "no se ve el iris"
+    return sum(xs) / len(xs)
+
+
+def test_la_pupila_va_al_reves_que_en_la_imagen_porque_la_camara_no_es_un_espejo(
+    qtbot: QtBot,
+) -> None:
+    # Quien sale a la derecha de la imagen está a la izquierda de quien mira la pantalla:
+    # para mirarle, las pupilas se van a la izquierda de la pantalla.
+    reloj = _Reloj()
+    a_su_derecha = _cara_que_mira(qtbot, reloj, lambda: (0.8, 0.0))
+    a_su_izquierda = _cara_que_mira(qtbot, reloj, lambda: (-0.8, 0.0))
+    a_su_derecha.grab()
+    a_su_izquierda.grab()
+    reloj.ahora += 0.1
+
+    derecha = _centro_del_iris(a_su_derecha.grab().toImage())
+    izquierda = _centro_del_iris(a_su_izquierda.grab().toImage())
+
+    assert derecha < izquierda - 10

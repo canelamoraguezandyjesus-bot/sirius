@@ -27,10 +27,12 @@ from sirius.adapters.llm.unconfigured import UnconfiguredLLMProvider
 from sirius.application.addressing import Addressing
 from sirius.application.local_listening import (
     CHAT_LEAVES,
+    LOOK_BEFORE_SECONDS,
     Addressee,
     Attended,
     HeardTurn,
     LocalListening,
+    VoicePhase,
     gesture_mark,
     read_meanwhile,
 )
@@ -479,6 +481,7 @@ class _Oido:
         detector: _Detector | None = None,
         a_quien: Addressee | None = None,
         cancelador: bool = False,
+        mira: Callable[[float], bool] | None = None,
     ) -> None:
         self.eventos: list[str] = []
         self.cancelador = _Cancelador()
@@ -507,6 +510,7 @@ class _Oido:
             clock=self.reloj,
             addressing=a_quien if a_quien is not None else _TodoEsParaEl(),
             reader=self.lector,
+            **({"looked_at": mira} if mira is not None else {}),
         )
 
     def _carga(self) -> ListeningEngines[str]:
@@ -2654,6 +2658,137 @@ def test_la_cara_lee_los_gestos_aunque_la_charla_tenga_el_cerrojo() -> None:
     try:
         empieza = time.monotonic()
         assert oido.servicio.speaking_gestures == (turno.operation_id, ("asiente",))
+        assert time.monotonic() - empieza < 1.0
+    finally:
+        suelta.set()
+        hilo.join()
+
+
+# --- Lo que ve: si le miran y en qué está (pieza D de la 0.4, ADR-262) ----------------
+
+
+class _Vista:
+    """Hace de la vista: dice si desde un momento quien habla le mira, y apunta desde
+    cuándo le preguntan."""
+
+    def __init__(self, *, le_miran: bool) -> None:
+        self.le_miran = le_miran
+        self.desde: list[float] = []
+
+    def __call__(self, since: float) -> bool:
+        self.desde.append(since)
+        return self.le_miran
+
+
+def _oido_que_ve(vista: _Vista) -> _Oido:
+    oido = _Oido(a_quien=Addressing(conversation_seconds=10.0), mira=vista)
+    oido.servicio.start()
+    return oido
+
+
+def test_sin_su_nombre_ni_charla_es_para_el_si_quien_habla_le_mira() -> None:
+    oido = _oido_que_ve(_Vista(le_miran=True))
+
+    (turno,) = oido.suena(voz("¿Qué hora es?"), FIN).turns
+
+    assert turno.addressed
+    assert oido.charla.mensajes == ["¿Qué hora es?"]
+
+
+def test_sin_su_nombre_ni_charla_ni_mirarle_no_es_para_el() -> None:
+    oido = _oido_que_ve(_Vista(le_miran=False))
+
+    (turno,) = oido.suena(voz("¿Qué hora es?"), FIN).turns
+
+    assert not turno.addressed
+    assert oido.charla.mensajes == []
+
+
+def test_cuenta_que_le_mira_desde_un_segundo_antes_de_empezar_a_oirse_su_voz() -> None:
+    # Quien le habla a alguien suele mirarle al empezar, y la cámara puede verlo antes de
+    # que el detector oiga la voz.
+    vista = _Vista(le_miran=False)
+    oido = _oido_que_ve(vista)
+    empieza = oido.reloj.ahora
+
+    oido.micro.capta(voz("¿Qué hora es?"))
+    oido.servicio.attend()
+    oido.reloj.avanza(2.5)
+    oido.suena(FIN)
+
+    assert LOOK_BEFORE_SECONDS == 1.0
+    assert vista.desde == [empieza - LOOK_BEFORE_SECONDS]
+
+
+def test_sin_vista_un_turno_sin_su_nombre_no_es_para_el() -> None:
+    oido = _oido_que_elige()
+
+    (turno,) = oido.suena(voz("¿Qué hora es?"), FIN).turns
+
+    assert not turno.addressed
+
+
+def test_la_cara_sabe_si_oye_piensa_habla_o_nada() -> None:
+    oido = _Oido()
+    oido.servicio.start()
+    fases: list[VoicePhase] = [oido.servicio.phase]
+    oido.altavoz.sigue_sonando = True
+
+    def al_enviar() -> None:
+        fases.append(oido.servicio.phase)
+
+    def al_acabar() -> None:
+        fases.append(oido.servicio.phase)
+
+    oido.charla.al_enviar = al_enviar
+    oido.charla.al_acabar = al_acabar
+    oido.charla.trozos = ["Son las tres. ", "Y diez."]
+    oido.micro.capta(voz("¿Qué hora es?"))
+    oido.servicio.attend()
+    fases.append(oido.servicio.phase)
+    oido.suena(FIN)
+    fases.append(oido.servicio.phase)
+    oido.altavoz.sigue_sonando = False
+    fases.append(oido.servicio.phase)
+
+    assert fases == [
+        VoicePhase.QUIET,
+        VoicePhase.HEARING,
+        VoicePhase.THINKING,
+        VoicePhase.SPEAKING,
+        VoicePhase.SPEAKING,
+        VoicePhase.QUIET,
+    ]
+
+
+def test_lo_que_no_dice_en_voz_alta_no_es_hablar() -> None:
+    # Sin decir nada, al acabar la charla no habla: vuelve a nada.
+    oido = _Oido()
+    oido.servicio.start()
+    oido.altavoz.sigue_sonando = True
+    oido.charla.trozos = [""]
+
+    oido.suena(voz("Hmm"), FIN)
+
+    assert oido.servicio.phase is VoicePhase.QUIET
+
+
+def test_la_cara_lee_en_que_esta_aunque_la_charla_tenga_el_cerrojo() -> None:
+    oido = _Oido()
+    oido.servicio.start()
+    cogido, suelta = threading.Event(), threading.Event()
+
+    def coge() -> None:
+        with oido.servicio._lock:
+            cogido.set()
+            suelta.wait(5)
+
+    hilo = threading.Thread(target=coge)
+    hilo.start()
+    assert cogido.wait(5)
+    try:
+        empieza = time.monotonic()
+        assert oido.servicio.phase is VoicePhase.QUIET
         assert time.monotonic() - empieza < 1.0
     finally:
         suelta.set()
