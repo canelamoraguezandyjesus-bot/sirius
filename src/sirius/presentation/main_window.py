@@ -134,6 +134,7 @@ from sirius.presentation.conversation_worker import SendMessageWorker
 from sirius.presentation.dream_worker import DreamWorker
 from sirius.presentation.error_messages import failed_send_message
 from sirius.presentation.export_worker import ExportWorker
+from sirius.presentation.face_widget import FaceWidget
 from sirius.presentation.historical_projects_widget import HistoricalProjectsWidget
 from sirius.presentation.knowledge_widget import KnowledgeWidget
 from sirius.presentation.listening_bridge import ListeningBridge
@@ -1230,6 +1231,14 @@ class MainWindow(QMainWindow):
             show_information=self._show_information,
         )
 
+        # Su cara, encima de la charla (pieza B de ADR-259): con el reloj de su voz y el
+        # volumen de lo que dice. Sin oído, con el reloj de siempre y la boca cerrada.
+        escucha = self._local_listening
+        self.face_widget = FaceWidget(
+            escucha.clock if escucha is not None else time.monotonic,
+            (lambda: escucha.speaking_level) if escucha is not None else (lambda: 0.0),
+        )
+
         self.message_list = QListWidget()
         # Bugfix (historial solapado): con el modo por defecto (Fixed), Qt no
         # vuelve a calcular la posición/tamaño de los itemWidget cuando la
@@ -1334,6 +1343,7 @@ class MainWindow(QMainWindow):
         conversation_column = QWidget()
         conversation_layout = QVBoxLayout(conversation_column)
         conversation_layout.setContentsMargins(0, 0, 0, 0)
+        conversation_layout.addWidget(self.face_widget)
         conversation_layout.addWidget(self.message_list, 1)
         conversation_layout.addLayout(mode_row)
         conversation_layout.addLayout(listening_row)
@@ -2198,6 +2208,8 @@ class MainWindow(QMainWindow):
         # mostrar nada más, aunque un worker en vuelo termine después
         # (#520, ronda 4).
         self.knowledge_widget.prepare_to_close()
+        # La cara deja de redibujarse: hasta aquí seguía viva mientras el cierre esperaba.
+        self.face_widget.stop()
         # Y nada de segundo plano vuelve a arrancar, aunque quedara pendiente
         # repetir: la ventana puede seguir viva tras un cambio de proyecto, con
         # los mismos repositorios que la nueva (ronda 1 de Codex).

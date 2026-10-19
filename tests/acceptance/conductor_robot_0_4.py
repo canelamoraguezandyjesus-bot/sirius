@@ -45,11 +45,13 @@ hacen lo que dicen lo comprueba ``test_dobles_del_conductor_0_4.py``.
 from __future__ import annotations
 
 import base64
+import inspect
 import math
 import random
 import re
 import struct
 import tempfile
+import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -68,8 +70,8 @@ from piezas_del_robot import PiezaPendiente, Piezas
 from sirius.infrastructure.paths import resolve_paths
 
 #: Las letras de la tabla de piezas de ADR-259 que ya han entrado en ``main``. La A es la
-#: nota de arranque y estas pruebas.
-PIEZAS_ENTREGADAS: frozenset[str] = frozenset({"A"})
+#: nota de arranque y estas pruebas; la B, su cara (ADR-260).
+PIEZAS_ENTREGADAS: frozenset[str] = frozenset({"A", "B"})
 
 #: Qué trae cada pieza, con las palabras de la tabla de ADR-259.
 PIEZAS: Mapping[str, str] = {
@@ -515,24 +517,81 @@ class TurnoConMirada:
     contestando: Dibujo | None
 
 
+#: Lo que delata una cara pintada con imágenes o vídeos en vez de dibujada, en el código
+#: de quien la dibuja: las clases de Qt que los cargan y las extensiones de sus ficheros.
+_LO_QUE_PINTA_IMAGENES: tuple[str, ...] = (
+    "QPixmap",
+    "QImage",
+    "QMovie",
+    "QIcon",
+    "QSvg",
+    "QVideo",
+    "QMediaPlayer",
+    ".png",
+    ".jpg",
+    ".gif",
+    ".svg",
+    ".mp4",
+)
+
+
 class VentanaDeOjos(VentanaDeVoz):
-    """La ventana de Sirius con lo que la 0.4 le añade: su cara y lo que dice de la cámara."""
+    """La ventana de Sirius con lo que la 0.4 le añade: su cara y lo que dice de la cámara.
+
+    La cara se lee de ``face_widget``, la de verdad: lo que dibujó la última vez, con el
+    instante del reloj con que lo dibujó, y cuántas veces se ha dibujado (pieza B).
+    """
+
+    def _cara(self) -> Any:
+        """La cara de la ventana; tiene que estar a la vista en ella, no solo existir:
+        ``grab`` dibuja también una cara escondida."""
+        cara = self._ventana.face_widget
+        assert cara.window() is self._ventana, "la cara no está en la ventana"
+        assert cara.isVisible(), "la cara está en la ventana pero no se ve"
+        return cara
+
+    def muestra(self) -> None:
+        """La enseña en pantalla, como al arrancar: escondida, nada se dibuja."""
+        self._ventana.show()
+        self._qtbot.waitExposed(self._ventana)
 
     def cara(self) -> Dibujo:
-        """Dibuja la cara ahora, y devuelve lo que dibujó, tal como se pintó."""
-        raise _pendiente("B")
+        """Dibuja la cara ahora, y devuelve lo que dibujó, tal como se pintó.
+
+        La dibuja con ``grab``, que pasa por su ``paintEvent`` en el acto: ``repaint`` no
+        lo garantiza con todas las plataformas de Qt, y la de las pruebas lo deja para
+        después.
+        """
+        cara = self._cara()
+        cara.grab()
+        return _dibujo(cara)
 
     def dibujos(self) -> int:
         """Cuántas veces se ha dibujado la cara desde que se abrió la ventana."""
-        raise _pendiente("B")
+        return int(self._cara().paints)
 
     def partes_de_la_cara(self) -> frozenset[str]:
-        """Lo que se ve dibujado de la cara: «ojos», «párpados», «cejas», «boca»."""
-        raise _pendiente("B")
+        """Lo que se ve dibujado de la cara: «ojos», «párpados», «cejas», «boca». La dibuja
+        antes, para leer lo que dibuja ahora y no lo de antes."""
+        cara = self._cara()
+        cara.grab()
+        return frozenset(cara.drawn_parts)
 
     def la_cara_usa_imagenes(self) -> bool:
-        """Si la cara se pinta con imágenes o vídeos en vez de dibujarse."""
-        raise _pendiente("B")
+        """Si la cara se pinta con imágenes o vídeos en vez de dibujarse: un hijo que las
+        enseñe, o el código que la dibuja cargándolas."""
+        from PySide6.QtWidgets import QAbstractScrollArea, QLabel, QWidget
+
+        cara = self._cara()
+        for hijo in cara.findChildren(QWidget):
+            if isinstance(hijo, QLabel) and (
+                not hijo.pixmap().isNull() or hijo.movie() is not None
+            ):
+                return True
+            if isinstance(hijo, QAbstractScrollArea):
+                return True
+        codigo = inspect.getsource(inspect.getmodule(type(cara)) or type(cara))
+        return any(rastro in codigo for rastro in _LO_QUE_PINTA_IMAGENES)
 
     def indicador_de_la_camara(self) -> str:
         """Lo que dice la ventana de la cámara, tal como se ve; vacío si no dice nada."""
@@ -564,6 +623,8 @@ class ConductorDeOjos(ConductorDeVoz):
         self.caras = ReconocedorDeCarasDeMentira()
         self.voces = ReconocedorDeVocesDeMentira()
         self.edades = EstimadorDeEdadDeMentira()
+        #: La última ventana abierta: la cara se lee de ella.
+        self._ventana_de_ojos: VentanaDeOjos | None = None
         # Las imágenes que ya había, antes de montar nada: así cuenta también lo que se
         # guarde al montarse. Son las mismas carpetas que vigila la 0.3.
         rutas = resolve_paths()
@@ -579,7 +640,16 @@ class ConductorDeOjos(ConductorDeVoz):
         super().__init__(carpeta, respuestas=respuestas, ajustes=ajustes)
 
     def ventana(self, qtbot: Any) -> VentanaDeOjos:
-        return VentanaDeOjos(self.abre_la_ventana(qtbot), qtbot)
+        """La ventana de verdad, en pantalla, como cuando arranca."""
+        ventana = VentanaDeOjos(self.abre_la_ventana(qtbot), qtbot)
+        ventana.muestra()
+        self._ventana_de_ojos = ventana
+        return ventana
+
+    def _la_ventana(self) -> VentanaDeOjos:
+        ventana = self._ventana_de_ojos
+        assert ventana is not None, "la cara está en la ventana: ábrela antes"
+        return ventana
 
     # --- Quién hay delante y quién habla ---
 
@@ -612,23 +682,78 @@ class ConductorDeOjos(ConductorDeVoz):
     def pasa_el_tiempo(self, segundos: float, *, cada: float = 0.02) -> tuple[Dibujo, ...]:
         """Deja pasar ``segundos`` del reloj de las pruebas, de ``cada`` en ``cada``, y
         devuelve lo que dibujó la cara en cada paso, leído de la ventana."""
-        raise _pendiente("B")
+        ventana = self._la_ventana()
+        dibujos: list[Dibujo] = []
+        for _ in range(round(segundos / cada)):
+            self.reloj.avanza(cada)
+            dibujos.append(ventana.cara())
+        return tuple(dibujos)
 
     def dibujos_mientras_contesta_despacio(
         self, qtbot: Any, texto: str, *, segundos: float
     ) -> tuple[int, tuple[Dibujo, ...]]:
         """Le escribe ``texto`` en la ventana con un modelo que tarda ``segundos`` de verdad
         en contestar, y devuelve cuántas veces se dibujó la cara mientras y los dibujos que
-        se leyeron. El reloj de las pruebas avanza con el de verdad mientras tanto."""
-        raise _pendiente("B")
+        se leyeron. El reloj de las pruebas avanza con el de verdad mientras tanto.
+
+        Los dibujos se leen sin pedirlos: lo que la cara dibujó por su cuenta, cada 50 ms.
+        Las veces las cuenta la propia cara; si se congela, no hay ninguna.
+        """
+        from PySide6.QtCore import QTimer
+
+        del qtbot
+        ventana = self._la_ventana()
+        cara = ventana._cara()
+        self.el_modelo_contesta_despacio(["Ya está pensado."], pausa=segundos)
+        dibujos: list[Dibujo] = []
+        visto = [time.monotonic()]
+
+        def mira() -> None:
+            ahora = time.monotonic()
+            self.reloj.avanza(ahora - visto[0])
+            visto[0] = ahora
+            if cara.last_drawn is not None:
+                dibujos.append(_dibujo(cara))
+
+        mirada = QTimer()
+        mirada.setInterval(50)
+        mirada.timeout.connect(mira)
+        antes = int(cara.paints)
+        mirada.start()
+        try:
+            ventana.escribe(texto)
+        finally:
+            mirada.stop()
+        return int(cara.paints) - antes, tuple(dibujos)
 
     def habla_con_volumen(
         self, texto: str, niveles: Sequence[float], *, cada: float = 0.2
     ) -> tuple[Dibujo, ...]:
         """Sirius dice ``texto`` y suena con ``niveles`` de volumen, de 0 a 1, uno por paso
         de ``cada`` segundos; devuelve lo que dibujó la cara al final de cada paso, y uno
-        más al callar."""
-        raise _pendiente("B")
+        más al callar.
+
+        Lo dice de verdad: el propietario le habla, el modelo contesta ``texto``, la voz lo
+        dice y el altavoz de mentira lo deja en el aire hasta que acaba.
+        """
+        ventana = self._la_ventana()
+        self._grabador.contesta_despues(texto)
+        self.altavoz.sigue_sonando = True
+        try:
+            turno = self.oye("Sirius, dime algo.")
+            assert turno.hablado, "no ha dicho nada"
+            dibujos: list[Dibujo] = []
+            for nivel in niveles:
+                self.altavoz.volumen = nivel
+                self.reloj.avanza(cada)
+                dibujos.append(ventana.cara())
+            self.altavoz.acaba()
+            self.reloj.avanza(cada)
+            dibujos.append(ventana.cara())
+        finally:
+            self.altavoz.sigue_sonando = False
+            self.altavoz.volumen = 0.0
+        return tuple(dibujos)
 
     # --- Pieza C: gestos ---
 
@@ -791,6 +916,22 @@ class ConductorDeOjos(ConductorDeVoz):
                 ):
                     encontradas.add(fichero)
         return frozenset(encontradas)
+
+
+def _dibujo(cara: Any) -> Dibujo:
+    """Lo que dibujó ``cara`` la última vez, con el instante del reloj con que lo dibujó."""
+    ultimo = cara.last_drawn
+    assert ultimo is not None, "la cara aún no se ha dibujado"
+    momento, pose = ultimo
+    return Dibujo(
+        momento=momento,
+        ojos=pose.eyes,
+        mirada=pose.gaze,
+        cejas=pose.brows,
+        boca=pose.mouth,
+        respira=pose.breath,
+        gesto=pose.gesture,
+    )
 
 
 def _empieza_como_imagen(fichero: Path) -> bool:

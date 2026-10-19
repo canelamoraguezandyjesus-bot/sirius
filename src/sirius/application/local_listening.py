@@ -384,6 +384,21 @@ class LocalListening[Chunk]:
         """Lo que dura la charla desde que Sirius calla: hasta entonces sobra su nombre."""
         return self._addressing.conversation_seconds
 
+    @property
+    def clock(self) -> Callable[[], float]:
+        """El reloj con que mide la charla: la cara vive con el mismo (pieza B, ADR-259)."""
+        return self._clock
+
+    @property
+    def speaking_level(self) -> float:
+        """Lo fuerte que suena ahora lo que dice, de 0 a 1; 0 si no tiene voz cargada.
+
+        No coge el cerrojo: lo lee la cara desde el hilo de la ventana unas 30 veces por
+        segundo, y el cerrojo lo puede tener la charla todo lo que tarde el modelo.
+        """
+        speaking = self._speaking
+        return speaking.speaker.level if speaking is not None else 0.0
+
     def watch(self, watcher: ListeningWatcher | None) -> None:
         """Quien enseña la escucha a partir de ahora; ``None``, nadie."""
         with self._lock:

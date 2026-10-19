@@ -15,7 +15,9 @@ dicho no acabe en ningún diario aunque alguien encienda los de las bibliotecas.
 
 from __future__ import annotations
 
+import array
 import logging
+import math
 import threading
 import time
 from collections import deque
@@ -40,6 +42,13 @@ ECHO_TAIL_SECONDS = 0.25
 #: Las muestras que se le dan a PortAudio de cada vez: 23 ms a 22 050 Hz. Fijas, para saber
 #: cuánto puede esperar una frase al siguiente bloque (ronda 1 de Codex sobre la PR #688).
 BLOCK_FRAMES = 512
+
+#: La media cuadrática de un bloque que la cara toma por voz a todo volumen, y la boca se
+#: abre en proporción (pieza B, ADR-260). Si con su voz abre poco o demasiado, lo dice
+#: E-R04-05 en su ordenador, y se ajusta aquí.
+LOUD_RMS = 0.25
+#: Cuántos bloques recuerda para decir lo fuerte que suena: más de lo que tarda en salir.
+_LEVEL_BLOCKS = 64
 
 
 def check_speaking_libraries() -> None:
@@ -171,6 +180,8 @@ class SoundDeviceSpeaker:
         #: Dónde empieza, en lo dado, cada sonido que aún no ha empezado a salir.
         self._waiting: deque[int] = deque()
         self._started = 0
+        #: Lo fuerte que suena cada bloque, con la hora en que se oye y cuánto dura.
+        self._levels: deque[tuple[float, float, float]] = deque(maxlen=_LEVEL_BLOCKS)
         try:
             stream = sounddevice.RawOutputStream(
                 samplerate=sample_rate,
@@ -213,6 +224,17 @@ class SoundDeviceSpeaker:
             self._waiting.clear()
 
     @property
+    def level(self) -> float:
+        """Lo fuerte que suena el bloque que se oye ahora, de 0 a 1; 0 si no se oye ninguno."""
+        now = self._clock()
+        with self._lock:
+            levels = list(self._levels)
+        for heard_at, lasts, level in reversed(levels):
+            if heard_at <= now:
+                return level if now < heard_at + lasts else 0.0
+        return 0.0
+
+    @property
     def started(self) -> int:
         with self._lock:
             return self._started
@@ -251,10 +273,21 @@ class SoundDeviceSpeaker:
                 self._started += 1
             if sound:
                 self._until = heard_at + frames / self._sample_rate + ECHO_TAIL_SECONDS
+            self._levels.append((heard_at, frames / self._sample_rate, loudness(sound, size)))
         block = sound + bytes(size - len(sound))
         outdata[:] = block
         if self._echo is not None:
             self._echo.played(block, at=heard_at)
+
+
+def loudness(sound: bytes, size: int) -> float:
+    """Lo fuerte que suena un bloque de ``size`` bytes de los que ``sound`` es lo que no es
+    silencio, de 0 a 1: su media cuadrática en 16 bits, sobre ``LOUD_RMS``."""
+    samples = array.array("h", sound[: len(sound) // 2 * 2])
+    if not samples or size < 2:
+        return 0.0
+    power = math.fsum(sample * sample for sample in samples) / (size // 2)
+    return min(math.sqrt(power) / 32768 / LOUD_RMS, 1.0)
 
 
 def _no_speaker(error: Exception) -> VoiceUnavailable:

@@ -9,6 +9,7 @@ fichero, y Piper no puede escribir en ningún diario el texto que dice.
 
 from __future__ import annotations
 
+import array
 import ast
 import importlib
 import logging
@@ -26,6 +27,7 @@ import sirius.adapters.audio.local_speaking as local_speaking_module
 from sirius.adapters.audio.local_speaking import (
     BLOCK_FRAMES,
     ECHO_TAIL_SECONDS,
+    LOUD_RMS,
     PiperSpeech,
     SoundDeviceSpeaker,
     check_speaking_libraries,
@@ -382,6 +384,55 @@ def test_cuenta_lo_que_empieza_a_sonar_y_no_lo_que_tira_al_callar() -> None:
     altavoz.play(b"ijkl")
     llena(bytearray(4), 2, None, None)
     assert altavoz.started == 3, "lo que suena después cuenta una vez, y lo tirado nunca"
+
+
+# --- Pieza B de la 0.4: lo fuerte que suena, para la boca de la cara (ADR-260) ---
+
+
+def _muestras(*valores: int) -> bytes:
+    return array.array("h", valores).tobytes()
+
+
+def test_dice_lo_fuerte_que_suena_el_bloque_que_se_oye_ahora() -> None:
+    reloj = _Reloj()
+    altavoz, llena = _altavoz(reloj)
+    assert altavoz.level == 0.0, "sin nada que suene, callado"
+    altavoz.play(_muestras(1_600, -1_600, 1_600, -1_600))
+
+    llena(bytearray(8), 4, None, None)
+
+    # Sale con la latencia del flujo, 0,1 s, y dura cuatro muestras.
+    assert altavoz.level == 0.0, "aún no ha llegado al altavoz"
+    reloj.ahora = 50.0 + 0.1 + 2 / _FRECUENCIA
+    assert altavoz.level == pytest.approx(1_600 / 32_768 / LOUD_RMS)
+    reloj.ahora = 50.0 + 0.1 + 4 / _FRECUENCIA + 0.001
+    assert altavoz.level == 0.0, "lo que ya sonó no suena"
+
+
+def test_un_bloque_a_medias_suena_menos_y_uno_de_silencio_no_suena() -> None:
+    reloj = _Reloj()
+    altavoz, llena = _altavoz(reloj)
+    altavoz.play(_muestras(1_600, -1_600))
+
+    llena(bytearray(8), 4, None, None)
+    reloj.ahora = 50.0 + 0.1
+    assert altavoz.level == pytest.approx(1_600 / 2**0.5 / 32_768 / LOUD_RMS)
+
+    reloj.ahora = 51.0
+    llena(bytearray(8), 4, None, None)
+    reloj.ahora = 51.0 + 0.1
+    assert altavoz.level == 0.0
+
+
+def test_a_toda_voz_es_uno_y_no_pasa_de_ahi() -> None:
+    reloj = _Reloj()
+    altavoz, llena = _altavoz(reloj)
+    altavoz.play(_muestras(30_000, -30_000))
+
+    llena(bytearray(4), 2, None, None)
+    reloj.ahora = 50.0 + 0.1
+
+    assert altavoz.level == 1.0
 
 
 class _Eco:

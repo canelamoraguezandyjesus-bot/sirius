@@ -379,6 +379,8 @@ class _Altavoz:
         self.en_cola = False
         #: Lo que pasa mientras calla: por ejemplo, que aún empiece a sonar lo siguiente.
         self.al_callar: Callable[[], None] | None = None
+        #: Lo fuerte que suena, de 0 a 1, como lo diga la prueba.
+        self.nivel = 0.0
 
     def play(self, sound: str) -> None:
         if self.falla is not None:
@@ -388,6 +390,10 @@ class _Altavoz:
         self.eventos.append(f"suena:{sound}")
         if not self.en_cola:
             self.empezados += 1
+
+    @property
+    def level(self) -> float:
+        return self.nivel
 
     @property
     def started(self) -> int:
@@ -2494,3 +2500,34 @@ def test_si_la_voz_nueva_no_carga_lo_dice_y_no_escucha() -> None:
     assert "No puedo hablarte: la voz de personaje no carga (sin memoria)." in aviso
     assert oido.instalacion.install_command in aviso
     assert not oido.servicio.listening
+
+
+# --- Pieza B de la 0.4: lo que la cara lee del oído (ADR-260) ---
+
+
+def test_la_cara_lee_lo_fuerte_que_habla_aunque_la_charla_tenga_el_cerrojo() -> None:
+    oido = _Oido()
+    assert oido.servicio.speaking_level == 0.0, "sin la voz cargada, callado"
+    oido.servicio.start()
+    oido.altavoz.nivel = 0.6
+    assert oido.servicio.speaking_level == 0.6
+    assert oido.servicio.clock is oido.reloj, "la cara vive con el reloj de la charla"
+
+    # La charla tiene el cerrojo todo lo que tarda el modelo: la cara no lo espera.
+    cogido, suelta = threading.Event(), threading.Event()
+
+    def coge() -> None:
+        with oido.servicio._lock:
+            cogido.set()
+            suelta.wait(5)
+
+    hilo = threading.Thread(target=coge)
+    hilo.start()
+    assert cogido.wait(5)
+    try:
+        empieza = time.monotonic()
+        assert oido.servicio.speaking_level == 0.6
+        assert time.monotonic() - empieza < 1.0
+    finally:
+        suelta.set()
+        hilo.join()
