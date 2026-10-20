@@ -475,7 +475,10 @@ def test_quitar_el_permiso_quita_tambien_su_nombre_de_lo_que_ha_visto(
     )
     montaje.da_permiso("Pepe", "pepe", "pepe")
     with caplog.at_level(logging.ERROR):
-        assert not montaje.reconocer.forget("Pepe"), "dice que no ha podido"
+        # Ronda 5 de Codex sobre la PR #703: sus huellas están borradas y la ventana ya no
+        # le lista, así que no se le dice que lo intente otra vez; el nombre lo quita lo que
+        # recuerda haber visto en su repaso (tests/unit/test_lo_que_ve.py).
+        assert montaje.reconocer.forget("Pepe"), "el permiso está quitado"
     assert "No se pudo quitar un nombre de lo que ha visto (OSError)" in caplog.text
     assert "Pepe" not in caplog.text
     assert montaje.reconocer.people() == (), "sus huellas, borradas igual"

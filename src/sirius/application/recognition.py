@@ -306,8 +306,10 @@ class Recognition[Crop, Chunk]:
     def forget(self, name: str) -> bool:
         """Quita el permiso de ``name``: borra todas sus huellas, deja de reconocerle y
         quita su nombre de lo que recuerda haber visto. Si no se pueden borrar sus huellas,
-        no cambia nada y da ``False``; si no se puede quitar su nombre de lo visto, también
-        da ``False``, y volver a quitar el permiso lo intenta otra vez."""
+        no cambia nada y da ``False``, y la ventana deja volver a intentarlo. Si se borran y
+        lo que no se puede es quitar su nombre de lo visto, el permiso ya está quitado y da
+        ``True``: el nombre lo quita lo que recuerda haber visto en su siguiente repaso, y
+        mientras tanto no se lee (ronda 5 de Codex sobre la PR #703)."""
         self._ensure_prints()
         with self._lock:
             try:
@@ -326,7 +328,6 @@ class Recognition[Crop, Chunk]:
                 _logger.error(
                     "No se pudo quitar un nombre de lo que ha visto (%s)", type(error).__name__
                 )
-                return False
         return True
 
     def _fail(self, enrollment: Enrollment, reason: str) -> None:

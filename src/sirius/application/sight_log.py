@@ -15,7 +15,9 @@ para que la reconozca, o nadie. De eso saca los cambios y los apunta, con su hor
 - **Lo apuntado lo lee la charla**, una línea por cambio de las últimas ``REMEMBER``, las
   ``MOST_LINES`` más nuevas; lo de antes se borra al apuntar, al leer y, mientras Sirius
   está abierto, cada ``TIDY_EVERY`` desde el hilo de la vista, vea o no: no depende de que
-  cambie nada ni de que la charla lo lea (ronda 1 de Codex sobre la PR #703).
+  cambie nada ni de que la charla lo lea (ronda 1 de Codex sobre la PR #703). En ese mismo
+  repaso se quita el nombre de quien ya no tiene permiso, si quitarlo falló en su momento
+  (ronda 5).
 - **Quien quita su permiso** deja de tener nombre en lo apuntado y en lo que se está
   mirando: pasa a ser alguien sin identificar, sin que se apunte que se fue; y lo que la
   vista reconoció de él justo antes, si llega después, también (ronda 3 de Codex sobre la
@@ -116,9 +118,12 @@ class SightLog:
                 self._write(changes)
 
     def tidy(self) -> None:
-        """Borra lo apuntado antes de ``REMEMBER``, como mucho cada ``TIDY_EVERY``. Lo pide
-        la vista en cada vuelta, vea o no: así lo viejo se va aunque no cambie nada delante
-        ni la charla lo lea. Si la hora de este ordenador vuelve atrás, se borra igual."""
+        """Borra lo apuntado antes de ``REMEMBER``, y el nombre de quien ya no tiene permiso,
+        como mucho cada ``TIDY_EVERY``. Lo pide la vista en cada vuelta, vea o no: así lo
+        viejo se va aunque no cambie nada delante ni la charla lo lea, y un nombre que no se
+        pudo quitar al quitar el permiso se quita en el siguiente repaso, también tras cerrar
+        y volver a abrir (ronda 5 de Codex sobre la PR #703). Si la hora de este ordenador
+        vuelve atrás, se borra igual."""
         now = self._wall_clock()
         with self._lock:
             tidied_at = self._tidied_at
@@ -126,6 +131,12 @@ class SightLog:
                 return
             self._tidied_at = now
         self._drop_old(now)
+        try:
+            seen = self._store.since(now - REMEMBER)
+        except Exception as error:
+            self._forget_failed(error)
+            return
+        self._forget_without_permission(seen)
 
     def pause(self) -> None:
         """La vista ha dejado de ver: no se sabe quién se va, y al volver a ver se empieza
@@ -155,22 +166,31 @@ class SightLog:
         now = self._wall_clock()
         self._drop_old(now)
         seen = self._store.since(now - REMEMBER)[-MOST_LINES:]
+        stale = self._forget_without_permission(seen)
+        today = now.astimezone().date()
+        return tuple(
+            _line(change if change.who not in stale else replace(change, who=None), today)
+            for change in seen
+        )
+
+    def _forget_without_permission(self, seen: Sequence[SeenChange]) -> set[str]:
+        """Quita de lo apuntado el nombre de quien, en ``seen``, ya no tiene permiso, y
+        devuelve esos nombres. Un fallo al quitarlo se dice una vez, con su tipo."""
         allowed = set(self._allowed())
         stale = {change.who for change in seen if change.who is not None} - allowed
         for who in sorted(stale):
             try:
                 self.forget(who)
             except Exception as error:
-                if not self._failed:
-                    self._failed = True
-                    _logger.error(
-                        "No se pudo quitar un nombre de lo que ha visto (%s)", type(error).__name__
-                    )
-        today = now.astimezone().date()
-        return tuple(
-            _line(change if change.who not in stale else replace(change, who=None), today)
-            for change in seen
-        )
+                self._forget_failed(error)
+        return stale
+
+    def _forget_failed(self, error: Exception) -> None:
+        if not self._failed:
+            self._failed = True
+            _logger.error(
+                "No se pudo quitar un nombre de lo que ha visto (%s)", type(error).__name__
+            )
 
     def _changes(self, now: float, wall: datetime, seen: Counter[str | None]) -> list[SeenChange]:
         there = self._there

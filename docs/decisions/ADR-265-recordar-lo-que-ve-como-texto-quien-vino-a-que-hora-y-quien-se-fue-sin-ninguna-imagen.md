@@ -119,7 +119,9 @@ Se adoptan las dos últimas.
   su nombre: el permiso se mira al apuntar, con el cerrojo con el que se quita (ronda 3 de
   Codex sobre la PR #703). Y lo que se le dice al modelo solo lleva nombres de quien tiene
   permiso: si quitar un nombre falló, se lee como alguien sin identificar y se vuelve a
-  quitar.
+  quitar. Si falla al quitar el permiso, con sus huellas ya borradas, lo quita el repaso
+  que la vista pide cada minuto, vea o no, también tras cerrar y volver a abrir: la ventana
+  ya no le lista, y no hace falta repetirlo (ronda 5).
 - **La hora** es la de este ordenador; la raíz de composición la recibe, y las pruebas
   ponen la suya.
 - Olvidar (ADR-239) no la toca: no guarda nada dicho. Así queda en `FORGET_COVERAGE`.

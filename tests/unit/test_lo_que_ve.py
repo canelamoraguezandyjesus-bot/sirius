@@ -42,6 +42,7 @@ class _Almacen:
     falla: Exception | None = None
     falla_al_olvidar: Exception | None = None
     falla_al_borrar: Exception | None = None
+    falla_al_leer: Exception | None = None
 
     def add(self, changes: Sequence[SeenChange]) -> None:
         if self.falla is not None:
@@ -49,6 +50,8 @@ class _Almacen:
         self.apuntado.extend(changes)
 
     def since(self, moment: datetime) -> tuple[SeenChange, ...]:
+        if self.falla_al_leer is not None:
+            raise self.falla_al_leer
         return tuple(sorted((c for c in self.apuntado if c.at >= moment), key=lambda c: c.at))
 
     def drop_before(self, moment: datetime) -> int:
@@ -415,6 +418,48 @@ def test_el_nombre_de_quien_ya_no_tiene_permiso_no_se_dice_y_se_quita(
             "aunque no se haya podido quitar"
         )
     assert "No se pudo quitar un nombre de lo que ha visto (OSError)" in caplog.text
+
+
+def test_el_repaso_de_cada_minuto_quita_el_nombre_de_quien_ya_no_tiene_permiso() -> None:
+    """Ronda 5 de Codex sobre la PR #703: si quitar su nombre falló al quitar el permiso, la
+    ventana ya no le lista para intentarlo otra vez. No hace falta: lo quita el repaso que
+    la vista pide cada minuto, sin esperar a que la charla lo lea, y lo vuelve a intentar
+    en el siguiente si falla otra vez."""
+    montaje = _Montaje(permiso=("Marta", "Pepe"))
+    hoy = montaje.reloj.hora()
+    montaje.almacen.apuntado = [
+        SeenChange(hoy, Change.CAME, "Pepe"),
+        SeenChange(hoy, Change.CAME, "Marta"),
+    ]
+    montaje.permiso.remove("Pepe")
+    montaje.almacen.falla_al_olvidar = OSError("la base, ocupada")
+    with pytest.raises(OSError):
+        montaje.log.forget("Pepe")
+
+    montaje.log.tidy()
+    assert montaje.almacen.olvidados == [], "sigue ocupada"
+    montaje.almacen.falla_al_olvidar = None
+    montaje.reloj.avanza(TIDY_EVERY.total_seconds())
+    montaje.log.tidy()
+
+    assert montaje.almacen.olvidados == ["Pepe"]
+    assert [cambio.who for cambio in montaje.almacen.apuntado] == [None, "Marta"]
+
+
+def test_si_el_repaso_no_puede_leer_lo_apuntado_se_dice_una_vez_y_no_para_nada(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    montaje = _Montaje()
+    montaje.almacen.falla_al_leer = OSError("la base, ocupada")
+
+    with caplog.at_level(logging.ERROR):
+        montaje.log.tidy()
+        montaje.reloj.avanza(TIDY_EVERY.total_seconds())
+        montaje.log.tidy()
+
+    errores = [r.getMessage() for r in caplog.records if r.levelno >= logging.ERROR]
+    assert errores == ["No se pudo quitar un nombre de lo que ha visto (OSError)"]
+    assert montaje.almacen.borrados_antes_de, "lo viejo se borra igual"
 
 
 # --- Apuntar ---------------------------------------------------------------------------

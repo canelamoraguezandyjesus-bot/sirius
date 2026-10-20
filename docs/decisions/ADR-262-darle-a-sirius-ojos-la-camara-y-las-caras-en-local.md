@@ -362,3 +362,11 @@ nuevo.
   memoria, en la prueba a ciegas y en las preguntas trampa. Por el criterio de parada no
   se arreglaron: se le preguntó al propietario, y decidió el 20-10-2026 no cerrar ese
   hueco, que es de un momento. Queda escrito en ADR-264, en «Consecuencias».
+- **Ronda 5, sobre `865ec729`**: un hallazgo P1, cierto, de otra clase. Si al quitar el
+  permiso se borraban sus huellas pero no se podía quitar su nombre de lo que recuerda
+  haber visto, porque la base estaba ocupada, la ventana decía «Prueba otra vez» y ya no
+  le listaba, y el nombre se quedaba en la base hasta que la charla lo leyera. Ahora lo
+  quita el repaso que la vista pide cada minuto, que quita el nombre de quien ya no tiene
+  permiso, y quitar el permiso no dice que ha fallado: sus huellas están borradas. Con la
+  prueba vista caer con el código de antes, y mutación: tres cambios a propósito, y las
+  pruebas cazan los tres.
