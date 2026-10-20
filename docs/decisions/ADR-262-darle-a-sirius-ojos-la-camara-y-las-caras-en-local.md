@@ -356,3 +356,9 @@ nuevo.
   visto, que el código de antes ya hacía bien y ahora vigila la mutación. Y mutación:
   veintiún cambios a propósito, de la foto de la vista a los permisos, lo apuntado y la
   regla; las pruebas cazan los veintiuno.
+- **Ronda 4, sobre `95ea6aef`**: tres hallazgos P1, los tres ciertos, de la familia de la
+  regla: se mira un momento antes de escribir la petición, y entre medias se eligen los
+  ejemplos de la semilla, que pide huellas a Ollama. Pasa en la voz de las órdenes de
+  memoria, en la prueba a ciegas y en las preguntas trampa. Por el criterio de parada no
+  se arreglaron: se le preguntó al propietario, y decidió el 20-10-2026 no cerrar ese
+  hueco, que es de un momento. Queda escrito en ADR-264, en «Consecuencias».

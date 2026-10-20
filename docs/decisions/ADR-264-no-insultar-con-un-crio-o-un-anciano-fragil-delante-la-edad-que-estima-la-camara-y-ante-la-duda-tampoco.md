@@ -183,6 +183,12 @@ Se adoptan las dos últimas.
   han leído a esa cara, o subir el margen, y lo decide él.
 - Sin el modelo de la edad, o si no carga, nadie delante se lee seguro, y la regla va
   siempre que la cámara vea a alguien: ante la duda, Sirius es más majo.
+- **La regla se mira al empezar a preparar cada petición, y no se vuelve a mirar mientras
+  se prepara.** Si alguien que la pide llega en ese rato, por ejemplo mientras se eligen
+  los ejemplos de la semilla, que pide huellas a Ollama, esa respuesta sale sin ella. La
+  ronda 4 de Codex sobre la PR #703 lo encontró en la voz de las órdenes de memoria, la
+  prueba a ciegas y las preguntas trampa, y el propietario decidió el 20-10-2026 no
+  cerrarlo: el hueco es de un momento, y la siguiente respuesta ya la lleva.
 - E-R04-04 puede empezar.
 
 ## Alternativas descartadas y por qué
