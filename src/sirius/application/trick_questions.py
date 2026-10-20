@@ -101,20 +101,26 @@ class TrickQuestionsUseCase:
         *,
         reminder: str = "",
         seed_examples: SeedExamplePicker | None = None,
+        care: Callable[[], str] = lambda: "",
     ) -> None:
         """``seed_examples`` elige los ejemplos de la semilla de cada pregunta, como en
-        la charla (ADR-240): las 40 pasan por la charla tal como conversa."""
+        la charla (ADR-240): las 40 pasan por la charla tal como conversa. ``care`` da la
+        regla de no insultar si delante hay alguien que la pide, o vacío: se mira en cada
+        petición, como en la charla (ronda 2 de Codex sobre la PR #703), también al volver
+        a pedir una que falló (ronda 3)."""
         self._identity_repository = identity_repository
         self._local_chat_provider = local_chat_provider
         self._judge = judge
         self._reminder = reminder.strip()
         self._seed_examples = seed_examples or SeedExamplePicker()
+        self._care = care
         self._lock = threading.Lock()
-        #: Lo ya contestado, por idea mala, y con qué modelo y qué versión de la semilla.
-        self._answered: dict[str, TrickAnswer] = {}
+        #: Lo ya contestado, por idea mala y por la regla con que se pidió, y con qué
+        #: modelo y qué versión de la semilla.
+        self._answered: dict[tuple[str, str], TrickAnswer] = {}
         #: Las respuestas ya dadas que se quedaron sin veredicto al cerrar la hoja, por
-        #: idea mala: volver a empezar solo pide su veredicto. Valen con lo mismo.
-        self._unjudged: dict[str, str] = {}
+        #: idea mala y regla: volver a empezar solo pide su veredicto. Valen con lo mismo.
+        self._unjudged: dict[tuple[str, str], str] = {}
         self._answered_with: tuple[LLMProvider, int] | None = None
         #: Las peticiones en marcha, para cortarlas al cerrar la hoja (ADR-253).
         self._in_flight: dict[str, LLMProvider] = {}
@@ -164,24 +170,21 @@ class TrickQuestionsUseCase:
         for number, question in enumerate(TRICK_QUESTIONS, start=1):
             if should_stop():
                 break
-            known = answered.get(question.id)
+            care = self._care()
+            known = answered.get((question.id, care))
             if known is not None:
                 answers.append(known)
                 if on_progress is not None:
                     on_progress(number, len(TRICK_QUESTIONS))
                 continue
-            reply = unjudged.get(question.id)
+            reply = unjudged.get((question.id, care))
             if reply is None:
-                context = self._context(identity, question)
-                reply = self._reply(
-                    provider,
-                    self._instructions(context),
-                    context_turns(context),
-                    question,
-                    should_stop,
+                replied = self._reply(
+                    provider, self._context(identity, question), care, question, should_stop
                 )
-                if reply is None:  # cerraron la hoja mientras contestaba: ni juez ni más
+                if replied is None:  # cerraron la hoja mientras contestaba: ni juez ni más
                     break
+                reply, care = replied
             try:
                 if should_stop():
                     raise _Stopped
@@ -191,12 +194,12 @@ class TrickQuestionsUseCase:
                 # volver a empezar solo le pide el veredicto (ADR-253).
                 with self._lock:
                     if self._answered_with == answered_with:
-                        self._unjudged[question.id] = reply
+                        self._unjudged[(question.id, care)] = reply
                 break
             answer = TrickAnswer(question, reply, verdict)
             with self._lock:
                 if self._answered_with == answered_with:
-                    self._answered[question.id] = answer
+                    self._answered[(question.id, care)] = answer
             answers.append(answer)
             if on_progress is not None:
                 on_progress(number, len(TRICK_QUESTIONS))
@@ -236,9 +239,12 @@ class TrickQuestionsUseCase:
             ),
         )
 
-    def _instructions(self, context: Context) -> str:
-        """Las de ``context``, con el recordatorio detrás."""
+    def _instructions(self, context: Context, care: str = "") -> str:
+        """Las de ``context``, con la regla de no insultar si hace falta y el recordatorio
+        detrás, como en la charla."""
         instructions = render_instructions(context)
+        if care:
+            instructions = f"{instructions}\n\n{care}"
         if self._reminder:
             instructions = f"{instructions}\n\n{self._reminder}"
         return instructions
@@ -246,24 +252,31 @@ class TrickQuestionsUseCase:
     def _reply(
         self,
         provider: LLMProvider,
-        instructions: str,
-        stop: tuple[str, ...],
+        context: Context,
+        care: str,
         question: TrickQuestion,
         should_stop: Callable[[], bool],
-    ) -> str | None:
-        """La respuesta a ``question``, pedida otra vez si falla; ``None`` si la cortaron.
+    ) -> tuple[str, str] | None:
+        """La respuesta a ``question``, pedida otra vez si falla, y la regla con la que se
+        pidió: la primera vez, ``care``, que se acaba de mirar; la segunda, la de ese
+        momento. ``None`` si la cortaron.
 
         Cada petición se apunta antes de mirar ``should_stop``: así un corte que llega
         entre las dos cosas, o la encuentra apuntada, o la deja sin pedir.
         """
+        stop = context_turns(context)
         for attempt in (1, 2):
+            if attempt > 1:
+                care = self._care()
             operation_id = f"trampa-{uuid.uuid4()}"
             with self._lock:
                 self._in_flight[operation_id] = provider
             try:
                 if should_stop():
                     return None
-                return _complete(provider, instructions, stop, question.bad_idea, operation_id)
+                instructions = self._instructions(context, care)
+                reply = _complete(provider, instructions, stop, question.bad_idea, operation_id)
+                return reply, care
             except Exception as exc:
                 if should_stop():
                     return None

@@ -1805,3 +1805,54 @@ defectos:
     adr: 261
     ficheros:
       - tests/gui/test_conversation_ui.py
+  # ADR-263: quien reconoce caras y voces cogía un solo cerrojo para todo, también mientras
+  # cargaba InsightFace y ECAPA, que tarda segundos en el hilo de la vista. La ventana mira
+  # el permiso dos veces por segundo y se habría quedado esperando, congelada. Se vio al
+  # repasar el código antes de escribir sus pruebas; ahora cargar tiene su propio cerrojo, y
+  # el de cambiar el permiso nunca se coge mientras algo tarda.
+  - id: H-263
+    titulo: Quien reconoce cogía el cerrojo del permiso mientras cargaba los modelos, y la ventana se habría congelado esperándolo
+    bloque: producto
+    gravedad: media
+    estado: cerrado
+    cerrado_por: bd7dc478f9b95f46062be4b2ca37cbf160bf3054
+    pr: 703
+    adr: 263
+    ficheros:
+      - src/sirius/application/recognition.py
+      - tests/unit/test_reconocer.py
+  # ADR-264: cada cargador de InsightFace miraba, con la comprobación de lo que saca la orden
+  # de instalar, los dos modelos, el de reconocer y el de la edad. Sin el del otro, no
+  # habría cargado y habría dicho que faltaba el suyo, que estaba. La edad se vio al
+  # escribir sus pruebas, antes del primer commit; reconocer, al repasar el paquete antes de
+  # la revisión externa. Ahora cada uno mira solo el suyo, y la orden de instalar, los dos.
+  - id: H-264
+    titulo: Cada cargador de InsightFace miraba también el modelo del otro, y sin él habría dicho que faltaba el suyo
+    bloque: producto
+    gravedad: baja
+    estado: cerrado
+    cerrado_por: e17d08d0260513c5ebd8c36e0e6508bf1ef16783
+    pr: 703
+    adr: 264
+    ficheros:
+      - src/sirius/adapters/recognition/age.py
+      - src/sirius/adapters/recognition/engines.py
+      - src/sirius/infrastructure/local_sight_installation.py
+      - tests/unit/test_edad_adaptador.py
+      - tests/unit/test_reconocer_adaptadores.py
+  # ADR-265: quien recuerda lo que ve solo miraba a quien se veía y a quien ya estaba, así
+  # que alguien a medio llegar que en el fotograma siguiente no se veía seguía a medio llegar:
+  # quien asomaba, se perdía un fotograma y volvía, habría llegado sin estar 3 s seguidos. Lo
+  # cazó su prueba antes del primer commit; ahora mira también a quien estaba llegando o
+  # yéndose.
+  - id: H-265
+    titulo: Alguien a medio llegar que dejaba de verse seguía a medio llegar, y habría llegado sin estar 3 s seguidos
+    bloque: producto
+    gravedad: baja
+    estado: cerrado
+    cerrado_por: 4c0981ebbe91165dc69ebbbd2ccb3730a5cc39a5
+    pr: 703
+    adr: 265
+    ficheros:
+      - src/sirius/application/sight_log.py
+      - tests/unit/test_lo_que_ve.py

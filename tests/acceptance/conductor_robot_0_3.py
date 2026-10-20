@@ -52,7 +52,7 @@ import time
 import weakref
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from contextlib import closing
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from types import FrameType
 from typing import Any, Literal, Protocol, get_origin, get_type_hints
@@ -565,9 +565,15 @@ class MicroDeMentira:
     cerrado se pierden, como en uno de verdad, y quedan en ``perdidos``. La
     tubería lee (``lee``) y recibe ``Audio``, sin quién lo dijo; cada lectura
     queda apuntada aquí, con su momento, en el acto de leer.
+
+    ``al_leer``, si la prueba lo pone, se llama en el acto de cada lectura, con lo leído y
+    lo que queda por leer: así marca el micro el momento en que lee lo último de un turno
+    (pieza D de la 0.4).
     """
 
     def __init__(self) -> None:
+        #: Lo que pasa en el acto de cada lectura; lo pone la prueba.
+        self.al_leer: Callable[[Sonido, int], None] | None = None
         self._abierto = False
         self._pendientes: list[Sonido] = []
         self._leidos: list[Sonido] = []
@@ -628,6 +634,8 @@ class MicroDeMentira:
         sonido = self._pendientes.pop(0)
         self._leidos.append(sonido)
         self._leido_en.append(_ahora())
+        if self.al_leer is not None:
+            self.al_leer(sonido, len(self._pendientes))
         return sonido.audio
 
 
@@ -837,9 +845,15 @@ class AltavozDeMentira:
     Lo fuerte que suena (``nivel``) es ``volumen`` mientras algo sigue en el aire, y 0
     cuando nada suena: ``volumen``, de 0 a 1, lo pone la prueba, como las dos banderas
     (pieza B de la 0.4, ADR-259).
+
+    ``al_sonar``, si la prueba lo pone, se llama en el acto de empezar a sonar cada sonido,
+    ya apuntado: así marca el altavoz el momento en que empieza la respuesta (pieza D de la
+    0.4).
     """
 
     def __init__(self, micro: MicroDeMentira) -> None:
+        #: Lo que pasa en el acto de empezar a sonar cada sonido; lo pone la prueba.
+        self.al_sonar: Callable[[Sonido], None] | None = None
         self._micro = micro
         self.con_eco = False
         self.sigue_sonando = False
@@ -882,6 +896,8 @@ class AltavozDeMentira:
             self._sonando = sonido
         else:
             self._deja_de_sonar()
+        if self.al_sonar is not None:
+            self.al_sonar(sonido)
 
     def para(self) -> None:
         """Sirius manda callar: lo que sonaba deja de sonar, y queda apuntado cuándo."""
@@ -925,7 +941,11 @@ class CanceladorDeMentira:
         return tuple(self._limpiados)
 
     def limpia(self, audio: Audio) -> tuple[Audio, bool]:
-        """``audio`` sin el eco de lo que sonaba cuando el micro lo captó, y si lo había."""
+        """``audio`` sin el eco de lo que sonaba cuando el micro lo captó, y si lo había.
+
+        Quita el eco y nada más: lo que queda es el mismo audio con lo que se dijo, de la
+        misma clase y, si lo trae, con el timbre de quien lo dijo, como un cancelador de
+        verdad deja la voz de quien habla (pieza E de la 0.4, ADR-263)."""
         ecos = self._altavoz.en_el_aire(len(self._micro.leidos) - 1)
         texto = audio.texto
         for eco in ecos:
@@ -933,7 +953,7 @@ class CanceladorDeMentira:
                 texto = ""
             elif texto.startswith(f"{eco} "):
                 texto = texto[len(eco) + 1 :]
-        limpio = Audio(texto)
+        limpio = audio if texto == audio.texto else replace(audio, texto=texto)
         self._limpiados.append((audio, limpio))
         return limpio, bool(ecos)
 
@@ -1015,6 +1035,10 @@ class ModeloDeMentira(_ProveedorGrabador):
     empezó a hablar antes de que el modelo acabara. Mientras contesta despacio, cortarle
     la operación (``cancel``) le hace dejar de escribir en el acto, como a Ollama desde
     ADR-252: lo que llevaba escrito queda en ``escrito_al_cortar``.
+
+    ``al_pensar``, si la prueba lo pone, se llama una vez, en el acto de recibir la
+    siguiente petición y antes de escribir nada: así marca el modelo el momento en que
+    piensa (pieza D de la 0.4).
     """
 
     #: Hace del modelo de este ordenador, como Ollama: la voz solo habla con uno así.
@@ -1030,6 +1054,8 @@ class ModeloDeMentira(_ProveedorGrabador):
         self.pedidas_en: list[float] = []
         #: Lo que llevaba escrito cuando le cortaron; ``None`` si no le han cortado.
         self.escrito_al_cortar: str | None = None
+        #: Lo que pasa una vez, al recibir la siguiente petición; lo pone la prueba.
+        self.al_pensar: Callable[[], None] | None = None
         #: La operación que está contestando despacio, y lo que se le corta.
         self._escribiendo: str | None = None
         self._corte = threading.Event()
@@ -1061,6 +1087,9 @@ class ModeloDeMentira(_ProveedorGrabador):
 
     def stream_response(self, request: LLMRequest) -> Iterable[LLMStreamEvent]:
         self.pedidas_en.append(_ahora())
+        gancho, self.al_pensar = self.al_pensar, None
+        if gancho is not None:
+            gancho()
         if self._trozos is None:
             for evento in super().stream_response(request):
                 if isinstance(evento, LLMCompleted):
@@ -1223,6 +1252,13 @@ TABLAS_DE_LA_0_2: frozenset[str] = frozenset(
         "reply_marks",
     }
 )
+#: Las que añade la 0.4 (ADR-259): las huellas cifradas de quien da permiso para que le
+#: reconozca (ADR-263) y lo que recuerda haber visto, como texto (ADR-265). En las pruebas
+#: de la voz nadie da permiso ni hay cámara, así que se quedan vacías; se miran igual que
+#: las de la 0.2, columna a columna.
+TABLAS_DE_LA_0_4: frozenset[str] = frozenset({"recognition_prints", "sight_log"})
+#: Las tablas que tiene Sirius.
+TABLAS_DE_SIRIUS: frozenset[str] = TABLAS_DE_LA_0_2 | TABLAS_DE_LA_0_4
 
 #: Las columnas de cada tabla del modelo de producción.
 _COLUMNAS_DEL_MODELO: Mapping[str, frozenset[str]] = {
@@ -1817,7 +1853,7 @@ class ConductorDeVoz(Conductor):
         No se infiere qué es audio por su forma: se comprueba que la base solo cambia
         donde la 0.2 ya escribía (ronda 5 de Codex sobre la PR #686), y se mira dos
         veces, porque la foto final no ve lo que se escribe y se borra antes (ronda 6).
-        La foto: las tablas son las de la 0.2 (``TABLAS_DE_LA_0_2``) y sus columnas las
+        La foto: las tablas son las de Sirius (``TABLAS_DE_SIRIUS``) y sus columnas las
         del modelo; ningún BLOB en ninguna columna del modelo, porque el modelo de
         huellas de estas pruebas no da ninguna; en las sombras de los índices, binarias
         por construcción, ningún bloque mayor de 16 KiB ni con cabecera de audio; ningún
@@ -1834,10 +1870,10 @@ class ConductorDeVoz(Conductor):
             tablas = _tablas(conexion)
             encontrados.extend(
                 f"{t} (tabla nueva)"
-                for t in sorted(set(tablas) - TABLAS_DE_LA_0_2 - TABLAS_DE_LA_PRUEBA)
+                for t in sorted(set(tablas) - TABLAS_DE_SIRIUS - TABLAS_DE_LA_PRUEBA)
             )
             encontrados.extend(
-                f"{t} (tabla que falta)" for t in sorted(TABLAS_DE_LA_0_2 - set(tablas))
+                f"{t} (tabla que falta)" for t in sorted(TABLAS_DE_SIRIUS - set(tablas))
             )
             filas = _filas_por_tabla(conexion)
             for tabla, tipo in sorted(tablas.items()):
@@ -1845,7 +1881,7 @@ class ConductorDeVoz(Conductor):
                 if ahora is None:
                     encontrados.append(f"{tabla} (tabla que no se puede leer)")
                     continue
-                if tabla not in TABLAS_DE_LA_0_2:
+                if tabla not in TABLAS_DE_SIRIUS:
                     continue
                 # Un índice de contenido externo no guarda nada suyo: lee de la tabla
                 # real, que ya se mira. Lo demás, sombras incluidas, se mira columna a

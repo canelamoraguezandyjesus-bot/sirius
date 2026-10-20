@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 
 import pytest
 
+from sirius.application.age import care_block
 from sirius.application.blind_test import BlindTestUseCase
 from sirius.application.seed_examples import SeedExamplePicker
 from sirius.domain.blind_test import (
@@ -723,3 +724,96 @@ def test_con_dos_pasadas_solapadas_cerrar_la_segunda_corta_su_respuesta() -> Non
 
     assert not segunda.is_alive(), "cerrar la segunda esperaría su respuesta entera"
     assert pedidos[1].cortadas == ["prueba-a-ciegas-1"]
+
+
+# --- La regla de no insultar (ronda 2 de Codex sobre la PR #703) ----------------------
+
+
+def _caso_con_regla(modelos: dict[str, _Modelo], regla: Callable[[], str]) -> BlindTestUseCase:
+    return BlindTestUseCase(
+        identity_repository=_Identidades(),  # type: ignore[arg-type]
+        provider_for=lambda nombre: modelos[nombre],
+        list_models=lambda: tuple(sorted(modelos)),
+        model_capabilities=_conversa,
+        choose_model=lambda modelo: None,
+        current_model=lambda: None,
+        rng=random.Random(11),
+        care=regla,
+    )
+
+
+def test_con_alguien_delante_que_la_pide_cada_respuesta_lleva_la_regla_de_no_insultar() -> None:
+    # Las respuestas se enseñan como de Sirius: con un crío delante, también se corta.
+    modelos = {"uno": _Modelo("uno"), "dos": _Modelo("dos")}
+
+    _caso_con_regla(modelos, care_block).prepare(["uno", "dos"])
+
+    for modelo in modelos.values():
+        assert len(modelo.peticiones) == len(BLIND_TEST_QUESTIONS)
+        assert all(p.instructions.endswith(care_block()) for p in modelo.peticiones)
+
+
+def test_la_regla_se_mira_en_cada_peticion_aunque_cambie_quien_hay_de_un_modelo_a_otro() -> None:
+    """Ronda 3 de Codex sobre la PR #703: hace las 20 preguntas de un modelo antes de pasar
+    al siguiente, y quién hay delante puede cambiar entre medias. Lo que no cambia es la
+    identidad con sus ejemplos, la misma para todos."""
+    modelos = {"uno": _Modelo("uno"), "dos": _Modelo("dos")}
+    regla = [""]
+
+    def avance(hechas: int, total: int) -> None:
+        del total
+        if hechas == len(BLIND_TEST_QUESTIONS):  # «uno» ha acabado, y llega un crío
+            regla[0] = care_block()
+
+    _caso_con_regla(modelos, lambda: regla[0]).prepare(["uno", "dos"], on_progress=avance)
+
+    assert not any(care_block() in p.instructions for p in modelos["uno"].peticiones)
+    assert len(modelos["dos"].peticiones) == len(BLIND_TEST_QUESTIONS)
+    pares = zip(modelos["uno"].peticiones, modelos["dos"].peticiones, strict=True)
+    for de_uno, de_dos in pares:
+        assert de_dos.instructions == f"{de_uno.instructions}\n\n{care_block()}"
+
+
+def test_al_volver_a_pedir_una_respuesta_que_fallo_la_regla_se_mira_otra_vez() -> None:
+    """Ronda 3 de Codex sobre la PR #703: lo que tarda en fallar una petición es tiempo para
+    que llegue alguien; la que se vuelve a pedir lleva la regla de ese momento. Y la
+    respuesta se guarda con la regla con que se pidió."""
+    tercera = BLIND_TEST_QUESTIONS[2]
+    regla = [""]
+
+    class _FallaYLlegaUnCrio(_FallaUnasVeces):
+        def stream_response(self, request: LLMRequest) -> Iterable[LLMStreamEvent]:
+            fallara = request.input_text == self.pregunta and self.quedan > 0
+            eventos = super().stream_response(request)
+            if fallara:
+                regla[0] = care_block()
+            return eventos
+
+    uno = _FallaYLlegaUnCrio("uno", tercera, veces=1)
+    modelos: dict[str, _Modelo] = {"uno": uno, "dos": _Modelo("dos")}
+    caso = _caso_con_regla(modelos, lambda: regla[0])
+
+    caso.prepare(["uno", "dos"])
+
+    fallida, repetida = [p for p in uno.peticiones if p.input_text == tercera]
+    assert care_block() not in fallida.instructions
+    assert repetida.instructions.endswith(care_block())
+    antes = len(uno.peticiones)
+    caso.prepare(["uno", "dos"])
+    assert [p.input_text for p in uno.peticiones[antes:]] == list(BLIND_TEST_QUESTIONS[:2]), (
+        "con la regla, solo las dos que se pidieron sin ella"
+    )
+
+
+def test_una_respuesta_pedida_sin_la_regla_no_vale_cuando_hace_falta() -> None:
+    modelos = {"uno": _Modelo("uno"), "dos": _Modelo("dos")}
+    regla = [""]
+    caso = _caso_con_regla(modelos, lambda: regla[0])
+    caso.prepare(["uno", "dos"])
+    regla[0] = care_block()
+
+    caso.prepare(["uno", "dos"])
+
+    segunda = modelos["uno"].peticiones[len(BLIND_TEST_QUESTIONS) :]
+    assert len(segunda) == len(BLIND_TEST_QUESTIONS), "se vuelven a pedir todas"
+    assert all(care_block() in p.instructions for p in segunda)

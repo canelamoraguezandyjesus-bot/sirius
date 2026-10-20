@@ -55,11 +55,15 @@ import inspect
 import math
 import random
 import re
+import sqlite3
 import struct
 import tempfile
 import time
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from contextlib import closing
+from dataclasses import dataclass, replace
+from datetime import UTC, date, datetime, timedelta
+from datetime import time as dt_time
 from pathlib import Path
 from typing import Any
 
@@ -76,13 +80,27 @@ from lector_de_la_cara import PARTES, Lectura, lee
 from lector_de_la_cara import Dibujo as Dibujo
 from piezas_del_robot import PiezaPendiente, Piezas
 
+from sirius.adapters.recognition.age import InsightFaceAges
+from sirius.adapters.recognition.engines import EcapaPrints, InsightFacePrints
+from sirius.adapters.secrets.fake import FakeSecretStore
+from sirius.adapters.vision.local_sight import TOOLS
+from sirius.application.age import care_block
+from sirius.application.presence import HEADING, IN_FRONT_LINE, NOBODY_LINE, SOMEONE, SPEAKER_LINE
+from sirius.application.recognition import UNKNOWN, EnrollmentStep
 from sirius.domain.gestures import GESTURES
 from sirius.infrastructure.paths import resolve_paths
+from sirius.ports.age import AgeEstimator, AgeReading
+from sirius.ports.local_sight import CameraUnavailable, SeenFace, SightEngines
+from sirius.ports.recognition import Print, RecognitionEngines
+from sirius.ports.secrets import SecretStore
 from sirius.presentation.face_widget import FRAME_MS
+from sirius.presentation.main_window import SIGHT_REFRESH_MS
 
 #: Las letras de la tabla de piezas de ADR-259 que ya han entrado en ``main``. La A es la
-#: nota de arranque y estas pruebas; la B, su cara (ADR-260); la C, sus gestos (ADR-261).
-PIEZAS_ENTREGADAS: frozenset[str] = frozenset({"A", "B", "C"})
+#: nota de arranque y estas pruebas; la B, su cara (ADR-260); la C, sus gestos (ADR-261);
+#: la D, sus ojos (ADR-262); la E, reconocer a quien dé permiso (ADR-263); la F, la regla de
+#: los críos y los ancianos frágiles (ADR-264); y la G, recordar lo que ve (ADR-265).
+PIEZAS_ENTREGADAS: frozenset[str] = frozenset({"A", "B", "C", "D", "E", "F", "G"})
 
 #: Qué trae cada pieza, con las palabras de la tabla de ADR-259.
 PIEZAS: Mapping[str, str] = {
@@ -408,6 +426,8 @@ class EstimadorDeEdadDeMentira:
     Apunta cada estimación que da, en el acto.
     """
 
+    nombre = "insightface"
+
     def __init__(self) -> None:
         self._estimadas: list[tuple[int, bool]] = []
 
@@ -572,6 +592,8 @@ PASO_DE_LA_CARA = FRAME_MS / 1000
 #: Lo que se espera a que Qt pinte la cara sola, en milisegundos: se pinta cada 33 ms, y si
 #: en un segundo no lo ha hecho, está congelada.
 ESPERA_A_QUE_SE_PINTE_MS = 1000
+#: Lo más que se espera a que abra los ojos para ver adónde mira, en segundos.
+ESPERA_A_QUE_ABRA = 0.3
 #: Lo que puede dejar de verse un gesto, en segundos, y seguir siendo el mismo.
 HUECO_DE_UN_GESTO = 0.3
 
@@ -643,6 +665,19 @@ class VentanaDeOjos(VentanaDeVoz):
         pruebas."""
         return self._lee().dibujo
 
+    def mirando(self) -> Dibujo:
+        """Lo que se ve de la cara en cuanto se pinta sola; si parpadea y no se ve adónde
+        mira, deja pasar el reloj de las pruebas de fotograma en fotograma, hasta
+        ``ESPERA_A_QUE_ABRA`` segundos, hasta que se vea: lo que se lee es adónde mira en
+        cuanto abre los ojos. Un parpadeo dura un cuarto de segundo."""
+        dibujo = self.cara()
+        for _ in range(round(ESPERA_A_QUE_ABRA / PASO_DE_LA_CARA)):
+            if dibujo.mirada is not None:
+                break
+            self._reloj.avanza(PASO_DE_LA_CARA)
+            dibujo = self.cara()
+        return dibujo
+
     def lo_que_se_ve(self) -> Dibujo | None:
         """La cara tal como está ahora en la pantalla, sin esperar a nada: lo último que
         pintó ella sola. ``None`` si no se ve ninguna cara."""
@@ -684,8 +719,115 @@ class VentanaDeOjos(VentanaDeVoz):
         return any(rastro in codigo for rastro in _LO_QUE_PINTA_IMAGENES)
 
     def indicador_de_la_camara(self) -> str:
-        """Lo que dice la ventana de la cámara, tal como se ve; vacío si no dice nada."""
-        raise _pendiente("D")
+        """Lo que dice la ventana de la cámara, tal como se ve; vacío si no dice nada.
+
+        Lo lee después de dejarle a la ventana el rato con que mira la vista, como quien
+        mira la pantalla un momento después: el indicador se pone al día solo.
+        """
+        self._qtbot.wait(SIGHT_REFRESH_MS + 100)
+        etiqueta = self._ventana.camera_label
+        return str(etiqueta.text()) if etiqueta.isVisible() else ""
+
+
+# --- Los dobles, enchufados a Sirius ------------------------------------------------
+
+
+class _CamaraEnchufada:
+    """La cámara de mentira con la cara del puerto de Sirius."""
+
+    def __init__(self, camara: CamaraDeMentira) -> None:
+        self._camara = camara
+
+    def open(self) -> None:
+        try:
+            self._camara.abre()
+        except CamaraNoEncontrada as error:
+            raise CameraUnavailable(str(error)) from error
+
+    def read(self) -> Fotograma | None:
+        try:
+            return self._camara.lee()
+        except CamaraNoEncontrada as error:
+            raise CameraUnavailable(str(error)) from error
+
+    def close(self) -> None:
+        self._camara.cierra()
+
+
+class _DetectorEnchufado:
+    """El detector de mentira con la cara del puerto de Sirius."""
+
+    def __init__(self, detector: DetectorDeMentira) -> None:
+        self._detector = detector
+        self.name = detector.nombre
+
+    def detect(self, frame: Fotograma) -> tuple[SeenFace[bytes], ...]:
+        return tuple(
+            SeenFace(x=cara.x, talking=cara.habla, looking=cara.mira, crop=cara.recorte)
+            for cara in self._detector.detecta(frame)
+        )
+
+
+class _CarasEnchufadas:
+    """El reconocedor de caras de mentira con la cara del puerto de Sirius."""
+
+    def __init__(self, caras: ReconocedorDeCarasDeMentira) -> None:
+        self._caras = caras
+        self.name = caras.nombre
+
+    def fingerprint(self, crop: bytes) -> Print:
+        return self._caras.huella(crop)
+
+
+class _VocesEnchufadas:
+    """El reconocedor de voces de mentira con la cara del puerto de Sirius: lee las
+    muestras de lo que sonó en el turno, juntas."""
+
+    def __init__(self, voces: ReconocedorDeVocesDeMentira) -> None:
+        self._voces = voces
+        self.name = voces.nombre
+
+    def fingerprint(self, chunks: Sequence[Audio]) -> Print | None:
+        return self._voces.huella(b"".join(audio.muestras for audio in chunks))
+
+
+class _EdadEnchufada:
+    """El estimador de edad de mentira con la cara del puerto de Sirius."""
+
+    def __init__(self, edades: EstimadorDeEdadDeMentira) -> None:
+        self._edades = edades
+        self.name = edades.nombre
+
+    def estimate(self, crop: bytes) -> AgeReading:
+        anos, segura = self._edades.estima(crop)
+        return AgeReading(years=anos, sure=segura)
+
+
+#: El día de las pruebas de lo que ve: la hora la pone ``son_las``.
+DIA_DE_LAS_PRUEBAS = date(2026, 10, 19)
+
+
+def _a_las(hora: str) -> datetime:
+    """``hora``, «HH:MM», del día de las pruebas, en la hora de este ordenador."""
+    horas, minutos = (int(trozo) for trozo in hora.split(":"))
+    return datetime.combine(DIA_DE_LAS_PRUEBAS, dt_time(horas, minutos)).astimezone()
+
+
+def _lineas_de_quien_hay(peticion: Peticion, formato: str) -> list[str]:
+    """Quiénes nombran en «# Quién hay» de ``peticion`` las líneas con ``formato``: su
+    nombre, o «sin identificar»."""
+    antes, despues = formato.split("{who}")
+    lineas = peticion.instrucciones.splitlines()
+    if HEADING not in lineas:
+        return []
+    nombrados: list[str] = []
+    for linea in lineas[lineas.index(HEADING) + 1 :]:
+        if not linea:
+            break
+        if linea.startswith(antes) and linea.endswith(despues):
+            quien = linea[len(antes) : len(linea) - len(despues)]
+            nombrados.append(UNKNOWN if quien == SOMEONE else quien)
+    return nombrados
 
 
 # --- El conductor ---------------------------------------------------------------------
@@ -713,6 +855,9 @@ class ConductorDeOjos(ConductorDeVoz):
         self.caras = ReconocedorDeCarasDeMentira()
         self.voces = ReconocedorDeVocesDeMentira()
         self.edades = EstimadorDeEdadDeMentira()
+        #: La hora de Sirius que puso ``son_las`` y el momento del reloj de las pruebas en
+        #: que la puso; ``None`` hasta que se pone, o se lee por primera vez.
+        self._pared: tuple[datetime, float] | None = None
         #: La última ventana abierta: la cara se lee de ella.
         self._ventana_de_ojos: VentanaDeOjos | None = None
         # Las imágenes que ya había, antes de montar nada: así cuenta también lo que se
@@ -876,13 +1021,38 @@ class ConductorDeOjos(ConductorDeVoz):
 
     # --- Pieza D: la cámara ---
 
-    def herramientas_de_los_ojos(self) -> frozenset[str]:
-        """Las herramientas con que vería Sirius en producción, leídas de su montaje."""
-        raise _pendiente("D")
+    def _motores_de_los_ojos(self) -> Callable[[], SightEngines[Any, Any]]:
+        """La vista de Sirius, con los dobles donde irían la cámara y MediaPipe; los monta la
+        raíz de composición de producción."""
 
-    def mira_un_rato(self, segundos: float) -> None:
-        """Deja a Sirius mirar con la cámara ``segundos`` del reloj de las pruebas."""
-        raise _pendiente("D")
+        def motores() -> SightEngines[Any, Any]:
+            return SightEngines(_CamaraEnchufada(self.camara), _DetectorEnchufado(self.detector))
+
+        return motores
+
+    def herramientas_de_los_ojos(self) -> frozenset[str]:
+        """Las herramientas con que vería Sirius en producción: las que importa la vista de
+        verdad, que es la que carga la raíz de composición sin dobles. Lo primero lo fija
+        ``tests/unit/test_vista_adaptadores.py``, y lo segundo,
+        ``tests/gui/test_camara_en_la_ventana.py``."""
+        return frozenset(TOOLS)
+
+    def _viendo(self) -> None:
+        """Abre la vista de Sirius si no está abierta: lo que hace la ventana al abrirse.
+        Sin cámara no ve, y lo dice; la prueba lo lee de la ventana."""
+        self._dependencias.local_sight.start()
+
+    def mira_un_rato(self, segundos: float, *, cada: float = 0.1) -> None:
+        """Deja a Sirius mirar con la cámara ``segundos`` del reloj de las pruebas, de
+        ``cada`` en ``cada``, como lo hace su hilo; con la ventana abierta, la cara se dibuja
+        en cada paso, como se dibuja sola."""
+        self._viendo()
+        ventana = self._ventana_de_ojos
+        for _ in range(round(segundos / cada)):
+            self.reloj.avanza(cada)
+            self._dependencias.local_sight.look()
+            if ventana is not None:
+                ventana.cara()
 
     def mira_y_oye(self, quien: str, texto: str) -> TurnoConMirada:
         """``quien``, que está delante de la cámara, dice ``texto`` con su voz y moviendo la
@@ -892,8 +1062,61 @@ class ConductorDeOjos(ConductorDeVoz):
         mientras el micro leía lo último que dijo, mientras el modelo pensaba, antes de
         su primera palabra, y cuando el altavoz empezó a sonar con la respuesta. Lo que
         reciba el modelo desde aquí es lo del último turno.
+
+        Antes de decirlo, Sirius le ve medio segundo moviendo la boca, como cuando alguien
+        empieza a hablar. Los momentos los marcan el micro al leer lo que dijo, el modelo al
+        recibir la petición y el altavoz al empezar a sonar. En cada momento la cara se
+        dibuja en el acto, como se dibuja sola, y se deja pasar lo que tarda en mover los
+        ojos: los dibujos de mientras piensa son ese y tres más, de 0,1 s en 0,1 s, y el de
+        al contestar es el de 0,15 s después de empezar a sonar. Si en uno parpadea, se lee
+        en cuanto abre los ojos (``mirando``).
         """
-        raise _pendiente("D")
+        antes = self.camara.delante
+        assert quien in {persona.quien for persona in antes}, f"{quien} no está delante"
+        self.camara.pon_delante(
+            [replace(persona, habla=persona.quien == quien) for persona in antes]
+        )
+        ventana = self._ventana_de_ojos
+        oyendo: list[Dibujo] = []
+        pensando: list[Dibujo] = []
+        contestando: list[Dibujo] = []
+
+        def al_leer(sonido: Sonido, quedan: int) -> None:
+            del quedan
+            if ventana is not None and sonido.texto == texto:
+                oyendo.append(ventana.mirando())
+
+        def al_pensar() -> None:
+            if ventana is not None:
+                pensando.append(ventana.mirando())
+                for _ in range(3):
+                    self.reloj.avanza(0.1)
+                    pensando.append(ventana.mirando())
+
+        def al_sonar(sonido: Sonido) -> None:
+            del sonido
+            if ventana is not None and not contestando:
+                ventana.cara()
+                self.reloj.avanza(0.15)
+                contestando.append(ventana.mirando())
+
+        try:
+            self.mira_un_rato(0.5)
+            self.micro.al_leer = al_leer
+            self.modelo.al_pensar = al_pensar
+            self.altavoz.al_sonar = al_sonar
+            turno = self.oye_a(quien, texto)
+        finally:
+            self.micro.al_leer = None
+            self.modelo.al_pensar = None
+            self.altavoz.al_sonar = None
+            self.camara.pon_delante(antes)
+        return TurnoConMirada(
+            turno,
+            oyendo[-1] if oyendo else None,
+            tuple(pensando),
+            contestando[0] if contestando else None,
+        )
 
     def a_quien_mira(self, dibujo: Dibujo) -> str | None:
         """A quién de los que hay delante mira la cara en ``dibujo``: el más cerca de su
@@ -919,34 +1142,65 @@ class ConductorDeOjos(ConductorDeVoz):
 
     # --- Pieza E: reconocer ---
 
+    def _almacen_de_secretos(self) -> SecretStore:
+        """El mismo al volver a abrir, como el almacén de secretos de Windows, que no se
+        borra al cerrar Sirius: ahí vive la llave de las huellas."""
+        secretos: SecretStore | None = getattr(self, "_secretos", None)
+        if secretos is None:
+            secretos = self._secretos = FakeSecretStore()
+        return secretos
+
+    def _motores_de_reconocer(self) -> Callable[[], RecognitionEngines[Any, Any]]:
+        """Quien reconoce caras y voces, con los dobles donde irían InsightFace y ECAPA."""
+
+        def motores() -> RecognitionEngines[Any, Any]:
+            return RecognitionEngines(_CarasEnchufadas(self.caras), _VocesEnchufadas(self.voces))
+
+        return motores
+
     def da_permiso(self, quien: str) -> None:
         """``quien``, delante de la cámara, da permiso para que Sirius le reconozca, por la
-        cara y por la voz, como lo haga la ventana."""
-        raise _pendiente("E")
+        cara y por la voz, como lo hace la ventana: empieza con su nombre, Sirius le mira
+        mientras está solo delante, un segundo, y dice su frase."""
+        reconocer = self._dependencias.recognition
+        reconocer.begin(quien)
+        self.mira_un_rato(1.0)
+        assert reconocer.wants_voice(), reconocer.enrollment.notice
+        self.oye_a(quien, f"Sirius, soy {quien}, y quiero que me reconozcas por la voz.")
+        assert reconocer.enrollment.step is EnrollmentStep.DONE, reconocer.enrollment.notice
 
     def quita_el_permiso(self, quien: str) -> None:
-        """``quien`` retira su permiso, como lo haga la ventana."""
-        raise _pendiente("E")
+        """``quien`` retira su permiso, como lo hace la ventana."""
+        self._dependencias.recognition.forget(quien)
 
     def quien_le_habla(self, peticion: Peticion) -> str | None:
         """Quién le dice ``peticion`` al modelo que le está hablando: su nombre o «sin
         identificar»; ``None`` si no se lo dice."""
-        raise _pendiente("E")
+        habla = _lineas_de_quien_hay(peticion, SPEAKER_LINE)
+        return habla[0] if habla else None
 
     def quienes_tiene_delante(self, peticion: Peticion) -> list[str] | None:
         """A quiénes le dice ``peticion`` al modelo que tiene delante ahora, por su nombre o
         «sin identificar», ordenados; ``None`` si no se lo dice."""
-        raise _pendiente("E")
+        if NOBODY_LINE in peticion.instrucciones.splitlines():
+            return []
+        delante = _lineas_de_quien_hay(peticion, IN_FRONT_LINE)
+        return sorted(delante) if delante else None
 
     def herramientas_de_reconocer(self) -> frozenset[str]:
-        """Con qué reconocería Sirius en producción, leído de su montaje: los nombres de los
-        reconocedores de cara y de voz que carga la raíz de composición sin dobles."""
-        raise _pendiente("E")
+        """Con qué reconocería Sirius en producción: los nombres de los reconocedores de
+        cara y de voz que construye ``load_recognition_engines``, que es lo que carga la
+        raíz de composición sin dobles. Lo primero lo fija
+        ``tests/unit/test_reconocer_adaptadores.py``, y lo segundo,
+        ``tests/gui/test_reconocer_en_la_ventana.py``."""
+        return frozenset({InsightFacePrints.name, EcapaPrints.name})
 
     def huellas_guardadas(self) -> int:
         """Cuántas huellas hay en la base, de caras y de voces, se usen o no: una huella
         marcada como borrada sigue guardada."""
-        raise _pendiente("E")
+        with closing(sqlite3.connect(self.base)) as conexion:
+            (cuantas,) = conexion.execute("SELECT COUNT(*) FROM recognition_prints").fetchone()
+        return int(cuantas)
 
     def huellas_en_claro(self) -> list[str]:
         """Dónde está guardada en claro alguna huella de las que dieron los reconocedores
@@ -969,20 +1223,44 @@ class ConductorDeOjos(ConductorDeVoz):
 
     # --- Pieza F: la edad ---
 
+    def _estimador_de_edad(self) -> Callable[[], AgeEstimator[Any]]:
+        """Quien estima la edad, con el doble donde iría el modelo de la edad de
+        InsightFace."""
+
+        def estimador() -> AgeEstimator[Any]:
+            return _EdadEnchufada(self.edades)
+
+        return estimador
+
     def herramientas_de_la_edad(self) -> frozenset[str]:
-        """Con qué estimaría Sirius la edad en producción, leído de su montaje."""
-        raise _pendiente("F")
+        """Con qué estimaría Sirius la edad en producción: el nombre del estimador que
+        construye ``load_age_estimator``, que es lo que carga la raíz de composición sin
+        dobles. Lo primero lo fija ``tests/unit/test_edad_adaptador.py``, y lo segundo,
+        ``tests/integration/test_edad_montada.py``."""
+        return frozenset({InsightFaceAges.name})
 
     def lleva_la_regla_de_no_insultar(self, peticion: Peticion) -> bool:
-        """Si ``peticion`` le dice al modelo que delante hay alguien a quien no se insulta."""
-        raise _pendiente("F")
+        """Si ``peticion`` le dice al modelo que delante hay alguien a quien no se insulta:
+        la regla, entera, en sus instrucciones."""
+        return care_block() in peticion.instrucciones
 
     # --- Pieza G: lo que ve ---
+
+    def _reloj_de_pared(self) -> Callable[[], datetime]:
+        """La hora de Sirius, con la que apunta lo que ve: la que pone ``son_las``, que
+        avanza con el reloj de las pruebas; antes de ponerla, las nueve de la mañana."""
+        return self._hora_de_sirius
+
+    def _hora_de_sirius(self) -> datetime:
+        if self._pared is None:
+            self._pared = (_a_las("09:00"), self.reloj.ahora)
+        desde, ancla = self._pared
+        return (desde + timedelta(seconds=self.reloj.ahora - ancla)).astimezone(UTC)
 
     def son_las(self, hora: str) -> None:
         """Pone la hora del día del reloj de Sirius, «HH:MM»; desde ahí avanza con el reloj
         de las pruebas."""
-        raise _pendiente("G")
+        self._pared = (_a_las(hora), self.reloj.ahora)
 
     # --- Las imágenes ---
 

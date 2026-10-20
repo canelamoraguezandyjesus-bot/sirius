@@ -19,6 +19,10 @@ la mirada, las cejas y la boca, y la ventana lo dibuja
   en 0,3, y dura lo suyo, de 0,6 s el guiño a 1,6 la sonrisa. Si llegan más de los que
   caben esperando, tres, los de más se dejan: la cara no se queda gesticulando lo que ya
   pasó (pieza C de la 0.4, ADR-261).
+- **Mira adonde le digan** (``look_at``, pieza D de la 0.4, ADR-262): a quien habla, o
+  lejos al pensar. Llega con el mismo salto de 60 ms y se queda ahí, con un temblor de
+  menos de 0,04 en horizontal y 0,03 en vertical, que la deja viva sin irse a otro sitio.
+  Sin nadie a quien mirar, mira a su aire, como en reposo.
 - **Todo sale del reloj que le den**: el de verdad en Sirius y el de las pruebas en las
   pruebas. Con el mismo reloj y la misma semilla, la misma cara.
 """
@@ -42,6 +46,10 @@ BLINK_OPENING = 0.13
 GAZE_EVERY: tuple[float, float] = (1.2, 3.5)
 GAZE_REACH: tuple[float, float] = (0.18, 0.12)
 GAZE_SACCADE = 0.06
+#: Lo que tiembla la mirada mientras mira a algo, en horizontal y en vertical.
+GAZE_FOCUS_REACH: tuple[float, float] = (0.04, 0.03)
+#: Lo que tiene que moverse lo que mira para que la mirada salte allí en el acto.
+GAZE_RETARGET = 0.05
 #: Lo que dura una respiración, en segundos.
 BREATH_PERIOD = 4.4
 #: Lo que tarda la boca en seguir al volumen: en cinco veces esto está donde suena.
@@ -123,6 +131,8 @@ class FaceLife:
         self._waiting: deque[str] = deque()
         #: El gesto que hace y cuándo empezó.
         self._gesture: tuple[str, float] | None = None
+        #: Adónde le dijeron que mirara la última vez; ``None``, a su aire.
+        self._look_at: tuple[float, float] | None = None
 
     def make(self, gesture: str) -> None:
         """Hace ``gesture`` en cuanto acabe lo que ya iba a hacer. Uno que no es de la lista
@@ -130,8 +140,15 @@ class FaceLife:
         if gesture in GESTURES and len(self._waiting) < GESTURES_WAITING:
             self._waiting.append(gesture)
 
-    def pose(self, now: float, *, level: float = 0.0) -> FacePose:
-        """La cara en ``now``, con su voz sonando a ``level``, de 0 a 1."""
+    def pose(
+        self,
+        now: float,
+        *,
+        level: float = 0.0,
+        look_at: tuple[float, float] | None = None,
+    ) -> FacePose:
+        """La cara en ``now``, con su voz sonando a ``level``, de 0 a 1, mirando a
+        ``look_at``, un punto de la mirada; con ``None``, a su aire."""
         if self._start is None:
             self._start = now
             self._last = now
@@ -149,12 +166,16 @@ class FaceLife:
         while self._next_blink <= now:
             self._blink_at = self._next_blink
             self._next_blink += self._random.uniform(*BLINK_EVERY)
+        if _moved(self._look_at, look_at):
+            # Le dicen que mire a otro sitio: salta allí desde donde está, ahora.
+            self._look_at = look_at
+            self._gaze_from = self._gaze(now)
+            self._gaze_to = self._gaze_target()
+            self._gaze_at = now
+            self._next_gaze = now + self._random.uniform(*GAZE_EVERY)
         while self._next_gaze <= now:
             self._gaze_from = self._gaze_to
-            self._gaze_to = (
-                self._random.uniform(-GAZE_REACH[0], GAZE_REACH[0]),
-                self._random.uniform(-GAZE_REACH[1], GAZE_REACH[1]),
-            )
+            self._gaze_to = self._gaze_target()
             self._gaze_at = self._next_gaze
             self._next_gaze += self._random.uniform(*GAZE_EVERY)
         target = min(max(level, 0.0), 1.0)
@@ -205,6 +226,19 @@ class FaceLife:
             return replace(pose, gesture=name, head=(0.0, -swing))
         return replace(pose, gesture=name, head=(swing, 0.0))
 
+    def _gaze_target(self) -> tuple[float, float]:
+        """El siguiente punto de la mirada: a su aire, cerca del frente; o mirando a algo,
+        con su temblor alrededor."""
+        if self._look_at is None:
+            return (
+                self._random.uniform(-GAZE_REACH[0], GAZE_REACH[0]),
+                self._random.uniform(-GAZE_REACH[1], GAZE_REACH[1]),
+            )
+        return (
+            self._look_at[0] + self._random.uniform(-GAZE_FOCUS_REACH[0], GAZE_FOCUS_REACH[0]),
+            self._look_at[1] + self._random.uniform(-GAZE_FOCUS_REACH[1], GAZE_FOCUS_REACH[1]),
+        )
+
     def _gaze(self, now: float) -> tuple[float, float]:
         done = min((now - self._gaze_at) / GAZE_SACCADE, 1.0)
         eased = done * done * (3 - 2 * done)
@@ -212,6 +246,14 @@ class FaceLife:
             self._gaze_from[0] + (self._gaze_to[0] - self._gaze_from[0]) * eased,
             self._gaze_from[1] + (self._gaze_to[1] - self._gaze_from[1]) * eased,
         )
+
+
+def _moved(before: tuple[float, float] | None, now: tuple[float, float] | None) -> bool:
+    """Si lo que mira ha cambiado lo bastante para saltar: de nada a algo, de algo a nada,
+    o más de ``GAZE_RETARGET`` en algún eje."""
+    if before is None or now is None:
+        return before is not now
+    return max(abs(before[0] - now[0]), abs(before[1] - now[1])) > GAZE_RETARGET
 
 
 def _envelope(since: float, seconds: float) -> float:

@@ -27,10 +27,13 @@ from sirius.adapters.llm.unconfigured import UnconfiguredLLMProvider
 from sirius.application.addressing import Addressing
 from sirius.application.local_listening import (
     CHAT_LEAVES,
+    LOOK_BEFORE_SECONDS,
     Addressee,
     Attended,
     HeardTurn,
     LocalListening,
+    VoicePhase,
+    VoiceRecognizer,
     gesture_mark,
     read_meanwhile,
 )
@@ -240,6 +243,8 @@ class _Charla:
         self.al_acabar: Callable[[], None] | None = None
         #: Cada respuesta se guarda con su número, del 7 en adelante.
         self._siguiente = 7
+        #: Quién le habla en cada turno, como se lo dice el oído (pieza E de la 0.4).
+        self.quien_habla: list[str | None] = []
 
     def cut(self, operation_id: str) -> None:
         if self.falla_al_cortar is not None:
@@ -262,11 +267,13 @@ class _Charla:
         on_completed: Callable[[], None] | None = None,
         on_gesture: Callable[[str], None] | None = None,
         only_on_this_computer: bool = False,
+        speaker: str | None = None,
     ) -> SendMessageResult:
         # Como la de verdad: comprueba el mismo modelo con el que enviaría.
         if only_on_this_computer and not runs_on_this_computer(self.llm_provider):
             raise ChatLeavesThisComputer("de fuera")
         self.mensajes.append(user_text)
+        self.quien_habla.append(speaker)
         self.operaciones.append(operation_id)
         if self.al_enviar is not None:
             self.al_enviar()
@@ -479,6 +486,8 @@ class _Oido:
         detector: _Detector | None = None,
         a_quien: Addressee | None = None,
         cancelador: bool = False,
+        mira: Callable[[float], bool] | None = None,
+        reconoce: VoiceRecognizer[str] | None = None,
     ) -> None:
         self.eventos: list[str] = []
         self.cancelador = _Cancelador()
@@ -507,6 +516,8 @@ class _Oido:
             clock=self.reloj,
             addressing=a_quien if a_quien is not None else _TodoEsParaEl(),
             reader=self.lector,
+            **({"looked_at": mira} if mira is not None else {}),
+            recognition=reconoce,
         )
 
     def _carga(self) -> ListeningEngines[str]:
@@ -2658,3 +2669,265 @@ def test_la_cara_lee_los_gestos_aunque_la_charla_tenga_el_cerrojo() -> None:
     finally:
         suelta.set()
         hilo.join()
+
+
+# --- Lo que ve: si le miran y en qué está (pieza D de la 0.4, ADR-262) ----------------
+
+
+class _Vista:
+    """Hace de la vista: dice si desde un momento quien habla le mira, y apunta desde
+    cuándo le preguntan."""
+
+    def __init__(self, *, le_miran: bool) -> None:
+        self.le_miran = le_miran
+        self.desde: list[float] = []
+
+    def __call__(self, since: float) -> bool:
+        self.desde.append(since)
+        return self.le_miran
+
+
+def _oido_que_ve(vista: _Vista) -> _Oido:
+    oido = _Oido(a_quien=Addressing(conversation_seconds=10.0), mira=vista)
+    oido.servicio.start()
+    return oido
+
+
+def test_sin_su_nombre_ni_charla_es_para_el_si_quien_habla_le_mira() -> None:
+    oido = _oido_que_ve(_Vista(le_miran=True))
+
+    (turno,) = oido.suena(voz("¿Qué hora es?"), FIN).turns
+
+    assert turno.addressed
+    assert oido.charla.mensajes == ["¿Qué hora es?"]
+
+
+def test_sin_su_nombre_ni_charla_ni_mirarle_no_es_para_el() -> None:
+    oido = _oido_que_ve(_Vista(le_miran=False))
+
+    (turno,) = oido.suena(voz("¿Qué hora es?"), FIN).turns
+
+    assert not turno.addressed
+    assert oido.charla.mensajes == []
+
+
+def test_cuenta_que_le_mira_desde_un_segundo_antes_de_empezar_a_oirse_su_voz() -> None:
+    # Quien le habla a alguien suele mirarle al empezar, y la cámara puede verlo antes de
+    # que el detector oiga la voz.
+    vista = _Vista(le_miran=False)
+    oido = _oido_que_ve(vista)
+    empieza = oido.reloj.ahora
+
+    oido.micro.capta(voz("¿Qué hora es?"))
+    oido.servicio.attend()
+    oido.reloj.avanza(2.5)
+    oido.suena(FIN)
+
+    assert LOOK_BEFORE_SECONDS == 1.0
+    assert vista.desde == [empieza - LOOK_BEFORE_SECONDS]
+
+
+def test_sin_vista_un_turno_sin_su_nombre_no_es_para_el() -> None:
+    oido = _oido_que_elige()
+
+    (turno,) = oido.suena(voz("¿Qué hora es?"), FIN).turns
+
+    assert not turno.addressed
+
+
+def test_la_cara_sabe_si_oye_piensa_habla_o_nada() -> None:
+    oido = _Oido()
+    oido.servicio.start()
+    fases: list[VoicePhase] = [oido.servicio.phase]
+    oido.altavoz.sigue_sonando = True
+
+    def al_enviar() -> None:
+        fases.append(oido.servicio.phase)
+
+    def al_acabar() -> None:
+        fases.append(oido.servicio.phase)
+
+    oido.charla.al_enviar = al_enviar
+    oido.charla.al_acabar = al_acabar
+    oido.charla.trozos = ["Son las tres. ", "Y diez."]
+    oido.micro.capta(voz("¿Qué hora es?"))
+    oido.servicio.attend()
+    fases.append(oido.servicio.phase)
+    oido.suena(FIN)
+    fases.append(oido.servicio.phase)
+    oido.altavoz.sigue_sonando = False
+    fases.append(oido.servicio.phase)
+
+    assert fases == [
+        VoicePhase.QUIET,
+        VoicePhase.HEARING,
+        VoicePhase.THINKING,
+        VoicePhase.SPEAKING,
+        VoicePhase.SPEAKING,
+        VoicePhase.QUIET,
+    ]
+
+
+def test_lo_que_no_dice_en_voz_alta_no_es_hablar() -> None:
+    # Sin decir nada, al acabar la charla no habla: vuelve a nada.
+    oido = _Oido()
+    oido.servicio.start()
+    oido.altavoz.sigue_sonando = True
+    oido.charla.trozos = [""]
+
+    oido.suena(voz("Hmm"), FIN)
+
+    assert oido.servicio.phase is VoicePhase.QUIET
+
+
+def test_la_cara_lee_en_que_esta_aunque_la_charla_tenga_el_cerrojo() -> None:
+    oido = _Oido()
+    oido.servicio.start()
+    cogido, suelta = threading.Event(), threading.Event()
+
+    def coge() -> None:
+        with oido.servicio._lock:
+            cogido.set()
+            suelta.wait(5)
+
+    hilo = threading.Thread(target=coge)
+    hilo.start()
+    assert cogido.wait(5)
+    try:
+        empieza = time.monotonic()
+        assert oido.servicio.phase is VoicePhase.QUIET
+        assert time.monotonic() - empieza < 1.0
+    finally:
+        suelta.set()
+        hilo.join()
+
+
+# --- Quién le habla (pieza E de la 0.4, ADR-263) -------------------------------------
+
+
+class _ReconoceVoces:
+    """Hace de quien reconoce voces: dice de quién es cada voz, y toma la de quien da
+    permiso cuando la espera. Apunta lo que oye."""
+
+    def __init__(self, *, quien: str | None = "Marta") -> None:
+        self.quien = quien
+        self.quiere_voz = False
+        self.oidas: list[list[str]] = []
+        self.tomadas: list[list[str]] = []
+        self.falla: Exception | None = None
+        self.falla_al_tomar: Exception | None = None
+        #: Lo que pasa cuando el oído pregunta si espera una voz: por ejemplo, que callen el
+        #: oído desde la ventana justo entonces.
+        self.al_preguntar: Callable[[], None] | None = None
+
+    def wants_voice(self) -> bool:
+        if self.al_preguntar is not None:
+            self.al_preguntar()
+        return self.quiere_voz
+
+    def take_voice(self, chunks: Sequence[str]) -> None:
+        if self.falla_al_tomar is not None:
+            raise self.falla_al_tomar
+        self.tomadas.append(list(chunks))
+        self.quiere_voz = False
+
+    def who_by_voice(self, chunks: Sequence[str]) -> str | None:
+        self.oidas.append(list(chunks))
+        if self.falla is not None:
+            raise self.falla
+        return self.quien
+
+
+def _oido_que_reconoce(reconoce: _ReconoceVoces) -> _Oido:
+    oido = _Oido(reconoce=reconoce)
+    oido.servicio.start()
+    return oido
+
+
+def test_la_charla_sabe_quien_le_habla_por_lo_que_sono_en_su_turno() -> None:
+    reconoce = _ReconoceVoces(quien="Marta")
+    oido = _oido_que_reconoce(reconoce)
+
+    oido.suena("a", voz("Hola"), FIN)
+
+    assert oido.charla.quien_habla == ["Marta"]
+    assert reconoce.oidas == oido.transcriptor.turnos, "lo mismo que se transcribe"
+
+
+def test_a_quien_no_reconoce_la_charla_le_dice_sin_identificar() -> None:
+    oido = _oido_que_reconoce(_ReconoceVoces(quien=None))
+
+    oido.suena(voz("Hola"), FIN)
+
+    assert oido.charla.quien_habla == ["sin identificar"]
+
+
+def test_sin_quien_reconozca_voces_la_charla_no_sabe_quien_habla() -> None:
+    oido = _Oido()
+    oido.servicio.start()
+
+    oido.suena(voz("Hola"), FIN)
+
+    assert oido.charla.quien_habla == [None]
+
+
+def test_si_falla_reconocer_la_voz_es_sin_identificar_y_se_apunta_una_vez(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    reconoce = _ReconoceVoces()
+    reconoce.falla = RuntimeError("un tensor en /ruta/secreta")
+    oido = _oido_que_reconoce(reconoce)
+
+    oido.suena(voz("Hola"), FIN)
+    oido.suena(voz("Otra vez"), FIN)
+
+    assert oido.charla.quien_habla == ["sin identificar", "sin identificar"]
+    assert oido.charla.mensajes == ["Hola", "Otra vez"], "el turno sigue a la charla"
+    fallos = [r for r in caplog.records if "Quien reconoce voces" in r.getMessage()]
+    assert len(fallos) == 1
+    assert "RuntimeError" in fallos[0].getMessage()
+    assert "/ruta/secreta" not in caplog.text
+
+
+def test_mientras_alguien_da_permiso_su_frase_va_a_quien_reconoce_y_no_a_la_charla() -> None:
+    reconoce = _ReconoceVoces()
+    reconoce.quiere_voz = True
+    oido = _oido_que_reconoce(reconoce)
+
+    oido.suena("a", voz("Sirius, soy Marta"), FIN)
+
+    assert reconoce.tomadas == [["a", voz("Sirius, soy Marta"), FIN]]
+    assert oido.transcriptor.turnos == [], "ni se transcribe"
+    assert oido.charla.mensajes == []
+    oido.suena(voz("Hola"), FIN)
+    assert oido.charla.mensajes == ["Hola"], "el turno siguiente va a la charla"
+
+
+def test_la_frase_de_antes_de_callar_el_oido_no_cuenta_para_dar_permiso() -> None:
+    """La ventana calla el oído justo cuando el turno se ha cerrado y aún no se ha mirado
+    para quién era: lo que sonó antes de callarlo no cuenta, como no iría a la charla."""
+    reconoce = _ReconoceVoces()
+    reconoce.quiere_voz = True
+    oido = _oido_que_reconoce(reconoce)
+    reconoce.al_preguntar = oido.servicio.mute
+
+    oido.suena(voz("Sirius, soy Marta"), FIN)
+
+    assert reconoce.tomadas == []
+    assert reconoce.quiere_voz, "la sigue esperando"
+
+
+def test_si_falla_dar_el_permiso_por_la_voz_el_oido_sigue(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    reconoce = _ReconoceVoces()
+    reconoce.quiere_voz = True
+    reconoce.falla_al_tomar = RuntimeError("roto")
+    oido = _oido_que_reconoce(reconoce)
+
+    oido.suena(voz("Sirius, soy Marta"), FIN)
+    reconoce.quiere_voz = False
+    oido.suena(voz("Hola"), FIN)
+
+    assert oido.charla.mensajes == ["Hola"]
+    assert "Quien reconoce voces ha fallado (RuntimeError)" in caplog.text

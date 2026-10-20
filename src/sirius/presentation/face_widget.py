@@ -13,6 +13,12 @@ Los gestos le llegan por dos sitios (pieza C de la 0.4, ADR-261): los de lo que 
 voz alta, del oído, cuando empieza a sonar la frase en que van, y los de lo escrito en la
 ventana, que no suena, en cuanto llega el texto (``make``). Los dibuja con lo que dice
 ``FaceLife``: una ceja, las dos, la sonrisa, el guiño, los ojos en blanco y la cabeza.
+
+Adónde mira se lo dicen (pieza D de la 0.4, ADR-262): ``Attention``, con lo que ve la
+cámara y en qué está el oído. La mirada va con la izquierda y la derecha de la cámara, y
+la cámara no es un espejo: quien sale a la izquierda de la imagen está a la derecha de
+quien mira la pantalla. Así que la pupila se dibuja al revés en horizontal, y mira de
+verdad hacia quien está.
 """
 
 from __future__ import annotations
@@ -65,6 +71,7 @@ class FaceWidget(QWidget):
         clock: Callable[[], float],
         level: Callable[[], float] = lambda: 0.0,
         gestures: Callable[[], tuple[str, tuple[str, ...]]] = lambda: ("", ()),
+        gaze: Callable[[], tuple[float, float] | None] = lambda: None,
         *,
         life: FaceLife | None = None,
         parent: QWidget | None = None,
@@ -75,6 +82,9 @@ class FaceWidget(QWidget):
         #: Los gestos de lo que dice en voz alta que ya suenan, con la operación de su
         #: turno: ``LocalListening.speaking_gestures``.
         self._gestures = gestures
+        #: Adónde mirar ahora, o ``None`` para mirar a su aire: ``Attention.gaze``.
+        self._gaze = gaze
+        self._gaze_failed = False
         self._life = life if life is not None else FaceLife()
         self._paints = 0
         self._last: tuple[float, FacePose] | None = None
@@ -118,7 +128,7 @@ class FaceWidget(QWidget):
         del event
         now = self._clock()
         self._new_gestures()
-        pose = self._life.pose(now, level=self._volume())
+        pose = self._life.pose(now, level=self._volume(), look_at=self._look_at())
         painter = QPainter(self)
         try:
             painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -139,6 +149,16 @@ class FaceWidget(QWidget):
                 self._volume_failed = True
                 _logger.warning("La cara no puede leer el volumen de su voz: %s", error)
             return 0.0
+
+    def _look_at(self) -> tuple[float, float] | None:
+        """Adónde mirar; si no se puede saber, a su aire, por lo mismo que el volumen."""
+        try:
+            return self._gaze()
+        except Exception as error:
+            if not self._gaze_failed:
+                self._gaze_failed = True
+                _logger.warning("La cara no puede saber adónde mirar: %s", error)
+            return None
 
     def _new_gestures(self) -> None:
         """Le pide a la vida los gestos de lo que dice que han empezado a sonar desde la
@@ -191,7 +211,8 @@ class FaceWidget(QWidget):
     ) -> None:
         painter.setBrush(_OJO)
         painter.drawEllipse(ojo, radio, radio)
-        pupila = QPointF(ojo.x() + pose.gaze[0] * radio * 0.5, ojo.y() - pose.gaze[1] * radio * 0.5)
+        # Al revés en horizontal: la cámara no es un espejo.
+        pupila = QPointF(ojo.x() - pose.gaze[0] * radio * 0.5, ojo.y() - pose.gaze[1] * radio * 0.5)
         painter.setBrush(_IRIS)
         painter.drawEllipse(pupila, radio * 0.5, radio * 0.5)
         painter.setBrush(_PUPILA)

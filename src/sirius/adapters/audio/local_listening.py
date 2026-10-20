@@ -36,6 +36,7 @@ from sirius.adapters.audio.voice_libraries import (
     SPEECH_TO_TEXT,
     VOICE_ACTIVITY,
     import_voice_library,
+    onnx_runtime_quiet,
 )
 from sirius.application.addressing import NAME
 from sirius.infrastructure.logging import get_logger
@@ -93,7 +94,9 @@ def _libraries() -> tuple[Any, Any, Any, Any, Any]:
 
     Pipecat escribe con loguru, que por defecto lo saca todo por la consola, y al importarse
     ya pinta su cartel: loguru se deja en los avisos antes de importar Pipecat (ADR-252).
+    Silero y Smart Turn cargan con ONNX Runtime: su telemetría se apaga antes (ADR-262).
     """
+    onnx_runtime_quiet()
     numpy = import_voice_library("numpy")
     sounddevice = import_voice_library("sounddevice")
     logger = import_voice_library("loguru").logger

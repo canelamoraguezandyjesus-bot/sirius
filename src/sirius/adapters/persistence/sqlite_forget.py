@@ -114,6 +114,19 @@ FORGET_COVERAGE: dict[str, str] = {
     "conversation_modes.mode": "«normal» o «serio»",
     "reply_marks.mark": "«eso es Sirius» o «eso no»",
     "reply_marks.model": "el nombre del modelo que dio la respuesta",
+    "recognition_prints.person": (
+        "el nombre de quien dio permiso para que le reconozca: lo borra quitar su permiso en "
+        "la ventana, con todas sus huellas (ADR-263)"
+    ),
+    "recognition_prints.kind": "«face» o «voice»",
+    "recognition_prints.sealed": (
+        "una huella cifrada, sin nada dicho: la borra quitar el permiso (ADR-263)"
+    ),
+    "sight_log.change": "«came», «left» o «there»: qué cambió de quién tenía delante",
+    "sight_log.person": (
+        "el nombre de quien dio permiso, en lo que recuerda haber visto, sin nada dicho: "
+        "lo quita quitar el permiso, y lo de hace más de 24 horas se borra (ADR-265)"
+    ),
 }
 
 _SENTENCE_END = re.compile(r"(?<=[.!?…])\s+")

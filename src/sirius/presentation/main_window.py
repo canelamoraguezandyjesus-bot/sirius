@@ -47,6 +47,7 @@ from sirius.application.api_key_settings import ApiKeySettingsError, ApiKeySetti
 from sirius.application.approve_decision import ApproveDecisionUseCase
 from sirius.application.archive_decision import ArchiveDecisionUseCase
 from sirius.application.archive_memory import ArchiveMemoryUseCase
+from sirius.application.attention import Attention
 from sirius.application.blind_test import BlindTestUseCase
 from sirius.application.budget_status import GetBudgetStatusUseCase
 from sirius.application.capture_commands import CaptureCommand, CaptureIntent, interpret
@@ -68,6 +69,7 @@ from sirius.application.historical_projects import HistoricalProjectsUseCase
 from sirius.application.knowledge_overview import GetKnowledgeOverviewUseCase
 from sirius.application.listening_loop import ListeningLoop
 from sirius.application.local_listening import HeardTurn, LocalListening
+from sirius.application.local_sight import LocalSight
 from sirius.application.memory_origin import GetMemoryOriginUseCase
 from sirius.application.memory_search import MemoryEmbeddingService
 from sirius.application.project_continuity import ProjectContinuityUseCase
@@ -79,6 +81,7 @@ from sirius.application.propose_memory_suggestion import (
     InvalidMemorySuggestionProposalDataError,
     ProposeMemorySuggestionUseCase,
 )
+from sirius.application.recognition import LONGEST_NAME, EnrollmentStep, Recognition
 from sirius.application.reject_memory_suggestion import RejectMemorySuggestionUseCase
 from sirius.application.restore_backup import RestoreBackupUseCase
 from sirius.application.robot_conversation import (
@@ -89,6 +92,7 @@ from sirius.application.robot_conversation import (
 from sirius.application.save_manual_memory import SaveManualMemoryUseCase
 from sirius.application.send_message import SendMessageResult, SendMessageUseCase
 from sirius.application.set_criticality import SetCriticalityUseCase
+from sirius.application.sight_loop import SightLoop
 from sirius.application.studio_brief import MODEL_STUDIO_BRIEF
 from sirius.application.studio_capture import CaptureFeedback, StudioCaptureUseCase
 from sirius.application.studio_voice import (
@@ -173,6 +177,20 @@ MODEL_STUDIO_PAGE_INDEX = 1
 #: Lo que dice el indicador de escucha (PA-R03-04, ADR-244).
 LISTENING = "Escuchando"
 MUTED = "En silencio"
+#: Lo que dice de la cámara mientras ve (pieza D de la 0.4, ADR-262); si no ve, dice por qué.
+SEEING = "Cámara: te veo"
+#: Cada cuánto mira la ventana si la vista sigue viendo, en milisegundos: si se desenchufa
+#: la cámara, lo dice sin esperar a nada más.
+SIGHT_REFRESH_MS = 500
+#: Lo que se le explica a quien va a dar permiso para que le reconozca (pieza E de la 0.4,
+#: ADR-263).
+ENROLL_HELP = (
+    "Guardo una huella de tu cara y otra de tu voz, cifradas y solo en este ordenador, para "
+    "saber quién eres. Escribe tu nombre, ponte tú solo delante de la cámara y di la frase "
+    "que te pida. Puedes quitar el permiso cuando quieras, y se borran."
+)
+#: Lo que dice si no puede borrar las huellas de quien quita su permiso.
+NOT_FORGOTTEN = "No he podido borrar las huellas de {name}. Prueba otra vez."
 #: Lo que dice si le hablan mientras está con otra cosa: ese turno no va a la charla.
 VOICE_BUSY = "Te he oído, pero estaba con otra cosa: dímelo otra vez cuando acabe."
 #: Lo que dice si abrir el oído falla de una forma que no se espera.
@@ -333,6 +351,9 @@ class MainWindow(QMainWindow):
         local_listening: LocalListening[Any] | None = None,
         listening_loop: ListeningLoop | None = None,
         voice_test_use_case: VoiceTestUseCase | None = None,
+        local_sight: LocalSight | None = None,
+        sight_loop: SightLoop | None = None,
+        recognition: Recognition[Any, Any] | None = None,
         connections: ConnectionCloser | None = None,
         show_warning: Callable[[str, str], None] | None = None,
         show_information: Callable[[str, str], None] | None = None,
@@ -383,6 +404,25 @@ class MainWindow(QMainWindow):
         self._listening_paused_for_studio = False
         # Pieza F de la 0.3 (ADR-246): la prueba de voces, para elegir su voz a ciegas.
         self._voice_test_use_case = voice_test_use_case
+        # Pieza D de la 0.4 (ADR-262): la vista, que se abre con la ventana como el oído y
+        # suelta la cámara en Model Studio, por si OBS la quiere. Sin ella, la cara mira a su
+        # aire salvo al pensar.
+        self._local_sight = local_sight
+        #: Quien atiende a la vista en producción; sin él, la atiende otro (las pruebas).
+        self._sight_loop = sight_loop
+        # Pieza E de la 0.4 (ADR-263): dar y quitar el permiso para que la reconozca.
+        self._recognition = recognition
+        #: Si está abierto el formulario de dar permiso, con el nombre.
+        self._enroll_form = False
+        #: Quiénes dieron permiso, como están en la lista de olvidar.
+        self._people_shown: tuple[str, ...] = ()
+        self._sight_paused_for_studio = False
+        #: El aviso de la última vez que se abrió la vista: el de un fallo que no esperaba
+        #: no lo guarda ella.
+        self._sight_notice = ""
+        self._sight_timer = QTimer(self)
+        self._sight_timer.setInterval(SIGHT_REFRESH_MS)
+        self._sight_timer.timeout.connect(self._refresh_camera)
         self._pending_user_item: QListWidgetItem | None = None
         self._send_message_use_case = send_message_use_case
         self._get_history_use_case = get_history_use_case
@@ -535,6 +575,7 @@ class MainWindow(QMainWindow):
         self._load_history()
         self._refresh_studio_context()
         self._start_listening()
+        self._start_sight()
 
     def _default_show_warning(self, title: str, text: str) -> None:
         QMessageBox.warning(self, title, text)
@@ -1089,6 +1130,7 @@ class MainWindow(QMainWindow):
         captarían a la vez (ronda 2 de Codex sobre la PR #689, ADR-244).
         """
         self._pause_listening_for_studio()
+        self._pause_sight_for_studio()
         self._pages.setCurrentIndex(MODEL_STUDIO_PAGE_INDEX)
         self._refresh_studio_context()
         self.studio_page.input.setFocus()
@@ -1108,6 +1150,7 @@ class MainWindow(QMainWindow):
         self._capture_heartbeat.stop()
         self._pages.setCurrentIndex(TECHNICAL_PAGE_INDEX)
         self._resume_listening_after_studio()
+        self._resume_sight_after_studio()
 
     def _silence_voice(self) -> None:
         """Cierra micrófono y reproducción. Idempotente."""
@@ -1234,15 +1277,19 @@ class MainWindow(QMainWindow):
         # Su cara, encima de la charla (pieza B de ADR-259): con el reloj de su voz, el
         # volumen de lo que dice y sus gestos cuando suenan (pieza C, ADR-261). Sin oído,
         # con el reloj de siempre, la boca cerrada y solo los gestos de lo escrito.
+        # Adónde mira se lo dice la atención, con lo que ve y lo que oye (pieza D de la 0.4,
+        # ADR-262).
         escucha = self._local_listening
+        atencion = Attention(escucha, self._local_sight)
         if escucha is not None:
             self.face_widget = FaceWidget(
                 escucha.clock,
                 lambda: escucha.speaking_level,
                 lambda: escucha.speaking_gestures,
+                atencion.gaze,
             )
         else:
-            self.face_widget = FaceWidget(time.monotonic)
+            self.face_widget = FaceWidget(time.monotonic, gaze=atencion.gaze)
 
         self.message_list = QListWidget()
         # Bugfix (historial solapado): con el modo por defecto (Fixed), Qt no
@@ -1313,10 +1360,55 @@ class MainWindow(QMainWindow):
         self.mute_button.setAccessibleName("Silencio: cerrar o abrir el micrófono")
         self.mute_button.setVisible(False)
         self.mute_button.clicked.connect(self._handle_mute_clicked)
+        # PA-R04-06: si ve con la cámara, y si no, por qué (pieza D de la 0.4, ADR-262).
+        self.camera_label = QLabel("")
+        self.camera_label.setAccessibleName("La cámara")
+        self.camera_label.setWordWrap(True)
+        self.camera_label.setVisible(False)
         listening_row = QHBoxLayout()
         listening_row.addWidget(self.listening_label)
         listening_row.addWidget(self.mute_button)
+        listening_row.addWidget(self.camera_label, 1)
         listening_row.addStretch(1)
+        # PA-R04-10 a PA-R04-12: dar permiso para que la reconozca, con su nombre, su cara y
+        # su voz, y quitarlo (pieza E de la 0.4, ADR-263).
+        self.recognize_button = QPushButton("Que me reconozca")
+        self.recognize_button.setAccessibleName("Dar permiso para que Sirius te reconozca")
+        self.recognize_button.setVisible(False)
+        self.recognize_button.clicked.connect(self._handle_recognize_clicked)
+        self.enroll_name = QLineEdit()
+        self.enroll_name.setPlaceholderText("Tu nombre")
+        self.enroll_name.setMaxLength(LONGEST_NAME)
+        self.enroll_name.setVisible(False)
+        self.enroll_name.returnPressed.connect(self._handle_enroll_confirm)
+        self.enroll_confirm = QPushButton("Dar permiso")
+        self.enroll_confirm.setVisible(False)
+        self.enroll_confirm.clicked.connect(self._handle_enroll_confirm)
+        self.enroll_cancel = QPushButton("Cancelar")
+        self.enroll_cancel.setVisible(False)
+        self.enroll_cancel.clicked.connect(self._handle_enroll_cancel)
+        self.forget_combo = QComboBox()
+        self.forget_combo.setAccessibleName("A quién olvidar")
+        self.forget_combo.setVisible(False)
+        self.forget_button = QPushButton("Que me olvide")
+        self.forget_button.setAccessibleName("Quitar el permiso y borrar sus huellas")
+        self.forget_button.setVisible(False)
+        self.forget_button.clicked.connect(self._handle_forget_clicked)
+        recognize_row = QHBoxLayout()
+        recognize_row.addWidget(self.recognize_button)
+        recognize_row.addWidget(self.enroll_name, 1)
+        recognize_row.addWidget(self.enroll_confirm)
+        recognize_row.addWidget(self.enroll_cancel)
+        recognize_row.addWidget(self.forget_combo)
+        recognize_row.addWidget(self.forget_button)
+        recognize_row.addStretch(1)
+        self.enroll_help = QLabel(ENROLL_HELP)
+        self.enroll_help.setWordWrap(True)
+        self.enroll_help.setVisible(False)
+        self.enroll_label = QLabel("")
+        self.enroll_label.setAccessibleName("El permiso para reconocerte")
+        self.enroll_label.setWordWrap(True)
+        self.enroll_label.setVisible(False)
 
         input_row = QHBoxLayout()
         input_row.addWidget(self.message_input)
@@ -1352,6 +1444,9 @@ class MainWindow(QMainWindow):
         conversation_layout.addWidget(self.message_list, 1)
         conversation_layout.addLayout(mode_row)
         conversation_layout.addLayout(listening_row)
+        conversation_layout.addLayout(recognize_row)
+        conversation_layout.addWidget(self.enroll_help)
+        conversation_layout.addWidget(self.enroll_label)
         conversation_layout.addLayout(input_row)
         conversation_layout.addWidget(self.status_label)
         conversation_layout.addWidget(self.error_label)
@@ -2015,6 +2110,120 @@ class MainWindow(QMainWindow):
         if self._listening_loop is not None:
             self._listening_loop.start()
 
+    # --- Los ojos (pieza D de la 0.4, ADR-262) -----------------------------------------
+
+    def _start_sight(self) -> None:
+        """PA-R04-06: al abrirse empieza a ver, como empieza a oír, y lo dice. Sin cámara, o
+        sin lo que ve, dice por qué y sigue oyendo y hablando."""
+        if self._local_sight is None:
+            return
+        self._sight_notice = self._see(self._local_sight.start)
+        self._refresh_camera()
+        self._sight_timer.start()
+        if self._sight_loop is not None:
+            self._sight_loop.start()
+
+    def _see(self, start: Callable[[], str]) -> str:
+        """Abre la vista con ``start`` y devuelve su aviso. Falle como falle, la ventana
+        sigue y lo dice, con el tipo de fallo y nada más."""
+        try:
+            return start()
+        except Exception as error:
+            _logger.error("La vista no se ha podido abrir (%s)", type(error).__name__)
+            return f"No puedo verte: ha fallado ({type(error).__name__}). Sigo oyéndote y hablando."
+
+    def _refresh_camera(self) -> None:
+        """El indicador de la cámara como está la vista de verdad: si ve, que ve; si no, por
+        qué, el aviso que dejó al perder la cámara o el que dio al abrirse."""
+        sight = self._local_sight
+        if sight is None or self._sight_paused_for_studio:
+            return
+        text = SEEING if sight.seeing else (sight.notice or self._sight_notice)
+        self.camera_label.setText(text)
+        self.camera_label.setVisible(bool(text))
+        self._refresh_recognition()
+
+    # --- Reconocer a quien dé permiso (pieza E de la 0.4, ADR-263) ----------------------
+
+    def _refresh_recognition(self) -> None:
+        """Los botones de dar y quitar el permiso, y lo que dice el permiso que se está
+        dando, como están de verdad. Se puede dar con la cámara viendo; quitar, siempre."""
+        recognition = self._recognition
+        sight = self._local_sight
+        if recognition is None or sight is None:
+            return
+        enrollment = recognition.enrollment
+        busy = enrollment.step in (EnrollmentStep.FACE, EnrollmentStep.VOICE)
+        self.enroll_label.setText(enrollment.notice)
+        self.enroll_label.setVisible(bool(enrollment.notice))
+        self.recognize_button.setVisible(sight.seeing and not busy and not self._enroll_form)
+        for form_widget in (self.enroll_name, self.enroll_confirm, self.enroll_help):
+            form_widget.setVisible(self._enroll_form)
+        self.enroll_cancel.setVisible(self._enroll_form or busy)
+        people = recognition.people()
+        if people != self._people_shown:
+            self._people_shown = people
+            self.forget_combo.clear()
+            self.forget_combo.addItems(people)
+        for forget_widget in (self.forget_combo, self.forget_button):
+            forget_widget.setVisible(bool(people) and not busy and not self._enroll_form)
+
+    def _handle_recognize_clicked(self) -> None:
+        """Abre el formulario de dar permiso: su nombre y qué se guarda."""
+        self._enroll_form = True
+        self.enroll_name.clear()
+        self._refresh_recognition()
+        self.enroll_name.setFocus()
+
+    def _handle_enroll_confirm(self) -> None:
+        """Empieza a dar permiso con el nombre escrito: ahora le mira, y después le oye."""
+        recognition = self._recognition
+        name = self.enroll_name.text()
+        if recognition is None or not name.strip():
+            return
+        recognition.begin(name)
+        self._enroll_form = False
+        self._refresh_recognition()
+
+    def _handle_enroll_cancel(self) -> None:
+        """Deja el permiso que se estaba dando, sin guardar nada."""
+        self._enroll_form = False
+        if self._recognition is not None:
+            self._recognition.cancel()
+        self._refresh_recognition()
+
+    def _handle_forget_clicked(self) -> None:
+        """Quita el permiso de quien está elegido en la lista: borra sus huellas. Si no se
+        pueden borrar, lo dice."""
+        recognition = self._recognition
+        name = self.forget_combo.currentText()
+        if recognition is None or not name:
+            return
+        if not recognition.forget(name):
+            self.error_label.setText(NOT_FORGOTTEN.format(name=name))
+        self._refresh_recognition()
+
+    def _pause_sight_for_studio(self) -> None:
+        """Al entrar en Model Studio suelta la cámara, por si la quiere OBS para grabar. El
+        indicador se queda como estaba: Model Studio no lo enseña, y al salir se pone al
+        día."""
+        sight = self._local_sight
+        if sight is None or not sight.seeing:
+            return
+        sight.stop()
+        self._sight_paused_for_studio = True
+
+    def _resume_sight_after_studio(self) -> None:
+        """Al salir de Model Studio vuelve a ver si veía al entrar, salvo que la ventana se
+        esté cerrando."""
+        if not self._sight_paused_for_studio:
+            return
+        self._sight_paused_for_studio = False
+        if self._local_sight is None or self._closed or self._close_requested:
+            return
+        self._sight_notice = self._see(self._local_sight.start)
+        self._refresh_camera()
+
     def _listen(self, start: Callable[[], str]) -> str:
         """Abre el oído con ``start`` y devuelve su aviso. Falle como falle, la ventana se
         abre igual y lo dice, con el tipo de fallo y nada más.
@@ -2228,6 +2437,12 @@ class MainWindow(QMainWindow):
             self._active_dream_worker.cancel()
         if self._listening_loop is not None:
             self._listening_loop.stop()
+        # La vista deja de mirar y suelta la cámara (pieza D de la 0.4, ADR-262).
+        self._sight_timer.stop()
+        if self._sight_loop is not None:
+            self._sight_loop.stop()
+        if self._local_sight is not None:
+            self._local_sight.stop()
         self._end_closing_connections()
         super().closeEvent(event)
 

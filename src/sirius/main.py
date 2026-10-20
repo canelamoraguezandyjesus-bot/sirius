@@ -15,6 +15,7 @@ from sirius.adapters.persistence.bootstrap import initialize_persistence
 from sirius.application.data_location import DataLocationUseCase, LocationFileCorruptedError
 from sirius.application.listening_loop import ListeningLoop
 from sirius.application.local_listening import LocalListening
+from sirius.application.sight_loop import SightLoop
 from sirius.composition_root import (
     ConversationDependencies,
     build_conversation_dependencies,
@@ -43,6 +44,7 @@ def _build_main_window(
     windows: list[QMainWindow],
     *,
     listening_loop: ListeningLoop | None = None,
+    sight_loop: SightLoop | None = None,
 ) -> ValidatedMainWindow:
     """Build the real conversation window, wired so completing the active
     project (RF-018) immediately reopens ``InitialProjectWindow`` — same
@@ -52,6 +54,7 @@ def _build_main_window(
     ``listening_loop`` atiende al oído mientras la ventana está abierta (ADR-244): la
     ventana lo arranca al abrirse y lo para al cerrarse. Sin él, el oído lo atiende otro,
     como el conductor de las pruebas; con los dos, habría dos leyendo el mismo micro.
+    ``sight_loop`` hace lo mismo con la vista y la cámara (pieza D de la 0.4, ADR-262).
 
     Le da el registro de conexiones del proceso, para que al cerrarse cuelgue la red sin
     importar nada de la infraestructura (ronda 4 de Codex sobre la #698, ADR-255).
@@ -108,6 +111,9 @@ def _build_main_window(
         local_listening=dependencies.local_listening,
         listening_loop=listening_loop,
         voice_test_use_case=dependencies.voice_test_use_case,
+        local_sight=dependencies.local_sight,
+        sight_loop=sight_loop,
+        recognition=dependencies.recognition,
         connections=connection_registry(),
     )
     main_window.project_completed.connect(_on_project_completed)
@@ -117,15 +123,19 @@ def _build_main_window(
 def _build_listening_main_window(
     dependencies: ConversationDependencies, windows: list[QMainWindow]
 ) -> ValidatedMainWindow:
-    """La ventana de verdad de Sirius, con su propio bucle para atender al oído: cada
-    ventana el suyo, porque un hilo parado no vuelve a arrancar (ADR-244).
+    """La ventana de verdad de Sirius, con su propio bucle para atender al oído, y otro para la
+    vista: cada ventana los suyos, porque un hilo parado no vuelve a arrancar (ADR-244,
+    ADR-262).
 
     Al arrancar, pide al modelo de la charla que se cargue, en segundo plano: la primera
     frase no espera a que cargue (ADR-252).
     """
     dependencies.send_message_use_case.warm_up_in_background()
     return _build_main_window(
-        dependencies, windows, listening_loop=ListeningLoop(dependencies.local_listening)
+        dependencies,
+        windows,
+        listening_loop=ListeningLoop(dependencies.local_listening),
+        sight_loop=SightLoop(dependencies.local_sight),
     )
 
 

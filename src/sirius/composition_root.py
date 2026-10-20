@@ -17,6 +17,7 @@ import threading
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -83,11 +84,18 @@ from sirius.adapters.persistence.sqlite_memory_suggestion_repository import (
     build_sqlite_memory_suggestion_repository,
 )
 from sirius.adapters.persistence.sqlite_project_repository import build_sqlite_project_repository
+from sirius.adapters.persistence.sqlite_recognition_prints import build_sqlite_recognition_prints
 from sirius.adapters.persistence.sqlite_robot_conversation import (
     build_sqlite_robot_conversation_repository,
 )
+from sirius.adapters.persistence.sqlite_sight_log import build_sqlite_sight_log
 from sirius.adapters.persistence.sqlite_unit_of_work import build_sqlite_unit_of_work
+from sirius.adapters.recognition.age import load_age_estimator
+from sirius.adapters.recognition.engines import load_recognition_engines
+from sirius.adapters.recognition.sealer import FernetSealer
 from sirius.adapters.secrets.keyring_store import build_keyring_secret_store
+from sirius.adapters.vision.local_sight import load_sight_engines
+from sirius.application.age import Ages, CareWatch
 from sirius.application.api_key_settings import ApiKeySettingsUseCase
 from sirius.application.approve_decision import ApproveDecisionUseCase
 from sirius.application.archive_decision import ArchiveDecisionUseCase
@@ -109,7 +117,13 @@ from sirius.application.get_conversation_history import GetConversationHistoryUs
 from sirius.application.historical_projects import HistoricalProjectsUseCase
 from sirius.application.initial_project import InitialProjectUseCase
 from sirius.application.knowledge_overview import GetKnowledgeOverviewUseCase
-from sirius.application.local_listening import Chat, LocalListening, MemorySuggestions
+from sirius.application.local_listening import (
+    Chat,
+    LocalListening,
+    MemorySuggestions,
+    VoiceRecognizer,
+)
+from sirius.application.local_sight import AgeOf, FaceRecognizer, LocalSight, SeenNames
 from sirius.application.memory_commands import MemoryCommandService
 from sirius.application.memory_origin import GetMemoryOriginUseCase
 from sirius.application.memory_search import MemoryEmbeddingService, MemorySearch
@@ -119,6 +133,7 @@ from sirius.application.propose_criticality import ProposeCriticalityUseCase
 from sirius.application.propose_decision import ProposeDecisionUseCase
 from sirius.application.propose_memory_suggestion import ProposeMemorySuggestionUseCase
 from sirius.application.rank_relevant_knowledge import RankRelevantKnowledgeUseCase
+from sirius.application.recognition import Recognition
 from sirius.application.reject_memory_suggestion import RejectMemorySuggestionUseCase
 from sirius.application.reply_judge import LLMReplyJudge
 from sirius.application.restore_backup import RestoreBackupUseCase
@@ -133,6 +148,7 @@ from sirius.application.save_manual_memory import SaveManualMemoryUseCase
 from sirius.application.seed_examples import SeedExamplePicker
 from sirius.application.send_message import CommandVoice, SendMessageUseCase
 from sirius.application.set_criticality import SetCriticalityUseCase
+from sirius.application.sight_log import SightLog
 from sirius.application.studio_capture import StudioCaptureUseCase
 from sirius.application.studio_voice import StudioVoiceUseCase, VoiceSettings
 from sirius.application.supersede_decision import SupersedeDecisionUseCase
@@ -163,6 +179,12 @@ from sirius.domain.capture import build_scene_registry
 from sirius.domain.robot_seed import ROBOT_SEED_REMINDER
 from sirius.infrastructure.bootstrap_location_store import build_bootstrap_location_store
 from sirius.infrastructure.data_path_validator import build_data_path_validator
+from sirius.infrastructure.local_sight_installation import (
+    SIGHT_INSTALL_COMMAND,
+    face_model_path,
+    face_recognition_dir,
+    voice_recognition_dir,
+)
 from sirius.infrastructure.local_voice_installation import (
     CHARACTER_INSTALL_COMMAND,
     ChosenVoiceInstallation,
@@ -172,11 +194,14 @@ from sirius.infrastructure.local_voice_installation import (
 from sirius.infrastructure.logging import get_logger
 from sirius.infrastructure.network import openai_client
 from sirius.infrastructure.paths import SiriusPaths, resolve_paths
+from sirius.ports.age import AgeEstimator
 from sirius.ports.audio_playback import AudioPlayback
 from sirius.ports.data_location import DataLocationError
 from sirius.ports.embeddings import TextEmbedder
 from sirius.ports.llm import LLMProvider
+from sirius.ports.local_sight import SightEngines
 from sirius.ports.local_voice import ListeningEngines, SpeakingEngines
+from sirius.ports.recognition import RecognitionEngines
 from sirius.ports.robot_conversation import ConversationSummarizer, FactExtractor, ReplyJudge
 from sirius.ports.secrets import SecretStore
 
@@ -376,6 +401,19 @@ class ConversationDependencies:
     ``voice_test_use_case`` es la prueba de voces de la pieza F (ADR-246): la hoja a ciegas
     con la que él elige con qué voz habla el oído.
 
+    ``local_sight`` es la vista del robot (pieza D de la 0.4, ADR-262): la cámara y las
+    caras, en local. La abre la ventana al abrirse, como el oído, y el oído le pregunta si
+    quien le habla le mira.
+
+    ``recognition`` es quién es quién (pieza E de la 0.4, ADR-263): reconoce por la cara y
+    por la voz a quien dio permiso, con sus huellas cifradas. La ventana da y quita los
+    permisos; la vista y el oído le preguntan.
+
+    La vista estima además la edad que aparenta cada cara (pieza F de la 0.4, ADR-264), y la
+    charla la lee para saber si tiene delante a alguien con quien cortarse; y recuerda lo
+    que ve como texto, quién vino y quién se fue, con su hora, que la charla también lee
+    (pieza G de la 0.4, ADR-265).
+
     ``propose_criticality_use_case`` (M21a, ADR-130) is likewise wired but not
     yet called from anywhere: the interface that shows a proposal and lets
     the user confirm or correct it is M21b, a later, separate cut. Wiring it
@@ -430,6 +468,8 @@ class ConversationDependencies:
     dream_service: DreamService
     local_listening: LocalListening[Any]
     voice_test_use_case: VoiceTestUseCase
+    local_sight: LocalSight
+    recognition: Recognition[Any, Any]
 
 
 def chat_goes_through_ollama() -> bool:
@@ -704,6 +744,8 @@ def build_local_listening(
     memory_suggestions: MemorySuggestions,
     settings: Callable[[], LocalVoiceSettings] = current_local_voice_settings,
     clock: Callable[[], float] = time.monotonic,
+    looked_at: Callable[[float], bool] = lambda since: False,
+    recognition: VoiceRecognizer[Any] | None = None,
 ) -> LocalListening[Any]:
     """El oído y la voz del robot (ADR-242, ADR-243), entregando lo oído a ``chat`` y
     diciendo lo que contesta.
@@ -717,7 +759,9 @@ def build_local_listening(
     dicen los ajustes; sin ``load_speaking``, la voz de verdad, que recibe el modelo de la
     voz que dicen los ajustes. Los ajustes se leen cada vez que hacen falta (``settings``):
     la voz que él elige vale desde que la elige (ADR-246). ``clock`` es el reloj con el que
-    mide la charla y lo que tarda en hablar (ADR-244).
+    mide la charla y lo que tarda en hablar (ADR-244). ``looked_at`` dice si quien habla le
+    mira, de la vista (pieza D de la 0.4, ADR-262), y ``recognition``, quién habla, de su
+    voz (pieza E de la 0.4, ADR-263).
     """
     installation = ChosenVoiceInstallation(settings)
     speak = load_speaking or load_speaking_engines
@@ -729,6 +773,42 @@ def build_local_listening(
         load_speaking=lambda: speak(installation.speaking_voice_model),
         memory_suggestions=memory_suggestions,
         clock=clock,
+        looked_at=looked_at,
+        recognition=recognition,
+    )
+
+
+def _real_recognition_engines() -> RecognitionEngines[Any, Any]:
+    """InsightFace y ECAPA, con los modelos que deja la orden de instalar (ADR-263)."""
+    return load_recognition_engines(face_recognition_dir(), voice_recognition_dir())
+
+
+def _real_age_estimator() -> AgeEstimator[Any]:
+    """El modelo de la edad de InsightFace, el que deja la orden de instalar (ADR-264)."""
+    return load_age_estimator(face_recognition_dir())
+
+
+def build_local_sight(
+    load_engines: Callable[[], SightEngines[Any, Any]] | None = None,
+    *,
+    clock: Callable[[], float] = time.monotonic,
+    recognition: FaceRecognizer | None = None,
+    ages: AgeOf | None = None,
+    log: SeenNames | None = None,
+) -> LocalSight:
+    """La vista del robot (pieza D de la 0.4, ADR-262): no carga nada al construirse; la
+    cámara y el detector se cargan al empezar a ver, y solo si el modelo de las caras está
+    en este ordenador. Sin ``load_engines``, los de verdad, OpenCV y MediaPipe. ``clock``
+    es el del oído: lo que ve y lo que oye se comparan en el mismo reloj. ``recognition``
+    reconoce las caras (ADR-263), ``ages`` estima su edad (ADR-264) y ``log`` recuerda lo
+    que ve (ADR-265)."""
+    return LocalSight(
+        load_engines=load_engines or (lambda: load_sight_engines(face_model_path())),
+        clock=clock,
+        install_command=SIGHT_INSTALL_COMMAND,
+        recognition=recognition,
+        ages=ages,
+        log=log,
     )
 
 
@@ -745,6 +825,10 @@ def build_conversation_dependencies(
     listening_engines: Callable[[], ListeningEngines[Any]] | None = None,
     speaking_engines: Callable[[Path], SpeakingEngines[Any]] | None = None,
     listening_clock: Callable[[], float] = time.monotonic,
+    sight_engines: Callable[[], SightEngines[Any, Any]] | None = None,
+    recognition_engines: Callable[[], RecognitionEngines[Any, Any]] | None = None,
+    age_estimator: Callable[[], AgeEstimator[Any]] | None = None,
+    wall_clock: Callable[[], datetime] | None = None,
 ) -> ConversationDependencies:
     """Build repositories, the secret store, and use cases wired to SQLite.
 
@@ -762,7 +846,13 @@ def build_conversation_dependencies(
     oído del robot; sin él, los de verdad del extra ``voz`` (ADR-242).
     ``speaking_engines`` carga su voz y su altavoz con el modelo de la voz que dicen los
     ajustes; sin él, Piper y el altavoz de verdad (ADR-243). ``listening_clock`` es el
-    reloj con el que el oído mide la charla, la del sistema si no se da (ADR-244).
+    reloj con el que el oído mide la charla, la del sistema si no se da (ADR-244), y con el
+    que la vista apunta lo que ve. ``sight_engines`` carga la cámara y el detector de caras;
+    sin él, OpenCV y MediaPipe (pieza D de la 0.4, ADR-262). ``recognition_engines`` carga
+    quien reconoce caras y voces; sin él, InsightFace y ECAPA (pieza E de la 0.4, ADR-263).
+    ``age_estimator`` carga quien estima la edad; sin él, el modelo de la edad de
+    InsightFace (pieza F de la 0.4, ADR-264). ``wall_clock`` es la hora con que se apunta lo
+    que ve, la de este ordenador si no se da (pieza G de la 0.4, ADR-265).
     """
     secret_store = secret_store or build_keyring_secret_store()
     conversation_repository = build_sqlite_conversation_repository(database_path)
@@ -891,12 +981,17 @@ def build_conversation_dependencies(
         command_voice=CommandVoice(identity_repository, seed_examples, conversation_repository),
         cuts=conversation_repository,
     )
+    # Si hay que cortarse, para lo que el modelo escribe como Sirius fuera de la charla: la
+    # prueba a ciegas y las preguntas trampa. Mira la vista, que se monta más abajo (ronda
+    # 2 de Codex sobre la PR #703).
+    care_watch = CareWatch()
     trick_questions_use_case = TrickQuestionsUseCase(
         identity_repository,
         local_chat_provider=lambda: _local_chat(send_message_use_case.llm_provider),
         judge=judge,
         reminder=ROBOT_SEED_REMINDER,
         seed_examples=seed_examples,
+        care=care_watch.block,
     )
     get_history_use_case = GetConversationHistoryUseCase(conversation_repository)
 
@@ -935,7 +1030,13 @@ def build_conversation_dependencies(
     )
     set_criticality_use_case = SetCriticalityUseCase(memory_repository, decision_repository)
 
+    # Pieza E de la 0.4 (ADR-263): las huellas cifradas de quien da permiso.
+    recognition_prints = build_sqlite_recognition_prints(database_path)
+    # Pieza G de la 0.4 (ADR-265): lo que recuerda haber visto, como texto.
+    sight_log_store = build_sqlite_sight_log(database_path)
     repositories = (
+        recognition_prints,
+        sight_log_store,
         conversation_repository,
         identity_repository,
         project_repository,
@@ -1021,18 +1122,45 @@ def build_conversation_dependencies(
         choose_model=choose_chat_model,
         current_model=current_chat_model,
         seed_examples=seed_examples,
+        care=care_watch.block,
     )
     # La misma para la ventana y para el oído: lo que el modelo propone recordar queda
     # pendiente igual se le escriba o se le hable.
     propose_memory_suggestion_use_case = ProposeMemorySuggestionUseCase(unit_of_work)
 
+    # Solo tienen nombre en lo que recuerda haber visto quienes tienen permiso, y al quitarlo
+    # se quita también de ahí.
+    sight_log = SightLog(
+        sight_log_store,
+        allowed=lambda: recognition.people(),
+        wall_clock=wall_clock or (lambda: datetime.now(UTC)),
+    )
+    recognition = Recognition(
+        load_engines=recognition_engines or _real_recognition_engines,
+        store=recognition_prints,
+        sealer=FernetSealer(secret_store),
+        also_forget=sight_log.forget,
+    )
+    local_sight = build_local_sight(
+        sight_engines,
+        clock=listening_clock,
+        recognition=recognition,
+        ages=Ages(age_estimator or _real_age_estimator),
+        log=sight_log,
+    )
     local_listening = build_local_listening(
         send_message_use_case,
         listening_engines,
         load_speaking=speaking_engines,
         memory_suggestions=propose_memory_suggestion_use_case,
         clock=listening_clock,
+        looked_at=local_sight.talker_looked_since,
+        recognition=recognition,
     )
+    send_message_use_case.set_presence(local_sight.in_front_names, allowed=recognition.people)
+    send_message_use_case.set_ages(local_sight.in_front_ages)
+    care_watch.watch(local_sight.in_front_ages)
+    send_message_use_case.set_seen(sight_log.lines)
 
     return ConversationDependencies(
         send_message_use_case=send_message_use_case,
@@ -1099,6 +1227,8 @@ def build_conversation_dependencies(
         dream_service=dream_service,
         local_listening=local_listening,
         voice_test_use_case=_build_voice_test_use_case(local_listening, speaking_engines),
+        local_sight=local_sight,
+        recognition=recognition,
     )
 
 

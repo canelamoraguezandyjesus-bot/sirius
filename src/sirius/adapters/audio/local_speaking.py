@@ -28,7 +28,11 @@ from typing import Any
 from sirius.adapters.audio.character_voice import load_character_voice
 from sirius.adapters.audio.echo_cancellation import WebRtcEchoCanceller, load_echo_canceller
 from sirius.adapters.audio.local_listening import portaudio_seconds
-from sirius.adapters.audio.voice_libraries import TEXT_TO_SPEECH, import_voice_library
+from sirius.adapters.audio.voice_libraries import (
+    TEXT_TO_SPEECH,
+    import_voice_library,
+    onnx_runtime_quiet,
+)
 from sirius.config.local_voice import SpeakingVoice
 from sirius.infrastructure.logging import get_logger
 from sirius.ports.local_voice import SpeakingEngines, VoiceUnavailable
@@ -57,7 +61,9 @@ def check_speaking_libraries() -> None:
 
 
 def _libraries() -> tuple[Any, Any]:
-    """Piper y sounddevice."""
+    """Piper y sounddevice. Piper carga con ONNX Runtime: su telemetría se apaga antes
+    (ADR-262)."""
+    onnx_runtime_quiet()
     return import_voice_library(TEXT_TO_SPEECH), import_voice_library("sounddevice")
 
 

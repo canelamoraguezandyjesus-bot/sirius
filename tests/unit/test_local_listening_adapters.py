@@ -36,6 +36,8 @@ from sirius.adapters.audio.local_listening import (
 )
 from sirius.adapters.audio.voice_libraries import (
     END_OF_TURN,
+    ONNX_RUNTIME,
+    ONNX_RUNTIME_TELEMETRY,
     SPEECH_TO_TEXT,
     VOICE_ACTIVITY,
     import_voice_library,
@@ -233,6 +235,9 @@ def bibliotecas(monkeypatch: pytest.MonkeyPatch) -> _Bibliotecas:
 
     monkeypatch.setitem(sys.modules, "numpy", _numpy())
     monkeypatch.setitem(sys.modules, "sounddevice", sounddevice)
+    # ONNX Runtime de mentira, y la variable de su telemetría como estaba al acabar.
+    monkeypatch.setenv(ONNX_RUNTIME_TELEMETRY, "0")
+    modulo(ONNX_RUNTIME, disable_telemetry_events=lambda: None)
     modulo("faster_whisper", WhisperModel=_Whisper)
     modulo("loguru", logger=loguru)
     for paquete in ("pipecat", "pipecat.audio", "pipecat.audio.turn", "pipecat.audio.vad"):
@@ -491,6 +496,29 @@ def test_loguru_se_deja_en_los_avisos_antes_de_importar_pipecat(
         i for i, (que, modulo) in enumerate(llamadas) if str(modulo).startswith("pipecat")
     )
     assert llamadas.index(("add", "WARNING")) < primera_de_pipecat
+
+
+@pytest.mark.parametrize("como", ["al cargar el oído", "al comprobar las bibliotecas"])
+def test_la_telemetria_de_onnx_runtime_se_apaga_antes_de_importar_nada_de_la_voz(
+    bibliotecas: _Bibliotecas, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, como: str
+) -> None:
+    # Silero y Smart Turn cargan con ONNX Runtime: su telemetría, antes (ADR-262).
+    pasos: list[str] = []
+
+    def importa(modulo: str) -> Any:
+        pasos.append(modulo)
+        return import_voice_library(modulo)
+
+    monkeypatch.setattr(local_listening_module, "import_voice_library", importa)
+    monkeypatch.setattr(local_listening_module, "onnx_runtime_quiet", lambda: pasos.append("apaga"))
+
+    if como == "al cargar el oído":
+        load_listening_engines(tmp_path)
+    else:
+        check_listening_libraries()
+
+    assert pasos[0] == "apaga"
+    assert pasos.count("apaga") == 1
 
 
 @pytest.mark.parametrize(

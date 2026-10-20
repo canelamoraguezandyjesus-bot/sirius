@@ -32,8 +32,10 @@ from sirius.adapters.persistence.sqlite_knowledge_search_repository import (
 from sirius.adapters.persistence.sqlite_memory_repository import build_sqlite_memory_repository
 from sirius.adapters.persistence.sqlite_project_repository import build_sqlite_project_repository
 from sirius.adapters.persistence.sqlite_unit_of_work import build_sqlite_unit_of_work
+from sirius.application.age import care_block
 from sirius.application.approve_decision import ApproveDecisionUseCase
 from sirius.application.context import Context, ContextBuilder
+from sirius.application.presence import HEADING, RULE
 from sirius.application.project_continuity import ProjectContinuityUseCase
 from sirius.application.propose_decision import ProposeDecisionUseCase
 from sirius.application.rank_relevant_knowledge import RankRelevantKnowledgeUseCase
@@ -43,10 +45,13 @@ from sirius.application.send_message import (
     SendMessageUseCase,
     render_instructions,
 )
+from sirius.application.sight_log import HEADING as SEEN_HEADING
+from sirius.application.sight_log import INTRO as SEEN_INTRO
 from sirius.domain.conversation import Conversation, Message, MessageRole, MessageStatus
 from sirius.domain.decision import DecisionStatus
 from sirius.domain.memory import MemoryStatus
 from sirius.domain.project import is_configured
+from sirius.ports.age import AgeReading
 from sirius.ports.conversation_repository import ConversationRepository
 from sirius.ports.llm import (
     LLMCompleted,
@@ -1132,3 +1137,364 @@ def test_cortarle_antes_de_que_escriba_nada_deja_su_respuesta_vacia_y_acabada(
     assert result.sirius_message.content == ""
     # Y al acabar se olvida que la cortaron: no se queda apuntada para siempre.
     assert not use_case._was_cut("op-sin-empezar")
+
+
+# --- Quién hay (pieza E de la 0.4, ADR-263) -------------------------------------------
+
+
+class _ProveedorQueApunta(_StaticLLMProvider):
+    """Contesta siempre lo mismo y apunta cada petición, con sus instrucciones. Corre en
+    este ordenador, como Ollama: lo que ve la cámara de quién hay solo va a uno así."""
+
+    runs_on_this_computer = True
+
+    def __init__(self) -> None:
+        super().__init__("vale")
+        self.peticiones: list[LLMRequest] = []
+
+    def stream_response(self, request: LLMRequest) -> Iterable[LLMStreamEvent]:
+        self.peticiones.append(request)
+        yield from super().stream_response(request)
+
+
+def _con_permiso() -> tuple[str, ...]:
+    """Quiénes tienen permiso en estas pruebas, como lo diría quien reconoce."""
+    return ("Marta", "Pepe")
+
+
+def _quien_hay(instrucciones: str) -> list[str]:
+    """Las líneas de «# Quién hay», sin el título ni la regla."""
+    lineas = instrucciones.splitlines()
+    if HEADING not in lineas:
+        return []
+    desde = lineas.index(HEADING) + 1
+    hasta = lineas.index(RULE, desde)
+    return lineas[desde:hasta]
+
+
+@pytest.mark.integration
+def test_el_modelo_lee_quien_le_habla_y_a_quienes_tiene_delante(tmp_path: Path) -> None:
+    proveedor = _ProveedorQueApunta()
+    use_case = _build_use_case(tmp_path / "sirius.db", proveedor)
+    use_case.set_presence(lambda: ("Pepe", None), allowed=_con_permiso)
+
+    use_case.send_message("hola", speaker="Marta")
+
+    [peticion] = proveedor.peticiones
+    assert _quien_hay(peticion.instructions) == [
+        "Te habla Marta.",
+        "Tienes delante a Pepe.",
+        "Tienes delante a alguien sin identificar.",
+    ]
+    assert "hola" not in peticion.instructions, "quién hay no se mezcla con lo dicho"
+
+
+@pytest.mark.integration
+def test_lo_escrito_en_la_ventana_no_lleva_quien_lo_escribe(tmp_path: Path) -> None:
+    proveedor = _ProveedorQueApunta()
+    use_case = _build_use_case(tmp_path / "sirius.db", proveedor)
+    use_case.set_presence(lambda: (), allowed=_con_permiso)
+
+    use_case.send_message("hola")
+
+    [peticion] = proveedor.peticiones
+    assert _quien_hay(peticion.instructions) == ["No tienes a nadie delante."]
+
+
+@pytest.mark.integration
+def test_sin_vista_ni_quien_hable_no_hay_seccion_de_quien_hay(tmp_path: Path) -> None:
+    proveedor = _ProveedorQueApunta()
+    use_case = _build_use_case(tmp_path / "sirius.db", proveedor)
+    use_case.send_message("uno")
+    use_case.set_presence(lambda: None, allowed=_con_permiso)
+    use_case.send_message("dos")
+
+    assert all(HEADING not in p.instructions for p in proveedor.peticiones)
+
+
+@pytest.mark.integration
+def test_si_no_se_sabe_quien_hay_se_apunta_una_vez_y_la_charla_sigue(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    proveedor = _ProveedorQueApunta()
+    use_case = _build_use_case(tmp_path / "sirius.db", proveedor)
+
+    def rota() -> tuple[str | None, ...] | None:
+        msg = "la cámara en /ruta/secreta"
+        raise RuntimeError(msg)
+
+    use_case.set_presence(rota, allowed=_con_permiso)
+
+    primera = use_case.send_message("uno", speaker="Marta")
+    use_case.send_message("dos")
+
+    assert primera.outcome is MessageStatus.COMPLETED
+    assert _quien_hay(proveedor.peticiones[0].instructions) == ["Te habla Marta."]
+    assert HEADING not in proveedor.peticiones[1].instructions
+    avisos = [r for r in caplog.records if "No se sabe a quiénes tiene delante" in r.getMessage()]
+    assert len(avisos) == 1
+    assert "RuntimeError" in avisos[0].getMessage()
+    assert "/ruta/secreta" not in caplog.text
+
+
+@pytest.mark.integration
+def test_quien_quita_su_permiso_entre_oirle_y_escribir_la_peticion_no_va_con_nombre(
+    tmp_path: Path,
+) -> None:
+    """Ronda 3 de Codex sobre la PR #703: la voz se reconoce al acabar de oírle, y la
+    petición se escribe después; si entretanto quita su permiso, ni su voz ni su cara van
+    con su nombre. Se mira al escribirla."""
+    proveedor = _ProveedorQueApunta()
+    use_case = _build_use_case(tmp_path / "sirius.db", proveedor)
+    con_permiso = ["Marta", "Pepe"]
+    use_case.set_presence(lambda: ("Marta", "Pepe"), allowed=lambda: tuple(con_permiso))
+
+    use_case.send_message("hola", speaker="Marta")
+    con_permiso.remove("Marta")
+    use_case.send_message("adiós", speaker="Marta")
+
+    antes, despues = proveedor.peticiones
+    assert _quien_hay(antes.instructions) == [
+        "Te habla Marta.",
+        "Tienes delante a Marta.",
+        "Tienes delante a Pepe.",
+    ]
+    assert _quien_hay(despues.instructions) == [
+        "Te habla alguien sin identificar.",
+        "Tienes delante a Pepe.",
+        "Tienes delante a alguien sin identificar.",
+    ]
+    assert "Marta" not in despues.instructions
+
+
+@pytest.mark.integration
+def test_si_no_se_sabe_quien_tiene_permiso_nadie_va_con_nombre_y_se_apunta_una_vez(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    proveedor = _ProveedorQueApunta()
+    use_case = _build_use_case(tmp_path / "sirius.db", proveedor)
+
+    def roto() -> tuple[str, ...]:
+        msg = "las huellas en /ruta/secreta"
+        raise RuntimeError(msg)
+
+    use_case.set_presence(lambda: ("Pepe",), allowed=roto)
+
+    primera = use_case.send_message("uno", speaker="Marta")
+    use_case.send_message("dos", speaker="Marta")
+
+    assert primera.outcome is MessageStatus.COMPLETED
+    for peticion in proveedor.peticiones:
+        assert _quien_hay(peticion.instructions) == [
+            "Te habla alguien sin identificar.",
+            "Tienes delante a alguien sin identificar.",
+        ]
+    avisos = [r for r in caplog.records if "No se sabe quiénes han dado permiso" in r.getMessage()]
+    assert len(avisos) == 1
+    assert "RuntimeError" in avisos[0].getMessage()
+    assert "/ruta/secreta" not in caplog.text
+
+
+@pytest.mark.integration
+def test_sin_saber_quien_tiene_permiso_quien_habla_no_va_con_nombre(tmp_path: Path) -> None:
+    proveedor = _ProveedorQueApunta()
+    use_case = _build_use_case(tmp_path / "sirius.db", proveedor)
+
+    use_case.send_message("hola", speaker="Marta")
+
+    [peticion] = proveedor.peticiones
+    assert _quien_hay(peticion.instructions) == ["Te habla alguien sin identificar."]
+
+
+# --- Con quién se corta (pieza F de la 0.4, ADR-264) ------------------------------------
+
+
+def _con_recordatorio(tmp_path: Path, proveedor: LLMProvider) -> SendMessageUseCase:
+    """Como ``_build_use_case``, con el recordatorio de la semilla, lo último que lee."""
+    database_path = tmp_path / "sirius.db"
+    upgrade_to_head(database_path)
+    _seed_bootstrap_singletons(database_path)
+    repository = build_sqlite_conversation_repository(database_path)
+    return SendMessageUseCase(
+        context_builder=_build_context_builder(database_path, repository),
+        conversation_repository=repository,
+        llm_provider=proveedor,
+        reminder="El recordatorio de la semilla.",
+    )
+
+
+@pytest.mark.integration
+def test_con_un_crio_delante_la_peticion_lleva_la_regla_tras_quien_hay_y_antes_del_recordatorio(
+    tmp_path: Path,
+) -> None:
+    proveedor = _ProveedorQueApunta()
+    use_case = _con_recordatorio(tmp_path, proveedor)
+    use_case.set_presence(lambda: (None, None), allowed=_con_permiso)
+    use_case.set_ages(lambda: (AgeReading(40, sure=True), AgeReading(8, sure=True)))
+
+    use_case.send_message("hola", speaker="Marta")
+
+    [peticion] = proveedor.peticiones
+    instrucciones = peticion.instructions
+    assert instrucciones.count(care_block()) == 1
+    assert instrucciones.index(RULE) < instrucciones.index(care_block())
+    assert instrucciones.endswith(f"{care_block()}\n\nEl recordatorio de la semilla.")
+    assert "hola" not in instrucciones
+
+
+@pytest.mark.integration
+def test_con_solo_adultos_bien_vistos_no_la_lleva_y_con_uno_dudoso_si(tmp_path: Path) -> None:
+    proveedor = _ProveedorQueApunta()
+    use_case = _build_use_case(tmp_path / "sirius.db", proveedor)
+    edades: list[tuple[AgeReading | None, ...]] = [
+        (AgeReading(40, sure=True), AgeReading(30, sure=True)),
+        (AgeReading(40, sure=True), AgeReading(30, sure=False)),
+        (AgeReading(40, sure=True), None),
+        (AgeReading(70, sure=True),),
+    ]
+    use_case.set_ages(lambda: edades[len(proveedor.peticiones)])
+
+    for texto in ("uno", "dos", "tres", "cuatro"):
+        use_case.send_message(texto)
+
+    assert [care_block() in p.instructions for p in proveedor.peticiones] == [
+        False,
+        True,
+        True,
+        True,
+    ]
+
+
+@pytest.mark.integration
+def test_sin_vista_o_sin_nadie_delante_no_la_lleva(tmp_path: Path) -> None:
+    proveedor = _ProveedorQueApunta()
+    use_case = _build_use_case(tmp_path / "sirius.db", proveedor)
+    use_case.send_message("uno")
+    use_case.set_ages(lambda: None)
+    use_case.send_message("dos")
+    use_case.set_ages(lambda: ())
+    use_case.send_message("tres")
+
+    assert all(care_block() not in p.instructions for p in proveedor.peticiones)
+
+
+@pytest.mark.integration
+def test_si_no_se_sabe_la_edad_de_nadie_la_lleva_ante_la_duda_y_se_apunta_una_vez(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    proveedor = _ProveedorQueApunta()
+    use_case = _build_use_case(tmp_path / "sirius.db", proveedor)
+
+    def rota() -> tuple[AgeReading | None, ...] | None:
+        msg = "la cámara en /ruta/secreta"
+        raise RuntimeError(msg)
+
+    use_case.set_ages(rota)
+
+    primera = use_case.send_message("uno")
+    use_case.send_message("dos")
+
+    assert primera.outcome is MessageStatus.COMPLETED
+    assert all(care_block() in p.instructions for p in proveedor.peticiones)
+    avisos = [r for r in caplog.records if "No se sabe la edad" in r.getMessage()]
+    assert len(avisos) == 1
+    assert "RuntimeError" in avisos[0].getMessage()
+    assert "/ruta/secreta" not in caplog.text
+
+
+# --- Lo que ha visto (pieza G de la 0.4, ADR-265) ---------------------------------------
+
+
+@pytest.mark.integration
+def test_el_modelo_lee_lo_que_ha_visto_antes_de_quien_hay(tmp_path: Path) -> None:
+    proveedor = _ProveedorQueApunta()
+    use_case = _build_use_case(tmp_path / "sirius.db", proveedor)
+    use_case.set_presence(lambda: ("Marta",), allowed=_con_permiso)
+    use_case.set_seen(
+        lambda: ("A las 18:02 vino Marta.", "A las 18:10 vino alguien sin identificar.")
+    )
+
+    use_case.send_message("¿quién ha venido?")
+
+    [peticion] = proveedor.peticiones
+    lineas = peticion.instructions.splitlines()
+    desde = lineas.index(SEEN_HEADING)
+    assert lineas[desde : desde + 4] == [
+        SEEN_HEADING,
+        SEEN_INTRO,
+        "A las 18:02 vino Marta.",
+        "A las 18:10 vino alguien sin identificar.",
+    ]
+    assert desde < lineas.index(HEADING), "lo que vio, antes de quién hay"
+    assert "¿quién ha venido?" not in peticion.instructions
+
+
+class _ProveedorDeFuera(_ProveedorQueApunta):
+    """El mismo, pero de fuera: no corre en este ordenador."""
+
+    runs_on_this_computer = False
+
+
+@pytest.mark.integration
+def test_a_un_modelo_de_fuera_no_le_llega_ni_quien_hay_ni_lo_que_ha_visto_y_la_regla_si(
+    tmp_path: Path,
+) -> None:
+    proveedor = _ProveedorDeFuera()
+    use_case = _build_use_case(tmp_path / "sirius.db", proveedor)
+    leido: list[str] = []
+
+    def lo_visto() -> tuple[str, ...]:
+        leido.append("lo visto")
+        return ("A las 18:02 vino Marta.",)
+
+    def quien_hay() -> tuple[str | None, ...]:
+        leido.append("quién hay")
+        return ("Marta", None)
+
+    use_case.set_seen(lo_visto)
+    use_case.set_presence(quien_hay, allowed=_con_permiso)
+    use_case.set_ages(lambda: (AgeReading(8, sure=True),))
+
+    use_case.send_message("hola")
+
+    [peticion] = proveedor.peticiones
+    assert "Marta" not in peticion.instructions
+    assert SEEN_HEADING not in peticion.instructions
+    assert HEADING not in peticion.instructions
+    assert care_block() in peticion.instructions, "la regla no nombra a nadie, y va"
+    assert leido == [], "ni se lee: leerlo puede tocar la base"
+
+
+@pytest.mark.integration
+def test_sin_nada_visto_no_hay_seccion(tmp_path: Path) -> None:
+    proveedor = _ProveedorQueApunta()
+    use_case = _build_use_case(tmp_path / "sirius.db", proveedor)
+    use_case.send_message("uno")
+    use_case.set_seen(lambda: ())
+    use_case.send_message("dos")
+
+    assert all(SEEN_HEADING not in p.instructions for p in proveedor.peticiones)
+
+
+@pytest.mark.integration
+def test_si_no_se_sabe_lo_que_ha_visto_se_apunta_una_vez_y_la_charla_sigue(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    proveedor = _ProveedorQueApunta()
+    use_case = _build_use_case(tmp_path / "sirius.db", proveedor)
+
+    def roto() -> tuple[str, ...]:
+        msg = "Marta, en /ruta/secreta"
+        raise RuntimeError(msg)
+
+    use_case.set_seen(roto)
+
+    primera = use_case.send_message("uno")
+    use_case.send_message("dos")
+
+    assert primera.outcome is MessageStatus.COMPLETED
+    assert all(SEEN_HEADING not in p.instructions for p in proveedor.peticiones)
+    avisos = [r for r in caplog.records if "No se sabe lo que ha visto" in r.getMessage()]
+    assert len(avisos) == 1
+    assert "RuntimeError" in avisos[0].getMessage()
+    assert "/ruta/secreta" not in caplog.text

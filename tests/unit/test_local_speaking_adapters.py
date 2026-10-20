@@ -33,7 +33,13 @@ from sirius.adapters.audio.local_speaking import (
     check_speaking_libraries,
     load_speaking_engines,
 )
-from sirius.adapters.audio.voice_libraries import TEXT_TO_SPEECH, voice_tools
+from sirius.adapters.audio.voice_libraries import (
+    ONNX_RUNTIME,
+    ONNX_RUNTIME_TELEMETRY,
+    TEXT_TO_SPEECH,
+    import_voice_library,
+    voice_tools,
+)
 from sirius.ports.local_voice import VoiceUnavailable
 
 _FRECUENCIA = 22_050
@@ -132,6 +138,11 @@ def sounddevice(monkeypatch: pytest.MonkeyPatch) -> _SoundDevice:
     piper.PiperVoice = _PiperVoice  # type: ignore[attr-defined]
     piper.SynthesisConfig = _SynthesisConfig  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "piper", piper)
+    # ONNX Runtime de mentira, y la variable de su telemetría como estaba al acabar.
+    runtime = types.ModuleType(ONNX_RUNTIME)
+    runtime.disable_telemetry_events = lambda: None  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, ONNX_RUNTIME, runtime)
+    monkeypatch.setenv(ONNX_RUNTIME_TELEMETRY, "0")
     falso = _SoundDevice()
     monkeypatch.setitem(sys.modules, "sounddevice", falso)
     registrador = logging.getLogger("piper")
@@ -239,6 +250,29 @@ def test_lo_que_dice_piper_no_llega_a_ningun_diario(
         logging.getLogger("piper.voice").debug("text=%s", "La clave es Zarzamora")
 
     assert "zarzamora" not in caplog.text.casefold()
+
+
+@pytest.mark.parametrize("como", ["al cargar la voz", "al comprobar las bibliotecas"])
+def test_la_telemetria_de_onnx_runtime_se_apaga_antes_de_importar_piper(
+    sounddevice: _SoundDevice, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, como: str
+) -> None:
+    # Piper carga con ONNX Runtime: su telemetría, antes (ADR-262).
+    pasos: list[str] = []
+
+    def importa(modulo: str) -> Any:
+        pasos.append(modulo)
+        return import_voice_library(modulo)
+
+    monkeypatch.setattr(local_speaking_module, "import_voice_library", importa)
+    monkeypatch.setattr(local_speaking_module, "onnx_runtime_quiet", lambda: pasos.append("apaga"))
+
+    if como == "al cargar la voz":
+        load_speaking_engines(tmp_path / "es_ES-davefx-medium.onnx")
+    else:
+        check_speaking_libraries()
+
+    assert pasos[0] == "apaga"
+    assert pasos.count("apaga") == 1
 
 
 def test_ninguna_funcion_de_la_voz_importa_por_su_cuenta() -> None:

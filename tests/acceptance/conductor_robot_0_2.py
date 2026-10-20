@@ -75,6 +75,7 @@ from sirius.domain.robot_seed import (
     ROBOT_SEED_REMINDER,
 )
 from sirius.infrastructure.paths import ensure_paths, resolve_paths
+from sirius.ports.age import AgeEstimator
 from sirius.ports.embeddings import EmbeddingError, TextEmbedder
 from sirius.ports.llm import (
     LLMCompleted,
@@ -84,7 +85,10 @@ from sirius.ports.llm import (
     LLMStreamEvent,
     LLMTextDelta,
 )
+from sirius.ports.local_sight import SightEngines
 from sirius.ports.local_voice import ListeningEngines, SpeakingEngines
+from sirius.ports.recognition import RecognitionEngines
+from sirius.ports.secrets import SecretStore
 
 #: Las letras de la tabla de piezas de ADR-233 que ya han entrado en ``main``.
 #: La A es esta: la nota de arranque y estas pruebas.
@@ -680,7 +684,7 @@ class Conductor:
         dependencias = build_conversation_dependencies(
             self.base,
             self.carpeta / "copias",
-            secret_store=FakeSecretStore(),
+            secret_store=self._almacen_de_secretos(),
             ollama_transport=self._ollama.transporte() if self._ollama is not None else None,
             conversation_summarizer=(
                 _ResumidorEnchufado(self._resumidor) if self._resumidor is not None else None
@@ -693,6 +697,10 @@ class Conductor:
             listening_engines=self._motores_de_voz(),
             speaking_engines=self._motores_de_hablar(),
             listening_clock=self._reloj_del_oido(),
+            sight_engines=self._motores_de_los_ojos(),
+            recognition_engines=self._motores_de_reconocer(),
+            age_estimator=self._estimador_de_edad(),
+            wall_clock=self._reloj_de_pared(),
         )
         if not self._charla_por_ollama:
             dependencias.send_message_use_case.set_llm_provider(self._grabador)
@@ -713,6 +721,42 @@ class Conductor:
         escuchar; el conductor de la 0.3 enchufa aquí sus dobles.
         """
         return None
+
+    def _motores_de_los_ojos(self) -> Callable[[], SightEngines[Any, Any]] | None:
+        """Con qué ve el robot: en la 0.2, con nada, porque no tiene ojos.
+
+        ``None`` es la vista de verdad, que no carga nada mientras falte el modelo de las
+        caras, y en las pruebas falta: no se abre ninguna cámara. El conductor de la 0.4
+        enchufa aquí sus dobles.
+        """
+        return None
+
+    def _motores_de_reconocer(self) -> Callable[[], RecognitionEngines[Any, Any]] | None:
+        """Con qué reconoce caras y voces: en la 0.2, con nada.
+
+        ``None`` es lo de verdad, InsightFace y ECAPA, que no cargan mientras falten sus
+        modelos, y en las pruebas faltan. El conductor de la 0.4 enchufa aquí sus dobles.
+        """
+        return None
+
+    def _estimador_de_edad(self) -> Callable[[], AgeEstimator[Any]] | None:
+        """Con qué estima la edad de quien ve: en la 0.2, con nada.
+
+        ``None`` es lo de verdad, el modelo de la edad de InsightFace, que no se carga
+        mientras la vista no vea a nadie, y en las pruebas no ve. El conductor de la 0.4
+        enchufa aquí su doble.
+        """
+        return None
+
+    def _reloj_de_pared(self) -> Callable[[], datetime] | None:
+        """La hora con que apunta Sirius lo que ve: en la 0.2, la de este ordenador, que no
+        ve nada. El conductor de la 0.4 le pone la suya."""
+        return None
+
+    def _almacen_de_secretos(self) -> SecretStore:
+        """Dónde guarda Sirius sus secretos: uno de mentira, nuevo cada vez que se monta.
+        El conductor de la 0.4 guarda el mismo al volver a abrir, como el de Windows."""
+        return FakeSecretStore()
 
     def _reloj_del_oido(self) -> Callable[[], float]:
         """El reloj con el que el oído mide la charla: en la 0.2, el del sistema, porque

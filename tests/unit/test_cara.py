@@ -20,7 +20,10 @@ from sirius.domain.face import (
     BLINK_EVERY,
     BLINK_OPENING,
     BREATH_PERIOD,
+    GAZE_FOCUS_REACH,
     GAZE_REACH,
+    GAZE_RETARGET,
+    GAZE_SACCADE,
     GESTURE_SECONDS,
     GESTURES_WAITING,
     FaceLife,
@@ -64,6 +67,91 @@ def test_la_mirada_se_queda_cerca_del_frente() -> None:
 
     assert all(abs(x) <= GAZE_REACH[0] and abs(y) <= GAZE_REACH[1] for x, y in miradas)
     assert len({(round(x, 3), round(y, 3)) for x, y in miradas}) > 10
+
+
+# --- Adónde mira (pieza D de la 0.4, ADR-262) -----------------------------------------
+
+
+def _cerca(mirada: tuple[float, float], de: tuple[float, float]) -> bool:
+    """Si ``mirada`` está dentro del temblor de quien mira a ``de``."""
+    return (
+        abs(mirada[0] - de[0]) <= GAZE_FOCUS_REACH[0] + 1e-9
+        and abs(mirada[1] - de[1]) <= GAZE_FOCUS_REACH[1] + 1e-9
+    )
+
+
+def test_mira_adonde_le_dicen_y_se_queda_ahi_con_un_temblor_pequeno() -> None:
+    vida = FaceLife(seed=5)
+    a = (0.6, -0.2)
+    vida.pose(_INICIO)
+
+    miradas = [vida.pose(_INICIO + 0.1 + n * 0.01, look_at=a).gaze for n in range(2_000)]
+
+    llegada = round(GAZE_SACCADE / 0.01) + 1
+    assert all(_cerca(m, a) for m in miradas[llegada:]), "se va de lo que mira"
+    assert len({(round(x, 4), round(y, 4)) for x, y in miradas[llegada:]}) > 2, "sin vida"
+    assert GAZE_FOCUS_REACH == (0.04, 0.03)
+
+
+def test_al_cambiar_adonde_mira_salta_desde_donde_estaba_en_lo_que_dura_un_salto() -> None:
+    sola, mirando = FaceLife(seed=2), FaceLife(seed=2)
+    for n in range(100):
+        sola.pose(_INICIO + n * 0.01)
+        mirando.pose(_INICIO + n * 0.01)
+    a = (0.8, 0.1)
+    ahora = _INICIO + 1.0
+
+    salida = mirando.pose(ahora, look_at=a).gaze
+    a_medias = mirando.pose(ahora + GAZE_SACCADE / 2, look_at=a).gaze
+    llegada = mirando.pose(ahora + GAZE_SACCADE, look_at=a).gaze
+
+    assert salida == pytest.approx(sola.pose(ahora).gaze), "salta sin pasar por en medio"
+    assert salida[0] < a_medias[0] < llegada[0]
+    assert _cerca(llegada, a)
+
+
+def test_si_le_dicen_otro_sitio_a_medio_salto_sale_desde_donde_iba() -> None:
+    sigue, cambia = FaceLife(seed=8), FaceLife(seed=8)
+    a, b = (0.8, 0.0), (-0.8, 0.0)
+    for vida in (sigue, cambia):
+        vida.pose(_INICIO)
+        vida.pose(_INICIO + 1.0, look_at=a)
+    a_medias = _INICIO + 1.0 + GAZE_SACCADE / 2
+
+    iba = sigue.pose(a_medias, look_at=a).gaze
+    sale = cambia.pose(a_medias, look_at=b).gaze
+
+    assert sale == pytest.approx(iba), "salta adonde iba sin haber llegado"
+    assert abs(iba[0]) < a[0] - GAZE_FOCUS_REACH[0], "a medio salto aún no ha llegado"
+
+
+def test_si_lo_que_mira_se_mueve_poco_no_salta_y_si_se_mueve_mas_si() -> None:
+    quieta, poco, mucho = FaceLife(seed=4), FaceLife(seed=4), FaceLife(seed=4)
+    a = (0.3, 0.0)
+    for n in range(50):
+        for vida in (quieta, poco, mucho):
+            vida.pose(_INICIO + n * 0.01, look_at=a)
+    ahora = _INICIO + 0.5
+
+    lejos = (a[0] + GAZE_RETARGET * 3, a[1])
+
+    tras_poco = poco.pose(ahora, look_at=(a[0] + GAZE_RETARGET * 0.9, a[1])).gaze
+    mucho.pose(ahora, look_at=lejos)
+    tras_mucho = mucho.pose(ahora + GAZE_SACCADE, look_at=lejos).gaze
+
+    assert tras_poco == quieta.pose(ahora, look_at=a).gaze
+    assert _cerca(tras_mucho, lejos)
+
+
+def test_sin_nadie_a_quien_mirar_vuelve_a_mirar_a_su_aire() -> None:
+    vida = FaceLife(seed=6)
+    for n in range(50):
+        vida.pose(_INICIO + n * 0.01, look_at=(0.9, 0.6))
+
+    miradas = [vida.pose(_INICIO + 0.5 + n * 0.01).gaze for n in range(1_000)]
+
+    llegada = round(GAZE_SACCADE / 0.01) + 1
+    assert all(abs(x) <= GAZE_REACH[0] and abs(y) <= GAZE_REACH[1] for x, y in miradas[llegada:])
 
 
 def test_respira_con_su_periodo() -> None:

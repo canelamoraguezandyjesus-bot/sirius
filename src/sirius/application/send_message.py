@@ -31,16 +31,19 @@ from __future__ import annotations
 
 import threading
 import uuid
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Collection, Sequence
 from dataclasses import dataclass
 
+from sirius.application.age import CareWatch, care_block
 from sirius.application.context import Context, ContextBuilder
 from sirius.application.memory_commands import CommandAnswer, CommandReply, MemoryCommandService
+from sirius.application.presence import presence_block
 from sirius.application.robot_conversation import (
     ConversationSummaryService,
     summary_operation_id,
 )
 from sirius.application.seed_examples import SeedExamplePicker
+from sirius.application.sight_log import sight_block
 from sirius.domain.conversation import Message, MessageRole, MessageStatus, cut_note
 from sirius.domain.conversation_mode import (
     ENTERING_SERIOUS_MODE,
@@ -55,6 +58,7 @@ from sirius.domain.own_memory import render_own_memory
 from sirius.domain.project import blockers_to_text
 from sirius.domain.robot_seed import EXAMPLES_FRAME, example_turns, render_examples
 from sirius.infrastructure.logging import get_logger
+from sirius.ports.age import AgeReading
 from sirius.ports.conversation_repository import (
     ConversationRepository,
     CutRecorder,
@@ -236,9 +240,11 @@ class CommandVoice:
     """La petición con la que Sirius dice a su manera lo que hizo una orden de memoria.
 
     Lleva la identidad, con los ejemplos que más se parecen a la frase, el modo de la
-    charla, la tarea y el recordatorio. La frase es fija y no sale de la base ni del
-    mensaje de la orden: el modelo nunca ve lo olvidado (ADR-240). ``replies`` cambia
-    la respuesta ya guardada con la frase de siempre por la que dice con su voz.
+    charla, la tarea y el recordatorio; y, con un crío, un anciano o alguien cuya edad no
+    se sabe delante, la regla de no insultar (``care``, ronda 1 de Codex sobre la PR
+    #703): esta frase también la escribe el modelo. La frase es fija y no sale de la base
+    ni del mensaje de la orden: el modelo nunca ve lo olvidado (ADR-240). ``replies``
+    cambia la respuesta ya guardada con la frase de siempre por la que dice con su voz.
     """
 
     def __init__(
@@ -252,7 +258,7 @@ class CommandVoice:
         self.replies = replies
 
     def request(
-        self, said: str, *, mode_block: str, reminder: str, operation_id: str
+        self, said: str, *, mode_block: str, reminder: str, operation_id: str, care: str = ""
     ) -> LLMRequest | None:
         identity = self._identities.get_current_identity()
         if identity is None:
@@ -263,6 +269,8 @@ class CommandVoice:
         if mode_block:
             parts.append(mode_block)
         parts.append(COMMAND_VOICE_TASK)
+        if care:
+            parts.append(care)
         if reminder:
             parts.append(reminder)
         return LLMRequest(
@@ -330,6 +338,41 @@ class SendMessageUseCase:
         #: Las respuestas que le cortaron por voz mientras las escribía (ADR-254).
         self._cut_operations: set[str] = set()
         self._cut_lock = threading.Lock()
+        #: A quiénes tiene delante, de la vista (pieza E de la 0.4, ADR-263); sin ella, no
+        #: se le dice.
+        self._presence: Callable[[], Sequence[str | None] | None] | None = None
+        self._presence_failed = False
+        #: Quiénes tienen permiso para que se les reconozca, que se mira al escribir cada
+        #: petición; sin ello, nadie tiene nombre (ronda 3 de Codex sobre la PR #703).
+        self._allowed: Callable[[], Collection[str]] | None = None
+        self._allowed_failed = False
+        #: Si hay que cortarse, con la edad que aparentan los que tiene delante, de la
+        #: vista (pieza F de la 0.4, ADR-264); sin ella, no se mira.
+        self._care_watch = CareWatch()
+        #: Lo que recuerda haber visto, como texto (pieza G de la 0.4, ADR-265); sin ello, no
+        #: se le dice.
+        self._seen: Callable[[], Sequence[str]] | None = None
+        self._seen_failed = False
+
+    def set_presence(
+        self,
+        in_front: Callable[[], Sequence[str | None] | None],
+        *,
+        allowed: Callable[[], Collection[str]],
+    ) -> None:
+        """Le dice de dónde saber a quiénes tiene delante: de la vista, su nombre o ``None``
+        por cada uno, o ``None`` si no ve (pieza E de la 0.4, ADR-263); y quiénes tienen
+        permiso para que se les reconozca, que se mira al escribir cada petición: el nombre
+        de quien ya no lo tiene, de la vista o de la voz, es alguien sin identificar (ronda
+        3 de Codex sobre la PR #703)."""
+        self._presence = in_front
+        self._allowed = allowed
+
+    def set_ages(self, in_front: Callable[[], Sequence[AgeReading | None] | None]) -> None:
+        """Le dice de dónde saber la edad que aparentan los que tiene delante: de la vista,
+        la de cada uno o ``None`` si no se sabe, o ``None`` si no ve (pieza F de la 0.4,
+        ADR-264)."""
+        self._care_watch.watch(in_front)
 
     def mark_cut(self, message_id: int, heard: str) -> None:
         """Le cortaron la respuesta ``message_id`` cuando el propietario había oído
@@ -337,6 +380,54 @@ class SendMessageUseCase:
         cortaron (ADR-254)."""
         if self._cuts is not None:
             self._cuts.mark_cut(message_id, heard)
+
+    def _in_front(self) -> Sequence[str | None] | None:
+        """A quiénes tiene delante; si no se puede saber, ``None``, y se apunta una vez."""
+        presence = self._presence
+        if presence is None:
+            return None
+        try:
+            return presence()
+        except Exception as error:
+            if not self._presence_failed:
+                self._presence_failed = True
+                _logger.warning("No se sabe a quiénes tiene delante (%s)", type(error).__name__)
+            return None
+
+    def _allowed_now(self) -> Collection[str]:
+        """Quiénes tienen permiso ahora; si no se puede saber, nadie, y se apunta una vez."""
+        allowed = self._allowed
+        if allowed is None:
+            return frozenset()
+        try:
+            return frozenset(allowed())
+        except Exception as error:
+            if not self._allowed_failed:
+                self._allowed_failed = True
+                _logger.warning("No se sabe quiénes han dado permiso (%s)", type(error).__name__)
+            return frozenset()
+
+    def set_seen(self, lines: Callable[[], Sequence[str]]) -> None:
+        """Le dice de dónde saber lo que recuerda haber visto: una línea por cambio, con su
+        hora (pieza G de la 0.4, ADR-265)."""
+        self._seen = lines
+
+    def _seen_lines(self) -> Sequence[str]:
+        """Lo que recuerda haber visto; si no se puede saber, nada, y se apunta una vez."""
+        seen = self._seen
+        if seen is None:
+            return ()
+        try:
+            return seen()
+        except Exception as error:
+            if not self._seen_failed:
+                self._seen_failed = True
+                _logger.warning("No se sabe lo que ha visto (%s)", type(error).__name__)
+            return ()
+
+    def _care(self) -> bool:
+        """Si tiene delante a alguien con quien se corta (``CareWatch``)."""
+        return self._care_watch.needed()
 
     def set_llm_provider(self, llm_provider: LLMProvider) -> None:
         """Swap the active provider (e.g. after B2a onboarding validates a key).
@@ -378,6 +469,7 @@ class SendMessageUseCase:
         on_gesture: Callable[[str], None] | None = None,
         extra_instructions: str = "",
         only_on_this_computer: bool = False,
+        speaker: str | None = None,
     ) -> SendMessageResult:
         """Persist the user's message, stream Sirius's reply, and persist its outcome.
 
@@ -407,6 +499,15 @@ class SendMessageUseCase:
         leído una sola vez aquí, así que cambiarlo en marcha no puede sacar el mensaje del
         ordenador. Si es de fuera, no se guarda ni se envía nada y se levanta
         ``ChatLeavesThisComputer`` (ronda 10 de Codex sobre la PR #687).
+
+        ``speaker`` es quién le habla, en un turno de voz: su nombre o «sin identificar»
+        (pieza E de la 0.4, ADR-263). Con él y con lo que ve la vista, la petición lleva
+        «# Quién hay» (``presence_block``); lo escrito en la ventana no lleva quién lo
+        escribe. Y si la vista tiene delante a un crío, a un anciano o a alguien cuya edad
+        no se sabe, lleva detrás la regla de no insultar (``care_block``, pieza F de la
+        0.4, ADR-264). Antes de «# Quién hay» va lo que recuerda haber visto, quién vino y
+        quién se fue, con su hora (``sight_block``, pieza G de la 0.4, ADR-265). Esas dos
+        llevan nombres, y solo van a un modelo de este ordenador; la regla va siempre.
         """
         operation_id = operation_id or str(uuid.uuid4())
         provider = self._llm_provider
@@ -422,6 +523,7 @@ class SendMessageUseCase:
                 on_completed,
                 on_gesture,
                 extra_instructions,
+                speaker,
             )
         finally:
             self._in_flight.pop(operation_id, None)
@@ -437,6 +539,7 @@ class SendMessageUseCase:
         on_completed: Callable[[], None] | None,
         on_gesture: Callable[[str], None] | None,
         extra_instructions: str,
+        speaker: str | None = None,
     ) -> SendMessageResult:
         if self._memory_commands is not None:
             # Antes que nada: una orden de memoria no puede llegar al modelo ni a
@@ -459,6 +562,20 @@ class SendMessageUseCase:
         instructions = render_instructions(context)
         if mode_block:
             instructions = f"{instructions}\n\n{mode_block}"
+        # Lo que ve la cámara de quién hay y de quién vino lleva nombres: solo va a un
+        # modelo de este ordenador, como lo que oye. La regla de no insultar no nombra a
+        # nadie, y va siempre.
+        if runs_on_this_computer(provider):
+            seen = sight_block(self._seen_lines())
+            if seen:
+                instructions = f"{instructions}\n\n{seen}"
+            presence = presence_block(
+                speaker=speaker, in_front=self._in_front(), allowed=self._allowed_now()
+            )
+            if presence:
+                instructions = f"{instructions}\n\n{presence}"
+        if self._care():
+            instructions = f"{instructions}\n\n{care_block()}"
         if extra_instructions.strip():
             instructions = f"{instructions}\n\n{extra_instructions.strip()}"
         if self._reminder:
@@ -605,6 +722,7 @@ class SendMessageUseCase:
                 mode_block=self._current_mode_block(conversation_id),
                 reminder=self._reminder,
                 operation_id=stored.operation_id or str(uuid.uuid4()),
+                care=care_block() if self._care() else "",
             )
         except Exception as exc:  # la orden ya está cumplida: sin voz, la frase de siempre
             _logger.warning("No se pudo preparar la voz de la orden (%s)", type(exc).__name__)

@@ -49,6 +49,16 @@ personaje = [
   "chatterbox-tts==0.1.7",
   "setuptools<82",
 ]
+# Los ojos del robot (pieza D de la 0.4, ADR-262): MediaPipe, que trae su OpenCV, para la
+# cámara y las caras en este ordenador; InsightFace y SpeechBrain, para reconocer por la
+# cara y por la voz a quien dé permiso (pieza E, ADR-263). Va aparte como la voz: la instala
+# `uv run --link-mode=copy --extra voz --extra ojos sirius-instala-la-voz`, que baja también
+# sus modelos, y Quality no la instala. Sin ella, Sirius oye y habla igual.
+ojos = [
+  "mediapipe>=1.1.1,<1.2",
+  "insightface>=2.1,<2.2",
+  "speechbrain>=1.1.2,<1.2",
+]
 
 [project.scripts]
 sirius = "sirius.main:main"
@@ -131,9 +141,15 @@ default-groups = ["dev"]
 # Chatterbox pide spacy-pkuseg, que solo segmenta chino y no tiene rueda para Windows con
 # Python 3.14 (habría que compilar C++ en su ordenador), y gradio, que es de sus demos: la
 # biblioteca no lo importa. Se dejan fuera con un marcador que nunca se cumple (ADR-246).
+#
+# Un solo OpenCV: MediaPipe trae `opencv-contrib-python`, que lleva todo lo de los demás, y
+# todos ponen el mismo `cv2`; instalados juntos, el segundo pisa al primero. Los otros dos se
+# dejan fuera igual, para quien los pida (ADR-259, ADR-262).
 override-dependencies = [
   "spacy-pkuseg; sys_platform == 'never'",
   "gradio; sys_platform == 'never'",
+  "opencv-python; sys_platform == 'never'",
+  "opencv-python-headless; sys_platform == 'never'",
 ]
 
 [tool.ruff]
