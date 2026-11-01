@@ -1,14 +1,5 @@
 {
-  "divergencias": [
-    {
-      "incidencia": 704,
-      "motivo": "WI-20261101-160908: el motor está en estado=active fase=preparar y la incidencia proyecta estado=planned fase=preparar; no hay camino hacia delante, no se toca nada",
-      "pasadas": 1,
-      "primera_vez": "2026-11-01T16:09:28.418364+00:00",
-      "ultima_vez": "2026-11-01T16:09:28.418364+00:00",
-      "work_id": "WI-20261101-160908"
-    }
-  ],
+  "divergencias": [],
   "pasada": {
     "interrumpida": false,
     "perdida_posible": false,
