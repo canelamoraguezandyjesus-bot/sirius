@@ -1,6 +1,6 @@
 # Desenlaces del motor de Sirius
 
-> **Generado por `uv run sirius-memoria desenlaces`** a partir de `diario.jsonl` y `diario-despacho.jsonl` y `divergencias.json`: 680 sucesos, el último el 2026-11-01 16:09 UTC. Lo escribe el motor en la rama
+> **Generado por `uv run sirius-memoria desenlaces`** a partir de `diario.jsonl` y `diario-despacho.jsonl` y `divergencias.json`: 681 sucesos, el último el 2026-11-01 16:10 UTC. Lo escribe el motor en la rama
 > `estado-del-motor` tras cada reflejo (ADR-171). **El diario manda**: si un documento
 > dice otra cosa sobre un encargo, vale esto.
 
@@ -8,9 +8,9 @@
 
 | Estado | Encargos |
 |---|---|
-| active | 1 |
 | cancelled | 28 |
 | delivered | 60 |
+| failed_safely | 1 |
 | needs_decision | 4 |
 
 ## Divergencias que el reflector aparta para una persona
@@ -21,7 +21,7 @@ Ninguna: la última pasada completa del reflector no apartó ninguna (si la hubi
 
 | Encargo | Clase | Estado / fase | Creado | Último suceso | Objetivo | Evidencia |
 |---|---|---|---|---|---|---|
-| WI-20261101-160908 | documentacion | active / ejecutar | 2026-11-01 16:09 UTC | 2026-11-01 16:09 UTC | Documenta en docs/audits/SIRIUS_MINA_APRENDIZAJE_OPERATIVO_2026-10.md la edicion de la mina de aprendizaje… | [#704](https://github.com/canelamoraguezandyjesus-bot/sirius/issues/704) |
+| WI-20261101-160908 | documentacion | failed_safely / ejecutar | 2026-11-01 16:09 UTC | 2026-11-01 16:10 UTC | Documenta en docs/audits/SIRIUS_MINA_APRENDIZAJE_OPERATIVO_2026-10.md la edicion de la mina de aprendizaje… | [#704](https://github.com/canelamoraguezandyjesus-bot/sirius/issues/704), [run](https://github.com/canelamoraguezandyjesus-bot/sirius/actions/runs/41324833360/attempts/1) |
 | WI-20261001-163302 | documentacion | cancelled / ejecutar | 2026-10-01 16:33 UTC | 2026-10-06 01:19 UTC | Documenta en docs/audits/SIRIUS_MINA_APRENDIZAJE_OPERATIVO_2026-09.md la edicion de la mina de aprendizaje… | [#677](https://github.com/canelamoraguezandyjesus-bot/sirius/issues/677), [run](https://github.com/canelamoraguezandyjesus-bot/sirius/actions/runs/36892843074/attempts/1) |
 | WI-20260828-122242 | investigacion | delivered / entregar | 2026-08-28 12:22 UTC | 2026-10-01 15:57 UTC | Investiga y compara los proveedores de API de modelos NVIDIA (build.nvidia.com, NIM) y Google AI (Gemini)… | [#392](https://github.com/canelamoraguezandyjesus-bot/sirius/issues/392), fusión `7742608` |
 | WI-20260914-073945 | documentacion | delivered / entregar | 2026-09-14 07:39 UTC | 2026-09-14 09:24 UTC | Documenta en docs/audits/SIRIUS_MINA_APRENDIZAJE_OPERATIVO_2026-09.md la segunda edicion de la mina de… | [#627](https://github.com/canelamoraguezandyjesus-bot/sirius/issues/627), fusión `aea308c` |
